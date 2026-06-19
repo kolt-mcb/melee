@@ -920,6 +920,9 @@ void fn_80392A08(int mode, int scale, int enable)
 
 PerfDispItem hsd_804CE3F8[6];
 
+/* 4D0B50 */ u8 psTexGroupArray_804D0B50[0x104];
+/* 4D0C54 */ u8 psNumCmdList_804D0C54[0x104];
+
 static s32 lbl_804D6090 = -1;
 static s32 lbl_804D6094 = (s32) 0xFF0000FF;
 static s32 lbl_804D6098 = 0x00FF00FF;
