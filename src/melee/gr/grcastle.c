@@ -61,7 +61,7 @@ StageCallbacks grCs_803E0FF4[21] = {
     { grCastle_801CE7E8, grCastle_801CE858, grCastle_801CE860,
       grCastle_801CE8E4, 0 },
     { grCastle_801CD658, grCastle_801CD8A0, grCastle_801CD8A8,
-      grCastle_801CD960, 0 },
+      grCastle_801CD960, 0xC0000000 },
     { grCastle_801CD5BC, grCastle_801CD600, grCastle_801CD608,
       grCastle_801CD60C, 0 },
     { grCastle_801CEACC, grCastle_801CEEFC, grCastle_801CEF04,
