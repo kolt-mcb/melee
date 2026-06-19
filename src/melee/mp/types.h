@@ -22,6 +22,7 @@ struct mpIsland_80458E88_t {
     /* +18 */ mp_UnkStruct0* x18;
     /* +1C */ mp_UnkStruct0* x1C;
     /* +20 */ mp_UnkStruct0* x20;
+    /* +24 */ mp_UnkStruct0* x24;
 };
 
 struct mpIsland_PaletteEntry {
