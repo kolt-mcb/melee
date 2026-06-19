@@ -184,7 +184,7 @@ static u8 grCs_804D45E4 = 1;
 static grCastleParams* grCs_804D6970;
 static struct lb_80011A50_t* grCs_804D6974;
 
-static const Quaternion grCs_803B7EB8 = { 0.0f, 0.0f, 0.0f, 1.0f };
+static const Quaternion grCs_803B7EB8 = { 0.0f, 0.0f, 0.0f, 0.0f };
 
 typedef struct grCastle_BlinkTable {
     s16 data[19];
@@ -229,7 +229,7 @@ typedef struct grCastle_WeightTable {
     s32 w[3];
 } grCastle_WeightTable;
 
-static const grCastle_WeightTable grCs_803B7EF0 = { { 0, 0, 0 } };
+static const grCastle_WeightTable grCs_803B7EF0 = { { 100, 100, 100 } };
 
 typedef struct grCastle_TargetEntry {
     s16 map_id;
