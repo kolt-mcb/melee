@@ -65,6 +65,11 @@ typedef struct lbl_804706D8_t {
 
 lbl_804706D8_t lbl_804706D8[12];
 
+/* 470708 */ u8 gmClassic_80470708[0x148];
+/* 470850 */ u8 gmClassic_80470850[0x1C];
+/* 47086C */ u8 gmClassic_8047086C[0x228C];
+/* 472AF8 */ u8 gmClassic_80472AF8[0x138];
+
 struct lbl_80472D28_t {
     /*   +0 */ char pad_0[0x20];
     /* +20 */ HSD_JObj* x20;
