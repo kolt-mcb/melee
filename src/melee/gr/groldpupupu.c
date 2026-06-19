@@ -53,7 +53,7 @@ static int grOp_804D48C8[1][2] = { { 4, 0 } };
 static int grOp_804D48D0[1][2] = { { 5, 1 } };
 static int grOp_804D48D8[1][2] = { { 2, 3 } };
 
-static int grOp_804D48E0[1][2] = { { 0, 0 } };
+static int grOp_804D48E0[1][2] = { { 1, 0 } };
 
 typedef struct grOldPupupuSpawnDesc {
     s8 x0;
