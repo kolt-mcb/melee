@@ -241,17 +241,17 @@ typedef struct grCastle_TargetTable {
 } grCastle_TargetTable;
 
 static const grCastle_TargetTable grCs_803B7EFC = { {
-    { 0, 0 },
-    { 0, 0 },
-    { 0, 0 },
-    { 0, 0 },
-    { 0, 0 },
-    { 0, 0 },
-    { 0, 0 },
-    { 0, 0 },
-    { 0, 0 },
-    { 0, 0 },
-    { 0, 0 },
+    { 3, 16 },
+    { 3, 17 },
+    { 3, 14 },
+    { 3, 15 },
+    { 3, 18 },
+    { 3, 19 },
+    { 3, 21 },
+    { 3, 22 },
+    { 3, 20 },
+    { 6, 2 },
+    { 6, 5 },
 } };
 
 void grCastle_801CD338(bool arg0)

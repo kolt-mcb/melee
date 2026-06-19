@@ -96,7 +96,7 @@ const f32 mn_804DBE54 = 17.0f;
 const f32 mn_804DBE58 = 364.68332f;
 const f32 mn_804DBE5C = 76.77544f;
 const f32 mn_804DBE60 = 0.0521f;
-volatile const f64 mn_804DBE68 = 4503599627370496.0;
+volatile const f64 mn_804DBE68 = 4503601774854144.0;
 
 static inline void SisLib_ClearText(HSD_Text** text)
 {
