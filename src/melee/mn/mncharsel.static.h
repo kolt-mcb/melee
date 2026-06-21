@@ -48,7 +48,7 @@ static u8 mnCharSel_804D6CF5; ///< number of (open? valid?) CSS doors
 static u8 mnCharSel_804D6CF6;
 static u8 mnCharSel_804D6CF7;
 static u8 mnCharSel_804D6CF8;
-static s8 mnCharSel_804D6CF9;
+static s8 mnCharSel_804D6CF9[7];
 
 /// Can't be enum bc float, but reused values
 #define ICONROWHT_TOP_TOP 20.0F

@@ -22,7 +22,7 @@
 static char lbl_803F9780[] = "ScInfStc_scene_models";
 static char lbl_803F9798[] = "translate";
 
-static void* lbl_804A1340[13];
+static void* lbl_804A1340[14];
 
 s32 fn_802F7288(HSD_GObj* gobj, Element_803F9628* entry)
 {

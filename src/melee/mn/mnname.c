@@ -51,9 +51,9 @@ typedef struct {
     HSD_ShapeAnimJoint* shapeanim_joint;
 } MnNameArchive;
 
-extern MnNameArchive mnName_804A06C0;
-extern MnNameArchive mnName_804A06D0;
-extern MnNameArchive mnName_804A06E0;
+MnNameArchive mnName_804A06C0;
+MnNameArchive mnName_804A06D0;
+MnNameArchive mnName_804A06E0;
 extern Vec3 mnName_803ED618[];
 
 void fn_80249A1C(HSD_GObj* arg0);

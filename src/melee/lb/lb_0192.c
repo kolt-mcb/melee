@@ -84,7 +84,7 @@ static struct strings us_msg[6] = {
     },
 };
 
-static HSD_Text* lb_804D63D0;
+static HSD_Text* lb_804D63D0[2];
 
 struct lb_804329F0_t {
     union {
@@ -137,28 +137,34 @@ void lb_800192A8(void (*cb)(void))
     if (i != -1 && i != 5) {
         lbAudioAx_80024F08();
         HSD_Rumble_80378524(1);
-        lb_804D63D0 = HSD_SisLib_803A6754(0, -1);
+        lb_804D63D0[0] = HSD_SisLib_803A6754(0, -1);
         if (lbLang_IsSavedLanguageJP()) {
-            HSD_Text* text = lb_804D63D0;
+            HSD_Text* text = lb_804D63D0[0];
             text->font_size.x = 0.67F;
             text->font_size.y = 0.75F;
         } else {
-            HSD_Text* text = lb_804D63D0;
+            HSD_Text* text = lb_804D63D0[0];
             text->font_size.x = 0.58F;
             text->font_size.y = 0.70F;
         }
-        lb_804D63D0->default_alignment = 1;
-        lb_804D63D0->default_kerning = 1;
+        lb_804D63D0[0]->default_alignment = 1;
+        lb_804D63D0[0]->default_kerning = 1;
         if (lbLang_IsSavedLanguageJP()) {
-            HSD_SisLib_803A6B98(lb_804D63D0, 0.0F, -68.0F, "%s", jp_msg[i].x0);
-            HSD_SisLib_803A6B98(lb_804D63D0, 0.0F, -34.0F, "%s", jp_msg[i].x4);
-            HSD_SisLib_803A6B98(lb_804D63D0, 0.0F, 0.0F, "%s", jp_msg[i].x8);
+            HSD_SisLib_803A6B98(lb_804D63D0[0], 0.0F, -68.0F, "%s",
+                                jp_msg[i].x0);
+            HSD_SisLib_803A6B98(lb_804D63D0[0], 0.0F, -34.0F, "%s",
+                                jp_msg[i].x4);
+            HSD_SisLib_803A6B98(lb_804D63D0[0], 0.0F, 0.0F, "%s",
+                                jp_msg[i].x8);
         } else {
-            if ((!lb_804D63D0) && (!lb_804D63D0)) {
+            if ((!lb_804D63D0[0]) && (!lb_804D63D0[0])) {
             }
-            HSD_SisLib_803A6B98(lb_804D63D0, 0.0F, -68.0F, "%s", us_msg[i].x0);
-            HSD_SisLib_803A6B98(lb_804D63D0, 0.0F, -34.0F, "%s", us_msg[i].x4);
-            HSD_SisLib_803A6B98(lb_804D63D0, 0.0F, 0.0F, "%s", us_msg[i].x8);
+            HSD_SisLib_803A6B98(lb_804D63D0[0], 0.0F, -68.0F, "%s",
+                                us_msg[i].x0);
+            HSD_SisLib_803A6B98(lb_804D63D0[0], 0.0F, -34.0F, "%s",
+                                us_msg[i].x4);
+            HSD_SisLib_803A6B98(lb_804D63D0[0], 0.0F, 0.0F, "%s",
+                                us_msg[i].x8);
         }
 
         while (true) {
@@ -166,18 +172,18 @@ void lb_800192A8(void (*cb)(void))
                 prev_i = i;
                 if (i != -1) {
                     if (lbLang_IsSavedLanguageJP()) {
-                        HSD_SisLib_803A70A0(lb_804D63D0, 0, "%s",
+                        HSD_SisLib_803A70A0(lb_804D63D0[0], 0, "%s",
                                             jp_msg[i].x0);
-                        HSD_SisLib_803A70A0(lb_804D63D0, 1, "%s",
+                        HSD_SisLib_803A70A0(lb_804D63D0[0], 1, "%s",
                                             jp_msg[i].x4);
-                        HSD_SisLib_803A70A0(lb_804D63D0, 2, "%s",
+                        HSD_SisLib_803A70A0(lb_804D63D0[0], 2, "%s",
                                             jp_msg[i].x8);
                     } else {
-                        HSD_SisLib_803A70A0(lb_804D63D0, 0, "%s",
+                        HSD_SisLib_803A70A0(lb_804D63D0[0], 0, "%s",
                                             us_msg[i].x0);
-                        HSD_SisLib_803A70A0(lb_804D63D0, 1, "%s",
+                        HSD_SisLib_803A70A0(lb_804D63D0[0], 1, "%s",
                                             us_msg[i].x4);
-                        HSD_SisLib_803A70A0(lb_804D63D0, 2, "%s",
+                        HSD_SisLib_803A70A0(lb_804D63D0[0], 2, "%s",
                                             us_msg[i].x8);
                     }
                 }
@@ -185,7 +191,7 @@ void lb_800192A8(void (*cb)(void))
             GXInvalidateVtxCache();
             GXInvalidateTexAll();
             HSD_StartRender(HSD_RP_SCREEN);
-            HSD_SisLib_803A84BC(NULL, (u32) lb_804D63D0);
+            HSD_SisLib_803A84BC(NULL, (u32) lb_804D63D0[0]);
             HSD_Init_803755A8();
             HSD_VICopyXFBAsync(HSD_RP_SCREEN);
             if (cb != NULL) {
@@ -199,7 +205,7 @@ void lb_800192A8(void (*cb)(void))
 
         lbAudioAx_80024F6C();
         HSD_Rumble_80378524(0);
-        HSD_SisLib_803A5CC4(lb_804D63D0);
+        HSD_SisLib_803A5CC4(lb_804D63D0[0]);
         gmMainLib_8046B0F0.xC = true;
     }
 }

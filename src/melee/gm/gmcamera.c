@@ -53,6 +53,8 @@ typedef struct _SisLibUnkStruct {
 /// @todo #HSD_SisLib_804D1124 is of type #SIS.
 /// extern SisLibUnkStruct HSD_SisLib_804D1124;
 
+union _gmCameraUnkUnion gmCamera_80479BC8;
+
 f32 gmCamera_803DA630[12] = {
     0.6f,   0.6f,   40.0f, 416.0f, 0.6f,  0.6f,
     340.0f, 416.0f, 0.6f,  0.6f,   40.0f, 44.0f,

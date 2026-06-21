@@ -123,7 +123,7 @@ typedef struct grZe_YakumonoParam {
 
 /* 4D6990 */ static grZe_YakumonoParam* grZe_804D6990;
 /* 4D6994 */ static s32 grZe_804D6994;
-/* 4D6998 */ static s16 grZe_804D6998;
+/* 4D6998 */ static s16 grZe_804D6998[4];
 
 extern f32 grZe_804DB0B0;
 
@@ -294,16 +294,16 @@ static const grZe_803B7FF0_t grZe_803B7FF0 = {
 };
 
 Vec3 grZe_803E1B90[20] = {
-    { -40.5f, -10.0f, 13.0f },  { -40.5f, -24.0f, 13.0f },
-    { -5.5f, -13.0f, 23.5f },   { -5.5f, -27.0f, 23.5f },
-    { -5.5f, 0.5f, 0.0f },      { -5.5f, -10.0f, 0.0f },
-    { -8.0f, 4.5f, 32.0f },     { -8.0f, -14.5f, 32.0f },
-    { -34.0f, 0.5f, 24.0f },    { -34.0f, -17.5f, 24.0f },
-    { -23.5f, -12.0f, 5.5f },   { -23.5f, -23.0f, 5.5f },
-    { 6.5f, 4.0f, 18.0f },      { 6.5f, -10.5f, 18.0f },
-    { 10.0f, 0.5f, 9.5f },      { 10.0f, -10.0f, 9.5f },
-    { -21.5f, 2.0f, 15.5f },    { -21.5f, -16.0f, 15.5f },
-    { -59.0f, 27.5f, 6.0f },    { -59.0f, 17.0f, 6.0f },
+    { -40.5f, -10.0f, 13.0f }, { -40.5f, -24.0f, 13.0f },
+    { -5.5f, -13.0f, 23.5f },  { -5.5f, -27.0f, 23.5f },
+    { -5.5f, 0.5f, 0.0f },     { -5.5f, -10.0f, 0.0f },
+    { -8.0f, 4.5f, 32.0f },    { -8.0f, -14.5f, 32.0f },
+    { -34.0f, 0.5f, 24.0f },   { -34.0f, -17.5f, 24.0f },
+    { -23.5f, -12.0f, 5.5f },  { -23.5f, -23.0f, 5.5f },
+    { 6.5f, 4.0f, 18.0f },     { 6.5f, -10.5f, 18.0f },
+    { 10.0f, 0.5f, 9.5f },     { 10.0f, -10.0f, 9.5f },
+    { -21.5f, 2.0f, 15.5f },   { -21.5f, -16.0f, 15.5f },
+    { -59.0f, 27.5f, 6.0f },   { -59.0f, 17.0f, 6.0f },
 };
 
 void grZebes_801D8644(HSD_GObj* gobj)
@@ -1188,7 +1188,7 @@ void grZebes_801DA254(Ground_GObj* gobj, f32 level)
 
 void grZebes_801DA3E8(void)
 {
-    grZe_804D6998 = 0;
+    grZe_804D6998[0] = 0;
 }
 
 void grZebes_801DA3F4(Vec3* pos)
@@ -1197,12 +1197,12 @@ void grZebes_801DA3F4(Vec3* pos)
     HSD_JObj* new_var;
     HSD_JObj* jobj;
 
-    if (grZe_804D6998 < 10 && (gobj = grZebes_801D8558(5)) != NULL) {
+    if (grZe_804D6998[0] < 10 && (gobj = grZebes_801D8558(5)) != NULL) {
         jobj = GET_JOBJ(gobj);
         new_var = jobj;
         if (new_var != NULL) {
             HSD_JObjSetTranslate(new_var, pos);
-            grZe_804D6998 += 1;
+            grZe_804D6998[0] += 1;
             return;
         }
         Ground_801C4A08(gobj);
@@ -1211,7 +1211,7 @@ void grZebes_801DA3F4(Vec3* pos)
 
 void grZebes_801DA4FC(Ground_GObj* gobj)
 {
-    grZe_804D6998 -= 1;
+    grZe_804D6998[0] -= 1;
     Ground_801C4A08(gobj);
 }
 

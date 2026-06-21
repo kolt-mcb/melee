@@ -40,7 +40,7 @@ typedef struct MnInfoDataLayout {
 
 StaticModelDesc mnInfo_804A0958;
 u8 mnInfo_804A0968[0x48];
-HSD_GObj* mnInfo_804D6C78;
+HSD_GObj* mnInfo_804D6C78[2];
 extern GXColor mn_804D4B64;
 
 #pragma push
@@ -238,7 +238,7 @@ void fn_80251FE4(void)
     MnInfoTextCursor* left;
     MnInfoTextCursor* right;
 
-    data = mnInfo_804D6C78->user_data;
+    data = mnInfo_804D6C78[0]->user_data;
     if (mn_804D6BC8.cooldown != 0) {
         mn_804D6BC8.cooldown -= 1;
         mn_804D6BC8.x2 = 0;
@@ -273,7 +273,7 @@ void fn_80251FE4(void)
                 left = (MnInfoTextCursor*) ((u8*) left + 4);
                 right = (MnInfoTextCursor*) ((u8*) right + 4);
             } while (i < 4);
-            gobj = mnInfo_804D6C78;
+            gobj = mnInfo_804D6C78[0];
             trophy = &mnInfo_804A0968[data->scroll_idx];
             for (i = 0; i < 4; i++) {
                 if (mnInfo_80251A08(*trophy) != 0) {
@@ -311,7 +311,7 @@ void fn_80251FE4(void)
                 left = (MnInfoTextCursor*) ((u8*) left + 4);
                 right = (MnInfoTextCursor*) ((u8*) right + 4);
             } while (i < 4);
-            gobj = mnInfo_804D6C78;
+            gobj = mnInfo_804D6C78[0];
             trophy = &mnInfo_804A0968[data->scroll_idx];
             for (i = 0; i < 4; i++) {
                 if (mnInfo_80251A08(*trophy) != 0) {
@@ -526,7 +526,7 @@ s32 mnInfo_80252758(void)
     mnInfo_80251AFC();
 
     temp_r3_2 = GObj_Create(6, 7, 0x80);
-    mnInfo_804D6C78 = temp_r3_2;
+    mnInfo_804D6C78[0] = temp_r3_2;
 
     temp_ret = HSD_MemAlloc(sizeof(MnInfoData));
     temp_r3_3 = temp_ret;

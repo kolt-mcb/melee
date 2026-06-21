@@ -84,7 +84,7 @@ static grCn_StageData* grCn_804D69A0;
 static u32 grCn_804D69A4;
 static int grCn_804D69A8;
 static int grCn_804D69AC;
-static int grCn_804D69B0;
+static int grCn_804D69B0[2];
 
 typedef struct {
     int data[3];
@@ -143,14 +143,14 @@ void grCorneria_801DCCFC(void)
     switch (stage) {
     case 0xE9:
     case 0x47:
-        grCn_804D69B0 = 1;
+        grCn_804D69B0[0] = 1;
         break;
     default:
-        grCn_804D69B0 = (imax = 0);
+        grCn_804D69B0[0] = (imax = 0);
         break;
     }
 
-    if (grCn_804D69B0 == 1) {
+    if (grCn_804D69B0[0] == 1) {
         grCn_804D69A8 = 0x78;
         return;
     }
@@ -227,7 +227,7 @@ void grCorneria_801DCE1C(void)
     Vec3 pos2;
 
     if (Stage_80225194() != 0x46) {
-        if (grCn_804D69B0 == 0) {
+        if (grCn_804D69B0[0] == 0) {
             if (data->arwing_gobj[0] == NULL) {
                 grCn_804D69A8--;
                 if (grCn_804D69A8 <= 0) {
@@ -1220,7 +1220,7 @@ void grCorneria_801DED50(Ground_GObj* gobj)
                                 }
                             }
                         }
-                        if (grCn_804D69B0 == 0) {
+                        if (grCn_804D69B0[0] == 0) {
                             s32 frame = gp->gv.corneria2.xF0;
                             s32 period = grCn_804D69A0->x74;
                             if ((frame - ((frame / period) * period)) == 0) {
@@ -1317,7 +1317,7 @@ void grCorneria_801DED50(Ground_GObj* gobj)
                 }
                 goto arwing_type_done;
             arwing_far_type: {
-                if (grCn_804D69B0 == 0) {
+                if (grCn_804D69B0[0] == 0) {
                     s32 frame = gp->gv.corneria2.xF0;
                     s32 period = grCn_804D69A0->x74;
                     if ((frame - ((frame / period) * period)) == 0) {

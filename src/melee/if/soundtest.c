@@ -151,25 +151,25 @@
 /* 4D6DC0 */ static int un_804D6DC0;
 
 /// .sbss (extern)
-/* 4D6DC8 */ extern s32 un_804D6DC8;
-/* 4D6DCC */ extern s32 un_804D6DCC;
-/* 4D6DD0 */ extern float un_804D6DD0;
-/* 4D6DD8 */ extern s32 un_804D6DD8;
-/* 4D6DDC */ extern s32 un_804D6DDC;
-/* 4D6DE0 */ extern s32 un_804D6DE0;
-/* 4D6DE4 */ extern s32 un_804D6DE4;
-/* 4D6DE8 */ extern s32 un_804D6DE8;
-/* 4D6DEC */ extern s32 un_804D6DEC;
-/* 4D6DF0 */ extern s32 un_804D6DF0;
-/* 4D6DF4 */ extern s32 un_804D6DF4;
-/* 4D6DF8 */ extern s32 un_804D6DF8;
-/* 4D6DFC */ extern s32 un_804D6DFC;
-/* 4D6E00 */ extern s32 un_804D6E00;
-/* 4D6E04 */ extern void* un_804D6E04;
-/* 4D6E08 */ extern HSD_GObj* un_804D6E08;
-/* 4D6E0C */ extern s32 un_804D6E0C;
-/* 4D6E10 */ extern s32 un_804D6E10;
-/* 4D6E14 */ extern s32 un_804D6E14;
+/* 4D6DC8 */ s32 un_804D6DC8;
+/* 4D6DCC */ s32 un_804D6DCC;
+/* 4D6DD0 */ float un_804D6DD0;
+/* 4D6DD8 */ s32 un_804D6DD8;
+/* 4D6DDC */ s32 un_804D6DDC;
+/* 4D6DE0 */ s32 un_804D6DE0;
+/* 4D6DE4 */ s32 un_804D6DE4;
+/* 4D6DE8 */ s32 un_804D6DE8;
+/* 4D6DEC */ s32 un_804D6DEC;
+/* 4D6DF0 */ s32 un_804D6DF0;
+/* 4D6DF4 */ s32 un_804D6DF4;
+/* 4D6DF8 */ s32 un_804D6DF8;
+/* 4D6DFC */ s32 un_804D6DFC;
+/* 4D6E00 */ s32 un_804D6E00;
+/* 4D6E04 */ void* un_804D6E04;
+/* 4D6E08 */ HSD_GObj* un_804D6E08;
+/* 4D6E0C */ s32 un_804D6E0C;
+/* 4D6E10 */ s32 un_804D6E10;
+/* 4D6E14 */ s32 un_804D6E14;
 
 /// .sdata (extern)
 /* 4D5908 */ extern s32 un_804D5908;

@@ -408,7 +408,7 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
     s32 idx;
     s32 skip_count;
 
-    if ((u8) lb_804D63B8 != 0) {
+    if ((u8) lb_804D63B8[0] != 0) {
         return;
     }
     if (desc == NULL) {
@@ -2104,13 +2104,13 @@ bool lb_800144C8(ColorOverlay* arg0, Fighter_804D653C_t* arg1, int arg2,
 
 void lb_80014534(void)
 {
-    lbArchive_80017040(NULL, "LbRb.dat", &lb_804D63C0, "lbRumbleData", 0);
+    lbArchive_80017040(NULL, "LbRb.dat", &lb_804D63C0[0], "lbRumbleData", 0);
 }
 
 void lb_80014574(u8 arg0, int arg1, int arg2, int arg3)
 {
-    HSD_PadRumbleAdd(arg0, arg1, arg3 != 0 ? arg3 : -2, lb_804D63C0[arg2].unk4,
-                     lb_804D63C0[arg2].unk);
+    HSD_PadRumbleAdd(arg0, arg1, arg3 != 0 ? arg3 : -2,
+                     lb_804D63C0[0][arg2].unk4, lb_804D63C0[0][arg2].unk);
 }
 
 void lb_800145C0(u8 slot)

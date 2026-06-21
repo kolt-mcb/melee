@@ -65,7 +65,7 @@ typedef struct UnkX {
     { NULL, 0, if_802F74D0, 0x9C46U, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
 };
 /* 4D6D60 */ static u8 ifStatus_804D6D60;
-/* 4D6D61 */ static s8 ifStatus_804D6D61;
+/* 4D6D61 */ static s8 ifStatus_804D6D61[7];
 
 HudIndex* ifStatus_802F4910(void)
 {
@@ -82,12 +82,12 @@ HudIndex* ifStatus_802F4910(void)
 static inline float foo(float a, float b)
 {
     float result;
-    if (ifStatus_804D6D61 != 0) {
+    if (ifStatus_804D6D61[0] != 0) {
         result = -a - b;
-        ifStatus_804D6D61 = 0;
+        ifStatus_804D6D61[0] = 0;
     } else {
         result = a + b;
-        ifStatus_804D6D61 = 1;
+        ifStatus_804D6D61[0] = 1;
     }
     return result;
 }

@@ -957,8 +957,8 @@ typedef struct {
     void* x2C;
 } BgFlashGlobal;
 
-extern BgFlashGlobal* lbl_804D63E0;
-extern struct Fighter_804D653C_t* lbl_804D63DC;
+BgFlashGlobal* lbl_804D63E0[2];
+struct Fighter_804D653C_t* lbl_804D63DC;
 
 void lbBgFlash_80021A10(f32 arg8)
 {
@@ -976,7 +976,7 @@ void lbBgFlash_80021A18(int arg0)
         user_data = HSD_ObjAlloc(&lbl_804336A0);
         if (user_data != NULL) {
             GObj_InitUserData(gobj, 0xE, fn_800219E4, user_data);
-            lbl_804D63E0 = (BgFlashGlobal*) gobj;
+            lbl_804D63E0[0] = (BgFlashGlobal*) gobj;
             lbl_804D63D8 = 1.0f;
             *user_data = (u8) arg0;
             lbArchive_LoadSymbols("LbBf.dat", &lbl_804D63DC,
@@ -1030,7 +1030,7 @@ static void fn_80021C18(HSD_GObj* gobj, CommandInfo* cmd, int arg2) {}
 
 void fn_80021C1C(void)
 {
-    HSD_GObj* gobj = (HSD_GObj*) lbl_804D63E0;
+    HSD_GObj* gobj = (HSD_GObj*) lbl_804D63E0[0];
     u8* user_data = gobj->user_data;
     lb_80014498((ColorOverlay*) (user_data + 4));
 }
@@ -1040,7 +1040,7 @@ void lbBgFlash_80021C48(u32 arg0, u32 arg1)
     struct {
         u8 unk0[4];
         ColorOverlay x4;
-    }* data = lbl_804D63E0->x2C;
+    }* data = lbl_804D63E0[0]->x2C;
     lb_800144C8(&data->x4, lbl_804D63DC, arg0, arg1);
 }
 
