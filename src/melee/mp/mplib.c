@@ -6800,7 +6800,7 @@ void mpLib_DrawZones(void)
     GXSetZMode(0, GX_LEQUAL, 0);
     GXSetLineWidth(0x10, GX_TO_ZERO);
 
-    var_r30 = cm_804D6468;
+    var_r30 = cm_804D6468[0];
     while (var_r30 != NULL) {
         if (Camera_8002928C(var_r30)) {
             GXBegin(GX_LINESTRIP, GX_VTXFMT0, 5);

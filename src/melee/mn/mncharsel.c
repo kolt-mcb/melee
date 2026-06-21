@@ -3885,9 +3885,9 @@ void fn_802633B0(HSD_GObj* gobj)
             if ((s32) tag->next_tag == row) {
                 if (IsNameListFull() == 0) {
                     if ((u8) mnCharSel_804D6CF5 == 1) {
-                        mnCharSel_804D6CF9 = (s8) (u8) mnCharSel_804D6CF0;
+                        mnCharSel_804D6CF9[0] = (s8) (u8) mnCharSel_804D6CF0;
                     } else {
-                        mnCharSel_804D6CF9 = (s8) tag->port;
+                        mnCharSel_804D6CF9[0] = (s8) tag->port;
                     }
                     mnCharSel_804D6CF6 = 4;
                     {
@@ -4517,7 +4517,7 @@ s32 mnCharSel_802640A0(void)
         } else {
             player = i;
         }
-        if (player == mnCharSel_804D6CF9 &&
+        if (player == mnCharSel_804D6CF9[0] &&
             (u8) mnCharSel_804D6CF8 < (u8) td->next_tag)
         {
             u8 mt = mnCharSel_804D6CB0->match_type;
@@ -4997,7 +4997,7 @@ void mnCharSel_8026688C_OnEnter(void* arg0)
             break;
         }
     }
-    mnCharSel_804D6CF9 = -1;
+    mnCharSel_804D6CF9[0] = -1;
     mnCharSel_804D6CF8++;
 
     mnCharSel_803F0DFC.doors[0].selected_since_load = 0;
@@ -5137,7 +5137,8 @@ void mnCharSel_802669F4_OnFrame(void)
     case 4:
         mn_8022F138(1, 8);
         HSD_SisLib_803A5E70();
-        mnNameNew_EnterFromMnCharSel(mnCharSel_804D6CD4, mnCharSel_804D6CF9);
+        mnNameNew_EnterFromMnCharSel(mnCharSel_804D6CD4,
+                                     mnCharSel_804D6CF9[0]);
         mnCharSel_804D6CF6 = 5;
         lbAudioAx_80024030(1);
         break;

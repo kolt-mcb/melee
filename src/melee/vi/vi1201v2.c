@@ -40,7 +40,7 @@
 typedef struct un_80400304_t {
     Vec3 player_spawn;
     char use_quaternion_assert[0x28];
-    char vi1201v2_dat[0x0C];
+    char vi1201v2_dat[0x10];
     char visual1201v2_scene[0x14];
     char tykoopa_dat[0x0C];
     char toykoopa_model_topn_joint[0x1C];
@@ -66,7 +66,7 @@ GXColor un_804D7028;
 static s32 un_804D702C;
 HSD_GObj* un_804D7030;
 HSD_GObj* un_804D7034;
-un_804D7004_t un_804D7038;
+u8 un_804D7038[8];
 
 void un_803204B0(int arg0, int arg1)
 {

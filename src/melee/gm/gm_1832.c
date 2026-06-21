@@ -112,14 +112,16 @@ typedef struct gm_1832_8047368C_t {
 } gm_1832_8047368C_t;
 STATIC_ASSERT(sizeof(gm_1832_8047368C_t) == 0x24);
 
-extern gm_1832_8047368C_t lbl_8047368C;
+gm_1832_8047368C_t lbl_8047368C;
+struct TrainingMenuData gm_80473814;
+UnkAllstarData gm_80473A18;
 
 static HSD_Archive* lbl_804D65F4;
 static HSD_Archive* lbl_804D65F8;
 static HSD_GObj* lbl_804D65F0;
 static SceneDesc* lbl_804D6600;
 
-extern int lbl_804D6608;
+int lbl_804D6608[2];
 
 typedef struct {
     s32 v[6];
@@ -128,8 +130,8 @@ typedef struct {
 extern ClassicProcArray lbl_803B7C40;
 extern ClassicProcArray lbl_803B7C28;
 
-extern DynamicModelDesc** lbl_804D662C;
-extern HSD_Archive* lbl_804D6628;
+DynamicModelDesc** lbl_804D662C;
+HSD_Archive* lbl_804D6628;
 extern u8 lbl_803D9828[];
 extern f32 lbl_803B7C68[];
 
@@ -464,21 +466,21 @@ void fn_80184AB8(HSD_GObj* arg0)
             break;
         case 0x46:
             if ((s32) lbl_804735E8.xE4 == 4 || (s32) lbl_804735E8.xE4 == 1) {
-                lbl_804D6608 = lbAudioAx_800237A8(0x7C863, 0x7F, 0x40);
+                lbl_804D6608[0] = lbAudioAx_800237A8(0x7C863, 0x7F, 0x40);
                 return;
             }
             if ((s32) lbl_804735E8.xE4 == 2) {
-                lbl_804D6608 = lbAudioAx_800237A8(0x7C837, 0x7F, 0x40);
+                lbl_804D6608[0] = lbAudioAx_800237A8(0x7C837, 0x7F, 0x40);
                 return;
             }
             if ((u8) lbl_804735E8.x100[0] != 0) {
-                lbl_804D6608 = lbAudioAx_800237A8(0x7C847, 0x7F, 0x40);
+                lbl_804D6608[0] = lbAudioAx_800237A8(0x7C847, 0x7F, 0x40);
                 return;
             }
             break;
         case 0x64:
-            if ((s32) lbl_804D6608 != -1) {
-                lbAudioAx_800236B8(lbl_804D6608);
+            if ((s32) lbl_804D6608[0] != -1) {
+                lbAudioAx_800236B8(lbl_804D6608[0]);
             }
             gm_80168C5C((u32) lbl_804735E8.xF4[0]);
             return;
@@ -1294,7 +1296,7 @@ void gm_80186E30_OnEnter(void* arg0_)
     lbl_804735A8.x3C = 0;
     *(ClassicModeEnterData*) &lbl_804735E8.xE4 = *arg0;
     fn_80186634(arg0_);
-    lbl_804D6608 = -1;
+    lbl_804D6608[0] = -1;
     gm_80167858((int) (s8) lbl_804735E8.xEC, lbl_804735E8.xED, 0xB, 0x2D);
     gm_80168F88();
 }
@@ -1390,7 +1392,7 @@ void fn_80186F6C(HSD_GObj* arg0)
     }
 }
 
-extern HSD_Archive* lbl_804D6610;
+HSD_Archive* lbl_804D6610;
 
 #pragma push
 #pragma dont_inline on
@@ -1465,7 +1467,7 @@ void fn_80187714(void)
 }
 #pragma pop
 
-extern HSD_Archive* lbl_804D6610;
+HSD_Archive* lbl_804D6610;
 
 void gm_8018776C_OnFrame(void)
 {
@@ -1767,7 +1769,7 @@ static char* lbl_803D9750[] = {
     (char*) 0x74610000,
 };
 
-static HSD_Archive* lbl_804D6620;
+static HSD_Archive* lbl_804D6620[2];
 
 void gm_80187F48_OnEnter(void* arg0_)
 {
@@ -1809,7 +1811,7 @@ void gm_80187F48_OnEnter(void* arg0_)
     lbl_804736C0.x36.active = 0;
 
     stage_index = arg0[1];
-    lbl_804D6620 = lbArchive_80016DBC(
+    lbl_804D6620[0] = lbArchive_80016DBC(
         lbl_804D4138, &lbl_804736C0.x0, (char*) &lbl_803D9750[48],
         &lbl_804736C0.x4, lbl_803D9750[stage_index], NULL);
 
@@ -1884,7 +1886,7 @@ void gm_80187F48_OnEnter(void* arg0_)
 
 void gm_80188364_OnLeave(void* arg0)
 {
-    HSD_Archive** var = &lbl_804D6620;
+    HSD_Archive** var = &lbl_804D6620[0];
     lbArchive_80016EFC(*var);
 }
 

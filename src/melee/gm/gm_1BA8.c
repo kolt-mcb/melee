@@ -226,19 +226,18 @@ s32 gm_801BAC9C(GameScene* arg0, s32 arg1)
     PAD_STACK(8);
 
     for (i = 0; i < 0x21; i++) {
-        u8 c = src->c_kind[i];
-        if ((s32) c == 0x21) {
+        if ((s32) src->c_kind[i] == 0x21) {
             break;
         }
         {
             found = 0;
             for (k = 0; k < arg1; k++) {
-                if (data->players[k].c_kind == (s8) c) {
+                if (data->players[k].c_kind == (s8) src->c_kind[i]) {
                     found++;
                 }
             }
             if (found == 0) {
-                chars[count] = c;
+                chars[count] = src->c_kind[i];
                 count++;
             }
         }

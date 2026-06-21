@@ -102,7 +102,7 @@ struct HSD_ImageDesc grPu_803E7620 = { &grPu_803E6E20, 32, 32, 4, 0, 0, 0 };
 
 void grPura_80211CFC(bool num) {}
 
-/* 4D6AA0 */ static HSD_GObj* grPu_804D6AA0;
+/* 4D6AA0 */ static HSD_GObj* grPu_804D6AA0[2];
 
 void grPura_80211D00(void)
 {
@@ -111,7 +111,7 @@ void grPura_80211D00(void)
     UNUSED u32 unused3;
     Vec3 cam_offset;
 
-    grPu_804D6AA0 = Ground_801C49F8();
+    grPu_804D6AA0[0] = Ground_801C49F8();
     stage_info.unk8C.b4 = 0;
     stage_info.unk8C.b5 = 1;
     grPura_80211E08(0);

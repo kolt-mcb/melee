@@ -472,17 +472,17 @@ int fn_80170110(void* arg0, int idx, int mask, u8 player_id)
 
 void gm_801701A0(void)
 {
-    lbl_804D65A0 = 1;
+    lbl_804D65A0[0] = 1;
 }
 
 void fn_801701AC(void)
 {
-    lbl_804D65A0 = 0;
+    lbl_804D65A0[0] = 0;
 }
 
 int fn_801701B8(void)
 {
-    return lbl_804D65A0;
+    return lbl_804D65A0[0];
 }
 
 int fn_801701C0(void* arg0, int arg1, int arg2)
@@ -495,7 +495,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
     u8 rankings[7];
 
     {
-        u8 is_teams = (u8) lbl_804D65A0;
+        u8 is_teams = (u8) lbl_804D65A0[0];
         *(s32*) &rankings[0] = lbl_804DA2F0;
         *(u16*) &rankings[4] = lbl_804DA2F4;
         rankings[6] = lbl_804DA2F6;
@@ -1253,7 +1253,7 @@ void fn_80171B64(struct lbl_804D65A8_t* arg0)
     arg0->x3 = lbl_804D65A8[3];
     arg0->x4 = lbl_804D65A8[4];
     arg0->x5 = lbl_804D65A8[5];
-    arg0->x6 = (u8) lbl_804D65B0;
+    arg0->x6 = (u8) lbl_804D65B0[0];
 }
 
 int fn_80171BA4(void* arg0)
@@ -1271,7 +1271,7 @@ int fn_80171BA4(void* arg0)
     rules = arg0;
     memzero(scores, sizeof(scores));
     memzero(lbl_804D65A8, 6);
-    lbl_804D65B0 = Gm_PKind_Human;
+    lbl_804D65B0[0] = Gm_PKind_Human;
 
     player = 0;
     do {
@@ -1330,8 +1330,8 @@ int fn_80171BA4(void* arg0)
                 j++;
             } while (j < 6);
             result = lbl_804D65A8[player];
-            if (lbl_804D65B0 < result) {
-                lbl_804D65B0 = result;
+            if (lbl_804D65B0[0] < result) {
+                lbl_804D65B0[0] = result;
             }
         }
         player++;
@@ -1346,14 +1346,14 @@ void fn_80171DC4(void)
 
     fn_80171BA4(rules);
 
-    if ((lbl_8046DBC8.x0 == 0) && (0 < lbl_804D65B0)) {
+    if ((lbl_8046DBC8.x0 == 0) && (0 < lbl_804D65B0[0])) {
         lbl_8046DBC8.x0 = 1;
         lbl_8046DBC8.x1 = 1;
         for (i = 0; i < 6; i++) {
             if (rules->x58[i].x0 != 3) {
                 if (lbl_804D65A8[i] == 0) {
                     lbl_8046DBC8.x2[i].x0 = 1;
-                } else if ((s32) lbl_804D65A8[i] == lbl_804D65B0) {
+                } else if ((s32) lbl_804D65A8[i] == lbl_804D65B0[0]) {
                     lbl_8046DBC8.x2[i].x1 = 1;
                 }
             }
@@ -1366,7 +1366,7 @@ void fn_80171DC4(void)
                 }
                 if (lbl_8046DBC8.x2[i].x1 == 1 &&
                     (lbl_804D65A8[i] == 0 ||
-                     (s32) lbl_804D65A8[i] != lbl_804D65B0))
+                     (s32) lbl_804D65A8[i] != lbl_804D65B0[0]))
                 {
                     lbl_8046DBC8.x2[i].x1 = 0;
                 }

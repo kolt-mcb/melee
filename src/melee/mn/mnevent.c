@@ -112,6 +112,9 @@ static s32 mnEvent_804D5028 = 0xCABC9FFF;
 static s32 mnEvent_804D502C = 0xFF;
 void* mnEvent_804A08F8[4];
 void* mnEvent_804A0908;
+HSD_GObj* mnEvent_804D6C60;
+u8 mnEvent_804D6C64;
+u8 mnEvent_804D6C65;
 static char mnEvent_804D5040[3] = "%d";
 static char mnEvent_804D5044[4] = { 0x81, 0x7C, 0, 0 };
 

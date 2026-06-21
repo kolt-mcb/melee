@@ -95,7 +95,7 @@ struct lbl_804336D0_t {
 STATIC_ASSERT(sizeof(struct lbl_804336D0_t) == 0x40);
 
 static struct lbl_804336D0_t lbl_804336D0;
-static u8* skip8_804D63E8;
+static u8* skip8_804D63E8[2];
 
 extern float MSL_TrigF_80400770[], MSL_TrigF_80400774[];
 
@@ -145,7 +145,7 @@ void lbRefract_80021CE8(void* arg0, s32 arg1)
             if (dist_sq > 1.0f) {
                 dist = 1.0f;
             }
-            params = *(f32**) (skip8_804D63E8 + 4);
+            params = *(f32**) (skip8_804D63E8[0] + 4);
             param0 = params[param_idx];
             if (param0) {
                 f32 rem;
@@ -163,7 +163,7 @@ void lbRefract_80021CE8(void* arg0, s32 arg1)
             } else {
                 param0 = dist;
             }
-            params = *(f32**) (skip8_804D63E8 + 4);
+            params = *(f32**) (skip8_804D63E8[0] + 4);
             param0 *= params[param_idx + 1];
             if (param0 > 1.0f) {
                 param0 = 1.0f;
@@ -366,17 +366,17 @@ void lbRefract_800222A4(void)
     u32 i;
 
     lbl_804336D0.refractionUserCount = 0;
-    lbArchive_LoadSymbols(lbl_803BB0B0.filename, &skip8_804D63E8,
+    lbArchive_LoadSymbols(lbl_803BB0B0.filename, &skip8_804D63E8[0],
                           lbl_803BB0B0.symbol, 0);
     {
         s32 buf_size = GXGetTexBufferSize(0x140, 0xF0, 4, 0, 0);
         lbl_804336D0.image_ptr = HSD_MemAlloc(buf_size);
         memset((void*) lbl_804336D0.image_ptr, 0, (u32) buf_size);
     }
-    lbl_804336D0.unk_C = HSD_MemAlloc(*skip8_804D63E8 * 4);
-    lbl_804336D0.unk_8 = HSD_MemAlloc(*skip8_804D63E8 * 0x18);
+    lbl_804336D0.unk_C = HSD_MemAlloc(*skip8_804D63E8[0] * 4);
+    lbl_804336D0.unk_8 = HSD_MemAlloc(*skip8_804D63E8[0] * 0x18);
 
-    for (i = 0; i < *skip8_804D63E8; i++) {
+    for (i = 0; i < *skip8_804D63E8[0]; i++) {
         buf = HSD_MemAlloc(GXGetTexBufferSize(0x20, 0x20, 3, 0, 0));
         lbRefract_8002219C(&cb, (s32) buf, 3, 0x20, 0x20);
         lbRefract_80021CE8(&cb, (s32) i);

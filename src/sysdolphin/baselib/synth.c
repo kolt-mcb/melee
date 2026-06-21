@@ -27,8 +27,11 @@ void HSD_AudioFree(void* ptr)
     OSFreeToHeap(HSD_Synth_804D6018, ptr);
 }
 
-extern void* HSD_Synth_804D7730;
-extern u32* HSD_Synth_804D7734;
+void* HSD_Synth_804D7730;
+u32* HSD_Synth_804D7734;
+s32 HSD_Synth_804D7764;
+u32 HSD_Synth_804D7770;
+u32 HSD_Synth_804D7774;
 
 struct SfxLoadStreamNode {
     /* 0x00 */ struct SfxLoadStreamNode* x0;
