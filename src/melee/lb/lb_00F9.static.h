@@ -48,7 +48,7 @@ struct CameraBlurData {
 /* 4D63AC */ static struct lb_80011A50_t* lb_804D63AC;
 /* 4D63B0 */ static struct lb_80011A50_t* lb_804D63B0;
 /* 4D63B4 */ static enum_t lb_804D63B4;
-/* 4D63B8 */ static u8 lb_804D63B8;
-/* 4D63C0 */ static struct Fighter_804D653C_t* lb_804D63C0;
+/* 4D63B8 */ static u8 lb_804D63B8[8];
+/* 4D63C0 */ static struct Fighter_804D653C_t* lb_804D63C0[2];
 
 #endif

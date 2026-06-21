@@ -105,7 +105,7 @@ static struct {
     s32 x3C;
     s32 x40;
     s32 x44;
-}* grRc_804D6A10;
+}* grRc_804D6A10[2];
 
 void grRCruise_801FF164(bool arg) {}
 
@@ -120,7 +120,7 @@ void grRCruise_801FF168(void)
     HSD_GObj* gobj1;
     HSD_GObj* gobj4;
 
-    grRc_804D6A10 = Ground_801C49F8();
+    grRc_804D6A10[0] = Ground_801C49F8();
     stage_info.unk8C.b4 = 1;
     stage_info.unk8C.b5 = 0;
     jgobj = grRCruise_801FF2C8(3);
@@ -579,7 +579,7 @@ void grRCruise_80200154(Ground_GObj* gobj)
             }
             break;
         case 3:
-            if (gp->gv.rcruise.x3C[i].x04 >= grRc_804D6A10->x0C) {
+            if (gp->gv.rcruise.x3C[i].x04 >= grRc_804D6A10[0]->x0C) {
                 gp->gv.rcruise.x3C[i].x04 = 0;
                 ((struct grRCruise_SubEntryFlags*) &gp->gv.rcruise.x3C[i]
                      .pad_01)
@@ -589,7 +589,7 @@ void grRCruise_80200154(Ground_GObj* gobj)
             gp->gv.rcruise.x3C[i].x04++;
             break;
         case 4:
-            if (gp->gv.rcruise.x3C[i].x04 % grRc_804D6A10->x14 == 0) {
+            if (gp->gv.rcruise.x3C[i].x04 % grRc_804D6A10[0]->x14 == 0) {
                 ((struct grRCruise_SubEntryFlags*) &gp->gv.rcruise.x3C[i]
                      .pad_01)
                     ->b0 =
@@ -606,7 +606,7 @@ void grRCruise_80200154(Ground_GObj* gobj)
                     grRCruise_80201B60(gp2->gv.rcruise.x3C[i].x0C->child, 1);
                 }
             }
-            if (gp->gv.rcruise.x3C[i].x04 >= grRc_804D6A10->x10) {
+            if (gp->gv.rcruise.x3C[i].x04 >= grRc_804D6A10[0]->x10) {
                 mpLib_80057BC0(gp2->gv.rcruise.x3C[i].x02);
                 grRCruise_80201B60(gp2->gv.rcruise.x3C[i].x0C->child, 0);
                 grAnime_801C7BA0(gobj, grRc_804D4790[i], 1, 0.0F);
@@ -618,12 +618,12 @@ void grRCruise_80200154(Ground_GObj* gobj)
             gp->gv.rcruise.x3C[i].x04++;
             break;
         case 5:
-            if (gp->gv.rcruise.x3C[i].x04 % grRc_804D6A10->x1C == 0) {
+            if (gp->gv.rcruise.x3C[i].x04 % grRc_804D6A10[0]->x1C == 0) {
                 grRCruise_80201B60(gp2->gv.rcruise.x3C[i].x0C->child, 0);
             } else {
                 grRCruise_80201B60(gp2->gv.rcruise.x3C[i].x0C->child, 1);
             }
-            if (gp->gv.rcruise.x3C[i].x04 >= grRc_804D6A10->x18) {
+            if (gp->gv.rcruise.x3C[i].x04 >= grRc_804D6A10[0]->x18) {
                 mpLib_80057BC0(gp2->gv.rcruise.x3C[i].x02);
                 grRCruise_80201B60(gp2->gv.rcruise.x3C[i].x0C->child, 0);
                 grAnime_801C7BA0(gobj, grRc_804D4790[i], 1, 0.0F);
@@ -732,24 +732,24 @@ void grRCruise_8020071C(Ground_GObj* gobj)
     case 0:
         if (gp->gv.rcruise.x34 == 0) {
             gp->gv.rcruise.x1C = (f32) (gp->gv.rcruise.x18 < 0.0f ? 1 : -1);
-            gp->gv.rcruise.x20 = grRc_804D6A10->x8 * gp->gv.rcruise.x1C;
+            gp->gv.rcruise.x20 = grRc_804D6A10[0]->x8 * gp->gv.rcruise.x1C;
             if (wrapped <= 0.2f) {
                 gp->gv.rcruise.x20 = 0.0f;
                 gp->gv.rcruise.x2C = 0;
             }
         } else if (gp->gv.rcruise.x24 < gp->gv.rcruise.x28) {
             gp->gv.rcruise.x1C = 1.0f;
-            gp->gv.rcruise.x20 =
-                grRc_804D6A10->x0 * (gp->gv.rcruise.x28 - gp->gv.rcruise.x24);
-            if (gp->gv.rcruise.x20 >= grRc_804D6A10->x4) {
-                gp->gv.rcruise.x20 = grRc_804D6A10->x4;
+            gp->gv.rcruise.x20 = grRc_804D6A10[0]->x0 *
+                                 (gp->gv.rcruise.x28 - gp->gv.rcruise.x24);
+            if (gp->gv.rcruise.x20 >= grRc_804D6A10[0]->x4) {
+                gp->gv.rcruise.x20 = grRc_804D6A10[0]->x4;
             }
         } else {
             gp->gv.rcruise.x1C = -1.0f;
-            gp->gv.rcruise.x20 =
-                -grRc_804D6A10->x0 * (gp->gv.rcruise.x24 - gp->gv.rcruise.x28);
-            if (gp->gv.rcruise.x20 <= -grRc_804D6A10->x4) {
-                gp->gv.rcruise.x20 = -grRc_804D6A10->x4;
+            gp->gv.rcruise.x20 = -grRc_804D6A10[0]->x0 *
+                                 (gp->gv.rcruise.x24 - gp->gv.rcruise.x28);
+            if (gp->gv.rcruise.x20 <= -grRc_804D6A10[0]->x4) {
+                gp->gv.rcruise.x20 = -grRc_804D6A10[0]->x4;
             }
         }
         break;
@@ -758,7 +758,7 @@ void grRCruise_8020071C(Ground_GObj* gobj)
             if (gp->gv.rcruise.x34 == 0) {
                 gp->gv.rcruise.x1C =
                     (f32) (gp->gv.rcruise.x18 < 0.0f ? 1 : -1);
-                gp->gv.rcruise.x20 = grRc_804D6A10->x8 * gp->gv.rcruise.x1C;
+                gp->gv.rcruise.x20 = grRc_804D6A10[0]->x8 * gp->gv.rcruise.x1C;
                 if (wrapped <= 0.2f) {
                     gp->gv.rcruise.x20 = 0.0f;
                     gp->gv.rcruise.x2C = 0;
@@ -846,32 +846,33 @@ void grRCruise_80200C04(Ground_GObj* gobj)
             if (entry->x08 == 0) {
                 entry->x04 = 0;
                 entry->x00 = 0;
-            } else if (entry->x04 >= grRc_804D6A10->x20) {
+            } else if (entry->x04 >= grRc_804D6A10[0]->x20) {
                 entry->x00 = 2;
             } else {
                 entry->x04++;
             }
             break;
         case 2:
-            if ((entry->x04 % grRc_804D6A10->x28) == 0) {
-                f32 range = 100.0f * (grRc_804D6A10->x30 - grRc_804D6A10->x2C);
+            if ((entry->x04 % grRc_804D6A10[0]->x28) == 0) {
+                f32 range =
+                    100.0f * (grRc_804D6A10[0]->x30 - grRc_804D6A10[0]->x2C);
                 s32 randi = (s32) range != 0 ? HSD_Randi((s32) range) : 0;
                 HSD_JObjSetTranslateY(entry->x14,
-                                      entry->x0C + (grRc_804D6A10->x2C +
+                                      entry->x0C + (grRc_804D6A10[0]->x2C +
                                                     ((f32) randi / 100.0f)));
             }
-            if (entry->x04 >= grRc_804D6A10->x24) {
+            if (entry->x04 >= grRc_804D6A10[0]->x24) {
                 entry->x10 = 0.0f;
                 entry->x00 = 3;
             }
             entry->x04++;
             break;
         case 3:
-            entry->x10 -= grRc_804D6A10->x34;
+            entry->x10 -= grRc_804D6A10[0]->x34;
             if ((entry->x10 < 0.0f ? -entry->x10 : entry->x10) >
-                grRc_804D6A10->x38)
+                grRc_804D6A10[0]->x38)
             {
-                entry->x10 = -grRc_804D6A10->x38;
+                entry->x10 = -grRc_804D6A10[0]->x38;
             }
             HSD_JObjAddTranslationY(entry->x14, entry->x10);
             if (HSD_JObjGetTranslationY(entry->x14) <=
@@ -885,7 +886,7 @@ void grRCruise_80200C04(Ground_GObj* gobj)
             }
             break;
         case 4:
-            if (entry->x04 >= grRc_804D6A10->x3C) {
+            if (entry->x04 >= grRc_804D6A10[0]->x3C) {
                 HSD_JObjSetTranslateY(entry->x14, entry->x0C);
                 mpLib_80055E9C(entry->x02);
                 mpLib_80057424(entry->x02);
@@ -898,7 +899,7 @@ void grRCruise_80200C04(Ground_GObj* gobj)
             entry->x04++;
             break;
         case 5:
-            if ((entry->x04 % grRc_804D6A10->x44) == 0) {
+            if ((entry->x04 % grRc_804D6A10[0]->x44) == 0) {
                 ((struct grRCruise_EntryFlags*) &entry->pad_01)->b0 =
                     ((struct grRCruise_EntryFlags*) &entry->pad_01)->b0 ^ 1;
                 if (((struct grRCruise_EntryFlags*) &entry->pad_01)->b0) {
@@ -907,7 +908,7 @@ void grRCruise_80200C04(Ground_GObj* gobj)
                     grRCruise_80201B60(entry->x14, 1);
                 }
             }
-            if (entry->x04 >= grRc_804D6A10->x40) {
+            if (entry->x04 >= grRc_804D6A10[0]->x40) {
                 grRCruise_80201B60(entry->x14, 1);
                 entry->x04 = 0;
                 entry->x00 = 0;

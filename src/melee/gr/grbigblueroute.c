@@ -125,7 +125,7 @@ static struct {
     f32 x44;
     f32 x48;
     f32 x4C;
-}* grBb_Route_804D6A68;
+}* grBb_Route_804D6A68[2];
 
 void grBigBlueRoute_8020B864(bool arg)
 {
@@ -139,7 +139,7 @@ void grBigBlueRoute_8020B864(bool arg)
 
 void grBigBlueRoute_8020B89C(void)
 {
-    grBb_Route_804D6A68 = Ground_801C49F8();
+    grBb_Route_804D6A68[0] = Ground_801C49F8();
     stage_info.unk8C.b4 = 0;
     stage_info.unk8C.b5 = 1;
     grBigBlueRoute_8020B9D4(0);
@@ -173,9 +173,9 @@ void grBigBlueRoute_8020B95C(void)
         return;
     }
 
-    val = grBb_Route_804D6A68->x0;
+    val = grBb_Route_804D6A68[0]->x0;
     if (val != 0) {
-        val = HSD_Randi(grBb_Route_804D6A68->x0);
+        val = HSD_Randi(grBb_Route_804D6A68[0]->x0);
     } else {
         val = 0;
     }
@@ -459,13 +459,13 @@ void grBigBlueRoute_8020C238(Ground_GObj* gobj)
         while (jobj != NULL) {
             HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
 
-            val = grBb_Route_804D6A68->x4;
+            val = grBb_Route_804D6A68[0]->x4;
             HSD_JObjSetScaleX(jobj, val);
 
-            val = grBb_Route_804D6A68->x4;
+            val = grBb_Route_804D6A68[0]->x4;
             HSD_JObjSetScaleY(jobj, val);
 
-            val = grBb_Route_804D6A68->x4;
+            val = grBb_Route_804D6A68[0]->x4;
             HSD_JObjSetScaleZ(jobj, val);
 
             if (jobj == NULL) {
@@ -544,7 +544,7 @@ void grBigBlueRoute_8020C85C(Ground_GObj* gobj)
     s32 route_idx;
     PAD_STACK(8);
 
-    if (!((f32) gp->u.car.x108 < 1.0f + grBb_Route_804D6A68->x40)) {
+    if (!((f32) gp->u.car.x108 < 1.0f + grBb_Route_804D6A68[0]->x40)) {
         return;
     }
 
@@ -555,7 +555,7 @@ void grBigBlueRoute_8020C85C(Ground_GObj* gobj)
     if (gp->u.car.x108 == 0) {
         route_idx = 30;
         ((RouteEntry*) gp->u.car.car_info)[30].flags.b1 = 1;
-        gp->u.car.x10A = grBb_Route_804D6A68->x4C;
+        gp->u.car.x10A = grBb_Route_804D6A68[0]->x4C;
     } else {
         s32 min_val;
         s32 max_val;
@@ -565,8 +565,8 @@ void grBigBlueRoute_8020C85C(Ground_GObj* gobj)
 
         ((RouteEntry*) gp->u.car.car_info)[route_idx].flags.b1 = 0;
 
-        min_val = (s32) grBb_Route_804D6A68->x44;
-        max_val = (s32) grBb_Route_804D6A68->x48;
+        min_val = (s32) grBb_Route_804D6A68[0]->x44;
+        max_val = (s32) grBb_Route_804D6A68[0]->x48;
 
         if (max_val > min_val) {
             s32 range = max_val - min_val;
@@ -592,7 +592,7 @@ void grBigBlueRoute_8020C85C(Ground_GObj* gobj)
         re->x4 = 0.0F;
 
         re = &((RouteEntry*) gp->u.car.car_info)[route_idx];
-        re->x8 = grBb_Route_804D6A68->x20;
+        re->x8 = grBb_Route_804D6A68[0]->x20;
 
         re = &((RouteEntry*) gp->u.car.car_info)[route_idx];
         re->xC = 0.0F;
@@ -607,7 +607,7 @@ void grBigBlueRoute_8020C85C(Ground_GObj* gobj)
         re->x14 = 0.0F;
 
         re = &((RouteEntry*) gp->u.car.car_info)[route_idx];
-        re->x18 = grBb_Route_804D6A68->x3C;
+        re->x18 = grBb_Route_804D6A68[0]->x3C;
 
         re = &((RouteEntry*) gp->u.car.car_info)[route_idx];
         re->x1C = 0.0F;
@@ -959,7 +959,7 @@ void grBigBlueRoute_8020CD20(Ground_GObj* gobj)
             {
                 if (RE_ENTRY->flags.b1) {
                     if (!((UnkFlagStruct*) &gp->gv.bigblue.x0)->b0) {
-                        un_802FD604((s32) grBb_Route_804D6A68->x4C);
+                        un_802FD604((s32) grBb_Route_804D6A68[0]->x4C);
                         Ground_801C53EC(0x77A11);
                         ((UnkFlagStruct*) &gp->gv.bigblue.x0)->b0 = 1;
                     }

@@ -87,7 +87,7 @@
 /* 4D6458 */ static CmSubject* cm_804D6458;
 /* 4D645C */ static CmSubject* cm_804D645C;
 /* 4D6460 */ static CmSubject* cm_804D6460;
-/* 4D6468 */ CmSubject* cm_804D6468; // requires a size of 8?
+/* 4D6468 */ CmSubject* cm_804D6468[2]; // size of 8
 
 /// .sdata
 /* 4D3938 */ static char cm_804D3938[0x8] = "0";

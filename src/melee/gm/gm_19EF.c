@@ -37,7 +37,7 @@ static struct {
     HSD_JObj* x0;
     s32 x4;
 } lbl_804D66B0;
-static HSD_JObj* lbl_804D66B8;
+static HSD_JObj* lbl_804D66B8[2];
 static struct {
     HSD_JObj* x0;
     s32 x4;
@@ -50,15 +50,15 @@ static struct {
     HSD_JObj* x0;
     s32 x4;
 } lbl_804D66D0;
-static HSD_JObj* lbl_804D66D8;
+static HSD_JObj* lbl_804D66D8[2];
 static struct {
     HSD_JObj* x0;
     s32 x4;
 } lbl_804D66E0;
-static HSD_JObj* lbl_804D66E8;
+static HSD_JObj* lbl_804D66E8[2];
 static HSD_Archive* lbl_804D66F0;
 static HSD_JObj* lbl_804D66F4;
-static u32 lbl_804D66F8;
+static u32 lbl_804D66F8[2];
 
 static struct {
     u8 x0;
@@ -316,8 +316,8 @@ static void fn_8019F6EC(HSD_GObj* gobj)
         }
     }
     HSD_JObjAnimAll(jobj);
-    HSD_JObjAnimAll(lbl_804D66B8);
-    HSD_JObjAnimAll(lbl_804D66E8);
+    HSD_JObjAnimAll(lbl_804D66B8[0]);
+    HSD_JObjAnimAll(lbl_804D66E8[0]);
 }
 
 static void fn_8019F810(void)
@@ -442,7 +442,7 @@ void fn_8019F9C4(u32 arg0)
     lbl_804D66E0.x4 = 0;
     lbl_804D66D0.x4 = 0x24E;
     lb_80011E24(jobj, &lbl_804D66B0.x0, 0x38, -1);
-    lb_80011E24(jobj, &lbl_804D66D8, 1, -1);
+    lb_80011E24(jobj, &lbl_804D66D8[0], 1, -1);
     lb_80011E24(jobj, &lbl_804D66D0.x0, 2, -1);
     lb_80011E24(jobj, &lbl_804D66C8.x0, 0x35, -1);
     lb_80011E24(jobj, &lbl_804D66C0.x0, 0x37, -1);
@@ -541,7 +541,7 @@ void fn_8019F9C4(u32 arg0)
 
     gobj = GObj_Create(0xE, 0xF, 0);
     jobj = HSD_JObjLoadJoint(lbl_804D66A8->models[0]->joint);
-    lbl_804D66E8 = jobj;
+    lbl_804D66E8[0] = jobj;
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xB, 0);
     HSD_JObjSetScaleX(jobj, 2.0f);
@@ -584,7 +584,7 @@ void fn_8019F9C4(u32 arg0)
 
     gobj = GObj_Create(0xE, 0xF, 0);
     jobj = HSD_JObjLoadJoint(lbl_804D66AC);
-    lbl_804D66B8 = jobj;
+    lbl_804D66B8[0] = jobj;
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xB, 0);
 
@@ -609,8 +609,8 @@ void fn_8019F9C4(u32 arg0)
     HSD_JObjSetScaleY(jobj, 2.0f);
     HSD_JObjSetScaleZ(jobj, 2.0f);
 
-    lb_8000C1C0(jobj, lbl_804D66E8);
-    lb_8000C290(jobj, lbl_804D66E8);
+    lb_8000C1C0(jobj, lbl_804D66E8[0]);
+    lb_8000C290(jobj, lbl_804D66E8[0]);
 
     HSD_SisLib_803A611C(0, cam_gobj, 9, 0x12, 0, 0xB, 0, 0x13);
     HSD_SisLib_803A62A0(0, "SdIntro.dat", "SIS_IntroData");
@@ -666,15 +666,15 @@ void gm_801A0B18_OnLeave(void* arg0_)
 static void fn_801A0B60(HSD_GObj* gobj)
 {
     HSD_JObj* jobj = GET_JOBJ(gobj);
-    HSD_JObjReqAnimAll(jobj, lbl_804D66F8);
+    HSD_JObjReqAnimAll(jobj, lbl_804D66F8[0]);
     HSD_JObjAnimAll(jobj);
-    if (lbl_804D66F8 == 0xBD) {
+    if (lbl_804D66F8[0] == 0xBD) {
         if (((u32) gm_801A36A0(4) & 0x1000) || ((u32) gm_801A36A0(4) & 0x100))
         {
-            lbl_804D66F8 += 1;
+            lbl_804D66F8[0] += 1;
         }
     } else {
-        lbl_804D66F8 += 1;
+        lbl_804D66F8[0] += 1;
     }
     if ((int) HSD_AObjGetCurrFrame(lbl_804D66F4->aobj) >=
         (int) HSD_AObjGetEndFrame(lbl_804D66F4->aobj))
@@ -694,7 +694,7 @@ void gm_801A0C6C_OnEnter(void* unused)
     HSD_LObj* lobj;
     PAD_STACK(4);
 
-    lbl_804D66F8 = 0;
+    lbl_804D66F8[0] = 0;
     lbl_804D66F0 =
         lbArchive_80016DBC("IfComSn.dat", &sp10, "ScComSoon_scene_data", 0);
 

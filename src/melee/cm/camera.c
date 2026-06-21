@@ -128,7 +128,7 @@ void Camera_80028B9C(int n_subjects)
     cm_804D645C[i].prev = NULL;
 
     cm_804D6460 = NULL;
-    cm_804D6468 = NULL;
+    cm_804D6468[0] = NULL;
 }
 
 void Camera_80028F5C(CmSubject* subject, s32 arg1)
@@ -178,12 +178,12 @@ CmSubject* Camera_80029044(int arg0)
     cm_804D6458 = subject->prev;
     subject->next = NULL;
     if ((CmSubject*) cm_804D6460 != NULL) {
-        cm_804D6468->next = subject;
+        cm_804D6468[0]->next = subject;
     } else {
         cm_804D6460 = subject;
     }
-    subject->prev = cm_804D6468;
-    cm_804D6468 = subject;
+    subject->prev = cm_804D6468[0];
+    cm_804D6468[0] = subject;
     Camera_80028F5C(subject, arg0);
     return subject;
 }
@@ -193,7 +193,7 @@ void Camera_800290D4(CmSubject* subject)
     if (subject->next != 0) {
         subject->next->prev = subject->prev;
     } else {
-        cm_804D6468 = subject->prev;
+        cm_804D6468[0] = subject->prev;
     }
 
     if (subject->prev != 0) {
@@ -295,7 +295,7 @@ void Camera_800293E0(void)
     f32 temp_f1;
     f32 distance;
 
-    for (curr = cm_804D6468; curr != NULL; curr = curr->prev) {
+    for (curr = cm_804D6468[0]; curr != NULL; curr = curr->prev) {
         if (Camera_8002928C(curr) != 0) {
             temp_f1 = curr->x40.x;
             temp_f0 = curr->x2C.x;
@@ -394,8 +394,8 @@ void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
     f32 tracking_multiplier;
 
     subject_count = 0;
-    subject = cm_804D6468;
-    for (subject = cm_804D6468; subject != 0L; subject = subject->prev) {
+    subject = cm_804D6468[0];
+    for (subject = cm_804D6468[0]; subject != 0L; subject = subject->prev) {
         if (Camera_8002928C(subject)) {
             subject_count++;
         }
@@ -413,7 +413,7 @@ void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
         max_x = max_y = -F32_MAX;
 
         subject_count = 0;
-        subject = cm_804D6468;
+        subject = cm_804D6468[0];
         while (subject != NULL) {
             if (Camera_8002928C(subject)) {
                 subject_count++;
