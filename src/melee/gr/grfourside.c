@@ -21,15 +21,17 @@
 #include "lb/lbspdisplay.h"
 #include "mp/mplib.h"
 
-#include <trigf.h>
 #include <dolphin/mtx.h>
 #include <baselib/gobj.h>
+#include <baselib/gobjgxlink.h>
 #include <baselib/gobjobject.h>
 #include <baselib/gobjproc.h>
+#include <baselib/gobjuserdata.h>
 #include <baselib/jobj.h>
 #include <baselib/random.h>
+#include <MSL/trigf.h>
 
-struct grFourside_YakumonoParam {
+static struct {
     /* 00 */ int heli_wait;
     /* 04 */ int heli_wait_add;
     /* 08 */ int heli_stay_time;
@@ -50,76 +52,30 @@ struct grFourside_YakumonoParam {
     /* 44 */ u16 ufo_challenge;
     /* 46 */ u16 x46;
     /* 48 */ u16 x48;
+}* grFs_804D69D8[2];
+
+S16Vec3 grFs_803E3CE8[] = { { 3, 1, 7 }, { 4, 5, 1 }, { 0, 6, 10 } };
+
+StageCallbacks grFs_803E3CFC[] = {
+    { grFourside_801F2EBC, grFourside_801F2EE8, grFourside_801F2EF0,
+      grFourside_801F2EF4, 0 },
+    { grFourside_801F3154, grFourside_801F326C, grFourside_801F3274,
+      grFourside_801F37F8, 0 },
+    { grFourside_801F2EF8, grFourside_801F2F24, grFourside_801F2F2C,
+      grFourside_801F2F30, 0 },
+    { grFourside_801F3C40, grFourside_801F3CC0, grFourside_801F3CC8,
+      grFourside_801F3F0C, 0 },
+    { grFourside_801F30F0, grFourside_801F3144, grFourside_801F314C,
+      grFourside_801F3150, 0 },
+    { grFourside_801F37FC, grFourside_801F388C, grFourside_801F3894,
+      grFourside_801F3B6C, 0 },
+    { grFourside_801F2F34, grFourside_801F3070, grFourside_801F3078,
+      grFourside_801F309C, 0xc0000000 }
 };
 
-static struct grFourside_YakumonoParam* yakumono_param;
-
-/* 1F9338 */ static void grFourside_801F30A0(void* user_data, int joint_id,
-                                             CollData* coll, int coll_x50,
-                                             mpLib_GroundEnum ground_kind,
-                                             float delta_y);
-
-GrJoint grFs_803E3CE8[] = {
-    { 3, 1, 7 },
-    { 4, 5, 1 },
-    { 0, 6, 10 },
-};
-
-StageCallbacks grFs_StageCallbacks[] = {
-    {
-        grFourside_801F2EBC,
-        grFourside_801F2EE8,
-        grFourside_801F2EF0,
-        grFourside_801F2EF4,
-        0,
-    },
-    {
-        grFourside_801F3154,
-        grFourside_801F326C,
-        grFourside_801F3274,
-        grFourside_801F37F8,
-        0,
-    },
-    {
-        grFourside_801F2EF8,
-        grFourside_801F2F24,
-        grFourside_801F2F2C,
-        grFourside_801F2F30,
-        0,
-    },
-    {
-        grFourside_801F3C40,
-        grFourside_801F3CC0,
-        grFourside_801F3CC8,
-        grFourside_801F3F0C,
-        0,
-    },
-    {
-        grFourside_801F30F0,
-        grFourside_801F3144,
-        grFourside_801F314C,
-        grFourside_801F3150,
-        0,
-    },
-    {
-        grFourside_801F37FC,
-        grFourside_801F388C,
-        grFourside_801F3894,
-        grFourside_801F3B6C,
-        0,
-    },
-    {
-        grFourside_801F2F34,
-        grFourside_801F3070,
-        grFourside_801F3078,
-        grFourside_801F309C,
-        (1 << 30) | (1 << 31),
-    },
-};
-
-StageData grFs_StageData = {
-    Gr_Kind_Fourside,
-    grFs_StageCallbacks,
+StageData grFs_803E3D94 = {
+    FOURSIDE,
+    grFs_803E3CFC,
     "/GrFs.dat",
     grFourside_801F2D10,
     grFourside_801F2D0C,
@@ -128,16 +84,16 @@ StageData grFs_StageData = {
     grFourside_801F2DC8,
     grFourside_801F41E0,
     grFourside_801F41E8,
-    (1 << 0),
+    1,
     grFs_803E3CE8,
-    ARRAY_SIZE(grFs_803E3CE8),
+    3,
 };
 
 void grFourside_801F2D0C(bool arg) {}
 
 void grFourside_801F2D10(void)
 {
-    yakumono_param = Ground_GetYakumonoParam();
+    grFs_804D69D8[0] = Ground_801C49F8();
     stage_info.unk8C.b4 = false;
     stage_info.unk8C.b5 = true;
     grFourside_801F2DD0(0);
@@ -167,7 +123,7 @@ bool grFourside_801F2DC8(void)
 HSD_GObj* grFourside_801F2DD0(int gobj_id)
 {
     HSD_GObj* gobj;
-    StageCallbacks* callbacks = &grFs_StageCallbacks[gobj_id];
+    StageCallbacks* callbacks = &grFs_803E3CFC[gobj_id];
 
     gobj = Ground_GetStageGObj(gobj_id);
 
@@ -223,13 +179,13 @@ void grFourside_801F2F34(Ground_GObj* gobj)
                     Ground_801C3FA4(gobj, 6), Ground_801C3FA4(gobj, 5),
                     Ground_801C3FA4(gobj, 9), Ground_801C3FA4(gobj, 8));
     gobj->render_cb = fn_801F3F74;
-    gp->u.fourside.x0 = Ground_801C3FA4(gobj, 2);
-    gp->u.fourside.x4 = Ground_801C3FA4(gobj, 3);
+    gp->gv.fourside.x0 = Ground_801C3FA4(gobj, 2);
+    gp->gv.fourside.x4 = Ground_801C3FA4(gobj, 3);
     pHVar1 = Ground_801C2BA4(4);
     if (pHVar1) {
-        gp->u.fourside.x8 = pHVar1->hsd_obj;
+        gp->gv.fourside.x8 = pHVar1->hsd_obj;
     } else {
-        gp->u.fourside.x8 = NULL;
+        gp->gv.fourside.x8 = NULL;
     }
     mpJointSetCb1(0, gobj, grFourside_801F30A0);
     gp->x10_flags.b5 = 1;
@@ -249,22 +205,21 @@ void grFourside_801F3078(Ground_GObj* gobj)
 
 void grFourside_801F309C(Ground_GObj* arg) {}
 
-/// @copydoc mpLib_JointCollisionCallback
-void grFourside_801F30A0(void* user_data, int joint_id, CollData* coll,
-                         int coll_x50, mpLib_GroundEnum ground_kind,
-                         float delta_y)
+void grFourside_801F30A0(Ground* unusedr3, s32 unusedr4, CollData* r5,
+                         s32 unusedr6, mpLib_GroundEnum unusedr7,
+                         float unusedf1)
 {
     HSD_GObj* gobj;
-    Ground* gp1;
+    Ground* gp;
     s32 val;
     PAD_STACK(3 * 4);
 
     gobj = Ground_801C2BA4(5);
-    val = M2C_FIELD(coll, u8*, 0x34);
-    gp1 = GET_GROUND(gobj);
+    val = M2C_FIELD(r5, u8*, 0x34);
+    gp = GET_GROUND(gobj);
     val = ((val >> 3) & 0xF);
     if (val == 1) {
-        gp1->u.fourside2.x8 += 1;
+        gp->gv.fourside2.x8 += 1;
     }
 }
 
@@ -296,15 +251,17 @@ void grFourside_801F3154(Ground_GObj* gobj)
     PAD_STACK(8);
     Ground_801C2ED0(jobj, gp->map_id);
     grAnime_801C7FF8(gobj, 0, 7, 0, 0.0f, 0.0f);
-    gp->u.foursideCrane.x1.b0 = 0;
-    gp->u.foursideCrane.x4 = yakumono_param->crane_wait +
-                             (yakumono_param->crane_wait_add != 0
-                                  ? HSD_Randi(yakumono_param->crane_wait_add)
-                                  : 0);
-    gp->u.foursideCrane.x8 = HSD_JObjGetTranslationY(crane_iron);
-    gp->u.foursideCrane.x8 = gp->u.foursideCrane.x8 - 10.0F;
-    gp->u.foursideCrane.xC = gp->u.foursideCrane.x10 = gp->u.foursideCrane.x8;
-    gp->u.foursideCrane.x0 = 0;
+    gp->gv.foursideCrane.x1.b0 = 0;
+    gp->gv.foursideCrane.x4 =
+        grFs_804D69D8[0]->crane_wait +
+        (grFs_804D69D8[0]->crane_wait_add != 0
+             ? HSD_Randi(grFs_804D69D8[0]->crane_wait_add)
+             : 0);
+    gp->gv.foursideCrane.x8 = HSD_JObjGetTranslationY(crane_iron);
+    gp->gv.foursideCrane.x8 = gp->gv.foursideCrane.x8 - 10.0F;
+    gp->gv.foursideCrane.xC = gp->gv.foursideCrane.x10 =
+        gp->gv.foursideCrane.x8;
+    gp->gv.foursideCrane.x0 = 0;
     gp->x10_flags.b5 = 1;
     gp->x11_flags.b012 = 1;
 }
@@ -314,183 +271,151 @@ bool grFourside_801F326C(Ground_GObj* arg)
     return false;
 }
 
-static inline void grFourside_UpdateCrane(Ground* gp, HSD_GObj* hsd_gobj)
-{
-    float fVar1;
-    s32 rand_max2;
-    s32 rand_max;
-    float temp_fVar1;
-    PAD_STACK(0x14);
-    // Ground_801C2ED0(jobj,gp->map_id);
-    // grAnime_801C7FF8(gobj,0,7,0,0.0f,0.0f);
-    switch (gp->u.foursideCrane.x0) {
-    case 0:
-        if (gp->u.foursideCrane.x4 <= 0) {
-            if (gp->u.foursideCrane.x1.b0 == 0u) {
-                grAnime_801C7B24(hsd_gobj, 0, 7, 0.0f);
-                grAnime_801C7A04(hsd_gobj, 0, 7, 1.0f);
-                gp->u.foursideCrane.x4 = 0;
-                gp->u.foursideCrane.x0 = 1;
-            } else {
-                grAnime_801C7B24(hsd_gobj, 0, 7, 400.0f);
-                grAnime_801C7A04(hsd_gobj, 0, 7, 1.0f);
-                gp->u.foursideCrane.x4 = 0;
-                gp->u.foursideCrane.x0 = 2;
-            }
-        } else {
-            gp->u.foursideCrane.x4 -= 1;
-        }
-        break;
-    case 1:
-        if (gp->u.foursideCrane.x4 >= 300) {
-            grAnime_801C7A04(hsd_gobj, 0, 7, 0.0);
-            gp->u.foursideCrane.x1.b0 = 1;
-            gp->u.foursideCrane.x0 = 3;
-        } else {
-            gp->u.foursideCrane.x4 += 1;
-        }
-        break;
-    case 2:
-        if (gp->u.foursideCrane.x4 >= 300) {
-            grAnime_801C7A04(hsd_gobj, 0, 7, 0.0);
-            gp->u.foursideCrane.x1.b0 = 0;
-            gp->u.foursideCrane.x0 = 3;
-        } else {
-            gp->u.foursideCrane.x4 += 1;
-        }
-        break;
-    case 3:
-        gp->u.foursideCrane.x4 =
-            yakumono_param->crane_iron_wait +
-            (yakumono_param->crane_iron_wait_add != 0
-                 ? HSD_Randi(yakumono_param->crane_iron_wait_add)
-                 : 0);
-        gp->u.foursideCrane.x0 = 4;
-        break;
-    case 4:
-        if (gp->u.foursideCrane.x4 <= 0) {
-            gp->u.foursideCrane.x10 = gp->u.foursideCrane.x8;
-            if (gp->u.foursideCrane.xC > gp->u.foursideCrane.x8) {
-                fVar1 = yakumono_param->crane_iron_down_max -
-                        yakumono_param->crane_iron_down_min;
-                if (fVar1 < 0.0f) {
-                    fVar1 = -fVar1;
-                }
-                rand_max2 = (s32) fVar1;
-                rand_max = (s32) fVar1;
-                fVar1 = rand_max != 0 ? HSD_Randi(rand_max2) : 0;
-                temp_fVar1 = yakumono_param->crane_iron_down_min;
-                if (temp_fVar1 < 0.0f) {
-                    temp_fVar1 = -temp_fVar1;
-                }
-                gp->u.foursideCrane.x10 =
-                    gp->u.foursideCrane.x10 - (fVar1 + temp_fVar1);
-                gp->u.foursideCrane.x1.b1 = 1;
-                OSReport("pos = %f : tgrpos = %f\n", gp->u.foursideCrane.xC,
-                         gp->u.foursideCrane.x10);
-                gp->u.foursideCrane.x0 = 5;
-            } else {
-                fVar1 = yakumono_param->crane_iron_up_max -
-                        yakumono_param->crane_iron_up_min;
-                if (fVar1 < 0.0f) {
-                    fVar1 = -fVar1;
-                }
-                rand_max2 = (s32) fVar1;
-                rand_max = (s32) fVar1;
-                fVar1 = rand_max != 0 ? HSD_Randi(rand_max2) : 0;
-                temp_fVar1 = yakumono_param->crane_iron_up_min;
-                if (temp_fVar1 < 0.0f) {
-                    temp_fVar1 = -temp_fVar1;
-                }
-                gp->u.foursideCrane.x10 =
-                    gp->u.foursideCrane.x10 + (fVar1 + temp_fVar1);
-                gp->u.foursideCrane.x1.b1 = 0;
-                OSReport("pos = %f : tgrpos = %f\n", gp->u.foursideCrane.xC,
-                         gp->u.foursideCrane.x10);
-                gp->u.foursideCrane.x0 = 6;
-            }
-        } else {
-            gp->u.foursideCrane.x4 -= 1;
-        }
-        break;
-    case 5:
-        gp->u.foursideCrane.xC -= yakumono_param->crane_iron_spd;
-        if (gp->u.foursideCrane.xC <= gp->u.foursideCrane.x10) {
-            gp->u.foursideCrane.xC = gp->u.foursideCrane.x10;
-            gp->u.foursideCrane.x14 = gp->u.foursideCrane.x18 =
-                yakumono_param->crane_iron_spd;
-            gp->u.foursideCrane.x1C = yakumono_param->crane_iron_stop_acl;
-            yakumono_param->crane_iron_spd;
-            gp->u.foursideCrane.x0 = 7;
-        }
-        break;
-    case 6:
-        gp->u.foursideCrane.xC += yakumono_param->crane_iron_spd;
-        if (gp->u.foursideCrane.xC >= gp->u.foursideCrane.x10) {
-            gp->u.foursideCrane.x14 = gp->u.foursideCrane.x18 =
-                yakumono_param->crane_iron_spd;
-            gp->u.foursideCrane.x1C = yakumono_param->crane_iron_stop_acl;
-            yakumono_param->crane_iron_spd;
-            gp->u.foursideCrane.x0 = 7;
-        }
-        break;
-    case 7:
-        temp_fVar1 = gp->u.foursideCrane.x1C;
-        if (temp_fVar1 < 0.0f) {
-            fVar1 = -temp_fVar1;
-        } else {
-            fVar1 = temp_fVar1;
-        }
-        if (fVar1 > gp->u.foursideCrane.x14) {
-            gp->u.foursideCrane.xC = gp->u.foursideCrane.x10;
-            gp->u.foursideCrane.x4 =
-                yakumono_param->crane_wait +
-                (yakumono_param->crane_wait_add != 0
-                     ? HSD_Randi(yakumono_param->crane_wait_add)
-                     : 0);
-            gp->u.foursideCrane.x0 = 0;
-        } else {
-            gp->u.foursideCrane.x18 += temp_fVar1;
-            gp->u.foursideCrane.xC += gp->u.foursideCrane.x18;
-            if ((gp->u.foursideCrane.x1C < 0.0f) &&
-                (gp->u.foursideCrane.xC < gp->u.foursideCrane.x10))
-            {
-                gp->u.foursideCrane.x1C *= -2.0f;
-            }
-            if ((gp->u.foursideCrane.x1C > 0.0f) &&
-                (gp->u.foursideCrane.xC > gp->u.foursideCrane.x10))
-            {
-                gp->u.foursideCrane.x1C *= -2.0f;
-            }
-        }
-        break;
-    }
-}
-
-static inline float grFourside_GetCraneY(Ground* gp)
-{
-    return gp->u.foursideCrane.xC;
-}
-
-static inline HSD_JObj* grFourside_GetCraneIron(HSD_GObj* gobj)
-{
-    return Ground_801C3FA4(gobj, 4);
-}
-
 /// #grFourside_801F3274
 void grFourside_801F3274(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
-    HSD_GObj* hsd_gobj = gobj;
-    HSD_JObj* crane_iron = grFourside_GetCraneIron(hsd_gobj);
+    HSD_JObj* jobj = gobj->hsd_obj;
+    HSD_JObj* crane_iron = Ground_801C3FA4(gobj, 4);
     float fVar1;
     float temp_fVar1;
-    s32 rand_max;
-    s32 rand_max2;
-
-    grFourside_UpdateCrane(gp, hsd_gobj);
-    HSD_JObjSetTranslateY(crane_iron, grFourside_GetCraneY(gp));
-    Ground_801C2FE0(hsd_gobj);
+    PAD_STACK(0x1C);
+    // Ground_801C2ED0(jobj,gp->map_id);
+    // grAnime_801C7FF8(gobj,0,7,0,0.0f,0.0f);
+    switch (gp->gv.foursideCrane.x0) {
+    case 0:
+        if (gp->gv.foursideCrane.x4 <= 0) {
+            if (gp->gv.foursideCrane.x1.b0 == 0u) {
+                grAnime_801C7B24(gobj, 0, 7, 0.0f);
+                grAnime_801C7A04(gobj, 0, 7, 1.0f);
+                gp->gv.foursideCrane.x4 = 0;
+                gp->gv.foursideCrane.x0 = 1;
+            } else {
+                grAnime_801C7B24(gobj, 0, 7, 400.0f);
+                grAnime_801C7A04(gobj, 0, 7, 1.0f);
+                gp->gv.foursideCrane.x4 = 0;
+                gp->gv.foursideCrane.x0 = 2;
+            }
+        } else {
+            gp->gv.foursideCrane.x4 -= 1;
+        }
+        break;
+    case 1:
+        if (gp->gv.foursideCrane.x4 >= 300) {
+            grAnime_801C7A04(gobj, 0, 7, 0.0);
+            gp->gv.foursideCrane.x1.b0 = 1;
+            gp->gv.foursideCrane.x0 = 3;
+        } else {
+            gp->gv.foursideCrane.x4 += 1;
+        }
+        break;
+    case 2:
+        if (gp->gv.foursideCrane.x4 >= 300) {
+            grAnime_801C7A04(gobj, 0, 7, 0.0);
+            gp->gv.foursideCrane.x1.b0 = 0;
+            gp->gv.foursideCrane.x0 = 3;
+        } else {
+            gp->gv.foursideCrane.x4 += 1;
+        }
+        break;
+    case 3:
+        gp->gv.foursideCrane.x4 =
+            grFs_804D69D8[0]->crane_iron_wait +
+            (grFs_804D69D8[0]->crane_iron_wait_add != 0
+                 ? HSD_Randi(grFs_804D69D8[0]->crane_iron_wait_add)
+                 : 0);
+        gp->gv.foursideCrane.x0 = 4;
+        break;
+    case 4:
+        if (gp->gv.foursideCrane.x4 <= 0) {
+            gp->gv.foursideCrane.x10 = gp->gv.foursideCrane.x8;
+            if (gp->gv.foursideCrane.xC > gp->gv.foursideCrane.x8) {
+                fVar1 = grFs_804D69D8[0]->crane_iron_down_max -
+                        grFs_804D69D8[0]->crane_iron_down_min;
+                if (fVar1 < 0.0f) {
+                    fVar1 = -fVar1;
+                }
+                temp_fVar1 = grFs_804D69D8[0]->crane_iron_down_min;
+                gp->gv.foursideCrane.x10 =
+                    gp->gv.foursideCrane.x10 -
+                    (((s32) fVar1 != 0 ? HSD_Randi(fVar1) : 0) + temp_fVar1);
+                gp->gv.foursideCrane.x1.b1 = 1;
+                OSReport("pos = %f : tgrpos = %f\n", gp->gv.foursideCrane.xC,
+                         gp->gv.foursideCrane.x10);
+                gp->gv.foursideCrane.x0 = 5;
+            } else {
+                fVar1 = grFs_804D69D8[0]->crane_iron_up_max -
+                        grFs_804D69D8[0]->crane_iron_up_min;
+                if (fVar1 < 0.0f) {
+                    fVar1 = -fVar1;
+                }
+                temp_fVar1 = grFs_804D69D8[0]->crane_iron_down_min;
+                gp->gv.foursideCrane.x10 =
+                    gp->gv.foursideCrane.x10 +
+                    ((s32) fVar1 != 0 ? HSD_Randi(fVar1) : 0) + temp_fVar1;
+                gp->gv.foursideCrane.x1.b1 = 0;
+                OSReport("pos = %f : tgrpos = %f\n", gp->gv.foursideCrane.xC,
+                         gp->gv.foursideCrane.x10);
+                gp->gv.foursideCrane.x0 = 6;
+            }
+        } else {
+            gp->gv.foursideCrane.x4 -= 1;
+        }
+        break;
+    case 5:
+        gp->gv.foursideCrane.xC -= grFs_804D69D8[0]->crane_iron_spd;
+        if (gp->gv.foursideCrane.xC <= gp->gv.foursideCrane.x10) {
+            gp->gv.foursideCrane.xC = gp->gv.foursideCrane.x10;
+            gp->gv.foursideCrane.x14 = gp->gv.foursideCrane.x18 =
+                grFs_804D69D8[0]->crane_iron_spd;
+            gp->gv.foursideCrane.x1C = grFs_804D69D8[0]->crane_iron_stop_acl;
+            grFs_804D69D8[0]->crane_iron_spd;
+            gp->gv.foursideCrane.x0 = 7;
+        }
+        break;
+    case 6:
+        gp->gv.foursideCrane.xC += grFs_804D69D8[0]->crane_iron_spd;
+        if (gp->gv.foursideCrane.xC >= gp->gv.foursideCrane.x10) {
+            gp->gv.foursideCrane.x14 = gp->gv.foursideCrane.x18 =
+                grFs_804D69D8[0]->crane_iron_spd;
+            gp->gv.foursideCrane.x1C = grFs_804D69D8[0]->crane_iron_stop_acl;
+            grFs_804D69D8[0]->crane_iron_spd;
+            gp->gv.foursideCrane.x0 = 7;
+        }
+        break;
+    case 7:
+        fVar1 = gp->gv.foursideCrane.x1C;
+        if (fVar1 < 0.0f) {
+            temp_fVar1 = -fVar1;
+        } else {
+            temp_fVar1 = fVar1;
+        }
+        if (temp_fVar1 > gp->gv.foursideCrane.x14) {
+            gp->gv.foursideCrane.xC = gp->gv.foursideCrane.x10;
+            gp->gv.foursideCrane.x4 =
+                grFs_804D69D8[0]->crane_wait +
+                (grFs_804D69D8[0]->crane_wait_add != 0
+                     ? HSD_Randi(grFs_804D69D8[0]->crane_wait_add)
+                     : 0);
+            gp->gv.foursideCrane.x0 = 0;
+        } else {
+            gp->gv.foursideCrane.x18 += fVar1;
+            gp->gv.foursideCrane.xC += gp->gv.foursideCrane.x18;
+            if ((gp->gv.foursideCrane.x1C < 0.0f) &&
+                (gp->gv.foursideCrane.xC < gp->gv.foursideCrane.x10))
+            {
+                gp->gv.foursideCrane.x1C *= -2.0f;
+            }
+            if ((gp->gv.foursideCrane.x1C > 0.0f) &&
+                (gp->gv.foursideCrane.xC > gp->gv.foursideCrane.x10))
+            {
+                gp->gv.foursideCrane.x1C *= -2.0f;
+            }
+        }
+        break;
+    }
+    HSD_JObjSetTranslateY(crane_iron, gp->gv.foursideCrane.xC);
+    Ground_801C2FE0(gobj);
 }
 
 void grFourside_801F37F8(Ground_GObj* arg) {}
@@ -501,14 +426,14 @@ void grFourside_801F37FC(Ground_GObj* gobj)
     Ground* gp = (Ground*) HSD_GObjGetUserData(gobj);
     HSD_JObj* jobj = gobj->hsd_obj;
     Ground_801C2ED0(jobj, gp->map_id);
-    new_var = yakumono_param->ufo_wait;
-    gp->u.foursideCrane.x4 = new_var;
-    gp->u.foursideUfo.x0 = 0;
-    gp->u.foursideUfo.x1 = 0xff;
-    gp->u.foursideUfo.x8 = 0;
-    gp->u.foursideUfo.x2 = 0;
-    gp->u.foursideUfo.xC = 0;
-    gp->u.foursideUfo.x3 = 0;
+    new_var = grFs_804D69D8[0]->ufo_wait;
+    gp->gv.foursideCrane.x4 = new_var;
+    gp->gv.foursideUfo.x0 = 0;
+    gp->gv.foursideUfo.x1 = 0xff;
+    gp->gv.foursideUfo.x8 = 0;
+    gp->gv.foursideUfo.x2 = 0;
+    gp->gv.foursideUfo.xC = 0;
+    gp->gv.foursideUfo.x3 = 0;
     HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
     mpLib_80057BC0(4);
     gp->x10_flags.b5 = 1;
@@ -525,60 +450,61 @@ static inline void grFourside_801F3894_inline(Ground_GObj* gobj, Ground* gp,
 {
     switch (state) {
     case 0: {
-        s32 timer = gp->u.foursideUfo.x4;
+        s32 timer = gp->gv.foursideUfo.x4;
         if (timer <= 0) {
             s32 prob = 0;
-            if (gp->u.foursideUfo.x8 != 0) {
-                prob = (s16) yakumono_param->x46;
+            if (gp->gv.foursideUfo.x8 != 0) {
+                prob = (s16) grFs_804D69D8[0]->x46;
             }
-            if (gp->u.foursideUfo.x2 >= (s16) yakumono_param->ufo_challenge) {
-                prob = (s16) yakumono_param->x48;
+            if (gp->gv.foursideUfo.x2 >= (s16) grFs_804D69D8[0]->ufo_challenge)
+            {
+                prob = (s16) grFs_804D69D8[0]->x48;
             }
             if (prob != 0 && HSD_Randi(prob) == 0) {
                 s32 building;
-                gp->u.foursideUfo.x2 = 0;
+                gp->gv.foursideUfo.x2 = 0;
                 do {
                     building = HSD_Randi(3);
                 } while (prev_building == building);
                 if (building == 2 || grFourside_801F3F10() == 0) {
-                    gp->u.foursideUfo.x1 = building;
+                    gp->gv.foursideUfo.x1 = building;
                     grAnime_801C8138(gobj, gp->map_id,
-                                     gp->u.foursideUfo.x1 * 4);
+                                     gp->gv.foursideUfo.x1 * 4);
                     mpLib_80055E9C(4);
                     mpLib_80057424(4);
                     HSD_JObjClearFlagsAll(jobj, JOBJ_HIDDEN);
                     mpJointListAdd(4);
-                    gp->u.foursideUfo.xC = Camera_80029020();
-                    gp->u.foursideUfo.x3 = 0;
-                    gp->u.foursideUfo.x0 = 1;
+                    gp->gv.foursideUfo.xC = Camera_80029020();
+                    gp->gv.foursideUfo.x3 = 0;
+                    gp->gv.foursideUfo.x0 = 1;
                 }
             } else {
-                gp->u.foursideUfo.x4 = yakumono_param->ufo_wait;
-                gp->u.foursideUfo.x2 += 1;
+                gp->gv.foursideUfo.x4 = grFs_804D69D8[0]->ufo_wait;
+                gp->gv.foursideUfo.x2 += 1;
             }
         } else {
-            gp->u.foursideUfo.x4 = timer - 1;
+            gp->gv.foursideUfo.x4 = timer - 1;
         }
         break;
     }
     case 1: {
         if (grAnime_801C83D0(gobj, 0, 7) != 0) {
-            s32 rand_add = yakumono_param->ufo_stay_time_add;
+            s32 rand_add = grFs_804D69D8[0]->ufo_stay_time_add;
             s32 var_r6;
             if (rand_add != 0) {
                 var_r6 = HSD_Randi(rand_add);
             } else {
                 var_r6 = 0;
             }
-            gp->u.foursideUfo.x4 = yakumono_param->ufo_stay_time + var_r6;
+            gp->gv.foursideUfo.x4 = grFs_804D69D8[0]->ufo_stay_time + var_r6;
             grAnime_801C8138(gobj, gp->map_id, (prev_building * 4) + 1);
-            Camera_800290D4(gp->u.foursideUfo.xC);
-            gp->u.foursideUfo.xC = 0;
-            gp->u.foursideUfo.x0 = 2;
+            Camera_800290D4(gp->gv.foursideUfo.xC);
+            gp->gv.foursideUfo.xC = 0;
+            gp->gv.foursideUfo.x0 = 2;
         }
         grFourside_801F3B70(gobj);
-        if (gp->u.foursideUfo.x3 == 1) {
-            u8 building = gp->u.foursideUfo.x1;
+        if (gp->gv.foursideUfo.x3 == 1) {
+            u8 building = gp->gv.foursideUfo.x1;
             if (building == 0) {
                 Ground_801C53EC(0x704E4U);
             } else if (building == 1) {
@@ -586,44 +512,44 @@ static inline void grFourside_801F3894_inline(Ground_GObj* gobj, Ground* gp,
             } else {
                 Ground_801C53EC(0x704E3U);
             }
-            gp->u.foursideUfo.x3 += 1;
+            gp->gv.foursideUfo.x3 += 1;
         }
         break;
     }
     case 2: {
-        s32 timer = gp->u.foursideUfo.x4;
+        s32 timer = gp->gv.foursideUfo.x4;
         if (timer <= 0) {
             if (grAnime_801C84A4(gobj, 0, 7) != 0) {
                 grAnime_801C8138(gobj, gp->map_id, (prev_building * 4) + 2);
-                gp->u.foursideUfo.x0 = 4;
+                gp->gv.foursideUfo.x0 = 4;
             }
         } else {
-            gp->u.foursideUfo.x4 = timer - 1;
+            gp->gv.foursideUfo.x4 = timer - 1;
         }
         break;
     }
     case 4: {
-        s32 timer = gp->u.foursideUfo.x4;
+        s32 timer = gp->gv.foursideUfo.x4;
         if (timer >= 0x3C) {
             HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
             mpLib_80057BC0(4);
-            gp->u.foursideUfo.x4 = yakumono_param->ufo_wait;
-            gp->u.foursideUfo.x0 = 0;
+            gp->gv.foursideUfo.x4 = grFs_804D69D8[0]->ufo_wait;
+            gp->gv.foursideUfo.x0 = 0;
         } else {
-            gp->u.foursideUfo.x4 = timer + 1;
+            gp->gv.foursideUfo.x4 = timer + 1;
         }
         break;
     }
     }
     Ground_801C2FE0(gobj);
-    gp->u.foursideUfo.x8 = 0;
+    gp->gv.foursideUfo.x8 = 0;
 }
 
 void grFourside_801F3894(Ground_GObj* gobj)
 {
     Ground* gp = gobj->user_data;
-    u8 state = gp->u.foursideUfo.x0;
-    u8 prev_building = gp->u.foursideUfo.x1;
+    u8 state = gp->gv.foursideUfo.x0;
+    u8 prev_building = gp->gv.foursideUfo.x1;
     HSD_JObj* jobj = gobj->hsd_obj;
     PAD_STACK(8);
 
@@ -639,14 +565,14 @@ void grFourside_801F3B70(Ground_GObj* gobj)
     HSD_JObj* jobj = Ground_801C3FA4(gobj, 1);
     CmSubject* cam;
     lb_8000B1CC(jobj, NULL, &local18);
-    if (gp->u.foursideUfo.xC != 0) {
+    if (gp->gv.foursideUfo.xC != 0) {
         if (local18.y <=
-            Stage_GetCamBoundsTopOffset() + yakumono_param->ufo_cs_offs)
+            Stage_GetCamBoundsTopOffset() + grFs_804D69D8[0]->ufo_cs_offs)
         {
-            if (gp->u.foursideUfo.x3 == 0) {
-                gp->u.foursideUfo.x3 = 1;
+            if (gp->gv.foursideUfo.x3 == 0) {
+                gp->gv.foursideUfo.x3 = 1;
             }
-            cam = gp->u.foursideUfo.xC;
+            cam = gp->gv.foursideUfo.xC;
             cam->x10 = local18;
             cam->x1C = local18;
             cam->x40.x = -50.0f;
@@ -664,12 +590,12 @@ void grFourside_801F3C40(Ground_GObj* gobj)
 
     gp->x11_flags.b012 = 1;
     HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
-    gp->u.fourside2.x0 = 0;
-    gp->u.fourside2.x4 = yakumono_param->heli_wait +
-                         (yakumono_param->heli_wait_add != 0
-                              ? HSD_Randi(yakumono_param->heli_wait_add)
-                              : 0);
-    gp->u.fourside2.x1 = 0;
+    gp->gv.fourside2.x0 = 0;
+    gp->gv.fourside2.x4 = grFs_804D69D8[0]->heli_wait +
+                          (grFs_804D69D8[0]->heli_wait_add != 0
+                               ? HSD_Randi(grFs_804D69D8[0]->heli_wait_add)
+                               : 0);
+    gp->gv.fourside2.x1 = 0;
 }
 
 bool grFourside_801F3CC0(Ground_GObj* arg)
@@ -688,12 +614,13 @@ void grFourside_801F3CC8(Ground_GObj* gobj)
     bool other_active;
     PAD_STACK(0x14);
 
-    switch (gp->u.fourside2.x0) {
+    switch (gp->gv.fourside2.x0) {
     case 0:
-        if (gp->u.fourside2.x4 <= 0) {
+        if (gp->gv.fourside2.x4 <= 0) {
             other = Ground_801C2BA4(5);
             other_gp = other->user_data;
-            if (other_gp->u.fourside2.x1 == 2 || other_gp->u.fourside2.x0 == 0)
+            if (other_gp->gv.fourside2.x1 == 2 ||
+                other_gp->gv.fourside2.x0 == 0)
             {
                 other_active = false;
             } else {
@@ -702,30 +629,31 @@ void grFourside_801F3CC8(Ground_GObj* gobj)
             if (other_active == false) {
                 HSD_JObjClearFlagsAll(jobj, JOBJ_HIDDEN);
                 grAnime_801C8138(gobj, gp->map_id, 0);
-                gp->u.fourside2.x1 = 0;
-                gp->u.fourside2.x0 = 1;
+                gp->gv.fourside2.x1 = 0;
+                gp->gv.fourside2.x0 = 1;
             }
         } else {
-            gp->u.fourside2.x4 -= 1;
+            gp->gv.fourside2.x4 -= 1;
         }
         break;
     case 1:
-        if (gp->u.fourside2.x1 == 0) {
+        if (gp->gv.fourside2.x1 == 0) {
             lb_8000B1CC(heli_jobj, NULL, &pos);
             if (pos.y <= 50.0f + Stage_GetCamBoundsTopOffset()) {
-                gp->u.fourside2.x1 = 1;
+                gp->gv.fourside2.x1 = 1;
                 Ground_801C53EC(0x704E1);
             }
         }
         if (grAnime_801C83D0(gobj, 0, 7)) {
-            gp->u.fourside2.x0 = 2;
+            gp->gv.fourside2.x0 = 2;
         }
         break;
     case 2:
-        if (gp->u.fourside2.x4 <= 0) {
+        if (gp->gv.fourside2.x4 <= 0) {
             other = Ground_801C2BA4(5);
             other_gp = other->user_data;
-            if (other_gp->u.fourside2.x1 == 2 || other_gp->u.fourside2.x0 == 0)
+            if (other_gp->gv.fourside2.x1 == 2 ||
+                other_gp->gv.fourside2.x0 == 0)
             {
                 other_active = false;
             } else {
@@ -733,25 +661,25 @@ void grFourside_801F3CC8(Ground_GObj* gobj)
             }
             if (other_active == false) {
                 grAnime_801C8138(gobj, gp->map_id, 2);
-                gp->u.fourside2.x0 = 3;
+                gp->gv.fourside2.x0 = 3;
                 Ground_801C53EC(0x704E2);
-                gp->u.fourside2.x4 = 0;
+                gp->gv.fourside2.x4 = 0;
             }
         } else {
-            gp->u.fourside2.x4 -= 1;
+            gp->gv.fourside2.x4 -= 1;
         }
         break;
     case 3:
         if (grAnime_801C83D0(gobj, 0, 7)) {
             HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
-            gp->u.fourside2.x0 = 0;
-            gp->u.fourside2.x4 =
-                yakumono_param->heli_wait +
-                (yakumono_param->heli_wait_add != 0
-                     ? HSD_Randi(yakumono_param->heli_wait_add)
+            gp->gv.fourside2.x0 = 0;
+            gp->gv.fourside2.x4 =
+                grFs_804D69D8[0]->heli_wait +
+                (grFs_804D69D8[0]->heli_wait_add != 0
+                     ? HSD_Randi(grFs_804D69D8[0]->heli_wait_add)
                      : 0);
         }
-        gp->u.fourside2.x4 += 1;
+        gp->gv.fourside2.x4 += 1;
         break;
     }
 }
@@ -762,8 +690,8 @@ int grFourside_801F3F10(void)
 {
     HSD_GObj* gobj = Ground_801C2BA4(3);
     Ground* gp = GET_GROUND(gobj);
-    if ((gp->u.fourside2.x0 == 1 && gp->u.fourside2.x1 == 0) ||
-        (gp->u.fourside2.x0 == 3 && gp->u.fourside2.x4 <= 700))
+    if ((gp->gv.fourside2.x0 == 1 && gp->gv.fourside2.x1 == 0) ||
+        (gp->gv.fourside2.x0 == 3 && gp->gv.fourside2.x4 <= 700))
     {
         return 1;
     }
@@ -787,14 +715,14 @@ void fn_801F3F74(HSD_GObj* gobj, int renderpass)
         }
         if (abs_y < 0.99f) {
             angle = atan2f(-eye.x, -eye.z);
-            if (gp->u.fourside.x0 != NULL) {
-                HSD_JObjSetRotationY(gp->u.fourside.x0, 0.2f * angle);
+            if (gp->gv.fourside.x0 != NULL) {
+                HSD_JObjSetRotationY(gp->gv.fourside.x0, 0.2f * angle);
             }
-            if (gp->u.fourside.x4 != NULL) {
-                HSD_JObjSetRotationY(gp->u.fourside.x4, 0.4f * angle);
+            if (gp->gv.fourside.x4 != NULL) {
+                HSD_JObjSetRotationY(gp->gv.fourside.x4, 0.4f * angle);
             }
-            if (gp->u.fourside.x8 != NULL) {
-                HSD_JObjSetRotationY(gp->u.fourside.x8, 0.7f * angle);
+            if (gp->gv.fourside.x8 != NULL) {
+                HSD_JObjSetRotationY(gp->gv.fourside.x8, 0.7f * angle);
             }
         }
     }

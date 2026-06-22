@@ -15,6 +15,7 @@ static struct {
     /* +A:5 */ u8 xA_b5 : 1;
     /* +A:6 */ u8 xA_b6 : 1;
     /* +A:7 */ u8 xA_b7 : 1;
+    /* +C */ s32 xC;
 } lbl_8049F030;
 
 #endif

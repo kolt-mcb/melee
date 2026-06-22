@@ -58,7 +58,7 @@ static u8 ifStatus_804D57A8[] = { 0xFF, 0xFF, 0xFF, 0xFF };
 /* End color (high damage) */
 static u8 ifStatus_804D57AC[] = { 0x50, 0x00, 0x00, 0xFF };
 /* 4D6D60 */ static u8 ifStatus_804D6D60;
-/* 4D6D61 */ static s8 ifStatus_804D6D61;
+/* 4D6D61 */ static s8 ifStatus_804D6D61[7];
 
 char num_models_name[] = "DmgNum_scene_models";
 char mrk_models_name[] = "DmgMrk_scene_models";
@@ -80,12 +80,12 @@ HudIndex* ifStatus_GetHUDInfo(void)
 static inline float foo(float a, float b)
 {
     float result;
-    if (ifStatus_804D6D61 != 0) {
+    if (ifStatus_804D6D61[0] != 0) {
         result = -a - b;
-        ifStatus_804D6D61 = 0;
+        ifStatus_804D6D61[0] = 0;
     } else {
         result = a + b;
-        ifStatus_804D6D61 = 1;
+        ifStatus_804D6D61[0] = 1;
     }
     return result;
 }

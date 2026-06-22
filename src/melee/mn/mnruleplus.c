@@ -38,8 +38,8 @@ extern StaticModelDesc MenMainCursorTr03_Top;
 extern StaticModelDesc MenMainCursorTr04_Top;
 extern StaticModelDesc MenMainNmRl_Top;
 extern MenuKindData mn_803EB6B0[];
-extern HSD_GObj* mn_804D6BE0;
-extern f32 mn_804D6BE4;
+HSD_GObj* mn_804D6BE0;
+f32 mn_804D6BE4;
 
 typedef struct _MenuRulesPlusData {
     MenuKind8 menu_kind;
@@ -75,7 +75,7 @@ STATIC_ASSERT(sizeof(mn_803ED1D0_t) == 0xA0);
 
 mn_803ED1D0_t mn_803ED1D0 = {
     { 3, 4, 5, 6, 7, 8, 9 },
-    { 7, 2, 2, 2, 2, 0 },
+    { 0, 7, 2, 2, 2, 2 },
     { 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f, 26.0f, 27.0f, 28.0f, 29.0f,
       30.0f, 31.0f },
     { 0.0f, 99.0f, 0.0f },
@@ -133,7 +133,7 @@ const f32 mn_804DBE54 = 17.0f;
 const f32 mn_804DBE58 = 364.68332f;
 const f32 mn_804DBE5C = 76.77544f;
 const f32 mn_804DBE60 = 0.0521f;
-volatile const f64 mn_804DBE68 = 4503599627370496.0;
+volatile const f64 mn_804DBE68 = 4503601774854144.0;
 
 static inline void SisLib_ClearText(HSD_Text** text)
 {
