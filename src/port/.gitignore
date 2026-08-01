@@ -1,0 +1,11 @@
+# PC Port build artifacts
+*.o
+*.d
+*.ninja.pc
+
+# IDE files
+.vscode/
+.idea/
+
+# Build output
+build.ninja.pc
