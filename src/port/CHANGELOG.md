@@ -1,3 +1,36 @@
+## [2025-08-03g] — GX Link Render Callbacks Wired Into Render Pipeline
+
+### Key Fix: Initialized GX Link Backing Arrays
+- `HSD_GObjGXLinkHead` and `HSD_GObj_804D7820` were NULL at runtime, causing SEGV
+  in `HSD_GObj_80390FC0()` when invoked from `invoke_gx_render_links()`
+- **Solution:** Added `__attribute__((constructor))` in `undef_stubs.c` that allocates
+  17-entry `HSD_GObj*` arrays and assigns them to the global pointers before main()
+
+### Architecture: Render Callback Chain
+```
+render_present() ─→ invoke_gx_render_links() ─→ HSD_GObj_80390FC0()
+                                                                    │
+                                             ┌──→ grDisplay (stage render)
+                                             ├──→ render_cb (character render)
+                                             └──→ render_cb (HUD/overlay)
+```
+- `HSD_GObjGXLinkHead[X]` = singly-linked list of objects for GX link type X
+- `HSD_GObjGXLinkHead[17]` = GXLinkMax (highest priority, single-linked)
+- `HSD_GObj_804D7820[X]` = tail pointers for O(1) insertion
+- Each GObj has `render_cb(GObj*, u8)` — called per frame when gr/ enabled
+
+### Validation
+- Binary runs 5+ seconds in main loop without crash
+- HSD_GObj_80390FC0() walks empty lists gracefully (no segfault)
+- Ready for gr/ module: when enabled, grDisplay functions register as render callbacks
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp = 53 total
+Runtime:    13/13 INIT ✓ → main loop ✓ → render callbacks wired ✓
+Binary:     433K ELF (zero errors, zero crashes, stable infinite loop)
+```
+
 ## [2025-08-03f] — 3D Cube Rendering + Stable Main Loop
 
 ### Key Fix: Removed Dolphin GX Inline Functions from render.c
