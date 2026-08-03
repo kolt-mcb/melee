@@ -52,6 +52,7 @@ DISPLAY_MODULES = [
 G_DISPLAY_SOURCES = [
     str(BASELIB_SRC / f) for f in DISPLAY_MODULES
 ]
+
 # Filter to only existing files
 G_OBJ_SOURCES = [s for s in G_OBJ_SOURCES if Path(s).exists()]
 G_DISPLAY_SOURCES = [s for s in G_DISPLAY_SOURCES if Path(s).exists()]
