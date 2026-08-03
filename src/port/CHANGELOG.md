@@ -110,3 +110,34 @@ Implemented persistent joystick handle pattern:
 Sources:    13 port + 4 stub + 31 decomp = 49 total
 Binary:     427K ELF — 0 errors, stable infinite main loop
 ```
+
+## [2025-08-03h] — GX Bridge Expansion: ChanCtrl + Misc Settings
+
+### GXSetChanCtrl — Real Implementation
+Previously a `(void)chan; (void)...` stub. Now tracks per-channel state:
+- **Channel enable/disable**: CHAN0 enabled by default (output channel), others disabled
+- **Lit flag**: Lighting computation toggle per channel
+- **Diffuse light source**: Which light (GX_LIGHT0-7) feeds each channel
+- **Color source**: GX_SRC_REG (material) vs GX_SRC_VTX (vertex color)
+- Added GX_SRC_REG/GX_SRC_VTX enum values to gx_gl_bridge.c
+
+### GXSetMisc — Real Implementation
+- **GX_SET_TME** (param=0): Texture mode enable — gates all texture lookups
+- **GX_SET_ZCLAMP** (param=1): Z value clamping to [0,1] range
+- Unknown params ignored with no-op
+
+### BridgeState Fields Added
+```c
+Bool chan_enabled[8];           /* Per-channel enable */
+u32 chan_color_source[8];      /* GX_SRC_REG or GX_SRC_VTX */
+Bool chan_lit[8];              /* Lighting enabled per channel */
+u32 chan_diffuse_light[8];     /* Active light per channel */
+Bool tme_enabled;              /* Texture mode enable */
+Bool zclamp_enabled;           /* Z value clamping */
+```
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp = 49 total
+Binary:     427K ELF — 0 errors, stable infinite main loop
+```
