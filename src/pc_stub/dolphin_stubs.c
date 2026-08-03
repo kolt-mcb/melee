@@ -8,6 +8,8 @@
 #include <stddef.h>
 #include <string.h>
 #include <time.h>
+#include <stdlib.h>
+#include <math.h>
 
 /* Minimal type definitions (matching dolphin/types.h) */
 typedef signed char s8;

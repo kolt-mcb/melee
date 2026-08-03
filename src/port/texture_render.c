@@ -25,6 +25,21 @@
 #include "port/platform.h"
 #include <baselib/archive.h>
 
+/* Forward declarations for GX bridge functions used by texture rendering */
+void GXClearVtxDesc(void);
+void GXSetVtxDesc(int attr, int type);
+void GXSetVtxAttrFmt(int fmt, int attr, int comp, int size, int offset);
+void GXSetBlendMode(int mode, int sfactor, int dfactor, int lop);
+void GXBegin(u32 type, u32 vtxfmt, u16 nverts);
+void GXEnd(void);
+void GXPosition2f32(float x, float y);
+void GXColor4u8(u8 r, u8 g, u8 b, u8 a);
+void GXSetTexCoordGen(int tex, int gen, int mtx, int genmode);
+void GXSetTevOrder(int tev, int texcoord, int tex, int color);
+void GXSetTevOp(int tev, int op);
+void GXTexCoord2f32(float u, float v);
+void GXFlush(void);
+
 /* ============================================================
  * Internal types — must match GX types exactly (from gx_gl_bridge.c)
  * ============================================================ */
@@ -125,8 +140,8 @@ enum {
 enum {
     GX_BL_ZERO   = 0,
     GX_BL_ONE    = 1,
-    GX_BL_SRCALPHA  = 2,
-    GX_BL_INVSRCALPHA = 3,
+    GX_BL_SRCALPHA   = 6,
+    GX_BL_INVSRCALPH = 3,
 };
 
 /* Logic ops (GXLogicOp) */
@@ -271,7 +286,7 @@ static void draw_rect_local(int x, int y, int w, int h, u8 r, u8 g, u8 b, u8 a)
     GXSetVtxDesc(GX_VA_TEX0, GX_DISABLE);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_F32, 0);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_U8, 0);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
+    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPH, GX_LO_NOOP);
 
     GXBegin(GX_QUADS, GX_VTXFMT0, 4);
     

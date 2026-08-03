@@ -17,13 +17,14 @@ LogLevel log_get_level(void)
 /* Write a single char to fd */
 static void write_char(int fd, char c)
 {
-    write(fd, &c, 1);
+    ssize_t ret = write(fd, &c, 1);
+    (void)ret;
 }
 
 /* Write a null-terminated string to fd */
 static void write_str(int fd, const char *s)
 {
-    while (*s) { write(fd, s, 1); s++; }
+    while (*s) { ssize_t ret = write(fd, s, 1); (void)ret; s++; }
 }
 
 /* port_log_string — write pre-formatted string */

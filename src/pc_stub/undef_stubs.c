@@ -1578,7 +1578,8 @@ void test_hang(void)
 {
     extern size_t lbFile_800163D8(const char*);
     lbFile_800163D8("MnSlChr.dat");
-    write(2, "[HANG] done\n", 12);
+    ssize_t ret = write(2, "[HANG] done\n", 12);
+    (void)ret;
 }
 
 /* ============================================================

@@ -1,3 +1,19 @@
+## [2025-08-03h3] — Compiler Warning Fixes + GX Bridge Forward Declarations
+
+### Issues Fixed
+- `texture_render.c` called GX functions with wrong signatures (GXBegin had 1-arg forward decl, actual is 3-arg)
+- `GX_BL_INVSRCALPHA` local enum had wrong value (3 instead of 7, correct Dolphin name is `GX_BL_INVSRCALPH`)
+- `dolphin_stubs.c` missing `<stdlib.h>` and `<math.h>` → implicit declaration of malloc/free/sqrtf
+- `log.c` ignored write() return value (warn_unused_result)
+- `undef_stubs.c` test_hang() ignored write() return value
+- All 14 port/decomp files with `_GNU_SOURCE` now guarded with `#ifndef`
+
+### Result
+- Zero ERROR: build succeeds cleanly
+- No NEW warnings introduced by this iteration
+- Remaining warnings (167) are all PRE-EXISTING: Dolphin inline headers, PPC math intrinsics, decomp casts
+- Binary unchanged: 433K ELF, stable 3s+ runtime confirmed
+
 ## [2025-08-03h] — Main Loop Frame Pacing + HSD_GetNextArena Fix
 
 ### Frame Timing
