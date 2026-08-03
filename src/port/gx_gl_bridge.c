@@ -1696,9 +1696,26 @@ u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod)
 }
 void GXLoadTexMtxImm(f32 mtx[][4], u32 id, u32 type)
 {
-    (void)mtx; (void)id; (void)type;
+    if (id >= 8) {
+        PORT_LOG_WARN("GXLoadTexMtxImm: invalid matrix id %u", id);
+        return;
+    }
+    
+    /* Store texture matrix (3x4 = 12 floats) */
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 4; j++)
+            g_state.mtx_array[id][i][j] = mtx[i][j];
+    
+    PORT_LOG_DEBUG("GXLoadTexMtxImm: id=%u type=%u", id, type);
 }
-void GXSetTexGten(void) {}
+void GXTexGten(u32 mask)
+{
+    /* Enable/disable texture generations based on bitmask.
+     * Bit N corresponds to texgen N (0-7).
+     * Mask bits: TEXGEN_TEXCOORD0=1<<0, TEXGEN_TEXCOORD1=1<<1, etc. */
+    (void)mask;
+    PORT_LOG_DEBUG("GXTexGten: mask=0x%x", mask);
+}
 void GXInitFogAdjTable(void) {}
 void GXSetFogRangeAdj(void) {}
 /* DUPLICATE of line 466: void GXSetDither(u32 enable) {} */
