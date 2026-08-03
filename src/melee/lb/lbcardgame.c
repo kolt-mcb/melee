@@ -1,4 +1,5 @@
 #include "lbcardgame.h"
+#include <stdint.h>
 
 #include "lbcardgame.static.h"
 
@@ -105,7 +106,7 @@ u32 lb_8001C87C(void)
 
 /// #lb_8001C87C
 
-int lb_8001C8BC(void)
+bool lb_8001C8BC(void)
 {
     HSD_ASSERT(0x140, _p(enable));
 
@@ -116,7 +117,7 @@ int lb_8001C8BC(void)
 
 #pragma push
 #pragma dont_inline on
-int lb_8001CAF4(void)
+bool lb_8001CAF4(void)
 {
     int temp_r5 = _p(x4);
     _p(x4) = 0;

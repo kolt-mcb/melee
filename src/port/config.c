@@ -1,5 +1,6 @@
 #include "config.h"
 #include "log.h"
+#include <stdbool.h>
 #include <string.h>
 #include <strings.h>
 
@@ -7,11 +8,14 @@ static void config_defaults(Config* config)
 {
     config->window.width = 1280;
     config->window.height = 720;
-    config->window.fullscreen = FALSE;
-    config->window.vsync = TRUE;
+    config->window.fullscreen = false;
+    config->window.vsync = true;
     config->window.title = "Super Smash Bros. Melee (PC Port)";
 
-    config->fs.asset_dir[0] = '\0';
+    /* Default asset directory: look for extracted GCN data */
+    strncpy(config->fs.asset_dir, "/home/grunt/melee/orig/GALE01", sizeof(config->fs.asset_dir) - 1);
+    config->fs.asset_dir[sizeof(config->fs.asset_dir) - 1] = '\0';
+
     config->fs.iso_path[0] = '\0';
 
     config->log_level = 1; /* INFO */
@@ -29,11 +33,11 @@ static void parse_args(Config* config, int argc, char* argv[])
         }
         else if (strcmp(argv[i], "-f") == 0 || strcmp(argv[i], "--fullscreen") == 0)
         {
-            config->window.fullscreen = TRUE;
+            config->window.fullscreen = true;
         }
         else if (strcmp(argv[i], "-nv") == 0 || strcmp(argv[i], "--no-vsync") == 0)
         {
-            config->window.vsync = FALSE;
+            config->window.vsync = false;
         }
         else if (strcmp(argv[i], "-i") == 0 && i + 1 < argc)
         {
@@ -74,8 +78,9 @@ void config_load(Config* config, int argc, char* argv[])
     parse_args(config, argc, argv);
 
     PORT_LOG_INFO("Configuration loaded: %dx%d%s",
-                  config->window.width, config->window.height,
-                  config->window.fullscreen ? " (fullscreen)" : "");
+        config->window.width,
+        config->window.height,
+        config->window.fullscreen ? " (fullscreen)" : "");
 }
 
 void config_save(const Config* config)

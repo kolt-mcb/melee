@@ -158,7 +158,7 @@ void lb_80019900(void)
     }
 }
 
-bool lb_80019A30(int index)
+int lb_80019A30(int index)
 {
     return lb_804329F0.x0[index].x10;
 }

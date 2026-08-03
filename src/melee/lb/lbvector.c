@@ -1,6 +1,18 @@
 #include "lb/lbvector.h"
 
+#ifndef M_TAU
+#define M_TAU 6.283185307179586
+#endif
+
+
+#include <dolphin/types.h>
+#include <stdbool.h>
+#include <math.h>
+
 #include <platform.h>
+#undef sin
+#undef cos
+#undef fmod
 
 #include "lb/lbrefract.h"
 
@@ -130,7 +142,7 @@ float lbVector_AngleXY(Vec3* a, Vec3* b)
 /// Procedure, which is described in the following paper:
 /// https://math.berkeley.edu/~arash/54/notes/6_4.pdf
 
-static float sin(float angle)
+static float _lb_sin(float angle)
 {
     if (angle > M_PI) {
         angle -= M_TAU;
@@ -142,7 +154,7 @@ static float sin(float angle)
            0.0056429998949170113f * angle * angle * angle * angle * angle;
 }
 
-static float cos(float angle)
+static float _lb_cos(float angle)
 {
     angle += M_PI / 2;
     if (angle > M_PI) {

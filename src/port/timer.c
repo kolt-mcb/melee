@@ -13,7 +13,8 @@ void timer_init(void)
 
 OSTick timer_get_tick(void)
 {
-    return (OSTick)SDL_GetTicksNS();
+    /* Use SDL_GetTicks64() scaled to nanoseconds */
+    return (OSTick)SDL_GetTicks64() * 1000000ULL;
 }
 
 f32 timer_ticks_to_seconds(OSTick ticks)

@@ -3,6 +3,7 @@
 
 static SDL_Window* g_sdl_window = NULL;
 static SDL_GLContext g_gl_context = NULL;
+static volatile Bool g_should_quit = FALSE;
 
 Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
 {
@@ -10,7 +11,7 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0)
     {
-        PORT_LOG_ERROR("SDL2 init failed: %s", SDL_GetError());
+        PORT_LOG_ERROR("SDL2 init failed: %s");
         return FALSE;
     }
 
@@ -34,14 +35,14 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
                                     *width, *height, flags);
     if (!g_sdl_window)
     {
-        PORT_LOG_ERROR("SDL window creation failed: %s", SDL_GetError());
+        PORT_LOG_ERROR("SDL window creation failed: %s");
         return FALSE;
     }
 
     g_gl_context = SDL_GL_CreateContext(g_sdl_window);
     if (!g_gl_context)
     {
-        PORT_LOG_ERROR("SDL GL context creation failed: %s", SDL_GetError());
+        PORT_LOG_ERROR("SDL GL context creation failed: %s");
         SDL_DestroyWindow(g_sdl_window);
         g_sdl_window = NULL;
         return FALSE;
@@ -52,6 +53,7 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
     *width = *height = 0;
     SDL_GetWindowSize(g_sdl_window, width, height);
 
+    SDL_GetWindowSize(g_sdl_window, width, height);
     PORT_LOG_INFO("Window initialized: %dx%d", *width, *height);
     return TRUE;
 }
@@ -74,6 +76,7 @@ void window_shutdown(void)
 
 Bool window_should_close(void)
 {
+    if (g_should_quit) return TRUE;
     Uint32 flags = SDL_GetWindowFlags(g_sdl_window);
     return !(flags & SDL_WINDOW_SHOWN);
 }
@@ -86,17 +89,18 @@ void window_poll_events(void)
         switch (event.type)
         {
             case SDL_QUIT:
+                g_should_quit = TRUE;
                 break;
             case SDL_KEYDOWN:
                 if (event.key.keysym.sym == SDLK_ESCAPE)
                 {
-                    /* Escape closes window */
+                    g_should_quit = TRUE;
                 }
                 break;
             case SDL_WINDOWEVENT:
                 if (event.window.event == SDL_WINDOWEVENT_RESIZED)
                 {
-                    /* Notify render layer of resize */
+                    /* Trigger GL viewport resize later */
                 }
                 break;
         }

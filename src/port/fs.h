@@ -34,6 +34,9 @@ typedef struct {
 Bool fs_init(const char* asset_dir, const char* iso_path);
 void fs_shutdown(void);
 
+/* Path resolution — prepends asset dir to filename */
+char* vf_resolve_path(const char* path, char* out, size_t out_size);
+
 /* File operations */
 VfHandle vf_open(const char* path, const char* mode);
 int vf_read(VfHandle handle, void* buffer, int size);

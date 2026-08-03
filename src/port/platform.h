@@ -21,25 +21,40 @@
  * PC Target — SDL2, OpenGL, POSIX
  * ======================================== */
 
+/* Must define _GNU_SOURCE before any system headers to get POSIX extensions */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 /* System / threading */
+#include <stddef.h>  /* Must be first: defines size_t, wchar_t for all below */
+#include <stdatomic.h>
 #include <pthread.h>
 #include <sched.h>
-#include <unistd.h>
 #include <semaphore.h>
 #include <signal.h>
 #include <time.h>
-#include <stdatomic.h>
 
-/* SDL2 (window, input, audio) */
-#include <SDL2/SDL.h>
-#define SDL_MAIN_HANDLED
+/* Standard I/O and types */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+#include <wchar.h>
+#include <stdarg.h>
 
-/* OpenGL (graphics) */
+/* POSIX types — MUST come after stddef.h/stdlib.h for size_t */
+#include <unistd.h>
+#include <dirent.h>
+#include <sys/stat.h>
+
+/* OpenGL (graphics) — core only, no GLU needed */
 #include <GL/gl.h>
-#include <GL/glu.h>
+
+/* SDL2 (window, input, audio, timer) */
+#include <SDL2/SDL.h>
 
 /* File I/O */
-#include <stdio.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -52,6 +67,9 @@
 #include <string.h>
 #include <stdarg.h>
 #include <limits.h>
+
+/* Integer types */
+#include <dolphin/types.h>
 
 #else /* BUILD_TARGET_GC */
 
@@ -92,15 +110,23 @@ typedef signed char        s8;
 typedef unsigned char      u8;
 typedef signed short       s16;
 typedef unsigned short     u16;
-typedef signed int         s32;
-typedef unsigned int       u32;
-typedef signed long long   s64;
-typedef unsigned long long u64;
+#ifdef BUILD_TARGET_PC
+/* s32/u32/s64/u64 defined in extern/dolphin/include/dolphin/types.h */
+#else
+typedef signed long         s32;
+typedef unsigned long       u32;
+typedef signed long long    s64;
+typedef unsigned long long  u64;
+#endif
 typedef float              f32;
 typedef double             f64;
 
 /* Pointer-sized integer */
+#ifdef BUILD_TARGET_PC
 typedef uintptr_t         uintptr;
+#else
+typedef unsigned int      uintptr;
+#endif
 
 /* Boolean */
 typedef int                Bool;

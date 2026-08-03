@@ -20,8 +20,16 @@ Vec3* lbVector_CrossprodNormalized(Vec3* a, Vec3* b, Vec3* result);
 float lbVector_Angle(Vec3* a, Vec3* b);
 float lbVector_AngleXY(Vec3* a, Vec3* b);
 
+#ifdef BUILD_TARGET_GC
 static float sin(float angle);
+#else
+/* sin overridden in lbvector.c for GCN — on PC use math.h sin() */
+#endif
+#ifdef BUILD_TARGET_GC
 static float cos(float angle);
+#else
+/* cos overridden in lbvector.c for GCN — on PC use math.h cos() */
+#endif
 
 void lbVector_RotateAboutUnitAxis(Vec3* v, Vec3* axis, float angle);
 void lbVector_Rotate(Vec3* v, int axis, float angle);

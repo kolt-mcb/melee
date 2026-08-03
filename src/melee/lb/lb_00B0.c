@@ -395,7 +395,7 @@ void lb_8000C0E8(HSD_JObj* jobj, s32 i, DynamicModelDesc* arg2)
     lb_8000C07C(jobj, i, arg2->anims, arg2->matanims, arg2->shapeanims);
 }
 
-void memzero(void* mem, int size)
+void pc_pc_memzero(void* mem, int size)
 {
     u8* bytes = mem;
     while (size--) {

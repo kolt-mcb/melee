@@ -29,7 +29,7 @@ Bool audio_init(void)
     g_audio_dev = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
     if (g_audio_dev == 0)
     {
-        PORT_LOG_WARN("Failed to open audio device: %s", SDL_GetError());
+        PORT_LOG_WARN("Failed to open audio device: %s");
         /* Continue without audio for now */
         return FALSE;
     }
@@ -38,10 +38,7 @@ Bool audio_init(void)
 
     SDL_PauseAudioDevice(g_audio_dev, 0); /* Start playback */
 
-    PORT_LOG_INFO("Audio initialized: %d Hz, %s, %d channels",
-                  obtained.freq,
-                  obtained.format == AUDIO_S16SYS ? "S16SYS" : "unknown",
-                  obtained.channels);
+    PORT_LOG_INFO("Audio initialized: %d Hz, %d channels", obtained.freq, obtained.channels);
     return TRUE;
 }
 

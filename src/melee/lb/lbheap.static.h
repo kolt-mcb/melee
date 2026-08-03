@@ -6,6 +6,7 @@
 
 #include <placeholder.h>
 
+
 /// @remarks @c LbHeapStatus_Create is named by an assert in #lbHeap_80015CA8.
 typedef enum LbHeapStatus {
     /* 0x00 */ LbHeapStatus_Create,

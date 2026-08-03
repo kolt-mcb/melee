@@ -2,7 +2,7 @@
 #include "log.h"
 
 #define MAX_GAMEPADS 4
-#define KEYPAD_SIZE  SDL_SCANCODE_COUNT
+#define KEYPAD_SIZE  512 /* Safe upper bound for scancodes */
 
 static PADData g_gamepads[MAX_GAMEPADS];
 static u8 g_keyboard[KEYPAD_SIZE];
@@ -17,7 +17,7 @@ void input_init(void)
         SDL_zero(g_gamepads[i]);
     }
 
-    PORT_LOG_INFO("Input initialized: %d gamepads, keyboard", MAX_GAMEPADS);
+    PORT_LOG_INFO("Input initialized: SDL pads + keyboard");
 }
 
 void input_shutdown(void)

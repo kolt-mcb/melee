@@ -739,22 +739,23 @@ void lbRefract_80022BD0(void)
     }
 }
 
-float atan2f(float y, float x)
+static float lb_atanf(float x);
+static float lb_atan2f(float y, float x)
 {
     if (GET_SIGN_BIT(x) == GET_SIGN_BIT(y)) {
         if (GET_SIGN_BIT(x) != 0) {
-            return x == -0.0f ? (float) -M_PI_2 : atanf(y / x) - (float) M_PI;
+            return x == -0.0f ? (float) -M_PI_2 : lb_atanf(y / x) - (float) M_PI;
         }
 
-        return x ? atanf(y / x) : (float) M_PI_2;
+        return x ? lb_atanf(y / x) : (float) M_PI_2;
     }
 
     if (x < 0.0f) {
-        return (float) M_PI + atanf(y / x);
+        return (float) M_PI + lb_atanf(y / x);
     }
 
     if (x) {
-        return atanf(y / x);
+        return lb_atanf(y / x);
     }
 
     *(u32*) &y = GET_SIGN_BIT(y) + BITWISE_PI_2;
@@ -762,7 +763,7 @@ float atan2f(float y, float x)
     return y;
 }
 
-float acosf(float x)
+static float lb_acosf(float x)
 {
     float result = 1.0F - x * x;
     if (result > 0) {
@@ -777,12 +778,12 @@ float acosf(float x)
     } else {
         result = INF;
     }
-    return (float) M_PI_2 - atanf(x * result);
+    return (float) M_PI_2 - lb_atanf(x * result);
 }
 
-float asinf(float x)
+static float lb_asinf(float x)
 {
-    return atanf(x * lbRefract_80022DF8(-(x * x - 1.0f)));
+    return lb_atanf(x * lbRefract_80022DF8(-(x * x - 1.0f)));
 }
 
 static inline float lbRefract_80022DF8(float x)
@@ -864,7 +865,7 @@ static const float atanf_lookup[] = {
     0.0,
 };
 
-float atanf(float x)
+static float lb_atanf(float x)
 {
     float const silver_ratio = 2.4142136573791504f;
     float const silver_ratio_conjugate = 0.4142135679721832f;

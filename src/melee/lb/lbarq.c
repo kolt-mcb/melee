@@ -1,4 +1,5 @@
 #include "lbarq.h"
+#include <stdint.h>
 
 #include <trigf.h>
 #include <dolphin/os.h>

@@ -1,6 +1,11 @@
 #ifndef MSL_MATH_H
 #define MSL_MATH_H
 
+#if defined(BUILD_TARGET_PC)
+#include_next <math.h>
+#else
+#define MSL_MATH_H
+
 #include <platform.h>
 
 #include <MetroTRK/intrinsics.h>
@@ -100,5 +105,7 @@ float cosf(float x);
 float sinf(float x);
 void __sinit_trigf_c(void);
 float logf(float);
+
+#endif
 
 #endif

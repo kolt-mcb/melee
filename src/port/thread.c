@@ -15,7 +15,7 @@ Bool thread_create(OSThread* thread, void* (*entry)(void*), void* arg)
 {
     pthread_attr_t attr;
     pthread_attr_init(&attr);
-    pthread_attr_setstacksize(&attr, 0x40000); /* 256KB stack, matches GCN default */
+    pthread_attr_setstacksize(&attr, 0x200000); /* 2MB stack — GCN had 64KB but PC init needs more */
 
     if (pthread_create(thread, &attr, entry, arg) != 0)
     {

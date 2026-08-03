@@ -1,3 +1,5 @@
+#include <dolphin/types.h>
+#include <stdbool.h>
 #include <math.h>
 #include <trigf.h>
 #include <MetroTRK/intrinsics.h>

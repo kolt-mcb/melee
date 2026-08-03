@@ -23,6 +23,13 @@ void render_shutdown(void);
 void render_clear(void);
 void render_present(void);
 
+/* Debug overlay — draws gradient + FPS in corner */
+void render_debug_overlay(void);
+
+/* Archive textures — load and render CMPR textures from .dat files */
+void render_archive_textures_once(void);  /* Called once at startup */
+void render_archive_textures(void);        /* Called every frame */
+
 /* Hook into GX callback chain */
 void render_hook_gx_calls(void);
 

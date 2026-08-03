@@ -169,6 +169,7 @@ void HSD_AObjInterpretAnim(HSD_AObj* aobj, void* obj,
     }
 }
 
+#if defined(BUILD_TARGET_GC)
 float fmod(float a, float b)
 {
     long long quotient;

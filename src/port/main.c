@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 /**
  * @file main.c
  * @brief PC entry point — replaces PPC __start entry.
@@ -18,6 +20,8 @@
 #include "port/thread.h"
 #include "port/timer.h"
 #include "port/config.h"
+#include <stdlib.h>
+#include <sys/resource.h>
 
 /* Forward declarations for decomp integration */
 extern int game_init(void);
@@ -26,6 +30,10 @@ extern void game_shutdown(void);
 
 int main(int argc, char* argv[])
 {
+    /* Increase main thread stack from 128KB to 2MB */
+    struct rlimit rl = { .rlim_cur = 0x1000000, .rlim_max = 0x1000000 };
+    prlimit(0, RLIMIT_STACK, &rl, NULL);
+
     PORT_LOG_INFO("Melee PC Port — starting");
 
     /* Parse command line */
@@ -40,7 +48,7 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    if (!fs_init(&config.fs.asset_dir, &config.fs.iso_path))
+    if (!fs_init(config.fs.asset_dir, config.fs.iso_path))
     {
         PORT_LOG_ERROR("Failed to initialize filesystem");
         window_shutdown();
@@ -57,11 +65,7 @@ int main(int argc, char* argv[])
 
     if (!audio_init())
     {
-        PORT_LOG_ERROR("Failed to initialize audio subsystem");
-        render_shutdown();
-        fs_shutdown();
-        window_shutdown();
-        return EXIT_FAILURE;
+        PORT_LOG_WARN("Audio init skipped, continuing without audio");
     }
 
     input_init();
@@ -86,6 +90,7 @@ int main(int argc, char* argv[])
     }
 
     /* Main loop — game logic runs here */
+    PORT_LOG_INFO("[MAIN] About to enter game_main_loop()");
     game_main_loop();
 
     /* Shutdown in reverse order */

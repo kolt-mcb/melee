@@ -15,7 +15,7 @@ typedef bool (*lb_803BA248_fn)(ColorOverlay*);
 /* 013C18 */ static bool lb_80013C18(ColorOverlay*);
 /* 013D68 */ static bool lb_80013D68(ColorOverlay*);
 /* 013E3C */ static bool lb_80013E3C(ColorOverlay*);
-/* 013F78 */ static int lb_80013F78(ColorOverlay*);
+/* 013F78 */ static bool lb_80013F78(ColorOverlay*);
 /* 014014 */ static bool lb_80014014(ColorOverlay*);
 /* 0140F8 */ static bool lb_800140F8(ColorOverlay*);
 /* 4D63C0 */ static struct Fighter_804D653C_t* lb_804D63C0;

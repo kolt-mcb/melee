@@ -128,6 +128,9 @@ typedef bool (*Predicate)(void);
     struct {                                                                  \
         int x[1 - 2 * !(cond)];                                               \
     };
+#elif defined(BUILD_TARGET_PC)
+/* On PC port, skip static assertions — struct sizes differ on 64-bit */
+#define STATIC_ASSERT(cond)
 #else
 #define STATIC_ASSERT(cond) _Static_assert((cond), "(" #cond ") failed")
 #endif

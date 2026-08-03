@@ -2,6 +2,7 @@
 #define _lbarchive_h_
 
 #include <platform.h>
+#include <stdint.h>
 
 #include <baselib/forward.h>
 

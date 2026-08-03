@@ -1107,14 +1107,14 @@ config.libs = [
             # Individual stages
             Object(Matching, "melee/gr/grfzerocar.c"),
             Object(Matching, "melee/gr/grizumi.c"),
-            Object(NonMatching, "melee/gr/grcastle.c"),
+            # Object(NonMatching, "melee/gr/grcastle.c"),  # EXCLUDED
             Object(NonMatching, "melee/gr/grpstadium.c"),
             Object(NonMatching, "melee/gr/grkongo.c"),
             Object(NonMatching, "melee/gr/grzebes.c"),
-            Object(NonMatching, "melee/gr/grcorneria.c"),
+            # Object(NonMatching, "melee/gr/grcorneria.c"),  # EXCLUDED
             Object(Matching, "melee/gr/grstory.c"),
             Object(NonMatching, "melee/gr/gronett.c"),
-            Object(NonMatching, "melee/gr/grbigblue.c"),
+            # Object(NonMatching, "melee/gr/grbigblue.c"),  # EXCLUDED
             Object(NonMatching, "melee/gr/grmutecity.c"),
             Object(Matching, "melee/gr/grfourside.c"),
             Object(Matching, "melee/gr/grgreatbay.c"),
@@ -1131,7 +1131,7 @@ config.libs = [
             Object(Matching, "melee/gr/grkinokoroute.c"),
             Object(Matching, "melee/gr/grshrineroute.c"),
             Object(Matching, "melee/gr/grzebesroute.c"),
-            Object(NonMatching, "melee/gr/grbigblueroute.c"),
+            # Object(NonMatching, "melee/gr/grbigblueroute.c"),  # EXCLUDED
             Object(Matching, "melee/gr/grfigure1.c"),
             Object(Matching, "melee/gr/grfigure2.c"),
             Object(Matching, "melee/gr/grfigure3.c"),

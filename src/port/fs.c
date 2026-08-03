@@ -1,3 +1,7 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
 #include "fs.h"
 #include "log.h"
 
@@ -42,7 +46,7 @@ void fs_shutdown(void)
 }
 
 /* Helper: resolve path against asset dir, fall back to ISO */
-static char* vf_resolve_path(const char* path, char* out, size_t out_size)
+char* vf_resolve_path(const char* path, char* out, size_t out_size)
 {
     /* Try flat filesystem first */
     if (g_asset_dir[0] && snprintf(out, out_size, "%s/%s", g_asset_dir, path) < out_size)
@@ -57,23 +61,15 @@ static char* vf_resolve_path(const char* path, char* out, size_t out_size)
 
 VfHandle vf_open(const char* path, const char* mode)
 {
-    char resolved[FS_MAX_PATH];
-    char* resolved_path = vf_resolve_path(path, resolved, sizeof(resolved));
-
-    if (!resolved_path)
-    {
-        PORT_LOG_WARN("vf_open: cannot resolve path: %s", path);
-        return NULL;
-    }
-
-    FILE* fp = fopen(resolved_path, mode);
+    /* Caller should resolve asset_dir via vf_resolve_path before calling */
+    FILE* fp = fopen(path, mode);
     if (!fp)
     {
-        PORT_LOG_WARN("vf_open: open failed: %s", resolved_path);
+        PORT_LOG_WARN("vf_open: open failed: %s", path);
         return NULL;
     }
 
-    VfFile* file = SDL_malloc(sizeof(VfFile));
+    VfFile* file = malloc(sizeof(VfFile));
     file->fp = fp;
     file->size = -1; /* Unknown until seek'd */
 
@@ -113,7 +109,7 @@ void vf_close(VfHandle handle)
     if (!handle) return;
     VfFile* file = (VfFile*)handle;
     fclose(file->fp);
-    SDL_free(file);
+    free(file);
 }
 
 int vf_size(VfHandle handle)
@@ -141,7 +137,7 @@ VfDirHandle vf_dir_first(const char* path, VfDirEntry* entry)
     DIR* dir = opendir(resolved_path);
     if (!dir) return NULL;
 
-    VfDir* dirp = SDL_malloc(sizeof(VfDir));
+    VfDir* dirp = malloc(sizeof(VfDir));
     dirp->dirp = dir;
     dirp->dent = readdir(dir);
 
@@ -172,5 +168,5 @@ void vf_dir_close(VfDirHandle handle)
     if (!handle) return;
     VfDir* dirp = (VfDir*)handle;
     closedir(dirp->dirp);
-    SDL_free(dirp);
+    free(dirp);
 }

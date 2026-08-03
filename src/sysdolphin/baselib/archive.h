@@ -2,10 +2,19 @@
 #define _archive_h_
 
 #include <platform.h>
+#include <stddef.h>
 
 #include "baselib/forward.h" // IWYU pragma: export
 
 #define HSD_ARCHIVE_DONT_FREE 1
+
+/* Size assertions only meaningful on decomp target (32-bit) */
+#ifdef BUILD_TARGET_PC
+/* Pointer sizes differ on x86_64; skip struct size checks on port */
+#define ASSERT_SIZE(s_, e_)
+#else
+#define ASSERT_SIZE(struct_, expected) STATIC_ASSERT(sizeof(struct_) == expected)
+#endif
 
 struct HSD_ArchiveHeader {
     u32 file_size; /* 0x00 */
@@ -16,7 +25,7 @@ struct HSD_ArchiveHeader {
     u8 version[4]; /* 0x14 */
     u32 pad[2];    /* 0x18 */
 };
-STATIC_ASSERT(sizeof(struct HSD_ArchiveHeader) == 0x20);
+ASSERT_SIZE(struct HSD_ArchiveHeader, 0x20);
 
 struct HSD_ArchiveRelocationInfo {
     u32 offset;
@@ -44,7 +53,7 @@ struct HSD_Archive {
     u32 flags;                             /* 0x3C */
     void* top_ptr;                         /* 0x40 */
 };
-STATIC_ASSERT(sizeof(struct HSD_Archive) == 0x44);
+ASSERT_SIZE(struct HSD_Archive, 0x44);
 
 s32 HSD_ArchiveParse(HSD_Archive*, u8*, size_t file_size);
 void* HSD_ArchiveGetPublicAddress(HSD_Archive*, const char*);

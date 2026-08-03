@@ -174,3 +174,18 @@ fabric.properties
 
 # Android studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
+
+# PC port generated files
+build.ninja.pc
+build/
+melee-pc
+melee-pc-debug
+
+# Tool generated
+extern/dolphin/include/dolphin/gx/gx_private.h
+extern/dolphin/include/dolphin/os/__os.h
+
+# Misc
+config.json
+match_progress.png
+get_undef.sh
