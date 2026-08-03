@@ -141,3 +141,26 @@ Bool zclamp_enabled;           /* Z value clamping */
 Sources:    13 port + 4 stub + 31 decomp = 49 total
 Binary:     427K ELF — 0 errors, stable infinite main loop
 ```
+
+## [2025-08-03i] — TEV KColor and Color Multiplier Fix
+
+### Bug Fix: Silent Zero KColor Values
+The fragment shader defined `u_kcolor0..3` and `u_color_mult0/1` uniforms
+but **they were never uploaded** — all KColor values were (0,0,0,0) and
+the multiplier was hardcoded to 1.0. This meant textures rendered without
+any KColor constant blending.
+
+### What Was Fixed
+- **BridgeState**: Added `color_mult[2]` field (per-texture-unit multiplier)
+- **gx_bridge_init()**: Initializes color_mult to 1.0f for both tex units
+- **GXSetTevColorOp**: Now propagates TEV scale (1/2/4/8) to color_mult array
+- **bridge_upload_and_draw()**: Added KColor and color_mult uniform uploads
+  - KColor: g_state.k_colors[K] → glUniform4fv(u_kcolorK) — converts u8→f32
+  - Color mult: g_state.color_mult[N] → glUniform1f(u_color_multN)
+- **Fragment shader**: Now correctly computes `color * tex * color_mult + kcolor`
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp = 49 total
+Binary:     427K ELF — 0 errors, stable infinite main loop
+```
