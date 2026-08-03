@@ -12,6 +12,7 @@
 #include "port/window.h"
 #include "port/render.h"
 #include "port/fs.h"
+#include "port/input.h"
 #include <dolphin/dvd.h>
 
 /* Forward declaration — HSD_Archive is opaque to stubs */
@@ -1572,6 +1573,9 @@ void game_main_loop(void)
     void lb_80019900(void);
     /* Use SDL timing for consistent frame pacing */
     while (1) {
+        /* Poll input first (before render, so state is fresh) */
+        input_read_frame();
+        
         /* Process SDL events (window close, keyboard, etc.) */
         window_poll_events();
         
