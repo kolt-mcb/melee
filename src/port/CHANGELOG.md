@@ -189,3 +189,28 @@ GX functions:
 Sources:    13 port + 4 stub + 31 decomp = 49 total
 Binary:     427K ELF — 0 errors, stable infinite main loop
 ```
+
+## [2025-08-03k] — GX Link Infrastructure Stubs for Game Object Rendering
+
+### GX Link Setup
+Added stub infrastructure to prepare for GX-linked game object rendering
+(needed when `gr/` module is eventually enabled):
+
+- **HSD_GObjGXLinkHead[16]**: Array of GX link list heads
+- **HSD_GObj_804D7820[16]**: GX link tail tracking array
+- **HSD_GObj_804D7814**: Current render GObj pointer (set during render_cb)
+- **HSD_GObj_804D7818**: Max-link render GObj pointer
+- **HSD_GObj_80390ED0(gobj, mask)**: Stub render loop for masked GX links
+- **HSD_GObj_80390FC0()**: Stub render loop for GXLinkMax objects
+- **HSD_GObjLibInitData**: Empty stub for GObj initialization data
+
+### Bug Fix
+Fixed undefined reference to `HSD_GObj_804D7814` in `lbshadow.c`:
+was defined as weak function, needed as global pointer variable.
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp = 49 total
+Binary:     427K ELF — 0 errors, stable infinite main loop
+Commits:    +19 since stable base
+```
