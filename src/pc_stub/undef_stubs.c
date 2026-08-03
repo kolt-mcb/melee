@@ -1089,9 +1089,13 @@ void HSD_PadRenewMasterStatus(void)
 
 void HSD_PadRenewCopyStatus(void)
 {
-    /* Copy game status to copy status */
+    /* Copy renewed game status to copy status.
+     * g_gc_pads_last is already maintained by HSD_PadRenewRawStatus
+     * (saves state before clearing and re-reading). Here we just
+     * ensure the copy matches for external consumers that expect
+     * PadRenewCopyStatus to be the canonical state-sync function. */
     for (int pad = 0; pad < 4; pad++) {
-        memcpy(&g_gc_pads[pad], &g_gc_pads[pad], sizeof(GCPadStatus));
+        memcpy(&g_gc_pads_last[pad], &g_gc_pads[pad], sizeof(GCPadStatus));
     }
 }
 

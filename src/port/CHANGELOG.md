@@ -1,11 +1,20 @@
 ## [2025-08-03h] — Main Loop Frame Pacing + HSD_GetNextArena Fix
 
-### Frame Timing (HSD_GetNextArena)
+### Frame Timing
 - `game_main_loop()` nanosleep changed from 1ms to ~16.67ms (60fps)
-- Weak stub `HSD_GetNextArena(void)` had WRONG signature → no-op instead of setting arena pointers
-- Replaced with proper impl: `HSD_GetNextArena(void** lo, void** hi)` calls OSGetArenaLo/Hi()
-- Previous behavior: `lbHeap_80015F3C` passed garbage to memory allocator → heap corruption
-- New behavior: valid arena pointers → stable 15s+ with MALLOC_CHECK_=3
+- Old: ~1000fps, high CPU usage, frame tearing
+- New: ~60fps, matches GameCube 60Hz VBlank timing
+
+### HSD_GetNextArena Signature Fix
+- Weak stub `HSD_GetNextArena(void)` had WRONG signature → no-op
+- Replaced with proper impl: `HSD_GetNextArena(void** lo, void** hi)`
+- Previous behavior: `lbHeap_80015F3C` passed garbage to allocator → heap corruption
+- New: valid arena pointers → stable 15s+ with MALLOC_CHECK_=3, zero malloc errors
+
+### HSD_PadRenewCopyStatus Bug Fix
+- `memcpy(&g_gc_pads[pad], &g_gc_pads[pad], sizeof(GCPadStatus))` was self-copy (no-op)
+- Fixed: copies FROM g_gc_pads TO g_gc_pads_last for button press detection
+- Enables proper trigger/release: `cur->trigger = cur->button & ~g_gc_pads_last[pad].button`
 
 ### Build State
 ```
@@ -15,7 +24,6 @@ Binary:     433K ELF (zero errors, zero crashes)
 ```
 
 ## [2025-08-03h2] — Upstream Merge
-
 Merged origin/master (1 commit: stack frame improvement in SObjLib).
 
 ## [2025-08-03g] — GX Link Render Callbacks Wired Into Render Pipeline
