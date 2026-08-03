@@ -1477,8 +1477,7 @@ void GXCallDisplayList(void* list)
 
 #pragma GCC diagnostic pop
 
-void GObj_SetupGXLinkMax(void) {}
-void GObj_SetupGXLink(void) {}
+/* GObj_SetupGXLink/Max defined in gobjgxlink.c (sysdolphin) */
 void GXSetTexCoordGen(u32 mask)
 {
     /* Enable/disable texture coordinate generation per texgen unit.

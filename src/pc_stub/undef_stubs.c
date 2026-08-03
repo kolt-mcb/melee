@@ -739,35 +739,11 @@ __attribute__((weak)) void HSD_FogReqAnim(void) {}
 __attribute__((weak)) void HSD_FogSet(void) {}
 __attribute__((weak)) void HSD_Fog_8037DE7C(void) {}
 __attribute__((weak)) void HSD_ForeachAnim(void) {}
-/* HSD_GObjGXLinkHead: array of GX link list heads (one per GX link type).
- * In full build, defined in gobj.c. Here we provide stub array since
- * gobj.c is not compiled. Game code uses it via HSD_GObjGXLinkHead[x] */
-HSD_GObj* HSD_GObjGXLinkHead[16] = {0};  /* 16 GX link types, all null initially */
-HSD_GObj* HSD_GObj_804D7820[16] = {0};  /* GX link tail tracking array */
-HSD_GObj* HSD_GObj_804D7814 = NULL;     /* Current render GObj (global) */
-HSD_GObj* HSD_GObj_804D7818 = NULL;     /* Max-link render GObj */
 
-/* Stub GX link render loop functions (gobjgxlink.c not compiled) */
-/* These walk GX link lists and call render callbacks for each object. */
-void HSD_GObj_80390ED0(void* gobj, u32 mask) {
-    /* Stub: would walk GX link heads for bits set in mask, call render_cb */
-    (void)gobj; (void)mask;
-}
-void HSD_GObj_80390FC0(void) {
-    /* Stub: would walk GXLinkMax list and call render callbacks */
-}
-
-/* GObjLibInitDataType and global (from gobj.c, not compiled) */
-struct GObjFuncs { struct GObjFuncs* next; u8 size; void* funcs; };
-typedef struct GObjFuncs GObjFuncs;
-typedef void (*GObjFunc)(HSD_GObj*);
-typedef struct _HSD_GObjLibInitDataType {
-    u8 p_link_max;    u8 gx_link_max;    u8 gproc_pri_max;
-    GObjFuncs* funcs;    void* unk_2;
-} HSD_GObjLibInitDataType;
-HSD_GObjLibInitDataType HSD_GObjLibInitData = {0};
 __attribute__((weak)) void HSD_GObjProc_8038FE24(void) {}
 __attribute__((weak)) void HSD_GObjProc_8038FED4(void) {}
+__attribute__((weak)) void HSD_GObjProc_8038FC18(void) {}
+__attribute__((weak)) void HSD_GObjProc_8038FAA8(void) {}
 __attribute__((weak)) void HSD_GObj_80390C5C(void) {}
 __attribute__((weak)) void HSD_GObj_80390C84(void) {}
 __attribute__((weak)) void HSD_GObj_80390CAC(void) {}

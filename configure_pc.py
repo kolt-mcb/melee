@@ -19,10 +19,20 @@ PORT_SOURCES = list(dict.fromkeys(PORT_SOURCES))  # deduplicate
 PORT_SOURCES = [s for s in PORT_SOURCES if Path(s).name != "test.c"]
 PC_STUB_SOURCES = collect(PC_STUB_SRC)
 EXCLUDE_DECOMP = {"MSL/math.h"}  # GCC type conflicts
+# SysDolphin baselib files (partial — only what we need)
+BASELIB_SRC = SRC / "sysdolphin" / "baselib"
+G_OBJ_SOURCES = [
+    str(BASELIB_SRC / "gobj.c"),
+    str(BASELIB_SRC / "gobjgxlink.c"),
+    str(BASELIB_SRC / "gobjplink.c"),
+    str(BASELIB_SRC / "gobjuserdata.c"),
+]
+# Filter to only existing files
+G_OBJ_SOURCES = [s for s in G_OBJ_SOURCES if Path(s).exists()]
 DECOMP_SOURCES = collect(MELEE / "lb")
 DECOMP_SOURCES = [s for s in DECOMP_SOURCES if Path(s).name not in EXCLUDE_DECOMP]
 MATH_SHIM = [str(SRC / "math_shim.c")]
-ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES
+ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + G_OBJ_SOURCES
 
 INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,
