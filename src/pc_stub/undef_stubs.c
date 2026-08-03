@@ -1633,8 +1633,10 @@ void game_main_loop(void)
         render_debug_overlay();
         render_present();
         
-        /* Yield CPU with proper sleep */
-        struct timespec ts = { 0, 1000000 }; /* 1ms = ~1000fps max */
+        /* Frame pacing: target 60fps (~16.67ms per frame).
+         * The GameCube uses VBlank interrupts for frame sync; on PC
+         * we approximate this with a 16ms sleep. */
+        struct timespec ts = { 0, 16666666 }; /* ~16.67ms = 60fps */
         nanosleep(&ts, NULL);
     }
 }
