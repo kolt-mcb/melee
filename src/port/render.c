@@ -99,6 +99,10 @@ void render_present(void)
         render_archive_textures();
     }
     
+    /* Walk GX link list and invoke render callbacks. */
+    /* When gr/ is enabled, grDisplay functions render each frame. */
+    invoke_gx_render_links();
+    
     /* Flush any remaining GX batches before swapping */
     gx_frame_end();
     window_swap();
@@ -486,8 +490,10 @@ void render_register_gx_callback(void)
 
 void invoke_gx_render_links(void)
 {
-    /* Stub: no objects registered yet. When gr/ is enabled,
-     * HSD_GObj_80390FC0() will be called to walk the GX link list
-     * and invoke each render callback. Currently disabled to avoid
-     * NULL pointer dereference when HSD_GObjGXLinkHead is not initialized. */
+    /* Walk the GX link list and invoke render callbacks.
+     * HSD_GObj_80390FC0() is defined in gobj.c — it walks the
+     * HSD_GObjGXLinkHead[HSD_GObjGXLinkHead] chain and calls
+     * each object's render_cb callback. */
+    extern void HSD_GObj_80390FC0(void);
+    HSD_GObj_80390FC0();
 }

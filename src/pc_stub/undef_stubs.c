@@ -1567,6 +1567,24 @@ void test_hang(void)
     write(2, "[HANG] done\n", 12);
 }
 
+/* ============================================================
+ * GX link backing arrays — initialized before main() starts
+ * HSD_GObjGXLinkHead and HSD_GObj_804D7820 are declared in gobj.c
+ * as tentative HSD_GObj** definitions. We allocate real arrays and
+ * assign them so HSD_GObj_80390FC0() and GObj_SetupGXLinkMax()
+ * can walk/link objects without NULL dereference.
+ * ============================================================ */
+__attribute__((constructor))
+static void init_gxlink_backing(void)
+{
+    extern HSD_GObj** HSD_GObjGXLinkHead;
+    extern HSD_GObj** HSD_GObj_804D7820;
+    static HSD_GObj* gxlink_head_storage[17] __attribute__((aligned(16)));
+    static HSD_GObj* gxlink_tail_storage[17] __attribute__((aligned(16)));
+    HSD_GObjGXLinkHead = gxlink_head_storage;
+    HSD_GObj_804D7820 = gxlink_tail_storage;
+}
+
 /* Game main loop - basic polling loop until decomp integration */
 /* External port functions for main loop */
 extern int window_should_close(void);
