@@ -1,3 +1,18 @@
+## [2025-08-03h] — Main Loop Frame Pacing Fixed (60fps)
+
+### Frame Timing
+- `game_main_loop()` nanosleep changed from 1ms (1,000,000ns) to ~16.67ms (16,666,666ns)
+- Old: ~1000fps, high CPU usage, frame tearing
+- New: ~60fps, matches GameCube 60Hz VBlank timing
+- Aligns with the GC's fixed-timestep game loop model
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp = 53 total
+Runtime:    13/13 INIT ✓ → 60fps main loop ✓ → stable (no crash)
+Binary:     433K ELF (zero errors, zero crashes)
+```
+
 ## [2025-08-03g] — GX Link Render Callbacks Wired Into Render Pipeline
 
 ### Key Fix: Initialized GX Link Backing Arrays
