@@ -151,6 +151,12 @@ enum {
     GX_TEXGEN_NORMALIZE = 0x00008000,
 };
 
+/* Channel color source selectors (GX_SRC_REG / GX_SRC_VTX) */
+enum {
+    GX_SRC_REG = 0x00000000,  /* Use material register color */
+    GX_SRC_VTX = 0x00000001,  /* Use vertex color */
+};
+
 /* Color sources for TEV */
 enum {
     GX_CSC_ID = 0x00002000,  /* Source is color channel */
@@ -443,6 +449,17 @@ typedef struct {
     /* Light storage: up to 8 lights (GX_LIGHT0-7) */
     LightSlot g_lights[8];
     u32 g_active_light_count;
+    
+    /* Channel control state (GXSetChanCtrl) */
+    Bool chan_enabled[8];       /* Per-channel enable (GX_COLOR0, GX_COLOR1, ...)
+                                    defaults to: CHAN0=true, CHAN1=false */
+    u32 chan_color_source[8];   /* GX_SRC_REG = material color, GX_SRC_VTX = vertex color */
+    Bool chan_lit[8];           /* Lighting enabled for this channel */
+    u32 chan_diffuse_light[8];  /* GX_LIGHT0-7 or GX_OFF */
+    
+    /* Misc settings (GXSetMisc) */
+    Bool tme_enabled;           /* Texture mode enable — gates all texture lookups */
+    Bool zclamp_enabled;        /* Clamp Z values to [0, 1] */
 } BridgeState;
 
 static BridgeState g_state;
@@ -707,6 +724,19 @@ void gx_bridge_init(void)
     
     /* Init TLUT palettes (all empty initially) */
     g_state.g_current_tlut = 0;
+    
+    /* Init channel state: channel 0 enabled (output), channel 1 disabled */
+    for (int i = 0; i < 8; i++) {
+        g_state.chan_enabled[i] = (i == 0);
+        g_state.chan_color_source[i] = GX_SRC_REG;  /* Material color by default */
+        g_state.chan_lit[i] = FALSE;
+        g_state.chan_diffuse_light[i] = 0xFFFFFFFF;  /* GX_OFF */
+    }
+    
+    /* Init misc settings */
+    g_state.tme_enabled = TRUE;  /* Texture mode enabled by default */
+    g_state.zclamp_enabled = FALSE;
+
     for (int i = 0; i < 16; i++) {
         g_state.g_tlut[i].valid = FALSE;
         g_state.g_tlut[i].entry_count = 0;
@@ -1342,7 +1372,24 @@ void GXSetTevOp(u32 stage, u32 op)
     }
 }
 void GXSetTevColor(u32 reg, void* color) {}
-void GXSetMisc(u32 param, u32 value) {}
+void GXSetMisc(u32 param, u32 value)
+{
+    /* GX_SET_* parameters for GXSetMisc */
+    /* Standard Dolphin values: TME=0, ZCLAMP=1, ZTRANSP=2 */
+    switch (param) {
+    case 0x00000000:  /* GX_SET_TME */
+        g_state.tme_enabled = (Bool)value;
+        PORT_LOG_DEBUG("GXSetMisc: TME=%d", value);
+        break;
+    case 0x00000001:  /* GX_SET_ZCLAMP */
+        g_state.zclamp_enabled = (Bool)value;
+        break;
+    default:
+        /* Unknown/unused misc parameter — ignore */
+        (void)value;
+        break;
+    }
+}
 
 void GXSetGPFifo(void* fifo) {}
 void HSD_GXSetFifoObj(void* fifo) { GXSetGPFifo(fifo); }
@@ -1586,7 +1633,21 @@ void GXSetZTexture(int op, u32 fmt, u32 bias)
 
 void GXSetChanCtrl(u32 chan, u32 ambient, u32 lit, u32 diffuse, u32 mask)
 {
-    (void)chan; (void)ambient; (void)lit; (void)diffuse; (void)mask;
+    if (chan >= 8) {
+        PORT_LOG_WARN("GXSetChanCtrl: invalid channel %u", chan);
+        return;
+    }
+    
+    g_state.chan_enabled[chan] = TRUE;
+    g_state.chan_lit[chan] = (Bool)lit;
+    g_state.chan_diffuse_light[chan] = (diffuse != 0xFFFFFFFF) ? diffuse : 0xFFFFFFFF;
+    g_state.chan_color_source[chan] = mask;
+    
+    /* Ambient source: typically GX_SOURCE_COLORREG (0) or GX_COLOR0A0 */
+    (void)ambient;
+    
+    PORT_LOG_DEBUG("GXSetChanCtrl[%u]: lit=%d diffuse=%u src=%u",
+                   chan, lit, diffuse, mask);
 }
 u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod)
 {
