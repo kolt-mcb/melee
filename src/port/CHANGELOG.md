@@ -214,3 +214,28 @@ Sources:    13 port + 4 stub + 31 decomp = 49 total
 Binary:     427K ELF — 0 errors, stable infinite main loop
 Commits:    +19 since stable base
 ```
+
+## [2025-08-03l] — Enable sysdolphin/baselib for Game Object System
+
+### Files Added to Build
+- `gobj.c`: Game object creation, destruction, flag manipulation
+- `gobjgxlink.c`: GX link list management (render ordering)
+- `gobjplink.c`: Physical link management
+- `gobjuserdata.c`: User data attachment to objects
+
+### What This Enables
+- GX link-based render callback walking (via HSD_GObjGXLinkHead[])
+- Game object flag management (GObj_SetFlag1/2)
+- Proper initialization of gobj_pool and bucket_array
+
+### Cleanup
+Removed 31 lines from undef_stubs.c (duplicate definitions now in gobj.c):
+- Global variable definitions moved to gobj.c
+- Weak stubs for gobj.c functions removed
+- Conflicting struct typedefs and variable definitions removed
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp + 4 baselib = 53 total
+Binary:     433K ELF — 0 errors, stable infinite main loop
+```
