@@ -1,17 +1,22 @@
-## [2025-08-03h] — Main Loop Frame Pacing Fixed (60fps)
+## [2025-08-03h] — Main Loop Frame Pacing + HSD_GetNextArena Fix
 
-### Frame Timing
-- `game_main_loop()` nanosleep changed from 1ms (1,000,000ns) to ~16.67ms (16,666,666ns)
-- Old: ~1000fps, high CPU usage, frame tearing
-- New: ~60fps, matches GameCube 60Hz VBlank timing
-- Aligns with the GC's fixed-timestep game loop model
+### Frame Timing (HSD_GetNextArena)
+- `game_main_loop()` nanosleep changed from 1ms to ~16.67ms (60fps)
+- Weak stub `HSD_GetNextArena(void)` had WRONG signature → no-op instead of setting arena pointers
+- Replaced with proper impl: `HSD_GetNextArena(void** lo, void** hi)` calls OSGetArenaLo/Hi()
+- Previous behavior: `lbHeap_80015F3C` passed garbage to memory allocator → heap corruption
+- New behavior: valid arena pointers → stable 15s+ with MALLOC_CHECK_=3
 
 ### Build State
 ```
 Sources:    13 port + 4 stub + 31 decomp = 53 total
-Runtime:    13/13 INIT ✓ → 60fps main loop ✓ → stable (no crash)
+Runtime:    13/13 INIT ✓ → 60fps main loop ✓ → stable 15s+ ✓ → MALLOC_CHECK_=3 clean ✓
 Binary:     433K ELF (zero errors, zero crashes)
 ```
+
+## [2025-08-03h2] — Upstream Merge
+
+Merged origin/master (1 commit: stack frame improvement in SObjLib).
 
 ## [2025-08-03g] — GX Link Render Callbacks Wired Into Render Pipeline
 

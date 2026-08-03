@@ -768,7 +768,17 @@ __attribute__((weak)) void HSD_GObj_SetupProc(void) {}
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 __attribute__((weak)) void HSD_GetHeap(void) {}
-__attribute__((weak)) void HSD_GetNextArena(void) {}
+/* Proper HSD_GetNextArena: returns arena_lo/hi pointers set up by
+ * the heap allocation system. Replaces the old no-op stub that had
+ * wrong signature (void instead of void**, void**) which caused
+ * lbHeap_80015F3C to pass garbage addresses to HSD_CreateMainHeap. */
+__attribute__((weak)) void HSD_GetNextArena(void** lo, void** hi)
+{
+    extern void* OSGetArenaLo(void);
+    extern void* OSGetArenaHi(void);
+    *lo = OSGetArenaLo();
+    *hi = OSGetArenaHi();
+}
 __attribute__((weak)) void HSD_IDInsertToTable(void) {}
 __attribute__((weak)) void HSD_ImageDescCopyFromEFB(void) {}
 __attribute__((weak)) void HSD_Index2PosNrmMtx(void) {}
