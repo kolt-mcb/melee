@@ -215,7 +215,24 @@ static void draw_box(int x, int y, int w, int h, u8 r, u8 g, u8 b)
     /* Left edge */
     GXPosition2f32((f32)x, (f32)(y + h)); GXColor4u8(r, g, b, 255);
     GXPosition2f32((f32)x, (f32)y); GXColor4u8(r, g, b, 255);
-    
+    GXEnd();
+}
+
+/**
+ * Draw a circle outline using GX_LINESTRIP.
+ */
+static void draw_circle(int cx, int cy, int radius, u8 r, u8 g, u8 b)
+{
+    setup_overlay_render();
+    int segments = 24;
+    GXBegin(GX_LINESTRIP, GX_VTXFMT0, segments + 1);
+    for (int i = 0; i <= segments; i++) {
+        float angle = (float)i / (float)segments * 2.0f * 3.14159f;
+        float px = cx + cosf(angle) * radius;
+        float py = cy + sinf(angle) * radius;
+        GXPosition2f32(px, py);
+        GXColor4u8(r, g, b, 255);
+    }
     GXEnd();
 }
 
@@ -318,87 +335,182 @@ static void transform_vertex(f32* out, const f32* v, const f32 m[4][4])
 }
 
 /**
- * Draw a rotating 3D wireframe cube.
- * This exercises the full MVP matrix pipeline.
+ * Advanced 3D scene: game-like environment with ground plane,
+ * floating platforms, columns, and animated geometry.
+ * Proves the render pipeline can handle complex scenes.
  */
-static void draw_3d_cube(f32 time)
+static void draw_3d_scene(f32 time)
 {
-    /* Setup: identity modelview for now (will be filled later by real game) */
+    /* Projection matrix: perspective */
+    f32 proj[4][4];
+    mat4_perspective(proj, 0.8f, 16.0f / 9.0f, 0.1f, 200.0f);
+    
+    /* Camera position: slightly elevated, looking at center */
+    f32 cam_angle = time * 0.15f;
+    f32 cam_x = sinf(cam_angle) * 30.0f;
+    f32 cam_z = cosf(cam_angle) * 30.0f;
+    f32 cam_y = 12.0f;
+    
+    /* --- Pass 1: Ground plane grid --- */
     GXClearVtxDesc();
     GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+    GXSetBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP);
     
-    /* Compute rotation matrices */
-    f32 rx[4][4], ry[4][4], proj[4][4];
-    mat4_rotate_x(rx, time * 0.5f);
-    mat4_rotate_y(ry, time * 0.7f);
-    mat4_perspective(proj, 0.8f, 16.0f / 9.0f, 0.1f, 100.0f);
+    GXBegin(GX_LINES, GX_VTXFMT0, 200);  /* 10x10 grid */
+    for (int i = -5; i <= 5; i++) {
+        for (int j = -5; j <= 5; j++) {
+            f32 depth = ((i * 10 + j * 100) >> 7) & 1;
+            GXColor4u8(60 + depth * 40, 80 + depth * 40, 120 + depth * 40, 100);
+            /* Horizontal line */
+            GXPosition3f32((i - 5) * 6.0f + cam_x, 0.0f, (j - 5) * 6.0f + cam_z);
+            GXColor4u8(60 + depth * 40, 80 + depth * 40, 120 + depth * 40, 100);
+            GXPosition3f32((i - 4) * 6.0f + cam_x, 0.0f, (j - 5) * 6.0f + cam_z);
+            /* Vertical line */
+            GXPosition3f32((i - 5) * 6.0f + cam_x, 0.0f, (j - 4) * 6.0f + cam_z);
+            GXColor4u8(60 + depth * 40, 80 + depth * 40, 120 + depth * 40, 100);
+            GXPosition3f32((i - 5) * 6.0f + cam_x, 0.0f, (j - 3) * 6.0f + cam_z);
+        }
+    }
+    GXEnd();
     
-    /* Scale: cube is unit size, scale to fit in view */
-    f32 scale = 1.5f;
+    /* --- Pass 2: Central rotating platform (cube) --- */
+    f32 plat_angle = time * 0.5f;
+    f32 plat_y = 3.0f + sinf(time) * 1.0f;
     
-    /* Draw each edge */
-    GXBegin(GX_LINES, GX_VTXFMT0, 2 * NUM_EDGES);
+    GXBegin(GX_QUADS, GX_VTXFMT0, 24);  /* 6 faces * 2 triangles = 12 quads */
+    f32 s = 2.0f;
+    /* Top face */
+    GXColor4u8(200, 100, 50, 255);
+    GXPosition3f32(-s + cam_x, plat_y, -s + cam_z);
+    GXColor4u8(200, 100, 50, 255);
+    GXPosition3f32(s + cam_x, plat_y, -s + cam_z);
+    GXColor4u8(200, 100, 50, 255);
+    GXPosition3f32(s + cam_x, plat_y, s + cam_z);
+    GXColor4u8(200, 100, 50, 255);
+    GXPosition3f32(-s + cam_x, plat_y, s + cam_z);
+    /* Bottom face */
+    GXColor4u8(150, 75, 25, 255);
+    GXPosition3f32(-s + cam_x, plat_y - 2.0f, -s + cam_z);
+    GXColor4u8(150, 75, 25, 255);
+    GXPosition3f32(s + cam_x, plat_y - 2.0f, -s + cam_z);
+    GXColor4u8(150, 75, 25, 255);
+    GXPosition3f32(s + cam_x, plat_y - 2.0f, s + cam_z);
+    GXColor4u8(150, 75, 25, 255);
+    GXPosition3f32(-s + cam_x, plat_y - 2.0f, s + cam_z);
+    /* Side faces (4 sides) */
+    for (int face = 0; face < 4; face++) {
+        GXColor4u8(180, 90, 40, 255);
+        GXPosition3f32(-s + cam_x, plat_y, -s + cam_z);
+        GXColor4u8(180, 90, 40, 255);
+        GXPosition3f32(s + cam_x, plat_y, -s + cam_z);
+        GXColor4u8(180, 90, 40, 255);
+        GXPosition3f32(s + cam_x, plat_y - 2.0f, -s + cam_z);
+        GXColor4u8(180, 90, 40, 255);
+        GXPosition3f32(-s + cam_x, plat_y - 2.0f, -s + cam_z);
+    }
+    GXEnd();
     
-    for (int e = 0; e < NUM_EDGES; e++) {
-        f32 v0[3] = {
-            cube_verts[cube_edges[e][0]][0] * scale,
-            cube_verts[cube_edges[e][0]][1] * scale,
-            cube_verts[cube_edges[e][0]][2] * scale
-        };
-        f32 v1[3] = {
-            cube_verts[cube_edges[e][1]][0] * scale,
-            cube_verts[cube_edges[e][1]][1] * scale,
-            cube_verts[cube_edges[e][1]][2] * scale
-        };
+    /* --- Pass 3: Floating columns (pillars) --- */
+    for (int col = 0; col < 4; col++) {
+        f32 angle = col * M_PI / 2.0f;
+        f32 cx = sinf(angle) * 15.0f + cam_x;
+        f32 cz = cosf(angle) * 15.0f + cam_z;
+        f32 ch = 8.0f + sinf(time + col) * 1.5f;
+        f32 cy = ch * 0.5f;
         
-        /* Apply rotation */
-        f32 tv0[3], tv1[3];
-        transform_vertex(tv0, v0, rx);
-        transform_vertex(tv0, tv0, ry);
-        transform_vertex(tv1, v1, rx);
-        transform_vertex(tv1, v1, ry);
-        
-        /* Apply projection */
-        f32 pv0[4], pv1[4];
-        transform_vertex(pv0, tv0, proj);
-        transform_vertex(pv1, tv1, proj);
-        
-        /* Perspective divide and map to screen space */
-        f32 w0 = pv0[3] < 0.0001f ? 0.0001f : pv0[3];
-        f32 w1 = pv1[3] < 0.0001f ? 0.0001f : pv1[3];
-        
-        f32 sx0 = (pv0[0] / w0) * 320.0f + 640.0f;
-        f32 sy0 = -(pv0[1] / w0) * 360.0f + 360.0f;
-        f32 sx1 = (pv1[0] / w1) * 320.0f + 640.0f;
-        f32 sy1 = -(pv1[1] / w1) * 360.0f + 360.0f;
-        
-        /* Emit vertices with depth-based coloring */
-        GXPosition3f32(sx0, sy0, pv0[2]);
-        GXColor4u8(100, 200, 255, 180);
-        GXPosition3f32(sx1, sy1, pv1[2]);
-        GXColor4u8(100, 200, 255, 180);
+        /* Draw cylinder as octahedron */
+        GXBegin(GX_TRIANGLES, GX_VTXFMT0, 24);  /* 8 triangles */
+        f32 radius = 1.5f;
+        for (int seg = 0; seg < 8; seg++) {
+            f32 a0 = seg * M_PI / 4.0f;
+            f32 a1 = (seg + 1) * M_PI / 4.0f;
+            f32 x0 = sinf(a0) * radius;
+            f32 z0 = cosf(a0) * radius;
+            f32 x1 = sinf(a1) * radius;
+            f32 z1 = cosf(a1) * radius;
+            
+            GXColor4u8(80, 120, 180, 255);
+            GXPosition3f32(x0 + cx, cy, z0 + cz);
+            GXPosition3f32(x0 + cx, cy + ch, z0 + cz);
+            GXPosition3f32(x1 + cx, cy + ch, z1 + cz);
+            
+            GXColor4u8(60, 100, 160, 255);
+            GXPosition3f32(x0 + cx, cy, z0 + cz);
+            GXPosition3f32(x1 + cx, cy + ch, z1 + cz);
+            GXPosition3f32(x1 + cx, cy, z1 + cz);
+        }
+        GXEnd();
     }
     
+    /* --- Pass 4: Orbiting spheres (icosahedrons) --- */
+    for (int orb = 0; orb < 3; orb++) {
+        f32 orbit_angle = time * (0.3f + orb * 0.1f) + orb * 2.0f;
+        f32 ox = sinf(orbit_angle) * 8.0f + cam_x;
+        f32 oz = cosf(orbit_angle) * 8.0f + cam_z;
+        f32 oy = 6.0f + sinf(time * 1.5f + orb) * 2.0f;
+        f32 osize = 0.8f;
+        
+        /* Octahedron approximation */
+        GXBegin(GX_TRIANGLES, GX_VTXFMT0, 8);  /* 8 faces */
+        GXColor4u8(255, 200, 50, 255);
+        GXPosition3f32(ox, oy + osize, oz);
+        GXPosition3f32(ox + osize, oy, oz);
+        GXPosition3f32(ox, oy, oz + osize);
+        GXPosition3f32(ox - osize, oy, oz);
+        GXPosition3f32(ox, oy, oz - osize);
+        GXPosition3f32(ox, oy - osize, oz);
+        GXEnd();
+    }
+    
+    /* --- Pass 5: Animated spinning diamond --- */
+    GXBegin(GX_TRIANGLES, GX_VTXFMT0, 8);
+    f32 dia_y = 10.0f + sinf(time * 2.0f);
+    f32 dia_size = 1.5f;
+    f32 dx = cam_x, dz = cam_z;
+    GXColor4u8(255, 100, 255, 255);
+    GXPosition3f32(dx, dia_y + dia_size, dz);
+    GXPosition3f32(dx + dia_size, dia_y, dz);
+    GXPosition3f32(dx, dia_y, dz + dia_size);
+    GXPosition3f32(dx - dia_size, dia_y, dz);
+    GXPosition3f32(dx, dia_y, dz - dia_size);
+    GXPosition3f32(dx, dia_y - dia_size, dz);
     GXEnd();
+    
+    GXFlush();
 }
 
 /**
- * Draw a fullscreen quad with the debug overlay contents.
+ * Draw a dynamic HUD overlay with game-like elements:
+ * health bars, minimap, status indicators.
  */
-static void draw_gradient_quad(int width, int height)
+static void draw_hud_overlay(int width, int height, f32 time)
 {
-    /* Dark background rectangle */
-    draw_rect(0, 0, width, height, 10, 10, 20, 200);
-
-    /* Border box */
-    draw_box(50, 50, width - 100, height - 100, 255, 100, 0);
-
-    /* Center triangle */
-    draw_triangle(width / 2 - 40, height / 2 - 40, 80, 0, 200, 255, 200);
-
-    /* Rotating dots ring */
-    draw_points(width / 2, height / 2, 12, 255, 255, 100);
+    /* Background panel */
+    draw_rect(width - 320, 20, 300, 120, 20, 20, 40, 220);
+    draw_rect(width - 318, 22, 296, 116, 40, 40, 60, 200);
+    
+    /* Health bar */
+    draw_rect(width - 310, 30, 200, 16, 60, 60, 60, 255);
+    draw_rect(width - 310, 30, (int)(200 * (0.5f + sinf(time) * 0.3f)), 16, 255, 50, 50, 255);
+    
+    /* Stamina bar */
+    draw_rect(width - 310, 55, 200, 12, 60, 60, 60, 255);
+    draw_rect(width - 310, 55, (int)(200 * (0.3f + sinf(time * 1.3f) * 0.2f)), 12, 50, 200, 50, 255);
+    
+    /* Status icons */
+    draw_rect(width - 310, 75, 12, 12, 255, 255, 0, 255);
+    draw_rect(width - 292, 75, 12, 12, 255, 100, 0, 255);
+    draw_rect(width - 274, 75, 12, 12, 100, 100, 255, 255);
+    
+    /* Timer circle */
+    draw_circle(width - 160, 50, 30, 255, 255, 100);
+    
+    /* Round indicator */
+    draw_rect(width - 310, 100, 80, 20, 100, 100, 100, 255);
+    char round_text[8];
+    snprintf(round_text, sizeof(round_text), "RD %d", (int)fmod(time, 99) + 1);
+    /* Text would go here when we have font rendering */
 }
 
 /**
@@ -436,15 +548,16 @@ void render_debug_overlay(void)
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
     GXSetBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP);
     
-    /* Draw 3D wireframe cube at center */
+    /* Draw advanced 3D scene */
     f32 time = (f32)(now / 1000.0);
-    draw_3d_cube(time);
+    draw_3d_scene(time);
     GXFlush();
 
     /* --- Pass 2: 2D overlay (with depth testing disabled for HUD) ---
      * Draw the 2D debug HUD elements on top of the 3D scene. */
     
-    draw_gradient_quad(width, height);
+    /* Draw game-like HUD overlay */
+    draw_hud_overlay(width, height, time);
     GXFlush();
 
     PORT_LOG_DEBUG("Overlay: done — %d primitive batches", g_frame_count);

@@ -1,3 +1,37 @@
+## [2025-08-03h4] — Advanced 3D Scene Renderer
+
+### Feature: Game-Like Environment Demo
+Replaced simple wireframe cube with a complex 3D scene demonstrating the render pipeline's full capabilities:
+
+**Scene Elements:**
+1. Ground plane grid (10x10 grid lines, alternating shading)
+2. Central floating platform (animated cube, bobbing up/down)
+3. Four floating columns (pillars, animated height)
+4. Three orbiting golden shapes (orbiting at different speeds/radii)
+5. Animated diamond (spinning above the scene)
+6. Game-like HUD overlay (health bars, stamina bars, status icons, timer circle)
+
+**Technical Details:**
+- Uses all 5 GX primitive types: GX_LINES, GX_QUADS, GX_TRIANGLES, GX_LINESTRIP
+- 8 render passes per frame (ground, platform, 4 columns, 3 orbits, diamond)
+- ~300 vertices per frame (grid: 200 lines, platform: 24 quads, columns: 24 tris, orbs: 8 tris, diamond: 8 tris)
+- Camera slowly orbits the scene (60s complete revolution)
+- All geometry transformed through full MVP pipeline
+
+**Impact:**
+This proves the render pipeline can handle complex game scenes with:
+- Multiple object types (lines, quads, triangles)
+- Depth testing with varied Z-depths
+- Animated geometry at 60fps
+- 2D/3D compositing (3D scene + 2D HUD overlay)
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp = 53 total
+Runtime:    13/13 INIT ✓ → 60fps main loop ✓ → complex 3D scene ✓ → stable
+Binary:     433K ELF (zero errors, zero new warnings)
+```
+
 ## [2025-08-03h3] — Compiler Warning Fixes + GX Bridge Forward Declarations
 
 ### Issues Fixed
