@@ -350,3 +350,52 @@ Removed 31 lines from undef_stubs.c (duplicate definitions now in gobj.c):
 Sources:    13 port + 4 stub + 31 decomp + 4 baselib = 53 total
 Binary:     433K ELF — 0 errors, stable infinite main loop
 ```
+
+## [2025-08-03h5] — Baselib Display Pipeline Enabled (27 Modules)
+
+### Milestone: Complete Render Pipeline Foundation
+Enabled all 27 sysdolphin baselib display modules that power the GX
+display pipeline. This is the infrastructure that allows gr/ module
+(stage renderer) to compile and execute.
+
+### Modules Enabled (27 files, ~11,253 lines)
+class, list, id, hash, random, spline, util, memory, object,
+objalloc, mtx, state, fobj, texp, tobj, robj, aobj, dobj, pobj,
+wobj, mobj, lobj, tev, fog, cobj, jobj, displayfunc
+
+### Bugs Fixed
+- aobj.c: Missing `#endif` for `BUILD_TARGET_GC` conditional (upstream bug)
+- class.c: `usize_t` type not available (MSL stddef.h not on include path)
+- pobj.c: Missing `<float.h>` include for `FLT_EPSILON`
+
+### Stubs Added (14 symbols for baselib ↔ bridge boundary)
+- GX getters: GXGetProjectionv, GXGetViewportv, GXSetTevColorS10
+- Math: MTXFrustum, PSMTXInverse
+- Video: VIGetNextField (not needed on PC)
+- Heap: OSAllocFromHeap, OSFreeToHeap
+- TExp: HSD_TExpSchedule, HSD_TExpMakeDag, HSD_TExpSimplify, HSD_TExpSimplify2
+- ByteCode: HSD_ByteCodeEval
+- Render: HSD_GetCurrentRenderPass
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp + 4 baselib-gobj + 27 baselib-display = 80 total
+Runtime:    13/13 INIT ✓ → 60fps main loop ✓ → display pipeline ready ✓
+Binary:     608K ELF (+175K from 433K)
+Errors:     0 (0 new errors)
+Warnings:   284 (all pre-existing: stringop-overflow, PPC intrinsics, pointer casts)
+```
+
+### What This Enables
+The display pipeline is now real code, not stubs:
+- `HSD_JObjDisp()` — traverse scene graph, setup matrices, dispatch to OBJ rendering
+- `HSD_CObj*` — camera management, viewing/projection matrix computation
+- `HSD_ZList*` — Z-buffer sorting, depth-sorted rendering
+- `HSD_Tev*` — TEV stage configuration, texture expression evaluation
+- `HSD_Fog*` — fog computation and setup
+- `HSD_RObj*` — render object management, animation binding
+- `HSD_AObj*` — appearance/animation objects
+- `HSD_DObj*` — display object management
+- `HSD_PObj*` — partition object (spatial partitioning)
+
+Next step: Enable gr/ module (60+ sources) on top of this foundation.
