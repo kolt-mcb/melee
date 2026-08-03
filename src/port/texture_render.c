@@ -479,7 +479,7 @@ static bool load_texture_from_archive(const char* archive_file,
         entry->height = 1;  /* 1 tile tall */
 
         /* Allocate and decompress to RGBA8 */
-        entry->rgba_data = (u8*)malloc(64);  /* 8×8 × 4 bytes */
+        entry->rgba_data = (u8*)malloc(TILE_SIZE * TILE_SIZE * 4);
         if (entry->rgba_data) {
             decompress_cmpr_tile(cmpr_data, entry->rgba_data, entry->name);
             PORT_LOG_INFO("    Pixels: {%d,%d,%d} + {%d,%d,%d}",

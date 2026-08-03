@@ -87,7 +87,16 @@ void render_clear(void)
 /* Archive loading state — loaded once at startup */
 static bool g_archive_loaded = false;
 
-void render_present(void)
+void render_present(void) /* DISABLED TEXTURE */ {
+    /* disabled
+    if (!g_archive_loaded) {
+        g_archive_loaded = true;
+        PORT_LOG_INFO("[RENDER] Initializing archive textures...");
+        render_archive_textures_once();
+    }
+    PORT_LOG_INFO("[RENDER] g_texture_count=%d calling render_archive_textures", g_texture_count);
+    if (g_texture_count > 0) {
+        render_archive_textures();
 {
     /* Initialize archive textures once at startup */
     if (!g_archive_loaded) {
