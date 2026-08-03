@@ -34,3 +34,21 @@ void render_archive_textures(void);        /* Called every frame */
 void render_hook_gx_calls(void);
 
 #endif /* PORT_RENDER_H */
+
+
+/* GX API declarations (needed by undef_stubs.c main loop) */
+void GXSetVtxDesc(u32, u32);
+void GXSetVtxAttrFmt(u32, u32, u32, u32, u32);
+void GXClearVtxDesc(void);
+void GXBegin(u32, u32, u16);
+void GXEnd(void);
+void GXFlush(void);
+void GXPosition3f32(f32, f32, f32);
+void GXPosition2f32(f32, f32);
+void GXColor4u8(u8, u8, u8, u8);
+void GXSetBlendMode(u32, u32, u32, u32);
+void GXSetScissor(u32, u32, u32, u32);
+void GXClearBuff(void);
+void GXSetCopyClear(void*, u32);
+void GXSetZCompLoc(void);
+

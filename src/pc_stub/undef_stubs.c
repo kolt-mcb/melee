@@ -109,8 +109,7 @@ typedef unsigned short  u16;
 typedef signed short    s16;
 #define u32 unsigned int
 #define s32 signed int
-typedef unsigned long long u64;
-typedef long long       s64;
+
 typedef float           f32;
 typedef double          f64;
 typedef int             Bool;
@@ -1501,8 +1500,11 @@ int game_init(void)
     OSReport("[GAME] Initializing subsystems...\n");
     
     /* Step-by-step init with logging */
-    OSReport("[INIT] lb_80019AAC\n");
-    lb_80019AAC((Event)lb_80019AAC_noop);
+    OSReport("[INIT] lb_80019AAC (stub — pad timer init skipped)\n");
+    /* Stub: just invoke the callback to reset pad state.
+     * The real lb_80019AAC accesses GCN-style virtual addresses (0x80xxxxxx)
+     * which crash on x86_64 due to RIP-relative address overflow. */
+    if (lb_80019AAC_noop) lb_80019AAC_noop();
     OSReport("[INIT] lbMemory_8001564C\n");
     lbMemory_8001564C();
     OSReport("[INIT] lbHeap_80015F3C\n");
@@ -1565,6 +1567,9 @@ __attribute__((weak)) void render_clear(void) {}
  */
 void game_main_loop(void)
 {
+    /* Forward declarations for lb_0195.c functions (overridden below) */
+    u8 lb_80019894(void);
+    void lb_80019900(void);
     /* Use SDL timing for consistent frame pacing */
     while (1) {
         /* Process SDL events (window close, keyboard, etc.) */
@@ -1806,6 +1811,21 @@ __attribute__((weak)) void lbAudioAx_80028690(void) {}
 __attribute__((weak)) void gmMainLib_8015FCC0(void) {}
 __attribute__((weak)) void gmMainLib_8015FBA4(void) {}
 __attribute__((weak)) void gm_801A4510(void) {}
+
+/* lb_0195.c override stubs — these weak functions access GCN-style virtual
+ * addresses (0x80xxxxxx) which crash on x86_64. Override with safe no-ops.
+ * The real implementations are in lb_0195.c which is compiled with -weak. */
+void lb_8001955C(void) {}
+void lb_800195D0(void) {}
+void lb_80019628(void) {}
+u8 lb_80019894(void) { return 0; }
+void lb_800198E0(void) {}
+void lb_80019880(u64 arg0) {}
+void lb_80019900(void) {}
+int lb_80019A30(int index) { return 0; }
+void lb_80019A48(void) {}
+void lb_80019AAC(Event arg0) { if (arg0) arg0(); }
+void fn_800195FC(void) {}
 // lb_80019894: Returns pad queue count (called every frame by main loop)
 
 /* ===== Synthetic archive loading stubs ===== */
@@ -1948,8 +1968,6 @@ __attribute__((weak)) void lbAudioAx_80027DBC(void) {}
 /* Void stub: lbMthp_8001F800 */
 __attribute__((weak)) void lbMthp_8001F800(void) {}
 
-/* Void stub: lb_800195D0 */
-__attribute__((weak)) void lb_800195D0(void) {}
 
 /* Void stub: lb_8001B6E0 */
 __attribute__((weak)) void lb_8001B6E0(void) {}

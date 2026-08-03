@@ -18,8 +18,6 @@
 #include <math.h>
 #include <stdbool.h>
 #include <time.h>
-#include <dolphin/gx.h>
-#include <baselib/video.h>
 
 /* Simple synchronous render for archive textures */
 static void render_archive_sync_once(void)
@@ -87,16 +85,7 @@ void render_clear(void)
 /* Archive loading state — loaded once at startup */
 static bool g_archive_loaded = false;
 
-void render_present(void) /* DISABLED TEXTURE */ {
-    /* disabled
-    if (!g_archive_loaded) {
-        g_archive_loaded = true;
-        PORT_LOG_INFO("[RENDER] Initializing archive textures...");
-        render_archive_textures_once();
-    }
-    PORT_LOG_INFO("[RENDER] g_texture_count=%d calling render_archive_textures", g_texture_count);
-    if (g_texture_count > 0) {
-        render_archive_textures();
+void render_present(void)
 {
     /* Initialize archive textures once at startup */
     if (!g_archive_loaded) {
@@ -106,7 +95,6 @@ void render_present(void) /* DISABLED TEXTURE */ {
     }
     
     /* Render loaded archive textures in the overlay */
-    PORT_LOG_INFO("[RENDER] g_texture_count=%d calling render_archive_textures", g_texture_count);
     if (g_texture_count > 0) {
         render_archive_textures();
     }
@@ -140,7 +128,7 @@ static void setup_overlay_render(void)
     GXSetVtxDesc(GX_VA_TEX0, GX_DISABLE);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_F32, 0);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_U8, 0);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
+    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPH, GX_LO_NOOP);
 }
 
 /**
@@ -446,7 +434,7 @@ void render_debug_overlay(void)
     
     /* Draw 3D wireframe cube at center */
     f32 time = (f32)(now / 1000.0);
-    draw_3d_cube(time);
+    // draw_3d_cube(time);  /* DISABLED: GCN address bug */
     GXFlush();
 
     /* --- Pass 2: 2D overlay (with depth testing disabled for HUD) ---

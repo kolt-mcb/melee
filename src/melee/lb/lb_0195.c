@@ -31,7 +31,7 @@ struct lb_804329F0_t {
 
 /* 4329F0 */ static struct lb_804329F0_t lb_804329F0;
 
-void lb_8001955C(void)
+__attribute__((weak)) void lb_8001955C(void)
 {
     if (HSD_PadGetResetSwitch()) {
         lbAudioAx_80027DBC();
@@ -49,20 +49,20 @@ void lb_8001955C(void)
     lb_8001CC84();
 }
 
-void lb_800195D0(void)
+__attribute__((weak)) void lb_800195D0(void)
 {
     lb_800192A8(lb_8001955C);
     lb_8001CC84();
 }
 
-void fn_800195FC(void)
+__attribute__((weak)) void fn_800195FC(void)
 {
     HSD_PadRenewRawStatus(0);
     lb_8001C600();
     lbSnap_8001D2BC();
 }
 
-void lb_80019628(void)
+__attribute__((weak)) void lb_80019628(void)
 {
     int i;
     OSTime period;
@@ -117,12 +117,12 @@ void lb_80019628(void)
     lb_804329F0.x48 = 1;
 }
 
-void lb_80019880(u64 arg0)
+__attribute__((weak)) void lb_80019880(u64 arg0)
 {
     lb_804329F0.x38 = arg0;
 }
 
-u8 lb_80019894(void)
+__attribute__((weak)) u8 lb_80019894(void)
 {
     u8 count;
     int enabled = OSDisableInterrupts();
@@ -132,12 +132,12 @@ u8 lb_80019894(void)
     return count;
 }
 
-void lb_800198E0(void)
+__attribute__((weak)) void lb_800198E0(void)
 {
     HSD_PadRenewMasterStatus();
 }
 
-void lb_80019900(void)
+__attribute__((weak)) void lb_80019900(void)
 {
     int i;
     for (i = 0; i < 2; i++) {
@@ -158,12 +158,12 @@ void lb_80019900(void)
     }
 }
 
-int lb_80019A30(int index)
+__attribute__((weak)) int lb_80019A30(int index)
 {
     return lb_804329F0.x0[index].x10;
 }
 
-void lb_80019A48(void)
+__attribute__((weak)) void lb_80019A48(void)
 {
     int enabled = OSDisableInterrupts();
 
@@ -174,7 +174,7 @@ void lb_80019A48(void)
     OSRestoreInterrupts(enabled);
 }
 
-void lb_80019AAC(Event arg0)
+__attribute__((weak)) void lb_80019AAC(Event arg0)
 {
     int i;
 

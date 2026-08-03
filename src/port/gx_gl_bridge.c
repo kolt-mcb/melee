@@ -28,7 +28,7 @@
 #include <stdint.h>
 
 /* ============================================================
- * Internal types — must match GX types exactly
+ * Internal types — must match GX types exactly */
 #include "platform.h"
 
 /* Dolphin typedefs u32/u8 etc as long-sized on x86_64.

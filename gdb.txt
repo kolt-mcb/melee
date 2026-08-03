@@ -1,0 +1,5 @@
+warning: Currently logging to gdb.txt.  Turn the logging off and on to make the new setting effective.
+No frame selected.
+This command cannot be used at the top level.
+No executable file specified.
+Use the "file" or "exec-file" command.

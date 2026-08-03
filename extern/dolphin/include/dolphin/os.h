@@ -160,8 +160,10 @@ BOOL OSRestoreInterrupts(BOOL level);
 #define OS_SOUND_MODE_MONO 0
 #define OS_SOUND_MODE_STEREO 1
 
+#ifndef BUILD_TARGET_PC
 u32 OSGetSoundMode(void);
 void OSSetSoundMode(u32 mode);
+#endif
 
 #ifndef DOLPHIN_ATTRIBUTE_NORETURN
 #if defined(__clang__) || defined(__GNUC__)
