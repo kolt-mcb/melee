@@ -1,6 +1,16 @@
 #ifndef MELEE_GR_TYPES_H
 #define MELEE_GR_TYPES_H
 
+/* Compat: old code used ->gv, upstream renamed to ->u */
+#define gv u
+
+#ifndef deg_to_rad
+#define deg_to_rad 0.0174532925199432957f
+#endif
+#ifndef ABS
+#define ABS(x) ((x) < 0 ? -(x) : (x))
+#endif
+
 #include <placeholder.h>
 #include <platform.h>
 
