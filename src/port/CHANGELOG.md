@@ -164,3 +164,28 @@ any KColor constant blending.
 Sources:    13 port + 4 stub + 31 decomp = 49 total
 Binary:     427K ELF — 0 errors, stable infinite main loop
 ```
+
+## [2025-08-03j] — GX Bridge: 10 High-Impact Stubs Implemented
+
+### Stub Implementations
+Reduced stub count from 167 → 157 by implementing 10 frequently-called
+GX functions:
+
+| Function        | Calls | Purpose                     |
+|----------------|-------|-----------------------------|
+| GXSetTevColor   | 37    | Set TEV KColor registers     |
+| GXSetArray      | 12    | Vertex array base pointer    |
+| GXSetLineWidth  | 7     | Line primitive width          |
+| GXSetNumChans   | 6     | Enable color channels         |
+| GXCallDisplayList| 6    | Execute display list          |
+| GXSetZCompLoc   | 5     | Z compare before/after tex    |
+| GXSetTexCoordGen| 4     | Enable texgen per unit        |
+| GXSetTevClampMode| 4    | Clamp TEV stage output        |
+| GXSetNumIndStages| 3    | Indirect tex stage count      |
+| GXSetDither     | 1     | Spatial dithering toggle      |
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp = 49 total
+Binary:     427K ELF — 0 errors, stable infinite main loop
+```
