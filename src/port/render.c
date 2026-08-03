@@ -468,3 +468,26 @@ void render_present_pc(void)
     gx_frame_begin();
     window_swap();
 }
+
+/* ============================================================
+ * GX Link Render Callback Invocation
+ * ============================================================
+ * 
+ * These functions walk the GX link lists managed by gobjgxlink.c
+ * and invoke render callbacks for each registered game object.
+ * 
+ * The gr/ module registers render callbacks via GObj_SetupGXLinkMax().
+ * When gr/ is enabled, the render callback chain will invoke
+ * grDisplay functions that translate GX commands to OpenGL. */
+void render_register_gx_callback(void)
+{
+    /* Placeholder — gr/ module registers callbacks via GObj_SetupGXLinkMax. */
+}
+
+void invoke_gx_render_links(void)
+{
+    /* Stub: no objects registered yet. When gr/ is enabled,
+     * HSD_GObj_80390FC0() will be called to walk the GX link list
+     * and invoke each render callback. Currently disabled to avoid
+     * NULL pointer dereference when HSD_GObjGXLinkHead is not initialized. */
+}

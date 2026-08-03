@@ -33,6 +33,10 @@ void render_archive_textures(void);        /* Called every frame */
 /* Hook into GX callback chain */
 void render_hook_gx_calls(void);
 
+/* GX link render callback system — walks GX link lists and invokes callbacks */
+void render_register_gx_callback(void);
+void invoke_gx_render_links(void);
+
 #endif /* PORT_RENDER_H */
 
 
