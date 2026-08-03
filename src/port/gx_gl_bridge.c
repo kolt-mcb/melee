@@ -395,9 +395,11 @@ typedef struct {
     Bool tev_order_valid[8];
     
     /* Constant color/alpha registers (K0-K3) */
-    
     TevColor k_colors[4];      /* GXSetTevKColor */
     TevColor k_alphas[4];      /* GXSetTevKAlpha */
+    
+    /* TEV color multiplier per tex unit (maps from TEV color op scale) */
+    f32 color_mult[2];         /* [0] = tex0 mult, [1] = tex1 mult (default 1.0) */
     
     /* Texture gen modes (per unit) */
     u32 tex_gen_mode[8];      /* GX_TEXGEN_NONE/X/Y/Z/LIGHT0-7 */
@@ -688,6 +690,8 @@ void gx_bridge_init(void)
         memset(&g_state.k_colors[i], 0, sizeof(g_state.k_colors[i]));
         memset(&g_state.k_alphas[i], 0, sizeof(g_state.k_alphas[i]));
     }
+    g_state.color_mult[0] = 1.0f;  /* Default: color * tex * 1 */
+    g_state.color_mult[1] = 1.0f;
     
     /* Init current texture */
     memset(&g_state.current_tex, 0, sizeof(g_state.current_tex));
@@ -987,6 +991,38 @@ static void bridge_upload_and_draw(void)
     
     /* Upload alpha compare uniforms */
     apply_alpha_compare_uniforms();
+    
+    /* Upload KColor constants to fragment shader */
+    if (g_kcolor0_loc >= 0) {
+        GLfloat kc0[4] = { (f32)g_state.k_colors[0].r/255.0f, (f32)g_state.k_colors[0].g/255.0f,
+                           (f32)g_state.k_colors[0].b/255.0f, (f32)g_state.k_colors[0].a/255.0f };
+        glUniform4fv(g_kcolor0_loc, 1, kc0);
+    }
+    if (g_kcolor1_loc >= 0) {
+        GLfloat kc1[4] = { (f32)g_state.k_colors[1].r/255.0f, (f32)g_state.k_colors[1].g/255.0f,
+                           (f32)g_state.k_colors[1].b/255.0f, (f32)g_state.k_colors[1].a/255.0f };
+        glUniform4fv(g_kcolor1_loc, 1, kc1);
+    }
+    if (g_kcolor2_loc >= 0) {
+        GLfloat kc2[4] = { (f32)g_state.k_colors[2].r/255.0f, (f32)g_state.k_colors[2].g/255.0f,
+                           (f32)g_state.k_colors[2].b/255.0f, (f32)g_state.k_colors[2].a/255.0f };
+        glUniform4fv(g_kcolor2_loc, 1, kc2);
+    }
+    if (g_kcolor3_loc >= 0) {
+        GLfloat kc3[4] = { (f32)g_state.k_colors[3].r/255.0f, (f32)g_state.k_colors[3].g/255.0f,
+                           (f32)g_state.k_colors[3].b/255.0f, (f32)g_state.k_colors[3].a/255.0f };
+        glUniform4fv(g_kcolor3_loc, 1, kc3);
+    }
+    
+    /* Upload TEV color multiplier per tex unit */
+    if (g_color_mult0_loc >= 0) {
+        GLfloat cm0 = g_state.color_mult[0];
+        glUniform1f(g_color_mult0_loc, cm0);
+    }
+    if (g_color_mult1_loc >= 0) {
+        GLfloat cm1 = g_state.color_mult[1];
+        glUniform1f(g_color_mult1_loc, cm1);
+    }
     
     /* Upload active texture info to fragment shader */
     /* 
@@ -1495,6 +1531,19 @@ void GXSetTevColorOp(u32 stage, u32 op, u32 a, u32 b, u32 c, u32 bias, u32 scl, 
         g_state.tev_stages[stage].color_scale = scl & 0x03;
         g_state.tev_stages[stage].color_clamp = clamp;
         g_state.tev_stages[stage].color_enabled = TRUE;
+        
+        /* Map TEV stage scale to per-tex-unit color multiplier */
+        /* Stages 0-3 → tex unit 0, stages 4-7 → tex unit 1 */
+        u32 unit = stage < 4 ? 0 : 1;
+        u32 raw_scale = scl & 0x03;
+        f32 mult = 1.0f;
+        switch (raw_scale) {
+        case 0: mult = 1.0f; break;   /* SCALE_1 */
+        case 1: mult = 2.0f; break;   /* SCALE_2 */
+        case 2: mult = 4.0f; break;   /* SCALE_4 */
+        case 3: mult = 8.0f; break;   /* SCALE_8 */
+        }
+        if (unit < 2) g_state.color_mult[unit] = mult;
     }
     (void)a; (void)b; (void)c; (void)out_conv;
 }
