@@ -1209,7 +1209,14 @@ void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
     case 14: g_state.tex1_enabled = TRUE; break;  /* GX_VA_TEX1 */
     }
 }
-void GXSetArray(u32 attr, const void* base_ptr, u8 stride) {}
+void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
+{
+    /* Sets base pointer and stride for a vertex attribute.
+     * Used for indirect vertex buffer mode (lbcollision uses this).
+     * In our direct accumulation mode, we ignore these and rely on
+     * GXPosition/GXColor/GXTexCoord calls to accumulate vertex data. */
+    (void)attr; (void)base_ptr; (void)stride;
+}
 
 void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
 {
@@ -1359,7 +1366,13 @@ void GXSetZMode(u32 enable, u32 func, u32 update)
     glDepthFunc(gl_func);
     glDepthMask(update);
 }
-void GXSetZCompLoc(u32 before_tex) {}
+void GXSetZCompLoc(u32 before_tex)
+{
+    /* Z comparison location: determines if Z compare happens
+     * before (before_tex=1) or after (before_tex=0) texture fetch.
+     * Currently unsupported in our GLSL pipeline. */
+    (void)before_tex;
+}
 void GXSetColorUpdate(u32 enable) { g_state.color_update=(Bool)enable; }
 void GXSetAlphaUpdate(u32 enable) { g_state.alpha_update=(Bool)enable; }
 void GXSetCullMode(u32 mode)
@@ -1375,7 +1388,12 @@ void GXSetCullMode(u32 mode)
         glFrontFace(GL_CCW);
     }
 }
-void GXSetDither(u32 enable) {}
+void GXSetDither(u32 enable)
+{
+    /* Spatial dithering: reduces banding on low-color displays.
+     * Not implemented in GLSL pipeline (modern GPUs have 8-bit per channel anyway). */
+    (void)enable;
+}
 void GXSetScissorExtend(void) { g_state.scissor_enabled = FALSE; }
 
 /* No-ops (delegated to stub system for now) */
@@ -1407,7 +1425,24 @@ void GXSetTevOp(u32 stage, u32 op)
         g_state.tev_stages[stage].color_enabled = TRUE;
     }
 }
-void GXSetTevColor(u32 reg, void* color) {}
+void GXSetTevColor(u32 reg, void* color)
+{
+    /* GXSetTevColor maps to KColor registers:
+     * GX_TEVREG0 → k_colors[0], GX_TEVREG1 → k_colors[1], etc.
+     * This is effectively the same as GXSetTevKColor but with
+     * GX_TEVREG id instead of KColor index. */
+    if (!color) return;
+    const GXColor *c = (const GXColor *)color;
+    
+    /* Clamp to valid KColor registers (0-3) */
+    u32 idx = reg & 3;  /* GX_TEVREG0=0, GX_TEVREG1=1, GX_TEVREG2=2 */
+    if (idx < 4) {
+        g_state.k_colors[idx].r = c->r;
+        g_state.k_colors[idx].g = c->g;
+        g_state.k_colors[idx].b = c->b;
+        g_state.k_colors[idx].a = c->a;
+    }
+}
 void GXSetMisc(u32 param, u32 value)
 {
     /* GX_SET_* parameters for GXSetMisc */
@@ -1431,13 +1466,26 @@ void GXSetGPFifo(void* fifo) {}
 void HSD_GXSetFifoObj(void* fifo) { GXSetGPFifo(fifo); }
 u32 GXEndDisplayList(void) { bridge_upload_and_draw(); return 0; }
 void GXBeginDisplayList(void* list, u32 size) {}
-void GXCallDisplayList(void* list) {}
+void GXCallDisplayList(void* list)
+{
+    /* Executes a GX display list at the given pointer.
+     * Display lists are serialized command buffers that the GX coprocessor
+     * executes. Our bridge captures commands in real-time, so this is
+     * a no-op since commands are processed as they're called. */
+    (void)list;
+}
 
 #pragma GCC diagnostic pop
 
 void GObj_SetupGXLinkMax(void) {}
 void GObj_SetupGXLink(void) {}
-void GXSetTexCoordGen(void) {}
+void GXSetTexCoordGen(u32 mask)
+{
+    /* Enable/disable texture coordinate generation per texgen unit.
+     * Mask bit N enables texgen N (0-7).
+     * Currently all texgens are handled via GXSetTexCoordGen2. */
+    (void)mask;
+}
 
 void GXSetFog(u32 type, f32 startz, f32 endz, f32 nearz, f32 farz, GXColor color)
 {
@@ -1497,7 +1545,15 @@ void GXSetAlphaDither(u32 enable)
     g_state.alpha_dither = (enable == 1);
 }
 
-void GXSetTevClampMode(void) {}
+void GXSetTevClampMode(u32 stage, u32 clamp)
+{
+    /* TEV clamp mode: controls whether the TEV output for this stage
+     * is clamped to [0, 255]. GX_CLAMP_NONE=0, GX_CLAMP_TOP=1.
+     * Our GLSL pipeline already clamps via clamp(color, 0.0, 1.0). */
+    if (stage < MAX_TEV_STAGES) {
+        g_state.tev_stages[stage].color_clamp = (Bool)(clamp != 0);
+    }
+}
 
 void GXSetTevColorIn(u32 stage, u32 a, u32 b, u32 c, u32 d, u32 conv)
 {
@@ -1557,7 +1613,16 @@ void GXSetTevAlphaOp(u32 stage, u32 op, u32 a, u32 b, u32 c, u32 bias, u32 scl, 
     }
     (void)a; (void)b; (void)c; (void)bias; (void)scl; (void)out_conv;
 }
-void GXSetNumChans(u32 n) {}
+void GXSetNumChans(u32 n)
+{
+    /* Sets the number of enabled color channels (GX_COLOR0, GX_COLOR1).
+     * n=0: no color output
+     * n=1: GX_COLOR0 output only (default)
+     * n=2: GX_COLOR0 + GX_COLOR1 output
+     * In our bridge, we always enable color output via vertex colors. */
+    PORT_LOG_DEBUG("GXSetNumChans: n=%u", n);
+    (void)n;
+}
 void GXSetChanAmbColor(void)
 {
     /* Stub - ambient color handling */
@@ -1568,7 +1633,13 @@ void GXSetChanMatColor(void)
     /* Stub - material color handling */
 }
 void GXSetTevDirect(u32 stage) { (void)stage; }
-void GXSetNumIndStages(void) {}
+void GXSetNumIndStages(u32 n)
+{
+    /* Sets number of indirect texture mapping stages (GXIndTexMtx).
+     * Indirect tex gen uses a separate coordinate texture to transform
+     * UVs before the main texture lookup. Not commonly used. */
+    (void)n;
+}
 void GXSetTexCopySrc(void) {}
 void GXSetTexCopyDst(void) {}
 void GXCopyTex(void) {}
@@ -1602,7 +1673,13 @@ void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx)
     }
     (void)mat; (void)mtx;
 }
-void GXSetLineWidth(u32 w, u32 texOffsets) {}
+void GXSetLineWidth(u32 w, u32 texOffsets)
+{
+    /* Sets the width of line primitives in pixels.
+     * w = line width, texOffsets = tex gen offset scaling.
+     * In our GLSL pipeline, line width is per-vertex, not per-primitive. */
+    (void)w; (void)texOffsets;
+}
 void GXSetPointSize(u32 sz, u32 texOffsets) {}
 void GXEnableTexOffsets(u32 coord, u32 line_en, u32 pt_en) {}
 void GXSetPolygonMode(void) {}
