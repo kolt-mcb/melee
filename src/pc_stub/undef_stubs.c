@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
@@ -916,60 +917,56 @@ static void lb_80019AAC_noop(void) {}
 
 /* Audio ax stubs (needed by lb_0192.c event queue) */
 
-/* Read a single SDL2 joystick into GC pad format
- * These functions are provided by SDL2 library at link time */
+/* Persistent SDL joystick handles for 4 controllers.
+ * Open once at init time, reused each frame. */
+static void* g_joysticks[4];  /* SDL_Joystick* */
 
-/* Read a single SDL2 joystick into GC pad format */
-static void read_one_joystick(int pad_index)
+/* Read a single SDL2 joystick into GC pad format.
+ * Joystick must already be opened via SDL_JoystickOpen(). */
+static void poll_joystick(void* joy, GCPadStatus* pad)
 {
-    void* joy = SDL_JoystickOpen(pad_index);
-    if (!joy) return;
-    
-    GCPadStatus* pad = &g_gc_pads[pad_index];
     u32 buttons = 0;
     
-    /* D-pad (axis 8-11 on most controllers) */
-    int dpx = SDL_JoystickGetAxis(joy, 8);  /* Left/Right */
-    int dpy = SDL_JoystickGetAxis(joy, 9);  /* Up/Down */
+    /* D-pad (axis 8-11 on most controllers, SDL2 standard) */
+    int dpx = SDL_JoystickGetAxis(joy, 8);
+    int dpy = SDL_JoystickGetAxis(joy, 9);
     if (dpx < -10000) buttons |= GC_BTN_DPAD_L;
     else if (dpx > 10000) buttons |= GC_BTN_DPAD_R;
     if (dpy < -10000) buttons |= GC_BTN_DPAD_U;
     else if (dpy > 10000) buttons |= GC_BTN_DPAD_D;
     
     /* Standard buttons: A=0, B=1, X=2, Y=3, L=4, R=5, Start=6 */
-    if (SDL_JoystickGetButton(joy, 0)) buttons |= GC_BTN_A;  /* A */
-    if (SDL_JoystickGetButton(joy, 1)) buttons |= GC_BTN_B;  /* B */
-    if (SDL_JoystickGetButton(joy, 2)) buttons |= GC_BTN_X;  /* X */
-    if (SDL_JoystickGetButton(joy, 3)) buttons |= GC_BTN_Y;  /* Y */
-    if (SDL_JoystickGetButton(joy, 4)) buttons |= GC_BTN_L;  /* L trigger */
-    if (SDL_JoystickGetButton(joy, 5)) buttons |= GC_BTN_R;  /* R trigger */
-    if (SDL_JoystickGetButton(joy, 6)) buttons |= GC_BTN_START;  /* Start */
+    if (SDL_JoystickGetButton(joy, 0)) buttons |= GC_BTN_A;
+    if (SDL_JoystickGetButton(joy, 1)) buttons |= GC_BTN_B;
+    if (SDL_JoystickGetButton(joy, 2)) buttons |= GC_BTN_X;
+    if (SDL_JoystickGetButton(joy, 3)) buttons |= GC_BTN_Y;
+    if (SDL_JoystickGetButton(joy, 4)) buttons |= GC_BTN_L;
+    if (SDL_JoystickGetButton(joy, 5)) buttons |= GC_BTN_R;
+    if (SDL_JoystickGetButton(joy, 6)) buttons |= GC_BTN_START;
     
-    /* Main stick (axes 0-1) */
+    /* Main stick (axes 0-1, range [-32768, 32767]) */
     int sx = SDL_JoystickGetAxis(joy, 0);
     int sy = SDL_JoystickGetAxis(joy, 1);
-    pad->stickX = (s8)(sx / 256);  /* Scale to s8 range */
-    pad->stickY = (s8)(sy / 256);
+    pad->stickX = (s8)(sx >> 8);   /* Divide by 256 to get s8 range */
+    pad->stickY = (s8)(sy >> 8);
     
     /* C-stick (axes 3-4) */
     int csx = SDL_JoystickGetAxis(joy, 3);
     int csy = SDL_JoystickGetAxis(joy, 4);
-    pad->subStickX = (s8)(csx / 256);
-    pad->subStickY = (s8)(csy / 256);
+    pad->subStickX = (s8)(csx >> 8);
+    pad->subStickY = (s8)(csy >> 8);
     
-    /* Analog triggers (triggers are often axes 2,5 mapped to buttons) */
+    /* Analog triggers (axes 2, 5, range [0, 65535]) */
     int lt = SDL_JoystickGetAxis(joy, 2);
     int rt = SDL_JoystickGetAxis(joy, 5);
-    pad->analogL = (u8)(lt / 256);  /* 0-255 range */
-    pad->analogR = (u8)(rt / 256);
+    pad->analogL = (u8)(lt >> 8);   /* Shift to u8 range */
+    pad->analogR = (u8)(rt >> 8);
     
-    /* Update button state */
     pad->button = buttons;
-    
-    SDL_JoystickClose(joy);
 }
 
-/* Read SDL2 input and update GC pad state */
+/* Read SDL2 input and update GC pad state.
+ * Joysticks are opened once at init time and reused. */
 void HSD_PadRenewRawStatus(bool unused)
 {
     (void)unused;
@@ -981,47 +978,14 @@ void HSD_PadRenewRawStatus(bool unused)
         /* Clear current state */
         memset(&g_gc_pads[pad], 0, sizeof(GCPadStatus));
         
-        /* Try to read SDL2 joystick for each pad */
-        void* joy = SDL_JoystickOpen(pad);
-        if (joy) {
-            GCPadStatus* p = &g_gc_pads[pad];
-            
-            /* Read D-Pad */
-            int dpx = SDL_JoystickGetAxis(joy, 8);
-            int dpy = SDL_JoystickGetAxis(joy, 9);
-            if (dpx < -10000) p->button |= GC_BTN_DPAD_L;
-            else if (dpx > 10000) p->button |= GC_BTN_DPAD_R;
-            if (dpy < -10000) p->button |= GC_BTN_DPAD_U;
-            else if (dpy > 10000) p->button |= GC_BTN_DPAD_D;
-            
-            /* Read buttons: A=0, B=1, X=2, Y=3, L=4, R=5, Start=6 */
-            if (SDL_JoystickGetButton(joy, 0)) p->button |= GC_BTN_A;
-            if (SDL_JoystickGetButton(joy, 1)) p->button |= GC_BTN_B;
-            if (SDL_JoystickGetButton(joy, 2)) p->button |= GC_BTN_X;
-            if (SDL_JoystickGetButton(joy, 3)) p->button |= GC_BTN_Y;
-            if (SDL_JoystickGetButton(joy, 4)) p->button |= GC_BTN_L;
-            if (SDL_JoystickGetButton(joy, 5)) p->button |= GC_BTN_R;
-            if (SDL_JoystickGetButton(joy, 6)) p->button |= GC_BTN_START;
-            
-            /* Read main stick */
-            int sx = SDL_JoystickGetAxis(joy, 0);
-            int sy = SDL_JoystickGetAxis(joy, 1);
-            p->stickX = (s8)(sx / 256);
-            p->stickY = (s8)(sy / 256);
-            
-            /* Read C-stick */
-            int csx = SDL_JoystickGetAxis(joy, 3);
-            int csy = SDL_JoystickGetAxis(joy, 4);
-            p->subStickX = (s8)(csx / 256);
-            p->subStickY = (s8)(csy / 256);
-            
-            /* Read analog triggers */
-            int lt = SDL_JoystickGetAxis(joy, 2);
-            int rt = SDL_JoystickGetAxis(joy, 5);
-            p->analogL = (u8)(lt / 256);
-            p->analogR = (u8)(rt / 256);
-            
-            SDL_JoystickClose(joy);
+        /* Lazy-init: open joystick handle if not already open */
+        if (!g_joysticks[pad]) {
+            g_joysticks[pad] = SDL_JoystickOpen(pad);
+        }
+        
+        /* Read from persistent joystick handle */
+        if (g_joysticks[pad]) {
+            poll_joystick(g_joysticks[pad], &g_gc_pads[pad]);
         }
     }
 }
@@ -1078,11 +1042,23 @@ void HSD_PadRenewStatus(void)
     HSD_PadRenewCopyStatus();
 }
 
-/* Dummy init */
+/* Initialize pad subsystem: open joysticks once, zero state */
 void HSD_PadInit(void)
 {
     memset(g_gc_pads, 0, sizeof(g_gc_pads));
     memset(g_gc_pads_last, 0, sizeof(g_gc_pads_last));
+    
+    /* Open SDL joysticks once — persistent handles reused each frame.
+     * Only open if not already open (lazy-init handles normal path). */
+    for (int i = 0; i < 4; i++) {
+        if (!g_joysticks[i]) {
+            g_joysticks[i] = SDL_JoystickOpen(i);
+            if (g_joysticks[i]) {
+                fprintf(stderr, "[PAD] Init: joystick %d: %s\n",
+                              i, SDL_JoystickName((void*)g_joysticks[i]));
+            }
+        }
+    }
 }
 
 /* Public pad arrays that game code accesses — aliased to global state */
