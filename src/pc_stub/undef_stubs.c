@@ -921,6 +921,54 @@ static void lb_80019AAC_noop(void) {}
  * Open once at init time, reused each frame. */
 static void* g_joysticks[4];  /* SDL_Joystick* */
 
+/* Keyboard-to-GC-pad mapping for Player 1.
+ * When no gamepad is connected, keyboard provides input. */
+static void poll_keyboard_to_pad(GCPadStatus* pad)
+{
+    const Uint8* kb = SDL_GetKeyboardState(NULL);
+    u32 buttons = 0;
+    
+    /* D-Pad: Arrow keys */
+    if (kb[SDL_SCANCODE_LEFT])  buttons |= GC_BTN_DPAD_L;
+    if (kb[SDL_SCANCODE_RIGHT]) buttons |= GC_BTN_DPAD_R;
+    if (kb[SDL_SCANCODE_UP])    buttons |= GC_BTN_DPAD_U;
+    if (kb[SDL_SCANCODE_DOWN])  buttons |= GC_BTN_DPAD_D;
+    
+    /* A button (primary attack/confirm): Z or Space */
+    if (kb[SDL_SCANCODE_Z] || kb[SDL_SCANCODE_SPACE]) buttons |= GC_BTN_A;
+    
+    /* B button (jump): X */
+    if (kb[SDL_SCANCODE_X]) buttons |= GC_BTN_B;
+    
+    /* X button (shield/block): C */
+    if (kb[SDL_SCANCODE_C]) buttons |= GC_BTN_X;
+    
+    /* Y button (secondary): V */
+    if (kb[SDL_SCANCODE_V]) buttons |= GC_BTN_Y;
+    
+    /* L trigger: Left Shift */
+    if (kb[SDL_SCANCODE_LSHIFT] || kb[SDL_SCANCODE_RSHIFT]) buttons |= GC_BTN_L;
+    
+    /* R trigger: Left Alt */
+    if (kb[SDL_SCANCODE_LALT]) buttons |= GC_BTN_R;
+    
+    /* Z button: Slash/Backslash */
+    if (kb[SDL_SCANCODE_SLASH]) buttons |= GC_BTN_Z;
+    
+    /* Start: Enter */
+    if (kb[SDL_SCANCODE_RETURN]) buttons |= GC_BTN_START;
+    
+    pad->button = buttons;
+    
+    /* Dead-zone neutralize: no stick movement on keyboard */
+    pad->stickX = 0;
+    pad->stickY = 0;
+    pad->subStickX = 0;
+    pad->subStickY = 0;
+    pad->analogL = 0;
+    pad->analogR = 0;
+}
+
 /* Read a single SDL2 joystick into GC pad format.
  * Joystick must already be opened via SDL_JoystickOpen(). */
 static void poll_joystick(void* joy, GCPadStatus* pad)
@@ -983,9 +1031,14 @@ void HSD_PadRenewRawStatus(bool unused)
             g_joysticks[pad] = SDL_JoystickOpen(pad);
         }
         
-        /* Read from persistent joystick handle */
+        /* Read from persistent joystick handle (if connected) */
         if (g_joysticks[pad]) {
             poll_joystick(g_joysticks[pad], &g_gc_pads[pad]);
+        }
+        
+        /* Always poll keyboard for player 0 — fallback/no-pad mode */
+        if (pad == 0) {
+            poll_keyboard_to_pad(&g_gc_pads[pad]);
         }
     }
 }

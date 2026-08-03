@@ -82,3 +82,31 @@ Runtime:    13/13 INIT ✓ → archive loaded ✓ → CMPR textures decompressed
             → game_main_loop() (pre-existing crash, unrelated to textures)
 ```
 ## [2025-08-03d] — GCN Archive Loader + CMPR Texture Decompression Working
+
+## [2025-08-03g] — Input Refactoring: Persistent Joystick Handles
+
+### Problem
+`HSD_PadRenewRawStatus()` called `SDL_JoystickOpen(pad)` and `SDL_JoystickClose(joy)`
+every single frame for all 4 controller slots. This is:
+- **Wasteful**: Opening/closing SDL joysticks involves file descriptor operations
+- **Race-prone**: SDL's internal device enumeration changes dynamically
+- **Incorrect**: Hot-plugging gamepads mid-game wouldn't work
+
+### Solution
+Implemented persistent joystick handle pattern:
+- **g_joysticks[4]**: Array of SDL_Joystick handles opened once, reused forever
+- **Lazy-init**: Joystick opened on first call to HSD_PadRenewRawStatus if not already open
+- **HSD_PadInit**: Also attempts to open joysticks (for gmmain.c callers)
+- **poll_joystick(handle, pad)**: Extracted from HSD_PadRenewRawStatus into dedicated helper
+- **No double-open**: Both lazy-init and HSD_PadInit check `if (!g_joysticks[i])`
+
+### Code Impact
+- 74 lines removed (duplicate poll logic in 3 places)
+- 50 lines added (cleaner, reusable code)
+- Net: -24 lines, cleaner separation of concerns
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp = 49 total
+Binary:     427K ELF — 0 errors, stable infinite main loop
+```
