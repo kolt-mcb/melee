@@ -434,7 +434,7 @@ void render_debug_overlay(void)
     
     /* Draw 3D wireframe cube at center */
     f32 time = (f32)(now / 1000.0);
-    // draw_3d_cube(time);  /* DISABLED: GCN address bug */
+    draw_3d_cube(time);
     GXFlush();
 
     /* --- Pass 2: 2D overlay (with depth testing disabled for HUD) ---

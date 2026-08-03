@@ -1,3 +1,24 @@
+## [2025-08-03f] — 3D Cube Rendering + Stable Main Loop
+
+### Key Fix: Removed Dolphin GX Inline Functions from render.c
+- `render.c` previously included `<baselib/video.h>` → `<dolphin/gx.h>` which pulled in Dolphin's inline GX functions
+- Those inlined functions wrote vertex data to GCN-style virtual addresses (0x80xxxxxx)
+- On x86_64, these overflowed to garbage pointers causing SEGV in `draw_3d_cube()`
+- **Solution:** Removed Dolphin GX includes; use only `gx_gl_bridge.h` with proper function declarations
+
+### Features
+- **3D Wireframe Cube** — Rotating MVP pipeline exercise (X + Y rotation, perspective projection)
+- **Debug Overlay** — FPS counter, gradient quad, border box, triangle, points ring
+- **CMPR Texture Rendering** — 3 MemCard banners from LbMcGame.dat
+- **Full Main Loop** — All 13 init stubs resolve; game runs forever
+
+### Build State
+```
+Sources:    13 port + 4 stub + 31 decomp = 49 total
+Runtime:    13/13 INIT ✓ → CMPR textures loaded ✓ → 3D cube rendered ✓ → main loop ✓
+Binary:     423K ELF (zero errors, zero crashes)
+```
+
 ## [2025-08-03e] — CMPR Texture Loading → OpenGL Pipeline Complete
 
 ### New File: `src/port/texture_render.c` (~400 lines)
