@@ -7,9 +7,9 @@ typedef signed int s32;
 typedef unsigned int u32;
 typedef void* void_ptr;
 
-/* seed_ptr - used to initialize random seed from tick count */
-static s32 _seed_value = 12345;
-s32* seed_ptr = &_seed_value;
+/* seed_ptr moved to random.c */
+//static s32 _seed_value = 12345;
+//s32* seed_ptr = &_seed_value;
 
 /* PadLibData struct definition (minimal, matching game expectations) */
 typedef struct {

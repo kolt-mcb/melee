@@ -103,12 +103,12 @@ int __GXCurrentRaster = 0;
 /* ===== Missing symbols from excluded/experimental files ===== */
 
 /* Memory allocation */
-void* HSD_MemAlloc(s32 size) { return malloc(size); }
+__attribute__((weak)) void* HSD_MemAlloc(s32 size) { return malloc(size); }
 void* HSD_MemAlign(s32 align, s32 size) {
     void* p = malloc(size + align);
     return p ? (void*)((((uintptr_t)p + align - 1) / align) * align) : NULL;
 }
-void HSD_Free(void* ptr) { free(ptr); }
+__attribute__((weak)) void HSD_Free(void* ptr) { free(ptr); }
 
 /* Debug/reporting — delegate to undef_stubs.c weak OSReport which uses write() syscalls */
 
@@ -131,8 +131,8 @@ const unsigned char __ctype_map[257] = {0};
 /* Additional stubs */
 void* HSD_GetArenaHi(int arena) { return NULL; }
 void* HSD_GetArenaLo(int arena) { return NULL; }
-void* HSD_AllocMem(s32 size, int align, int arena) { return malloc(size); }
-void HSD_FreeMem(void* ptr, int arena) { free(ptr); }
+__attribute__((weak)) void* HSD_AllocMem(s32 size, int align, int arena) { return malloc(size); }
+__attribute__((weak)) void HSD_FreeMem(void* ptr, int arena) { free(ptr); }
 void HSD_CancelMsg(void) {}
 void HSD_DbgPrint(const char* fmt, ...) {}
 
@@ -188,24 +188,24 @@ float get_follow_speed(void) { return 1.0f; }
 float get_delta(void) { return 0.0f; }
 
 /* More common undefined references */
-void HSD_JObjLoadJoint(void* joint) {}
-void HSD_JObjReqAnimAll(void* jobj, f32 speed) {}
-void HSD_JObjAnimAll(void* jobj) {}
-void HSD_JObjSetupMtx(void* jobj, void* mtx, void* work) {}
-void HSD_JObjDrawNext(void* jobj) {}
-void* HSD_JObjGetNext(void* jobj) { return NULL; }
-void* HSD_JObjGetParent(void* jobj) { return NULL; }
-void HSD_JObjSetPriority(void* jobj, s32 prio) {}
-void HSD_JObjDetachAllChild(void* jobj) {}
-void HSD_JObjUpdateVisibility(void* jobj) {}
+__attribute__((weak)) void HSD_JObjLoadJoint(void* joint) {}
+__attribute__((weak)) void HSD_JObjReqAnimAll(void* jobj, f32 speed) {}
+__attribute__((weak)) void HSD_JObjAnimAll(void* jobj) {}
+__attribute__((weak)) void HSD_JObjSetupMtx(void* jobj, void* mtx, void* work) {}
+__attribute__((weak)) void HSD_JObjDrawNext(void* jobj) {}
+__attribute__((weak)) void* HSD_JObjGetNext(void* jobj) { return NULL; }
+__attribute__((weak)) void* HSD_JObjGetParent(void* jobj) { return NULL; }
+__attribute__((weak)) void HSD_JObjSetPriority(void* jobj, s32 prio) {}
+__attribute__((weak)) void HSD_JObjDetachAllChild(void* jobj) {}
+__attribute__((weak)) void HSD_JObjUpdateVisibility(void* jobj) {}
 void HSD_Dtor(void* obj) {}
 void HSD_SetDtor(void (*dtor)(void*)) {}
 
 /* Render stubs */
-void* HSD_JObjGetJoint(void* jobj) { return NULL; }
-void HSD_JObjSetName(void* jobj, const char* name) {}
-void* HSD_JObjAlloc(void) { return NULL; }
-void HSD_JObjInit(void* jobj) {}
+__attribute__((weak)) void* HSD_JObjGetJoint(void* jobj) { return NULL; }
+__attribute__((weak)) void HSD_JObjSetName(void* jobj, const char* name) {}
+__attribute__((weak)) void* HSD_JObjAlloc(void) { return NULL; }
+__attribute__((weak)) void HSD_JObjInit(void* jobj) {}
 
 /* ---- mnName function overrides ---- */
 /*

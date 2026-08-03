@@ -2919,3 +2919,38 @@ __attribute__((weak)) void GXSetTevOrderEx(void) {}
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
+
+/* ============================================================
+ * Missing symbols from baselib display modules
+ * These stub functions satisfy the linker for displayfunc.c
+ * and its dependencies. Many are query functions that the
+ * actual game uses for video mode checks we don't need on PC.
+ * ============================================================ */
+
+/* GX query functions — no-op on PC, values not queried in game path */
+__attribute__((weak)) void GXGetProjectionv(void) {}
+__attribute__((weak)) void GXGetViewportv(void) {}
+__attribute__((weak)) void GXSetTevColorS10(void) {}
+
+/* MTX/PSMATH math functions */
+__attribute__((weak)) void MTXFrustum(void) {}
+__attribute__((weak)) void PSMTXInverse(void) {}
+
+/* Video functions — not needed on PC (no GCN video output) */
+__attribute__((weak)) void VIGetNextField(void) {}
+
+/* Heap allocation — our stubs use HSD_AllocMem/HSD_FreeMem instead */
+__attribute__((weak)) void* OSAllocFromHeap(void) { return 0; }
+__attribute__((weak)) void OSFreeToHeap(void) {}
+
+/* HSD render pass query — initialize.c not compiled yet */
+__attribute__((weak)) void HSD_GetCurrentRenderPass(void) {}
+
+/* TExp (texture expression) dag — stubs from texpdag.c */
+__attribute__((weak)) void HSD_TExpSchedule(void) {}
+__attribute__((weak)) void HSD_TExpMakeDag(void) {}
+__attribute__((weak)) void HSD_TExpSimplify(void) {}
+__attribute__((weak)) void HSD_TExpSimplify2(void) {}
+
+/* ByteCode evaluator */
+__attribute__((weak)) void HSD_ByteCodeEval(void) {}

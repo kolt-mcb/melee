@@ -9,6 +9,12 @@
 #include <string.h>
 #include <dolphin/os.h>
 
+/* MSL stddef.h defines usize_t as unsigned int, but system stddef.h
+ * (pulled in via platform.h → stddef.h) doesn't have it. Define here. */
+#ifndef usize_t
+typedef unsigned int usize_t;
+#endif
+
 void _hsdClassInfoInit(void);
 HSD_ClassInfo hsdClass = { _hsdClassInfoInit };
 

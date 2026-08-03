@@ -27,12 +27,38 @@ G_OBJ_SOURCES = [
     str(BASELIB_SRC / "gobjplink.c"),
     str(BASELIB_SRC / "gobjuserdata.c"),
 ]
+# Rendering pipeline: displayfunc + all its baselib dependencies
+DISPLAY_MODULES = [
+    "class.c", "list.c", "id.c", "hash.c", "random.c", "spline.c",
+    "util.c", "memory.c", "object.c",
+    "objalloc.c",
+    "mtx.c",
+    "state.c",
+    "fobj.c",
+    "texp.c", "tobj.c",
+    "robj.c",
+    "aobj.c",
+    "dobj.c",
+    "pobj.c",
+    "wobj.c",
+    "mobj.c",
+    "lobj.c",
+    "tev.c",
+    "fog.c",
+    "cobj.c",
+    "jobj.c",
+    "displayfunc.c",
+]
+G_DISPLAY_SOURCES = [
+    str(BASELIB_SRC / f) for f in DISPLAY_MODULES
+]
 # Filter to only existing files
 G_OBJ_SOURCES = [s for s in G_OBJ_SOURCES if Path(s).exists()]
+G_DISPLAY_SOURCES = [s for s in G_DISPLAY_SOURCES if Path(s).exists()]
 DECOMP_SOURCES = collect(MELEE / "lb")
 DECOMP_SOURCES = [s for s in DECOMP_SOURCES if Path(s).name not in EXCLUDE_DECOMP]
 MATH_SHIM = [str(SRC / "math_shim.c")]
-ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + G_OBJ_SOURCES
+ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
 
 INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,
@@ -82,5 +108,5 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 (OUT_DIR / "obj").mkdir(parents=True, exist_ok=True)
 
 print(f"Generated build.ninja.pc")
-print(f"Sources: {len(PORT_SOURCES)} port + {len(PC_STUB_SOURCES)} stub + {len(DECOMP_SOURCES)} decomp = {len(ALL_SOURCES)} total")
+print(f"Sources: {len(PORT_SOURCES)} port + {len(PC_STUB_SOURCES)} stub + {len(DECOMP_SOURCES)} decomp + {len(G_OBJ_SOURCES)} baselib-gobj + {len(G_DISPLAY_SOURCES)} baselib-display = {len(ALL_SOURCES)} total")
 print(f"Output: {OUT_PATH}")

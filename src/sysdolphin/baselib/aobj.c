@@ -179,6 +179,7 @@ float fmod(float a, float b)
     quotient = a / b;
     return a - b * quotient;
 }
+#endif
 
 HSD_AObj* HSD_AObjLoadDesc(HSD_AObjDesc* aobjdesc)
 {
