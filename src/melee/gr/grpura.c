@@ -24,7 +24,34 @@
 #include <baselib/tobj.h>
 #include <sysdolphin/baselib/dobj.h>
 
-/* 213030 */ static void grPura_80213030(Ground_GObj* arg0);
+/* Forward declarations */
+void grPura_80211CFC(bool num);
+void grPura_80211D00(void);
+void grPura_80211DD8(void);
+void grPura_80211DDC(void);
+bool grPura_80211E00(void);
+void grPura_80211EF0(Ground_GObj* arg0);
+bool grPura_80211F1C(Ground_GObj* arg0);
+void grPura_80211F24(Ground_GObj* arg0);
+void grPura_80211F28(Ground_GObj* arg0);
+void grPura_80211F2C(Ground_GObj* arg0);
+bool grPura_80211F58(Ground_GObj* arg0);
+void grPura_80211F60(Ground_GObj* arg0);
+void grPura_80211F64(Ground_GObj* arg0);
+void grPura_80211F68(Ground_GObj* arg0);
+bool grPura_80211FD0(Ground_GObj* arg0);
+void grPura_80211FD8(Ground_GObj* arg0);
+void grPura_80212020(Ground_GObj* arg0);
+void grPura_80212024(Ground_GObj* arg0);
+bool grPura_802120D8(Ground_GObj* arg0);
+void grPura_802120E0(Ground_GObj* arg0);
+void grPura_8021228C(Ground_GObj* arg0);
+void grPura_80212290(Ground_GObj* arg0);
+bool grPura_80212314(Ground_GObj* arg0);
+void grPura_8021231C(Ground_GObj* arg0);
+void grPura_802125EC(Ground_GObj* arg0);
+void grPura_802130C0(Ground_GObj* arg0);
+bool grPura_802130C8(Vec3* a, int num, HSD_JObj* joint);
 
 StageCallbacks grPu_803E6800[] = {
     { grPura_80211EF0, grPura_80211F1C, grPura_80211F24, grPura_80211F28, 0 },
@@ -61,13 +88,13 @@ StageCallbacks grPu_803E6800[] = {
 
 char grPu_803E6A30[] = "/GrPu.dat";
 
-typedef struct grPu_StageData {
+typedef struct grPu_StageDataLocal {
     StageData stage_data;
     char report_format[0x24];
     char filename[0xC];
-} grPu_StageData;
+} grPu_StageDataLocal;
 
-grPu_StageData grPu_803E6A3C = {
+grPu_StageDataLocal grPu_803E6A3C = {
     {
         0x11,
         grPu_803E6800,

@@ -1,5 +1,11 @@
 #include "grbigblueroute.h"
 
+/* Forward declaration for grBigBlueRoute_8020DA9C_t */
+typedef struct grBigBlueRoute_8020DA9C_t {
+    u8 pad_0[0x8];
+    int x8;
+} grBigBlueRoute_8020DA9C_t;
+
 #include <platform.h>
 
 #include "baselib/debug.h"

@@ -32,7 +32,7 @@
 #include <MSL/trigf.h>
 
 /* Forward declarations */
-void grFourside_801F30A0(Ground* gp, s32 arg1, CollData* cd, s32 arg3, s32 arg4, f32 arg5);
+void grFourside_801F30A0(Ground* gp, s32 arg1, CollData* cd, s32 arg3, mpLib_GroundEnum arg4, f32 arg5);
 
 static struct {
     /* 00 */ int heli_wait;

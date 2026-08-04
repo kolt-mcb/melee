@@ -32,6 +32,9 @@
 #include "lb/types.h"
 #include "mp/mplib.h"
 
+/* Forward declarations */
+void fn_8021E994(Ground* arg0, s32 arg1, CollData* arg2, s32 arg3, s32 arg4, f32 arg5);
+
 f32 grHr_804D6AD8;
 int grHr_804D6ADC;
 f32 grHr_804D6AE0;
@@ -99,9 +102,9 @@ typedef struct grHr_StageDataLocal {
     char filename[0xC];
 } grHr_StageDataLocal;
 
-grHr_StageData grHr_803E821C = {
+grHr_StageDataLocal grHr_803E821C = {
     {
-        Gr_Kind_HomeRun,
+        Gr_Kind_Homerun,
         grHr_803E8140,
         grHr_804D49A0,
         grHomeRun_8021C754,

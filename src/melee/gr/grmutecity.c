@@ -62,6 +62,9 @@ static s32 grMc_8049F440[30];
 
 #include "grmutecity.static.h"
 
+/* Forward declarations */
+void fn_801F2B58(Ground* gp, s32 arg1, CollData* cd, s32 arg3, s32 arg4, f32 arg5);
+
 u8 grMc_803E30B0[0x14] = { 0x00, 0x06, 0x00, 0x1D, 0x00, 0x06, 0x00,
                            0x07, 0x00, 0x1D, 0x00, 0x08, 0x00, 0x08,
                            0x00, 0x1D, 0x00, 0x09, 0x00, 0x00 };
@@ -344,14 +347,14 @@ StageCallbacks grMc_803E30C4[39] = {
 
 char grMc_803E33D0[] = "/GrMc.dat";
 
-typedef struct grMc_StageData {
+typedef struct grMc_StageDataLocal {
     StageData stage_data;
     char report_format[0x24];
-} grMc_StageData;
+} grMc_StageDataLocal;
 
-grMc_StageData grMc_803E33DC = {
+grMc_StageDataLocal grMc_803E33DC = {
     {
-        MUTECITY,
+        Gr_Kind_MuteCity,
         grMc_803E30C4,
         grMc_803E33D0,
         grMuteCity_801EFC6C,

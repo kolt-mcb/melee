@@ -214,7 +214,7 @@ bool grBigBlue_801E59F0(void)
 
 char grBb_803E2D14[] = "/GrBb.dat";
 
-grBb_StageData grBb_803E2D20 = {
+grBb_StageDataLocal grBb_803E2D20 = {
     {
         Gr_Kind_BigBlue,
         grBb_803E29E0,
