@@ -518,58 +518,13 @@ static const char* g_vert_src =
 "    v_uv1 = a_uv1 * u_uv_scale;\n"
 "}\n";
 
-/* Fragment shader — 2 texture units with TEV compositing.
- * Implements TEV_BASIC mode: color = prev * tex + const.
- * GLSL 3.30 forbids dynamic sampler array indexing. */
+/* Fragment shader — outputs vertex color directly. */
 static const char* g_frag_src =
 "#version 330 core\n"
 "in vec4 v_col;\n"
-"in vec2 v_uv0;\n"
-"in vec2 v_uv1;\n"
 "out vec4 frag_color;\n"
-"uniform int u_tex0_enable;\n"
-"uniform int u_tex1_enable;\n"
-"uniform vec4 u_kcolor0;\n"
-"uniform vec4 u_kcolor1;\n"
-"uniform vec4 u_kcolor2;\n"
-"uniform vec4 u_kcolor3;\n"
-"uniform float u_color_mult0;\n"
-"uniform float u_color_mult1;\n"
-"// Alpha compare uniforms (GLSL Core Profile: discard instead of glAlphaFunc)\n"
-"uniform int u_alpha_cmp_func;\n"
-"uniform float u_alpha_cmp_ref;\n"
-"uniform int u_alpha_cmp_mask;\n"
-"uniform sampler2D u_tex0;\n"
-"uniform sampler2D u_tex1;\n"
 "void main() {\n"
-"    vec4 color = v_col;\n"
-"    // TEV stage 0: multiply color by tex0 and apply constant\n"
-"    if (u_tex0_enable == 1) {\n"
-"        vec4 tex = texture(u_tex0, v_uv0);\n"
-"        color = color * tex * u_color_mult0 + u_kcolor0;\n"
-"    }\n"
-"    // TEV stage 1: multiply color by tex1 and apply constant\n"
-"    if (u_tex1_enable == 1) {\n"
-"        vec4 tex = texture(u_tex1, v_uv1);\n"
-"        color = color * tex * u_color_mult1 + u_kcolor1;\n"
-"    }\n"
-"    // Alpha comparison via discard (replaces deprecated fixed-function glAlphaFunc)\n"
-"    // Maps Dolphin GX compare functions to GLSL equivalent branches\n"
-"    float sample_a = color.a;\n"
-"    if (u_alpha_cmp_mask != 0) {\n"
-"        sample_a = floor(sample_a * 255.0 * u_alpha_cmp_mask) / 255.0;\n"
-"    }\n"
-"    bool pass = false;\n"
-"    float ref = u_alpha_cmp_ref;\n"
-"    if (u_alpha_cmp_func == 1) pass = (sample_a < ref);\n"
-"    else if (u_alpha_cmp_func == 2) pass = (sample_a == ref);\n"
-"    else if (u_alpha_cmp_func == 3) pass = (sample_a <= ref);\n"
-"    else if (u_alpha_cmp_func == 4) pass = (sample_a > ref);\n"
-"    else if (u_alpha_cmp_func == 5) pass = (sample_a != ref);\n"
-"    else if (u_alpha_cmp_func == 6) pass = (sample_a >= ref);\n"
-"    else if (u_alpha_cmp_func == 7) pass = true;\n"
-"    if (!pass) discard;\n"
-"    frag_color = clamp(color, vec4(0.0), vec4(1.0));\n"
+"    frag_color = v_col;\n"
 "}\n";
 
 static GLuint compile_shader(GLenum type, const char* src)
@@ -795,6 +750,22 @@ void gx_frame_begin(void)
     glClearColor(0, 0, 0, 1);
     glClearDepth(1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    /* Set viewport to full window size for debug overlay rendering. */
+    g_state.vp_x = 0; g_state.vp_y = 0;
+    g_state.vp_w = 1280; g_state.vp_h = 720;
+    
+    /* Orthographic projection: maps [0,1280]×[0,720]→NDC [-1,1]². 
+     * Standard GL row-major ortho: translation is in col3 (row0-2 of row3). */
+    g_state.proj_matrix[0][0] =  2.0f / 1280.0f;  g_state.proj_matrix[0][1] = 0;        g_state.proj_matrix[0][2] = 0;   g_state.proj_matrix[0][3] = -1;
+    g_state.proj_matrix[1][0] =  0;                g_state.proj_matrix[1][1] =  2.0f / 720.0f; g_state.proj_matrix[1][2] = 0;   g_state.proj_matrix[1][3] = -1;
+    g_state.proj_matrix[2][0] =  0;                g_state.proj_matrix[2][1] = 0;        g_state.proj_matrix[2][2] = -1; g_state.proj_matrix[2][3] = 0;
+    g_state.proj_matrix[3][0] =  0;                g_state.proj_matrix[3][1] = 0;        g_state.proj_matrix[3][2] = 0;   g_state.proj_matrix[3][3] = 1;
+    
+    /* Model-view: identity — positions are already in screen space. */
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 4; j++)
+            g_state.mv_matrix[i][j] = (i == j) ? 1.0f : 0.0f;
 }
 
 /* Forward declaration - defined below */
@@ -803,7 +774,10 @@ static void apply_alpha_compare_uniforms(void);
 
 void gx_frame_end(void)
 {
-    if (g_state.in_primitive && g_state.vert_count > 0) {
+    /* Always flush pending vertex data, regardless of in_primitive state.
+     * GXEnd() sets in_primitive=FALSE after collecting verts, but the draw
+     * hasn't been issued yet — it's deferred to gx_frame_end or GXFlush. */
+    if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
 }
@@ -934,7 +908,9 @@ static void bridge_upload_and_draw(void)
     if (g_state.cull_enabled) {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
-        glFrontFace(GL_CCW);
+        /* GC quads wind clockwise (TL→TR→BR→BL in screen-space y-down), 
+         * so CW = front face to match. */
+        glFrontFace(GL_CW);
     } else {
         glDisable(GL_CULL_FACE);
     }
@@ -1134,9 +1110,6 @@ void GXClearBuff(void)
 }
 void GXFlush(void)
 {
-    if (g_state.vert_count > 0) {
-        PORT_LOG_DEBUG("GXFlush: %u pending verts", g_state.vert_count);
-    }
     bridge_upload_and_draw();
     glFlush();
 }
@@ -1222,7 +1195,8 @@ void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
 {
     g_state.in_primitive = TRUE;
     g_state.prim_type = type;
-    g_state.vert_count = 0;
+    /* Do NOT reset vert_count — multiple GXBegin/End pairs batch into one draw. */
+    /* g_state.vert_count = 0;  <-- REMOVED: was destroying accumulated vertices */
     PORT_LOG_DEBUG("GXBegin: type=0x%X fmt=%u verts=%u", type, vtxfmt, nverts);
 }
 void GXEnd(void)
@@ -1385,7 +1359,7 @@ void GXSetCullMode(u32 mode)
     } else {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
-        glFrontFace(GL_CCW);
+        glFrontFace(GL_CW);
     }
 }
 void GXSetDither(u32 enable)

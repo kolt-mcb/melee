@@ -93,15 +93,15 @@ StageCallbacks grHr_803E8140[11] = {
       grHomeRun_8021DEB0, 0xC0000000 },
 };
 
-typedef struct grHr_StageData {
+typedef struct grHr_StageDataLocal {
     StageData stage_data;
     char report_format[0x24];
     char filename[0xC];
-} grHr_StageData;
+} grHr_StageDataLocal;
 
 grHr_StageData grHr_803E821C = {
     {
-        HOMERUN,
+        Gr_Kind_HomeRun,
         grHr_803E8140,
         grHr_804D49A0,
         grHomeRun_8021C754,
@@ -245,7 +245,7 @@ void grHomeRun_8021CB20(Ground_GObj* gobj)
 
     *(u8*) &gp->x10_flags |= 4;
     grAnime_801C8138(gobj, gp->map_id, false);
-    mpJointSetCb1(0, gp, (mpLib_Callback) fn_8021E994);
+    mpJointSetCb1(0, gp, (mpColl_Callback) fn_8021E994);
 
     archive = grDatFiles_801C6324();
     vars->xD4 = GObj_Create(0x11, 0x13, 0);
@@ -418,7 +418,7 @@ void grHomeRun_8021D680(Ground_GObj* gobj)
                             (160.0F * Ground_801C0498())));
         gp2 = GET_GROUND(
             ((grHomeRun_MainGroundVars*) &gp->gv.homerun)->gobjs[0]);
-        if (gp2->gv.homerun.xC4 < x0) {
+        if (gp2->gv.homerun2.xC4 < x0) {
             {
                 HSD_GObj* first_gobj =
                     ((grHomeRun_MainGroundVars*) &gp->gv.homerun)->gobjs[0];
@@ -430,8 +430,8 @@ void grHomeRun_8021D680(Ground_GObj* gobj)
                         ->gobjs[i + 1];
             }
             ((grHomeRun_MainGroundVars*) &gp->gv.homerun)->gobjs[63] = NULL;
-        } else if (gp2->gv.homerun.xC4 > x0) {
-            gobj2 = grHomeRun_8021E500(gp2->gv.homerun.xC4 - 1);
+        } else if (gp2->gv.homerun2.xC4 > x0) {
+            gobj2 = grHomeRun_8021E500(gp2->gv.homerun2.xC4 - 1);
             for (i = 63; i > 0; i--) {
                 ((grHomeRun_MainGroundVars*) &gp->gv.homerun)->gobjs[i] =
                     ((grHomeRun_MainGroundVars*) &gp->gv.homerun)
@@ -448,12 +448,12 @@ void grHomeRun_8021D680(Ground_GObj* gobj)
         }
         HSD_ASSERT(0x239, gobj2);
         gp2 = GET_GROUND(gobj2);
-        if (gp2->gv.homerun.xC4 > x1) {
+        if (gp2->gv.homerun2.xC4 > x1) {
             ((grHomeRun_MainGroundVars*) &gp->gv.homerun)->gobjs[i] = NULL;
             Ground_801C4A08(gobj2);
-        } else if (gp2->gv.homerun.xC4 < x1) {
+        } else if (gp2->gv.homerun2.xC4 < x1) {
             ((grHomeRun_MainGroundVars*) &gp->gv.homerun)->gobjs[i + 1] =
-                grHomeRun_8021E500(gp2->gv.homerun.xC4 + 1);
+                grHomeRun_8021E500(gp2->gv.homerun2.xC4 + 1);
         }
 
         x = 0.85F * cam_interest.x;
@@ -538,7 +538,7 @@ void grHomeRun_8021DF50(Ground_GObj* gobj)
             f32 y, z;
             HSD_Text* text;
 
-            gp->gv.unk.xC8 = (int) grHomeRun_8021EC58(gp->gv.homerun.xC6);
+            gp->gv.unk.xC8 = (int) grHomeRun_8021EC58(gp->gv.homerun2.xC6);
             lb_8000B1CC((HSD_JObj*) gp->gv.unk.xCC, NULL, &pos);
 
             scale = Ground_801C0498();
@@ -602,7 +602,7 @@ void grHomeRun_8021E0D4(Ground_GObj* gobj)
             f32 y, z;
             HSD_Text* text;
 
-            gp->gv.unk.xC8 = (int) grHomeRun_8021EC58(gp->gv.homerun.xC6);
+            gp->gv.unk.xC8 = (int) grHomeRun_8021EC58(gp->gv.homerun2.xC6);
             lb_8000B1CC((HSD_JObj*) gp->gv.unk.xCC, NULL, &pos);
 
             scale = Ground_801C0498();
@@ -666,7 +666,7 @@ void grHomeRun_8021E258(Ground_GObj* gobj)
             f32 y, z;
             HSD_Text* text;
 
-            gp->gv.unk.xC8 = (int) grHomeRun_8021EC58(gp->gv.homerun.xC6);
+            gp->gv.unk.xC8 = (int) grHomeRun_8021EC58(gp->gv.homerun2.xC6);
             lb_8000B1CC((HSD_JObj*) gp->gv.unk.xCC, NULL, &pos);
 
             scale = Ground_801C0498();
@@ -730,7 +730,7 @@ void grHomeRun_8021E3DC(Ground_GObj* gobj)
             f32 y, z;
             HSD_Text* text;
 
-            gp->gv.unk.xC8 = (int) grHomeRun_8021EC58(gp->gv.homerun.xC6);
+            gp->gv.unk.xC8 = (int) grHomeRun_8021EC58(gp->gv.homerun2.xC6);
             lb_8000B1CC((HSD_JObj*) gp->gv.unk.xCC, NULL, &pos);
 
             scale = Ground_801C0498();
@@ -829,9 +829,9 @@ HSD_GObj* grHomeRun_8021E500(s16 arg0)
         (160.0F * (grHr_804D6AE4 * Ground_801C0498())) + offset;
     HSD_JObjSetTranslateX(jobj, gp->gv.homerun.xD0);
 
-    gp->gv.homerun.xC6 =
+    gp->gv.homerun2.xC6 =
         (s16) ((s32) grHr_804D6AE0 * ((arg0 + 1) / grHr_804D6ADC));
-    gp->gv.homerun.xC4 = arg0;
+    gp->gv.homerun2.xC4 = arg0;
     return gobj;
 }
 

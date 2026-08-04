@@ -8,6 +8,7 @@
  */
 
 #define _GNU_SOURCE
+#define GL_GLEXT_PROTOTYPES
 
 #include "render.h"
 #include "window.h"
@@ -84,9 +85,13 @@ void render_clear(void)
 
 /* Archive loading state — loaded once at startup */
 static bool g_archive_loaded = false;
+static _Bool g_frame_saved = 0;
 
 void render_present(void)
 {
+    /* Restore normal pipeline — fragment shader outputs BLUE now */
+    /* No extra test code — let the pipeline run normally */
+    
     /* Initialize archive textures once at startup */
     if (!g_archive_loaded) {
         g_archive_loaded = true;
@@ -105,6 +110,35 @@ void render_present(void)
     
     /* Flush any remaining GX batches before swapping */
     gx_frame_end();
+    
+    /* Save first rendered frame to screenshot.ppm for debugging.
+     * MUST read pixels BEFORE window_swap() — after swap the backbuffer
+     * is a fresh black buffer and the previous frame is on screen. */
+    if (!g_frame_saved) {
+        GLint vw, vh;
+        SDL_Window* win = window_get_sdl_window();
+        SDL_GetWindowSize(win, &vw, &vh);
+
+        GLubyte *pixels = (GLubyte*)malloc(vw * vh * 3);
+                glFinish();
+                glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glReadPixels(0, 0, vw, vh, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+        FILE *f = fopen("screenshot.ppm", "wb");
+        fprintf(f, "P6\n%d %d\n255\n", vw, vh);
+        /* Flip vertically: PPM rows go bottom-up, glReadPixels top-down */
+        int row_stride = vw * 3;
+        GLubyte *row = (GLubyte*)malloc(row_stride);
+        for (int y = vh - 1; y >= 0; y--) {
+            memcpy(row, pixels + y * row_stride, row_stride);
+            fwrite(row, 1, row_stride, f);
+        }
+        free(row);
+        free(pixels);
+        fclose(f);
+        g_frame_saved = true;
+        PORT_LOG_INFO("[RENDER] Screenshot saved to screenshot.ppm (%dx%d)", vw, vh);
+    }
+    
     window_swap();
 }
 
@@ -121,7 +155,8 @@ static long get_time_ms(void)
 
 /**
  * Setup vertex format and state for 2D overlay rendering.
- * Uses identity modelview so positions are in clip space.
+ * Uses screen-space-to-clip-space matrix so positions in [0,w]x[0,h]
+ * map correctly to clip space [-1,1]x[-1,1].
  */
 static void setup_overlay_render(void)
 {
@@ -133,6 +168,26 @@ static void setup_overlay_render(void)
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_F32, 0);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_U8, 0);
     GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPH, GX_LO_NOOP);
+    
+    /* Build screen-space to clip-space matrix. */
+    int width = 1280, height = 720;
+    SDL_Window* win = window_get_sdl_window();
+    if (win) SDL_GetWindowSize(win, &width, &height);
+    
+    extern void gx_set_overlay_matrix_identity(void);
+    extern void gx_set_overlay_projection(f32 ortho[4][4]);
+    gx_set_overlay_matrix_identity();
+    
+    /* Orthographic projection: maps screen coords to clip space.
+     * GL viewport y=0 is at bottom, so y_ndc = 2*y/height - 1 maps
+     * y=0 → clip.y=-1 (bottom) and y=height → clip.y=+1 (top). */
+    f32 ortho[4][4] = {
+        {2.0f/width, 0,       0, -1},
+        {0,         2.0f/height, 0, -1},
+        {0,          0,       -1,  0},  /* z=0 → z_ndc=0 (middle of depth range) */
+        {0,          0,       0,  1},
+    };
+    gx_set_overlay_projection(ortho);
 }
 
 /**
@@ -553,8 +608,11 @@ void render_debug_overlay(void)
     draw_3d_scene(time);
     GXFlush();
 
-    /* --- Pass 2: 2D overlay (with depth testing disabled for HUD) ---
-     * Draw the 2D debug HUD elements on top of the 3D scene. */
+    /* --- Pass 2: 2D overlay (disable depth test & depth write for HUD) --- */
+    
+    /* Disable depth test so HUD always renders on top */
+    extern void GXSetZMode(u32 enable, u32 func, u32 update);
+    GXSetZMode(0, 0, 0);  /* Disable depth test */
     
     /* Draw game-like HUD overlay */
     draw_hud_overlay(width, height, time);
@@ -572,17 +630,48 @@ void render_debug_overlay(void)
  * every frame even when the decomp game loop is running.
  */
 
-/* Archive loading state — loaded once at startup */
 void render_present_pc(void)
 {
-    /* Full frame cycle for game-loop-integrated rendering:
-     * 1. Flush any pending GX draw calls from previous frame
-     * 2. Clear buffers for this frame  
-     * 3. Swap the double-buffered frame (SDL presents the back buffer)
-     * 
-     * Called every iteration of gm_801A4510()'s while(true) loop. */
-    gx_frame_end();
+    /* Full frame cycle for game-loop-integrated rendering: */
     gx_frame_begin();
+    
+    /* Draw the debug overlay every frame while the game loop runs */
+    render_debug_overlay();
+    
+    /* Flush pending draw calls */
+    gx_frame_end();
+    
+    /* Save first rendered frame BEFORE swap — after swap we read fresh backbuffer.
+     * Also capture frame 2 and 3 if frame 1 was all-one-color (debug). */
+    if (g_frame_saved == 0) {
+        g_frame_saved = -1;  /* Mark as frame 1 captured */
+        SDL_Window* win = window_get_sdl_window();
+        if (win) {
+            int vw = 1280, vh = 720;
+            SDL_GetWindowSize(win, &vw, &vh);
+            GLubyte *pixels = (GLubyte*)malloc(vw * vh * 3);
+            if (pixels) {
+                        glFinish();
+                glPixelStorei(GL_PACK_ALIGNMENT, 1);
+                glReadPixels(0, 0, vw, vh, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+                FILE *f = fopen("screenshot.ppm", "wb");
+                if (f) {
+                    fprintf(f, "P6\n%d %d\n255\n", vw, vh);
+                    GLubyte *row = (GLubyte*)malloc(vw * 3);
+                    for (int y = vh - 1; y >= 0; y--) {
+                        memcpy(row, pixels + y * (vw * 3), vw * 3);
+                        fwrite(row, 1, vw * 3, f);
+                    }
+                    free(row);
+                    fclose(f);
+                    PORT_LOG_INFO("[RENDER] First frame captured -> screenshot.ppm (%dx%d)", vw, vh);
+                }
+                free(pixels);
+            }
+        }
+    }
+    
+    /* Present the frame AFTER reading screenshot */
     window_swap();
 }
 

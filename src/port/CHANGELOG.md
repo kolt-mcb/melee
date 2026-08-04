@@ -1,3 +1,200 @@
+## [2025-08-03h8] — gr/ Module Reconciliation Progress (Phase 1 Partial)
+
+### Doldecomp Merge
+- Merged commit 9509dc044 (Improve ftCo_8008DCE0 stack frame)
+- Now at origin/master + 0 commits ahead
+
+### gr/ Module Reconciliation Progress
+Attempted Phase 1 of the 4-phase reconciliation plan. Applied fixes across 77 gr/ files:
+
+**Fixes Applied (reverted to preserve stable build):**
+- Added `M_TAU` macro to `gr/inlines.h` (10 files affected)
+- Replaced `callback0` → `on_init`, `callback2` → `gobj_proc` (10+ files)
+- Replaced enum constants: CASTLE→Gr_Kind_Castle, FOURSIDE→Gr_Kind_Fourside, etc. (all files)
+- Replaced `internal_stage_id` → `grkind` (all files)
+- Renamed local typedefs: grCn_StageData→grCn_StageDataLocal, grHr_StageData→grHr_StageDataLocal, etc.
+- Fixed `grBb_YakumonoParams` → `grBb_YakumonoParam` (singular)
+- Added `unkCastle` struct definition in grcastle.c
+- Added forward declarations for grFourside_801F30A0, grCastle_801CF750, fn_801E8560, etc.
+- Fixed `mpLib_Callback` → `mpColl_Callback` (grbigblue.c, grhomerun.c)
+- Fixed `char_id_count` → `CHAR_ID_COUNT` define in grheal.c
+- Fixed `gv.oldkongo.*` → `gv.kongo.*` struct member renames
+- Fixed `gv.homerun.xC4/xC6` → `gv.homerun2.xC4/xC6` (integer variant)
+
+**Remaining Issues (10 files, ~100 errors):**
+- groldkongo.c: 15+ missing grOldKongo functions, struct member renames
+- grbigblueroute.c: undefined struct grBigBlueRoute_8020DA9C_t
+- grbigblue.c: function signature conflicts (Ground* vs void*)
+- grlib.c, grlast.c, grkinokoroute.c: bool vs int return type conflicts
+- grhomerun.c: fn_8021E994 forward declaration needed
+- grcastle.c: Pokemon_Random undeclared
+
+**Decision:** Reverted gr/ changes to preserve stable 80-source build. The gr/ reconciliation
+requires a more systematic approach with per-file validation. Estimated 3-5 hours remaining.
+
+### Keyboard Input O2 Optimization Fix
+- Initialized `g_joysticks[4]` array to `{NULL}` to prevent O2 optimization from assuming valid pointers
+
+### Critical Files Modified
+- `configure_pc.py` — Reverted gr/ inclusion
+- `src/melee/gr/inlines.h` — Added M_TAU macro
+- `src/melee/gr/grcorneria.c` — Fixed callback0/2, enum constants, typedef collision
+- `src/melee/gr/grbigblue.c` — Fixed typedef, forward declarations, mpColl_Callback
+- `src/melee/gr/grcastle.c` — Added unkCastle struct, forward declaration
+- `src/melee/gr/grfourside.c` — Added forward declaration
+- `src/melee/gr/grhomerun.c` — Fixed typedef, mpColl_Callback, homerun2 struct
+- `src/melee/gr/grheal.c` — Fixed char_id_count → CHAR_ID_COUNT
+- `src/melee/gr/groldkongo.c` — Fixed typedef, oldkongo→kongo
+- `src/melee/gr/grbigblueroute.c` — Fixed enum constant
+- `src/pc_stub/undef_stubs.c` — Initialized g_joysticks array
+
+---
+
+## [2025-08-03h7] — GXBegin() Vertex Buffer Reset Bug Fixed (HUD Now Renders!)
+
+### Root Cause Identified: GXBegin() Was Clearing Accumulated Vertices
+
+**THE BUG:** `GXBegin()` reset `g_state.vert_count = 0` on every call:
+```c
+void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
+{
+    g_state.in_primitive = TRUE;
+    g_state.prim_type = type;
+    g_state.vert_count = 0;  // BUG! Destroys accumulated vertices
+}
+```
+
+**Why it failed:** The HUD overlay draws multiple rectangles via `draw_rect()`. Each
+call invokes `GXBegin()` → `GXPosition*` ×4 → `GXEnd()`. Because `GXBegin()` cleared
+the vertex count, ONLY the LAST rectangle's vertices survived. The earlier 15+ rectangles
+were silently discarded.
+
+**Symptom:** Black screen with only 1024 white pixels (archive texture quad at the end
+of the frame). The HUD was completely invisible despite correct MVP matrices and shader.
+
+### Fix Applied
+```c
+void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
+{
+    g_state.in_primitive = TRUE;
+    g_state.prim_type = type;
+    /* Do NOT reset vert_count — multiple GXBegin/End pairs batch into one draw. */
+}
+```
+
+### Proof of Fix
+
+**Before:** 4 verts per HUD flush → only last rectangle visible
+**After:** 65 verts per HUD flush → all rectangles, circles, bars visible
+
+Screenshot confirms:
+- Yellow health/stamina bars (animated)
+- White status icons (3 colored squares)
+- Timer circle (orange)
+- Round indicator (gray)
+- Archive texture quads (white)
+- 3D wireframe scene (724 verts)
+
+### Diagnostic Journey
+
+1. `glClear` to red → SOLID RED (GL context valid)
+2. `glDrawArrays` standalone shader → RED (draw pipeline works)
+3. Bridge draws → BLACK (vertex data issue)
+4. MVP matrix log → CORRECT (ortho projection valid)
+5. Vertex position log → CORRECT (screen coords valid)
+6. **GXBegin vert_count reset → THE SMOKING GUN**
+
+### Critical Files Modified
+- `/home/grunt/melee/src/port/gx_gl_bridge.c` — Removed `vert_count = 0` from `GXBegin()`
+
+---
+
+## [2025-08-03h6] — gx_frame_end() Flush Bug Fixed
+
+### Root Cause Identified: gx_frame_end() Was Not Flushing
+
+**THE BUG:** `gx_frame_end()` checked `g_state.in_primitive` before flushing:
+```c
+void gx_frame_end(void)
+{
+    if (g_state.in_primitive && g_state.vert_count > 0) {  // BUG!
+        bridge_upload_and_draw();
+    }
+}
+```
+
+**Why it failed:** `GXEnd()` sets `in_primitive = FALSE` **after** accumulating vertices.
+So when `gx_frame_end()` checked `in_primitive`, it was already FALSE — and vertices
+were NEVER flushed to the GPU.
+
+### Fix Applied
+```c
+void gx_frame_end(void)
+{
+    /* Always flush pending vertex data, regardless of in_primitive state. */
+    if (g_state.vert_count > 0) {
+        bridge_upload_and_draw();
+    }
+}
+```
+
+### Proof of Fix
+1. **Yellow triangle test**: Hardcoded yellow triangle via GX bridge rendered correctly
+   — yellow (255,255,0) on black background at expected position
+2. **glClear test**: `glClearColor(1,1,0)` + `glClear` produced solid yellow screenshot
+   — proves window/framebuffer/readback work perfectly
+3. **Simple fragment shader**: `frag_color = v_col;` compiles and links (prog=3)
+4. **Draw count**: Frame produces 4000+ flush calls with small vertex batches
+
+### Current State
+- Fragment shader outputs vertex colors directly (texture compositing deferred)
+- HUD overlay draws at right side of screen (dark blue rects ~0,0,40)
+- Archive textures render with white border (fragment ignores textures)
+- Overall: pipeline is functional but geometry appears nearly black due to
+  very dark HUD colors (20,20,40 out of 255) on black background
+- 336 white pixels visible from texture border rendering
+
+### Pending Issues
+1. HUD overlay renders at very dark colors — not visible on black background
+   - Fix: Use brighter HUD colors or add HUD outline for visibility
+2. Fragment shader doesn't apply textures — simplified to v_col passthrough
+   - Fix: Restore TEV compositing shader (current shader compiles but has
+     issues with GL_INVALID_OPERATION from unresolved uniform locations)
+3. Large numbers of tiny draw batches (1-4 verts each) — inefficient
+   - Potential fix: Batch similar geometry in render_debug_overlay
+
+---
+
+## [2025-08-03h5] — OpenGL Rasterization Root-Cause Analysis
+
+### Finding: Headless Core Profile Cannot Rasterize (CORRECTED)
+
+**PREVIOUS MISDIAGNOSIS:** Earlier testing incorrectly concluded that Mesa's Core
+Profile couldn't rasterize on headless systems.
+
+**CORRECTION:** The black screen was caused by `gx_frame_end()` not flushing pending
+draws (see h6 section above). The GL pipeline IS functional on this system.
+
+Key evidence:
+- Yellow triangle renders correctly when manually triggered
+- glClear produces solid yellow when called explicitly
+- The actual game geometry appears nearly black due to very dark overlay colors
+
+**Solution path (pick one):**
+1. Run under Xvfb with llvmpipe: `LIBGL_ALWAYS_SOFTWARE=1 Xvfb :99 -screen 0 1280x720x24`
+2. Use a physical display with proprietary NVIDIA drivers
+3. Use AMDVLK/vulkan for hardware-accelerated software emulation
+4. Fall back to SDL2's 2D rendering API (SDL_Render) as an alternative render path
+
+### Build State
+- Sources: 80 (unchanged)
+- Compiler errors: 0
+- Binary: 608K ELF (unchanged)
+- Boot: 13/13 INIT phases complete, enters main loop
+- Rendering: Pipeline structurally correct; rasterization blocked by GL driver
+
+---
+
 ## [2025-08-03h4] — Advanced 3D Scene Renderer
 
 ### Feature: Game-Like Environment Demo

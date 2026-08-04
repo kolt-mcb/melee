@@ -47,7 +47,11 @@ extern f32 grBb_804DB30C;
 extern f32 grBb_804DB310;
 extern f32 grBb_804DB3F0;
 
-static grBb_YakumonoParams* grBb_804D69C8[2];
+static grBb_YakumonoParam* grBb_804D69C8[2];
+
+/* Forward declarations for functions used before definition */
+void fn_801E8560(Ground* gp, s32 param, CollData* coll, s32 time_param, s32 enum_val, f32 fval);
+void fn_801EF60C(Ground* gp, s32 param, CollData* coll, s32 time_param, s32 enum_val, f32 fval);
 
 typedef struct grBb_Data803E2D78 {
     u8 pad_0[0xC];
@@ -129,9 +133,9 @@ StageCallbacks grBb_803E29E0[] = {
     { NULL, NULL, NULL, NULL, 0 }
 };
 
-typedef struct grBb_StageData {
+typedef struct grBb_StageDataLocal {
     StageData stage_data;
-} grBb_StageData;
+} grBb_StageDataLocal;
 
 static const Vec3 grBb_803B8108 = { -1.0F, 0.0F, 0.0F };
 static const Vec3 grBb_803B8114 = { 56.0F, 40.0F, 24.0F };
@@ -212,7 +216,7 @@ char grBb_803E2D14[] = "/GrBb.dat";
 
 grBb_StageData grBb_803E2D20 = {
     {
-        BIGBLUE,
+        Gr_Kind_BigBlue,
         grBb_803E29E0,
         grBb_803E2D14,
         grBigBlue_801E57C0,
@@ -242,11 +246,11 @@ HSD_GObj* grBigBlue_801E59F8(s32 id)
         if (cbs->callback3 != NULL) {
             gp->x1C_callback = cbs->callback3;
         }
-        if (cbs->callback0 != NULL) {
-            cbs->callback0(gobj);
+        if (cbs->on_init != NULL) {
+            cbs->on_init(gobj);
         }
-        if (cbs->callback2 != NULL) {
-            HSD_GObj_SetupProc(gobj, cbs->callback2, 4U);
+        if (cbs->gobj_proc != NULL) {
+            HSD_GObj_SetupProc(gobj, cbs->gobj_proc, 4U);
         }
     } else {
         OSReport("%s:%d: couldn t get gobj(id=%d)\n", "grbigblue.c", 0x17E,
@@ -570,9 +574,9 @@ void grBigBlue_801E6904(Ground_GObj* gobj)
     jobj = gp->gv.bigblue.xD4[2];
     HSD_JObjSetScale(jobj, &scale);
 
-    mpJointSetCb1(0, gp, (mpLib_Callback) fn_801E8560);
-    mpJointSetCb1(1, gp, (mpLib_Callback) fn_801E8560);
-    mpJointSetCb1(2, gp, (mpLib_Callback) fn_801E8560);
+    mpJointSetCb1(0, gp, (mpColl_Callback) fn_801E8560);
+    mpJointSetCb1(1, gp, (mpColl_Callback) fn_801E8560);
+    mpJointSetCb1(2, gp, (mpColl_Callback) fn_801E8560);
 }
 
 bool grBigBlue_801E6C58(Ground_GObj* arg)
@@ -2929,7 +2933,7 @@ void grBigBlue_801EC6C0(Ground_GObj* gobj)
     s32 idx;
     s32 k;
     u8* car;
-    grBb_YakumonoParams* params;
+    grBb_YakumonoParam* params;
     f32 scale;
     f32 lerp;
     s32 lo;
@@ -2939,7 +2943,7 @@ void grBigBlue_801EC6C0(Ground_GObj* gobj)
     for (i = 0; i < 30; i++) {
         u8 val;
         mpJointSetCb1(*(s16*) ((u8*) grBb_803E2938 + 0x4C4 + i * 2), gp,
-                      (mpLib_Callback) fn_801EF60C);
+                      (mpColl_Callback) fn_801EF60C);
         HSD_JObjSetFlagsAll(((HSD_JObj**) gp->gv.bigblue.xC8)[i], JOBJ_HIDDEN);
         val = HSD_Randi(2) ? 0 : 2;
         ((u8*) gp->gv.bigblue.xCC)[i] = val;
@@ -4693,7 +4697,7 @@ void fn_801EF60C(Ground* gp, s32 joint_id, CollData* coll, s32 time_param,
 {
     s32 car_num;
     s16* table;
-    grBb_YakumonoParams* params;
+    grBb_YakumonoParam* params;
     u8* p;
     s32 i;
     u16 hw;
@@ -4744,7 +4748,7 @@ void grBigBlue_801EF7D8(Vec3* pos)
 
 bool grBigBlue_801EF844(enum_t line_id)
 {
-    if (stage_info.internal_stage_id == 19 && line_id != -1) {
+    if (stage_info.grkind == 19 && line_id != -1) {
         s32 joint = mpJointFromLine(line_id);
         s32 result;
 

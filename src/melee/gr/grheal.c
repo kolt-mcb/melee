@@ -70,14 +70,14 @@ typedef struct grHeal_UnkData {
 
 static Vec3 const grHeal_803B84A8 = { 0.0F, 40.0F, 0.0F };
 
-static size_t const char_id_count = 26;
+#define CHAR_ID_COUNT 26
 
-static s16 grHeal_803E83B8[char_id_count] = {
+static s16 grHeal_803E83B8[CHAR_ID_COUNT] = {
     29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
     42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54,
 };
 
-static enum_t frame_to_character_id[char_id_count] = {
+static enum_t frame_to_character_id[CHAR_ID_COUNT] = {
     0, 21, 1,  22, 20, 2,  25, 3,  14, 4,  5,  7,  6,
     8, 9,  10, 11, 24, 12, 13, 15, 16, 17, 18, 23, -1,
 };
@@ -227,7 +227,7 @@ void stageGObj1_OnInit(Ground_GObj* gobj)
         u8 next_players[4];
         HSD_JObj* next_jobjs[3];
         UNUSED HSD_JObj* reserved_next_jobj;
-        HSD_JObj* player_jobjs[char_id_count];
+        HSD_JObj* player_jobjs[CHAR_ID_COUNT];
         UNUSED HSD_JObj* reserved_player_jobj;
         s32 next_count;
         s32 line_id;

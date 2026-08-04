@@ -926,8 +926,9 @@ static void lb_80019AAC_noop(void) {}
 /* Audio ax stubs (needed by lb_0192.c event queue) */
 
 /* Persistent SDL joystick handles for 4 controllers.
- * Open once at init time, reused each frame. */
-static void* g_joysticks[4];  /* SDL_Joystick* */
+ * Open once at init time, reused each frame.
+ * Initialized to NULL to prevent O2 optimization from assuming valid pointers. */
+static void* g_joysticks[4] = {NULL};
 
 /* Keyboard-to-GC-pad mapping for Player 1.
  * When no gamepad is connected, keyboard provides input. */

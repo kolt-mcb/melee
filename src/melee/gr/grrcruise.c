@@ -176,11 +176,11 @@ HSD_GObj* grRCruise_801FF2C8(int gobj_id)
         if (callbacks->callback3 != NULL) {
             gp->x1C_callback = callbacks->callback3;
         }
-        if (callbacks->callback0 != NULL) {
-            callbacks->callback0(gobj);
+        if (callbacks->on_init != NULL) {
+            callbacks->on_init(gobj);
         }
-        if (callbacks->callback2 != NULL) {
-            HSD_GObj_SetupProc(gobj, callbacks->callback2, 4);
+        if (callbacks->gobj_proc != NULL) {
+            HSD_GObj_SetupProc(gobj, callbacks->gobj_proc, 4);
         }
     } else {
         OSReport("%s:%d: couldn t get gobj(id=%d)\n", __FILE__, 0x122,
@@ -1225,7 +1225,7 @@ void grRCruise_80201918(Vec3* vec)
 
 bool grRCruise_80201988(s32 line_id)
 {
-    if (stage_info.internal_stage_id == RCRUISE && line_id != -1) {
+    if (stage_info.grkind == Gr_Kind_RCruise && line_id != -1) {
         s32 joint = mpJointFromLine(line_id);
         s32 result;
 

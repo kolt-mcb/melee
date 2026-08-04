@@ -1,6 +1,10 @@
 #ifndef MELEE_GR_INLINES_H
 #define MELEE_GR_INLINES_H
 
+#ifndef M_TAU
+#define M_TAU 6.283185307179586f
+#endif
+
 #include "gr/granime.h"
 #include "gr/grcorneria.h"
 #include "gr/grdisplay.h"

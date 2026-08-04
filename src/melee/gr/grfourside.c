@@ -31,6 +31,9 @@
 #include <baselib/random.h>
 #include <MSL/trigf.h>
 
+/* Forward declarations */
+void grFourside_801F30A0(Ground* gp, s32 arg1, CollData* cd, s32 arg3, s32 arg4, f32 arg5);
+
 static struct {
     /* 00 */ int heli_wait;
     /* 04 */ int heli_wait_add;
@@ -74,7 +77,7 @@ StageCallbacks grFs_803E3CFC[] = {
 };
 
 StageData grFs_803E3D94 = {
-    FOURSIDE,
+    Gr_Kind_Fourside,
     grFs_803E3CFC,
     "/GrFs.dat",
     grFourside_801F2D10,

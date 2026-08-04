@@ -83,7 +83,7 @@ StageCallbacks grBb_Route_803E5E78[38] = {
 char grBb_Route_803E6170[] = "/GrNBr.dat";
 
 static struct {
-    u32 internal_stage_id;
+    u32 grkind;
     StageCallbacks* callbacks;
     char* data1;
     void (*OnInit)(void);
@@ -98,7 +98,7 @@ static struct {
     size_t x30;
     char fmt[0x24];
 } grBb_Route_803E617C = {
-    BIGBLUEROUTE,
+    Gr_Kind_BigBlueRoute,
     grBb_Route_803E5E78,
     grBb_Route_803E6170,
     grBigBlueRoute_8020B89C,
@@ -206,12 +206,12 @@ HSD_GObj* grBigBlueRoute_8020B9D4(int gobj_id)
             gp->x1C_callback = callbacks->callback3;
         }
 
-        if (callbacks->callback0 != NULL) {
-            callbacks->callback0(gobj);
+        if (callbacks->on_init != NULL) {
+            callbacks->on_init(gobj);
         }
 
-        if (callbacks->callback2 != NULL) {
-            HSD_GObj_SetupProc(gobj, callbacks->callback2, 4);
+        if (callbacks->gobj_proc != NULL) {
+            HSD_GObj_SetupProc(gobj, callbacks->gobj_proc, 4);
         }
 
     } else {
