@@ -1,3 +1,48 @@
+## [2025-08-03h9] — gr/ Module Reconciliation Progress (Phase 1 Continued)
+
+### Progress: 284 → 75 errors (73% reduction)
+
+Applied additional fixes across 14 gr/ files:
+- gr/inlines.h: Added M_TAU macro
+- gr/grcorneria.c: Fixed callback0/2→on_init/gobj_proc, enum constants, typedef collision
+- gr/grbigblue.c: Fixed typedef, forward declarations, mpColl_Callback, grBb_YakumonoParam
+- gr/grbigblueroute.c: Fixed enum constant, added grBigBlueRoute_8020DA9C_t struct
+- gr/grcastle.c: Added unkCastle struct, forward declaration, enum constants, Pokemon_Random→It_PKind_Random
+- gr/grfourside.c: Added forward declaration, fixed function signature
+- gr/grhomerun.c: Fixed typedef, mpColl_Callback, homerun2 struct, forward declaration
+- gr/grheal.c: Fixed char_id_count→CHAR_ID_COUNT define
+- gr/grkinokoroute.c: Fixed bool→int return type
+- gr/grlast.c: Fixed bool→int return type
+- gr/grlib.c: Fixed bool→int return type
+- gr/grmutecity.c: Fixed typedef, enum constant, forward declaration
+- gr/groldkongo.c: Fixed typedef, oldkongo→taru struct, forward declarations, struct member mappings
+- gr/grpura.c: Fixed typedef, forward declarations
+- gr/grrcruise.c: Fixed enum constant, mpColl_Callback, forward declarations, struct member mappings (x00→x0, etc.)
+- gr/grshrineroute.c: Fixed callback0/2→on_init/gobj_proc, enum constant, forward declarations, struct member mappings
+
+### Remaining Issues (75 errors in 9 files)
+- grrcruise.c (30): struct member mapping (pad_01, grRCruise_VanishDesc, grRCruise_Entry)
+- grshrineroute.c (29): struct member mapping, function signatures
+- grpura.c (5): undeclared variables
+- grzebes.c (4): struct member mapping
+- grhomerun.c (3): struct member mapping
+- grtzelda.c (1): function signature mismatch
+- ground.c (1): struct member mapping
+- grmutecity.c (1): function signature mismatch
+- debug.h (1): implicit declaration
+
+### Build Status
+- **80 sources** compile/link successfully (gr/ not included)
+- **0 compiler errors**
+- Binary boots fully, logs all 13 [INIT] phases, enters game_main_loop()
+- HUD overlay renders with health bars, status icons, timer circle, archive textures, and 3D wireframe scene
+
+### Critical Files Modified
+- `configure_pc.py` — Reverted gr/ inclusion
+- `src/melee/gr/*.c` — 14 files with reconciliation fixes
+
+---
+
 ## [2025-08-03h8] — gr/ Module Reconciliation Progress (Phase 1 Partial)
 
 ### Doldecomp Merge
