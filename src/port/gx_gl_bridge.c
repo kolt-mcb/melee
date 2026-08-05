@@ -582,7 +582,12 @@ static const char* g_frag_src =
 "in vec4 v_col;\n"
 "out vec4 frag_color;\n"
 "void main() {\n"
-"    frag_color = v_col;\n"
+"    /* PC port debug: use vertex color, but if it's black, use bright green */\n"
+"    if (v_col.r < 0.01 && v_col.g < 0.01 && v_col.b < 0.01) {\n"
+"        frag_color = vec4(0.0, 1.0, 0.0, 1.0);\n"
+"    } else {\n"
+"        frag_color = v_col;\n"
+"    }\n"
 "}\n";
 
 static GLuint compile_shader(GLenum type, const char* src)
@@ -921,12 +926,11 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
 void gx_set_default_3d_camera(void)
 {
     /* Default camera: perspective, 90 degree FOV.
-     * Stage geometry joint positions are in range (-165, 150, 0).
-     * Vertex positions are relative to joints, so geometry is at similar scale.
-     * Camera at (0, 0, 300) looking at (0, 0, 0) with wide FOV should catch it. */
-    gx_set_3d_camera(90.0f, 1280.0f / 720.0f, 1.0f, 1000.0f,
-                     0.0f, 0.0f, 400.0f,   /* eye position */
-                     0.0f, 0.0f, 0.0f,     /* target */
+     * Stage geometry vertex positions are in range ~(-165, -298, 3712).
+     * Camera at (0, 0, 4000) looking at (0, 0, 3500) with far plane 10000. */
+    gx_set_3d_camera(90.0f, 1280.0f / 720.0f, 1.0f, 10000.0f,
+                     0.0f, 0.0f, 5000.0f,   /* eye position */
+                     0.0f, 0.0f, 3500.0f,   /* target */
                      0.0f, 1.0f, 0.0f);    /* up vector */
 }
 
@@ -1264,14 +1268,6 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
 {
     memcpy(g_state.mtx_array[id], mtx, sizeof(g_state.mtx_array[0]));
     if (id < 4) {
-        /* Multiply model matrix by viewing matrix (if valid) */
-        static int g_mtx_count = 0;
-        g_mtx_count++;
-        if (g_mtx_count <= 5) {
-            fprintf(stderr, "[GX] LoadPosMtxImm #%d: id=%u mtx[0]=%.2f,%.2f,%.2f,%.2f view_valid=%d\n",
-                    g_mtx_count, id, mtx[0][0], mtx[0][1], mtx[0][2], mtx[0][3], g_state.view_matrix_valid);
-            fflush(stderr);
-        }
         if (g_state.view_matrix_valid) {
             f32 mvm[3][4];
             /* mvm = view * model (row-major 3x4 multiplication) */
@@ -1331,13 +1327,6 @@ void GXClearVtxDesc(void)
 void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 {
     /* Enable attributes and store format params for vertex data conversion. */
-    static int g_fmt_count = 0;
-    g_fmt_count++;
-    if (g_fmt_count <= 20) {
-        fprintf(stderr, "[GX] VtxAttrFmt #%d: attr=%u cnt=%u type=%u frac=%u\n",
-                g_fmt_count, attr, cnt, type, frac);
-        fflush(stderr);
-    }
     switch (attr) {
     case 9:  /* GX_VA_POS */
         g_state.pos_enabled = TRUE;
@@ -1735,18 +1724,28 @@ void GXCallDisplayList(void* list, u32 nbytes)
                     const u8* base_pos = (const u8*)g_state.arr_pos;
                     u16 stride_pos = g_state.arr_stride_pos;
                     
-                    /* Debug: print first vertex and format */
+                    /* Debug: print first vertex position */
                     static int g_debug_draw = 0;
                     g_debug_draw++;
                     if (g_debug_draw <= 3 && g_state.pos_enabled) {
-                        fprintf(stderr, "[GX] DL draw #%d: pos_comp_type=%u pos_comp_cnt=%u stride_pos=%u\n",
-                                g_debug_draw, g_state.pos_comp_type, g_state.pos_comp_cnt, stride_pos);
-                        /* Dump first 12 bytes of position array */
-                        fprintf(stderr, "[GX] DL draw #%d: pos_bytes=", g_debug_draw);
-                        for (int bi = 0; bi < 12 && bi < nverts * stride_pos; bi++) {
-                            fprintf(stderr, "%02X ", base_pos[bi]);
+                        f32 px, py, pz;
+                        const u8* vp_pos = base_pos;
+                        switch (g_state.pos_comp_type) {
+                        case 3: {
+                            u16 hx = ((u16)vp_pos[0] << 8) | vp_pos[1];
+                            u16 hy = ((u16)vp_pos[2] << 8) | vp_pos[3];
+                            u16 hz = ((u16)vp_pos[4] << 8) | vp_pos[5];
+                            px = f16_to_f32(hx);
+                            py = f16_to_f32(hy);
+                            pz = f16_to_f32(hz);
+                            break;
                         }
-                        fprintf(stderr, "\n");
+                        default:
+                            px = py = pz = 0;
+                            break;
+                        }
+                        fprintf(stderr, "[GX] DL draw #%d: first_vert=(%.2f,%.2f,%.2f) nverts=%d\n",
+                                g_debug_draw, px, py, pz, nverts);
                         fflush(stderr);
                     }
                     
@@ -1772,11 +1771,12 @@ void GXCallDisplayList(void* list, u32 nbytes)
                                 py = (f32)(((u16)vp_pos[2] << 8) | vp_pos[3]);
                                 pz = (g_state.pos_comp_cnt == 1) ? (f32)(((u16)vp_pos[4] << 8) | vp_pos[5]) : 0.0f;
                                 break;
-                            case 3: /* GX_S16 — but GCN stage data uses f16 (half-precision float) */
+                            case 3: /* GX_S16 — GCN stage data uses f16 (half-precision float) */
                             {
-                                u16 hx = ((u16)vp_pos[0]) | ((u16)vp_pos[1] << 8);
-                                u16 hy = ((u16)vp_pos[2]) | ((u16)vp_pos[3] << 8);
-                                u16 hz = ((u16)vp_pos[4]) | ((u16)vp_pos[5] << 8);
+                                /* GCN is big-endian: first byte is high byte */
+                                u16 hx = ((u16)vp_pos[0] << 8) | vp_pos[1];
+                                u16 hy = ((u16)vp_pos[2] << 8) | vp_pos[3];
+                                u16 hz = ((u16)vp_pos[4] << 8) | vp_pos[5];
                                 px = f16_to_f32(hx);
                                 py = f16_to_f32(hy);
                                 pz = (g_state.pos_comp_cnt == 1) ? f16_to_f32(hz) : 0.0f;
