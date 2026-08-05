@@ -1,3 +1,33 @@
+## [2025-08-05h5] — NaN Matrix Fix + Joint Position Conversion
+
+### Root Cause Analysis
+- **NaN model matrices**: `HSD_MtxSRT` divides by parent scale (`1.0 / scl->x`).
+  When parent scale is (0,0,0) (GCN convention for invisible root joints),
+  division by zero produces `inf`, and `0.0 * inf = NaN`.
+- **Zero matrix propagation**: Root joint with scale (0,0,0) produces zero matrix.
+  `PSMTXConcat(zero, child, result) = zero` for all children.
+- **Missing joint conversion**: `grDatFiles_ConvertJointTreeGCNtoX64` only converted
+  flags, child/next pointers, and dobjdesc. Rotation, scale, and position were NOT copied.
+  All joints had default values (zero rotation, zero scale, zero position).
+
+### Fixes Applied
+- **Zero-scale guard in HSD_JObjMakeMatrix**: After HSD_MtxSRT, check if matrix is
+  zero or NaN. Replace with identity matrix + translation to preserve child transforms.
+- **Zero parent scale guard**: Before calling HSD_MtxSRT, check if parent scale is
+  near zero (`> 0.0001f`). If so, pass `scl = NULL` to skip the division.
+- **Joint position conversion**: Added byte-swapped conversion for rotation, scale,
+  and position fields from GCN archive data to x86_64 structs.
+- **JOBJ_MTX_DIRTY flag**: Set during JObj loading to trigger matrix recomputation.
+- **Camera adjustment**: Perspective projection with far plane 10000, eye at (0,0,5000).
+- **Fragment shader debug**: Outputs bright green for black vertices.
+
+### Current State
+- Joint positions correctly loaded (e.g., (-165, 150, 0) for stage geometry)
+- Model matrices are valid (no NaN) after zero-scale guard
+- Display list parser reads vertex data (first vertex at (-0, -448, 3712))
+- Stage geometry NOT visible — vertex transformation pipeline issue
+  (model matrix not applied to display list vertices correctly)
+
 ## [2025-08-05h4] — 3D Camera System + Matrix Computation Fixes
 
 ### Major Findings
