@@ -1,3 +1,28 @@
+## [2025-08-05h1] — Vertex Array Wiring + Display List Parser + Conversion Debug
+
+### Major Fixes
+- **Fixed `n_display` conversion**: Was using `be32_swap()` on `u16` fields (read 4 bytes instead of 2).
+  Now uses `be16_swap()` for correct big-endian u16 conversion.
+- **Wired vertex arrays into display list parser**: `GXSetArray` now stores vertex array pointers
+  in bridge state. Display list parser reads from stored arrays instead of trying to parse inline data.
+- **Added vertex array storage to BridgeState**: New fields `arr_pos`, `arr_nrm`, `arr_clr`, `arr_tex0`,
+  `arr_tex1`, `arr_stride`, `arr_count`, `arr_valid` for indexed vertex buffer mode.
+
+### Debugging Findings (Unresolved)
+- **Stage geometry JObjs loaded from unconverted Joint trees**: The conversion creates converted Joints
+  with DObjDesc pointers, but the actual JObjs are loaded from a different Joint tree with `dobjdesc=(nil)`.
+- **Root cause**: Stage geometry loading (`Ground_GetStageGObj`) uses `archive->unk4->unk8[map_id].unk0`,
+  which should be the converted Joint tree. But the JObjs are loaded from Joints at different addresses
+  (e.g., `0x22766730` vs converted `0x308f6f40`), suggesting a different Joint tree is being used.
+- **Impact**: PObjDescs have GCN addresses that are not relocated, so display lists point to wrong data.
+- **Fix requires**: Either convert all Joint trees at load time, or make conversion happen lazily
+  when JObjs are loaded. This is a fundamental architecture issue.
+
+### Build Status
+- 162 sources, 0 errors, 1.3MB ELF
+- Program runs stably with HUD overlay rendering
+- Stage geometry pipeline active but geometry not visible (unconverted data)
+
 ## [2025-08-04h12] — Stage Geometry Rendering Enabled (Heap Corruption Recovery)
 
 ### Major Fixes
