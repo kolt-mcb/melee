@@ -469,9 +469,19 @@ typedef struct {
     const u8*  arr_clr;         /* Color array base */
     const f32* arr_tex0;        /* TexCoord0 array base */
     const f32* arr_tex1;        /* TexCoord1 array base */
-    u16 arr_stride;             /* Vertex stride in bytes */
+    u16 arr_stride_pos;         /* Position stride in bytes */
+    u16 arr_stride_nrm;         /* Normal stride in bytes */
+    u16 arr_stride_clr;         /* Color stride in bytes */
+    u16 arr_stride_tex0;        /* TexCoord0 stride in bytes */
+    u16 arr_stride_tex1;        /* TexCoord1 stride in bytes */
+    u16 arr_stride;             /* Legacy: last stride set (for backwards compat) */
     u16 arr_count;              /* Number of vertices in the array */
     Bool arr_valid;             /* Whether vertex arrays are set up */
+    
+    /* Vertex format (from GXSetVtxAttrFmt) */
+    u8 pos_comp_cnt;            /* Position component count (0=XY, 1=XYZ) */
+    u8 pos_comp_type;           /* Position component type (0=U8, 1=S8, 2=U16, 3=S16, 4=F32) */
+    u8 pos_frac;                /* Position fraction bits */
 } BridgeState;
 
 static BridgeState g_state;
@@ -1183,9 +1193,14 @@ void GXClearVtxDesc(void)
 
 void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 {
-    /* Enable attributes regardless of format params (always as f32 internally) */
+    /* Enable attributes and store format params for vertex data conversion. */
     switch (attr) {
-    case 9:  g_state.pos_enabled = TRUE; break;   /* GX_VA_POS */
+    case 9:  /* GX_VA_POS */
+        g_state.pos_enabled = TRUE;
+        g_state.pos_comp_cnt = (u8)cnt;
+        g_state.pos_comp_type = (u8)type;
+        g_state.pos_frac = frac;
+        break;
     case 10: g_state.nrm_enabled = TRUE; break;   /* GX_VA_NRM */
     case 11: g_state.clr_enabled = TRUE; break;   /* GX_VA_CLR0 */
     case 13: g_state.tex0_enabled = TRUE; break;  /* GX_VA_TEX0 */
@@ -1198,11 +1213,11 @@ void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
      * Used for indexed vertex buffer mode (display lists use this).
      * Store arrays so the display list parser can read vertex data. */
     switch (attr) {
-    case 9:  g_state.arr_pos = (const f32*)base_ptr; break;   /* GX_VA_POS */
-    case 10: g_state.arr_nrm = (const f32*)base_ptr; break;   /* GX_VA_NRM */
-    case 11: g_state.arr_clr = (const u8*)base_ptr; break;    /* GX_VA_CLR0 */
-    case 13: g_state.arr_tex0 = (const f32*)base_ptr; break;  /* GX_VA_TEX0 */
-    case 14: g_state.arr_tex1 = (const f32*)base_ptr; break;  /* GX_VA_TEX1 */
+    case 9:  g_state.arr_pos = (const f32*)base_ptr; g_state.arr_stride_pos = stride; break;   /* GX_VA_POS */
+    case 10: g_state.arr_nrm = (const f32*)base_ptr; g_state.arr_stride_nrm = stride; break;   /* GX_VA_NRM */
+    case 11: g_state.arr_clr = (const u8*)base_ptr;  g_state.arr_stride_clr = stride; break;    /* GX_VA_CLR0 */
+    case 13: g_state.arr_tex0 = (const f32*)base_ptr; g_state.arr_stride_tex0 = stride; break;  /* GX_VA_TEX0 */
+    case 14: g_state.arr_tex1 = (const f32*)base_ptr; g_state.arr_stride_tex1 = stride; break;  /* GX_VA_TEX1 */
     default: break;
     }
     g_state.arr_stride = stride;
@@ -1465,14 +1480,200 @@ void GXCallDisplayList(void* list, u32 nbytes)
      * hardware, and parsing it correctly requires understanding the exact
      * byte layout of each command.
      *
-     * For now, skip display list parsing and rely on direct vertex commands.
-     * The stage geometry is rendered using direct vertex commands (GXPosition,
-     * GXColor, etc.), not display lists.
+     * Display list format (byte stream, big-endian):
+     *   0x00: NOP (1 byte)
+     *   0x08: LOAD_CP_REG (1 byte opcode + 1B param + 4B value = 6 bytes)
+     *   0x10: LOAD_XF_REG (1 byte opcode + 1B param + 4B addr + 4B value = 10 bytes)
+     *   0x20/28/30/38: LOAD_INDX (1 byte opcode + 1B param + 4B value = 6 bytes)
+     *   0x40: CALL_DISP_LIST (1 byte opcode + 1B param + 4B ptr + 4B size = 10 bytes)
+     *   0x61: LOAD_BP_REG (1 byte opcode + 1B param + 4B value = 6 bytes)
+     *   0x80-0xB8: DRAW (1 byte opcode + 2B vertex count = 3 bytes)
      *
-     * TODO: Implement proper GCN display list parsing when needed.
+     * Draw commands: upper 5 bits = primitive type, lower 3 bits = vtxfmt
+     * Vertex count is big-endian u16.
+     *
+     * Vertex data is NOT inline - it comes from vertex arrays set up by GXSetArray.
+     * Vertex arrays use per-attribute strides stored by GXSetArray.
+     *
+     * Vertex format conversion:
+     *   GX_U8 (0): 8-bit unsigned, read as u8 and convert to f32
+     *   GX_S8 (1): 8-bit signed, read as s8 and convert to f32
+     *   GX_U16 (2): 16-bit unsigned, read as u16 (big-endian) and convert to f32
+     *   GX_S16 (3): 16-bit signed, read as s16 (big-endian) and convert to f32
+     *   GX_F32 (4): 32-bit float, read as f32 (big-endian, needs byte swap)
+     *
+     * Component count (for position):
+     *   GX_POS_XY (0): 2 components (X, Y)
+     *   GX_POS_XYZ (1): 3 components (X, Y, Z)
      */
-    (void)list; (void)nbytes;
-    return;
+    if (!list || nbytes == 0) return;
+
+    u8* ptr = (u8*)list;
+    u8* end = ptr + nbytes;
+    static int g_dl_depth = 0;
+
+    g_dl_depth++;
+    if (g_dl_depth > 8) {
+        g_dl_depth--;
+        return; /* Prevent infinite recursion */
+    }
+
+    /* Safety: limit total bytes parsed per call */
+    if (nbytes > 1024 * 1024) { /* 1MB max */
+        g_dl_depth--;
+        return;
+    }
+
+    while (ptr < end) {
+        u8 opcode = *ptr++;
+        u8 param = opcode & 0x07; /* Lower 3 bits = vertex attribute table index */
+        u8 cmd = opcode & 0xF8;  /* Upper 5 bits = command type */
+
+        switch (cmd) {
+        case 0x00: /* NOP */
+            break;
+
+        case 0x08: /* LOAD_CP_REG */
+            if (ptr + 5 <= end) { ptr += 5; } else { goto dl_end; }
+            break;
+
+        case 0x10: /* LOAD_XF_REG */
+            if (ptr + 9 <= end) { ptr += 9; } else { goto dl_end; }
+            break;
+
+        case 0x20: /* LOAD_INDX_A */
+        case 0x28: /* LOAD_INDX_B */
+        case 0x30: /* LOAD_INDX_C */
+        case 0x38: /* LOAD_INDX_D */
+            if (ptr + 5 <= end) { ptr += 5; } else { goto dl_end; }
+            break;
+
+        case 0x40: /* CALL_DISP_LIST */
+            if (ptr + 9 <= end) { ptr += 9; } else { goto dl_end; }
+            break;
+
+        case 0x60: /* LOAD_BP_REG (0x61) */
+            if (ptr + 5 <= end) { ptr += 5; } else { goto dl_end; }
+            break;
+
+        case 0x80: /* DRAW_QUADS */
+        case 0x90: /* DRAW_TRIANGLES */
+        case 0x98: /* DRAW_TRIANGLE_STRIP */
+        case 0xA0: /* DRAW_TRIANGLE_FAN */
+        case 0xA8: /* DRAW_LINES */
+        case 0xB0: /* DRAW_LINE_STRIP */
+        case 0xB8: /* DRAW_POINTS */
+            {
+                if (ptr + 1 > end) goto dl_end;
+                u16 nverts = ((u16)ptr[0] << 8) | ptr[1]; /* Big-endian */
+                ptr += 2;
+
+                if (nverts == 0 || nverts > 65535 || nverts > 10000) {
+                    goto dl_end;
+                }
+
+                int gx_prim;
+                switch (cmd) {
+                case 0x80: gx_prim = GX_QUADS; break;
+                case 0x90: gx_prim = GX_TRIANGLES; break;
+                case 0x98: gx_prim = GX_TRIANGLESTRIP; break;
+                case 0xA0: gx_prim = GX_TRIANGLEFAN; break;
+                case 0xA8: gx_prim = GX_LINES; break;
+                case 0xB0: gx_prim = GX_LINESTRIP; break;
+                case 0xB8: gx_prim = GX_POINTS; break;
+                default: g_dl_depth--; return;
+                }
+
+                GXBegin(gx_prim, param, nverts);
+
+                /* Read vertex data from stored arrays (set by GXSetArray). */
+                if (g_state.arr_valid && g_state.arr_pos != NULL) {
+                    const u8* base_pos = (const u8*)g_state.arr_pos;
+                    u16 stride_pos = g_state.arr_stride_pos;
+                    
+                    for (u16 v = 0; v < nverts; v++) {
+                        const u8* vp_pos = base_pos + v * stride_pos;
+                        
+                        /* Position - read based on stored format */
+                        if (g_state.pos_enabled) {
+                            f32 px, py, pz;
+                            switch (g_state.pos_comp_type) {
+                            case 0: /* GX_U8 */
+                                px = (f32)vp_pos[0];
+                                py = (f32)vp_pos[1];
+                                pz = (g_state.pos_comp_cnt == 1) ? (f32)vp_pos[2] : 0.0f;
+                                break;
+                            case 1: /* GX_S8 */
+                                px = (f32)(s8)vp_pos[0];
+                                py = (f32)(s8)vp_pos[1];
+                                pz = (g_state.pos_comp_cnt == 1) ? (f32)(s8)vp_pos[2] : 0.0f;
+                                break;
+                            case 2: /* GX_U16 (big-endian) */
+                                px = (f32)(((u16)vp_pos[0] << 8) | vp_pos[1]);
+                                py = (f32)(((u16)vp_pos[2] << 8) | vp_pos[3]);
+                                pz = (g_state.pos_comp_cnt == 1) ? (f32)(((u16)vp_pos[4] << 8) | vp_pos[5]) : 0.0f;
+                                break;
+                            case 3: /* GX_S16 (big-endian) */
+                                px = (f32)(((s16)((s16)vp_pos[0] << 8) | vp_pos[1]));
+                                py = (f32)(((s16)((s16)vp_pos[2] << 8) | vp_pos[3]));
+                                pz = (g_state.pos_comp_cnt == 1) ? (f32)(((s16)((s16)vp_pos[4] << 8) | vp_pos[5])) : 0.0f;
+                                break;
+                            case 4: /* GX_F32 (big-endian, need byte swap) */
+                            default:
+                                {
+                                    u32 raw;
+                                    raw = ((u32)vp_pos[0] << 24) | ((u32)vp_pos[1] << 16) | ((u32)vp_pos[2] << 8) | vp_pos[3];
+                                    px = *(f32*)&raw;
+                                    raw = ((u32)vp_pos[4] << 24) | ((u32)vp_pos[5] << 16) | ((u32)vp_pos[6] << 8) | vp_pos[7];
+                                    py = *(f32*)&raw;
+                                    if (g_state.pos_comp_cnt == 1) {
+                                        raw = ((u32)vp_pos[8] << 24) | ((u32)vp_pos[9] << 16) | ((u32)vp_pos[10] << 8) | vp_pos[11];
+                                        pz = *(f32*)&raw;
+                                    } else {
+                                        pz = 0.0f;
+                                    }
+                                }
+                                break;
+                            }
+                            GXPosition3f32(px, py, pz);
+                        }
+                        
+                        /* Normal */
+                        if (g_state.nrm_enabled && g_state.arr_nrm != NULL) {
+                            const u8* vp_nrm = (const u8*)g_state.arr_nrm + v * g_state.arr_stride_nrm;
+                            f32 nx = (f32)(s8)vp_nrm[0];
+                            f32 ny = (f32)(s8)vp_nrm[1];
+                            f32 nz = (f32)(s8)vp_nrm[2];
+                            GXNormal3f32(nx / 127.0f, ny / 127.0f, nz / 127.0f);
+                        }
+                        
+                        /* Color */
+                        if (g_state.clr_enabled && g_state.arr_clr != NULL) {
+                            const u8* vp_clr = (const u8*)g_state.arr_clr + v * g_state.arr_stride_clr;
+                            GXColor4u8(vp_clr[0], vp_clr[1], vp_clr[2], vp_clr[3]);
+                        }
+                        
+                        /* TexCoord0 */
+                        if (g_state.tex0_enabled && g_state.arr_tex0 != NULL) {
+                            const u8* vp_tex = (const u8*)g_state.arr_tex0 + v * g_state.arr_stride_tex0;
+                            f32 s = (f32)(((u16)vp_tex[0] << 8) | vp_tex[1]) / 65535.0f;
+                            f32 t = (f32)(((u16)vp_tex[2] << 8) | vp_tex[3]) / 65535.0f;
+                            GXTexCoord2f32(s, t);
+                        }
+                    }
+                }
+
+                GXEnd();
+                break;
+            }
+
+        default:
+            break;
+        }
+    }
+
+dl_end:
+    g_dl_depth--;
 }
 
 #pragma GCC diagnostic pop
