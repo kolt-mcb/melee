@@ -1304,9 +1304,29 @@ __attribute__((weak)) void PADSetSamplingRate(void) {}
 __attribute__((weak)) void PADSetSpec(void) {}
 __attribute__((weak)) void PPCMfmsr(void) {}
 __attribute__((weak)) void PPCMtmsr(void) {}
-__attribute__((weak)) void PSMTXConcat(void) {}
-__attribute__((weak)) void PSMTXCopy(void) {}
-__attribute__((weak)) void PSMTXIdentity(void) {}
+/* Mtx type for matrix functions (from Dolphin mtx.h) */
+typedef f32 Mtx[3][4];
+
+__attribute__((weak)) void PSMTXConcat(Mtx mA, Mtx mB, Mtx mAB)
+{
+    /* Multiply two 3x4 matrices: mAB = mA * mB (row-major) */
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            mAB[i][j] = mA[i][0] * mB[0][j] + mA[i][1] * mB[1][j] + mA[i][2] * mB[2][j];
+        }
+        mAB[i][3] = mA[i][0] * mB[0][3] + mA[i][1] * mB[1][3] + mA[i][2] * mB[2][3] + mA[i][3];
+    }
+}
+__attribute__((weak)) void PSMTXCopy(Mtx mDst, Mtx mSrc)
+{
+    memcpy(mDst, mSrc, sizeof(Mtx));
+}
+__attribute__((weak)) void PSMTXIdentity(Mtx m)
+{
+    m[0][0] = 1.0f; m[0][1] = 0.0f; m[0][2] = 0.0f; m[0][3] = 0.0f;
+    m[1][0] = 0.0f; m[1][1] = 1.0f; m[1][2] = 0.0f; m[1][3] = 0.0f;
+    m[2][0] = 0.0f; m[2][1] = 0.0f; m[2][2] = 1.0f; m[2][3] = 0.0f;
+}
 __attribute__((weak)) void PSMTXMultVec(void) {}
 __attribute__((weak)) void PSMTXMultVecSR(void) {}
 __attribute__((weak)) void PSMTXQuat(void) {}
@@ -1763,6 +1783,9 @@ void game_main_loop(void)
         lb_80019894();
         lb_80019900();
 
+        /* Clear the screen first */
+        render_clear();
+        
         /* Walk the GObj GX link chain and call render callbacks.
          * This is where stage geometry rendering happens.
          * HSD_GObj_80390FC0 walks HSD_GObjGXLinkHead[gx_link_max+1]
@@ -1789,11 +1812,17 @@ void game_main_loop(void)
                     }
                 }
             }
+            
+            /* Set up 3D camera for stage geometry rendering.
+             * The stage geometry uses perspective projection and a viewing matrix.
+             * The HUD overlay uses orthographic projection (set up in render_clear). */
+            extern void gx_set_default_3d_camera(void);
+            gx_set_default_3d_camera();
+            
             HSD_GObj_80390FC0();
         }
 
-        /* Clear and render */
-        render_clear();
+        /* Render HUD overlay (uses orthographic projection from render_clear) */
         render_debug_overlay();
         render_present();
         
