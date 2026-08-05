@@ -1,3 +1,31 @@
+## [2025-08-05h4] — 3D Camera System + Matrix Computation Fixes
+
+### Major Findings
+- **Display list parser working**: Parses GCN display list byte stream without crashes.
+  - Handles all command types: NOP, LOAD_CP_REG, LOAD_XF_REG, LOAD_INDX, CALL_DISP_LIST, LOAD_BP_REG, DRAW
+  - Vertex count is big-endian u16
+  - Command sizes: NOP (1B), LOAD_CP_REG (6B), LOAD_XF_REG (10B), LOAD_INDX (6B), CALL_DISP_LIST (10B), LOAD_BP_REG (6B), DRAW (3B)
+- **Vertex format conversion**: Vertex data is 16-bit half-precision floats (f16), not 32-bit floats.
+  - Implemented f16 to f32 conversion function
+  - Vertex positions in range ~0-10 (relative to joint positions)
+- **Per-attribute stride storage**: Each vertex attribute has its own stride (pos, nrm, clr, tex0, tex1).
+- **3D camera system**: Implemented perspective projection and viewing matrix.
+  - gx_set_3d_camera() sets up 90 degree FOV perspective projection
+  - Camera at (0, 0, 400) looking at (0, 0, 0) with up vector (0, 1, 0)
+  - Model matrix multiplied by viewing matrix in GXLoadPosMtxImm
+- **Matrix functions**: Implemented PSMTXConcat, PSMTXCopy, PSMTXIdentity.
+  - PSMTXConcat was no-op stub, causing NaN matrices
+  - PSMTXIdentity sets matrix to identity
+  - PSMTXCopy copies matrix data
+- **Render order fix**: Clear screen before stage geometry, then HUD overlay.
+  - Previously, render_clear() was called after stage geometry, clearing it
+
+### Build Status
+- 162 sources, 0 errors, 1.3MB ELF
+- Program runs stably with HUD overlay rendering
+- Display list parser active, no crashes
+- Stage geometry pipeline active but not visible (vertex color / camera issues)
+
 ## [2025-08-05h3] — GCN Display List Parser + Vertex Format Conversion
 
 ### Major Findings
