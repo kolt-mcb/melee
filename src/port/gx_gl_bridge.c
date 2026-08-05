@@ -462,6 +462,16 @@ typedef struct {
     /* Misc settings (GXSetMisc) */
     Bool tme_enabled;           /* Texture mode enable — gates all texture lookups */
     Bool zclamp_enabled;        /* Clamp Z values to [0, 1] */
+    
+    /* Vertex array storage (for indexed mode in display lists) */
+    const f32* arr_pos;         /* Position array base */
+    const f32* arr_nrm;         /* Normal array base */
+    const u8*  arr_clr;         /* Color array base */
+    const f32* arr_tex0;        /* TexCoord0 array base */
+    const f32* arr_tex1;        /* TexCoord1 array base */
+    u16 arr_stride;             /* Vertex stride in bytes */
+    u16 arr_count;              /* Number of vertices in the array */
+    Bool arr_valid;             /* Whether vertex arrays are set up */
 } BridgeState;
 
 static BridgeState g_state;
@@ -1185,10 +1195,18 @@ void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
 {
     /* Sets base pointer and stride for a vertex attribute.
-     * Used for indirect vertex buffer mode (lbcollision uses this).
-     * In our direct accumulation mode, we ignore these and rely on
-     * GXPosition/GXColor/GXTexCoord calls to accumulate vertex data. */
-    (void)attr; (void)base_ptr; (void)stride;
+     * Used for indexed vertex buffer mode (display lists use this).
+     * Store arrays so the display list parser can read vertex data. */
+    switch (attr) {
+    case 9:  g_state.arr_pos = (const f32*)base_ptr; break;   /* GX_VA_POS */
+    case 10: g_state.arr_nrm = (const f32*)base_ptr; break;   /* GX_VA_NRM */
+    case 11: g_state.arr_clr = (const u8*)base_ptr; break;    /* GX_VA_CLR0 */
+    case 13: g_state.arr_tex0 = (const f32*)base_ptr; break;  /* GX_VA_TEX0 */
+    case 14: g_state.arr_tex1 = (const f32*)base_ptr; break;  /* GX_VA_TEX1 */
+    default: break;
+    }
+    g_state.arr_stride = stride;
+    g_state.arr_valid = TRUE;
 }
 
 void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
@@ -1462,9 +1480,6 @@ void GXCallDisplayList(void* list, u32 nbytes)
      *   0xB8: DRAW_POINTS (1 byte + 2B count + vertex data)
      *
      * Draw commands: upper 5 bits = primitive type, lower 3 bits = vtxfmt
-     * After the draw command, vertex data follows based on the vertex attribute
-     * format. Each vertex has position (3x f32), normal (3x f32), color (4x u8),
-     * and texcoord (2x f32) components.
      */
     if (!list || nbytes == 0) return;
 
@@ -1584,69 +1599,44 @@ void GXCallDisplayList(void* list, u32 nbytes)
                 /* Begin the primitive */
                 GXBegin(gx_prim, vtxfmt, nverts);
 
-                /* Parse vertex data. The vertex format determines the layout.
-                 * In direct mode (which display lists use), each vertex has:
-                 *   Position: 3x f32 (12 bytes)
-                 *   Normal: 3x f32 (12 bytes) if enabled
-                 *   Color: 4x u8 (4 bytes) if enabled
-                 *   TexCoord: 2x f32 (8 bytes) if enabled
-                 *
-                 * We need to know the vertex attribute format to parse correctly.
-                 * For now, we assume the most common format:
-                 *   Position (3x f32) + Normal (3x f32) + Color (4x u8) + TexCoord (2x f32)
-                 *   Total per vertex: 12 + 12 + 4 + 8 = 36 bytes
-                 *
-                 * However, the actual format depends on the VAT settings.
-                 * Since we can't easily determine the format from the display list
-                 * alone, we use a heuristic: try to detect the vertex size from
-                 * the total data remaining and the vertex count.
-                 */
-                /* For simplicity, assume position-only vertices (3x f32 = 12 bytes)
-                 * and parse what we can. The bridge will handle the data. */
-                {
-                    u32 bytes_per_vertex = 36; /* Common format: pos+nrm+clr+tex */
-                    u32 total_vertex_bytes = nverts * bytes_per_vertex;
-
-                    if (ptr + total_vertex_bytes > end) {
-                        /* Try smaller vertex sizes */
-                        if (bytes_per_vertex > 12) {
-                            bytes_per_vertex = 12; /* Position only */
-                            total_vertex_bytes = nverts * bytes_per_vertex;
+                /* Read vertex data from stored arrays (set by GXSetArray).
+                 * Display lists use indexed mode - vertex data is in separate
+                 * buffers, not inline in the display list. */
+                if (g_state.arr_valid && g_state.arr_pos != NULL) {
+                    u16 stride = g_state.arr_stride;
+                    const u8* base = (const u8*)g_state.arr_pos;
+                    
+                    for (u16 v = 0; v < nverts; v++) {
+                        const u8* vp = base + v * stride;
+                        
+                        /* Position (3x f32) at offset 0 */
+                        if (g_state.pos_enabled) {
+                            f32 px = ((const f32*)vp)[0];
+                            f32 py = ((const f32*)vp)[1];
+                            f32 pz = ((const f32*)vp)[2];
+                            GXPosition3f32(px, py, pz);
                         }
-                    }
-
-                    for (u16 v = 0; v < nverts && ptr + 12 <= end; v++) {
-                        /* Position (3x f32) */
-                        f32 px = *(f32*)ptr;
-                        f32 py = *(f32*)(ptr + 4);
-                        f32 pz = *(f32*)(ptr + 8);
-                        ptr += 12;
-                        GXPosition3f32(px, py, pz);
-
-                        /* Normal (3x f32) - if enough data */
-                        if (ptr + 12 <= end && bytes_per_vertex >= 24) {
-                            f32 nx = *(f32*)ptr;
-                            f32 ny = *(f32*)(ptr + 4);
-                            f32 nz = *(f32*)(ptr + 8);
-                            ptr += 12;
+                        
+                        /* Normal (3x f32) - typically at offset 12 */
+                        if (g_state.nrm_enabled && g_state.arr_nrm != NULL) {
+                            const u8* nrm_vp = (const u8*)g_state.arr_nrm + v * stride;
+                            f32 nx = ((const f32*)nrm_vp)[0];
+                            f32 ny = ((const f32*)nrm_vp)[1];
+                            f32 nz = ((const f32*)nrm_vp)[2];
                             GXNormal3f32(nx, ny, nz);
                         }
-
-                        /* Color (4x u8) - if enough data */
-                        if (ptr + 4 <= end && bytes_per_vertex >= 28) {
-                            u8 r = ptr[0];
-                            u8 g = ptr[1];
-                            u8 b = ptr[2];
-                            u8 a = ptr[3];
-                            ptr += 4;
-                            GXColor4u8(r, g, b, a);
+                        
+                        /* Color (4x u8) - typically at offset 24 */
+                        if (g_state.clr_enabled && g_state.arr_clr != NULL) {
+                            const u8* clr_vp = (const u8*)g_state.arr_clr + v * stride;
+                            GXColor4u8(clr_vp[0], clr_vp[1], clr_vp[2], clr_vp[3]);
                         }
-
-                        /* TexCoord (2x f32) - if enough data */
-                        if (ptr + 8 <= end && bytes_per_vertex >= 36) {
-                            f32 s = *(f32*)ptr;
-                            f32 t = *(f32*)(ptr + 4);
-                            ptr += 8;
+                        
+                        /* TexCoord0 (2x f32) - typically at offset 28 */
+                        if (g_state.tex0_enabled && g_state.arr_tex0 != NULL) {
+                            const u8* tex_vp = (const u8*)g_state.arr_tex0 + v * stride;
+                            f32 s = ((const f32*)tex_vp)[0];
+                            f32 t = ((const f32*)tex_vp)[1];
                             GXTexCoord2f32(s, t);
                         }
                     }

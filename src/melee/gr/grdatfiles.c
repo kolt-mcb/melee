@@ -315,9 +315,19 @@ static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
 
     /* Convert dobjdesc chain (mesh data) from GCN to x64 */
     val = be32_swap(gcnJoint->u);
+    if (visited_count < 3) {
+        fprintf(stderr, "[GRDAT] Joint[%u] gcn_u=0x%08x\n",
+                visited_count, val);
+        fflush(stderr);
+    }
     if (val != 0 && val < 0x80000000U) {
         x64Joint->u.dobjdesc = grDatFiles_ConvertDObjDescGCNtoX64(
             dataBase + val, dataBase);
+        if (visited_count < 3) {
+            fprintf(stderr, "[GRDAT] Joint[%u] -> x64_dobjdesc=%p\n",
+                    visited_count, (const void*)x64Joint->u.dobjdesc);
+            fflush(stderr);
+        }
     } else {
         x64Joint->u.dobjdesc = NULL;
     }
@@ -422,17 +432,23 @@ static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8
     }
     
     /* flags and n_display - read as big-endian u16 */
-    x64Pobj->flags = (gcnPobjPtr[0x0C] << 8) | gcnPobjPtr[0x0D];
-    x64Pobj->n_display = (gcnPobjPtr[0x0E] << 8) | gcnPobjPtr[0x0F];
-    
-    /* flags and n_display */
-    x64Pobj->flags = be32_swap(*(const u16*)(gcnPobjPtr + 0x0C));
-    x64Pobj->n_display = be32_swap(*(const u16*)(gcnPobjPtr + 0x0E));
+    x64Pobj->flags = be16_swap(*(const u16*)(gcnPobjPtr + 0x0C));
+    x64Pobj->n_display = be16_swap(*(const u16*)(gcnPobjPtr + 0x0E));
     
     /* display - raw byte stream (GX command list), keep as direct pointer */
     val = be32_swap(gcnPobj->display);
+    if (pobj_count <= 5) {
+        fprintf(stderr, "[GRDAT] PObjDesc[%d]: dataBase=%p display_offset=0x%08x relocated=%p\n",
+                pobj_count, (const void*)dataBase, val, (const void*)(dataBase + val));
+        fflush(stderr);
+    }
     if (val != 0 && val < 0x80000000U) {
         x64Pobj->display = (u8*)(dataBase + val);
+    }
+    if (pobj_count <= 5) {
+        fprintf(stderr, "[GRDAT] PObjDesc[%d] FINAL: display=%p n_display=%u\n",
+                pobj_count, (const void*)x64Pobj->display, x64Pobj->n_display);
+        fflush(stderr);
     }
     
     /* next - convert linked list */
@@ -535,6 +551,11 @@ static HSD_DObjDesc* grDatFiles_ConvertDObjDescGCNtoX64(const u8* gcnDobjPtr, u8
     val = be32_swap(gcnDobj->pobjdesc);
     if (val != 0 && val < 0x80000000U) {
         x64Dobj->pobjdesc = grDatFiles_ConvertPObjDescGCNtoX64(dataBase + val, dataBase);
+        if (x64Dobj->pobjdesc != NULL) {
+            fprintf(stderr, "[GRDAT] DObjDesc pobjdesc: gcn_offset=0x%08x x64=%p display=%p n_display=%u\n",
+                    val, (const void*)x64Dobj->pobjdesc, (const void*)x64Dobj->pobjdesc->display, x64Dobj->pobjdesc->n_display);
+            fflush(stderr);
+        }
     }
     
     /* next - convert linked list */
