@@ -1,3 +1,42 @@
+## [2025-08-05h6] — Display List Parser Improvements
+
+### Display List Format Investigation
+- Dumped raw display list bytes: `90 00 09 03 c3 01 b4 01 c6 ...`
+- First byte 0x90 = DRAW_TRIANGLES, followed by 2-byte vertex count
+- Remaining bytes are NOT GCN FIFO commands — compact PObj format
+- Display list is parsed as: DRAW command + index data (not command stream)
+
+### Byte Count Fixes
+- LOAD_XF_REG: 8 bytes after opcode (was 9, off by 1)
+- CALL_DISP_LIST: 8 bytes after opcode (was 9, off by 1)
+- LOAD_BP_REG: 4 bytes after opcode (was 5, off by 1)
+
+### Matrix Handling
+- Implemented LOAD_XF_REG matrix accumulation (xf_addr 0x1000-0x102F)
+- Fixed GXSetCurrentMtx to apply view transform when switching matrices
+- Added GXFlush() between stage geometry and HUD overlay renders
+- Discovered that vertex transforms use identity view matrix
+
+### Vertex Data
+- Vertex positions from archive: `(-0, -448, 3712)` in f16 format
+- Vertex stride: 6 bytes (3 × f16 for XYZ)
+- Color array: 4 bytes per vertex (RGBA8)
+- Tried Z-flip for GCN→OpenGL coordinate system conversion
+
+### Debug Findings
+- `GXLoadPosMtxImm` called with trans=(0,0,0) for root joint
+- Subsequent matrix loads have garbage Z values (NaN/inf)
+- `bridge_upload_and_draw` confirms 9, 12, 5 vertex draws
+- Geometry NOT visible despite correct draw calls
+- Fragment shader outputs vertex color directly
+- No green-for-black pixels (vertex colors are not black)
+
+### Current State
+- Stage geometry pipeline is ACTIVE (draws confirmed)
+- Geometry NOT visible on screen (root cause undetermined)
+- Possible causes: coordinate system mismatch, matrix computation error,
+  OpenGL state issue, or vertex data interpretation error
+
 ## [2025-08-05h5] — NaN Matrix Fix + Joint Position Conversion
 
 ### Root Cause Analysis
