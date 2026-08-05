@@ -1817,9 +1817,17 @@ void game_main_loop(void)
              * The stage geometry uses perspective projection and a viewing matrix.
              * The HUD overlay uses orthographic projection (set up in render_clear). */
             extern void gx_set_default_3d_camera(void);
+            extern void GXFlush(void);
+            extern void GXSetZMode(u32, u32, u32);
             gx_set_default_3d_camera();
             
+            /* Disable depth test for stage geometry (debug) */
+            GXSetZMode(FALSE, 0, FALSE);
+            
             HSD_GObj_80390FC0();
+            
+            /* Flush stage geometry before switching to HUD overlay */
+            GXFlush();
         }
 
         /* Render HUD overlay (uses orthographic projection from render_clear) */
