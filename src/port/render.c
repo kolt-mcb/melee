@@ -698,5 +698,6 @@ void invoke_gx_render_links(void)
      * HSD_GObjGXLinkHead[HSD_GObjGXLinkHead] chain and calls
      * each object's render_cb callback. */
     extern void HSD_GObj_80390FC0(void);
+    
     HSD_GObj_80390FC0();
 }

@@ -41,12 +41,12 @@ __attribute__((weak)) void Camera_80030A50(...) {
     (void)0;
 }
 
-__attribute__((weak)) void Camera_80030A78(...) {
-    (void)0;
+__attribute__((weak)) bool Camera_80030A78(void) {
+    return false; /* PC port: camera is not transitioning */
 }
 
-__attribute__((weak)) void Camera_80030AC4(...) {
-    (void)0;
+__attribute__((weak)) bool Camera_80030AC4(void) {
+    return true; /* PC port: camera is active */
 }
 
 __attribute__((weak)) void Camera_80030AE0(...) {
@@ -65,8 +65,8 @@ __attribute__((weak)) void Camera_80031074(...) {
     (void)0;
 }
 
-__attribute__((weak)) void Camera_8003108C(...) {
-    (void)0;
+__attribute__((weak)) int Camera_8003108C(void) {
+    return 0;
 }
 
 __attribute__((weak)) void Camera_800310A0(...) {
