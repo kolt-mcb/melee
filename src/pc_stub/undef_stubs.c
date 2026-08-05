@@ -1752,10 +1752,6 @@ void game_main_loop(void)
     int frame_count = 0;
     while (1) {
         frame_count++;
-        if (frame_count % 10 == 0) {
-            fprintf(stderr, "[PORT INFO] [LOOP] Frame %d\n", frame_count);
-            fflush(stderr);
-        }
 
         /* Poll input first (before render, so state is fresh) */
         input_read_frame();
