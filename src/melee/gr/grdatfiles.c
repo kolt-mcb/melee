@@ -62,6 +62,11 @@ static inline u32 be32_swap(u32 x)
            ((x << 8) & 0xFF0000) | ((x << 24) & 0xFF000000);
 }
 
+static inline u16 be16_swap(u16 x)
+{
+    return ((x >> 8) & 0xFF) | ((x << 8) & 0xFF00);
+}
+
 /* Forward declarations */
 static void* gcn_ptr_to_x64(u32 gcn_ptr, u8* dataBase);
 static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gcnDat, u8* dataBase);
@@ -326,35 +331,58 @@ static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
  * DObjDesc chain converters (GCN → x86_64)
  * ============================================================ */
 
-/* Convert a GCN VtxDescList to x86_64 VtxDescList. */
+/* Convert a GCN VtxDescList chain to x86_64 VtxDescList chain.
+ * GCN uses 20-byte entries with 4-byte pointers; x86_64 uses 32-byte entries.
+ * The chain is terminated by attr == GX_VA_NULL (0xFF). */
 static HSD_VtxDescList* grDatFiles_ConvertVtxDescListGCNtoX64(const u8* gcnVtxPtr, u8* dataBase)
 {
-    HSD_VtxDescList* x64Vtx;
+    HSD_VtxDescList* x64Head = NULL;
+    HSD_VtxDescList* x64Tail = NULL;
     const struct HSD_VtxDescList_gcn* gcnVtx;
     u32 val;
+    int count = 0;
 
     if (gcnVtxPtr == NULL) return NULL;
 
+    /* Count entries in the chain first */
     gcnVtx = (const struct HSD_VtxDescList_gcn*)gcnVtxPtr;
-    x64Vtx = lbHeap_80015BD0(0, sizeof(HSD_VtxDescList));
-    if (x64Vtx == NULL) return NULL;
-
-    x64Vtx->attr = (GXAttr)be32_swap(gcnVtx->attr);
-    x64Vtx->attr_type = (GXAttrType)be32_swap(gcnVtx->attr_type);
-    x64Vtx->comp_cnt = (GXCompCnt)be32_swap(gcnVtx->comp_cnt);
-    x64Vtx->comp_type = (GXCompType)be32_swap(gcnVtx->comp_type);
-    x64Vtx->frac = gcnVtx->frac;
-    x64Vtx->stride = (gcnVtxPtr[0x11] << 8) | gcnVtxPtr[0x12];
-    
-    /* vertex pointer points to raw vertex data in archive - keep as direct pointer */
-    val = be32_swap(gcnVtx->vertex);
-    if (val != 0 && val < 0x80000000U) {
-        x64Vtx->vertex = dataBase + val;
-    } else {
-        x64Vtx->vertex = NULL;
+    while (gcnVtx->attr != 0xFF) {
+        count++;
+        gcnVtx = (const struct HSD_VtxDescList_gcn*)((const u8*)gcnVtx + sizeof(struct HSD_VtxDescList_gcn));
+        if (count > 32) break; /* safety limit */
     }
 
-    return x64Vtx;
+    /* Allocate the entire chain as a single block */
+    if (count == 0) return NULL;
+    x64Head = lbHeap_80015BD0(0, sizeof(HSD_VtxDescList) * (size_t)count);
+    if (x64Head == NULL) return NULL;
+    memset(x64Head, 0, sizeof(HSD_VtxDescList) * (size_t)count);
+
+    /* Convert each entry */
+    gcnVtx = (const struct HSD_VtxDescList_gcn*)gcnVtxPtr;
+    x64Tail = x64Head;
+    for (int i = 0; i < count; i++) {
+        x64Tail->attr = (GXAttr)be32_swap(gcnVtx->attr);
+        x64Tail->attr_type = (GXAttrType)be32_swap(gcnVtx->attr_type);
+        x64Tail->comp_cnt = (GXCompCnt)be32_swap(gcnVtx->comp_cnt);
+        x64Tail->comp_type = (GXCompType)be32_swap(gcnVtx->comp_type);
+        x64Tail->frac = gcnVtx->frac;
+        x64Tail->stride = be16_swap(gcnVtx->stride);
+
+        /* vertex pointer points to raw vertex data in archive */
+        val = be32_swap(gcnVtx->vertex);
+        if (val != 0 && val < 0x80000000U) {
+            x64Tail->vertex = dataBase + val;
+        } else {
+            x64Tail->vertex = NULL;
+        }
+
+        /* Advance to next entry */
+        gcnVtx = (const struct HSD_VtxDescList_gcn*)((const u8*)gcnVtx + sizeof(struct HSD_VtxDescList_gcn));
+        x64Tail = (HSD_VtxDescList*)((u8*)x64Tail + sizeof(HSD_VtxDescList));
+    }
+
+    return x64Head;
 }
 
 /* Convert a GCN PObjDesc to x86_64 PObjDesc. */
