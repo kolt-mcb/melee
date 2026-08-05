@@ -13,9 +13,11 @@ static inline u32 swap32(u32 x)
 
 inline void Locate(HSD_Archive* archive)
 {
-    /* PC port: skip relocation. Pointers in archive data are relative offsets.
-     * We compute absolute addresses by adding the base when dereferencing.
-     * This avoids issues with 64-bit pointers and big-endian data. */
+    /* PC port: skip in-place relocation. Pointers in the archive data
+     * section are 32-bit offsets packed at 4-byte boundaries. Writing
+     * 64-bit pointers in place would corrupt adjacent fields.
+     * Instead, the GCN-to-x64 converters (grdatfiles.c) allocate
+     * new x64 structs and convert pointers during tree traversal. */
     (void)archive;
 }
 

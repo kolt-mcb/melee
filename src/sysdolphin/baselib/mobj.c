@@ -342,6 +342,11 @@ void HSD_MObjCompileTev(HSD_MObj* mobj)
 
     tail = NULL;
     if (mobj != NULL) {
+        /* PC port: skip TEV if no texture object */
+        if (mobj->tobj == NULL) {
+            return;
+        }
+
         if (mobj->tevdesc != NULL) {
             HSD_TExpFreeTevDesc(mobj->tevdesc);
             mobj->tevdesc = NULL;
@@ -384,7 +389,7 @@ static char unused1[] = "hsdIsDescendantOf(info, &hsdMObj)";
 
 void MObjSetupTev(HSD_MObj* mobj, HSD_TObj* tobj, u32 arg2)
 {
-    HSD_ASSERT(624, mobj->tevdesc);
+    if (mobj->tevdesc == NULL) { return; } // PC port: skip if no TEV
     HSD_TExpSetupTev(mobj->tevdesc, mobj->texp);
     HSD_TObjSetupVolatileTev(tobj, arg2);
 }
@@ -552,6 +557,11 @@ static void MObjRelease(HSD_Class* o)
     HSD_AObjRemove(mobj->aobj);
     hsdFreeMemPiece(mobj->mat, sizeof(HSD_Material));
     HSD_TObjRemoveAll(mobj->tobj);
+
+        /* PC port: skip TEV if no texture object */
+        if (mobj->tobj == NULL) {
+            return;
+        }
 
     if (mobj->tevdesc != NULL) {
         HSD_TExpFreeTevDesc(mobj->tevdesc);
