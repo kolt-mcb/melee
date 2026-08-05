@@ -169,7 +169,9 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
         }
     }
     if (jobj->flags & 0x20000) {
-        if (has_scl(jobj->parent)) {
+        /* Guard against zero parent scale to prevent NaN in HSD_MtxSRTQuat */
+        if (has_scl(jobj->parent) && jobj->parent->scl->x != 0.0f &&
+            jobj->parent->scl->y != 0.0f && jobj->parent->scl->z != 0.0f) {
             scl = jobj->parent->scl;
         } else {
             scl = NULL;
@@ -177,13 +179,31 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
         HSD_MtxSRTQuat(jobj->mtx, &jobj->scale, &jobj->rotate,
                        &jobj->translate, scl);
     } else {
+        /* Guard against zero parent scale to prevent NaN in HSD_MtxSRT */
+        scl = NULL; /* Default: no parent scale correction */
         if (has_scl(jobj->parent)) {
-            scl = jobj->parent->scl;
-        } else {
-            scl = NULL;
+            if (jobj->parent->scl->x > 0.0001f && jobj->parent->scl->y > 0.0001f &&
+                jobj->parent->scl->z > 0.0001f) {
+                scl = jobj->parent->scl;
+            }
         }
+        
         HSD_MtxSRT(jobj->mtx, &jobj->scale, (Vec3*) &jobj->rotate,
                    &jobj->translate, scl);
+    }
+    
+    /* PC port: GCN uses scale (0,0,0) for invisible root joints.
+     * HSD_MtxSRT produces a zero matrix for zero scale, which breaks
+     * child matrices via PSMTXConcat (zero * anything = zero).
+     * Also guards against NaN from division by zero parent scale.
+     * Replace with identity matrix + translation to preserve child transforms. */
+    {
+        f32 v = jobj->mtx[0][0];
+        if (v != v || v == 0.0f) { /* NaN or zero */
+            jobj->mtx[0][0] = 1.0f; jobj->mtx[0][1] = 0.0f; jobj->mtx[0][2] = 0.0f; jobj->mtx[0][3] = jobj->translate.x;
+            jobj->mtx[1][0] = 0.0f; jobj->mtx[1][1] = 1.0f; jobj->mtx[1][2] = 0.0f; jobj->mtx[1][3] = jobj->translate.y;
+            jobj->mtx[2][0] = 0.0f; jobj->mtx[2][1] = 0.0f; jobj->mtx[2][2] = 1.0f; jobj->mtx[2][3] = jobj->translate.z;
+        }
     }
     if (jobj->parent != NULL) {
         PSMTXConcat(jobj->parent->mtx, jobj->mtx, jobj->mtx);
@@ -659,6 +679,8 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
     jobj->translate = joint->position;
     PSMTXIdentity(jobj->mtx);
     jobj->scl = NULL;
+    /* PC port: mark matrix as dirty so HSD_JObjSetupMatrix computes it */
+    jobj->flags |= JOBJ_MTX_DIRTY;
     if (joint->mtx != NULL) {
         jobj->envelopemtx = HSD_MtxAlloc();
         memcpy(jobj->envelopemtx, joint->mtx, sizeof(Mtx));

@@ -333,7 +333,40 @@ static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
     }
     x64Joint->mtx = NULL;
     x64Joint->robjdesc = NULL;
-
+    
+    /* Convert rotation, scale, position (GCN is big-endian, need byte swap) */
+    {
+        u32 raw;
+        raw = be32_swap(*(const u32*)&gcnJoint->rot_x);
+        x64Joint->rotation.x = *(f32*)&raw;
+        raw = be32_swap(*(const u32*)&gcnJoint->rot_y);
+        x64Joint->rotation.y = *(f32*)&raw;
+        raw = be32_swap(*(const u32*)&gcnJoint->rot_z);
+        x64Joint->rotation.z = *(f32*)&raw;
+        
+        raw = be32_swap(*(const u32*)&gcnJoint->scl_x);
+        x64Joint->scale.x = *(f32*)&raw;
+        raw = be32_swap(*(const u32*)&gcnJoint->scl_y);
+        x64Joint->scale.y = *(f32*)&raw;
+        raw = be32_swap(*(const u32*)&gcnJoint->scl_z);
+        x64Joint->scale.z = *(f32*)&raw;
+        
+        raw = be32_swap(*(const u32*)&gcnJoint->pos_x);
+        x64Joint->position.x = *(f32*)&raw;
+        raw = be32_swap(*(const u32*)&gcnJoint->pos_y);
+        x64Joint->position.y = *(f32*)&raw;
+        raw = be32_swap(*(const u32*)&gcnJoint->pos_z);
+        x64Joint->position.z = *(f32*)&raw;
+    }
+    
+    if (visited_count < 3) {
+        fprintf(stderr, "[GRDAT] Joint[%u] pos=(%.1f,%.1f,%.1f) scl=(%.1f,%.1f,%.1f)\n",
+                visited_count,
+                x64Joint->position.x, x64Joint->position.y, x64Joint->position.z,
+                x64Joint->scale.x, x64Joint->scale.y, x64Joint->scale.z);
+        fflush(stderr);
+    }
+    
     return x64Joint;
 }
 
