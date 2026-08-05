@@ -1,3 +1,23 @@
+## [2025-08-05h2] — Display List Parser Disabled + Conversion Chain Verified
+
+### Major Findings
+- **Verified DObjDesc conversion chain works**: After extensive tracing, confirmed that:
+  - Converted Joint trees ARE being used (addresses match between ground.c and jobj.c)
+  - First 21 Joints (map_id=0) have NULL DObjDesc pointers (correct - no mesh data)
+  - Remaining Joints (map_id=1, map_id=3) have valid DObjDesc pointers
+  - DObjDesc conversion creates valid DObjs with MObjs and PObjs
+- **Disabled GCN display list parser**: The parser was reading garbage data from the
+  display list, causing crashes. The GCN display list format is specific to the hardware
+  and requires proper understanding of the byte layout. Disabled for now.
+- **Program runs stably**: 1000+ frames without crashes. HUD overlay renders correctly.
+- **Stage geometry not visible**: Because the display list parser is disabled, stage
+  geometry is not rendered. The HUD overlay uses direct vertex commands, which still work.
+
+### Build Status
+- 162 sources, 0 errors, 1.3MB ELF
+- Program runs stably with HUD overlay rendering
+- Stage geometry pipeline active but display list parser disabled
+
 ## [2025-08-05h1] — Vertex Array Wiring + Display List Parser + Conversion Debug
 
 ### Major Fixes
