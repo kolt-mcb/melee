@@ -1,3 +1,26 @@
+## [2025-08-05h3] — GCN Display List Parser + Vertex Format Conversion
+
+### Major Findings
+- **Display list parser working**: Parses GCN display list byte stream without crashes.
+  - Handles all command types: NOP, LOAD_CP_REG, LOAD_XF_REG, LOAD_INDX, CALL_DISP_LIST, LOAD_BP_REG, DRAW
+  - Vertex count is big-endian u16 (was reading as little-endian before)
+  - Command sizes: NOP (1B), LOAD_CP_REG (6B), LOAD_XF_REG (10B), LOAD_INDX (6B), CALL_DISP_LIST (10B), LOAD_BP_REG (6B), DRAW (3B)
+- **Vertex format conversion**: Vertex data is NOT 3x f32 as assumed. Actual format:
+  - Position: 3x u8 (3 bytes), stride 6 bytes (3 bytes padding)
+  - Normal: 3x u8 (3 bytes), stride 3 bytes
+  - Texture: 2x u8 (2 bytes), stride 4 bytes
+  - Vertex positions in range 0-255 (8-bit unsigned integers)
+- **Per-attribute strides**: Each vertex attribute has its own stride (pos, nrm, clr, tex0, tex1).
+  - GXSetArray stores per-attribute strides, not a single global stride.
+- **Stage geometry not visible**: Vertex data is read correctly, but camera/projection matrices
+  are not set up. Geometry positions (0-255 range) are likely outside the camera view frustum.
+
+### Build Status
+- 162 sources, 0 errors, 1.3MB ELF
+- Program runs stably with HUD overlay rendering
+- Display list parser active, no crashes
+- Stage geometry pipeline active but not visible (camera issue)
+
 ## [2025-08-05h2] — Display List Parser Disabled + Conversion Chain Verified
 
 ### Major Findings
