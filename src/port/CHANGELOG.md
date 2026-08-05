@@ -1,3 +1,30 @@
+## [2025-08-05h8] — Stage Geometry Visibility RESOLVED
+
+### Root Cause: Disabled Vertex Color Attribute
+- **Problem**: When `clr_enabled` is FALSE (no color array from GCN archive),
+  `glDisableVertexAttribArray(2)` was called in `bridge_upload_and_draw()`.
+  This made the vertex shader use the default color `(0,0,0,1)` = BLACK,
+  regardless of what was in the vertex buffer.
+- **Fix**: Always enable attribute location 2 (color) so the default white
+  colors set by `bridge_add_vertex()` actually reach the shader.
+- **Result**: Stage geometry now renders with 69,928 visible pixels
+  covering screen area (0-611, 0-624). Up from 0 visible pixels.
+
+### Additional Fixes (from h6/h7)
+- Set JObj render flag (bit 18) during GCN→x64 archive conversion
+- Flush accumulated vertices on matrix change in GXLoadPosMtxImm
+- Fix near-zero matrix threshold (was exact 0.0f, now ±0.0001f)
+- Fix perspective projection matrix element placement
+- Add Z-flip for GCN→OpenGL coordinate system conversion
+- Default vertex color to white when clr_enabled is FALSE
+
+### Current State
+- Stage geometry IS VISIBLE (69,928 pixels)
+- HUD overlay renders correctly (10,247 pixels)
+- Total non-black pixels: 80,175 (8.7% of screen)
+- Geometry uses actual vertex colors from archive data
+- Pipeline stable for 1000+ frames
+
 ## [2025-08-05h7] — Stage Geometry Visibility Investigation
 
 ### Root Cause Analysis
