@@ -994,7 +994,10 @@ static void bridge_upload_and_draw(void)
         glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                               (void *)(uintptr_t)offsetof(Vertex, col));
     } else {
-        glDisableVertexAttribArray(2);
+        /* PC port: always enable color attribute so default white colors reach shader */
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                              (void *)(uintptr_t)offsetof(Vertex, col));
     }
     
     if (g_state.tex0_enabled) {
@@ -1199,11 +1202,10 @@ static void bridge_upload_and_draw(void)
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                               (void *)(uintptr_t)offsetof(Vertex, pos));
-        if (g_state.clr_enabled) {
-            glEnableVertexAttribArray(2);
-            glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+        /* PC port: always enable color attribute */
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                               (void *)(uintptr_t)offsetof(Vertex, col));
-        }
         
         glDrawArrays(GL_TRIANGLES, 0, 6);
     } else {
@@ -1710,14 +1712,6 @@ void GXCallDisplayList(void* list, u32 nbytes)
                 f32 val = *(f32*)&val_raw;
                 ptr += 8;
 
-                /* Debug: print first few LOAD_XF_REG commands */
-                static int g_xf_debug = 0;
-                if (g_xf_debug < 5) {
-                    fprintf(stderr, "[GX] LOAD_XF xf_addr=0x%08x val=%.4f\n", xf_addr, val);
-                    g_xf_debug++;
-                    fflush(stderr);
-                }
-                
                 /* Position matrix registers: 0x1000-0x102F (12 floats per matrix, 4 matrices) */
                 if (xf_addr >= 0x1000 && xf_addr < 0x1030) {
                     u32 reg_idx = xf_addr - 0x1000; /* 0-47 */
