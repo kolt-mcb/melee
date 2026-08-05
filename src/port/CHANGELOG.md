@@ -1,3 +1,33 @@
+## [2025-08-05h7] — Stage Geometry Visibility Investigation
+
+### Root Cause Analysis
+- **JObj render flag missing**: `HSD_JObjDispAll` checks `jobj->flags & (flags << 0x12)`
+  (bit 18) before calling `HSD_JObjDisp`. GCN archive Joint data doesn't include this flag.
+  **Fix**: Set bit 18 during `grDatFiles_ConvertJointTreeGCNtoX64`.
+- **Vertex colors all black**: `clr_enabled=FALSE` and `arr_clr=NULL` in display list parser.
+  Vertex colors default to `(0,0,0,0)` when `bridge_add_vertex` skips color copy.
+  **Fix**: Default to white `(1,1,1,1)` when `clr_enabled` is FALSE.
+- **MVP batching bug**: Vertices from multiple joints accumulated with single MVP matrix.
+  **Fix**: Flush in `GXLoadPosMtxImm` when `vert_count > 0`.
+- **Near-zero matrix threshold**: `v == 0.0f` missed values like `2.3e-41`.
+  **Fix**: Use threshold `(v >= -0.0001f && v <= 0.0001f)`.
+
+### Debug Findings
+- `GXCallDisplayList` called 5+ times per frame with valid data (224, 1760, 288, 3264, 32 bytes)
+- `bridge_upload_and_draw` confirms draw calls (9, 12, 5, 22, 4, 16, 4, 4, 16, 4 vertices)
+- MVP matrix computation produces valid NDC coordinates `(-0.000001, -0.120690, 0.999661)`
+- Test triangle with known coordinates also not visible
+- Solid red fragment shader (293,293 pixels) confirmed geometry WAS rendering at some point
+
+### Current State
+- Stage geometry pipeline is ACTIVE (draw calls confirmed)
+- Geometry NOT visible despite all fixes
+- Possible remaining causes:
+  1. GL state issue (blend, scissor, viewport) silently rejecting geometry
+  2. Shader uniform not being uploaded correctly
+  3. Vertex data interpretation error (archive format mismatch)
+  4. View frustum culling at driver level
+
 ## [2025-08-05h6] — Display List Parser Improvements
 
 ### Display List Format Investigation

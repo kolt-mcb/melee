@@ -199,7 +199,7 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
      * Replace with identity matrix + translation to preserve child transforms. */
     {
         f32 v = jobj->mtx[0][0];
-        if (v != v || v == 0.0f) { /* NaN or zero */
+        if (v != v || (v >= -0.0001f && v <= 0.0001f)) { /* NaN or near-zero */
             jobj->mtx[0][0] = 1.0f; jobj->mtx[0][1] = 0.0f; jobj->mtx[0][2] = 0.0f; jobj->mtx[0][3] = jobj->translate.x;
             jobj->mtx[1][0] = 0.0f; jobj->mtx[1][1] = 1.0f; jobj->mtx[1][2] = 0.0f; jobj->mtx[1][3] = jobj->translate.y;
             jobj->mtx[2][0] = 0.0f; jobj->mtx[2][1] = 0.0f; jobj->mtx[2][2] = 1.0f; jobj->mtx[2][3] = jobj->translate.z;
