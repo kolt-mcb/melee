@@ -828,9 +828,9 @@ HSD_GObj* grHomeRun_8021E500(s16 arg0)
     HSD_JObjSetTranslateX(child, 0.0F);
 
     offset = grHr_804D6AE4 * ((f32) arg0 * (160.0F * Ground_801C0498()));
-    gp->gv.homerun.xD0 =
+    gp->gv.homerun2.xD0 =
         (160.0F * (grHr_804D6AE4 * Ground_801C0498())) + offset;
-    HSD_JObjSetTranslateX(jobj, gp->gv.homerun.xD0);
+    HSD_JObjSetTranslateX(jobj, gp->gv.homerun2.xD0);
 
     gp->gv.homerun2.xC6 =
         (s16) ((s32) grHr_804D6AE0 * ((arg0 + 1) / grHr_804D6ADC));
@@ -839,7 +839,7 @@ HSD_GObj* grHomeRun_8021E500(s16 arg0)
 }
 
 void fn_8021E994(Ground* arg0, s32 arg1, CollData* arg2, s32 arg3,
-                 mpLib_GroundEnum arg4, f32 arg5)
+                 s32 arg4, f32 arg5)
 {
     HSD_GObj* gobj;
     Ground* gp;

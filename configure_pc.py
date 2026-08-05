@@ -23,6 +23,8 @@ EXCLUDE_DECOMP = {"MSL/math.h"}  # GCC type conflicts
 BASELIB_SRC = SRC / "sysdolphin" / "baselib"
 G_OBJ_SOURCES = [
     str(BASELIB_SRC / "gobj.c"),
+    str(BASELIB_SRC / "gobjinit.c"),
+    str(BASELIB_SRC / "gobjproc.c"),
     str(BASELIB_SRC / "gobjgxlink.c"),
     str(BASELIB_SRC / "gobjplink.c"),
     str(BASELIB_SRC / "gobjuserdata.c"),
@@ -47,7 +49,9 @@ DISPLAY_MODULES = [
     "fog.c",
     "cobj.c",
     "jobj.c",
+    "shadow.c",
     "displayfunc.c",
+    "archive.c",  # GCN archive parser (needed for stage data)
 ]
 G_DISPLAY_SOURCES = [
     str(BASELIB_SRC / f) for f in DISPLAY_MODULES
@@ -58,8 +62,9 @@ G_OBJ_SOURCES = [s for s in G_OBJ_SOURCES if Path(s).exists()]
 G_DISPLAY_SOURCES = [s for s in G_DISPLAY_SOURCES if Path(s).exists()]
 DECOMP_SOURCES = collect(MELEE / "lb")
 DECOMP_SOURCES = [s for s in DECOMP_SOURCES if Path(s).name not in EXCLUDE_DECOMP]
+GR_SOURCES = collect(MELEE / "gr")
 MATH_SHIM = [str(SRC / "math_shim.c")]
-ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
+ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + GR_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
 
 INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,
@@ -109,5 +114,5 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 (OUT_DIR / "obj").mkdir(parents=True, exist_ok=True)
 
 print(f"Generated build.ninja.pc")
-print(f"Sources: {len(PORT_SOURCES)} port + {len(PC_STUB_SOURCES)} stub + {len(DECOMP_SOURCES)} decomp + {len(G_OBJ_SOURCES)} baselib-gobj + {len(G_DISPLAY_SOURCES)} baselib-display = {len(ALL_SOURCES)} total")
+print(f"Sources: {len(PORT_SOURCES)} port + {len(PC_STUB_SOURCES)} stub + {len(DECOMP_SOURCES)} decomp + {len(GR_SOURCES)} gr + {len(G_OBJ_SOURCES)} baselib-gobj + {len(G_DISPLAY_SOURCES)} baselib-display = {len(ALL_SOURCES)} total")
 print(f"Output: {OUT_PATH}")

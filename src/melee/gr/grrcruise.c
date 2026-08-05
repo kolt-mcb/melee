@@ -39,6 +39,10 @@
 #include <MSL/math_ppc.h>
 #include <MSL/trigf.h>
 
+// Aliases for Map_VanishDesc/Entry used in RCruise
+struct grRCruise_VanishDesc { s16 x0; s16 x2; bool x4; u8 pad_5[3]; };
+struct grRCruise_VanishEntry { s16 x0; s16 x2; HSD_JObj* jobj; };
+
 /* Forward declarations */
 void grRCruise_801FF164(bool arg);
 void grRCruise_801FF168(void);
@@ -77,6 +81,9 @@ void grRCruise_80200154(Ground_GObj* gobj);
 void grRCruise_8020045C(Ground_GObj* arg);
 void grRCruise_80200540(Ground_GObj* gobj);
 void grRCruise_80200578(Ground* gp_arg, s32 joint_id, CollData* cd, s32 arg3, mpLib_GroundEnum arg4, f32 arg5);
+void grRCruise_802010A4(Ground_GObj* gobj, s32 id, CollData* coll);
+void fn_80200460(Ground* gp_arg, s32 joint_id, CollData* cd, s32 arg3, mpLib_GroundEnum arg4, f32 arg5);
+void grRCruise_80201B60(HSD_JObj* jobj, bool arg1);
 void grRCruise_8020071C(Ground_GObj* gobj);
 void grRCruise_80200B48(Ground_GObj* gobj);
 void grRCruise_80200C04(Ground_GObj* gobj);
@@ -453,14 +460,14 @@ void grRCruise_801FF924(Ground_GObj* gobj)
     gp->u.scroll.ctr_jobj = Ground_801C3FA4(gobj, 1);
     HSD_ASSERT(0x2B4, gp->u.scroll.ctr_jobj);
 
-    HSD_JObjGetTranslation(gp->u.scroll.ctr_jobj, &gp->u.scroll.x4);
+    HSD_JObjGetTranslation(gp->u.scroll.ctr_jobj, &gp->u.scroll.x04);
     gp->u.scroll.x10.z = 0.0F;
     gp->u.scroll.x10.y = 0.0F;
     gp->u.scroll.x10.x = 0.0F;
     gp->u.scroll.x1C.z = 0.0F;
     gp->u.scroll.x1C.y = 0.0F;
     gp->u.scroll.x1C.x = 0.0F;
-    gp->u.scroll.x0.b0 = 0;
+    gp->u.scroll.x00.b0 = 0;
     grAnime_801C8138(gobj, gp->map_id, 0);
     grAnime_801C752C(jobj, 1, 30628, HSD_AObjSetFlags, 3, 0x20000000);
     gobj->render_cb = (GObj_RenderFunc) fn_80201BE0;
@@ -621,10 +628,9 @@ void grRCruise_80200154(Ground_GObj* gobj)
             }
             break;
         case 3:
-            if (gp->gv.rcruise.x3C[i].x4 >= grRc_804D6A10[0]->xC) {
+            if (gp->gv.rcruise.x3C[i].x4 >= grRc_804D6A10[0]->x0C) {
                 gp->gv.rcruise.x3C[i].x4 = 0;
-                ((struct grRCruise_SubEntryFlags*) &gp->gv.rcruise.x3C[i]
-                     .pad_01)
+                ((struct grRCruise_SubEntryFlags*) ((u8*) &gp->gv.rcruise.x3C[i] + 1))
                     ->b0 = 0;
                 gp->gv.rcruise.x3C[i].x0 = 4;
             }
@@ -632,15 +638,12 @@ void grRCruise_80200154(Ground_GObj* gobj)
             break;
         case 4:
             if (gp->gv.rcruise.x3C[i].x4 % grRc_804D6A10[0]->x14 == 0) {
-                ((struct grRCruise_SubEntryFlags*) &gp->gv.rcruise.x3C[i]
-                     .pad_01)
+                ((struct grRCruise_SubEntryFlags*) ((u8*) &gp->gv.rcruise.x3C[i] + 1))
                     ->b0 =
-                    ((struct grRCruise_SubEntryFlags*) &gp->gv.rcruise.x3C[i]
-                         .pad_01)
+                    ((struct grRCruise_SubEntryFlags*) ((u8*) &gp->gv.rcruise.x3C[i] + 1))
                         ->b0 ^
                     1;
-                if (((struct grRCruise_SubEntryFlags*) &gp->gv.rcruise.x3C[i]
-                         .pad_01)
+                if (((struct grRCruise_SubEntryFlags*) ((u8*) &gp->gv.rcruise.x3C[i] + 1))
                         ->b0)
                 {
                     grRCruise_80201B60(gp2->gv.rcruise.x3C[i].xC->child, 0);
@@ -1284,7 +1287,7 @@ bool grRCruise_80201988(s32 line_id)
     return false;
 }
 
-void grRCruise_80201B60(HSD_JObj* jobj, s32 arg1)
+void grRCruise_80201B60(HSD_JObj* jobj, bool arg1)
 {
     HSD_DObj* dobj;
     HSD_DObj* next;

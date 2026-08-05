@@ -192,6 +192,12 @@ void lb_8001CC84(void)
 {
     int temp_r24;
     int temp_r3;
+    static int count = 0;
+    count++;
+    if (count <= 3) {
+        fprintf(stderr, "[LBCARD] lb_8001CC84 call #%d: x10=%d xC=%d\n", count, _p(x10), _p(xC));
+        fflush(stderr);
+    }
 
     do {
         switch (_p(x10)) {

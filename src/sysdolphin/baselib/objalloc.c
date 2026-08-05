@@ -5,57 +5,89 @@
 
 #include <__mem.h>
 #include <dolphin/os/OSAlloc.h>
+#include <execinfo.h>
 
 static objheap obj_heap = { 0, 0, -1, -1 };
+static uintptr_t obj_heap_saved_curr = 0; /* PC port: save curr before corruption */
 
 static HSD_ObjAllocData* alloc_datas;
 
-void HSD_ObjSetHeap(u32 size, void* ptr)
+void HSD_ObjSetHeap(uintptr_t size, void* ptr)
 {
-    obj_heap.curr = (u32) ptr;
-    obj_heap.top = (u32) ptr;
+    obj_heap.curr = (uintptr_t) ptr;
+    obj_heap.top = (uintptr_t) ptr;
     obj_heap.remain = size;
     obj_heap.size = size;
+    obj_heap_saved_curr = 0;
 }
 
 s32 HSD_ObjAllocAddFree(HSD_ObjAllocData* data, u32 num)
 {
-    u32 computed_start;
-    u32 pool_end;
-    u32 pool_size;
+    uintptr_t computed_start;
+    uintptr_t pool_end;
+    uintptr_t pool_size;
     u8* pool_start;
 
     u8 _[4];
 
     HSD_ASSERT(0xEE, data);
+    if (obj_heap.top != 0 && obj_heap.top > 0x700000000000UL && obj_heap.top < 0x800000000000UL) {
+        /* Valid PC heap address */
+    } else {
+        extern void* g_heap_base;
+        extern size_t g_heap_size;
+        if (g_heap_base != NULL) {
+            /* Restore curr from saved position to avoid overwriting prior allocations */
+            obj_heap.top = (uintptr_t) g_heap_base;
+            obj_heap.curr = obj_heap_saved_curr != 0 ? obj_heap_saved_curr : (uintptr_t) g_heap_base;
+            obj_heap.size = g_heap_size;
+            obj_heap.remain = g_heap_size - (obj_heap.curr - (uintptr_t) g_heap_base);
+        }
+    }
+    if (data->size == 0) {
+        return 0;
+    }
     pool_size = data->size * num;
     if (obj_heap.top != 0) {
         pool_end = obj_heap.top + obj_heap.size;
-        computed_start = (obj_heap.curr + data->align) & ~data->align;
+        /* PC port: cast to uintptr_t before ~ to avoid 32-bit truncation. */
+        computed_start = (obj_heap.curr + data->align) & ~(uintptr_t)data->align;
         pool_start = (void*) computed_start;
         if (computed_start > pool_end) {
             return 0;
         }
-        if (pool_end - (u32) pool_start < pool_size) {
-            pool_size = pool_end - (u32) pool_start -
-                        (pool_end - (u32) pool_start) % data->size;
+        if (pool_end - (uintptr_t) pool_start < pool_size) {
+            pool_size = pool_end - (uintptr_t) pool_start -
+                        (pool_end - (uintptr_t) pool_start) % data->size;
         }
         num = pool_size / data->size;
         if (num == 0) {
             return 0;
         }
-        obj_heap.curr = (u32) pool_start + pool_size;
+        obj_heap.curr = (uintptr_t) pool_start + pool_size;
         obj_heap.remain = pool_end - obj_heap.curr;
+        obj_heap_saved_curr = obj_heap.curr; /* PC port: save for corruption recovery */
     } else {
         pool_start = HSD_MemAlloc(pool_size);
         if (pool_start == 0) {
             return 0;
         }
-        obj_heap.remain -= pool_size;
+        /* PC port: obj_heap.remain is -1 when heap is not set.
+         * Don't subtract from it to avoid wraparound. */
+        if (obj_heap.remain != (uintptr_t)-1) {
+            obj_heap.remain -= pool_size;
+        }
     }
 
     {
         int i;
+        if (pool_start == NULL) {
+            return 0;
+        }
+        /* Zero the pool memory to prevent uninitialized field crashes.
+         * On x86_64, structs are larger than on GCN due to 8-byte pointers,
+         * so fields beyond what CreateGObj initializes contain garbage. */
+        memset(pool_start, 0, data->size * num);
         for (i = 0; (unsigned) i < num - 1; i++) {
             *(void**) (pool_start + data->size * i) =
                 (void*) (pool_start + data->size * (i + 1));

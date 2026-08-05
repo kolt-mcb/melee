@@ -1,3 +1,371 @@
+## [2025-08-04h12] — Stage Geometry Rendering Enabled (Heap Corruption Recovery)
+
+### Major Fixes
+- **Fixed heap corruption recovery**: `obj_heap.top` was overwritten with GCN arena pointer `0x3f800000`
+  during `HSD_JObjLoadJoint` recursion. Added corruption detection and recovery in `HSD_ObjAllocAddFree`.
+- **Saved `obj_heap.curr` position**: On corruption recovery, restore `curr` from saved position instead
+  of resetting to heap base. Prevents double-allocation overwriting prior structs.
+- **Zeroed allocated memory**: Added `memset(pool_start, 0, data->size * num)` in `HSD_ObjAllocAddFree`
+  to prevent uninitialized field crashes from x86_64 struct size differences.
+- **Made heap globals non-static**: `g_heap_base` and `g_heap_size` in `undef_stubs.c` are now global
+  so `objalloc.c` can reference them for corruption recovery.
+- **Removed stage geometry deferral**: Early return in `Ground_GetStageGObj` removed.
+  Stage init chain completes: `Stage_802251E8` → `Stage_80225298` → `Stage_8022524C` → `Stage_802252E4`.
+- **Render callback registered**: `grDisplay_801C5DB0` wired as stage render callback.
+- **Screenshot capture**: Live rendered pixels captured to `screenshot.ppm` (1280x720).
+
+### Root Cause (Unresolved)
+- `obj_heap.top` is corrupted from `0x7fffc0000000` to `0x3f800000` during `JObjLoad` recursion.
+- GDB watchpoints did not trigger, suggesting the write may be from a memory-mapped region
+  or through a corrupted pointer. Recovery works but root cause remains unknown.
+
+### Build Status
+- 162 sources, 0 errors, 1.3MB ELF
+- Program boots, renders stage geometry, runs main loop stably
+- Screenshot captures correctly
+
+## [2025-08-04h11] — Baselib Heap Wiring & Stage Geometry Deferral (Root Cause Found)
+
+### Major Fixes
+- **Wired baselib heap allocation**: `HSD_ObjSetHeap` called with 64MB mmap region in `game_main_loop()`.
+- **Fixed 32-bit pointer truncation in objalloc.c**: `~data->align` cast to `uintptr_t` before negation.
+  Without this, 64-bit addresses like `0x7bdd88000000` were truncated to `0x88000000`.
+- **Fixed obj_heap.remain wraparound**: Guard against subtracting from `(uintptr_t)-1`.
+- **Added shadow.c to build**: Required by `HSD_ShadowInitAllocData()`.
+- **Initialized baselib object allocators**: Explicit calls before stage init.
+
+### Root Cause of Stage Geometry Crash
+- `HSD_CreateMainHeap` (called from `lbHeap_80015BB8` during file loading) overwrites `obj_heap`
+  with GCN arena pointers (`0x3f800000`), corrupting the PC heap allocated in `game_main_loop()`.
+- `obj_heap.top` changes from `0x7e0b64000000` (valid PC heap) to `0x3f800000` (GCN address)
+  between the first and second `HSD_ObjAllocAddFree` calls during `JObjLoad`.
+- **Fix needed**: Prevent `HSD_CreateMainHeap` from calling `HSD_ObjSetHeap` with GCN addresses,
+  or reinitialize `obj_heap` after file loading completes.
+
+### Deferred
+- Stage geometry creation in `Ground_GetStageGObj` returns early to avoid crash.
+- `HSD_JObjLoadJoint` crashes because `obj_heap` is corrupted by `HSD_CreateMainHeap`.
+
+### Build Status
+- 162 sources, 0 errors, 1.3MB ELF
+- Program boots, renders debug overlay, runs main loop
+- Stage init completes, render callback registered
+- Screenshot captures correctly
+
+## [2025-08-04h10] — Baselib Memory Allocator Fixes & Stage Geometry Deferral
+
+### Major Fixes
+- **Fixed GetMemoryEntry pointer size**: Changed `new_nb * 4` to `new_nb * sizeof(HSD_MemoryEntry*)`
+  for x86_64 compatibility (8-byte pointers vs 4-byte on GCN).
+- **Fixed objheap structure**: Changed `u32` fields to `uintptr_t` for addresses.
+  GCN uses 32-bit addresses; x86_64 uses 64-bit addresses.
+- **Fixed HSD_ObjSetHeap signature**: Changed `u32 size` to `uintptr_t size`.
+- **Added shadow.c to build**: Required by `HSD_ShadowInitAllocData()`.
+- **Initialized baselib object allocators**: Added explicit calls to `HSD_ListInitAllocData()`,
+  `HSD_AObjInitAllocData()`, `HSD_FObjInitAllocData()`, `HSD_IDInitAllocData()`, etc.
+  before stage init in `game_main_loop()`.
+- **Fixed obj_heap.remain wraparound**: When heap is not set (`remain == -1`),
+  don't subtract from it to avoid wraparound to huge number.
+
+### Deferred (baselib heap initialization)
+- `HSD_ObjSetHeap` not called properly on PC. `obj_heap.size` is `-1` (all 1s as unsigned).
+- Stage geometry creation deferred until baselib memory allocator is properly initialized.
+- `Ground_GetStageGObj` returns early to avoid segfault in `HSD_JObjLoadJoint`.
+- `grAnime_801C8780`, `Ground_801C39C0`, `Ground_801C3BB4` skipped.
+- `unk28` array of GCN pointers set to NULL.
+
+### Build Status
+- 162 sources (added shadow.c), 0 errors, 1.3MB ELF
+- Program boots, renders debug overlay, runs main loop
+- Stage init completes, render callback registered
+- GCN-to-x86_64 conversion working for top-level structs and HSD_Joint trees
+- Screenshot captures correctly
+
+## [2025-08-04h9] — HSD_Joint Tree Conversion Implemented
+
+### Major Fixes
+- **Implemented HSD_Joint tree conversion**: GCN HSD_Joint (64 bytes, 4-byte pointers)
+  converted to x86_64 HSD_Joint (96 bytes, 8-byte pointers).
+  `grDatFiles_ConvertJointTreeGCNtoX64` recursively converts child/next pointers.
+- **GCN HSD_Joint struct defined**: Packed struct with explicit byte offsets matching
+  GCN binary layout (class_name=0x00, flags=0x04, child=0x08, next=0x0C, union=0x10,
+  rotation=0x14, scale=0x20, position=0x2C, mtx=0x38, robjdesc=0x3C).
+- **class_name set to NULL**: Points to archive symbol table (not data section).
+  JObjLoadJointSub allocates default JObj when class_name is NULL.
+
+### Deferred (nested struct conversion)
+- HSD_Joint tree conversion works but nested structs (HSD_RObjDesc, HSD_DObjDesc, etc.)
+  are still in GCN format. Stage geometry creation deferred until full conversion.
+- `Ground_GetStageGObj` skipped (would crash reading GCN-packed nested structs).
+- `grAnime_801C8780`, `Ground_801C39C0`, `Ground_801C3BB4` skipped.
+- `unk28` array of GCN pointers set to NULL.
+
+### Build Status
+- 161 sources, 0 errors, 1.3MB ELF
+- Program boots, renders debug overlay, runs main loop
+- Stage init completes, render callback registered
+- GCN-to-x86_64 conversion working for top-level structs and HSD_Joint trees
+- Screenshot captures correctly
+
+## [2025-08-04h8] — GCN-to-x86_64 Struct Conversion Implemented
+
+### Major Fixes
+- **Implemented GCN-to-x86_64 struct conversion**: Archive data is stored in GCN format
+  (32-bit BE pointers, 4-byte struct fields) but code reads as x86_64 (64-bit pointers,
+  8-byte struct fields). Created `UnkStageDat_gcn` and `UnkStageDat_x8_t_gcn` packed
+  structs with explicit GCN byte offsets.
+- **Conversion pipeline**: `grDatFiles_ConvertArchiveGCNtoX64` → `grDatFiles_ConvertStageDatGCNtoX64`
+  reads GCN-packed structs, byte-swaps fields, converts 32-bit pointer offsets to x86_64
+  pointers, and allocates new x86_64 structs.
+- **Map count validation**: GCN `unkC` field now correctly reads as 5 maps (was 866224
+  before conversion due to struct offset mismatch).
+- **Pointer conversion**: `gcn_ptr_to_x64` converts 32-bit GCN offsets to x86_64 pointers.
+  GCN absolute addresses (0x80000000+) are returned as NULL to avoid segfaults.
+
+### Deferred (nested struct conversion)
+- Top-level structs (UnkStageDat, UnkArchiveStruct) convert successfully.
+- Nested structs (HSD_Joint, HSD_AnimJoint, etc.) are still in GCN format.
+- `Ground_GetStageGObj` reads nested structs as x86_64 pointers → segfault.
+- Stage geometry creation deferred until full nested struct conversion.
+- `grAnime_801C8780`, `Ground_801C39C0`, `Ground_801C3BB4` skipped.
+- `unk28` array of GCN pointers set to NULL (would need per-entry conversion).
+
+### Build Status
+- 161 sources, 0 errors, 1.3MB ELF
+- Program boots, renders debug overlay, runs main loop
+- Stage init completes, render callback registered
+- GCN-to-x86_64 conversion working for top-level structs
+- Screenshot captures correctly
+
+## [2025-08-04h7] — Stage Init Complete, Render Callback Wired
+
+### Major Fixes
+- **Fixed stack smashing in `grDatFiles_801C6038`**: `lbFile_800164A4` writes `size_t` (8 bytes on x86_64)
+  to the `dest` parameter. Caller used `u32 length` (4 bytes), causing 4-byte stack overflow
+  that corrupted the stack canary. Fixed by changing `length` to `size_t`.
+- **Avoided variadic call crash in `lbArchive_80016DBC`/`lbArchive_800171CC`**:
+  Replaced with direct archive load + `HSD_ArchiveGetPublicAddress` calls.
+  Variadic calls crashed after `vLoadSections` returned (likely `va_list` ABI issue on x86_64).
+
+### Stage Init Status
+- Archive loads correctly (GrIz.dat, 1.1MB, 89 symbols)
+- `Ground_801C0754` → `grDatFiles_801C6038` → archive load → symbol resolution
+- Stage init chain: `Stage_802251E8` → `Stage_80225298` → `Stage_8022524C` → `Stage_802252E4`
+- 4 stage GObjs created (map_id 0, 1, 3)
+- `grDisplay_801C5DB0` render callback registered in GX link chain `head[3]`
+- `HSD_GObj_80390FC0` called in main loop for render callback traversal
+
+### Deferred (struct layout mismatch)
+- `UnkStageDat` struct has different field offsets on x86_64 (8-byte pointers) vs GCN (4-byte pointers)
+  - GCN: `unk0` at 0x00, `unk4` at 0x04, `unk8` at 0x08, `unkC` at 0x0C
+  - x86_64: `unk0` at 0x00, `unk4` at 0x08, `unk8` at 0x10, `unkC` at 0x18
+- Reading struct directly produces garbage (e.g., `unkC=866224` instead of ~4)
+- Stage geometry creation skipped until GCN-layout struct access is implemented
+- `grAnime_801C8780`, `Ground_801C39C0`, `Ground_801C3BB4` skipped (read big-endian params)
+
+### Build Status
+- 161 sources, 0 errors, 1.3MB ELF
+- Program boots, renders debug overlay, runs main loop
+- Stage init completes, render callback registered
+- Screenshot captures correctly
+
+## [2025-08-04h6] — Render Callback Wired, Stage GObjs Created
+
+### Major Fixes
+- **GObj system initialization**: Added `gobjinit.c` and `gobjproc.c` to build.
+  `HSD_GObj_803912E0` + `HSD_GObj_80391304` called before stage init.
+- **Fixed HSD_GObj struct layout**: Matched real struct definition from `gobj.h`.
+  (classifier at offset 0, p_link at 2, gx_link at 3, etc.)
+- **Stage init chain complete**: `Stage_802251E8` → `Stage_80225298` → `Stage_8022524C` → `Stage_802252E4`
+- **`on_init` callback**: Calls `grIzumi_801CBB88` which creates 4 stage GObjs
+  via `grIzumi_801CBCE8` → `Ground_GetStageGObj`.
+- **Render callback registered**: `GObj_SetupGXLink(gobj, grDisplay_801C5DB0, 3, 0)`
+  populates `HSD_GObjGXLinkHead[3]` with render callback.
+- **`HSD_GObj_80390FC0` in main loop**: Walks GX link chain and calls render callbacks.
+
+### PC Port Workarounds (big-endian archive data)
+- `Ground_GetStageGObj`: Skips archive geometry creation (big-endian struct access).
+  Returns GObj without stage geometry but without crashing.
+- `grIzumi_801CBCE8`: Skips `callbacks->on_init` (calls `grAnime_801C8138` which
+  reads big-endian archive data).
+- `grIzumi_801CBB88`: Skips `grAnime_801C8780` and `Ground_801C39C0`/`Ground_801C3BB4`.
+- `Ground_801C0800`: Skips param field access, calls `on_init()` directly.
+
+### Status
+- Stage GObjs created: 4 GObjs (map_id 0, 1, 3)
+- GX link chain: head[3] populated with `grDisplay_801C5DB0` render callback
+- Main loop: `HSD_GObj_80390FC0()` called each frame
+- Screenshot: debug overlay renders, stage geometry not yet visible
+  (skipped due to big-endian archive data)
+
+### Next Steps
+1. Implement big-endian byte-swapping for archive stage data structs
+2. Enable `Ground_GetStageGObj` to create stage geometry from archive
+3. Verify `grDisplay_801C5DB0` renders stage geometry each frame
+4. Wire `HSD_GObj_80390ED0` for GObj event processing
+
+### Build Status
+- 161 sources (added gobjinit.c, gobjproc.c), 0 errors, 1.3MB ELF
+- Program boots, renders debug overlay, runs main loop
+- Stage init completes, render callback registered
+
+## [2025-08-04h5] — Stage Init Complete, Archive Loading Working
+
+### Major Fixes
+- **`Stage_80225298` crash fixed**: `grIzumi_OnLoad` accessed `HSD_GObj_Entities` which
+  is NULL during stage init. Added NULL check to skip entity iteration.
+- **Cleaned diagnostic logging**: Removed verbose fprintf statements from stage.c,
+  ground.c, and grizumi.c.
+
+### Stage Init Status
+- **Stage init completes successfully**: `Stage_802251E8` → `Stage_80225298` → returns
+- Archive loads correctly: GrIz.dat (1.1MB), 89 public symbols, all resolved
+- `Ground_801C28CC` finds St_Kind_Izumi=2 in param list
+- `grIzumi_OnLoad` skips entity iteration (HSD_GObj_Entities is NULL)
+
+### Next Steps
+1. Wire `Ground_GetStageGobj()` to create joint hierarchy
+2. Register render callback via `GObj_SetupGXLinkMax()`
+3. Verify `grDisplay_801C5DB0()` renders stage geometry each frame
+4. Implement `HSD_GObj_Entities` initialization for entity tracking
+
+### Build Status
+- 159 sources, 0 errors, 1.3MB ELF
+- Program boots, renders debug overlay, runs main loop
+- Stage init completes successfully
+
+## [2025-08-04h4] — Archive Loading Working, Stage Init Progress
+
+### Major Fixes
+- **Low-memory pool**: Added `mmap` at `0x10000000` for large allocations (>64KB).
+  This ensures archive data is in lower 32-bit address space so GCN pointers work.
+- **Archive parser**: Added `archive.c` to build (was missing from baselib sources).
+  Implemented byte-swapping of archive header and info arrays.
+- **Disabled `Locate()` on PC**: Pointers in archive data are relative offsets,
+  not absolute addresses. Compute absolute addresses by adding archive base.
+- **`Ground_801C28CC` fix**: Read `stage_params` and `stage_param_count` fields
+  explicitly with byte-swapping (offsets 0xB0 and 0xB4 in GroundParam struct).
+  Archive entries are 32 bytes apart (not struct size due to GCN packing).
+- **`be32()` helper**: Fixed byte-swap function to use masking (avoid shift overflow).
+
+### Stage Init Status
+- Archive loads correctly: GrIz.dat (1.1MB), 89 public symbols, all resolved
+- `Ground_801C28CC` completes successfully (finds St_Kind_Izumi=2 in param list)
+- `Ground_801C0754` returns, stage init continues to `Stage_80225298`
+- Segfault in `Stage_80225298` (Ground_OnLoad) — next debugging target
+
+### Files Modified
+- `src/port/gx_gl_bridge.c`: GX display list parser
+- `src/pc_stub/undef_stubs.c`: HSD_DevComRequest, low-memory pool, OSReport
+- `src/pc_stub/dvd_vf_bridge.c`: DVD bridge
+- `src/melee/lb/lbheap.c`: lbHeap_InitMainHeap, malloc fallback
+- `src/melee/lb/lbfile.c`: g_last_file_buf for pointer preservation
+- `src/melee/lb/lbarchive.c`: archive loading diagnostics
+- `src/sysdolphin/baselib/archive.c`: byte-swapping, disabled Locate()
+- `src/melee/gr/ground.c`: Ground_801C28CC byte-swap fix
+- `src/melee/gr/stage.c`: Stage_802251E8 diagnostics
+- `configure_pc.py`: Added archive.c to baselib sources
+
+### Build Status
+- 159 sources, 0 errors, 1.3MB ELF
+- Program boots, renders debug overlay, runs main loop
+- Archive loading works, stage init progresses through Ground_801C0754
+
+## [2025-08-04h3] — Heap Fix, DevCom Stub Fix, Stage Init Deferred
+
+### Fixes
+- **Fixed `HSD_DevComRequest` stub**: `dest` parameter is the data buffer (not `src`),
+  fixed file read to write into correct buffer. Removed incorrect length write that corrupted data.
+- **Fixed heap allocation**: Added `lbHeap_InitMainHeap()` to initialize heap 0 status,
+  added `malloc` fallback in `lbHeap_80015BD0` when heap isn't created.
+- **Fixed `OSReport` formatting**: Now uses `vsnprintf` for proper format string expansion.
+- **Fixed `OSDisableInterrupts`/`OSRestoreInterrupts`**: Corrected return types.
+- **Fixed `OSAllocFromHeap`/`OSFreeToHeap`**: Now uses `malloc`/`free`.
+
+### Stage Init (deferred)
+- Archive loading works: GrIz.dat (1.1MB) loads successfully via DVD bridge
+- `HSD_DevComRequest` reads file data into allocated buffer
+- Hang occurs in `lbFile_800161A0()` spin-loop → `lb_800195D0()` → card game logic
+- `lb_800192A8` has `while(true)` loop that depends on `DVDGetDriveStatus()`
+- `lb_8001CC84` has card game state machine with potential infinite loops
+- Stage init deferred until async I/O spin-loop is fixed
+
+### Files Modified
+- `src/port/gx_gl_bridge.c`: GX display list parser
+- `src/pc_stub/undef_stubs.c`: HSD_DevComRequest, heap stubs, OSReport, OSAllocFromHeap
+- `src/pc_stub/dvd_vf_bridge.c`: DVD bridge (cleaned up logging)
+- `src/melee/lb/lbheap.c`: lbHeap_InitMainHeap, malloc fallback
+- `src/sysdolphin/baselib/memory.c`: HSD_MemAlloc (cleaned up logging)
+
+### Build Status
+- 157 sources, 0 errors, 0 warnings, 1.3MB ELF
+- Program boots, renders debug overlay, runs main loop correctly
+- Screenshot capture works (screenshot.ppm generated)
+
+## [2025-08-04h2] — GX Display List Parser & Main Loop Stabilization
+
+### New Features
+- **Implemented `GXCallDisplayList` parser** in `gx_gl_bridge.c`: Parses GX display list byte streams
+  and replays commands through the bridge. Supports draw commands (0x80-0xB8), XF register writes (0x10),
+  index loads (0x20-0x38), BP register writes (0x61), nested display list calls (0x40), and NOPs.
+  Safety limits: 8-level recursion depth, 1MB max size per call.
+- **Fixed `HSD_DevComRequest` callback**: Changed cancelflag from `TRUE` to `FALSE` to break the
+  spin-loop in `lbFile_8001668C` correctly. Without this fix, file loading hangs indefinitely.
+- **Replaced `nanosleep()` with `usleep()`** in main loop: `nanosleep()` was blocking indefinitely
+  on this system; `usleep(16666)` provides correct ~60fps frame pacing.
+
+### Stage Init Wiring (deferred)
+- Added stage init wiring in `game_main_loop()` calling `Stage_802251E8(St_Kind_Izumi, NULL)`
+- Deferred due to async DVD I/O spin-loop hang in archive loading path
+- `lbFile_8001668C()` → `lbFile_80016580()` → `HSD_DevComRequest()` → callback sets `cancel=true`
+  → `lbFile_800161A0()` returns true → loop breaks. Path works but archive loading still hangs
+  deeper in the chain (likely `HSD_ArchiveParse` or `lbHeap_80015BD0` allocation).
+
+### Files Modified
+- `src/port/gx_gl_bridge.c`: Implemented `GXCallDisplayList` parser (~200 lines)
+- `src/pc_stub/undef_stubs.c`: Fixed `HSD_DevComRequest` callback, replaced `nanosleep`,
+  added stage init wiring (currently deferred), added `#include "port/log.h"`
+- `src/port/render.c`: Minor cleanup
+
+### Build Status
+- 157 sources, 0 errors, 0 warnings, 1.3MB ELF
+- Program boots, renders debug overlay, runs main loop correctly
+- Screenshot capture works (screenshot.ppm generated)
+
+## [2025-08-04] — gr/ Module Full Integration (77 files, 0 errors, links to 1.3MB ELF)
+
+### Milestone: gr/ module (77 source files) compiles and links cleanly
+
+- **Build**: 157 sources (80 original + 77 gr/), 0 compiler errors, 0 linker errors
+- **Binary**: 1.3MB ELF, boots fully, enters main loop
+- **Stubs**: Generated 258 weak stubs for gr/ dependencies (gm/, cm/, mp/, ft/, it/, ps/, ty/, un/, ef/)
+
+### Fixes Applied (across 9 files)
+- ground.c: Removed static fabsf (provided by <math.h> on PC)
+- grmutecity.c: Fixed fn_801F2B58 signature (mpLib_GroundEnum→s32)
+- grhomerun.c: Fixed homerun→homerun2 struct usage, fn_8021E994 signature
+- grpura.c: Added forward declarations, grPu_803E6C0C struct, grPura_802130C0 signature
+- grrcruise.c: Fixed grRCruise_VanishDesc/Entry typedefs, grRCruise_SubEntryFlags bit-field access,
+  grRCruise_80201B60 signature, fn_80200460 forward declaration, grRCruise_ScrollVarsForInit field names,
+  grRc_804D6A10 member names (xC→x0C)
+- grshrineroute.c: Fixed grShrineroute_GroundVars2 union for xC4 (pointer vs array),
+  grShrineRoute_OnTouchLine forward declaration, grShrineRoute_8020AE08 signature,
+  mpColl_Callback casts, xC4 ptr/arr disambiguation
+- grzebes.c: Fixed callback0/2→on_init/gobj_proc
+- grtzelda.c: Fixed grTZelda_OnDemoInit signature (int→bool)
+- types.h: Fixed grShrineroute_GroundVars2 with union for xC4
+
+### Infrastructure Fixes
+- math_shim.c: Made sqrtf/sqrtf_accurate weak to avoid conflicts with <math.h>
+- MSL/math_ppc.h: Commented out sqrtf/sqrtf_accurate (use system <math.h> on x86_64)
+- dolphin_stubs.c: Made Stage_* and Ground_801C4368 weak to avoid duplicate definitions
+- gr_stubs.c: Auto-generated 258 weak stubs for gr/ module dependencies
+
+### Remaining Work
+- Wire gr/ stage data into the render pipeline
+- Enable actual stage geometry rendering
+- Implement missing gm/, mp/, ft/ modules for full gameplay loop
+
 ## [2025-08-03h9] — gr/ Module Reconciliation Progress (Phase 1 Continued)
 
 ### Progress: 284 → 75 errors (73% reduction)

@@ -268,11 +268,11 @@ Ground_GObj* grZebes_801D8558(int id)
         if (cbs->callback3 != NULL) {
             gp->x1C_callback = cbs->callback3;
         }
-        if (cbs->callback0 != NULL) {
-            cbs->callback0(gobj);
+        if (cbs->on_init != NULL) {
+            cbs->on_init(gobj);
         }
-        if (cbs->callback2 != NULL) {
-            HSD_GObj_SetupProc(gobj, cbs->callback2, 4);
+        if (cbs->gobj_proc != NULL) {
+            HSD_GObj_SetupProc(gobj, cbs->gobj_proc, 4);
         }
     } else {
         OSReport("%s:%d: couldn t get gobj(id=%d)\n", "grzebes.c", 256, id);

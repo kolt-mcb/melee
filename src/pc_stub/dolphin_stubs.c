@@ -115,15 +115,15 @@ __attribute__((weak)) void HSD_Free(void* ptr) { free(ptr); }
 /* PPC frsqrte - fake reciprocal sqrt approximation */
 f32 __frsqrte(f32 x) { return x > 0 ? 1.0f / sqrtf(x) : 0.0f; }
 
-/* Camera bounds stubs */
-s32 Stage_GetCamBoundsLeftOffset(void) { return 0; }
-s32 Stage_GetCamBoundsRightOffset(void) { return 0; }
-s32 Stage_GetCamBoundsTopOffset(void) { return 0; }
-s32 Stage_GetCamBoundsBottomOffset(void) { return 0; }
-s32 Stage_GetCamTrackRatio(void) { return 0; }
+/* Camera bounds stubs (weak - overridden by gr/stage.c) */
+__attribute__((weak)) s32 Stage_GetCamBoundsLeftOffset(void) { return 0; }
+__attribute__((weak)) s32 Stage_GetCamBoundsRightOffset(void) { return 0; }
+__attribute__((weak)) s32 Stage_GetCamBoundsTopOffset(void) { return 0; }
+__attribute__((weak)) s32 Stage_GetCamBoundsBottomOffset(void) { return 0; }
+__attribute__((weak)) s32 Stage_GetCamTrackRatio(void) { return 0; }
 
-/* Ground stubs */
-void Ground_801C4368(void* gobj) {}
+/* Ground stubs (weak - overridden by gr/ground.c) */
+__attribute__((weak)) void Ground_801C4368(void* gobj) {}
 
 /* Ctype map - needed by ctype.h */
 const unsigned char __ctype_map[257] = {0};

@@ -2,6 +2,7 @@
 
 #include "placeholder.h"
 
+#include <stdlib.h>
 #include <dolphin/os/OSInterrupt.h>
 #include <baselib/archive.h>
 #include <baselib/debug.h>
@@ -197,7 +198,10 @@ void* lbHeap_80015BD0(int arg0, int arg1)
             }
         }
     } else {
-        result = NULL;
+        /* PC port fallback: use malloc when heap isn't created */
+        OSReport("[HEAP] lbHeap_80015BD0 fallback: arg0=%d arg1=%d\n", arg0, arg1);
+        result = malloc(arg1);
+        OSReport("[HEAP] malloc returned %p\n", result);
     }
     OSRestoreInterrupts(enabled);
     return result;
@@ -329,4 +333,19 @@ void lbHeap_80015F3C(void)
         }
         desc++;
     }
+}
+
+/* PC port: Initialize heap 0 (main heap) for lbHeap_80015BD0 allocations.
+ * Called after lbHeap_80015F3C to set up the main heap. */
+void lbHeap_InitMainHeap(void)
+{
+    struct Heap* heap = &lbHeap_80431FA0.heap_array[0];
+    heap->id = 0;
+    heap->handle = (Handle*)-1;
+    heap->start = 0;
+    heap->size = 0;
+    heap->type = 0; /* type 0 = HSD_MemAlloc */
+    heap->transient = 1;
+    heap->status = LbHeapStatus_Create;
+    OSReport("[HEAP] lbHeap_InitMainHeap: heap 0 status=%d type=%d\n", heap->status, heap->type);
 }

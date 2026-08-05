@@ -3,6 +3,7 @@
 #include "lbfile.h"
 #include "lbheap.h"
 
+#include <stdio.h>
 #include <stdarg.h>
 #include <dolphin/os.h>
 #include <baselib/archive.h>
@@ -16,10 +17,17 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
     const char* symbol;
     int i = 0;
 
+    fprintf(stderr, "[ARCHIVE] lbArchive_InitializeDAT: archive=%p data=%p length=%zu\n",
+            archive, data, length);
+    fflush(stderr);
+
     if (HSD_ArchiveParse(archive, data, length) == -1) {
         OSReport("HSD_ArchiveParse error!\n");
         HSD_ASSERT(73, 0);
     }
+
+    fprintf(stderr, "[ARCHIVE] Parse succeeded\n");
+    fflush(stderr);
 
     while (true) {
         symbol = HSD_ArchiveGetExtern(archive, i++);
@@ -84,7 +92,7 @@ static inline void lbArchive_vLoadSectionsFatal(HSD_Archive* archive,
     }
 }
 
-static inline void lbArchive_vLoadSections(HSD_Archive* archive, void** symbol,
+static void lbArchive_vLoadSections(HSD_Archive* archive, void** symbol,
                                            va_list symbols)
 {
     const char* symbol_name;

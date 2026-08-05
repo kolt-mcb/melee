@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <time.h>
+#include <sys/mman.h>
 
 /* Runtime/platform.h for Event typedef and common types */
 #include <platform.h>
@@ -13,6 +14,7 @@
 #include "port/window.h"
 #include "port/render.h"
 #include "port/fs.h"
+#include "port/log.h"
 #include "port/input.h"
 #include <dolphin/dvd.h>
 
@@ -183,13 +185,13 @@ static int write_ptr(int fd, void *p) {
 
 __attribute__((weak)) void OSReport(const char *fmt, ...) __asm__("OSReport");
 __attribute__((weak)) void OSReport(const char *fmt, ...) {
-    /* Just write the raw format string, no formatting */
-    const char *p = fmt;
+    va_list args;
+    char buf[1024];
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
     int out_fd = 2;
-    while (*p) {
-        write(out_fd, p, 1);
-        p++;
-    }
+    write(out_fd, buf, strlen(buf));
     write(out_fd, "\n", 1);
 }
 
@@ -214,10 +216,10 @@ void __assert(const char *file, unsigned int line, const char *msg) {
 __attribute__((weak)) void OSInit(void) {}
 __attribute__((weak)) void OSInitAlarm(void) {}
 __attribute__((weak)) void OSCancelAlarm(void) {}
-__attribute__((weak)) void OSDisableInterrupts(void) { return 0; }
+__attribute__((weak)) u32 OSDisableInterrupts(void) { return 0; }
 __attribute__((weak)) void OSGetConsoleSimulatedMemSize(void) {}
 __attribute__((weak)) void OSResetSystem(void) {}
-__attribute__((weak)) void OSRestoreInterrupts(void) {}
+__attribute__((weak)) void OSRestoreInterrupts(u32 level) { (void)level; }
 __attribute__((weak)) void OSSetAlarm(void) {}
 __attribute__((weak)) void OSGetTick(void) {}
 __attribute__((weak)) void OSAllocFromArenaHi(void) {}
@@ -271,28 +273,13 @@ __attribute__((weak)) void* lbHeap_80015BD0_internal(u32 id, u32 size) {
 /* Archive stubs */
 static u8 g_stub_archive_buf[4096];
 
-__attribute__((weak)) s32 HSD_ArchiveParse(void* archive, u8* src, size_t size) {
-    (void)archive; (void)src; (void)size;
-    return 0;  /* success */
-}
-
-__attribute__((weak)) void* HSD_ArchiveGetPublicAddress(void* archive, const char* name) {
-    (void)archive; (void)name;
-    return g_stub_archive_buf;
-}
-
-__attribute__((weak)) void* HSD_ArchiveGetExtern(void* archive, int idx) {
-    (void)archive; (void)idx;
-    return NULL;
-}
-
-__attribute__((weak)) void HSD_ArchiveLocateExtern(void* a, const char* s, void* d) {
-    (void)a; (void)s; (void)d;
-}
+/* NOTE: HSD_ArchiveParse, HSD_ArchiveGetPublicAddress, HSD_ArchiveGetExtern,
+ * HSD_ArchiveLocateExtern are now implemented in sysdolphin/baselib/archive.c */
 
 /* GObj system */
 typedef struct HSD_GObj HSD_GObj;
 typedef void (*HSD_GObjProc)(void*);
+typedef void (*GObj_RenderFunc)(HSD_GObj*, int);
 
 typedef struct HSD_GObjList {
     void* items;
@@ -300,31 +287,24 @@ typedef struct HSD_GObjList {
 } HSD_GObjList;
 
 struct HSD_GObj {
-    struct HSD_GObj* prev;
-    struct HSD_GObj* next;
-    struct HSD_GObj* next_gx;
-    struct HSD_GObj* prev_gx;
-    void* p_link;
-    HSD_GObjProc* proc;
-    u16 classifier;
-    u8 p_link_idx;
-    u8 p_prio;
-    u8 render_priority;
-    u8 gx_link;
-    u8 obj_kind;
-    u8 user_data_kind;
-    u8 _pad1[3];
-    void* user_data;
-    void (*user_data_remove_func)(void*);
-    void* hsd_obj;
-    void* data;
-    void* next_data;
-    void (*remove_func)(void*);
-    void* unk_0x40;
-    void* unk_0x44;
-    void* unk_0x48;
-    u32 flags;
-    u32 type;
+    /*  +0 */ u16 classifier;
+    /*  +2 */ u8 p_link;
+    /*  +3 */ u8 gx_link;
+    /*  +4 */ u8 p_prio;
+    /*  +5 */ u8 render_priority;
+    /*  +6 */ u8 obj_kind;
+    /*  +7 */ u8 user_data_kind;
+    /*  +8 */ HSD_GObj* next;
+    /*  +C */ HSD_GObj* prev;
+    /* +10 */ HSD_GObj* next_gx;
+    /* +14 */ HSD_GObj* prev_gx;
+    /* +18 */ HSD_GObjProc* proc;
+    /* +1C */ GObj_RenderFunc render_cb;
+    /* +20 */ u64 gxlink_prios;
+    /* +28 */ void* hsd_obj;
+    /* +2C */ void* user_data;
+    /* +30 */ void (*user_data_remove_func)(void*);
+    /* +34 */ void* x34_unk;
 };
 
 #define MAX_GOBS 512
@@ -344,7 +324,7 @@ static void gobj_init(void) {
 }
 
 static void gobj_pinsert(HSD_GObj* gobj) {
-    u8 link = gobj->p_link_idx;
+    u8 link = gobj->p_link;
     if (link >= 256) return;
     gobj->prev = NULL;
     gobj->next = gobj_bucket_array[link];
@@ -359,8 +339,7 @@ __attribute__((weak)) void* GObj_Create(u16 classifier, u8 p_link, u8 priority) 
     HSD_GObj* obj = gobj_free_list;
     gobj_free_list = obj->next;
     obj->classifier = classifier;
-    obj->p_link_idx = p_link;
-    obj->p_link = (void*)(uintptr_t)p_link;
+    obj->p_link = p_link;
     obj->gx_link = 0xFF;
     obj->p_prio = priority;
     obj->render_priority = 0;
@@ -370,12 +349,13 @@ __attribute__((weak)) void* GObj_Create(u16 classifier, u8 p_link, u8 priority) 
     obj->prev = NULL;
     obj->next_gx = NULL;
     obj->prev_gx = NULL;
-    obj->user_data = NULL;
+    obj->proc = NULL;
+    obj->render_cb = NULL;
+    obj->gxlink_prios = 0;
     obj->hsd_obj = NULL;
-    obj->data = NULL;
-    obj->next_data = NULL;
-    obj->remove_func = NULL;
+    obj->user_data = NULL;
     obj->user_data_remove_func = NULL;
+    obj->x34_unk = NULL;
     gobj_pinsert(obj);
     return (void*)obj;
 }
@@ -417,18 +397,6 @@ __attribute__((weak)) void HSD_GObjObject_80390B0C(HSD_GObj* gobj) {
         gobj->obj_kind = 0xFF;
         gobj->hsd_obj = NULL;
     }
-}
-
-__attribute__((weak)) void HSD_GObj_803912A8(HSD_GObj* gobj, u8 kind) {
-    (void)gobj; (void)kind;
-}
-
-__attribute__((weak)) void HSD_GObj_803912E0(HSD_GObj* gobj) {
-    (void)gobj;
-}
-
-__attribute__((weak)) void HSD_GObj_80391304(HSD_GObj* gobj) {
-    (void)gobj;
 }
 
 /* Placeholder for everything else */
@@ -667,7 +635,11 @@ __attribute__((weak)) void HSD_CObjSetUpVector(void) {}
 __attribute__((weak)) void HSD_CObjSetViewport(void) {}
 __attribute__((weak)) void HSD_CObjSetupViewingMtx(void) {}
 __attribute__((weak)) void HSD_ClearVtxDesc(void) {}
-__attribute__((weak)) void HSD_CreateMainHeap(void) {}
+__attribute__((weak)) int HSD_CreateMainHeap(void* lo, void* hi)
+{
+    (void)lo; (void)hi;
+    return 0; /* default heap handle */
+}
 __attribute__((weak)) void HSD_DObjAddAnimAll(void) {}
 __attribute__((weak)) void HSD_DObjClearFlags(void) {}
 __attribute__((weak)) void HSD_DObjGetFlags(void) {}
@@ -710,26 +682,47 @@ __attribute__((weak)) int HSD_DevComRequest(int file, uintptr_t src,
                                             void (*callback)(int, int, void*, s32),
                                             void* args)
 {
-    (void)src; (void)type; (void)pri; (void)args;
+    (void)type; (void)pri; (void)args;
     
-    if (file < 0 || dest == 0) return -1;
+    if (file < 0) return -1;
+    
+    /* PC port: the src/dest params are truncated 32-bit pointers.
+     * Use the original 64-bit pointer stored by lbFile_8001668C/qwer. */
+    extern void* g_last_file_buf;
+    extern size_t g_last_file_buf_size;
+    
+    void* buf = g_last_file_buf;
+    if (buf == NULL) {
+        /* Fallback: use dest as the buffer (works when not truncated) */
+        buf = (void*)(uintptr_t)dest;
+    }
     
     DVDFileInfo info;
     if (!DVDFastOpen(file, &info)) return -1;
     
     if (info.length < size) size = info.length;
     
-    /* Read file data from offset into destination buffer */
-    DVDReadPrio(&info, (void*)dest, (long)size, info.startAddr, 2);
+    /* Read file data into the buffer */
+    if (buf != 0) {
+        DVDReadPrio(&info, buf, (long)size, 0, 2);
+    }
     
     DVDClose(&info);
     
     /* Trigger callback to signal completion */
     if (callback) {
-        callback(file, 0, (void*)dest, TRUE);
+        callback(file, 0, buf, FALSE);
     }
     
     return 0;
+}
+
+/* Weak stub for lbFile_8001668C with timeout protection.
+ * The original function spins on lbFile_800161A0() waiting for the callback.
+ * If the callback is never called, this spins forever. */
+__attribute__((weak)) void lbFile_8001668C_timeout(const char* basename, u32* src, u32* dest)
+{
+    (void)basename; (void)src; (void)dest;
 }
 __attribute__((weak)) void HSD_FObjAlloc(void) {}
 __attribute__((weak)) void HSD_FObjStopAnim(void) {}
@@ -767,7 +760,7 @@ __attribute__((weak)) void HSD_GObj_LObjCallback(void) {}
 __attribute__((weak)) void HSD_GObj_SetupProc(void) {}
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void HSD_GetHeap(void) {}
+__attribute__((weak)) int HSD_GetHeap(void) { return 0; } /* default heap */
 /* Proper HSD_GetNextArena: returns arena_lo/hi pointers set up by
  * the heap allocation system. Replaces the old no-op stub that had
  * wrong signature (void instead of void**, void**) which caused
@@ -928,7 +921,9 @@ static void lb_80019AAC_noop(void) {}
 /* Persistent SDL joystick handles for 4 controllers.
  * Open once at init time, reused each frame.
  * Initialized to NULL to prevent O2 optimization from assuming valid pointers. */
-static void* g_joysticks[4] = {NULL};
+void* g_joysticks[4] = {NULL};
+void* g_heap_base = NULL;
+size_t g_heap_size = 0;
 
 /* Keyboard-to-GC-pad mapping for Player 1.
  * When no gamepad is connected, keyboard provides input. */
@@ -1189,7 +1184,7 @@ __attribute__((weak)) void HSD_SObjLib_803A55DC(void) {}
 __attribute__((weak)) void HSD_SObjLib_8040C3A4(void) {}
 __attribute__((weak)) u8 HSD_SObjLib_804D7960;
 __attribute__((weak)) void HSD_SetEraseColor(void) {}
-__attribute__((weak)) void HSD_SetHeap(void) {}
+__attribute__((weak)) void HSD_SetHeap(int handle) { (void)handle; }
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 __attribute__((weak)) void HSD_SetMaterialColor(void) {}
@@ -1299,7 +1294,7 @@ __attribute__((weak)) void MatToQuat(void) {}
 __attribute__((weak)) void NessFloatMath_PKThunder2(void) {}
 __attribute__((weak)) void NotAllowedNamesList(void) {}
 __attribute__((weak)) void OSCheckActiveThreads(void) {}
-__attribute__((weak)) void OSCheckHeap(void) {}
+__attribute__((weak)) size_t OSCheckHeap(void* heap) { (void)heap; return SIZE_MAX; }
 __attribute__((weak)) void OSCreateAlarm(void) {}
 __attribute__((weak)) void OSCreateHeap(void) {}
 __attribute__((weak)) void OSDestroyHeap(void) {}
@@ -1552,6 +1547,16 @@ int game_init(void)
     lbMemory_8001564C();
     OSReport("[INIT] lbHeap_80015F3C\n");
     lbHeap_80015F3C();
+    /* Initialize heap 0 (main heap) for lbHeap_80015BD0 allocations.
+     * lbHeap_80015F3C sets up arena pointers but doesn't create heap 0.
+     * Without this, lbHeap_80015BD0(0, size) returns NULL.
+     * struct lbHeap_HeapState layout: arena_lo(4) arena_hi(4) aram_lo(4) aram_hi(4) heap_array[6]
+     * heap_array starts at offset 0x10. Each Heap: id(4) handle(4) start(4) size(4) type(4) transient(4) status(4)
+     * status is at offset 0x28 within each Heap. */
+    {
+        extern void lbHeap_InitMainHeap(void);
+        lbHeap_InitMainHeap();
+    }
     OSReport("[INIT] lbDvd_80018F68\n");
     lbDvd_80018F68();
     OSReport("[INIT] lbArq_80014D2C\n");
@@ -1632,8 +1637,128 @@ void game_main_loop(void)
     /* Forward declarations for lb_0195.c functions (overridden below) */
     u8 lb_80019894(void);
     void lb_80019900(void);
+
+    /* Initialize baselib object allocators before stage init.
+     * This initializes HSD_ID, HSD_JObj, HSD_RObj, etc. allocators.
+     * Normally done by HSD_InitComponent() but we skip full gm/ init. */
+    {
+        static int baselib_initialized = 0;
+        if (!baselib_initialized) {
+            baselib_initialized = 1;
+            extern void HSD_ListInitAllocData(void);
+            extern void HSD_AObjInitAllocData(void);
+            extern void HSD_FObjInitAllocData(void);
+            extern void HSD_IDInitAllocData(void);
+            extern void HSD_VecInitAllocData(void);
+            extern void HSD_MtxInitAllocData(void);
+            extern void HSD_RObjInitAllocData(void);
+            extern void HSD_RenderInitAllocData(void);
+            extern void HSD_ShadowInitAllocData(void);
+            extern void HSD_ZListInitAllocData(void);
+            extern void HSD_ObjSetHeap(unsigned long, void*);
+
+            /* Allocate a 64MB heap region for baselib object allocator.
+             * This is used by HSD_ObjAllocAddFree to allocate objects
+             * from a contiguous memory pool. */
+            {
+                size_t heap_size = 64 * 1024 * 1024; /* 64MB */
+                g_heap_base = mmap(NULL, heap_size, PROT_READ | PROT_WRITE,
+                                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                g_heap_size = heap_size;
+                if (g_heap_base != MAP_FAILED) {
+                    HSD_ObjSetHeap(heap_size, g_heap_base);
+                    PORT_LOG_INFO("[BASERLIB] Heap allocated at %p (%zu bytes)",
+                                  g_heap_base, heap_size);
+                } else {
+                    PORT_LOG_INFO("[BASERLIB] WARNING: heap allocation failed");
+                }
+            }
+
+            HSD_ListInitAllocData();
+            HSD_AObjInitAllocData();
+            HSD_FObjInitAllocData();
+            HSD_IDInitAllocData();
+            HSD_VecInitAllocData();
+            HSD_MtxInitAllocData();
+            HSD_RObjInitAllocData();
+            HSD_RenderInitAllocData();
+            HSD_ShadowInitAllocData();
+            HSD_ZListInitAllocData();
+            PORT_LOG_INFO("[BASERLIB] Object allocators initialized");
+        }
+    }
+
+    /* Initialize GObj system before stage init.
+     * This is normally done by gm_801A4BD4() but we skip the full gm/ init.
+     * HSD_GObj_803912E0 fills in defaults, then we set gproc_pri_max.
+     * HSD_GObj_80391304 allocates the entity lists and GX link arrays. */
+    {
+        static int gobj_initialized = 0;
+        if (!gobj_initialized) {
+            gobj_initialized = 1;
+            extern void HSD_GObj_803912E0(void*);
+            extern void HSD_GObj_80391304(void*);
+            typedef struct {
+                u8 p_link_max;
+                u8 gx_link_max;
+                u8 gproc_pri_max;
+                void* funcs;
+                void* unk_2;
+            } GObjInitData;
+            GObjInitData initdata;
+            memset(&initdata, 0, sizeof(initdata));
+            HSD_GObj_803912E0(&initdata);
+            initdata.gproc_pri_max = 0x18;
+            HSD_GObj_80391304(&initdata);
+            PORT_LOG_INFO("[GObj] GObj system initialized");
+        }
+    }
+
+    /* Initialize a stage for geometry rendering.
+     * Stage_802251E8 triggers the full stage init chain:
+     *   Ground_801C0754() → grDatFiles_801C6038() → loads /GrIz.dat
+     *   Ground_GetStageGobj() → creates Ground gobj with joint hierarchy
+     *   GObj_SetupGXLinkMax() → registers render callback
+     * The GX link chain is walked each frame via HSD_GObj_80390FC0().
+     */
+    {
+        static int stage_initialized = 0;
+        if (!stage_initialized) {
+            stage_initialized = 1;
+            PORT_LOG_INFO("[STAGE] Attempting stage init...");
+            
+            /* Use function pointers to avoid enum type conflicts */
+            typedef void (*StageInitFn)(int, void*);
+            typedef void (*StageOnLoadFn)(void);
+            typedef void (*StageOnStartFn)(int, void*);
+            void *sym_init = (void*)(intptr_t)&Stage_802251E8;
+            void *sym_load = (void*)(intptr_t)&Stage_80225298;
+            void *sym_start = (void*)(intptr_t)&Stage_802252E4;
+            
+            PORT_LOG_INFO("[STAGE] Calling Stage_802251E8(St_Kind_Izumi=2, NULL)...");
+            ((StageInitFn)sym_init)(2, NULL); /* St_Kind_Izumi = 2 */
+            PORT_LOG_INFO("[STAGE] Stage_802251E8 returned");
+            
+            PORT_LOG_INFO("[STAGE] Calling Stage_80225298 (Ground_OnLoad)...");
+            ((StageOnLoadFn)sym_load)();
+            PORT_LOG_INFO("[STAGE] Stage_80225298 returned");
+
+            PORT_LOG_INFO("[STAGE] Calling Stage_8022524C (Ground_801C0800/on_init)...");
+            ((StageOnLoadFn)&Stage_8022524C)();
+            PORT_LOG_INFO("[STAGE] Stage_8022524C returned");
+
+            PORT_LOG_INFO("[STAGE] Calling Stage_802252E4 (Ground_OnStart)...");
+            ((StageOnStartFn)sym_start)(2, NULL);
+            PORT_LOG_INFO("[STAGE] Stage_802252E4 returned");
+            PORT_LOG_INFO("[STAGE] Stage init complete");
+        }
+    }
+
     /* Use SDL timing for consistent frame pacing */
+    int frame_count = 0;
     while (1) {
+        frame_count++;
+
         /* Poll input first (before render, so state is fresh) */
         input_read_frame();
         
@@ -1643,7 +1768,36 @@ void game_main_loop(void)
         /* Poll pad state */
         lb_80019894();
         lb_80019900();
-        
+
+        /* Walk the GObj GX link chain and call render callbacks.
+         * This is where stage geometry rendering happens.
+         * HSD_GObj_80390FC0 walks HSD_GObjGXLinkHead[gx_link_max+1]
+         * and calls cur->render_cb(cur, 0) for each GObj in the chain. */
+        {
+            extern void HSD_GObj_80390FC0(void);
+            extern HSD_GObj** HSD_GObjGXLinkHead;
+            extern struct {
+                u8 p_link_max;
+                u8 gx_link_max;
+                u8 gproc_pri_max;
+                void* funcs;
+                void* unk_2;
+            } HSD_GObjLibInitData;
+            static int gx_diagnostic = 0;
+            if (!gx_diagnostic && frame_count == 1) {
+                gx_diagnostic = 1;
+                int i;
+                for (i = 0; i <= HSD_GObjLibInitData.gx_link_max + 1; i++) {
+                    if (HSD_GObjGXLinkHead[i] != NULL) {
+                        HSD_GObj* head = HSD_GObjGXLinkHead[i];
+                        PORT_LOG_INFO("[GObj] GX link chain head[%d] = %p (render_cb=%p)",
+                                      i, (void*)head, (void*)head->render_cb);
+                    }
+                }
+            }
+            HSD_GObj_80390FC0();
+        }
+
         /* Clear and render */
         render_clear();
         render_debug_overlay();
@@ -1652,8 +1806,7 @@ void game_main_loop(void)
         /* Frame pacing: target 60fps (~16.67ms per frame).
          * The GameCube uses VBlank interrupts for frame sync; on PC
          * we approximate this with a 16ms sleep. */
-        struct timespec ts = { 0, 16666666 }; /* ~16.67ms = 60fps */
-        nanosleep(&ts, NULL);
+        usleep(16666);
     }
 }
 __attribute__((weak)) void game_shutdown(void) {}
@@ -2941,9 +3094,57 @@ __attribute__((weak)) void PSMTXInverse(void) {}
 __attribute__((weak)) void VIGetNextField(void) {}
 
 /* Heap allocation — our stubs use HSD_AllocMem/HSD_FreeMem instead */
-__attribute__((weak)) void* OSAllocFromHeap(void) { return 0; }
-__attribute__((weak)) void OSFreeToHeap(void) {}
+static void* g_low_mem_base = NULL;
+static size_t g_low_mem_size = 0;
+static size_t g_low_mem_used = 0;
 
+__attribute__((weak)) void* OSAllocFromHeap(void* heap, size_t size)
+{
+    (void)heap;
+    /* PC port: for large allocations (>64KB), use low-memory pool
+     * to ensure archive pointers work correctly with 32-bit arithmetic. */
+    if (size > 65536) {
+        if (g_low_mem_base == NULL) {
+            /* Allocate 64MB pool at a fixed low address (0x10000000 = 256MB) */
+            fprintf(stderr, "[MEM] Allocating low-memory pool at 0x10000000\n");
+            fflush(stderr);
+            g_low_mem_base = mmap((void*)0x10000000, 64*1024*1024, PROT_READ | PROT_WRITE,
+                                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+            if (g_low_mem_base == MAP_FAILED) {
+                fprintf(stderr, "[MEM] mmap at 0x10000000 failed, trying 0x08000000\n");
+                fflush(stderr);
+                /* Fallback: try a different address */
+                g_low_mem_base = mmap((void*)0x08000000, 64*1024*1024, PROT_READ | PROT_WRITE,
+                                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+            }
+            if (g_low_mem_base != MAP_FAILED) {
+                fprintf(stderr, "[MEM] Low-memory pool allocated at %p\n", g_low_mem_base);
+                fflush(stderr);
+                g_low_mem_size = 64*1024*1024;
+                g_low_mem_used = 0;
+            } else {
+                fprintf(stderr, "[MEM] Low-memory pool allocation FAILED\n");
+                fflush(stderr);
+            }
+        }
+        if (g_low_mem_base != NULL && g_low_mem_used + size <= g_low_mem_size) {
+            void* ptr = (u8*)g_low_mem_base + g_low_mem_used;
+            fprintf(stderr, "[MEM] Low-mem alloc: size=%zu ptr=%p\n", size, ptr);
+            fflush(stderr);
+            g_low_mem_used += (size + 31) & ~31;  /* align to 32 bytes */
+            return ptr;
+        }
+    }
+    return malloc(size);
+}
+__attribute__((weak)) void OSFreeToHeap(void* heap, void* ptr)
+{
+    (void)heap;
+    (void)ptr;
+    /* Don't free low-memory pool allocations — they're from the fixed pool */
+    /* Don't free mmap'd memory — it's from the fixed pool */
+    /* For now, just leak memory (simpler than tracking allocations) */
+}
 /* HSD render pass query — initialize.c not compiled yet */
 __attribute__((weak)) void HSD_GetCurrentRenderPass(void) {}
 

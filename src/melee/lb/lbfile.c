@@ -6,6 +6,7 @@
 #include "lb/lblanguage.h"
 
 #include <string.h>
+#include <stdio.h>
 #include <dolphin/dvd.h>
 #include <dolphin/os/OSError.h>
 #include <dolphin/os/OSInterrupt.h>
@@ -13,17 +14,29 @@
 #include <baselib/devcom.h>
 
 static bool cancel;
+void* g_last_file_buf = NULL;  /* PC port: store original pointer before truncation */
+size_t g_last_file_buf_size = 0;
 
 void lbFile_8001615C(int r3, int r4, void* r5, bool cancelflag)
 {
+    fprintf(stderr, "[LBFILE] lbFile_8001615C callback: cancelflag=%d\n", cancelflag);
+    fflush(stderr);
     HSD_ASSERT(71, !cancelflag);
     cancel = true;
+    fprintf(stderr, "[LBFILE] cancel set to true\n");
+    fflush(stderr);
 }
 
 #pragma push
 #pragma dont_inline on
 bool lbFile_800161A0(void)
 {
+    static int call_count = 0;
+    call_count++;
+    if (call_count <= 5 || call_count % 100 == 0) {
+        fprintf(stderr, "[LBFILE] lbFile_800161A0 call #%d: cancel=%d\n", call_count, cancel);
+        fflush(stderr);
+    }
     lb_800195D0();
     return cancel;
 }
@@ -32,6 +45,9 @@ bool lbFile_800161A0(void)
 void lbFile_800161C4(int file, u32 src, u32 dest, u32 size, int type, int pri)
 {
     cancel = false;
+    /* PC port: store original buffer pointer before truncation */
+    g_last_file_buf = (void*)(uintptr_t)src;
+    g_last_file_buf_size = size;
     HSD_DevComRequest(file, src, dest, size, type, pri, lbFile_8001615C, 0);
 
     do {
@@ -153,6 +169,9 @@ void lbFile_80016580(const char* basename, u32 src, u32* dest,
 void lbFile_8001668C(const char* basename, u32* src, u32* dest)
 {
     cancel = false;
+    /* PC port: store original buffer pointer before truncation */
+    g_last_file_buf = (void*)(uintptr_t)src;
+    g_last_file_buf_size = 0;
     lbFile_80016580(basename, (u32) src, dest, lbFile_8001615C, 0);
     do {
     } while (!lbFile_800161A0());
@@ -162,6 +181,9 @@ inline void qwer(s32 a, const char* basename, u32* src, u32* dest)
 {
     *dest = lbFile_800163D8(basename);
     *src = (u32) lbHeap_80015BD0(a, ROUND_UP_32(*dest));
+    /* PC port: store original buffer pointer before truncation */
+    g_last_file_buf = (void*)(uintptr_t)*src;
+    g_last_file_buf_size = *dest;
     lbFile_80016580(basename, *src, dest, lbFile_8001615C, 0);
 
     do {

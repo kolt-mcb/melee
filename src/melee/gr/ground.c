@@ -100,6 +100,7 @@
 
 #include <math.h>
 #include <math_ppc.h>
+#include <stdio.h>
 #include <trigf.h>
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
@@ -107,6 +108,15 @@
 #include <baselib/debug.h>
 #include <baselib/fog.h>
 #include <baselib/gobj.h>
+
+/* PC port: byte-swap 32-bit value (big-endian to little-endian) */
+static inline u32 be32(u32 x)
+{
+    return ((x & 0xFF000000) >> 24) |
+           ((x & 0x00FF0000) >> 8) |
+           ((x & 0x0000FF00) << 8) |
+           ((x & 0x000000FF) << 24);
+}
 #include <baselib/gobjgxlink.h>
 #include <baselib/gobjobject.h>
 #include <baselib/gobjplink.h>
@@ -204,15 +214,7 @@ static u8* Ground_804D6950;
 static ssize_t const buffer_size = 64;
 static ssize_t const Gr_CObj_Max = ARRAY_SIZE(stage_info.x694);
 
-/// @todo Move elsewhere.
-static inline f32 fabsf(f32 x)
-{
-    if (x < 0) {
-        return -x;
-    } else {
-        return x;
-    }
-}
+/// fabsf provided by <math.h> on PC.
 
 static void Ground_OnStart(void) {}
 
@@ -482,6 +484,17 @@ void Ground_801C0754(StageIdPair* pair)
 void Ground_801C0800(StageIdPair* pair)
 {
     StageData* stage_data = stage_datas[pair->grkind];
+    
+    /* PC port: stage_info.param is big-endian archive data.
+     * The struct layout differs on x86_64 due to pointer sizes.
+     * Skip the param field access but call on_init() which creates
+     * stage GObjs with render callbacks. */
+    /* Call on_init to create stage GObjs with render callbacks */
+    if (stage_data && stage_data->on_init) {
+        stage_data->on_init();
+    }
+    return;
+
     Ground_801C38D0(stage_info.param->x8, stage_info.param->x14,
                     stage_info.param->x1C, stage_info.param->x18);
     Ground_801C38EC(stage_info.param->x10, stage_info.param->xC);
@@ -1515,20 +1528,27 @@ static inline void reportStageParams(s32 count)
 
 void Ground_801C28CC(s32* arg0, StKind stkind)
 {
-    StageParam* param = stage_info.param->stage_params;
-    s32 count = stage_info.param->stage_param_count;
+    /* PC port: archive data is big-endian, pointers are relative offsets from archive base.
+     * GroundParam::stage_params is at offset 0xB0 (32-bit relative offset on GCN).
+     * GroundParam::stage_param_count is at offset 0xB4 (32-bit int on GCN). */
+    u8* base = (u8*)stage_info.param;
+    u32 raw_offset = be32(*(u32*)(base + 0xB0));  /* relative offset from archive base */
+    s32 count = be32(*(u32*)(base + 0xB4));  /* byte-swapped */
+    StageParam* param = (StageParam*)(0x10000000 + raw_offset);
     s32 i;
 
     for (i = 0; i < count; i++) {
-        if (param->stkind == stkind) {
+        /* PC port: archive StageParam entries are 0x20 (32) bytes apart. */
+        u8* entry = (u8*)param + i * 0x20;
+        s32 param_stkind = be32(*(u32*)entry);
+        if (param_stkind == stkind) {
             s32 j;
             for (j = 0; 0x23 > j; j++) {
                 arg0[j] = ((s16*) stage_info.param)[0x35 + j] *
-                          ((s16*) param)[0xD + j];
+                          ((s16*) entry)[0xD + j];
             }
             return;
         }
-        param++;
     }
 
     OSReport(msg0, __FILE__, 0x906, stage_info.grkind, stkind, count);
@@ -1544,10 +1564,15 @@ s32* Ground_801C2AD8(void)
 
 float Ground_801C2AE8(StKind stkind)
 {
-    StageParam* phi_r5 = stage_info.param->stage_params;
+    /* PC port: read fields explicitly with byte-swapping */
+    u8* base = (u8*)stage_info.param;
+    u32 raw_offset = be32(*(u32*)(base + 0xB0));
+    s32 count = be32(*(u32*)(base + 0xB4));
+    StageParam* phi_r5 = (StageParam*)(0x10000000 + raw_offset);
     int i;
-    for (i = 0; i < stage_info.param->stage_param_count; i++) {
-        if (phi_r5->stkind == stkind) {
+    for (i = 0; i < count; i++) {
+        u8* entry = (u8*)phi_r5 + i * 0x20;
+        if (be32(*(u32*)entry) == stkind) {
             return (0.01f * stage_info.param->x68) * (0.01f * phi_r5->x18);
         }
         phi_r5 += 1;

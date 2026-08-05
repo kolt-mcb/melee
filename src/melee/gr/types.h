@@ -1559,12 +1559,15 @@ struct grShrineroute_GroundVars {
 };
 
 struct grShrineroute_GroundVars2 {
-    /*  +0 gp+C4 */ HSD_GObj* xC4;
-    /*  +4 gp+C8 */ HSD_LObj* xC8[20];
-    /* +54 gp+118 */ u32 x118[20];
-    /* +A4 gp+168 */ u32 x168;
-    /* +A8 gp+16C */ HSD_LObj* x16C;
-    /* +AC gp+170 */ HSD_LObj* x170;
+    /*  +0 gp+C4 */ union {
+        HSD_GObj* ptr;
+        HSD_GObj* arr[6];
+    } xC4;
+    /* +18 gp+E4 */ HSD_LObj* xC8[20];
+    /* +68 gp+134 */ u32 x118[20];
+    /* +B8 gp+184 */ u32 x168;
+    /* +BC gp+188 */ HSD_LObj* x16C;
+    /* +C0 gp+18C */ HSD_LObj* x170;
 };
 
 struct grShrineroute_GroundVars3 {
@@ -1970,6 +1973,52 @@ struct UnkStageDat {
     s32 unk2C; // size
 };
 STATIC_ASSERT(sizeof(struct UnkStageDat_x8_t) == 0x34);
+
+/* GCN-packed structs for reading archive data with 32-bit offsets.
+ * On GCN, all pointers are 4 bytes. On x86_64, pointers are 8 bytes,
+ * so the C struct above has different field offsets.
+ * These packed structs match the GCN binary layout exactly.
+ * All fields are u32/s32 to avoid pointer size issues. */
+#pragma pack(push, 4)
+
+struct UnkStageDat_x8_t_gcn {
+    u32 unk0;   /* HSD_Joint* at offset 0x00 */
+    u32 unk4;   /* HSD_AnimJoint** at offset 0x04 */
+    u32 unk8;   /* HSD_MatAnimJoint** at offset 0x08 */
+    u32 unkC;   /* HSD_ShapeAnimJoint** at offset 0x0C */
+    u32 x10;    /* HSD_CameraDescPerspective* at offset 0x10 */
+    u32 x14;    /* UNK_T at offset 0x14 */
+    u32 x18;    /* UNK_T at offset 0x18 */
+    u32 x1C;    /* HSD_FogDesc* at offset 0x1C */
+    u32 unk20;  /* GrJoint* at offset 0x20 */
+    s32 unk24;  /* s32 at offset 0x24 */
+    u32 x28;    /* UNK_T at offset 0x28 */
+    u32 x2C;    /* s16* at offset 0x2C */
+    s32 x30;    /* s32 at offset 0x30 */
+};
+/* Total: 0x34 = 52 bytes */
+
+struct UnkStageDat_gcn {
+    u32 unk0;   /* void* at offset 0x00 */
+    s32 unk4;   /* s32 at offset 0x04 */
+    u32 unk8;   /* UnkStageDat_x8_t* at offset 0x08 */
+    s32 unkC;   /* s32 (count) at offset 0x0C */
+    u32 unk10;  /* HSD_Spline** at offset 0x10 */
+    s32 unk14;  /* s32 at offset 0x14 */
+    u32 unk18;  /* void* at offset 0x18 */
+    s32 unk1C;  /* s32 at offset 0x1C */
+    u32 unk20;  /* void* at offset 0x20 */
+    s32 unk24;  /* s32 at offset 0x24 */
+    u32 unk28;  /* UnkStageDatInternal** at offset 0x28 */
+    s32 unk2C;  /* s32 (count) at offset 0x2C */
+};
+/* Total: 0x2C = 44 bytes */
+
+#pragma pack(pop)
+
+/* Typedefs for GCN-packed structs */
+typedef struct UnkStageDat_x8_t_gcn UnkStageDat_x8_t_gcn;
+typedef struct UnkStageDat_gcn UnkStageDat_gcn;
 
 struct UnkArchiveStruct {
     HSD_Archive* unk0;

@@ -1,17 +1,22 @@
 #include "archive.h"
 
 #include <string.h>
+#include <stdio.h>
+#include <stdint.h>
 #include <dolphin/os.h>
+
+/* Byte-swap 32-bit value (big-endian to little-endian) */
+static inline u32 swap32(u32 x)
+{
+    return ((x >> 24) & 0xFF) | ((x >> 8) & 0xFF00) | ((x << 8) & 0xFF0000) | ((x << 24) & 0xFF000000);
+}
 
 inline void Locate(HSD_Archive* archive)
 {
-    u32 i;
-    u32* ptr;
-
-    for (i = 0; i < archive->header.nb_reloc; i++) {
-        ptr = (u32*) (archive->data + archive->reloc_info[i].offset);
-        *ptr += (u32) archive->data;
-    }
+    /* PC port: skip relocation. Pointers in archive data are relative offsets.
+     * We compute absolute addresses by adding the base when dereferencing.
+     * This avoids issues with 64-bit pointers and big-endian data. */
+    (void)archive;
 }
 
 s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
@@ -24,7 +29,29 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
 
     memset(archive, 0, sizeof(HSD_Archive));
     archive->flags |= 1;
+    
+    /* PC port: check raw bytes before memcpy */
+    fprintf(stderr, "[ARCHIVE] Raw bytes at src: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+            src[0], src[1], src[2], src[3], src[4], src[5], src[6], src[7]);
+    fflush(stderr);
+    
     memcpy(archive, src, sizeof(HSD_ArchiveHeader));
+    
+    fprintf(stderr, "[ARCHIVE] After memcpy: raw file_size=%u (before swap)\n",
+            archive->header.file_size);
+    fflush(stderr);
+
+    /* PC port: byte-swap header fields from big-endian to little-endian */
+    archive->header.file_size = swap32(archive->header.file_size);
+    archive->header.data_size = swap32(archive->header.data_size);
+    archive->header.nb_reloc = swap32(archive->header.nb_reloc);
+    archive->header.nb_public = swap32(archive->header.nb_public);
+    archive->header.nb_extern = swap32(archive->header.nb_extern);
+
+    fprintf(stderr, "[ARCHIVE] HSD_ArchiveParse: file_size=%u data_size=%u reloc=%u public=%u extern=%u\n",
+            archive->header.file_size, archive->header.data_size,
+            archive->header.nb_reloc, archive->header.nb_public, archive->header.nb_extern);
+    fflush(stderr);
 
     if (archive->header.file_size != file_size) {
         OSReport("HSD_ArchiveParse: byte-order mismatch! Please check data "
@@ -40,22 +67,39 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
     }
     if (archive->header.nb_reloc != 0) { // Relocation Size
         archive->reloc_info =
-            (HSD_ArchiveRelocationInfo*) ((s32) src + offset);
+            (HSD_ArchiveRelocationInfo*) ((uintptr_t) src + offset);
+        /* PC port: byte-swap relocation offsets */
+        for (u32 j = 0; j < archive->header.nb_reloc; j++) {
+            archive->reloc_info[j].offset = swap32(archive->reloc_info[j].offset);
+        }
         offset = offset +
                  archive->header.nb_reloc * sizeof(HSD_ArchiveRelocationInfo);
     }
     if (archive->header.nb_public != 0) { // Root Size
-        archive->public_info = (HSD_ArchivePublicInfo*) ((s32) src + offset);
+        archive->public_info = (HSD_ArchivePublicInfo*) ((uintptr_t) src + offset);
+        /* PC port: byte-swap public info offsets and symbol indices */
+        for (u32 j = 0; j < archive->header.nb_public; j++) {
+            archive->public_info[j].offset = swap32(archive->public_info[j].offset);
+            archive->public_info[j].symbol = swap32(archive->public_info[j].symbol);
+        }
+        fprintf(stderr, "[ARCHIVE] Public symbol 0: offset=%u symbol=%u\n",
+                archive->public_info[0].offset, archive->public_info[0].symbol);
+        fflush(stderr);
         offset =
             offset + archive->header.nb_public * sizeof(HSD_ArchivePublicInfo);
     }
     if (archive->header.nb_extern != 0) { // XRef Size
-        archive->extern_info = (HSD_ArchiveExternInfo*) ((s32) src + offset);
+        archive->extern_info = (HSD_ArchiveExternInfo*) ((uintptr_t) src + offset);
+        /* PC port: byte-swap extern info offsets and symbol indices */
+        for (u32 j = 0; j < archive->header.nb_extern; j++) {
+            archive->extern_info[j].offset = swap32(archive->extern_info[j].offset);
+            archive->extern_info[j].symbol = swap32(archive->extern_info[j].symbol);
+        }
         offset =
             offset + archive->header.nb_extern * sizeof(HSD_ArchiveExternInfo);
     }
     if (offset < archive->header.file_size) { // File Size
-        archive->symbols = (char*) ((s32) src + offset);
+        archive->symbols = (char*) ((uintptr_t) src + offset);
     }
 
     archive->top_ptr = (void*) src;
@@ -68,12 +112,18 @@ void* HSD_ArchiveGetPublicAddress(HSD_Archive* archive, const char* symbols)
 {
     u32 i;
 
+    fprintf(stderr, "[ARCHIVE] GetPublicAddress: archive=%p symbols=%s nb_public=%u\n",
+            archive, symbols, archive->header.nb_public);
+    fflush(stderr);
+
     for (i = 0; i < archive->header.nb_public; i++) {
         int comparison =
             strcmp(archive->symbols + archive->public_info[i].symbol, symbols);
 
         if (comparison == 0) {
             // If both strings are equal, we've found the node
+            fprintf(stderr, "[ARCHIVE] Found symbol %s at offset %u\n", symbols, archive->public_info[i].offset);
+            fflush(stderr);
             return archive->data + archive->public_info[i].offset;
         }
     }

@@ -1440,13 +1440,229 @@ void GXSetGPFifo(void* fifo) {}
 void HSD_GXSetFifoObj(void* fifo) { GXSetGPFifo(fifo); }
 u32 GXEndDisplayList(void) { bridge_upload_and_draw(); return 0; }
 void GXBeginDisplayList(void* list, u32 size) {}
-void GXCallDisplayList(void* list)
+void GXCallDisplayList(void* list, u32 nbytes)
 {
     /* Executes a GX display list at the given pointer.
      * Display lists are serialized command buffers that the GX coprocessor
-     * executes. Our bridge captures commands in real-time, so this is
-     * a no-op since commands are processed as they're called. */
-    (void)list;
+     * executes. We parse the command stream and replay through our bridge.
+     *
+     * Display list format (byte stream):
+     *   0x00: NOP (1 byte)
+     *   0x08: LOAD_CP_REG (1 byte + params)
+     *   0x10: LOAD_XF_REG (1 byte + 4B addr + 4B value)
+     *   0x20/28/30/38: LOAD_INDX (1 byte + 1B + 4B)
+     *   0x40: CALL_DISP_LIST (1 byte + 4B ptr + 4B size)
+     *   0x61: LOAD_BP_REG (1 byte + 4B value)
+     *   0x80: DRAW_QUADS (1 byte + 2B count + vertex data)
+     *   0x90: DRAW_TRIANGLES (1 byte + 2B count + vertex data)
+     *   0x98: DRAW_TRIANGLE_STRIP (1 byte + 2B count + vertex data)
+     *   0xA0: DRAW_TRIANGLE_FAN (1 byte + 2B count + vertex data)
+     *   0xA8: DRAW_LINES (1 byte + 2B count + vertex data)
+     *   0xB0: DRAW_LINE_STRIP (1 byte + 2B count + vertex data)
+     *   0xB8: DRAW_POINTS (1 byte + 2B count + vertex data)
+     *
+     * Draw commands: upper 5 bits = primitive type, lower 3 bits = vtxfmt
+     * After the draw command, vertex data follows based on the vertex attribute
+     * format. Each vertex has position (3x f32), normal (3x f32), color (4x u8),
+     * and texcoord (2x f32) components.
+     */
+    if (!list || nbytes == 0) return;
+
+    u8* ptr = (u8*)list;
+    u8* end = ptr + nbytes;
+    static int g_dl_depth = 0;
+
+    g_dl_depth++;
+    if (g_dl_depth > 8) {
+        g_dl_depth--;
+        return; /* Prevent infinite recursion */
+    }
+
+    /* Safety: limit total bytes parsed per call to prevent infinite loops */
+    if (nbytes > 1024 * 1024) { /* 1MB max */
+        g_dl_depth--;
+        return;
+    }
+
+    while (ptr < end) {
+        u8 opcode = *ptr++;
+
+        switch (opcode & 0xF8) {
+        case 0x00: /* NOP */
+            break;
+
+        case 0x08: /* LOAD_CP_REG */
+            /* 1 byte opcode + variable params, skip */
+            if (ptr + 4 <= end) ptr += 4;
+            break;
+
+        case 0x10: /* LOAD_XF_REG */
+            /* 1 byte opcode + 4B addr + 4B value = 9 bytes */
+            if (ptr + 8 <= end) {
+                u32 addr = (*(u32*)ptr) & 0xFFF; /* Lower 12 bits = reg addr */
+                u32 value = *(u32*)(ptr + 4);
+                /* XF register writes set TEV, texture, blend, etc. state.
+                 * Most are handled by the per-frame state sync. */
+                ptr += 8;
+            } else {
+                break;
+            }
+            break;
+
+        case 0x20: /* LOAD_INDX_A */
+        case 0x28: /* LOAD_INDX_B */
+        case 0x30: /* LOAD_INDX_C */
+        case 0x38: /* LOAD_INDX_D */
+            /* 1 byte opcode + 1B param + 4B value = 6 bytes */
+            if (ptr + 5 <= end) {
+                ptr += 5;
+            } else {
+                break;
+            }
+            break;
+
+        case 0x40: /* CALL_DISP_LIST */
+            /* 1 byte opcode + 4B ptr + 4B size = 9 bytes */
+            if (ptr + 8 <= end) {
+                void* sub_list = *(void**)(ptr);
+                u32 sub_size = *(u32*)(ptr + 4);
+                ptr += 8;
+                /* Only recurse if the sub-list is valid */
+                if (sub_list && sub_size > 0 && sub_size < 1024 * 1024) {
+                    GXCallDisplayList(sub_list, sub_size);
+                }
+            } else {
+                break;
+            }
+            break;
+
+        case 0x60: /* LOAD_BP_REG (0x61) */
+            /* 1 byte opcode + 4B value = 5 bytes */
+            if (ptr + 4 <= end) {
+                ptr += 4;
+            } else {
+                break;
+            }
+            break;
+
+        case 0x80: /* DRAW_QUADS */
+        case 0x90: /* DRAW_TRIANGLES */
+        case 0x98: /* DRAW_TRIANGLE_STRIP */
+        case 0xA0: /* DRAW_TRIANGLE_FAN */
+        case 0xA8: /* DRAW_LINES */
+        case 0xB0: /* DRAW_LINE_STRIP */
+        case 0xB8: /* DRAW_POINTS */
+            {
+                /* Draw command: 1 byte opcode + 2B vertex count = 3 bytes
+                 * Then vertex data follows.
+                 * Upper 5 bits of opcode = primitive type
+                 * Lower 3 bits = vertex format index (ignored, we use direct mode)
+                 */
+                u8 raw_opcode = opcode;
+                u32 primitive_type = raw_opcode & 0xF8;
+                u32 vtxfmt = raw_opcode & 0x07;
+
+                if (ptr + 2 > end) break;
+                u16 nverts = *(u16*)ptr;
+                ptr += 2;
+
+                if (nverts == 0 || nverts > 65535) break;
+
+                /* Map GX primitive type to our bridge enum */
+                int gx_prim;
+                switch (primitive_type) {
+                case 0x80: gx_prim = GX_QUADS; break;
+                case 0x90: gx_prim = GX_TRIANGLES; break;
+                case 0x98: gx_prim = GX_TRIANGLESTRIP; break;
+                case 0xA0: gx_prim = GX_TRIANGLEFAN; break;
+                case 0xA8: gx_prim = GX_LINES; break;
+                case 0xB0: gx_prim = GX_LINESTRIP; break;
+                case 0xB8: gx_prim = GX_POINTS; break;
+                default: continue;
+                }
+
+                /* Begin the primitive */
+                GXBegin(gx_prim, vtxfmt, nverts);
+
+                /* Parse vertex data. The vertex format determines the layout.
+                 * In direct mode (which display lists use), each vertex has:
+                 *   Position: 3x f32 (12 bytes)
+                 *   Normal: 3x f32 (12 bytes) if enabled
+                 *   Color: 4x u8 (4 bytes) if enabled
+                 *   TexCoord: 2x f32 (8 bytes) if enabled
+                 *
+                 * We need to know the vertex attribute format to parse correctly.
+                 * For now, we assume the most common format:
+                 *   Position (3x f32) + Normal (3x f32) + Color (4x u8) + TexCoord (2x f32)
+                 *   Total per vertex: 12 + 12 + 4 + 8 = 36 bytes
+                 *
+                 * However, the actual format depends on the VAT settings.
+                 * Since we can't easily determine the format from the display list
+                 * alone, we use a heuristic: try to detect the vertex size from
+                 * the total data remaining and the vertex count.
+                 */
+                /* For simplicity, assume position-only vertices (3x f32 = 12 bytes)
+                 * and parse what we can. The bridge will handle the data. */
+                {
+                    u32 bytes_per_vertex = 36; /* Common format: pos+nrm+clr+tex */
+                    u32 total_vertex_bytes = nverts * bytes_per_vertex;
+
+                    if (ptr + total_vertex_bytes > end) {
+                        /* Try smaller vertex sizes */
+                        if (bytes_per_vertex > 12) {
+                            bytes_per_vertex = 12; /* Position only */
+                            total_vertex_bytes = nverts * bytes_per_vertex;
+                        }
+                    }
+
+                    for (u16 v = 0; v < nverts && ptr + 12 <= end; v++) {
+                        /* Position (3x f32) */
+                        f32 px = *(f32*)ptr;
+                        f32 py = *(f32*)(ptr + 4);
+                        f32 pz = *(f32*)(ptr + 8);
+                        ptr += 12;
+                        GXPosition3f32(px, py, pz);
+
+                        /* Normal (3x f32) - if enough data */
+                        if (ptr + 12 <= end && bytes_per_vertex >= 24) {
+                            f32 nx = *(f32*)ptr;
+                            f32 ny = *(f32*)(ptr + 4);
+                            f32 nz = *(f32*)(ptr + 8);
+                            ptr += 12;
+                            GXNormal3f32(nx, ny, nz);
+                        }
+
+                        /* Color (4x u8) - if enough data */
+                        if (ptr + 4 <= end && bytes_per_vertex >= 28) {
+                            u8 r = ptr[0];
+                            u8 g = ptr[1];
+                            u8 b = ptr[2];
+                            u8 a = ptr[3];
+                            ptr += 4;
+                            GXColor4u8(r, g, b, a);
+                        }
+
+                        /* TexCoord (2x f32) - if enough data */
+                        if (ptr + 8 <= end && bytes_per_vertex >= 36) {
+                            f32 s = *(f32*)ptr;
+                            f32 t = *(f32*)(ptr + 4);
+                            ptr += 8;
+                            GXTexCoord2f32(s, t);
+                        }
+                    }
+                }
+
+                GXEnd();
+                break;
+            }
+
+        default:
+            /* Unknown command - skip 1 byte and try again */
+            break;
+        }
+    }
+
+    g_dl_depth--;
 }
 
 #pragma GCC diagnostic pop

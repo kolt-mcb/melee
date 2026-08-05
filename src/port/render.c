@@ -120,23 +120,24 @@ void render_present(void)
         SDL_GetWindowSize(win, &vw, &vh);
 
         GLubyte *pixels = (GLubyte*)malloc(vw * vh * 3);
-                glFinish();
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);
         glReadPixels(0, 0, vw, vh, GL_RGB, GL_UNSIGNED_BYTE, pixels);
         FILE *f = fopen("screenshot.ppm", "wb");
-        fprintf(f, "P6\n%d %d\n255\n", vw, vh);
-        /* Flip vertically: PPM rows go bottom-up, glReadPixels top-down */
-        int row_stride = vw * 3;
-        GLubyte *row = (GLubyte*)malloc(row_stride);
-        for (int y = vh - 1; y >= 0; y--) {
-            memcpy(row, pixels + y * row_stride, row_stride);
-            fwrite(row, 1, row_stride, f);
+        if (f) {
+            fprintf(f, "P6\n%d %d\n255\n", vw, vh);
+            /* Flip vertically: PPM rows go bottom-up, glReadPixels top-down */
+            int row_stride = vw * 3;
+            GLubyte *row = (GLubyte*)malloc(row_stride);
+            for (int y = vh - 1; y >= 0; y--) {
+                memcpy(row, pixels + y * row_stride, row_stride);
+                fwrite(row, 1, row_stride, f);
+            }
+            free(row);
+            fclose(f);
+            PORT_LOG_INFO("[RENDER] Screenshot saved to screenshot.ppm (%dx%d)", vw, vh);
         }
-        free(row);
         free(pixels);
-        fclose(f);
         g_frame_saved = true;
-        PORT_LOG_INFO("[RENDER] Screenshot saved to screenshot.ppm (%dx%d)", vw, vh);
     }
     
     window_swap();

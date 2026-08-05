@@ -6,6 +6,7 @@
 #include "lbcardnew.h"
 #include "lbsnap.h"
 
+#include <stdio.h>
 #include <dolphin/dvd.h>
 #include <dolphin/vi.h>
 #include <baselib/controller.h>
@@ -51,6 +52,12 @@ __attribute__((weak)) void lb_8001955C(void)
 
 __attribute__((weak)) void lb_800195D0(void)
 {
+    static int count = 0;
+    count++;
+    if (count <= 3) {
+        fprintf(stderr, "[LB0195] lb_800195D0 call #%d\n", count);
+        fflush(stderr);
+    }
     lb_800192A8(lb_8001955C);
     lb_8001CC84();
 }

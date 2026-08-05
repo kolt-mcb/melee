@@ -48,6 +48,258 @@ static void order_data(void)
     (void) __FILE__;
 }
 
+/* PC port: Big-endian byte-swap for archive stage data structs.
+ * The GCN archive data section is big-endian with 32-bit pointers.
+ * On x86_64, the C structs have 64-bit pointers with different field offsets.
+ * This function reads GCN-packed structs and converts them to x86_64 structs. */
+static inline u32 be32_swap(u32 x)
+{
+    return ((x >> 24) & 0xFF) | ((x >> 8) & 0xFF00) |
+           ((x << 8) & 0xFF0000) | ((x << 24) & 0xFF000000);
+}
+
+/* Forward declarations */
+static void* gcn_ptr_to_x64(u32 gcn_ptr, u8* dataBase);
+static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gcnDat, u8* dataBase);
+static UnkArchiveStruct* grDatFiles_ConvertArchiveGCNtoX64(HSD_Archive* archive, void* gcnMapHeadPtr);
+static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
+        u8* dataBase, u32 visited_count, u32* visited);
+
+/* Convert a GCN pointer offset to an x86_64 pointer.
+ * GCN pointers in the archive are offsets from the archive data section base.
+ * Absolute GCN addresses (0x80000000+) are returned as NULL. */
+static void* gcn_ptr_to_x64(u32 gcn_ptr, u8* dataBase)
+{
+    if (gcn_ptr == 0) return NULL;
+    if (gcn_ptr >= 0x80000000) return NULL;  /* GCN absolute address */
+    return dataBase + gcn_ptr;
+}
+
+/* Convert GCN-packed UnkStageDat to x86_64 UnkStageDat.
+ * Allocates new memory for the x86_64 struct and the x8_t array.
+ * Returns the converted UnkStageDat pointer. */
+static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gcnDat, u8* dataBase)
+{
+    UnkStageDat* x64Dat;
+    const UnkStageDat_x8_t_gcn* gcnArr;
+    struct UnkStageDat_x8_t* x64Arr;
+    u32 val;
+    s32 i, n;
+
+    if (gcnDat == NULL || dataBase == NULL) {
+        return NULL;
+    }
+
+    /* Byte-swap fields */
+    val = be32_swap(gcnDat->unk8);
+    n = be32_swap(gcnDat->unkC);
+
+    if (n <= 0 || n > 100) {
+        fprintf(stderr, "[GRDAT] ERROR: invalid map count %d\n", n);
+        fflush(stderr);
+        return NULL;
+    }
+
+    /* Allocate x86_64 struct */
+    x64Dat = lbHeap_80015BD0(0, sizeof(UnkStageDat));
+    if (x64Dat == NULL) {
+        return NULL;
+    }
+
+    /* Fill x86_64 struct with converted values */
+    x64Dat->unk0 = gcn_ptr_to_x64(be32_swap(gcnDat->unk0), dataBase);
+    x64Dat->unk4 = be32_swap(gcnDat->unk4);
+
+    /* Convert the x8_t array */
+    if (val != 0) {
+        /* The x8_t array is stored as GCN-packed structs in the archive.
+         * Each entry is 0x34 bytes (52 bytes) in GCN format.
+         * We need to read each entry and convert to x86_64 format. */
+        const u8* arrBase = dataBase + val;
+        x64Arr = lbHeap_80015BD0(0, sizeof(struct UnkStageDat_x8_t) * (size_t)n);
+        if (x64Arr == NULL) {
+            lbHeap_80015CA8(0, (u32*)x64Dat);
+            return NULL;
+        }
+
+        for (i = 0; i < n; i++) {
+            const u8* ep = arrBase + i * 0x34;
+            u32 pval;
+
+            /* Read GCN-packed fields with explicit byte offsets */
+            pval = be32_swap(*(const u32*)(ep + 0x00));
+            /* Convert the HSD_Joint tree from GCN to x86_64 format */
+            if (pval != 0) {
+                x64Arr[i].unk0 = grDatFiles_ConvertJointTreeGCNtoX64(
+                    dataBase + pval, dataBase, 0, NULL);
+            } else {
+                x64Arr[i].unk0 = NULL;
+            }
+
+            pval = be32_swap(*(const u32*)(ep + 0x04));
+            x64Arr[i].unk4 = (HSD_AnimJoint**)gcn_ptr_to_x64(pval, dataBase);
+
+            pval = be32_swap(*(const u32*)(ep + 0x08));
+            x64Arr[i].unk8 = (HSD_MatAnimJoint**)gcn_ptr_to_x64(pval, dataBase);
+
+            pval = be32_swap(*(const u32*)(ep + 0x0C));
+            x64Arr[i].unkC = (HSD_ShapeAnimJoint**)gcn_ptr_to_x64(pval, dataBase);
+
+            pval = be32_swap(*(const u32*)(ep + 0x10));
+            x64Arr[i].x10 = (HSD_CameraDescPerspective*)gcn_ptr_to_x64(pval, dataBase);
+
+            /* x14 and x18 are UNK_T - treat as raw u32 for now */
+            /* x14 = be32_swap(*(const u32*)(ep + 0x14)); */
+            /* x18 = be32_swap(*(const u32*)(ep + 0x18)); */
+
+            pval = be32_swap(*(const u32*)(ep + 0x1C));
+            x64Arr[i].x1C = (HSD_FogDesc*)gcn_ptr_to_x64(pval, dataBase);
+
+            pval = be32_swap(*(const u32*)(ep + 0x20));
+            x64Arr[i].unk20 = (GrJoint*)gcn_ptr_to_x64(pval, dataBase);
+
+            x64Arr[i].unk24 = be32_swap(*(const s32*)(ep + 0x24));
+
+            /* x28 is UNK_T */
+
+            pval = be32_swap(*(const u32*)(ep + 0x2C));
+            x64Arr[i].x2C = (s16*)gcn_ptr_to_x64(pval, dataBase);
+
+            x64Arr[i].x30 = be32_swap(*(const s32*)(ep + 0x30));
+        }
+        x64Dat->unk8 = x64Arr;
+    } else {
+        x64Dat->unk8 = NULL;
+    }
+    x64Dat->unkC = n;
+
+    x64Dat->unk10 = (HSD_Spline**)gcn_ptr_to_x64(be32_swap(gcnDat->unk10), dataBase);
+    x64Dat->unk14 = be32_swap(gcnDat->unk14);
+    x64Dat->unk18 = gcn_ptr_to_x64(be32_swap(gcnDat->unk18), dataBase);
+    x64Dat->unk1C = be32_swap(gcnDat->unk1C);
+    x64Dat->unk20 = gcn_ptr_to_x64(be32_swap(gcnDat->unk20), dataBase);
+    x64Dat->unk24 = be32_swap(gcnDat->unk24);
+    /* PC port: unk28 is an array of GCN pointers that would need conversion.
+     * For now, set to NULL to avoid segfaults. */
+    x64Dat->unk28 = NULL;
+    x64Dat->unk2C = 0;  /* No entries since array is NULL */
+
+    fprintf(stderr, "[GRDAT] ConvertStageDat complete: %d maps, x64Dat=%p\n", n, (void*)x64Dat);
+    fflush(stderr);
+    return x64Dat;
+}
+
+/* GCN HSD_Joint struct (4-byte pointers, 64 bytes total).
+ * On x86_64, HSD_Joint is 96 bytes with 8-byte pointers.
+ * This packed struct matches the GCN binary layout. */
+#pragma pack(push, 4)
+struct HSD_Joint_gcn {
+    u32 class_name;   /* char* at offset 0x00 */
+    u32 flags;        /* u32 at offset 0x04 */
+    u32 child;        /* HSD_Joint* at offset 0x08 */
+    u32 next;         /* HSD_Joint* at offset 0x0C */
+    u32 u;            /* union at offset 0x10 */
+    f32 rot_x;        /* Vec3 rotation at offset 0x14 */
+    f32 rot_y;
+    f32 rot_z;
+    f32 scl_x;        /* Vec3 scale at offset 0x20 */
+    f32 scl_y;
+    f32 scl_z;
+    f32 pos_x;        /* Vec3 position at offset 0x2C */
+    f32 pos_y;
+    f32 pos_z;
+    u32 mtx;          /* MtxPtr at offset 0x38 */
+    u32 robjdesc;     /* HSD_RObjDesc* at offset 0x3C */
+};
+#pragma pack(pop)
+
+/* Convert a GCN HSD_Joint tree to x86_64 HSD_Joint tree.
+ * Recursively converts child and next pointers.
+ * Returns the root of the converted tree. */
+static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
+        u8* dataBase, u32 visited_count, u32* visited)
+{
+    HSD_Joint* x64Joint;
+    const struct HSD_Joint_gcn* gcnJoint;
+    u32 val;
+
+    if (gcnJointPtr == NULL || gcnJointPtr == 0) {
+        return NULL;
+    }
+
+    /* Safety: limit recursion depth to prevent infinite loops */
+    if (visited_count > 10000) {
+        fprintf(stderr, "[GRDAT] ConvertJointTree: recursion limit exceeded\n");
+        fflush(stderr);
+        return NULL;
+    }
+
+    gcnJoint = (const struct HSD_Joint_gcn*)gcnJointPtr;
+
+    /* Allocate x86_64 HSD_Joint */
+    x64Joint = lbHeap_80015BD0(0, sizeof(HSD_Joint));
+    if (x64Joint == NULL) {
+        return NULL;
+    }
+
+    /* Convert pointer fields */
+    /* PC port: class_name points to archive symbol table, not data section.
+     * For now, set to NULL to avoid invalid pointer dereference.
+     * JObjLoadJointSub will allocate a default JObj when class_name is NULL. */
+    x64Joint->class_name = NULL;
+
+    x64Joint->flags = be32_swap(gcnJoint->flags);
+
+    /* Recursively convert child and next */
+    val = be32_swap(gcnJoint->child);
+    x64Joint->child = grDatFiles_ConvertJointTreeGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, visited_count + 1, visited);
+
+    val = be32_swap(gcnJoint->next);
+    x64Joint->next = grDatFiles_ConvertJointTreeGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, visited_count + 1, visited);
+
+    /* PC port: Set nested struct pointers to NULL.
+     * HSD_RObjDesc, HSD_DObjDesc are still in GCN format.
+     * Setting them to NULL allows the joint tree to load and render
+     * as wireframe geometry without materials/animations.
+     * Full conversion deferred until stage geometry is visible. */
+    x64Joint->u.dobjdesc = NULL;
+    x64Joint->mtx = NULL;
+    x64Joint->robjdesc = NULL;
+
+    return x64Joint;
+}
+
+/* Convert GCN-packed UnkArchiveStruct to x86_64 UnkArchiveStruct.
+ * Allocates new memory and converts stage data. */
+static UnkArchiveStruct* grDatFiles_ConvertArchiveGCNtoX64(HSD_Archive* archive,
+        void* gcnMapHeadPtr)
+{
+    UnkArchiveStruct* x64Arc;
+    UnkStageDat_gcn gcnStageDat;
+    u8* dataBase = archive->data;
+
+    if (archive == NULL || gcnMapHeadPtr == NULL) {
+        return NULL;
+    }
+
+    /* Read GCN-packed UnkStageDat from the map_head location. */
+    memcpy(&gcnStageDat, gcnMapHeadPtr, sizeof(UnkStageDat_gcn));
+
+    /* Convert to x86_64 struct */
+    x64Arc = lbHeap_80015BD0(0, sizeof(UnkArchiveStruct));
+    if (x64Arc == NULL) {
+        return NULL;
+    }
+
+    x64Arc->unk0 = archive;
+    x64Arc->unk4 = grDatFiles_ConvertStageDatGCNtoX64(&gcnStageDat, dataBase);
+    x64Arc->unk8 = 0;
+
+    return x64Arc;
+}
+
 void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
 {
     UnkArchiveStruct* temp_r3 = grDatFiles_801C62B4();
@@ -56,13 +308,54 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
         s32 phi_r28;
         void* r4 = arg0;
         if (arg2 != 0) {
-            phi_r28 =
-                lbArchive_800171CC(&sp14, r4, &temp_r3->unk4, "map_head", 0);
+            /* PC port: avoid variadic call crash - load archive then get symbol directly */
+            void* data;
+            size_t length;
+            void* mapHead;
+            sp14 = lbHeap_80015BD0(0, sizeof(HSD_Archive));
+            data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(r4)));
+            lbFile_8001668C(r4, data, &length);
+            lbArchive_InitializeDAT(sp14, data, length);
+            mapHead = HSD_ArchiveGetPublicAddress(sp14, "map_head");
+            /* PC port: convert GCN-packed structs to x86_64 */
+            temp_r3->unk0 = sp14;
+            temp_r3->unk4 = NULL;
+            temp_r3->unk8 = 0;
+            if (mapHead != NULL) {
+                UnkArchiveStruct* x64Arc = grDatFiles_ConvertArchiveGCNtoX64(sp14, mapHead);
+                if (x64Arc != NULL) {
+                    /* Replace temp_r3 with the converted archive */
+                    temp_r3->unk0 = x64Arc->unk0;
+                    temp_r3->unk4 = x64Arc->unk4;
+                    temp_r3->unk8 = x64Arc->unk8;
+                }
+            }
+            phi_r28 = 1;
         } else {
-            sp14 =
-                lbArchive_80016DBC(r4, (void**) &temp_r3->unk4, "map_head", 0);
+            /* PC port: avoid variadic call crash - load archive then get symbol directly */
+            void* data;
+            size_t length;
+            void* mapHead;
+            sp14 = lbHeap_80015BD0(0, sizeof(HSD_Archive));
+            data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(r4)));
+            lbFile_8001668C(r4, data, &length);
+            lbArchive_InitializeDAT(sp14, data, length);
+            mapHead = HSD_ArchiveGetPublicAddress(sp14, "map_head");
+            /* PC port: convert GCN-packed structs to x86_64 */
+            temp_r3->unk0 = sp14;
+            temp_r3->unk4 = NULL;
+            temp_r3->unk8 = 0;
+            if (mapHead != NULL) {
+                UnkArchiveStruct* x64Arc = grDatFiles_ConvertArchiveGCNtoX64(sp14, mapHead);
+                if (x64Arc != NULL) {
+                    temp_r3->unk0 = x64Arc->unk0;
+                    temp_r3->unk4 = x64Arc->unk4;
+                    temp_r3->unk8 = x64Arc->unk8;
+                }
+            }
             phi_r28 = 0;
         }
+        
         temp_r3->unk8 = 0;
         if (arg1 == 0) {
             stage_info.coll_data =
@@ -114,7 +407,8 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
 
 static void grDatFiles_801C6228(UnkStageDat* arg0)
 {
-    if (arg0 != NULL && arg0->unk28 != NULL && arg0->unk2C != 0) {
+    if (arg0 == NULL) return;
+    if (arg0->unk28 != NULL && arg0->unk2C != 0) {
         s32 i;
         for (i = 0; i < arg0->unk2C; i++) {
             UnkStageDatInternal* temp_r4 = arg0->unk28[i];

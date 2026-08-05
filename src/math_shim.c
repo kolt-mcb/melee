@@ -3,11 +3,12 @@
 /* sqrtf wrapper matching the MWCC ABI exactly.
  * On PPC, sqrtf was implemented via __frsqrte (approximate reciprocal sqrt).
  * On x86_64, we replicate the same algorithm for ABI compatibility.
+ * Marked weak so the system sqrtf from <math.h> takes precedence.
  */
 
 #include <math.h>
 
-float sqrtf(float x)
+__attribute__((weak)) float sqrtf(float x)
 {
     if (x > 0.0f) {
         double guess = 1.0 / sqrt((double)x);
@@ -19,7 +20,7 @@ float sqrtf(float x)
     return x;
 }
 
-float sqrtf_accurate(float x)
+__attribute__((weak)) float sqrtf_accurate(float x)
 {
     if (x > 0.0f) {
         double guess = 1.0 / sqrt((double)x);

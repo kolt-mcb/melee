@@ -192,15 +192,25 @@ void grIzumi_801CBB88(void)
     grIzumi_801CBCE8(0);
     grIzumi_801CBCE8(1);
     r3 = grIzumi_801CBCE8(3);
-    grAnime_801C8780(r3, 3, 0, 0.0f, 1.0f);
-    Ground_801C39C0();
-    Ground_801C3BB4();
+    /* PC port: skip grAnime_801C8780 - reads GCN-packed archive data */
+    if (0 && r3) {
+        grAnime_801C8780(r3, 3, 0, 0.0f, 1.0f);
+    }
+    /* PC port: skip - reads GCN-packed stage params */
+    if (0) {
+        Ground_801C39C0();
+        Ground_801C3BB4();
+    }
 }
 
 void grIzumi_OnLoad(void)
 {
     HSD_GObj* gobj;
     HSD_LObj* lobj;
+
+    if (!HSD_GObj_Entities) {
+        return;
+    }
 
     gobj = HSD_GObj_Entities->xC;
     while (gobj != NULL) {
@@ -245,7 +255,10 @@ HSD_GObj* grIzumi_801CBCE8(int gobj_id)
         }
 
         if (callbacks->on_init != NULL) {
-            callbacks->on_init(gobj);
+            /* PC port: skip - reads GCN-packed archive structs */
+            if (0) {
+                callbacks->on_init(gobj);
+            }
         }
 
         if (callbacks->gobj_proc != NULL) {

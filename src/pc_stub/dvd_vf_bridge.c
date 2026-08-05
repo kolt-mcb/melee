@@ -68,8 +68,11 @@ s32 DVDConvertPathToEntrynum(const char* path)
     const char* filename = path;
     if (filename[0] == '/') filename++;
     
+    
     s32 entry = dvd_find_or_add_entry(filename);
-    if (entry < 0) return -1;
+    if (entry < 0) {
+        return -1;
+    }
     
     /* Verify file exists — vf_resolve_path prepends asset dir */
     char resolved[512];
@@ -78,6 +81,7 @@ s32 DVDConvertPathToEntrynum(const char* path)
         dvd_close_all();
         return -1;
     }
+    
     VfHandle h = vf_open(rp, "rb");
     if (!h) {
         dvd_close_all();
@@ -95,6 +99,7 @@ BOOL DVDFastOpen(s32 entry_num, DVDFileInfo* fileInfo)
     DVDFile* file = &g_dvd_files[entry_num];
     if (!file->open) return FALSE;
     
+    
     /* Already open */
     if (file->handle) {
         fileInfo->startAddr = (u32)vf_tell(file->handle);
@@ -106,10 +111,14 @@ BOOL DVDFastOpen(s32 entry_num, DVDFileInfo* fileInfo)
     /* Resolve path against asset directory */
     char resolved[512];
     char* rp = vf_resolve_path(file->path, resolved, sizeof(resolved));
-    if (!rp) return FALSE;
+    if (!rp) {
+        return FALSE;
+    }
     
     VfHandle h = vf_open(rp, "rb");
-    if (!h) return FALSE;
+    if (!h) {
+        return FALSE;
+    }
     file->handle = h;
     fileInfo->startAddr = 0;
     fileInfo->length = (u32)(vf_size(h) > 0 ? vf_size(h) : 0);

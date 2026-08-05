@@ -62,7 +62,7 @@ StageData grTZd_StageData = {
     1,
 };
 
-void grTZelda_OnDemoInit(int unused) {}
+void grTZelda_OnDemoInit(bool unused) {}
 
 void grTZelda_OnInit(void)
 {

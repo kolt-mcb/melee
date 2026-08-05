@@ -7,6 +7,7 @@
 #include "lb/lbvector.h"
 #include "mp/mplib.h"
 
+#include <stdio.h>
 #include <baselib/debug.h>
 #include <baselib/random.h>
 

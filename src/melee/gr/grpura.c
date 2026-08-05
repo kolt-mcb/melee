@@ -50,8 +50,9 @@ void grPura_80212290(Ground_GObj* arg0);
 bool grPura_80212314(Ground_GObj* arg0);
 void grPura_8021231C(Ground_GObj* arg0);
 void grPura_802125EC(Ground_GObj* arg0);
-void grPura_802130C0(Ground_GObj* arg0);
+DynamicsDesc* grPura_802130C0(enum_t arg0);
 bool grPura_802130C8(Vec3* a, int num, HSD_JObj* joint);
+void fn_802130D0(HSD_GObj* arg0, int arg1);
 
 StageCallbacks grPu_803E6800[] = {
     { grPura_80211EF0, grPura_80211F1C, grPura_80211F24, grPura_80211F28, 0 },
@@ -123,6 +124,18 @@ GXColor grPu_803E6AA0[] = {
     { 0x3F, 0x80, 0x00, 0x00 },
 };
 
+/// grPu_803E6C0C: Pura stage dynamic object descriptor table (0x2A entries)
+typedef struct {
+    s16 x00;
+    s16 x02;
+    u16 x04;
+    u16 x06;
+    HSD_GObj* x08;
+    u8 pad_0C[4]; // pad to 0x10
+} grPu_DynObjDesc;
+
+static grPu_DynObjDesc grPu_803E6C0C[0x2A] = { {0} };
+
 void* grPu_803E6E20;
 
 struct HSD_ImageDesc grPu_803E7620 = { &grPu_803E6E20, 32, 32, 4, 0, 0, 0 };
@@ -130,6 +143,8 @@ struct HSD_ImageDesc grPu_803E7620 = { &grPu_803E6E20, 32, 32, 4, 0, 0, 0 };
 void grPura_80211CFC(bool num) {}
 
 /* 4D6AA0 */ static HSD_GObj* grPu_804D6AA0[2];
+
+HSD_GObj* grPura_80211E08(int gobj_id);
 
 void grPura_80211D00(void)
 {

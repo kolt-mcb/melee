@@ -1771,7 +1771,7 @@ void grMuteCity_801F2AB0(s32 arg0, HSD_JObj* arg1)
 }
 
 void fn_801F2B58(Ground* gp, s32 arg1, CollData* cd, s32 arg3,
-                 mpLib_GroundEnum arg4, f32 arg5)
+                 s32 arg4, f32 arg5)
 {
     s32 b1234 = cd->x34_flags.b1234;
 

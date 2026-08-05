@@ -67,6 +67,10 @@ void grShrineRoute_8020A868(Ground_GObj* gobj);
 bool grShrineRoute_8020A894(Ground_GObj* arg);
 void grShrineRoute_8020A89C(Ground_GObj* arg);
 void grShrineRoute_8020A8A0(Ground_GObj* arg);
+DynamicsDesc* grShrineRoute_OnTouchLine(enum_t arg);
+HSD_LObj* grShrineRoute_8020AB58(Ground_GObj* arg);
+HSD_LObj* grShrineRoute_8020AC44(HSD_GObj* arg);
+s32 grShrineRoute_8020AE08(HSD_GObj* gobj, HSD_GObj* player_gobj, s32* out);
 void grShrineRoute_8020A8A4(Ground_GObj* gobj);
 void grShrineRoute_8020AA40(HSD_GObj* gobj);
 bool grShrineRoute_8020AD24(int arg);
@@ -316,12 +320,12 @@ void fn_80208A38(HSD_GObj* gobj)
         jobj = Ground_801C2CF4(i + 0xBD);
         if (jobj != NULL) {
             if (*flag != 0) {
-                gp->gv.shrineroute2.xC4[i] = grShrineRoute_802088C0(3);
+                gp->gv.shrineroute2.xC4.arr[i] = grShrineRoute_802088C0(3);
             } else {
-                gp->gv.shrineroute2.xC4[i] = grShrineRoute_802088C0(1);
+                gp->gv.shrineroute2.xC4.arr[i] = grShrineRoute_802088C0(1);
             }
             lb_8000B1CC(jobj, NULL, &pos);
-            effect = gp->gv.shrineroute2.xC4[i];
+            effect = gp->gv.shrineroute2.xC4.arr[i];
             if (effect != NULL) {
                 if ((ejobj = GET_JOBJ(effect)) != NULL) {
                     HSD_JObjSetTranslate(ejobj, &pos);
@@ -360,16 +364,16 @@ void grShrineRoute_80208D14(Ground_GObj* gobj)
     stage_info.x6DC = 0;
 
     for (i = 0; i < 6; i++) {
-        gp->gv.shrineroute2.xC4[i] = NULL;
+        gp->gv.shrineroute2.xC4.arr[i] = NULL;
     }
 
     ftCo_800C07F8(gobj, 3, grShrineRoute_8020AE08);
-    mpJointSetCb1(8, gp, (mpLib_Callback) (Event) grShrineRoute_8020AD58);
-    mpJointSetCb1(9, gp, (mpLib_Callback) (Event) grShrineRoute_8020AD58);
-    mpJointSetCb1(0xA, gp, (mpLib_Callback) (Event) grShrineRoute_8020AD58);
-    mpJointSetCb1(0xB, gp, (mpLib_Callback) (Event) grShrineRoute_8020AD58);
-    mpJointSetCb1(0xC, gp, (mpLib_Callback) (Event) grShrineRoute_8020AD58);
-    mpJointSetCb1(0xD, gp, (mpLib_Callback) (Event) grShrineRoute_8020AD58);
+    mpJointSetCb1(8, gp, (mpColl_Callback) (Event) grShrineRoute_8020AD58);
+    mpJointSetCb1(9, gp, (mpColl_Callback) (Event) grShrineRoute_8020AD58);
+    mpJointSetCb1(0xA, gp, (mpColl_Callback) (Event) grShrineRoute_8020AD58);
+    mpJointSetCb1(0xB, gp, (mpColl_Callback) (Event) grShrineRoute_8020AD58);
+    mpJointSetCb1(0xC, gp, (mpColl_Callback) (Event) grShrineRoute_8020AD58);
+    mpJointSetCb1(0xD, gp, (mpColl_Callback) (Event) grShrineRoute_8020AD58);
 
     if (Ground_801C2D24(0x94, &center)) {
         HSD_JObj* jobj;
@@ -455,11 +459,11 @@ void grShrineRoute_80208F70(Ground_GObj* gobj)
             ix = result - 0xBD;
             if (!(gp->gv.shrineroute.xC6 & (1 << ix))) {
                 gp->gv.shrineroute.xC8 = (u16) result;
-                HSD_ASSERTMSG(0x213, gp->gv.shrineroute2.xC4[(u32) ix],
+                HSD_ASSERTMSG(0x213, (HSD_GObj**) &gp->gv.shrineroute2.xC4.ptr,
                               "gp->u.map.symbol[ix]");
                 {
                     s32 mid =
-                        ((Ground*) gp->gv.shrineroute2.xC4[ix]->user_data)
+                        ((Ground*) ((HSD_GObj**) &gp->gv.shrineroute2.xC4.ptr)[ix]->user_data)
                             ->map_id;
                     if (player != NULL) {
                         Player_80031790((s32) ftLib_80086BE0(player));
@@ -929,10 +933,10 @@ void grShrineRoute_8020A104(Ground_GObj* gobj)
         }
     }
     HSD_ASSERT(1106, lgobj);
-    gp->gv.shrineroute2.xC4 = lgobj;
-    grShrineRoute_8020AA40(gp->gv.shrineroute2.xC4);
+    gp->gv.shrineroute2.xC4.ptr = lgobj;
+    grShrineRoute_8020AA40((HSD_GObj*) gp->gv.shrineroute2.xC4.ptr);
 
-    lobj = GET_LOBJ(gp->gv.shrineroute2.xC4);
+    lobj = GET_LOBJ((HSD_GObj*) gp->gv.shrineroute2.xC4.ptr);
     gp->gv.shrineroute2.x168 = 0;
     while (lobj != NULL) {
         gp->gv.shrineroute2.xC8[gp->gv.shrineroute2.x168] = lobj;
@@ -943,8 +947,8 @@ void grShrineRoute_8020A104(Ground_GObj* gobj)
         gp->gv.shrineroute2.x168 += 1;
     }
 
-    gp->gv.shrineroute2.x16C = grShrineRoute_8020AB58(gp->gv.shrineroute2.xC4);
-    gp->gv.shrineroute2.x170 = grShrineRoute_8020AC44(gp->gv.shrineroute2.xC4);
+    gp->gv.shrineroute2.x16C = grShrineRoute_8020AB58(gp->gv.shrineroute2.xC4.ptr);
+    gp->gv.shrineroute2.x170 = grShrineRoute_8020AC44(gp->gv.shrineroute2.xC4.ptr);
     grShrineRoute_8020A21C(gobj);
 }
 
@@ -991,7 +995,7 @@ void grShrineRoute_8020A21C(Ground_GObj* gobj)
         player_pos.x = 0.0f;
     }
 
-    if ((u32) gp->gv.shrineroute2.xC4 != 0) {
+    if ((u32) gp->gv.shrineroute2.xC4.ptr != 0) {
         sp = sorted;
         sp2 = sp;
         dp = distances;
@@ -1356,10 +1360,10 @@ void grShrineRoute_8020AF38(HSD_GObj* gobj, s32 arg1)
 
     pgobj = Ground_801C57A4();
 
-    if (gp->gv.shrineroute2.xC4[ix] != NULL) {
-        symbolp = gp->gv.shrineroute2.xC4 + ix;
+    if (gp->gv.shrineroute2.xC4.arr[ix] != NULL) {
+        symbolp = gp->gv.shrineroute2.xC4.arr + ix;
         scale = 0.7f;
-        if (((Ground*) gp->gv.shrineroute2.xC4[ix]->user_data)->map_id == 1)
+        if (((Ground*) gp->gv.shrineroute2.xC4.arr[ix]->user_data)->map_id == 1)
         {
             scale *= grSh_Route_804D6A58[0]->x14;
         } else {
@@ -1367,7 +1371,7 @@ void grShrineRoute_8020AF38(HSD_GObj* gobj, s32 arg1)
         }
         jobj = Ground_801C2CF4(arg1);
         efSync_Spawn(0x428, gobj, jobj, &scale);
-        Ground_801C4A08(gp->gv.shrineroute2.xC4[ix]);
+        Ground_801C4A08(gp->gv.shrineroute2.xC4.arr[ix]);
         *symbolp = NULL;
         if (pgobj != NULL) {
             ftLib_80086C18(pgobj, 0xB, 0x1E);
@@ -1384,15 +1388,15 @@ void grShrineRoute_8020B020(HSD_GObj* gobj, int r4, int r5)
     comp = r4 - 189;
     for (i = 0; i < 6; i++) {
         if (r4 == -1 || i != comp) {
-            if (gp->gv.shrineroute2.xC4[i]) {
-                if (GET_JOBJ(gp->gv.shrineroute2.xC4[i])) {
+            if (gp->gv.shrineroute2.xC4.arr[i]) {
+                if (GET_JOBJ(gp->gv.shrineroute2.xC4.arr[i])) {
                     if (r5) {
                         HSD_JObjSetFlagsAll(
-                            gp->gv.shrineroute2.xC4[i]->hsd_obj,
+                            gp->gv.shrineroute2.xC4.arr[i]->hsd_obj,
                             JOBJ_HIDDEN);
                     } else {
                         HSD_JObjClearFlagsAll(
-                            gp->gv.shrineroute2.xC4[i]->hsd_obj,
+                            gp->gv.shrineroute2.xC4.arr[i]->hsd_obj,
                             JOBJ_HIDDEN);
                     }
                 }

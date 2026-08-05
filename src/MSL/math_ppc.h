@@ -8,7 +8,10 @@
 
 extern double __frsqrte(double);
 
-extern inline float sqrtf(float x)
+// On x86_64, use the system sqrtf from <math.h>
+// The MWCC sqrtf implementation is commented out to avoid conflicts:
+/*
+static inline float sqrtf(float x)
 {
     volatile float y;
     if (x > 0.0f) {
@@ -24,12 +27,15 @@ extern inline float sqrtf(float x)
     }
     return x;
 }
+*/
 
 #ifdef __MWERKS__
 #pragma pop
 #endif
 
-inline float sqrtf_accurate(float x)
+// On x86_64, use the system sqrtf_accurate from <math.h>
+/*
+static inline float sqrtf_accurate(float x)
 {
     volatile float y;
     if (x > 0.0f) {
@@ -46,5 +52,6 @@ inline float sqrtf_accurate(float x)
     }
     return x;
 }
+*/
 
 #endif
