@@ -175,6 +175,13 @@ void gx_frame_end(void);
 void gx_set_overlay_projection(f32 ortho[4][4]);
 void gx_set_overlay_matrix_identity(void);
 
+/* 3D camera helpers — perspective projection + viewing matrix */
+void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
+                      f32 eye_x, f32 eye_y, f32 eye_z,
+                      f32 target_x, f32 target_y, f32 target_z,
+                      f32 up_x, f32 up_y, f32 up_z);
+void gx_set_default_3d_camera(void);
+
 /* Depth testing toggles for multi-pass rendering */
 void gx_enable_depth_test(void);
 void gx_disable_depth_test(void);

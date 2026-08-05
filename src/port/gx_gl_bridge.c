@@ -482,6 +482,10 @@ typedef struct {
     u8 pos_comp_cnt;            /* Position component count (0=XY, 1=XYZ) */
     u8 pos_comp_type;           /* Position component type (0=U8, 1=S8, 2=U16, 3=S16, 4=F32) */
     u8 pos_frac;                /* Position fraction bits */
+    
+    /* Viewing matrix (from gx_set_3d_camera) */
+    f32 view_matrix[3][4];      /* Viewing matrix (camera transform) */
+    Bool view_matrix_valid;     /* Whether viewing matrix is set */
 } BridgeState;
 
 static BridgeState g_state;
@@ -497,6 +501,40 @@ static GLint g_uv_scale_loc = -1;
 static GLint g_tex0_enable_loc = -1;
 static GLint g_tex1_enable_loc = -1;
 static GLint g_tex0_loc        = -1;
+
+/* f16 to f32 conversion (half-precision float to single-precision float) */
+static f32 f16_to_f32(u16 h)
+{
+    u32 sign = (h >> 15) & 0x1;
+    u32 exp  = (h >> 10) & 0x1F;
+    u32 frac = h & 0x3FF;
+    if (exp == 0) {
+        /* Denormal or zero */
+        if (frac == 0) {
+            u32 r = sign << 31;
+            return *(f32*)&r;
+        }
+        /* Normalize denormal */
+        exp = 1;
+        while ((frac & 0x400) == 0) {
+            frac <<= 1;
+            exp--;
+        }
+        frac &= 0x3FF;
+        exp = 127 - (int)exp + 1;
+        u32 r = (sign << 31) | ((u32)exp << 23) | (frac << 13);
+        return *(f32*)&r;
+    } else if (exp == 31) {
+        /* Inf or NaN */
+        u32 r = (sign << 31) | (0xFF << 23) | (frac << 13);
+        return *(f32*)&r;
+    } else {
+        /* Normal */
+        exp = exp - 15 + 127;
+        u32 r = (sign << 31) | ((u32)exp << 23) | (frac << 13);
+        return *(f32*)&r;
+    }
+}
 static GLint g_tex1_loc        = -1;
 static GLint g_kcolor0_loc     = -1;
 static GLint g_kcolor1_loc     = -1;
@@ -816,6 +854,80 @@ void gx_set_overlay_matrix_identity(void)
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 4; j++)
             g_state.mv_matrix[i][j] = (i == j) ? 1.0f : 0.0f;
+}
+
+/* ============================================================
+ * 3D camera helpers — perspective projection + viewing matrix
+ * ============================================================ */
+
+void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
+                      f32 eye_x, f32 eye_y, f32 eye_z,
+                      f32 target_x, f32 target_y, f32 target_z,
+                      f32 up_x, f32 up_y, f32 up_z)
+{
+    f32 proj[4][4];
+    f32 mv[3][4];
+    f32 f = 1.0f / tanf(fov * 0.5f * 3.14159265f / 180.0f);
+    f32 zrange = far_z - near_z;
+    
+    /* Perspective projection matrix (row-major, column-major storage) */
+    proj[0][0] = f / aspect; proj[0][1] = 0; proj[0][2] = 0; proj[0][3] = 0;
+    proj[1][0] = 0; proj[1][1] = f; proj[1][2] = 0; proj[1][3] = 0;
+    proj[2][0] = 0; proj[2][1] = 0; proj[2][2] = -(far_z + near_z) / zrange; proj[2][3] = -1;
+    proj[3][0] = 0; proj[3][1] = 0; proj[3][2] = -(2.0f * far_z * near_z) / zrange; proj[3][3] = 0;
+    
+    memcpy(g_state.proj_matrix, proj, sizeof(g_state.proj_matrix));
+    
+    /* Viewing matrix (look-at) */
+    f32 fwd[3] = { target_x - eye_x, target_y - eye_y, target_z - eye_z };
+    f32 fwd_len = sqrtf(fwd[0]*fwd[0] + fwd[1]*fwd[1] + fwd[2]*fwd[2]);
+    if (fwd_len > 0.0001f) {
+        fwd[0] /= fwd_len; fwd[1] /= fwd_len; fwd[2] /= fwd_len;
+    }
+    
+    /* Right = fwd x up */
+    f32 right[3] = {
+        fwd[1] * up_z - fwd[2] * up_y,
+        fwd[2] * up_x - fwd[0] * up_z,
+        fwd[0] * up_y - fwd[1] * up_x
+    };
+    f32 right_len = sqrtf(right[0]*right[0] + right[1]*right[1] + right[2]*right[2]);
+    if (right_len > 0.0001f) {
+        right[0] /= right_len; right[1] /= right_len; right[2] /= right_len;
+    }
+    
+    /* Actual up = right x fwd */
+    f32 actual_up[3] = {
+        right[1] * fwd[2] - right[2] * fwd[1],
+        right[2] * fwd[0] - right[0] * fwd[2],
+        right[0] * fwd[1] - right[1] * fwd[0]
+    };
+    
+    /* Build 3x4 viewing matrix (row-major) */
+    mv[0][0] = right[0];  mv[0][1] = right[1];  mv[0][2] = right[2];
+    mv[0][3] = -(right[0]*eye_x + right[1]*eye_y + right[2]*eye_z);
+    mv[1][0] = actual_up[0]; mv[1][1] = actual_up[1]; mv[1][2] = actual_up[2];
+    mv[1][3] = -(actual_up[0]*eye_x + actual_up[1]*eye_y + actual_up[2]*eye_z);
+    mv[2][0] = -fwd[0];   mv[2][1] = -fwd[1];   mv[2][2] = -fwd[2];
+    mv[2][3] = -(fwd[0]*eye_x + fwd[1]*eye_y + fwd[2]*eye_z);
+    
+    /* Save viewing matrix for later multiplication with model matrix */
+    memcpy(g_state.view_matrix, mv, sizeof(g_state.view_matrix));
+    g_state.view_matrix_valid = TRUE;
+    
+    memcpy(g_state.mv_matrix, mv, sizeof(g_state.mv_matrix));
+}
+
+void gx_set_default_3d_camera(void)
+{
+    /* Default camera: perspective, 90 degree FOV.
+     * Stage geometry joint positions are in range (-165, 150, 0).
+     * Vertex positions are relative to joints, so geometry is at similar scale.
+     * Camera at (0, 0, 300) looking at (0, 0, 0) with wide FOV should catch it. */
+    gx_set_3d_camera(90.0f, 1280.0f / 720.0f, 1.0f, 1000.0f,
+                     0.0f, 0.0f, 400.0f,   /* eye position */
+                     0.0f, 0.0f, 0.0f,     /* target */
+                     0.0f, 1.0f, 0.0f);    /* up vector */
 }
 
 /* ============================================================
@@ -1150,9 +1262,34 @@ void GXSetCopyClear(void* color, u32 z)
 
 void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
 {
-    memcpy(g_state.mtx_array[id], mtx, sizeof(g_state.mv_matrix));
+    memcpy(g_state.mtx_array[id], mtx, sizeof(g_state.mtx_array[0]));
     if (id < 4) {
-        memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix));
+        /* Multiply model matrix by viewing matrix (if valid) */
+        static int g_mtx_count = 0;
+        g_mtx_count++;
+        if (g_mtx_count <= 5) {
+            fprintf(stderr, "[GX] LoadPosMtxImm #%d: id=%u mtx[0]=%.2f,%.2f,%.2f,%.2f view_valid=%d\n",
+                    g_mtx_count, id, mtx[0][0], mtx[0][1], mtx[0][2], mtx[0][3], g_state.view_matrix_valid);
+            fflush(stderr);
+        }
+        if (g_state.view_matrix_valid) {
+            f32 mvm[3][4];
+            /* mvm = view * model (row-major 3x4 multiplication) */
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    mvm[i][j] = g_state.view_matrix[i][0] * mtx[0][j] +
+                                 g_state.view_matrix[i][1] * mtx[1][j] +
+                                 g_state.view_matrix[i][2] * mtx[2][j];
+                }
+                mvm[i][3] = g_state.view_matrix[i][0] * mtx[0][3] +
+                             g_state.view_matrix[i][1] * mtx[1][3] +
+                             g_state.view_matrix[i][2] * mtx[2][3] +
+                             g_state.view_matrix[i][3];
+            }
+            memcpy(g_state.mv_matrix, mvm, sizeof(g_state.mv_matrix));
+        } else {
+            memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix));
+        }
     }
 }
 
@@ -1194,6 +1331,13 @@ void GXClearVtxDesc(void)
 void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 {
     /* Enable attributes and store format params for vertex data conversion. */
+    static int g_fmt_count = 0;
+    g_fmt_count++;
+    if (g_fmt_count <= 20) {
+        fprintf(stderr, "[GX] VtxAttrFmt #%d: attr=%u cnt=%u type=%u frac=%u\n",
+                g_fmt_count, attr, cnt, type, frac);
+        fflush(stderr);
+    }
     switch (attr) {
     case 9:  /* GX_VA_POS */
         g_state.pos_enabled = TRUE;
@@ -1591,6 +1735,21 @@ void GXCallDisplayList(void* list, u32 nbytes)
                     const u8* base_pos = (const u8*)g_state.arr_pos;
                     u16 stride_pos = g_state.arr_stride_pos;
                     
+                    /* Debug: print first vertex and format */
+                    static int g_debug_draw = 0;
+                    g_debug_draw++;
+                    if (g_debug_draw <= 3 && g_state.pos_enabled) {
+                        fprintf(stderr, "[GX] DL draw #%d: pos_comp_type=%u pos_comp_cnt=%u stride_pos=%u\n",
+                                g_debug_draw, g_state.pos_comp_type, g_state.pos_comp_cnt, stride_pos);
+                        /* Dump first 12 bytes of position array */
+                        fprintf(stderr, "[GX] DL draw #%d: pos_bytes=", g_debug_draw);
+                        for (int bi = 0; bi < 12 && bi < nverts * stride_pos; bi++) {
+                            fprintf(stderr, "%02X ", base_pos[bi]);
+                        }
+                        fprintf(stderr, "\n");
+                        fflush(stderr);
+                    }
+                    
                     for (u16 v = 0; v < nverts; v++) {
                         const u8* vp_pos = base_pos + v * stride_pos;
                         
@@ -1613,11 +1772,16 @@ void GXCallDisplayList(void* list, u32 nbytes)
                                 py = (f32)(((u16)vp_pos[2] << 8) | vp_pos[3]);
                                 pz = (g_state.pos_comp_cnt == 1) ? (f32)(((u16)vp_pos[4] << 8) | vp_pos[5]) : 0.0f;
                                 break;
-                            case 3: /* GX_S16 (big-endian) */
-                                px = (f32)(((s16)((s16)vp_pos[0] << 8) | vp_pos[1]));
-                                py = (f32)(((s16)((s16)vp_pos[2] << 8) | vp_pos[3]));
-                                pz = (g_state.pos_comp_cnt == 1) ? (f32)(((s16)((s16)vp_pos[4] << 8) | vp_pos[5])) : 0.0f;
-                                break;
+                            case 3: /* GX_S16 — but GCN stage data uses f16 (half-precision float) */
+                            {
+                                u16 hx = ((u16)vp_pos[0]) | ((u16)vp_pos[1] << 8);
+                                u16 hy = ((u16)vp_pos[2]) | ((u16)vp_pos[3] << 8);
+                                u16 hz = ((u16)vp_pos[4]) | ((u16)vp_pos[5] << 8);
+                                px = f16_to_f32(hx);
+                                py = f16_to_f32(hy);
+                                pz = (g_state.pos_comp_cnt == 1) ? f16_to_f32(hz) : 0.0f;
+                            }
+                            break;
                             case 4: /* GX_F32 (big-endian, need byte swap) */
                             default:
                                 {
