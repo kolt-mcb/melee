@@ -870,11 +870,17 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
     f32 f = 1.0f / tanf(fov * 0.5f * 3.14159265f / 180.0f);
     f32 zrange = far_z - near_z;
     
-    /* Perspective projection matrix (column-major for OpenGL) */
+    /* Perspective projection matrix (column-major for OpenGL)
+     * Standard GL perspective:
+     * | fx  0   0   0  |
+     * |  0  fy  0   0  |
+     * |  0   0  A   B  |
+     * |  0   0 -1   0  |
+     * where A = -(far+near)/(far-near), B = -(2*far*near)/(far-near) */
     proj[0][0] = f / aspect; proj[0][1] = 0;           proj[0][2] = 0; proj[0][3] = 0;
     proj[1][0] = 0;           proj[1][1] = f;           proj[1][2] = 0; proj[1][3] = 0;
-    proj[2][0] = 0;           proj[2][1] = 0;           proj[2][2] = -(far_z + near_z) / zrange; proj[2][3] = -1;
-    proj[3][0] = 0;           proj[3][1] = 0;           proj[3][2] = -(2.0f * far_z * near_z) / zrange; proj[3][3] = 0;
+    proj[2][0] = 0;           proj[2][1] = 0;           proj[2][2] = -(far_z + near_z) / zrange; proj[2][3] = -(2.0f * far_z * near_z) / zrange;
+    proj[3][0] = 0;           proj[3][1] = 0;           proj[3][2] = -1;                    proj[3][3] = 0;
     
     memcpy(g_state.proj_matrix, proj, sizeof(g_state.proj_matrix));
     
@@ -959,14 +965,6 @@ static void bridge_upload_and_draw(void)
 {
     u16 count = g_state.vert_count;
     if (count == 0) return;
-    
-    /* Debug: print draw info */
-    static int g_draw_debug = 0;
-    if (g_draw_debug < 5) {
-        fprintf(stderr, "[GX] bridge_upload_and_draw: count=%d prim=0x%x\n", count, g_state.prim_type);
-        g_draw_debug++;
-        fflush(stderr);
-    }
     
     if (!g_shader_program) {
         PORT_LOG_WARN("Shader not ready, skipping draw");
@@ -1269,17 +1267,14 @@ void GXSetCopyClear(void* color, u32 z)
 
 void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
 {
+    /* PC port: flush accumulated vertices before matrix changes.
+     * This ensures each draw batch uses the correct MVP matrix. */
+    if (g_state.vert_count > 0) {
+        bridge_upload_and_draw();
+    }
+    
     memcpy(g_state.mtx_array[id], mtx, sizeof(g_state.mtx_array[0]));
     if (id < 4) {
-        /* Debug: print first matrix load */
-        static int g_mtx_debug = 0;
-        if (g_mtx_debug < 3) {
-            fprintf(stderr, "[GX] LoadPosMtxImm id=%d view_valid=%d trans=(%.1f,%.1f,%.1f)\n",
-                    id, g_state.view_matrix_valid, mtx[0][3], mtx[1][3], mtx[2][3]);
-            g_mtx_debug++;
-            fflush(stderr);
-        }
-        
         if (g_state.view_matrix_valid) {
             f32 mvm[3][4];
             /* mvm = view * model (row-major 3x4 multiplication) */
@@ -1411,7 +1406,12 @@ static void bridge_add_vertex(void)
     Vertex* v = &g_state.verts[g_state.vert_count];
     if (g_state.pos_enabled) { v->pos[0] = g_state.last_pos[0]; v->pos[1] = g_state.last_pos[1]; v->pos[2] = g_state.last_pos[2]; }
     if (g_state.nrm_enabled) { v->nrm[0] = g_state.last_nrm[0]; v->nrm[1] = g_state.last_nrm[1]; v->nrm[2] = g_state.last_nrm[2]; }
-    if (g_state.clr_enabled) { v->col[0] = g_state.last_clr[0]; v->col[1] = g_state.last_clr[1]; v->col[2] = g_state.last_clr[2]; v->col[3] = g_state.last_clr[3]; }
+    /* PC port: always set a default color to prevent black geometry */
+    if (g_state.clr_enabled) {
+        v->col[0] = g_state.last_clr[0]; v->col[1] = g_state.last_clr[1]; v->col[2] = g_state.last_clr[2]; v->col[3] = g_state.last_clr[3];
+    } else {
+        v->col[0] = 1.0f; v->col[1] = 1.0f; v->col[2] = 1.0f; v->col[3] = 1.0f;
+    }
     if (g_state.tex0_enabled) { v->tex0[0] = g_state.last_tex0[0]; v->tex0[1] = g_state.last_tex0[1]; }
     if (g_state.tex1_enabled) { v->tex1[0] = g_state.last_tex1[0]; v->tex1[1] = g_state.last_tex1[1]; }
     g_state.vert_count++;
@@ -1674,18 +1674,6 @@ void GXCallDisplayList(void* list, u32 nbytes)
     u8* ptr = (u8*)list;
     u8* end = ptr + nbytes;
     static int g_dl_depth = 0;
-    
-    /* Debug: hex dump first display list */
-    static int g_dl_dump = 0;
-    if (g_dl_dump == 0) {
-        g_dl_dump = 1;
-        fprintf(stderr, "[GX] DL hex dump (list=%p nbytes=%u): ", (void*)list, nbytes);
-        for (int k = 0; k < 32 && k < nbytes; k++) {
-            fprintf(stderr, "%02x ", ptr[k]);
-        }
-        fprintf(stderr, "\n");
-        fflush(stderr);
-    }
 
     g_dl_depth++;
     if (g_dl_depth > 8) {
@@ -1829,19 +1817,6 @@ void GXCallDisplayList(void* list, u32 nbytes)
                         const u8* base_pos = (const u8*)g_state.arr_pos;
                         u16 stride_pos = g_state.arr_stride_pos;
                         
-                        /* Debug: print first vertex */
-                        static int g_vert_debug = 0;
-                        if (g_vert_debug < 3 && g_state.pos_enabled) {
-                            const u8* vp = base_pos;
-                            u16 hx = ((u16)vp[0] << 8) | vp[1];
-                            u16 hy = ((u16)vp[2] << 8) | vp[3];
-                            u16 hz = ((u16)vp[4] << 8) | vp[5];
-                            fprintf(stderr, "[GX] DL vert[0]=(%.2f,%.2f,%.2f) nverts=%d\n",
-                                    f16_to_f32(hx), f16_to_f32(hy), f16_to_f32(hz), nverts);
-                            g_vert_debug++;
-                            fflush(stderr);
-                        }
-                        
                         for (u16 v = 0; v < nverts; v++) {
                             const u8* vp_pos = base_pos + v * stride_pos;
                             
@@ -1880,6 +1855,9 @@ void GXCallDisplayList(void* list, u32 nbytes)
                             if (g_state.clr_enabled && g_state.arr_clr != NULL) {
                                 const u8* vp_clr = (const u8*)g_state.arr_clr + v * g_state.arr_stride_clr;
                                 GXColor4u8(vp_clr[0], vp_clr[1], vp_clr[2], vp_clr[3]);
+                            } else {
+                                /* PC port: default to white when no color array is set */
+                                GXColor4u8(255, 255, 255, 255);
                             }
                         }
                     }
