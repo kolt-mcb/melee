@@ -9,8 +9,12 @@
 
 #include <baselib/archive.h>
 #include <baselib/debug.h>
+#include <baselib/dobj.h>
+#include <baselib/mobj.h>
+#include <baselib/pobj.h>
 #include <baselib/particle.h>
 #include <baselib/psstructs.h>
+#include <dolphin/gx.h>
 
 /// @todo Merge declaration and definition
 /* static */ extern GroundParam grDatFiles_803E0848;
@@ -64,6 +68,11 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
 static UnkArchiveStruct* grDatFiles_ConvertArchiveGCNtoX64(HSD_Archive* archive, void* gcnMapHeadPtr);
 static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         u8* dataBase, u32 visited_count, u32* visited);
+/* DObjDesc chain converters */
+static HSD_DObjDesc* grDatFiles_ConvertDObjDescGCNtoX64(const u8* gcnDobjPtr, u8* dataBase);
+static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8* dataBase);
+static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8* dataBase);
+static HSD_VtxDescList* grDatFiles_ConvertVtxDescListGCNtoX64(const u8* gcnVtxPtr, u8* dataBase);
 
 /* Convert a GCN pointer offset to an x86_64 pointer.
  * GCN pointers in the archive are offsets from the archive data section base.
@@ -211,6 +220,46 @@ struct HSD_Joint_gcn {
     u32 mtx;          /* MtxPtr at offset 0x38 */
     u32 robjdesc;     /* HSD_RObjDesc* at offset 0x3C */
 };
+
+/* GCN DObjDesc (4-byte pointers, 16 bytes total) */
+struct HSD_DObjDesc_gcn {
+    u32 class_name;   /* 0x00 */
+    u32 next;         /* 0x04 */
+    u32 mobjdesc;     /* 0x08 */
+    u32 pobjdesc;     /* 0x0C */
+};
+
+/* GCN MObjDesc (4-byte pointers, 24 bytes total) */
+struct HSD_MObjDesc_gcn {
+    u32 class_name;   /* 0x00 */
+    u32 rendermode;   /* 0x04 */
+    u32 texdesc;      /* 0x08 */
+    u32 mat;          /* 0x0C */
+    u32 renderdesc;   /* 0x10 */
+    u32 pedesc;       /* 0x14 */
+};
+
+/* GCN PObjDesc (4-byte pointers, 32 bytes total) */
+struct HSD_PObjDesc_gcn {
+    u32 class_name;   /* 0x00 */
+    u32 next;         /* 0x04 */
+    u32 verts;        /* 0x08 */
+    u16 flags;        /* 0x0C */
+    u16 n_display;    /* 0x0E */
+    u32 display;      /* 0x10 */
+    u32 u;            /* 0x14 union (joint/shape_set/envelope) */
+};
+
+/* GCN VtxDescList (4-byte pointers, 20 bytes total) */
+struct HSD_VtxDescList_gcn {
+    u32 attr;         /* 0x00 GXAttr */
+    u32 attr_type;    /* 0x04 GXAttrType */
+    u32 comp_cnt;     /* 0x08 GXCompCnt */
+    u32 comp_type;    /* 0x0C GXCompType */
+    u8  frac;         /* 0x10 */
+    u16 stride;       /* 0x11 */
+    u32 vertex;       /* 0x14 void* */
+};
 #pragma pack(pop)
 
 /* Convert a GCN HSD_Joint tree to x86_64 HSD_Joint tree.
@@ -259,16 +308,214 @@ static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
     x64Joint->next = grDatFiles_ConvertJointTreeGCNtoX64(
         val ? dataBase + val : NULL, dataBase, visited_count + 1, visited);
 
-    /* PC port: Set nested struct pointers to NULL.
-     * HSD_RObjDesc, HSD_DObjDesc are still in GCN format.
-     * Setting them to NULL allows the joint tree to load and render
-     * as wireframe geometry without materials/animations.
-     * Full conversion deferred until stage geometry is visible. */
-    x64Joint->u.dobjdesc = NULL;
+    /* Convert dobjdesc chain (mesh data) from GCN to x64 */
+    val = be32_swap(gcnJoint->u);
+    if (val != 0 && val < 0x80000000U) {
+        x64Joint->u.dobjdesc = grDatFiles_ConvertDObjDescGCNtoX64(
+            dataBase + val, dataBase);
+    } else {
+        x64Joint->u.dobjdesc = NULL;
+    }
     x64Joint->mtx = NULL;
     x64Joint->robjdesc = NULL;
 
     return x64Joint;
+}
+
+/* ============================================================
+ * DObjDesc chain converters (GCN → x86_64)
+ * ============================================================ */
+
+/* Convert a GCN VtxDescList to x86_64 VtxDescList. */
+static HSD_VtxDescList* grDatFiles_ConvertVtxDescListGCNtoX64(const u8* gcnVtxPtr, u8* dataBase)
+{
+    HSD_VtxDescList* x64Vtx;
+    const struct HSD_VtxDescList_gcn* gcnVtx;
+    u32 val;
+
+    if (gcnVtxPtr == NULL) return NULL;
+
+    gcnVtx = (const struct HSD_VtxDescList_gcn*)gcnVtxPtr;
+    x64Vtx = lbHeap_80015BD0(0, sizeof(HSD_VtxDescList));
+    if (x64Vtx == NULL) return NULL;
+
+    x64Vtx->attr = (GXAttr)be32_swap(gcnVtx->attr);
+    x64Vtx->attr_type = (GXAttrType)be32_swap(gcnVtx->attr_type);
+    x64Vtx->comp_cnt = (GXCompCnt)be32_swap(gcnVtx->comp_cnt);
+    x64Vtx->comp_type = (GXCompType)be32_swap(gcnVtx->comp_type);
+    x64Vtx->frac = gcnVtx->frac;
+    x64Vtx->stride = (gcnVtxPtr[0x11] << 8) | gcnVtxPtr[0x12];
+    
+    /* vertex pointer points to raw vertex data in archive - keep as direct pointer */
+    val = be32_swap(gcnVtx->vertex);
+    if (val != 0 && val < 0x80000000U) {
+        x64Vtx->vertex = dataBase + val;
+    } else {
+        x64Vtx->vertex = NULL;
+    }
+
+    return x64Vtx;
+}
+
+/* Convert a GCN PObjDesc to x86_64 PObjDesc. */
+static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8* dataBase)
+{
+    HSD_PObjDesc* x64Pobj;
+    const struct HSD_PObjDesc_gcn* gcnPobj;
+    u32 val;
+    static int pobj_count = 0;
+
+    if (gcnPobjPtr == NULL) return NULL;
+
+    gcnPobj = (const struct HSD_PObjDesc_gcn*)gcnPobjPtr;
+    x64Pobj = lbHeap_80015BD0(0, sizeof(HSD_PObjDesc));
+    if (x64Pobj == NULL) return NULL;
+
+    memset(x64Pobj, 0, sizeof(HSD_PObjDesc));
+    
+    /* class_name - points to archive symbol table, set NULL for now */
+    x64Pobj->class_name = NULL;
+    
+    /* verts - convert VtxDescList chain */
+    val = be32_swap(gcnPobj->verts);
+    if (pobj_count < 10) {
+        u16 gcn_flags = (gcnPobjPtr[0x0C] << 8) | gcnPobjPtr[0x0D];
+        u16 gcn_ndisp = (gcnPobjPtr[0x0E] << 8) | gcnPobjPtr[0x0F];
+        fprintf(stderr, "[GRDAT] PObjDesc[%d]: gcn=%p class=0x%08x next=0x%08x verts=0x%08x flags=0x%04x n_display=%u display=0x%08x\n",
+                pobj_count, (const void*)gcnPobjPtr,
+                be32_swap(gcnPobj->class_name), be32_swap(gcnPobj->next), val,
+                gcn_flags, gcn_ndisp,
+                be32_swap(gcnPobj->display));
+        fflush(stderr);
+    }
+    pobj_count++;
+    if (val != 0 && val < 0x80000000U) {
+        x64Pobj->verts = grDatFiles_ConvertVtxDescListGCNtoX64(dataBase + val, dataBase);
+    }
+    
+    /* flags and n_display - read as big-endian u16 */
+    x64Pobj->flags = (gcnPobjPtr[0x0C] << 8) | gcnPobjPtr[0x0D];
+    x64Pobj->n_display = (gcnPobjPtr[0x0E] << 8) | gcnPobjPtr[0x0F];
+    
+    /* flags and n_display */
+    x64Pobj->flags = be32_swap(*(const u16*)(gcnPobjPtr + 0x0C));
+    x64Pobj->n_display = be32_swap(*(const u16*)(gcnPobjPtr + 0x0E));
+    
+    /* display - raw byte stream (GX command list), keep as direct pointer */
+    val = be32_swap(gcnPobj->display);
+    if (val != 0 && val < 0x80000000U) {
+        x64Pobj->display = (u8*)(dataBase + val);
+    }
+    
+    /* next - convert linked list */
+    val = be32_swap(gcnPobj->next);
+    if (val != 0 && val < 0x80000000U) {
+        x64Pobj->next = grDatFiles_ConvertPObjDescGCNtoX64(dataBase + val, dataBase);
+    }
+
+    return x64Pobj;
+}
+
+/* Convert a GCN MObjDesc to x86_64 MObjDesc. */
+static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8* dataBase)
+{
+    HSD_MObjDesc* x64Mobj;
+    const struct HSD_MObjDesc_gcn* gcnMobj;
+    u32 val;
+
+    if (gcnMobjPtr == NULL) return NULL;
+
+    gcnMobj = (const struct HSD_MObjDesc_gcn*)gcnMobjPtr;
+    x64Mobj = lbHeap_80015BD0(0, sizeof(HSD_MObjDesc));
+    if (x64Mobj == NULL) return NULL;
+
+    memset(x64Mobj, 0, sizeof(HSD_MObjDesc));
+    
+    /* class_name - points to symbol table, set NULL for now */
+    x64Mobj->class_name = NULL;
+    
+    /* rendermode */
+    x64Mobj->rendermode = be32_swap(gcnMobj->rendermode);
+    
+    /* texdesc - raw data pointer in archive, set NULL for now */
+    x64Mobj->texdesc = NULL;
+    
+    /* mat - allocate a default material (MObjLoad copies from desc->mat) */
+    x64Mobj->mat = lbHeap_80015BD0(0, sizeof(HSD_Material));
+    if (x64Mobj->mat != NULL) {
+        /* Default: white diffuse, black ambient/specular, full alpha */
+        x64Mobj->mat->ambient.r = 0;
+        x64Mobj->mat->ambient.g = 0;
+        x64Mobj->mat->ambient.b = 0;
+        x64Mobj->mat->ambient.a = 255;
+        x64Mobj->mat->diffuse.r = 255;
+        x64Mobj->mat->diffuse.g = 255;
+        x64Mobj->mat->diffuse.b = 255;
+        x64Mobj->mat->diffuse.a = 255;
+        x64Mobj->mat->specular.r = 0;
+        x64Mobj->mat->specular.g = 0;
+        x64Mobj->mat->specular.b = 0;
+        x64Mobj->mat->specular.a = 255;
+        x64Mobj->mat->alpha = 1.0f;
+        x64Mobj->mat->shininess = 0.0f;
+    }
+    
+    /* renderdesc - set NULL for now */
+    x64Mobj->renderdesc = NULL;
+    
+    /* pedesc - convert from GCN data */
+    val = be32_swap(gcnMobj->pedesc);
+    if (val != 0 && val < 0x80000000U) {
+        x64Mobj->pedesc = (HSD_PEDesc*)(dataBase + val);
+    }
+
+    return x64Mobj;
+}
+
+/* Convert a GCN DObjDesc chain to x86_64 DObjDesc chain. */
+static HSD_DObjDesc* grDatFiles_ConvertDObjDescGCNtoX64(const u8* gcnDobjPtr, u8* dataBase)
+{
+    HSD_DObjDesc* x64Dobj;
+    const struct HSD_DObjDesc_gcn* gcnDobj;
+    u32 val;
+    static int convert_count = 0;
+
+    if (gcnDobjPtr == NULL) return NULL;
+
+    gcnDobj = (const struct HSD_DObjDesc_gcn*)gcnDobjPtr;
+    x64Dobj = lbHeap_80015BD0(0, sizeof(HSD_DObjDesc));
+    if (x64Dobj == NULL) return NULL;
+
+    if (convert_count++ < 5) {
+        fprintf(stderr, "[GRDAT] ConvertDObjDesc: gcn=%p x64=%p\n",
+                (const void*)gcnDobjPtr, (void*)x64Dobj);
+        fflush(stderr);
+    }
+
+    memset(x64Dobj, 0, sizeof(HSD_DObjDesc));
+    
+    /* class_name - points to symbol table, set NULL for now */
+    x64Dobj->class_name = NULL;
+    
+    /* mobjdesc - convert material descriptor */
+    val = be32_swap(gcnDobj->mobjdesc);
+    if (val != 0 && val < 0x80000000U) {
+        x64Dobj->mobjdesc = grDatFiles_ConvertMObjDescGCNtoX64(dataBase + val, dataBase);
+    }
+    
+    /* pobjdesc - convert polygon descriptor chain */
+    val = be32_swap(gcnDobj->pobjdesc);
+    if (val != 0 && val < 0x80000000U) {
+        x64Dobj->pobjdesc = grDatFiles_ConvertPObjDescGCNtoX64(dataBase + val, dataBase);
+    }
+    
+    /* next - convert linked list */
+    val = be32_swap(gcnDobj->next);
+    if (val != 0 && val < 0x80000000U) {
+        x64Dobj->next = grDatFiles_ConvertDObjDescGCNtoX64(dataBase + val, dataBase);
+    }
+
+    return x64Dobj;
 }
 
 /* Convert GCN-packed UnkArchiveStruct to x86_64 UnkArchiveStruct.

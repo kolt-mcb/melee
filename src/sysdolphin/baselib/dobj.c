@@ -204,26 +204,27 @@ static int DObjLoad(HSD_DObj* dobj, HSD_DObjDesc* desc)
 
 static char HSD_DObj_804D5C84[5] = "dobj\0";
 
+
 HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
 {
+    static int dobj_class_initialized = 0;
     HSD_DObj* dobj;
-    HSD_ClassInfo* info;
 
     if (desc == NULL) {
         return NULL;
     }
 
-    if (desc->class_name == NULL ||
-        (info = hsdSearchClassInfo(desc->class_name)) == NULL)
-    {
-        dobj = HSD_DObjAlloc();
-    } else {
-        dobj = HSD_DOBJ(hsdNew(info));
-        if (dobj == NULL) {
-            __assert(HSD_DObj_804D5C78, 378, HSD_DObj_804D5C84);
-        }
+    /* PC port: bypass hsdNew to avoid GCN class info corruption. */
+    if (!dobj_class_initialized) {
+        DObjInfoInit();
+        dobj_class_initialized = 1;
     }
-    HSD_DOBJ_METHOD(dobj)->load(dobj, desc);
+    dobj = (HSD_DObj*)hsdAllocMemPiece(sizeof(HSD_DObj));
+    if (dobj != NULL) {
+        memset(dobj, 0, sizeof(HSD_DObj));
+        dobj->parent.class_info = (HSD_ClassInfo*)&hsdDObj;
+        DObjLoad(dobj, desc);
+    }
 
     return dobj;
 }

@@ -186,15 +186,23 @@ void HSD_GObj_80390ED0(HSD_GObj* gobj, u32 mask)
 void HSD_GObj_80390FC0(void)
 {
     HSD_GObj* saved;
-    HSD_GObj* cur = HSD_GObjGXLinkHead[HSD_GObjLibInitData.gx_link_max + 1];
-    while (cur != NULL) {
-        if (cur->render_cb != NULL) {
-            saved = HSD_GObj_804D7818;
-            HSD_GObj_804D7818 = cur;
-            cur->render_cb(cur, 0);
-            HSD_GObj_804D7818 = saved;
+    HSD_GObj* cur;
+    int i;
+    /* PC port: walk ALL GX links, not just the last one.
+     * The original GCN code walks link[gx_link_max+1] which is
+     * the highest priority link. On PC, stage GObjs are in lower
+     * priority links (e.g., link[3]), so we need to walk all of them. */
+    for (i = 0; i <= HSD_GObjLibInitData.gx_link_max + 1; i++) {
+        cur = HSD_GObjGXLinkHead[i];
+        while (cur != NULL) {
+            if (cur->render_cb != NULL) {
+                saved = HSD_GObj_804D7818;
+                HSD_GObj_804D7818 = cur;
+                cur->render_cb(cur, 0);
+                HSD_GObj_804D7818 = saved;
+            }
+            cur = cur->next_gx;
         }
-        cur = cur->next_gx;
     }
 }
 

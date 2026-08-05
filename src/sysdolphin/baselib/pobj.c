@@ -314,19 +314,20 @@ static s32 PObjLoad(HSD_PObj* pobj, HSD_PObjDesc* desc)
 
 HSD_PObj* HSD_PObjLoadDesc(HSD_PObjDesc* pobjdesc)
 {
+    static int pobj_class_initialized = 0;
     if (pobjdesc != NULL) {
         HSD_PObj* pobj;
-        HSD_ClassInfo* info;
-
-        if (!pobjdesc->class_name ||
-            !(info = hsdSearchClassInfo(pobjdesc->class_name)))
-        {
-            pobj = HSD_PObjAlloc();
-        } else {
-            pobj = hsdNew(info);
-            HSD_ASSERT(605, pobj);
+        /* PC port: bypass hsdNew to avoid GCN class info corruption. */
+        if (!pobj_class_initialized) {
+            PObjInfoInit();
+            pobj_class_initialized = 1;
         }
-        HSD_POBJ_METHOD(pobj)->load(pobj, pobjdesc);
+        pobj = (HSD_PObj*)hsdAllocMemPiece(sizeof(HSD_PObj));
+        if (pobj != NULL) {
+            memset(pobj, 0, sizeof(HSD_PObj));
+            pobj->parent.class_info = (HSD_ClassInfo*)HSD_PObjGetDefaultClass();
+            PObjLoad(pobj, pobjdesc);
+        }
         return pobj;
     } else {
         return NULL;
