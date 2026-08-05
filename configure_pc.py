@@ -52,6 +52,7 @@ DISPLAY_MODULES = [
     "shadow.c",
     "displayfunc.c",
     "archive.c",  # GCN archive parser (needed for stage data)
+    "perf.c",     # performance counters (HSD_PerfCurrentStat)
 ]
 G_DISPLAY_SOURCES = [
     str(BASELIB_SRC / f) for f in DISPLAY_MODULES

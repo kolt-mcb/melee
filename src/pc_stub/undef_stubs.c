@@ -1155,12 +1155,6 @@ s32 HSD_PadGetResetSwitch(void)
 #define HSD_PadGameStatus g_gc_pads
 #define HSD_PadCopyStatus g_gc_pads
 __attribute__((weak)) void HSD_Panic(void) {}
-__attribute__((weak)) void HSD_PerfCountEnvelopeBlending(void) {}
-__attribute__((weak)) void HSD_PerfCurrentStat(void) {}
-__attribute__((weak)) void HSD_PerfInitStat(void) {}
-__attribute__((weak)) void HSD_PerfSetCPUTime(void) {}
-__attribute__((weak)) void HSD_PerfSetDrawTime(void) {}
-__attribute__((weak)) void HSD_PerfSetStartTime(void) {}
 __attribute__((weak)) void HSD_PerfSetTotalTime(void) {}
 __attribute__((weak)) void HSD_QuatLib_8037EB28(void) {}
 __attribute__((weak)) void HSD_QuatLib_8037EC4C(void) {}
@@ -1758,6 +1752,10 @@ void game_main_loop(void)
     int frame_count = 0;
     while (1) {
         frame_count++;
+        if (frame_count % 10 == 0) {
+            fprintf(stderr, "[PORT INFO] [LOOP] Frame %d\n", frame_count);
+            fflush(stderr);
+        }
 
         /* Poll input first (before render, so state is fresh) */
         input_read_frame();
