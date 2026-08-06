@@ -1914,6 +1914,67 @@ void GXCallDisplayList(void* list, u32 nbytes)
                                 /* PC port: default to white when no color array is set */
                                 GXColor4u8(255, 255, 255, 255);
                             }
+                            
+                            /* Texture Coordinates (UV mapping) */
+                            if (g_state.tex0_enabled && g_state.arr_tex0 != NULL) {
+                                const u8* vp_tex = (const u8*)g_state.arr_tex0 + v * g_state.arr_stride_tex0;
+                                f32 ts, tt;
+                                /* Texture coords use same format as positions (f16 or f32) */
+                                switch (g_state.pos_comp_type) {
+                                case 3: { /* f16 */
+                                    u16 hs = ((u16)vp_tex[0] << 8) | vp_tex[1];
+                                    u16 ht = ((u16)vp_tex[2] << 8) | vp_tex[3];
+                                    ts = f16_to_f32(hs);
+                                    tt = f16_to_f32(ht);
+                                    break;
+                                }
+                                case 4: /* f32 big-endian */
+                                default: {
+                                    u32 raw;
+                                    raw = ((u32)vp_tex[0] << 24) | ((u32)vp_tex[1] << 16) |
+                                          ((u32)vp_tex[2] << 8) | vp_tex[3];
+                                    ts = *(f32*)&raw;
+                                    raw = ((u32)vp_tex[4] << 24) | ((u32)vp_tex[5] << 16) |
+                                          ((u32)vp_tex[6] << 8) | vp_tex[7];
+                                    tt = *(f32*)&raw;
+                                    break;
+                                }
+                                }
+                                GXTexCoord2f32(ts, tt);
+                            }
+                            
+                            /* Normal vectors (for lighting) */
+                            if (g_state.nrm_enabled && g_state.arr_nrm != NULL) {
+                                const u8* vp_nrm = (const u8*)g_state.arr_nrm + v * g_state.arr_stride_nrm;
+                                f32 nx, ny, nz;
+                                /* Normals use same format as positions (f16 or f32) */
+                                switch (g_state.pos_comp_type) {
+                                case 3: { /* f16 */
+                                    u16 hnx = ((u16)vp_nrm[0] << 8) | vp_nrm[1];
+                                    u16 hny = ((u16)vp_nrm[2] << 8) | vp_nrm[3];
+                                    u16 hnz = ((u16)vp_nrm[4] << 8) | vp_nrm[5];
+                                    nx = f16_to_f32(hnx);
+                                    ny = f16_to_f32(hny);
+                                    nz = -f16_to_f32(hnz); /* Flip Z */
+                                    break;
+                                }
+                                case 4: /* f32 big-endian */
+                                default: {
+                                    u32 raw;
+                                    raw = ((u32)vp_nrm[0] << 24) | ((u32)vp_nrm[1] << 16) |
+                                          ((u32)vp_nrm[2] << 8) | vp_nrm[3];
+                                    nx = *(f32*)&raw;
+                                    raw = ((u32)vp_nrm[4] << 24) | ((u32)vp_nrm[5] << 16) |
+                                          ((u32)vp_nrm[6] << 8) | vp_nrm[7];
+                                    ny = *(f32*)&raw;
+                                    raw = ((u32)vp_nrm[8] << 24) | ((u32)vp_nrm[9] << 16) |
+                                          ((u32)vp_nrm[10] << 8) | vp_nrm[11];
+                                    nz = *(f32*)&raw;
+                                    break;
+                                }
+                                }
+                                GXNormal3f32(nx, ny, nz);
+                            }
                         }
                     }
                     GXEnd();
