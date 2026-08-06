@@ -13,6 +13,7 @@
 #include <baselib/mobj.h>
 #include <baselib/pobj.h>
 #include <baselib/particle.h>
+#include <baselib/tobj.h>
 #include <baselib/psstructs.h>
 #include <dolphin/gx.h>
 
@@ -78,6 +79,9 @@ static HSD_DObjDesc* grDatFiles_ConvertDObjDescGCNtoX64(const u8* gcnDobjPtr, u8
 static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8* dataBase);
 static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8* dataBase);
 static HSD_VtxDescList* grDatFiles_ConvertVtxDescListGCNtoX64(const u8* gcnVtxPtr, u8* dataBase);
+/* TObjDesc/ImageDesc converters (for texture loading) */
+static struct HSD_ImageDesc* grDatFiles_ConvertImageDescGCNtoX64(const u8* gcnImgPtr, u8* dataBase);
+static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8* dataBase);
 
 /* Convert a GCN pointer offset to an x86_64 pointer.
  * GCN pointers in the archive are offsets from the archive data section base.
@@ -265,6 +269,51 @@ struct HSD_VtxDescList_gcn {
     u16 stride;       /* 0x11 */
     u32 vertex;       /* 0x14 void* */
 };
+
+/* GCN HSD_ImageDesc (4-byte pointers, 24 bytes total on GCN) */
+struct HSD_ImageDesc_gcn {
+    u32 image_ptr;    /* 0x00 void* */
+    u16 width;        /* 0x04 */
+    u16 height;       /* 0x06 */
+    u32 format;       /* 0x08 GXTexFmt */
+    u32 mipmap;       /* 0x0C */
+    u32 minLOD;       /* 0x10 f32 (big-endian) */
+    u32 maxLOD;       /* 0x14 f32 (big-endian) */
+};
+
+/* GCN HSD_TObjDesc (4-byte pointers, ~56 bytes on GCN)
+ * GCN layout: class_name(4) next(4) id(4) src(4) rotate(12) scale(12) translate(12)
+ *             wrap_s(4) wrap_t(4) repeat_s(1) repeat_t(1) pad(2) blend_flags(4)
+ *             blending(4) magFilt(4) imagedesc(4) tlutdesc(4) lod(4) tev(4) = 76 bytes
+ * But GCN uses tighter packing, so actual size is likely smaller.
+ * Using conservative field offsets based on GCN 4-byte alignment. */
+struct HSD_TObjDesc_gcn {
+    u32 class_name;   /* 0x00 char* */
+    u32 next;         /* 0x04 HSD_TObjDesc* */
+    u32 id;           /* 0x08 GXTexMapID */
+    u32 src;          /* 0x0C GXTexGenSrc */
+    u32 rotate_x;     /* 0x10 Vec3 rotate (3x f32) */
+    u32 rotate_y;     /* 0x14 */
+    u32 rotate_z;     /* 0x18 */
+    u32 scale_x;      /* 0x1C Vec3 scale (3x f32) */
+    u32 scale_y;      /* 0x20 */
+    u32 scale_z;      /* 0x24 */
+    u32 translate_x;  /* 0x28 Vec3 translate (3x f32) */
+    u32 translate_y;  /* 0x2C */
+    u32 translate_z;  /* 0x30 */
+    u32 wrap_s;       /* 0x34 GXTexWrapMode */
+    u32 wrap_t;       /* 0x38 GXTexWrapMode */
+    u8  repeat_s;     /* 0x3C */
+    u8  repeat_t;     /* 0x3D */
+    u16 pad1;         /* 0x3E padding */
+    u32 blend_flags;  /* 0x40 */
+    f32 blending;     /* 0x44 */
+    u32 magFilt;      /* 0x48 GXTexFilter */
+    u32 imagedesc;    /* 0x4C HSD_ImageDesc* */
+    u32 tlutdesc;     /* 0x50 HSD_TlutDesc* */
+    u32 lod;          /* 0x54 HSD_TexLODDesc* */
+    u32 tev;          /* 0x58 HSD_TObjTevDesc* */
+}; /* 0x5C = 92 bytes */
 #pragma pack(pop)
 
 /* Convert a GCN HSD_Joint tree to x86_64 HSD_Joint tree.
@@ -520,10 +569,12 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
     
     /* rendermode */
     x64Mobj->rendermode = be32_swap(gcnMobj->rendermode);
-    
-    /* texdesc - raw data pointer in archive, set NULL for now */
+
+    /* texdesc - disabled for now (GCN struct layout mismatch)
+     * The texdesc offset points to data that doesn't match the expected TObjDesc layout.
+     * Need to investigate the actual GCN archive format for texture descriptors. */
     x64Mobj->texdesc = NULL;
-    
+
     /* mat - allocate a default material (MObjLoad copies from desc->mat) */
     x64Mobj->mat = lbHeap_80015BD0(0, sizeof(HSD_Material));
     if (x64Mobj->mat != NULL) {
@@ -554,6 +605,152 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
     }
 
     return x64Mobj;
+}
+
+/* Convert a GCN HSD_ImageDesc to x86_64 HSD_ImageDesc.
+ * Relocates image_ptr from GCN offset to actual archive data base. */
+static struct HSD_ImageDesc* grDatFiles_ConvertImageDescGCNtoX64(const u8* gcnImgPtr, u8* dataBase)
+{
+    struct HSD_ImageDesc* x64Img;
+    const struct HSD_ImageDesc_gcn* gcnImg;
+    u32 val;
+    u32 raw;
+
+    if (gcnImgPtr == NULL) return NULL;
+
+    gcnImg = (const struct HSD_ImageDesc_gcn*)gcnImgPtr;
+    x64Img = lbHeap_80015BD0(0, sizeof(struct HSD_ImageDesc));
+    if (x64Img == NULL) return NULL;
+
+    memset(x64Img, 0, sizeof(struct HSD_ImageDesc));
+
+    /* image_ptr - relocate from GCN offset to archive data base */
+    val = be32_swap(gcnImg->image_ptr);
+    if (val != 0 && val < 0x80000000U && val < 0x200000U) {  /* Sanity: < 2MB offset */
+        x64Img->image_ptr = (void*)(dataBase + val);
+    }
+
+    /* width and height - big-endian u16 */
+    x64Img->width = ((u16)gcnImg->width >> 8) | ((u16)gcnImg->width << 8);
+    x64Img->height = ((u16)gcnImg->height >> 8) | ((u16)gcnImg->height << 8);
+
+    /* Sanity: reject obviously corrupt dimensions */
+    if (x64Img->width == 0 || x64Img->height == 0 ||
+        x64Img->width > 2048 || x64Img->height > 2048) {
+        fprintf(stderr, "[GRDAT] ImageDesc bad dims %dx%d, skipping\n", x64Img->width, x64Img->height);
+        lbHeap_80015BD0(0, 0); /* Free the allocated memory (workaround) */
+        return NULL;
+    }
+
+    /* format - GXTexFmt (u32 big-endian) */
+    x64Img->format = (GXTexFmt)be32_swap(gcnImg->format);
+
+    /* mipmap - u32 big-endian */
+    x64Img->mipmap = be32_swap(gcnImg->mipmap);
+
+    /* minLOD and maxLOD - f32 big-endian */
+    raw = be32_swap(gcnImg->minLOD);
+    x64Img->minLOD = *(f32*)&raw;
+    raw = be32_swap(gcnImg->maxLOD);
+    x64Img->maxLOD = *(f32*)&raw;
+
+    return x64Img;
+}
+
+/* Convert a GCN HSD_TObjDesc chain to x86_64 HSD_TObjDesc chain.
+ * Recursively converts the linked list via 'next' pointer. */
+static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8* dataBase)
+{
+    HSD_TObjDesc* x64Tobj;
+    const struct HSD_TObjDesc_gcn* gcnTobj;
+    u32 val;
+    u32 raw;
+    static int convert_count = 0;
+
+    if (gcnTobjPtr == NULL) return NULL;
+
+    /* Safety: limit conversion count to prevent infinite loops */
+    if (convert_count > 100) {
+        fprintf(stderr, "[GRDAT] TObjDesc conversion limit reached (100)\n");
+        return NULL;
+    }
+
+    gcnTobj = (const struct HSD_TObjDesc_gcn*)gcnTobjPtr;
+    x64Tobj = lbHeap_80015BD0(0, sizeof(HSD_TObjDesc));
+    if (x64Tobj == NULL) return NULL;
+
+    memset(x64Tobj, 0, sizeof(HSD_TObjDesc));
+    convert_count++;
+
+    /* class_name - points to symbol table, set NULL for now */
+    x64Tobj->class_name = NULL;
+
+    /* next - convert linked list */
+    val = be32_swap(gcnTobj->next);
+    if (val != 0 && val < 0x80000000U) {
+        x64Tobj->next = grDatFiles_ConvertTObjDescGCNtoX64(dataBase + val, dataBase);
+    }
+
+    /* id - GXTexMapID (u32 big-endian) */
+    x64Tobj->id = (GXTexMapID)be32_swap(gcnTobj->id);
+
+    /* src - GXTexGenSrc (u32 big-endian) */
+    x64Tobj->src = (GXTexGenSrc)be32_swap(gcnTobj->src);
+
+    /* rotate - Vec3 (3x f32 big-endian) */
+    raw = be32_swap(gcnTobj->rotate_x);
+    x64Tobj->rotate.x = *(f32*)&raw;
+    raw = be32_swap(gcnTobj->rotate_y);
+    x64Tobj->rotate.y = *(f32*)&raw;
+    raw = be32_swap(gcnTobj->rotate_z);
+    x64Tobj->rotate.z = *(f32*)&raw;
+
+    /* scale - Vec3 (3x f32 big-endian) */
+    raw = be32_swap(gcnTobj->scale_x);
+    x64Tobj->scale.x = *(f32*)&raw;
+    raw = be32_swap(gcnTobj->scale_y);
+    x64Tobj->scale.y = *(f32*)&raw;
+    raw = be32_swap(gcnTobj->scale_z);
+    x64Tobj->scale.z = *(f32*)&raw;
+
+    /* translate - Vec3 (3x f32 big-endian) */
+    raw = be32_swap(gcnTobj->translate_x);
+    x64Tobj->translate.x = *(f32*)&raw;
+    raw = be32_swap(gcnTobj->translate_y);
+    x64Tobj->translate.y = *(f32*)&raw;
+    raw = be32_swap(gcnTobj->translate_z);
+    x64Tobj->translate.z = *(f32*)&raw;
+
+    /* wrap_s and wrap_t - GXTexWrapMode (u32 big-endian) */
+    x64Tobj->wrap_s = (GXTexWrapMode)be32_swap(gcnTobj->wrap_s);
+    x64Tobj->wrap_t = (GXTexWrapMode)be32_swap(gcnTobj->wrap_t);
+
+    /* repeat_s and repeat_t - u8 */
+    x64Tobj->repeat_s = gcnTobj->repeat_s;
+    x64Tobj->repeat_t = gcnTobj->repeat_t;
+
+    /* blend_flags - u32 big-endian */
+    x64Tobj->blend_flags = be32_swap(gcnTobj->blend_flags);
+
+    /* blending - f32 big-endian */
+    raw = be32_swap(gcnTobj->blending);
+    x64Tobj->blending = *(f32*)&raw;
+
+    /* magFilt - GXTexFilter (u32 big-endian) */
+    x64Tobj->magFilt = (GXTexFilter)be32_swap(gcnTobj->magFilt);
+
+    /* imagedesc - convert image descriptor */
+    val = be32_swap(gcnTobj->imagedesc);
+    if (val != 0 && val < 0x80000000U && val < 0x200000U) {  /* Sanity: < 2MB offset */
+        x64Tobj->imagedesc = grDatFiles_ConvertImageDescGCNtoX64(dataBase + val, dataBase);
+    }
+
+    /* tlutdesc, lod, tev - set NULL for now (advanced features) */
+    x64Tobj->tlutdesc = NULL;
+    x64Tobj->lod = NULL;
+    x64Tobj->tev = NULL;
+
+    return x64Tobj;
 }
 
 /* Convert a GCN DObjDesc chain to x86_64 DObjDesc chain. */
