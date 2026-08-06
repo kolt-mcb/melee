@@ -982,11 +982,11 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
 void gx_set_default_3d_camera(void)
 {
     /* Default camera: perspective, 60 degree FOV.
-     * Real geometry is near origin (x≈0, y≈0, z≈0-5000).
-     * Position camera to see this area from an elevated angle. */
-    gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 20000.0f,
-                     3000.0f, 2000.0f, 3000.0f,   /* eye: diagonal above */
-                     0.0f, 0.0f, 2500.0f,         /* target: center of geometry */
+     * Geometry clamped to ±500, camera centered on origin.
+     * Eye elevated and tilted down to center geometry vertically. */
+    gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 5000.0f,
+                     0.0f, 800.0f, 1200.0f,       /* eye: above and in front */
+                     0.0f, -200.0f, 0.0f,          /* target: slightly below origin */
                      0.0f, 1.0f, 0.0f);           /* up vector: standard Y-up */
 }
 
@@ -1130,26 +1130,28 @@ static void bridge_upload_and_draw(void)
         glUniformMatrix4fv(g_proj_loc, 1, GL_FALSE, &g_state.proj_matrix[0][0]);
     }
     
-    /* Compute MVP = proj * modelview */
+    /* Compute MVP = proj * modelview (all row-major, transpose at upload) */
     f32 mvp[4][4];
     memset(mvp, 0, sizeof(mvp));
-    /* Multiply proj (4x4) * mv_matrix (3x4 → padded to 4x4) */
-    f32 mv4[16];
+    /* Pad mv_matrix (3x4) to 4x4 */
+    f32 mv4[4][4];
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 4; j++)
-            mv4[j * 4 + i] = g_state.mv_matrix[i][j];
-    mv4[12] = 0; mv4[13] = 0; mv4[14] = 0; mv4[15] = 1;
+            mv4[i][j] = g_state.mv_matrix[i][j];
+    mv4[3][0] = 0; mv4[3][1] = 0; mv4[3][2] = 0; mv4[3][3] = 1;
     
+    /* Standard matrix multiply: mvp = proj * mv4 */
     for (int i = 0; i < 4; i++)
         for (int j = 0; j < 4; j++)
             for (int k = 0; k < 4; k++)
-                mvp[i][j] += g_state.proj_matrix[i][k] * mv4[k * 4 + j];
+                mvp[i][j] += g_state.proj_matrix[i][k] * mv4[k][j];
     
     if (g_mvp_loc >= 0) {
         f32 mvp_flat[16];
+        /* OpenGL glUniformMatrix4fv with GL_FALSE expects column-major */
         for (int i = 0; i < 4; i++)
             for (int j = 0; j < 4; j++)
-                mvp_flat[j * 4 + i] = mvp[i][j];  /* Transpose to column-major for OpenGL */
+                mvp_flat[j * 4 + i] = mvp[i][j];  /* Transpose row→col major */
         glUniformMatrix4fv(g_mvp_loc, 1, GL_FALSE, mvp_flat);
     }
     
