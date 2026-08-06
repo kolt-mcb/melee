@@ -415,9 +415,11 @@ static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         x64Joint->position.z = *(f32*)&raw;
     }
     
-    /* Clamp extreme values to prevent garbage transforms from bad archive data */
+    /* Clamp extreme values to prevent garbage transforms from bad archive data.
+     * Use tight limits (±500) to keep geometry near the camera frustum.
+     * Real stage geometry is typically within ±500 units of the origin. */
     {
-        f32 pos_limit = 10000.0f, scl_limit = 100.0f;
+        f32 pos_limit = 500.0f, scl_limit = 10.0f;
         if (x64Joint->position.x < -pos_limit) x64Joint->position.x = -pos_limit;
         if (x64Joint->position.x > pos_limit) x64Joint->position.x = pos_limit;
         if (x64Joint->position.y < -pos_limit) x64Joint->position.y = -pos_limit;
