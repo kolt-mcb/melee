@@ -486,6 +486,12 @@ typedef struct {
     /* Viewing matrix (from gx_set_3d_camera) */
     f32 view_matrix[3][4];      /* Viewing matrix (camera transform) */
     Bool view_matrix_valid;     /* Whether viewing matrix is set */
+    
+    /* Geometry bounds tracking (world space, updated per-frame) */
+    f32 bounds_min[3];
+    f32 bounds_max[3];
+    u32 bounds_count;
+    Bool bounds_valid;
 } BridgeState;
 
 static BridgeState g_state;
@@ -795,6 +801,12 @@ void gx_frame_begin(void)
     g_active_tex_count = 0;
     memset(g_active_tex_slots, 0, sizeof(g_active_tex_slots));
     
+    /* Reset geometry bounds for this frame */
+    g_state.bounds_count = 0;
+    g_state.bounds_valid = FALSE;
+    g_state.bounds_min[0] = g_state.bounds_min[1] = g_state.bounds_min[2] = 0;
+    g_state.bounds_max[0] = g_state.bounds_max[1] = g_state.bounds_max[2] = 0;
+    
     /* Periodically dump texture stats (every 100 frames) */
     static u32 s_tex_dump_frame = 0;
     s_tex_dump_frame++;
@@ -837,6 +849,16 @@ void gx_frame_end(void)
      * hasn't been issued yet — it's deferred to gx_frame_end or GXFlush. */
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
+    }
+    
+    /* Print geometry bounds every 600 frames for camera tuning */
+    static u32 s_bounds_frame = 0;
+    s_bounds_frame++;
+    if (g_state.bounds_valid && s_bounds_frame % 600 == 0) {
+        PORT_LOG_INFO("GEOMETRY BOUNDS: min=(%.1f,%.1f,%.1f) max=(%.1f,%.1f,%.1f) count=%u",
+                      g_state.bounds_min[0], g_state.bounds_min[1], g_state.bounds_min[2],
+                      g_state.bounds_max[0], g_state.bounds_max[1], g_state.bounds_max[2],
+                      g_state.bounds_count);
     }
 }
 
@@ -926,13 +948,12 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
 
 void gx_set_default_3d_camera(void)
 {
-    /* Default camera: perspective, 90 degree FOV.
-     * After Z-flip, stage geometry vertex positions are ~(-0, -448, -3712).
-     * Camera at (0, 0, 0) looking at (0, 0, -4000) with far plane 10000. */
-    gx_set_3d_camera(90.0f, 1280.0f / 720.0f, 1.0f, 10000.0f,
-                     0.0f, 0.0f, 0.0f,      /* eye position */
-                     0.0f, 0.0f, -4000.0f,   /* target */
-                     0.0f, 1.0f, 0.0f);     /* up vector */
+    /* Default camera: perspective, 75 degree FOV (wider view).
+     * Stage geometry centered well with elevated top-down view. */
+    gx_set_3d_camera(75.0f, 1280.0f / 720.0f, 1.0f, 20000.0f,
+                     0.0f, 5000.0f, 3000.0f,   /* eye: high above, further forward */
+                     0.0f, 0.0f, -500.0f,     /* target: center of stage */
+                     0.0f, 0.0f, 1.0f);      /* up vector: pointing forward (top-down view) */
 }
 
 /* ============================================================
@@ -1296,6 +1317,15 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
             memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix));
         }
     }
+    
+    /* PC port: trace first few matrix loads */
+    static int g_mtx_trace = 0;
+    if (g_mtx_trace < 5) {
+        fprintf(stderr, "[GX] LoadPosMtxImm id=%d trans=(%g,%g,%g) view_valid=%d\n",
+                id, mtx[0][3], mtx[1][3], mtx[2][3], g_state.view_matrix_valid);
+        g_mtx_trace++;
+        fflush(stderr);
+    }
 }
 
 void GXLoadNrmMtxImm(f32 mtx[3][4], u32 id)
@@ -1406,7 +1436,38 @@ static void bridge_add_vertex(void)
         bridge_upload_and_draw();
     }
     Vertex* v = &g_state.verts[g_state.vert_count];
-    if (g_state.pos_enabled) { v->pos[0] = g_state.last_pos[0]; v->pos[1] = g_state.last_pos[1]; v->pos[2] = g_state.last_pos[2]; }
+    if (g_state.pos_enabled) { 
+        v->pos[0] = g_state.last_pos[0]; v->pos[1] = g_state.last_pos[1]; v->pos[2] = g_state.last_pos[2];
+        /* Clamp extreme vertex positions (from joints with garbage transforms).
+         * Stage geometry is in a reasonable range; clamp outliers to prevent
+         * camera distortion from extreme coordinates. */
+        f32 clamp = 10000.0f;
+        if (v->pos[0] < -clamp) v->pos[0] = -clamp;
+        if (v->pos[0] > clamp) v->pos[0] = clamp;
+        if (v->pos[1] < -clamp) v->pos[1] = -clamp;
+        if (v->pos[1] > clamp) v->pos[1] = clamp;
+        if (v->pos[2] < -clamp) v->pos[2] = -clamp;
+        if (v->pos[2] > clamp) v->pos[2] = clamp;
+    }
+    
+    /* Track geometry bounds in world space (only for stage geometry, not HUD)
+     * HUD overlay uses orthographic projection with tiny coordinates.
+     * Stage geometry uses perspective projection with large coordinates. */
+    if (g_state.pos_enabled && g_state.view_matrix_valid) {
+        f32* p = v->pos;
+        /* Only track vertices that are likely stage geometry (large coords) */
+        f32 mag = p[0]*p[0] + p[1]*p[1] + p[2]*p[2];
+        if (mag > 100.0f && mag < 200000000.0f) {  /* Filter out HUD and extreme outliers */
+            if (g_state.bounds_count == 0 || p[0] < g_state.bounds_min[0]) g_state.bounds_min[0] = p[0];
+            if (g_state.bounds_count == 0 || p[1] < g_state.bounds_min[1]) g_state.bounds_min[1] = p[1];
+            if (g_state.bounds_count == 0 || p[2] < g_state.bounds_min[2]) g_state.bounds_min[2] = p[2];
+            if (g_state.bounds_count == 0 || p[0] > g_state.bounds_max[0]) g_state.bounds_max[0] = p[0];
+            if (g_state.bounds_count == 0 || p[1] > g_state.bounds_max[1]) g_state.bounds_max[1] = p[1];
+            if (g_state.bounds_count == 0 || p[2] > g_state.bounds_max[2]) g_state.bounds_max[2] = p[2];
+            g_state.bounds_count++;
+            g_state.bounds_valid = TRUE;
+        }
+    }
     if (g_state.nrm_enabled) { v->nrm[0] = g_state.last_nrm[0]; v->nrm[1] = g_state.last_nrm[1]; v->nrm[2] = g_state.last_nrm[2]; }
     /* PC port: always set a default color to prevent black geometry */
     if (g_state.clr_enabled) {

@@ -303,10 +303,13 @@ static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
     x64Joint->class_name = NULL;
 
     x64Joint->flags = be32_swap(gcnJoint->flags);
-    /* PC port: set render flag (bit 18) for all joints.
-     * The GCN archive doesn't include this flag, but HSD_JObjDispAll
-     * checks for it (jobj->flags & (flags << 0x12)) before rendering. */
-    x64Joint->flags |= (1u << 18);
+    /* PC port: set render flag (bit 18) and recurse flag (bit 28) for all joints.
+     * HSD_JObjDispAll checks:
+     *   jobj->flags & (flags << 0x12)  = bit 18 for rendering
+     *   jobj->flags & (flags << 0x1C)  = bit 28 for recursing into children
+     * Without bit 28, child joints are never visited, so only root joints
+     * (which have identity transforms) render. */
+    x64Joint->flags |= (1u << 18) | (1u << 28);
 
     /* Recursively convert child and next */
     val = be32_swap(gcnJoint->child);
