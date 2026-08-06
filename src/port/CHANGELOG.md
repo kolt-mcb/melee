@@ -1,3 +1,27 @@
+## [2025-08-06] — Texture Descriptor Investigation
+
+### TObjDesc/ImageDesc Conversion Research
+- **Raw Data Analysis**: Dumped raw GCN bytes at texdesc offsets.
+  TObjDesc data IS valid: src=4, wrap_s=2 (GX_CLAMP), imagedesc=valid offset.
+  ImageDesc data IS valid: image_ptr=0x0007adc0, w=32, h=32, fmt=1 (RGBA4).
+- **Byte Order**: GCN archive stores width/height as big-endian u16.
+  On x86_64 LE, raw bytes `00 20` read as 0x2000 (8192).
+  After byte swap: 0x0020 (32) — correct value.
+- **Crash**: Enabling TObjDesc conversion causes segfault in Stage_8022524C
+  (Ground_801C0800/on_init) during low-memory pool allocation.
+  Likely heap corruption from excessive allocations (197 MObjDesc × TObjDesc × ImageDesc).
+- **Blocked**: Texture loading disabled pending heap corruption fix.
+  Need to investigate whether GCN ImageDesc uses u32 width/height instead of u16.
+
+### Render Pipeline Trace
+- Traced full render path: grDisplay_801C5DB0 → HSD_GObj_JObjCallback →
+  HSD_JObjDispAll → HSD_JObjDisp → HSD_JObjDispDObj → HSD_JObjDispSub →
+  HSD_DObjDisp → HSD_MObjSetup → HSD_TObjSetup → GXLoadTexObj.
+- Confirmed HSD_MObjSetup is NOT being called during render pass.
+  Early-exit checks in grDisplay_801C5DB0 may be blocking the callback.
+- Texture upload path (GXLoadTexObj) is wired and functional.
+  Needs valid texture data from TObjDesc to activate.
+
 ## [2025-08-05h9] — Camera Tuning, Vertex Clamping, Main Loop Exit
 
 ### Camera System Overhaul
