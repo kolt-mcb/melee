@@ -507,6 +507,8 @@ static GLuint g_shader_program = 0;
 static GLint g_proj_loc = -1;
 static GLint g_mvp_loc = -1;
 static GLint g_uv_scale_loc = -1;
+static GLint g_light_dir_loc = -1;
+static GLint g_light_ambient_loc = -1;
 
 /* Texture shader uniform locations */
 /* Per-texture-unit shader uniform locations (max 2 active in GLSL 3.30) */
@@ -567,7 +569,8 @@ static u32 g_active_tex_count = 0;
  * ============================================================ */
 
 /* Minimal vertex shader — transforms positions through projection matrix
- * and passes through color/UV for fixed-function replacement. */
+ * and passes through color/UV for fixed-function replacement.
+ * Also interpolates normals for basic lighting. */
 static const char* g_vert_src =
 "#version 330 core\n"
 "layout(location = 0) in vec3 a_pos;\n"
@@ -581,26 +584,40 @@ static const char* g_vert_src =
 "out vec4 v_col;\n"
 "out vec2 v_uv0;\n"
 "out vec2 v_uv1;\n"
+"out vec3 v_nrm;\n"
+"out vec3 v_world_pos;\n"
 "void main() {\n"
 "    gl_Position = u_mvp * vec4(a_pos, 1.0);\n"
 "    v_col = a_col;\n"
 "    v_uv0 = a_uv0 * u_uv_scale;\n"
 "    v_uv1 = a_uv1 * u_uv_scale;\n"
+"    // Approximate world-space normal (upper 3x3 of MVP, imperfect but fast)\n"
+"    v_nrm = mat3(u_mvp) * a_nrm;\n"
+"    v_world_pos = (u_mvp * vec4(a_pos, 1.0)).xyz;\n"
 "}\n";
 
-/* Fragment shader — outputs vertex color directly. */
+/* Fragment shader — basic directional lighting + texture sampling. */
 static const char* g_frag_src =
 "#version 330 core\n"
 "in vec4 v_col;\n"
 "in vec2 v_uv0;\n"
 "in vec2 v_uv1;\n"
+"in vec3 v_nrm;\n"
+"in vec3 v_world_pos;\n"
 "out vec4 frag_color;\n"
 "uniform int u_tex0_enable;\n"
 "uniform int u_tex1_enable;\n"
 "uniform sampler2D u_tex0;\n"
 "uniform sampler2D u_tex1;\n"
+"uniform vec3 u_light_dir;    // Directional light direction (normalized)\n"
+"uniform vec3 u_light_ambient; // Ambient light color\n"
 "void main() {\n"
-"    vec4 col = v_col;\n"
+"    vec3 n = normalize(v_nrm);\n"
+"    vec3 l = normalize(u_light_dir);\n"
+"    float ndotl = max(dot(n, l), 0.0);\n"
+"    vec3 diff = ndotl * vec3(1.0); // White directional light\n"
+"    vec3 lit = u_light_ambient + diff;\n"
+"    vec4 col = v_col * vec4(lit, 1.0);\n"
 "    if (u_tex0_enable != 0) {\n"
 "        vec4 tex = texture(u_tex0, v_uv0);\n"
 "        col.rgb *= tex.rgb;\n"
@@ -657,6 +674,8 @@ static void bridge_compile_shaders(void)
     g_proj_loc = glGetUniformLocation(g_shader_program, "u_proj");
     g_mvp_loc = glGetUniformLocation(g_shader_program, "u_mvp");
     g_uv_scale_loc = glGetUniformLocation(g_shader_program, "u_uv_scale");
+    g_light_dir_loc = glGetUniformLocation(g_shader_program, "u_light_dir");
+    g_light_ambient_loc = glGetUniformLocation(g_shader_program, "u_light_ambient");
     
     /* Texture uniforms for fragment shader (tex0 + tex1 with TEV compositing) */
     g_tex0_enable_loc = glGetUniformLocation(g_shader_program, "u_tex0_enable");
@@ -1160,6 +1179,16 @@ static void bridge_upload_and_draw(void)
     if (g_uv_scale_loc >= 0) {
         GLfloat uv_scale[2] = {1.0f, 1.0f};
         glUniform2fv(g_uv_scale_loc, 1, uv_scale);
+    }
+    
+    /* Upload lighting uniforms — simple directional light from above-front */
+    if (g_light_dir_loc >= 0) {
+        GLfloat light_dir[3] = {0.5f, 0.8f, 0.3f};  // Light from above-front-right
+        glUniform3fv(g_light_dir_loc, 1, light_dir);
+    }
+    if (g_light_ambient_loc >= 0) {
+        GLfloat ambient[3] = {0.4f, 0.4f, 0.45f}; // Moderate ambient (slight blue tint)
+        glUniform3fv(g_light_ambient_loc, 1, ambient);
     }
     
     /* Upload alpha compare uniforms */
