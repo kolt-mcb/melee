@@ -586,9 +586,26 @@ static const char* g_vert_src =
 static const char* g_frag_src =
 "#version 330 core\n"
 "in vec4 v_col;\n"
+"in vec2 v_uv0;\n"
+"in vec2 v_uv1;\n"
 "out vec4 frag_color;\n"
+"uniform int u_tex0_enable;\n"
+"uniform int u_tex1_enable;\n"
+"uniform sampler2D u_tex0;\n"
+"uniform sampler2D u_tex1;\n"
 "void main() {\n"
-"    frag_color = v_col;\n"
+"    vec4 col = v_col;\n"
+"    if (u_tex0_enable != 0) {\n"
+"        vec4 tex = texture(u_tex0, v_uv0);\n"
+"        col.rgb *= tex.rgb;\n"
+"        col.a *= tex.a;\n"
+"    }\n"
+"    if (u_tex1_enable != 0) {\n"
+"        vec4 tex = texture(u_tex1, v_uv1);\n"
+"        col.rgb *= tex.rgb;\n"
+"        col.a *= tex.a;\n"
+"    }\n"
+"    frag_color = col;\n"
 "}\n";
 
 static GLuint compile_shader(GLenum type, const char* src)
