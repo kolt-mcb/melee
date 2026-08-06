@@ -117,14 +117,42 @@ void render_present(void)
      * Delay to frame 50 so stage init completes. */
     static int g_render_frame = 0;
     g_render_frame++;
-    if (g_render_frame >= 50 && g_render_frame <= 60 && !g_frame_saved) {
+    if (g_render_frame == 1) {
+        fprintf(stderr, "[RENDER] Frame 1 reached\n");
+        fflush(stderr);
+    }
+    if (g_render_frame >= 1 && g_render_frame <= 2 && !g_frame_saved) {
+        g_frame_saved = true;
         GLint vw, vh;
         SDL_Window* win = window_get_sdl_window();
         SDL_GetWindowSize(win, &vw, &vh);
 
+        /* Draw a test quad to verify the GL pipeline is working */
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_BLEND);
+        glUseProgram(0); // Use fixed function
+        glViewport(0, 0, vw, vh);
+        glBegin(GL_QUADS);
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glVertex2f(0.0f, 0.0f);
+        glVertex2f(200.0f, 0.0f);
+        glVertex2f(200.0f, 200.0f);
+        glVertex2f(0.0f, 200.0f);
+        glEnd();
+        glFlush();
+        
         GLubyte *pixels = (GLubyte*)malloc(vw * vh * 3);
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glFinish(); // Ensure all draw calls are complete
+        glReadBuffer(GL_BACK);
         glReadPixels(0, 0, vw, vh, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+        int nonblack = 0;
+        for (int i = 0; i < vw * vh; i++) {
+            if (pixels[i*3] > 10 || pixels[i*3+1] > 10 || pixels[i*3+2] > 10) nonblack++;
+        }
+        fprintf(stderr, "[SCREENSHOT] frame=%d nonblack=%d (%.1f%%)\n", g_render_frame, nonblack, 100.0*nonblack/(vw*vh));
+        fflush(stderr);
         FILE *f = fopen("screenshot.ppm", "wb");
         if (f) {
             fprintf(f, "P6\n%d %d\n255\n", vw, vh);
@@ -579,6 +607,11 @@ static void draw_hud_overlay(int width, int height, f32 time)
  */
 void render_debug_overlay(void)
 {
+    static int dbg = 0;
+    if (dbg++ < 3) {
+        fprintf(stderr, "[DBG] render_debug_overlay called\n");
+        fflush(stderr);
+    }
     long now = get_time_ms();
     g_frame_count++;
 
@@ -674,5 +707,10 @@ void invoke_gx_render_links(void)
      * each object's render_cb callback. */
     extern void HSD_GObj_80390FC0(void);
     
+    static int inv_dbg = 0;
+    if (inv_dbg++ < 3) {
+        fprintf(stderr, "[INVOKE] HSD_GObj_80390FC0\n");
+        fflush(stderr);
+    }
     HSD_GObj_80390FC0();
 }

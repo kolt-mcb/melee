@@ -612,22 +612,19 @@ static const char* g_frag_src =
 "uniform vec3 u_light_dir;    // Directional light direction (normalized)\n"
 "uniform vec3 u_light_ambient; // Ambient light color\n"
 "void main() {\n"
-"    vec3 n = normalize(v_nrm);\n"
-"    vec3 l = normalize(u_light_dir);\n"
-"    float ndotl = max(dot(n, l), 0.0);\n"
-"    vec3 diff = ndotl * vec3(1.0); // White directional light\n"
-"    vec3 lit = u_light_ambient + diff;\n"
-"    vec4 col = v_col * vec4(lit, 1.0);\n"
-"    if (u_tex0_enable != 0) {\n"
-"        vec4 tex = texture(u_tex0, v_uv0);\n"
-"        col.rgb *= tex.rgb;\n"
-"        col.a *= tex.a;\n"
+"    vec4 col = v_col;\n"
+"    float nlen = length(v_nrm);\n"
+"    float llen = length(u_light_dir);\n"
+"    if (nlen > 0.5 && llen > 0.5) {\n"
+"        vec3 n = v_nrm / nlen;\n"
+"        vec3 l = u_light_dir / llen;\n"
+"        float ndotl = max(dot(n, l), 0.0);\n"
+"        col.rgb *= (u_light_ambient + ndotl);\n"
+"    } else {\n"
+"        col.rgb *= u_light_ambient;\n"
 "    }\n"
-"    if (u_tex1_enable != 0) {\n"
-"        vec4 tex = texture(u_tex1, v_uv1);\n"
-"        col.rgb *= tex.rgb;\n"
-"        col.a *= tex.a;\n"
-"    }\n"
+"    if (u_tex0_enable != 0) { vec4 t = texture(u_tex0, v_uv0); if(length(t.rgb) > 0.001) col *= t; }\n"
+"    if (u_tex1_enable != 0) { vec4 t = texture(u_tex1, v_uv1); if(length(t.rgb) > 0.001) col *= t; }\n"
 "    frag_color = col;\n"
 "}\n";
 
@@ -1037,6 +1034,9 @@ void gx_set_depth_mask(Bool write_depth)
 
 static void bridge_upload_and_draw(void)
 {
+    /* Clear any lingering GL errors from previous calls */
+    glGetError();
+    
     u16 count = g_state.vert_count;
     if (count == 0) return;
     
@@ -1048,7 +1048,8 @@ static void bridge_upload_and_draw(void)
     /* Upload vertex data to GPU */
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, count * sizeof(Vertex), g_state.verts);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(g_state.verts), g_state.verts, GL_DYNAMIC_DRAW);
+    glGetError(); /* Clear any errors */
     
     /* Bind vertex attributes */
     glEnableVertexAttribArray(0);
@@ -1183,11 +1184,11 @@ static void bridge_upload_and_draw(void)
     
     /* Upload lighting uniforms — simple directional light from above-front */
     if (g_light_dir_loc >= 0) {
-        GLfloat light_dir[3] = {0.5f, 0.8f, 0.3f};  // Light from above-front-right
+        GLfloat light_dir[3] = {0.0f, 1.0f, 0.0f};  // Light from above (Y-up)
         glUniform3fv(g_light_dir_loc, 1, light_dir);
     }
     if (g_light_ambient_loc >= 0) {
-        GLfloat ambient[3] = {0.4f, 0.4f, 0.45f}; // Moderate ambient (slight blue tint)
+        GLfloat ambient[3] = {0.5f, 0.5f, 0.5f}; // Moderate ambient
         glUniform3fv(g_light_ambient_loc, 1, ambient);
     }
     
@@ -1380,15 +1381,6 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
         } else {
             memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix));
         }
-    }
-    
-    /* PC port: trace first few matrix loads */
-    static int g_mtx_trace = 0;
-    if (g_mtx_trace < 5) {
-        fprintf(stderr, "[GX] LoadPosMtxImm id=%d trans=(%g,%g,%g) view_valid=%d\n",
-                id, mtx[0][3], mtx[1][3], mtx[2][3], g_state.view_matrix_valid);
-        g_mtx_trace++;
-        fflush(stderr);
     }
 }
 
@@ -3185,7 +3177,7 @@ skip_tlut:
     /* Count active texture units */
     g_active_tex_count = 0;
     for (u32 i = 0; i < 2; i++) {
-        if (g_active_tex_slots[i] > 0 && g_state.tex_cache_valid[g_active_tex_slots[i]]) {
+        if (g_state.tex_cache_valid[g_active_tex_slots[i]]) {
             g_active_tex_count++;
         }
     }

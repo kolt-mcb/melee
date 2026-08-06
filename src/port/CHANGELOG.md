@@ -1,3 +1,33 @@
+## [2025-08-06j] — Black Screen Root Cause: Fragment Shader NaN + Unbound Textures
+
+### Root Cause Analysis
+- **Black screen despite valid draw calls**: 261K pixels render with constant-red
+  shader but 0 pixels with lighting shader.
+- **Root cause 1 (NaN normals)**: `normalize(vec3(0,0,0))` produces NaN in GLSL.
+  Zero normals from disabled attributes propagate through `mat3(u_mvp) * a_nrm`.
+  NaN arithmetic taints entire fragment output → black.
+- **Root cause 2 (Unbound textures)**: `texture()` on unbound GL texture units
+  returns `(0,0,0,1)`. Multiplying vertex colors by black → all fragments black.
+- **Diagnosis**: Iterative shader simplification isolated both issues. Constant
+  red shader works → pipeline valid. Vertex color passthrough works → VBO valid.
+  Ambient-only works → uniforms uploaded. Full lighting fails → NaN/textures.
+
+### Fixes
+- **NaN guard in fragment shader**: Check `length(v_nrm) > 0.5` and
+  `length(u_light_dir) > 0.5` before normalizing. Use division instead of
+  `normalize()` to avoid implicit NaN on zero vectors.
+- **Texture sampling guard**: Check `length(t.rgb) > 0.001` before multiplying.
+  Unbound textures return `(0,0,0,1)` which blacks out fragments.
+- **Lighting uniforms**: `u_light_dir = (0,1,0)` (Y-up), `u_light_ambient = (0.5,0.5,0.5)`.
+- **VBO upload**: Use `glBufferData` with full buffer size instead of `glBufferSubData`
+  to avoid Mesa driver issues with buffer reallocation.
+
+### Result
+- Stage geometry renders with proper directional + ambient lighting.
+- 261,940 visible pixels (28.4% of 1280x720 viewport).
+- Geometry spans bounding box (0,62)-(1182,699), nearly full viewport.
+- Whitish-blue vertex colors with moderate lighting.
+
 ## [2025-08-06i] — Stage Geometry Visibility (261K pixels, 28.4%)
 
 ### Tighter Joint Clamp & Camera Tuning
