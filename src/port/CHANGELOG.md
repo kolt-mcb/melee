@@ -22,6 +22,41 @@
 - Texture upload path (GXLoadTexObj) is wired and functional.
   Needs valid texture data from TObjDesc to activate.
 
+## [2025-08-06] — Render Chain Validation & TEV Crash Diagnosis
+
+### Full Render Chain Traced and Validated
+- **Instrumented grDisplay_801C5DB0**: Added debug prints at each early-exit check.
+  Confirmed callback reaches `HSD_GObj_JObjCallback` (b5==0 path).
+  Flags: b012=0, cam=0, x18=(nil), b5=0, b2=1, b3=0.
+- **Traced HSD_JObjDispAll → HSD_JObjDisp → HSD_JObjDispDObj → HSD_DObjDisp → HSD_MObjSetup → HSD_PObjDisp → PObjDispSimplePrimitive → GXCallDisplayList**
+  All links in the chain are functional. Geometry renders with vertex colors.
+- **Confirmed MObjSetup is called**: `mobj->tobj=(nil)` for all MObjs because
+  texdesc conversion is disabled. Texture upload path (GXLoadTexObj) is wired
+  and functional, waiting for valid texture data.
+- **PObjDispSimplePrimitive confirmed**: Display lists parsed and uploaded.
+  n_display=7 (224 bytes) for first mesh, n_display=55 (1760 bytes) for second.
+
+### TObjDesc Conversion Crash Diagnosis (GDB)
+- **Crash location**: `HSD_TExpColorInSub` at `mov (%rdx), %ebx` where `%rdx = -1`
+  Call chain: HSD_TExpColorInSub → TObjMakeTExp → MObjMakeTExp →
+  HSD_MObjCompileTev → HSD_MObjLoadDesc → DObjLoad → HSD_DObjLoadDesc → JObjLoad
+- **Root cause**: `sel = 0xfffffffe = -2` and `exp = -1` passed to HSD_TExpColorInSub.
+  These are garbage values from the converted TObjDesc's blend_flags field.
+  `tobj_colormap(tobj)` extracts bits 16-19 of flags, which are garbage from
+  the GCN→x64 conversion, causing the switch to fall through to `HSD_ASSERT`.
+- **GCN struct layout mismatch**: Raw bytes at texdesc offset show valid data
+  (src=4, wrap_s=GX_CLAMP, imagedesc=valid offset), but the full struct layout
+  doesn't match our GCN packed struct definition. The TEV fields (tevdesc)
+  are read from wrong offsets, producing garbage enum values.
+- **Blocked**: Texture loading requires correct GCN TObjDesc struct layout.
+  Need to reverse-engineer the actual field offsets from the archive data.
+
+### HSD_GObj_80390EB8 Fix
+- Weak stub was `void HSD_GObj_80390EB8(void)` but header declares
+  `u32 HSD_GObj_80390EB8(s32 i)`. Strong definition in gobj.c overrides it.
+  Returns `HSD_GObj_804085F0[i]` = {1, 4, 2, 0}. For code=0, returns 1.
+  This sets `flags=1` in HSD_JObjDispAll, enabling bits 18 and 28 checks.
+
 ## [2025-08-05h9] — Camera Tuning, Vertex Clamping, Main Loop Exit
 
 ### Camera System Overhaul
