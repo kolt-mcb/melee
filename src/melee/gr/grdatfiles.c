@@ -570,7 +570,10 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
     /* rendermode */
     x64Mobj->rendermode = be32_swap(gcnMobj->rendermode);
 
-    /* texdesc - disabled for now (GCN struct layout mismatch causes TEV crash) */
+    /* texdesc - disabled: GCN rendermode flags (0x60000011) don't set
+     * RENDER_VERTEX/RENDER_DIFFUSE, leaving diff/alpha uninitialized in
+     * MObjMakeTExp. TObjMakeTExp then passes garbage pointers to HSD_TExpColorIn.
+     * Fix requires understanding the full TEV/lighting flag mapping. */
     x64Mobj->texdesc = NULL;
 
     /* mat - allocate a default material (MObjLoad copies from desc->mat) */

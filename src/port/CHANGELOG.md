@@ -22,6 +22,34 @@
 - Texture upload path (GXLoadTexObj) is wired and functional.
   Needs valid texture data from TObjDesc to activate.
 
+## [2025-08-06b] — Texture Loading Crash Root Cause Found
+
+### TEV Pipeline Crash Diagnosis
+- **Crash**: Enabling TObjDesc conversion crashes in `HSD_TExpColorInSub` with
+  `sel=-2, exp=-1` (garbage values).
+- **Root Cause**: GCN `rendermode` field (0x60000011) does NOT set `RENDER_VERTEX`
+  (bit 1) or `RENDER_DIFFUSE` (bit 2) in `MObjMakeTExp`. This leaves `diff` and
+  `alpha` expression pointers UNINITIALIZED. When `TObjMakeTExp` is called for
+  lightmap textures, it reads `*c` and `*a` (the uninitialized pointers) and
+  passes them as `HSD_TExp*` arguments to `HSD_TExpColorIn`, causing the crash.
+- **GCN Data Valid**: Raw TObjDesc bytes parse correctly (src=4, wrap_s/t=GX_REPEAT,
+  scale=(1,1,1), imagedesc=valid 32x32 RGBA4). Raw ImageDesc bytes also valid
+  (image_ptr=0x0007adc0, w=32, h=32, fmt=RGBA4).
+- **Blocked**: Texture loading requires understanding the full GCN rendermode flag
+  mapping to baselib RENDER_* constants. The TEV compilation pipeline assumes
+  valid expression pointers from MObjMakeTExp, which are only initialized when
+  RENDER_VERTEX or RENDER_DIFFUSE is set.
+- **Workaround**: TObjDesc conversion disabled. Stage geometry renders with
+  vertex colors (no textures). ~7-13% of screen shows visible geometry.
+
+### Render Chain Fully Validated
+- Traced and confirmed every link: grDisplay → HSD_GObj_JObjCallback →
+  HSD_JObjDispAll → HSD_JObjDisp → HSD_JObjDispDObj → HSD_DObjDisp →
+  HSD_MObjSetup → HSD_PObjDisp → PObjDispSimplePrimitive → GXCallDisplayList
+- GXCallDisplayList receives valid display lists (224B, 1760B, 288B, 3264B, etc.)
+- Display list parser processes ~3.4M vertices across all frames
+- Stage geometry renders with vertex colors (white default)
+
 ## [2025-08-06] — Render Chain Validation & TEV Crash Diagnosis
 
 ### Full Render Chain Traced and Validated
