@@ -984,9 +984,9 @@ void gx_set_default_3d_camera(void)
     /* Default camera: perspective, 60 degree FOV.
      * Real geometry is near origin (x≈0, y≈0, z≈0-5000).
      * Position camera to see this area from an elevated angle. */
-    gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 15000.0f,
-                     0.0f, 2000.0f, 6000.0f,      /* eye: above and in front */
-                     0.0f, 0.0f, 2000.0f,         /* target: near origin */
+    gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 20000.0f,
+                     3000.0f, 2000.0f, 3000.0f,   /* eye: diagonal above */
+                     0.0f, 0.0f, 2500.0f,         /* target: center of geometry */
                      0.0f, 1.0f, 0.0f);           /* up vector: standard Y-up */
 }
 
@@ -1149,7 +1149,7 @@ static void bridge_upload_and_draw(void)
         f32 mvp_flat[16];
         for (int i = 0; i < 4; i++)
             for (int j = 0; j < 4; j++)
-                mvp_flat[i * 4 + j] = mvp[i][j];  /* Column-major for OpenGL */
+                mvp_flat[j * 4 + i] = mvp[i][j];  /* Transpose to column-major for OpenGL */
         glUniformMatrix4fv(g_mvp_loc, 1, GL_FALSE, mvp_flat);
     }
     

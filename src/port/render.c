@@ -111,10 +111,13 @@ void render_present(void)
     /* Flush any remaining GX batches before swapping */
     gx_frame_end();
     
-    /* Save first rendered frame to screenshot.ppm for debugging.
+    /* Save rendered frame to screenshot.ppm for debugging.
      * MUST read pixels BEFORE window_swap() — after swap the backbuffer
-     * is a fresh black buffer and the previous frame is on screen. */
-    if (!g_frame_saved) {
+     * is a fresh black buffer and the previous frame is on screen.
+     * Delay to frame 50 so stage init completes. */
+    static int g_render_frame = 0;
+    g_render_frame++;
+    if (g_render_frame >= 50 && g_render_frame <= 60 && !g_frame_saved) {
         GLint vw, vh;
         SDL_Window* win = window_get_sdl_window();
         SDL_GetWindowSize(win, &vw, &vh);
@@ -642,35 +645,7 @@ void render_present_pc(void)
     /* Flush pending draw calls */
     gx_frame_end();
     
-    /* Save first rendered frame BEFORE swap — after swap we read fresh backbuffer.
-     * Also capture frame 2 and 3 if frame 1 was all-one-color (debug). */
-    if (g_frame_saved == 0) {
-        g_frame_saved = -1;  /* Mark as frame 1 captured */
-        SDL_Window* win = window_get_sdl_window();
-        if (win) {
-            int vw = 1280, vh = 720;
-            SDL_GetWindowSize(win, &vw, &vh);
-            GLubyte *pixels = (GLubyte*)malloc(vw * vh * 3);
-            if (pixels) {
-                        glFinish();
-                glPixelStorei(GL_PACK_ALIGNMENT, 1);
-                glReadPixels(0, 0, vw, vh, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-                FILE *f = fopen("screenshot.ppm", "wb");
-                if (f) {
-                    fprintf(f, "P6\n%d %d\n255\n", vw, vh);
-                    GLubyte *row = (GLubyte*)malloc(vw * 3);
-                    for (int y = vh - 1; y >= 0; y--) {
-                        memcpy(row, pixels + y * (vw * 3), vw * 3);
-                        fwrite(row, 1, vw * 3, f);
-                    }
-                    free(row);
-                    fclose(f);
-                    PORT_LOG_INFO("[RENDER] First frame captured -> screenshot.ppm (%dx%d)", vw, vh);
-                }
-                free(pixels);
-            }
-        }
-    }
+    /* Screenshot is captured in render_present() on frame 50 */
     
     /* Present the frame AFTER reading screenshot */
     window_swap();

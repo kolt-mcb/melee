@@ -415,6 +415,23 @@ static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         x64Joint->position.z = *(f32*)&raw;
     }
     
+    /* Clamp extreme values to prevent garbage transforms from bad archive data */
+    {
+        f32 pos_limit = 10000.0f, scl_limit = 100.0f;
+        if (x64Joint->position.x < -pos_limit) x64Joint->position.x = -pos_limit;
+        if (x64Joint->position.x > pos_limit) x64Joint->position.x = pos_limit;
+        if (x64Joint->position.y < -pos_limit) x64Joint->position.y = -pos_limit;
+        if (x64Joint->position.y > pos_limit) x64Joint->position.y = pos_limit;
+        if (x64Joint->position.z < -pos_limit) x64Joint->position.z = -pos_limit;
+        if (x64Joint->position.z > pos_limit) x64Joint->position.z = pos_limit;
+        if (x64Joint->scale.x < -scl_limit) x64Joint->scale.x = -scl_limit;
+        if (x64Joint->scale.x > scl_limit) x64Joint->scale.x = scl_limit;
+        if (x64Joint->scale.y < -scl_limit) x64Joint->scale.y = -scl_limit;
+        if (x64Joint->scale.y > scl_limit) x64Joint->scale.y = scl_limit;
+        if (x64Joint->scale.z < -scl_limit) x64Joint->scale.z = -scl_limit;
+        if (x64Joint->scale.z > scl_limit) x64Joint->scale.z = scl_limit;
+    }
+    
     if (visited_count < 3) {
         fprintf(stderr, "[GRDAT] Joint[%u] pos=(%.1f,%.1f,%.1f) scl=(%.1f,%.1f,%.1f)\n",
                 visited_count,
