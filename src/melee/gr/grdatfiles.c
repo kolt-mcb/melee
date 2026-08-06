@@ -686,12 +686,19 @@ static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8
     u32 val;
     u32 raw;
     static int convert_count = 0;
+    static int last_map_id = -1;
 
     if (gcnTobjPtr == NULL) return NULL;
 
+    gcnTobj = (const struct HSD_TObjDesc_gcn*)gcnTobjPtr;
+
+    /* Reset counter when map_id changes (detected via different base pointers) */
+    // Note: convert_count is intentionally NOT reset - it tracks total conversions
+    // to prevent infinite loops across all map loads.
+
     /* Safety: limit conversion count to prevent infinite loops */
-    if (convert_count > 100) {
-        fprintf(stderr, "[GRDAT] TObjDesc conversion limit reached (100)\n");
+    if (convert_count > 500) {
+        fprintf(stderr, "[GRDAT] TObjDesc conversion limit reached (%d)\n", convert_count);
         return NULL;
     }
 

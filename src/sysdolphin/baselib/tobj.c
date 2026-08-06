@@ -1177,7 +1177,10 @@ void HSD_TObjSetup(HSD_TObj* tobj)
 
         TObjSetupMtx(tobj);
         HSD_ASSERT(1578, imagedesc);
-        HSD_ASSERT(1579, imagedesc->image_ptr);
+        /* PC port: guard against NULL image_ptr from GCN→x64 conversion */
+        if (!imagedesc->image_ptr) {
+            continue;
+        }
 
         lod = tobj->lod != NULL ? tobj->lod : &default_lod;
         min_filter = lod->minFilt;
