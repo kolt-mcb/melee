@@ -22,6 +22,32 @@
 - Texture upload path (GXLoadTexObj) is wired and functional.
   Needs valid texture data from TObjDesc to activate.
 
+## [2025-08-06c] — TEV Pipeline Guards & Texture Loading Blocker
+
+### TEV Pipeline Crash Root Cause
+- **Crash location**: `HSD_TExpColorInSub` dereferences garbage `tev` or `exp` pointers
+  from the TEV expression chain during `HSD_MObjCompileTev` → `MObjMakeTExp` →
+  `TObjMakeTExp` → `HSD_TExpColorIn` → `HSD_TExpColorInSub`.
+- **Root cause**: GCN TObjDesc `blend_flags` field (0x00250010) maps to valid
+  baselib constants (TEX_COLORMAP_REPLACE, TEX_ALPHAMAP_BLEND), but the TEV
+  expression chain built by `MObjMakeTExp` contains pointers that are valid on
+  GCN (32-bit address space) but garbage on x86_64 (64-bit pointers).
+- **Attempted fixes**: Added guards in `TObjMakeTExp` (colormap/alphamap validation,
+  c_src/a_src sentinel checks) and `HSD_TExpColorInSub`/`HSD_TExpAlphaInSub`
+  (tev/exp pointer validation). Guards caught some cases but not all.
+- **Decision**: Texture loading disabled pending full TEV pipeline understanding.
+  The GCN TEV compiler assumes 32-bit pointer arithmetic and specific memory
+  layouts that don't translate directly to x86_64.
+
+### Render Chain Fully Validated
+- Complete path traced: grDisplay → HSD_GObj_JObjCallback → HSD_JObjDispAll →
+  HSD_JObjDisp → HSD_JObjDispDObj → HSD_DObjDisp → HSD_MObjSetup →
+  HSD_PObjDisp → PObjDispSimplePrimitive → GXCallDisplayList
+- GXCallDisplayList receives valid display lists (224B, 1760B, 288B, 3264B)
+- Display list parser processes ~3.4M vertices across all frames
+- Stage geometry renders with vertex colors (~7-13% visible pixels)
+- Texture upload path (GXLoadTexObj) wired and functional, waiting for valid data
+
 ## [2025-08-06b] — Texture Loading Crash Root Cause Found
 
 ### TEV Pipeline Crash Diagnosis
