@@ -3,7 +3,7 @@
 
 static SDL_Window* g_sdl_window = NULL;
 static SDL_GLContext g_gl_context = NULL;
-static volatile Bool g_should_quit = FALSE;
+volatile Bool g_should_quit = FALSE;  /* global, used by main loop */
 
 Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
 {

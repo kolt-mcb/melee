@@ -17,6 +17,9 @@ typedef struct {
 Bool window_init(int* width, int* height, Bool fullscreen, const char* title);
 void window_shutdown(void);
 
+/* Global quit flag (set by SDL_QUIT / ESC key) */
+extern volatile Bool g_should_quit;
+
 Bool window_should_close(void);
 void window_poll_events(void);
 

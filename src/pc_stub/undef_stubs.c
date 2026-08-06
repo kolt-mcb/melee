@@ -1770,7 +1770,8 @@ void game_main_loop(void)
 
     /* Use SDL timing for consistent frame pacing */
     int frame_count = 0;
-    while (1) {
+    int max_frames = 600;  /* Run ~10 seconds then exit (for testing) */
+    while (frame_count < max_frames && !g_should_quit) {
         frame_count++;
 
         /* Poll input first (before render, so state is fresh) */
