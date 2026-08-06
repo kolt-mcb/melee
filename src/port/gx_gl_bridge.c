@@ -495,6 +495,12 @@ typedef struct {
 } BridgeState;
 
 static BridgeState g_state;
+
+/* Debug: track unclamped vertex position range across display list parsing */
+static f32 g_dbg_xmin = 1e10f, g_dbg_ymin = 1e10f, g_dbg_zmin = 1e10f;
+static f32 g_dbg_xmax = -1e10f, g_dbg_ymax = -1e10f, g_dbg_zmax = -1e10f;
+static int g_dbg_vert_count = 0;
+
 static GLuint g_vbo = 0;
 static GLuint g_vao = 0;
 static GLuint g_shader_program = 0;
@@ -877,6 +883,16 @@ void gx_frame_end(void)
                       g_state.bounds_max[0], g_state.bounds_max[1], g_state.bounds_max[2],
                       g_state.bounds_count);
     }
+    
+    /* Debug: print unclamped vertex position range from display list parser */
+    if (g_dbg_vert_count > 0 && s_bounds_frame % 600 == 0) {
+        fprintf(stderr, "[DBG] RAW VERTS: x=[%.0f..%.0f] y=[%.0f..%.0f] z=[%.0f..%.0f] count=%d\n",
+                g_dbg_xmin, g_dbg_xmax, g_dbg_ymin, g_dbg_ymax, g_dbg_zmin, g_dbg_zmax, g_dbg_vert_count);
+        /* Reset for next frame */
+        g_dbg_xmin = g_dbg_ymin = g_dbg_zmin = 1e10f;
+        g_dbg_xmax = g_dbg_ymax = g_dbg_zmax = -1e10f;
+        g_dbg_vert_count = 0;
+    }
 }
 
 /* ============================================================
@@ -965,12 +981,13 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
 
 void gx_set_default_3d_camera(void)
 {
-    /* Default camera: perspective, 75 degree FOV (wider view).
-     * Stage geometry centered well with elevated top-down view. */
-    gx_set_3d_camera(75.0f, 1280.0f / 720.0f, 1.0f, 20000.0f,
-                     0.0f, 5000.0f, 3000.0f,   /* eye: high above, further forward */
-                     0.0f, 0.0f, -500.0f,     /* target: center of stage */
-                     0.0f, 0.0f, 1.0f);      /* up vector: pointing forward (top-down view) */
+    /* Default camera: perspective, 60 degree FOV.
+     * Real geometry is near origin (x≈0, y≈0, z≈0-5000).
+     * Position camera to see this area from an elevated angle. */
+    gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 15000.0f,
+                     0.0f, 2000.0f, 6000.0f,      /* eye: above and in front */
+                     0.0f, 0.0f, 2000.0f,         /* target: near origin */
+                     0.0f, 1.0f, 0.0f);           /* up vector: standard Y-up */
 }
 
 /* ============================================================
@@ -1465,6 +1482,14 @@ static void bridge_add_vertex(void)
         if (v->pos[1] > clamp) v->pos[1] = clamp;
         if (v->pos[2] < -clamp) v->pos[2] = -clamp;
         if (v->pos[2] > clamp) v->pos[2] = clamp;
+        
+        /* Debug: track unclamped position distribution */
+        if (g_state.vert_count == 0) {
+            g_state.bounds_min[0] = g_state.bounds_min[1] = g_state.bounds_min[2] = 0;
+            g_state.bounds_max[0] = g_state.bounds_max[1] = g_state.bounds_max[2] = 0;
+            g_state.bounds_count = 0;
+            g_state.bounds_valid = FALSE;
+        }
     }
     
     /* Track geometry bounds in world space (only for stage geometry, not HUD)
@@ -1889,6 +1914,7 @@ void GXCallDisplayList(void* list, u32 nbytes)
                         const u8* base_pos = (const u8*)g_state.arr_pos;
                         u16 stride_pos = g_state.arr_stride_pos;
                         
+                        /* Debug: track position histogram across all draw calls */
                         for (u16 v = 0; v < nverts; v++) {
                             const u8* vp_pos = base_pos + v * stride_pos;
                             
@@ -1920,6 +1946,16 @@ void GXCallDisplayList(void* list, u32 nbytes)
                                     break;
                                 }
                                 }
+                                
+                                /* Track unclamped bounds */
+                                if (px < g_dbg_xmin) g_dbg_xmin = px;
+                                if (py < g_dbg_ymin) g_dbg_ymin = py;
+                                if (pz < g_dbg_zmin) g_dbg_zmin = pz;
+                                if (px > g_dbg_xmax) g_dbg_xmax = px;
+                                if (py > g_dbg_ymax) g_dbg_ymax = py;
+                                if (pz > g_dbg_zmax) g_dbg_zmax = pz;
+                                g_dbg_vert_count++;
+                                
                                 GXPosition3f32(px, py, pz);
                             }
                             
