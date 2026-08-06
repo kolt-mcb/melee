@@ -570,7 +570,7 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
     /* rendermode */
     x64Mobj->rendermode = be32_swap(gcnMobj->rendermode);
 
-    /* texdesc - disabled for now (causes crash during stage init) */
+    /* texdesc - disabled for now (GCN struct layout mismatch causes TEV crash) */
     x64Mobj->texdesc = NULL;
 
     /* mat - allocate a default material (MObjLoad copies from desc->mat) */
