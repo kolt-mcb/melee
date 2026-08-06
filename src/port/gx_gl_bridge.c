@@ -315,7 +315,7 @@ enum {
  * ============================================================ */
 
 #define MAX_VERTS 16384
-#define MAX_TEXTURES 16
+#define MAX_TEXTURES 64
 
 /* TLUT palette slot structure */
 typedef struct {
