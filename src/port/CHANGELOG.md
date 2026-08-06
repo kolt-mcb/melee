@@ -1,3 +1,28 @@
+## [2025-08-06k] — Texture Mapping & Normal Format Fix
+
+### Texture Loading Working
+- **Root cause**: GCN I8 intensity textures uploaded as `GL_LUMINANCE` which is
+  deprecated in OpenGL 3.30 core profile. Mesa returns `(R, 0, 0, 1)` instead of
+  `(R, R, R, 1)`, causing red-tinted textures.
+- **Fix**: Upload I8/I4 as `GL_R8`/`GL_RED` and IA8/IA4 as `GL_RG8`/`GL_RG`.
+  Fragment shader replicates R channel: `vec4(t.r, t.r, t.r, t.a)`.
+- **Result**: Grayscale intensity textures now render correctly. Stage geometry
+  shows texture-mapped surfaces with proper lighting.
+- **Verified**: Screenshot center pixel (128,128,128), sample pixels (42,42,42)
+  and (128,128,128) confirming multi-level intensity mapping.
+
+### Normal Format Tracking
+- **Fix**: Added `nrm_comp_type` and `nrm_frac` fields to `BridgeState`.
+  `GXSetVtxAttrFmt` now captures normal format params separately from position
+  format. Display list parser uses `nrm_comp_type` instead of `pos_comp_type`
+  for normal parsing.
+- **Impact**: Ensures correct normal parsing when normals use a different format
+  than positions (e.g., 8-bit signed normals with 32-bit float positions).
+
+### 257,779 visible pixels (28.0% of viewport)
+- Stage geometry with texture mapping and directional lighting.
+- Grayscale I8 textures applied correctly to stage surfaces.
+
 ## [2025-08-06j] — Black Screen Root Cause: Fragment Shader NaN + Unbound Textures
 
 ### Root Cause Analysis

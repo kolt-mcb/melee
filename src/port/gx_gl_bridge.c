@@ -482,6 +482,8 @@ typedef struct {
     u8 pos_comp_cnt;            /* Position component count (0=XY, 1=XYZ) */
     u8 pos_comp_type;           /* Position component type (0=U8, 1=S8, 2=U16, 3=S16, 4=F32) */
     u8 pos_frac;                /* Position fraction bits */
+    u8 nrm_comp_type;           /* Normal component type (same enum as pos) */
+    u8 nrm_frac;                /* Normal fraction bits */
     
     /* Viewing matrix (from gx_set_3d_camera) */
     f32 view_matrix[3][4];      /* Viewing matrix (camera transform) */
@@ -623,8 +625,8 @@ static const char* g_frag_src =
 "    } else {\n"
 "        col.rgb *= u_light_ambient;\n"
 "    }\n"
-"    if (u_tex0_enable != 0) { vec4 t = texture(u_tex0, v_uv0); if(length(t.rgb) > 0.001) col *= t; }\n"
-"    if (u_tex1_enable != 0) { vec4 t = texture(u_tex1, v_uv1); if(length(t.rgb) > 0.001) col *= t; }\n"
+"    if (u_tex0_enable != 0) { vec4 t = texture(u_tex0, v_uv0); vec4 tc = vec4(t.r, t.r, t.r, t.a); if(length(tc.rgb) > 0.001) col *= tc; }\n"
+"    if (u_tex1_enable != 0) { vec4 t = texture(u_tex1, v_uv1); vec4 tc = vec4(t.r, t.r, t.r, t.a); if(length(tc.rgb) > 0.001) col *= tc; }\n"
 "    frag_color = col;\n"
 "}\n";
 
@@ -1447,7 +1449,12 @@ void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
         g_state.pos_comp_type = (u8)type;
         g_state.pos_frac = frac;
         break;
-    case 10: g_state.nrm_enabled = TRUE; break;   /* GX_VA_NRM */
+    case 10: {
+        g_state.nrm_enabled = TRUE;
+        g_state.nrm_comp_type = (u8)type;
+        g_state.nrm_frac = frac;
+        break;
+    }
     case 11: g_state.clr_enabled = TRUE; break;   /* GX_VA_CLR0 */
     case 13: g_state.tex0_enabled = TRUE; break;  /* GX_VA_TEX0 */
     case 14: g_state.tex1_enabled = TRUE; break;  /* GX_VA_TEX1 */
@@ -2022,8 +2029,8 @@ void GXCallDisplayList(void* list, u32 nbytes)
                             if (g_state.nrm_enabled && g_state.arr_nrm != NULL) {
                                 const u8* vp_nrm = (const u8*)g_state.arr_nrm + v * g_state.arr_stride_nrm;
                                 f32 nx, ny, nz;
-                                /* Normals use same format as positions (f16 or f32) */
-                                switch (g_state.pos_comp_type) {
+                                /* Normals use their own format type (nrm_comp_type) */
+                                switch (g_state.nrm_comp_type) {
                                 case 3: { /* f16 */
                                     u16 hnx = ((u16)vp_nrm[0] << 8) | vp_nrm[1];
                                     u16 hny = ((u16)vp_nrm[2] << 8) | vp_nrm[3];
@@ -2859,13 +2866,13 @@ static void gx_format_to_gl(u8 gx_fmt, GLenum* internal_fmt, GLenum* base_fmt, G
 {
     switch (gx_fmt) {
     case 0x00: /* I4 */
-        *internal_fmt = GL_LUMINANCE; *base_fmt = GL_LUMINANCE; *data_type = GL_UNSIGNED_BYTE; break;
+        *internal_fmt = GL_R8; *base_fmt = GL_RED; *data_type = GL_UNSIGNED_BYTE; break;
     case 0x01: /* I8 */
-        *internal_fmt = GL_LUMINANCE; *base_fmt = GL_LUMINANCE; *data_type = GL_UNSIGNED_BYTE; break;
+        *internal_fmt = GL_R8; *base_fmt = GL_RED; *data_type = GL_UNSIGNED_BYTE; break;
     case 0x02: /* IA4 */
-        *internal_fmt = GL_LUMINANCE_ALPHA; *base_fmt = GL_LUMINANCE_ALPHA; *data_type = GL_UNSIGNED_BYTE; break;
+        *internal_fmt = GL_RG8; *base_fmt = GL_RG; *data_type = GL_UNSIGNED_BYTE; break;
     case 0x03: /* IA8 */
-        *internal_fmt = GL_LUMINANCE_ALPHA; *base_fmt = GL_LUMINANCE_ALPHA; *data_type = GL_UNSIGNED_BYTE; break;
+        *internal_fmt = GL_RG8; *base_fmt = GL_RG; *data_type = GL_UNSIGNED_BYTE; break;
     case 0x04: /* RGB565 */
         *internal_fmt = GL_RGB8; *base_fmt = GL_RGB; *data_type = GL_UNSIGNED_SHORT_5_6_5; break;
     case 0x05: /* RGB5A3 */
