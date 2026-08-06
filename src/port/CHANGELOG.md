@@ -1,3 +1,35 @@
+## [2025-08-05h9] — Camera Tuning, Vertex Clamping, Main Loop Exit
+
+### Camera System Overhaul
+- **Problem**: Stage geometry rendered at bottom of screen (y=620-719),
+  only 14-63K visible pixels. Joint transforms produced extreme coordinates
+  (-64576 to +64576) from garbage scale values.
+- **Fix**: Elevated top-down camera (75 FOV, eye at y=5000, z=3000),
+  looking down at stage center. Up vector (0,0,1) for top-down view.
+- **Vertex Clamping**: Clamp vertex positions to ±10000 to filter outliers
+  from joints with garbage transforms. Prevents camera distortion.
+- **Result**: 825,879 visible pixels (66% of screen), centered at y=377.
+  Geometry spans y=35-719 (685 rows), full screen width.
+
+### Geometry Bounds Tracking
+- Added `bounds_min[3]`, `bounds_max[3]`, `bounds_count`, `bounds_valid`
+  to `BridgeState` struct. Updated per-vertex in `bridge_add_vertex()`.
+- Filters: magnitude > 100 (exclude HUD) and < 200M (exclude extremes).
+- Logs bounds every 600 frames for camera tuning.
+
+### Main Loop Exit Condition
+- **Problem**: `while(1)` loop never exited; program hung indefinitely.
+  `g_should_quit` was `static` in `window.c` — invisible to main loop.
+- **Fix**: Made `g_should_quit` non-static, exported in `window.h`.
+  Added frame limit (600 frames ≈ 10 seconds) for testing.
+  Main loop: `while (frame_count < max_frames && !g_should_quit)`.
+
+### Known Issues
+- Segfault during shutdown (`free(): invalid pointer` heap corruption).
+  Does not affect rendering — program runs 600 frames cleanly.
+- Geometry colors are uniform white (no UV mapping yet).
+- Joint transforms still have some garbage values (clamped, not fixed).
+
 ## [2025-08-05h8] — Stage Geometry Visibility RESOLVED
 
 ### Root Cause: Disabled Vertex Color Attribute
