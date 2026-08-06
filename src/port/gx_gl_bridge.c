@@ -382,7 +382,7 @@ typedef struct {
     Bool tex1_enabled;
     
     /* Matrix tracking */
-    f32 mtx_array[8][3][4];  /* Up to 8 matrices */
+    f32 mtx_array[68][3][4];  /* GCN matrix IDs: 0-27 (PNMTX), 30-60 (TEXMTX/IDENTITY), 64+ (bump) */
     u32 current_mtx_id;
     
     /* TEV state - full tracking for shader compositing */
@@ -1357,6 +1357,7 @@ void GXSetCopyClear(void* color, u32 z)
 
 void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
 {
+    if (id >= 68) { PORT_LOG_WARN("GXLoadPosMtxImm: matrix id %u out of range", id); return; }
     /* PC port: flush accumulated vertices before matrix changes.
      * This ensures each draw batch uses the correct MVP matrix. */
     if (g_state.vert_count > 0) {
@@ -1388,12 +1389,13 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
 
 void GXLoadNrmMtxImm(f32 mtx[3][4], u32 id)
 {
+    if (id >= 68) { PORT_LOG_WARN("GXLoadNrmMtxImm: matrix id %u out of range", id); return; }
     memcpy(g_state.mtx_array[id], mtx, sizeof(g_state.mv_matrix));
 }
 
 void GXSetCurrentMtx(u32 id)
 {
-    if (id < 8) {
+    if (id < 68) {
         g_state.current_mtx_id = id;
         if (id < 4) {
             /* Apply view transform when switching matrices */
@@ -2426,8 +2428,8 @@ u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod)
 }
 void GXLoadTexMtxImm(f32 mtx[][4], u32 id, u32 type)
 {
-    if (id >= 8) {
-        PORT_LOG_WARN("GXLoadTexMtxImm: invalid matrix id %u", id);
+    if (id >= 68) {
+        PORT_LOG_WARN("GXLoadTexMtxImm: matrix id %u out of range", id);
         return;
     }
     
