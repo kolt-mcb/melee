@@ -970,7 +970,7 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
     mv[1][0] = actual_up[0]; mv[1][1] = actual_up[1]; mv[1][2] = actual_up[2];
     mv[1][3] = -(actual_up[0]*eye_x + actual_up[1]*eye_y + actual_up[2]*eye_z);
     mv[2][0] = -fwd[0];   mv[2][1] = -fwd[1];   mv[2][2] = -fwd[2];
-    mv[2][3] = -(fwd[0]*eye_x + fwd[1]*eye_y + fwd[2]*eye_z);
+    mv[2][3] = (fwd[0]*eye_x + fwd[1]*eye_y + fwd[2]*eye_z);  /* Negated to match -fwd row */
     
     /* Save viewing matrix for later multiplication with model matrix */
     memcpy(g_state.view_matrix, mv, sizeof(g_state.view_matrix));
@@ -1149,7 +1149,7 @@ static void bridge_upload_and_draw(void)
         f32 mvp_flat[16];
         for (int i = 0; i < 4; i++)
             for (int j = 0; j < 4; j++)
-                mvp_flat[j * 4 + i] = mvp[i][j];
+                mvp_flat[i * 4 + j] = mvp[i][j];  /* Column-major for OpenGL */
         glUniformMatrix4fv(g_mvp_loc, 1, GL_FALSE, mvp_flat);
     }
     
@@ -1196,11 +1196,10 @@ static void bridge_upload_and_draw(void)
     }
     
     /* Upload active texture info to fragment shader */
-    /* 
-     * TEV mapping: game uses texEnv values to determine which texture unit binds.
-     * texEnv=0 → tex0 (GL_TEXTURE0), texEnv=1 → tex1 (GL_TEXTURE1), etc.
-     * We sample the bridge's active slots and bind them to the right units.
-     */
+    /* Reset texture enables first — only set if a texture is actually bound */
+    if (g_tex0_enable_loc >= 0) glUniform1i(g_tex0_enable_loc, 0);
+    if (g_tex1_enable_loc >= 0) glUniform1i(g_tex1_enable_loc, 0);
+    
     for (u32 i = 0; i < g_active_tex_count && i < 2; i++) {
         u32 gl_unit = i;  /* Map to GL_TEXTURE0/GL_TEXTURE1 */
         u32 slot = g_active_tex_slots[gl_unit];

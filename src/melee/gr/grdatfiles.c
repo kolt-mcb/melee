@@ -570,13 +570,11 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
     /* rendermode */
     x64Mobj->rendermode = be32_swap(gcnMobj->rendermode);
 
-    /* texdesc - disabled: TEV pipeline crashes from GCN→x64 data mismatch.
-     * The HSD_TExpColorInSub function dereferences pointers from the TEV
-     * expression chain that are garbage on x86_64. Guards in TObjMakeTExp
-     * and HSD_TExpColorInSub help but don't fully resolve the issue.
-     * Fix requires understanding the full GCN TEV/lighting flag mapping.
-     * Stage geometry renders correctly with vertex colors (no textures). */
-    x64Mobj->texdesc = NULL;
+    /* texdesc - convert from GCN data */
+    val = be32_swap(gcnMobj->texdesc);
+    if (val != 0 && val < 0x80000000U && val < 0x200000U) {
+        x64Mobj->texdesc = grDatFiles_ConvertTObjDescGCNtoX64(dataBase + val, dataBase);
+    }
 
     /* mat - allocate a default material (MObjLoad copies from desc->mat) */
     x64Mobj->mat = lbHeap_80015BD0(0, sizeof(HSD_Material));
