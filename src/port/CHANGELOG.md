@@ -1,3 +1,22 @@
+## [2025-08-06i] — Stage Geometry Visibility (261K pixels, 28.4%)
+
+### Tighter Joint Clamp & Camera Tuning
+- **Tighter clamp**: Reduced from ±10000/±100 to ±500/±10 to keep geometry
+  within camera frustum. Real stage geometry is typically within ±500 units.
+- **Centered camera**: eye (0,800,1200), target (0,-200,0), far 5000.
+- **Result**: 70K → 261K visible pixels (7.6% → 28.4% of screen).
+  Bounding box (0,62)-(1182,699) spans nearly full viewport.
+
+### MVP Matrix Fix
+- **Root cause**: MVP computation was doing `proj * mv^T` instead of `proj * mv`.
+  The mv4 array was stored column-major but multiplied as if row-major.
+- **Fix**: Use row-major arrays throughout, transpose only at `glUniformMatrix4fv` upload.
+
+### Basic Lighting
+- Added directional light (from above-front-right) with ambient term.
+- Normals interpolated from vertex to fragment shader.
+- Normal parsing from display list uses position format as proxy — may need refinement.
+
 ## [2025-08-06h] — Stage Geometry Visibility (70K pixels, 7.6%)
 
 ### Root Cause: Garbage Joint Transforms
