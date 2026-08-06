@@ -1,3 +1,25 @@
+## [2025-08-06h] — Stage Geometry Visibility (70K pixels, 7.6%)
+
+### Root Cause: Garbage Joint Transforms
+- **Extreme values**: Joint positions at (-64576, -63040, etc.) from bad archive data
+  corrupted the model matrix pipeline, pushing geometry far outside the view frustum.
+- **Fix**: Clamp joint position to ±10000 and scale to ±100 in `grDatFiles_ConvertJointTreeGCNtoX64`.
+- **Result**: 24K → 70K visible pixels (2.7% → 7.6% of screen). Stage geometry visible
+  with whitish-blue vertex colors in bounding box (380,107)-(1182,719).
+
+### Camera and MVP Fixes
+- **View matrix z-translation sign**: Negated to match negated fwd row in look-at matrix.
+- **MVP matrix upload**: Fixed to use column-major layout for OpenGL `glUniformMatrix4fv`.
+- **Default camera**: eye (3000,2000,3000), target (0,0,2500), far plane 20000.
+
+### Screenshot Timing
+- Delayed screenshot capture to frame 50 so stage init chain completes.
+- Removed duplicate screenshot code in `render_present_pc()`.
+
+### TEV Pipeline
+- Skipped `HSD_MObjCompileTev` during `HSD_MObjLoadDesc` to avoid TEV crash.
+- TObjDesc conversion enabled with TEV skip — textures not yet active.
+
 ## [2025-08-06] — Texture Descriptor Investigation
 
 ### TObjDesc/ImageDesc Conversion Research
