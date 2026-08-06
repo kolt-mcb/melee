@@ -570,9 +570,7 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
     /* rendermode */
     x64Mobj->rendermode = be32_swap(gcnMobj->rendermode);
 
-    /* texdesc - disabled for now (GCN struct layout mismatch)
-     * The texdesc offset points to data that doesn't match the expected TObjDesc layout.
-     * Need to investigate the actual GCN archive format for texture descriptors. */
+    /* texdesc - disabled for now (causes crash during stage init) */
     x64Mobj->texdesc = NULL;
 
     /* mat - allocate a default material (MObjLoad copies from desc->mat) */
