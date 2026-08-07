@@ -1,3 +1,30 @@
+## [2025-08-07c] — GLSL TEV Pipeline Implementation
+
+### GLSL TEV Pipeline
+- Implemented full GLSL TEV pipeline in fragment shader.
+- Replaced simple `v_col * texture()` approximation with programmable
+  TEV stage execution loop (up to 8 stages).
+- Each stage resolves 4 color inputs, applies (A+B)*C operation,
+  bias, scale, and clamp — matching GCN TEV hardware behavior.
+- Input sources supported: TEXC, TEXA, RASC, RASA, CPREV, APREV,
+  KONST, ZERO, ONE, HALF, TEXRRR, TEXGGG, TEXBBB.
+- Operations: TEV_ADD (A+B)*C, TEV_SUB (A-B)*C.
+- Flat array uniforms (GLSL 3.30 has no arrays of arrays):
+  u_tev_color_in[32], u_tev_alpha_in[32] (8 stages × 4 inputs).
+- Fixed TEV constant enum values to match Dolphin GX_CC_* simple
+  enum values (0x0B=TEXC, 0x0D=RASC, etc.) used by game code.
+- Default TEV stage: TEXC * RASC modulate pattern.
+- Result: 380,091 visible pixels (41.2%) — stable, TEV-driven shading.
+
+### Architecture
+- GX bridge tracks TEV state via GXSetTevColorIn, GXSetTevAlphaIn,
+  GXSetTevColorOp, GXSetTevAlphaOp, GXSetTevOrder, GXSetTevKColor.
+- apply_tev_uniforms() uploads all TEV parameters per draw batch.
+- Shader executes stages in a loop, resolving inputs from textures,
+  vertex colors, previous stage output, or KColor constants.
+- Texture sampling uses explicit if-chains (GLSL 3.30 no dynamic
+  sampler indexing).
+
 ## [2025-08-07b] — TEV Pipeline Investigation
 
 ### TEV Crash Root Cause Analysis
