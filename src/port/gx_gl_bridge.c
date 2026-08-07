@@ -157,49 +157,40 @@ enum {
     GX_SRC_VTX = 0x00000001,  /* Use vertex color */
 };
 
-/* Color sources for TEV */
+/* Color sources for TEV — simple Dolphin enum values matching shader */
 enum {
-    GX_CSC_ID = 0x00002000,  /* Source is color channel */
-    GX_CPASS_CSC = 0x00002000,
-    GX_CC_CPREV = 0x00002000,
-    GX_CC_C1 = 0x00002001,
-    GX_CC_C2 = 0x00002002,
-    GX_CC_C3 = 0x00002003,
-    GX_CC_C4 = 0x00002004,
-    GX_CC_C5 = 0x00002005,
-    GX_CC_C6 = 0x00002006,
-    GX_CC_C7 = 0x00002007,
-    GX_CC_KRGB = 0x00002008,
-    GX_CC_KRGBA = 0x00002009,
-    GX_CC_REG0 = 0x0000200A,
-    GX_CC_REG1 = 0x0000200B,
-    GX_CC_REG2 = 0x0000200C,
-    GX_CC_ONE = 0xFFFFFFFF,
-    GX_CC_HALF = 0xFFFFFFFE,
-    GX_CC_ZERO = 0xFFFFFFFD,
-    GX_CC_TEXC = 0x0000200D,
+    GX_CC_CPREV = 0x00,
+    GX_CC_APREV = 0x01,
+    GX_CC_C0 = 0x02,
+    GX_CC_A0 = 0x03,
+    GX_CC_C1 = 0x04,
+    GX_CC_A1 = 0x05,
+    GX_CC_C2 = 0x06,
+    GX_CC_A2 = 0x07,
+    GX_CC_TEXC = 0x0B,
+    GX_CC_TEXA = 0x0C,
+    GX_CC_RASC = 0x0D,
+    GX_CC_RASA = 0x0E,
+    GX_CC_ONE = 0x0F,
+    GX_CC_HALF = 0x10,
+    GX_CC_KONST = 0x11,
+    GX_CC_ZERO = 0x12,
+    GX_CC_TEXRRR = 0x13,
+    GX_CC_TEXGGG = 0x14,
+    GX_CC_TEXBBB = 0x15,
 };
 
 /* Alpha sources for TEV */
 enum {
-    GX_ASC_ID = 0x00003000,
-    GX_APASS_ASC = 0x00003000,
-    GX_AC_APREV = 0x00003000,
-    GX_AC_A1 = 0x00003001,
-    GX_AC_A2 = 0x00003002,
-    GX_AC_A3 = 0x00003003,
-    GX_AC_A4 = 0x00003004,
-    GX_AC_A5 = 0x00003005,
-    GX_AC_A6 = 0x00003006,
-    GX_AC_A7 = 0x00003007,
-    GX_AC_KFA = 0x00003008,
-    GX_AC_REG0 = 0x00003009,
-    GX_AC_REG1 = 0x0000300A,
-    GX_AC_REG2 = 0x0000300B,
-    GX_AC_ONE = 0xFFFFFFFF,
-    GX_AC_HALF = 0xFFFFFFFE,
-    GX_AC_ZERO = 0xFFFFFFFD,
-    GX_AC_TEXA = 0x0000300C,
+    GX_CA_APREV = 0x00,
+    GX_CA_A0 = 0x01,
+    GX_CA_A1 = 0x02,
+    GX_CA_A2 = 0x03,
+    GX_CA_TEXA = 0x04,
+    GX_CA_RASA = 0x05,
+    GX_CA_KONST = 0x06,
+    GX_CA_ZERO = 0x07,
+    GX_CA_ONE = 0x08,
 };
 
 /* TEV operation types */
@@ -574,6 +565,23 @@ static GLint g_alpha_cmp_func_loc = -1;
 static GLint g_alpha_cmp_ref_loc = -1;
 static GLint g_alpha_cmp_mask_loc = -1;
 
+/* TEV pipeline uniform locations */
+static GLint g_tev_num_stages_loc = -1;
+static GLint g_tev_color_in_loc = -1;   /* Flat array of 32 */
+static GLint g_tev_alpha_in_loc = -1;
+static GLint g_tev_color_op_loc = -1;
+static GLint g_tev_alpha_op_loc = -1;
+static GLint g_tev_color_bias_loc = -1;
+static GLint g_tev_alpha_bias_loc = -1;
+static GLint g_tev_color_scale_loc = -1;
+static GLint g_tev_alpha_scale_loc = -1;
+static GLint g_tev_color_clamp_loc = -1;
+static GLint g_tev_alpha_clamp_loc = -1;
+static GLint g_tev_color_enabled_loc = -1;
+static GLint g_tev_alpha_enabled_loc = -1;
+static GLint g_tev_tex_map_loc = -1;
+static GLint g_kalpha_loc = -1;
+
 /* Active texture tracking: which bridge texture slots are bound to GL units */
 static u32 g_active_tex_slots[2];     /* GL unit N -> bridge slot index */
 static u32 g_active_tex_count = 0;
@@ -610,7 +618,26 @@ static const char* g_vert_src =
 "    v_world_pos = (u_mvp * vec4(a_pos, 1.0)).xyz;\n"
 "}\n";
 
-/* Fragment shader — matches GCN TEV pipeline behavior. */
+/* Fragment shader — GLSL TEV pipeline implementation.
+ * Executes up to 8 TEV stages to match GCN hardware TEV behavior.
+ * Each stage: resolve inputs → (A+B)*C → bias → scale → clamp
+ *
+ * Input sources (matching GX_CC_* / GX_CA_* enums):
+ *   0x00 = CPREV/APREV (prev stage output)
+ *   0x01 = APREV as color
+ *   0x02-0x04 = C0/A0 (channel 0)
+ *   0x05-0x07 = C1/A1 (channel 1)
+ *   0x08-0x0A = C2/A2 (channel 2)
+ *   0x0B = TEXC (texture color)
+ *   0x0C = TEXA (texture alpha as color)
+ *   0x0D = RASC (rasterized vertex color)
+ *   0x0E = RASA (rasterized alpha)
+ *   0x0F = ONE
+ *   0x10 = HALF
+ *   0x11 = KONST (KColor register)
+ *   0x12 = ZERO
+ *   0x13 = TEXRRR, 0x14 = TEXGGG, 0x15 = TEXBBB
+ */
 static const char* g_frag_src =
 "#version 330 core\n"
 "in vec4 v_col;\n"
@@ -619,26 +646,148 @@ static const char* g_frag_src =
 "in vec3 v_nrm;\n"
 "in vec3 v_world_pos;\n"
 "out vec4 frag_color;\n"
+"\n"
+"// Texture uniforms (GLSL 3.30: no dynamic sampler indexing)\n"
 "uniform int u_tex0_enable;\n"
 "uniform int u_tex1_enable;\n"
 "uniform sampler2D u_tex0;\n"
 "uniform sampler2D u_tex1;\n"
-"uniform int u_alpha_cmp_func; // 0=NEVER, 1=LESS, 2=EQUAL, 3=LEQUAL, 4=GREATER, 5=NOTEQUAL, 6=GEQUAL, 7=ALWAYS\n"
-"uniform float u_alpha_cmp_ref; // Reference alpha value\n"
+"\n"
+"// TEV pipeline uniforms (flat arrays — GLSL 3.30 has no arrays of arrays)\n"
+"uniform int u_tev_num_stages;\n"
+"uniform int u_tev_color_in[32];    // [stage*4 + input] color input sources\n"
+"uniform int u_tev_alpha_in[32];    // [stage*4 + input] alpha input sources\n"
+"uniform int u_tev_color_op[8];     // 0=ADD, 1=SUB\n"
+"uniform int u_tev_alpha_op[8];\n"
+"uniform int u_tev_color_bias[8];   // 0=0, 1=-0.5\n"
+"uniform int u_tev_alpha_bias[8];\n"
+"uniform int u_tev_color_scale[8];  // 0=1x, 1=2x, 2=4x, 3=8x\n"
+"uniform int u_tev_alpha_scale[8];\n"
+"uniform int u_tev_color_clamp[8];  // 0=no clamp, 1=clamp to [0,1]\n"
+"uniform int u_tev_alpha_clamp[8];\n"
+"uniform int u_tev_color_enabled[8];\n"
+"uniform int u_tev_alpha_enabled[8];\n"
+"uniform int u_tev_tex_map[8];      // texture unit per stage (0 or 1)\n"
+"\n"
+"// KColor constants\n"
+"uniform vec4 u_kcolor[4];\n"
+"uniform vec4 u_kalpha;\n"
+"\n"
+"// Alpha test\n"
+"uniform int u_alpha_cmp_func;\n"
+"uniform float u_alpha_cmp_ref;\n"
+"\n"
+"// Resolve a TEV color input source to a vec4\n"
+"vec4 tev_resolve_color(int src, vec4 tex, vec4 ras, vec4 cprev, vec4 aprev) {\n"
+"    if (src == 0x0B) { // TEXC\n"
+"        // Handle intensity textures (GL_LUMINANCE deprecated, use R channel)\n"
+"        if (length(tex.rgb) > 0.001) return tex;\n"
+"        return vec4(1.0);\n"
+"    }\n"
+"    if (src == 0x0C) return vec4(tex.a); // TEXA\n"
+"    if (src == 0x0D) return ras;        // RASC\n"
+"    if (src == 0x0E) return vec4(ras.a); // RASA\n"
+"    if (src == 0x00) return cprev;     // CPREV\n"
+"    if (src == 0x01) return vec4(aprev.a); // APREV as color\n"
+"    if (src == 0x11) return u_kcolor[0];   // KONST\n"
+"    if (src == 0x12) return vec4(0.0);     // ZERO\n"
+"    if (src == 0x0F) return vec4(1.0);     // ONE\n"
+"    if (src == 0x10) return vec4(0.5);     // HALF\n"
+"    if (src == 0x13) return vec4(tex.r);   // TEXRRR\n"
+"    if (src == 0x14) return vec4(tex.g);   // TEXGGG\n"
+"    if (src == 0x15) return vec4(tex.b);   // TEXBBB\n"
+"    // Default: RAS (vertex color)\n"
+"    return ras;\n"
+"}\n"
+"\n"
+"// Resolve a TEV alpha input source to a float\n"
+"float tev_resolve_alpha(int src, vec4 tex, vec4 ras, float aprev) {\n"
+"    if (src == 0x04) return tex.a;     // TEXA\n"
+"    if (src == 0x05) return ras.a;     // RASA\n"
+"    if (src == 0x00) return aprev;     // APREV\n"
+"    if (src == 0x06) return u_kcolor[0].a; // KONST\n"
+"    if (src == 0x07) return 0.0;       // ZERO\n"
+"    if (src == 0x08) return 1.0;       // ONE\n"
+"    return ras.a;\n"
+"}\n"
+"\n"
+"// Sample texture from the appropriate unit\n"
+"vec4 sample_tex(int tex_map, vec2 uv0, vec2 uv1) {\n"
+"    if (tex_map == 0 && u_tex0_enable != 0) {\n"
+"        return texture(u_tex0, uv0);\n"
+"    } else if (tex_map == 1 && u_tex1_enable != 0) {\n"
+"        return texture(u_tex1, uv1);\n"
+"    }\n"
+"    return vec4(1.0); // Default white texture\n"
+"}\n"
+"\n"
 "void main() {\n"
-"    vec4 col = v_col;\n"
-"    // Texture sampling (matches GCN TEV modulate stage)\n"
-"    if (u_tex0_enable != 0) {\n"
-"        vec4 t = texture(u_tex0, v_uv0);\n"
-"        vec4 tc = vec4(t.r, t.r, t.r, t.a);\n"
-"        if (length(tc.rgb) > 0.001) col *= tc;\n"
+"    vec4 ras = v_col;           // RAS = rasterized vertex color\n"
+"    vec4 cprev = ras;          // CPREV starts as RAS\n"
+"    float aprev = ras.a;       // APREV starts as RAS.a\n"
+"\n"
+"    // Execute TEV stages\n"
+"    for (int stage = 0; stage < u_tev_num_stages && stage < 8; stage++) {\n"
+"        vec4 tex = sample_tex(u_tev_tex_map[stage], v_uv0, v_uv1);\n"
+"\n"
+"        // Color processing\n"
+"        if (u_tev_color_enabled[stage] != 0) {\n"
+"            vec4 a = tev_resolve_color(u_tev_color_in[stage*4 + 0], tex, ras, cprev, vec4(aprev));\n"
+"            vec4 b = tev_resolve_color(u_tev_color_in[stage*4 + 1], tex, ras, cprev, vec4(aprev));\n"
+"            vec4 c = tev_resolve_color(u_tev_color_in[stage*4 + 2], tex, ras, cprev, vec4(aprev));\n"
+"\n"
+"            vec4 result;\n"
+"            if (u_tev_color_op[stage] == 0) { // ADD\n"
+"                result = (a + b) * c;\n"
+"            } else { // SUB\n"
+"                result = (a - b) * c;\n"
+"            }\n"
+"\n"
+"            // Apply bias\n"
+"            if (u_tev_color_bias[stage] == 1) {\n"
+"                result += vec4(-0.5);\n"
+"            }\n"
+"\n"
+"            // Apply scale\n"
+"            if (u_tev_color_scale[stage] == 1) result *= 2.0;\n"
+"            else if (u_tev_color_scale[stage] == 2) result *= 4.0;\n"
+"            else if (u_tev_color_scale[stage] == 3) result *= 8.0;\n"
+"\n"
+"            // Clamp\n"
+"            if (u_tev_color_clamp[stage] != 0) {\n"
+"                result.rgb = clamp(result.rgb, 0.0, 1.0);\n"
+"            }\n"
+"\n"
+"            cprev = result;\n"
+"        }\n"
+"\n"
+"        // Alpha processing\n"
+"        if (u_tev_alpha_enabled[stage] != 0) {\n"
+"            float a = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 0], tex, ras, aprev);\n"
+"            float b = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 1], tex, ras, aprev);\n"
+"            float c = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 2], tex, ras, aprev);\n"
+"\n"
+"            float result;\n"
+"            if (u_tev_alpha_op[stage] == 0) { // ADD\n"
+"                result = (a + b) * c;\n"
+"            } else { // SUB\n"
+"                result = (a - b) * c;\n"
+"            }\n"
+"\n"
+"            if (u_tev_alpha_bias[stage] == 1) result += -0.5;\n"
+"            if (u_tev_alpha_scale[stage] == 1) result *= 2.0;\n"
+"            else if (u_tev_alpha_scale[stage] == 2) result *= 4.0;\n"
+"            else if (u_tev_alpha_scale[stage] == 3) result *= 8.0;\n"
+"            if (u_tev_alpha_clamp[stage] != 0) result = clamp(result, 0.0, 1.0);\n"
+"\n"
+"            aprev = result;\n"
+"        }\n"
 "    }\n"
-"    if (u_tex1_enable != 0) {\n"
-"        vec4 t = texture(u_tex1, v_uv1);\n"
-"        vec4 tc = vec4(t.r, t.r, t.r, t.a);\n"
-"        if (length(tc.rgb) > 0.001) col *= tc;\n"
-"    }\n"
-"    // Alpha test (GXAlphaTest)\n"
+"\n"
+"    // Final output\n"
+"    vec4 col = vec4(cprev.rgb, aprev);\n"
+"\n"
+"    // Alpha test\n"
 "    if (u_alpha_cmp_func == 0) { discard; } // NEVER\n"
 "    else if (u_alpha_cmp_func == 1 && col.a >= u_alpha_cmp_ref) { discard; } // LESS\n"
 "    else if (u_alpha_cmp_func == 2 && abs(col.a - u_alpha_cmp_ref) > 0.001) { discard; } // EQUAL\n"
@@ -646,7 +795,7 @@ static const char* g_frag_src =
 "    else if (u_alpha_cmp_func == 4 && col.a <= u_alpha_cmp_ref) { discard; } // GREATER\n"
 "    else if (u_alpha_cmp_func == 5 && abs(col.a - u_alpha_cmp_ref) <= 0.001) { discard; } // NOTEQUAL\n"
 "    else if (u_alpha_cmp_func == 6 && col.a < u_alpha_cmp_ref) { discard; } // GEQUAL\n"
-"    // else: ALWAYS passes\n"
+"\n"
 "    frag_color = col;\n"
 "}\n";
 
@@ -699,15 +848,35 @@ static void bridge_compile_shaders(void)
     g_tex1_enable_loc = glGetUniformLocation(g_shader_program, "u_tex1_enable");
     g_tex0_loc        = glGetUniformLocation(g_shader_program, "u_tex0");
     g_tex1_loc        = glGetUniformLocation(g_shader_program, "u_tex1");
-    g_kcolor0_loc     = glGetUniformLocation(g_shader_program, "u_kcolor0");
-    g_kcolor1_loc     = glGetUniformLocation(g_shader_program, "u_kcolor1");
-    g_kcolor2_loc     = glGetUniformLocation(g_shader_program, "u_kcolor2");
-    g_kcolor3_loc     = glGetUniformLocation(g_shader_program, "u_kcolor3");
-    g_color_mult0_loc = glGetUniformLocation(g_shader_program, "u_color_mult0");
-    g_color_mult1_loc = glGetUniformLocation(g_shader_program, "u_color_mult1");
+    g_kcolor0_loc     = glGetUniformLocation(g_shader_program, "u_kcolor");
+    /* u_kcolor is an array uniform - base location is index 0 */
+    g_kcolor1_loc     = g_kcolor0_loc + 1;
+    g_kcolor2_loc     = g_kcolor0_loc + 2;
+    g_kcolor3_loc     = g_kcolor0_loc + 3;
+    g_color_mult0_loc = -1; /* No longer used — TEV pipeline handles scaling */
+    g_color_mult1_loc = -1;
     g_alpha_cmp_func_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_func");
     g_alpha_cmp_ref_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_ref");
-    g_alpha_cmp_mask_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_mask");
+    g_alpha_cmp_mask_loc = -1; /* No longer used — alpha test in TEV shader */
+    
+    /* TEV pipeline uniform locations */
+    g_tev_num_stages_loc = glGetUniformLocation(g_shader_program, "u_tev_num_stages");
+    g_tev_color_op_loc = glGetUniformLocation(g_shader_program, "u_tev_color_op");
+    g_tev_alpha_op_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_op");
+    g_tev_color_bias_loc = glGetUniformLocation(g_shader_program, "u_tev_color_bias");
+    g_tev_alpha_bias_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_bias");
+    g_tev_color_scale_loc = glGetUniformLocation(g_shader_program, "u_tev_color_scale");
+    g_tev_alpha_scale_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_scale");
+    g_tev_color_clamp_loc = glGetUniformLocation(g_shader_program, "u_tev_color_clamp");
+    g_tev_alpha_clamp_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_clamp");
+    g_tev_color_enabled_loc = glGetUniformLocation(g_shader_program, "u_tev_color_enabled");
+    g_tev_alpha_enabled_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_enabled");
+    g_tev_tex_map_loc = glGetUniformLocation(g_shader_program, "u_tev_tex_map");
+    g_kalpha_loc = glGetUniformLocation(g_shader_program, "u_kalpha");
+    
+    /* TEV input arrays: flat 32-element arrays (8 stages × 4 inputs each) */
+    g_tev_color_in_loc = glGetUniformLocation(g_shader_program, "u_tev_color_in");
+    g_tev_alpha_in_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_in");
     
     PORT_LOG_INFO("SHADER: prog=%u alpha_cmp=%d,%d,%d",
                   g_shader_program, g_alpha_cmp_func_loc, g_alpha_cmp_ref_loc, g_alpha_cmp_mask_loc);
@@ -747,14 +916,16 @@ void gx_bridge_init(void)
     g_state.current_mtx_id = 0;
     g_state.tex_gen_mode[0] = 0;  /* No tex gen by default */
     
-    /* Init TEV stages with default settings */
+    /* Init TEV stages with default modulate: TEXC * RASC
+     * GCN TEV formula: (A + B) * C + bias → scale → clamp
+     * Modulate: (TEXC + ZERO) * RASC = TEXC * RASC */
     for (int i = 0; i < MAX_TEV_STAGES; i++) {
-        g_state.tev_stages[i].color_inputs[0] = GX_CC_CPREV;
-        g_state.tev_stages[i].color_inputs[1] = GX_CC_TEXC;
-        g_state.tev_stages[i].color_inputs[2] = GX_CC_ZERO;
+        g_state.tev_stages[i].color_inputs[0] = GX_CC_TEXC;
+        g_state.tev_stages[i].color_inputs[1] = GX_CC_ZERO;
+        g_state.tev_stages[i].color_inputs[2] = GX_CC_RASC;
         g_state.tev_stages[i].color_inputs[3] = GX_CC_ZERO;
         g_state.tev_stages[i].color_op = GX_TEV_ADD;
-        g_state.tev_stages[i].color_scale = 1;
+        g_state.tev_stages[i].color_scale = 0;  /* SCALE_1 */
         g_state.tev_stages[i].color_clamp = FALSE;
         g_state.tev_stages[i].color_enabled = TRUE;
         g_state.tev_stages[i].alpha_enabled = FALSE;
@@ -903,6 +1074,8 @@ void gx_frame_begin(void)
 /* Forward declaration - defined below */
 static void bridge_upload_and_draw(void);
 static void apply_alpha_compare_uniforms(void);
+static void apply_tev_uniforms(void);
+void GXColor4u8(u8 r, u8 g, u8 b, u8 a); /* forward decl for display list parser */
 
 void gx_frame_end(void)
 {
@@ -1215,37 +1388,8 @@ static void bridge_upload_and_draw(void)
     /* Upload alpha compare uniforms */
     apply_alpha_compare_uniforms();
     
-    /* Upload KColor constants to fragment shader */
-    if (g_kcolor0_loc >= 0) {
-        GLfloat kc0[4] = { (f32)g_state.k_colors[0].r/255.0f, (f32)g_state.k_colors[0].g/255.0f,
-                           (f32)g_state.k_colors[0].b/255.0f, (f32)g_state.k_colors[0].a/255.0f };
-        glUniform4fv(g_kcolor0_loc, 1, kc0);
-    }
-    if (g_kcolor1_loc >= 0) {
-        GLfloat kc1[4] = { (f32)g_state.k_colors[1].r/255.0f, (f32)g_state.k_colors[1].g/255.0f,
-                           (f32)g_state.k_colors[1].b/255.0f, (f32)g_state.k_colors[1].a/255.0f };
-        glUniform4fv(g_kcolor1_loc, 1, kc1);
-    }
-    if (g_kcolor2_loc >= 0) {
-        GLfloat kc2[4] = { (f32)g_state.k_colors[2].r/255.0f, (f32)g_state.k_colors[2].g/255.0f,
-                           (f32)g_state.k_colors[2].b/255.0f, (f32)g_state.k_colors[2].a/255.0f };
-        glUniform4fv(g_kcolor2_loc, 1, kc2);
-    }
-    if (g_kcolor3_loc >= 0) {
-        GLfloat kc3[4] = { (f32)g_state.k_colors[3].r/255.0f, (f32)g_state.k_colors[3].g/255.0f,
-                           (f32)g_state.k_colors[3].b/255.0f, (f32)g_state.k_colors[3].a/255.0f };
-        glUniform4fv(g_kcolor3_loc, 1, kc3);
-    }
-    
-    /* Upload TEV color multiplier per tex unit */
-    if (g_color_mult0_loc >= 0) {
-        GLfloat cm0 = g_state.color_mult[0];
-        glUniform1f(g_color_mult0_loc, cm0);
-    }
-    if (g_color_mult1_loc >= 0) {
-        GLfloat cm1 = g_state.color_mult[1];
-        glUniform1f(g_color_mult1_loc, cm1);
-    }
+    /* Upload TEV pipeline uniforms (includes KColors) */
+    apply_tev_uniforms();
     
     /* Upload active texture info to fragment shader */
     /* Reset texture enables first — only set if a texture is actually bound */
@@ -2133,11 +2277,7 @@ static void apply_alpha_compare_uniforms(void)
 {
     if (!g_shader_program) return;
     
-    GLint func_loc  = glGetUniformLocation(g_shader_program, "u_alpha_cmp_func");
-    GLint ref_loc   = glGetUniformLocation(g_shader_program, "u_alpha_cmp_ref");
-    GLint mask_loc  = glGetUniformLocation(g_shader_program, "u_alpha_cmp_mask");
-    
-    if (func_loc >= 0) {
+    if (g_alpha_cmp_func_loc >= 0) {
         u32 gl_func = 0; /* 0 = NEVER (disabled) */
         switch (g_state.alpha_compare_func) {
         case 0: gl_func = 0;  break; /* NEVER */
@@ -2148,15 +2288,105 @@ static void apply_alpha_compare_uniforms(void)
         case 5: gl_func = 5;  break; /* NOTEQUAL */
         case 6: gl_func = 6;  break; /* GEQUAL */
         case 7: gl_func = 7;  break; /* ALWAYS */
-        default: gl_func = 3;  break; /* Default: LEQUAL */
+        default: gl_func = 7;  break; /* Default: ALWAYS */
         }
-        glUniform1i(func_loc, gl_func);
+        glUniform1i(g_alpha_cmp_func_loc, gl_func);
     }
-    if (ref_loc >= 0) {
-        glUniform1f(ref_loc, g_state.alpha_compare_ref);
+    if (g_alpha_cmp_ref_loc >= 0) {
+        glUniform1f(g_alpha_cmp_ref_loc, g_state.alpha_compare_ref);
     }
-    if (mask_loc >= 0) {
-        glUniform1i(mask_loc, g_state.alpha_compare_mask);
+}
+
+/* Upload TEV pipeline uniforms to the shader */
+static void apply_tev_uniforms(void)
+{
+    if (!g_shader_program) return;
+    
+    u32 num_stages = g_state.num_tev_stages;
+    if (num_stages > 8) num_stages = 8; /* GLSL shader limit */
+    
+    /* Upload number of stages */
+    if (g_tev_num_stages_loc >= 0) {
+        glUniform1i(g_tev_num_stages_loc, num_stages);
+    }
+    
+    /* Upload per-stage parameters as arrays */
+    if (num_stages > 0) {
+        GLint color_op_arr[8], alpha_op_arr[8];
+        GLint color_bias_arr[8], alpha_bias_arr[8];
+        GLint color_scale_arr[8], alpha_scale_arr[8];
+        GLint color_clamp_arr[8], alpha_clamp_arr[8];
+        GLint color_enabled_arr[8], alpha_enabled_arr[8];
+        GLint tex_map_arr[8];
+        
+        for (u32 i = 0; i < num_stages; i++) {
+            TevStage* s = &g_state.tev_stages[i];
+            color_op_arr[i] = s->color_op;
+            alpha_op_arr[i] = s->alpha_op;
+            color_bias_arr[i] = s->color_bias;
+            alpha_bias_arr[i] = 0; /* alpha bias not tracked yet */
+            color_scale_arr[i] = s->color_scale;
+            alpha_scale_arr[i] = 0;
+            color_clamp_arr[i] = s->color_clamp;
+            alpha_clamp_arr[i] = s->alpha_clamp;
+            color_enabled_arr[i] = s->color_enabled;
+            alpha_enabled_arr[i] = s->alpha_enabled;
+            tex_map_arr[i] = s->tex_map;
+        }
+        
+        if (g_tev_color_op_loc >= 0)
+            glUniform1iv(g_tev_color_op_loc, num_stages, color_op_arr);
+        if (g_tev_alpha_op_loc >= 0)
+            glUniform1iv(g_tev_alpha_op_loc, num_stages, alpha_op_arr);
+        if (g_tev_color_bias_loc >= 0)
+            glUniform1iv(g_tev_color_bias_loc, num_stages, color_bias_arr);
+        if (g_tev_alpha_bias_loc >= 0)
+            glUniform1iv(g_tev_alpha_bias_loc, num_stages, alpha_bias_arr);
+        if (g_tev_color_scale_loc >= 0)
+            glUniform1iv(g_tev_color_scale_loc, num_stages, color_scale_arr);
+        if (g_tev_alpha_scale_loc >= 0)
+            glUniform1iv(g_tev_alpha_scale_loc, num_stages, alpha_scale_arr);
+        if (g_tev_color_clamp_loc >= 0)
+            glUniform1iv(g_tev_color_clamp_loc, num_stages, color_clamp_arr);
+        if (g_tev_alpha_clamp_loc >= 0)
+            glUniform1iv(g_tev_alpha_clamp_loc, num_stages, alpha_clamp_arr);
+        if (g_tev_color_enabled_loc >= 0)
+            glUniform1iv(g_tev_color_enabled_loc, num_stages, color_enabled_arr);
+        if (g_tev_alpha_enabled_loc >= 0)
+            glUniform1iv(g_tev_alpha_enabled_loc, num_stages, alpha_enabled_arr);
+        if (g_tev_tex_map_loc >= 0)
+            glUniform1iv(g_tev_tex_map_loc, num_stages, tex_map_arr);
+        
+        /* Upload TEV input arrays (flat: 8 stages × 4 inputs = 32 elements) */
+        GLint cin_arr[32] = {0};
+        GLint ain_arr[32] = {0};
+        for (u32 i = 0; i < num_stages; i++) {
+            TevStage* s = &g_state.tev_stages[i];
+            cin_arr[i*4 + 0] = s->color_inputs[0];
+            cin_arr[i*4 + 1] = s->color_inputs[1];
+            cin_arr[i*4 + 2] = s->color_inputs[2];
+            cin_arr[i*4 + 3] = s->color_inputs[3];
+            ain_arr[i*4 + 0] = s->alpha_inputs[0];
+            ain_arr[i*4 + 1] = s->alpha_inputs[1];
+            ain_arr[i*4 + 2] = s->alpha_inputs[2];
+            ain_arr[i*4 + 3] = s->alpha_inputs[3];
+        }
+        if (g_tev_color_in_loc >= 0)
+            glUniform1iv(g_tev_color_in_loc, 32, cin_arr);
+        if (g_tev_alpha_in_loc >= 0)
+            glUniform1iv(g_tev_alpha_in_loc, 32, ain_arr);
+    }
+    
+    /* Upload KColor constants */
+    if (g_kcolor0_loc >= 0) {
+        GLfloat kc[4][4];
+        for (int i = 0; i < 4; i++) {
+            kc[i][0] = (f32)g_state.k_colors[i].r / 255.0f;
+            kc[i][1] = (f32)g_state.k_colors[i].g / 255.0f;
+            kc[i][2] = (f32)g_state.k_colors[i].b / 255.0f;
+            kc[i][3] = (f32)g_state.k_colors[i].a / 255.0f;
+        }
+        glUniform4fv(g_kcolor0_loc, 4, &kc[0][0]);
     }
 }
 
