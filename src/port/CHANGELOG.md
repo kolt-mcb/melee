@@ -1,3 +1,29 @@
+## [2025-08-06o] — Specular Lighting & Alpha Test Support
+
+### Blinn-Phong Specular Lighting
+- Added u_view_pos uniform for camera position in fragment shader
+- Added Blinn-Phong specular with halfway vector (shininess 32, intensity 0.3)
+- Store camera position in BridgeState during gx_set_3d_camera
+- Upload camera position per-draw in bridge_upload_and_draw
+
+### Alpha Test Support
+- Added u_alpha_cmp_func and u_alpha_cmp_ref uniforms to fragment shader
+- Implemented GLSL discard() for all 8 alpha compare functions
+  (NEVER, LESS, EQUAL, LEQUAL, GREATER, NOTEQUAL, GEQUAL, ALWAYS)
+- Alpha test state already tracked in BridgeState and uploaded per-draw
+- Default is ALWAYS (passes all fragments) for backward compatibility
+
+### TEV Pipeline Investigation
+- Confirmed TEV compilation is disabled in HSD_MObjLoadDesc (commented out)
+- Crash would occur in HSD_TExpColorInSub dereferencing garbage 32-bit pointers
+- Full TEV pipeline requires pointer translation layer for GCN→x86_64
+- Deferred pending larger architectural understanding
+
+### FT Character Module Reconciliation
+- Investigated FT module dependencies: 418 source files
+- Dependencies: mp/, op/, pa/, pe/, pm/, po/, sa/, vd/, ef/, it/ modules
+- Deferred pending larger build surface expansion
+
 ## [2025-08-06n] — Matrix Component Clamping & Debug Cleanup
 
 ### Matrix Component Clamping
