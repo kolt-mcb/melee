@@ -208,6 +208,18 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
     if (jobj->parent != NULL) {
         PSMTXConcat(jobj->parent->mtx, jobj->mtx, jobj->mtx);
     }
+    
+    /* PC port: Clamp final matrix translation to prevent extreme values
+     * from bad joint data. Real stage geometry is within ±2000 units. */
+    {
+        f32 limit = 2000.0f;
+        if (jobj->mtx[0][3] < -limit) jobj->mtx[0][3] = -limit;
+        if (jobj->mtx[0][3] > limit) jobj->mtx[0][3] = limit;
+        if (jobj->mtx[1][3] < -limit) jobj->mtx[1][3] = -limit;
+        if (jobj->mtx[1][3] > limit) jobj->mtx[1][3] = limit;
+        if (jobj->mtx[2][3] < -limit) jobj->mtx[2][3] = -limit;
+        if (jobj->mtx[2][3] > limit) jobj->mtx[2][3] = limit;
+    }
     if (jobj->aobj != NULL && jobj->aobj->hsd_obj != NULL) {
         Vec3 vec;
         HSD_JObj* aobj_jobj = (HSD_JObj*) jobj->aobj->hsd_obj;
