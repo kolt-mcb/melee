@@ -1,3 +1,43 @@
+## [2025-08-07b] — TEV Pipeline Investigation
+
+### TEV Crash Root Cause Analysis
+- Investigated HSD_MObjCompileTev crash in HSD_TExpColorInSub.
+- Found two root causes:
+  1. GCC O2 optimizes memset(,0,) into `pcmpeqd %xmm0,%xmm0` + `movups`,
+     which writes 0xFFFFFFFF (all 1s) instead of 0x00000000 (zeros).
+     This corrupts HSD_TETev c_in/a_in arrays with type=0xFF (HSD_TE_UNDEF)
+     and garbage exp pointers.
+  2. HSD_TExpGetType uses `(uintptr_t)texp == -1U` comparison, but GCC
+     zero-extends to 32-bit: compares 0x00000000FFFFFFFF against
+     0xFFFFFFFFFFFFFFFF. Special pointer values (HSD_TEXP_TEX, HSD_TEXP_RAS)
+     fail the comparison on x86_64.
+- Fixed HSD_TExpGetType with explicit 64-bit casts:
+  `texp == (HSD_TExp*)(uintptr_t)-1`.
+- Added guards in HSD_TExpColorInSub/HSD_TExpAlphaInSub for garbage
+  existing slot pointers from bad init.
+- Added guard in CalcDistance (texpdag.c) for garbage pointers.
+- Used `#pragma GCC optimize("O0")` on TevAlloc/CnstAlloc to force
+  correct zeroing via `rep stos`.
+- Crash moved from HSD_TExpColorInSub to HSD_TExpCompile (TExpAssignReg)
+  due to expression tree traversal hitting garbage pointers in the
+  HSD_TExpSchedule output.
+- **Decision**: Disabled HSD_MObjCompileTev for now. The simplified GLSL
+  shader (vertex color × texture color) is a reasonable approximation.
+  Full TEV pipeline requires GLSL implementation.
+
+### TEV Pipeline Architecture (for future implementation)
+- GCN TEV: 16 programmable stages, each with 4 color inputs, 4 alpha inputs,
+  ADD/SUB operation, bias, scale, clamp.
+- Current GX bridge tracks TEV state via GXSetTevColorIn, GXSetTevColorOp,
+  GXSetTevAlphaIn, GXSetTevAlphaOp, etc. in g_state.tev_stages[].
+- GLSL TEV pipeline would need:
+  1. Uniforms for TEV stage parameters (operations, inputs, bias, scale)
+  2. Fragment shader that executes TEV stages in a loop (unrolled)
+  3. Input resolution: TEXC→texture, RAS→vertex color, CPREV→prev output,
+     KONST→KColor, ZERO/ONE/HALF→constants
+  4. Per-stage: resolve inputs → apply op → apply bias/scale → clamp
+- Estimated effort: 2-3 days for basic 8-stage implementation.
+
 ## [2025-08-07] — Shader Simplification (Match Decomp TEV)
 
 ### Shader Revert

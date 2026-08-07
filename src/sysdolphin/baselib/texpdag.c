@@ -131,6 +131,11 @@ void CalcDistance(HSD_TExp** tevs, int* dist, HSD_TExp* tev, int num,
     int idx;
     int i;
 
+    /* PC port: guard against garbage pointers */
+    if (tev == NULL || (uintptr_t) tev < 0x10000) {
+        return;
+    }
+
     p = tevs;
     idx = 0;
     for (i = 0; i < num; i++) {

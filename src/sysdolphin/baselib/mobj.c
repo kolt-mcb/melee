@@ -181,9 +181,12 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
         }
 
         HSD_MOBJ_METHOD(mobj)->load(mobj, mobjdesc);
-        /* PC port: skip TEV compilation — GCN TEV expression chain
-         * contains 32-bit pointers that crash on x86_64. Our GLSL
-         * shader pipeline handles lighting/texturing directly. */
+        /* PC port: TEV compilation disabled.
+         * HSD_TExpCompile crashes due to expression tree traversal
+         * hitting garbage pointers from compiler-optimized memset
+         * (pcmpeqd writes 0xFFFFFFFF instead of 0x00000000).
+         * The GLSL shader pipeline handles basic texturing directly.
+         * TODO: Implement GLSL TEV pipeline to replace this. */
         // HSD_MObjCompileTev(mobj);
 
         return mobj;
