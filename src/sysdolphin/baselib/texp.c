@@ -15,19 +15,29 @@ HSD_TExpType HSD_TExpGetType(HSD_TExp* texp)
     if (texp == NULL) {
         return HSD_TE_ZERO;
     }
-    if ((uintptr_t) texp == -1U) {
+    /* PC port: use full 64-bit comparisons for special pointer values.
+     * GCC zero-extends 32-bit constants, breaking (uintptr_t)-1U comparisons. */
+    if (texp == (HSD_TExp*) (uintptr_t) -1) {
         return HSD_TE_TEX;
     }
-    if ((uintptr_t) texp == -2U) {
+    if (texp == (HSD_TExp*) (uintptr_t) -2) {
         return HSD_TE_RAS;
+    }
+    /* PC port: guard against garbage 32-bit GCN archive pointers.
+     * Valid x86_64 heap pointers are > 0x10000000 (mmap region) or
+     * in the process heap. Reject pointers below 0x10000 as garbage. */
+    if ((uintptr_t) texp < 0x10000) {
+        return HSD_TE_ZERO;
     }
     return texp->type;
 }
 
+#pragma GCC optimize("O0")
 static HSD_TExp* TevAlloc(void)
 {
     HSD_TExp* texp = hsdAllocMemPiece(sizeof(HSD_TETev));
     HSD_ASSERT(62, texp);
+    __builtin_memset(texp, 0, sizeof(HSD_TETev));
     return texp;
 }
 
@@ -35,8 +45,10 @@ static HSD_TExp* CnstAlloc(void)
 {
     HSD_TExp* texp = hsdAllocMemPiece(sizeof(HSD_TECnst));
     HSD_ASSERT(70, texp);
+    __builtin_memset(texp, 0, sizeof(HSD_TECnst));
     return texp;
 }
+#pragma GCC optimize("O2")
 
 void HSD_TExpFree(HSD_TExp* texp)
 {
@@ -336,6 +348,14 @@ static void HSD_TExpColorInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
         break;
 
     default: {
+        /* PC port: guard against garbage exp pointers from bad archive data */
+        if (exp != NULL && (uintptr_t) exp < 0x10000) {
+            tev->c_in[idx].type = HSD_TE_ZERO;
+            tev->c_in[idx].sel = HSD_TE_0;
+            tev->c_in[idx].arg = GX_CC_ZERO;
+            tev->c_in[idx].exp = NULL;
+            break;
+        }
         switch (tev->c_in[idx].type) {
         case HSD_TE_ZERO:
             tev->c_in[idx].type = HSD_TE_ZERO;
@@ -344,6 +364,20 @@ static void HSD_TExpColorInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
             break;
         case HSD_TE_TEV: {
             u8 swap;
+            /* PC port: guard against garbage existing slot pointer
+             * from compiler-optimized memset that writes 0xFFFFFFFF. */
+            if (tev->c_in[idx].exp == NULL ||
+                (uintptr_t) tev->c_in[idx].exp < 0x10000 ||
+                (uintptr_t) tev->c_in[idx].exp == (uintptr_t) -1 ||
+                (uintptr_t) tev->c_in[idx].exp == (uintptr_t) -2)
+            {
+                /* Treat as zero — slot has garbage from bad init */
+                tev->c_in[idx].type = HSD_TE_ZERO;
+                tev->c_in[idx].sel = HSD_TE_0;
+                tev->c_in[idx].arg = GX_CC_ZERO;
+                tev->c_in[idx].exp = NULL;
+                break;
+            }
             HSD_ASSERT(519,
                         sel == HSD_TE_RGB || sel == HSD_TE_A);
             HSD_ASSERT(521,
@@ -537,6 +571,14 @@ static void HSD_TExpAlphaInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
         break;
 
     default: {
+        /* PC port: guard against garbage exp pointers from bad archive data */
+        if (exp != NULL && (uintptr_t) exp < 0x10000) {
+            tev->a_in[idx].exp = NULL;
+            tev->a_in[idx].type = HSD_TE_ZERO;
+            tev->a_in[idx].sel = HSD_TE_0;
+            tev->a_in[idx].arg = GX_CA_ZERO;
+            break;
+        }
         switch (tev->a_in[idx].type) {
         case HSD_TE_ZERO:
             tev->a_in[idx].exp = NULL;
@@ -545,6 +587,18 @@ static void HSD_TExpAlphaInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
             tev->a_in[idx].arg = GX_CA_ZERO;
             break;
         case HSD_TE_TEV:
+            /* PC port: guard against garbage existing slot pointer */
+            if (tev->a_in[idx].exp == NULL ||
+                (uintptr_t) tev->a_in[idx].exp < 0x10000 ||
+                (uintptr_t) tev->a_in[idx].exp == (uintptr_t) -1 ||
+                (uintptr_t) tev->a_in[idx].exp == (uintptr_t) -2)
+            {
+                tev->a_in[idx].exp = NULL;
+                tev->a_in[idx].type = HSD_TE_ZERO;
+                tev->a_in[idx].sel = HSD_TE_0;
+                tev->a_in[idx].arg = GX_CA_ZERO;
+                break;
+            }
             HSD_ASSERT(771, sel == HSD_TE_A);
             HSD_ASSERT(772, idx == 3 || exp->tev.a_clamp);
             HSD_TExpRef(tev->a_in[idx].exp, tev->a_in[idx].sel);
