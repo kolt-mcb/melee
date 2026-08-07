@@ -121,27 +121,12 @@ void render_present(void)
         fprintf(stderr, "[RENDER] Frame 1 reached\n");
         fflush(stderr);
     }
-    if (g_render_frame >= 1 && g_render_frame <= 2 && !g_frame_saved) {
+    if (g_render_frame == 50 && !g_frame_saved) {
         g_frame_saved = true;
         GLint vw, vh;
         SDL_Window* win = window_get_sdl_window();
         SDL_GetWindowSize(win, &vw, &vh);
 
-        /* Draw a test quad to verify the GL pipeline is working */
-        glDisable(GL_DEPTH_TEST);
-        glDisable(GL_CULL_FACE);
-        glDisable(GL_BLEND);
-        glUseProgram(0); // Use fixed function
-        glViewport(0, 0, vw, vh);
-        glBegin(GL_QUADS);
-        glColor3f(1.0f, 0.0f, 0.0f);
-        glVertex2f(0.0f, 0.0f);
-        glVertex2f(200.0f, 0.0f);
-        glVertex2f(200.0f, 200.0f);
-        glVertex2f(0.0f, 200.0f);
-        glEnd();
-        glFlush();
-        
         GLubyte *pixels = (GLubyte*)malloc(vw * vh * 3);
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);
         glFinish(); // Ensure all draw calls are complete
