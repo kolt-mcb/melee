@@ -424,8 +424,14 @@ typedef struct {
     } current_tex;
     
     /* Texture cache: maps GL texture IDs to cached metadata */
+    /* Texture cache with LRU eviction */
     GLuint tex_cache[MAX_TEXTURES];
     Bool tex_cache_valid[MAX_TEXTURES];
+    const void* tex_cache_img[MAX_TEXTURES];  /* Image pointer for dedup */
+    u16 tex_cache_w[MAX_TEXTURES];            /* Width for dedup */
+    u16 tex_cache_h[MAX_TEXTURES];            /* Height for dedup */
+    u8 tex_cache_fmt[MAX_TEXTURES];           /* Format for dedup */
+    u32 tex_cache_hits[MAX_TEXTURES];         /* Hit count for LRU */
     
     /* Texture upload statistics */
     u32 tex_upload_count;
@@ -3043,25 +3049,45 @@ static GLenum gx_filter_mode(u32 gx_filt)
     }
 }
 
-static GLuint tex_get_slot(void)
+static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
 {
+    /* Check for existing matching texture (dedup by pointer + dims + format) */
+    for (u32 i = 0; i < MAX_TEXTURES; i++) {
+        if (g_state.tex_cache_valid[i] &&
+            g_state.tex_cache_img[i] == img &&
+            g_state.tex_cache_w[i] == w &&
+            g_state.tex_cache_h[i] == h &&
+            g_state.tex_cache_fmt[i] == fmt) {
+            g_state.tex_cache_hits[i]++;
+            return i;
+        }
+    }
+    /* Find empty slot */
     for (u32 i = 0; i < MAX_TEXTURES; i++) {
         if (!g_state.tex_cache_valid[i]) {
             g_state.tex_cache[i] = 0;
             g_state.tex_cache_valid[i] = TRUE;
-            PORT_LOG_INFO("TX: alloc slot[%u]", i);
+            g_state.tex_cache_img[i] = img;
+            g_state.tex_cache_w[i] = w;
+            g_state.tex_cache_h[i] = h;
+            g_state.tex_cache_fmt[i] = fmt;
+            g_state.tex_cache_hits[i] = 0;
             return i;
         }
     }
-    /* Ring buffer: reuse oldest */
+    /* Evict least-used slot */
     u32 best = 0;
     for (u32 i = 1; i < MAX_TEXTURES; i++) {
-        if (g_state.tex_cache[i] < g_state.tex_cache[best])
+        if (g_state.tex_cache_hits[i] < g_state.tex_cache_hits[best])
             best = i;
     }
-    PORT_LOG_WARN("TX: evict slot[%u]", best);
     glDeleteTextures(1, &g_state.tex_cache[best]);
     g_state.tex_cache[best] = 0;
+    g_state.tex_cache_img[best] = img;
+    g_state.tex_cache_w[best] = w;
+    g_state.tex_cache_h[best] = h;
+    g_state.tex_cache_fmt[best] = fmt;
+    g_state.tex_cache_hits[best] = 0;
     return best;
 }
 
@@ -3086,9 +3112,18 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
     GLenum internal_fmt, base_fmt, data_type;
     gx_format_to_gl(fmt, &internal_fmt, &base_fmt, &data_type);
     
-    /* Get a texture slot */
-    u32 slot = tex_get_slot();
+    /* Get a texture slot (dedup by content) */
+    u32 slot = tex_get_slot(img, w, h, fmt);
     GLuint tex_id = g_state.tex_cache[slot];
+    
+    /* If this is a cache hit, just bind the existing texture */
+    if (tex_id && g_state.tex_cache_img[slot] == img &&
+        g_state.tex_cache_w[slot] == w && g_state.tex_cache_h[slot] == h &&
+        g_state.tex_cache_fmt[slot] == fmt) {
+        /* Cache hit - skip upload, just set up state */
+        goto bind_tex;
+    }
+    
     if (!tex_id) {
         glGenTextures(1, &tex_id);
         g_state.tex_cache[slot] = tex_id;
@@ -3167,6 +3202,7 @@ skip_tlut:
                     gx_wrap_mode(g_state.current_tex.wrap_s));
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
                     gx_wrap_mode(g_state.current_tex.wrap_t));
+bind_tex:
     
     /* Cleanup temp buffer (only free if not using shared buffer) */
     if (tmp_buf && !used_tlut) free(tmp_buf);
@@ -3174,8 +3210,6 @@ skip_tlut:
     /* Stats & logging */
     g_state.tex_upload_count++;
     g_state.tex_formats_seen[fmt & 0x0F]++;
-    PORT_LOG_INFO("TX #%u: slot[%u] %dx%d fmt=0x%X id=%u unit=%u",
-                  g_state.tex_upload_count, slot, w, h, fmt, tex_id, texEnv);
     
     /* Activate texture unit and track for shader */
     u32 gl_unit = texEnv % 2;  /* Clamp to 0-1 (shader only has 2 units) */
