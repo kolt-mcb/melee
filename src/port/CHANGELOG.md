@@ -1,3 +1,17 @@
+## [2025-08-06q] — Camera Tuning & Bounds Tracking Fix
+
+### Bounds Tracking Fix
+- Fixed bounds tracking logic: was only capturing first vertex due to
+  incorrect || operator. Now properly tracks min/max across all vertices.
+- Actual geometry bounds: min=(-4096,-448,-3712) max=(1260,140,464)
+  Center: (-1418, -154, -1624), extent: ~5356 x 588 x 4176
+
+### Camera Tuning
+- Repositioned camera to center on actual geometry bounds:
+  eye=(-1418, 500, 900), target=(-1418, -154, -1624)
+- Far plane extended to 15000 to capture full stage depth.
+- Result: 373,601 visible pixels (40.5%) vs 294,389 (31.9%) baseline.
+
 ## [2025-08-06p] — Vertex Filtering & Texture Mipmapping
 
 ### Garbage Vertex Filtering
