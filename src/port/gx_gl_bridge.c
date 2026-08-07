@@ -508,6 +508,12 @@ static BridgeState g_state;
 static f32 g_dbg_xmin = 1e10f, g_dbg_ymin = 1e10f, g_dbg_zmin = 1e10f;
 static f32 g_dbg_xmax = -1e10f, g_dbg_ymax = -1e10f, g_dbg_zmax = -1e10f;
 static int g_dbg_vert_count = 0;
+/* Histogram: track vertex count in different position ranges */
+static int g_dbg_near_origin = 0;  /* |x|,|y|,|z| < 100 */
+static int g_dbg_small_range = 0;  /* |x|,|y|,|z| < 500 */
+static int g_dbg_med_range = 0;    /* |x|,|y|,|z| < 1000 */
+static int g_dbg_large_range = 0;  /* |x|,|y|,|z| < 5000 */
+static int g_dbg_extreme = 0;      /* any coord > 5000 */
 
 static GLuint g_vbo = 0;
 static GLuint g_vao = 0;
@@ -912,10 +918,13 @@ void gx_frame_end(void)
     if (g_dbg_vert_count > 0 && s_bounds_frame % 600 == 0) {
         fprintf(stderr, "[DBG] RAW VERTS: x=[%.0f..%.0f] y=[%.0f..%.0f] z=[%.0f..%.0f] count=%d\n",
                 g_dbg_xmin, g_dbg_xmax, g_dbg_ymin, g_dbg_ymax, g_dbg_zmin, g_dbg_zmax, g_dbg_vert_count);
+        fprintf(stderr, "[DBG] HISTOGRAM: near_origin=%d small=%d med=%d large=%d extreme=%d\n",
+                g_dbg_near_origin, g_dbg_small_range, g_dbg_med_range, g_dbg_large_range, g_dbg_extreme);
         /* Reset for next frame */
         g_dbg_xmin = g_dbg_ymin = g_dbg_zmin = 1e10f;
         g_dbg_xmax = g_dbg_ymax = g_dbg_zmax = -1e10f;
         g_dbg_vert_count = 0;
+        g_dbg_near_origin = g_dbg_small_range = g_dbg_med_range = g_dbg_large_range = g_dbg_extreme = 0;
     }
 }
 
@@ -1006,8 +1015,8 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
 void gx_set_default_3d_camera(void)
 {
     /* Default camera: perspective, 60 degree FOV.
-     * Geometry clamped to ±500, camera centered on origin.
-     * Eye elevated and tilted down to center geometry vertically. */
+     * Geometry clamped to ±5000, real stage within ±500 of origin.
+     * Eye elevated and in front of stage, looking down at center. */
     gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 5000.0f,
                      0.0f, 800.0f, 1200.0f,       /* eye: above and in front */
                      0.0f, -200.0f, 0.0f,          /* target: slightly below origin */
@@ -1127,8 +1136,8 @@ static void bridge_upload_and_draw(void)
         glDisable(GL_DEPTH_TEST);
     }
     
-    /* State — cull */
-    if (g_state.cull_enabled) {
+    /* State — cull (PC port: disable to catch more geometry) */
+    if (FALSE && g_state.cull_enabled) {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
         /* GC quads wind clockwise (TL→TR→BR→BL in screen-space y-down), 
@@ -1190,13 +1199,13 @@ static void bridge_upload_and_draw(void)
         glUniform2fv(g_uv_scale_loc, 1, uv_scale);
     }
     
-    /* Upload lighting uniforms — simple directional light from above-front */
+    /* Upload lighting uniforms — directional light from above-front-right */
     if (g_light_dir_loc >= 0) {
-        GLfloat light_dir[3] = {0.0f, 1.0f, 0.0f};  // Light from above (Y-up)
+        GLfloat light_dir[3] = {0.7f, 0.7f, -0.7f};  // Light from above-front-right
         glUniform3fv(g_light_dir_loc, 1, light_dir);
     }
     if (g_light_ambient_loc >= 0) {
-        GLfloat ambient[3] = {0.5f, 0.5f, 0.5f}; // Moderate ambient
+        GLfloat ambient[3] = {0.4f, 0.4f, 0.45f}; // Moderate ambient
         glUniform3fv(g_light_ambient_loc, 1, ambient);
     }
     
@@ -1979,7 +1988,7 @@ void GXCallDisplayList(void* list, u32 nbytes)
                                     py = *(f32*)&raw;
                                     raw = ((u32)vp_pos[8] << 24) | ((u32)vp_pos[9] << 16) |
                                           ((u32)vp_pos[10] << 8) | vp_pos[11];
-                                    pz = *(f32*)&raw;
+                                    pz = *(f32*)&raw; /* Z flip handled by camera orientation */
                                     break;
                                 }
                                 }
@@ -1992,6 +2001,16 @@ void GXCallDisplayList(void* list, u32 nbytes)
                                 if (py > g_dbg_ymax) g_dbg_ymax = py;
                                 if (pz > g_dbg_zmax) g_dbg_zmax = pz;
                                 g_dbg_vert_count++;
+                                
+                                /* Histogram: track position distribution */
+                                f32 ax = px < 0 ? -px : px;
+                                f32 ay = py < 0 ? -py : py;
+                                f32 az = pz < 0 ? -pz : pz;
+                                if (ax > 5000 || ay > 5000 || az > 5000) g_dbg_extreme++;
+                                else if (ax < 100 && ay < 100 && az < 100) g_dbg_near_origin++;
+                                else if (ax < 500 && ay < 500 && az < 500) g_dbg_small_range++;
+                                else if (ax < 1000 && ay < 1000 && az < 1000) g_dbg_med_range++;
+                                else g_dbg_large_range++;
                                 
                                 GXPosition3f32(px, py, pz);
                             }
