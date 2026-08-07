@@ -1040,12 +1040,14 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
 void gx_set_default_3d_camera(void)
 {
     /* Default camera: perspective, 60 degree FOV.
-     * Geometry clamped to ±5000, real stage within ±500 of origin.
-     * Eye elevated and in front of stage, looking down at center. */
-    gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 5000.0f,
-                     0.0f, 800.0f, 1200.0f,       /* eye: above and in front */
-                     0.0f, -200.0f, 0.0f,          /* target: slightly below origin */
-                     0.0f, 1.0f, 0.0f);           /* up vector: standard Y-up */
+     * Actual geometry bounds: min=(-4096,-448,-3712) max=(1260,140,464)
+     * Center: (-1418, -154, -1624), extent: ~5356 x 588 x 4176
+     * Camera positioned elevated and offset to see the full stage.
+     * Far plane extended to 15000 to capture the full depth. */
+    gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 15000.0f,
+                     -1418.0f, 500.0f, 900.0f,      /* eye: elevated and in front of stage */
+                     -1418.0f, -154.0f, -1624.0f,   /* target: center of geometry */
+                     0.0f, 1.0f, 0.0f);            /* up vector: standard Y-up */
 }
 
 /* ============================================================
@@ -1583,14 +1585,6 @@ static void bridge_add_vertex(void)
         if (pz < -clamp) pz = -clamp;
         if (pz > clamp) pz = clamp;
         v->pos[0] = px; v->pos[1] = py; v->pos[2] = pz;
-        
-        /* Debug: track unclamped position distribution */
-        if (g_state.vert_count == 0) {
-            g_state.bounds_min[0] = g_state.bounds_min[1] = g_state.bounds_min[2] = 0;
-            g_state.bounds_max[0] = g_state.bounds_max[1] = g_state.bounds_max[2] = 0;
-            g_state.bounds_count = 0;
-            g_state.bounds_valid = FALSE;
-        }
     }
     
     /* Track geometry bounds in world space (only for stage geometry, not HUD)
@@ -1601,12 +1595,17 @@ static void bridge_add_vertex(void)
         /* Only track vertices that are likely stage geometry (large coords) */
         f32 mag = p[0]*p[0] + p[1]*p[1] + p[2]*p[2];
         if (mag > 100.0f && mag < 200000000.0f) {  /* Filter out HUD and extreme outliers */
-            if (g_state.bounds_count == 0 || p[0] < g_state.bounds_min[0]) g_state.bounds_min[0] = p[0];
-            if (g_state.bounds_count == 0 || p[1] < g_state.bounds_min[1]) g_state.bounds_min[1] = p[1];
-            if (g_state.bounds_count == 0 || p[2] < g_state.bounds_min[2]) g_state.bounds_min[2] = p[2];
-            if (g_state.bounds_count == 0 || p[0] > g_state.bounds_max[0]) g_state.bounds_max[0] = p[0];
-            if (g_state.bounds_count == 0 || p[1] > g_state.bounds_max[1]) g_state.bounds_max[1] = p[1];
-            if (g_state.bounds_count == 0 || p[2] > g_state.bounds_max[2]) g_state.bounds_max[2] = p[2];
+            if (g_state.bounds_count == 0) {
+                g_state.bounds_min[0] = p[0]; g_state.bounds_min[1] = p[1]; g_state.bounds_min[2] = p[2];
+                g_state.bounds_max[0] = p[0]; g_state.bounds_max[1] = p[1]; g_state.bounds_max[2] = p[2];
+            } else {
+                if (p[0] < g_state.bounds_min[0]) g_state.bounds_min[0] = p[0];
+                if (p[1] < g_state.bounds_min[1]) g_state.bounds_min[1] = p[1];
+                if (p[2] < g_state.bounds_min[2]) g_state.bounds_min[2] = p[2];
+                if (p[0] > g_state.bounds_max[0]) g_state.bounds_max[0] = p[0];
+                if (p[1] > g_state.bounds_max[1]) g_state.bounds_max[1] = p[1];
+                if (p[2] > g_state.bounds_max[2]) g_state.bounds_max[2] = p[2];
+            }
             g_state.bounds_count++;
             g_state.bounds_valid = TRUE;
         }
