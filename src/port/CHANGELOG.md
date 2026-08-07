@@ -1,3 +1,25 @@
+## [2025-08-06l] — Texture Cache Dedup & Matrix Array Fix
+
+### Texture Content Dedup Cache
+- **Problem**: 76,000+ texture evictions per 30 seconds. Every frame re-uploaded
+  all textures because the cache used GL texture IDs as timestamps, not content.
+- **Fix**: Added content-based dedup (image pointer + dims + format) to
+  tex_get_slot(). Cache hit path skips glTexImage2D entirely.
+- **Eviction**: LRU using hit counts instead of GL texture IDs.
+- **Result**: 0 evictions after initial load. 64-slot cache holds all stage
+  textures.
+
+### Matrix Array Expansion
+- **Problem**: mtx_array[8] only supported IDs 0-7, but GCN uses 0-27 (PNMTX),
+  30-60 (TEXMTX/IDENTITY), 64+ (bump). id=64 caused warnings.
+- **Fix**: mtx_array[8] → mtx_array[68]. Range checks updated to id < 68.
+- **Result**: No more matrix ID warnings during stage rendering.
+
+### Normal Format Tracking
+- Added nrm_comp_type/nrm_frac fields to BridgeState.
+- GXSetVtxAttrFmt captures normal format params separately from position.
+- Display list parser uses nrm_comp_type for normal parsing.
+
 ## [2025-08-06k] — Texture Mapping & Normal Format Fix
 
 ### Texture Loading Working
