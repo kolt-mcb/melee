@@ -1407,6 +1407,7 @@ void GXSetCopyClear(void* color, u32 z)
 void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
 {
     if (id >= 68) { PORT_LOG_WARN("GXLoadPosMtxImm: matrix id %u out of range", id); return; }
+    
     /* PC port: flush accumulated vertices before matrix changes.
      * This ensures each draw batch uses the correct MVP matrix. */
     if (g_state.vert_count > 0) {
@@ -1552,16 +1553,36 @@ static void bridge_add_vertex(void)
     Vertex* v = &g_state.verts[g_state.vert_count];
     if (g_state.pos_enabled) { 
         v->pos[0] = g_state.last_pos[0]; v->pos[1] = g_state.last_pos[1]; v->pos[2] = g_state.last_pos[2];
-        /* Clamp extreme vertex positions (from joints with garbage transforms).
-         * Stage geometry is in a reasonable range; clamp outliers to prevent
-         * camera distortion from extreme coordinates. */
-        f32 clamp = 5000.0f;
-        if (v->pos[0] < -clamp) v->pos[0] = -clamp;
-        if (v->pos[0] > clamp) v->pos[0] = clamp;
-        if (v->pos[1] < -clamp) v->pos[1] = -clamp;
-        if (v->pos[1] > clamp) v->pos[1] = clamp;
-        if (v->pos[2] < -clamp) v->pos[2] = -clamp;
-        if (v->pos[2] > clamp) v->pos[2] = clamp;
+        
+        /* PC port: Filter extreme vertex positions from garbage joint transforms.
+         * Real stage geometry is within ±1000 units of the origin.
+         * Vertices outside this range are likely from bad archive data or
+         * pointer corruption. Skip them entirely rather than clamping.
+         * Exception: HUD overlay uses small coordinates (< 100), so we allow
+         * those through. Stage geometry uses larger coordinates (100-1000).
+         * Garbage vertices are typically > 2000 or < -1000. */
+        f32 px = v->pos[0], py = v->pos[1], pz = v->pos[2];
+        f32 mag = px*px + py*py + pz*pz;
+        
+        /* Skip vertices with extreme magnitudes (> 6000 units from origin).
+         * Real geometry is within ±500 in x/y, z≈0-5000.
+         * Garbage from bad transforms produces values > 5000 (clamped).
+         * Replace with degenerate vertex (all zeros) to keep primitive
+         * state machine in sync. The GPU will clip it away. */
+        if (mag > 36000000.0f) {  // sqrt(36000000) ≈ 6000
+            v->pos[0] = 0; v->pos[1] = 0; v->pos[2] = 0;
+            goto SKIP_DEG;
+        }
+        
+        /* Clamp remaining vertices to ±6000 to prevent edge cases. */
+        f32 clamp = 6000.0f;
+        if (px < -clamp) px = -clamp;
+        if (px > clamp) px = clamp;
+        if (py < -clamp) py = -clamp;
+        if (py > clamp) py = clamp;
+        if (pz < -clamp) pz = -clamp;
+        if (pz > clamp) pz = clamp;
+        v->pos[0] = px; v->pos[1] = py; v->pos[2] = pz;
         
         /* Debug: track unclamped position distribution */
         if (g_state.vert_count == 0) {
@@ -1591,6 +1612,7 @@ static void bridge_add_vertex(void)
         }
     }
     if (g_state.nrm_enabled) { v->nrm[0] = g_state.last_nrm[0]; v->nrm[1] = g_state.last_nrm[1]; v->nrm[2] = g_state.last_nrm[2]; }
+SKIP_DEG:
     /* PC port: always set a default color to prevent black geometry */
     if (g_state.clr_enabled) {
         v->col[0] = g_state.last_clr[0]; v->col[1] = g_state.last_clr[1]; v->col[2] = g_state.last_clr[2]; v->col[3] = g_state.last_clr[3];
