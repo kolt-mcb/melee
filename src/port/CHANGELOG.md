@@ -15,6 +15,11 @@
 - **Fix**: mtx_array[8] → mtx_array[68]. Range checks updated to id < 68.
 - **Result**: No more matrix ID warnings during stage rendering.
 
+### Matrix Translation Clamp
+- Added clamp to final matrix translation in HSD_JObjMakeMatrix (±2000).
+- Tightened vertex position clamp from ±10000 to ±5000 in bridge_add_vertex.
+- Prevents extreme values from bad joint data from distorting camera.
+
 ### Normal Format Tracking
 - Added nrm_comp_type/nrm_frac fields to BridgeState.
 - GXSetVtxAttrFmt captures normal format params separately from position.
