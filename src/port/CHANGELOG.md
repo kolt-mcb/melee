@@ -1,3 +1,18 @@
+## [2025-08-06p] — Vertex Filtering & Texture Mipmapping
+
+### Garbage Vertex Filtering
+- Replace extreme vertex positions (mag > 6000) with degenerate vertices
+  instead of clamping to ±5000. This keeps the primitive state machine
+  in sync while filtering garbage from bad joint transforms.
+- Tighten clamp limit from ±5000 to ±6000 to match the filtering threshold.
+- Result: 294,389 visible pixels (31.9%) vs 283,040 (30.7%) baseline.
+
+### Texture Mipmapping
+- Generate mipmaps when min_filter indicates mipmapping is needed.
+- Previously, GL_LINEAR_MIPMAP_LINEAR was set without generating mipmaps,
+  causing undefined texture quality at distant viewing angles.
+- No change to visible pixel count, but improves texture quality.
+
 ## [2025-08-06o] — Specular Lighting & Alpha Test Support
 
 ### Blinn-Phong Specular Lighting
