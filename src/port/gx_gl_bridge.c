@@ -523,9 +523,6 @@ static GLuint g_shader_program = 0;
 static GLint g_proj_loc = -1;
 static GLint g_mvp_loc = -1;
 static GLint g_uv_scale_loc = -1;
-static GLint g_light_dir_loc = -1;
-static GLint g_light_ambient_loc = -1;
-static GLint g_view_pos_loc = -1;
 
 /* Texture shader uniform locations */
 /* Per-texture-unit shader uniform locations (max 2 active in GLSL 3.30) */
@@ -613,7 +610,7 @@ static const char* g_vert_src =
 "    v_world_pos = (u_mvp * vec4(a_pos, 1.0)).xyz;\n"
 "}\n";
 
-/* Fragment shader — directional + specular lighting + texture sampling + alpha test. */
+/* Fragment shader — matches GCN TEV pipeline behavior. */
 static const char* g_frag_src =
 "#version 330 core\n"
 "in vec4 v_col;\n"
@@ -626,29 +623,21 @@ static const char* g_frag_src =
 "uniform int u_tex1_enable;\n"
 "uniform sampler2D u_tex0;\n"
 "uniform sampler2D u_tex1;\n"
-"uniform vec3 u_light_dir;    // Directional light direction (normalized)\n"
-"uniform vec3 u_light_ambient; // Ambient light color\n"
-"uniform vec3 u_view_pos;     // Camera position for specular\n"
 "uniform int u_alpha_cmp_func; // 0=NEVER, 1=LESS, 2=EQUAL, 3=LEQUAL, 4=GREATER, 5=NOTEQUAL, 6=GEQUAL, 7=ALWAYS\n"
 "uniform float u_alpha_cmp_ref; // Reference alpha value\n"
 "void main() {\n"
 "    vec4 col = v_col;\n"
-"    float nlen = length(v_nrm);\n"
-"    float llen = length(u_light_dir);\n"
-"    if (nlen > 0.5 && llen > 0.5) {\n"
-"        vec3 n = v_nrm / nlen;\n"
-"        vec3 l = u_light_dir / llen;\n"
-"        float ndotl = max(dot(n, l), 0.0);\n"
-"        // Specular: Blinn-Phong with halfway vector\n"
-"        vec3 v = normalize(u_view_pos - v_world_pos);\n"
-"        vec3 h = normalize(l + v);\n"
-"        float spec = pow(max(dot(n, h), 0.0), 32.0) * 0.3;\n"
-"        col.rgb *= (u_light_ambient + ndotl + spec);\n"
-"    } else {\n"
-"        col.rgb *= u_light_ambient;\n"
+"    // Texture sampling (matches GCN TEV modulate stage)\n"
+"    if (u_tex0_enable != 0) {\n"
+"        vec4 t = texture(u_tex0, v_uv0);\n"
+"        vec4 tc = vec4(t.r, t.r, t.r, t.a);\n"
+"        if (length(tc.rgb) > 0.001) col *= tc;\n"
 "    }\n"
-"    if (u_tex0_enable != 0) { vec4 t = texture(u_tex0, v_uv0); vec4 tc = vec4(t.r, t.r, t.r, t.a); if(length(tc.rgb) > 0.001) col *= tc; }\n"
-"    if (u_tex1_enable != 0) { vec4 t = texture(u_tex1, v_uv1); vec4 tc = vec4(t.r, t.r, t.r, t.a); if(length(tc.rgb) > 0.001) col *= tc; }\n"
+"    if (u_tex1_enable != 0) {\n"
+"        vec4 t = texture(u_tex1, v_uv1);\n"
+"        vec4 tc = vec4(t.r, t.r, t.r, t.a);\n"
+"        if (length(tc.rgb) > 0.001) col *= tc;\n"
+"    }\n"
 "    // Alpha test (GXAlphaTest)\n"
 "    if (u_alpha_cmp_func == 0) { discard; } // NEVER\n"
 "    else if (u_alpha_cmp_func == 1 && col.a >= u_alpha_cmp_ref) { discard; } // LESS\n"
@@ -704,9 +693,6 @@ static void bridge_compile_shaders(void)
     g_proj_loc = glGetUniformLocation(g_shader_program, "u_proj");
     g_mvp_loc = glGetUniformLocation(g_shader_program, "u_mvp");
     g_uv_scale_loc = glGetUniformLocation(g_shader_program, "u_uv_scale");
-    g_light_dir_loc = glGetUniformLocation(g_shader_program, "u_light_dir");
-    g_light_ambient_loc = glGetUniformLocation(g_shader_program, "u_light_ambient");
-    g_view_pos_loc = glGetUniformLocation(g_shader_program, "u_view_pos");
     
     /* Texture uniforms for fragment shader (tex0 + tex1 with TEV compositing) */
     g_tex0_enable_loc = glGetUniformLocation(g_shader_program, "u_tex0_enable");
@@ -1224,25 +1210,6 @@ static void bridge_upload_and_draw(void)
     if (g_uv_scale_loc >= 0) {
         GLfloat uv_scale[2] = {1.0f, 1.0f};
         glUniform2fv(g_uv_scale_loc, 1, uv_scale);
-    }
-    
-    /* Upload lighting uniforms — directional light from above-front-right */
-    if (g_light_dir_loc >= 0) {
-        GLfloat light_dir[3] = {0.7f, 0.7f, -0.7f};  // Light from above-front-right
-        glUniform3fv(g_light_dir_loc, 1, light_dir);
-    }
-    if (g_light_ambient_loc >= 0) {
-        GLfloat ambient[3] = {0.4f, 0.4f, 0.45f}; // Moderate ambient
-        glUniform3fv(g_light_ambient_loc, 1, ambient);
-    }
-    if (g_view_pos_loc >= 0) {
-        // Camera position from gx_set_3d_camera
-        GLfloat view_pos[3] = {
-            g_state.camera_pos[0],
-            g_state.camera_pos[1],
-            g_state.camera_pos[2]
-        };
-        glUniform3fv(g_view_pos_loc, 1, view_pos);
     }
     
     /* Upload alpha compare uniforms */

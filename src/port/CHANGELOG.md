@@ -1,3 +1,13 @@
+## [2025-08-07] — Shader Simplification (Match Decomp TEV)
+
+### Shader Revert
+- Removed custom Blinn-Phong lighting, fog, and specular effects from
+  fragment shader. These did not match the original GCN TEV pipeline.
+- Simplified shader to match decomp TEV behavior: vertex color modulated
+  with texture color, alpha test via discard().
+- Removed unused lighting/fog uniform uploads from bridge.
+- Result: 375,703 visible pixels (40.8%) — stable, matches decomp.
+
 ## [2025-08-06r] — Tone Mapping Investigation (Reverted)
 
 ### Tone Mapping Attempt
