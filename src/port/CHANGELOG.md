@@ -1,3 +1,22 @@
+## [2025-08-06m] — Stage Rendering Improvements
+
+### Screenshot Timing
+- Moved screenshot capture to frame 50 (was frame 1-2) for stable stage init
+- Removed debug quad from screenshot capture (was inflating pixel count)
+
+### Backface Culling Disabled
+- Disabled backface culling in GX bridge to catch more geometry
+- Result: +2.7% viewport coverage (28.0% → 30.7%)
+
+### Lighting Direction
+- Changed from (0, 1, 0) to (0.7, 0.7, -0.7) (above-front-right)
+- Ambient: (0.4, 0.4, 0.45) for better visibility
+
+### Vertex Histogram Tracking
+- Added histogram tracking for vertex position distribution
+- Reveals: 2.5% near origin (< 100), 0.9% small (< 500), 18.3% large (< 5000), 78.3% extreme (> 5000)
+- Most vertices (78.3%) are garbage from bad joint transforms
+
 ## [2025-08-06l] — Texture Cache Dedup & Matrix Array Fix
 
 ### Texture Content Dedup Cache
