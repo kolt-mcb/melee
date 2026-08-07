@@ -210,15 +210,27 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
     }
     
     /* PC port: Clamp final matrix translation to prevent extreme values
-     * from bad joint data. Real stage geometry is within ±2000 units. */
+     * from bad joint data. Real stage geometry is within ±2000 units.
+     * Also clamp rotation/scale components to prevent extreme transforms. */
     {
-        f32 limit = 2000.0f;
-        if (jobj->mtx[0][3] < -limit) jobj->mtx[0][3] = -limit;
-        if (jobj->mtx[0][3] > limit) jobj->mtx[0][3] = limit;
-        if (jobj->mtx[1][3] < -limit) jobj->mtx[1][3] = -limit;
-        if (jobj->mtx[1][3] > limit) jobj->mtx[1][3] = limit;
-        if (jobj->mtx[2][3] < -limit) jobj->mtx[2][3] = -limit;
-        if (jobj->mtx[2][3] > limit) jobj->mtx[2][3] = limit;
+        f32 limit_pos = 2000.0f;
+        f32 limit_rot = 10.0f;  /* Rotation/scale should be within ±10 */
+        
+        /* Clamp rotation/scale components */
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                if (jobj->mtx[i][j] < -limit_rot) jobj->mtx[i][j] = -limit_rot;
+                if (jobj->mtx[i][j] > limit_rot) jobj->mtx[i][j] = limit_rot;
+            }
+        }
+        
+        /* Clamp translation components */
+        if (jobj->mtx[0][3] < -limit_pos) jobj->mtx[0][3] = -limit_pos;
+        if (jobj->mtx[0][3] > limit_pos) jobj->mtx[0][3] = limit_pos;
+        if (jobj->mtx[1][3] < -limit_pos) jobj->mtx[1][3] = -limit_pos;
+        if (jobj->mtx[1][3] > limit_pos) jobj->mtx[1][3] = limit_pos;
+        if (jobj->mtx[2][3] < -limit_pos) jobj->mtx[2][3] = -limit_pos;
+        if (jobj->mtx[2][3] > limit_pos) jobj->mtx[2][3] = limit_pos;
     }
     if (jobj->aobj != NULL && jobj->aobj->hsd_obj != NULL) {
         Vec3 vec;

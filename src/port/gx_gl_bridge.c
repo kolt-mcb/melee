@@ -514,6 +514,7 @@ static int g_dbg_small_range = 0;  /* |x|,|y|,|z| < 500 */
 static int g_dbg_med_range = 0;    /* |x|,|y|,|z| < 1000 */
 static int g_dbg_large_range = 0;  /* |x|,|y|,|z| < 5000 */
 static int g_dbg_extreme = 0;      /* any coord > 5000 */
+static int g_dbg_draw_calls = 0;   /* draw call counter per frame */
 
 static GLuint g_vbo = 0;
 static GLuint g_vao = 0;
@@ -860,6 +861,9 @@ void gx_frame_begin(void)
     g_state.bounds_min[0] = g_state.bounds_min[1] = g_state.bounds_min[2] = 0;
     g_state.bounds_max[0] = g_state.bounds_max[1] = g_state.bounds_max[2] = 0;
     
+    /* Reset debug draw call counter */
+    g_dbg_draw_calls = 0;
+    
     /* Periodically dump texture stats (every 100 frames) */
     static u32 s_tex_dump_frame = 0;
     s_tex_dump_frame++;
@@ -918,13 +922,10 @@ void gx_frame_end(void)
     if (g_dbg_vert_count > 0 && s_bounds_frame % 600 == 0) {
         fprintf(stderr, "[DBG] RAW VERTS: x=[%.0f..%.0f] y=[%.0f..%.0f] z=[%.0f..%.0f] count=%d\n",
                 g_dbg_xmin, g_dbg_xmax, g_dbg_ymin, g_dbg_ymax, g_dbg_zmin, g_dbg_zmax, g_dbg_vert_count);
-        fprintf(stderr, "[DBG] HISTOGRAM: near_origin=%d small=%d med=%d large=%d extreme=%d\n",
-                g_dbg_near_origin, g_dbg_small_range, g_dbg_med_range, g_dbg_large_range, g_dbg_extreme);
         /* Reset for next frame */
         g_dbg_xmin = g_dbg_ymin = g_dbg_zmin = 1e10f;
         g_dbg_xmax = g_dbg_ymax = g_dbg_zmax = -1e10f;
         g_dbg_vert_count = 0;
-        g_dbg_near_origin = g_dbg_small_range = g_dbg_med_range = g_dbg_large_range = g_dbg_extreme = 0;
     }
 }
 
@@ -1993,25 +1994,6 @@ void GXCallDisplayList(void* list, u32 nbytes)
                                 }
                                 }
                                 
-                                /* Track unclamped bounds */
-                                if (px < g_dbg_xmin) g_dbg_xmin = px;
-                                if (py < g_dbg_ymin) g_dbg_ymin = py;
-                                if (pz < g_dbg_zmin) g_dbg_zmin = pz;
-                                if (px > g_dbg_xmax) g_dbg_xmax = px;
-                                if (py > g_dbg_ymax) g_dbg_ymax = py;
-                                if (pz > g_dbg_zmax) g_dbg_zmax = pz;
-                                g_dbg_vert_count++;
-                                
-                                /* Histogram: track position distribution */
-                                f32 ax = px < 0 ? -px : px;
-                                f32 ay = py < 0 ? -py : py;
-                                f32 az = pz < 0 ? -pz : pz;
-                                if (ax > 5000 || ay > 5000 || az > 5000) g_dbg_extreme++;
-                                else if (ax < 100 && ay < 100 && az < 100) g_dbg_near_origin++;
-                                else if (ax < 500 && ay < 500 && az < 500) g_dbg_small_range++;
-                                else if (ax < 1000 && ay < 1000 && az < 1000) g_dbg_med_range++;
-                                else g_dbg_large_range++;
-                                
                                 GXPosition3f32(px, py, pz);
                             }
                             
@@ -2087,6 +2069,7 @@ void GXCallDisplayList(void* list, u32 nbytes)
                         }
                     }
                     GXEnd();
+                    g_dbg_draw_calls++;
                     
                     /* Skip the rest of the display list (index data, not commands) */
                     ptr = end;
