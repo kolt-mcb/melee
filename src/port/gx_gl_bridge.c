@@ -613,7 +613,7 @@ static const char* g_vert_src =
 "    v_world_pos = (u_mvp * vec4(a_pos, 1.0)).xyz;\n"
 "}\n";
 
-/* Fragment shader — directional + specular lighting + texture sampling. */
+/* Fragment shader — directional + specular lighting + texture sampling + alpha test. */
 static const char* g_frag_src =
 "#version 330 core\n"
 "in vec4 v_col;\n"
@@ -629,6 +629,8 @@ static const char* g_frag_src =
 "uniform vec3 u_light_dir;    // Directional light direction (normalized)\n"
 "uniform vec3 u_light_ambient; // Ambient light color\n"
 "uniform vec3 u_view_pos;     // Camera position for specular\n"
+"uniform int u_alpha_cmp_func; // 0=NEVER, 1=LESS, 2=EQUAL, 3=LEQUAL, 4=GREATER, 5=NOTEQUAL, 6=GEQUAL, 7=ALWAYS\n"
+"uniform float u_alpha_cmp_ref; // Reference alpha value\n"
 "void main() {\n"
 "    vec4 col = v_col;\n"
 "    float nlen = length(v_nrm);\n"
@@ -647,6 +649,15 @@ static const char* g_frag_src =
 "    }\n"
 "    if (u_tex0_enable != 0) { vec4 t = texture(u_tex0, v_uv0); vec4 tc = vec4(t.r, t.r, t.r, t.a); if(length(tc.rgb) > 0.001) col *= tc; }\n"
 "    if (u_tex1_enable != 0) { vec4 t = texture(u_tex1, v_uv1); vec4 tc = vec4(t.r, t.r, t.r, t.a); if(length(tc.rgb) > 0.001) col *= tc; }\n"
+"    // Alpha test (GXAlphaTest)\n"
+"    if (u_alpha_cmp_func == 0) { discard; } // NEVER\n"
+"    else if (u_alpha_cmp_func == 1 && col.a >= u_alpha_cmp_ref) { discard; } // LESS\n"
+"    else if (u_alpha_cmp_func == 2 && abs(col.a - u_alpha_cmp_ref) > 0.001) { discard; } // EQUAL\n"
+"    else if (u_alpha_cmp_func == 3 && col.a > u_alpha_cmp_ref) { discard; } // LEQUAL\n"
+"    else if (u_alpha_cmp_func == 4 && col.a <= u_alpha_cmp_ref) { discard; } // GREATER\n"
+"    else if (u_alpha_cmp_func == 5 && abs(col.a - u_alpha_cmp_ref) <= 0.001) { discard; } // NOTEQUAL\n"
+"    else if (u_alpha_cmp_func == 6 && col.a < u_alpha_cmp_ref) { discard; } // GEQUAL\n"
+"    // else: ALWAYS passes\n"
 "    frag_color = col;\n"
 "}\n";
 
