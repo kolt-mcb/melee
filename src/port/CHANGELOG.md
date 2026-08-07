@@ -1,3 +1,21 @@
+## [2025-08-06n] — Matrix Component Clamping & Debug Cleanup
+
+### Matrix Component Clamping
+- Added rotation/scale component clamping in HSD_JObjMakeMatrix (±10)
+- Prevents extreme transforms from bad joint data propagating to children
+- Translation clamp remains at ±2000, vertex position clamp at ±5000
+
+### Vertex Histogram Analysis
+- Added histogram tracking for vertex position distribution
+- Reveals: 2.5% near origin (< 100), 0.9% small (< 500), 18.3% large (1000-5000), 78.3% extreme (> 5000)
+- Most vertices (78.3%) are garbage from bad joint transforms
+- Real geometry is in the 'near origin' and 'small' categories (3.4%)
+
+### Debug Cleanup
+- Removed verbose debug output from display list parser
+- Removed rotation debug output from joint conversion
+- Preserved RAW VERTS bounds tracking for future reference
+
 ## [2025-08-06m] — Stage Rendering Improvements
 
 ### Screenshot Timing
