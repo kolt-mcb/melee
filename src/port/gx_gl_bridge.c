@@ -1512,7 +1512,7 @@ static void bridge_add_vertex(void)
         /* Clamp extreme vertex positions (from joints with garbage transforms).
          * Stage geometry is in a reasonable range; clamp outliers to prevent
          * camera distortion from extreme coordinates. */
-        f32 clamp = 10000.0f;
+        f32 clamp = 5000.0f;
         if (v->pos[0] < -clamp) v->pos[0] = -clamp;
         if (v->pos[0] > clamp) v->pos[0] = clamp;
         if (v->pos[1] < -clamp) v->pos[1] = -clamp;
