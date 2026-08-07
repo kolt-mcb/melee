@@ -494,6 +494,7 @@ typedef struct {
     /* Viewing matrix (from gx_set_3d_camera) */
     f32 view_matrix[3][4];      /* Viewing matrix (camera transform) */
     Bool view_matrix_valid;     /* Whether viewing matrix is set */
+    f32 camera_pos[3];          /* Camera position in world space */
     
     /* Geometry bounds tracking (world space, updated per-frame) */
     f32 bounds_min[3];
@@ -524,6 +525,7 @@ static GLint g_mvp_loc = -1;
 static GLint g_uv_scale_loc = -1;
 static GLint g_light_dir_loc = -1;
 static GLint g_light_ambient_loc = -1;
+static GLint g_view_pos_loc = -1;
 
 /* Texture shader uniform locations */
 /* Per-texture-unit shader uniform locations (max 2 active in GLSL 3.30) */
@@ -611,7 +613,7 @@ static const char* g_vert_src =
 "    v_world_pos = (u_mvp * vec4(a_pos, 1.0)).xyz;\n"
 "}\n";
 
-/* Fragment shader — basic directional lighting + texture sampling. */
+/* Fragment shader — directional + specular lighting + texture sampling. */
 static const char* g_frag_src =
 "#version 330 core\n"
 "in vec4 v_col;\n"
@@ -626,6 +628,7 @@ static const char* g_frag_src =
 "uniform sampler2D u_tex1;\n"
 "uniform vec3 u_light_dir;    // Directional light direction (normalized)\n"
 "uniform vec3 u_light_ambient; // Ambient light color\n"
+"uniform vec3 u_view_pos;     // Camera position for specular\n"
 "void main() {\n"
 "    vec4 col = v_col;\n"
 "    float nlen = length(v_nrm);\n"
@@ -634,7 +637,11 @@ static const char* g_frag_src =
 "        vec3 n = v_nrm / nlen;\n"
 "        vec3 l = u_light_dir / llen;\n"
 "        float ndotl = max(dot(n, l), 0.0);\n"
-"        col.rgb *= (u_light_ambient + ndotl);\n"
+"        // Specular: Blinn-Phong with halfway vector\n"
+"        vec3 v = normalize(u_view_pos - v_world_pos);\n"
+"        vec3 h = normalize(l + v);\n"
+"        float spec = pow(max(dot(n, h), 0.0), 32.0) * 0.3;\n"
+"        col.rgb *= (u_light_ambient + ndotl + spec);\n"
 "    } else {\n"
 "        col.rgb *= u_light_ambient;\n"
 "    }\n"
@@ -688,6 +695,7 @@ static void bridge_compile_shaders(void)
     g_uv_scale_loc = glGetUniformLocation(g_shader_program, "u_uv_scale");
     g_light_dir_loc = glGetUniformLocation(g_shader_program, "u_light_dir");
     g_light_ambient_loc = glGetUniformLocation(g_shader_program, "u_light_ambient");
+    g_view_pos_loc = glGetUniformLocation(g_shader_program, "u_view_pos");
     
     /* Texture uniforms for fragment shader (tex0 + tex1 with TEV compositing) */
     g_tex0_enable_loc = glGetUniformLocation(g_shader_program, "u_tex0_enable");
@@ -1010,6 +1018,11 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
     memcpy(g_state.view_matrix, mv, sizeof(g_state.view_matrix));
     g_state.view_matrix_valid = TRUE;
     
+    /* Save camera position for specular lighting */
+    g_state.camera_pos[0] = eye_x;
+    g_state.camera_pos[1] = eye_y;
+    g_state.camera_pos[2] = eye_z;
+    
     memcpy(g_state.mv_matrix, mv, sizeof(g_state.mv_matrix));
 }
 
@@ -1208,6 +1221,15 @@ static void bridge_upload_and_draw(void)
     if (g_light_ambient_loc >= 0) {
         GLfloat ambient[3] = {0.4f, 0.4f, 0.45f}; // Moderate ambient
         glUniform3fv(g_light_ambient_loc, 1, ambient);
+    }
+    if (g_view_pos_loc >= 0) {
+        // Camera position from gx_set_3d_camera
+        GLfloat view_pos[3] = {
+            g_state.camera_pos[0],
+            g_state.camera_pos[1],
+            g_state.camera_pos[2]
+        };
+        glUniform3fv(g_view_pos_loc, 1, view_pos);
     }
     
     /* Upload alpha compare uniforms */
