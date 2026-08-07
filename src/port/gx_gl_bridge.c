@@ -3249,6 +3249,8 @@ skip_tlut:
     GLenum mag_f = (mag_filt & 0x0F) == 0x04 || (mag_filt & 0x0F) == 0x0C ? GL_LINEAR : GL_NEAREST;
     if ((filt & 0xF0) == 0x10) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        /* Generate mipmaps for proper minification */
+        glGenerateMipmap(GL_TEXTURE_2D);
     } else {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_f);
     }
