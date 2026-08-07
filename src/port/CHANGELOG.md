@@ -1,3 +1,11 @@
+## [2025-08-06r] — Tone Mapping Investigation (Reverted)
+
+### Tone Mapping Attempt
+- Added soft clamp to prevent overbright areas from washing out.
+- Reverted because it caused black screen (likely due to uniform upload
+  timing issue or shader recompilation bug). Will investigate further.
+- Current lighting: Blinn-Phong specular + directional + ambient.
+
 ## [2025-08-06q] — Camera Tuning & Bounds Tracking Fix
 
 ### Bounds Tracking Fix
