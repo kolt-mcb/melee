@@ -250,11 +250,20 @@ HSD_TExp* HSD_TExpCnst(void* val, HSD_TEInput comp, HSD_TEType type,
         texp->cnst.next = (*texp_list);
         *texp_list = texp;
         texp->cnst.ref = 0;
-        texp->cnst.val = val;
         texp->cnst.comp = comp;
         texp->cnst.ctype = type;
         texp->cnst.reg = 0xFF;
         texp->cnst.idx = 0xFF;
+        /* PC port: copy constant values instead of storing pointers.
+         * The original val pointer may be freed or corrupted during rendering.
+         * Copy up to 16 bytes (enough for GXColor + alpha). */
+        if (val != NULL && (uintptr_t) val >= 0x10000) {
+            __builtin_memcpy(texp->cnst.val_buf, val, sizeof(texp->cnst.val_buf));
+            texp->cnst.val = texp->cnst.val_buf;
+        } else {
+            __builtin_memset(texp->cnst.val_buf, 0, sizeof(texp->cnst.val_buf));
+            texp->cnst.val = texp->cnst.val_buf;
+        }
         return texp;
     } while (true);
 
