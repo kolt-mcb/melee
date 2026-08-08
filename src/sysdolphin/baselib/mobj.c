@@ -181,12 +181,10 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
         }
 
         HSD_MOBJ_METHOD(mobj)->load(mobj, mobjdesc);
-        /* PC port: TEV compilation disabled.
-         * HSD_TExpCompile crashes due to expression tree traversal
-         * hitting garbage pointers from compiler-optimized memset
-         * (pcmpeqd writes 0xFFFFFFFF instead of 0x00000000).
-         * The GLSL shader pipeline handles basic texturing directly.
-         * TODO: Fix TEV compilation or implement GLSL TEV pipeline. */
+        /* PC port: TEV compilation disabled - constant value corruption
+         * during rendering. TEV compilation runs (num=1 stages) but the
+         * CNST node val pointers point to freed/corrupted memory.
+         * TODO: Fix constant value storage in HSD_TExpCnst. */
         // HSD_MObjCompileTev(mobj);
 
         return mobj;
@@ -395,7 +393,7 @@ static char unused1[] = "hsdIsDescendantOf(info, &hsdMObj)";
 
 void MObjSetupTev(HSD_MObj* mobj, HSD_TObj* tobj, u32 arg2)
 {
-    if (mobj->tevdesc == NULL) { return; } // PC port: skip if no TEV
+    if (mobj->tevdesc == NULL) { return; }
     HSD_TExpSetupTev(mobj->tevdesc, mobj->texp);
     HSD_TObjSetupVolatileTev(tobj, arg2);
 }

@@ -23,10 +23,12 @@ HSD_TExpType HSD_TExpGetType(HSD_TExp* texp)
     if (texp == (HSD_TExp*) (uintptr_t) -2) {
         return HSD_TE_RAS;
     }
-    /* PC port: guard against garbage 32-bit GCN archive pointers.
-     * Valid x86_64 heap pointers are > 0x10000000 (mmap region) or
-     * in the process heap. Reject pointers below 0x10000 as garbage. */
-    if ((uintptr_t) texp < 0x10000) {
+    /* PC port: guard against garbage pointers.
+     * Valid x86_64 heap pointers are in mmap region (> 0x10000000) or
+     * in the process heap. Reject pointers below 0x10000 as garbage.
+     * Also reject 0xFFFFFFFFFFFFFFFF (memset 0xFF residue on x86_64). */
+    uintptr_t addr = (uintptr_t) texp;
+    if (addr < 0x10000 || addr > 0x7FFFFFFFFFFF0000ULL) {
         return HSD_TE_ZERO;
     }
     return texp->type;
@@ -193,7 +195,11 @@ HSD_TExp* HSD_TExpTev(HSD_TExp** texp_list)
 
     HSD_ASSERT(294, texp_list);
     texp = TevAlloc();
-    memset(texp, 0xFF, sizeof(HSD_TETev));
+    /* PC port: replace memset(0xFF) with explicit field init.
+     * memset(0xFF) sets 64-bit pointers to 0xFFFFFFFFFFFFFFFF on x86_64,
+     * which causes crashes when expression tree traversal dereferences them.
+     * Zero the struct, then set fields that need 0xFF explicitly. */
+    __builtin_memset(texp, 0, sizeof(HSD_TETev));
     texp->type = HSD_TE_TEV;
     texp->tev.next = *texp_list;
     *texp_list = texp;
@@ -201,9 +207,19 @@ HSD_TExp* HSD_TExpTev(HSD_TExp** texp_list)
     texp->tev.a_ref = 0;
     texp->tev.tex = NULL;
     for (i = 0; i < 4; i++) {
+        texp->tev.c_in[i].type = HSD_TE_UNDEF;
+        texp->tev.c_in[i].sel = 0;
+        texp->tev.c_in[i].arg = 0xFF;
         texp->tev.c_in[i].exp = NULL;
+        texp->tev.a_in[i].type = HSD_TE_UNDEF;
+        texp->tev.a_in[i].sel = 0;
+        texp->tev.a_in[i].arg = 0xFF;
         texp->tev.a_in[i].exp = NULL;
     }
+    texp->tev.tex_swap = HSD_TE_UNDEF;
+    texp->tev.ras_swap = HSD_TE_UNDEF;
+    texp->tev.kcsel = 0xFF;
+    texp->tev.kasel = 0xFF;
     return texp;
 }
 
@@ -1098,6 +1114,8 @@ void HSD_TExpSetReg(HSD_TExp* texp)
     u32 changed;
     HSD_TECnst* clist;
 
+    if (texp == NULL || (uintptr_t) texp < 0x10000) return;
+
     clist = &texp->cnst;
     changed = 0;
 
@@ -1156,6 +1174,12 @@ void HSD_TExpSetReg(HSD_TExp* texp)
             } else {
                 int x;
                 u8 val;
+                /* PC port: guard against invalid val pointer */
+                if (clist->val == NULL || (uintptr_t) clist->val < 0x10000 || (uintptr_t) clist->val > 0x7FFFFFFFFFFF0000ULL) {
+                    clist = &clist->next->cnst;
+                    if (clist == NULL || (uintptr_t) clist < 0x10000) break;
+                    continue;
+                }
                 switch (clist->ctype) {
                 case HSD_TE_U8:
                     x = *(u8*) clist->val;
@@ -1204,6 +1228,8 @@ void HSD_TExpSetReg(HSD_TExp* texp)
             }
         }
         clist = &clist->next->cnst;
+        /* PC port: guard against garbage next pointer */
+        if (clist == NULL || (uintptr_t) clist < 0x10000) break;
     }
     if (changed != 0) {
         GXPixModeSync();
@@ -1272,7 +1298,12 @@ int HSD_TExpCompile(HSD_TExp* texp, HSD_TExpTevDesc** tevdesc,
         HSD_TExpTevDesc* tdesc = hsdAllocMemPiece(sizeof(HSD_TExpTevDesc));
         tdesc->desc.stage = HSD_Index2TevStage(i);
         TExp2TevDesc(order[(num - i) - 1], tdesc, &init_cprev, &init_aprev);
-        tdesc->desc.next = &(*tevdesc)->desc;
+        /* PC port: fix chain building - don't dereference NULL */
+        if (*tevdesc != NULL) {
+            tdesc->desc.next = &(*tevdesc)->desc;
+        } else {
+            tdesc->desc.next = NULL;
+        }
         *tevdesc = tdesc;
     }
 

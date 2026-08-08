@@ -407,6 +407,8 @@ int SimplifySrc(HSD_TExp* arg0)
         if (arg0->tev.c_in[i].type == HSD_TE_TEV) {
             HSD_TExp* src = arg0->tev.c_in[i].exp;
             u8 sel = arg0->tev.c_in[i].sel;
+            /* PC port: guard against garbage pointers */
+            if (src == NULL || (uintptr_t) src < 0x10000) continue;
             if (HSD_TExpSimplify(src) != 0) {
                 result = true;
             }
@@ -424,8 +426,10 @@ int SimplifySrc(HSD_TExp* arg0)
                     {
                         switch (src->tev.c_in[3].type) {
                         case HSD_TE_TEV:
-                            if (src->tev.c_in[3].exp->tev.c_clamp != 0 ||
-                                src->tev.c_clamp == 0)
+                            if (src->tev.c_in[3].exp != NULL &&
+                                (uintptr_t) src->tev.c_in[3].exp >= 0x10000 &&
+                                (src->tev.c_in[3].exp->tev.c_clamp != 0 ||
+                                src->tev.c_clamp == 0))
                             {
                                 arg0->tev.c_in[i] = src->tev.c_in[3];
                                 HSD_TExpRef(arg0->tev.c_in[i].exp,
@@ -488,6 +492,8 @@ int SimplifySrc(HSD_TExp* arg0)
         if (arg0->tev.a_in[i].type == HSD_TE_TEV) {
             HSD_TExp* src = arg0->tev.a_in[i].exp;
             u8 sel = arg0->tev.a_in[i].sel;
+            /* PC port: guard against garbage pointers */
+            if (src == NULL || (uintptr_t) src < 0x10000) continue;
             HSD_TExpSimplify(src);
             switch (src->tev.a_op) {
             case 0xFF:
@@ -502,11 +508,14 @@ int SimplifySrc(HSD_TExp* arg0)
                 {
                     switch (src->tev.a_in[3].type) {
                     case HSD_TE_TEV:
-                        arg0->tev.a_in[i] = src->tev.a_in[3];
-                        HSD_TExpRef(arg0->tev.a_in[i].exp,
-                                    arg0->tev.a_in[i].sel);
-                        HSD_TExpUnref(src, sel);
-                        result = true;
+                        if (src->tev.a_in[3].exp != NULL &&
+                            (uintptr_t) src->tev.a_in[3].exp >= 0x10000) {
+                            arg0->tev.a_in[i] = src->tev.a_in[3];
+                            HSD_TExpRef(arg0->tev.a_in[i].exp,
+                                        arg0->tev.a_in[i].sel);
+                            HSD_TExpUnref(src, sel);
+                            result = true;
+                        }
                         break;
                     case HSD_TE_TEX:
                         if (arg0->tev.tex == NULL ||

@@ -37,7 +37,7 @@ DISPLAY_MODULES = [
     "mtx.c",
     "state.c",
     "fobj.c",
-    "texp.c", "tobj.c",
+    "texp.c", "texpdag.c", "tobj.c",
     "robj.c",
     "aobj.c",
     "dobj.c",
