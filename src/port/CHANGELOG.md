@@ -1,3 +1,11 @@
+## [2025-08-07f] — TEV Pipeline Completeness
+
+### TEV Fixes
+- Added D input to TEV formula: (A+B)*C+D instead of (A+B)*C
+- Added C0/C1/C2/A0/A1/A2 channel resolution in shader
+- Pixel count improved: 356,827 (38.7%) -> 375,056 (40.7%)
+- Baseline with TEV disabled: 380,091 (41.2%)
+
 ## [2025-08-07e] — TEV Compilation Enabled
 
 ### TEV Compilation
