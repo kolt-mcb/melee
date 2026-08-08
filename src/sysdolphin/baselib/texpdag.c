@@ -143,11 +143,11 @@ void CalcDistance(HSD_TExp** tevs, int* dist, HSD_TExp* tev, int num,
             if (dist[idx] < depth) {
                 dist[idx] = depth;
                 for (i = 0; i < 4; i++) {
-                    if (tev->tev.c_in[i].type == 1) {
+                    if (tev->tev.c_in[i].type == 1 && tev->tev.c_in[i].exp != NULL) {
                         CalcDistance(tevs, dist, tev->tev.c_in[i].exp, num,
                                      depth + 1);
                     }
-                    if (tev->tev.a_in[i].type == 1) {
+                    if (tev->tev.a_in[i].type == 1 && tev->tev.a_in[i].exp != NULL) {
                         CalcDistance(tevs, dist, tev->tev.a_in[i].exp, num,
                                      depth + 1);
                     }
@@ -184,8 +184,10 @@ int HSD_TExpMakeDag(HSD_TExp* root, HSD_TExpDag* list)
         HSD_TExp* tmp;
         HSD_ASSERT(0xF6, j<HSD_TEXP_MAX_NUM);
         tmp = sp94[j];
+        /* PC port: guard against garbage pointers */
+        if (tmp == NULL || (uintptr_t) tmp < 0x10000) continue;
         for (i = 0; i < 4; i++) {
-            if (tmp->tev.c_in[i].type == HSD_TE_TEV) {
+            if (tmp->tev.c_in[i].type == HSD_TE_TEV && tmp->tev.c_in[i].exp != NULL) {
                 for (k = 0; k < num; k++) {
                     if (base[k] == tmp->tev.c_in[i].exp) {
                         break;
@@ -198,7 +200,7 @@ int HSD_TExpMakeDag(HSD_TExp* root, HSD_TExpDag* list)
         }
 
         for (i = 0; i < 4; i++) {
-            if (tmp->tev.a_in[i].type == HSD_TE_TEV) {
+            if (tmp->tev.a_in[i].type == HSD_TE_TEV && tmp->tev.a_in[i].exp != NULL) {
                 for (k = 0; k < num; k++) {
                     if (base[k] == tmp->tev.a_in[i].exp) {
                         break;
@@ -1267,8 +1269,13 @@ int HSD_TExpSimplify2(HSD_TExp* texp_)
     u8 src_sel;
     int i;
 
+    /* PC port: guard against garbage pointers */
+    if (texp == NULL || (uintptr_t) texp < 0x10000) return 0;
+
     for (i = 0; i < 4; i++) {
         src_exp = texp->tev.c_in[i].exp;
+        /* PC port: skip invalid entries */
+        if (src_exp == NULL || (uintptr_t) src_exp < 0x10000) continue;
         src_sel = texp->tev.c_in[i].sel;
         if (texp->tev.c_in[i].type == HSD_TE_TEV && src_sel == 1 &&
             IsThroughColor(src_exp))
@@ -1292,6 +1299,8 @@ int HSD_TExpSimplify2(HSD_TExp* texp_)
     for (i = 0; i < 4; i++) {
         src_exp = texp->tev.a_in[i].exp;
         src_sel = texp->tev.a_in[i].sel;
+        /* PC port: skip invalid entries */
+        if (src_exp == NULL || (uintptr_t) src_exp < 0x10000) continue;
         if (texp->tev.a_in[i].type == HSD_TE_TEV && IsThroughAlpha(src_exp)) {
             switch (src_exp->tev.a_in[3].type) {
             case HSD_TE_KONST:
