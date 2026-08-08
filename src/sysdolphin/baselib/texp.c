@@ -1185,8 +1185,8 @@ void HSD_TExpSetReg(HSD_TExp* texp)
                 u8 val;
                 /* PC port: guard against invalid val pointer */
                 if (clist->val == NULL || (uintptr_t) clist->val < 0x10000 || (uintptr_t) clist->val > 0x7FFFFFFFFFFF0000ULL) {
+                    if (clist->next == NULL) break;
                     clist = &clist->next->cnst;
-                    if (clist == NULL || (uintptr_t) clist < 0x10000) break;
                     continue;
                 }
                 switch (clist->ctype) {
@@ -1236,9 +1236,9 @@ void HSD_TExpSetReg(HSD_TExp* texp)
                 }
             }
         }
+        /* PC port: guard against NULL next pointer before dereference */
+        if (clist->next == NULL) break;
         clist = &clist->next->cnst;
-        /* PC port: guard against garbage next pointer */
-        if (clist == NULL || (uintptr_t) clist < 0x10000) break;
     }
     if (changed != 0) {
         GXPixModeSync();
