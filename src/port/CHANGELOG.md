@@ -1,3 +1,20 @@
+## [2025-08-07d] — TEV Expression Tree Crash Guards
+
+### TEV Compilation Progress
+- Added texpdag.c to PC build (was missing, causing link issues)
+- Fixed HSD_TExpTev: replaced memset(0xFF) with explicit field init
+  (memset sets 64-bit pointers to 0xFFFFFFFF on x86_64)
+- Fixed tevdesc chain building: first node's next was &(NULL)->desc
+- Added crash guards throughout expression tree traversal:
+  - HSD_TExpGetType: reject 0xFFFFFFFF pointers
+  - CalcDistance: guard against garbage pointers
+  - HSD_TExpMakeDag: skip invalid nodes in DAG construction
+  - HSD_TExpSimplify2: skip invalid c_in/a_in entries
+  - SimplifySrc: guard against garbage pointers (color and alpha)
+  - HSD_TExpSetReg: guard against invalid val pointers
+- TEV compilation now runs without crashing during DAG/scheduling
+- Constant value corruption during rendering still needs investigation
+
 ## [2025-08-07c] — GLSL TEV Pipeline Implementation
 
 ### GLSL TEV Pipeline
