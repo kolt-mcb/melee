@@ -157,40 +157,40 @@ enum {
     GX_SRC_VTX = 0x00000001,  /* Use vertex color */
 };
 
-/* Color sources for TEV — simple Dolphin enum values matching shader */
+/* Color sources for TEV — match Dolphin GXTevColorArg enum values */
 enum {
-    GX_CC_CPREV = 0x00,
-    GX_CC_APREV = 0x01,
-    GX_CC_C0 = 0x02,
-    GX_CC_A0 = 0x03,
-    GX_CC_C1 = 0x04,
-    GX_CC_A1 = 0x05,
-    GX_CC_C2 = 0x06,
-    GX_CC_A2 = 0x07,
-    GX_CC_TEXC = 0x0B,
-    GX_CC_TEXA = 0x0C,
-    GX_CC_RASC = 0x0D,
-    GX_CC_RASA = 0x0E,
-    GX_CC_ONE = 0x0F,
-    GX_CC_HALF = 0x10,
-    GX_CC_KONST = 0x11,
-    GX_CC_ZERO = 0x12,
-    GX_CC_TEXRRR = 0x13,
-    GX_CC_TEXGGG = 0x14,
-    GX_CC_TEXBBB = 0x15,
+    GX_CC_CPREV = 0,
+    GX_CC_APREV = 1,
+    GX_CC_C0 = 2,
+    GX_CC_A0 = 3,
+    GX_CC_C1 = 4,
+    GX_CC_A1 = 5,
+    GX_CC_C2 = 6,
+    GX_CC_A2 = 7,
+    GX_CC_TEXC = 8,
+    GX_CC_TEXA = 9,
+    GX_CC_RASC = 10,
+    GX_CC_RASA = 11,
+    GX_CC_ONE = 12,
+    GX_CC_HALF = 13,
+    GX_CC_KONST = 14,
+    GX_CC_ZERO = 15,
+    GX_CC_TEXRRR = 16,
+    GX_CC_TEXGGG = 17,
+    GX_CC_TEXBBB = 18,
 };
 
-/* Alpha sources for TEV */
+/* Alpha sources for TEV — match Dolphin GXTevAlphaArg enum values */
 enum {
-    GX_CA_APREV = 0x00,
-    GX_CA_A0 = 0x01,
-    GX_CA_A1 = 0x02,
-    GX_CA_A2 = 0x03,
-    GX_CA_TEXA = 0x04,
-    GX_CA_RASA = 0x05,
-    GX_CA_KONST = 0x06,
-    GX_CA_ZERO = 0x07,
-    GX_CA_ONE = 0x08,
+    GX_CA_APREV = 0,
+    GX_CA_A0 = 1,
+    GX_CA_A1 = 2,
+    GX_CA_A2 = 3,
+    GX_CA_TEXA = 4,
+    GX_CA_RASA = 5,
+    GX_CA_KONST = 6,
+    GX_CA_ZERO = 7,
+    GX_CA_ONE = 6,  /* Alias of KONST in Dolphin */
 };
 
 /* TEV operation types */
@@ -678,36 +678,39 @@ static const char* g_frag_src =
 "uniform float u_alpha_cmp_ref;\n"
 "\n"
 "// Resolve a TEV color input source to a vec4\n"
+"// Dolphin GXTevColorArg enum: CPREV=0, APREV=1, C0=2, A0=3, C1=4, A1=5,\n"
+"// C2=6, A2=7, TEXC=8, TEXA=9, RASC=10, RASA=11, ONE=12, HALF=13,\n"
+"// KONST=14, ZERO=15, TEXRRR=16, TEXGGG=17, TEXBBB=18\n"
 "vec4 tev_resolve_color(int src, vec4 tex, vec4 ras, vec4 cprev, vec4 aprev) {\n"
-"    if (src == 0x0B) { // TEXC\n"
-"        // Handle intensity textures (GL_LUMINANCE deprecated, use R channel)\n"
+"    if (src == 8) { // TEXC\n"
 "        if (length(tex.rgb) > 0.001) return tex;\n"
 "        return vec4(1.0);\n"
 "    }\n"
-"    if (src == 0x0C) return vec4(tex.a); // TEXA\n"
-"    if (src == 0x0D) return ras;        // RASC\n"
-"    if (src == 0x0E) return vec4(ras.a); // RASA\n"
-"    if (src == 0x00) return cprev;     // CPREV\n"
-"    if (src == 0x01) return vec4(aprev.a); // APREV as color\n"
-"    if (src == 0x11) return u_kcolor[0];   // KONST\n"
-"    if (src == 0x12) return vec4(0.0);     // ZERO\n"
-"    if (src == 0x0F) return vec4(1.0);     // ONE\n"
-"    if (src == 0x10) return vec4(0.5);     // HALF\n"
-"    if (src == 0x13) return vec4(tex.r);   // TEXRRR\n"
-"    if (src == 0x14) return vec4(tex.g);   // TEXGGG\n"
-"    if (src == 0x15) return vec4(tex.b);   // TEXBBB\n"
+"    if (src == 9) return vec4(tex.a);     // TEXA\n"
+"    if (src == 10) return ras;           // RASC\n"
+"    if (src == 11) return vec4(ras.a);   // RASA\n"
+"    if (src == 0) return cprev;          // CPREV\n"
+"    if (src == 1) return vec4(aprev.a);  // APREV as color\n"
+"    if (src == 14) return u_kcolor[0];   // KONST\n"
+"    if (src == 15) return vec4(0.0);     // ZERO\n"
+"    if (src == 12) return vec4(1.0);     // ONE\n"
+"    if (src == 13) return vec4(0.5);     // HALF\n"
+"    if (src == 16) return vec4(tex.r);   // TEXRRR\n"
+"    if (src == 17) return vec4(tex.g);   // TEXGGG\n"
+"    if (src == 18) return vec4(tex.b);   // TEXBBB\n"
 "    // Default: RAS (vertex color)\n"
 "    return ras;\n"
 "}\n"
 "\n"
 "// Resolve a TEV alpha input source to a float\n"
+"// Dolphin GXTevAlphaArg enum: APREV=0, A0=1, A1=2, A2=3, TEXA=4, RASA=5, KONST=6, ZERO=7\n"
 "float tev_resolve_alpha(int src, vec4 tex, vec4 ras, float aprev) {\n"
-"    if (src == 0x04) return tex.a;     // TEXA\n"
-"    if (src == 0x05) return ras.a;     // RASA\n"
-"    if (src == 0x00) return aprev;     // APREV\n"
-"    if (src == 0x06) return u_kcolor[0].a; // KONST\n"
-"    if (src == 0x07) return 0.0;       // ZERO\n"
-"    if (src == 0x08) return 1.0;       // ONE\n"
+"    if (src == 4) return tex.a;      // TEXA\n"
+"    if (src == 5) return ras.a;      // RASA\n"
+"    if (src == 0) return aprev;      // APREV\n"
+"    if (src == 6) return u_kcolor[0].a; // KONST\n"
+"    if (src == 7) return 0.0;        // ZERO\n"
+"    if (src == 8) return 1.0;        // ONE (alias of KONST in Dolphin)\n"
 "    return ras.a;\n"
 "}\n"
 "\n"
