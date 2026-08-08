@@ -2019,22 +2019,14 @@ void GXSetTevOp(u32 stage, u32 op)
         g_state.tev_stages[stage].color_enabled = TRUE;
     }
 }
-void GXSetTevColor(u32 reg, void* color)
+void GXSetTevColor(u32 reg, GXColor color)
 {
-    /* GXSetTevColor maps to KColor registers:
-     * GX_TEVREG0 → k_colors[0], GX_TEVREG1 → k_colors[1], etc.
-     * This is effectively the same as GXSetTevKColor but with
-     * GX_TEVREG id instead of KColor index. */
-    if (!color) return;
-    const GXColor *c = (const GXColor *)color;
-    
-    /* Clamp to valid KColor registers (0-3) */
-    u32 idx = reg & 3;  /* GX_TEVREG0=0, GX_TEVREG1=1, GX_TEVREG2=2 */
+    u32 idx = reg & 3;
     if (idx < 4) {
-        g_state.k_colors[idx].r = c->r;
-        g_state.k_colors[idx].g = c->g;
-        g_state.k_colors[idx].b = c->b;
-        g_state.k_colors[idx].a = c->a;
+        g_state.k_colors[idx].r = color.r;
+        g_state.k_colors[idx].g = color.g;
+        g_state.k_colors[idx].b = color.b;
+        g_state.k_colors[idx].a = color.a;
     }
 }
 void GXSetMisc(u32 param, u32 value)
@@ -2946,14 +2938,13 @@ void GXSetTevSwapModeTbl(u32 entry, u32 swp0, u32 swp1)
 void GXSetIndTevStage(void) {}
 void GXSetIndTevColor(void) {}
 void GXSetIndTevAlpha(void) {}
-void GXSetTevKColor(u32 kcolor, const void* color)
+void GXSetTevKColor(u32 kcolor, GXColor color)
 {
-    if (kcolor < 4 && color) {
-        const u8* p = (const u8*)color;
-        g_state.k_colors[kcolor].r = p[0];
-        g_state.k_colors[kcolor].g = p[1];
-        g_state.k_colors[kcolor].b = p[2];
-        g_state.k_colors[kcolor].a = p[3];
+    if (kcolor < 4) {
+        g_state.k_colors[kcolor].r = color.r;
+        g_state.k_colors[kcolor].g = color.g;
+        g_state.k_colors[kcolor].b = color.b;
+        g_state.k_colors[kcolor].a = color.a;
     }
 }
 void GXSetTevKAlpha(void) {}
