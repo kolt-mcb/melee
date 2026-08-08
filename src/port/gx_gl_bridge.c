@@ -92,6 +92,8 @@ typedef struct {
     u32 alpha_op;
     u32 color_bias;
     u32 color_scale;
+    u32 alpha_bias;
+    u32 alpha_scale;
     Bool color_clamp;
     Bool alpha_clamp;
     u32 swap_sel[4];
@@ -420,9 +422,11 @@ typedef struct {
     
     /* Alpha compare state (GLSL Core Profile: discard in fragment shader) */
     Bool alpha_compare_enabled;
-    u32 alpha_compare_func;  /* GL_NEVER, GL_LESS, GL_LEQUAL, etc. */
-    f32 alpha_compare_ref;   /* Reference alpha value [0..1] */
-    u32 alpha_compare_mask;  /* Alpha test mask (bitwise AND with pixel alpha) */
+    u32 alpha_compare_func;  /* comp0: GL_NEVER, GL_LESS, GL_LEQUAL, etc. */
+    f32 alpha_compare_ref;   /* ref0: Reference alpha value [0..1] */
+    u32 alpha_compare_op;    /* GXAlphaOp: GX_AOP_AND, GX_AOP_OR */
+    u32 alpha_compare_func1; /* comp1: second alpha compare function */
+    f32 alpha_compare_ref1;  /* ref1: second reference alpha value [0..1] */
     Bool alpha_dither;       /* Enable alpha dither */
     
     GXColor prim_color;
@@ -630,6 +634,9 @@ static GLint g_color_mult0_loc = -1;
 static GLint g_color_mult1_loc = -1;
 static GLint g_alpha_cmp_func_loc = -1;
 static GLint g_alpha_cmp_ref_loc = -1;
+static GLint g_alpha_op_loc = -1;
+static GLint g_alpha_cmp_func1_loc = -1;
+static GLint g_alpha_cmp_ref1_loc = -1;
 static GLint g_alpha_cmp_mask_loc = -1;
 
 /* TEV pipeline uniform locations */
@@ -747,6 +754,9 @@ static const char* g_frag_src =
 "// Alpha test\n"
 "uniform int u_alpha_cmp_func;\n"
 "uniform float u_alpha_cmp_ref;\n"
+"uniform int u_alpha_op;\n"
+"uniform int u_alpha_cmp_func1;\n"
+"uniform float u_alpha_cmp_ref1;\n"
 "\n"
 "// Resolve a TEV color input source to a vec4\n"
 "// Dolphin GXTevColorArg enum: CPREV=0, APREV=1, C0=2, A0=3, C1=4, A1=5,\n"
@@ -903,14 +913,35 @@ static const char* g_frag_src =
 "    // Final output\n"
 "    vec4 col = vec4(cprev.rgb, aprev);\n"
 "\n"
-"    // Alpha test\n"
-"    if (u_alpha_cmp_func == 0) { discard; } // NEVER\n"
-"    else if (u_alpha_cmp_func == 1 && col.a >= u_alpha_cmp_ref) { discard; } // LESS\n"
-"    else if (u_alpha_cmp_func == 2 && abs(col.a - u_alpha_cmp_ref) > 0.001) { discard; } // EQUAL\n"
-"    else if (u_alpha_cmp_func == 3 && col.a > u_alpha_cmp_ref) { discard; } // LEQUAL\n"
-"    else if (u_alpha_cmp_func == 4 && col.a <= u_alpha_cmp_ref) { discard; } // GREATER\n"
-"    else if (u_alpha_cmp_func == 5 && abs(col.a - u_alpha_cmp_ref) <= 0.001) { discard; } // NOTEQUAL\n"
-"    else if (u_alpha_cmp_func == 6 && col.a < u_alpha_cmp_ref) { discard; } // GEQUAL\n"
+"    // Alpha test (GCN style: two compares combined with AND/OR)\n"
+"    // comp0: 0=NEVER, 1=LESS, 2=EQUAL, 3=LEQUAL, 4=GREATER, 5=NOTEQUAL, 6=GEQUAL, 7=ALWAYS\n"
+"    bool pass0 = true;\n"
+"    if (u_alpha_cmp_func == 0) pass0 = false; // NEVER\n"
+"    else if (u_alpha_cmp_func == 1) pass0 = col.a < u_alpha_cmp_ref; // LESS\n"
+"    else if (u_alpha_cmp_func == 2) pass0 = abs(col.a - u_alpha_cmp_ref) <= 0.001; // EQUAL\n"
+"    else if (u_alpha_cmp_func == 3) pass0 = col.a <= u_alpha_cmp_ref; // LEQUAL\n"
+"    else if (u_alpha_cmp_func == 4) pass0 = col.a > u_alpha_cmp_ref; // GREATER\n"
+"    else if (u_alpha_cmp_func == 5) pass0 = abs(col.a - u_alpha_cmp_ref) > 0.001; // NOTEQUAL\n"
+"    else if (u_alpha_cmp_func == 6) pass0 = col.a >= u_alpha_cmp_ref; // GEQUAL\n"
+"    // else pass0 = true; // ALWAYS\n"
+"\n"
+"    bool pass1 = true;\n"
+"    if (u_alpha_cmp_func1 == 0) pass1 = false; // NEVER\n"
+"    else if (u_alpha_cmp_func1 == 1) pass1 = col.a < u_alpha_cmp_ref1; // LESS\n"
+"    else if (u_alpha_cmp_func1 == 2) pass1 = abs(col.a - u_alpha_cmp_ref1) <= 0.001; // EQUAL\n"
+"    else if (u_alpha_cmp_func1 == 3) pass1 = col.a <= u_alpha_cmp_ref1; // LEQUAL\n"
+"    else if (u_alpha_cmp_func1 == 4) pass1 = col.a > u_alpha_cmp_ref1; // GREATER\n"
+"    else if (u_alpha_cmp_func1 == 5) pass1 = abs(col.a - u_alpha_cmp_ref1) > 0.001; // NOTEQUAL\n"
+"    else if (u_alpha_cmp_func1 == 6) pass1 = col.a >= u_alpha_cmp_ref1; // GEQUAL\n"
+"    // else pass1 = true; // ALWAYS\n"
+"\n"
+"    // Combine: op=0 (AND), op=1 (OR), op=2 (XOR), op=3 (XNOR)\n"
+"    bool pass;\n"
+"    if (u_alpha_op == 0) pass = pass0 && pass1;     // AND\n"
+"    else if (u_alpha_op == 1) pass = pass0 || pass1; // OR\n"
+"    else if (u_alpha_op == 2) pass = pass0 != pass1; // XOR\n"
+"    else pass = pass0 == pass1;                     // XNOR\n"
+"    if (!pass) { discard; }\n"
 "\n"
 "    frag_color = col;\n"
 "}\n";
@@ -973,6 +1004,9 @@ static void bridge_compile_shaders(void)
     g_color_mult1_loc = -1;
     g_alpha_cmp_func_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_func");
     g_alpha_cmp_ref_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_ref");
+    g_alpha_op_loc = glGetUniformLocation(g_shader_program, "u_alpha_op");
+    g_alpha_cmp_func1_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_func1");
+    g_alpha_cmp_ref1_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_ref1");
     g_alpha_cmp_mask_loc = -1; /* No longer used — alpha test in TEV shader */
     
     /* TEV pipeline uniform locations */
@@ -1124,7 +1158,9 @@ void gx_bridge_init(void)
     g_state.alpha_compare_enabled = FALSE;
     g_state.alpha_compare_func = 7;   /* ALWAYS passes */
     g_state.alpha_compare_ref = 1.0f;
-    g_state.alpha_compare_mask = 0;
+    g_state.alpha_compare_op = 0;     /* GX_AOP_OR */
+    g_state.alpha_compare_func1 = 7;  /* ALWAYS passes */
+    g_state.alpha_compare_ref1 = 1.0f;
     g_state.alpha_dither = FALSE;
     
     /* Initialize light slots (all disabled) */
@@ -2405,6 +2441,27 @@ static void apply_alpha_compare_uniforms(void)
     if (g_alpha_cmp_ref_loc >= 0) {
         glUniform1f(g_alpha_cmp_ref_loc, g_state.alpha_compare_ref);
     }
+    if (g_alpha_op_loc >= 0) {
+        glUniform1i(g_alpha_op_loc, g_state.alpha_compare_op);
+    }
+    if (g_alpha_cmp_func1_loc >= 0) {
+        u32 gl_func1 = 7; /* Default: ALWAYS */
+        switch (g_state.alpha_compare_func1) {
+        case 0: gl_func1 = 0;  break; /* NEVER */
+        case 1: gl_func1 = 1;  break; /* LESS */
+        case 2: gl_func1 = 2;  break; /* EQUAL */
+        case 3: gl_func1 = 3;  break; /* LEQUAL */
+        case 4: gl_func1 = 4;  break; /* GREATER */
+        case 5: gl_func1 = 5;  break; /* NOTEQUAL */
+        case 6: gl_func1 = 6;  break; /* GEQUAL */
+        case 7: gl_func1 = 7;  break; /* ALWAYS */
+        default: gl_func1 = 7;  break;
+        }
+        glUniform1i(g_alpha_cmp_func1_loc, gl_func1);
+    }
+    if (g_alpha_cmp_ref1_loc >= 0) {
+        glUniform1f(g_alpha_cmp_ref1_loc, g_state.alpha_compare_ref1);
+    }
 }
 
 /* Upload TEV pipeline uniforms to the shader */
@@ -2434,9 +2491,9 @@ static void apply_tev_uniforms(void)
             color_op_arr[i] = s->color_op;
             alpha_op_arr[i] = s->alpha_op;
             color_bias_arr[i] = s->color_bias;
-            alpha_bias_arr[i] = 0; /* alpha bias not tracked yet */
+            alpha_bias_arr[i] = s->alpha_bias;
             color_scale_arr[i] = s->color_scale;
-            alpha_scale_arr[i] = 0;
+            alpha_scale_arr[i] = s->alpha_scale;
             color_clamp_arr[i] = s->color_clamp;
             alpha_clamp_arr[i] = s->alpha_clamp;
             color_enabled_arr[i] = s->color_enabled;
@@ -2512,19 +2569,21 @@ static void apply_tev_uniforms(void)
     }
 }
 
-void GXSetAlphaCompare(u32 func, u32 ref, u32 op, u32 mask)
+void GXSetAlphaCompare(u32 comp0, u32 ref0, u32 op, u32 comp1, u32 ref1)
 {
     g_state.alpha_compare_enabled = TRUE;
-    g_state.alpha_compare_func = func;
-    g_state.alpha_compare_ref = ref / 255.0f;
-    g_state.alpha_compare_mask = mask;
+    g_state.alpha_compare_func = comp0;
+    g_state.alpha_compare_ref = ref0 / 255.0f;
+    g_state.alpha_compare_op = op;
+    g_state.alpha_compare_func1 = comp1;
+    g_state.alpha_compare_ref1 = ref1 / 255.0f;
     g_state.alpha_dither = FALSE;
     
     /* Apply immediately if we're in a draw context */
     apply_alpha_compare_uniforms();
     
-    PORT_LOG_DEBUG("ALPHA_CMP: func=%u ref=%.2f mask=0x%X",
-                   func, g_state.alpha_compare_ref, mask);
+    PORT_LOG_DEBUG("ALPHA_CMP: comp0=%u ref0=%.2f op=%u comp1=%u ref1=%.2f",
+                   comp0, g_state.alpha_compare_ref, op, comp1, g_state.alpha_compare_ref1);
 }
 
 void GXSetAlphaDither(u32 enable)
@@ -2595,10 +2654,12 @@ void GXSetTevAlphaOp(u32 stage, u32 op, u32 a, u32 b, u32 c, u32 bias, u32 scl, 
 {
     if (stage < MAX_TEV_STAGES) {
         g_state.tev_stages[stage].alpha_op = op;
+        g_state.tev_stages[stage].alpha_bias = bias;
+        g_state.tev_stages[stage].alpha_scale = scl & 0x03;
         g_state.tev_stages[stage].alpha_clamp = clamp;
         g_state.tev_stages[stage].alpha_enabled = TRUE;
     }
-    (void)a; (void)b; (void)c; (void)bias; (void)scl; (void)out_conv;
+    (void)a; (void)b; (void)c; (void)out_conv;
 }
 void GXSetNumChans(u32 n)
 {
