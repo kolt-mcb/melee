@@ -181,9 +181,10 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
         }
 
         HSD_MOBJ_METHOD(mobj)->load(mobj, mobjdesc);
-        /* PC port: TEV compilation disabled - constant value corruption
-         * during rendering. TEV compilation runs (num=1 stages) but the
-         * CNST node val pointers point to freed/corrupted memory.
+        /* PC port: TEV compilation disabled - HSD_TExpSetReg crash
+         * during constant value processing. TEV compilation runs
+         * (num=1 stages) but HSD_TExpSetReg crashes when reading
+         * constant values from the CNST node.
          * TODO: Fix constant value storage in HSD_TExpCnst. */
         // HSD_MObjCompileTev(mobj);
 
