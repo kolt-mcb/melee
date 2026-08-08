@@ -100,6 +100,8 @@ typedef struct {
     u32 tex_coord;
     u32 tex_map;
     u32 tex_chan;
+    u32 kcolor_sel;  /* GXSetTevKColorSel */
+    u32 kalpha_sel;  /* GXSetTevKAlphaSel */
 } TevStage;
 
 /* Light object storage (used for material rendering) */
@@ -178,6 +180,7 @@ enum {
     GX_CC_TEXRRR = 16,
     GX_CC_TEXGGG = 17,
     GX_CC_TEXBBB = 18,
+    GX_CC_QUARTER = GX_CC_KONST,  /* Alias in Dolphin */
 };
 
 /* Alpha sources for TEV — match Dolphin GXTevAlphaArg enum values */
@@ -191,6 +194,70 @@ enum {
     GX_CA_KONST = 6,
     GX_CA_ZERO = 7,
     GX_CA_ONE = 6,  /* Alias of KONST in Dolphin */
+};
+
+/* TEV stage indices */
+enum {
+    GX_TEVSTAGE0 = 0,
+    GX_TEVSTAGE1 = 1,
+    GX_TEVSTAGE2 = 2,
+    GX_TEVSTAGE3 = 3,
+    GX_TEVSTAGE4 = 4,
+    GX_TEVSTAGE5 = 5,
+    GX_TEVSTAGE6 = 6,
+    GX_TEVSTAGE7 = 7,
+};
+
+/* TEV output registers */
+enum {
+    GX_TEVPREV = 0,
+    GX_TEVREG0 = 1,
+    GX_TEVREG1 = 2,
+    GX_TEVREG2 = 3,
+};
+
+/* TEV KColor selector */
+enum {
+    GX_TEV_KCSEL_1    = 0x00,
+    GX_TEV_KCSEL_7_8  = 0x01,
+    GX_TEV_KCSEL_1_2  = 0x02,
+    GX_TEV_KCSEL_1_4  = 0x03,
+    GX_TEV_KCSEL_1_8  = 0x04,
+    GX_TEV_KCSEL_3_4  = 0x05,
+    GX_TEV_KCSEL_1_16 = 0x06,
+    GX_TEV_KCSEL_1_32 = 0x07,
+    GX_TEV_KCSEL_K0   = 0x08,
+    GX_TEV_KCSEL_K1   = 0x09,
+    GX_TEV_KCSEL_K2   = 0x0A,
+    GX_TEV_KCSEL_K3   = 0x0B,
+};
+
+/* TEV KAlpha selector */
+enum {
+    GX_TEV_KASEL_1    = 0x00,
+    GX_TEV_KASEL_7_8  = 0x01,
+    GX_TEV_KASEL_1_2  = 0x02,
+    GX_TEV_KASEL_1_4  = 0x03,
+    GX_TEV_KASEL_1_8  = 0x04,
+    GX_TEV_KASEL_3_4  = 0x05,
+    GX_TEV_KASEL_1_16 = 0x06,
+    GX_TEV_KASEL_1_32 = 0x07,
+    GX_TEV_KASEL_K0   = 0x08,
+    GX_TEV_KASEL_K0_A = 0x09,
+    GX_TEV_KASEL_K1   = 0x0A,
+    GX_TEV_KASEL_K1_A = 0x0B,
+    GX_TEV_KASEL_K2   = 0x0C,
+    GX_TEV_KASEL_K2_A = 0x0D,
+    GX_TEV_KASEL_K3   = 0x0E,
+    GX_TEV_KASEL_K3_A = 0x0F,
+};
+
+/* TEV swap mode */
+enum {
+    GX_TEV_SWAP0 = 0,
+    GX_TEV_SWAP1 = 1,
+    GX_TEV_SWAP2 = 2,
+    GX_TEV_SWAP3 = 3,
 };
 
 /* TEV operation types */
@@ -580,6 +647,8 @@ static GLint g_tev_alpha_clamp_loc = -1;
 static GLint g_tev_color_enabled_loc = -1;
 static GLint g_tev_alpha_enabled_loc = -1;
 static GLint g_tev_tex_map_loc = -1;
+static GLint g_tev_kcolor_sel_loc = -1;
+static GLint g_tev_kalpha_sel_loc = -1;
 static GLint g_kalpha_loc = -1;
 
 /* Active texture tracking: which bridge texture slots are bound to GL units */
@@ -668,6 +737,8 @@ static const char* g_frag_src =
 "uniform int u_tev_color_enabled[8];\n"
 "uniform int u_tev_alpha_enabled[8];\n"
 "uniform int u_tev_tex_map[8];      // texture unit per stage (0 or 1)\n"
+"uniform int u_tev_kcolor_sel[8];   // KColor selector per stage\n"
+"uniform int u_tev_kalpha_sel[8];   // KAlpha selector per stage\n"
 "\n"
 "// KColor constants\n"
 "uniform vec4 u_kcolor[4];\n"
@@ -681,7 +752,7 @@ static const char* g_frag_src =
 "// Dolphin GXTevColorArg enum: CPREV=0, APREV=1, C0=2, A0=3, C1=4, A1=5,\n"
 "// C2=6, A2=7, TEXC=8, TEXA=9, RASC=10, RASA=11, ONE=12, HALF=13,\n"
 "// KONST=14, ZERO=15, TEXRRR=16, TEXGGG=17, TEXBBB=18\n"
-"vec4 tev_resolve_color(int src, vec4 tex, vec4 ras, vec4 cprev, vec4 aprev) {\n"
+"vec4 tev_resolve_color(int src, vec4 tex, vec4 ras, vec4 cprev, vec4 aprev, int stage) {\n"
 "    if (src == 8) { // TEXC\n"
 "        if (length(tex.rgb) > 0.001) return tex;\n"
 "        return vec4(1.0);\n"
@@ -691,26 +762,57 @@ static const char* g_frag_src =
 "    if (src == 11) return vec4(ras.a);   // RASA\n"
 "    if (src == 0) return cprev;          // CPREV\n"
 "    if (src == 1) return vec4(aprev.a);  // APREV as color\n"
-"    if (src == 14) return u_kcolor[0];   // KONST\n"
+"    if (src == 14) { // KONST\n"
+"        int ksel = u_tev_kcolor_sel[stage];\n"
+"        vec4 kc;\n"
+"        if (ksel >= 8 && ksel <= 11) kc = u_kcolor[ksel - 8];\n"
+"        else kc = u_kcolor[0];\n"
+"        if (ksel == 0) return kc;\n"
+"        if (ksel == 1) return kc * (7.0/8.0);\n"
+"        if (ksel == 2) return kc * 0.5;\n"
+"        if (ksel == 3) return kc * 0.25;\n"
+"        if (ksel == 4) return kc * 0.125;\n"
+"        if (ksel == 5) return kc * 0.75;\n"
+"        if (ksel == 6) return kc * (1.0/16.0);\n"
+"        if (ksel == 7) return kc * (1.0/32.0);\n"
+"        return kc;\n"
+"    }\n"
 "    if (src == 15) return vec4(0.0);     // ZERO\n"
 "    if (src == 12) return vec4(1.0);     // ONE\n"
 "    if (src == 13) return vec4(0.5);     // HALF\n"
 "    if (src == 16) return vec4(tex.r);   // TEXRRR\n"
 "    if (src == 17) return vec4(tex.g);   // TEXGGG\n"
 "    if (src == 18) return vec4(tex.b);   // TEXBBB\n"
-"    // Default: RAS (vertex color)\n"
 "    return ras;\n"
 "}\n"
 "\n"
 "// Resolve a TEV alpha input source to a float\n"
 "// Dolphin GXTevAlphaArg enum: APREV=0, A0=1, A1=2, A2=3, TEXA=4, RASA=5, KONST=6, ZERO=7\n"
-"float tev_resolve_alpha(int src, vec4 tex, vec4 ras, float aprev) {\n"
+"float tev_resolve_alpha(int src, vec4 tex, vec4 ras, float aprev, int stage) {\n"
 "    if (src == 4) return tex.a;      // TEXA\n"
 "    if (src == 5) return ras.a;      // RASA\n"
 "    if (src == 0) return aprev;      // APREV\n"
-"    if (src == 6) return u_kcolor[0].a; // KONST\n"
+"    if (src == 6) { // KONST\n"
+"        int ksel = u_tev_kalpha_sel[stage];\n"
+"        float ka;\n"
+"        if (ksel >= 8 && ksel <= 15) {\n"
+"            int idx = ksel - 8;\n"
+"            ka = (ksel % 2 == 1) ? u_kcolor[idx].a : u_kalpha.a;\n"
+"        } else {\n"
+"            ka = u_kalpha.a;\n"
+"        }\n"
+"        if (ksel == 0) return ka;\n"
+"        if (ksel == 1) return ka * (7.0/8.0);\n"
+"        if (ksel == 2) return ka * 0.5;\n"
+"        if (ksel == 3) return ka * 0.25;\n"
+"        if (ksel == 4) return ka * 0.125;\n"
+"        if (ksel == 5) return ka * 0.75;\n"
+"        if (ksel == 6) return ka * (1.0/16.0);\n"
+"        if (ksel == 7) return ka * (1.0/32.0);\n"
+"        return ka;\n"
+"    }\n"
 "    if (src == 7) return 0.0;        // ZERO\n"
-"    if (src == 8) return 1.0;        // ONE (alias of KONST in Dolphin)\n"
+"    if (src == 8) return 1.0;        // ONE\n"
 "    return ras.a;\n"
 "}\n"
 "\n"
@@ -735,9 +837,9 @@ static const char* g_frag_src =
 "\n"
 "        // Color processing\n"
 "        if (u_tev_color_enabled[stage] != 0) {\n"
-"            vec4 a = tev_resolve_color(u_tev_color_in[stage*4 + 0], tex, ras, cprev, vec4(aprev));\n"
-"            vec4 b = tev_resolve_color(u_tev_color_in[stage*4 + 1], tex, ras, cprev, vec4(aprev));\n"
-"            vec4 c = tev_resolve_color(u_tev_color_in[stage*4 + 2], tex, ras, cprev, vec4(aprev));\n"
+"            vec4 a = tev_resolve_color(u_tev_color_in[stage*4 + 0], tex, ras, cprev, vec4(aprev), stage);\n"
+"            vec4 b = tev_resolve_color(u_tev_color_in[stage*4 + 1], tex, ras, cprev, vec4(aprev), stage);\n"
+"            vec4 c = tev_resolve_color(u_tev_color_in[stage*4 + 2], tex, ras, cprev, vec4(aprev), stage);\n"
 "\n"
 "            vec4 result;\n"
 "            if (u_tev_color_op[stage] == 0) { // ADD\n"
@@ -766,9 +868,9 @@ static const char* g_frag_src =
 "\n"
 "        // Alpha processing\n"
 "        if (u_tev_alpha_enabled[stage] != 0) {\n"
-"            float a = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 0], tex, ras, aprev);\n"
-"            float b = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 1], tex, ras, aprev);\n"
-"            float c = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 2], tex, ras, aprev);\n"
+"            float a = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 0], tex, ras, aprev, stage);\n"
+"            float b = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 1], tex, ras, aprev, stage);\n"
+"            float c = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 2], tex, ras, aprev, stage);\n"
 "\n"
 "            float result;\n"
 "            if (u_tev_alpha_op[stage] == 0) { // ADD\n"
@@ -875,6 +977,8 @@ static void bridge_compile_shaders(void)
     g_tev_color_enabled_loc = glGetUniformLocation(g_shader_program, "u_tev_color_enabled");
     g_tev_alpha_enabled_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_enabled");
     g_tev_tex_map_loc = glGetUniformLocation(g_shader_program, "u_tev_tex_map");
+    g_tev_kcolor_sel_loc = glGetUniformLocation(g_shader_program, "u_tev_kcolor_sel");
+    g_tev_kalpha_sel_loc = glGetUniformLocation(g_shader_program, "u_tev_kalpha_sel");
     g_kalpha_loc = glGetUniformLocation(g_shader_program, "u_kalpha");
     
     /* TEV input arrays: flat 32-element arrays (8 stages × 4 inputs each) */
@@ -2360,6 +2464,18 @@ static void apply_tev_uniforms(void)
         if (g_tev_tex_map_loc >= 0)
             glUniform1iv(g_tev_tex_map_loc, num_stages, tex_map_arr);
         
+        /* Upload KColor/KAlpha selector arrays */
+        GLint kcolor_sel_arr[8], kalpha_sel_arr[8];
+        for (u32 i = 0; i < num_stages; i++) {
+            TevStage* s = &g_state.tev_stages[i];
+            kcolor_sel_arr[i] = s->kcolor_sel;
+            kalpha_sel_arr[i] = s->kalpha_sel;
+        }
+        if (g_tev_kcolor_sel_loc >= 0)
+            glUniform1iv(g_tev_kcolor_sel_loc, num_stages, kcolor_sel_arr);
+        if (g_tev_kalpha_sel_loc >= 0)
+            glUniform1iv(g_tev_kalpha_sel_loc, num_stages, kalpha_sel_arr);
+        
         /* Upload TEV input arrays (flat: 8 stages × 4 inputs = 32 elements) */
         GLint cin_arr[32] = {0};
         GLint ain_arr[32] = {0};
@@ -2531,8 +2647,18 @@ void GXSetTevIndirect(u32 stage, u32 ind_stages, u32 ind_tex_gen)
     (void)stage; (void)ind_stages; (void)ind_tex_gen;
 }
 
-void GXSetTevKColorSel(u32 stage, u32 sel) { (void)stage; (void)sel; }
-void GXSetTevKAlphaSel(u32 stage, u32 sel) { (void)stage; (void)sel; }
+void GXSetTevKColorSel(u32 stage, u32 sel)
+{
+    if (stage < MAX_TEV_STAGES) {
+        g_state.tev_stages[stage].kcolor_sel = sel;
+    }
+}
+void GXSetTevKAlphaSel(u32 stage, u32 sel)
+{
+    if (stage < MAX_TEV_STAGES) {
+        g_state.tev_stages[stage].kalpha_sel = sel;
+    }
+}
 void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx)
 {
     if (tex < 8) {

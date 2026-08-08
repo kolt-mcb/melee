@@ -186,7 +186,7 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
          * hitting garbage pointers from compiler-optimized memset
          * (pcmpeqd writes 0xFFFFFFFF instead of 0x00000000).
          * The GLSL shader pipeline handles basic texturing directly.
-         * TODO: Implement GLSL TEV pipeline to replace this. */
+         * TODO: Fix TEV compilation or implement GLSL TEV pipeline. */
         // HSD_MObjCompileTev(mobj);
 
         return mobj;
