@@ -1,3 +1,17 @@
+## [2025-08-07e] — TEV Compilation Enabled
+
+### TEV Compilation
+- TEV compilation now runs successfully!
+- Fixed GXSetTevKColor/GXSetTevColor signatures (take GXColor by value, not pointer)
+- Fixed HSD_TExpCnst: added val_buf[16] for constant value copying
+- Fixed tevdesc chain building: first node's next was &(NULL)->desc
+- Fixed HSD_TExpTev: replaced memset(0xFF) with explicit field init
+- Fixed clist->next NULL dereference in HSD_TExpSetReg loop
+- Added crash guards throughout expression tree traversal
+- TEV compilation produces 1-stage TEV programs per material
+- Pixel count: 356,827 (38.7%) vs 380,091 (41.2%) baseline
+- The drop is due to TEV stages being set up properly (alpha testing, etc.)
+
 ## [2025-08-07d] — TEV Expression Tree Crash Guards
 
 ### TEV Compilation Progress
