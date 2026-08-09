@@ -1,3 +1,201 @@
+## [2025-08-09] — Indirect TEV (Bump Mapping / Refraction)
+
+### New Features
+- **Indirect TEV support**: Implemented bump mapping and refraction effects in GLSL shaders.
+- **Vertex shader**: Texture coordinate generation from normals/positions (`GXSetTexCoordGen2` with `GX_TG_MTX3x4` + `GX_TG_NRM`/`GX_TG_POS`).
+- **Fragment shader**: Indirect texture coordinate generation — samples bump map, extracts S/T/U offset, applies indirect matrix, offsets base coordinates.
+- **Bump map formats**: `GX_ITF_8` (8-bit), `GX_ITF_5` (5-bit), `GX_ITF_4` (4-bit), `GX_ITF_3` (3-bit) with proper quantization.
+- **Bias selection**: `GX_ITB_NONE/S/T/ST/U/SU/TU/STU` — controls which bump map channels contribute to the offset.
+- **Wrap modes**: `GX_ITW_OFF/256/128/64/32/16/0` — controls wrapping of indirect coordinates.
+- **Scale factors**: `GX_ITS_1/2/4/8/...` — per-axis scale for indirect coordinates.
+- **Indirect matrix**: `GXSetIndTexMtx` stores 2x3 matrix (padded to 3x3 for GLSL mat3).
+- **Uniform uploads**: 12 new uniforms for indirect texture state, 6 for texture coordinate generation.
+
+### Shader Changes
+- **Vertex shader**: Added texture coordinate generation from world position and normal vectors using 3x4 matrices.
+- **Fragment shader**: Added `indirect_texcoord()` function that samples bump maps and computes refraction offsets.
+- **TEV stage loop**: Now calls `indirect_texcoord()` to get offset texture coordinates before sampling.
+
+### Bridge Changes
+- **BridgeState**: Added `indirect_bias_sel` to TevStage, `ind_tex_mtx[2][3][3]`, `ind_tex_scale_s/t`, `ind_tex_bump_bound`.
+- **GXSetIndTexMtx**: Stores 3x3 matrix (padded from 2x3).
+- **GXSetIndTexCoordScale**: Computes float scale factors (2^scale).
+- **GXSetTevIndirect**: Stores bias selection.
+- **apply_tev_uniforms**: Uploads indirect texture state and texture generation matrices.
+
+### Usage
+- Refraction effects in `lbrefract.c` now work with indirect TEV.
+- Bump mapping from normals enables realistic water/refraction surfaces.
+
+## [2025-08-07o] — GX Call Tracer
+
+### New Features
+- **GX Call Tracer**: Instrumented 30+ key GX functions with `GX_TRACE` macro. Records every GX state-setting call with arguments per frame to `gx_trace/frame_NNNN.txt`.
+- **Enable via env var**: `MELEE_GX_TRACE=1` (defaults to `gx_trace/` dir) or `MELEE_GX_TRACE=/path/to/dir`.
+- **Trace format**: `CALL_SEQ GXFuncName(args...)` — one line per call, sequential numbering per frame.
+- **Traced functions**: TEV (ColorIn, AlphaIn, ColorOp, AlphaOp, KColor, KAlpha, Color, SwapMode, Op), Lighting (ChanCtrl, ChanAmbColor, ChanMatColor, InitLightDir, InitLightColor, InitLightDistAttn, InitLightSpot, LoadLightObjIndx), Matrix (LoadPosMtxImm, LoadTexMtxImm), Texture (InitTexObj, LoadTexObj, SetTexCoordGen2), State (BlendMode, ZMode, CullMode, AlphaCompare, PixelFmt, NumTevStages, NumTexGens, NumChans, SetFog, SetViewport, SetScissor), Drawing (Begin, End, Flush, ClearBuff, InvalidateTexAll), Vertex (SetVtxDesc).
+
+### Verification
+- Trace is deterministic across runs (only uninitialized stack garbage in unused params varies).
+- Frame 0 trace: ~3,194 calls per frame, ~3,200 lines.
+- Pixel count stable: 380,091 (41.2%) across 5 runs.
+
+### Usage
+- Run with trace: `MELEE_GX_TRACE=1 ./build/pc/melee-pc --frames 50`
+- Compare frames: `diff gx_trace/frame_0000.txt gx_trace/frame_0001.txt`
+- Compare against Dolphin trace: diff the call sequences to identify state divergence.
+
+## [2025-08-07n] — Spot Light and Distance Attenuation
+
+### New Implementations
+- **`GXInitLightDistAttn`**: Sets distance attenuation parameters (ref_dist, ref_br, dist_func) on a LightSlot. Supports GX_DA_OFF/GENTLE/MEDIUM/STEEP distance functions.
+- **`GXInitLightSpot`**: Sets spot light parameters (cutoff angle, spot_func) on a LightSlot. Supports GX_SP_OFF/FLAT/COS/COS2/SHARP/RING1/RING2 spot functions.
+- **`GXInitSpecularDir`**: Sets specular direction on a LightSlot (for future specular lighting support).
+- **`GXInitSpecularDirHA`**: Sets specular direction with half-angle vectors.
+- **`GXLoadLightObjIndx`**: Loads a light object from indexed storage to an active light slot.
+
+### Shader Changes
+- **Vertex shader lighting**: Replaced simple hardcoded attenuation with per-light GCN-style distance attenuation (quadratic a0+a1*d+a2*d^2) and spot light intensity computation. Added uniform arrays: `u_light_atten_a[8]`, `u_light_atten_k[8]`, `u_light_spot_func[8]`, `u_light_spot_cutoff[8]`, `u_light_dist_func[8]`, `u_light_ref_dist[8]`, `u_light_ref_br[8]`.
+- **Distance attenuation**: GENTLE (1/(1+rd)), MEDIUM (1/(1+rd^2)), STEEP (1/(1+rd^3)) scaling based on reference distance.
+- **Spot intensity**: FLAT (constant), COS (cosine), COS2 (cos^2), SHARP (cos^4) falloff within cutoff angle.
+
+### LightSlot Struct
+- Added `spot_cutoff`, `spot_func`, `dist_attn_func`, `ref_dist`, `ref_br`, `spec_nx/ny/nz`, `spec_hx/hy/hz` fields.
+
+### Debug Cleanup
+- Replaced raw `fprintf(stderr, ...)` with `PORT_LOG_DEBUG` in `gx_frame_end`.
+
+### Pixel Count
+- 380,091 (41.2%) — unchanged. Spot/distance attenuation parameters are stored and uploaded to the shader, improving lighting accuracy for stages that use point lights with attenuation. The baseline frame 50 screenshot is unaffected as it primarily uses directional lights.
+
+## [2025-08-07m] — Indexed Vertex Data and Texture Metadata
+
+### New Implementations
+- **`GXTexCoord1x8`** / **`GXTexCoord1x16`**: Indexed texture coordinate lookup from vertex arrays set by `GXSetArray`. Supports f16 and f32 formats. Called 10+ times during display list processing.
+- **`GXMatrixIndex1u8`**: Stores matrix index for current vertex (used for skinning and texture matrix selection).
+- **`GXInvalidateTexAll`** / **`GXInvalidateVtxCache`**: Texture and vertex cache invalidation via `glFlush()`.
+- **`GXGetTexObjWidth`** / **`GXGetTexObjHeight`** / **`GXGetTexObjFmt`**: Read texture metadata from `GXTexObj` struct. `GXInitTexObj` now encodes width, height, and format in the struct's dummy fields.
+- **`GXGetTexObjWrapS/T`**, **`GXGetTexObjData`**, **`GXGetTexObjMipMap`**, **`GXGetTexObjAll`**, **`GXGetTexObjLODAll`**, and 8 more `GXGetTexObj*` variants.
+
+### Pixel Count
+- 380,091 (41.2%) — unchanged. These functions support sprite rendering and display list processing but don't affect the main frame 50 screenshot.
+
+## [2025-08-07l] — GXSetDispCopyYScale and GXInitFogAdjTable
+
+### New Implementations
+- **`GXSetDispCopyYScale`**: Returns number of XFB lines based on vertical scale factor. Computes `ceil(efbHeight * vscale)` from `disp_copy_src` state.
+- **`GXInitFogAdjTable`**: Proper signature with parameters (table, width, projmtx). Fog adjustment is handled by the shader directly.
+
+### Pixel Count
+- 380,091 (41.2%) — unchanged. These functions are called during video init/fog setup but don't affect per-frame rendering.
+
+## [2025-08-07k] — GXSetTevOp Implementation, Dithering, Line/Point Size
+
+### Bug Fixes
+- **`GXSetTevOp`**: Was only setting `color_op` and `color_enabled`. Now properly configures both color and alpha inputs based on the preset mode (GX_MODULATE, GX_DECAL, GX_BLEND, GX_REPLACE, GX_PASSCLR). This fixes TEV stages that use the convenience GXSetTevOp instead of the detailed GXSetTevColorOp/GXSetTevAlphaOp path.
+- **`GXSetLineWidth`**: Now calls `glLineWidth()` to apply the line width to OpenGL.
+- **`GXSetPointSize`**: Now calls `glPointSize()` to apply the point size to OpenGL.
+- **`GXSetDither`**: Now enables/disables `GL_DITHER` instead of being a no-op.
+
+### Pixel Count
+- 380,091 (41.2%) — up from 345,193 (37.5%). The ~4% increase is correct: GX_PASSCLR mode now properly passes through RAS color, and GX_MODULATE multiplies RAS by TEX. Previously these modes used uninitialized color/alpha inputs.
+
+## [2025-08-07j] — Channel Control, Light Mask, and TEVREG Fixes
+
+### Bug Fixes
+- **TEVREG/KColor aliasing**: `GXSetTevColor` (TEVREG0-2) and `GXSetTevKColor` (K0-K3) now write to separate register banks. Previously both wrote to `g_state.k_colors[]`, causing TEVREG values to overwrite K1-K3. Added `g_state.tev_regs[4]` and `u_tevreg[4]` uniform.
+- **`GXSetTevColorS10`**: Now writes to `tev_regs` instead of `k_colors` (same aliasing fix).
+- **`GXSetBlendMode` signature**: Fixed to take 4 parameters (mode, src, dst, logic_op) matching the Dolphin header. Was missing `logic_op` parameter.
+
+### New Implementations
+- **`GXSetNumChans`**: Now stores `num_chans` in state (was previously discarded).
+- **`GXSetChanCtrl`**: Now stores `diff_fn`, `attn_fn`, `amb_src` per channel (were previously discarded). Tracks diffuse function, attenuation function, and ambient source.
+- **`GXInitLightAttnA`**: Sets attenuation coefficients (a0, a1, a2) on a LightSlot.
+- **`GXInitLightAttnK`**: Sets attenuation constants (k0, k1, k2) on a LightSlot.
+- **Per-channel light mask propagation**: Added `u_light_mask` uniform to vertex shader. Light contributions are filtered by the combined channel light mask (OR of all enabled channels' masks).
+- **Vertex shader light mask filtering**: Each light is checked against the bitmask before contributing to diffuse sum.
+
+### State Changes
+- Added `chan_amb_src[8]`, `chan_diff_fn[8]`, `chan_attn_fn[8]`, `num_chans` to `BridgeState`.
+- Initialized defaults: `num_chans=2`, `diff_fn=GX_DF_NONE`, `attn_fn=GX_AF_NONE`, `amb_src=GX_SRC_REG`.
+
+### Pixel Count
+- 345,193 (37.5%) — unchanged. Lighting masks are now propagated but no lights are loaded by the game yet.
+
+## [2025-08-07i] — Per-Vertex Lighting Infrastructure
+
+### New Implementations
+- **Per-vertex diffuse lighting**: Vertex shader now computes GCN-style diffuse lighting from up to 8 lights. Supports both directional and point lights with distance attenuation.
+- **Lighting uniforms**: Added `u_light_pos[8]`, `u_light_color[8]`, `u_light_directional[8]`, `u_light_count`, `u_camera_pos`, `u_ambient_color`, `u_model` (mat4).
+- **`v_lit_color` varying**: Per-vertex lit color (ambient + diffuse) passed from vertex to fragment shader.
+- **Fragment shader lighting integration**: When `u_lighting_enabled != 0`, channel color C0 is modulated by `v_lit_color.rgb`, matching GCN hardware behavior where the vertex processing unit computes light contributions before TEV.
+- **Model matrix tracking**: `GXLoadPosMtxImm` and `GXSetCurrentMtx` now store the model matrix for world-space transforms. Uploaded as `u_model` (mat4) to the vertex shader.
+- **`GXSetLightColors`**: Now stores ambient color in state for per-vertex lighting.
+- **`GXLoadLightObjImm`**: Now tracks active light count when lights are loaded.
+- **Lighting enabled flag**: Computed from channel lighting state (`chan_lit[]`) and uploaded as `u_lighting_enabled`.
+
+### Vertex Shader
+- Added model matrix uniform (`u_model`) for world-space position computation.
+- Computes world-space position: `v_world_pos = (u_model * vec4(a_pos, 1.0)).xyz`
+- Computes world-space normal: `v_nrm = normalize(mat3(u_model) * a_nrm)`
+- Diffuse lighting loop: iterates over active lights, computes NdotL, applies distance attenuation.
+- Outputs `v_lit_color = clamp(ambient + diffuse_sum, 0, 1)`.
+
+### State Changes
+- Added `ambient_color[3]`, `model_matrix[16]`, `model_matrix_valid` to `BridgeState`.
+- Initialized ambient color to (0.1, 0.1, 0.1) default.
+
+### Pixel Count
+- 345,193 (37.5%) — unchanged. No lights loaded yet by the game (g_active_light_count = 0).
+- Lighting infrastructure is ready for when stage lighting is implemented.
+
+## [2025-08-07h] — Lighting, Texture Matrix, and Color Index Support
+
+### New Implementations
+- **Texture matrix transforms**: Added `u_texmtx0`/`u_texmtx1` uniforms to vertex shader. Texture coordinates are now transformed by 2x4 matrices from `GXLoadTexMtxImm`. Fixes environment mapping, projected textures, and bone-driven skinning textures.
+- **`GXSetTexCoordGen2`**: Now tracks source coordinate (`tex_gen_src`) and matrix ID (`tex_gen_mat_id`) per texgen unit.
+- **`GXColor1u16`**: Single 16-bit grayscale color value (high byte as intensity).
+- **`GXColor1x16`**: 16-bit color index (converted to grayscale, palette lookup not implemented).
+- **`GXColor1x8`**: 8-bit color index (converted to grayscale, palette lookup not implemented).
+- **`GXSetDstAlpha`**: Forces fragment alpha to a constant value. Added `u_dst_alpha_enabled`/`u_dst_alpha` uniforms.
+- **`GXSetZCompLoc`**: Tracks Z comparison location (before/after texture fetch).
+- **`GXSetLineWidth`**: Tracks line width state.
+- **`GXSetPointSize`**: Tracks point size state.
+- **`GXEnableTexOffsets`**: Stub with proper signature.
+
+### Vertex Shader
+- Added texture matrix transform support: `u_texmtx0`/`u_texmtx1` (mat4) and enable flags.
+- UV coordinates transformed before passing to fragment shader.
+
+### Pixel Count
+- 345,193 (37.5%) vs 340,519 (36.9%) before. ~0.6% improvement from texture matrices and dst_alpha.
+
+## [2025-08-07g] — GX Bridge Completeness Pass
+
+### New GX Function Implementations
+- `GXSetTevSwapModeTable(table, red, green, blue, alpha)`: Full TEV swap mode table with 4 entries × 4 channels. Initializes to Dolphin defaults (SWAP0=identity, SWAP1=red, SWAP2=green, SWAP3=blue).
+- `GXSetDispCopySrc(left, top, wd, ht)`: Display copy source rectangle.
+- `GXSetDispCopyDst(wd, ht)`: Display copy destination size.
+- `GXSetPixelFmt(pix_fmt, z_fmt)`: Pixel format and Z buffer format.
+- `GXSetFogRangeAdj(enable, center, table)`: Fog range adjustment with correct signature.
+- `GXSetCopyClamp(clamp)`: Framebuffer copy clamp mode.
+- `GXSetTexCopySrc(left, top, wd, ht)`: Texture copy source rectangle.
+- `GXSetTexCopyDst(wd, ht, fmt, mipmap)`: Texture copy destination.
+- `GXSetCopyFilter(aa, sample_pattern, vf, vfilter)`: AA and VFilter for copy operations.
+- `GXCopyDisp(dest, clear)`: Display copy from EFB.
+- `GXWaitDrawDone()`: Wait for draw completion (no-op in OpenGL).
+- `GXSetDrawDone(callback)`: Draw done callback registration.
+- `GXSetDrawDoneCallback(callback)`: Alias for GXSetDrawDone.
+- `GXSetFieldMode(field_mode, half_aspect)`: Interlaced field mode.
+- `GXSetViewportJitter(left, top, wd, ht, nearz, farz, field)`: Viewport jitter for AA.
+
+### Shader Fixes
+- Fixed `tev_swap()` GLSL function: SWAP1=red, SWAP2=green, SWAP3=blue (was wrong permutations).
+- Added TEV swap table state tracking with proper initialization.
+
+### State Tracking
+- Added `tev_swap_table[4][4]`, `disp_copy_src[4]`, `disp_copy_dst[2]`, `pixel_fmt`, `z_fmt`, `copy_clamp`, `fog_range_adj_*`, `tex_copy_src[4]`, `copy_filter_*` to BridgeState.
+
 ## [2025-08-07f] — TEV Pipeline Completeness
 
 ### TEV Fixes
