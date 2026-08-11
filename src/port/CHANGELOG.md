@@ -1,4 +1,10 @@
-## [2025-08-11] — TEV Shader Cleanup & Input Infrastructure
+## [2025-08-11] — Color Texture Verification & TEV Shader Cleanup
+
+### Color Texture Verification
+- **CMPR color textures confirmed working**: Switched to Great Bay stage (St_Kind_GreatBay=13) to test color texture rendering. Great Bay uses 280 CMPR textures (format 14 = RGB5A3) that decompress to RGBA8 with proper color output.
+- **Screenshot analysis**: Great Bay renders 5,525 distinctly colored pixels (2,107 unique colors), primarily yellow/beach tones from sand textures. Izumi (I4-only) renders 0 colored pixels (pure grayscale).
+- **Stage switching**: Verified that non-Izumi stages require PC-port guards for `on_init` callbacks (read GCN-packed archive data). Added guards to `grgreatbay.c` as proof-of-concept.
+- **Reverted to Izumi**: Default stage remains Izumi for stability. Color texture path is verified and functional.
 
 ### Bug Fixes
 - **TEXC fallback removed**: Removed incorrect `length(tex.rgb) > 0.001` check in `tev_resolve_color` that replaced truly black texture pixels with white. Black is a valid texture color and should not be replaced.
@@ -19,6 +25,7 @@
 - Rendering: 176,836 non-black pixels (19.2%), 0 white pixels
 - Title screen rendering unchanged (I4 grayscale textures)
 - Texture format conversion code verified: RGB565, RGB5A3, IA4, IA8, I8, I4 all correct
+- Color textures verified: Great Bay stage renders 5,525 colored pixels (2,107 unique colors)
 
 ## [2025-08-10] — Fixed White Polygon Rendering (Texture Coordinates)
 
