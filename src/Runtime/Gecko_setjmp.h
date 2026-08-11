@@ -36,6 +36,11 @@ typedef struct __jmp_buf {
 int __setjmp(register __jmp_buf*);
 void longjmp(register __jmp_buf* env, register int val);
 
+#else /* BUILD_TARGET_PC */
+
+/* On PC, use system setjmp.h which already defines __jmp_buf, __setjmp, longjmp */
+#include <setjmp.h>
+
 #endif /* !BUILD_TARGET_PC */
 
 #endif

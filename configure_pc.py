@@ -70,8 +70,8 @@ ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + GR_S
 INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,
     SRC / "melee" / "ft" / "chara", SRC / "MSL" / "PPC_EABI",
-    SRC / "port", SRC / "Runtime", SRC / "MetroTRK",
-    ROOT / "extern" / "dolphin" / "include",
+    SRC / "Runtime", SRC / "MetroTRK",
+    ROOT / "extern" / "dolphin" / "include", SRC / "port",
 ]
 
 inc = " ".join("-I" + str(p) for p in INCLUDE_DIRS)
