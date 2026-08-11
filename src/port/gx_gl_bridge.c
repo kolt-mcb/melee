@@ -471,6 +471,12 @@ typedef struct {
     Bool tex0_enabled;
     Bool tex1_enabled;
     
+    /* Texture coordinate format (from GXSetVtxAttrFmt) */
+    u8 tex0_comp_type;       /* Texture coord 0 component type (3=S16, 4=F32) */
+    u8 tex0_frac;             /* Texture coord 0 fraction bits */
+    u8 tex1_comp_type;       /* Texture coord 1 component type */
+    u8 tex1_frac;             /* Texture coord 1 fraction bits */
+    
     /* Matrix tracking */
     f32 mtx_array[68][3][4];  /* GCN matrix IDs: 0-27 (PNMTX), 30-60 (TEXMTX/IDENTITY), 64+ (bump) */
     u32 current_mtx_id;
@@ -1103,15 +1109,24 @@ static const char* g_frag_src =
 "// Lighting (per-vertex lit color modulates channel colors)\n"
 "uniform int u_lighting_enabled;  // 1 if any channel has lighting enabled\n"
 "\n"
+"// Indirect texture (bump mapping / refraction) uniforms\n"
+"uniform int u_ind_tex_enabled;       // 1 if indirect TEV is active\n"
+"uniform int u_ind_tex_stage;         // Indirect stage ID (0-1)\n"
+"uniform int u_ind_tex_format;        // GX_ITF_8/5/4/3 bump map format\n"
+"uniform int u_ind_tex_bias;          // GX_ITB_NONE/S/T/ST/U/SU/TU/STU\n"
+"uniform int u_ind_tex_wrap_s;        // GX_ITW_OFF/256/128/...\n"
+"uniform int u_ind_tex_wrap_t;        // GX_ITW_OFF/256/128/...\n"
+"uniform vec2 u_ind_tex_scale;        // S,T scale factors (1,2,4,8,...)\n"
+"uniform mat3 u_ind_tex_mtx;          // 3x3 indirect texture matrix\n"
+"uniform int u_ind_tex_coord_src;     // Source texcoord (0=uv0, 1=uv1)\n"
+"uniform int u_ind_tex_base_coord;    // Base texcoord to offset (0=uv0, 1=uv1)\n"
+"\n"
 "// Resolve a TEV color input source to a vec4\n"
 "// Dolphin GXTevColorArg enum: CPREV=0, APREV=1, C0=2, A0=3, C1=4, A1=5,\n"
 "// C2=6, A2=7, TEXC=8, TEXA=9, RASC=10, RASA=11, ONE=12, HALF=13,\n"
 "// KONST=14, ZERO=15, TEXRRR=16, TEXGGG=17, TEXBBB=18\n"
 "vec4 tev_resolve_color(int src, vec4 tex, vec4 ras, vec4 cprev, vec4 aprev, int stage) {\n"
-"    if (src == 8) { // TEXC\n"
-"        if (length(tex.rgb) > 0.001) return tex;\n"
-"        return vec4(1.0);\n"
-"    }\n"
+"    if (src == 8) return tex;   // TEXC\n"
 "    if (src == 9) return vec4(tex.a);     // TEXA\n"
 "    if (src == 10) return ras;           // RASC\n"
 "    if (src == 11) return vec4(ras.a);   // RASA\n"
@@ -1206,6 +1221,7 @@ static const char* g_frag_src =
 "    }\n"
 "    return vec4(1.0); // Default white texture\n"
 "}\n"
+"\n"
 "\n"
 "// Indirect texture coordinate generation (bump mapping / refraction)\n"
 "// GCN indirect TEV: sample bump map → extract S/T/U → apply matrix → offset base coords\n"
@@ -1441,6 +1457,12 @@ static void bridge_compile_shaders(void)
     g_shader_program = glCreateProgram();
     glAttachShader(g_shader_program, vs);
     glAttachShader(g_shader_program, fs);
+    /* Explicitly bind attribute locations */
+    glBindAttribLocation(g_shader_program, 0, "a_pos");
+    glBindAttribLocation(g_shader_program, 1, "a_nrm");
+    glBindAttribLocation(g_shader_program, 2, "a_col");
+    glBindAttribLocation(g_shader_program, 3, "a_uv0");
+    glBindAttribLocation(g_shader_program, 4, "a_uv1");
     glLinkProgram(g_shader_program);
     GLint linked;
     glGetProgramiv(g_shader_program, GL_LINK_STATUS, &linked);
@@ -1573,6 +1595,24 @@ static void bridge_create_gl(void)
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * MAX_VERTS, NULL, GL_DYNAMIC_DRAW);
+    
+    /* Set up vertex attribute pointers in VAO */
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void *)(uintptr_t)offsetof(Vertex, pos));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void *)(uintptr_t)offsetof(Vertex, nrm));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void *)(uintptr_t)offsetof(Vertex, col));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void *)(uintptr_t)offsetof(Vertex, tex0));
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void *)(uintptr_t)offsetof(Vertex, tex1));
+    
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 }
@@ -1707,7 +1747,7 @@ void gx_bridge_init(void)
             g_state.mv_matrix[i][j] = (i == j) ? 1.0f : 0.0f;
     
     /* Identity matrices array */
-    for (int k = 0; k < 8; k++) {
+    for (int k = 0; k < 68; k++) {
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 4; j++)
                 g_state.mtx_array[k][i][j] = (i == j) ? 1.0f : 0.0f;
@@ -1807,6 +1847,7 @@ void gx_frame_begin(void)
     gx_trace_frame_begin();
     g_state.in_primitive = FALSE;
     g_state.vert_count = 0;
+    g_state.num_tev_stages = 0;  /* Reset — TEV stage count is tracked automatically */
     g_active_tex_count = 0;
     memset(g_active_tex_slots, 0, sizeof(g_active_tex_slots));
     
@@ -2033,48 +2074,24 @@ static void bridge_upload_and_draw(void)
     /* Upload vertex data to GPU */
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(g_state.verts), g_state.verts, GL_DYNAMIC_DRAW);
-    glGetError(); /* Clear any errors */
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * MAX_VERTS, g_state.verts, GL_DYNAMIC_DRAW);
     
-    /* Bind vertex attributes */
+    /* Set ALL vertex attributes explicitly every draw */
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                              (void *)(uintptr_t)offsetof(Vertex, pos));
-    
-    if (g_state.nrm_enabled) {
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                              (void *)(uintptr_t)offsetof(Vertex, nrm));
-    } else {
-        glDisableVertexAttribArray(1);
-    }
-    
-    if (g_state.clr_enabled) {
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                              (void *)(uintptr_t)offsetof(Vertex, col));
-    } else {
-        /* PC port: always enable color attribute so default white colors reach shader */
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                              (void *)(uintptr_t)offsetof(Vertex, col));
-    }
-    
-    if (g_state.tex0_enabled) {
-        glEnableVertexAttribArray(3);
-        glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                              (void *)(uintptr_t)offsetof(Vertex, tex0));
-    } else {
-        glDisableVertexAttribArray(3);
-    }
-    
-    if (g_state.tex1_enabled) {
-        glEnableVertexAttribArray(4);
-        glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                              (void *)(uintptr_t)offsetof(Vertex, tex1));
-    } else {
-        glDisableVertexAttribArray(4);
-    }
+                          (void*)(uintptr_t)offsetof(Vertex, pos));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void*)(uintptr_t)offsetof(Vertex, nrm));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void*)(uintptr_t)offsetof(Vertex, col));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void*)(uintptr_t)offsetof(Vertex, tex0));
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void*)(uintptr_t)offsetof(Vertex, tex1));
     
     /* State — blend */
     if (g_state.blend_enabled) {
@@ -2214,6 +2231,12 @@ static void bridge_upload_and_draw(void)
     /* Reset texture enables first — only set if a texture is actually bound */
     if (g_tex0_enable_loc >= 0) glUniform1i(g_tex0_enable_loc, 0);
     if (g_tex1_enable_loc >= 0) glUniform1i(g_tex1_enable_loc, 0);
+    
+    PORT_LOG_DEBUG("TEX: active_count=%u slots[0]=%u(%s) slots[1]=%u(%s)",
+                   g_active_tex_count, g_active_tex_slots[0],
+                   g_state.tex_cache_valid[g_active_tex_slots[0]] ? "valid" : "invalid",
+                   g_active_tex_slots[1],
+                   g_state.tex_cache_valid[g_active_tex_slots[1]] ? "valid" : "invalid");
     
     for (u32 i = 0; i < g_active_tex_count && i < 2; i++) {
         u32 gl_unit = i;  /* Map to GL_TEXTURE0/GL_TEXTURE1 */
@@ -2488,8 +2511,8 @@ void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
         break;
     }
     case 11: g_state.clr_enabled = TRUE; break;   /* GX_VA_CLR0 */
-    case 13: g_state.tex0_enabled = TRUE; break;  /* GX_VA_TEX0 */
-    case 14: g_state.tex1_enabled = TRUE; break;  /* GX_VA_TEX1 */
+    case 13: g_state.tex0_enabled = TRUE; g_state.tex0_comp_type = (u8)type; g_state.tex0_frac = frac; break;  /* GX_VA_TEX0 */
+    case 14: g_state.tex1_enabled = TRUE; g_state.tex1_comp_type = (u8)type; g_state.tex1_frac = frac; break;  /* GX_VA_TEX1 */
     }
 }
 void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
@@ -2768,7 +2791,17 @@ void GXSetNumTevStages(u32 n)
 {
     GX_TRACE("GXSetNumTevStages(%u)", n);
     if (n > 16) n = 16;
-    g_state.num_tev_stages = n;
+    /* On GCN, n=0 means "use default" (1 stage). The game often calls
+     * GXSetNumTevStages(0) after configuring stages directly via
+     * GXSetTevColorIn/GXSetTevAlphaIn/GXSetTevColorOp/GXSetTevAlphaOp.
+     * We track the actual max stage index via tev_track_stage() and use
+     * that when n=0 to avoid disabling TEV entirely. */
+    if (n == 0) {
+        /* Keep the tracked stage count from direct TEV calls */
+        /* g_state.num_tev_stages is already set by tev_track_stage() */
+    } else {
+        g_state.num_tev_stages = n;
+    }
 }
 
 void GXSetTevOrder(u32 stage, u32 coord, u32 tex, u32 chan)
@@ -2781,10 +2814,21 @@ void GXSetTevOrder(u32 stage, u32 coord, u32 tex, u32 chan)
     }
 }
 
+/* Auto-track max TEV stage index — game often calls HSD_SetupTevStage
+ * without calling GXSetNumTevStages, so we infer the stage count from
+ * which stages are actually configured. */
+static void tev_track_stage(u32 stage)
+{
+    if (stage + 1 > g_state.num_tev_stages) {
+        g_state.num_tev_stages = stage + 1;
+    }
+}
+
 void GXSetTevOp(u32 stage, u32 mode)
 {
     GX_TRACE("GXSetTevOp(%u, %u)", stage, mode);
     if (stage >= MAX_TEV_STAGES) return;
+    tev_track_stage(stage);
     TevStage *s = &g_state.tev_stages[stage];
     
     /* GXSetTevOp is a convenience function that sets both color and alpha
@@ -3136,13 +3180,16 @@ void GXCallDisplayList(void* list, u32 nbytes)
                             if (g_state.tex0_enabled && g_state.arr_tex0 != NULL) {
                                 const u8* vp_tex = (const u8*)g_state.arr_tex0 + v * g_state.arr_stride_tex0;
                                 f32 ts, tt;
-                                /* Texture coords use same format as positions (f16 or f32) */
-                                switch (g_state.pos_comp_type) {
-                                case 3: { /* f16 */
-                                    u16 hs = ((u16)vp_tex[0] << 8) | vp_tex[1];
-                                    u16 ht = ((u16)vp_tex[2] << 8) | vp_tex[3];
-                                    ts = f16_to_f32(hs);
-                                    tt = f16_to_f32(ht);
+                                /* Use texture coord format from GXSetVtxAttrFmt, fallback to pos format */
+                                u8 tex_type = g_state.tex0_comp_type;
+                                u8 tex_frac = g_state.tex0_frac;
+                                if (tex_type == 0) { tex_type = g_state.pos_comp_type; tex_frac = g_state.pos_frac; }
+                                switch (tex_type) {
+                                case 3: { /* S16 fixed-point */
+                                    s16 hs = ((s16)vp_tex[0] << 8) | vp_tex[1];
+                                    s16 ht = ((s16)vp_tex[2] << 8) | vp_tex[3];
+                                    ts = (f32)hs / (1 << tex_frac);
+                                    tt = (f32)ht / (1 << tex_frac);
                                     break;
                                 }
                                 case 4: /* f32 big-endian */
@@ -3310,6 +3357,14 @@ static void apply_tev_uniforms(void)
     
     u32 num_stages = g_state.num_tev_stages;
     if (num_stages > 8) num_stages = 8; /* GLSL shader limit */
+    
+    static int tev_dbg = 0;
+    if (tev_dbg < 3) {
+        PORT_LOG_DEBUG("TEV: num_stages=%u (tracked=%u)", num_stages, g_state.num_tev_stages);
+        tev_dbg++;
+    }
+    
+
     
     /* Upload number of stages */
     if (g_tev_num_stages_loc >= 0) {
@@ -3682,36 +3737,37 @@ void GXSetTevClampMode(u32 stage, u32 clamp)
     }
 }
 
-void GXSetTevColorIn(u32 stage, u32 a, u32 b, u32 c, u32 d, u32 conv)
+void GXSetTevColorIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
 {
-    GX_TRACE("GXSetTevColorIn(%u, %u, %u, %u, %u, %u)", stage, a, b, c, d, conv);
+    GX_TRACE("GXSetTevColorIn(%u, %u, %u, %u, %u)", stage, a, b, c, d);
     if (stage < MAX_TEV_STAGES) {
+        tev_track_stage(stage);
         g_state.tev_stages[stage].color_inputs[0] = a;
         g_state.tev_stages[stage].color_inputs[1] = b;
         g_state.tev_stages[stage].color_inputs[2] = c;
         g_state.tev_stages[stage].color_inputs[3] = d;
         g_state.tev_stages[stage].color_enabled = TRUE;
     }
-    (void)conv;
 }
 
-void GXSetTevAlphaIn(u32 stage, u32 a, u32 b, u32 c, u32 d, u32 conv)
+void GXSetTevAlphaIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
 {
-    GX_TRACE("GXSetTevAlphaIn(%u, %u, %u, %u, %u, %u)", stage, a, b, c, d, conv);
+    GX_TRACE("GXSetTevAlphaIn(%u, %u, %u, %u, %u)", stage, a, b, c, d);
     if (stage < MAX_TEV_STAGES) {
+        tev_track_stage(stage);
         g_state.tev_stages[stage].alpha_inputs[0] = a;
         g_state.tev_stages[stage].alpha_inputs[1] = b;
         g_state.tev_stages[stage].alpha_inputs[2] = c;
         g_state.tev_stages[stage].alpha_inputs[3] = d;
         g_state.tev_stages[stage].alpha_enabled = TRUE;
     }
-    (void)conv;
 }
 
-void GXSetTevColorOp(u32 stage, u32 op, u32 a, u32 b, u32 c, u32 bias, u32 scl, u32 clamp, u32 out_conv)
+void GXSetTevColorOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_reg)
 {
-    GX_TRACE("GXSetTevColorOp(%u, %u, %u, %u, %u, %u, %u, %u, %u)", stage, op, a, b, c, bias, scl, clamp, out_conv);
+    GX_TRACE("GXSetTevColorOp(%u, %u, %u, %u, %u, %u)", stage, op, bias, scl, clamp, out_reg);
     if (stage < MAX_TEV_STAGES) {
+        tev_track_stage(stage);
         g_state.tev_stages[stage].color_op = op;
         g_state.tev_stages[stage].color_bias = bias;
         g_state.tev_stages[stage].color_scale = scl & 0x03;
@@ -3731,20 +3787,21 @@ void GXSetTevColorOp(u32 stage, u32 op, u32 a, u32 b, u32 c, u32 bias, u32 scl, 
         }
         if (unit < 2) g_state.color_mult[unit] = mult;
     }
-    (void)a; (void)b; (void)c; (void)out_conv;
+    (void)out_reg;
 }
 
-void GXSetTevAlphaOp(u32 stage, u32 op, u32 a, u32 b, u32 c, u32 bias, u32 scl, u32 clamp, u32 out_conv)
+void GXSetTevAlphaOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_reg)
 {
-    GX_TRACE("GXSetTevAlphaOp(%u, %u, %u, %u, %u, %u, %u, %u, %u)", stage, op, a, b, c, bias, scl, clamp, out_conv);
+    GX_TRACE("GXSetTevAlphaOp(%u, %u, %u, %u, %u, %u)", stage, op, bias, scl, clamp, out_reg);
     if (stage < MAX_TEV_STAGES) {
+        tev_track_stage(stage);
         g_state.tev_stages[stage].alpha_op = op;
         g_state.tev_stages[stage].alpha_bias = bias;
         g_state.tev_stages[stage].alpha_scale = scl & 0x03;
         g_state.tev_stages[stage].alpha_clamp = clamp;
         g_state.tev_stages[stage].alpha_enabled = TRUE;
     }
-    (void)a; (void)b; (void)c; (void)out_conv;
+    (void)out_reg;
 }
 void GXSetNumChans(u32 n)
 {
@@ -5071,6 +5128,21 @@ static void convert_ia8_be_to_rgba8(const void *src, u8 *dst, u32 npixels)
     }
 }
 
+/* Convert IA4 (4-bit intensity + 4-bit alpha per pixel, 1 byte/pixel) to RGBA8888 */
+static void convert_ia4_to_rgba8(const void *src, u8 *dst, u32 npixels)
+{
+    const u8 *s = (const u8*)src;
+    for (u32 i = 0; i < npixels; i++) {
+        u8 byte = s[i];
+        u8 intensity = ((byte >> 4) & 0x0F) * 17;  /* 4-bit -> 8-bit */
+        u8 alpha = (byte & 0x0F) * 17;              /* 4-bit -> 8-bit */
+        dst[i * 4 + 0] = intensity;
+        dst[i * 4 + 1] = intensity;
+        dst[i * 4 + 2] = intensity;
+        dst[i * 4 + 3] = alpha;
+    }
+}
+
 /* Convert I8 (intensity 8-bit) to grayscale RGBA8888 */
 static void convert_i8_to_rgba8(const void *src, u8 *dst, u32 npixels)
 {
@@ -5113,6 +5185,7 @@ static u32 calc_cmpr_size(u16 w, u16 h)
 
 /* Decompress CMPR texture data to RGBA8888 temp buffer */
 /* Returns allocated buffer (caller frees) or NULL on failure */
+/* Only decompresses base level — mipmaps are generated by glGenerateMipmap */
 static u8* decompress_cmpr(const void *src, u16 w, u16 h, u32 *out_size)
 {
     u32 npixels = (u32)w * (u32)h;
@@ -5121,24 +5194,28 @@ static u8* decompress_cmpr(const void *src, u16 w, u16 h, u32 *out_size)
     if (!out) return NULL;
     
     const u8 *cin = (const u8*)src;
-    u8 *cout = out;
-    u16 cw = w, ch = h;
-    u32 level = 0;
+    u32 row_stride = w * 4;  /* bytes per row in output buffer */
+    u32 tx = (w + 7) / 8;
+    u32 ty = (h + 7) / 8;
     
-    while (cw > 0 && ch > 0) {
-        u32 tx = (cw + 7) / 8;
-        u32 ty = (ch + 7) / 8;
-        
-        for (u32 by = 0; by < ty; by++) {
-            for (u32 bx = 0; bx < tx; bx++) {
-                decompress_cmpr_block(cin, (PixelRGBA8*)cout);
-                cin += 12;  /* next 12-byte block */
-                cout += 64; /* 64 pixels * 4 bytes */
+    /* Temp buffer for one 8x8 block (64 pixels * 4 bytes = 256) */
+    PixelRGBA8 block_out[64];
+    
+    /* Decompress base level only, placing each 8x8 block at the correct position */
+    for (u32 by = 0; by < ty; by++) {
+        for (u32 bx = 0; bx < tx; bx++) {
+            decompress_cmpr_block(cin, block_out);
+            cin += 12;  /* next 12-byte CMPR block */
+            
+            /* Copy 8x8 block to correct position in output buffer */
+            u32 base_y = by * 8;
+            u32 base_x = bx * 8;
+            for (int r = 0; r < 8; r++) {
+                u32 src_off = (r * 8) * 4;  /* offset within block_out (flat 8-pixel rows) */
+                u32 dst_off = ((base_y + r) * row_stride) + (base_x * 4);
+                memcpy(out + dst_off, (u8*)block_out + src_off, 32);  /* 8 pixels * 4 bytes */
             }
         }
-        
-        cw = (cw > 1) ? cw / 2 : 0;
-        ch = (ch > 1) ? ch / 2 : 0;
     }
     
     *out_size = out_bytes;
@@ -5284,6 +5361,18 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         }
     }
     
+    /* IA4: convert to RGBA8888 (4-bit intensity + 4-bit alpha per pixel) */
+    if (fmt == 0x02) {
+        u32 npixels = (u32)w * (u32)h;
+        u32 needed = npixels * 4;
+        tmp_buf = malloc(needed);
+        if (tmp_buf) {
+            convert_ia4_to_rgba8(img, tmp_buf, npixels);
+            upload_src = tmp_buf;
+            tmp_size = needed;
+        }
+    }
+    
     /* I4/I8 with TLUT: decode indexed pixels to RGBA8888 */
     if (fmt == 0x00 || fmt == 0x01) {  /* I4 or I8 */
         TLUTSlot *tlut = &g_state.g_tlut[g_state.g_current_tlut];
@@ -5325,7 +5414,7 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
 skip_tlut:
     
     /* Upload */
-    if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x00 || fmt == 0x01) {
+    if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x02 || fmt == 0x00 || fmt == 0x01) {
         /* Decompressed/converted → always RGBA8 */
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, upload_w, upload_h, 0,
                      GL_RGBA, GL_UNSIGNED_BYTE, upload_src);
@@ -5430,6 +5519,7 @@ static void decode_i4_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, T
 void GXInitTexObjCI(void* texObj, const void* image, u16 width, u16 height,
     u8 ci_fmt, u8 dim, u8 s_wrap, u8 t_wrap)
 {
+    GX_TRACE("GXInitTexObjCI(p, p, %u, %u, %u, 0x%X, %u, %u)", width, height, ci_fmt, dim, s_wrap, t_wrap);
     (void)texObj; (void)image; (void)width; (void)height;
     (void)ci_fmt; (void)dim; (void)s_wrap; (void)t_wrap;
 }
@@ -5439,7 +5529,7 @@ void GXInitTexObjCI(void* texObj, const void* image, u16 width, u16 height,
  * count: 16 (for I4) or 256 (for I8) */
 void GXInitTlutObj(void* tlutObj, const void* tlut_data, u32 tlut_fmt, u32 tlut_count)
 {
-    (void)tlutObj;
+    GX_TRACE("GXInitTlutObj(p, p, %u, %u)", tlut_fmt, tlut_count);
     if (!tlut_data || tlut_count == 0) return;
     
     /* Store palette in all 16 slots simultaneously.
@@ -5480,6 +5570,8 @@ void GXInitTlutObj(void* tlutObj, const void* tlut_data, u32 tlut_fmt, u32 tlut_
 /* Activate a TLUT slot. Slot becomes the "current" palette for I4/I8 textures. */
 void GXLoadTlut(void* tlutObj, u32 tlut_group)
 {
+    GX_TRACE("GXLoadTlut(p, %u)", tlut_group);
+    PORT_LOG_DEBUG("TLUT load: slot=%u", tlut_group);
     if (tlut_group < 16) {
         g_state.g_current_tlut = tlut_group;
     }

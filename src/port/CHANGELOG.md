@@ -1,3 +1,37 @@
+## [2025-08-11] — TEV Shader Cleanup & Input Infrastructure
+
+### Bug Fixes
+- **TEXC fallback removed**: Removed incorrect `length(tex.rgb) > 0.001` check in `tev_resolve_color` that replaced truly black texture pixels with white. Black is a valid texture color and should not be replaced.
+- **Sample tex simplified**: Removed unnecessary intermediate variable in `sample_tex()` function.
+- **Debug code removed**: Removed unused `debug_tex_color()` function from fragment shader.
+- **HSD_PadInit signature**: Fixed to match Dolphin signature (`u8 qnum, HSD_PadData* queue, u16 nb_list, HSD_PadRumbleListData*`).
+- **Pad state propagation**: Added `HSD_PadRenewStatus()` call in main loop to propagate pad state to game controller system.
+
+### Code Cleanup
+- **Debug logging removed**: Replaced all `fprintf(stderr, ...)` calls with `PORT_LOG_DEBUG` or removed entirely. Cleaned up 15+ debug logging statements across texture loading, TEV pipeline, UV debugging, and TLUT initialization.
+- **Upload verification removed**: Removed static debug counters for texture upload verification (no longer needed after stability fixes).
+
+### New Features
+- **Auto-start**: Added `MELEE_AUTO_START=N` env var to simulate button presses for skipping title screen. Phased input: frames 0-59 (no input), frame 60 (Start), frames 61-119 (hold Start), frame 120+ (Start+A). Enables automated testing when gm/ code is compiled.
+
+### Verification
+- Stability: 5/5 clean runs
+- Rendering: 176,836 non-black pixels (19.2%), 0 white pixels
+- Title screen rendering unchanged (I4 grayscale textures)
+- Texture format conversion code verified: RGB565, RGB5A3, IA4, IA8, I8, I4 all correct
+
+## [2025-08-10] — Fixed White Polygon Rendering (Texture Coordinates)
+
+### Bug Fix
+- **Root cause**: Matrix array (`g_state.mtx_array[68][3][4]`) was only initialized for 8 entries (k=0..7) during bridge init. Game uses matrix ID 60 for texture coordinate generation via `GXSetTexCoordGen2()`. Uninitialized matrix at index 60 contained garbage data that zeroed out texture coordinates in the vertex shader's texture matrix transform.
+- **Fix**: Initialize all 68 matrices to identity during bridge init.
+- **Result**: Textures now render correctly. Pixel count changed from 380,091 white pixels (41.2%) to 172,197 varied pixels (18.7%).
+
+### Additional Fixes
+- Restored normal shader code after extensive debugging of vertex attribute pipeline.
+- Verified VBO data is correct on CPU and GPU sides.
+- Verified vertex-to-fragment interpolation works for all vector types.
+
 ## [2025-08-09] — Indirect TEV (Bump Mapping / Refraction)
 
 ### New Features
