@@ -908,6 +908,17 @@ typedef struct {
 static GCPadStatus g_gc_pads[4];
 static GCPadStatus g_gc_pads_last[4];
 
+/* Auto-start: simulated button presses to skip title screen.
+ * Phase 1 (frames 0-59): No input (title screen loads).
+ * Phase 2 (frame 60): Press Start (edge trigger) to wake title screen.
+ * Phase 3 (frames 61-119): Hold Start.
+ * Phase 4 (frame 120): Press A (edge trigger) to confirm.
+ * Phase 5 (frames 121+): Hold A for menu navigation.
+ * Enable via MELEE_AUTO_START=N env var (default: 0 = disabled). */
+static int g_auto_start_frames = 0;
+static int g_auto_start_elapsed = 0;  /* Frames elapsed since auto-start began */
+static u32 g_auto_start_buttons = 0;  /* Current buttons held */
+
 #include <dolphin/types.h>
 
 /* No-op event callback for lb_80019AAC when game mode not wired up */
@@ -1043,6 +1054,27 @@ void HSD_PadRenewRawStatus(bool unused)
         /* Always poll keyboard for player 0 — fallback/no-pad mode */
         if (pad == 0) {
             poll_keyboard_to_pad(&g_gc_pads[pad]);
+            
+            /* Auto-start: simulated button presses to skip title screen.
+             * Frame 0-59: No input (title screen loads).
+             * Frame 60: Press Start (edge trigger).
+             * Frame 61-119: Hold Start.
+             * Frame 120: Press A (edge trigger) + hold Start.
+             * Frame 121+: Hold Start+A for menu navigation. */
+            if (g_auto_start_frames > 0) {
+                u32 buttons = 0;
+                if (g_auto_start_elapsed >= 60) {
+                    buttons |= GC_BTN_START;  /* Hold Start from frame 60 */
+                }
+                if (g_auto_start_elapsed >= 120) {
+                    buttons |= GC_BTN_A;  /* Add A from frame 120 */
+                }
+                g_gc_pads[pad].button |= buttons;
+                g_auto_start_elapsed++;
+                if (g_auto_start_elapsed >= g_auto_start_frames) {
+                    g_auto_start_frames = 0;  /* Disable after N frames */
+                }
+            }
         }
     }
 }
@@ -1104,10 +1136,21 @@ void HSD_PadRenewStatus(void)
 }
 
 /* Initialize pad subsystem: open joysticks once, zero state */
-void HSD_PadInit(void)
+void HSD_PadInit(u8 qnum, void* queue, u16 nb_list, void* rumble_list)
 {
+    (void)qnum; (void)queue; (void)nb_list; (void)rumble_list;
     memset(g_gc_pads, 0, sizeof(g_gc_pads));
     memset(g_gc_pads_last, 0, sizeof(g_gc_pads_last));
+    
+    /* Check for auto-start env var to skip title screen */
+    const char* auto_start = getenv("MELEE_AUTO_START");
+    if (auto_start) {
+        g_auto_start_frames = atoi(auto_start);
+        if (g_auto_start_frames <= 0) g_auto_start_frames = 300;  /* Default: 5 seconds */
+        g_auto_start_elapsed = 0;
+        g_auto_start_buttons = 0;
+        fprintf(stderr, "[PAD] Auto-start enabled: %d frames\n", g_auto_start_frames);
+    }
     
     /* Open SDL joysticks once — persistent handles reused each frame.
      * Only open if not already open (lazy-init handles normal path). */
@@ -1648,6 +1691,22 @@ __attribute__((weak)) void render_clear(void) {}
  */
 void game_main_loop(void)
 {
+    /* Initialize auto-start from env var (done here since gmmain.c is not compiled) */
+    {
+        static int auto_start_initialized = 0;
+        if (!auto_start_initialized) {
+            auto_start_initialized = 1;
+            const char* auto_start = getenv("MELEE_AUTO_START");
+            if (auto_start) {
+                g_auto_start_frames = atoi(auto_start);
+                if (g_auto_start_frames <= 0) g_auto_start_frames = 300;
+                g_auto_start_elapsed = 0;
+                g_auto_start_buttons = 0;
+                fprintf(stderr, "[PAD] Auto-start enabled: %d frames\n", g_auto_start_frames);
+            }
+        }
+    }
+    
     /* Forward declarations for lb_0195.c functions (overridden below) */
     u8 lb_80019894(void);
     void lb_80019900(void);
@@ -1780,9 +1839,10 @@ void game_main_loop(void)
         /* Process SDL events (window close, keyboard, etc.) */
         window_poll_events();
         
-        /* Poll pad state */
+        /* Poll pad state and propagate to game controller system */
         lb_80019894();
         lb_80019900();
+        HSD_PadRenewStatus();  /* Renew pad state for game input */
 
         /* Clear the screen first */
         render_clear();
