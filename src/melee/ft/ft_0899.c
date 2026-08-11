@@ -106,7 +106,7 @@ void ft_80089B08(Fighter_GObj* gobj)
                     fp->parts[((ftData_x58_t*) fp->ft_data->x58)->x8].joint;
                 ik.jobj2 =
                     fp->parts[((ftData_x58_t*) fp->ft_data->x58)->x10].joint;
-                ik.angle_max = M_PI_2_F;
+                ik.angle_max = M_PI_2f;
                 ik.angle_limit = 1.2217305f;
                 lb_8000B1CC(ik.jobj0, NULL, &ik.pos0);
                 lb_8000B1CC(ik.jobj1, NULL, &ik.pos1);
@@ -141,7 +141,7 @@ void ft_80089B08(Fighter_GObj* gobj)
                     fp->parts[((ftData_x58_t*) fp->ft_data->x58)->x9].joint;
                 ik.jobj2 =
                     fp->parts[((ftData_x58_t*) fp->ft_data->x58)->x11].joint;
-                ik.angle_max = M_PI_2_F;
+                ik.angle_max = M_PI_2f;
                 ik.angle_limit = 1.2217305f;
                 lb_8000B1CC(ik.jobj0, NULL, &ik.pos0);
                 lb_8000B1CC(ik.jobj1, NULL, &ik.pos1);

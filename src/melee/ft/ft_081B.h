@@ -75,7 +75,7 @@
 /* 0847D0 */ void ft_800847D0(Fighter_GObj* gobj, ftCollisionBox*);
 /* 0848DC */ void ft_800848DC(Fighter_GObj* gobj, HSD_GObjEvent cb);
 /* 0849EC */ void ft_800849EC(Fighter*, Fighter*);
-/* 084A18 */ bool ft_80084A18(Fighter_GObj*);
+/* 084A18 */ int ft_80084A18(Fighter_GObj*);
 /* 084A40 */ float ft_GetGroundFrictionMultiplier(Fighter* fp);
 /* 084A80 */ bool ft_80084A80(int arg0, Fighter_GObj* gobj, int*, int*, int*);
 /* 084BFC */ bool ft_80084BFC(Fighter_GObj* gobj, int*, int*, int*);

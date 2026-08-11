@@ -3,6 +3,8 @@
 
 #include <platform.h>
 
+#ifndef BUILD_TARGET_PC
+
 typedef struct __jmp_buf {
     unsigned long pc;       /*	0: saved PC			*/
     unsigned long cr;       /*	4: saved CR			*/
@@ -33,5 +35,7 @@ typedef struct __jmp_buf {
 
 int __setjmp(register __jmp_buf*);
 void longjmp(register __jmp_buf* env, register int val);
+
+#endif /* !BUILD_TARGET_PC */
 
 #endif
