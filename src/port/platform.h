@@ -77,6 +77,25 @@ typedef int enum_t;  /* underlying type of enum, used as placeholder */
 typedef void (*Event)(void);  /* void callback with no arguments */
 typedef bool (*Predicate)(void);  /* predicate callback */
 
+/* GCN-specific constants (from MSL/math.h, Runtime/platform.h, MSL/stddef.h) */
+#define F32_MAX 3.4028235e38f
+#ifndef M_PI_F
+#define M_PI_F 3.14159265358979323846f
+#endif
+#ifndef M_PI_2_F
+#define M_PI_2_F (M_PI_F / 2.0f)
+#endif
+#ifndef M_PI_2f
+#define M_PI_2f (M_PI_F / 2.0f)
+#endif
+#ifndef rad_to_deg
+static float const rad_to_deg = 180.0f / M_PI_F;
+#endif
+#ifndef deg_to_rad
+static float const deg_to_rad = M_PI_F / 180.0f;
+#endif
+typedef unsigned int usize_t;
+
 /* Static assertions — disabled on PC (struct sizes differ on 64-bit) */
 #define STATIC_ASSERT(cond)
 

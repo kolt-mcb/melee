@@ -8,7 +8,7 @@
 #include "ftMario/forward.h"
 #include <baselib/forward.h>
 
-static usize_t const aux_states_count = 2;
+#define aux_states_count 2
 
 /* 0E08CC */ void ftMr_Init_OnDeath(HSD_GObj* gobj);
 /* 0E0920 */ void ftMr_Init_OnLoadForDrMario(Fighter*);

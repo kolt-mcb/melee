@@ -12,6 +12,7 @@
 #include "gm/gm_16AE.h"
 #include "it/it_26B1.h"
 #include "lb/lbvector.h"
+#include "gr/types.h"  /* deg_to_rad */
 
 #include "mp/forward.h"
 
