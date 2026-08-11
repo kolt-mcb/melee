@@ -67,9 +67,35 @@
 #include <string.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <stdbool.h>  /* bool, true, false */
 
 /* Integer types */
 #include <dolphin/types.h>
+
+/* Game-specific type definitions (from Runtime/platform.h) */
+typedef int enum_t;  /* underlying type of enum, used as placeholder */
+typedef void (*Event)(void);  /* void callback with no arguments */
+typedef bool (*Predicate)(void);  /* predicate callback */
+
+/* Static assertions — disabled on PC (struct sizes differ on 64-bit) */
+#define STATIC_ASSERT(cond)
+
+/* Noreturn attribute */
+#define ATTRIBUTE_NORETURN __attribute__((noreturn))
+
+/* Common macros */
+#define SQ(x) ((x) * (x))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+
+/* Section/attribute macros (no-op on PC) */
+#define SDATA
+#define DATA
+#define WEAK
+#define SECTION_INIT
+#define SECTION_CTORS
+#define SECTION_DTORS
+#define AT_ADDRESS(x)
 
 #else /* BUILD_TARGET_GC */
 
