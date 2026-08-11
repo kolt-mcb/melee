@@ -112,6 +112,27 @@ typedef bool (*Predicate)(void);
 #define S32_MAX 0x7FFFFFFF
 #define F32_MAX 3.4028235e38f
 
+/* GCN math constants (from MSL/math.h) */
+#ifndef M_PI_F
+#define M_PI_F 3.14159265358979323846f
+#endif
+#ifndef M_PI_2_F
+#define M_PI_2_F (M_PI_F / 2.0f)
+#endif
+
+/* GCN rad/deg conversion constants (from MSL/math.h) */
+#ifndef rad_to_deg
+#define rad_to_deg (180.0f / M_PI_F)
+#endif
+#ifndef deg_to_rad
+#define deg_to_rad (M_PI_F / 180.0f)
+#endif
+
+/* GCN size type (from MSL/stddef.h) */
+#ifndef usize_t
+typedef unsigned int usize_t;
+#endif
+
 #define SQ(x) ((x) * (x))
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))

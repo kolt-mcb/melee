@@ -88,12 +88,6 @@ typedef bool (*Predicate)(void);  /* predicate callback */
 #ifndef M_PI_2f
 #define M_PI_2f (M_PI_F / 2.0f)
 #endif
-#ifndef rad_to_deg
-static float const rad_to_deg = 180.0f / M_PI_F;
-#endif
-#ifndef deg_to_rad
-static float const deg_to_rad = M_PI_F / 180.0f;
-#endif
 typedef unsigned int usize_t;
 
 /* Static assertions — disabled on PC (struct sizes differ on 64-bit) */
