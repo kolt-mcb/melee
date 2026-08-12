@@ -77,6 +77,12 @@ OSContext *OSGetCurrentContext(void) { return &_os_current_context; }
 /* Time-related stubs */
 OSTick OSGetTime(void) { return _os_tick_count; }
 void OSGetTimeStruct(struct tm *timep) {}
+
+/* Timer conversion functions */
+#define OS_TIMER_CLOCK 240000000  /* 240 MHz GCN clock */
+u64 OSTicksToSeconds(u64 ticks) { return ticks / OS_TIMER_CLOCK; }
+u64 OSSecondsToTicks(u64 secs) { return secs * OS_TIMER_CLOCK; }
+void OSTicksToCalendarTime(u64 ticks, struct tm *timep) {}
 u32 __OSCoreClock = 486000000;
 u32 __OSSimulatedMemSize = 0x20000000;
 u32 __OSPhysicalMemSize = 0x20000000;

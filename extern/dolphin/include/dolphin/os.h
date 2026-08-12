@@ -68,7 +68,9 @@ u32 __OSBusClock : (OS_BASE_CACHED | 0x00F8);
 u32 __OSCoreClock : (OS_BASE_CACHED | 0x00FC);
 int __EXIProbeStartTime[2] : (OS_BASE_CACHED | 0x30C0);
 #else
+#ifndef __OSBusClock
 #define __OSBusClock (*(u32*) (OS_BASE_CACHED | 0x00F8))
+#endif
 #define __OSCoreClock (*(u32*) (OS_BASE_CACHED | 0x00FC))
 #endif
 #define OS_BUS_CLOCK __OSBusClock

@@ -21,6 +21,12 @@
  * PC Target — SDL2, OpenGL, POSIX
  * ======================================== */
 
+/* Override GCN hardware constants for PC compilation.
+ * These are defined as memory-mapped registers in dolphin/os.h,
+ * but on PC we need them as actual constants. */
+#define __OSBusClock 486000000  /* 486 MHz GCN bus clock */
+#define OS_BASE_CACHED 0x00000000  /* No-op on PC */
+
 /* Must define _GNU_SOURCE before any system headers to get POSIX extensions */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -93,6 +99,49 @@ typedef bool (*Predicate)(void);  /* predicate callback */
 #ifndef M_PI_2f
 #define M_PI_2f (M_PI_F / 2.0f)
 #endif
+#ifndef M_PI_3
+#define M_PI_3 (M_PI_F / 3.0f)
+#endif
+#ifndef M_TAU
+#define M_TAU (2.0f * M_PI_F)
+#endif
+#ifndef rad_to_deg
+#define rad_to_deg (180.0f / M_PI_F)
+#endif
+#ifndef deg_to_rad
+#define deg_to_rad (M_PI_F / 180.0f)
+#endif
+
+/* GCN integer limits (from Runtime/platform.h) */
+#ifndef U8_MAX
+#define U8_MAX 0xFF
+#endif
+#ifndef U16_MAX
+#define U16_MAX 0xFFFF
+#endif
+#ifndef U32_MAX
+#define U32_MAX 0xFFFFFFFF
+#endif
+#ifndef S8_MAX
+#define S8_MAX 0x7F
+#endif
+#ifndef S16_MAX
+#define S16_MAX 0x7FFF
+#endif
+#ifndef S32_MAX
+#define S32_MAX 0x7FFFFFFF
+#endif
+
+/* Common macros (from Runtime/platform.h) */
+#ifndef RETURN_IF
+#define RETURN_IF(cond)                                                       \
+    do {                                                                      \
+        if ((cond)) {                                                         \
+            return;                                                           \
+        }                                                                     \
+    } while (0)
+#endif
+
 typedef unsigned int usize_t;
 
 /* Static assertions — disabled on PC (struct sizes differ on 64-bit) */

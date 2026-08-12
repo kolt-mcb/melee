@@ -51,6 +51,7 @@ DISPLAY_MODULES = [
     "cobj.c",
     "jobj.c",
     "shadow.c",
+    "sobjlib.c",
     "displayfunc.c",
     "archive.c",  # GCN archive parser (needed for stage data)
     "perf.c",     # performance counters (HSD_PerfCurrentStat)
@@ -71,7 +72,7 @@ FT_SOURCES += collect(MELEE / "ft" / "chara")
 FT_SOURCES += collect(MELEE / "ft" / "chara" / "ftCommon")
 FT_SOURCES += collect(MELEE / "ft" / "chara" / "ftMario")
 GM_SOURCES = collect(MELEE / "gm")
-GM_SOURCES = [s for s in GM_SOURCES if Path(s).name not in {"gm_1736.c", "gmmain.c", "gmmain_lib.c", "gmtitle.c", "gmscdata.c"}]  # exclude duplicates and entry point
+GM_SOURCES = [s for s in GM_SOURCES if Path(s).name not in {"gm_1736.c", "gmmain.c", "gmtitle.c"}]  # exclude duplicates and entry point
 EF_SOURCES = []  # ef/ module uses GCN-specific va_arg macros
 IT_SOURCES = collect(MELEE / "it")
 MP_SOURCES = collect(MELEE / "mp")
@@ -81,8 +82,8 @@ ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + GR_S
 INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,
     SRC / "melee" / "ft" / "chara", SRC / "MSL" / "PPC_EABI",
-    SRC / "Runtime", SRC / "MetroTRK",
-    ROOT / "extern" / "dolphin" / "include", SRC / "port",
+    SRC / "port", SRC / "Runtime", SRC / "MetroTRK",
+    ROOT / "extern" / "dolphin" / "include",
 ]
 
 inc = " ".join("-I" + str(p) for p in INCLUDE_DIRS)

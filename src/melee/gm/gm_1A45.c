@@ -285,6 +285,17 @@ void gm_801A4D34(void (*on_frame)(void), GameSceneInfo* arg1)
         hsd_80392E80();
         gmMainLib_8046B0F0.xC = false;
 
+        /* PC port: check for window close request */
+        extern int g_should_quit;
+        if (g_should_quit) {
+            gm_80479D58.unk_C = 1;
+            break;
+        }
+        
+        /* PC port: poll SDL events and input */
+        extern void port_input_poll(void);
+        port_input_poll();
+
         while ((pad_queue_count = lb_80019894()) == 0) {
             lb_800195D0();
         }
@@ -340,7 +351,17 @@ void gm_801A4D34(void (*on_frame)(void), GameSceneInfo* arg1)
             if (temp_r25->unk_10.unk_30 != NULL) {
                 temp_r25->unk_10.unk_30();
             }
+            
+            /* PC port: render hook before GObj process chain */
+            extern void port_render_frame_begin(void);
+            port_render_frame_begin();
+            
             HSD_GObj_80390CFC();
+            
+            /* PC port: render hook after GObj process chain */
+            extern void port_render_frame_end(void);
+            port_render_frame_end();
+            
             if (temp_r25->unk_0 != -2) {
                 temp_r25->unk_0++;
             }
