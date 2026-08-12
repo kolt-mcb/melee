@@ -907,6 +907,7 @@ typedef struct {
 /* Global pad state for 4 controllers */
 static GCPadStatus g_gc_pads[4];
 static GCPadStatus g_gc_pads_last[4];
+int g_gc_pads_initialized = 0;  /* Set to 1 after HSD_PadInit */
 
 /* Auto-start: simulated button presses to skip title screen.
  * Phase 1 (frames 0-59): No input (title screen loads).
@@ -1141,6 +1142,7 @@ void HSD_PadInit(u8 qnum, void* queue, u16 nb_list, void* rumble_list)
     (void)qnum; (void)queue; (void)nb_list; (void)rumble_list;
     memset(g_gc_pads, 0, sizeof(g_gc_pads));
     memset(g_gc_pads_last, 0, sizeof(g_gc_pads_last));
+    g_gc_pads_initialized = 1;  /* Mark pads as initialized */
     
     /* Check for auto-start env var to skip title screen */
     const char* auto_start = getenv("MELEE_AUTO_START");
@@ -1185,7 +1187,10 @@ void HSD_PadFlushQueue(u8 type)
 
 u8 HSD_PadGetRawQueueCount(void)
 {
-    return 0;  /* No queue */
+    /* PC port: return 1 to allow game loop to proceed.
+     * The game expects at least one pad status update per frame.
+     * HSD_PadRenewStatus() populates g_gc_pads with current input state. */
+    return g_gc_pads_initialized ? 1 : 0;
 }
 
 s32 HSD_PadGetResetSwitch(void)
@@ -2061,7 +2066,7 @@ __attribute__((weak)) void gm_801A4510(void) {}
 void lb_8001955C(void) {}
 void lb_800195D0(void) {}
 void lb_80019628(void) {}
-u8 lb_80019894(void) { return 0; }
+u8 lb_80019894(void) { return 1; }  /* Return 1 to allow game loop to proceed */
 void lb_800198E0(void) {}
 void lb_80019880(u64 arg0) {}
 void lb_80019900(void) {}

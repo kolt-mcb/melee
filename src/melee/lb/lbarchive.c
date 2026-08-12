@@ -17,10 +17,6 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
     const char* symbol;
     int i = 0;
 
-    fprintf(stderr, "[ARCHIVE] lbArchive_InitializeDAT: archive=%p data=%p length=%zu\n",
-            archive, data, length);
-    fflush(stderr);
-
     if (HSD_ArchiveParse(archive, data, length) == -1) {
         OSReport("HSD_ArchiveParse error!\n");
         /* PC port: don't crash on archive parse errors (byte-order issues) */
@@ -28,9 +24,6 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
         memset(archive, 0, sizeof(HSD_Archive));
         return;
     }
-
-    fprintf(stderr, "[ARCHIVE] Parse succeeded\n");
-    fflush(stderr);
 
     while (true) {
         symbol = HSD_ArchiveGetExtern(archive, i++);
