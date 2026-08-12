@@ -1218,7 +1218,6 @@ __attribute__((weak)) void HSD_SObjLib_803A477C(void) {}
 __attribute__((weak)) void HSD_SObjLib_803A49E0(void) {}
 __attribute__((weak)) void HSD_SObjLib_803A54EC(void) {}
 __attribute__((weak)) void HSD_SObjLib_803A55DC(void) {}
-__attribute__((weak)) void HSD_SObjLib_8040C3A4(void) {}
 __attribute__((weak)) u8 HSD_SObjLib_804D7960;
 __attribute__((weak)) void HSD_SetEraseColor(void) {}
 __attribute__((weak)) void HSD_SetHeap(int handle) { (void)handle; }
@@ -1691,7 +1690,7 @@ __attribute__((weak)) void render_clear(void) {}
  */
 void game_main_loop(void)
 {
-    /* Initialize auto-start from env var (done here since gmmain.c is not compiled) */
+    /* Initialize auto-start from env var */
     {
         static int auto_start_initialized = 0;
         if (!auto_start_initialized) {
@@ -1702,18 +1701,12 @@ void game_main_loop(void)
                 if (g_auto_start_frames <= 0) g_auto_start_frames = 300;
                 g_auto_start_elapsed = 0;
                 g_auto_start_buttons = 0;
-                fprintf(stderr, "[PAD] Auto-start enabled: %d frames\n", g_auto_start_frames);
+                PORT_LOG_INFO("[PAD] Auto-start enabled: %d frames", g_auto_start_frames);
             }
         }
     }
-    
-    /* Forward declarations for lb_0195.c functions (overridden below) */
-    u8 lb_80019894(void);
-    void lb_80019900(void);
 
-    /* Initialize baselib object allocators before stage init.
-     * This initializes HSD_ID, HSD_JObj, HSD_RObj, etc. allocators.
-     * Normally done by HSD_InitComponent() but we skip full gm/ init. */
+    /* Initialize baselib object allocators */
     {
         static int baselib_initialized = 0;
         if (!baselib_initialized) {
@@ -1730,21 +1723,14 @@ void game_main_loop(void)
             extern void HSD_ZListInitAllocData(void);
             extern void HSD_ObjSetHeap(unsigned long, void*);
 
-            /* Allocate a 64MB heap region for baselib object allocator.
-             * This is used by HSD_ObjAllocAddFree to allocate objects
-             * from a contiguous memory pool. */
-            {
-                size_t heap_size = 64 * 1024 * 1024; /* 64MB */
-                g_heap_base = mmap(NULL, heap_size, PROT_READ | PROT_WRITE,
-                                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-                g_heap_size = heap_size;
-                if (g_heap_base != MAP_FAILED) {
-                    HSD_ObjSetHeap(heap_size, g_heap_base);
-                    PORT_LOG_INFO("[BASERLIB] Heap allocated at %p (%zu bytes)",
-                                  g_heap_base, heap_size);
-                } else {
-                    PORT_LOG_INFO("[BASERLIB] WARNING: heap allocation failed");
-                }
+            size_t heap_size = 64 * 1024 * 1024;
+            g_heap_base = mmap(NULL, heap_size, PROT_READ | PROT_WRITE,
+                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            g_heap_size = heap_size;
+            if (g_heap_base != MAP_FAILED) {
+                HSD_ObjSetHeap(heap_size, g_heap_base);
+                PORT_LOG_INFO("[BASERLIB] Heap allocated at %p (%zu bytes)",
+                              g_heap_base, heap_size);
             }
 
             HSD_ListInitAllocData();
@@ -1761,10 +1747,7 @@ void game_main_loop(void)
         }
     }
 
-    /* Initialize GObj system before stage init.
-     * This is normally done by gm_801A4BD4() but we skip the full gm/ init.
-     * HSD_GObj_803912E0 fills in defaults, then we set gproc_pri_max.
-     * HSD_GObj_80391304 allocates the entity lists and GX link arrays. */
+    /* Initialize GObj system */
     {
         static int gobj_initialized = 0;
         if (!gobj_initialized) {
@@ -1787,120 +1770,68 @@ void game_main_loop(void)
         }
     }
 
-    /* Initialize a stage for geometry rendering.
-     * Stage_802251E8 triggers the full stage init chain:
-     *   Ground_801C0754() → grDatFiles_801C6038() → loads /GrIz.dat
-     *   Ground_GetStageGobj() → creates Ground gobj with joint hierarchy
-     *   GObj_SetupGXLinkMax() → registers render callback
-     * The GX link chain is walked each frame via HSD_GObj_80390FC0().
-     */
+    /* Main game loop - delegates to decomp gm_801A4510() */
     {
-        static int stage_initialized = 0;
-        if (!stage_initialized) {
-            stage_initialized = 1;
-            PORT_LOG_INFO("[STAGE] Attempting stage init...");
-            
-            /* Use function pointers to avoid enum type conflicts */
-            typedef void (*StageInitFn)(int, void*);
-            typedef void (*StageOnLoadFn)(void);
-            typedef void (*StageOnStartFn)(int, void*);
-            void *sym_init = (void*)(intptr_t)&Stage_802251E8;
-            void *sym_load = (void*)(intptr_t)&Stage_80225298;
-            void *sym_start = (void*)(intptr_t)&Stage_802252E4;
-            
-            PORT_LOG_INFO("[STAGE] Calling Stage_802251E8(St_Kind_Izumi=2, NULL)...");
-            ((StageInitFn)sym_init)(2, NULL); /* St_Kind_Izumi = 2 */
-            PORT_LOG_INFO("[STAGE] Stage_802251E8 returned");
-            
-            PORT_LOG_INFO("[STAGE] Calling Stage_80225298 (Ground_OnLoad)...");
-            ((StageOnLoadFn)sym_load)();
-            PORT_LOG_INFO("[STAGE] Stage_80225298 returned");
-
-            PORT_LOG_INFO("[STAGE] Calling Stage_8022524C (Ground_801C0800/on_init)...");
-            ((StageOnLoadFn)&Stage_8022524C)();
-            PORT_LOG_INFO("[STAGE] Stage_8022524C returned");
-
-            PORT_LOG_INFO("[STAGE] Calling Stage_802252E4 (Ground_OnStart)...");
-            ((StageOnStartFn)sym_start)(2, NULL);
-            PORT_LOG_INFO("[STAGE] Stage_802252E4 returned");
-            PORT_LOG_INFO("[STAGE] Stage init complete");
-        }
-    }
-
-    /* Use SDL timing for consistent frame pacing */
-    int frame_count = 0;
-    int max_frames = 600;  /* Run ~10 seconds then exit (for testing) */
-    while (frame_count < max_frames && !g_should_quit) {
-        frame_count++;
-
-        /* Poll input first (before render, so state is fresh) */
-        input_read_frame();
+        extern void gm_801A4510(void);
+        extern void HSD_GObj_80390FC0(void);
+        extern void gx_set_default_3d_camera(void);
+        extern void GXFlush(void);
+        extern void GXSetZMode(u32, u32, u32);
         
-        /* Process SDL events (window close, keyboard, etc.) */
-        window_poll_events();
+        PORT_LOG_INFO("[MAIN] Starting game mode loop (gm_801A4510)...");
         
-        /* Poll pad state and propagate to game controller system */
-        lb_80019894();
-        lb_80019900();
-        HSD_PadRenewStatus();  /* Renew pad state for game input */
-
-        /* Clear the screen first */
-        render_clear();
+        /* Call gm_801A4510() which runs the full game loop.
+         * It will return when g_should_quit is set (window close).
+         * The game loop handles:
+         * - Game mode transitions (BOOT → TITLE → MENU → MELEE)
+         * - Scene loading and unloading
+         * - Per-frame game logic via OnFrame handlers
+         * - GObj process chain walking (HSD_GObj_80390CFC)
+         * 
+         * Our render loop runs in parallel via the port layer.
+         * We need to integrate rendering into the game loop.
+         * 
+         * NOTE: gm_801A4510() has its own inner loop that blocks
+         * until the game mode is done. We added a g_should_quit
+         * check to break out of it. */
         
-        /* Walk the GObj GX link chain and call render callbacks.
-         * This is where stage geometry rendering happens.
-         * HSD_GObj_80390FC0 walks HSD_GObjGXLinkHead[gx_link_max+1]
-         * and calls cur->render_cb(cur, 0) for each GObj in the chain. */
-        {
-            extern void HSD_GObj_80390FC0(void);
-            extern HSD_GObj** HSD_GObjGXLinkHead;
-            extern struct {
-                u8 p_link_max;
-                u8 gx_link_max;
-                u8 gproc_pri_max;
-                void* funcs;
-                void* unk_2;
-            } HSD_GObjLibInitData;
-            static int gx_diagnostic = 0;
-            if (!gx_diagnostic && frame_count == 1) {
-                gx_diagnostic = 1;
-                int i;
-                for (i = 0; i <= HSD_GObjLibInitData.gx_link_max + 1; i++) {
-                    if (HSD_GObjGXLinkHead[i] != NULL) {
-                        HSD_GObj* head = HSD_GObjGXLinkHead[i];
-                        PORT_LOG_INFO("[GObj] GX link chain head[%d] = %p (render_cb=%p)",
-                                      i, (void*)head, (void*)head->render_cb);
-                    }
-                }
-            }
-            
-            /* Set up 3D camera for stage geometry rendering.
-             * The stage geometry uses perspective projection and a viewing matrix.
-             * The HUD overlay uses orthographic projection (set up in render_clear). */
-            extern void gx_set_default_3d_camera(void);
-            extern void GXFlush(void);
-            extern void GXSetZMode(u32, u32, u32);
-            gx_set_default_3d_camera();
-            
-            /* Disable depth test for stage geometry (debug) */
-            GXSetZMode(FALSE, 0, FALSE);
-            
-            HSD_GObj_80390FC0();
-            
-            /* Flush stage geometry before switching to HUD overlay */
-            GXFlush();
-        }
-
-        /* Render HUD overlay (uses orthographic projection from render_clear) */
-        render_debug_overlay();
-        render_present();
+        /* Run the game loop. This will block until g_should_quit is set. */
+        gm_801A4510();
         
-        /* Frame pacing: target 60fps (~16.67ms per frame).
-         * The GameCube uses VBlank interrupts for frame sync; on PC
-         * we approximate this with a 16ms sleep. */
-        usleep(16666);
+        PORT_LOG_INFO("[MAIN] Game loop exited");
     }
 }
+/* PC port: render hooks called from gm_801A4D34() per frame */
+__attribute__((weak)) void port_input_poll(void)
+{
+    extern void window_poll_events(void);
+    extern void input_read_frame(void);
+    extern void HSD_PadRenewStatus(void);
+    window_poll_events();
+    input_read_frame();
+    HSD_PadRenewStatus();
+}
+
+__attribute__((weak)) void port_render_frame_begin(void)
+{
+    extern void render_clear(void);
+    extern void gx_set_default_3d_camera(void);
+    extern void GXSetZMode(u32, u32, u32);
+    render_clear();
+    gx_set_default_3d_camera();
+    GXSetZMode(FALSE, 0, FALSE);
+}
+
+__attribute__((weak)) void port_render_frame_end(void)
+{
+    extern void GXFlush(void);
+    extern void render_debug_overlay(void);
+    extern void render_present(void);
+    GXFlush();
+    render_debug_overlay();
+    render_present();
+}
+
 __attribute__((weak)) void game_shutdown(void) {}
 __attribute__((weak)) void getAirSpecialMotionId(void) {}
 __attribute__((weak)) void getAnimSpeed(void) {}
@@ -2639,11 +2570,7 @@ struct gmSaveData {
     .x1CB0.item_mask = 0,
 };
 
-static void* gmMainLib_GetSaveData_real(void) { return &gmSaveData_static; }
-__attribute__((alias("gmMainLib_GetSaveData_real"))) void* gmMainLib_GetSaveData(void);
 
-static struct gmm_x1CB0* gmMainLib_8015CC58_real(void) { return &gmSaveData_static.x1CB0; }
-__attribute__((alias("gmMainLib_8015CC58_real"))) struct gmm_x1CB0* gmMainLib_8015CC58(void);
 __attribute__((weak)) void HSD_PadRumbleAdd(void) {}
 __attribute__((weak)) void HSD_PadRumbleOn(void) {}
 __attribute__((weak)) void HSD_PadRumbleRemove(void) {}

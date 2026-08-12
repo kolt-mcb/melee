@@ -309,11 +309,14 @@ void gm_801A4510(void)
     gm_GetAllGameModes();
     memzero(&gm_80479D30, sizeof(GameState));
     modes = gm_GetAllGameModes();
-    for (i = 0; modes[i].idx != GM_COUNT; i++) {
+    /* PC port: skip game mode init loop — many inits crash due to
+     * uninitialized global state. The game modes will be initialized
+     * lazily when their scenes are loaded. */
+    /* for (i = 0; modes[i].idx != GM_COUNT; i++) {
         if (modes[i].Init != NULL) {
             modes[i].Init();
         }
-    }
+    } */
     if (VIGetDTVStatus() != 0 &&
         (db_gameLaunchButtonState & 0x200 || OSGetProgressiveMode() == 1))
     {
@@ -324,6 +327,12 @@ void gm_801A4510(void)
     gm_80479D30.routing.prev_mode = GM_COUNT;
 
     while (true) {
+        /* PC port: check for window close request */
+        extern int g_should_quit;
+        if (g_should_quit) {
+            return;
+        }
+        
         u8 next_mode = gm_RunGameMode(gm_80479D30.routing.curr_mode);
         if (gmMainLib_8046B0F0.resetting) {
             gmMainLib_8046B0F0.resetting = false;

@@ -8,6 +8,7 @@ static HSD_GObjLibInitDataType HSD_GObj_80408620 = {
     0x3F,
     0x3F,
     2,
+    NULL,  /* funcs */
 };
 
 void HSD_GObj_803912E0(HSD_GObjLibInitDataType* arg0)

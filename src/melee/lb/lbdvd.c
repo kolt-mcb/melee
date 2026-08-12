@@ -449,7 +449,9 @@ HSD_Archive* lbDvd_8001819C(const char* basename)
     char* filename = lbFile_80016204(basename);
     archive = lbDvd_GetPreloadedArchive(DVDConvertPathToEntrynum(filename));
     if (DbLevel != 0 && preloadCache.preloaded && archive == NULL) {
-        HSD_ASSERTREPORT(948, 0, "[LbDvd] %s is not PRELOADed.\n", filename);
+        /* PC port: don't crash on missing preloaded archives */
+        fprintf(stderr, "[LbDvd] %s is not PRELOADed.\n", filename);
+        /* HSD_ASSERTREPORT(948, 0, "[LbDvd] %s is not PRELOADed.\n", filename); */
     }
     return archive;
 }
