@@ -43,6 +43,11 @@
 #include <wchar.h>
 #include <stdarg.h>
 
+/* GCN-specific va_arg macros (from MSL/stdarg.h) */
+#ifndef _var_arg_typeof
+#define _var_arg_typeof(e) 0
+#endif
+
 /* POSIX types — MUST come after stddef.h/stdlib.h for size_t */
 #include <unistd.h>
 #include <dirent.h>

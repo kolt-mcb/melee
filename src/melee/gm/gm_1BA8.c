@@ -1,4 +1,10 @@
 #include "gm_1BA8.h"
+typedef StKind InternalStageId;
+
+/* Forward declaration for lbDvd_8001822C (defined in lb/ module) */
+struct PreloadCacheScene;
+struct PreloadCacheScene* lbDvd_8001822C(void);
+struct lbl_8046B6A0_t* gm_8016AE38(void);
 
 #include "gm_1BA8.static.h"
 
@@ -106,7 +112,7 @@ void gm_801BA938(struct EventData* arg0, int lo, int hi, bool arg3)
     }
 
     if (arg3 != 0) {
-        temp_r7->stage_id = arg0->x48;
+        temp_r7->stkind = arg0->x48;
     }
     lbDvd_80018254();
     mask = 0;
@@ -362,7 +368,7 @@ void gm_801BAD70(GameScene* arg0)
     md->rules.x1_7 = (*lvlpp)->x8->x1_1;
     md->rules.x2_2 = 0;
     md->rules.x2_3 = 0;
-    md->rules.x2_4 = 0;
+    md->rules.disable_pausing = 0;
     md->rules.x2_5 = (*lvlpp)->x8->x1_2;
     md->rules.x3_1 = 1;
     md->rules.x3_2 = 1;
@@ -3452,7 +3458,7 @@ void gm_801BF3F8(void)
         var_r31->entries[i].char_id = gm_801BF648(i);
         var_r31->entries[i].color = gm_801BF670(i);
     }
-    var_r31->stage_id = gm_801BF694();
+    var_r31->stkind = gm_801BF694();
     lbDvd_80018254();
 
     temp_ret = 4;
@@ -3487,7 +3493,7 @@ void gm_801BF4DC(GameScene* arg0)
     temp_r31->rules.x1_0 = false;
     temp_r31->rules.x1_2 = true;
     temp_r31->rules.x1_3 = true;
-    temp_r31->rules.x2_4 = true;
+    temp_r31->rules.disable_pausing = true;
     temp_r31->rules.x7 = 0;
     temp_r31->rules.x44 = gm_80183218;
     temp_r31->rules.x34 = 1.0F;
