@@ -19,7 +19,7 @@
 
 #include <dolphin/mtx.h>
 
-/* 09AAFC */ static bool ftCo_8009AAFC(Fighter_GObj* gobj, bool arg1,
+/* 09AAFC */ static bool ftCo_8009AAFC(Fighter_GObj* gobj, int arg1,
                                        float stick_x, float stick_angle);
 /* 09AB9C */ static void ftCo_8009AB9C(Fighter_GObj* gobj);
 

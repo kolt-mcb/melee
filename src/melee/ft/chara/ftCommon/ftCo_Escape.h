@@ -10,7 +10,7 @@
 /* 099714 */ void ftCo_Escape_Phys(Fighter_GObj* gobj);
 /* 099734 */ void ftCo_Escape_Coll(Fighter_GObj* gobj);
 /* 099794 */ bool ftCo_80099794(Fighter_GObj* gobj);
-/* 09980C */ bool ftCo_8009980C(Fighter_GObj* gobj);
+/* 09980C */ int ftCo_8009980C(Fighter_GObj* gobj);
 /* 0999D8 */ void ftCo_EscapeN_Anim(Fighter_GObj* gobj);
 /* 099A14 */ void ftCo_EscapeN_IASA(Fighter_GObj* gobj);
 /* 099A18 */ void ftCo_EscapeN_Phys(Fighter_GObj* gobj);

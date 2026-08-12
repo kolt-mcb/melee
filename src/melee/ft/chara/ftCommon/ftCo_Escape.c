@@ -31,10 +31,10 @@
                                        bool);
 /* 099314 */ static void ftCo_80099314(Fighter_GObj* gobj, FtMotionId msid,
                                        bool arg2);
-/* 099390 */ static void ftCo_80099390(Fighter_GObj* gobj, FtMotionId msid,
-                                       bool arg2);
-/* 099438 */ static void ftCo_80099438(Fighter_GObj* gobj, FtMotionId msid,
-                                       bool arg2);
+/* 099390 */ static void ftCo_80099390(Fighter_GObj* gobj, int msid,
+                                       int arg2);
+/* 099438 */ static void ftCo_80099438(Fighter_GObj* gobj, int msid,
+                                       int arg2);
 /* 099564 */ static void ftCo_80099564(Fighter_GObj* gobj);
 /* 099644 */ static void ftCo_80099644(Fighter_GObj* gobj);
 /* 099754 */ static void ftCo_80099754(Fighter_GObj* gobj);
