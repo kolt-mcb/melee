@@ -8,6 +8,7 @@
 #include "gm/gmscdata.h"
 #include "lb/lbaudio_ax.h"
 #include "lb/lbdvd.h"
+#include "sysdolphin/baselib/controller.h"  /* HSD_PadInit */
 #include "lb/lbheap.h"
 #include "lb/lbmthp.h"
 #include "lb/lbsnap.h"
@@ -325,6 +326,9 @@ void gm_801A4510(void)
         gm_80479D30.routing.curr_mode = GM_BOOT;
     }
     gm_80479D30.routing.prev_mode = GM_COUNT;
+
+    /* PC port: initialize pad subsystem (normally done by gmmain.c) */
+    HSD_PadInit(5, NULL, 12, NULL);
 
     while (true) {
         /* PC port: check for window close request */

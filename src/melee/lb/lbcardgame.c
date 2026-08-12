@@ -294,12 +294,16 @@ void lb_8001CF18(void)
 
 void lb_8001D164(int arg0)
 {
-    if (_p(x5C) == 0) {
+    /* PC port: skip memcard archive loading to avoid va_arg issues
+     * with GCN-style va_list on x86_64. Memcard functionality is
+     * not needed for title screen rendering. */
+    (void)arg0;
+    /* if (_p(x5C) == 0) {
         lbArchive_80016DBC("LbMcGame.", &_p(x5C), "MemCardIconData", 0);
         lbArchive_80016DBC("NtMemAc", &_p(x64), "ScNtcCommon_scene_data", 0);
         _p(x60) = arg0;
         _p(enable) = 1;
-    }
+    } */
 }
 
 void lb_8001D1F4(void)

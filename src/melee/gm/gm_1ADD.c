@@ -329,11 +329,13 @@ void fn_801AE948(HSD_GObj* arg0)
 
 void gm_801AEBB0(void)
 {
+    /* PC port: skip message window init to avoid va_arg issues
+     * and NULL pointer dereference. Message windows are not needed
+     * for title screen rendering. */
+    return;
+    
     HSD_GObj* gobj;
     PAD_STACK(4);
-
-    lbArchive_80016DBC("NtMsgWin.dat", &gm_804D6868, "ScNtcCommon_scene_data",
-                       0);
 
     if (lbLang_IsSavedLanguageUS()) {
         HSD_SisLib_803A62A0(3, "SdMsgBox.usd", "SIS_MessageData");

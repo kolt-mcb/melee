@@ -22,6 +22,7 @@ typedef struct {
 } DVDFile;
 
 static DVDFile g_dvd_files[MAX_DVD_FILES];
+static int g_dvd_current_file = -1;  /* Track last opened file for DVDReadPrio */
 
 static int dvd_find_or_add_entry(const char* path)
 {
@@ -105,6 +106,7 @@ BOOL DVDFastOpen(s32 entry_num, DVDFileInfo* fileInfo)
         fileInfo->startAddr = (u32)vf_tell(file->handle);
         s32 size = vf_size(file->handle);
         fileInfo->length = size > 0 ? (u32)size : 0;
+        g_dvd_current_file = entry_num;  /* Track current file for reads */
         return TRUE;
     }
     
@@ -123,6 +125,7 @@ BOOL DVDFastOpen(s32 entry_num, DVDFileInfo* fileInfo)
     fileInfo->startAddr = 0;
     fileInfo->length = (u32)(vf_size(h) > 0 ? vf_size(h) : 0);
     fileInfo->callback = NULL;
+    g_dvd_current_file = entry_num;  /* Track current file for reads */
     return TRUE;
 }
 
@@ -165,7 +168,17 @@ long DVDReadPrio(DVDFileInfo* fileInfo, void* addr, long length, long offset, lo
     (void)prio;
     if (!fileInfo || !addr || length <= 0) return 0;
     
-    /* Seek to the offset, then read */
+    /* Use the tracked current file index */
+    if (g_dvd_current_file >= 0 && g_dvd_current_file < MAX_DVD_FILES) {
+        DVDFile* file = &g_dvd_files[g_dvd_current_file];
+        if (file->handle) {
+            vf_seek(file->handle, (int)offset, 0);
+            long bytes = vf_read(file->handle, addr, (int)length);
+            return bytes;
+        }
+    }
+    
+    /* Fallback: iterate through open files */
     for (int i = 0; i < MAX_DVD_FILES; i++) {
         if (g_dvd_files[i].open && g_dvd_files[i].handle) {
             VfHandle h = g_dvd_files[i].handle;

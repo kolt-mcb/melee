@@ -261,3 +261,7 @@ GameMode* findMode(u8 idx)
     }
     return &gm_803DACA4[0];
 }
+
+
+
+

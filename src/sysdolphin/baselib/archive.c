@@ -32,16 +32,7 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
     memset(archive, 0, sizeof(HSD_Archive));
     archive->flags |= 1;
     
-    /* PC port: check raw bytes before memcpy */
-    fprintf(stderr, "[ARCHIVE] Raw bytes at src: %02x %02x %02x %02x %02x %02x %02x %02x\n",
-            src[0], src[1], src[2], src[3], src[4], src[5], src[6], src[7]);
-    fflush(stderr);
-    
     memcpy(archive, src, sizeof(HSD_ArchiveHeader));
-    
-    fprintf(stderr, "[ARCHIVE] After memcpy: raw file_size=%u (before swap)\n",
-            archive->header.file_size);
-    fflush(stderr);
 
     /* PC port: byte-swap header fields from big-endian to little-endian */
     archive->header.file_size = swap32(archive->header.file_size);
@@ -49,11 +40,6 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
     archive->header.nb_reloc = swap32(archive->header.nb_reloc);
     archive->header.nb_public = swap32(archive->header.nb_public);
     archive->header.nb_extern = swap32(archive->header.nb_extern);
-
-    fprintf(stderr, "[ARCHIVE] HSD_ArchiveParse: file_size=%u data_size=%u reloc=%u public=%u extern=%u\n",
-            archive->header.file_size, archive->header.data_size,
-            archive->header.nb_reloc, archive->header.nb_public, archive->header.nb_extern);
-    fflush(stderr);
 
     if (archive->header.file_size != file_size) {
         OSReport("HSD_ArchiveParse: byte-order mismatch! Please check data "
@@ -84,9 +70,6 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
             archive->public_info[j].offset = swap32(archive->public_info[j].offset);
             archive->public_info[j].symbol = swap32(archive->public_info[j].symbol);
         }
-        fprintf(stderr, "[ARCHIVE] Public symbol 0: offset=%u symbol=%u\n",
-                archive->public_info[0].offset, archive->public_info[0].symbol);
-        fflush(stderr);
         offset =
             offset + archive->header.nb_public * sizeof(HSD_ArchivePublicInfo);
     }
@@ -114,18 +97,11 @@ void* HSD_ArchiveGetPublicAddress(HSD_Archive* archive, const char* symbols)
 {
     u32 i;
 
-    fprintf(stderr, "[ARCHIVE] GetPublicAddress: archive=%p symbols=%s nb_public=%u\n",
-            archive, symbols, archive->header.nb_public);
-    fflush(stderr);
-
     for (i = 0; i < archive->header.nb_public; i++) {
-        int comparison =
-            strcmp(archive->symbols + archive->public_info[i].symbol, symbols);
+        char* sym_str = archive->symbols + archive->public_info[i].symbol;
+        int comparison = strcmp(sym_str, symbols);
 
         if (comparison == 0) {
-            // If both strings are equal, we've found the node
-            fprintf(stderr, "[ARCHIVE] Found symbol %s at offset %u\n", symbols, archive->public_info[i].offset);
-            fflush(stderr);
             return archive->data + archive->public_info[i].offset;
         }
     }
