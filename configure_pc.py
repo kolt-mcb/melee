@@ -70,8 +70,13 @@ FT_SOURCES = collect(MELEE / "ft")
 FT_SOURCES += collect(MELEE / "ft" / "chara")
 FT_SOURCES += collect(MELEE / "ft" / "chara" / "ftCommon")
 FT_SOURCES += collect(MELEE / "ft" / "chara" / "ftMario")
+GM_SOURCES = collect(MELEE / "gm")
+GM_SOURCES = [s for s in GM_SOURCES if Path(s).name not in {"gm_1736.c", "gmmain.c", "gmmain_lib.c", "gmtitle.c", "gmscdata.c"}]  # exclude duplicates and entry point
+EF_SOURCES = []  # ef/ module uses GCN-specific va_arg macros
+IT_SOURCES = collect(MELEE / "it")
+MP_SOURCES = collect(MELEE / "mp")
 MATH_SHIM = [str(SRC / "math_shim.c")]
-ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + GR_SOURCES + PL_SOURCES + FT_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
+ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + GR_SOURCES + PL_SOURCES + FT_SOURCES + GM_SOURCES + EF_SOURCES + IT_SOURCES + MP_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
 
 INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,

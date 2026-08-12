@@ -27,7 +27,7 @@ struct gm_80480DA8_t {
 };
 
 /* 1AEE6C */ void gm_801AEE6C(int, int, int);
-/* 1AF0D4 */ bool gm_801AF0D4(void);
+/* 1AF0D4 */ int gm_801AF0D4(void);
 /* 1AF250 */ void gm_801AF250(void);
 /* 1AF568 */ void gm_801AF568_OnFrame(void);
 /* 1B0264 */ void gm_801B0264_OnEnter(struct gm_80480DA8_t*);

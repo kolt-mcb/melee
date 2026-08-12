@@ -77,7 +77,7 @@
 /* 16C35C */ MatchOutcome gm_GetMatchOutcome(void);
 /* 16C46C */ void fn_8016C46C(int);
 /* 16C4F4 */ void fn_8016C4F4(struct lbl_8046B6A0_24C_t*);
-/* 16C5C0 */ bool gm_8016C5C0(int pl_slot);
+/* 16C5C0 */ int gm_8016C5C0(int pl_slot);
 /* 16C658 */ int gm_8016C658(int);
 
 /// @todo should take Fighter_GObj*? See ftCo_800A53DC
@@ -115,5 +115,6 @@
 /* 16F120 */ int gm_8016F120(int);
 /* 16F140 */ void fn_8016F140(int);
 /* 16F160 */ int fn_8016F160(int, int);
+/* 16AE50 */ struct StartMeleeRules* gm_8016AE50(void);
 
 #endif
