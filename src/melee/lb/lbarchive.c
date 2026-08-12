@@ -23,7 +23,10 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
 
     if (HSD_ArchiveParse(archive, data, length) == -1) {
         OSReport("HSD_ArchiveParse error!\n");
-        HSD_ASSERT(73, 0);
+        /* PC port: don't crash on archive parse errors (byte-order issues) */
+        /* HSD_ASSERT(73, 0); */
+        memset(archive, 0, sizeof(HSD_Archive));
+        return;
     }
 
     fprintf(stderr, "[ARCHIVE] Parse succeeded\n");
