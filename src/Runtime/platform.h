@@ -119,6 +119,9 @@ typedef bool (*Predicate)(void);
 #ifndef M_PI_2_F
 #define M_PI_2_F (M_PI_F / 2.0f)
 #endif
+#ifndef M_PI_3
+#define M_PI_3 (M_PI_F / 3.0f)
+#endif
 
 /* GCN rad/deg conversion constants (from MSL/math.h) */
 #ifndef rad_to_deg
