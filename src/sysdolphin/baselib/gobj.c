@@ -188,7 +188,6 @@ void HSD_GObj_80390FC0(void)
     HSD_GObj* saved;
     HSD_GObj* cur;
     int i;
-    static int dbg = 0;
     /* PC port: walk ALL GX links, not just the last one.
      * The original GCN code walks link[gx_link_max+1] which is
      * the highest priority link. On PC, stage GObjs are in lower
@@ -203,10 +202,6 @@ void HSD_GObj_80390FC0(void)
                 break; /* Stop walking this link - pointer is corrupted */
             }
             if (cur->render_cb != NULL) {
-                if (dbg++ < 3) {
-                    fprintf(stderr, "[GObj] render_cb=%p on link %d\n", cur->render_cb, i);
-                    fflush(stderr);
-                }
                 saved = HSD_GObj_804D7818;
                 HSD_GObj_804D7818 = cur;
                 cur->render_cb(cur, 0);
