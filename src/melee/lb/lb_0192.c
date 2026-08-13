@@ -116,9 +116,6 @@ void lb_800192A8(void (*cb)(void))
 
     PAD_STACK(8);
 
-    fprintf(stderr, "[LB0192] lb_800192A8: i=%d\n", i);
-    fflush(stderr);
-
     if (i != -1 && i != 5) {
         lbAudioAx_80024F08();
         HSD_Rumble_80378524(1);
