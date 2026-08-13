@@ -4,6 +4,7 @@
 #include "lb/lbdvd.h"
 #include "lb/lbheap.h"
 #include "lb/lblanguage.h"
+#include "port/log.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -136,8 +137,11 @@ s32 lbFile_800163D8(const char* basename)
     s32 entry_num;
     char* filename = lbFile_80016204(basename);
     entry_num = DVDConvertPathToEntrynum(filename);
-    HSD_ASSERTREPORT(0xEE, entry_num != -1, "file isn't exist %s = %d\n",
-                     filename, entry_num);
+    /* PC port: Don't crash on missing files - return 0 size. */
+    if (entry_num == -1) {
+        PORT_LOG_WARN("vf_open: open failed: %s\n", filename);
+        return 0;
+    }
     return lbFile_8001634C(entry_num);
 }
 
@@ -160,8 +164,11 @@ void lbFile_80016580(const char* basename, u32 src, u32* dest,
     s32 entry_num = DVDConvertPathToEntrynum(filename);
     PAD_STACK(4);
 
-    HSD_ASSERTREPORT(0x11A, entry_num != -1, "file isn't exist %s = %d\n",
-                     filename, entry_num);
+    /* PC port: Don't crash on missing files. */
+    if (entry_num == -1) {
+        PORT_LOG_WARN("lbFile_80016580: file not found: %s\n", filename);
+        return;
+    }
 
     lbFile_800164A4(entry_num, src, dest, 1, callback, args);
 }

@@ -3482,6 +3482,10 @@ void gm_801BF4DC(GameScene* arg0)
 
     temp_r30 = &gmMainLib_804D3EE0->unk_1710;
     temp_r31 = gm_801A427C(arg0);
+    
+    /* PC port: Guard against NULL pointer from uninitialized game mode data. */
+    if (temp_r31 == NULL || (uintptr_t)temp_r31 < 0x1000000ULL) return;
+    
     gm_80167BC8(temp_r30);
     gm_8016F088(temp_r31);
     gm_80168FC4();
