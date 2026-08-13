@@ -20,24 +20,14 @@ size_t g_last_file_buf_size = 0;
 
 void lbFile_8001615C(int r3, int r4, void* r5, bool cancelflag)
 {
-    fprintf(stderr, "[LBFILE] lbFile_8001615C callback: cancelflag=%d\n", cancelflag);
-    fflush(stderr);
     HSD_ASSERT(71, !cancelflag);
     cancel = true;
-    fprintf(stderr, "[LBFILE] cancel set to true\n");
-    fflush(stderr);
 }
 
 #pragma push
 #pragma dont_inline on
 bool lbFile_800161A0(void)
 {
-    static int call_count = 0;
-    call_count++;
-    if (call_count <= 5 || call_count % 100 == 0) {
-        fprintf(stderr, "[LBFILE] lbFile_800161A0 call #%d: cancel=%d\n", call_count, cancel);
-        fflush(stderr);
-    }
     lb_800195D0();
     return cancel;
 }
