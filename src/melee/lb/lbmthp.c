@@ -492,7 +492,13 @@ void lbMthp_8001F578(void)
 
 s32 lbMthp_8001F5C4(void)
 {
-    return MoviePlayer.unk_84;
+    /* PC port: without movie player, return an incrementing frame counter.
+     * This allows gm_804D67EC to advance through the title screen sequence.
+     * The counter wraps at 0x2000 to avoid overflow issues. */
+    static s32 pc_frame = 0;
+    pc_frame++;
+    if (pc_frame > 0x2000) pc_frame = 0x2000;
+    return pc_frame;
 }
 
 s32 lbMthp_8001F5D4(void)
