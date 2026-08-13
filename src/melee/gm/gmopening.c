@@ -225,8 +225,10 @@ void gm_801AA28C_OnFrame(void)
         GObj_SetupGXLink(temp_r3_2, HSD_SObjLib_803A49E0, 0x11U, 0U);
         temp_r3_3 =
             HSD_SObjLib_803A477C(temp_r3_2, gm_804D67F0, 0, 0, 0x80, 0);
-        temp_r3_3->x10 = 82.0f;
-        temp_r3_3->x14 = 290.0f;
+        if (temp_r3_3 != NULL) {
+            temp_r3_3->x10 = 82.0f;
+            temp_r3_3->x14 = 290.0f;
+        }
         gm_804D67D4 = temp_r3_2;
     }
     if ((gm_804D67D4 != NULL) && ((u32) gm_804D67EC >= 0x202)) {
