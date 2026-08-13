@@ -662,6 +662,11 @@ inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
     if (joint == NULL) {
         return NULL;
     }
+    /* PC port: Guard against corrupted child/next pointers from big-endian archive.
+     * If the joint pointer has bits set above 32 bits, it's a corrupted offset. */
+    if ((uintptr_t)joint > 0xFFFFFFFFULL) {
+        return NULL;
+    }
     if (joint->class_name == NULL ||
         !(info = hsdSearchClassInfo(joint->class_name)))
     {
@@ -676,10 +681,22 @@ inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
 
 s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
 {
+    /* PC port: Guard against big-endian archive data corruption.
+     * The joint->child and joint->next pointers are 32-bit offsets
+     * in the archive, interpreted as 64-bit pointers on x86_64.
+     * Skip recursive loading if the data is corrupted. */
+    if (joint == NULL || jobj == NULL) return 0;
+    
     if (!(joint->flags & JOBJ_INSTANCE)) {
-        jobj->child = JObjLoadJointSub(joint->child, jobj);
+        /* Check if child pointer looks valid (not a corrupted 32-bit offset) */
+        if ((uintptr_t)joint->child <= 0xFFFFFFFFULL) {
+            jobj->child = JObjLoadJointSub(joint->child, jobj);
+        }
     }
-    jobj->next = JObjLoadJointSub(joint->next, parent);
+    /* Check if next pointer looks valid */
+    if ((uintptr_t)joint->next <= 0xFFFFFFFFULL) {
+        jobj->next = JObjLoadJointSub(joint->next, parent);
+    }
     jobj->parent = parent;
     jobj->flags |= joint->flags;
     if (union_type_spline(jobj)) {
@@ -716,6 +733,19 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
 
 HSD_JObj* HSD_JObjLoadJoint(HSD_Joint* arg0)
 {
+    /* PC port: Guard against big-endian archive data corruption.
+     * On little-endian x86_64, the joint struct fields are byte-swapped.
+     * Check if the joint pointer looks like a valid address (not a 32-bit
+     * offset interpreted as 64-bit). If the data is corrupted, return NULL. */
+    if (arg0 == NULL) return NULL;
+    /* Check if the joint pointer is in a reasonable range.
+     * Archive data is typically mapped below 0x100000000 (4GB).
+     * If the pointer has bits set above 32 bits, it's likely a
+     * corrupted 32-bit offset interpreted as 64-bit. */
+    if ((uintptr_t)arg0 > 0xFFFFFFFFULL) {
+        return NULL;
+    }
+    
     HSD_JObj* jobj = JObjLoadJointSub(arg0, 0);
     HSD_JObjResolveRefsAll(jobj, arg0);
     return jobj;
