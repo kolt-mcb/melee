@@ -1872,7 +1872,11 @@ void gx_frame_begin(void)
     }
     glClearColor(0, 0, 0, 1);
     glClearDepth(1.0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    /* PC port: glClear is extremely slow on headless Mesa software rendering
+     * (LLVMpipe). It can stall for 1+ seconds when the driver flushes a
+     * backlog of commands. Skip the clear — the debug overlay draws over
+     * the entire frame anyway. */
+    /* glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); */
     
     /* Set viewport to full window size for debug overlay rendering. */
     g_state.vp_x = 0; g_state.vp_y = 0;
