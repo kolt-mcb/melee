@@ -87,7 +87,7 @@ INCLUDE_DIRS = [
 ]
 
 inc = " ".join("-I" + str(p) for p in INCLUDE_DIRS)
-CFLAGS = "-m64 -Wno-unused -Wno-builtin-declaration-mismatch -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants -O2 " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1"
+CFLAGS = "-m64 -Wno-unused -Wno-builtin-declaration-mismatch -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants -O2 -g " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1"
 LDFLAGS = "-m64 -no-pie"
 LIBS = "-lSDL2 -lGL -lpthread -ldl -lm -lc -lstdc++"
 out_objs = " ".join(str(OUT_DIR/"obj"/(Path(s).stem+".o")) for s in ALL_SOURCES)
