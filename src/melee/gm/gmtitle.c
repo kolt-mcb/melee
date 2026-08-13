@@ -1,6 +1,7 @@
 #include "gmtitle.h"
 
 #include "gm_unsplit.h"
+#include "../gr/grdatfiles.h"
 
 #include <sysdolphin/baselib/cobj.h>
 #include <sysdolphin/baselib/displayfunc.h>
@@ -247,18 +248,49 @@ HSD_Archive* gmTitle_801A1AC0(void)
         lbLang_IsSettingUS() ? usd : dat);
     if (archive == NULL) return NULL;
 
-    gmTitle_80479B28.joint = HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_joint");
-    gmTitle_80479B28.animjoint = HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_animjoint");
-    gmTitle_80479B28.matanim_joint = HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_matanim_joint");
-    gmTitle_80479B28.shapeanim_joint = HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_shapeanim_joint");
-    gmTitle_804D6708 = (HSD_CameraDescPerspective*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_cam_int1_camera");
-    gmTitle_804D670C = (LightList**)HSD_ArchiveGetPublicAddress(archive, "ScTitle_scene_lights");
-    gmTitle_804D6710 = (HSD_FogDesc*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_fog");
-    gmTitle_80479B38.joint = HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_joint");
-    gmTitle_80479B38.animjoint = HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_animjoint");
-    gmTitle_80479B38.matanim_joint = HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_matanim_joint");
-    gmTitle_80479B38.shapeanim_joint = HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_shapeanim_joint");
-    gm_804D67F0 = HSD_ArchiveGetPublicAddress(archive, "TitleMark_sobjdesc");
+    /* PC port: Convert GCN-packed archive data to x86_64 heap structs.
+     * Raw archive pointers point to GCN-packed structs (32-bit BE pointers/floats)
+     * that must be converted to x86_64 format (64-bit LE pointers/floats). */
+    {
+        const u8* raw;
+        u8* dataBase = archive->data;
+
+        /* TtlMoji (title text) joint tree */
+        raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_joint");
+        gmTitle_80479B28.joint = grDatFiles_ConvertJointTreeGCNtoX64(raw, dataBase, 0, NULL);
+
+        /* TtlMoji animation trees */
+        raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_animjoint");
+        gmTitle_80479B28.animjoint = grDatFiles_ConvertAnimJointTreeGCNtoX64(raw, dataBase, 0);
+
+        raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_matanim_joint");
+        gmTitle_80479B28.matanim_joint = grDatFiles_ConvertMatAnimJointTreeGCNtoX64(raw, dataBase, 0);
+
+        raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_shapeanim_joint");
+        gmTitle_80479B28.shapeanim_joint = grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(raw, dataBase, 0);
+
+        /* Camera, lights, fog — leave as raw archive pointers (guards in place) */
+        gmTitle_804D6708 = (HSD_CameraDescPerspective*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_cam_int1_camera");
+        gmTitle_804D670C = (LightList**)HSD_ArchiveGetPublicAddress(archive, "ScTitle_scene_lights");
+        gmTitle_804D6710 = (HSD_FogDesc*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_fog");
+
+        /* TtlBg (title background) joint tree */
+        raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_joint");
+        gmTitle_80479B38.joint = grDatFiles_ConvertJointTreeGCNtoX64(raw, dataBase, 0, NULL);
+
+        /* TtlBg animation trees */
+        raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_animjoint");
+        gmTitle_80479B38.animjoint = grDatFiles_ConvertAnimJointTreeGCNtoX64(raw, dataBase, 0);
+
+        raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_matanim_joint");
+        gmTitle_80479B38.matanim_joint = grDatFiles_ConvertMatAnimJointTreeGCNtoX64(raw, dataBase, 0);
+
+        raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_shapeanim_joint");
+        gmTitle_80479B38.shapeanim_joint = grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(raw, dataBase, 0);
+
+        /* TitleMark sobjdesc — leave as raw archive pointer (not used directly) */
+        gm_804D67F0 = HSD_ArchiveGetPublicAddress(archive, "TitleMark_sobjdesc");
+    }
 
     return archive;
 }
