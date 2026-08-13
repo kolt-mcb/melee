@@ -1219,7 +1219,7 @@ __attribute__((weak)) void HSD_Randi(void) {}
 __attribute__((weak)) void HSD_Rumble_80378524(void) {}
 __attribute__((weak)) void HSD_SObjLib_803A44A4(void) {}
 __attribute__((weak)) void HSD_SObjLib_803A4740(void) {}
-__attribute__((weak)) void HSD_SObjLib_803A477C(void) {}
+/* HSD_SObjLib_803A477C implemented in sobjlib.c — removed stub */
 __attribute__((weak)) void HSD_SObjLib_803A49E0(void) {}
 __attribute__((weak)) void HSD_SObjLib_803A54EC(void) {}
 __attribute__((weak)) void HSD_SObjLib_803A55DC(void) {}

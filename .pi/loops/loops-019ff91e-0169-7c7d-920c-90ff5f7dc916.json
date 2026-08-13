@@ -1,0 +1,19 @@
+{
+  "nextId": 2,
+  "loops": [
+    {
+      "id": "1",
+      "prompt": "check for upstream changes to the decomp",
+      "trigger": {
+        "type": "cron",
+        "schedule": "0 * * * *"
+      },
+      "status": "active",
+      "recurring": true,
+      "createdAt": 1786659352866,
+      "updatedAt": 1786659352866,
+      "expiresAt": 1787264152866,
+      "fireCount": 0
+    }
+  ]
+}
