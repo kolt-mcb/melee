@@ -119,12 +119,17 @@ HSD_Archive* lbArchive_LoadSymbols(const char* filename, void* symbols, ...)
     u8 _[8];
     va_list sections;
 
-    /* PC port: va_arg is broken for GCN-style variadic calls on x86_64.
-     * The game passes (filename, output_ptr1, name1, output_ptr2, name2, ...).
-     * We load the archive and return it; callers will do lookups separately.
+    va_start(sections, symbols);
+
+    /* PC port: va_arg layout is broken for GCN-style variadic calls on x86_64.
+     * The caller passes (filename, &ptr1, "name1", &ptr2, "name2", ..., NULL).
+     * But the callee reads (void**, const char*) pairs from va_list, which
+     * gets the first variadic arg as void** when it's actually const char*.
+     * The first symbol pointer is the 'symbols' param itself.
+     * We load the archive and return it; callers do lookups via
+     * HSD_ArchiveGetPublicAddress() on the returned archive.
      * The 'symbols' param and variadic args are ignored. */
     (void)symbols;
-    va_start(sections, filename);
     va_end(sections);
 
     data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(filename)));
