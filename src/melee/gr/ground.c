@@ -1531,11 +1531,17 @@ void Ground_801C28CC(s32* arg0, StKind stkind)
     /* PC port: archive data is big-endian, pointers are relative offsets from archive base.
      * GroundParam::stage_params is at offset 0xB0 (32-bit relative offset on GCN).
      * GroundParam::stage_param_count is at offset 0xB4 (32-bit int on GCN). */
+    /* PC port: Guard against NULL or corrupted stage_info.param. */
+    if (stage_info.param == NULL || (uintptr_t)stage_info.param < 0x1000000ULL) return;
+    
     u8* base = (u8*)stage_info.param;
     u32 raw_offset = be32(*(u32*)(base + 0xB0));  /* relative offset from archive base */
     s32 count = be32(*(u32*)(base + 0xB4));  /* byte-swapped */
     StageParam* param = (StageParam*)(0x10000000 + raw_offset);
     s32 i;
+
+    /* PC port: Guard against corrupted count or param pointer. */
+    if (count < 0 || count > 1000 || param == NULL) return;
 
     for (i = 0; i < count; i++) {
         /* PC port: archive StageParam entries are 0x20 (32) bytes apart. */

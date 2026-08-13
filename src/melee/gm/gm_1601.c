@@ -3650,6 +3650,9 @@ void gm_80167A14(struct PlayerInitData* arg0)
 
 void gm_80167A64(struct StartMeleeRules* arg0)
 {
+    /* PC port: Guard against NULL pointer. */
+    if (arg0 == NULL) return;
+    
     memzero(arg0, sizeof(*arg0));
     arg0->x0_3 = 4;
 

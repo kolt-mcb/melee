@@ -23,7 +23,40 @@
 #include "port/timer.h"
 #include "port/config.h"
 #include <stdlib.h>
+#include <signal.h>
 #include <sys/resource.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <ucontext.h>
+
+/* PC port: crash handler for debugging segfaults */
+static void crash_handler(int sig, siginfo_t* info, void* ctx)
+{
+    /* Write to stderr directly, bypassing stdio buffering */
+    write(2, "\n[CRASH] Signal ", 15);
+    char buf[256];
+    int n;
+    ucontext_t* uc = (ucontext_t*)ctx;
+    n = snprintf(buf, sizeof(buf), "%d at address %p, rip=%p\n", 
+                 sig, info->si_addr, 
+                 (void*)uc->uc_mcontext.gregs[REG_RIP]);
+    write(2, buf, n);
+    fsync(2);
+    _exit(128 + sig);
+}
+
+static void install_crash_handler(void)
+{
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = crash_handler;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGABRT, &sa, NULL);
+    sigaction(SIGBUS, &sa, NULL);
+}
 
 /* Forward declarations for decomp integration */
 extern int game_init(void);
@@ -35,6 +68,9 @@ int main(int argc, char* argv[])
     /* Increase main thread stack from 128KB to 2MB */
     struct rlimit rl = { .rlim_cur = 0x1000000, .rlim_max = 0x1000000 };
     prlimit(0, RLIMIT_STACK, &rl, NULL);
+
+    /* PC port: install crash handler for debugging */
+    install_crash_handler();
 
     PORT_LOG_INFO("Melee PC Port — starting");
 
