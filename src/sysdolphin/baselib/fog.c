@@ -98,9 +98,11 @@ HSD_Fog* HSD_FogLoadDesc(HSD_FogDesc* desc)
     HSD_Fog* fog = HSD_FogAlloc();
     HSD_ASSERT(0x99, fog);
     HSD_FogInit(fog, desc);
-    if (desc->fogadjdesc != NULL) {
+    /* PC port: archive data is big-endian, fogadjdesc pointer is corrupted on LE.
+     * Skip fog adjacency loading until endianness conversion is implemented. */
+    /* if (desc->fogadjdesc != NULL) {
         fog->fog_adj = HSD_FogAdjLoadDesc(desc->fogadjdesc);
-    }
+    } */
     return fog;
 }
 

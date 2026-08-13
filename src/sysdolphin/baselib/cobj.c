@@ -1304,7 +1304,10 @@ static int CObjLoad(HSD_CObj* cobj, HSD_CObjDesc* desc)
                            desc->frustum.left, desc->frustum.right);
         break;
     default:
-        HSD_ASSERT(0x7D0, 0);
+        /* PC port: archive data is big-endian, projection type is garbage on LE.
+         * Default to perspective instead of crashing. */
+        HSD_CObjSetPerspective(cobj, desc->perspective.fov,
+                               desc->perspective.aspect);
         break;
     }
     return 0;

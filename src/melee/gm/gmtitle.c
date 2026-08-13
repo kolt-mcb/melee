@@ -2,6 +2,8 @@
 
 #include "gm_unsplit.h"
 
+#include <stdio.h>
+
 #include <sysdolphin/baselib/cobj.h>
 #include <sysdolphin/baselib/displayfunc.h>
 #include <sysdolphin/baselib/fog.h>
@@ -241,22 +243,26 @@ HSD_Archive* gmTitle_801A1AC0(void)
     const char dat[] = "GmTtAll.dat";
     const char usd[] = "GmTtAll.usd";
 
-    return lbArchive_LoadSymbols(
-        lbLang_IsSettingUS() ? usd : dat, &gmTitle_80479B28.joint,
-        "TtlMoji_Top_joint", &gmTitle_80479B28.animjoint,
-        "TtlMoji_Top_animjoint", &gmTitle_80479B28.matanim_joint,
-        "TtlMoji_Top_matanim_joint", &gmTitle_80479B28.shapeanim_joint,
-        "TtlMoji_Top_shapeanim_joint",
+    /* PC port: lbArchive_LoadSymbols va_arg is broken on x86_64.
+     * Load the archive and resolve symbols manually. */
+    HSD_Archive* archive = lbArchive_LoadArchive(
+        lbLang_IsSettingUS() ? usd : dat);
+    if (archive == NULL) return NULL;
 
-        &gmTitle_804D6708, "ScTitle_cam_int1_camera", &gmTitle_804D670C,
-        "ScTitle_scene_lights", &gmTitle_804D6710, "ScTitle_fog",
+    gmTitle_80479B28.joint = HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_joint");
+    gmTitle_80479B28.animjoint = HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_animjoint");
+    gmTitle_80479B28.matanim_joint = HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_matanim_joint");
+    gmTitle_80479B28.shapeanim_joint = HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_shapeanim_joint");
+    gmTitle_804D6708 = (HSD_CameraDescPerspective*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_cam_int1_camera");
+    gmTitle_804D670C = (LightList**)HSD_ArchiveGetPublicAddress(archive, "ScTitle_scene_lights");
+    gmTitle_804D6710 = (HSD_FogDesc*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_fog");
+    gmTitle_80479B38.joint = HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_joint");
+    gmTitle_80479B38.animjoint = HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_animjoint");
+    gmTitle_80479B38.matanim_joint = HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_matanim_joint");
+    gmTitle_80479B38.shapeanim_joint = HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_shapeanim_joint");
+    gm_804D67F0 = HSD_ArchiveGetPublicAddress(archive, "TitleMark_sobjdesc");
 
-        &gmTitle_80479B38.joint, "TtlBg_Top_joint",
-        &gmTitle_80479B38.animjoint, "TtlBg_Top_animjoint",
-        &gmTitle_80479B38.matanim_joint, "TtlBg_Top_matanim_joint",
-        &gmTitle_80479B38.shapeanim_joint, "TtlBg_Top_shapeanim_joint",
-
-        &gm_804D67F0, "TitleMark_sobjdesc", 0);
+    return archive;
 }
 
 void gmTitle_801A1C18_OnFrame(void)
