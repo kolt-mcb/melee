@@ -249,6 +249,11 @@ static inline void HSD_JObjSetMtxDirtyOutOfLine(HSD_JObj* jobj)
 inline void HSD_JObjSetupMatrix(HSD_JObj* jobj)
 {
     if (!jobj || !HSD_JObjMtxIsDirty(jobj)) {
+        /* PC port: even if not dirty, ensure parent matrix is computed.
+         * This prevents uninitialized matrix reads during rendering. */
+        if (jobj && jobj->parent != NULL) {
+            HSD_JObjSetupMatrix(jobj->parent);
+        }
         return;
     }
     HSD_JObjSetupMatrixSub(jobj);

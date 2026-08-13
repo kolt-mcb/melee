@@ -1939,6 +1939,7 @@ void gx_set_overlay_projection(f32 ortho[4][4])
     memcpy(g_state.proj_matrix, ortho, sizeof(g_state.proj_matrix));
 }
 
+void gx_set_mv_matrix(f32 mtx[3][4]) { memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix)); }
 void gx_set_overlay_matrix_identity(void)
 {
     for (int i = 0; i < 3; i++)
@@ -3159,7 +3160,9 @@ void GXCallDisplayList(void* list, u32 nbytes)
                                     py = *(f32*)&raw;
                                     raw = ((u32)vp_pos[8] << 24) | ((u32)vp_pos[9] << 16) |
                                           ((u32)vp_pos[10] << 8) | vp_pos[11];
-                                    pz = *(f32*)&raw; /* Z flip handled by camera orientation */
+                                    pz = *(f32*)&raw;
+                                    /* GCN Z-forward → OpenGL Z-backward: flip Z */
+                                    pz = -pz;
                                     break;
                                 }
                                 }

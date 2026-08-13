@@ -1219,6 +1219,12 @@ static void PObjSetupMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 
 static void PObjDispSimplePrimitive(HSD_PObj* pobj, u32 rendermode)
 {
+    static int dbg = 0;
+    if (dbg++ < 10) {
+        fprintf(stderr, "[POBJ] dispSimple: display=%p n_display=%d verts=%p\n",
+                pobj->display, pobj->n_display, pobj->verts);
+        fflush(stderr);
+    }
     setupArrayDesc(pobj->verts);
     setupVtxDesc(pobj);
 

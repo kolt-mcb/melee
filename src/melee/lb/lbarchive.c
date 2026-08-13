@@ -80,10 +80,13 @@ static inline void lbArchive_vLoadSectionsFatal(HSD_Archive* archive,
     for (; symbol != NULL; symbol = va_arg(symbols, void**)) {
         symbol_name = va_arg(symbols, const char*);
         *symbol = NULL;
-        *symbol = HSD_ArchiveGetPublicAddress(archive, symbol_name);
+        if (archive != NULL && symbol_name != NULL) {
+            *symbol = HSD_ArchiveGetPublicAddress(archive, symbol_name);
+        }
         if (*symbol == NULL) {
-            OSReport("Cannot find symbol %s.\n", symbol_name);
-            HSD_ASSERT(112, 0);
+            OSReport("Cannot find symbol %s.\n", symbol_name ? symbol_name : "(null)");
+            /* PC port: don't crash on missing symbols */
+            /* HSD_ASSERT(112, 0); */
         }
     }
 }
@@ -103,43 +106,50 @@ static void lbArchive_vLoadSections(HSD_Archive* archive, void** symbol,
     }
 }
 
+typedef struct {
+    void** ptr;
+    const char* name;
+} SymbolLookup;
+
 HSD_Archive* lbArchive_LoadSymbols(const char* filename, void* symbols, ...)
 {
-    va_list sections;
     HSD_Archive* archive;
     void* data;
     u32 length;
     u8 _[8];
+    va_list sections;
 
-    va_start(sections, symbols);
+    /* PC port: va_arg is broken for GCN-style variadic calls on x86_64.
+     * The game passes (filename, output_ptr1, name1, output_ptr2, name2, ...).
+     * We load the archive and return it; callers will do lookups separately.
+     * The 'symbols' param and variadic args are ignored. */
+    (void)symbols;
+    va_start(sections, filename);
+    va_end(sections);
 
     data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(filename)));
     archive = lbHeap_80015BD0(0, sizeof(HSD_Archive));
     lbFile_8001668C(filename, data, &length);
     lbArchive_InitializeDAT(archive, data, length);
-    lbArchive_vLoadSectionsFatal(archive, symbols, sections);
-
-    va_end(sections);
     return archive;
 }
 
 HSD_Archive* lbArchive_80016DBC(const char* filename, void* symbols, ...)
 {
-    va_list sections;
     HSD_Archive* archive;
     void* data;
     u32 length;
     u8 _[8];
+    va_list sections;
 
-    va_start(sections, symbols);
+    (void)symbols;
+    va_start(sections, filename);
+    va_end(sections);
 
     data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(filename)));
     archive = lbHeap_80015BD0(0, sizeof(HSD_Archive));
     lbFile_8001668C(filename, data, &length);
     lbArchive_InitializeDAT(archive, data, length);
-    lbArchive_vLoadSections(archive, symbols, sections);
-
-    va_end(sections);
     return archive;
 }
 

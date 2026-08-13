@@ -94,6 +94,7 @@ HSD_Fog* HSD_FogAlloc(void)
 
 HSD_Fog* HSD_FogLoadDesc(HSD_FogDesc* desc)
 {
+    if (desc == NULL) return NULL;
     HSD_Fog* fog = HSD_FogAlloc();
     HSD_ASSERT(0x99, fog);
     HSD_FogInit(fog, desc);

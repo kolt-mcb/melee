@@ -232,6 +232,9 @@ int lbHeap_80015D6C(u32 heap0, UNK_T cb, u32 heap1)
 
     if (heap0 <= 1) {
         var_r30 = 0;
+    } else if (p->handle == NULL || p->handle == (Handle*)-1) {
+        /* PC port: heap not initialized, skip memory relocation */
+        var_r30 = 0;
     } else {
         var_r30 = lbMemory_8001529C(p->handle, cb, heap1);
     }

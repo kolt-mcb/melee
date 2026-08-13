@@ -323,12 +323,16 @@ void gm_801A4510(void)
     {
         gm_80479D30.routing.curr_mode = GM_PROGRESSIVE_SCAN;
     } else {
-        gm_80479D30.routing.curr_mode = GM_BOOT;
+        /* PC port: skip GM_BOOT (memcard init) and go directly to title screen */
+        gm_80479D30.routing.curr_mode = GM_OPENING_MV;
     }
     gm_80479D30.routing.prev_mode = GM_COUNT;
 
     /* PC port: initialize pad subsystem (normally done by gmmain.c) */
     HSD_PadInit(5, NULL, 12, NULL);
+
+    /* PC port: set scene index for GM_OPENING_MV (scene 0 = GS_MOVIE_OPENING) */
+    gm_SetSceneIndex(0);
 
     while (true) {
         /* PC port: check for window close request */

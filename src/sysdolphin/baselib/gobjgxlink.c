@@ -8,6 +8,11 @@
 void GObj_GXReorder(HSD_GObj* gobj, HSD_GObj* hiprio_gobj)
 {
     u32 link = gobj->gx_link;
+    static int dbg = 0;
+    if (dbg++ < 10) {
+        fprintf(stderr, "[GXLINK] GObj_GXReorder link=%u gobj=%p\n", link, gobj);
+        fflush(stderr);
+    }
 
     gobj->prev_gx = hiprio_gobj;
     if (hiprio_gobj != NULL) {
