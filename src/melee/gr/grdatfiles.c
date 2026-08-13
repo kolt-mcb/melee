@@ -8,11 +8,13 @@
 #include "lb/lbheap.h"
 
 #include <baselib/archive.h>
+#include <baselib/aobj.h>
 #include <baselib/debug.h>
 #include <baselib/dobj.h>
 #include <baselib/mobj.h>
 #include <baselib/pobj.h>
 #include <baselib/particle.h>
+#include <baselib/robj.h>
 #include <baselib/tobj.h>
 #include <baselib/psstructs.h>
 #include <dolphin/gx.h>
@@ -72,7 +74,7 @@ static inline u16 be16_swap(u16 x)
 static void* gcn_ptr_to_x64(u32 gcn_ptr, u8* dataBase);
 static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gcnDat, u8* dataBase);
 static UnkArchiveStruct* grDatFiles_ConvertArchiveGCNtoX64(HSD_Archive* archive, void* gcnMapHeadPtr);
-static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
+HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         u8* dataBase, u32 visited_count, u32* visited);
 /* DObjDesc chain converters */
 static HSD_DObjDesc* grDatFiles_ConvertDObjDescGCNtoX64(const u8* gcnDobjPtr, u8* dataBase);
@@ -82,6 +84,13 @@ static HSD_VtxDescList* grDatFiles_ConvertVtxDescListGCNtoX64(const u8* gcnVtxPt
 /* TObjDesc/ImageDesc converters (for texture loading) */
 static struct HSD_ImageDesc* grDatFiles_ConvertImageDescGCNtoX64(const u8* gcnImgPtr, u8* dataBase);
 static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8* dataBase);
+/* Animation joint tree converters */
+HSD_AnimJoint* grDatFiles_ConvertAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
+HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
+HSD_ShapeAnimJoint* grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
+/* AObjDesc/RObjAnimJoint converters */
+static HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase);
+static HSD_RObjAnimJoint* grDatFiles_ConvertRObjAnimJointChainGCNtoX64(const u8* gcnPtr, u8* dataBase);
 
 /* Convert a GCN pointer offset to an x86_64 pointer.
  * GCN pointers in the archive are offsets from the archive data section base.
@@ -314,12 +323,230 @@ struct HSD_TObjDesc_gcn {
     u32 lod;          /* 0x54 HSD_TexLODDesc* */
     u32 tev;          /* 0x58 HSD_TObjTevDesc* */
 }; /* 0x5C = 92 bytes */
+
+/* GCN HSD_AnimJoint (4-byte pointers, 24 bytes total)
+ * x86_64 layout: child(8) next(8) aobjdesc(8) robj_anim(8) flags(4) = 36 bytes */
+struct HSD_AnimJoint_gcn {
+    u32 child;        /* 0x00 HSD_AnimJoint* */
+    u32 next;         /* 0x04 HSD_AnimJoint* */
+    u32 aobjdesc;     /* 0x08 HSD_AObjDesc* */
+    u32 robj_anim;    /* 0x0C HSD_RObjAnimJoint* */
+    u32 flags;        /* 0x10 u32 */
+};
+
+/* GCN HSD_MatAnimJoint (4-byte pointers, 12 bytes total)
+ * x86_64 layout: child(8) next(8) matanim(8) = 24 bytes */
+struct HSD_MatAnimJoint_gcn {
+    u32 child;        /* 0x00 HSD_MatAnimJoint* */
+    u32 next;         /* 0x04 HSD_MatAnimJoint* */
+    u32 matanim;      /* 0x08 HSD_MatAnim* */
+};
+
+/* GCN HSD_ShapeAnimJoint (4-byte pointers, 12 bytes total)
+ * x86_64 layout: child(8) next(8) shapeanimdobj(8) = 24 bytes */
+struct HSD_ShapeAnimJoint_gcn {
+    u32 child;            /* 0x00 HSD_ShapeAnimJoint* */
+    u32 next;             /* 0x04 HSD_ShapeAnimJoint* */
+    u32 shapeanimdobj;    /* 0x08 HSD_ShapeAnimDObj* */
+};
+
+/* GCN HSD_AObjDesc (4-byte pointers, 20 bytes total)
+ * x86_64 layout: flags(4) end_frame(4) fobjdesc(8) obj_id(4) pad(4) = 24 bytes */
+struct HSD_AObjDesc_gcn {
+    u32 flags;        /* 0x00 */
+    u32 end_frame;    /* 0x04 f32 (big-endian) */
+    u32 fobjdesc;     /* 0x08 HSD_FObjDesc* */
+    u32 obj_id;       /* 0x0C */
+};
+
+/* GCN HSD_RObjAnimJoint (4-byte pointers, 8 bytes total)
+ * x86_64 layout: next(8) aobjdesc(8) = 16 bytes */
+struct HSD_RObjAnimJoint_gcn {
+    u32 next;         /* 0x00 HSD_RObjAnimJoint* */
+    u32 aobjdesc;     /* 0x04 HSD_AObjDesc* */
+};
 #pragma pack(pop)
 
-/* Convert a GCN HSD_Joint tree to x86_64 HSD_Joint tree.
- * Recursively converts child and next pointers.
- * Returns the root of the converted tree. */
-static HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
+/* ============================================================
+ * Animation joint tree converters (GCN → x86_64)
+ * ============================================================ */
+
+/* Convert HSD_AObjDesc (animation object descriptor) */
+static HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    HSD_AObjDesc* x64;
+    const struct HSD_AObjDesc_gcn* gcn;
+    u32 raw;
+
+    if (gcnPtr == NULL) return NULL;
+
+    gcn = (const struct HSD_AObjDesc_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_AObjDesc));
+    if (x64 == NULL) return NULL;
+    memset(x64, 0, sizeof(HSD_AObjDesc));
+
+    x64->flags = be32_swap(gcn->flags);
+    raw = be32_swap(gcn->end_frame);
+    x64->end_frame = *(f32*)&raw;
+    /* fobjdesc - skip for now, points to FObj data in archive */
+    x64->fobjdesc = NULL;
+    x64->obj_id = be32_swap(gcn->obj_id);
+
+    return x64;
+}
+
+/* Convert HSD_RObjAnimJoint chain (linked list, no recursion) */
+static HSD_RObjAnimJoint* grDatFiles_ConvertRObjAnimJointChainGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    HSD_RObjAnimJoint* x64Head = NULL;
+    HSD_RObjAnimJoint* x64Tail = NULL;
+    const struct HSD_RObjAnimJoint_gcn* gcn;
+    u32 val;
+    int count = 0;
+
+    if (gcnPtr == NULL) return NULL;
+
+    /* Count entries */
+    gcn = (const struct HSD_RObjAnimJoint_gcn*)gcnPtr;
+    while (gcn != NULL && count < 64) {
+        count++;
+        val = be32_swap(gcn->next);
+        gcn = val ? (const struct HSD_RObjAnimJoint_gcn*)(dataBase + val) : NULL;
+    }
+    if (count == 0) return NULL;
+
+    /* Allocate chain as single block */
+    x64Head = lbHeap_80015BD0(0, sizeof(HSD_RObjAnimJoint) * (size_t)count);
+    if (x64Head == NULL) return NULL;
+    memset(x64Head, 0, sizeof(HSD_RObjAnimJoint) * (size_t)count);
+
+    /* Convert each entry */
+    gcn = (const struct HSD_RObjAnimJoint_gcn*)gcnPtr;
+    x64Tail = x64Head;
+    for (int i = 0; i < count; i++) {
+        val = be32_swap(gcn->aobjdesc);
+        if (val != 0 && val < 0x80000000U) {
+            x64Tail->aobjdesc = grDatFiles_ConvertAObjDescGCNtoX64(dataBase + val, dataBase);
+        }
+        val = be32_swap(gcn->next);
+        if (val != 0 && val < 0x80000000U) {
+            x64Tail->next = (HSD_RObjAnimJoint*)((u8*)x64Head + sizeof(HSD_RObjAnimJoint) * (i + 1));
+        } else {
+            x64Tail->next = NULL;
+        }
+        gcn = val ? (const struct HSD_RObjAnimJoint_gcn*)(dataBase + val) : NULL;
+        x64Tail = (HSD_RObjAnimJoint*)((u8*)x64Tail + sizeof(HSD_RObjAnimJoint));
+    }
+
+    return x64Head;
+}
+
+/* Convert HSD_AnimJoint tree (recursive, like HSD_Joint) */
+HSD_AnimJoint* grDatFiles_ConvertAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
+{
+    HSD_AnimJoint* x64;
+    const struct HSD_AnimJoint_gcn* gcn;
+    u32 val;
+
+    if (gcnPtr == NULL || depth > 10000) return NULL;
+
+    gcn = (const struct HSD_AnimJoint_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_AnimJoint));
+    if (x64 == NULL) return NULL;
+    memset(x64, 0, sizeof(HSD_AnimJoint));
+
+    /* Convert child and next (recursive tree walk) */
+    val = be32_swap(gcn->child);
+    x64->child = grDatFiles_ConvertAnimJointTreeGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, depth + 1);
+
+    val = be32_swap(gcn->next);
+    x64->next = grDatFiles_ConvertAnimJointTreeGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, depth + 1);
+
+    /* Convert aobjdesc */
+    val = be32_swap(gcn->aobjdesc);
+    if (val != 0 && val < 0x80000000U) {
+        x64->aobjdesc = grDatFiles_ConvertAObjDescGCNtoX64(dataBase + val, dataBase);
+    }
+
+    /* Convert robj_anim chain */
+    val = be32_swap(gcn->robj_anim);
+    if (val != 0 && val < 0x80000000U) {
+        x64->robj_anim = grDatFiles_ConvertRObjAnimJointChainGCNtoX64(dataBase + val, dataBase);
+    }
+
+    x64->flags = be32_swap(gcn->flags);
+
+    return x64;
+}
+
+/* Convert HSD_MatAnimJoint tree (recursive, like HSD_Joint) */
+HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
+{
+    HSD_MatAnimJoint* x64;
+    const struct HSD_MatAnimJoint_gcn* gcn;
+    u32 val;
+
+    if (gcnPtr == NULL || depth > 10000) return NULL;
+
+    gcn = (const struct HSD_MatAnimJoint_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_MatAnimJoint));
+    if (x64 == NULL) return NULL;
+    memset(x64, 0, sizeof(HSD_MatAnimJoint));
+
+    /* Convert child and next (recursive tree walk) */
+    val = be32_swap(gcn->child);
+    x64->child = grDatFiles_ConvertMatAnimJointTreeGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, depth + 1);
+
+    val = be32_swap(gcn->next);
+    x64->next = grDatFiles_ConvertMatAnimJointTreeGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, depth + 1);
+
+    /* matanim - skip for now (complex animation data) */
+    x64->matanim = NULL;
+
+    return x64;
+}
+
+/* Convert HSD_ShapeAnimJoint tree (recursive, like HSD_Joint) */
+HSD_ShapeAnimJoint* grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
+{
+    HSD_ShapeAnimJoint* x64;
+    const struct HSD_ShapeAnimJoint_gcn* gcn;
+    u32 val;
+
+    if (gcnPtr == NULL || depth > 10000) return NULL;
+
+    gcn = (const struct HSD_ShapeAnimJoint_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_ShapeAnimJoint));
+    if (x64 == NULL) return NULL;
+    memset(x64, 0, sizeof(HSD_ShapeAnimJoint));
+
+    /* Convert child and next (recursive tree walk) */
+    val = be32_swap(gcn->child);
+    x64->child = grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, depth + 1);
+
+    val = be32_swap(gcn->next);
+    x64->next = grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, depth + 1);
+
+    /* shapeanimdobj - skip for now (complex shape animation data) */
+    x64->shapeanimdobj = NULL;
+
+    return x64;
+}
+
+/* ============================================================
+ * Public API: archive data converters (used by title screen, etc.)
+ * ============================================================ */
+
+/* Convert a GCN HSD_Joint tree from archive data to x86_64 heap memory.
+ * Returns the root of the converted tree, or NULL on error.
+ * The caller should pass the raw pointer from HSD_ArchiveGetPublicAddress(). */
+HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         u8* dataBase, u32 visited_count, u32* visited)
 {
     HSD_Joint* x64Joint;

@@ -662,10 +662,10 @@ inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
     if (joint == NULL) {
         return NULL;
     }
-    /* PC port: Guard against 32-bit archive offsets used as 64-bit pointers.
-     * Valid pointers should be in the heap/archive data range (> 0x1000000).
-     * Offsets like 0x89 are valid within the archive but invalid as addresses. */
-    if ((uintptr_t)joint < 0x1000000ULL || (uintptr_t)joint > 0xFFFFFFFFFFFFFULL) {
+    /* PC port: Guard against obviously-invalid pointers.
+     * After archive conversion, valid joints are heap-allocated x86_64 structs.
+     * Keep a low threshold as a safety net for any unconverted data. */
+    if ((uintptr_t)joint < 0x1000ULL || (uintptr_t)joint > 0xFFFFFFFFFFFFFULL) {
         return NULL;
     }
     if (joint->class_name == NULL ||
@@ -689,13 +689,13 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
     if (joint == NULL || jobj == NULL) return 0;
     
     if (!(joint->flags & JOBJ_INSTANCE)) {
-        /* Check if child pointer looks like a valid address, not an offset */
-        if ((uintptr_t)joint->child >= 0x1000000ULL) {
+        /* PC port: after conversion, child is a valid heap pointer or NULL */
+        if (joint->child != NULL) {
             jobj->child = JObjLoadJointSub(joint->child, jobj);
         }
     }
-    /* Check if next pointer looks like a valid address */
-    if ((uintptr_t)joint->next >= 0x1000000ULL) {
+    /* PC port: after conversion, next is a valid heap pointer or NULL */
+    if (joint->next != NULL) {
         jobj->next = JObjLoadJointSub(joint->next, parent);
     }
     jobj->parent = parent;
@@ -734,9 +734,8 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
 
 HSD_JObj* HSD_JObjLoadJoint(HSD_Joint* arg0)
 {
-    /* PC port: Guard against 32-bit archive offsets used as 64-bit pointers.
-     * Valid pointers should be in the heap/archive data range (> 0x1000000). */
-    if (arg0 == NULL || (uintptr_t)arg0 < 0x1000000ULL) return NULL;
+    /* PC port: after conversion, arg0 is a heap pointer or NULL */
+    if (arg0 == NULL || (uintptr_t)arg0 < 0x1000ULL) return NULL;
     
     HSD_JObj* jobj = JObjLoadJointSub(arg0, 0);
     HSD_JObjResolveRefsAll(jobj, arg0);
