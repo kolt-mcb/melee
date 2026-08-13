@@ -93,6 +93,33 @@ int main(int argc, char* argv[])
 
     /* Main loop — game logic runs here */
     PORT_LOG_INFO("[MAIN] About to enter game_main_loop()");
+    
+    /* PC port: Set up perspective projection matrix for 3D rendering.
+     * The game code relies on HSD_CObjSetCurrent to call GXSetProjection,
+     * but the camera system isn't fully initialized. Force a perspective
+     * projection that covers the stage geometry bounds.
+     * Stage geometry bounds: min=(-840,-70,-83) max=(1260,140,33)
+     * GCN uses Z-forward (positive Z = into screen), OpenGL uses Z-backward.
+     * Flip Z in the projection matrix. */
+    {
+        extern void GXSetProjection(f32 mtx[4][4], u32 type);
+        f32 proj[4][4] = {{0}};
+        f32 fov = 60.0f * 3.14159265f / 180.0f;
+        f32 aspect = 1280.0f / 720.0f;
+        f32 tan_half_fov = tanf(fov * 0.5f);
+        f32 near_z = 1.0f;
+        f32 far_z = 3000.0f;
+        
+        /* OpenGL perspective with Z flip for GCN Z-forward convention */
+        proj[0][0] = 1.0f / (aspect * tan_half_fov);
+        proj[1][1] = 1.0f / tan_half_fov;
+        proj[2][2] = (far_z + near_z) / (far_z - near_z);  /* Note: positive for Z flip */
+        proj[2][3] = 1.0f;  /* Note: positive for Z flip */
+        proj[3][2] = -(2.0f * far_z * near_z) / (far_z - near_z);
+        
+        GXSetProjection(proj, 0); /* GX_PERSPECTIVE = 0 */
+    }
+    
     game_main_loop();
 
     /* Shutdown in reverse order */

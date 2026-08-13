@@ -19,6 +19,7 @@ typedef struct {
     VfHandle handle;
     char path[256];
     char open;
+    s32 entry_num;  /* Track which DVD entry this file corresponds to */
 } DVDFile;
 
 static DVDFile g_dvd_files[MAX_DVD_FILES];
@@ -74,6 +75,7 @@ s32 DVDConvertPathToEntrynum(const char* path)
     if (entry < 0) {
         return -1;
     }
+    g_dvd_files[entry].entry_num = entry;
     
     /* Verify file exists — vf_resolve_path prepends asset dir */
     char resolved[512];
@@ -98,15 +100,19 @@ BOOL DVDFastOpen(s32 entry_num, DVDFileInfo* fileInfo)
     if (entry_num < 0 || entry_num >= MAX_DVD_FILES) return FALSE;
     
     DVDFile* file = &g_dvd_files[entry_num];
-    if (!file->open) return FALSE;
-    
+    if (!file->open) {
+        fprintf(stderr, "[DVD] DVDFastOpen: entry %d not open\n", entry_num);
+        return FALSE;
+    }
     
     /* Already open */
     if (file->handle) {
         fileInfo->startAddr = (u32)vf_tell(file->handle);
         s32 size = vf_size(file->handle);
         fileInfo->length = size > 0 ? (u32)size : 0;
-        g_dvd_current_file = entry_num;  /* Track current file for reads */
+        /* Store entry_num in the callback field as a pointer hack */
+        fileInfo->callback = (DVDCallback)(uintptr_t)entry_num;
+        g_dvd_current_file = entry_num;
         return TRUE;
     }
     
@@ -114,18 +120,21 @@ BOOL DVDFastOpen(s32 entry_num, DVDFileInfo* fileInfo)
     char resolved[512];
     char* rp = vf_resolve_path(file->path, resolved, sizeof(resolved));
     if (!rp) {
+        fprintf(stderr, "[DVD] DVDFastOpen: cannot resolve path '%s' (entry %d)\n", file->path, entry_num);
         return FALSE;
     }
     
     VfHandle h = vf_open(rp, "rb");
     if (!h) {
+        fprintf(stderr, "[DVD] DVDFastOpen: cannot open '%s' (entry %d)\n", file->path, entry_num);
         return FALSE;
     }
     file->handle = h;
     fileInfo->startAddr = 0;
     fileInfo->length = (u32)(vf_size(h) > 0 ? vf_size(h) : 0);
-    fileInfo->callback = NULL;
-    g_dvd_current_file = entry_num;  /* Track current file for reads */
+    fileInfo->callback = (DVDCallback)(uintptr_t)entry_num;
+    g_dvd_current_file = entry_num;
+    fprintf(stderr, "[DVD] DVDFastOpen: opened '%s' (entry %d), size=%u, handle=%p\n", file->path, entry_num, fileInfo->length, h);
     return TRUE;
 }
 
@@ -168,25 +177,28 @@ long DVDReadPrio(DVDFileInfo* fileInfo, void* addr, long length, long offset, lo
     (void)prio;
     if (!fileInfo || !addr || length <= 0) return 0;
     
-    /* Use the tracked current file index */
-    if (g_dvd_current_file >= 0 && g_dvd_current_file < MAX_DVD_FILES) {
-        DVDFile* file = &g_dvd_files[g_dvd_current_file];
-        if (file->handle) {
+    /* Try to find the file handle via the entry_num stored in callback field */
+    s32 entry = (s32)(uintptr_t)fileInfo->callback;
+    if (entry >= 0 && entry < MAX_DVD_FILES) {
+        DVDFile* file = &g_dvd_files[entry];
+        if (file->handle && file->open) {
             vf_seek(file->handle, (int)offset, 0);
             long bytes = vf_read(file->handle, addr, (int)length);
             return bytes;
         }
     }
     
-    /* Fallback: iterate through open files */
-    for (int i = 0; i < MAX_DVD_FILES; i++) {
-        if (g_dvd_files[i].open && g_dvd_files[i].handle) {
-            VfHandle h = g_dvd_files[i].handle;
-            vf_seek(h, (int)offset, 0);
-            long bytes = vf_read(h, addr, (int)length);
+    /* Fallback: use tracked current file */
+    if (g_dvd_current_file >= 0 && g_dvd_current_file < MAX_DVD_FILES) {
+        DVDFile* file = &g_dvd_files[g_dvd_current_file];
+        if (file->handle && file->open) {
+            vf_seek(file->handle, (int)offset, 0);
+            long bytes = vf_read(file->handle, addr, (int)length);
             return bytes;
         }
     }
+    
+    fprintf(stderr, "[DVD] DVDReadPrio: no valid file handle found (entry=%d, current=%d)\n", entry, g_dvd_current_file);
     return 0;
 }
 
@@ -195,14 +207,31 @@ BOOL DVDReadAsyncPrio(DVDFileInfo* fileInfo, void* addr, s32 length, s32 offset,
 {
     /* Synchronous fallback: just read directly */
     if (!fileInfo || !addr) return FALSE;
-    for (int i = 0; i < MAX_DVD_FILES; i++) {
-        if (g_dvd_files[i].open && g_dvd_files[i].handle) {
-            VfHandle h = g_dvd_files[i].handle;
-            vf_seek(h, (int)offset, 0);
-            vf_read(h, addr, length);
+    
+    /* Try to find the file handle via the entry_num stored in callback field */
+    s32 entry = (s32)(uintptr_t)fileInfo->callback;
+    fprintf(stderr, "[DVD] DVDReadAsyncPrio: entry=%d, current=%d, len=%d, offset=%d\n", entry, g_dvd_current_file, length, offset);
+    if (entry >= 0 && entry < MAX_DVD_FILES) {
+        DVDFile* file = &g_dvd_files[entry];
+        if (file->handle && file->open) {
+            vf_seek(file->handle, (int)offset, 0);
+            vf_read(file->handle, addr, length);
+            return TRUE;
+        }
+        fprintf(stderr, "[DVD] DVDReadAsyncPrio: entry %d has no valid handle (open=%d, handle=%p)\n", entry, file->open, file->handle);
+    }
+    
+    /* Fallback: use tracked current file */
+    if (g_dvd_current_file >= 0 && g_dvd_current_file < MAX_DVD_FILES) {
+        DVDFile* file = &g_dvd_files[g_dvd_current_file];
+        if (file->handle && file->open) {
+            vf_seek(file->handle, (int)offset, 0);
+            vf_read(file->handle, addr, length);
             return TRUE;
         }
     }
+    
+    fprintf(stderr, "[DVD] DVDReadAsyncPrio: no valid file handle found (entry=%d, current=%d)\n", entry, g_dvd_current_file);
     return FALSE;
 }
 

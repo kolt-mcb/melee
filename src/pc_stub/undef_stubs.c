@@ -1822,9 +1822,38 @@ __attribute__((weak)) void port_render_frame_begin(void)
     extern void render_clear(void);
     extern void gx_set_default_3d_camera(void);
     extern void GXSetZMode(u32, u32, u32);
+    extern void GXSetProjection(f32 mtx[4][4], u32 type);
+    extern void gx_set_mv_matrix(f32 mtx[3][4]);
+    
     render_clear();
     gx_set_default_3d_camera();
     GXSetZMode(FALSE, 0, FALSE);
+    
+    /* PC port: Set up perspective projection for 3D stage geometry. */
+    {
+        f32 proj[4][4] = {{0}};
+        f32 fov = 60.0f * 3.14159265f / 180.0f;
+        f32 aspect = 1280.0f / 720.0f;
+        f32 tan_half_fov = tanf(fov * 0.5f);
+        f32 near_z = 1.0f;
+        f32 far_z = 5000.0f;
+        
+        proj[0][0] = 1.0f / (aspect * tan_half_fov);
+        proj[1][1] = 1.0f / tan_half_fov;
+        proj[2][2] = -(far_z + near_z) / (far_z - near_z);
+        proj[2][3] = -1.0f;
+        proj[3][2] = -(2.0f * far_z * near_z) / (far_z - near_z);
+        
+        GXSetProjection(proj, 0);
+        
+        /* Identity model-view matrix. */
+        f32 mv[3][4] = {
+            {1.0f, 0.0f, 0.0f, 0.0f},
+            {0.0f, 1.0f, 0.0f, 0.0f},
+            {0.0f, 0.0f, 1.0f, 0.0f}
+        };
+        gx_set_mv_matrix(mv);
+    }
 }
 
 __attribute__((weak)) void port_render_frame_end(void)

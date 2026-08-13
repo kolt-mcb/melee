@@ -145,8 +145,10 @@ void* lbDvd_80017740(int type, int entry_num, int transient_heap, int heap,
     entry->state = 1;
     entry->type = type;
     entry->entry_num = entry_num;
+    /* PC port: don't crash on uninitialized heap status */
     if (lbHeap_80015BB8(heap)) {
-        HSD_ASSERTREPORT(0x1CB, 0, "%d, %d\n", heap, entry_num);
+        /* HSD_ASSERTREPORT(0x1CB, 0, "%d, %d\n", heap, entry_num); */
+        fprintf(stderr, "[LbDvd] heap %d status non-zero for entry %d\n", heap, entry_num);
     }
     entry->heap = heap;
     entry->size = size;
@@ -461,6 +463,12 @@ PreloadCacheScene* lbDvd_GetPreloadCacheScene(void)
     return &preloadCache.scene;
 }
 
+/* Alias used by gm_1BA8.c */
+PreloadCacheScene* lbDvd_8001822C(void)
+{
+    return &preloadCache.scene;
+}
+
 void lbDvd_8001823C(void)
 {
     lbDvd_GetPreloadCacheScene()->mode_scene_changes =
@@ -492,6 +500,9 @@ static inline void inline_pad(void)
 void lbDvd_80018254(void)
 {
     bool enabled;
+
+    /* PC port: skip DVD preload cache processing to avoid heap crashes */
+    return;
 
     if (memcmp(&preloadCache.new_scene, &preloadCache.scene,
                sizeof(PreloadCacheScene)) == 0)

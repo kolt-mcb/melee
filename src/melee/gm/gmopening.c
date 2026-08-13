@@ -137,6 +137,26 @@ void fn_801AA0E8(void)
 
 void gm_801AA110_OnEnter(UNK_T arg0)
 {
+    /* PC port: stub out title screen and stage loading entirely.
+     * The va_arg-based symbol lookup is broken on x86_64, and the
+     * joint tree converter has infinite recursion issues.
+     * The debug overlay in render.c provides visual verification
+     * of the TEV pipeline working correctly.
+     * TODO: Fix va_arg for proper archive symbol loading.
+     * TODO: Fix joint tree converter recursion.
+     * 
+     * The game mode loop will still run, and the debug overlay
+     * will render every frame. */
+    gm_804D67D0 = 0;
+    gm_804D67D4 = 0;
+    gm_804D67D8 = 0;
+    gm_804D67EC = 0;
+    gm_804D67E0 = 0;
+    gm_804D67E1 = 0;
+    gm_804D67DC = 0;
+    gm_804D67E2 = 0;
+    return;
+
     HSD_GObj* temp_r3;
     HSD_GObj* temp_r3_2;
     HSD_GObj* temp_r3_3;

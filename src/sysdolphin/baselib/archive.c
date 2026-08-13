@@ -97,8 +97,13 @@ void* HSD_ArchiveGetPublicAddress(HSD_Archive* archive, const char* symbols)
 {
     u32 i;
 
+    if (archive == NULL || symbols == NULL) return NULL;
+    if (archive->data == NULL || archive->symbols == NULL) return NULL;
+    if (archive->public_info == NULL) return NULL;
+
     for (i = 0; i < archive->header.nb_public; i++) {
         char* sym_str = archive->symbols + archive->public_info[i].symbol;
+        if (sym_str == NULL || sym_str[0] == '\0') continue;
         int comparison = strcmp(sym_str, symbols);
 
         if (comparison == 0) {
