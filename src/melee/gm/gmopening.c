@@ -177,7 +177,8 @@ void gm_801AA110_OnEnter(UNK_T arg0)
     lbAudioAx_80027648();
     lbAudioAx_80023F28(0x3E);
     lbAudioAx_80024E50(1);
-    lbMthp_8001F410("MvOpen.mth", gm_803DBFB4, 0, 0, 0);
+    /* PC port: skip movie loading - MvOpen.mth doesn't exist and decoder crashes. */
+    /* lbMthp_8001F410("MvOpen.mth", gm_803DBFB4, 0, 0, 0); */
     lbAudioAx_80024E50(0);
     gm_804D6724 = fn_801AA0E8;
 }

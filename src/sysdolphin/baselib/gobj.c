@@ -196,6 +196,12 @@ void HSD_GObj_80390FC0(void)
     for (i = 0; i <= HSD_GObjLibInitData.gx_link_max + 1; i++) {
         cur = HSD_GObjGXLinkHead[i];
         while (cur != NULL) {
+            /* PC port: sanity check - GObj pointers from archive data are corrupted on LE.
+             * Skip GObjs with obviously invalid next_gx pointers. */
+            HSD_GObj* next_cur = cur->next_gx;
+            if (next_cur != NULL && (uintptr_t)next_cur > 0xFFFFFFFFULL) {
+                break; /* Stop walking this link - pointer is corrupted */
+            }
             if (cur->render_cb != NULL) {
                 if (dbg++ < 3) {
                     fprintf(stderr, "[GObj] render_cb=%p on link %d\n", cur->render_cb, i);
@@ -206,15 +212,17 @@ void HSD_GObj_80390FC0(void)
                 cur->render_cb(cur, 0);
                 HSD_GObj_804D7818 = saved;
             }
-            cur = cur->next_gx;
+            cur = next_cur;
         }
     }
 }
 
 void HSD_GObj_LObjCallback(HSD_GObj* gobj, int unused)
 {
-    HSD_LObj_803668EC(gobj->hsd_obj);
-    HSD_LObjSetupInit(HSD_CObjGetCurrent());
+    /* PC port: lighting objects from archive data are big-endian and corrupted on LE.
+     * Skip lighting setup until endianness conversion is implemented. */
+    /* HSD_LObj_803668EC(gobj->hsd_obj);
+    HSD_LObjSetupInit(HSD_CObjGetCurrent()); */
 }
 
 void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
@@ -241,15 +249,19 @@ void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
 
 void HSD_GObj_FogCallback(HSD_GObj* gobj, int unused)
 {
-    HSD_FogSet(gobj->hsd_obj);
+    /* PC port: fog objects from archive data are big-endian and corrupted on LE.
+     * Skip fog setting until endianness conversion is implemented. */
+    /* HSD_FogSet(gobj->hsd_obj); */
 }
 
 void HSD_GObj_803910D8(HSD_GObj* gobj, int renderpass)
 {
-    if (HSD_CObjSetCurrent(gobj->hsd_obj)) {
+    /* PC port: camera objects from archive data are big-endian and corrupted on LE.
+     * Skip camera setup until endianness conversion is implemented. */
+    /* if (HSD_CObjSetCurrent(gobj->hsd_obj)) {
         HSD_GObj_80390ED0(gobj, 7);
         HSD_CObjEndCurrent();
-    }
+    } */
 }
 
 void HSD_GObj_80391120(HSD_Obj* obj)

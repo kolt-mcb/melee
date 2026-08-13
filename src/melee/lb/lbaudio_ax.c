@@ -2314,7 +2314,10 @@ s32 fn_80027488(void)
 
 void lbAudioAx_80027648(void)
 {
-    while (fn_80027488() == 1) {
+    /* PC port: audio loading wait blocks forever on headless systems.
+     * Add a timeout to prevent hanging. */
+    static int timeout = 100; /* max iterations */
+    while (fn_80027488() == 1 && timeout-- > 0) {
         HSD_SynthSFXWaitForLoadCompletion(lb_800195D0);
     }
 }

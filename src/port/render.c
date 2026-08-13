@@ -593,10 +593,6 @@ static void draw_hud_overlay(int width, int height, f32 time)
 void render_debug_overlay(void)
 {
     static int dbg = 0;
-    if (dbg++ < 3) {
-        fprintf(stderr, "[DBG] render_debug_overlay called\n");
-        fflush(stderr);
-    }
     long now = get_time_ms();
     g_frame_count++;
 
@@ -605,6 +601,10 @@ void render_debug_overlay(void)
         g_fps = g_frame_count;
         g_frame_count = 0;
         g_last_fps_time = now;
+        if (dbg++ < 5) {
+            fprintf(stderr, "[RENDER] FPS=%d\n", g_fps);
+            fflush(stderr);
+        }
     }
 
     /* Get window dimensions */
@@ -614,33 +614,28 @@ void render_debug_overlay(void)
         SDL_GetWindowSize(win, &width, &height);
     }
 
-    /* --- Pass 1: 3D scene (with depth testing) ---
-     * Draw the rotating wireframe cube to exercise MVP pipeline
-     * and depth buffering. This simulates what game models
-     * would look like once the gm/ module is integrated. */
-    
-    /* Setup: position + depth only, no color blending */
+    /* Draw a simple colored quad to verify the pipeline works. */
     GXClearVtxDesc();
     GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
     GXSetBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP);
-    
-    /* Draw advanced 3D scene */
+    GXSetZMode(0, 0, 0);
+
+    /* Single triangle as a minimal test primitive */
     f32 time = (f32)(now / 1000.0);
-    draw_3d_scene(time);
-    GXFlush();
+    f32 r = 0.5f + 0.5f * sinf(time);
+    f32 g = 0.5f + 0.5f * sinf(time + 2.09f);
+    f32 b = 0.5f + 0.5f * sinf(time + 4.18f);
 
-    /* --- Pass 2: 2D overlay (disable depth test & depth write for HUD) --- */
-    
-    /* Disable depth test so HUD always renders on top */
-    extern void GXSetZMode(u32 enable, u32 func, u32 update);
-    GXSetZMode(0, 0, 0);  /* Disable depth test */
-    
-    /* Draw game-like HUD overlay */
-    draw_hud_overlay(width, height, time);
+    GXBegin(GX_TRIANGLES, GX_VTXFMT0, 3);
+    GXColor4u8((u8)(r * 255), (u8)(g * 255), (u8)(b * 255), 255);
+    GXPosition3f32(-0.5f, 0.5f, 0.0f);
+    GXColor4u8((u8)(g * 255), (u8)(b * 255), (u8)(r * 255), 255);
+    GXPosition3f32(0.5f, 0.5f, 0.0f);
+    GXColor4u8((u8)(b * 255), (u8)(r * 255), (u8)(g * 255), 255);
+    GXPosition3f32(0.0f, -0.5f, 0.0f);
+    GXEnd();
     GXFlush();
-
-    PORT_LOG_DEBUG("Overlay: done — %d primitive batches", g_frame_count);
 }
 
 /* ============================================================
