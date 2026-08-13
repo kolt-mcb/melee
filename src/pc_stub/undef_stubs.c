@@ -2098,8 +2098,7 @@ void lb_80019628(void) {}
 u8 lb_80019894(void) { return 1; }  /* Return 1 to allow game loop to proceed */
 void lb_800198E0(void) {}
 void lb_80019880(u64 arg0) {}
-void lb_80019900(void) {}
-int lb_80019A30(int index) { return 0; }
+/* lb_80019900 and lb_80019A30 are implemented in lb_0195.c — removed stubs */
 void lb_80019A48(void) {}
 void lb_80019AAC(Event arg0) { if (arg0) arg0(); }
 void fn_800195FC(void) {}
