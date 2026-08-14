@@ -595,8 +595,13 @@ void HSD_RObjResolveRefs(HSD_RObj* robj, HSD_RObjDesc* desc)
 
 void HSD_RObjResolveRefsAll(HSD_RObj* robj, HSD_RObjDesc* desc)
 {
+    /* PC port: guard against corrupted RObjDesc pointers. */
+    if (desc != NULL && (uintptr_t)desc < 0x1000ULL) return;
+    
     for (; robj != NULL && desc != NULL; robj = robj->next, desc = desc->next)
     {
+        /* PC port: guard against corrupted RObjDesc pointers. */
+        if ((uintptr_t)desc < 0x1000ULL) break;
         HSD_RObjResolveRefs(robj, desc);
     }
 }

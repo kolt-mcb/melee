@@ -288,6 +288,8 @@ void HSD_JObjDispSub(HSD_JObj* jobj, MtxPtr vmtx, MtxPtr pmtx,
     HSD_DObj* dobj;
     u32 dobj_trsp;
 
+    if (jobj == NULL) return;
+    
     HSD_JObjSetCurrent(jobj);
 
     dobj_trsp = trsp_mask << DOBJ_TRSP_SHIFT;
@@ -306,7 +308,11 @@ void HSD_JObjDispSub(HSD_JObj* jobj, MtxPtr vmtx, MtxPtr pmtx,
 
         if (dobj->flags & dobj_trsp) {
             HSD_DObjSetCurrent(dobj);
-            HSD_DOBJ_METHOD(dobj)->disp(dobj, vmtx, pmtx, rendermode);
+            /* PC port: guard against corrupted method pointers. */
+            HSD_DObjInfo* dobj_info = HSD_DOBJ_METHOD(dobj);
+            if (dobj_info != NULL && dobj_info->disp != NULL) {
+                dobj_info->disp(dobj, vmtx, pmtx, rendermode);
+            }
         }
     }
     HSD_DObjSetCurrent(NULL);
@@ -319,6 +325,8 @@ void HSD_JObjDispDObj(HSD_JObj* jobj, MtxPtr vmtx, HSD_TrspMask trsp_mask,
     HSD_CObj* cobj;
     Mtx mtx;
 
+    if (jobj == NULL) return;
+    
     if ((jobj->flags & JOBJ_HIDDEN) == 0) {
         u32 xlu_bits = jobj->flags & (trsp_mask << JOBJ_TRSP_SHIFT);
         if (xlu_bits != 0) {
@@ -326,22 +334,28 @@ void HSD_JObjDispDObj(HSD_JObj* jobj, MtxPtr vmtx, HSD_TrspMask trsp_mask,
 
             if (vmtx == NULL) {
                 cobj = HSD_CObjGetCurrent();
+                if (cobj == NULL) return;  /* PC port: no camera init */
                 vmtx = HSD_CObjGetViewingMtxPtrDirect(cobj);
             }
 
-            HSD_JOBJ_METHOD(jobj)->make_pmtx(jobj, vmtx, mtx);
+            /* PC port: guard against corrupted method pointers. */
+            HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
+            if (jobj_info == NULL || jobj_info->make_pmtx == NULL ||
+                jobj_info->disp == NULL) return;
+
+            jobj_info->make_pmtx(jobj, vmtx, mtx);
             if ((xlu_bits & JOBJ_OPA) != 0) {
-                HSD_JOBJ_METHOD(jobj)->disp(jobj, vmtx, mtx, HSD_TRSP_OPA,
-                                            rendermode);
+                jobj_info->disp(jobj, vmtx, mtx, HSD_TRSP_OPA,
+                                rendermode);
             }
             if (zsort_listing == 0) {
                 if ((xlu_bits & JOBJ_TEXEDGE) != 0) {
-                    HSD_JOBJ_METHOD(jobj)->disp(jobj, vmtx, mtx,
-                                                HSD_TRSP_TEXEDGE, rendermode);
+                    jobj_info->disp(jobj, vmtx, mtx,
+                                    HSD_TRSP_TEXEDGE, rendermode);
                 }
                 if ((xlu_bits & JOBJ_XLU) != 0) {
-                    HSD_JOBJ_METHOD(jobj)->disp(jobj, vmtx, mtx, HSD_TRSP_XLU,
-                                                rendermode);
+                    jobj_info->disp(jobj, vmtx, mtx, HSD_TRSP_XLU,
+                                    rendermode);
                 }
             } else {
                 if ((xlu_bits & (JOBJ_TEXEDGE | JOBJ_XLU)) != 0) {

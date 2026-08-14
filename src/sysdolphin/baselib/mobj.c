@@ -152,6 +152,9 @@ void HSD_MObjAnim(HSD_MObj* mobj)
 
 static int MObjLoad(HSD_MObj* mobj, HSD_MObjDesc* desc)
 {
+    /* PC port: guard against GCN-packed MObjDesc with garbage fields. */
+    if (desc == NULL) return 0;
+    
     mobj->rendermode = desc->rendermode;
     mobj->tobj = HSD_TObjLoadDesc(desc->texdesc);
     mobj->mat = HSD_MaterialAlloc();
@@ -171,6 +174,9 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
         HSD_MObj* mobj;
         HSD_ClassInfo* info;
 
+        /* PC port: guard against GCN-packed MObjDesc with garbage class_name. */
+        if ((uintptr_t)mobjdesc < 0x20000000ULL) return NULL;
+
         if (!mobjdesc->class_name ||
             !(info = hsdSearchClassInfo(mobjdesc->class_name)))
         {
@@ -181,8 +187,10 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
         }
 
         HSD_MOBJ_METHOD(mobj)->load(mobj, mobjdesc);
-        /* PC port: TEV compilation enabled with crash guards. */
-        HSD_MObjCompileTev(mobj);
+        /* PC port: skip TEV compilation for now - archive data corruption.
+         * TEV descriptors from GCN archives have different struct layouts
+         * on x86_64, causing crashes in the TEV compiler. */
+        /* HSD_MObjCompileTev(mobj); */
 
         return mobj;
     } else {
