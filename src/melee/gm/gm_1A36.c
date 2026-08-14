@@ -6,6 +6,37 @@
 #include <melee/gm/gmscdata.h>
 #include <melee/gm/types.h>
 
+/* PC port: forward declare GCPadStatus from undef_stubs.c */
+typedef struct {
+    u32 button;
+    u32 last_button;
+    u32 trigger;
+    u32 repeat;
+    u32 release;
+    s32 repeat_count;
+    s8 stickX;
+    s8 stickY;
+    s8 subStickX;
+    s8 subStickY;
+    u8 analogL;
+    u8 analogR;
+    u8 analogA;
+    u8 analogB;
+    f32 nml_stickX;
+    f32 nml_stickY;
+    f32 nml_subStickX;
+    f32 nml_subStickY;
+    f32 nml_analogL;
+    f32 nml_analogR;
+    f32 nml_analogA;
+    f32 nml_analogB;
+    u8 cross_dir;
+    s8 err;
+} GCPadStatus;
+
+/* PC port: bridge from g_gc_pads to controller_map. */
+void gm_SyncPadToControllerMap(void);
+
 u64 gm_GetButtonsPressed(u8 idx)
 {
     return controller_map.x0[idx].button;
@@ -165,5 +196,25 @@ void gm_801A3EF4(void)
         if (scene->Init != NULL) {
             scene->Init();
         }
+    }
+}
+
+/* PC port: bridge from g_gc_pads to controller_map. */
+void gm_SyncPadToControllerMap(void)
+{
+    extern GCPadStatus g_gc_pads[4];
+    for (int i = 0; i < 4; i++) {
+        controller_map.x0[i].button = g_gc_pads[i].button;
+        controller_map.x0[i].trigger = g_gc_pads[i].trigger;
+        controller_map.x0[i].release = g_gc_pads[i].release;
+    }
+    /* Index 4 = PAD_ALL_CONTROLLERS = union of all pads */
+    controller_map.x0[4].button = 0;
+    controller_map.x0[4].trigger = 0;
+    controller_map.x0[4].release = 0;
+    for (int i = 0; i < 4; i++) {
+        controller_map.x0[4].button |= g_gc_pads[i].button;
+        controller_map.x0[4].trigger |= g_gc_pads[i].trigger;
+        controller_map.x0[4].release |= g_gc_pads[i].release;
     }
 }

@@ -905,8 +905,8 @@ typedef struct {
 } GCPadStatus;
 
 /* Global pad state for 4 controllers */
-static GCPadStatus g_gc_pads[4];
-static GCPadStatus g_gc_pads_last[4];
+GCPadStatus g_gc_pads[4];
+GCPadStatus g_gc_pads_last[4];
 int g_gc_pads_initialized = 0;  /* Set to 1 after HSD_PadInit */
 
 /* Auto-start: simulated button presses to skip title screen.
@@ -1812,9 +1812,12 @@ __attribute__((weak)) void port_input_poll(void)
     extern void window_poll_events(void);
     extern void input_read_frame(void);
     extern void HSD_PadRenewStatus(void);
+    extern void gm_SyncPadToControllerMap(void);
     window_poll_events();
     input_read_frame();
     HSD_PadRenewStatus();
+    /* PC port: bridge g_gc_pads → controller_map so game reads input. */
+    gm_SyncPadToControllerMap();
 }
 
 __attribute__((weak)) void port_render_frame_begin(void)
