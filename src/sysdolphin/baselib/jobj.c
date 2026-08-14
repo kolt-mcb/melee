@@ -676,7 +676,11 @@ inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
         jobj = hsdNew(info);
         HSD_ASSERT(972, jobj);
     }
-    HSD_JOBJ_METHOD(jobj)->load(jobj, joint, parent);
+    /* PC port: guard against corrupted method pointers. */
+    HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
+    if (jobj_info != NULL && jobj_info->load != NULL) {
+        jobj_info->load(jobj, joint, parent);
+    }
     return jobj;
 }
 
@@ -800,7 +804,11 @@ void HSD_JObjUnref(HSD_JObj* jobj)
             hsdDelete(jobj);
         } else {
             iref_INC(jobj);
-            HSD_JOBJ_METHOD(jobj)->release_child(jobj);
+            /* PC port: guard against corrupted method pointers. */
+            HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
+            if (jobj_info != NULL && jobj_info->release_child != NULL) {
+                jobj_info->release_child(jobj);
+            }
             if (iref_DEC(jobj)) {
                 hsdDelete(jobj);
             }
@@ -1253,7 +1261,11 @@ void resolveIKJoint1(HSD_JObj* jobj)
             if (jobj->robj != NULL) {
                 HSD_RObjUpdateAll(jobj->robj, jobj, JObjUpdateFunc);
                 if (HSD_JObjMtxIsDirty(jobj)) {
-                    HSD_JOBJ_METHOD(jobj)->make_mtx(jobj);
+                    /* PC port: guard against corrupted method pointers. */
+                    HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
+                    if (jobj_info != NULL && jobj_info->make_mtx != NULL) {
+                        jobj_info->make_mtx(jobj);
+                    }
                     jobj->flags &= 0xFFFFFFBF;
                 }
             }
@@ -1474,7 +1486,11 @@ void HSD_JObjSetupMatrixSub(HSD_JObj* jobj)
     HSD_RObj* robj;
     f32 x_scale;
 
-    HSD_JOBJ_METHOD(jobj)->make_mtx(jobj);
+    /* PC port: guard against corrupted method pointers. */
+    HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
+    if (jobj_info != NULL && jobj_info->make_mtx != NULL) {
+        jobj_info->make_mtx(jobj);
+    }
     jobj->flags &= ~JOBJ_MTX_DIRTY;
     if (!(jobj->flags & JOBJ_USER_DEF_MTX)) {
         switch (jobj->flags & JOBJ_JOINT) {
@@ -1515,7 +1531,11 @@ void HSD_JObjSetupMatrixSub(HSD_JObj* jobj)
             if (jobj->robj != NULL && jobj != NULL && jobj->robj != NULL) {
                 HSD_RObjUpdateAll(jobj->robj, jobj, JObjUpdateFunc);
                 if (HSD_JObjMtxIsDirty(jobj)) {
-                    HSD_JOBJ_METHOD(jobj)->make_mtx(jobj);
+                    /* PC port: guard against corrupted method pointers. */
+                    HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
+                    if (jobj_info != NULL && jobj_info->make_mtx != NULL) {
+                        jobj_info->make_mtx(jobj);
+                    }
                     jobj->flags &= ~JOBJ_MTX_DIRTY;
                 }
             }
@@ -1594,7 +1614,11 @@ void JObjReleaseChild(HSD_JObj* jobj)
 void JObjRelease(HSD_Class* o)
 {
     HSD_JObj* jobj = (HSD_JObj*) o;
-    HSD_JOBJ_METHOD(jobj)->release_child(jobj);
+    /* PC port: guard against corrupted method pointers. */
+    HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
+    if (jobj_info != NULL && jobj_info->release_child != NULL) {
+        jobj_info->release_child(jobj);
+    }
 
     if (HSD_IDGetDataFromTable(NULL, jobj->id, NULL) == jobj) {
         u32 id = jobj->id;
