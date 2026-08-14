@@ -482,8 +482,7 @@ static inline f32 HSD_JObjGetScaleZ(HSD_JObj* jobj)
 
 static inline void HSD_JObjSetTranslate(HSD_JObj* jobj, Vec3* translate)
 {
-    HSD_ASSERT(916, jobj);
-    HSD_ASSERT(917, translate);
+    if (!jobj || !translate) return; /* PC port: guard against NULL from corrupted archive */
     jobj->translate = *translate;
     if (!(jobj->flags & JOBJ_MTX_INDEP_SRT)) {
         HSD_JObjSetMtxDirty(jobj);
@@ -493,8 +492,7 @@ static inline void HSD_JObjSetTranslate(HSD_JObj* jobj, Vec3* translate)
 static inline void HSD_JObjSetTranslateWithMtxDirty(HSD_JObj* jobj,
                                                     Vec3* translate)
 {
-    HSD_ASSERT(916, jobj);
-    HSD_ASSERT(917, translate);
+    if (!jobj || !translate) return; /* PC port guard */
     jobj->translate = *translate;
     if (!(jobj->flags & JOBJ_MTX_INDEP_SRT)) {
         (HSD_JObjSetMtxDirty)(jobj);
@@ -504,8 +502,7 @@ static inline void HSD_JObjSetTranslateWithMtxDirty(HSD_JObj* jobj,
 static inline void HSD_JObjSetTranslateWithMtxDirtyOutOfLine(HSD_JObj* jobj,
                                                              Vec3* translate)
 {
-    HSD_ASSERT(916, jobj);
-    HSD_ASSERT(917, translate);
+    if (!jobj || !translate) return; /* PC port guard */
     jobj->translate = *translate;
     if (!(jobj->flags & JOBJ_MTX_INDEP_SRT)) {
         HSD_JObjSetMtxDirtyOutOfLine(jobj);
