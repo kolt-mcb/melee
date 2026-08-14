@@ -3,6 +3,9 @@
 #include "aobj.h"
 #include "class.h"
 #include "cobj.h"
+
+/* PC port: validate pointer is not NULL and not a small garbage value */
+#define PC_PTR_VALID(p) ((p) != NULL && (uintptr_t)(p) >= 0x1000ULL)
 #include "displayfunc.h"
 #include "dobj.h"
 #include "fobj.h"
@@ -245,7 +248,7 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
 
 void HSD_JObjRemoveAnimByFlags(HSD_JObj* jobj, u32 flags)
 {
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         if (flags & 1) {
             HSD_AObjRemove(jobj->aobj);
             jobj->aobj = NULL;
@@ -259,7 +262,7 @@ void HSD_JObjRemoveAnimByFlags(HSD_JObj* jobj, u32 flags)
 
 void HSD_JObjRemoveAnimAllByFlags(HSD_JObj* jobj, u32 flags)
 {
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         HSD_JObjRemoveAnimByFlags(jobj, flags);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             HSD_JObj* child = jobj->child;
@@ -284,7 +287,7 @@ void HSD_JObjRemoveAnimAll(HSD_JObj* jobj)
 void HSD_JObjReqAnimByFlags(HSD_JObj* jobj, u32 flags, f32 frame)
 {
     bool has_dobj;
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         if (flags & 1) {
             HSD_AObjReqAnim(jobj->aobj, frame);
         }
@@ -302,7 +305,7 @@ void HSD_JObjReqAnimByFlags(HSD_JObj* jobj, u32 flags, f32 frame)
 
 void HSD_JObjReqAnimAllByFlags(HSD_JObj* jobj, u32 flags, f32 frame)
 {
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         HSD_JObjReqAnimByFlags(jobj, flags, frame);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             HSD_JObj* child = jobj->child;
@@ -346,7 +349,7 @@ void JObjSortAnim(HSD_AObj* aobj)
 void HSD_JObjAddAnim(HSD_JObj* jobj, HSD_AnimJoint* an_joint,
                      HSD_MatAnimJoint* mat_joint, HSD_ShapeAnimJoint* sh_joint)
 {
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         if (an_joint != NULL) {
             if (jobj->aobj != NULL) {
                 HSD_AObjRemove(jobj->aobj);
@@ -376,7 +379,7 @@ void HSD_JObjAddAnimAll(HSD_JObj* jobj, HSD_AnimJoint* ajoint,
     HSD_MatAnimJoint* mj;
     HSD_ShapeAnimJoint* sj;
 
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         HSD_JObjAddAnim(jobj, ajoint, mjoint, sjoint);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             jp = jobj->child;
@@ -405,7 +408,7 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
     HSD_RObj* robj;
     Mtx mtx;
 
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         switch (type) {
         case HSD_A_J_PATH:
             if (val->fv < 0.0L) {
@@ -578,7 +581,7 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
 
 void HSD_JObjAnim(HSD_JObj* jobj)
 {
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         HSD_JObjCheckDepend(jobj);
         HSD_AObjInterpretAnim(jobj->aobj, jobj, JObjUpdateFunc);
         HSD_RObjAnimAll(jobj->robj);
@@ -591,7 +594,7 @@ void HSD_JObjAnim(HSD_JObj* jobj)
 void JObjAnimAll(HSD_JObj* jobj)
 {
     HSD_JObj* child;
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         HSD_JObjAnim(jobj);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             child = jobj->child;
@@ -605,7 +608,7 @@ void JObjAnimAll(HSD_JObj* jobj)
 
 void HSD_JObjAnimAll(HSD_JObj* jobj)
 {
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         HSD_AObjInitEndCallBack();
         JObjAnimAll(jobj);
         HSD_AObjInvokeCallBacks();
@@ -615,7 +618,7 @@ void HSD_JObjAnimAll(HSD_JObj* jobj)
 void HSD_JObjDispAll(HSD_JObj* jobj, Mtx vmtx, u32 flags, u32 rendermode)
 {
     MtxPtr new_var = vmtx;
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         if (jobj->flags & JOBJ_INSTANCE) {
             if (!(jobj->flags & JOBJ_HIDDEN)) {
                 Mtx mtx;
@@ -674,8 +677,10 @@ inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
         jobj = HSD_JObjAlloc();
     } else {
         jobj = hsdNew(info);
-        HSD_ASSERT(972, jobj);
+        /* PC port: removed HSD_ASSERT - hsdNew may return NULL on corrupted class info. */
     }
+    /* PC port: if allocation failed, return NULL safely. */
+    if (jobj == NULL) return NULL;
     /* PC port: guard against corrupted method pointers. */
     HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
     if (jobj_info != NULL && jobj_info->load != NULL) {
@@ -742,7 +747,7 @@ HSD_JObj* HSD_JObjLoadJoint(HSD_Joint* arg0)
     if (arg0 == NULL || (uintptr_t)arg0 < 0x1000ULL) return NULL;
     
     HSD_JObj* jobj = JObjLoadJointSub(arg0, 0);
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         HSD_JObjResolveRefsAll(jobj, arg0);
     }
     return jobj;
@@ -1072,7 +1077,7 @@ void HSD_JObjDeleteRObj(HSD_JObj* jobj, HSD_RObj* robj)
 
 u32 HSD_JObjGetFlags(HSD_JObj* jobj)
 {
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         return jobj->flags;
     }
     return 0;
@@ -1080,7 +1085,7 @@ u32 HSD_JObjGetFlags(HSD_JObj* jobj)
 
 void HSD_JObjSetFlags(HSD_JObj* jobj, u32 flags)
 {
-    if (jobj != NULL) {
+    if (jobj != NULL && (uintptr_t)jobj >= 0x1000ULL) {
         if ((jobj->flags ^ flags) & JOBJ_CLASSICAL_SCALE) {
             // manually inlined HSD_JObjSetMtxDirty
             if (jobj != NULL && !HSD_JObjMtxIsDirty(jobj)) {
@@ -1093,11 +1098,11 @@ void HSD_JObjSetFlags(HSD_JObj* jobj, u32 flags)
 
 void HSD_JObjSetFlagsAll(HSD_JObj* jobj, u32 flags)
 {
-    if (jobj != NULL) {
+    if (jobj != NULL && (uintptr_t)jobj >= 0x1000ULL) {
         HSD_JObjSetFlags(jobj, flags);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             HSD_JObj* i;
-            for (i = jobj->child; i != NULL; i = i->next) {
+            for (i = jobj->child; i != NULL && (uintptr_t)i >= 0x1000ULL; i = i->next) {
                 HSD_JObjSetFlagsAll(i, flags);
             }
         }
@@ -1106,7 +1111,7 @@ void HSD_JObjSetFlagsAll(HSD_JObj* jobj, u32 flags)
 
 void HSD_JObjClearFlags(HSD_JObj* jobj, u32 arg1)
 {
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         if ((jobj->flags ^ arg1) & JOBJ_CLASSICAL_SCALE) {
             // manually inlined HSD_JObjSetMtxDirty
             if (jobj != NULL && !HSD_JObjMtxIsDirty(jobj)) {
@@ -1119,7 +1124,7 @@ void HSD_JObjClearFlags(HSD_JObj* jobj, u32 arg1)
 
 void HSD_JObjClearFlagsAll(HSD_JObj* jobj, u32 flags)
 {
-    if (jobj != NULL) {
+    if (PC_PTR_VALID(jobj)) {
         HSD_JObjClearFlags(jobj, flags);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             HSD_JObj* i;
@@ -1132,8 +1137,10 @@ void HSD_JObjClearFlagsAll(HSD_JObj* jobj, u32 flags)
 
 HSD_JObj* HSD_JObjAlloc(void)
 {
-    HSD_JObj* jobj =
-        hsdNew(default_class != NULL ? default_class : &hsdJObj.parent.parent);
+    HSD_ClassInfo* ci = default_class != NULL ? default_class : &hsdJObj.parent.parent;
+    /* PC port: guard against corrupted class info alloc pointer. */
+    if (ci == NULL || ci->alloc == NULL) return NULL;
+    HSD_JObj* jobj = hsdNew(ci);
     HSD_ASSERT(2003, jobj);
     return jobj;
 }

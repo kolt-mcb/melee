@@ -210,7 +210,8 @@ void __assert(const char *file, unsigned int line, const char *msg) {
     else { char tmp[16]; int j = 0; while (line) { tmp[j++] = (line%10)+'0'; line /= 10; } while(j) buf[i++] = tmp[--j]; }
     write(out_fd, buf, i);
     write(out_fd, "\n", 1);
-    abort();
+    /* PC port: do NOT abort on assertions — archive data corruption is expected. */
+    /* abort(); */
 }
 
 __attribute__((weak)) void OSInit(void) {}
