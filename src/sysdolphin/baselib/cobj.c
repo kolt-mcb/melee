@@ -1335,7 +1335,11 @@ HSD_CObj* HSD_CObjLoadDesc(HSD_CObjDesc* desc)
             cobj = hsdNew(info);
             HSD_ASSERT(0x7F7, cobj);
         }
-        HSD_COBJ_METHOD(cobj)->load(cobj, desc);
+        /* PC port: guard against corrupted method pointers. */
+        HSD_CObjInfo* cobj_info = HSD_COBJ_METHOD(cobj);
+        if (cobj_info != NULL && cobj_info->load != NULL) {
+            cobj_info->load(cobj, desc);
+        }
         return cobj;
     }
     return NULL;

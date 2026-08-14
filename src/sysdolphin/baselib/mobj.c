@@ -186,7 +186,11 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
             HSD_ASSERT(353, mobj);
         }
 
-        HSD_MOBJ_METHOD(mobj)->load(mobj, mobjdesc);
+        /* PC port: guard against corrupted method pointers. */
+        HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(mobj);
+        if (mobj_info != NULL && mobj_info->load != NULL) {
+            mobj_info->load(mobj, mobjdesc);
+        }
         /* PC port: skip TEV compilation for now - archive data corruption.
          * TEV descriptors from GCN archives have different struct layouts
          * on x86_64, causing crashes in the TEV compiler. */
@@ -247,9 +251,13 @@ HSD_TExp* MObjMakeTExp(HSD_MObj* mobj, HSD_TObj* tobj_top, HSD_TExp** list)
         if ((tobj_2->flags & (TEX_LIGHTMAP_DIFFUSE | TEX_LIGHTMAP_AMBIENT)) &&
             tobj_2->id != GX_TEXMAP_NULL)
         {
-            HSD_TOBJ_METHOD(tobj_2)->make_texp(
-                tobj_2, (TEX_LIGHTMAP_DIFFUSE | TEX_LIGHTMAP_AMBIENT), done,
-                &diff, &alpha, list);
+            /* PC port: guard against corrupted method pointers. */
+            HSD_TObjInfo* tobj_info = HSD_TOBJ_METHOD(tobj_2);
+            if (tobj_info != NULL && tobj_info->make_texp != NULL) {
+                tobj_info->make_texp(
+                    tobj_2, (TEX_LIGHTMAP_DIFFUSE | TEX_LIGHTMAP_AMBIENT), done,
+                    &diff, &alpha, list);
+            }
         }
     }
     done |= (TEX_LIGHTMAP_DIFFUSE | TEX_LIGHTMAP_AMBIENT);
@@ -292,8 +300,12 @@ HSD_TExp* MObjMakeTExp(HSD_MObj* mobj, HSD_TObj* tobj_top, HSD_TExp** list)
             if ((tobj_3->flags & TEX_LIGHTMAP_SPECULAR) &&
                 tobj_3->id != GX_TEXMAP_NULL)
             {
-                HSD_TOBJ_METHOD(tobj_3)->make_texp(
-                    tobj_3, TEX_LIGHTMAP_SPECULAR, done, &spec, &alpha, list);
+                /* PC port: guard against corrupted method pointers. */
+                HSD_TObjInfo* tobj_info = HSD_TOBJ_METHOD(tobj_3);
+                if (tobj_info != NULL && tobj_info->make_texp != NULL) {
+                    tobj_info->make_texp(
+                        tobj_3, TEX_LIGHTMAP_SPECULAR, done, &spec, &alpha, list);
+                }
             }
         }
         done |= TEX_LIGHTMAP_SPECULAR;
@@ -319,8 +331,12 @@ HSD_TExp* MObjMakeTExp(HSD_MObj* mobj, HSD_TObj* tobj_top, HSD_TExp** list)
     for (tobj_4 = tobj_top; tobj_4 != NULL; tobj_4 = tobj_4->next) {
         if ((tobj_4->flags & TEX_LIGHTMAP_EXT) && tobj_4->id != GX_TEXMAP_NULL)
         {
-            HSD_TOBJ_METHOD(tobj_4)->make_texp(tobj_4, TEX_LIGHTMAP_EXT, done,
-                                               &ext, &alpha, list);
+            /* PC port: guard against corrupted method pointers. */
+            HSD_TObjInfo* tobj_info = HSD_TOBJ_METHOD(tobj_4);
+            if (tobj_info != NULL && tobj_info->make_texp != NULL) {
+                tobj_info->make_texp(tobj_4, TEX_LIGHTMAP_EXT, done,
+                                     &ext, &alpha, list);
+            }
         }
     }
 
@@ -381,7 +397,11 @@ void HSD_MObjCompileTev(HSD_MObj* mobj)
             }
         }
         HSD_TObjAssignResources(tobj);
-        texp = HSD_MOBJ_METHOD(mobj)->make_texp(mobj, tobj, &mobj->texp);
+        /* PC port: guard against corrupted method pointers. */
+        HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(mobj);
+        if (mobj_info != NULL && mobj_info->make_texp != NULL) {
+            texp = mobj_info->make_texp(mobj, tobj, &mobj->texp);
+        }
         HSD_TExpCompile(texp, &mobj->tevdesc, &mobj->texp);
         if (tail != NULL) {
             *tail = NULL;
@@ -433,7 +453,11 @@ void HSD_MObjSetup(HSD_MObj* mobj, u32 rendermode)
     }
     HSD_TObjSetup(tobj);
     HSD_TObjSetupTextureCoordGen(tobj);
-    HSD_MOBJ_METHOD(mobj)->setup_tev(mobj, tobj, rendermode);
+    /* PC port: guard against corrupted method pointers. */
+    HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(mobj);
+    if (mobj_info != NULL && mobj_info->setup_tev != NULL) {
+        mobj_info->setup_tev(mobj, tobj, rendermode);
+    }
     HSD_SetupRenderModeWithCustomPE(rendermode, mobj->pe);
     if (tail != NULL) {
         *tail = NULL;

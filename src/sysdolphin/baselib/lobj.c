@@ -1012,7 +1012,11 @@ HSD_LObj* HSD_LObjLoadDesc(HSD_LightDesc* ldesc)
             *p = hsdNew(info);
             HSD_ASSERT(1644, *p);
         }
-        HSD_LOBJ_METHOD(*p)->load(*p, ldesc);
+        /* PC port: guard against corrupted method pointers. */
+        HSD_LObjInfo* lobj_info = HSD_LOBJ_METHOD(*p);
+        if (lobj_info != NULL && lobj_info->load != NULL) {
+            lobj_info->load(*p, ldesc);
+        }
         p = &(*p)->next;
     }
     *p = NULL;
