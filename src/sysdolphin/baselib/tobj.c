@@ -296,7 +296,11 @@ HSD_TObj* HSD_TObjLoadDesc(HSD_TObjDesc* td)
             tobj = hsdNew(info);
             HSD_ASSERT(468, tobj);
         }
-        HSD_TOBJ_METHOD(tobj)->load(tobj, td);
+        /* PC port: guard against corrupted method pointers. */
+        HSD_TObjInfo* tobj_info = HSD_TOBJ_METHOD(tobj);
+        if (tobj_info != NULL && tobj_info->load != NULL) {
+            tobj_info->load(tobj, td);
+        }
         return tobj;
     } else {
         return NULL;
@@ -422,7 +426,11 @@ static void TObjSetupMtx(HSD_TObj* tobj)
     }
 
     if (tobj->flags & TEX_MTX_DIRTY) {
-        HSD_TOBJ_METHOD(tobj)->make_mtx(tobj);
+        /* PC port: guard against corrupted method pointers. */
+        HSD_TObjInfo* tobj_info = HSD_TOBJ_METHOD(tobj);
+        if (tobj_info != NULL && tobj_info->make_mtx != NULL) {
+            tobj_info->make_mtx(tobj);
+        }
         tobj->flags &= ~TEX_MTX_DIRTY;
     }
 

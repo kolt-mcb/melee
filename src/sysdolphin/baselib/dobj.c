@@ -330,6 +330,8 @@ void HSD_DObjDisp(HSD_DObj* dobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
         }
     }
     for (p = dobj->pobj; p != NULL; p = p->next) {
+        /* PC port: guard against corrupted pobj->next pointers. */
+        if ((uintptr_t)p > 0xFFFFFFFFULL) break;
         /* PC port: guard against corrupted method pointers. */
         HSD_PObjInfo* pobj_info = HSD_POBJ_METHOD(p);
         if (pobj_info != NULL && pobj_info->disp != NULL) {
@@ -337,7 +339,11 @@ void HSD_DObjDisp(HSD_DObj* dobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
         }
     }
     if ((rendermode & 0x4000000) == 0) {
-        HSD_MOBJ_METHOD(dobj->mobj)->unset(dobj->mobj, rendermode);
+        /* PC port: guard against corrupted method pointers. */
+        HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(dobj->mobj);
+        if (mobj_info != NULL && mobj_info->unset != NULL) {
+            mobj_info->unset(dobj->mobj, rendermode);
+        }
     }
     HSD_MObjSetCurrent(NULL);
 }

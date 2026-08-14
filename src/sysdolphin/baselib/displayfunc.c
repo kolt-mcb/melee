@@ -302,6 +302,8 @@ void HSD_JObjDispSub(HSD_JObj* jobj, MtxPtr vmtx, MtxPtr pmtx,
 
     HSD_PObjClearMtxMark(NULL, 0);
     for (dobj = jobj->u.dobj; dobj; dobj = dobj->next) {
+        /* PC port: guard against corrupted dobj->next pointers. */
+        if ((uintptr_t)dobj > 0xFFFFFFFFULL) break;
         if (dobj->flags & DOBJ_HIDDEN) {
             continue;
         }

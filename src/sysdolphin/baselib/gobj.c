@@ -150,7 +150,12 @@ inline void render_gobj(HSD_GObj* cur, int i)
 {
     HSD_GObj* saved = HSD_GObj_804D7814;
     HSD_GObj_804D7814 = cur;
-    cur->render_cb(cur, i);
+    /* PC port: guard against corrupted callback pointers. */
+    if (cur->render_cb != NULL &&
+        (uintptr_t)cur->render_cb >= 0x400000ULL &&
+        (uintptr_t)cur->render_cb <= 0xFFFFFFFFULL) {
+        cur->render_cb(cur, i);
+    }
     HSD_GObj_804D7814 = saved;
 }
 

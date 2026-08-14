@@ -148,7 +148,11 @@ HSD_WObj* HSD_WObjLoadDesc(HSD_WObjDesc* desc)
             wobj = hsdNew(info);
             HSD_ASSERT(252, wobj);
         }
-        HSD_WOBJ_METHOD(wobj)->load(wobj, desc);
+        /* PC port: guard against corrupted method pointers. */
+        HSD_WObjInfo* wobj_info = HSD_WOBJ_METHOD(wobj);
+        if (wobj_info != NULL && wobj_info->load != NULL) {
+            wobj_info->load(wobj, desc);
+        }
         return wobj;
     }
     return NULL;
