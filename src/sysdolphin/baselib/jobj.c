@@ -738,7 +738,9 @@ HSD_JObj* HSD_JObjLoadJoint(HSD_Joint* arg0)
     if (arg0 == NULL || (uintptr_t)arg0 < 0x1000ULL) return NULL;
     
     HSD_JObj* jobj = JObjLoadJointSub(arg0, 0);
-    HSD_JObjResolveRefsAll(jobj, arg0);
+    if (jobj != NULL) {
+        HSD_JObjResolveRefsAll(jobj, arg0);
+    }
     return jobj;
 }
 
@@ -758,7 +760,11 @@ void HSD_JObjResolveRefs(HSD_JObj* jobj, HSD_Joint* joint)
         return;
     }
 
-    HSD_RObjResolveRefsAll(jobj->robj, joint->robjdesc);
+    /* PC port: guard against corrupted joint pointers. */
+    if ((uintptr_t)joint < 0x1000ULL) return;
+
+    /* PC port: skip RObj resolve - archive data corruption. */
+    /* HSD_RObjResolveRefsAll(jobj->robj, joint->robjdesc); */
     if (!!(jobj->flags & JOBJ_INSTANCE)) {
         HSD_JObjUnref(jobj->child);
         jobj->child = HSD_IDGetDataFromTable(NULL, (u32) joint->child, NULL);
@@ -775,6 +781,9 @@ void HSD_JObjResolveRefsAll(HSD_JObj* jobj, HSD_Joint* joint)
     u8 _[4];
 
     while (jobj != NULL && joint != NULL) {
+        /* PC port: guard against corrupted joint pointers. */
+        if ((uintptr_t)joint < 0x1000ULL) break;
+        
         HSD_JObjResolveRefs(jobj, joint);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             HSD_JObjResolveRefsAll(jobj->child, joint->child);

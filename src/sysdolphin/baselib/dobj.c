@@ -178,6 +178,9 @@ void HSD_DObjAnimAll(HSD_DObj* dobj)
 
 static int DObjLoad(HSD_DObj* dobj, HSD_DObjDesc* desc)
 {
+    /* PC port: guard against corrupted archive descriptors. */
+    if (desc == NULL) return 0;
+    
     dobj->next = HSD_DObjLoadDesc(desc->next);
     dobj->mobj = HSD_MObjLoadDesc(desc->mobjdesc);
     dobj->pobj = HSD_PObjLoadDesc(desc->pobjdesc);
@@ -213,6 +216,9 @@ HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
     if (desc == NULL) {
         return NULL;
     }
+
+    /* PC port: guard against GCN-packed DObjDesc with garbage fields. */
+    if ((uintptr_t)desc < 0x20000000ULL) return NULL;
 
     /* PC port: bypass hsdNew to avoid GCN class info corruption. */
     if (!dobj_class_initialized) {
@@ -272,13 +278,20 @@ void HSD_DObjResolveRefs(HSD_DObj* dobj, HSD_DObjDesc* desc)
     if (dobj == NULL || desc == NULL) {
         return;
     }
+    /* PC port: guard against corrupted DObjDesc pointers. */
+    if ((uintptr_t)desc < 0x1000ULL) return;
     HSD_PObjResolveRefsAll(dobj->pobj, desc->pobjdesc);
 }
 
 void HSD_DObjResolveRefsAll(HSD_DObj* dobj, HSD_DObjDesc* desc)
 {
+    /* PC port: guard against corrupted DObjDesc pointers. */
+    if (desc != NULL && (uintptr_t)desc < 0x1000ULL) return;
+    
     for (; dobj != NULL && desc != NULL; dobj = dobj->next, desc = desc->next)
     {
+        /* PC port: guard against corrupted DObjDesc pointers. */
+        if ((uintptr_t)desc < 0x1000ULL) break;
         HSD_DObjResolveRefs(dobj, desc);
     }
 }
@@ -306,12 +319,22 @@ void HSD_DObjDisp(HSD_DObj* dobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 {
     HSD_PObj* p;
 
+    if (dobj == NULL || dobj->mobj == NULL) return;
+    
     HSD_MObjSetCurrent(dobj->mobj);
     if ((rendermode & 0x4000000) == 0) {
-        HSD_MOBJ_METHOD(dobj->mobj)->setup(dobj->mobj, rendermode);
+        /* PC port: guard against corrupted method pointers. */
+        HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(dobj->mobj);
+        if (mobj_info != NULL && mobj_info->setup != NULL) {
+            mobj_info->setup(dobj->mobj, rendermode);
+        }
     }
     for (p = dobj->pobj; p != NULL; p = p->next) {
-        HSD_POBJ_METHOD(p)->disp(p, vmtx, pmtx, rendermode);
+        /* PC port: guard against corrupted method pointers. */
+        HSD_PObjInfo* pobj_info = HSD_POBJ_METHOD(p);
+        if (pobj_info != NULL && pobj_info->disp != NULL) {
+            pobj_info->disp(p, vmtx, pmtx, rendermode);
+        }
     }
     if ((rendermode & 0x4000000) == 0) {
         HSD_MOBJ_METHOD(dobj->mobj)->unset(dobj->mobj, rendermode);

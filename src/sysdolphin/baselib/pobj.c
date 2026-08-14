@@ -285,6 +285,9 @@ static HSD_ShapeSet* loadShapeSetDesc(HSD_ShapeSetDesc* sdesc)
 
 static s32 PObjLoad(HSD_PObj* pobj, HSD_PObjDesc* desc)
 {
+    /* PC port: guard against GCN-packed PObjDesc with garbage fields. */
+    if (desc == NULL) return 0;
+    
     pobj->next = HSD_PObjLoadDesc(desc->next);
     pobj->verts = desc->verts;
     pobj->flags = desc->flags;
@@ -317,6 +320,8 @@ HSD_PObj* HSD_PObjLoadDesc(HSD_PObjDesc* pobjdesc)
     static int pobj_class_initialized = 0;
     if (pobjdesc != NULL) {
         HSD_PObj* pobj;
+        /* PC port: guard against GCN-packed PObjDesc with garbage fields. */
+        if ((uintptr_t)pobjdesc < 0x20000000ULL) return NULL;
         /* PC port: bypass hsdNew to avoid GCN class info corruption. */
         if (!pobj_class_initialized) {
             PObjInfoInit();
@@ -403,6 +408,8 @@ void HSD_PObjResolveRefs(HSD_PObj* pobj, HSD_PObjDesc* pdesc)
     if (!pobj || !pdesc) {
         return;
     }
+    /* PC port: guard against corrupted PObjDesc pointers. */
+    if ((uintptr_t)pdesc < 0x1000ULL) return;
 
     switch (pobj_type(pobj)) {
     case POBJ_ENVELOPE:
@@ -426,9 +433,14 @@ void HSD_PObjResolveRefs(HSD_PObj* pobj, HSD_PObjDesc* pdesc)
 
 void HSD_PObjResolveRefsAll(HSD_PObj* pobj, HSD_PObjDesc* pdesc)
 {
+    /* PC port: guard against corrupted PObjDesc pointers. */
+    if (pdesc != NULL && (uintptr_t)pdesc < 0x1000ULL) return;
+    
     for (; pobj != NULL && pdesc != NULL;
          pobj = pobj->next, pdesc = pdesc->next)
     {
+        /* PC port: guard against corrupted PObjDesc pointers. */
+        if ((uintptr_t)pdesc < 0x1000ULL) break;
         HSD_PObjResolveRefs(pobj, pdesc);
     }
 }
@@ -1242,6 +1254,8 @@ static void PObjDispShapeAnim(HSD_PObj* pobj, u32 rendermode)
 
 void HSD_PObjDisp(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 {
+    if (pobj == NULL) return;
+    
     switch (pobj->flags & (POBJ_CULLFRONT | POBJ_CULLBACK)) {
     case 0x0:
         HSD_StateSetCullMode(GX_CULL_NONE);
@@ -1256,7 +1270,11 @@ void HSD_PObjDisp(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
         return;
     }
 
-    HSD_POBJ_METHOD(pobj)->setup_mtx(pobj, vmtx, pmtx, rendermode);
+    /* PC port: guard against corrupted method pointers. */
+    HSD_PObjInfo* pobj_info = HSD_POBJ_METHOD(pobj);
+    if (pobj_info != NULL && pobj_info->setup_mtx != NULL) {
+        pobj_info->setup_mtx(pobj, vmtx, pmtx, rendermode);
+    }
     if (pobj_type(pobj) == POBJ_SHAPEANIM) {
         PObjDispShapeAnim(pobj, rendermode);
     } else {

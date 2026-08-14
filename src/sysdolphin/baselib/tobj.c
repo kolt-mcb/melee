@@ -251,6 +251,9 @@ void HSD_TObjAnimAll(HSD_TObj* tobj)
 
 static int TObjLoad(HSD_TObj* tobj, HSD_TObjDesc* td)
 {
+    /* PC port: guard against GCN-packed TObjDesc with garbage fields. */
+    if (td == NULL) return 0;
+    
     tobj->next = HSD_TObjLoadDesc(td->next);
     tobj->id = td->id;
     tobj->src = td->src;
@@ -283,6 +286,9 @@ HSD_TObj* HSD_TObjLoadDesc(HSD_TObjDesc* td)
     if (td != NULL) {
         HSD_TObj* tobj;
         HSD_ClassInfo* info;
+
+        /* PC port: guard against GCN-packed TObjDesc with garbage fields. */
+        if ((uintptr_t)td < 0x20000000ULL) return NULL;
 
         if (!td->class_name || !(info = hsdSearchClassInfo(td->class_name))) {
             tobj = HSD_TObjAlloc();

@@ -202,6 +202,12 @@ void HSD_GObj_80390FC0(void)
                 break; /* Stop walking this link - pointer is corrupted */
             }
             if (cur->render_cb != NULL) {
+                /* PC port: guard against corrupted callback pointers. */
+                if ((uintptr_t)cur->render_cb < 0x400000ULL ||
+                    (uintptr_t)cur->render_cb > 0xFFFFFFFFULL) {
+                    cur = next_cur;
+                    continue;  /* Skip corrupted callback */
+                }
                 saved = HSD_GObj_804D7818;
                 HSD_GObj_804D7818 = cur;
                 cur->render_cb(cur, 0);
