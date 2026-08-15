@@ -131,10 +131,15 @@ void CalcDistance(HSD_TExp** tevs, int* dist, HSD_TExp* tev, int num,
     int idx;
     int i;
 
+    #if BUILD_TARGET_PC
     /* PC port: guard against garbage pointers */
     if (tev == NULL || (uintptr_t) tev < 0x10000) {
         return;
     }
+    else {
+        port_guard_warn("texpdag.c:134");
+    }
+    #endif /* BUILD_TARGET_PC */
 
     p = tevs;
     idx = 0;
@@ -184,8 +189,13 @@ int HSD_TExpMakeDag(HSD_TExp* root, HSD_TExpDag* list)
         HSD_TExp* tmp;
         HSD_ASSERT(0xF6, j<HSD_TEXP_MAX_NUM);
         tmp = sp94[j];
+        #if BUILD_TARGET_PC
         /* PC port: guard against garbage pointers */
-        if (tmp == NULL || (uintptr_t) tmp < 0x10000) continue;
+                if (tmp == NULL || (uintptr_t) tmp < 0x10000) {
+            port_guard_warn("texpdag.c:190");
+            continue;
+        }
+        #endif /* BUILD_TARGET_PC */
         for (i = 0; i < 4; i++) {
             if (tmp->tev.c_in[i].type == HSD_TE_TEV && tmp->tev.c_in[i].exp != NULL) {
                 for (k = 0; k < num; k++) {
@@ -407,8 +417,13 @@ int SimplifySrc(HSD_TExp* arg0)
         if (arg0->tev.c_in[i].type == HSD_TE_TEV) {
             HSD_TExp* src = arg0->tev.c_in[i].exp;
             u8 sel = arg0->tev.c_in[i].sel;
+            #if BUILD_TARGET_PC
             /* PC port: guard against garbage pointers */
-            if (src == NULL || (uintptr_t) src < 0x10000) continue;
+                        if (src == NULL || (uintptr_t) src < 0x10000) {
+                port_guard_warn("texpdag.c:413");
+                continue;
+            }
+            #endif /* BUILD_TARGET_PC */
             if (HSD_TExpSimplify(src) != 0) {
                 result = true;
             }
@@ -492,8 +507,13 @@ int SimplifySrc(HSD_TExp* arg0)
         if (arg0->tev.a_in[i].type == HSD_TE_TEV) {
             HSD_TExp* src = arg0->tev.a_in[i].exp;
             u8 sel = arg0->tev.a_in[i].sel;
+            #if BUILD_TARGET_PC
             /* PC port: guard against garbage pointers */
-            if (src == NULL || (uintptr_t) src < 0x10000) continue;
+                        if (src == NULL || (uintptr_t) src < 0x10000) {
+                port_guard_warn("texpdag.c:498");
+                continue;
+            }
+            #endif /* BUILD_TARGET_PC */
             HSD_TExpSimplify(src);
             switch (src->tev.a_op) {
             case 0xFF:
@@ -1278,13 +1298,20 @@ int HSD_TExpSimplify2(HSD_TExp* texp_)
     u8 src_sel;
     int i;
 
+    #if BUILD_TARGET_PC
     /* PC port: guard against garbage pointers */
-    if (texp == NULL || (uintptr_t) texp < 0x10000) return 0;
+        if (texp == NULL || (uintptr_t) texp < 0x10000) {
+        port_guard_warn("texpdag.c:1282");
+        return 0;
+    }
+    #endif /* BUILD_TARGET_PC */
 
     for (i = 0; i < 4; i++) {
         src_exp = texp->tev.c_in[i].exp;
+#if BUILD_TARGET_PC
         /* PC port: skip invalid entries */
         if (src_exp == NULL || (uintptr_t) src_exp < 0x10000) continue;
+#endif
         src_sel = texp->tev.c_in[i].sel;
         if (texp->tev.c_in[i].type == HSD_TE_TEV && src_sel == 1 &&
             IsThroughColor(src_exp))
@@ -1308,8 +1335,10 @@ int HSD_TExpSimplify2(HSD_TExp* texp_)
     for (i = 0; i < 4; i++) {
         src_exp = texp->tev.a_in[i].exp;
         src_sel = texp->tev.a_in[i].sel;
+#if BUILD_TARGET_PC
         /* PC port: skip invalid entries */
         if (src_exp == NULL || (uintptr_t) src_exp < 0x10000) continue;
+#endif
         if (texp->tev.a_in[i].type == HSD_TE_TEV && IsThroughAlpha(src_exp)) {
             switch (src_exp->tev.a_in[3].type) {
             case HSD_TE_KONST:

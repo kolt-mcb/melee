@@ -302,19 +302,29 @@ void HSD_JObjDispSub(HSD_JObj* jobj, MtxPtr vmtx, MtxPtr pmtx,
 
     HSD_PObjClearMtxMark(NULL, 0);
     for (dobj = jobj->u.dobj; dobj; dobj = dobj->next) {
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted dobj->next pointers. */
-        if ((uintptr_t)dobj > 0xFFFFFFFFULL) break;
+                if ((uintptr_t)dobj > 0xFFFFFFFFULL) {
+            port_guard_warn("displayfunc.c:305");
+            break;
+        }
+        #endif /* BUILD_TARGET_PC */
         if (dobj->flags & DOBJ_HIDDEN) {
             continue;
         }
 
         if (dobj->flags & dobj_trsp) {
             HSD_DObjSetCurrent(dobj);
+            #if BUILD_TARGET_PC
             /* PC port: guard against corrupted method pointers. */
             HSD_DObjInfo* dobj_info = HSD_DOBJ_METHOD(dobj);
             if (dobj_info != NULL && dobj_info->disp != NULL) {
                 dobj_info->disp(dobj, vmtx, pmtx, rendermode);
             }
+            else {
+                port_guard_warn("displayfunc.c:316");
+            }
+            #endif /* BUILD_TARGET_PC */
         }
     }
     HSD_DObjSetCurrent(NULL);
@@ -327,8 +337,10 @@ void HSD_JObjDispDObj(HSD_JObj* jobj, MtxPtr vmtx, HSD_TrspMask trsp_mask,
     HSD_CObj* cobj;
     Mtx mtx;
 
+#if BUILD_TARGET_PC
     if (jobj == NULL) return;
-    
+    #endif /* BUILD_TARGET_PC */
+
     if ((jobj->flags & JOBJ_HIDDEN) == 0) {
         u32 xlu_bits = jobj->flags & (trsp_mask << JOBJ_TRSP_SHIFT);
         if (xlu_bits != 0) {
@@ -336,14 +348,20 @@ void HSD_JObjDispDObj(HSD_JObj* jobj, MtxPtr vmtx, HSD_TrspMask trsp_mask,
 
             if (vmtx == NULL) {
                 cobj = HSD_CObjGetCurrent();
+#if BUILD_TARGET_PC
                 if (cobj == NULL) return;  /* PC port: no camera init */
+#endif
                 vmtx = HSD_CObjGetViewingMtxPtrDirect(cobj);
             }
 
+#if BUILD_TARGET_PC
             /* PC port: guard against corrupted method pointers. */
             HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
             if (jobj_info == NULL || jobj_info->make_pmtx == NULL ||
-                jobj_info->disp == NULL) return;
+                jobj_info->disp == NULL) {
+                port_guard_warn("displayfunc.c:347");
+                return;
+            }
 
             jobj_info->make_pmtx(jobj, vmtx, mtx);
             if ((xlu_bits & JOBJ_OPA) != 0) {
@@ -385,6 +403,48 @@ void HSD_JObjDispDObj(HSD_JObj* jobj, MtxPtr vmtx, HSD_TrspMask trsp_mask,
                     }
                 }
             }
+#else
+            HSD_JOBJ_METHOD(jobj)->make_pmtx(jobj, vmtx, mtx);
+            if ((xlu_bits & JOBJ_OPA) != 0) {
+                HSD_JOBJ_METHOD(jobj)->disp(jobj, vmtx, mtx, HSD_TRSP_OPA,
+                                            rendermode);
+            }
+            if (zsort_listing == 0) {
+                if ((xlu_bits & JOBJ_TEXEDGE) != 0) {
+                    HSD_JOBJ_METHOD(jobj)->disp(jobj, vmtx, mtx,
+                                                HSD_TRSP_TEXEDGE, rendermode);
+                }
+                if ((xlu_bits & JOBJ_XLU) != 0) {
+                    HSD_JOBJ_METHOD(jobj)->disp(jobj, vmtx, mtx, HSD_TRSP_XLU,
+                                                rendermode);
+                }
+            } else {
+                if ((xlu_bits & (JOBJ_TEXEDGE | JOBJ_XLU)) != 0) {
+                    HSD_ZList* zlist;
+
+                    zlist = HSD_ZListAlloc();
+                    MTXCopy(mtx, zlist->pmtx);
+                    if (vmtx != NULL) {
+                        zlist->vmtx = (MtxPtr) HSD_MtxAlloc();
+                        MTXCopy(vmtx, zlist->vmtx);
+                    }
+                    zlist->jobj = jobj;
+                    zlist->rendermode = rendermode;
+                    *zlist_bottom = zlist;
+                    zlist_bottom = &zlist->next;
+                    if ((xlu_bits & JOBJ_TEXEDGE) != 0) {
+                        *zlist_texedge_bottom = zlist;
+                        zlist_texedge_bottom = &zlist->sort.texedge;
+                        zlist_texedge_nb += 1;
+                    }
+                    if ((xlu_bits & JOBJ_XLU) != 0) {
+                        *zlist_xlu_bottom = zlist;
+                        zlist_xlu_bottom = &zlist->sort.xlu;
+                        zlist_xlu_nb += 1;
+                    }
+                }
+            }
+#endif /* BUILD_TARGET_PC */
         }
     }
 }

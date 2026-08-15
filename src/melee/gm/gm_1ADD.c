@@ -329,11 +329,12 @@ void fn_801AE948(HSD_GObj* arg0)
 
 void gm_801AEBB0(void)
 {
+#if BUILD_TARGET_PC
     /* PC port: skip message window init to avoid va_arg issues
      * and NULL pointer dereference. Message windows are not needed
      * for title screen rendering. */
     return;
-    
+#else
     HSD_GObj* gobj;
     PAD_STACK(4);
 
@@ -353,6 +354,7 @@ void gm_801AEBB0(void)
 
     gm_804D686C = HSD_SisLib_803A611C(3, gobj, 9, 13, 0, 14, 0, 18);
     HSD_GObj_SetupProc(GObj_Create(15, 17, 0), fn_801AE948, 0);
+#endif /* BUILD_TARGET_PC */
 }
 
 HSD_GObj* gm_801AECC4(int model_idx)

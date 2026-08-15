@@ -55,6 +55,7 @@ static void order_data(void)
     (void) __FILE__;
 }
 
+#if BUILD_TARGET_PC
 /* PC port: Big-endian byte-swap for archive stage data structs.
  * The GCN archive data section is big-endian with 32-bit pointers.
  * On x86_64, the C structs have 64-bit pointers with different field offsets.
@@ -1086,6 +1087,7 @@ static UnkArchiveStruct* grDatFiles_ConvertArchiveGCNtoX64(HSD_Archive* archive,
 
     return x64Arc;
 }
+#endif /* BUILD_TARGET_PC */
 
 void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
 {
@@ -1094,6 +1096,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
         HSD_Archive* sp14;
         s32 phi_r28;
         void* r4 = arg0;
+#if BUILD_TARGET_PC
         if (arg2 != 0) {
             /* PC port: avoid variadic call crash - load archive then get symbol directly */
             void* data;
@@ -1142,7 +1145,16 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
             }
             phi_r28 = 0;
         }
-        
+#else
+        if (arg2 != 0) {
+            phi_r28 =
+                lbArchive_800171CC(&sp14, r4, &temp_r3->unk4, "map_head", 0);
+        } else {
+            sp14 =
+                lbArchive_80016DBC(r4, (void**) &temp_r3->unk4, "map_head", 0);
+            phi_r28 = 0;
+        }
+#endif /* BUILD_TARGET_PC */
         temp_r3->unk8 = 0;
         if (arg1 == 0) {
             stage_info.coll_data =

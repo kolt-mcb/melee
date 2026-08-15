@@ -6,36 +6,13 @@
 #include <melee/gm/gmscdata.h>
 #include <melee/gm/types.h>
 
-/* PC port: forward declare GCPadStatus from undef_stubs.c */
-typedef struct {
-    u32 button;
-    u32 last_button;
-    u32 trigger;
-    u32 repeat;
-    u32 release;
-    s32 repeat_count;
-    s8 stickX;
-    s8 stickY;
-    s8 subStickX;
-    s8 subStickY;
-    u8 analogL;
-    u8 analogR;
-    u8 analogA;
-    u8 analogB;
-    f32 nml_stickX;
-    f32 nml_stickY;
-    f32 nml_subStickX;
-    f32 nml_subStickY;
-    f32 nml_analogL;
-    f32 nml_analogR;
-    f32 nml_analogA;
-    f32 nml_analogB;
-    u8 cross_dir;
-    s8 err;
-} GCPadStatus;
+#if BUILD_TARGET_PC
+/* PC port: GC pad state shared with the input bridge (undef_stubs.c). */
+#include <port/gc_pad.h>
 
 /* PC port: bridge from g_gc_pads to controller_map. */
 void gm_SyncPadToControllerMap(void);
+#endif /* BUILD_TARGET_PC */
 
 u64 gm_GetButtonsPressed(u8 idx)
 {
@@ -199,6 +176,7 @@ void gm_801A3EF4(void)
     }
 }
 
+#if BUILD_TARGET_PC
 /* PC port: bridge from g_gc_pads to controller_map. */
 void gm_SyncPadToControllerMap(void)
 {
@@ -218,3 +196,4 @@ void gm_SyncPadToControllerMap(void)
         controller_map.x0[4].release |= g_gc_pads[i].release;
     }
 }
+#endif /* BUILD_TARGET_PC */

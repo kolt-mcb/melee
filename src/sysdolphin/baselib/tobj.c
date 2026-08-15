@@ -251,8 +251,13 @@ void HSD_TObjAnimAll(HSD_TObj* tobj)
 
 static int TObjLoad(HSD_TObj* tobj, HSD_TObjDesc* td)
 {
+    #if BUILD_TARGET_PC
     /* PC port: guard against GCN-packed TObjDesc with garbage fields. */
-    if (td == NULL) return 0;
+        if (td == NULL) {
+        port_guard_warn("tobj.c:254");
+        return 0;
+    }
+    #endif /* BUILD_TARGET_PC */
     
     tobj->next = HSD_TObjLoadDesc(td->next);
     tobj->id = td->id;
@@ -287,8 +292,13 @@ HSD_TObj* HSD_TObjLoadDesc(HSD_TObjDesc* td)
         HSD_TObj* tobj;
         HSD_ClassInfo* info;
 
+        #if BUILD_TARGET_PC
         /* PC port: guard against GCN-packed TObjDesc with garbage fields. */
-        if ((uintptr_t)td < 0x20000000ULL) return NULL;
+                if ((uintptr_t)td < 0x20000000ULL) {
+            port_guard_warn("tobj.c:290");
+            return NULL;
+        }
+        #endif /* BUILD_TARGET_PC */
 
         if (!td->class_name || !(info = hsdSearchClassInfo(td->class_name))) {
             tobj = HSD_TObjAlloc();
@@ -296,11 +306,16 @@ HSD_TObj* HSD_TObjLoadDesc(HSD_TObjDesc* td)
             tobj = hsdNew(info);
             HSD_ASSERT(468, tobj);
         }
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted method pointers. */
         HSD_TObjInfo* tobj_info = HSD_TOBJ_METHOD(tobj);
         if (tobj_info != NULL && tobj_info->load != NULL) {
             tobj_info->load(tobj, td);
         }
+        else {
+            port_guard_warn("tobj.c:305");
+        }
+        #endif /* BUILD_TARGET_PC */
         return tobj;
     } else {
         return NULL;
@@ -426,11 +441,16 @@ static void TObjSetupMtx(HSD_TObj* tobj)
     }
 
     if (tobj->flags & TEX_MTX_DIRTY) {
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted method pointers. */
         HSD_TObjInfo* tobj_info = HSD_TOBJ_METHOD(tobj);
         if (tobj_info != NULL && tobj_info->make_mtx != NULL) {
             tobj_info->make_mtx(tobj);
         }
+        else {
+            port_guard_warn("tobj.c:436");
+        }
+        #endif /* BUILD_TARGET_PC */
         tobj->flags &= ~TEX_MTX_DIRTY;
     }
 
@@ -1191,10 +1211,13 @@ void HSD_TObjSetup(HSD_TObj* tobj)
 
         TObjSetupMtx(tobj);
         HSD_ASSERT(1578, imagedesc);
+        #if BUILD_TARGET_PC
         /* PC port: guard against NULL image_ptr from GCN→x64 conversion */
         if (!imagedesc->image_ptr) {
+            port_guard_warn("tobj.c:1194");
             continue;
         }
+        #endif /* BUILD_TARGET_PC */
 
         lod = tobj->lod != NULL ? tobj->lod : &default_lod;
         min_filter = lod->minFilt;

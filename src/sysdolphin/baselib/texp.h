@@ -130,10 +130,12 @@ typedef struct _HSD_TECnst {
     u8 idx;
     u8 ref;
     u8 range;
+#if BUILD_TARGET_PC
     /* PC port: embedded buffer for constant values.
      * We copy values here instead of storing pointers,
      * since the original pointers may be freed during rendering. */
     u8 val_buf[16];
+#endif
 } HSD_TECnst;
 
 typedef struct _HSD_TEArg {

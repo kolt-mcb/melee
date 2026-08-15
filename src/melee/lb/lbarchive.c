@@ -19,8 +19,12 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
 
     if (HSD_ArchiveParse(archive, data, length) == -1) {
         OSReport("HSD_ArchiveParse error!\n");
+#if BUILD_TARGET_PC
         /* PC port: don't crash on archive parse errors (byte-order issues) */
         /* HSD_ASSERT(73, 0); */
+#else
+        HSD_ASSERT(73, 0);
+#endif /* BUILD_TARGET_PC */
         memset(archive, 0, sizeof(HSD_Archive));
         return;
     }
@@ -85,8 +89,12 @@ static inline void lbArchive_vLoadSectionsFatal(HSD_Archive* archive,
         }
         if (*symbol == NULL) {
             OSReport("Cannot find symbol %s.\n", symbol_name ? symbol_name : "(null)");
+#if BUILD_TARGET_PC
             /* PC port: don't crash on missing symbols */
             /* HSD_ASSERT(112, 0); */
+#else
+            HSD_ASSERT(112, 0);
+#endif /* BUILD_TARGET_PC */
         }
     }
 }
@@ -121,6 +129,7 @@ HSD_Archive* lbArchive_LoadSymbols(const char* filename, void* symbols, ...)
 
     va_start(sections, symbols);
 
+#if BUILD_TARGET_PC
     /* PC port: va_arg layout is broken for GCN-style variadic calls on x86_64.
      * The caller passes (filename, &ptr1, "name1", &ptr2, "name2", ..., NULL).
      * But the callee reads (void**, const char*) pairs from va_list, which
@@ -137,6 +146,16 @@ HSD_Archive* lbArchive_LoadSymbols(const char* filename, void* symbols, ...)
     lbFile_8001668C(filename, data, &length);
     lbArchive_InitializeDAT(archive, data, length);
     return archive;
+#else
+    data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(filename)));
+    archive = lbHeap_80015BD0(0, sizeof(HSD_Archive));
+    lbFile_8001668C(filename, data, &length);
+    lbArchive_InitializeDAT(archive, data, length);
+    lbArchive_vLoadSectionsFatal(archive, symbols, sections);
+
+    va_end(sections);
+    return archive;
+#endif /* BUILD_TARGET_PC */
 }
 
 HSD_Archive* lbArchive_80016DBC(const char* filename, void* symbols, ...)

@@ -145,11 +145,15 @@ void* lbDvd_80017740(int type, int entry_num, int transient_heap, int heap,
     entry->state = 1;
     entry->type = type;
     entry->entry_num = entry_num;
+#if BUILD_TARGET_PC
     /* PC port: don't crash on uninitialized heap status */
     if (lbHeap_80015BB8(heap)) {
         /* HSD_ASSERTREPORT(0x1CB, 0, "%d, %d\n", heap, entry_num); */
         fprintf(stderr, "[LbDvd] heap %d status non-zero for entry %d\n", heap, entry_num);
     }
+#else
+    HSD_ASSERTREPORT(0x1CB, 0, "%d, %d\n", heap, entry_num);
+#endif /* BUILD_TARGET_PC */
     entry->heap = heap;
     entry->size = size;
     entry->archive = NULL;
@@ -451,9 +455,13 @@ HSD_Archive* lbDvd_8001819C(const char* basename)
     char* filename = lbFile_80016204(basename);
     archive = lbDvd_GetPreloadedArchive(DVDConvertPathToEntrynum(filename));
     if (DbLevel != 0 && preloadCache.preloaded && archive == NULL) {
+#if BUILD_TARGET_PC
         /* PC port: don't crash on missing preloaded archives */
         fprintf(stderr, "[LbDvd] %s is not PRELOADed.\n", filename);
         /* HSD_ASSERTREPORT(948, 0, "[LbDvd] %s is not PRELOADed.\n", filename); */
+#else
+        HSD_ASSERTREPORT(948, 0, "[LbDvd] %s is not PRELOADed.\n", filename);
+#endif /* BUILD_TARGET_PC */
     }
     return archive;
 }
@@ -501,11 +509,16 @@ void lbDvd_80018254(void)
 {
     bool enabled;
 
+#if BUILD_TARGET_PC
     /* PC port: skip DVD preload cache processing to avoid heap crashes */
     return;
 
     if (memcmp(&preloadCache.new_scene, &preloadCache.scene,
                sizeof(PreloadCacheScene)) == 0)
+#else
+    if (memcmp(&preloadCache.new_scene, &preloadCache.scene,
+               sizeof(PreloadCacheScene)) == 0)
+#endif /* BUILD_TARGET_PC */
     {
         return;
     }

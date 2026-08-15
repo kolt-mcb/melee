@@ -158,6 +158,7 @@ HSD_SObj* HSD_SObjLib_803A477C(HSD_GObj* gobj, HSD_SObjDesc* desc,
     f32 inv_width;
     f32 inv_height;
 
+#if BUILD_TARGET_PC
     /* PC port: SObj descriptors from archive data have GCN-packed structs
      * (different field offsets than x86_64). Guard against archive data
      * by checking if desc pointer is in the low-mem archive region. */
@@ -172,6 +173,17 @@ HSD_SObj* HSD_SObjLib_803A477C(HSD_GObj* gobj, HSD_SObjDesc* desc,
     } else {
         image2 = NULL;
     }
+#else
+    if (use_secondary) {
+        image = desc->image;
+        tlut = desc->tlut;
+        image2 = ((HSD_SObjDesc2*) desc)->image2;
+    } else {
+        image = desc->image;
+        image2 = NULL;
+        tlut = desc->tlut;
+    }
+#endif /* BUILD_TARGET_PC */
 
     sobj = HSD_ObjAlloc(&HSD_SObjLib_804D10E0);
     HSD_ASSERT(287, sobj);

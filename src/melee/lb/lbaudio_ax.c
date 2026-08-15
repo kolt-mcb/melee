@@ -2282,8 +2282,12 @@ void lbAudioAx_80027168(void)
 
     if (lbl_804D6438 < lbl_804D6448 + lbl_804D6450) {
         OSReport("******** CAUTION ********\nFGM load size is over\n");
+#if BUILD_TARGET_PC
         /* PC port: don't crash on audio heap overflow */
         /* HSD_ASSERT(0xDB3, 0); */
+#else
+        HSD_ASSERT(0xDB3, 0);
+#endif /* BUILD_TARGET_PC */
     }
 
     slot = fn_80026650_noinline();
@@ -2314,12 +2318,18 @@ s32 fn_80027488(void)
 
 void lbAudioAx_80027648(void)
 {
+#if BUILD_TARGET_PC
     /* PC port: audio loading wait blocks forever on headless systems.
      * Add a timeout to prevent hanging. */
     static int timeout = 100; /* max iterations */
     while (fn_80027488() == 1 && timeout-- > 0) {
         HSD_SynthSFXWaitForLoadCompletion(lb_800195D0);
     }
+#else
+    while (fn_80027488() == 1) {
+        HSD_SynthSFXWaitForLoadCompletion(lb_800195D0);
+    }
+#endif /* BUILD_TARGET_PC */
 }
 
 void lbAudioAx_8002785C(void)

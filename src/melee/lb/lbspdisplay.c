@@ -68,11 +68,13 @@ HSD_LObj* lb_80011AC4(LightList** list)
     HSD_LObj* first;
     HSD_LightAnim** temp_r4;
 
+#if BUILD_TARGET_PC
     /* PC port: archive data is big-endian, pointers are garbage on LE.
      * Return NULL until endianness conversion is implemented. */
     if (list == NULL || *list == NULL) return NULL;
     /* Sanity check: pointer should be in the low-memory archive region. */
     if ((uintptr_t)*list > 0xFFFFFFFFULL) return NULL;
+#endif /* BUILD_TARGET_PC */
 
     prev = NULL;
     while (*list != NULL) {

@@ -192,6 +192,7 @@ void grIzumi_801CBB88(void)
     grIzumi_801CBCE8(0);
     grIzumi_801CBCE8(1);
     r3 = grIzumi_801CBCE8(3);
+#if BUILD_TARGET_PC
     /* PC port: skip grAnime_801C8780 - reads GCN-packed archive data */
     if (0 && r3) {
         grAnime_801C8780(r3, 3, 0, 0.0f, 1.0f);
@@ -201,6 +202,11 @@ void grIzumi_801CBB88(void)
         Ground_801C39C0();
         Ground_801C3BB4();
     }
+#else
+    grAnime_801C8780(r3, 3, 0, 0.0f, 1.0f);
+    Ground_801C39C0();
+    Ground_801C3BB4();
+#endif /* BUILD_TARGET_PC */
 }
 
 void grIzumi_OnLoad(void)
@@ -208,10 +214,12 @@ void grIzumi_OnLoad(void)
     HSD_GObj* gobj;
     HSD_LObj* lobj;
 
+#if BUILD_TARGET_PC
     if (!HSD_GObj_Entities) {
         return;
     }
 
+#endif /* BUILD_TARGET_PC */
     gobj = HSD_GObj_Entities->xC;
     while (gobj != NULL) {
         if (HSD_GObjGetClassifier(gobj) == 0xC) {
@@ -255,10 +263,14 @@ HSD_GObj* grIzumi_801CBCE8(int gobj_id)
         }
 
         if (callbacks->on_init != NULL) {
+#if BUILD_TARGET_PC
             /* PC port: skip - reads GCN-packed archive structs */
             if (0) {
                 callbacks->on_init(gobj);
             }
+#else
+            callbacks->on_init(gobj);
+#endif /* BUILD_TARGET_PC */
         }
 
         if (callbacks->gobj_proc != NULL) {

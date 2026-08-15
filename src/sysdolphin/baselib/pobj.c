@@ -16,7 +16,9 @@
 #include "forward.h"
 
 #include <math.h> // IWYU pragma: keep
+#if BUILD_TARGET_PC
 #include <float.h>
+#endif
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 #include <dolphin/os.h>
@@ -285,8 +287,13 @@ static HSD_ShapeSet* loadShapeSetDesc(HSD_ShapeSetDesc* sdesc)
 
 static s32 PObjLoad(HSD_PObj* pobj, HSD_PObjDesc* desc)
 {
+    #if BUILD_TARGET_PC
     /* PC port: guard against GCN-packed PObjDesc with garbage fields. */
-    if (desc == NULL) return 0;
+        if (desc == NULL) {
+        port_guard_warn("pobj.c:288");
+        return 0;
+    }
+    #endif /* BUILD_TARGET_PC */
     
     pobj->next = HSD_PObjLoadDesc(desc->next);
     pobj->verts = desc->verts;
@@ -317,11 +324,15 @@ static s32 PObjLoad(HSD_PObj* pobj, HSD_PObjDesc* desc)
 
 HSD_PObj* HSD_PObjLoadDesc(HSD_PObjDesc* pobjdesc)
 {
+#if BUILD_TARGET_PC
     static int pobj_class_initialized = 0;
     if (pobjdesc != NULL) {
         HSD_PObj* pobj;
         /* PC port: guard against GCN-packed PObjDesc with garbage fields. */
-        if ((uintptr_t)pobjdesc < 0x20000000ULL) return NULL;
+        if ((uintptr_t)pobjdesc < 0x20000000ULL) {
+            port_guard_warn("pobj.c:323");
+            return NULL;
+        }
         /* PC port: bypass hsdNew to avoid GCN class info corruption. */
         if (!pobj_class_initialized) {
             PObjInfoInit();
@@ -337,6 +348,25 @@ HSD_PObj* HSD_PObjLoadDesc(HSD_PObjDesc* pobjdesc)
     } else {
         return NULL;
     }
+#else
+    if (pobjdesc != NULL) {
+        HSD_PObj* pobj;
+        HSD_ClassInfo* info;
+
+        if (!pobjdesc->class_name ||
+            !(info = hsdSearchClassInfo(pobjdesc->class_name)))
+        {
+            pobj = HSD_PObjAlloc();
+        } else {
+            pobj = hsdNew(info);
+            HSD_ASSERT(605, pobj);
+        }
+        HSD_POBJ_METHOD(pobj)->load(pobj, pobjdesc);
+        return pobj;
+    } else {
+        return NULL;
+    }
+#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_PObjRemove(HSD_PObj* pobj)
@@ -408,8 +438,13 @@ void HSD_PObjResolveRefs(HSD_PObj* pobj, HSD_PObjDesc* pdesc)
     if (!pobj || !pdesc) {
         return;
     }
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted PObjDesc pointers. */
-    if ((uintptr_t)pdesc < 0x1000ULL) return;
+        if ((uintptr_t)pdesc < 0x1000ULL) {
+        port_guard_warn("pobj.c:411");
+        return;
+    }
+    #endif /* BUILD_TARGET_PC */
 
     switch (pobj_type(pobj)) {
     case POBJ_ENVELOPE:
@@ -433,14 +468,24 @@ void HSD_PObjResolveRefs(HSD_PObj* pobj, HSD_PObjDesc* pdesc)
 
 void HSD_PObjResolveRefsAll(HSD_PObj* pobj, HSD_PObjDesc* pdesc)
 {
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted PObjDesc pointers. */
-    if (pdesc != NULL && (uintptr_t)pdesc < 0x1000ULL) return;
+        if (pdesc != NULL && (uintptr_t)pdesc < 0x1000ULL) {
+        port_guard_warn("pobj.c:436");
+        return;
+    }
+    #endif /* BUILD_TARGET_PC */
     
     for (; pobj != NULL && pdesc != NULL;
          pobj = pobj->next, pdesc = pdesc->next)
     {
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted PObjDesc pointers. */
-        if ((uintptr_t)pdesc < 0x1000ULL) break;
+                if ((uintptr_t)pdesc < 0x1000ULL) {
+            port_guard_warn("pobj.c:442");
+            break;
+        }
+        #endif /* BUILD_TARGET_PC */
         HSD_PObjResolveRefs(pobj, pdesc);
     }
 }
@@ -1231,12 +1276,14 @@ static void PObjSetupMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 
 static void PObjDispSimplePrimitive(HSD_PObj* pobj, u32 rendermode)
 {
+#if BUILD_TARGET_PC
     static int dbg = 0;
     if (dbg++ < 10) {
         fprintf(stderr, "[POBJ] dispSimple: display=%p n_display=%d verts=%p\n",
                 pobj->display, pobj->n_display, pobj->verts);
         fflush(stderr);
     }
+#endif
     setupArrayDesc(pobj->verts);
     setupVtxDesc(pobj);
 
@@ -1254,8 +1301,10 @@ static void PObjDispShapeAnim(HSD_PObj* pobj, u32 rendermode)
 
 void HSD_PObjDisp(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 {
+#if BUILD_TARGET_PC
     if (pobj == NULL) return;
-    
+#endif
+
     switch (pobj->flags & (POBJ_CULLFRONT | POBJ_CULLBACK)) {
     case 0x0:
         HSD_StateSetCullMode(GX_CULL_NONE);
@@ -1270,11 +1319,20 @@ void HSD_PObjDisp(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
         return;
     }
 
+    #if BUILD_TARGET_PC
+#if BUILD_TARGET_PC
     /* PC port: guard against corrupted method pointers. */
     HSD_PObjInfo* pobj_info = HSD_POBJ_METHOD(pobj);
     if (pobj_info != NULL && pobj_info->setup_mtx != NULL) {
         pobj_info->setup_mtx(pobj, vmtx, pmtx, rendermode);
     }
+#else
+    HSD_POBJ_METHOD(pobj)->setup_mtx(pobj, vmtx, pmtx, rendermode);
+#endif /* BUILD_TARGET_PC */
+    else {
+        port_guard_warn("pobj.c:1288");
+    }
+    #endif /* BUILD_TARGET_PC */
     if (pobj_type(pobj) == POBJ_SHAPEANIM) {
         PObjDispShapeAnim(pobj, rendermode);
     } else {

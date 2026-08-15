@@ -150,12 +150,17 @@ inline void render_gobj(HSD_GObj* cur, int i)
 {
     HSD_GObj* saved = HSD_GObj_804D7814;
     HSD_GObj_804D7814 = cur;
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted callback pointers. */
     if (cur->render_cb != NULL &&
         (uintptr_t)cur->render_cb >= 0x400000ULL &&
         (uintptr_t)cur->render_cb <= 0xFFFFFFFFULL) {
         cur->render_cb(cur, i);
     }
+        else {
+            port_guard_warn("gobj.c:153");
+        }
+    #endif /* BUILD_TARGET_PC */
     HSD_GObj_804D7814 = saved;
 }
 
@@ -191,6 +196,7 @@ void HSD_GObj_80390ED0(HSD_GObj* gobj, u32 mask)
 void HSD_GObj_80390FC0(void)
 {
     HSD_GObj* saved;
+#if BUILD_TARGET_PC
     HSD_GObj* cur;
     int i;
     /* PC port: walk ALL GX links, not just the last one.
@@ -210,6 +216,7 @@ void HSD_GObj_80390FC0(void)
                 /* PC port: guard against corrupted callback pointers. */
                 if ((uintptr_t)cur->render_cb < 0x400000ULL ||
                     (uintptr_t)cur->render_cb > 0xFFFFFFFFULL) {
+                    port_guard_warn("gobj.c:211");
                     cur = next_cur;
                     continue;  /* Skip corrupted callback */
                 }
@@ -221,14 +228,30 @@ void HSD_GObj_80390FC0(void)
             cur = next_cur;
         }
     }
+#else
+    HSD_GObj* cur = HSD_GObjGXLinkHead[HSD_GObjLibInitData.gx_link_max + 1];
+    while (cur != NULL) {
+        if (cur->render_cb != NULL) {
+            saved = HSD_GObj_804D7818;
+            HSD_GObj_804D7818 = cur;
+            cur->render_cb(cur, 0);
+            HSD_GObj_804D7818 = saved;
+        }
+        cur = cur->next_gx;
+    }
+#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_GObj_LObjCallback(HSD_GObj* gobj, int unused)
 {
+#if BUILD_TARGET_PC
     /* PC port: lighting objects from archive data are big-endian and corrupted on LE.
      * Skip lighting setup until endianness conversion is implemented. */
-    /* HSD_LObj_803668EC(gobj->hsd_obj);
-    HSD_LObjSetupInit(HSD_CObjGetCurrent()); */
+    (void)gobj;
+#else
+    HSD_LObj_803668EC(gobj->hsd_obj);
+    HSD_LObjSetupInit(HSD_CObjGetCurrent());
+#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
@@ -239,6 +262,7 @@ void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
     ///       #HSD_GObj_JObjCallback?
 #pragma push
 #pragma dont_inline on
+#if BUILD_TARGET_PC
     /* PC port: pass identity matrix instead of NULL.
      * On x86_64, Mtx is passed by value (48 bytes). NULL leaves 40 bytes
      * of garbage, causing crashes in HSD_PObjDisp. Additionally,
@@ -250,24 +274,36 @@ void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
         {0.0f, 0.0f, 1.0f, 0.0f}
     };
     HSD_JObjDispAll(jobj, identity_mtx, HSD_GObj_80390EB8(arg1), 0);
+#else
+    HSD_JObjDispAll(jobj, NULL, HSD_GObj_80390EB8(arg1), 0);
+#endif /* BUILD_TARGET_PC */
 }
 #pragma pop
 
 void HSD_GObj_FogCallback(HSD_GObj* gobj, int unused)
 {
+#if BUILD_TARGET_PC
     /* PC port: fog objects from archive data are big-endian and corrupted on LE.
      * Skip fog setting until endianness conversion is implemented. */
-    /* HSD_FogSet(gobj->hsd_obj); */
+    (void)gobj;
+#else
+    HSD_FogSet(gobj->hsd_obj);
+#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_GObj_803910D8(HSD_GObj* gobj, int renderpass)
 {
+#if BUILD_TARGET_PC
     /* PC port: camera objects from archive data are big-endian and corrupted on LE.
      * Skip camera setup until endianness conversion is implemented. */
-    /* if (HSD_CObjSetCurrent(gobj->hsd_obj)) {
+    (void)gobj;
+    (void)renderpass;
+#else
+    if (HSD_CObjSetCurrent(gobj->hsd_obj)) {
         HSD_GObj_80390ED0(gobj, 7);
         HSD_CObjEndCurrent();
-    } */
+    }
+#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_GObj_80391120(HSD_Obj* obj)

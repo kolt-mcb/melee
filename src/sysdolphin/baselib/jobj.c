@@ -4,8 +4,10 @@
 #include "class.h"
 #include "cobj.h"
 
+#if BUILD_TARGET_PC
 /* PC port: validate pointer is not NULL and not a small garbage value */
 #define PC_PTR_VALID(p) ((p) != NULL && (uintptr_t)(p) >= 0x1000ULL)
+#endif
 #include "displayfunc.h"
 #include "dobj.h"
 #include "fobj.h"
@@ -195,6 +197,7 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
                    &jobj->translate, scl);
     }
     
+#if BUILD_TARGET_PC
     /* PC port: GCN uses scale (0,0,0) for invisible root joints.
      * HSD_MtxSRT produces a zero matrix for zero scale, which breaks
      * child matrices via PSMTXConcat (zero * anything = zero).
@@ -235,6 +238,11 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
         if (jobj->mtx[2][3] < -limit_pos) jobj->mtx[2][3] = -limit_pos;
         if (jobj->mtx[2][3] > limit_pos) jobj->mtx[2][3] = limit_pos;
     }
+#else
+    if (jobj->parent != NULL) {
+        PSMTXConcat(jobj->parent->mtx, jobj->mtx, jobj->mtx);
+    }
+#endif /* BUILD_TARGET_PC */
     if (jobj->aobj != NULL && jobj->aobj->hsd_obj != NULL) {
         Vec3 vec;
         HSD_JObj* aobj_jobj = (HSD_JObj*) jobj->aobj->hsd_obj;
@@ -248,7 +256,11 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
 
 void HSD_JObjRemoveAnimByFlags(HSD_JObj* jobj, u32 flags)
 {
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         if (flags & 1) {
             HSD_AObjRemove(jobj->aobj);
             jobj->aobj = NULL;
@@ -262,7 +274,11 @@ void HSD_JObjRemoveAnimByFlags(HSD_JObj* jobj, u32 flags)
 
 void HSD_JObjRemoveAnimAllByFlags(HSD_JObj* jobj, u32 flags)
 {
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         HSD_JObjRemoveAnimByFlags(jobj, flags);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             HSD_JObj* child = jobj->child;
@@ -287,7 +303,11 @@ void HSD_JObjRemoveAnimAll(HSD_JObj* jobj)
 void HSD_JObjReqAnimByFlags(HSD_JObj* jobj, u32 flags, f32 frame)
 {
     bool has_dobj;
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         if (flags & 1) {
             HSD_AObjReqAnim(jobj->aobj, frame);
         }
@@ -305,7 +325,11 @@ void HSD_JObjReqAnimByFlags(HSD_JObj* jobj, u32 flags, f32 frame)
 
 void HSD_JObjReqAnimAllByFlags(HSD_JObj* jobj, u32 flags, f32 frame)
 {
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         HSD_JObjReqAnimByFlags(jobj, flags, frame);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             HSD_JObj* child = jobj->child;
@@ -349,7 +373,11 @@ void JObjSortAnim(HSD_AObj* aobj)
 void HSD_JObjAddAnim(HSD_JObj* jobj, HSD_AnimJoint* an_joint,
                      HSD_MatAnimJoint* mat_joint, HSD_ShapeAnimJoint* sh_joint)
 {
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         if (an_joint != NULL) {
             if (jobj->aobj != NULL) {
                 HSD_AObjRemove(jobj->aobj);
@@ -379,7 +407,11 @@ void HSD_JObjAddAnimAll(HSD_JObj* jobj, HSD_AnimJoint* ajoint,
     HSD_MatAnimJoint* mj;
     HSD_ShapeAnimJoint* sj;
 
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         HSD_JObjAddAnim(jobj, ajoint, mjoint, sjoint);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             jp = jobj->child;
@@ -408,7 +440,11 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
     HSD_RObj* robj;
     Mtx mtx;
 
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         switch (type) {
         case HSD_A_J_PATH:
             if (val->fv < 0.0L) {
@@ -581,7 +617,11 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
 
 void HSD_JObjAnim(HSD_JObj* jobj)
 {
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         HSD_JObjCheckDepend(jobj);
         HSD_AObjInterpretAnim(jobj->aobj, jobj, JObjUpdateFunc);
         HSD_RObjAnimAll(jobj->robj);
@@ -594,7 +634,11 @@ void HSD_JObjAnim(HSD_JObj* jobj)
 void JObjAnimAll(HSD_JObj* jobj)
 {
     HSD_JObj* child;
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         HSD_JObjAnim(jobj);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             child = jobj->child;
@@ -608,7 +652,11 @@ void JObjAnimAll(HSD_JObj* jobj)
 
 void HSD_JObjAnimAll(HSD_JObj* jobj)
 {
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         HSD_AObjInitEndCallBack();
         JObjAnimAll(jobj);
         HSD_AObjInvokeCallBacks();
@@ -618,7 +666,11 @@ void HSD_JObjAnimAll(HSD_JObj* jobj)
 void HSD_JObjDispAll(HSD_JObj* jobj, Mtx vmtx, u32 flags, u32 rendermode)
 {
     MtxPtr new_var = vmtx;
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         if (jobj->flags & JOBJ_INSTANCE) {
             if (!(jobj->flags & JOBJ_HIDDEN)) {
                 Mtx mtx;
@@ -665,20 +717,30 @@ inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
     if (joint == NULL) {
         return NULL;
     }
+    #if BUILD_TARGET_PC
     /* PC port: Guard against obviously-invalid pointers.
      * After archive conversion, valid joints are heap-allocated x86_64 structs.
      * Keep a low threshold as a safety net for any unconverted data. */
     if ((uintptr_t)joint < 0x1000ULL || (uintptr_t)joint > 0xFFFFFFFFFFFFFULL) {
         return NULL;
     }
+    else {
+        port_guard_warn("jobj.c:668");
+    }
+    #endif /* BUILD_TARGET_PC */
     if (joint->class_name == NULL ||
         !(info = hsdSearchClassInfo(joint->class_name)))
     {
         jobj = HSD_JObjAlloc();
     } else {
         jobj = hsdNew(info);
+#if BUILD_TARGET_PC
         /* PC port: removed HSD_ASSERT - hsdNew may return NULL on corrupted class info. */
+#else
+        HSD_ASSERT(972, jobj);
+#endif
     }
+#if BUILD_TARGET_PC
     /* PC port: if allocation failed, return NULL safely. */
     if (jobj == NULL) return NULL;
     /* PC port: guard against corrupted method pointers. */
@@ -686,17 +748,29 @@ inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
     if (jobj_info != NULL && jobj_info->load != NULL) {
         jobj_info->load(jobj, joint, parent);
     }
+    else {
+        port_guard_warn("jobj.c:685");
+    }
+#else
+    HSD_JOBJ_METHOD(jobj)->load(jobj, joint, parent);
+#endif /* BUILD_TARGET_PC */
     return jobj;
 }
 
 s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
 {
+    #if BUILD_TARGET_PC
     /* PC port: Guard against big-endian archive data corruption.
      * The joint->child and joint->next pointers are 32-bit offsets
      * in the archive, interpreted as 64-bit pointers on x86_64.
      * Skip recursive loading if the data is corrupted. */
-    if (joint == NULL || jobj == NULL) return 0;
+        if (joint == NULL || jobj == NULL) {
+        port_guard_warn("jobj.c:696");
+        return 0;
+    }
+    #endif /* BUILD_TARGET_PC */
     
+#if BUILD_TARGET_PC
     if (!(joint->flags & JOBJ_INSTANCE)) {
         /* PC port: after conversion, child is a valid heap pointer or NULL */
         if (joint->child != NULL) {
@@ -707,6 +781,12 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
     if (joint->next != NULL) {
         jobj->next = JObjLoadJointSub(joint->next, parent);
     }
+#else
+    if (!(joint->flags & JOBJ_INSTANCE)) {
+        jobj->child = JObjLoadJointSub(joint->child, jobj);
+    }
+    jobj->next = JObjLoadJointSub(joint->next, parent);
+#endif /* BUILD_TARGET_PC */
     jobj->parent = parent;
     jobj->flags |= joint->flags;
     if (union_type_spline(jobj)) {
@@ -730,8 +810,10 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
     jobj->translate = joint->position;
     PSMTXIdentity(jobj->mtx);
     jobj->scl = NULL;
+#if BUILD_TARGET_PC
     /* PC port: mark matrix as dirty so HSD_JObjSetupMatrix computes it */
     jobj->flags |= JOBJ_MTX_DIRTY;
+#endif
     if (joint->mtx != NULL) {
         jobj->envelopemtx = HSD_MtxAlloc();
         memcpy(jobj->envelopemtx, joint->mtx, sizeof(Mtx));
@@ -743,14 +825,20 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
 
 HSD_JObj* HSD_JObjLoadJoint(HSD_Joint* arg0)
 {
+#if BUILD_TARGET_PC
     /* PC port: after conversion, arg0 is a heap pointer or NULL */
     if (arg0 == NULL || (uintptr_t)arg0 < 0x1000ULL) return NULL;
-    
+
     HSD_JObj* jobj = JObjLoadJointSub(arg0, 0);
     if (PC_PTR_VALID(jobj)) {
         HSD_JObjResolveRefsAll(jobj, arg0);
     }
     return jobj;
+#else
+    HSD_JObj* jobj = JObjLoadJointSub(arg0, 0);
+    HSD_JObjResolveRefsAll(jobj, arg0);
+    return jobj;
+#endif /* BUILD_TARGET_PC */
 }
 
 #ifndef BUGFIX
@@ -769,11 +857,18 @@ void HSD_JObjResolveRefs(HSD_JObj* jobj, HSD_Joint* joint)
         return;
     }
 
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted joint pointers. */
-    if ((uintptr_t)joint < 0x1000ULL) return;
+        if ((uintptr_t)joint < 0x1000ULL) {
+        port_guard_warn("jobj.c:772");
+        return;
+    }
 
     /* PC port: skip RObj resolve - archive data corruption. */
     /* HSD_RObjResolveRefsAll(jobj->robj, joint->robjdesc); */
+    #else
+    HSD_RObjResolveRefsAll(jobj->robj, joint->robjdesc);
+    #endif /* BUILD_TARGET_PC */
     if (!!(jobj->flags & JOBJ_INSTANCE)) {
         HSD_JObjUnref(jobj->child);
         jobj->child = HSD_IDGetDataFromTable(NULL, (u32) joint->child, NULL);
@@ -790,8 +885,13 @@ void HSD_JObjResolveRefsAll(HSD_JObj* jobj, HSD_Joint* joint)
     u8 _[4];
 
     while (jobj != NULL && joint != NULL) {
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted joint pointers. */
-        if ((uintptr_t)joint < 0x1000ULL) break;
+                if ((uintptr_t)joint < 0x1000ULL) {
+            port_guard_warn("jobj.c:793");
+            break;
+        }
+        #endif /* BUILD_TARGET_PC */
         
         HSD_JObjResolveRefs(jobj, joint);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
@@ -809,11 +909,16 @@ void HSD_JObjUnref(HSD_JObj* jobj)
             hsdDelete(jobj);
         } else {
             iref_INC(jobj);
+            #if BUILD_TARGET_PC
             /* PC port: guard against corrupted method pointers. */
             HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
             if (jobj_info != NULL && jobj_info->release_child != NULL) {
                 jobj_info->release_child(jobj);
             }
+            else {
+                port_guard_warn("jobj.c:820");
+            }
+            #endif /* BUILD_TARGET_PC */
             if (iref_DEC(jobj)) {
                 hsdDelete(jobj);
             }
@@ -1077,7 +1182,11 @@ void HSD_JObjDeleteRObj(HSD_JObj* jobj, HSD_RObj* robj)
 
 u32 HSD_JObjGetFlags(HSD_JObj* jobj)
 {
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         return jobj->flags;
     }
     return 0;
@@ -1111,7 +1220,11 @@ void HSD_JObjSetFlagsAll(HSD_JObj* jobj, u32 flags)
 
 void HSD_JObjClearFlags(HSD_JObj* jobj, u32 arg1)
 {
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         if ((jobj->flags ^ arg1) & JOBJ_CLASSICAL_SCALE) {
             // manually inlined HSD_JObjSetMtxDirty
             if (jobj != NULL && !HSD_JObjMtxIsDirty(jobj)) {
@@ -1124,7 +1237,11 @@ void HSD_JObjClearFlags(HSD_JObj* jobj, u32 arg1)
 
 void HSD_JObjClearFlagsAll(HSD_JObj* jobj, u32 flags)
 {
+    #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
+    #else
+    if (jobj != NULL) {
+    #endif /* BUILD_TARGET_PC */
         HSD_JObjClearFlags(jobj, flags);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             HSD_JObj* i;
@@ -1138,8 +1255,13 @@ void HSD_JObjClearFlagsAll(HSD_JObj* jobj, u32 flags)
 HSD_JObj* HSD_JObjAlloc(void)
 {
     HSD_ClassInfo* ci = default_class != NULL ? default_class : &hsdJObj.parent.parent;
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted class info alloc pointer. */
-    if (ci == NULL || ci->alloc == NULL) return NULL;
+        if (ci == NULL || ci->alloc == NULL) {
+        port_guard_warn("jobj.c:1141");
+        return NULL;
+    }
+    #endif /* BUILD_TARGET_PC */
     HSD_JObj* jobj = hsdNew(ci);
     HSD_ASSERT(2003, jobj);
     return jobj;
@@ -1268,11 +1390,16 @@ void resolveIKJoint1(HSD_JObj* jobj)
             if (jobj->robj != NULL) {
                 HSD_RObjUpdateAll(jobj->robj, jobj, JObjUpdateFunc);
                 if (HSD_JObjMtxIsDirty(jobj)) {
+                    #if BUILD_TARGET_PC
                     /* PC port: guard against corrupted method pointers. */
                     HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
                     if (jobj_info != NULL && jobj_info->make_mtx != NULL) {
                         jobj_info->make_mtx(jobj);
                     }
+                    else {
+                        port_guard_warn("jobj.c:1283");
+                    }
+                    #endif /* BUILD_TARGET_PC */
                     jobj->flags &= 0xFFFFFFBF;
                 }
             }
@@ -1493,11 +1620,16 @@ void HSD_JObjSetupMatrixSub(HSD_JObj* jobj)
     HSD_RObj* robj;
     f32 x_scale;
 
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted method pointers. */
     HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
     if (jobj_info != NULL && jobj_info->make_mtx != NULL) {
         jobj_info->make_mtx(jobj);
     }
+    else {
+        port_guard_warn("jobj.c:1509");
+    }
+    #endif /* BUILD_TARGET_PC */
     jobj->flags &= ~JOBJ_MTX_DIRTY;
     if (!(jobj->flags & JOBJ_USER_DEF_MTX)) {
         switch (jobj->flags & JOBJ_JOINT) {
@@ -1538,11 +1670,16 @@ void HSD_JObjSetupMatrixSub(HSD_JObj* jobj)
             if (jobj->robj != NULL && jobj != NULL && jobj->robj != NULL) {
                 HSD_RObjUpdateAll(jobj->robj, jobj, JObjUpdateFunc);
                 if (HSD_JObjMtxIsDirty(jobj)) {
+                    #if BUILD_TARGET_PC
                     /* PC port: guard against corrupted method pointers. */
                     HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
                     if (jobj_info != NULL && jobj_info->make_mtx != NULL) {
                         jobj_info->make_mtx(jobj);
                     }
+                    else {
+                        port_guard_warn("jobj.c:1555");
+                    }
+                    #endif /* BUILD_TARGET_PC */
                     jobj->flags &= ~JOBJ_MTX_DIRTY;
                 }
             }
@@ -1621,11 +1758,16 @@ void JObjReleaseChild(HSD_JObj* jobj)
 void JObjRelease(HSD_Class* o)
 {
     HSD_JObj* jobj = (HSD_JObj*) o;
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted method pointers. */
     HSD_JObjInfo* jobj_info = HSD_JOBJ_METHOD(jobj);
     if (jobj_info != NULL && jobj_info->release_child != NULL) {
         jobj_info->release_child(jobj);
     }
+    else {
+        port_guard_warn("jobj.c:1639");
+    }
+    #endif /* BUILD_TARGET_PC */
 
     if (HSD_IDGetDataFromTable(NULL, jobj->id, NULL) == jobj) {
         u32 id = jobj->id;

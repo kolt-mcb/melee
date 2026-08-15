@@ -1559,6 +1559,7 @@ struct grShrineroute_GroundVars {
 };
 
 struct grShrineroute_GroundVars2 {
+#if BUILD_TARGET_PC
     /*  +0 gp+C4 */ union {
         HSD_GObj* ptr;
         HSD_GObj* arr[6];
@@ -1568,6 +1569,14 @@ struct grShrineroute_GroundVars2 {
     /* +B8 gp+184 */ u32 x168;
     /* +BC gp+188 */ HSD_LObj* x16C;
     /* +C0 gp+18C */ HSD_LObj* x170;
+#else
+    /*  +0 gp+C4 */ HSD_GObj* xC4;
+    /*  +4 gp+C8 */ HSD_LObj* xC8[20];
+    /* +54 gp+118 */ u32 x118[20];
+    /* +A4 gp+168 */ u32 x168;
+    /* +A8 gp+16C */ HSD_LObj* x16C;
+    /* +AC gp+170 */ HSD_LObj* x170;
+#endif /* BUILD_TARGET_PC */
 };
 
 struct grShrineroute_GroundVars3 {
@@ -1974,6 +1983,7 @@ struct UnkStageDat {
 };
 STATIC_ASSERT(sizeof(struct UnkStageDat_x8_t) == 0x34);
 
+#if BUILD_TARGET_PC
 /* GCN-packed structs for reading archive data with 32-bit offsets.
  * On GCN, all pointers are 4 bytes. On x86_64, pointers are 8 bytes,
  * so the C struct above has different field offsets.
@@ -2019,6 +2029,7 @@ struct UnkStageDat_gcn {
 /* Typedefs for GCN-packed structs */
 typedef struct UnkStageDat_x8_t_gcn UnkStageDat_x8_t_gcn;
 typedef struct UnkStageDat_gcn UnkStageDat_gcn;
+#endif /* BUILD_TARGET_PC */
 
 struct UnkArchiveStruct {
     HSD_Archive* unk0;

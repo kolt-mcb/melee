@@ -15,6 +15,7 @@ HSD_TExpType HSD_TExpGetType(HSD_TExp* texp)
     if (texp == NULL) {
         return HSD_TE_ZERO;
     }
+#if BUILD_TARGET_PC
     /* PC port: use full 64-bit comparisons for special pointer values.
      * GCC zero-extends 32-bit constants, breaking (uintptr_t)-1U comparisons. */
     if (texp == (HSD_TExp*) (uintptr_t) -1) {
@@ -23,6 +24,15 @@ HSD_TExpType HSD_TExpGetType(HSD_TExp* texp)
     if (texp == (HSD_TExp*) (uintptr_t) -2) {
         return HSD_TE_RAS;
     }
+#else
+    if ((uintptr_t) texp == -1U) {
+        return HSD_TE_TEX;
+    }
+    if ((uintptr_t) texp == -2U) {
+        return HSD_TE_RAS;
+    }
+#endif /* BUILD_TARGET_PC */
+    #if BUILD_TARGET_PC
     /* PC port: guard against garbage pointers.
      * Valid x86_64 heap pointers are in mmap region (> 0x10000000) or
      * in the process heap. Reject pointers below 0x10000 as garbage.
@@ -31,6 +41,10 @@ HSD_TExpType HSD_TExpGetType(HSD_TExp* texp)
     if (addr < 0x10000 || addr > 0x7FFFFFFFFFFF0000ULL) {
         return HSD_TE_ZERO;
     }
+    else {
+        port_guard_warn("texp.c:26");
+    }
+    #endif /* BUILD_TARGET_PC */
     return texp->type;
 }
 
@@ -195,6 +209,7 @@ HSD_TExp* HSD_TExpTev(HSD_TExp** texp_list)
 
     HSD_ASSERT(294, texp_list);
     texp = TevAlloc();
+#if BUILD_TARGET_PC
     /* PC port: replace memset(0xFF) with explicit field init.
      * memset(0xFF) sets 64-bit pointers to 0xFFFFFFFFFFFFFFFF on x86_64,
      * which causes crashes when expression tree traversal dereferences them.
@@ -221,6 +236,20 @@ HSD_TExp* HSD_TExpTev(HSD_TExp** texp_list)
     texp->tev.kcsel = 0xFF;
     texp->tev.kasel = 0xFF;
     return texp;
+#else
+    memset(texp, 0xFF, sizeof(HSD_TETev));
+    texp->type = HSD_TE_TEV;
+    texp->tev.next = *texp_list;
+    *texp_list = texp;
+    texp->tev.c_ref = 0;
+    texp->tev.a_ref = 0;
+    texp->tev.tex = NULL;
+    for (i = 0; i < 4; i++) {
+        texp->tev.c_in[i].exp = NULL;
+        texp->tev.a_in[i].exp = NULL;
+    }
+    return texp;
+#endif /* BUILD_TARGET_PC */
 }
 
 HSD_TExp* HSD_TExpCnst(void* val, HSD_TEInput comp, HSD_TEType type,
@@ -254,6 +283,7 @@ HSD_TExp* HSD_TExpCnst(void* val, HSD_TEInput comp, HSD_TEType type,
         texp->cnst.ctype = type;
         texp->cnst.reg = 0xFF;
         texp->cnst.idx = 0xFF;
+#if BUILD_TARGET_PC
         /* PC port: copy constant values instead of storing pointers.
          * The original val pointer may be freed or corrupted during rendering.
          * Copy up to 16 bytes (enough for GXColor + alpha). */
@@ -264,6 +294,9 @@ HSD_TExp* HSD_TExpCnst(void* val, HSD_TEInput comp, HSD_TEType type,
             __builtin_memset(texp->cnst.val_buf, 0, sizeof(texp->cnst.val_buf));
             texp->cnst.val = texp->cnst.val_buf;
         }
+#else
+        texp->cnst.val = val;
+#endif /* BUILD_TARGET_PC */
         return texp;
     } while (true);
 
@@ -373,6 +406,7 @@ static void HSD_TExpColorInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
         break;
 
     default: {
+        #if BUILD_TARGET_PC
         /* PC port: guard against garbage exp pointers from bad archive data */
         if (exp != NULL && (uintptr_t) exp < 0x10000) {
             tev->c_in[idx].type = HSD_TE_ZERO;
@@ -381,6 +415,10 @@ static void HSD_TExpColorInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
             tev->c_in[idx].exp = NULL;
             break;
         }
+        else {
+            port_guard_warn("texp.c:376");
+        }
+        #endif /* BUILD_TARGET_PC */
         switch (tev->c_in[idx].type) {
         case HSD_TE_ZERO:
             tev->c_in[idx].type = HSD_TE_ZERO;
@@ -389,6 +427,7 @@ static void HSD_TExpColorInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
             break;
         case HSD_TE_TEV: {
             u8 swap;
+            #if BUILD_TARGET_PC
             /* PC port: guard against garbage existing slot pointer
              * from compiler-optimized memset that writes 0xFFFFFFFF. */
             if (tev->c_in[idx].exp == NULL ||
@@ -403,6 +442,10 @@ static void HSD_TExpColorInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
                 tev->c_in[idx].exp = NULL;
                 break;
             }
+            else {
+                port_guard_warn("texp.c:393");
+            }
+            #endif /* BUILD_TARGET_PC */
             HSD_ASSERT(519,
                         sel == HSD_TE_RGB || sel == HSD_TE_A);
             HSD_ASSERT(521,
@@ -596,6 +639,7 @@ static void HSD_TExpAlphaInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
         break;
 
     default: {
+        #if BUILD_TARGET_PC
         /* PC port: guard against garbage exp pointers from bad archive data */
         if (exp != NULL && (uintptr_t) exp < 0x10000) {
             tev->a_in[idx].exp = NULL;
@@ -604,6 +648,10 @@ static void HSD_TExpAlphaInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
             tev->a_in[idx].arg = GX_CA_ZERO;
             break;
         }
+        else {
+            port_guard_warn("texp.c:601");
+        }
+        #endif /* BUILD_TARGET_PC */
         switch (tev->a_in[idx].type) {
         case HSD_TE_ZERO:
             tev->a_in[idx].exp = NULL;
@@ -612,6 +660,7 @@ static void HSD_TExpAlphaInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
             tev->a_in[idx].arg = GX_CA_ZERO;
             break;
         case HSD_TE_TEV:
+            #if BUILD_TARGET_PC
             /* PC port: guard against garbage existing slot pointer */
             if (tev->a_in[idx].exp == NULL ||
                 (uintptr_t) tev->a_in[idx].exp < 0x10000 ||
@@ -624,6 +673,10 @@ static void HSD_TExpAlphaInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
                 tev->a_in[idx].arg = GX_CA_ZERO;
                 break;
             }
+            else {
+                port_guard_warn("texp.c:618");
+            }
+            #endif /* BUILD_TARGET_PC */
             HSD_ASSERT(771, sel == HSD_TE_A);
             HSD_ASSERT(772, idx == 3 || exp->tev.a_clamp);
             HSD_TExpRef(tev->a_in[idx].exp, tev->a_in[idx].sel);
@@ -1183,12 +1236,15 @@ void HSD_TExpSetReg(HSD_TExp* texp)
             } else {
                 int x;
                 u8 val;
+                #if BUILD_TARGET_PC
                 /* PC port: guard against invalid val pointer */
                 if (clist->val == NULL || (uintptr_t) clist->val < 0x10000 || (uintptr_t) clist->val > 0x7FFFFFFFFFFF0000ULL) {
+                    port_guard_warn("texp.c:1190");
                     if (clist->next == NULL) break;
                     clist = &clist->next->cnst;
                     continue;
                 }
+                #endif /* BUILD_TARGET_PC */
                 switch (clist->ctype) {
                 case HSD_TE_U8:
                     x = *(u8*) clist->val;
@@ -1236,8 +1292,13 @@ void HSD_TExpSetReg(HSD_TExp* texp)
                 }
             }
         }
+        #if BUILD_TARGET_PC
         /* PC port: guard against NULL next pointer before dereference */
-        if (clist->next == NULL) break;
+                if (clist->next == NULL) {
+            port_guard_warn("texp.c:1244");
+            break;
+        }
+        #endif /* BUILD_TARGET_PC */
         clist = &clist->next->cnst;
     }
     if (changed != 0) {
@@ -1307,12 +1368,16 @@ int HSD_TExpCompile(HSD_TExp* texp, HSD_TExpTevDesc** tevdesc,
         HSD_TExpTevDesc* tdesc = hsdAllocMemPiece(sizeof(HSD_TExpTevDesc));
         tdesc->desc.stage = HSD_Index2TevStage(i);
         TExp2TevDesc(order[(num - i) - 1], tdesc, &init_cprev, &init_aprev);
+#if BUILD_TARGET_PC
         /* PC port: fix chain building - don't dereference NULL */
         if (*tevdesc != NULL) {
             tdesc->desc.next = &(*tevdesc)->desc;
         } else {
             tdesc->desc.next = NULL;
         }
+#else
+        tdesc->desc.next = &(*tevdesc)->desc;
+#endif /* BUILD_TARGET_PC */
         *tevdesc = tdesc;
     }
 
