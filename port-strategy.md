@@ -39,6 +39,10 @@
 - Input: single path (g_gc_pads bridge); debug overlay + screenshots
   are opt-in via `MELEE_DEBUG_OVERLAY=1` / `MELEE_SCREENSHOT=1`.
 - PC build has depfiles (header edits now trigger rebuilds).
+- Decomp/port separation: all 178 PC-port sites in `src/melee/` +
+  `src/sysdolphin/` are guarded with `#if BUILD_TARGET_PC` (original
+  GCN code in `#else`); GCN build statically verified, pending a
+  MWCC compile.
 
 **Active blocker (NEW-1)**
 - After ~950 frames the opening sequence times out and GM_TITLE runs.
@@ -51,8 +55,13 @@
 **Known open items**
 - Rare early crash (~1 in 7 runs) in the opening sequence — see
   checklist NEW-2.
-- Decomp/port separation decision (checklist item 5): ~15 decomp files
-  have unguarded PC changes; the GCN build is not currently linkable.
+- Decomp/port separation (checklist item 5): RESOLVED — every PC-port
+  change in `src/melee/` + `src/sysdolphin/` is now inside
+  `#if BUILD_TARGET_PC` with the original GCN code in `#else` (commit
+  fba642edf). The GCN build is statically verified (no PC symbol
+  leakage, balanced preprocessor/braces) but not yet compiled with
+  MWCC — the first `ninja` on a machine with Metrowerks is the final
+  check.
 - Display-list vertex-format enums in the bridge mix API and wire-format
   values (checklist item 14, deferred).
 
