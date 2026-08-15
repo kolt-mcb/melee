@@ -205,13 +205,15 @@ void HSD_GObj_80390FC0(void)
      * priority links (e.g., link[3]), so we need to walk all of them. */
     for (i = 0; i <= HSD_GObjLibInitData.gx_link_max + 1; i++) {
         cur = HSD_GObjGXLinkHead[i];
+        int iter = 0;
         while (cur != NULL) {
-            /* PC port: sanity check - GObj pointers from archive data are corrupted on LE.
-             * Skip GObjs with obviously invalid next_gx pointers. */
-            HSD_GObj* next_cur = cur->next_gx;
-            if (next_cur != NULL && (uintptr_t)next_cur > 0xFFFFFFFFULL) {
-                break; /* Stop walking this link - pointer is corrupted */
+            /* PC port: prevent infinite loops on corrupted/cyclic lists.
+             * Valid GObj pointers are high x86_64 heap addresses, so we
+             * cannot use a low-address threshold. Use a max iteration count. */
+            if (++iter > 10000) {
+                break; /* Corrupted/cyclic list - stop walking this link */
             }
+            HSD_GObj* next_cur = cur->next_gx;
             if (cur->render_cb != NULL) {
                 /* PC port: guard against corrupted callback pointers. */
                 if ((uintptr_t)cur->render_cb < 0x400000ULL ||

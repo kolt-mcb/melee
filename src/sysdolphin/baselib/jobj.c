@@ -722,10 +722,8 @@ inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
      * After archive conversion, valid joints are heap-allocated x86_64 structs.
      * Keep a low threshold as a safety net for any unconverted data. */
     if ((uintptr_t)joint < 0x1000ULL || (uintptr_t)joint > 0xFFFFFFFFFFFFFULL) {
+        port_guard_warn("jobj.c:JObjLoadJointSub");
         return NULL;
-    }
-    else {
-        port_guard_warn("jobj.c:668");
     }
     #endif /* BUILD_TARGET_PC */
     if (joint->class_name == NULL ||
@@ -1255,13 +1253,9 @@ void HSD_JObjClearFlagsAll(HSD_JObj* jobj, u32 flags)
 HSD_JObj* HSD_JObjAlloc(void)
 {
     HSD_ClassInfo* ci = default_class != NULL ? default_class : &hsdJObj.parent.parent;
-    #if BUILD_TARGET_PC
-    /* PC port: guard against corrupted class info alloc pointer. */
-        if (ci == NULL || ci->alloc == NULL) {
-        port_guard_warn("jobj.c:1141");
-        return NULL;
-    }
-    #endif /* BUILD_TARGET_PC */
+    /* Note: ci->alloc may legitimately be NULL here — hsdNew() runs the
+     * lazy info_init() (which sets alloc) when head.flags & 1 is clear.
+     * Corruption of the class info is guarded inside hsdNew(). */
     HSD_JObj* jobj = hsdNew(ci);
     HSD_ASSERT(2003, jobj);
     return jobj;

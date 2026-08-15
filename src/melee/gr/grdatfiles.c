@@ -2,6 +2,7 @@
 
 #include "ground.h"
 #include "types.h"
+#include "sc/types.h"
 
 #include "lb/lb_00B0.h"
 #include "lb/lbarchive.h"
@@ -9,13 +10,18 @@
 
 #include <baselib/archive.h>
 #include <baselib/aobj.h>
+#include <baselib/cobj.h>
 #include <baselib/debug.h>
 #include <baselib/dobj.h>
+#include <baselib/fog.h>
+#include <baselib/lobj.h>
 #include <baselib/mobj.h>
 #include <baselib/pobj.h>
 #include <baselib/particle.h>
 #include <baselib/robj.h>
+#include <baselib/sobjlib.h>
 #include <baselib/tobj.h>
+#include <baselib/wobj.h>
 #include <baselib/psstructs.h>
 #include <dolphin/gx.h>
 
@@ -903,6 +909,355 @@ static struct HSD_ImageDesc* grDatFiles_ConvertImageDescGCNtoX64(const u8* gcnIm
     x64Img->maxLOD = *(f32*)&raw;
 
     return x64Img;
+}
+
+/* GCN HSD_Tlut (4-byte pointers, 16 bytes total) */
+struct HSD_Tlut_gcn {
+    u32 lut;          /* 0x00 void* */
+    u32 fmt;          /* 0x04 GXTlutFmt */
+    u32 tlut_name;    /* 0x08 u32 */
+    u16 n_entries;    /* 0x0C u16 */
+};
+
+/* GCN HSD_SObjDesc (4-byte pointers, 8 bytes total) */
+struct HSD_SObjDesc_gcn {
+    u32 image;    /* 0x00 HSD_ImageDesc* */
+    u32 tlut;     /* 0x04 HSD_Tlut* */
+};
+
+/* Convert a GCN HSD_Tlut to an x86_64 HSD_Tlut. */
+static HSD_Tlut* grDatFiles_ConvertTlutGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    const struct HSD_Tlut_gcn* gcn;
+    HSD_Tlut* x64;
+    u32 val;
+
+    if (gcnPtr == NULL) return NULL;
+    gcn = (const struct HSD_Tlut_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_Tlut));
+    if (x64 == NULL) return NULL;
+
+    val = be32_swap(gcn->lut);
+    x64->lut = (val != 0 && val < 0x80000000U) ? (void*)(dataBase + val) : NULL;
+    x64->fmt = (GXTlutFmt)be32_swap(gcn->fmt);
+    x64->tlut_name = be32_swap(gcn->tlut_name);
+    x64->n_entries = be16_swap(gcn->n_entries);
+    return x64;
+}
+
+/* Convert a GCN HSD_SObjDesc to an x86_64 HSD_SObjDesc.
+ * Also converts the referenced image descriptor and tlut. */
+HSD_SObjDesc* grDatFiles_ConvertSObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    const struct HSD_SObjDesc_gcn* gcn;
+    HSD_SObjDesc* x64;
+    u32 val;
+
+    if (gcnPtr == NULL) return NULL;
+    gcn = (const struct HSD_SObjDesc_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_SObjDesc));
+    if (x64 == NULL) return NULL;
+
+    val = be32_swap(gcn->image);
+    x64->image = (val != 0 && val < 0x80000000U)
+        ? grDatFiles_ConvertImageDescGCNtoX64(dataBase + val, dataBase)
+        : NULL;
+
+    val = be32_swap(gcn->tlut);
+    x64->tlut = (val != 0 && val < 0x80000000U)
+        ? grDatFiles_ConvertTlutGCNtoX64(dataBase + val, dataBase)
+        : NULL;
+
+    return x64;
+}
+
+/* GCN HSD_WObjDesc (4-byte pointers, 20 bytes total) */
+struct HSD_WObjDesc_gcn {
+    u32 class_name;   /* 0x00 char* */
+    u32 pos_x;        /* 0x04 Vec3 (BE f32) */
+    u32 pos_y;
+    u32 pos_z;
+    u32 robjdesc;     /* 0x10 HSD_RObjDesc* */
+};
+
+/* Convert a GCN HSD_WObjDesc to an x86_64 HSD_WObjDesc.
+ * Camera eyepos/interest WObjs only use pos; robjdesc is left NULL. */
+static HSD_WObjDesc* grDatFiles_ConvertWObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    const struct HSD_WObjDesc_gcn* gcn;
+    HSD_WObjDesc* x64;
+    u32 raw;
+
+    if (gcnPtr == NULL) return NULL;
+    gcn = (const struct HSD_WObjDesc_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_WObjDesc));
+    if (x64 == NULL) return NULL;
+
+    x64->class_name = NULL;
+    raw = be32_swap(gcn->pos_x); x64->pos.x = *(f32*)&raw;
+    raw = be32_swap(gcn->pos_y); x64->pos.y = *(f32*)&raw;
+    raw = be32_swap(gcn->pos_z); x64->pos.z = *(f32*)&raw;
+    x64->robjdesc = NULL;
+    return x64;
+}
+
+/* GCN HSD_CameraDescPerspective (4-byte pointers, 56 bytes total) */
+struct HSD_CameraDescPerspective_gcn {
+    u32 class_name;       /* 0x00 char* */
+    u16 flags;            /* 0x04 */
+    u16 projection_type;  /* 0x06 */
+    s16 viewport[4];      /* 0x08 HSD_RectS16 */
+    u16 scissor[4];       /* 0x10 Scissor */
+    u32 eyepos;           /* 0x18 HSD_WObjDesc* */
+    u32 interest;         /* 0x1C HSD_WObjDesc* */
+    u32 roll;             /* 0x20 f32 BE */
+    u32 up_vector;        /* 0x24 Vec3* */
+    u32 nnear;            /* 0x28 f32 BE */
+    u32 ffar;             /* 0x2C f32 BE */
+    u32 fov;              /* 0x30 f32 BE */
+    u32 aspect;           /* 0x34 f32 BE */
+};
+
+/* Convert a GCN HSD_CameraDescPerspective to x86_64.
+ * Converts eyepos/interest WObjDescs and the up_vector. */
+HSD_CameraDescPerspective* grDatFiles_ConvertCameraDescGCNtoX64(
+    const u8* gcnPtr, u8* dataBase)
+{
+    const struct HSD_CameraDescPerspective_gcn* gcn;
+    HSD_CameraDescPerspective* x64;
+    u32 val;
+    u32 raw;
+
+    if (gcnPtr == NULL) return NULL;
+    gcn = (const struct HSD_CameraDescPerspective_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_CameraDescPerspective));
+    if (x64 == NULL) return NULL;
+
+    memset(x64, 0, sizeof(HSD_CameraDescPerspective));
+    x64->class_name = NULL;
+    x64->flags = be16_swap(gcn->flags);
+    x64->projection_type = be16_swap(gcn->projection_type);
+
+    x64->viewport.xmin = be16_swap(gcn->viewport[0]);
+    x64->viewport.xmax = be16_swap(gcn->viewport[1]);
+    x64->viewport.ymin = be16_swap(gcn->viewport[2]);
+    x64->viewport.ymax = be16_swap(gcn->viewport[3]);
+    x64->scissor.left = be16_swap(gcn->scissor[0]);
+    x64->scissor.right = be16_swap(gcn->scissor[1]);
+    x64->scissor.top = be16_swap(gcn->scissor[2]);
+    x64->scissor.bottom = be16_swap(gcn->scissor[3]);
+
+    val = be32_swap(gcn->eyepos);
+    x64->eyepos = (val != 0 && val < 0x80000000U)
+        ? grDatFiles_ConvertWObjDescGCNtoX64(dataBase + val, dataBase)
+        : NULL;
+
+    val = be32_swap(gcn->interest);
+    x64->interest = (val != 0 && val < 0x80000000U)
+        ? grDatFiles_ConvertWObjDescGCNtoX64(dataBase + val, dataBase)
+        : NULL;
+
+    raw = be32_swap(gcn->roll);
+    x64->roll = *(f32*)&raw;
+
+    val = be32_swap(gcn->up_vector);
+    if (val != 0 && val < 0x80000000U) {
+        const u8* up = dataBase + val;
+        Vec3* vec = lbHeap_80015BD0(0, sizeof(Vec3));
+        if (vec != NULL) {
+            raw = be32_swap(*(const u32*)(up + 0)); vec->x = *(f32*)&raw;
+            raw = be32_swap(*(const u32*)(up + 4)); vec->y = *(f32*)&raw;
+            raw = be32_swap(*(const u32*)(up + 8)); vec->z = *(f32*)&raw;
+            x64->up_vector = vec;
+        }
+    }
+
+    raw = be32_swap(gcn->nnear);
+    x64->nnear = *(f32*)&raw;
+    raw = be32_swap(gcn->ffar);
+    x64->ffar = *(f32*)&raw;
+    raw = be32_swap(gcn->fov);
+    x64->fov = *(f32*)&raw;
+    raw = be32_swap(gcn->aspect);
+    x64->aspect = *(f32*)&raw;
+
+    return x64;
+}
+
+/* GCN HSD_LightDesc (4-byte pointers, 28 bytes total) */
+struct HSD_LightDesc_gcn {
+    u32 class_name;   /* 0x00 char* */
+    u32 next;         /* 0x04 HSD_LightDesc* */
+    u16 flags;        /* 0x08 */
+    u16 attnflags;    /* 0x0A */
+    u8 color[4];      /* 0x0C GXColor */
+    u32 position;     /* 0x10 HSD_WObjDesc* */
+    u32 interest;     /* 0x14 HSD_WObjDesc* */
+    u32 u;            /* 0x18 union (point/spot/attn) */
+};
+
+/* GCN LightList (4-byte pointers, 8 bytes total) */
+struct LightList_gcn {
+    u32 desc;    /* 0x00 HSD_LightDesc* */
+    u32 anims;   /* 0x04 HSD_LightAnim** */
+};
+
+/* Convert a GCN HSD_LightDesc chain to x86_64 (follows 'next'). */
+static HSD_LightDesc* grDatFiles_ConvertLightDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    const struct HSD_LightDesc_gcn* gcn;
+    HSD_LightDesc* x64;
+    u32 val;
+    u32 raw;
+    u16 flags;
+
+    if (gcnPtr == NULL) return NULL;
+    gcn = (const struct HSD_LightDesc_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_LightDesc));
+    if (x64 == NULL) return NULL;
+
+    memset(x64, 0, sizeof(HSD_LightDesc));
+    flags = be16_swap(gcn->flags);
+    x64->class_name = NULL;
+    x64->flags = flags;
+    x64->attnflags = be16_swap(gcn->attnflags);
+    memcpy(&x64->color, gcn->color, 4);
+
+    val = be32_swap(gcn->position);
+    x64->position = (val != 0 && val < 0x80000000U)
+        ? grDatFiles_ConvertWObjDescGCNtoX64(dataBase + val, dataBase)
+        : NULL;
+
+    val = be32_swap(gcn->interest);
+    x64->interest = (val != 0 && val < 0x80000000U)
+        ? grDatFiles_ConvertWObjDescGCNtoX64(dataBase + val, dataBase)
+        : NULL;
+
+    /* Convert the type-specific union payload. */
+    val = be32_swap(gcn->u);
+    if (val != 0 && val < 0x80000000U) {
+        const u8* up = dataBase + val;
+        switch (flags & LOBJ_TYPE_MASK) {
+        case LOBJ_POINT: {
+            HSD_LightPointDesc* pd = lbHeap_80015BD0(0, sizeof(HSD_LightPointDesc));
+            if (pd != NULL) {
+                raw = be32_swap(*(const u32*)(up + 0)); pd->ref_br = *(f32*)&raw;
+                raw = be32_swap(*(const u32*)(up + 4)); pd->ref_dist = *(f32*)&raw;
+                pd->dist_func = be32_swap(*(const u32*)(up + 8));
+                x64->u.point = pd;
+            }
+            break;
+        }
+        case LOBJ_SPOT: {
+            HSD_LightSpotDesc* sd = lbHeap_80015BD0(0, sizeof(HSD_LightSpotDesc));
+            if (sd != NULL) {
+                raw = be32_swap(*(const u32*)(up + 0)); sd->cutoff = *(f32*)&raw;
+                sd->spot_func = be32_swap(*(const u32*)(up + 4));
+                raw = be32_swap(*(const u32*)(up + 8)); sd->ref_br = *(f32*)&raw;
+                raw = be32_swap(*(const u32*)(up + 12)); sd->ref_dist = *(f32*)&raw;
+                sd->dist_func = be32_swap(*(const u32*)(up + 16));
+                x64->u.spot = sd;
+            }
+            break;
+        }
+        case LOBJ_AMBIENT:
+        case LOBJ_INFINITE:
+            break;
+        default: {
+            /* attention curve (6 f32) */
+            HSD_LightAttn* at = lbHeap_80015BD0(0, sizeof(HSD_LightAttn));
+            s32 i;
+            if (at != NULL) {
+                for (i = 0; i < 6; i++) {
+                    raw = be32_swap(*(const u32*)(up + i * 4));
+                    ((f32*)at)[i] = *(f32*)&raw;
+                }
+                x64->u.attn = at;
+            }
+            break;
+        }
+        }
+    }
+
+    val = be32_swap(gcn->next);
+    x64->next = (val != 0 && val < 0x80000000U)
+        ? grDatFiles_ConvertLightDescGCNtoX64(dataBase + val, dataBase)
+        : NULL;
+
+    return x64;
+}
+
+/* Convert a GCN LightList array (NULL-terminated array of LightList*)
+ * to x86_64. Returns a pointer to the converted array. */
+LightList** grDatFiles_ConvertLightListGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    const u32* entries;
+    LightList** arr;
+    u32 val;
+    s32 i, n;
+
+    if (gcnPtr == NULL) return NULL;
+    entries = (const u32*)gcnPtr;
+
+    n = 0;
+    while (n < 16 && be32_swap(entries[n]) != 0) n++;
+    if (n == 0) return NULL;
+
+    arr = lbHeap_80015BD0(0, sizeof(LightList*) * (size_t)(n + 1));
+    if (arr == NULL) return NULL;
+
+    for (i = 0; i < n; i++) {
+        const struct LightList_gcn* ll;
+        LightList* x64ll;
+
+        val = be32_swap(entries[i]);
+        ll = (const struct LightList_gcn*)(dataBase + val);
+        x64ll = lbHeap_80015BD0(0, sizeof(LightList));
+        if (x64ll == NULL) {
+            arr[i] = NULL;
+            continue;
+        }
+        val = be32_swap(ll->desc);
+        x64ll->desc = (val != 0 && val < 0x80000000U)
+            ? grDatFiles_ConvertLightDescGCNtoX64(dataBase + val, dataBase)
+            : NULL;
+        x64ll->anims = NULL;  /* light anims not needed for static title */
+        arr[i] = x64ll;
+    }
+    arr[n] = NULL;
+    return arr;
+}
+
+/* GCN HSD_FogDesc (4-byte pointers, 20 bytes total) */
+struct HSD_FogDesc_gcn {
+    u32 type;           /* 0x00 */
+    u32 fogadjdesc;     /* 0x04 HSD_FogAdjDesc* */
+    u32 start;          /* 0x08 f32 BE */
+    u32 end;            /* 0x0C f32 BE */
+    u8 color[4];        /* 0x10 GXColor */
+};
+
+/* Convert a GCN HSD_FogDesc to x86_64. fogadjdesc is left NULL. */
+HSD_FogDesc* grDatFiles_ConvertFogDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    const struct HSD_FogDesc_gcn* gcn;
+    HSD_FogDesc* x64;
+    u32 raw;
+
+    if (gcnPtr == NULL) return NULL;
+    gcn = (const struct HSD_FogDesc_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_FogDesc));
+    if (x64 == NULL) return NULL;
+
+    memset(x64, 0, sizeof(HSD_FogDesc));
+    x64->type = be32_swap(gcn->type);
+    x64->fogadjdesc = NULL;  /* fog adjacency not needed for static title fog */
+    raw = be32_swap(gcn->start);
+    x64->start = *(f32*)&raw;
+    raw = be32_swap(gcn->end);
+    x64->end = *(f32*)&raw;
+    memcpy(&x64->color, gcn->color, 4);
+    return x64;
 }
 
 /* Convert a GCN HSD_TObjDesc chain to x86_64 HSD_TObjDesc chain.

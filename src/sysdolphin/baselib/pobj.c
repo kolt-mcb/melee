@@ -329,7 +329,7 @@ HSD_PObj* HSD_PObjLoadDesc(HSD_PObjDesc* pobjdesc)
     if (pobjdesc != NULL) {
         HSD_PObj* pobj;
         /* PC port: guard against GCN-packed PObjDesc with garbage fields. */
-        if ((uintptr_t)pobjdesc < 0x20000000ULL) {
+        if ((uintptr_t)pobjdesc < 0x1000000ULL  /* GCN offsets are <1MB; valid pointers are >=16MB */) {
             port_guard_warn("pobj.c:323");
             return NULL;
         }
@@ -1276,14 +1276,6 @@ static void PObjSetupMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 
 static void PObjDispSimplePrimitive(HSD_PObj* pobj, u32 rendermode)
 {
-#if BUILD_TARGET_PC
-    static int dbg = 0;
-    if (dbg++ < 10) {
-        fprintf(stderr, "[POBJ] dispSimple: display=%p n_display=%d verts=%p\n",
-                pobj->display, pobj->n_display, pobj->verts);
-        fflush(stderr);
-    }
-#endif
     setupArrayDesc(pobj->verts);
     setupVtxDesc(pobj);
 

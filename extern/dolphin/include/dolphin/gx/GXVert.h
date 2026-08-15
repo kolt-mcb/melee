@@ -29,9 +29,12 @@ volatile PPCWGPipe GXWGFifo : GXFIFO_ADDR;
 #define GXWGFifo (*(volatile PPCWGPipe *)GXFIFO_ADDR)
 #endif
 
-#if DEBUG
+#if DEBUG || defined(BUILD_TARGET_PC)
 
 // external functions
+// (PC port: the non-DEBUG inline versions write directly to the GCN
+// GPU FIFO at 0xCC008000, which faults on x86_64. On PC the vertex
+// functions are implemented by the GL bridge (src/port/gx_gl_bridge.c).)
 
 #define FUNC_1PARAM(name, T) void name##1##T(T x);
 #define FUNC_2PARAM(name, T) void name##2##T(T x, T y);

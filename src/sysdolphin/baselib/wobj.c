@@ -111,28 +111,12 @@ void HSD_WObjInit(HSD_WObj* wobj, HSD_WObjDesc* desc)
     if (wobj == NULL || desc == NULL) {
         return;
     }
-#if BUILD_TARGET_PC
-    /* PC port: archive data is big-endian, desc fields are corrupted on LE.
-     * Skip wind object initialization until endianness conversion is implemented. */
-    return;
-
-    HSD_WObjSetPosition(wobj, &desc->pos);
-    if (wobj->robj != NULL) {
-        HSD_RObjRemoveAll(wobj->robj);
-    }
-    /* PC port: archive data is big-endian, robjdesc pointer is corrupted on LE.
-     * Skip rotation object loading until endianness conversion is implemented. */
-    /* wobj->robj = HSD_RObjLoadDesc(desc->robjdesc);
-    HSD_RObjResolveRefsAll(wobj->robj, desc->robjdesc); */
-#else
-
     HSD_WObjSetPosition(wobj, &desc->pos);
     if (wobj->robj != NULL) {
         HSD_RObjRemoveAll(wobj->robj);
     }
     wobj->robj = HSD_RObjLoadDesc(desc->robjdesc);
     HSD_RObjResolveRefsAll(wobj->robj, desc->robjdesc);
-#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_WObjSetDefaultClass(HSD_ClassInfo* info)

@@ -294,7 +294,7 @@ HSD_TObj* HSD_TObjLoadDesc(HSD_TObjDesc* td)
 
         #if BUILD_TARGET_PC
         /* PC port: guard against GCN-packed TObjDesc with garbage fields. */
-                if ((uintptr_t)td < 0x20000000ULL) {
+                if ((uintptr_t)td < 0x1000000ULL  /* GCN offsets are <1MB; valid pointers are >=16MB */) {
             port_guard_warn("tobj.c:290");
             return NULL;
         }

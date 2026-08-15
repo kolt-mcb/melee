@@ -142,7 +142,7 @@ void render_present(void)
     if (g_screenshot_wanted < 0) {
         g_screenshot_wanted = getenv("MELEE_SCREENSHOT") != NULL;
     }
-    if (g_render_frame == 50 && g_screenshot_wanted && !g_frame_saved) {
+    if (g_render_frame == 1200 && g_screenshot_wanted && !g_frame_saved) {
         g_frame_saved = true;
         GLint vw, vh;
         SDL_Window* win = window_get_sdl_window();
