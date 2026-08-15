@@ -111,6 +111,7 @@ void HSD_WObjInit(HSD_WObj* wobj, HSD_WObjDesc* desc)
     if (wobj == NULL || desc == NULL) {
         return;
     }
+#if BUILD_TARGET_PC
     /* PC port: archive data is big-endian, desc fields are corrupted on LE.
      * Skip wind object initialization until endianness conversion is implemented. */
     return;
@@ -123,6 +124,15 @@ void HSD_WObjInit(HSD_WObj* wobj, HSD_WObjDesc* desc)
      * Skip rotation object loading until endianness conversion is implemented. */
     /* wobj->robj = HSD_RObjLoadDesc(desc->robjdesc);
     HSD_RObjResolveRefsAll(wobj->robj, desc->robjdesc); */
+#else
+
+    HSD_WObjSetPosition(wobj, &desc->pos);
+    if (wobj->robj != NULL) {
+        HSD_RObjRemoveAll(wobj->robj);
+    }
+    wobj->robj = HSD_RObjLoadDesc(desc->robjdesc);
+    HSD_RObjResolveRefsAll(wobj->robj, desc->robjdesc);
+#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_WObjSetDefaultClass(HSD_ClassInfo* info)
@@ -148,11 +158,16 @@ HSD_WObj* HSD_WObjLoadDesc(HSD_WObjDesc* desc)
             wobj = hsdNew(info);
             HSD_ASSERT(252, wobj);
         }
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted method pointers. */
         HSD_WObjInfo* wobj_info = HSD_WOBJ_METHOD(wobj);
         if (wobj_info != NULL && wobj_info->load != NULL) {
             wobj_info->load(wobj, desc);
         }
+        else {
+            port_guard_warn("wobj.c:151");
+        }
+        #endif /* BUILD_TARGET_PC */
         return wobj;
     }
     return NULL;

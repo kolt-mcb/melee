@@ -1304,10 +1304,14 @@ static int CObjLoad(HSD_CObj* cobj, HSD_CObjDesc* desc)
                            desc->frustum.left, desc->frustum.right);
         break;
     default:
+#if BUILD_TARGET_PC
         /* PC port: archive data is big-endian, projection type is garbage on LE.
          * Default to perspective instead of crashing. */
         HSD_CObjSetPerspective(cobj, desc->perspective.fov,
                                desc->perspective.aspect);
+#else
+        HSD_ASSERT(0x7D0, 0);
+#endif
         break;
     }
     return 0;
@@ -1335,11 +1339,18 @@ HSD_CObj* HSD_CObjLoadDesc(HSD_CObjDesc* desc)
             cobj = hsdNew(info);
             HSD_ASSERT(0x7F7, cobj);
         }
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted method pointers. */
         HSD_CObjInfo* cobj_info = HSD_COBJ_METHOD(cobj);
         if (cobj_info != NULL && cobj_info->load != NULL) {
             cobj_info->load(cobj, desc);
         }
+        else {
+            port_guard_warn("cobj.c:1338");
+        }
+        #else
+        HSD_COBJ_METHOD(cobj)->load(cobj, desc);
+        #endif /* BUILD_TARGET_PC */
         return cobj;
     }
     return NULL;

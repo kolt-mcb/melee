@@ -1155,10 +1155,11 @@ void grAnime_801C8098(Ground_GObj* gobj, int arg1, int arg2, int arg3,
 
 void grAnime_801C8138(HSD_GObj* gobj, enum_t arg1, bool arg2)
 {
+#if BUILD_TARGET_PC
     /* PC port: stub out animation loading — reads GCN-packed archive data
      * that we haven't converted yet. The stage renders without animations. */
     return;
-
+#else
     HSD_JObj* jobj = gobj->hsd_obj;
     UnkArchiveStruct* archive;
     HSD_Joint* joint;
@@ -1217,6 +1218,7 @@ void grAnime_801C8138(HSD_GObj* gobj, enum_t arg1, bool arg2)
         grAnime_801C752C(jobj, 1, 0x77A4, HSD_AObjSetFlags, 3, 0x20000000);
     }
     HSD_JObjAnimAll(jobj);
+#endif /* BUILD_TARGET_PC */
 }
 
 void fn_801C82E8(int arg0, int* arg1)

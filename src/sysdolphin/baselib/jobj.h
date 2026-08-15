@@ -249,11 +249,13 @@ static inline void HSD_JObjSetMtxDirtyOutOfLine(HSD_JObj* jobj)
 inline void HSD_JObjSetupMatrix(HSD_JObj* jobj)
 {
     if (!jobj || !HSD_JObjMtxIsDirty(jobj)) {
+#if BUILD_TARGET_PC
         /* PC port: even if not dirty, ensure parent matrix is computed.
          * This prevents uninitialized matrix reads during rendering. */
         if (jobj && jobj->parent != NULL) {
             HSD_JObjSetupMatrix(jobj->parent);
         }
+#endif /* BUILD_TARGET_PC */
         return;
     }
     HSD_JObjSetupMatrixSub(jobj);
@@ -482,7 +484,12 @@ static inline f32 HSD_JObjGetScaleZ(HSD_JObj* jobj)
 
 static inline void HSD_JObjSetTranslate(HSD_JObj* jobj, Vec3* translate)
 {
+#if BUILD_TARGET_PC
     if (!jobj || !translate) return; /* PC port: guard against NULL from corrupted archive */
+#else
+    HSD_ASSERT(916, jobj);
+    HSD_ASSERT(917, translate);
+#endif /* BUILD_TARGET_PC */
     jobj->translate = *translate;
     if (!(jobj->flags & JOBJ_MTX_INDEP_SRT)) {
         HSD_JObjSetMtxDirty(jobj);
@@ -492,7 +499,12 @@ static inline void HSD_JObjSetTranslate(HSD_JObj* jobj, Vec3* translate)
 static inline void HSD_JObjSetTranslateWithMtxDirty(HSD_JObj* jobj,
                                                     Vec3* translate)
 {
+#if BUILD_TARGET_PC
     if (!jobj || !translate) return; /* PC port guard */
+#else
+    HSD_ASSERT(916, jobj);
+    HSD_ASSERT(917, translate);
+#endif /* BUILD_TARGET_PC */
     jobj->translate = *translate;
     if (!(jobj->flags & JOBJ_MTX_INDEP_SRT)) {
         (HSD_JObjSetMtxDirty)(jobj);
@@ -502,7 +514,12 @@ static inline void HSD_JObjSetTranslateWithMtxDirty(HSD_JObj* jobj,
 static inline void HSD_JObjSetTranslateWithMtxDirtyOutOfLine(HSD_JObj* jobj,
                                                              Vec3* translate)
 {
+#if BUILD_TARGET_PC
     if (!jobj || !translate) return; /* PC port guard */
+#else
+    HSD_ASSERT(916, jobj);
+    HSD_ASSERT(917, translate);
+#endif /* BUILD_TARGET_PC */
     jobj->translate = *translate;
     if (!(jobj->flags & JOBJ_MTX_INDEP_SRT)) {
         HSD_JObjSetMtxDirtyOutOfLine(jobj);

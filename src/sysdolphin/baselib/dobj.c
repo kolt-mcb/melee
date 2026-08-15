@@ -178,8 +178,13 @@ void HSD_DObjAnimAll(HSD_DObj* dobj)
 
 static int DObjLoad(HSD_DObj* dobj, HSD_DObjDesc* desc)
 {
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted archive descriptors. */
-    if (desc == NULL) return 0;
+        if (desc == NULL) {
+        port_guard_warn("dobj.c:181");
+        return 0;
+    }
+    #endif /* BUILD_TARGET_PC */
     
     dobj->next = HSD_DObjLoadDesc(desc->next);
     dobj->mobj = HSD_MObjLoadDesc(desc->mobjdesc);
@@ -210,6 +215,7 @@ static char HSD_DObj_804D5C84[5] = "dobj\0";
 
 HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
 {
+#if BUILD_TARGET_PC
     static int dobj_class_initialized = 0;
     HSD_DObj* dobj;
 
@@ -218,7 +224,10 @@ HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
     }
 
     /* PC port: guard against GCN-packed DObjDesc with garbage fields. */
-    if ((uintptr_t)desc < 0x20000000ULL) return NULL;
+    if ((uintptr_t)desc < 0x20000000ULL) {
+        port_guard_warn("dobj.c:220");
+        return NULL;
+    }
 
     /* PC port: bypass hsdNew to avoid GCN class info corruption. */
     if (!dobj_class_initialized) {
@@ -233,6 +242,28 @@ HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
     }
 
     return dobj;
+#else
+    HSD_DObj* dobj;
+    HSD_ClassInfo* info;
+
+    if (desc == NULL) {
+        return NULL;
+    }
+
+    if (desc->class_name == NULL ||
+        (info = hsdSearchClassInfo(desc->class_name)) == NULL)
+    {
+        dobj = HSD_DObjAlloc();
+    } else {
+        dobj = HSD_DOBJ(hsdNew(info));
+        if (dobj == NULL) {
+            __assert(HSD_DObj_804D5C78, 378, HSD_DObj_804D5C84);
+        }
+        DObjLoad(dobj, desc);
+    }
+
+    return dobj;
+#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_DObjRemove(HSD_DObj* dobj)
@@ -278,20 +309,35 @@ void HSD_DObjResolveRefs(HSD_DObj* dobj, HSD_DObjDesc* desc)
     if (dobj == NULL || desc == NULL) {
         return;
     }
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted DObjDesc pointers. */
-    if ((uintptr_t)desc < 0x1000ULL) return;
+        if ((uintptr_t)desc < 0x1000ULL) {
+        port_guard_warn("dobj.c:281");
+        return;
+    }
+    #endif /* BUILD_TARGET_PC */
     HSD_PObjResolveRefsAll(dobj->pobj, desc->pobjdesc);
 }
 
 void HSD_DObjResolveRefsAll(HSD_DObj* dobj, HSD_DObjDesc* desc)
 {
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted DObjDesc pointers. */
-    if (desc != NULL && (uintptr_t)desc < 0x1000ULL) return;
+        if (desc != NULL && (uintptr_t)desc < 0x1000ULL) {
+        port_guard_warn("dobj.c:288");
+        return;
+    }
+    #endif /* BUILD_TARGET_PC */
     
     for (; dobj != NULL && desc != NULL; dobj = dobj->next, desc = desc->next)
     {
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted DObjDesc pointers. */
-        if ((uintptr_t)desc < 0x1000ULL) break;
+                if ((uintptr_t)desc < 0x1000ULL) {
+            port_guard_warn("dobj.c:293");
+            break;
+        }
+        #endif /* BUILD_TARGET_PC */
         HSD_DObjResolveRefs(dobj, desc);
     }
 }
@@ -323,27 +369,44 @@ void HSD_DObjDisp(HSD_DObj* dobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
     
     HSD_MObjSetCurrent(dobj->mobj);
     if ((rendermode & 0x4000000) == 0) {
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted method pointers. */
         HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(dobj->mobj);
         if (mobj_info != NULL && mobj_info->setup != NULL) {
             mobj_info->setup(dobj->mobj, rendermode);
         }
+        #endif /* BUILD_TARGET_PC */
     }
     for (p = dobj->pobj; p != NULL; p = p->next) {
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted pobj->next pointers. */
-        if ((uintptr_t)p > 0xFFFFFFFFULL) break;
+                if ((uintptr_t)p > 0xFFFFFFFFULL) {
+            port_guard_warn("dobj.c:333");
+            break;
+        }
+        #endif /* BUILD_TARGET_PC */
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted method pointers. */
         HSD_PObjInfo* pobj_info = HSD_POBJ_METHOD(p);
         if (pobj_info != NULL && pobj_info->disp != NULL) {
             pobj_info->disp(p, vmtx, pmtx, rendermode);
         }
+        else {
+            port_guard_warn("dobj.c:353");
+        }
+        #endif /* BUILD_TARGET_PC */
     }
     if ((rendermode & 0x4000000) == 0) {
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted method pointers. */
         HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(dobj->mobj);
         if (mobj_info != NULL && mobj_info->unset != NULL) {
             mobj_info->unset(dobj->mobj, rendermode);
         }
+        else {
+            port_guard_warn("dobj.c:361");
+        }
+        #endif /* BUILD_TARGET_PC */
     }
     HSD_MObjSetCurrent(NULL);
 }

@@ -242,6 +242,7 @@ HSD_Archive* gmTitle_801A1AC0(void)
     const char dat[] = "GmTtAll.dat";
     const char usd[] = "GmTtAll.usd";
 
+#if BUILD_TARGET_PC
     /* PC port: lbArchive_LoadSymbols va_arg is broken on x86_64.
      * Load the archive and resolve symbols manually. */
     HSD_Archive* archive = lbArchive_LoadArchive(
@@ -293,6 +294,24 @@ HSD_Archive* gmTitle_801A1AC0(void)
     }
 
     return archive;
+#else
+    return lbArchive_LoadSymbols(
+        lbLang_IsSettingUS() ? usd : dat, &gmTitle_80479B28.joint,
+        "TtlMoji_Top_joint", &gmTitle_80479B28.animjoint,
+        "TtlMoji_Top_animjoint", &gmTitle_80479B28.matanim_joint,
+        "TtlMoji_Top_matanim_joint", &gmTitle_80479B28.shapeanim_joint,
+        "TtlMoji_Top_shapeanim_joint",
+
+        &gmTitle_804D6708, "ScTitle_cam_int1_camera", &gmTitle_804D670C,
+        "ScTitle_scene_lights", &gmTitle_804D6710, "ScTitle_fog",
+
+        &gmTitle_80479B38.joint, "TtlBg_Top_joint",
+        &gmTitle_80479B38.animjoint, "TtlBg_Top_animjoint",
+        &gmTitle_80479B38.matanim_joint, "TtlBg_Top_matanim_joint",
+        &gmTitle_80479B38.shapeanim_joint, "TtlBg_Top_shapeanim_joint",
+
+        &gm_804D67F0, "TitleMark_sobjdesc", 0);
+#endif /* BUILD_TARGET_PC */
 }
 
 void gmTitle_801A1C18_OnFrame(void)

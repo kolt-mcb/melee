@@ -14,7 +14,9 @@
 /* 1A3A74 */ UNK_RET gm_EvaluateAllControllerInputs(UNK_PARAMS);
 /* 1A3E88 */ UNK_RET gm_801A3E88(UNK_PARAMS);
 /* 1A3EF4 */ void gm_801A3EF4(void);
+#if BUILD_TARGET_PC
 /* PC port: bridge g_gc_pads → controller_map */
 void gm_SyncPadToControllerMap(void);
+#endif /* BUILD_TARGET_PC */
 
 #endif

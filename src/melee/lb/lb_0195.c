@@ -54,10 +54,12 @@ __attribute__((weak)) void lb_800195D0(void)
 {
     lb_800192A8(lb_8001955C);
     lb_8001CC84();
+#if BUILD_TARGET_PC
     /* PC port: set frame advance flag so on_frame callback fires.
      * On GCN, this is set by the VI retrace interrupt. On headless PC,
      * we set it every frame to allow the game loop to progress. */
     lb_804329F0.x0[0].x10 = 1;
+#endif /* BUILD_TARGET_PC */
 }
 
 __attribute__((weak)) void fn_800195FC(void)
@@ -147,12 +149,21 @@ __attribute__((weak)) void lb_80019900(void)
     int i;
     for (i = 0; i < 2; i++) {
         lb_804329F0.x0[i].x8 += lb_804329F0.x40;
+#if BUILD_TARGET_PC
         /* PC port: on headless systems, the timer doesn't advance properly.
          * Always set x10=1 to allow the game loop to progress. */
         if (lb_804329F0.x0[i].x8 >= lb_804329F0.x0[i].x0) {
             lb_804329F0.x0[i].x8 -= lb_804329F0.x0[i].x0;
         }
         lb_804329F0.x0[i].x10 = true;
+#else
+        if (lb_804329F0.x0[i].x8 >= lb_804329F0.x0[i].x0) {
+            lb_804329F0.x0[i].x8 -= lb_804329F0.x0[i].x0;
+            lb_804329F0.x0[i].x10 = true;
+        } else {
+            lb_804329F0.x0[i].x10 = false;
+        }
+#endif /* BUILD_TARGET_PC */
     }
 
     if (lb_80019A30(0)) {

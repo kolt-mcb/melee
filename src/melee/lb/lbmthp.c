@@ -492,6 +492,7 @@ void lbMthp_8001F578(void)
 
 s32 lbMthp_8001F5C4(void)
 {
+#if BUILD_TARGET_PC
     /* PC port: without movie player, return an incrementing frame counter.
      * This allows gm_804D67EC to advance through the title screen sequence.
      * The counter wraps at 0x2000 to avoid overflow issues. */
@@ -499,6 +500,9 @@ s32 lbMthp_8001F5C4(void)
     pc_frame++;
     if (pc_frame > 0x2000) pc_frame = 0x2000;
     return pc_frame;
+#else
+    return MoviePlayer.unk_84;
+#endif /* BUILD_TARGET_PC */
 }
 
 s32 lbMthp_8001F5D4(void)
@@ -546,9 +550,42 @@ HSD_SObj* lbMthp_8001F624(HSD_GObj* gobj, int width, int height)
 
 void lbMthp_8001F67C(HSD_GObj* gobj, int arg1)
 {
+#if BUILD_TARGET_PC
     /* PC port: movie player is not initialized (MvOpen.mth skipped).
      * Return immediately to avoid reading garbage state. */
     return;
+#else
+    struct lbl_804333E0_t* streamPlayer = &MoviePlayer;
+    PAD_STACK(8);
+
+    fn_8001EF5C((THPDecComp*) streamPlayer);
+    if ((s32) streamPlayer->unk_148 != 0) {
+        GXInitTexObj(&streamPlayer->unk_178, streamPlayer->unk_50,
+                     (u16) streamPlayer->unk_44, (u16) streamPlayer->unk_48,
+                     GX_TF_I8, GX_CLAMP, GX_CLAMP, 0U);
+        GXInitTexObjLOD(&streamPlayer->unk_178, GX_NEAR, GX_NEAR, 0.0f, 0.0f,
+                        0.0f, 0U, 0U, GX_ANISO_1);
+        GXLoadTexObj(&streamPlayer->unk_178, GX_TEXMAP0);
+
+        GXInitTexObj(&streamPlayer->unk_198, streamPlayer->unk_54,
+                     (u16) ((u32) streamPlayer->unk_44 >> 1U),
+                     (u16) ((u32) streamPlayer->unk_48 >> 1U), GX_TF_I8,
+                     GX_CLAMP, GX_CLAMP, 0U);
+        GXInitTexObjLOD(&streamPlayer->unk_198, GX_NEAR, GX_NEAR, 0.0f, 0.0f,
+                        0.0f, 0U, 0U, GX_ANISO_1);
+        GXLoadTexObj(&streamPlayer->unk_198, GX_TEXMAP1);
+
+        GXInitTexObj(&streamPlayer->unk_1B8, streamPlayer->unk_58,
+                     (u16) ((u32) streamPlayer->unk_44 >> 1U),
+                     (u16) ((u32) streamPlayer->unk_48 >> 1U), GX_TF_I8,
+                     GX_CLAMP, GX_CLAMP, 0U);
+        GXInitTexObjLOD(&streamPlayer->unk_1B8, GX_NEAR, GX_NEAR, 0.0f, 0.0f,
+                        0.0f, 0U, 0U, GX_ANISO_1);
+        GXLoadTexObj(&streamPlayer->unk_1B8, GX_TEXMAP2);
+
+        HSD_SObjLib_803A49E0(gobj, arg1);
+    }
+#endif /* BUILD_TARGET_PC */
 }
 
 void lbMthp_8001F800(void)

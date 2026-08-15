@@ -2254,8 +2254,10 @@ void gm_8016F088(StartMeleeData* arg0)
     int temp_r3;
     int i;
 
+#if BUILD_TARGET_PC
     /* PC port: Guard against NULL or corrupted pointer from big-endian archive. */
     if (arg0 == NULL || (uintptr_t)arg0 < 0x1000000ULL) return;
+#endif
 
     for (i = 0; i < 6; i++) {
         if (arg0->players[i].slot_type == Gm_PKind_Human && i < 4) {

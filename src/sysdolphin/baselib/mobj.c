@@ -152,8 +152,13 @@ void HSD_MObjAnim(HSD_MObj* mobj)
 
 static int MObjLoad(HSD_MObj* mobj, HSD_MObjDesc* desc)
 {
+    #if BUILD_TARGET_PC
     /* PC port: guard against GCN-packed MObjDesc with garbage fields. */
-    if (desc == NULL) return 0;
+        if (desc == NULL) {
+        port_guard_warn("mobj.c:155");
+        return 0;
+    }
+    #endif /* BUILD_TARGET_PC */
     
     mobj->rendermode = desc->rendermode;
     mobj->tobj = HSD_TObjLoadDesc(desc->texdesc);
@@ -174,8 +179,13 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
         HSD_MObj* mobj;
         HSD_ClassInfo* info;
 
+        #if BUILD_TARGET_PC
         /* PC port: guard against GCN-packed MObjDesc with garbage class_name. */
-        if ((uintptr_t)mobjdesc < 0x20000000ULL) return NULL;
+                if ((uintptr_t)mobjdesc < 0x20000000ULL) {
+            port_guard_warn("mobj.c:177");
+            return NULL;
+        }
+        #endif /* BUILD_TARGET_PC */
 
         if (!mobjdesc->class_name ||
             !(info = hsdSearchClassInfo(mobjdesc->class_name)))
@@ -186,15 +196,24 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
             HSD_ASSERT(353, mobj);
         }
 
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted method pointers. */
         HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(mobj);
         if (mobj_info != NULL && mobj_info->load != NULL) {
             mobj_info->load(mobj, mobjdesc);
         }
+        else {
+            port_guard_warn("mobj.c:195");
+        }
+        #endif /* BUILD_TARGET_PC */
+#if BUILD_TARGET_PC
         /* PC port: skip TEV compilation for now - archive data corruption.
          * TEV descriptors from GCN archives have different struct layouts
          * on x86_64, causing crashes in the TEV compiler. */
         /* HSD_MObjCompileTev(mobj); */
+#else
+        HSD_MObjCompileTev(mobj);
+#endif /* BUILD_TARGET_PC */
 
         return mobj;
     } else {
@@ -251,6 +270,7 @@ HSD_TExp* MObjMakeTExp(HSD_MObj* mobj, HSD_TObj* tobj_top, HSD_TExp** list)
         if ((tobj_2->flags & (TEX_LIGHTMAP_DIFFUSE | TEX_LIGHTMAP_AMBIENT)) &&
             tobj_2->id != GX_TEXMAP_NULL)
         {
+            #if BUILD_TARGET_PC
             /* PC port: guard against corrupted method pointers. */
             HSD_TObjInfo* tobj_info = HSD_TOBJ_METHOD(tobj_2);
             if (tobj_info != NULL && tobj_info->make_texp != NULL) {
@@ -258,6 +278,10 @@ HSD_TExp* MObjMakeTExp(HSD_MObj* mobj, HSD_TObj* tobj_top, HSD_TExp** list)
                     tobj_2, (TEX_LIGHTMAP_DIFFUSE | TEX_LIGHTMAP_AMBIENT), done,
                     &diff, &alpha, list);
             }
+            else {
+                port_guard_warn("mobj.c:261");
+            }
+            #endif /* BUILD_TARGET_PC */
         }
     }
     done |= (TEX_LIGHTMAP_DIFFUSE | TEX_LIGHTMAP_AMBIENT);
@@ -300,12 +324,17 @@ HSD_TExp* MObjMakeTExp(HSD_MObj* mobj, HSD_TObj* tobj_top, HSD_TExp** list)
             if ((tobj_3->flags & TEX_LIGHTMAP_SPECULAR) &&
                 tobj_3->id != GX_TEXMAP_NULL)
             {
+                #if BUILD_TARGET_PC
                 /* PC port: guard against corrupted method pointers. */
                 HSD_TObjInfo* tobj_info = HSD_TOBJ_METHOD(tobj_3);
                 if (tobj_info != NULL && tobj_info->make_texp != NULL) {
                     tobj_info->make_texp(
                         tobj_3, TEX_LIGHTMAP_SPECULAR, done, &spec, &alpha, list);
                 }
+                else {
+                    port_guard_warn("mobj.c:311");
+                }
+                #endif /* BUILD_TARGET_PC */
             }
         }
         done |= TEX_LIGHTMAP_SPECULAR;
@@ -331,12 +360,17 @@ HSD_TExp* MObjMakeTExp(HSD_MObj* mobj, HSD_TObj* tobj_top, HSD_TExp** list)
     for (tobj_4 = tobj_top; tobj_4 != NULL; tobj_4 = tobj_4->next) {
         if ((tobj_4->flags & TEX_LIGHTMAP_EXT) && tobj_4->id != GX_TEXMAP_NULL)
         {
+            #if BUILD_TARGET_PC
             /* PC port: guard against corrupted method pointers. */
             HSD_TObjInfo* tobj_info = HSD_TOBJ_METHOD(tobj_4);
             if (tobj_info != NULL && tobj_info->make_texp != NULL) {
                 tobj_info->make_texp(tobj_4, TEX_LIGHTMAP_EXT, done,
                                      &ext, &alpha, list);
             }
+            else {
+                port_guard_warn("mobj.c:343");
+            }
+            #endif /* BUILD_TARGET_PC */
         }
     }
 
@@ -367,10 +401,12 @@ void HSD_MObjCompileTev(HSD_MObj* mobj)
 
     tail = NULL;
     if (mobj != NULL) {
+#if BUILD_TARGET_PC
         /* PC port: skip TEV if no texture object */
         if (mobj->tobj == NULL) {
             return;
         }
+#endif
 
         if (mobj->tevdesc != NULL) {
             HSD_TExpFreeTevDesc(mobj->tevdesc);
@@ -397,11 +433,16 @@ void HSD_MObjCompileTev(HSD_MObj* mobj)
             }
         }
         HSD_TObjAssignResources(tobj);
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted method pointers. */
         HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(mobj);
         if (mobj_info != NULL && mobj_info->make_texp != NULL) {
             texp = mobj_info->make_texp(mobj, tobj, &mobj->texp);
         }
+        else {
+            port_guard_warn("mobj.c:410");
+        }
+        #endif /* BUILD_TARGET_PC */
         HSD_TExpCompile(texp, &mobj->tevdesc, &mobj->texp);
         if (tail != NULL) {
             *tail = NULL;
@@ -453,11 +494,16 @@ void HSD_MObjSetup(HSD_MObj* mobj, u32 rendermode)
     }
     HSD_TObjSetup(tobj);
     HSD_TObjSetupTextureCoordGen(tobj);
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted method pointers. */
     HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(mobj);
     if (mobj_info != NULL && mobj_info->setup_tev != NULL) {
         mobj_info->setup_tev(mobj, tobj, rendermode);
     }
+    else {
+        port_guard_warn("mobj.c:467");
+    }
+    #endif /* BUILD_TARGET_PC */
     HSD_SetupRenderModeWithCustomPE(rendermode, mobj->pe);
     if (tail != NULL) {
         *tail = NULL;
@@ -591,10 +637,12 @@ static void MObjRelease(HSD_Class* o)
     hsdFreeMemPiece(mobj->mat, sizeof(HSD_Material));
     HSD_TObjRemoveAll(mobj->tobj);
 
+#if BUILD_TARGET_PC
         /* PC port: skip TEV if no texture object */
         if (mobj->tobj == NULL) {
             return;
         }
+#endif
 
     if (mobj->tevdesc != NULL) {
         HSD_TExpFreeTevDesc(mobj->tevdesc);

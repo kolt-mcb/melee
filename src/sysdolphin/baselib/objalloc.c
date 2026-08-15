@@ -5,32 +5,49 @@
 
 #include <__mem.h>
 #include <dolphin/os/OSAlloc.h>
+#if BUILD_TARGET_PC
 #include <execinfo.h>
+#endif
 
 static objheap obj_heap = { 0, 0, -1, -1 };
+#if BUILD_TARGET_PC
 static uintptr_t obj_heap_saved_curr = 0; /* PC port: save curr before corruption */
+#endif
 
 static HSD_ObjAllocData* alloc_datas;
 
 void HSD_ObjSetHeap(uintptr_t size, void* ptr)
 {
+#if BUILD_TARGET_PC
+    /* PC port: 64-bit heap addresses */
     obj_heap.curr = (uintptr_t) ptr;
     obj_heap.top = (uintptr_t) ptr;
+    obj_heap_saved_curr = 0;
+#else
+    obj_heap.curr = (u32) ptr;
+    obj_heap.top = (u32) ptr;
+#endif
     obj_heap.remain = size;
     obj_heap.size = size;
-    obj_heap_saved_curr = 0;
 }
 
 s32 HSD_ObjAllocAddFree(HSD_ObjAllocData* data, u32 num)
 {
+#if BUILD_TARGET_PC
     uintptr_t computed_start;
     uintptr_t pool_end;
     uintptr_t pool_size;
+#else
+    u32 computed_start;
+    u32 pool_end;
+    u32 pool_size;
+#endif
     u8* pool_start;
 
     u8 _[4];
 
     HSD_ASSERT(0xEE, data);
+#if BUILD_TARGET_PC
     if (obj_heap.top != 0 && obj_heap.top > 0x700000000000UL && obj_heap.top < 0x800000000000UL) {
         /* Valid PC heap address */
     } else {
@@ -47,9 +64,11 @@ s32 HSD_ObjAllocAddFree(HSD_ObjAllocData* data, u32 num)
     if (data->size == 0) {
         return 0;
     }
+#endif
     pool_size = data->size * num;
     if (obj_heap.top != 0) {
         pool_end = obj_heap.top + obj_heap.size;
+#if BUILD_TARGET_PC
         /* PC port: cast to uintptr_t before ~ to avoid 32-bit truncation. */
         computed_start = (obj_heap.curr + data->align) & ~(uintptr_t)data->align;
         pool_start = (void*) computed_start;
@@ -67,20 +86,42 @@ s32 HSD_ObjAllocAddFree(HSD_ObjAllocData* data, u32 num)
         obj_heap.curr = (uintptr_t) pool_start + pool_size;
         obj_heap.remain = pool_end - obj_heap.curr;
         obj_heap_saved_curr = obj_heap.curr; /* PC port: save for corruption recovery */
+#else
+        computed_start = (obj_heap.curr + data->align) & ~data->align;
+        pool_start = (void*) computed_start;
+        if (computed_start > pool_end) {
+            return 0;
+        }
+        if (pool_end - (u32) pool_start < pool_size) {
+            pool_size = pool_end - (u32) pool_start -
+                        (pool_end - (u32) pool_start) % data->size;
+        }
+        num = pool_size / data->size;
+        if (num == 0) {
+            return 0;
+        }
+        obj_heap.curr = (u32) pool_start + pool_size;
+        obj_heap.remain = pool_end - obj_heap.curr;
+#endif
     } else {
         pool_start = HSD_MemAlloc(pool_size);
         if (pool_start == 0) {
             return 0;
         }
+#if BUILD_TARGET_PC
         /* PC port: obj_heap.remain is -1 when heap is not set.
          * Don't subtract from it to avoid wraparound. */
         if (obj_heap.remain != (uintptr_t)-1) {
             obj_heap.remain -= pool_size;
         }
+#else
+        obj_heap.remain -= pool_size;
+#endif
     }
 
     {
         int i;
+#if BUILD_TARGET_PC
         if (pool_start == NULL) {
             return 0;
         }
@@ -88,6 +129,7 @@ s32 HSD_ObjAllocAddFree(HSD_ObjAllocData* data, u32 num)
          * On x86_64, structs are larger than on GCN due to 8-byte pointers,
          * so fields beyond what CreateGObj initializes contain garbage. */
         memset(pool_start, 0, data->size * num);
+#endif
         for (i = 0; (unsigned) i < num - 1; i++) {
             *(void**) (pool_start + data->size * i) =
                 (void*) (pool_start + data->size * (i + 1));

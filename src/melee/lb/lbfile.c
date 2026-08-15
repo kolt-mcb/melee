@@ -4,7 +4,9 @@
 #include "lb/lbdvd.h"
 #include "lb/lbheap.h"
 #include "lb/lblanguage.h"
+#if BUILD_TARGET_PC
 #include "port/log.h"
+#endif /* BUILD_TARGET_PC */
 
 #include <string.h>
 #include <stdio.h>
@@ -15,8 +17,10 @@
 #include <baselib/devcom.h>
 
 static bool cancel;
+#if BUILD_TARGET_PC
 void* g_last_file_buf = NULL;  /* PC port: store original pointer before truncation */
 size_t g_last_file_buf_size = 0;
+#endif /* BUILD_TARGET_PC */
 
 void lbFile_8001615C(int r3, int r4, void* r5, bool cancelflag)
 {
@@ -36,9 +40,11 @@ bool lbFile_800161A0(void)
 void lbFile_800161C4(int file, u32 src, u32 dest, u32 size, int type, int pri)
 {
     cancel = false;
+#if BUILD_TARGET_PC
     /* PC port: store original buffer pointer before truncation */
     g_last_file_buf = (void*)(uintptr_t)src;
     g_last_file_buf_size = size;
+#endif
     HSD_DevComRequest(file, src, dest, size, type, pri, lbFile_8001615C, 0);
 
     do {
@@ -127,11 +133,16 @@ s32 lbFile_800163D8(const char* basename)
     s32 entry_num;
     char* filename = lbFile_80016204(basename);
     entry_num = DVDConvertPathToEntrynum(filename);
+#if BUILD_TARGET_PC
     /* PC port: Don't crash on missing files - return 0 size. */
     if (entry_num == -1) {
         PORT_LOG_WARN("vf_open: open failed: %s\n", filename);
         return 0;
     }
+#else
+    HSD_ASSERTREPORT(0xEE, entry_num != -1, "file isn't exist %s = %d\n",
+                     filename, entry_num);
+#endif /* BUILD_TARGET_PC */
     return lbFile_8001634C(entry_num);
 }
 
@@ -154,11 +165,13 @@ void lbFile_80016580(const char* basename, u32 src, u32* dest,
     s32 entry_num = DVDConvertPathToEntrynum(filename);
     PAD_STACK(4);
 
+#if BUILD_TARGET_PC
     /* PC port: Don't crash on missing files. */
     if (entry_num == -1) {
         PORT_LOG_WARN("lbFile_80016580: file not found: %s\n", filename);
         return;
     }
+#endif /* BUILD_TARGET_PC */
 
     lbFile_800164A4(entry_num, src, dest, 1, callback, args);
 }
@@ -166,9 +179,11 @@ void lbFile_80016580(const char* basename, u32 src, u32* dest,
 void lbFile_8001668C(const char* basename, u32* src, u32* dest)
 {
     cancel = false;
+#if BUILD_TARGET_PC
     /* PC port: store original buffer pointer before truncation */
     g_last_file_buf = (void*)(uintptr_t)src;
     g_last_file_buf_size = 0;
+#endif
     lbFile_80016580(basename, (u32) src, dest, lbFile_8001615C, 0);
     do {
     } while (!lbFile_800161A0());
@@ -178,9 +193,11 @@ inline void qwer(s32 a, const char* basename, u32* src, u32* dest)
 {
     *dest = lbFile_800163D8(basename);
     *src = (u32) lbHeap_80015BD0(a, ROUND_UP_32(*dest));
+#if BUILD_TARGET_PC
     /* PC port: store original buffer pointer before truncation */
     g_last_file_buf = (void*)(uintptr_t)*src;
     g_last_file_buf_size = *dest;
+#endif
     lbFile_80016580(basename, *src, dest, lbFile_8001615C, 0);
 
     do {

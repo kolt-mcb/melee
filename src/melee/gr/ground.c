@@ -109,6 +109,7 @@
 #include <baselib/fog.h>
 #include <baselib/gobj.h>
 
+#if BUILD_TARGET_PC
 /* PC port: byte-swap 32-bit value (big-endian to little-endian) */
 static inline u32 be32(u32 x)
 {
@@ -117,6 +118,7 @@ static inline u32 be32(u32 x)
            ((x & 0x0000FF00) << 8) |
            ((x & 0x000000FF) << 24);
 }
+#endif /* BUILD_TARGET_PC */
 #include <baselib/gobjgxlink.h>
 #include <baselib/gobjobject.h>
 #include <baselib/gobjplink.h>
@@ -485,6 +487,7 @@ void Ground_801C0800(StageIdPair* pair)
 {
     StageData* stage_data = stage_datas[pair->grkind];
     
+#if BUILD_TARGET_PC
     /* PC port: stage_info.param is big-endian archive data.
      * The struct layout differs on x86_64 due to pointer sizes.
      * Skip the param field access but call on_init() which creates
@@ -498,6 +501,11 @@ void Ground_801C0800(StageIdPair* pair)
     Ground_801C38D0(stage_info.param->x8, stage_info.param->x14,
                     stage_info.param->x1C, stage_info.param->x18);
     Ground_801C38EC(stage_info.param->x10, stage_info.param->xC);
+#else
+    Ground_801C38D0(stage_info.param->x8, stage_info.param->x14,
+                    stage_info.param->x1C, stage_info.param->x18);
+    Ground_801C38EC(stage_info.param->x10, stage_info.param->xC);
+#endif /* BUILD_TARGET_PC */
     Ground_801C3970(stage_info.param->x28);
     Ground_801C3900(stage_info.param->x2E, stage_info.param->x30,
                     stage_info.param->x34, stage_info.param->x38,
@@ -1528,6 +1536,7 @@ static inline void reportStageParams(s32 count)
 
 void Ground_801C28CC(s32* arg0, StKind stkind)
 {
+#if BUILD_TARGET_PC
     /* PC port: archive data is big-endian, pointers are relative offsets from archive base.
      * GroundParam::stage_params is at offset 0xB0 (32-bit relative offset on GCN).
      * GroundParam::stage_param_count is at offset 0xB4 (32-bit int on GCN). */
@@ -1561,6 +1570,28 @@ void Ground_801C28CC(s32* arg0, StKind stkind)
     reportStageParams(count);
     while (1) {
     }
+#else
+    StageParam* param = stage_info.param->stage_params;
+    s32 count = stage_info.param->stage_param_count;
+    s32 i;
+
+    for (i = 0; i < count; i++) {
+        if (param->stkind == stkind) {
+            s32 j;
+            for (j = 0; 0x23 > j; j++) {
+                arg0[j] = ((s16*) stage_info.param)[0x35 + j] *
+                          ((s16*) param)[0xD + j];
+            }
+            return;
+        }
+        param++;
+    }
+
+    OSReport(msg0, __FILE__, 0x906, stage_info.grkind, stkind, count);
+    reportStageParams(count);
+    while (1) {
+    }
+#endif /* BUILD_TARGET_PC */
 }
 
 s32* Ground_801C2AD8(void)
@@ -1570,6 +1601,7 @@ s32* Ground_801C2AD8(void)
 
 float Ground_801C2AE8(StKind stkind)
 {
+#if BUILD_TARGET_PC
     /* PC port: read fields explicitly with byte-swapping */
     u8* base = (u8*)stage_info.param;
     u32 raw_offset = be32(*(u32*)(base + 0xB0));
@@ -1583,6 +1615,16 @@ float Ground_801C2AE8(StKind stkind)
         }
         phi_r5 += 1;
     }
+#else
+    StageParam* phi_r5 = stage_info.param->stage_params;
+    int i;
+    for (i = 0; i < stage_info.param->stage_param_count; i++) {
+        if (phi_r5->stkind == stkind) {
+            return (0.01f * stage_info.param->x68) * (0.01f * phi_r5->x18);
+        }
+        phi_r5 += 1;
+    }
+#endif /* BUILD_TARGET_PC */
     OSReport("%s:%d: not found stage param in DAT\n", __FILE__, 0x927);
     while (1) {
     }

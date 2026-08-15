@@ -94,6 +94,7 @@ HSD_Fog* HSD_FogAlloc(void)
 
 HSD_Fog* HSD_FogLoadDesc(HSD_FogDesc* desc)
 {
+#if BUILD_TARGET_PC
     if (desc == NULL) return NULL;
     HSD_Fog* fog = HSD_FogAlloc();
     HSD_ASSERT(0x99, fog);
@@ -104,6 +105,15 @@ HSD_Fog* HSD_FogLoadDesc(HSD_FogDesc* desc)
         fog->fog_adj = HSD_FogAdjLoadDesc(desc->fogadjdesc);
     } */
     return fog;
+#else
+    HSD_Fog* fog = HSD_FogAlloc();
+    HSD_ASSERT(0x99, fog);
+    HSD_FogInit(fog, desc);
+    if (desc->fogadjdesc != NULL) {
+        fog->fog_adj = HSD_FogAdjLoadDesc(desc->fogadjdesc);
+    }
+    return fog;
+#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_FogInit(HSD_Fog* fog, HSD_FogDesc* desc)

@@ -299,18 +299,33 @@ void* hsdNew(HSD_ClassInfo* i)
     HSD_ClassInfo* info = i;
     HSD_ClassInfo* info2 = info;
     HSD_Class* cls;
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted class info. */
-    if (info == NULL) return NULL;
+        if (info == NULL) {
+        port_guard_warn("class.c:302");
+        return NULL;
+    }
+    #endif /* BUILD_TARGET_PC */
     if (!(info2->head.flags & 1)) {
+        #if BUILD_TARGET_PC
         /* PC port: guard against corrupted info_init pointer. */
-        if (info2->head.info_init == NULL) return NULL;
+                if (info2->head.info_init == NULL) {
+            port_guard_warn("class.c:305");
+            return NULL;
+        }
+        #endif /* BUILD_TARGET_PC */
         info2->head.info_init();
     }
+    #if BUILD_TARGET_PC
     /* PC port: guard against corrupted alloc pointer.
      * Valid function pointers should be in the binary text segment.
      * Reject pointers in the upper half of the address space.
      * Also check that info_init was called (flags & 1). */
-    if (info->alloc == NULL || (uintptr_t)info->alloc >= 0x800000000000ULL) return NULL;
+        if (info->alloc == NULL || (uintptr_t)info->alloc >= 0x800000000000ULL) {
+        port_guard_warn("class.c:309");
+        return NULL;
+    }
+    #endif /* BUILD_TARGET_PC */
     cls = info->alloc(info2);
     if (cls == NULL) {
         return NULL;

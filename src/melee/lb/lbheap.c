@@ -198,10 +198,14 @@ void* lbHeap_80015BD0(int arg0, int arg1)
             }
         }
     } else {
+#if BUILD_TARGET_PC
         /* PC port fallback: use malloc when heap isn't created */
         OSReport("[HEAP] lbHeap_80015BD0 fallback: arg0=%d arg1=%d\n", arg0, arg1);
         result = malloc(arg1);
         OSReport("[HEAP] malloc returned %p\n", result);
+#else
+        result = NULL;
+#endif /* BUILD_TARGET_PC */
     }
     OSRestoreInterrupts(enabled);
     return result;
@@ -232,11 +236,17 @@ int lbHeap_80015D6C(u32 heap0, UNK_T cb, u32 heap1)
 
     if (heap0 <= 1) {
         var_r30 = 0;
-    } else if (p->handle == NULL || p->handle == (Handle*)-1) {
-        /* PC port: heap not initialized, skip memory relocation */
-        var_r30 = 0;
     } else {
+#if BUILD_TARGET_PC
+        /* PC port: heap not initialized, skip memory relocation */
+        if (p->handle == NULL || p->handle == (Handle*)-1) {
+            var_r30 = 0;
+        } else {
+            var_r30 = lbMemory_8001529C(p->handle, cb, heap1);
+        }
+#else
         var_r30 = lbMemory_8001529C(p->handle, cb, heap1);
+#endif /* BUILD_TARGET_PC */
     }
     OSRestoreInterrupts(enabled);
     return var_r30;
@@ -338,6 +348,7 @@ void lbHeap_80015F3C(void)
     }
 }
 
+#if BUILD_TARGET_PC
 /* PC port: Initialize heap 0 (main heap) for lbHeap_80015BD0 allocations.
  * Called after lbHeap_80015F3C to set up the main heap. */
 void lbHeap_InitMainHeap(void)
@@ -352,3 +363,4 @@ void lbHeap_InitMainHeap(void)
     heap->status = LbHeapStatus_Create;
     OSReport("[HEAP] lbHeap_InitMainHeap: heap 0 status=%d type=%d\n", heap->status, heap->type);
 }
+#endif /* BUILD_TARGET_PC */

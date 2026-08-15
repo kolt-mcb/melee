@@ -17,6 +17,7 @@
 /* 1C6330 */ UnkArchiveStruct* grDatFiles_801C6330(s32);
 /* 1C6478 */ UnkArchiveStruct* grDatFiles_801C6478(void* data, s32 length);
 
+#if BUILD_TARGET_PC
 /* PC port: GCN → x86_64 archive data converters.
  * These convert raw GCN-packed archive data (32-bit BE pointers/floats)
  * into proper x86_64 heap-allocated structs (64-bit LE pointers/floats).
@@ -28,5 +29,6 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
 HSD_AnimJoint* grDatFiles_ConvertAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 HSD_ShapeAnimJoint* grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
+#endif /* BUILD_TARGET_PC */
 
 #endif

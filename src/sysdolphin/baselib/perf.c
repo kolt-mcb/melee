@@ -23,20 +23,35 @@ void HSD_PerfSetStartTime(void)
 
 void HSD_PerfSetCPUTime(void)
 {
+#if BUILD_TARGET_PC
     /* PC port: stub out GCN performance counter */
     HSD_PerfCurrentStat.cpu_time = 0.0f;
+#else
+    HSD_PerfCurrentStat.cpu_time =
+        (OSGetTime() - start_time) / (f32) (*(u32*) 0x800000F8 / 4 / 60);
+#endif
 }
 
 void HSD_PerfSetDrawTime(void)
 {
+#if BUILD_TARGET_PC
     /* PC port: stub out GCN performance counter */
     HSD_PerfCurrentStat.draw_time = 0.0f;
+#else
+    HSD_PerfCurrentStat.draw_time =
+        (OSGetTime() - start_time) / (f32) (*(u32*) 0x800000F8 / 4 / 60);
+#endif
 }
 
 void HSD_PerfSetTotalTime(void)
 {
+#if BUILD_TARGET_PC
     /* PC port: stub out GCN performance counter */
     HSD_PerfCurrentStat.total_time = 0.0f;
+#else
+    HSD_PerfCurrentStat.total_time =
+        (OSGetTime() - start_time) / (f32) (*(u32*) 0x800000F8 / 4 / 60);
+#endif
 }
 
 void HSD_PerfCountEnvelopeBlending(s32 n)
