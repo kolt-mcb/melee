@@ -721,6 +721,34 @@ static HSD_VtxDescList* grDatFiles_ConvertVtxDescListGCNtoX64(const u8* gcnVtxPt
         x64Tail->frac = gcnVtx->frac;
         x64Tail->stride = be16_swap(gcnVtx->stride);
 
+        /* PC port: the archive stores stride=0. The real stride is derived
+         * from comp_cnt (a per-attribute enum) and comp_type (component size).
+         * Compute it so the display-list parser can step through the vertex
+         * buffer correctly. */
+        if (x64Tail->stride == 0) {
+            u32 ccnt = (u32)x64Tail->comp_cnt;
+            u32 ctype = (u32)x64Tail->comp_type;
+            u32 comp_size;
+            switch (ctype) {
+            case 0: case 1: comp_size = 1; break; /* U8/S8 */
+            case 2: case 3: comp_size = 2; break; /* U16/S16 */
+            case 4: comp_size = 4; break;         /* F32 */
+            default: comp_size = 4; break;
+            }
+            u32 ncomps;
+            switch (x64Tail->attr) {
+            case 9:  /* POS: XY=0(2), XYZ=1(3) */
+            case 10: /* NRM: N=0(1), NBT=1(2), NBT3=2(3) */
+                ncomps = ccnt + 1; break;
+            case 11: /* CLR0: RGB=0(3), RGBA=1(4) */
+            case 12: /* CLR1 */
+                ncomps = ccnt + 2; break;
+            default: /* TEX: S=0(1), ST=1(2) */
+                ncomps = ccnt + 1; break;
+            }
+            x64Tail->stride = (u16)(ncomps * comp_size);
+        }
+
         /* vertex pointer points to raw vertex data in archive */
         val = be32_swap(gcnVtx->vertex);
         if (val != 0 && val < 0x80000000U) {
