@@ -1,10 +1,13 @@
 #include "timer.h"
 #include "log.h"
 
-/* GCN runs at 60.000 Hz (16666.67 μs per tick) */
-static const f32 TICKS_PER_SECOND = 60.0f;
-static const OSTick SECONDS_TO_TICKS = (OSTick)TICKS_PER_SECOND;
-static const OSTick MILLISECONDS_TO_TICKS = (OSTick)(TICKS_PER_SECOND / 1000.0f);
+/* Tick convention: identical to Dolphin OSTick — the timebase advances at
+ * the GCN core clock rate (243 MHz), so 1 tick = 1/243e6 seconds.
+ * timer_get_tick() delegates to OSGetTime() (pc_stub/dolphin_stubs.c) so
+ * the port layer and the game always read the same clock.
+ */
+#define TICKS_PER_SECOND 243000000ULL
+#define NANOSECONDS_PER_TICK (1000000000ULL / TICKS_PER_SECOND)
 
 void timer_init(void)
 {
@@ -13,8 +16,8 @@ void timer_init(void)
 
 OSTick timer_get_tick(void)
 {
-    /* Use SDL_GetTicks64() scaled to nanoseconds */
-    return (OSTick)SDL_GetTicks64() * 1000000ULL;
+    extern OSTick OSGetTime(void);
+    return OSGetTime();
 }
 
 f32 timer_ticks_to_seconds(OSTick ticks)
@@ -24,15 +27,15 @@ f32 timer_ticks_to_seconds(OSTick ticks)
 
 OSTick timer_seconds_to_ticks(f32 seconds)
 {
-    return (OSTick)(seconds * TICKS_PER_SECOND);
+    return (OSTick)((f64)seconds * (f64)TICKS_PER_SECOND);
 }
 
 OSTick timer_ms_to_ticks(u32 ms)
 {
-    return (OSTick)((f32)ms * TICKS_PER_SECOND / 1000.0f);
+    return (OSTick)ms * (TICKS_PER_SECOND / 1000ULL);
 }
 
 u32 timer_ticks_to_ms(OSTick ticks)
 {
-    return (u32)((f32)ticks * 1000.0f / TICKS_PER_SECOND);
+    return (u32)(ticks / (TICKS_PER_SECOND / 1000ULL));
 }

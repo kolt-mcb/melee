@@ -1,5 +1,6 @@
 #include "log.h"
 #include <stdarg.h>
+#include <string.h>
 
 /* Global log level */
 LogLevel g_log_level = LOG_LEVEL_INFO;
@@ -62,5 +63,43 @@ void port_log(LogLevel level, const char *fmt, ...)
         va_end(args);
         write_str(2, buf);
         write_char(2, '\n');
+    }
+}
+
+/* ============================================================
+ * port_guard_warn — rate-limited "guard fired" logging.
+ * The PC port's crash guards in baselib silently skip work when they
+ * detect corrupted pointers/data. Without logging, that is invisible
+ * visual corruption. Each unique site logs its first 10 occurrences,
+ * then goes quiet to avoid flooding the log.
+ * ============================================================ */
+#define GUARD_SITE_MAX 128
+#define GUARD_SITE_LOG_LIMIT 10
+
+static const char* g_guard_sites[GUARD_SITE_MAX];
+static int g_guard_site_count = 0;
+static int g_guard_counts[GUARD_SITE_MAX];
+
+void port_guard_warn(const char* site)
+{
+    int i;
+    for (i = 0; i < g_guard_site_count; i++) {
+        if (strcmp(g_guard_sites[i], site) == 0) {
+            if (g_guard_counts[i] < GUARD_SITE_LOG_LIMIT) {
+                g_guard_counts[i]++;
+                port_log(LOG_LEVEL_WARN,
+                         "GUARD SKIP [%s] occurrence %d (max %d logged per site) — corrupted pointer/data skipped",
+                         site, g_guard_counts[i], GUARD_SITE_LOG_LIMIT);
+            }
+            return;
+        }
+    }
+    if (g_guard_site_count < GUARD_SITE_MAX) {
+        g_guard_sites[g_guard_site_count] = site;
+        g_guard_counts[g_guard_site_count] = 1;
+        g_guard_site_count++;
+        port_log(LOG_LEVEL_WARN,
+                 "GUARD SKIP [%s] occurrence 1 (max %d logged per site) — corrupted pointer/data skipped",
+                 site, GUARD_SITE_LOG_LIMIT);
     }
 }

@@ -877,33 +877,9 @@ __attribute__((weak)) void HSD_PSAppSrt_804D10B0(void) {}
 #define GC_BTN_Y          (1 << 11)
 #define GC_BTN_START      (1 << 12)
 
-/* HSD_PadStatus structure (from baselib/controller.h) */
-typedef struct {
-    u32 button;
-    u32 last_button;
-    u32 trigger;
-    u32 repeat;
-    u32 release;
-    s32 repeat_count;
-    s8 stickX;
-    s8 stickY;
-    s8 subStickX;
-    s8 subStickY;
-    u8 analogL;
-    u8 analogR;
-    u8 analogA;
-    u8 analogB;
-    f32 nml_stickX;
-    f32 nml_stickY;
-    f32 nml_subStickX;
-    f32 nml_subStickY;
-    f32 nml_analogL;
-    f32 nml_analogR;
-    f32 nml_analogA;
-    f32 nml_analogB;
-    u8 cross_dir;
-    s8 err;
-} GCPadStatus;
+/* HSD_PadStatus-compatible structure — shared with melee/gm/gm_1A36.c
+ * via port/gc_pad.h (single source of truth for the layout). */
+#include <port/gc_pad.h>
 
 /* Global pad state for 4 controllers */
 GCPadStatus g_gc_pads[4];

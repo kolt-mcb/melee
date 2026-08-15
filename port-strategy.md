@@ -17,7 +17,44 @@
 | **Compiler** | Clang/GCC for port layer, keep MWCC for decomp |
 | **Entry point** | New x86_64 entry, decomp as linked object |
 | **Timeline estimate** | Alpha: 12–18 months from Phase 1 start |
-| **Runtime status** | ✅ Full init pipeline runs, enters main loop (250KB ELF), SDL events + OpenGL + PAD timing system |
+| **Runtime status** | ✅ Real game loop runs; live OS clock; ~950-frame stable run; title model load is the active blocker (see below) |
+
+---
+
+## Status as of 2026-08-14 (post review-fix pass)
+
+> The embedded progress notes below this section are historical. This is
+> the current source of truth. Open items: `port-review-checklist.md`.
+
+**Working now**
+- Real decomp game loop (`gm_801A4510`) runs: BOOT → OPENING → TITLE.
+- `OSGetTime()` advances in real time at 243 MHz (GCN core clock);
+  `__OSBusClock`=972 MHz so `OS_TIMER_CLOCK = bus/4` is correct.
+  (platform.h MUST keep `#define __OSBusClock` — it suppresses the
+  hardware-register macro in dolphin/os.h; removing it segfaults.)
+- GX→GL bridge: batch split on primitive/format change, partial VBO
+  uploads, SDK-accurate blend factors, per-frame degenerate-vertex
+  warning, diagnostics demoted to DEBUG.
+- All 63 baselib crash guards log (rate-limited) when they skip work.
+- Input: single path (g_gc_pads bridge); debug overlay + screenshots
+  are opt-in via `MELEE_DEBUG_OVERLAY=1` / `MELEE_SCREENSHOT=1`.
+- PC build has depfiles (header edits now trigger rebuilds).
+
+**Active blocker (NEW-1)**
+- After ~950 frames the opening sequence times out and GM_TITLE runs.
+  The title FGM load fails ("FGM load size is over") and the JObj joint
+  tree comes back with unresolved 32-bit offsets → segfault in
+  `gmTitle_801A12C4` → `HSD_JObjSetFlagsAll` (jobj ≈ 0x15cXX).
+  Next step: verify the title model archive in `orig/GALE01` and fix
+  joint pointer resolution during load.
+
+**Known open items**
+- Rare early crash (~1 in 7 runs) in the opening sequence — see
+  checklist NEW-2.
+- Decomp/port separation decision (checklist item 5): ~15 decomp files
+  have unguarded PC changes; the GCN build is not currently linkable.
+- Display-list vertex-format enums in the bridge mix API and wire-format
+  values (checklist item 14, deferred).
 
 ---
 

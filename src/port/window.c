@@ -11,7 +11,7 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0)
     {
-        PORT_LOG_ERROR("SDL2 init failed: %s");
+        PORT_LOG_ERROR("SDL2 init failed: %s", SDL_GetError());
         return FALSE;
     }
 
@@ -35,24 +35,22 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
                                     *width, *height, flags);
     if (!g_sdl_window)
     {
-        PORT_LOG_ERROR("SDL window creation failed: %s");
+        PORT_LOG_ERROR("SDL window creation failed: %s", SDL_GetError());
         return FALSE;
     }
 
     g_gl_context = SDL_GL_CreateContext(g_sdl_window);
     if (!g_gl_context)
     {
-        PORT_LOG_ERROR("SDL GL context creation failed: %s");
+        PORT_LOG_ERROR("SDL GL context creation failed: %s", SDL_GetError());
         SDL_DestroyWindow(g_sdl_window);
         g_sdl_window = NULL;
         return FALSE;
     }
 
-    SDL_GL_SetSwapInterval(1); /* VSync */
+    SDL_GL_SetSwapInterval(1); /* Vsync */
 
-    *width = *height = 0;
-    SDL_GetWindowSize(g_sdl_window, width, height);
-
+    /* Report the actual window size back to the caller. */
     SDL_GetWindowSize(g_sdl_window, width, height);
     PORT_LOG_INFO("Window initialized: %dx%d", *width, *height);
     return TRUE;
@@ -77,6 +75,7 @@ void window_shutdown(void)
 Bool window_should_close(void)
 {
     if (g_should_quit) return TRUE;
+    if (!g_sdl_window) return TRUE;
     Uint32 flags = SDL_GetWindowFlags(g_sdl_window);
     return !(flags & SDL_WINDOW_SHOWN);
 }

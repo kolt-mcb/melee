@@ -189,3 +189,7 @@ extern/dolphin/include/dolphin/os/__os.h
 config.json
 match_progress.png
 get_undef.sh
+
+# PC port working artifacts
+run_log*.txt
+screenshot*

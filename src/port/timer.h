@@ -2,13 +2,15 @@
  * @file timer.h
  * @brief High-resolution timers — replace OSTime/OSAlarm.
  *
- * GCN uses microseconds-based timing via OSGetTicket() / OSGetTime().
- * Port maps these to SDL_GetTicksNS() (nanosecond precision).
+ * Tick convention matches Dolphin OSTick: the timebase advances at the
+ * GCN core clock rate (243 MHz), so 1 tick = 1/243e6 s.
+ * timer_get_tick() reads the same clock as OSGetTime()
+ * (pc_stub/dolphin_stubs.c), so port and game code agree.
  *
  * Replacements needed:
- *   OSTick                  → SDL_atomic_t (nanoseconds)
- *   OSGetTick()             → SDL_GetTicksNS()
- *   OSTicksToSeconds()      → convert()
+ *   OSGetTime()             → timer_get_tick()
+ *   OSTicksToSeconds()      → timer_ticks_to_seconds()
+ *   OSMillisecondsToTicks() → timer_ms_to_ticks()
  *   OSSetAlarm()            → timer_settime() / SDL_timer
  *   OSDeleteAlarm()         → timer_delete()
  */

@@ -111,18 +111,22 @@ typedef int Bool;
 #define GX_BM_LOGIC      2
 #define GX_BM_SUBTRACT   3
 
-/* GXBlendFactor */
-#define GX_BL_ZERO       0
-#define GX_BL_ONE        1
-#define GX_BL_SRCCOLOR   2
-#define GX_BL_INVSRCCLR  3
-#define GX_BL_DSTCOLOR   4
-#define GX_BL_INVDSTCLR  5
-#define GX_BL_SRCALPHA   6
-#define GX_BL_INVSRCALPH 7
-#define GX_BL_DSTALPHA   8
-#define GX_BL_INVDSTALPH 9
-#define GX_BL_CONSTANT   12
+/* GXBlendFactor — values per dolphin/gx/GXEnum.h */
+#define GX_BL_ZERO         0
+#define GX_BL_ONE          1
+#define GX_BL_SRCCLR       2
+#define GX_BL_INVSRCCLR    3
+#define GX_BL_SRCALPHA     4
+#define GX_BL_INVSRCALPHA  5
+#define GX_BL_DSTALPHA     6
+#define GX_BL_INVDSTALPHA  7
+/* Aliases used in port code (SDK: DSTCLR=SRCCLR, INVDSTCLR=INVSRCCLR) */
+#define GX_BL_SRCCOLOR     GX_BL_SRCCLR
+#define GX_BL_DSTCLR       GX_BL_SRCCLR
+#define GX_BL_INVDSTCLR    GX_BL_INVSRCCLR
+#define GX_BL_INVSRCALPH   GX_BL_INVSRCALPHA
+#define GX_BL_INVDSTALPH   GX_BL_INVDSTALPHA
+#define GX_BL_CONSTANT     12
 
 /* GXLogicOp */
 #define GX_LO_CLEAR      0x0

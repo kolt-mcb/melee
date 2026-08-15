@@ -12,8 +12,12 @@
 #include <stdint.h>
 #include <dolphin/dvd.h>
 #include "port/fs.h"
+#include "port/log.h"
 
-#define MAX_DVD_FILES 128
+/* The game can have many files open at once (stage + character + effect
+ * archives). 128 was too small — overflow silently returned -1
+ * (file-not-found). */
+#define MAX_DVD_FILES 1024
 
 typedef struct {
     VfHandle handle;
@@ -41,6 +45,7 @@ static int dvd_find_or_add_entry(const char* path)
             return i;
         }
     }
+    PORT_LOG_WARN("DVD: file table full (%d open) — cannot open '%s'", MAX_DVD_FILES, path);
     return -1;
 }
 

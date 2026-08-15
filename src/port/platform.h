@@ -22,9 +22,16 @@
  * ======================================== */
 
 /* Override GCN hardware constants for PC compilation.
- * These are defined as memory-mapped registers in dolphin/os.h,
- * but on PC we need them as actual constants. */
-#define __OSBusClock 486000000  /* 486 MHz GCN bus clock */
+ *
+ * IMPORTANT: __OSBusClock MUST be defined here (before dolphin/os.h is
+ * included). os.h only defines it as a memory-mapped hardware register
+ * (0x800000F8) under an #ifndef guard — without this define, every decomp
+ * translation unit dereferences a GCN hardware address and segfaults.
+ *
+ * Value: GCN core clock is 243 MHz and os.h derives OS_TIMER_CLOCK as
+ * __OSBusClock / 4, so the bus clock must be 4x the core clock. Must match
+ * the __OSCoreClock variable in pc_stub/dolphin_stubs.c. */
+#define __OSBusClock 972000000  /* 4 x 243 MHz GCN core clock */
 #define OS_BASE_CACHED 0x00000000  /* No-op on PC */
 
 /* Must define _GNU_SOURCE before any system headers to get POSIX extensions */
@@ -225,6 +232,14 @@ typedef unsigned int      uintptr;
 typedef int                Bool;
 #define TRUE  1
 #define FALSE 0
+
+/* PC port crash-guard helper (implemented in port/log.c).
+ * Logs a WARN for a guard site that silently skipped work, rate-limited
+ * to the first 10 occurrences per site. Call with a unique site string
+ * like "gobj.c:153". */
+#if defined(BUILD_TARGET_PC)
+void port_guard_warn(const char* site);
+#endif
 
 /* Attributes */
 #if defined(BUILD_TARGET_PC)
