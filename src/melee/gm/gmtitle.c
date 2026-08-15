@@ -270,10 +270,18 @@ HSD_Archive* gmTitle_801A1AC0(void)
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_shapeanim_joint");
         gmTitle_80479B28.shapeanim_joint = grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(raw, dataBase, 0);
 
-        /* Camera, lights, fog — leave as raw archive pointers (guards in place) */
-        gmTitle_804D6708 = (HSD_CameraDescPerspective*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_cam_int1_camera");
-        gmTitle_804D670C = (LightList**)HSD_ArchiveGetPublicAddress(archive, "ScTitle_scene_lights");
-        gmTitle_804D6710 = (HSD_FogDesc*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_fog");
+        /* Camera — convert GCN-packed desc (eyepos/interest WObjs, up vector). */
+        gmTitle_804D6708 = grDatFiles_ConvertCameraDescGCNtoX64(
+            (const u8*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_cam_int1_camera"),
+            dataBase);
+        /* Lights — convert GCN LightList array. */
+        gmTitle_804D670C = grDatFiles_ConvertLightListGCNtoX64(
+            (const u8*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_scene_lights"),
+            dataBase);
+        /* Fog — convert GCN-packed desc. */
+        gmTitle_804D6710 = grDatFiles_ConvertFogDescGCNtoX64(
+            (const u8*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_fog"),
+            dataBase);
 
         /* TtlBg (title background) joint tree */
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_joint");
@@ -289,8 +297,10 @@ HSD_Archive* gmTitle_801A1AC0(void)
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_shapeanim_joint");
         gmTitle_80479B38.shapeanim_joint = grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(raw, dataBase, 0);
 
-        /* TitleMark sobjdesc — leave as raw archive pointer (not used directly) */
-        gm_804D67F0 = HSD_ArchiveGetPublicAddress(archive, "TitleMark_sobjdesc");
+        /* TitleMark sobjdesc — convert GCN-packed desc (image + tlut). */
+        gm_804D67F0 = grDatFiles_ConvertSObjDescGCNtoX64(
+            (const u8*)HSD_ArchiveGetPublicAddress(archive, "TitleMark_sobjdesc"),
+            dataBase);
     }
 
     return archive;

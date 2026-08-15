@@ -134,24 +134,37 @@ files touched and how to verify.
 
 ## NEW findings from the fix pass (2026-08-14)
 
-- [ ] **NEW-1: Title model load corrupts the JObj tree (next frontier)**
-  - After ~950 frames the opening sequence times out (live clock now
-    unblocks it) and GM_TITLE runs `gmTitle_801A12C4` (gmtitle.c:45).
-  - The title FGM load fails ("FGM load size is over"), and the joint
-    tree comes back with unresolved 32-bit offsets used as pointers
-    (jobj ≈ 0x15cXX). `lb_80011E24` returns that garbage child and
-    `HSD_JObjSetFlagsAll` segfaults.
-  - GUARD SKIPs at jobj.c:668 (load) and jobj.c:1141 (hsdNew alloc) fire
-    just before — the model load is partially failing.
-  - Fix direction: verify the title model archive (GrTItl.dat / FGM)
-    exists in orig/GALE01 and that its joint pointers are resolved
-    (32-bit offset → 64-bit) during load.
+- [x] **NEW-1: Title model load corrupts the JObj tree** — RESOLVED (prior
+  session: class.c memcpy head-size fix, pointer guards, SObjDesc/Camera/Light/
+  Fog converters, GXVert.h DEBUG path). Title JObj tree now loads cleanly.
 
-- [ ] **NEW-2: Rare early crash (~1 in 7 runs)**
-  - SIGSEGV at address 0x28, rip in a shared library (0x7f…), during the
-    opening sequence, before the title. Not reproduced under gdb (8
-    attempts). Possibly a pre-existing race/timing bug. Watch for it; if
-    it becomes frequent, capture a backtrace with a gdb run-loop.
+- [x] **NEW-4: Title render path never ran (black screen)** — RESOLVED this
+  session. Root cause: `HSD_GObj_80390FC0` (gobj.c) PC walk had a guard
+  `if (next_cur > 0xFFFFFFFF) break;` that broke on *valid* x86_64 GObj
+  pointers (high heap addresses), so each GX link was walked only one GObj
+  deep. The title's CObj GObj (`gmTitle_801A1814`, on link gx_link_max+1) was
+  never reached, so `HSD_GObj_80390ED0(gobj,7)` never ran and only the OPA
+  pass executed (title background is XLU/TEXEDGE). Fix: replaced the address
+  threshold with a max-iteration-count (10000) cycle guard. Now all three
+  passes (OPA/TEXEDGE/XLU) run and the display-list parser issues draws.
+
+- [ ] **NEW-5: Title vertices misinterpreted (still black)** — next frontier.
+  - Display-list parser now generates verts (8/frame) but at huge positions
+    (e.g. -4344,3571,-2500) → zeroed as degenerate. `GXSetArray(POS)` base is
+    often NULL; VtxDescList `vertex` offset reads 0 at runtime though the
+    archive has a valid offset (0x34580). comp_cnt=1 for POS is suspicious
+    (expect 3 for XYZ).
+  - Also: `GXSetProjection` reports `proj[0][0]=-nan` in places (camera/matrix
+    NaN) — separate matrix issue.
+  - Fix direction: reconcile the VtxDescList `vertex`/`comp_cnt` conversion in
+    grdatfiles.c against the raw archive bytes; verify the display-list vertex
+    format (f16 vs f32, stride) matches what the parser reads.
+
+- [ ] **NEW-2: Rare early crash (~1 in 4-7 runs)** — CONFIRMED pre-existing this
+  session (reproduces with AND without the NEW-4 guard fix). SIGSEGV at address
+  0x10, rip in a shared library, in title init (`gmTitle_801A165C` →
+  `gm_801BF128`, gm_1BA8.c). Timing-dependent; not reproduced under gdb. Not
+  caused by the port work.
 
 - [ ] **NEW-3: Docs refresh** (was item 20)
   - port-strategy.md: stale phase checkboxes, stale troubleshooting

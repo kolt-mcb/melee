@@ -181,7 +181,7 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
 
         #if BUILD_TARGET_PC
         /* PC port: guard against GCN-packed MObjDesc with garbage class_name. */
-                if ((uintptr_t)mobjdesc < 0x20000000ULL) {
+                if ((uintptr_t)mobjdesc < 0x1000000ULL  /* GCN offsets are <1MB; valid pointers are >=16MB */) {
             port_guard_warn("mobj.c:177");
             return NULL;
         }

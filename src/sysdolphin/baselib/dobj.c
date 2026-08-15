@@ -224,7 +224,7 @@ HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
     }
 
     /* PC port: guard against GCN-packed DObjDesc with garbage fields. */
-    if ((uintptr_t)desc < 0x20000000ULL) {
+    if ((uintptr_t)desc < 0x1000000ULL  /* GCN offsets are <1MB; valid pointers are >=16MB */) {
         port_guard_warn("dobj.c:220");
         return NULL;
     }

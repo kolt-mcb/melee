@@ -53,8 +53,18 @@ void hsdInitClassInfo(HSD_ClassInfo* class_info, HSD_ClassInfo* parent_info,
         }
         HSD_ASSERT(94, class_info->head.obj_size >= parent_info->head.obj_size);
         HSD_ASSERT(95, class_info->head.info_size >= parent_info->head.info_size);
+#if BUILD_TARGET_PC
+        /* PC port: on x86_64 the class head is 0x48 bytes (64-bit pointers),
+         * not 0x28. The method-pointer section therefore starts at 0x48.
+         * Using 0x28 over-copies by 32 bytes and corrupts the class info
+         * struct that follows in memory (e.g. hsdCObj init clobbered
+         * hsdJObj, leaving its alloc/info_init NULL/garbage). */
+        memcpy(&class_info->alloc, &parent_info->alloc,
+               parent_info->head.info_size - 0x48);
+#else
         memcpy(&class_info->alloc, &parent_info->alloc,
                parent_info->head.info_size - 0x28);
+#endif /* BUILD_TARGET_PC */
         class_info->head.next = parent_info->head.child;
         parent_info->head.child = class_info;
     }

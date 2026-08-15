@@ -163,10 +163,11 @@ HSD_SObj* HSD_SObjLib_803A477C(HSD_GObj* gobj, HSD_SObjDesc* desc,
      * (different field offsets than x86_64). Guard against archive data
      * by checking if desc pointer is in the low-mem archive region. */
     if (desc == NULL) return NULL;
-    if ((uintptr_t)desc < 0x20000000ULL) return NULL;  /* Archive data region */
+    if ((uintptr_t)desc < 0x1000000ULL  /* GCN offsets are <1MB; valid pointers are >=16MB */) return NULL;  /* Archive data region */
     image = desc->image;
     if (image == NULL) return NULL;
-    if ((uintptr_t)image < 0x20000000ULL) return NULL;  /* Archive data region */
+    if ((uintptr_t)image < 0x1000000ULL  /* GCN offsets are <1MB; valid pointers are >=16MB */) return NULL;  /* Archive data region */
+    tlut = desc->tlut;
 
     if (use_secondary) {
         image2 = ((HSD_SObjDesc2*) desc)->image2;

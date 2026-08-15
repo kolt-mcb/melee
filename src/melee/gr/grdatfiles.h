@@ -4,6 +4,7 @@
 #include <platform.h>
 
 #include "gr/forward.h"
+#include "sc/forward.h"
 #include <baselib/forward.h>
 
 #include <dolphin/mtx.h>
@@ -18,6 +19,9 @@
 /* 1C6478 */ UnkArchiveStruct* grDatFiles_801C6478(void* data, s32 length);
 
 #if BUILD_TARGET_PC
+struct HSD_SObjDesc;  /* forward decl (baselib/sobjlib.h) */
+struct HSD_CameraDescPerspective;  /* forward decl (baselib/cobj.h) */
+struct HSD_FogDesc;  /* forward decl (baselib/fog.h) */
 /* PC port: GCN → x86_64 archive data converters.
  * These convert raw GCN-packed archive data (32-bit BE pointers/floats)
  * into proper x86_64 heap-allocated structs (64-bit LE pointers/floats).
@@ -29,6 +33,10 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
 HSD_AnimJoint* grDatFiles_ConvertAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 HSD_ShapeAnimJoint* grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
+struct HSD_SObjDesc* grDatFiles_ConvertSObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase);
+HSD_CameraDescPerspective* grDatFiles_ConvertCameraDescGCNtoX64(const u8* gcnPtr, u8* dataBase);
+LightList** grDatFiles_ConvertLightListGCNtoX64(const u8* gcnPtr, u8* dataBase);
+HSD_FogDesc* grDatFiles_ConvertFogDescGCNtoX64(const u8* gcnPtr, u8* dataBase);
 #endif /* BUILD_TARGET_PC */
 
 #endif
