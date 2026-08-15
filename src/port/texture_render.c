@@ -137,11 +137,12 @@ enum {
     GX_BM_SUBTRACT = 3,
 };
 
+/* Blend factors — values per dolphin/gx/GXEnum.h */
 enum {
     GX_BL_ZERO   = 0,
     GX_BL_ONE    = 1,
-    GX_BL_SRCALPHA   = 6,
-    GX_BL_INVSRCALPH = 3,
+    GX_BL_SRCALPHA   = 4,
+    GX_BL_INVSRCALPH = 5,
 };
 
 /* Logic ops (GXLogicOp) */

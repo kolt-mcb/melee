@@ -21,7 +21,7 @@
 #include "platform.h"
 
 typedef pthread_t OSThread;
-typedef pthread_mutex_t OSSemaphore;
+typedef sem_t OSSemaphore;  /* real counting semaphore (see thread.c) */
 typedef pthread_attr_t ThreadAttr;
 
 void thread_init(void);
@@ -36,6 +36,7 @@ u32 thread_get_id(OSThread thread);
 /* Synchronization */
 Bool semaphore_init(OSSemaphore* sem, u32 initial_value);
 Bool semaphore_lock(OSSemaphore* sem);
+Bool semaphore_trylock(OSSemaphore* sem);
 Bool semaphore_unlock(OSSemaphore* sem);
 void semaphore_destroy(OSSemaphore* sem);
 

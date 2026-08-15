@@ -12,8 +12,9 @@ static void config_defaults(Config* config)
     config->window.vsync = true;
     config->window.title = "Super Smash Bros. Melee (PC Port)";
 
-    /* Default asset directory: look for extracted GCN data */
-    strncpy(config->fs.asset_dir, "/home/grunt/melee/orig/GALE01", sizeof(config->fs.asset_dir) - 1);
+    /* Default asset directory: extracted GCN data relative to the CWD
+     * (the game is normally run from the repo root). Override with -a. */
+    strncpy(config->fs.asset_dir, "orig/GALE01", sizeof(config->fs.asset_dir) - 1);
     config->fs.asset_dir[sizeof(config->fs.asset_dir) - 1] = '\0';
 
     config->fs.iso_path[0] = '\0';

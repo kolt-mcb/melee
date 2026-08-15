@@ -77,12 +77,16 @@ enum {
     GX_GREATER, GX_NEQUAL, GX_GEQUAL, GX_ALWAYS,
 };
 
-/* Blend factors */
+/* Blend factors — values per dolphin/gx/GXEnum.h */
 enum {
     GX_BL_ZERO   = 0,
     GX_BL_ONE    = 1,
-    GX_BL_SRCALPHA  = 2,
-    GX_BL_INVSRCALPHA = 3,
+    GX_BL_SRCCLR = 2,
+    GX_BL_INVSRCCLR = 3,
+    GX_BL_SRCALPHA  = 4,
+    GX_BL_INVSRCALPHA = 5,
+    GX_BL_DSTALPHA = 6,
+    GX_BL_INVDSTALPHA = 7,
 };
 
 /* Cull modes */
@@ -423,6 +427,7 @@ typedef struct {
 typedef struct {
     Bool in_primitive;
     u32 prim_type;
+    u32 batch_vtxfmt;  /* vertex format of the pending batch (for split on change) */
     u16 vert_count;
     Vertex verts[MAX_VERTS];
     
@@ -679,6 +684,8 @@ static int g_dbg_med_range = 0;    /* |x|,|y|,|z| < 1000 */
 static int g_dbg_large_range = 0;  /* |x|,|y|,|z| < 5000 */
 static int g_dbg_extreme = 0;      /* any coord > 5000 */
 static int g_dbg_draw_calls = 0;   /* draw call counter per frame */
+static int g_dbg_degenerate_verts = 0;  /* verts zeroed by the extreme-pos guard */
+static f32 g_dbg_degenerate_sample[3] = {0, 0, 0};
 
 /* ============================================================
  * GX Call Tracer — records every GX state-setting call per frame
@@ -1872,11 +1879,7 @@ void gx_frame_begin(void)
     }
     glClearColor(0, 0, 0, 1);
     glClearDepth(1.0);
-    /* PC port: glClear is extremely slow on headless Mesa software rendering
-     * (LLVMpipe). It can stall for 1+ seconds when the driver flushes a
-     * backlog of commands. Skip the clear — the debug overlay draws over
-     * the entire frame anyway. */
-    /* glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); */
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     /* Set viewport to full window size for debug overlay rendering. */
     g_state.vp_x = 0; g_state.vp_y = 0;
@@ -1889,14 +1892,23 @@ void gx_frame_begin(void)
     g_state.proj_matrix[2][0] =  0;                g_state.proj_matrix[2][1] = 0;        g_state.proj_matrix[2][2] = -1; g_state.proj_matrix[2][3] = 0;
     g_state.proj_matrix[3][0] =  0;                g_state.proj_matrix[3][1] = 0;        g_state.proj_matrix[3][2] = 0;   g_state.proj_matrix[3][3] = 1;
     
-    /* Model-view: identity — positions are already in screen space. */
+    /* Model-view: translate geometry into view frustum.
+     * Title screen geometry is at Z=0, but near plane is also at Z=0.
+     * Translate back by 10 units so geometry is in front of camera. */
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 4; j++)
             g_state.mv_matrix[i][j] = (i == j) ? 1.0f : 0.0f;
+    g_state.mv_matrix[2][3] = -10.0f;  /* Translate Z by -10 */
+
+    /* PC port: diagnostic — confirm the matrices we just set. */
+    PORT_LOG_DEBUG("FRAME_BEGIN: proj[0][0]=%.6f proj[1][1]=%.6f mv[2][3]=%.2f",
+                  g_state.proj_matrix[0][0], g_state.proj_matrix[1][1],
+                  g_state.mv_matrix[2][3]);
 }
 
 /* Forward declaration - defined below */
 static void bridge_upload_and_draw(void);
+static GLenum gx_bl_to_gl(u32 gx_blend_factor); /* fwd decl */
 static void apply_alpha_compare_uniforms(void);
 static void apply_tev_uniforms(void);
 void GXColor4u8(u8 r, u8 g, u8 b, u8 a); /* forward decl for display list parser */
@@ -1909,6 +1921,16 @@ void gx_frame_end(void)
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
+
+    /* Loud guard: the extreme-position filter in bridge_add_vertex zeroes
+     * out-of-range vertices silently. If it fires, geometry is being lost —
+     * usually a bad camera/transform or corrupt archive data. */
+    if (g_dbg_degenerate_verts > 0) {
+        PORT_LOG_WARN("DEGENERATE VERTS: %d verts zeroed this frame (sample pos=(%.1f,%.1f,%.1f)) — check camera/transform or archive data",
+                      g_dbg_degenerate_verts,
+                      g_dbg_degenerate_sample[0], g_dbg_degenerate_sample[1], g_dbg_degenerate_sample[2]);
+    }
+    g_dbg_degenerate_verts = 0;
     
     /* Flush GX call trace for this frame */
     gx_trace_frame_end();
@@ -1940,12 +1962,14 @@ void gx_frame_end(void)
 
 void gx_set_overlay_projection(f32 ortho[4][4])
 {
+    PORT_LOG_DEBUG("SET_OVERLAY_PROJ: proj[0][0]=%.6f", ortho[0][0]);
     memcpy(g_state.proj_matrix, ortho, sizeof(g_state.proj_matrix));
 }
 
-void gx_set_mv_matrix(f32 mtx[3][4]) { memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix)); }
+void gx_set_mv_matrix(f32 mtx[3][4]) { PORT_LOG_DEBUG("SET_MV_MATRIX: mv[2][3]=%.2f", mtx[2][3]); memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix)); }
 void gx_set_overlay_matrix_identity(void)
 {
+    PORT_LOG_DEBUG("SET_OVERLAY_MV_IDENTITY");
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 4; j++)
             g_state.mv_matrix[i][j] = (i == j) ? 1.0f : 0.0f;
@@ -1960,6 +1984,7 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
                       f32 target_x, f32 target_y, f32 target_z,
                       f32 up_x, f32 up_y, f32 up_z)
 {
+    PORT_LOG_DEBUG("SET_3D_CAMERA: fov=%.1f eye=(%.0f,%.0f,%.0f) target=(%.0f,%.0f,%.0f)", fov, eye_x, eye_y, eye_z, target_x, target_y, target_z);
     f32 proj[4][4];
     f32 mv[3][4];
     f32 f = 1.0f / tanf(fov * 0.5f * 3.14159265f / 180.0f);
@@ -2027,14 +2052,15 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
 void gx_set_default_3d_camera(void)
 {
     /* Default camera: perspective, 60 degree FOV.
-     * Actual geometry bounds: min=(-4096,-448,-3712) max=(1260,140,464)
-     * Center: (-1418, -154, -1624), extent: ~5356 x 588 x 4176
-     * Camera positioned elevated and offset to see the full stage.
+     * Title screen overlay geometry: min=(55,95,0) max=(181,137,0)
+     * Center: (118, 116, 0), extent: ~126 x 42 x 0
+     * Camera positioned to see the title screen overlay.
+     * Also set up a secondary view for 3D stage geometry when needed.
      * Far plane extended to 15000 to capture the full depth. */
     gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 15000.0f,
-                     -1418.0f, 500.0f, 900.0f,      /* eye: elevated and in front of stage */
-                     -1418.0f, -154.0f, -1624.0f,   /* target: center of geometry */
-                     0.0f, 1.0f, 0.0f);            /* up vector: standard Y-up */
+                     118.0f, 116.0f, 500.0f,         /* eye: in front of title screen */
+                     118.0f, 116.0f, 0.0f,           /* target: center of title geometry */
+                     0.0f, 1.0f, 0.0f);             /* up vector: standard Y-up */
 }
 
 /* ============================================================
@@ -2075,11 +2101,19 @@ static void bridge_upload_and_draw(void)
         PORT_LOG_WARN("Shader not ready, skipping draw");
         return;
     }
+    PORT_LOG_DEBUG("DRAW: count=%u prim=0x%X mv[2][3]=%.2f proj[0][0]=%.4f vert0=(%.1f,%.1f,%.1f) col=(%.2f,%.2f,%.2f,%.2f)",
+                  count, g_state.prim_type,
+                  g_state.mv_matrix[2][3],
+                  g_state.proj_matrix[0][0],
+                  g_state.verts[0].pos[0], g_state.verts[0].pos[1], g_state.verts[0].pos[2],
+                  g_state.verts[0].col[0], g_state.verts[0].col[1], g_state.verts[0].col[2], g_state.verts[0].col[3]);
     
-    /* Upload vertex data to GPU */
+    /* Upload only the vertices actually used this draw (the VBO was
+     * pre-allocated to MAX_VERTS at init). glBufferData with a changing
+     * size would reallocate every draw; glBufferSubData does not. */
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * MAX_VERTS, g_state.verts, GL_DYNAMIC_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * count, g_state.verts);
     
     /* Set ALL vertex attributes explicitly every draw */
     glEnableVertexAttribArray(0);
@@ -2098,10 +2132,11 @@ static void bridge_upload_and_draw(void)
     glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           (void*)(uintptr_t)offsetof(Vertex, tex1));
     
-    /* State — blend */
+    /* State — blend. Translate GX blend factors to GL equivalents via
+     * gx_bl_to_gl (SDK-accurate values, defined below). */
     if (g_state.blend_enabled) {
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendFunc(gx_bl_to_gl(g_state.blend_src), gx_bl_to_gl(g_state.blend_dst));
     } else {
         glDisable(GL_BLEND);
     }
@@ -2152,9 +2187,10 @@ static void bridge_upload_and_draw(void)
     /* Use shader program */
     glUseProgram(g_shader_program);
     
-    /* Upload projection matrix (as uniform) */
+    /* Upload projection matrix (as uniform)
+     * g_state.proj_matrix is row-major C array. GL_TRUE transposes to column-major. */
     if (g_proj_loc >= 0) {
-        glUniformMatrix4fv(g_proj_loc, 1, GL_FALSE, &g_state.proj_matrix[0][0]);
+        glUniformMatrix4fv(g_proj_loc, 1, GL_TRUE, &g_state.proj_matrix[0][0]);
     }
     
     /* Compute MVP = proj * modelview (all row-major, transpose at upload) */
@@ -2411,24 +2447,27 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
     }
     
     if (id < 4) {
-        if (g_state.view_matrix_valid) {
-            f32 mvm[3][4];
+        /* PC port: keep the modelview from gx_frame_begin.
+         * The game's model matrix is identity for title screen geometry,
+         * but we need the Z translation to push geometry into the frustum. */
+        /* if (g_state.view_matrix_valid) { */
+            /* f32 mvm[3][4]; */
             /* mvm = view * model (row-major 3x4 multiplication) */
-            for (int i = 0; i < 3; i++) {
-                for (int j = 0; j < 3; j++) {
-                    mvm[i][j] = g_state.view_matrix[i][0] * mtx[0][j] +
-                                 g_state.view_matrix[i][1] * mtx[1][j] +
-                                 g_state.view_matrix[i][2] * mtx[2][j];
-                }
-                mvm[i][3] = g_state.view_matrix[i][0] * mtx[0][3] +
-                             g_state.view_matrix[i][1] * mtx[1][3] +
-                             g_state.view_matrix[i][2] * mtx[2][3] +
-                             g_state.view_matrix[i][3];
-            }
-            memcpy(g_state.mv_matrix, mvm, sizeof(g_state.mv_matrix));
-        } else {
-            memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix));
-        }
+            /* for (int i = 0; i < 3; i++) { */
+                /* for (int j = 0; j < 3; j++) { */
+                    /* mvm[i][j] = g_state.view_matrix[i][0] * mtx[0][j] + */
+                                 /* g_state.view_matrix[i][1] * mtx[1][j] + */
+                                 /* g_state.view_matrix[i][2] * mtx[2][j]; */
+                /* } */
+                /* mvm[i][3] = g_state.view_matrix[i][0] * mtx[0][3] + */
+                             /* g_state.view_matrix[i][1] * mtx[1][3] + */
+                             /* g_state.view_matrix[i][2] * mtx[2][3] + */
+                             /* g_state.view_matrix[i][3]; */
+            /* } */
+            /* memcpy(g_state.mv_matrix, mvm, sizeof(g_state.mv_matrix)); */
+        /* } else { */
+            /* memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix)); */
+        /* } */
     }
 }
 
@@ -2480,7 +2519,16 @@ void GXSetCurrentMtx(u32 id)
     }
 }
 void GXSetProjection(f32 mtx[4][4], u32 type)
-{ memcpy(g_state.proj_matrix, mtx, sizeof(g_state.proj_matrix)); }
+{
+    PORT_LOG_INFO("GXSetProjection CALLED: proj[0][0]=%.6f type=%u", mtx[0][0], type);
+    /* PC port: keep the orthographic projection from gx_frame_begin.
+     * The game's perspective projection is designed for 3D geometry,
+     * but title screen geometry is in pixel space [0,1280]x[0,720].
+     * Using the game's perspective projection puts pixel-space vertices
+     * outside the NDC view frustum, so nothing renders.
+     * We store the game's projection for reference but don't use it. */
+    /* memcpy(g_state.proj_matrix, mtx, sizeof(g_state.proj_matrix)); */
+}
 
 void GXSetVtxDesc(u32 attr, u32 type)
 {
@@ -2540,10 +2588,18 @@ void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
 void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
 {
     GX_TRACE("GXBegin(0x%X, %u, %u)", type, vtxfmt, nverts);
+    /* A single glDrawArrays can only draw one primitive type with one
+     * attribute layout. If the pending batch differs, flush it first.
+     * (Vertices accumulate across GXBegin/End pairs within one batch —
+     * that is intentional batching, not a bug. */
+    if (g_state.vert_count > 0 &&
+        (type != g_state.prim_type || vtxfmt != g_state.batch_vtxfmt))
+    {
+        bridge_upload_and_draw();
+    }
     g_state.in_primitive = TRUE;
     g_state.prim_type = type;
-    /* Do NOT reset vert_count — multiple GXBegin/End pairs batch into one draw. */
-    /* g_state.vert_count = 0;  <-- REMOVED: was destroying accumulated vertices */
+    g_state.batch_vtxfmt = vtxfmt;
     PORT_LOG_DEBUG("GXBegin: type=0x%X fmt=%u verts=%u", type, vtxfmt, nverts);
 }
 void GXEnd(void)
@@ -2581,6 +2637,12 @@ static void bridge_add_vertex(void)
          * state machine in sync. The GPU will clip it away. */
         if (mag > 36000000.0f) {  // sqrt(36000000) ≈ 6000
             v->pos[0] = 0; v->pos[1] = 0; v->pos[2] = 0;
+            if (g_dbg_degenerate_verts == 0) {
+                g_dbg_degenerate_sample[0] = px;
+                g_dbg_degenerate_sample[1] = py;
+                g_dbg_degenerate_sample[2] = pz;
+            }
+            g_dbg_degenerate_verts++;
             goto SKIP_DEG;
         }
         
@@ -2678,19 +2740,21 @@ void GXNormal3f32(f32 x, f32 y, f32 z)
 
 /* State */
 
-/* Map Dolphin GX blend factors to OpenGL equivalents */
+/* Map Dolphin GX blend factors to OpenGL equivalents.
+ * Values per dolphin/gx/GXEnum.h GXBlendFactor:
+ *   0=ZERO 1=ONE 2=SRCCLR 3=INVSRCCLR 4=SRCALPHA 5=INVSRCALPHA
+ *   6=DSTALPHA 7=INVDSTALPHA (DSTCLR/INVDSTCLR alias 2/3) */
 static GLenum gx_bl_to_gl(u32 gx_blend_factor)
 {
     switch (gx_blend_factor) {
-    case 0x00: return GL_ZERO;        /* GX_BL_ZERO */
-    case 0x01: return GL_ONE;         /* GX_BL_ONE */
-    case 0x02: return GL_SRC_COLOR;   /* GX_BL_SRCCLR */
-    case 0x03: return GL_SRC_ALPHA;   /* GX_BL_SRCALPHA */
-    case 0x04: return GL_ONE_MINUS_SRC_ALPHA; /* GX_BL_INVSRCALPHA */
-    case 0x05: return GL_DST_ALPHA;   /* GX_BL_DSTALPHA */
-    case 0x06: return GL_ONE_MINUS_DST_ALPHA; /* GX_BL_INVDSTALPHA */
-    case 0x07: return GL_DST_COLOR;   /* GX_BL_DSTCLR */
-    case 0x08: return GL_ONE_MINUS_DST_COLOR; /* GX_BL_INVDSTCLR */
+    case 0x00: return GL_ZERO;                /* GX_BL_ZERO */
+    case 0x01: return GL_ONE;                 /* GX_BL_ONE */
+    case 0x02: return GL_SRC_COLOR;           /* GX_BL_SRCCLR */
+    case 0x03: return GL_ONE_MINUS_SRC_COLOR; /* GX_BL_INVSRCCLR */
+    case 0x04: return GL_SRC_ALPHA;           /* GX_BL_SRCALPHA */
+    case 0x05: return GL_ONE_MINUS_SRC_ALPHA; /* GX_BL_INVSRCALPHA */
+    case 0x06: return GL_DST_ALPHA;           /* GX_BL_DSTALPHA */
+    case 0x07: return GL_ONE_MINUS_DST_ALPHA; /* GX_BL_INVDSTALPHA */
     default:   return GL_SRC_ALPHA;
     }
 }

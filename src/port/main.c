@@ -43,10 +43,9 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
                  (void*)uc->uc_mcontext.gregs[REG_RIP]);
     write(2, buf, n);
     fsync(2);
-    /* PC port: exit cleanly on SIGABRT (free() errors on shutdown) */
-    if (sig == SIGABRT) {
-        _exit(0);
-    }
+    /* Note: SIGABRT (e.g. glibc free() corruption) is NOT swallowed —
+     * exiting 0 here used to hide memory corruption as a clean shutdown.
+     * Exit with the conventional 128+signal so failures are visible. */
     _exit(128 + sig);
 }
 

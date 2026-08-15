@@ -30,7 +30,13 @@ typedef void (*GPCallback)(void);
 
 /* OSTick */
 typedef u64 OSTick;
-static u64 _os_tick_count = 1234567890;
+
+/* GCN clocks. The timebase (OSGetTime) advances at the core clock rate
+ * (243 MHz on GameCube). dolphin/os.h derives OS_TIMER_CLOCK as
+ * __OSBusClock / 4, so the bus clock must be 4x the core clock for the
+ * SDK's tick conversion macros to be correct. */
+u32 __OSCoreClock = 243000000;
+u32 __OSBusClock = 972000000;
 
 /* Calendar time */
 typedef struct {
@@ -48,7 +54,7 @@ typedef struct { u32 lightID; f32 intensity[3]; f32 direction[3]; } GXLightObj;
 typedef struct { void* stack; void* entry; u32 prio; } OSThread;
 
 /* ===== Global variables ===== */
-u32 __OSBusClock = 486000000;
+/* __OSCoreClock / __OSBusClock are defined above with the GCN values. */
 
 /* OSContext for FPU context saving/loading (used by db_ClearFPUExceptions) */
 typedef struct {
@@ -74,16 +80,23 @@ void OSLoadFPUContext(OSContext *ctx) {}
 void OSSaveFPUContext(OSContext *ctx) {}
 OSContext *OSGetCurrentContext(void) { return &_os_current_context; }
 
-/* Time-related stubs */
-OSTick OSGetTime(void) { return _os_tick_count; }
+/* Time-related stubs.
+ * OSGetTime must advance in real time at the core clock rate — the game's
+ * lbTime/lbSnap/lbCardGame/perf code all read wall-clock time from it. */
+OSTick OSGetTime(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    u64 ns = (u64)ts.tv_sec * 1000000000ULL + (u64)ts.tv_nsec;
+    return ns * (u64)__OSCoreClock / 1000000000ULL;
+}
 void OSGetTimeStruct(struct tm *timep) {}
 
-/* Timer conversion functions */
-#define OS_TIMER_CLOCK 240000000  /* 240 MHz GCN clock */
-u64 OSTicksToSeconds(u64 ticks) { return ticks / OS_TIMER_CLOCK; }
-u64 OSSecondsToTicks(u64 secs) { return secs * OS_TIMER_CLOCK; }
+/* Timer conversion functions — must match OS_TIMER_CLOCK from
+ * dolphin/os.h (= __OSBusClock / 4 = core clock). */
+u64 OSTicksToSeconds(u64 ticks) { return ticks / (u64)__OSCoreClock; }
+u64 OSSecondsToTicks(u64 secs) { return secs * (u64)__OSCoreClock; }
 void OSTicksToCalendarTime(u64 ticks, struct tm *timep) {}
-u32 __OSCoreClock = 486000000;
 u32 __OSSimulatedMemSize = 0x20000000;
 u32 __OSPhysicalMemSize = 0x20000000;
 OSThread *__gCurrentThread = NULL;

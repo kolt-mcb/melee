@@ -45,25 +45,34 @@ u32 thread_get_id(OSThread thread)
 
 Bool semaphore_init(OSSemaphore* sem, u32 initial_value)
 {
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutex_init(sem, &attr);
-    pthread_mutexattr_destroy(&attr);
+    /* Dolphin OSSemaphore is a counting semaphore: lock decrements,
+     * unlock increments, and a thread blocks when the count is 0.
+     * (A recursive mutex has different semantics and must not be used. */
+    if (sem_init(sem, 0, initial_value) != 0)
+    {
+        return FALSE;
+    }
     return TRUE;
 }
 
 Bool semaphore_lock(OSSemaphore* sem)
 {
-    return pthread_mutex_lock(sem) == 0 ? TRUE : FALSE;
+    /* Blocking wait (OSWaitSemaphore semantics). */
+    return sem_wait(sem) == 0 ? TRUE : FALSE;
+}
+
+Bool semaphore_trylock(OSSemaphore* sem)
+{
+    int rc = sem_trywait(sem);
+    return rc == 0 ? TRUE : FALSE;
 }
 
 Bool semaphore_unlock(OSSemaphore* sem)
 {
-    return pthread_mutex_unlock(sem) == 0 ? TRUE : FALSE;
+    return sem_post(sem) == 0 ? TRUE : FALSE;
 }
 
 void semaphore_destroy(OSSemaphore* sem)
 {
-    pthread_mutex_destroy(sem);
+    sem_destroy(sem);
 }

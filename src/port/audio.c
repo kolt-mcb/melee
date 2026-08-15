@@ -5,15 +5,9 @@ static SDL_AudioDeviceID g_audio_dev = 0;
 static Uint8* g_audio_buffer = NULL;
 static const int AUDIO_BUFFER_SIZE = 4096;
 
-static void audio_callback(void* userdata, Uint8* stream, int len)
-{
-    (void)userdata;
-
-    /* Mix GCN audio into this buffer, then copy to stream */
-    /* For now, fill with silence as placeholder */
-    SDL_memset(stream, 0, len);
-}
-
+/* Queue-based audio: no SDL audio callback is set, so SDL_QueueAudio()
+ * (via audio_submit) is the only way to feed PCM. A callback and the
+ * queue API cannot be used together. */
 Bool audio_init(void)
 {
     PORT_LOG_INFO("Initializing SDL2 audio subsystem");
@@ -24,12 +18,13 @@ Bool audio_init(void)
     desired.format = AUDIO_S16SYS;
     desired.channels = 2;
     desired.samples = 1024;
-    desired.callback = audio_callback;
+    desired.callback = NULL;  /* queue-based (SDL_QueueAudio) */
+    desired.userdata = NULL;
 
     g_audio_dev = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
     if (g_audio_dev == 0)
     {
-        PORT_LOG_WARN("Failed to open audio device: %s");
+        PORT_LOG_WARN("Failed to open audio device: %s", SDL_GetError());
         /* Continue without audio for now */
         return FALSE;
     }
