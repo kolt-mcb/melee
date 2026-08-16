@@ -138,11 +138,16 @@ void render_present(void)
      * after swap the backbuffer is a fresh black buffer. */
     static int g_render_frame = 0;
     static int g_screenshot_wanted = -1;
+    static int g_screenshot_frame = -1;
     g_render_frame++;
     if (g_screenshot_wanted < 0) {
         g_screenshot_wanted = getenv("MELEE_SCREENSHOT") != NULL;
     }
-    if (g_render_frame == 1200 && g_screenshot_wanted && !g_frame_saved) {
+    if (g_screenshot_frame < 0) {
+        const char *sf = getenv("MELEE_SCREENSHOT_FRAME");
+        g_screenshot_frame = sf ? atoi(sf) : 1200;
+    }
+    if (g_render_frame == g_screenshot_frame && g_screenshot_wanted && !g_frame_saved) {
         g_frame_saved = true;
         GLint vw, vh;
         SDL_Window* win = window_get_sdl_window();
