@@ -826,8 +826,8 @@ void grBigBlue_801E6C60(Ground_GObj* gobj)
                     s32 found;
                     s32 retries;
 
-                    memzero(&pos, 0xC);
-                    memzero(&neg_pos, 0xC);
+                    memzero(&pos, sizeof(pos));
+                    memzero(&neg_pos, sizeof(neg_pos));
                     pos.x = 10.0f + Stage_GetBlastZoneRightOffset();
                     neg_pos.x = -(10.0f + Stage_GetBlastZoneRightOffset());
 
@@ -1724,10 +1724,74 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
             u8* mgp = (u8*) Ground_801C2BA4(32)->user_data;
             s32 count = 0;
 
-            if ((s8) mgp[0xE5] != 0) {
-                count = 1;
-                if (cars_avail != 0U) {
-                    cars_avail = *(u32*) (mgp + ((s8) mgp[0xE4] * 4) + 0xD4);
+        switch (state) {
+        case 0:
+            if (((grBb_GroundStateFlag*) Ground_GetMapGObj(32)->user_data)
+                    ->xCC != 0)
+            {
+                s32 i;
+                HSD_JObj* cars_avail = NULL;
+                Ground* manager = GET_GROUND(Ground_GetMapGObj(32));
+                s32 count = 0;
+
+                for (i = 0; i < 3; i++) {
+                    if ((s8) manager->u.bigblue.data[i].x1 != 0) {
+                        count++;
+                        if (cars_avail != NULL) {
+                            cars_avail =
+                                manager->u.bigblue.xD4
+                                    [(s8) manager->u.bigblue.data[i].index];
+                        }
+                    }
+                }
+
+                if (count <= 1) {
+                    f32 height;
+
+                    memzero(&pos, sizeof(pos));
+                    pos.x = Stage_GetBlastZoneLeftOffset() - 50.0f;
+                    height = grBigBlue_801EC58C(&pos, NULL, 500.0f);
+                    if (height != -3.4028235e38f) {
+                        f32 cam_right;
+                        f32 cam_left;
+                        f32 cam_bot;
+                        f32 speed;
+                        s32 collided;
+
+                        pos.y = height + yakumono_param->xCC;
+                        speed = 140.0f * Ground_801C0498();
+                        collided = grBigBlue_801E8794(
+                            jobj, &pos, 1, 2.0f * (60.0f * Ground_801C0498()),
+                            speed);
+                        if (collided == 0) {
+                            collided = grBigBlue_801EAB50(
+                                &pos, 1, 2.0f * (60.0f * Ground_801C0498()),
+                                25.0f);
+                        }
+                        if (collided == 0) {
+                            cam_right = Stage_GetCamBoundsRightOffset();
+                            cam_left = Stage_GetCamBoundsLeftOffset();
+                            cam_bot = Stage_GetCamBoundsBottomOffset();
+                            if (pos.y <= grBigBlue_801E8B84_noinline(
+                                             Stage_GetCamBoundsTopOffset(),
+                                             cam_bot, cam_left, cam_right))
+                            {
+                                collided = 1;
+                            }
+                        }
+                        if (collided != 0) {
+                            pos.y = 30.0f + Stage_GetCamBoundsTopOffset();
+                        }
+                        if (pos.y == -3.4028235e38f) {
+                            HSD_ASSERTREPORT(
+                                1739, 0, "*** Not Set Position!(FFlyer)\n");
+                        }
+                        HSD_JObjSetTranslate(jobj, &pos);
+                        *(f32*) (bp + 0xD0) = pos.y;
+                        *(f32*) (bp + 0xD8) = yakumono_param->xD0;
+                        HSD_JObjClearFlagsAll(jobj, JOBJ_HIDDEN);
+                        bp[0xC4] = 1;
+                    }
                 }
             }
             {
@@ -2027,8 +2091,8 @@ void grBigBlue_801EA05C(Ground_GObj* gobj)
             f32 range;
             s32 r;
 
-            memzero(&pos, 0xC);
-            memzero(&half_bot, 0xC);
+            memzero(&pos, sizeof(pos));
+            memzero(&half_bot, sizeof(half_bot));
             pos.x = Stage_GetBlastZoneRightOffset();
             half_bot.x = -Stage_GetBlastZoneRightOffset();
 

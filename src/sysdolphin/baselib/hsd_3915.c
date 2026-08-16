@@ -666,7 +666,8 @@ block_1: {
             goto block_1;
         }
         {
-            struct EventPriority* data = HSD_MemAlloc(8);
+            struct EventPriority* data =
+                HSD_MemAlloc(sizeof(struct EventPriority));
             data->event = event;
             data->priority = priority;
             if (prev != NULL) {
