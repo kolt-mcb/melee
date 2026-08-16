@@ -1047,7 +1047,13 @@ void HSD_PadRenewRawStatus(bool unused)
                 if (g_auto_start_elapsed >= 120) {
                     buttons |= GC_BTN_A;  /* Add A from frame 120 */
                 }
+                /* Set trigger (edge) for newly-pressed buttons so the game's
+                 * gm_GetButtonsTriggered (which reads .trigger, not .button)
+                 * sees the press. */
+                u32 new_buttons = buttons & ~g_auto_start_buttons;
+                g_auto_start_buttons = buttons;
                 g_gc_pads[pad].button |= buttons;
+                g_gc_pads[pad].trigger |= new_buttons;
                 g_auto_start_elapsed++;
                 if (g_auto_start_elapsed >= g_auto_start_frames) {
                     g_auto_start_frames = 0;  /* Disable after N frames */
@@ -1095,13 +1101,17 @@ void HSD_PadRenewMasterStatus(void)
 
 void HSD_PadRenewCopyStatus(void)
 {
-    /* Copy renewed game status to copy status.
-     * g_gc_pads_last is already maintained by HSD_PadRenewRawStatus
-     * (saves state before clearing and re-reading). Here we just
-     * ensure the copy matches for external consumers that expect
-     * PadRenewCopyStatus to be the canonical state-sync function. */
+    /* PC port: wire g_gc_pads (the SDL/keyboard/auto-start bridge state)
+     * into HSD_PadCopyStatus, which is what the game's input path
+     * (gm_EvaluateAllControllerInputs) actually reads. Without this,
+     * HSD_PadCopyStatus is never populated and the game sees no input.
+     * GCPadStatus has the identical layout to HSD_PadStatus.
+     * Note: do NOT update g_gc_pads_last here — HSD_PadRenewRawStatus
+     * owns that (it saves the previous state before re-reading), and
+     * HSD_PadRenewGameStatus uses it to compute the trigger edge. */
+    extern GCPadStatus HSD_PadCopyStatus[4];
     for (int pad = 0; pad < 4; pad++) {
-        memcpy(&g_gc_pads_last[pad], &g_gc_pads[pad], sizeof(GCPadStatus));
+        memcpy(&HSD_PadCopyStatus[pad], &g_gc_pads[pad], sizeof(GCPadStatus));
     }
 }
 
@@ -1790,6 +1800,7 @@ __attribute__((weak)) void port_input_poll(void)
     extern void input_read_frame(void);
     extern void HSD_PadRenewStatus(void);
     extern void gm_SyncPadToControllerMap(void);
+    extern int gm_GetCurrentGameMode(void);
     window_poll_events();
     input_read_frame();
     HSD_PadRenewStatus();
