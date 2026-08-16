@@ -132,6 +132,17 @@ int main(int argc, char* argv[])
 
     /* Main loop — game logic runs here */
     PORT_LOG_INFO("[MAIN] About to enter game_main_loop()");
+
+    /* PC port: disable the debug build-timestamp block on the title screen.
+     * DbLevel defaults to 1 (dbinit.c), which enables the sislib text path
+     * (HSD_SisLib_803A6754) that currently returns NULL and crashes the title
+     * OnEnter handler. The timestamp is a debug nicety, not core functionality.
+     * Set DbLevel=0 to skip it. Revisit the sislib NULL once the low-memory
+     * inspection tooling is available. */
+    {
+        extern int DbLevel;
+        DbLevel = 0;
+    }
     
     /* PC port: Set up perspective projection matrix for 3D rendering.
      * The game code relies on HSD_CObjSetCurrent to call GXSetProjection,

@@ -1875,7 +1875,12 @@ __attribute__((weak)) void gmMainLib_8045A6C0(void) {}
 __attribute__((weak)) void gm_80160638(void) {}
 __attribute__((weak)) void gm_8016400C(void) {}
 __attribute__((weak)) void gm_80164024(void) {}
-__attribute__((weak)) void gm_80164840(void) {}
+/* gm_80164840(ckind): returns nonzero if the character is unlocked/available.
+ * The real function checks per-character unlock state; for a fresh game all
+ * base characters (CKIND 0..0x19) are unlocked. The previous empty void stub
+ * returned garbage, so the title's character picker (gm_801BF128) built an
+ * empty character_pool and read uninitialized stack entries -> SIGSEGV. */
+__attribute__((weak)) int gm_80164840(int ckind) { return (ckind >= 0 && ckind <= 0x19) ? 1 : 0; }
 __attribute__((weak)) void gm_8016AE38(void) {}
 __attribute__((weak)) void gm_8016AE44(void) {}
 __attribute__((weak)) void gm_8017E424(void) {}
