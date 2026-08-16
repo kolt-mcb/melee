@@ -227,60 +227,59 @@ void grHomeRun_8021CB20(Ground_GObj* gobj)
     HSD_JObj* jobj = GET_JOBJ(gobj);
     UnkArchiveStruct* archive;
     HSD_CObj* cobj;
-    s16 i;
-    f32 gobjs_num;
-    HSD_GObj** gobjs;
-    HSD_GObj** jobjs;
-    PAD_STACK(24);
+    int i;
 
     Ground_801C2ED0(jobj, gp->map_id);
 
-    vars->gobjs = HSD_MemAlloc(0x100);
-    HSD_ASSERT(0x17A, vars->gobjs);
-    gobjs = vars->gobjs;
+    gp->u.homerun.parts =
+        HSD_MemAlloc(sizeof(*gp->u.homerun.parts) * Gr_Homerun_Parts_Max);
+    HSD_ASSERTMSG(378, gp->u.homerun.parts, "gp->u.map.parts");
 
-    vars->jobj_gobjs = HSD_MemAlloc(0x40);
-    HSD_ASSERT(0x17B, vars->jobj_gobjs);
-    jobjs = vars->jobj_gobjs;
+    gp->u.homerun.back =
+        HSD_MemAlloc(sizeof(*gp->u.homerun.back) * Gr_Homerun_Parts_Back);
+    HSD_ASSERTMSG(379, gp->u.homerun.back, "gp->u.map.back");
 
     HSD_JObjSetScaleX(jobj, grHr_804D6AE4 * HSD_JObjGetScaleX(jobj));
     HSD_JObjSetScaleY(jobj, grHr_804D6AE4 * HSD_JObjGetScaleY(jobj));
     HSD_JObjSetScaleZ(jobj, grHr_804D6AE4 * HSD_JObjGetScaleZ(jobj));
 
-    *(u8*) &gp->x10_flags |= 4;
+    gp->x10_flags.b5 = true;
     grAnime_801C8138(gobj, gp->map_id, false);
     mpJointSetCb1(0, gp, (mpColl_Callback) fn_8021E994);
 
-    archive = grDatFiles_801C6324();
-    vars->xD4 = GObj_Create(0x11, 0x13, 0);
+    archive = grDatFiles_GetArchive();
+    gp->u.unk.text_gobj = GObj_Create(HSD_GOBJ_CLASS_TEXT, 19, 0);
     cobj = lb_80013B14(&cobj_desc);
     HSD_CObjSetPerspective(cobj, 30.0F, 1.4F);
-    HSD_GObjObject_80390A70(vars->xD4, HSD_GObj_804D784B, cobj);
-    GObj_SetupGXLinkMax(vars->xD4, fn_8021EB10, 7);
-    vars->xD4->gxlink_prios = 2;
-    HSD_SisLib_803A611C(1, vars->xD4, 9, 0xD, 0, 1, 0, 7);
+    {
+        u8 kind = HSD_GObj_804D784B;
+        HSD_GObjObject_80390A70(gp->u.unk.text_gobj, kind, cobj);
+    }
+    GObj_SetupGXLinkMax(gp->u.unk.text_gobj, fn_8021EB10, 7);
+    gp->u.unk.text_gobj->gxlink_prios = 2;
+    {
+        HSD_GObj* text_gobj = gp->u.unk.text_gobj;
+        HSD_SisLib_803A611C(1, text_gobj, HSD_GOBJ_CLASS_SISLIB_UNK, 13, 0, 1,
+                            0, 7);
+    }
     HSD_SisLib_804D1124[1] =
         HSD_ArchiveGetPublicAddress(archive->unk0, "SIS_GrHomerunData");
-    gobjs_num = 2.0F * (1.0F + (2400.0F / (160.0F * Ground_801C0498())));
-    HSD_ASSERT(0x1A2, gobjs_num < 64);
+    HSD_ASSERT(418, INIT_ADD_PARTS_RANGE*2<Gr_Homerun_Parts_Max);
 
-    for (i = 0; (f32) i < 1.0F + (2400.0F / (160.0F * Ground_801C0498())); i++)
-    {
-        gobjs[i] = grHomeRun_8021E500(i);
+    for (i = 0; (float) i < INIT_ADD_PARTS_RANGE; i++) {
+        gp->u.homerun.parts[i] = grHomeRun_8021E500(i);
     }
     for (; i < 64; i++) {
         gobjs[i] = NULL;
     }
 
-    for (i = 0; i < 16; i++) {
+    for (i = 0; i < Gr_Homerun_Parts_Back; i++) {
         HSD_JObj* child;
-        HSD_GObj* gobj;
-        jobjs[i] = grHomeRun_8021C82C_noinline(4);
-        gobj = jobjs[i];
-        HSD_ASSERT(0x1AB, gobj);
+        gp->u.homerun.back[i] = grHomeRun_8021C82C(4);
+        HSD_ASSERTMSG(427, gp->u.homerun.back[i], "gp->u.map.back[i]");
 
-        jobj = GET_JOBJ(gobj);
-        HSD_ASSERT(0x1AC, jobj);
+        jobj = GET_JOBJ(gp->u.homerun.back[i]);
+        HSD_ASSERT(428, jobj);
 
         HSD_JObjSetScaleX(jobj, grHr_804D6AE4 * HSD_JObjGetScaleX(jobj));
         HSD_JObjSetScaleY(jobj, grHr_804D6AE4 * HSD_JObjGetScaleY(jobj));
@@ -293,48 +292,33 @@ void grHomeRun_8021CB20(Ground_GObj* gobj)
                       ((4.0F + (f32) i) * -(160.0F * Ground_801C0498())));
     }
 
-    {
-        HSD_GObj* rear_gobj = grHomeRun_8021C82C_noinline(3);
-        HSD_ASSERT(0x1BA, rear_gobj);
-        vars->rear_gobj = rear_gobj;
-        jobj = GET_JOBJ(rear_gobj);
-        HSD_ASSERT(0x1BB, jobj);
-    }
+    gp->u.homerun.bg_gobj[0] = grHomeRun_8021C82C(3);
+    HSD_ASSERTMSG(442, gp->u.homerun.bg_gobj[0], "gp->u.map.bg_gobj[0]");
+    jobj = GET_JOBJ(gp->u.homerun.bg_gobj[0]);
+    HSD_ASSERT(443, jobj);
     HSD_JObjSetTranslateX(jobj, 1.5F * -(2150.99F * Ground_801C0498()));
 
-    {
-        HSD_GObj* rear2_gobj = grHomeRun_8021C82C_noinline(3);
-        HSD_ASSERT(0x1BD, rear2_gobj);
-        vars->rear2_gobj = rear2_gobj;
-        jobj = GET_JOBJ(rear2_gobj);
-        HSD_ASSERT(0x1BE, jobj);
-    }
-
+    gp->u.homerun.bg_gobj[1] = grHomeRun_8021C82C(3);
+    HSD_ASSERTMSG(445, gp->u.homerun.bg_gobj[1], "gp->u.map.bg_gobj[1]");
+    jobj = GET_JOBJ(gp->u.homerun.bg_gobj[1]);
+    HSD_ASSERT(446, jobj);
     HSD_JObjSetTranslateX(jobj, 0.5F * -(2150.99F * Ground_801C0498()));
 
-    {
-        HSD_GObj* rear3_gobj = grHomeRun_8021C82C_noinline(3);
-        HSD_ASSERT(0x1C0, rear3_gobj);
-        vars->rear3_gobj = rear3_gobj;
-        jobj = GET_JOBJ(rear3_gobj);
-        HSD_ASSERT(0x1C1, jobj);
-    }
-
+    gp->u.homerun.bg_gobj[2] = grHomeRun_8021C82C(3);
+    HSD_ASSERTMSG(448, gp->u.homerun.bg_gobj[2], "gp->u.map.bg_gobj[2]");
+    jobj = GET_JOBJ(gp->u.homerun.bg_gobj[2]);
+    HSD_ASSERT(449, jobj);
     HSD_JObjSetTranslateX(jobj, 0.5F * (2150.99F * Ground_801C0498()));
 
-    {
-        HSD_GObj* rear4_gobj = grHomeRun_8021C82C_noinline(3);
-        HSD_ASSERT(0x1C3, rear4_gobj);
-        vars->rear4_gobj = rear4_gobj;
-        jobj = GET_JOBJ(rear4_gobj);
-        HSD_ASSERT(0x1C4, jobj);
-    }
-
+    gp->u.homerun.bg_gobj[3] = grHomeRun_8021C82C(3);
+    HSD_ASSERTMSG(451, gp->u.homerun.bg_gobj[3], "gp->u.map.bg_gobj[3]");
+    jobj = GET_JOBJ(gp->u.homerun.bg_gobj[3]);
+    HSD_ASSERT(452, jobj);
     HSD_JObjSetTranslateX(jobj, 1.5F * (2150.99F * Ground_801C0498()));
 
-    vars->xCC = NULL;
-    vars->xD0 = Ground_801C3FA4(gobj, 1);
-    vars->xE8_flags.b0 = 0;
+    gp->u.homerun.xCC = NULL;
+    gp->u.homerun.xD0 = Ground_801C3FA4(gobj, 1);
+    gp->u.homerun.xE8_flags.b0 = false;
 }
 
 bool grHomeRun_8021D678(Ground_GObj* arg)
@@ -909,7 +893,7 @@ void fn_8021EB10(HSD_GObj* target_cam_gobj, int pc_render_code)
     Scissor scissor;
     Vec3 position;
 
-    target_cam_cobj = GET_COBJ(target_cam_gobj);
+    target_cam_cobj = target_cam_gobj->hsd_obj;
     main_cam_gobj = Camera_80030A50();
     if (main_cam_gobj) {
         if ((main_cam_cobj = GET_COBJ(main_cam_gobj))) {

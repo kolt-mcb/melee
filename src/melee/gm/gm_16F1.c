@@ -1294,8 +1294,8 @@ int fn_80171BA4(void* arg0)
 
     rules = arg0;
     memzero(scores, sizeof(scores));
-    memzero(lbl_804D65A8, 6);
-    lbl_804D65B0[0] = Gm_PKind_Human;
+    memzero(lbl_804D65A8, sizeof(lbl_804D65A8));
+    lbl_804D65B0 = Gm_PKind_Human;
 
     player = 0;
     do {

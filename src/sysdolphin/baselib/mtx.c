@@ -874,7 +874,7 @@ HSD_ObjAllocData* HSD_VecGetAllocData(void)
 
 void HSD_VecInitAllocData(void)
 {
-    HSD_ObjAllocInit(HSD_VecGetAllocData(), 0xC, 4);
+    HSD_ObjAllocInit(HSD_VecGetAllocData(), sizeof(Vec), 4);
 }
 
 HSD_ObjAllocData* HSD_MtxGetAllocData(void)
@@ -884,5 +884,5 @@ HSD_ObjAllocData* HSD_MtxGetAllocData(void)
 
 void HSD_MtxInitAllocData(void)
 {
-    HSD_ObjAllocInit(HSD_MtxGetAllocData(), 0x30, 4);
+    HSD_ObjAllocInit(HSD_MtxGetAllocData(), sizeof(Mtx), 4);
 }
