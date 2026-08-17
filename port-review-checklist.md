@@ -215,3 +215,45 @@ must apply the index permutation before rendering.
   vertex array, how multiple draw commands partition the indices).
 - Apply the index permutation in the parser before reading vertex data.
 - Verify the model renders as a smooth surface.
+
+## NEW-6 Update: Display List Format (definitive findings)
+
+**Display list location:** archive offset 0x39D60, 4128 bytes (= 129 × 32-byte units,
+matching `n_display=129`).
+
+**Command encoding (from Dolphin `GXGeometry.c` / `__gx.h`):**
+- `GXBegin`: writes `opcode(1B) = (vtxfmt | type)` + `nverts(2B big-endian)` = 3 bytes
+  - upper 5 bits of opcode = primitive type (0x80 QUADS, 0x90 TRIS, 0x98 STRIP, ...)
+  - lower 3 bits = vtxfmt (0-7)
+- `LOAD_XF_REG` (0x10): 9 bytes (1B opcode + 4B addr + 4B value)
+- `LOAD_INDX` (0x20/28/30/38): 6 bytes (1B opcode + 1B param + 4B value)
+- `LOAD_CP_REG`/VAT (0x08): 6 bytes (1B opcode + 1B param + 4B value)
+- `CALL_DL` (0x40): 9 bytes; `LOAD_BP_REG` (0x61): 5 bytes; NOP (0x00): 1 byte
+
+**Structure of the TtlBg display list:**
+- A regular sequence of 4-byte packets: `[opcode][0x02][decreasing_counter][0x02]`
+- opcodes alternate between DRAW types (0x98 STRIP, 0x90 TRIS, 0x80 QUADS) and
+  unknown types (0x78, 0xE8, 0xE0, 0x88) that the current parser doesn't handle
+- The "nverts" values (1025, 750, 749, 748, ...) sum to 186373 — far exceeding the
+  vertex array capacity (~1872 verts). So they are NOT cumulative offsets.
+
+**Root cause of twisted ribbon (confirmed):**
+- The vertex array (1025+ verts, F32 XYZ, stride 12) is stored in an order that
+  zigzags between a FRONT ring (z≈8.8) and BACK ring (z≈-196).
+- On GCN, the display list + vertex-fetch hardware reorders the vertices into a
+  coherent surface. The front verts are scattered (not in angular order), proving
+  the stored order is NOT the render order.
+- The PC parser reads the vertex array in MEMORY ORDER and ignores the display
+  list's reordering → twisted ribbon.
+
+**Blocker:** The exact vertex-reordering mechanism in the display list is not yet
+decoded. The unknown opcodes (0x78/0xE8/0xE0/0x88) likely carry the index/permutation
+data. Decoding these is the remaining work.
+
+**Candidate next steps:**
+1. Identify the unknown opcodes (0x78, 0xE8, 0xE0, 0x88) — likely indexed-vertex
+   or vertex-cache commands. Check Dolphin's `GXVerifXF.c` / vertex-packet code.
+2. The `GX_VA_POS` attr_type is GX_INDEX16 (type=3) — the vertex fetch is INDEXED.
+   The 16-bit index block (seen at archive ~0x39C60, values 0x60-0x9B) is likely the
+   permutation. Map indices → vertex array and apply before rendering.
+3. Verify by rendering the reordered vertices as a smooth surface.
