@@ -296,3 +296,28 @@ sequence.
   interleave and drawing all primitive groups.
 - Next: decode the full display-list command/index structure (the 3-byte commands are
   interspersed among the index runs); render each primitive group with its own indices.
+
+## ENV: 1fps slowness is a system-wide display/GPU stall (NOT a code bug)
+
+**Symptom (observed 2026-08-17 PM):** Title-screen runs render at ~1fps
+(~1s/frame). Earlier the same day the same build ran at 10fps+.
+
+**Diagnosis (definitive):**
+- A minimal SDL+GL clear+swap test app (`gltest`) runs at **1.8 FPS** on `:0`.
+- The game's main thread is blocked in `poll_schedule_timeout` (poll w/ timeout)
+  on the DRI render node fd (`/dev/dri/renderD128`, 4 fds), ~1s/frame, state=S,
+  CPU ~1%.
+- Ruled out: CPU load (75% idle), cgroup limits (`cpu.max=max`), audio
+  (identical with `SDL_AUDIODRIVER=dummy`), vsync (`LIBGL_DISABLE_VSYNC`),
+  DRI3 (`LIBGL_DRI3_DISABLE`), GPU thermal throttle (51-70°C).
+- Display is **XWayland** (`Xwayland :0 -rootless`) over the Wayland compositor
+  (mutter). The DRM master node (`card1`) was recreated 2026-08-17 10:31 while
+  the render node (`renderD128`) dates from Aug 13 — a display/DRM state change.
+- Renderer: `Mesa Intel(R) Iris(R) Plus Graphics 655 (CFL GT3)`.
+
+**Conclusion:** The Intel GPU / XWayland / mutter swap path is stalling on every
+present. Unrelated to the melee port. Likely stale DRM/GPU state (leftover game
+processes from hung runs may have contributed). No i915 reset/hang in the journal.
+
+**Fix (system-level, needs user action):** log out/in or restart the display
+manager to reset GPU/DRM/compositor state; or rebind i915 (root). Then re-test.
