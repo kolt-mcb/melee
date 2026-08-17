@@ -182,3 +182,36 @@ files touched and how to verify.
   NEW-2. 0 crashes before the title-model stage. Guard logging works.
 - Frame rate: ~27fps → ~27fps but 24x more frames rendered per run
   (per-draw logging + full-VBO uploads + always-on overlays removed).
+
+## Title Screen Geometry — Twisted Ribbon (NEW-6)
+
+**Status:** Root cause identified, fix pending
+
+**Symptom:** TtlBg title background renders as a twisted ribbon (white with black
+stripes) instead of a smooth curved surface.
+
+**Findings:**
+- Vertex data at archive offset 0x345A0 (stride 12, F32 XYZ) is verified correct
+  (matches archive bytes exactly).
+- The 1025 vertices alternate between a FRONT ring (z≈8.8, 353 verts, radius ~70)
+  and a BACK ring (z≈-196, 597 verts, radius ~20). Rendered as a single triangle
+  strip, this creates the twisted-ribbon zigzag.
+- The display list (at archive ~0x39C60) contains:
+  1. A block of 128 × 16-bit values (high byte 0x60–0x9B, low byte 0x00)
+  2. Setup commands (LOAD_XF_REG, etc.)
+  3. Multiple draw commands: DRAW_STRIP(1025), DRAW_STRIP(750), DRAW_QUADS(749),
+     DRAW_STRIP(748), ... with decreasing "counts"
+- The parser (`gx_gl_bridge.c` display-list decoder) executes only the FIRST draw
+  command, then does `ptr = end` (skips the rest).
+- The vertex array is read in MEMORY ORDER (0,1,2,...,1024), not via the index
+  block. On GCN, the indices reorder the vertices into a coherent surface.
+
+**Hypothesis:** The display list uses indexed vertex data. The 16-bit index block
+reorders the vertex array into the correct triangle-strip sequence. The parser
+must apply the index permutation before rendering.
+
+**Next steps:**
+- Reverse-engineer the exact display-list index format (how indices map to the
+  vertex array, how multiple draw commands partition the indices).
+- Apply the index permutation in the parser before reading vertex data.
+- Verify the model renders as a smooth surface.
