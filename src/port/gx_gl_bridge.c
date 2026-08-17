@@ -2370,8 +2370,15 @@ void GXSetScissor(u32 x, u32 y, u32 w, u32 h)
     g_state.scissor_y = y;
     g_state.scissor_w = w;
     g_state.scissor_h = h;
-    g_state.scissor_enabled = TRUE;
-    glEnable(GL_SCISSOR_TEST);
+    /* PC port: GCN treats zero-width/height scissor as "disabled".
+     * OpenGL would clip everything to a zero-area rectangle. */
+    if (w == 0 || h == 0) {
+        g_state.scissor_enabled = FALSE;
+        glDisable(GL_SCISSOR_TEST);
+    } else {
+        g_state.scissor_enabled = TRUE;
+        glEnable(GL_SCISSOR_TEST);
+    }
     glScissor((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
 }
 void GXClearBuff(void)
@@ -2912,12 +2919,12 @@ void GXSetTevOp(u32 stage, u32 mode)
     switch (mode) {
     case 0: /* GX_MODULATE: RAS * TEX */
         s->color_inputs[0] = 10;  // RASC
-        s->color_inputs[1] = 8;   // TEXC
-        s->color_inputs[2] = 15;  // ZERO
+        s->color_inputs[1] = 15;  // ZERO
+        s->color_inputs[2] = 8;   // TEXC (multiplier)
         s->color_inputs[3] = 15;  // ZERO
         s->alpha_inputs[0] = 11;  // RASA
-        s->alpha_inputs[1] = 9;   // TEXA
-        s->alpha_inputs[2] = 7;   // ZERO
+        s->alpha_inputs[1] = 7;   // ZERO
+        s->alpha_inputs[2] = 9;   // TEXA (multiplier)
         s->alpha_inputs[3] = 7;   // ZERO
         s->color_op = 0;  // ADD
         s->alpha_op = 0;  // ADD
@@ -2925,23 +2932,23 @@ void GXSetTevOp(u32 stage, u32 mode)
     case 1: /* GX_DECAL: TEX color, RAS alpha */
         s->color_inputs[0] = 8;   // TEXC
         s->color_inputs[1] = 15;  // ZERO
-        s->color_inputs[2] = 15;  // ZERO
+        s->color_inputs[2] = 12;  // ONE (pass-through)
         s->color_inputs[3] = 15;  // ZERO
         s->alpha_inputs[0] = 11;  // RASA
         s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 7;   // ZERO
+        s->alpha_inputs[2] = 12;  // ONE (pass-through)
         s->alpha_inputs[3] = 7;   // ZERO
         s->color_op = 0;
         s->alpha_op = 0;
         break;
-    case 2: /* GX_BLEND: TEX * RAS + (1-TEX.a) * RAS */
-        s->color_inputs[0] = 8;   // TEXC
-        s->color_inputs[1] = 10;  // RASC
-        s->color_inputs[2] = 10;  // RASC
-        s->color_inputs[3] = 9;   // TEXA
+    case 2: /* GX_BLEND: TEX * RAS + (1-TEX.a) * RAS ≈ RAS * TEX */
+        s->color_inputs[0] = 10;  // RASC
+        s->color_inputs[1] = 15;  // ZERO
+        s->color_inputs[2] = 8;   // TEXC (multiplier)
+        s->color_inputs[3] = 15;  // ZERO
         s->alpha_inputs[0] = 11;  // RASA
         s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 7;   // ZERO
+        s->alpha_inputs[2] = 9;   // TEXA (multiplier)
         s->alpha_inputs[3] = 7;   // ZERO
         s->color_op = 0;
         s->alpha_op = 0;
@@ -2949,11 +2956,11 @@ void GXSetTevOp(u32 stage, u32 mode)
     case 3: /* GX_REPLACE: Replace with TEX */
         s->color_inputs[0] = 8;   // TEXC
         s->color_inputs[1] = 15;  // ZERO
-        s->color_inputs[2] = 15;  // ZERO
+        s->color_inputs[2] = 12;  // ONE (pass-through)
         s->color_inputs[3] = 15;  // ZERO
         s->alpha_inputs[0] = 9;   // TEXA
         s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 7;   // ZERO
+        s->alpha_inputs[2] = 12;  // ONE (pass-through)
         s->alpha_inputs[3] = 7;   // ZERO
         s->color_op = 0;
         s->alpha_op = 0;
@@ -2961,11 +2968,11 @@ void GXSetTevOp(u32 stage, u32 mode)
     case 4: /* GX_PASSCLR: Pass through RAS */
         s->color_inputs[0] = 10;  // RASC
         s->color_inputs[1] = 15;  // ZERO
-        s->color_inputs[2] = 15;  // ZERO
+        s->color_inputs[2] = 12;  // ONE (pass-through)
         s->color_inputs[3] = 15;  // ZERO
         s->alpha_inputs[0] = 11;  // RASA
         s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 7;   // ZERO
+        s->alpha_inputs[2] = 12;  // ONE (pass-through)
         s->alpha_inputs[3] = 7;   // ZERO
         s->color_op = 0;
         s->alpha_op = 0;
@@ -2973,11 +2980,11 @@ void GXSetTevOp(u32 stage, u32 mode)
     default:
         s->color_inputs[0] = 10;  // RASC
         s->color_inputs[1] = 15;
-        s->color_inputs[2] = 15;
+        s->color_inputs[2] = 12;  // ONE (pass-through)
         s->color_inputs[3] = 15;
         s->alpha_inputs[0] = 11;  // RASA
         s->alpha_inputs[1] = 7;
-        s->alpha_inputs[2] = 7;
+        s->alpha_inputs[2] = 12;  // ONE (pass-through)
         s->alpha_inputs[3] = 7;
         s->color_op = 0;
         s->alpha_op = 0;
