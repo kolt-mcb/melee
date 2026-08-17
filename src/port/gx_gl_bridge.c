@@ -602,6 +602,7 @@ typedef struct {
     u16 arr_stride;             /* Legacy: last stride set (for backwards compat) */
     u16 arr_count;              /* Number of vertices in the array */
     Bool arr_valid;             /* Whether vertex arrays are set up */
+    Bool pos_fetch_indexed;     /* POS uses GX_INDEX16: display list carries 16-bit vertex indices */
     
     /* Vertex format (from GXSetVtxAttrFmt) */
     u8 pos_comp_cnt;            /* Position component count (0=XY, 1=XYZ) */
@@ -2542,9 +2543,11 @@ void GXSetVtxDesc(u32 attr, u32 type)
     GX_TRACE("GXSetVtxDesc(%u, %u)", attr, type);
     /* GXAttr enum values from stub header:
      * POS=9, NRM=10, CLR0=11, TEX0=13, TEX1=14 */
+    /* GXAttrType: NONE=0, DIRECT=1, INDEX8=2, INDEX16=3 */
     Bool enabled = (type == 1);  /* GX_DIRECT = enabled */
+    Bool indexed = (type == 2 || type == 3); /* INDEX8/INDEX16 */
     switch (attr) {
-    case 9:  g_state.pos_enabled = enabled; break;  /* GX_VA_POS */
+    case 9:  g_state.pos_enabled = enabled || indexed; g_state.pos_fetch_indexed = indexed; break;  /* GX_VA_POS */
     case 10: g_state.nrm_enabled = enabled; break;  /* GX_VA_NRM */
     case 11: g_state.clr_enabled = enabled; break;  /* GX_VA_CLR0 */
     case 13: g_state.tex0_enabled = enabled; break; /* GX_VA_TEX0 */
@@ -2552,7 +2555,7 @@ void GXSetVtxDesc(u32 attr, u32 type)
     }
 }
 void GXClearVtxDesc(void)
-{ g_state.pos_enabled = g_state.nrm_enabled = g_state.clr_enabled = g_state.tex0_enabled = g_state.tex1_enabled = FALSE; }
+{ g_state.pos_enabled = g_state.nrm_enabled = g_state.clr_enabled = g_state.tex0_enabled = g_state.tex1_enabled = FALSE; g_state.pos_fetch_indexed = FALSE; }
 
 void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 {
@@ -3207,9 +3210,23 @@ void GXCallDisplayList(void* list, u32 nbytes)
                         const u8* base_pos = (const u8*)g_state.arr_pos;
                         u16 stride_pos = g_state.arr_stride_pos;
                         
-                        /* Debug: track position histogram across all draw calls */
+                        /* PC port: when POS uses GX_INDEX16, the display list carries a
+                         * 16-bit big-endian vertex index per vertex, immediately after the
+                         * 3-byte draw command. The vertex array is stored scrambled and the
+                         * indices reorder it into the render sequence (raw order zigzags
+                         * between front/back rings; indexed order is a coherent surface).
+                         * Read the indices and fetch vertices via them. */
+                        Bool indexed = g_state.pos_fetch_indexed &&
+                                       (ptr + (size_t)nverts * 2 <= end);
                         for (u16 v = 0; v < nverts; v++) {
-                            const u8* vp_pos = base_pos + v * stride_pos;
+                            u32 vidx;
+                            if (indexed) {
+                                vidx = ((u32)ptr[v*2] << 8) | ptr[v*2+1];
+                                if (vidx > 10000) vidx = v; /* out of range; fall back */
+                            } else {
+                                vidx = v;
+                            }
+                            const u8* vp_pos = base_pos + vidx * stride_pos;
                             
                             /* Position */
                             if (g_state.pos_enabled) {
@@ -3247,7 +3264,7 @@ void GXCallDisplayList(void* list, u32 nbytes)
                             
                             /* Color */
                             if (g_state.clr_enabled && g_state.arr_clr != NULL) {
-                                const u8* vp_clr = (const u8*)g_state.arr_clr + v * g_state.arr_stride_clr;
+                                const u8* vp_clr = (const u8*)g_state.arr_clr + vidx * g_state.arr_stride_clr;
                                 GXColor4u8(vp_clr[0], vp_clr[1], vp_clr[2], vp_clr[3]);
                             } else {
                                 /* PC port: default to white when no color array is set */
@@ -3256,7 +3273,7 @@ void GXCallDisplayList(void* list, u32 nbytes)
                             
                             /* Texture Coordinates (UV mapping) */
                             if (g_state.tex0_enabled && g_state.arr_tex0 != NULL) {
-                                const u8* vp_tex = (const u8*)g_state.arr_tex0 + v * g_state.arr_stride_tex0;
+                                const u8* vp_tex = (const u8*)g_state.arr_tex0 + vidx * g_state.arr_stride_tex0;
                                 f32 ts, tt;
                                 /* Use texture coord format from GXSetVtxAttrFmt, fallback to pos format */
                                 u8 tex_type = g_state.tex0_comp_type;
@@ -3287,7 +3304,7 @@ void GXCallDisplayList(void* list, u32 nbytes)
                             
                             /* Normal vectors (for lighting) */
                             if (g_state.nrm_enabled && g_state.arr_nrm != NULL) {
-                                const u8* vp_nrm = (const u8*)g_state.arr_nrm + v * g_state.arr_stride_nrm;
+                                const u8* vp_nrm = (const u8*)g_state.arr_nrm + vidx * g_state.arr_stride_nrm;
                                 f32 nx, ny, nz;
                                 /* Normals use their own format type (nrm_comp_type) */
                                 switch (g_state.nrm_comp_type) {
@@ -3317,6 +3334,9 @@ void GXCallDisplayList(void* list, u32 nbytes)
                                 }
                                 GXNormal3f32(nx, ny, nz);
                             }
+                        }
+                        if (indexed) {
+                            ptr += (size_t)nverts * 2; /* advance past the 16-bit index run */
                         }
                     }
                     GXEnd();

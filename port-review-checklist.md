@@ -257,3 +257,42 @@ data. Decoding these is the remaining work.
    The 16-bit index block (seen at archive ~0x39C60, values 0x60-0x9B) is likely the
    permutation. Map indices → vertex array and apply before rendering.
 3. Verify by rendering the reordered vertices as a smooth surface.
+
+## NEW-6 RESOLVED (main model): Display list carries 16-bit vertex indices
+
+**Status:** Twisted ribbon FIXED — model now renders as a coherent cone. Vertical
+stripes remain (secondary issue, see below).
+
+**The breakthrough:** The display list is NOT just a stream of draw commands. When a
+vertex attribute uses `GX_INDEX16` (type=3), the display list carries a **16-bit
+big-endian vertex index per vertex**, immediately after each 3-byte draw command.
+The vertex array is stored SCRAMBLED, and these indices reorder it into the render
+sequence.
+
+**Verified empirically** (against `orig/GALE01/GmTtAll.usd`):
+- Vertex array: 1829 verts at archive 0x345A0 (POS base → TEX0 base = 21952 B / stride 12).
+- Display list at archive 0x39D60, 4128 bytes. First 3 bytes = `98 04 01`
+  (DRAW_TRIANGLE_STRIP, nverts=1025). The next 1025 × 16-bit BE values are vertex
+  indices (range 402–1305, all valid).
+- RAW array order: z-depths zigzag (8.8, 8.7, -196.0, -196.0, ...), avg consecutive
+  distance 85.5 → twisted ribbon.
+- INDEX order: avg consecutive distance 44.0, coherent cone shape → **matches render**.
+
+**Fix implemented** (`src/port/gx_gl_bridge.c`):
+- Added `g_state.pos_fetch_indexed` (set in `GXSetVtxDesc` when type is INDEX8/INDEX16;
+  reset in `GXClearVtxDesc`).
+- In the display-list DRAW handler: when `pos_fetch_indexed`, read `nverts` 16-bit BE
+  indices from `ptr` (right after the 3-byte command) and fetch each vertex via its
+  index (`base + idx * stride`) for POS/NRM/CLR/TEX0/TEX1. Fallback to array order when
+  not indexed or when the index run overruns the list.
+
+**Remaining: vertical stripes (secondary).**
+- The 1025-index sequence interleaves TWO rings: a near ring (z≈-2, indices ~634-669)
+  and a far ring (z≈-49..-117, indices 736-750 in clean decreasing order). Rendered as
+  one strip this produces regular vertical stripes.
+- The model is actually drawn with MULTIPLE primitives (parse found STRIP(1025), then
+  other draws with nverts 258, 453, ...). The parser currently handles only the FIRST
+  draw then skips to end. Full fidelity requires decoding the complete command/index
+  interleave and drawing all primitive groups.
+- Next: decode the full display-list command/index structure (the 3-byte commands are
+  interspersed among the index runs); render each primitive group with its own indices.
