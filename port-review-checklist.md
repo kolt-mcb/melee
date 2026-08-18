@@ -455,3 +455,39 @@ no Z-flip + garbage clamp) and documented here for a focused follow-up.
 
 All experimental 3D changes were reverted; the tree is at the working state
 (7.2% white shape). Only the GXSetProjection log-spam fix was kept.
+
+## NEW-8 iteration 2 (2026-08-15): transform confirmed; flat-white + display slowness block visual confirm
+
+Pushed the 3D placement (option B) with a runtime XFORM diagnostic mode.
+Results:
+
+### Confirmed
+- The correct transform (simple view 0,0,16.9 + identity model + captured
+  perspective + **no Z-flip**) puts **13,841 TtlBg vertices in-front and
+  on-screen** (verified by an in-shader NDC counter at draw time). MVP
+  matrix convention (row-major proj×mv, transposed to column-major for GL)
+  is correct. Culling is off; depth test uses the game's z-func with valid
+  NDC depth.
+- The clean TtlBg geometry spans eye x[−58,78] y[−71,65] — **larger than the
+  visible frustum**, so a correctly-framed background legitimately fills the
+  whole screen.
+
+### Why it still looks wrong (flat white, not shaded silver)
+- The title's **ambient + diffuse lights** are active, so geometry is LIT.
+  My vertex-color overrides get overridden by lighting → everything flattens
+  to white. The background renders as a **uniform white full-screen fill**
+  (1 unique color), not the shaded/colored silver of the real Melee title.
+  So the transform is right, but the shading/material/texture layer is what
+  makes it look wrong.
+- TtlBg is MULTIPLE indexed DLs (nbytes 608 / 4128 / 3328) sharing one
+  position array; the pos=(nil) non-array DLs (32/288/1792) also draw.
+
+### Blockers to a clean visual confirm
+- **Display slowness**: even after a reset the port runs ~5fps (healthy 23),
+  so each screenshot cycle is ~2.5 min. NEW-2 segfault adds ~1-in-5 retries.
+- Getting the shaded, correctly-bounded, textured background (plus TtlMoji
+  logo/text) is several more distinct sub-problems, each needing a slow
+  iteration cycle on this display.
+
+Kept from this pass: degenerate-vertex guard now logs once (was per-frame,
+slowed the game). All XFORM diagnostic code reverted; tree at working state.
