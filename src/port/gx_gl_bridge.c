@@ -3203,6 +3203,24 @@ void GXCallDisplayList(void* list, u32 nbytes)
                     default: g_dl_depth--; return;
                     }
 
+                    /* PC port: multi-primitive display lists. The list is a
+                     * stream of [draw cmd][16-bit index run] groups plus other
+                     * commands/data. Validate the index run BEFORE rendering:
+                     * a misparsed "draw" (e.g. misread from an unknown data
+                     * block) has garbage nverts/indices. If any index is out of
+                     * the plausible vertex range this is not a real draw, so
+                     * stop parsing. */
+                    Bool indexed = g_state.pos_fetch_indexed &&
+                                   (ptr + (size_t)nverts * 2 <= end);
+                    if (indexed) {
+                        Bool idx_ok = TRUE;
+                        for (u16 v = 0; v < nverts; v++) {
+                            u32 vi = ((u32)ptr[v*2] << 8) | ptr[v*2+1];
+                            if (vi >= 32768) { idx_ok = FALSE; break; }
+                        }
+                        if (!idx_ok) goto dl_end;
+                    }
+
                     GXBegin(gx_prim, param, nverts);
 
                     /* Read vertex data from stored arrays (set by GXSetArray). */
@@ -3210,19 +3228,14 @@ void GXCallDisplayList(void* list, u32 nbytes)
                         const u8* base_pos = (const u8*)g_state.arr_pos;
                         u16 stride_pos = g_state.arr_stride_pos;
                         
-                        /* PC port: when POS uses GX_INDEX16, the display list carries a
-                         * 16-bit big-endian vertex index per vertex, immediately after the
-                         * 3-byte draw command. The vertex array is stored scrambled and the
-                         * indices reorder it into the render sequence (raw order zigzags
-                         * between front/back rings; indexed order is a coherent surface).
-                         * Read the indices and fetch vertices via them. */
-                        Bool indexed = g_state.pos_fetch_indexed &&
-                                       (ptr + (size_t)nverts * 2 <= end);
+                        /* PC port: when POS uses GX_INDEX16, each vertex is
+                         * referenced by a 16-bit big-endian index in the run
+                         * right after the draw cmd; the array is stored
+                         * scrambled and the indices give the render order. */
                         for (u16 v = 0; v < nverts; v++) {
                             u32 vidx;
                             if (indexed) {
                                 vidx = ((u32)ptr[v*2] << 8) | ptr[v*2+1];
-                                if (vidx > 10000) vidx = v; /* out of range; fall back */
                             } else {
                                 vidx = v;
                             }
@@ -3342,8 +3355,9 @@ void GXCallDisplayList(void* list, u32 nbytes)
                     GXEnd();
                     g_dbg_draw_calls++;
                     
-                    /* Skip the rest of the display list (index data, not commands) */
-                    ptr = end;
+                    /* Continue parsing: the display list may have more primitive
+                     * groups (multi-primitive models). Stop only on an unknown
+                     * command or an invalid index run (see validation above). */
                 }
                 break;
             }
