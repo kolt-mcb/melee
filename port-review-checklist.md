@@ -347,3 +347,65 @@ It is little-endian (vs big-endian draws) with a regular structured pattern —
 likely a different command type (vertex-index table / restart table / second
 attribute). Decoding needs the GCN GPU FIFO spec or a Dolphin GPU-side
 decoder. Low priority: cracks are a small fraction of the model.
+
+## NEW-8: Title screen is a full 3D scene; the bridge's 3D pipeline is stubbed
+
+Investigation to make the title screen "complete" (2026-08-15). The white
+shape (NEW-6) turned out to be FAITHFUL and to be only PART of the title
+scene. Findings:
+
+### The white TtlBg shape is faithful
+- All 670 frames use TEV mode 4 (PASSCLR) ONLY. Zero GXSetTevColorIn/
+  GXSetTevColorOp in the whole codebase. No model sets a CLR0/CLR1 array.
+- TtlBg material color is white (GXSetChanMatColor 4 = 255,255,255,255),
+  and the title's light (0x1006a9b0) is NOT in the current light list
+  (no GXInitLight calls before the TtlBg draw).
+- => PASSCLR + white material + no lights = the shape SHOULD be white.
+  Textures are irrelevant to TtlBg (it has no texture sampling).
+
+### The title scene composition (GmTtAll.usd)
+- **TtlBg**: background, 1829 verts, 5 DL passes, no joints (white shape).
+- **TtlMoji**: the "MELEE" title text/logo — a JOINTED, animated model.
+  **Not rendering at all** (the bridge has no joint-deformation support).
+- **TitleMark**: 2D sprite (GXDrawPxmap, not a 3D draw).
+- Camera (cobj 0x1001c948): **eye=(0,0,16.9), interest=(0,0,0)**, near=1,
+  far=5000, fov=110. So the camera is at z=+16.9 (GCN Z-forward) looking at
+  the origin; TtlBg (world z≈0.86) is in front of it.
+- Lights: ambient (32,255,255,255), diffuse (221,230,255,255). Fog: 0.
+- Game projection (GXSetProjection): **fov=60, aspect=16/9, near=1, far≈15386**
+  (NOTE: differs from the camera desc's fov=110/aspect=1.217 — the projection
+  is built from a different source, likely the framebuffer aspect).
+
+### The bridge 3D pipeline is stubbed/hardcoded (root cause of wrong 3D)
+1. `GXSetProjection` (bridge) IGNORES the game's matrix — keeps an ortho
+   fallback (`memcpy(g_state.proj_matrix, mtx)` is commented out).
+2. `GXLoadPosMtxImm` had the model-view computation commented out — used
+   `identity + Z=-10` (a hardcoded camera at z=+10).
+3. The game's **view/camera is never applied** — the camera at z=+16.9 is
+   loaded but its view matrix is not fed to the bridge.
+4. **Z-convention mismatch**: the bridge flips vertex Z (pz=-pz) but not the
+   model/projection matrices.
+
+### Progress made (not committed — experimental)
+- Applying the model matrix + the camera view offset (eye z=16.9) makes the
+  TtlBg vertices land **on-screen and in front** (NDC x∈[−0.6,−0.09],
+  y∈[−0.78,0.84], w>0). Verified via a per-vertex NDC debug.
+- BUT the screen is still BLACK even with culling disabled — so the
+  corrected geometry is rejected by something deeper (depth test, color
+  path, or the GL draw path). Not yet root-caused.
+
+### Honest assessment
+Fully completing the title screen is a SUBSTANTIAL effort, not a quick fix:
+- Correct 3D placement: proper GCN projection + view in the bridge (currently
+  both stubbed), plus a consistent Z-convention. I got vertices on-screen but
+  they don't render — one more layer of bridge 3D debugging remains.
+- The TtlMoji title text: requires joint-deformation (per-vertex joint
+  matrices applied in the bridge), which the bridge lacks entirely. Separate,
+  large effort.
+- State left at the last committed working point (white shape, 7.2% coverage).
+  All experimental 3D changes were reverted to keep the tree clean.
+
+Next diagnostic step if resumed: with the corrected on-screen transform,
+check the GL draw path — is drawElements/drawArrays called with the right
+count? Is the depth test rejecting (try glDepthMask/disable)? Is the vertex
+color actually non-zero at the shader input?
