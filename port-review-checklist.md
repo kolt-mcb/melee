@@ -491,3 +491,28 @@ Results:
 
 Kept from this pass: degenerate-vertex guard now logs once (was per-frame,
 slowed the game). All XFORM diagnostic code reverted; tree at working state.
+
+## NEW-8 iteration 3 (2026-08-15): slowness is CPU contention, not the display
+
+- A minimal SDL2+GL clear/swap benchmark ran at **6684 fps** (swaps instant),
+  so the display is NOT the bottleneck. The port's 5-10fps (vs the 23fps
+  healthy baseline) is **CPU-bound** — most likely CPU contention on the
+  shared server, not the display or the bridge code. This is why each
+  screenshot cycle is 1-2.5 min and why XFORM (more geometry) is slower.
+- The flat-white render is **faithful**: TtlBg uses PASSCLR TEV (fragment =
+  vertex color) and has **no CLR/texture array** → defaults to white. So a
+  correctly-placed TtlBg is genuinely a flat white mesh; the real title's
+  shaded/colored look comes from other elements (TtlMoji logo, other models),
+  not TtlBg itself.
+- Garbage-vertex handling: clamping extreme referenced vertices to the
+  previous valid vertex (degenerate triangle) did not change the render speed
+  (the slowness is CPU, not overdraw).
+
+### Net status of the 3D placement work
+- ✅ Transform is CONFIRMED correct (simple view 0,0,16.9 + identity model +
+  captured perspective + no Z-flip; 13,841 TtlBg verts on-screen at draw time).
+- ⏳ A clean visual confirm is blocked by (a) shared-server CPU slowness
+  making iteration slow, and (b) the garbage referenced-vertices in the array.
+- The full title screen (shaded/colored background + TtlMoji logo + text) is a
+  multi-session effort. All XFORM diagnostics reverted; tree at working state
+  (7.2% white shape) + two committed log-hygiene fixes.
