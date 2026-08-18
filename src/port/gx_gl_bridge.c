@@ -1927,9 +1927,13 @@ void gx_frame_end(void)
      * out-of-range vertices silently. If it fires, geometry is being lost —
      * usually a bad camera/transform or corrupt archive data. */
     if (g_dbg_degenerate_verts > 0) {
-        PORT_LOG_WARN("DEGENERATE VERTS: %d verts zeroed this frame (sample pos=(%.1f,%.1f,%.1f)) — check camera/transform or archive data",
+        static int g_deg_warned = 0;
+        if (!g_deg_warned) {
+            g_deg_warned = 1;
+            PORT_LOG_WARN("DEGENERATE VERTS: %d verts zeroed this frame (sample pos=(%.1f,%.1f,%.1f)) — check camera/transform or archive data",
                       g_dbg_degenerate_verts,
                       g_dbg_degenerate_sample[0], g_dbg_degenerate_sample[1], g_dbg_degenerate_sample[2]);
+        }
     }
     g_dbg_degenerate_verts = 0;
     
