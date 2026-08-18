@@ -443,6 +443,8 @@ void Player_80031FB0(int slot, s32 entity_index)
 void Player_80032070(int slot, bool bool_arg)
 {
     StaticPlayer* player;
+    struct Unk_Struct_w_Array* unkStruct =
+        PDPM_PUN_INIT;
     Player_CheckSlot(slot);
 #if BUILD_TARGET_PC
     /* PC port: the assert above is non-fatal here, so an out-of-range
@@ -455,7 +457,7 @@ void Player_80032070(int slot, bool bool_arg)
         ftCo_800D4FF4(player->player_entity[player->transformed[0]]);
 
         if (player->flags.b2 &&
-            !ftMapping_list[player->ckind].has_transformation &&
+            unkStruct->vec_arr[player->player_character].z == 0 &&
             ftLib_8008701C(player->player_entity[player->transformed[1]]))
         {
             ftCo_800D4FF4(player->player_entity[player->transformed[1]]);
@@ -565,6 +567,8 @@ Gm_PKind Player_GetPlayerSlotType(s32 slot)
 Gm_PKind Player_8003248C(s32 slot, bool arg1)
 {
     Gm_PKind slot_type;
+    struct Unk_Struct_w_Array* unk_struct =
+        PDPM_PUN_INIT;
     StaticPlayer* player;
 
     Player_CheckSlot(slot);
@@ -577,9 +581,9 @@ Gm_PKind Player_8003248C(s32 slot, bool arg1)
     player = &player_slots[slot];
 
     if (arg1 == 1) {
-        if (!ftMapping_list[player->ckind].has_transformation) {
-            if (player->pkind == Gm_PKind_Human ||
-                player->pkind == Gm_PKind_Cpu)
+        if (unk_struct->vec_arr[player->player_character].z == 0) {
+            if (player->slot_type == Gm_PKind_Human ||
+                player->slot_type == Gm_PKind_Cpu)
             {
                 return 1;
             }
@@ -617,6 +621,8 @@ s8 Player_800325C8(CharacterKind kind, bool b)
 s8 Player_80032610(s32 slot, bool arg1)
 { //// decomp.me/scratch/pHTx2
 
+    struct Unk_Struct_w_Array* some_struct =
+        PDPM_PUN_INIT;
     StaticPlayer* player;
     s32 error_value = -1;
 
@@ -629,10 +635,10 @@ s8 Player_80032610(s32 slot, bool arg1)
     player = &player_slots[slot];
 
     if (arg1 == 0) {
-        return ftMapping_list[player->ckind].internal_id;
+        return some_struct->vec_arr[player->player_character].x;
     }
     if (arg1 == 1) {
-        return ftMapping_list[player->ckind].extra_internal_id;
+        return some_struct->vec_arr[player->player_character].y;
     }
 
     return error_value;
@@ -1831,6 +1837,8 @@ s32 Player_GetRemainingHPByIndex(s32 slot, s32 index)
 s32 Player_GetFalls(s32 slot)
 { /// decomp.me/scratch/8ijor
     StaticPlayer* player;
+    struct Unk_Struct_w_Array* unkStruct =
+        PDPM_PUN_INIT;
     Player_CheckSlot(slot);
 #if BUILD_TARGET_PC
     /* PC port: the assert above is non-fatal here, so an out-of-range
@@ -1839,8 +1847,8 @@ s32 Player_GetFalls(s32 slot)
 #endif
     player = &player_slots[slot];
 
-    if (ftMapping_list[player->ckind].extra_internal_id != -1 &&
-        ftMapping_list[player->ckind].has_transformation)
+    if (unkStruct->vec_arr[player->player_character].y != -1 &&
+        unkStruct->vec_arr[player->player_character].z != 0)
     {
         return player->falls[player->transformed[0]] +
                player->falls[player->transformed[1]];
@@ -2931,12 +2939,13 @@ void Player_80036DD8(void)
 
 void Player_80036E20(CharacterKind ckind, HSD_Archive* archive, s32 arg2)
 {
-    ftDemo_SetArchiveData(ftMapping_list[ckind].internal_id, archive, arg2);
-    if (ftMapping_list[ckind].extra_internal_id != -1 &&
-        !ftMapping_list[ckind].has_transformation)
+    struct Unk_Struct_w_Array* unkStruct =
+        PDPM_PUN_INIT;
+    ftDemo_SetArchiveData(unkStruct->vec_arr[ckind].x, archive, arg2);
+    if ((unkStruct->vec_arr[ckind].y != -1) &&
+        (unkStruct->vec_arr[ckind].z == 0))
     {
-        ftDemo_SetArchiveData(ftMapping_list[ckind].extra_internal_id, archive,
-                              arg2);
+        ftDemo_SetArchiveData(unkStruct->vec_arr[ckind].y, archive, arg2);
     }
 }
 
