@@ -321,3 +321,29 @@ processes from hung runs may have contributed). No i915 reset/hang in the journa
 
 **Fix (system-level, needs user action):** log out/in or restart the display
 manager to reset GPU/DRM/compositor state; or rebind i915 (root). Then re-test.
+
+## NEW-6 (stripes): multi-primitive rendering — SOLID SHAPE ACHIEVED
+
+**Status:** Stripes mostly eliminated. Model now renders as a solid shape
+(non-black coverage 2.5% → 7.2%). Committed `dbf9d4aec`. Small cracks remain
+in the top dome.
+
+**Display list structure (decoded):**
+- `DRAW 0`: TRIANGLE_STRIP(1025), big-endian 16-bit indices (402–1305) — near ring / main body
+- `DRAW 1`: TRIANGLE_FAN(784), big-endian 16-bit indices (218–784)
+- `0xE8 block`: ~500 bytes (dl+3628..end), **little-endian** 16-bit indices
+  (0–929), a 4-way interleave of decreasing sequences. Command class 0xE8 is
+  unknown (not in the CPU-side GX command set). Endianness differs from the
+  draws above.
+
+**Parser changes (committed):**
+- Removed post-draw `ptr = end` so all decodable primitives render.
+- Added index-run validation (any index >= 32768 → stop) to safely skip
+  misparsed "draws". The 0xE8 block's bytes are all non-draw command classes
+  (0xE8/0xD8/0x48/0x38/0xE0/0xD0), so it is walked harmlessly (not rendered).
+
+**Remaining (top-dome cracks):** the 0xE8 block is the undecoded geometry.
+It is little-endian (vs big-endian draws) with a regular structured pattern —
+likely a different command type (vertex-index table / restart table / second
+attribute). Decoding needs the GCN GPU FIFO spec or a Dolphin GPU-side
+decoder. Low priority: cracks are a small fraction of the model.
