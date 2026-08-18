@@ -2528,7 +2528,7 @@ void GXSetCurrentMtx(u32 id)
 }
 void GXSetProjection(f32 mtx[4][4], u32 type)
 {
-    PORT_LOG_INFO("GXSetProjection CALLED: proj[0][0]=%.6f type=%u", mtx[0][0], type);
+    PORT_LOG_DEBUG("GXSetProjection CALLED: proj[0][0]=%.6f type=%u", mtx[0][0], type);
     /* PC port: keep the orthographic projection from gx_frame_begin.
      * The game's perspective projection is designed for 3D geometry,
      * but title screen geometry is in pixel space [0,1280]x[0,720].
