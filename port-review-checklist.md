@@ -409,3 +409,49 @@ Next diagnostic step if resumed: with the corrected on-screen transform,
 check the GL draw path — is drawElements/drawArrays called with the right
 count? Is the depth test rejecting (try glDepthMask/disable)? Is the vertex
 color actually non-zero at the shader input?
+
+## NEW-8 deep-dive (2026-08-15): TtlBg 3D placement — root causes isolated
+
+Followed option B (get the background correctly placed). Captured the game's
+actual matrices + vertices at runtime and did the transform math. Findings:
+
+### The correct TtlBg transform (verified in Python)
+- TtlBg's **model matrix is ~identity** (no rotation). The view is a **simple
+  camera at (0,0,16.9) looking at origin** → eye = (wx, wy, wz − 16.9).
+- **No Z-flip** is correct (the game's projection + view are already
+  GL-compatible: points in front have eye z < 0, w = −2.0·eye_z > 0).
+- Projection (captured): `f=1.732051` (fov 60), `f/aspect=0.974279`
+  (aspect 16/9), depth `1.000667 / −2.000667` (near 1, far ≈3000).
+- With `proj × simple-view` on the clean referenced vertices: **75% land
+  on-screen, 1042/1087 in front**. With the captured slot-0 (a rotated
+  matrix): only 8%. So the rotated slot-0 was a **stale/wrong object's**
+  matrix — TtlBg's real pmtx ≈ the simple view.
+
+### Why it doesn't just render (three interacting blockers)
+1. **Garbage vertices in the array.** The referenced indices (0–1305) include
+   ~11 vertices whose coords are thousands-scale (−4344, 3571, −2500) and
+   others 1e19-scale. Under the real transform these form giant triangles that
+   fill the whole screen with a flat wash. The bridge's existing extreme-pos
+   guard (mag>6000 → zero) catches some but not all.
+2. **`pos=(nil)` display lists** (nbytes 32/288/1792, per frame) use a
+   NON-ARRAY vertex path and fill the screen white, occluding TtlBg (TtlBg
+   colored magenta → 0 magenta px; the white is from these).
+3. After suppressing the nil-pos DLs, the indexed geometry still renders as a
+   **uniform light-pink full-screen wash** (fog/blend/overlay interaction),
+   not a shaped model — another layer to crack.
+
+### DL structure (refined)
+The 4128-byte TtlBg DL has THREE draw runs, not two:
+- STRIP 1025 (idx 402–1305), FAN 513 (idx 281–784), QUAD 272 (idx 208–784),
+  then the undecoded 0xE8 block.
+
+### Conclusion
+"Correctly place the background" is NOT a single clean fix. It requires
+solving the whole 3D scene: correct per-object view×model at runtime (not a
+hardcoded view), garbage-vertex handling across models, the nil-pos inline-
+vertex DLs, the fog/blend wash, and the 0xE8 block. The KEY to TtlBg's
+placement is now known (simple view + identity model + captured projection +
+no Z-flip + garbage clamp) and documented here for a focused follow-up.
+
+All experimental 3D changes were reverted; the tree is at the working state
+(7.2% white shape). Only the GXSetProjection log-spam fix was kept.
