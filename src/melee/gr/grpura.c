@@ -463,11 +463,11 @@ void grPura_8021231C(Ground_GObj* arg0)
     HSD_JObjGetScale(gp->gv.pura2.xC8, &vec2);
     HSD_JObjSetScale(jobj, &vec2);
 
-    if ((HSD_JObjGetFlags(gp->gv.pura2.xC8) & 0x10) &&
-        ((HSD_JObjGetFlags(jobj) & 0x10) == NULL))
+    if ((HSD_JObjGetFlags(gp->u.pura2.xC8) & 0x10) &&
+        !(HSD_JObjGetFlags(jobj) & 0x10))
     {
         HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
-    } else if (((HSD_JObjGetFlags(gp->gv.pura2.xC8) & 0x10) == NULL) &&
+    } else if (!(HSD_JObjGetFlags(gp->u.pura2.xC8) & 0x10) &&
                (HSD_JObjGetFlags(jobj) & 0x10))
     {
         HSD_JObjClearFlagsAll(jobj, JOBJ_HIDDEN);
