@@ -2526,6 +2526,28 @@ static void bridge_upload_and_draw(void)
                         (double)g_state.verts[1].col[0], (double)g_state.verts[1].col[1], (double)g_state.verts[1].col[2], (double)g_state.verts[1].col[3],
                         (double)g_state.verts[count-1].col[0], (double)g_state.verts[count-1].col[1], (double)g_state.verts[count-1].col[2], (double)g_state.verts[count-1].col[3]);
                 }
+                /* PC diag: one-shot full dump of the big logo strip's local
+                 * vertices + P0 + proj, for offline shape analysis. */
+                if (count == 252) {
+                    static int _vd_done = 0;
+                    if (!_vd_done && getenv("MELEE_VERTDUMP")) {
+                        _vd_done = 1;
+                        FILE* f = fopen("/tmp/logo_verts.txt", "w");
+                        if (f) {
+                            int mid = g_state.current_mtx_id;
+                            const f32(*pm)[4] = (mid < 28) ? g_state.mtx_array[mid] : NULL;
+                            fprintf(f, "# count=%u prim=%u mid=%d\n", (unsigned)count, (unsigned)g_state.prim_type, mid);
+                            fprintf(f, "P0:\n");
+                            if (pm) for (int i = 0; i < 4; i++) fprintf(f, "%.6f %.6f %.6f %.6f\n", (double)pm[i][0], (double)pm[i][1], (double)pm[i][2], (double)pm[i][3]);
+                            fprintf(f, "PROJ:\n");
+                            for (int i = 0; i < 4; i++) fprintf(f, "%.6f %.6f %.6f %.6f\n", (double)g_state.proj_matrix[i][0], (double)g_state.proj_matrix[i][1], (double)g_state.proj_matrix[i][2], (double)g_state.proj_matrix[i][3]);
+                            fprintf(f, "VERTS:\n");
+                            for (u32 i = 0; i < count; i++) fprintf(f, "%.6f %.6f %.6f\n", (double)g_state.verts[i].pos[0], (double)g_state.verts[i].pos[1], (double)g_state.verts[i].pos[2]);
+                            fclose(f);
+                            fprintf(stderr, "VERTDUMP wrote /tmp/logo_verts.txt (%u verts)\n", count);
+                        }
+                    }
+                }
             }
         }
         /* PC fix: a GX_QUADS batch with more than 4 vertices is N INDEPENDENT
@@ -3622,18 +3644,25 @@ void GXCallDisplayList(void* list, u32 nbytes)
                 const u8* vdata = ptr + 3;
                 ptr += 3 + (size_t)nverts * vsize;
 
-                GLenum gl_prim;
+                /* DList primitive → GCN GXBegin primitive. This MUST be the
+                 * GCN enum, not a GL enum: GXBegin() stores it in
+                 * g_state.prim_type and the draw path converts GCN→GL.
+                 * (DList encoding per Dolphin: 0/1=quads 2=tris 3=strip
+                 * 4=fan 5=lines 6=linestrip 7=points.) Passing a GL enum
+                 * here double-translated it, drawing triangle LISTS as fans
+                 * and line strips as triangle lists. */
+                u32 gcn_prim;
                 switch (prim) {
-                case 0: case 1: gl_prim = GL_TRIANGLE_FAN; break;  /* quads */
-                case 2:  gl_prim = GL_TRIANGLES; break;
-                case 3:  gl_prim = GL_TRIANGLE_STRIP; break;
-                case 4:  gl_prim = GL_TRIANGLE_FAN; break;
-                case 5:  gl_prim = GL_LINES; break;
-                case 6:  gl_prim = GL_LINE_STRIP; break;
-                default: gl_prim = GL_POINTS; break;
+                case 0: case 1: gcn_prim = GX_QUADS;          break;
+                case 2:  gcn_prim = GX_TRIANGLES;      break;
+                case 3:  gcn_prim = GX_TRIANGLESTRIP;  break;
+                case 4:  gcn_prim = GX_TRIANGLEFAN;    break;
+                case 5:  gcn_prim = GX_LINES;          break;
+                case 6:  gcn_prim = GX_LINESTRIP;      break;
+                default: gcn_prim = GX_POINTS;         break;
                 }
 
-                GXBegin(gl_prim, op & 7, nverts);
+                GXBegin(gcn_prim, op & 7, nverts);
 
                 {
                     /* PC diag: raw DL vertex-stream hex dump (unambiguous) */
