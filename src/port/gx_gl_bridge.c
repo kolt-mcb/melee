@@ -2126,13 +2126,22 @@ void gx_set_depth_mask(Bool write_depth)
 static void pc_frame_trace(const char* what)
 {
     static int on = -1;
-    if (on < 0) on = (getenv("MELEE_MTR") != NULL);
+    static unsigned lo = 940, hi = 1205;
+    if (on < 0) {
+        on = (getenv("MELEE_MTR") != NULL);
+        const char* w = getenv("MELEE_TRACE_FRAMES");
+        if (w) sscanf(w, "%u-%u", &lo, &hi);
+    }
     if (!on) return;
-    if (g_state.frame_count < 940 || g_state.frame_count > 1205) return;
+    if (g_state.frame_count < lo || g_state.frame_count > hi) return;
     static unsigned char px[3];
+    /* probe: center, top-left (black-wedge), lower-left */
     glReadPixels(640, 360, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, px);
-    fprintf(stderr, "  TRACE frame=%u %-18s center=(%u,%u,%u)\n",
-            (unsigned)g_state.frame_count, what, px[0], px[1], px[2]);
+    glReadPixels(100, 100, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, px + 3);
+    glReadPixels(300, 600, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, px + 6);
+    fprintf(stderr, "  TRACE frame=%u %-18s c=(%u,%u,%u) tl=(%u,%u,%u) ll=(%u,%u,%u)\n",
+            (unsigned)g_state.frame_count, what,
+            px[0], px[1], px[2], px[3], px[4], px[5], px[6], px[7], px[8]);
 }
 
 static void bridge_upload_and_draw(void)
@@ -2486,13 +2495,15 @@ static void bridge_upload_and_draw(void)
                 int vp[4], sc[4];
                 glGetIntegerv(GL_VIEWPORT, vp);
                 glGetIntegerv(GL_SCISSOR_BOX, sc);
-                fprintf(stderr, "DRAWRD frame=%u n=%u prim=%u v0=(%.2f,%.2f,%.2f) z=%d/%u upd=%d blend=%d/%u/%u tex0=%d vp=(%d,%d,%d,%d) sc=(%d,%d,%d,%d) fog=%d%s\n",
+                fprintf(stderr, "DRAWRD frame=%u n=%u prim=%u v0=(%.2f,%.2f,%.2f) z=%d/%u upd=%d blend=%d/%u/%u tex0=%d texb=%d/%u vp=(%d,%d,%d,%d) sc=(%d,%d,%d,%d) fog=%d%s\n",
                         (unsigned)g_state.frame_count,
                         count, (unsigned)g_state.prim_type,
                         (double)g_state.verts[0].pos[0], (double)g_state.verts[0].pos[1], (double)g_state.verts[0].pos[2],
                         (int)g_state.z_enabled, (unsigned)g_state.z_func, (int)g_state.z_update,
                         (int)g_state.blend_enabled, (unsigned)g_state.blend_src, (unsigned)g_state.blend_dst,
                         (int)g_state.tex0_enabled,
+                        g_active_tex_count > 0 ? (int)g_state.tex_cache_valid[g_active_tex_slots[0]] : -1,
+                        (g_active_tex_count > 0 && g_state.tex_cache_valid[g_active_tex_slots[0]]) ? (unsigned)g_state.tex_cache[g_active_tex_slots[0]] : 0u,
                         vp[0], vp[1], vp[2], vp[3], sc[0], sc[1], sc[2], sc[3],
                         (int)g_state.fog_enabled,
                         (count >= 7 ? " [LOGO]" : ""));
@@ -3010,11 +3021,26 @@ static void bridge_add_vertex(void)
     }
     if (g_state.nrm_enabled) { v->nrm[0] = g_state.last_nrm[0]; v->nrm[1] = g_state.last_nrm[1]; v->nrm[2] = g_state.last_nrm[2]; }
 SKIP_DEG:
-    /* PC port: always set a default color to prevent black geometry */
+    /* PC port: when the color attribute is disabled (mode 0), GCN feeds the
+     * material color (last GXColor* call) to the vertex shader. Use it -
+     * hard-coding white here painted the title background a full-screen
+     * white triangle. */
     if (g_state.clr_enabled) {
         v->col[0] = g_state.last_clr[0]; v->col[1] = g_state.last_clr[1]; v->col[2] = g_state.last_clr[2]; v->col[3] = g_state.last_clr[3];
     } else {
-        v->col[0] = 1.0f; v->col[1] = 1.0f; v->col[2] = 1.0f; v->col[3] = 1.0f;
+        v->col[0] = g_state.cur_color.r / 255.0f; v->col[1] = g_state.cur_color.g / 255.0f;
+        v->col[2] = g_state.cur_color.b / 255.0f; v->col[3] = g_state.cur_color.a / 255.0f;
+        /* PC diag: confirm material color used for disabled-color verts */
+        {
+            static int _mc_on = -1, _mc_n = 0;
+            if (_mc_on < 0) _mc_on = (getenv("MELEE_MTR") != NULL);
+            if (_mc_on && _mc_n < 24) {
+                _mc_n++;
+                fprintf(stderr, "  MATCOL v%u=(%u,%u,%u,%u) pos=(%.1f,%.1f,%.1f) frame=%u\n",
+                        (unsigned)g_state.vert_count, (unsigned)g_state.cur_color.r, (unsigned)g_state.cur_color.g, (unsigned)g_state.cur_color.b, (unsigned)g_state.cur_color.a,
+                        (double)v->pos[0], (double)v->pos[1], (double)v->pos[2], (unsigned)g_state.frame_count);
+            }
+        }
     }
     /* PC test: MELEE_WHT forces white vertex colors (isolate color pipeline).
      * Must run AFTER the color assignment so it actually wins. */
@@ -4983,6 +5009,18 @@ void GXColor4u8(u8 r, u8 g, u8 b, u8 a)
     static int _wht = -1;
     if (_wht < 0) _wht = (getenv("MELEE_WHT") != NULL);
     if (_wht) { r = g = b = a = 255; }
+    /* PC diag: log color-state changes (MELEE_MTR) */
+    {
+        static int _clog_on = -1, _clog_n = 0;
+        if (_clog_on < 0) _clog_on = (getenv("MELEE_MTR") != NULL);
+        if (_clog_on && !g_state.clr_enabled && _clog_n < 300) {
+            _clog_n++;
+            fprintf(stderr, "COLORSET %s=(%u,%u,%u,%u) frame=%u clr_en=%d\n",
+                    "GXColor4u8", (unsigned)r, (unsigned)g, (unsigned)b, (unsigned)a,
+                    (unsigned)g_state.frame_count, (int)g_state.clr_enabled);
+        }
+    }
+    g_state.cur_color.r = r; g_state.cur_color.g = g; g_state.cur_color.b = b; g_state.cur_color.a = a;
     g_state.last_clr[0] = r / 255.0f;
     g_state.last_clr[1] = g / 255.0f;
     g_state.last_clr[2] = b / 255.0f;
@@ -5001,6 +5039,7 @@ void GXColor3u8(u8 r, u8 g, u8 b)
     static int _wht = -1;
     if (_wht < 0) _wht = (getenv("MELEE_WHT") != NULL);
     if (_wht) { r = g = b = 255; }
+    g_state.cur_color.r = r; g_state.cur_color.g = g; g_state.cur_color.b = b; g_state.cur_color.a = 255;
     g_state.last_clr[0] = r / 255.0f;
     g_state.last_clr[1] = g / 255.0f;
     g_state.last_clr[2] = b / 255.0f;
@@ -5016,6 +5055,8 @@ void GXColor1u16(u16 c)
 {
     /* Single 16-bit grayscale color value (0-65535) */
     f32 v = (c >> 8) / 255.0f;  /* Use high byte as intensity */
+    u8 vv = (u8)(c >> 8);
+    g_state.cur_color.r = vv; g_state.cur_color.g = vv; g_state.cur_color.b = vv; g_state.cur_color.a = 255;
     g_state.last_clr[0] = v;
     g_state.last_clr[1] = v;
     g_state.last_clr[2] = v;
@@ -5031,6 +5072,8 @@ void GXColor1x16(u16 c)
 {
     /* 16-bit color index - convert to grayscale (palette lookup not implemented) */
     f32 v = (c >> 8) / 255.0f;
+    u8 vv = (u8)(c >> 8);
+    g_state.cur_color.r = vv; g_state.cur_color.g = vv; g_state.cur_color.b = vv; g_state.cur_color.a = 255;
     g_state.last_clr[0] = v;
     g_state.last_clr[1] = v;
     g_state.last_clr[2] = v;
@@ -5046,6 +5089,7 @@ void GXColor1x8(u8 c)
 {
     /* 8-bit color index - convert to grayscale (palette lookup not implemented) */
     f32 v = c / 255.0f;
+    g_state.cur_color.r = c; g_state.cur_color.g = c; g_state.cur_color.b = c; g_state.cur_color.a = 255;
     g_state.last_clr[0] = v;
     g_state.last_clr[1] = v;
     g_state.last_clr[2] = v;
