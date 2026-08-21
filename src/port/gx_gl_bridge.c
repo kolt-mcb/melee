@@ -2465,6 +2465,15 @@ static void bridge_upload_and_draw(void)
                         (int)g_state.tex0_enabled,
                         fp[0], fp[1], fp[2], fp[3], sp[0], sp[1], sp[2], sp[3],
                         (int)g_state.fog_enabled);
+                fprintf(stderr, "  QV v1=(%.2f,%.2f,%.2f) v2=(%.2f,%.2f,%.2f) v3=(%.2f,%.2f,%.2f) c0=(%d,%d,%d,%d) c1=(%d,%d,%d,%d) c2=(%d,%d,%d,%d) c3=(%d,%d,%d,%d) prim=%u\n",
+                        (double)g_state.verts[1].pos[0], (double)g_state.verts[1].pos[1], (double)g_state.verts[1].pos[2],
+                        (double)g_state.verts[2].pos[0], (double)g_state.verts[2].pos[1], (double)g_state.verts[2].pos[2],
+                        (double)g_state.verts[3].pos[0], (double)g_state.verts[3].pos[1], (double)g_state.verts[3].pos[2],
+                        (int)(g_state.verts[0].col[0]*255), (int)(g_state.verts[0].col[1]*255), (int)(g_state.verts[0].col[2]*255), (int)(g_state.verts[0].col[3]*255),
+                        (int)(g_state.verts[1].col[0]*255), (int)(g_state.verts[1].col[1]*255), (int)(g_state.verts[1].col[2]*255), (int)(g_state.verts[1].col[3]*255),
+                        (int)(g_state.verts[2].col[0]*255), (int)(g_state.verts[2].col[1]*255), (int)(g_state.verts[2].col[2]*255), (int)(g_state.verts[2].col[3]*255),
+                        (int)(g_state.verts[3].col[0]*255), (int)(g_state.verts[3].col[1]*255), (int)(g_state.verts[3].col[2]*255), (int)(g_state.verts[3].col[3]*255),
+                        (unsigned)g_state.prim_type);
             }
         }
     } else {
@@ -2791,9 +2800,12 @@ void GXSetProjection(f32 mtx[4][4], u32 type)
         if (_pj_on < 0) _pj_on = (getenv("MELEE_MTR") != NULL);
         _pj_n = ++g_state.proj_call_seq;
 
-        /* Validate: every element finite and |v| < 1e8. */
+        /* Validate ONLY the 3x4 the SDK builders write. Row 3 (the w-row)
+         * is intentionally left uninitialized by MTXPerspective/MTXOrtho
+         * and is derived from `type` below - checking it here used to
+         * reject every projection the game sets and keep a stale one. */
         int bad = 0;
-        for (int i = 0; i < 4 && !bad; i++)
+        for (int i = 0; i < 3 && !bad; i++)
             for (int j = 0; j < 4 && !bad; j++)
                 if (!isfinite(mtx[i][j]) || fabsf(mtx[i][j]) > 1e8f)
                     bad = 1;
