@@ -138,17 +138,23 @@ void render_present(void)
      * after swap the backbuffer is a fresh black buffer. */
     static int g_render_frame = 0;
     static int g_screenshot_wanted = -1;
-    static int g_screenshot_frame = -1;
+    static int g_shot_frames[16];
+    static int g_shot_n = 0;
+    static int g_shot_init = -1;
     g_render_frame++;
-    if (g_screenshot_wanted < 0) {
+    if (g_shot_init < 0) {
+        g_shot_init = 1;
         g_screenshot_wanted = getenv("MELEE_SCREENSHOT") != NULL;
-    }
-    if (g_screenshot_frame < 0) {
         const char *sf = getenv("MELEE_SCREENSHOT_FRAME");
-        g_screenshot_frame = sf ? atoi(sf) : 1200;
+        if (sf) {
+            char buf[256]; strncpy(buf, sf, 255); buf[255] = 0;
+            char *tok = strtok(buf, ",");
+            while (tok && g_shot_n < 16) { g_shot_frames[g_shot_n++] = atoi(tok); tok = strtok(NULL, ","); }
+        }
+        if (g_shot_n == 0) g_shot_frames[g_shot_n++] = 1200;
     }
-    if (g_render_frame == g_screenshot_frame && g_screenshot_wanted && !g_frame_saved) {
-        g_frame_saved = true;
+    for (int si = 0; si < g_shot_n; si++) {
+    if (g_render_frame == g_shot_frames[si] && g_screenshot_wanted) {
         GLint vw, vh;
         SDL_Window* win = window_get_sdl_window();
         SDL_GetWindowSize(win, &vw, &vh);
@@ -164,7 +170,8 @@ void render_present(void)
         }
         fprintf(stderr, "[SCREENSHOT] frame=%d nonblack=%d (%.1f%%)\n", g_render_frame, nonblack, 100.0*nonblack/(vw*vh));
         fflush(stderr);
-        FILE *f = fopen("screenshot.ppm", "wb");
+        char shotpath[128]; snprintf(shotpath, sizeof(shotpath), "screenshot_%d.ppm", g_render_frame);
+        FILE *f = fopen(shotpath, "wb");
         if (f) {
             fprintf(f, "P6\n%d %d\n255\n", vw, vh);
             /* Flip vertically: PPM rows go bottom-up, glReadPixels top-down */
@@ -176,10 +183,10 @@ void render_present(void)
             }
             free(row);
             fclose(f);
-            PORT_LOG_INFO("[RENDER] Screenshot saved to screenshot.ppm (%dx%d)", vw, vh);
+            PORT_LOG_INFO("[RENDER] Screenshot saved to %s (%dx%d)", shotpath, vw, vh);
         }
         free(pixels);
-        g_frame_saved = true;
+    }
     }
     
     window_swap();

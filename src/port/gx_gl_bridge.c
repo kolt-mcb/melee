@@ -485,6 +485,8 @@ typedef struct {
     /* Matrix tracking */
     f32 mtx_array[68][3][4];  /* GCN matrix IDs: 0-27 (PNMTX), 30-60 (TEXMTX/IDENTITY), 64+ (bump) */
     u32 current_mtx_id;
+    u32 frame_count;          /* incremented each gx_frame_begin */
+    u32 proj_call_seq;        /* cumulative GXSetProjection call number */
     
     /* TEV state - full tracking for shader compositing */
     u32 num_tex_gens;         /* Number of enabled texture units */
@@ -611,10 +613,28 @@ typedef struct {
     u8 nrm_comp_type;           /* Normal component type (same enum as pos) */
     u8 nrm_frac;                /* Normal fraction bits */
     
+    /* Per-attribute VAT mode for display list vertex decoding.
+     * 0=absent, 1=direct, 2=index8, 3=index16 (GXAttrType values) */
+    u8 pos_mode, nrm_mode, clr_mode, tex0_mode, tex1_mode;
+    
     /* Viewing matrix (from gx_set_3d_camera) */
     f32 view_matrix[3][4];      /* Viewing matrix (camera transform) */
     Bool view_matrix_valid;     /* Whether viewing matrix is set */
     f32 camera_pos[3];          /* Camera position in world space */
+    
+    /* GCN-faithful matrix pipeline. On GC hardware each vertex goes:
+     *   pos -> P(current) -> P1 -> projection matrix -> clip.
+     * P1 is the second (skin/joint) position matrix loaded with
+     * GXLoadPosMtxImm(m, GX_PNMTX1); it persists across draws until
+     * reloaded (hardware register semantics). We model exactly that:
+     *   mvp_gl = (2z/w-1) * proj * (P1 or I) * P(current)
+     * The (2z/w-1) row converts GCN depth (z/w in [0,1], z-forward)
+     * to GL NDC z in [-1,1] exactly, for any perspective or ortho
+     * frustum, so all matrices stay in native GCN convention (no
+     * ad-hoc Z flips). */
+    Bool mtx3d_active;          /* Game 3D matrix path (vs 2D overlay path) */
+    Bool p1_valid;              /* P1 position matrix loaded this frame */
+    f32 p1_pos_mtx[3][4];       /* Copy of P1 pos matrix (id 1 is shared with NRM) */
     
     /* Geometry bounds tracking (world space, updated per-frame) */
     f32 bounds_min[3];
@@ -1853,6 +1873,7 @@ void gx_bridge_init(void)
 void gx_frame_begin(void)
 {
     gx_trace_frame_begin();
+    g_state.frame_count++;
     g_state.in_primitive = FALSE;
     g_state.vert_count = 0;
     g_state.num_tev_stages = 0;  /* Reset — TEV stage count is tracked automatically */
@@ -1905,6 +1926,10 @@ void gx_frame_begin(void)
     PORT_LOG_DEBUG("FRAME_BEGIN: proj[0][0]=%.6f proj[1][1]=%.6f mv[2][3]=%.2f",
                   g_state.proj_matrix[0][0], g_state.proj_matrix[1][1],
                   g_state.mv_matrix[2][3]);
+    
+    /* Reset GCN-faithful matrix pipeline state for this frame */
+    g_state.mtx3d_active = FALSE;
+    g_state.p1_valid = FALSE;
 }
 
 /* Forward declaration - defined below */
@@ -1969,15 +1994,17 @@ void gx_set_overlay_projection(f32 ortho[4][4])
 {
     PORT_LOG_DEBUG("SET_OVERLAY_PROJ: proj[0][0]=%.6f", ortho[0][0]);
     memcpy(g_state.proj_matrix, ortho, sizeof(g_state.proj_matrix));
+    g_state.mtx3d_active = FALSE; /* 2D overlay path */
 }
 
-void gx_set_mv_matrix(f32 mtx[3][4]) { PORT_LOG_DEBUG("SET_MV_MATRIX: mv[2][3]=%.2f", mtx[2][3]); memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix)); }
+void gx_set_mv_matrix(f32 mtx[3][4]) { PORT_LOG_DEBUG("SET_MV_MATRIX: mv[2][3]=%.2f", mtx[2][3]); memcpy(g_state.mv_matrix, mtx, sizeof(g_state.mv_matrix)); g_state.mtx3d_active = FALSE; }
 void gx_set_overlay_matrix_identity(void)
 {
     PORT_LOG_DEBUG("SET_OVERLAY_MV_IDENTITY");
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 4; j++)
             g_state.mv_matrix[i][j] = (i == j) ? 1.0f : 0.0f;
+    g_state.mtx3d_active = FALSE; /* 2D overlay path */
 }
 
 /* ============================================================
@@ -2094,6 +2121,20 @@ void gx_set_depth_mask(Bool write_depth)
  * Flush
  * ============================================================ */
 
+/* PC diag: trace the center pixel after every draw in the target frames
+ * (MELEE_MTR) to pinpoint what wipes the logo. */
+static void pc_frame_trace(const char* what)
+{
+    static int on = -1;
+    if (on < 0) on = (getenv("MELEE_MTR") != NULL);
+    if (!on) return;
+    if (g_state.frame_count < 940 || g_state.frame_count > 1205) return;
+    static unsigned char px[3];
+    glReadPixels(640, 360, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, px);
+    fprintf(stderr, "  TRACE frame=%u %-18s center=(%u,%u,%u)\n",
+            (unsigned)g_state.frame_count, what, px[0], px[1], px[2]);
+}
+
 static void bridge_upload_and_draw(void)
 {
     /* Clear any lingering GL errors from previous calls */
@@ -2140,8 +2181,15 @@ static void bridge_upload_and_draw(void)
     /* State — blend. Translate GX blend factors to GL equivalents via
      * gx_bl_to_gl (SDK-accurate values, defined below). */
     if (g_state.blend_enabled) {
-        glEnable(GL_BLEND);
-        glBlendFunc(gx_bl_to_gl(g_state.blend_src), gx_bl_to_gl(g_state.blend_dst));
+        static int _ba_on = -1;
+        if (_ba_on < 0) _ba_on = (getenv("MELEE_BLEND_ALPHA1") != NULL);
+        if (_ba_on) {
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        } else {
+            glEnable(GL_BLEND);
+            glBlendFunc(gx_bl_to_gl(g_state.blend_src), gx_bl_to_gl(g_state.blend_dst));
+        }
     } else {
         glDisable(GL_BLEND);
     }
@@ -2201,18 +2249,50 @@ static void bridge_upload_and_draw(void)
     /* Compute MVP = proj * modelview (all row-major, transpose at upload) */
     f32 mvp[4][4];
     memset(mvp, 0, sizeof(mvp));
-    /* Pad mv_matrix (3x4) to 4x4 */
-    f32 mv4[4][4];
-    for (int i = 0; i < 3; i++)
+    if (g_state.mtx3d_active) {
+        /* GCN-faithful pipeline:
+         *   clip = proj * PNMTX[posmatidx] * pos   (ONE position matrix;
+         *   HSD loads vmtx*joint into PNMTX0 and uses PNMTX1 only for
+         *   normals). The z-row is remapped (2z - w) for GL NDC. */
+        f32 p0[4][4];
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++)
+                p0[i][j] = (i == j) ? 1.0f : 0.0f;
+        if (g_state.current_mtx_id < 28) {
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 4; j++)
+                    p0[i][j] = g_state.mtx_array[g_state.current_mtx_id][i][j];
+        }
+        f32 mv4[4][4];
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++)
+                mv4[i][j] = p0[i][j];
+        /* mvp = proj * mv4 */
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++) {
+                f32 s = 0.0f;
+                for (int k = 0; k < 4; k++)
+                    s += g_state.proj_matrix[i][k] * mv4[k][j];
+                mvp[i][j] = s;
+            }
+        /* GL NDC depth: GCN clip z/w is in [-1,0] (near=-1, far=0); the
+         * hardware depth buffer is -z/w in [0,1] (near=1). GL NDC wants
+         * [-1,1] (near=-1, far=+1), so the mapping is gl = -2*gcn - 1,
+         * i.e. in clip space: z' = -2z - w (Dolphin: z'=-z, then 2z'-w). */
         for (int j = 0; j < 4; j++)
-            mv4[i][j] = g_state.mv_matrix[i][j];
-    mv4[3][0] = 0; mv4[3][1] = 0; mv4[3][2] = 0; mv4[3][3] = 1;
-    
-    /* Standard matrix multiply: mvp = proj * mv4 */
-    for (int i = 0; i < 4; i++)
-        for (int j = 0; j < 4; j++)
-            for (int k = 0; k < 4; k++)
-                mvp[i][j] += g_state.proj_matrix[i][k] * mv4[k][j];
+            mvp[2][j] = -2.0f * mvp[2][j] - mvp[3][j];
+    } else {
+        /* 2D overlay path: mvp = proj * mv (mv set by gx_set_* helpers) */
+        f32 mv4[4][4];
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 4; j++)
+                mv4[i][j] = g_state.mv_matrix[i][j];
+        mv4[3][0] = 0; mv4[3][1] = 0; mv4[3][2] = 0; mv4[3][3] = 1;
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++)
+                for (int k = 0; k < 4; k++)
+                    mvp[i][j] += g_state.proj_matrix[i][k] * mv4[k][j];
+    }
     
     if (g_mvp_loc >= 0) {
         f32 mvp_flat[16];
@@ -2223,6 +2303,28 @@ static void bridge_upload_and_draw(void)
         glUniformMatrix4fv(g_mvp_loc, 1, GL_FALSE, mvp_flat);
     }
     
+    /* PC diag: where do vertices land in NDC under this mvp? (MELEE_MTR) */
+#if BUILD_TARGET_PC
+    if (g_state.mtx3d_active) {
+        static int _ndc_on = -1, _ndc_n = 0;
+        if (_ndc_on < 0) _ndc_on = (getenv("MELEE_MTR") != NULL);
+        if (_ndc_on && g_state.p1_valid && g_state.vert_count > 0) {
+            if (_ndc_n < 120) {
+                _ndc_n++;
+            f32 p0 = g_state.verts[0].pos[0], p1_ = g_state.verts[0].pos[1], p2 = g_state.verts[0].pos[2];
+            f32 cx = mvp[0][0]*p0 + mvp[0][1]*p1_ + mvp[0][2]*p2 + mvp[0][3];
+            f32 cy = mvp[1][0]*p0 + mvp[1][1]*p1_ + mvp[1][2]*p2 + mvp[1][3];
+            f32 cz = mvp[2][0]*p0 + mvp[2][1]*p1_ + mvp[2][2]*p2 + mvp[2][3];
+            f32 cw = mvp[3][0]*p0 + mvp[3][1]*p1_ + mvp[3][2]*p2 + mvp[3][3];
+            fprintf(stderr, "NDCCHECK v0=(%.2f,%.2f,%.2f) ndc=(%.3f,%.3f,%.3f) w=%.3f p1v=%d curmtx=%u\n",
+                    (double)p0,(double)p1_,(double)p2,
+                    (double)(cw? cx/cw:0),(double)(cw? cy/cw:0),(double)(cw? cz/cw:0),(double)cw,
+                    (int)g_state.p1_valid, (unsigned)g_state.current_mtx_id);
+            }
+        }
+    }
+#endif
+
     /* UV scale — identity by default (games send normalized [0,1] UVs).
      * The overlay code can override this when rendering pixel-space geometry. */
     if (g_uv_scale_loc >= 0) {
@@ -2346,8 +2448,97 @@ static void bridge_upload_and_draw(void)
                               (void *)(uintptr_t)offsetof(Vertex, col));
         
         glDrawArrays(GL_TRIANGLES, 0, 6);
+        pc_frame_trace("quad4");
+        /* PC diag: quad draw summary (MELEE_MTR) */
+        {
+            static int _dq_on = -1, _dq_n = 0;
+            if (_dq_on < 0) _dq_on = (getenv("MELEE_MTR") != NULL);
+            if (_dq_on && _dq_n < 80) {
+                _dq_n++;
+                int fp[4], sp[4];
+                glGetIntegerv(GL_VIEWPORT, fp);
+                glGetIntegerv(GL_SCISSOR_BOX, sp);
+                fprintf(stderr, "DRAWRDQ n=4(quad) v0=(%.2f,%.2f,%.2f) z=%d/%u upd=%d blend=%d/%u/%u tex0=%d vp=(%d,%d,%d,%d) sc=(%d,%d,%d,%d) fog=%d\n",
+                        (double)g_state.verts[0].pos[0], (double)g_state.verts[0].pos[1], (double)g_state.verts[0].pos[2],
+                        (int)g_state.z_enabled, (unsigned)g_state.z_func, (int)g_state.z_update,
+                        (int)g_state.blend_enabled, (unsigned)g_state.blend_src, (unsigned)g_state.blend_dst,
+                        (int)g_state.tex0_enabled,
+                        fp[0], fp[1], fp[2], fp[3], sp[0], sp[1], sp[2], sp[3],
+                        (int)g_state.fog_enabled);
+            }
+        }
     } else {
+        /* PC diag: 3D draw summary (MELEE_MTR) */
+        {
+            static int _ds_on = -1, _ds_n = 0;
+            if (_ds_on < 0) _ds_on = (getenv("MELEE_MTR") != NULL);
+            if (_ds_on && count >= 5 && _ds_n < 40) {
+                _ds_n++;
+                int vp[4], sc[4];
+                glGetIntegerv(GL_VIEWPORT, vp);
+                glGetIntegerv(GL_SCISSOR_BOX, sc);
+                fprintf(stderr, "DRAWRD frame=%u n=%u prim=%u v0=(%.2f,%.2f,%.2f) z=%d/%u upd=%d blend=%d/%u/%u tex0=%d vp=(%d,%d,%d,%d) sc=(%d,%d,%d,%d) fog=%d%s\n",
+                        (unsigned)g_state.frame_count,
+                        count, (unsigned)g_state.prim_type,
+                        (double)g_state.verts[0].pos[0], (double)g_state.verts[0].pos[1], (double)g_state.verts[0].pos[2],
+                        (int)g_state.z_enabled, (unsigned)g_state.z_func, (int)g_state.z_update,
+                        (int)g_state.blend_enabled, (unsigned)g_state.blend_src, (unsigned)g_state.blend_dst,
+                        (int)g_state.tex0_enabled,
+                        vp[0], vp[1], vp[2], vp[3], sc[0], sc[1], sc[2], sc[3],
+                        (int)g_state.fog_enabled,
+                        (count >= 7 ? " [LOGO]" : ""));
+                if (count >= 7 && count <= 400) {
+                    fprintf(stderr, "  COLS v0=(%.3f,%.3f,%.3f,%.3f) v1=(%.3f,%.3f,%.3f,%.3f) vN=(%.3f,%.3f,%.3f,%.3f)\n",
+                        (double)g_state.verts[0].col[0], (double)g_state.verts[0].col[1], (double)g_state.verts[0].col[2], (double)g_state.verts[0].col[3],
+                        (double)g_state.verts[1].col[0], (double)g_state.verts[1].col[1], (double)g_state.verts[1].col[2], (double)g_state.verts[1].col[3],
+                        (double)g_state.verts[count-1].col[0], (double)g_state.verts[count-1].col[1], (double)g_state.verts[count-1].col[2], (double)g_state.verts[count-1].col[3]);
+                }
+            }
+        }
+        /* PC fix: a GX_QUADS batch with more than 4 vertices is N INDEPENDENT
+         * quads, not a triangle fan. Convert each quad (a,b,c,d) to the two
+         * triangles (a,b,c),(a,c,d) and draw a triangle list. */
+        if (g_state.prim_type == GX_QUADS && count > 4) {
+            static Vertex quad_tri[MAX_VERTS * 3 / 2];
+            u32 nq = (u32)count / 4;
+            if (count % 4 != 0)
+                PORT_LOG_WARN("GX_QUADS batch with %u verts (not a multiple of 4); dropping %u", (unsigned)count, (unsigned)(count % 4));
+            for (u32 q = 0; q < nq; q++) {
+                const Vertex *a = &g_state.verts[q*4+0];
+                const Vertex *b = &g_state.verts[q*4+1];
+                const Vertex *c = &g_state.verts[q*4+2];
+                const Vertex *d = &g_state.verts[q*4+3];
+                quad_tri[q*6+0] = *a; quad_tri[q*6+1] = *b; quad_tri[q*6+2] = *c;
+                quad_tri[q*6+3] = *a; quad_tri[q*6+4] = *c; quad_tri[q*6+5] = *d;
+            }
+            glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * (nq * 6), quad_tri);
+            glDrawArrays(GL_TRIANGLES, 0, nq * 6);
+            pc_frame_trace("quadsN");
+        } else {
         glDrawArrays(gl_prim, 0, count);
+        pc_frame_trace("drawN");
+        }
+        /* PC diag: sample screen pixels immediately after the draw to see
+         * if the geometry actually reached the framebuffer (MELEE_MTR). */
+        {
+            static int _pp_on = -1, _pp_n = 0;
+            if (_pp_on < 0) _pp_on = (getenv("MELEE_MTR") != NULL);
+            if (_pp_on && count >= 7 && count <= 400 && _pp_n < 40) {
+                _pp_n++;
+                GLenum err = glGetError();
+                static unsigned char px[3];
+                glReadPixels(640, 360, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, px);
+                GLint fbo = 0, dbuf = 0, cfmt = 0, dstat = 0;
+                glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+                glGetIntegerv(GL_DRAW_BUFFER, &dbuf);
+                glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &dstat);
+                glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &cfmt);
+                fprintf(stderr, "  PIXPROBE after-draw glerr=0x%x center=(%u,%u,%u) fbo=%d drawbuf=%d glDepthTest=%d glBlend=%d depthobj=%d colorobj=%d\n",
+                        (unsigned)err, px[0], px[1], px[2],
+                        fbo, dbuf, (int)glIsEnabled(GL_DEPTH_TEST), (int)glIsEnabled(GL_BLEND), dstat, cfmt);
+            }
+        }
     }
     
     g_state.in_primitive = FALSE;
@@ -2393,13 +2584,38 @@ void GXClearBuff(void)
     glClearColor(g_state.copy_clear_r, g_state.copy_clear_g,
                  g_state.copy_clear_b, g_state.copy_clear_a);
     glClearDepth(g_state.copy_clear_z);
+    /* PC diag: log every full clear + screen state before it (MELEE_MTR) */
+    {
+        static int _cl_on = -1;
+        if (_cl_on < 0) _cl_on = (getenv("MELEE_MTR") != NULL);
+        if (_cl_on && g_state.frame_count >= 1190 && g_state.frame_count <= 1205) {
+            static unsigned char px[3];
+            glReadPixels(640, 360, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, px);
+            fprintf(stderr, "  CLEARB frame=%u clr=(%.2f,%.2f,%.2f,%.2f) z=%.2f center_before=(%u,%u,%u)\n",
+                    (unsigned)g_state.frame_count, (double)g_state.copy_clear_r, (double)g_state.copy_clear_g,
+                    (double)g_state.copy_clear_b, (double)g_state.copy_clear_a,
+                    (double)g_state.copy_clear_z, px[0], px[1], px[2]);
+        }
+    }
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    pc_frame_trace("clear");
 }
 void GXFlush(void)
 {
     GX_TRACE("GXFlush");
     bridge_upload_and_draw();
     glFlush();
+    /* PC diag: end-of-frame center pixel (MELEE_MTR) */
+    {
+        static int _fl_on = -1;
+        if (_fl_on < 0) _fl_on = (getenv("MELEE_MTR") != NULL);
+        if (_fl_on && g_state.frame_count >= 1190 && g_state.frame_count <= 1205) {
+            static unsigned char px[3];
+            glReadPixels(640, 360, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, px);
+            fprintf(stderr, "  EOFLUSH frame=%u center=(%u,%u,%u)\n",
+                    (unsigned)g_state.frame_count, px[0], px[1], px[2]);
+        }
+    }
 }
 void GXInvVtxCache(void)
 {
@@ -2437,6 +2653,16 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
     GX_TRACE("GXLoadPosMtxImm(p, %u)", id);
     if (id >= 68) { PORT_LOG_WARN("GXLoadPosMtxImm: matrix id %u out of range", id); return; }
     
+    /* PC port: GXLoadPosMtxImm is a 3D game-matrix call. */
+    g_state.mtx3d_active = TRUE;
+    if (id == 3) {  /* GX_PNMTX1 */
+        /* P1 (skin/joint matrix). Keep a private copy: id 3 is also
+         * used for the normal matrix (GXLoadNrmMtxImm) which would
+         * overwrite mtx_array[3]. */
+        memcpy(g_state.p1_pos_mtx, mtx, sizeof(g_state.p1_pos_mtx));
+        g_state.p1_valid = TRUE;
+    }
+    
     /* PC port: flush accumulated vertices before matrix changes.
      * This ensures each draw batch uses the correct MVP matrix. */
     if (g_state.vert_count > 0) {
@@ -2444,6 +2670,29 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
     }
     
     memcpy(g_state.mtx_array[id], mtx, sizeof(g_state.mtx_array[0]));
+
+    /* PC diag: pair P0/P1 loads and dump the logo's matrices. */
+    {
+        static int _pp_on = -1, _pp_n = 0;
+        static f32 last_p0[12];
+        if (_pp_on < 0) _pp_on = (getenv("MELEE_MTR") != NULL);
+        if (_pp_on) {
+            if (id == 0) {
+                for (int k = 0; k < 12; k++) last_p0[k] = (f32)mtx[k/4][k%4];
+            } else if (id == 3 && _pp_n < 60) {
+                _pp_n++;
+                fprintf(stderr, "MTRPAIR P0=");
+                for (int k = 0; k < 12; k++) fprintf(stderr, "%.3f ", (double)last_p0[k]);
+                fprintf(stderr, "P1=");
+                for (int k = 0; k < 12; k++) fprintf(stderr, "%.3f ", (double)mtx[k/4][k%4]);
+                fprintf(stderr, "PRJ=%9.3f %9.3f %9.3f %9.3f|%9.3f %9.3f %9.3f %9.3f|%9.3f %9.3f %9.3f %9.3f|%9.3f %9.3f %9.3f %9.3f\n",
+                        (double)g_state.proj_matrix[0][0],(double)g_state.proj_matrix[0][1],(double)g_state.proj_matrix[0][2],(double)g_state.proj_matrix[0][3],
+                        (double)g_state.proj_matrix[1][0],(double)g_state.proj_matrix[1][1],(double)g_state.proj_matrix[1][2],(double)g_state.proj_matrix[1][3],
+                        (double)g_state.proj_matrix[2][0],(double)g_state.proj_matrix[2][1],(double)g_state.proj_matrix[2][2],(double)g_state.proj_matrix[2][3],
+                        (double)g_state.proj_matrix[3][0],(double)g_state.proj_matrix[3][1],(double)g_state.proj_matrix[3][2],(double)g_state.proj_matrix[3][3]);
+            }
+        }
+    }
     
     /* Store model matrix for world-space lighting (id 0 is typically model matrix) */
     if (id == 0) {
@@ -2494,6 +2743,8 @@ void GXSetCurrentMtx(u32 id)
     if (id < 68) {
         g_state.current_mtx_id = id;
         if (id < 4) {
+            /* PC port: 3D game-matrix path. */
+            g_state.mtx3d_active = TRUE;
             /* Store model matrix for world-space lighting */
             f32(*model)[4] = g_state.mtx_array[id];
             g_state.model_matrix[0] = model[0][0]; g_state.model_matrix[1] = model[0][1];
@@ -2533,13 +2784,59 @@ void GXSetCurrentMtx(u32 id)
 void GXSetProjection(f32 mtx[4][4], u32 type)
 {
     PORT_LOG_DEBUG("GXSetProjection CALLED: proj[0][0]=%.6f type=%u", mtx[0][0], type);
-    /* PC port: keep the orthographic projection from gx_frame_begin.
-     * The game's perspective projection is designed for 3D geometry,
-     * but title screen geometry is in pixel space [0,1280]x[0,720].
-     * Using the game's perspective projection puts pixel-space vertices
-     * outside the NDC view frustum, so nothing renders.
-     * We store the game's projection for reference but don't use it. */
-    /* memcpy(g_state.proj_matrix, mtx, sizeof(g_state.proj_matrix)); */
+#if BUILD_TARGET_PC
+    {
+        static int _pj_on = -1;
+        int _pj_n;
+        if (_pj_on < 0) _pj_on = (getenv("MELEE_MTR") != NULL);
+        _pj_n = ++g_state.proj_call_seq;
+
+        /* Validate: every element finite and |v| < 1e8. */
+        int bad = 0;
+        for (int i = 0; i < 4 && !bad; i++)
+            for (int j = 0; j < 4 && !bad; j++)
+                if (!isfinite(mtx[i][j]) || fabsf(mtx[i][j]) > 1e8f)
+                    bad = 1;
+        if (_pj_on && bad) {
+            fprintf(stderr, "PROJBAD call#%d type=%u frame=%u: %9.4f %9.4f %9.4f %9.4f|%9.4f %9.4f %9.4f %9.4f|%9.4f %9.4f %9.4f %9.4f|%9.4f %9.4f %9.4f %9.4f\n",
+                _pj_n, (unsigned)type, g_state.frame_count,
+                (double)mtx[0][0],(double)mtx[0][1],(double)mtx[0][2],(double)mtx[0][3],
+                (double)mtx[1][0],(double)mtx[1][1],(double)mtx[1][2],(double)mtx[1][3],
+                (double)mtx[2][0],(double)mtx[2][1],(double)mtx[2][2],(double)mtx[2][3],
+                (double)mtx[3][0],(double)mtx[3][1],(double)mtx[3][2],(double)mtx[3][3]);
+        }
+        if (bad) {
+            /* Garbage (e.g. uninitialized Mtx44): keep last valid projection. */
+            return;
+        }
+        if (_pj_on && _pj_n <= 40) {
+            fprintf(stderr, "PROJDUMP call#%d type=%u frame=%u: %9.4f %9.4f %9.4f %9.4f|%9.4f %9.4f %9.4f %9.4f|%9.4f %9.4f %9.4f %9.4f|%9.4f %9.4f %9.4f %9.4f\n",
+                _pj_n, (unsigned)type, g_state.frame_count,
+                (double)mtx[0][0],(double)mtx[0][1],(double)mtx[0][2],(double)mtx[0][3],
+                (double)mtx[1][0],(double)mtx[1][1],(double)mtx[1][2],(double)mtx[1][3],
+                (double)mtx[2][0],(double)mtx[2][1],(double)mtx[2][2],(double)mtx[2][3],
+                (double)mtx[3][0],(double)mtx[3][1],(double)mtx[3][2],(double)mtx[3][3]);
+        }
+    }
+#endif
+    /* PC port: use the game's projection matrix. The GCN-faithful
+     * pipeline (2z/w-1 conversion in bridge_upload_and_draw) handles
+     * z-forward GCN frustums exactly, so the game's perspective or
+     * orthographic projection can be used directly.
+     * The SDK builders write only the 3x4; fill the w-row here:
+     * perspective/frustum: w_clip = -z_view; ortho: w = 1. */
+    memcpy(g_state.proj_matrix, mtx, sizeof(f32) * 3 * 4);
+    if (type == 0 /* GX_PERSPECTIVE */) {
+        g_state.proj_matrix[3][0] = 0.0f;
+        g_state.proj_matrix[3][1] = 0.0f;
+        g_state.proj_matrix[3][2] = -1.0f;
+        g_state.proj_matrix[3][3] = 0.0f;
+    } else {
+        g_state.proj_matrix[3][0] = 0.0f;
+        g_state.proj_matrix[3][1] = 0.0f;
+        g_state.proj_matrix[3][2] = 0.0f;
+        g_state.proj_matrix[3][3] = 1.0f;
+    }
 }
 
 void GXSetVtxDesc(u32 attr, u32 type)
@@ -2548,22 +2845,20 @@ void GXSetVtxDesc(u32 attr, u32 type)
     /* GXAttr enum values from stub header:
      * POS=9, NRM=10, CLR0=11, TEX0=13, TEX1=14 */
     /* GXAttrType: NONE=0, DIRECT=1, INDEX8=2, INDEX16=3 */
-    Bool enabled = (type == 1);  /* GX_DIRECT = enabled */
-    Bool indexed = (type == 2 || type == 3); /* INDEX8/INDEX16 */
+    u8 mode = (u8)type;
     switch (attr) {
-    case 9:  g_state.pos_enabled = enabled || indexed; g_state.pos_fetch_indexed = indexed; break;  /* GX_VA_POS */
-    case 10: g_state.nrm_enabled = enabled; break;  /* GX_VA_NRM */
-    case 11: g_state.clr_enabled = enabled; break;  /* GX_VA_CLR0 */
-    case 13: g_state.tex0_enabled = enabled; break; /* GX_VA_TEX0 */
-    case 14: g_state.tex1_enabled = enabled; break; /* GX_VA_TEX1 */
+    case 9:  g_state.pos_enabled = (type != 0); g_state.pos_fetch_indexed = (type == 2 || type == 3); g_state.pos_mode = mode; break;  /* GX_VA_POS */
+    case 10: g_state.nrm_enabled = (type != 0); g_state.nrm_mode = mode; break;  /* GX_VA_NRM */
+    case 11: g_state.clr_enabled = (type != 0); g_state.clr_mode = mode; break;  /* GX_VA_CLR0 */
+    case 13: g_state.tex0_enabled = (type != 0); g_state.tex0_mode = mode; break; /* GX_VA_TEX0 */
+    case 14: g_state.tex1_enabled = (type != 0); g_state.tex1_mode = mode; break; /* GX_VA_TEX1 */
     }
 }
-void GXClearVtxDesc(void)
-{ g_state.pos_enabled = g_state.nrm_enabled = g_state.clr_enabled = g_state.tex0_enabled = g_state.tex1_enabled = FALSE; g_state.pos_fetch_indexed = FALSE; }
+void GXClearVtxDesc(void) { g_state.pos_enabled = g_state.nrm_enabled = g_state.clr_enabled = g_state.tex0_enabled = g_state.tex1_enabled = FALSE; g_state.pos_fetch_indexed = FALSE; g_state.pos_mode = g_state.nrm_mode = g_state.clr_mode = g_state.tex0_mode = g_state.tex1_mode = 0; }
 
 void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 {
-    /* Enable attributes and store format params for vertex data conversion. */
+    /* Store format params for vertex data conversion. */
     switch (attr) {
     case 9:  /* GX_VA_POS */
         g_state.pos_enabled = TRUE;
@@ -2577,7 +2872,7 @@ void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
         g_state.nrm_frac = frac;
         break;
     }
-    case 11: g_state.clr_enabled = TRUE; break;   /* GX_VA_CLR0 */
+    case 11: g_state.clr_enabled = TRUE; break;   /* GX_VA_CLR0 (always 4 x U8) */
     case 13: g_state.tex0_enabled = TRUE; g_state.tex0_comp_type = (u8)type; g_state.tex0_frac = frac; break;  /* GX_VA_TEX0 */
     case 14: g_state.tex1_enabled = TRUE; g_state.tex1_comp_type = (u8)type; g_state.tex1_frac = frac; break;  /* GX_VA_TEX1 */
     }
@@ -2597,6 +2892,13 @@ void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
     }
     g_state.arr_stride = stride;
     g_state.arr_valid = TRUE;
+#if BUILD_TARGET_PC
+    { static int _sa_on = -1, _sa_n = 0;
+      if (_sa_on < 0) _sa_on = (getenv("MELEE_MTR") != NULL);
+      if (_sa_on && _sa_n < 4000) { _sa_n++;
+        if (attr == 9 || attr == 10 || attr == 11)
+          fprintf(stderr, "GXSETARR attr=%u ptr=%p stride=%u\n", attr, base_ptr, stride); } }
+#endif
 }
 
 void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
@@ -2701,6 +3003,13 @@ SKIP_DEG:
         v->col[0] = g_state.last_clr[0]; v->col[1] = g_state.last_clr[1]; v->col[2] = g_state.last_clr[2]; v->col[3] = g_state.last_clr[3];
     } else {
         v->col[0] = 1.0f; v->col[1] = 1.0f; v->col[2] = 1.0f; v->col[3] = 1.0f;
+    }
+    /* PC test: MELEE_WHT forces white vertex colors (isolate color pipeline).
+     * Must run AFTER the color assignment so it actually wins. */
+    {
+        static int _wht = -1;
+        if (_wht < 0) _wht = (getenv("MELEE_WHT") != NULL);
+        if (_wht) { v->col[0] = v->col[1] = v->col[2] = v->col[3] = 1.0f; }
     }
     if (g_state.tex0_enabled) { v->tex0[0] = g_state.last_tex0[0]; v->tex0[1] = g_state.last_tex0[1]; }
     if (g_state.tex1_enabled) { v->tex1[0] = g_state.last_tex1[0]; v->tex1[1] = g_state.last_tex1[1]; }
@@ -3041,332 +3350,313 @@ void GXSetGPFifo(void* fifo) {}
 void HSD_GXSetFifoObj(void* fifo) { GXSetGPFifo(fifo); }
 u32 GXEndDisplayList(void) { bridge_upload_and_draw(); return 0; }
 void GXBeginDisplayList(void* list, u32 size) {}
+/* ============================================================
+ * Display list (DList) parser — GCN byte stream format.
+ *
+ * Command layout (verified against the Dolphin emulator's
+ * OpcodeDecoding.h RunCommand):
+ *   0x00            NOP                     1 byte
+ *   0x08            LOAD_CP_REG             6 bytes (op, cmd, u32 BE)
+ *   0x10            LOAD_XF_REG             5 + 4*stream bytes
+ *   0x20/28/30/38   LOAD_INDX_A..D          5 bytes
+ *   0x40            CALL_DL                 9 bytes (op, u32 addr, u32 size)
+ *   0x60            LOAD_BP_REG             5 bytes
+ *   0x80..0xBF      primitive               3 + nverts*vertex_size bytes
+ *       op = 0x80 | (prim << 3) | vat
+ *       prim: 0/1 quads, 2 tris, 3 strip, 4 fan, 5 lines, 6 linestrip,
+ *             7 points
+ *       After a 2-byte BE vertex count, the vertex data is INLINE.
+ *
+ * The per-vertex byte layout is determined by the current VAT
+ * (GXSetVtxDesc + GXSetVtxAttrFmt), in attribute order POS, NRM,
+ * CLR0, TEX0, TEX1. Each attribute is DIRECT (typed components in
+ * the stream) or INDEX8/INDEX16 (an index into the array set by
+ * GXSetArray).
+ * ============================================================ */
+
+static u32 dl_comp_size(u32 type)
+{
+    return (type >= 4) ? 4u : (type >= 2 ? 2u : 1u);
+}
+
+static f32 dl_dequant(u32 type, s32 v, u32 frac)
+{
+    switch (type) {
+    case 0:  return (f32)v / 255.0f;                    /* U8 */
+    case 1:  return ((f32)v + 128.0f) / 128.0f;         /* S8 */
+    case 2:  return (f32)v / (f32)(1u << frac);         /* U16 */
+    case 3:  return (f32)v / (f32)(1u << frac);         /* S16 */
+    default: return *(f32*)&v;                          /* F32 BE bits */
+    }
+}
+
+/* Decode one attribute (comp_cnt components) from the vertex stream
+ * (DIRECT) or through an 8/16-bit index into the GXSetArray array.
+ * Returns the advanced stream pointer. */
+static const u8* dl_read_comps(const u8* p, u32 mode, u32 cnt, u32 type, u32 frac,
+                               const u8* arr_base, u32 arr_stride, f32* out)
+{
+    const u8* src = p;
+    u32 i, sz = dl_comp_size(type);
+
+    if (mode == 2 || mode == 3) {
+        u32 idx;
+        if (mode == 2) { idx = p[0]; p += 1; }
+        else { idx = ((u32)p[0] << 8) | p[1]; p += 2; }
+        if (!arr_base) {
+            for (i = 0; i < cnt; i++) out[i] = 0.0f;
+            return p;
+        }
+        src = arr_base + (u32)idx * arr_stride;
+    }
+
+    for (i = 0; i < cnt; i++) {
+        u32 v = 0;
+        switch (sz) {
+        case 1:
+            v = src[i];
+            if (type == 1) v = (u32)(s8)src[i] & 0xFF;  /* sign-extend S8 */
+            break;
+        case 2:
+            v = ((u32)src[2*i] << 8) | src[2*i+1];
+            if (type == 3) v = (u32)(s16)(((u32)src[2*i] << 8) | src[2*i+1]) & 0xFFFF;
+            break;
+        default:
+            /* Archive data is big-endian; read the 32-bit pattern in BE
+             * order so it is the float's native bit pattern on LE hosts. */
+            v = ((u32)src[4*i] << 24) | ((u32)src[4*i+1] << 16) |
+                ((u32)src[4*i+2] << 8) | (u32)src[4*i+3];
+            break;
+        }
+        out[i] = dl_dequant(type, (s32)v, frac);
+    }
+    if (mode == 2 || mode == 3)
+        return p;   /* PC fix: indexed reads advance the STREAM only by the
+                      * index size; the old `src + cnt*sz` returned a pointer
+                      * into the vertex pool and corrupted the walk. */
+    return src + cnt * sz;
+}
+
+static u32 dl_vat_attr_size(u32 mode, u32 cnt, u32 type)
+{
+    if (mode == 2) return 1;
+    if (mode == 3) return 2;
+    if (mode == 1) return cnt * dl_comp_size(type);
+    return 0;
+}
+
 void GXCallDisplayList(void* list, u32 nbytes)
 {
-    /* PC port: The GCN display list format is a serialized command buffer
-     * that the GX coprocessor executes. The format is specific to the GCN
-     * hardware, and parsing it correctly requires understanding the exact
-     * byte layout of each command.
-     *
-     * Display list format (byte stream, big-endian):
-     *   0x00: NOP (1 byte)
-     *   0x08: LOAD_CP_REG (1 byte opcode + 1B param + 4B value = 6 bytes)
-     *   0x10: LOAD_XF_REG (1 byte opcode + 1B param + 4B addr + 4B value = 10 bytes)
-     *   0x20/28/30/38: LOAD_INDX (1 byte opcode + 1B param + 4B value = 6 bytes)
-     *   0x40: CALL_DISP_LIST (1 byte opcode + 1B param + 4B ptr + 4B size = 10 bytes)
-     *   0x61: LOAD_BP_REG (1 byte opcode + 1B param + 4B value = 6 bytes)
-     *   0x80-0xB8: DRAW (1 byte opcode + 2B vertex count = 3 bytes)
-     *
-     * Draw commands: upper 5 bits = primitive type, lower 3 bits = vtxfmt
-     * Vertex count is big-endian u16.
-     *
-     * Vertex data is NOT inline - it comes from vertex arrays set up by GXSetArray.
-     * Vertex arrays use per-attribute strides stored by GXSetArray.
-     *
-     * Vertex format conversion:
-     *   GX_U8 (0): 8-bit unsigned, read as u8 and convert to f32
-     *   GX_S8 (1): 8-bit signed, read as s8 and convert to f32
-     *   GX_U16 (2): 16-bit unsigned, read as u16 (big-endian) and convert to f32
-     *   GX_S16 (3): 16-bit signed, read as s16 (big-endian) and convert to f32
-     *   GX_F32 (4): 32-bit float, read as f32 (big-endian, needs byte swap)
-     *
-     * Component count (for position):
-     *   GX_POS_XY (0): 2 components (X, Y)
-     *   GX_POS_XYZ (1): 3 components (X, Y, Z)
-     */
     if (!list || nbytes == 0) return;
 
-    u8* ptr = (u8*)list;
-    u8* end = ptr + nbytes;
+    const u8* ptr = (const u8*)list;
+    const u8* end = ptr + nbytes;
     static int g_dl_depth = 0;
 
     g_dl_depth++;
-    if (g_dl_depth > 8) {
-        g_dl_depth--;
-        return; /* Prevent infinite recursion */
-    }
+    if (g_dl_depth > 8) { g_dl_depth--; return; }
+    if (nbytes > 1024 * 1024) { g_dl_depth--; return; }
 
-    /* Safety: limit total bytes parsed per call */
-    if (nbytes > 1024 * 1024) { /* 1MB max */
-        g_dl_depth--;
-        return;
+#if BUILD_TARGET_PC
+    /* PC diag: dump the first draw of logo (P1-active) display lists. */
+    {
+        static int _cl_on = -1, _cl_n = 0;
+        if (_cl_on < 0) _cl_on = (getenv("MELEE_MTR") != NULL);
+        if (_cl_on && g_state.p1_valid && _cl_n < 20) {
+            _cl_n++;
+            fprintf(stderr, "DLCALL nbytes=%u\n", nbytes);
+        }
+    }
+#endif
+
+    /* Per-vertex size from the current VAT (POS, NRM, CLR0, TEX0, TEX1). */
+    u32 pos_cnt = (g_state.pos_comp_cnt == 0) ? 2u : 3u;
+    u32 vsize = 0;
+    vsize += dl_vat_attr_size(g_state.pos_mode, pos_cnt, g_state.pos_comp_type);
+    vsize += dl_vat_attr_size(g_state.nrm_mode, 3u, g_state.nrm_comp_type);
+    vsize += (g_state.clr_mode == 1) ? 4u : dl_vat_attr_size(g_state.clr_mode, 4u, 0);
+    vsize += dl_vat_attr_size(g_state.tex0_mode, 2u, g_state.tex0_comp_type);
+    vsize += dl_vat_attr_size(g_state.tex1_mode, 2u, g_state.tex1_comp_type);
+
+    {
+        static int _wk_on = -1, _wk_n = 0;
+        if (_wk_on < 0) _wk_on = (getenv("MELEE_MTR") != NULL);
+        if (_wk_on && g_state.p1_valid && _wk_n < 30) {
+            const u8* w = ptr;
+            int dw = 0, steps = 0;
+            while (w < end && steps < 40) {
+                u8 o = *w;
+                if (o == 0) { w += 1; }
+                else if (o == 8) { w += 6; }
+                else if (o == 0x10) { w += 5; }
+                else if (o == 0x20 || o == 0x28 || o == 0x30 || o == 0x38) { w += 5; }
+                else if (o == 0x40) { w += 9; }
+                else if (o == 0x60) { w += 5; }
+                else if ((o & 0xC0) == 0x80) {
+                    if (vsize == 0) { fprintf(stderr, "DLDIAG nbytes=%u vsize=0 bail@draw op=%02x\\n", nbytes, o); break; }
+                    u32 nv = ((u32)w[1] << 8) | w[2];
+                    if (w + 3 + (size_t)nv * vsize > end) { fprintf(stderr, "DLDIAG nbytes=%u vsize=%u bail@draw(nv=%u exceeds) op=%02x\\n", nbytes, vsize, nv, o); break; }
+                    dw++; w += 3 + (size_t)nv * vsize;
+                }
+                else { fprintf(stderr, "DLDIAG nbytes=%u vsize=%u bail@unknown op=%02x @%td draws_so_far=%d\\n", nbytes, vsize, o, (const char*)w - (const char*)ptr, dw); break; }
+                steps++;
+            }
+            if (dw && !steps) {} /* fine */
+            if (!steps) {} 
+            if (steps == 40 || w >= end) {
+                fprintf(stderr, "DLDIAG nbytes=%u vsize=%u modes pos=%u nrm=%u clr=%u tex0=%u tex1=%u draws=%d (walk complete)\\n",
+                       nbytes, vsize, g_state.pos_mode, g_state.nrm_mode, g_state.clr_mode, g_state.tex0_mode, g_state.tex1_mode, dw);
+            }
+            _wk_n++;
+        }
     }
 
     while (ptr < end) {
-        u8 opcode = *ptr++;
-        u8 param = opcode & 0x07; /* Lower 3 bits = vertex attribute table index */
-        u8 cmd = opcode & 0xF8;  /* Upper 5 bits = command type */
+        u8 op = *ptr;
 
-        switch (cmd) {
+        switch (op) {
         case 0x00: /* NOP */
+            ptr += 1;
             break;
-
         case 0x08: /* LOAD_CP_REG */
-            if (ptr + 5 <= end) { ptr += 5; } else { goto dl_end; }
+            if (ptr + 6 > end) goto dl_end;
+            ptr += 6;
             break;
-
-        case 0x10: /* LOAD_XF_REG: opcode(1B) + addr(4B) + value(4B) = 9B
-                 * addr = 0x1000 + register index. Matrix pos regs are 0x000-0x02F.
-                 * So addr range for pos matrices: 0x1000-0x102F. */
+        case 0x10: { /* LOAD_XF_REG: 5 + 4*stream_size */
+            u32 c2;
+            if (ptr + 5 > end) goto dl_end;
+            c2 = ((u32)ptr[1] << 24) | ((u32)ptr[2] << 16) |
+                 ((u32)ptr[3] << 8) | (u32)ptr[4];
             {
-                if (ptr + 8 > end) { goto dl_end; }
-                u32 xf_addr = ((u32)ptr[0] << 24) | ((u32)ptr[1] << 16) | ((u32)ptr[2] << 8) | ptr[3];
-                u32 val_raw = ((u32)ptr[4] << 24) | ((u32)ptr[5] << 16) | ((u32)ptr[6] << 8) | ptr[7];
-                f32 val = *(f32*)&val_raw;
-                ptr += 8;
-
-                /* Position matrix registers: 0x1000-0x102F (12 floats per matrix, 4 matrices) */
-                if (xf_addr >= 0x1000 && xf_addr < 0x1030) {
-                    u32 reg_idx = xf_addr - 0x1000; /* 0-47 */
-                    u32 mtx_idx = reg_idx / 12;     /* 0-3 */
-                    u32 float_idx = reg_idx % 12;   /* 0-11 */
-                    
-                    static f32 g_mtx_accum[4][12];
-                    static int g_mtx_counts[4] = {0, 0, 0, 0};
-                    static int g_first_seen = -1;
-                    
-                    /* Detect new matrix (first float of a matrix) */
-                    if (float_idx == 0 && g_first_seen >= 0) {
-                        /* Apply previous matrix if complete */
-                        if (g_mtx_counts[g_first_seen] >= 12) {
-                            if (g_state.vert_count > 0) {
-                                bridge_upload_and_draw();
-                            }
-                            memcpy(g_state.mv_matrix, g_mtx_accum[g_first_seen], sizeof(g_state.mv_matrix));
-                        }
-                    }
-                    
-                    if (float_idx == 0 && g_first_seen < 0) {
-                        g_first_seen = mtx_idx;
-                    }
-                    
-                    g_mtx_accum[mtx_idx][float_idx] = val;
-                    if (float_idx + 1 > g_mtx_counts[mtx_idx]) {
-                        g_mtx_counts[mtx_idx] = float_idx + 1;
-                    }
-                }
+                u32 stream = ((c2 >> 16) & 0xF) + 1;
+                if (ptr + 5 + stream * 4 > end) goto dl_end;
+                ptr += 5 + stream * 4;
             }
             break;
-
-        case 0x20: /* LOAD_INDX_A */
-        case 0x28: /* LOAD_INDX_B */
-        case 0x30: /* LOAD_INDX_C */
-        case 0x38: /* LOAD_INDX_D */
-            if (ptr + 5 <= end) { ptr += 5; } else { goto dl_end; }
+        }
+        case 0x20: case 0x28: case 0x30: case 0x38: /* LOAD_INDX */
+            if (ptr + 5 > end) goto dl_end;
+            ptr += 5;
             break;
-
-        case 0x40: /* CALL_DISP_LIST: opcode(1B) + ptr(4B) + size(4B) = 9B */
-            if (ptr + 8 <= end) { ptr += 8; } else { goto dl_end; }
+        case 0x40: /* CALL_DL */
+            if (ptr + 9 > end) goto dl_end;
+            ptr += 9;
             break;
-
-        case 0x60: /* LOAD_BP_REG (0x61): opcode(1B) + value(4B) = 5B */
-            if (ptr + 4 <= end) { ptr += 4; } else { goto dl_end; }
+        case 0x60: /* LOAD_BP_REG */
+            if (ptr + 5 > end) goto dl_end;
+            ptr += 5;
             break;
-
-        case 0x80: /* DRAW_QUADS */
-        case 0x90: /* DRAW_TRIANGLES */
-        case 0x98: /* DRAW_TRIANGLE_STRIP */
-        case 0xA0: /* DRAW_TRIANGLE_FAN */
-        case 0xA8: /* DRAW_LINES */
-        case 0xB0: /* DRAW_LINE_STRIP */
-        case 0xB8: /* DRAW_POINTS */
+        default:
+            if ((op & 0xC0) != 0x80) goto dl_end; /* unknown opcode */
             {
-                if (ptr + 1 >= end) goto dl_end;
-                u16 nverts = ((u16)ptr[0] << 8) | ptr[1]; /* Big-endian */
-                ptr += 2;
+                u32 prim = (op & 0x78) >> 3;
+                u16 nverts = (u16)(((u16)ptr[1] << 8) | ptr[2]);
+                if (ptr + 3 > end) goto dl_end;
+                if (nverts == 0) { ptr += 3; break; }
+                if (vsize == 0 || ptr + 3 + (size_t)nverts * vsize > end) goto dl_end;
 
-                if (nverts == 0 || nverts > 10000) {
-                    goto dl_end;
-                }
+                const u8* vdata = ptr + 3;
+                ptr += 3 + (size_t)nverts * vsize;
 
                 GLenum gl_prim;
-                switch (cmd) {
-                case 0x80: gl_prim = GL_TRIANGLE_FAN; break;  /* QUADS not in Core */
-                case 0x90: gl_prim = GL_TRIANGLES; break;
-                case 0x98: gl_prim = GL_TRIANGLE_STRIP; break;
-                case 0xA0: gl_prim = GL_TRIANGLE_FAN; break;
-                case 0xA8: gl_prim = GL_LINES; break;
-                case 0xB0: gl_prim = GL_LINE_STRIP; break;
-                case 0xB8: gl_prim = GL_POINTS; break;
-                default: g_dl_depth--; return;
+                switch (prim) {
+                case 0: case 1: gl_prim = GL_TRIANGLE_FAN; break;  /* quads */
+                case 2:  gl_prim = GL_TRIANGLES; break;
+                case 3:  gl_prim = GL_TRIANGLE_STRIP; break;
+                case 4:  gl_prim = GL_TRIANGLE_FAN; break;
+                case 5:  gl_prim = GL_LINES; break;
+                case 6:  gl_prim = GL_LINE_STRIP; break;
+                default: gl_prim = GL_POINTS; break;
                 }
 
-                /* PC port: The display list format is a compact GCN format.
-                 * First DRAW command is parsed, then the rest is index data.
-                 * Use the existing vertex accumulation path. */
+                GXBegin(gl_prim, op & 7, nverts);
+
                 {
-                    int gx_prim;
-                    switch (cmd) {
-                    case 0x80: gx_prim = GX_QUADS; break;
-                    case 0x90: gx_prim = GX_TRIANGLES; break;
-                    case 0x98: gx_prim = GX_TRIANGLESTRIP; break;
-                    case 0xA0: gx_prim = GX_TRIANGLEFAN; break;
-                    case 0xA8: gx_prim = GX_LINES; break;
-                    case 0xB0: gx_prim = GX_LINESTRIP; break;
-                    case 0xB8: gx_prim = GX_POINTS; break;
-                    default: g_dl_depth--; return;
-                    }
-
-                    /* PC port: multi-primitive display lists. The list is a
-                     * stream of [draw cmd][16-bit index run] groups plus other
-                     * commands/data. Validate the index run BEFORE rendering:
-                     * a misparsed "draw" (e.g. misread from an unknown data
-                     * block) has garbage nverts/indices. If any index is out of
-                     * the plausible vertex range this is not a real draw, so
-                     * stop parsing. */
-                    Bool indexed = g_state.pos_fetch_indexed &&
-                                   (ptr + (size_t)nverts * 2 <= end);
-                    if (indexed) {
-                        Bool idx_ok = TRUE;
-                        for (u16 v = 0; v < nverts; v++) {
-                            u32 vi = ((u32)ptr[v*2] << 8) | ptr[v*2+1];
-                            if (vi >= 32768) { idx_ok = FALSE; break; }
-                        }
-                        if (!idx_ok) goto dl_end;
-                    }
-
-                    GXBegin(gx_prim, param, nverts);
-
-                    /* Read vertex data from stored arrays (set by GXSetArray). */
-                    if (g_state.arr_valid && g_state.arr_pos != NULL) {
-                        const u8* base_pos = (const u8*)g_state.arr_pos;
-                        u16 stride_pos = g_state.arr_stride_pos;
-                        
-                        /* PC port: when POS uses GX_INDEX16, each vertex is
-                         * referenced by a 16-bit big-endian index in the run
-                         * right after the draw cmd; the array is stored
-                         * scrambled and the indices give the render order. */
-                        for (u16 v = 0; v < nverts; v++) {
-                            u32 vidx;
-                            if (indexed) {
-                                vidx = ((u32)ptr[v*2] << 8) | ptr[v*2+1];
-                            } else {
-                                vidx = v;
-                            }
-                            const u8* vp_pos = base_pos + vidx * stride_pos;
-                            
-                            /* Position */
-                            if (g_state.pos_enabled) {
-                                f32 px, py, pz;
-                                switch (g_state.pos_comp_type) {
-                                case 3: { /* f16 */
-                                    u16 hx = ((u16)vp_pos[0] << 8) | vp_pos[1];
-                                    u16 hy = ((u16)vp_pos[2] << 8) | vp_pos[3];
-                                    u16 hz = ((u16)vp_pos[4] << 8) | vp_pos[5];
-                                    px = f16_to_f32(hx);
-                                    py = f16_to_f32(hy);
-                                    pz = -f16_to_f32(hz); /* Flip Z: GCN is Z-forward, OpenGL is Z-backward */
-                                    break;
-                                }
-                                case 4: /* f32 big-endian */
-                                default: {
-                                    u32 raw;
-                                    raw = ((u32)vp_pos[0] << 24) | ((u32)vp_pos[1] << 16) |
-                                          ((u32)vp_pos[2] << 8) | vp_pos[3];
-                                    px = *(f32*)&raw;
-                                    raw = ((u32)vp_pos[4] << 24) | ((u32)vp_pos[5] << 16) |
-                                          ((u32)vp_pos[6] << 8) | vp_pos[7];
-                                    py = *(f32*)&raw;
-                                    raw = ((u32)vp_pos[8] << 24) | ((u32)vp_pos[9] << 16) |
-                                          ((u32)vp_pos[10] << 8) | vp_pos[11];
-                                    pz = *(f32*)&raw;
-                                    /* GCN Z-forward → OpenGL Z-backward: flip Z */
-                                    pz = -pz;
-                                    break;
-                                }
-                                }
-                                
-                                GXPosition3f32(px, py, pz);
-                            }
-                            
-                            /* Color */
-                            if (g_state.clr_enabled && g_state.arr_clr != NULL) {
-                                const u8* vp_clr = (const u8*)g_state.arr_clr + vidx * g_state.arr_stride_clr;
-                                GXColor4u8(vp_clr[0], vp_clr[1], vp_clr[2], vp_clr[3]);
-                            } else {
-                                /* PC port: default to white when no color array is set */
-                                GXColor4u8(255, 255, 255, 255);
-                            }
-                            
-                            /* Texture Coordinates (UV mapping) */
-                            if (g_state.tex0_enabled && g_state.arr_tex0 != NULL) {
-                                const u8* vp_tex = (const u8*)g_state.arr_tex0 + vidx * g_state.arr_stride_tex0;
-                                f32 ts, tt;
-                                /* Use texture coord format from GXSetVtxAttrFmt, fallback to pos format */
-                                u8 tex_type = g_state.tex0_comp_type;
-                                u8 tex_frac = g_state.tex0_frac;
-                                if (tex_type == 0) { tex_type = g_state.pos_comp_type; tex_frac = g_state.pos_frac; }
-                                switch (tex_type) {
-                                case 3: { /* S16 fixed-point */
-                                    s16 hs = ((s16)vp_tex[0] << 8) | vp_tex[1];
-                                    s16 ht = ((s16)vp_tex[2] << 8) | vp_tex[3];
-                                    ts = (f32)hs / (1 << tex_frac);
-                                    tt = (f32)ht / (1 << tex_frac);
-                                    break;
-                                }
-                                case 4: /* f32 big-endian */
-                                default: {
-                                    u32 raw;
-                                    raw = ((u32)vp_tex[0] << 24) | ((u32)vp_tex[1] << 16) |
-                                          ((u32)vp_tex[2] << 8) | vp_tex[3];
-                                    ts = *(f32*)&raw;
-                                    raw = ((u32)vp_tex[4] << 24) | ((u32)vp_tex[5] << 16) |
-                                          ((u32)vp_tex[6] << 8) | vp_tex[7];
-                                    tt = *(f32*)&raw;
-                                    break;
-                                }
-                                }
-                                GXTexCoord2f32(ts, tt);
-                            }
-                            
-                            /* Normal vectors (for lighting) */
-                            if (g_state.nrm_enabled && g_state.arr_nrm != NULL) {
-                                const u8* vp_nrm = (const u8*)g_state.arr_nrm + vidx * g_state.arr_stride_nrm;
-                                f32 nx, ny, nz;
-                                /* Normals use their own format type (nrm_comp_type) */
-                                switch (g_state.nrm_comp_type) {
-                                case 3: { /* f16 */
-                                    u16 hnx = ((u16)vp_nrm[0] << 8) | vp_nrm[1];
-                                    u16 hny = ((u16)vp_nrm[2] << 8) | vp_nrm[3];
-                                    u16 hnz = ((u16)vp_nrm[4] << 8) | vp_nrm[5];
-                                    nx = f16_to_f32(hnx);
-                                    ny = f16_to_f32(hny);
-                                    nz = -f16_to_f32(hnz); /* Flip Z */
-                                    break;
-                                }
-                                case 4: /* f32 big-endian */
-                                default: {
-                                    u32 raw;
-                                    raw = ((u32)vp_nrm[0] << 24) | ((u32)vp_nrm[1] << 16) |
-                                          ((u32)vp_nrm[2] << 8) | vp_nrm[3];
-                                    nx = *(f32*)&raw;
-                                    raw = ((u32)vp_nrm[4] << 24) | ((u32)vp_nrm[5] << 16) |
-                                          ((u32)vp_nrm[6] << 8) | vp_nrm[7];
-                                    ny = *(f32*)&raw;
-                                    raw = ((u32)vp_nrm[8] << 24) | ((u32)vp_nrm[9] << 16) |
-                                          ((u32)vp_nrm[10] << 8) | vp_nrm[11];
-                                    nz = *(f32*)&raw;
-                                    break;
-                                }
-                                }
-                                GXNormal3f32(nx, ny, nz);
-                            }
-                        }
-                        if (indexed) {
-                            ptr += (size_t)nverts * 2; /* advance past the 16-bit index run */
+                    /* PC diag: raw DL vertex-stream hex dump (unambiguous) */
+                    static int _pf_on = -1, _pf_n = 0;
+                    if (_pf_on < 0) _pf_on = (getenv("MELEE_MTR") != NULL);
+                    if (_pf_on && _pf_n < 4 && vsize >= 7 && nverts >= 7) {
+                        _pf_n++;
+                        fprintf(stderr, "DLRAW nverts=%u vsize=%u modes pos=%u nrm=%u clr=%u tex0=%u arr_pos=%p stride=%u:\n",
+                                (unsigned)nverts, (unsigned)vsize,
+                                (unsigned)g_state.pos_mode, (unsigned)g_state.nrm_mode,
+                                (unsigned)g_state.clr_mode, (unsigned)g_state.tex0_mode,
+                                (const void*)g_state.arr_pos, (unsigned)g_state.arr_stride_pos);
+                        u32 i, b;
+                        for (i = 0; i < 4 && i < nverts; i++) {
+                            const u8* vp = vdata + (size_t)i * vsize;
+                            fprintf(stderr, "  v%u:", i);
+                            for (b = 0; b < (size_t)vsize; b++)
+                                fprintf(stderr, " %02x", vp[b]);
+                            fprintf(stderr, "\n");
                         }
                     }
-                    GXEnd();
-                    g_dbg_draw_calls++;
-                    
-                    /* Continue parsing: the display list may have more primitive
-                     * groups (multi-primitive models). Stop only on an unknown
-                     * command or an invalid index run (see validation above). */
                 }
-                break;
-            }
 
-        default:
+                const u8* p = vdata;
+                f32 c[4];
+                u16 v;
+                for (v = 0; v < nverts; v++) {
+                    c[0] = c[1] = c[2] = c[3] = 0.0f;
+                    /* PC port: per-vertex stream order (vsize=7), verified from
+                     * the DLRAW hex dump: [pos idx 2B][color 4B][tex 1B].
+                     * Read position, ADD vertex, then color (GXColor4u8
+                     * writes into the vertex just added), then texcoords. */
+                    f32 vclr[4];
+                    int have_clr = 0;
+                    if (g_state.pos_mode) {
+                        p = dl_read_comps(p, g_state.pos_mode, pos_cnt,
+                                          g_state.pos_comp_type, g_state.pos_frac,
+                                          (const u8*)g_state.arr_pos, g_state.arr_stride_pos, c);
+                        if (pos_cnt == 2) GXPosition2f32(c[0], c[1]);
+                        else              GXPosition3f32(c[0], c[1], c[2]);
+                    }
+                    if (g_state.clr_mode) {
+                        u32 i;
+                        if (g_state.clr_mode == 1) {
+                            for (i = 0; i < 4; i++) vclr[i] = (f32)p[i];
+                            p += 4;
+                        } else {
+                            u32 idx = (g_state.clr_mode == 2) ? p[0]
+                                       : ((u32)p[0] << 8) | p[1];
+                            p += (g_state.clr_mode == 2) ? 1 : 2;
+                            const u8* src = g_state.arr_clr
+                                ? (const u8*)g_state.arr_clr + (u32)idx * g_state.arr_stride_clr
+                                : NULL;
+                            for (i = 0; i < 4; i++) vclr[i] = (f32)(src ? src[i] : 255);
+                        }
+                        have_clr = 1;
+                    }
+                    if (have_clr) {
+                        GXColor4u8((u8)vclr[0], (u8)vclr[1], (u8)vclr[2], (u8)vclr[3]);
+                    }
+                    /* PC diag: dump first 3 verts' raw stream bytes */
+                    if (v < 3) {
+                        fprintf(stderr, "  V%u pos=(%.2f,%.2f,%.2f) clr=(%.3f,%.3f,%.3f,%.3f)\n",
+                                v, (double)c[0], (double)c[1], (double)c[2],
+                                (double)vclr[0], (double)vclr[1], (double)vclr[2], (double)vclr[3]);
+                    }
+                    if (g_state.nrm_mode) {
+                        p = dl_read_comps(p, g_state.nrm_mode, 3,
+                                          g_state.nrm_comp_type, g_state.nrm_frac,
+                                          (const u8*)g_state.arr_nrm, g_state.arr_stride_nrm, c);
+                        GXNormal3f32(c[0], c[1], c[2]);
+                    }
+                    if (g_state.tex0_mode) {
+                        p = dl_read_comps(p, g_state.tex0_mode, 2,
+                                          g_state.tex0_comp_type, g_state.tex0_frac,
+                                          (const u8*)g_state.arr_tex0, g_state.arr_stride_tex0, c);
+                        GXTexCoord2f32(c[0], c[1]);
+                    }
+                    if (g_state.tex1_mode) {
+                        p = dl_read_comps(p, g_state.tex1_mode, 2,
+                                          g_state.tex1_comp_type, g_state.tex1_frac,
+                                          (const u8*)g_state.arr_tex1, g_state.arr_stride_tex1, c);
+                        GXTexCoord2f32(c[0], c[1]);
+                    }
+                }
+                GXEnd();
+            }
             break;
         }
     }
@@ -3470,6 +3760,16 @@ static void apply_alpha_compare_uniforms(void)
 static void apply_tev_uniforms(void)
 {
     if (!g_shader_program) return;
+
+    /* PC test: MELEE_NOTEX disables texture/TEV — fragment color = vertex color */
+    static int _ntex = -1;
+    if (_ntex < 0) _ntex = (getenv("MELEE_NOTEX") != NULL);
+    if (_ntex) {
+        if (g_tev_num_stages_loc >= 0) glUniform1i(g_tev_num_stages_loc, 0);
+        if (g_tex0_enable_loc >= 0) glUniform1i(g_tex0_enable_loc, 0);
+        if (g_tex1_enable_loc >= 0) glUniform1i(g_tex1_enable_loc, 0);
+        return;
+    }
     
     u32 num_stages = g_state.num_tev_stages;
     if (num_stages > 8) num_stages = 8; /* GLSL shader limit */
@@ -4667,6 +4967,10 @@ void GXProject(f32 vx, f32 vy, f32 vz, f32 mv[3][4], f32 *pm, f32 *vp, f32 *sx, 
 /* Color functions */
 void GXColor4u8(u8 r, u8 g, u8 b, u8 a)
 {
+    /* PC test: MELEE_WHT forces white vertex colors */
+    static int _wht = -1;
+    if (_wht < 0) _wht = (getenv("MELEE_WHT") != NULL);
+    if (_wht) { r = g = b = a = 255; }
     g_state.last_clr[0] = r / 255.0f;
     g_state.last_clr[1] = g / 255.0f;
     g_state.last_clr[2] = b / 255.0f;
@@ -4681,6 +4985,10 @@ void GXColor4u8(u8 r, u8 g, u8 b, u8 a)
 }
 void GXColor3u8(u8 r, u8 g, u8 b)
 {
+    /* PC test: MELEE_WHT forces white vertex colors */
+    static int _wht = -1;
+    if (_wht < 0) _wht = (getenv("MELEE_WHT") != NULL);
+    if (_wht) { r = g = b = 255; }
     g_state.last_clr[0] = r / 255.0f;
     g_state.last_clr[1] = g / 255.0f;
     g_state.last_clr[2] = b / 255.0f;

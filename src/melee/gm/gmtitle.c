@@ -274,6 +274,23 @@ HSD_Archive* gmTitle_801A1AC0(void)
         gmTitle_804D6708 = grDatFiles_ConvertCameraDescGCNtoX64(
             (const u8*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_cam_int1_camera"),
             dataBase);
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_MTR")) {
+            HSD_CameraDescPerspective* d = gmTitle_804D6708;
+            if (d) {
+                fprintf(stderr, "CAMDUMP raw=%p flags=0x%04x ptype=%u near=%.4f far=%.4f fov=%.4f aspect=%.4f\n",
+                    (void*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_cam_int1_camera"),
+                    (unsigned)d->flags, (unsigned)d->projection_type,
+                    (double)d->nnear, (double)d->ffar, (double)d->fov, (double)d->aspect);
+                fprintf(stderr, "CAMDUMP eyepos=%p interest=%p up=%p\n",
+                    (void*)d->eyepos, (void*)d->interest, (void*)d->up_vector);
+                if (d->eyepos) { u8 b[12]; memcpy(b, (const u8*)d->eyepos + 8, 12);
+                    fprintf(stderr, "CAMDUMP eye_pos=(%.3f,%.3f,%.3f)\n", (double)*(f32*)b, (double)*(f32*)(b+4), (double)*(f32*)(b+8)); }
+                if (d->interest) { u8 b[12]; memcpy(b, (const u8*)d->interest + 8, 12);
+                    fprintf(stderr, "CAMDUMP int_pos=(%.3f,%.3f,%.3f)\n", (double)*(f32*)b, (double)*(f32*)(b+4), (double)*(f32*)(b+8)); }
+            }
+        }
+#endif
         /* Lights — convert GCN LightList array. */
         gmTitle_804D670C = grDatFiles_ConvertLightListGCNtoX64(
             (const u8*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_scene_lights"),
@@ -301,6 +318,12 @@ HSD_Archive* gmTitle_801A1AC0(void)
         gm_804D67F0 = grDatFiles_ConvertSObjDescGCNtoX64(
             (const u8*)HSD_ArchiveGetPublicAddress(archive, "TitleMark_sobjdesc"),
             dataBase);
+
+        /* PC port: resolve POBJ_SKIN PObjDesc -> joint refs now that both the
+         * TtlMoji and TtlBg joint trees have been converted. Without this, each
+         * logo/background mesh has pobj->u.jobj == NULL and renders as a static
+         * rigid blob instead of being driven by its skeleton's joint animation. */
+        grDatFiles_ResolvePObjJoints();
     }
 
     return archive;

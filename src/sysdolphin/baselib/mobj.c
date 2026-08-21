@@ -401,13 +401,6 @@ void HSD_MObjCompileTev(HSD_MObj* mobj)
 
     tail = NULL;
     if (mobj != NULL) {
-#if BUILD_TARGET_PC
-        /* PC port: skip TEV if no texture object */
-        if (mobj->tobj == NULL) {
-            return;
-        }
-#endif
-
         if (mobj->tevdesc != NULL) {
             HSD_TExpFreeTevDesc(mobj->tevdesc);
             mobj->tevdesc = NULL;

@@ -452,10 +452,16 @@ void HSD_PObjResolveRefs(HSD_PObj* pobj, HSD_PObjDesc* pdesc)
         break;
 
     case POBJ_SKIN:
+#if BUILD_TARGET_PC
+        { static int _r=-1; if(_r<0)_r=(getenv("MELEE_MTR")!=NULL); if(_r){static int _n=0; if(_n++<80) fprintf(stderr,"POBJRESOLVE_ENTER pdesc=%p pdesc_joint=%p\n",(void*)pdesc,(void*)pdesc->u.joint);} }
+#endif
         HSD_JObjUnrefThis(pobj->u.jobj);
         pobj->u.jobj = NULL;
         if (pdesc->u.joint != NULL) {
             pobj->u.jobj = HSD_IDGetData((u32) pdesc->u.joint, NULL);
+#if BUILD_TARGET_PC
+            { static int _r=-1; if(_r<0)_r=(getenv("MELEE_MTR")!=NULL); if(_r){static int _n=0; if(_n++<80) fprintf(stderr,"POBJRESOLVE pdesc_joint=%p lookup_jobj=%p\n",(void*)pdesc->u.joint,(void*)pobj->u.jobj);} }
+#endif
             HSD_ASSERT(0x2FB, pobj->u.jobj);
             HSD_JObjRefThis(pobj->u.jobj);
         }
@@ -1161,6 +1167,9 @@ static void SetupSharedVtxModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
         ///@todo Unused stack
         u8 _[4];
         HSD_JObjSetupMatrix(pobj->u.jobj);
+#if BUILD_TARGET_PC
+        { static int _mtr=-1; if(_mtr<0)_mtr=(getenv("MELEE_MTR")!=NULL); if(_mtr){static int _n=0; if(_n++<500) fprintf(stderr,"LOGOJMTX j=%p t=(%.3f,%.3f,%.3f) r00=%.3f\n",(void*)pobj->u.jobj,(double)pobj->u.jobj->mtx[0][3],(double)pobj->u.jobj->mtx[1][3],(double)pobj->u.jobj->mtx[2][3],(double)pobj->u.jobj->mtx[0][0]);} }
+#endif
         PSMTXConcat(vmtx, pobj->u.jobj->mtx, m);
         GXLoadPosMtxImm(m, GX_PNMTX1);
         HSD_PerfCountMtxLoad();
@@ -1257,6 +1266,9 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
 
 static void PObjSetupMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 {
+#if BUILD_TARGET_PC
+    { static int _mtr=-1; if(_mtr<0)_mtr=(getenv("MELEE_MTR")!=NULL); if(_mtr && pobj_type(pobj)==POBJ_SKIN){static int _n=0; if(_n++<200) fprintf(stderr,"POBJSKIN jobj=%p type=%d\n",(void*)pobj->u.jobj,(int)pobj_type(pobj));} }
+#endif
     switch (pobj_type(pobj)) {
     case POBJ_SKIN:
         if (!pobj->u.jobj) {
@@ -1276,6 +1288,19 @@ static void PObjSetupMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 
 static void PObjDispSimplePrimitive(HSD_PObj* pobj, u32 rendermode)
 {
+#if BUILD_TARGET_PC
+    { static int _mtr = -1;
+      if (_mtr < 0) _mtr = (getenv("MELEE_MTR") != NULL);
+      if (_mtr) {
+          static int _n = 0;
+          if (pobj_type(pobj) == POBJ_SKIN && _n < 200) {
+              _n++;
+              fprintf(stderr, "POBJDISP p=%p display=%p ndisplay=%u jobj=%p\n",
+                      (void*)pobj, (void*)pobj->display, (unsigned)pobj->n_display,
+                      (void*)pobj->u.jobj);
+          }
+      } }
+#endif
     setupArrayDesc(pobj->verts);
     setupVtxDesc(pobj);
 
@@ -1295,6 +1320,11 @@ void HSD_PObjDisp(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 {
 #if BUILD_TARGET_PC
     if (pobj == NULL) return;
+    /* PC diag: isolate the two title models by PObj type. */
+    static int _hbg = -1, _hlogo = -1;
+    if (_hbg < 0) { _hbg = (getenv("MELEE_HIDE_BG") != NULL); _hlogo = (getenv("MELEE_HIDE_LOGO") != NULL); }
+    if (_hbg && pobj_type(pobj) == POBJ_SHAPEANIM) return;
+    if (_hlogo && pobj_type(pobj) == POBJ_SKIN) return;
 #endif
 
     switch (pobj->flags & (POBJ_CULLFRONT | POBJ_CULLBACK)) {

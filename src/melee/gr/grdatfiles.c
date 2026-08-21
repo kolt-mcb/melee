@@ -112,6 +112,9 @@ static void* gcn_ptr_to_x64(u32 gcn_ptr, u8* dataBase)
 /* Convert GCN-packed UnkStageDat to x86_64 UnkStageDat.
  * Allocates new memory for the x86_64 struct and the x8_t array.
  * Returns the converted UnkStageDat pointer. */
+static void grdat_resolve_pobj_joints(void);
+static HSD_Joint* grdat_jointmap_find(u32 offset);
+
 static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gcnDat, u8* dataBase)
 {
     UnkStageDat* x64Dat;
@@ -206,6 +209,10 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
         x64Dat->unk8 = NULL;
     }
     x64Dat->unkC = n;
+
+    /* PC port: resolve POBJ_SKIN PObjDesc -> joint refs now that all joints in
+     * this stage have been converted (populates pobjdesc->u.joint). */
+    grdat_resolve_pobj_joints();
 
     x64Dat->unk10 = (HSD_Spline**)gcn_ptr_to_x64(be32_swap(gcnDat->unk10), dataBase);
     x64Dat->unk14 = be32_swap(gcnDat->unk14);
@@ -553,13 +560,61 @@ HSD_ShapeAnimJoint* grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(const u8* gcnPt
 /* Convert a GCN HSD_Joint tree from archive data to x86_64 heap memory.
  * Returns the root of the converted tree, or NULL on error.
  * The caller should pass the raw pointer from HSD_ArchiveGetPublicAddress(). */
+/* PC port: two-pass resolution for POBJ_SKIN PObjDesc -> joint (skeleton) refs.
+ * The GCN PObjDesc carries a 4-byte offset (field u, at 0x14) to the joint it
+ * is parented under. The original converter dropped this field, leaving
+ * pobj->u.jobj NULL so the logo rendered as a static rigid blob instead of the
+ * animated skeleton. We record each joint's archive offset during the joint
+ * pass, queue each POBJ_SKIN PObjDesc's raw joint offset, then resolve after
+ * all joints in the stage have been converted. */
+#define GRDAT_MAX_JOINTMAP 16384
+#define GRDAT_MAX_POBJPENDING 16384
+static struct { u32 offset; HSD_Joint* x64; } g_grdat_jointmap[GRDAT_MAX_JOINTMAP];
+static int g_grdat_jointmap_n = 0;
+static struct { HSD_PObjDesc* pobj; u32 offset; } g_grdat_pobjpending[GRDAT_MAX_POBJPENDING];
+static int g_grdat_pobjpending_n = 0;
+/* PC port: the joint whose DObjDesc chain is currently being converted. POBJ_SKIN
+ * PObjDescs with no explicit joint ref (u == 0, the title's case) are parented
+ * to this joint. */
+static HSD_Joint* g_grdat_current_joint = NULL;
+
+static HSD_Joint* grdat_jointmap_find(u32 offset)
+{
+    for (int i = 0; i < g_grdat_jointmap_n; i++)
+        if (g_grdat_jointmap[i].offset == offset) return g_grdat_jointmap[i].x64;
+    return NULL;
+}
+
+static void grdat_resolve_pobj_joints(void)
+{
+    int resolved = 0, failed = 0;
+    for (int i = 0; i < g_grdat_pobjpending_n; i++) {
+        HSD_Joint* j = grdat_jointmap_find(g_grdat_pobjpending[i].offset);
+        if (j) { g_grdat_pobjpending[i].pobj->u.joint = j; resolved++; }
+        else failed++;
+    }
+    if (getenv("MELEE_GRDAT_TRACE")) {
+        fprintf(stderr, "[GRDAT] PObj joint resolve: %d resolved, %d failed (map=%d, pending=%d)\n",
+                resolved, failed, g_grdat_jointmap_n, g_grdat_pobjpending_n);
+        fflush(stderr);
+    }
+    g_grdat_pobjpending_n = 0;
+}
+
+/* PC port: public wrapper so the title loader (gmtitle.c) can resolve POBJ_SKIN
+ * PObjDesc -> joint refs after converting its joint trees directly (the title
+ * bypasses the archive/stage converter). */
+void grDatFiles_ResolvePObjJoints(void)
+{
+    grdat_resolve_pobj_joints();
+}
+
 HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         u8* dataBase, u32 visited_count, u32* visited)
 {
     HSD_Joint* x64Joint;
     const struct HSD_Joint_gcn* gcnJoint;
     u32 val;
-
     if (gcnJointPtr == NULL || gcnJointPtr == 0) {
         return NULL;
     }
@@ -577,6 +632,14 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
     x64Joint = lbHeap_80015BD0(0, sizeof(HSD_Joint));
     if (x64Joint == NULL) {
         return NULL;
+    }
+
+    /* PC port: register this joint's archive offset so POBJ_SKIN PObjDescs can
+     * be linked to their skeleton in the second pass. */
+    if (g_grdat_jointmap_n < GRDAT_MAX_JOINTMAP) {
+        g_grdat_jointmap[g_grdat_jointmap_n].offset = (u32)(gcnJointPtr - dataBase);
+        g_grdat_jointmap[g_grdat_jointmap_n].x64 = x64Joint;
+        g_grdat_jointmap_n++;
     }
 
     /* Convert pointer fields */
@@ -611,6 +674,9 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         fflush(stderr);
     }
     if (val != 0 && val < 0x80000000U) {
+        /* PC port: mark this joint as current so its POBJ_SKIN PObjDescs (which
+         * carry no explicit joint ref) are parented to it. */
+        g_grdat_current_joint = x64Joint;
         x64Joint->u.dobjdesc = grDatFiles_ConvertDObjDescGCNtoX64(
             dataBase + val, dataBase);
         if (visited_count < 3) {
@@ -749,9 +815,12 @@ static HSD_VtxDescList* grDatFiles_ConvertVtxDescListGCNtoX64(const u8* gcnVtxPt
             x64Tail->stride = (u16)(ncomps * comp_size);
         }
 
-        /* vertex pointer points to raw vertex data in archive */
+        /* vertex pointer points to raw vertex data in archive (offset from
+         * dataBase). A stored zero is legitimate: the title-logo PObjDescs
+         * keep vertex=0, meaning the vertex pool at the start of the data
+         * region (dataBase + 0). */
         val = be32_swap(gcnVtx->vertex);
-        if (val != 0 && val < 0x80000000U) {
+        if (val < 0x80000000U) {
             x64Tail->vertex = dataBase + val;
         } else {
             x64Tail->vertex = NULL;
@@ -804,6 +873,25 @@ static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8
     /* flags and n_display - read as big-endian u16 */
     x64Pobj->flags = be16_swap(*(const u16*)(gcnPobjPtr + 0x0C));
     x64Pobj->n_display = be16_swap(*(const u16*)(gcnPobjPtr + 0x0E));
+
+    /* PC port: for POBJ_SKIN the u field (0x14) is a joint reference. Queue the
+     * raw offset for a second-pass resolve (target joint may not be converted
+     * yet). POBJ_SHAPEANIM uses u as a shape_set ref and is left NULL here. */
+    val = be32_swap(gcnPobj->u);
+    if ((x64Pobj->flags & 0x3000) == POBJ_SKIN) {
+        if (val != 0 && val < 0x80000000U) {
+            /* explicit joint ref -> queue for the second-pass resolve */
+            if (g_grdat_pobjpending_n < GRDAT_MAX_POBJPENDING) {
+                g_grdat_pobjpending[g_grdat_pobjpending_n].pobj = x64Pobj;
+                g_grdat_pobjpending[g_grdat_pobjpending_n].offset = val;
+                g_grdat_pobjpending_n++;
+            }
+        } else if (g_grdat_current_joint != NULL) {
+            /* no explicit ref (the title's case) -> parent to the joint that
+             * owns this DObjDesc so the joint animation drives the mesh. */
+            x64Pobj->u.joint = g_grdat_current_joint;
+        }
+    }
     
     /* display - raw byte stream (GX command list), keep as direct pointer */
     val = be32_swap(gcnPobj->display);
@@ -1451,6 +1539,10 @@ static UnkArchiveStruct* grDatFiles_ConvertArchiveGCNtoX64(HSD_Archive* archive,
     UnkStageDat_gcn gcnStageDat;
     u8* dataBase = archive->data;
 
+#if BUILD_TARGET_PC
+    { static int _g=-1; if(_g<0)_g=(getenv("MELEE_GRDAT_TRACE")!=NULL); if(_g){static int _n=0; if(_n<30) fprintf(stderr,"[GRDAT] ARCHIVE_CONVERT archive=%p maphead=%p\n",(void*)archive,(void*)gcnMapHeadPtr);} }
+#endif
+
     if (archive == NULL || gcnMapHeadPtr == NULL) {
         return NULL;
     }
@@ -1467,6 +1559,11 @@ static UnkArchiveStruct* grDatFiles_ConvertArchiveGCNtoX64(HSD_Archive* archive,
     x64Arc->unk0 = archive;
     x64Arc->unk4 = grDatFiles_ConvertStageDatGCNtoX64(&gcnStageDat, dataBase);
     x64Arc->unk8 = 0;
+
+    /* PC port: resolve POBJ_SKIN PObjDesc -> joint refs now that this archive's
+     * joints have been converted (populates pobjdesc->u.joint). */
+    { static int _g2=-1; if(_g2<0)_g2=(getenv("MELEE_GRDAT_TRACE")!=NULL); if(_g2){static int _n2=0; if(_n2<30) fprintf(stderr,"[GRDAT] RESOLVE_BEFORE map_n=%d pending_n=%d\n",g_grdat_jointmap_n,g_grdat_pobjpending_n);} }
+    grdat_resolve_pobj_joints();
 
     return x64Arc;
 }

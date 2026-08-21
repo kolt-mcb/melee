@@ -265,17 +265,20 @@ void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
 #pragma push
 #pragma dont_inline on
 #if BUILD_TARGET_PC
-    /* PC port: pass identity matrix instead of NULL.
-     * On x86_64, Mtx is passed by value (48 bytes). NULL leaves 40 bytes
-     * of garbage, causing crashes in HSD_PObjDisp. Additionally,
-     * HSD_JObjDispDObj tries to get the camera viewing matrix on NULL,
-     * but HSD_CObjGetCurrent() returns NULL (no camera init), crashing. */
+    /* PC port: use the current camera's view matrix when a camera is
+     * active; fall back to identity (no camera, e.g. pre-title). */
     static Mtx identity_mtx = {
         {1.0f, 0.0f, 0.0f, 0.0f},
         {0.0f, 1.0f, 0.0f, 0.0f},
         {0.0f, 0.0f, 1.0f, 0.0f}
     };
-    HSD_JObjDispAll(jobj, identity_mtx, HSD_GObj_80390EB8(arg1), 0);
+    Mtx vmtx;
+    memcpy(vmtx, identity_mtx, sizeof(Mtx));
+    HSD_CObj* cobj = HSD_CObjGetCurrent();
+    if (cobj != NULL) {
+        memcpy(vmtx, HSD_CObjGetViewingMtxPtr(cobj), sizeof(Mtx));
+    }
+    HSD_JObjDispAll(jobj, vmtx, HSD_GObj_80390EB8(arg1), 0);
 #else
     HSD_JObjDispAll(jobj, NULL, HSD_GObj_80390EB8(arg1), 0);
 #endif /* BUILD_TARGET_PC */
