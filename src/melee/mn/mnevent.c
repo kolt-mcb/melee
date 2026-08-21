@@ -120,9 +120,6 @@ static s32 mnEvent_804D5028 = 0xCABC9FFF;
 static s32 mnEvent_804D502C = 0xFF;
 void* mnEvent_804A08F8[4];
 void* mnEvent_804A0908;
-HSD_GObj* mnEvent_804D6C60;
-u8 mnEvent_804D6C64;
-u8 mnEvent_804D6C65;
 static char mnEvent_804D5040[3] = "%d";
 static char mnEvent_804D5044[4] = { 0x81, 0x7C, 0, 0 };
 
@@ -274,7 +271,7 @@ void mnEvent_8024D5B0(HSD_GObj* gobj, u8 event)
     HSD_SisLib_803A6B98(temp_r3_2, 0.0f, 0.0f, mnEvent_804D5044);
 }
 
-inline MnEventData* GET_EVENTDATA(HSD_GObj* gobj)
+static inline MnEventData* GET_EVENTDATA(HSD_GObj* gobj)
 {
     return gobj->user_data;
 }
