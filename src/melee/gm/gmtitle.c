@@ -98,9 +98,48 @@ static void fn_801A1498_inline(void)
     HSD_JObjAnimAll(jobj);
 }
 
+#if BUILD_TARGET_PC
+static int pc_jtree_dump(HSD_JObj* j, int depth, int* budget)
+{
+    if (!j || *budget <= 0) return depth;
+    (*budget)--;
+    struct HSD_AObj* a = j->aobj;
+    int nf = 0;
+    if (a && a->fobj) { for (HSD_FObj* f = a->fobj; f && nf < 999; f = f->next) nf++; }
+    fprintf(stderr, "JTREE %*saobj=%c fobj=%c nfobj=%d frame=%.1f end=%.1f t=(%.2f,%.2f,%.2f)\n",
+            depth * 2, "", a ? 'Y' : 'n', (a && a->fobj) ? 'Y' : 'n', nf,
+            a ? (double)a->curr_frame : -1.0, a ? (double)a->end_frame : -1.0,
+            (double)j->translate.x, (double)j->translate.y, (double)j->translate.z);
+    pc_jtree_dump(j->child, depth + 1, budget);
+    pc_jtree_dump(j->next, depth, budget);
+    return depth;
+}
+#endif
+
 static void fn_801A1498(HSD_GObj* arg0)
 {
     HSD_JObj* jobj = GET_JOBJ(arg0);
+#if BUILD_TARGET_PC
+    static int _t_on = -1, _t_n = 0, _tree_done = 0;
+    if (_t_on < 0) _t_on = (getenv("MELEE_ANIMLOG") != NULL);
+    if (_t_on && !_tree_done) {
+        _tree_done = 1;
+        int budget = 80;
+        fprintf(stderr, "=== JTREE dump ===\n");
+        pc_jtree_dump(jobj, 0, &budget);
+    }
+    if (_t_on && _t_n < 60) {
+        _t_n++;
+        struct HSD_AObj* ao = jobj->aobj;
+        HSD_JObj* ch = jobj->child;
+        fprintf(stderr, "T1498 EC=%u animframe=%.1f aobj=%p fobj=%p nchild=%d root_t=(%.3f,%.3f,%.3f) ch_t=(%.3f,%.3f,%.3f)\n",
+                (unsigned)gm_804D67EC, (double)mn_8022F298(jobj),
+                (void*)ao, ao ? (void*)ao->fobj : NULL,
+                ch ? 1 : 0,
+                (double)jobj->translate.x, (double)jobj->translate.y, (double)jobj->translate.z,
+                ch ? (double)ch->translate.x : 0, ch ? (double)ch->translate.y : 0, ch ? (double)ch->translate.z : 0);
+    }
+#endif
     if (gm_804D67EC > 0x1518) {
         mn_8022ED6C(jobj, &gmTitle_803DA4F0);
     } else {
@@ -150,6 +189,10 @@ HSD_GObj* gmTitle_801A165C(void)
         gmTitle_804D671C = 0;
         HSD_JObjReqAnimAll(jobj, gmTitle_803DA4F0.start_frame);
         HSD_GObj_SetupProc(gobj, fn_801A1498, 0);
+#if BUILD_TARGET_PC
+        fprintf(stderr, "TITLEPROC registered fn_801A1498=%p gobj=%p jobj=%p EC=%u\n",
+                (void*)fn_801A1498, (void*)gobj, (void*)jobj, (unsigned)gm_804D67EC);
+#endif
     } else {
         HSD_JObjReqAnimAll(jobj, 400.0F);
         HSD_GObj_SetupProc(gobj, gmTitle_801A1630, 0);

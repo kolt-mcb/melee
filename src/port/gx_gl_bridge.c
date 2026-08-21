@@ -2139,8 +2139,11 @@ static void pc_frame_trace(const char* what)
     glReadPixels(640, 360, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, px);
     glReadPixels(100, 100, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, px + 3);
     glReadPixels(300, 600, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, px + 6);
-    fprintf(stderr, "  TRACE frame=%u %-18s c=(%u,%u,%u) tl=(%u,%u,%u) ll=(%u,%u,%u)\n",
+    fprintf(stderr, "  TRACE frame=%u %-18s n=%u c0=(%u,%u,%u,%u) c=(%u,%u,%u) tl=(%u,%u,%u) ll=(%u,%u,%u)\n",
             (unsigned)g_state.frame_count, what,
+            (unsigned)g_state.vert_count,
+            (unsigned)(g_state.verts[0].col[0]*255), (unsigned)(g_state.verts[0].col[1]*255),
+            (unsigned)(g_state.verts[0].col[2]*255), (unsigned)(g_state.verts[0].col[3]*255),
             px[0], px[1], px[2], px[3], px[4], px[5], px[6], px[7], px[8]);
 }
 
@@ -2507,6 +2510,16 @@ static void bridge_upload_and_draw(void)
                         vp[0], vp[1], vp[2], vp[3], sc[0], sc[1], sc[2], sc[3],
                         (int)g_state.fog_enabled,
                         (count >= 7 ? " [LOGO]" : ""));
+                if (count >= 7) {
+                    int mid = g_state.current_mtx_id;
+                    const f32(*m)[4] = (mid < 28) ? g_state.mtx_array[mid] : NULL;
+                    fprintf(stderr, "  P0 mid=%d [", (int)mid);
+                    if (m) {
+                        for (int i = 0; i < 3; i++)
+                            fprintf(stderr, "%.3f,%.3f,%.3f,%.3f%s", (double)m[i][0], (double)m[i][1], (double)m[i][2], (double)m[i][3], i<2?"; ":"");
+                    } else fprintf(stderr, "id oor");
+                    fprintf(stderr, "]\n");
+                }
                 if (count >= 7 && count <= 400) {
                     fprintf(stderr, "  COLS v0=(%.3f,%.3f,%.3f,%.3f) v1=(%.3f,%.3f,%.3f,%.3f) vN=(%.3f,%.3f,%.3f,%.3f)\n",
                         (double)g_state.verts[0].col[0], (double)g_state.verts[0].col[1], (double)g_state.verts[0].col[2], (double)g_state.verts[0].col[3],
@@ -2952,6 +2965,19 @@ void GXEnd(void)
 
 static void bridge_add_vertex(void)
 {
+    /* PC diag: per-frame GXVertex count (is geometry rebuilt each frame?) */
+    {
+        static int _vc_on = -1, _vc_frame = -1, _vc_count = 0;
+        if (_vc_on < 0) _vc_on = (getenv("MELEE_VCOUNT") != NULL);
+        if (_vc_on) {
+            int f = (int)g_state.frame_count;
+            if (f != _vc_frame) {
+                if (_vc_frame >= 0) fprintf(stderr, "VCOUNT frame=%d verts_added=%d\n", _vc_frame, _vc_count);
+                _vc_frame = f; _vc_count = 0;
+            }
+            _vc_count++;
+        }
+    }
     if (g_state.vert_count >= MAX_VERTS) {
         bridge_upload_and_draw();
     }

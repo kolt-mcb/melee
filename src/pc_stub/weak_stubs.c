@@ -2634,3 +2634,8 @@ __attribute__((weak)) void gmTitle_801A1A3C(void) { }
 __attribute__((weak)) void gmTitle_801A1AC0(void) { }
 __attribute__((weak)) void* gm_GetAllGameSceneHandlers(void) { return NULL; }
 __attribute__((weak)) void* gm_GetChallengerData(void) { return NULL; }
+
+
+// --- misc undefined fns (if/ module + dolphin rumble not linked) ---
+__attribute__((weak)) void HSD_PadRumbleOffN(u8 no) { }
+__attribute__((weak)) void un_802FE3F8(int a, int b, short* c, short* d) { }

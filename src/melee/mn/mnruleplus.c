@@ -38,8 +38,8 @@ extern StaticModelDesc MenMainCursorTr03_Top;
 extern StaticModelDesc MenMainCursorTr04_Top;
 extern StaticModelDesc MenMainNmRl_Top;
 extern MenuKindData mn_803EB6B0[];
-HSD_GObj* mn_804D6BE0;
-f32 mn_804D6BE4;
+extern HSD_GObj* mn_804D6BE0;
+extern f32 mn_804D6BE4;
 
 typedef struct _MenuRulesPlusData {
     MenuKind8 menu_kind;
@@ -75,7 +75,7 @@ STATIC_ASSERT(sizeof(mn_803ED1D0_t) == 0xA0);
 
 mn_803ED1D0_t mn_803ED1D0 = {
     { 3, 4, 5, 6, 7, 8, 9 },
-    { 0, 7, 2, 2, 2, 2 },
+    { 7, 2, 2, 2, 2, 0 },
     { 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f, 26.0f, 27.0f, 28.0f, 29.0f,
       30.0f, 31.0f },
     { 0.0f, 99.0f, 0.0f },
@@ -133,7 +133,7 @@ const f32 mn_804DBE54 = 17.0f;
 const f32 mn_804DBE58 = 364.68332f;
 const f32 mn_804DBE5C = 76.77544f;
 const f32 mn_804DBE60 = 0.0521f;
-volatile const f64 mn_804DBE68 = 4503601774854144.0;
+volatile const f64 mn_804DBE68 = 4503599627370496.0;
 
 static inline void SisLib_ClearText(HSD_Text** text)
 {
@@ -195,7 +195,7 @@ void fn_8023201C(HSD_GObj* gobj)
 
     if (buttons & 0x200) {
         /// A button: confirm stage select (option 5 only)
-        if ((u16) mn_804A04F0.hovered_selection == 5) {
+        if (mn_804A04F0.hovered_selection == 5) {
             sfxForward();
             mn_804A04F0.entering_menu = 1;
             mnRulePlus_SaveRules();
@@ -252,12 +252,12 @@ void fn_8023201C(HSD_GObj* gobj)
         mn_804A04F0.confirmed_selection =
             data->rule_values.values[mn_804A04F0.hovered_selection];
         return;
-    } else if ((u16) mn_804A04F0.hovered_selection != 5) {
+    } else if (mn_804A04F0.hovered_selection != 5) {
         /// D-Pad Left/Right: adjust value for non-stage options
         u8* bounds = mn_803ED2E8.stat[mn_804A04F0.hovered_selection];
         if (buttons & 4) {
             sfxMove();
-            if ((u8) mn_804A04F0.confirmed_selection > (u8) bounds[0]) {
+            if (mn_804A04F0.confirmed_selection > bounds[0]) {
                 mn_804A04F0.confirmed_selection -= 1;
                 return;
             }
@@ -266,7 +266,7 @@ void fn_8023201C(HSD_GObj* gobj)
         }
         if (buttons & 8) {
             sfxMove();
-            if ((u8) mn_804A04F0.confirmed_selection < (u8) bounds[1]) {
+            if (mn_804A04F0.confirmed_selection < bounds[1]) {
                 mn_804A04F0.confirmed_selection += 1;
                 return;
             }
@@ -356,7 +356,7 @@ void mn_802324E4(u8 time_limit, MenuRulesPlusData* data)
     mnRulePlus_AnimZeros(jobjs);
 }
 
-inline void mn_80232660_inline(HSD_JObj* jobj)
+static inline void mn_80232660_inline(HSD_JObj* jobj)
 {
     AnimLoopSettings* settings;
     AnimLoopSettings* p294;
@@ -668,7 +668,7 @@ void fn_80232F44(HSD_GObj* gobj)
     if ((state == 0 || state == 1 || state == 3) &&
         (u8) data->menu_kind != (u8) mn_804A04F0.cur_menu)
     {
-        if ((u8) mn_804A04F0.entering_menu != 0) {
+        if (mn_804A04F0.entering_menu != 0) {
             data->state = 4;
         } else {
             data->state = 2;
@@ -740,7 +740,7 @@ void fn_80232F44(HSD_GObj* gobj)
             selection_changed = 1;
         }
         if (data->rule_values.values[mn_804A04F0.hovered_selection] !=
-            (u8) mn_804A04F0.confirmed_selection)
+            mn_804A04F0.confirmed_selection)
         {
             value_changed = 1;
         }
@@ -755,7 +755,7 @@ void fn_80232F44(HSD_GObj* gobj)
     }
     if ((s32) value_changed != 0) {
         data->rule_values.values[data->hovered_selection] =
-            (u8) mn_804A04F0.confirmed_selection;
+            mn_804A04F0.confirmed_selection;
         data2 = gobj->user_data;
         gmMainLib_GetGameRules()->stock_time_limit =
             data2->rule_values.time_limit;

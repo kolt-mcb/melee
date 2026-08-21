@@ -1,5 +1,8 @@
 #include "gobj.h"
 
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#endif
 #include "class.h"
 #include "cobj.h"
 #include "fog.h"
@@ -90,7 +93,11 @@ void HSD_GObj_80390CFC(void)
     s32 i;
     HSD_GObjProc* proc;
     HSD_GObj* gobj;
-
+#if BUILD_TARGET_PC
+    static int _rp_on = -1, _rp_n = 0, _rp_total = 0;
+    if (_rp_on < 0) _rp_on = (getenv("MELEE_ANIMLOG") != NULL);
+    if (_rp_on) _rp_total = 0;
+#endif
     u64 var_r31 =
         HSD_GObjLibInitData.unk_2 != NULL ? *HSD_GObjLibInitData.unk_2 : 0;
     HSD_GObj_804D783C += 1;
@@ -111,6 +118,13 @@ void HSD_GObj_80390CFC(void)
                 {
                     HSD_GObj_804D781C = gobj;
                     HSD_GObj_804D7838 = proc;
+#if BUILD_TARGET_PC
+                    if (_rp_on) {
+                        _rp_total++;
+                        if (_rp_total <= 4 && _rp_n < 200)
+                            fprintf(stderr, "  INVOKE %p gobj=%p pri=%d\n", (void*)proc->on_invoke, (void*)gobj, i);
+                    }
+#endif
                     proc->on_invoke(proc->gobj);
                     HSD_GObj_804D7830 = proc->next;
                     if (HSD_GObj_804CE3E4.flags != 0) {
@@ -138,6 +152,12 @@ void HSD_GObj_80390CFC(void)
             proc = HSD_GObj_804D7830;
         }
     }
+#if BUILD_TARGET_PC
+    if (_rp_on && _rp_n < 200) {
+        _rp_n++;
+        fprintf(stderr, "RUNPROCS tick=%u invoked=%d\n", (unsigned)HSD_GObj_804D783C, _rp_total);
+    }
+#endif
 }
 
 /// GObj_GetFlagFromArray

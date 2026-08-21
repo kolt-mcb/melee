@@ -97,6 +97,7 @@ HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u
 HSD_ShapeAnimJoint* grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 /* AObjDesc/RObjAnimJoint converters */
 static HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase);
+static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 static HSD_RObjAnimJoint* grDatFiles_ConvertRObjAnimJointChainGCNtoX64(const u8* gcnPtr, u8* dataBase);
 
 /* Convert a GCN pointer offset to an x86_64 pointer.
@@ -373,6 +374,19 @@ struct HSD_AObjDesc_gcn {
     u32 obj_id;       /* 0x0C */
 };
 
+/* GCN HSD_FObjDesc (4-byte pointers, 20 bytes total)
+ * x86_64 layout: next(8) length(4) startframe(4) type/frac/slope/dummy(4) ad(8) */
+struct HSD_FObjDesc_gcn {
+    u32 next;         /* 0x00 HSD_FObjDesc* */
+    u32 length;       /* 0x04 */
+    u32 startframe;   /* 0x08 f32 (big-endian) */
+    u8  type;         /* 0x0C */
+    u8  frac_value;   /* 0x0D */
+    u8  frac_slope;   /* 0x0E */
+    u8  dummy0;       /* 0x0F */
+    u32 ad;           /* 0x10 u8* packed keyframe data */
+};
+
 /* GCN HSD_RObjAnimJoint (4-byte pointers, 8 bytes total)
  * x86_64 layout: next(8) aobjdesc(8) = 16 bytes */
 struct HSD_RObjAnimJoint_gcn {
@@ -385,12 +399,44 @@ struct HSD_RObjAnimJoint_gcn {
  * Animation joint tree converters (GCN → x86_64)
  * ============================================================ */
 
+/* Convert HSD_FObjDesc chain (linked list of keyframe-data descriptors).
+ * The packed keyframe bytes (ad) are left in place in the archive: the FObj
+ * interpreter (parseFloat et al.) reads them byte-by-byte in a fixed order,
+ * so they are host-endianness independent and need no conversion. */
+static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
+{
+    HSD_FObjDesc* x64;
+    const struct HSD_FObjDesc_gcn* gcn;
+    u32 val, raw;
+
+    if (gcnPtr == NULL || depth > 10000) return NULL;
+
+    gcn = (const struct HSD_FObjDesc_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_FObjDesc));
+    if (x64 == NULL) return NULL;
+    memset(x64, 0, sizeof(HSD_FObjDesc));
+
+    val = be32_swap(gcn->next);
+    x64->next = grDatFiles_ConvertFObjDescGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, depth + 1);
+    x64->length = be32_swap(gcn->length);
+    raw = be32_swap(gcn->startframe);
+    x64->startframe = *(f32*)&raw;
+    x64->type = gcn->type;
+    x64->frac_value = gcn->frac_value;
+    x64->frac_slope = gcn->frac_slope;
+    val = be32_swap(gcn->ad);
+    x64->ad = (val != 0 && val < 0x80000000U) ? (u8*)dataBase + val : NULL;
+
+    return x64;
+}
+
 /* Convert HSD_AObjDesc (animation object descriptor) */
 static HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
     HSD_AObjDesc* x64;
     const struct HSD_AObjDesc_gcn* gcn;
-    u32 raw;
+    u32 raw, fobj_off;
 
     if (gcnPtr == NULL) return NULL;
 
@@ -402,8 +448,13 @@ static HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* da
     x64->flags = be32_swap(gcn->flags);
     raw = be32_swap(gcn->end_frame);
     x64->end_frame = *(f32*)&raw;
-    /* fobjdesc - skip for now, points to FObj data in archive */
-    x64->fobjdesc = NULL;
+    /* fobjdesc - the keyframe chain. Convert it so HSD_FObjLoadDesc can build
+     * runtime keyframes; without this every aobj has zero keyframes and the
+     * model renders as a static rigid blob (title logo never animated). */
+    fobj_off = be32_swap(gcn->fobjdesc);
+    x64->fobjdesc = (fobj_off != 0 && fobj_off < 0x80000000U)
+        ? grDatFiles_ConvertFObjDescGCNtoX64(dataBase + fobj_off, dataBase, 0)
+        : NULL;
     x64->obj_id = be32_swap(gcn->obj_id);
 
     return x64;
