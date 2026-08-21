@@ -818,6 +818,9 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
     }
     HSD_IDInsertToTable(NULL, (u32) joint, jobj);
     jobj->id = (u32) joint;
+#if BUILD_TARGET_PC
+    { static int _r=-1; if(_r<0)_r=(getenv("MELEE_MTR")!=NULL); if(_r){static int _n=0; if(_n++<80) fprintf(stderr,"JOBJREGISTER joint_id=%p jobj=%p\n",(void*)joint,(void*)jobj);} }
+#endif
     return 0;
 }
 

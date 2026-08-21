@@ -9,6 +9,201 @@
 #define EPSILON 0.0000000001f
 #define FLOAT_MIN 1.1754943E-38f
 
+/* GCN look-at view matrix (SDK mtx.c C_MTXLookAt). Builds the camera
+ * view matrix for a camera at camPos looking at target with camUp as the
+ * up direction. View space: +x right, +y up, camera looks down -z.
+ * Rows: [right; up; look] with translation -dot(camPos, axis). */
+void C_MTXLookAt(Mtx m, Vec3* camPos, Vec3* camUp, Vec3* target)
+{
+    f32 lx = camPos->x - target->x;
+    f32 ly = camPos->y - target->y;
+    f32 lz = camPos->z - target->z;
+    f32 len = sqrtf(lx * lx + ly * ly + lz * lz);
+
+    if (len < EPSILON) {
+        /* Degenerate (camPos == target): fall back to identity. */
+        m[0][0] = 1; m[0][1] = 0; m[0][2] = 0; m[0][3] = 0;
+        m[1][0] = 0; m[1][1] = 1; m[1][2] = 0; m[1][3] = 0;
+        m[2][0] = 0; m[2][1] = 0; m[2][2] = 1; m[2][3] = 0;
+        return;
+    }
+    lx /= len; ly /= len; lz /= len;
+
+    /* right = normalize(cross(camUp, look)) */
+    f32 rx = camUp->y * lz - camUp->z * ly;
+    f32 ry = camUp->z * lx - camUp->x * lz;
+    f32 rz = camUp->x * ly - camUp->y * lx;
+    len = sqrtf(rx * rx + ry * ry + rz * rz);
+    if (len < EPSILON) {
+        m[0][0] = 1; m[0][1] = 0; m[0][2] = 0; m[0][3] = 0;
+        m[1][0] = 0; m[1][1] = 1; m[1][2] = 0; m[1][3] = 0;
+        m[2][0] = 0; m[2][1] = 0; m[2][2] = 1; m[2][3] = 0;
+        return;
+    }
+    rx /= len; ry /= len; rz /= len;
+
+    /* up = cross(look, right) */
+    f32 ux = ly * rz - lz * ry;
+    f32 uy = lz * rx - lx * rz;
+    f32 uz = lx * ry - ly * rx;
+
+    m[0][0] = rx; m[0][1] = ry; m[0][2] = rz;
+    m[0][3] = -((camPos->x * rx) + (camPos->y * ry) + (camPos->z * rz));
+    m[1][0] = ux; m[1][1] = uy; m[1][2] = uz;
+    m[1][3] = -((camPos->x * ux) + (camPos->y * uy) + (camPos->z * uz));
+    m[2][0] = lx; m[2][1] = ly; m[2][2] = lz;
+    m[2][3] = -((camPos->x * lx) + (camPos->y * ly) + (camPos->z * lz));
+
+    fprintf(stderr, "[LOOKAT] eye=(%.3f,%.3f,%.3f) up=(%.2f,%.2f,%.2f) tgt=(%.3f,%.3f,%.3f) m2=(%.2f,%.2f,%.2f,%.2f)\n",
+            camPos->x, camPos->y, camPos->z,
+            camUp->x, camUp->y, camUp->z,
+            target->x, target->y, target->z,
+            m[2][0], m[2][1], m[2][2], m[2][3]);
+}
+
+/* GCN projection matrix builders (SDK mtx.c / mtx44.c). The camera looks
+ * down -z in view space; w_clip = -z_view; z_clip/w lands in [0,1] over
+ * [near, far]. */
+void MTXFrustum(Mtx m, f32 t, f32 b, f32 l, f32 r, f32 n, f32 f)
+{
+    f32 tmp;
+
+    if (m == NULL || t == b || l == r || n == f) return;
+    tmp = 1 / (r - l);
+    m[0][0] = (2 * n * tmp);
+    m[0][1] = 0;
+    m[0][2] = (tmp * (r + l));
+    m[0][3] = 0;
+    tmp = 1 / (t - b);
+    m[1][0] = 0;
+    m[1][1] = (2 * n * tmp);
+    m[1][2] = (tmp * (t + b));
+    m[1][3] = 0;
+    m[2][0] = 0;
+    m[2][1] = 0;
+    tmp = 1 / (f - n);
+    m[2][2] = (-n * tmp);
+    m[2][3] = (tmp * -(f * n));
+}
+
+void MTXPerspective(Mtx m, f32 fovY, f32 aspect, f32 n, f32 f)
+{
+    f32 angle;
+    f32 cot;
+    f32 tmp;
+
+    if (m == NULL || fovY <= 0.0f || fovY >= 180.0f || aspect == 0.0f ||
+        n <= 0.0f || f <= n) {
+        return;
+    }
+    angle = (0.5f * fovY);
+    angle = angle * 0.017453293f;
+    cot = 1 / tanf(angle);
+    m[0][0] = (cot / aspect);
+    m[0][1] = 0;
+    m[0][2] = 0;
+    m[0][3] = 0;
+    m[1][0] = 0;
+    m[1][1] = (cot);
+    m[1][2] = 0;
+    m[1][3] = 0;
+    m[2][0] = 0;
+    m[2][1] = 0;
+    tmp = 1 / (f - n);
+    m[2][2] = (-n * tmp);
+    m[2][3] = (tmp * -(f * n));
+}
+
+void MTXOrtho(Mtx m, f32 t, f32 b, f32 l, f32 r, f32 n, f32 f)
+{
+    f32 tmp;
+
+    if (m == NULL || t == b || l == r || n == f) return;
+    tmp = 1 / (r - l);
+    m[0][0] = 2 * tmp;
+    m[0][1] = 0;
+    m[0][2] = 0;
+    m[0][3] = (tmp * -(r + l));
+    tmp = 1 / (t - b);
+    m[1][0] = 0;
+    m[1][1] = 2 * tmp;
+    m[1][2] = 0;
+    m[1][3] = (tmp * -(t + b));
+    m[2][0] = 0;
+    m[2][1] = 0;
+    tmp = 1 / (f - n);
+    m[2][2] = (-1 * tmp);
+    m[2][3] = (-f * tmp);
+}
+
+void MTXLightFrustum(Mtx m, f32 t, f32 b, f32 l, f32 r, f32 n, f32 scaleS,
+                     f32 scaleT, f32 transS, f32 transT)
+{
+    f32 tmp;
+
+    if (m == NULL || t == b || l == r) return;
+    tmp = 1 / (r - l);
+    m[0][0] = (scaleS * (2 * n * tmp));
+    m[0][1] = 0;
+    m[0][2] = (scaleS * (tmp * (r + l))) - transS;
+    m[0][3] = 0;
+    tmp = 1 / (t - b);
+    m[1][0] = 0;
+    m[1][1] = (scaleT * (2 * n * tmp));
+    m[1][2] = (scaleT * (tmp * (t + b))) - transT;
+    m[1][3] = 0;
+    m[2][0] = 0;
+    m[2][1] = 0;
+    m[2][2] = -1;
+    m[2][3] = 0;
+}
+
+void MTXLightPerspective(Mtx m, f32 fovY, f32 aspect, f32 scaleS, f32 scaleT,
+                         f32 transS, f32 transT)
+{
+    f32 angle;
+    f32 cot;
+
+    if (m == NULL || fovY <= 0.0f || fovY >= 180.0f || aspect == 0) return;
+    angle = (0.5f * fovY);
+    angle = angle * 0.017453293f;
+    cot = 1 / tanf(angle);
+    m[0][0] = (scaleS * (cot / aspect));
+    m[0][1] = 0;
+    m[0][2] = -transS;
+    m[0][3] = 0;
+    m[1][0] = 0;
+    m[1][1] = (cot * scaleT);
+    m[1][2] = -transT;
+    m[1][3] = 0;
+    m[2][0] = 0;
+    m[2][1] = 0;
+    m[2][2] = -1;
+    m[2][3] = 0;
+}
+
+void MTXLightOrtho(Mtx m, f32 t, f32 b, f32 l, f32 r, f32 scaleS, f32 scaleT,
+                   f32 transS, f32 transT)
+{
+    f32 tmp;
+
+    if (m == NULL || t == b || l == r) return;
+    tmp = 1 / (r - l);
+    m[0][0] = (2 * tmp * scaleS);
+    m[0][1] = 0;
+    m[0][2] = 0;
+    m[0][3] = (transS + (scaleS * (tmp * -(r + l))));
+    tmp = 1 / (t - b);
+    m[1][0] = 0;
+    m[1][1] = (2 * tmp * scaleT);
+    m[1][2] = 0;
+    m[1][3] = (transT + (scaleT * (tmp * -(t + b))));
+    m[2][0] = 0;
+    m[2][1] = 0;
+    m[2][2] = 0;
+    m[2][3] = 1;
+}
+
 HSD_ObjAllocData HSD_Mtx_804C2310;
 HSD_ObjAllocData HSD_Mtx_804C233C;
 

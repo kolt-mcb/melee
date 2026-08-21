@@ -202,7 +202,7 @@ void HSD_CObjReqAnim(HSD_CObj* cobj, float startframe)
 
 GXProjectionType makeProjectionMtx(HSD_CObj* cobj, Mtx mtx)
 {
-    GXProjectionType projection_type;
+    GXProjectionType projection_type = GX_PERSPECTIVE;
     switch (cobj->projection_type) {
     case PROJ_PERSPECTIVE:
         projection_type = GX_PERSPECTIVE;
@@ -225,6 +225,13 @@ GXProjectionType makeProjectionMtx(HSD_CObj* cobj, Mtx mtx)
                  cobj->projection_param.frustum.left,
                  cobj->projection_param.frustum.right, cobj->near, cobj->far);
         break;
+    default:
+        /* Unset/garbage projection type: fall back to perspective so the
+         * output matrix is never left uninitialized. */
+        MTXPerspective(mtx, cobj->projection_param.perspective.fov,
+                       cobj->projection_param.perspective.aspect, cobj->near,
+                       cobj->far);
+        break;
     }
     return projection_type;
 }
@@ -232,6 +239,10 @@ GXProjectionType makeProjectionMtx(HSD_CObj* cobj, Mtx mtx)
 static bool setupOffscreenCamera(HSD_CObj* cobj)
 {
     Mtx44 mtx;
+    int i, j;
+    for (i = 0; i < 4; i++)
+        for (j = 0; j < 4; j++)
+            mtx[i][j] = (i == j) ? 1.0f : 0.0f;
 
     GXSetViewport(cobj->viewport.xmin, cobj->viewport.ymin,
                   cobj->viewport.xmax - cobj->viewport.xmin,
@@ -470,7 +481,18 @@ void HSD_CObjSetupViewingMtx(HSD_CObj* cobj)
     Vec3 up_vec;
     Vec3 interest;
 
-    if (!(cobj->flags & 2) && HSD_CObjMtxIsDirty(cobj)) {
+    bool guard = !(cobj->flags & 2) && HSD_CObjMtxIsDirty(cobj);
+    if (getenv("MELEE_MTR") && guard) {
+        HSD_CObjGetEyePosition(cobj, &eyepos);
+        HSD_CObjGetUpVector(cobj, &up_vec);
+        HSD_CObjGetInterest(cobj, &interest);
+        fprintf(stderr, "[CSETUP] cobj=%p flags=0x%x eye=(%.3f,%.3f,%.3f) up=(%.2f,%.2f,%.2f) int=(%.3f,%.3f,%.3f)\n",
+                (void*)cobj, (unsigned)cobj->flags,
+                (double)eyepos.x, (double)eyepos.y, (double)eyepos.z,
+                (double)up_vec.x, (double)up_vec.y, (double)up_vec.z,
+                (double)interest.x, (double)interest.y, (double)interest.z);
+    }
+    if (guard) {
         HSD_CObjGetEyePosition(cobj, &eyepos);
         HSD_CObjGetUpVector(cobj, &up_vec);
         HSD_CObjGetInterest(cobj, &interest);
@@ -479,6 +501,14 @@ void HSD_CObjSetupViewingMtx(HSD_CObj* cobj)
         HSD_WObjClearFlags(cobj->interest, 2);
         HSD_CObjClearFlags(cobj, 0x40000000);
         HSD_CObjSetFlags(cobj, 0x80000000);
+        if (getenv("MELEE_MTR")) {
+            fprintf(stderr, "[VMTX] cobj=%p eye=(%.2f,%.2f,%.2f) up=(%.1f,%.1f,%.1f) tgt=(%.2f,%.2f,%.2f) row2=(%.2f,%.2f,%.2f,%.2f)\n",
+                    (void*)cobj, (double)eyepos.x, (double)eyepos.y, (double)eyepos.z,
+                    (double)up_vec.x, (double)up_vec.y, (double)up_vec.z,
+                    (double)interest.x, (double)interest.y, (double)interest.z,
+                    (double)cobj->view_mtx[2][0], (double)cobj->view_mtx[2][1],
+                    (double)cobj->view_mtx[2][2], (double)cobj->view_mtx[2][3]);
+        }
     }
 }
 
