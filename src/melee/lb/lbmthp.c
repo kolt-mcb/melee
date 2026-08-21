@@ -495,8 +495,15 @@ s32 lbMthp_8001F5C4(void)
 #if BUILD_TARGET_PC
     /* PC port: without movie player, return an incrementing frame counter.
      * This allows gm_804D67EC to advance through the title screen sequence.
-     * The counter wraps at 0x2000 to avoid overflow issues. */
-    static s32 pc_frame = 0;
+     * The counter wraps at 0x2000 to avoid overflow issues.
+     * MELEE_MTHP_START fast-forwards the counter (skips the opening movie)
+     * so the persistent title screen (gm_804D67EC >= 0x140A) can be reached
+     * for verification without a 17-minute run. */
+    static s32 pc_frame = -1;
+    if (pc_frame < 0) {
+        const char* s = getenv("MELEE_MTHP_START");
+        pc_frame = s ? (s32) strtol(s, NULL, 0) : 0;
+    }
     pc_frame++;
     if (pc_frame > 0x2000) pc_frame = 0x2000;
     return pc_frame;
