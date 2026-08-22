@@ -2528,11 +2528,14 @@ static void bridge_upload_and_draw(void)
                 }
                 /* PC diag: one-shot full dump of the big logo strip's local
                  * vertices + P0 + proj, for offline shape analysis. */
-                if (count == 252) {
-                    static int _vd_done = 0;
-                    if (!_vd_done && getenv("MELEE_VERTDUMP")) {
-                        _vd_done = 1;
-                        FILE* f = fopen("/tmp/logo_verts.txt", "w");
+                if (count == 252 || count == 39) {
+                    static int _vd_252 = 0, _vd_39 = 0;
+                    int _vd_is252 = (count == 252);
+                    if (!((_vd_is252 ? _vd_252 : _vd_39)) && getenv("MELEE_VERTDUMP")) {
+                        if (_vd_is252) _vd_252 = 1; else _vd_39 = 1;
+                        char _vd_path[64];
+                        snprintf(_vd_path, sizeof(_vd_path), "/tmp/mesh_%u_verts.txt", (unsigned)count);
+                        FILE* f = fopen(_vd_path, "w");
                         if (f) {
                             int mid = g_state.current_mtx_id;
                             const f32(*pm)[4] = (mid < 28) ? g_state.mtx_array[mid] : NULL;
@@ -2544,10 +2547,49 @@ static void bridge_upload_and_draw(void)
                             fprintf(f, "VERTS:\n");
                             for (u32 i = 0; i < count; i++) fprintf(f, "%.6f %.6f %.6f\n", (double)g_state.verts[i].pos[0], (double)g_state.verts[i].pos[1], (double)g_state.verts[i].pos[2]);
                             fclose(f);
-                            fprintf(stderr, "VERTDUMP wrote /tmp/logo_verts.txt (%u verts)\n", count);
+                            fprintf(stderr, "VERTDUMP wrote %s (%u verts)\n", _vd_path, count);
                         }
                     }
                 }
+            }
+        }
+        /* PC diag: tunnel-targeted trace. TtlBg (the tunnel) is created ~frame 270,
+         * so DRAWRD's first-40-draws cap never sees it. Fire here for big draws in
+         * the tunnel window, logging clr mode + per-vertex colors + material color
+         * so we can tell whether the per-ray colors come from vertex color, the
+         * material (cur_color), or neither. */
+        {
+            static int _tn_on = -1, _tn_n = 0;
+            if (_tn_on < 0) _tn_on = (getenv("MELEE_TUNTRACE") != NULL);
+            u32 fc = g_state.frame_count;
+            if (_tn_on && fc >= 275 && fc <= 340 && count >= 16 && _tn_n < 30) {
+                _tn_n++;
+                fprintf(stderr, "TUN frame=%u n=%u prim=%u clr_en=%d clr_mode=%u tex0_en=%d texb=%u mat=(%u,%u,%u,%u) v0=(%.1f,%.1f,%.1f)\n",
+                        (unsigned)fc, (unsigned)count, (unsigned)g_state.prim_type,
+                        (int)g_state.clr_enabled, (unsigned)g_state.clr_mode,
+                        (int)g_state.tex0_enabled,
+                        (g_active_tex_count > 0 && g_state.tex_cache_valid[g_active_tex_slots[0]]) ? (unsigned)g_state.tex_cache[g_active_tex_slots[0]] : 0u,
+                        (unsigned)g_state.cur_color.r, (unsigned)g_state.cur_color.g, (unsigned)g_state.cur_color.b, (unsigned)g_state.cur_color.a,
+                        (double)g_state.verts[0].pos[0], (double)g_state.verts[0].pos[1], (double)g_state.verts[0].pos[2]);
+                /* Lighting state: is this draw lit? what's the ambient + light? */
+                int lit_any = 0; u32 lmask = 0;
+                for (int i = 0; i < 8; i++) { if (g_state.chan_lit[i]) lit_any = 1; lmask |= g_state.chan_diffuse_light[i]; }
+                fprintf(stderr, "  TUNL lit=%d lmask=0x%08x nlights=%u amb=(%.3f,%.3f,%.3f) l0=(%u,%u,%u,%u) dir=%d pos=(%.1f,%.1f,%.1f)\n",
+                        lit_any, (unsigned)lmask, (unsigned)g_state.g_active_light_count,
+                        (double)g_state.ambient_color[0], (double)g_state.ambient_color[1], (double)g_state.ambient_color[2],
+                        g_state.g_lights[0].r, g_state.g_lights[0].g, g_state.g_lights[0].b, g_state.g_lights[0].a,
+                        (int)g_state.g_lights[0].is_directional,
+                        (double)g_state.g_lights[0].x, (double)g_state.g_lights[0].y, (double)g_state.g_lights[0].z);
+                fprintf(stderr, "  TUNC chan0_src=%u (0=REG,1=VTX) C0reg=(%u,%u,%u,%u) C1reg=(%u,%u,%u,%u)\n",
+                        (unsigned)g_state.chan_color_source[0],
+                        g_state.chan_colors[0].r, g_state.chan_colors[0].g, g_state.chan_colors[0].b, g_state.chan_colors[0].a,
+                        g_state.chan_colors[1].r, g_state.chan_colors[1].g, g_state.chan_colors[1].b, g_state.chan_colors[1].a);
+                for (u32 i = 0; i < count && i < 10; i++)
+                    fprintf(stderr, "  TUNV %2u col=(%.3f,%.3f,%.3f,%.3f) pos=(%.1f,%.1f,%.1f) tex=(%.2f,%.2f)\n",
+                            (unsigned)i,
+                            (double)g_state.verts[i].col[0], (double)g_state.verts[i].col[1], (double)g_state.verts[i].col[2], (double)g_state.verts[i].col[3],
+                            (double)g_state.verts[i].pos[0], (double)g_state.verts[i].pos[1], (double)g_state.verts[i].pos[2],
+                            (double)g_state.verts[i].tex0[0], (double)g_state.verts[i].tex0[1]);
             }
         }
         /* PC fix: a GX_QUADS batch with more than 4 vertices is N INDEPENDENT
@@ -2961,6 +3003,10 @@ void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
 
 void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
 {
+    /* NOTE: this project defines the GX primitive "enums" as the GCN
+     * display-list opcode values (GX_QUADS=0x80, GX_TRIANGLES=0x90,
+     * GX_TRIANGLESTRIP=0x98, ...), so callers passing e.g. 0x98 is correct,
+     * and the draw path switches on those same values. No normalization. */
     GX_TRACE("GXBegin(0x%X, %u, %u)", type, vtxfmt, nverts);
     /* A single glDrawArrays can only draw one primitive type with one
      * attribute layout. If the pending batch differs, flush it first.
@@ -2974,6 +3020,13 @@ void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
     g_state.in_primitive = TRUE;
     g_state.prim_type = type;
     g_state.batch_vtxfmt = vtxfmt;
+#if BUILD_TARGET_PC
+    { static int _gb_on = -1, _gb_n = 0;
+      if (_gb_on < 0) _gb_on = (getenv("MELEE_MTR") != NULL);
+      if (_gb_on && _gb_n < 200) { _gb_n++;
+        fprintf(stderr, "GXBEGIN type=%u(0x%X) vtxfmt=%u nverts=%u\n",
+                (unsigned)type, (unsigned)type, (unsigned)vtxfmt, (unsigned)nverts); } }
+#endif
     PORT_LOG_DEBUG("GXBegin: type=0x%X fmt=%u verts=%u", type, vtxfmt, nverts);
 }
 void GXEnd(void)
@@ -5911,6 +5964,15 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
     /* I4/I8 with TLUT: decode indexed pixels to RGBA8888 */
     if (fmt == 0x00 || fmt == 0x01) {  /* I4 or I8 */
         TLUTSlot *tlut = &g_state.g_tlut[g_state.g_current_tlut];
+#if BUILD_TARGET_PC
+        { static int _it_on = -1, _it_n = 0;
+          if (_it_on < 0) _it_on = (getenv("MELEE_MTR") != NULL);
+          if (_it_on && _it_n < 30) { _it_n++;
+            fprintf(stderr, "I48DECODE %dx%d fmt=0x%x curtlut=%u valid=%d ent=%u -> %s\n",
+                    w, h, fmt, (unsigned)g_state.g_current_tlut,
+                    (int)tlut->valid, (unsigned)tlut->entry_count,
+                    (tlut->valid && tlut->entry_count>0) ? "TLUT" : "GRAYFALLBACK"); } }
+#endif
         if (tlut->valid && tlut->entry_count > 0) {
             u32 pixel_count = (u32)w * (u32)h;
             u32 needed = pixel_count * 4;  /* RGBA8 = 4 bytes per pixel */
@@ -5947,7 +6009,32 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
     }
     
 skip_tlut:
-    
+
+    /* PC diag: dump the first N converted textures to PPM so we can SEE
+     * what is being loaded (MELEE_TEXDUMP). Only for RGBA8 upload_src. */
+    {
+        static int _td_on = -1, _td_n = 0;
+        if (_td_on < 0) _td_on = (getenv("MELEE_TEXDUMP") != NULL);
+        int is_rgba8 = (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 ||
+                        fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || fmt == 0x06);
+        if (_td_on && is_rgba8 && _td_n < 16 && upload_src) {
+            char path[128];
+            snprintf(path, sizeof(path), "/tmp/texdump_%d_%dx%d.ppm", _td_n, upload_w, upload_h);
+            FILE* tf = fopen(path, "wb");
+            if (tf) {
+                fprintf(tf, "P6\n%d %d\n255\n", upload_w, upload_h);
+                for (int i = 0; i < upload_w * upload_h; i++) {
+                    const unsigned char* p = (const unsigned char*)upload_src + i * 4;
+                    unsigned char rgb[3] = {p[0], p[1], p[2]};
+                    fwrite(rgb, 1, 3, tf);
+                }
+                fclose(tf);
+            }
+            fprintf(stderr, "TEXDUMP #%d %dx%d fmt=0x%02x -> %s\n", _td_n, upload_w, upload_h, fmt, path);
+            _td_n++;
+        }
+    }
+
     /* Upload */
     if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x02 || fmt == 0x00 || fmt == 0x01) {
         /* Decompressed/converted → always RGBA8 */
@@ -6066,6 +6153,15 @@ void GXInitTlutObj(void* tlutObj, const void* tlut_data, u32 tlut_fmt, u32 tlut_
 {
     GX_TRACE("GXInitTlutObj(p, p, %u, %u)", tlut_fmt, tlut_count);
     if (!tlut_data || tlut_count == 0) return;
+#if BUILD_TARGET_PC
+    { static int _ti_on = -1, _ti_n = 0;
+      if (_ti_on < 0) _ti_on = (getenv("MELEE_MTR") != NULL);
+      if (_ti_on && _ti_n < 20) { _ti_n++;
+        const u8* r = (const u8*)tlut_data;
+        fprintf(stderr, "TLUTINIT fmt=%u count=%u lut=%p first8=%02x %02x %02x %02x %02x %02x %02x %02x\n",
+                (unsigned)tlut_fmt, (unsigned)tlut_count, tlut_data,
+                r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7]); } }
+#endif
     
     /* Store palette in all 16 slots simultaneously.
      * GXLoadTlut activates which slot is "current".

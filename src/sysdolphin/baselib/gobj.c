@@ -266,14 +266,12 @@ void HSD_GObj_80390FC0(void)
 
 void HSD_GObj_LObjCallback(HSD_GObj* gobj, int unused)
 {
-#if BUILD_TARGET_PC
-    /* PC port: lighting objects from archive data are big-endian and corrupted on LE.
-     * Skip lighting setup until endianness conversion is implemented. */
-    (void)gobj;
-#else
+    /* PC port: lighting objects are converted from big-endian archive data in
+     * grDatFiles_ConvertLightDescGCNtoX64 (flags, color, position/interest WObj,
+     * and the type-specific union are all byte-swapped). The earlier
+     * "skip until endianness conversion" stub is no longer needed. */
     HSD_LObj_803668EC(gobj->hsd_obj);
     HSD_LObjSetupInit(HSD_CObjGetCurrent());
-#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)

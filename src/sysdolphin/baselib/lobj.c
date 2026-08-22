@@ -91,6 +91,17 @@ void HSD_LObjSetActive(HSD_LObj* lobj)
     }
     active_lights[idx] = lobj;
     lobj->id = HSD_Index2LightID(idx);
+    {
+        static int _lb_on = -1, _lb_n = 0;
+        if (_lb_on < 0) _lb_on = (getenv("MELEE_LOBJLOG") != NULL);
+        if (_lb_on && _lb_n < 40) {
+            _lb_n++;
+            fprintf(stderr, "LOBJSET type=%d active_idx=%d id=0x%x col=(%u,%u,%u,%u) flags=0x%x\n",
+                    (int)HSD_LObjGetType(lobj), idx, (unsigned)HSD_Index2LightID(idx),
+                    lobj->color.r, lobj->color.g, lobj->color.b, lobj->color.a,
+                    (unsigned)lobj->flags);
+        }
+    }
 }
 
 s32 HSD_LObjGetNbActive(void)
@@ -482,6 +493,13 @@ void HSD_LObjSetupInit(HSD_CObj* cobj)
     int i, num, idx;
     HSD_SList* list;
 
+    {
+        int _cln = 0; HSD_SList* _t = current_lights; while (_t) { _cln++; _t = _t->next; }
+        static int _ls_on = -1, _ls_n = 0;
+        if (_ls_on < 0) _ls_on = (getenv("MELEE_LOBJLOG") != NULL);
+        if (_ls_on && _ls_n < 40) { _ls_n++; fprintf(stderr, "LOBJSETUP current_lights_count=%d\n", _cln); }
+    }
+
     idx = 0;
     num = 0;
 
@@ -599,6 +617,17 @@ void HSD_LObjAddCurrent(HSD_LObj* lobj)
 {
     HSD_SList* node;
     HSD_SList** p;
+
+    {
+        static int _la_on = -1, _la_n = 0;
+        if (_la_on < 0) _la_on = (getenv("MELEE_LOBJLOG") != NULL);
+        if (_la_on && lobj != NULL && _la_n < 40) {
+            _la_n++;
+            fprintf(stderr, "LOBJADD type=%d col=(%u,%u,%u,%u) flags=0x%x prio=%d\n",
+                    (int)HSD_LObjGetType(lobj), lobj->color.r, lobj->color.g, lobj->color.b, lobj->color.a,
+                    (unsigned)lobj->flags, (int)HSD_LObjGetPriority(lobj));
+        }
+    }
 
     if (lobj != NULL) {
         node = current_lights;

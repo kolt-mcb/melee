@@ -50,6 +50,16 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
 
     SDL_GL_SetSwapInterval(1); /* Vsync */
 
+    /* PC port: report the actual GL renderer once, so we can tell hardware
+     * (i965/anv) from software (llvmpipe/swrast) at a glance. */
+    {
+        const char* r = (const char*)glGetString(GL_RENDERER);
+        const char* v = (const char*)glGetString(GL_VERSION);
+        const char* d = (const char*)glGetString(GL_VENDOR);
+        fprintf(stderr, "[GLINFO] vendor=%s renderer=%s version=%s\n",
+                d ? d : "?", r ? r : "?", v ? v : "?");
+    }
+
     /* Report the actual window size back to the caller. */
     SDL_GetWindowSize(g_sdl_window, width, height);
     PORT_LOG_INFO("Window initialized: %dx%d", *width, *height);
