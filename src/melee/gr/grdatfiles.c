@@ -357,6 +357,17 @@ struct HSD_MatAnimJoint_gcn {
     u32 matanim;      /* 0x08 HSD_MatAnim* */
 };
 
+/* GCN HSD_MatAnim (4-byte pointers, 16 bytes total)
+ * x86_64 layout: next(8) aobjdesc(8) texanim(8) renderanim(8) = 32 bytes.
+ * aobjdesc keyframes drive the material ambient/diffuse/specular/alpha
+ * (see MObjUpdateFunc) — this is what colors the title tunnel. */
+struct HSD_MatAnim_gcn {
+    u32 next;         /* 0x00 HSD_MatAnim* */
+    u32 aobjdesc;     /* 0x04 HSD_AObjDesc* */
+    u32 texanim;      /* 0x08 HSD_TexAnim* */
+    u32 renderanim;   /* 0x0C HSD_RenderAnim* */
+};
+
 /* GCN HSD_ShapeAnimJoint (4-byte pointers, 12 bytes total)
  * x86_64 layout: child(8) next(8) shapeanimdobj(8) = 24 bytes */
 struct HSD_ShapeAnimJoint_gcn {
@@ -427,6 +438,21 @@ static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* da
     x64->frac_slope = gcn->frac_slope;
     val = be32_swap(gcn->ad);
     x64->ad = (val != 0 && val < 0x80000000U) ? (u8*)dataBase + val : NULL;
+
+    /* PC diag: dump raw GCN FObjDesc fields + first keyframe bytes to check
+     * frac_value/denom and whether the diffuse data is really 0. */
+    {
+        static int _fd_on = -1, _fd_n = 0;
+        if (_fd_on < 0) _fd_on = (getenv("MELEE_FOBJDUMP") != NULL);
+        if (_fd_on && _fd_n < 40) {
+            _fd_n++;
+            fprintf(stderr, "FOBJD gcn=%p len=%u start=%.2f type=%u frac_v=0x%02x frac_s=0x%02x ad=%p:",
+                    (void*)gcn, (unsigned)x64->length, (double)x64->startframe,
+                    (unsigned)gcn->type, (unsigned)gcn->frac_value, (unsigned)gcn->frac_slope, (void*)x64->ad);
+            if (x64->ad) { for (int i = 0; i < 8 && i < (int)x64->length; i++) fprintf(stderr, " %02x", x64->ad[i]); }
+            fprintf(stderr, "\n");
+        }
+    }
 
     return x64;
 }
@@ -546,6 +572,38 @@ HSD_AnimJoint* grDatFiles_ConvertAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dat
     return x64;
 }
 
+/* Convert HSD_MatAnim chain (linked list via next). Each matanim carries an
+ * aobjdesc whose keyframes drive the material ambient/diffuse/specular/alpha
+ * (MObjUpdateFunc) — the source of the title tunnel's animated colors. texanim
+ * and renderanim are left NULL for now: the base texture still renders (texanim
+ * only animates it) and the diffuse color (aobjdesc) is what we need. */
+static HSD_MatAnim* grDatFiles_ConvertMatAnimGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
+{
+    HSD_MatAnim* x64;
+    const struct HSD_MatAnim_gcn* gcn;
+    u32 val;
+
+    if (gcnPtr == NULL || depth > 10000) return NULL;
+
+    gcn = (const struct HSD_MatAnim_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_MatAnim));
+    if (x64 == NULL) return NULL;
+    memset(x64, 0, sizeof(HSD_MatAnim));
+
+    val = be32_swap(gcn->next);
+    x64->next = grDatFiles_ConvertMatAnimGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, depth + 1);
+
+    val = be32_swap(gcn->aobjdesc);
+    if (val != 0 && val < 0x80000000U) {
+        x64->aobjdesc = grDatFiles_ConvertAObjDescGCNtoX64(dataBase + val, dataBase);
+    }
+
+    /* texanim / renderanim: NULL for now (see comment above). */
+
+    return x64;
+}
+
 /* Convert HSD_MatAnimJoint tree (recursive, like HSD_Joint) */
 HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
 {
@@ -569,8 +627,13 @@ HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u
     x64->next = grDatFiles_ConvertMatAnimJointTreeGCNtoX64(
         val ? dataBase + val : NULL, dataBase, depth + 1);
 
-    /* matanim - skip for now (complex animation data) */
-    x64->matanim = NULL;
+        /* matanim: convert the chain so material color animation (aobjdesc
+     * keyframes) plays. Without this the tunnel renders at its base color
+     * (gray-lavender) instead of the animated red/blue/green. */
+    val = be32_swap(gcn->matanim);
+    if (val != 0 && val < 0x80000000U) {
+        x64->matanim = grDatFiles_ConvertMatAnimGCNtoX64(dataBase + val, dataBase, 0);
+    }
 
     return x64;
 }

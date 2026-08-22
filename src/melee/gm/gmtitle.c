@@ -10,6 +10,10 @@
 #include <sysdolphin/baselib/gobjgxlink.h>
 #include <sysdolphin/baselib/gobjobject.h>
 #include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/mobj.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/fobj.h>
 #include <sysdolphin/baselib/random.h>
 #include <melee/db/db.h>
 #include <melee/gm/gmmain_lib.h>
@@ -64,6 +68,31 @@ HSD_GObj* gmTitle_801A12C4(void)
 /// Animation callback for background
 static void gmTitle_801A146C(HSD_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    static int _tbg_on = -1, _tbg_n = 0;
+    if (_tbg_on < 0) _tbg_on = (getenv("MELEE_ANIMLOG") != NULL);
+    if (_tbg_on && _tbg_n < 200) {
+        _tbg_n++;
+        HSD_JObj* jb = GET_JOBJ(gobj);
+        /* Walk the tunnel jobj tree; for each dobj log its mobj + matanim + color. */
+        HSD_JObj* stack[128]; int sp = 0, shown = 0;
+        if (jb) stack[sp++] = jb;
+        while (sp > 0 && shown < 8) {
+            HSD_JObj* j = stack[--sp];
+            if (!j) continue;
+            if (union_type_dobj(j) && j->u.dobj && j->u.dobj->mobj && shown < 8) {
+                HSD_MObj* m = j->u.dobj->mobj;
+                fprintf(stderr, "TTLBG-MAT f=%.1f mobj=%p aobj=%p diff=(%u,%u,%u) amb=(%u,%u,%u) alpha=%.2f\n",
+                        (double)mn_8022F298(jb), (void*)m, (void*)m->aobj,
+                        (unsigned)m->mat->diffuse.r, (unsigned)m->mat->diffuse.g, (unsigned)m->mat->diffuse.b,
+                        (unsigned)m->mat->ambient.r, (unsigned)m->mat->ambient.g, (unsigned)m->mat->ambient.b,
+                        (double)m->mat->alpha);
+                shown++;
+            }
+            if (sp + 2 <= 128) { if (j->child) stack[sp++] = j->child; if (j->next) stack[sp++] = j->next; }
+        }
+    }
+#endif
     mn_8022ED6C(GET_JOBJ(gobj), &gmTitle_803DA4FC);
 }
 
@@ -79,11 +108,22 @@ static inline bool isActiveTitle(void)
 }
 
 /// Set up title screen animated background
+#if BUILD_TARGET_PC
+static int pc_jtree_dump(HSD_JObj* j, int depth, int* budget);
+#endif
 static void fn_801A1498_inline(void)
 {
     bool var_r0;
     HSD_GObj* gobj = GObj_Create(0xE, 0xF, 0);
     HSD_JObj* jobj = HSD_JObjLoadJoint(gmTitle_80479B38.joint);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ANIMLOG")) {
+        fprintf(stderr, "TTLBG-CREATE gobj=%p jobj=%p\n", (void*)gobj, (void*)jobj);
+        int budget = 120;
+        fprintf(stderr, "=== JTREE (TTLBG background) ===\n");
+        pc_jtree_dump(jobj, 0, &budget);
+    }
+#endif
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 3, 0);
     HSD_JObjAddAnimAll(jobj, gmTitle_80479B38.animjoint,
@@ -367,6 +407,37 @@ HSD_Archive* gmTitle_801A1AC0(void)
          * logo/background mesh has pobj->u.jobj == NULL and renders as a static
          * rigid blob instead of being driven by its skeleton's joint animation. */
         grDatFiles_ResolvePObjJoints();
+    }
+    /* PC diag: verify the TtlBg matanim conversion produced real keyframes.
+     * Walk the matanim_joint tree; for each matanim count aobjdesc + fobjdesc
+     * (keyframe groups). If all are NULL/empty, the color animation can't play. */
+    if (getenv("MELEE_ANIMLOG")) {
+        fprintf(stderr, "=== TtlBg matanim_joint walk ===\n");
+        const HSD_MatAnimJoint* stack[256];
+        int sp = 0, budget = 200, total_mat = 0, total_aobj = 0, total_fobj = 0;
+        if (gmTitle_80479B38.matanim_joint) stack[sp++] = gmTitle_80479B38.matanim_joint;
+        while (sp > 0 && budget > 0) {
+            const HSD_MatAnimJoint* j = stack[--sp];
+            if (!j) continue;
+            budget--;
+            int nmat = 0, naobj = 0, nfobj = 0;
+            for (const HSD_MatAnim* m = j->matanim; m; m = m->next) {
+                nmat++;
+                if (m->aobjdesc) {
+                    naobj++;
+                    for (const HSD_FObjDesc* f = m->aobjdesc->fobjdesc; f; f = f->next) nfobj++;
+                }
+            }
+            total_mat += nmat; total_aobj += naobj; total_fobj += nfobj;
+            fprintf(stderr, "MATWALK joint=%p matanim=%p nmat=%d naobj=%d nfobj=%d\n",
+                    (void*)j, (void*)j->matanim, nmat, naobj, nfobj);
+            if (sp + 2 <= 256) {
+                if (j->child) stack[sp++] = j->child;
+                if (j->next) stack[sp++] = j->next;
+            }
+        }
+        fprintf(stderr, "MATWALK TOTAL nmat=%d naobj=%d nfobj=%d (budget left=%d)\n",
+                total_mat, total_aobj, total_fobj, budget);
     }
 
     return archive;

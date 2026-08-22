@@ -88,6 +88,18 @@ static void MObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
 {
     HSD_MObj* mobj = obj;
 
+    /* PC diag: confirm the matanim is actually driving material params, and
+     * which ones (RGB diffuse? alpha? something else?). */
+    {
+        static int _mu_on = -1, _mu_n = 0;
+        if (_mu_on < 0) _mu_on = (getenv("MELEE_ANIMLOG") != NULL);
+        if (_mu_on && _mu_n < 60) {
+            _mu_n++;
+            fprintf(stderr, "MATUPD mobj=%p type=%u val=%.4f\n",
+                    (void*)mobj, (unsigned)type, (double)(val ? val->fv : -1.0f));
+        }
+    }
+
     if (mobj == NULL) {
         return;
     }
