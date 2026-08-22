@@ -2592,6 +2592,27 @@ static void bridge_upload_and_draw(void)
                             (double)g_state.verts[i].tex0[0], (double)g_state.verts[i].tex0[1]);
             }
         }
+        /* PC diag: MELEE_DRAWTRACE — log every draw in a frame window (position
+         * center + texture bank + material) to identify each model (logo, white
+         * box, tunnel) and see which textures are bound. */
+        {
+            static int _dt_on = -1, _dt_n = 0;
+            if (_dt_on < 0) _dt_on = (getenv("MELEE_DRAWTRACE") != NULL);
+            u32 fc2 = g_state.frame_count;
+            if (_dt_on && fc2 >= 340 && fc2 <= 342 && _dt_n < 130) {
+                _dt_n++;
+                f64 cx = 0, cy = 0, cz = 0;
+                u32 cn = (count < 200 ? count : 200);
+                for (u32 i = 0; i < cn; i++) { cx += g_state.verts[i].pos[0]; cy += g_state.verts[i].pos[1]; cz += g_state.verts[i].pos[2]; }
+                if (cn > 0) { cx /= cn; cy /= cn; cz /= cn; }
+                fprintf(stderr, "DRAW frame=%u #%02u n=%u prim=%u mat=(%u,%u,%u,%u) ctr=(%.1f,%.1f,%.1f) texb=%u clr_en=%d\n",
+                        (unsigned)fc2, _dt_n, (unsigned)count, (unsigned)g_state.prim_type,
+                        (unsigned)g_state.cur_color.r, (unsigned)g_state.cur_color.g, (unsigned)g_state.cur_color.b, (unsigned)g_state.cur_color.a,
+                        cx, cy, cz,
+                        (g_active_tex_count > 0 && g_state.tex_cache_valid[g_active_tex_slots[0]]) ? (unsigned)g_state.tex_cache[g_active_tex_slots[0]] : 0u,
+                        (int)g_state.clr_enabled);
+            }
+        }
         /* PC fix: a GX_QUADS batch with more than 4 vertices is N INDEPENDENT
          * quads, not a triangle fan. Convert each quad (a,b,c,d) to the two
          * triangles (a,b,c),(a,c,d) and draw a triangle list. */
@@ -6017,7 +6038,7 @@ skip_tlut:
         if (_td_on < 0) _td_on = (getenv("MELEE_TEXDUMP") != NULL);
         int is_rgba8 = (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 ||
                         fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || fmt == 0x06);
-        if (_td_on && is_rgba8 && _td_n < 16 && upload_src) {
+        if (_td_on && is_rgba8 && _td_n < 96 && upload_src) {
             char path[128];
             snprintf(path, sizeof(path), "/tmp/texdump_%d_%dx%d.ppm", _td_n, upload_w, upload_h);
             FILE* tf = fopen(path, "wb");

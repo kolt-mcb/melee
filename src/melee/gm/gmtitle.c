@@ -146,10 +146,26 @@ static int pc_jtree_dump(HSD_JObj* j, int depth, int* budget)
     struct HSD_AObj* a = j->aobj;
     int nf = 0;
     if (a && a->fobj) { for (HSD_FObj* f = a->fobj; f && nf < 999; f = f->next) nf++; }
-    fprintf(stderr, "JTREE %*saobj=%c fobj=%c nfobj=%d frame=%.1f end=%.1f t=(%.2f,%.2f,%.2f)\n",
+    /* DOBJ (mesh) info: material diffuse/alpha + number of display lists */
+    char dstr[96] = "";
+    if (j->flags && !(j->flags & 0x00000020u) && !(j->flags & 0x00004000u)) {
+        struct HSD_DObj* d = j->u.dobj;
+        if (d) {
+            int nd = (d->pobj) ? d->pobj->n_display : -1;
+            snprintf(dstr, sizeof(dstr), " DOBJ m=%p diff=(%u,%u,%u) a=%.2f nd=%d",
+                     (void*)d->mobj,
+                     d->mobj ? (unsigned)d->mobj->mat->diffuse.r : 0,
+                     d->mobj ? (unsigned)d->mobj->mat->diffuse.g : 0,
+                     d->mobj ? (unsigned)d->mobj->mat->diffuse.b : 0,
+                     d->mobj ? (double)d->mobj->mat->alpha : -1.0, nd);
+        } else {
+            snprintf(dstr, sizeof(dstr), " (dobjslot-null)");
+        }
+    }
+    fprintf(stderr, "JTREE %*saobj=%c fobj=%c nfobj=%d frame=%.1f t=(%.2f,%.2f,%.2f)%s\n",
             depth * 2, "", a ? 'Y' : 'n', (a && a->fobj) ? 'Y' : 'n', nf,
-            a ? (double)a->curr_frame : -1.0, a ? (double)a->end_frame : -1.0,
-            (double)j->translate.x, (double)j->translate.y, (double)j->translate.z);
+            a ? (double)a->curr_frame : -1.0,
+            (double)j->translate.x, (double)j->translate.y, (double)j->translate.z, dstr);
     pc_jtree_dump(j->child, depth + 1, budget);
     pc_jtree_dump(j->next, depth, budget);
     return depth;
@@ -198,6 +214,16 @@ static void fn_801A1498(HSD_GObj* arg0)
 static void gmTitle_801A1630(HSD_GObj* gobj)
 {
     mn_8022ED6C(GET_JOBJ(gobj), &gmTitle_803DA4F0);
+#if BUILD_TARGET_PC
+    {
+        static int _lg_n = 0;
+        if (getenv("MELEE_ANIMLOG") && _lg_n < 80) {
+            _lg_n++;
+            fprintf(stderr, "LOGOF C=%u logoFrame=%.1f\n",
+                    (unsigned)gm_804D67EC, (double)mn_8022F298(GET_JOBJ(gobj)));
+        }
+    }
+#endif
 }
 
 HSD_GObj* gmTitle_801A165C(void)
@@ -216,6 +242,13 @@ HSD_GObj* gmTitle_801A165C(void)
     HSD_JObjAddAnimAll(jobj, gmTitle_80479B28.animjoint,
                        gmTitle_80479B28.matanim_joint,
                        gmTitle_80479B28.shapeanim_joint);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ANIMLOG")) {
+        int budget = 200;
+        fprintf(stderr, "=== JTREE (TTLMOJI logo, gmTitle_80479B28) ===\n");
+        pc_jtree_dump(jobj, 0, &budget);
+    }
+#endif
 
     if (gm_GetCurrentGameMode() == GM_TITLE ||
         (gm_GetCurrentGameMode() == GM_OPENING_MV &&
@@ -227,11 +260,25 @@ HSD_GObj* gmTitle_801A165C(void)
     }
     if (var_r0) {
         gmTitle_804D671C = 0;
+#if BUILD_TARGET_PC
+        /* PC fast-forward fix: with MELEE_MTHP_START the title-sequence frame
+         * (gm_804D67EC) is jumped ahead, so this logo is *created* already
+         * past the intro. It would then start at frame 0 and need ~5130 frames
+         * to reach its steady state (the 0-400 intro range, where the text is
+         * mid-fade -> invisible). In real Melee the logo is created during the
+         * intro (~EC 5130) and its frame runs continuously at EC-5130 through
+         * the 400->1600 loop. So when created with EC already past the intro,
+         * start the logo at that steady-state frame so the text is visible. */
+        if (gm_804D67EC > 0x1518) {
+            HSD_JObjReqAnimAll(jobj, (f32)(gm_804D67EC - 0x140A));
+        } else
+#endif
         HSD_JObjReqAnimAll(jobj, gmTitle_803DA4F0.start_frame);
         HSD_GObj_SetupProc(gobj, fn_801A1498, 0);
 #if BUILD_TARGET_PC
-        fprintf(stderr, "TITLEPROC registered fn_801A1498=%p gobj=%p jobj=%p EC=%u\n",
-                (void*)fn_801A1498, (void*)gobj, (void*)jobj, (unsigned)gm_804D67EC);
+        fprintf(stderr, "TITLEPROC registered fn_801A1498=%p gobj=%p jobj=%p EC=%u frame=%.1f\n",
+                (void*)fn_801A1498, (void*)gobj, (void*)jobj, (unsigned)gm_804D67EC,
+                (double)mn_8022F298(jobj));
 #endif
     } else {
         HSD_JObjReqAnimAll(jobj, 400.0F);
