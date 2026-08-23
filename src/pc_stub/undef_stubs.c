@@ -1343,13 +1343,21 @@ typedef f32 Mtx[3][4];
 
 __attribute__((weak)) void PSMTXConcat(Mtx mA, Mtx mB, Mtx mAB)
 {
-    /* Multiply two 3x4 matrices: mAB = mA * mB (row-major) */
+    /* Multiply two 3x4 matrices: mAB = mA * mB (row-major).
+     * NOTE: must be alias-safe — HSD_JObjMakeMatrix calls
+     * PSMTXConcat(parent->mtx, jobj->mtx, jobj->mtx) with mB == mAB.
+     * The original PPC SIMD implementation loads all of mB into
+     * FPRs before storing, so in-place concatenation is legal. */
+    f32 tmp[3][4];
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
-            mAB[i][j] = mA[i][0] * mB[0][j] + mA[i][1] * mB[1][j] + mA[i][2] * mB[2][j];
+            tmp[i][j] = mA[i][0] * mB[0][j] + mA[i][1] * mB[1][j] + mA[i][2] * mB[2][j];
         }
-        mAB[i][3] = mA[i][0] * mB[0][3] + mA[i][1] * mB[1][3] + mA[i][2] * mB[2][3] + mA[i][3];
+        tmp[i][3] = mA[i][0] * mB[0][3] + mA[i][1] * mB[1][3] + mA[i][2] * mB[2][3] + mA[i][3];
     }
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 4; j++)
+            mAB[i][j] = tmp[i][j];
 }
 __attribute__((weak)) void PSMTXCopy(Mtx mDst, Mtx mSrc)
 {
