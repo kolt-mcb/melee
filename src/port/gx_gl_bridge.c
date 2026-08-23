@@ -2599,18 +2599,20 @@ static void bridge_upload_and_draw(void)
             static int _dt_on = -1, _dt_n = 0;
             if (_dt_on < 0) _dt_on = (getenv("MELEE_DRAWTRACE") != NULL);
             u32 fc2 = g_state.frame_count;
-            if (_dt_on && fc2 >= 340 && fc2 <= 342 && _dt_n < 130) {
+            if (_dt_on && fc2 >= 6 && fc2 <= 7 && _dt_n < 400) {
                 _dt_n++;
                 f64 cx = 0, cy = 0, cz = 0;
                 u32 cn = (count < 200 ? count : 200);
                 for (u32 i = 0; i < cn; i++) { cx += g_state.verts[i].pos[0]; cy += g_state.verts[i].pos[1]; cz += g_state.verts[i].pos[2]; }
                 if (cn > 0) { cx /= cn; cy /= cn; cz /= cn; }
-                fprintf(stderr, "DRAW frame=%u #%02u n=%u prim=%u mat=(%u,%u,%u,%u) ctr=(%.1f,%.1f,%.1f) texb=%u clr_en=%d\n",
+                fprintf(stderr, "DRAW frame=%u #%02u n=%u prim=%u mat=(%u,%u,%u,%u) ctr=(%.1f,%.1f,%.1f) texb=%u clr_en=%d mm_t=(%.2f,%.2f,%.2f) mm_s=(%.2f,%.2f,%.2f)\n",
                         (unsigned)fc2, _dt_n, (unsigned)count, (unsigned)g_state.prim_type,
                         (unsigned)g_state.cur_color.r, (unsigned)g_state.cur_color.g, (unsigned)g_state.cur_color.b, (unsigned)g_state.cur_color.a,
                         cx, cy, cz,
                         (g_active_tex_count > 0 && g_state.tex_cache_valid[g_active_tex_slots[0]]) ? (unsigned)g_state.tex_cache[g_active_tex_slots[0]] : 0u,
-                        (int)g_state.clr_enabled);
+                        (int)g_state.clr_enabled,
+                        (double)g_state.model_matrix[3], (double)g_state.model_matrix[7], (double)g_state.model_matrix[11],
+                        (double)g_state.model_matrix[0], (double)g_state.model_matrix[5], (double)g_state.model_matrix[10]);
             }
         }
         /* PC fix: a GX_QUADS batch with more than 4 vertices is N INDEPENDENT
@@ -3019,6 +3021,21 @@ void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
       if (_sa_on && _sa_n < 4000) { _sa_n++;
         if (attr == 9 || attr == 10 || attr == 11)
           fprintf(stderr, "GXSETARR attr=%u ptr=%p stride=%u\n", attr, base_ptr, stride); } }
+    /* Dump the position pool contents when POS is set (gated). */
+    { static int _pd_on = -1;
+      if (_pd_on < 0) _pd_on = (getenv("MELEE_POOLDUMP") != NULL);
+      if (_pd_on && attr == 9 && stride == 12) {
+        static u8 seen[64]; static int seen_n = 0;
+        u32 key = (u32)((uintptr_t)base_ptr >> 4);
+        int dup = 0; for (int i = 0; i < seen_n; i++) if (seen[i] == key) { dup = 1; break; }
+        if (!dup && seen_n < 64) { seen[seen_n++] = key;
+          const f32* p = (const f32*)base_ptr;
+          fprintf(stderr, "POOLDUMP ptr=%p stride=12: ", base_ptr);
+          for (int e = 0; e < 8; e++)
+              fprintf(stderr, "[%d]=(%.2f,%.2f,%.2f) ", e, (double)p[e*3], (double)p[e*3+1], (double)p[e*3+2]);
+          fprintf(stderr, "\n");
+          fflush(stderr); }
+      } }
 #endif
 }
 
@@ -3053,6 +3070,15 @@ void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
 void GXEnd(void)
 {
     GX_TRACE("GXEnd");
+#if BUILD_TARGET_PC
+    { static int _ge_on=-1; if(_ge_on<0)_ge_on=(getenv("MELEE_MTR")!=NULL); if(_ge_on){static int _ge_n=0; if(_ge_n++<300) fprintf(stderr,"GXEND type=0x%X batched=%u\n",(unsigned)g_state.prim_type,(unsigned)g_state.vert_count);} }
+#endif
+    /* GCN semantics: each GXBegin/GXEnd is one draw. Flush here so a DL
+     * with several strips (e.g. the title's 17-strip text DL) does not get
+     * merged into one corrupted mega-strip. */
+    if (g_state.vert_count > 0) {
+        bridge_upload_and_draw();
+    }
     g_state.in_primitive = FALSE;
     PORT_LOG_DEBUG("GXEnd: collected %u verts", g_state.vert_count);
 }
@@ -3617,6 +3643,23 @@ void GXCallDisplayList(void* list, u32 nbytes)
     if (g_dl_depth > 8) { g_dl_depth--; return; }
     if (nbytes > 1024 * 1024) { g_dl_depth--; return; }
 
+    int n_draws = 0;
+
+    /* PC diag: dump the main-mesh DL bytes to a file (MELEE_DLDUMP). Fires once
+     * on the first call of a DL of the given size (MELEE_DLDUMP_SIZE, default 1792). */
+    {
+        static int _dd_on = -1, _dd_done = 0;
+        static u32 _dd_size = 0;
+        if (_dd_on < 0) { const char* sz = getenv("MELEE_DLDUMP_SIZE"); _dd_on = (getenv("MELEE_DLDUMP") != NULL); _dd_size = sz ? (u32)strtoul(sz, 0, 0) : 0; if (!_dd_size) _dd_size = 1792; }
+        if (_dd_on && nbytes >= 500) {
+            static int _dd_seq = 0;
+            char path[160]; snprintf(path, sizeof(path), "/tmp/dls/dl_%03d_%u.bin", _dd_seq++, (unsigned)nbytes);
+            FILE* f = fopen(path, "wb");
+            if (f) { fwrite(ptr, 1, nbytes, f); fclose(f); }
+            if (_dd_seq < 60) fprintf(stderr, "DLDUMP %s list=%p frame=%u\n", path, list, (unsigned)g_state.frame_count);
+        }
+    }
+
 #if BUILD_TARGET_PC
     /* PC diag: dump the first draw of logo (P1-active) display lists. */
     {
@@ -3736,6 +3779,7 @@ void GXCallDisplayList(void* list, u32 nbytes)
                 default: gcn_prim = GX_POINTS;         break;
                 }
 
+                n_draws++;
                 GXBegin(gcn_prim, op & 7, nverts);
 
                 {
@@ -3798,10 +3842,15 @@ void GXCallDisplayList(void* list, u32 nbytes)
                         GXColor4u8((u8)vclr[0], (u8)vclr[1], (u8)vclr[2], (u8)vclr[3]);
                     }
                     /* PC diag: dump first 3 verts' raw stream bytes */
-                    if (v < 3) {
-                        fprintf(stderr, "  V%u pos=(%.2f,%.2f,%.2f) clr=(%.3f,%.3f,%.3f,%.3f)\n",
+                    {
+                        static int _vv_on = -1;
+                        if (_vv_on < 0) _vv_on = (getenv("MELEE_MTR") != NULL);
+                        if (_vv_on && v < 3) {
+                            static int _vv_n = 0;
+                            if (_vv_n++ < 60) fprintf(stderr, "  V%u pos=(%.2f,%.2f,%.2f) clr=(%.3f,%.3f,%.3f,%.3f)\n",
                                 v, (double)c[0], (double)c[1], (double)c[2],
                                 (double)vclr[0], (double)vclr[1], (double)vclr[2], (double)vclr[3]);
+                        }
                     }
                     if (g_state.nrm_mode) {
                         p = dl_read_comps(p, g_state.nrm_mode, 3,
@@ -3822,6 +3871,70 @@ void GXCallDisplayList(void* list, u32 nbytes)
                         GXTexCoord2f32(c[0], c[1]);
                     }
                 }
+                /* PC diag: for the main-text DL (nbytes==3328), log each strip's
+                 * world position (model matrix translation) + resolved vertex
+                 * positions (model space) to see where the letters actually land. */
+                if (nbytes == 3328 && nverts >= 8) {
+                    static int _mt_n = 0;
+                    if (_mt_n < 60) {
+                        _mt_n++;
+                        f64 cx=0,cy=0,cz=0; u32 cn=(nverts<8?nverts:8);
+                        for (u32 i=0;i<cn;i++){cx+=g_state.verts[i].pos[0];cy+=g_state.verts[i].pos[1];cz+=g_state.verts[i].pos[2];}
+                        if (cn>0){cx/=cn;cy/=cn;cz/=cn;}
+                        if (n_draws == 1) {
+                            {
+                                extern void* HSD_JObjGetCurrent(void);
+                                void* cj = HSD_JObjGetCurrent();
+                                static int _jc_n = 0;
+                                if (_jc_n < 1) {
+                                    _jc_n++;
+                                    int count = 0;
+                                    for (void* j = (void**)((u8*)cj + 0x10); j && count < 50; ) {
+                                        f32* cm = (f32*)((u8*)j + 0x44);
+                                        f32* ct = (f32*)((u8*)j + 0x38);
+                                        f32* cs = (f32*)((u8*)j + 0x2C);
+                                        f32* cr = (f32*)((u8*)j + 0x1C);
+                                        void* par = *(void**)((u8*)j + 0xC);
+                                        u32 jid = *(u32*)((u8*)j + 0x84);
+                                        fprintf(stderr, "JTREE j=%p id=%08x par=%p t=(%.2f,%.2f,%.2f) s=(%.2f,%.2f,%.2f) q=(%.2f,%.2f,%.2f,%.2f) m=(%.2f,%.2f,%.2f,%.2f | %.2f,%.2f,%.2f,%.2f | %.2f,%.2f,%.2f,%.2f)\n",
+                                                j, jid, par,
+                                                (double)ct[0],(double)ct[1],(double)ct[2],
+                                                (double)cs[0],(double)cs[1],(double)cs[2],
+                                                (double)cr[0],(double)cr[1],(double)cr[2],(double)cr[3],
+                                                (double)cm[0],(double)cm[1],(double)cm[2],(double)cm[3],
+                                                (double)cm[4],(double)cm[5],(double)cm[6],(double)cm[7],
+                                                (double)cm[8],(double)cm[9],(double)cm[10],(double)cm[11]);
+                                        count++;
+                                        j = *(void**)((u8*)j + 8);
+                                    }
+                                }
+                            }
+                            fprintf(stderr, "MTXFULL m0=(%.3f,%.3f,%.3f,%.3f) m1=(%.3f,%.3f,%.3f,%.3f) m2=(%.3f,%.3f,%.3f,%.3f)\n",
+                                (double)g_state.model_matrix[0],(double)g_state.model_matrix[1],(double)g_state.model_matrix[2],(double)g_state.model_matrix[3],
+                                (double)g_state.model_matrix[4],(double)g_state.model_matrix[5],(double)g_state.model_matrix[6],(double)g_state.model_matrix[7],
+                                (double)g_state.model_matrix[8],(double)g_state.model_matrix[9],(double)g_state.model_matrix[10],(double)g_state.model_matrix[11]);
+                            /* Dump the position array base + first entries + the
+                             * entries at the indices the first strip uses. */
+                            const f32* ap = (const f32*)g_state.arr_pos;
+                            u32 sp = g_state.arr_stride_pos;
+                            fprintf(stderr, "POSARR base=%p stride=%u\n", (const void*)ap, (unsigned)sp);
+                            for (u32 e = 0; e < 4; e++) {
+                                const f32* q = ap + (size_t)e * (sp / 4);
+                                fprintf(stderr, "  posarr[%u]=(%.3f,%.3f,%.3f)\n", e, (double)q[0], (double)q[1], (double)q[2]);
+                            }
+                            for (u32 idx = 1162; idx <= 1170; idx++) {
+                                const f32* q = ap + (size_t)idx * (sp / 4);
+                                fprintf(stderr, "  posarr[%u]=(%.3f,%.3f,%.3f)\n", idx, (double)q[0], (double)q[1], (double)q[2]);
+                            }
+                        }
+                        fprintf(stderr, "MTX strip=%d n=%u mm_t=(%.2f,%.2f,%.2f) mm_s=(%.2f,%.2f,%.2f) v0=(%.2f,%.2f,%.2f) cent8=(%.2f,%.2f,%.2f)\n",
+                                n_draws, (unsigned)nverts,
+                                (double)g_state.model_matrix[3],(double)g_state.model_matrix[7],(double)g_state.model_matrix[11],
+                                (double)g_state.model_matrix[0],(double)g_state.model_matrix[5],(double)g_state.model_matrix[10],
+                                (double)g_state.verts[0].pos[0],(double)g_state.verts[0].pos[1],(double)g_state.verts[0].pos[2],
+                                cx,cy,cz);
+                    }
+                }
                 GXEnd();
             }
             break;
@@ -3829,6 +3942,20 @@ void GXCallDisplayList(void* list, u32 nbytes)
     }
 
 dl_end:
+    /* PC diag: log DL call -> draw count (MELEE_DLC) */
+    {
+        static int _dlc_on = -1, _dlc_n = 0;
+        if (_dlc_on < 0) _dlc_on = (getenv("MELEE_DLC") != NULL);
+        u32 fcc = g_state.frame_count;
+        if (_dlc_on && _dlc_n < 400) {
+            _dlc_n++;
+            fprintf(stderr, "DLC frame=%u list=%p nbytes=%u depth=%d draws=%d vsize=%u vat[pos=%u/%u/f%u nrm=%u clr=%u tex0=%u/%u] arr_pos=%p stride_pos=%u\n",
+                    (unsigned)fcc, list, (unsigned)nbytes, g_dl_depth, n_draws, (unsigned)vsize,
+                    (unsigned)g_state.pos_mode, (unsigned)g_state.pos_comp_type, (unsigned)g_state.pos_frac,
+                    (unsigned)g_state.nrm_mode, (unsigned)g_state.clr_mode, (unsigned)g_state.tex0_mode, (unsigned)g_state.tex0_comp_type,
+                    (const void*)g_state.arr_pos, (unsigned)g_state.arr_stride_pos);
+        }
+    }
     /* Flush any remaining accumulated vertices */
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
