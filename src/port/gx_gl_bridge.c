@@ -1749,10 +1749,16 @@ void gx_bridge_init(void)
         g_state.tev_stages[i].tex_chan = 0;
     }
     
-    /* Init KColor/KAlpha constants (black by default) */
+    /* Init KColor/KAlpha constants. KColor defaults to black (matches GCN).
+     * KAlpha defaults to 255 (opaque) to match the GCN hardware: the alpha
+     * TEV space has no literal ONE — GX_CA_ONE == GX_CA_KONST == 6, which
+     * resolves to the KAlpha constant. So GX_PASSCLR / GX_DECAL alpha
+     * passthrough ((RASA + ZERO) * ONE + ZERO) only yields ras.a when
+     * KAlpha == 255. Zeroing it made every passthrough material invisible. */
     for (int i = 0; i < 4; i++) {
         memset(&g_state.k_colors[i], 0, sizeof(g_state.k_colors[i]));
-        memset(&g_state.k_alphas[i], 0, sizeof(g_state.k_alphas[i]));
+        g_state.k_alphas[i].r = 255; g_state.k_alphas[i].g = 255;
+        g_state.k_alphas[i].b = 255; g_state.k_alphas[i].a = 255;
         memset(&g_state.tev_regs[i], 0, sizeof(g_state.tev_regs[i]));
     }
     
@@ -2637,11 +2643,12 @@ static void bridge_upload_and_draw(void)
                                 st->alpha_inputs[0], st->alpha_inputs[1], st->alpha_inputs[2], st->alpha_inputs[3],
                                 st->alpha_op, (int)st->alpha_enabled);
                     }
-                    fprintf(stderr, "  KCOL k0=(%u,%u,%u,%u) k1=(%u,%u,%u,%u) k2=(%u,%u,%u,%u) k3=(%u,%u,%u,%u)\n",
+                    fprintf(stderr, "  KCOL k0=(%u,%u,%u,%u) k1=(%u,%u,%u,%u) k2=(%u,%u,%u,%u) k3=(%u,%u,%u,%u) kalpha0=%u\n",
                             g_state.k_colors[0].r, g_state.k_colors[0].g, g_state.k_colors[0].b, g_state.k_colors[0].a,
                             g_state.k_colors[1].r, g_state.k_colors[1].g, g_state.k_colors[1].b, g_state.k_colors[1].a,
                             g_state.k_colors[2].r, g_state.k_colors[2].g, g_state.k_colors[2].b, g_state.k_colors[2].a,
-                            g_state.k_colors[3].r, g_state.k_colors[3].g, g_state.k_colors[3].b, g_state.k_colors[3].a);
+                            g_state.k_colors[3].r, g_state.k_colors[3].g, g_state.k_colors[3].b, g_state.k_colors[3].a,
+                            (unsigned)g_state.k_alphas[0].a);
                 }
             }
         }
@@ -3448,15 +3455,19 @@ void GXSetTevOp(u32 stage, u32 mode)
      * GX_PASSCLR=4: Pass through RAS unchanged */
     
     /* Set color and alpha inputs based on mode */
+    /* Alpha inputs use the 3-bit GXTevAlphaArg encoding (NOT the 4-bit color
+     * encoding): APREV=0, A0=1, A1=2, A2=3, TEXA=4, RASA=5, KONST/ONE=6, ZERO=7.
+     * The color inputs above use the 4-bit GXTevColorArg encoding (RASC=10,
+     * TEXC=8, ONE=12, ZERO=15) — do not mix the two. */
     switch (mode) {
     case 0: /* GX_MODULATE: RAS * TEX */
         s->color_inputs[0] = 10;  // RASC
         s->color_inputs[1] = 15;  // ZERO
         s->color_inputs[2] = 8;   // TEXC (multiplier)
         s->color_inputs[3] = 15;  // ZERO
-        s->alpha_inputs[0] = 11;  // RASA
+        s->alpha_inputs[0] = 5;   // RASA
         s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 9;   // TEXA (multiplier)
+        s->alpha_inputs[2] = 4;   // TEXA (multiplier)
         s->alpha_inputs[3] = 7;   // ZERO
         s->color_op = 0;  // ADD
         s->alpha_op = 0;  // ADD
@@ -3466,9 +3477,9 @@ void GXSetTevOp(u32 stage, u32 mode)
         s->color_inputs[1] = 15;  // ZERO
         s->color_inputs[2] = 12;  // ONE (pass-through)
         s->color_inputs[3] = 15;  // ZERO
-        s->alpha_inputs[0] = 11;  // RASA
+        s->alpha_inputs[0] = 5;   // RASA
         s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 12;  // ONE (pass-through)
+        s->alpha_inputs[2] = 6;   // ONE (pass-through) = KONST
         s->alpha_inputs[3] = 7;   // ZERO
         s->color_op = 0;
         s->alpha_op = 0;
@@ -3478,9 +3489,9 @@ void GXSetTevOp(u32 stage, u32 mode)
         s->color_inputs[1] = 15;  // ZERO
         s->color_inputs[2] = 8;   // TEXC (multiplier)
         s->color_inputs[3] = 15;  // ZERO
-        s->alpha_inputs[0] = 11;  // RASA
+        s->alpha_inputs[0] = 5;   // RASA
         s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 9;   // TEXA (multiplier)
+        s->alpha_inputs[2] = 4;   // TEXA (multiplier)
         s->alpha_inputs[3] = 7;   // ZERO
         s->color_op = 0;
         s->alpha_op = 0;
@@ -3490,9 +3501,9 @@ void GXSetTevOp(u32 stage, u32 mode)
         s->color_inputs[1] = 15;  // ZERO
         s->color_inputs[2] = 12;  // ONE (pass-through)
         s->color_inputs[3] = 15;  // ZERO
-        s->alpha_inputs[0] = 9;   // TEXA
+        s->alpha_inputs[0] = 4;   // TEXA
         s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 12;  // ONE (pass-through)
+        s->alpha_inputs[2] = 6;   // ONE (pass-through) = KONST
         s->alpha_inputs[3] = 7;   // ZERO
         s->color_op = 0;
         s->alpha_op = 0;
@@ -3502,9 +3513,9 @@ void GXSetTevOp(u32 stage, u32 mode)
         s->color_inputs[1] = 15;  // ZERO
         s->color_inputs[2] = 12;  // ONE (pass-through)
         s->color_inputs[3] = 15;  // ZERO
-        s->alpha_inputs[0] = 11;  // RASA
+        s->alpha_inputs[0] = 5;   // RASA
         s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 12;  // ONE (pass-through)
+        s->alpha_inputs[2] = 6;   // ONE (pass-through) = KONST
         s->alpha_inputs[3] = 7;   // ZERO
         s->color_op = 0;
         s->alpha_op = 0;
@@ -3514,9 +3525,9 @@ void GXSetTevOp(u32 stage, u32 mode)
         s->color_inputs[1] = 15;
         s->color_inputs[2] = 12;  // ONE (pass-through)
         s->color_inputs[3] = 15;
-        s->alpha_inputs[0] = 11;  // RASA
+        s->alpha_inputs[0] = 5;   // RASA
         s->alpha_inputs[1] = 7;
-        s->alpha_inputs[2] = 12;  // ONE (pass-through)
+        s->alpha_inputs[2] = 6;   // ONE (pass-through) = KONST
         s->alpha_inputs[3] = 7;
         s->color_op = 0;
         s->alpha_op = 0;
@@ -4493,6 +4504,12 @@ void GXSetTevColorIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
 void GXSetTevAlphaIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
 {
     GX_TRACE("GXSetTevAlphaIn(%u, %u, %u, %u, %u)", stage, a, b, c, d);
+    {
+        static int _ain_on = -1, _ain_n = 0;
+        if (_ain_on < 0) _ain_on = (getenv("MELEE_MTR") != NULL);
+        if (_ain_on && _ain_n < 60 && (a | b | c | d) >= 8) { _ain_n++;
+            fprintf(stderr, "  ALPHAIN s%u=[%u,%u,%u,%u] frame=%u\n", stage, a, b, c, d, (unsigned)g_state.frame_count); }
+    }
     if (stage < MAX_TEV_STAGES) {
         tev_track_stage(stage);
         g_state.tev_stages[stage].alpha_inputs[0] = a;
@@ -5150,6 +5167,12 @@ void GXSetTevKColor(u32 kcolor, GXColor color)
 void GXSetTevKAlpha(u32 kalpha, u32 val)
 {
     GX_TRACE("GXSetTevKAlpha(%u, %u)", kalpha, val);
+    {
+        static int _kal_on = -1, _kal_n = 0;
+        if (_kal_on < 0) _kal_on = (getenv("MELEE_MTR") != NULL);
+        if (_kal_on && _kal_n < 40) { _kal_n++;
+            fprintf(stderr, "  SETKALPHA k%u=%u frame=%u\n", kalpha, val, (unsigned)g_state.frame_count); }
+    }
     u32 idx = kalpha & 3;
     if (idx < 4) {
         g_state.k_alphas[idx].r = val & 0xFF;
