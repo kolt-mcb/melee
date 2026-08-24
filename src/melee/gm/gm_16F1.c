@@ -17,8 +17,23 @@
 #include <melee/pl/types.h>
 #include <melee/ty/toy.h>
 
-/* Forward declaration for lbl_8046DBD8 (defined in lb/ module) */
-extern lbl_8046DBD8_t lbl_8046DBD8;
+/* PC fix: lbl_8046DBD8 is a 10-byte data global (c_kind/color/stocks/gamemode
+ * transition state). The weak-stub system defined it as a 5-byte FUNC in .text,
+ * so any store to it (e.g. in gm_80173754 during scene transition) wrote to
+ * read-only .text and SIGSEGV'd. Define the real data object here; the strong
+ * definition overrides the weak function at link time. */
+lbl_8046DBD8_t lbl_8046DBD8;
+
+/* PC fix: the decomp split the challenger-data accessors across gm_16F1.c
+ * (built) and gm_1736.c (NOT in the build). gm_1736.c's gm_GetChallengerData
+ * returned a local static, but the only linked definition was a weak stub
+ * returning NULL — so the character-select scene (gm_801BFA6C) NULL-deref'd
+ * reading ->x4. Define it here to return the real global lbl_8046DBD8 that
+ * gm_801736E8/gm_80173754 (both in this file) write to. */
+lbl_8046DBD8_t* gm_GetChallengerData(void)
+{
+    return &lbl_8046DBD8;
+}
 
 struct lbl_804D65A8_t {
     /* 0x00 */ u8 x0;

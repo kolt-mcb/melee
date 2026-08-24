@@ -128,7 +128,15 @@ void render_present(void)
     
     /* Walk GX link list and invoke render callbacks. */
     /* When gr/ is enabled, grDisplay functions render each frame. */
-    invoke_gx_render_links();
+    /* PC port: MELEE_TEX_TEST=1 renders a 3D color-texture test quad
+     * instead of the game scene (validates the color-texture + 3D pipeline). */
+    static int s_tex_test = -1;
+    if (s_tex_test < 0) s_tex_test = (getenv("MELEE_TEX_TEST") != NULL);
+    if (s_tex_test) {
+        pc_render_tex_test();
+    } else {
+        invoke_gx_render_links();
+    }
     
     /* Flush any remaining GX batches before swapping */
     gx_frame_end();

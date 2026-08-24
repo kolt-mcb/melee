@@ -29,6 +29,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ucontext.h>
+#include <execinfo.h>
 
 /* PC port: crash handler for debugging segfaults */
 static void crash_handler(int sig, siginfo_t* info, void* ctx)
@@ -42,6 +43,12 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
                  sig, info->si_addr, 
                  (void*)uc->uc_mcontext.gregs[REG_RIP]);
     write(2, buf, n);
+    /* Print a backtrace so we can pinpoint the faulting call site. */
+    void* frames[64];
+    int cnt = backtrace(frames, 64);
+    n = snprintf(buf, sizeof(buf), "[CRASH] backtrace (%d frames):\n", cnt);
+    write(2, buf, n);
+    backtrace_symbols_fd(frames, cnt, 2);
     fsync(2);
     /* Note: SIGABRT (e.g. glibc free() corruption) is NOT swallowed —
      * exiting 0 here used to hide memory corruption as a clean shutdown.
