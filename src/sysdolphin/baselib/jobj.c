@@ -195,6 +195,26 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
         
         HSD_MtxSRT(jobj->mtx, &jobj->scale, (Vec3*) &jobj->rotate,
                    &jobj->translate, scl);
+#if BUILD_TARGET_PC
+        { static int _srt_on = -1, _srt_n = 0;
+          if (_srt_on < 0) _srt_on = (getenv("MELEE_MTR") != NULL);
+          if (_srt_on && _srt_n < 60) {
+              _srt_n++;
+              fprintf(stderr, "SRTIN j=%p scl4=(%s) scl=(%.3f,%.3f,%.3f) t=(%.2f,%.2f,%.2f) rot=(%.4f,%.4f,%.4f,%.4f)\n",
+                      (void*)jobj,
+                      scl ? "set" : "null",
+                      (double)jobj->scale.x, (double)jobj->scale.y, (double)jobj->scale.z,
+                      (double)jobj->translate.x, (double)jobj->translate.y, (double)jobj->translate.z,
+                      (double)jobj->rotate.x, (double)jobj->rotate.y, (double)jobj->rotate.z, (double)jobj->rotate.w);
+              if (scl) fprintf(stderr, "SRTIN   parent_scl=(%.4f,%.4f,%.4f)\n", (double)scl->x,(double)scl->y,(double)scl->z);
+              fprintf(stderr, "SRTOUT j=%p=(%.4f,%.4f,%.4f,%.4f | %.4f,%.4f,%.4f,%.4f | %.4f,%.4f,%.4f,%.4f)\n",
+                      (void*)jobj,
+                      (double)jobj->mtx[0][0],(double)jobj->mtx[0][1],(double)jobj->mtx[0][2],(double)jobj->mtx[0][3],
+                      (double)jobj->mtx[1][0],(double)jobj->mtx[1][1],(double)jobj->mtx[1][2],(double)jobj->mtx[1][3],
+                      (double)jobj->mtx[2][0],(double)jobj->mtx[2][1],(double)jobj->mtx[2][2],(double)jobj->mtx[2][3]);
+          }
+        }
+#endif
     }
     
 #if BUILD_TARGET_PC
