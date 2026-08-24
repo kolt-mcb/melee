@@ -2102,6 +2102,77 @@ void gx_set_default_3d_camera(void)
 }
 
 /* ============================================================
+ * PC port: color-texture render test (MELEE_TEX_TEST=1)
+ *
+ * Renders a 3D textured quad through the REAL GX pipeline (the same
+ * path the game uses) with a synthetic RGBA8 texture, to validate the
+ * color-texture + 3D-projection + camera pipeline independent of the
+ * title screen (which only exercises I4 intensity textures).
+ *
+ * The texture is an 8x8 RGBA8 image split into 4 colored quadrants
+ * (red / green / blue / white). A correct render shows those four
+ * colors on a perspective 3D plane.
+ * ============================================================ */
+void pc_render_tex_test(void)
+{
+    /* Use the 3D-camera path (mvp = proj * mv from gx_set_3d_camera),
+     * NOT the GCN matrix pipeline the title uses. */
+    g_state.mtx3d_active = FALSE;
+
+    /* Perspective camera: eye at (0,0,60) looking at the origin, Y-up. */
+    gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 1000.0f,
+                     0.0f, 0.0f, 60.0f,
+                     0.0f, 0.0f, 0.0f,
+                     0.0f, 1.0f, 0.0f);
+
+    /* Identity model matrix so u_model * pos == pos. */
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+            g_state.model_matrix[i*4+j] = (i == j) ? 1.0f : 0.0f;
+    g_state.model_matrix_valid = TRUE;
+
+    /* 8x8 RGBA8 texture: 4 colored quadrants (v=0 is bottom). */
+    static u8 tex[8 * 8 * 4];
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            u8* p = &tex[(y * 8 + x) * 4];
+            int left = (x < 4), top = (y >= 4);
+            if (left && top)      { p[0] = 255; p[1] = 0;   p[2] = 0;   }
+            else if (!left && top){ p[0] = 0;   p[1] = 255; p[2] = 0;   }
+            else if (left && !top){ p[0] = 0;   p[1] = 0;   p[2] = 255; }
+            else                  { p[0] = 255; p[1] = 255; p[2] = 255; }
+            p[3] = 255;
+        }
+    }
+    GXTexObj texobj;
+    GXInitTexObj(&texobj, tex, 8, 8, /*dim*/0, /*fmt*/0x06 /*RGBA8*/,
+                 /*s_clamp*/0x01, /*t_clamp*/0x01);
+    GXLoadTexObj(&texobj, /*texEnv*/0 /*GX_TEXMAP0*/);
+
+    /* Vertex format: direct position (XYZ) + texcoord (ST) + color (RGBA). */
+    GXClearVtxDesc();
+    GXSetVtxDesc(GX_VA_POS,  1 /*DIRECT*/);
+    GXSetVtxDesc(GX_VA_TEX0, 1);
+    GXSetVtxDesc(GX_VA_CLR0, 1);
+    GXSetVtxAttrFmt(0, GX_VA_POS,  GX_POS_XYZ, GX_F32, 0);
+    GXSetVtxAttrFmt(0, GX_VA_TEX0, GX_TEX_ST,  GX_F32, 0);
+    GXSetVtxAttrFmt(0, GX_VA_CLR0, GX_CLR_RGBA, GX_U8, 0);
+
+    /* Texgen: identity (use vertex ST). TEV: color = texture (GX_REPLACE). */
+    GXSetTexCoordGen2(GX_TEXMAP0, 0, 0, 0, 0, 0);
+    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, 0 /*GX_COLOR0*/);
+    GXSetTevOp(GX_TEVSTAGE0, 3 /*GX_REPLACE*/);
+
+    /* A 20x20 plane at z=0, facing the camera (which is at z=60). */
+    GXBegin(GX_QUADS, 0 /*GX_VTXFMT0*/, 4);
+    GXPosition3f32(-10.0f, -10.0f, 0.0f); GXTexCoord2f32(0.0f, 0.0f); GXColor4u8(255,255,255,255);
+    GXPosition3f32( 10.0f, -10.0f, 0.0f); GXTexCoord2f32(1.0f, 0.0f); GXColor4u8(255,255,255,255);
+    GXPosition3f32( 10.0f,  10.0f, 0.0f); GXTexCoord2f32(1.0f, 1.0f); GXColor4u8(255,255,255,255);
+    GXPosition3f32(-10.0f,  10.0f, 0.0f); GXTexCoord2f32(0.0f, 1.0f); GXColor4u8(255,255,255,255);
+    GXEnd();
+}
+
+/* ============================================================
  * Depth testing controls for multi-pass rendering
  * ============================================================ */
 

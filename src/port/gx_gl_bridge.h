@@ -186,6 +186,11 @@ void gx_set_3d_camera(f32 fov, f32 aspect, f32 near_z, f32 far_z,
                       f32 up_x, f32 up_y, f32 up_z);
 void gx_set_default_3d_camera(void);
 
+/* PC port: render a 3D textured quad with a synthetic RGBA8 color texture
+ * through the real GX pipeline (MELEE_TEX_TEST=1). Validates the
+ * color-texture + 3D-projection + camera pipeline. */
+void pc_render_tex_test(void);
+
 /* Depth testing toggles for multi-pass rendering */
 void gx_enable_depth_test(void);
 void gx_disable_depth_test(void);

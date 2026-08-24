@@ -374,3 +374,51 @@ void gm_801A4510(void)
     }
 #endif /* BUILD_TARGET_PC */
 }
+
+/* ---------------------------------------------------------------------------
+ * PC port: raw-address forwarders for the scene-manager accessors.
+ *
+ * This file implements the scene manager under FRIENDLY names
+ * (gm_SetPendingGameMode, gm_RunGameMode, gm_GetAllGameModes, ...), but the
+ * decompiled game code in other modules (gm_16F1.c, gm_1BA8.c, ...) calls the
+ * RAW PPC address names (gm_801A42E8, gm_801A42D4, ...). Those raw names were
+ * left as no-op weak stubs, so scene transitions silently did nothing and the
+ * port was stuck on the title screen forever.
+ *
+ * These strong forwarders make the raw names call the real implementations.
+ * Strong definitions override the no-op weak stubs at link time.
+ * ------------------------------------------------------------------------- */
+void* gm_801A427C(GameScene* scene)
+{
+    return gm_GetGameSceneLoadDataCallback(scene);
+}
+
+void* gm_801A4284(GameScene* scene)
+{
+    return gm_GetGameSceneLeaveDataCallback(scene);
+}
+
+void gm_801A42D4(void)
+{
+    gm_SetNewGameModePending();
+}
+
+void gm_801A42E8(s8 pending_mode)
+{
+    gm_SetPendingGameMode(pending_mode);
+}
+
+void gm_801A42F8(int pending_mode)
+{
+    gm_ChangeGameModeAfterCurrentScene(pending_mode);
+}
+
+u8 gm_801A4310(void)
+{
+    return gm_GetCurrentGameMode();
+}
+
+u8 gm_801A4320(void)
+{
+    return gm_GetPreviousGameMode();
+}
