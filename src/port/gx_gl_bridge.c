@@ -2104,72 +2104,146 @@ void gx_set_default_3d_camera(void)
 /* ============================================================
  * PC port: color-texture render test (MELEE_TEX_TEST=1)
  *
- * Renders a 3D textured quad through the REAL GX pipeline (the same
- * path the game uses) with a synthetic RGBA8 texture, to validate the
- * color-texture + 3D-projection + camera pipeline independent of the
- * title screen (which only exercises I4 intensity textures).
- *
- * The texture is an 8x8 RGBA8 image split into 4 colored quadrants
- * (red / green / blue / white). A correct render shows those four
- * colors on a perspective 3D plane.
+ * Renders a ROW of 3D textured quads through the REAL GX pipeline (the
+ * same path the game uses), one per texture format, to validate the
+ * color-texture + 3D-projection + camera + format-decode pipeline.
+ * Formats tested: RGBA8, RGB5A3, RGB565, I4+TLUT, I8+TLUT, CMPR.
+ * Each quad shows the same 4-color pattern (red/green/blue/white in the
+ * four quadrants); a correct render shows those colors per format.
  * ============================================================ */
+
+/* Forward decls (defined later in this file). */
+void GXInitTlutObj(void* tlutObj, const void* tlut_data, u32 tlut_fmt, u32 tlut_count);
+void GXLoadTlut(void* tlutObj, u32 tlut_group);
+
+
+/* Quadrant index for pixel (x,y) in an 8x8 (or 16x16) texture, v=0 bottom.
+ * 0=red(top-left) 1=green(top-right) 2=blue(bottom-left) 3=white(bottom-right) */
+static int tex_test_quadrant(int x, int y, int half)
+{
+    int left = (x < half), top = (y >= half);
+    if (left && top)     return 0;
+    if (!left && top)    return 1;
+    if (left && !top)    return 2;
+    return 3;
+}
+
+/* Draw a size x size quad centered at (cx,0), z=0, full UV. */
+static void tex_test_draw_quad(f32 cx, f32 half)
+{
+    GXBegin(GX_QUADS, 0, 4);
+    GXPosition3f32(cx-half, -half, 0.0f); GXTexCoord2f32(0.0f, 0.0f); GXColor4u8(255,255,255,255);
+    GXPosition3f32(cx+half, -half, 0.0f); GXTexCoord2f32(1.0f, 0.0f); GXColor4u8(255,255,255,255);
+    GXPosition3f32(cx+half,  half, 0.0f); GXTexCoord2f32(1.0f, 1.0f); GXColor4u8(255,255,255,255);
+    GXPosition3f32(cx-half,  half, 0.0f); GXTexCoord2f32(0.0f, 1.0f); GXColor4u8(255,255,255,255);
+    GXEnd();
+}
+
 void pc_render_tex_test(void)
 {
-    /* Use the 3D-camera path (mvp = proj * mv from gx_set_3d_camera),
-     * NOT the GCN matrix pipeline the title uses. */
     g_state.mtx3d_active = FALSE;
-
-    /* Perspective camera: eye at (0,0,60) looking at the origin, Y-up. */
     gx_set_3d_camera(60.0f, 1280.0f / 720.0f, 1.0f, 1000.0f,
-                     0.0f, 0.0f, 60.0f,
-                     0.0f, 0.0f, 0.0f,
-                     0.0f, 1.0f, 0.0f);
-
-    /* Identity model matrix so u_model * pos == pos. */
+                     0.0f, 0.0f, 60.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     for (int i = 0; i < 4; i++)
         for (int j = 0; j < 4; j++)
             g_state.model_matrix[i*4+j] = (i == j) ? 1.0f : 0.0f;
     g_state.model_matrix_valid = TRUE;
 
-    /* 8x8 RGBA8 texture: 4 colored quadrants (v=0 is bottom). */
-    static u8 tex[8 * 8 * 4];
-    for (int y = 0; y < 8; y++) {
-        for (int x = 0; x < 8; x++) {
-            u8* p = &tex[(y * 8 + x) * 4];
-            int left = (x < 4), top = (y >= 4);
-            if (left && top)      { p[0] = 255; p[1] = 0;   p[2] = 0;   }
-            else if (!left && top){ p[0] = 0;   p[1] = 255; p[2] = 0;   }
-            else if (left && !top){ p[0] = 0;   p[1] = 0;   p[2] = 255; }
-            else                  { p[0] = 255; p[1] = 255; p[2] = 255; }
-            p[3] = 255;
-        }
-    }
-    GXTexObj texobj;
-    GXInitTexObj(&texobj, tex, 8, 8, /*dim*/0, /*fmt*/0x06 /*RGBA8*/,
-                 /*s_clamp*/0x01, /*t_clamp*/0x01);
-    GXLoadTexObj(&texobj, /*texEnv*/0 /*GX_TEXMAP0*/);
-
-    /* Vertex format: direct position (XYZ) + texcoord (ST) + color (RGBA). */
+    /* Vertex format: direct position + texcoord + color. TEV: color = TEX. */
     GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS,  1 /*DIRECT*/);
+    GXSetVtxDesc(GX_VA_POS,  1);
     GXSetVtxDesc(GX_VA_TEX0, 1);
     GXSetVtxDesc(GX_VA_CLR0, 1);
     GXSetVtxAttrFmt(0, GX_VA_POS,  GX_POS_XYZ, GX_F32, 0);
     GXSetVtxAttrFmt(0, GX_VA_TEX0, GX_TEX_ST,  GX_F32, 0);
     GXSetVtxAttrFmt(0, GX_VA_CLR0, GX_CLR_RGBA, GX_U8, 0);
-
-    /* Texgen: identity (use vertex ST). TEV: color = texture (GX_REPLACE). */
     GXSetTexCoordGen2(GX_TEXMAP0, 0, 0, 0, 0, 0);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, 0 /*GX_COLOR0*/);
+    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, 0);
     GXSetTevOp(GX_TEVSTAGE0, 3 /*GX_REPLACE*/);
 
-    /* A 20x20 plane at z=0, facing the camera (which is at z=60). */
-    GXBegin(GX_QUADS, 0 /*GX_VTXFMT0*/, 4);
-    GXPosition3f32(-10.0f, -10.0f, 0.0f); GXTexCoord2f32(0.0f, 0.0f); GXColor4u8(255,255,255,255);
-    GXPosition3f32( 10.0f, -10.0f, 0.0f); GXTexCoord2f32(1.0f, 0.0f); GXColor4u8(255,255,255,255);
-    GXPosition3f32( 10.0f,  10.0f, 0.0f); GXTexCoord2f32(1.0f, 1.0f); GXColor4u8(255,255,255,255);
-    GXPosition3f32(-10.0f,  10.0f, 0.0f); GXTexCoord2f32(0.0f, 1.0f); GXColor4u8(255,255,255,255);
-    GXEnd();
+    /* 4-color palette (RGB565) for the I4/I8 TLUT: red/green/blue/white. */
+    static const u8 pal_rgb565[16 * 2] = {
+        0xF8,0x00,  /* 0 red   */
+        0x07,0xE0,  /* 1 green */
+        0x00,0x1F,  /* 2 blue  */
+        0xFF,0xFF,  /* 3 white */
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    };
+    static u8 tlutobj[8];
+    GXInitTlutObj(tlutobj, pal_rgb565, 1 /*RGB565*/, 16);
+    GXLoadTlut(tlutobj, 0 /*GX_TLUT0*/);
+
+    /* Quadrant colors as RGB565 / RGB5A3 / RGBA8 / CMPR-C0 (4444) values. */
+    /* index: 0=red 1=green 2=blue 3=white */
+    const u16 rgb565[4] = { 0xF800, 0x07E0, 0x001F, 0xFFFF };
+    const u16 rgb5a3[4] = { 0xFC00, 0x83E0, 0x801F, 0xFFFF };
+    const u16 cmpr_c0[4]= { 0x8F00, 0x80F0, 0x800F, 0xFFFF };
+
+    f32 cx[6] = { -27.5f, -16.5f, -5.5f, 5.5f, 16.5f, 27.5f };
+    f32 half = 4.5f;
+
+    /* 1) RGBA8 (0x06) */
+    {
+        static u8 t[8*8*4];
+        for (int y=0;y<8;y++) for (int x=0;x<8;x++) {
+            u8* p=&t[(y*8+x)*4]; int q=tex_test_quadrant(x,y,4);
+            if(q==0){p[0]=255;p[1]=0;p[2]=0;} else if(q==1){p[0]=0;p[1]=255;p[2]=0;}
+            else if(q==2){p[0]=0;p[1]=0;p[2]=255;} else {p[0]=255;p[1]=255;p[2]=255;}
+            p[3]=255;
+        }
+        GXTexObj to; GXInitTexObj(&to,t,8,8,0,0x06,1,1); GXLoadTexObj(&to,0);
+        tex_test_draw_quad(cx[0], half);
+    }
+    /* 2) RGB5A3 (0x05) — BE 16-bit, A1 R5 G5 B5 */
+    {
+        static u8 t[8*8*2];
+        for (int y=0;y<8;y++) for (int x=0;x<8;x++) {
+            u16 v=rgb5a3[tex_test_quadrant(x,y,4)];
+            t[(y*8+x)*2]=v>>8; t[(y*8+x)*2+1]=v&0xFF;
+        }
+        GXTexObj to; GXInitTexObj(&to,t,8,8,0,0x05,1,1); GXLoadTexObj(&to,0);
+        tex_test_draw_quad(cx[1], half);
+    }
+    /* 3) RGB565 (0x04) — BE 16-bit, R5 G6 B5 */
+    {
+        static u8 t[8*8*2];
+        for (int y=0;y<8;y++) for (int x=0;x<8;x++) {
+            u16 v=rgb565[tex_test_quadrant(x,y,4)];
+            t[(y*8+x)*2]=v>>8; t[(y*8+x)*2+1]=v&0xFF;
+        }
+        GXTexObj to; GXInitTexObj(&to,t,8,8,0,0x04,1,1); GXLoadTexObj(&to,0);
+        tex_test_draw_quad(cx[2], half);
+    }
+    /* 4) I4 (0x00) + TLUT — 4-bit indices, 2/byte (high nibble = left) */
+    {
+        static u8 t[8*8/2];
+        for (int y=0;y<8;y++) for (int xb=0;xb<8;xb+=2) {
+            int hi=tex_test_quadrant(xb,y,4), lo=tex_test_quadrant(xb+1,y,4);
+            t[(y*8+xb)/2]=(u8)((hi<<4)|lo);
+        }
+        GXTexObj to; GXInitTexObj(&to,t,8,8,0,0x00,1,1); GXLoadTexObj(&to,0);
+        tex_test_draw_quad(cx[3], half);
+    }
+    /* 5) I8 (0x01) + TLUT — 8-bit indices */
+    {
+        static u8 t[8*8];
+        for (int y=0;y<8;y++) for (int x=0;x<8;x++)
+            t[y*8+x]=(u8)tex_test_quadrant(x,y,4);
+        GXTexObj to; GXInitTexObj(&to,t,8,8,0,0x01,1,1); GXLoadTexObj(&to,0);
+        tex_test_draw_quad(cx[4], half);
+    }
+    /* 6) CMPR (0x0E) — 16x16 = 4 blocks, each a solid color (all sel=0 -> C0) */
+    {
+        static u8 t[4*12];
+        int order[4]={0,1,2,3}; /* block (by,bx): by outer. Assign distinct colors */
+        for (int by=0;by<2;by++) for (int bx=0;bx<2;bx++) {
+            u8* b=&t[(by*2+bx)*12]; u16 c=cmpr_c0[order[by*2+bx]];
+            b[0]=c>>8; b[1]=c&0xFF; b[2]=0; b[3]=0; /* C1 unused */
+            for (int i=4;i<12;i++) b[i]=0;          /* selectors: all C0 */
+        }
+        GXTexObj to; GXInitTexObj(&to,t,16,16,0,0x0E,1,1); GXLoadTexObj(&to,0);
+        tex_test_draw_quad(cx[5], half);
+    }
 }
 
 /* ============================================================
@@ -6371,16 +6445,24 @@ bind_tex:
 }
 
 /* Convert 16-bit color (RGB565/RGB5A3) to RGBA8888 */
-static void tlut_decode_color(u16 val, u8* out_rgba)
+static void tlut_decode_color(u16 val, u8* out_rgba, u32 fmt)
 {
+    if (fmt == 1 /*GX_TL_RGB565*/) {
+        /* Unambiguous R5 G6 B5 (bit 15 is the MSB of R, not a mode flag). */
+        out_rgba[0] = ((val >> 11) & 0x1F) * 255 / 31;
+        out_rgba[1] = ((val >>  5) & 0x3F) * 255 / 63;
+        out_rgba[2] = ( val        & 0x1F) * 255 / 31;
+        out_rgba[3] = 0xFF;
+        return;
+    }
     if (val & 0x8000) {
-        /* RGB5A3 mode 1: 1-bit alpha, 4-bit RGB */
+        /* RGB5A3 mode 1: 4-bit RGB + alpha */
         out_rgba[3] = ((val >> 12) & 0xF) * 17;
         out_rgba[0] = ((val >>  8) & 0xF) * 17;
         out_rgba[1] = ((val >>  4) & 0xF) * 17;
         out_rgba[2] = ( val         & 0xF) * 17;
     } else {
-        /* RGB565 / RGB5A3 mode 0: 1-bit alpha, 5-bit RGB */
+        /* RGB5A3 mode 0: 1-bit alpha, 5-bit RGB */
         out_rgba[3] = (val >> 15) ? 0xFF : 0x00;
         out_rgba[0] = ((val >> 10) & 0x1F) * 255 / 31;
         out_rgba[1] = ((val >>  5) & 0x1F) * 255 / 31;
@@ -6463,7 +6545,7 @@ void GXInitTlutObj(void* tlutObj, const void* tlut_data, u32 tlut_fmt, u32 tlut_
             case 2: /* GX_TL_RGB5A3: big-endian 16-bit with alpha mode */
             {
                 u16 val = ((u16)raw[i * 2] << 8) | raw[i * 2 + 1];
-                tlut_decode_color(val, t->rgba[i]);
+                tlut_decode_color(val, t->rgba[i], tlut_fmt);
                 break;
             }
             default:
