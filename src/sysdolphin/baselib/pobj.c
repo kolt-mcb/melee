@@ -460,6 +460,15 @@ void HSD_PObjResolveRefs(HSD_PObj* pobj, HSD_PObjDesc* pdesc)
         if (pdesc->u.joint != NULL) {
             pobj->u.jobj = HSD_IDGetData((u32) pdesc->u.joint, NULL);
 #if BUILD_TARGET_PC
+            { static int _r=-1; if(_r<0)_r=(getenv("MELEE_MTR")!=NULL); if(_r){static int _n=0; if(_n++<120){
+                f32* jm = (f32*)((u8*)pobj->u.jobj + 0x44);
+                fprintf(stderr,"POBJRESOLVE id=%08x -> jobj=%p jid=%08x disp=%p ndisp=%u mtx_t=(%.3f,%.3f,%.3f) r00=%.3f\n",
+                    (unsigned)(u32)pdesc->u.joint, (void*)pobj->u.jobj,
+                    (unsigned)*(u32*)((u8*)pobj->u.jobj + 0x84),
+                    (void*)pdesc->display, (unsigned)pdesc->n_display,
+                    (double)jm[3],(double)jm[7],(double)jm[11], (double)jm[0]); }} }
+#endif
+#if BUILD_TARGET_PC
             { static int _r=-1; if(_r<0)_r=(getenv("MELEE_MTR")!=NULL); if(_r){static int _n=0; if(_n++<80) fprintf(stderr,"POBJRESOLVE pdesc_joint=%p lookup_jobj=%p\n",(void*)pdesc->u.joint,(void*)pobj->u.jobj);} }
 #endif
             HSD_ASSERT(0x2FB, pobj->u.jobj);
@@ -1117,6 +1126,16 @@ static void SetupRigidModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
     }
 }
 
+static void svtx_dump3(const char* label, Mtx A)
+{
+    fprintf(stderr, "SVTX %s=(%.4f,%.4f,%.4f,%.4f | %.4f,%.4f,%.4f,%.4f | %.4f,%.4f,%.4f,%.4f)\n", label,
+        (double)A[0][0],(double)A[0][1],(double)A[0][2],(double)A[0][3],
+        (double)A[1][0],(double)A[1][1],(double)A[1][2],(double)A[1][3],
+        (double)A[2][0],(double)A[2][1],(double)A[2][2],(double)A[2][3]);
+}
+#if 0
+#endif
+
 static void SetupSharedVtxModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                                    u32 rendermode)
 {
@@ -1125,6 +1144,40 @@ static void SetupSharedVtxModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
     PObjSetupFlag flags = SETUP_NONE;
 
     jobj = HSD_JObjGetCurrent();
+#if BUILD_TARGET_PC
+    { static int _sv_on = -1, _sv_n = 0;
+      if (_sv_on < 0) _sv_on = (getenv("MELEE_MTR") != NULL);
+      if (_sv_on && pobj->u.jobj && _sv_n < 40) {
+          _sv_n++;
+          fprintf(stderr, "SVTX pobj=%p disp=%p ndisp=%u cur=%p\n", (void*)pobj, (void*)pobj->display, (unsigned)pobj->n_display, (void*)jobj);
+          {
+              Quaternion* q = &jobj->rotate;
+              Vec3* s = &jobj->scale;
+              Vec3* tt = &jobj->translate;
+              fprintf(stderr, "SVTX   local:flags=0x%08x quat=(%.4f,%.4f,%.4f,%.4f) scl=(%.4f,%.4f,%.4f) trs=(%.4f,%.4f,%.4f)\n",
+                      jobj->flags, (double)q->x, (double)q->y, (double)q->z, (double)q->w,
+                      (double)s->x, (double)s->y, (double)s->z, (double)tt->x, (double)tt->y, (double)tt->z);
+          }
+          svtx_dump3("curjobj", jobj->mtx);
+          svtx_dump3("vmtx   ", vmtx);
+          svtx_dump3("pmtx   ", pmtx);
+          HSD_JObjSetupMatrix(pobj->u.jobj);
+          fprintf(stderr, "SVTX u.jobj=%p\n", (void*)pobj->u.jobj);
+          svtx_dump3("ujobj  ", pobj->u.jobj->mtx);
+          {
+              HSD_JObj* anc = jobj->parent;
+              int d = 1;
+              while (anc && d <= 8) {
+                  Vec3* as = (Vec3*)&anc->scale;
+                  fprintf(stderr, "SVTX anc[%d]=%p scale=(%.3f,%.3f,%.3f) flags=0x%08x\n", d, (void*)anc, (double)as->x,(double)as->y,(double)as->z, anc->flags);
+                  svtx_dump3("ancm   ", anc->mtx);
+                  anc = anc->parent;
+                  d++;
+              }
+          }
+      }
+    }
+#endif
     {
         void* obj;
         u32 mark;

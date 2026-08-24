@@ -294,6 +294,18 @@ struct HSD_VtxDescList_gcn {
     u32 vertex;       /* 0x14 void* */
 };
 
+/* GCN HSD_ShapeSetDesc (4-byte pointers, 28 bytes total on GCN). */
+struct HSD_ShapeSetDesc_gcn {
+    u16 flags;            /* 0x00 */
+    u16 nb_shape;         /* 0x02 */
+    u32 nb_vertex_index;  /* 0x04 */
+    u32 vertex_desc;      /* 0x08 HSD_VtxDescList* (offset) */
+    u32 vertex_idx_list;  /* 0x0C u8** (offset to array of nb_shape offsets) */
+    u32 nb_normal_index;  /* 0x10 */
+    u32 normal_desc;      /* 0x14 HSD_VtxDescList* (offset) */
+    u32 normal_idx_list;  /* 0x18 u8** (offset to array of nb_shape offsets) */
+};
+
 /* GCN HSD_ImageDesc (4-byte pointers, 24 bytes total on GCN) */
 struct HSD_ImageDesc_gcn {
     u32 image_ptr;    /* 0x00 void* */
@@ -755,6 +767,9 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         g_grdat_jointmap[g_grdat_jointmap_n].x64 = x64Joint;
         g_grdat_jointmap_n++;
     }
+#if BUILD_TARGET_PC
+    { static int _jc_on=-1; if(_jc_on<0)_jc_on=(getenv("MELEE_MTR")!=NULL); if(_jc_on){static int _jc_n=0; if(_jc_n++<60) fprintf(stderr,"JCONV gcn_joint=0x%06x x64=%p\n",(u32)(gcnJointPtr-dataBase),(void*)x64Joint);} }
+#endif
 
     /* Convert pointer fields */
     /* PC port: class_name points to archive symbol table, not data section.
@@ -940,12 +955,94 @@ static HSD_VtxDescList* grDatFiles_ConvertVtxDescListGCNtoX64(const u8* gcnVtxPt
             x64Tail->vertex = NULL;
         }
 
+        if (getenv("MELEE_VTXDESC") != NULL && x64Tail->attr == 9) {
+            static int vd_log = 0;
+            if (vd_log < 400) {
+                fprintf(stderr, "[VTXDESC-POS] gcn=%p type=%u ccnt=%u ctype=%u stride=%u voff=0x%08x\n",
+                        (const void*)gcnVtx, (unsigned)x64Tail->attr_type,
+                        (unsigned)x64Tail->comp_cnt, (unsigned)x64Tail->comp_type,
+                        (unsigned)x64Tail->stride, val);
+                vd_log++;
+            }
+            fflush(stderr);
+        }
+
         /* Advance to next entry */
         gcnVtx = (const struct HSD_VtxDescList_gcn*)((const u8*)gcnVtx + sizeof(struct HSD_VtxDescList_gcn));
         x64Tail = (HSD_VtxDescList*)((u8*)x64Tail + sizeof(HSD_VtxDescList));
     }
 
     return x64Head;
+}
+
+/* Convert a GCN HSD_ShapeSetDesc to x86_64. The shape-set holds the base
+ * vertex pool + per-shape index lists that a shape-animated PObj uses to
+ * generate its positions (see drawShapeAnim/get_shape_vertex_xyz). */
+static HSD_ShapeSetDesc* grDatFiles_ConvertShapeSetDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    static int shape_count = 0;
+    if (gcnPtr == NULL) return NULL;
+
+    HSD_ShapeSetDesc* x64 = lbHeap_80015BD0(0, sizeof(HSD_ShapeSetDesc));
+    if (x64 == NULL) return NULL;
+    memset(x64, 0, sizeof(HSD_ShapeSetDesc));
+
+    const struct HSD_ShapeSetDesc_gcn* g = (const struct HSD_ShapeSetDesc_gcn*)gcnPtr;
+    x64->flags = be16_swap(g->flags);
+    x64->nb_shape = be16_swap(g->nb_shape);
+    x64->nb_vertex_index = (s32)be32_swap(g->nb_vertex_index);
+
+    u32 vertex_desc_off = be32_swap(g->vertex_desc);
+    if (vertex_desc_off != 0 && vertex_desc_off < 0x80000000U) {
+        x64->vertex_desc = grDatFiles_ConvertVtxDescListGCNtoX64(dataBase + vertex_desc_off, dataBase);
+    }
+
+    u32 vertex_idx_list_off = be32_swap(g->vertex_idx_list);
+    if (vertex_idx_list_off != 0 && vertex_idx_list_off < 0x80000000U && x64->nb_shape > 0 && x64->nb_shape < 4096) {
+        const u32* idx_arr = (const u32*)(dataBase + vertex_idx_list_off);
+        x64->vertex_idx_list = (u8**)lbHeap_80015BD0(0, (size_t)x64->nb_shape * sizeof(u8*));
+        if (x64->vertex_idx_list) {
+            for (u32 i = 0; i < x64->nb_shape; i++) {
+                u32 off = be32_swap(idx_arr[i]);
+                x64->vertex_idx_list[i] = (off != 0 && off < 0x80000000U) ? (u8*)(dataBase + off) : NULL;
+            }
+        }
+    }
+
+    x64->nb_normal_index = (s32)be32_swap(g->nb_normal_index);
+
+    u32 normal_desc_off = be32_swap(g->normal_desc);
+    if (normal_desc_off != 0 && normal_desc_off < 0x80000000U) {
+        x64->normal_desc = grDatFiles_ConvertVtxDescListGCNtoX64(dataBase + normal_desc_off, dataBase);
+    }
+
+    u32 normal_idx_list_off = be32_swap(g->normal_idx_list);
+    if (normal_idx_list_off != 0 && normal_idx_list_off < 0x80000000U && x64->nb_shape > 0 && x64->nb_shape < 4096) {
+        const u32* idx_arr = (const u32*)(dataBase + normal_idx_list_off);
+        x64->normal_idx_list = (u8**)lbHeap_80015BD0(0, (size_t)x64->nb_shape * sizeof(u8*));
+        if (x64->normal_idx_list) {
+            for (u32 i = 0; i < x64->nb_shape; i++) {
+                u32 off = be32_swap(idx_arr[i]);
+                x64->normal_idx_list[i] = (off != 0 && off < 0x80000000U) ? (u8*)(dataBase + off) : NULL;
+            }
+        }
+    }
+
+    if (shape_count < 10) {
+        fprintf(stderr, "[GRDAT] ShapeSetDesc[%d]: gcn=%p dataBase=%p flags=0x%04x nb_shape=%u nb_vtx=%d vdesc=%p(voff=0x%x) vidx=%p nrm_desc=%p nb_nrm=%d\n",
+                shape_count, (const void*)gcnPtr, (const void*)dataBase,
+                (unsigned)x64->flags, (unsigned)x64->nb_shape, x64->nb_vertex_index,
+                (const void*)x64->vertex_desc, vertex_desc_off,
+                (const void*)x64->vertex_idx_list, (const void*)x64->normal_desc, x64->nb_normal_index);
+        if (x64->vertex_idx_list) {
+            for (u32 i = 0; i < x64->nb_shape && i < 4; i++)
+                fprintf(stderr, "    vidx[%u]=%p\n", i, (const void*)x64->vertex_idx_list[i]);
+        }
+        fflush(stderr);
+    }
+    shape_count++;
+
+    return x64;
 }
 
 /* Convert a GCN PObjDesc to x86_64 PObjDesc. */
@@ -987,6 +1084,18 @@ static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8
     /* flags and n_display - read as big-endian u16 */
     x64Pobj->flags = be16_swap(*(const u16*)(gcnPobjPtr + 0x0C));
     x64Pobj->n_display = be16_swap(*(const u16*)(gcnPobjPtr + 0x0E));
+    if (getenv("MELEE_POBJALL")) {
+        fprintf(stderr, "[POBJALL] #%d gcn=%p class=0x%08x verts=0x%08x flags=0x%04x ndisp=%u display=0x%08x u=0x%08x\n",
+                pobj_count, (const void*)gcnPobjPtr,
+                be32_swap(gcnPobj->class_name), val, x64Pobj->flags,
+                (unsigned)x64Pobj->n_display, be32_swap(gcnPobj->display), be32_swap(gcnPobj->u));
+        fflush(stderr);
+    }
+    if ((x64Pobj->flags & 0x3000) == POBJ_SHAPEANIM) {
+        fprintf(stderr, "[GRDAT] PObjDesc SHAPEANIM found: gcn=%p flags=0x%04x n_display=%u u=0x%08x\n",
+                (const void*)gcnPobjPtr, (unsigned)x64Pobj->flags, (unsigned)x64Pobj->n_display, be32_swap(gcnPobj->u));
+        fflush(stderr);
+    }
 
     /* PC port: for POBJ_SKIN the u field (0x14) is a joint reference. Queue the
      * raw offset for a second-pass resolve (target joint may not be converted
@@ -1005,7 +1114,26 @@ static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8
              * owns this DObjDesc so the joint animation drives the mesh. */
             x64Pobj->u.joint = g_grdat_current_joint;
         }
+    } else if ((x64Pobj->flags & 0x3000) == POBJ_SHAPEANIM) {
+        /* Shape-animated PObj: the u field is a shape-set descriptor. Convert
+         * it so the renderer runs the shape-anim path (drawShapeAnim) to
+         * generate the real vertex positions instead of reading an empty
+         * position array. */
+        if (val != 0 && val < 0x80000000U) {
+            x64Pobj->u.shape_set =
+                grDatFiles_ConvertShapeSetDescGCNtoX64(dataBase + val, dataBase);
+        } else {
+            fprintf(stderr, "[GRDAT] PObjDesc: POBJ_SHAPEANIM but u=0x%08x (no shape set)\n", val);
+            fflush(stderr);
+        }
     }
+#if BUILD_TARGET_PC
+    { static int _pj_on=-1; if(_pj_on<0)_pj_on=(getenv("MELEE_MTR")!=NULL); if(_pj_on){static int _pj_n=0;
+      if(_pj_n++<80 && (x64Pobj->flags & 0x3000) == POBJ_SKIN){ u32 cg=0xFFFFFFFF; for(int i=0;i<g_grdat_jointmap_n;i++) if(g_grdat_jointmap[i].x64==g_grdat_current_joint) cg=g_grdat_jointmap[i].offset;
+        fprintf(stderr,"PJV gcn_pobj=0x%06x flags=0x%04x nd=%u disp=0x%06x raw_u=0x%06x -> joint_gcn=0x%06x x64_j=%p\n",
+            (u32)(gcnPobjPtr-dataBase), (unsigned)x64Pobj->flags, (unsigned)x64Pobj->n_display,
+            (unsigned)(be32_swap(gcnPobj->display)&0xFFFFFF), (unsigned)val, cg, (void*)x64Pobj->u.joint); } } }
+#endif
     
     /* display - raw byte stream (GX command list), keep as direct pointer */
     val = be32_swap(gcnPobj->display);

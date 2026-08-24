@@ -71,26 +71,27 @@ static void gmTitle_801A146C(HSD_GObj* gobj)
 #if BUILD_TARGET_PC
     static int _tbg_on = -1, _tbg_n = 0;
     if (_tbg_on < 0) _tbg_on = (getenv("MELEE_ANIMLOG") != NULL);
-    if (_tbg_on && _tbg_n < 200) {
+    if (_tbg_on && _tbg_n < 40) {
         _tbg_n++;
         HSD_JObj* jb = GET_JOBJ(gobj);
-        /* Walk the tunnel jobj tree; for each dobj log its mobj + matanim + color. */
-        HSD_JObj* stack[128]; int sp = 0, shown = 0;
+        float fr = mn_8022F298(jb);
+        /* find the joint owning the tunnel mesh (nd==129) and print its world t */
+        HSD_JObj* stack[128]; int sp = 0;
+        f32 tun_t[3] = {0,0,0}; int found = 0;
         if (jb) stack[sp++] = jb;
-        while (sp > 0 && shown < 8) {
+        while (sp > 0) {
             HSD_JObj* j = stack[--sp];
             if (!j) continue;
-            if (union_type_dobj(j) && j->u.dobj && j->u.dobj->mobj && shown < 8) {
-                HSD_MObj* m = j->u.dobj->mobj;
-                fprintf(stderr, "TTLBG-MAT f=%.1f mobj=%p aobj=%p diff=(%u,%u,%u) amb=(%u,%u,%u) alpha=%.2f\n",
-                        (double)mn_8022F298(jb), (void*)m, (void*)m->aobj,
-                        (unsigned)m->mat->diffuse.r, (unsigned)m->mat->diffuse.g, (unsigned)m->mat->diffuse.b,
-                        (unsigned)m->mat->ambient.r, (unsigned)m->mat->ambient.g, (unsigned)m->mat->ambient.b,
-                        (double)m->mat->alpha);
-                shown++;
+            if (!found && union_type_dobj(j) && j->u.dobj && j->u.dobj->pobj && j->u.dobj->pobj->n_display == 129) {
+                tun_t[0] = j->mtx[0][3]; tun_t[1] = j->mtx[1][3]; tun_t[2] = j->mtx[2][3];
+                found = 1;
             }
             if (sp + 2 <= 128) { if (j->child) stack[sp++] = j->child; if (j->next) stack[sp++] = j->next; }
         }
+        fprintf(stderr, "TTLBG-FRAME n=%d animf=%.1f rootT=(%.2f,%.2f,%.2f) tunnelT=(%.2f,%.2f,%.2f)\n",
+                _tbg_n, (double)fr,
+                (double)jb->mtx[0][3], (double)jb->mtx[1][3], (double)jb->mtx[2][3],
+                (double)tun_t[0], (double)tun_t[1], (double)tun_t[2]);
     }
 #endif
     mn_8022ED6C(GET_JOBJ(gobj), &gmTitle_803DA4FC);
@@ -110,7 +111,31 @@ static inline bool isActiveTitle(void)
 /// Set up title screen animated background
 #if BUILD_TARGET_PC
 static int pc_jtree_dump(HSD_JObj* j, int depth, int* budget);
+/* walk an anim-joint tree: print aobjdesc/fobj presence per node */
+static int pc_ajtree_dump(const struct HSD_AnimJoint* aj, int depth, int* count)
+{
+    int d = depth;
+    if (!aj) return depth;
+    (*count)++;
+    const struct HSD_AObjDesc* ad = aj->aobjdesc;
+    int nf = 0;
+    if (ad) { for (const HSD_FObjDesc* fd = ad->fobjdesc; fd; fd = fd->next) nf++; }
+    fprintf(stderr, "AJTREE %*s aobj=%c nfobj=%d f0_type=%d f0_start=%.0f\n",
+            depth * 2, "", ad ? 'Y' : 'n', nf,
+            (ad && ad->fobjdesc) ? (int)ad->fobjdesc->type : -1,
+            (ad && ad->fobjdesc) ? (double)ad->fobjdesc->startframe : -1.0);
+    if (aj->child) { int c = pc_ajtree_dump(aj->child, depth + 1, count); if (c > d) d = c; }
+    if (aj->next)  { int n = pc_ajtree_dump(aj->next, depth, count);    if (n > d) d = n; }
+    return d;
+}
 #endif
+#if BUILD_TARGET_PC
+/* PC fast-forward: run a jobj tree's one-shot matanim fobjs (diffuse RGB,
+ * alpha) from frame 0 to completion so materials reach their steady-state
+ * values. Used by both the logo and TtlBg creation paths when fast-forwarded. */
+static void pc_MatAnimCatchUp(HSD_JObj* jobj, int* budget);
+#endif /* BUILD_TARGET_PC */
+
 static void fn_801A1498_inline(void)
 {
     bool var_r0;
@@ -122,6 +147,13 @@ static void fn_801A1498_inline(void)
         int budget = 120;
         fprintf(stderr, "=== JTREE (TTLBG background) ===\n");
         pc_jtree_dump(jobj, 0, &budget);
+        /* shape-compare the anim joint tree (lockstep matching requires identical shape) */
+        fprintf(stderr, "=== AJTREE (TTLBG anim) root=%p ===\n", (void*)gmTitle_80479B38.animjoint);
+        int depth = 0, count = 0;
+        if (gmTitle_80479B38.animjoint) {
+            depth = pc_ajtree_dump(gmTitle_80479B38.animjoint, 0, &count);
+        }
+        fprintf(stderr, "AJTREE nodes=%d maxdepth=%d\n", count, depth);
     }
 #endif
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
@@ -130,6 +162,16 @@ static void fn_801A1498_inline(void)
                        gmTitle_80479B38.matanim_joint,
                        gmTitle_80479B38.shapeanim_joint);
     HSD_GObj_SetupProc(gobj, gmTitle_801A146C, 0);
+#if BUILD_TARGET_PC
+    /* PC fast-forward fix: TtlBg's matanim fobjs (diffuse 0..21, alpha up to
+     * 470..486) play during the intro. When created past the intro the
+     * starburst material keeps its bright base value. Run matanim from 0 to
+     * steady state so the starburst gets its post-intro color. */
+    if (gm_804D67EC > 0x1518) {
+        int _bu = 256;
+        pc_MatAnimCatchUp(jobj, &_bu);
+    }
+#endif /* BUILD_TARGET_PC */
     if (isActiveTitle() != 0) {
         HSD_JObjReqAnimAll(jobj, gmTitle_803DA4FC.start_frame);
     } else {
@@ -146,6 +188,13 @@ static int pc_jtree_dump(HSD_JObj* j, int depth, int* budget)
     struct HSD_AObj* a = j->aobj;
     int nf = 0;
     if (a && a->fobj) { for (HSD_FObj* f = a->fobj; f && nf < 999; f = f->next) nf++; }
+    /* per-fobj detail: type + frame range */
+    char astr[192] = "";
+    int ai = 0;
+    if (a && a->fobj) {
+        for (HSD_FObj* f = a->fobj; f && ai < 180; f = f->next)
+            ai += snprintf(astr + ai, sizeof(astr) - ai, " [t=%d %.0f..%d]", (int)f->obj_type, (double)f->startframe, (int)f->fterm);
+    }
     /* DOBJ (mesh) info: material diffuse/alpha + number of display lists */
     char dstr[96] = "";
     if (j->flags && !(j->flags & 0x00000020u) && !(j->flags & 0x00004000u)) {
@@ -162,10 +211,10 @@ static int pc_jtree_dump(HSD_JObj* j, int depth, int* budget)
             snprintf(dstr, sizeof(dstr), " (dobjslot-null)");
         }
     }
-    fprintf(stderr, "JTREE %*saobj=%c fobj=%c nfobj=%d frame=%.1f t=(%.2f,%.2f,%.2f)%s\n",
-            depth * 2, "", a ? 'Y' : 'n', (a && a->fobj) ? 'Y' : 'n', nf,
+    fprintf(stderr, "JTREE j=%p %*saobj=%c fobj=%c nfobj=%d frame=%.1f t=(%.2f,%.2f,%.2f)%s%s\n",
+            (void*)j, depth * 2, "", a ? 'Y' : 'n', (a && a->fobj) ? 'Y' : 'n', nf,
             a ? (double)a->curr_frame : -1.0,
-            (double)j->translate.x, (double)j->translate.y, (double)j->translate.z, dstr);
+            (double)j->translate.x, (double)j->translate.y, (double)j->translate.z, dstr, astr);
     pc_jtree_dump(j->child, depth + 1, budget);
     pc_jtree_dump(j->next, depth, budget);
     return depth;
@@ -226,6 +275,34 @@ static void gmTitle_801A1630(HSD_GObj* gobj)
 #endif
 }
 
+#if BUILD_TARGET_PC
+/* PC fast-forward fix: the logo's material animations (diffuse RGB, alpha)
+ * are one-shot fobjs that play during the intro (logo frames 0-25) and set
+ * the materials to their steady-state colors. With MELEE_MTHP_START we arm
+ * the tree directly at the steady-state loop frame, so those fobjs never
+ * fire and the materials keep their base values (white) instead of the
+ * post-intro colors. Run each mobj's matanim from frame 0 to completion so
+ * the materials reach their steady values first. The later ReqAnimAll at the
+ * fast-forwarded frame re-arms the fobjs but does not reset mobj->mat, so
+ * the steady values persist. */
+static void pc_MatAnimCatchUp(HSD_JObj* jobj, int* budget)
+{
+    HSD_JObj* j;
+    if (!jobj) return;
+    for (j = jobj; j && *budget > 0; j = j->next) {
+        (*budget)--;
+        if (j->u.dobj && j->u.dobj->mobj && j->u.dobj->mobj->aobj) {
+            HSD_MObjReqAnim(j->u.dobj->mobj, 0.0f);
+            int i;
+            for (i = 0; i < 500; i++) {
+                HSD_MObjAnim(j->u.dobj->mobj);
+            }
+        }
+        pc_MatAnimCatchUp(j->child, budget);
+    }
+}
+#endif /* BUILD_TARGET_PC */
+
 HSD_GObj* gmTitle_801A165C(void)
 {
     int var_r0;
@@ -270,6 +347,8 @@ HSD_GObj* gmTitle_801A165C(void)
          * the 400->1600 loop. So when created with EC already past the intro,
          * start the logo at that steady-state frame so the text is visible. */
         if (gm_804D67EC > 0x1518) {
+            int _bu = 256;
+            pc_MatAnimCatchUp(jobj, &_bu);
             HSD_JObjReqAnimAll(jobj, (f32)(gm_804D67EC - 0x140A));
         } else
 #endif
@@ -459,32 +538,43 @@ HSD_Archive* gmTitle_801A1AC0(void)
      * Walk the matanim_joint tree; for each matanim count aobjdesc + fobjdesc
      * (keyframe groups). If all are NULL/empty, the color animation can't play. */
     if (getenv("MELEE_ANIMLOG")) {
-        fprintf(stderr, "=== TtlBg matanim_joint walk ===\n");
-        const HSD_MatAnimJoint* stack[256];
-        int sp = 0, budget = 200, total_mat = 0, total_aobj = 0, total_fobj = 0;
-        if (gmTitle_80479B38.matanim_joint) stack[sp++] = gmTitle_80479B38.matanim_joint;
-        while (sp > 0 && budget > 0) {
-            const HSD_MatAnimJoint* j = stack[--sp];
-            if (!j) continue;
-            budget--;
-            int nmat = 0, naobj = 0, nfobj = 0;
-            for (const HSD_MatAnim* m = j->matanim; m; m = m->next) {
-                nmat++;
-                if (m->aobjdesc) {
-                    naobj++;
-                    for (const HSD_FObjDesc* f = m->aobjdesc->fobjdesc; f; f = f->next) nfobj++;
+        struct matwalk_t { const char* name; const HSD_MatAnimJoint* root; };
+        struct matwalk_t trees[2] = {
+            { "TtlBg", gmTitle_80479B38.matanim_joint },
+            { "TtlMoji", gmTitle_80479B28.matanim_joint },
+        };
+        for (int ti = 0; ti < 2; ti++) {
+            fprintf(stderr, "=== %s matanim_joint walk ===\n", trees[ti].name);
+            const HSD_MatAnimJoint* stack[256];
+            int sp = 0, budget = 200, total_mat = 0, total_aobj = 0, total_fobj = 0;
+            if (trees[ti].root) stack[sp++] = trees[ti].root;
+            while (sp > 0 && budget > 0) {
+                const HSD_MatAnimJoint* j = stack[--sp];
+                if (!j) continue;
+                budget--;
+                int nmat = 0, naobj = 0, nfobj = 0;
+                for (const HSD_MatAnim* m = j->matanim; m; m = m->next) {
+                    nmat++;
+                    if (m->aobjdesc) {
+                        naobj++;
+                        for (const HSD_FObjDesc* f = m->aobjdesc->fobjdesc; f; f = f->next) {
+                            nfobj++;
+                            fprintf(stderr, "  FOBJ type=%u start=%.0f len=%u\n",
+                                    (unsigned)f->type, (double)f->startframe, (unsigned)f->length);
+                        }
+                    }
+                }
+                total_mat += nmat; total_aobj += naobj; total_fobj += nfobj;
+                if (nmat) fprintf(stderr, "MATWALK joint=%p nmat=%d naobj=%d nfobj=%d\n",
+                        (void*)j, nmat, naobj, nfobj);
+                if (sp + 2 <= 256) {
+                    if (j->child) stack[sp++] = j->child;
+                    if (j->next) stack[sp++] = j->next;
                 }
             }
-            total_mat += nmat; total_aobj += naobj; total_fobj += nfobj;
-            fprintf(stderr, "MATWALK joint=%p matanim=%p nmat=%d naobj=%d nfobj=%d\n",
-                    (void*)j, (void*)j->matanim, nmat, naobj, nfobj);
-            if (sp + 2 <= 256) {
-                if (j->child) stack[sp++] = j->child;
-                if (j->next) stack[sp++] = j->next;
-            }
+            fprintf(stderr, "MATWALK %s TOTAL nmat=%d naobj=%d nfobj=%d (budget left=%d)\n",
+                    trees[ti].name, total_mat, total_aobj, total_fobj, budget);
         }
-        fprintf(stderr, "MATWALK TOTAL nmat=%d naobj=%d nfobj=%d (budget left=%d)\n",
-                total_mat, total_aobj, total_fobj, budget);
     }
 
     return archive;

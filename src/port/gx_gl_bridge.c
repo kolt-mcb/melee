@@ -2603,16 +2603,46 @@ static void bridge_upload_and_draw(void)
                 _dt_n++;
                 f64 cx = 0, cy = 0, cz = 0;
                 u32 cn = (count < 200 ? count : 200);
-                for (u32 i = 0; i < cn; i++) { cx += g_state.verts[i].pos[0]; cy += g_state.verts[i].pos[1]; cz += g_state.verts[i].pos[2]; }
+                f64 mnx=1e30,mny=1e30,mnz=1e30,mxx=-1e30,mxy=-1e30,mxz=-1e30;
+                for (u32 i = 0; i < cn; i++) {
+                    cx += g_state.verts[i].pos[0]; cy += g_state.verts[i].pos[1]; cz += g_state.verts[i].pos[2];
+                    f64 px=g_state.verts[i].pos[0], py=g_state.verts[i].pos[1], pz=g_state.verts[i].pos[2];
+                    if(px<mnx)mnx=px; if(px>mxx)mxx=px;
+                    if(py<mny)mny=py; if(py>mxy)mxy=py;
+                    if(pz<mnz)mnz=pz; if(pz>mxz)mxz=pz;
+                }
                 if (cn > 0) { cx /= cn; cy /= cn; cz /= cn; }
-                fprintf(stderr, "DRAW frame=%u #%02u n=%u prim=%u mat=(%u,%u,%u,%u) ctr=(%.1f,%.1f,%.1f) texb=%u clr_en=%d mm_t=(%.2f,%.2f,%.2f) mm_s=(%.2f,%.2f,%.2f)\n",
+                fprintf(stderr, "DRAW frame=%u #%02u n=%u prim=%u mat=(%u,%u,%u,%u) v0c=(%d,%d,%d,%d) ctr=(%.1f,%.1f,%.1f) texb=%u clr_en=%d blend=%d/%u/%u mm_t=(%.2f,%.2f,%.2f) mm_s=(%.2f,%.2f,%.2f) bbox=[(%.1f,%.1f,%.1f)..(%.1f,%.1f,%.1f)]\n",
                         (unsigned)fc2, _dt_n, (unsigned)count, (unsigned)g_state.prim_type,
                         (unsigned)g_state.cur_color.r, (unsigned)g_state.cur_color.g, (unsigned)g_state.cur_color.b, (unsigned)g_state.cur_color.a,
+                        (count>0)?(int)(g_state.verts[0].col[0]*255):0, (count>0)?(int)(g_state.verts[0].col[1]*255):0, (count>0)?(int)(g_state.verts[0].col[2]*255):0, (count>0)?(int)(g_state.verts[0].col[3]*255):0,
                         cx, cy, cz,
                         (g_active_tex_count > 0 && g_state.tex_cache_valid[g_active_tex_slots[0]]) ? (unsigned)g_state.tex_cache[g_active_tex_slots[0]] : 0u,
                         (int)g_state.clr_enabled,
+                        (int)g_state.blend_enabled, (unsigned)g_state.blend_src, (unsigned)g_state.blend_dst,
                         (double)g_state.model_matrix[3], (double)g_state.model_matrix[7], (double)g_state.model_matrix[11],
-                        (double)g_state.model_matrix[0], (double)g_state.model_matrix[5], (double)g_state.model_matrix[10]);
+                        (double)g_state.model_matrix[0], (double)g_state.model_matrix[5], (double)g_state.model_matrix[10],
+                        mnx,mny,mnz,mxx,mxy,mxz);
+                /* PC diag: dump the TEV pipeline for this draw so we can see
+                 * how the final color is derived (esp. for the bright tunnel). */
+                {
+                    u32 ns = g_state.num_tev_stages; if (ns > 8) ns = 8;
+                    for (u32 s = 0; s < ns; s++) {
+                        TevStage* st = &g_state.tev_stages[s];
+                        if (!st->color_enabled && !st->alpha_enabled) continue;
+                        fprintf(stderr, "  TEV s%u: cin=[%u,%u,%u,%u] op=%u bias=%u scale=%u clamp=%d en=%d tex=%u kcol=%u swap=[%u,%u] | ain=[%u,%u,%u,%u] aop=%u aen=%d\n",
+                                s,
+                                st->color_inputs[0], st->color_inputs[1], st->color_inputs[2], st->color_inputs[3],
+                                st->color_op, st->color_bias, st->color_scale, (int)st->color_clamp, (int)st->color_enabled, st->tex_map, st->kcolor_sel, st->swap_sel[0], st->swap_sel[1],
+                                st->alpha_inputs[0], st->alpha_inputs[1], st->alpha_inputs[2], st->alpha_inputs[3],
+                                st->alpha_op, (int)st->alpha_enabled);
+                    }
+                    fprintf(stderr, "  KCOL k0=(%u,%u,%u,%u) k1=(%u,%u,%u,%u) k2=(%u,%u,%u,%u) k3=(%u,%u,%u,%u)\n",
+                            g_state.k_colors[0].r, g_state.k_colors[0].g, g_state.k_colors[0].b, g_state.k_colors[0].a,
+                            g_state.k_colors[1].r, g_state.k_colors[1].g, g_state.k_colors[1].b, g_state.k_colors[1].a,
+                            g_state.k_colors[2].r, g_state.k_colors[2].g, g_state.k_colors[2].b, g_state.k_colors[2].a,
+                            g_state.k_colors[3].r, g_state.k_colors[3].g, g_state.k_colors[3].b, g_state.k_colors[3].a);
+                }
             }
         }
         /* PC fix: a GX_QUADS batch with more than 4 vertices is N INDEPENDENT
@@ -3684,7 +3714,7 @@ void GXCallDisplayList(void* list, u32 nbytes)
     {
         static int _wk_on = -1, _wk_n = 0;
         if (_wk_on < 0) _wk_on = (getenv("MELEE_MTR") != NULL);
-        if (_wk_on && g_state.p1_valid && _wk_n < 30) {
+        if (_wk_on && g_state.p1_valid && _wk_n < 400) {
             const u8* w = ptr;
             int dw = 0, steps = 0;
             while (w < end && steps < 40) {
@@ -5104,6 +5134,12 @@ void GXSetIndTevAlpha(void) {}
 void GXSetTevKColor(u32 kcolor, GXColor color)
 {
     GX_TRACE("GXSetTevKColor(%u, {%u,%u,%u,%u})", kcolor, (u32)color.r, (u32)color.g, (u32)color.b, (u32)color.a);
+    {
+        static int _kc_on = -1, _kc_n = 0;
+        if (_kc_on < 0) _kc_on = (getenv("MELEE_MTR") != NULL);
+        if (_kc_on && _kc_n < 40 && (color.r|color.g|color.b|color.a)) { _kc_n++;
+            fprintf(stderr, "  SETKCOL k%u=(%u,%u,%u,%u) frame=%u\n", kcolor, (unsigned)color.r,(unsigned)color.g,(unsigned)color.b,(unsigned)color.a, (unsigned)g_state.frame_count); }
+    }
     if (kcolor < 4) {
         g_state.k_colors[kcolor].r = color.r;
         g_state.k_colors[kcolor].g = color.g;
