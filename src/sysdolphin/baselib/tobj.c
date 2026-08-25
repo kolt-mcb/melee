@@ -11,6 +11,11 @@
 #include <placeholder.h>
 
 #include <dolphin/gx.h>
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#include <execinfo.h>
+#endif
 #include <dolphin/mtx.h>
 #include <MetroTRK/intrinsics.h>
 
@@ -1244,6 +1249,19 @@ void HSD_TObjSetup(HSD_TObj* tobj)
             } else {
                 tlut = tobj->tlut;
             }
+
+            #if BUILD_TARGET_PC
+            if (getenv("MELEE_STAGE_DIAG") && !tlut) {
+                static int _ntl = 0;
+                if (_ntl < 10) { _ntl++;
+                    void *bt[12]; int bn = backtrace(bt, 12);
+                    fprintf(stderr, "[TLUTFAIL] tobj=%p fmt=%d tlut_no=%d tlut=%p id=%d imagedesc=%p\n",
+                            (void*)tobj, (int)imagedesc->format, (int)tobj->tlut_no,
+                            (void*)tlut, (int)tobj->id, (void*)imagedesc);
+                    backtrace_symbols_fd(bt, bn, 2);
+                }
+            }
+            #endif
 
             HSD_ASSERT(1595, tlut);
 

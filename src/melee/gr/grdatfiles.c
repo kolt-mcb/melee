@@ -91,6 +91,7 @@ static HSD_VtxDescList* grDatFiles_ConvertVtxDescListGCNtoX64(const u8* gcnVtxPt
 /* TObjDesc/ImageDesc converters (for texture loading) */
 static struct HSD_ImageDesc* grDatFiles_ConvertImageDescGCNtoX64(const u8* gcnImgPtr, u8* dataBase);
 static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8* dataBase);
+static HSD_TlutDesc* grDatFiles_ConvertTlutDescGCNtoX64(const u8* gcnPtr, u8* dataBase);
 /* Animation joint tree converters */
 HSD_AnimJoint* grDatFiles_ConvertAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
@@ -1303,6 +1304,30 @@ static HSD_Tlut* grDatFiles_ConvertTlutGCNtoX64(const u8* gcnPtr, u8* dataBase)
     return x64;
 }
 
+/* Convert a GCN HSD_TlutDesc to an x86_64 HSD_TlutDesc.
+ * HSD_TlutDesc has the same field layout as HSD_Tlut (lut, fmt, tlut_name,
+ * n_entries), so reuse the HSD_Tlut_gcn layout. */
+static HSD_TlutDesc* grDatFiles_ConvertTlutDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    const struct HSD_Tlut_gcn* gcn;
+    HSD_TlutDesc* x64;
+    u32 val;
+
+    if (gcnPtr == NULL) return NULL;
+    gcn = (const struct HSD_Tlut_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_TlutDesc));
+    if (x64 == NULL) return NULL;
+    memset(x64, 0, sizeof(HSD_TlutDesc));
+
+    val = be32_swap(gcn->lut);
+    x64->lut = (val != 0 && val < 0x80000000U && val < 0x200000U)
+        ? (void*)(dataBase + val) : NULL;
+    x64->fmt = (GXTlutFmt)be32_swap(gcn->fmt);
+    x64->tlut_name = be32_swap(gcn->tlut_name);
+    x64->n_entries = be16_swap(gcn->n_entries);
+    return x64;
+}
+
 /* Convert a GCN HSD_SObjDesc to an x86_64 HSD_SObjDesc.
  * Also converts the referenced image descriptor and tlut. */
 HSD_SObjDesc* grDatFiles_ConvertSObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
@@ -1713,8 +1738,16 @@ static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8
         x64Tobj->imagedesc = grDatFiles_ConvertImageDescGCNtoX64(dataBase + val, dataBase);
     }
 
-    /* tlutdesc, lod, tev - set NULL for now (advanced features) */
-    x64Tobj->tlutdesc = NULL;
+    /* tlutdesc - convert TLUT descriptor (required for palettized
+     * C4/C8/C14X2 textures; a NULL tlutdesc leaves the TObj with no TLUT
+     * and crashes HSD_TObjSetup). */
+    val = be32_swap(gcnTobj->tlutdesc);
+    if (val != 0 && val < 0x80000000U && val < 0x200000U) {
+        x64Tobj->tlutdesc = grDatFiles_ConvertTlutDescGCNtoX64(dataBase + val, dataBase);
+    } else {
+        x64Tobj->tlutdesc = NULL;
+    }
+    /* lod, tev - set NULL for now (advanced features) */
     x64Tobj->lod = NULL;
     x64Tobj->tev = NULL;
 
