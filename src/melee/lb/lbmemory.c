@@ -1,4 +1,8 @@
 #include "lbmemory.h"
+#include <unistd.h>
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 #if BUILD_TARGET_PC
 #include "port/log.h"
 #endif
@@ -64,6 +68,15 @@ static inline Handle* new_handle(void* arenaLo, void* arenaHi)
 {
     Handle* h;
     HSD_ASSERT(0x7B, _p(free_heap));
+#if BUILD_TARGET_PC
+    /* PC port: only 6 static handles exist; repeated scene transitions can
+     * drain them. Continuing past the (non-fatal) assert popped garbage. */
+    if (!pc_ptr_sane(_p(free_heap))) {
+        static const char m[] = "[LBMEM] new_handle: no free heap handles\n";
+        ssize_t r = write(2, m, sizeof(m) - 1); (void)r;
+        return NULL;
+    }
+#endif
 
     if (((u32) arenaLo < 0x80000000U) && ((u32) arenaHi < 0x80000000U)) {
         HSD_ASSERT(0x80, (u32)arenaLo >= (u32)_p(a_arenaLo) && (u32)arenaHi <= (u32)_p(a_arenaHi));
@@ -117,6 +130,11 @@ loop:
 Handle* lbMemory_80014FC8(Handle* arg0, u32 size)
 {
     void* lo;
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(arg0)) {
+        return NULL; /* caller falls back to malloc */
+    }
+#endif
     Handle* memp_kouho;
     void* end;
     u32 least_leftover;
@@ -156,7 +174,12 @@ Handle* lbMemory_80014FC8(Handle* arg0, u32 size)
     /* PC port: asserts are non-fatal here; continuing with an exhausted
      * heap popped garbage handles and crashed. Let the caller fall back. */
     if (memp_kouho == NULL || _p(free_mem) == NULL) {
-        PORT_LOG_WARN("lbMemory: heap exhausted (alloc %u); returning NULL\n", (unsigned)size);
+        {
+            /* async-safe: raw write, no formatting (crashed in vsnprintf
+             * under investigation; this path must never make things worse) */
+            static const char m[] = "[LBMEM] heap exhausted; returning NULL\n";
+            ssize_t r = write(2, m, sizeof(m) - 1); (void)r;
+        }
         return NULL;
     }
 #endif
@@ -178,10 +201,26 @@ Handle* lbMemory_80014FC8(Handle* arg0, u32 size)
 }
 void lbMemFreeToHeap(Handle* h, void* arg1)
 {
-    Handle* handle = h->xC_prev;
-    Handle* r6 = (Handle*) &h->xC_prev;
+    Handle* handle;
+    Handle* r6;
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(h)) {
+        { static const char m[] = "[LBMEM] FreeToHeap: insane heap handle\n";
+          ssize_t r = write(2, m, sizeof(m) - 1); (void)r; }
+        return;
+    }
+#endif
+    handle = h->xC_prev;
+    r6 = (Handle*) &h->xC_prev;
 
     while (handle != NULL) {
+#if BUILD_TARGET_PC
+        if (!pc_ptr_sane(handle)) {
+            { static const char m[] = "[LBMEM] FreeToHeap: corrupt handle chain; abandoning free\n";
+              ssize_t r = write(2, m, sizeof(m) - 1); (void)r; }
+            return;
+        }
+#endif
         if (handle->x4_lo == arg1) {
             r6->x0_next = handle->x0_next;
             PUSH_HANDLE(&_p(free_mem), handle);

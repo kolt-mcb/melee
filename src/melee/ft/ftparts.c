@@ -464,9 +464,21 @@ void ftParts_SetupParts(Fighter_GObj* fighter_obj)
 
 void ftParts_8007462C(Fighter_GObj* gobj)
 {
-    Fighter* fp = GET_FIGHTER(gobj);
+    Fighter* fp;
     int i = 0;
-    HSD_JObj* jobj = fp->x8AC_animSkeleton;
+    HSD_JObj* jobj;
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(gobj)) {
+        return;
+    }
+#endif
+    fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(fp)) {
+        return;
+    }
+#endif
+    jobj = fp->x8AC_animSkeleton;
 
     while (jobj != NULL) {
         if (ftParts_8007506C(fp->kind, i) != 0) {

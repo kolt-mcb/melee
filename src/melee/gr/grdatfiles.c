@@ -1830,6 +1830,9 @@ static UnkArchiveStruct* grDatFiles_ConvertArchiveGCNtoX64(HSD_Archive* archive,
     UnkArchiveStruct* x64Arc;
     UnkStageDat_gcn gcnStageDat;
     u8* dataBase = archive->data;
+    /* PC port: remember the stage archive base for offset-relative reads
+     * elsewhere (Ground_801C28CC's stage params). */
+    { extern u8* pc_stage_dataBase; pc_stage_dataBase = dataBase; }
 
 #if BUILD_TARGET_PC
     { static int _g=-1; if(_g<0)_g=(getenv("MELEE_GRDAT_TRACE")!=NULL); if(_g){static int _n=0; if(_n<30) fprintf(stderr,"[GRDAT] ARCHIVE_CONVERT archive=%p maphead=%p\n",(void*)archive,(void*)gcnMapHeadPtr);} }

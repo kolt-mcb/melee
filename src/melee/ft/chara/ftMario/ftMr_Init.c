@@ -1,4 +1,7 @@
 #include "ftMr_Init.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "ftMr_SpecialHi.h"
 #include "ftMr_SpecialLw.h"
@@ -181,6 +184,15 @@ void ftMr_Init_OnLoad(HSD_GObj* gobj)
 
     fp->can_walljump = true;
 
+#if BUILD_TARGET_PC
+    /* PC port: ext_attr / items come from PlMr.dat, which is not fully
+     * converted yet; PUSH_ATTRS derefs ext_attr. Skip with zeroed attrs. */
+    if (!pc_ptr_sane(ftDataInfo) || !pc_ptr_sane(ftDataInfo->ext_attr) ||
+        !pc_ptr_sane(items))
+    {
+        return;
+    }
+#endif
     PUSH_ATTRS(fp, ftMario_DatAttrs);
 
     {

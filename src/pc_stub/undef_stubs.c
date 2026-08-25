@@ -467,8 +467,29 @@ __attribute__((weak)) unsigned int __cvt_fp2unsigned(float f) {
 }
 
 /* Auto-generated stubs for missing symbols */
-__attribute__((weak)) void ARAlloc(void) {}
-__attribute__((weak)) void ARGetSize(void) {}
+/* PC ARAM emulation: ARAM is a 16MB zero-based address space on GCN. Back
+ * it with a carved host region; ARAM "addresses" stay 0-based offsets and
+ * ARQ transfers translate offset<->host. pc_aram_host() is also used by
+ * ARQPostRequest below. */
+static unsigned char* pc_aram_base = 0;
+static unsigned long pc_aram_used = 0x20; /* skip 0: 0 means NULL to the game */
+#define PC_ARAM_SIZE 0x01000000UL
+static unsigned char* pc_aram_host(unsigned long aram_off)
+{
+    void* pc_lowmem_carve(unsigned long size);
+    if (pc_aram_base == 0) pc_aram_base = (unsigned char*)pc_lowmem_carve(PC_ARAM_SIZE);
+    return pc_aram_base ? pc_aram_base + (aram_off % PC_ARAM_SIZE) : 0;
+}
+__attribute__((weak)) unsigned long ARAlloc(unsigned long length)
+{
+    unsigned long off;
+    (void)pc_aram_host(0); /* ensure backing */
+    off = pc_aram_used;
+    pc_aram_used += (length + 0x1F) & ~0x1FUL;
+    return off;
+}
+__attribute__((weak)) unsigned long ARGetSize(void) { return PC_ARAM_SIZE; }
+/* ARGetSize implemented above (ARAM emulation) */
 /* PC port: no ARAM. Complete ARQ requests synchronously by invoking the
  * callback so DevCom relay-path (type 0x23) loads finish instead of
  * hanging in busy-waits. The copy itself is skipped (ARAM-destined data
@@ -478,8 +499,23 @@ __attribute__((weak)) void ARQPostRequest(void* task, unsigned long owner, unsig
                                           unsigned long pri, unsigned long src, unsigned long dest,
                                           unsigned long len, void (*callback)(void*))
 {
-    static int warned = 0;
-    if (!warned) { warned = 1; fprintf(stderr, "[ARQ] ARQPostRequest: completing without copy (no ARAM on PC)\n"); }
+    /* PC ARAM emulation: type 0 = MRAM->ARAM (src is a sub-4GB host
+     * address — .bss relay buffers on this non-PIE binary — dest is an
+     * ARAM offset); type 1 = ARAM->MRAM. Bounds-check and copy. */
+    (void)owner; (void)pri;
+    unsigned char* aram0 = pc_aram_host(0);
+    if (aram0 != 0 && len > 0 && len <= PC_ARAM_SIZE) {
+        if (type == 0 && src >= 0x10000 && src < 0xFFFFFFFFUL && dest + len <= PC_ARAM_SIZE) {
+            memcpy(aram0 + dest, (void*)(uintptr_t)src, len);
+        } else if (type != 0 && dest >= 0x10000 && dest < 0xFFFFFFFFUL && src + len <= PC_ARAM_SIZE) {
+            memcpy((void*)(uintptr_t)dest, aram0 + src, len);
+        } else {
+            static int warned = 0;
+            if (warned < 4) { warned++;
+                fprintf(stderr, "[ARQ] skipped transfer type=%lu src=%#lx dest=%#lx len=%lu\n",
+                        type, src, dest, len); }
+        }
+    }
     if (callback) callback(task);
 }
 __attribute__((weak)) void AXDriverKeyOff(void) {}
@@ -3189,15 +3225,15 @@ static size_t g_low_mem_used = 0;
  * a fallback. */
 void pc_lowmem_init(void)
 {
-    static const uintptr_t candidates[] = { 0x10000000, 0x18000000, 0x20000000, 0x08000000 };
+    static const uintptr_t candidates[] = { 0x10000000, 0x20000000, 0x30000000, 0x40000000 };
     unsigned i;
     if (g_low_mem_base != NULL) return;
     for (i = 0; i < sizeof(candidates)/sizeof(candidates[0]); i++) {
-        void* p = mmap((void*)candidates[i], 64*1024*1024, PROT_READ | PROT_WRITE,
+        void* p = mmap((void*)candidates[i], 256*1024*1024, PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
         if (p != MAP_FAILED) {
             g_low_mem_base = p;
-            g_low_mem_size = 64*1024*1024;
+            g_low_mem_size = 256*1024*1024;
             g_low_mem_used = 0;
             fprintf(stderr, "[MEM] Low-memory pool reserved at %p\n", p);
             fflush(stderr);
@@ -3206,6 +3242,24 @@ void pc_lowmem_init(void)
     }
     fprintf(stderr, "[MEM] Low-memory pool reservation FAILED\n");
     fflush(stderr);
+}
+
+/* Carve a permanent region out of the low pool (sub-4GB addresses so the
+ * game's u32 heap arithmetic works). Used to give lbHeap real arena/ARAM
+ * bounds — the GCN values live in zeroed .bss on PC, so the ARAM heap was
+ * a zero-byte arena and every allocation fell back to malloc. */
+void* pc_lowmem_carve(unsigned long size)
+{
+    void* p;
+    void pc_lowmem_init(void);
+    if (g_low_mem_base == NULL) pc_lowmem_init();
+    if (g_low_mem_base == NULL) return NULL;
+    size = (size + 4095UL) & ~4095UL;
+    if (g_low_mem_used + size > g_low_mem_size) return NULL;
+    p = (unsigned char*)g_low_mem_base + g_low_mem_used;
+    g_low_mem_used += size;
+    fprintf(stderr, "[MEM] carved %lu MB at %p for game heap\n", size >> 20, p);
+    return p;
 }
 
 __attribute__((weak)) void* OSAllocFromHeap(void* heap, size_t size)

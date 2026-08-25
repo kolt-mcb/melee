@@ -1612,6 +1612,8 @@ static inline void reportStageParams(s32 count)
     }
 }
 
+u8* pc_stage_dataBase; /* PC port: set by grdatfiles on stage convert */
+
 void Ground_801C28CC(s32* arg0, StKind stkind)
 {
 #if BUILD_TARGET_PC
@@ -1624,11 +1626,25 @@ void Ground_801C28CC(s32* arg0, StKind stkind)
     u8* base = (u8*)stage_info.param;
     u32 raw_offset = be32(*(u32*)(base + 0xB0));  /* relative offset from archive base */
     s32 count = be32(*(u32*)(base + 0xB4));  /* byte-swapped */
-    StageParam* param = (StageParam*)(0x10000000 + raw_offset);
+    StageParam* param;
+    {
+        extern u8* pc_stage_dataBase;
+        param = (pc_stage_dataBase != NULL)
+                    ? (StageParam*)(pc_stage_dataBase + raw_offset)
+                    : (StageParam*)(0x10000000 + raw_offset);
+    }
     s32 i;
 
-    /* PC port: Guard against corrupted count or param pointer. */
-    if (count < 0 || count > 1000 || param == NULL) return;
+    /* PC port: Guard against corrupted count or param pointer. The pool
+     * base is only correct when the archive actually lives in the low-mem
+     * pool; probe readability instead of trusting it. */
+    if (count < 0 || count > 1000 || param == NULL ||
+        !pc_mem_readable(param, (unsigned long)count * 0x20))
+    {
+        PORT_LOG_WARN("Ground stage params unreadable (param=%p count=%d); skipping\n",
+                      (void*)param, count);
+        return;
+    }
 
     for (i = 0; i < count; i++) {
         /* PC port: archive StageParam entries are 0x20 (32) bytes apart. */
