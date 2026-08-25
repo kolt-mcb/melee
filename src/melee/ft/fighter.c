@@ -781,8 +781,11 @@ void Fighter_UnkInitLoad_80068914(Fighter_GObj* gobj,
     /* PC port: player data can be zeroed/garbage — clamp the fighter kind
      * to Mario (the one character whose code is compiled) rather than
      * indexing tables with a wild kind. */
-    if ((u32)fp->kind >= FTKIND_MAX) {
-        PORT_LOG_WARN("Fighter_Create: wild fighter kind %d; clamping to Mario\n", fp->kind);
+    if (fp->kind != 0) {
+        /* Only Mario's code/data is compiled (roadmap M2 vertical slice);
+         * creating other kinds walks dataless init paths (stack smash via
+         * zeroed tables). Substitute Mario. */
+        PORT_LOG_WARN("Fighter_Create: kind %d unavailable on PC; substituting Mario\n", fp->kind);
         fp->kind = 0;
     }
 #endif
@@ -930,6 +933,18 @@ Fighter_GObj* Fighter_Create(struct plAllocInfo* input)
     Fighter* fp;
     HSD_JObj* jobj;
 
+#if BUILD_TARGET_PC
+    /* PC port: fighter init walks real DAT data that is not converted yet
+     * (raw big-endian PlMr/PlCo) — creating fighters corrupts memory.
+     * Default to a stage-only scene; MELEE_FIGHTERS=1 re-enables creation
+     * for working on the M2 fighter-data conversion. */
+    if (getenv("MELEE_FIGHTERS") == NULL) {
+        static int warned = 0;
+        if (!warned) { warned = 1;
+            PORT_LOG_WARN("Fighter_Create: skipped (set MELEE_FIGHTERS=1 to enable)\n"); }
+        return NULL;
+    }
+#endif
     gobj = GObj_Create(HSD_GOBJ_CLASS_FIGHTER, 8, 0);
     GObj_SetupGXLink(gobj, &ftDrawCommon_80080E18, 5U, 0U);
     fp = HSD_ObjAlloc(&fighter_alloc_data);
