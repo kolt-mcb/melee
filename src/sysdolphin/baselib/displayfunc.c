@@ -247,6 +247,28 @@ void HSD_JObjMakePositionMtx(HSD_JObj* jobj, Mtx vmtx, Mtx pmtx)
     } else {
         MTXConcat(vmtx, jobj->mtx, pmtx);
     }
+#if defined(BUILD_TARGET_PC)
+    if (getenv("MELEE_STAGE_DIAG")) {
+        /* The stage floor's PNMTX0 = vmtx * jobj->mtx. The view matrix has a
+         * z-translation of ~-436 (camera 435 units from the floor). If the
+         * result pmtx[2][3] is missing that, either vmtx lost it or jobj->mtx
+         * has a +436 translation canceling it. Print the z-translation of
+         * each to pinpoint which. */
+        static int _pm = 0;
+        if (_pm < 40) {
+            fprintf(stderr, "[PMTX] #%d vrow3=[%.3f,%.3f,%.3f,%.3f] jrow3=[%.3f,%.3f,%.3f,%.3f] prow3=[%.3f,%.3f,%.3f,%.3f]\n",
+                    _pm,
+                    (double)vmtx[3][0],(double)vmtx[3][1],(double)vmtx[3][2],(double)vmtx[3][3],
+                    (double)jobj->mtx[3][0],(double)jobj->mtx[3][1],(double)jobj->mtx[3][2],(double)jobj->mtx[3][3],
+                    (double)pmtx[3][0],(double)pmtx[3][1],(double)pmtx[3][2],(double)pmtx[3][3]);
+            fprintf(stderr, "       jrow0=[%.3f,%.3f,%.3f,%.1f] jrow1=[%.3f,%.3f,%.3f,%.1f] jrow2=[%.3f,%.3f,%.3f,%.1f]\n",
+                    (double)jobj->mtx[0][0],(double)jobj->mtx[0][1],(double)jobj->mtx[0][2],(double)jobj->mtx[0][3],
+                    (double)jobj->mtx[1][0],(double)jobj->mtx[1][1],(double)jobj->mtx[1][2],(double)jobj->mtx[1][3],
+                    (double)jobj->mtx[2][0],(double)jobj->mtx[2][1],(double)jobj->mtx[2][2],(double)jobj->mtx[2][3]);
+            _pm++;
+        }
+    }
+#endif
 }
 
 HSD_JObj* HSD_JObjFindSkeleton(HSD_JObj* jobj)

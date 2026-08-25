@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "pobj.h"
 
 #include "aobj.h"
@@ -534,6 +536,18 @@ static void setupVtxDesc(HSD_PObj* pobj)
         GXClearVtxDesc();
         for (desc = pobj->verts; desc->attr != GX_VA_NULL; desc++) {
             GXSetVtxDesc(desc->attr, desc->attr_type);
+#if defined(BUILD_TARGET_PC)
+            if (getenv("MELEE_STAGE_DIAG")) {
+                static int _vd = 0;
+                if (_vd < 120) {
+                    _vd++;
+                    fprintf(stderr, "[VTXDESC] pobj=%p attr=%u type=%u cnt=%u comp=%u frac=%u stride=%u arr=%p\n",
+                            (void*)pobj, (unsigned)desc->attr, (unsigned)desc->attr_type,
+                            (unsigned)desc->comp_cnt, (unsigned)desc->comp_type,
+                            (unsigned)desc->frac, (unsigned)desc->stride, (void*)desc->vertex);
+                }
+            }
+#endif
             switch (desc->attr) {
             case GX_VA_PNMTXIDX:
             case GX_VA_TEX0MTXIDX:

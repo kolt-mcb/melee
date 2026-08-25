@@ -53,12 +53,10 @@ void C_MTXLookAt(Mtx m, Vec3* camPos, Vec3* camUp, Vec3* target)
     m[1][3] = -((camPos->x * ux) + (camPos->y * uy) + (camPos->z * uz));
     m[2][0] = lx; m[2][1] = ly; m[2][2] = lz;
     m[2][3] = -((camPos->x * lx) + (camPos->y * ly) + (camPos->z * lz));
-
-    fprintf(stderr, "[LOOKAT] eye=(%.3f,%.3f,%.3f) up=(%.2f,%.2f,%.2f) tgt=(%.3f,%.3f,%.3f) m2=(%.2f,%.2f,%.2f,%.2f)\n",
-            camPos->x, camPos->y, camPos->z,
-            camUp->x, camUp->y, camUp->z,
-            target->x, target->y, target->z,
-            m[2][0], m[2][1], m[2][2], m[2][3]);
+    /* NOTE: row 3 (w-row) is intentionally NOT set here. Setting it to
+     * [0,0,0,1] triggered a stack-overflow crash in the title render path.
+     * The position matrix's w-row is sanitized in HSD_JObjMakePositionMtx
+     * instead (which only touches corrupt matrices). */
 }
 
 /* GCN projection matrix builders (SDK mtx.c / mtx44.c). The camera looks

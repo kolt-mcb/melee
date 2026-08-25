@@ -215,12 +215,20 @@ u32 HSD_CObjGetFlags(HSD_CObj* cobj);
 void HSD_CObjSetFlags(HSD_CObj*, u32);
 void HSD_CObjClearFlags(HSD_CObj*, u32);
 HSD_CObj* HSD_CObjGetCurrent(void);
+#if defined(BUILD_TARGET_PC)
+void HSD_CObjPCSetForceCam(HSD_CObj* cobj);
+MtxPtr HSD_CObjPCGetForceViewMtx(void);
+#endif
 void HSD_CObjInit(HSD_CObj* cobj, HSD_CObjDesc* desc);
 HSD_CObj* HSD_CObjLoadDesc(HSD_CObjDesc* desc);
 void HSD_CObjSetDefaultClass(HSD_ClassInfo* info);
 
 static inline MtxPtr HSD_CObjGetViewingMtxPtrDirect(HSD_CObj* cobj)
 {
+#if defined(BUILD_TARGET_PC)
+    MtxPtr f = HSD_CObjPCGetForceViewMtx();
+    if (f != NULL) return f;
+#endif
     return cobj->view_mtx;
 }
 
