@@ -701,18 +701,23 @@ void ftParts_80074E58(Fighter* fp)
 }
 
 #if BUILD_TARGET_PC
-static Fighter_Part ftParts_GetBoneIndex_orig(Fighter* fp, Fighter_Part part)
-{
-    return ftPartsTable[fp->kind]->part_to_joint[part];
-}
 Fighter_Part ftParts_GetBoneIndex(Fighter* fp, Fighter_Part part)
 {
-    /* PC port: bone lookup tables come from the zeroed PlCo arena; clamp
-     * wild indices to 0 so parts[] writes stay in bounds. */
-    Fighter_Part idx = ftParts_GetBoneIndex_orig(fp, part);
-    if ((u32)idx >= 0x80) {
-        return 0;
-    }
+    /* PC port: this is a triple deref (table -> per-kind struct -> index
+     * array) through PlCo data that is a zeroed arena until conversion
+     * exists. Guard each step and clamp the result so parts[] writes stay
+     * in bounds. */
+    FighterPartsTable** tbl = ftPartsTable;
+    FighterPartsTable* pt;
+    u8* arr;
+    Fighter_Part idx;
+    if (!pc_ptr_sane(tbl) || (u32)fp->kind >= 0x40) return 0;
+    pt = tbl[fp->kind];
+    if (!pc_ptr_sane(pt)) return 0;
+    arr = (u8*)pt->part_to_joint;
+    if (!pc_ptr_sane(arr)) return 0;
+    idx = (Fighter_Part)arr[part];
+    if ((u32)idx >= 0x80) return 0;
     return idx;
 }
 #else
