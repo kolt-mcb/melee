@@ -185,6 +185,16 @@ void ftCo_800D105C(Fighter_GObj* fgp)
     PAD_STACK(36); /// @todo fix stack
 
     fp = GET_FIGHTER(fgp);
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x0) ||
+        !pc_ptr_sane(fp->ft_data->x40) || !pc_ptr_sane(fp->ft_data->x50))
+    {
+        memset(&fp->co_attrs, 0, sizeof(fp->co_attrs));
+        memset(&fp->x294_itPickup, 0, sizeof(fp->x294_itPickup));
+        memset(&fp->x2C4, 0, sizeof(fp->x2C4));
+        return; /* PC port: fighter DAT attr blocks not converted */
+    }
+#endif
     fp->co_attrs = *fp->ft_data->x0;
     fp->x294_itPickup = *fp->ft_data->x40;
     fp->x2C4 = *fp->ft_data->x50;

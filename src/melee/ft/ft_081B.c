@@ -1,4 +1,7 @@
 #include "ft/ft_081B.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "inlines.h"
 #include "stdbool.h"
@@ -56,6 +59,24 @@ void ft_80081B38(Fighter_GObj* gobj)
     coll->x34_flags.b1234 = 1;
     bones = fp->parts;
     temp_r29 = fp->ft_data->x44;
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(temp_r29)) {
+        /* PC port: ECB bone table not converted — anchor everything to the
+         * root joint with zero ledge-snap so collision stays functional. */
+        mpColl_SetECBSource_JObj(coll, gobj, bones->joint, bones[0].joint,
+                                 bones[0].joint, bones[0].joint,
+                                 bones[0].joint, bones[0].joint,
+                                 bones[0].joint, 0.0f);
+        mpColl_SetLedgeSnap(coll, 0.0f, 0.0f, 0.0f);
+        coll->x50 = fp->co_attrs.weight;
+        if (coll->ecb_source.kind == ECBSource_JObj) {
+            f32 t = 10.0F * fp->x34_scale.y;
+            coll->ecb_source.x128 = t;
+            coll->ecb_source.x12C = t;
+        }
+        return;
+    }
+#endif
     mpColl_SetECBSource_JObj(
         coll, gobj, bones->joint, bones[temp_r29->unk0].joint,
         bones[temp_r29->unk2].joint, bones[temp_r29->unk4].joint,

@@ -262,7 +262,10 @@ void Fighter_LoadCommonData(void)
          * lead to zeroed memory: single derefs read a valid pointer, double
          * derefs read zeros (e.g. ftPartsTable[kind]->parts_num == 0).
          * Real values arrive with the M4 PlCo conversion. */
-        static void* pc_zero_target[0x1000 / sizeof(void*)];
+        /* Large: fields at big offsets get WRITTEN through these pointers;
+         * a small arena overflowed into adjacent .bss (corrupted the
+         * guard-site table and worse). 1MB of zeroed bss is free. */
+        static void* pc_zero_target[0x100000 / sizeof(void*)];
         static void* pc_ptr_arena[0x200];
         static int pc_arena_init = 0;
         if (!pc_arena_init) {
@@ -861,7 +864,7 @@ void Fighter_UnkInitLoad_80068914(Fighter_GObj* gobj,
      * zeroed arena so single-level field reads yield 0/NULL instead of
      * faulting. Double-deref sites are guarded individually. */
     {
-        static u8 pc_ftdata_zero[0x4000];
+        static u8 pc_ftdata_zero[0x100000]; /* large: see pc_zero_target */
         if (!pc_ptr_sane(fp->ft_data)) {
             fp->ft_data = (void*)pc_ftdata_zero;
         }
@@ -875,6 +878,18 @@ void Fighter_UnkInitLoad_80068914(Fighter_GObj* gobj,
     fp->x20_actionStateList = ftData_CharacterStateTables[fp->kind];
     fp->x24 = fp->ft_data->xC;
     fp->x28 = fp->ft_data->x10;
+#if BUILD_TARGET_PC
+    /* PC port: motion-state tables come from the fighter DAT (unconverted).
+     * Point them at zeroed statics so every anim lookup reads zeros (the
+     * fighter T-poses) instead of dereferencing NULL. Entries sized
+     * generously past any real anim id. */
+    {
+        static u8 pc_zero_waitanim[0x20 * 0x300];
+        static u8 pc_zero_bytepairs[4 * 0x300];
+        if (!pc_ptr_sane(fp->x24)) fp->x24 = (void*)pc_zero_waitanim;
+        if (!pc_ptr_sane(fp->x28)) fp->x28 = (void*)pc_zero_bytepairs;
+    }
+#endif
 
     fp->input.x634 = 0.0f;
     fp->input.x630 = 0.0f;

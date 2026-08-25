@@ -1,4 +1,7 @@
 #include "ftlib.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "cm/camera.h"
 #include "ef/efasync.h"
@@ -294,12 +297,22 @@ void ftLib_800865D8(HSD_GObj* gobj, float* x, float* y)
 HSD_JObj* ftLib_800865F0(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(fp) || !pc_ptr_sane(fp->parts)) {
+        return NULL;
+    }
+#endif
     return fp->parts[ftParts_GetBoneIndex(fp, 4)].joint;
 }
 
 HSD_JObj* ftLib_80086630(HSD_GObj* gobj, Fighter_Part part)
 {
     Fighter* fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(fp) || !pc_ptr_sane(fp->parts) || (u32)part > 0x80) {
+        return NULL;
+    }
+#endif
     return fp->parts[part].joint;
 }
 
