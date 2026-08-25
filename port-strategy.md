@@ -1,5 +1,8 @@
 # Melee PC Port — Implementation Plan
 
+> **NOTE (2026-08-25): the current plan of record is [port-roadmap.md](port-roadmap.md).**
+> This document is kept for architecture reference and history.
+
 > A concrete, milestone-driven roadmap for porting the Melee decomp to native PC.
 > Modeled on the Ocartra (OOT), sm64-port, and other proven decomp→PC pipelines.
 
