@@ -1,4 +1,8 @@
 #include "gm_1601.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#include "port/log.h"
+#endif
 
 #include "gm_1601.static.h"
 
@@ -3061,6 +3065,15 @@ void gm_80166378(lbl_8046B6A0_24C_t* arg0_raw)
 {
     s32 i;
     MatchEnd* arg0 = (MatchEnd*) arg0_raw;
+#if BUILD_TARGET_PC
+    /* PC port: match-end standings struct can be a garbage pointer while
+     * match data is stubbed. */
+    if (!pc_ptr_sane(arg0_raw)) {
+        PORT_LOG_WARN("gm_80166378: invalid match-end struct %p; skipping standings\n",
+                      (void*)arg0_raw);
+        return;
+    }
+#endif
     u64 stack_padding;
     f32 sp48_y;
     f32 sp48_x;

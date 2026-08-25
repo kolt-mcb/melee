@@ -2636,9 +2636,9 @@ __attribute__((weak)) void mpCheckFloor(void) {}
 __attribute__((weak)) void Player_GetPlayerCharacter(void) {}
 __attribute__((weak)) void Player_GetPlayerSlotType(void) {}
 __attribute__((weak)) void un_80304470(void) {}
-__attribute__((weak)) void lbl_804336A0(void) {}
-__attribute__((weak)) void lbl_803BB0E0(void) {}
-__attribute__((weak)) void lbl_803BB028(void) {}
+__attribute__((weak, aligned(16))) unsigned char lbl_804336A0[256]; /* data (GCN 0x804336A0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803BB0E0[256]; /* data (GCN 0x803BB0E0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803BB028[256]; /* data (GCN 0x803BB028), was void-fn stub */
 /* Data, not a function: HSD_ObjAllocData used by lbBgFlash_80021A18 via
  * HSD_ObjAllocInit (writes faulted in .text). 128 zeroed bytes cover it. */
 __attribute__((weak, aligned(16))) unsigned char lbl_80433658[128];
