@@ -3176,6 +3176,38 @@ static void* g_low_mem_base = NULL;
 static size_t g_low_mem_size = 0;
 static size_t g_low_mem_used = 0;
 
+#ifndef MAP_FIXED_NOREPLACE
+#define MAP_FIXED_NOREPLACE 0x100000
+#endif
+
+/* PC port: reserve the low-memory pool. MUST use MAP_FIXED_NOREPLACE:
+ * plain MAP_FIXED silently REPLACED whatever glibc malloc had already
+ * mapped in [0x10000000, +64MB) — ASLR decides whether an arena lands
+ * there, which was the intermittent (~1/20) malloc(): invalid size /
+ * corrupted double-linked list abort during the title archive load.
+ * Called early from main() (before malloc traffic grows) and lazily as
+ * a fallback. */
+void pc_lowmem_init(void)
+{
+    static const uintptr_t candidates[] = { 0x10000000, 0x18000000, 0x20000000, 0x08000000 };
+    unsigned i;
+    if (g_low_mem_base != NULL) return;
+    for (i = 0; i < sizeof(candidates)/sizeof(candidates[0]); i++) {
+        void* p = mmap((void*)candidates[i], 64*1024*1024, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+        if (p != MAP_FAILED) {
+            g_low_mem_base = p;
+            g_low_mem_size = 64*1024*1024;
+            g_low_mem_used = 0;
+            fprintf(stderr, "[MEM] Low-memory pool reserved at %p\n", p);
+            fflush(stderr);
+            return;
+        }
+    }
+    fprintf(stderr, "[MEM] Low-memory pool reservation FAILED\n");
+    fflush(stderr);
+}
+
 __attribute__((weak)) void* OSAllocFromHeap(void* heap, size_t size)
 {
     (void)heap;
@@ -3183,27 +3215,7 @@ __attribute__((weak)) void* OSAllocFromHeap(void* heap, size_t size)
      * to ensure archive pointers work correctly with 32-bit arithmetic. */
     if (size > 65536) {
         if (g_low_mem_base == NULL) {
-            /* Allocate 64MB pool at a fixed low address (0x10000000 = 256MB) */
-            fprintf(stderr, "[MEM] Allocating low-memory pool at 0x10000000\n");
-            fflush(stderr);
-            g_low_mem_base = mmap((void*)0x10000000, 64*1024*1024, PROT_READ | PROT_WRITE,
-                                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-            if (g_low_mem_base == MAP_FAILED) {
-                fprintf(stderr, "[MEM] mmap at 0x10000000 failed, trying 0x08000000\n");
-                fflush(stderr);
-                /* Fallback: try a different address */
-                g_low_mem_base = mmap((void*)0x08000000, 64*1024*1024, PROT_READ | PROT_WRITE,
-                                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-            }
-            if (g_low_mem_base != MAP_FAILED) {
-                fprintf(stderr, "[MEM] Low-memory pool allocated at %p\n", g_low_mem_base);
-                fflush(stderr);
-                g_low_mem_size = 64*1024*1024;
-                g_low_mem_used = 0;
-            } else {
-                fprintf(stderr, "[MEM] Low-memory pool allocation FAILED\n");
-                fflush(stderr);
-            }
+            pc_lowmem_init();
         }
         if (g_low_mem_base != NULL && g_low_mem_used + size <= g_low_mem_size) {
             void* ptr = (u8*)g_low_mem_base + g_low_mem_used;

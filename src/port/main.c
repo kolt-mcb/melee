@@ -170,6 +170,12 @@ int main(int argc, char* argv[])
 
     /* PC port: install crash handler for debugging */
     install_crash_handler();
+    /* Reserve the low-memory pool before malloc traffic can occupy the
+     * region (see pc_lowmem_init in undef_stubs.c). */
+    {
+        extern void pc_lowmem_init(void);
+        pc_lowmem_init();
+    }
 
     PORT_LOG_INFO("Melee PC Port — starting");
 
