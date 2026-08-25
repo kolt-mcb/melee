@@ -1419,7 +1419,16 @@ static bool Ground_801C24F8(StKind stkind, u32 arg1, s32* arg2)
     bool temp_r25;
     /// @todo @c phi_r30 probably belongs to an @c inline.
     StageParam* phi_r30;
-    StageParam* phi_r30_0 = stage_info.param->stage_params;
+    StageParam* phi_r30_0;
+#if BUILD_TARGET_PC
+    /* PC port: stage_info.param is NULL/unconverted BE data. */
+    if (!pc_ptr_sane(stage_info.param) ||
+        !pc_ptr_sane(stage_info.param->stage_params))
+    {
+        return false;
+    }
+#endif
+    phi_r30_0 = stage_info.param->stage_params;
     enum_t bgm = BGM_Undefined;
     bool result = false;
     int i;

@@ -2350,96 +2350,96 @@ __attribute__((weak)) void lbl_803B7CE0(void) { }
 __attribute__((weak)) void lbl_803B7D04(void) { }
 __attribute__((weak)) void lbl_803B7D18(void) { }
 __attribute__((weak)) void lbl_803B7D3C(void) { }
-__attribute__((weak)) void lbl_803D6878(void) { }
-__attribute__((weak)) void lbl_803D6A08(void) { }
-__attribute__((weak)) void lbl_803D6A18(void) { }
-__attribute__((weak)) void lbl_803D7018(void) { }
-__attribute__((weak)) void lbl_803D7038(void) { }
-__attribute__((weak)) void lbl_803D7058(void) { }
-__attribute__((weak)) void lbl_803D7910(void) { }
-__attribute__((weak)) void lbl_803D7AC0(void) { }
-__attribute__((weak)) void lbl_803D85F0(void) { }
-__attribute__((weak)) void lbl_803D9828(void) { }
-__attribute__((weak)) void lbl_803D9910(void) { }
-__attribute__((weak)) void lbl_803DA3D0(void) { }
-__attribute__((weak)) void lbl_8046DBD8(void) { }
-__attribute__((weak)) void lbl_8046DBE8(void) { }
-__attribute__((weak)) void lbl_8046E1B0(void) { }
-__attribute__((weak)) void lbl_8046E38C(void) { }
-__attribute__((weak)) void lbl_8046E39C(void) { }
-__attribute__((weak)) void lbl_8046E3AC(void) { }
-__attribute__((weak)) void lbl_804D65B8(void) { }
-__attribute__((weak)) void lbl_804D65C0(void) { }
-__attribute__((weak)) void lbl_804D65C8(void) { }
-__attribute__((weak)) void lbl_804D65D8(void) { }
-__attribute__((weak)) void lbl_804D65E8(void) { }
-__attribute__((weak)) void lbl_804D6608(void) { }
-__attribute__((weak)) void lbl_804D6610(void) { }
-__attribute__((weak)) void lbl_804D6628(void) { }
-__attribute__((weak)) void lbl_804D662C(void) { }
-__attribute__((weak)) void lbl_804D6638(void) { }
-__attribute__((weak)) void lbl_804D6640(void) { }
-__attribute__((weak)) void lbl_804D6644(void) { }
-__attribute__((weak)) void lbl_804D6648(void) { }
-__attribute__((weak)) void lbl_804D664C(void) { }
-__attribute__((weak)) void lbl_804D6650(void) { }
-__attribute__((weak)) void lbl_804D665C(void) { }
-__attribute__((weak)) void lbl_804D6660(void) { }
-__attribute__((weak)) void lbl_804D6664(void) { }
-__attribute__((weak)) void lbl_804D6668(void) { }
-__attribute__((weak)) void lbl_804D666C(void) { }
-__attribute__((weak)) void lbl_804D6670(void) { }
-__attribute__((weak)) void lbl_804D6674(void) { }
-__attribute__((weak)) void lbl_804D6678(void) { }
-__attribute__((weak)) void lbl_804D667C(void) { }
-__attribute__((weak)) void lbl_804D6680(void) { }
-__attribute__((weak)) void lbl_804D6688(void) { }
-__attribute__((weak)) void lbl_804D668C(void) { }
-__attribute__((weak)) void lbl_804D6690(void) { }
-__attribute__((weak)) void lbl_804D6694(void) { }
-__attribute__((weak)) void lbl_804DA3F0(void) { }
-__attribute__((weak)) void lbl_804DA3F4(void) { }
-__attribute__((weak)) void lbl_804DA5E8(void) { }
-__attribute__((weak)) void lbl_804DA6B4(void) { }
-__attribute__((weak)) void lbl_804DA6B8(void) { }
-__attribute__((weak)) void lbl_804DA6BC(void) { }
-__attribute__((weak)) void lbl_804DA6C0(void) { }
-__attribute__((weak)) void lbl_804DA6C8(void) { }
-__attribute__((weak)) void lbl_804DA6CC(void) { }
-__attribute__((weak)) void lbl_804DA6D0(void) { }
-__attribute__((weak)) void lbl_804DA6D8(void) { }
-__attribute__((weak)) void lbl_804DA6DC(void) { }
-__attribute__((weak)) void lbl_804DA6E0(void) { }
-__attribute__((weak)) void lbl_804DA6E4(void) { }
-__attribute__((weak)) void lbl_804DA734(void) { }
-__attribute__((weak)) void lbl_804DA738(void) { }
-__attribute__((weak)) void lbl_804DA73C(void) { }
-__attribute__((weak)) void lbl_804DA740(void) { }
-__attribute__((weak)) void lbl_804DA744(void) { }
-__attribute__((weak)) void lbl_804DA750(void) { }
-__attribute__((weak)) void lbl_804DA754(void) { }
-__attribute__((weak)) void lbl_804DA758(void) { }
-__attribute__((weak)) void lbl_804DA75C(void) { }
-__attribute__((weak)) void lbl_804DA760(void) { }
-__attribute__((weak)) void lbl_804DA78C(void) { }
-__attribute__((weak)) void lbl_804DA7E8(void) { }
-__attribute__((weak)) void lbl_804DA7EC(void) { }
-__attribute__((weak)) void lbl_804DA7F0(void) { }
-__attribute__((weak)) void lbl_804DA808(void) { }
-__attribute__((weak)) void lbl_804DA810(void) { }
-__attribute__((weak)) void lbl_804DA814(void) { }
-__attribute__((weak)) void lbl_804DA818(void) { }
-__attribute__((weak)) void lbl_804DA81C(void) { }
-__attribute__((weak)) void lbl_804DA820(void) { }
-__attribute__((weak)) void lbl_804DA824(void) { }
-__attribute__((weak)) void lbl_804DA82C(void) { }
-__attribute__((weak)) void lbl_804DA830(void) { }
-__attribute__((weak)) void lbl_804DA834(void) { }
-__attribute__((weak)) void lbl_804DA838(void) { }
-__attribute__((weak)) void lbl_804DA83C(void) { }
-__attribute__((weak)) void lbl_804DA840(void) { }
-__attribute__((weak)) void lbl_804DA870(void) { }
-__attribute__((weak)) void lbl_804DA874(void) { }
+__attribute__((weak, aligned(16))) unsigned char lbl_803D6878[256]; /* data (GCN 0x803D6878), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D6A08[256]; /* data (GCN 0x803D6A08), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D6A18[256]; /* data (GCN 0x803D6A18), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D7018[256]; /* data (GCN 0x803D7018), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D7038[256]; /* data (GCN 0x803D7038), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D7058[256]; /* data (GCN 0x803D7058), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D7910[256]; /* data (GCN 0x803D7910), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D7AC0[256]; /* data (GCN 0x803D7AC0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D85F0[256]; /* data (GCN 0x803D85F0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D9828[256]; /* data (GCN 0x803D9828), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D9910[256]; /* data (GCN 0x803D9910), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_803DA3D0[256]; /* data (GCN 0x803DA3D0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_8046DBD8[256]; /* data (GCN 0x8046DBD8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_8046DBE8[256]; /* data (GCN 0x8046DBE8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_8046E1B0[256]; /* data (GCN 0x8046E1B0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_8046E38C[256]; /* data (GCN 0x8046E38C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_8046E39C[256]; /* data (GCN 0x8046E39C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_8046E3AC[256]; /* data (GCN 0x8046E3AC), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D65B8[256]; /* data (GCN 0x804D65B8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D65C0[256]; /* data (GCN 0x804D65C0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D65C8[256]; /* data (GCN 0x804D65C8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D65D8[256]; /* data (GCN 0x804D65D8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D65E8[256]; /* data (GCN 0x804D65E8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6608[256]; /* data (GCN 0x804D6608), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6610[256]; /* data (GCN 0x804D6610), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6628[256]; /* data (GCN 0x804D6628), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D662C[256]; /* data (GCN 0x804D662C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6638[256]; /* data (GCN 0x804D6638), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6640[256]; /* data (GCN 0x804D6640), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6644[256]; /* data (GCN 0x804D6644), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6648[256]; /* data (GCN 0x804D6648), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D664C[256]; /* data (GCN 0x804D664C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6650[256]; /* data (GCN 0x804D6650), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D665C[256]; /* data (GCN 0x804D665C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6660[256]; /* data (GCN 0x804D6660), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6664[256]; /* data (GCN 0x804D6664), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6668[256]; /* data (GCN 0x804D6668), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D666C[256]; /* data (GCN 0x804D666C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6670[256]; /* data (GCN 0x804D6670), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6674[256]; /* data (GCN 0x804D6674), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6678[256]; /* data (GCN 0x804D6678), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D667C[256]; /* data (GCN 0x804D667C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6680[256]; /* data (GCN 0x804D6680), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6688[256]; /* data (GCN 0x804D6688), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D668C[256]; /* data (GCN 0x804D668C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6690[256]; /* data (GCN 0x804D6690), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804D6694[256]; /* data (GCN 0x804D6694), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA3F0[256]; /* data (GCN 0x804DA3F0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA3F4[256]; /* data (GCN 0x804DA3F4), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA5E8[256]; /* data (GCN 0x804DA5E8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6B4[256]; /* data (GCN 0x804DA6B4), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6B8[256]; /* data (GCN 0x804DA6B8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6BC[256]; /* data (GCN 0x804DA6BC), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6C0[256]; /* data (GCN 0x804DA6C0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6C8[256]; /* data (GCN 0x804DA6C8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6CC[256]; /* data (GCN 0x804DA6CC), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6D0[256]; /* data (GCN 0x804DA6D0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6D8[256]; /* data (GCN 0x804DA6D8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6DC[256]; /* data (GCN 0x804DA6DC), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6E0[256]; /* data (GCN 0x804DA6E0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA6E4[256]; /* data (GCN 0x804DA6E4), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA734[256]; /* data (GCN 0x804DA734), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA738[256]; /* data (GCN 0x804DA738), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA73C[256]; /* data (GCN 0x804DA73C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA740[256]; /* data (GCN 0x804DA740), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA744[256]; /* data (GCN 0x804DA744), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA750[256]; /* data (GCN 0x804DA750), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA754[256]; /* data (GCN 0x804DA754), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA758[256]; /* data (GCN 0x804DA758), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA75C[256]; /* data (GCN 0x804DA75C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA760[256]; /* data (GCN 0x804DA760), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA78C[256]; /* data (GCN 0x804DA78C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA7E8[256]; /* data (GCN 0x804DA7E8), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA7EC[256]; /* data (GCN 0x804DA7EC), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA7F0[256]; /* data (GCN 0x804DA7F0), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA808[256]; /* data (GCN 0x804DA808), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA810[256]; /* data (GCN 0x804DA810), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA814[256]; /* data (GCN 0x804DA814), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA818[256]; /* data (GCN 0x804DA818), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA81C[256]; /* data (GCN 0x804DA81C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA820[256]; /* data (GCN 0x804DA820), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA824[256]; /* data (GCN 0x804DA824), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA82C[256]; /* data (GCN 0x804DA82C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA830[256]; /* data (GCN 0x804DA830), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA834[256]; /* data (GCN 0x804DA834), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA838[256]; /* data (GCN 0x804DA838), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA83C[256]; /* data (GCN 0x804DA83C), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA840[256]; /* data (GCN 0x804DA840), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA870[256]; /* data (GCN 0x804DA870), was void-fn stub */
+__attribute__((weak, aligned(16))) unsigned char lbl_804DA874[256]; /* data (GCN 0x804DA874), was void-fn stub */
 __attribute__((weak)) void mnGallery_80258940(void) { }
 __attribute__((weak)) const char* mnNameNew_8023EA08(void) { return NULL; }
 __attribute__((weak)) void mnSnap_804A0B90(void) { }
