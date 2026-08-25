@@ -969,6 +969,17 @@ static void TObjMakeTExp(HSD_TObj* tobj, u32 lightmap, u32 lightmap_done,
     HSD_TExp *e0, *e1;
     HSD_TExp *c_src, *a_src;
     HSD_TEInput c_sel, a_sel;
+#if BUILD_TARGET_PC
+    /* PC port: guard against garbage params (corrupted caller / bad mobj from
+     * a stage archive). A legit call (from MObjMakeTExp) always passes valid
+     * c, a, list (stack/heap addresses). The TEV is a GCN concept not used by
+     * the simplified GLSL renderer, so if the params are invalid we skip the
+     * whole TEV build rather than dereferencing NULL/0x1. */
+    if (c == NULL || a == NULL || list == NULL ||
+        (uintptr_t)c < 0x10000 || (uintptr_t)a < 0x10000 || (uintptr_t)list < 0x10000) {
+        return;
+    }
+#endif
     int repeat = (lightmap_done & tobj_lightmap(tobj));
 
     c_src = HSD_TEXP_TEX;

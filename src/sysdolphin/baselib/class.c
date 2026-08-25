@@ -189,6 +189,11 @@ void* hsdAllocMemPiece(s32 size)
 
     temp_r29 = (size + 0x1F) / 32 - 1;
     temp_r3_3 = GetMemoryEntry((size + 0x1F) / 32 - 1);
+#if BUILD_TARGET_PC
+    { static int _ma_on=-1,_ma_n=0; if(_ma_on<0)_ma_on=(getenv("MELEE_STAGE_DIAG")!=NULL);
+      if(_ma_on && _ma_n<8){_ma_n++; fprintf(stderr,"[MEMPIECE] size=%d entry=%p free_list=%p nb_free=%d\n",
+        size, (void*)temp_r3_3, temp_r3_3?(void*)temp_r3_3->free_list:0, temp_r3_3?(int)temp_r3_3->nb_free:-1); } }
+#endif
     if (temp_r3_3 == NULL) {
         return NULL;
     }

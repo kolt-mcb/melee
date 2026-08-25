@@ -1811,6 +1811,27 @@ static UnkArchiveStruct* grDatFiles_ConvertArchiveGCNtoX64(HSD_Archive* archive,
 }
 #endif /* BUILD_TARGET_PC */
 
+#if BUILD_TARGET_PC
+/* PC port: load a stage .dat archive from an in-memory buffer (bypasses the
+ * lbFile language-extension path logic). Mirrors grDatFiles_801C6038's PC
+ * branch but takes raw data instead of a filename. Returns the converted
+ * UnkArchiveStruct (unk0=archive, unk4=UnkStageDat with converted joint trees
+ * + cameras) or NULL. */
+UnkArchiveStruct* pc_LoadStageFromBuffer(const void* data, size_t length)
+{
+    if (data == NULL || length == 0) return NULL;
+    HSD_Archive* sp14 = lbHeap_80015BD0(0, sizeof(HSD_Archive));
+    if (sp14 == NULL) return NULL;
+    lbArchive_InitializeDAT(sp14, (void*)data, length);
+    void* mapHead = HSD_ArchiveGetPublicAddress(sp14, "map_head");
+    if (mapHead == NULL) {
+        fprintf(stderr, "[PCSTAGE] no map_head public in stage archive\n");
+        return NULL;
+    }
+    return grDatFiles_ConvertArchiveGCNtoX64(sp14, mapHead);
+}
+#endif /* BUILD_TARGET_PC */
+
 void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
 {
     UnkArchiveStruct* temp_r3 = grDatFiles_801C62B4();

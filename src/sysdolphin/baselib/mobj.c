@@ -411,6 +411,11 @@ void HSD_MObjCompileTev(HSD_MObj* mobj)
     HSD_TObj *tobj, **tail;
     HSD_TExp* texp;
 
+#if BUILD_TARGET_PC
+    { static int _ct_on=-1,_ct_n=0; if(_ct_on<0)_ct_on=(getenv("MELEE_STAGE_DIAG")!=NULL);
+      if(_ct_on && _ct_n<20){_ct_n++; fprintf(stderr,"[COMPILETEV #%d] mobj=%p\n",_ct_n,(void*)mobj); } }
+#endif
+
     tail = NULL;
     if (mobj != NULL) {
         if (mobj->tevdesc != NULL) {
