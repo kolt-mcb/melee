@@ -1,4 +1,7 @@
 #include "gmtitle.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "gm_unsplit.h"
 #include "../gr/grdatfiles.h"
@@ -370,8 +373,19 @@ HSD_GObj* gmTitle_801A165C(void)
         var_r0 = false;
     }
     if (!var_r0) {
+#if BUILD_TARGET_PC
+        /* PC port: lb_80011E24 leaves sp10 untouched when the child joint
+         * is not found; SetFlagsAll on the uninitialized value crashed
+         * intermittently at boot. */
+        sp10 = NULL;
+        lb_80011E24(jobj, &sp10, 7, -1);
+        if (pc_ptr_sane(sp10)) {
+            HSD_JObjSetFlagsAll(sp10, JOBJ_HIDDEN);
+        }
+#else
         lb_80011E24(jobj, &sp10, 7, -1);
         HSD_JObjSetFlagsAll(sp10, JOBJ_HIDDEN);
+#endif
     }
     gm_801692E8(lbTime_8000AFBC(), &sp8);
     second = sp8.second;

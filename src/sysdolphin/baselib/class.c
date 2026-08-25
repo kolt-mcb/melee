@@ -1,4 +1,7 @@
 #include "class.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "debug.h"
 #include "hash.h"
@@ -373,6 +376,14 @@ inline bool hsdChangeClass_inline(HSD_Obj* object, HSD_ClassInfo* class_info)
 
     HSD_ASSERT(0x249, object);
     HSD_ASSERT(0x24A, class_info);
+#if BUILD_TARGET_PC
+    /* PC port: asserts don't abort here; continuing with a NULL/garbage
+     * object walked into a wild indirect call (HSD_GetClassInfo(NULL) ->
+     * info_init through heap garbage). */
+    if (!pc_ptr_sane(object) || !pc_ptr_sane(class_info)) {
+        return false;
+    }
+#endif
     var_r29 = HSD_GetClassInfo(object);
     !var_r29;
     var_r28 = HSD_PushClassInfo(class_info);
@@ -420,6 +431,37 @@ bool hsdIsDescendantOf(void* info, void* p)
 
     var_r31 = var_r31 = info;
 
+#if BUILD_TARGET_PC
+    /* PC port: objects built from unconverted BE data carry garbage
+     * class_info pointers; walking/calling through them crashes. */
+    {
+        extern char etext;
+        if (!pc_ptr_sane(info) || !pc_ptr_sane(p)) {
+            return false;
+        }
+        if (!(HSD_CLASS_INFO(info)->head.flags & 1)) {
+            if ((uintptr_t)var_r31->head.info_init < (uintptr_t)&etext &&
+                var_r31->head.info_init != NULL)
+                var_r31->head.info_init();
+            else
+                return false;
+        }
+        if (!(cls->head.flags & 1)) {
+            if ((uintptr_t)cls->head.info_init < (uintptr_t)&etext &&
+                cls->head.info_init != NULL)
+                cls->head.info_init();
+            else
+                return false;
+        }
+        while (pc_ptr_sane(var_r31)) {
+            if (var_r31 == cls) {
+                return true;
+            }
+            var_r31 = var_r31->head.parent;
+        }
+        return false;
+    }
+#else
     if (!(HSD_CLASS_INFO(info)->head.flags & 1)) {
         var_r31->head.info_init();
     }
@@ -433,6 +475,7 @@ bool hsdIsDescendantOf(void* info, void* p)
         var_r31 = var_r31->head.parent;
     }
     return false;
+#endif
 }
 
 bool hsdObjIsDescendantOf(HSD_Obj* o, HSD_ClassInfo* p)
