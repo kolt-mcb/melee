@@ -193,6 +193,16 @@ void* lbHeap_80015BD0(int arg0, int arg1)
             HSD_SetHeap(cur_heap);
         } else {
             result = lbMemory_80014FC8(p->handle, arg1);
+#if BUILD_TARGET_PC
+            /* PC port: heap exhaustion returns NULL now — fall back to
+             * malloc so loads keep working (freed via lbMemFreeToHeap will
+             * just log; acceptable leak until heap sizing is ported). */
+            if (result == NULL) {
+                OSReport("[HEAP] lbHeap_80015BD0: heap %d exhausted; malloc(%d) fallback\n", arg0, arg1);
+                OSRestoreInterrupts(enabled);
+                return malloc(arg1);
+            }
+#endif
             if (p->type == 3) {
                 result = result->x4_lo;
             }

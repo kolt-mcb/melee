@@ -1,4 +1,7 @@
 #include "lbmemory.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include <platform.h>
 
@@ -149,6 +152,14 @@ Handle* lbMemory_80014FC8(Handle* arg0, u32 size)
         }
     }
     HSD_ASSERT(0xE9, memp_kouho);
+#if BUILD_TARGET_PC
+    /* PC port: asserts are non-fatal here; continuing with an exhausted
+     * heap popped garbage handles and crashed. Let the caller fall back. */
+    if (memp_kouho == NULL || _p(free_mem) == NULL) {
+        PORT_LOG_WARN("lbMemory: heap exhausted (alloc %u); returning NULL\n", (unsigned)size);
+        return NULL;
+    }
+#endif
     {
         Handle* result;
         POP_HANDLE(&_p(free_mem), result);

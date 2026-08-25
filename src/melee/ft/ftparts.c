@@ -700,10 +700,27 @@ void ftParts_80074E58(Fighter* fp)
     fp->parts[ftParts_GetBoneIndex(fp, 0x35)].flags_b4 = true;
 }
 
+#if BUILD_TARGET_PC
+static Fighter_Part ftParts_GetBoneIndex_orig(Fighter* fp, Fighter_Part part)
+{
+    return ftPartsTable[fp->kind]->part_to_joint[part];
+}
+Fighter_Part ftParts_GetBoneIndex(Fighter* fp, Fighter_Part part)
+{
+    /* PC port: bone lookup tables come from the zeroed PlCo arena; clamp
+     * wild indices to 0 so parts[] writes stay in bounds. */
+    Fighter_Part idx = ftParts_GetBoneIndex_orig(fp, part);
+    if ((u32)idx >= 0x80) {
+        return 0;
+    }
+    return idx;
+}
+#else
 Fighter_Part ftParts_GetBoneIndex(Fighter* fp, Fighter_Part part)
 {
     return ftPartsTable[fp->kind]->part_to_joint[part];
 }
+#endif
 
 int ftPartsRemap(size_t to_table_idx, size_t from_table_idx, size_t joint_idx)
 {

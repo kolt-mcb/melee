@@ -1,4 +1,7 @@
 #include "ftdata.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include "ft_0877.h"
 #include "ft_459A.h"
@@ -1510,6 +1513,18 @@ void ftData_800857E0(FighterKind kind)
 
 void ftData_80085820(FighterKind kind, int costume_id)
 {
+#if BUILD_TARGET_PC
+    /* PC port: only Mario (kind 0) has compiled data; other kinds' costume
+     * tables contain weak-stub function addresses that end up used as
+     * filenames/heap handles. */
+    if (kind != 0) {
+        static int warned = 0;
+        if (warned < 4) { warned++;
+            PORT_LOG_WARN("ftData: skipping data load for kind %d (Mario only on PC)\n", (int)kind);
+        }
+        return;
+    }
+#endif
     UnkCostumeStruct* temp_r5 =
         &CostumeListsForeachCharacter[kind].costume_list[costume_id];
     if (temp_r5->joint == NULL) {
@@ -1572,6 +1587,18 @@ void ftData_800859A8(Fighter* fp)
 
 void ftData_80085A14(FighterKind kind)
 {
+#if BUILD_TARGET_PC
+    /* PC port: only Mario (kind 0) has compiled data; other kinds' costume
+     * tables contain weak-stub function addresses that end up used as
+     * filenames/heap handles. */
+    if (kind != 0) {
+        static int warned = 0;
+        if (warned < 4) { warned++;
+            PORT_LOG_WARN("ftData_A14: skipping data load for kind %d (Mario only on PC)\n", (int)kind);
+        }
+        return;
+    }
+#endif
     u32 sp18;
     u32 a_head;
     ftData* temp_r27 = gFtDataList[kind];
