@@ -190,6 +190,7 @@ void gx_set_default_3d_camera(void);
  * through the real GX pipeline (MELEE_TEX_TEST=1). Validates the
  * color-texture + 3D-projection + camera pipeline. */
 void pc_render_tex_test(void);
+void pc_render_stage_test(void);
 
 /* Depth testing toggles for multi-pass rendering */
 void gx_enable_depth_test(void);
