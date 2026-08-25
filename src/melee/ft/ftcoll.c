@@ -1,4 +1,7 @@
 #include "ftcoll.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "fighter.h"
 #include "ft_081B.h"
@@ -2979,6 +2982,12 @@ void ftColl_8007B320(Fighter_GObj* gobj)
     u32 i;
     PAD_STACK(8);
 
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(x30)) {
+        fp->hurt_capsules_len = 0; /* PC port: hurtbox table not converted */
+        return;
+    }
+#endif
     if (x30->count > 0xF) {
         HSD_ASSERTREPORT(0x8C9, 0, "fighter hit num over!\n");
     }

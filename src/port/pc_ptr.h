@@ -32,4 +32,25 @@ static inline int pc_str_sane(const char* p, int max)
     }
     return 0;
 }
+/* Probe that [p, p+n) is readable without faulting (write(2) returns
+ * EFAULT on unmapped memory). Checks first and last byte only. */
+static inline int pc_mem_readable(const void* p, unsigned long n)
+{
+    static int pc_mem_nullfd = -1;
+    if (!pc_ptr_sane(p) || n == 0) return 0;
+    if (pc_mem_nullfd < 0) pc_mem_nullfd = open("/dev/null", O_WRONLY);
+    if (pc_mem_nullfd < 0) return 1;
+    {
+        /* probe every page in [p, p+n) — a first/last check misses holes */
+        const char* a = (const char*)p;
+        unsigned long off = 0;
+        for (;;) {
+            if (write(pc_mem_nullfd, a + off, 1) < 0) return 0;
+            if (off + 4096 >= n) break;
+            off += 4096;
+        }
+        if (n > 1 && write(pc_mem_nullfd, a + n - 1, 1) < 0) return 0;
+    }
+    return 1;
+}
 #endif

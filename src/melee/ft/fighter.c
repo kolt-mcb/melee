@@ -192,13 +192,71 @@ void Fighter_FirstInitialize_80067A84(void)
 void Fighter_LoadCommonData(void)
 {
     void** pData = NULL;
-    lbArchive_LoadSymbols("PlCo.dat", (void**) &pData, "ftLoadCommonData", 0);
 #if BUILD_TARGET_PC
-    /* PC port: LoadSymbols does not resolve symbol out-pointers on PC (see
-     * lbarchive.c), and PlCo.dat's content is unconverted big-endian data
-     * anyway. Leave every ftCommonData global at its zeroed .bss value
-     * (consumers are NULL-guarded) until the M4 conversion tooling covers
-     * PlCo. */
+    /* PC port: load PlCo via the resolving loader and convert the two
+     * critical tables in place. ftCommonData is 503 pointer-free 4-byte
+     * fields (one u8[4] pad) — a bulk 32-bit byteswap converts it exactly.
+     * ftPartsTable is per-kind {joint_to_part, part_to_joint, parts_num};
+     * the u8 bone maps can point straight into archive data. */
+    {
+        HSD_Archive* arc = NULL;
+        void* raw = NULL;
+        lbArchive_80017040(&arc, "PlCo.dat", &raw, "ftLoadCommonData", 0);
+        if (pc_ptr_sane(arc) && pc_ptr_sane(arc->data) && pc_ptr_sane(raw)) {
+            u8* dataBase = arc->data;
+            const u32* offs = (const u32*)raw;
+            u32 fsize = arc->header.file_size;
+            u32 off0, off4;
+            #define PC_BE32(x) __builtin_bswap32(x)
+            off0 = PC_BE32(offs[0]);
+            off4 = PC_BE32(offs[4]);
+            if (off0 != 0 && off0 + 0x818 <= fsize) {
+                static int swapped = 0;
+                u32* w = (u32*)(dataBase + off0);
+                if (!swapped) {
+                    u32 k;
+                    swapped = 1;
+                    for (k = 0; k < 0x818 / 4; k++) w[k] = PC_BE32(w[k]);
+                }
+                p_ftCommonData = (ftCommonData*)w;
+            }
+            if (off4 != 0 && off4 + FTKIND_MAX * 4 <= fsize) {
+                static struct FighterPartsTable pc_tbl[FTKIND_MAX];
+                static struct FighterPartsTable* pc_tblp[FTKIND_MAX];
+                const u32* kinds = (const u32*)(dataBase + off4);
+                u32 k;
+                for (k = 0; k < FTKIND_MAX; k++) {
+                    u32 to = PC_BE32(kinds[k]);
+                    pc_tblp[k] = &pc_tbl[k];
+                    if (to != 0 && to + 12 <= fsize) {
+                        const u32* e = (const u32*)(dataBase + to);
+                        u32 j2p = PC_BE32(e[0]);
+                        u32 p2j = PC_BE32(e[1]);
+                        pc_tbl[k].parts_num = PC_BE32(e[2]);
+                        pc_tbl[k].joint_to_part =
+                            (j2p && j2p < fsize) ? dataBase + j2p : NULL;
+                        pc_tbl[k].part_to_joint =
+                            (p2j && p2j < fsize) ? dataBase + p2j : NULL;
+                        if (pc_tbl[k].parts_num > 0x80) pc_tbl[k].parts_num = 0;
+                    } else {
+                        pc_tbl[k].parts_num = 0;
+                        pc_tbl[k].joint_to_part = NULL;
+                        pc_tbl[k].part_to_joint = NULL;
+                    }
+                }
+                ftPartsTable = pc_tblp;
+                PORT_LOG_WARN("Fighter_LoadCommonData: PlCo converted (mario parts_num=%u)\n",
+                              (unsigned)pc_tbl[0].parts_num);
+            }
+            #undef PC_BE32
+        }
+    }
+    /* Fall through: the remaining 21 PlCo globals still need the zeroed
+     * arena until their own conversions exist. */
+#else
+    lbArchive_LoadSymbols("PlCo.dat", (void**) &pData, "ftLoadCommonData", 0);
+#endif
+#if BUILD_TARGET_PC
     if (pData == NULL) {
         /* Point every PlCo-derived global at an arena of pointers that all
          * lead to zeroed memory: single derefs read a valid pointer, double
@@ -214,12 +272,12 @@ void Fighter_LoadCommonData(void)
                 pc_ptr_arena[i] = (void*)pc_zero_target;
             }
         }
-        PORT_LOG_WARN("Fighter_LoadCommonData: ftLoadCommonData unavailable; using zeroed arenas\n");
-        p_ftCommonData = (void*)pc_zero_target;
+        PORT_LOG_WARN("Fighter_LoadCommonData: arena-filling unconverted PlCo globals\n");
+        if (p_ftCommonData == NULL) p_ftCommonData = (void*)pc_zero_target;
         Fighter_804D6550 = (void*)pc_ptr_arena;
         Fighter_804D654C = (void*)pc_ptr_arena;
         Fighter_804D6548 = (void*)pc_ptr_arena;
-        ftPartsTable = (void*)pc_ptr_arena;
+        if (ftPartsTable == NULL) ftPartsTable = (void*)pc_ptr_arena;
         Fighter_804D6540 = (void*)pc_ptr_arena;
         Fighter_804D653C = (void*)pc_ptr_arena;
         Fighter_804D6538 = (void*)pc_ptr_arena;

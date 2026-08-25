@@ -1,5 +1,9 @@
 #include "ftdata.h"
 #if BUILD_TARGET_PC
+#include "gr/grdatfiles.h"
+#include "port/pc_ptr.h"
+#endif
+#if BUILD_TARGET_PC
 #include "port/log.h"
 #endif
 
@@ -1543,6 +1547,34 @@ void ftData_80085820(FighterKind kind, int costume_id)
             CostumeListsForeachCharacter[kind].costume_list[costume_id].x4 =
                 NULL;
         }
+#if BUILD_TARGET_PC
+    /* PC port: the archive symbols resolve to raw big-endian data. Convert
+     * the costume joint tree (and matanim joints) to x64 structs with the
+     * same converters the stage loader uses; fighter models are ordinary
+     * HSD joint trees. */
+    if (temp_r5->joint != NULL && pc_ptr_sane(temp_r5->x14_archive) &&
+        pc_ptr_sane(temp_r5->x14_archive->data))
+    {
+        u8* dataBase = temp_r5->x14_archive->data;
+        const u8* rawJoint = (const u8*)temp_r5->joint;
+        const u8* rawMat = (const u8*)temp_r5->x4;
+        if ((uintptr_t)rawJoint > (uintptr_t)dataBase) {
+            temp_r5->joint =
+                grDatFiles_ConvertJointTreeGCNtoX64(rawJoint, dataBase, 0, NULL);
+        } else {
+            temp_r5->joint = NULL;
+        }
+        if (rawMat != NULL && (uintptr_t)rawMat > (uintptr_t)dataBase) {
+            temp_r5->x4 =
+                grDatFiles_ConvertMatAnimJointTreeGCNtoX64(rawMat, dataBase, 0);
+        } else {
+            temp_r5->x4 = NULL;
+        }
+        grDatFiles_ResolvePObjJoints();
+        PORT_LOG_WARN("ftData: converted costume joint kind=%d costume=%d joint=%p\n",
+                      (int)kind, costume_id, (void*)temp_r5->joint);
+    }
+#endif
     }
 }
 
@@ -1566,6 +1598,34 @@ void ftData_800858E4(FighterKind kind, int costume_id)
             CostumeListsForeachCharacter[kind].costume_list[costume_id].x4 =
                 NULL;
         }
+#if BUILD_TARGET_PC
+    /* PC port: the archive symbols resolve to raw big-endian data. Convert
+     * the costume joint tree (and matanim joints) to x64 structs with the
+     * same converters the stage loader uses; fighter models are ordinary
+     * HSD joint trees. */
+    if (temp_r5->joint != NULL && pc_ptr_sane(temp_r5->x14_archive) &&
+        pc_ptr_sane(temp_r5->x14_archive->data))
+    {
+        u8* dataBase = temp_r5->x14_archive->data;
+        const u8* rawJoint = (const u8*)temp_r5->joint;
+        const u8* rawMat = (const u8*)temp_r5->x4;
+        if ((uintptr_t)rawJoint > (uintptr_t)dataBase) {
+            temp_r5->joint =
+                grDatFiles_ConvertJointTreeGCNtoX64(rawJoint, dataBase, 0, NULL);
+        } else {
+            temp_r5->joint = NULL;
+        }
+        if (rawMat != NULL && (uintptr_t)rawMat > (uintptr_t)dataBase) {
+            temp_r5->x4 =
+                grDatFiles_ConvertMatAnimJointTreeGCNtoX64(rawMat, dataBase, 0);
+        } else {
+            temp_r5->x4 = NULL;
+        }
+        grDatFiles_ResolvePObjJoints();
+        PORT_LOG_WARN("ftData: converted costume joint kind=%d costume=%d joint=%p\n",
+                      (int)kind, costume_id, (void*)temp_r5->joint);
+    }
+#endif
     }
 }
 
@@ -1613,6 +1673,14 @@ void ftData_80085A14(FighterKind kind)
         lbFile_800168A0(1, ftData_803C23E4[kind], &sp18, &sp10);
         a_head = sp18;
         HSD_ASSERT(0x974, a_head);
+#if BUILD_TARGET_PC
+        /* PC port: gFtDataList is unpopulated until fighter DAT conversion
+         * covers it; skip the figatree offset fixups. */
+        if (!pc_ptr_sane(temp_r27)) {
+            ftData_Table_Unk0[kind].data = (void*) a_head;
+            return;
+        }
+#endif
         for (i = 0; i < (u32) ftData_Table_Unk0[kind].count; i++) {
             temp_r0 = temp_r27->xC[i].x8;
             if (temp_r0 != 0) {
@@ -1737,6 +1805,11 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
 
     if (msid < arg0->x58C) {
         temp_r3 = ftData_80085FD4(arg0, msid);
+#if BUILD_TARGET_PC
+        if (!pc_ptr_sane(temp_r3)) {
+            return NULL; /* PC port: figatree tables not fully converted */
+        }
+#endif
         temp_r3_2 = temp_r3->x14;
         if (temp_r3_2 != (u32) arg0->x5A8) {
             if (temp_r3_2 != 0) {

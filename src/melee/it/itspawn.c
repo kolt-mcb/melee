@@ -1,4 +1,7 @@
 #include "it/itspawn.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "placeholder.h"
 
@@ -346,6 +349,11 @@ void it_8026CF04(void)
     u32 idx;
     s32* counts;
 
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(it_804D6D28)) {
+        return; /* PC port: ItCo common data unavailable */
+    }
+#endif
     counts = it_804D6D28->x128;
     sum = counts[0];
     sum += counts[1];
@@ -401,6 +409,11 @@ void it_8026D018(void)
             }
             it_8026CF04();
             HSD_GObj_SetupProc(GObj_Create(5, 7, 0), fn_8026C88C, 0);
+#if BUILD_TARGET_PC
+            if (!pc_ptr_sane(it_804D6D28)) {
+                it_804A0E30.x0 = 0.0f;
+            } else
+#endif
             {
                 s32* range = &it_804D6D28->xFC[gm_8016AE80() * 2];
                 f32 randf = HSD_Randf();

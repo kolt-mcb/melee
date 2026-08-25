@@ -1,4 +1,7 @@
 #include "lbheap.static.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "placeholder.h"
 
@@ -64,6 +67,13 @@ lbHeap_CreateOffsetViewIfDestroyed(struct lbHeap_HeapOffsetView* view)
     struct Heap* heap = &view->heap;
 
     if (view->heap.status == LbHeapStatus_Destroy) {
+#if BUILD_TARGET_PC
+        /* PC port: offset-view heaps with zeroed bounds stay Destroy; the
+         * allocator falls back to malloc for them. */
+        if (heap->start == 0 || heap->size == 0) {
+            return;
+        }
+#endif
         if (heap->type == 0) {
             heap->id = OSCreateHeap((void*) heap->start,
                                     (void*) (heap->start + heap->size));
@@ -116,6 +126,38 @@ void lbHeap_80015900(void)
         }
     }
 
+#if BUILD_TARGET_PC
+    /* PC port: these bounds are GCN boot values living in zeroed .bss here,
+     * which made the ARAM heap a zero-byte arena (every allocation
+     * "exhausted" and fell back to malloc; frees walked garbage handles).
+     * Carve real sub-4GB regions from the low pool once. */
+    {
+        /* The allocator init (free lists + a_arena bounds from ARAlloc/
+         * ARGetSize) lives in gmmain.c on GCN, which is not in the PC
+         * build. Run it once here, then adopt its ARAM bounds. The main
+         * arena gets a carved region (its heap is malloc-backed anyway;
+         * bounds are bookkeeping). */
+        extern void* pc_lowmem_carve(unsigned long size);
+        extern void lbMemory_8001564C(void);
+        extern void lbMemory_800154BC(uintptr_t* lo, uintptr_t* hi);
+        static int pc_meminit_done = 0;
+        if (!pc_meminit_done) {
+            pc_meminit_done = 1;
+            lbMemory_8001564C();
+        }
+        if (lbHeap_80431FA0.aram_hi == 0) {
+            uintptr_t alo = 0, ahi = 0;
+            void* a = pc_lowmem_carve(64UL << 20);
+            lbMemory_800154BC(&alo, &ahi);
+            lbHeap_80431FA0.aram_lo = (u32)alo;
+            lbHeap_80431FA0.aram_hi = (u32)ahi;
+            if (a != NULL) {
+                lbHeap_80431FA0.arena_lo = (u32)(uintptr_t)a;
+                lbHeap_80431FA0.arena_hi = (u32)((uintptr_t)a + (64UL << 20));
+            }
+        }
+    }
+#endif
     arena_lo = (u32) lbHeap_80431FA0.arena_lo;
     arena_hi = (u32) lbHeap_80431FA0.arena_hi;
     aram_lo = lbHeap_80431FA0.aram_lo;
