@@ -520,6 +520,19 @@ void ftParts_8007487C(FtPartsDesc* desc, FtPartsVis* vis, u32 costume_id,
     void*(*vis_table)[4];
     PAD_STACK(0x8);
 
+#if BUILD_TARGET_PC
+    /* PC port: desc comes from stubbed fighter data. */
+    if (!pc_ptr_sane(desc) || !pc_ptr_sane(vis)) {
+        if (pc_ptr_sane(vis)) {
+            vis->model_num = 0;
+        }
+        return;
+    }
+    if (!pc_ptr_sane(desc->vis_table)) {
+        vis->model_num = 0;
+        return;
+    }
+#endif
     vis_table = desc->vis_table;
     vis->model_num = desc->model_num;
     if (vis->model_num > 11) {
