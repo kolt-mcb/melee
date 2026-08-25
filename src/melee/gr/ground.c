@@ -754,6 +754,17 @@ void Ground_801C0C2C(HSD_GObj* arg0)
 
 void Ground_OnLoad(StageIdPair* pair)
 {
+#if BUILD_TARGET_PC
+    extern char etext;
+    if (pair == NULL || (u32)pair->grkind >= (u32)(sizeof(stage_datas)/sizeof(stage_datas[0])) ||
+        !pc_ptr_sane(stage_datas[pair->grkind]) ||
+        stage_datas[pair->grkind]->on_load == NULL ||
+        (uintptr_t)stage_datas[pair->grkind]->on_load >= (uintptr_t)&etext)
+    {
+        PORT_LOG_WARN("Ground_OnLoad: invalid stage data; skipping\n");
+        return;
+    }
+#endif
     stage_datas[pair->grkind]->on_load();
 }
 
@@ -765,6 +776,19 @@ void Ground_801C0FB8(StageIdPair* pair)
         void (*unk8)(s32);
     }* cur;
     void* next;
+#if BUILD_TARGET_PC
+    {
+        extern char etext;
+        if (pair == NULL || (u32)pair->grkind >= (u32)(sizeof(stage_datas)/sizeof(stage_datas[0])) ||
+            !pc_ptr_sane(stage_datas[pair->grkind]) ||
+            stage_datas[pair->grkind]->on_start == NULL ||
+            (uintptr_t)stage_datas[pair->grkind]->on_start >= (uintptr_t)&etext)
+        {
+            PORT_LOG_WARN("Ground_801C0FB8: invalid stage data; skipping on_start\n");
+            return;
+        }
+    }
+#endif
     stage_datas[pair->grkind]->on_start();
     for (cur = stage_info.x6A4; cur != NULL; cur = next) {
         next = cur->unk0;
