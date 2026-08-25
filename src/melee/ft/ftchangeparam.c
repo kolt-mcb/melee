@@ -1,4 +1,8 @@
 #include "ftchangeparam.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#include <string.h>
+#endif
 
 #include "placeholder.h"
 
@@ -148,6 +152,18 @@ void ftCo_800D0FA0(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
 
+#if BUILD_TARGET_PC
+    /* PC port: ft_data can be the zeroed arena (fields NULL) while
+     * per-character DATs are unconverted. Zero the attribute blocks. */
+    if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x0) ||
+        !pc_ptr_sane(fp->ft_data->x40) || !pc_ptr_sane(fp->ft_data->x50))
+    {
+        memset(&fp->co_attrs, 0, sizeof(fp->co_attrs));
+        memset(&fp->x294_itPickup, 0, sizeof(fp->x294_itPickup));
+        memset(&fp->x2C4, 0, sizeof(fp->x2C4));
+        return;
+    }
+#endif
     fp->co_attrs = *fp->ft_data->x0;
     {
         fp->x294_itPickup = *fp->ft_data->x40;

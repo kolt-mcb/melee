@@ -233,6 +233,12 @@ float mn_8022F298(HSD_JObj* jobj)
     HSD_MObj* mobj;
     HSD_TObj* tobj;
 
+#if BUILD_TARGET_PC
+    /* PC port: menu jobjs can be NULL while menu data tables are stubbed. */
+    if (jobj == NULL) {
+        return 0.0f;
+    }
+#endif
     aobj = jobj->aobj;
     if (aobj != NULL) {
         return aobj->curr_frame;

@@ -7,6 +7,9 @@
  */
 
 #include "lbrefract.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include <placeholder.h>
 
@@ -366,6 +369,18 @@ void lbRefract_800222A4(void)
     u32 i;
 
     lbl_804336D0.refractionUserCount = 0;
+#if BUILD_TARGET_PC
+    /* PC port: lbl_803BB0B0 is DOL data (texture matrix, TObj descriptors,
+     * "LbRf"/"lbRefData" strings) that is only zero-filled on PC so far.
+     * With an empty filename the archive load fails and the code below
+     * derefs a NULL symbol table. Skip refraction setup until the real
+     * table is extracted from boot.dol (see port-roadmap M4). */
+    if (lbl_803BB0B0.filename[0] == '\0') {
+        PORT_LOG_WARN("lbRefract_800222A4: refract data table empty; "
+                      "skipping refraction setup\n");
+        return;
+    }
+#endif
     lbArchive_LoadSymbols(lbl_803BB0B0.filename, &skip8_804D63E8[0],
                           lbl_803BB0B0.symbol, 0);
     {

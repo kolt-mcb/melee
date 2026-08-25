@@ -38,6 +38,33 @@ inline void ft_800852B0_Reset_ft_8045993C(int i)
 
 void ft_800852B0(void)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the GCN code reaches the two adjacent DOL tables via pointer
+     * math past CostumeListsForeachCharacter (fixed GCN addresses). On PC
+     * they are separate symbols — use them directly. Also, several
+     * per-character costume_list arrays are still weak .text stubs (not
+     * data); writing through those faults. Skip pointers below etext. */
+    extern char etext;
+    int i;
+    int new_var = 0;
+
+    for (i = 0; i < FTKIND_MAX; ++i) {
+        int costume_idx;
+        UnkCostumeStruct* list = CostumeListsForeachCharacter[i].costume_list;
+        gFtDataList[i] = NULL;
+        if (list != NULL && (uintptr_t)list > (uintptr_t)&etext) {
+            for (costume_idx = new_var;
+                 costume_idx < (s32) CostumeListsForeachCharacter[i].numCostumes;
+                 ++costume_idx)
+            {
+                list[costume_idx].joint = NULL;
+                list[costume_idx].pad_x8 = NULL;
+            }
+        }
+        ftData_Table_Unk0[i].data = NULL;
+        ftData_UnkIntPairs[i].data = NULL;
+    }
+#else
     ftData_UnkCountStruct* unk0 =
         (ftData_UnkCountStruct*) &CostumeListsForeachCharacter[FTKIND_MAX];
     ftData_UnkCountStruct* pairs =
@@ -60,6 +87,7 @@ void ft_800852B0(void)
         unk0[i].data = NULL;
         pairs[i].data = NULL;
     }
+#endif
     ft_800852B0_Reset_ft_8045993C(new_var);
     ft_800852B0_Reset_ft_8045993C(1);
     ft_800852B0_Reset_ft_8045993C(2);

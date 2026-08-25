@@ -1,4 +1,10 @@
 #include "ground.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include "grbattle.h"
 #include "grbigblue.h"
@@ -485,16 +491,42 @@ void Ground_801C0754(StageIdPair* pair)
 
 void Ground_801C0800(StageIdPair* pair)
 {
+#if BUILD_TARGET_PC
+    /* PC port: pair can point at unconverted BE data — grkind then indexes
+     * far outside stage_datas and on_init becomes a wild call. */
+    StageData* stage_data;
+    if (pair == NULL ||
+        pair->grkind >= (s32)(sizeof(stage_datas) / sizeof(stage_datas[0])) ||
+        pair->grkind < 0)
+    {
+        PORT_LOG_WARN("Ground_801C0800: bad grkind (pair=%p); skipping stage on_init\n",
+                      (void*)pair);
+        return;
+    }
+    stage_data = stage_datas[pair->grkind];
+#else
     StageData* stage_data = stage_datas[pair->grkind];
+#endif
     
 #if BUILD_TARGET_PC
     /* PC port: stage_info.param is big-endian archive data.
      * The struct layout differs on x86_64 due to pointer sizes.
      * Skip the param field access but call on_init() which creates
      * stage GObjs with render callbacks. */
-    /* Call on_init to create stage GObjs with render callbacks */
-    if (stage_data && stage_data->on_init) {
-        stage_data->on_init();
+    /* Call on_init to create stage GObjs with render callbacks.
+     * Validate the pointers land in the text segment — StageData read
+     * through unconverted BE data yields garbage function pointers. */
+    {
+        extern char etext;
+        if (stage_data != NULL && (uintptr_t)stage_data > 0x10000 &&
+            stage_data->on_init != NULL &&
+            (uintptr_t)stage_data->on_init < (uintptr_t)&etext)
+        {
+            stage_data->on_init();
+        } else {
+            PORT_LOG_WARN("Ground_801C0800: skipping invalid on_init (stage_data=%p)\n",
+                          (void*)stage_data);
+        }
     }
     return;
 
@@ -1274,9 +1306,22 @@ LightList** Ground_801C20E0(UnkArchiveStruct* archive, LightList** lightset)
     HSD_ASSERT(1907, lightset);
     HSD_ASSERT(1908, *lightset);
 
+#if BUILD_TARGET_PC
+    /* PC port: lightset entries can be unconverted BE pointers. */
+    if (!pc_ptr_sane(lightset)) {
+        return lightset;
+    }
+#endif
     walker = lightset;
     matched = 0;
     while (*walker != NULL) {
+#if BUILD_TARGET_PC
+        if (!pc_ptr_sane(*walker)) {
+            PORT_LOG_WARN("Ground_801C20E0: insane light entry %p; skipping overrides\n",
+                          (void*)*walker);
+            return lightset;
+        }
+#endif
         found = find_light_override(archive, (*walker)->desc, &b6, &b7, &b5);
         if (found != 0 && (b6 != 0 || b7 != 0 || b5 != 0)) {
             matched = 1;
@@ -1566,10 +1611,19 @@ void Ground_801C28CC(s32* arg0, StKind stkind)
         }
     }
 
-    OSReport(msg0, __FILE__, 0x906, stage_info.grkind, stkind, count);
-    reportStageParams(count);
-    while (1) {
+    /* PC port: missing stage-param entry (zeroed/unconverted data table).
+     * The GCN code prints the table and hangs in while(1); reportStageParams
+     * additionally derefs the unconverted stage_params pointer (crash).
+     * Zero-fill the output and continue instead. */
+    PORT_LOG_WARN("Ground stage param not found (grkind=%d stkind=%d count=%d); zero-filling\n",
+                  stage_info.grkind, stkind, count);
+    {
+        s32 j;
+        for (j = 0; j < 0x23; j++) {
+            arg0[j] = 0;
+        }
     }
+    return;
 #else
     StageParam* param = stage_info.param->stage_params;
     s32 count = stage_info.param->stage_param_count;

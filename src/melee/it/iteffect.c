@@ -1,4 +1,7 @@
 #include "iteffect.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include "it_2725.h"
 #include "it_3F14.h"
@@ -24,12 +27,26 @@ void it_8027870C(s32 arg0)
     } else {
         lbArchive_80017040(NULL, it_803F1ED8, &it_804D6D20, it_803F1EF0, 0);
     }
+#if BUILD_TARGET_PC
+    /* PC port: it_804D6D20 points at raw big-endian ItCo data; its pointer
+     * fields are GCN offsets, so reading them through x64 structs yields
+     * garbage pointers. Keep the derived globals NULL (users are guarded)
+     * until ItCo conversion exists (roadmap M4). */
+    PORT_LOG_WARN("it_8027870C: ItCo data unconverted; item common data disabled\n");
+    it_804D6D28 = NULL;
+    it_804D6D24 = NULL;
+    it_804D6D38 = NULL;
+    it_804D6D30 = NULL;
+    it_804D6D40 = NULL;
+    it_804D6D04 = NULL;
+#else
     it_804D6D28 = it_804D6D20->x0;
     it_804D6D24 = it_804D6D20->x4;
     it_804D6D38 = it_804D6D20->x8;
     it_804D6D30 = it_804D6D20->xC;
     it_804D6D40 = it_804D6D20->x10;
     it_804D6D04 = it_804D6D20->x14;
+#endif
 }
 
 void it_802787B4(Item_GObj* item_gobj, s32 arg1)

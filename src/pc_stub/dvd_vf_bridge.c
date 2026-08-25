@@ -220,7 +220,13 @@ BOOL DVDReadAsyncPrio(DVDFileInfo* fileInfo, void* addr, s32 length, s32 offset,
         DVDFile* file = &g_dvd_files[entry];
         if (file->handle && file->open) {
             vf_seek(file->handle, (int)offset, 0);
-            vf_read(file->handle, addr, length);
+            int n = vf_read(file->handle, addr, length);
+            /* GCN semantics: the read completes asynchronously and invokes
+             * `callback(bytes_read, fileInfo)` from the DVD interrupt. We
+             * read synchronously, so invoke it here — without this, DevCom
+             * requests never complete and every file load spins for seconds
+             * in lbFile busy-waits (was ~20 s per frame during load). */
+            if (callback) callback((s32)(n > 0 ? n : length), fileInfo);
             return TRUE;
         }
         fprintf(stderr, "[DVD] DVDReadAsyncPrio: entry %d has no valid handle (open=%d, handle=%p)\n", entry, file->open, file->handle);
@@ -231,12 +237,14 @@ BOOL DVDReadAsyncPrio(DVDFileInfo* fileInfo, void* addr, s32 length, s32 offset,
         DVDFile* file = &g_dvd_files[g_dvd_current_file];
         if (file->handle && file->open) {
             vf_seek(file->handle, (int)offset, 0);
-            vf_read(file->handle, addr, length);
+            int n = vf_read(file->handle, addr, length);
+            if (callback) callback((s32)(n > 0 ? n : length), fileInfo);
             return TRUE;
         }
     }
     
     fprintf(stderr, "[DVD] DVDReadAsyncPrio: no valid file handle found (entry=%d, current=%d)\n", entry, g_dvd_current_file);
+    if (callback) callback(-1, fileInfo);
     return FALSE;
 }
 

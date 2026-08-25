@@ -1,4 +1,7 @@
 #include "player.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include "ft/fighter.h"
 
@@ -2059,7 +2062,22 @@ void Player_80036DD8(void)
 
     lbArchive_LoadSymbols(str_PdPmdat_start_of_data, (void**) &sp8,
                           str_plLoadCommonData, 0);
+#if BUILD_TARGET_PC
+    /* PC port: sp8 is NULL when the archive/symbol is missing, and even on
+     * success it points at raw big-endian data whose embedded pointers are
+     * GCN offsets — *sp8 would be a garbage pointer on x86_64. Keep
+     * pl_804D6470 NULL until the archive conversion tooling (roadmap M4)
+     * covers PdPm.dat. */
+    if (sp8 == NULL) {
+        PORT_LOG_WARN("Player_80036DD8: plLoadCommonData unavailable; pl_804D6470=NULL\n");
+        pl_804D6470 = NULL;
+    } else {
+        PORT_LOG_WARN("Player_80036DD8: plLoadCommonData is unconverted BE data; pl_804D6470=NULL\n");
+        pl_804D6470 = NULL;
+    }
+#else
     pl_804D6470 = *sp8;
+#endif
 }
 
 void Player_80036E20(CharacterKind ckind, HSD_Archive* archive, s32 arg2)

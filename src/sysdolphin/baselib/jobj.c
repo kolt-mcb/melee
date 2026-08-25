@@ -6,7 +6,8 @@
 
 #if BUILD_TARGET_PC
 /* PC port: validate pointer is not NULL and not a small garbage value */
-#define PC_PTR_VALID(p) ((p) != NULL && (uintptr_t)(p) >= 0x1000ULL)
+#include "port/pc_ptr.h"
+#define PC_PTR_VALID(p) pc_ptr_sane(p)
 #endif
 #include "displayfunc.h"
 #include "dobj.h"
@@ -1215,7 +1216,12 @@ u32 HSD_JObjGetFlags(HSD_JObj* jobj)
 
 void HSD_JObjSetFlags(HSD_JObj* jobj, u32 flags)
 {
-    if (jobj != NULL && (uintptr_t)jobj >= 0x1000ULL) {
+#if BUILD_TARGET_PC
+    if (jobj == NULL) {
+        return; /* PC port: menu/title data paths can pass NULL while data tables are stubbed */
+    }
+#endif
+    if (PC_PTR_VALID(jobj)) {
         if ((jobj->flags ^ flags) & JOBJ_CLASSICAL_SCALE) {
             // manually inlined HSD_JObjSetMtxDirty
             if (jobj != NULL && !HSD_JObjMtxIsDirty(jobj)) {
@@ -1228,11 +1234,11 @@ void HSD_JObjSetFlags(HSD_JObj* jobj, u32 flags)
 
 void HSD_JObjSetFlagsAll(HSD_JObj* jobj, u32 flags)
 {
-    if (jobj != NULL && (uintptr_t)jobj >= 0x1000ULL) {
+    if (PC_PTR_VALID(jobj)) {
         HSD_JObjSetFlags(jobj, flags);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
             HSD_JObj* i;
-            for (i = jobj->child; i != NULL && (uintptr_t)i >= 0x1000ULL; i = i->next) {
+            for (i = jobj->child; PC_PTR_VALID(i); i = i->next) {
                 HSD_JObjSetFlagsAll(i, flags);
             }
         }
