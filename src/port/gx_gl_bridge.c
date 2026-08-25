@@ -6498,7 +6498,20 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
     /* Get a texture slot (dedup by content) */
     u32 slot = tex_get_slot(img, w, h, fmt);
     GLuint tex_id = g_state.tex_cache[slot];
-    
+
+    /* Temp-buffer state MUST be declared and initialized BEFORE the
+     * cache-hit goto below: the jump skips over declarations, so a
+     * declaration after it leaves tmp_buf holding stack garbage at the
+     * bind_tex cleanup — free(garbage) on every cache hit. At -O2 the
+     * register often happened to be NULL; at -O1 (ASan) it crashed
+     * immediately, and whenever it held a stale heap pointer this was
+     * the long-standing intermittent free()/heap-corruption abort. */
+    u8 *tmp_buf = NULL;
+    u32 tmp_size = 0;
+    const void *upload_src = img;
+    u32 upload_w = w, upload_h = h;
+    Bool used_tlut = FALSE;
+
     /* If this is a cache hit, just bind the existing texture */
     if (tex_id && g_state.tex_cache_img[slot] == img &&
         g_state.tex_cache_w[slot] == w && g_state.tex_cache_h[slot] == h &&
@@ -6512,13 +6525,6 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
     }
     
     glBindTexture(GL_TEXTURE_2D, tex_id);
-    
-    /* Allocate temp buffer for decompression/byte-swapping */
-    u8 *tmp_buf = NULL;
-    u32 tmp_size = 0;
-    const void *upload_src = img;
-    u32 upload_w = w, upload_h = h;
-    Bool used_tlut = FALSE;
     
     if (fmt == 0x0E) {
         /* CMPR: decompress to RGBA8888 temp buffer */

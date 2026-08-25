@@ -1,4 +1,10 @@
 #include "fighter.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include "ft_07C1.h"
 #include "ft_07C6.h"
@@ -185,8 +191,19 @@ void Fighter_FirstInitialize_80067A84(void)
 
 void Fighter_LoadCommonData(void)
 {
-    void** pData;
+    void** pData = NULL;
     lbArchive_LoadSymbols("PlCo.dat", (void**) &pData, "ftLoadCommonData", 0);
+#if BUILD_TARGET_PC
+    /* PC port: LoadSymbols does not resolve symbol out-pointers on PC (see
+     * lbarchive.c), and PlCo.dat's content is unconverted big-endian data
+     * anyway. Leave every ftCommonData global at its zeroed .bss value
+     * (consumers are NULL-guarded) until the M4 conversion tooling covers
+     * PlCo. */
+    if (pData == NULL) {
+        PORT_LOG_WARN("Fighter_LoadCommonData: ftLoadCommonData unavailable; ftCommonData stays NULL\n");
+        return;
+    }
+#endif
 
     // copy 23 4-byte chunks from pData to p_ftCommonData in reverse order,
     // equivalent to this: for(i=0; i<23; i++)
@@ -723,6 +740,15 @@ void Fighter_UnkInitLoad_80068914(Fighter_GObj* gobj,
         fp->x610_color_rgba[0].a = color->a;
     }
 
+#if BUILD_TARGET_PC
+    /* PC port: player data can be zeroed/garbage — clamp the fighter kind
+     * to Mario (the one character whose code is compiled) rather than
+     * indexing tables with a wild kind. */
+    if ((u32)fp->kind >= FTKIND_MAX) {
+        PORT_LOG_WARN("Fighter_Create: wild fighter kind %d; clamping to Mario\n", fp->kind);
+        fp->kind = 0;
+    }
+#endif
     costume_id = Player_GetCostumeId(fp->player_id);
     if (costume_id >= CostumeListsForeachCharacter[fp->kind].numCostumes) {
         costume_id = 0;
@@ -732,6 +758,17 @@ void Fighter_UnkInitLoad_80068914(Fighter_GObj* gobj,
     fp->team = Player_GetTeam(fp->player_id);
     fp->gobj = gobj;
     fp->ft_data = gFtDataList[fp->kind];
+#if BUILD_TARGET_PC
+    /* PC port: per-character DAT data is not loaded yet; point ft_data at a
+     * zeroed arena so single-level field reads yield 0/NULL instead of
+     * faulting. Double-deref sites are guarded individually. */
+    {
+        static u8 pc_ftdata_zero[0x4000];
+        if (!pc_ptr_sane(fp->ft_data)) {
+            fp->ft_data = (void*)pc_ftdata_zero;
+        }
+    }
+#endif
     ftCo_800D0FA0(gobj);
     fp->x2CC = 0;
     fp->x2D0 = 0;

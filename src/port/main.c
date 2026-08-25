@@ -82,6 +82,49 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
     _exit(128 + sig);
 }
 
+/* PC port: tiny in-process sampling profiler (MELEE_PROF=1). perf and gdb
+ * attach are blocked without root on this box (perf_event_paranoid=4,
+ * ptrace_scope=1), so sample RIP from a SIGPROF timer instead. The binary
+ * is non-PIE, so dumped addresses map directly with addr2line. */
+#include <sys/time.h>
+#define PROF_MAX (1 << 20)
+static unsigned long g_prof_rips[PROF_MAX];
+static volatile int g_prof_n = 0;
+static void prof_handler(int sig, siginfo_t* info, void* ctx)
+{
+    (void)sig; (void)info;
+    if (g_prof_n < PROF_MAX) {
+        ucontext_t* uc = (ucontext_t*)ctx;
+        g_prof_rips[g_prof_n++] = (unsigned long)uc->uc_mcontext.gregs[REG_RIP];
+    }
+}
+static void prof_dump(void)
+{
+    if (g_prof_n == 0) return;
+    FILE* f = fopen("/tmp/melee_prof.txt", "w");
+    if (!f) return;
+    for (int i = 0; i < g_prof_n; i++) fprintf(f, "%#lx\n", g_prof_rips[i]);
+    fclose(f);
+    fprintf(stderr, "[PROF] wrote %d samples to /tmp/melee_prof.txt\n", g_prof_n);
+}
+static void prof_term(int sig) { (void)sig; prof_dump(); _exit(0); }
+static void prof_init(void)
+{
+    if (!getenv("MELEE_PROF")) return;
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = prof_handler;
+    sa.sa_flags = SA_SIGINFO | SA_RESTART;
+    sigaction(SIGPROF, &sa, NULL);
+    signal(SIGTERM, prof_term);
+    atexit(prof_dump);
+    struct itimerval it;
+    it.it_interval.tv_sec = 0; it.it_interval.tv_usec = 2000; /* 500 Hz */
+    it.it_value = it.it_interval;
+    setitimer(ITIMER_PROF, &it, NULL);
+    fprintf(stderr, "[PROF] sampling profiler armed (SIGPROF 500 Hz)\n");
+}
+
 static void install_crash_handler(void)
 {
     struct sigaction sa;
@@ -101,6 +144,7 @@ static void install_crash_handler(void)
     sigaction(SIGSEGV, &sa, NULL);
     sigaction(SIGABRT, &sa, NULL);
     sigaction(SIGBUS, &sa, NULL);
+    prof_init();
 }
 
 /* Forward declarations for decomp integration */

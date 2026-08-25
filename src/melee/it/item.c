@@ -1,4 +1,7 @@
 #include "item.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include "it_26B1.h"
 #include "math.h"
@@ -132,6 +135,17 @@ void Item_80266FCC(void)
     Item_804A0C64.x58 = 0;
     Item_804A0C64.x60 = 0;
 
+#if BUILD_TARGET_PC
+    /* PC port: it_804D6D28 (ItemCommonData from ItCo archive) may be NULL/
+     * unconverted; skip the attribute copies rather than crash. */
+    /* it_804D6D28 comes from raw archive data (it_804D6D20->x0) and can be
+     * an unconverted big-endian GCN pointer (0x80xxxxxx) — not just NULL. */
+    uintptr_t it_cd = (uintptr_t)it_804D6D28;
+    if (it_cd < 0x10000 || (it_cd >= 0x80000000ULL && it_cd < 0xC0000000ULL)) {
+        PORT_LOG_WARN("Item_80266FCC: it_804D6D28=%p invalid/unconverted; using zeroed item attrs\n",
+                      (void*)it_804D6D28);
+    } else {
+#endif
     Item_804A0C64.x4 = it_804D6D28->x0;
     Item_804A0C64.xC = it_804D6D28->x4;
     Item_804A0C64.x14 = it_804D6D28->x8;
@@ -144,6 +158,9 @@ void Item_80266FCC(void)
     Item_804A0C64.x54 = it_804D6D28->x20;
     Item_804A0C64.x5C = it_804D6D28->x28;
     Item_804A0C64.x64 = it_804D6D28->x148;
+#if BUILD_TARGET_PC
+    }
+#endif
 
     Item_804A0CCC.x154.b0 = true;
     Item_804A0CCC.count = 1;

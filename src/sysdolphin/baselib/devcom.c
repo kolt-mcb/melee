@@ -344,20 +344,40 @@ void HSD_DevComDVDWakeUp(void)
             }
             DVDFastOpen(dvdDC->file, &fileinfo);
             if (dvdDC->type == 0x21) {
+#if BUILD_TARGET_PC
+                /* PC port: the DVD bridge reads synchronously and invokes
+                 * the completion callback from inside DVDReadAsyncPrio. Set
+                 * the busy flag BEFORE issuing so the callback's flag-clear
+                 * + re-wake is not clobbered afterward (setting it after
+                 * the call left the queue wedged busy forever). Correct for
+                 * GCN too: the flag must be up before the op can finish. */
+                HSD_DevCom_804D77F5 = 1;
+                DVDReadAsyncPrio(&fileinfo, (void*) dvdDC->dest,
+                                 MIN(dvdDC->size, 0x80000), (s32) dvdDC->src,
+                                 HSD_DevComDVDMemCallback, 2);
+#else
                 DVDReadAsyncPrio(&fileinfo, (void*) dvdDC->dest,
                                  MIN(dvdDC->size, 0x80000), (s32) dvdDC->src,
                                  HSD_DevComDVDMemCallback, 2);
                 HSD_DevCom_804D77F5 = 1;
+#endif
                 OSRestoreInterrupts(enabled);
                 return;
             }
             buf_idx = getRelayBufIdx();
             if (buf_idx >= 0) {
                 HSD_DevCom_804D77F6 = buf_idx;
+#if BUILD_TARGET_PC
+                HSD_DevCom_804D77F5 = 1; /* see above: set before issuing */
+                DVDReadAsyncPrio(&fileinfo, HSD_DevCom_804C6330_bufs[buf_idx],
+                                 MIN(dvdDC->size, DEVCOM_BUF_SIZE), dvdDC->src,
+                                 HSD_DevComDVDCallback, 2);
+#else
                 DVDReadAsyncPrio(&fileinfo, HSD_DevCom_804C6330_bufs[buf_idx],
                                  MIN(dvdDC->size, DEVCOM_BUF_SIZE), dvdDC->src,
                                  HSD_DevComDVDCallback, 2);
                 HSD_DevCom_804D77F5 = 1;
+#endif
                 OSRestoreInterrupts(enabled);
                 return;
             }

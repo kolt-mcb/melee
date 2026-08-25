@@ -132,6 +132,13 @@ void ftCo_800C8F6C(void)
     }
 
     ft_804D6588 = mobj;
+#if BUILD_TARGET_PC
+    /* PC port: mobj is NULL when the joint data is unavailable (stubbed
+     * fighter data), and p_ftCommonData is NULL until PlCo conversion. */
+    if (mobj == NULL || p_ftCommonData == NULL) {
+        return;
+    }
+#endif
     mat = mobj->mat;
     if (mat != NULL) {
         mat->diffuse = p_ftCommonData->x7D8;

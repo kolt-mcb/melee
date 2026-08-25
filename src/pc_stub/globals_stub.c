@@ -44,3 +44,7 @@ void* OSGetArenaHi(void) { return _arena_hi_buf; }
 void* OSGetArenaLo(void) { return _arena_lo_buf; }
 u32 OSGetArenaHiSize(u32 arena) { return sizeof(_arena_hi_buf); }
 u32 OSGetArenaLoSize(u32 arena) { return sizeof(_arena_lo_buf); }
+
+/* gr data symbol referenced by grcorneria.c at -O1 (optimized out at -O2). */
+typedef struct { float x, y, z; } pc_Vec3_stub;
+__attribute__((weak)) pc_Vec3_stub grCn_803B809C = {0};

@@ -1,4 +1,7 @@
 #include "lbarchive.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include "lbfile.h"
 #include "lbheap.h"
@@ -17,6 +20,17 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
     const char* symbol;
     int i = 0;
 
+#if BUILD_TARGET_PC
+    /* PC port: failed/missing loads reach here with NULL data or a length
+     * that can't hold an archive header; parsing would read unmapped
+     * memory. */
+    if (data == NULL || length < 0x20) {
+        PORT_LOG_WARN("lbArchive_InitializeDAT: empty archive (data=%p len=%zu)\n",
+                      data, length);
+        memset(archive, 0, sizeof(HSD_Archive));
+        return;
+    }
+#endif
     if (HSD_ArchiveParse(archive, data, length) == -1) {
         OSReport("HSD_ArchiveParse error!\n");
 #if BUILD_TARGET_PC
@@ -141,10 +155,27 @@ HSD_Archive* lbArchive_LoadSymbols(const char* filename, void* symbols, ...)
     (void)symbols;
     va_end(sections);
 
+    {
+        /* PC port: a missing file used to fall through and parse an
+         * uninitialized buffer (memcpy crash in lbArchive_InitializeDAT).
+         * Return NULL so callers can tell the load failed. */
+        size_t fsize = lbFile_800163D8(filename);
+        if (fsize == 0) {
+            PORT_LOG_WARN("lbArchive_LoadSymbols: no such archive '%s'\n",
+                          filename ? filename : "(null)");
+            return NULL;
+        }
+    }
     data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(filename)));
     archive = lbHeap_80015BD0(0, sizeof(HSD_Archive));
     lbFile_8001668C(filename, data, &length);
     lbArchive_InitializeDAT(archive, data, length);
+    /* PC port: deliberately NOT resolving the (ptr, "name") pairs here.
+     * Restoring GCN symbol resolution regressed the title screen: several
+     * PC callers (gmtitle and friends) run their own GCN->x64 conversion
+     * keyed on these out-pointers staying untouched. Callers that DO read
+     * their out-pointer (Player_80036DD8, it_8027870C) are individually
+     * guarded. Revisit with the M4 conversion tooling. */
     return archive;
 #else
     data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(filename)));

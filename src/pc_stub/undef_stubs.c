@@ -469,7 +469,19 @@ __attribute__((weak)) unsigned int __cvt_fp2unsigned(float f) {
 /* Auto-generated stubs for missing symbols */
 __attribute__((weak)) void ARAlloc(void) {}
 __attribute__((weak)) void ARGetSize(void) {}
-__attribute__((weak)) void ARQPostRequest(void) {}
+/* PC port: no ARAM. Complete ARQ requests synchronously by invoking the
+ * callback so DevCom relay-path (type 0x23) loads finish instead of
+ * hanging in busy-waits. The copy itself is skipped (ARAM-destined data
+ * is audio; revisit in the audio milestone). Signature per dolphin/arq.h:
+ * ARQPostRequest(ARQRequest*, owner, type, pri, src, dest, len, callback) */
+__attribute__((weak)) void ARQPostRequest(void* task, unsigned long owner, unsigned long type,
+                                          unsigned long pri, unsigned long src, unsigned long dest,
+                                          unsigned long len, void (*callback)(void*))
+{
+    static int warned = 0;
+    if (!warned) { warned = 1; fprintf(stderr, "[ARQ] ARQPostRequest: completing without copy (no ARAM on PC)\n"); }
+    if (callback) callback(task);
+}
 __attribute__((weak)) void AXDriverKeyOff(void) {}
 __attribute__((weak)) void AXDriverPause(void) {}
 __attribute__((weak)) void AXDriverResume(void) {}
@@ -2046,7 +2058,10 @@ __attribute__((weak)) void it_803B8650(void) {}
 __attribute__((weak)) void it_803B8660(void) {}
 __attribute__((weak)) void it_803B8674(void) {}
 __attribute__((weak)) void it_803F73A8(void) {}
-__attribute__((weak)) void it_804A0E60(void) {}
+/* Data symbol, not a function: ItemPickTable written by Item_80266FCC
+ * (it_804A0E60.x8 = 0). The old void-function stub landed in .text and
+ * writes to it faulted. 512 zeroed bytes covers the real struct size. */
+__attribute__((weak, aligned(16))) unsigned char it_804A0E60[512];
 __attribute__((weak)) void it_damage_inline(void) {}
 __attribute__((weak)) void jobj_get(void) {}
 __attribute__((weak)) void jobj_parent(void) {}
