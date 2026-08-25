@@ -1,4 +1,7 @@
 #include "texp.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "debug.h"
 
@@ -40,9 +43,6 @@ HSD_TExpType HSD_TExpGetType(HSD_TExp* texp)
     uintptr_t addr = (uintptr_t) texp;
     if (addr < 0x10000 || addr > 0x7FFFFFFFFFFF0000ULL) {
         return HSD_TE_ZERO;
-    }
-    else {
-        port_guard_warn("texp.c:26");
     }
     #endif /* BUILD_TARGET_PC */
     return texp->type;
@@ -319,6 +319,11 @@ HSD_TExp* HSD_TExpCnst(void* val, HSD_TEInput comp, HSD_TEType type,
 void HSD_TExpColorOp(HSD_TExp* texp, GXTevOp op, GXTevBias bias,
                      GXTevScale scale, u8 clamp)
 {
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(texp)) {
+        return; /* PC port: TExp alloc can fail under converted-data loads */
+    }
+#endif
     HSD_ASSERT(408, texp);
     HSD_ASSERT(409, HSD_TExpGetType(texp) == HSD_TE_TEV);
 
@@ -336,6 +341,11 @@ void HSD_TExpColorOp(HSD_TExp* texp, GXTevOp op, GXTevBias bias,
 void HSD_TExpAlphaOp(HSD_TExp* texp, GXTevOp op, GXTevBias bias,
                      GXTevScale scale, u8 clamp)
 {
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(texp)) {
+        return; /* PC port: TExp alloc can fail under converted-data loads */
+    }
+#endif
     HSD_ASSERT(434, texp);
     HSD_ASSERT(435, HSD_TExpGetType(texp) == HSD_TE_TEV);
 
@@ -575,6 +585,11 @@ void HSD_TExpColorIn(HSD_TExp* texp, HSD_TEInput sel_a, HSD_TExp* exp_a,
                      HSD_TEInput sel_b, HSD_TExp* exp_b, HSD_TEInput sel_c,
                      HSD_TExp* exp_c, HSD_TEInput sel_d, HSD_TExp* exp_d)
 {
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(texp)) {
+        return; /* PC port: TExp alloc can fail under converted-data loads */
+    }
+#endif
     HSD_TETev* tev;
 
     HSD_ASSERT(691, texp);
@@ -722,6 +737,11 @@ void HSD_TExpAlphaIn(HSD_TExp* texp, HSD_TEInput sel_a, HSD_TExp* exp_a,
                      HSD_TEInput sel_b, HSD_TExp* exp_b, HSD_TEInput sel_c,
                      HSD_TExp* exp_c, HSD_TEInput sel_d, HSD_TExp* exp_d)
 {
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(texp)) {
+        return; /* PC port: TExp alloc can fail under converted-data loads */
+    }
+#endif
     HSD_TETev* tev;
 
     HSD_ASSERT(821, texp);

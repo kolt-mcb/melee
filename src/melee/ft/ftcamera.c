@@ -1,4 +1,10 @@
 #include "ftcamera.h"
+#if BUILD_TARGET_PC
+#include <string.h>
+#endif
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "ftlib.h"
 
@@ -11,6 +17,14 @@
 
 void ftCamera_80076018(UnkFloat6_Camera* in, UnkFloat6_Camera* out, float mul)
 {
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(in) || !pc_ptr_sane(out)) {
+        if (pc_ptr_sane(out)) {
+            memset(out, 0, sizeof(*out));
+        }
+        return; /* PC port: camera table not converted */
+    }
+#endif
     out->x0.x = in->x0.x * mul;
     out->x0.y = in->x0.y * mul;
     out->x0.z = in->x0.z * mul;
@@ -25,6 +39,13 @@ void ftCamera_80076064(Fighter* fp)
     CmSubject* camera_box;
     UnkFloat6_Camera spC;
     camera_box = fp->x890_cameraBox;
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(camera_box) || !pc_ptr_sane(fp->ft_data) ||
+        !pc_ptr_sane(fp->ft_data->x3C))
+    {
+        return; /* PC port: camera-box table not converted */
+    }
+#endif
     ftCamera_80076018(fp->ft_data->x3C, &spC, fp->x34_scale.y);
     camera_box->x8 = 0;
     if (fp->facing_dir == 1.0f) {

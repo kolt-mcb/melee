@@ -83,8 +83,12 @@ static int g_guard_counts[GUARD_SITE_MAX];
 void port_guard_warn(const char* site)
 {
     int i;
+    if (site == NULL) return;
+    if (g_guard_site_count < 0 || g_guard_site_count > GUARD_SITE_MAX) {
+        g_guard_site_count = 0; /* table corrupted; reset */
+    }
     for (i = 0; i < g_guard_site_count; i++) {
-        if (strcmp(g_guard_sites[i], site) == 0) {
+        if (g_guard_sites[i] != NULL && strcmp(g_guard_sites[i], site) == 0) {
             if (g_guard_counts[i] < GUARD_SITE_LOG_LIMIT) {
                 g_guard_counts[i]++;
                 port_log(LOG_LEVEL_WARN,

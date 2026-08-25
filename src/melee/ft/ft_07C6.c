@@ -1,4 +1,8 @@
 #include "ft_07C6.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#include <string.h>
+#endif
 
 #include <placeholder.h>
 
@@ -22,6 +26,12 @@ void ft_8007C630(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     int i;
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x38)) {
+        memset(fp->x1614, 0, sizeof(fp->x1614));
+        return; /* PC port: x38 table not converted */
+    }
+#endif
     for (i = 0; i < (signed) ARRAY_SIZE(fp->x1614); i++) {
         struct ftData_x38* temp_r6 = &fp->ft_data->x38[i];
         struct Fighter_x1614_t* temp_r27 = &fp->x1614[i];
@@ -40,6 +50,11 @@ void ft_8007C6DC(Fighter_GObj* gobj)
 
     if (gm_8016B0B4()) {
         fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+        if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x38)) {
+            return; /* PC port: x38 table not converted */
+        }
+#endif
         for (i = 0; i < (signed) ARRAY_SIZE(fp->x1614); i++) {
             struct ftData_x38* temp_r6 = &fp->ft_data->x38[i];
             struct Fighter_x1614_t* temp_r27 = &fp->x1614[i];

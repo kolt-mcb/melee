@@ -1,4 +1,7 @@
 #include "ft/ft_07C1.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include <placeholder.h>
 #include <platform.h>
@@ -43,6 +46,12 @@ void ft_8007C17C(Fighter_GObj* gobj)
     fp->x1064_thrownHitbox.x4 = 0;
     fp->x1064_thrownHitbox.state = HitCapsule_Enabled;
     lbColl_80008440(hit);
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(x34)) {
+        fp->x1064_thrownHitbox.state = HitCapsule_Disabled;
+        return; /* PC port: thrown-hitbox table not converted */
+    }
+#endif
     hit->jobj = fp->parts[x34->x0].joint;
     hit->scale = x34->scale;
     hit->b_offset.x = hit->b_offset.y = hit->b_offset.z = 0;
