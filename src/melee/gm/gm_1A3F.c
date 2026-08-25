@@ -274,6 +274,16 @@ u8 gm_RunGameMode(u8 mode_kind)
         mode->Load();
     }
     while (!gamestate->pending) {
+#if BUILD_TARGET_PC
+        /* PC port: honor the harness/window quit request from the inner
+         * per-mode loop too — without this MELEE_MAX_FRAMES never exits. */
+        {
+            extern int g_should_quit;
+            if (g_should_quit) {
+                return gm_80479D30.routing.pending_mode;
+            }
+        }
+#endif
         if (gm_80479D30.game_mode_override != NULL &&
             (temp_r3 = gm_80479D30.game_mode_override(), temp_r3 != GM_COUNT))
         {
