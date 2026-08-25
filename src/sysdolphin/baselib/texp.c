@@ -210,14 +210,27 @@ HSD_TExp* HSD_TExpTev(HSD_TExp** texp_list)
     HSD_ASSERT(294, texp_list);
     texp = TevAlloc();
 #if BUILD_TARGET_PC
+    { static int _tt_on=-1,_tt_n=0; if(_tt_on<0)_tt_on=(getenv("MELEE_STAGE_DIAG")!=NULL);
+      if(_tt_on && _tt_n<4000){_tt_n++; fprintf(stderr,"[TEXPT #%d] list=%p texp=%p\n",
+        _tt_n, (void*)texp_list, (void*)texp); } }
+#endif
+#if BUILD_TARGET_PC
     /* PC port: replace memset(0xFF) with explicit field init.
      * memset(0xFF) sets 64-bit pointers to 0xFFFFFFFFFFFFFFFF on x86_64,
      * which causes crashes when expression tree traversal dereferences them.
-     * Zero the struct, then set fields that need 0xFF explicitly. */
+     * Zero the struct, then set fields that need 0xFF explicitly.
+     * ALSO guard against a bad texp_list (corrupted mobj->texp from a stage
+     * archive). The TEV is a GCN concept; the simplified GLSL renderer does
+     * not use it, so if the list pointer is invalid we skip the link and
+     * return a valid (unlinked) node rather than dereferencing 0x1. */
     __builtin_memset(texp, 0, sizeof(HSD_TETev));
     texp->type = HSD_TE_TEV;
-    texp->tev.next = *texp_list;
-    *texp_list = texp;
+    if (texp_list != NULL && (uintptr_t)texp_list >= 0x10000) {
+        texp->tev.next = *texp_list;
+        *texp_list = texp;
+    } else {
+        texp->tev.next = NULL;
+    }
     texp->tev.c_ref = 0;
     texp->tev.a_ref = 0;
     texp->tev.tex = NULL;

@@ -842,6 +842,7 @@ static GLint g_kalpha_loc = -1;
 
 /* Channel color uniform locations (C0-C2) */
 static GLint g_chan_color_loc = -1;
+static GLint g_chan_src_loc = -1;
 
 /* Lighting uniform locations */
 static GLint g_light_pos_loc = -1;
@@ -1124,6 +1125,8 @@ static const char* g_frag_src =
 "uniform vec4 u_kalpha;\n"
 "// Channel color registers (C0-C2, set by GXSetChanCtrl + material)\n"
 "uniform vec4 u_chan_color[3];\n"
+"// Channel color source per C0/C1/C2 (GX_SRC_REG=0 -> u_chan_color, GX_SRC_VTX=1 -> v_col)\n"
+"uniform int u_chan_src[3];\n"
 "\n"
 "// Alpha test\n"
 "uniform int u_alpha_cmp_func;\n"
@@ -1161,16 +1164,17 @@ static const char* g_frag_src =
 "    if (src == 0) return cprev;          // CPREV\n"
 "    if (src == 1) return vec4(aprev.a);  // APREV as color\n"
 "    if (src == 2) { // C0\n"
+"        if (u_chan_src[0] == 1) return v_col;  // GX_SRC_VTX: per-vertex color\n"
 "        // When lighting is enabled, modulate channel color by per-vertex lit color\n"
 "        vec4 c0 = u_chan_color[0];\n"
 "        if (u_lighting_enabled != 0) c0.rgb *= v_lit_color.rgb;\n"
 "        return c0;\n"
 "    }\n"
-"    if (src == 3) return vec4(u_chan_color[0].a); // A0 as color\n"
-"    if (src == 4) return u_chan_color[1];   // C1\n"
-"    if (src == 5) return vec4(u_chan_color[1].a); // A1 as color\n"
-"    if (src == 6) return u_chan_color[2];   // C2\n"
-"    if (src == 7) return vec4(u_chan_color[2].a); // A2 as color\n"
+"    if (src == 3) return vec4((u_chan_src[0] == 1) ? v_col.a : u_chan_color[0].a); // A0 as color\n"
+"    if (src == 4) return (u_chan_src[1] == 1) ? v_col : u_chan_color[1];   // C1\n"
+"    if (src == 5) return vec4((u_chan_src[1] == 1) ? v_col.a : u_chan_color[1].a); // A1 as color\n"
+"    if (src == 6) return (u_chan_src[2] == 1) ? v_col : u_chan_color[2];   // C2\n"
+"    if (src == 7) return vec4((u_chan_src[2] == 1) ? v_col.a : u_chan_color[2].a); // A2 as color\n"
 "    if (src == 14) { // KONST\n"
 "        int ksel = u_tev_kcolor_sel[stage];\n"
 "        vec4 kc;\n"
@@ -1201,9 +1205,9 @@ static const char* g_frag_src =
 "    if (src == 4) return tex.a;      // TEXA\n"
 "    if (src == 5) return ras.a;      // RASA\n"
 "    if (src == 0) return aprev;      // APREV\n"
-"    if (src == 1) return u_chan_color[0].a; // A0\n"
-"    if (src == 2) return u_chan_color[1].a; // A1\n"
-"    if (src == 3) return u_chan_color[2].a; // A2\n"
+"    if (src == 1) return (u_chan_src[0] == 1) ? v_col.a : u_chan_color[0].a; // A0\n"
+"    if (src == 2) return (u_chan_src[1] == 1) ? v_col.a : u_chan_color[1].a; // A1\n"
+"    if (src == 3) return (u_chan_src[2] == 1) ? v_col.a : u_chan_color[2].a; // A2\n"
 "    if (src == 6) { // KONST\n"
 "        int ksel = u_tev_kalpha_sel[stage];\n"
 "        float ka;\n"
@@ -1556,6 +1560,7 @@ static void bridge_compile_shaders(void)
     
     /* Channel color uniforms */
     g_chan_color_loc = glGetUniformLocation(g_shader_program, "u_chan_color");
+    g_chan_src_loc = glGetUniformLocation(g_shader_program, "u_chan_src");
     
     /* Fog uniforms */
     g_fog_enabled_loc = glGetUniformLocation(g_shader_program, "u_fog_enabled");
@@ -1876,10 +1881,13 @@ void gx_bridge_init(void)
     PORT_LOG_INFO("GX bridge ready — textures enabled, %d slots", MAX_TEXTURES);
 }
 
+static u32 s_pc_draws = 0;  /* PC diag: per-frame GL draw count (MELEE_STAGE_DIAG) */
 void gx_frame_begin(void)
 {
     gx_trace_frame_begin();
     g_state.frame_count++;
+    { static int _dd=-1; if(_dd<0)_dd=(getenv("MELEE_STAGE_DIAG")!=NULL);
+      if(_dd && g_state.frame_count<=23) s_pc_draws=0; }
     g_state.in_primitive = FALSE;
     g_state.vert_count = 0;
     g_state.num_tev_stages = 0;  /* Reset — TEV stage count is tracked automatically */
@@ -1947,6 +1955,9 @@ void GXColor4u8(u8 r, u8 g, u8 b, u8 a); /* forward decl for display list parser
 
 void gx_frame_end(void)
 {
+    { static int _dd=-1; if(_dd<0)_dd=(getenv("MELEE_STAGE_DIAG")!=NULL);
+      if(_dd && g_state.frame_count>=8 && g_state.frame_count<=22)
+        fprintf(stderr, "[PCDRAWS] frame=%u draws=%u\n", (unsigned)g_state.frame_count, (unsigned)s_pc_draws); }
     /* Always flush pending vertex data, regardless of in_primitive state.
      * GXEnd() sets in_primitive=FALSE after collecting verts, but the draw
      * hasn't been issued yet — it's deferred to gx_frame_end or GXFlush. */
@@ -2305,6 +2316,15 @@ static void bridge_upload_and_draw(void)
     
     u16 count = g_state.vert_count;
     if (count == 0) return;
+
+    { static int _pd_on=-1,_pd_n=0; if(_pd_on<0)_pd_on=(getenv("MELEE_STAGE_DIAG")!=NULL);
+      if(_pd_on && g_state.frame_count>=8 && g_state.frame_count<=9 && _pd_n<12){_pd_n++;
+        fprintf(stderr,"[PDDRAW] frame=%u count=%u prim=0x%X mtx3d=%d curid=%u p1=%d pos0=(%.1f,%.1f,%.1f) col0=(%.2f,%.2f,%.2f,%.2f) proj00=%.3f\n",
+          (unsigned)g_state.frame_count, count, g_state.prim_type, (int)g_state.mtx3d_active,
+          (unsigned)g_state.current_mtx_id, (int)g_state.p1_valid,
+          g_state.verts[0].pos[0], g_state.verts[0].pos[1], g_state.verts[0].pos[2],
+          (double)g_state.verts[0].col[0], (double)g_state.verts[0].col[1], (double)g_state.verts[0].col[2], (double)g_state.verts[0].col[3],
+          (double)g_state.proj_matrix[0][0]); } }
     
     if (!g_shader_program) {
         PORT_LOG_WARN("Shader not ready, skipping draw");
@@ -2750,7 +2770,7 @@ static void bridge_upload_and_draw(void)
             static int _dt_on = -1, _dt_n = 0;
             if (_dt_on < 0) _dt_on = (getenv("MELEE_DRAWTRACE") != NULL);
             u32 fc2 = g_state.frame_count;
-            if (_dt_on && fc2 >= 6 && fc2 <= 7 && _dt_n < 400) {
+            if (_dt_on && fc2 >= 6 && fc2 <= 8 && _dt_n < 400) {
                 _dt_n++;
                 f64 cx = 0, cy = 0, cz = 0;
                 u32 cn = (count < 200 ? count : 200);
@@ -2816,9 +2836,11 @@ static void bridge_upload_and_draw(void)
             glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
             glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * (nq * 6), quad_tri);
             glDrawArrays(GL_TRIANGLES, 0, nq * 6);
+            s_pc_draws++;
             pc_frame_trace("quadsN");
         } else {
         glDrawArrays(gl_prim, 0, count);
+        s_pc_draws++;
         pc_frame_trace("drawN");
         }
         /* PC diag: sample screen pixels immediately after the draw to see
@@ -2836,8 +2858,8 @@ static void bridge_upload_and_draw(void)
                 glGetIntegerv(GL_DRAW_BUFFER, &dbuf);
                 glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &dstat);
                 glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &cfmt);
-                fprintf(stderr, "  PIXPROBE after-draw glerr=0x%x center=(%u,%u,%u) fbo=%d drawbuf=%d glDepthTest=%d glBlend=%d depthobj=%d colorobj=%d\n",
-                        (unsigned)err, px[0], px[1], px[2],
+                fprintf(stderr, "  PIXPROBE frame=%u after-draw glerr=0x%x center=(%u,%u,%u) fbo=%d drawbuf=%d glDepthTest=%d glBlend=%d depthobj=%d colorobj=%d\n",
+                        (unsigned)g_state.frame_count, (unsigned)err, px[0], px[1], px[2],
                         fbo, dbuf, (int)glIsEnabled(GL_DEPTH_TEST), (int)glIsEnabled(GL_BLEND), dstat, cfmt);
             }
         }
@@ -3114,7 +3136,7 @@ void GXSetProjection(f32 mtx[4][4], u32 type)
             /* Garbage (e.g. uninitialized Mtx44): keep last valid projection. */
             return;
         }
-        if (_pj_on && _pj_n <= 40) {
+        if (_pj_on && (_pj_n <= 40 || (g_state.frame_count >= 8 && g_state.frame_count <= 12))) {
             fprintf(stderr, "PROJDUMP call#%d type=%u frame=%u: %9.4f %9.4f %9.4f %9.4f|%9.4f %9.4f %9.4f %9.4f|%9.4f %9.4f %9.4f %9.4f|%9.4f %9.4f %9.4f %9.4f\n",
                 _pj_n, (unsigned)type, g_state.frame_count,
                 (double)mtx[0][0],(double)mtx[0][1],(double)mtx[0][2],(double)mtx[0][3],
@@ -3299,12 +3321,15 @@ static void bridge_add_vertex(void)
         f32 px = v->pos[0], py = v->pos[1], pz = v->pos[2];
         f32 mag = px*px + py*py + pz*pz;
         
-        /* Skip vertices with extreme magnitudes (> 6000 units from origin).
-         * Real geometry is within ±500 in x/y, z≈0-5000.
-         * Garbage from bad transforms produces values > 5000 (clamped).
-         * Replace with degenerate vertex (all zeros) to keep primitive
-         * state machine in sync. The GPU will clip it away. */
-        if (mag > 36000000.0f) {  // sqrt(36000000) ≈ 6000
+        /* Skip vertices with extreme magnitudes (> 1e6 units from origin).
+         * Legitimate view-space geometry — including the CObj erase quad,
+         * whose corners sit at ±top_res/±right_res/-z_val and can reach
+         * several thousand units for a wide-far stage camera — must pass.
+         * Only true garbage (bad pointer / uninitialized matrix, typically
+         * 1e6+) is zeroed. The prior 6000 threshold wrongly zeroed the
+         * erase quad and distant stage geometry (PSMTXConcat fix already
+         * resolved the garbage joint matrices that motivated it). */
+        if (mag > 1e12f) {  // (1e6)^2
             v->pos[0] = 0; v->pos[1] = 0; v->pos[2] = 0;
             if (g_dbg_degenerate_verts == 0) {
                 g_dbg_degenerate_sample[0] = px;
@@ -3315,8 +3340,8 @@ static void bridge_add_vertex(void)
             goto SKIP_DEG;
         }
         
-        /* Clamp remaining vertices to ±6000 to prevent edge cases. */
-        f32 clamp = 6000.0f;
+        /* Clamp remaining vertices to ±1e6 to prevent true edge cases. */
+        f32 clamp = 1e6f;
         if (px < -clamp) px = -clamp;
         if (px > clamp) px = clamp;
         if (py < -clamp) py = -clamp;
@@ -4401,6 +4426,13 @@ static void apply_tev_uniforms(void)
             cc[i][3] = (f32)g_state.chan_colors[i].a / 255.0f;
         }
         glUniform4fv(g_chan_color_loc, 3, &cc[0][0]);
+    }
+    /* Upload channel color sources (C0-C2): GX_SRC_REG=0 / GX_SRC_VTX=1 */
+    if (g_chan_src_loc >= 0) {
+        GLint cs[3] = { (GLint)g_state.chan_color_source[0],
+                        (GLint)g_state.chan_color_source[1],
+                        (GLint)g_state.chan_color_source[2] };
+        glUniform1iv(g_chan_src_loc, 3, cs);
     }
 
     /* Upload lighting uniforms */

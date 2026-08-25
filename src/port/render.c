@@ -132,7 +132,19 @@ void render_present(void)
      * instead of the game scene (validates the color-texture + 3D pipeline). */
     static int s_tex_test = -1;
     if (s_tex_test < 0) s_tex_test = (getenv("MELEE_TEX_TEST") != NULL);
-    if (s_tex_test) {
+    /* PC port: MELEE_STAGE_TEST=1 renders the FD stage floor (real stage
+     * content) instead of the game scene. Delayed a few frames so the GObj
+     * system is initialized. */
+    static int s_stage_test = -1;
+    if (s_stage_test < 0) s_stage_test = (getenv("MELEE_STAGE_TEST") != NULL);
+    static int s_stage_frame = 0;
+    if (s_stage_test) {
+        s_stage_frame++;
+        if (s_stage_frame >= 8)
+            pc_render_stage_test();
+        else
+            invoke_gx_render_links();  /* title renders first: populates baselib TEV/memory */
+    } else if (s_tex_test) {
         pc_render_tex_test();
     } else {
         invoke_gx_render_links();
