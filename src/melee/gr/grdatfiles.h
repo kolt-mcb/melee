@@ -19,6 +19,11 @@
 /* 1C6478 */ UnkArchiveStruct* grDatFiles_801C6478(void* data, s32 length);
 
 #if BUILD_TARGET_PC
+/* PC port: load a stage .dat archive from an in-memory buffer. */
+UnkArchiveStruct* pc_LoadStageFromBuffer(const void* data, size_t length);
+#endif /* BUILD_TARGET_PC */
+
+#if BUILD_TARGET_PC
 struct HSD_SObjDesc;  /* forward decl (baselib/sobjlib.h) */
 struct HSD_CameraDescPerspective;  /* forward decl (baselib/cobj.h) */
 struct HSD_FogDesc;  /* forward decl (baselib/fog.h) */

@@ -206,7 +206,12 @@ void pc_render_stage_test(void)
         if (stage_diag() && !s_camlog) { s_camlog = 1;
             Vec3 e,it,ev; HSD_CObjGetEyePosition(s_cam,&e); HSD_CObjGetInterest(s_cam,&it); HSD_CObjGetEyeVector(s_cam,&ev);
             fprintf(stderr, "[STAGE] CObjSetCurrent OK eye=(%.0f,%.0f,%.0f) interest=(%.0f,%.0f,%.0f) eyevec=(%.2f,%.2f,%.2f)\n",
-                (double)e.x,(double)e.y,(double)e.z,(double)it.x,(double)it.y,(double)it.z,(double)ev.x,(double)ev.y,(double)ev.z); }
+                (double)e.x,(double)e.y,(double)e.z,(double)it.x,(double)it.y,(double)it.z,(double)ev.x,(double)ev.y,(double)ev.z);
+            Mtx vm; HSD_CObjGetViewingMtx(s_cam, vm);
+            fprintf(stderr, "[STAGE] VIEWMTX row0=(%.4f,%.4f,%.4f,%.4f) row1=(%.4f,%.4f,%.4f,%.4f) row2=(%.4f,%.4f,%.4f,%.4f)\n",
+                (double)vm[0][0],(double)vm[0][1],(double)vm[0][2],(double)vm[0][3],
+                (double)vm[1][0],(double)vm[1][1],(double)vm[1][2],(double)vm[1][3],
+                (double)vm[2][0],(double)vm[2][1],(double)vm[2][2],(double)vm[2][3]); }
         HSD_SetEraseColor(255, 0, 0, 255);
         HSD_CObjEraseScreen(s_cam, 1, 0, 1);
         {

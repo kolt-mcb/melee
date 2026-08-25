@@ -2324,7 +2324,12 @@ static void bridge_upload_and_draw(void)
           (unsigned)g_state.current_mtx_id, (int)g_state.p1_valid,
           g_state.verts[0].pos[0], g_state.verts[0].pos[1], g_state.verts[0].pos[2],
           (double)g_state.verts[0].col[0], (double)g_state.verts[0].col[1], (double)g_state.verts[0].col[2], (double)g_state.verts[0].col[3],
-          (double)g_state.proj_matrix[0][0]); } }
+          (double)g_state.proj_matrix[0][0]);
+        { f32* m = g_state.mtx_array[g_state.current_mtx_id];
+          fprintf(stderr,"[PNMTX0] r0=(%.3f,%.3f,%.3f,%.3f) r1=(%.3f,%.3f,%.3f,%.3f) r2=(%.3f,%.3f,%.3f,%.3f)\n",
+            (double)m[0],(double)m[1],(double)m[2],(double)m[3],
+            (double)m[4],(double)m[5],(double)m[6],(double)m[7],
+            (double)m[8],(double)m[9],(double)m[10],(double)m[11]); } } }
     
     if (!g_shader_program) {
         PORT_LOG_WARN("Shader not ready, skipping draw");

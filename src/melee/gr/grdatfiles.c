@@ -1444,6 +1444,23 @@ HSD_CameraDescPerspective* grDatFiles_ConvertCameraDescGCNtoX64(
     x64->roll = *(f32*)&raw;
 
     val = be32_swap(gcn->up_vector);
+    if (getenv("MELEE_STAGE_DIAG")) {
+        f32 _r, _nn, _ff, _fov, _asp;
+        u32 _t;
+        _t = be32_swap(gcn->roll);   _r = *(f32*)&_t;
+        _t = be32_swap(gcn->nnear);  _nn = *(f32*)&_t;
+        _t = be32_swap(gcn->ffar);   _ff = *(f32*)&_t;
+        _t = be32_swap(gcn->fov);    _fov = *(f32*)&_t;
+        _t = be32_swap(gcn->aspect); _asp = *(f32*)&_t;
+        fprintf(stderr, "[CAMCONV] gcn=%p flags=0x%04x roll=%f up_vector=0x%08x nnear=%f ffar=%f fov=%f aspect=%f\n",
+                (const void*)gcnPtr, (unsigned)be16_swap(gcn->flags),
+                (double)_r, (unsigned)val, (double)_nn, (double)_ff, (double)_fov, (double)_asp);
+        if (val != 0 && val < 0x80000000U) {
+            const u8* up = dataBase + val;
+            fprintf(stderr, "[CAMCONV]   up raw bytes: %02x %02x %02x %02x | %02x %02x %02x %02x | %02x %02x %02x %02x\n",
+                up[0],up[1],up[2],up[3], up[4],up[5],up[6],up[7], up[8],up[9],up[10],up[11]);
+        }
+    }
     if (val != 0 && val < 0x80000000U) {
         const u8* up = dataBase + val;
         Vec3* vec = lbHeap_80015BD0(0, sizeof(Vec3));

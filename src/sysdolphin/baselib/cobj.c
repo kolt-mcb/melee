@@ -18,6 +18,10 @@
 #include <dolphin/gx.h>
 #include <dolphin/gx/GXTransform.h>
 #include <dolphin/mtx.h>
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 #include <dolphin/vi.h>
 #include <MetroTRK/intrinsics.h>
 
@@ -617,6 +621,13 @@ int HSD_CObjGetEyeVector(HSD_CObj* cobj, Vec3* eye)
         HSD_CObjGetInterest(cobj, &interest);
         VECSubtract(&interest, &eyepos, eye);
         if (vec_normalize_check(eye, eye) == 0) {
+            if (getenv("MELEE_STAGE_DIAG")) {
+                static int _en = 0; if (_en < 6) { _en++;
+                    fprintf(stderr, "[EYEVER] cobj=%p eyepos=(%.2f,%.2f,%.2f) interest=(%.2f,%.2f,%.2f) out=(%.4f,%.4f,%.4f)\n",
+                        (void*)cobj, (double)eyepos.x,(double)eyepos.y,(double)eyepos.z,
+                        (double)interest.x,(double)interest.y,(double)interest.z,
+                        (double)eye->x,(double)eye->y,(double)eye->z); }
+            }
             return 0;
         }
     }
