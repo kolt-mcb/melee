@@ -417,7 +417,13 @@ void gmTitle_801A185C(void)
 
 static void gmTitle_801A18D4(HSD_GObj* gobj, int unused)
 {
-    GXColor erase_color = gmTitle_804D6710->color;
+    GXColor erase_color;
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(gmTitle_804D6710)) {
+        return; /* PC port: title color table not loaded yet */
+    }
+#endif
+    erase_color = gmTitle_804D6710->color;
     if (HSD_CObjSetCurrent(GET_COBJ(gobj))) {
         HSD_SetEraseColor(erase_color.r, erase_color.g, erase_color.b,
                           erase_color.a);

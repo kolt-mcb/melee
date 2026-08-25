@@ -200,7 +200,44 @@ void Fighter_LoadCommonData(void)
      * (consumers are NULL-guarded) until the M4 conversion tooling covers
      * PlCo. */
     if (pData == NULL) {
-        PORT_LOG_WARN("Fighter_LoadCommonData: ftLoadCommonData unavailable; ftCommonData stays NULL\n");
+        /* Point every PlCo-derived global at an arena of pointers that all
+         * lead to zeroed memory: single derefs read a valid pointer, double
+         * derefs read zeros (e.g. ftPartsTable[kind]->parts_num == 0).
+         * Real values arrive with the M4 PlCo conversion. */
+        static void* pc_zero_target[0x1000 / sizeof(void*)];
+        static void* pc_ptr_arena[0x200];
+        static int pc_arena_init = 0;
+        if (!pc_arena_init) {
+            unsigned i;
+            pc_arena_init = 1;
+            for (i = 0; i < sizeof(pc_ptr_arena)/sizeof(pc_ptr_arena[0]); i++) {
+                pc_ptr_arena[i] = (void*)pc_zero_target;
+            }
+        }
+        PORT_LOG_WARN("Fighter_LoadCommonData: ftLoadCommonData unavailable; using zeroed arenas\n");
+        p_ftCommonData = (void*)pc_zero_target;
+        Fighter_804D6550 = (void*)pc_ptr_arena;
+        Fighter_804D654C = (void*)pc_ptr_arena;
+        Fighter_804D6548 = (void*)pc_ptr_arena;
+        ftPartsTable = (void*)pc_ptr_arena;
+        Fighter_804D6540 = (void*)pc_ptr_arena;
+        Fighter_804D653C = (void*)pc_ptr_arena;
+        Fighter_804D6538 = (void*)pc_ptr_arena;
+        Fighter_804D6534 = (void*)pc_ptr_arena;
+        Fighter_804D6530 = (void*)pc_ptr_arena;
+        Fighter_804D652C = (void*)pc_ptr_arena;
+        Fighter_804D6528 = (void*)pc_ptr_arena;
+        Fighter_804D6524 = (void*)pc_ptr_arena;
+        Fighter_804D6520 = (void*)pc_ptr_arena;
+        Fighter_804D651C = (void*)pc_ptr_arena;
+        Fighter_804D6518 = (void*)pc_ptr_arena;
+        Fighter_804D6514 = (void*)pc_ptr_arena;
+        Fighter_804D6510 = (void*)pc_ptr_arena;
+        Fighter_804D650C = (void*)pc_ptr_arena;
+        Fighter_804D6508 = (void*)pc_ptr_arena;
+        Fighter_804D6504 = NULL; /* HSD_JObjLoadJoint input: must stay NULL */
+        gCrowdConfig = (void*)pc_zero_target;
+        Fighter_804D64FC = (void*)pc_ptr_arena;
         return;
     }
 #endif
