@@ -119,7 +119,8 @@
 /* 4D645C */ static CmSubject* cm_804D645C;
 /* 4D6460 */ static CmSubject* cm_804D6460;
 /* 4D6464 */ static HSD_CObj* cm_804D6464;
-/* 4D6468 */ CmSubject* cm_804D6468;
+/* 4D6468 */ CmSubject* cm_804D6468[2]; /* matches camera.h/camera.static.h
+    (the lone-pointer definition conflicted; TU is NonMatching upstream) */
 
 /// sdata2
 
