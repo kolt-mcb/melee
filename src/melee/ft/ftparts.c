@@ -1,4 +1,7 @@
 #include "ftparts.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "fighter.h"
 #include "ftdata.h"
@@ -62,6 +65,11 @@ void ftParts_JObjInfoInit(void)
 
 void ftParts_80073758(HSD_JObj* jobj)
 {
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(jobj)) {
+        return; /* PC port: NULL costume joint while fighter data is stubbed */
+    }
+#endif
     hsdChangeClass(jobj, &ftJObj);
 }
 

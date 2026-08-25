@@ -1,5 +1,8 @@
 #include "lbarchive.h"
 #if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+#if BUILD_TARGET_PC
 #include "port/log.h"
 #endif
 
@@ -96,7 +99,25 @@ static inline void lbArchive_vLoadSectionsFatal(HSD_Archive* archive,
     const char* symbol_name;
 
     for (; symbol != NULL; symbol = va_arg(symbols, void**)) {
+#if BUILD_TARGET_PC
+        /* PC port: some callers pass name/ptr pairs read from unconverted
+         * data; when the walk hits garbage, stop instead of dereferencing
+         * it (an OSReport of an unterminated 'name' crashed in snprintf). */
+        if (!pc_ptr_sane(symbol)) {
+            PORT_LOG_WARN("vLoadSectionsFatal: insane symbol slot %p; stopping walk\n",
+                          (void*)symbol);
+            return;
+        }
+#endif
         symbol_name = va_arg(symbols, const char*);
+#if BUILD_TARGET_PC
+        if (symbol_name != NULL && !pc_str_sane(symbol_name, 64)) {
+            *symbol = NULL;
+            PORT_LOG_WARN("vLoadSectionsFatal: insane symbol name %p; stopping walk\n",
+                          (const void*)symbol_name);
+            return;
+        }
+#endif
         *symbol = NULL;
         if (archive != NULL && symbol_name != NULL) {
             *symbol = HSD_ArchiveGetPublicAddress(archive, symbol_name);
