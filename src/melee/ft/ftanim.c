@@ -1,4 +1,7 @@
 #include "ftanim.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "placeholder.h"
 
@@ -1006,6 +1009,20 @@ void ftAnim_80070200(Fighter* fp, ftData_x8_x8* r4, CostumeTObjList* r5,
                      DObjList* r6)
 {
     u32 i;
+#if BUILD_TARGET_PC
+    /* PC port: r4 comes from the zeroed PlCo/ftData arena until real
+     * fighter data conversion exists; treat as "no costume tobjs". */
+    if (!pc_ptr_sane(r4) || !pc_ptr_sane(r5)) {
+        if (pc_ptr_sane(r5)) {
+            r5->n_costume_tobjs = 0;
+        }
+        return;
+    }
+    if (r4->x8 == 0 || !pc_ptr_sane(r4->xC[0])) {
+        r5->n_costume_tobjs = 0;
+        return;
+    }
+#endif
     r5->n_costume_tobjs = r4->x8;
 
     if (r5->n_costume_tobjs > ARRAY_SIZE(r5->costume_tobjs)) {
