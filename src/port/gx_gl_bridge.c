@@ -2557,6 +2557,11 @@ static void bridge_upload_and_draw(void)
                                 t->alpha_inputs[0], t->alpha_inputs[1], t->alpha_inputs[2], t->alpha_inputs[3],
                                 t->tex_map, t->tex_coord, (int)t->color_enabled, (int)t->alpha_enabled);
                     }
+                    for (u32 vi = 0; vi < 3 && vi < g_state.vert_count; vi++) {
+                        fprintf(stderr, "    UV%u=(%.3f,%.3f)", vi,
+                                (double)g_state.verts[vi].tex0[0], (double)g_state.verts[vi].tex0[1]);
+                    }
+                    fprintf(stderr, "\n");
                 }
             }
         }
@@ -6325,92 +6330,123 @@ static u32 calc_pixel_count(u16 w, u16 h)
  * We convert to RGBA8888 to avoid endianness issues entirely.
  */
 
+/* GCN textures are stored in tiles (row-major tiles, row-major texels
+ * within a tile). Map a linear texel (x,y) to its index in tiled storage.
+ * Tile dims per format: I4 8x8, I8/IA4 8x4, IA8/RGB565/RGB5A3 4x4,
+ * RGBA8 4x4 (with split AR/GB byte groups), CMPR handled separately. */
+static inline u32 gx_tiled_index(u32 x, u32 y, u32 w, u32 tw, u32 th)
+{
+    u32 tiles_per_row = (w + tw - 1) / tw;
+    u32 tile = (y / th) * tiles_per_row + (x / tw);
+    return tile * (tw * th) + (y % th) * tw + (x % tw);
+}
+
 /* Convert big-endian RGB565 texture to RGBA8888 */
-static void convert_rgb565_be_to_rgba8(const void *src, u8 *dst, u32 npixels)
+static void convert_rgb565_be_to_rgba8(const void *src, u8 *dst, u32 w, u32 h)
 {
     const u8 *s = (const u8*)src;
-    for (u32 i = 0; i < npixels; i++) {
-        u16 val = ((u16)s[0] << 8) | s[1]; /* Big-endian read */
-        s += 2;
-        dst[0] = ((val >> 11) & 0x1F) * 255 / 31; /* R5 */
-        dst[1] = ((val >> 5) & 0x3F) * 255 / 63;  /* G6 */
-        dst[2] = ( val        & 0x1F) * 255 / 31; /* B5 */
-        dst[3] = 0xFF;
-        dst += 4;
+    for (u32 y = 0; y < h; y++) for (u32 x = 0; x < w; x++) {
+        u32 ti = gx_tiled_index(x, y, w, 4, 4);
+        u16 val = ((u16)s[ti*2] << 8) | s[ti*2+1];
+        u8* d = dst + (y * w + x) * 4;
+        d[0] = ((val >> 11) & 0x1F) * 255 / 31;
+        d[1] = ((val >> 5) & 0x3F) * 255 / 63;
+        d[2] = ( val        & 0x1F) * 255 / 31;
+        d[3] = 0xFF;
     }
 }
 
 /* Convert big-endian RGB5A3 texture to RGBA8888 */
-static void convert_rgb5a3_be_to_rgba8(const void *src, u8 *dst, u32 npixels)
+static void convert_rgb5a3_be_to_rgba8(const void *src, u8 *dst, u32 w, u32 h)
 {
     const u8 *s = (const u8*)src;
-    for (u32 i = 0; i < npixels; i++) {
-        u16 val = ((u16)s[0] << 8) | s[1]; /* Big-endian read */
-        s += 2;
-        dst[0] = ((val >> 10) & 0x1F) * 255 / 31; /* R5 */
-        dst[1] = ((val >> 5) & 0x1F) * 255 / 31;  /* G5 */
-        dst[2] = ( val        & 0x1F) * 255 / 31; /* B5 */
-        dst[3] = (val >> 15) ? 0xFF : 0x00;       /* A1 (bit 15) */
-        dst += 4;
+    for (u32 y = 0; y < h; y++) for (u32 x = 0; x < w; x++) {
+        u32 ti = gx_tiled_index(x, y, w, 4, 4);
+        u16 val = ((u16)s[ti*2] << 8) | s[ti*2+1];
+        u8* d = dst + (y * w + x) * 4;
+        if (val & 0x8000) { /* RGB555, opaque */
+            d[0] = ((val >> 10) & 0x1F) * 255 / 31;
+            d[1] = ((val >> 5) & 0x1F) * 255 / 31;
+            d[2] = ( val        & 0x1F) * 255 / 31;
+            d[3] = 0xFF;
+        } else {            /* A3RGB444 */
+            d[0] = ((val >> 8) & 0x0F) * 17;
+            d[1] = ((val >> 4) & 0x0F) * 17;
+            d[2] = ( val       & 0x0F) * 17;
+            d[3] = ((val >> 12) & 0x07) * 255 / 7;
+        }
     }
 }
 
 /* Convert big-endian IA8 texture to RGBA8888 */
-static void convert_ia8_be_to_rgba8(const void *src, u8 *dst, u32 npixels)
+static void convert_ia8_be_to_rgba8(const void *src, u8 *dst, u32 w, u32 h)
 {
     const u8 *s = (const u8*)src;
-    for (u32 i = 0; i < npixels; i++) {
-        u16 val = ((u16)s[0] << 8) | s[1]; /* Big-endian read */
-        s += 2;
-        u8 intensity = (val >> 8) & 0xFF;
-        u8 alpha = val & 0xFF;
-        dst[0] = intensity;
-        dst[1] = intensity;
-        dst[2] = intensity;
-        dst[3] = alpha;
-        dst += 4;
+    for (u32 y = 0; y < h; y++) for (u32 x = 0; x < w; x++) {
+        u32 ti = gx_tiled_index(x, y, w, 4, 4);
+        /* IA8 texel: alpha byte first, then intensity (GX stores A,I) */
+        u8 alpha = s[ti*2];
+        u8 intensity = s[ti*2+1];
+        u8* d = dst + (y * w + x) * 4;
+        d[0] = intensity; d[1] = intensity; d[2] = intensity; d[3] = alpha;
     }
 }
 
 /* Convert IA4 (4-bit intensity + 4-bit alpha per pixel, 1 byte/pixel) to RGBA8888 */
-static void convert_ia4_to_rgba8(const void *src, u8 *dst, u32 npixels)
+static void convert_ia4_to_rgba8(const void *src, u8 *dst, u32 w, u32 h)
 {
     const u8 *s = (const u8*)src;
-    for (u32 i = 0; i < npixels; i++) {
-        u8 byte = s[i];
-        u8 intensity = ((byte >> 4) & 0x0F) * 17;  /* 4-bit -> 8-bit */
-        u8 alpha = (byte & 0x0F) * 17;              /* 4-bit -> 8-bit */
-        dst[i * 4 + 0] = intensity;
-        dst[i * 4 + 1] = intensity;
-        dst[i * 4 + 2] = intensity;
-        dst[i * 4 + 3] = alpha;
+    for (u32 y = 0; y < h; y++) for (u32 x = 0; x < w; x++) {
+        u32 ti = gx_tiled_index(x, y, w, 8, 4);
+        u8 byte = s[ti];
+        u8* d = dst + (y * w + x) * 4;
+        u8 alpha = ((byte >> 4) & 0x0F) * 17;      /* IA4: A in high nibble */
+        u8 intensity = (byte & 0x0F) * 17;
+        d[0] = intensity; d[1] = intensity; d[2] = intensity; d[3] = alpha;
     }
 }
 
 /* Convert I8 (intensity 8-bit) to grayscale RGBA8888 */
-static void convert_i8_to_rgba8(const void *src, u8 *dst, u32 npixels)
+static void convert_i8_to_rgba8(const void *src, u8 *dst, u32 w, u32 h)
 {
     const u8 *s = (const u8*)src;
-    for (u32 i = 0; i < npixels; i++) {
-        u8 intensity = s[i];
-        dst[0] = intensity;
-        dst[1] = intensity;
-        dst[2] = intensity;
-        dst[3] = 0xFF;
-        dst += 4;
+    for (u32 y = 0; y < h; y++) for (u32 x = 0; x < w; x++) {
+        u32 ti = gx_tiled_index(x, y, w, 8, 4);
+        u8 intensity = s[ti];
+        u8* d = dst + (y * w + x) * 4;
+        d[0] = intensity; d[1] = intensity; d[2] = intensity; d[3] = 0xFF;
     }
 }
 
 /* Convert I4 (intensity 4-bit) to grayscale RGBA8888 */
-static void convert_i4_to_rgba8(const void *src, u8 *dst, u32 npixels)
+static void convert_i4_to_rgba8(const void *src, u8 *dst, u32 w, u32 h)
 {
     const u8 *s = (const u8*)src;
-    for (u32 i = 0; i < npixels; i += 2) {
-        u8 byte = s[i / 2];
-        u8 hi = ((byte >> 4) & 0x0F) * 17;  /* 4-bit -> 8-bit */
-        u8 lo = (byte & 0x0F) * 17;
-        dst[0] = hi; dst[1] = hi; dst[2] = hi; dst[3] = 0xFF; dst += 4;
-        dst[0] = lo; dst[1] = lo; dst[2] = lo; dst[3] = 0xFF; dst += 4;
+    for (u32 y = 0; y < h; y++) for (u32 x = 0; x < w; x++) {
+        u32 ti = gx_tiled_index(x, y, w, 8, 8);
+        u8 byte = s[ti >> 1];
+        u8 v = (ti & 1) ? (byte & 0x0F) : ((byte >> 4) & 0x0F);
+        v *= 17;
+        u8* d = dst + (y * w + x) * 4;
+        d[0] = v; d[1] = v; d[2] = v; d[3] = 0xFF;
+    }
+}
+
+/* RGBA8: 4x4 tiles of 64 bytes — first 32 bytes hold A,R pairs, next 32
+ * hold G,B pairs for the same 16 texels. */
+static void convert_rgba8_tiled(const void *src, u8 *dst, u32 w, u32 h)
+{
+    const u8 *s = (const u8*)src;
+    u32 tiles_per_row = (w + 3) / 4;
+    for (u32 y = 0; y < h; y++) for (u32 x = 0; x < w; x++) {
+        u32 tile = (y / 4) * tiles_per_row + (x / 4);
+        u32 within = (y % 4) * 4 + (x % 4);
+        const u8* t = s + tile * 64;
+        u8* d = dst + (y * w + x) * 4;
+        d[3] = t[within*2];      /* A */
+        d[0] = t[within*2+1];    /* R */
+        d[1] = t[32+within*2];   /* G */
+        d[2] = t[32+within*2+1]; /* B */
     }
 }
 
@@ -6600,11 +6636,11 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         tmp_buf = malloc(needed);
         if (tmp_buf) {
             if (fmt == 0x04) {
-                convert_rgb565_be_to_rgba8(img, tmp_buf, npixels);
+                convert_rgb565_be_to_rgba8(img, tmp_buf, w, h);
             } else if (fmt == 0x05) {
-                convert_rgb5a3_be_to_rgba8(img, tmp_buf, npixels);
+                convert_rgb5a3_be_to_rgba8(img, tmp_buf, w, h);
             } else {
-                convert_ia8_be_to_rgba8(img, tmp_buf, npixels);
+                convert_ia8_be_to_rgba8(img, tmp_buf, w, h);
             }
             upload_src = tmp_buf;
             tmp_size = needed;
@@ -6617,12 +6653,24 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         u32 needed = npixels * 4;
         tmp_buf = malloc(needed);
         if (tmp_buf) {
-            convert_ia4_to_rgba8(img, tmp_buf, npixels);
+            convert_ia4_to_rgba8(img, tmp_buf, w, h);
             upload_src = tmp_buf;
             tmp_size = needed;
         }
     }
     
+    /* RGBA8: detile 4x4 AR/GB groups */
+    if (fmt == 0x06) {
+        u32 npx = (u32)w * (u32)h;
+        u32 needed = npx * 4;
+        tmp_buf = malloc(needed);
+        if (tmp_buf) {
+            convert_rgba8_tiled(img, tmp_buf, w, h);
+            upload_src = tmp_buf;
+            tmp_size = needed;
+        }
+    }
+
     /* I4/I8 with TLUT: decode indexed pixels to RGBA8888 */
     if (fmt == 0x00 || fmt == 0x01) {  /* I4 or I8 */
         TLUTSlot *tlut = &g_state.g_tlut[g_state.g_current_tlut];
@@ -6660,9 +6708,9 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
             tmp_buf = malloc(needed);
             if (tmp_buf) {
                 if (fmt == 0x01) {
-                    convert_i8_to_rgba8(img, tmp_buf, pixel_count);
+                    convert_i8_to_rgba8(img, tmp_buf, w, h);
                 } else {
-                    convert_i4_to_rgba8(img, tmp_buf, pixel_count);
+                    convert_i4_to_rgba8(img, tmp_buf, w, h);
                 }
                 upload_src = tmp_buf;
                 tmp_size = needed;
@@ -6698,7 +6746,7 @@ skip_tlut:
     }
 
     /* Upload */
-    if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x02 || fmt == 0x00 || fmt == 0x01) {
+    if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || (fmt == 0x06 && upload_src != img)) {
         /* Decompressed/converted → always RGBA8 */
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, upload_w, upload_h, 0,
                      GL_RGBA, GL_UNSIGNED_BYTE, upload_src);
@@ -6736,6 +6784,8 @@ bind_tex:
     }
     
     /* Stats & logging */
+    { static int _tl=0; if (getenv("MELEE_CHAN") && g_state.frame_count>=8 && _tl<30) { _tl++;
+        fprintf(stderr, "  TEXLOAD fmt=0x%X %ux%u img=%p slot=%u\n", fmt, w, h, img, slot); } }
     g_state.tex_upload_count++;
     g_state.tex_formats_seen[fmt & 0x0F]++;
     
@@ -6793,18 +6843,20 @@ static void tlut_get_color(TLUTSlot *tlut, u32 idx, u8* out_rgba)
 /* Decode I8 texture with palette lookup */
 static void decode_i8_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, TLUTSlot *tlut)
 {
-    for (u32 i = 0; i < (u32)width * height; i++) {
-        tlut_get_color(tlut, src[i], &dst[i * 4]);
+    for (u32 y = 0; y < height; y++) for (u32 x = 0; x < width; x++) {
+        u32 ti = gx_tiled_index(x, y, width, 8, 4); /* CI8/I8: 8x4 tiles */
+        tlut_get_color(tlut, src[ti], &dst[(y * width + x) * 4]);
     }
 }
 
 /* Decode I4 texture with palette lookup */
 static void decode_i4_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, TLUTSlot *tlut)
 {
-    for (u32 i = 0; i < (u32)width * height; i++) {
-        u32 byte_idx = i >> 1;
-        u8 nibble = (i & 1) ? (src[byte_idx] & 0xF) : ((src[byte_idx] >> 4) & 0xF);
-        tlut_get_color(tlut, nibble, &dst[i * 4]);
+    for (u32 y = 0; y < height; y++) for (u32 x = 0; x < width; x++) {
+        u32 ti = gx_tiled_index(x, y, width, 8, 8); /* CI4/I4: 8x8 tiles */
+        u8 byte = src[ti >> 1];
+        u8 nibble = (ti & 1) ? (byte & 0xF) : ((byte >> 4) & 0xF);
+        tlut_get_color(tlut, nibble, &dst[(y * width + x) * 4]);
     }
 }
 
