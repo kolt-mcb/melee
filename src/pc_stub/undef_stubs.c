@@ -2639,7 +2639,9 @@ __attribute__((weak)) void un_80304470(void) {}
 __attribute__((weak)) void lbl_804336A0(void) {}
 __attribute__((weak)) void lbl_803BB0E0(void) {}
 __attribute__((weak)) void lbl_803BB028(void) {}
-__attribute__((weak)) void lbl_80433658(void) {}
+/* Data, not a function: HSD_ObjAllocData used by lbBgFlash_80021A18 via
+ * HSD_ObjAllocInit (writes faulted in .text). 128 zeroed bytes cover it. */
+__attribute__((weak, aligned(16))) unsigned char lbl_80433658[128];
 
 /* ============================================================
  * GX → OpenGL bridge (weak stubs — overridden by real impl)

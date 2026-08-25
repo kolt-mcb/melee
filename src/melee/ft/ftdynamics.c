@@ -1,4 +1,7 @@
 #include "ftdynamics.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include <placeholder.h>
 #include <platform.h>
@@ -81,6 +84,14 @@ void ftCo_8009CB40(Fighter* fp, ssize_t bone_idx, bool arg2, FigaTree* arg3)
 void ftCo_8009CF84(Fighter* fp)
 {
     ftData* data = fp->ft_data;
+#if BUILD_TARGET_PC
+    /* PC port: ft_data is the zeroed arena until real fighter data loads;
+     * x2C is then NULL. No dynamic bones. */
+    if (!pc_ptr_sane(data) || !pc_ptr_sane(data->x2C)) {
+        fp->dynamics_num = 0;
+        return;
+    }
+#endif
     fp->dynamics_num = data->x2C->dynamicsNum;
     if (fp->dynamics_num >= Ft_Dynamics_NumMax) {
         HSD_ASSERTREPORT(109, 0, "fighter dynamics num over!\n");

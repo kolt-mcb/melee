@@ -1,4 +1,8 @@
 #include "gmpause.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#include "port/log.h"
+#endif
 
 #include <math.h>
 #include <sysdolphin/baselib/controller.h>
@@ -81,8 +85,18 @@ void fn_801A1134(void)
     HSD_GObj* gobj;
     HSD_JObj* jobj;
 
+    scene = NULL;
     lbl_804D6700 =
         lbArchive_80016DBC("GmPause", &scene, "ScGamPause_scene_data", 0);
+#if BUILD_TARGET_PC
+    /* PC port: symbol out-pointers are not resolved (see lbarchive.c);
+     * scene stays NULL and the model walk below would crash. Pause UI
+     * disabled until archive conversion covers GmPause. */
+    if (!pc_ptr_sane(scene) || !pc_ptr_sane(scene->models[0])) {
+        PORT_LOG_WARN("gmpause: ScGamPause scene data unavailable; pause UI disabled\n");
+        return;
+    }
+#endif
     gobj = GObj_Create(0xEU, 2U, 0U);
     lbl_804D6704 = gobj;
     jobj = HSD_JObjLoadJoint(scene->models[0]->joint);
