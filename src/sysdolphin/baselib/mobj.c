@@ -218,14 +218,12 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
             port_guard_warn("mobj.c:195");
         }
         #endif /* BUILD_TARGET_PC */
-#if BUILD_TARGET_PC
-        /* PC port: skip TEV compilation for now - archive data corruption.
-         * TEV descriptors from GCN archives have different struct layouts
-         * on x86_64, causing crashes in the TEV compiler. */
-        /* HSD_MObjCompileTev(mobj); */
-#else
+        /* PC port: TEV compilation was disabled here for a long time
+         * ("archive data corruption") — that predated the TObj/TLUT
+         * conversion fixes and the pc_ptr_sane guard layer. Without it no
+         * material gets TEV stages: everything fell back to PASSCLR and
+         * textures were never sampled (the "white surfaces" bug). */
         HSD_MObjCompileTev(mobj);
-#endif /* BUILD_TARGET_PC */
 
         return mobj;
     } else {

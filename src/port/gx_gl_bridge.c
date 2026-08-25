@@ -1338,7 +1338,13 @@ static const char* g_frag_src =
 "}\n"
 "\n"
 "void main() {\n"
-"    vec4 ras = v_col;           // RAS = rasterized vertex color\n"
+"    // RAS = channel-0 rasterized color: vertex color or material register,\n"
+"    // modulated by per-vertex lighting when channel 0 is lit (GCN formula\n"
+"    // approximated as mat * clamp(amb + diffuse)).\n"
+"    vec4 ras = (u_chan_src[0] == 1) ? v_col : u_chan_color[0];\n"
+"    if (u_lighting_enabled != 0) {\n"
+"        ras.rgb = clamp(ras.rgb * v_lit_color.rgb, 0.0, 1.0);\n"
+"    }\n"
 "    vec4 cprev = ras;          // CPREV starts as RAS\n"
 "    float aprev = ras.a;       // APREV starts as RAS.a\n"
 "\n"
@@ -2525,6 +2531,35 @@ static void bridge_upload_and_draw(void)
         /* PC diag: compute the EXACT GPU clip for the first vertex using the
          * final mvp (after z-remap). Check if it's in the GL clip volume
          * (-w<=x,y,z<=w, w>0). */
+        /* PC diag: MELEE_CHAN=1 — one line of channel/lighting state per 3D
+         * draw (white-surface debugging, roadmap M1). */
+        if (getenv("MELEE_CHAN") && g_state.vert_count > 0 && g_state.frame_count >= 8) {
+            static int _ch = 0;
+            if (_ch < 80) {
+                _ch++;
+                int lit_any = 0; u32 lmask = 0;
+                for (int i = 0; i < 8; i++) { if (g_state.chan_lit[i]) lit_any = 1; lmask |= g_state.chan_diffuse_light[i]; }
+                fprintf(stderr, "  CHAN n=%u clr_en=%d src0=%u lit=%d lmask=%x nl=%u C0=(%u,%u,%u,%u) amb=(%.2f,%.2f,%.2f) v0c=(%.2f,%.2f,%.2f,%.2f) texen=%d\n",
+                        (unsigned)g_state.vert_count, (int)g_state.clr_enabled,
+                        (unsigned)g_state.chan_color_source[0], lit_any, (unsigned)lmask,
+                        (unsigned)g_state.g_active_light_count,
+                        g_state.chan_colors[0].r, g_state.chan_colors[0].g, g_state.chan_colors[0].b, g_state.chan_colors[0].a,
+                        (double)g_state.ambient_color[0], (double)g_state.ambient_color[1], (double)g_state.ambient_color[2],
+                        (double)g_state.verts[0].col[0], (double)g_state.verts[0].col[1], (double)g_state.verts[0].col[2], (double)g_state.verts[0].col[3],
+                        (int)g_state.tex0_enabled);
+                {
+                    u32 ns = g_state.num_tev_stages; if (ns > 8) ns = 8;
+                    for (u32 st = 0; st < ns; st++) {
+                        TevStage* t = &g_state.tev_stages[st];
+                        if (!t->color_enabled && !t->alpha_enabled) continue;
+                        fprintf(stderr, "    TEV%u cin=[%u,%u,%u,%u] ain=[%u,%u,%u,%u] tex=%u coord=%u en=%d/%d\n",
+                                st, t->color_inputs[0], t->color_inputs[1], t->color_inputs[2], t->color_inputs[3],
+                                t->alpha_inputs[0], t->alpha_inputs[1], t->alpha_inputs[2], t->alpha_inputs[3],
+                                t->tex_map, t->tex_coord, (int)t->color_enabled, (int)t->alpha_enabled);
+                    }
+                }
+            }
+        }
         if (getenv("MELEE_CLIP") && g_state.vert_count > 0 && g_state.frame_count >= 8) {
             static int _cl = 0;
             if (_cl < 300) {
@@ -4969,6 +5004,9 @@ void GXSetChanAmbColor(u32 chan, GXColor amb_color)
 void GXSetChanMatColor(u32 chan, GXColor mat_color)
 {
     GX_TRACE("GXSetChanMatColor(%u, {%u,%u,%u,%u})", chan, (u32)mat_color.r, (u32)mat_color.g, (u32)mat_color.b, (u32)mat_color.a);
+    { static int _n=0; if (getenv("MELEE_CHAN") && g_state.frame_count>=8 && _n<40) { _n++;
+        fprintf(stderr, "  SETMAT chan=%u col=(%u,%u,%u,%u) f=%u\n", chan,
+                mat_color.r, mat_color.g, mat_color.b, mat_color.a, (unsigned)g_state.frame_count); } }
     /* Set material color for a channel (used by TEV as C0, C1, C2) */
     /* GX_COLOR0=0, GX_COLOR1=1, GX_COLOR0A0=2, GX_COLOR1A1=3 */
     u32 idx = chan & 1;  /* 0=C0, 1=C1 */
@@ -5303,13 +5341,31 @@ void GXSetChanCtrl(u32 chan, u32 enable, u32 amb_src, u32 mat_src, u32 light_mas
         return;
     }
     
-    g_state.chan_enabled[chan] = (Bool)enable;
-    g_state.chan_lit[chan] = (Bool)(mat_src != 0);  /* GX_SRC_REG = material color */
-    g_state.chan_diffuse_light[chan] = light_mask;
-    g_state.chan_color_source[chan] = mat_src;
-    g_state.chan_amb_src[chan] = amb_src;
-    g_state.chan_diff_fn[chan] = diff_fn;
-    g_state.chan_attn_fn[chan] = attn_fn;
+    { static int _n=0; if (getenv("MELEE_CHAN") && g_state.frame_count>=8 && _n<40) { _n++;
+        fprintf(stderr, "  SETCTRL chan=%u en=%u amb=%u mat=%u mask=%x diff=%u f=%u\n",
+                chan, enable, amb_src, mat_src, light_mask, diff_fn, (unsigned)g_state.frame_count); } }
+    /* GXChannelID mapping: COLOR0=0, COLOR1=1, ALPHA0=2, ALPHA1=3,
+     * COLOR0A0=4, COLOR1A1=5. The shader reads channel slots 0/1, so
+     * COLOR0A0/COLOR1A1 must land there — storing at the raw enum value
+     * meant COLOR0A0 state was never seen, and ALPHA0 clobbered slot 2.
+     * chan_lit means "lighting enabled" (the `enable` arg), NOT mat_src. */
+    {
+        int cidx = -1;
+        switch (chan) {
+        case 0: case 4: cidx = 0; break;   /* COLOR0 / COLOR0A0 */
+        case 1: case 5: cidx = 1; break;   /* COLOR1 / COLOR1A1 */
+        default: break;                    /* ALPHA0/ALPHA1: alpha-only */
+        }
+        if (cidx >= 0) {
+            g_state.chan_enabled[cidx] = (Bool)enable;
+            g_state.chan_lit[cidx] = (Bool)(enable != 0);
+            g_state.chan_diffuse_light[cidx] = light_mask;
+            g_state.chan_color_source[cidx] = mat_src;
+            g_state.chan_amb_src[cidx] = amb_src;
+            g_state.chan_diff_fn[cidx] = diff_fn;
+            g_state.chan_attn_fn[cidx] = attn_fn;
+        }
+    }
     
     PORT_LOG_DEBUG("GXSetChanCtrl[%u]: enable=%d amb=%u mat=%u lights=0x%08X diff=%u attn=%u",
                    chan, enable, amb_src, mat_src, light_mask, diff_fn, attn_fn);
