@@ -258,6 +258,13 @@ struct CameraInputs {
     /* +04 */ f32 stick_y;
     /* +08 */ f32 substick_x;
     /* +0C */ f32 substick_y;
+#if BUILD_TARGET_PC
+    /* PC port: camera.c (NonMatching) accesses these by name; the struct is
+     * runtime-only (filled from pad state), so exact GCN offsets are not
+     * load-bearing on PC. */
+    /* +10 */ u64 buttons_triggered;
+    /* +18 */ u64 buttons_pressed;
+#else
     /// @todo sus unions
     /* +10 */ union {
         u32 _u32[2];
@@ -267,6 +274,7 @@ struct CameraInputs {
         u32 _u32[2];
         u64 _u64;
     } x18;
+#endif
 };
 
 #endif
