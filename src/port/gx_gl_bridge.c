@@ -616,6 +616,14 @@ typedef struct {
     /* Per-attribute VAT mode for display list vertex decoding.
      * 0=absent, 1=direct, 2=index8, 3=index16 (GXAttrType values) */
     u8 pos_mode, nrm_mode, clr_mode, tex0_mode, tex1_mode;
+    /* Full per-attribute vertex descriptor table for the display-list
+     * decoder, indexed by GXAttr 0..20 (PNMTXIDX, TEX0-7MTXIDX, POS, NRM,
+     * CLR0, CLR1, TEX0-7). GX_VA_NBT (25) is folded into NRM (10) with
+     * cnt=GX_NRM_NBT, as the hardware does. mode: 0=absent 1=direct
+     * 2=index8 3=index16. cnt/type/frac from GXSetVtxAttrFmt. */
+    u8 va_mode[21], va_cnt[21], va_type[21], va_frac[21];
+    const u8* va_arr[21];
+    u16 va_stride[21];
     
     /* Viewing matrix (from gx_set_3d_camera) */
     f32 view_matrix[3][4];      /* Viewing matrix (camera transform) */
@@ -2316,6 +2324,8 @@ static void bridge_upload_and_draw(void)
     
     u16 count = g_state.vert_count;
     if (count == 0) return;
+    { static int _n=0; if(getenv("MELEE_ZTRACE") && _n<30){_n++;
+        fprintf(stderr,"[FLUSH] count=%u ztex_op=%d frame=%u prim=0x%X\n",(unsigned)count,(int)g_state.ztex_op,(unsigned)g_state.frame_count,(unsigned)g_state.prim_type); } }
 
     { static int _pd_on=-1,_pd_n=0; if(_pd_on<0)_pd_on=(getenv("MELEE_STAGE_DIAG")!=NULL);
       if(_pd_on && g_state.frame_count>=8 && g_state.frame_count<=9 && _pd_n<12){_pd_n++;
@@ -2348,6 +2358,24 @@ static void bridge_upload_and_draw(void)
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * count, g_state.verts);
+
+    /* PC diag: read back the VBO's first vertex to confirm the GPU has the
+     * same data the CPU used for the NDCCHECK (rules out a bad upload). */
+#if BUILD_TARGET_PC
+    if (g_state.mtx3d_active && getenv("MELEE_MTR")) {
+        static int _rb_n = 0;
+        if (_rb_n < 300) {
+            _rb_n++;
+            Vertex rb;
+            glGetBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex), &rb);
+            fprintf(stderr, "  VBORB v0 in=(%.2f,%.2f,%.2f) vbo=(%.2f,%.2f,%.2f) match=%d n=%u\n",
+                    (double)g_state.verts[0].pos[0],(double)g_state.verts[0].pos[1],(double)g_state.verts[0].pos[2],
+                    (double)rb.pos[0],(double)rb.pos[1],(double)rb.pos[2],
+                    (int)(fabsf(rb.pos[0]-g_state.verts[0].pos[0])<1e-3f && fabsf(rb.pos[2]-g_state.verts[0].pos[2])<1e-3f),
+                    (unsigned)count);
+        }
+    }
+#endif
     
     /* Set ALL vertex attributes explicitly every draw */
     glEnableVertexAttribArray(0);
@@ -2383,7 +2411,7 @@ static void bridge_upload_and_draw(void)
     }
     
     /* State — depth */
-    if (g_state.z_enabled) {
+    if (g_state.z_enabled && !getenv("MELEE_STAGE_NODEPTH")) {
         glEnable(GL_DEPTH_TEST);
         GLenum gl_func;
         switch (g_state.z_func) {
@@ -2401,7 +2429,32 @@ static void bridge_upload_and_draw(void)
     } else {
         glDisable(GL_DEPTH_TEST);
     }
-    
+
+    /* Z-texture REPLACE: on GC hardware the fragment's depth is replaced by
+     * the Z-texture value instead of the interpolated vertex z. HSD_EraseRect
+     * uses this with a constant Z8=0xFF (far) image to clear the depth buffer
+     * to far across the whole screen. We ignore Z-textures generally, but
+     * emulating this exactly is essential: without it the erase quad writes
+     * its own mid-frustum z, leaving the depth buffer at ~half-depth so the
+     * farther half of every subsequent 3D draw (e.g. the stage floor) fails
+     * the LEQUAL depth test and vanishes. Force a constant far depth for the
+     * (constant-z) replace draw via a collapsed depth range; restore it for
+     * every normal draw. (Set stateless each call so it never persists.) */
+    /* Z-texture REPLACE writes a constant Z8=0xFF (far) into the depth
+     * buffer instead of the interpolated vertex z. Its only user is
+     * HSD_EraseRect, which relies on it to clear depth to far across the
+     * whole screen; without it the erase quad writes its own mid-frustum z
+     * and the farther half of every later 3D draw (the stage floor) fails
+     * the LEQUAL depth test and vanishes. Force a constant far depth for the
+     * replace draw via a collapsed depth range (the erase quad is flushed
+     * while REPLACE is active — see GXSetZTexture, which flushes pending
+     * geometry before the op changes). Reset for all normal draws. */
+    if (g_state.ztex_op == GX_ZT_REPLACE) {
+        glDepthRange(1.0, 1.0);
+    } else {
+        glDepthRange(0.0, 1.0);
+    }
+
     /* State — cull (PC port: disable to catch more geometry) */
     if (FALSE && g_state.cull_enabled) {
         glEnable(GL_CULL_FACE);
@@ -2469,6 +2522,39 @@ static void bridge_upload_and_draw(void)
          * i.e. in clip space: z' = -2z - w (Dolphin: z'=-z, then 2z'-w). */
         for (int j = 0; j < 4; j++)
             mvp[2][j] = -2.0f * mvp[2][j] - mvp[3][j];
+        /* PC diag: compute the EXACT GPU clip for the first vertex using the
+         * final mvp (after z-remap). Check if it's in the GL clip volume
+         * (-w<=x,y,z<=w, w>0). */
+        if (getenv("MELEE_CLIP") && g_state.vert_count > 0 && g_state.frame_count >= 8) {
+            static int _cl = 0;
+            if (_cl < 300) {
+                _cl++;
+                u32 inside = 0, wpos = 0, vi;
+                f32 mnx=1e30f,mxx=-1e30f,mny=1e30f,mxy=-1e30f;
+                for (vi = 0; vi < g_state.vert_count; vi++) {
+                    f32 x=g_state.verts[vi].pos[0], y=g_state.verts[vi].pos[1], z=g_state.verts[vi].pos[2];
+                    f32 cx = mvp[0][0]*x + mvp[0][1]*y + mvp[0][2]*z + mvp[0][3];
+                    f32 cy = mvp[1][0]*x + mvp[1][1]*y + mvp[1][2]*z + mvp[1][3];
+                    f32 cz = mvp[2][0]*x + mvp[2][1]*y + mvp[2][2]*z + mvp[2][3];
+                    f32 cw = mvp[3][0]*x + mvp[3][1]*y + mvp[3][2]*z + mvp[3][3];
+                    if (cw > 0) {
+                        f32 nx = cx/cw, ny = cy/cw;
+                        wpos++;
+                        if (nx<mnx)mnx=nx; if (nx>mxx)mxx=nx; if (ny<mny)mny=ny; if (ny>mxy)mxy=ny;
+                    }
+                    if (cw > 0 && fabsf(cx) <= cw && fabsf(cy) <= cw && fabsf(cz) <= cw) inside++;
+                }
+                const f32* pm = (const f32*)g_state.mtx_array[g_state.current_mtx_id];
+                fprintf(stderr, "  CLIP frame=%u n=%u inside=%u wpos=%u ndc_x[%.2f,%.2f] ndc_y[%.2f,%.2f] mtxid=%u p1=%d pm_t=(%.1f,%.1f,%.1f) pm_r0=(%.2f,%.2f,%.2f) pm_r1=(%.2f,%.2f,%.2f) pm_r2=(%.2f,%.2f,%.2f)\n",
+                        (unsigned)g_state.frame_count, (unsigned)g_state.vert_count, inside, wpos,
+                        (double)mnx,(double)mxx,(double)mny,(double)mxy,
+                        (unsigned)g_state.current_mtx_id, (int)g_state.p1_valid,
+                        (double)pm[3],(double)pm[7],(double)pm[11],
+                        (double)pm[0],(double)pm[1],(double)pm[2],
+                        (double)pm[4],(double)pm[5],(double)pm[6],
+                        (double)pm[8],(double)pm[9],(double)pm[10]);
+            }
+        }
     } else {
         /* 2D overlay path: mvp = proj * mv (mv set by gx_set_* helpers) */
         f32 mv4[4][4];
@@ -2508,6 +2594,14 @@ static void bridge_upload_and_draw(void)
                     (double)p0,(double)p1_,(double)p2,
                     (double)(cw? cx/cw:0),(double)(cw? cy/cw:0),(double)(cw? cz/cw:0),(double)cw,
                     (int)g_state.p1_valid, (unsigned)g_state.current_mtx_id);
+            /* model-space bbox of this draw's vertices */
+            f32 mnx=1e30,mxx=-1e30,mny=1e30,mxy=-1e30,mnz=1e30,mxz=-1e30;
+            for (int vi=0; vi<g_state.vert_count; vi++) {
+                f32 vx=g_state.verts[vi].pos[0], vy=g_state.verts[vi].pos[1], vz=g_state.verts[vi].pos[2];
+                if(vx<mnx)mnx=vx; if(vx>mxx)mxx=vx; if(vy<mny)mny=vy; if(vy>mxy)mxy=vy; if(vz<mnz)mnz=vz; if(vz>mxz)mxz=vz;
+            }
+            fprintf(stderr, "  BBOX n=%d x[%.1f,%.1f] y[%.1f,%.1f] z[%.1f,%.1f]\n",
+                    g_state.vert_count,(double)mnx,(double)mxx,(double)mny,(double)mxy,(double)mnz,(double)mxz);
             }
         }
     }
@@ -2609,6 +2703,10 @@ static void bridge_upload_and_draw(void)
     case GX_POINTS:        gl_prim = GL_POINTS; break;
     default:               gl_prim = GL_TRIANGLES; break;
     }
+    /* PC test: MELEE_STAGE_POINTS forces 3D draws to render as points, to
+     * check if the vertices are on-screen (points appear) vs the triangles
+     * being clipped/degenerate. */
+    if (g_state.mtx3d_active && getenv("MELEE_STAGE_POINTS")) gl_prim = GL_POINTS;
     
     /* Quad conversion: GX_QUADS not available in Core profile, 
      * split into 2 triangles. Vertices 0,1,2 and 0,2,3 */
@@ -2853,7 +2951,7 @@ static void bridge_upload_and_draw(void)
         {
             static int _pp_on = -1, _pp_n = 0;
             if (_pp_on < 0) _pp_on = (getenv("MELEE_MTR") != NULL);
-            if (_pp_on && count >= 7 && count <= 400 && _pp_n < 40) {
+            if (_pp_on && count >= 7 && count <= 400 && _pp_n < 300) {
                 _pp_n++;
                 GLenum err = glGetError();
                 static unsigned char px[3];
@@ -3174,11 +3272,16 @@ void GXSetProjection(f32 mtx[4][4], u32 type)
 void GXSetVtxDesc(u32 attr, u32 type)
 {
     GX_TRACE("GXSetVtxDesc(%u, %u)", attr, type);
-    /* GXAttr enum values from stub header:
-     * POS=9, NRM=10, CLR0=11, TEX0=13, TEX1=14 */
     /* GXAttrType: NONE=0, DIRECT=1, INDEX8=2, INDEX16=3 */
     u8 mode = (u8)type;
-    switch (attr) {
+    u32 a = (attr == 25 /* GX_VA_NBT */) ? 10u : attr;
+    if (a <= 20) {
+        g_state.va_mode[a] = mode;
+        if (attr == 25 && type != 0 && g_state.va_cnt[10] == 0)
+            g_state.va_cnt[10] = 1; /* GX_NRM_NBT */
+    }
+    /* Legacy per-attribute fields (still used by the immediate-mode path). */
+    switch (a) {
     case 9:  g_state.pos_enabled = (type != 0); g_state.pos_fetch_indexed = (type == 2 || type == 3); g_state.pos_mode = mode; break;  /* GX_VA_POS */
     case 10: g_state.nrm_enabled = (type != 0); g_state.nrm_mode = mode; break;  /* GX_VA_NRM */
     case 11: g_state.clr_enabled = (type != 0); g_state.clr_mode = mode; break;  /* GX_VA_CLR0 */
@@ -3186,12 +3289,24 @@ void GXSetVtxDesc(u32 attr, u32 type)
     case 14: g_state.tex1_enabled = (type != 0); g_state.tex1_mode = mode; break; /* GX_VA_TEX1 */
     }
 }
-void GXClearVtxDesc(void) { g_state.pos_enabled = g_state.nrm_enabled = g_state.clr_enabled = g_state.tex0_enabled = g_state.tex1_enabled = FALSE; g_state.pos_fetch_indexed = FALSE; g_state.pos_mode = g_state.nrm_mode = g_state.clr_mode = g_state.tex0_mode = g_state.tex1_mode = 0; }
+void GXClearVtxDesc(void)
+{
+    memset(g_state.va_mode, 0, sizeof(g_state.va_mode));
+    g_state.pos_enabled = g_state.nrm_enabled = g_state.clr_enabled = g_state.tex0_enabled = g_state.tex1_enabled = FALSE;
+    g_state.pos_fetch_indexed = FALSE;
+    g_state.pos_mode = g_state.nrm_mode = g_state.clr_mode = g_state.tex0_mode = g_state.tex1_mode = 0;
+}
 
 void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 {
     /* Store format params for vertex data conversion. */
-    switch (attr) {
+    u32 a = (attr == 25 /* GX_VA_NBT */) ? 10u : attr;
+    if (a <= 20) {
+        g_state.va_cnt[a]  = (u8)((attr == 25 && cnt == 0) ? 1u : cnt);
+        g_state.va_type[a] = (u8)type;
+        g_state.va_frac[a] = frac;
+    }
+    switch (a) {
     case 9:  /* GX_VA_POS */
         g_state.pos_enabled = TRUE;
         g_state.pos_comp_cnt = (u8)cnt;
@@ -3204,13 +3319,17 @@ void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
         g_state.nrm_frac = frac;
         break;
     }
-    case 11: g_state.clr_enabled = TRUE; break;   /* GX_VA_CLR0 (always 4 x U8) */
+    case 11: g_state.clr_enabled = TRUE; break;   /* GX_VA_CLR0 */
     case 13: g_state.tex0_enabled = TRUE; g_state.tex0_comp_type = (u8)type; g_state.tex0_frac = frac; break;  /* GX_VA_TEX0 */
     case 14: g_state.tex1_enabled = TRUE; g_state.tex1_comp_type = (u8)type; g_state.tex1_frac = frac; break;  /* GX_VA_TEX1 */
     }
 }
 void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
 {
+    {
+        u32 a = (attr == 25 /* GX_VA_NBT */) ? 10u : attr;
+        if (a <= 20) { g_state.va_arr[a] = (const u8*)base_ptr; g_state.va_stride[a] = stride; }
+    }
     /* Sets base pointer and stride for a vertex attribute.
      * Used for indexed vertex buffer mode (display lists use this).
      * Store arrays so the display list parser can read vertex data. */
@@ -3800,6 +3919,7 @@ static const u8* dl_read_comps(const u8* p, u32 mode, u32 cnt, u32 type, u32 fra
 {
     const u8* src = p;
     u32 i, sz = dl_comp_size(type);
+    f32 div = (f32)(1u << (frac & 31));
 
     if (mode == 2 || mode == 3) {
         u32 idx;
@@ -3812,31 +3932,110 @@ static const u8* dl_read_comps(const u8* p, u32 mode, u32 cnt, u32 type, u32 fra
         src = arr_base + (u32)idx * arr_stride;
     }
 
+    /* Archive/DL data is big-endian. GX dequantization: integer types are
+     * divided by 2^frac (signed types sign-extended first). */
     for (i = 0; i < cnt; i++) {
-        u32 v = 0;
-        switch (sz) {
-        case 1:
-            v = src[i];
-            if (type == 1) v = (u32)(s8)src[i] & 0xFF;  /* sign-extend S8 */
-            break;
-        case 2:
-            v = ((u32)src[2*i] << 8) | src[2*i+1];
-            if (type == 3) v = (u32)(s16)(((u32)src[2*i] << 8) | src[2*i+1]) & 0xFFFF;
-            break;
-        default:
-            /* Archive data is big-endian; read the 32-bit pattern in BE
-             * order so it is the float's native bit pattern on LE hosts. */
-            v = ((u32)src[4*i] << 24) | ((u32)src[4*i+1] << 16) |
-                ((u32)src[4*i+2] << 8) | (u32)src[4*i+3];
+        f32 f;
+        switch (type) {
+        case 0: f = (f32)src[i] / div; break;                                   /* U8 */
+        case 1: f = (f32)(s8)src[i] / div; break;                               /* S8 */
+        case 2: f = (f32)(u16)(((u32)src[2*i] << 8) | src[2*i+1]) / div; break; /* U16 */
+        case 3: f = (f32)(s16)(((u32)src[2*i] << 8) | src[2*i+1]) / div; break; /* S16 */
+        default: {                                                              /* F32 */
+            u32 v = ((u32)src[4*i] << 24) | ((u32)src[4*i+1] << 16) |
+                    ((u32)src[4*i+2] << 8) | (u32)src[4*i+3];
+            memcpy(&f, &v, 4);
             break;
         }
-        out[i] = dl_dequant(type, (s32)v, frac);
+        }
+        out[i] = f;
     }
     if (mode == 2 || mode == 3)
-        return p;   /* PC fix: indexed reads advance the STREAM only by the
-                      * index size; the old `src + cnt*sz` returned a pointer
-                      * into the vertex pool and corrupted the walk. */
+        return p;   /* indexed reads advance the STREAM only by the index size */
     return src + cnt * sz;
+}
+
+/* Byte size of one color of the given GXCompType (RGB565, RGB8, RGBX8,
+ * RGBA4, RGBA6, RGBA8). */
+static u32 dl_color_size(u32 type)
+{
+    switch (type) {
+    case 0: return 2; case 1: return 3; case 2: return 4;
+    case 3: return 2; case 4: return 3; default: return 4;
+    }
+}
+
+/* Decode one color attribute (DIRECT or indexed) into RGBA8. */
+static const u8* dl_read_color(const u8* p, u32 mode, u32 type,
+                               const u8* arr_base, u32 arr_stride, u8* out)
+{
+    const u8* src = p;
+    u32 sz = dl_color_size(type);
+    out[0] = out[1] = out[2] = out[3] = 255;
+    if (mode == 2 || mode == 3) {
+        u32 idx;
+        if (mode == 2) { idx = p[0]; p += 1; }
+        else { idx = ((u32)p[0] << 8) | p[1]; p += 2; }
+        if (!arr_base) return p;
+        src = arr_base + (u32)idx * arr_stride;
+    } else {
+        p += sz;
+    }
+    switch (type) {
+    case 0: { /* RGB565 */
+        u32 v = ((u32)src[0] << 8) | src[1];
+        out[0] = (u8)((((v >> 11) & 31) * 255 + 15) / 31);
+        out[1] = (u8)((((v >> 5) & 63) * 255 + 31) / 63);
+        out[2] = (u8)(((v & 31) * 255 + 15) / 31);
+        break;
+    }
+    case 1: out[0] = src[0]; out[1] = src[1]; out[2] = src[2]; break;                 /* RGB8 */
+    case 2: out[0] = src[0]; out[1] = src[1]; out[2] = src[2]; break;                 /* RGBX8 */
+    case 3: { /* RGBA4 */
+        u32 v = ((u32)src[0] << 8) | src[1];
+        out[0] = (u8)(((v >> 12) & 15) * 17);
+        out[1] = (u8)(((v >> 8) & 15) * 17);
+        out[2] = (u8)(((v >> 4) & 15) * 17);
+        out[3] = (u8)((v & 15) * 17);
+        break;
+    }
+    case 4: { /* RGBA6 */
+        u32 v = ((u32)src[0] << 16) | ((u32)src[1] << 8) | src[2];
+        out[0] = (u8)((((v >> 18) & 63) * 255 + 31) / 63);
+        out[1] = (u8)((((v >> 12) & 63) * 255 + 31) / 63);
+        out[2] = (u8)((((v >> 6) & 63) * 255 + 31) / 63);
+        out[3] = (u8)(((v & 63) * 255 + 31) / 63);
+        break;
+    }
+    default: out[0] = src[0]; out[1] = src[1]; out[2] = src[2]; out[3] = src[3]; break; /* RGBA8 */
+    }
+    return p;
+}
+
+/* Bytes one vertex occupies in the DL stream for attribute `a` (GXAttr
+ * index into g_state.va_*). Hardware stream order is attribute order. */
+static u32 dl_attr_size(u32 a)
+{
+    u32 mode = g_state.va_mode[a];
+    if (mode == 0) return 0;
+    if (a <= 8) return 1;                       /* matrix index: always 1 byte direct */
+    if (mode == 2 || mode == 3) {
+        u32 isz = (mode == 2) ? 1u : 2u;
+        /* GX_NRM_NBT3 indexed carries three indices (N, B, T). */
+        if (a == 10 && g_state.va_cnt[10] == 2) return 3 * isz;
+        return isz;
+    }
+    if (a == 9)  return ((g_state.va_cnt[9] == 0) ? 2u : 3u) * dl_comp_size(g_state.va_type[9]);
+    if (a == 10) return ((g_state.va_cnt[10] == 0) ? 3u : 9u) * dl_comp_size(g_state.va_type[10]);
+    if (a == 11 || a == 12) return dl_color_size(g_state.va_type[a]);
+    return ((g_state.va_cnt[a] == 0) ? 1u : 2u) * dl_comp_size(g_state.va_type[a]);
+}
+
+static u32 dl_vertex_size(void)
+{
+    u32 a, n = 0;
+    for (a = 0; a <= 20; a++) n += dl_attr_size(a);
+    return n;
 }
 
 static u32 dl_vat_attr_size(u32 mode, u32 cnt, u32 type)
@@ -3888,14 +4087,9 @@ void GXCallDisplayList(void* list, u32 nbytes)
     }
 #endif
 
-    /* Per-vertex size from the current VAT (POS, NRM, CLR0, TEX0, TEX1). */
-    u32 pos_cnt = (g_state.pos_comp_cnt == 0) ? 2u : 3u;
-    u32 vsize = 0;
-    vsize += dl_vat_attr_size(g_state.pos_mode, pos_cnt, g_state.pos_comp_type);
-    vsize += dl_vat_attr_size(g_state.nrm_mode, 3u, g_state.nrm_comp_type);
-    vsize += (g_state.clr_mode == 1) ? 4u : dl_vat_attr_size(g_state.clr_mode, 4u, 0);
-    vsize += dl_vat_attr_size(g_state.tex0_mode, 2u, g_state.tex0_comp_type);
-    vsize += dl_vat_attr_size(g_state.tex1_mode, 2u, g_state.tex1_comp_type);
+    /* Per-vertex stream size from the full VAT/desc table (all attributes). */
+    u32 pos_cnt = (g_state.va_cnt[9] == 0) ? 2u : 3u;
+    u32 vsize = dl_vertex_size();
 
     {
         static int _wk_on = -1, _wk_n = 0;
@@ -4021,72 +4215,77 @@ void GXCallDisplayList(void* list, u32 nbytes)
                 }
 
                 const u8* p = vdata;
-                f32 c[4];
                 u16 v;
                 for (v = 0; v < nverts; v++) {
-                    c[0] = c[1] = c[2] = c[3] = 0.0f;
-                    /* PC port: per-vertex stream order (vsize=7), verified from
-                     * the DLRAW hex dump: [pos idx 2B][color 4B][tex 1B].
-                     * Read position, ADD vertex, then color (GXColor4u8
-                     * writes into the vertex just added), then texcoords. */
-                    f32 vclr[4];
-                    int have_clr = 0;
-                    if (g_state.pos_mode) {
-                        p = dl_read_comps(p, g_state.pos_mode, pos_cnt,
-                                          g_state.pos_comp_type, g_state.pos_frac,
-                                          (const u8*)g_state.arr_pos, g_state.arr_stride_pos, c);
-                        if (pos_cnt == 2) GXPosition2f32(c[0], c[1]);
-                        else              GXPosition3f32(c[0], c[1], c[2]);
-                    }
-                    if (g_state.clr_mode) {
-                        u32 i;
-                        if (g_state.clr_mode == 1) {
-                            for (i = 0; i < 4; i++) vclr[i] = (f32)p[i];
-                            p += 4;
+                    /* Decode every enabled attribute in hardware stream
+                     * order (PNMTXIDX, TEXnMTXIDX, POS, NRM, CLR0, CLR1,
+                     * TEX0..7), then emit: position adds the vertex, the
+                     * others write into the vertex just added. */
+                    f32 pos[3] = {0.0f, 0.0f, 0.0f};
+                    f32 nrm[9] = {0.0f, 0.0f, 1.0f, 0,0,0, 0,0,0};
+                    f32 t0[2] = {0.0f, 0.0f}, t1[2] = {0.0f, 0.0f}, tmp[2];
+                    u8 clr[4] = {255, 255, 255, 255}, ctmp[4];
+                    int have_pos = 0, have_nrm = 0, have_clr = 0, have_t0 = 0, have_t1 = 0;
+                    u32 a;
+                    for (a = 0; a <= 20; a++) {
+                        u32 mode = g_state.va_mode[a];
+                        if (mode == 0) continue;
+                        if (a <= 8) { p += 1; continue; }
+                        if (a == 9) {
+                            p = dl_read_comps(p, mode, pos_cnt, g_state.va_type[9], g_state.va_frac[9],
+                                              g_state.va_arr[9], g_state.va_stride[9], pos);
+                            have_pos = 1;
+                        } else if (a == 10) {
+                            u32 ncnt = g_state.va_cnt[10];
+                            if (ncnt == 2 && mode != 1) {
+                                /* NBT3 indexed: N, B, T indices; keep N */
+                                p = dl_read_comps(p, mode, 3, g_state.va_type[10], g_state.va_frac[10],
+                                                  g_state.va_arr[10], g_state.va_stride[10], nrm);
+                                p += 2 * ((mode == 2) ? 1u : 2u);
+                            } else {
+                                p = dl_read_comps(p, mode, (ncnt ? 9u : 3u), g_state.va_type[10], g_state.va_frac[10],
+                                                  g_state.va_arr[10], g_state.va_stride[10], nrm);
+                            }
+                            have_nrm = 1;
+                        } else if (a == 11 || a == 12) {
+                            p = dl_read_color(p, mode, g_state.va_type[a], g_state.va_arr[a], g_state.va_stride[a], ctmp);
+                            if (a == 11) { memcpy(clr, ctmp, 4); have_clr = 1; }
                         } else {
-                            u32 idx = (g_state.clr_mode == 2) ? p[0]
-                                       : ((u32)p[0] << 8) | p[1];
-                            p += (g_state.clr_mode == 2) ? 1 : 2;
-                            const u8* src = g_state.arr_clr
-                                ? (const u8*)g_state.arr_clr + (u32)idx * g_state.arr_stride_clr
-                                : NULL;
-                            for (i = 0; i < 4; i++) vclr[i] = (f32)(src ? src[i] : 255);
+                            u32 tc = (g_state.va_cnt[a] == 0) ? 1u : 2u;
+                            tmp[0] = tmp[1] = 0.0f;
+                            p = dl_read_comps(p, mode, tc, g_state.va_type[a], g_state.va_frac[a],
+                                              g_state.va_arr[a], g_state.va_stride[a], tmp);
+                            if (a == 13) { t0[0] = tmp[0]; t0[1] = tmp[1]; have_t0 = 1; }
+                            else if (a == 14) { t1[0] = tmp[0]; t1[1] = tmp[1]; have_t1 = 1; }
                         }
-                        have_clr = 1;
                     }
-                    if (have_clr) {
-                        GXColor4u8((u8)vclr[0], (u8)vclr[1], (u8)vclr[2], (u8)vclr[3]);
+                    if (have_pos) {
+                        if (pos_cnt == 2) GXPosition2f32(pos[0], pos[1]);
+                        else              GXPosition3f32(pos[0], pos[1], pos[2]);
                     }
-                    /* PC diag: dump first 3 verts' raw stream bytes */
+                    if (have_clr) GXColor4u8(clr[0], clr[1], clr[2], clr[3]);
+                    if (have_nrm) GXNormal3f32(nrm[0], nrm[1], nrm[2]);
+                    if (have_t0)  GXTexCoord2f32(t0[0], t0[1]);
+                    if (have_t1) {
+                        g_state.last_tex1[0] = t1[0]; g_state.last_tex1[1] = t1[1];
+                        if (g_state.vert_count > 0) {
+                            g_state.verts[g_state.vert_count-1].tex1[0] = t1[0];
+                            g_state.verts[g_state.vert_count-1].tex1[1] = t1[1];
+                        }
+                    }
+                    /* PC diag: dump first 3 verts (MELEE_MTR) */
                     {
                         static int _vv_on = -1;
                         if (_vv_on < 0) _vv_on = (getenv("MELEE_MTR") != NULL);
                         if (_vv_on && v < 3) {
                             static int _vv_n = 0;
-                            if (_vv_n++ < 60) fprintf(stderr, "  V%u pos=(%.2f,%.2f,%.2f) clr=(%.3f,%.3f,%.3f,%.3f)\n",
-                                v, (double)c[0], (double)c[1], (double)c[2],
-                                (double)vclr[0], (double)vclr[1], (double)vclr[2], (double)vclr[3]);
+                            if (_vv_n++ < 60) fprintf(stderr, "  V%u pos=(%.2f,%.2f,%.2f) clr=(%u,%u,%u,%u)\n",
+                                v, (double)pos[0], (double)pos[1], (double)pos[2],
+                                clr[0], clr[1], clr[2], clr[3]);
                         }
                     }
-                    if (g_state.nrm_mode) {
-                        p = dl_read_comps(p, g_state.nrm_mode, 3,
-                                          g_state.nrm_comp_type, g_state.nrm_frac,
-                                          (const u8*)g_state.arr_nrm, g_state.arr_stride_nrm, c);
-                        GXNormal3f32(c[0], c[1], c[2]);
-                    }
-                    if (g_state.tex0_mode) {
-                        p = dl_read_comps(p, g_state.tex0_mode, 2,
-                                          g_state.tex0_comp_type, g_state.tex0_frac,
-                                          (const u8*)g_state.arr_tex0, g_state.arr_stride_tex0, c);
-                        GXTexCoord2f32(c[0], c[1]);
-                    }
-                    if (g_state.tex1_mode) {
-                        p = dl_read_comps(p, g_state.tex1_mode, 2,
-                                          g_state.tex1_comp_type, g_state.tex1_frac,
-                                          (const u8*)g_state.arr_tex1, g_state.arr_stride_tex1, c);
-                        GXTexCoord2f32(c[0], c[1]);
-                    }
                 }
+
                 /* PC diag: for the main-text DL (nbytes==3328), log each strip's
                  * world position (model matrix translation) + resolved vertex
                  * positions (model space) to see where the letters actually land. */
@@ -4207,10 +4406,14 @@ void GXSetFog(u32 type, f32 startz, f32 endz, f32 nearz, f32 farz, GXColor color
 static void apply_alpha_compare_uniforms(void)
 {
     if (!g_shader_program) return;
-    
+    /* PC test: MELEE_STAGE_NOALPHA forces the alpha test to ALWAYS (pass),
+     * to check if the floor is being discarded by the alpha test. */
+    int pc_noalpha = (getenv("MELEE_STAGE_NOALPHA") != NULL);
+
     if (g_alpha_cmp_func_loc >= 0) {
         u32 gl_func = 0; /* 0 = NEVER (disabled) */
-        switch (g_state.alpha_compare_func) {
+        if (pc_noalpha) gl_func = 7;
+        else switch (g_state.alpha_compare_func) {
         case 0: gl_func = 0;  break; /* NEVER */
         case 1: gl_func = 1;  break; /* LESS */
         case 2: gl_func = 2;  break; /* EQUAL */
@@ -5078,6 +5281,14 @@ void GXSetLightColors(f32 amb_r, f32 amb_g, f32 amb_b,
 
 void GXSetZTexture(int op, u32 fmt, u32 bias)
 {
+    /* Flush any geometry still pending under the current Z-texture mode
+     * before changing it. HSD_EraseRect's erase quad is not always flushed
+     * by its GXEnd (it can batch with the prior primitive), so without this
+     * the quad would be drawn under the next mode (REPLACE->DISABLE),
+     * losing the constant-far depth write the erase depends on. */
+    if (g_state.vert_count > 0) {
+        bridge_upload_and_draw();
+    }
     g_state.ztex_op = op;
     g_state.ztex_fmt = fmt;
     g_state.ztex_bias = bias;

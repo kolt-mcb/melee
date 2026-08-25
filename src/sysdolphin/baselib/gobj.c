@@ -296,6 +296,17 @@ void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
     if (cobj != NULL) {
         memcpy(vmtx, HSD_CObjGetViewingMtxPtr(cobj), sizeof(Mtx));
     }
+#if defined(BUILD_TARGET_PC)
+    if (getenv("MELEE_STAGE_DIAG")) {
+        static int _jcb = 0;
+        if (_jcb < 6) {
+            fprintf(stderr, "[JCB] cobj=%p vmtx[2][3]=%.1f vmtx[0]=%.3f,%.3f,%.3f,%.1f\n",
+                    (void*)cobj, (double)vmtx[2][3],
+                    (double)vmtx[0][0], (double)vmtx[0][1], (double)vmtx[0][2], (double)vmtx[0][3]);
+            _jcb++;
+        }
+    }
+#endif
     HSD_JObjDispAll(jobj, vmtx, HSD_GObj_80390EB8(arg1), 0);
 #else
     HSD_JObjDispAll(jobj, NULL, HSD_GObj_80390EB8(arg1), 0);

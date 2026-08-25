@@ -18,7 +18,7 @@
  * (C_VEC*, C_MTX* in vec.c/mtx.c/mtxvec.c). They are strong definitions that
  * override the empty weak stubs in undef_stubs.c. Only the functions that were
  * empty stubs are implemented here; PSMTXConcat / PSMTXCopy / PSMTXIdentity
- * already have real implementations in undef_stubs.c and are left alone.
+ * have real implementations in undef_stubs.c (note: PSMTXCopy is (src, dst)).
  */
 #include <dolphin/mtx.h>
 #include <math.h>

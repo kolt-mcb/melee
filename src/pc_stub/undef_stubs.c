@@ -1359,7 +1359,12 @@ __attribute__((weak)) void PSMTXConcat(Mtx mA, Mtx mB, Mtx mAB)
         for (int j = 0; j < 4; j++)
             mAB[i][j] = tmp[i][j];
 }
-__attribute__((weak)) void PSMTXCopy(Mtx mDst, Mtx mSrc)
+/* SDK signature is PSMTXCopy(src, dst) — see dolphin/mtx.h. This stub used
+ * to be declared (dst, src) and therefore copied the WRONG WAY, e.g.
+ * HSD_CObjGetViewingMtx() copied the caller's uninitialized output buffer
+ * into the camera's view_mtx, and HSD_JObjCopyMtx() never updated
+ * jobj->mtx. */
+__attribute__((weak)) void PSMTXCopy(Mtx mSrc, Mtx mDst)
 {
     memcpy(mDst, mSrc, sizeof(Mtx));
 }

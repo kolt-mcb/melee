@@ -43,6 +43,32 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
                  sig, info->si_addr, 
                  (void*)uc->uc_mcontext.gregs[REG_RIP]);
     write(2, buf, n);
+    /* Raw stack dump first: backtrace() below can itself fault (it lazily
+     * dlopens libgcc_s / mallocs, which dies on a corrupted heap). Dumping
+     * words from RSP only reads mapped stack memory and cannot fault; map
+     * the values that fall in the (non-PIE) text segment with nm/addr2line.
+     * Also print RBP-chain frames when frame pointers are present. */
+    {
+        unsigned long rsp = (unsigned long)uc->uc_mcontext.gregs[REG_RSP];
+        unsigned long rbp = (unsigned long)uc->uc_mcontext.gregs[REG_RBP];
+        n = snprintf(buf, sizeof(buf), "[CRASH] rsp=%#lx rbp=%#lx\n", rsp, rbp);
+        write(2, buf, n);
+        unsigned long* sp = (unsigned long*)(rsp & ~7UL);
+        for (int i = 0; i < 512; i++) {
+            unsigned long v = sp[i];
+            if (v >= 0x400000UL && v < 0x800000UL) {
+                n = snprintf(buf, sizeof(buf), "[CRASH] stack[%d]=%#lx\n", i, v);
+                write(2, buf, n);
+            }
+        }
+        unsigned long* fp = (unsigned long*)rbp;
+        for (int i = 0; i < 40 && fp && ((unsigned long)fp > rsp) &&
+                        ((unsigned long)fp - rsp) < (1UL << 24); i++) {
+            n = snprintf(buf, sizeof(buf), "[CRASH] fp#%d ret=%#lx\n", i, fp[1]);
+            write(2, buf, n);
+            fp = (unsigned long*)fp[0];
+        }
+    }
     /* Print a backtrace so we can pinpoint the faulting call site. */
     void* frames[64];
     int cnt = backtrace(frames, 64);
@@ -62,6 +88,15 @@ static void install_crash_handler(void)
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = crash_handler;
     sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    /* Alternate signal stack so the handler survives a stack overflow. */
+    {
+        static char altstack[1 << 16];
+        stack_t ss;
+        ss.ss_sp = altstack;
+        ss.ss_size = sizeof(altstack);
+        ss.ss_flags = 0;
+        sigaltstack(&ss, NULL);
+    }
     sigemptyset(&sa.sa_mask);
     sigaction(SIGSEGV, &sa, NULL);
     sigaction(SIGABRT, &sa, NULL);

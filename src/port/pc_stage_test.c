@@ -212,7 +212,7 @@ void pc_render_stage_test(void)
                 (double)vm[0][0],(double)vm[0][1],(double)vm[0][2],(double)vm[0][3],
                 (double)vm[1][0],(double)vm[1][1],(double)vm[1][2],(double)vm[1][3],
                 (double)vm[2][0],(double)vm[2][1],(double)vm[2][2],(double)vm[2][3]); }
-        HSD_SetEraseColor(255, 0, 0, 255);
+        HSD_SetEraseColor(40, 40, 120, 255);
         HSD_CObjEraseScreen(s_cam, 1, 0, 1);
         {
             static int s_vp_on = -1, s_vp_n = 0;
@@ -233,6 +233,20 @@ void pc_render_stage_test(void)
             if (s_nofloor) {
                 if (stage_diag()) fprintf(stderr, "[STAGE] NOFLOOR: skipping floor render\n");
             } else {
+                /* PC port: by default render the floor with the stage's
+                 * real in-game camera (s_cam = FD's eye (-13,39,435) fov27),
+                 * forced via pc_force_cam so the stage GObjs' own close-up
+                 * cameras don't override it mid-render. Set MELEE_STAGE_TOPDOWN
+                 * to instead reposition s_cam to a top-down debug view. */
+                if (getenv("MELEE_STAGE_TOPDOWN")) {
+                    Vec3 fe; fe.x = 0.0f; fe.y = 150.0f; fe.z = 0.0f; HSD_CObjSetEyePosition(s_cam, &fe);
+                    Vec3 fi; fi.x = 0.0f; fi.y = 0.0f; fi.z = 0.0f; HSD_CObjSetInterest(s_cam, &fi);
+                    Vec3 fu; fu.x = 0.0f; fu.y = 0.0f; fu.z = 1.0f; HSD_CObjSetUpVector(s_cam, &fu);
+                    HSD_CObjSetFov(s_cam, 90.0f);
+                    HSD_CObjSetMtxDirty(s_cam);
+                    HSD_CObjGetViewingMtxPtr(s_cam); /* recompute view now */
+                }
+                HSD_CObjPCSetForceCam(s_cam);
                 HSD_GObj_JObjCallback(s_floor_gobj, 0);
             }
         }

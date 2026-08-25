@@ -27,6 +27,38 @@
 
 static HSD_ClassInfo* default_class;
 static HSD_CObj* current;
+/* PC port: when set (by the stage test harness), HSD_CObjGetCurrent returns
+ * this camera instead of `current`. The stage's GObjs re-set `current` to
+ * their own (close-up) cameras during the floor's render, overriding the
+ * far camera the harness wants. Forcing lets the floor render with the far
+ * camera so the whole stage is visible. */
+static HSD_CObj* pc_force_cam = NULL;
+
+void HSD_CObjPCSetForceCam(HSD_CObj* cobj) {
+    pc_force_cam = cobj;
+#if defined(BUILD_TARGET_PC)
+    if (getenv("MELEE_STAGE_DIAG")) {
+        fprintf(stderr, "[FORCECAM] set pc_force_cam=%p\n", (void*)cobj);
+    }
+#endif
+}
+
+/* PC port: return the force camera's computed view matrix (or NULL if no
+ * force cam is set). Used by HSD_CObjGetViewingMtxPtrDirect so that the
+ * stage test harness camera overrides the per-object CObj view matrix. */
+MtxPtr HSD_CObjPCGetForceViewMtx(void) {
+#if defined(BUILD_TARGET_PC)
+    if (pc_force_cam != NULL) {
+        /* Return the stored (already-computed) view matrix directly. Do NOT
+         * call HSD_CObjGetViewingMtxPtr here: it calls back into
+         * HSD_CObjGetViewingMtxPtrDirect (the inline that calls us), which
+         * would recurse infinitely. The harness computes s_cam's view matrix
+         * before the render, so the stored matrix is valid. */
+        return pc_force_cam->view_mtx;
+    }
+#endif
+    return NULL;
+}
 
 #define DegToRad(a) ((a) * 0.01745329252F)
 
@@ -532,6 +564,15 @@ bool HSD_CObjSetCurrent(HSD_CObj* cobj)
     render_pass = HSD_GetCurrentRenderPass();
     _HSD_ZListClear();
     current = cobj;
+#if defined(BUILD_TARGET_PC)
+    if (getenv("MELEE_STAGE_DIAG")) {
+        static int _sc = 0;
+        if (_sc < 30) {
+            fprintf(stderr, "[SETCUR] #%d current=%p\n", _sc, (void*)cobj);
+            _sc++;
+        }
+    }
+#endif
     switch (render_pass) {
     case HSD_RP_OFFSCREEN:
         result = setupOffscreenCamera(cobj);
@@ -1282,6 +1323,13 @@ void HSD_CObjClearFlags(HSD_CObj* cobj, u32 flags)
 
 HSD_CObj* HSD_CObjGetCurrent(void)
 {
+#if defined(BUILD_TARGET_PC)
+    if (pc_force_cam != NULL) {
+        static int _fg = 0;
+        if (getenv("MELEE_STAGE_DIAG") && _fg < 4) { fprintf(stderr, "[GETCUR] forcing pc_force_cam=%p\n", (void*)pc_force_cam); _fg++; }
+        return pc_force_cam;
+    }
+#endif
     return current;
 }
 
