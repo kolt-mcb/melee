@@ -1517,12 +1517,13 @@ void ftData_8008572C(FighterKind kind)
          * ftData_80085A14's xC[] walk, which does a wild read AND a wild
          * write over 303 iterations.
          *
-         * Until a real BE->x64 ftData converter exists, keep the slot NULL so
-         * Fighter_Create's zeroed-arena fallback stays engaged. The archive
-         * load above is kept: it warms the DVD cache and is where the
-         * converter will hook in. MELEE_FTDATA=1 opts into the raw pointer
-         * for conversion work. */
-        if (getenv("MELEE_FTDATA") == NULL) {
+         * The converter below now handles this; the zeroed-arena fallback in
+         * Fighter_Create remains as the MELEE_NO_FTDATA=1 escape hatch. */
+        /* PC port: the converter and the guards behind it now carry a whole
+         * match -- 900 frames at a steady draw count, fighters lit, posed and
+         * animating -- so the real data is the default and the zeroed-arena
+         * fallback is the opt-out. MELEE_NO_FTDATA=1 restores it. */
+        if (getenv("MELEE_NO_FTDATA") != NULL) {
             gFtDataList[kind] = NULL;
         } else {
             /* Convert the raw big-endian ftData into a real x86_64 one.
