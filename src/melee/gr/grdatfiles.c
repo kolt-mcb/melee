@@ -2112,6 +2112,48 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
                 HSD_ArchiveGetPublicAddress(sp14, "coll_data");
             stage_info.param =
                 HSD_ArchiveGetPublicAddress(sp14, "grGroundParam");
+#if BUILD_TARGET_PC
+            /* PC port: grGroundParam is raw big-endian. Everything below
+             * offset 0xB0 is scalar (no pointers), so GCN and x86_64 layouts
+             * match and conversion is a field-wise byteswap. This block feeds
+             * the match camera its bounds and zoom limits, the blast zones,
+             * and gravity — leaving it unswapped is why the camera sat inside
+             * the stage. Fields at 0xB0+ (stage_params pointer and the
+             * GXColors) are left alone: Ground_801C28CC already handles the
+             * pointer, and the colours are byte arrays. */
+            if (stage_info.param != NULL) {
+                u8* gp = (u8*) stage_info.param;
+                static const u16 f32_off[] = {
+                    0x00, 0x18, 0x1C, 0x20, 0x24, 0x28,
+                    0x3C, 0x40, 0x44, 0x48,
+                    0x50, 0x54, 0x58, 0x5C, 0x60, 0x64
+                };
+                static const u16 s32_off[] = { 0x0C, 0x10, 0x14, 0x30, 0x34, 0x38 };
+                static const u16 s16_off[] = { 0x04, 0x08, 0x0A, 0x2E, 0x68 };
+                unsigned k;
+                for (k = 0; k < sizeof(f32_off) / sizeof(f32_off[0]); k++) {
+                    u32* v = (u32*) (gp + f32_off[k]);
+                    *v = be32_swap(*v);
+                }
+                for (k = 0; k < sizeof(s32_off) / sizeof(s32_off[0]); k++) {
+                    u32* v = (u32*) (gp + s32_off[k]);
+                    *v = be32_swap(*v);
+                }
+                for (k = 0; k < sizeof(s16_off) / sizeof(s16_off[0]); k++) {
+                    u16* v = (u16*) (gp + s16_off[k]);
+                    *v = be16_swap(*v);
+                }
+                if (getenv("MELEE_GRDAT_TRACE")) {
+                    GroundParam* q = stage_info.param;
+                    fprintf(stderr,
+                            "[GRDAT] GroundParam: x0=%.2f fixed_cam=%d "
+                            "x50=%.1f x54=%.1f x58=%.1f x5C=%.1f x60=%.1f\n",
+                            (double) q->x0, (int) q->x4C_fixed_cam,
+                            (double) q->x50, (double) q->x54, (double) q->x58,
+                            (double) q->x5C, (double) q->x60);
+                }
+            }
+#endif
             stage_info.itemdata =
                 HSD_ArchiveGetPublicAddress(sp14, "itemdata");
             stage_info.ald_yaku_all =

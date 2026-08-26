@@ -2015,6 +2015,12 @@ void fn_800267B0(void)
     if (lbl_804D6450 == 0) {
         return;
     }
+#if BUILD_TARGET_PC
+    /* PC port: audio is not implemented (roadmap M5). The SFX bank tables
+     * this walks are never populated, so the indices below run wild. Newly
+     * reachable now that the stage parameter setup runs. */
+    return;
+#endif
 
     for (i = 0; i < 5; i++) {
         for (j = 0; lbl_804D6438 < lbl_804D6448 + lbl_804D6450 && j < 0x37;

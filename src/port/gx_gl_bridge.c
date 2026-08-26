@@ -23,6 +23,7 @@
 #include "pc_ptr.h"
 #endif
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include <GL/glcorearb.h>
@@ -573,7 +574,13 @@ typedef struct {
     u32 g_current_tlut;   /* Currently active TLUT index (from GXLoadTlut) */
     
     /* I4/I8 palette conversion buffer (reused for all uploads) */
-    u8 g_palette_convert_buf[256 * 256 * 4];  /* Max I8 texture = 256x256 = 65536 pixels */
+    /* PC port: allocated with a PROT_NONE guard page after it so any
+     * overflow faults at the offending instruction instead of silently
+     * corrupting the light/channel state that follows in this struct. */
+    u8* g_palette_convert_buf;
+    /* PC diag: canaries bracketing the region that has been observed holding
+     * impossible light/ambient values, to locate the overflow that writes it. */
+    u32 canary_after_palette[64];
     
     /* Accumulators for current vertex data */
     f32 last_pos[3];
@@ -584,12 +591,18 @@ typedef struct {
     u8 last_mtx_idx;            /* Last matrix index (GXMatrixIndex1u8) */
     
     /* Light storage: up to 8 lights (GX_LIGHT0-7) */
+    u32 canary_before_lights[4];
     LightSlot g_lights[8];
+    u32 canary_after_lights[4];
     u32 g_active_light_count;
     f32 ambient_color[3];       /* Ambient light color (from GXSetLightColors) */
     f32 model_matrix[16];       /* Model matrix for world-space transforms */
     Bool model_matrix_valid;    /* Whether model matrix is set */
     
+    /* Per-channel ambient colours (GXSetChanAmbColor), separate from the
+     * material colours above. */
+    GXColor chan_amb_colors[3];
+
     /* Channel control state (GXSetChanCtrl) */
     Bool chan_enabled[8];       /* Per-channel enable (GX_COLOR0, GX_COLOR1, ...) */
     u32 chan_color_source[8];   /* GX_SRC_REG = material color, GX_SRC_VTX = vertex color */
@@ -724,7 +737,9 @@ typedef struct {
     u8   point_size;
 } BridgeState;
 
+#define PC_PALETTE_BUF_SIZE (256u * 256u * 4u)
 static BridgeState g_state;
+static void pc_check_canaries(const char* where);
 
 /* Debug: track unclamped vertex position range across display list parsing */
 static f32 g_dbg_xmin = 1e10f, g_dbg_ymin = 1e10f, g_dbg_zmin = 1e10f;
@@ -1911,6 +1926,25 @@ void gx_bridge_init(void)
     g_state.dither_enabled = TRUE;  /* Dithering enabled by default */
     
     /* Initialize light slots (all disabled) */
+    if (g_state.g_palette_convert_buf == NULL) {
+        size_t pg = 4096;
+        size_t body = (PC_PALETTE_BUF_SIZE + pg - 1) & ~(pg - 1);
+        u8* base = mmap(NULL, body + pg, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (base != MAP_FAILED) {
+            mprotect(base + body, pg, PROT_NONE); /* guard page */
+            g_state.g_palette_convert_buf = base;
+            fprintf(stderr, "[MEM] palette buf %p + guard page at %p\n",
+                    (void*) base, (void*) (base + body));
+        }
+    }
+    for (int ci = 0; ci < 64; ci++) {
+        g_state.canary_after_palette[ci] = 0xC0FFEE00u + ci;
+    }
+    for (int ci = 0; ci < 4; ci++) {
+        g_state.canary_before_lights[ci] = 0xC0FFEE10u + ci;
+        g_state.canary_after_lights[ci] = 0xC0FFEE20u + ci;
+    }
     g_state.g_active_light_count = 0;
     g_state.ambient_color[0] = 0.1f;
     g_state.ambient_color[1] = 0.1f;
@@ -2002,8 +2036,63 @@ static void apply_alpha_compare_uniforms(void);
 static void apply_tev_uniforms(void);
 void GXColor4u8(u8 r, u8 g, u8 b, u8 a); /* forward decl for display list parser */
 
+/* PC diag: report the first canary that gets clobbered, once. */
+static void pc_check_canaries(const char* where)
+{
+    static int reported = 0;
+    static int first = 1;
+    int ci;
+    if (reported) {
+        return;
+    }
+    if (first) {
+        first = 0;
+        fprintf(stderr, "[CANARY] init check: pal=%08x before=%08x after=%08x\n",
+                g_state.canary_after_palette[0], g_state.canary_before_lights[0],
+                g_state.canary_after_lights[0]);
+    }
+    {
+        int first_bad = -1, last_bad = -1, nbad = 0;
+        for (ci = 0; ci < 64; ci++) {
+            if (g_state.canary_after_palette[ci] != 0xC0FFEE00u + (u32) ci) {
+                if (first_bad < 0) first_bad = ci;
+                last_bad = ci;
+                nbad++;
+            }
+        }
+        if (nbad) {
+            reported = 1;
+            fprintf(stderr,
+                    "[CANARY] after_palette clobbered at %s: %d/64 words, range [%d..%d], "
+                    "vals %08x %08x %08x\n",
+                    where, nbad, first_bad, last_bad,
+                    g_state.canary_after_palette[first_bad],
+                    g_state.canary_after_palette[first_bad + 1 < 64 ? first_bad + 1 : first_bad],
+                    g_state.canary_after_palette[last_bad]);
+            return;
+        }
+    }
+    for (ci = 0; ci < 4; ci++) {
+        if (g_state.canary_before_lights[ci] != 0xC0FFEE10u + (u32) ci) {
+            reported = 1;
+            fprintf(stderr, "[CANARY] before_lights[%d] clobbered at %s (=0x%08x)\n",
+                    ci, where, g_state.canary_before_lights[ci]);
+            return;
+        }
+        if (g_state.canary_after_lights[ci] != 0xC0FFEE20u + (u32) ci) {
+            reported = 1;
+            fprintf(stderr, "[CANARY] after_lights[%d] clobbered at %s (=0x%08x)\n",
+                    ci, where, g_state.canary_after_lights[ci]);
+            return;
+        }
+    }
+}
+
 void gx_frame_end(void)
 {
+    if (getenv("MELEE_CANARY")) {
+        pc_check_canaries("frame_end");
+    }
     { static int _dd=-1; if(_dd<0)_dd=(getenv("MELEE_STAGE_DIAG")!=NULL);
       if(_dd && g_state.frame_count>=8 && g_state.frame_count<=22)
         fprintf(stderr, "[PCDRAWS] frame=%u draws=%u\n", (unsigned)g_state.frame_count, (unsigned)s_pc_draws); }
@@ -2360,6 +2449,7 @@ static void pc_frame_trace(const char* what)
 
 static void bridge_upload_and_draw(void)
 {
+    if (getenv("MELEE_CANARY")) pc_check_canaries("upload_and_draw");
     /* Clear any lingering GL errors from previous calls */
     glGetError();
     
@@ -5146,17 +5236,42 @@ void GXSetNumChans(u32 n)
     g_state.num_chans = n;
     PORT_LOG_DEBUG("GXSetNumChans: n=%u", n);
 }
+/* PC port: GX channel ids are NOT a bitmask.
+ *   GX_COLOR0=0, GX_COLOR1=1, GX_ALPHA0=2, GX_ALPHA1=3,
+ *   GX_COLOR0A0=4, GX_COLOR1A1=5
+ * The old `chan & 1` mapping sent GX_ALPHA0 (2) and GX_COLOR0A0 (4) to the
+ * same slot, so an alpha-channel write (rgb=0, a=255) clobbered the real
+ * material colour and every lit surface rendered black. Decode properly:
+ * which slot, and whether colour and/or alpha applies. */
+static void pc_chan_slot(u32 chan, int* slot, int* do_rgb, int* do_a)
+{
+    switch (chan) {
+    case 0: *slot = 0; *do_rgb = 1; *do_a = 0; break; /* GX_COLOR0   */
+    case 1: *slot = 1; *do_rgb = 1; *do_a = 0; break; /* GX_COLOR1   */
+    case 2: *slot = 0; *do_rgb = 0; *do_a = 1; break; /* GX_ALPHA0   */
+    case 3: *slot = 1; *do_rgb = 0; *do_a = 1; break; /* GX_ALPHA1   */
+    case 4: *slot = 0; *do_rgb = 1; *do_a = 1; break; /* GX_COLOR0A0 */
+    case 5: *slot = 1; *do_rgb = 1; *do_a = 1; break; /* GX_COLOR1A1 */
+    default: *slot = 0; *do_rgb = 1; *do_a = 1; break;
+    }
+}
+
 void GXSetChanAmbColor(u32 chan, GXColor amb_color)
 {
     GX_TRACE("GXSetChanAmbColor(%u, {%u,%u,%u,%u})", chan, (u32)amb_color.r, (u32)amb_color.g, (u32)amb_color.b, (u32)amb_color.a);
     /* Set ambient color for a channel (used by TEV as C0, C1, C2) */
     /* GX_COLOR0=0, GX_COLOR1=1, GX_COLOR0A0=2, GX_COLOR1A1=3 */
-    u32 idx = chan & 1;  /* 0=C0, 1=C1 */
-    if (idx < 3) {
-        g_state.chan_colors[idx].r = amb_color.r;
-        g_state.chan_colors[idx].g = amb_color.g;
-        g_state.chan_colors[idx].b = amb_color.b;
-        g_state.chan_colors[idx].a = amb_color.a;
+    {
+        int slot, do_rgb, do_a;
+        pc_chan_slot(chan, &slot, &do_rgb, &do_a);
+        if (do_rgb) {
+            g_state.chan_amb_colors[slot].r = amb_color.r;
+            g_state.chan_amb_colors[slot].g = amb_color.g;
+            g_state.chan_amb_colors[slot].b = amb_color.b;
+        }
+        if (do_a) {
+            g_state.chan_amb_colors[slot].a = amb_color.a;
+        }
     }
 }
 
@@ -5166,14 +5281,20 @@ void GXSetChanMatColor(u32 chan, GXColor mat_color)
     { static int _n=0; if (getenv("MELEE_CHAN") && g_state.frame_count>=8 && _n<40) { _n++;
         fprintf(stderr, "  SETMAT chan=%u col=(%u,%u,%u,%u) f=%u\n", chan,
                 mat_color.r, mat_color.g, mat_color.b, mat_color.a, (unsigned)g_state.frame_count); } }
-    /* Set material color for a channel (used by TEV as C0, C1, C2) */
-    /* GX_COLOR0=0, GX_COLOR1=1, GX_COLOR0A0=2, GX_COLOR1A1=3 */
-    u32 idx = chan & 1;  /* 0=C0, 1=C1 */
-    if (idx < 3) {
-        g_state.chan_colors[idx].r = mat_color.r;
-        g_state.chan_colors[idx].g = mat_color.g;
-        g_state.chan_colors[idx].b = mat_color.b;
-        g_state.chan_colors[idx].a = mat_color.a;
+    /* Material colour per channel. See pc_chan_slot: GX channel ids are not
+     * a bitmask, and the old `chan & 1` let a GX_ALPHA0 write zero the
+     * colour. */
+    {
+        int slot, do_rgb, do_a;
+        pc_chan_slot(chan, &slot, &do_rgb, &do_a);
+        if (do_rgb) {
+            g_state.chan_colors[slot].r = mat_color.r;
+            g_state.chan_colors[slot].g = mat_color.g;
+            g_state.chan_colors[slot].b = mat_color.b;
+        }
+        if (do_a) {
+            g_state.chan_colors[slot].a = mat_color.a;
+        }
     }
 }
 void GXSetTevDirect(u32 stage) { (void)stage; }
@@ -6729,6 +6850,7 @@ static void decode_i4_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, T
 void GXLoadTexObj(void* texObj, u32 texEnv)
 {
     GX_TRACE("GXLoadTexObj(p, %u)", texEnv);
+    if (getenv("MELEE_CANARY")) pc_check_canaries("GXLoadTexObj:enter");
     if (!g_state.current_tex.valid) return;
     
     u16 w = g_state.current_tex.width;
@@ -6876,7 +6998,8 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         if (tlut->valid && tlut->entry_count > 0) {
             u32 pixel_count = (u32)w * (u32)h;
             u32 needed = pixel_count * 4;  /* RGBA8 = 4 bytes per pixel */
-            if (needed > sizeof(g_state.g_palette_convert_buf)) {
+            if (needed > PC_PALETTE_BUF_SIZE ||
+                g_state.g_palette_convert_buf == NULL) {
                 tmp_buf = malloc(needed);
                 if (!tmp_buf) goto skip_tlut;
             } else {
@@ -6986,6 +7109,7 @@ bind_tex:
     g_state.tex_upload_count++;
     g_state.tex_formats_seen[fmt & 0x0F]++;
     
+    if (getenv("MELEE_CANARY")) pc_check_canaries("GXLoadTexObj:exit");
     /* Activate texture unit and track for shader */
     u32 gl_unit = texEnv % 2;  /* Clamp to 0-1 (shader only has 2 units) */
     glActiveTexture(GL_TEXTURE0 + gl_unit);
@@ -7096,6 +7220,24 @@ void GXInitTlutObj(void* tlutObj, const void* tlut_data, u32 tlut_fmt, u32 tlut_
 {
     GX_TRACE("GXInitTlutObj(p, p, %u, %u)", tlut_fmt, tlut_count);
     if (!tlut_data || tlut_count == 0) return;
+    /* PC port: TLUTSlot::rgba is [256][4], but GX palettes can declare more
+     * (C14X2 allows up to 16384 entries) and an unconverted descriptor can
+     * supply garbage. The fill loop below indexes rgba[i] for i < tlut_count,
+     * so an oversized count wrote straight through the remaining TLUT slots,
+     * the whole 256KB palette decode buffer, the vertex accumulators and the
+     * light/channel state that follows them in this struct — which is what
+     * turned every material colour black and filled the light count and
+     * ambient colour with garbage. ASan cannot see it because it is all one
+     * global object. Clamp to what the slot can hold. */
+    if (tlut_count > 256) {
+        static int warned = 0;
+        if (warned < 4) {
+            warned++;
+            PORT_LOG_WARN("TLUT: count %u exceeds 256-entry slot; clamping",
+                          (unsigned) tlut_count);
+        }
+        tlut_count = 256;
+    }
 #if BUILD_TARGET_PC
     { static int _ti_on = -1, _ti_n = 0;
       if (_ti_on < 0) _ti_on = (getenv("MELEE_MTR") != NULL);

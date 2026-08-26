@@ -526,9 +526,17 @@ void Ground_801C0800(StageIdPair* pair)
         } else {
             PORT_LOG_WARN("Ground_801C0800: skipping invalid on_init (stage_data=%p)\n",
                           (void*)stage_data);
+            return;
         }
     }
-    return;
+    /* PC port: grGroundParam is byte-swapped at load now (grdatfiles.c), so
+     * the parameter setup below is finally safe to run — it is what gives the
+     * match camera its bounds and zoom limits and the stage its gravity and
+     * blast zones. This function used to `return` here, leaving all of that
+     * dead and the camera on defaults, sitting inside the stage. */
+    if (stage_info.param == NULL) {
+        return;
+    }
 
     Ground_801C38D0(stage_info.param->x8, stage_info.param->x14,
                     stage_info.param->x1C, stage_info.param->x18);
@@ -550,6 +558,13 @@ void Ground_801C0800(StageIdPair* pair)
     Ground_801C3950(stage_info.param->x24);
     {
         int i;
+#if BUILD_TARGET_PC
+        /* PC port: itemdata and ald_yaku_all are arrays of GCN pointers still
+         * in big-endian archive form, so walking them as host pointers reads
+         * garbage. Newly reachable now that the parameter setup runs. */
+        stage_info.itemdata = NULL;
+        stage_info.ald_yaku_all = NULL;
+#endif
         if (stage_info.itemdata != NULL) {
             for (i = 0; stage_info.itemdata[i] != NULL; i++) {
                 it_8026B40C(stage_info.itemdata[i]->unk4,
@@ -569,11 +584,27 @@ void Ground_801C0800(StageIdPair* pair)
         psInitDataBankLoad(0x1E, stage_info.map_ptcl, stage_info.map_texg, 0,
                            0);
     }
+#if BUILD_TARGET_PC
+    /* Collision data is still unconverted (roadmap M2 stage 3) — feeding
+     * mpLibLoad garbage joint counts allocates and indexes wildly. See the
+     * MELEE_STAGE_COLL gate in Ground_801C2ED0. on_init already ran above. */
+    if (getenv("MELEE_STAGE_COLL") != NULL) {
+        mpLibLoad(stage_info.coll_data);
+        mpLib_80058820();
+    }
+    /* These two walk stage animation/light structures that are still
+     * big-endian — same reason grAnime_801C7C1C is gated (MELEE_STAGE_ANIM). */
+    if (getenv("MELEE_STAGE_ANIM") != NULL) {
+        Ground_801C1E94();
+        Ground_801C466C();
+    }
+#else
     mpLibLoad(stage_info.coll_data);
     mpLib_80058820();
     Ground_801C1E94();
     Ground_801C466C();
     stage_data->on_init();
+#endif
 }
 
 static bool Ground_801C0A70(Vec3* pos)
