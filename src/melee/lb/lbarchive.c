@@ -367,6 +367,22 @@ int lbArchiveRelocate(HSD_Archive* archive, u8* src, size_t file_size,
     memset(archive, 0, sizeof(HSD_Archive));
     archive->flags |= 1;
     memcpy(archive, src, sizeof(HSD_ArchiveHeader));
+#if BUILD_TARGET_PC
+    /* PC port: this header is copied straight out of the raw DAT bytes, which
+     * are big-endian. Without a swap every field reads reversed, the file_size
+     * check below never matches and this returns -1 -- which is why the nested
+     * animation archives never relocated and every fighter held its bind pose.
+     * The outer archive loader swaps its header; this one never did.
+     * NOTE: currently unexercised -- lbArchiveRelocate is not reached in any
+     * configuration that runs today, with or without MELEE_FTDATA. Kept
+     * because the bytes are unambiguously big-endian and the animation path
+     * will need it, but it has not been observed working. */
+    {
+        u32* h = (u32*) &archive->header;
+        int hi;
+        for (hi = 0; hi < 5; hi++) h[hi] = __builtin_bswap32(h[hi]);
+    }
+#endif
 
     if (archive->header.file_size != file_size) {
         OSReport("lbArchiveRelocate: byte-order mismatch! "
