@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "lbheap.static.h"
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
@@ -283,6 +284,21 @@ void* lbHeap_80015BD0(int arg0, int arg1)
 #endif /* BUILD_TARGET_PC */
     }
     OSRestoreInterrupts(enabled);
+#if BUILD_TARGET_PC
+    /* PC port: anything allocated here can end up in a u32 pointer field of a
+     * converted archive struct, so an allocation above 4 GB silently
+     * truncates and the scene loads with missing meshes. Shout if it ever
+     * happens rather than debugging the symptom again. */
+    if (result != NULL && (uintptr_t) result >= 0x100000000ULL) {
+        static int warned = 0;
+        if (warned < 8) {
+            warned++;
+            fprintf(stderr,
+                    "[HEAP] WARNING: allocation above 4GB: %p (heap %d, %d bytes)\n",
+                    (void*) result, arg0, arg1);
+        }
+    }
+#endif
     return result;
 }
 
