@@ -44,6 +44,20 @@ struct Unk_Struct_w_Array {
     S8Vec3 vec_arr[30]; /// ftMapping_list
 };
 
+#if BUILD_TARGET_PC
+/* PC port: on GCN this struct puns the .data that follows
+ * str_PdPmdat_start_of_data (i.e. ftMapping_list). PC layout differs, so
+ * alias vec_arr accesses directly onto ftMapping_list instead. */
+extern ftMapping ftMapping_list[];
+#define PC_PDPM_PUN                                                           \
+    ((struct Unk_Struct_w_Array*) ((char*) ftMapping_list -                   \
+                                   offsetof(struct Unk_Struct_w_Array,        \
+                                            vec_arr)))
+#define PDPM_PUN_INIT PC_PDPM_PUN
+#else
+#define PDPM_PUN_INIT (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data
+#endif
+
 //// .data
 char str_PdPmdat_start_of_data[] = "PdPm.dat";
 char str_plLoadCommonData[] = "plLoadCommonData";
@@ -366,7 +380,7 @@ void Player_80032070(int slot, bool bool_arg)
 {
     StaticPlayer* player;
     struct Unk_Struct_w_Array* unkStruct =
-        (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data;
+        PDPM_PUN_INIT;
     Player_CheckSlot(slot);
     player = &player_slots[slot];
 
@@ -455,7 +469,7 @@ Gm_PKind Player_8003248C(s32 slot, bool arg1)
 {
     Gm_PKind slot_type;
     struct Unk_Struct_w_Array* unk_struct =
-        (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data;
+        PDPM_PUN_INIT;
     StaticPlayer* player;
 
     Player_CheckSlot(slot);
@@ -499,7 +513,7 @@ s8 Player_80032610(s32 slot, bool arg1)
 { //// decomp.me/scratch/pHTx2
 
     struct Unk_Struct_w_Array* some_struct =
-        (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data;
+        PDPM_PUN_INIT;
     StaticPlayer* player;
     s32 error_value = -1;
 
@@ -1305,7 +1319,7 @@ s32 Player_GetFalls(s32 slot)
 { /// decomp.me/scratch/8ijor
     StaticPlayer* player;
     struct Unk_Struct_w_Array* unkStruct =
-        (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data;
+        PDPM_PUN_INIT;
     Player_CheckSlot(slot);
     player = &player_slots[slot];
 
@@ -2084,7 +2098,7 @@ void Player_80036DD8(void)
 void Player_80036E20(CharacterKind ckind, HSD_Archive* archive, s32 arg2)
 {
     struct Unk_Struct_w_Array* unkStruct =
-        (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data;
+        PDPM_PUN_INIT;
     ftDemo_SetArchiveData(unkStruct->vec_arr[ckind].x, archive, arg2);
     if ((unkStruct->vec_arr[ckind].y != -1) &&
         (unkStruct->vec_arr[ckind].z == 0))

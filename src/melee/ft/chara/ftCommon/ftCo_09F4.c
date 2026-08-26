@@ -16,6 +16,7 @@
 #include <baselib/gobjproc.h>
 #include <baselib/jobj.h>
 #include <baselib/lobj.h>
+#include <baselib/wobj.h>
 #include <melee/sc/types.h>
 
 /* 09F480 */ static void ftCo_8009F480(Fighter_GObj* gobj);
@@ -26,9 +27,21 @@ static HSD_LObj* lobj1;
 
 static float floats[] = { 0, 0.57, 0.57, 0.57, 0 };
 
+#if BUILD_TARGET_PC
+/* PC port: on GCN `floats` is punned as an HSD_WObjDesc (4-byte pointers:
+ * class_name=0, pos=(0.57,0.57,0.57), robjdesc=NULL). With 8-byte pointers
+ * the pun misaligns and robjdesc reads past the array (ASan
+ * global-buffer-overflow in WObjLoad). Use a real desc with the same
+ * semantics. */
+static HSD_WObjDesc pc_light_pos = { NULL, { 0.57f, 0.57f, 0.57f }, NULL };
+#define FT_LIGHT_POS ((void*) &pc_light_pos)
+#else
+#define FT_LIGHT_POS ((void*) floats)
+#endif
+
 static HSD_LightDesc node0 = {
     NULL,           NULL, 0x0005, 0x0000, { 0xFF, 0xFF, 0xFF, 0xFF },
-    (void*) floats, 0,    0,
+    FT_LIGHT_POS,   0,    0,
 };
 
 static LightList node1 = { &node0, NULL };

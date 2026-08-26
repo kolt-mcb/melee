@@ -202,7 +202,7 @@ void VI_GetNextField(void) {}
 void DBInit(void) {}
 
 /* Camera system stubs */
-void* cm_803BCCA0 = NULL;
+/* cm_803BCCA0: real definition lives in camera.c now */
 float get_follow_speed(void) { return 1.0f; }
 float get_delta(void) { return 0.0f; }
 
