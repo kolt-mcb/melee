@@ -1565,6 +1565,27 @@ void Camera_8002B3D4(void* arg0)
     update_zoom_distance();
     update_bounds(&bounds, &bounds_copy);
     update_avg_bounds_width();
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_CAMTRACE") != NULL) {
+        static int n = 0;
+        if (n < 6) { n++;
+            fprintf(stderr,
+                    "[CAMBOUNDS] subjects=%d x=[%.1f..%.1f] y=[%.1f..%.1f] "
+                    "z=%.1f | tpos=(%.1f,%.1f,%.1f) tint=(%.1f,%.1f,%.1f) "
+                    "fov=%.1f dist=%.1f\n",
+                    bounds.total_subjects, (double) bounds.x_min,
+                    (double) bounds.x_max, (double) bounds.y_min,
+                    (double) bounds.y_max, (double) bounds.z_pos,
+                    (double) cm_80452C68.transform.target_position.x,
+                    (double) cm_80452C68.transform.target_position.y,
+                    (double) cm_80452C68.transform.target_position.z,
+                    (double) cm_80452C68.transform.target_interest.x,
+                    (double) cm_80452C68.transform.target_interest.y,
+                    (double) cm_80452C68.transform.target_interest.z,
+                    (double) cm_80452C68.transform.target_fov,
+                    (double) cm_80452C68.x2C0); }
+    }
+#endif
 }
 
 inline HSD_PadStatus* get_slot_pad(u8 arg0)

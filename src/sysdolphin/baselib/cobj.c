@@ -587,11 +587,10 @@ bool HSD_CObjSetCurrent(HSD_CObj* cobj)
 #endif
 #if BUILD_TARGET_PC
     if (getenv("MELEE_VPTRACE") != NULL) {
-        static void* seen[16];
+        /* Print every Nth call so late-run state is visible; a first-sighting
+         * log only ever shows the startup transient. */
         static int n = 0;
-        int k, dup = 0;
-        for (k = 0; k < n; k++) if (seen[k] == (void*) cobj) dup = 1;
-        if (!dup && n < 16) { seen[n++] = (void*) cobj;
+        if (++n % 200 == 0) {
             Vec3 e = { 0, 0, 0 };
             HSD_CObjGetEyePosition(cobj, &e);
             fprintf(stderr,
