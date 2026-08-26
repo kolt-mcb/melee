@@ -539,7 +539,7 @@ static void setupVtxDesc(HSD_PObj* pobj)
 #if defined(BUILD_TARGET_PC)
             if (getenv("MELEE_STAGE_DIAG")) {
                 static int _vd = 0;
-                if (_vd < 120) {
+                if (_vd < 4000) {
                     _vd++;
                     fprintf(stderr, "[VTXDESC] pobj=%p attr=%u type=%u cnt=%u comp=%u frac=%u stride=%u arr=%p\n",
                             (void*)pobj, (unsigned)desc->attr, (unsigned)desc->attr_type,
@@ -1104,6 +1104,7 @@ static PObjSetupFlag GetSetupFlags(HSD_JObj* jobj, u32 rendermode)
 static void SetupRigidModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                                u32 rendermode)
 {
+    { static int _ps=0; if(_ps<4){_ps++; fprintf(stderr,"[RIGIDSETUP]\n");} }
     HSD_JObj* jobj;
     Mtx n;
     PObjSetupFlag flags;
@@ -1153,6 +1154,7 @@ static void svtx_dump3(const char* label, Mtx A)
 static void SetupSharedVtxModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                                    u32 rendermode)
 {
+    { static int _ps=0; if(_ps<4){_ps++; fprintf(stderr,"[SHAREDSETUP]\n");} }
     HSD_JObj* jobj;
     Mtx n0, n1, m;
     PObjSetupFlag flags = SETUP_NONE;
@@ -1258,6 +1260,7 @@ static void SetupSharedVtxModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
 static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                                   u32 rendermode)
 {
+    { static int _ps=0; if(_ps<4){_ps++; fprintf(stderr,"[ENVSETUP]\n");} }
     HSD_JObj* jobj;
     HSD_SList* list;
     int MtxIdx = 0;
@@ -1280,6 +1283,26 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
         int perf = 0;
 
         HSD_ASSERT(1872, envelope);
+#if BUILD_TARGET_PC
+        /* PC port: skip corrupted/unresolved envelope chains — load the
+         * plain joint matrix as a fallback so the slot isn't stale. */
+        {
+            HSD_Envelope* e2 = envelope;
+            int bad = (envelope == NULL);
+            for (; e2 != NULL && !bad; e2 = e2->next) {
+                if ((uintptr_t)e2->jobj < 0x400000ULL ||
+                    (e2->weight < 1.0f - FLT_EPSILON &&
+                     e2->jobj->envelopemtx == NULL))
+                {
+                    bad = 1;
+                }
+            }
+            if (bad) {
+                GXLoadPosMtxImm(pmtx, mtx_no);
+                continue;
+            }
+        }
+#endif
         if (envelope->weight >= (1.0f - FLT_EPSILON)) {
             HSD_JObjSetupMatrix(envelope->jobj);
             if (right) {
@@ -1315,6 +1338,12 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
         }
         MTXConcat(vmtx, mtxp, tmp);
         GXLoadPosMtxImm(tmp, mtx_no);
+        { static int _em=0; if(_em<12){_em++;
+            fprintf(stderr,"[ENVMTX] no=%d w=%.2f r0=(%.2f,%.2f,%.2f,%.2f) r2=(%.2f,%.2f,%.2f,%.2f) vm23=%.1f\n",
+                (int)mtx_no,(double)((HSD_Envelope*)list->data)->weight,
+                (double)tmp[0][0],(double)tmp[0][1],(double)tmp[0][2],(double)tmp[0][3],
+                (double)tmp[2][0],(double)tmp[2][1],(double)tmp[2][2],(double)tmp[2][3],
+                (double)vmtx[2][3]); } }
         HSD_PerfCountMtxLoad();
 
         if (flags & SETUP_NORMAL) {

@@ -238,6 +238,11 @@ void pc_render_stage_test(void)
                                 int nj = 0, nd = 0; count_jobj(fjobj, &nj, &nd);
                                 fprintf(stderr, "[FTEST] fighter jobj: %d nodes, %d with dobj\n", nj, nd);
                                 Vec3 fpos = { 0.0f, 5.0f, 0.0f };
+                                if (getenv("MELEE_FIGHTER_NEAR")) {
+                                    /* place right in front of the stage camera
+                                     * (eye ~(-13,39,435) looking at origin) */
+                                    fpos.x = -13.0f; fpos.y = 30.0f; fpos.z = 330.0f;
+                                }
                                 HSD_JObjSetTranslate(fjobj, &fpos);
                                 s_fighter_jobj = fjobj;
                                 s_fighter_gobj = GObj_Create(HSD_GOBJ_CLASS_STAGE, 5, 0);
@@ -332,8 +337,12 @@ void pc_render_stage_test(void)
                 }
                 HSD_CObjPCSetForceCam(s_cam);
                 HSD_GObj_JObjCallback(s_floor_gobj, 0);
-                if (s_fighter_gobj) HSD_GObj_JObjCallback(s_fighter_gobj, 0);
             }
+        }
+        /* Fighter renders regardless of NOFLOOR. */
+        if (s_fighter_gobj) {
+            HSD_CObjPCSetForceCam(s_cam);
+            HSD_GObj_JObjCallback(s_fighter_gobj, 0);
         }
         HSD_CObjEndCurrent();
     } else {
