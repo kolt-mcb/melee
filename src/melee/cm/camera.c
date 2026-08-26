@@ -1365,6 +1365,20 @@ void Camera_8002AF68(HSD_CObj* cobj, CameraTransformState* transform)
     if (vec.y < eye_y_bound) {
         vec.y = eye_y_bound;
     }
+#if BUILD_TARGET_PC
+    /* MELEE_CAM_Z=<n>: override the eye distance, to check framing questions
+     * without having to fix the follow maths first. */
+    {
+        static int init = 0;
+        static float override_z = 0.0f;
+        if (!init) {
+            const char* e = getenv("MELEE_CAM_Z");
+            init = 1;
+            override_z = e ? (float) atof(e) : 0.0f;
+        }
+        if (override_z != 0.0f) { vec.z = override_z; vec.y = 20.0f; }
+    }
+#endif
     HSD_CObjSetEyePosition(cobj, &vec);
 }
 
