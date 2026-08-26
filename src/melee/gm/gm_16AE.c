@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "gm_16AE.h"
 
 #include "gm_16AE.static.h"
@@ -1940,7 +1941,15 @@ void fn_8016E2BC(void)
                         Player_SetFacingDirection(i, var_f1_2);
                     }
                 }
-                Player_80032768(i, &sp18);
+    #if BUILD_TARGET_PC
+            /* PC diag: spawn points come from stage_info.x280[], which is only
+             * populated if UnkStageDat::unk0 was converted. When it is not,
+             * getSpawnPoint leaves sp18 as uninitialized stack. */
+            if (getenv("MELEE_STAGE_DIAG") != NULL)
+            fprintf(stderr, "[SPAWN] slot=%d pos=(%.1f,%.1f,%.1f)\n",
+                    i, (double)sp18.x, (double)sp18.y, (double)sp18.z);
+#endif
+            Player_80032768(i, &sp18);
                 is_teams = lbl_8046B6A0.x24C8.is_teams == true;
                 Player_SetUnk45(
                     i, fn_80160840(gm_80160854(Player_GetPlayerId(i),
