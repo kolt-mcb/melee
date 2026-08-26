@@ -159,6 +159,9 @@ typedef struct {
 /* MELEE_TEXLOG tally: why texture loads do or do not reach the GL upload. */
 unsigned long g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable, g_tx_hit;
 unsigned long g_tx_init, g_tx_distinct;
+/* Set by ftDrawCommon while a fighter's JObj tree is being submitted, so the
+ * TEV dump can tell fighter draws apart from stage draws. */
+int pc_in_fighter_draw;
 
 static void pc_apply_cull_state(void);
 static int pc_texmtx_active(u32 coord);
@@ -2536,15 +2539,17 @@ static void bridge_upload_and_draw(void)
         }
         /* Keyed on batch size rather than frame: the bridge frame counter and
          * the game frame counter do not advance together on this path. */
-        if (_tv_from >= 0 && _tv_n < 6 && (int) g_state.vert_count >= _tv_from)
+        if (_tv_from >= 0 && _tv_n < 6 && (int) g_state.vert_count >= _tv_from &&
+            (getenv("MELEE_TEVDUMP_FT") == NULL || pc_in_fighter_draw))
         {
             u32 st;
             _tv_n++;
             fprintf(stderr,
-                    "[TEV] draw n=%u stages=%u chan0src=%u C0=(%u,%u,%u,%u) "
+                    "[TEV] ft=%d draw n=%u stages=%u chan0src=%u C0=(%u,%u,%u,%u) "
                     "amb0=(%u,%u,%u,%u) texen=%d blend=%d/%u src=%u dst=%u "
                     "acmp=%d:%u/%.2f,%u/%.2f z=%d,%d tex=%dx%d/0x%02x atc=%u slot0=%u/%d texid=%u "
-                    "| lights=%u amb=(%.2f,%.2f,%.2f) L0=(%u,%u,%u) dir=(%.2f,%.2f,%.2f)\n",
+                    "| lights=%u amb=(%.2f,%.2f,%.2f) L0=(%u,%u,%u) dirflag=%d pos=(%.0f,%.0f,%.0f) mask=%u lit0=%d en0=%d\n",
+                    pc_in_fighter_draw,
                     (unsigned) g_state.vert_count, (unsigned) g_state.num_tev_stages,
                     (unsigned) g_state.chan_color_source[0],
                     g_state.chan_colors[0].r, g_state.chan_colors[0].g,
@@ -2574,9 +2579,12 @@ static void bridge_upload_and_draw(void)
                     (unsigned) g_state.g_lights[0].r,
                     (unsigned) g_state.g_lights[0].g,
                     (unsigned) g_state.g_lights[0].b,
-                    (double) g_state.g_lights[0].nx,
-                    (double) g_state.g_lights[0].ny,
-                    (double) g_state.g_lights[0].nz);
+                    (int) g_state.g_lights[0].is_directional,
+                    (double) g_state.g_lights[0].x,
+                    (double) g_state.g_lights[0].y,
+                    (double) g_state.g_lights[0].z,
+                    (unsigned) (g_state.chan_diffuse_light[0] & 0xFF),
+                    (int) g_state.chan_lit[0], (int) g_state.chan_enabled[0]);
             {
                 u32 nv = g_state.vert_count < 4 ? g_state.vert_count : 4;
                 fprintf(stderr, "[TEV]   uv0:");
@@ -5074,11 +5082,19 @@ static void apply_alpha_compare_uniforms(void)
     /* Lighting enabled flag */
     if (g_lighting_enabled_loc >= 0) {
         // Lighting is enabled if any channel has lighting enabled
-        int lit = 0;
-        for (int i = 0; i < 8; i++) {
-            if (g_state.chan_lit[i]) { lit = 1; break; }
-        }
-        glUniform1i(g_lighting_enabled_loc, lit);
+        /* The fragment shader multiplies RAS by the lit colour, and RAS comes
+         * from colour channel 0 -- so this flag has to be channel 0's own
+         * lighting enable, not an OR across all channels. ORing meant that any
+         * material anywhere in the frame with lighting on forced every
+         * lighting-off material to be multiplied by the lit colour too. With
+         * no lights in the channel's mask that colour is just the ambient
+         * 0.10, so everything drawn unlit came out at a tenth brightness --
+         * which is why the fighters were nearly black while the stage, whose
+         * TEV konstants add colour after the channel, still looked lit. */
+        int lit = g_state.chan_lit[0] ? 1 : 0;
+        static int no_light = -1;
+        if (no_light < 0) no_light = (getenv("MELEE_NOLIGHT") != NULL);
+        glUniform1i(g_lighting_enabled_loc, no_light ? 0 : lit);
     }
 }
 
@@ -5912,10 +5928,29 @@ void GXInitSpecularDirHA(LightSlot *lt_obj, f32 nx, f32 ny, f32 nz, f32 hx, f32 
     lt_obj->spec_hz = hz;
 }
 
+/* GX light ids are a bitmask, not an index: GX_LIGHT0 = 0x01, GX_LIGHT1 =
+ * 0x02, GX_LIGHT2 = 0x04 ... GX_LIGHT7 = 0x80. Using the id directly as an
+ * array index put GX_LIGHT0's data in slot 1 and GX_LIGHT1's in slot 2, left
+ * slot 0 holding its initialiser (a placeholder direction of (0,0,1)), and
+ * dropped GX_LIGHT3 and above entirely because 0x08 >= 8. Every lit surface
+ * was therefore shaded by a light that was never set -- fighters came out
+ * almost black, and the stage only looked lit because its TEV konstants add
+ * colour on top of the channel result. */
+static int pc_light_id_to_index(u32 id)
+{
+    int i;
+    for (i = 0; i < 8; i++) {
+        if (id == (1u << i)) return i;
+    }
+    return -1;
+}
+
 void GXLoadLightObjImm(LightSlot *lt_obj, u32 light_id)
 {
-    if (!lt_obj || light_id >= 8) return;
-    
+    int idx = pc_light_id_to_index(light_id);
+    if (!lt_obj || idx < 0) return;
+    light_id = (u32) idx;
+
     LightSlot *target = &g_state.g_lights[light_id];
     memcpy(target, lt_obj, sizeof(LightSlot));
     target->r = lt_obj->r;
