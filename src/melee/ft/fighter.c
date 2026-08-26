@@ -909,6 +909,7 @@ void Fighter_UnkInitLoad_80068914(Fighter_GObj* gobj,
     fp->x221F_b1 = 0;
     fp->x221F_b2 = 0;
 
+
     fp->x209A = 0;
     fp->x221E_b5 = 0;
     fp->x221F_b0 = 0;

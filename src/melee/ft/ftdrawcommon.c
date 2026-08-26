@@ -397,7 +397,17 @@ void ftDrawCommon_80080E18(HSD_GObj* gobj, int arg1)
                     (void*) gobj, (void*) fp, (int) fp->x221F_b3,
                     (int) ftLib_80086A8C(gobj), (int) Camera_80031060(),
                     (void*) fp->x5AC.xC[4], (int) fp->x21FC_flag.b7,
-                    (int) fp->invisible); }
+                    (int) fp->invisible);
+            {
+                HSD_JObj* j = GET_JOBJ(gobj);
+                fprintf(stderr,
+                        "[FTDRAW]   jobj=%p child=%p next=%p dobj=%p "
+                        "accessory=%p\n",
+                        (void*) j, j ? (void*) j->child : NULL,
+                        j ? (void*) j->next : NULL,
+                        j ? (void*) j->u.dobj : NULL,
+                        (void*) fp->x20A0_accessory);
+            } }
     }
 #endif
     if (!fp->x221F_b3 && ftLib_80086A8C(gobj)) {
