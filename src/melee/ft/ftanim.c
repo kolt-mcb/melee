@@ -606,14 +606,51 @@ void ftAnim_8006F4C8(Fighter* fp, bool do_blending, FigaTree* tree)
     u32 temp_r3;
     int i = 0;
 
+#if BUILD_TARGET_PC
+    /* PC port: applying an animation needs fp->parts[] to have been built
+     * from ft_data->x8 (the parts descriptor), which is not converted yet.
+     * Without it no part carries the scan flags and this walk has nothing
+     * valid to index, so skip the whole pass — the fighter holds its bind
+     * pose. Remove this once pc_conv_ftData covers x8. */
+    if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x8)) {
+        return;
+    }
+    /* PC port: the FigaTree comes out of a NESTED archive parsed inside
+     * fp->x59C, and nested archives are not relocated here either — so
+     * tree->nodes/tracks are still raw big-endian offsets, and FigaTrack is
+     * 0xC on GCN vs 0x10 here. Converting this is its own piece of work
+     * (streaming into a recycled 0x8000 buffer, re-converted per motion
+     * change, consumed per frame); until then, refuse to walk it rather than
+     * chase garbage. The fighter holds its bind pose. */
+    if (!pc_mem_readable(tree, sizeof(*tree)) ||
+        !pc_mem_readable(tree->nodes, 1) ||
+        !pc_mem_readable(tree->tracks, 1))
+    {
+        return;
+    }
+#endif
     cur_node = tree->nodes;
     cur_track = tree->tracks;
 
     flags = fp->x594_bits;
 
     while (*cur_node != -1) {
+#if BUILD_TARGET_PC
+        /* PC port: these scans rely on fp->parts[] having been set up from
+         * ft_data->x8 (the parts descriptor), which is not converted yet — so
+         * no part carries the flag and the index runs off the array. Bound
+         * both scans by the same limit the assert below uses. */
+        if (i >= 0x8C) {
+            return;
+        }
+#endif
         while (!fp->parts[i].flags_b1) {
             i++;
+#if BUILD_TARGET_PC
+            if (i >= 0x8C) {
+                return;
+            }
+#endif
         }
         while (1) {
             if (!fp->parts[i].flags_b2) {
@@ -624,6 +661,11 @@ void ftAnim_8006F4C8(Fighter* fp, bool do_blending, FigaTree* tree)
                 break;
             }
             i++;
+#if BUILD_TARGET_PC
+            if (i >= 0x8C) {
+                return;
+            }
+#endif
         }
         if (i >= 0x8C) {
             HSD_ASSERTREPORT(767, 0, "atree data error! player %d\n",
@@ -810,6 +852,14 @@ void ftAnim_8006FA58(Fighter* fp, Fighter_Part part, HSD_Joint* joint)
 {
     int i = part;
     s32 depth = 0;
+#if BUILD_TARGET_PC
+    /* PC port: ft_data->x8 (the parts descriptor) is not converted yet, so it
+     * is NULL by design — see the convert-or-NULL rule in port/pc_ftconv.c.
+     * This site dereferences it without a check. */
+    if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x8)) {
+        return;
+    }
+#endif
 
     while (joint != NULL) {
         while (ftParts_8007506C(fp->kind, i) != 0) {

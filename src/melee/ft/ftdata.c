@@ -1490,11 +1490,24 @@ void ftData_800855C8(FighterKind kind, u8 color)
     }
 }
 
+#if BUILD_TARGET_PC
+/* PC port: archive retained from the last ftData load so the BE->x64
+ * converter can rebase its offsets. */
+static HSD_Archive* pc_ftdata_archive;
+#endif
+
 void ftData_8008572C(FighterKind kind)
 {
     if (gFtDataList[kind] == NULL) {
+#if BUILD_TARGET_PC
+        /* PC port: capture the archive so the converter can rebase offsets
+         * (the GCN call discards it). */
+        lbArchive_80017040(&pc_ftdata_archive, ftData_803C1F40[kind].a,
+                           &gFtDataList[kind], ftData_803C1F40[kind].b, 0);
+#else
         lbArchive_80017040(NULL, ftData_803C1F40[kind].a, &gFtDataList[kind],
                            ftData_803C1F40[kind].b, 0);
+#endif
 #if BUILD_TARGET_PC
         /* PC port: lbArchive resolves this symbol to a perfectly *sane host
          * pointer* that nevertheless points at raw big-endian, GCN-packed
@@ -1511,6 +1524,23 @@ void ftData_8008572C(FighterKind kind)
          * for conversion work. */
         if (getenv("MELEE_FTDATA") == NULL) {
             gFtDataList[kind] = NULL;
+        } else {
+            /* Convert the raw big-endian ftData into a real x86_64 one.
+             * pc_conv_ftData fills only the fields the vertical slice needs
+             * and NULLs the rest, so the existing guards keep covering
+             * everything not yet converted. */
+            extern struct ftData* pc_conv_ftData(const u8* raw, const u8* base,
+                                                 unsigned long len, int kind);
+            HSD_Archive* arc = pc_ftdata_archive;
+            if (gFtDataList[kind] != NULL && arc != NULL &&
+                pc_ptr_sane(arc->data))
+            {
+                gFtDataList[kind] = pc_conv_ftData(
+                    (const u8*) gFtDataList[kind], (const u8*) arc->data,
+                    (unsigned long) arc->header.file_size, (int) kind);
+            } else {
+                gFtDataList[kind] = NULL;
+            }
         }
 #endif
     }
@@ -1789,6 +1819,22 @@ void ftData_80085CD8(Fighter* fp, Fighter* arg1, int msid)
                     }
                 } else {
                     temp_r4_2 = temp_r3->x14;
+#if BUILD_TARGET_PC
+                    /* PC port: this chooses between an ARAM DMA (offset
+                     * < 0x80000000) and a straight MRAM copy. On PC the
+                     * animation file lives in the sub-4GB low pool, so a
+                     * perfectly valid host pointer looks like an ARAM offset
+                     * and took the DMA path into lbArq. Copy directly when the
+                     * value is a real pointer, and bound the copy to the
+                     * 0x8000 staging buffer. */
+                    if (pc_ptr_sane((void*) (uintptr_t) temp_r4_2)) {
+                        u32 n = (u32) temp_r3->x8;
+                        if (n > 0x8000u) {
+                            n = 0x8000u;
+                        }
+                        memcpy(fp->x59C, (void*) (uintptr_t) temp_r4_2, n);
+                    } else
+#endif
                     if (temp_r4_2 < 0x80000000) {
                         lbArq_80014BD0(temp_r4_2, fp->x59C,
                                        OSRoundUp32B(temp_r3->x8), 0, 0);
