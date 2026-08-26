@@ -1208,13 +1208,6 @@ void HSD_TObjSetup(HSD_TObj* tobj)
         return;
     }
 
-#if BUILD_TARGET_PC
-    { extern unsigned long g_dbg_tobj_setup, g_dbg_tobj_seen, g_dbg_tobj_null;
-      HSD_TObj* dt; g_dbg_tobj_setup++;
-      for (dt = tobj; dt; dt = dt->next) {
-          g_dbg_tobj_seen++;
-          if (dt->id == GX_TEXMAP_NULL) g_dbg_tobj_null++; } }
-#endif
     num = HSD_TObjAssignResources(tobj);
     if (num > 0) {
         HSD_StateRegisterTexGen(HSD_Index2TexCoord(num - 1));
