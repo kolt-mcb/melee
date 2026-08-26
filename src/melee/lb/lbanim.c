@@ -89,6 +89,19 @@ void lbAnim_8001E6D8(HSD_JObj* jobj, FigaTree* tree, FigaTrack* track,
 {
     HSD_AObj* aobj;
     PAD_STACK(8);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ANIMLOG") != NULL) {
+        static unsigned long n, attached;
+        n++;
+        if (jobj != NULL && frames != 0) attached++;
+        if (n % 100 == 0) {
+            fprintf(stderr,
+                    "[ANIM] lbAnim_8001E6D8 calls=%lu attached=%lu "
+                    "(jobj=%p frames=%d)\n",
+                    n, attached, (void*) jobj, (int) frames);
+        }
+    }
+#endif
 
     if (jobj != NULL && frames != 0) {
         if (jobj->aobj != NULL) {

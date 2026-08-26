@@ -1401,7 +1401,11 @@ void Fighter_ChangeMotionState(Fighter_GObj* gobj, FtMotionId msid,
             Vec3 translation;
             Quaternion quat;
 
+#if BUILD_TARGET_PC
+            bone_index = fp->x596_x7;
+#else
             bone_index = fp->x596_bits.x7;
+#endif
 
             if ((flags & Ft_MF_FreezeState) != 0) {
                 fp->x2223_b0 = 1;
@@ -1850,6 +1854,14 @@ void Fighter_8006A360(Fighter_GObj* gobj)
             if (fp->dmg.x18ac_time_since_hit != -1) {
                 fp->dmg.x18ac_time_since_hit++;
             }
+#if BUILD_TARGET_PC
+            if (getenv("MELEE_ANIMLOG") != NULL) {
+                static unsigned long n;
+                if (++n % 200 == 0) {
+                    fprintf(stderr, "[TICK] anim path reached #%lu\n", n);
+                }
+            }
+#endif
             ftAnim_8006EBA4(gobj);
             ftCo_800D71D8(gobj);
             ftColl_800764DC(gobj);
@@ -2291,6 +2303,19 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
 
 void Fighter_procUpdate(Fighter_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ANIMLOG") != NULL) {
+        static unsigned long n;
+        if (++n % 200 == 0) {
+            Fighter* f = GET_FIGHTER(gobj);
+            fprintf(stderr,
+                    "[TICK] Fighter_procUpdate #%lu anim_id=%d frame=%.2f "
+                    "state=%d\n",
+                    n, (int) f->anim_id, (double) f->x8A8_anim_frame,
+                    (int) f->motion_id);
+        }
+    }
+#endif
     Fighter* fp = GET_FIGHTER(gobj);
     Vec3 windOffset;
 
