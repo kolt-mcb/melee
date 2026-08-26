@@ -161,6 +161,8 @@ unsigned long g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable, g_tx_hit;
 unsigned long g_tx_init, g_tx_distinct;
 
 static void pc_apply_cull_state(void);
+static int pc_texmtx_active(u32 coord);
+static void pc_gl_clear(f32 r, f32 g, f32 b, f32 a, f32 z);
 static void pc_apply_blend_state(void);
 
 static u32 g_tev_color_out_reg[8];
@@ -547,6 +549,7 @@ typedef struct {
     
     /* Texture gen modes (per unit) */
     u32 tex_gen_mode[8];      /* GX_TEXGEN_NONE/X/Y/Z/LIGHT0-7 */
+    Bool tex_mtx_loaded[68];  /* set by GXLoadTexMtxImm; unloaded slots are 0 */
     u32 tex_gen_src[8];       /* GX_TEXGEN_SRC_MATRIX/MAPPED */
     u32 tex_gen_mat_id[8];    /* Matrix ID for LIGHT sources */
     
@@ -2060,10 +2063,8 @@ void gx_frame_begin(void)
                       g_state.tex_formats_seen[2], g_state.tex_formats_seen[4],
                       g_state.tex_formats_seen[5]);
     }
-    glClearColor(0, 0, 0, 1);
-    glClearDepth(1.0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
+    pc_gl_clear(0.0f, 0.0f, 0.0f, 1.0f, 1.0f);
+
     /* Set viewport to full window size for debug overlay rendering. */
     g_state.vp_x = 0; g_state.vp_y = 0;
     g_state.vp_w = 1280; g_state.vp_h = 720;
@@ -2542,7 +2543,7 @@ static void bridge_upload_and_draw(void)
             fprintf(stderr,
                     "[TEV] draw n=%u stages=%u chan0src=%u C0=(%u,%u,%u,%u) "
                     "amb0=(%u,%u,%u,%u) texen=%d blend=%d/%u src=%u dst=%u "
-                    "acmp=%d:%u/%.2f,%u/%.2f z=%d,%d tex=%dx%d/0x%02x\n",
+                    "acmp=%d:%u/%.2f,%u/%.2f z=%d,%d tex=%dx%d/0x%02x atc=%u slot0=%u/%d texid=%u\n",
                     (unsigned) g_state.vert_count, (unsigned) g_state.num_tev_stages,
                     (unsigned) g_state.chan_color_source[0],
                     g_state.chan_colors[0].r, g_state.chan_colors[0].g,
@@ -2560,7 +2561,24 @@ static void bridge_upload_and_draw(void)
                     (int) g_state.z_enabled, (int) g_state.z_update,
                     (int) g_state.current_tex.width,
                     (int) g_state.current_tex.height,
-                    (unsigned) g_state.current_tex.fmt);
+                    (unsigned) g_state.current_tex.fmt,
+                    (unsigned) g_active_tex_count,
+                    (unsigned) g_active_tex_slots[0],
+                    (int) g_state.tex_cache_valid[g_active_tex_slots[0]],
+                    (unsigned) g_state.tex_cache[g_active_tex_slots[0]]);
+            {
+                u32 nv = g_state.vert_count < 4 ? g_state.vert_count : 4;
+                fprintf(stderr, "[TEV]   uv0:");
+                for (u32 vi = 0; vi < nv; vi++) {
+                    fprintf(stderr, " (%.3f,%.3f)",
+                            (double) g_state.verts[vi].tex0[0],
+                            (double) g_state.verts[vi].tex0[1]);
+                }
+                fprintf(stderr, "  pos0=(%.1f,%.1f,%.1f)\n",
+                        (double) g_state.verts[0].pos[0],
+                        (double) g_state.verts[0].pos[1],
+                        (double) g_state.verts[0].pos[2]);
+            }
             fprintf(stderr,
                     "[TEV]   K0=(%u,%u,%u,%u) K1=(%u,%u,%u,%u) "
                     "K2=(%u,%u,%u,%u) K3=(%u,%u,%u,%u)\n",
@@ -2963,8 +2981,12 @@ static void bridge_upload_and_draw(void)
     }
     
     /* Upload texture matrix transforms */
+    /* GX_TEXMTX0..9 live at matrix-memory rows 30..57 in steps of 3;
+     * GX_IDENTITY is 60 and means "leave the coords alone". A slot that was
+     * never filled by GXLoadTexMtxImm is all zeros and would collapse every
+     * UV to the origin, so require it to have been loaded. */
     if (g_texmtx0_enable_loc >= 0) {
-        int enable0 = (g_state.tex_gen_enabled[0] && g_state.tex_gen_mat_id[0] < 68) ? 1 : 0;
+        int enable0 = pc_texmtx_active(0);
         glUniform1i(g_texmtx0_enable_loc, enable0);
         if (enable0 && g_texmtx0_loc >= 0) {
             f32 mtx[4][4] = {{0}};
@@ -2974,7 +2996,7 @@ static void bridge_upload_and_draw(void)
         }
     }
     if (g_texmtx1_enable_loc >= 0) {
-        int enable1 = (g_state.tex_gen_enabled[1] && g_state.tex_gen_mat_id[1] < 68) ? 1 : 0;
+        int enable1 = pc_texmtx_active(1);
         glUniform1i(g_texmtx1_enable_loc, enable1);
         if (enable1 && g_texmtx1_loc >= 0) {
             f32 mtx[4][4] = {{0}};
@@ -3411,13 +3433,38 @@ void GXSetScissor(u32 x, u32 y, u32 w, u32 h)
         glScissor(r[0], r[1], (GLsizei) r[2], (GLsizei) r[3]);
     }
 }
+/* glClear obeys the scissor test and the colour/depth write masks. The game
+ * leaves all three in whatever state its last draw needed -- scissor enabled
+ * on a sub-rectangle, depth writes off for blended sprites -- so a plain
+ * glClear cleared only part of the colour buffer and often none of the depth
+ * buffer. Additive draws then accumulated frame over frame: the title screen
+ * starts correct and washes out to white within ~200 frames. Clear with the
+ * masks open and the scissor off, then put the state back. */
+static void pc_gl_clear(f32 r, f32 g, f32 b, f32 a, f32 z)
+{
+    GLboolean scissor_was = glIsEnabled(GL_SCISSOR_TEST);
+
+    if (scissor_was) glDisable(GL_SCISSOR_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_TRUE);
+    glClearColor(r, g, b, a);
+    glClearDepth(z);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (scissor_was) glEnable(GL_SCISSOR_TEST);
+    /* The per-draw state block reasserts colour/depth masks, so leaving them
+     * open here is safe; restore what the bridge last recorded anyway. */
+    glColorMask(g_state.color_update ? GL_TRUE : GL_FALSE,
+                g_state.color_update ? GL_TRUE : GL_FALSE,
+                g_state.color_update ? GL_TRUE : GL_FALSE,
+                g_state.alpha_update ? GL_TRUE : GL_FALSE);
+    glDepthMask(g_state.z_update ? GL_TRUE : GL_FALSE);
+}
+
 void GXClearBuff(void)
 {
     GX_TRACE("GXClearBuff");
     /* Use copy-clear color/depth if configured, otherwise defaults */
-    glClearColor(g_state.copy_clear_r, g_state.copy_clear_g,
-                 g_state.copy_clear_b, g_state.copy_clear_a);
-    glClearDepth(g_state.copy_clear_z);
+
     /* PC diag: log every full clear + screen state before it (MELEE_MTR) */
     {
         static int _cl_on = -1;
@@ -3431,7 +3478,9 @@ void GXClearBuff(void)
                     (double)g_state.copy_clear_z, px[0], px[1], px[2]);
         }
     }
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    pc_gl_clear(g_state.copy_clear_r, g_state.copy_clear_g,
+                g_state.copy_clear_b, g_state.copy_clear_a,
+                g_state.copy_clear_z);
     pc_frame_trace("clear");
 }
 void GXFlush(void)
@@ -4075,12 +4124,23 @@ static GLenum gx_bl_to_gl(u32 gx_blend_factor)
  * every later draw kept subtracting: one subtractive effect anywhere in the
  * frame inverted the rest of the scene. The per-draw state block reapplied
  * only the blend *func*, which cannot undo a sticky equation. */
+static int pc_texmtx_active(u32 coord)
+{
+    u32 id;
+    if (coord >= 8 || !g_state.tex_gen_enabled[coord]) return 0;
+    id = g_state.tex_gen_mat_id[coord];
+    if (id < 30 || id > 57) return 0;      /* GX_IDENTITY (60) or not a texmtx */
+    return g_state.tex_mtx_loaded[id] ? 1 : 0;
+}
+
 static void pc_apply_blend_state(void)
 {
     static int alpha1 = -1;
     if (alpha1 < 0) alpha1 = (getenv("MELEE_BLEND_ALPHA1") != NULL);
 
-    if (!g_state.blend_enabled) {
+    static int noblend = -1;
+    if (noblend < 0) noblend = (getenv("MELEE_NOBLEND") != NULL);
+    if (noblend || !g_state.blend_enabled) {
         glDisable(GL_BLEND);
         glBlendEquation(GL_FUNC_ADD);
         return;
@@ -5705,7 +5765,12 @@ void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize, u32 p
 {
     GX_TRACE("GXSetTexCoordGen2(%u, %u, %u, %u, %u, %u)", tex, type, mat, mtx, normalize, pt_texmtx);
     if (tex < 8) {
-        g_state.tex_gen_enabled[tex] = (type != 0);
+        /* type is GXTexGenType, and GX_TG_MTX3x4 -- by far the most common --
+         * is 0. Treating type==0 as "texgen off" disabled the texture matrix
+         * for essentially every textured draw in the game, so UVs reached the
+         * shader untransformed. The coord is generated whenever this is
+         * called; whether a matrix applies is decided by mtx below. */
+        g_state.tex_gen_enabled[tex] = TRUE;
         g_state.tex_gen_mode[tex] = type;
         g_state.tex_gen_src[tex] = mat;
         g_state.tex_gen_mat_id[tex] = mtx;
@@ -5965,6 +6030,7 @@ u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod)
 void GXLoadTexMtxImm(f32 mtx[][4], u32 id, u32 type)
 {
     GX_TRACE("GXLoadTexMtxImm(p, %u, %u)", id, type);
+    if (id < 68) g_state.tex_mtx_loaded[id] = TRUE;
     if (id >= 68) {
         PORT_LOG_WARN("GXLoadTexMtxImm: matrix id %u out of range", id);
         return;

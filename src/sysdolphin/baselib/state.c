@@ -310,6 +310,19 @@ void HSD_SetupRenderMode(u32 rendermode)
 void HSD_SetMaterialColor(GXColor ambient, GXColor diffuse, GXColor specular,
                           f32 alpha)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_CHANLOG") != NULL) {
+        static int n = 0;
+        if (n < 10) { n++;
+            fprintf(stderr,
+                    "[MATCOL] amb=(%u,%u,%u) dif=(%u,%u,%u) spc=(%u,%u,%u) "
+                    "alpha=%g -> matstate.alpha=%g\n",
+                    ambient.r, ambient.g, ambient.b,
+                    diffuse.r, diffuse.g, diffuse.b,
+                    specular.r, specular.g, specular.b,
+                    (double) alpha, (double) (255.0 * alpha)); }
+    }
+#endif
     matstate.ambient = ambient;
     matstate.diffuse = diffuse;
     matstate.specular = specular;
