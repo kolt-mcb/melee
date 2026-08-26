@@ -577,6 +577,25 @@ void ftParts_800749CC(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     int i;
 
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_FTDRAW") != NULL) {
+        static int n = 0;
+        if (n < 4) { n++;
+            fprintf(stderr,
+                    "[FTPARTS] fp=%p ft_data=%p x8=%p costume=%d\n",
+                    (void*) fp, (void*) fp->ft_data,
+                    fp->ft_data ? (void*) fp->ft_data->x8 : NULL,
+                    (int) fp->x619_costume_id); }
+    }
+    if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x8)) {
+        static int warned = 0;
+        if (warned < 2) { warned++;
+            fprintf(stderr,
+                    "[PORT WARN] ftParts_800749CC: no ft_data->x8; fighter "
+                    "parts stay empty and the model never draws\n"); }
+        return;
+    }
+#endif
     ftParts_8007487C(&fp->ft_data->x8->x0, &fp->x5AC, fp->x619_costume_id,
                      &fp->dobj_list, &fp->x203C);
     for (i = 0; i < fp->x5AC.model_num; i++) {
