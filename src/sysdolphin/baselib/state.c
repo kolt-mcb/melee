@@ -171,6 +171,19 @@ void HSD_SetupChannelMode(u32 arg0)
             }
         }
     }
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_CHANLOG") != NULL) {
+        static unsigned long hist[8];
+        static int n = 0;
+        hist[arg0 & 7]++;
+        if (++n % 2000 == 0) {
+            fprintf(stderr, "[CHAN] rm&7 histogram: 0=%lu 1=%lu 2=%lu 3=%lu "
+                            "4=%lu 5=%lu 6=%lu 7=%lu\n",
+                    hist[0], hist[1], hist[2], hist[3], hist[4], hist[5],
+                    hist[6], hist[7]);
+        }
+    }
+#endif
     switch (arg0 & 7) {
     case 2:
         HSD_SetupChannel(&HSD_State_80405A38_30);
@@ -183,6 +196,29 @@ void HSD_SetupChannelMode(u32 arg0)
         } else {
             HSD_State_80405A38_60.amb_color = dark_matter;
         }
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_CHANLOG") != NULL) {
+            extern unsigned long g_dbg_lobj_clear, g_dbg_lobj_amb,
+                g_dbg_lobj_other;
+            static int n = 0;
+            if (n < 8) { n++;
+                fprintf(stderr,
+                        "[CHAN] rm&7=4 amb_lobj=%p flags=0x%x matamb=(%u,%u,%u) "
+                        "-> amb=(%u,%u,%u) matdif=(%u,%u,%u) "
+                        "| clear=%lu amb_set=%lu other_set=%lu nbactive=%d\n",
+                        (void*) temp_r3_2,
+                        temp_r3_2 ? (unsigned) temp_r3_2->flags : 0u,
+                        matstate.ambient.r, matstate.ambient.g,
+                        matstate.ambient.b,
+                        HSD_State_80405A38_60.amb_color.r,
+                        HSD_State_80405A38_60.amb_color.g,
+                        HSD_State_80405A38_60.amb_color.b,
+                        matstate.diffuse.r, matstate.diffuse.g,
+                        matstate.diffuse.b,
+                        g_dbg_lobj_clear, g_dbg_lobj_amb, g_dbg_lobj_other,
+                        (int) HSD_LObjGetNbActive()); }
+        }
+#endif
         HSD_State_80405A38_60.light_mask = HSD_LObjGetLightMaskDiffuse();
         HSD_SetupChannel(&HSD_State_80405A38_60);
         HSD_State_80405A38_90.light_mask = HSD_LObjGetLightMaskAlpha();

@@ -1,3 +1,4 @@
+#include <execinfo.h>
 #include "lobj.h"
 
 #include "aobj.h"
@@ -77,9 +78,17 @@ u32 HSD_LObjGetType(HSD_LObj* lobj)
     return lobj->flags & LOBJ_TYPE_MASK;
 }
 
+#if BUILD_TARGET_PC
+unsigned long g_dbg_lobj_clear, g_dbg_lobj_amb, g_dbg_lobj_other;
+#endif
+
 void HSD_LObjSetActive(HSD_LObj* lobj)
 {
     int idx;
+#if BUILD_TARGET_PC
+    if (HSD_LObjGetType(lobj) == LOBJ_AMBIENT) g_dbg_lobj_amb++;
+    else g_dbg_lobj_other++;
+#endif
 
     if (HSD_LObjGetType(lobj) == LOBJ_AMBIENT) {
         idx = MAX_GXLIGHT - 1;
@@ -131,6 +140,9 @@ HSD_LObj* HSD_LObjGetActiveByIndex(s32 idx)
 void HSD_LObjClearActive(void)
 {
     int i;
+#if BUILD_TARGET_PC
+    g_dbg_lobj_clear++;
+#endif
 
     for (i = 0; i < MAX_GXLIGHT; i++) {
         active_lights[i] = NULL;
@@ -615,6 +627,7 @@ void HSD_LObjSetupInit(HSD_CObj* cobj)
 
 void HSD_LObjAddCurrent(HSD_LObj* lobj)
 {
+
     HSD_SList* node;
     HSD_SList** p;
 

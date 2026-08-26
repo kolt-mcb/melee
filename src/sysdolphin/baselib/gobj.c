@@ -228,11 +228,19 @@ void HSD_GObj_80390FC0(void)
 #if BUILD_TARGET_PC
     HSD_GObj* cur;
     int i;
-    /* PC port: walk ALL GX links, not just the last one.
-     * The original GCN code walks link[gx_link_max+1] which is
-     * the highest priority link. On PC, stage GObjs are in lower
-     * priority links (e.g., link[3]), so we need to walk all of them. */
-    for (i = 0; i <= HSD_GObjLibInitData.gx_link_max + 1; i++) {
+    /* PC port: the original walks only link[gx_link_max + 1] -- the camera
+     * link -- and the camera's own callback then drives the nested passes
+     * (HSD_GObj_80390ED0(gobj, N)) in the right order: lights first, then
+     * geometry. Walking every link here instead runs the light GObjs at top
+     * level, so they install their lights, and the camera callback's
+     * HSD_LObjDeleteCurrentAll(NULL) then wipes them before any geometry
+     * draws -- every surface renders with no lights and a black ambient. It
+     * also renders geometry GObjs a second time outside the camera's passes.
+     * MELEE_GXLINK_ALL=1 restores the old walk-everything behaviour. */
+    static int walk_all = -1;
+    if (walk_all < 0) walk_all = (getenv("MELEE_GXLINK_ALL") != NULL);
+    for (i = walk_all ? 0 : HSD_GObjLibInitData.gx_link_max + 1;
+         i <= HSD_GObjLibInitData.gx_link_max + 1; i++) {
         cur = HSD_GObjGXLinkHead[i];
         int iter = 0;
         while (cur != NULL) {
