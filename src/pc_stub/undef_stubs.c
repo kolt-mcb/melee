@@ -2007,17 +2007,14 @@ __attribute__((weak)) void port_render_frame_end(void)
             double dt = (t.tv_sec - _t0.tv_sec) + (t.tv_nsec - _t0.tv_nsec) / 1e9;
             if (getenv("MELEE_TEXLOG") != NULL) {
                 extern unsigned long g_tx_calls, g_tx_invalid, g_tx_baddim,
-                    g_tx_unreadable, g_tx_hit, g_tx_init, g_tx_distinct,
-                    g_dbg_mobj_setup, g_dbg_tobj_setup, g_dbg_tobj_seen,
-                    g_dbg_tobj_null;
+                    g_tx_unreadable, g_tx_hit, g_tx_init;
                 fprintf(stderr,
                         "[TXTALLY] calls=%lu invalid=%lu baddim=%lu unreadable=%lu "
-                        "hit=%lu upload=%lu init=%lu | mobjsetup=%lu tobjsetup=%lu tobjseen=%lu tobjnull=%lu\n",
+                        "hit=%lu upload=%lu init=%lu\n",
                         g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable,
                         g_tx_hit,
                         g_tx_calls - g_tx_invalid - g_tx_baddim - g_tx_unreadable
-                            - g_tx_hit, g_tx_init, g_dbg_mobj_setup,
-                        g_dbg_tobj_setup, g_dbg_tobj_seen, g_dbg_tobj_null);
+                            - g_tx_hit, g_tx_init);
             }
             fprintf(stderr, "[FPS] frame %lu: %.1f fps draws=%u verts=%u ends=%u vadds=%u jd=%u dd=%u pd=%u dl=%u rg=%u ja=%u j1=%u clip=%u/%u proj=(%.3f,%.3f,%.3f,%.1f) vp=(%.0f,%.0f,%.0f,%.0f) mtxT=(%.1f,%.1f,%.1f) v0=(%.1f,%.1f,%.1f)\n",
                     _fr, dt > 0 ? 100.0 / dt : 0.0, pc_stat_draws, pc_stat_verts, pc_stat_ends, pc_stat_vadds, pc_stat_jdisp, pc_stat_ddisp, pc_stat_pdisp, pc_stat_dlcalls, pc_stat_rgobj, pc_stat_jdall, pc_stat_jdisp1, pc_stat_clip_in, pc_stat_clip_tot,

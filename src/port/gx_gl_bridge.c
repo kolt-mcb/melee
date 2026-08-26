@@ -159,7 +159,6 @@ typedef struct {
 /* MELEE_TEXLOG tally: why texture loads do or do not reach the GL upload. */
 unsigned long g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable, g_tx_hit;
 unsigned long g_tx_init, g_tx_distinct;
-unsigned long g_dbg_mobj_setup, g_dbg_tobj_setup, g_dbg_tobj_seen, g_dbg_tobj_null;
 
 static u32 g_tev_color_out_reg[8];
 static u32 g_tev_alpha_out_reg[8];
@@ -6542,7 +6541,8 @@ void GXInitTexObj(void* texObj, const void* image, u16 width, u16 height,
     }
     
     { static const void* last_img; g_tx_init++;
-      if (image != last_img) { last_img = image; g_tx_distinct++; } }
+      if (image != last_img) { last_img = image; g_tx_distinct++; }
+    }
     /* Capture texture metadata during initialization */
     memset(&g_state.current_tex, 0, sizeof(g_state.current_tex));
     g_state.current_tex.valid = TRUE;
