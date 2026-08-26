@@ -160,6 +160,8 @@ typedef struct {
 unsigned long g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable, g_tx_hit;
 unsigned long g_tx_init, g_tx_distinct;
 
+static void pc_apply_cull_state(void);
+
 static u32 g_tev_color_out_reg[8];
 static u32 g_tev_alpha_out_reg[8];
 
@@ -2737,16 +2739,10 @@ static void bridge_upload_and_draw(void)
         glDepthRange(0.0, 1.0);
     }
 
-    /* State — cull (PC port: disable to catch more geometry) */
-    if (FALSE && g_state.cull_enabled) {
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
-        /* GC quads wind clockwise (TL→TR→BR→BL in screen-space y-down), 
-         * so CW = front face to match. */
-        glFrontFace(GL_CW);
-    } else {
-        glDisable(GL_CULL_FACE);
-    }
+    /* State — cull. This block used to be `if (FALSE && ...)`, so every draw
+     * unconditionally disabled culling and threw away whatever GXSetCullMode
+     * had selected: the game's backface culling has never run on the port. */
+    pc_apply_cull_state();
     
     /* State — scissor */
     if (g_state.scissor_enabled) {
@@ -4084,12 +4080,31 @@ void GXSetCullMode(u32 mode)
     g_state.cull_enabled = (mode != GX_CULL_NONE);
     g_state.cull_mode = mode;
     
-    if (mode == GX_CULL_NONE) {
+    /* The direction used to be ignored: every non-NONE mode culled GL_BACK,
+     * so GX_CULL_FRONT showed the faces it asked to hide and GX_CULL_ALL drew
+     * geometry that should have been dropped entirely. GC quads wind clockwise
+     * in screen space (y-down), hence GL_CW as the front-face convention. */
+    pc_apply_cull_state();
+}
+
+/* Shared by GXSetCullMode and the per-draw state block, so a draw cannot
+ * silently contradict what the game asked for. */
+static void pc_apply_cull_state(void)
+{
+    static int no_cull = -1;
+    if (no_cull < 0) no_cull = (getenv("MELEE_NOCULL") != NULL);
+
+    if (no_cull || !g_state.cull_enabled) {
         glDisable(GL_CULL_FACE);
-    } else {
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
-        glFrontFace(GL_CW);
+        return;
+    }
+    glEnable(GL_CULL_FACE);
+    glFrontFace(GL_CW);
+    switch (g_state.cull_mode) {
+    case GX_CULL_FRONT: glCullFace(GL_FRONT); break;
+    case GX_CULL_ALL:   glCullFace(GL_FRONT_AND_BACK); break;
+    case GX_CULL_BACK:
+    default:            glCullFace(GL_BACK); break;
     }
 }
 void GXSetDither(u32 enable)
