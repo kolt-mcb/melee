@@ -775,6 +775,36 @@ __attribute__((weak)) int HSD_DevComRequest(int file, uintptr_t src,
         /* Fallback: use dest as the buffer (works when not truncated) */
         buf = (void*)(uintptr_t)dest;
     }
+
+    /* PC port: a destination inside the ARAM window is an ARAM *offset*, not
+     * a host pointer. lbHeap builds heap_array[1] out of aram_lo/aram_hi -- a
+     * zero-based 16 MB space on GCN -- so every allocation from it is an
+     * offset, and lbFile_800164A4 marks such requests type 0x23. Writing to
+     * one directly is a write to low memory: PlMrAJ.dat (1.25 MB) landed on
+     * this non-PIE binary's .bss, on top of the GX bridge's state struct.
+     * That was the corruption behind the garbage frame counter, light count
+     * and texture cache -- invisible to ASan (one global object) and to a
+     * hardware watchpoint (it arrives as a read() syscall, not a CPU store).
+     * Translate the same way ARQPostRequest does. */
+    if (buf != NULL && (uintptr_t) buf < PC_ARAM_SIZE) {
+        unsigned char* host = pc_aram_host((unsigned long) (uintptr_t) buf);
+        if (host == NULL) {
+            fprintf(stderr, "[DEVCOM] no ARAM backing for offset %p; "
+                            "dropping %lu-byte load\n", buf,
+                    (unsigned long) size);
+            if (callback) callback(file, 0, buf, FALSE);
+            return -1;
+        }
+        if ((unsigned long) size > PC_ARAM_SIZE -
+                ((unsigned long) (uintptr_t) buf % PC_ARAM_SIZE)) {
+            fprintf(stderr, "[DEVCOM] ARAM load of %lu bytes at offset %p "
+                            "overruns the 16MB window; clamping\n",
+                    (unsigned long) size, buf);
+            size = PC_ARAM_SIZE -
+                   ((unsigned long) (uintptr_t) buf % PC_ARAM_SIZE);
+        }
+        buf = host;
+    }
     
     DVDFileInfo info;
     if (!DVDFastOpen(file, &info)) return -1;
@@ -1975,6 +2005,20 @@ __attribute__((weak)) void port_render_frame_end(void)
             extern unsigned pc_stat_clip_in, pc_stat_clip_tot;
             extern float pc_stat_mtxt[3], pc_stat_v0[3];
             double dt = (t.tv_sec - _t0.tv_sec) + (t.tv_nsec - _t0.tv_nsec) / 1e9;
+            if (getenv("MELEE_TEXLOG") != NULL) {
+                extern unsigned long g_tx_calls, g_tx_invalid, g_tx_baddim,
+                    g_tx_unreadable, g_tx_hit, g_tx_init, g_tx_distinct,
+                    g_dbg_mobj_setup, g_dbg_tobj_setup, g_dbg_tobj_seen,
+                    g_dbg_tobj_null;
+                fprintf(stderr,
+                        "[TXTALLY] calls=%lu invalid=%lu baddim=%lu unreadable=%lu "
+                        "hit=%lu upload=%lu init=%lu | mobjsetup=%lu tobjsetup=%lu tobjseen=%lu tobjnull=%lu\n",
+                        g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable,
+                        g_tx_hit,
+                        g_tx_calls - g_tx_invalid - g_tx_baddim - g_tx_unreadable
+                            - g_tx_hit, g_tx_init, g_dbg_mobj_setup,
+                        g_dbg_tobj_setup, g_dbg_tobj_seen, g_dbg_tobj_null);
+            }
             fprintf(stderr, "[FPS] frame %lu: %.1f fps draws=%u verts=%u ends=%u vadds=%u jd=%u dd=%u pd=%u dl=%u rg=%u ja=%u j1=%u clip=%u/%u proj=(%.3f,%.3f,%.3f,%.1f) vp=(%.0f,%.0f,%.0f,%.0f) mtxT=(%.1f,%.1f,%.1f) v0=(%.1f,%.1f,%.1f)\n",
                     _fr, dt > 0 ? 100.0 / dt : 0.0, pc_stat_draws, pc_stat_verts, pc_stat_ends, pc_stat_vadds, pc_stat_jdisp, pc_stat_ddisp, pc_stat_pdisp, pc_stat_dlcalls, pc_stat_rgobj, pc_stat_jdall, pc_stat_jdisp1, pc_stat_clip_in, pc_stat_clip_tot,
                     (double)pc_stat_proj[0], (double)pc_stat_proj[1], (double)pc_stat_proj[2], (double)pc_stat_proj[3],

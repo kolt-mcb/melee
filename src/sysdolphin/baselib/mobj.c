@@ -500,6 +500,9 @@ void HSD_MObjSetup(HSD_MObj* mobj, u32 rendermode)
         tobj_toon->next = tobj;
         tobj = tobj_toon;
     }
+#if BUILD_TARGET_PC
+    { extern unsigned long g_dbg_mobj_setup; g_dbg_mobj_setup++; }
+#endif
     HSD_TObjSetup(tobj);
     HSD_TObjSetupTextureCoordGen(tobj);
     #if BUILD_TARGET_PC
