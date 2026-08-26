@@ -1859,6 +1859,20 @@ void ftData_80085CD8(Fighter* fp, Fighter* arg1, int msid)
                     }
                 }
                 fp->x590 = HSD_ArchiveGetPublicAddress(&sp14, temp_r3->x0);
+#if BUILD_TARGET_PC
+                /* Same conversion as the x598 path below: the archive header
+                 * is swapped by HSD_ArchiveParse but the data section is not,
+                 * so this FigaTree is still big-endian with 4-byte offsets. */
+                if (fp->x590 != NULL && sp14.data != NULL) {
+                    extern void* pc_conv_FigaTree(const u8* raw, const u8* base,
+                                                  unsigned long len,
+                                                  const void* owner);
+                    fp->x590 = pc_conv_FigaTree(
+                        (const u8*) fp->x590, (const u8*) sp14.data,
+                        (unsigned long) sp14.header.data_size,
+                        (const void*) fp);
+                }
+#endif
             } else {
                 fp->x590 = NULL;
             }
@@ -1917,6 +1931,22 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
                     }
                 }
                 arg0->x598 = HSD_ArchiveGetPublicAddress(&sp10, temp_r3->x0);
+#if BUILD_TARGET_PC
+            /* PC port: HSD_ArchiveParse swaps the archive header and reloc
+             * table but never the data section, so what comes back here is a
+             * big-endian FigaTree holding 4-byte offsets. Rebuild it at
+             * x86_64 widths -- FigaTrack is 0xC on GCN and 0x10 here, so this
+             * cannot be done in place. */
+            if (arg0->x598 != NULL && sp10.data != NULL) {
+                extern void* pc_conv_FigaTree(const u8* raw, const u8* base,
+                                              unsigned long len,
+                                              const void* owner);
+                void* conv = pc_conv_FigaTree(
+                    (const u8*) arg0->x598, (const u8*) sp10.data,
+                    (unsigned long) sp10.header.data_size, (const void*) arg0);
+                arg0->x598 = conv;
+            }
+#endif
             } else {
                 arg0->x598 = 0;
             }
