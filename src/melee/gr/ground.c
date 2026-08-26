@@ -3393,6 +3393,13 @@ f32 Ground_801C57F0(int arg0)
 
 void Ground_EnableMatchCamera(void)
 {
+#if BUILD_TARGET_PC
+    /* PC port: stage params may be unconverted/NULL; default to standard. */
+    if (!pc_ptr_sane(stage_info.param)) {
+        Camera_SetModeToStandard();
+        return;
+    }
+#endif
     if (stage_info.param->x4C_fixed_cam) {
         Camera_SetModeToFixed();
     } else {

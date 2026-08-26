@@ -4332,7 +4332,7 @@ void GXCallDisplayList(void* list, u32 nbytes)
                 /* PC diag: for the main-text DL (nbytes==3328), log each strip's
                  * world position (model matrix translation) + resolved vertex
                  * positions (model space) to see where the letters actually land. */
-                if (nbytes == 3328 && nverts >= 8) {
+                if (nbytes == 3328 && nverts >= 8 && getenv("MELEE_MTR")) {
                     static int _mt_n = 0;
                     if (_mt_n < 60) {
                         _mt_n++;
@@ -5747,27 +5747,31 @@ void GXSetPixelFmt(u32 pix_fmt, u32 z_fmt)
 
 void GXProject(f32 vx, f32 vy, f32 vz, f32 mv[3][4], f32 *pm, f32 *vp, f32 *sx, f32 *sy, f32 *sz)
 {
-    /* Transform point by modelview matrix */
-    f32 wx = mv[0][0]*vx + mv[1][0]*vy + mv[2][0]*vz + mv[0][3];
-    f32 wy = mv[0][1]*vx + mv[1][1]*vy + mv[2][1]*vz + mv[1][3];
-    f32 wz = mv[0][2]*vx + mv[1][2]*vy + mv[2][2]*vz + mv[2][3];
-    f32 ww = mv[0][3]*vx + mv[1][3]*vy + mv[2][3]*vz + mv[3][3];
-    
-    /* Transform by projection matrix (4x4, row-major) */
-    f32 dx = pm[0]*wx + pm[1]*wy + pm[2]*wz + pm[3]*ww;
-    f32 dy = pm[4]*wx + pm[5]*wy + pm[6]*wz + pm[7]*ww;
-    f32 dz = pm[8]*wx + pm[9]*wy + pm[10]*wz + pm[11]*ww;
-    f32 dw = pm[12]*wx + pm[13]*wy + pm[14]*wz + pm[15]*ww;
-    
-    /* Perspective divide */
-    if (dw != 0) {
-        dx /= dw; dy /= dw; dz /= dw;
+    /* Real GX semantics: mv is a 3x4 row-major modelview matrix; pm is the
+     * 7-float GX projection vector (pm[0]=0 perspective / 1 ortho, then
+     * A..F as returned by GXGetProjectionv); vp is the 6-float viewport.
+     * (Previously treated pm as a 4x4 = read 9 floats past the caller's
+     * stack array; ASan stack-buffer-overflow in lbVector_WorldToScreen.) */
+    f32 x = mv[0][0]*vx + mv[0][1]*vy + mv[0][2]*vz + mv[0][3];
+    f32 y = mv[1][0]*vx + mv[1][1]*vy + mv[1][2]*vz + mv[1][3];
+    f32 z = mv[2][0]*vx + mv[2][1]*vy + mv[2][2]*vz + mv[2][3];
+    f32 xc, yc, zc, wc;
+
+    if (pm[0] == 0.0f) { /* perspective */
+        xc = x * pm[1] + z * pm[2];
+        yc = y * pm[3] + z * pm[4];
+        zc = z * pm[5] + pm[6];
+        wc = (z != 0.0f) ? (1.0f / -z) : 0.0f;
+    } else { /* orthographic */
+        xc = x * pm[1] + pm[2];
+        yc = y * pm[3] + pm[4];
+        zc = z * pm[5] + pm[6];
+        wc = 1.0f;
     }
-    
-    /* Map to viewport (vp = {x, y, w, h}) */
-    if (sx) *sx = (dx + 1) * 0.5f * vp[2] + vp[0];
-    if (sy) *sy = (dy + 1) * 0.5f * vp[3] + vp[1];
-    if (sz) *sz = dz;
+
+    if (sx) *sx = vp[2] * 0.5f * xc * wc + (vp[0] + vp[2] * 0.5f);
+    if (sy) *sy = -vp[3] * 0.5f * yc * wc + (vp[1] + vp[3] * 0.5f);
+    if (sz) *sz = vp[5] + zc * wc * (vp[5] - vp[4]);
 }
 
 /* ============================================================

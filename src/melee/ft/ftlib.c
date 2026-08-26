@@ -539,6 +539,14 @@ bool ftLib_80086A8C(HSD_GObj* gobj)
         if (camera_gobj != NULL) {
             HSD_CObj* temp_r30 = GET_COBJ(camera_gobj);
             if (temp_r30 == HSD_CObjGetCurrent()) {
+#if BUILD_TARGET_PC
+                /* PC port: cameraBox may be unconverted garbage; treat the
+                 * fighter as on-screen. */
+                if (!pc_ptr_sane(fp->x890_cameraBox)) {
+                    fp->x221F_b0 = false;
+                    return true;
+                }
+#endif
                 if (Camera_80030CD8(fp->x890_cameraBox, &fp->x2188)) {
                     fp->x221F_b0 = false;
                     return true;

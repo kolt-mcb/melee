@@ -9,7 +9,7 @@
 static inline int pc_ptr_sane(const void* p)
 {
     uintptr_t up = (uintptr_t)p;
-    if (up < 0x10000ULL) return 0;
+    if (up < 0x400000ULL) return 0;
     if (up >= 0x80000000ULL && up < 0xC0000000ULL) return 0; /* GCN range */
     if (up > 0x7fffffffffffULL) return 0;
     return 1;

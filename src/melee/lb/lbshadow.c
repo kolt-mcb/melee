@@ -1,4 +1,5 @@
 #include "lbshadow.h"
+#include <stdlib.h>
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
@@ -336,6 +337,15 @@ void lbShadow_8000F38C(s32 arg0)
 
     PAD_STACK(0x10);
 
+#if BUILD_TARGET_PC
+    /* PC port: the shadow pass corrupts the stack canary somewhere in its
+     * unconverted-data walk (deterministic SIGABRT once fighters render).
+     * Shadows are cosmetic — skip entirely until lights/shadow data are
+     * converted. Set MELEE_SHADOWS=1 to re-enable for debugging. */
+    if (getenv("MELEE_SHADOWS") == NULL) {
+        return;
+    }
+#endif
     noLight = 0;
 
     for (gobj = HSD_GObj_Entities->fighters; gobj != NULL; gobj = gobj->next) {
