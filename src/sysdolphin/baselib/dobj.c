@@ -363,6 +363,9 @@ void forceStringAllocation(
 
 void HSD_DObjDisp(HSD_DObj* dobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 {
+#if BUILD_TARGET_PC
+    { extern unsigned pc_stat_ddisp; pc_stat_ddisp++; }
+#endif
     HSD_PObj* p;
 
     if (dobj == NULL || dobj->mobj == NULL) return;

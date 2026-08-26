@@ -31,6 +31,10 @@
 #include <sysdolphin/baselib/lobj.h>
 
 static HSD_GObj* s_floor_gobj = NULL;
+static HSD_GObj* s_fighter_gobj = NULL;
+static HSD_JObj* s_floor_jobj = NULL;
+static HSD_JObj* s_fighter_jobj = NULL;
+static u8* s_fbuf = NULL;
 static HSD_CObj* s_cam = NULL;
 static HSD_LObj* s_light = NULL;
 static u8* s_buf = NULL;   /* kept alive: archive camera/fog descs reference it */
@@ -164,6 +168,7 @@ void pc_render_stage_test(void)
             fprintf(stderr, "[STAGE] jobj tree: %d nodes, %d with dobj (PObj)\n", nj, nd);
             if (stage_diag()) { int dn = 0; dump_floor_mobjs(jobj, &dn); }
         }
+        s_floor_jobj = jobj;
         s_floor_gobj = GObj_Create(HSD_GOBJ_CLASS_STAGE, 5, 0);
         if (!s_floor_gobj) { fprintf(stderr, "[STAGE] GObj_Create failed\n"); return; }
         HSD_GObjObject_80390A70(s_floor_gobj, HSD_GObj_804D7849, jobj);
@@ -195,11 +200,76 @@ void pc_render_stage_test(void)
         }
         fprintf(stderr, "[STAGE] init done: floor_gobj=%p cam=%p light=%p\n",
                 (void*)s_floor_gobj, (void*)s_cam, (void*)s_light);
+
+        /* PC port: optional fighter model on the stage (MELEE_STAGE_FIGHTER).
+         * Loads Mario's neutral costume through the same conversion pipeline
+         * and renders it with the stage camera — a deterministic test bed for
+         * fighter visibility, independent of scene-flow randomness. */
+        if (getenv("MELEE_STAGE_FIGHTER")) {
+            FILE* ff = fopen("orig/GALE01/PlMrNr.dat", "rb");
+            if (!ff) { fprintf(stderr, "[FTEST] fopen PlMrNr.dat failed\n"); }
+            else {
+                fseek(ff, 0, SEEK_END); long flen = ftell(ff); fseek(ff, 0, SEEK_SET);
+                s_fbuf = (u8*)malloc(flen);
+                if (s_fbuf && fread(s_fbuf, 1, flen, ff) == (size_t)flen) {
+                    extern void* lbHeap_80015BD0(int, unsigned long);
+                    HSD_Archive* farc = (HSD_Archive*)lbHeap_80015BD0(0, sizeof(HSD_Archive));
+                    lbArchive_InitializeDAT(farc, s_fbuf, (u32)flen);
+                    const u8* rawJoint =
+                        (const u8*)HSD_ArchiveGetPublicAddress(farc, "PlyMario5K_Share_joint");
+                    fprintf(stderr, "[FTEST] rawJoint=%p dataBase=%p\n",
+                            (void*)rawJoint, (void*)farc->data);
+                    if (rawJoint) {
+                        HSD_Joint* fj = grDatFiles_ConvertJointTreeGCNtoX64(
+                            rawJoint, farc->data, 0, NULL);
+                        grDatFiles_ResolvePObjJoints();
+                        if (fj) {
+                            { int nj2 = 0, nd2 = 0; count_joint_dobjdesc(fj, &nj2, &nd2);
+                              fprintf(stderr, "[FTEST] joint tree: %d joints, %d with dobjdesc\n", nj2, nd2); }
+                            { /* fighter meshes hang as one ->next chain */
+                              int chain = 0; HSD_DObjDesc* dd = NULL;
+                              HSD_Joint* jw = fj;
+                              while (jw && !jw->u.dobjdesc) jw = jw->child;
+                              if (jw) dd = jw->u.dobjdesc;
+                              while (dd) { chain++; dd = dd->next; }
+                              fprintf(stderr, "[FTEST] dobjdesc chain length=%d\n", chain); }
+                            HSD_JObj* fjobj = HSD_JObjLoadJoint(fj);
+                            if (fjobj) {
+                                int nj = 0, nd = 0; count_jobj(fjobj, &nj, &nd);
+                                fprintf(stderr, "[FTEST] fighter jobj: %d nodes, %d with dobj\n", nj, nd);
+                                Vec3 fpos = { 0.0f, 5.0f, 0.0f };
+                                HSD_JObjSetTranslate(fjobj, &fpos);
+                                s_fighter_jobj = fjobj;
+                                s_fighter_gobj = GObj_Create(HSD_GOBJ_CLASS_STAGE, 5, 0);
+                                if (s_fighter_gobj)
+                                    HSD_GObjObject_80390A70(s_fighter_gobj, HSD_GObj_804D7849, fjobj);
+                            } else fprintf(stderr, "[FTEST] HSD_JObjLoadJoint failed\n");
+                        } else fprintf(stderr, "[FTEST] joint conversion failed\n");
+                    }
+                }
+                fclose(ff);
+            }
+            fprintf(stderr, "[FTEST] fighter_gobj=%p\n", (void*)s_fighter_gobj);
+        }
     }
 
     if (!s_floor_gobj) return;
 
     static int s_camlog = 0;
+    /* Apply camera overrides BEFORE SetCurrent, and dirty the jobj trees so
+     * cached view*model matrices recompute (HSD caches them per jobj). */
+    if (s_cam && getenv("MELEE_STAGE_CLOSE")) {
+        Vec3 fe = { 0.0f, 8.0f, 30.0f };  HSD_CObjSetEyePosition(s_cam, &fe);
+        Vec3 fi = { 0.0f, 6.0f, 0.0f };   HSD_CObjSetInterest(s_cam, &fi);
+        Vec3 fu = { 0.0f, 1.0f, 0.0f };   HSD_CObjSetUpVector(s_cam, &fu);
+        HSD_CObjSetFov(s_cam, 45.0f);
+        HSD_CObjSetNear(s_cam, 1.0f);
+        HSD_CObjSetFar(s_cam, 10000.0f);
+        HSD_CObjSetMtxDirty(s_cam);
+        { extern void HSD_JObjSetMtxDirtySub(HSD_JObj*);
+          if (s_floor_jobj) HSD_JObjSetMtxDirtySub(s_floor_jobj);
+          if (s_fighter_jobj) HSD_JObjSetMtxDirtySub(s_fighter_jobj); }
+    }
     if (s_cam && HSD_CObjSetCurrent(s_cam)) {
         { GLint vp[4]; glGetIntegerv(GL_VIEWPORT, vp);
           fprintf(stderr, "[STAGE] after-SetCurrent viewport=(%d,%d,%d,%d)\n", vp[0],vp[1],vp[2],vp[3]); }
@@ -238,7 +308,21 @@ void pc_render_stage_test(void)
                  * forced via pc_force_cam so the stage GObjs' own close-up
                  * cameras don't override it mid-render. Set MELEE_STAGE_TOPDOWN
                  * to instead reposition s_cam to a top-down debug view. */
-                if (getenv("MELEE_STAGE_TOPDOWN")) {
+                if (getenv("MELEE_STAGE_CLOSE")) {
+                    /* Close-up on the fighter test model at (0,5,0). */
+                    Vec3 fe = { 0.0f, 8.0f, 30.0f };  HSD_CObjSetEyePosition(s_cam, &fe);
+                    Vec3 fi = { 0.0f, 6.0f, 0.0f };   HSD_CObjSetInterest(s_cam, &fi);
+                    Vec3 fu = { 0.0f, 1.0f, 0.0f };   HSD_CObjSetUpVector(s_cam, &fu);
+                    HSD_CObjSetFov(s_cam, 45.0f);
+                    HSD_CObjSetMtxDirty(s_cam);
+                    HSD_CObjGetViewingMtxPtr(s_cam);
+                    { static int _cl_n = 0;
+                      if (_cl_n++ < 2) { Vec3 e; HSD_CObjGetEyePosition(s_cam, &e);
+                        Mtx vm; HSD_CObjGetViewingMtx(s_cam, vm);
+                        fprintf(stderr, "[CLOSE] eye now=(%.1f,%.1f,%.1f) fov=%.1f vm2=(%.3f,%.3f,%.3f,%.1f)\n",
+                                (double)e.x,(double)e.y,(double)e.z,(double)HSD_CObjGetFov(s_cam),
+                                (double)vm[2][0],(double)vm[2][1],(double)vm[2][2],(double)vm[2][3]); } }
+                } else if (getenv("MELEE_STAGE_TOPDOWN")) {
                     Vec3 fe; fe.x = 0.0f; fe.y = 150.0f; fe.z = 0.0f; HSD_CObjSetEyePosition(s_cam, &fe);
                     Vec3 fi; fi.x = 0.0f; fi.y = 0.0f; fi.z = 0.0f; HSD_CObjSetInterest(s_cam, &fi);
                     Vec3 fu; fu.x = 0.0f; fu.y = 0.0f; fu.z = 1.0f; HSD_CObjSetUpVector(s_cam, &fu);
@@ -248,6 +332,7 @@ void pc_render_stage_test(void)
                 }
                 HSD_CObjPCSetForceCam(s_cam);
                 HSD_GObj_JObjCallback(s_floor_gobj, 0);
+                if (s_fighter_gobj) HSD_GObj_JObjCallback(s_fighter_gobj, 0);
             }
         }
         HSD_CObjEndCurrent();

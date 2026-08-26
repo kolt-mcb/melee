@@ -307,6 +307,11 @@ void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
         }
     }
 #endif
+    { static int _gcb_n = 0;
+      if (_gcb_n < 10) { _gcb_n++;
+          fprintf(stderr, "[GCB] gobj=%p cls=0x%04x plink=%u gxlink=%u kind=%u hsd_obj=%p\n",
+                  (void*)gobj, (unsigned)gobj->classifier, (unsigned)gobj->p_link,
+                  (unsigned)gobj->gx_link, (unsigned)gobj->obj_kind, (void*)jobj); } }
     HSD_JObjDispAll(jobj, vmtx, HSD_GObj_80390EB8(arg1), 0);
 #else
     HSD_JObjDispAll(jobj, NULL, HSD_GObj_80390EB8(arg1), 0);

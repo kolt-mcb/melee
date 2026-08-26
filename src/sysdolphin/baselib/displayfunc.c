@@ -307,6 +307,9 @@ MtxPtr _HSD_mkEnvelopeModelNodeMtx(HSD_JObj* m, MtxPtr mtx)
 void HSD_JObjDispSub(HSD_JObj* jobj, MtxPtr vmtx, MtxPtr pmtx,
                      HSD_TrspMask trsp_mask, u32 rendermode)
 {
+#if BUILD_TARGET_PC
+    { extern unsigned pc_stat_jdisp; pc_stat_jdisp++; }
+#endif
     HSD_DObj* dobj;
     u32 dobj_trsp;
 
@@ -584,6 +587,9 @@ void _HSD_ZListClear(void)
 void HSD_JObjDisp(HSD_JObj* jobj, MtxPtr vmtx, HSD_TrspMask trsp_mask,
                   u32 rendermode)
 {
+#if BUILD_TARGET_PC
+    { extern unsigned pc_stat_jdisp1; pc_stat_jdisp1++; }
+#endif
     if (jobj != NULL) {
         if (union_type_dobj(jobj)) {
             HSD_JObjDispDObj(jobj, vmtx, trsp_mask, rendermode);
