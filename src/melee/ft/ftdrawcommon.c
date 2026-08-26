@@ -387,6 +387,19 @@ void ftDrawCommon_80080E18(HSD_GObj* gobj, int arg1)
 {
     Fighter* fp = gobj->user_data;
 
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_FTDRAW") != NULL) {
+        static int n = 0;
+        if (n < 8) { n++;
+            fprintf(stderr,
+                    "[FTDRAW] gobj=%p fp=%p x221F_b3=%d visible=%d camstate=%d "
+                    "x5AC.xC[4]=%p x21FC_b7=%d invisible=%d\n",
+                    (void*) gobj, (void*) fp, (int) fp->x221F_b3,
+                    (int) ftLib_80086A8C(gobj), (int) Camera_80031060(),
+                    (void*) fp->x5AC.xC[4], (int) fp->x21FC_flag.b7,
+                    (int) fp->invisible); }
+    }
+#endif
     if (!fp->x221F_b3 && ftLib_80086A8C(gobj)) {
         switch (Camera_80031060()) {
         case 1:
