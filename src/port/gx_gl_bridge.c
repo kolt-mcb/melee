@@ -152,6 +152,12 @@ typedef struct {
     u32 indirect_add_prev;        /* Add previous stage flag */
 } TevStage;
 
+/* Per-stage TEV destination register (GXSetTevColorOp/GXSetTevAlphaOp out_reg).
+ * Deliberately NOT inside TevStage/BridgeState: an unfound writer corrupts that
+ * struct, and growing it shifts every field past tev_stages[]. */
+static u32 g_tev_color_out_reg[8];
+static u32 g_tev_alpha_out_reg[8];
+
 /* Light object storage (used for material rendering) */
 typedef struct {
     f32 x, y, z;
@@ -868,6 +874,8 @@ static GLint g_lighting_enabled_loc = -1;
 /* TEV pipeline uniform locations */
 static GLint g_tev_num_stages_loc = -1;
 static GLint g_tev_color_in_loc = -1;   /* Flat array of 32 */
+static GLint g_tev_color_out_loc = -1;  /* per-stage output register */
+static GLint g_tev_alpha_out_loc = -1;
 static GLint g_tev_alpha_in_loc = -1;
 static GLint g_tev_color_op_loc = -1;
 static GLint g_tev_alpha_op_loc = -1;
@@ -1151,6 +1159,8 @@ static const char* g_frag_src =
 "// TEV pipeline uniforms (flat arrays — GLSL 3.30 has no arrays of arrays)\n"
 "uniform int u_tev_num_stages;\n"
 "uniform int u_tev_color_in[32];    // [stage*4 + input] color input sources\n"
+"uniform int u_tev_color_out[8];    // per-stage dest register (0=PREV,1..3=REG0..2)\n"
+"uniform int u_tev_alpha_out[8];\n"
 "uniform int u_tev_alpha_in[32];    // [stage*4 + input] alpha input sources\n"
 "uniform int u_tev_color_op[8];     // 0=ADD, 1=SUB\n"
 "uniform int u_tev_alpha_op[8];\n"
@@ -1213,25 +1223,21 @@ static const char* g_frag_src =
 "// Dolphin GXTevColorArg enum: CPREV=0, APREV=1, C0=2, A0=3, C1=4, A1=5,\n"
 "// C2=6, A2=7, TEXC=8, TEXA=9, RASC=10, RASA=11, ONE=12, HALF=13,\n"
 "// KONST=14, ZERO=15, TEXRRR=16, TEXGGG=17, TEXBBB=18\n"
-"vec4 tev_resolve_color(int src, vec4 tex, vec4 ras, vec4 cprev, vec4 aprev, int stage) {\n"
+"vec4 tev_resolve_color(int src, vec4 tex, vec4 ras, vec4 reg[4], int stage) {\n"
 "    if (src == 8) return tex;   // TEXC\n"
 "    if (src == 9) return vec4(tex.a);     // TEXA\n"
 "    if (src == 10) return ras;           // RASC\n"
 "    if (src == 11) return vec4(ras.a);   // RASA\n"
-"    if (src == 0) return cprev;          // CPREV\n"
-"    if (src == 1) return vec4(aprev.a);  // APREV as color\n"
-"    if (src == 2) { // C0\n"
-"        if (u_chan_src[0] == 1) return v_col;  // GX_SRC_VTX: per-vertex color\n"
-"        // When lighting is enabled, modulate channel color by per-vertex lit color\n"
-"        vec4 c0 = u_chan_color[0];\n"
-"        if (u_lighting_enabled != 0) c0.rgb *= v_lit_color.rgb;\n"
-"        return c0;\n"
+"    // Sources 0..7 are the four TEV colour registers, NOT the rasterised\n"
+"    // channel colours: 0/1 = TEVPREV rgb/a, 2/3 = TEVREG0, 4/5 = TEVREG1,\n"
+"    // 6/7 = TEVREG2. The channel colour reaches TEV only as RASC/RASA.\n"
+"    // These used to read u_chan_color[], so every C0/C1/C2 input returned a\n"
+"    // channel colour -- and u_chan_color[2] is never written (GX has only two\n"
+"    // colour channels), so C2 was a hardcoded white.\n"
+"    if (src < 8) {\n"
+"        int ri = src / 2;\n"
+"        return (src - ri * 2 == 0) ? reg[ri] : vec4(reg[ri].a);\n"
 "    }\n"
-"    if (src == 3) return vec4((u_chan_src[0] == 1) ? v_col.a : u_chan_color[0].a); // A0 as color\n"
-"    if (src == 4) return (u_chan_src[1] == 1) ? v_col : u_chan_color[1];   // C1\n"
-"    if (src == 5) return vec4((u_chan_src[1] == 1) ? v_col.a : u_chan_color[1].a); // A1 as color\n"
-"    if (src == 6) return (u_chan_src[2] == 1) ? v_col : u_chan_color[2];   // C2\n"
-"    if (src == 7) return vec4((u_chan_src[2] == 1) ? v_col.a : u_chan_color[2].a); // A2 as color\n"
 "    if (src == 14) { // KONST\n"
 "        // Real GX_TEV_KCSEL table: 0x00-0x07 are the numeric constants\n"
 "        // 8/8..1/8; 0x0C-0x0F select K0-K3; 0x10-0x1F select a single\n"
@@ -1261,13 +1267,11 @@ static const char* g_frag_src =
 "\n"
 "// Resolve a TEV alpha input source to a float\n"
 "// Dolphin GXTevAlphaArg enum: APREV=0, A0=1, A1=2, A2=3, TEXA=4, RASA=5, KONST=6, ZERO=7\n"
-"float tev_resolve_alpha(int src, vec4 tex, vec4 ras, float aprev, int stage) {\n"
+"float tev_resolve_alpha(int src, vec4 tex, vec4 ras, vec4 reg[4], int stage) {\n"
 "    if (src == 4) return tex.a;      // TEXA\n"
 "    if (src == 5) return ras.a;      // RASA\n"
-"    if (src == 0) return aprev;      // APREV\n"
-"    if (src == 1) return (u_chan_src[0] == 1) ? v_col.a : u_chan_color[0].a; // A0\n"
-"    if (src == 2) return (u_chan_src[1] == 1) ? v_col.a : u_chan_color[1].a; // A1\n"
-"    if (src == 3) return (u_chan_src[2] == 1) ? v_col.a : u_chan_color[2].a; // A2\n"
+"    // APREV/A0/A1/A2 are the alpha halves of the four TEV registers.\n"
+"    if (src < 4) return reg[src].a;\n"
 "    if (src == 6) { // KONST\n"
 "        int ksel = u_tev_kalpha_sel[stage];\n"
 "        float ka;\n"
@@ -1397,8 +1401,16 @@ static const char* g_frag_src =
 "    if (u_lighting_enabled != 0) {\n"
 "        ras.rgb = clamp(ras.rgb * v_lit_color.rgb, 0.0, 1.0);\n"
 "    }\n"
-"    vec4 cprev = ras;          // CPREV starts as RAS\n"
-"    float aprev = ras.a;       // APREV starts as RAS.a\n"
+"    // The four TEV colour registers. On hardware these persist across draws\n"
+"    // and hold whatever GXSetTevColor last wrote; stages read and write them\n"
+"    // by index. reg[0] is TEVPREV.\n"
+"    vec4 reg[4];\n"
+"    reg[0] = u_tevreg[0];\n"
+"    reg[1] = u_tevreg[1];\n"
+"    reg[2] = u_tevreg[2];\n"
+"    reg[3] = u_tevreg[3];\n"
+"    int last_c = -1;\n"
+"    int last_a = -1;\n"
 "\n"
 "    // Execute TEV stages\n"
 "    for (int stage = 0; stage < u_tev_num_stages && stage < 8; stage++) {\n"
@@ -1413,10 +1425,10 @@ static const char* g_frag_src =
 "\n"
 "        // Color processing\n"
 "        if (u_tev_color_enabled[stage] != 0) {\n"
-"            vec4 a = tev_resolve_color(u_tev_color_in[stage*4 + 0], tex_s, ras_s, cprev, vec4(aprev), stage);\n"
-"            vec4 b = tev_resolve_color(u_tev_color_in[stage*4 + 1], tex_s, ras_s, cprev, vec4(aprev), stage);\n"
-"            vec4 c = tev_resolve_color(u_tev_color_in[stage*4 + 2], tex_s, ras_s, cprev, vec4(aprev), stage);\n"
-"            vec4 d = tev_resolve_color(u_tev_color_in[stage*4 + 3], tex_s, ras_s, cprev, vec4(aprev), stage);\n"
+"            vec4 a = tev_resolve_color(u_tev_color_in[stage*4 + 0], tex_s, ras_s, reg, stage);\n"
+"            vec4 b = tev_resolve_color(u_tev_color_in[stage*4 + 1], tex_s, ras_s, reg, stage);\n"
+"            vec4 c = tev_resolve_color(u_tev_color_in[stage*4 + 2], tex_s, ras_s, reg, stage);\n"
+"            vec4 d = tev_resolve_color(u_tev_color_in[stage*4 + 3], tex_s, ras_s, reg, stage);\n"
 "\n"
 "            vec4 result;\n"
 "            if (u_tev_color_op[stage] == 0) { // ADD\n"
@@ -1440,15 +1452,17 @@ static const char* g_frag_src =
 "                result.rgb = clamp(result.rgb, 0.0, 1.0);\n"
 "            }\n"
 "\n"
-"            cprev = result;\n"
+"            int oc = u_tev_color_out[stage];\n"
+"            reg[oc].rgb = result.rgb;\n"
+"            last_c = oc;\n"
 "        }\n"
 "\n"
 "        // Alpha processing\n"
 "        if (u_tev_alpha_enabled[stage] != 0) {\n"
-"            float a = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 0], tex, ras, aprev, stage);\n"
-"            float b = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 1], tex, ras, aprev, stage);\n"
-"            float c = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 2], tex, ras, aprev, stage);\n"
-"            float d = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 3], tex, ras, aprev, stage);\n"
+"            float a = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 0], tex, ras, reg, stage);\n"
+"            float b = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 1], tex, ras, reg, stage);\n"
+"            float c = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 2], tex, ras, reg, stage);\n"
+"            float d = tev_resolve_alpha(u_tev_alpha_in[stage*4 + 3], tex, ras, reg, stage);\n"
 "\n"
 "            float result;\n"
 "            if (u_tev_alpha_op[stage] == 0) { // ADD\n"
@@ -1463,12 +1477,19 @@ static const char* g_frag_src =
 "            else if (u_tev_alpha_scale[stage] == 3) result *= 8.0;\n"
 "            if (u_tev_alpha_clamp[stage] != 0) result = clamp(result, 0.0, 1.0);\n"
 "\n"
-"            aprev = result;\n"
+"            int oa = u_tev_alpha_out[stage];\n"
+"            reg[oa].a = result;\n"
+"            last_a = oa;\n"
 "        }\n"
 "    }\n"
 "\n"
 "    // Final output\n"
-"    vec4 col = vec4(cprev.rgb, aprev);\n"
+"    // Hardware reads the framebuffer colour out of TEVPREV; fall back to the\n"
+"    // last register actually written (and to RAS if no stage ran at all) so a\n"
+"    // material that never targets PREV still shows something.\n"
+"    vec4 col;\n"
+"    col.rgb = (last_c >= 0) ? reg[last_c].rgb : ras.rgb;\n"
+"    col.a   = (last_a >= 0) ? reg[last_a].a   : ras.a;\n"
 "\n"
 "    // Fog (GCN style: linear, exponential, reverse exponential)\n"
 "    if (u_fog_enabled != 0) {\n"
@@ -1658,6 +1679,8 @@ static void bridge_compile_shaders(void)
     /* TEV input arrays: flat 32-element arrays (8 stages × 4 inputs each) */
     g_tev_color_in_loc = glGetUniformLocation(g_shader_program, "u_tev_color_in");
     g_tev_alpha_in_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_in");
+    g_tev_color_out_loc = glGetUniformLocation(g_shader_program, "u_tev_color_out");
+    g_tev_alpha_out_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_out");
     
     /* Indirect texture (bump mapping) uniforms */
     g_ind_tex_enabled_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_enabled");
@@ -2060,6 +2083,9 @@ static void pc_check_canaries(const char* where)
         fprintf(stderr, "[CANARY] init check: pal=%08x before=%08x after=%08x\n",
                 g_state.canary_after_palette[0], g_state.canary_before_lights[0],
                 g_state.canary_after_lights[0]);
+        fprintf(stderr, "[CANARY] addrs: g_state=%p pal=%p lights=%p\n",
+                (void*) &g_state, (void*) &g_state.canary_after_palette[0],
+                (void*) &g_state.canary_before_lights[0]);
     }
     {
         int first_bad = -1, last_bad = -1, nbad = 0;
@@ -2074,11 +2100,12 @@ static void pc_check_canaries(const char* where)
             reported = 1;
             fprintf(stderr,
                     "[CANARY] after_palette clobbered at %s: %d/64 words, range [%d..%d], "
-                    "vals %08x %08x %08x\n",
+                    "vals %08x %08x %08x (at %p)\n",
                     where, nbad, first_bad, last_bad,
                     g_state.canary_after_palette[first_bad],
                     g_state.canary_after_palette[first_bad + 1 < 64 ? first_bad + 1 : first_bad],
-                    g_state.canary_after_palette[last_bad]);
+                    g_state.canary_after_palette[last_bad],
+                    (void*) &g_state.canary_after_palette[0]);
             return;
         }
     }
@@ -2483,13 +2510,40 @@ static void bridge_upload_and_draw(void)
                     g_state.chan_amb_colors[0].r, g_state.chan_amb_colors[0].g,
                     g_state.chan_amb_colors[0].b, g_state.chan_amb_colors[0].a,
                     (int) g_state.tex0_enabled);
+            fprintf(stderr,
+                    "[TEV]   K0=(%u,%u,%u,%u) K1=(%u,%u,%u,%u) "
+                    "K2=(%u,%u,%u,%u) K3=(%u,%u,%u,%u)\n",
+                    g_state.k_colors[0].r, g_state.k_colors[0].g,
+                    g_state.k_colors[0].b, g_state.k_colors[0].a,
+                    g_state.k_colors[1].r, g_state.k_colors[1].g,
+                    g_state.k_colors[1].b, g_state.k_colors[1].a,
+                    g_state.k_colors[2].r, g_state.k_colors[2].g,
+                    g_state.k_colors[2].b, g_state.k_colors[2].a,
+                    g_state.k_colors[3].r, g_state.k_colors[3].g,
+                    g_state.k_colors[3].b, g_state.k_colors[3].a);
+            fprintf(stderr,
+                    "[TEV]   regs PREV=(%u,%u,%u,%u) R0=(%u,%u,%u,%u) "
+                    "R1=(%u,%u,%u,%u) R2=(%u,%u,%u,%u)\n",
+                    g_state.tev_regs[0].r, g_state.tev_regs[0].g,
+                    g_state.tev_regs[0].b, g_state.tev_regs[0].a,
+                    g_state.tev_regs[1].r, g_state.tev_regs[1].g,
+                    g_state.tev_regs[1].b, g_state.tev_regs[1].a,
+                    g_state.tev_regs[2].r, g_state.tev_regs[2].g,
+                    g_state.tev_regs[2].b, g_state.tev_regs[2].a,
+                    g_state.tev_regs[3].r, g_state.tev_regs[3].g,
+                    g_state.tev_regs[3].b, g_state.tev_regs[3].a);
             for (st = 0; st < g_state.num_tev_stages && st < 4; st++) {
                 TevStage* tv = &g_state.tev_stages[st];
                 fprintf(stderr,
-                        "[TEV]   s%u cin=[%u,%u,%u,%u] op=%u ksel=%u tex=%u en=%d\n",
+                        "[TEV]   s%u cin=[%u,%u,%u,%u] op=%u ksel=%u tex=%u en=%d "
+                        "cout=%u ain=[%u,%u,%u,%u] aout=%u aen=%d\n",
                         st, tv->color_inputs[0], tv->color_inputs[1],
                         tv->color_inputs[2], tv->color_inputs[3], tv->color_op,
-                        tv->kcolor_sel, tv->tex_map, (int) tv->color_enabled);
+                        tv->kcolor_sel, tv->tex_map, (int) tv->color_enabled,
+                        g_tev_color_out_reg[st],
+                        tv->alpha_inputs[0], tv->alpha_inputs[1],
+                        tv->alpha_inputs[2], tv->alpha_inputs[3],
+                        g_tev_alpha_out_reg[st], (int) tv->alpha_enabled);
             }
         }
     }
@@ -4923,6 +4977,18 @@ static void apply_tev_uniforms(void)
             glUniform1iv(g_tev_color_in_loc, 32, cin_arr);
         if (g_tev_alpha_in_loc >= 0)
             glUniform1iv(g_tev_alpha_in_loc, 32, ain_arr);
+
+        /* Per-stage destination register (GXSetTevColorOp/AlphaOp out_reg) */
+        GLint cout_arr[8] = {0};
+        GLint aout_arr[8] = {0};
+        for (u32 i = 0; i < num_stages && i < 8; i++) {
+            cout_arr[i] = (GLint)g_tev_color_out_reg[i];
+            aout_arr[i] = (GLint)g_tev_alpha_out_reg[i];
+        }
+        if (g_tev_color_out_loc >= 0)
+            glUniform1iv(g_tev_color_out_loc, 8, cout_arr);
+        if (g_tev_alpha_out_loc >= 0)
+            glUniform1iv(g_tev_alpha_out_loc, 8, aout_arr);
     }
     
     /* Upload KColor constants */
@@ -5279,8 +5345,8 @@ void GXSetTevColorOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_re
         case 3: mult = 8.0f; break;   /* SCALE_8 */
         }
         if (unit < 2) g_state.color_mult[unit] = mult;
+        g_tev_color_out_reg[stage & 7] = out_reg & 3;
     }
-    (void)out_reg;
 }
 
 void GXSetTevAlphaOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_reg)
@@ -5293,8 +5359,8 @@ void GXSetTevAlphaOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_re
         g_state.tev_stages[stage].alpha_scale = scl & 0x03;
         g_state.tev_stages[stage].alpha_clamp = clamp;
         g_state.tev_stages[stage].alpha_enabled = TRUE;
+        g_tev_alpha_out_reg[stage & 7] = out_reg & 3;
     }
-    (void)out_reg;
 }
 void GXSetNumChans(u32 n)
 {
@@ -6914,11 +6980,14 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
 static void decode_i8_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, TLUTSlot *tlut);
 static void decode_i4_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, TLUTSlot *tlut);
 
+/* MELEE_TEXLOG tally: why texture loads do or do not reach the GL upload. */
+unsigned long g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable, g_tx_hit;
 void GXLoadTexObj(void* texObj, u32 texEnv)
 {
     GX_TRACE("GXLoadTexObj(p, %u)", texEnv);
     if (pc_canary_on()) pc_check_canaries("GXLoadTexObj:enter");
-    if (!g_state.current_tex.valid) return;
+    g_tx_calls++;
+    if (!g_state.current_tex.valid) { g_tx_invalid++; return; }
     
     u16 w = g_state.current_tex.width;
     u16 h = g_state.current_tex.height;
@@ -6927,6 +6996,7 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
     
     if (w == 0 || h == 0 || img == NULL) {
         PORT_LOG_WARN("TX: bad tex %dx%d img=%p", w, h, img);
+        g_tx_baddim++;
         return;
     }
 #if BUILD_TARGET_PC
@@ -6942,6 +7012,7 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
             static int warned = 0;
             if (warned < 8) { warned++;
                 PORT_LOG_WARN("TX: unreadable image %p (%ux%u fmt=0x%X); skipping", img, w, h, fmt); }
+            g_tx_unreadable++;
             return;
         }
     }
@@ -6972,6 +7043,7 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         g_state.tex_cache_w[slot] == w && g_state.tex_cache_h[slot] == h &&
         g_state.tex_cache_fmt[slot] == fmt) {
         /* Cache hit - skip upload, just set up state */
+        g_tx_hit++;
         goto bind_tex;
     }
     if (!tex_id) {
@@ -7103,18 +7175,38 @@ skip_tlut:
     /* PC diag: dump the first N converted textures to PPM so we can SEE
      * what is being loaded (MELEE_TEXDUMP). Only for RGBA8 upload_src. */
     {
-        static int _td_on = -1, _td_n = 0, _td_from = -1;
-        if (_td_on < 0) _td_on = (getenv("MELEE_TEXDUMP") != NULL);
-        if (_td_from < 0) {
+        /* The frame gate this used to have keyed off g_state.frame_count, which
+         * the BridgeState corruption makes meaningless (it reads as a huge or
+         * negative number), so the dump silently never fired. Count uploads. */
+        static int _td_on = -1, _td_n = 0, _td_from = -1, _td_seen = 0;
+        if (_td_on < 0) {
             const char* tf = getenv("MELEE_TEXDUMP_FROM");
+            _td_on = (getenv("MELEE_TEXDUMP") != NULL);
             _td_from = tf ? atoi(tf) : 0;
         }
-        if (_td_on && (int)g_state.frame_count < _td_from) _td_on = 0;
-        else if (_td_from > 0 && (int)g_state.frame_count >= _td_from && _td_on == 0 &&
+        _td_seen++;
+        /* One line per upload regardless of the file-dump cap, so a run can be
+         * summarised by size/format without writing 96 files. */
+        if (_td_on || getenv("MELEE_TEXLOG") != NULL) {
+            fprintf(stderr, "TXTALLY calls=%lu invalid=%lu baddim=%lu unreadable=%lu hit=%lu\n",
+                    g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable, g_tx_hit);
+            fprintf(stderr, "TEXUP %dx%d fmt=0x%02x src=%s\n", upload_w, upload_h,
+                    fmt, upload_src ? (upload_src == img ? "raw" : "conv") : "null");
+        }
+        if (_td_on && _td_seen <= _td_from) _td_on = 0;
+        else if (_td_from > 0 && _td_seen > _td_from && _td_on == 0 &&
                  getenv("MELEE_TEXDUMP") != NULL) _td_on = 1;
         int is_rgba8 = (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 ||
                         fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || fmt == 0x06);
-        if (_td_on && is_rgba8 && _td_n < 96 && upload_src) {
+        /* MELEE_TEXDUMP_MIN=<px>: only dump textures at least this wide/tall.
+         * The HUD font re-uploads every frame and otherwise fills the budget. */
+        static int _td_min = -1;
+        if (_td_min < 0) {
+            const char* tm = getenv("MELEE_TEXDUMP_MIN");
+            _td_min = tm ? atoi(tm) : 0;
+        }
+        if (_td_on && is_rgba8 && _td_n < 96 && upload_src &&
+            upload_w >= _td_min && upload_h >= _td_min) {
             char path[128];
             snprintf(path, sizeof(path), "/tmp/texdump_%d_%dx%d.ppm", _td_n, upload_w, upload_h);
             FILE* tf = fopen(path, "wb");
