@@ -240,9 +240,14 @@ void* lbHeap_80015BD0(int arg0, int arg1)
              * malloc so loads keep working (freed via lbMemFreeToHeap will
              * just log; acceptable leak until heap sizing is ported). */
             if (result == NULL) {
-                OSReport("[HEAP] lbHeap_80015BD0: heap %d exhausted; malloc(%d) fallback\n", arg0, arg1);
+                OSReport("[HEAP] lbHeap_80015BD0: heap %d exhausted; low-pool(%d) fallback\n", arg0, arg1);
                 OSRestoreInterrupts(enabled);
-                return malloc(arg1);
+                {
+                    extern void* pc_lowmem_alloc(unsigned long size);
+                    void* lp = pc_lowmem_alloc((unsigned long)arg1);
+                    /* Must stay sub-4GB: callers store these in u32 fields. */
+                    return lp ? lp : malloc(arg1);
+                }
             }
 #endif
             if (p->type == 3) {
@@ -252,9 +257,11 @@ void* lbHeap_80015BD0(int arg0, int arg1)
     } else {
 #if BUILD_TARGET_PC
         /* PC port fallback: use malloc when heap isn't created */
-        OSReport("[HEAP] lbHeap_80015BD0 fallback: arg0=%d arg1=%d\n", arg0, arg1);
-        result = malloc(arg1);
-        OSReport("[HEAP] malloc returned %p\n", result);
+        {
+            extern void* pc_lowmem_alloc(unsigned long size);
+            result = pc_lowmem_alloc((unsigned long)arg1);
+            if (result == NULL) result = malloc(arg1);
+        }
 #else
         result = NULL;
 #endif /* BUILD_TARGET_PC */

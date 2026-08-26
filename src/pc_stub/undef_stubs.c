@@ -1806,11 +1806,23 @@ void game_main_loop(void)
             extern void HSD_ZListInitAllocData(void);
             extern void HSD_ObjSetHeap(unsigned long, void*);
 
+            /* PC port: this heap MUST live below 4 GB. lbHeap/lbMemory do
+             * their block arithmetic in u32, so a kernel-chosen mmap (e.g.
+             * 0x7485c8000000) silently truncates and every allocation from
+             * it fails — that was the ~5-in-6 "black screen" nondeterminism:
+             * the title/stage archive alloc returned NULL, so the scene
+             * loaded with no model at all. Carve from the low pool instead
+             * and only fall back to mmap if the pool is exhausted. */
             size_t heap_size = 64 * 1024 * 1024;
-            g_heap_base = mmap(NULL, heap_size, PROT_READ | PROT_WRITE,
-                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            void* pc_lowmem_carve(unsigned long size);
+            g_heap_base = pc_lowmem_carve(heap_size);
+            if (g_heap_base == NULL) {
+                g_heap_base = mmap(NULL, heap_size, PROT_READ | PROT_WRITE,
+                                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                PORT_LOG_WARN("[BASERLIB] low pool exhausted; heap may be >4GB");
+            }
             g_heap_size = heap_size;
-            if (g_heap_base != MAP_FAILED) {
+            if (g_heap_base != MAP_FAILED && g_heap_base != NULL) {
                 HSD_ObjSetHeap(heap_size, g_heap_base);
                 PORT_LOG_INFO("[BASERLIB] Heap allocated at %p (%zu bytes)",
                               g_heap_base, heap_size);
@@ -3312,6 +3324,31 @@ void* pc_lowmem_carve(unsigned long size)
     p = (unsigned char*)g_low_mem_base + g_low_mem_used;
     g_low_mem_used += size;
     fprintf(stderr, "[MEM] carved %lu MB at %p for game heap\n", size >> 20, p);
+    return p;
+}
+
+/* PC port: sub-4GB bump allocator for game structures. The game's heap code
+ * (lbHeap/lbMemory) and the archive converters store pointers in u32 fields,
+ * so anything reachable from converted archive data MUST live below 4 GB.
+ * malloc() returns high addresses, which silently truncated — that was the
+ * intermittent "scene loads but has no meshes" failure. */
+void* pc_lowmem_alloc(unsigned long size)
+{
+    static unsigned char* base = NULL;
+    static unsigned long used = 0, cap = 0;
+    void* pc_lowmem_carve(unsigned long size);
+    void* p;
+
+    if (base == NULL) {
+        cap = 96UL * 1024UL * 1024UL;
+        base = (unsigned char*)pc_lowmem_carve(cap);
+        if (base == NULL) return NULL;
+        used = 0;
+    }
+    size = (size + 31UL) & ~31UL;
+    if (size == 0 || used + size > cap) return NULL;
+    p = base + used;
+    used += size;
     return p;
 }
 
