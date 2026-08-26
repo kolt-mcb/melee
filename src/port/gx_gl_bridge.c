@@ -19,6 +19,9 @@
 #define GL_GLEXT_PROTOTYPES
 
 #include "log.h"
+#if BUILD_TARGET_PC
+#include "pc_ptr.h"
+#endif
 #include <stdlib.h>
 #include <GL/gl.h>
 #include <GL/glext.h>
@@ -6583,6 +6586,23 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         PORT_LOG_WARN("TX: bad tex %dx%d img=%p", w, h, img);
         return;
     }
+#if BUILD_TARGET_PC
+    /* PC port: image pointers can be garbage from unconverted archive
+     * descriptors. Probe the whole nominal extent (worst case 4 B/texel)
+     * before any decoder touches it. */
+    {
+        unsigned long probe = (unsigned long)w * (unsigned long)h;
+        if (fmt == 0x06) probe *= 4; else if (fmt >= 0x03 && fmt <= 0x05) probe *= 2;
+        else if (fmt == 0x0E || fmt == 0x00) probe /= 2;
+        if (probe == 0) probe = 1;
+        if (!pc_mem_readable(img, probe)) {
+            static int warned = 0;
+            if (warned < 8) { warned++;
+                PORT_LOG_WARN("TX: unreadable image %p (%ux%u fmt=0x%X); skipping", img, w, h, fmt); }
+            return;
+        }
+    }
+#endif
     
     GLenum internal_fmt, base_fmt, data_type;
     gx_format_to_gl(fmt, &internal_fmt, &base_fmt, &data_type);
@@ -6673,7 +6693,19 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
 
     /* I4/I8 with TLUT: decode indexed pixels to RGBA8888 */
     if (fmt == 0x00 || fmt == 0x01) {  /* I4 or I8 */
-        TLUTSlot *tlut = &g_state.g_tlut[g_state.g_current_tlut];
+        TLUTSlot *tlut;
+#if BUILD_TARGET_PC
+        /* PC port: the current-TLUT id can be garbage from unconverted
+         * descriptors — a wild index here dereferenced off the array. */
+        if (g_state.g_current_tlut >= 16) {
+            static int warned = 0;
+            if (warned < 8) { warned++;
+                PORT_LOG_WARN("TX: wild TLUT id %u; gray fallback", g_state.g_current_tlut); }
+            g_state.g_current_tlut = 0;
+            g_state.g_tlut[0].valid = FALSE;
+        }
+#endif
+        tlut = &g_state.g_tlut[g_state.g_current_tlut];
 #if BUILD_TARGET_PC
         { static int _it_on = -1, _it_n = 0;
           if (_it_on < 0) _it_on = (getenv("MELEE_MTR") != NULL);

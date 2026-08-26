@@ -2068,12 +2068,13 @@ void Player_80036DD8(void)
      * GCN offsets — *sp8 would be a garbage pointer on x86_64. Keep
      * pl_804D6470 NULL until the archive conversion tooling (roadmap M4)
      * covers PdPm.dat. */
-    if (sp8 == NULL) {
-        PORT_LOG_WARN("Player_80036DD8: plLoadCommonData unavailable; pl_804D6470=NULL\n");
-        pl_804D6470 = NULL;
-    } else {
-        PORT_LOG_WARN("Player_80036DD8: plLoadCommonData is unconverted BE data; pl_804D6470=NULL\n");
-        pl_804D6470 = NULL;
+    {
+        /* Zero arena, not NULL: the bonus/points system reads dozens of
+         * fields through this. Zeros are safe until PdPm conversion. */
+        static u8 pc_plco_zero[0x100000];
+        (void)sp8;
+        PORT_LOG_WARN("Player_80036DD8: plLoadCommonData unconverted; using zero arena\n");
+        pl_804D6470 = (void*)pc_plco_zero;
     }
 #else
     pl_804D6470 = *sp8;
