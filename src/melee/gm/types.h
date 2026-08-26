@@ -16,9 +16,24 @@
 #include <melee/mn/types.h>
 
 /// @deprecated Replace with inline bitfields
+/* PC port: PowerPC allocates bitfields MSB-first, x86_64 LSB-first, so on GCN
+ * `.u8 = 1` sets b7 while here it would set b0. Code mixes the two views --
+ * Fighter_UnkInitLoad writes x21FC_flag.u8 = 1 and ftDrawCommon_800805C8 then
+ * returns early unless x21FC_flag.b7 -- so the fighter never drew. Declaring
+ * the bits in reverse on a little-endian target reproduces the GCN layout. */
 typedef union UnkFlagStruct {
     u8 u8;
     struct {
+#if BUILD_TARGET_PC
+        u8 b7 : 1;
+        u8 b6 : 1;
+        u8 b5 : 1;
+        u8 b4 : 1;
+        u8 b3 : 1;
+        u8 b2 : 1;
+        u8 b1 : 1;
+        u8 b0 : 1;
+#else
         u8 b0 : 1;
         u8 b1 : 1;
         u8 b2 : 1;
@@ -27,6 +42,7 @@ typedef union UnkFlagStruct {
         u8 b5 : 1;
         u8 b6 : 1;
         u8 b7 : 1;
+#endif
     };
 } UnkFlagStruct;
 
