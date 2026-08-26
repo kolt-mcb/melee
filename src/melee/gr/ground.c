@@ -592,10 +592,16 @@ void Ground_801C0800(StageIdPair* pair)
         mpLibLoad(stage_info.coll_data);
         mpLib_80058820();
     }
-    /* These two walk stage animation/light structures that are still
-     * big-endian — same reason grAnime_801C7C1C is gated (MELEE_STAGE_ANIM). */
+    /* Ground_801C1E94 walks stage animation structures that are still
+     * big-endian, and still crashes in grAnime_801C7C1C -- keep it gated.
+     * Ground_801C466C is separate: it builds the stage's light list, and
+     * without it current_lights is empty, so HSD_LObjSetupInit clears the
+     * active lights and every surface renders with no light and a black
+     * ambient. Try it by default; MELEE_STAGE_NOLIGHTS=1 backs it out. */
     if (getenv("MELEE_STAGE_ANIM") != NULL) {
         Ground_801C1E94();
+    }
+    if (getenv("MELEE_STAGE_NOLIGHTS") == NULL) {
         Ground_801C466C();
     }
 #else
@@ -2990,6 +2996,18 @@ void Ground_801C466C(void)
             var_r27 = var_r27->next;
         }
     }
+#if BUILD_TARGET_PC
+    /* PC port: the light objects themselves are converted, but their AObj
+     * animation tracks are still big-endian -- HSD_ForeachAnim walks straight
+     * off the end of them. Creating the lights is the part that matters for
+     * rendering (without it current_lights stays empty and every surface is
+     * unlit with a black ambient); the animation can wait for the stage-anim
+     * conversion that also gates Ground_801C1E94 and grAnime_801C7C1C. */
+    if (getenv("MELEE_STAGE_ANIM") == NULL) {
+        HSD_GObj_SetupProc(temp_r3, Ground_801C461C, 0);
+        return;
+    }
+#endif
     HSD_LObjReqAnimAll(temp_r3_2, 0.0F);
     HSD_ForeachAnim(temp_r3_2, LOBJ_TYPE, ALL_TYPE_MASK, HSD_AObjSetRate,
                     AOBJ_ARG_AF, 1.0);
