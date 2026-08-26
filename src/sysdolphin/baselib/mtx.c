@@ -1,3 +1,5 @@
+#include <math.h>
+#include <stdio.h>
 #include "mtx.h"
 
 #include "debug.h"
@@ -15,6 +17,38 @@
  * Rows: [right; up; look] with translation -dot(camPos, axis). */
 void C_MTXLookAt(Mtx m, Vec3* camPos, Vec3* camUp, Vec3* target)
 {
+#if BUILD_TARGET_PC
+    /* PC diag/guard: a non-finite camera input produces an all-NaN view
+     * matrix, after which nothing survives clipping (silent black screen). */
+    if (!isfinite(camPos->x) || !isfinite(camPos->y) || !isfinite(camPos->z) ||
+        !isfinite(target->x) || !isfinite(target->y) || !isfinite(target->z) ||
+        !isfinite(camUp->x) || !isfinite(camUp->y) || !isfinite(camUp->z))
+    {
+        static int _nn = 0;
+        if (_nn < 4) { _nn++;
+            fprintf(stderr, "[LOOKAT-NAN] eye=(%.2f,%.2f,%.2f) up=(%.2f,%.2f,%.2f) tgt=(%.2f,%.2f,%.2f) ra=%p\n",
+                    (double)camPos->x,(double)camPos->y,(double)camPos->z,
+                    (double)camUp->x,(double)camUp->y,(double)camUp->z,
+                    (double)target->x,(double)target->y,(double)target->z,
+                    __builtin_return_address(0)); }
+        /* Sanitize component-wise instead of bailing to identity: a
+         * degenerate-but-sane view (looking down -z from the finite
+         * component of the eye) keeps the scene visible. */
+        static Vec3 sp, st, su;
+        sp = *camPos; st = *target; su = *camUp;
+        if (!isfinite(sp.x)) sp.x = 0.0f;
+        if (!isfinite(sp.y)) sp.y = 0.0f;
+        if (!isfinite(sp.z)) sp.z = 100.0f;
+        if (!isfinite(st.x)) st.x = 0.0f;
+        if (!isfinite(st.y)) st.y = 0.0f;
+        if (!isfinite(st.z)) st.z = 0.0f;
+        if (!isfinite(su.x) || !isfinite(su.y) || !isfinite(su.z)) {
+            su.x = 0.0f; su.y = 1.0f; su.z = 0.0f;
+        }
+        if (sp.x == st.x && sp.y == st.y && sp.z == st.z) sp.z = st.z + 100.0f;
+        camPos = &sp; target = &st; camUp = &su;
+    }
+#endif
     f32 lx = camPos->x - target->x;
     f32 ly = camPos->y - target->y;
     f32 lz = camPos->z - target->z;

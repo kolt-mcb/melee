@@ -1,3 +1,4 @@
+#include "port/pc_ptr.h"
 #include "gobj.h"
 
 #if BUILD_TARGET_PC
@@ -124,6 +125,14 @@ void HSD_GObj_80390CFC(void)
                         if (_rp_total <= 4 && _rp_n < 200)
                             fprintf(stderr, "  INVOKE %p gobj=%p pri=%d\n", (void*)proc->on_invoke, (void*)gobj, i);
                     }
+#endif
+#if BUILD_TARGET_PC
+                    /* PC port: a proc whose gobj/callback came from
+                     * unconverted data would fault inside the callback
+                     * (e.g. HSD_GObjGetUserData on a near-NULL gobj). */
+                    if (!pc_ptr_sane(proc->gobj) || !pc_ptr_sane((void*)proc->on_invoke)) {
+                        port_guard_warn("gobj.c:proc_invoke");
+                    } else
 #endif
                     proc->on_invoke(proc->gobj);
                     HSD_GObj_804D7830 = proc->next;

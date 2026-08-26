@@ -425,7 +425,15 @@ struct gmm_x0 {
 STATIC_ASSERT(sizeof(struct gmm_x0) == 0x8518);
 
 struct lbl_8046B6A0_24C_t {
+#if BUILD_TARGET_PC
+    /* PC port: UNK_T is void* (8 bytes on x86_64) but the field offsets here
+     * are GCN's (x4 follows at +4). The extra 4 bytes pushed this struct to
+     * 8832 and made EndMeleeData overrun MatchExitInfo (8840) by 4 — an
+     * ASan global-buffer-overflow at match end. Keep the GCN width. */
+    u32 x0;
+#else
     UNK_T x0;
+#endif
     u8 x4; ///< MatchOutcome
     u8 x5; ///< match mode
     u8 is_teams;

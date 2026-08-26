@@ -1971,13 +1971,21 @@ __attribute__((weak)) void port_render_frame_end(void)
             extern unsigned pc_stat_ends, pc_stat_vadds, pc_stat_vfilt;
             extern unsigned pc_stat_jdisp, pc_stat_ddisp, pc_stat_pdisp, pc_stat_dlcalls;
             extern unsigned pc_stat_rgobj, pc_stat_jdall, pc_stat_jdisp1;
+            extern float pc_stat_proj[4], pc_stat_vp[4];
+            extern unsigned pc_stat_clip_in, pc_stat_clip_tot;
+            extern float pc_stat_mtxt[3], pc_stat_v0[3];
             double dt = (t.tv_sec - _t0.tv_sec) + (t.tv_nsec - _t0.tv_nsec) / 1e9;
-            fprintf(stderr, "[FPS] frame %lu: %.1f fps draws=%u verts=%u ends=%u vadds=%u jd=%u dd=%u pd=%u dl=%u rg=%u ja=%u j1=%u projsets=%u\n",
-                    _fr, dt > 0 ? 100.0 / dt : 0.0, pc_stat_draws, pc_stat_verts, pc_stat_ends, pc_stat_vadds, pc_stat_jdisp, pc_stat_ddisp, pc_stat_pdisp, pc_stat_dlcalls, pc_stat_rgobj, pc_stat_jdall, pc_stat_jdisp1, pc_stat_projsets);
+            fprintf(stderr, "[FPS] frame %lu: %.1f fps draws=%u verts=%u ends=%u vadds=%u jd=%u dd=%u pd=%u dl=%u rg=%u ja=%u j1=%u clip=%u/%u proj=(%.3f,%.3f,%.3f,%.1f) vp=(%.0f,%.0f,%.0f,%.0f) mtxT=(%.1f,%.1f,%.1f) v0=(%.1f,%.1f,%.1f)\n",
+                    _fr, dt > 0 ? 100.0 / dt : 0.0, pc_stat_draws, pc_stat_verts, pc_stat_ends, pc_stat_vadds, pc_stat_jdisp, pc_stat_ddisp, pc_stat_pdisp, pc_stat_dlcalls, pc_stat_rgobj, pc_stat_jdall, pc_stat_jdisp1, pc_stat_clip_in, pc_stat_clip_tot,
+                    (double)pc_stat_proj[0], (double)pc_stat_proj[1], (double)pc_stat_proj[2], (double)pc_stat_proj[3],
+                    (double)pc_stat_vp[0], (double)pc_stat_vp[1], (double)pc_stat_vp[2], (double)pc_stat_vp[3],
+                    (double)pc_stat_mtxt[0], (double)pc_stat_mtxt[1], (double)pc_stat_mtxt[2],
+                    (double)pc_stat_v0[0], (double)pc_stat_v0[1], (double)pc_stat_v0[2]);
             pc_stat_draws = pc_stat_projsets = pc_stat_verts = 0;
             pc_stat_ends = pc_stat_vadds = pc_stat_vfilt = 0;
             pc_stat_jdisp = pc_stat_ddisp = pc_stat_pdisp = pc_stat_dlcalls = 0;
             pc_stat_rgobj = pc_stat_jdall = pc_stat_jdisp1 = 0;
+            pc_stat_clip_in = pc_stat_clip_tot = 0;
             _t0 = t;
         }
     }

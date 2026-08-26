@@ -1,5 +1,7 @@
 #include "baselib/wobj.h"
 
+#include <math.h>
+#include <stdio.h>
 #include "aobj.h"
 #include "class.h"
 #include "debug.h"
@@ -159,6 +161,7 @@ HSD_WObj* HSD_WObjLoadDesc(HSD_WObjDesc* desc)
 
 void HSD_WObjSetPosition(HSD_WObj* wobj, Vec3* pos)
 {
+
     if (wobj == NULL || pos == NULL) {
         return;
     }
