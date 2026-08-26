@@ -585,6 +585,24 @@ bool HSD_CObjSetCurrent(HSD_CObj* cobj)
         }
     }
 #endif
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_VPTRACE") != NULL) {
+        static void* seen[16];
+        static int n = 0;
+        int k, dup = 0;
+        for (k = 0; k < n; k++) if (seen[k] == (void*) cobj) dup = 1;
+        if (!dup && n < 16) { seen[n++] = (void*) cobj;
+            Vec3 e = { 0, 0, 0 };
+            HSD_CObjGetEyePosition(cobj, &e);
+            fprintf(stderr,
+                    "[CAMCUR] cobj=%p pass=%d eye=(%.1f,%.1f,%.1f) "
+                    "vp=(%.0f,%.0f,%.0f,%.0f)\n",
+                    (void*) cobj, (int) render_pass,
+                    (double) e.x, (double) e.y, (double) e.z,
+                    (double) cobj->viewport.xmin, (double) cobj->viewport.ymin,
+                    (double) cobj->viewport.xmax, (double) cobj->viewport.ymax); }
+    }
+#endif
     switch (render_pass) {
     case HSD_RP_OFFSCREEN:
         result = setupOffscreenCamera(cobj);
@@ -606,6 +624,25 @@ bool HSD_CObjSetCurrent(HSD_CObj* cobj)
         return false;
     } else {
         HSD_CObjSetupViewingMtx(cobj);
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_VPTRACE") != NULL) {
+            static int n = 0;
+            if (n < 60) { n++;
+                Vec3 eye = { 0, 0, 0 }, tgt = { 0, 0, 0 };
+                if (cobj->eyepos != NULL) HSD_WObjGetPosition(cobj->eyepos, &eye);
+                if (cobj->interest != NULL) HSD_WObjGetPosition(cobj->interest, &tgt);
+                fprintf(stderr,
+                        "[CAM] cobj=%p eye=(%.1f,%.1f,%.1f) interest=(%.1f,%.1f,%.1f) "
+                        "fov=%.1f aspect=%.3f near=%.1f far=%.1f proj=%d\n",
+                        (void*) cobj,
+                        (double) eye.x, (double) eye.y, (double) eye.z,
+                        (double) tgt.x, (double) tgt.y, (double) tgt.z,
+                        (double) cobj->projection_param.perspective.fov,
+                        (double) cobj->projection_param.perspective.aspect,
+                        (double) cobj->near, (double) cobj->far,
+                        (int) cobj->projection_type); }
+        }
+#endif
         return true;
     }
 }
