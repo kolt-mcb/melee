@@ -1205,6 +1205,41 @@ struct Fighter {
     /*  fp+58C */ u32 x58C;
     /*  fp+590 */ FigaTree* x590;
     /*  fp+594 */ union {
+#if BUILD_TARGET_PC
+        /* PC port: this union is written whole through x594_s32 (from the
+         * wait-anim table) and read back through the bitfields, so the two
+         * views have to agree about which bit is which. PowerPC allocates
+         * bitfields MSB-first and x86_64 LSB-first, so on GCN x594_b0 is bit
+         * 31 and x594_b1_loop is bit 30, while here they landed on bits 0 and
+         * 1. The visible symptom was fighters animating once and freezing:
+         * x594_s32 = 0x40000000 is the loop flag on bit 30, and
+         * x594_b1_loop read 0, so HSD_AObjSetFlags never set AOBJ_LOOP and
+         * every animation stopped dead on its end frame.
+         *
+         * Declaring the members in reverse, as u32 bitfields, puts each one
+         * back on the bit GCN gave it. Reversing declaration order also keeps
+         * the bit order *within* a multi-bit field, which matters for
+         * x594_bits (used as a mask) and x597_bits (a FighterKind). */
+        struct {
+            u32 x596_pad : 14;
+            u32 x596_x7 : 3;
+            u32 x596_x0 : 7;
+            u32 x594_b7 : 1;
+            u32 x594_b6 : 1;
+            u32 x594_b5 : 1;
+            u32 x594_b4 : 1;
+            u32 x594_b3 : 1;
+            u32 x594_b2 : 1;
+            u32 x594_b1_loop : 1;
+            u32 x594_b0 : 1;
+        };
+        struct {
+            u32 x597_bits : 6; // FighterKind of this fighter's x590 FigaTree
+            u32 x594_pad2 : 3;
+            u32 x594_bits : 13;
+            u32 x594_pad : 10;
+        };
+#else
         struct {
             /* fp+594:0 */ u8 x594_b0 : 1;
             /* fp+594:1 */ u8 x594_b1_loop : 1;
@@ -1225,6 +1260,7 @@ struct Fighter {
             u32 x594_pad2 : 3;
             u32 x597_bits : 6; // FighterKind of this fighter's x590 FigaTree
         };
+#endif
         /* fp+594 */ s32 x594_s32;
     };
     /*  fp+598 */ FigaTree* x598;

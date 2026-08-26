@@ -286,6 +286,24 @@ void ftAnim_8006E7B8(Fighter* fp, Fighter_Part part)
             break;
         }
         if (!fp->parts[i].flags_b0 && !fp->parts[i].flags_b5) {
+#if BUILD_TARGET_PC
+            if (getenv("MELEE_ANIMLOG") != NULL) {
+                static unsigned long n;
+                HSD_AObj* a0 = jobj->aobj;
+                if (a0 != NULL && ++n % 300 == 0) {
+                    HSD_AObj* a = a0;
+                    fprintf(stderr,
+                            "[ANIM] JObjAnim #%lu jobj=%p aobj=%p frame=%.2f "
+                            "end=%.1f framerate=%.2f flags=0x%x fobj=%p\n",
+                            n, (void*) jobj, (void*) a,
+                            a ? (double) a->curr_frame : -1.0,
+                            a ? (double) a->end_frame : -1.0,
+                            a ? (double) a->framerate : -1.0,
+                            a ? (unsigned) a->flags : 0u,
+                            a ? (void*) a->fobj : NULL);
+                }
+            }
+#endif
             HSD_JObjAnim(jobj);
         }
         i++;
@@ -356,22 +374,6 @@ void ftAnim_8006E9B4(Fighter_GObj* gobj)
             blend_t_inv = 1.0F - blend_t;
         }
         ftAnim_8006E7B8(fp, FtPart_TopN);
-#if BUILD_TARGET_PC
-        if (getenv("MELEE_ANIMLOG") != NULL) {
-            static unsigned long n;
-            if (++n % 200 == 0) {
-                HSD_AObj* a = anim_jobj ? anim_jobj->aobj : NULL;
-                fprintf(stderr,
-                        "[ANIM] advance #%lu b0=%d jobj=%p aobj=%p frame=%.2f "
-                        "end=%.1f rate=%.2f flags=0x%x\n",
-                        n, (int) fp->x594_b0, (void*) anim_jobj, (void*) a,
-                        a ? (double) a->curr_frame : -1.0,
-                        a ? (double) a->end_frame : -1.0,
-                        a ? (double) a->framerate : -1.0,
-                        a ? (unsigned) a->flags : 0u);
-            }
-        }
-#endif
         if (fp->x594_b0) {
             ftAnim_8006E054(
                 fp, anim_jobj,
