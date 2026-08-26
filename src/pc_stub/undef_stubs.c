@@ -504,7 +504,7 @@ __attribute__((weak)) unsigned int __cvt_fp2unsigned(float f) {
 static unsigned char* pc_aram_base = 0;
 static unsigned long pc_aram_used = 0x20; /* skip 0: 0 means NULL to the game */
 #define PC_ARAM_SIZE 0x01000000UL
-static unsigned char* pc_aram_host(unsigned long aram_off)
+unsigned char* pc_aram_host(unsigned long aram_off)
 {
     void* pc_lowmem_carve(unsigned long size);
     if (pc_aram_base == 0) pc_aram_base = (unsigned char*)pc_lowmem_carve(PC_ARAM_SIZE);

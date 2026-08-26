@@ -812,7 +812,14 @@ void Ground_801C10B8(HSD_GObj* arg0, HSD_GObjEvent arg1)
         HSD_GObj* unk4;
         HSD_GObjEvent unk8;
     }* temp_r3;
+#if BUILD_TARGET_PC
+    /* PC port: 0xC is the GCN size of this struct (three 4-byte fields). On
+     * x86_64 the two pointers make it 24 bytes, so the literal under-allocated
+     * and the writes below ran past the block (ASan: heap-buffer-overflow). */
+    temp_r3 = HSD_MemAlloc(sizeof(*temp_r3));
+#else
     temp_r3 = HSD_MemAlloc(0xC);
+#endif
     if (temp_r3 != NULL) {
         temp_r3->unk0 = stage_info.x6A4;
         temp_r3->unk4 = arg0;
