@@ -2604,7 +2604,13 @@ static void bridge_upload_and_draw(void)
          * (-w<=x,y,z<=w, w>0). */
         /* PC diag: MELEE_CHAN=1 — one line of channel/lighting state per 3D
          * draw (white-surface debugging, roadmap M1). */
-        if (getenv("MELEE_CHAN") && g_state.vert_count > 0 && g_state.frame_count >= 8) {
+        static int _chan_from = -1;
+        if (_chan_from < 0) {
+            const char* cf = getenv("MELEE_CHAN_FROM");
+            _chan_from = cf ? atoi(cf) : 8;
+        }
+        if (getenv("MELEE_CHAN") && g_state.vert_count > 0 &&
+            (int)g_state.frame_count >= _chan_from) {
             static int _ch = 0;
             if (_ch < 80) {
                 _ch++;
@@ -4816,7 +4822,14 @@ static void apply_tev_uniforms(void)
 
     /* Upload lighting uniforms */
     if (g_light_count_loc >= 0) {
-        glUniform1i(g_light_count_loc, (int)g_state.g_active_light_count);
+        /* PC port: g_active_light_count and ambient_color have been observed
+         * holding impossible values in-match (1280 lights, ambient green
+         * 136192) — an intra-struct overflow ASan cannot see, since both
+         * live right after g_lights[8] inside one global. Clamp at use so a
+         * corrupt value cannot flood the scene with light. */
+        u32 nlc = g_state.g_active_light_count;
+        if (nlc > 8) nlc = 8;
+        glUniform1i(g_light_count_loc, (int)nlc);
     }
     if (g_light_mask_loc >= 0) {
         // Combine light masks from all enabled channels
@@ -4826,13 +4839,23 @@ static void apply_tev_uniforms(void)
                 combined_mask |= (int)g_state.chan_diffuse_light[i];
             }
         }
+        /* PC port: GX light masks are 8 bits (GX_LIGHT0..7). Unconverted
+         * channel data yields values like 0xfd8fcf03, which lit every slot
+         * (including garbage ones) and blew the scene out to full
+         * saturation. Keep only the real light bits. */
+        combined_mask &= 0xFF;
         glUniform1i(g_light_mask_loc, combined_mask);
     }
     if (g_ambient_color_loc >= 0) {
-        glUniform3f(g_ambient_color_loc,
-            g_state.ambient_color[0],
-            g_state.ambient_color[1],
-            g_state.ambient_color[2]);
+        f32 amb[3];
+        int ai;
+        for (ai = 0; ai < 3; ai++) {
+            f32 v = g_state.ambient_color[ai];
+            if (!isfinite(v) || v < 0.0f) v = 0.0f;
+            else if (v > 1.0f) v = 1.0f;
+            amb[ai] = v;
+        }
+        glUniform3f(g_ambient_color_loc, amb[0], amb[1], amb[2]);
     }
     if (g_camera_pos_loc >= 0) {
         glUniform3f(g_camera_pos_loc,
@@ -6890,8 +6913,15 @@ skip_tlut:
     /* PC diag: dump the first N converted textures to PPM so we can SEE
      * what is being loaded (MELEE_TEXDUMP). Only for RGBA8 upload_src. */
     {
-        static int _td_on = -1, _td_n = 0;
+        static int _td_on = -1, _td_n = 0, _td_from = -1;
         if (_td_on < 0) _td_on = (getenv("MELEE_TEXDUMP") != NULL);
+        if (_td_from < 0) {
+            const char* tf = getenv("MELEE_TEXDUMP_FROM");
+            _td_from = tf ? atoi(tf) : 0;
+        }
+        if (_td_on && (int)g_state.frame_count < _td_from) _td_on = 0;
+        else if (_td_from > 0 && (int)g_state.frame_count >= _td_from && _td_on == 0 &&
+                 getenv("MELEE_TEXDUMP") != NULL) _td_on = 1;
         int is_rgba8 = (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 ||
                         fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || fmt == 0x06);
         if (_td_on && is_rgba8 && _td_n < 96 && upload_src) {
