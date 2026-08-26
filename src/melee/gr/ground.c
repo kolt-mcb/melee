@@ -1833,7 +1833,19 @@ bool Ground_801C2ED0(HSD_JObj* jobj, s32 arg1)
 {
     u8 _[4];
     bool result = false;
-    UnkArchiveStruct* temp_r3 = grDatFiles_801C6330(arg1);
+    UnkArchiveStruct* temp_r3;
+#if BUILD_TARGET_PC
+    /* PC port: this binds stage JObjs to mp/ collision joints, but the
+     * stage's coll_data is still raw big-endian and mpLibLoad has never run
+     * (Ground_801C0800 returns before it). Every id passed to mpLib_* here is
+     * therefore garbage. Skip the binding until the MapCollData converter
+     * lands (roadmap M2 stage 3); the stage still renders, it just has no
+     * collision. */
+    if (getenv("MELEE_STAGE_COLL") == NULL) {
+        return false;
+    }
+#endif
+    temp_r3 = grDatFiles_801C6330(arg1);
     GrJoint* cur;
     int i;
     int max;
@@ -1885,6 +1897,15 @@ bool Ground_801C2FE0(Ground_GObj* arg0)
         result = false;
 
         temp_r3 = mpGetGroundCollJoint();
+#if BUILD_TARGET_PC
+        /* PC port: mpLibLoad has never run (Ground_801C0800 returns before
+         * it) so the collision joint array is NULL; indexing it with ids from
+         * unconverted stage data faults. See the MELEE_STAGE_COLL gate in
+         * Ground_801C2ED0 — same root cause, roadmap M2 stage 3. */
+        if (temp_r3 == NULL) {
+            return false;
+        }
+#endif
         Ground_804D6954++;
         stagedata = stage_datas[stage_info.grkind];
         count = stagedata->joint_count;

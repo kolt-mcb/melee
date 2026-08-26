@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include "port/pc_ptr.h"
 #include "gr/granime.h"
 
 #include <platform.h>
@@ -319,6 +321,13 @@ void grAnime_801C6A54(HSD_JObj* jobj, HSD_AnimJoint* animjoint,
     if (jobj == NULL) {
         return;
     }
+#if BUILD_TARGET_PC
+    /* PC port: stage anim-joint trees reach here straight from the archive,
+     * still big-endian, so these are raw GCN offsets rather than pointers. */
+    if (animjoint != NULL && !pc_ptr_sane(animjoint)) animjoint = NULL;
+    if (matanimjoint != NULL && !pc_ptr_sane(matanimjoint)) matanimjoint = NULL;
+    if (shapeanimjoint != NULL && !pc_ptr_sane(shapeanimjoint)) shapeanimjoint = NULL;
+#endif
     if (animjoint != NULL) {
         if (animjoint->aobjdesc != NULL) {
             if (jobj->aobj != NULL) {
@@ -958,6 +967,17 @@ void grAnime_801C7BA0(HSD_GObj* gobj, int arg1, u32 arg2, f32 arg8)
 void grAnime_801C7C1C(HSD_JObj* jobj, s32 map_id, s32 arg2, s32 arg3, s32 arg4,
                       int arg5, f32 farg0, f32 farg1)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the stage's anim/matanim/shapeanim joint trees are still raw
+     * big-endian in the archive, and this walks them recursively (child/next),
+     * so sanitizing the roots is not enough — every node below is a GCN
+     * offset too. Skip stage animation until those trees are converted;
+     * static stage geometry still renders. MELEE_STAGE_ANIM=1 re-enables it
+     * for conversion work. */
+    if (getenv("MELEE_STAGE_ANIM") == NULL) {
+        return;
+    }
+#endif
     u32 var_r30 = 0;
     UnkArchiveStruct* archive;
     HSD_AnimJoint** ajp;
@@ -1008,6 +1028,14 @@ void grAnime_801C7C1C(HSD_JObj* jobj, s32 map_id, s32 arg2, s32 arg3, s32 arg4,
     } else {
         sj = NULL;
     }
+#if BUILD_TARGET_PC
+    /* PC port: aj/mj/sj come straight out of the stage archive and are still
+     * raw big-endian GCN offsets, not pointers. Drop them rather than walking
+     * ->child chains through garbage. */
+    if (aj != NULL && !pc_ptr_sane(aj)) aj = NULL;
+    if (mj != NULL && !pc_ptr_sane(mj)) mj = NULL;
+    if (sj != NULL && !pc_ptr_sane(sj)) sj = NULL;
+#endif
     if (arg5 != 0) {
         if (jobj != NULL) {
             grAnime_801C6A54_noinline(jobj, aj, mj, sj);

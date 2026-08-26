@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "gm_1A3F.h"
 
 #include "gm_1A45.h"
@@ -334,7 +335,18 @@ void gm_801A4510(void)
     {
         gm_80479D30.routing.curr_mode = GM_PROGRESSIVE_SCAN;
     } else {
-        /* PC port: skip GM_BOOT (memcard init) and go directly to title screen */
+        /* PC port: skip GM_BOOT (memcard init) and go directly to title screen.
+         *
+         * MELEE_BOOT_MODE=<n> boots straight into a game mode instead,
+         * bypassing the opening movie, title and attract demo. Roadmap M2 uses
+         * MELEE_BOOT_MODE=14 (GM_DEBUG_VS) — the game's own menu-free
+         * programmatic VS match on Final Destination. No scene-index forcing is
+         * needed: gm_RunGameMode zeroes curr_scene_idx and findScene() then
+         * picks the first entry in the mode's scene list. */
+        /* NOTE: MELEE_BOOT_MODE is honored at the *title's* scene transition
+         * (gm_801B089C), not here. Overriding curr_mode at boot enters a scene
+         * before the opening path has warmed up the lbHeap/lbMemory arenas,
+         * and the scene-heap setup in gm_801A3F48 then pops a NULL handle. */
         gm_80479D30.routing.curr_mode = GM_OPENING_MV;
     }
     gm_80479D30.routing.prev_mode = GM_COUNT;

@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "gm_1BA8.h"
 typedef StKind InternalStageId;
 
@@ -3325,6 +3326,24 @@ int gm_801BF050(void)
 void gm_801BF060(GameScene* arg0)
 {
     int* temp_r3 = gm_801A4284(arg0);
+#if BUILD_TARGET_PC
+    /* PC port: MELEE_BOOT_MODE=<n> sends the title straight to a game mode
+     * instead of the attract demo. This is the title scene inside
+     * GM_OPENING_MV (the mode the port boots into), so it is the Decide that
+     * actually runs. Redirecting here rather than at boot reuses the opening
+     * path's heap/arena warm-up, which gm_801A3F48's scene-heap setup needs.
+     * Roadmap M2 uses 14 = GM_DEBUG_VS (menu-free VS on Final Destination). */
+    {
+        const char* bm = getenv("MELEE_BOOT_MODE");
+        if (bm != NULL) {
+            int mode = (int) strtol(bm, NULL, 0);
+            OSReport("[PC] MELEE_BOOT_MODE: title -> game mode %d\n", mode);
+            gm_801A42E8((s8) mode);
+            gm_801A42D4();
+            return;
+        }
+    }
+#endif
     if (DbLevel >= 3) {
         if (*temp_r3 & 0x100) {
             gm_801A42E8(GM_DEBUG_VS);

@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "gm_1B03.h"
 
 #include "gm_1B03.static.h"
@@ -479,6 +480,23 @@ void gm_801B087C(GameScene* arg0)
 void gm_801B089C(GameScene* scene)
 {
     int* temp_r3 = gm_GetGameSceneLeaveDataCallback(scene);
+#if BUILD_TARGET_PC
+    /* PC port: MELEE_BOOT_MODE=<n> sends the title straight to a game mode
+     * instead of the attract demo. Roadmap M2 uses 14 (GM_DEBUG_VS) — the
+     * game's own menu-free VS match on Final Destination. Redirecting here
+     * (rather than at boot) reuses the opening path's heap/arena warm-up,
+     * which the scene-heap setup in gm_801A3F48 depends on. */
+    {
+        const char* bm = getenv("MELEE_BOOT_MODE");
+        if (bm != NULL) {
+            int mode = (int) strtol(bm, NULL, 0);
+            OSReport("[PC] MELEE_BOOT_MODE: title -> game mode %d\n", mode);
+            gm_SetPendingGameMode((s8) mode);
+            gm_SetNewGameModePending();
+            return;
+        }
+    }
+#endif
     if (DbLevel >= 3) {
         if (*temp_r3 & 0x100) {
             gm_SetPendingGameMode(GM_DEBUG_VS);

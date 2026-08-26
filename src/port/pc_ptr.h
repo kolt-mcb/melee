@@ -28,6 +28,11 @@ static inline int pc_str_sane(const char* p, int max)
     for (i = 0; i < max; i++) {
         char c = p[i];
         if (c == '\0') return 1;
+        /* Printable ASCII, plus the whitespace that legitimately appears in
+         * format strings. Rejecting '\n' here made pc_str_sane fail on every
+         * ordinary OSReport literal, which silently suppressed the game's
+         * whole diagnostic stream as "[OSReport: bad fmt]". */
+        if (c == '\n' || c == '\t' || c == '\r') continue;
         if ((unsigned char)c < 0x20 || (unsigned char)c > 0x7E) return 0;
     }
     return 0;

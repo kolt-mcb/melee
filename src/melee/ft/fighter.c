@@ -1011,10 +1011,12 @@ Fighter_GObj* Fighter_Create(struct plAllocInfo* input)
      * (raw big-endian PlMr/PlCo) — creating fighters corrupts memory.
      * Default to a stage-only scene; MELEE_FIGHTERS=1 re-enables creation
      * for working on the M2 fighter-data conversion. */
-    if (getenv("MELEE_FIGHTERS") == NULL) {
+    /* PC port: fighters are ON by default now that the M2 slice needs them;
+     * MELEE_NO_FIGHTERS=1 restores the old kill switch for stage-only runs. */
+    if (getenv("MELEE_NO_FIGHTERS") != NULL) {
         static int warned = 0;
         if (!warned) { warned = 1;
-            PORT_LOG_WARN("Fighter_Create: skipped (set MELEE_FIGHTERS=1 to enable)\n"); }
+            PORT_LOG_WARN("Fighter_Create: skipped (MELEE_NO_FIGHTERS set)\n"); }
         return NULL;
     }
 #endif
