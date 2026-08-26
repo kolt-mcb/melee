@@ -623,6 +623,23 @@ void ftAnim_8006F4C8(Fighter* fp, bool do_blending, FigaTree* tree)
      * (streaming into a recycled 0x8000 buffer, re-converted per motion
      * change, consumed per frame); until then, refuse to walk it rather than
      * chase garbage. The fighter holds its bind pose. */
+    if (getenv("MELEE_ANIMLOG") != NULL) {
+        static unsigned long n, bad_tree, ok;
+        n++;
+        if (!pc_mem_readable(tree, sizeof(*tree)) ||
+            !pc_mem_readable(tree->nodes, 1) ||
+            !pc_mem_readable(tree->tracks, 1)) bad_tree++;
+        else ok++;
+        if (n % 200 == 0) {
+            fprintf(stderr,
+                    "[ANIM] ftAnim calls=%lu unreadable_tree=%lu walked=%lu "
+                    "tree=%p nodes=%p tracks=%p frames=%.1f\n",
+                    n, bad_tree, ok, (void*) tree,
+                    pc_mem_readable(tree, sizeof(*tree)) ? (void*) tree->nodes : NULL,
+                    pc_mem_readable(tree, sizeof(*tree)) ? (void*) tree->tracks : NULL,
+                    pc_mem_readable(tree, sizeof(*tree)) ? (double) tree->frames : 0.0);
+        }
+    }
     if (!pc_mem_readable(tree, sizeof(*tree)) ||
         !pc_mem_readable(tree->nodes, 1) ||
         !pc_mem_readable(tree->tracks, 1))

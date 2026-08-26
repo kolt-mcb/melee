@@ -246,6 +246,28 @@ void ftDrawCommon_800805C8(HSD_GObj* gobj, s32 arg1, bool arg2)
         fighter->x2228_b0 = false;
 
         mtx = ftDrawCommon_8008051C_inline(gobj, &sp54, &v, sp18, sp78);
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_FTPOS") != NULL) {
+            static int n = 0;
+            if (++n % 211 == 0) {
+                HSD_JObj* rj = GET_JOBJ(gobj);
+                fprintf(stderr,
+                        "[FTPOS] cur_pos=(%.1f,%.1f,%.1f) rootT=(%.1f,%.1f,%.1f) "
+                        "mtxT=(%.1f,%.1f,%.1f) scale=(%.2f,%.2f,%.2f)\n",
+                        (double) fighter->cur_pos.x, (double) fighter->cur_pos.y,
+                        (double) fighter->cur_pos.z,
+                        rj ? (double) rj->translate.x : 0.0,
+                        rj ? (double) rj->translate.y : 0.0,
+                        rj ? (double) rj->translate.z : 0.0,
+                        mtx ? (double) mtx[0][3] : 0.0,
+                        mtx ? (double) mtx[1][3] : 0.0,
+                        mtx ? (double) mtx[2][3] : 0.0,
+                        (double) fighter->x34_scale.x,
+                        (double) fighter->x34_scale.y,
+                        (double) fighter->x34_scale.z);
+            }
+        }
+#endif
 
 #if BUILD_TARGET_PC
         { extern int pc_in_fighter_draw; pc_in_fighter_draw = 1; }
