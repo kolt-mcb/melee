@@ -4574,6 +4574,16 @@ void mpLib_800552B0(int joint_id, HSD_JObj* jobj, int z)
     }
 
     if (r7 != NULL) {
+#if BUILD_TARGET_PC
+        /* PC port: the mp/ collision module has never executed here — the
+         * stage's coll_data is still raw big-endian, so joint_id comes from
+         * unconverted data and groundCollJoint may not be allocated at all.
+         * Guard until the MapCollData converter lands (roadmap M2 stage 3);
+         * without it the first FD stage init writes through a wild pointer. */
+        if (groundCollJoint == NULL || joint_id < 0 || joint_id >= 256) {
+            return;
+        }
+#endif
         CollJoint* joint = &groundCollJoint[joint_id];
         joint->x20 = r7;
     }

@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "lbmemory.h"
 #include <unistd.h>
 #if BUILD_TARGET_PC
@@ -82,6 +83,11 @@ static inline Handle* new_handle(void* arenaLo, void* arenaHi)
         HSD_ASSERT(0x80, (u32)arenaLo >= (u32)_p(a_arenaLo) && (u32)arenaHi <= (u32)_p(a_arenaHi));
     }
 
+#if BUILD_TARGET_PC
+    if (_p(free_heap) == NULL) {
+        return NULL; /* pool drained; caller must tolerate NULL */
+    }
+#endif
     POP_HANDLE(&_p(free_heap), h);
     h->x0_next = NULL;
     h->x4_lo = arenaLo;
@@ -390,6 +396,27 @@ void lbMemory_8001564C(void)
 
     _p(x634_max_num_allocs) = 0;
     _p(x630_num_allocs) = 0;
+#if BUILD_TARGET_PC
+    /* PC port: the GCN code builds this free list out of hardcoded byte
+     * offsets into the Allocator struct (base+0x638, +0x648, ... spaced 0x10
+     * apart, six handles). `struct Handle` is four pointers: 16 bytes on GCN
+     * but 32 on x86_64, so those offsets land in the wrong fields AND the
+     * handles overlap each other. The chain terminated early, and new_handle
+     * then popped a NULL — which is what crashed any scene entered without
+     * the attract path's warm-up. Build the list from a real array instead,
+     * with headroom, since scene transitions consume handles. */
+    {
+        /* Use the struct's own handle array so any other code that addresses
+         * x638_heap by field sees the same storage. */
+        int hi_;
+        for (hi_ = 0; hi_ < 5; hi_++) {
+            _p(x638_heap)[hi_].x0_next = &_p(x638_heap)[hi_ + 1];
+        }
+        _p(x638_heap)[5].x0_next = NULL;
+        _p(free_heap) = &_p(x638_heap)[0];
+    }
+    (void) base;
+#else
     _p(free_heap) = (Handle*) (base + 0x638);
     *(void**) (base + 0x638) = base + 0x648;
     *(void**) (base + 0x648) = base + 0x658;
@@ -397,6 +424,7 @@ void lbMemory_8001564C(void)
     *(void**) (base + 0x668) = base + 0x678;
     *(void**) (base + 0x678) = base + 0x688;
     *(void**) (base + 0x688) = NULL;
+#endif
     _p(x69C) = NULL;
     {
         void* hi = _p(a_arenaHi);

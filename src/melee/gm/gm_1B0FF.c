@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "gm_1B03.h"
 
 #include "gm_1B03.static.h"
@@ -250,6 +252,38 @@ void gm_801B13B8(GameScene* arg0)
     temp_r28->players[1].xC_b0 = false;
     temp_r28->players[2].xC_b0 = false;
     temp_r28->players[3].xC_b0 = false;
+
+#if BUILD_TARGET_PC
+    /* PC port (roadmap M2 vertical slice): only Mario's code and data are
+     * usable, so make the debug-VS lineup an explicit Mario ditto instead of
+     * relying on Fighter_Create's kind clamp (fighter.c: "substituting Mario").
+     *
+     * MELEE_BOOT_MATCH="<ckind0>,<ckind1>,<stkind>" overrides it; the default
+     * is Mario vs Mario on Final Destination. Note CKIND_MARIO is 8 (a
+     * CharacterKind); FTKIND_MARIO is 0 — Player_80031AD0 maps between them
+     * through ftMapping_list. Slot 1 gets costume 1 so the two are
+     * distinguishable on screen. */
+    {
+        int ck0 = CKIND_MARIO, ck1 = CKIND_MARIO, stkind = -1;
+        const char* spec = getenv("MELEE_BOOT_MATCH");
+        if (spec != NULL) {
+            sscanf(spec, "%d,%d,%d", &ck0, &ck1, &stkind);
+        }
+        if (stkind >= 0) {
+            temp_r28->rules.xE = (u16) stkind;
+        }
+        temp_r28->players[0].c_kind = (s8) ck0;
+        temp_r28->players[1].c_kind = (s8) ck1;
+        temp_r28->players[0].color = 0;
+        temp_r28->players[1].color = 1;
+        temp_r28->players[0].slot_type = Gm_PKind_Human;
+        temp_r28->players[1].slot_type = Gm_PKind_Human;
+        temp_r28->players[2].slot_type = Gm_PKind_NA;
+        temp_r28->players[3].slot_type = Gm_PKind_NA;
+        OSReport("[PC] debug-VS lineup: p0=ckind%d p1=ckind%d stage=%d\n",
+                 ck0, ck1, (int) temp_r28->rules.xE);
+    }
+#endif
 
     gm_80168FC4();
 }

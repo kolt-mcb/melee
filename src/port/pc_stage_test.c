@@ -1,7 +1,7 @@
 /* ============================================================
  * PC port: real-stage render test (MELEE_STAGE_TEST=1)
  *
- * Loads the Final Destination stage (orig/GALE01/GrFs.dat) through the
+ * Loads a stage (default Final Destination, orig/GALE01/GrNLa.dat) through the
  * port's PROVEN stage-data conversion pipeline (pc_LoadStageFromBuffer ->
  * ConvertStageDatGCNtoX64 -> converted joint trees + camera descs), then
  * renders the floor joint tree with the stage's own camera through the
@@ -93,8 +93,17 @@ void pc_render_stage_test(void)
     if (!s_inited) {
         s_inited = 1;
 
-        FILE* f = fopen("orig/GALE01/GrFs.dat", "rb");
-        if (!f) { fprintf(stderr, "[STAGE] fopen GrFs.dat failed\n"); return; }
+        /* MELEE_STAGE_FILE overrides the stage; default is Final Destination.
+         * NOTE: this harness previously loaded GrFs.dat while calling it
+         * "Final Destination" — GrFs.dat is Fourside (gr/grfourside.c:82).
+         * FD is GrNLa.dat (gr/grlast.c:217). */
+        const char* stage_env = getenv("MELEE_STAGE_FILE");
+        char stage_path[256];
+        snprintf(stage_path, sizeof(stage_path), "orig/GALE01/%s",
+                 stage_env ? stage_env : "GrNLa.dat");
+        FILE* f = fopen(stage_path, "rb");
+        if (!f) { fprintf(stderr, "[STAGE] fopen %s failed\n", stage_path); return; }
+        fprintf(stderr, "[STAGE] loading %s\n", stage_path);
         fseek(f, 0, SEEK_END); long len = ftell(f); fseek(f, 0, SEEK_SET);
         s_buf = (u8*)malloc(len);
         if (!s_buf || fread(s_buf, 1, len, f) != (size_t)len) {

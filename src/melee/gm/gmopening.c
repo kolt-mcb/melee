@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "gmopening.h"
 
 #include "gm_unsplit.h"
@@ -197,6 +198,30 @@ void gm_801AA28C_OnFrame(void)
     HSD_SObj* temp_r3_3;
     PAD_STACK(4);
 
+#if BUILD_TARGET_PC
+    /* PC port: MELEE_BOOT_MODE=<n> leaves the opening/title sequence for a
+     * game mode as soon as the scene is up, instead of waiting out the intro
+     * and dropping into the attract demo. This is the scene that actually
+     * runs on the port (the port boots GM_OPENING_MV scene 0), and leaving
+     * from here reuses the opening path's heap/arena warm-up that
+     * gm_801A3F48's scene-heap setup depends on. Roadmap M2 uses 14 =
+     * GM_DEBUG_VS: the game's own menu-free VS match on Final Destination. */
+    {
+        static int pc_bootmode_done = 0;
+        static int pc_bootmode_frames = 0;
+        const char* bm = getenv("MELEE_BOOT_MODE");
+        if (bm != NULL && !pc_bootmode_done && ++pc_bootmode_frames > 8) {
+            int mode = (int) strtol(bm, NULL, 0);
+            pc_bootmode_done = 1;
+            OSReport("[PC] MELEE_BOOT_MODE: leaving opening for game mode %d\n",
+                     mode);
+            gm_801A42E8((s8) mode);
+            gm_801A42D4();
+            gm_801A4B60();
+            return;
+        }
+    }
+#endif
     lbMthp_8001F578();
     temp_r3 = lbMthp_8001F5C4();
     if ((u32) gm_804D67EC > 0x1518) {

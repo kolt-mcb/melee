@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "gmtitle.h"
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
@@ -627,6 +628,15 @@ void gmTitle_801A1C18_OnFrame(void)
         return;
     }
     gmTitle_804D6718++;
+#if BUILD_TARGET_PC
+    /* With MELEE_BOOT_MODE set, don't sit on the title for 600 frames. */
+    if (getenv("MELEE_BOOT_MODE") != NULL && gmTitle_804D6718 > 4) {
+        int* t2 = gm_GetCurrentSceneExitData();
+        if (t2 != NULL) *t2 = 0;
+        gm_801A4B60();
+        return;
+    }
+#endif
     if (gmTitle_804D6718 > 600) {
         tmp = gm_GetCurrentSceneExitData();
         *tmp = 0;

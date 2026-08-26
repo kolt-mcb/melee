@@ -113,6 +113,22 @@ void lbHeap_80015900(void)
     struct Heap* aram_heap;
     u32 destroy_cursor;
 
+#if BUILD_TARGET_PC
+    /* PC port: this runs once per scene entry (via lbDvd_80018CF4), and each
+     * pass re-creates the main and ARAM heaps — popping a fresh handle from
+     * lbMemory's 6-entry pool every time without ever returning one, and
+     * re-asserting the ARAM arena bounds. On GCN the repeat is harmless
+     * because the arenas are real hardware ranges; here it drained the pool
+     * and the next new_handle popped NULL. Create the heaps once. */
+    {
+        static int pc_heaps_created = 0;
+        if (pc_heaps_created) {
+            return;
+        }
+        pc_heaps_created = 1;
+    }
+#endif
+
     /// @remarks 0 and 1 are reserved for HSD and ARAM
     destroy_i = 2;
     destroy_cursor = (u32) &lbHeap_80431FA0.heap_array[destroy_i] - 0x10;

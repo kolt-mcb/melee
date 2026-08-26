@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "ftdata.h"
 #if BUILD_TARGET_PC
 #include "gr/grdatfiles.h"
@@ -1494,6 +1495,24 @@ void ftData_8008572C(FighterKind kind)
     if (gFtDataList[kind] == NULL) {
         lbArchive_80017040(NULL, ftData_803C1F40[kind].a, &gFtDataList[kind],
                            ftData_803C1F40[kind].b, 0);
+#if BUILD_TARGET_PC
+        /* PC port: lbArchive resolves this symbol to a perfectly *sane host
+         * pointer* that nevertheless points at raw big-endian, GCN-packed
+         * data. Publishing it makes every `pc_ptr_sane(fp->ft_data)` guard
+         * pass with garbage behind it, and ~150 `ft_data->` sites then read
+         * 8-byte pointers out of 4-byte-packed fields. The first casualty is
+         * ftData_80085A14's xC[] walk, which does a wild read AND a wild
+         * write over 303 iterations.
+         *
+         * Until a real BE->x64 ftData converter exists, keep the slot NULL so
+         * Fighter_Create's zeroed-arena fallback stays engaged. The archive
+         * load above is kept: it warms the DVD cache and is where the
+         * converter will hook in. MELEE_FTDATA=1 opts into the raw pointer
+         * for conversion work. */
+        if (getenv("MELEE_FTDATA") == NULL) {
+            gFtDataList[kind] = NULL;
+        }
+#endif
     }
 }
 
@@ -1676,7 +1695,7 @@ void ftData_80085A14(FighterKind kind)
 #if BUILD_TARGET_PC
         /* PC port: gFtDataList is unpopulated until fighter DAT conversion
          * covers it; skip the figatree offset fixups. */
-        if (!pc_ptr_sane(temp_r27)) {
+        if (!pc_ptr_sane(temp_r27) || !pc_ptr_sane(temp_r27->xC)) {
             ftData_Table_Unk0[kind].data = (void*) a_head;
             return;
         }
