@@ -161,6 +161,7 @@ unsigned long g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable, g_tx_hit;
 unsigned long g_tx_init, g_tx_distinct;
 
 static void pc_apply_cull_state(void);
+static void pc_apply_blend_state(void);
 
 static u32 g_tev_color_out_reg[8];
 static u32 g_tev_alpha_out_reg[8];
@@ -483,6 +484,7 @@ typedef struct {
     
     Bool blend_enabled;
     u32 blend_src, blend_dst;
+    u32 blend_mode;             /* GXSetBlendMode mode (GX_BM_*) */
     
     Bool cull_enabled;
     u32 cull_mode;
@@ -2538,14 +2540,27 @@ static void bridge_upload_and_draw(void)
             u32 st;
             _tv_n++;
             fprintf(stderr,
-                    "[TEV] draw n=%u stages=%u chan0src=%u C0=(%u,%u,%u,%u) amb0=(%u,%u,%u,%u) texen=%d\n",
+                    "[TEV] draw n=%u stages=%u chan0src=%u C0=(%u,%u,%u,%u) "
+                    "amb0=(%u,%u,%u,%u) texen=%d blend=%d/%u src=%u dst=%u "
+                    "acmp=%d:%u/%.2f,%u/%.2f z=%d,%d tex=%dx%d/0x%02x\n",
                     (unsigned) g_state.vert_count, (unsigned) g_state.num_tev_stages,
                     (unsigned) g_state.chan_color_source[0],
                     g_state.chan_colors[0].r, g_state.chan_colors[0].g,
                     g_state.chan_colors[0].b, g_state.chan_colors[0].a,
                     g_state.chan_amb_colors[0].r, g_state.chan_amb_colors[0].g,
                     g_state.chan_amb_colors[0].b, g_state.chan_amb_colors[0].a,
-                    (int) g_state.tex0_enabled);
+                    (int) g_state.tex0_enabled,
+                    (int) g_state.blend_enabled, (unsigned) g_state.blend_mode,
+                    (unsigned) g_state.blend_src, (unsigned) g_state.blend_dst,
+                    (int) g_state.alpha_compare_enabled,
+                    (unsigned) g_state.alpha_compare_func,
+                    (double) g_state.alpha_compare_ref,
+                    (unsigned) g_state.alpha_compare_func1,
+                    (double) g_state.alpha_compare_ref1,
+                    (int) g_state.z_enabled, (int) g_state.z_update,
+                    (int) g_state.current_tex.width,
+                    (int) g_state.current_tex.height,
+                    (unsigned) g_state.current_tex.fmt);
             fprintf(stderr,
                     "[TEV]   K0=(%u,%u,%u,%u) K1=(%u,%u,%u,%u) "
                     "K2=(%u,%u,%u,%u) K3=(%u,%u,%u,%u)\n",
@@ -2680,19 +2695,7 @@ static void bridge_upload_and_draw(void)
     
     /* State — blend. Translate GX blend factors to GL equivalents via
      * gx_bl_to_gl (SDK-accurate values, defined below). */
-    if (g_state.blend_enabled) {
-        static int _ba_on = -1;
-        if (_ba_on < 0) _ba_on = (getenv("MELEE_BLEND_ALPHA1") != NULL);
-        if (_ba_on) {
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-        } else {
-            glEnable(GL_BLEND);
-            glBlendFunc(gx_bl_to_gl(g_state.blend_src), gx_bl_to_gl(g_state.blend_dst));
-        }
-    } else {
-        glDisable(GL_BLEND);
-    }
+    pc_apply_blend_state();
     
     /* State — depth */
     if (g_state.z_enabled && !getenv("MELEE_STAGE_NODEPTH")) {
@@ -4067,35 +4070,53 @@ static GLenum gx_bl_to_gl(u32 gx_blend_factor)
     }
 }
 
+/* Apply the whole blend state, equation included. GX_BM_SUBTRACT used to set
+ * glBlendEquation(GL_FUNC_REVERSE_SUBTRACT) and nothing ever set it back, so
+ * every later draw kept subtracting: one subtractive effect anywhere in the
+ * frame inverted the rest of the scene. The per-draw state block reapplied
+ * only the blend *func*, which cannot undo a sticky equation. */
+static void pc_apply_blend_state(void)
+{
+    static int alpha1 = -1;
+    if (alpha1 < 0) alpha1 = (getenv("MELEE_BLEND_ALPHA1") != NULL);
+
+    if (!g_state.blend_enabled) {
+        glDisable(GL_BLEND);
+        glBlendEquation(GL_FUNC_ADD);
+        return;
+    }
+    glEnable(GL_BLEND);
+    switch (g_state.blend_mode) {
+    case 0x03: /* GX_BM_SUBTRACT: dst - src, with the factors forced to ONE */
+        glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+        glBlendFunc(GL_ONE, GL_ONE);
+        break;
+    case 0x02: /* GX_BM_LOGIC: no GL equivalent here; behave as a plain copy */
+        glBlendEquation(GL_FUNC_ADD);
+        glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
+        break;
+    case 0x01: /* GX_BM_BLEND */
+    default:
+        glBlendEquation(GL_FUNC_ADD);
+        if (alpha1) {
+            glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        } else {
+            glBlendFunc(gx_bl_to_gl(g_state.blend_src),
+                        gx_bl_to_gl(g_state.blend_dst));
+        }
+        break;
+    }
+}
+
 void GXSetBlendMode(u32 mode, u32 src, u32 dst, u32 logic_op)
 {
     GX_TRACE("GXSetBlendMode(%u, %u, %u, %u)", mode, src, dst, logic_op);
+    (void) logic_op;
     g_state.blend_enabled = (mode != 0);
+    g_state.blend_mode = mode;
     g_state.blend_src = src;
     g_state.blend_dst = dst;
-    
-    switch (mode) {
-    case 0x00: /* GX_BM_NONE */
-        glDisable(GL_BLEND);
-        break;
-    case 0x01: /* GX_BM_BLEND: dest = src*srcA + dst*dstA */
-        glEnable(GL_BLEND);
-        glBlendFunc(gx_bl_to_gl(src), gx_bl_to_gl(dst));
-        break;
-    case 0x02: /* GX_BM_LOGIC: use OpenGL logical operations */
-        glEnable(GL_BLEND);
-        glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
-        break;
-    case 0x03: /* GX_BM_SUBTRACT: dest = src*srcA - dst*dstA + dst */
-        glEnable(GL_BLEND);
-        glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
-        glBlendFunc(gx_bl_to_gl(src), gx_bl_to_gl(dst));
-        break;
-    default: /* Fallback: standard alpha blend */
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        break;
-    }
+    pc_apply_blend_state();
 }
 void GXSetZMode(u32 enable, u32 func, u32 update)
 {
@@ -6938,7 +6959,8 @@ static void convert_i8_to_rgba8(const void *src, u8 *dst, u32 w, u32 h)
         u32 ti = gx_tiled_index(x, y, w, 8, 4);
         u8 intensity = s[ti];
         u8* d = dst + (y * w + x) * 4;
-        d[0] = intensity; d[1] = intensity; d[2] = intensity; d[3] = 0xFF;
+        /* GX_TF_I8: alpha is the intensity (see convert_i4_to_rgba8). */
+        d[0] = intensity; d[1] = intensity; d[2] = intensity; d[3] = intensity;
     }
 }
 
@@ -6952,7 +6974,12 @@ static void convert_i4_to_rgba8(const void *src, u8 *dst, u32 w, u32 h)
         u8 v = (ti & 1) ? (byte & 0x0F) : ((byte >> 4) & 0x0F);
         v *= 17;
         u8* d = dst + (y * w + x) * 4;
-        d[0] = v; d[1] = v; d[2] = v; d[3] = 0xFF;
+        /* GX_TF_I4 is an *intensity* format: alpha is the intensity, not
+         * opaque. Forcing 0xFF here made every I4 texture fully opaque, so
+         * additive glows (src=SRCALPHA dst=ONE) blended at full strength and
+         * saturated to white, and alpha-masked glyph quads drew as solid
+         * rectangles instead of letters. */
+        d[0] = v; d[1] = v; d[2] = v; d[3] = v;
     }
 }
 
@@ -7338,7 +7365,17 @@ skip_tlut:
                 }
                 fclose(tf);
             }
-            fprintf(stderr, "TEXDUMP #%d %dx%d fmt=0x%02x -> %s\n", _td_n, upload_w, upload_h, fmt, path);
+            {
+                unsigned amin = 255, amax = 0;
+                for (int i = 0; i < upload_w * upload_h; i++) {
+                    unsigned a = ((const unsigned char*) upload_src)[i * 4 + 3];
+                    if (a < amin) amin = a;
+                    if (a > amax) amax = a;
+                }
+                fprintf(stderr,
+                        "TEXDUMP #%d %dx%d fmt=0x%02x alpha=[%u..%u] -> %s\n",
+                        _td_n, upload_w, upload_h, fmt, amin, amax, path);
+            }
             _td_n++;
         }
     }
