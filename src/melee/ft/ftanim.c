@@ -607,12 +607,13 @@ void ftAnim_8006F4C8(Fighter* fp, bool do_blending, FigaTree* tree)
     int i = 0;
 
 #if BUILD_TARGET_PC
-    /* PC port: applying an animation needs fp->parts[] to have been built
-     * from ft_data->x8 (the parts descriptor), which is not converted yet.
-     * Without it no part carries the scan flags and this walk has nothing
-     * valid to index, so skip the whole pass — the fighter holds its bind
-     * pose. Remove this once pc_conv_ftData covers x8. */
-    if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x8)) {
+    /* PC port: applying an animation needs both the parts descriptor
+     * (ft_data->x8, converted by pc_conv_ftData) and the fp->parts[] array
+     * built from it. If either is missing the scans below have nothing valid
+     * to index, so skip the pass and let the fighter hold its bind pose. */
+    if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x8) ||
+        !pc_ptr_sane(fp->parts))
+    {
         return;
     }
     /* PC port: the FigaTree comes out of a NESTED archive parsed inside
@@ -1068,7 +1069,9 @@ void ftAnim_80070200(Fighter* fp, ftData_x8_x8* r4, CostumeTObjList* r5,
         }
         return;
     }
-    if (r4->x8 == 0 || !pc_ptr_sane(r4->xC[0])) {
+    /* NOTE: check xC itself before indexing it — it is NULL by design until
+     * pc_conv_ftData converts the costume-tobj table. */
+    if (r4->x8 == 0 || !pc_ptr_sane(r4->xC) || !pc_ptr_sane(r4->xC[0])) {
         r5->n_costume_tobjs = 0;
         return;
     }

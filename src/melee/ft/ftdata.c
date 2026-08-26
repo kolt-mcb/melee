@@ -1721,6 +1721,13 @@ void ftData_80085A14(FighterKind kind)
     if (ftData_Table_Unk0[kind].data == NULL) {
         lbFile_800168A0(1, ftData_803C23E4[kind], &sp18, &sp10);
         a_head = sp18;
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_FTCONV_TRACE")) {
+            fprintf(stderr, "[FTCONV] AJ file '%s' buf=0x%08x size=%u\n",
+                    ftData_803C23E4[kind] ? ftData_803C23E4[kind] : "(null)",
+                    (unsigned) a_head, (unsigned) sp10);
+        }
+#endif
         HSD_ASSERT(0x974, a_head);
 #if BUILD_TARGET_PC
         /* PC port: gFtDataList is unpopulated until fighter DAT conversion
@@ -1820,19 +1827,22 @@ void ftData_80085CD8(Fighter* fp, Fighter* arg1, int msid)
                 } else {
                     temp_r4_2 = temp_r3->x14;
 #if BUILD_TARGET_PC
-                    /* PC port: this chooses between an ARAM DMA (offset
-                     * < 0x80000000) and a straight MRAM copy. On PC the
-                     * animation file lives in the sub-4GB low pool, so a
-                     * perfectly valid host pointer looks like an ARAM offset
-                     * and took the DMA path into lbArq. Copy directly when the
-                     * value is a real pointer, and bound the copy to the
-                     * 0x8000 staging buffer. */
-                    if (pc_ptr_sane((void*) (uintptr_t) temp_r4_2)) {
+                    /* PC port: values below 0x80000000 are ARAM offsets, and
+                     * the animation file genuinely lives in ARAM (lbHeap heap
+                     * 1). ARAM is emulated by a carved host region, so
+                     * translate the offset and copy rather than going through
+                     * the ARQ DMA queue. Bounded to the 0x8000 staging
+                     * buffer. */
+                    if (temp_r4_2 < 0x80000000) {
+                        extern unsigned char* pc_aram_host(unsigned long off);
+                        unsigned char* srcp = pc_aram_host((unsigned long) temp_r4_2);
                         u32 n = (u32) temp_r3->x8;
                         if (n > 0x8000u) {
                             n = 0x8000u;
                         }
-                        memcpy(fp->x59C, (void*) (uintptr_t) temp_r4_2, n);
+                        if (srcp != NULL) {
+                            memcpy(fp->x59C, srcp, n);
+                        }
                     } else
 #endif
                     if (temp_r4_2 < 0x80000000) {

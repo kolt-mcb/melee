@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "lb/lbfile.h"
 
 #include "lb/lb_0195.h"
@@ -263,6 +264,11 @@ inline void qwer(s32 a, const char* basename, u32* src, u32* dest)
     /* PC port: store original buffer pointer before truncation */
     g_last_file_buf = (void*)(uintptr_t)*src;
     g_last_file_buf_size = *dest;
+    if (getenv("MELEE_FTCONV_TRACE")) {
+        fprintf(stderr, "[QWER] heap=%d '%s' size=%u -> %p\n", a,
+                basename ? basename : "(null)", (unsigned) *dest,
+                (void*) (uintptr_t) *src);
+    }
 #endif
     lbFile_80016580(basename, *src, dest, lbFile_8001615C, 0);
 
@@ -279,6 +285,17 @@ void lbFile_80016760(const char* basename, u32* src, u32* dest)
 
 bool lbFile_800168A0(s32 arg0, const char* basename, u32* src, u32* dest)
 {
+#if BUILD_TARGET_PC
+    /* PC port: lbDvd_8001819C returns an HSD_Archive*, not the raw file
+     * bytes, but this path hands it back as the data pointer. Callers such as
+     * ftData_80085A14 then treat it as the base of the animation file and
+     * index far past the small archive struct (ASan: global-buffer-overflow
+     * reading ~2.6KB out of it). The preload cache is a GCN load-time
+     * optimisation; loading fresh is always correct, just slower. */
+    cancel = false;
+    qwer(arg0, basename, src, dest);
+    return false;
+#else
     if ((*src = (u32) lbDvd_8001819C(basename))) {
         *dest = lbFile_800163D8(basename);
         return true;
@@ -287,4 +304,5 @@ bool lbFile_800168A0(s32 arg0, const char* basename, u32* src, u32* dest)
         qwer(arg0, basename, src, dest);
         return false;
     }
+#endif
 }
