@@ -504,6 +504,10 @@ void HSD_LObjSetupInit(HSD_CObj* cobj)
     MtxPtr vmtx;
     int i, num, idx;
     HSD_SList* list;
+#if BUILD_TARGET_PC
+    struct { int dummy; } _pc_unused;
+    (void) _pc_unused;
+#endif
 
     {
         int _cln = 0; HSD_SList* _t = current_lights; while (_t) { _cln++; _t = _t->next; }
@@ -587,6 +591,21 @@ void HSD_LObjSetupInit(HSD_CObj* cobj)
         }
     }
 
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_LIGHTMASK") != NULL) {
+        static unsigned long zero_mask, nonzero_mask, n;
+        int cnt = 0; HSD_SList* t = current_lights;
+        while (t) { cnt++; t = t->next; }
+        if (lightmask_diffuse == 0) zero_mask++; else nonzero_mask++;
+        if (++n % 500 == 0) {
+            fprintf(stderr,
+                    "[LMASK] SetupInit calls=%lu -> diffuse==0 in %lu, "
+                    "nonzero in %lu (this call: list=%d mask=0x%x)\n",
+                    n, zero_mask, nonzero_mask, cnt,
+                    (unsigned) lightmask_diffuse);
+        }
+    }
+#endif
     if (!HSD_LObjGetActiveByID(256)) {
         for (; list; list = list->next) {
             HSD_LObj* lobj = list->data;

@@ -287,6 +287,29 @@ void HSD_GObj_LObjCallback(HSD_GObj* gobj, int unused)
      * grDatFiles_ConvertLightDescGCNtoX64 (flags, color, position/interest WObj,
      * and the type-specific union are all byte-swapped). The earlier
      * "skip until endianness conversion" stub is no longer needed. */
+#if BUILD_TARGET_PC
+    /* PC port: a light GObj whose HSD_LObj chain is NULL would still run
+     * LObjReplaceAll(NULL) here, which drops every current light and leaves
+     * HSD_LObjSetupInit with an empty list -- so lightmask_diffuse comes back
+     * 0 and every material set up afterwards is lit by ambient alone. That is
+     * how the fighters ended up at a tenth brightness: the fighter light GObj
+     * (ftCo_8009F4A4) gets its chain from the stage light list, which is not
+     * always built, and its callback then wiped the stage's own lights every
+     * frame. An empty chain should contribute nothing, not erase what is
+     * already there. */
+    if (gobj->hsd_obj == NULL) {
+        return;
+    }
+    if (getenv("MELEE_LIGHTMASK") != NULL) {
+        static int n = 0;
+        HSD_LObj* l = gobj->hsd_obj;
+        int cnt = 0;
+        while (l != NULL && cnt < 16) { cnt++; l = l->next; }
+        if (n < 8) { n++;
+            fprintf(stderr, "[LMASK] LObjCallback gobj=%p lobj=%p chain=%d\n",
+                    (void*) gobj, (void*) gobj->hsd_obj, cnt); }
+    }
+#endif
     HSD_LObj_803668EC(gobj->hsd_obj);
     HSD_LObjSetupInit(HSD_CObjGetCurrent());
 }
