@@ -3217,7 +3217,11 @@ float fn_80166A8C(register Vec3* src, register Vec3* dst)
 #else
 float fn_80166A8C(register Vec3* src, register Vec3* dst)
 {
-    NOT_IMPLEMENTED;
+    /* PC port: the MWERKS version stores src->x into dst->x via psq_st and
+     * returns it. */
+    float x = src->x;
+    dst->x = x;
+    return x;
 }
 #endif
 
