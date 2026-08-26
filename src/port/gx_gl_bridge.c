@@ -30,6 +30,21 @@
 #include <math.h>
 #include <stdint.h>
 
+/* PC diag counters (printed per 100 frames from port_render_frame_end) */
+unsigned pc_stat_draws = 0;
+unsigned pc_stat_projsets = 0;
+unsigned pc_stat_verts = 0;
+unsigned pc_stat_ends = 0;
+unsigned pc_stat_vadds = 0;
+unsigned pc_stat_vfilt = 0;
+unsigned pc_stat_jdisp = 0;
+unsigned pc_stat_ddisp = 0;
+unsigned pc_stat_pdisp = 0;
+unsigned pc_stat_dlcalls = 0;
+unsigned pc_stat_rgobj = 0;
+unsigned pc_stat_jdall = 0;
+unsigned pc_stat_jdisp1 = 0;
+
 /* Forward declarations for Dolphin GX types used in GXGetTexObj* functions */
 typedef uint8_t GXBool;
 typedef uint8_t GXTexFmt;
@@ -2982,10 +2997,12 @@ static void bridge_upload_and_draw(void)
             glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
             glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * (nq * 6), quad_tri);
             glDrawArrays(GL_TRIANGLES, 0, nq * 6);
+            pc_stat_draws++; pc_stat_verts += (unsigned)(nq*6);
             s_pc_draws++;
             pc_frame_trace("quadsN");
         } else {
         glDrawArrays(gl_prim, 0, count);
+        pc_stat_draws++; pc_stat_verts += (unsigned)count;
         s_pc_draws++;
         pc_frame_trace("drawN");
         }
@@ -3253,6 +3270,7 @@ void GXSetCurrentMtx(u32 id)
 }
 void GXSetProjection(f32 mtx[4][4], u32 type)
 {
+    pc_stat_projsets++;
     PORT_LOG_DEBUG("GXSetProjection CALLED: proj[0][0]=%.6f type=%u", mtx[0][0], type);
 #if BUILD_TARGET_PC
     {
@@ -3441,6 +3459,7 @@ void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
 void GXEnd(void)
 {
     GX_TRACE("GXEnd");
+    pc_stat_ends++;
 #if BUILD_TARGET_PC
     { static int _ge_on=-1; if(_ge_on<0)_ge_on=(getenv("MELEE_MTR")!=NULL); if(_ge_on){static int _ge_n=0; if(_ge_n++<300) fprintf(stderr,"GXEND type=0x%X batched=%u\n",(unsigned)g_state.prim_type,(unsigned)g_state.vert_count);} }
 #endif
@@ -3458,6 +3477,7 @@ void GXEnd(void)
 
 static void bridge_add_vertex(void)
 {
+    pc_stat_vadds++;
     /* PC diag: per-frame GXVertex count (is geometry rebuilt each frame?) */
     {
         static int _vc_on = -1, _vc_frame = -1, _vc_count = 0;
@@ -3503,7 +3523,7 @@ static void bridge_add_vertex(void)
                 g_dbg_degenerate_sample[1] = py;
                 g_dbg_degenerate_sample[2] = pz;
             }
-            g_dbg_degenerate_verts++;
+            g_dbg_degenerate_verts++; pc_stat_vfilt++;
             goto SKIP_DEG;
         }
         
@@ -4091,6 +4111,7 @@ static u32 dl_vat_attr_size(u32 mode, u32 cnt, u32 type)
 
 void GXCallDisplayList(void* list, u32 nbytes)
 {
+    pc_stat_dlcalls++;
     if (!list || nbytes == 0) return;
 
     const u8* ptr = (const u8*)list;

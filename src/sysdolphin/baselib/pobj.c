@@ -1386,6 +1386,9 @@ static void PObjDispShapeAnim(HSD_PObj* pobj, u32 rendermode)
 void HSD_PObjDisp(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 {
 #if BUILD_TARGET_PC
+    { extern unsigned pc_stat_pdisp; pc_stat_pdisp++; }
+#endif
+#if BUILD_TARGET_PC
     if (pobj == NULL) return;
     /* PC diag: isolate the two title models by PObj type. */
     static int _hbg = -1, _hlogo = -1;

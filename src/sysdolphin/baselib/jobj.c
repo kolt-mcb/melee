@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "jobj.h"
 
 #include "aobj.h"
@@ -686,6 +687,20 @@ void HSD_JObjAnimAll(HSD_JObj* jobj)
 
 void HSD_JObjDispAll(HSD_JObj* jobj, Mtx vmtx, u32 flags, u32 rendermode)
 {
+#if BUILD_TARGET_PC
+    { extern unsigned pc_stat_jdall; pc_stat_jdall++; }
+    { static int _da_n = 0;
+      if (_da_n < 8) {
+          _da_n++;
+          fprintf(stderr, "[JDALL] jobj=%p caller=%p flags=0x%x", (void*)jobj,
+                  __builtin_return_address(0), (unsigned)flags);
+          if (jobj != NULL && (uintptr_t)jobj > 0x400000)
+              fprintf(stderr, " jflags=0x%08x opa=0x%x child=%p",
+                      (unsigned)jobj->flags,
+                      (unsigned)(jobj->flags & (flags << 0x12)), (void*)jobj->child);
+          fprintf(stderr, "\n");
+      } }
+#endif
     MtxPtr new_var = vmtx;
     #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
