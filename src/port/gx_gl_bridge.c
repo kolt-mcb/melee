@@ -6177,10 +6177,16 @@ enum {
  * Texture setup functions
  * ============================================================ */
 
+/* Canonical GX signature (extern/dolphin/include/dolphin/gx/GXTexture.h):
+ *   GXInitTexObj(obj, image_ptr, w, h, format, wrap_s, wrap_t, mipmap)
+ * The bridge previously declared (dim, fmt, s_clamp, t_clamp) here, so `fmt`
+ * actually received wrap_s — EVERY texture in the game decoded with a bogus
+ * format (hence the monochrome/noisy look everywhere). */
 void GXInitTexObj(void* texObj, const void* image, u16 width, u16 height,
-    u8 dim, u8 fmt, u8 s_clamp, u8 t_clamp)
+    u8 fmt, u8 s_clamp, u8 t_clamp, u8 mipmap)
 {
-    GX_TRACE("GXInitTexObj(p, p, %u, %u, %u, 0x%X, %u, %u)", width, height, dim, fmt, s_clamp, t_clamp);
+    u8 dim = mipmap;
+    GX_TRACE("GXInitTexObj(p, p, %u, %u, 0x%X, %u, %u, %u)", width, height, fmt, s_clamp, t_clamp, mipmap);
     /* Encode texture metadata in GXTexObj struct for GXGetTexObj* access.
      * GXTexObj has 8 u32 dummy fields. We encode:
      *   dummy[0] = (width << 16) | height
@@ -6209,16 +6215,18 @@ void GXInitTexObj(void* texObj, const void* image, u16 width, u16 height,
     g_state.current_tex.mag_filter = GX_LINEAR;
 }
 
-void GXInitTexObjLOD(void* texObj, f32 min_lod, f32 max_lod,
-    f32 lod_bias, u32 min_filter, u32 mag_filter,
-    u8 wrap_s, u8 wrap_t, u8 min_aniso)
+/* Canonical: GXInitTexObjLOD(obj, min_filt, mag_filt, min_lod, max_lod,
+ * lod_bias, bias_clamp, edge_lod_enable, max_aniso). The old declaration put
+ * the LODs first, so the filters were read from LOD floats and the wrap modes
+ * were overwritten with bias/edge flags. */
+void GXInitTexObjLOD(void* texObj, u32 min_filter, u32 mag_filter,
+    f32 min_lod, f32 max_lod, f32 lod_bias,
+    u8 bias_clamp, u8 edge_lod, u8 max_aniso)
 {
-    g_state.current_tex.min_filter = min_filter;
-    g_state.current_tex.mag_filter = mag_filter;
-    g_state.current_tex.wrap_s = wrap_s;
-    g_state.current_tex.wrap_t = wrap_t;
+    g_state.current_tex.min_filter = (u8)min_filter;
+    g_state.current_tex.mag_filter = (u8)mag_filter;
     (void)texObj; (void)min_lod; (void)max_lod; (void)lod_bias;
-    (void)min_aniso;
+    (void)bias_clamp; (void)edge_lod; (void)max_aniso;
 }
 
 /* GXGetTexObj* functions - read metadata encoded in GXTexObj by GXInitTexObj */
@@ -6357,68 +6365,51 @@ static void gx_format_to_gl(u8 gx_fmt, GLenum* internal_fmt, GLenum* base_fmt, G
 typedef struct { u8 r, g, b, a; } PixelRGBA8;
 
 /* Decompress one 8x8 CMPR block (12 bytes) into 64 RGBA pixels */
+/* Decode one 4x4 CMPR (DXT1-like) sub-block: 8 bytes = two big-endian
+ * RGB565 endpoints followed by 4 bytes of 2-bit selectors (MSB = leftmost
+ * pixel of each row). Writes 16 pixels row-major into out[0..15].
+ * The previous version treated a block as 8x8 with RGB5A3 endpoints and
+ * 4-bit selectors, which is why CMPR textures decoded as colored stripes. */
 static void decompress_cmpr_block(const u8 *block, PixelRGBA8 *out)
 {
     u16 c0 = ((u16)block[0] << 8) | block[1];
     u16 c1 = ((u16)block[2] << 8) | block[3];
-    
-    u8 c0r, c0g, c0b, c0a, c1r, c1g, c1b, c1a;
-    
-    /* Decode C0 (RGB5A3 format) */
-    if (c0 & 0x8000) {
-        c0a = ((c0 >> 12) & 0xF) * 17;
-        c0r = ((c0 >>  8) & 0xF) * 17;
-        c0g = ((c0 >>  4) & 0xF) * 17;
-        c0b = ( c0         & 0xF) * 17;
+    PixelRGBA8 pal[4];
+
+    pal[0].r = (u8)(((c0 >> 11) & 0x1F) * 255 / 31);
+    pal[0].g = (u8)(((c0 >>  5) & 0x3F) * 255 / 63);
+    pal[0].b = (u8)(( c0        & 0x1F) * 255 / 31);
+    pal[0].a = 0xFF;
+    pal[1].r = (u8)(((c1 >> 11) & 0x1F) * 255 / 31);
+    pal[1].g = (u8)(((c1 >>  5) & 0x3F) * 255 / 63);
+    pal[1].b = (u8)(( c1        & 0x1F) * 255 / 31);
+    pal[1].a = 0xFF;
+
+    if (c0 > c1) {
+        /* Four-color block: two interpolated shades. */
+        pal[2].r = (u8)((2 * pal[0].r + pal[1].r) / 3);
+        pal[2].g = (u8)((2 * pal[0].g + pal[1].g) / 3);
+        pal[2].b = (u8)((2 * pal[0].b + pal[1].b) / 3);
+        pal[2].a = 0xFF;
+        pal[3].r = (u8)((pal[0].r + 2 * pal[1].r) / 3);
+        pal[3].g = (u8)((pal[0].g + 2 * pal[1].g) / 3);
+        pal[3].b = (u8)((pal[0].b + 2 * pal[1].b) / 3);
+        pal[3].a = 0xFF;
     } else {
-        c0a = (c0 >> 15) ? 0xFF : 0x00;
-        c0r = ((c0 >> 10) & 0x1F) * 255 / 31;
-        c0g = ((c0 >>  5) & 0x1F) * 255 / 31;
-        c0b = ( c0        & 0x1F) * 255 / 31;
+        /* Three-color block: one midpoint plus a transparent selector. */
+        pal[2].r = (u8)((pal[0].r + pal[1].r) / 2);
+        pal[2].g = (u8)((pal[0].g + pal[1].g) / 2);
+        pal[2].b = (u8)((pal[0].b + pal[1].b) / 2);
+        pal[2].a = 0xFF;
+        pal[3].r = pal[3].g = pal[3].b = 0;
+        pal[3].a = 0x00;
     }
-    
-    /* Decode C1 */
-    if (c1 & 0x8000) {
-        c1a = ((c1 >> 12) & 0xF) * 17;
-        c1r = ((c1 >>  8) & 0xF) * 17;
-        c1g = ((c1 >>  4) & 0xF) * 17;
-        c1b = ( c1         & 0xF) * 17;
-    } else {
-        c1a = (c1 >> 15) ? 0xFF : 0x00;
-        c1r = ((c1 >> 10) & 0x1F) * 255 / 31;
-        c1g = ((c1 >>  5) & 0x1F) * 255 / 31;
-        c1b = ( c1        & 0x1F) * 255 / 31;
-    }
-    
-    for (int row = 0; row < 8; row++) {
-        u8 sb = block[4 + row];
-        for (int col = 0; col < 8; col++) {
-            u8 sel = (col & 1) ? (sb & 0xF) : ((sb >> 4) & 0xF);
-            PixelRGBA8 p;
-            
-            switch (sel) {
-            case 0: p.r=c0r; p.g=c0g; p.b=c0b; p.a=c0a; break;
-            case 1: p.r=c1r; p.g=c1g; p.b=c1b; p.a=c1a; break;
-            case 2:
-            case 3: {
-                int mix, omix;
-                if (c0 <= c1) {
-                    mix = (sel == 2) ? 3 : 1;
-                    omix = 4 - mix;
-                } else {
-                    mix = (sel == 2) ? 1 : 3;
-                    omix = 4 - mix;
-                }
-                p.r = (c0r*mix + c1r*omix + 2) / 4;
-                p.g = (c0g*mix + c1g*omix + 2) / 4;
-                p.b = (c0b*mix + c1b*omix + 2) / 4;
-                p.a = (c0a*mix + c1a*omix + 2) / 4;
-                break;
-            }
-            default: p.r=c0r; p.g=c0g; p.b=c0b; p.a=c0a; break;
-            }
-            
-            out[row * 8 + col] = p;
+
+    for (int row = 0; row < 4; row++) {
+        u8 bits = block[4 + row];
+        for (int col = 0; col < 4; col++) {
+            u8 sel = (u8)((bits >> (6 - 2 * col)) & 3);
+            out[row * 4 + col] = pal[sel];
         }
     }
 }
@@ -6577,32 +6568,40 @@ static u8* decompress_cmpr(const void *src, u16 w, u16 h, u32 *out_size)
     u32 out_bytes = npixels * 4;  /* RGBA8888 */
     u8 *out = (u8*)malloc(out_bytes);
     if (!out) return NULL;
-    
+    memset(out, 0, out_bytes);
+
+    /* GCN CMPR layout: the image is stored as 8x8 tiles; each tile holds
+     * four 4x4 DXT1-style sub-blocks of 8 bytes, in the order
+     * top-left, top-right, bottom-left, bottom-right (32 bytes per tile).
+     * The old loop consumed 12 bytes per 8x8 tile — every tile after the
+     * first read misaligned data. */
     const u8 *cin = (const u8*)src;
-    u32 row_stride = w * 4;  /* bytes per row in output buffer */
-    u32 tx = (w + 7) / 8;
-    u32 ty = (h + 7) / 8;
-    
-    /* Temp buffer for one 8x8 block (64 pixels * 4 bytes = 256) */
-    PixelRGBA8 block_out[64];
-    
-    /* Decompress base level only, placing each 8x8 block at the correct position */
+    u32 row_stride = (u32)w * 4;
+    u32 tx = ((u32)w + 7) / 8;
+    u32 ty = ((u32)h + 7) / 8;
+    PixelRGBA8 sub[16];
+
     for (u32 by = 0; by < ty; by++) {
         for (u32 bx = 0; bx < tx; bx++) {
-            decompress_cmpr_block(cin, block_out);
-            cin += 12;  /* next 12-byte CMPR block */
-            
-            /* Copy 8x8 block to correct position in output buffer */
-            u32 base_y = by * 8;
-            u32 base_x = bx * 8;
-            for (int r = 0; r < 8; r++) {
-                u32 src_off = (r * 8) * 4;  /* offset within block_out (flat 8-pixel rows) */
-                u32 dst_off = ((base_y + r) * row_stride) + (base_x * 4);
-                memcpy(out + dst_off, (u8*)block_out + src_off, 32);  /* 8 pixels * 4 bytes */
+            for (u32 sb = 0; sb < 4; sb++) {
+                decompress_cmpr_block(cin, sub);
+                cin += 8;
+                u32 ox = bx * 8 + ((sb & 1) ? 4 : 0);
+                u32 oy = by * 8 + ((sb & 2) ? 4 : 0);
+                for (u32 r = 0; r < 4; r++) {
+                    u32 py = oy + r;
+                    if (py >= (u32)h) break;
+                    for (u32 c = 0; c < 4; c++) {
+                        u32 px = ox + c;
+                        if (px >= (u32)w) break;
+                        memcpy(out + py * row_stride + px * 4,
+                               &sub[r * 4 + c], 4);
+                    }
+                }
             }
         }
     }
-    
+
     *out_size = out_bytes;
     return out;
 }
@@ -6793,8 +6792,12 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         }
     }
 
-    /* I4/I8 with TLUT: decode indexed pixels to RGBA8888 */
-    if (fmt == 0x00 || fmt == 0x01) {  /* I4 or I8 */
+    /* Paletted (C4=0x08 / C8=0x09 / C14X2=0x0A) and legacy I4/I8-with-TLUT:
+     * decode indexed pixels through the loaded TLUT to RGBA8888. C4 shares
+     * I4's 4-bit-index layout, C8 shares I8's. */
+    if (fmt == 0x08) fmt = 0x00;
+    else if (fmt == 0x09 || fmt == 0x0A) fmt = 0x01;
+    if (fmt == 0x00 || fmt == 0x01) {  /* index4 / index8 */
         TLUTSlot *tlut;
 #if BUILD_TARGET_PC
         /* PC port: the current-TLUT id can be garbage from unconverted
@@ -6994,12 +6997,36 @@ static void decode_i4_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, T
     }
 }
 
+/* Canonical: GXInitTexObjCI(obj, image_ptr, w, h, format, wrap_s, wrap_t,
+ * mipmap, tlut_name). This was a no-op, so paletted (C4/C8/C14X2) textures
+ * kept whatever state the previous GXInitTexObj left behind. */
 void GXInitTexObjCI(void* texObj, const void* image, u16 width, u16 height,
-    u8 ci_fmt, u8 dim, u8 s_wrap, u8 t_wrap)
+    u8 ci_fmt, u8 s_wrap, u8 t_wrap, u8 mipmap, u32 tlut_name)
 {
-    GX_TRACE("GXInitTexObjCI(p, p, %u, %u, %u, 0x%X, %u, %u)", width, height, ci_fmt, dim, s_wrap, t_wrap);
-    (void)texObj; (void)image; (void)width; (void)height;
-    (void)ci_fmt; (void)dim; (void)s_wrap; (void)t_wrap;
+    GX_TRACE("GXInitTexObjCI(p, p, %u, %u, 0x%X, %u, %u, %u, %u)",
+             width, height, ci_fmt, s_wrap, t_wrap, mipmap, tlut_name);
+    if (texObj) {
+        GXTexObj* to = (GXTexObj*)texObj;
+        to->dummy[0] = ((u32)width << 16) | (u32)height;
+        to->dummy[1] = ((u32)ci_fmt << 16) | ((u32)mipmap << 8) |
+                       ((u32)s_wrap << 4) | (u32)t_wrap;
+        to->dummy[2] = (u32)(uintptr_t)image;
+        to->dummy[3] = tlut_name;
+    }
+    memset(&g_state.current_tex, 0, sizeof(g_state.current_tex));
+    g_state.current_tex.valid = TRUE;
+    g_state.current_tex.width = width;
+    g_state.current_tex.height = height;
+    g_state.current_tex.fmt = ci_fmt;
+    g_state.current_tex.dim = mipmap;
+    g_state.current_tex.image_ptr = (void*)image;
+    g_state.current_tex.s_clamp = s_wrap;
+    g_state.current_tex.t_clamp = t_wrap;
+    g_state.current_tex.wrap_s = s_wrap;
+    g_state.current_tex.wrap_t = t_wrap;
+    g_state.current_tex.min_filter = GX_LINEAR;
+    g_state.current_tex.mag_filter = GX_LINEAR;
+    if (tlut_name < 16) g_state.g_current_tlut = tlut_name;
 }
 
 /* Load a TLUT palette into storage.
