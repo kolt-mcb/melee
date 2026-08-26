@@ -22,6 +22,9 @@ static void setFlag(int player, int kind)
     pl_StaleMoveTableExt_t* table = Player_GetStaleMoveTableIndexPtr2(player);
     HSD_ASSERT(0x38, player != Gm_Player_Other);
     HSD_ASSERT(0x39, gmDecisionGetType(kind) == Gm_DecType_Flag);
+#if BUILD_TARGET_PC
+    if ((unsigned) kind >= 215u || table == NULL) return;
+#endif
     table->x0_staleMoveTable.x904[kind] = true;
 }
 
@@ -31,6 +34,9 @@ static inline void setPointValue(int player, int kind, unsigned int val)
     pl_StaleMoveTableExt_t* table = Player_GetStaleMoveTableIndexPtr2(player);
     HSD_ASSERT(0x50, player != Gm_Player_Other);
     HSD_ASSERT(0x51, gmDecisionGetType(kind) == Gm_DecType_Point);
+#if BUILD_TARGET_PC
+    if ((unsigned) kind >= 215u || table == NULL) return;
+#endif
     table->x0_staleMoveTable.x904[kind] = val;
 }
 
@@ -72,6 +78,12 @@ void pl_80038824(int player, int kind)
     pl_StaleMoveTableExt_t* temp_r31 =
         Player_GetStaleMoveTableIndexPtr2(player);
 
+#if BUILD_TARGET_PC
+    /* PC port: match-end results code runs with unconverted tables and can
+     * pass a garbage kind, which wrote far outside x904[215] and smashed
+     * memory (observed: ~700k asserts then a stack-overflow crash). */
+    if ((unsigned) kind >= 215u || temp_r31 == NULL) return;
+#endif
     HSD_ASSERT(92, gmDecisionGetType(kind) == Gm_DecType_Point);
     temp_r31->x0_staleMoveTable.x904[kind] += 1;
 }
@@ -81,6 +93,9 @@ void pl_80038898(int player, int kind)
     unsigned int currentValue;
     pl_StaleMoveTableExt_t* temp_r31 =
         Player_GetStaleMoveTableIndexPtr2(player);
+#if BUILD_TARGET_PC
+    if ((unsigned) kind >= 215u || temp_r31 == NULL) return;
+#endif
     HSD_ASSERT(103, gmDecisionGetType(kind) == Gm_DecType_Point);
     currentValue = temp_r31->x0_staleMoveTable.x904[kind];
     RETURN_IF(currentValue == 0);
