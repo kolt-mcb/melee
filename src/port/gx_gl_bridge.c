@@ -2543,7 +2543,8 @@ static void bridge_upload_and_draw(void)
             fprintf(stderr,
                     "[TEV] draw n=%u stages=%u chan0src=%u C0=(%u,%u,%u,%u) "
                     "amb0=(%u,%u,%u,%u) texen=%d blend=%d/%u src=%u dst=%u "
-                    "acmp=%d:%u/%.2f,%u/%.2f z=%d,%d tex=%dx%d/0x%02x atc=%u slot0=%u/%d texid=%u\n",
+                    "acmp=%d:%u/%.2f,%u/%.2f z=%d,%d tex=%dx%d/0x%02x atc=%u slot0=%u/%d texid=%u "
+                    "| lights=%u amb=(%.2f,%.2f,%.2f) L0=(%u,%u,%u) dir=(%.2f,%.2f,%.2f)\n",
                     (unsigned) g_state.vert_count, (unsigned) g_state.num_tev_stages,
                     (unsigned) g_state.chan_color_source[0],
                     g_state.chan_colors[0].r, g_state.chan_colors[0].g,
@@ -2565,7 +2566,17 @@ static void bridge_upload_and_draw(void)
                     (unsigned) g_active_tex_count,
                     (unsigned) g_active_tex_slots[0],
                     (int) g_state.tex_cache_valid[g_active_tex_slots[0]],
-                    (unsigned) g_state.tex_cache[g_active_tex_slots[0]]);
+                    (unsigned) g_state.tex_cache[g_active_tex_slots[0]],
+                    (unsigned) g_state.g_active_light_count,
+                    (double) g_state.ambient_color[0],
+                    (double) g_state.ambient_color[1],
+                    (double) g_state.ambient_color[2],
+                    (unsigned) g_state.g_lights[0].r,
+                    (unsigned) g_state.g_lights[0].g,
+                    (unsigned) g_state.g_lights[0].b,
+                    (double) g_state.g_lights[0].nx,
+                    (double) g_state.g_lights[0].ny,
+                    (double) g_state.g_lights[0].nz);
             {
                 u32 nv = g_state.vert_count < 4 ? g_state.vert_count : 4;
                 fprintf(stderr, "[TEV]   uv0:");
@@ -3624,6 +3635,17 @@ void GXLoadNrmMtxImm(f32 mtx[3][4], u32 id)
 
 void GXSetCurrentMtx(u32 id)
 {
+    if (getenv("MELEE_MTXTRACE") != NULL) {
+        static unsigned long hist[70];
+        static int n = 0;
+        if (id < 70) hist[id]++;
+        if (++n % 1000 == 0) {
+            int k;
+            fprintf(stderr, "[MTX] GXSetCurrentMtx histogram:");
+            for (k = 0; k < 70; k++) if (hist[k]) fprintf(stderr, " %d=%lu", k, hist[k]);
+            fprintf(stderr, "\n");
+        }
+    }
     if (id < 68) {
         g_state.current_mtx_id = id;
         if (id < 4) {
@@ -3661,7 +3683,16 @@ void GXSetCurrentMtx(u32 id)
                 memcpy(g_state.mv_matrix, g_state.mtx_array[id], sizeof(g_state.mv_matrix));
             }
         } else {
-            memcpy(g_state.proj_matrix, g_state.mtx_array[id], sizeof(g_state.proj_matrix));
+            /* GXSetCurrentMtx selects a position/normal matrix: GX_PNMTX0..9
+             * are ids 0,3,6,...,27. None of them is a projection matrix, and
+             * copying one into proj_matrix (as this used to do for id >= 4)
+             * would replace the camera projection with a model transform.
+             * Nothing in the scenes exercised so far uses PNMTX above 0, so
+             * this never fired -- but it is a landmine for anything that does. */
+            static int warned = 0;
+            if (warned < 4) { warned++;
+                PORT_LOG_WARN("GXSetCurrentMtx: PNMTX id %u not handled; "
+                              "keeping current model matrix", id); }
         }
     }
 }
