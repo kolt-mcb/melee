@@ -1985,7 +1985,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
         if (arg2 != 0) {
             /* PC port: avoid variadic call crash - load archive then get symbol directly */
             void* data;
-            size_t length;
+            size_t length = 0; /* PC: lbFile_8001668C writes only the low u32 */
             void* mapHead;
             sp14 = lbHeap_80015BD0(0, sizeof(HSD_Archive));
             data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(r4)));
@@ -2009,7 +2009,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
         } else {
             /* PC port: avoid variadic call crash - load archive then get symbol directly */
             void* data;
-            size_t length;
+            size_t length = 0; /* PC: lbFile_8001668C writes only the low u32 */
             void* mapHead;
             sp14 = lbHeap_80015BD0(0, sizeof(HSD_Archive));
             data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(r4)));
