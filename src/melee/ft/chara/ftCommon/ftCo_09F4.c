@@ -68,6 +68,20 @@ void ftCo_8009F4A4(void)
 
 void ftCo_8009F54C(HSD_GObj* gobj, int code)
 {
+#if BUILD_TARGET_PC
+    /* PC port: this is the fighter light GObj's render callback, and its
+     * HSD_LObj chain comes from Ground_801C49B4() via lb_80011AC4. When the
+     * stage light list has not been built, that chain is NULL and
+     * HSD_LObj_803668EC(NULL) drops every current light -- including the
+     * stage's own -- so HSD_LObjSetupInit then produces an empty
+     * lightmask_diffuse and every material set up afterwards is lit by
+     * ambient alone. About a third of SetupInit calls were coming through
+     * here with an empty list. An absent chain should contribute nothing
+     * rather than erase what is already installed. */
+    if (gobj->hsd_obj == NULL) {
+        return;
+    }
+#endif
     HSD_LObj_803668EC(gobj->hsd_obj);
     HSD_LObjSetupInit(HSD_CObjGetCurrent());
 }

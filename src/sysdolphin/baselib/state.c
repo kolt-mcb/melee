@@ -220,6 +220,15 @@ void HSD_SetupChannelMode(u32 arg0)
         }
 #endif
         HSD_State_80405A38_60.light_mask = HSD_LObjGetLightMaskDiffuse();
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_LIGHTMASK") != NULL) {
+            static int n = 0;
+            if (++n % 401 == 0) {
+                fprintf(stderr, "[LMASK] chan0 setup mask=0x%x\n",
+                        (unsigned) HSD_State_80405A38_60.light_mask);
+            }
+        }
+#endif
         HSD_SetupChannel(&HSD_State_80405A38_60);
         HSD_State_80405A38_90.light_mask = HSD_LObjGetLightMaskAlpha();
         if (temp_r3_2 != NULL && (temp_r3_2->flags & 0x10)) {
