@@ -598,6 +598,35 @@ static HSD_JObj* get_part_joint(Fighter* fp, int part, bool do_blending)
     return result;
 }
 
+#if BUILD_TARGET_PC
+/* A FigaTree that has not been byte-swapped is recognisable from its own
+ * fields: type is small (0 or 1) and reads as something huge the wrong way
+ * round, and frames is a sane positive count that reads as a denormal. The
+ * readability probe alone is not enough -- a raw big-endian offset can land on
+ * a mapped page and sail straight through it, which is exactly how
+ * tree->nodes = 0x34840030000 got past it and faulted. */
+static int pc_figatree_converted(FigaTree* tree, const char* who)
+{
+    if (!pc_mem_readable(tree, sizeof(*tree))) return 0;
+    if ((u32) tree->type <= 0xFFFFu && tree->frames >= 0.0f &&
+        tree->frames <= 100000.0f && pc_mem_readable(tree->nodes, 1) &&
+        pc_mem_readable(tree->tracks, 1))
+    {
+        return 1;
+    }
+    {
+        static int warned = 0;
+        if (warned < 4) { warned++;
+            fprintf(stderr,
+                    "[PORT WARN] %s: FigaTree at %p is still big-endian "
+                    "(type=0x%x frames=%g nodes=%p); holding bind pose\n",
+                    who, (void*) tree, (unsigned) tree->type,
+                    (double) tree->frames, (void*) tree->nodes); }
+    }
+    return 0;
+}
+#endif
+
 void ftAnim_8006F4C8(Fighter* fp, bool do_blending, FigaTree* tree)
 {
     s8* cur_node;
@@ -644,6 +673,9 @@ void ftAnim_8006F4C8(Fighter* fp, bool do_blending, FigaTree* tree)
         !pc_mem_readable(tree->nodes, 1) ||
         !pc_mem_readable(tree->tracks, 1))
     {
+        return;
+    }
+    if (!pc_figatree_converted(tree, "ftAnim_8006F4C8")) {
         return;
     }
 #endif
@@ -717,6 +749,11 @@ void ftAnim_8006F628(Fighter* fp, Fighter_Part part, bool do_blending)
 
     i = 0;
     tree = fp->x590;
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(fp->parts) || !pc_figatree_converted(tree, __func__)) {
+        return;
+    }
+#endif
     cur_node = tree->nodes;
     x594_bits = fp->x594_bits;
     cur_track = tree->tracks;
@@ -943,6 +980,11 @@ void ftAnim_8006FCE4(Fighter* fp, bool do_blending)
 
     i = 0;
     tree = fp->x590;
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(fp->parts) || !pc_figatree_converted(tree, __func__)) {
+        return;
+    }
+#endif
     cur_node = tree->nodes;
     x594_bits = fp->x594_bits;
     cur_track = tree->tracks;

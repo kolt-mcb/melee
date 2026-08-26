@@ -728,6 +728,24 @@ void ftParts_80074E58(Fighter* fp)
 
     fp->parts = HSD_ObjAlloc(&fighter_parts_alloc_data);
     fp->dobj_list.data = HSD_ObjAlloc(&fighter_dobj_list_alloc_data);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_FTPOS") != NULL) {
+        fprintf(stderr,
+                "[FTPARTS] alloc parts=%p dobjs=%p kind=%d parts_num=%d\n",
+                (void*) fp->parts, (void*) fp->dobj_list.data, (int) fp->kind,
+                pc_ptr_sane(ftPartsTable[fp->kind])
+                    ? (int) ftPartsTable[fp->kind]->parts_num : -1);
+    }
+    if (!pc_ptr_sane(fp->parts) ||
+        !pc_mem_readable(fp->parts, 0x8C * sizeof(fp->parts[0])))
+    {
+        fprintf(stderr, "[PORT WARN] ftParts_80074E58: parts alloc %p is not "
+                        "usable; fighter bones stay unset\n",
+                (void*) fp->parts);
+        fp->parts = NULL;
+        return;
+    }
+#endif
 
     for (i = 0; i < ftPartsTable[fp->kind]->parts_num; i++) {
         fp->parts[i].flags8 = 0;
