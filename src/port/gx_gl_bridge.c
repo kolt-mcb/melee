@@ -1233,19 +1233,22 @@ static const char* g_frag_src =
 "    if (src == 6) return (u_chan_src[2] == 1) ? v_col : u_chan_color[2];   // C2\n"
 "    if (src == 7) return vec4((u_chan_src[2] == 1) ? v_col.a : u_chan_color[2].a); // A2 as color\n"
 "    if (src == 14) { // KONST\n"
+"        // Real GX_TEV_KCSEL table: 0x00-0x07 are the numeric constants\n"
+"        // 8/8..1/8; 0x0C-0x0F select K0-K3; 0x10-0x1F select a single\n"
+"        // channel of K0-K3 (R,G,B,A groups of four). The old code tested\n"
+"        // 8..11 for K0-K3, so every konstant-modulated stage silently fell\n"
+"        // back to K0 and the numeric constants were never handled.\n"
 "        int ksel = u_tev_kcolor_sel[stage];\n"
-"        vec4 kc;\n"
-"        if (ksel >= 8 && ksel <= 11) kc = u_kcolor[ksel - 8];\n"
-"        else kc = u_kcolor[0];\n"
-"        if (ksel == 0) return kc;\n"
-"        if (ksel == 1) return kc * (7.0/8.0);\n"
-"        if (ksel == 2) return kc * 0.5;\n"
-"        if (ksel == 3) return kc * 0.25;\n"
-"        if (ksel == 4) return kc * 0.125;\n"
-"        if (ksel == 5) return kc * 0.75;\n"
-"        if (ksel == 6) return kc * (1.0/16.0);\n"
-"        if (ksel == 7) return kc * (1.0/32.0);\n"
-"        return kc;\n"
+"        if (ksel <= 7) return vec4(float(8 - ksel) / 8.0);\n"
+"        if (ksel >= 12 && ksel <= 15) return vec4(u_kcolor[ksel - 12].rgb, 1.0);\n"
+"        if (ksel >= 16 && ksel <= 31) {\n"
+"            int ki = (ksel - 16) % 4;\n"
+"            int comp = (ksel - 16) / 4;\n"
+"            vec4 k = u_kcolor[ki];\n"
+"            float v = (comp == 0) ? k.r : (comp == 1) ? k.g : (comp == 2) ? k.b : k.a;\n"
+"            return vec4(v);\n"
+"        }\n"
+"        return vec4(1.0);\n"
 "    }\n"
 "    if (src == 15) return vec4(0.0);     // ZERO\n"
 "    if (src == 12) return vec4(1.0);     // ONE\n"
@@ -2037,6 +2040,13 @@ static void apply_tev_uniforms(void);
 void GXColor4u8(u8 r, u8 g, u8 b, u8 a); /* forward decl for display list parser */
 
 /* PC diag: report the first canary that gets clobbered, once. */
+static int pc_canary_on(void)
+{
+    static int on = -1;
+    if (on < 0) on = (getenv("MELEE_CANARY") != NULL);
+    return on;
+}
+
 static void pc_check_canaries(const char* where)
 {
     static int reported = 0;
@@ -2090,7 +2100,7 @@ static void pc_check_canaries(const char* where)
 
 void gx_frame_end(void)
 {
-    if (getenv("MELEE_CANARY")) {
+    if (pc_canary_on()) {
         pc_check_canaries("frame_end");
     }
     { static int _dd=-1; if(_dd<0)_dd=(getenv("MELEE_STAGE_DIAG")!=NULL);
@@ -2449,7 +2459,40 @@ static void pc_frame_trace(const char* what)
 
 static void bridge_upload_and_draw(void)
 {
-    if (getenv("MELEE_CANARY")) pc_check_canaries("upload_and_draw");
+    if (pc_canary_on()) pc_check_canaries("upload_and_draw");
+    /* PC diag: MELEE_TEVDUMP=<frame> — dump the TEV pipeline for the first
+     * few draws of that frame, to see how the final colour is derived. */
+    {
+        static int _tv_from = -2, _tv_n = 0;
+        if (_tv_from == -2) {
+            const char* tv = getenv("MELEE_TEVDUMP");
+            _tv_from = tv ? atoi(tv) : -1;
+        }
+        /* Keyed on batch size rather than frame: the bridge frame counter and
+         * the game frame counter do not advance together on this path. */
+        if (_tv_from >= 0 && _tv_n < 6 && (int) g_state.vert_count >= _tv_from)
+        {
+            u32 st;
+            _tv_n++;
+            fprintf(stderr,
+                    "[TEV] draw n=%u stages=%u chan0src=%u C0=(%u,%u,%u,%u) amb0=(%u,%u,%u,%u) texen=%d\n",
+                    (unsigned) g_state.vert_count, (unsigned) g_state.num_tev_stages,
+                    (unsigned) g_state.chan_color_source[0],
+                    g_state.chan_colors[0].r, g_state.chan_colors[0].g,
+                    g_state.chan_colors[0].b, g_state.chan_colors[0].a,
+                    g_state.chan_amb_colors[0].r, g_state.chan_amb_colors[0].g,
+                    g_state.chan_amb_colors[0].b, g_state.chan_amb_colors[0].a,
+                    (int) g_state.tex0_enabled);
+            for (st = 0; st < g_state.num_tev_stages && st < 4; st++) {
+                TevStage* tv = &g_state.tev_stages[st];
+                fprintf(stderr,
+                        "[TEV]   s%u cin=[%u,%u,%u,%u] op=%u ksel=%u tex=%u en=%d\n",
+                        st, tv->color_inputs[0], tv->color_inputs[1],
+                        tv->color_inputs[2], tv->color_inputs[3], tv->color_op,
+                        tv->kcolor_sel, tv->tex_map, (int) tv->color_enabled);
+            }
+        }
+    }
     /* Clear any lingering GL errors from previous calls */
     glGetError();
     
@@ -3091,7 +3134,13 @@ static void bridge_upload_and_draw(void)
             static int _dt_on = -1, _dt_n = 0;
             if (_dt_on < 0) _dt_on = (getenv("MELEE_DRAWTRACE") != NULL);
             u32 fc2 = g_state.frame_count;
-            if (_dt_on && fc2 >= 6 && fc2 <= 8 && _dt_n < 400) {
+            static int _dt_from = -1;
+            if (_dt_from < 0) {
+                const char* df = getenv("MELEE_DRAWTRACE_FROM");
+                _dt_from = df ? atoi(df) : 6;
+            }
+            if (_dt_on && (int) fc2 >= _dt_from && (int) fc2 <= _dt_from + 2 &&
+                _dt_n < 400) {
                 _dt_n++;
                 f64 cx = 0, cy = 0, cz = 0;
                 u32 cn = (count < 200 ? count : 200);
@@ -3656,6 +3705,24 @@ static void bridge_add_vertex(void)
     if (g_state.vert_count >= MAX_VERTS) {
         bridge_upload_and_draw();
     }
+#if BUILD_TARGET_PC
+    /* PC port: bridge_upload_and_draw() has early returns (nothing batched,
+     * shader not ready) that leave vert_count untouched, so the flush above
+     * is not guaranteed to make room. Indexing verts[] past MAX_VERTS then
+     * writes vertex data straight through the rest of BridgeState — which is
+     * what was corrupting frame_count, the active light count, the ambient
+     * colour and the channel state, and is invisible to ASan because it is
+     * all one global object. Drop the vertex instead. */
+    if (g_state.vert_count >= MAX_VERTS) {
+        static int warned = 0;
+        if (warned < 4) {
+            warned++;
+            PORT_LOG_WARN("vertex buffer full (%u); dropping vertex",
+                          (unsigned) g_state.vert_count);
+        }
+        return;
+    }
+#endif
     Vertex* v = &g_state.verts[g_state.vert_count];
     if (g_state.pos_enabled) { 
         v->pos[0] = g_state.last_pos[0]; v->pos[1] = g_state.last_pos[1]; v->pos[2] = g_state.last_pos[2];
@@ -6850,7 +6917,7 @@ static void decode_i4_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, T
 void GXLoadTexObj(void* texObj, u32 texEnv)
 {
     GX_TRACE("GXLoadTexObj(p, %u)", texEnv);
-    if (getenv("MELEE_CANARY")) pc_check_canaries("GXLoadTexObj:enter");
+    if (pc_canary_on()) pc_check_canaries("GXLoadTexObj:enter");
     if (!g_state.current_tex.valid) return;
     
     u16 w = g_state.current_tex.width;
@@ -7109,7 +7176,7 @@ bind_tex:
     g_state.tex_upload_count++;
     g_state.tex_formats_seen[fmt & 0x0F]++;
     
-    if (getenv("MELEE_CANARY")) pc_check_canaries("GXLoadTexObj:exit");
+    if (pc_canary_on()) pc_check_canaries("GXLoadTexObj:exit");
     /* Activate texture unit and track for shader */
     u32 gl_unit = texEnv % 2;  /* Clamp to 0-1 (shader only has 2 units) */
     glActiveTexture(GL_TEXTURE0 + gl_unit);
