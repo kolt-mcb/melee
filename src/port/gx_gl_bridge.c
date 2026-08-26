@@ -44,6 +44,12 @@ unsigned pc_stat_dlcalls = 0;
 unsigned pc_stat_rgobj = 0;
 unsigned pc_stat_jdall = 0;
 unsigned pc_stat_jdisp1 = 0;
+/* PC diag: last projection/viewport seen, for the per-100-frame FPS line. */
+float pc_stat_proj[4];
+float pc_stat_vp[4];
+unsigned pc_stat_clip_in = 0, pc_stat_clip_tot = 0;
+float pc_stat_mtxt[3];
+float pc_stat_v0[3];
 
 /* Forward declarations for Dolphin GX types used in GXGetTexObj* functions */
 typedef uint8_t GXBool;
@@ -2554,6 +2560,19 @@ static void bridge_upload_and_draw(void)
         for (int i = 0; i < 4; i++)
             for (int j = 0; j < 4; j++)
                 p0[i][j] = (i == j) ? 1.0f : 0.0f;
+        { u32 mid = g_state.current_mtx_id < 28 ? g_state.current_mtx_id : 0;
+          pc_stat_mtxt[0] = g_state.mtx_array[mid][0][3];
+          pc_stat_mtxt[1] = g_state.mtx_array[mid][1][3];
+          pc_stat_mtxt[2] = g_state.mtx_array[mid][2][3]; }
+        pc_stat_v0[0] = g_state.verts[0].pos[0];
+        pc_stat_v0[1] = g_state.verts[0].pos[1];
+        pc_stat_v0[2] = g_state.verts[0].pos[2];
+        pc_stat_proj[0] = g_state.proj_matrix[0][0];
+        pc_stat_proj[1] = g_state.proj_matrix[1][1];
+        pc_stat_proj[2] = g_state.proj_matrix[2][2];
+        pc_stat_proj[3] = g_state.proj_matrix[2][3];
+        pc_stat_vp[0] = g_state.vp_x; pc_stat_vp[1] = g_state.vp_y;
+        pc_stat_vp[2] = g_state.vp_w; pc_stat_vp[3] = g_state.vp_h;
         if (g_batch_pretransformed) {
             /* Vertices already in view space (per-vertex PNMTX applied on
              * the CPU) — keep p0 = identity. */
@@ -2660,6 +2679,17 @@ static void bridge_upload_and_draw(void)
                     mvp[i][j] += g_state.proj_matrix[i][k] * mv4[k][j];
     }
     
+    {
+        /* Sample the first vertex of every batch against the clip volume. */
+        f32 x=g_state.verts[0].pos[0], y=g_state.verts[0].pos[1], z=g_state.verts[0].pos[2];
+        f32 cx = mvp[0][0]*x + mvp[0][1]*y + mvp[0][2]*z + mvp[0][3];
+        f32 cy = mvp[1][0]*x + mvp[1][1]*y + mvp[1][2]*z + mvp[1][3];
+        f32 cz = mvp[2][0]*x + mvp[2][1]*y + mvp[2][2]*z + mvp[2][3];
+        f32 cw = mvp[3][0]*x + mvp[3][1]*y + mvp[3][2]*z + mvp[3][3];
+        pc_stat_clip_tot++;
+        if (cw > 0 && fabsf(cx) <= cw && fabsf(cy) <= cw && fabsf(cz) <= cw)
+            pc_stat_clip_in++;
+    }
     if (g_mvp_loc >= 0) {
         f32 mvp_flat[16];
         /* OpenGL glUniformMatrix4fv with GL_FALSE expects column-major */

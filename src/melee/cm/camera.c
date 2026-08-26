@@ -901,6 +901,22 @@ void Camera_8002A0C0(CameraBounds* bounds, CameraTransformState* state)
     input_y *= cm_80452C68.x2BC;
     half_view_height =
         bounds->z_pos * tanf(0.5f * (0.017453292f * state->fov));
+#if BUILD_TARGET_PC
+    /* PC port: an unconverted camera desc has an all-zero viewport, so these
+     * divisions produced inf and then NaN, poisoning cm_80452C68.translation
+     * — which Camera_8002AF68 adds to the eye/interest, making the whole
+     * view matrix NaN and silently clipping the entire match away. */
+    {
+        f32 vw = (f32) (data->desc.viewport.xmax - data->desc.viewport.xmin);
+        f32 vh = (f32) (data->desc.viewport.ymax - data->desc.viewport.ymin);
+        if (!(vw > 0.0f) || !(vh > 0.0f)) {
+            Camera_80030DE4(0.0f, 0.0f);
+            cm_80452C68.xA4 = 0.0f;
+            cm_80452C68.xA8 = 0.0f;
+            return;
+        }
+    }
+#endif
     viewport_x_scale =
         data->desc.aspect *
         (half_view_height /
@@ -922,8 +938,14 @@ void Camera_8002A0C0(CameraBounds* bounds, CameraTransformState* state)
         (depth_ratio * (cm_803BCCA0.x5C - cm_803BCCA0.x54)) + cm_803BCCA0.x54;
     depth_factor_x =
         (depth_ratio * (cm_803BCCA0.x60 - cm_803BCCA0.x58)) + cm_803BCCA0.x58;
-    Camera_80030DE4(depth_factor_x * (input_x * viewport_x_scale),
-                    depth_factor_y * (input_y * viewport_y_scale));
+    {
+        f32 tx = depth_factor_x * (input_x * viewport_x_scale);
+        f32 ty = depth_factor_y * (input_y * viewport_y_scale);
+#if BUILD_TARGET_PC
+        if (!isfinite(tx) || !isfinite(ty)) { tx = 0.0f; ty = 0.0f; }
+#endif
+        Camera_80030DE4(tx, ty);
+    }
     cm_80452C68.xA4 = 0.0f;
     cm_80452C68.xA8 = 0.0f;
 }
