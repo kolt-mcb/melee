@@ -342,3 +342,159 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
     }
     return out;
 }
+
+/* ------------------------------------------------------------------ */
+/* FigaTree: the fighter animation tree, read out of a nested archive.  */
+/*                                                                      */
+/* HSD_ArchiveParse byte-swaps the archive header and relocation table   */
+/* on this port, but never the data section, so the FigaTree and its     */
+/* FigaTrack array are still big-endian and still hold 4-byte offsets    */
+/* where x86_64 wants 8-byte pointers. FigaTrack is 0xC on GCN and 0x10  */
+/* here, so this cannot be fixed in place -- the array has to be rebuilt */
+/* at the wider stride.                                                  */
+/*                                                                       */
+/* GCN FigaTree  (0x14): s32 type; u32 flags; f32 frames;                */
+/*                        u32 nodes_off; u32 tracks_off                   */
+/* GCN FigaTrack (0x0C): u16 length; u16 startframe; u8 obj_type;         */
+/*                        u8 frac_value; u8 frac_slope; (pad); u32 ad_off */
+/*                                                                       */
+/* nodes is an s8 array, one entry per joint giving that joint's track    */
+/* count, terminated by -1; tracks is consumed that many at a time.       */
+
+/* Conversions happen on every motion change, so the result is recycled   */
+/* per owning fighter rather than allocated afresh and leaked. Six slots  */
+/* covers every player plus the Ice Climbers' partners. */
+#define PC_FIGATREE_SLOTS 8
+
+struct pc_figatree_slot {
+    const void* owner;
+    void* buf;
+    unsigned long cap;
+};
+
+static struct pc_figatree_slot pc_figatree_slots[PC_FIGATREE_SLOTS];
+
+static void* pc_figatree_buf(const void* owner, unsigned long need)
+{
+    int i, free_slot = -1;
+    for (i = 0; i < PC_FIGATREE_SLOTS; i++) {
+        if (pc_figatree_slots[i].owner == owner) break;
+        if (free_slot < 0 && pc_figatree_slots[i].owner == NULL) free_slot = i;
+    }
+    if (i == PC_FIGATREE_SLOTS) {
+        i = free_slot >= 0 ? free_slot : 0; /* evict slot 0 rather than fail */
+        pc_figatree_slots[i].owner = owner;
+    }
+    if (pc_figatree_slots[i].cap < need) {
+        void* nb = realloc(pc_figatree_slots[i].buf, need);
+        if (nb == NULL) return NULL;
+        pc_figatree_slots[i].buf = nb;
+        pc_figatree_slots[i].cap = need;
+    }
+    return pc_figatree_slots[i].buf;
+}
+
+struct pc_FigaTree_x64 {
+    int type;
+    u32 flags;
+    f32 frames;
+    signed char* nodes;
+    void* tracks;
+};
+
+struct pc_FigaTrack_x64 {
+    u16 length;
+    u16 startframe;
+    u8 obj_type;
+    u8 frac_value;
+    u8 frac_slope;
+    u8 pad;
+    u8* ad_head;
+};
+
+void* pc_conv_FigaTree(const u8* raw, const u8* data_base, unsigned long len,
+                       const void* owner)
+{
+    u32 nodes_off, tracks_off, raw_frames;
+    const signed char* nodes;
+    unsigned long n_nodes = 0, n_tracks = 0, need, k;
+    struct pc_FigaTree_x64* out;
+    struct pc_FigaTrack_x64* out_tracks;
+    signed char* out_nodes;
+
+    if (raw == NULL || data_base == NULL) return NULL;
+
+    nodes_off = pc_be32(*(const u32*) (raw + 0x0C));
+    tracks_off = pc_be32(*(const u32*) (raw + 0x10));
+    raw_frames = pc_be32(*(const u32*) (raw + 0x08));
+    if (nodes_off >= len || tracks_off >= len) {
+        fprintf(stderr, "[FTCONV] FigaTree offsets out of range "
+                        "(nodes=0x%x tracks=0x%x len=%lu)\n",
+                (unsigned) nodes_off, (unsigned) tracks_off, len);
+        return NULL;
+    }
+
+    /* Walk the node list to size the track array. The list is bounded by the
+     * archive, so a missing terminator cannot run away. */
+    nodes = (const signed char*) (data_base + nodes_off);
+    while (nodes_off + n_nodes < len && nodes[n_nodes] != -1) {
+        if (nodes[n_nodes] > 0) n_tracks += (unsigned long) nodes[n_nodes];
+        n_nodes++;
+    }
+    if (nodes_off + n_nodes >= len) {
+        fprintf(stderr, "[FTCONV] FigaTree node list is unterminated\n");
+        return NULL;
+    }
+    if (tracks_off + n_tracks * 0x0C > len) {
+        fprintf(stderr, "[FTCONV] FigaTree track array overruns the archive "
+                        "(%lu tracks at 0x%x, len=%lu)\n",
+                n_tracks, (unsigned) tracks_off, len);
+        return NULL;
+    }
+
+    need = sizeof(struct pc_FigaTree_x64) + (n_nodes + 1) +
+           n_tracks * sizeof(struct pc_FigaTrack_x64) + 16;
+    out = pc_figatree_buf(owner, need);
+    if (out == NULL) return NULL;
+
+    out_nodes = (signed char*) (out + 1);
+    out_tracks = (struct pc_FigaTrack_x64*) (((uintptr_t) (out_nodes +
+                                                           n_nodes + 1) +
+                                              7ul) &
+                                             ~7ul);
+
+    out->type = (int) pc_be32(*(const u32*) (raw + 0x00));
+    out->flags = pc_be32(*(const u32*) (raw + 0x04));
+    out->frames = *(f32*) &raw_frames;
+    out->nodes = out_nodes;
+    out->tracks = out_tracks;
+
+    for (k = 0; k < n_nodes; k++) out_nodes[k] = nodes[k];
+    out_nodes[n_nodes] = -1;
+
+    for (k = 0; k < n_tracks; k++) {
+        const u8* t = data_base + tracks_off + k * 0x0C;
+        u32 ad_off = pc_be32(*(const u32*) (t + 0x08));
+        out_tracks[k].length = (u16) ((t[0] << 8) | t[1]);
+        out_tracks[k].startframe = (u16) ((t[2] << 8) | t[3]);
+        out_tracks[k].obj_type = t[4];
+        out_tracks[k].frac_value = t[5];
+        out_tracks[k].frac_slope = t[6];
+        out_tracks[k].pad = 0;
+        /* ad_head points at the packed keyframe stream inside the same
+         * archive; it stays a byte pointer, so only the offset needs widening.
+         * Offset 0 is a legitimate data-section offset here -- it is the start
+         * of the section, not a null -- so only an out-of-range offset gives
+         * NULL, and the consumer (parseOpCode) dereferences without checking. */
+        out_tracks[k].ad_head =
+            (ad_off < len) ? (u8*) (data_base + ad_off) : NULL;
+    }
+
+    if (getenv("MELEE_FTCONV_TRACE") != NULL) {
+        fprintf(stderr,
+                "[FTCONV] FigaTree type=%d flags=0x%x frames=%.1f nodes=%lu "
+                "tracks=%lu\n",
+                out->type, out->flags, (double) out->frames, n_nodes, n_tracks);
+    }
+    return out;
+}
