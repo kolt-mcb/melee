@@ -1,3 +1,4 @@
+#include "../port/pc_ptr.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -185,13 +186,42 @@ static int write_ptr(int fd, void *p) {
 
 __attribute__((weak)) void OSReport(const char *fmt, ...) __asm__("OSReport");
 __attribute__((weak)) void OSReport(const char *fmt, ...) {
+    /* PC port: game code passes unconverted BE data through %s args, which
+     * crashes vsnprintf. Walk the format manually and validate every %s
+     * pointer with pc_str_sane before printing it. */
     va_list args;
     char buf[1024];
-    va_start(args, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
+    size_t o = 0;
     int out_fd = 2;
-    write(out_fd, buf, strlen(buf));
+    if (!pc_str_sane(fmt, 512)) { write(out_fd, "[OSReport: bad fmt]\n", 20); return; }
+    va_start(args, fmt);
+    for (const char *c = fmt; *c && o < sizeof(buf) - 48; c++) {
+        if (*c != '%') { buf[o++] = *c; continue; }
+        /* Collect the conversion spec. */
+        char spec[16]; size_t sl = 0; spec[sl++] = *c++;
+        while (*c && sl < 14 && strchr("0123456789.+-# lh", *c)) spec[sl++] = *c++;
+        if (!*c) break;
+        spec[sl++] = *c; spec[sl] = 0;
+        char conv = *c;
+        if (conv == '%') { buf[o++] = '%'; }
+        else if (conv == 's') {
+            const char *sa = va_arg(args, const char *);
+            if (pc_str_sane(sa, 256)) o += snprintf(buf + o, sizeof(buf) - o, "%s", sa);
+            else o += snprintf(buf + o, sizeof(buf) - o, "<bad:%p>", (const void *)sa);
+        } else if (conv == 'f' || conv == 'g' || conv == 'e') {
+            o += snprintf(buf + o, sizeof(buf) - o, spec, va_arg(args, double));
+        } else if (conv == 'p') {
+            o += snprintf(buf + o, sizeof(buf) - o, spec, va_arg(args, void *));
+        } else if (strchr(spec, 'l')) {
+            o += snprintf(buf + o, sizeof(buf) - o, spec, va_arg(args, long));
+        } else {
+            o += snprintf(buf + o, sizeof(buf) - o, spec, va_arg(args, int));
+        }
+        if (o > sizeof(buf) - 1) o = sizeof(buf) - 1;
+    }
+    va_end(args);
+    buf[o] = 0;
+    write(out_fd, buf, o);
     write(out_fd, "\n", 1);
 }
 
@@ -1916,6 +1946,20 @@ __attribute__((weak)) void port_render_frame_end(void)
     GXFlush();
     render_debug_overlay();
     render_present();
+    /* PC diag: frame throughput, printed every 100 frames. */
+    {
+        static unsigned long _fr = 0;
+        static struct timespec _t0;
+        struct timespec t;
+        _fr++;
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        if (_fr == 1) _t0 = t;
+        if (_fr % 100 == 0) {
+            double dt = (t.tv_sec - _t0.tv_sec) + (t.tv_nsec - _t0.tv_nsec) / 1e9;
+            fprintf(stderr, "[FPS] frame %lu: %.1f fps (last 100)\n", _fr, dt > 0 ? 100.0 / dt : 0.0);
+            _t0 = t;
+        }
+    }
 }
 
 __attribute__((weak)) void game_shutdown(void) {}

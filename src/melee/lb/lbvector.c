@@ -1,3 +1,4 @@
+#include "port/pc_ptr.h"
 #include "lb/lbvector.h"
 
 #ifndef M_TAU
@@ -394,6 +395,22 @@ Vec3* lbVector_WorldToScreen(HSD_CObj* cobj, const Vec3* pos3d,
     MtxPtr mvMtx; // modelview matrix
     float f1;
 
+#if BUILD_TARGET_PC
+    /* PC port: callers can pass pointers derived from unconverted BE data;
+     * treat them as off-screen. */
+    if (!pc_ptr_sane(cobj) || !pc_ptr_sane(pos3d) || !pc_ptr_sane(screenCoords)) {
+        return NULL;
+    }
+    /* The GCN asserts below bound valid world positions to +/-50000; a
+     * fighter with unconverted data feeds garbage here. Treat as
+     * off-screen instead of computing with it. */
+    if (!(pos3d->x > -50000.0f && pos3d->x < 50000.0f) ||
+        !(pos3d->y > -50000.0f && pos3d->y < 50000.0f) ||
+        !(pos3d->z > -50000.0f && pos3d->z < 50000.0f))
+    {
+        return NULL;
+    }
+#endif
     HSD_ASSERT(676, pos3d);
     HSD_ASSERT(677, pos3d->x>-50000.0F&&pos3d->x<50000.0F);
     HSD_ASSERT(678, pos3d->y>-50000.0F&&pos3d->y<50000.0F);
