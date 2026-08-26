@@ -1322,6 +1322,7 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
     HSD_MObjDesc* x64Mobj;
     const struct HSD_MObjDesc_gcn* gcnMobj;
     u32 val;
+    u32 raw;
 
     if (gcnMobjPtr == NULL) return NULL;
 
@@ -1343,24 +1344,49 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
         x64Mobj->texdesc = grDatFiles_ConvertTObjDescGCNtoX64(dataBase + val, dataBase);
     }
 
-    /* mat - allocate a default material (MObjLoad copies from desc->mat) */
+    /* mat - HSD_Material is 3 GXColor + 2 f32 and has the same layout on both
+     * targets, so only the two floats need swapping. This used to fabricate a
+     * white-diffuse/black-specular default and ignore the file: those two
+     * colours are what HSD_TExpSetReg feeds to the TEV konstants, so every
+     * stage material rendered as untinted texture. */
     x64Mobj->mat = lbHeap_80015BD0(0, sizeof(HSD_Material));
     if (x64Mobj->mat != NULL) {
-        /* Default: white diffuse, black ambient/specular, full alpha */
-        x64Mobj->mat->ambient.r = 0;
-        x64Mobj->mat->ambient.g = 0;
-        x64Mobj->mat->ambient.b = 0;
-        x64Mobj->mat->ambient.a = 255;
-        x64Mobj->mat->diffuse.r = 255;
-        x64Mobj->mat->diffuse.g = 255;
-        x64Mobj->mat->diffuse.b = 255;
-        x64Mobj->mat->diffuse.a = 255;
-        x64Mobj->mat->specular.r = 0;
-        x64Mobj->mat->specular.g = 0;
-        x64Mobj->mat->specular.b = 0;
-        x64Mobj->mat->specular.a = 255;
-        x64Mobj->mat->alpha = 1.0f;
-        x64Mobj->mat->shininess = 0.0f;
+        val = be32_swap(gcnMobj->mat);
+        if (val != 0 && val < 0x80000000U) {
+            const u8* m = dataBase + val;
+            memcpy(&x64Mobj->mat->ambient, m + 0x00, 4);
+            memcpy(&x64Mobj->mat->diffuse, m + 0x04, 4);
+            memcpy(&x64Mobj->mat->specular, m + 0x08, 4);
+            raw = be32_swap(*(const u32*) (m + 0x0C));
+            x64Mobj->mat->alpha = *(f32*) &raw;
+            raw = be32_swap(*(const u32*) (m + 0x10));
+            x64Mobj->mat->shininess = *(f32*) &raw;
+            if (getenv("MELEE_GRDAT_TRACE") != NULL) {
+                fprintf(stderr,
+                        "[GRDAT] material amb=(%u,%u,%u,%u) dif=(%u,%u,%u,%u) "
+                        "spc=(%u,%u,%u,%u) alpha=%.3f shine=%.3f\n",
+                        x64Mobj->mat->ambient.r, x64Mobj->mat->ambient.g,
+                        x64Mobj->mat->ambient.b, x64Mobj->mat->ambient.a,
+                        x64Mobj->mat->diffuse.r, x64Mobj->mat->diffuse.g,
+                        x64Mobj->mat->diffuse.b, x64Mobj->mat->diffuse.a,
+                        x64Mobj->mat->specular.r, x64Mobj->mat->specular.g,
+                        x64Mobj->mat->specular.b, x64Mobj->mat->specular.a,
+                        x64Mobj->mat->alpha, x64Mobj->mat->shininess);
+            }
+        } else {
+            /* No material in the file: neutral white, full alpha. */
+            x64Mobj->mat->ambient.r = x64Mobj->mat->ambient.g =
+                x64Mobj->mat->ambient.b = 0;
+            x64Mobj->mat->ambient.a = 255;
+            x64Mobj->mat->diffuse.r = x64Mobj->mat->diffuse.g =
+                x64Mobj->mat->diffuse.b = 255;
+            x64Mobj->mat->diffuse.a = 255;
+            x64Mobj->mat->specular.r = x64Mobj->mat->specular.g =
+                x64Mobj->mat->specular.b = 0;
+            x64Mobj->mat->specular.a = 255;
+            x64Mobj->mat->alpha = 1.0f;
+            x64Mobj->mat->shininess = 0.0f;
+        }
     }
     
     /* renderdesc - set NULL for now */
