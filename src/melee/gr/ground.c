@@ -2141,6 +2141,15 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
     if (entry_count == 0) {
         return;
     }
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_STAGE_DIAG") != NULL) {
+        fprintf(stderr, "[X280] walker: map=%d entries=%d unk0=%p joint=%p\n",
+                (int) map_id, (int) entry_count, stage_dat->unk0, (void*) joint);
+    }
+    if (!pc_ptr_sane(stage_dat->unk0)) {
+        return;
+    }
+#endif
     i = 0;
     entry = stage_dat->unk0;
     while (1) {
@@ -2156,6 +2165,15 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
     }
     count = entry->pair_count;
     pair = entry->pairs;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_STAGE_DIAG") != NULL) {
+        fprintf(stderr, "[X280] MATCH map=%d pairs=%p count=%d\n",
+                (int) map_id, (void*) pair, (int) count);
+    }
+    if (pair == NULL || count <= 0) {
+        return;
+    }
+#endif
     for (j = count; j > 0; j--) {
         target = pair[0];
         if (prev_index > target || prev_index == -1) {
@@ -2190,6 +2208,13 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
             i++;
         }
         prev_index = i;
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_STAGE_DIAG") != NULL) {
+            fprintf(stderr, "[X280]   slot=%d <- jobj=%p (joint idx %d)\n",
+                    (int) pair[1], (void*) jobj, (int) pair[0]);
+        }
+        if ((unsigned) pair[1] >= 0x100u) { pair += 2; continue; }
+#endif
         stage_info.x280[pair[1]] = jobj;
         pair += 2;
     }

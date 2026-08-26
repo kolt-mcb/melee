@@ -146,7 +146,7 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
     }
 
     /* Fill x86_64 struct with converted values */
-    x64Dat->unk0 = gcn_ptr_to_x64(be32_swap(gcnDat->unk0), dataBase);
+    /* unk0 (spawn-point entries) is converted below, after the joint map exists. */
     x64Dat->unk4 = be32_swap(gcnDat->unk4);
 
     /* Convert the x8_t array */
@@ -215,6 +215,72 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
     /* PC port: resolve POBJ_SKIN PObjDesc -> joint refs now that all joints in
      * this stage have been converted (populates pobjdesc->u.joint). */
     grdat_resolve_pobj_joints();
+
+    /* PC port: convert the spawn-point entry array (UnkStageDat::unk0).
+     * Ground_801C34AC walks it to fill stage_info.x280[], which is what
+     * getSpawnPoint/Ground_801C2D24 read; leaving it as a raw rebase meant
+     * x280 was never populated, Ground_801C2D24 returned false, and
+     * fn_8016E2BC spawned fighters at uninitialized stack coordinates.
+     *
+     * GCN entry is 12 bytes { u32 joint_off; u32 pairs_off; s32 pair_count; };
+     * the x64 form has 8-byte pointers. `joint` is matched by IDENTITY against
+     * an already-converted HSD_Joint*, so it resolves through the jointmap
+     * built by the x8_t loop above — which is why this must run after it.
+     * `pairs` is pair_count pairs of big-endian s16 (joint index, x280 slot). */
+    {
+        u32 e_off = be32_swap(gcnDat->unk0);
+        s32 e_cnt = x64Dat->unk4;
+        x64Dat->unk0 = NULL;
+        if (e_off != 0 && e_off < 0x80000000U && e_cnt > 0 && e_cnt < 4096) {
+            struct grdat_spawn_entry {
+                void* joint;
+                s16* pairs;
+                s32 pair_count;
+            };
+            struct grdat_spawn_entry* arr =
+                lbHeap_80015BD0(0, sizeof(struct grdat_spawn_entry) * (size_t) e_cnt);
+            if (arr != NULL) {
+                const u8* eb = dataBase + e_off;
+                s32 ei;
+                int resolved = 0;
+                memset(arr, 0, sizeof(struct grdat_spawn_entry) * (size_t) e_cnt);
+                for (ei = 0; ei < e_cnt; ei++) {
+                    const u8* ep = eb + (size_t) ei * 12;
+                    u32 joint_off = be32_swap(*(const u32*) (ep + 0));
+                    u32 pairs_off = be32_swap(*(const u32*) (ep + 4));
+                    s32 pcount = (s32) be32_swap(*(const u32*) (ep + 8));
+
+                    arr[ei].joint = grdat_jointmap_find(joint_off);
+                    if (arr[ei].joint != NULL) resolved++;
+                    arr[ei].pair_count = 0;
+                    arr[ei].pairs = NULL;
+                    /* NOTE: 0 is a VALID data-section offset here (Locate()
+                     * is skipped on PC, so these stay as offsets and the
+                     * relocation would have added the base). Only reject
+                     * out-of-range values. */
+                    if (pairs_off < 0x80000000U && pcount > 0 && pcount < 4096)
+                    {
+                        s16* pv = lbHeap_80015BD0(0, sizeof(s16) * 2u * (size_t) pcount);
+                        if (pv != NULL) {
+                            const u8* pb = dataBase + pairs_off;
+                            s32 pi;
+                            for (pi = 0; pi < pcount * 2; pi++) {
+                                pv[pi] = (s16) be16_swap(*(const u16*) (pb + pi * 2));
+                            }
+                            arr[ei].pairs = pv;
+                            arr[ei].pair_count = pcount;
+                        }
+                    }
+                }
+                x64Dat->unk0 = arr;
+                if (getenv("MELEE_GRDAT_TRACE")) {
+                    fprintf(stderr,
+                            "[GRDAT] spawn entries: %d total, %d joints resolved\n",
+                            (int) e_cnt, resolved);
+                }
+            }
+        }
+    }
 
     x64Dat->unk10 = (HSD_Spline**)gcn_ptr_to_x64(be32_swap(gcnDat->unk10), dataBase);
     x64Dat->unk14 = be32_swap(gcnDat->unk14);
