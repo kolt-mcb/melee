@@ -346,7 +346,13 @@ void ftLib_800866DC(HSD_GObj* gobj, Vec3* v)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     struct ftCo_DatAttrs* r4 = &fp->co_attrs;
-    s32 i = fp->ft_data->x0->camera_zoom_target_bone;
+    s32 i;
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x0)) {
+        i = 0; /* PC port: attrs not converted; use root bone */
+    } else
+#endif
+    i = fp->ft_data->x0->camera_zoom_target_bone;
     lb_8000B1CC(ftLib_80086630(gobj, i), &r4->x170, v);
 }
 

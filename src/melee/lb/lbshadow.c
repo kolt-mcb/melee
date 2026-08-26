@@ -1,4 +1,7 @@
 #include "lbshadow.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include <math_ppc.h>
 #include <dolphin/gx/GXVert.h>
@@ -371,6 +374,11 @@ void lbShadow_8000F38C(s32 arg0)
         lobj = fallback;
     }
     HSD_ASSERT(0x181, lobj);
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(lobj)) {
+        return; /* PC port: no shadow light available; skip shadow pass */
+    }
+#endif
 
     if (!HSD_LObjGetPosition(lobj, &lightPos)) {
         HSD_ASSERTREPORT(0x184, 0, "coudn t get light position ...\n");
