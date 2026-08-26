@@ -247,7 +247,13 @@ void ftDrawCommon_800805C8(HSD_GObj* gobj, s32 arg1, bool arg2)
 
         mtx = ftDrawCommon_8008051C_inline(gobj, &sp54, &v, sp18, sp78);
 
+#if BUILD_TARGET_PC
+        { extern int pc_in_fighter_draw; pc_in_fighter_draw = 1; }
+#endif
         HSD_JObjDispAll(GET_JOBJ(gobj), mtx, HSD_GObj_80390EB8(arg1), 0);
+#if BUILD_TARGET_PC
+        { extern int pc_in_fighter_draw; pc_in_fighter_draw = 0; }
+#endif
         if (ftData_UnkMtxFunc0[fighter->kind] != NULL) {
             ftData_UnkMtxFunc0[fighter->kind](gobj, arg1, mtx);
         }
