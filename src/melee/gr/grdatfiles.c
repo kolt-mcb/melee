@@ -1343,6 +1343,15 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
     if (val != 0 && val < 0x80000000U && val < 0x200000U) {
         x64Mobj->texdesc = grDatFiles_ConvertTObjDescGCNtoX64(dataBase + val, dataBase);
     }
+    if (getenv("MELEE_GRDAT_TRACE") != NULL) {
+        static int n_mobj = 0, n_tex = 0, n_off = 0;
+        n_mobj++;
+        if (val != 0) n_off++;
+        if (x64Mobj->texdesc != NULL) n_tex++;
+        fprintf(stderr, "[GRDAT] mobj#%d texdesc_off=0x%x -> %s (with-offset=%d "
+                        "converted=%d of %d)\n",
+                n_mobj, val, x64Mobj->texdesc ? "ok" : "NULL", n_off, n_tex, n_mobj);
+    }
 
     /* mat - HSD_Material is 3 GXColor + 2 f32 and has the same layout on both
      * targets, so only the two floats need swapping. This used to fabricate a

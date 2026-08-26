@@ -28,6 +28,7 @@
 #include <GL/glext.h>
 #include <GL/glcorearb.h>
 #include <string.h>
+#include <errno.h>
 #include <math.h>
 #include <stdint.h>
 
@@ -155,6 +156,11 @@ typedef struct {
 /* Per-stage TEV destination register (GXSetTevColorOp/GXSetTevAlphaOp out_reg).
  * Deliberately NOT inside TevStage/BridgeState: an unfound writer corrupts that
  * struct, and growing it shifts every field past tev_stages[]. */
+/* MELEE_TEXLOG tally: why texture loads do or do not reach the GL upload. */
+unsigned long g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable, g_tx_hit;
+unsigned long g_tx_init, g_tx_distinct;
+unsigned long g_dbg_mobj_setup, g_dbg_tobj_setup, g_dbg_tobj_seen, g_dbg_tobj_null;
+
 static u32 g_tev_color_out_reg[8];
 static u32 g_tev_alpha_out_reg[8];
 
@@ -586,7 +592,7 @@ typedef struct {
     u8* g_palette_convert_buf;
     /* PC diag: canaries bracketing the region that has been observed holding
      * impossible light/ambient values, to locate the overflow that writes it. */
-    u32 canary_after_palette[64];
+    u32 canary_after_palette[2048];
     
     /* Accumulators for current vertex data */
     f32 last_pos[3];
@@ -744,7 +750,17 @@ typedef struct {
 } BridgeState;
 
 #define PC_PALETTE_BUF_SIZE (256u * 256u * 4u)
-static BridgeState g_state;
+static BridgeState g_state __attribute__((aligned(4096)));
+
+/* Diagnostic: the corruption of this struct turned out to end exactly at a
+ * write-protected page with no SIGSEGV, which means a kernel write (a read()
+ * syscall) rather than a CPU store -- hence the gdb hardware watchpoint never
+ * fired. Export the range so the file-read paths can name the culprit. */
+void pc_bridge_state_range(void** lo, void** hi)
+{
+    if (lo) *lo = (void*) &g_state;
+    if (hi) *hi = (void*) ((char*) &g_state + sizeof(g_state));
+}
 static void pc_check_canaries(const char* where);
 
 /* Debug: track unclamped vertex position range across display list parsing */
@@ -1964,8 +1980,27 @@ void gx_bridge_init(void)
                     (void*) base, (void*) (base + body));
         }
     }
-    for (int ci = 0; ci < 64; ci++) {
-        g_state.canary_after_palette[ci] = 0xC0FFEE00u + ci;
+    for (int ci = 0; ci < 2048; ci++) {
+        g_state.canary_after_palette[ci] = 0xC0FFEE00u + (u32) (ci & 0xFF);
+    }
+    /* MELEE_GUARD=1: write-protect one whole page inside the canary. The
+     * corruption that scribbles this region is a write past an array inside
+     * BridgeState, which ASan cannot see (it is all one global object) and
+     * which a gdb hardware watchpoint did not catch. A PROT_READ page turns
+     * the next such write into a SIGSEGV at the offending instruction, and
+     * the crash handler prints the backtrace. */
+    if (getenv("MELEE_GUARD") != NULL) {
+        uintptr_t lo = (uintptr_t) &g_state.canary_after_palette[0];
+        uintptr_t hi = lo + sizeof(g_state.canary_after_palette);
+        uintptr_t pg = (lo + 4095) & ~(uintptr_t) 4095;
+        if (pg + 4096 <= hi) {
+            if (mprotect((void*) pg, 4096, PROT_READ) == 0) {
+                fprintf(stderr, "[GUARD] canary page %p..%p is read-only\n",
+                        (void*) pg, (void*) (pg + 4096));
+            } else {
+                fprintf(stderr, "[GUARD] mprotect failed: %s\n", strerror(errno));
+            }
+        }
     }
     for (int ci = 0; ci < 4; ci++) {
         g_state.canary_before_lights[ci] = 0xC0FFEE10u + ci;
@@ -2089,8 +2124,8 @@ static void pc_check_canaries(const char* where)
     }
     {
         int first_bad = -1, last_bad = -1, nbad = 0;
-        for (ci = 0; ci < 64; ci++) {
-            if (g_state.canary_after_palette[ci] != 0xC0FFEE00u + (u32) ci) {
+        for (ci = 0; ci < 2048; ci++) {
+            if (g_state.canary_after_palette[ci] != 0xC0FFEE00u + (u32) (ci & 0xFF)) {
                 if (first_bad < 0) first_bad = ci;
                 last_bad = ci;
                 nbad++;
@@ -2099,11 +2134,11 @@ static void pc_check_canaries(const char* where)
         if (nbad) {
             reported = 1;
             fprintf(stderr,
-                    "[CANARY] after_palette clobbered at %s: %d/64 words, range [%d..%d], "
+                    "[CANARY] after_palette clobbered at %s: %d/2048 words, range [%d..%d], "
                     "vals %08x %08x %08x (at %p)\n",
                     where, nbad, first_bad, last_bad,
                     g_state.canary_after_palette[first_bad],
-                    g_state.canary_after_palette[first_bad + 1 < 64 ? first_bad + 1 : first_bad],
+                    g_state.canary_after_palette[first_bad + 1 < 2048 ? first_bad + 1 : first_bad],
                     g_state.canary_after_palette[last_bad],
                     (void*) &g_state.canary_after_palette[0]);
             return;
@@ -6506,6 +6541,8 @@ void GXInitTexObj(void* texObj, const void* image, u16 width, u16 height,
         to->dummy[2] = (u32)(uintptr_t)image;
     }
     
+    { static const void* last_img; g_tx_init++;
+      if (image != last_img) { last_img = image; g_tx_distinct++; } }
     /* Capture texture metadata during initialization */
     memset(&g_state.current_tex, 0, sizeof(g_state.current_tex));
     g_state.current_tex.valid = TRUE;
@@ -6980,8 +7017,6 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
 static void decode_i8_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, TLUTSlot *tlut);
 static void decode_i4_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, TLUTSlot *tlut);
 
-/* MELEE_TEXLOG tally: why texture loads do or do not reach the GL upload. */
-unsigned long g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable, g_tx_hit;
 void GXLoadTexObj(void* texObj, u32 texEnv)
 {
     GX_TRACE("GXLoadTexObj(p, %u)", texEnv);

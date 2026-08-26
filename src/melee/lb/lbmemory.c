@@ -127,7 +127,11 @@ loop:
     r0 = (u32) ((iter != NULL) ? iter->x4_lo : h->x8_hi);
     sum += r0 - r4;
     if (iter != NULL) {
+#if BUILD_TARGET_PC
+        r4 = (u32) ((uintptr_t) iter->x4_lo + (uintptr_t) iter->x8_hi);
+#else
         r4 = (u32) iter->x4_lo + (u32) iter->x8_hi;
+#endif
         goto loop;
     }
     return sum;
@@ -150,6 +154,12 @@ Handle* lbMemory_80014FC8(Handle* arg0, u32 size)
     void* start;
     Handle* iter;
 
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_HEAPTRACE") != NULL) {
+        fprintf(stderr, "[HEAPTRACE]   arena lo=%p hi=%p size=%u\n",
+                arg0->x4_lo, arg0->x8_hi, (unsigned) size);
+    }
+#endif
     least_leftover = 0x40000000U;
     HSD_ASSERT(0xCC, _p(free_mem));
     aligned_size = ((size + 0x1F) & 0xFFFFFFE0);
@@ -159,7 +169,28 @@ Handle* lbMemory_80014FC8(Handle* arg0, u32 size)
 
     while (1) {
         end = (iter->x0_next != NULL) ? iter->x0_next->x4_lo : arg0->x8_hi;
+#if BUILD_TARGET_PC
+        /* PC port: x4_lo/x8_hi are void* (8 bytes here, 4 on GCN) and this
+         * walk truncated every one of them to u32. On x86_64 the block-end
+         * computation below then wrapped to a 32-bit value, and the allocator
+         * handed back a pointer with the high half missing -- for PlMrAJ.dat
+         * (1.25 MB) that address landed inside the GX bridge's own state
+         * struct, and the subsequent DVD read wrote a megabyte of file data
+         * straight over it. That is the corruption that made BridgeState's
+         * frame counter, light count and texture cache read as garbage, and
+         * why neither ASan (one global object) nor a hardware watchpoint (the
+         * write arrives via a read() syscall, not a CPU store) could see it.
+         * Do the arithmetic at pointer width. */
+        {
+            uintptr_t e = (uintptr_t) end;
+            uintptr_t sp = (uintptr_t) start;
+            available_space = (e >= sp && e - sp <= 0xFFFFFFFFULL)
+                                  ? (u32) (e - sp)
+                                  : 0;
+        }
+#else
         available_space = (u32) end - (u32) start;
+#endif
         if (available_space >= aligned_size) {
             leftover = available_space - aligned_size;
             if (leftover <= least_leftover) {
@@ -172,7 +203,11 @@ Handle* lbMemory_80014FC8(Handle* arg0, u32 size)
             break;
         } else {
             iter = iter->x0_next;
+#if BUILD_TARGET_PC
+            start = (void*) ((uintptr_t) iter->x4_lo + (uintptr_t) iter->x8_hi);
+#else
             start = (void*) ((u32) iter->x4_lo + (u32) iter->x8_hi);
+#endif
         }
     }
     HSD_ASSERT(0xE9, memp_kouho);
@@ -284,7 +319,12 @@ u32 lbMemory_8001529C(Handle* h, void* arg1, u32 arg2)
             lbMemory_80015320(0, iter, 0, 0);
             return 1;
         }
+#if BUILD_TARGET_PC
+        /* Pointer reconstruction: must not be truncated to 32 bits. */
+        *r7 = (void*) ((uintptr_t) lo + (uintptr_t) iter->x8_hi);
+#else
         *r7 = (void*) ((u32) lo + (u32) iter->x8_hi);
+#endif
     }
     return 0;
 }

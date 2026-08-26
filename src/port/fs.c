@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <execinfo.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -76,10 +77,41 @@ VfHandle vf_open(const char* path, const char* mode)
     return (VfHandle)file;
 }
 
+/* Diagnostic: something reads file data straight over the GX bridge's state
+ * struct. Because it lands there via a read() syscall, neither ASan nor a gdb
+ * hardware watchpoint sees it -- the corruption just appears. Every file read
+ * on the port funnels through here, so check the destination once. */
+void pc_bridge_state_range(void** lo, void** hi);
+
+static void vf_check_dest(const void* buffer, int size)
+{
+    void* lo = NULL;
+    void* hi = NULL;
+    const char* b = (const char*) buffer;
+    static int reported = 0;
+
+    if (reported >= 8) return;
+    pc_bridge_state_range(&lo, &hi);
+    if (lo == NULL || b + size <= (const char*) lo || b >= (const char*) hi) {
+        return;
+    }
+    reported++;
+    fprintf(stderr,
+            "[FSGUARD] file read of %d bytes into %p overlaps BridgeState "
+            "[%p..%p]\n", size, buffer, lo, hi);
+    {
+        void* bt[24];
+        int n = backtrace(bt, 24);
+        backtrace_symbols_fd(bt, n, 2);
+    }
+    fflush(stderr);
+}
+
 int vf_read(VfHandle handle, void* buffer, int size)
 {
     if (!handle) return 0;
     VfFile* file = (VfFile*)handle;
+    vf_check_dest(buffer, size);
     return fread(buffer, 1, size, file->fp);
 }
 

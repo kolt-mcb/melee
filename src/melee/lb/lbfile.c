@@ -259,16 +259,19 @@ void lbFile_8001668C(const char* basename, u32* src, u32* dest)
 inline void qwer(s32 a, const char* basename, u32* src, u32* dest)
 {
     *dest = lbFile_800163D8(basename);
-    *src = (u32) lbHeap_80015BD0(a, ROUND_UP_32(*dest));
 #if BUILD_TARGET_PC
-    /* PC port: store original buffer pointer before truncation */
-    g_last_file_buf = (void*)(uintptr_t)*src;
-    g_last_file_buf_size = *dest;
-    if (getenv("MELEE_FTCONV_TRACE")) {
-        fprintf(stderr, "[QWER] heap=%d '%s' size=%u -> %p\n", a,
-                basename ? basename : "(null)", (unsigned) *dest,
-                (void*) (uintptr_t) *src);
+    {
+        void* raw = lbHeap_80015BD0(a, ROUND_UP_32(*dest));
+        if (getenv("MELEE_FTCONV_TRACE")) {
+            fprintf(stderr, "[QWER] heap=%d '%s' size=%u -> raw=%p\n", a,
+                    basename ? basename : "(null)", (unsigned) *dest, raw);
+        }
+        *src = (u32) (uintptr_t) raw;
+        g_last_file_buf = raw;
+        g_last_file_buf_size = *dest;
     }
+#else
+    *src = (u32) lbHeap_80015BD0(a, ROUND_UP_32(*dest));
 #endif
     lbFile_80016580(basename, *src, dest, lbFile_8001615C, 0);
 

@@ -267,6 +267,19 @@ void* lbHeap_80015BD0(int arg0, int arg1)
                 }
             }
 #endif
+#if BUILD_TARGET_PC
+            if (getenv("MELEE_HEAPTRACE") != NULL) {
+                fprintf(stderr,
+                        "[HEAPTRACE] lbHeap_80015BD0(heap=%d, size=%d): "
+                        "status=%d type=%d handle=%p -> %p",
+                        arg0, arg1, (int) p->status, (int) p->type,
+                        (void*) p->handle, (void*) result);
+                if (p->type == 3 && result != NULL) {
+                    fprintf(stderr, " x4_lo=%p", (void*) result->x4_lo);
+                }
+                fprintf(stderr, "\n");
+            }
+#endif
             if (p->type == 3) {
                 result = result->x4_lo;
             }
