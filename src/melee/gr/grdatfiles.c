@@ -712,6 +712,60 @@ static HSD_Joint* grdat_jointmap_find(u32 offset)
     return NULL;
 }
 
+/* PC port: pending envelope-desc joint refs (offset -> x64 HSD_Joint*),
+ * resolved in grdat_resolve_pobj_joints once the whole tree is converted. */
+#define GRDAT_MAX_ENVPENDING 32768
+static struct { HSD_EnvelopeDesc* desc; u32 offset; } g_grdat_envpending[GRDAT_MAX_ENVPENDING];
+static int g_grdat_envpending_n = 0;
+
+/* Convert a GCN envelope list: a null-terminated array of offsets, each to a
+ * null-terminated array of { joint_offset(u32), weight(f32) } big-endian
+ * pairs. Joints resolve in the second pass. */
+static HSD_EnvelopeDesc** grDatFiles_ConvertEnvelopeListGCNtoX64(const u8* gcnPtr, u8* dataBase)
+{
+    const u8* op = gcnPtr;
+    int n = 0;
+    while (n < 128) {
+        u32 off = (u32)((op[n*4] << 24) | (op[n*4+1] << 16) | (op[n*4+2] << 8) | op[n*4+3]);
+        if (off == 0) break;
+        n++;
+    }
+    if (n == 0) return NULL;
+    HSD_EnvelopeDesc** arr = lbHeap_80015BD0(0, sizeof(void*) * (size_t)(n + 1));
+    if (arr == NULL) return NULL;
+    for (int i = 0; i < n; i++) {
+        u32 off = (u32)((op[i*4] << 24) | (op[i*4+1] << 16) | (op[i*4+2] << 8) | op[i*4+3]);
+        arr[i] = NULL;
+        if (off >= 0x80000000U) continue;
+        const u8* e = dataBase + off;
+        int m = 0;
+        while (m < 64) {
+            u32 j = (u32)((e[m*8] << 24) | (e[m*8+1] << 16) | (e[m*8+2] << 8) | e[m*8+3]);
+            if (j == 0) break;
+            m++;
+        }
+        HSD_EnvelopeDesc* d = lbHeap_80015BD0(0, sizeof(HSD_EnvelopeDesc) * (size_t)(m + 1));
+        if (d == NULL) continue;
+        memset(d, 0, sizeof(HSD_EnvelopeDesc) * (size_t)(m + 1));
+        for (int k = 0; k < m; k++) {
+            u32 joff = (u32)((e[k*8] << 24) | (e[k*8+1] << 16) | (e[k*8+2] << 8) | e[k*8+3]);
+            u32 wraw = (u32)((e[k*8+4] << 24) | (e[k*8+5] << 16) | (e[k*8+6] << 8) | e[k*8+7]);
+            f32 w;
+            memcpy(&w, &wraw, 4);
+            d[k].weight = w;
+            d[k].joint = NULL;
+            if (g_grdat_envpending_n < GRDAT_MAX_ENVPENDING) {
+                g_grdat_envpending[g_grdat_envpending_n].desc = &d[k];
+                g_grdat_envpending[g_grdat_envpending_n].offset = joff;
+                g_grdat_envpending_n++;
+            }
+        }
+        arr[i] = d;
+    }
+    arr[n] = NULL;
+    return arr;
+}
+
 static void grdat_resolve_pobj_joints(void)
 {
     int resolved = 0, failed = 0;
@@ -720,12 +774,20 @@ static void grdat_resolve_pobj_joints(void)
         if (j) { g_grdat_pobjpending[i].pobj->u.joint = j; resolved++; }
         else failed++;
     }
+    int env_resolved = 0, env_failed = 0;
+    for (int i = 0; i < g_grdat_envpending_n; i++) {
+        HSD_Joint* j = grdat_jointmap_find(g_grdat_envpending[i].offset);
+        if (j) { g_grdat_envpending[i].desc->joint = j; env_resolved++; }
+        else env_failed++;
+    }
     if (getenv("MELEE_GRDAT_TRACE")) {
-        fprintf(stderr, "[GRDAT] PObj joint resolve: %d resolved, %d failed (map=%d, pending=%d)\n",
-                resolved, failed, g_grdat_jointmap_n, g_grdat_pobjpending_n);
+        fprintf(stderr, "[GRDAT] PObj joint resolve: %d resolved, %d failed (map=%d, pending=%d); envelopes: %d resolved, %d failed\n",
+                resolved, failed, g_grdat_jointmap_n, g_grdat_pobjpending_n,
+                env_resolved, env_failed);
         fflush(stderr);
     }
     g_grdat_pobjpending_n = 0;
+    g_grdat_envpending_n = 0;
 }
 
 /* PC port: public wrapper so the title loader (gmtitle.c) can resolve POBJ_SKIN
@@ -817,7 +879,25 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
     } else {
         x64Joint->u.dobjdesc = NULL;
     }
-    x64Joint->mtx = NULL;
+    /* PC port: joint->mtx is the inverse-bind matrix for envelope-skinned
+     * models (12 BE floats, 3x4). Fighters need it (envelopemtx); NULL for
+     * joints without one. */
+    val = be32_swap(gcnJoint->mtx);
+    if (val != 0 && val < 0x80000000U) {
+        f32* bm = lbHeap_80015BD0(0, sizeof(f32) * 12);
+        if (bm != NULL) {
+            const u32* src = (const u32*)(dataBase + val);
+            for (int mi = 0; mi < 12; mi++) {
+                u32 raw = be32_swap(src[mi]);
+                memcpy(&bm[mi], &raw, 4);
+            }
+            x64Joint->mtx = (MtxPtr)bm;
+        } else {
+            x64Joint->mtx = NULL;
+        }
+    } else {
+        x64Joint->mtx = NULL;
+    }
     x64Joint->robjdesc = NULL;
     
     /* Convert rotation, scale, position (GCN is big-endian, need byte swap) */
@@ -1114,6 +1194,15 @@ static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8
             /* no explicit ref (the title's case) -> parent to the joint that
              * owns this DObjDesc so the joint animation drives the mesh. */
             x64Pobj->u.joint = g_grdat_current_joint;
+        }
+    } else if ((x64Pobj->flags & 0x3000) == POBJ_ENVELOPE) {
+        /* PC port: convert the envelope descriptor arrays (per-vertex
+         * skinning weights + joint refs). Without this u.envelope_p stayed
+         * NULL, SetupEnvelopeModelMtx loaded no matrices, and skinned
+         * fighter meshes rendered as garbage. */
+        if (val != 0 && val < 0x80000000U) {
+            x64Pobj->u.envelope_p =
+                grDatFiles_ConvertEnvelopeListGCNtoX64(dataBase + val, dataBase);
         }
     } else if ((x64Pobj->flags & 0x3000) == POBJ_SHAPEANIM) {
         /* Shape-animated PObj: the u field is a shape-set descriptor. Convert

@@ -724,6 +724,16 @@ static BridgeState g_state;
 static f32 g_dbg_xmin = 1e10f, g_dbg_ymin = 1e10f, g_dbg_zmin = 1e10f;
 static f32 g_dbg_xmax = -1e10f, g_dbg_ymax = -1e10f, g_dbg_zmax = -1e10f;
 static int g_dbg_vert_count = 0;
+/* PC port: set when the current batch's vertices were CPU-transformed by
+ * their per-vertex PNMTX (skinning); upload then uses identity as the
+ * position matrix. */
+static int g_batch_pretransformed = 0;
+/* PC port: GXLoadNrmMtxImm shares the GX matrix-index space with
+ * GXLoadPosMtxImm but writes a 3x3 rotation (no translation). Writing both
+ * into one array zeroed the position matrices' translation — skinned models
+ * then drew in model space. Keep normal matrices separate. */
+static f32 g_nrm_mtx_array[68][3][4];
+static u8 g_nrm_mtx_valid[68];
 /* Histogram: track vertex count in different position ranges */
 static int g_dbg_near_origin = 0;  /* |x|,|y|,|z| < 100 */
 static int g_dbg_small_range = 0;  /* |x|,|y|,|z| < 500 */
@@ -1922,6 +1932,7 @@ void gx_frame_begin(void)
       if(_dd && g_state.frame_count<=23) s_pc_draws=0; }
     g_state.in_primitive = FALSE;
     g_state.vert_count = 0;
+    g_batch_pretransformed = 0;
     g_state.num_tev_stages = 0;  /* Reset — TEV stage count is tracked automatically */
     g_active_tex_count = 0;
     memset(g_active_tex_slots, 0, sizeof(g_active_tex_slots));
@@ -2401,6 +2412,26 @@ static void bridge_upload_and_draw(void)
     }
 #endif
     
+    /* PC diag (MELEE_SKINBOX): per-batch position bbox for skinned batches. */
+    {
+        static int _sb_on = -1, _sb_n = 0;
+        if (_sb_on < 0) _sb_on = (getenv("MELEE_SKINBOX") != NULL);
+        if (_sb_on && _sb_n < 14 && count > 0 && g_batch_pretransformed) {
+            _sb_n++;
+            f32 mn[3] = { 1e30f, 1e30f, 1e30f }, mx[3] = { -1e30f, -1e30f, -1e30f };
+            for (u32 i = 0; i < count; i++)
+                for (int c = 0; c < 3; c++) {
+                    f32 vv = g_state.verts[i].pos[c];
+                    if (vv < mn[c]) mn[c] = vv;
+                    if (vv > mx[c]) mx[c] = vv;
+                }
+            fprintf(stderr, "[SKINBOX] n=%u pre=%d mtxid=%u x[%.1f,%.1f] y[%.1f,%.1f] z[%.1f,%.1f] proj00=%.3f\n",
+                    (unsigned)count, g_batch_pretransformed, (unsigned)g_state.current_mtx_id,
+                    (double)mn[0],(double)mx[0],(double)mn[1],(double)mx[1],(double)mn[2],(double)mx[2],
+                    (double)g_state.proj_matrix[0][0]);
+        }
+    }
+
     /* Set ALL vertex attributes explicitly every draw */
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
@@ -2523,7 +2554,10 @@ static void bridge_upload_and_draw(void)
         for (int i = 0; i < 4; i++)
             for (int j = 0; j < 4; j++)
                 p0[i][j] = (i == j) ? 1.0f : 0.0f;
-        if (g_state.current_mtx_id < 28) {
+        if (g_batch_pretransformed) {
+            /* Vertices already in view space (per-vertex PNMTX applied on
+             * the CPU) — keep p0 = identity. */
+        } else if (g_state.current_mtx_id < 28) {
             for (int i = 0; i < 3; i++)
                 for (int j = 0; j < 4; j++)
                     p0[i][j] = g_state.mtx_array[g_state.current_mtx_id][i][j];
@@ -3030,6 +3064,7 @@ static void bridge_upload_and_draw(void)
     
     g_state.in_primitive = FALSE;
     g_state.vert_count = 0;
+    g_batch_pretransformed = 0;
 }
 
 /* ============================================================
@@ -3222,7 +3257,8 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
 void GXLoadNrmMtxImm(f32 mtx[3][4], u32 id)
 {
     if (id >= 68) { PORT_LOG_WARN("GXLoadNrmMtxImm: matrix id %u out of range", id); return; }
-    memcpy(g_state.mtx_array[id], mtx, sizeof(g_state.mv_matrix));
+    memcpy(g_nrm_mtx_array[id], mtx, sizeof(g_nrm_mtx_array[0]));
+    g_nrm_mtx_valid[id] = 1;
 }
 
 void GXSetCurrentMtx(u32 id)
@@ -3497,7 +3533,41 @@ static void bridge_add_vertex(void)
     Vertex* v = &g_state.verts[g_state.vert_count];
     if (g_state.pos_enabled) { 
         v->pos[0] = g_state.last_pos[0]; v->pos[1] = g_state.last_pos[1]; v->pos[2] = g_state.last_pos[2];
-        
+
+        /* PC port: per-vertex position-matrix indices (GX_VA_PNMTXIDX —
+         * envelope/skinned meshes). GCN hardware transforms each vertex by
+         * PNMTX[idx]; emulate by CPU-transforming into view space here and
+         * flagging the batch so upload uses identity as the position matrix.
+         * Without this every skinned vertex used ONE current matrix and
+         * fighters rendered as garbled shards. */
+        if (g_state.va_mode[0] != 0 && g_state.mtx3d_active) {
+            u32 mid = g_state.last_mtx_idx;
+            { static int _sv = 0;
+              if (_sv < 8) { _sv++;
+                  const f32 (*mm)[4] = (const f32 (*)[4])g_state.mtx_array[mid < 28 ? mid : 0];
+                  fprintf(stderr, "[SKINV] mid=%u raw=(%.2f,%.2f,%.2f) m_r2=(%.2f,%.2f,%.2f,%.2f)\n",
+                          mid, (double)v->pos[0], (double)v->pos[1], (double)v->pos[2],
+                          (double)mm[2][0],(double)mm[2][1],(double)mm[2][2],(double)mm[2][3]); } }
+            if (mid >= 28) mid = 0;
+            {
+                const f32 (*m)[4] = (const f32 (*)[4])g_state.mtx_array[mid];
+                f32 X = v->pos[0], Y = v->pos[1], Z = v->pos[2];
+                v->pos[0] = m[0][0]*X + m[0][1]*Y + m[0][2]*Z + m[0][3];
+                v->pos[1] = m[1][0]*X + m[1][1]*Y + m[1][2]*Z + m[1][3];
+                v->pos[2] = m[2][0]*X + m[2][1]*Y + m[2][2]*Z + m[2][3];
+                if (g_state.nrm_enabled) {
+                    const f32 (*nm)[4] = g_nrm_mtx_valid[mid]
+                                             ? (const f32 (*)[4])g_nrm_mtx_array[mid]
+                                             : m;
+                    f32 NX = g_state.last_nrm[0], NY = g_state.last_nrm[1], NZ = g_state.last_nrm[2];
+                    g_state.last_nrm[0] = nm[0][0]*NX + nm[0][1]*NY + nm[0][2]*NZ;
+                    g_state.last_nrm[1] = nm[1][0]*NX + nm[1][1]*NY + nm[1][2]*NZ;
+                    g_state.last_nrm[2] = nm[2][0]*NX + nm[2][1]*NY + nm[2][2]*NZ;
+                }
+            }
+            g_batch_pretransformed = 1;
+        }
+
         /* PC port: Filter extreme vertex positions from garbage joint transforms.
          * Real stage geometry is within ±1000 units of the origin.
          * Vertices outside this range are likely from bad archive data or
@@ -4294,7 +4364,14 @@ void GXCallDisplayList(void* list, u32 nbytes)
                     for (a = 0; a <= 20; a++) {
                         u32 mode = g_state.va_mode[a];
                         if (mode == 0) continue;
-                        if (a <= 8) { p += 1; continue; }
+                        if (a <= 8) {
+                            /* PC port: PNMTXIDX (a==0) selects this vertex's
+                             * position matrix — capture it for the skinning
+                             * transform in bridge_add_vertex. Texture matrix
+                             * indices (1-8) are still skipped. */
+                            if (a == 0) g_state.last_mtx_idx = *p;
+                            p += 1; continue;
+                        }
                         if (a == 9) {
                             p = dl_read_comps(p, mode, pos_cnt, g_state.va_type[9], g_state.va_frac[9],
                                               g_state.va_arr[9], g_state.va_stride[9], pos);
