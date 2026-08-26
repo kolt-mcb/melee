@@ -3841,6 +3841,29 @@ Vec3* Camera_8003019C(void)
     return &ftLib_80086B74(Player_GetEntity(cm_80453004.ply_slot))->x1C;
 }
 
+#if BUILD_TARGET_PC
+/* MELEE_VPTRACE: the standard camera frames the live fighters, so a wrong
+ * camera usually means wrong fighter positions rather than a camera bug. */
+void pc_log_fighter_positions(void)
+{
+    static int n = 0;
+    int slot;
+    if (getenv("MELEE_VPTRACE") == NULL || n >= 4) return;
+    n++;
+    for (slot = 0; slot < 4; slot++) {
+        HSD_GObj* g = Player_GetEntity(slot);
+        if (g == NULL) continue;
+        {
+            CmSubject* s = ftLib_80086B74(g);
+            if (s == NULL) continue;
+            fprintf(stderr, "[FTPOS] slot=%d gobj=%p x1C=(%.1f,%.1f,%.1f)\n",
+                    slot, (void*) g, (double) s->x1C.x, (double) s->x1C.y,
+                    (double) s->x1C.z);
+        }
+    }
+}
+#endif
+
 /// @todo these are probably somewhat fake, but maybe a combination of this +
 /// render_gxlink_pass is the real deal.
 static inline s64 gxlink_prio8(void)
