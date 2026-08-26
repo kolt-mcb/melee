@@ -3334,11 +3334,53 @@ void GXInit(void* base, u32 size)
 {
     PORT_LOG_INFO("GXInit fifo=%p size=%u", base, size);
 }
+/* GC framebuffer space (640x480, origin top-left, y down) -> GL window space
+ * (origin bottom-left, y up), letterboxed so the 4:3 image keeps its aspect
+ * inside whatever window we happen to have. Without this the game's viewport
+ * would land in the bottom-left 640x480 corner of a 1280x720 window. */
+static void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
+{
+    void window_get_size(int* width, int* height);
+    void pc_get_fb_size(float* w, float* h);
+    f32 fb_w = 640.0f, fb_h = 480.0f;
+    int win_w = 1280, win_h = 720;
+
+    pc_get_fb_size(&fb_w, &fb_h);
+    f32 sx, sy, scale, off_x, off_y;
+
+    window_get_size(&win_w, &win_h);
+    if (fb_w <= 0.0f || fb_h <= 0.0f || win_w <= 0 || win_h <= 0) {
+        out[0] = (GLint) x; out[1] = (GLint) y;
+        out[2] = (GLint) w; out[3] = (GLint) h;
+        return;
+    }
+    sx = (f32) win_w / fb_w;
+    sy = (f32) win_h / fb_h;
+    scale = sx < sy ? sx : sy;
+    off_x = ((f32) win_w - fb_w * scale) * 0.5f;
+    off_y = ((f32) win_h - fb_h * scale) * 0.5f;
+
+    out[0] = (GLint) (off_x + x * scale);
+    out[1] = (GLint) (off_y + (fb_h - (y + h)) * scale);
+    out[2] = (GLint) (w * scale);
+    out[3] = (GLint) (h * scale);
+}
+
 void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz)
 {
     GX_TRACE("GXSetViewport(%.1f, %.1f, %.1f, %.1f, %.1f, %.1f)", left, top, wd, ht, nearz, farz);
-    g_state.vp_x = left; g_state.vp_y = top; g_state.vp_w = wd; g_state.vp_h = ht;
-    glViewport((GLint)left, (GLint)top, (GLsizei)wd, (GLsizei)ht);
+    { static int n = 0;
+      if (n < 6 && getenv("MELEE_VPTRACE") != NULL) { n++;
+        fprintf(stderr, "[VP] GXSetViewport(%.1f,%.1f,%.1f,%.1f) aspect=%.4f\n",
+                (double) left, (double) top, (double) wd, (double) ht,
+                ht != 0.0f ? (double) (wd / ht) : 0.0); } }
+    {
+        GLint r[4];
+        pc_fb_rect_to_window(left, top, wd, ht, r);
+        g_state.vp_x = (f32) r[0]; g_state.vp_y = (f32) r[1];
+        g_state.vp_w = (f32) r[2]; g_state.vp_h = (f32) r[3];
+        glViewport(r[0], r[1], (GLsizei) r[2], (GLsizei) r[3]);
+    }
 }
 void GXSetScissor(u32 x, u32 y, u32 w, u32 h)
 {
@@ -3356,7 +3398,15 @@ void GXSetScissor(u32 x, u32 y, u32 w, u32 h)
         g_state.scissor_enabled = TRUE;
         glEnable(GL_SCISSOR_TEST);
     }
-    glScissor((GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h);
+    {
+        GLint r[4];
+        pc_fb_rect_to_window((f32) x, (f32) y, (f32) w, (f32) h, r);
+        g_state.scissor_x = (u32) (r[0] < 0 ? 0 : r[0]);
+        g_state.scissor_y = (u32) (r[1] < 0 ? 0 : r[1]);
+        g_state.scissor_w = (u32) (r[2] < 0 ? 0 : r[2]);
+        g_state.scissor_h = (u32) (r[3] < 0 ? 0 : r[3]);
+        glScissor(r[0], r[1], (GLsizei) r[2], (GLsizei) r[3]);
+    }
 }
 void GXClearBuff(void)
 {
@@ -3565,6 +3615,14 @@ void GXSetCurrentMtx(u32 id)
 }
 void GXSetProjection(f32 mtx[4][4], u32 type)
 {
+    { static int n = 0;
+      if (n < 3 && getenv("MELEE_VPTRACE") != NULL &&
+          mtx[1][1] > 3.0f && mtx[1][1] < 4.0f) { n++;
+        void* bt[16]; int bn = backtrace(bt, 16);
+        fprintf(stderr, "[VP] GXSetProjection m00=%.3f m11=%.3f type=%u\n",
+                (double) mtx[0][0], (double) mtx[1][1], (unsigned) type);
+        backtrace_symbols_fd(bt, bn, 2); } }
+
     pc_stat_projsets++;
     PORT_LOG_DEBUG("GXSetProjection CALLED: proj[0][0]=%.6f type=%u", mtx[0][0], type);
 #if BUILD_TARGET_PC
@@ -4099,7 +4157,13 @@ static void pc_apply_cull_state(void)
         return;
     }
     glEnable(GL_CULL_FACE);
-    glFrontFace(GL_CW);
+    {
+        /* MELEE_CULLCCW=1 flips the front-face convention, to check the
+         * GL_CW choice against the alternative without a rebuild. */
+        static int ccw = -1;
+        if (ccw < 0) ccw = (getenv("MELEE_CULLCCW") != NULL);
+        glFrontFace(ccw ? GL_CCW : GL_CW);
+    }
     switch (g_state.cull_mode) {
     case GX_CULL_FRONT: glCullFace(GL_FRONT); break;
     case GX_CULL_ALL:   glCullFace(GL_FRONT_AND_BACK); break;
@@ -5919,8 +5983,13 @@ void GXSetFogRangeAdj(u32 enable, u16 center, const u8 *table)
 /* DUPLICATE of line 466: void GXSetDither(u32 enable) {} */
 void GXSetViewportJitter(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz, u32 field)
 {
-    (void)left; (void)top; (void)wd; (void)ht; (void)nearz; (void)farz; (void)field;
-    /* Viewport jitter for AA - not supported in PC port */
+    /* This was an empty stub. On GC the "jitter" is only a half-line vertical
+     * offset for interlaced field rendering; the viewport itself still has to
+     * be set. Dropping the call entirely meant that whenever the render mode
+     * asked for field rendering, HSD_CObjSetCurrent's viewport never reached
+     * GL at all and the last viewport set by something else stayed in force. */
+    (void) field;
+    GXSetViewport(left, top, wd, ht, nearz, farz);
 }
 void GXSetScissorBoxOffset(void) {}
 void GXSetPrecisionMode(void) {}

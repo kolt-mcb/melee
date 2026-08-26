@@ -138,7 +138,33 @@ static inline HSD_VIStatus* HSD_VIGetVIStatus(void)
 
 static inline GXRenderModeObj* HSD_VIGetRenderMode(void)
 {
+#if BUILD_TARGET_PC
+    /* PC port: video.c is not in this build, so `HSD_VIData` resolves to the
+     * weak no-op *function* stub in undef_stubs.c. That put
+     * &HSD_VIData.current.vi.rmode inside .text: every field read from it was
+     * instruction bytes. HSD_CObjSetCurrent computed
+     * x_scale = fbWidth / viWidth from that garbage, every viewport it derived
+     * came out NaN, GL silently ignored the call, and the viewport never
+     * changed for the whole run -- while field_rendering read as nonzero, so
+     * the call went to GXSetViewportJitter, which was an empty stub anyway.
+     * Hand back NTSC 480i defaults until the VI layer is really ported. */
+    static GXRenderModeObj pc_rmode = {
+        (VITVMode) 0, /* viTVmode: NTSC interlaced */
+        640,          /* fbWidth */
+        480,          /* efbHeight */
+        480,          /* xfbHeight */
+        0,            /* viXOrigin */
+        0,            /* viYOrigin */
+        640,          /* viWidth */
+        480,          /* viHeight */
+        (VIXFBMode) 0,
+        0,            /* field_rendering */
+        0,            /* aa */
+    };
+    return &pc_rmode;
+#else
     return &HSD_VIData.current.vi.rmode;
+#endif
 }
 
 #endif

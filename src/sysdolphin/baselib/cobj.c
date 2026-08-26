@@ -272,6 +272,18 @@ GXProjectionType makeProjectionMtx(HSD_CObj* cobj, Mtx mtx)
     return projection_type;
 }
 
+#if BUILD_TARGET_PC
+/* Single source of truth for the GC framebuffer size the port renders into,
+ * so the GX->GL bridge can letterbox it into the window without pulling in
+ * the whole VI header. */
+void pc_get_fb_size(float* w, float* h)
+{
+    GXRenderModeObj* rm = HSD_VIGetRenderMode();
+    if (w != NULL) *w = (float) rm->fbWidth;
+    if (h != NULL) *h = (float) rm->efbHeight;
+}
+#endif
+
 static bool setupOffscreenCamera(HSD_CObj* cobj)
 {
     Mtx44 mtx;
