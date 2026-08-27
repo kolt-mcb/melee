@@ -169,9 +169,30 @@ void Fighter_800679B0(void)
     ftCo_800C8F6C(); ///< @todo &fighter_alloc_data+2, +3, +4 are not defined
                      ///< in the fighter.s
     // data section, how does this work?
+#if BUILD_TARGET_PC
+    /* PC port: both of these pool sizes are GameCube *byte* counts for arrays
+     * whose element width doubled on x86_64, so each pool held roughly half
+     * the entries it must:
+     *
+     *   parts[]      0x8C0 / 16 = 140 FighterBone on GCN, but sizeof grew to
+     *                24 here (the embedded HSD_JObj* went 4 -> 8), so only 93
+     *                fit.
+     *   dobj_list[]  0x1F0 /  4 = 124 HSD_DObj* on GCN, only 62 here.
+     *
+     * Mario has 61 parts and squeaked under both limits, which is why he was
+     * the only character this never broke. Every character with a larger
+     * skeleton ran ftParts_80074B6C/80074D7C off the end of dobj_list.data
+     * and faulted inside HSD_DObjSetFlags/ClearFlags. Size by entry count
+     * instead of by byte count. */
+    HSD_ObjAllocInit(&fighter_parts_alloc_data,
+                     /*size*/ 140 * sizeof(FighterBone), /*align*/ 4);
+    HSD_ObjAllocInit(&fighter_dobj_list_alloc_data,
+                     /*size*/ 124 * sizeof(HSD_DObj*), /*align*/ 4);
+#else
     HSD_ObjAllocInit(&fighter_parts_alloc_data, /*size*/ 0x8c0, /*align*/ 4);
     HSD_ObjAllocInit(&fighter_dobj_list_alloc_data, /*size*/ 0x1f0,
                      /*align*/ 4);
+#endif
     HSD_ObjAllocInit(&fighter_x2040_alloc_data, /*size*/ 0x80, /*align*/ 4);
 
     g_spawnNumCounter = 1;

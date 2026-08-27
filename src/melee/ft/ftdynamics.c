@@ -660,6 +660,20 @@ void ftCo_8009E7B4(Fighter* fp, u8 (*arg1)[2])
                     FigaTree*** dyn;
                     FigaTree** tree;
                     u8 blend_slot = arg1[0][1];
+#if BUILD_TARGET_PC
+                    /* PC port: pc_conv_ftData leaves ftData::x2C (dynamics)
+                     * NULL. ftCo_8009CF84 already guards this and forces
+                     * dynamics_num to 0, but this branch dereferences x2C one
+                     * step before consulting dynamics_num. Take the same
+                     * dyn == NULL fallback that follows -- with dynamics_num
+                     * already 0 its loop is a no-op. */
+                    if (!pc_ptr_sane(fp->ft_data->x2C)) {
+                        for (i = 0; i < fp->dynamics_num; i++) {
+                            ftCo_8009CB40(fp, i, 0, NULL);
+                        }
+                        return;
+                    }
+#endif
                     dyn = fp->ft_data->x2C->x10;
                     if (dyn == NULL) {
                         for (i = 0; i < fp->dynamics_num; i++) {
