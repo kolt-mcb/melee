@@ -39,6 +39,7 @@
 #include <melee/ft/types.h>
 #include <melee/ft/forward.h>
 #include <melee/ft/dobjlist.h>
+#include <melee/ft/chara/ftCommon/types.h>
 #include <sysdolphin/baselib/archive.h>
 
 #include "pc_ptr.h"
@@ -499,6 +500,46 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         }
     }
 
+    /* +0x30 hurtboxes: { int count; ftHurtboxInit* inits; }. The header holds
+     * a pointer so it changes shape (0x08 -> 0x10), but ftHurtboxInit itself
+     * is forty bytes of 4-byte fields with no pointers, so the array only
+     * needs a rebase and a wholesale swap. Without this ftColl_8007B320 left
+     * hurt_capsules_len at zero and fighters could not be hit at all -- they
+     * could stand and walk straight through each other. */
+    off = pc_be32(*(const u32*) (raw + 0x30));
+    if (off != 0 && off + 8u <= len) {
+        const u8* h = base + off;
+        int hcount = (int) pc_be32(*(const u32*) (h + 0x00));
+        u32 ioff = pc_be32(*(const u32*) (h + 0x04));
+        /* ftColl_8007B320 asserts above 0xF and fp->hurt_capsules is sized
+         * for that, so refuse anything larger rather than overrun it. */
+        if (hcount > 0 && hcount <= 0xF && ioff != 0 &&
+            ioff + (u32) hcount * 40u <= len)
+        {
+            struct ftData_x30* hd = pc_lowmem_alloc(sizeof(*hd));
+            ftHurtboxInit* iv =
+                pc_lowmem_alloc(sizeof(ftHurtboxInit) * (unsigned long) hcount);
+            if (hd != NULL && iv != NULL) {
+                const u32* s = (const u32*) (base + ioff);
+                u32* d = (u32*) iv;
+                int w, nwords = hcount * (int) (sizeof(ftHurtboxInit) / 4u);
+                for (w = 0; w < nwords; w++) {
+                    d[w] = pc_be32(s[w]);
+                }
+                hd->count = hcount;
+                hd->inits = iv;
+                out->x30 = hd;
+                if (pc_ftconv_trace()) {
+                    fprintf(stderr,
+                            "[FTCONV] hurtboxes: %d capsules, [0] bone=%d "
+                            "scale=%.2f\n",
+                            hcount, (int) iv[0].bone_idx,
+                            (double) iv[0].scale);
+                }
+            }
+        }
+    }
+
     /* +0x54 is a plain int, not a pointer. */
     out->x54 = (int) pc_be32(*(const u32*) (raw + 0x54));
 
@@ -536,8 +577,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
     }
 
     /* Deliberately left NULL until something needs them:
-     * x1C, x20, x24, x28, x2C(dynamics), x30(hurtboxes),
-     * x34, x38, x3C, x44, x58, x5C. */
+     * x1C, x20, x24, x28, x2C(dynamics), x34, x38, x3C, x44, x58, x5C. */
 
     if (pc_ftconv_trace()) {
         fprintf(stderr,

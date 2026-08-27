@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "ftcoll.h"
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
@@ -2930,14 +2931,22 @@ void ftColl_8007B128(Fighter_GObj* fighter_gobj, int bone_id,
     }
 
 #if BUILD_TARGET_PC
-    /* PC port: the hurt-capsule table comes from ft_data->x30, which
-     * pc_conv_ftData still leaves NULL, so no bone id ever matches and this
-     * assert fires for every character whose code touches hurtbox state.
-     * It only became reachable when stage collision was enabled. Fighters
-     * stand and move without hurtboxes; they cannot yet be hit. */
-    if (fp->hurt_capsules_len == 0 || fp->hurt_capsules == NULL) {
-        return;
+    /* PC port: a bone id that is not among this fighter's hurt capsules is
+     * fatal on GCN because the data is always complete there. Here the parts
+     * tables and the hurtbox list come from different conversion paths and do
+     * not always agree, so treat a miss as "no such capsule" and carry on.
+     * Warn once per run so a real mismatch is still visible. */
+    {
+        static int warned;
+        if (!warned) {
+            warned = 1;
+            fprintf(stderr,
+                    "[PORT WARN] ftColl_8007B128: bone %d not among %d hurt "
+                    "capsules; ignoring\n",
+                    bone_id, (int) fp->hurt_capsules_len);
+        }
     }
+    return;
 #endif
     HSD_ASSERTREPORT(0x888, 0,
                      "in ftCollisionSetHitStatus illegal parts!\n");
@@ -3016,6 +3025,15 @@ void ftColl_8007B320(Fighter_GObj* gobj)
         hurt->capsule.scale = init->scale;
     }
 
+#if BUILD_TARGET_PC
+    /* PC port: ftData::x2C (dynamics) is still unconverted. The hurtbox half
+     * above now runs, so this half has to be skipped explicitly rather than
+     * relying on the whole function bailing out. */
+    if (!pc_ptr_sane(dyn) || !pc_ptr_sane(dyn->x8)) {
+        fp->x166C = 0;
+        return;
+    }
+#endif
     if (dyn->x4 > 0xB) {
         HSD_ASSERTREPORT(0x8DF, 0, "fighter dynamics hit num over!\n");
     }

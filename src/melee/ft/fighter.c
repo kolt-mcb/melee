@@ -2462,9 +2462,9 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                     (double) f->co_attrs.grav,
                     (double) f->co_attrs.terminal_vel, (void*) f->x24);
             fprintf(stderr,
-                    "[TICK]     fp=%p lstick=(%.2f,%.2f) held=0x%x "
+                    "[TICK]     dmg=%.0f%% fp=%p lstick=(%.2f,%.2f) held=0x%x "
                     "pressed=0x%x | pid=%d pad0=(%.2f,%.2f) padN=(%.2f,%.2f) "
-                    "btn=0x%x\n", (void*) f,
+                    "btn=0x%x\n", (double) f->dmg.x1830_percent, (void*) f,
                     (double) f->input.lstick.x, (double) f->input.lstick.y,
                     (unsigned) f->input.held_inputs,
                     (unsigned) f->input.x668,
