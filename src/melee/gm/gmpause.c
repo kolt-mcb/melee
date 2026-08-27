@@ -17,6 +17,11 @@
 #include <melee/lb/lbspdisplay.h>
 #include <melee/sc/types.h>
 
+#if BUILD_TARGET_PC
+#include <baselib/archive.h>
+#include "port/pc_scene.h"
+#endif
+
 struct PauseData {
     /* +0 */ HSD_JObj* background;
     /* +4 */ HSD_JObj* analog_stick;
@@ -92,8 +97,14 @@ void fn_801A1134(void)
     /* PC port: symbol out-pointers are not resolved (see lbarchive.c);
      * scene stays NULL and the model walk below would crash. Pause UI
      * disabled until archive conversion covers GmPause. */
-    if (!pc_ptr_sane(scene) || !pc_ptr_sane(scene->models[0])) {
-        PORT_LOG_WARN("gmpause: ScGamPause scene data unavailable; pause UI disabled\n");
+    /* The scene arrives big-endian and GameCube-packed straight out of
+     * GmPause. (It used to arrive NULL, because lbArchive_80016DBC dropped
+     * its symbol arguments; that is fixed, so it now needs converting like
+     * every other scene.) */
+    scene = pc_conv_SceneDesc(scene, lbl_804D6700->data);
+    if (scene == NULL || scene->models == NULL || scene->models[0] == NULL) {
+        PORT_LOG_WARN("gmpause: ScGamPause scene data would not convert; "
+                      "pause UI disabled\n");
         return;
     }
 #endif

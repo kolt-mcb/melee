@@ -218,14 +218,33 @@ HSD_Archive* lbArchive_80016DBC(const char* filename, void* symbols, ...)
     u8 _[8];
     va_list sections;
 
-    (void)symbols;
-    va_start(sections, filename);
-    va_end(sections);
-
     data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(filename)));
     archive = lbHeap_80015BD0(0, sizeof(HSD_Archive));
     lbFile_8001668C(filename, data, &length);
     lbArchive_InitializeDAT(archive, data, length);
+
+#if BUILD_TARGET_PC
+    /* The variadic (symbol, name) pairs were accepted and dropped -- va_start
+     * immediately followed by va_end -- so every caller's out-pointer kept
+     * whatever it already held. Resolve them the way lbArchive_LoadSections
+     * does. Callers must convert what they get back: it is raw archive data. */
+    {
+        void** symbol = (void**) symbols;
+        va_start(sections, symbols);
+        for (; symbol != NULL; symbol = va_arg(sections, void**)) {
+            const char* symbol_name = va_arg(sections, const char*);
+            *symbol = HSD_ArchiveGetPublicAddress(archive, symbol_name);
+            if (*symbol == NULL) {
+                OSReport("Cannot find symbol %s.\n", symbol_name);
+            }
+        }
+        va_end(sections);
+    }
+#else
+    (void)symbols;
+    va_start(sections, filename);
+    va_end(sections);
+#endif
     return archive;
 }
 

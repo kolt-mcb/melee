@@ -23,6 +23,11 @@
 #include <baselib/jobj.h>
 #include <baselib/lobj.h>
 
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#include "port/log.h"
+#endif
+
 static struct ifAll_804A0FD8_t {
     /* 0x00 */ HSD_GObj* gobj;
     /* 0x04 */ HSD_GObj* gobj_2;
@@ -207,6 +212,17 @@ void ifAll_802F390C(void)
     lbArchive_80016F80(parchive, "IfAll");
     lbArchive_LoadSections(*parchive, (void**) &sp14, "ScInfDmg_scene_data",
                            0);
+#if BUILD_TARGET_PC
+    /* ScInfDmg_scene_data comes straight out of IfAll.dat: big-endian, with
+     * four pointer arrays that widen on x86_64. Convert it before anything
+     * walks it. */
+    sp14 = pc_conv_SceneDesc(sp14, (*parchive)->data);
+    if (sp14 == NULL) {
+        PORT_LOG_WARN("ifAll_802F390C: IfAll scene data would not convert; "
+                      "HUD display disabled\n");
+        return;
+    }
+#endif
     ifAll_802F370C(sp14);
 
     {

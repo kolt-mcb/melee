@@ -176,7 +176,17 @@ void OSSetSoundMode(u32 mode);
 #endif
 
 void OSReport(char*, ...);
+#if defined(BUILD_TARGET_PC)
+/* PC port: the stub for this reports and RETURNS -- halting on a panic would
+ * make the port unusable, since archive-conversion gaps trip them routinely.
+ * Declaring it noreturn told GCC that everything after a panic was
+ * unreachable, so it deleted the recovery paths and execution ran off the end
+ * of the function into whatever the linker had placed next. Exactly the bug
+ * __assert had (see sysdolphin/baselib/debug.h). */
+void OSPanic(char* file, int line, char* msg, ...);
+#else
 DOLPHIN_ATTRIBUTE_NORETURN void OSPanic(char* file, int line, char* msg, ...);
+#endif
 
 #define OSRoundUp32B(x) (((u32) (x) + 32 - 1) & ~(32 - 1))
 #define OSRoundDown32B(x) (((u32) (x)) & ~(32 - 1))

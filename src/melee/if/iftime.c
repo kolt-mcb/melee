@@ -17,6 +17,10 @@
 #include <baselib/gobjproc.h>
 #include <baselib/jobj.h>
 
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#endif
+
 static struct ifTime_data {
     HSD_GObj* match_timer;
     HSD_GObj* countdown_timer;
@@ -33,6 +37,15 @@ static bool ifTime_LoadModels(void)
     lbArchive_LoadSections(*ifAll_GetArchive(), (void*) &ScInfTim_scene_models,
                            "ScInfTim_scene_models",
                            &ifTime_data.countdown_timer_models, "tdsce", 0);
+#if BUILD_TARGET_PC
+    ScInfTim_scene_models = pc_conv_ModelDescArray(
+        ScInfTim_scene_models, (*ifAll_GetArchive())->data);
+    ifTime_data.countdown_timer_models = (void*) pc_conv_ModelDescArray(
+        ifTime_data.countdown_timer_models, (*ifAll_GetArchive())->data);
+    if (ScInfTim_scene_models == NULL) {
+        return false;
+    }
+#endif
     if (*ScInfTim_scene_models != NULL) {
         ifTime_match_timer_models.joint = (**ScInfTim_scene_models).joint;
         ifTime_match_timer_models.anims = (**ScInfTim_scene_models).anims;
