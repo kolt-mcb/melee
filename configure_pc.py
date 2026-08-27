@@ -93,8 +93,13 @@ for _it_dir in sorted((MELEE / "it").iterdir()):
 MN_SOURCES = collect(MELEE / "mn")
 MP_SOURCES = collect(MELEE / "mp")
 CM_SOURCES = collect(MELEE / "cm")  # camera — required for in-match view (roadmap M2)
+# sfx/ is small and carries un_803222EC, which scales knockback magnitude in
+# ftCo_Damage. Stubbed out it returned nothing useful and fighters took damage
+# without ever being launched. gCrowdConfig is the zeroed block on PC, so the
+# real function is a pass-through, which is the correct default.
+SFX_SOURCES = collect(MELEE / "sfx")
 MATH_SHIM = [str(SRC / "math_shim.c")]
-ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + GR_SOURCES + PL_SOURCES + FT_SOURCES + GM_SOURCES + EF_SOURCES + IT_SOURCES + MN_SOURCES + MP_SOURCES + CM_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
+ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + GR_SOURCES + PL_SOURCES + FT_SOURCES + GM_SOURCES + EF_SOURCES + IT_SOURCES + MN_SOURCES + MP_SOURCES + CM_SOURCES + SFX_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
 
 INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,
