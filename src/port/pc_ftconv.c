@@ -42,6 +42,7 @@
 #include <sysdolphin/baselib/archive.h>
 
 #include "pc_ptr.h"
+#include <melee/gr/grdatfiles.h>
 
 extern void* pc_lowmem_alloc(unsigned long size);
 /* LEN: the motion-table entry count per fighter kind lives in a separate
@@ -69,6 +70,81 @@ static int pc_ftconv_trace(void)
  * start of the data section), not NULL — relocation would have added the
  * base to it. Callers that need "absent" must track it another way. */
 #define PC_FTDATA_ITEM_SLOTS 16
+
+/* ------------------------------------------------------------------ */
+/* Raw joint pointers that live inside a fighter's own archive.         */
+/*                                                                      */
+/* Not every pointer a fighter reads out of its DAT is an Article. Link  */
+/* and Young Link hand ftData::x48_items[6] to ftParts_800753D4 as an    */
+/* HSD_Joint*, and Jigglypuff pulls a headwear joint out by public       */
+/* symbol. Those trees are still GCN-packed, so they need the same       */
+/* conversion the main costume model gets. The call sites do not have    */
+/* the archive base, so record the base/length of every fighter archive  */
+/* converted here and look up whichever one contains the pointer.        */
+/* Results are memoised: the same raw tree is asked for once per         */
+/* fighter spawn, and converting it again would leak a fresh tree each   */
+/* time. */
+#define PC_FTCONV_ARCHIVES 40
+static struct {
+    const u8* base;
+    unsigned long len;
+} pc_ftconv_arch[PC_FTCONV_ARCHIVES];
+static int pc_ftconv_arch_n;
+
+static void pc_ftconv_note_archive(const u8* base, unsigned long len)
+{
+    int i;
+    if (base == NULL || len == 0) return;
+    for (i = 0; i < pc_ftconv_arch_n; i++) {
+        if (pc_ftconv_arch[i].base == base) {
+            if (len > pc_ftconv_arch[i].len) pc_ftconv_arch[i].len = len;
+            return;
+        }
+    }
+    if (pc_ftconv_arch_n < PC_FTCONV_ARCHIVES) {
+        pc_ftconv_arch[pc_ftconv_arch_n].base = base;
+        pc_ftconv_arch[pc_ftconv_arch_n].len = len;
+        pc_ftconv_arch_n++;
+    }
+}
+
+#define PC_FTCONV_JOINT_CACHE 32
+void* pc_ftconv_joint(void* raw)
+{
+    static struct { void* raw; void* conv; } cache[PC_FTCONV_JOINT_CACHE];
+    static int cache_n;
+    const u8* p = (const u8*) raw;
+    int i;
+
+    if (raw == NULL) return NULL;
+    for (i = 0; i < cache_n; i++) {
+        if (cache[i].raw == raw) return cache[i].conv;
+    }
+    for (i = 0; i < pc_ftconv_arch_n; i++) {
+        const u8* b = pc_ftconv_arch[i].base;
+        if (p > b && (unsigned long) (p - b) < pc_ftconv_arch[i].len) {
+            void* conv = grDatFiles_ConvertJointTreeGCNtoX64(p, (u8*) b, 0,
+                                                             NULL);
+            grDatFiles_ResolvePObjJoints();
+            if (cache_n < PC_FTCONV_JOINT_CACHE) {
+                cache[cache_n].raw = raw;
+                cache[cache_n].conv = conv;
+                cache_n++;
+            }
+            if (pc_ftconv_trace()) {
+                fprintf(stderr, "[FTCONV] joint %p -> %p (base %p)\n", raw,
+                        conv, (const void*) b);
+            }
+            return conv;
+        }
+    }
+    fprintf(stderr,
+            "[PORT WARN] pc_ftconv_joint: %p is in no known fighter archive; "
+            "skipping\n",
+            raw);
+    return NULL;
+}
+
 
 static void* pc_off_to_ptr(u32 off, const u8* base, unsigned long len)
 {
@@ -278,6 +354,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         return NULL;
     }
     memset(out, 0, sizeof(struct ftData)); /* rule 1: everything NULL first */
+    pc_ftconv_note_archive(base, len);
 
     /* +0x00 physics/attribute block — the highest-value field by far: it
      * carries gravity, weight, walk/run speeds and model_scaling. */
