@@ -160,6 +160,23 @@ malformed word can carry any of 64 opcodes and only 10..58 have handlers; off
 the end of the table is an indirect call through whatever the linker placed
 next.
 
+## Prefer linking the real file over stubbing it
+
+Zeroing the 94 garbage-returning weak stubs made behaviour deterministic and
+immediately exposed the cost of stubbing at all: `un_803222EC` scales knockback
+magnitude in `ftCo_Damage`, so returning zero meant fighters took damage and
+were never launched. Its real implementation is thirteen lines in
+`src/melee/sfx/crowdsfx.c` — a pass-through of the magnitude unless the angle
+falls in a window — and `sfx/` simply was not in the build. Adding it restored
+knockback, and `gCrowdConfig` is the zeroed block on PC, so the pass-through is
+exactly the right default.
+
+Other stubbed functions whose real sources exist but are not compiled, worth
+linking rather than stubbing (function count in brackets):
+`sysdolphin/baselib/quatlib.c` [6, used by `lb_00B0`/`lb_00F9`/`lbbgflash`],
+`bytecode.c` [1, `robj.c`], `sislib.c` [7], `generator.c` [3],
+`psappsrt.c` [1], `melee/if/` [12, the HUD], `melee/ty/` [10].
+
 ## Weak stubs that return garbage
 
 `void` weak stubs standing in for functions whose *declarations* return a
