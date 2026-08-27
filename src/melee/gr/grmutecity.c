@@ -352,6 +352,30 @@ typedef struct grMc_StageDataLocal {
     char report_format[0x24];
 } grMc_StageDataLocal;
 
+#if BUILD_TARGET_PC
+/* PC port: ground.c's stage_datas[] references the canonical
+ * grMc_StageData, but this file only defined the StageData as the first
+ * member of a local wrapper under an address-derived name, so the
+ * canonical symbol bound to a weak function stub in gr_stubs.c and the
+ * stage loaded no geometry. The wrapper's trailing report-format
+ * strings exist only to reproduce the original data layout and are
+ * referenced by nothing, so the PC build just defines the StageData. */
+StageData grMc_StageData = {
+        Gr_Kind_MuteCity,
+        grMc_803E30C4,
+        grMc_803E33D0,
+        grMuteCity_801EFC6C,
+        grMuteCity_801EFC68,
+        grMuteCity_801EFCDC,
+        grMuteCity_801EFCE0,
+        grMuteCity_801EFD04,
+        grMuteCity_801F2BBC,
+        grMuteCity_801F2C10,
+        0x00000001,
+        (S16Vec3*) grMc_803E30B0,
+        3,
+};
+#else
 grMc_StageDataLocal grMc_803E33DC = {
     {
         Gr_Kind_MuteCity,
@@ -370,6 +394,7 @@ grMc_StageDataLocal grMc_803E33DC = {
     },
     "%s:%d: couldn t get gobj(id=%d)\n",
 };
+#endif
 
 char grMc_803E3434[0x48] = "grmutecity.c\0\0\0\0"
                            "not found car spline (R)\n\0\0\0"

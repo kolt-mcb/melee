@@ -195,23 +195,11 @@ StageCallbacks grZe_callbacks[] = {
 
 char grZe_803E1B20[] = "/GrZe.dat";
 
-typedef struct grZe_803E1B2C_t {
-    u32 count;
-    StageCallbacks* cbs;
-    char* datfile;
-    void (*init)(void);
-    void (*reset)(bool);
-    void (*unk528)(void);
-    void (*unk52c)(void);
-    bool (*unk550)(void);
-    DynamicsDesc* (*unkCCB8)(enum_t);
-    bool (*unkCCC0)(Vec3*, int, HSD_JObj*);
-    u32 unkA;
-    u32* unkB;
-    u32 unkC;
-} grZe_803E1B2C_t;
-
-grZe_803E1B2C_t grZe_803E1B2C = {
+/* PC port: this is a StageData; it carried a local shadow typedef and an
+ * address-derived name, so the canonical grZe_StageData that ground.c's
+ * stage_datas[] references was never defined and bound to a weak function
+ * stub in gr_stubs.c instead. Brinstar then loaded no geometry at all. */
+StageData grZe_StageData = {
     8,
     grZe_callbacks,
     grZe_803E1B20,

@@ -95,6 +95,30 @@ typedef struct grPu_StageDataLocal {
     char filename[0xC];
 } grPu_StageDataLocal;
 
+#if BUILD_TARGET_PC
+/* PC port: ground.c's stage_datas[] references the canonical
+ * grPu_StageData, but this file only defined the StageData as the first
+ * member of a local wrapper under an address-derived name, so the
+ * canonical symbol bound to a weak function stub in gr_stubs.c and the
+ * stage loaded no geometry. The wrapper's trailing report-format
+ * strings exist only to reproduce the original data layout and are
+ * referenced by nothing, so the PC build just defines the StageData. */
+StageData grPu_StageData = {
+        0x11,
+        grPu_803E6800,
+        grPu_803E6A30,
+        grPura_80211D00,
+        grPura_80211CFC,
+        grPura_80211DD8,
+        grPura_80211DDC,
+        grPura_80211E00,
+        grPura_802130C0,
+        grPura_802130C8,
+        1,
+        0,
+        0,
+};
+#else
 grPu_StageDataLocal grPu_803E6A3C = {
     {
         0x11,
@@ -114,6 +138,7 @@ grPu_StageDataLocal grPu_803E6A3C = {
     "%s:%d: couldn t get gobj(id=%d)\n",
     "grpura.c",
 };
+#endif
 
 GXColor grPu_803E6AA0[] = {
     { 0x00, 0x00, 0x00, 0xFF }, { 0x00, 0x00, 0x50, 0xFF },

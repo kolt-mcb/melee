@@ -113,7 +113,7 @@ StageCallbacks grRc_803E4E34[7] = {
       grRCruise_801FF920, 0 },
 };
 
-struct StageData grRc_803E4ECC = {
+struct StageData grRc_StageData = {
     Gr_Kind_RCruise,
     grRc_803E4E34,
     "/GrRc.dat",

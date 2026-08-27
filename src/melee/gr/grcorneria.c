@@ -121,7 +121,48 @@ typedef struct grCn_Data {
     /* 0x4CC */ grCn_Entry entries[][5];
 } grCn_Data;
 
+#if BUILD_TARGET_PC
+/* PC port: this was only ever declared, so it bound to a weak *function* stub
+ * in gr_stubs.c and every arwing-state write went into .text. Define it. */
+grCn_Data grCn_803E1D38;
+
+/* PC port: Corneria's stage_datas[] entry, grCn_StageData, was likewise never
+ * defined and bound to a weak stub, so the stage loaded no geometry. The
+ * struct's contents were recovered from orig/GALE01/boot.dol at 0x803E1D5C;
+ * every field resolves to a symbol already in this file except the archive
+ * name, which is the literal "/GrCn" -- no extension, unlike every other
+ * stage -- verified in ROM at 0x804D4650.
+ *
+ * The joint table is the one place this cannot alias the original. On GCN the
+ * eight GrJoint entries overlay the first 0x30 bytes of grCn_803E1D38, which
+ * the decomp labels pad0 and the game later reuses for arwing state. That
+ * overlay does not survive here (grCn_Data holds HSD_GObj*[3], so the layout
+ * shifted), so the table is spelled out as its own array. */
+extern StageCallbacks grCn_803E1D8C[19]; /* defined further down this file */
+
+static GrJoint grCn_Joints[8] = {
+    { 3, 3, 0 },  { 4, 3, 0 },  { 0, 13, 0 }, { 1, 14, 0 },
+    { 2, 15, 0 }, { 5, 16, 0 }, { 6, 17, 0 }, { 7, 18, 0 },
+};
+
+StageData grCn_StageData = {
+    Gr_Kind_Corneria,
+    grCn_803E1D8C,
+    "/GrCn",
+    grCorneria_801DD350,
+    (void (*)(int)) grCorneria_801DD2C0,
+    grCorneria_801DD478,
+    grCorneria_801DD508,
+    grCorneria_801DD52C,
+    grCorneria_801E2EE4,
+    grCorneria_801E2EEC,
+    1,
+    grCn_Joints,
+    8,
+};
+#else
 extern grCn_Data grCn_803E1D38;
+#endif
 
 void grCorneria_801DCCFC(void)
 {
