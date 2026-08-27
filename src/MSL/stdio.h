@@ -1,6 +1,14 @@
 #ifndef _STDIO_H_
 #define _STDIO_H_
 
+/* PC port: use the host implementation. Metrowerks' declarations
+ * conflict with glibc's (fpos_t, struct _IO_FILE, fwrite), and every
+ * caller here just wants sprintf/strlen. Same pattern as MSL/math.h. */
+#if defined(BUILD_TARGET_PC)
+#include_next <stdio.h>
+#else
+
+
 #include "stdarg.h"
 #include "stddef.h"
 
@@ -131,5 +139,7 @@ int vprintf(const char* format, va_list arg);
 int vsprintf(char* s, const char* format, va_list arg);
 
 size_t fwrite(const void*, size_t memb_size, size_t num_memb, FILE*);
+
+#endif /* BUILD_TARGET_PC */
 
 #endif // _STDIO

@@ -160,6 +160,44 @@ malformed word can carry any of 64 opcodes and only 10..58 have handlers; off
 the end of the table is an indirect call through whatever the linker placed
 next.
 
+## The HUD is blocked on one thing: a `SceneDesc` converter
+
+`if/` compiles and links cleanly on PC once three things are dealt with:
+`MSL/stdio.h` and `MSL/string.h` need the `#include_next` guard `MSL/math.h`
+already has (Metrowerks' `fpos_t`/`struct _IO_FILE`/`fwrite` conflict with
+glibc's); `textlib.h` declares `un_803045A0`/`un_80304690` as `int` while
+`textlib.c` defines them `bool`; and `soundtest.c`, `ifprize.c`,
+`textlib.c`, `textdraw.c` pull in the unbuilt `ty/` trophy system and
+undecompiled `.data` globals, so they stay out.
+
+It still cannot run. `ifAll_802F390C` loads `IfAll.dat` and takes the
+`ScInfDmg_scene_data` section as a `SceneDesc` — big-endian, with four pointer
+arrays that widen here — and nothing converts it, so `models[0]->joint` is
+garbage. Guarding around that means guarding every display function in
+`ifstatus.c`/`ifall.c`/`iftime.c` in turn, and the query side that would have
+justified linking it anyway (`ifStock_802F7EFC`, `ifTime_IsTimerHidden`,
+`ifMagnify_802FB6E8`) reads the same uninitialised HUD state, so it would
+return exactly what the zero stubs already return. Linking `if/` without the
+converter buys nothing.
+
+The converter is the whole job, and most of it already exists:
+
+```c
+struct SceneDesc {
+    DynamicModelDesc** models;                                  /* NULL-terminated */
+    struct { HSD_CObjDesc* desc; HSD_CameraAnim** anims; }* cameras;
+    struct LightList { HSD_LightDesc* desc; HSD_LightAnim** anims; }** lights;
+    struct { HSD_FogDesc* desc; HSD_CameraAnim** anims; }* fogs;
+};
+```
+
+The HUD needs `models[0]->joint`, `cameras[0].desc` and `lights[0]->desc`.
+`grDatFiles_ConvertJointTreeGCNtoX64` and the AObj/FObj/anim-joint converters
+in `grdatfiles.c` already cover the deep part; what is missing is the
+`SceneDesc` wrapper plus small `HSD_CObjDesc` and `HSD_LightDesc` converters.
+Menu and stage scene data have the same shape, so it should pay for itself
+more than once.
+
 ## Prefer linking the real file over stubbing it
 
 Zeroing the 94 garbage-returning weak stubs made behaviour deterministic and
