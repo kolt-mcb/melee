@@ -63,12 +63,12 @@ static void dump_fighter_joints(HSD_JObj* j, int depth, int* idx)
     }
     fprintf(stderr,
             "[FTJOINT] %3d d=%d t=(%8.3f,%8.3f,%8.3f) s=(%.2f,%.2f,%.2f) "
-            "q=(%.3f,%.3f,%.3f,%.3f) dobj=%s env=%s\n",
+            "q=(%.3f,%.3f,%.3f,%.3f) dobj=%s env=%s jobj=%p\n",
             *idx, depth, (double) j->translate.x, (double) j->translate.y,
             (double) j->translate.z, (double) j->scale.x, (double) j->scale.y,
             (double) j->scale.z, (double) j->rotate.x, (double) j->rotate.y,
             (double) j->rotate.z, (double) j->rotate.w, j->u.dobj ? "y" : "-",
-            j->envelopemtx ? "y" : "-");
+            j->envelopemtx ? "y" : "-", (void*) j);
     (*idx)++;
     dump_fighter_joints(j->child, depth + 1, idx);
     dump_fighter_joints(j->next, depth, idx);
