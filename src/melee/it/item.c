@@ -984,29 +984,6 @@ static void foobar3(HSD_GObj* gobj)
 
 static HSD_GObj* Item_8026862C(SpawnItem* spawnItem)
 {
-#if BUILD_TARGET_PC
-    /* PC port: every item's behaviour tables and hurtbox come from the ItCo
-     * archive, which it_8027870C leaves unconverted -- it_804D6D24/6D30/6D38
-     * and it_804A0F60 are all NULL, so Item_80267978 hands the item a NULL
-     * xC4_article_data and the item is unusable. Stages spawn hazards at load
-     * (Brinstar, Corneria, Green Greens), and those items then faulted deep
-     * in item code on a NULL hurtbox.
-     *
-     * Refuse to create the item here rather than guarding each field access:
-     * callers already cope with a NULL item gobj, since spawning legitimately
-     * fails when the item cap is reached. */
-    if (it_804D6D24 == NULL && it_804D6D30 == NULL && it_804D6D38 == NULL &&
-        it_804A0F60 == NULL)
-    {
-        static int warned;
-        if (!warned) {
-            warned = 1;
-            PORT_LOG_WARN("Item_8026862C: ItCo item data unconverted; item "
-                          "spawning disabled\n");
-        }
-        return NULL;
-    }
-#endif
     HSD_GObj* gobj;
     void* user_data;
 
