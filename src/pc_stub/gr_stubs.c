@@ -1,6 +1,18 @@
 // Auto-generated weak stubs for gr/ module dependencies
 #include <platform.h>
 
+/* PC port: the weak stubs below marked "decl:" return a value rather than
+ * being void. They stand in for functions whose real implementations are not
+ * in this build, but their *declarations* return a value -- and a `void` stub
+ * leaves rax/xmm0 holding whatever the last call left there. Callers then
+ * branched on uninitialised registers, which made behaviour depend on
+ * unrelated code: un_803222EC feeds a float into the damage path, and
+ * ifMagnify_802FB6E8 an s32 into fighter.c. Returning zero makes the missing
+ * subsystem behave like a subsystem that is switched off, deterministically.
+ * `double` is used where the declaration returns a float so the zero lands in
+ * xmm0 instead of rax. */
+
+
 __attribute__((weak)) void Camera_80029020(...) {
     (void)0;
 }
@@ -973,8 +985,8 @@ __attribute__((weak)) void mpVtxSetPos(...) {
     (void)0;
 }
 
-__attribute__((weak)) void psAddGeneratorAppSRT_begin(...) {
-    (void)0;
+__attribute__((weak)) long psAddGeneratorAppSRT_begin(...) {
+    return 0; /* decl: HSD_psAppSRT* */
 }
 
 __attribute__((weak)) void psInitDataBank(...) {
@@ -993,16 +1005,16 @@ __attribute__((weak)) void tyDisplay_8031C2CC(...) {
     (void)0;
 }
 
-__attribute__((weak)) void tyDisplay_8031C2EC(...) {
-    (void)0;
+__attribute__((weak)) long tyDisplay_8031C2EC(...) {
+    return 0; /* decl: s32 */
 }
 
-__attribute__((weak)) void tyDisplay_8031C354(...) {
-    (void)0;
+__attribute__((weak)) long tyDisplay_8031C354(...) {
+    return 0; /* decl: s32 */
 }
 
-__attribute__((weak)) void tyDisplay_8031C454(...) {
-    (void)0;
+__attribute__((weak)) long tyDisplay_8031C454(...) {
+    return 0; /* decl: s32 */
 }
 
 __attribute__((weak)) void un_802FD604(...) {

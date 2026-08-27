@@ -1422,6 +1422,22 @@ void ftAnim_ApplyPartAnim(Fighter_GObj* gobj, s32 arg1, s32 arg2, f32 arg3)
     struct Fighter_x8B0_t* temp_r30;
     struct ftData_x1C* temp_r29;
 
+#if BUILD_TARGET_PC
+    /* arg1 comes from a 7-bit signed script field, so it can address outside
+     * fp->x8B0[5], and ftData::x1C (the per-part animation table) is not
+     * converted yet -- it is an array of pointers to structs that themselves
+     * hold an HSD_AnimJoint** whose length nothing records. x8B0[5] bounds
+     * the outer array at five; see port-roadmap.md for what a conversion
+     * needs. Until then, skip the part animation rather than indexing NULL:
+     * this is the only thing still crashing Captain Falcon. */
+    if (arg1 < 0 || (unsigned) arg1 >= ARRAY_SIZE(fp->x8B0) ||
+        fp->ft_data == NULL || !pc_ptr_sane(fp->ft_data->x1C) ||
+        !pc_ptr_sane(fp->ft_data->x1C[arg1]))
+    {
+        port_guard_warn("ftanim.c:ApplyPartAnim");
+        return;
+    }
+#endif
     temp_r30 = &fp->x8B0[arg1];
     temp_r29 = fp->ft_data->x1C[arg1];
     temp_r30->x11 = arg2;

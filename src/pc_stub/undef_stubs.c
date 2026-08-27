@@ -548,27 +548,27 @@ __attribute__((weak)) void ARQPostRequest(void* task, unsigned long owner, unsig
     }
     if (callback) callback(task);
 }
-__attribute__((weak)) void AXDriverKeyOff(void) {}
-__attribute__((weak)) void AXDriverPause(void) {}
-__attribute__((weak)) void AXDriverResume(void) {}
-__attribute__((weak)) void AXDriverStop(void) {}
-__attribute__((weak)) void AXDriver_8038CFF4(void) {}
-__attribute__((weak)) void AXDriver_8038D2B4(void) {}
-__attribute__((weak)) void AXDriver_8038D3B8(void) {}
-__attribute__((weak)) void AXDriver_8038D4E4(void) {}
-__attribute__((weak)) void AXDriver_8038D914(void) {}
-__attribute__((weak)) void AXDriver_8038D9D8(void) {}
+__attribute__((weak)) long AXDriverKeyOff(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriverPause(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriverResume(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriverStop(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriver_8038CFF4(void) { return 0; } /* decl: int */
+__attribute__((weak)) long AXDriver_8038D2B4(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriver_8038D3B8(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriver_8038D4E4(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriver_8038D914(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriver_8038D9D8(void) { return 0; } /* decl: bool */
 __attribute__((weak)) void AXDriver_8038DA70(void) {}
 __attribute__((weak)) void AXDriver_8038DCFC(void) {}
-__attribute__((weak)) void AXDriver_8038E30C(void) {}
-__attribute__((weak)) void AXDriver_8038E37C(void) {}
+__attribute__((weak)) long AXDriver_8038E30C(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriver_8038E37C(void) { return 0; } /* decl: bool */
 __attribute__((weak)) void AXDriver_8038E498(void) {}
-__attribute__((weak)) void AXDriver_8038E5D4(void) {}
-__attribute__((weak)) void AXDriver_8038E5DC(void) {}
-__attribute__((weak)) void AXDriver_8038E6C0(void) {}
-__attribute__((weak)) void AXDriver_8038E844(void) {}
-__attribute__((weak)) void AXDriver_8038E8EC(void) {}
-__attribute__((weak)) void AXDriver_8038EA18(void) {}
+__attribute__((weak)) long AXDriver_8038E5D4(void) { return 0; } /* decl: int */
+__attribute__((weak)) long AXDriver_8038E5DC(void) { return 0; } /* decl: int */
+__attribute__((weak)) long AXDriver_8038E6C0(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriver_8038E844(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriver_8038E8EC(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long AXDriver_8038EA18(void) { return 0; } /* decl: bool */
 __attribute__((weak)) void AddCharacterToName_getGlyphs(void) {}
 __attribute__((weak)) void AutoNamesList(void) {}
 __attribute__((weak)) void CARDCheckAsync(void) {}
@@ -590,7 +590,7 @@ __attribute__((weak)) void DevText_AdvanceLine(void) {}
 __attribute__((weak)) void DevText_Clamp(void) {}
 __attribute__((weak)) void DrawASCII(void) {}
 __attribute__((weak)) void DrawRectangle(void) {}
-__attribute__((weak)) void EulerToQuat(void) {}
+__attribute__((weak)) long EulerToQuat(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void Exception_ReportCodeline(void) {}
 __attribute__((weak)) void Exception_ReportStackTrace(void) {}
 __attribute__((weak)) void Exception_StoreDebugLevel(void) {}
@@ -661,7 +661,7 @@ __attribute__((weak)) void HSD_AObjStopAnim(void) {}
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void HSD_AudioGetAuxHeapSize(void) {}
+__attribute__((weak)) long HSD_AudioGetAuxHeapSize(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void HSD_AudioSFXKeyOffAll(void) {}
 __attribute__((weak)) void HSD_AudioSFXKeyOffTrack(void) {}
 __attribute__((weak)) void HSD_CObjAddAnim(void) {}
@@ -939,7 +939,7 @@ __attribute__((weak)) void HSD_LObjSetInterest(void) {}
 __attribute__((weak)) void HSD_LObjSetPosition(void) {}
 __attribute__((weak)) void HSD_LObjSetupInit(void) {}
 __attribute__((weak)) void HSD_LObj_803668EC(void) {}
-__attribute__((weak)) void HSD_Leak_80387DF8(void) {}
+__attribute__((weak)) long HSD_Leak_80387DF8(void) { return 0; } /* decl: int */
 __attribute__((weak)) void HSD_MObjAnim(void) {}
 __attribute__((weak)) void HSD_MObjGetTObj(void) {}
 __attribute__((weak)) void HSD_MObjRemoveAnimByFlags(void) {}
@@ -1006,6 +1006,18 @@ static int g_auto_start_elapsed = 0;  /* Frames elapsed since auto-start began *
 static u32 g_auto_start_buttons = 0;  /* Current buttons held */
 
 #include <dolphin/types.h>
+
+/* PC port: the weak stubs below marked "decl:" return a value rather than
+ * being void. They stand in for functions whose real implementations are not
+ * in this build, but their *declarations* return a value -- and a `void` stub
+ * leaves rax/xmm0 holding whatever the last call left there. Callers then
+ * branched on uninitialised registers, which made behaviour depend on
+ * unrelated code: un_803222EC feeds a float into the damage path, and
+ * ifMagnify_802FB6E8 an s32 into fighter.c. Returning zero makes the missing
+ * subsystem behave like a subsystem that is switched off, deterministically.
+ * `double` is used where the declaration returns a float so the zero lands in
+ * xmm0 instead of rax. */
+
 
 /* No-op event callback for lb_80019AAC when game mode not wired up */
 static void lb_80019AAC_noop(void) {}
@@ -1408,10 +1420,10 @@ s32 HSD_PadGetResetSwitch(void)
 
 __attribute__((weak)) void HSD_Panic(void) {}
 __attribute__((weak)) void HSD_PerfSetTotalTime(void) {}
-__attribute__((weak)) void HSD_QuatLib_8037EB28(void) {}
-__attribute__((weak)) void HSD_QuatLib_8037EC4C(void) {}
-__attribute__((weak)) void HSD_QuatLib_8037ECE0(void) {}
-__attribute__((weak)) void HSD_QuatLib_8037EF28(void) {}
+__attribute__((weak)) long HSD_QuatLib_8037EB28(void) { return 0; } /* decl: s32 */
+__attribute__((weak)) long HSD_QuatLib_8037EC4C(void) { return 0; } /* decl: s32 */
+__attribute__((weak)) long HSD_QuatLib_8037ECE0(void) { return 0; } /* decl: s32 */
+__attribute__((weak)) long HSD_QuatLib_8037EF28(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void HSD_RObjAlloc(void) {}
 __attribute__((weak)) void HSD_RObjGetByType(void) {}
 __attribute__((weak)) void HSD_RObjRemove(void) {}
@@ -1452,22 +1464,22 @@ __attribute__((weak)) void HSD_ShadowSetActive(void) {}
 __attribute__((weak)) void HSD_ShadowSetSize(void) {}
 __attribute__((weak)) void HSD_ShadowSetViewingRect(void) {}
 __attribute__((weak)) void HSD_ShadowStartRender(void) {}
-__attribute__((weak)) void HSD_SisLib_803A5ACC(void) {}
+__attribute__((weak)) long HSD_SisLib_803A5ACC(void) { return 0; } /* decl: HSD_Text* */
 __attribute__((weak)) void HSD_SisLib_803A5CC4(void) {}
 __attribute__((weak)) void HSD_SisLib_803A5D30(void) {}
 __attribute__((weak)) void HSD_SisLib_803A5E70(void) {}
 __attribute__((weak)) void HSD_SisLib_803A5F50(void) {}
 __attribute__((weak)) void HSD_SisLib_803A5FBC(void) {}
 __attribute__((weak)) void HSD_SisLib_803A6048(u32 arg) {(void)arg;}
-    __attribute__((weak)) void HSD_SisLib_803A611C(void) {}
+__attribute__((weak)) long HSD_SisLib_803A611C(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void HSD_SisLib_803A62A0(void) {}
 __attribute__((weak)) void HSD_SisLib_803A6368(void) {}
-__attribute__((weak)) void HSD_SisLib_803A6478(void) {}
-__attribute__((weak)) void HSD_SisLib_803A6530(void) {}
+__attribute__((weak)) long HSD_SisLib_803A6478(void) { return 0; } /* decl: u8* */
+__attribute__((weak)) long HSD_SisLib_803A6530(void) { return 0; } /* decl: u8* */
 __attribute__((weak)) void HSD_SisLib_803A660C(void) {}
-__attribute__((weak)) void HSD_SisLib_803A6754(void) {}
-__attribute__((weak)) void HSD_SisLib_803A6B98(void) {}
-__attribute__((weak)) void HSD_SisLib_803A70A0(void) {}
+__attribute__((weak)) long HSD_SisLib_803A6754(void) { return 0; } /* decl: HSD_Text* */
+__attribute__((weak)) long HSD_SisLib_803A6B98(void) { return 0; } /* decl: int */
+__attribute__((weak)) long HSD_SisLib_803A70A0(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void HSD_SisLib_803A746C(void) {}
 __attribute__((weak)) void HSD_SisLib_803A74F0(void) {}
 __attribute__((weak)) void HSD_SisLib_803A7548(void) {}
@@ -1487,13 +1499,13 @@ __attribute__((weak)) void HSD_StateSetNumChans(void) {}
 __attribute__((weak)) void HSD_StateSetNumTevStages(void) {}
 __attribute__((weak)) void HSD_StateSetNumTexGens(void) {}
 __attribute__((weak)) void HSD_StateSetZMode(void) {}
-__attribute__((weak)) void HSD_SynthGetSoundMode(void) {}
+__attribute__((weak)) long HSD_SynthGetSoundMode(void) { return 0; } /* decl: u32 */
 __attribute__((weak)) void HSD_SynthSFXAllocateBank(void) {}
 __attribute__((weak)) void HSD_SynthSFXBankDeflag(void) {}
 __attribute__((weak)) void HSD_SynthSFXBankDeflagSync(void) {}
-__attribute__((weak)) void HSD_SynthSFXCancelLoad(void) {}
-__attribute__((weak)) void HSD_SynthSFXGetPendingLoadCount(void) {}
-__attribute__((weak)) void HSD_SynthSFXLoad(void) {}
+__attribute__((weak)) long HSD_SynthSFXCancelLoad(void) { return 0; } /* decl: int */
+__attribute__((weak)) long HSD_SynthSFXGetPendingLoadCount(void) { return 0; } /* decl: int */
+__attribute__((weak)) long HSD_SynthSFXLoad(void) { return 0; } /* decl: int */
 __attribute__((weak)) void HSD_SynthSFXUnloadBank(void) {}
 __attribute__((weak)) void HSD_SynthSFXUpdateAllVolume(void) {}
 __attribute__((weak)) void HSD_SynthSFXWaitForLoadCompletion(void) {}
@@ -1535,7 +1547,7 @@ __attribute__((weak)) void MTXOrtho(void) {}
 __attribute__((weak)) void MTXPerspective(void) {}
 __attribute__((weak)) void MTXRotRad(void) {}
 __attribute__((weak)) void MagnetStateVarCalc(void) {}
-__attribute__((weak)) void MatToQuat(void) {}
+__attribute__((weak)) long MatToQuat(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void NessFloatMath_PKThunder2(void) {}
 __attribute__((weak)) void NotAllowedNamesList(void) {}
 __attribute__((weak)) void OSCheckActiveThreads(void) {}
@@ -1639,12 +1651,12 @@ __attribute__((weak)) void Stage_GetPauseCamZPosInit(void) {}
 __attribute__((weak)) void Stage_GetPauseCamZPosMax(void) {}
 __attribute__((weak)) void Stage_GetPauseCamZPosMin(void) {}
 __attribute__((weak)) void Stage_SetVecToFixedCamPos(void) {}
-__attribute__((weak)) void THPDec_8032F8D4(void) {}
-__attribute__((weak)) void THPDec_8032FD40(void) {}
+__attribute__((weak)) long THPDec_8032F8D4(void) { return 0; } /* decl: s32 */
+__attribute__((weak)) long THPDec_8032FD40(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void THPDec_80331340(void) {}
 __attribute__((weak)) void THPDec_803313D0(void) {}
-__attribute__((weak)) void THPInit(void) {}
-__attribute__((weak)) void THPVideoDecode(void) {}
+__attribute__((weak)) long THPInit(void) { return 0; } /* decl: BOOL */
+__attribute__((weak)) long THPVideoDecode(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void ThunderPhysTimer(void) {}
 __attribute__((weak)) void VIFlush(void) {}
 __attribute__((weak)) void VIGetDTVStatus(void) {}
@@ -1683,8 +1695,8 @@ __attribute__((weak)) void findScene(void) {}
 __attribute__((weak)) void fn_800F9260_inline(void) {}
 __attribute__((weak)) void fn_801605EC(void) {}
 __attribute__((weak)) void fn_801606A8(void) {}
-__attribute__((weak)) void fn_801693A8(void) {}
-__attribute__((weak)) void fn_8016A1E4(void) {}
+__attribute__((weak)) long fn_801693A8(void) { return 0; } /* decl: s32 */
+__attribute__((weak)) long fn_8016A1E4(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void fn_801884F8_inline(void) {}
 __attribute__((weak)) void fn_801A7FB4_inline(void) {}
 __attribute__((weak)) void fn_801A7FB4_inline2(void) {}
@@ -2244,9 +2256,9 @@ __attribute__((weak)) void hsdJObj(void) {}
 __attribute__((weak)) void hsdMObj(void) {}
 __attribute__((weak)) void hsdPObj(void) {}
 __attribute__((weak)) void hsd_80391A04(void) {}
-__attribute__((weak)) void hsd_80392474(void) {}
+__attribute__((weak)) long hsd_80392474(void) { return 0; } /* decl: UNK_RET */
 __attribute__((weak)) void hsd_80392528(void) {}
-__attribute__((weak)) void hsd_80392E80(void) {}
+__attribute__((weak)) long hsd_80392E80(void) { return 0; } /* decl: int */
 __attribute__((weak)) void hsd_803931A4(void) {}
 __attribute__((weak)) void hsd_80393A04(void) {}
 __attribute__((weak)) void hsd_80393A54(void) {}
@@ -2254,7 +2266,7 @@ __attribute__((weak)) void hsd_80393A5C(void) {}
 __attribute__((weak)) void hsd_80393DA0(void) {}
 __attribute__((weak)) void hsd_80397DA4(void) {}
 __attribute__((weak)) void hsd_80397DFC(void) {}
-__attribute__((weak)) void hsd_80398310(void) {}
+__attribute__((weak)) long hsd_80398310(void) { return 0; } /* decl: HSD_GObj* */
 __attribute__((weak)) void hsd_80398A08(void) {}
 __attribute__((weak)) void hsd_8039CEAC(void) {}
 __attribute__((weak)) void hsd_8039D1E4(void) {}
@@ -2262,24 +2274,24 @@ __attribute__((weak)) void hsd_8039D354(void) {}
 __attribute__((weak)) void hsd_8039D4DC(void) {}
 __attribute__((weak)) void hsd_8039D688(void) {}
 __attribute__((weak)) void hsd_8039EE24(void) {}
-__attribute__((weak)) void hsd_8039EFAC(void) {}
-__attribute__((weak)) void hsd_8039F05C(void) {}
-__attribute__((weak)) void hsd_8039F6CC(void) {}
-__attribute__((weak)) void hsd_803AAA48(void) {}
+__attribute__((weak)) long hsd_8039EFAC(void) { return 0; } /* decl: HSD_Generator* */
+__attribute__((weak)) long hsd_8039F05C(void) { return 0; } /* decl: HSD_Generator* */
+__attribute__((weak)) long hsd_8039F6CC(void) { return 0; } /* decl: HSD_Generator* */
+__attribute__((weak)) long hsd_803AAA48(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void hsd_803AC3E0(void) {}
 __attribute__((weak)) void hsd_803B2374(void) {}
 __attribute__((weak)) void hsd_803B24E4(void) {}
-__attribute__((weak)) void hsd_803B2550(void) {}
-__attribute__((weak)) void hsd_803B2674(void) {}
-__attribute__((weak)) void hsd_803B27F4(void) {}
-__attribute__((weak)) void hsd_803B286C(void) {}
-__attribute__((weak)) void hsd_803B2928(void) {}
-__attribute__((weak)) void hsd_803B29D8(void) {}
-__attribute__((weak)) void hsd_803B2A4C(void) {}
-__attribute__((weak)) void hsd_803B2ADC(void) {}
-__attribute__((weak)) void hsd_803B51C8(void) {}
+__attribute__((weak)) long hsd_803B2550(void) { return 0; } /* decl: int */
+__attribute__((weak)) long hsd_803B2674(void) { return 0; } /* decl: s32 */
+__attribute__((weak)) long hsd_803B27F4(void) { return 0; } /* decl: int */
+__attribute__((weak)) long hsd_803B286C(void) { return 0; } /* decl: int */
+__attribute__((weak)) long hsd_803B2928(void) { return 0; } /* decl: int */
+__attribute__((weak)) long hsd_803B29D8(void) { return 0; } /* decl: int */
+__attribute__((weak)) long hsd_803B2A4C(void) { return 0; } /* decl: int */
+__attribute__((weak)) long hsd_803B2ADC(void) { return 0; } /* decl: int */
+__attribute__((weak)) long hsd_803B51C8(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void hsd_803B5C2C(void) {}
-__attribute__((weak)) void hsd_803B6BE4(void) {}
+__attribute__((weak)) long hsd_803B6BE4(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void hsd_804D0F60(void) {}
 __attribute__((weak)) void hsd_804D0F90(void) {}
 __attribute__((weak)) void hsd_804D7900(void) {}
@@ -2411,10 +2423,10 @@ __attribute__((weak)) void Player_80031CB0(u32 kind, u8 color) {}
 __attribute__((weak)) void Player_80031D2C(u32 kind, u8 color) {}
 
 /* Void stub: Toy_803048C0 */
-__attribute__((weak)) void Toy_803048C0(void) {}
+__attribute__((weak)) long Toy_803048C0(void) { return 0; } /* decl: s32 */
 
 /* Void stub: Toy_80305058 */
-__attribute__((weak)) void Toy_80305058(void) {}
+__attribute__((weak)) long Toy_80305058(void) { return 0; } /* decl: s32 */
 
 /* Void stub: Toy_80311960 */
 __attribute__((weak)) void Toy_80311960(void) {}
@@ -2887,14 +2899,14 @@ struct gmSaveData {
 };
 
 
-__attribute__((weak)) void HSD_PadRumbleAdd(void) {}
+__attribute__((weak)) long HSD_PadRumbleAdd(void) { return 0; } /* decl: int */
 __attribute__((weak)) void HSD_PadRumbleOn(void) {}
 __attribute__((weak)) void HSD_PadRumbleRemove(void) {}
 __attribute__((weak)) void it_8026B294(void) {}
 __attribute__((weak)) void mpCheckFloor(void) {}
 __attribute__((weak)) void Player_GetPlayerCharacter(void) {}
 __attribute__((weak)) void Player_GetPlayerSlotType(void) {}
-__attribute__((weak)) void un_80304470(void) {}
+__attribute__((weak)) long un_80304470(void) { return 0; } /* decl: bool */
 __attribute__((weak, aligned(16))) unsigned char lbl_804336A0[256]; /* data (GCN 0x804336A0), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_803BB0E0[256]; /* data (GCN 0x803BB0E0), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_803BB028[256]; /* data (GCN 0x803BB028), was void-fn stub */
@@ -3538,7 +3550,7 @@ __attribute__((weak)) void OSFreeToHeap(void* heap, void* ptr)
     /* For now, just leak memory (simpler than tracking allocations) */
 }
 /* HSD render pass query — initialize.c not compiled yet */
-__attribute__((weak)) void HSD_GetCurrentRenderPass(void) {}
+__attribute__((weak)) long HSD_GetCurrentRenderPass(void) { return 0; } /* decl: HSD_RenderPass */
 
 /* TExp (texture expression) dag — stubs from texpdag.c */
 __attribute__((weak)) void HSD_TExpSchedule(void) {}
@@ -3547,7 +3559,7 @@ __attribute__((weak)) void HSD_TExpSimplify(void) {}
 __attribute__((weak)) void HSD_TExpSimplify2(void) {}
 
 /* ByteCode evaluator */
-__attribute__((weak)) void HSD_ByteCodeEval(void) {}
+__attribute__((weak)) double HSD_ByteCodeEval(void) { return 0; } /* decl: float */
 
 /* ------------------------------------------------------------------ */
 /* Cross-module stubs for code reached only now that every character is  */
