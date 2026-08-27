@@ -685,9 +685,12 @@ struct grIceMt_GroundVars {
     /* +24 gp+E8 */ u32 xE8;
     /* +28 gp+EC */ u32 xEC;
     /* +2C gp+F0 */ u32 pad_2;
-    /* +30 gp+F4 */ s16 xF4[2];
-    /* +34 gp+F8 */ u32 pad_3[2];
-    /* +44 gp+10E */ s16 x100[4];
+    /* +30 gp+F4 */ s16 xF4[6];
+    /* xF4 was s16[2] followed by u32 pad_3[2]. The offset comments give it
+     * away: gp+F4 to gp+100 is twelve bytes, and grIceMt_801F9668 indexes
+     * xF4[0..5] under HSD_Randi(6). Same total size, so the layout is
+     * unchanged -- but GCC could see the overrun and warned about it. */
+    /* +3C gp+100 */ s16 x100[4];
     /* +44 gp+108 */ s16 x108[8];
 };
 

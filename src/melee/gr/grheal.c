@@ -266,6 +266,15 @@ void stageGObj1_OnInit(Ground_GObj* gobj)
         }
 
         for (i = 0; i < ARRAY_SIZE(grHeal_803E83B8); i++) {
+#if BUILD_TARGET_PC
+            /* grHeal_803E83B8 has CHAR_ID_COUNT (26) entries but
+             * gm_80473A18.x76 is u8[24]; GCC proves the last two iterations
+             * read past it. One of the two sizes is wrong in the decomp --
+             * until that is settled, stop at the shorter one. */
+            if ((unsigned) i >= sizeof(gm_80473A18.x76)) {
+                break;
+            }
+#endif
             enum_t character_id = gm_80473A18.x76[i];
             if (character_id != 33) {
                 grHeal_8021F628(grHeal_8021F70C(character_id),
