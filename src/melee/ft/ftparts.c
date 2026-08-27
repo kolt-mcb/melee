@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "ftparts.h"
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
@@ -985,6 +987,17 @@ void ftParts_800753D4(Fighter* arg0, struct Fighter_804D6540_x0_t* arg1,
             ftAnim_GetNextJointInTree(&sp6C, &depth);
         }
     }
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_SKIPTRACE") != NULL) {
+        fprintf(stderr,
+                "[SKIP] kind=%d x0=%u x1=%u x2=%u x3=%u arg2=%p sp6C=%p "
+                "robjdesc=%p dobj=%p\n",
+                (int) arg0->kind, arg1->x0, arg1->x1, arg1->x2, arg1->x3,
+                (void*) arg2, (void*) sp6C,
+                sp6C ? (void*) sp6C->robjdesc : NULL,
+                sp6C ? (void*) sp6C->u.dobjdesc : NULL);
+    }
+#endif
     sp2C = *sp6C;
     sp2C.next = 0;
     sp2C.child = 0;

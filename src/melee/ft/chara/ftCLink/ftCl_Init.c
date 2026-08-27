@@ -1,3 +1,6 @@
+#if BUILD_TARGET_PC
+extern void* pc_ftconv_joint(void* raw);
+#endif
 #include "ftCl_Init.h"
 
 #include "ftCl_AppealS.h"
@@ -340,7 +343,17 @@ void ftCl_Init_OnLoad(HSD_GObj* gobj)
     it_8026B3F8(items[3], ea->xC);
     it_8026B3F8(items[4], ea->x10);
     it_8026B3F8(items[5], It_Kind_CLink_Milk);
+#if BUILD_TARGET_PC
+    /* PC port: items[6] is not an Article -- it is a raw HSD_Joint* into the
+     * still GCN-packed archive, which ftParts_800753D4 loads as a joint tree.
+     * Convert it the way the main costume model is converted. This path only
+     * became reachable once the PlCo part-skip table was converted; before
+     * that Fighter_804D6540 pointed at the zero arena. */
+    ftParts_800753D4(fp, Fighter_804D6540[fp->kind]->x0,
+                     pc_ftconv_joint(items[6]));
+#else
     ftParts_800753D4(fp, Fighter_804D6540[fp->kind]->x0, items[6]);
+#endif
 }
 
 void ftCl_Init_OnItemPickupExt(HSD_GObj* gobj, bool flag)

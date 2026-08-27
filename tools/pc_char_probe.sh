@@ -20,7 +20,7 @@ RC=$?
 
 FPS=$(grep -c '\[FPS\]' "$OUT")
 DRAWS=$(grep '\[FPS\]' "$OUT" | tail -1 | grep -o 'draws=[0-9]*' | sed 's/draws=//')
-CRASH=$(grep -c 'Signal11' "$OUT")
+CRASH=$(grep -cE 'Signal11|\[CRASH\] backtrace' "$OUT")
 SUBST=$(grep -c 'substituting Mario' "$OUT")
 
 echo "=== ckind $CK ==="
