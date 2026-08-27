@@ -205,4 +205,8 @@
 /* 05A340 */ void mpLib_DrawZones(void);
 /* 458868 */ extern mpCollisionBox mpLib_80458868[2];
 
+#if BUILD_TARGET_PC
+void mpLib_PCInstallEmptyCollision(void);
+#endif
+
 #endif

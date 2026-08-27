@@ -955,7 +955,18 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
                 visited_count, val);
         fflush(stderr);
     }
-    if (val != 0 && val < 0x80000000U) {
+    /* PC port: HSD_Joint::u is a union selected by flags -- dobjdesc normally,
+     * but HSD_Spline* when JOBJ_SPLINE is set and an HSD_SList* when JOBJ_PTCL
+     * is. Converting it unconditionally reinterpreted a spline's bytes as a
+     * DObjDesc chain: the spline's `tension` float became an MObjDesc offset
+     * and `totalLength`/`cv` became a wild PObjDesc offset, which
+     * grDatFiles_ConvertPObjDescGCNtoX64 then dereferenced. Kongo Jungle and
+     * Yoshi's Story have exactly one JOBJ_SPLINE joint each; no other stage
+     * that loads has any, which is why only those two crashed. The spline
+     * itself is not converted yet, so the joint simply gets no mesh. */
+    if ((x64Joint->flags & (JOBJ_SPLINE | JOBJ_PTCL)) != 0) {
+        x64Joint->u.dobjdesc = NULL;
+    } else if (val != 0 && val < 0x80000000U) {
         /* PC port: mark this joint as current so its POBJ_SKIN PObjDescs (which
          * carry no explicit joint ref) are parented to it. */
         g_grdat_current_joint = x64Joint;
@@ -1385,6 +1396,11 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
     x64Mobj->mat = lbHeap_80015BD0(0, sizeof(HSD_Material));
     if (x64Mobj->mat != NULL) {
         val = be32_swap(gcnMobj->mat);
+        if (getenv("MELEE_MATDBG")) {
+            fprintf(stderr, "[MATDBG] gcnMobjPtr=%p dataBase=%p mat_off=0x%08x m=%p archlen_guess=?\n",
+                    (const void*)gcnMobjPtr, (void*)dataBase, val, (const void*)(dataBase + val));
+            fflush(stderr);
+        }
         if (val != 0 && val < 0x80000000U) {
             const u8* m = dataBase + val;
             memcpy(&x64Mobj->mat->ambient, m + 0x00, 4);
@@ -2012,6 +2028,11 @@ static HSD_DObjDesc* grDatFiles_ConvertDObjDescGCNtoX64(const u8* gcnDobjPtr, u8
     
     /* mobjdesc - convert material descriptor */
     val = be32_swap(gcnDobj->mobjdesc);
+    if (getenv("MELEE_MATDBG")) {
+        fprintf(stderr, "[MATDBG] DObjDesc gcn=%p dataBase=%p mobjdesc_off=0x%08x\n",
+                (const void*)gcnDobjPtr, (void*)dataBase, val);
+        fflush(stderr);
+    }
     if (val != 0 && val < 0x80000000U) {
         x64Dobj->mobjdesc = grDatFiles_ConvertMObjDescGCNtoX64(dataBase + val, dataBase);
     }
