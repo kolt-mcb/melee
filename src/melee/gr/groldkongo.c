@@ -113,6 +113,30 @@ typedef struct grOk_StageDataLocal {
     char report_format[0x24];
 } grOk_StageDataLocal;
 
+#if BUILD_TARGET_PC
+/* PC port: ground.c's stage_datas[] references the canonical
+ * grOk_StageData, but this file only defined the StageData as the first
+ * member of a local wrapper under an address-derived name, so the
+ * canonical symbol bound to a weak function stub in gr_stubs.c and the
+ * stage loaded no geometry. The wrapper's trailing report-format
+ * strings exist only to reproduce the original data layout and are
+ * referenced by nothing, so the PC build just defines the StageData. */
+StageData grOk_StageData = {
+        Gr_Kind_Kongo,
+        grOk_803E658C,
+        grOk_803E65DC,
+        grOldKongo_8020F46C,
+        grOldKongo_8020F468,
+        grOldKongo_8020F4E4,
+        grOldKongo_8020F4E8,
+        grOldKongo_8020F524,
+        grOldKongo_80210780,
+        grOldKongo_80210788,
+        1,
+        (S16Vec3*) grOk_803E6580,
+        2,
+};
+#else
 grOk_StageDataLocal grOk_803E65E8 = {
     {
         Gr_Kind_Kongo,
@@ -131,6 +155,7 @@ grOk_StageDataLocal grOk_803E65E8 = {
     },
     "%s:%d: couldn t get gobj(id=%d)\n",
 };
+#endif
 
 static lbColl_80008D30_arg1 grOk_803B8408;
 

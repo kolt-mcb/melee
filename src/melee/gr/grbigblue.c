@@ -214,6 +214,30 @@ bool grBigBlue_801E59F0(void)
 
 char grBb_803E2D14[] = "/GrBb.dat";
 
+#if BUILD_TARGET_PC
+/* PC port: ground.c's stage_datas[] references the canonical
+ * grBb_StageData, but this file only defined the StageData as the first
+ * member of a local wrapper under an address-derived name, so the
+ * canonical symbol bound to a weak function stub in gr_stubs.c and the
+ * stage loaded no geometry. The wrapper's trailing report-format
+ * strings exist only to reproduce the original data layout and are
+ * referenced by nothing, so the PC build just defines the StageData. */
+StageData grBb_StageData = {
+        Gr_Kind_BigBlue,
+        grBb_803E29E0,
+        grBb_803E2D14,
+        grBigBlue_801E57C0,
+        grBigBlue_801E57BC,
+        grBigBlue_801E59C8,
+        grBigBlue_801E59CC,
+        grBigBlue_801E59F0,
+        grBigBlue_801EFC0C,
+        grBigBlue_801EFC14,
+        1,
+        (S16Vec3*) grBb_803E2938,
+        0x1C,
+};
+#else
 grBb_StageDataLocal grBb_803E2D20 = {
     {
         Gr_Kind_BigBlue,
@@ -231,6 +255,7 @@ grBb_StageDataLocal grBb_803E2D20 = {
         0x1C,
     },
 };
+#endif
 
 HSD_GObj* grBigBlue_801E59F8(s32 id)
 {

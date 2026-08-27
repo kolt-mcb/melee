@@ -109,7 +109,7 @@ StageCallbacks grCs_803E0FF4[21] = {
 
 char grCs_803E1198[] = "/GrCs.dat";
 
-StageData grCs_803E11A4 = {
+StageData grCs_StageData = {
     Gr_Kind_Castle,
     grCs_803E0FF4,
     grCs_803E1198,
