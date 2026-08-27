@@ -234,6 +234,38 @@ dump), `MELEE_NO_SKIN` (force the rigid fallback), `MELEE_ENV_STATS` (resolve
 counts, weight sums, list lengths), `MELEE_ENV_TARGETS` (which joints each
 PObj's envelopes bind to).
 
+### Where all 33 costumes stand
+
+`tools/pc_rig_sweep.sh` runs the bind-pose check over every `Pl??Nr.dat`.
+All 33 render; **25 are exactly clean (0.0000 on every joint)**. Eight report
+small deviations:
+
+| costume | joints over threshold | worst |
+|---|---|---|
+| Pikachu | 4 | 0.147 (~8.5 deg) |
+| Kirby, Marth | 2 | 0.044 |
+| Young Link, Link, Peach, Jigglypuff, Zelda | 1 | 0.110 |
+
+These are **not** the Mario signature (1.0 / 2.0, a lost quarter turn). Pikachu
+renders correctly in game despite being the worst of them, so the 0.01
+threshold is probably tighter than the precision of the authored inverse-bind
+matrices. Do not chase these before confirming a visible defect.
+
+**Kirby is genuinely wrong in a real match** and the bind check does not
+explain it (his worst joint is 0.0117). He renders as overlapping shapes --
+pink body plus yellow, red, teal and white geometry. Part visibility runs
+(`ftParts_80074B6C` reports `model_num=2`, a non-null lookup, `cleared` going
+0 to 1), so the next suspect is his copy-ability hat: `ftkirby.c` renders
+`fp->u.kb.hat.jobj` explicitly through `HSD_JObjDispAll`, separately from the
+parts system.
+
+**Reading the sweep:** `joints_checked` matters as much as `bad`. The first run
+of this sweep reported "33 clean of 33" while 32 costumes had rendered nothing
+at all -- the viewer hardcoded Mario's skeleton symbol, and every character
+exports its own (`PlyCaptain5K_Share_joint`, ...). A silent no-op reads as a
+pass unless the count is checked. `MELEE_FIGHTER_FILE` now selects the costume
+and the symbol is found by its `_Share_joint` suffix.
+
 ## Weak function stubs standing in for DATA symbols
 
 412 data symbols are satisfied by weak *function* stubs, so `&symbol` is a code

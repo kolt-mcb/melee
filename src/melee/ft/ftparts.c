@@ -657,6 +657,17 @@ void ftParts_80074B6C(Fighter* fp, FtPartsVis* vis, int idx,
 {
     FtPartsVisLookup* lookup = vis->xC[idx]; // r4
 #if BUILD_TARGET_PC
+    if (getenv("MELEE_VIS_TRACE") != NULL) {
+        static int _n;
+        if (_n < 24) {
+            _n++;
+            fprintf(stderr,
+                    "[VIS] idx=%d lookup=%p cleared=%d model_num=%d "
+                    "dobj_data=%p\n",
+                    idx, (void*) lookup, (int) vis->cleared[idx],
+                    (int) vis->model_num, (void*) dobj_list->data);
+        }
+    }
     if (dobj_list->data == NULL) {
         return;
     }
