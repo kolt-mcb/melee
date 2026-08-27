@@ -1612,6 +1612,7 @@ void ftData_80085820(FighterKind kind, int costume_id)
     {
         u8* dataBase = temp_r5->x14_archive->data;
         const u8* rawJoint = (const u8*)temp_r5->joint;
+        grDatFiles_ResetJointMap();
         const u8* rawMat = (const u8*)temp_r5->x4;
         if ((uintptr_t)rawJoint > (uintptr_t)dataBase) {
             temp_r5->joint =
@@ -1663,6 +1664,7 @@ void ftData_800858E4(FighterKind kind, int costume_id)
     {
         u8* dataBase = temp_r5->x14_archive->data;
         const u8* rawJoint = (const u8*)temp_r5->joint;
+        grDatFiles_ResetJointMap();
         const u8* rawMat = (const u8*)temp_r5->x4;
         if ((uintptr_t)rawJoint > (uintptr_t)dataBase) {
             temp_r5->joint =

@@ -864,6 +864,30 @@ void grDatFiles_ResolvePObjJoints(void)
     grdat_resolve_pobj_joints();
 }
 
+/* PC port: drop every recorded joint offset. The map is keyed by file offset
+ * alone, but an offset is only unique within its own archive -- small offsets
+ * collide routinely between the stage, PlCo.dat and a fighter's own model.
+ * Without a reset, a fighter's envelope joint refs could resolve to unrelated
+ * joints registered earlier by another archive; those joints are never
+ * instantiated in the fighter's own tree, so HSD_IDGetData returns NULL,
+ * pobj.c's jobj asserts fire and SetupRigidModelMtx faults. Falco is the
+ * character it happened to hit -- Fox loads earlier, with less in the map to
+ * collide with, which is luck of load order rather than anything intrinsic.
+ *
+ * Keying the map by (archive, offset) is the surgical fix and was tried
+ * first; it is not in yet because adding a call inside
+ * grDatFiles_ConvertJointTreeGCNtoX64's insert path makes an unrelated latent
+ * corruption in this build surface as a jump to a null instruction pointer,
+ * on every character. Bisected to exactly that: the same struct field written
+ * with a constant instead of a helper call is harmless. Clearing between
+ * archives avoids the collisions without touching that path. */
+void grDatFiles_ResetJointMap(void)
+{
+    g_grdat_jointmap_n = 0;
+    g_grdat_pobjpending_n = 0;
+    g_grdat_envpending_n = 0;
+}
+
 HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         u8* dataBase, u32 visited_count, u32* visited)
 {
