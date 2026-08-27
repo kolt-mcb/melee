@@ -1094,7 +1094,6 @@ __attribute__((weak)) void un_80322314(void) { }
 __attribute__((weak)) void un_8032233C(void) { }
 __attribute__((weak)) void un_803224DC(void) { }
 __attribute__((weak)) void un_80322598(void) { }
-__attribute__((weak)) struct StartMeleeRules* gm_8016AE50(void) { return NULL; }
 __attribute__((weak)) struct lbl_8046B6A0_t* gm_8016AE38(void) { return NULL; }
 /* Auto-generated weak stubs (batch 3) */
 
