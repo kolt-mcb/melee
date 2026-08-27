@@ -750,7 +750,13 @@ void it_802BC080(ItemLink* link, Vec3* target, Item* ip)
     ip->xDD4_itemVar.seakchain.x10 = env_flags;
 }
 
+/* PC port: header and definition disagree on bool vs int. MWCC accepts
+ * the mismatch, GCC does not. Follow the header; GCN build unchanged. */
+#if BUILD_TARGET_PC
+bool it_802BC94C(ItemLink* arg0, Vec3* arg1, itSeakChain_Attrs* sa, f32 farg0)
+#else
 int it_802BC94C(ItemLink* arg0, Vec3* arg1, itSeakChain_Attrs* sa, f32 farg0)
+#endif
 {
     u8 _padA[8];
     ItemLink *var_r30, *var_r29;

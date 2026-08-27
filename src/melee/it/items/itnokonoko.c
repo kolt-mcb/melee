@@ -540,7 +540,13 @@ Item_GObj* it_802DD7F0(s32 arg0, Vec3* arg1, Vec3* arg2, s32 arg3)
     return gobj;
 }
 
+/* PC port: header and definition disagree on bool vs int. MWCC accepts
+ * the mismatch, GCC does not. Follow the header; GCN build unchanged. */
+#if BUILD_TARGET_PC
+bool it_802DDA84(Item_GObj* gobj)
+#else
 int it_802DDA84(Item_GObj* gobj)
+#endif
 {
     Item* ip = gobj->user_data;
     CollData* col = &ip->x378_itemColl;

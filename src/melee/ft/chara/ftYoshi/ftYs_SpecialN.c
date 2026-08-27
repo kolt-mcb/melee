@@ -102,7 +102,14 @@ float ftYs_SpecialN_GetExtAttr34(void)
     return ext_attr->x34;
 }
 
+/* PC port: the header declares this returning bool; the definition says int.
+ * MWCC lets that slide, GCC does not. The value feeds ftColl_8007B760 as a
+ * flag, so bool is the intended type -- take the header's. */
+#if BUILD_TARGET_PC
+bool ftYs_SpecialN_GetExtAttr38(void)
+#else
 int ftYs_SpecialN_GetExtAttr38(void)
+#endif
 {
     ftYoshiAttributes* ext_attr = gFtDataList[FTKIND_YOSHI]->ext_attr;
     return ext_attr->x38;

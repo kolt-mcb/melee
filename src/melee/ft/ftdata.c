@@ -1571,12 +1571,17 @@ void ftData_80085820(FighterKind kind, int costume_id)
     /* PC port: only Mario (kind 0) has compiled data; other kinds' costume
      * tables contain weak-stub function addresses that end up used as
      * filenames/heap handles. */
-    if (kind != 0) {
-        static int warned = 0;
-        if (warned < 4) { warned++;
-            PORT_LOG_WARN("ftData: skipping data load for kind %d (Mario only on PC)\n", (int)kind);
+    {
+        static int all_kinds = -1;
+        if (all_kinds < 0) all_kinds = (getenv("MELEE_FT_ALLKINDS") != NULL);
+        if (kind != 0 && !all_kinds) {
+            static int warned = 0;
+            if (warned < 4) { warned++;
+                PORT_LOG_WARN("ftData: skipping data load for kind %d "
+                              "(Mario only on PC)\n", (int) kind);
+            }
+            return;
         }
-        return;
     }
 #endif
     UnkCostumeStruct* temp_r5 =
@@ -1701,12 +1706,17 @@ void ftData_80085A14(FighterKind kind)
     /* PC port: only Mario (kind 0) has compiled data; other kinds' costume
      * tables contain weak-stub function addresses that end up used as
      * filenames/heap handles. */
-    if (kind != 0) {
-        static int warned = 0;
-        if (warned < 4) { warned++;
-            PORT_LOG_WARN("ftData_A14: skipping data load for kind %d (Mario only on PC)\n", (int)kind);
+    {
+        static int all_kinds = -1;
+        if (all_kinds < 0) all_kinds = (getenv("MELEE_FT_ALLKINDS") != NULL);
+        if (kind != 0 && !all_kinds) {
+            static int warned = 0;
+            if (warned < 4) { warned++;
+                PORT_LOG_WARN("ftData_A14: skipping data load for kind %d "
+                              "(Mario only on PC)\n", (int) kind);
+            }
+            return;
         }
-        return;
     }
 #endif
     u32 sp18;

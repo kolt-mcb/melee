@@ -24,7 +24,13 @@ ItemStateTable it_803F7340[] = {
     { 3, itSamusmissile_UnkMotion3_Anim, NULL, NULL },
 };
 
+/* PC port: header and definition disagree on bool vs int. MWCC accepts
+ * the mismatch, GCC does not. Follow the header; GCN build unchanged. */
+#if BUILD_TARGET_PC
+Item_GObj* it_802B62D0(Item_GObj* gobj, Vec3* pos, bool arg2, f32 facing_dir)
+#else
 Item_GObj* it_802B62D0(Item_GObj* gobj, Vec3* pos, int arg2, f32 facing_dir)
+#endif
 {
     SpawnItem spawn;
     spawn.kind = It_Kind_Samus_Missile;

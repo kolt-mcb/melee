@@ -3439,3 +3439,25 @@ __attribute__((weak)) void HSD_TExpSimplify2(void) {}
 
 /* ByteCode evaluator */
 __attribute__((weak)) void HSD_ByteCodeEval(void) {}
+
+/* ------------------------------------------------------------------ */
+/* Cross-module stubs for code reached only now that every character is  */
+/* compiled in. These are FUNCTIONS in modules the PC build does not yet  */
+/* include -- ef/ (excluded: GCN va_arg macros), ty/ (trophies) and db/   */
+/* (debug menus) -- so a no-op is a fair stand-in for each.               */
+/*                                                                        */
+/* Note the distinction from the bug that motivated this work: the        */
+/* character costume tables were *data* symbols falling through to weak   */
+/* stubs, which silently handed a function address to code expecting a    */
+/* filename. These three are genuine functions whose absence means the    */
+/* feature is simply not present yet, which is a different thing.          */
+__attribute__((weak)) unsigned int db_ShowCoinPickupRange(void) { return 0; }
+__attribute__((weak)) void efLib_SetFlags(void* gobj, int expires)
+{
+    (void) gobj; (void) expires;
+}
+__attribute__((weak)) void* tyDisplay_8031C5E4(int arg0)
+{
+    (void) arg0;
+    return 0;
+}

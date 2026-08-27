@@ -167,7 +167,14 @@ void ftKb_SpecialNMt_80107130(Fighter_GObj* gobj)
     Fighter* fp;
     Fighter* fp2;
     ftKb_DatAttrs* da;
+#if BUILD_TARGET_PC
+    /* PC port: `NULL & 0xFFFFFFFFu` is a decomp artefact that MWCC folds to 0.
+     * GCC rejects `&` between void* and unsigned. The comparison means
+     * "gobj is null" either way. */
+    if (gobj == NULL) {
+#else
     if (gobj == (NULL & 0xFFFFFFFFu)) {
+#endif
         return;
     }
     fp = GET_FIGHTER(gobj);

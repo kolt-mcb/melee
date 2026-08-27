@@ -87,7 +87,13 @@ void it_80294EB0(Item_GObj* item_gobj, Vec3* input_pos1, Vec3* input_pos2)
     HSD_JObjSetTranslate(item_jobj_var, &pos_var);
 }
 
+/* PC port: header and definition disagree on bool vs int. MWCC accepts
+ * the mismatch, GCC does not. Follow the header; GCN build unchanged. */
+#if BUILD_TARGET_PC
+void it_802950D4(Item_GObj* item_gobj, bool arg1)
+#else
 void it_802950D4(Item_GObj* item_gobj, int arg1)
+#endif
 {
     HSD_JObj* item_jobj;
     PAD_STACK(4);

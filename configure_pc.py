@@ -69,12 +69,27 @@ GR_SOURCES = collect(MELEE / "gr")
 PL_SOURCES = collect(MELEE / "pl")
 FT_SOURCES = collect(MELEE / "ft")
 FT_SOURCES += collect(MELEE / "ft" / "chara")
-FT_SOURCES += collect(MELEE / "ft" / "chara" / "ftCommon")
-FT_SOURCES += collect(MELEE / "ft" / "chara" / "ftMario")
+# PC port: every character directory, not just Mario. Leaving the other 32 out
+# meant their data symbols -- costume tables, parts tables, DAT filenames --
+# fell through to the weak stubs in undef_stubs.c, so
+# CostumeListsForeachCharacter held the *address of a weak function* where a
+# filename string belongs. That is why every non-Mario fighter died in
+# ftParts_SetupParts with an empty parts table, having never opened its own
+# PlXX.dat.
+for _chara_dir in sorted((MELEE / "ft" / "chara").iterdir()):
+    if _chara_dir.is_dir():
+        FT_SOURCES += collect(_chara_dir)
 GM_SOURCES = collect(MELEE / "gm")
 GM_SOURCES = [s for s in GM_SOURCES if Path(s).name not in {"gm_1736.c", "gmmain.c", }]  # exclude duplicates and entry point
 EF_SOURCES = []  # ef/ module uses GCN-specific va_arg macros
 IT_SOURCES = collect(MELEE / "it")
+# PC port: the per-item sources live in it/items and collect() does not
+# recurse. Character code calls into them directly (Fox's laser, Dr. Mario's
+# pill, Young Link's bombs), so leaving them out breaks the link the moment
+# any character other than Mario is compiled in.
+for _it_dir in sorted((MELEE / "it").iterdir()):
+    if _it_dir.is_dir():
+        IT_SOURCES += collect(_it_dir)
 MN_SOURCES = collect(MELEE / "mn")
 MP_SOURCES = collect(MELEE / "mp")
 CM_SOURCES = collect(MELEE / "cm")  # camera — required for in-match view (roadmap M2)

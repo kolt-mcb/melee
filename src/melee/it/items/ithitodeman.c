@@ -50,7 +50,15 @@ ItemStateTable it_803F8180[] = { {
     it_802D5048,
 } };
 
+/* PC port: `extern inline` here gives this decomp-local sqrtf shim external
+ * linkage under GCC's C99 semantics, so two files defining it collide at link
+ * time (and both collide with libm). Give the PC copy internal linkage. */
+#if BUILD_TARGET_PC
+#define sqrtf pc_local_sqrtf
+static inline float sqrtf(float x)
+#else
 extern inline float sqrtf(float x)
+#endif
 {
     volatile float y;
     if (x > 0.0f) {

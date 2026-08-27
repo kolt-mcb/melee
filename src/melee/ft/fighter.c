@@ -842,12 +842,19 @@ void Fighter_UnkInitLoad_80068914(Fighter_GObj* gobj,
     /* PC port: player data can be zeroed/garbage — clamp the fighter kind
      * to Mario (the one character whose code is compiled) rather than
      * indexing tables with a wild kind. */
-    if (fp->kind != 0) {
-        /* Only Mario's code/data is compiled (roadmap M2 vertical slice);
-         * creating other kinds walks dataless init paths (stack smash via
-         * zeroed tables). Substitute Mario. */
-        PORT_LOG_WARN("Fighter_Create: kind %d unavailable on PC; substituting Mario\n", fp->kind);
-        fp->kind = 0;
+    /* MELEE_FT_ALLKINDS=1 lifts the Mario substitution so other characters can
+     * be exercised. Off by default because non-Mario kinds walk init paths
+     * whose data has never been converted; the point of the flag is to find
+     * out which ones now survive, character by character, rather than to
+     * assume none do. */
+    {
+        static int all_kinds = -1;
+        if (all_kinds < 0) all_kinds = (getenv("MELEE_FT_ALLKINDS") != NULL);
+        if (fp->kind != 0 && !all_kinds) {
+            PORT_LOG_WARN("Fighter_Create: kind %d unavailable on PC; "
+                          "substituting Mario\n", fp->kind);
+            fp->kind = 0;
+        }
     }
 #endif
     costume_id = Player_GetCostumeId(fp->player_id);

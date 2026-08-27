@@ -647,7 +647,13 @@ bool itGShell_Logic14_ShieldBounced(Item_GObj* gobj)
     return false;
 }
 
+/* PC port: the header declares this returning int, the definition says bool.
+ * MWCC tolerates the mismatch; GCC does not. Take the header's type. */
+#if BUILD_TARGET_PC
+int it_8028CF68(Item_GObj* gobj)
+#else
 bool it_8028CF68(Item_GObj* gobj)
+#endif
 {
     Item* ip = GET_ITEM(gobj);
     it_80272940(gobj);
