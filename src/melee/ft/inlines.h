@@ -2,6 +2,10 @@
 #define MELEE_FT_INLINES_H
 
 #include <platform.h>
+#include <string.h>
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "ef/eflib.h"
 
@@ -24,6 +28,43 @@
 #include <baselib/jobj.h>
 #include <baselib/lobj.h>
 
+#if BUILD_TARGET_PC
+/* PC port: ext_attr points straight at the character's attribute blob inside
+ * the still-big-endian PlXX.dat data section, so the GCN struct assignment
+ * would copy 400-odd bytes of byte-reversed floats. Every field of every
+ * ft<Xx>_DatAttrs is a 4-byte word, so a wholesale 32-bit swap of
+ * sizeof(attributeName) bytes is the whole conversion -- and this macro is
+ * the only place that knows the concrete size.
+ *
+ * The copy is also bounds-checked. dat_attrs_backup comes from
+ * fighter_dat_attrs_alloc_data, a fixed 0x424-byte block (fighter.c), and an
+ * over-long struct would silently smash the heap. On a bad source pointer or
+ * an oversized struct the block is zeroed instead, so dat_attrs still points
+ * somewhere valid and downstream reads yield 0 rather than faulting. */
+#define PC_DAT_ATTRS_MAX 0x424
+#define PUSH_ATTRS(fp, attributeName)                                         \
+    do {                                                                      \
+        void* backup = (fp)->dat_attrs_backup;                                \
+        const u32* src = ((fp)->ft_data != NULL)                              \
+                             ? (const u32*) (fp)->ft_data->ext_attr           \
+                             : NULL;                                          \
+        unsigned long n_ = sizeof(attributeName);                             \
+        if (backup != NULL && n_ <= PC_DAT_ATTRS_MAX) {                       \
+            if (pc_ptr_sane(src) && pc_mem_readable(src, n_)) {               \
+                u32* d_ = (u32*) backup;                                      \
+                unsigned long i_;                                             \
+                for (i_ = 0; i_ < n_ / 4; i_++) {                             \
+                    u32 v_ = src[i_];                                         \
+                    d_[i_] = ((v_ >> 24) & 0xFF) | ((v_ >> 8) & 0xFF00) |     \
+                             ((v_ << 8) & 0xFF0000) | ((v_ << 24));           \
+                }                                                             \
+            } else {                                                          \
+                memset(backup, 0, n_);                                        \
+            }                                                                 \
+            (fp)->dat_attrs = backup;                                         \
+        }                                                                     \
+    } while (0)
+#else
 #define PUSH_ATTRS(fp, attributeName)                                         \
     do {                                                                      \
         void* backup = (fp)->dat_attrs_backup;                                \
@@ -32,6 +73,7 @@
         *(attributeName*) (fp)->dat_attrs_backup = *src;                      \
         *da = backup;                                                         \
     } while (0)
+#endif
 
 /// @todo Remove declarations. Doesn't really need to be a macro.
 #define COPY_ATTRS(gobj, attributeName)                                       \

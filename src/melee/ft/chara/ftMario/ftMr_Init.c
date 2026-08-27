@@ -185,15 +185,18 @@ void ftMr_Init_OnLoad(HSD_GObj* gobj)
     fp->can_walljump = true;
 
 #if BUILD_TARGET_PC
-    /* PC port: ext_attr / items come from PlMr.dat, which is not fully
-     * converted yet; PUSH_ATTRS derefs ext_attr. Skip with zeroed attrs. */
-    if (!pc_ptr_sane(ftDataInfo) || !pc_ptr_sane(ftDataInfo->ext_attr) ||
-        !pc_ptr_sane(items))
-    {
+    /* PC port: ext_attr is converted now (rebased in pc_conv_ftData, swapped
+     * by PUSH_ATTRS), so attributes load unconditionally. x48_items is still
+     * left NULL by the converter, so only the item-spawn half is gated. */
+    if (pc_ptr_sane(ftDataInfo)) {
+        PUSH_ATTRS(fp, ftMario_DatAttrs);
+    }
+    if (!pc_ptr_sane(items)) {
         return;
     }
-#endif
+#else
     PUSH_ATTRS(fp, ftMario_DatAttrs);
+#endif
 
     {
         ftMario_DatAttrs* sa = fp->dat_attrs;

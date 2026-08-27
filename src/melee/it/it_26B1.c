@@ -197,12 +197,28 @@ int it_8026B3C0(ItemKind kind) // Count identical item GObj entities?
 void it_8026B3F8(Article* article,
                  s32 kind) // Store Item article pointer to table
 {
+#if BUILD_TARGET_PC
+    /* PC port: it_8027870C deliberately leaves it_804D6D38 NULL while the
+     * ItCo common-item data is unconverted, on the stated understanding that
+     * its users are guarded -- these two storers were not. Every character's
+     * ft<Xx>_Init_OnLoad calls straight into here right after PUSH_ATTRS, so
+     * the unguarded store through NULL killed all 24 non-Mario fighters
+     * during Fighter_Create. */
+    if (it_804D6D38 == NULL) {
+        return;
+    }
+#endif
     it_804D6D38[kind - It_Kind_Kuriboh] = article;
 }
 
 void it_8026B40C(Article* article,
                  s32 kind) // Store Stage Item article pointer to table
 {
+#if BUILD_TARGET_PC
+    if (it_804A0F60 == NULL) {
+        return;
+    }
+#endif
     it_804A0F60[kind - It_Kind_Old_Kuri] = article;
 }
 
