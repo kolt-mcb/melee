@@ -221,7 +221,21 @@ HSD_GObj* grPura_80211E08_noinline2(int gobj_id)
 HSD_GObj* grPura_80211E08(int gobj_id)
 {
     HSD_GObj* gobj;
-    StageCallbacks* callbacks = &grPu_803E6800[gobj_id];
+    StageCallbacks* callbacks;
+#if BUILD_TARGET_PC
+    /* grPura_802125F0 feeds this ids read through a byte-offset overlay of
+     * grPu_803E6800 that does not survive the trip (see there), so gobj_id
+     * arrives as things like 4877872. Indexing the table with it produces a
+     * pointer that passes a sanity check and faults on first use. */
+    if (gobj_id < 0 ||
+        (unsigned) gobj_id >=
+            sizeof(grPu_803E6800) / sizeof(grPu_803E6800[0]))
+    {
+        port_guard_warn("grpura.c:bad-gobj-id");
+        return NULL;
+    }
+#endif
+    callbacks = &grPu_803E6800[gobj_id];
 
     gobj = Ground_GetStageGObj(gobj_id);
 
@@ -411,10 +425,31 @@ void grPura_802125F0(HSD_GObj* arg0)
     Ground* gp;
     HSD_JObj* child;
 
+#if BUILD_TARGET_PC
+    /* `desc` overlays grPu_803E6800 at byte offset 0x2B0. On GameCube that is
+     * past the 28 StageCallbacks entries the decomp captured (28 * 0x14 =
+     * 0x230) and into the rest of a larger blob that was never decompiled --
+     * so the table it wants is not in this tree at all. Here StageCallbacks
+     * is 0x28 (four function pointers plus the flags word), which puts 0x2B0
+     * back *inside* the array, and every desc->x8 is a misread callback
+     * pointer. Skip the loop rather than feed garbage ids into the stage. */
+    port_guard_warn("grpura.c:model-desc-overlay");
+    (void) desc;
+    (void) scale;
+    (void) jobj;
+    (void) joint;
+    (void) child;
+    return;
+#endif
     for (i = 0; i < 27; i++, desc++) {
         if (desc->x8 != -1) {
             gobj = grPura_80211E08(desc->x8);
             HSD_ASSERT(0x291, gobj);
+#if BUILD_TARGET_PC
+            if (gobj == NULL) {
+                continue;
+            }
+#endif
             gp = GET_GROUND(gobj);
             HSD_ASSERT(0x292, gp);
 
