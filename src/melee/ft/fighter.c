@@ -269,6 +269,50 @@ void Fighter_LoadCommonData(void)
                 PORT_LOG_WARN("Fighter_LoadCommonData: PlCo converted (mario parts_num=%u)\n",
                               (unsigned)pc_tbl[0].parts_num);
             }
+            /* Symbol 5, Fighter_804D6540: the per-kind "skip this part slot"
+             * list that ftParts_8007506C consults. Leaving it on the zero
+             * arena silently disabled the skip mechanism for everyone, which
+             * is harmless for the 23 kinds whose list is empty but broke the
+             * only three that have one -- Kirby (13 entries), Link (1) and
+             * Young Link (1). For those, ftParts_SetupParts walked exactly
+             * that many fewer joints than parts_num, tripped "fighter parts
+             * num not match!", and left uninitialised fp->parts[] slots for
+             * ftAnim_80070308 to crash on. Records are {u32 x0_off; u32 x4};
+             * x0 points at u8[4] rows that need no byteswap. */
+            {
+                u32 off5 = PC_BE32(offs[5]);
+                if (off5 != 0 && off5 + FTKIND_MAX * 4 <= fsize) {
+                    static struct Fighter_804D6540_t pc_skip[FTKIND_MAX];
+                    static struct Fighter_804D6540_t* pc_skipp[FTKIND_MAX];
+                    const u32* kinds5 = (const u32*)(dataBase + off5);
+                    u32 k;
+                    for (k = 0; k < FTKIND_MAX; k++) {
+                        u32 to5 = PC_BE32(kinds5[k]);
+                        pc_skipp[k] = &pc_skip[k];
+                        pc_skip[k].x0 = NULL;
+                        pc_skip[k].x4 = 0;
+                        if (to5 != 0 && to5 + 8 <= fsize) {
+                            const u32* e5 = (const u32*)(dataBase + to5);
+                            u32 rows = PC_BE32(e5[0]);
+                            u32 cnt = PC_BE32(e5[1]);
+                            if (rows != 0 && cnt != 0 && cnt <= 0x80 &&
+                                rows + cnt * 4 <= fsize)
+                            {
+                                pc_skip[k].x0 =
+                                    (struct Fighter_804D6540_x0_t*)(dataBase +
+                                                                    rows);
+                                pc_skip[k].x4 = (int) cnt;
+                            }
+                        }
+                    }
+                    Fighter_804D6540 = pc_skipp;
+                    PORT_LOG_WARN("Fighter_LoadCommonData: part-skip table "
+                                  "converted (kirby=%d link=%d clink=%d)\n",
+                                  pc_skip[FTKIND_KIRBY].x4,
+                                  pc_skip[FTKIND_LINK].x4,
+                                  pc_skip[FTKIND_CLINK].x4);
+                }
+            }
             #undef PC_BE32
         }
     }
@@ -302,7 +346,7 @@ void Fighter_LoadCommonData(void)
         Fighter_804D654C = (void*)pc_ptr_arena;
         Fighter_804D6548 = (void*)pc_ptr_arena;
         if (ftPartsTable == NULL) ftPartsTable = (void*)pc_ptr_arena;
-        Fighter_804D6540 = (void*)pc_ptr_arena;
+        if (Fighter_804D6540 == NULL) Fighter_804D6540 = (void*)pc_ptr_arena;
         Fighter_804D653C = (void*)pc_ptr_arena;
         Fighter_804D6538 = (void*)pc_ptr_arena;
         Fighter_804D6534 = (void*)pc_ptr_arena;
@@ -713,8 +757,24 @@ void Fighter_UnkUpdateCostumeJoint_800686E4(Fighter_GObj* gobj)
     fp->x108_costume_joint = CostumeListsForeachCharacter[fp->kind]
                                  .costume_list[fp->x619_costume_id]
                                  .joint;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_DIAG1") != NULL) {
+        fprintf(stderr, "[DIAG1] kind=%d costume=%d x108_costume_joint=%p flags=0x%08x child=%p next=%p u=%p\n",
+                (int)fp->kind, (int)fp->x619_costume_id,
+                (void*)fp->x108_costume_joint,
+                fp->x108_costume_joint ? (unsigned)fp->x108_costume_joint->flags : 0,
+                fp->x108_costume_joint ? (void*)fp->x108_costume_joint->child : NULL,
+                fp->x108_costume_joint ? (void*)fp->x108_costume_joint->next : NULL,
+                fp->x108_costume_joint ? (void*)fp->x108_costume_joint->u.dobjdesc : NULL);
+    }
+#endif
     ftPartsPObjSetDefaultClass();
     jobj = HSD_JObjLoadJoint(fp->x108_costume_joint);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_DIAG1") != NULL) {
+        fprintf(stderr, "[DIAG1] HSD_JObjLoadJoint returned jobj=%p\n", (void*)jobj);
+    }
+#endif
     ftPartsPObjClearDefaultClass();
     ftParts_80073758(jobj);
 

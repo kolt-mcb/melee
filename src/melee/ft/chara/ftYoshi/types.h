@@ -104,12 +104,40 @@ struct ftYs_DatAttrs {
 };
 STATIC_ASSERT(sizeof(struct ftYs_DatAttrs) == 0x120);
 
+#if BUILD_TARGET_PC
+/* PC port: this struct does not describe a struct in the file -- it is an
+ * alternate reading of two *consecutive* TempS entries out of the generic
+ * FtPartsVisLookup array that pc_conv_PartsDesc builds. On GCN TempS is
+ * { s32; u8* } = 8 bytes with no padding, so two of them are byte-identical
+ * to the four 4-byte fields below. On x86_64 the pointer forces TempS to a
+ * 16-byte stride, and the identity breaks: x8_end_index landed inside
+ * ts[0].x4's pointer bytes and xC_start_index read ts[1].x0's count (1) as
+ * an address. Yoshi is the only character that reinterprets this block, so
+ * respace the fields to the x86_64 TempS stride rather than special-casing
+ * the shared converter.
+ *
+ *   x0             -> ts[0].x0   @  0
+ *   x4             -> ts[0].x4   @  8   (not read by ftYs code)
+ *   x8_end_index   -> ts[1].x0   @ 16
+ *   xC_start_index -> ts[1].x4   @ 24
+ */
+struct S_UNK_YOSHI2 {
+    s32 x0;
+    s32 _pc_pad0;
+    s32 x4;
+    s32 _pc_pad1;
+    s32 x8_end_index;
+    s32 _pc_pad2;
+    u8* xC_start_index;
+};
+#else
 struct S_UNK_YOSHI2 {
     s32 x0;
     s32 x4;
     s32 x8_end_index;
     u8* xC_start_index;
 };
+#endif
 
 struct S_UNK_YOSHI1 {
     s32 x0;
