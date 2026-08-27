@@ -1,3 +1,6 @@
+#if BUILD_TARGET_PC
+extern void* pc_ftconv_vislookup(void* raw, unsigned model_num);
+#endif
 #include "ftGw_Init.h"
 
 #include "ftGw_Attack100.h"
@@ -539,7 +542,17 @@ void ftGw_Init_OnLoad(HSD_GObj* gobj)
         fp->x610_color_rgba[1] = da->x14_GAMEWATCH_OUTLINE;
         ftMaterial_800BFB4C(gobj,
                             &da->x4_GAMEWATCH_COLOR[fp->x619_costume_id]);
+#if BUILD_TARGET_PC
+        /* PC port: items[10] is not an Article -- it is a raw
+         * FtPartsVisLookup table in the still GCN-packed archive, assigned
+         * straight into the parts-visibility array. Left unconverted, the
+         * walkers in ftparts.c read 4-byte offsets as 8-byte pointers and
+         * produced dobj indices as high as 214. */
+        fp->x5AC.xC[4] =
+            pc_ftconv_vislookup(items[10], fp->x5AC.model_num);
+#else
         fp->x5AC.xC[4] = items[10];
+#endif
 
         it_8026B3F8(items[0], It_Kind_GameWatch_Greenhouse);
         it_8026B3F8(items[1], It_Kind_GameWatch_Manhole);

@@ -108,6 +108,12 @@ static void pc_ftconv_note_archive(const u8* base, unsigned long len)
     }
 }
 
+/* Mr. Game & Watch assigns ftData::x48_items[10] straight into
+ * fp->x5AC.xC[4] as a FtPartsVisLookup*, so that table also arrives raw. */
+static FtPartsVisLookup* pc_conv_VisLookup(const u8* raw, const u8* base,
+                                           unsigned long len, u32 model_num);
+void* pc_ftconv_vislookup(void* raw, unsigned model_num);
+
 #define PC_FTCONV_JOINT_CACHE 32
 void* pc_ftconv_joint(void* raw)
 {
@@ -141,6 +147,37 @@ void* pc_ftconv_joint(void* raw)
     fprintf(stderr,
             "[PORT WARN] pc_ftconv_joint: %p is in no known fighter archive; "
             "skipping\n",
+            raw);
+    return NULL;
+}
+
+void* pc_ftconv_vislookup(void* raw, unsigned model_num)
+{
+    static struct { void* raw; void* conv; } cache[8];
+    static int cache_n;
+    const u8* p = (const u8*) raw;
+    int i;
+
+    if (raw == NULL) return NULL;
+    for (i = 0; i < cache_n; i++) {
+        if (cache[i].raw == raw) return cache[i].conv;
+    }
+    for (i = 0; i < pc_ftconv_arch_n; i++) {
+        const u8* b = pc_ftconv_arch[i].base;
+        unsigned long len = pc_ftconv_arch[i].len;
+        if (p > b && (unsigned long) (p - b) < len) {
+            void* conv = pc_conv_VisLookup(p, b, len, model_num);
+            if (cache_n < 8) {
+                cache[cache_n].raw = raw;
+                cache[cache_n].conv = conv;
+                cache_n++;
+            }
+            return conv;
+        }
+    }
+    fprintf(stderr,
+            "[PORT WARN] pc_ftconv_vislookup: %p is in no known fighter "
+            "archive; skipping\n",
             raw);
     return NULL;
 }

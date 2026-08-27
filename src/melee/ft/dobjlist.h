@@ -22,6 +22,10 @@ struct CostumeTObjList {
     /*  fp+5D4 */ HSD_TObj* costume_tobjs[5];
 };
 
+/* PC port: the number of HSD_DObj* slots fighter_dobj_list_alloc_data
+ * provides. Kept next to the struct it sizes so the two cannot drift. */
+#define FT_DOBJ_LIST_MAX 124
+
 struct TempS {
     int x0;
     u8* x4;
