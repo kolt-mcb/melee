@@ -1,3 +1,6 @@
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 #include "grizumi.h"
 
 #include "granime.h"
@@ -401,9 +404,26 @@ bool grIzumi_801CC0CC(Ground_GObj* gobj)
 void grIzumi_801CC0D4(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
+#if BUILD_TARGET_PC
+    /* PC port: the platform handle itself can be a stale non-NULL pointer. */
+    if (!pc_ptr_sane(gp) || !pc_ptr_sane(gp->u.izumi.xCC)) {
+        return;
+    }
+#endif
     if (gp->u.izumi.xCC != NULL) {
         Ground* gp2 = GET_GROUND(gp->u.izumi.xCC);
         Vec3 vec;
+#if BUILD_TARGET_PC
+        /* PC port: Fountain of Dreams' two rising platforms. Their jobjs come
+         * from stage data this port does not fully convert, so the handles can
+         * be absent. This runs only when stage collision is enabled, so it had
+         * never executed before. */
+        if (!pc_ptr_sane(gp2) || !pc_ptr_sane(gp2->u.izumi2.xC4) ||
+            !pc_ptr_sane(gp2->u.izumi2.xC8))
+        {
+            return;
+        }
+#endif
         if (gp->u.izumi.xD0 != NULL) {
             HSD_JObjGetTranslation(gp->u.izumi.xD0, &vec);
             HSD_JObjSetTranslate(gp2->u.izumi2.xC4, &vec);
