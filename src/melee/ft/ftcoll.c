@@ -2929,6 +2929,16 @@ void ftColl_8007B128(Fighter_GObj* fighter_gobj, int bone_id,
         }
     }
 
+#if BUILD_TARGET_PC
+    /* PC port: the hurt-capsule table comes from ft_data->x30, which
+     * pc_conv_ftData still leaves NULL, so no bone id ever matches and this
+     * assert fires for every character whose code touches hurtbox state.
+     * It only became reachable when stage collision was enabled. Fighters
+     * stand and move without hurtboxes; they cannot yet be hit. */
+    if (fp->hurt_capsules_len == 0 || fp->hurt_capsules == NULL) {
+        return;
+    }
+#endif
     HSD_ASSERTREPORT(0x888, 0,
                      "in ftCollisionSetHitStatus illegal parts!\n");
 }

@@ -1,3 +1,6 @@
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 #include "mpisland.h" // IWYU pragma: keep
 
 #include "mplib.h"
@@ -210,6 +213,14 @@ mp_UnkStruct0* mpIsland_8005AB54(int surface_idx)
 
         for (cur = mpIsland_80458E88.next; cur; cur = cur->next) {
             int j, j_next;
+#if BUILD_TARGET_PC
+            /* PC port: the island list is built from collision data this port
+             * does not fully populate, so a node can be a stale or wild
+             * pointer. */
+            if (!pc_ptr_sane(cur)) {
+                break;
+            }
+#endif
             for (j = cur->x24; j != -1; j = j_next) {
                 if (j == surface_idx) {
                     return cur;
@@ -220,6 +231,16 @@ mp_UnkStruct0* mpIsland_8005AB54(int surface_idx)
                 }
 
                 done = true;
+#if BUILD_TARGET_PC
+                /* PC port: CollLine::x0 points back into the stage's MapLine
+                 * array, and an island entry can reference a line index this
+                 * port has not populated. Reached only with collision enabled
+                 * and only by the Ice Climbers, whose partner logic walks the
+                 * island list. */
+                if (v2 == NULL || !pc_ptr_sane(v2[j].x0)) {
+                    break;
+                }
+#endif
                 j_next = v2[j].x0->next_id0;
 
                 if (j_next != -1 && (v2[j_next].flags & CollLine_Floor)) {

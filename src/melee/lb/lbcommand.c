@@ -42,6 +42,36 @@ void Command_03(CommandInfo* info)
 /// Execute Loop
 void Command_04(CommandInfo* info)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the original reaches the loop counter by raw word index --
+     * ((u32*) info)[loop_count + 3] -- and jumps by indexing info->ptr past
+     * its declared length. Both encode CommandInfo's GameCube layout, where
+     * the union at 0x08 is four bytes wide. Here it is eight, so every field
+     * after it shifts: the decrement landed on padding, the loop counter
+     * never reached zero, and the jump read a resume address from the wrong
+     * slot -- a wild 0x8... offset that crashed the interpreter.
+     *
+     * Command_03 pushes the resume address then the iteration count, so on
+     * GCN word index (loop_count + 3) is exactly event_return[loop_count - 1]
+     * and info->ptr[loop_count] is event_return[loop_count - 2]. Say that
+     * directly. Kirby, Ness, the Ice Climbers and Jigglypuff are the
+     * characters whose scripts loop. */
+    if (info->loop_count < 2) {
+        NEXT_CMD(info);
+        return;
+    }
+    {
+        uintptr_t n = (uintptr_t) info->event_return[info->loop_count - 1];
+        n -= 1;
+        info->event_return[info->loop_count - 1] = (union CmdUnion*) n;
+        if ((s32) n) {
+            info->u = info->event_return[info->loop_count - 2];
+            return;
+        }
+    }
+    NEXT_CMD(info);
+    info->loop_count -= 2;
+#else
     u32* ptr = (u32*) info;
     ptr[info->loop_count + 3] -= 1;
 
@@ -51,6 +81,7 @@ void Command_04(CommandInfo* info)
     }
     NEXT_CMD(info);
     info->loop_count -= 2;
+#endif
 }
 
 /// Subroutine

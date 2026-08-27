@@ -120,7 +120,27 @@ void ftCo_800D0CBC(Fighter_GObj* fgp)
     PAD_STACK(8);
 
     fp = fgp->user_data;
+#if BUILD_TARGET_PC
+    /* PC port: fp->x2D0 is initialised to NULL in Fighter_Create and only
+     * filled from fighter data this port does not convert yet. This became
+     * reachable once the attribute-init guard stopped bailing out early, and
+     * Kirby is the character that reaches it. */
+    if (!pc_ptr_sane(fp->x2D0)) {
+        return;
+    }
+#endif
     count = (temp_r30 = fp->x2D0)->x28;
+#if BUILD_TARGET_PC
+    /* ...and its count comes from the same unconverted block. x14 is a
+     * five-element array, so anything past that is a heap overflow, not just
+     * a bad read. x2D0 is the multi-jump stats block, which is why the two
+     * characters that reach this are Kirby and Jigglypuff. */
+    if (count < 0 || count > (int) (sizeof(temp_r30->x14) /
+                                    sizeof(temp_r30->x14[0])))
+    {
+        return;
+    }
+#endif
     scale = 1.0f;
 
     if (scale != fp->x34_scale.y) {
