@@ -123,6 +123,46 @@ emulation for settings/unlocks, config (keybinds, resolution), pause menu.
 - Every renderer fix is validated against a Dolphin capture, not eyeballs.
 - Diagnostics stay env-gated; prune dead ones at each milestone.
 
+## Subaction scripts — why fighters cannot hit each other *(diagnosed, not fixed)*
+
+Fighters move, stand and enter attack states, and their hurtboxes convert. They
+still deal no damage: driven together on Final Destination they overlap
+completely (separation 0.0 at x=85.6) with no percent change. The cause is
+precisely located.
+
+Subaction scripts are a stream of 32-bit **big-endian** words whose top six bits
+are the opcode — Melee's documented event ids (`0x2C` create-hitbox, `0x0C`
+timer) are the first byte with the low two bits masked off. Two things are wrong
+at once:
+
+1. **Nothing byteswaps the stream.** `MELEE_CMDDUMP=1` shows a real attack
+   script as `08000004 / 4c000001 / 2c006809 / 03fe0055` in file order.
+2. **The command structs are MSB-first bitfields.** PowerPC allocates the first
+   declared field at the top of the word; x86-64 puts it at the bottom.
+
+So `0x2C` create-hitbox decodes as 44 and dispatches an unrelated handler. No
+attack ever creates a hitbox, and wrong handlers run on garbage — which is also
+where `Command_04`'s crashes came from.
+
+**What a fix needs** (attempted and reverted; the partial state crashes because
+correct dispatch plus wrong field order is worse than both being wrong):
+
+- Byteswap each script in place, once, walking to its terminating zero word.
+  `pc_conv_WaitAnimTable` is the right place — `Fighter_WaitAnimData::xC` is
+  the script pointer.
+- Reverse the field order of every command struct under `#if BUILD_TARGET_PC`,
+  padding to 32 bits first where a struct is narrower. There are ~60, in
+  `src/melee/lb/types.h` plus `gmScriptEventDefault` in `src/melee/ft/types.h`,
+  and they mix `u32`, `s32`, `u16` and `u8` base types.
+- **The unsolved part:** `Command_05` (subroutine) is
+  `struct { union CmdUnion* ptr; }` — a raw pointer *inside the script stream*.
+  It is a 4-byte file offset on GameCube and 8 bytes here, so no amount of bit
+  reordering fixes it; it needs a PC-specific accessor that reads four bytes and
+  rebases against the archive, and its target script must be swapped too
+  (recursively, since subroutines nest).
+
+Treat this as its own milestone rather than a patch.
+
 ## Reference harness *(built; use it before judging any renderer change)*
 
 `tools/pc_ref_compare.py` compares port frames against the real game running

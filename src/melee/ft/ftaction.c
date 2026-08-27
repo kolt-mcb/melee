@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "ftaction.h"
 
 #include <placeholder.h>
@@ -1336,6 +1338,52 @@ void ftAction_80073240(Fighter_GObj* fighter_gobj)
             }
             eventCode =
                 gmScriptEventCast(ftCommand->u, gmScriptEventDefault)->opcode;
+#if BUILD_TARGET_PC
+            /* PC port: subaction scripts are a stream of 32-bit BIG-ENDIAN
+             * words whose top six bits are the opcode -- Melee's documented
+             * event ids (0x2C create-hitbox, 0x0C timer) are the first byte
+             * with the low two bits masked off. Nothing byteswaps that stream,
+             * and the command structs are MSB-first bitfields that x86-64
+             * allocates LSB-first, so every opcode decodes wrong: an attack's
+             * 0x2C create-hitbox reads as 44 and dispatches an unrelated
+             * handler. Attacks never create a hitbox, which is why fighters
+             * can overlap completely and deal no damage.
+             *
+             * MELEE_CMDDUMP=1 dumps the first non-empty script both ways;
+             * MELEE_CMDTRACE=1 logs each dispatched command. See the roadmap
+             * for what a real fix needs. */
+            if (getenv("MELEE_CMDDUMP") != NULL) {
+                static int dumped;
+                if (!dumped && ftCommand->u != NULL &&
+                    *(const u32*) ftCommand->u != 0) {
+                    const u32* w = (const u32*) ftCommand->u;
+                    int k;
+                    dumped = 1;
+                    fprintf(stderr, "[CMDDUMP] script at %p\n",
+                            (const void*) w);
+                    for (k = 0; k < 24; k++) {
+                        u32 be = __builtin_bswap32(w[k]);
+                        fprintf(stderr,
+                                "  [%2d] mem=%08x | correct op=%2u | "
+                                "as-decoded op=%2u\n",
+                                k, w[k], (unsigned) (be >> 26),
+                                (unsigned) (w[k] & 0x3F));
+                        if (w[k] == 0) break;
+                    }
+                }
+            }
+            if (getenv("MELEE_CMDTRACE") != NULL) {
+                static int cn;
+                if (cn < 400) {
+                    u32 w = *(const u32*) ftCommand->u;
+                    cn++;
+                    fprintf(stderr,
+                            "[CMD] mem=%08x correct_op=%u as_decoded_op=%u\n",
+                            w, (unsigned) (__builtin_bswap32(w) >> 26),
+                            eventCode);
+                }
+            }
+#endif
             if (Command_Execute((CommandInfo*) ftCommand, eventCode) == false)
             {
                 eventCode -= 0xA;
