@@ -123,45 +123,72 @@ emulation for settings/unlocks, config (keybinds, resolution), pause menu.
 - Every renderer fix is validated against a Dolphin capture, not eyeballs.
 - Diagnostics stay env-gated; prune dead ones at each milestone.
 
-## Subaction scripts — why fighters cannot hit each other *(diagnosed, not fixed)*
+## Subaction scripts — big-endian, MSB-first bitfields *(fixed)*
 
-Fighters move, stand and enter attack states, and their hurtboxes convert. They
-still deal no damage: driven together on Final Destination they overlap
-completely (separation 0.0 at x=85.6) with no percent change. The cause is
-precisely located.
+Subaction and item command scripts are read straight out of the DAT archive: a
+stream of 32-bit **big-endian** words whose top six bits are the opcode. Melee's
+documented event ids (`0x2C` create-hitbox, `0x0C` timer) are the first byte with
+the low two bits masked off. Two things were wrong at once — nothing byteswapped
+the stream, and the command structs are MSB-first bitfields that x86-64 allocates
+LSB-first. `0x2C` create-hitbox decoded as opcode 44 and dispatched an unrelated
+handler, so no attack ever created a hitbox and wrong handlers ran on garbage
+(which is also where `Command_04`'s crashes came from).
 
-Subaction scripts are a stream of 32-bit **big-endian** words whose top six bits
-are the opcode — Melee's documented event ids (`0x2C` create-hitbox, `0x0C`
-timer) are the first byte with the low two bits masked off. Two things are wrong
-at once:
+Reversing ~70 struct declarations by hand and byteswapping the stream in place
+was the obvious fix, and it is the wrong one. GCC's
+`__attribute__((scalar_storage_order("big-endian")))` does both halves at once:
+it makes a struct's scalars load big-endian *and* allocates its bit-fields
+MSB-first, exactly like PowerPC. So the archive stays untouched and the
+declarations stay identical to the GameCube ones — every member of
+`union CmdUnion` (and the union itself) just carries `PC_SCRIPT_BE`
+(`src/melee/lb/types.h`), as does `gmScriptEventDefault`.
 
-1. **Nothing byteswaps the stream.** `MELEE_CMDDUMP=1` shows a real attack
-   script as `08000004 / 4c000001 / 2c006809 / 03fe0055` in file order.
-2. **The command structs are MSB-first bitfields.** PowerPC allocates the first
-   declared field at the top of the word; x86-64 puts it at the bottom.
+Two things the attribute cannot cover:
 
-So `0x2C` create-hitbox decodes as 44 and dispatches an unrelated handler. No
-attack ever creates a hitbox, and wrong handlers run on garbage — which is also
-where `Command_04`'s crashes came from.
+- **`Command_05`/`Command_07` hold a pointer inside the stream.** `Locate()` is a
+  no-op on PC, so the word is still an unrelocated 32-bit archive offset — and a
+  real 8-byte pointer there would double `sizeof(union CmdUnion)` and make
+  `NEXT_CMD` step two words at a time. Under PC they are `u32 off`, resolved by
+  `pc_script_target()` (`src/port/pc_ftconv.c`), which finds the registered
+  archive containing the current command and rebases against it.
+- **Raw reads that bypass the structs** — a whole word copied into a scratch
+  command, a halfword pulled out by pointer cast. Those need the swap spelled
+  out: `PC_SCRIPT_W` / `PC_SCRIPT_H`.
 
-**What a fix needs** (attempted and reverted; the partial state crashes because
-correct dispatch plus wrong field order is worse than both being wrong):
+Both dispatch loops now bound the opcode against their handler table. A
+malformed word can carry any of 64 opcodes and only 10..58 have handlers; off
+the end of the table is an indirect call through whatever the linker placed
+next.
 
-- Byteswap each script in place, once, walking to its terminating zero word.
-  `pc_conv_WaitAnimTable` is the right place — `Fighter_WaitAnimData::xC` is
-  the script pointer.
-- Reverse the field order of every command struct under `#if BUILD_TARGET_PC`,
-  padding to 32 bits first where a struct is narrower. There are ~60, in
-  `src/melee/lb/types.h` plus `gmScriptEventDefault` in `src/melee/ft/types.h`,
-  and they mix `u32`, `s32`, `u16` and `u8` base types.
-- **The unsolved part:** `Command_05` (subroutine) is
-  `struct { union CmdUnion* ptr; }` — a raw pointer *inside the script stream*.
-  It is a 4-byte file offset on GameCube and 8 bytes here, so no amount of bit
-  reordering fixes it; it needs a PC-specific accessor that reads four bytes and
-  rebases against the archive, and its target script must be swapped too
-  (recursively, since subroutines nest).
+## `__assert` was declared `noreturn` while the PC stub returns
 
-Treat this as its own milestone rather than a patch.
+Found while chasing the first crash the working scripts exposed, and much larger
+than the script bug: `debug.h` declares `ATTRIBUTE_NORETURN void __assert(...)`,
+which is true on GameCube — it halts. The PC stub deliberately reports and
+**returns**, because archive-conversion asserts fire routinely and halting on
+them would make the port unusable.
+
+GCC believed the declaration. Everything after a firing assert was unreachable,
+so it deleted the rest of the function — including guards written specifically to
+run after the report. Execution then ran off the end of the emitted block into
+whatever the linker had placed next:
+
+```
+00000000004d4f80 <ftAnim_80070458.part.0.isra.0>:
+  ...
+  4d4fad:  call   422550 <__assert>
+  4d4fb2:  nopw                          <- no ret; falls into the next function
+00000000004d4fc0 <pc_figatree_converted>:
+```
+
+That is why "texture no exist!" surfaced as a segfault inside an unrelated
+function's diagnostic. It applied to **every** assert in the PC build, and is a
+strong candidate for other "crashes just after an assert" seen in this port. The
+fix is one declaration, PC-only, in `src/sysdolphin/baselib/debug.h`.
+
+The general lesson matches the port's other signature bug class: a decomp
+declaration that encodes a GameCube *behaviour* is as dangerous as one that
+encodes a GameCube *layout*.
 
 ## Reference harness *(built; use it before judging any renderer change)*
 

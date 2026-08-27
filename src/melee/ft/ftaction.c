@@ -1154,7 +1154,7 @@ void ftAction_80072CD8(Fighter_GObj* gobj, CommandInfo* cmd)
         if (sp64 != -1) {
             _cmd.u = (union CmdUnion*) cmd_words;
             cmd_words[0] = *(u32*) cmd->u;
-            cmd_words[1] = sp64;
+            cmd_words[1] = PC_SCRIPT_W(sp64);
             cmd_words[2] = *(u32*) ((u8*) cmd->u + 8);
             ftAction_80071B50(gobj, &_cmd);
         }
@@ -1214,13 +1214,13 @@ void ftAction_80072E4C(Fighter_GObj* gobj, CommandInfo* cmd)
     {
         _cmd.u = (union CmdUnion*) cmd_words;
         cmd_words[0] = *(u32*) cmd->u;
-        cmd_words[1] = sp64;
+        cmd_words[1] = PC_SCRIPT_W(sp64);
         cmd_words[2] = ((u32*) cmd->u)[2];
         ftAction_80071B50(gobj, &_cmd);
     }
 
     if (gfx_id == -1) {
-        gfx_id = ((u16*) cmd->u)[1];
+        gfx_id = PC_SCRIPT_H(((u16*) cmd->u)[1]);
     }
     offset.z = 0.0f;
     range.z = 0.0f;
@@ -1339,19 +1339,11 @@ void ftAction_80073240(Fighter_GObj* fighter_gobj)
             eventCode =
                 gmScriptEventCast(ftCommand->u, gmScriptEventDefault)->opcode;
 #if BUILD_TARGET_PC
-            /* PC port: subaction scripts are a stream of 32-bit BIG-ENDIAN
-             * words whose top six bits are the opcode -- Melee's documented
-             * event ids (0x2C create-hitbox, 0x0C timer) are the first byte
-             * with the low two bits masked off. Nothing byteswaps that stream,
-             * and the command structs are MSB-first bitfields that x86-64
-             * allocates LSB-first, so every opcode decodes wrong: an attack's
-             * 0x2C create-hitbox reads as 44 and dispatches an unrelated
-             * handler. Attacks never create a hitbox, which is why fighters
-             * can overlap completely and deal no damage.
-             *
-             * MELEE_CMDDUMP=1 dumps the first non-empty script both ways;
-             * MELEE_CMDTRACE=1 logs each dispatched command. See the roadmap
-             * for what a real fix needs. */
+            /* Subaction scripts are read straight out of the big-endian DAT
+             * archive; PC_SCRIPT_BE (lb/types.h) makes the command structs
+             * decode them the way PowerPC did. MELEE_CMDTRACE=1 logs each
+             * dispatched command, MELEE_CMDDUMP=1 dumps the first non-empty
+             * script. */
             if (getenv("MELEE_CMDDUMP") != NULL) {
                 static int dumped;
                 if (!dumped && ftCommand->u != NULL &&
@@ -1362,12 +1354,9 @@ void ftAction_80073240(Fighter_GObj* fighter_gobj)
                     fprintf(stderr, "[CMDDUMP] script at %p\n",
                             (const void*) w);
                     for (k = 0; k < 24; k++) {
-                        u32 be = __builtin_bswap32(w[k]);
-                        fprintf(stderr,
-                                "  [%2d] mem=%08x | correct op=%2u | "
-                                "as-decoded op=%2u\n",
-                                k, w[k], (unsigned) (be >> 26),
-                                (unsigned) (w[k] & 0x3F));
+                        fprintf(stderr, "  [%2d] mem=%08x op=%2u\n", k,
+                                __builtin_bswap32(w[k]),
+                                (unsigned) (__builtin_bswap32(w[k]) >> 26));
                         if (w[k] == 0) break;
                     }
                 }
@@ -1375,13 +1364,19 @@ void ftAction_80073240(Fighter_GObj* fighter_gobj)
             if (getenv("MELEE_CMDTRACE") != NULL) {
                 static int cn;
                 if (cn < 400) {
-                    u32 w = *(const u32*) ftCommand->u;
                     cn++;
-                    fprintf(stderr,
-                            "[CMD] mem=%08x correct_op=%u as_decoded_op=%u\n",
-                            w, (unsigned) (__builtin_bswap32(w) >> 26),
+                    fprintf(stderr, "[CMD] mem=%08x op=%u\n",
+                            __builtin_bswap32(*(const u32*) ftCommand->u),
                             eventCode);
                 }
+            }
+            /* A malformed word can carry any of 64 opcodes; only 10..58 have
+             * handlers. Off the end of the table is an indirect call through
+             * whatever follows it, so stop the script instead. */
+            if (eventCode >= 0xA + ARRAY_SIZE(ftAction_803C06E8)) {
+                port_guard_warn("ftaction.c:opcode");
+                ftCommand->u = NULL;
+                break;
             }
 #endif
             if (Command_Execute((CommandInfo*) ftCommand, eventCode) == false)
@@ -1422,6 +1417,14 @@ void ftAction_80073354(Fighter_GObj* gobj)
                 float timer = cmd->timer;
                 eventCode =
                     gmScriptEventCast(cmd->u, gmScriptEventDefault)->opcode;
+#if BUILD_TARGET_PC
+                /* Same table-overrun guard as ftAction_80073240. */
+                if (eventCode >= 0xA + ARRAY_SIZE(ftAction_803C07AC)) {
+                    port_guard_warn("ftaction.c:throw-opcode");
+                    cmd->u = NULL;
+                    break;
+                }
+#endif
                 if (Command_Execute(cmd, eventCode) == false) {
                     eventCode -= 0xA;
                     ftAction_803C07AC[eventCode](gobj, (CommandInfo*) cmd);

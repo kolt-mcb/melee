@@ -4,6 +4,10 @@
 #include "lb/lbbgflash.h"
 #include "lb/types.h"
 
+#if BUILD_TARGET_PC
+void* pc_script_target(const void* cur, u32 off);
+#endif
+
 void (*lbCommand_803B9840[16])(CommandInfo*) = {
     Command_00, Command_01, Command_02, Command_03, Command_04, Command_05,
     Command_06, Command_07, Command_08, Command_09, NULL,       NULL,
@@ -87,9 +91,20 @@ void Command_04(CommandInfo* info)
 /// Subroutine
 void Command_05(CommandInfo* info)
 {
+#if BUILD_TARGET_PC
+    /* The jump target is an unrelocated archive offset here, not a pointer.
+     * A target that resolves to nothing ends the script instead of jumping
+     * into unmapped memory. */
+    union CmdUnion* dst =
+        pc_script_target(info->u, info->u->Command_05.off);
+    NEXT_CMD(info);
+    info->event_return[info->loop_count++] = info->u;
+    info->u = dst;
+#else
     NEXT_CMD(info);
     info->event_return[info->loop_count++] = info->u + 1;
     info->u = info->u->Command_05.ptr;
+#endif
 }
 
 /// Return
@@ -101,8 +116,12 @@ void Command_06(CommandInfo* info)
 /// Goto
 void Command_07(CommandInfo* info)
 {
+#if BUILD_TARGET_PC
+    info->u = pc_script_target(info->u, info->u->Command_07.off);
+#else
     NEXT_CMD(info);
     info->u = info->u->Command_07.ptr;
+#endif
 }
 
 /// SetTimerAnimation

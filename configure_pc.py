@@ -113,7 +113,7 @@ SAN_FLAGS = " -fsanitize=address -fno-omit-frame-pointer" if ASAN else ""
 OPT = "-O1" if ASAN else "-O2"
 if ASAN:
     OUT_DIR = BUILD / "pc-asan"
-CFLAGS = "-m64 -Wno-unused -Wno-builtin-declaration-mismatch -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1"
+CFLAGS = "-m64 -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1"
 LDFLAGS = "-m64 -no-pie" + SAN_FLAGS
 LIBS = "-lSDL2 -lGL -lpthread -ldl -lm -lc -lstdc++"
 out_objs = " ".join(str(OUT_DIR/"obj"/(Path(s).stem+".o")) for s in ALL_SOURCES)
