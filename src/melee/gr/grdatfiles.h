@@ -44,6 +44,8 @@ LightList** grDatFiles_ConvertLightListGCNtoX64(const u8* gcnPtr, u8* dataBase);
 HSD_FogDesc* grDatFiles_ConvertFogDescGCNtoX64(const u8* gcnPtr, u8* dataBase);
 /* PC port: resolve POBJ_SKIN PObjDesc -> joint refs after converting joint trees. */
 void grDatFiles_ResolvePObjJoints(void);
+struct MapCollData* grDatFiles_ConvertMapCollDataGCNtoX64(const u8* raw,
+                                                          u8* dataBase);
 void grDatFiles_ResetJointMap(void);
 #endif /* BUILD_TARGET_PC */
 

@@ -1,3 +1,6 @@
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 #include "ft_0899.h"
 
 #include "math.h"
@@ -93,7 +96,18 @@ void ft_80089B08(Fighter_GObj* gobj)
     (void) &line_len_sqrt;
 
     if (!fp->x2219_b5 && fp->ground_or_air == GA_Ground) {
-        if (db_804D4AF8 != 0) {
+#if BUILD_TARGET_PC
+        /* PC port: ft_data->x58 drives the leg-IK that plants feet on sloped
+         * ground, and pc_conv_ftData still leaves it NULL. This block only
+         * runs while a fighter is standing, so it first became reachable the
+         * moment stage collision started working -- before that nobody was
+         * ever grounded. Feet stay unplanted; the fighter still stands. */
+        if (db_804D4AF8 != 0 && pc_ptr_sane(fp->ft_data) &&
+            pc_ptr_sane(fp->ft_data->x58))
+#else
+        if (db_804D4AF8 != 0)
+#endif
+        {
             f32 scale_y = fp->x34_scale.y;
             ik.len0 = ((ftData_x58_t*) fp->ft_data->x58)->x4 * scale_y;
             ik.len1 = scale_y * (((ftData_x58_t*) fp->ft_data->x58)->xC +

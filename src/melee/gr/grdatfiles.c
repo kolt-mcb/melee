@@ -1,3 +1,4 @@
+#include <melee/mp/types.h>
 #include "grdatfiles.h"
 
 #include "ground.h"
@@ -884,6 +885,132 @@ static void grdat_resolve_pobj_joints(void)
 /* PC port: public wrapper so the title loader (gmtitle.c) can resolve POBJ_SKIN
  * PObjDesc -> joint refs after converting its joint trees directly (the title
  * bypasses the archive/stage converter). */
+/* PC port: convert the stage's collision data.
+ *
+ * stage_info.coll_data is taken straight out of the archive by public symbol,
+ * so it is still GCN-packed big-endian -- grGroundParam right beside it gets a
+ * field-wise byteswap and this never did. mpLibLoad was therefore gated behind
+ * MELEE_STAGE_COLL, and with collision disabled fighters have no ground to
+ * stand on, which is the single thing keeping the port from being playable.
+ *
+ * Only MapCollData itself changes shape: it holds three pointers, so it grows
+ * from 0x30 to 0x40. MapLine (0x10), MapJoint (0x28) and Vec2 (0x08) have
+ * identical GCN and x86_64 layouts, so those arrays are byteswapped in place
+ * in the archive and the rebuilt header just points at them. In-place means
+ * this must run exactly once per archive; a second pass would swap them back.
+ */
+MapCollData* grDatFiles_ConvertMapCollDataGCNtoX64(const u8* raw, u8* dataBase)
+{
+    static const u8* converted[16];
+    static int converted_n;
+    MapCollData* out;
+    u32 verts_off, lines_off, joints_off;
+    int i, j;
+
+    if (raw == NULL || dataBase == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < converted_n; i++) {
+        if (converted[i] == raw) {
+            /* Already swapped in place; rebuild the header only. */
+            break;
+        }
+    }
+    {
+        int already = (i < converted_n);
+        if (!already && converted_n < 16) {
+            converted[converted_n++] = raw;
+        }
+
+        out = lbHeap_80015BD0(0, sizeof(MapCollData));
+        if (out == NULL) {
+            return NULL;
+        }
+        memset(out, 0, sizeof(MapCollData));
+
+        verts_off  = be32_swap(*(const u32*) (raw + 0x00));
+        out->vert_count = (int) be32_swap(*(const u32*) (raw + 0x04));
+        lines_off  = be32_swap(*(const u32*) (raw + 0x08));
+        out->line_count = (int) be32_swap(*(const u32*) (raw + 0x0C));
+        out->floor_start      = (s16) be16_swap(*(const u16*) (raw + 0x10));
+        out->floor_count      = (s16) be16_swap(*(const u16*) (raw + 0x12));
+        out->ceiling_start    = (s16) be16_swap(*(const u16*) (raw + 0x14));
+        out->ceiling_count    = (s16) be16_swap(*(const u16*) (raw + 0x16));
+        out->right_wall_start = (s16) be16_swap(*(const u16*) (raw + 0x18));
+        out->right_wall_count = (s16) be16_swap(*(const u16*) (raw + 0x1A));
+        out->left_wall_start  = (s16) be16_swap(*(const u16*) (raw + 0x1C));
+        out->left_wall_count  = (s16) be16_swap(*(const u16*) (raw + 0x1E));
+        out->dynamic_start    = (s16) be16_swap(*(const u16*) (raw + 0x20));
+        out->dynamic_count    = (s16) be16_swap(*(const u16*) (raw + 0x22));
+        joints_off = be32_swap(*(const u32*) (raw + 0x24));
+        out->joint_count = (int) be32_swap(*(const u32*) (raw + 0x28));
+        out->x2C = (int) be32_swap(*(const u32*) (raw + 0x2C));
+
+        if (out->vert_count < 0 || out->vert_count > 0x4000) out->vert_count = 0;
+        if (out->line_count < 0 || out->line_count > 0x4000) out->line_count = 0;
+        if (out->joint_count < 0 || out->joint_count > 0x100) out->joint_count = 0;
+
+        if (verts_off != 0 && out->vert_count > 0) {
+            u32* v = (u32*) (dataBase + verts_off);
+            out->verts = (Vec2*) v;
+            if (!already) {
+                for (j = 0; j < out->vert_count * 2; j++) v[j] = be32_swap(v[j]);
+            }
+        }
+        if (lines_off != 0 && out->line_count > 0) {
+            u16* l = (u16*) (dataBase + lines_off);
+            out->lines = (MapLine*) l;
+            if (!already) {
+                for (j = 0; j < out->line_count * 8; j++) l[j] = be16_swap(l[j]);
+            }
+        }
+        if (joints_off != 0 && out->joint_count > 0) {
+            u8* jb = dataBase + joints_off;
+            out->joints = (MapJoint*) jb;
+            if (!already) {
+                for (j = 0; j < out->joint_count; j++) {
+                    u8* e = jb + (size_t) j * 0x28;
+                    int k;
+                    /* 0x00..0x13: ten s16 indices. 0x14..0x23: four f32
+                     * bounds. 0x24..0x27: two more s16. */
+                    for (k = 0; k < 0x14; k += 2) {
+                        u16* h = (u16*) (e + k);
+                        *h = be16_swap(*h);
+                    }
+                    for (k = 0x14; k < 0x24; k += 4) {
+                        u32* w = (u32*) (e + k);
+                        *w = be32_swap(*w);
+                    }
+                    for (k = 0x24; k < 0x28; k += 2) {
+                        u16* h = (u16*) (e + k);
+                        *h = be16_swap(*h);
+                    }
+                }
+            }
+        }
+    }
+
+    if (getenv("MELEE_GRDAT_TRACE")) {
+        int q;
+        fprintf(stderr,
+                "[GRDAT] coll_data: verts=%d lines=%d joints=%d "
+                "floor=%d/%d\n",
+                out->vert_count, out->line_count, out->joint_count,
+                out->floor_start, out->floor_count);
+        for (q = 0; q < out->vert_count && q < 6; q++) {
+            fprintf(stderr, "[GRDAT]   v%d=(%.1f,%.1f)\n", q,
+                    (double) out->verts[q].x, (double) out->verts[q].y);
+        }
+        for (q = 0; q < out->line_count && q < 6; q++) {
+            fprintf(stderr, "[GRDAT]   l%d: v%u->v%u flags=%04x/%04x\n", q,
+                    out->lines[q].v0_idx, out->lines[q].v1_idx,
+                    out->lines[q].hi_flags, out->lines[q].lo_flags);
+        }
+        fflush(stderr);
+    }
+    return out;
+}
+
 void grDatFiles_ResolvePObjJoints(void)
 {
     grdat_resolve_pobj_joints();
@@ -2205,6 +2332,19 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
         if (arg1 == 0) {
             stage_info.coll_data =
                 HSD_ArchiveGetPublicAddress(sp14, "coll_data");
+#if BUILD_TARGET_PC
+            /* PC port: that pointer is raw big-endian archive data. Convert
+             * it, or mpLibLoad reads garbage counts and indexes wildly --
+             * which is why collision was gated off, and why fighters had no
+             * ground. */
+            if (stage_info.coll_data != NULL && sp14 != NULL &&
+                sp14->data != NULL)
+            {
+                stage_info.coll_data =
+                    grDatFiles_ConvertMapCollDataGCNtoX64(
+                        (const u8*) stage_info.coll_data, sp14->data);
+            }
+#endif
             stage_info.param =
                 HSD_ArchiveGetPublicAddress(sp14, "grGroundParam");
 #if BUILD_TARGET_PC
@@ -2263,6 +2403,14 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
                 HSD_ArchiveGetPublicAddress(sp14, "map_plit");
             stage_info.quake_model_set =
                 HSD_ArchiveGetPublicAddress(sp14, "quake_model_set");
+#if BUILD_TARGET_PC
+            /* PC port: raw big-endian like itemdata and ald_yaku_all, which
+             * are already nulled for the same reason. grLib_801C9CEC walks
+             * its ->joint and ->anims[] as native pointers; those are 4-byte
+             * file offsets. Reached as soon as fighter physics started
+             * running. Screen-shake models are not needed to play. */
+            stage_info.quake_model_set = NULL;
+#endif
         }
         temp_r3->unk0 = sp14;
         if (stage_info.map_ptcl != NULL && stage_info.map_texg != NULL) {
