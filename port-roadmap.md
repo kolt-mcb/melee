@@ -195,6 +195,46 @@ Still off: the **magnifier** (the off-screen player indicator). It is driven by
 stay out of the build for the same reason: undecompiled `.data` plus the
 unbuilt `ty/` trophy system.
 
+## Character rigging: everything above the waist is right, the legs are not
+
+Textures are fine -- hat, face, moustache, glove and overall materials all read
+correctly. The head, arms and torso deform correctly. **The legs collapse**, with
+one shoe stretched sideways out of the hip.
+
+Measured, not assumed. Ruled out, each with a number:
+
+| hypothesis | measurement |
+|---|---|
+| envelopes fail to resolve | 379 resolved, **0 failed** |
+| envelope weights do not sum to 1 | every blend sums to **1.0000** |
+| `envelopemtx` missing on the weight-1 path | **0** of 20000 were NULL |
+| more than 10 envelopes per PObj (GX slot limit) | longest list is **10** |
+| per-vertex `PNMTXIDX` not read per vertex | it is; indices vary (0, 6, 9, ...) |
+| Euler convention wrong | `HSD_MtxSRT` is exactly `Rz*Ry*Rx`, verified numerically (max diff 0.0) |
+| hip rotation wrong | euler (-pi/2, 0, -pi/2) maps the bone's +X to **(0,-1,0)** -- straight down, correct |
+| skeleton asymmetric or malformed | hips at x = +1.119 / -1.117, arms at +-0.858; chains symmetric |
+| skinning not actually running | forcing the rigid fallback (`MELEE_NO_SKIN=1`) collapses the whole model, so it is |
+
+One real bug found on the way: the joint map keys on offsets **relative to each
+archive's base**, and `grdat_jointmap_find` returns the first match, so entries
+left from a previously converted archive can capture a later model's envelope
+lookups. `ftdata.c` resets before every costume model; `pc_ftconv_joint` did
+not, and neither did the stage-test harness -- the resolve stats show it
+(`map=193` = 132 stage joints + 61 fighter joints, against `map=61` on the
+correct path). Both now reset.
+
+Diagnostics added, all env-gated:
+`MELEE_FT_JOINTS=1` dumps the skeleton (index, depth, translation, scale,
+quaternion, whether the joint carries a DObj or an envelope matrix);
+`MELEE_NO_SKIN=1` forces every envelope to the rigid fallback;
+`MELEE_ENV_STATS=1` reports resolve counts, weight sums and envelope-list
+lengths.
+
+Next place to look: which joints the *leg* mesh's envelopes actually bind to.
+Everything about the skeleton and the blend is verified correct, so the
+remaining suspect is the binding itself -- dump each leg PObj's envelope
+targets and compare against joints 47-58.
+
 ## Weak function stubs standing in for DATA symbols
 
 412 data symbols are satisfied by weak *function* stubs, so `&symbol` is a code

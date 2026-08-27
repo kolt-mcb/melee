@@ -130,8 +130,17 @@ void* pc_ftconv_joint(void* raw)
     for (i = 0; i < pc_ftconv_arch_n; i++) {
         const u8* b = pc_ftconv_arch[i].base;
         if (p > b && (unsigned long) (p - b) < pc_ftconv_arch[i].len) {
-            void* conv = grDatFiles_ConvertJointTreeGCNtoX64(p, (u8*) b, 0,
-                                                             NULL);
+            void* conv;
+            /* The joint map keys on offsets relative to *each archive's* base,
+             * and grdat_jointmap_find returns the first match -- so entries
+             * left over from a previously converted archive can capture this
+             * tree's envelope lookups and bind its mesh to another model's
+             * joints. ftdata.c resets before converting a costume model for
+             * exactly this reason; this path did not, and the resolve stats
+             * showed it (map=193 = 132 stage joints + 61 fighter joints,
+             * against map=61 on the ftdata.c path). */
+            grDatFiles_ResetJointMap();
+            conv = grDatFiles_ConvertJointTreeGCNtoX64(p, (u8*) b, 0, NULL);
             grDatFiles_ResolvePObjJoints();
             if (cache_n < PC_FTCONV_JOINT_CACHE) {
                 cache[cache_n].raw = raw;
