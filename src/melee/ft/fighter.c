@@ -800,6 +800,14 @@ void Fighter_UnkUpdateVecFromBones_8006876C(Fighter* fp)
 
 void Fighter_ResetInputData_80068854(Fighter_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ANIMLOG") != NULL) {
+        static unsigned long rn;
+        if (++rn % 101 == 0) {
+            fprintf(stderr, "[INPUT]   RESET called #%lu\n", rn);
+        }
+    }
+#endif
     Fighter* fp = GET_FIGHTER(gobj);
 
     fp->input.lstick.x = fp->input.lstick.y = fp->input.lstick1.x =
@@ -1945,7 +1953,7 @@ void Fighter_8006A360(Fighter_GObj* gobj)
 #if BUILD_TARGET_PC
             if (getenv("MELEE_ANIMLOG") != NULL) {
                 static unsigned long n;
-                if (++n % 200 == 0) {
+                if (++n % 101 == 0) {
                     fprintf(stderr, "[TICK] anim path reached #%lu\n", n);
                 }
             }
@@ -2047,6 +2055,20 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     float tempf1;
     float tempf0;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ANIMLOG") != NULL) {
+        static unsigned long sn;
+        if (++sn % 101 == 0) {
+            fprintf(stderr,
+                    "[INPUT] spaghetti #%lu p%d b3=%d b2=%d cpu=%d "
+                    "deadzone x0=%.4f x4=%.4f x10=%.4f\n", sn,
+                    (int) fp->player_id, (int) fp->x221F_b3,
+                    (int) fp->x2224_b2, (int) ftCo_800A2040(fp),
+                    (double) p_ftCommonData->x0, (double) p_ftCommonData->x4,
+                    (double) p_ftCommonData->x10);
+        }
+    }
+#endif
 
     if (!fp->x221F_b3) {
         if (!fp->x2224_b2) {
@@ -2122,6 +2144,19 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
             if (fp->input.x650 <= p_ftCommonData->x10) {
                 fp->input.x650 = 0.0f;
             }
+#if BUILD_TARGET_PC
+            if (getenv("MELEE_INPUT_DUMP") != NULL) {
+                static unsigned long dn;
+                if (++dn > 0) {
+                    fprintf(stderr,
+                            "[INPUT]   post-clamp p%d fp=%p "
+                            "lstick=(%.2f,%.2f)\n",
+                            (int) fp->player_id, (void*) fp,
+                            (double) fp->input.lstick.x,
+                            (double) fp->input.lstick.y);
+                }
+            }
+#endif
 
             if (ftCo_800A2040(fp)) {
                 fp->input.held_inputs = ftCo_800A198C(fp);
@@ -2354,6 +2389,19 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
             }
         }
 
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_INPUT_DUMP") != NULL) {
+            static unsigned long wn;
+            static int last_b4 = -1;
+            if (++wn <= 6 || (int) fp->x221D_b4 != last_b4) {
+                fprintf(stderr,
+                        "[INPUT]   wipe? #%lu p%d b4=%d b2=%d gm2=%d\n", wn,
+                        (int) fp->player_id, (int) fp->x221D_b4,
+                        (int) fp->x2224_b2, (int) gm_801A45E8(2));
+                last_b4 = (int) fp->x221D_b4;
+            }
+        }
+#endif
         if (fp->x221D_b4 || fp->x2224_b2 || gm_801A45E8(2)) {
             fp->input.x630 = fp->input.lstick.x;
             fp->input.x634 = fp->input.lstick.y;
@@ -2392,9 +2440,9 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
 void Fighter_procUpdate(Fighter_GObj* gobj)
 {
 #if BUILD_TARGET_PC
-    if (getenv("MELEE_ANIMLOG") != NULL) {
+    if (getenv("MELEE_INPUT_DUMP") != NULL) {
         static unsigned long n;
-        if (++n % 200 == 0) {
+        if (++n > 0) {
             Fighter* f = GET_FIGHTER(gobj);
             fprintf(stderr,
                     "[TICK] #%lu p%d anim_id=%d frame=%.2f motion=%d "
@@ -2413,6 +2461,19 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                     (void*) f->phys_cb, (void*) f->anim_cb,
                     (double) f->co_attrs.grav,
                     (double) f->co_attrs.terminal_vel, (void*) f->x24);
+            fprintf(stderr,
+                    "[TICK]     fp=%p lstick=(%.2f,%.2f) held=0x%x "
+                    "pressed=0x%x | pid=%d pad0=(%.2f,%.2f) padN=(%.2f,%.2f) "
+                    "btn=0x%x\n", (void*) f,
+                    (double) f->input.lstick.x, (double) f->input.lstick.y,
+                    (unsigned) f->input.held_inputs,
+                    (unsigned) f->input.x668,
+                    (int) f->x618_player_id,
+                    (double) HSD_PadGameStatus[0].nml_stickX,
+                    (double) HSD_PadGameStatus[0].nml_stickY,
+                    (double) HSD_PadGameStatus[f->x618_player_id].nml_stickX,
+                    (double) HSD_PadGameStatus[f->x618_player_id].nml_stickY,
+                    (unsigned) HSD_PadGameStatus[f->x618_player_id].button);
         }
     }
 #endif
