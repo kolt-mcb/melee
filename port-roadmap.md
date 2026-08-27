@@ -123,6 +123,59 @@ emulation for settings/unlocks, config (keybinds, resolution), pause menu.
 - Every renderer fix is validated against a Dolphin capture, not eyeballs.
 - Diagnostics stay env-gated; prune dead ones at each milestone.
 
+## Reference harness *(built; use it before judging any renderer change)*
+
+`tools/pc_ref_compare.py` compares port frames against the real game running
+under Dolphin. It exists because every other harness here — `pc_char_probe.sh`,
+`pc_stage_probe.sh` — answers "did it run", and a wrong TEV stage, a swapped
+texture format or an inverted matrix never crashes.
+
+```
+tools/pc_ref_compare.py --from 300 --to 340 \
+    --ref-mode 14 --env MELEE_BOOT_MODE=14 --env MELEE_BOOT_MATCH=8,8,32 \
+    --search -1 --outdir /tmp/pc_ref
+# then, for every subsequent run against the same scene:
+tools/pc_ref_compare.py --from 300 --to 340 --reuse-ref --outdir /tmp/pc_ref
+```
+
+It reports mean absolute difference, percentage of pixels within tolerance,
+and a **signed per-channel bias** — the last is the one that matters here,
+because a uniform negative delta across all three channels is the
+everything-too-dark signature and is invisible in an absolute difference.
+Composites land in `<outdir>/composite/cmp_<frame>.png` as port | Dolphin |
+heatmap.
+
+Three things worth knowing before trusting a number:
+
+- **The two timelines do not share frame numbering.** The port boots straight
+  into a scene; Dolphin plays the intro and title first. The tool aligns on one
+  anchor frame and prints the offset it chose; `--search -1` searches every
+  captured reference frame, which is what you want the first time. If it warns
+  that the best offset sits at the edge of the search window, widen it before
+  believing anything.
+- **Check a composite before acting on a bias figure.** The first run of this
+  tool reported the port as 39 levels too dark when it had in fact drawn
+  nothing at all. NO-CONTENT and MISMATCH verdicts now fire before any
+  statement about colour, but the composite is still the ground truth.
+- **Reference captures are slow** — headless Dolphin with PNG dumping runs at
+  about 5–6 emulated fps, and the debug-VS scene only begins after the intro
+  and title, several thousand frames in. Capture once, then `--reuse-ref`.
+
+Getting Dolphin onto the same scene is done with `MELEE_REF_MODE=<GameModeKind>`
+(wired through as `--ref-mode`), which writes a Gecko patch forcing the game's
+boot routing — the Dolphin-side twin of the port's `MELEE_BOOT_MODE`. It
+patches the argument setup in `gm_801BF920` and the store in
+`gm_ChangeGameModeAfterCurrentScene`, so the mode takes effect at the title's
+scene transition rather than at power-on. The repo's Dolphin INI already
+carried a "Boot to CSS" code writing `0x0202` (`GM_VS`) through those same two
+instructions; this generalises it.
+
+Known gap: the port's **default** boot (no `MELEE_BOOT_MODE`) currently renders
+a flat grey quad — 100 identical draws per frame, zero detail — so the opening
+cinematic is not usable as a shared scene even though it would otherwise be the
+ideal one: deterministic, input-free, and rich in textures, lighting and fog.
+Fixing that boot path would make the cheapest possible reference available.
+
 ## Sequencing
 
 ```
