@@ -61,11 +61,29 @@ DOLPHIN_REF = os.path.join(REPO, "tools", "dolphin_ref.sh")
 CMP_SIZE = (640, 480)
 
 
-def load(path):
-    im = Image.open(path).convert("RGB")
-    if im.size != CMP_SIZE:
-        im = im.resize(CMP_SIZE, Image.BILINEAR)
+# Alignment compares many candidate pairs, so it works on thumbnails; the
+# reported metrics are always computed at CMP_SIZE.
+ALIGN_SIZE = (160, 120)
+
+_cache = {}
+
+
+def load(path, size=CMP_SIZE):
+    key = (path, size)
+    im = _cache.get(key)
+    if im is None:
+        im = Image.open(path).convert("RGB")
+        if im.size != size:
+            im = im.resize(size, Image.BILINEAR)
+        _cache[key] = im
     return im
+
+
+def quick_diff(a, b):
+    """Mean absolute difference on thumbnails -- used only for alignment."""
+    d = ImageChops.difference(a, b)
+    px = list(d.getdata())
+    return sum(sum(p) for p in px) / (3.0 * len(px))
 
 
 def detail(im):
@@ -219,7 +237,7 @@ def main():
 
     # --- align the two timelines on one anchor frame -----------------------
     anchor = sorted(ports)[len(ports) // 2]
-    anchor_im = load(ports[anchor])
+    anchor_im = load(ports[anchor], ALIGN_SIZE)
     best = (None, 1e9)
     if a.search < 0:
         # Global search: try every reference frame we have. Use this when the
@@ -231,7 +249,7 @@ def main():
         r = refs.get(cand)
         if r is None:
             continue
-        mean, _, _ = compare(anchor_im, load(r), a.tol)
+        mean = quick_diff(anchor_im, load(r, ALIGN_SIZE))
         if mean < best[1]:
             best = (cand - anchor, mean)
     offset = best[0]
