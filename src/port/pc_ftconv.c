@@ -192,6 +192,43 @@ static void* pc_off_to_ptr(u32 off, const u8* base, unsigned long len)
     return (void*) (base + off);
 }
 
+/* FtSFXArr: { int num; int* sfx_ids; } -- a list of sound ids the damage
+ * reaction picks from at random. Both fields widen, and the id array is a
+ * plain big-endian int array that only needs rebasing and swapping.
+ * LEN: num is the array length, bounded here so a garbage count cannot turn
+ * a bad read into a large allocation. */
+static FtSFXArr* pc_conv_SFXArr(u32 off, const u8* base, unsigned long len)
+{
+    FtSFXArr* out;
+    int n, i;
+    u32 ids_off;
+
+    if (off == 0 || off + 8u > len) {
+        return NULL;
+    }
+    n = (int) pc_be32(*(const u32*) (base + off + 0));
+    ids_off = pc_be32(*(const u32*) (base + off + 4));
+    if (n <= 0 || n > 64 || ids_off == 0 ||
+        ids_off + (u32) n * 4u > len)
+    {
+        return NULL;
+    }
+    out = pc_lowmem_alloc(sizeof(FtSFXArr));
+    if (out == NULL) {
+        return NULL;
+    }
+    out->num = n;
+    out->sfx_ids = pc_lowmem_alloc(sizeof(int) * (unsigned long) n);
+    if (out->sfx_ids == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < n; i++) {
+        out->sfx_ids[i] =
+            (int) pc_be32(*(const u32*) (base + ids_off + (u32) i * 4u));
+    }
+    return out;
+}
+
 /* ftCo_DatAttrs: 0x184 bytes of float/int/Vec3 with a trailing u8 and NO
  * pointers, so GCN and x86_64 layouts are identical. Conversion is a plain
  * 32-bit byteswap of everything up to the final byte. */
@@ -489,14 +526,50 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         FtSFX* sx = pc_lowmem_alloc(sizeof(FtSFX));
         if (sx != NULL) {
             const u32* s = (const u32*) (base + off);
-            int* d = (int*) &sx->x4;
-            int i;
             memset(sx, 0, sizeof(*sx));
-            sx->smash = NULL;
-            for (i = 0; i < 13; i++) {
-                d[i] = (int) pc_be32(s[i + 1]);
-            }
+            /* Field n of the GCN struct is word n; assign by name because
+             * x1C and x20 are pointers on this side and shift everything
+             * after them. */
+            sx->smash = pc_conv_SFXArr(pc_be32(s[0]), base, len);
+            sx->x4 = (int) pc_be32(s[1]);
+            sx->x8 = (int) pc_be32(s[2]);
+            sx->xC = (int) pc_be32(s[3]);
+            sx->x10 = (int) pc_be32(s[4]);
+            sx->x14 = (int) pc_be32(s[5]);
+            sx->x18 = (int) pc_be32(s[6]);
+            /* +0x1C and +0x20 are FtSFXArr* -- the hit-sound arrays the
+             * damage reaction plays. Left as raw offsets they crashed
+             * ft_800889F4 the first time a fighter actually took a hit. */
+            sx->x1C = pc_conv_SFXArr(pc_be32(s[7]), base, len);
+            sx->x20 = pc_conv_SFXArr(pc_be32(s[8]), base, len);
+            sx->x24 = (int) pc_be32(s[9]);
+            sx->x28 = (int) pc_be32(s[10]);
+            sx->x2C = (int) pc_be32(s[11]);
+            sx->x30 = (int) pc_be32(s[12]);
+            sx->x34 = (int) pc_be32(s[13]);
             out->x4C_sfx = sx;
+        }
+    }
+
+    /* +0x44 ftData_x44_t: six s16 then four floats, no pointers, so the
+     * layout is identical and it only needs rebasing and swapping. Reached
+     * unconditionally by ft_80081DD4 (ledge-snap height) the moment a
+     * fighter is knocked into the air by a hit. */
+    off = pc_be32(*(const u32*) (raw + 0x44));
+    if (off != 0 && off + sizeof(ftData_x44_t) <= len) {
+        ftData_x44_t* x44 = pc_lowmem_alloc(sizeof(ftData_x44_t));
+        if (x44 != NULL) {
+            const u8* r = base + off;
+            u16* h = (u16*) x44;
+            u32* w = (u32*) ((u8*) x44 + 0x0C);
+            int i;
+            for (i = 0; i < 6; i++) {
+                h[i] = (u16) ((r[i * 2] << 8) | r[i * 2 + 1]);
+            }
+            for (i = 0; i < 4; i++) {
+                w[i] = pc_be32(*(const u32*) (r + 0x0C + i * 4));
+            }
+            out->x44 = x44;
         }
     }
 
@@ -742,4 +815,32 @@ void* pc_conv_FigaTree(const u8* raw, const u8* data_base, unsigned long len,
                 out->type, out->flags, (double) out->frames, n_nodes, n_tracks);
     }
     return out;
+}
+
+/* Resolve a subroutine/goto target inside a command script (Command_05 /
+ * Command_07). On GameCube these words are absolute pointers, patched in by
+ * Locate() when the archive loads; that pass is a no-op here, so the word is
+ * still the raw 32-bit offset from the archive's data section. `cur` is the
+ * command being executed, which is itself inside that archive -- look up
+ * whichever registered archive contains it and rebase against that.
+ *
+ * Returns NULL for an unknown archive or an out-of-range offset; the caller
+ * treats that as the end of the script rather than jumping into nothing. */
+void* pc_script_target(const void* cur, u32 off)
+{
+    const u8* p = (const u8*) cur;
+    int i;
+
+    for (i = 0; i < pc_ftconv_arch_n; i++) {
+        const u8* base = pc_ftconv_arch[i].base;
+        unsigned long len = pc_ftconv_arch[i].len;
+        if (p < base || p >= base + len) {
+            continue;
+        }
+        if (off >= len) {
+            return NULL;
+        }
+        return (void*) (base + off);
+    }
+    return NULL;
 }

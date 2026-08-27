@@ -573,8 +573,17 @@ struct FtSFX {
     int x10;
     int x14;
     int x18;
+#if BUILD_TARGET_PC
+    /* These two are FtSFXArr* -- every call site casts them (ft_0D31.c:792,
+     * ftCo_Damage.c:491/498). Leaving them `int` on x86_64 truncates the
+     * converted pointer, and the damage-reaction path then read a hit-sound
+     * array through a 32-bit archive offset. */
+    FtSFXArr* x1C;
+    FtSFXArr* x20;
+#else
     int x1C;
     int x20;
+#endif
     int x24;
     int x28;
     int x2C;
@@ -1856,10 +1865,20 @@ struct Fighter {
 };
 STATIC_ASSERT(sizeof(struct Fighter) == 0x23EC);
 
+/* PC port: read big-endian, MSB-first bitfields -- see PC_SCRIPT_BE in
+ * lb/types.h. Without it the opcode is the wrong six bits of the wrong byte. */
+#ifndef PC_SCRIPT_BE
+#if defined(BUILD_TARGET_PC)
+#define PC_SCRIPT_BE __attribute__((scalar_storage_order("big-endian")))
+#else
+#define PC_SCRIPT_BE
+#endif
+#endif
+
 struct gmScriptEventDefault {
     u32 opcode : 6;
     u32 value1 : 26;
-};
+} PC_SCRIPT_BE;
 
 struct ftData_UnkCountStruct {
     void* data;

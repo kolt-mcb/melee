@@ -563,225 +563,266 @@ struct lbColl_8000A10C_arg0_t {
     Vec3 x14;
 };
 
+/* PC port: subaction/item command scripts are read straight out of the DAT
+ * archive, which is big-endian and packs its bitfields MSB-first the way
+ * PowerPC does. x86-64 does neither, so every command word decoded wrong:
+ * an attack's 0x2C create-hitbox read as opcode 44 and dispatched an
+ * unrelated handler, which is why fighters could overlap and deal no damage.
+ *
+ * GCC's scalar_storage_order attribute fixes both halves at once -- it makes
+ * the struct's scalars load big-endian AND allocates its bitfields MSB-first
+ * -- so the stream stays untouched and the declarations stay identical to
+ * the GameCube ones. Every member of union CmdUnion (and the union itself)
+ * carries it. */
+#ifndef PC_SCRIPT_BE
+#if defined(BUILD_TARGET_PC)
+#define PC_SCRIPT_BE __attribute__((scalar_storage_order("big-endian")))
+#else
+#define PC_SCRIPT_BE
+#endif
+#endif
+
+/* Command scripts are also read raw in a handful of places -- a whole word
+ * copied into a scratch command, a halfword pulled out by pointer cast.
+ * Those bypass PC_SCRIPT_BE, so they need the swap spelled out. */
+#if defined(BUILD_TARGET_PC)
+#define PC_SCRIPT_W(x) ((u32) __builtin_bswap32((u32) (x)))
+#define PC_SCRIPT_H(x) ((u16) __builtin_bswap16((u16) (x)))
+#else
+#define PC_SCRIPT_W(x) (x)
+#define PC_SCRIPT_H(x) (x)
+#endif
+
 struct Command_00 {
     u32 code : 6;
     u32 value : 26;
-};
+} PC_SCRIPT_BE;
 struct Command_02 {
     u32 code : 6;
     u32 value : 26;
-};
+} PC_SCRIPT_BE;
 struct Command_03 {
     u32 code : 6;
     u32 value : 26;
-};
+} PC_SCRIPT_BE;
 struct Command_04 {
     u32 x;
-};
+} PC_SCRIPT_BE;
 struct Command_05 {
+#if defined(BUILD_TARGET_PC)
+    /* Unrelocated 32-bit archive offset -- Locate() is a no-op on PC, and a
+     * real 8-byte pointer here would double sizeof(union CmdUnion) and make
+     * NEXT_CMD step two words at a time. Resolve with pc_script_target(). */
+    u32 off;
+#else
     union CmdUnion* ptr;
-};
+#endif
+} PC_SCRIPT_BE;
 struct Command_07 {
+#if defined(BUILD_TARGET_PC)
+    u32 off;
+#else
     union CmdUnion* ptr;
-};
+#endif
+} PC_SCRIPT_BE;
 struct Command_09 {
     u32 id : 6;
     u32 param_1 : 8;
     u32 param_2 : 18;
-};
+} PC_SCRIPT_BE;
 struct unk0 {
     u32 opcode : 6; ///< Bits 0~5
     u32 unk1 : 8;   ///< Bits 6~13
     u32 unk2 : 18;  ///< Bits 14~31
-};
+} PC_SCRIPT_BE;
 struct unk1 {
     u32 opcode : 6; ///< Bits 0~5
     u32 unk0 : 2;   ///< Bits 6~7
     u32 unk1 : 4;   ///< Bits 8~11
     u32 unk2 : 1;   ///< Bit 12
-};
+} PC_SCRIPT_BE;
 struct set_throw_flags {
     u32 opcode : 6;   ///< Bits 0~5
     u32 hit_idx : 26; ///< Bits 6~31
-};
+} PC_SCRIPT_BE;
 struct unk3 {
     s32 unk0 : 7;  ///< Bits 0~6
     s32 unk1 : 25; ///< Bits 7~31
-};
+} PC_SCRIPT_BE;
 struct unk4 {
     u16 opcode : 6; ///< Bits 0~5
     u16 unk1 : 8;   ///< Bits 6~13
-};
+} PC_SCRIPT_BE;
 struct unk5 {
     s32 unk0 : 14; ///< Bits 0~13
     s32 unk1 : 18; ///< Bits 14~31
-};
+} PC_SCRIPT_BE;
 struct unk6 {
     u8 opcode : 6; ///< Bits 0~5
     u8 unk1 : 1;   ///< Bit 6
-};
+} PC_SCRIPT_BE;
 struct set_airborne_state {
     u32 opcode : 6; ///< Bits 0~5
     u32 state : 26; ///< Bits 6~31
-}; ///< #ftAction_80071998
+} PC_SCRIPT_BE; ///< #ftAction_80071998
 struct unk8 {
     int unk0;
-};
+} PC_SCRIPT_BE;
 struct part_anim {
     s32 opcode : 6;
     s32 unk1 : 7;
     s32 unk2 : 7;
     u32 unk3 : 12;
-};
+} PC_SCRIPT_BE;
 struct unk9 {
     s32 unk0 : 6;
     u32 unk1 : 13;
     u32 unk2 : 13;
-};
+} PC_SCRIPT_BE;
 struct unk10 {
     s32 unk0 : 6;
     u32 unk1 : 1;
     u32 unk2 : 12;
     u32 unk3 : 13;
-};
+} PC_SCRIPT_BE;
 struct unk11 {
     s32 unk0 : 6;
     u32 unk1 : 26;
-};
+} PC_SCRIPT_BE;
 struct unk12 {
     u32 unk0 : 6;
     u32 unk1 : 2;
     u32 unk2 : 10;
     u32 unk3 : 14;
-};
+} PC_SCRIPT_BE;
 struct unk13 {
     u32 unk0 : 6;
     u32 unk1 : 8;
     u32 unk2 : 18;
-};
+} PC_SCRIPT_BE;
 struct unk14 {
     u32 unk0 : 6;
     u32 unk1 : 8;
-};
+} PC_SCRIPT_BE;
 struct unk15 {
     u32 unk0 : 6;
     u32 unk1 : 26;
-}; ///< #ftAction_80072B14
+} PC_SCRIPT_BE; ///< #ftAction_80072B14
 struct unk16 {
     u32 unk0 : 6;
     s32 unk3 : 1;
     s32 unk4 : 25;
-}; ///< #ftAction_80072B3C
+} PC_SCRIPT_BE; ///< #ftAction_80072B3C
 struct unk17 {
     u32 unk0 : 6;
     s32 unk1 : 26;
-}; ///< #ftAction_80072B94
+} PC_SCRIPT_BE; ///< #ftAction_80072B94
 struct unk18 {
     u32 unk0 : 6;
     s32 damage_amount : 26;
-}; ///< #ftAction_80072BF4
+} PC_SCRIPT_BE; ///< #ftAction_80072BF4
 struct unk19 {
     u32 unk0 : 6;
     u32 unk1 : 26;
-}; ///< #ftAction_80072C6C
+} PC_SCRIPT_BE; ///< #ftAction_80072C6C
 struct unk20 {
     u32 unk0 : 6;
     u32 unk1 : 26;
-}; ///< #ftAction_80072CB0
+} PC_SCRIPT_BE; ///< #ftAction_80072CB0
 struct unk21 {
     u32 unk0 : 6;
     u32 unk1 : 1;
     u32 unk2 : 8;
-}; ///< #ftAction_800730B8
+} PC_SCRIPT_BE; ///< #ftAction_800730B8
 struct set_hitbox_damage {
     u32 opcdoe : 6;
     u32 idx : 3;
     u32 value : 23;
-}; ///< #ftAction_8007162C
+} PC_SCRIPT_BE; ///< #ftAction_8007162C
 struct set_hitbox_scale {
     u32 opcode : 6;
     u32 idx : 3;
     u32 value : 23;
-}; ///< #ftAction_8007169C
+} PC_SCRIPT_BE; ///< #ftAction_8007169C
 struct set_hitbox_x42_b57 {
     u32 opcode : 6;
     u32 idx : 24;
     u32 type : 1;
     u32 value : 1;
-}; ///< #ftAction_80071708
+} PC_SCRIPT_BE; ///< #ftAction_80071708
 struct set_cmd_var {
     u32 opcode : 6;
     u32 idx : 2;
     u32 value : 24;
-}; ///< #ftAction_80071708
+} PC_SCRIPT_BE; ///< #ftAction_80071708
 struct set_hurt_state {
     u32 opcode : 6;
     u32 bone_idx : 8;
     u32 state : 18;
-}; ///< #ftAction_80071A9C
+} PC_SCRIPT_BE; ///< #ftAction_80071A9C
 struct set_jab_combo {
     u32 opcode : 6;
     u32 disabled : 26;
-}; ///< #ftAction_80071AE8
+} PC_SCRIPT_BE; ///< #ftAction_80071AE8
 struct set_jab_rapid {
     u32 opcode : 6;
     u32 state : 26;
-}; ///< #ftAction_80071B28
+} PC_SCRIPT_BE; ///< #ftAction_80071B28
 struct set_dobj_flags {
     u32 opcode : 6;
     s32 idx : 7;
     s32 value : 19;
-}; ///< #ftAction_80071D40
+} PC_SCRIPT_BE; ///< #ftAction_80071D40
 struct set_throw_hitbox_0 {
     u32 opcode : 6;
     u32 idx : 3;
     u32 damage : 23;
-}; ///< #ftAction_80071E04
+} PC_SCRIPT_BE; ///< #ftAction_80071E04
 struct set_throw_hitbox_1 {
     u32 unk0 : 9;
     u32 hit_x24 : 9;
     u32 hit_x28 : 9;
-}; ///< #ftAction_80071E04
+} PC_SCRIPT_BE; ///< #ftAction_80071E04
 struct set_throw_hitbox_2 {
     u32 hit_x2C : 9;
     u32 element : 4;
     u32 sfx_severity : 3;
     u32 sfx_kind : 4;
-}; ///< #ftAction_80071E04
+} PC_SCRIPT_BE; ///< #ftAction_80071E04
 struct unk27 {
     u32 opcode : 6;
     u32 value : 26;
-}; ///< #ftAction_80071F34
+} PC_SCRIPT_BE; ///< #ftAction_80071F34
 struct set_article_vis {
     u32 opcode : 6;
     u32 value : 26;
-}; ///< #ftAction_80071F78
+} PC_SCRIPT_BE; ///< #ftAction_80071F78
 struct set_fighter_vis {
     u32 opcode : 6;
     u32 value : 26;
-}; ///< #ftAction_80071FA0
+} PC_SCRIPT_BE; ///< #ftAction_80071FA0
 struct set_tex_anim {
     u32 opcode : 6;
     u32 b : 1;
     s32 idx : 7;
     s32 idx2 : 7;
     s32 frame : 11;
-}; ///< #ftAction_800726F4
+} PC_SCRIPT_BE; ///< #ftAction_800726F4
 struct unk31 {
     u32 opcode : 6;
     u32 unk0 : 10;
     u32 unk1 : 16;
-}; ///< #ftAction_80073008
+} PC_SCRIPT_BE; ///< #ftAction_80073008
 struct unk32 {
     u32 opcode : 6;
     u32 unk0 : 13;
     u32 unk1 : 13;
-}; ///< #ftAction_80073008
+} PC_SCRIPT_BE; ///< #ftAction_80073008
 struct unk33 {
     u32 opcode : 6;
     u32 unk0 : 13;
     u32 unk1 : 13;
-}; ///< #it_8027990C
+} PC_SCRIPT_BE; ///< #it_8027990C
 struct spawn_gfx_0 {
     u32 opcode : 6;
     u32 boneId : 8;
@@ -789,23 +830,23 @@ struct spawn_gfx_0 {
     u32 destroyOnStateChange : 1;
     u32 useUnkBone : 1;
     u32 unk1 : 15;
-};
+} PC_SCRIPT_BE;
 struct spawn_gfx_1 {
     u32 gfxID : 16;
     u32 unkFloat : 16;
-};
+} PC_SCRIPT_BE;
 struct spawn_gfx_2 {
     s16 offsetZ : 16;
     s16 offsetY : 16;
-};
+} PC_SCRIPT_BE;
 struct spawn_gfx_3 {
     s16 offsetX : 16;
     u16 rangeZ : 16;
-};
+} PC_SCRIPT_BE;
 struct spawn_gfx_4 {
     u16 rangeY : 16;
     u16 rangeX : 16;
-};
+} PC_SCRIPT_BE;
 struct spawn_hitbox_0 {
     u32 opcode : 6;
     u32 id : 3;
@@ -814,15 +855,15 @@ struct spawn_hitbox_0 {
     u32 bone : 8;
     u32 use_common_bone_ids : 1;
     u32 damage : 10;
-};
+} PC_SCRIPT_BE;
 struct spawn_hitbox_1 {
     u32 size : 16;
     s32 z_offset : 16;
-};
+} PC_SCRIPT_BE;
 struct spawn_hitbox_2 {
     s32 y_offset : 16;
     s32 x_offset : 16;
-};
+} PC_SCRIPT_BE;
 struct spawn_hitbox_3 {
     u32 angle : 9;
     u32 knockback_growth : 9;
@@ -832,7 +873,7 @@ struct spawn_hitbox_3 {
     u32 ignore_fighter_scale : 1;
     u32 clank : 1;
     u32 rebound : 1;
-};
+} PC_SCRIPT_BE;
 struct spawn_hitbox_4 {
     u32 base_knockback : 9;
     u32 element : 5;
@@ -841,7 +882,7 @@ struct spawn_hitbox_4 {
     u32 hit_sfx_kind : 5;
     u32 hit_grounded : 1;
     u32 hit_aerial : 1;
-};
+} PC_SCRIPT_BE;
 struct spawn_hitbox_5 {
     u32 x0 : 8;
     u32 x1_b0 : 1;
@@ -852,14 +893,14 @@ struct spawn_hitbox_5 {
     u32 x1_b5 : 1;
     u32 x1_b6 : 1;
     u32 x1_b7 : 1;
-};
+} PC_SCRIPT_BE;
 struct it_create_hitbox_0 {
     u32 opcode : 6;
     u32 id : 3;
     u32 hit_group : 3;
     u32 bone : 7;
     u32 damage : 13;
-};
+} PC_SCRIPT_BE;
 struct it_create_hitbox_4 {
     u32 base_knockback : 9;
     u32 element : 5;
@@ -869,7 +910,7 @@ struct it_create_hitbox_4 {
     u32 sfx_kind : 4;
     u32 x40_b3 : 1;
     u32 x40_b2 : 1;
-};
+} PC_SCRIPT_BE;
 struct spawn_hitbox_skip {
     u8 _0[0xF];
     u32 xF_b0 : 1;
@@ -877,48 +918,48 @@ struct spawn_hitbox_skip {
     u32 xF_b2 : 1;
     u32 xF_b3 : 1;
     u32 xF_b4 : 1;
-};
+} PC_SCRIPT_BE;
 struct sound_effect_0 {
     u32 opcode : 6;
     u32 behavior : 8;
     u32 unknown : 18;
-};
+} PC_SCRIPT_BE;
 struct sound_effect_1 {
     u32 sfx_id;
-};
+} PC_SCRIPT_BE;
 struct sound_effect_2 {
     u32 padding : 16;
     u32 volume : 8;
     u32 panning : 8;
-};
+} PC_SCRIPT_BE;
 struct pseudo_random_sfx_0 {
     u32 opcode : 6;
     u32 volume : 8;
     u32 panning : 8;
     u32 behavior : 4;
     u32 random_range : 6;
-};
+} PC_SCRIPT_BE;
 struct pseudo_random_sfx_1 {
     u32 sfx_id;
-};
+} PC_SCRIPT_BE;
 struct stage_sfx_0 {
     u32 opcode : 6;
     u32 sfx_base : 10;
     u32 x2_b0_7 : 8;
     u32 pitch_select : 8;
-};
+} PC_SCRIPT_BE;
 struct stage_sfx_1 {
     u32 sfx_id;
-};
+} PC_SCRIPT_BE;
 struct stage_sfx_2 {
     u32 x0_b0_15 : 16;
     u32 x2_b0_15 : 16;
-};
+} PC_SCRIPT_BE;
 struct stage_sfx_3 {
     u32 x0_b0_15 : 16;
     u32 x2_b0_7 : 8;
     u32 x3_b0_7 : 8;
-};
+} PC_SCRIPT_BE;
 struct footstep_fx_0 {
     u32 opcode : 6;
     u32 boneId : 8;
@@ -926,40 +967,40 @@ struct footstep_fx_0 {
     u32 x1_b7 : 1;
     u32 x2_b0_7 : 8;
     u32 x3_b0_7 : 8;
-};
+} PC_SCRIPT_BE;
 struct unk_fx_0 {
     u32 opcode : 6;
     u32 x0_b6_7 : 2;
     u32 x1_b0_7 : 8;
     u32 x2_b0_7 : 8;
     u32 x3_b0_7 : 8;
-};
+} PC_SCRIPT_BE;
 struct smash_charge_0 {
     u32 opcode : 6;
     u32 charge_frames : 10;
     u32 charge_rate : 16;
-};
+} PC_SCRIPT_BE;
 struct smash_charge_1 {
     u32 color_anim : 8;
     u32 x1_b0_23 : 24;
-};
+} PC_SCRIPT_BE;
 struct wind_fx_0 {
     u32 opcode : 6;
     u32 x0_b6_17 : 18;
     u32 bone : 8;
-};
+} PC_SCRIPT_BE;
 struct wind_fx_1 {
     s16 timer : 16;
     s16 x : 16;
-};
+} PC_SCRIPT_BE;
 struct wind_fx_2 {
     s16 y : 16;
     s16 mag : 16;
-};
+} PC_SCRIPT_BE;
 struct wind_fx_3 {
     s16 angle : 16;
     s16 decay : 16;
-};
+} PC_SCRIPT_BE;
 
 struct CommandInfo {
     f32 timer;       // 0x00
@@ -1052,7 +1093,7 @@ struct CommandInfo {
             struct wind_fx_1 wind_fx_1;
             struct wind_fx_2 wind_fx_2;
             struct wind_fx_3 wind_fx_3;
-        }* u;
+        } PC_SCRIPT_BE* u;
     };
     u32 loop_count; // 0x0C
     union CmdUnion*

@@ -1202,6 +1202,16 @@ void ftAnim_80070458(Fighter* fp, CostumeTObjList* tobj_list, u32 tobj_idx,
     if (tobj_idx >= tobj_list->n_costume_tobjs) {
         HSD_ASSERTREPORT(1264, 0, "texture no exist! %d %d\n", fp->player_id,
                          tobj_idx);
+#if BUILD_TARGET_PC
+        /* On GameCube the assert halts; here it only reports, and the read
+         * below then walks off an empty list. Fighter texture-animation
+         * lists are not built yet on PC (n_costume_tobjs is 0), and the
+         * set_tex_anim command only started reaching this function once
+         * subaction opcodes decoded correctly. Skip the animation instead
+         * of crashing. */
+        port_guard_warn("ftanim.c:1264");
+        return;
+#endif
     }
     tobjAnim(&tobj_list->costume_tobjs[tobj_idx], frame);
 }

@@ -38,7 +38,7 @@ typedef struct itAnimlistCmdUnk {
     u16 opcode : 8;
     u16 x0_b14 : 2;
     u16 x2;
-} itAnimlistCmdUnk;
+} PC_SCRIPT_BE itAnimlistCmdUnk;
 
 void it_80278F2C(Item_GObj* item_gobj, CommandInfo* cmd)
 {
@@ -49,20 +49,20 @@ void it_80278F2C(Item_GObj* item_gobj, CommandInfo* cmd)
     s32 arg6;
     PAD_STACK(4);
 
-    arg2 = ((u16*) cmd->u)[0];
+    arg2 = PC_SCRIPT_H(((u16*) cmd->u)[0]);
     arg2 = arg2 & 0x3FF;
     ++cmd->u;
-    arg6 = (f32) ((u16*) cmd->u)[1];
-    ef_id = ((u16*) cmd->u)[0];
+    arg6 = (f32) PC_SCRIPT_H(((u16*) cmd->u)[1]);
+    ef_id = PC_SCRIPT_H(((u16*) cmd->u)[0]);
     ++cmd->u;
-    sp20.x = 0.003906f * ((s16*) cmd->u)[0];
-    sp20.y = 0.003906f * ((s16*) cmd->u)[1];
+    sp20.x = 0.003906f * (s16) PC_SCRIPT_H(((s16*) cmd->u)[0]);
+    sp20.y = 0.003906f * (s16) PC_SCRIPT_H(((s16*) cmd->u)[1]);
     ++cmd->u;
-    sp20.z = 0.003906f * ((s16*) cmd->u)[0];
-    sp14.x = 0.003906f * ((s16*) cmd->u)[1];
+    sp20.z = 0.003906f * (s16) PC_SCRIPT_H(((s16*) cmd->u)[0]);
+    sp14.x = 0.003906f * (s16) PC_SCRIPT_H(((s16*) cmd->u)[1]);
     ++cmd->u;
-    sp14.y = 0.003906f * ((s16*) cmd->u)[0];
-    sp14.z = 0.003906f * ((s16*) cmd->u)[1];
+    sp14.y = 0.003906f * (s16) PC_SCRIPT_H(((s16*) cmd->u)[0]);
+    sp14.z = 0.003906f * (s16) PC_SCRIPT_H(((s16*) cmd->u)[1]);
     ++cmd->u;
     it_80278800(item_gobj, ef_id, arg2, &sp20, &sp14, 0, arg6);
 }
@@ -164,7 +164,7 @@ void it_80279544(Item_GObj* item_gobj, CommandInfo* cmd)
 {
     Item* item = item_gobj->user_data;
     HitCapsule* hit = &item->x5D4_hitboxes[cmd->u->set_hitbox_damage.idx].hit;
-    u32 val = ((u16*) cmd->u)[1] & 0x1FFF;
+    u32 val = PC_SCRIPT_H(((u16*) cmd->u)[1]) & 0x1FFF;
     PAD_STACK(8);
     it_80272460(hit, (u32) (item->xC3C * ((f32) val * item->xC40)), item_gobj);
     ++cmd->u;
@@ -256,7 +256,7 @@ void it_8027978C(Item_GObj* item_gobj, CommandInfo* cmd)
     }
 
 low_opcode:
-    arg1 = *(u32*) cmd->u;
+    arg1 = PC_SCRIPT_W(*(u32*) cmd->u);
     ++cmd->u;
     arg2 = ((u8*) cmd->u)[2];
     arg3 = ((u8*) cmd->u)[3];
