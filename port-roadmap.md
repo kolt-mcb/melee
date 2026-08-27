@@ -160,6 +160,46 @@ malformed word can carry any of 64 opcodes and only 10..58 have handlers; off
 the end of the table is an indirect call through whatever the linker placed
 next.
 
+## Weak stubs that return garbage
+
+`void` weak stubs standing in for functions whose *declarations* return a
+value leave rax/xmm0 holding whatever the previous call left there, so callers
+branch on uninitialised registers and behaviour depends on unrelated code.
+94 such stubs had no strong definition anywhere and a real undefined reference
+from a compiled object; several sit in the combat path (`un_803222EC` feeds a
+float into `ftCo_Damage`, `ifMagnify_802FB6E8` an `s32` into `fighter.c`,
+`ifStock_802F7EFC` and `ifTime_IsTimerHidden` into the match rules). They now
+return zero — a missing subsystem behaves like one that is switched off,
+deterministically. `double` is used where the declaration returns a float so
+the zero lands in xmm0 rather than rax.
+
+To re-run the audit after adding sources to the build: take the weak stubs
+declared `void`, keep those whose header declares a non-void return, drop any
+with a strong definition in `build/pc/obj/*.o`, and keep the rest only if some
+compiled object actually lists them as undefined.
+
+The related shape — a weak stub shadowing a real definition that carries the
+same address comment under a different name — is what hid `gm_8016AE50`
+(`gm_GetRules`) and capped every run with a NULL deref at match teardown. An
+audit across all headers finds exactly one other, `efAsync_Spawn`, and `ef/` is
+deliberately out of the build.
+
+## `ftData::x1C` — the part-animation table *(guarded, not converted)*
+
+`ftAnim_ApplyPartAnim` indexes `fp->ft_data->x1C`, which is still NULL, with a
+value taken straight from a 7-bit signed script field — so it can also address
+outside `fp->x8B0[5]`. Guarded on PC; this was the last thing crashing Captain
+Falcon.
+
+Converting it needs: the outer array is bounded at **five** entries by
+`Fighter::x8B0[5]`. Each entry is
+`struct ftData_x1C { u16 x0; u16 x2; u8* x4; HSD_AnimJoint** x8; }` — 12 bytes
+on GCN, 24 here. `x4` is a plain byte array (rebase only). `x8` is the hard
+part: an array of `HSD_AnimJoint*` whose length nothing records, indexed by
+another script field, and each tree needs the animjoint conversion in
+`grdatfiles.c` — whose insert path carries the unfound corruption bug that
+makes every character jump to a null rip.
+
 ## `__assert` was declared `noreturn` while the PC stub returns
 
 Found while chasing the first crash the working scripts exposed, and much larger
