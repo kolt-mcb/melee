@@ -1059,8 +1059,6 @@ static void poll_keyboard_to_pad(GCPadStatus* pad)
     /* Start: Enter */
     if (kb[SDL_SCANCODE_RETURN]) buttons |= GC_BTN_START;
     
-    pad->button = buttons;
-
     /* Movement in Melee is entirely analog-stick driven -- the D-pad does not
      * walk, run or jump. This used to zero the stick unconditionally ("no
      * stick movement on keyboard"), which meant the keyboard could press
@@ -1082,23 +1080,41 @@ static void poll_keyboard_to_pad(GCPadStatus* pad)
         if (kb[SDL_SCANCODE_L]) cx += FULL;
         if (kb[SDL_SCANCODE_K]) cy -= FULL;
         if (kb[SDL_SCANCODE_I]) cy += FULL;
-        /* MELEE_PAD_FORCE="sx,sy" pins the stick, so fighter movement can be
-         * exercised in a headless run with no one at the keyboard. */
+        /* MELEE_PAD_FORCE="sx,sy[,buttons[,period]]" pins the stick and
+         * optionally holds a button mask, so movement and attacks can be
+         * exercised in a headless run with no one at the keyboard. With a
+         * period the buttons pulse on/off every N frames, which is what an
+         * attack needs -- the game triggers on the press edge, so a
+         * permanently-held button fires exactly once. */
         {
             static int forced = -1;
-            static int fx, fy;
+            static int fx, fy, fbtn, fperiod;
+            static unsigned long fcount;
             if (forced < 0) {
                 const char* e = getenv("MELEE_PAD_FORCE");
                 forced = 0;
-                if (e != NULL && sscanf(e, "%d,%d", &fx, &fy) == 2) {
+                fbtn = 0;
+                fperiod = 0;
+                if (e != NULL && sscanf(e, "%d,%d,%i,%d", &fx, &fy, &fbtn,
+                                        &fperiod) >= 2)
+                {
                     forced = 1;
                 }
             }
             if (forced) {
                 sx = fx;
                 sy = fy;
+                if (fbtn != 0) {
+                    fcount++;
+                    if (fperiod <= 0 ||
+                        (fcount / (unsigned long) fperiod) % 2 == 0)
+                    {
+                        buttons |= (u32) fbtn;
+                    }
+                }
             }
         }
+        pad->button = buttons;
         pad->stickX = (s8) sx;
         pad->stickY = (s8) sy;
         pad->subStickX = (s8) cx;
