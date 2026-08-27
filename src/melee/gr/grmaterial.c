@@ -208,6 +208,16 @@ void grMaterial_801C8B68(HSD_JObj* jobj, int arg1)
 
 void grMaterial_801C8CDC(Item_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     Item_8026A8EC(gobj);
 }
 
@@ -231,6 +241,16 @@ Item_GObj* grMaterial_801C8D44(int arg0, int arg1, Ground* arg2, Vec3* arg3,
 
 void grMaterial_801C8D98(HSD_GObj* gobj, int id)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     it_802725D4(gobj);
     Item_80268E5C(gobj, id, 2);
 }
@@ -238,6 +258,16 @@ void grMaterial_801C8D98(HSD_GObj* gobj, int id)
 void grMaterial_801C8DE0(Item_GObj* gobj, float arg8, float arg9, float argA,
                          float argB, float argC, float argD, float argE)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     Item* it = gobj->user_data;
     HurtCapsule* hurt = it->xACC_itemHurtbox;
     hurt->a_offset.x = arg8;
@@ -251,11 +281,31 @@ void grMaterial_801C8DE0(Item_GObj* gobj, float arg8, float arg9, float argA,
 
 void grMaterial_801C8E08(Item_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     it_802756E0(gobj);
 }
 
 void grMaterial_801C8E28(HSD_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     it_802756D0(gobj);
 }
 
@@ -270,6 +320,16 @@ bool grMaterial_801C8E48(HSD_GObj* gobj)
 
 void grMaterial_801C8E68(HSD_GObj* gobj, GroundOrAir ground_or_air)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     Item* it = gobj->user_data;
     it->ground_or_air = ground_or_air;
 }
@@ -481,11 +541,31 @@ void grMaterial_801C92C0(HSD_JObj* jobj)
 
 void grMaterial_801C9470(Item_GObj* gobj, CommandInfo* cmd)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     grMaterial_801C9490(gobj, cmd);
 }
 
 void grMaterial_801C9490(Item_GObj* gobj, CommandInfo* cmd)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     Ground* gp = gobj->user_data;
     u32 val = (*(u16*) cmd->ptr[0] >> 2) & 0xFF;
     gp->xC0 = (f32) val;
@@ -543,6 +623,16 @@ void grMaterial_801C94D8(void* obj)
 
 void grMaterial_801C95C4(HSD_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     Ground* gp = gobj->user_data;
     lb_80014498(grMaterial_GetOverlay(gp));
     gp->x10_flags.b4 = 1;
@@ -556,6 +646,16 @@ inline Ground* grMaterial_801C9604_inline(HSD_GObj* arg0)
 
 void grMaterial_801C9604(HSD_GObj* gobj, int arg1, bool arg2)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     Ground* gp = grMaterial_801C9604_inline(gobj);
     ColorOverlay* co = grMaterial_GetOverlay(gp);
     co->x4_pri = arg2;
@@ -579,6 +679,16 @@ void fn_801C9664(Item_GObj* gobj, CommandInfo* cmd, int arg2)
 
 void grMaterial_801C9698(HSD_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now
+     * that item creation is refused while the ItCo archive is unconverted, and
+     * stage code does not check the result -- it spawns a hazard and
+     * immediately configures it. Accept a NULL gobj here instead of making
+     * every stage module null-check. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     Ground* gp = gobj->user_data;
     if (lb_80014258(gobj, grMaterial_GetOverlay(gp), fn_801C9664)) {
         gp->x10_flags.b4 = 1;
