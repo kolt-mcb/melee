@@ -68,6 +68,8 @@ static int pc_ftconv_trace(void)
 /* Rebase a GCN data-section offset. NOTE: offset 0 is a VALID offset (the
  * start of the data section), not NULL — relocation would have added the
  * base to it. Callers that need "absent" must track it another way. */
+#define PC_FTDATA_ITEM_SLOTS 16
+
 static void* pc_off_to_ptr(u32 off, const u8* base, unsigned long len)
 {
     if (off >= 0x80000000U || off >= len) {
@@ -330,9 +332,42 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
     /* +0x54 is a plain int, not a pointer. */
     out->x54 = (int) pc_be32(*(const u32*) (raw + 0x54));
 
-    /* Deliberately left NULL until something needs them: ext_attr(+04),
+    /* +0x04 ext_attr -- the per-character attribute blob (ftMario_DatAttrs,
+     * ftFox_DatAttrs, ...). Every field in every one of those structs is a
+     * 4-byte word (the u8 members are all 4-aligned padding gaps), so the
+     * blob needs no layout change, only a rebase here and a wholesale 32-bit
+     * byteswap at the point of use -- see PUSH_ATTRS in ft/inlines.h, which
+     * is the only place that knows the concrete struct's size. Leaving this
+     * NULL is what made all 24 non-Mario characters fault in their own
+     * ft<Xx>_Init_OnLoad: PUSH_ATTRS dereferences it unconditionally. */
+    off = pc_be32(*(const u32*) (raw + 0x04));
+    if (off < len) {
+        out->ext_attr = pc_off_to_ptr(off, base, len);
+    }
+
+    /* +0x48 x48_items -- an array of Article pointers, stored as 4-byte file
+     * offsets. Every ft<Xx>_Init_OnLoad reads item_list[0..2] immediately
+     * after PUSH_ATTRS and hands each entry to it_8026B3F8, which only files
+     * the pointer away, so a rebase of the array is all that is needed here.
+     * The file does not record the entry count; characters index at most a
+     * handful, so convert a fixed 16 and leave out-of-range slots NULL. */
+    off = pc_be32(*(const u32*) (raw + 0x48));
+    if (off < len && off + 16u * 4u <= len) {
+        void** items = pc_lowmem_alloc(sizeof(void*) * PC_FTDATA_ITEM_SLOTS);
+        if (items != NULL) {
+            const u8* e = base + off;
+            int i;
+            for (i = 0; i < PC_FTDATA_ITEM_SLOTS; i++) {
+                items[i] = pc_off_to_ptr(pc_be32(*(const u32*) (e + i * 4)),
+                                         base, len);
+            }
+            out->x48_items = items;
+        }
+    }
+
+    /* Deliberately left NULL until something needs them:
      * x1C, x20, x24, x28, x2C(dynamics), x30(hurtboxes),
-     * x34, x38, x3C, x40(itPickup), x44, x48, x4C(sfx), x50, x58, x5C. */
+     * x34, x38, x3C, x40(itPickup), x44, x4C(sfx), x50, x58, x5C. */
 
     if (pc_ftconv_trace()) {
         fprintf(stderr,
