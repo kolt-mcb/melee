@@ -395,7 +395,14 @@ void lb_8000C0E8(HSD_JObj* jobj, s32 i, DynamicModelDesc* arg2)
     lb_8000C07C(jobj, i, arg2->anims, arg2->matanims, arg2->shapeanims);
 }
 
-void pc_pc_memzero(void* mem, int size)
+/* PC port: this was named pc_pc_memzero, so nothing ever called it -- the
+ * header declares plain `memzero`, and a weak no-op stub in
+ * src/pc_stub/gr_stubs.c satisfied the link instead. The linked symbol was
+ * literally `endbr64; ret`, so all 125 memzero() call sites across the tree
+ * silently did nothing and left callers reading uninitialised memory. Stages
+ * that appeared to work only did so where the target happened to be zero
+ * already (fresh archive data, or OS-zeroed pages). */
+void memzero(void* mem, ssize_t size)
 {
     u8* bytes = mem;
     while (size--) {

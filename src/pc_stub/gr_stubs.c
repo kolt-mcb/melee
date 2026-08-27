@@ -841,9 +841,9 @@ __attribute__((weak)) void it_804D6D38(...) {
     (void)0;
 }
 
-__attribute__((weak)) void memzero(void* p, size_t n) {
-    (void)0;
-}
+/* PC port: memzero's real implementation lives in src/melee/lb/lb_00B0.c.
+ * It used to be misnamed pc_pc_memzero, so this weak no-op won the link and
+ * every memzero() in the tree did nothing. Do not reintroduce a stub here. */
 
 __attribute__((weak)) int mpCheckMultiple(...) {
     return 0;

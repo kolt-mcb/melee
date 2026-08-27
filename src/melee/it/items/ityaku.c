@@ -116,7 +116,19 @@ Item_GObj* it_802E6AEC(Ground* arg0, int arg1, int arg2, HSD_JObj* arg3,
     spawn.x4_parent_gobj2 = spawn.x0_parent_gobj;
     spawn.x44_flag.b0 = arg5 ? 1 : 0;
     spawn.x40 = 0;
+#if BUILD_TARGET_PC
+    /* PC port: it_8027870C leaves it_804D6D38 NULL while the ItCo common-item
+     * data is unconverted. The storers into that table are already guarded;
+     * this reader was not, so four stages that spawn a yakumono item died
+     * here -- Green Greens, Mushroom Kingdom, Icicle Mountain and Icetop. */
+    if (it_804D6D38 != NULL &&
+        it_804D6D38[spawn.kind - It_Kind_Kuriboh] != NULL) {
+        it_804D6D38[spawn.kind - It_Kind_Kuriboh]->x0_common_attr =
+            &it_803F8C08;
+    }
+#else
     it_804D6D38[spawn.kind - It_Kind_Kuriboh]->x0_common_attr = &it_803F8C08;
+#endif
 
     item_gobj = Item_80268B18(&spawn);
     if (item_gobj != NULL) {

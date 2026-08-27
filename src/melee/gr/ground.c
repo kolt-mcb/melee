@@ -575,7 +575,13 @@ void Ground_801C0800(StageIdPair* pair)
 
         if (stage_info.ald_yaku_all != NULL) {
             for (i = 1; stage_info.ald_yaku_all[i] != NULL; i++) {
-                Article* a = it_804D6D38[It_PKind_Random - It_Kind_Kuriboh];
+                Article* a = (it_804D6D38 != NULL)
+                                 ? it_804D6D38[It_PKind_Random -
+                                               It_Kind_Kuriboh]
+                                 : NULL;
+                if (a == NULL) {
+                    continue;
+                }
                 a->xC_itemStates->x0_itemStateDesc[i].xC_script =
                     stage_info.ald_yaku_all[i];
             }
@@ -1991,7 +1997,6 @@ bool Ground_801C2FE0(Ground_GObj* arg0)
             dat = &archive->unk4->unk8[map_id];
             vec = dat->unk20;
             count = dat->unk24;
-
             for (i = 0; i < count; i++, vec++) {
                 if (Ground_804D6954 != temp_r3[vec->x].xC) {
                     mpLib_80055E9C(vec->x);
