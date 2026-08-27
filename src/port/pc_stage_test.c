@@ -52,6 +52,28 @@ static void count_jobj(HSD_JObj* j, int* nj, int* ndobj)
     count_jobj(j->next, nj, ndobj);
 }
 
+/* PC diag (MELEE_FT_JOINTS=1): dump the fighter skeleton -- index, depth,
+ * local translation and scale for every joint. A limb that renders collapsed
+ * while the rest of the model is right shows up here as a joint whose
+ * translation is zero (or absurd) when its siblings are not. */
+static void dump_fighter_joints(HSD_JObj* j, int depth, int* idx)
+{
+    if (j == NULL) {
+        return;
+    }
+    fprintf(stderr,
+            "[FTJOINT] %3d d=%d t=(%8.3f,%8.3f,%8.3f) s=(%.2f,%.2f,%.2f) "
+            "q=(%.3f,%.3f,%.3f,%.3f) dobj=%s env=%s\n",
+            *idx, depth, (double) j->translate.x, (double) j->translate.y,
+            (double) j->translate.z, (double) j->scale.x, (double) j->scale.y,
+            (double) j->scale.z, (double) j->rotate.x, (double) j->rotate.y,
+            (double) j->rotate.z, (double) j->rotate.w, j->u.dobj ? "y" : "-",
+            j->envelopemtx ? "y" : "-");
+    (*idx)++;
+    dump_fighter_joints(j->child, depth + 1, idx);
+    dump_fighter_joints(j->next, depth, idx);
+}
+
 /* PC diag: walk the floor jobj tree, log each dobj's mobj + vtable + tobj.
  * Reveals whether the stage conversion left a bad mobj pointer. */
 static void dump_floor_mobjs(HSD_JObj* j, int* n)
@@ -229,6 +251,12 @@ void pc_render_stage_test(void)
                     fprintf(stderr, "[FTEST] rawJoint=%p dataBase=%p\n",
                             (void*)rawJoint, (void*)farc->data);
                     if (rawJoint) {
+                        /* Clear the joint map first: it keys on offsets
+                         * relative to each archive's base, so the stage's
+                         * entries (converted just above) can capture this
+                         * model's envelope lookups. ftdata.c does the same
+                         * before every costume model. */
+                        grDatFiles_ResetJointMap();
                         HSD_Joint* fj = grDatFiles_ConvertJointTreeGCNtoX64(
                             rawJoint, farc->data, 0, NULL);
                         grDatFiles_ResolvePObjJoints();
@@ -246,6 +274,10 @@ void pc_render_stage_test(void)
                             if (fjobj) {
                                 int nj = 0, nd = 0; count_jobj(fjobj, &nj, &nd);
                                 fprintf(stderr, "[FTEST] fighter jobj: %d nodes, %d with dobj\n", nj, nd);
+                                if (getenv("MELEE_FT_JOINTS") != NULL) {
+                                    int ji = 0;
+                                    dump_fighter_joints(fjobj, 0, &ji);
+                                }
                                 Vec3 fpos = { 0.0f, 5.0f, 0.0f };
                                 if (getenv("MELEE_FIGHTER_NEAR")) {
                                     /* place right in front of the stage camera

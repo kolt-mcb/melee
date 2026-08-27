@@ -1257,10 +1257,13 @@ static void SetupSharedVtxModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
     }
 }
 
+unsigned long pc_env_bad, pc_env_ok;
+
 static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                                   u32 rendermode)
 {
-    { static int _ps=0; if(_ps<4){_ps++; fprintf(stderr,"[ENVSETUP]\n");} }
+    if (getenv("MELEE_ENV_STATS") != NULL)
+        { static int _ps=0; if(_ps<4){_ps++; fprintf(stderr,"[ENVSETUP]\n");} }
     HSD_JObj* jobj;
     HSD_SList* list;
     int MtxIdx = 0;
@@ -1273,6 +1276,19 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
     flags = GetSetupFlags(jobj, rendermode);
     right = _HSD_mkEnvelopeModelNodeMtx(jobj, mtx);
 
+    if (getenv("MELEE_ENV_STATS") != NULL) {
+        static int _n;
+        int len = 0;
+        HSD_SList* l2 = pobj->u.envelope_list;
+        for (; l2 != NULL; l2 = l2->next) {
+            len++;
+        }
+        if (len > 10 || _n < 12) {
+            _n++;
+            fprintf(stderr, "[ENVLIST] len=%d%s\n", len,
+                    (len > 10) ? "  <-- OVER 10, tail dropped" : "");
+        }
+    }
     for (MtxIdx = 0, list = pobj->u.envelope_list; MtxIdx < 10 && list;
          MtxIdx++, list = list->next)
     {
@@ -1289,6 +1305,10 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
         {
             HSD_Envelope* e2 = envelope;
             int bad = (envelope == NULL);
+            /* MELEE_NO_SKIN=1 forces every envelope to the rigid fallback --
+             * separates "the envelopes are wrong" from "the geometry is
+             * wrong or hidden". */
+            if (getenv("MELEE_NO_SKIN") != NULL) bad = 1;
             for (; e2 != NULL && !bad; e2 = e2->next) {
                 if ((uintptr_t)e2->jobj < 0x400000ULL ||
                     (e2->weight < 1.0f - FLT_EPSILON &&
@@ -1298,13 +1318,32 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                 }
             }
             if (bad) {
+                if (getenv("MELEE_ENV_STATS") != NULL) {
+                    extern unsigned long pc_env_bad, pc_env_ok;
+                    pc_env_bad++;
+                }
                 GXLoadPosMtxImm(pmtx, mtx_no);
                 continue;
+            }
+            if (getenv("MELEE_ENV_STATS") != NULL) {
+                extern unsigned long pc_env_bad, pc_env_ok;
+                pc_env_ok++;
             }
         }
 #endif
         if (envelope->weight >= (1.0f - FLT_EPSILON)) {
             HSD_JObjSetupMatrix(envelope->jobj);
+            if (getenv("MELEE_ENV_STATS") != NULL) {
+                static int _n1, _nnull;
+                _n1++;
+                if (envelope->jobj->envelopemtx == NULL) _nnull++;
+                if (_n1 % 5000 == 0) {
+                    fprintf(stderr,
+                            "[ENVW1] weight1=%d of which envelopemtx==NULL=%d "
+                            "right=%d\n",
+                            _n1, _nnull, right != NULL);
+                }
+            }
             if (right) {
                 MTXConcat(envelope->jobj->mtx, envelope->jobj->envelopemtx,
                           mtx);
@@ -1313,6 +1352,8 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                 mtxp = envelope->jobj->mtx;
             }
         } else {
+            f32 wsum = 0.0f;
+            int nenv = 0;
             mtx[0][0] = mtx[0][1] = mtx[0][2] = mtx[0][3] = mtx[1][0] =
                 mtx[1][1] = mtx[1][2] = mtx[1][3] = mtx[2][0] = mtx[2][1] =
                     mtx[2][2] = mtx[2][3] = 0.0f;
@@ -1328,7 +1369,17 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                 MTXConcat(jp->mtx, jp->envelopemtx, tmp);
                 HSD_MtxScaledAdd(tmp, mtx, mtx, envelope->weight);
                 perf++;
+                wsum += envelope->weight;
+                nenv++;
                 envelope = envelope->next;
+            }
+            if (getenv("MELEE_ENV_STATS") != NULL) {
+                static int _n;
+                if (_n < 20) {
+                    _n++;
+                    fprintf(stderr, "[ENVW] n=%d weightsum=%.4f\n", nenv,
+                            (double) wsum);
+                }
             }
             mtxp = mtx;
         }
@@ -1338,6 +1389,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
         }
         MTXConcat(vmtx, mtxp, tmp);
         GXLoadPosMtxImm(tmp, mtx_no);
+        if (getenv("MELEE_ENV_STATS") != NULL)
         { static int _em=0; if(_em<12){_em++;
             fprintf(stderr,"[ENVMTX] no=%d w=%.2f r0=(%.2f,%.2f,%.2f,%.2f) r2=(%.2f,%.2f,%.2f,%.2f) vm23=%.1f\n",
                 (int)mtx_no,(double)((HSD_Envelope*)list->data)->weight,
