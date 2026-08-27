@@ -38,6 +38,10 @@
 
 #if BUILD_TARGET_PC
 #include "port/pc_scene.h"
+
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 #endif
 
 struct IfStockStealAnim {
@@ -428,6 +432,17 @@ static inline void fn_802F9410_inline(HSD_GObj* gobj,
 {
     HSD_JObj* jobj = gobj->hsd_obj;
     HSD_JObj* jobj2 = ifStock_804A1378.player[p->player].x4[1];
+#if BUILD_TARGET_PC
+    /* Same four-deep stock-icon chain as ifStock_802F98E8; a joint without a
+     * mesh leaves it null. */
+    if (!pc_ptr_sane(jobj2) || !pc_ptr_sane(jobj2->u.dobj) ||
+        !pc_ptr_sane(jobj2->u.dobj->mobj) ||
+        !pc_ptr_sane(jobj2->u.dobj->mobj->tobj))
+    {
+        port_guard_warn("ifstock.c:anim-icon-tobj");
+        return;
+    }
+#endif
     HSD_JObjReqAnimAll(jobj2, 0.0f);
     HSD_TObjReqAnimAll(jobj2->u.dobj->mobj->tobj, gm_80168BF8(p->player));
     HSD_AObjSetRate(jobj2->u.dobj->mobj->tobj->aobj, 0.0f);
@@ -601,6 +616,18 @@ void ifStock_802F98E8(unsigned char player, int b)
                         } else {
                             data[5] = 10;
                         }
+#if BUILD_TARGET_PC
+                        /* The stock icons come from the converted "Stc_scemdls"
+                         * models; a joint without a mesh leaves this four-deep
+                         * chain null. */
+                        if (!pc_ptr_sane(jobj) || !pc_ptr_sane(jobj->u.dobj) ||
+                            !pc_ptr_sane(jobj->u.dobj->mobj) ||
+                            !pc_ptr_sane(jobj->u.dobj->mobj->tobj))
+                        {
+                            port_guard_warn("ifstock.c:icon-tobj");
+                            continue;
+                        }
+#endif
                         if (i < 5) {
                             HSD_JObjReqAnimAll(jobj, data[5]);
                             HSD_TObjReqAnimAll(jobj->u.dobj->mobj->tobj,

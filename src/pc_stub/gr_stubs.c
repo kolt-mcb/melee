@@ -1,5 +1,6 @@
 // Auto-generated weak stubs for gr/ module dependencies
 #include <platform.h>
+#include <melee/gr/types.h>
 
 /* PC port: the weak stubs below marked "decl:" return a value rather than
  * being void. They stand in for functions whose real implementations are not
@@ -425,9 +426,15 @@ __attribute__((weak)) void grBb_Route_803E6200(...) {
     (void)0;
 }
 
-__attribute__((weak)) void grBb_Route_StageData(...) {
-    (void)0;
-}
+
+/* PC port: DATA stubs, not function stubs.
+ *
+ * These three are `StageData` objects (grbigblueroute.h, grhomerun.h,
+ * grshrineroute.h) whose real tables are not decompiled. As weak *functions*
+ * they made stage_datas[grkind] a code address: non-NULL, so every NULL guard
+ * passed, and stage->data1 / stage->on_init read instruction bytes. Zeroed
+ * objects of the right type make those guards work as written. */
+__attribute__((weak)) StageData grBb_Route_StageData = { 0 };
 
 __attribute__((weak)) void grBb_StageData(...) {
     (void)0;
@@ -529,13 +536,13 @@ __attribute__((weak)) void grHr_804DBC94(...) {
     (void)0;
 }
 
-__attribute__((weak)) void grHr_StageData(...) {
-    (void)0;
-}
+__attribute__((weak)) StageData grHr_StageData = { 0 };
 
-__attribute__((weak)) void grIm_804DB570(...) {
-    (void)0;
-}
+/* gricemt.h declares this as `extern f32`; it is a scroll-rate multiplier.
+ * As a weak *function* it made `grIm_804DB570 * y_pos` read instruction bytes
+ * as a float. 1.0f keeps the multiply neutral until the real value is
+ * decompiled -- zero would freeze Icicle Mountain's scroll. */
+__attribute__((weak)) f32 grIm_804DB570 = 1.0f;
 
 __attribute__((weak)) void grMc_803B81B8(...) {
     (void)0;
@@ -645,9 +652,7 @@ __attribute__((weak)) void grSh_Route_803E5D90(...) {
     (void)0;
 }
 
-__attribute__((weak)) void grSh_Route_StageData(...) {
-    (void)0;
-}
+__attribute__((weak)) StageData grSh_Route_StageData = { 0 };
 
 __attribute__((weak)) void grZe_804DB0B0(...) {
     (void)0;
