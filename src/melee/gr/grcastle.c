@@ -502,6 +502,14 @@ void grCastle_801CD9B4(Ground_GObj* gobj)
 
 void grCastle_801CDA0C(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
     f32 val;
@@ -554,6 +562,14 @@ bool grCastle_801CDC3C(Ground_GObj* gobj)
 
 void grCastle_801CDC44(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp = GET_GROUND(gobj);
     s32 i = 0;
     PAD_STACK(8);
@@ -673,6 +689,14 @@ bool grCastle_801CDF54(Vec3* vec)
 
 void grCastle_801CDFD8(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp = GET_GROUND(gobj);
     s32 range;
     s32 rand_result;
@@ -752,6 +776,14 @@ s32 grCastle_801CE054(Ground_GObj* gobj)
 
 void grCastle_801CE19C(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp = GET_GROUND(gobj);
     PAD_STACK(4);
     if (gp->gv.castle9.xDE_b0) {
@@ -774,6 +806,14 @@ void grCastle_801CE19C(Ground_GObj* gobj)
 
 void grCastle_801CE260(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp = GET_GROUND(gobj);
     Ground* gp2;
     HSD_JObj* jobj = GET_JOBJ(gobj);
@@ -821,6 +861,14 @@ void grCastle_801CE3AC_dontinline(Ground_GObj* gobj)
 
 void grCastle_801CE3AC(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     HSD_JObj* jobj;
     Ground* gp = GET_GROUND(gobj);
 
@@ -850,6 +898,14 @@ void grCastle_801CE3AC(Ground_GObj* gobj)
 
 void grCastle_801CE578(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* new_var2;
     int new_var4;
 
@@ -952,6 +1008,14 @@ void grCastle_801CE7E4(Ground_GObj* gobj) {}
 
 void grCastle_801CE7E8(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp = GET_GROUND(gobj);
     PAD_STACK(8);
     Ground_801C2ED0(GET_JOBJ(gobj), gp->map_id);
@@ -967,6 +1031,14 @@ bool grCastle_801CE858(Ground_GObj* gobj)
 
 void grCastle_801CE860(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp = gobj->user_data;
 
     if ((s32) gp->gv.castle.xC4 < 3) {
@@ -985,6 +1057,14 @@ void grCastle_801CE8E4(Ground_GObj* gobj) {}
 
 void grCastle_801CE8E8(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp2;
     Ground* gp = GET_GROUND(gobj);
     CmSubject* subject;
@@ -1168,6 +1248,14 @@ bool grCastle_801CEEFC(Ground_GObj* gobj)
 
 void grCastle_801CEF04(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp = GET_GROUND(gobj);
     PAD_STACK(8);
 
@@ -1285,6 +1373,14 @@ bool grCastle_801CF300(Ground_GObj* gobj)
 
 void grCastle_801CF308(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     s32 var_r6 = 0;
     Ground* gp = (Ground*) gobj->user_data;
     HSD_JObj* jobj = (HSD_JObj*) gobj->hsd_obj;
@@ -1400,6 +1496,14 @@ void grCastle_801CF750(Ground* gp, s32 arg1, CollData* cd, s32 arg3,
 
 void grCastle_801CF7B0(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp = GET_GROUND(gobj);
     s16 x0, x2;
 
@@ -1533,6 +1637,14 @@ void fn_801CFB68(Item_GObj* item_gobj, Ground* gp, HSD_GObj* gobj)
 
 s32 grCastle_801CFBD4(Ground_GObj* gobj, s32 arg1)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return 0;
+    }
+#endif
     s32 i = 0;
     s32 result = 1;
     Ground* gp = (Ground*) gobj->user_data;
@@ -1687,6 +1799,14 @@ bool grCastle_801D0298(Ground_GObj* gobj, s32 arg1)
 
 void grCastle_801D02B8(Ground_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC (see ground.c), so the stage
+     * parameter block every branch below reads is absent. */
+    if (grCs_804D6970 == NULL) {
+        port_guard_warn("grcastle.c:no-params");
+        return;
+    }
+#endif
     Ground* gp = GET_GROUND(gobj);
     s32 i;
 

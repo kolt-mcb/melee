@@ -221,6 +221,30 @@ headers, and intersect. Several of the remainder are `StageData` and
 `MotionState` tables whose real values are simply not decompiled yet, and those
 cannot be fixed by typing alone.
 
+## `Ground_801C49F8` — an unresolved accessor, four stages
+
+Castle, Old Kongo, Mute City and Shrine Route each open with
+`grXx_params = Ground_801C49F8();` and dereference the result. The function
+has **no definition and no declaration anywhere in the tree**, so it fell
+through to a weak `void` stub and every caller got whatever was in rax.
+
+Two candidates were tried against the stage sweep and both are wrong:
+
+- `stage_info.param` — the shared `GroundParam` header. Old Kongo survives on
+  it; Castle divides by zero, because it reads its own struct's floats off
+  GroundParam's integer fields.
+- `&stage_info.xA0` — the per-`StKind` row `Ground_801C28CC` fills. Right
+  shape, wrong contents: those are `s32` products of two `s16`s and the
+  callers read floats.
+
+It now returns NULL from `ground.c` (documented, deterministic) and all four
+callers check it, so those stages skip their parameter-driven setup instead of
+crashing. Castle needed the guard in fifteen functions -- every callback in its
+table reads the block.
+
+Recovering the real accessor needs the GameCube symbol map, not this tree.
+Until then this is a known-wrong-but-safe stub, not a fix.
+
 ## Non-fatal asserts followed by a dereference
 
 `__assert` reports and returns on PC, so the decomp's

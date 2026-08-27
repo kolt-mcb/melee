@@ -27,6 +27,10 @@
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 
+#if BUILD_TARGET_PC
+#include <platform.h>
+#endif
+
 /* Forward declarations for functions used in struct initializers */
 void grOldKongo_8020F468(bool arg);
 void grOldKongo_8020F46C(void);
@@ -169,6 +173,14 @@ void grOldKongo_8020F468(bool arg) {}
 void grOldKongo_8020F46C(void)
 {
     grOk_804D6A90[0] = Ground_801C49F8();
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC -- see ground.c. Everything after this
+     * reads through the pointer. */
+    if (grOk_804D6A90[0] == NULL) {
+        port_guard_warn("groldkongo.c:no-params");
+        return;
+    }
+#endif
     stage_info.unk8C.b4 = 0;
     stage_info.unk8C.b5 = 1;
     grOldKongo_8020F52C(0);

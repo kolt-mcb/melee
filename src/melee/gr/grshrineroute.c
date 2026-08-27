@@ -35,6 +35,10 @@
 #include <MSL/math_ppc.h>
 #include <MSL/trigf.h>
 
+#if BUILD_TARGET_PC
+#include <platform.h>
+#endif
+
 /* Forward declarations */
 void grShrineRoute_OnDemoInit(bool arg);
 void grShrineRoute_OnInit(void);
@@ -197,6 +201,14 @@ void grShrineRoute_OnDemoInit(bool arg) {}
 void grShrineRoute_OnInit(void)
 {
     grSh_Route_804D6A58[0] = Ground_801C49F8();
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC -- see ground.c. Everything after this
+     * reads through the pointer. */
+    if (grSh_Route_804D6A58[0] == NULL) {
+        port_guard_warn("grshrineroute.c:no-params");
+        return;
+    }
+#endif
     stage_info.unk8C.b4 = 0;
     stage_info.unk8C.b5 = 0;
     grShrineRoute_802088C0(0);
