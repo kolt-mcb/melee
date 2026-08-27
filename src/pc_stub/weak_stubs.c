@@ -1018,7 +1018,10 @@ __attribute__((weak)) void it_802EAAEC(void) { }
 __attribute__((weak)) void it_802EADD8(void) { }
 __attribute__((weak)) void it_802EAE80(void) { }
 __attribute__((weak)) void it_802EAF28(void) { }
-__attribute__((weak)) void it_804D6D28(void) { }
+/* it_3F14.h: `extern ItemCommonData* it_804D6D28`. As a weak *function*
+ * it was a non-NULL code address, so Item_80267978's null check passed
+ * and the article lookup read instruction bytes. */
+__attribute__((weak)) void* it_804D6D28;
 __attribute__((weak)) void lbRefSetUnuse(void) { }
 __attribute__((weak)) int mpCheckAllRemap(void) { return 0; }
 __attribute__((weak)) int mpCheckLeftWall(void) { return 0; }

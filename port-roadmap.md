@@ -198,17 +198,42 @@ unbuilt `ty/` trophy system.
 ## Weak function stubs standing in for DATA symbols
 
 412 data symbols are satisfied by weak *function* stubs, so `&symbol` is a code
-address and any read returns instruction bytes. This is what broke
-`ifMagnify_803F97E8` (a camera descriptor read as a function) and the magnifier
-constants. Most are inert because nothing reads them, but the class is silent
-and the failure looks like data corruption rather than a missing symbol.
+address and any read returns instruction bytes. The failure looks like data
+corruption rather than a missing symbol, which is what makes it expensive.
 
-To list them: collect `__attribute__((weak))` function stubs in `src/pc_stub/`,
-collect `extern <type> name;` declarations (no parens) from the headers, and
-intersect. Fixing one means declaring it with the type and size its header
-gives it -- see the `lbl_8040C8C0` / `HSD_SisLib_8040C680` tables in
-`weak_stubs.c`. Several are `StageData` and `MotionState` tables whose real
-values are simply not decompiled yet.
+Fixed so far, all found by chasing a crash back to its source:
+
+| symbol | declared | was read as |
+|---|---|---|
+| `ifMagnify_803F97E8` | `HSD_CameraDescPerspective` | a camera descriptor → garbage viewport |
+| `ifMagnify_804DDB4C` and ~19 siblings | `f32` | `1.6e36` → degenerate ortho frustum, SIGFPE |
+| `grIm_804DB570` | `f32` | Icicle Mountain's scroll-rate multiplier |
+| `grBb_Route_StageData`, `grHr_StageData`, `grSh_Route_StageData` | `StageData` | non-NULL, so every NULL guard in `ground.c` passed |
+| `it_804D6D28`, `it_804D6D38` | `ItemCommonData*`, `Article**` | non-NULL, so `Item_80267978`'s NULL check passed and the article lookup read code |
+
+The pattern in the fix is always the same: declare the stub with the type and
+size its header gives it, zeroed. That makes the existing NULL guards work as
+written — which is what they were for.
+
+To re-run the audit: collect `__attribute__((weak))` function stubs from
+`src/pc_stub/`, collect `extern <type> name;` declarations (no parens) from the
+headers, and intersect. Several of the remainder are `StageData` and
+`MotionState` tables whose real values are simply not decompiled yet, and those
+cannot be fixed by typing alone.
+
+## Non-fatal asserts followed by a dereference
+
+`__assert` reports and returns on PC, so the decomp's
+`HSD_ASSERT(n, p); p->field` idiom is a null dereference wherever a caller
+skipped a guard. An audit finds **202** such sites across `melee/` and
+`sysdolphin/`.
+
+Guarding them one at a time does not scale. The leverage is in the ~50 inline
+accessors in `baselib/jobj.h`, which is where most of them bottom out:
+`HSD_JOBJ_REQUIRE` there turns the whole class into a no-op rather than a
+crash, and checks for a wild pointer as well as NULL, since an unconverted
+big-endian field produces one just as often. Two stage crashes
+(`HSD_JObjSetRotationX`, `HSD_JObjSetRotation`) were exactly this.
 
 ## Prefer linking the real file over stubbing it
 

@@ -854,9 +854,10 @@ __attribute__((weak)) void it_802F2094(...) {
     (void)0;
 }
 
-__attribute__((weak)) void it_804D6D38(...) {
-    (void)0;
-}
+/* it_3F14.h: `extern Article** it_804D6D38` -- the character-item article
+ * table. Same data-as-function problem. NULL makes IT_PC_ART yield NULL,
+ * which the caller already handles. */
+__attribute__((weak)) void** it_804D6D38;
 
 /* PC port: memzero's real implementation lives in src/melee/lb/lb_00B0.c.
  * It used to be misnamed pc_pc_memzero, so this weak no-op won the link and

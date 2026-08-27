@@ -1,5 +1,9 @@
 #include "gricemt.static.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 struct grIceMt_YakumonoParam {
     float x0;
     int x4;
@@ -1570,8 +1574,23 @@ int grIceMt_801F9ACC(Ground_GObj* gobj, float y, GrIceMtSegmentLookup ev,
     f = grIceMt_801F993C(seg[0], seg[1]);
     mgobj = Ground_801C2BA4(seg[1]);
     HSD_ASSERT(0xAB9, mgobj);
+#if BUILD_TARGET_PC
+    /* Both asserts are non-fatal here, so a missing segment gobj falls
+     * straight into the dereference. Icicle Mountain looks its segments up by
+     * id and not all of them exist on PC yet. */
+    if (!pc_ptr_sane(mgobj)) {
+        port_guard_warn("gricemt.c:no-segment-gobj");
+        return 0;
+    }
+#endif
     jobj = mgobj->hsd_obj;
     HSD_ASSERT(0xABA, jobj);
+#if BUILD_TARGET_PC
+    if (!pc_ptr_sane(jobj)) {
+        port_guard_warn("gricemt.c:no-segment-jobj");
+        return 0;
+    }
+#endif
     cur = HSD_JObjGetTranslationY(jobj);
     if (ABS(cur) < 10.0f) {
         gp = GET_GROUND(Ground_801C2BA4(seg[1]));
