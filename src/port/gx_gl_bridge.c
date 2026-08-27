@@ -365,35 +365,41 @@ enum {
     GX_VA_TEX3  = 16,
 };
 
-/* Vertex attribute component counts */
+/* Vertex attribute component counts -- GXCompCnt, GXEnum.h:390.
+ * These were previously invented values (GX_POS_XYZ=3, GX_TEX_ST=2,
+ * GX_CLR_RGBA=0, plus a GX_POS_XZ that does not exist in GX at all), which
+ * disagreed with both the real header and this file's own vertex-descriptor
+ * decoder. The decoder is right; the enum was wrong. */
 enum {
-    GX_TEX_S    = 0x01,
-    GX_TEX_ST   = 0x02,
-    GX_POS_XY   = 0x00,
-    GX_POS_XZ   = 0x01,
-    GX_POS_XYZ  = 0x03,
-    GX_CLR_RGBA = 0x00,
-    GX_CLR_RGB  = 0x01,
+    GX_POS_XY   = 0,
+    GX_POS_XYZ  = 1,
+    GX_NRM_XYZ  = 0,
+    GX_NRM_NBT  = 1,
+    GX_NRM_NBT3 = 2,
+    GX_CLR_RGB  = 0,
+    GX_CLR_RGBA = 1,
+    GX_TEX_S    = 0,
+    GX_TEX_ST   = 1,
 };
 
-/* Vertex attribute types */
+/* Vertex attribute component types -- GXCompType, GXEnum.h:403. Note that
+ * GX overloads this enum: 0..4 are the numeric types, and a second, disjoint
+ * set of names covers colour formats. The previous table merged the two into
+ * one invented sequence and ended up defining GX_F32 as 0x0D, colliding with
+ * its own GX_IA1 -- so the self-test harness that is supposed to validate
+ * texture decoding was itself feeding the vertex path a bogus format. */
 enum {
-    GX_RGBA4  = 0x00,
-    GX_RGBA6  = 0x01,
-    GX_RGBA8  = 0x02,
-    GX_RGB565 = 0x03,
-    GX_RGB5A3 = 0x04,
-    GX_U8     = 0x05,
-    GX_I4     = 0x06,
-    GX_I8     = 0x07,
-    GX_I16    = 0x08,
-    GX_I32    = 0x09,
-    GX_I10    = 0x0A,
-    GX_IA8    = 0x0B,
-    GX_I14    = 0x0C,
-    GX_IA1    = 0x0D,
-    GX_IA4    = 0x0E,
-    GX_F32    = 0x0D,  /* Simplified - matches actual usage */
+    GX_U8     = 0,
+    GX_S8     = 1,
+    GX_U16    = 2,
+    GX_S16    = 3,
+    GX_F32    = 4,
+    GX_RGB565 = 0,
+    GX_RGB8   = 1,
+    GX_RGBX8  = 2,
+    GX_RGBA4  = 3,
+    GX_RGBA6  = 4,
+    GX_RGBA8  = 5,
 };
 
 /* Texture coord IDs */
@@ -571,6 +577,15 @@ typedef struct {
         u8 s_clamp, t_clamp;
         u8 wrap_s, wrap_t;
         u32 min_filter, mag_filter;
+        /* PC port: whether this texobj was created by GXInitTexObjCI (i.e. is
+         * genuinely paletted) and, if so, which TLUT it named. Without this
+         * the decoder had only the format byte to go on, and `g_current_tlut`
+         * is global state that GXInitTexObj never clears -- so a real
+         * GX_TF_I4 loaded after any paletted texture (sislib.c:2261 does
+         * exactly this for the text/HUD glyph atlas) was decoded through a
+         * stale palette instead of as intensity. */
+        Bool is_ci;
+        u32 tlut_name;
     } current_tex;
     
     /* Texture cache: maps GL texture IDs to cached metadata */
@@ -6755,12 +6770,19 @@ void GXMatrixIndex1u8(u8 idx)
  * Texture state tracking (for future texture upload)
  * ============================================================ */
 
-/* Local enum values — must match stub GXEnum.h */
+/* Local enum values. These MUST match the real GX API enums in
+ * extern/dolphin/include/dolphin/gx/GXEnum.h, because that is the header
+ * sysdolphin compiles against and therefore what actually arrives in the
+ * arguments here. They previously did not: the wrap values started at 1
+ * instead of 0, and the filter values were the GX *hardware register*
+ * encodings (0x04/0x0C) rather than the API enum. See gx_wrap_mode() and
+ * gx_filter_mode() for what that cost. */
 enum {
-    GX_LINEAR      = 0x04,
-    GX_NEAREST     = 0x00,
-    GX_CLAMP       = 0x01,
-    GX_REPEAT      = 0x02,
+    GX_NEAREST     = 0,  /* GX_NEAR */
+    GX_LINEAR      = 1,
+    GX_CLAMP       = 0,
+    GX_REPEAT      = 1,
+    GX_MIRROR      = 2,
 };
 
 /* ============================================================
@@ -7205,25 +7227,38 @@ static u8* decompress_cmpr(const void *src, u16 w, u16 h, u32 *out_size)
     return out;
 }
 
+/* GXTexWrapMode (GXEnum.h): GX_CLAMP=0, GX_REPEAT=1, GX_MIRROR=2.
+ * This table used to be shifted by one, so GX_CLAMP landed on the default
+ * (correct by accident) while every GX_REPEAT texture was clamped and every
+ * GX_MIRROR one merely repeated -- tiling surfaces rendered as a single
+ * stretched copy with smeared edge texels. */
 static GLenum gx_wrap_mode(u8 gx_wrap)
 {
     switch (gx_wrap) {
-    case 0x01: return GL_CLAMP_TO_EDGE;
-    case 0x02: return GL_REPEAT;
-    case 0x03: return GL_MIRRORED_REPEAT;
+    case GX_CLAMP:  return GL_CLAMP_TO_EDGE;
+    case GX_REPEAT: return GL_REPEAT;
+    case GX_MIRROR: return GL_MIRRORED_REPEAT;
     default: return GL_CLAMP_TO_EDGE;
     }
 }
 
+/* GXTexFilter (GXEnum.h) is an ordered enum, not a bitfield of register bits:
+ *   0 GX_NEAR   1 GX_LINEAR   2 GX_NEAR_MIP_NEAR
+ *   3 GX_LIN_MIP_NEAR   4 GX_NEAR_MIP_LIN   5 GX_LIN_MIP_LIN
+ * so bit 0 is exactly "is this filter linear?" -- which is why tobj.c:1316
+ * demotes a mipmapped filter to a flat one with `min_filter &= 0x01`.
+ *
+ * This function used to test for 0x04/0x0C, the GX hardware TX_SETMODE0
+ * encodings, which no value in that range ever equals. Every texture in the
+ * game therefore fell through to GL_NEAREST and rendered unfiltered.
+ *
+ * The mipmapped filters are deliberately folded onto their flat equivalents
+ * rather than mapped to GL_*_MIPMAP_*: the bridge uploads level 0 only, and a
+ * mipmap filter over a texture with no mip chain is incomplete in GL and
+ * samples as white. */
 static GLenum gx_filter_mode(u32 gx_filt)
 {
-    switch (gx_filt) {
-    case 0x04: /* Linear */
-    case 0x0C: /* Linear + mipmap */
-        return GL_LINEAR;
-    default:
-        return GL_NEAREST;
-    }
+    return (gx_filt & 0x01) ? GL_LINEAR : GL_NEAREST;
 }
 
 static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
@@ -7420,11 +7455,22 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         }
     }
 
-    /* Paletted (C4=0x08 / C8=0x09 / C14X2=0x0A) and legacy I4/I8-with-TLUT:
-     * decode indexed pixels through the loaded TLUT to RGBA8888. C4 shares
-     * I4's 4-bit-index layout, C8 shares I8's. */
-    if (fmt == 0x08) fmt = 0x00;
-    else if (fmt == 0x09 || fmt == 0x0A) fmt = 0x01;
+    /* Paletted (C4=0x08 / C8=0x09 / C14X2=0x0A): decode indexed pixels
+     * through the loaded TLUT to RGBA8888. C4 shares I4's 4-bit-index
+     * layout, C8 shares I8's, which is why they are folded onto those
+     * decoders here.
+     *
+     * A texture only goes through a palette if it was created by
+     * GXInitTexObjCI. Testing the format byte alone is not enough: after the
+     * fold above, a genuine GX_TF_I4 is indistinguishable from a C4, and
+     * `g_current_tlut` is global state that plain GXInitTexObj never clears,
+     * so real I4 textures were being decoded through whatever palette the
+     * previous CI texture had left behind. An earlier attempt to fix this by
+     * accepting only declared formats 0x08/0x09/0x0A regressed -- CI-ness is
+     * the signal that actually tracks the caller's intent. */
+    Bool paletted = g_state.current_tex.is_ci;
+    if (fmt == 0x08) { fmt = 0x00; paletted = TRUE; }
+    else if (fmt == 0x09 || fmt == 0x0A) { fmt = 0x01; paletted = TRUE; }
     if (fmt == 0x00 || fmt == 0x01) {  /* index4 / index8 */
         TLUTSlot *tlut;
 #if BUILD_TARGET_PC
@@ -7443,12 +7489,12 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         { static int _it_on = -1, _it_n = 0;
           if (_it_on < 0) _it_on = (getenv("MELEE_MTR") != NULL);
           if (_it_on && _it_n < 30) { _it_n++;
-            fprintf(stderr, "I48DECODE %dx%d fmt=0x%x curtlut=%u valid=%d ent=%u -> %s\n",
-                    w, h, fmt, (unsigned)g_state.g_current_tlut,
+            fprintf(stderr, "I48DECODE %dx%d fmt=0x%x ci=%d curtlut=%u valid=%d ent=%u -> %s\n",
+                    w, h, fmt, (int)paletted, (unsigned)g_state.g_current_tlut,
                     (int)tlut->valid, (unsigned)tlut->entry_count,
-                    (tlut->valid && tlut->entry_count>0) ? "TLUT" : "GRAYFALLBACK"); } }
+                    (paletted && tlut->valid && tlut->entry_count>0) ? "TLUT" : "GRAY"); } }
 #endif
-        if (tlut->valid && tlut->entry_count > 0) {
+        if (paletted && tlut->valid && tlut->entry_count > 0) {
             u32 pixel_count = (u32)w * (u32)h;
             u32 needed = pixel_count * 4;  /* RGBA8 = 4 bytes per pixel */
             if (needed > PC_PALETTE_BUF_SIZE ||
@@ -7625,18 +7671,36 @@ skip_tlut:
                      base_fmt, data_type, upload_src);
     }
     
-    /* Set filtering */
-    u8 filt = g_state.current_tex.min_filter;
-    u8 mag_filt = g_state.current_tex.mag_filter;
-    GLenum min_f = (filt & 0x0F) == 0x04 || (filt & 0x0F) == 0x0C ? GL_LINEAR : GL_NEAREST;
-    GLenum mag_f = (mag_filt & 0x0F) == 0x04 || (mag_filt & 0x0F) == 0x0C ? GL_LINEAR : GL_NEAREST;
-    if ((filt & 0xF0) == 0x10) {
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        /* Generate mipmaps for proper minification */
+    /* Set filtering.
+     *
+     * GXTexFilter is the ordered enum 0..5 (see gx_filter_mode above), so the
+     * tests here used to be unsatisfiable: `(filt & 0x0F) == 0x04 || == 0x0C`
+     * are hardware TX_SETMODE0 encodings, and `(filt & 0xF0) == 0x10` cannot
+     * hold for any value below 16. Every texture in the game therefore fell
+     * through to GL_NEAREST with no mip chain, and nothing was ever filtered.
+     * gx_filter_mode() existed with the same defect but was never called. */
+    u32 filt = g_state.current_tex.min_filter;
+    u32 mag_filt = g_state.current_tex.mag_filter;
+    /* GX only permits GX_NEAR/GX_LINEAR for magnification. */
+    GLenum mag_f = (mag_filt & 0x01) ? GL_LINEAR : GL_NEAREST;
+    GLenum min_f;
+    if (filt >= 2 && filt <= 5) {
+        /* GX_NEAR_MIP_NEAR=2, GX_LIN_MIP_NEAR=3, GX_NEAR_MIP_LIN=4,
+         * GX_LIN_MIP_LIN=5. The bridge uploads level 0 only, so build the
+         * rest here -- a mipmap filter over a texture with no mip chain is
+         * incomplete in GL and samples as white. */
+        static const GLenum mip_filters[4] = {
+            GL_NEAREST_MIPMAP_NEAREST,
+            GL_LINEAR_MIPMAP_NEAREST,
+            GL_NEAREST_MIPMAP_LINEAR,
+            GL_LINEAR_MIPMAP_LINEAR,
+        };
+        min_f = mip_filters[filt - 2];
         glGenerateMipmap(GL_TEXTURE_2D);
     } else {
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_f);
+        min_f = gx_filter_mode(filt);
     }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_f);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_f);
     
     /* Set wrapping */
@@ -7760,6 +7824,8 @@ void GXInitTexObjCI(void* texObj, const void* image, u16 width, u16 height,
     g_state.current_tex.wrap_t = t_wrap;
     g_state.current_tex.min_filter = GX_LINEAR;
     g_state.current_tex.mag_filter = GX_LINEAR;
+    g_state.current_tex.is_ci = TRUE;
+    g_state.current_tex.tlut_name = tlut_name;
     if (tlut_name < 16) g_state.g_current_tlut = tlut_name;
 }
 

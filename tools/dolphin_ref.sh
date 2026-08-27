@@ -116,6 +116,45 @@ if [ -n "${MELEE_REF_TAP_FRAMES:-}" ] && [ -p "$PIPE" ]; then
     echo "dolphin_ref: tapping Start at emulated frames $MELEE_REF_TAP_FRAMES"
 fi
 
+# MELEE_REF_INPUT="<frame>:<BUTTON>[,<frame>:<BUTTON>...]" drives arbitrary
+# buttons at given emulated frames, which is what it takes to reach an actual
+# VS match: the Gecko boot-to-mode patch does not intercept the title->menu
+# transition, so Dolphin lands in the 1P menus and has to be navigated out.
+# BUTTON is a pipe name (A, B, START, UP, DOWN, LEFT, RIGHT) or MAIN:<x>:<y>
+# to move the control stick, which is how Melee's menus are actually driven.
+if [ -n "${MELEE_REF_INPUT:-}" ] && [ -p "$PIPE" ]; then
+    (
+        exec 3> "$PIPE"
+        for step in $(echo "$MELEE_REF_INPUT" | tr ',' ' '); do
+            target="${step%%:*}"
+            rest="${step#*:}"
+            while [ "$(ls "$DUMPDIR" 2>/dev/null | wc -l)" -lt "$target" ]; do
+                sleep 0.2
+                pgrep -x dolphin-emu-nog > /dev/null || { exec 3>&-; exit 0; }
+            done
+            case "$rest" in
+              MAIN:*)
+                # Set and HOLD. Auto-recentring after a wall-clock sleep is
+                # useless here: headless Dolphin runs at ~5.6 emulated fps, so
+                # a 0.3s hold is about two emulated frames and the cursor
+                # barely moves. Recentre with an explicit later step
+                # (<frame>:MAIN:0.5:0.5) so the hold is frame-accurate.
+                x="${rest#MAIN:}"; y="${x#*:}"; x="${x%%:*}"
+                printf 'SET MAIN %s %s\n' "$x" "$y" >&3
+                ;;
+              *)
+                printf 'PRESS %s\n' "$rest" >&3
+                sleep 0.25
+                printf 'RELEASE %s\n' "$rest" >&3
+                ;;
+            esac
+        done
+        exec 3>&-
+    ) &
+    INPUTTER=$!
+    echo "dolphin_ref: input script $MELEE_REF_INPUT"
+fi
+
 timeout -s KILL "$TIMEOUT" "$DOLPHIN" -p headless -e "$ISO" \
   -C Dolphin.FifoPlayer.RecordFrames="$FRAMES" \
   -C Dolphin.FifoPlayer.RecordOutput="$OUTDIR/ref.dff" \
@@ -124,6 +163,7 @@ timeout -s KILL "$TIMEOUT" "$DOLPHIN" -p headless -e "$ISO" \
   > "$OUTDIR/dolphin.log" 2>&1
 rc=$?
 [ -n "${MASHER:-}" ] && kill "$MASHER" 2>/dev/null
+[ -n "${INPUTTER:-}" ] && kill "$INPUTTER" 2>/dev/null
 for p in $(pgrep -x dolphin-emu-nog); do kill -9 "$p"; done
 
 # Keep only the requested range (dump index ~= emulated frame index).
