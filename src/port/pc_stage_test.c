@@ -43,6 +43,35 @@ static int s_diag = -1;
 
 static int stage_diag(void);
 
+/* PC diag: every character's costume archive exports its skeleton under its
+ * own name (PlyMario5K_Share_joint, PlyCaptain5K_Share_joint, ...), so find it
+ * by suffix rather than hardcoding Mario's. */
+static void* pc_find_share_joint(HSD_Archive* arc)
+{
+    u32 i;
+
+    if (arc == NULL || arc->symbols == NULL || arc->public_info == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < arc->header.nb_public; i++) {
+        const char* sym = arc->symbols + arc->public_info[i].symbol;
+        size_t n;
+        if (sym == NULL || sym[0] == '\0') {
+            continue;
+        }
+        n = strlen(sym);
+        if (getenv("MELEE_FT_SYMS") != NULL) {
+            fprintf(stderr, "[FTSYM] %s\n", sym);
+        }
+        if (n >= 12 && strcmp(sym + n - 12, "_Share_joint") == 0) {
+            fprintf(stderr, "[FTEST] skeleton symbol: %s\n", sym);
+            return arc->data + arc->public_info[i].offset;
+        }
+    }
+    fprintf(stderr, "[FTEST] no *_Share_joint symbol in archive\n");
+    return NULL;
+}
+
 static void count_jobj(HSD_JObj* j, int* nj, int* ndobj)
 {
     if (!j) return;
@@ -237,8 +266,16 @@ void pc_render_stage_test(void)
          * and renders it with the stage camera — a deterministic test bed for
          * fighter visibility, independent of scene-flow randomness. */
         if (getenv("MELEE_STAGE_FIGHTER")) {
-            FILE* ff = fopen("orig/GALE01/PlMrNr.dat", "rb");
-            if (!ff) { fprintf(stderr, "[FTEST] fopen PlMrNr.dat failed\n"); }
+            /* MELEE_FIGHTER_FILE=<path> picks the costume archive, so the
+             * bind-pose checks can sweep every character rather than Mario
+             * alone. */
+            const char* ffname = getenv("MELEE_FIGHTER_FILE");
+            FILE* ff;
+            if (ffname == NULL || *ffname == '\0') {
+                ffname = "orig/GALE01/PlMrNr.dat";
+            }
+            ff = fopen(ffname, "rb");
+            if (!ff) { fprintf(stderr, "[FTEST] fopen %s failed\n", ffname); }
             else {
                 fseek(ff, 0, SEEK_END); long flen = ftell(ff); fseek(ff, 0, SEEK_SET);
                 s_fbuf = (u8*)malloc(flen);
@@ -247,7 +284,7 @@ void pc_render_stage_test(void)
                     HSD_Archive* farc = (HSD_Archive*)lbHeap_80015BD0(0, sizeof(HSD_Archive));
                     lbArchive_InitializeDAT(farc, s_fbuf, (u32)flen);
                     const u8* rawJoint =
-                        (const u8*)HSD_ArchiveGetPublicAddress(farc, "PlyMario5K_Share_joint");
+                        (const u8*) pc_find_share_joint(farc);
                     fprintf(stderr, "[FTEST] rawJoint=%p dataBase=%p\n",
                             (void*)rawJoint, (void*)farc->data);
                     if (rawJoint) {
