@@ -30,6 +30,7 @@
 
 #if BUILD_TARGET_PC
 #include <stddef.h>
+#include "port/pc_ptr.h"
 #include "port/pc_scene.h"
 #include "port/log.h"
 #endif
@@ -330,6 +331,32 @@ void ifStatus_802F4EDC(HSD_GObj* gobj)
     found_player:
         (void) 0;
     }
+
+#if BUILD_TARGET_PC
+    /* This function updates the percent digits and reaches
+     * jobjs[N]->u.dobj->mobj->tobj in half a dozen places without checking
+     * any of it. state can also come out of the search above as NULL. The
+     * digit joints are only as complete as the converted HUD model, which on
+     * some stages is missing them entirely -- so gate the whole function once
+     * rather than each dereference. */
+    if (!pc_ptr_sane(state)) {
+        port_guard_warn("ifstatus.c:no-state");
+        return;
+    }
+    {
+        int d;
+        for (d = 0; d < 4; d++) {
+            HSD_JObj* dj = state->jobjs[d];
+            if (dj == NULL || !pc_ptr_sane(dj->u.dobj) ||
+                !pc_ptr_sane(dj->u.dobj->mobj) ||
+                !pc_ptr_sane(dj->u.dobj->mobj->tobj))
+            {
+                port_guard_warn("ifstatus.c:digits-incomplete");
+                return;
+            }
+        }
+    }
+#endif
 
     /* Check for death animation flag (bit 7 of flags byte at offset 0x10) */
     if (state->flags.explode_animation) {
@@ -733,6 +760,20 @@ HSD_GObj* ifStatus_802F5EC0(IfDamageState* state, s32 player_idx)
         state->translation_x[i] = HSD_JObjGetTranslationX(state->jobjs[i]);
         state->translation_y[i] = HSD_JObjGetTranslationY(state->jobjs[i]);
     }
+#if BUILD_TARGET_PC
+    /* jobjs[3] being non-null does not make the DObj/MObj/TObj chain below it
+     * real: it comes from the converted HUD model, and not every joint in it
+     * carries a mesh. The anim-joint walk that follows dereferences five
+     * pointers of its own, so require the whole path. */
+    if (state->jobjs[3] != NULL &&
+        (!pc_ptr_sane(state->jobjs[3]->u.dobj) ||
+         !pc_ptr_sane(state->jobjs[3]->u.dobj->mobj) ||
+         !pc_ptr_sane(state->jobjs[3]->u.dobj->mobj->tobj)))
+    {
+        port_guard_warn("ifstatus.c:digit-tobj");
+        state->jobjs[3] = NULL;
+    }
+#endif
     if (state->jobjs[3] != NULL) {
         tobj = state->jobjs[3]->u.dobj->mobj->tobj;
         HSD_TObjAddAnimAll(
@@ -847,6 +888,20 @@ void ifStatus_802F61FC(IfDamageState* state, s32 player_idx)
     } else {
         jobj = state->next->hsd_obj;
     }
+#if BUILD_TARGET_PC
+    /* The player marker's model is converted from IfAll.dat; on some stages
+     * the joint has no child, or the child no DObj, and this chain walks four
+     * pointers without checking any of them. The two asserts above are
+     * non-fatal here, so a null jobj also reaches this line. */
+    if (!pc_ptr_sane(jobj) || !pc_ptr_sane(jobj->child) ||
+        !pc_ptr_sane(jobj->child->u.dobj) ||
+        !pc_ptr_sane(jobj->child->u.dobj->mobj) ||
+        !pc_ptr_sane(jobj->child->u.dobj->mobj->tobj))
+    {
+        port_guard_warn("ifstatus.c:mark-tobj");
+        return;
+    }
+#endif
     tobj = jobj->child->u.dobj->mobj->tobj;
     lb_8000C07C(jobj, 0, (HSD_AnimJoint**) hud->unk26C,
                 (HSD_MatAnimJoint**) hud->unk270,
