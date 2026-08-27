@@ -7548,6 +7548,73 @@ skip_tlut:
         }
     }
 
+#if defined(MELEE_TEX_DUMP_BUILD)
+    /* MELEE_TEX_DUMP=<dir>: write the raw GameCube bytes and this decoder's
+     * RGBA output for each distinct texture, for tools/pc_tex_verify.py to
+     * check against an independent implementation of the GX formats.
+     *
+     * `fmt` here is post-remap (C4 reads as I4, C8 as I8); the tool tells them
+     * apart by whether a .tlut companion was written. Only converted formats
+     * are dumped -- for the rest upload_src still points at the raw texture
+     * and reading w*h*4 from it runs off the end.
+     *
+     * Compiled out by default. Adding this block to the texture path -- in any
+     * form tried, including hoisting the getenv to a one-shot static -- makes
+     * the port's latent corruption surface as rip=(nil) on every character
+     * before the first frame. Build with -DMELEE_TEX_DUMP_BUILD to collect a
+     * dump; that build crashes shortly after the textures are written, which
+     * is late enough to be useful and is why the data exists at all. */
+    {
+    static int _dump_on = -1;
+    static const char* _dump_dir;
+    if (_dump_on < 0) {
+        /* Resolved once: calling getenv per upload adds a call frame to this
+         * path on every texture, which is enough to surface the port's latent
+         * corruption as rip=(nil) on every character. */
+        _dump_dir = getenv("MELEE_TEX_DUMP");
+        _dump_on = (_dump_dir != NULL) ? 1 : 0;
+    }
+    if (_dump_on && upload_src != NULL &&
+        upload_src != img && w > 0 && h > 0 && w <= 1024 && h <= 1024)
+    {
+        static int dumped_n;
+        if (dumped_n < 128) {
+            const char* dir = _dump_dir;
+            char path[512];
+            FILE* fp2;
+            u32 tw = 0, th = 0, num = 0, den = 1;
+            switch (fmt) {
+            case 0x00: case 0x0E: tw = 8; th = 8; num = 1; den = 2; break;
+            case 0x01: case 0x02: tw = 8; th = 4; num = 1; den = 1; break;
+            case 0x03: case 0x04: case 0x05: tw = 4; th = 4; num = 2; den = 1; break;
+            case 0x06: tw = 4; th = 4; num = 4; den = 1; break;
+            default: break;
+            }
+            if (tw != 0) {
+                u32 pw = ((w + tw - 1) / tw) * tw;
+                u32 ph = ((h + th - 1) / th) * th;
+                snprintf(path, sizeof(path), "%s/t%03d_fmt%02X_%ux%u.raw",
+                         dir, dumped_n, fmt, w, h);
+                fp2 = fopen(path, "wb");
+                if (fp2 != NULL) { fwrite(img, 1, pw * ph * num / den, fp2); fclose(fp2); }
+                snprintf(path, sizeof(path), "%s/t%03d_fmt%02X_%ux%u.rgba",
+                         dir, dumped_n, fmt, w, h);
+                fp2 = fopen(path, "wb");
+                if (fp2 != NULL) { fwrite(upload_src, 1, (size_t) w * h * 4, fp2); fclose(fp2); }
+                if (used_tlut) {
+                    TLUTSlot* tl = &g_state.g_tlut[g_state.g_current_tlut];
+                    snprintf(path, sizeof(path), "%s/t%03d_fmt%02X_%ux%u.tlut",
+                             dir, dumped_n, fmt, w, h);
+                    fp2 = fopen(path, "wb");
+                    if (fp2 != NULL) { fwrite(tl->rgba, 1, sizeof(tl->rgba), fp2); fclose(fp2); }
+                }
+                dumped_n++;
+            }
+        }
+    }
+    }
+#endif
+
     /* Upload */
     if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || (fmt == 0x06 && upload_src != img)) {
         /* Decompressed/converted → always RGBA8 */
