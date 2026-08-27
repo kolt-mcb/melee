@@ -39,6 +39,12 @@
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 #include <MSL/math.h>
+#if BUILD_TARGET_PC
+/* PC port: SIGNF lives in MSL/math.h, which this file does not pull in here. */
+#ifndef SIGNF
+#define SIGNF(x) ((x) > 0.0f ? 1.0f : -1.0f)
+#endif
+#endif
 
 /* 100E0C */ static void fn_80100E0C(Fighter_GObj* gobj);
 /* 100F60 */ static void fn_80100F60(Fighter_GObj* gobj);

@@ -12,6 +12,12 @@
 
 /// @todo Fix these to be in a single file, not math.h
 #define M_PI 3.14159265358979323846
+#if BUILD_TARGET_PC
+/* PC port: platform.h defines deg_to_rad as a macro; this file declares its
+ * own file-local constant of the same name. Drop the macro here so the
+ * declaration below is a declaration and not an expanded literal. */
+#undef deg_to_rad
+#endif
 static float const deg_to_rad = M_PI / 180;
 
 ItemStateTable it_803F5AB0[] = {
@@ -73,6 +79,12 @@ void it_8028B17C(Item_GObj* item_gobj)
     Item_80268E5C(item_gobj, 1, ITEM_ANIM_UPDATE);
 }
 
+/* PC port: glibc declares fabsf as a non-static builtin, so this decomp-local
+ * shim collides with it. Rename the local copy; call sites in this file follow
+ * the macro to it and the GCN build is unaffected. */
+#if BUILD_TARGET_PC
+#define fabsf pc_local_fabsf
+#endif
 static inline f32 fabsf(f32 x)
 {
     if (x < 0) {

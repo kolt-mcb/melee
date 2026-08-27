@@ -88,6 +88,12 @@ void it_8029C6CC(f32 angle, f32 vel, HSD_GObj* parent, Vec3* vec, int kind)
     it_8029C504(parent, vec, 1, kind, angle, vel);
 }
 
+/* PC port: glibc declares fabsf as a non-static builtin, so this decomp-local
+ * shim collides with it. Rename the local copy; call sites in this file follow
+ * the macro to it and the GCN build is unaffected. */
+#if BUILD_TARGET_PC
+#define fabsf pc_local_fabsf
+#endif
 static inline f32 fabsf(f32 x)
 {
     if (x < 0) {

@@ -104,7 +104,13 @@ bool itMewtwodisable_UnkMotion0_Anim(Item_GObj* item_gobj)
 
 void itMewtwodisable_UnkMotion0_Phys(Item_GObj* item_gobj) {}
 
+/* PC port: header and definition disagree on bool vs int. MWCC accepts
+ * the mismatch, GCC does not. Follow the header; GCN build unchanged. */
+#if BUILD_TARGET_PC
+bool itMewtwodisable_UnkMotion0_Coll(Item_GObj* item_gobj)
+#else
 int itMewtwodisable_UnkMotion0_Coll(Item_GObj* item_gobj)
+#endif
 {
     u32 coll_flags = 0;
 

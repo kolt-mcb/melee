@@ -23,6 +23,13 @@
 #include "it/itmaplib.h"
 #include "it/itspawn.h"
 #include "sysdolphin/baselib/random.h"
+#if BUILD_TARGET_PC
+/* PC port: M_TAU_F comes from MSL/math.h, which this file does not include on
+ * this target; platform.h supplies M_TAU with the same value and type. */
+#ifndef M_TAU_F
+#define M_TAU_F M_TAU
+#endif
+#endif
 
 ItemStateTable it_803F59F8[] = {
     { -1, itKusudama_UnkMotion0_Anim, itKusudama_UnkMotion0_Phys,

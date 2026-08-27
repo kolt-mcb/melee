@@ -34,6 +34,12 @@
 #include <melee/cm/camera.h>
 #include <melee/ef/efsync.h>
 #include <melee/mp/mplib.h>
+#if BUILD_TARGET_PC
+/* PC port: SIGNF lives in MSL/math.h, not included on this path. */
+#ifndef SIGNF
+#define SIGNF(x) ((x) > 0.0f ? 1.0f : -1.0f)
+#endif
+#endif
 
 static void sdata2_order(void)
 {

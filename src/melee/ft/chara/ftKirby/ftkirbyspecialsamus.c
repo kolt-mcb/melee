@@ -19,7 +19,14 @@
 
 #include <MSL/math.h>
 
+/* PC port: the header declares this with s32. On GCN `long` and s32 are both
+ * 32-bit so the two agree; under LP64 `long` is 64-bit and they conflict. Use
+ * the header's type on PC and leave the GCN signature alone. */
+#if BUILD_TARGET_PC
+s32 ftKb_SpecialNSs_800FCC14(Fighter_GObj* gobj, s32* out1, s32* out2)
+#else
 long ftKb_SpecialNSs_800FCC14(Fighter_GObj* gobj, long* out1, long* out2)
+#endif
 {
     Fighter* fp;
     ftKb_DatAttrs* da;
