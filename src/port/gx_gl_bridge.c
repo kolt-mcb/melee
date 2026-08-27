@@ -3382,7 +3382,7 @@ void GXInit(void* base, u32 size)
  * (origin bottom-left, y up), letterboxed so the 4:3 image keeps its aspect
  * inside whatever window we happen to have. Without this the game's viewport
  * would land in the bottom-left 640x480 corner of a 1280x720 window. */
-static void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
+void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
 {
     void window_get_size(int* width, int* height);
     void pc_get_fb_size(float* w, float* h);

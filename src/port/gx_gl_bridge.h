@@ -197,4 +197,9 @@ void gx_enable_depth_test(void);
 void gx_disable_depth_test(void);
 void gx_set_depth_mask(Bool write_depth);
 
+/* PC port: the window rect the GameCube framebuffer is letterboxed into.
+ * The reference harness crops screenshots to this so a diff against a Dolphin
+ * frame measures the picture rather than the black bars around it. */
+void pc_fb_rect_to_window(float x, float y, float w, float h, int out[4]);
+
 #endif /* GX_GL_BRIDGE_H */

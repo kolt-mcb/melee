@@ -14,6 +14,7 @@
 #include "window.h"
 #include "log.h"
 #include "gx_gl_bridge.h"
+void pc_get_fb_size(float* w, float* h);
 #include "texture_render.h"
 #include "platform.h"
 #include <math.h>
@@ -153,62 +154,149 @@ void render_present(void)
     /* Flush any remaining GX batches before swapping */
     gx_frame_end();
     
-    /* Save rendered frame to screenshot.ppm for debugging.
-     * Opt-in: MELEE_SCREENSHOT=1. MUST read pixels BEFORE window_swap() —
-     * after swap the backbuffer is a fresh black buffer. */
+    /* Capture rendered frames for the Dolphin reference harness and for
+     * ad-hoc debugging. MUST read pixels BEFORE window_swap() -- after the
+     * swap the backbuffer is a fresh black buffer.
+     *
+     *   MELEE_SCREENSHOT=1                 enable capture
+     *   MELEE_SCREENSHOT_FRAME=a,b,c       explicit frame list (max 16)
+     *   MELEE_SHOT_RANGE=from:to[:stride]  a range instead, no count limit
+     *   MELEE_SHOT_DIR=path                output directory (default ".")
+     *   MELEE_SHOT_FULL=1                  keep the letterbox bars
+     *
+     * By default the frame is cropped to the rect the GameCube framebuffer is
+     * letterboxed into, so a diff against a 640x528 Dolphin frame measures
+     * the picture and not the black bars around it. */
     static int g_render_frame = 0;
-    static int g_screenshot_wanted = -1;
+    static int g_shot_init = -1;
+    static int g_shot_wanted = 0;
     static int g_shot_frames[16];
     static int g_shot_n = 0;
-    static int g_shot_init = -1;
+    static int g_shot_from = -1, g_shot_to = -1, g_shot_stride = 1;
+    static const char* g_shot_dir = ".";
+    static int g_shot_full = 0;
+
     g_render_frame++;
     if (g_shot_init < 0) {
+        const char* sf;
+        const char* sr;
+        const char* sd;
         g_shot_init = 1;
-        g_screenshot_wanted = getenv("MELEE_SCREENSHOT") != NULL;
-        const char *sf = getenv("MELEE_SCREENSHOT_FRAME");
-        if (sf) {
-            char buf[256]; strncpy(buf, sf, 255); buf[255] = 0;
-            char *tok = strtok(buf, ",");
-            while (tok && g_shot_n < 16) { g_shot_frames[g_shot_n++] = atoi(tok); tok = strtok(NULL, ","); }
+        g_shot_wanted = getenv("MELEE_SCREENSHOT") != NULL;
+        sd = getenv("MELEE_SHOT_DIR");
+        if (sd != NULL && *sd != '\0') {
+            g_shot_dir = sd;
         }
-        if (g_shot_n == 0) g_shot_frames[g_shot_n++] = 1200;
-    }
-    for (int si = 0; si < g_shot_n; si++) {
-    if (g_render_frame == g_shot_frames[si] && g_screenshot_wanted) {
-        GLint vw, vh;
-        SDL_Window* win = window_get_sdl_window();
-        SDL_GetWindowSize(win, &vw, &vh);
-
-        GLubyte *pixels = (GLubyte*)malloc(vw * vh * 3);
-                glPixelStorei(GL_PACK_ALIGNMENT, 1);
-        glFinish(); // Ensure all draw calls are complete
-        glReadBuffer(GL_BACK);
-        glReadPixels(0, 0, vw, vh, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-        int nonblack = 0;
-        for (int i = 0; i < vw * vh; i++) {
-            if (pixels[i*3] > 10 || pixels[i*3+1] > 10 || pixels[i*3+2] > 10) nonblack++;
-        }
-        fprintf(stderr, "[SCREENSHOT] frame=%d nonblack=%d (%.1f%%)\n", g_render_frame, nonblack, 100.0*nonblack/(vw*vh));
-        fflush(stderr);
-        char shotpath[128]; snprintf(shotpath, sizeof(shotpath), "screenshot_%d.ppm", g_render_frame);
-        FILE *f = fopen(shotpath, "wb");
-        if (f) {
-            fprintf(f, "P6\n%d %d\n255\n", vw, vh);
-            /* Flip vertically: PPM rows go bottom-up, glReadPixels top-down */
-            int row_stride = vw * 3;
-            GLubyte *row = (GLubyte*)malloc(row_stride);
-            for (int y = vh - 1; y >= 0; y--) {
-                memcpy(row, pixels + y * row_stride, row_stride);
-                fwrite(row, 1, row_stride, f);
+        g_shot_full = getenv("MELEE_SHOT_FULL") != NULL;
+        sr = getenv("MELEE_SHOT_RANGE");
+        if (sr != NULL) {
+            int a = 0, b = 0, s = 1;
+            int got = sscanf(sr, "%d:%d:%d", &a, &b, &s);
+            if (got >= 2) {
+                g_shot_from = a;
+                g_shot_to = b;
+                g_shot_stride = (got >= 3 && s > 0) ? s : 1;
             }
-            free(row);
-            fclose(f);
-            PORT_LOG_INFO("[RENDER] Screenshot saved to %s (%dx%d)", shotpath, vw, vh);
         }
-        free(pixels);
+        sf = getenv("MELEE_SCREENSHOT_FRAME");
+        if (sf != NULL) {
+            char buf[256];
+            char* tok;
+            strncpy(buf, sf, sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+            tok = strtok(buf, ",");
+            while (tok != NULL && g_shot_n < 16) {
+                g_shot_frames[g_shot_n++] = atoi(tok);
+                tok = strtok(NULL, ",");
+            }
+        }
+        if (g_shot_n == 0 && g_shot_from < 0) {
+            g_shot_frames[g_shot_n++] = 1200;
+        }
     }
+
+    if (g_shot_wanted) {
+        int want = 0;
+        int si;
+        for (si = 0; si < g_shot_n; si++) {
+            if (g_render_frame == g_shot_frames[si]) {
+                want = 1;
+                break;
+            }
+        }
+        if (!want && g_shot_from >= 0 && g_render_frame >= g_shot_from &&
+            g_render_frame <= g_shot_to &&
+            ((g_render_frame - g_shot_from) % g_shot_stride) == 0)
+        {
+            want = 1;
+        }
+        if (want) {
+            SDL_Window* win = window_get_sdl_window();
+            int vw = 0, vh = 0;
+            int rect[4];
+            int cx, cy, cw, ch;
+            GLubyte* pixels;
+
+            SDL_GetWindowSize(win, &vw, &vh);
+            cx = 0; cy = 0; cw = vw; ch = vh;
+            if (!g_shot_full) {
+                float fbw = 640.0f, fbh = 480.0f;
+                pc_get_fb_size(&fbw, &fbh);
+                pc_fb_rect_to_window(0.0f, 0.0f, fbw, fbh, rect);
+                if (rect[2] > 0 && rect[3] > 0 && rect[0] >= 0 &&
+                    rect[1] >= 0 && rect[0] + rect[2] <= vw &&
+                    rect[1] + rect[3] <= vh)
+                {
+                    cx = rect[0]; cy = rect[1];
+                    cw = rect[2];  ch = rect[3];
+                }
+            }
+
+            pixels = (GLubyte*) malloc((size_t) cw * (size_t) ch * 3u);
+            if (pixels != NULL) {
+                char shotpath[512];
+                FILE* f;
+                int nonblack = 0, i;
+                glPixelStorei(GL_PACK_ALIGNMENT, 1);
+                glFinish();
+                glReadBuffer(GL_BACK);
+                glReadPixels(cx, cy, cw, ch, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+                for (i = 0; i < cw * ch; i++) {
+                    if (pixels[i * 3] > 10 || pixels[i * 3 + 1] > 10 ||
+                        pixels[i * 3 + 2] > 10)
+                    {
+                        nonblack++;
+                    }
+                }
+                fprintf(stderr,
+                        "[SCREENSHOT] frame=%d %dx%d nonblack=%.1f%%\n",
+                        g_render_frame, cw, ch,
+                        100.0 * nonblack / (cw * ch));
+                fflush(stderr);
+                snprintf(shotpath, sizeof(shotpath), "%s/screenshot_%d.ppm",
+                         g_shot_dir, g_render_frame);
+                f = fopen(shotpath, "wb");
+                if (f != NULL) {
+                    /* PPM rows are top-down; glReadPixels gives bottom-up. */
+                    int row_stride = cw * 3;
+                    GLubyte* row = (GLubyte*) malloc((size_t) row_stride);
+                    fprintf(f, "P6\n%d %d\n255\n", cw, ch);
+                    if (row != NULL) {
+                        int y;
+                        for (y = ch - 1; y >= 0; y--) {
+                            memcpy(row, pixels + (size_t) y * row_stride,
+                                   (size_t) row_stride);
+                            fwrite(row, 1, (size_t) row_stride, f);
+                        }
+                        free(row);
+                    }
+                    fclose(f);
+                }
+                free(pixels);
+            }
+        }
     }
-    
+
     window_swap();
 }
 
