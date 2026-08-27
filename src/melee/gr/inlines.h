@@ -23,6 +23,10 @@
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #define GET_GROUND(gobj) ((Ground*) HSD_GObjGetUserData(gobj))
 
 static inline void Ground_JObjInline1(Ground_GObj* gobj)
@@ -38,18 +42,50 @@ static inline void Ground_SetupStageCallbacks(Ground_GObj* gobj,
                                               StageCallbacks* callbacks)
 {
     Ground* gp = GET_GROUND(gobj);
+#if BUILD_TARGET_PC
+    /* Stages pick `callbacks` out of a per-map table indexed by map_id, which
+     * comes from archive data and is not always in range -- the same bad
+     * map_id that Ground_801C2BBC now drops. Every stage routes through this
+     * inline, so one check covers all of them. */
+    if (!pc_ptr_sane(gp) || !pc_ptr_sane(callbacks)) {
+        port_guard_warn("gr/inlines.h:SetupStageCallbacks");
+        return;
+    }
+#endif
     gp->x8_callback = NULL;
     gp->xC_callback = NULL;
     GObj_SetupGXLink(gobj, grDisplay_801C5DB0, 3, 0);
     if (callbacks->callback3 != NULL) {
         gp->x1C_callback = callbacks->callback3;
     }
+#if BUILD_TARGET_PC
+    /* A sane-looking `callbacks` can still hold garbage function pointers when
+     * the table itself came out of unconverted data. Calling one is an
+     * immediate jump into nothing, so require it to land in the text segment
+     * -- the same test Ground_801C0800 applies to StageData::on_init. */
+    {
+        extern char etext;
+        if (callbacks->on_init != NULL) {
+            if ((uintptr_t) callbacks->on_init < (uintptr_t) &etext) {
+                callbacks->on_init(gobj);
+            } else {
+                port_guard_warn("gr/inlines.h:on_init-not-text");
+            }
+        }
+        if (callbacks->gobj_proc != NULL &&
+            (uintptr_t) callbacks->gobj_proc < (uintptr_t) &etext)
+        {
+            HSD_GObj_SetupProc(gobj, callbacks->gobj_proc, 4);
+        }
+    }
+#else
     if (callbacks->on_init != NULL) {
         callbacks->on_init(gobj);
     }
     if (callbacks->gobj_proc != NULL) {
         HSD_GObj_SetupProc(gobj, callbacks->gobj_proc, 4);
     }
+#endif
 }
 
 static inline void Ground_InitTargetStage(HSD_GObj* (*create_gobj)(int) )

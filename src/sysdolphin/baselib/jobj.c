@@ -150,6 +150,16 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
 {
     Vec3* scl;
 
+#if BUILD_TARGET_PC
+    /* Every matrix build funnels through here, and the inline guards in
+     * jobj.h cannot cover it. Stage code reaches it with a joint pulled out
+     * of unconverted archive data (Pokemon Stadium's grPura_8021231C is one),
+     * and the very first thing below walks jobj->parent. */
+    if (!HSD_JOBJ_SANE(jobj)) {
+        port_guard_warn("jobj.c:MakeMatrix-bad-jobj");
+        return;
+    }
+#endif
     HSD_JObjSetupMatrix(jobj->parent);
     if (jobj->flags & 8) {
         if (jobj->parent != NULL && jobj->parent->scl != NULL) {

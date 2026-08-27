@@ -1858,6 +1858,23 @@ Ground_GObj* Ground_801C2BA4(int index)
 
 static void Ground_801C2BBC(Ground_GObj* map_gobj, int index)
 {
+#if BUILD_TARGET_PC
+    /* index is the stage's map_id, which comes from archive data. An
+     * out-of-range one writes a pointer past stage_info.map_gobjs[64] and
+     * into whatever follows it in StageInfo -- silent corruption that
+     * surfaces much later. */
+    if (index < 0 ||
+        (unsigned) index >=
+            sizeof(stage_info.map_gobjs) / sizeof(stage_info.map_gobjs[0]))
+    {
+        PORT_LOG_WARN("Ground_801C2BBC: map_id %d outside map_gobjs[%u]; "
+                      "dropping\n",
+                      index,
+                      (unsigned) (sizeof(stage_info.map_gobjs) /
+                                  sizeof(stage_info.map_gobjs[0])));
+        return;
+    }
+#endif
     stage_info.map_gobjs[index] = map_gobj;
 }
 
