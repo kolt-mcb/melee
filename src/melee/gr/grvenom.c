@@ -558,9 +558,21 @@ Ground_GObj* grVenom_80203EAC(int gobj_id)
 {
     Ground_GObj* gobj;
     Ground* gp;
+#if BUILD_TARGET_PC
+    /* PC port: the original reached the callback table by static-data anchor
+     * -- &grVe_803E5348 + 0x44 -- which relied on MWCC placing
+     * grVe_803E5348/grVe_803E5380 immediately before grVe_StageCallbacks in
+     * .data. Two things break that here: grVe_Data holds HSD_GObj*[3], so it
+     * grew from 0x38 to 0x48 bytes, and GCC does not preserve MWCC's
+     * cross-global adjacency anyway. The computed pointer landed well short
+     * of the real array and on_init was read from unrelated static data and
+     * called as code. Address the table by name. */
+    StageCallbacks* callbacks = &grVe_StageCallbacks[gobj_id];
+#else
     grVe_Data* base = &grVe_803E5348;
     StageCallbacks* callbacks =
         &((StageCallbacks*) ((char*) base + 0x44))[gobj_id];
+#endif
 
     gobj = Ground_GetStageGObj(gobj_id);
 

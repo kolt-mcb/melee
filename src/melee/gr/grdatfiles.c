@@ -194,10 +194,35 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
             pval = be32_swap(*(const u32*)(ep + 0x1C));
             x64Arr[i].x1C = (HSD_FogDesc*)gcn_ptr_to_x64(pval, dataBase);
 
+            /* PC port: unk20 is a GrJoint[] -- three s16 per entry -- and
+             * unk24 is its length. Rebasing the pointer without swapping the
+             * halfwords made Ground_801C2FE0 read joint id 1 (BE 00 01) as
+             * 0x0100 = 256, one past the 256-entry collision joint table, and
+             * index straight off the end. Stages with no secondary map areas
+             * (Final Destination, Battlefield) have an empty table here, which
+             * is why they never showed it. Convert into a real array. */
             pval = be32_swap(*(const u32*)(ep + 0x20));
-            x64Arr[i].unk20 = (GrJoint*)gcn_ptr_to_x64(pval, dataBase);
-
             x64Arr[i].unk24 = be32_swap(*(const s32*)(ep + 0x24));
+            x64Arr[i].unk20 = NULL;
+            if (pval != 0 && x64Arr[i].unk24 > 0 &&
+                x64Arr[i].unk24 <= 0x1000)
+            {
+                const u8* jb = (const u8*) gcn_ptr_to_x64(pval, dataBase);
+                if (jb != NULL) {
+                    int ji;
+                    GrJoint* jv = lbHeap_80015BD0(
+                        0, sizeof(GrJoint) * (size_t) x64Arr[i].unk24);
+                    if (jv != NULL) {
+                        for (ji = 0; ji < x64Arr[i].unk24; ji++) {
+                            const u8* je = jb + (size_t) ji * 6;
+                            jv[ji].x = (s16) be16_swap(*(const u16*) (je + 0));
+                            jv[ji].y = (s16) be16_swap(*(const u16*) (je + 2));
+                            jv[ji].z = (s16) be16_swap(*(const u16*) (je + 4));
+                        }
+                        x64Arr[i].unk20 = jv;
+                    }
+                }
+            }
 
             /* x28 is UNK_T */
 
@@ -1396,11 +1421,6 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
     x64Mobj->mat = lbHeap_80015BD0(0, sizeof(HSD_Material));
     if (x64Mobj->mat != NULL) {
         val = be32_swap(gcnMobj->mat);
-        if (getenv("MELEE_MATDBG")) {
-            fprintf(stderr, "[MATDBG] gcnMobjPtr=%p dataBase=%p mat_off=0x%08x m=%p archlen_guess=?\n",
-                    (const void*)gcnMobjPtr, (void*)dataBase, val, (const void*)(dataBase + val));
-            fflush(stderr);
-        }
         if (val != 0 && val < 0x80000000U) {
             const u8* m = dataBase + val;
             memcpy(&x64Mobj->mat->ambient, m + 0x00, 4);
@@ -2028,11 +2048,6 @@ static HSD_DObjDesc* grDatFiles_ConvertDObjDescGCNtoX64(const u8* gcnDobjPtr, u8
     
     /* mobjdesc - convert material descriptor */
     val = be32_swap(gcnDobj->mobjdesc);
-    if (getenv("MELEE_MATDBG")) {
-        fprintf(stderr, "[MATDBG] DObjDesc gcn=%p dataBase=%p mobjdesc_off=0x%08x\n",
-                (const void*)gcnDobjPtr, (void*)dataBase, val);
-        fflush(stderr);
-    }
     if (val != 0 && val < 0x80000000U) {
         x64Dobj->mobjdesc = grDatFiles_ConvertMObjDescGCNtoX64(dataBase + val, dataBase);
     }
