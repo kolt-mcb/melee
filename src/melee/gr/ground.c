@@ -481,6 +481,22 @@ void Ground_801C0754(StageIdPair* pair)
     Ground_801BFFB0();
     stage_info.grkind = pair->grkind;
     stage = stage_datas[pair->grkind];
+#if BUILD_TARGET_PC
+    /* Same guard Ground_801C0800 already carries: a stage with no StageData
+     * leaves a NULL here and stage->data1 faults. Some stages still have no
+     * entry, and this one runs earlier -- from Stage_802251E8 -- so it hit
+     * first. */
+    if (pair == NULL ||
+        pair->grkind < 0 ||
+        pair->grkind >= (s32) (sizeof(stage_datas) / sizeof(stage_datas[0])) ||
+        stage == NULL)
+    {
+        PORT_LOG_WARN("Ground_801C0754: no StageData for grkind %d; "
+                      "skipping stage file load\n",
+                      (pair != NULL) ? (int) pair->grkind : -1);
+        return;
+    }
+#endif
     arg3 = (pair->stkind == St_Kind_Heal) ? 0 : 1;
     grDatFiles_801C6038(stage->data1, 0, arg3);
     Ground_801C28CC(&stage_info.xA0, pair->stkind);
