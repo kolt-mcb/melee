@@ -187,7 +187,7 @@ void Fighter_800679B0(void)
     HSD_ObjAllocInit(&fighter_parts_alloc_data,
                      /*size*/ 140 * sizeof(FighterBone), /*align*/ 4);
     HSD_ObjAllocInit(&fighter_dobj_list_alloc_data,
-                     /*size*/ 124 * sizeof(HSD_DObj*), /*align*/ 4);
+                     /*size*/ FT_DOBJ_LIST_MAX * sizeof(HSD_DObj*), /*align*/ 4);
 #else
     HSD_ObjAllocInit(&fighter_parts_alloc_data, /*size*/ 0x8c0, /*align*/ 4);
     HSD_ObjAllocInit(&fighter_dobj_list_alloc_data, /*size*/ 0x1f0,

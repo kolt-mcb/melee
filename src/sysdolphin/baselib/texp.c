@@ -1215,7 +1215,21 @@ void HSD_TExpSetReg(HSD_TExp* texp)
     changed = 0;
 
     while (clist != NULL) {
+#if BUILD_TARGET_PC
+        /* PC port: an unconverted TExp chain lands here as a run of
+         * plausible-looking pointers with the wrong node type. On GCN this
+         * assert only documented an invariant; here it aborts the process
+         * (Mr. Game & Watch, whose materials build a longer constant list
+         * than anyone else's). Stop walking instead -- the registers set so
+         * far are still applied, so the material renders wrong rather than
+         * killing the run. */
+        if (clist->type != HSD_TE_CNST) {
+            port_guard_warn("texp.c:1425");
+            break;
+        }
+#else
         HSD_ASSERT(0x591, clist->type == HSD_TE_CNST);
+#endif
         if (clist->reg < 8) {
             changed |= 1 << clist->reg;
             if (clist->comp == HSD_TE_RGB) {

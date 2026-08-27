@@ -1,3 +1,4 @@
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "ftparts.h"
@@ -655,22 +656,53 @@ void ftParts_80074B6C(Fighter* fp, FtPartsVis* vis, int idx,
                       DObjList* dobj_list)
 {
     FtPartsVisLookup* lookup = vis->xC[idx]; // r4
+#if BUILD_TARGET_PC
+    if (dobj_list->data == NULL) {
+        return;
+    }
+#endif
     if (lookup != NULL && !vis->cleared[idx]) {
         int i; // r26
         for (i = 0; i < vis->model_num; i++) {
             int r25 = (int) fp->x5F4_arr[i].idx; // r25
             int j;                               // r24
+#if BUILD_TARGET_PC
+            if (lookup[i].x4 == NULL) {
+                continue;
+            }
+#endif
             for (j = 0; j < lookup[i].x0; j++) {
                 TempS* r27 = &lookup[i].x4[j]; // r27
                 u8* r0 = r27->x4;              // r0
+#if BUILD_TARGET_PC
+                /* PC port: pc_conv_VisLookup leaves TempS::x4 NULL when the
+                 * file offset for that leaf is out of range, so the index
+                 * array can be absent. Mr. Game & Watch (model_num 11, the
+                 * largest in the roster) is the character that hits it.
+                 * Skipping the leaf leaves those parts at their current
+                 * visibility instead of faulting on a read from address 0. */
+                if (r0 == NULL) {
+                    continue;
+                }
+#endif
                 if (j == r25) {
                     int k; // r20
                     for (k = 0; k < r27->x0; k++) {
+#if BUILD_TARGET_PC
+                        if (r0[k] >= FT_DOBJ_LIST_MAX) {
+                            continue;
+                        }
+#endif
                         HSD_DObjClearFlags(dobj_list->data[r0[k]], 1);
                     }
                 } else {
                     int k; // r20
                     for (k = 0; k < r27->x0; k++) {
+#if BUILD_TARGET_PC
+                        if (r0[k] >= FT_DOBJ_LIST_MAX) {
+                            continue;
+                        }
+#endif
                         HSD_DObjSetFlags(dobj_list->data[r0[k]], 1);
                     }
                 }
@@ -683,17 +715,41 @@ void ftParts_80074B6C(Fighter* fp, FtPartsVis* vis, int idx,
 void ftParts_80074CA0(FtPartsVis* vis, int idx, DObjList* dobj_list)
 {
     FtPartsVisLookup* lookup = vis->xC[idx]; // r0
+#if BUILD_TARGET_PC
+    if (dobj_list->data == NULL) {
+        return;
+    }
+#endif
     if (lookup != NULL && !vis->cleared[idx]) {
         int i; // r24
         for (i = 0; i < vis->model_num; i++) {
             int j; // r23
+#if BUILD_TARGET_PC
+            /* PC port: pc_conv_VisLookup leaves a row's TempS array NULL when
+             * its file offset is out of range. Mr. Game & Watch, with the
+             * largest model_num in the roster, is the character that has one;
+             * without this the walk indexed off a NULL base. */
+            if (lookup[i].x4 == NULL) {
+                continue;
+            }
+#endif
             for (j = 0; j < lookup[i].x0; j++) {
                 TempS* r26; // r26
                 int k;      // r22
                 u8* r29;    // r29
                 r26 = &lookup[i].x4[j];
                 r29 = r26->x4;
+#if BUILD_TARGET_PC
+                if (r29 == NULL) {
+                    continue;
+                }
+#endif
                 for (k = 0; k < r26->x0; k++) {
+#if BUILD_TARGET_PC
+                    if (r29[k] >= FT_DOBJ_LIST_MAX) {
+                        continue;
+                    }
+#endif
                     HSD_DObjClearFlags(dobj_list->data[r29[k]], 1);
                 }
             }
@@ -705,17 +761,48 @@ void ftParts_80074CA0(FtPartsVis* vis, int idx, DObjList* dobj_list)
 void ftParts_80074D7C(FtPartsVis* vis, int idx, DObjList* dobj_list)
 {
     FtPartsVisLookup* lookup = vis->xC[idx]; // r0
+#if BUILD_TARGET_PC
+    if (dobj_list->data == NULL) {
+        return;
+    }
+#endif
     if (lookup != NULL && vis->cleared[idx]) {
         int i; // r24
         for (i = 0; i < vis->model_num; i++) {
             int j; // r23
+#if BUILD_TARGET_PC
+            /* PC port: pc_conv_VisLookup leaves a row's TempS array NULL when
+             * its file offset is out of range. Mr. Game & Watch, with the
+             * largest model_num in the roster, is the character that has one;
+             * without this the walk indexed off a NULL base. */
+            if (lookup[i].x4 == NULL) {
+                continue;
+            }
+#endif
             for (j = 0; j < lookup[i].x0; j++) {
                 TempS* r26; // r26
                 int k;      // r22
                 u8* r29;    // r29
                 r26 = &lookup[i].x4[j];
                 r29 = r26->x4;
+#if BUILD_TARGET_PC
+                if (r29 == NULL) {
+                    continue;
+                }
+#endif
                 for (k = 0; k < r26->x0; k++) {
+#if BUILD_TARGET_PC
+                    /* PC port: pc_conv_VisLookup mis-sizes at least one of
+                     * Mr. Game & Watch's leaves -- it yields indices as high
+                     * as 214 for a list that never holds more than
+                     * FT_DOBJ_LIST_MAX. Skip the out-of-range ones; the
+                     * in-range slots are zeroed at allocation, so an
+                     * unregistered slot reads as "no dobj" rather than as
+                     * whatever the pool last held. */
+                    if (r29[k] >= FT_DOBJ_LIST_MAX) {
+                        continue;
+                    }
+#endif
                     HSD_DObjSetFlags(dobj_list->data[r29[k]], 1);
                 }
             }
@@ -730,6 +817,12 @@ void ftParts_80074E58(Fighter* fp)
 
     fp->parts = HSD_ObjAlloc(&fighter_parts_alloc_data);
     fp->dobj_list.data = HSD_ObjAlloc(&fighter_dobj_list_alloc_data);
+#if BUILD_TARGET_PC
+    if (fp->dobj_list.data != NULL) {
+        memset(fp->dobj_list.data, 0,
+               FT_DOBJ_LIST_MAX * sizeof(fp->dobj_list.data[0]));
+    }
+#endif
 #if BUILD_TARGET_PC
     if (getenv("MELEE_FTPOS") != NULL) {
         fprintf(stderr,
