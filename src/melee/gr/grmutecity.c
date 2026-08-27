@@ -62,6 +62,10 @@ static s32 grMc_8049F440[30];
 
 #include "grmutecity.static.h"
 
+#if BUILD_TARGET_PC
+#include <platform.h>
+#endif
+
 /* Forward declarations */
 void fn_801F2B58(Ground* gp, s32 arg1, CollData* cd, s32 arg3, s32 arg4, f32 arg5);
 
@@ -431,6 +435,14 @@ void grMuteCity_801EFC68(bool arg) {}
 void grMuteCity_801EFC6C(void)
 {
     grMc_804D69D0 = Ground_801C49F8();
+#if BUILD_TARGET_PC
+    /* Ground_801C49F8 yields NULL on PC -- see ground.c. Everything after this
+     * reads through the pointer. */
+    if (grMc_804D69D0 == NULL) {
+        port_guard_warn("grmutecity.c:no-params");
+        return;
+    }
+#endif
     stage_info.unk8C.b4 = 0;
     stage_info.unk8C.b5 = 0;
     grMuteCity_801EFD0C(0);

@@ -311,6 +311,37 @@ void mem_free(void* ptr)
     HSD_Free(ptr);
 }
 
+#if BUILD_TARGET_PC
+/* PC port: no definition of this exists in the tree, so it fell through to a
+ * weak `void` stub and every caller got whatever was in rax. Four stages --
+ * Castle, Old Kongo, Mute City, Shrine Route -- assign the result to their own
+ * parameter-struct pointer and dereference it immediately.
+ *
+ * It is the per-stage parameter block: the accessors around it here (see
+ * Ground_801C0498 just below) all read stage_info.param, and each caller casts
+ * the result to its own view of that block. Returning it makes those stages
+ * read real parameters when the stage supplied them, and NULL when it did
+ * not -- which the callers must still check. */
+void* Ground_801C49F8(void)
+{
+    /* Returns the stage's own parameter block. Which block that is, this tree
+     * does not say: the function has no definition and no declaration, and
+     * each of the four callers (Castle, Old Kongo, Mute City, Shrine Route)
+     * casts the result to a different private struct.
+     *
+     * Two candidates were tried and both are wrong. stage_info.param is the
+     * shared GroundParam header -- Old Kongo survives on it, Castle divides by
+     * zero. &stage_info.xA0 is the per-StKind row Ground_801C28CC fills, but
+     * those are s32 products of two s16s and the callers read floats.
+     *
+     * So: NULL, which the callers must check, rather than a guess that reads
+     * one struct through another's field offsets. Returning it from here
+     * rather than from a weak `void` stub at least makes that deterministic --
+     * the stub left whatever was in rax. */
+    return NULL;
+}
+#endif
+
 f32 Ground_801C0498(void)
 {
     GroundParam* temp_r3 = stage_info.param;

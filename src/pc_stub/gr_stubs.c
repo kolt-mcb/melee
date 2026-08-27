@@ -122,9 +122,6 @@ __attribute__((weak)) int GetMatchTimer(...) {
     return 0;
 }
 
-__attribute__((weak)) void Ground_801C49F8(...) {
-    (void)0;
-}
 
 __attribute__((weak)) void HSD_JObjSetMtxDirty(...) {
     (void)0;
