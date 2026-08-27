@@ -2650,3 +2650,17 @@ __attribute__((weak)) void* gm_GetChallengerData(void) { return NULL; }
 // --- misc undefined fns (if/ module + dolphin rumble not linked) ---
 __attribute__((weak)) void HSD_PadRumbleOffN(u8 no) { }
 __attribute__((weak)) void un_802FE3F8(int a, int b, short* c, short* d) { }
+
+/* PC port: DATA stubs, not function stubs.
+ *
+ * sislib.c's text layout reads two 576-byte tables that are not decompiled,
+ * and if_2FF2.c reaches into the DevText debug overlay (textlib.c/textdraw.c),
+ * which stays out of the build. A weak *function* standing in for a data
+ * symbol is the shape that broke ifMagnify_803F97E8 -- &symbol was then a code
+ * address read as a struct -- so the tables are declared with the type and
+ * size their header gives them. Zeroed means "no kerning pairs", which lays
+ * text out without adjustment rather than corrupting it. */
+__attribute__((weak)) unsigned int lbl_8040C8C0[144];
+__attribute__((weak)) unsigned int HSD_SisLib_8040C680[144];
+__attribute__((weak)) void* DevText_Setup(void) { return 0; }
+__attribute__((weak)) long un_80304138(void) { return 0; }

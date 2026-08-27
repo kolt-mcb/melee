@@ -203,6 +203,15 @@ void ifStatus_PercentOnDeathAnimationThink(UnkX* value, s32 arg1, s32 arg2)
     {
         HSD_JObj* jobj_r30 = value->x54_jobj[i];
         ASSERT_NOT_NULL(jobj_r30, 993);
+#if BUILD_TARGET_PC
+        /* The assert is non-fatal here, so a null digit joint falls straight
+         * into the dereference below. x54_jobj[] is filled from
+         * ifStatus_802F6194, which walks the converted HUD joint tree; not
+         * every slot is populated yet, and a KO is when this runs. */
+        if (jobj_r30 == NULL) {
+            continue;
+        }
+#endif
         if (fabsf_bitwise(jobj_r30->translate.x) <
             100.0f) { // 100.0f @ lbl_804DDA6C
             float f = (&value->x34_vec.x)[i];
@@ -753,6 +762,22 @@ HSD_GObj* ifStatus_802F6194(HSD_GObj* node, s32 n)
     if ((node == NULL) || (n < 0)) {
         return NULL;
     }
+#if BUILD_TARGET_PC
+    /* `node` is really an HSD_JObj* -- every caller passes one and casts the
+     * result back. The walk below reaches it through HSD_GObj's fields, which
+     * is only correct because HSD_GObj::next_gx and HSD_JObj::child both sit
+     * at +0x10 on GameCube, and ::next at +0x08 for both. Neither holds on
+     * x86_64: HSD_Obj widens, so JObj::child is at +0x20 while GObj::next_gx
+     * is at +0x18. Walk the joint tree as a joint tree. */
+    {
+        HSD_JObj* cur = ((HSD_JObj*) node)->child;
+        s32 k;
+        for (k = 0; k < n && cur != NULL; k++) {
+            cur = cur->next;
+        }
+        return (HSD_GObj*) cur;
+    }
+#endif
     if (node == NULL) {
         gx_head = NULL;
     } else {

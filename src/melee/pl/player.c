@@ -2668,7 +2668,11 @@ bool Player_800368F8(int slot)
     return ftLib_80086BB4(player->player_entity[player->transformed[0]]);
 }
 
+#if BUILD_TARGET_PC
+void Player_80036978(s32 slot, Vec3* arg1)
+#else
 void Player_80036978(s32 slot, s32 arg1)
+#endif
 {
     StaticPlayer* player;
 
@@ -2683,8 +2687,12 @@ void Player_80036978(s32 slot, s32 arg1)
     player = &player_slots[slot];
 
     /// @todo Eliminate cast.
+#if BUILD_TARGET_PC
+    ftLib_80086B90(player->player_entity[player->transformed[0]], arg1);
+#else
     ftLib_80086B90(player->player_entity[player->transformed[0]],
                    (Vec3*) arg1);
+#endif
 }
 
 void Player_InitOrResetPlayer(s32 slot)

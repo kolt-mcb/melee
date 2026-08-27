@@ -160,43 +160,55 @@ malformed word can carry any of 64 opcodes and only 10..58 have handlers; off
 the end of the table is an indirect call through whatever the linker placed
 next.
 
-## The HUD is blocked on one thing: a `SceneDesc` converter
+## The HUD renders
 
-`if/` compiles and links cleanly on PC once three things are dealt with:
-`MSL/stdio.h` and `MSL/string.h` need the `#include_next` guard `MSL/math.h`
-already has (Metrowerks' `fpos_t`/`struct _IO_FILE`/`fwrite` conflict with
-glibc's); `textlib.h` declares `un_803045A0`/`un_80304690` as `int` while
-`textlib.c` defines them `bool`; and `soundtest.c`, `ifprize.c`,
-`textlib.c`, `textdraw.c` pull in the unbuilt `ty/` trophy system and
-undecompiled `.data` globals, so they stay out.
+`if/` is in the build and the in-match HUD draws: both players' percent
+displays and stock icons, updating with damage and surviving a KO.
 
-It still cannot run. `ifAll_802F390C` loads `IfAll.dat` and takes the
-`ScInfDmg_scene_data` section as a `SceneDesc` — big-endian, with four pointer
-arrays that widen here — and nothing converts it, so `models[0]->joint` is
-garbage. Guarding around that means guarding every display function in
-`ifstatus.c`/`ifall.c`/`iftime.c` in turn, and the query side that would have
-justified linking it anyway (`ifStock_802F7EFC`, `ifTime_IsTimerHidden`,
-`ifMagnify_802FB6E8`) reads the same uninitialised HUD state, so it would
-return exactly what the zero stubs already return. Linking `if/` without the
-converter buys nothing.
+Getting there needed `port/pc_scene.c` (a `SceneDesc` converter) plus a chain
+of fixes, almost all of them the port's signature bug in different clothes:
 
-The converter is the whole job, and most of it already exists:
+- **`HSD_SisLib_Alloc(0xA0)`** is `sizeof(HSD_Text)` on GameCube. The struct is
+  larger here, so every write past 0xA0 landed on the next block's `SisBlock`
+  header and corrupted sislib's free list. Two more literal sizes alongside it,
+  and `- 0xC` for the pool header.
+- **Two overlay structs in `ifmagnify.c`** (`pad[0x5C]`, `pad[0x74]`) reach
+  `image_descs` at hardcoded GameCube offsets. On x86_64 those land inside
+  `player[]` and wrote a host-heap address into `player[3].gobj`.
+- **`ifStatus_802F6194` walks an `HSD_JObj*` through `HSD_GObj`'s fields.**
+  That works only because `GObj::next_gx` and `JObj::child` are both at +0x10
+  on GameCube, and `::next` at +0x08 for both. Neither holds here.
+- **`Player_80036978(s32 slot, s32 arg1)`** takes a `Vec3*` in an `s32` -- the
+  decomp even marks it `@todo Eliminate cast`. It truncated a stack address.
+- **`lbArchive_80016DBC` dropped its variadic `(symbol, name)` pairs**, so
+  every caller's out-pointer kept whatever it held.
+- **`OSPanic` declared `noreturn` while its stub returns** -- the `__assert`
+  bug again, and the reason sislib's allocator recovery paths vanished.
+- Hardcoded GameCube `memzero` sizes, and `% arg3` with a zero period from an
+  undecompiled bonus table (PowerPC's `divw` produced garbage; x86 traps).
 
-```c
-struct SceneDesc {
-    DynamicModelDesc** models;                                  /* NULL-terminated */
-    struct { HSD_CObjDesc* desc; HSD_CameraAnim** anims; }* cameras;
-    struct LightList { HSD_LightDesc* desc; HSD_LightAnim** anims; }** lights;
-    struct { HSD_FogDesc* desc; HSD_CameraAnim** anims; }* fogs;
-};
-```
+Still off: the **magnifier** (the off-screen player indicator). It is driven by
+~20 float constants in `.data` that are not decompiled, so they resolve to weak
+*function* stubs -- `ifMagnify_804DDB4C` read back as 1.6e36 and gave
+`HSD_CObjSetOrtho` a degenerate frustum. Disabled until those are recovered.
+`textlib.c`/`textdraw.c` (the DevText overlay), `soundtest.c` and `ifprize.c`
+stay out of the build for the same reason: undecompiled `.data` plus the
+unbuilt `ty/` trophy system.
 
-The HUD needs `models[0]->joint`, `cameras[0].desc` and `lights[0]->desc`.
-`grDatFiles_ConvertJointTreeGCNtoX64` and the AObj/FObj/anim-joint converters
-in `grdatfiles.c` already cover the deep part; what is missing is the
-`SceneDesc` wrapper plus small `HSD_CObjDesc` and `HSD_LightDesc` converters.
-Menu and stage scene data have the same shape, so it should pay for itself
-more than once.
+## Weak function stubs standing in for DATA symbols
+
+412 data symbols are satisfied by weak *function* stubs, so `&symbol` is a code
+address and any read returns instruction bytes. This is what broke
+`ifMagnify_803F97E8` (a camera descriptor read as a function) and the magnifier
+constants. Most are inert because nothing reads them, but the class is silent
+and the failure looks like data corruption rather than a missing symbol.
+
+To list them: collect `__attribute__((weak))` function stubs in `src/pc_stub/`,
+collect `extern <type> name;` declarations (no parens) from the headers, and
+intersect. Fixing one means declaring it with the type and size its header
+gives it -- see the `lbl_8040C8C0` / `HSD_SisLib_8040C680` tables in
+`weak_stubs.c`. Several are `StageData` and `MotionState` tables whose real
+values are simply not decompiled yet.
 
 ## Prefer linking the real file over stubbing it
 

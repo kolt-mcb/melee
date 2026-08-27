@@ -2296,7 +2296,6 @@ __attribute__((weak)) void hsd_804D0F60(void) {}
 __attribute__((weak)) void hsd_804D0F90(void) {}
 __attribute__((weak)) void hsd_804D7900(void) {}
 __attribute__((weak)) void ifAll_802F3404(void) {}
-__attribute__((weak)) void ifMagnify_803F97E8(void) {}
 __attribute__((weak)) void ifMagnify_804DDB08(void) {}
 __attribute__((weak)) void ifMagnify_804DDB28(void) {}
 __attribute__((weak)) void ifMagnify_804DDB2C(void) {}

@@ -19,6 +19,14 @@
 #include <baselib/gobjproc.h>
 #include <baselib/jobj.h>
 
+#if BUILD_TARGET_PC
+#include <baselib/archive.h>
+#include "port/pc_scene.h"
+/* Holds the converted model so lbl_804A1340[0] can stay a pointer-to-slot,
+ * which is the shape every reader here assumes. */
+static DynamicModelDesc* if_2F72_pc_model;
+#endif
+
 /// Orphaned data strings from original ROM
 static char lbl_803F9780[] = "ScInfStc_scene_models";
 static char lbl_803F9798[] = "translate";
@@ -442,6 +450,18 @@ void if_802F7E24(void)
 {
     memzero(lbl_804A1340, sizeof(lbl_804A1340));
     lbArchive_LoadSections(*ifAll_GetArchive(), lbl_804A1340, lbl_803F9780, 0);
+#if BUILD_TARGET_PC
+    /* base[0] is the archive address of a slot holding a DynamicModelDesc
+     * offset -- read raw it is a big-endian 32-bit value, not a pointer.
+     * Convert it and point the slot at the converted descriptor, keeping the
+     * one extra indirection the callers expect. */
+    if (lbl_804A1340[0] != NULL) {
+        if_2F72_pc_model =
+            pc_conv_ModelDescAt(lbl_804A1340[0], (*ifAll_GetArchive())->data);
+        lbl_804A1340[0] = (if_2F72_pc_model != NULL) ? &if_2F72_pc_model
+                                                     : NULL;
+    }
+#endif
 }
 
 void if_802F7E7C(void)

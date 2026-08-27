@@ -329,7 +329,11 @@ void ifMagnify_802FBBDC(HSD_GObj* arg0)
                 continue;
             }
 
+#if BUILD_TARGET_PC
+            Player_80036978(i, &world_pos);
+#else
             Player_80036978(i, (s32) &world_pos);
+#endif
             is_outside = true;
             if (!(world_pos.x < Stage_GetCamBoundsLeftOffset()) &&
                 !(world_pos.x > Stage_GetCamBoundsRightOffset()))
@@ -649,6 +653,23 @@ void ifMagnify_802FC870(void)
     HSD_Archive** archive;
     s32 i;
 
+#if BUILD_TARGET_PC
+    /* The magnifier -- the off-screen player indicator -- is driven entirely
+     * by ~20 float constants in .data (ifMagnify_804DDB08..804DDB60) that are
+     * not decompiled. They resolve to weak *function* stubs, so reading one as
+     * an f32 returns instruction bytes: ifMagnify_804DDB4C came back as 1.6e36
+     * and HSD_CObjSetOrtho got a degenerate frustum, which divided by zero in
+     * the render callback. Zeroing them instead just collapses the projection.
+     *
+     * This is a display-only element and the rest of the HUD does not depend
+     * on it; the query side (ifMagnify_802FB6E8 / ifMagnify_802FC998) reads
+     * ifMagnify_804A1DE0.player[].state, which stays zeroed. Skip building it
+     * until those constants are recovered. */
+    memzero(&ifMagnify_804A1DE0, sizeof(ifMagnify_804A1DE0));
+    PORT_LOG_WARN("ifMagnify_802FC870: magnifier constants are undecompiled "
+                  ".data; off-screen indicator disabled\n");
+    return;
+#endif
     memzero(&ifMagnify_804A1DE0, sizeof(ifMagnify_804A1DE0));
     ifMagnify_802FC7C0(&ifMagnify_804A1DE0);
     archive = ifAll_GetArchive();
