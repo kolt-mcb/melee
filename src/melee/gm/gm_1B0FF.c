@@ -265,23 +265,30 @@ void gm_801B13B8(GameScene* arg0)
      * distinguishable on screen. */
     {
         int ck0 = CKIND_MARIO, ck1 = CKIND_MARIO, stkind = -1;
+        /* Costume colours default to 0 and 1 so a Mario ditto is readable on
+         * screen. The Dolphin reference harness needs them settable: matching
+         * the game's own debug-VS lineup (Link vs Mario, both colour 0) means
+         * matching its costumes too, and a different costume is a different
+         * texture set, which swamps a frame diff. */
+        int col0 = 0, col1 = 1;
         const char* spec = getenv("MELEE_BOOT_MATCH");
         if (spec != NULL) {
-            sscanf(spec, "%d,%d,%d", &ck0, &ck1, &stkind);
+            sscanf(spec, "%d,%d,%d,%d,%d", &ck0, &ck1, &stkind, &col0, &col1);
         }
         if (stkind >= 0) {
             temp_r28->rules.xE = (u16) stkind;
         }
         temp_r28->players[0].c_kind = (s8) ck0;
         temp_r28->players[1].c_kind = (s8) ck1;
-        temp_r28->players[0].color = 0;
-        temp_r28->players[1].color = 1;
+        temp_r28->players[0].color = (u8) col0;
+        temp_r28->players[1].color = (u8) col1;
         temp_r28->players[0].slot_type = Gm_PKind_Human;
         temp_r28->players[1].slot_type = Gm_PKind_Human;
         temp_r28->players[2].slot_type = Gm_PKind_NA;
         temp_r28->players[3].slot_type = Gm_PKind_NA;
-        OSReport("[PC] debug-VS lineup: p0=ckind%d p1=ckind%d stage=%d\n",
-                 ck0, ck1, (int) temp_r28->rules.xE);
+        OSReport("[PC] debug-VS lineup: p0=ckind%d(c%d) p1=ckind%d(c%d) "
+                 "stage=%d\n",
+                 ck0, col0, ck1, col1, (int) temp_r28->rules.xE);
     }
 #endif
 
