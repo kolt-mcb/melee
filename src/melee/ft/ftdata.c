@@ -1868,10 +1868,15 @@ void ftData_80085CD8(Fighter* fp, Fighter* arg1, int msid)
                     extern void* pc_conv_FigaTree(const u8* raw, const u8* base,
                                                   unsigned long len,
                                                   const void* owner);
+                    /* Key the recycled buffer on the *field*, not the
+                     * fighter: x590 and x598 are converted separately and
+                     * keying both on fp made the second overwrite the first,
+                     * leaving one of the two trees pointing at the other's
+                     * data. */
                     fp->x590 = pc_conv_FigaTree(
                         (const u8*) fp->x590, (const u8*) sp14.data,
                         (unsigned long) sp14.header.data_size,
-                        (const void*) fp);
+                        (const void*) &fp->x590);
                 }
 #endif
             } else {
@@ -1944,7 +1949,8 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
                                               const void* owner);
                 void* conv = pc_conv_FigaTree(
                     (const u8*) arg0->x598, (const u8*) sp10.data,
-                    (unsigned long) sp10.header.data_size, (const void*) arg0);
+                    (unsigned long) sp10.header.data_size,
+                    (const void*) &arg0->x598);
                 arg0->x598 = conv;
             }
 #endif

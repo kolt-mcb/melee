@@ -290,8 +290,9 @@ void ftAnim_8006E7B8(Fighter* fp, Fighter_Part part)
             if (getenv("MELEE_ANIMLOG") != NULL) {
                 static unsigned long n;
                 HSD_AObj* a0 = jobj->aobj;
-                if (a0 != NULL && ++n % 300 == 0) {
+                if (a0 != NULL && ++n % 1500 == 0) {
                     HSD_AObj* a = a0;
+                    fprintf(stderr, "[ANIM] fp=%p part=%d ", (void*) fp, i);
                     fprintf(stderr,
                             "[ANIM] JObjAnim #%lu jobj=%p aobj=%p frame=%.2f "
                             "end=%.1f framerate=%.2f flags=0x%x fobj=%p\n",
