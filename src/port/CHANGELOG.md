@@ -1,3 +1,57 @@
+## [2026-08-27] — GL bridge vs. the real GX enums
+
+The bridge kept private copies of GX enums instead of including
+`extern/dolphin/include/dolphin/gx/GXEnum.h`. Several disagreed with it --
+and that header is the one `src/sysdolphin/` compiles against, so its values
+are what actually arrive in the bridge's arguments.
+
+### Bug Fixes
+- **Texture filtering was dead code.** `GXTexFilter` is the ordered enum 0..5,
+  but the live site in `GXLoadTexObj` (and the never-called `gx_filter_mode`)
+  tested for `0x04`/`0x0C`, the GX *hardware* TX_SETMODE0 encodings. No value
+  in range equals those, so every texture rendered `GL_NEAREST`, unfiltered.
+  The mipmap branch `(filt & 0xF0) == 0x10` was equally unreachable. 19.5% of
+  a match frame changes once filtering actually happens.
+- **Texture wrapping off by one.** `GX_CLAMP=0/GX_REPEAT=1/GX_MIRROR=2`; the
+  table started at 1, so `GX_CLAMP` was right only by hitting the default,
+  every repeating texture was clamped, and every mirrored one repeated.
+- **Real I4/I8 decoded through a stale palette.** A texture is paletted only
+  if created by `GXInitTexObjCI`; the format byte cannot tell, because C4/C8
+  are folded onto the I4/I8 decoders for their shared index layout, and
+  `g_current_tlut` is global state plain `GXInitTexObj` never clears.
+  `sislib.c:2261` loads the text/HUD glyph atlas as a genuine `GX_TF_I4`, so
+  it took whatever palette the previous CI texture left behind -- the brown
+  smear where the white backing plate behind each damage percentage belongs.
+  CI-ness is now tracked per texobj. (Restricting by declared format 0x08/
+  0x09/0x0A was tried first and regressed; that is recorded in the code.)
+- **TEV konstant alpha invented.** `GXTevKAlphaSel` mirrors `GXTevKColorSel`:
+  0..7 are the fractions `(8-n)/8`, `0x10..0x1F` select one component of one
+  K register. The shader tested an 8..15 range no GX value takes and had the
+  fractions wrong from index 2 (`KASEL_3_4` resolved to 1/2). The colour path
+  was already correct -- the two had drifted apart.
+- **Sampler state applied per upload, not per load.** The texture cache dedups
+  on (image, w, h, format), so one GL texture can back two TObjs that disagree
+  about wrap or filter; a cache hit kept the first loader's settings. Harmless
+  while everything collapsed to CLAMP/NEAREST, not harmless now. Parameters are
+  set after every bind, and `g_tex_cache_hasmip` records which slots have a mip
+  chain so a cache hit is not given a mip filter over a texture without one.
+- **`GXCompCnt`/`GXCompType` were fabricated** (`GX_POS_XYZ=3`, a `GX_POS_XZ`
+  that does not exist in GX, a `GX_F32` colliding with the file's own
+  `GX_IA1`). Only reached from `pc_render_tex_test`, but a texture self-test
+  feeding the vertex path a bogus format cannot validate anything.
+
+### Method
+A script parsing every `enum { ... }` in the bridge and in `GXEnum.h`, diffing
+enumerators by name, then filtering to those actually *referenced* -- most
+mismatched definitions are dead. Worth re-running after bridge work. Note the
+trap: a mismatched-but-dead definition can sit beside a live *inline* copy of
+the same wrong test, which is exactly how the filter bug survived.
+
+### Known divergence, not fixed
+`GXSetTevSwapModeTable` is stored in `tev_swap_table[4][4]` but never uploaded;
+the shader hardcodes SWAP1/2/3 as RRR/GGG/BBB. HSD programs the default table
+and almost always uses SWAP0, so this has no observed effect yet.
+
 ## [2025-08-11] — Color Texture Verification & TEV Shader Cleanup
 
 ### Color Texture Verification

@@ -190,7 +190,10 @@ def capture_port(outdir, run_frames, lo, hi, stride, extra_env):
         capture_output=True,
         text=True,
     )
-    subprocess.run(["pkill", "-f", "melee-pc"], capture_output=True)
+    # -x, not -f: `pkill -f melee-pc` matches any command line containing
+    # that string, which includes the shell or wrapper that launched this
+    # script -- it has killed the caller before.
+    subprocess.run(["pkill", "-x", "melee-pc"], capture_output=True)
     return port_dir
 
 
