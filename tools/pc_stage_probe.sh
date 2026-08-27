@@ -23,8 +23,9 @@ FPS=$(grep -c '\[FPS\]' "$OUT")
 DRAWS=$(grep '\[FPS\]' "$OUT" | tail -1 | grep -o 'draws=[0-9]*' | sed 's/draws=//')
 # Any crash report, not just SIGSEGV -- stages die with SIGBUS and SIGABRT too.
 CRASH=$(grep -cE 'Signal[0-9]+|\[CRASH\] backtrace' "$OUT")
-# Which stage archive actually opened. GrXx.dat only; PlXx.dat are fighters.
-GRDAT=$(grep -oE "opened '/?Gr[A-Za-z0-9]+\.dat'" "$OUT" \
+# Which stage archive actually opened. Gr* only (Pl* are fighters), and both
+# extensions: several stages ship a localised .usd rather than a .dat.
+GRDAT=$(grep -oE "opened '/?Gr[A-Za-z0-9]+\.(dat|usd)'" "$OUT" \
         | sed -E "s/^opened '\/?//; s/'$//" | sort -u | tr '\n' ' ')
 
 echo "=== stkind $ST ==="
