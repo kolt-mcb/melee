@@ -552,24 +552,34 @@ static /// @remarks #Item_8026862C loads two integers into this,
 void Item_80267978(HSD_GObj* gobj)
 {
     Item* item_data = gobj->user_data;
+#if BUILD_TARGET_PC
+    /* PC port: it_8027870C leaves the four article tables NULL while the ItCo
+     * common-item data is unconverted, so each lookup below is a read through
+     * a null base. Yield NULL instead; xC4_article_data is null-checked by the
+     * stage-item branch already. */
+#define IT_PC_ART(tbl, i) (((tbl) != NULL) ? (tbl)[i] : NULL)
+#else
+#define IT_PC_ART(tbl, i) ((tbl)[i])
+#endif
     if (item_data->kind < It_Kind_Kuriboh) {
         // Common items
-        item_data->xC4_article_data = it_804D6D24[item_data->kind];
+        item_data->xC4_article_data =
+            IT_PC_ART(it_804D6D24, item_data->kind);
         item_data->xB8_itemLogicTable = &it_803F14C4[item_data->kind];
     } else if (item_data->kind < It_PKind_Start) {
         // Character items
         int idx = item_data->kind - It_Kind_Kuriboh;
-        item_data->xC4_article_data = it_804D6D38[idx];
+        item_data->xC4_article_data = IT_PC_ART(it_804D6D38, idx);
         item_data->xB8_itemLogicTable = &it_803F3100[idx];
     } else if (item_data->kind < It_Kind_Old_Kuri) {
         // Pokemon
         int idx = item_data->kind - It_PKind_Start;
-        item_data->xC4_article_data = it_804D6D30[idx];
+        item_data->xC4_article_data = IT_PC_ART(it_804D6D30, idx);
         item_data->xB8_itemLogicTable = &it_803F23CC[idx];
     } else {
         // Stage items
         int idx = item_data->kind - It_Kind_Old_Kuri;
-        item_data->xC4_article_data = it_804A0F60[idx];
+        item_data->xC4_article_data = IT_PC_ART(it_804A0F60, idx);
         item_data->xB8_itemLogicTable = &it_803F4D20[idx];
         if (item_data->xC4_article_data == NULL) {
             HSD_ASSERTREPORT(
@@ -577,6 +587,7 @@ void Item_80267978(HSD_GObj* gobj)
         }
     }
     item_data->xBC_itemStateContainer = item_data->xB8_itemLogicTable->states;
+#undef IT_PC_ART
 }
 
 static void Item_80267AA8(HSD_GObj* gobj, SpawnItem* spawnItem)
