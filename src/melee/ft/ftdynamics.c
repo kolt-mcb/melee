@@ -35,8 +35,17 @@ static inline void ftCo_8009CB40_inline(struct DynamicsData* data)
 
 void ftCo_8009CB40(Fighter* fp, ssize_t bone_idx, bool arg2, FigaTree* arg3)
 {
-    ftDynamics* dyn = fp->ft_data->x2C;
+    ftDynamics* dyn;
     PAD_STACK(8);
+#if BUILD_TARGET_PC
+    /* PC port: pc_conv_ftData leaves ftData::x2C (dynamics) NULL, so guard
+     * here at the callee rather than at each of the callers. The GCN body's
+     * own dynamicsNum == 0 path is a no-op, so returning is equivalent. */
+    if (!pc_ptr_sane(fp->ft_data) || !pc_ptr_sane(fp->ft_data->x2C)) {
+        return;
+    }
+#endif
+    dyn = fp->ft_data->x2C;
     if (dyn->dynamicsNum != 0) {
         s32 bone_id;
         s32 flag;

@@ -1,3 +1,8 @@
+#if BUILD_TARGET_PC
+#include <stdint.h>
+#include "gr/grdatfiles.h"
+#include "port/pc_ptr.h"
+#endif
 #include "ftPr_Init.h"
 
 #include "ftPr_SpecialHi.h"
@@ -476,7 +481,38 @@ void ftPr_Init_8013C360(HSD_GObj* gobj)
             joints[fp->x619_costume_id] = HSD_ArchiveGetPublicAddress(
                 costume_list[fp->x619_costume_id].x14_archive,
                 ftPr_Init_803D05B4[fp->x619_costume_id]);
+#if BUILD_TARGET_PC
+            /* PC port: this is a second joint tree -- Jigglypuff's per-costume
+             * headwear -- fetched straight out of the archive by public
+             * symbol, so it is still GCN-packed big-endian data. The main
+             * costume model goes through grDatFiles_ConvertJointTreeGCNtoX64
+             * in ftData_80085820; this one was never wired through it, so
+             * HSD_JObjLoadJoint below read 4-byte offsets as 8-byte pointers
+             * and walked off into garbage. Only costume ids 1+ have a non-NULL
+             * table entry, which is why a mirror match (player 2 gets an
+             * alternate costume) was needed to hit it. */
+            {
+                HSD_Archive* ar = costume_list[fp->x619_costume_id].x14_archive;
+                const u8* raw = (const u8*) joints[fp->x619_costume_id];
+                if (raw != NULL && pc_ptr_sane(ar) && pc_ptr_sane(ar->data) &&
+                    (uintptr_t) raw > (uintptr_t) ar->data)
+                {
+                    joints[fp->x619_costume_id] =
+                        grDatFiles_ConvertJointTreeGCNtoX64(raw, ar->data, 0,
+                                                            NULL);
+                    grDatFiles_ResolvePObjJoints();
+                } else {
+                    joints[fp->x619_costume_id] = NULL;
+                }
+            }
+#endif
         }
+#if BUILD_TARGET_PC
+        if (joints[fp->x619_costume_id] == NULL) {
+            fp->u.pr.x223C = 0;
+            return;
+        }
+#endif
 
         fp->u.pr.x2240.data = HSD_ObjAlloc(&fighter_x2040_alloc_data);
         ftPartsPObjSetDefaultClass();
