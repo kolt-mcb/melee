@@ -122,15 +122,28 @@ fi
 # transition, so Dolphin lands in the 1P menus and has to be navigated out.
 # BUTTON is a pipe name (A, B, START, UP, DOWN, LEFT, RIGHT) or MAIN:<x>:<y>
 # to move the control stick, which is how Melee's menus are actually driven.
+# A step may be prefixed with P2: to drive the second controller instead --
+# <frame>:P2:A, <frame>:P2:MAIN:0.5:1.0. A VS match needs two players, and a
+# Melee port stays "N/A" on the character select screen until that port's own
+# controller presses something, so P1 cannot claim port 2 on its behalf.
+# GCPad2 is configured as Pipe/0/brash2 with SIDevice1 = 6.
+PIPE2="$HOME/.local/share/dolphin-emu/Pipes/brash2"
 if [ -n "${MELEE_REF_INPUT:-}" ] && [ -p "$PIPE" ]; then
     (
         exec 3> "$PIPE"
+        # Opening the second pipe unconditionally would block forever when
+        # Dolphin has not created it, so only open it if it is there.
+        if [ -p "$PIPE2" ]; then exec 4> "$PIPE2"; else exec 4>&3; fi
         for step in $(echo "$MELEE_REF_INPUT" | tr ',' ' '); do
             target="${step%%:*}"
             rest="${step#*:}"
+            fd=3
+            case "$rest" in
+              P2:*) fd=4; rest="${rest#P2:}" ;;
+            esac
             while [ "$(ls "$DUMPDIR" 2>/dev/null | wc -l)" -lt "$target" ]; do
                 sleep 0.2
-                pgrep -x dolphin-emu-nog > /dev/null || { exec 3>&-; exit 0; }
+                pgrep -x dolphin-emu-nog > /dev/null || { exec 3>&- 4>&-; exit 0; }
             done
             case "$rest" in
               MAIN:*)
@@ -140,16 +153,16 @@ if [ -n "${MELEE_REF_INPUT:-}" ] && [ -p "$PIPE" ]; then
                 # barely moves. Recentre with an explicit later step
                 # (<frame>:MAIN:0.5:0.5) so the hold is frame-accurate.
                 x="${rest#MAIN:}"; y="${x#*:}"; x="${x%%:*}"
-                printf 'SET MAIN %s %s\n' "$x" "$y" >&3
+                printf 'SET MAIN %s %s\n' "$x" "$y" >&"$fd"
                 ;;
               *)
-                printf 'PRESS %s\n' "$rest" >&3
+                printf 'PRESS %s\n' "$rest" >&"$fd"
                 sleep 0.25
-                printf 'RELEASE %s\n' "$rest" >&3
+                printf 'RELEASE %s\n' "$rest" >&"$fd"
                 ;;
             esac
         done
-        exec 3>&-
+        exec 3>&- 4>&-
     ) &
     INPUTTER=$!
     echo "dolphin_ref: input script $MELEE_REF_INPUT"

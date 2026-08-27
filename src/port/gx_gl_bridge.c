@@ -458,6 +458,14 @@ enum {
 #define MAX_VERTS 16384
 #define MAX_TEXTURES 64
 
+/* Whether each texture-cache slot's GL texture has a mip chain. A mipmapped
+ * minification filter over a texture without one is incomplete in GL and
+ * samples as white, and the chain is only ever built on the upload path -- so
+ * a cache hit asking for a mip filter has to be told the truth. Kept out of
+ * BridgeState for the same reason as the TEV output registers below. */
+static Bool g_tex_cache_hasmip[MAX_TEXTURES];
+
+
 /* TLUT palette slot structure */
 typedef struct {
     u8 rgba[256][4];   /* Max 256 entries per palette (GX_TLUT0-15) */
@@ -1313,23 +1321,22 @@ static const char* g_frag_src =
 "    // APREV/A0/A1/A2 are the alpha halves of the four TEV registers.\n"
 "    if (src < 4) return reg[src].a;\n"
 "    if (src == 6) { // KONST\n"
+"        // GXTevKAlphaSel (GXEnum.h:663) mirrors GXTevKColorSel: 0..7 are\n"
+"        // the constant fractions (8-n)/8, and 0x10..0x1F select one\n"
+"        // component of one konstant register, ordered R,G,B,A by group.\n"
+"        // The previous table invented an 8..15 range that no GX value ever\n"
+"        // takes, so every K-register alpha select fell through to a plain\n"
+"        // u_kalpha.a, and the fractions were wrong from index 2 onward\n"
+"        // (KASEL_3_4=2 was resolving to 1/2, KASEL_1_2=4 to 1/8).\n"
 "        int ksel = u_tev_kalpha_sel[stage];\n"
-"        float ka;\n"
-"        if (ksel >= 8 && ksel <= 15) {\n"
-"            int idx = ksel - 8;\n"
-"            ka = (ksel % 2 == 1) ? u_kcolor[idx].a : u_kalpha.a;\n"
-"        } else {\n"
-"            ka = u_kalpha.a;\n"
+"        if (ksel <= 7) return float(8 - ksel) / 8.0;\n"
+"        if (ksel >= 16 && ksel <= 31) {\n"
+"            int ki = (ksel - 16) % 4;\n"
+"            int comp = (ksel - 16) / 4;\n"
+"            vec4 k = u_kcolor[ki];\n"
+"            return (comp == 0) ? k.r : (comp == 1) ? k.g : (comp == 2) ? k.b : k.a;\n"
 "        }\n"
-"        if (ksel == 0) return ka;\n"
-"        if (ksel == 1) return ka * (7.0/8.0);\n"
-"        if (ksel == 2) return ka * 0.5;\n"
-"        if (ksel == 3) return ka * 0.25;\n"
-"        if (ksel == 4) return ka * 0.125;\n"
-"        if (ksel == 5) return ka * 0.75;\n"
-"        if (ksel == 6) return ka * (1.0/16.0);\n"
-"        if (ksel == 7) return ka * (1.0/32.0);\n"
-"        return ka;\n"
+"        return 1.0;\n"
 "    }\n"
 "    if (src == 7) return 0.0;        // ZERO\n"
 "    if (src == 8) return 1.0;        // ONE\n"
@@ -7261,6 +7268,20 @@ static GLenum gx_filter_mode(u32 gx_filt)
     return (gx_filt & 0x01) ? GL_LINEAR : GL_NEAREST;
 }
 
+/* Minification filter, including the four mipmapped modes. The caller must
+ * have built a mip chain (glGenerateMipmap) before selecting one of those,
+ * since the bridge uploads level 0 only. */
+static GLenum gx_min_filter_mode(u32 gx_filt)
+{
+    switch (gx_filt) {
+    case 2: return GL_NEAREST_MIPMAP_NEAREST; /* GX_NEAR_MIP_NEAR */
+    case 3: return GL_LINEAR_MIPMAP_NEAREST;  /* GX_LIN_MIP_NEAR  */
+    case 4: return GL_NEAREST_MIPMAP_LINEAR;  /* GX_NEAR_MIP_LIN  */
+    case 5: return GL_LINEAR_MIPMAP_LINEAR;   /* GX_LIN_MIP_LIN   */
+    default: return gx_filter_mode(gx_filt);
+    }
+}
+
 static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
 {
     /* Check for existing matching texture (dedup by pointer + dims + format) */
@@ -7284,6 +7305,7 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
             g_state.tex_cache_h[i] = h;
             g_state.tex_cache_fmt[i] = fmt;
             g_state.tex_cache_hits[i] = 0;
+            g_tex_cache_hasmip[i] = FALSE;
             return i;
         }
     }
@@ -7679,35 +7701,16 @@ skip_tlut:
      * hold for any value below 16. Every texture in the game therefore fell
      * through to GL_NEAREST with no mip chain, and nothing was ever filtered.
      * gx_filter_mode() existed with the same defect but was never called. */
-    u32 filt = g_state.current_tex.min_filter;
-    u32 mag_filt = g_state.current_tex.mag_filter;
-    /* GX only permits GX_NEAR/GX_LINEAR for magnification. */
-    GLenum mag_f = (mag_filt & 0x01) ? GL_LINEAR : GL_NEAREST;
-    GLenum min_f;
-    if (filt >= 2 && filt <= 5) {
-        /* GX_NEAR_MIP_NEAR=2, GX_LIN_MIP_NEAR=3, GX_NEAR_MIP_LIN=4,
-         * GX_LIN_MIP_LIN=5. The bridge uploads level 0 only, so build the
-         * rest here -- a mipmap filter over a texture with no mip chain is
-         * incomplete in GL and samples as white. */
-        static const GLenum mip_filters[4] = {
-            GL_NEAREST_MIPMAP_NEAREST,
-            GL_LINEAR_MIPMAP_NEAREST,
-            GL_NEAREST_MIPMAP_LINEAR,
-            GL_LINEAR_MIPMAP_LINEAR,
-        };
-        min_f = mip_filters[filt - 2];
+    if (g_state.current_tex.min_filter >= 2 &&
+        g_state.current_tex.min_filter <= 5) {
+        /* A mipmapped minification filter needs a mip chain; the bridge
+         * uploads level 0 only, and a mip filter over a texture without one
+         * is incomplete in GL and samples as white. The filters themselves
+         * are selected after the bind below, so cache hits get them too. */
         glGenerateMipmap(GL_TEXTURE_2D);
-    } else {
-        min_f = gx_filter_mode(filt);
+        g_tex_cache_hasmip[slot] = TRUE;
     }
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_f);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_f);
     
-    /* Set wrapping */
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 
-                    gx_wrap_mode(g_state.current_tex.wrap_s));
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
-                    gx_wrap_mode(g_state.current_tex.wrap_t));
 bind_tex:
     
     /* Cleanup temp buffer */
@@ -7728,6 +7731,25 @@ bind_tex:
     u32 gl_unit = texEnv % 2;  /* Clamp to 0-1 (shader only has 2 units) */
     glActiveTexture(GL_TEXTURE0 + gl_unit);
     glBindTexture(GL_TEXTURE_2D, tex_id);
+
+    /* Sampler state belongs to the GXTexObj, not to the image: the texture
+     * cache dedups on (image, w, h, format), so the same image reached
+     * through two TObjs with different wrap or filter settings shares one GL
+     * texture. Setting these only on the upload path left a cache hit
+     * wearing whichever settings the first loader happened to have. That was
+     * invisible while gx_wrap_mode() collapsed everything to CLAMP and
+     * gx_filter_mode() to NEAREST; now that both actually vary, it is not. */
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                    g_tex_cache_hasmip[slot]
+                        ? gx_min_filter_mode(g_state.current_tex.min_filter)
+                        : gx_filter_mode(g_state.current_tex.min_filter));
+    /* GX only permits GX_NEAR/GX_LINEAR for magnification. */
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
+                    gx_filter_mode(g_state.current_tex.mag_filter));
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
+                    gx_wrap_mode(g_state.current_tex.wrap_s));
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
+                    gx_wrap_mode(g_state.current_tex.wrap_t));
     g_active_tex_slots[gl_unit] = slot;
     
     /* Count active texture units */
