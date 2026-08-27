@@ -7342,7 +7342,31 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
     }
     
     glBindTexture(GL_TEXTURE_2D, tex_id);
-    
+
+    if (getenv("MELEE_TEX_FMT") != NULL) {
+        /* Which GX texture formats actually reach the decoder, and at what
+         * sizes. Run it once with fighters on screen and once on a stage to
+         * see whether the two share a format set. */
+        static struct { u32 fmt, w, h, n; } seen[64];
+        static int seen_n;
+        int i, found = 0;
+        for (i = 0; i < seen_n; i++) {
+            if (seen[i].fmt == fmt && seen[i].w == w && seen[i].h == h) {
+                seen[i].n++;
+                found = 1;
+                break;
+            }
+        }
+        if (!found && seen_n < 64) {
+            seen[seen_n].fmt = fmt;
+            seen[seen_n].w = w;
+            seen[seen_n].h = h;
+            seen[seen_n].n = 1;
+            seen_n++;
+            fprintf(stderr, "[TEXFMT] fmt=0x%02X %ux%u\n", fmt, w, h);
+        }
+    }
+
     if (fmt == 0x0E) {
         /* CMPR: decompress to RGBA8888 temp buffer */
         tmp_buf = decompress_cmpr(img, w, h, &tmp_size);
