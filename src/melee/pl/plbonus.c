@@ -318,7 +318,15 @@ int pl_8003906C(int player, int kind, unsigned int* arg2, unsigned int arg3,
                 *arg6 = (int) arg5;
                 return 1;
             }
+#if BUILD_TARGET_PC
+        /* arg3 is a period taken from bonus/trick tables that are still
+         * undecompiled here, so it can be zero -- and `% 0` traps on x86_64
+         * where PowerPC's divw simply produced a garbage quotient. Treat a
+         * zero period as "never fires", which is what a disabled bonus is. */
+        } else if (arg3 != 0 && (gm_8016AEDC() % arg3) == 0) {
+#else
         } else if ((gm_8016AEDC() % arg3) == 0) {
+#endif
             if (kind != -1) {
                 var_r3 = pl_80039418(player, kind);
             } else {
@@ -364,7 +372,12 @@ bool pl_80039238(int player, int kind, int* arg2, unsigned int arg3, f32* arg4,
                 *arg4 = arg7;
                 return true;
             }
+#if BUILD_TARGET_PC
+        /* Same zero-period guard as above. */
+        } else if (arg3 != 0 && gm_8016AEDC() % arg3 == 0) {
+#else
         } else if (gm_8016AEDC() % arg3 == 0) {
+#endif
             if (kind != -1) {
                 var_r3 = pl_80039418(player, kind);
             } else {

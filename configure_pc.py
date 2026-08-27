@@ -53,6 +53,7 @@ DISPLAY_MODULES = [
     "shadow.c",
     "sobjlib.c",
     "displayfunc.c",
+    "sislib.c",   # SIS text system: the HUD's name tags and intro text
     "archive.c",  # GCN archive parser (needed for stage data)
     "perf.c",     # performance counters (HSD_PerfCurrentStat)
 ]
@@ -98,8 +99,16 @@ CM_SOURCES = collect(MELEE / "cm")  # camera — required for in-match view (roa
 # without ever being launched. gCrowdConfig is the zeroed block on PC, so the
 # real function is a pass-through, which is the correct default.
 SFX_SOURCES = collect(MELEE / "sfx")
+# if/ is the in-match HUD: percent, stocks, timer, magnifier. Its scene data is
+# converted by port/pc_scene.c. soundtest.c (sound-test menu), ifprize.c
+# (trophy display) and textlib/textdraw (the DevText debug overlay) pull in the
+# unbuilt ty/ trophy system and undecompiled .data globals, so they stay out.
+IF_SOURCES = collect(MELEE / "if")
+IF_SOURCES = [s for s in IF_SOURCES
+              if Path(s).name not in {"soundtest.c", "ifprize.c",
+                                      "textlib.c", "textdraw.c"}]
 MATH_SHIM = [str(SRC / "math_shim.c")]
-ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + GR_SOURCES + PL_SOURCES + FT_SOURCES + GM_SOURCES + EF_SOURCES + IT_SOURCES + MN_SOURCES + MP_SOURCES + CM_SOURCES + SFX_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
+ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + GR_SOURCES + PL_SOURCES + FT_SOURCES + GM_SOURCES + EF_SOURCES + IT_SOURCES + MN_SOURCES + MP_SOURCES + CM_SOURCES + SFX_SOURCES + IF_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
 
 INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,

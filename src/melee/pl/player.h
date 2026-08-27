@@ -302,7 +302,14 @@ void Player_800366DC(s32 slot, s32 arg1);
 void Player_80036790(s32 slot, f32 arg1);
 void Player_80036844(s32 slot, s32 arg1);
 bool Player_800368F8(int slot);
+#if BUILD_TARGET_PC
+/* arg1 is a Vec3* -- the definition casts it straight back, and the decomp
+ * marks it "@todo Eliminate cast". As an s32 it truncates a 64-bit stack
+ * address here, which is what crashed the magnifier's render callback. */
+void Player_80036978(s32 slot, Vec3* arg1);
+#else
 void Player_80036978(s32 slot, s32 arg1);
+#endif
 void Player_InitOrResetPlayer(s32 slot);
 void Player_80036CF0(s32 slot);
 void Player_80036D24(s32 slot);

@@ -1,5 +1,9 @@
 #include "sislib.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #include "cobj.h"
 #include "gobj.h"
 #include "gobjgxlink.h"
@@ -103,6 +107,42 @@ void* HSD_SisLib_Alloc(s32 size)
         alloc_tail = alloc_cur;
         alloc_cur = alloc_cur->next;
     }
+#if BUILD_TARGET_PC
+    /* This walk trusts the free list completely, so a bad link is a wild
+     * dereference rather than a failed allocation. Bound it and check each
+     * node; a list that does not survive that fails the allocation, which is
+     * a case callers already have to handle. */
+    {
+        int guard_n = 0;
+        for (;;) {
+            if (!pc_ptr_sane(free_cur) || ++guard_n > 4096) {
+                port_guard_warn("sislib.c:free-list");
+                return NULL;
+            }
+            if (free_cur->size == size) {
+                best = free_cur;
+                break;
+            }
+            if (free_cur->size > size) {
+                if (best != NULL) {
+                    if (best->size > free_cur->size) {
+                        best = free_cur;
+                    }
+                } else {
+                    best = free_cur;
+                }
+            }
+            free_cur = free_cur->next;
+            if (free_cur == NULL) {
+                break;
+            }
+        }
+    }
+    if (best == NULL) {
+        port_guard_warn("sislib.c:no-block");
+        return NULL;
+    }
+#else
     for (;;) {
         if (free_cur->size == size) {
             best = free_cur;
@@ -122,6 +162,7 @@ void* HSD_SisLib_Alloc(s32 size)
             break;
         }
     }
+#endif
     if (best == NULL) {
         OSReport("Memory Empty\n");
         OSPanic("sislib.c", 0x56, "");
@@ -367,7 +408,14 @@ HSD_Text* HSD_SisLib_803A5ACC(int font_idx, s32 context_id, f32 pos_x,
         list_tail = list_cur;
         list_cur = list_cur->next;
     }
+#if BUILD_TARGET_PC
+    /* 0xA0 is sizeof(HSD_Text) on GameCube. It is larger here -- several of
+     * its members are pointers -- so every write past 0xA0 landed on the next
+     * block's SisBlock header and corrupted the free list. */
+    text = HSD_SisLib_Alloc(sizeof(HSD_Text));
+#else
     text = HSD_SisLib_Alloc(0xA0);
+#endif
     if (HSD_SisLib_804D7978 == NULL) {
         HSD_SisLib_804D7978 = text;
     }
@@ -444,7 +492,13 @@ void HSD_SisLib_803A5E70(void)
     used_head = NULL;
     free_head->next = NULL;
     free_head->data = (HSD_Text*) (free_head + 1);
+    #if BUILD_TARGET_PC
+    /* 0xC is sizeof(SisBlock) on GameCube; two of its three fields are
+     * pointers, so the header is bigger here. */
+    free_head->size = HSD_SisLib_804D7968 - sizeof(SisBlock);
+#else
     free_head->size = HSD_SisLib_804D7968 - 0xC;
+#endif
 }
 
 void HSD_SisLib_803A5F50(s32 font_idx)
@@ -485,7 +539,13 @@ void HSD_SisLib_803A6048(u32 size)
     HSD_SisLib_804D796C = free_head = HSD_MemAlloc(HSD_SisLib_804D7968);
     free_head->next = NULL;
     free_head->data = (HSD_Text*) (free_head + 1);
+    #if BUILD_TARGET_PC
+    /* 0xC is sizeof(SisBlock) on GameCube; two of its three fields are
+     * pointers, so the header is bigger here. */
+    free_head->size = HSD_SisLib_804D7968 - sizeof(SisBlock);
+#else
     free_head->size = HSD_SisLib_804D7968 - 0xC;
+#endif
     HSD_SisLib_804D7978 = NULL;
     HSD_SisLib_804D797C = NULL;
 
@@ -527,7 +587,11 @@ s32 HSD_SisLib_803A611C(int font_idx, HSD_GObj* parent_gobj, u16 class_id,
         }
         list_cur = list_cur->x0;
     }
+#if BUILD_TARGET_PC
+    entry = HSD_SisLib_Alloc(sizeof(sislib_UnkAlloc3)); /* 0x10 on GameCube */
+#else
     entry = HSD_SisLib_Alloc(0x10);
+#endif
     if (HSD_SisLib_804D797C == NULL) {
         HSD_SisLib_804D797C = entry;
     }
@@ -697,7 +761,11 @@ HSD_Text* HSD_SisLib_803A6754(int font_idx, s32 context_id)
 
     text = HSD_SisLib_803A5ACC(font_idx, context_id, 0.0F, 0.0F, 0.0F, 640.0F,
                                480.0F);
+#if BUILD_TARGET_PC
+    alloc = HSD_SisLib_Alloc(sizeof(SisBlock)); /* 0x10 on GameCube */
+#else
     alloc = HSD_SisLib_Alloc(0x10);
+#endif
     text->alloc_data = alloc;
     buffer = HSD_SisLib_Alloc(0x80);
     alloc->data = buffer;
