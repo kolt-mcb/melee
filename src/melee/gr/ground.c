@@ -492,6 +492,7 @@ void Ground_801C0754(StageIdPair* pair)
 void Ground_801C0800(StageIdPair* pair)
 {
 #if BUILD_TARGET_PC
+    mpLib_PCInstallEmptyCollision();
     /* PC port: pair can point at unconverted BE data — grkind then indexes
      * far outside stage_datas and on_init becomes a wild call. */
     StageData* stage_data;
@@ -591,6 +592,10 @@ void Ground_801C0800(StageIdPair* pair)
     if (getenv("MELEE_STAGE_COLL") != NULL) {
         mpLibLoad(stage_info.coll_data);
         mpLib_80058820();
+    } else {
+        /* Collision stays off, but stage on_load code calls into mplib
+         * regardless, so give it an empty world rather than NULL tables. */
+        mpLib_PCInstallEmptyCollision();
     }
     /* Ground_801C1E94 walks stage animation structures that are still
      * big-endian, and still crashes in grAnime_801C7C1C -- keep it gated.
@@ -793,12 +798,28 @@ void Ground_OnLoad(StageIdPair* pair)
 {
 #if BUILD_TARGET_PC
     extern char etext;
+    /* Stage on_load code calls into mplib whether or not collision loaded. */
+    mpLib_PCInstallEmptyCollision();
     if (pair == NULL || (u32)pair->grkind >= (u32)(sizeof(stage_datas)/sizeof(stage_datas[0])) ||
         !pc_ptr_sane(stage_datas[pair->grkind]) ||
         stage_datas[pair->grkind]->on_load == NULL ||
         (uintptr_t)stage_datas[pair->grkind]->on_load >= (uintptr_t)&etext)
     {
-        PORT_LOG_WARN("Ground_OnLoad: invalid stage data; skipping\n");
+        PORT_LOG_WARN("Ground_OnLoad: invalid stage data; skipping "
+                      "(grkind=%d stage_data=%p on_load=%p etext=%p)\n",
+                      pair ? (int) pair->grkind : -1,
+                      (pair && (u32) pair->grkind <
+                                   (u32)(sizeof(stage_datas) /
+                                         sizeof(stage_datas[0])))
+                          ? (void*) stage_datas[pair->grkind]
+                          : NULL,
+                      (pair && (u32) pair->grkind <
+                                   (u32)(sizeof(stage_datas) /
+                                         sizeof(stage_datas[0])) &&
+                       pc_ptr_sane(stage_datas[pair->grkind]))
+                          ? (void*) stage_datas[pair->grkind]->on_load
+                          : NULL,
+                      (void*) &etext);
         return;
     }
 #endif

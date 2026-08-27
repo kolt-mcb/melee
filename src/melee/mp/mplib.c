@@ -1,3 +1,6 @@
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "mplib.h"
 
 #include "mpisland.h"
@@ -76,8 +79,80 @@ struct mpLib_803BF248_t {
 /* 4D64B4 */ static MapCollData* mpLib_804D64B4;
 /* 4D64B8 */ static CollVtx* groundCollVtx;
 /* 4D64BC */ static CollLine* groundCollLine;
+/* PC port: the joint-table capacity the rest of this file assumes; see
+ * mpLib_80057D9C's joint_id >= 256 guard. */
+#define MP_COLL_JOINT_MAX 256
+
 /* 4D64C0 */ static CollJoint* groundCollJoint;
 /* 4D64C4 */ static CollJoint* jointListStart;
+
+#if BUILD_TARGET_PC
+/* PC port: collision data is still unconverted, so ground.c gates mpLibLoad
+ * behind MELEE_STAGE_COLL and none of these tables are normally allocated.
+ * Stages do not know that: their on_load calls mpJointSetCb1/Cb2,
+ * mpLib_80057BC0, mpJointListAdd and friends regardless, and this file
+ * indexes groundCollJoint[] at twenty-one sites with no null check. Nine
+ * stages died that way -- Onett, Great Bay, Green Greens, both Mushroom
+ * Kingdoms, Icicle Mountain, Icetop, Flat Zone and Yoshi's Island 64.
+ *
+ * Install a consistent *empty* collision world instead of leaving the tables
+ * NULL: every joint present but disabled, each pointing at a zeroed MapJoint
+ * with no vertices or lines, and an empty joint list. Flags are zero, so
+ * mpLib_80057BC0's `if (!(joint->flags & CollJoint_Enabled)) return;` fires
+ * immediately and the deeper walkers see counts of zero. A bare non-NULL
+ * array is not enough -- mpLib_80055E9C reads joint->inner->vtx_count, so
+ * `inner` has to be valid too. */
+static MapJoint mp_pc_empty_inner;
+static CollJoint mp_pc_empty_joints[MP_COLL_JOINT_MAX];
+static CollVtx mp_pc_empty_vtx[8];
+static CollLine mp_pc_empty_lines[8];
+
+/* Run before main: mplib is reached from several stage paths (Ground_OnLoad,
+ * Ground_801C0800, Ground_801C2ED0's per-frame update) and chasing the call
+ * order is fragile, so make the empty world the program's initial state and
+ * let mpLibLoad replace it if collision is ever enabled. */
+/* PC port: while collision is disabled the joint ids stages pass in come from
+ * unconverted big-endian data, so they are not trustworthy -- Onett asks for
+ * joint 256, exactly one past the table. Bound every id that indexes
+ * groundCollJoint[]. Warns once per site so a genuinely wrong id is still
+ * visible rather than silently swallowed. */
+#define MP_PC_CHECK_JOINT(id, ret)                                            \
+    do {                                                                      \
+        if ((unsigned) (id) >= (unsigned) MP_COLL_JOINT_MAX) {                \
+            static int warned_;                                               \
+            if (!warned_) {                                                   \
+                warned_ = 1;                                                  \
+                fprintf(stderr,                                               \
+                        "[PORT WARN] %s: joint_id %d out of range (max %d); " \
+                        "skipping\n",                                         \
+                        __func__, (int) (id), MP_COLL_JOINT_MAX);             \
+            }                                                                 \
+            return ret;                                                       \
+        }                                                                     \
+    } while (0)
+
+__attribute__((constructor)) void mpLib_PCInstallEmptyCollision(void)
+{
+    int i;
+    /* Idempotent: this is called from every path that can reach stage code,
+     * because Ground_801C0800 has several early returns before the point
+     * where collision would normally load. */
+    if (groundCollJoint == mp_pc_empty_joints) {
+        return;
+    }
+    memset(&mp_pc_empty_inner, 0, sizeof(mp_pc_empty_inner));
+    memset(mp_pc_empty_joints, 0, sizeof(mp_pc_empty_joints));
+    memset(mp_pc_empty_vtx, 0, sizeof(mp_pc_empty_vtx));
+    memset(mp_pc_empty_lines, 0, sizeof(mp_pc_empty_lines));
+    for (i = 0; i < MP_COLL_JOINT_MAX; i++) {
+        mp_pc_empty_joints[i].inner = &mp_pc_empty_inner;
+    }
+    groundCollJoint = mp_pc_empty_joints;
+    groundCollVtx = mp_pc_empty_vtx;
+    groundCollLine = mp_pc_empty_lines;
+    jointListStart = NULL;
+}
+#endif
 /* 4D64C8 */ static CollJoint* jointListEnd;
 /* 4D64CC */ static s32 mpLib_804D64CC;
 /* 4D64D0 */ static s32 mpLib_804D64D0;
@@ -899,7 +974,19 @@ void mpLibLoad(MapCollData* coll_data)
     HSD_ASSERT(412, groundCollVtx);
     groundCollLine = HSD_MemAlloc(0x3000);
     HSD_ASSERT(413, groundCollLine);
+#if BUILD_TARGET_PC
+    /* PC port: 0x3400 is a GameCube *byte* count -- 0x3400 / sizeof(CollJoint)
+     * is exactly 256 there, matching the joint_id < 256 bound this file
+     * already checks (mpLib_80057D9C). CollJoint holds seven pointers, so it
+     * grew from 0x34 to 0x50 bytes here and the same allocation only covers
+     * 166 joints. Every stage with more collision joints than that ran off
+     * the end: mpLib_80057BC0 and mpJointSetCb1/Cb2 index groundCollJoint
+     * directly, which is where nine stages were dying. Allocate by entry
+     * count instead. */
+    groundCollJoint = HSD_MemAlloc(MP_COLL_JOINT_MAX * sizeof(CollJoint));
+#else
     groundCollJoint = HSD_MemAlloc(0x3400);
+#endif
     HSD_ASSERT(414, groundCollJoint);
     grDynamicAttr_801CA0B4();
     if (coll_data == NULL) {
@@ -4584,6 +4671,9 @@ void mpLib_800552B0(int joint_id, HSD_JObj* jobj, int z)
             return;
         }
 #endif
+        #if BUILD_TARGET_PC
+        MP_PC_CHECK_JOINT(joint_id,);
+        #endif
         CollJoint* joint = &groundCollJoint[joint_id];
         joint->x20 = r7;
     }
@@ -4595,6 +4685,9 @@ void mpJointHide(int joint_id)
     CollLine* line;
     int count;
 
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     joint = &groundCollJoint[joint_id];
     joint->flags |= CollJoint_Hidden;
 
@@ -4642,6 +4735,9 @@ void mpJointUnhide(int joint_id)
     int count;
     int i;
 
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     joint = &groundCollJoint[joint_id];
     joint->flags &= ~CollJoint_Hidden;
 
@@ -4691,6 +4787,9 @@ void mpJointUpdateDynamics(int joint_id)
 {
     const double TAN30 = 0.577350295784245;
     const double TAN60 = 1.7320508368950045;
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
     CollLine* line;
     int i;
@@ -4743,6 +4842,9 @@ void mpJointUpdateDynamics(int joint_id)
 void mpLib_80055E24(int joint_id)
 {
     bool var_r6;
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
 
     mpJointUpdateDynamics(joint_id);
@@ -4781,6 +4883,9 @@ void mpLib_80055E9C(int joint_id)
     PAD_STACK(0x14);
 
     mpColl_804D64AC += 1;
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     joint = &groundCollJoint[joint_id];
     vtx_count = joint->inner->vtx_count;
     v_r4 = &groundCollVtx[joint->inner->vtx_start];
@@ -4955,6 +5060,9 @@ after1:
 
 void mpJointUpdateBounding(int joint_id)
 {
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
     CollVtx* vtx = &groundCollVtx[joint->inner->vtx_start];
     int count = joint->inner->vtx_count;
@@ -4980,6 +5088,9 @@ void mpJointUpdateBounding(int joint_id)
 void mpLib_8005667C(int joint_id)
 {
     bool var_r6 = false;
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
 
     if (!(joint->flags & (CollJoint_Hidden | CollJoint_B11)) &&
@@ -5276,6 +5387,9 @@ bool mpLib_80056C54(int line_id, Vec3* pos, int* line_id_out, Vec3* vec_out,
 
 void mpLib_80057424(int joint_id)
 {
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
     MapJoint* j_inner = joint->inner;
     u32 count = j_inner->vtx_count;
@@ -5293,6 +5407,9 @@ void mpLib_80057528(int line_id)
     int joint_id = mpJointFromLine(line_id);
     if (joint_id != -1) {
         CollLine* line = &groundCollLine[line_id];
+        #if BUILD_TARGET_PC
+        MP_PC_CHECK_JOINT(joint_id,);
+        #endif
         CollJoint* joint = &groundCollJoint[joint_id];
         line->flags |= LINE_FLAG_ENABLED;
         mpIsland_8005B334(joint_id, joint->inner->vtx_start,
@@ -5307,6 +5424,9 @@ void mpLib_800575B0(int line_id)
     int joint_id = mpJointFromLine(line_id);
     if (joint_id != -1) {
         CollLine* line = &groundCollLine[line_id];
+        #if BUILD_TARGET_PC
+        MP_PC_CHECK_JOINT(joint_id,);
+        #endif
         CollJoint* joint = &groundCollJoint[joint_id];
         line->flags &= ~LINE_FLAG_ENABLED;
         mpIsland_8005B334(joint_id, joint->inner->vtx_start,
@@ -5323,6 +5443,9 @@ void mpJointListAdd(int joint_id)
     int count_r7;
     CollLine* line_r6;
 
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     joint = &groundCollJoint[joint_id];
     if (joint->flags & CollJoint_Enabled) {
         return;
@@ -5417,6 +5540,9 @@ void mpLib_80057BC0(int joint_id)
     int start;
     CollLine* line_r6;
 
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     joint = &groundCollJoint[joint_id];
     if (!(joint->flags & CollJoint_Enabled)) {
         return;
@@ -5473,6 +5599,9 @@ void mpLib_80057FDC(int joint_id)
 {
     MapJoint* j_inner;
     bool var_r6 = false;
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
 
     joint->flags &= ~CollJoint_B11;
@@ -5490,6 +5619,9 @@ void mpLib_80058044(int joint_id)
 {
     MapJoint* j_inner;
     bool var_r6 = false;
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
 
     joint->flags |= CollJoint_B11;
@@ -5505,6 +5637,9 @@ void mpLib_80058044(int joint_id)
 
 void mpJointSetB10(int joint_id)
 {
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
     joint->flags |= CollJoint_B10;
 }
@@ -5512,13 +5647,18 @@ void mpJointSetB10(int joint_id)
 void mpJointSetCb1(int joint_id, void* user_data,
                    mpLib_JointCollisionCallback cb)
 {
-    CollJoint* joint = &groundCollJoint[joint_id];
+    CollJoint* joint;
+    MP_PC_CHECK_JOINT(joint_id, );
+    joint = &groundCollJoint[joint_id];
     joint->cb_0 = cb;
     joint->cb_data_0 = user_data;
 }
 
 void mpJointClearCb1(int joint_id)
 {
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
     joint->cb_0 = NULL;
     joint->cb_data_0 = NULL;
@@ -5527,6 +5667,9 @@ void mpJointClearCb1(int joint_id)
 void mpJointGetCb1(int joint_id, mpLib_JointCollisionCallback* cb,
                    void** user_data)
 {
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
     *cb = joint->cb_0;
     *user_data = joint->cb_data_0;
@@ -5548,6 +5691,9 @@ void mpLib_8005811C(CollData* coll, int ledge_id)
 
 void mpJointSetCb2(int joint_id, void* gp, mpLib_JointCollisionCallback cb)
 {
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
     joint->cb_1 = cb;
     joint->cb_data_1 = gp;
@@ -5556,6 +5702,9 @@ void mpJointSetCb2(int joint_id, void* gp, mpLib_JointCollisionCallback cb)
 void mpJointGetCb2(int joint_id, mpLib_JointCollisionCallback* cb,
                    void** user_data)
 {
+    #if BUILD_TARGET_PC
+    MP_PC_CHECK_JOINT(joint_id,);
+    #endif
     CollJoint* joint = &groundCollJoint[joint_id];
     *cb = joint->cb_1;
     *user_data = joint->cb_data_1;
