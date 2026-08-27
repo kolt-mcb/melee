@@ -252,8 +252,12 @@ void ftDrawCommon_800805C8(HSD_GObj* gobj, s32 arg1, bool arg2)
             if (++n % 211 == 0) {
                 HSD_JObj* rj = GET_JOBJ(gobj);
                 fprintf(stderr,
-                        "[FTPOS] cur_pos=(%.1f,%.1f,%.1f) rootT=(%.1f,%.1f,%.1f) "
+                        "[FTPOS] jobj=%p jmtxT=(%.1f,%.1f,%.1f) cur_pos=(%.1f,%.1f,%.1f) rootT=(%.1f,%.1f,%.1f) "
                         "mtxT=(%.1f,%.1f,%.1f) scale=(%.2f,%.2f,%.2f)\n",
+                        (void*) GET_JOBJ(gobj),
+                        (double) GET_JOBJ(gobj)->mtx[0][3],
+                        (double) GET_JOBJ(gobj)->mtx[1][3],
+                        (double) GET_JOBJ(gobj)->mtx[2][3],
                         (double) fighter->cur_pos.x, (double) fighter->cur_pos.y,
                         (double) fighter->cur_pos.z,
                         rj ? (double) rj->translate.x : 0.0,
