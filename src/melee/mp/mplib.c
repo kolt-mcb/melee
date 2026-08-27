@@ -102,6 +102,7 @@ struct mpLib_803BF248_t {
  * immediately and the deeper walkers see counts of zero. A bare non-NULL
  * array is not enough -- mpLib_80055E9C reads joint->inner->vtx_count, so
  * `inner` has to be valid too. */
+static int mp_pc_real_coll; /* set once mpLibLoad has real geometry */
 static MapJoint mp_pc_empty_inner;
 static CollJoint mp_pc_empty_joints[MP_COLL_JOINT_MAX];
 static CollVtx mp_pc_empty_vtx[8];
@@ -134,10 +135,12 @@ static CollLine mp_pc_empty_lines[8];
 __attribute__((constructor)) void mpLib_PCInstallEmptyCollision(void)
 {
     int i;
-    /* Idempotent: this is called from every path that can reach stage code,
-     * because Ground_801C0800 has several early returns before the point
-     * where collision would normally load. */
-    if (groundCollJoint == mp_pc_empty_joints) {
+    /* Idempotent, and -- more importantly -- it must never overwrite a real
+     * collision world. Ground_OnLoad runs *after* Ground_801C0800 has called
+     * mpLibLoad, so without this the empty tables were reinstalled on top of
+     * the stage's actual geometry and fighters fell straight through a floor
+     * that had loaded correctly. */
+    if (mp_pc_real_coll || groundCollJoint == mp_pc_empty_joints) {
         return;
     }
     memset(&mp_pc_empty_inner, 0, sizeof(mp_pc_empty_inner));
@@ -984,6 +987,7 @@ void mpLibLoad(MapCollData* coll_data)
      * directly, which is where nine stages were dying. Allocate by entry
      * count instead. */
     groundCollJoint = HSD_MemAlloc(MP_COLL_JOINT_MAX * sizeof(CollJoint));
+    mp_pc_real_coll = 1;
 #else
     groundCollJoint = HSD_MemAlloc(0x3400);
 #endif

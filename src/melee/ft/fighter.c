@@ -2397,10 +2397,22 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
         if (++n % 200 == 0) {
             Fighter* f = GET_FIGHTER(gobj);
             fprintf(stderr,
-                    "[TICK] Fighter_procUpdate #%lu anim_id=%d frame=%.2f "
-                    "state=%d\n",
-                    n, (int) f->anim_id, (double) f->x8A8_anim_frame,
-                    (int) f->motion_id);
+                    "[TICK] #%lu p%d anim_id=%d frame=%.2f motion=%d "
+                    "pos=(%.1f,%.1f) vel=(%.2f,%.2f) fsm=%.2f ga=%d "
+                    "grounded=%d\n",
+                    n, (int) f->player_id, (int) f->anim_id,
+                    (double) f->x8A8_anim_frame, (int) f->motion_id,
+                    (double) f->cur_pos.x, (double) f->cur_pos.y,
+                    (double) f->self_vel.x, (double) f->self_vel.y,
+                    (double) f->frame_speed_mul, (int) f->ground_or_air,
+                    (int) (f->ground_or_air == GA_Ground));
+            fprintf(stderr,
+                    "[TICK]     b3=%d b5=%d phys=%p anim=%p grav=%.3f "
+                    "termvel=%.2f x24=%p\n",
+                    (int) f->x221F_b3, (int) f->x2219_b5,
+                    (void*) f->phys_cb, (void*) f->anim_cb,
+                    (double) f->co_attrs.grav,
+                    (double) f->co_attrs.terminal_vel, (void*) f->x24);
         }
     }
 #endif

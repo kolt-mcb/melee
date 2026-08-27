@@ -592,10 +592,10 @@ void Ground_801C0800(StageIdPair* pair)
                            0);
     }
 #if BUILD_TARGET_PC
-    /* Collision data is still unconverted (roadmap M2 stage 3) — feeding
-     * mpLibLoad garbage joint counts allocates and indexes wildly. See the
-     * MELEE_STAGE_COLL gate in Ground_801C2ED0. on_init already ran above. */
-    if (getenv("MELEE_STAGE_COLL") != NULL) {
+    /* Stage collision is converted now (grDatFiles_ConvertMapCollDataGCNtoX64),
+     * so this runs by default -- it is what gives fighters a floor to stand
+     * on. MELEE_NO_STAGE_COLL=1 backs it out. */
+    if (getenv("MELEE_NO_STAGE_COLL") == NULL) {
         mpLibLoad(stage_info.coll_data);
         mpLib_80058820();
     } else {

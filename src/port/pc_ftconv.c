@@ -443,6 +443,62 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         out->x8 = pc_conv_PartsDesc(base + off, base, len, costumes);
     }
 
+    /* +0x40 itPickup and +0x50 (a Vec2) are pure float blobs -- itPickup is
+     * three Vec4, x50 is one Vec2 -- so both need only a rebase and a
+     * wholesale 32-bit swap. They matter far more than their size suggests:
+     * ftCo_800D0FA0 and ftCo_800D105C copy the fighter's physics attributes
+     * out of ft_data->x0, but the PC guard there requires x0, x40 AND x50 all
+     * be sane. With these two left NULL the guard fired, zeroed co_attrs and
+     * returned -- discarding the gravity, weight and terminal velocity that
+     * x0 had converted correctly all along. Fighters therefore spawned with
+     * gravity 0.0 and hung motionless in mid-air. */
+    off = pc_be32(*(const u32*) (raw + 0x40));
+    if (off != 0 && off + sizeof(itPickup) <= len) {
+        itPickup* ip = pc_lowmem_alloc(sizeof(itPickup));
+        if (ip != NULL) {
+            const u32* s = (const u32*) (base + off);
+            u32* d = (u32*) ip;
+            unsigned i;
+            for (i = 0; i < sizeof(itPickup) / 4u; i++) {
+                d[i] = pc_be32(s[i]);
+            }
+            out->x40 = ip;
+        }
+    }
+    off = pc_be32(*(const u32*) (raw + 0x50));
+    if (off != 0 && off + sizeof(Vec2) <= len) {
+        Vec2* v = pc_lowmem_alloc(sizeof(Vec2));
+        if (v != NULL) {
+            const u32* s = (const u32*) (base + off);
+            u32* d = (u32*) v;
+            d[0] = pc_be32(s[0]);
+            d[1] = pc_be32(s[1]);
+            out->x50 = v;
+        }
+    }
+
+    /* +0x4C FtSFX: one pointer plus thirteen ints, so it does change shape
+     * (0x38 on GCN, 0x40 here). Four sites in ft_0D31.c's death path
+     * dereference it unconditionally, and they became reachable the moment
+     * fighters got real gravity and started falling off the stage. The
+     * FtSFXArr behind `smash` is left NULL -- only the scalar sound ids are
+     * read on the paths that matter. */
+    off = pc_be32(*(const u32*) (raw + 0x4C));
+    if (off != 0 && off + 0x38u <= len) {
+        FtSFX* sx = pc_lowmem_alloc(sizeof(FtSFX));
+        if (sx != NULL) {
+            const u32* s = (const u32*) (base + off);
+            int* d = (int*) &sx->x4;
+            int i;
+            memset(sx, 0, sizeof(*sx));
+            sx->smash = NULL;
+            for (i = 0; i < 13; i++) {
+                d[i] = (int) pc_be32(s[i + 1]);
+            }
+            out->x4C_sfx = sx;
+        }
+    }
+
     /* +0x54 is a plain int, not a pointer. */
     out->x54 = (int) pc_be32(*(const u32*) (raw + 0x54));
 
@@ -481,7 +537,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
 
     /* Deliberately left NULL until something needs them:
      * x1C, x20, x24, x28, x2C(dynamics), x30(hurtboxes),
-     * x34, x38, x3C, x40(itPickup), x44, x4C(sfx), x50, x58, x5C. */
+     * x34, x38, x3C, x44, x58, x5C. */
 
     if (pc_ftconv_trace()) {
         fprintf(stderr,
