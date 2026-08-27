@@ -1398,7 +1398,7 @@ bool gm_801720B4(void)
     if (gm_8016B3D8()) {
         return fn_8017E160();
     }
-    return gm_8016AE50()->is_teams == true;
+    return gm_GetRules()->is_teams == true;
 }
 
 bool gm_801720F8(void)
@@ -1406,7 +1406,7 @@ bool gm_801720F8(void)
     if (gm_8016B3D8()) {
         return true;
     }
-    return gm_8016AE50()->x0_0 == 1;
+    return gm_GetRules()->x0_0 == 1;
 }
 
 int gm_80172140(void)

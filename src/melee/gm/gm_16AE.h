@@ -115,6 +115,5 @@
 /* 16F120 */ int gm_8016F120(int);
 /* 16F140 */ void fn_8016F140(int);
 /* 16F160 */ int fn_8016F160(int, int);
-/* 16AE50 */ struct StartMeleeRules* gm_8016AE50(void);
 
 #endif
