@@ -100,6 +100,30 @@ def detail(im):
     return sum(abs(p[c] - mu[c]) for p in px for c in range(3)) / (3.0 * n)
 
 
+def correlation(a, b):
+    """Pearson correlation of the two frames' luma.
+
+    This is what separates "same scene, rendered wrong" from "two different
+    moments". Brightness and contrast errors -- which are most of what this
+    port gets wrong -- leave structure intact and correlate strongly, while
+    genuinely different scenes do not. Without it, a badly over-bright frame
+    is indistinguishable from a misalignment on the within-tolerance figure
+    alone: the port's title screen matched only 16% of pixels while plainly
+    being the same screen.
+    """
+    pa = list(a.convert("L").getdata())
+    pb = list(b.convert("L").getdata())
+    n = len(pa)
+    ma = sum(pa) / n
+    mb = sum(pb) / n
+    num = sum((pa[i] - ma) * (pb[i] - mb) for i in range(n))
+    da = sum((v - ma) ** 2 for v in pa)
+    db = sum((v - mb) ** 2 for v in pb)
+    if da == 0 or db == 0:
+        return 0.0
+    return num / ((da * db) ** 0.5)
+
+
 def compare(port_im, ref_im, tol):
     """Return (mean_abs_diff, pct_within_tol, per-channel signed mean delta).
 
@@ -306,11 +330,16 @@ def main():
     ab = tuple(sum(r[3][c] for r in rows) / n for c in range(3))
     port_detail = sum(detail(load(ports[r[0]])) for r in rows) / n
     ref_detail = sum(detail(load(refs[r[0] + offset])) for r in rows) / n
+    corr = sum(
+        correlation(load(ports[r[0]], ALIGN_SIZE),
+                    load(refs[r[0] + offset], ALIGN_SIZE))
+        for r in rows
+    ) / n
     print()
     print(
         "SUMMARY frames=%d mean_abs_diff=%.2f within_tol=%.1f%% "
-        "bias=(%+.1f,%+.1f,%+.1f) detail port=%.1f ref=%.1f"
-        % (n, am, ap_, ab[0], ab[1], ab[2], port_detail, ref_detail)
+        "bias=(%+.1f,%+.1f,%+.1f) detail port=%.1f ref=%.1f corr=%.2f"
+        % (n, am, ap_, ab[0], ab[1], ab[2], port_detail, ref_detail, corr)
     )
     print("composites: %s/cmp_<frame>.png  (port | dolphin | diff)" % comp_dir)
 
@@ -326,14 +355,35 @@ def main():
             "same scene before drawing any conclusion." % (port_detail, ref_detail)
         )
         return 2
-    if ap_ < 40.0:
+    # Use |corr| for the same-scene test: an inverted image still depicts the
+    # same scene, and its sign is itself a diagnosis.
+    if corr <= -0.15:
         print(
-            "VERDICT MISMATCH: only %.1f%% of pixels agree. That is more "
-            "likely to be two different moments than a rendering bug -- check "
-            "a composite before believing the bias figure, and re-align with "
-            "--search -1 (global) if the scenes do not correspond." % ap_
+            "VERDICT INVERTED: the two frames correlate *negatively* (%.2f) -- "
+            "the port is drawing this scene tonally inverted, not merely "
+            "mis-lit. Bright where the game is dark. Look for a blend or TEV "
+            "op with the wrong sign (this port has had a sticky "
+            "GL_FUNC_REVERSE_SUBTRACT before) rather than at light values."
+            % corr
+        )
+        return 1
+    if ap_ < 40.0 and abs(corr) < 0.5:
+        print(
+            "VERDICT MISMATCH: only %.1f%% of pixels agree and the two frames "
+            "barely correlate (%.2f). That is more likely to be two different "
+            "moments than a rendering bug -- check a composite, and re-align "
+            "with --search -1 (global) if the scenes do not correspond."
+            % (ap_, corr)
         )
         return 2
+    if ap_ < 90.0 and abs(corr) >= 0.5:
+        print(
+            "VERDICT RENDERING-ERROR: the two frames correlate strongly "
+            "(%.2f), so this is the same scene drawn wrong rather than a "
+            "misalignment -- only %.1f%% of pixels agree, with a per-channel "
+            "bias of (%+.1f,%+.1f,%+.1f)." % (corr, ap_, ab[0], ab[1], ab[2])
+        )
+        return 1
     if max(ab) < -8:
         print(
             "NOTE: all three channels read low against the reference "

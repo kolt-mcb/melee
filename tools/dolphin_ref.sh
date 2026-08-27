@@ -40,10 +40,15 @@ ISO="/home/grunt/brashmos/Super Smash Bros. Melee (USA) (En,Ja) (v1.02).iso"
 # GM_DEBUG_VS, the menu-free Mario-vs-Mario match on Final Destination that
 # the port uses. The mode takes effect at the title's scene transition, not at
 # power-on, so the intro still plays first; capture past it.
-GAMEINI="$HOME/.config/dolphin-emu/GameSettings/GALE01.ini"
+# Dolphin picks the game INI by revision, so a v1.02 (revision 2) ISO reads
+# GALE01r2.ini and ignores GALE01.ini entirely. Write both -- editing only the
+# unsuffixed file is a silent no-op that looks exactly like "the patch does not
+# work".
+GAMEINI_DIR="$HOME/.config/dolphin-emu/GameSettings"
 if [ -n "${MELEE_REF_MODE:-}" ]; then
     mm=$(printf '%02X%02X' "$MELEE_REF_MODE" "$MELEE_REF_MODE")
-    mkdir -p "$(dirname "$GAMEINI")"
+    mkdir -p "$GAMEINI_DIR"
+    for GAMEINI in "$GAMEINI_DIR/GALE01.ini" "$GAMEINI_DIR/GALE01r2.ini"; do
     [ -f "$GAMEINI" ] && [ ! -f "$GAMEINI.orig" ] && cp "$GAMEINI" "$GAMEINI.orig"
     cat > "$GAMEINI" <<INI
 [Core]
@@ -55,6 +60,7 @@ EnableCheats = True
 [Gecko_Enabled]
 \$Boot to mode $MELEE_REF_MODE
 INI
+    done
     echo "dolphin_ref: forcing game mode $MELEE_REF_MODE (lis r3, 0x$mm)"
 fi
 DUMPDIR="$HOME/.local/share/dolphin-emu/Dump/Frames"
@@ -65,10 +71,50 @@ DUMPDIR="$HOME/.local/share/dolphin-emu/Dump/Frames"
 # like a timeout. Budget from the measured rate, with headroom.
 TIMEOUT=$(( FRAMES / 4 + 180 ))
 
+# MELEE_REF_TAP_FRAMES=<f1,f2,...> taps Start through Dolphin's pipe
+# controller as each emulated frame number is reached. The opening cinematic
+# runs well past 6000 frames, and
+# at the ~5.6 emulated fps headless PNG dumping allows that is twenty minutes
+# of capture before the game reaches anything comparable. Tapping Start skips
+# the movie and drives the title transition, which is where the MELEE_REF_MODE
+# patch takes effect. Tapping stops after the window so it cannot pause the
+# match once it starts.
+#
+# GCPad1 is already configured as Pipe/0/brash (see ~/.config/dolphin-emu/
+# GCPadNew.ini) with SIDevice0=6, so no controller setup is needed here.
+PIPE="$HOME/.local/share/dolphin-emu/Pipes/brash"
+
 for p in $(pgrep -x dolphin-emu-nog); do kill -9 "$p"; done
 sleep 1
 rm -f "$DUMPDIR"/framedump_*.png "$DUMPDIR"/*.avi /tmp/xf_ref.log
 mkdir -p "$OUTDIR"
+
+if [ -n "${MELEE_REF_TAP_FRAMES:-}" ] && [ -p "$PIPE" ]; then
+    (
+        # Tap Start at specific *emulated* frames. Wall-clock tapping does not
+        # work: headless Dolphin runs at roughly 5.6 emulated fps, so one wall
+        # second is about a tenth of an emulated second and the same tap count
+        # lands in a completely different part of the boot sequence depending
+        # on machine load. Six taps landed entirely inside the pre-intro logo
+        # and skipped nothing; a forty-second window blew through the title
+        # into the menus. The frame dump directory fills as frames render, so
+        # counting the files in it is a reliable emulated-frame clock.
+        exec 3> "$PIPE"
+        for target in $(echo "$MELEE_REF_TAP_FRAMES" | tr ',' ' '); do
+            while [ "$(ls "$DUMPDIR" 2>/dev/null | wc -l)" -lt "$target" ]; do
+                sleep 0.2
+                # Give up if emulation has stopped, rather than hanging.
+                pgrep -x dolphin-emu-nog > /dev/null || { exec 3>&-; exit 0; }
+            done
+            printf 'PRESS START\n'   >&3
+            sleep 0.2
+            printf 'RELEASE START\n' >&3
+        done
+        exec 3>&-
+    ) &
+    MASHER=$!
+    echo "dolphin_ref: tapping Start at emulated frames $MELEE_REF_TAP_FRAMES"
+fi
 
 timeout -s KILL "$TIMEOUT" "$DOLPHIN" -p headless -e "$ISO" \
   -C Dolphin.FifoPlayer.RecordFrames="$FRAMES" \
@@ -77,6 +123,7 @@ timeout -s KILL "$TIMEOUT" "$DOLPHIN" -p headless -e "$ISO" \
   -C Graphics.Settings.DumpFramesAsImages=True \
   > "$OUTDIR/dolphin.log" 2>&1
 rc=$?
+[ -n "${MASHER:-}" ] && kill "$MASHER" 2>/dev/null
 for p in $(pgrep -x dolphin-emu-nog); do kill -9 "$p"; done
 
 # Keep only the requested range (dump index ~= emulated frame index).
