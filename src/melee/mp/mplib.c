@@ -1750,11 +1750,26 @@ bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
                 continue;
             }
 
+#if BUILD_TARGET_PC
+            /* The original derives the line index from a raw byte difference
+             * divided by 8 -- sizeof(CollLine) on GameCube, where it is
+             * { MapLine*; u32; }. Here the pointer widens and the struct is
+             * 16 bytes, so that division produced twice the real index and
+             * mpLib_8004ED5C read past the end of groundCollLine[]; line->x0
+             * was then garbage. Typed pointer subtraction is the index on
+             * both targets. (It also drops two (s32) casts that truncate a
+             * 64-bit pointer.) */
+            line_offset = (s32) (line_r26 - groundCollLine);
+            if (line_id_skip == line_offset) {
+                continue;
+            }
+#else
             if (line_id_skip ==
                 (line_offset = (s32) line_r26 - (s32) groundCollLine) / 8)
             {
                 continue;
             }
+#endif
 
             if (!(line_r26->flags & CollLine_Floor) ||
                 !(line_r26->flags & LINE_FLAG_ENABLED) ||
@@ -1763,8 +1778,13 @@ bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
                 continue;
             }
 
+#if BUILD_TARGET_PC
+            mpLib_8004ED5C(line_offset, &x0_sp48, &y0_sp44, &x1_sp40,
+                           &y1_sp3C);
+#else
             mpLib_8004ED5C(line_offset / 8, &x0_sp48, &y0_sp44, &x1_sp40,
                            &y1_sp3C);
+#endif
             y0_sp44 += y_offset;
             y1_sp3C += y_offset;
             if (ABS(y0_sp44 - y1_sp3C) > 0.0001) {
@@ -4226,7 +4246,13 @@ void mpFloorGetRight(int line_id, Vec3* pos_out)
     do {
         MapLine* line;
         line_offset = new_id * sizeof(CollLine);
+#if BUILD_TARGET_PC
+        /* (int) truncates a 64-bit pointer; the byte offset itself is
+         * already computed with sizeof(CollLine), so index directly. */
+        line = groundCollLine[line_offset / (int) sizeof(CollLine)].x0;
+#else
         line = ((CollLine*) (line_offset + (int) groundCollLine))->x0;
+#endif
         new_id = line->next_id1;
         new_id = mpLineGetNextCheckInline(line, new_id);
     } while (new_id != -1 &&
@@ -4255,7 +4281,13 @@ void mpFloorGetLeft(int line_id, Vec3* pos_out)
     while (true) {
         MapLine* line;
         line_offset = new_id * sizeof(CollLine);
+#if BUILD_TARGET_PC
+        /* (int) truncates a 64-bit pointer; the byte offset itself is
+         * already computed with sizeof(CollLine), so index directly. */
+        line = groundCollLine[line_offset / (int) sizeof(CollLine)].x0;
+#else
         line = ((CollLine*) (line_offset + (int) groundCollLine))->x0;
+#endif
         new_id = line->prev_id1;
         new_id = mpLineGetPrevCheckInline(line, new_id);
         if (new_id == -1 ||

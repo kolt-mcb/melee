@@ -883,8 +883,8 @@ __attribute__((weak)) void gm_801720F8(void) { }
 __attribute__((weak)) void gm_80172140(void) { }
 __attribute__((weak)) void gm_801A4BB8(void) { }
 __attribute__((weak)) int gm_GetCurrentGameMode(void) { return 0; }
-__attribute__((weak)) void ifMagnify_802FB6E8(void) { }
-__attribute__((weak)) void ifMagnify_802FC998(void) { }
+__attribute__((weak)) long ifMagnify_802FB6E8(void) { return 0; } /* decl: s32 */
+__attribute__((weak)) long ifMagnify_802FC998(void) { return 0; } /* decl: bool */
 __attribute__((weak)) void itDrMarioPill_802C09C4(void) { }
 __attribute__((weak)) void* itDrMarioPill_Spawn(void) { return NULL; }
 __attribute__((weak)) int itGetAttackId(void) { return 0; }
@@ -1088,16 +1088,28 @@ __attribute__((weak)) int mpLineGetPrev(void) { return 0; }
 __attribute__((weak)) int mpLineGetV0Pos(void) { return 0; }
 __attribute__((weak)) int mpLineGetV1Pos(void) { return 0; }
 __attribute__((weak)) void mpUpdateFloorSkip(void) { }
-__attribute__((weak)) void un_80322258(void) { }
-__attribute__((weak)) void un_803222EC(void) { }
+__attribute__((weak)) long un_80322258(void) { return 0; } /* decl: bool */
+__attribute__((weak)) double un_803222EC(void) { return 0; } /* decl: float */
 __attribute__((weak)) void un_80322314(void) { }
 __attribute__((weak)) void un_8032233C(void) { }
-__attribute__((weak)) void un_803224DC(void) { }
-__attribute__((weak)) void un_80322598(void) { }
+__attribute__((weak)) long un_803224DC(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long un_80322598(void) { return 0; } /* decl: int */
 __attribute__((weak)) struct lbl_8046B6A0_t* gm_8016AE38(void) { return NULL; }
 /* Auto-generated weak stubs (batch 3) */
 
 #include <platform.h>
+
+/* PC port: the weak stubs below marked "decl:" return a value rather than
+ * being void. They stand in for functions whose real implementations are not
+ * in this build, but their *declarations* return a value -- and a `void` stub
+ * leaves rax/xmm0 holding whatever the last call left there. Callers then
+ * branched on uninitialised registers, which made behaviour depend on
+ * unrelated code: un_803222EC feeds a float into the damage path, and
+ * ifMagnify_802FB6E8 an s32 into fighter.c. Returning zero makes the missing
+ * subsystem behave like a subsystem that is switched off, deterministically.
+ * `double` is used where the declaration returns a float so the zero lands in
+ * xmm0 instead of rax. */
+
 
 __attribute__((weak)) void Camera_80028B9C(void) { }
 __attribute__((weak)) void Camera_8002928C(void) { }
@@ -1124,7 +1136,7 @@ __attribute__((weak)) int GetNameCount(void) { return 0; }
 __attribute__((weak)) int GetNameText(void) { return 0; }
 __attribute__((weak)) void HSD_AllocateFifo(void) { }
 __attribute__((weak)) void HSD_AllocateXFB(void) { }
-__attribute__((weak)) void HSD_GObjObject_80390A3C(void) { }
+__attribute__((weak)) long HSD_GObjObject_80390A3C(void) { return 0; } /* decl: HSD_GObj* */
 __attribute__((weak)) void HSD_InitComponent(void) { }
 __attribute__((weak)) void HSD_PadRumblePauseAll(void) { }
 __attribute__((weak)) void HSD_PadRumbleRemoveAll(void) { }
@@ -1136,8 +1148,8 @@ __attribute__((weak)) void ItemStateTable_Flipper(void) { }
 __attribute__((weak)) void ItemStateTable_KoopaFlame(void) { }
 __attribute__((weak)) void ItemStateTable_MsBomb(void) { }
 __attribute__((weak)) void ItemStateTable_ZeldaDinFire(void) { }
-__attribute__((weak)) void Toy_803060BC(void) { }
-__attribute__((weak)) void Toy_8030813C(void) { }
+__attribute__((weak)) double Toy_803060BC(void) { return 0; } /* decl: float */
+__attribute__((weak)) long Toy_8030813C(void) { return 0; } /* decl: char* */
 __attribute__((weak)) void Toy_803102D0(void) { }
 __attribute__((weak)) int Toy_GetTrophyTotal(void) { return 0; }
 __attribute__((weak)) void cmSnap_800315C8(void) { }
@@ -1153,8 +1165,8 @@ __attribute__((weak)) void db_PrintEntityCounts(void) { }
 __attribute__((weak)) void db_PrintThreadInfo(void) { }
 __attribute__((weak)) void db_RunEveryFrame(void) { }
 __attribute__((weak)) void db_Setup(void) { }
-__attribute__((weak)) void db_ShowEnemyStompRange(void) { }
-__attribute__((weak)) void db_ShowItemPickupRange(void) { }
+__attribute__((weak)) long db_ShowEnemyStompRange(void) { return 0; } /* decl: u32 */
+__attribute__((weak)) long db_ShowItemPickupRange(void) { return 0; } /* decl: u32 */
 __attribute__((weak)) void db_TakeScreenshotIfPending(void) { }
 __attribute__((weak)) void efLib_Init(void) { }
 __attribute__((weak)) void efLib_particles_proc_main(void) { }
@@ -1171,12 +1183,12 @@ __attribute__((weak)) void ifStatus_802F6948(void) { }
 __attribute__((weak)) void ifStatus_802F6E3C(void) { }
 __attribute__((weak)) void ifStatus_802F6EA4(void) { }
 __attribute__((weak)) void ifStatus_802F7034(void) { }
-__attribute__((weak)) void ifStock_802F7EFC(void) { }
+__attribute__((weak)) long ifStock_802F7EFC(void) { return 0; } /* decl: int */
 __attribute__((weak)) void ifStock_802FA2D0(void) { }
 __attribute__((weak)) void ifTime_CreateTimers(void) { }
 __attribute__((weak)) void ifTime_FreeCountdown(void) { }
 __attribute__((weak)) void ifTime_HideTimers(void) { }
-__attribute__((weak)) void ifTime_IsTimerHidden(void) { }
+__attribute__((weak)) long ifTime_IsTimerHidden(void) { return 0; } /* decl: bool */
 __attribute__((weak)) void ifTime_ShowTimers(void) { }
 __attribute__((weak)) void itBat_Logic11_Clanked(void) { }
 __attribute__((weak)) void itBat_Logic11_DmgDealt(void) { }
@@ -2454,9 +2466,9 @@ __attribute__((weak)) void mn_8022F3D8(void) { }
 __attribute__((weak)) void mn_8022F410(void) { }
 __attribute__((weak)) void mn_8022F470(void) { }
 __attribute__((weak)) void mn_802317E4(void) { }
-__attribute__((weak)) void tyDisplay_8031B9DC(void) { }
-__attribute__((weak)) void tyDisplay_8031BB34(void) { }
-__attribute__((weak)) void tyDisplay_8031BB94(void) { }
+__attribute__((weak)) long tyDisplay_8031B9DC(void) { return 0; } /* decl: TyDspEntry* */
+__attribute__((weak)) long tyDisplay_8031BB34(void) { return 0; } /* decl: s32 */
+__attribute__((weak)) long tyDisplay_8031BB94(void) { return 0; } /* decl: char* */
 __attribute__((weak)) void un_802FD28C(void) { }
 __attribute__((weak)) void un_802FD404(void) { }
 __attribute__((weak)) void un_802FD428(void) { }
@@ -2465,20 +2477,20 @@ __attribute__((weak)) void un_802FF128(void) { }
 __attribute__((weak)) void un_802FF1B4(void) { }
 __attribute__((weak)) void un_802FF6A0(void) { }
 __attribute__((weak)) void un_802FF710(void) { }
-__attribute__((weak)) void un_802FF78C(void) { }
+__attribute__((weak)) long un_802FF78C(void) { return 0; } /* decl: HSD_GObj* */
 __attribute__((weak)) void un_802FF7DC(void) { }
-__attribute__((weak)) void un_802FF884(void) { }
+__attribute__((weak)) long un_802FF884(void) { return 0; } /* decl: bool */
 __attribute__((weak)) void un_802FFEE0(void) { }
 __attribute__((weak)) void un_802FFF2C(void) { }
 __attribute__((weak)) void un_80301BA8(void) { }
 __attribute__((weak)) void un_80301C64(void) { }
-__attribute__((weak)) void un_80302DF0(void) { }
+__attribute__((weak)) long un_80302DF0(void) { return 0; } /* decl: struct un_80304138_objalloc_t* */
 __attribute__((weak)) void un_80302DF8(void) { }
-__attribute__((weak)) void un_80304168(void) { }
-__attribute__((weak)) void un_80304510(void) { }
-__attribute__((weak)) void un_803045A0(void) { }
-__attribute__((weak)) void un_80304690(void) { }
-__attribute__((weak)) void un_80304780(void) { }
+__attribute__((weak)) long un_80304168(void) { return 0; } /* decl: HSD_GObj* */
+__attribute__((weak)) long un_80304510(void) { return 0; } /* decl: bool */
+__attribute__((weak)) long un_803045A0(void) { return 0; } /* decl: int */
+__attribute__((weak)) long un_80304690(void) { return 0; } /* decl: int */
+__attribute__((weak)) long un_80304780(void) { return 0; } /* decl: bool */
 __attribute__((weak)) void un_8031D9E4(void) { }
 __attribute__((weak)) void un_8031E110(void) { }
 __attribute__((weak)) void un_8031F980(void) { }
