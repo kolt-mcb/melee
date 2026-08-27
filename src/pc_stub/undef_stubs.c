@@ -1060,14 +1060,52 @@ static void poll_keyboard_to_pad(GCPadStatus* pad)
     if (kb[SDL_SCANCODE_RETURN]) buttons |= GC_BTN_START;
     
     pad->button = buttons;
-    
-    /* Dead-zone neutralize: no stick movement on keyboard */
-    pad->stickX = 0;
-    pad->stickY = 0;
-    pad->subStickX = 0;
-    pad->subStickY = 0;
-    pad->analogL = 0;
-    pad->analogR = 0;
+
+    /* Movement in Melee is entirely analog-stick driven -- the D-pad does not
+     * walk, run or jump. This used to zero the stick unconditionally ("no
+     * stick movement on keyboard"), which meant the keyboard could press
+     * buttons but could never move a fighter an inch.
+     *
+     * Arrow keys and WASD both drive the main stick; the GameCube stick is an
+     * s8 whose usable range is about +/-80 at the octagon gate, and the game
+     * treats anything past its smash threshold as a dash/smash input, so
+     * full deflection is what a real stick delivers when held to the edge.
+     * IJKL drives the C-stick. */
+    {
+        int sx = 0, sy = 0, cx = 0, cy = 0;
+        const int FULL = 80;
+        if (kb[SDL_SCANCODE_LEFT]  || kb[SDL_SCANCODE_A]) sx -= FULL;
+        if (kb[SDL_SCANCODE_RIGHT] || kb[SDL_SCANCODE_D]) sx += FULL;
+        if (kb[SDL_SCANCODE_DOWN]  || kb[SDL_SCANCODE_S]) sy -= FULL;
+        if (kb[SDL_SCANCODE_UP]    || kb[SDL_SCANCODE_W]) sy += FULL;
+        if (kb[SDL_SCANCODE_J]) cx -= FULL;
+        if (kb[SDL_SCANCODE_L]) cx += FULL;
+        if (kb[SDL_SCANCODE_K]) cy -= FULL;
+        if (kb[SDL_SCANCODE_I]) cy += FULL;
+        /* MELEE_PAD_FORCE="sx,sy" pins the stick, so fighter movement can be
+         * exercised in a headless run with no one at the keyboard. */
+        {
+            static int forced = -1;
+            static int fx, fy;
+            if (forced < 0) {
+                const char* e = getenv("MELEE_PAD_FORCE");
+                forced = 0;
+                if (e != NULL && sscanf(e, "%d,%d", &fx, &fy) == 2) {
+                    forced = 1;
+                }
+            }
+            if (forced) {
+                sx = fx;
+                sy = fy;
+            }
+        }
+        pad->stickX = (s8) sx;
+        pad->stickY = (s8) sy;
+        pad->subStickX = (s8) cx;
+        pad->subStickY = (s8) cy;
+    }
+    pad->analogL = (buttons & GC_BTN_L) ? 255 : 0;
+    pad->analogR = (buttons & GC_BTN_R) ? 255 : 0;
 }
 
 /* Read a single SDL2 joystick into GC pad format.
@@ -1171,6 +1209,8 @@ void HSD_PadRenewRawStatus(bool unused)
     }
 }
 
+void pc_pad_publish(void);
+
 /* Update normalized values from raw stick positions */
 void HSD_PadRenewGameStatus(void)
 {
@@ -1199,6 +1239,10 @@ void HSD_PadRenewGameStatus(void)
         cur->trigger = cur->button & ~g_gc_pads_last[pad].button;
         cur->release = ~cur->button & g_gc_pads_last[pad].button;
     }
+    /* Publish into the arrays the game actually reads. Normalising into
+     * g_gc_pads alone was not enough: HSD_PadGameStatus is a separate symbol
+     * that game code in other translation units links against. */
+    pc_pad_publish();
 }
 
 /* Propagate game status to master and copy */
@@ -1262,10 +1306,63 @@ void HSD_PadInit(u8 qnum, void* queue, u16 nb_list, void* rumble_list)
     }
 }
 
-/* Public pad arrays that game code accesses — aliased to global state */
-__attribute__((weak)) GCPadStatus HSD_PadMasterStatus[4] = {{0}};
-__attribute__((weak)) GCPadStatus HSD_PadGameStatus[4] = {{0}};
-__attribute__((weak)) GCPadStatus HSD_PadCopyStatus[4] = {{0}};
+/* Public pad arrays the game reads.
+ *
+ * These were weak GCPadStatus arrays of permanently-zero bytes -- the wrong
+ * type as well as the wrong data, since sysdolphin/baselib/controller.c
+ * (which defines them properly as HSD_PadStatus) is not in this build. Fighter
+ * code reads HSD_PadGameStatus[i].nml_stickX and friends, so with a zeroed
+ * GCPadStatus standing in, every fighter saw a permanently centred stick and
+ * no buttons: the keyboard could never move anyone. Same weak-stub failure
+ * mode as the character costume tables and the stage StageData.
+ *
+ * Define them for real and fill them from the SDL pads each poll. */
+/* GCPadStatus here is field-for-field HSD_PadStatus (see port/gc_pad.h), so
+ * the game's `extern HSD_PadStatus HSD_PadGameStatus[4]` links against these
+ * correctly. */
+GCPadStatus HSD_PadMasterStatus[4];
+GCPadStatus HSD_PadGameStatus[4];
+GCPadStatus HSD_PadCopyStatus[4];
+
+/* GC sticks read about +/-80 at the octagon gate; the game works in a
+ * normalised -1..1 and applies its own dead zone (p_ftCommonData->x0/x4). */
+static float pc_pad_nml(int v)
+{
+    float f = (float) v / 80.0f;
+    if (f > 1.0f) f = 1.0f;
+    if (f < -1.0f) f = -1.0f;
+    return f;
+}
+
+void pc_pad_publish(void)
+{
+    int i;
+    for (i = 0; i < 4; i++) {
+        GCPadStatus* s = &g_gc_pads[i];
+        GCPadStatus* l = &g_gc_pads_last[i];
+        GCPadStatus* d = &HSD_PadGameStatus[i];
+        d->last_button = l->button;
+        d->button = s->button;
+        d->trigger = s->button & ~l->button;   /* newly pressed this frame */
+        d->release = l->button & ~s->button;
+        d->repeat = d->trigger;
+        d->stickX = s->stickX;
+        d->stickY = s->stickY;
+        d->subStickX = s->subStickX;
+        d->subStickY = s->subStickY;
+        d->analogL = s->analogL;
+        d->analogR = s->analogR;
+        d->nml_stickX = pc_pad_nml(s->stickX);
+        d->nml_stickY = pc_pad_nml(s->stickY);
+        d->nml_subStickX = pc_pad_nml(s->subStickX);
+        d->nml_subStickY = pc_pad_nml(s->subStickY);
+        d->nml_analogL = (float) s->analogL / 255.0f;
+        d->nml_analogR = (float) s->analogR / 255.0f;
+        d->err = 0;
+        HSD_PadMasterStatus[i] = *d;
+        HSD_PadCopyStatus[i] = *d;
+    }
+}
 
 /* Additional pad functions needed by game code */
 void HSD_PadReset(void)
@@ -1293,10 +1390,6 @@ s32 HSD_PadGetResetSwitch(void)
     return 0;  /* No reset switch */
 }
 
-/* Override to use our internal state */
-#define HSD_PadMasterStatus g_gc_pads
-#define HSD_PadGameStatus g_gc_pads
-#define HSD_PadCopyStatus g_gc_pads
 __attribute__((weak)) void HSD_Panic(void) {}
 __attribute__((weak)) void HSD_PerfSetTotalTime(void) {}
 __attribute__((weak)) void HSD_QuatLib_8037EB28(void) {}
