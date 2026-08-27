@@ -1276,6 +1276,27 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
     flags = GetSetupFlags(jobj, rendermode);
     right = _HSD_mkEnvelopeModelNodeMtx(jobj, mtx);
 
+    if (getenv("MELEE_ENV_TARGETS") != NULL) {
+        /* One line per PObj listing every joint its envelopes bind to, so the
+         * binding can be checked against the skeleton dump (MELEE_FT_JOINTS).
+         * If the leg mesh never names the leg joints, the binding is the bug. */
+        static int _t;
+        if (_t < 80) {
+            HSD_SList* l3 = pobj->u.envelope_list;
+            int slot = 0;
+            _t++;
+            fprintf(stderr, "[ENVTGT] pobj=%p", (void*) pobj);
+            for (; l3 != NULL; l3 = l3->next, slot++) {
+                HSD_Envelope* e = l3->data;
+                fprintf(stderr, " |s%d:", slot);
+                for (; e != NULL; e = e->next) {
+                    fprintf(stderr, " %p(w=%.2f)", (void*) e->jobj,
+                            (double) e->weight);
+                }
+            }
+            fprintf(stderr, "\n");
+        }
+    }
     if (getenv("MELEE_ENV_STATS") != NULL) {
         static int _n;
         int len = 0;
@@ -1367,6 +1388,54 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                 HSD_ASSERT(1896, jp->envelopemtx);
 
                 MTXConcat(jp->mtx, jp->envelopemtx, tmp);
+                if (getenv("MELEE_BIND_CHECK") != NULL) {
+                    /* At bind pose, world * inverse-bind must be identity.
+                     * Any joint that deviates has a bad envelopemtx -- that is
+                     * the one thing left that can deform a correctly-bound,
+                     * correctly-weighted mesh. */
+                    static const void* seen[128];
+                    static int seen_n;
+                    int k, known = 0;
+                    for (k = 0; k < seen_n; k++) {
+                        if (seen[k] == (void*) jp) { known = 1; break; }
+                    }
+                    if (!known && seen_n < 128) {
+                        f32 dev = 0.0f;
+                        int r, c;
+                        seen[seen_n++] = (void*) jp;
+                        /* Only the 3x3: the translation column carries the
+                         * model's placement in the world, which is not part
+                         * of the bind relationship. */
+                        for (r = 0; r < 3; r++) {
+                            for (c = 0; c < 3; c++) {
+                                f32 want = (r == c) ? 1.0f : 0.0f;
+                                f32 d = tmp[r][c] - want;
+                                if (d < 0) d = -d;
+                                if (d > dev) dev = d;
+                            }
+                        }
+                        fprintf(stderr, "[BINDCHK] jobj=%p dev=%.4f%s\n",
+                                (void*) jp, (double) dev,
+                                (dev > 0.01f) ? "   <-- NOT IDENTITY" : "");
+                        if (dev > 0.01f) {
+                            for (r = 0; r < 3; r++) {
+                                fprintf(stderr,
+                                        "[BINDMTX] jobj=%p world[%d]=(%7.3f %7.3f %7.3f %8.3f) "
+                                        "inv[%d]=(%7.3f %7.3f %7.3f %8.3f) "
+                                        "prod[%d]=(%7.3f %7.3f %7.3f %8.3f)\n",
+                                        (void*) jp, r, (double) jp->mtx[r][0],
+                                        (double) jp->mtx[r][1], (double) jp->mtx[r][2],
+                                        (double) jp->mtx[r][3], r,
+                                        (double) jp->envelopemtx[r][0],
+                                        (double) jp->envelopemtx[r][1],
+                                        (double) jp->envelopemtx[r][2],
+                                        (double) jp->envelopemtx[r][3], r,
+                                        (double) tmp[r][0], (double) tmp[r][1],
+                                        (double) tmp[r][2], (double) tmp[r][3]);
+                            }
+                        }
+                    }
+                }
                 HSD_MtxScaledAdd(tmp, mtx, mtx, envelope->weight);
                 perf++;
                 wsum += envelope->weight;

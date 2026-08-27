@@ -236,8 +236,33 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
      * Also guards against NaN from division by zero parent scale.
      * Replace with identity matrix + translation to preserve child transforms. */
     {
-        f32 v = jobj->mtx[0][0];
-        if (v != v || (v >= -0.0001f && v <= 0.0001f)) { /* NaN or near-zero */
+        /* This tested mtx[0][0] alone, which is wrong: mtx[0][0] is
+         * cosZ * cosY * scaleX, and that is legitimately zero for any joint
+         * rotated a quarter turn about Y or Z. Mario's hips are rotated
+         * -pi/2 about Z, so their rotation was being replaced with identity
+         * and the whole leg chain inherited none of it -- the legs rendered
+         * collapsed while the rest of the model was correct.
+         *
+         * Test what the guard is actually for: a matrix with no magnitude
+         * anywhere in its 3x3 (the zero-scale case), or NaN. */
+        int degenerate = 0;
+        f32 mag = 0.0f;
+        int r, c;
+        for (r = 0; r < 3; r++) {
+            for (c = 0; c < 4; c++) {
+                f32 v = jobj->mtx[r][c];
+                if (v != v) {
+                    degenerate = 1;
+                }
+                if (c < 3) {
+                    f32 a = (v < 0.0f) ? -v : v;
+                    if (a > mag) {
+                        mag = a;
+                    }
+                }
+            }
+        }
+        if (degenerate || mag <= 0.0001f) {
             jobj->mtx[0][0] = 1.0f; jobj->mtx[0][1] = 0.0f; jobj->mtx[0][2] = 0.0f; jobj->mtx[0][3] = jobj->translate.x;
             jobj->mtx[1][0] = 0.0f; jobj->mtx[1][1] = 1.0f; jobj->mtx[1][2] = 0.0f; jobj->mtx[1][3] = jobj->translate.y;
             jobj->mtx[2][0] = 0.0f; jobj->mtx[2][1] = 0.0f; jobj->mtx[2][2] = 1.0f; jobj->mtx[2][3] = jobj->translate.z;

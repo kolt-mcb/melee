@@ -195,45 +195,44 @@ Still off: the **magnifier** (the off-screen player indicator). It is driven by
 stay out of the build for the same reason: undecompiled `.data` plus the
 unbuilt `ty/` trophy system.
 
-## Character rigging: everything above the waist is right, the legs are not
+## Character rigging *(fixed)*
 
-Textures are fine -- hat, face, moustache, glove and overall materials all read
-correctly. The head, arms and torso deform correctly. **The legs collapse**, with
-one shoe stretched sideways out of the hip.
+Characters render correctly: head, arms, torso, **both legs and both shoes**,
+in bind pose and in a live match. Textures were never the problem.
 
-Measured, not assumed. Ruled out, each with a number:
+The bug was a PC-port hack in `HSD_JObjMakeMatrix`:
 
-| hypothesis | measurement |
-|---|---|
-| envelopes fail to resolve | 379 resolved, **0 failed** |
-| envelope weights do not sum to 1 | every blend sums to **1.0000** |
-| `envelopemtx` missing on the weight-1 path | **0** of 20000 were NULL |
-| more than 10 envelopes per PObj (GX slot limit) | longest list is **10** |
-| per-vertex `PNMTXIDX` not read per vertex | it is; indices vary (0, 6, 9, ...) |
-| Euler convention wrong | `HSD_MtxSRT` is exactly `Rz*Ry*Rx`, verified numerically (max diff 0.0) |
-| hip rotation wrong | euler (-pi/2, 0, -pi/2) maps the bone's +X to **(0,-1,0)** -- straight down, correct |
-| skeleton asymmetric or malformed | hips at x = +1.119 / -1.117, arms at +-0.858; chains symmetric |
-| skinning not actually running | forcing the rigid fallback (`MELEE_NO_SKIN=1`) collapses the whole model, so it is |
+```c
+f32 v = jobj->mtx[0][0];
+if (v != v || (v >= -0.0001f && v <= 0.0001f))   /* NaN or near-zero */
+    ... replace the whole matrix with identity + translation
+```
 
-One real bug found on the way: the joint map keys on offsets **relative to each
-archive's base**, and `grdat_jointmap_find` returns the first match, so entries
-left from a previously converted archive can capture a later model's envelope
-lookups. `ftdata.c` resets before every costume model; `pc_ftconv_joint` did
-not, and neither did the stage-test harness -- the resolve stats show it
-(`map=193` = 132 stage joints + 61 fighter joints, against `map=61` on the
-correct path). Both now reset.
+It exists to handle GameCube's zero-scale invisible root joints, and it tested
+`mtx[0][0]` alone. But `mtx[0][0]` is `cosZ * cosY * scaleX`, which is
+legitimately **zero for any joint rotated a quarter turn about Y or Z**.
+Mario's hips are rotated -pi/2 about Z, so their rotation was overwritten with
+identity and the whole leg chain inherited none of it. No other joint in the
+model hit the condition, which is why only the legs collapsed. It now tests
+what the guard is for: no magnitude anywhere in the 3x3, or NaN.
 
-Diagnostics added, all env-gated:
-`MELEE_FT_JOINTS=1` dumps the skeleton (index, depth, translation, scale,
-quaternion, whether the joint carries a DObj or an envelope matrix);
-`MELEE_NO_SKIN=1` forces every envelope to the rigid fallback;
-`MELEE_ENV_STATS=1` reports resolve counts, weight sums and envelope-list
-lengths.
+**The invariant that found it.** At bind pose,
+`joint->mtx * joint->envelopemtx` must be the identity for every joint (up to
+the model's placement, so compare the 3x3 only). `MELEE_BIND_CHECK=1` reports
+that deviation per joint and dumps the matrices for any that fail. It read
+0.0000 for all thirteen upper-body joints and 1.0 / 2.0 for exactly the six leg
+joints -- and it disproved two plausible-looking guesses on the way: the `w=0`
+in every joint quaternion (expected, HSD keeps Euler in those components while
+`JOBJ_USE_QUATERNION` is clear) and a transposed inverse-bind (made it worse,
+11 failing joints instead of 6).
 
-Next place to look: which joints the *leg* mesh's envelopes actually bind to.
-Everything about the skeleton and the blend is verified correct, so the
-remaining suspect is the binding itself -- dump each leg PObj's envelope
-targets and compare against joints 47-58.
+Prefer this to inspection. Reading a render tells you *that* something is
+wrong; the invariant tells you *which joint*.
+
+Diagnostics, all env-gated: `MELEE_BIND_CHECK`, `MELEE_FT_JOINTS` (skeleton
+dump), `MELEE_NO_SKIN` (force the rigid fallback), `MELEE_ENV_STATS` (resolve
+counts, weight sums, list lengths), `MELEE_ENV_TARGETS` (which joints each
+PObj's envelopes bind to).
 
 ## Weak function stubs standing in for DATA symbols
 
