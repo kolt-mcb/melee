@@ -36,6 +36,10 @@
 #include <baselib/mobj.h>
 #include <baselib/tobj.h>
 
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#endif
+
 struct IfStockStealAnim {
     Vec3 start;
     Vec3 mid;
@@ -903,6 +907,14 @@ void ifStock_802FAEC4(void)
     memzero(&ifStock_804A1774, sizeof(ifStock_804A1774));
     lbArchive_LoadSections(*ifAll_GetArchive(), (void**) &sp18, "Stc_scemdls",
                            0);
+#if BUILD_TARGET_PC
+    /* The archive hands back a NULL-terminated array of 32-bit
+     * DynamicModelDesc offsets, unrelocated and big-endian. */
+    sp18 = pc_conv_ModelDescArray(sp18, (*ifAll_GetArchive())->data);
+    if (sp18 == NULL) {
+        return;
+    }
+#endif
     stock->x0 = sp18;
     stock->x4 = sp18[1];
     ifStock_804A1ACC.x108 = 0;

@@ -28,6 +28,12 @@
 #include <baselib/random.h>
 #include <baselib/tobj.h>
 
+#if BUILD_TARGET_PC
+#include <stddef.h>
+#include "port/pc_scene.h"
+#include "port/log.h"
+#endif
+
 typedef struct FlagsX {
     u32 b80 : 1;
     u32 b40 : 1;
@@ -900,6 +906,22 @@ void ifStatus_802F66A4(void)
     arch = ifAll_GetArchive();
     lbArchive_LoadSections(*arch, (void**) &num, num_models_name,
                            (void**) &mrk, mrk_models_name, 0);
+#if BUILD_TARGET_PC
+    /* Each of these symbols is a bare 32-bit offset to a DynamicModelDesc,
+     * unrelocated and big-endian like the rest of the archive. */
+    {
+        DynamicModelDesc* cnum = pc_conv_ModelDescAt(num, (*arch)->data);
+        DynamicModelDesc* cmrk = pc_conv_ModelDescAt(mrk, (*arch)->data);
+        if (cnum == NULL || cmrk == NULL) {
+            PORT_LOG_WARN("ifStatus_802F66A4: HUD digit/marker models would "
+                          "not convert (num=%p mrk=%p)\n", (void*) cnum,
+                          (void*) cmrk);
+            return;
+        }
+        num = &cnum;
+        mrk = &cmrk;
+    }
+#endif
     hud->unk258 = (*num)->joint;
     hud->jobj_desc_parent = (*num)->anims;
     hud->janim_selection_joints = (HSD_AnimJoint*) (*num)->matanims;
@@ -908,10 +930,23 @@ void ifStatus_802F66A4(void)
     hud->unk26C = (*mrk)->anims;
     hud->unk270 = (*mrk)->matanims;
     hud->unk274 = (*mrk)->shapeanims;
+#if BUILD_TARGET_PC
+    /* `reset` is never assigned -- a decomp gap, and reading it is undefined.
+     * On GameCube the garbage was whatever the previous frame left on the
+     * stack; here it made HUD initialisation nondeterministic. Take the branch
+     * always: this is the setup path, and everything below +0x258 is exactly
+     * the per-player state that should start cleared. The models loaded just
+     * above live at +0x258 and beyond, so they survive either way -- but the
+     * boundary is a GameCube offset, and every pointer before it is wider
+     * here, so use the real field offset. */
+    ifStatus_804D6D60 = 0;
+    memzero(hud, offsetof(HudIndex, unk258));
+#else
     if (reset != 0) {
         ifStatus_804D6D60 = 0;
         memzero(hud, 0x258);
     }
+#endif
 }
 
 void ifStatus_802F6788(u8 player_idx)

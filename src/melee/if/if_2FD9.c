@@ -18,6 +18,10 @@
 #include <baselib/jobj.h>
 #include <baselib/lobj.h>
 
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#endif
+
 /// .bss
 /* 4A1F10 */ static struct un_804A1F10_t {
     DynamicModelDesc** x0;
@@ -200,6 +204,13 @@ void un_802FE260(void)
     un_804D6D90 = 0;
     lbArchive_LoadSections(*ifAll_GetArchive(), (void*) &un_804A1F10.x0,
                            "Stc_rarwmdls", 0);
+#if BUILD_TARGET_PC
+    un_804A1F10.x0 =
+        pc_conv_ModelDescArray(un_804A1F10.x0, (*ifAll_GetArchive())->data);
+    if (un_804A1F10.x0 == NULL) {
+        return;
+    }
+#endif
     for (i = 0; i < 4; i++) {
         gobj = GObj_Create(HSD_GOBJ_CLASS_UI, 15, 0);
         jobj = HSD_JObjLoadJoint(un_804A1F10.x0[0]->joint);

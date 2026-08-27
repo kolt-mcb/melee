@@ -17,6 +17,11 @@
 #include <baselib/lobj.h>
 #include <baselib/wobj.h>
 
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#include "port/log.h"
+#endif
+
 /* 3F9E08 */ static struct un_803F9E08_t {
     unsigned char x0_b0 : 1;
     unsigned char x0_b1 : 1;
@@ -135,5 +140,14 @@ void un_802FF1B4(void)
     un_803F9E08.x0_b1 = false;
     un_804D6DA0 = lbArchive_80016DBC("IfCoGet.dat", &un_804D6DA4,
                                      "ScInfCgt_scene_data", 0);
+#if BUILD_TARGET_PC
+    un_804D6DA4 = pc_conv_SceneDesc(
+        un_804D6DA4, ((HSD_Archive*) un_804D6DA0)->data);
+    if (un_804D6DA4 == NULL) {
+        PORT_LOG_WARN("un_802FF1B4: IfCoGet scene data would not convert; "
+                      "coin/get display disabled\n");
+        return;
+    }
+#endif
     un_802FEFAC();
 }

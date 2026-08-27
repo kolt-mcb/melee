@@ -9,6 +9,9 @@
 #include <baselib/forward.h>
 
 #include <dolphin/gx.h>
+#if BUILD_TARGET_PC
+#include <baselib/tobj.h> /* HSD_ImageDesc must be complete: image_descs is a real array here */
+#endif
 
 struct IfDamageFlags {
     u8 explode_animation : 1;
@@ -127,8 +130,17 @@ struct ifMagnify {
     int xC;
     int x10;
     ifMagnifyPlayer player[6];
+#if BUILD_TARGET_PC
+    /* 5 * 0x18 is five GameCube HSD_ImageDescs. The struct is bigger here
+     * (image_ptr widens), and ifmagnify.c reached this array through two
+     * overlay casts with hardcoded offsets -- which on x86_64 landed inside
+     * player[] and scribbled its gobj pointers. Name the array properly and
+     * let the compiler place it. */
+    HSD_ImageDesc image_descs[5];
+#else
     u8 image_descs[5 * 0x18];
     u8 pad[0xF0 - 0xEC];
+#endif
 };
 
 #define DEVTEXT_FLAG_HIDETEXT (0x80)

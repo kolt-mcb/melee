@@ -17,6 +17,10 @@
 #include <melee/lb/lbspdisplay.h>
 #include <melee/sc/types.h>
 
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#endif
+
 /* 3F9628 */ Element_803F9628 ifStatus_803F9628[8] = {
     { NULL, 0, if_802F74D0, 0x7C860U, 8, 0, { 0 }, 0, NULL, NULL, 0, 0 },
     { NULL, 0, if_802F73C4, 0xC351U, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
@@ -138,6 +142,14 @@ void ifStatus_802F7134(void)
     archive = ifAll_GetArchive();
     lbArchive_LoadSections(*archive, (void**) &models, "ScInfCnt_scene_models",
                            0);
+#if BUILD_TARGET_PC
+    /* The archive hands back a NULL-terminated array of 32-bit
+     * DynamicModelDesc offsets, unrelocated and big-endian. */
+    models = pc_conv_ModelDescArray(models, (*archive)->data);
+    if (models == NULL) {
+        return;
+    }
+#endif
 
     for (i = 0; i < 8; i++) {
         ifStatus_803F9628[i].x14 = models[i];

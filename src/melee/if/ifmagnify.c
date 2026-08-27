@@ -31,7 +31,40 @@
 #include <baselib/mobj.h>
 #include <baselib/tobj.h>
 
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#include "port/pc_scene.h"
+#include "port/log.h"
+/* Holds the converted "lupe" model so model_desc can keep pointing at a
+ * DynamicModelDesc* the way the original archive layout did. */
+static DynamicModelDesc* ifMagnify_pc_model;
+#endif
+
 /* 3F97E8 */ extern HSD_CameraDescPerspective ifMagnify_803F97E8;
+#if BUILD_TARGET_PC
+/* This is a static camera descriptor in .data that is not decompiled. The
+ * weak stub standing in for it was a *function*, so &ifMagnify_803F97E8 was a
+ * code address read as a camera descriptor -- garbage viewport, garbage
+ * eyepos, and a crash inside CObjLoad. ifMagnify_802FC618 overrides the
+ * projection with HSD_CObjSetOrtho and sets the viewport explicitly right
+ * after loading it, so all this has to be is a valid ortho camera. */
+HSD_CameraDescPerspective ifMagnify_803F97E8 = {
+    NULL,        /* class_name: use the default CObj class */
+    0,           /* flags */
+    PROJ_ORTHO,  /* projection_type */
+    { 0, 640, 0, 480 },
+    { 0, 640, 0, 480 },
+    NULL,        /* eyepos: HSD_WObjInit skips a null desc */
+    NULL,        /* interest */
+    0.0f,        /* roll */
+    NULL,        /* up_vector */
+    1.0f,        /* nnear */
+    3500.0f,     /* ffar */
+    0.0f,        /* fov: replaced by HSD_CObjSetOrtho */
+    0.0f,        /* aspect */
+};
+#endif
 static char ifMagnify_803F988C[] = "!(jobj->flags & JOBJ_USE_QUATERNION)";
 static char ifMagnify_804D57F0[] = "jobj.h";
 static char ifMagnify_804D57F8[] = "jobj";
@@ -447,6 +480,12 @@ void ifMagnify_802FC3C0(s32 slot)
     HSD_MObj* mobj;
 
     player = &ifMagnify_804A1DE0.player[slot];
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_HUD_TRACE") != NULL) {
+        fprintf(stderr, "[HUD] magnify slot %d player=%p gobj=%p\n",
+                (int) slot, (void*) player, (void*) player->gobj);
+    }
+#endif
     if (player->gobj != NULL) {
         HSD_GObjPLink_80390228(player->gobj);
     }
@@ -464,12 +503,23 @@ void ifMagnify_802FC3C0(s32 slot)
     if (slot == 0) {
         player->idesc = child->u.dobj->next->mobj->tobj->imagedesc;
     } else {
+#if BUILD_TARGET_PC
+        /* Both overlays name the same array: ifMagnifyImageDescCopy's
+         * image_descs[slot] is ifMagnifyImageDescBase's image_descs[slot-1],
+         * because its pad is one HSD_ImageDesc shorter. Their pads are
+         * GameCube offsets, so on x86_64 they aimed into player[]. Say it
+         * through the real field instead. */
+        ifMagnify_804A1DE0.image_descs[slot - 1] =
+            *ifMagnify_804A1DE0.player[0].idesc;
+        player->idesc = &ifMagnify_804A1DE0.image_descs[slot - 1];
+#else
         ifMagnifyImageDescCopy* copy_base =
             (ifMagnifyImageDescCopy*) &ifMagnify_804A1DE0;
 
         copy_base->image_descs[slot] = *ifMagnify_804A1DE0.player[0].idesc;
         player->idesc = &((ifMagnifyImageDescBase*) &ifMagnify_804A1DE0)
                              ->image_descs[slot - 1];
+#endif
         player->idesc->image_ptr = HSD_MemAlloc(
             (GXGetTexBufferSize(player->idesc->width, player->idesc->height,
                                 player->idesc->format, 0, 0) +
@@ -507,7 +557,16 @@ void ifMagnify_802FC3C0(s32 slot)
 
 void ifMagnify_802FC618(void)
 {
+#if BUILD_TARGET_PC
+    /* 0x14 is offsetof(ifMagnify, player) and +8 offsetof(ifMagnifyPlayer,
+     * idesc) on GameCube. Both move here -- gobj and jobj widen -- so the raw
+     * byte arithmetic read the wrong field entirely. It is just
+     * player[0].idesc. */
+    HSD_ImageDesc** const player0_idesc = &ifMagnify_804A1DE0.player[0].idesc;
+#else
     u8* player0 = (u8*) &ifMagnify_804A1DE0 + 0x14;
+#define player0_idesc ((HSD_ImageDesc**) (player0 + 8))
+#endif
     HSD_GObj* gobj;
     HSD_CObj* cobj;
     HSD_ImageDesc* idesc;
@@ -522,15 +581,15 @@ void ifMagnify_802FC618(void)
     GObj_SetupGXLinkMax(gobj, (GObj_RenderFunc) (Event) ifMagnify_802FBBDC, 0);
     gobj->gxlink_prios = 0x10;
 
-    idesc = *(HSD_ImageDesc**) (player0 + 8);
+    idesc = *player0_idesc;
     half_height = ifMagnify_804DDB4C * idesc->height;
     half_width = ifMagnify_804DDB4C * idesc->width;
     HSD_CObjSetOrtho(cobj, half_height, -half_height, -half_width, half_width);
 
     viewport.xmin = 0;
-    viewport.xmax = (*(HSD_ImageDesc**) (player0 + 8))->width;
+    viewport.xmax = (*player0_idesc)->width;
     viewport.ymin = 0;
-    viewport.ymax = (*(HSD_ImageDesc**) (player0 + 8))->height;
+    viewport.ymax = (*player0_idesc)->height;
     HSD_CObjSetViewport(cobj, &viewport);
     HSD_CObjSetScissorx4(cobj, (u16) viewport.xmin, (u16) viewport.xmax,
                          (u16) viewport.ymin, (u16) viewport.ymax);
@@ -590,10 +649,27 @@ void ifMagnify_802FC870(void)
     HSD_Archive** archive;
     s32 i;
 
-    memzero(&ifMagnify_804A1DE0, 0x74);
+    memzero(&ifMagnify_804A1DE0, sizeof(ifMagnify_804A1DE0));
     ifMagnify_802FC7C0(&ifMagnify_804A1DE0);
     archive = ifAll_GetArchive();
     lbArchive_LoadSections(*archive, (void**) &ifMagnify_804A1DE0, "lupe", 0);
+#if BUILD_TARGET_PC
+    /* "lupe" is a bare DynamicModelDesc offset, unrelocated and big-endian
+     * like every other pointer in the archive. Convert it in place so the
+     * magnifier's joint tree is a real x86_64 one. */
+    {
+        DynamicModelDesc* m =
+            pc_conv_ModelDescAt(ifMagnify_804A1DE0.model_desc,
+                                (*archive)->data);
+        if (m == NULL) {
+            PORT_LOG_WARN("ifMagnify_802FC870: lupe model would not "
+                          "convert; magnifier disabled\n");
+            return;
+        }
+        ifMagnify_pc_model = m;
+        ifMagnify_804A1DE0.model_desc = &ifMagnify_pc_model;
+    }
+#endif
     i = 0;
     do {
         ifMagnify_802FC3C0(i);

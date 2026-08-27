@@ -21,6 +21,10 @@
 #include <melee/lb/lb_00B0.h>
 #include <melee/lb/lbvector.h>
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 typedef struct AfterimageVtx {
     f32 x, y, z;
     u8 r, g, b, a;
@@ -461,6 +465,17 @@ void ftCo_800C2FD8(Fighter_GObj* gobj)
         fp->x20FC = var_r5->x1C;
         jobj = fp->parts[var_r5->x14].joint;
     }
+#if BUILD_TARGET_PC
+    /* jobj comes either from it_80285314 (the held item's model -- Link's
+     * sword) or from fp->parts[]. Neither is guaranteed on PC: item models
+     * are not all converted, and a part index out of range gives a null
+     * joint. The reads below go straight into jobj->mtx. This path only
+     * became reachable once fighters started actually landing hits. */
+    if (!pc_ptr_sane(jobj)) {
+        port_guard_warn("ftafterimage.c:no-joint");
+        return;
+    }
+#endif
     lb_8000B1CC(jobj, NULL, &temp_r30->x0);
     temp_r30->xC.x = jobj->mtx[0][var_r29];
     temp_r30->xC.y = jobj->mtx[1][var_r29];
