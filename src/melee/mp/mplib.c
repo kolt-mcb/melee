@@ -1,3 +1,6 @@
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -4509,6 +4512,17 @@ bool mpLib_80054ED8(int line_id)
     if (line_id == -1) {
         return false;
     }
+#if BUILD_TARGET_PC
+    /* PC port: treat an unusable collision table as "no line" rather than
+     * spinning in the report loop below or indexing a NULL groundCollLine.
+     * Callers pass an index that came out of mpCheckFloor, which can be
+     * left unset when the query finds nothing. */
+    if (!pc_ptr_sane(mpLib_804D64B4) || groundCollLine == NULL ||
+        line_id < 0 || line_id >= mpLib_804D64B4->line_count)
+    {
+        return false;
+    }
+#endif
     if (line_id < 0 || line_id >= mpLib_804D64B4->line_count) {
         OSReport("%s:%d:not found lineID=%d\n", __FILE__, 4636, line_id);
         while (true) {
