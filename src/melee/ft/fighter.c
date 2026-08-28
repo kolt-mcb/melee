@@ -769,6 +769,9 @@ void Fighter_UnkUpdateCostumeJoint_800686E4(Fighter_GObj* gobj)
     }
 #endif
     ftPartsPObjSetDefaultClass();
+    if (getenv("MELEE_COSTLOG") != NULL)
+        fprintf(stderr, "[COST] kind=%d costume_joint=%p\n",
+                (int) fp->kind, (void*) fp->x108_costume_joint);
     jobj = HSD_JObjLoadJoint(fp->x108_costume_joint);
 #if BUILD_TARGET_PC
     if (getenv("MELEE_DIAG1") != NULL) {
@@ -787,6 +790,17 @@ void Fighter_UnkUpdateVecFromBones_8006876C(Fighter* fp)
     Vec3 vec2;
     HSD_JObj* jobj = fp->parts[ftParts_GetBoneIndex(fp, 2)].joint;
 
+#if BUILD_TARGET_PC
+    /* PC port: a fighter whose costume joint failed to load has no parts, so
+     * there are no bones to measure between. Link reaches this: its costume
+     * joint is 0x1000, which JObjLoadJointSub now rejects as unmapped rather
+     * than dereferencing. Leave the derived vectors alone. */
+    if (!pc_ptr_sane(jobj) ||
+        !pc_ptr_sane(fp->parts[ftParts_GetBoneIndex(fp, 1)].joint))
+    {
+        return;
+    }
+#endif
     HSD_JObjGetTranslation(jobj, &vec);
 
     fp->x1A6C = (vec.y / 8.55f);

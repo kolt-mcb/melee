@@ -7444,6 +7444,10 @@ static void convert_i8_to_rgba8(const void *src, u8 *dst, u32 w, u32 h)
 static void convert_i4_to_rgba8(const void *src, u8 *dst, u32 w, u32 h)
 {
     const u8 *s = (const u8*)src;
+    if (ENV_FLAG("MELEE_I4LOG")) {
+        fprintf(stderr, "[I4] src=%p %ux%u\n", src, w, h);
+        fflush(stderr);
+    }
     for (u32 y = 0; y < h; y++) for (u32 x = 0; x < w; x++) {
         u32 ti = gx_tiled_index(x, y, w, 8, 8);
         u8 byte = s[ti >> 1];
@@ -7659,9 +7663,25 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
      * descriptors. Probe the whole nominal extent (worst case 4 B/texel)
      * before any decoder touches it. */
     {
-        unsigned long probe = (unsigned long)w * (unsigned long)h;
+        /* GX stores textures in tiles and pads to whole ones, and every
+         * decoder below indexes through gx_tiled_index, which uses the padded
+         * width. Probing the *unpadded* extent therefore approved textures
+         * whose last tile row runs past the mapping -- a 190x190 I4 glyph
+         * atlas reads 192x192/2 bytes, 191 more than w*h/2. Pad first.
+         *
+         * Tile sizes: 8x8 for I4/C4/CMPR, 8x4 for I8/C8/IA4, 4x4 for the
+         * rest. */
+        unsigned long probe;
+        u32 tw, th;
+        switch (fmt) {
+        case 0x00: case 0x08: case 0x0E: tw = 8; th = 8; break;
+        case 0x01: case 0x09: case 0x02: tw = 8; th = 4; break;
+        default:                         tw = 4; th = 4; break;
+        }
+        probe = (unsigned long) (((w + tw - 1) / tw) * tw) *
+                (unsigned long) (((h + th - 1) / th) * th);
         if (fmt == 0x06) probe *= 4; else if (fmt >= 0x03 && fmt <= 0x05) probe *= 2;
-        else if (fmt == 0x0E || fmt == 0x00) probe /= 2;
+        else if (fmt == 0x0E || fmt == 0x00 || fmt == 0x08) probe /= 2;
         if (probe == 0) probe = 1;
         if (!pc_mem_readable(img, probe)) {
             static int warned = 0;
@@ -7847,6 +7867,27 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
             /* No TLUT available — convert to grayscale as fallback */
             u32 pixel_count = (u32)w * (u32)h;
             u32 needed = pixel_count * 4;
+            /* The entry probe above covers `img`, but SIS glyph atlases
+             * arrive here addressed as `base + (glyph_index << 9)` -- an
+             * index the font data controls -- so a bad index lands outside
+             * the archive with nothing else noticing. Check again, against
+             * the padded extent this decoder actually walks. */
+            unsigned long need_i4 =
+                (unsigned long) (((w + 7) / 8) * 8) *
+                (unsigned long) (((h + (fmt == 0x01 ? 3u : 7u)) /
+                                  (fmt == 0x01 ? 4u : 8u)) *
+                                 (fmt == 0x01 ? 4u : 8u));
+            if (fmt != 0x01) {
+                need_i4 /= 2;
+            }
+            if (!pc_mem_readable(img, need_i4)) {
+                static int warned_i4 = 0;
+                if (warned_i4 < 8) { warned_i4++;
+                    PORT_LOG_WARN("TX: I%d source %p unreadable (%ux%u)",
+                                  fmt == 0x01 ? 8 : 4, img, w, h); }
+                g_tx_unreadable++;
+                goto skip_tlut;
+            }
             tmp_buf = malloc(needed);
             if (tmp_buf) {
                 if (fmt == 0x01) {
