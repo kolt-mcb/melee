@@ -1,5 +1,9 @@
 #include "gmclassic.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_dol.h"
+#endif
+
 #include "gm_unsplit.h"
 
 #include <sysdolphin/baselib/random.h>
@@ -82,26 +86,92 @@ STATIC_ASSERT(sizeof(gmClassicSceneData) == 0x560);
 
 static gmClassic_80490880Data gmClassic_80490880;
 #if BUILD_TARGET_PC
-/* gmClassic_803DDEC8 is initialised .data in the original: the Classic-mode
- * matchup tables. Nothing in this tree reconstructs it, so the PC build was
- * resolving it against a weak *function* stub in pc_stub/undef_stubs.c --
- * &gmClassic_803DDEC8 was a code address, and every read below came out of
- * instruction bytes. Define it for real so the symbol is at least data.
- * Zeroed means Classic mode has no matchups yet, which the bounded scans
- * below now survive; it no longer takes the process down. */
-gmClassic_803DDEC8Data gmClassic_803DDEC8 = {
-    /* Terminator-only. Every reader of this table scans for a sentinel --
-     * 0x0D in gm_803DDEC8Struct::x0, 0x148 in gmClassicMatchup::x00 -- and a
-     * table of zeroes presents neither, so each scan would run off the end.
-     * An empty-but-terminated table reads as "Classic mode has no matchups",
-     * which every one of those loops handles. */
-    .x00 = { { .x0 = 0x0D } },
-    .x0C0 = { { .x00 = 0x148 } },
-    .x0CC = { { .x00 = 0x148 } },
-    .x1B8 = { { .x00 = 0x148 } },
-    .x26C = { { .x00 = 0x148 } },
-    .x2B0 = { { .x00 = 0x148 } },
-};
+/* gmClassic_803DDEC8 is initialised .data in the original -- the Classic-mode
+ * matchup tables -- and nothing in this tree reconstructs it, so the symbol
+ * used to resolve against a weak *function* stub in pc_stub/undef_stubs.c:
+ * &gmClassic_803DDEC8 was a code address and every read below came out of
+ * instruction bytes.
+ *
+ * The table is plain data (the xC pointers are filled in at runtime by
+ * fn_801B2CDC, and read as zero in the file), so read the real bytes out of
+ * boot.dol and widen them. Only the u16s need byte-swapping; the one layout
+ * difference is gm_803DDEC8Struct, which carries a pointer and so is 0x10
+ * bytes on GCN against 0x18 here.
+ *
+ * Lazily, because pc_dol_read needs the filesystem up. */
+#define PC_CLASSIC_TABLE_ADDR 0x803DDEC8u
+#define PC_CLASSIC_TABLE_SIZE 0x2F0u
+#define PC_CLASSIC_ENTRY_SIZE_GCN 0x10u
+
+static gmClassic_803DDEC8Data pc_classic_tables_storage;
+static int pc_classic_tables_ready;
+
+static u16 pc_classic_be16(const u8* p)
+{
+    return (u16) (((u16) p[0] << 8) | p[1]);
+}
+
+static void pc_classic_convert_matchups(gmClassicMatchup* dst, const u8* src,
+                                        int count)
+{
+    int i;
+    for (i = 0; i < count; i++) {
+        const u8* e = src + (size_t) i * 6;
+        dst[i].x00 = pc_classic_be16(e);
+        dst[i].x02[0] = (s8) e[2];
+        dst[i].x02[1] = (s8) e[3];
+        dst[i].x02[2] = (s8) e[4];
+        dst[i].x05 = e[5];
+    }
+}
+
+static gmClassic_803DDEC8Data* pc_classic_tables(void)
+{
+    static u8 raw[PC_CLASSIC_TABLE_SIZE];
+    gmClassic_803DDEC8Data* t = &pc_classic_tables_storage;
+    int i;
+
+    if (pc_classic_tables_ready) {
+        return t;
+    }
+    pc_classic_tables_ready = 1;
+
+    /* Terminator-only until proven otherwise. Every reader scans for a
+     * sentinel -- 0x0D in gm_803DDEC8Struct::x0, 0x148 in
+     * gmClassicMatchup::x00 -- and a table of zeroes presents neither, so a
+     * failed load would leave those scans running off the end. */
+    t->x00[0].x0 = 0x0D;
+    t->x0C0[0].x00 = 0x148;
+    t->x0CC[0].x00 = 0x148;
+    t->x1B8[0].x00 = 0x148;
+    t->x26C[0].x00 = 0x148;
+    t->x2B0[0].x00 = 0x148;
+
+    if (!pc_dol_read(PC_CLASSIC_TABLE_ADDR, raw, PC_CLASSIC_TABLE_SIZE)) {
+        return t;
+    }
+
+    for (i = 0; i < 12; i++) {
+        const u8* e = raw + (size_t) i * PC_CLASSIC_ENTRY_SIZE_GCN;
+        t->x00[i].x0 = e[0];
+        t->x00[i].x1 = e[1];
+        t->x00[i].x2 = e[2];
+        t->x00[i].x4 = pc_classic_be16(e + 4);
+        t->x00[i].x6 = pc_classic_be16(e + 6);
+        t->x00[i].x8 = e[8];
+        t->x00[i].xC = NULL; /* assigned at runtime by fn_801B2CDC */
+    }
+    pc_classic_convert_matchups(t->x0C0, raw + 0x0C0, 2);
+    pc_classic_convert_matchups(t->x0CC, raw + 0x0CC, 39);
+    pc_classic_convert_matchups(t->x1B8, raw + 0x1B8, 30);
+    pc_classic_convert_matchups(t->x26C, raw + 0x26C, 11);
+    pc_classic_convert_matchups(t->x2B0, raw + 0x2B0, 10);
+    return t;
+}
+
+/* Every `gmClassic_803DDEC8.` and `&gmClassic_803DDEC8` below goes through
+ * the lazy loader. */
+#define gmClassic_803DDEC8 (*pc_classic_tables())
 #else
 extern gmClassic_803DDEC8Data gmClassic_803DDEC8;
 #endif
@@ -530,7 +600,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
      * gm_803DDC58_Scenes in .data there. GameScene is 0x18 bytes on GCN and
      * 0x28 here, so scenes[26] spans 0x410 rather than 0x270 and that pun
      * lands on nothing. Address the table by name instead. */
-    gmClassic_803DDEC8Data* scene_matchups = &gmClassic_803DDEC8;
+    gmClassic_803DDEC8Data* scene_matchups = pc_classic_tables();
 #else
     gmClassicSceneData* scene_data = (gmClassicSceneData*) gm_803DDC58_Scenes;
     gmClassic_803DDEC8Data* scene_matchups = &scene_data->matchups;
@@ -626,7 +696,7 @@ void gmClassic_OnLoad(void)
      * gm_803DDC58_Scenes in .data there. GameScene is 0x18 bytes on GCN and
      * 0x28 here, so scenes[26] spans 0x410 rather than 0x270 and that pun
      * lands on nothing. Address the table by name instead. */
-    gmClassic_803DDEC8Data* scene_matchups = &gmClassic_803DDEC8;
+    gmClassic_803DDEC8Data* scene_matchups = pc_classic_tables();
 #else
     gmClassicSceneData* scene_data = (gmClassicSceneData*) gm_803DDC58_Scenes;
     gmClassic_803DDEC8Data* scene_matchups = &scene_data->matchups;
