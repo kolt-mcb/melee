@@ -322,6 +322,51 @@ void mem_free(void* ptr)
  * the result to its own view of that block. Returning it makes those stages
  * read real parameters when the stage supplied them, and NULL when it did
  * not -- which the callers must still check. */
+#if BUILD_TARGET_PC
+/* Convert one stage's yakumono parameter block out of the archive.
+ *
+ * The block is raw big-endian, and the structs are not uniformly 4-byte:
+ * Fourside's ends with three u16 while everything before them is int/float.
+ * So a blanket word swap corrupts them, which is why the naive version of
+ * this failed. `u16_from` is the offset where the trailing 16-bit fields
+ * begin; pass `size` for a struct that has none.
+ *
+ * Deliberately opt-in per stage. Castle, Old Kongo, Mute City and Shrine
+ * Route survive the NULL this function otherwise returns, and handing them an
+ * unconverted -- or wrongly converted -- block takes them from working to
+ * crashing. A stage gets a block only once its layout has been read and the
+ * sweep has confirmed it. */
+static void* pc_yakumono_convert(u32 size, u32 u16_from)
+{
+    static u8 buf[0x400];
+    static const void* cached_src;
+    static u32 cached_size, cached_u16;
+    const u8* src = stage_info.yakumono_param;
+    u32 o;
+
+    if (src == NULL || size > sizeof(buf) || u16_from > size) {
+        return NULL;
+    }
+    if (!pc_mem_readable(src, size)) {
+        port_guard_warn("ground.c:yakumono block unreadable");
+        return NULL;
+    }
+    if (src == cached_src && size == cached_size && u16_from == cached_u16) {
+        return buf;
+    }
+    for (o = 0; o + 4 <= u16_from; o += 4) {
+        *(u32*) (buf + o) = __builtin_bswap32(*(const u32*) (src + o));
+    }
+    for (o = u16_from; o + 2 <= size; o += 2) {
+        *(u16*) (buf + o) = __builtin_bswap16(*(const u16*) (src + o));
+    }
+    cached_src = src;
+    cached_size = size;
+    cached_u16 = u16_from;
+    return buf;
+}
+#endif
+
 void* Ground_801C49F8(void)
 {
     /* Returns the stage's own parameter block. Which block that is, this tree
@@ -351,9 +396,28 @@ void* Ground_801C49F8(void)
      * 4-byte scalar layouts that Zebes' and Big Blue's turned out to be. The
      * conversion has to be per stage, driven by each grXx_YakumonoParam.
      *
-     * So: still NULL, which callers must check, rather than a guess that
-     * reads one struct through another's field offsets -- but now with a
-     * known-good starting point for whoever writes those converters. */
+     * So: NULL by default, with a per-stage conversion added as each layout
+     * is read and measured. */
+#if BUILD_TARGET_PC
+    switch (stage_info.grkind) {
+    case Gr_Kind_Fourside:
+        /* grfourside.c:37 -- int/float through 0x40, then u16 at 0x44/46/48. */
+        return pc_yakumono_convert(0x4C, 0x44);
+    case Gr_Kind_Corneria:
+        /* grcorneria.c grCn_StageDataLocal -- f32/s32 through 0x88. */
+        return pc_yakumono_convert(0x8C, 0x8C);
+    case Gr_Kind_BigBlue:
+        /* grbigblue.static.h grBb_YakumonoParam -- f32/s32 through
+         * 0x140 (Vec3 at 0x134, f32 scale at 0x140). */
+        return pc_yakumono_convert(0x144, 0x144);
+    case Gr_Kind_Zebes:
+        /* grzebes.c grZe_YakumonoParam -- f32/s32 through 0x9C, then
+         * grZe_AcidLevelEntry[30], four s16 apiece, from 0xA0 to 0x190. */
+        return pc_yakumono_convert(0x190, 0xA0);
+    default:
+        break;
+    }
+#endif
     return NULL;
 }
 #endif
