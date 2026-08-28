@@ -57,7 +57,18 @@ ItemStateTable it_803F83F0[] = {
 void it_802D8618(s32 arg0, Vec3* arg1, s32 arg2, s32 arg3)
 {
     Item_GObj* gobj = it_8027B5B0(It_Kind_Heiho, arg1, NULL, NULL, 1);
-    Item* ip = GET_ITEM(gobj);
+    Item* ip;
+#if BUILD_TARGET_PC
+    /* PC port: the spawn can refuse now that a missing article table is
+     * reported rather than dereferenced (see Item_80267AA8). it_8027B5B0
+     * already returns NULL for that, and its own callers check -- this one
+     * did not, so Yoshi's Story died configuring a Shy Guy that was never
+     * created. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
+    ip = GET_ITEM(gobj);
     ip->xDD4_itemVar.heiho.x20 = (s8) arg0;
     ip->xDD4_itemVar.heiho.x21 = (s8) arg2;
     ip->xDD4_itemVar.heiho.x24 = arg3;

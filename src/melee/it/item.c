@@ -601,6 +601,20 @@ static void Item_80267AA8(HSD_GObj* gobj, SpawnItem* spawnItem)
     item_data->entity = gobj;
     Item_80267978(gobj);
     item_data->msid = -1;
+#if BUILD_TARGET_PC
+    /* PC port: Item_80267978 can legitimately leave xC4_article_data NULL --
+     * it says so itself for stage items ("not found zako model data! check
+     * ground dat file!"). On GameCube that report aborts; here
+     * HSD_ASSERTREPORT returns, so execution ran straight on into the
+     * two-level dereference below and faulted at address 0x20. That is how
+     * Yoshi's Story and Great Bay died, both while spawning a stage zako.
+     *
+     * Leave the item half-initialised and let the spawn path unwind: it_zako
+     * and the other callers already treat a NULL gobj as "no item". */
+    if (item_data->xC4_article_data == NULL) {
+        return;
+    }
+#endif
     item_data->xC8_joint =
         item_data->xC4_article_data->x10_modelDesc->x0_joint;
     item_data->xCC_item_attr = item_data->xC4_article_data->x0_common_attr;
@@ -1018,6 +1032,16 @@ static HSD_GObj* Item_8026862C(SpawnItem* spawnItem)
     }
     GObj_InitUserData(gobj, 6, Item_OnUserDataRemove, user_data);
     Item_80267AA8(gobj, spawnItem);
+#if BUILD_TARGET_PC
+    /* Item_80267AA8 returns early when the article data is missing (see
+     * there). Unwind the same way the Item_802682F0 failure below does, so
+     * the caller gets NULL rather than a half-built item. */
+    if (((Item*) HSD_GObjGetUserData(gobj))->xC4_article_data == NULL) {
+        port_guard_warn("item.c:Item_8026862C no article data; spawn refused");
+        HSD_GObjPLink_80390228(gobj);
+        return NULL;
+    }
+#endif
     Item_802680CC(gobj);
     if (Item_802682F0(gobj) != false) {
         Item_8026814C(gobj);
