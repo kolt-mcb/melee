@@ -456,7 +456,7 @@ enum {
  * ============================================================ */
 
 #define MAX_VERTS 16384
-#define MAX_TEXTURES 64
+#define MAX_TEXTURES 1024
 
 /* Whether each texture-cache slot's GL texture has a mip chain. A mipmapped
  * minification filter over a texture without one is incomplete in GL and
@@ -2194,6 +2194,97 @@ void gx_frame_begin(void)
 /* Forward declaration - defined below */
 static void bridge_upload_and_draw(void);
 static GLenum gx_bl_to_gl(u32 gx_blend_factor); /* fwd decl */
+/* Uniform upload memoisation.
+ *
+ * bridge_upload_and_draw() runs once per draw and re-uploaded the whole
+ * shader state every time -- apply_tev_uniforms() alone is 64 glUniform
+ * calls, and with lights, fog, channels and matrices it comes to well over a
+ * hundred. At ~1800 draws a frame that is ~180k glUniform calls per frame,
+ * which measured as the dominant cost: 52ms of CPU per frame, ~29us per draw.
+ *
+ * Uniform values live in the program object and this bridge has exactly one
+ * program, so re-uploading an unchanged value is a no-op with a syscall-like
+ * cost attached. These helpers keep a shadow copy per location and skip the
+ * call when nothing changed. Correctness rests on that single-program
+ * invariant; if a second program is ever introduced, this cache has to be
+ * invalidated on program switch. */
+/* Environment flags resolved once. These sat in the per-draw path, and
+ * getenv() is a linear scan of environ -- at ~1800 draws a frame that is
+ * ~1800 environment scans per frame for diagnostics that are almost always
+ * off. The statement expression keeps them usable inside an `if` condition,
+ * which is how they are all written. */
+#define ENV_FLAG(name) \
+    ({ static int _envf = -1; if (_envf < 0) _envf = (getenv(name) != NULL); _envf; })
+
+#define UCACHE_MAX 512
+#define UCACHE_BYTES 256
+static GLint u_shadow_i[UCACHE_MAX];
+static GLfloat u_shadow_f[UCACHE_MAX];
+static u8 u_shadow_set_i[UCACHE_MAX];
+static u8 u_shadow_set_f[UCACHE_MAX];
+static u8 u_shadow_arr[UCACHE_MAX][UCACHE_BYTES];
+static u16 u_shadow_arr_len[UCACHE_MAX];
+
+static void pc_uniform_cache_reset(void)
+{
+    memset(u_shadow_set_i, 0, sizeof(u_shadow_set_i));
+    memset(u_shadow_set_f, 0, sizeof(u_shadow_set_f));
+    memset(u_shadow_arr_len, 0, sizeof(u_shadow_arr_len));
+}
+
+static int u_changed_i(GLint loc, GLint v)
+{
+    if (loc < 0 || loc >= UCACHE_MAX) return 1;
+    if (u_shadow_set_i[loc] && u_shadow_i[loc] == v) return 0;
+    u_shadow_i[loc] = v;
+    u_shadow_set_i[loc] = 1;
+    return 1;
+}
+
+static int u_changed_f(GLint loc, GLfloat v)
+{
+    if (loc < 0 || loc >= UCACHE_MAX) return 1;
+    if (u_shadow_set_f[loc] && u_shadow_f[loc] == v) return 0;
+    u_shadow_f[loc] = v;
+    u_shadow_set_f[loc] = 1;
+    return 1;
+}
+
+/* Arrays and matrices: compare the bytes actually being uploaded. */
+static int u_changed_mem(GLint loc, const void* data, unsigned long len)
+{
+    if (loc < 0 || loc >= UCACHE_MAX || len > UCACHE_BYTES) return 1;
+    if (u_shadow_arr_len[loc] == len &&
+        memcmp(u_shadow_arr[loc], data, len) == 0)
+    {
+        return 0;
+    }
+    memcpy(u_shadow_arr[loc], data, len);
+    u_shadow_arr_len[loc] = (u16) len;
+    return 1;
+}
+
+#define UP1I(loc, v)  do { GLint _l=(loc); GLint _v=(v); \
+    if (_l >= 0 && u_changed_i(_l, _v)) glUniform1i(_l, _v); } while (0)
+#define UP1F(loc, v)  do { GLint _l=(loc); GLfloat _v=(GLfloat)(v); \
+    if (_l >= 0 && u_changed_f(_l, _v)) glUniform1f(_l, _v); } while (0)
+#define UPNIV(loc, n, p) do { GLint _l=(loc); \
+    if (_l >= 0 && u_changed_mem(_l, (p), sizeof(GLint)*(unsigned long)(n))) \
+        glUniform1iv(_l, (n), (p)); } while (0)
+#define UPNFV(loc, n, p) do { GLint _l=(loc); \
+    if (_l >= 0 && u_changed_mem(_l, (p), sizeof(GLfloat)*(unsigned long)(n))) \
+        glUniform1fv(_l, (n), (p)); } while (0)
+#define UP3FV(loc, n, p) do { GLint _l=(loc); \
+    if (_l >= 0 && u_changed_mem(_l, (p), sizeof(GLfloat)*3*(unsigned long)(n))) \
+        glUniform3fv(_l, (n), (p)); } while (0)
+#define UP4FV(loc, n, p) do { GLint _l=(loc); \
+    if (_l >= 0 && u_changed_mem(_l, (p), sizeof(GLfloat)*4*(unsigned long)(n))) \
+        glUniform4fv(_l, (n), (p)); } while (0)
+#define UPMTX4(loc, n, tr, p) do { GLint _l=(loc); \
+    if (_l >= 0 && u_changed_mem(_l, (p), sizeof(GLfloat)*16*(unsigned long)(n))) \
+        glUniformMatrix4fv(_l, (n), (tr), (p)); } while (0)
+
+
 static void apply_alpha_compare_uniforms(void);
 static void apply_tev_uniforms(void);
 void GXColor4u8(u8 r, u8 g, u8 b, u8 a); /* forward decl for display list parser */
@@ -2628,13 +2719,13 @@ static void bridge_upload_and_draw(void)
     {
         static int _tv_from = -2, _tv_n = 0;
         if (_tv_from == -2) {
-            const char* tv = getenv("MELEE_TEVDUMP");
+            const char* tv = ENV_FLAG("MELEE_TEVDUMP");
             _tv_from = tv ? atoi(tv) : -1;
         }
         /* Keyed on batch size rather than frame: the bridge frame counter and
          * the game frame counter do not advance together on this path. */
         if (_tv_from >= 0 && _tv_n < 6 && (int) g_state.vert_count >= _tv_from &&
-            (getenv("MELEE_TEVDUMP_FT") == NULL || pc_in_fighter_draw))
+            (!ENV_FLAG("MELEE_TEVDUMP_FT") || pc_in_fighter_draw))
         {
             u32 st;
             _tv_n++;
@@ -2729,15 +2820,21 @@ static void bridge_upload_and_draw(void)
             }
         }
     }
-    /* Clear any lingering GL errors from previous calls */
-    glGetError();
+    /* Clear any lingering GL errors from previous calls.
+     *
+     * glGetError forces the driver to resolve pending state and was running
+     * unconditionally on every draw -- roughly 1800 synchronising calls a
+     * frame to service a diagnostic nothing was reading. Behind a flag now. */
+    if (ENV_FLAG("MELEE_GLCHECK")) {
+        glGetError();
+    }
     
     u16 count = g_state.vert_count;
     if (count == 0) return;
-    { static int _n=0; if(getenv("MELEE_ZTRACE") && _n<30){_n++;
+    { static int _n=0; if(ENV_FLAG("MELEE_ZTRACE") && _n<30){_n++;
         fprintf(stderr,"[FLUSH] count=%u ztex_op=%d frame=%u prim=0x%X\n",(unsigned)count,(int)g_state.ztex_op,(unsigned)g_state.frame_count,(unsigned)g_state.prim_type); } }
 
-    { static int _pd_on=-1,_pd_n=0; if(_pd_on<0)_pd_on=(getenv("MELEE_STAGE_DIAG")!=NULL);
+    { static int _pd_on=-1,_pd_n=0; if(_pd_on<0)_pd_on=(ENV_FLAG("MELEE_STAGE_DIAG")!=NULL);
       if(_pd_on && g_state.frame_count>=8 && g_state.frame_count<=9 && _pd_n<12){_pd_n++;
         fprintf(stderr,"[PDDRAW] frame=%u count=%u prim=0x%X mtx3d=%d curid=%u p1=%d pos0=(%.1f,%.1f,%.1f) col0=(%.2f,%.2f,%.2f,%.2f) proj00=%.3f\n",
           (unsigned)g_state.frame_count, count, g_state.prim_type, (int)g_state.mtx3d_active,
@@ -2772,7 +2869,7 @@ static void bridge_upload_and_draw(void)
     /* PC diag: read back the VBO's first vertex to confirm the GPU has the
      * same data the CPU used for the NDCCHECK (rules out a bad upload). */
 #if BUILD_TARGET_PC
-    if (g_state.mtx3d_active && getenv("MELEE_MTR")) {
+    if (g_state.mtx3d_active && ENV_FLAG("MELEE_MTR")) {
         static int _rb_n = 0;
         if (_rb_n < 300) {
             _rb_n++;
@@ -2790,7 +2887,7 @@ static void bridge_upload_and_draw(void)
     /* PC diag (MELEE_SKINBOX): per-batch position bbox for skinned batches. */
     {
         static int _sb_on = -1, _sb_n = 0;
-        if (_sb_on < 0) _sb_on = (getenv("MELEE_SKINBOX") != NULL);
+        if (_sb_on < 0) _sb_on = (ENV_FLAG("MELEE_SKINBOX"));
         if (_sb_on && _sb_n < 14 && count > 0 && g_batch_pretransformed) {
             _sb_n++;
             f32 mn[3] = { 1e30f, 1e30f, 1e30f }, mx[3] = { -1e30f, -1e30f, -1e30f };
@@ -2807,29 +2904,17 @@ static void bridge_upload_and_draw(void)
         }
     }
 
-    /* Set ALL vertex attributes explicitly every draw */
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                          (void*)(uintptr_t)offsetof(Vertex, pos));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                          (void*)(uintptr_t)offsetof(Vertex, nrm));
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                          (void*)(uintptr_t)offsetof(Vertex, col));
-    glEnableVertexAttribArray(3);
-    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                          (void*)(uintptr_t)offsetof(Vertex, tex0));
-    glEnableVertexAttribArray(4);
-    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                          (void*)(uintptr_t)offsetof(Vertex, tex1));
+    /* Vertex attribute layout is fixed -- one Vertex struct, one VBO -- and
+     * is recorded in the VAO at init (see the identical block in the setup
+     * path). Re-specifying it on every draw only made the driver revalidate
+     * the same state ~1800 times a frame. */
     
     /* State — blend. Translate GX blend factors to GL equivalents via
      * gx_bl_to_gl (SDK-accurate values, defined below). */
     pc_apply_blend_state();
     
     /* State — depth */
-    if (g_state.z_enabled && !getenv("MELEE_STAGE_NODEPTH")) {
+    if (g_state.z_enabled && !ENV_FLAG("MELEE_STAGE_NODEPTH")) {
         glEnable(GL_DEPTH_TEST);
         GLenum gl_func;
         switch (g_state.z_func) {
@@ -2896,7 +2981,7 @@ static void bridge_upload_and_draw(void)
     /* Upload projection matrix (as uniform)
      * g_state.proj_matrix is row-major C array. GL_TRUE transposes to column-major. */
     if (g_proj_loc >= 0) {
-        glUniformMatrix4fv(g_proj_loc, 1, GL_TRUE, &g_state.proj_matrix[0][0]);
+        UPMTX4(g_proj_loc, 1, GL_TRUE, &g_state.proj_matrix[0][0]);
     }
     
     /* Compute MVP = proj * modelview (all row-major, transpose at upload) */
@@ -2957,10 +3042,10 @@ static void bridge_upload_and_draw(void)
          * draw (white-surface debugging, roadmap M1). */
         static int _chan_from = -1;
         if (_chan_from < 0) {
-            const char* cf = getenv("MELEE_CHAN_FROM");
+            const char* cf = ENV_FLAG("MELEE_CHAN_FROM");
             _chan_from = cf ? atoi(cf) : 8;
         }
-        if (getenv("MELEE_CHAN") && g_state.vert_count > 0 &&
+        if (ENV_FLAG("MELEE_CHAN") && g_state.vert_count > 0 &&
             (int)g_state.frame_count >= _chan_from) {
             static int _ch = 0;
             if (_ch < 80) {
@@ -2993,7 +3078,7 @@ static void bridge_upload_and_draw(void)
                 }
             }
         }
-        if (getenv("MELEE_CLIP") && g_state.vert_count > 0 && g_state.frame_count >= 8) {
+        if (ENV_FLAG("MELEE_CLIP") && g_state.vert_count > 0 && g_state.frame_count >= 8) {
             static int _cl = 0;
             if (_cl < 300) {
                 _cl++;
@@ -3053,14 +3138,14 @@ static void bridge_upload_and_draw(void)
         for (int i = 0; i < 4; i++)
             for (int j = 0; j < 4; j++)
                 mvp_flat[j * 4 + i] = mvp[i][j];  /* Transpose row→col major */
-        glUniformMatrix4fv(g_mvp_loc, 1, GL_FALSE, mvp_flat);
+        UPMTX4(g_mvp_loc, 1, GL_FALSE, mvp_flat);
     }
     
     /* PC diag: where do vertices land in NDC under this mvp? (MELEE_MTR) */
 #if BUILD_TARGET_PC
     if (g_state.mtx3d_active) {
         static int _ndc_on = -1, _ndc_n = 0;
-        if (_ndc_on < 0) _ndc_on = (getenv("MELEE_MTR") != NULL);
+        if (_ndc_on < 0) _ndc_on = (ENV_FLAG("MELEE_MTR"));
         if (_ndc_on && g_state.p1_valid && g_state.vert_count > 0) {
             if (_ndc_n < 120) {
                 _ndc_n++;
@@ -3100,22 +3185,22 @@ static void bridge_upload_and_draw(void)
      * UV to the origin, so require it to have been loaded. */
     if (g_texmtx0_enable_loc >= 0) {
         int enable0 = pc_texmtx_active(0);
-        glUniform1i(g_texmtx0_enable_loc, enable0);
+        UP1I(g_texmtx0_enable_loc, enable0);
         if (enable0 && g_texmtx0_loc >= 0) {
             f32 mtx[4][4] = {{0}};
             memcpy(mtx, g_state.mtx_array[g_state.tex_gen_mat_id[0]], sizeof(f32) * 12);
             mtx[3][3] = 1.0f;
-            glUniformMatrix4fv(g_texmtx0_loc, 1, GL_FALSE, &mtx[0][0]);
+            UPMTX4(g_texmtx0_loc, 1, GL_FALSE, &mtx[0][0]);
         }
     }
     if (g_texmtx1_enable_loc >= 0) {
         int enable1 = pc_texmtx_active(1);
-        glUniform1i(g_texmtx1_enable_loc, enable1);
+        UP1I(g_texmtx1_enable_loc, enable1);
         if (enable1 && g_texmtx1_loc >= 0) {
             f32 mtx[4][4] = {{0}};
             memcpy(mtx, g_state.mtx_array[g_state.tex_gen_mat_id[1]], sizeof(f32) * 12);
             mtx[3][3] = 1.0f;
-            glUniformMatrix4fv(g_texmtx1_loc, 1, GL_FALSE, &mtx[0][0]);
+            UPMTX4(g_texmtx1_loc, 1, GL_FALSE, &mtx[0][0]);
         }
     }
     
@@ -3126,12 +3211,12 @@ static void bridge_upload_and_draw(void)
     apply_tev_uniforms();
     
     /* Upload fog uniforms */
-    if (g_fog_enabled_loc >= 0) glUniform1i(g_fog_enabled_loc, g_state.fog_enabled ? 1 : 0);
-    if (g_fog_type_loc >= 0) glUniform1i(g_fog_type_loc, g_state.fog_type);
-    if (g_fog_startz_loc >= 0) glUniform1f(g_fog_startz_loc, g_state.fog_startz);
-    if (g_fog_endz_loc >= 0) glUniform1f(g_fog_endz_loc, g_state.fog_endz);
-    if (g_fog_nearz_loc >= 0) glUniform1f(g_fog_nearz_loc, g_state.fog_nearz);
-    if (g_fog_farz_loc >= 0) glUniform1f(g_fog_farz_loc, g_state.fog_farz);
+    if (g_fog_enabled_loc >= 0) UP1I(g_fog_enabled_loc, g_state.fog_enabled ? 1 : 0);
+    if (g_fog_type_loc >= 0) UP1I(g_fog_type_loc, g_state.fog_type);
+    if (g_fog_startz_loc >= 0) UP1F(g_fog_startz_loc, g_state.fog_startz);
+    if (g_fog_endz_loc >= 0) UP1F(g_fog_endz_loc, g_state.fog_endz);
+    if (g_fog_nearz_loc >= 0) UP1F(g_fog_nearz_loc, g_state.fog_nearz);
+    if (g_fog_farz_loc >= 0) UP1F(g_fog_farz_loc, g_state.fog_farz);
     if (g_fog_color_loc >= 0) {
         glUniform4f(g_fog_color_loc,
             g_state.fog_color.r / 255.0f,
@@ -3142,8 +3227,8 @@ static void bridge_upload_and_draw(void)
     
     /* Upload active texture info to fragment shader */
     /* Reset texture enables first — only set if a texture is actually bound */
-    if (g_tex0_enable_loc >= 0) glUniform1i(g_tex0_enable_loc, 0);
-    if (g_tex1_enable_loc >= 0) glUniform1i(g_tex1_enable_loc, 0);
+    if (g_tex0_enable_loc >= 0) UP1I(g_tex0_enable_loc, 0);
+    if (g_tex1_enable_loc >= 0) UP1I(g_tex1_enable_loc, 0);
     
     PORT_LOG_DEBUG("TEX: active_count=%u slots[0]=%u(%s) slots[1]=%u(%s)",
                    g_active_tex_count, g_active_tex_slots[0],
@@ -3158,19 +3243,19 @@ static void bridge_upload_and_draw(void)
         GLuint tex_id = g_state.tex_cache_valid[slot] ? g_state.tex_cache[slot] : 0;
         
         if (tex_id && gl_unit == 0) {
-            if (g_tex0_enable_loc >= 0) glUniform1i(g_tex0_enable_loc, 1);
+            if (g_tex0_enable_loc >= 0) UP1I(g_tex0_enable_loc, 1);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, tex_id);
-            if (g_tex0_loc >= 0) glUniform1i(g_tex0_loc, 0);
+            if (g_tex0_loc >= 0) UP1I(g_tex0_loc, 0);
         } else if (tex_id && gl_unit == 1) {
-            if (g_tex1_enable_loc >= 0) glUniform1i(g_tex1_enable_loc, 1);
+            if (g_tex1_enable_loc >= 0) UP1I(g_tex1_enable_loc, 1);
             glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D, tex_id);
-            if (g_tex1_loc >= 0) glUniform1i(g_tex1_loc, 1);
+            if (g_tex1_loc >= 0) UP1I(g_tex1_loc, 1);
         } else {
             /* No texture bound to this unit — disable it */
-            if (gl_unit == 0 && g_tex0_enable_loc >= 0) glUniform1i(g_tex0_enable_loc, 0);
-            if (gl_unit == 1 && g_tex1_enable_loc >= 0) glUniform1i(g_tex1_enable_loc, 0);
+            if (gl_unit == 0 && g_tex0_enable_loc >= 0) UP1I(g_tex0_enable_loc, 0);
+            if (gl_unit == 1 && g_tex1_enable_loc >= 0) UP1I(g_tex1_enable_loc, 0);
         }
     }
     
@@ -3189,7 +3274,7 @@ static void bridge_upload_and_draw(void)
     /* PC test: MELEE_STAGE_POINTS forces 3D draws to render as points, to
      * check if the vertices are on-screen (points appear) vs the triangles
      * being clipped/degenerate. */
-    if (g_state.mtx3d_active && getenv("MELEE_STAGE_POINTS")) gl_prim = GL_POINTS;
+    if (g_state.mtx3d_active && ENV_FLAG("MELEE_STAGE_POINTS")) gl_prim = GL_POINTS;
     
     /* Quad conversion: GX_QUADS not available in Core profile, 
      * split into 2 triangles. Vertices 0,1,2 and 0,2,3 */
@@ -3221,7 +3306,7 @@ static void bridge_upload_and_draw(void)
         /* PC diag: quad draw summary (MELEE_MTR) */
         {
             static int _dq_on = -1, _dq_n = 0;
-            if (_dq_on < 0) _dq_on = (getenv("MELEE_MTR") != NULL);
+            if (_dq_on < 0) _dq_on = (ENV_FLAG("MELEE_MTR"));
             if (_dq_on && _dq_n < 80) {
                 _dq_n++;
                 int fp[4], sp[4];
@@ -3249,7 +3334,7 @@ static void bridge_upload_and_draw(void)
         /* PC diag: 3D draw summary (MELEE_MTR) */
         {
             static int _ds_on = -1, _ds_n = 0;
-            if (_ds_on < 0) _ds_on = (getenv("MELEE_MTR") != NULL);
+            if (_ds_on < 0) _ds_on = (ENV_FLAG("MELEE_MTR"));
             if (_ds_on && count >= 5 && _ds_n < 40) {
                 _ds_n++;
                 int vp[4], sc[4];
@@ -3288,7 +3373,7 @@ static void bridge_upload_and_draw(void)
                 if (count == 252 || count == 39) {
                     static int _vd_252 = 0, _vd_39 = 0;
                     int _vd_is252 = (count == 252);
-                    if (!((_vd_is252 ? _vd_252 : _vd_39)) && getenv("MELEE_VERTDUMP")) {
+                    if (!((_vd_is252 ? _vd_252 : _vd_39)) && ENV_FLAG("MELEE_VERTDUMP")) {
                         if (_vd_is252) _vd_252 = 1; else _vd_39 = 1;
                         char _vd_path[64];
                         snprintf(_vd_path, sizeof(_vd_path), "/tmp/mesh_%u_verts.txt", (unsigned)count);
@@ -3317,7 +3402,7 @@ static void bridge_upload_and_draw(void)
          * material (cur_color), or neither. */
         {
             static int _tn_on = -1, _tn_n = 0;
-            if (_tn_on < 0) _tn_on = (getenv("MELEE_TUNTRACE") != NULL);
+            if (_tn_on < 0) _tn_on = (ENV_FLAG("MELEE_TUNTRACE"));
             u32 fc = g_state.frame_count;
             if (_tn_on && fc >= 275 && fc <= 340 && count >= 16 && _tn_n < 30) {
                 _tn_n++;
@@ -5163,13 +5248,13 @@ static void apply_alpha_compare_uniforms(void)
         case 7: gl_func = 7;  break; /* ALWAYS */
         default: gl_func = 7;  break; /* Default: ALWAYS */
         }
-        glUniform1i(g_alpha_cmp_func_loc, gl_func);
+        UP1I(g_alpha_cmp_func_loc, gl_func);
     }
     if (g_alpha_cmp_ref_loc >= 0) {
-        glUniform1f(g_alpha_cmp_ref_loc, g_state.alpha_compare_ref);
+        UP1F(g_alpha_cmp_ref_loc, g_state.alpha_compare_ref);
     }
     if (g_alpha_op_loc >= 0) {
-        glUniform1i(g_alpha_op_loc, g_state.alpha_compare_op);
+        UP1I(g_alpha_op_loc, g_state.alpha_compare_op);
     }
     if (g_alpha_cmp_func1_loc >= 0) {
         u32 gl_func1 = 7; /* Default: ALWAYS */
@@ -5184,17 +5269,17 @@ static void apply_alpha_compare_uniforms(void)
         case 7: gl_func1 = 7;  break; /* ALWAYS */
         default: gl_func1 = 7;  break;
         }
-        glUniform1i(g_alpha_cmp_func1_loc, gl_func1);
+        UP1I(g_alpha_cmp_func1_loc, gl_func1);
     }
     if (g_alpha_cmp_ref1_loc >= 0) {
-        glUniform1f(g_alpha_cmp_ref1_loc, g_state.alpha_compare_ref1);
+        UP1F(g_alpha_cmp_ref1_loc, g_state.alpha_compare_ref1);
     }
     /* DstAlpha */
     if (g_dst_alpha_enabled_loc >= 0) {
-        glUniform1i(g_dst_alpha_enabled_loc, g_state.dst_alpha_enabled ? 1 : 0);
+        UP1I(g_dst_alpha_enabled_loc, g_state.dst_alpha_enabled ? 1 : 0);
     }
     if (g_dst_alpha_loc >= 0) {
-        glUniform1f(g_dst_alpha_loc, g_state.dst_alpha);
+        UP1F(g_dst_alpha_loc, g_state.dst_alpha);
     }
     
     /* Lighting enabled flag */
@@ -5221,7 +5306,7 @@ static void apply_alpha_compare_uniforms(void)
           if (_lt_on) { _lt[lit]++;
             if (++_n2 % 5000 == 0)
                 fprintf(stderr, "[LITTALLY] draws unlit=%lu lit=%lu\n", _lt[0], _lt[1]); } }
-        glUniform1i(g_lighting_enabled_loc, no_light ? 0 : lit);
+        UP1I(g_lighting_enabled_loc, no_light ? 0 : lit);
     }
 }
 
@@ -5234,9 +5319,9 @@ static void apply_tev_uniforms(void)
     static int _ntex = -1;
     if (_ntex < 0) _ntex = (getenv("MELEE_NOTEX") != NULL);
     if (_ntex) {
-        if (g_tev_num_stages_loc >= 0) glUniform1i(g_tev_num_stages_loc, 0);
-        if (g_tex0_enable_loc >= 0) glUniform1i(g_tex0_enable_loc, 0);
-        if (g_tex1_enable_loc >= 0) glUniform1i(g_tex1_enable_loc, 0);
+        if (g_tev_num_stages_loc >= 0) UP1I(g_tev_num_stages_loc, 0);
+        if (g_tex0_enable_loc >= 0) UP1I(g_tex0_enable_loc, 0);
+        if (g_tex1_enable_loc >= 0) UP1I(g_tex1_enable_loc, 0);
         return;
     }
     
@@ -5253,7 +5338,7 @@ static void apply_tev_uniforms(void)
     
     /* Upload number of stages */
     if (g_tev_num_stages_loc >= 0) {
-        glUniform1i(g_tev_num_stages_loc, num_stages);
+        UP1I(g_tev_num_stages_loc, num_stages);
     }
     
     /* Upload per-stage parameters as arrays */
@@ -5281,27 +5366,27 @@ static void apply_tev_uniforms(void)
         }
         
         if (g_tev_color_op_loc >= 0)
-            glUniform1iv(g_tev_color_op_loc, num_stages, color_op_arr);
+            UPNIV(g_tev_color_op_loc, num_stages, color_op_arr);
         if (g_tev_alpha_op_loc >= 0)
-            glUniform1iv(g_tev_alpha_op_loc, num_stages, alpha_op_arr);
+            UPNIV(g_tev_alpha_op_loc, num_stages, alpha_op_arr);
         if (g_tev_color_bias_loc >= 0)
-            glUniform1iv(g_tev_color_bias_loc, num_stages, color_bias_arr);
+            UPNIV(g_tev_color_bias_loc, num_stages, color_bias_arr);
         if (g_tev_alpha_bias_loc >= 0)
-            glUniform1iv(g_tev_alpha_bias_loc, num_stages, alpha_bias_arr);
+            UPNIV(g_tev_alpha_bias_loc, num_stages, alpha_bias_arr);
         if (g_tev_color_scale_loc >= 0)
-            glUniform1iv(g_tev_color_scale_loc, num_stages, color_scale_arr);
+            UPNIV(g_tev_color_scale_loc, num_stages, color_scale_arr);
         if (g_tev_alpha_scale_loc >= 0)
-            glUniform1iv(g_tev_alpha_scale_loc, num_stages, alpha_scale_arr);
+            UPNIV(g_tev_alpha_scale_loc, num_stages, alpha_scale_arr);
         if (g_tev_color_clamp_loc >= 0)
-            glUniform1iv(g_tev_color_clamp_loc, num_stages, color_clamp_arr);
+            UPNIV(g_tev_color_clamp_loc, num_stages, color_clamp_arr);
         if (g_tev_alpha_clamp_loc >= 0)
-            glUniform1iv(g_tev_alpha_clamp_loc, num_stages, alpha_clamp_arr);
+            UPNIV(g_tev_alpha_clamp_loc, num_stages, alpha_clamp_arr);
         if (g_tev_color_enabled_loc >= 0)
-            glUniform1iv(g_tev_color_enabled_loc, num_stages, color_enabled_arr);
+            UPNIV(g_tev_color_enabled_loc, num_stages, color_enabled_arr);
         if (g_tev_alpha_enabled_loc >= 0)
-            glUniform1iv(g_tev_alpha_enabled_loc, num_stages, alpha_enabled_arr);
+            UPNIV(g_tev_alpha_enabled_loc, num_stages, alpha_enabled_arr);
         if (g_tev_tex_map_loc >= 0)
-            glUniform1iv(g_tev_tex_map_loc, num_stages, tex_map_arr);
+            UPNIV(g_tev_tex_map_loc, num_stages, tex_map_arr);
         
         /* Upload KColor/KAlpha selector arrays */
         GLint kcolor_sel_arr[8], kalpha_sel_arr[8];
@@ -5311,9 +5396,9 @@ static void apply_tev_uniforms(void)
             kalpha_sel_arr[i] = s->kalpha_sel;
         }
         if (g_tev_kcolor_sel_loc >= 0)
-            glUniform1iv(g_tev_kcolor_sel_loc, num_stages, kcolor_sel_arr);
+            UPNIV(g_tev_kcolor_sel_loc, num_stages, kcolor_sel_arr);
         if (g_tev_kalpha_sel_loc >= 0)
-            glUniform1iv(g_tev_kalpha_sel_loc, num_stages, kalpha_sel_arr);
+            UPNIV(g_tev_kalpha_sel_loc, num_stages, kalpha_sel_arr);
         
         /* Upload TEV swap mode arrays */
         GLint swap_ras_arr[8], swap_tex_arr[8];
@@ -5323,9 +5408,9 @@ static void apply_tev_uniforms(void)
             swap_tex_arr[i] = s->swap_sel[1];
         }
         if (g_tev_swap_ras_loc >= 0)
-            glUniform1iv(g_tev_swap_ras_loc, num_stages, swap_ras_arr);
+            UPNIV(g_tev_swap_ras_loc, num_stages, swap_ras_arr);
         if (g_tev_swap_tex_loc >= 0)
-            glUniform1iv(g_tev_swap_tex_loc, num_stages, swap_tex_arr);
+            UPNIV(g_tev_swap_tex_loc, num_stages, swap_tex_arr);
 
         /* Which colour channel each stage rasterises. GXSetTevOrder has
          * always recorded this; it was simply never uploaded, so every stage
@@ -5337,7 +5422,7 @@ static void apply_tev_uniforms(void)
                 ras_chan_arr[i] = (GLint) g_state.tev_stages[i].tex_chan;
             }
             if (g_tev_ras_chan_loc >= 0)
-                glUniform1iv(g_tev_ras_chan_loc, num_stages, ras_chan_arr);
+                UPNIV(g_tev_ras_chan_loc, num_stages, ras_chan_arr);
         }
         
         /* Upload TEV input arrays (flat: 8 stages × 4 inputs = 32 elements) */
@@ -5355,9 +5440,9 @@ static void apply_tev_uniforms(void)
             ain_arr[i*4 + 3] = s->alpha_inputs[3];
         }
         if (g_tev_color_in_loc >= 0)
-            glUniform1iv(g_tev_color_in_loc, 32, cin_arr);
+            UPNIV(g_tev_color_in_loc, 32, cin_arr);
         if (g_tev_alpha_in_loc >= 0)
-            glUniform1iv(g_tev_alpha_in_loc, 32, ain_arr);
+            UPNIV(g_tev_alpha_in_loc, 32, ain_arr);
 
         /* Per-stage destination register (GXSetTevColorOp/AlphaOp out_reg) */
         GLint cout_arr[8] = {0};
@@ -5367,9 +5452,9 @@ static void apply_tev_uniforms(void)
             aout_arr[i] = (GLint)g_tev_alpha_out_reg[i];
         }
         if (g_tev_color_out_loc >= 0)
-            glUniform1iv(g_tev_color_out_loc, 8, cout_arr);
+            UPNIV(g_tev_color_out_loc, 8, cout_arr);
         if (g_tev_alpha_out_loc >= 0)
-            glUniform1iv(g_tev_alpha_out_loc, 8, aout_arr);
+            UPNIV(g_tev_alpha_out_loc, 8, aout_arr);
     }
     
     /* Upload KColor constants */
@@ -5381,7 +5466,7 @@ static void apply_tev_uniforms(void)
             kc[i][2] = (f32)g_state.k_colors[i].b / 255.0f;
             kc[i][3] = (f32)g_state.k_colors[i].a / 255.0f;
         }
-        glUniform4fv(g_kcolor0_loc, 4, &kc[0][0]);
+        UP4FV(g_kcolor0_loc, 4, &kc[0][0]);
     }
     
     /* Upload TEV registers (TEVREG0-2, separate from K0-K3) */
@@ -5393,7 +5478,7 @@ static void apply_tev_uniforms(void)
             tr[i][2] = (f32)g_state.tev_regs[i].b / 255.0f;
             tr[i][3] = (f32)g_state.tev_regs[i].a / 255.0f;
         }
-        glUniform4fv(g_tevreg_loc, 4, &tr[0][0]);
+        UP4FV(g_tevreg_loc, 4, &tr[0][0]);
     }
     
     /* Upload KAlpha constant */
@@ -5414,14 +5499,14 @@ static void apply_tev_uniforms(void)
             cc[i][2] = (f32)g_state.chan_colors[i].b / 255.0f;
             cc[i][3] = (f32)g_state.chan_colors[i].a / 255.0f;
         }
-        glUniform4fv(g_chan_color_loc, 3, &cc[0][0]);
+        UP4FV(g_chan_color_loc, 3, &cc[0][0]);
     }
     /* Upload channel color sources (C0-C2): GX_SRC_REG=0 / GX_SRC_VTX=1 */
     if (g_chan_src_loc >= 0) {
         GLint cs[3] = { (GLint)g_state.chan_color_source[0],
                         (GLint)g_state.chan_color_source[1],
                         (GLint)g_state.chan_color_source[2] };
-        glUniform1iv(g_chan_src_loc, 3, cs);
+        UPNIV(g_chan_src_loc, 3, cs);
     }
 
     /* Upload lighting uniforms */
@@ -5433,7 +5518,7 @@ static void apply_tev_uniforms(void)
          * corrupt value cannot flood the scene with light. */
         u32 nlc = g_state.g_active_light_count;
         if (nlc > 8) nlc = 8;
-        glUniform1i(g_light_count_loc, (int)nlc);
+        UP1I(g_light_count_loc, (int)nlc);
     }
     /* Light masks are per colour channel, not global. ORing them together
      * put channel 1's specular lights into channel 0's diffuse sum, where
@@ -5449,16 +5534,16 @@ static void apply_tev_uniforms(void)
         int m0 = g_state.chan_enabled[0]
                      ? (int) (g_state.chan_diffuse_light[0] & 0xFF)
                      : 0;
-        glUniform1i(g_light_mask_loc, m0);
+        UP1I(g_light_mask_loc, m0);
     }
     if (g_light_mask1_loc >= 0) {
         int m1 = g_state.chan_enabled[1]
                      ? (int) (g_state.chan_diffuse_light[1] & 0xFF)
                      : 0;
-        glUniform1i(g_light_mask1_loc, m1);
+        UP1I(g_light_mask1_loc, m1);
     }
     if (g_chan1_lit_loc >= 0) {
-        glUniform1i(g_chan1_lit_loc, g_state.chan_lit[1] ? 1 : 0);
+        UP1I(g_chan1_lit_loc, g_state.chan_lit[1] ? 1 : 0);
     }
     { static int _c1 = -1; static unsigned long lit1, mask1, stages1, specdir, n;
       if (_c1 < 0) _c1 = (getenv("MELEE_SPECTALLY") != NULL);
@@ -5511,7 +5596,7 @@ static void apply_tev_uniforms(void)
             sd[i][1] = g_state.g_lights[i].spec_ny;
             sd[i][2] = g_state.g_lights[i].spec_nz;
         }
-        glUniform3fv(g_light_spec_dir_loc, 8, &sd[0][0]);
+        UP3FV(g_light_spec_dir_loc, 8, &sd[0][0]);
     }
     if (g_ambient_color_loc >= 0) {
         f32 amb[3];
@@ -5554,7 +5639,7 @@ static void apply_tev_uniforms(void)
         mm[10] = g_state.model_matrix[10]; mm[11] = g_state.model_matrix[14];
         mm[12] = g_state.model_matrix[3]; mm[13] = g_state.model_matrix[7];
         mm[14] = g_state.model_matrix[11]; mm[15] = g_state.model_matrix[15];
-        glUniformMatrix4fv(g_model_loc, 1, GL_FALSE, mm);
+        UPMTX4(g_model_loc, 1, GL_FALSE, mm);
     }
     if (g_light_pos_loc >= 0) {
         GLfloat lp[8][3];
@@ -5565,9 +5650,9 @@ static void apply_tev_uniforms(void)
             lp[i][2] = g_state.g_lights[i].z;
             ld[i] = g_state.g_lights[i].is_directional ? 1 : 0;
         }
-        glUniform3fv(g_light_pos_loc, 8, &lp[0][0]);
+        UP3FV(g_light_pos_loc, 8, &lp[0][0]);
         if (g_light_directional_loc >= 0) {
-            glUniform1iv(g_light_directional_loc, 8, ld);
+            UPNIV(g_light_directional_loc, 8, ld);
         }
     }
     if (g_light_color_loc >= 0) {
@@ -5578,7 +5663,7 @@ static void apply_tev_uniforms(void)
             lc[i][2] = (f32)g_state.g_lights[i].b / 255.0f;
             lc[i][3] = (f32)g_state.g_lights[i].a / 255.0f;
         }
-        glUniform4fv(g_light_color_loc, 8, &lc[0][0]);
+        UP4FV(g_light_color_loc, 8, &lc[0][0]);
     }
     /* Per-light spot/distance attenuation uniforms */
     if (g_light_atten_a_loc >= 0) {
@@ -5588,7 +5673,7 @@ static void apply_tev_uniforms(void)
             la[i][1] = g_state.g_lights[i].a1;
             la[i][2] = g_state.g_lights[i].a2;
         }
-        glUniform3fv(g_light_atten_a_loc, 8, &la[0][0]);
+        UP3FV(g_light_atten_a_loc, 8, &la[0][0]);
     }
     if (g_light_atten_k_loc >= 0) {
         GLfloat lk[8][3];
@@ -5597,62 +5682,62 @@ static void apply_tev_uniforms(void)
             lk[i][1] = g_state.g_lights[i].k1;
             lk[i][2] = g_state.g_lights[i].k2;
         }
-        glUniform3fv(g_light_atten_k_loc, 8, &lk[0][0]);
+        UP3FV(g_light_atten_k_loc, 8, &lk[0][0]);
     }
     if (g_light_spot_func_loc >= 0) {
         GLint sf[8];
         for (int i = 0; i < 8; i++) {
             sf[i] = (int)g_state.g_lights[i].spot_func;
         }
-        glUniform1iv(g_light_spot_func_loc, 8, sf);
+        UPNIV(g_light_spot_func_loc, 8, sf);
     }
     if (g_light_spot_cutoff_loc >= 0) {
         GLfloat sc[8];
         for (int i = 0; i < 8; i++) {
             sc[i] = g_state.g_lights[i].spot_cutoff;
         }
-        glUniform1fv(g_light_spot_cutoff_loc, 8, sc);
+        UPNFV(g_light_spot_cutoff_loc, 8, sc);
     }
     if (g_light_dist_func_loc >= 0) {
         GLint df[8];
         for (int i = 0; i < 8; i++) {
             df[i] = (int)g_state.g_lights[i].dist_attn_func;
         }
-        glUniform1iv(g_light_dist_func_loc, 8, df);
+        UPNIV(g_light_dist_func_loc, 8, df);
     }
     if (g_light_ref_dist_loc >= 0) {
         GLfloat rd[8];
         for (int i = 0; i < 8; i++) {
             rd[i] = g_state.g_lights[i].ref_dist;
         }
-        glUniform1fv(g_light_ref_dist_loc, 8, rd);
+        UPNFV(g_light_ref_dist_loc, 8, rd);
     }
     if (g_light_ref_br_loc >= 0) {
         GLfloat rb[8];
         for (int i = 0; i < 8; i++) {
             rb[i] = g_state.g_lights[i].ref_br;
         }
-        glUniform1fv(g_light_ref_br_loc, 8, rb);
+        UPNFV(g_light_ref_br_loc, 8, rb);
     }
     
     /* Upload indirect texture (bump mapping) state */
     if (g_ind_tex_enabled_loc >= 0) {
-        glUniform1i(g_ind_tex_enabled_loc, g_state.num_ind_stages > 0 ? 1 : 0);
+        UP1I(g_ind_tex_enabled_loc, g_state.num_ind_stages > 0 ? 1 : 0);
     }
     if (g_ind_tex_stage_loc >= 0) {
-        glUniform1i(g_ind_tex_stage_loc, (int)g_state.tev_stages[0].indirect_stage);
+        UP1I(g_ind_tex_stage_loc, (int)g_state.tev_stages[0].indirect_stage);
     }
     if (g_ind_tex_format_loc >= 0) {
-        glUniform1i(g_ind_tex_format_loc, (int)g_state.tev_stages[0].indirect_format);
+        UP1I(g_ind_tex_format_loc, (int)g_state.tev_stages[0].indirect_format);
     }
     if (g_ind_tex_bias_loc >= 0) {
-        glUniform1i(g_ind_tex_bias_loc, (int)g_state.tev_stages[0].indirect_bias_sel);
+        UP1I(g_ind_tex_bias_loc, (int)g_state.tev_stages[0].indirect_bias_sel);
     }
     if (g_ind_tex_wrap_s_loc >= 0) {
-        glUniform1i(g_ind_tex_wrap_s_loc, (int)g_state.tev_stages[0].indirect_wrap_s);
+        UP1I(g_ind_tex_wrap_s_loc, (int)g_state.tev_stages[0].indirect_wrap_s);
     }
     if (g_ind_tex_wrap_t_loc >= 0) {
-        glUniform1i(g_ind_tex_wrap_t_loc, (int)g_state.tev_stages[0].indirect_wrap_t);
+        UP1I(g_ind_tex_wrap_t_loc, (int)g_state.tev_stages[0].indirect_wrap_t);
     }
     if (g_ind_tex_scale_loc >= 0) {
         glUniform2f(g_ind_tex_scale_loc,
@@ -5668,25 +5753,25 @@ static void apply_tev_uniforms(void)
         glUniformMatrix3fv(g_ind_tex_mtx_loc, 1, GL_FALSE, mtx);
     }
     if (g_ind_tex_coord_src_loc >= 0) {
-        glUniform1i(g_ind_tex_coord_src_loc, (int)g_state.ind_tex_order[0].coord);
+        UP1I(g_ind_tex_coord_src_loc, (int)g_state.ind_tex_order[0].coord);
     }
     if (g_ind_tex_base_coord_loc >= 0) {
-        glUniform1i(g_ind_tex_base_coord_loc, (int)g_state.ind_tex_order[0].tex);
+        UP1I(g_ind_tex_base_coord_loc, (int)g_state.ind_tex_order[0].tex);
     }
     // Bump map uses u_tex0 (TEXMAP0) - checked via u_tex0_enable in shader
     
     /* Upload texture coordinate generation state */
     if (g_texgen0_mode_loc >= 0) {
-        glUniform1i(g_texgen0_mode_loc, (int)g_state.tex_gen_mode[0]);
+        UP1I(g_texgen0_mode_loc, (int)g_state.tex_gen_mode[0]);
     }
     if (g_texgen0_src_loc >= 0) {
-        glUniform1i(g_texgen0_src_loc, (int)g_state.tex_gen_src[0]);
+        UP1I(g_texgen0_src_loc, (int)g_state.tex_gen_src[0]);
     }
     if (g_texgen1_mode_loc >= 0) {
-        glUniform1i(g_texgen1_mode_loc, (int)g_state.tex_gen_mode[1]);
+        UP1I(g_texgen1_mode_loc, (int)g_state.tex_gen_mode[1]);
     }
     if (g_texgen1_src_loc >= 0) {
-        glUniform1i(g_texgen1_src_loc, (int)g_state.tex_gen_src[1]);
+        UP1I(g_texgen1_src_loc, (int)g_state.tex_gen_src[1]);
     }
     if (g_texgen_mtx0_loc >= 0 && g_state.tex_gen_enabled[0]) {
         u32 mtx_id = g_state.tex_gen_mat_id[0];
@@ -5696,7 +5781,7 @@ static void apply_tev_uniforms(void)
                 for (int j = 0; j < 4; j++)
                     m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
             m[3*4 + 3] = 1.0f;
-            glUniformMatrix4fv(g_texgen_mtx0_loc, 1, GL_FALSE, m);
+            UPMTX4(g_texgen_mtx0_loc, 1, GL_FALSE, m);
         }
     }
     if (g_texgen_mtx1_loc >= 0 && g_state.tex_gen_enabled[1]) {
@@ -5707,7 +5792,7 @@ static void apply_tev_uniforms(void)
                 for (int j = 0; j < 4; j++)
                     m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
             m[3*4 + 3] = 1.0f;
-            glUniformMatrix4fv(g_texgen_mtx1_loc, 1, GL_FALSE, m);
+            UPMTX4(g_texgen_mtx1_loc, 1, GL_FALSE, m);
         }
     }
 }

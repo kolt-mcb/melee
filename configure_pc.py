@@ -130,11 +130,16 @@ SAN_FLAGS = " -fsanitize=address -fno-omit-frame-pointer" if ASAN else ""
 # the textures are written -- late enough to collect them, but not a build
 # to play. Uses the same output tree, so reconfigure without it afterwards.
 TEXDUMP = os.environ.get("PC_TEXDUMP") == "1"
+# PC_PROFILE=1 builds with -pg so a normal exit writes gmon.out for
+# gprof. Needed because perf_event_paranoid is 4 on this machine, which
+# blocks perf entirely.
+PROFILE = os.environ.get("PC_PROFILE") == "1"
+PROF_FLAGS = " -pg" if PROFILE else ""
 OPT = "-O1" if ASAN else "-O2"
 if ASAN:
     OUT_DIR = BUILD / "pc-asan"
-CFLAGS = "-m64 -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "")
-LDFLAGS = "-m64 -no-pie" + SAN_FLAGS
+CFLAGS = PROF_FLAGS + " " + "-m64 -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "")
+LDFLAGS = "-m64 -no-pie" + SAN_FLAGS + PROF_FLAGS
 LIBS = "-lSDL2 -lGL -lpthread -ldl -lm -lc -lstdc++"
 out_objs = " ".join(str(OUT_DIR/"obj"/(Path(s).stem+".o")) for s in ALL_SOURCES)
 OUT_PATH = str(OUT_DIR / "melee-pc")

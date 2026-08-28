@@ -170,6 +170,7 @@ int main(int argc, char* argv[])
 
     /* PC port: install crash handler for debugging */
     install_crash_handler();
+    { extern void pc_profile_init(void); pc_profile_init(); }
     /* Reserve the low-memory pool before malloc traffic can occupy the
      * region (see pc_lowmem_init in undef_stubs.c). */
     {
