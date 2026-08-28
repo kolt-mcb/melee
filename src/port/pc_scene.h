@@ -46,6 +46,9 @@ LightList** pc_conv_LightListArray(const void* arrBase, u8* dataBase);
  * a SceneDesc -- such a table cannot be read in place, because its slots are
  * 4 bytes wide and a C struct of pointers is not. */
 HSD_CObjDesc* pc_conv_CObjDescAt(const void* slot, u8* dataBase);
+
+/* As above, but given the descriptor's own address rather than a slot. */
+HSD_CObjDesc* pc_conv_CObjDescRaw(const void* raw, u8* dataBase);
 HSD_LightDesc* pc_conv_LightDescAt(const void* slot, u8* dataBase);
 #endif
 

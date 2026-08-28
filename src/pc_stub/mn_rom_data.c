@@ -8,6 +8,13 @@
 #include <dolphin/gx/GXStruct.h>
 #include <melee/mn/mndiagram2.static.h>
 
+/* Declared `extern struct mnSnap_804A0B90_t* mnSnap_804A0B90[4]` in
+ * mnsnap.h and defined nowhere, so it fell through to the weak *function*
+ * stub in undef_stubs.c -- which makes the symbol a text address. gm_801B0FF8
+ * then wrote four HSD_MemAlloc results into the code segment, which is the
+ * crash that made the main menu unreachable. */
+struct mnSnap_804A0B90_t* mnSnap_804A0B90[4] = { NULL, NULL, NULL, NULL };
+
 HSD_GObj* mn_804D6BD0 = NULL;
 s32 mn_804D6BD4 = 0;
 f32 mn_804D6BD8 = 0.0f;

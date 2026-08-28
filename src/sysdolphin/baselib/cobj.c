@@ -1,5 +1,9 @@
 #include "cobj.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #include "aobj.h"
 #include "class.h"
 #include "debug.h"
@@ -679,24 +683,52 @@ void HSD_CObjSetEyePositionWObj(HSD_CObj* cobj, HSD_WObj* eyepos)
 void HSD_CObjGetInterest(HSD_CObj* cobj, Vec3* interest)
 {
     HSD_ASSERT(709, cobj);
+#if BUILD_TARGET_PC
+    /* HSD_ASSERT reports and returns on this port, so a null camera
+     * fell straight through into the WObj accessor below. */
+    if (!pc_ptr_sane(cobj)) {
+        return;
+    }
+#endif
     HSD_WObjGetPosition(HSD_CObjGetInterestWObj(cobj), interest);
 }
 
 void HSD_CObjSetInterest(HSD_CObj* cobj, Vec3* interest)
 {
     HSD_ASSERT(721, cobj);
+#if BUILD_TARGET_PC
+    /* HSD_ASSERT reports and returns on this port, so a null camera
+     * fell straight through into the WObj accessor below. */
+    if (!pc_ptr_sane(cobj)) {
+        return;
+    }
+#endif
     HSD_WObjSetPosition(HSD_CObjGetInterestWObj(cobj), interest);
 }
 
 void HSD_CObjGetEyePosition(HSD_CObj* cobj, Vec3* position)
 {
     HSD_ASSERT(733, cobj);
+#if BUILD_TARGET_PC
+    /* HSD_ASSERT reports and returns on this port, so a null camera
+     * fell straight through into the WObj accessor below. */
+    if (!pc_ptr_sane(cobj)) {
+        return;
+    }
+#endif
     HSD_WObjGetPosition(HSD_CObjGetEyePositionWObj(cobj), position);
 }
 
 void HSD_CObjSetEyePosition(HSD_CObj* cobj, Vec3* position)
 {
     HSD_ASSERT(745, cobj);
+#if BUILD_TARGET_PC
+    /* HSD_ASSERT reports and returns on this port, so a null camera
+     * fell straight through into the WObj accessor below. */
+    if (!pc_ptr_sane(cobj)) {
+        return;
+    }
+#endif
     HSD_WObjSetPosition(HSD_CObjGetEyePositionWObj(cobj), position);
 }
 

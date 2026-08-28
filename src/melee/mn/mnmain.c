@@ -1,5 +1,9 @@
 #include "mnmain.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #include "dolphin/pad.h"
 
 #include "mn/forward.h"
@@ -1643,6 +1647,14 @@ void fn_8022BDB4(HSD_GObj* gobj, int unused)
 {
     HSD_Fog* fog = GET_FOG(mn_804D6BA8);
     if (HSD_CObjSetCurrent(GET_COBJ(gobj)) != 0) {
+#if BUILD_TARGET_PC
+        /* PC port: HSD_FogDesc is not converted, so the menu has no fog
+         * object and its colour cannot be read. Erase to black, which is what
+         * the menu background covers anyway. */
+        if (!pc_ptr_sane(fog)) {
+            HSD_SetEraseColor(0, 0, 0, 255);
+        } else
+#endif
         HSD_SetEraseColor(fog->color.r, fog->color.g, fog->color.b,
                           fog->color.a);
         HSD_CObjEraseScreen(GET_COBJ(gobj), 1, 0, 1);
@@ -1675,7 +1687,15 @@ static inline HSD_GObj* mn_8022BE34_OnEnter(void)
 
     mn_804D6BAC = gobj;
     cobj = HSD_CObjLoadDesc(MenMain_cam);
+#if BUILD_TARGET_PC
+    /* The GCN original wrote the eye position into unused stack padding
+     * 0x14 bytes past `pos`; the result is discarded either way. That frame
+     * padding does not exist here, so the 12-byte write landed on the saved
+     * frame pointer and the menu's OnEnter returned into garbage. */
+    HSD_CObjGetEyePosition(cobj, &pos);
+#else
     HSD_CObjGetEyePosition(cobj, (Vec3*) ((u8*) &pos + 0x14));
+#endif
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
     GObj_SetupGXLinkMax(gobj, fn_8022BDB4, 0);
     gobj->gxlink_prios = 0x7F;
@@ -1769,9 +1789,22 @@ static inline void LerpLightColor(HSD_LObj* lobj, int div)
 {
     int diff;
 
+#if BUILD_TARGET_PC
+    /* PC port: this walks the light list for a point light and assumes one
+     * exists. A menu whose light descriptors have not converted has none, so
+     * the walk ran off the end of the chain and dereferenced null. Nothing to
+     * adjust if there is no point light. */
+    while (pc_ptr_sane(lobj) && !(lobj->flags & LOBJ_POINT)) {
+        lobj = lobj->next;
+    }
+    if (!pc_ptr_sane(lobj)) {
+        return;
+    }
+#else
     while (!(lobj->flags & LOBJ_POINT)) {
         lobj = lobj->next;
     }
+#endif
     if (div != 0) {
         diff = mn_804A04F0.light_color->r - lobj->color.r;
         if (diff != 0) {
@@ -1797,9 +1830,20 @@ static void mn_8022C068(HSD_LObj* lobj, int unused, int div)
 {
     int diff;
 
+#if BUILD_TARGET_PC
+    /* Same walk as the inlined copy above, and the same problem: no point
+     * light in the chain means walking off the end. */
+    while (pc_ptr_sane(lobj) && !(lobj->flags & LOBJ_POINT)) {
+        lobj = lobj->next;
+    }
+    if (!pc_ptr_sane(lobj)) {
+        return;
+    }
+#else
     while (!(lobj->flags & LOBJ_POINT)) {
         lobj = lobj->next;
     }
+#endif
     if (div != 0) {
         diff = mn_804A04F0.light_color->r - lobj->color.r;
         if (diff != 0) {

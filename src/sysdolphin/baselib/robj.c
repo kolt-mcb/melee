@@ -1,5 +1,9 @@
 #include "robj.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #include "aobj.h"
 #include "class.h"
 #include "debug.h"
@@ -149,9 +153,17 @@ void HSD_RObjRemoveAnimAll(HSD_RObj* robj)
 
 void HSD_RObjReqAnimByFlags(HSD_RObj* robj, f32 startframe, u32 flags)
 {
+#if BUILD_TARGET_PC
+    /* Reference objects reached from partially converted menu data are
+     * non-null and unmapped, so a plain null test walks into ->aobj. */
+    if (!pc_ptr_sane(robj)) {
+        return;
+    }
+#else
     if (robj == NULL) {
         return;
     }
+#endif
 
     if (robj->aobj != NULL && (flags & 0x80) != 0) {
         HSD_AObjReqAnim(robj->aobj, startframe);
@@ -160,6 +172,13 @@ void HSD_RObjReqAnimByFlags(HSD_RObj* robj, f32 startframe, u32 flags)
 
 void HSD_RObjReqAnimAllByFlags(HSD_RObj* robj, f32 startframe, u32 flags)
 {
+#if BUILD_TARGET_PC
+    /* Same as the single-object form: the chain can hold non-null pointers
+     * into nothing, so test each link rather than only for null. */
+    for (; pc_ptr_sane(robj); robj = robj->next) {
+        HSD_RObjReqAnimByFlags(robj, startframe, flags);
+    }
+#else
     if (robj == NULL) {
         return;
     }
@@ -167,6 +186,7 @@ void HSD_RObjReqAnimAllByFlags(HSD_RObj* robj, f32 startframe, u32 flags)
     for (; robj != NULL; robj = robj->next) {
         HSD_RObjReqAnimByFlags(robj, startframe, flags);
     }
+#endif
 }
 
 void HSD_RObjReqAnimAll(HSD_RObj* robj, f32 startframe)
