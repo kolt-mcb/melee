@@ -1475,22 +1475,52 @@ float grIceMt_801F96E0(struct grIceMt_GroundVars* arg0, float farg0)
 {
     HSD_GObj* mgobj;
     HSD_JObj* jobj2;
+    /* PC port: Icicle Mountain looks its scrolling segments up by id, and not
+     * every id resolves here yet. HSD_ASSERT does not abort on this port, so
+     * each miss fell through into GET_JOBJ and faulted at offset 0x40 --
+     * which is how both Icicle Mountain entries died. A segment that is not
+     * there simply does not scroll. The same guard already exists a few
+     * functions down in grIceMt_801F9ACC. */
     if (arg0->xC4 != -1) {
         HSD_JObj* jobj;
         mgobj = Ground_801C2BA4(arg0->xC4);
         HSD_ASSERT(2629, mgobj);
-        jobj = GET_JOBJ(mgobj);
-        HSD_ASSERT(2630, jobj);
-        HSD_JObjAddTranslationY(jobj, farg0);
+#if BUILD_TARGET_PC
+        if (!pc_ptr_sane(mgobj)) {
+            port_guard_warn("gricemt.c:801F96E0 no segment gobj");
+        } else
+#endif
+        {
+            jobj = GET_JOBJ(mgobj);
+            HSD_ASSERT(2630, jobj);
+#if BUILD_TARGET_PC
+            if (!pc_ptr_sane(jobj)) {
+                port_guard_warn("gricemt.c:801F96E0 no segment jobj");
+            } else
+#endif
+            HSD_JObjAddTranslationY(jobj, farg0);
+        }
     }
     if (arg0->xC6 != -1) {
         HSD_JObj* jobj;
         mgobj = Ground_801C2BA4(arg0->xC6);
         HSD_ASSERT(2635, mgobj);
-        jobj = GET_JOBJ(mgobj);
-        jobj2 = jobj;
-        HSD_ASSERT(2636, jobj);
-        HSD_JObjAddTranslationY(jobj2, farg0);
+#if BUILD_TARGET_PC
+        if (!pc_ptr_sane(mgobj)) {
+            port_guard_warn("gricemt.c:801F96E0 no segment gobj (2)");
+        } else
+#endif
+        {
+            jobj = GET_JOBJ(mgobj);
+            jobj2 = jobj;
+            HSD_ASSERT(2636, jobj);
+#if BUILD_TARGET_PC
+            if (!pc_ptr_sane(jobj2)) {
+                port_guard_warn("gricemt.c:801F96E0 no segment jobj (2)");
+            } else
+#endif
+            HSD_JObjAddTranslationY(jobj2, farg0);
+        }
     }
 }
 

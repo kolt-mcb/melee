@@ -4,6 +4,10 @@
 
 #include <platform.h>
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #include "baselib/psstructs.h"
 
 #include "forward.h"
@@ -637,6 +641,17 @@ void grGreatBay_801F5600(Ground_GObj* gobj)
     HSD_JObj* jobj = gobj->hsd_obj;
     Vec3 pos;
 
+#if BUILD_TARGET_PC
+    /* PC port: xF0 is the Turtle, spawned by it_802ECA70. That spawn can now
+     * refuse rather than dereference a missing article table (see
+     * Item_80267AA8), and this per-frame callback drives the Turtle through a
+     * dozen accessors without ever checking it exists. No Turtle means
+     * nothing to drive. */
+    if (!pc_ptr_sane(gp->u.greatbay4.xF0)) {
+        port_guard_warn("grgreatbay.c:801F5600 no turtle");
+        return;
+    }
+#endif
     it_802ECCA4(gp->u.greatbay4.xF0, &gp->u.greatbay4.xC4,
                 &gp->u.greatbay4.xE4);
     if (gp->u.greatbay4.xE4.y < -50.0f) {
