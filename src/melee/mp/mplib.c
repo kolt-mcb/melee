@@ -5997,6 +5997,16 @@ void mpLib_80058560(void)
     CollJoint* cur_i;
     CollJoint* cur_j;
 
+#if BUILD_TARGET_PC
+    /* PC port: no collision world means no joints to pair off. Rainbow
+     * Cruise calls this during stage setup and faulted on
+     * temp_r29->joint_count. Same family as the guards in mpJointFromLine
+     * and mpLib_80056758. */
+    if (temp_r29 == NULL || groundCollJoint == NULL) {
+        return;
+    }
+#endif
+
     for (i = 0; i < temp_r29->joint_count - 1; i++) {
         for (j = i + 1; j < temp_r29->joint_count; j++) {
             cur_i = &groundCollJoint[i];
