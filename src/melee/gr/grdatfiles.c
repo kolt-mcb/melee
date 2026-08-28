@@ -505,7 +505,7 @@ struct HSD_MatAnim_gcn {
     u32 renderanim;   /* 0x0C HSD_RenderAnim* */
 };
 
-/* GCN HSD_TexAnim (4-byte pointers, 20 bytes total)
+/* GCN HSD_TexAnim (4-byte pointers, 24 bytes total)
  * x86_64 layout: next(8) id(4) pad(4) aobjdesc(8) imagetbl(8) tluttbl(8)
  * n_imagetbl(2) n_tluttbl(2) = 48 bytes. The two tables are arrays of
  * 4-byte offsets on disc and must be rebuilt as arrays of host pointers --
