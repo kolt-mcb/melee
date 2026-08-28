@@ -205,19 +205,21 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
              *
              * x14 stays raw: it has no reader in this tree, so there is
              * nothing to say what it points at. */
-            /* Off by default, and measured rather than assumed. Feeding the
-             * stage's real lights in makes the *data* more correct but the
-             * *picture* worse, because the bridge's lighting model does not
-             * yet reproduce GX's: against the Dolphin capture of Onett,
-             * Pikachu's mean body colour moves from (237,182,8) to
-             * (91,70,1) where the reference is (214,185,82) -- total channel
-             * error 100 -> 318. The stage lights are dimmer than the generic
-             * default list, and the port's diffuse term does not make up the
-             * difference the way the hardware does. Enable with
-             * MELEE_STAGE_LIGHTLIST=1 when working on the lighting model. */
+            /* Measured against the Dolphin capture of Onett, comparing only
+             * pixels that move between frames so the stage's own yellow
+             * houses cannot contaminate the sample. Pikachu's lit body colour
+             * is (255,199,0) on hardware and (255,198,0) here either way; what
+             * the stage's real lights fix is the *shading depth*. His shadow
+             * tone is 0.60 of the lit tone on hardware, 0.70 with the generic
+             * default light list, and 0.56 with the stage's own. So this is on
+             * by default. MELEE_NO_STAGE_LIGHTLIST=1 backs it out.
+             *
+             * (An earlier pass gated this off on a measurement that turned out
+             * to be sampling Onett's cream-coloured house siding along with
+             * the character. Sample tightly, or verify by eye at 12x.) */
             pval = be32_swap(*(const u32*) (ep + 0x18));
             x64Arr[i].x18 = NULL;
-            if (pval != 0 && getenv("MELEE_STAGE_LIGHTLIST") != NULL) {
+            if (pval != 0 && getenv("MELEE_NO_STAGE_LIGHTLIST") == NULL) {
                 x64Arr[i].x18 = pc_conv_LightListArray(
                     gcn_ptr_to_x64(pval, dataBase), dataBase);
             }
