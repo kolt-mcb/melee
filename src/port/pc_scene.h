@@ -33,6 +33,12 @@ DynamicModelDesc* pc_conv_ModelDescAt(const void* slot, u8* dataBase);
  * address of the array. Returns a NULL-terminated array of converted
  * descriptors, allocated once per array. */
 DynamicModelDesc** pc_conv_ModelDescArray(const void* arrBase, u8* dataBase);
+
+/* A NULL-terminated array of LightList offsets. Stages hold one of these in
+ * UnkStageDat_x8_t::x18; without converting it Ground_801C466C_inline returns
+ * NULL and every surface is lit by the generic default list instead of the
+ * stage's own. `arrBase` is the host address of the array. */
+LightList** pc_conv_LightListArray(const void* arrBase, u8* dataBase);
 #endif
 
 #endif /* PORT_PC_SCENE_H */

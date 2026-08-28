@@ -1,4 +1,8 @@
 #include <melee/mp/types.h>
+
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#endif
 #include "grdatfiles.h"
 
 #include "ground.h"
@@ -188,9 +192,35 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
             pval = be32_swap(*(const u32*)(ep + 0x10));
             x64Arr[i].x10 = (HSD_CameraDescPerspective*)gcn_ptr_to_x64(pval, dataBase);
 
-            /* x14 and x18 are UNK_T - treat as raw u32 for now */
-            /* x14 = be32_swap(*(const u32*)(ep + 0x14)); */
-            /* x18 = be32_swap(*(const u32*)(ep + 0x18)); */
+            /* x18 is the map's own light list: a NULL-terminated array of
+             * LightList offsets. Ground_801C466C_inline hands it straight to
+             * Ground_801C20E0, so leaving it raw meant that lookup could only
+             * ever return NULL and Ground_801C466C fell back to the generic
+             * default list in Ground_803E06C8 -- every surface in the game,
+             * fighters included, lit by defaults rather than by the stage.
+             * Measured against Dolphin on Onett that shows up as flat,
+             * over-saturated characters: the reference is an affine function
+             * of the port's output (ref ~= 0.63 * port + 68), which is exactly
+             * a missing diffuse modulation and a missing ambient term.
+             *
+             * x14 stays raw: it has no reader in this tree, so there is
+             * nothing to say what it points at. */
+            /* Off by default, and measured rather than assumed. Feeding the
+             * stage's real lights in makes the *data* more correct but the
+             * *picture* worse, because the bridge's lighting model does not
+             * yet reproduce GX's: against the Dolphin capture of Onett,
+             * Pikachu's mean body colour moves from (237,182,8) to
+             * (91,70,1) where the reference is (214,185,82) -- total channel
+             * error 100 -> 318. The stage lights are dimmer than the generic
+             * default list, and the port's diffuse term does not make up the
+             * difference the way the hardware does. Enable with
+             * MELEE_STAGE_LIGHTLIST=1 when working on the lighting model. */
+            pval = be32_swap(*(const u32*) (ep + 0x18));
+            x64Arr[i].x18 = NULL;
+            if (pval != 0 && getenv("MELEE_STAGE_LIGHTLIST") != NULL) {
+                x64Arr[i].x18 = pc_conv_LightListArray(
+                    gcn_ptr_to_x64(pval, dataBase), dataBase);
+            }
 
             pval = be32_swap(*(const u32*)(ep + 0x1C));
             x64Arr[i].x1C = (HSD_FogDesc*)gcn_ptr_to_x64(pval, dataBase);

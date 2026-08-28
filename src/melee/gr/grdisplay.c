@@ -84,6 +84,30 @@ void grDisplay_801C5DB0(HSD_GObj* gobj, int code)
     u32 unused[14];
 
     gp = GET_GROUND(gobj);
+#if BUILD_TARGET_PC
+    /* MELEE_SKIP_MAPS=<csv of map_id> drops those maps from the draw. A stage
+     * whose layers land in the wrong place looks identical whether one map is
+     * drawn at the wrong scale or another is missing; bisecting by map is the
+     * only way to tell without reading every stage's private layout. */
+    {
+        static const char* skip = (const char*) -1;
+        if (skip == (const char*) -1) {
+            skip = getenv("MELEE_SKIP_MAPS");
+        }
+        if (skip != NULL && *skip != '\0') {
+            const char* q = skip;
+            int id = (int) gp->map_id;
+            while (*q != '\0') {
+                int v = 0, any = 0;
+                while (*q >= '0' && *q <= '9') { v = v * 10 + (*q++ - '0'); any = 1; }
+                if (any && v == id) {
+                    return;
+                }
+                while (*q != '\0' && (*q < '0' || *q > '9')) q++;
+            }
+        }
+    }
+#endif
     if (gp->x11_flags.b012 == Camera_8003108C()) {
         if (gp->x18 != NULL) {
             if (((intptr_t) gp->x18 & ~0x7FFFFFFF) == 0) {

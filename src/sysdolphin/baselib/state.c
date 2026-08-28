@@ -175,12 +175,18 @@ void HSD_SetupChannelMode(u32 arg0)
     if (getenv("MELEE_CHANLOG") != NULL) {
         static unsigned long hist[8];
         static int n = 0;
+        static unsigned long spec_hist[2];
         hist[arg0 & 7]++;
+        /* Bit 3 selects the second colour channel, which HSD sets up with the
+         * specular light mask -- the term the bridge's shader does not
+         * implement at all. Tallying it says whether that omission actually
+         * reaches character draws or only stage ones. */
+        spec_hist[(arg0 >> 3) & 1]++;
         if (++n % 2000 == 0) {
             fprintf(stderr, "[CHAN] rm&7 histogram: 0=%lu 1=%lu 2=%lu 3=%lu "
-                            "4=%lu 5=%lu 6=%lu 7=%lu\n",
+                            "4=%lu 5=%lu 6=%lu 7=%lu | spec off=%lu on=%lu\n",
                     hist[0], hist[1], hist[2], hist[3], hist[4], hist[5],
-                    hist[6], hist[7]);
+                    hist[6], hist[7], spec_hist[0], spec_hist[1]);
         }
     }
 #endif
