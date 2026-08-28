@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <time.h>
+#include <math.h>
 #include <sys/mman.h>
 
 /* Runtime/platform.h for Event typedef and common types */
@@ -1034,6 +1035,137 @@ void* g_joysticks[4] = {NULL};
 void* g_heap_base = NULL;
 size_t g_heap_size = 0;
 
+
+/* MELEE_PAD_SCRIPT drives player 1 from a frame-keyed script so menu and CSS
+ * navigation can be exercised in a headless run. MELEE_PAD_FORCE pins the
+ * stick for a whole run, which is enough for walking a fighter around but
+ * useless for a menu: menus move on the press edge, so what is needed is a
+ * sequence of discrete events at known frames.
+ *
+ *   MELEE_PAD_SCRIPT="30:down;45:down;60:A;200:START"
+ *
+ * Stick tokens (up/down/left/right/neutral) latch until the next stick
+ * token. Button tokens (a/b/x/y/z/l/r/start/dup/ddown/dleft/dright) are
+ * pressed for PC_PAD_SCRIPT_HOLD frames from the given frame, and the game's
+ * gm_GetButtonsTriggered reads .trigger, so the press edge is published too. */
+#define PC_PAD_SCRIPT_MAX 64
+#define PC_PAD_SCRIPT_HOLD 4
+
+struct pc_pad_event {
+    long frame;
+    u32 button; /* 0 for a stick event */
+    int sx, sy;
+};
+
+static struct pc_pad_event g_pad_script[PC_PAD_SCRIPT_MAX];
+static int g_pad_script_n = -1;
+static long g_pad_script_frame;
+
+static int pc_pad_token(const char* t, struct pc_pad_event* ev)
+{
+    static const struct {
+        const char* name;
+        u32 button;
+        int sx, sy;
+    } map[] = {
+        { "neutral", 0, 0, 0 },      { "up", 0, 0, 80 },
+        { "down", 0, 0, -80 },       { "left", 0, -80, 0 },
+        { "right", 0, 80, 0 },       { "a", GC_BTN_A, 0, 0 },
+        { "b", GC_BTN_B, 0, 0 },     { "x", GC_BTN_X, 0, 0 },
+        { "y", GC_BTN_Y, 0, 0 },     { "z", GC_BTN_Z, 0, 0 },
+        { "l", GC_BTN_L, 0, 0 },     { "r", GC_BTN_R, 0, 0 },
+        { "start", GC_BTN_START, 0, 0 },
+        { "dup", GC_BTN_DPAD_U, 0, 0 },
+        { "ddown", GC_BTN_DPAD_D, 0, 0 },
+        { "dleft", GC_BTN_DPAD_L, 0, 0 },
+        { "dright", GC_BTN_DPAD_R, 0, 0 },
+    };
+    size_t i;
+    for (i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
+        if (strcasecmp(t, map[i].name) == 0) {
+            ev->button = map[i].button;
+            ev->sx = map[i].sx;
+            ev->sy = map[i].sy;
+            return 1;
+        }
+    }
+    fprintf(stderr, "[PADSCRIPT] unknown token '%s'\n", t);
+    return 0;
+}
+
+static void pc_pad_script_parse(void)
+{
+    const char* e = getenv("MELEE_PAD_SCRIPT");
+    char buf[1024];
+    char* save = NULL;
+    char* tok;
+
+    g_pad_script_n = 0;
+    if (e == NULL || *e == '\0') {
+        return;
+    }
+    snprintf(buf, sizeof(buf), "%s", e);
+    for (tok = strtok_r(buf, ";,", &save); tok != NULL;
+         tok = strtok_r(NULL, ";,", &save))
+    {
+        struct pc_pad_event ev;
+        char name[32];
+        long frame;
+        if (sscanf(tok, "%ld:%31s", &frame, name) != 2) {
+            fprintf(stderr, "[PADSCRIPT] bad entry '%s'\n", tok);
+            continue;
+        }
+        memset(&ev, 0, sizeof(ev));
+        if (!pc_pad_token(name, &ev)) {
+            continue;
+        }
+        if (g_pad_script_n >= PC_PAD_SCRIPT_MAX) {
+            fprintf(stderr, "[PADSCRIPT] too many entries, dropping '%s'\n",
+                    tok);
+            break;
+        }
+        ev.frame = frame;
+        g_pad_script[g_pad_script_n++] = ev;
+    }
+    fprintf(stderr, "[PADSCRIPT] %d event(s) loaded\n", g_pad_script_n);
+}
+
+static void pc_pad_run_script(GCPadStatus* pad)
+{
+    static int stick_x, stick_y;
+    static u32 held;
+    long frame;
+    u32 pressed = 0;
+    int i;
+
+    if (g_pad_script_n < 0) {
+        pc_pad_script_parse();
+    }
+    if (g_pad_script_n == 0) {
+        return;
+    }
+
+    frame = g_pad_script_frame++;
+    for (i = 0; i < g_pad_script_n; i++) {
+        const struct pc_pad_event* ev = &g_pad_script[i];
+        if (ev->button == 0) {
+            if (frame == ev->frame) {
+                stick_x = ev->sx;
+                stick_y = ev->sy;
+            }
+        } else if (frame >= ev->frame && frame < ev->frame + PC_PAD_SCRIPT_HOLD)
+        {
+            pressed |= ev->button;
+        }
+    }
+
+    pad->stickX = (s8) stick_x;
+    pad->stickY = (s8) stick_y;
+    pad->button |= pressed;
+    pad->trigger |= pressed & ~held;
+    held = pressed;
+}
+
 /* Keyboard-to-GC-pad mapping for Player 1.
  * When no gamepad is connected, keyboard provides input. */
 static void poll_keyboard_to_pad(GCPadStatus* pad)
@@ -1180,6 +1312,41 @@ static void poll_joystick(void* joy, GCPadStatus* pad)
     pad->button = buttons;
 }
 
+/* Stick-direction bits from dolphin/pad.h. That header cannot be included
+ * here: it also declares PADInit/PADRead, which this file stubs with
+ * different signatures. */
+#define PC_PAD_STICK_UP (1u << 16)
+#define PC_PAD_STICK_DOWN (1u << 17)
+#define PC_PAD_STICK_LEFT (1u << 18)
+#define PC_PAD_STICK_RIGHT (1u << 19)
+#define PC_PAD_SUBSTICK_UP (1u << 20)
+#define PC_PAD_SUBSTICK_DOWN (1u << 21)
+#define PC_PAD_SUBSTICK_LEFT (1u << 22)
+#define PC_PAD_SUBSTICK_RIGHT (1u << 23)
+
+/* Stick deflection to the four direction bits, matching sysdolphin's
+ * HSD_PadADConvertCheck1: a dead zone on magnitude, then 90-degree octant
+ * boundaries at +/-45 degrees. */
+static uint32_t pc_pad_stick_dirs(int x, int y, uint32_t up, uint32_t down,
+                                  uint32_t left, uint32_t right)
+{
+    const float TH = 40.0f; /* half deflection; GC gate reads ~80 */
+    float a;
+    uint32_t bits = 0;
+
+    if (sqrtf((float) (x * x + y * y)) < TH) {
+        return 0;
+    }
+    a = (x == 0) ? (y >= 0 ? 1.5707963f : -1.5707963f)
+                 : atan2f((float) y, (float) x);
+    if (a < -2.3561945f) bits |= left;
+    if (a >= -2.3561945f && a <= -0.7853982f) bits |= down;
+    if (a > -0.7853982f && a < 0.7853982f) bits |= right;
+    if (a >= 0.7853982f && a <= 2.3561945f) bits |= up;
+    if (a > 2.3561945f) bits |= left;
+    return bits;
+}
+
 /* Read SDL2 input and update GC pad state.
  * Joysticks are opened once at init time and reused. */
 void HSD_PadRenewRawStatus(bool unused)
@@ -1233,7 +1400,30 @@ void HSD_PadRenewRawStatus(bool unused)
                     g_auto_start_frames = 0;  /* Disable after N frames */
                 }
             }
+
+            pc_pad_run_script(&g_gc_pads[pad]);
         }
+
+        /* Synthesize the stick-direction bits into the raw button word.
+         * sysdolphin's HSD_PadADConvert does this on GCN (controller.c,
+         * which is not in this build); without it PAD_STICK_UP/DOWN/LEFT/
+         * RIGHT are never set, gm_EvaluateAllControllerInputs never derives
+         * PAD_ANY_*, and no menu can be navigated with the control stick.
+         *
+         * It has to happen here rather than in pc_pad_publish: this function
+         * runs once per frame and owns g_gc_pads_last, which is what the
+         * trigger/release edge is measured against. pc_pad_publish runs
+         * three times per HSD_PadRenewStatus, so an edge computed there was
+         * consumed by the first call and read as zero by the rest -- the
+         * press never reached the menus' repeat timer, which then ran at
+         * its fastest rate from the first frame. */
+        g_gc_pads[pad].button |= pc_pad_stick_dirs(
+            g_gc_pads[pad].stickX, g_gc_pads[pad].stickY, PC_PAD_STICK_UP,
+            PC_PAD_STICK_DOWN, PC_PAD_STICK_LEFT, PC_PAD_STICK_RIGHT);
+        g_gc_pads[pad].button |= pc_pad_stick_dirs(
+            g_gc_pads[pad].subStickX, g_gc_pads[pad].subStickY,
+            PC_PAD_SUBSTICK_UP, PC_PAD_SUBSTICK_DOWN, PC_PAD_SUBSTICK_LEFT,
+            PC_PAD_SUBSTICK_RIGHT);
     }
 }
 
@@ -1288,10 +1478,20 @@ void HSD_PadRenewCopyStatus(void)
      * GCPadStatus has the identical layout to HSD_PadStatus.
      * Note: do NOT update g_gc_pads_last here — HSD_PadRenewRawStatus
      * owns that (it saves the previous state before re-reading), and
-     * HSD_PadRenewGameStatus uses it to compute the trigger edge. */
+     * HSD_PadRenewGameStatus uses it to compute the trigger edge.
+     *
+     * Copy from HSD_PadGameStatus, not from g_gc_pads. g_gc_pads holds only
+     * what SDL reported; the derived state -- trigger/release edges and the
+     * synthetic PAD_STICK_* direction bits -- is added by pc_pad_publish on
+     * the way into HSD_PadGameStatus. Copying the raw pads here ran last in
+     * HSD_PadRenewStatus and threw all of that away, so the game's input
+     * path saw a stick that never pointed anywhere and no menu could be
+     * navigated. */
     extern GCPadStatus HSD_PadCopyStatus[4];
+    extern GCPadStatus HSD_PadGameStatus[4];
     for (int pad = 0; pad < 4; pad++) {
-        memcpy(&HSD_PadCopyStatus[pad], &g_gc_pads[pad], sizeof(GCPadStatus));
+        memcpy(&HSD_PadCopyStatus[pad], &HSD_PadGameStatus[pad],
+               sizeof(GCPadStatus));
     }
 }
 
