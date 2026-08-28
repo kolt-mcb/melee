@@ -380,6 +380,29 @@ static DynamicModelDesc* conv_model(u32 off, u8* dataBase)
  * UnkStageDat_x8_t::x18 is the stage's own light list, and until it was
  * converted Ground_801C466C_inline could only return NULL, so every stage
  * fell back to the generic default light list in Ground_803E06C8. */
+/* A slot in archive data holding one 32-bit descriptor offset. Scenes reach
+ * their camera and lights through a SceneDesc, but some screens keep a bare
+ * table of descriptor offsets at a public symbol instead -- the character
+ * select's "MnSelectChrDataTable" is four of them. Such a table cannot be
+ * read in place: each slot is 4 bytes on GameCube and the struct declaring
+ * them is 8-byte-per-pointer here, so field two onward lands in the wrong
+ * place and field one splices two offsets into one number. */
+HSD_CObjDesc* pc_conv_CObjDescAt(const void* slot, u8* dataBase)
+{
+    if (slot == NULL) {
+        return NULL;
+    }
+    return conv_cobj(be32(slot), dataBase);
+}
+
+HSD_LightDesc* pc_conv_LightDescAt(const void* slot, u8* dataBase)
+{
+    if (slot == NULL) {
+        return NULL;
+    }
+    return conv_light(be32(slot), dataBase, 0);
+}
+
 LightList** pc_conv_LightListArray(const void* arrBase, u8* dataBase)
 {
     const u8* arr = arrBase;

@@ -14,6 +14,7 @@
 
 #include <platform.h>
 #include <sc/forward.h>
+#include <baselib/forward.h>
 
 #if defined(BUILD_TARGET_PC)
 /* raw: host pointer to the unconverted SceneDesc inside the archive.
@@ -39,6 +40,13 @@ DynamicModelDesc** pc_conv_ModelDescArray(const void* arrBase, u8* dataBase);
  * NULL and every surface is lit by the generic default list instead of the
  * stage's own. `arrBase` is the host address of the array. */
 LightList** pc_conv_LightListArray(const void* arrBase, u8* dataBase);
+
+/* One 32-bit descriptor offset sitting in archive data, converted. For screens
+ * that keep a bare table of descriptor offsets at a public symbol rather than
+ * a SceneDesc -- such a table cannot be read in place, because its slots are
+ * 4 bytes wide and a C struct of pointers is not. */
+HSD_CObjDesc* pc_conv_CObjDescAt(const void* slot, u8* dataBase);
+HSD_LightDesc* pc_conv_LightDescAt(const void* slot, u8* dataBase);
 #endif
 
 #endif /* PORT_PC_SCENE_H */

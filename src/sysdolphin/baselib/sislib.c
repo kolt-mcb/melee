@@ -630,6 +630,51 @@ s32 HSD_SisLib_803A611C(int font_idx, HSD_GObj* parent_gobj, u16 class_id,
     return count;
 }
 
+#if BUILD_TARGET_PC
+/* One converted SIS table per font slot. The entry count is not recorded
+ * anywhere, so convert until a slot stops being readable or its contents stop
+ * looking like offsets into this archive. */
+#define PC_SIS_MAX_ENTRIES 256
+static SIS pc_sis_tables[5][PC_SIS_MAX_ENTRIES];
+
+static u32 pc_sis_be32(const void* p)
+{
+    const u8* b = (const u8*) p;
+    return ((u32) b[0] << 24) | ((u32) b[1] << 16) | ((u32) b[2] << 8) |
+           (u32) b[3];
+}
+
+static SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase)
+{
+    const u8* src = raw;
+    u8* base = dataBase;
+    int i;
+
+    if (src == NULL || base == NULL || font_idx < 0 || font_idx >= 5) {
+        return (SIS*) raw;
+    }
+    memset(pc_sis_tables[font_idx], 0, sizeof(pc_sis_tables[font_idx]));
+    for (i = 0; i < PC_SIS_MAX_ENTRIES; i++) {
+        const u8* e = src + (size_t) i * 8;
+        u32 k, t;
+        if (!pc_mem_readable(e, 8)) {
+            break;
+        }
+        k = pc_sis_be32(e + 0);
+        t = pc_sis_be32(e + 4);
+        pc_sis_tables[font_idx][i].kerning =
+            (k != 0 && pc_mem_readable(base + k, 2))
+                ? (TextKerning*) (base + k)
+                : NULL;
+        pc_sis_tables[font_idx][i].textures =
+            (t != 0 && pc_mem_readable(base + t, 4))
+                ? (TextGlyphTexture*) (base + t)
+                : NULL;
+    }
+    return pc_sis_tables[font_idx];
+}
+#endif
+
 void HSD_SisLib_803A62A0(s32 font_idx, char* archive_name, char* symbol_name)
 {
     HSD_Archive* tmp = HSD_SisLib_803A945C(archive_name);
@@ -641,6 +686,20 @@ void HSD_SisLib_803A62A0(s32 font_idx, char* archive_name, char* symbol_name)
     {
         SIS* sis = HSD_ArchiveGetPublicAddress(HSD_SisLib_804D1110[font_idx],
                                                symbol_name);
+#if BUILD_TARGET_PC
+        /* PC port: SIS is two pointers -- 8 bytes in the archive, 16 here --
+         * so indexing this table in place walks at the wrong stride and reads
+         * each 4-byte offset as an 8-byte pointer. Every
+         * HSD_SisLib_804D1124[f][n].kerning in the tree then hands out a
+         * non-null pointer into nothing, which is what took the character
+         * select down once it reached its rules text.
+         *
+         * Convert the table once, here, rather than guarding each reader. */
+        sis = pc_sis_convert(font_idx, sis,
+                             HSD_SisLib_804D1110[font_idx] != NULL
+                                 ? HSD_SisLib_804D1110[font_idx]->data
+                                 : NULL);
+#endif
         HSD_SisLib_804D1124[font_idx] = sis;
         if (sis == NULL) {
             OSReport("Cannot find symbol %s.\n", symbol_name);
@@ -955,7 +1014,17 @@ int HSD_SisLib_803A6B98(HSD_Text* text, float x, float y, const char* fmt, ...)
     encoded[0] = 0;
     if (fmt) {
         va_start(args, fmt);
+#if BUILD_TARGET_PC
+        /* PC port: -1 as the size becomes SIZE_MAX, which turns this into an
+         * unbounded vsprintf into a 128-byte stack buffer. glibc's fortify
+         * checks catch it and abort() -- "*** buffer overflow detected ***"
+         * was how the character select died once it got far enough to draw
+         * text. Bound it by the buffer instead; the format strings that
+         * overflow it were already corrupting the stack on the console. */
+        vsnprintf((char*) buffer, sizeof(buffer), fmt, args);
+#else
         vsnprintf((char*) buffer, -1, fmt, args);
+#endif
         va_end(args);
         encoded_len = HSD_SisLib_803A67EC(encoded, buffer);
     }
@@ -1092,7 +1161,12 @@ s32 HSD_SisLib_803A70A0(HSD_Text* text, s32 entry_idx, char* fmt, ...)
         playhead = entry + 0xE;
         if (fmt != NULL) {
             va_start(args, fmt);
+#if BUILD_TARGET_PC
+            /* Same unbounded vsnprintf as above; see there. */
+            vsnprintf((char*) buffer, sizeof(buffer), fmt, args);
+#else
             vsnprintf((char*) buffer, -1, fmt, args);
+#endif
             va_end(args);
             new_size = HSD_SisLib_803A67EC(encoded, buffer);
         } else {
