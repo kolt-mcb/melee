@@ -977,6 +977,8 @@ static GLint g_light_spec_dir_loc = -1;
 static GLint g_ambient_color1_loc = -1;
 static GLint g_chan1_lit_loc = -1;
 static GLint g_tev_ras_chan_loc = -1;
+static GLint g_kasel_strict_loc = -1;
+
 static GLint g_camera_pos_loc = -1;
 static GLint g_ambient_color_loc = -1;
 static GLint g_model_loc = -1;
@@ -1239,6 +1241,8 @@ static const char* g_frag_src =
 "in vec4 v_lit_color;             // Per-vertex lit color (ambient + diffuse)\n"
 "in vec4 v_lit_color1;            // Per-vertex channel-1 lit color (specular)\n"
 "uniform int u_tev_ras_chan[8];   // GXSetTevOrder channel per stage\n"
+"uniform int u_kasel_strict;      // honour GX_TEV_KASEL_1 literally\n"
+
 "uniform int u_chan1_lit;         // Channel 1 lighting enable\n"
 "out vec4 frag_color;\n"
 "\n"
@@ -1373,6 +1377,28 @@ static const char* g_frag_src =
 "        // u_kalpha.a, and the fractions were wrong from index 2 onward\n"
 "        // (KASEL_3_4=2 was resolving to 1/2, KASEL_1_2=4 to 1/8).\n"
 "        int ksel = u_tev_kalpha_sel[stage];\n"
+"        // 255 is this bridge's marker for \"never selected\"; 0 is\n"
+"        // GX_TEV_KASEL_1, a real selection meaning 1.0. Both resolve to the\n"
+"        // konstant alpha register here, and the second is a deliberate\n"
+"        // deviation from the spec.\n"
+"        //\n"
+"        // HSD passes this value straight out of archive data (tev.c:241,\n"
+"        // GXSetTevKAlphaSel(desc->stage, desc->u.tevconf.kasel)) and\n"
+"        // HSD_TevDesc is not converted for this target, so kasel reads 0 on\n"
+"        // 239 of the ~3400 konstant-alpha draws in a match frame. Honouring\n"
+"        // the spec there turns every one of them fully opaque and buries the\n"
+"        // match-start \"Go!\" under a solid white rectangle. Applying a\n"
+"        // correct rule to wrong input is still the wrong picture.\n"
+"        //\n"
+"        // MELEE_KASEL_STRICT=1 restores the literal mapping, for whoever\n"
+"        // converts HSD_TevDesc and can then delete this.\n"
+"        if (u_kasel_strict == 0) {\n"
+"            // Non-strict: the selector is not trustworthy, so take the\n"
+"            // konstant alpha register and only honour the K0-K3 alpha\n"
+"            // picks that HSD sets explicitly in sobjlib.\n"
+"            if (ksel >= 8 && ksel <= 15) return u_kcolor[ksel - 8].a;\n"
+"            return u_kalpha.a;\n"
+"        }\n"
 "        if (ksel <= 7) return float(8 - ksel) / 8.0;\n"
 "        if (ksel >= 16 && ksel <= 31) {\n"
 "            int ki = (ksel - 16) % 4;\n"
@@ -1783,6 +1809,8 @@ static void bridge_compile_shaders(void)
     g_chan1_lit_loc = glGetUniformLocation(g_shader_program, "u_chan1_lit");
     g_tev_ras_chan_loc =
         glGetUniformLocation(g_shader_program, "u_tev_ras_chan");
+    g_kasel_strict_loc =
+        glGetUniformLocation(g_shader_program, "u_kasel_strict");
     g_camera_pos_loc = glGetUniformLocation(g_shader_program, "u_camera_pos");
     g_ambient_color_loc = glGetUniformLocation(g_shader_program, "u_ambient_color");
     g_model_loc = glGetUniformLocation(g_shader_program, "u_model");
@@ -1957,6 +1985,12 @@ void gx_bridge_init(void)
         g_state.tev_stages[i].color_clamp = FALSE;
         g_state.tev_stages[i].color_enabled = TRUE;
         g_state.tev_stages[i].alpha_enabled = FALSE;
+        /* 255 marks "the game has not chosen a konstant selector for this
+         * stage". Zero is a real GX value (GX_TEV_KCSEL_1 / GX_TEV_KASEL_1,
+         * both meaning 1.0), so it cannot double as "unset" -- doing that made
+         * every stage the game left alone resolve to fully opaque white. */
+        g_state.tev_stages[i].kcolor_sel = 255;
+        g_state.tev_stages[i].kalpha_sel = 255;
         g_state.tev_stages[i].tex_coord = GX_TEXCOORD0;
         g_state.tev_stages[i].tex_map = i;  /* Stage 0 uses texmap 0 */
         g_state.tev_stages[i].tex_chan = 0;
@@ -2719,7 +2753,7 @@ static void bridge_upload_and_draw(void)
     {
         static int _tv_from = -2, _tv_n = 0;
         if (_tv_from == -2) {
-            const char* tv = ENV_FLAG("MELEE_TEVDUMP");
+            const char* tv = getenv("MELEE_TEVDUMP");
             _tv_from = tv ? atoi(tv) : -1;
         }
         /* Keyed on batch size rather than frame: the bridge frame counter and
@@ -2834,7 +2868,7 @@ static void bridge_upload_and_draw(void)
     { static int _n=0; if(ENV_FLAG("MELEE_ZTRACE") && _n<30){_n++;
         fprintf(stderr,"[FLUSH] count=%u ztex_op=%d frame=%u prim=0x%X\n",(unsigned)count,(int)g_state.ztex_op,(unsigned)g_state.frame_count,(unsigned)g_state.prim_type); } }
 
-    { static int _pd_on=-1,_pd_n=0; if(_pd_on<0)_pd_on=(ENV_FLAG("MELEE_STAGE_DIAG")!=NULL);
+    { static int _pd_on=-1,_pd_n=0; if(_pd_on<0)_pd_on=(getenv("MELEE_STAGE_DIAG")!=NULL);
       if(_pd_on && g_state.frame_count>=8 && g_state.frame_count<=9 && _pd_n<12){_pd_n++;
         fprintf(stderr,"[PDDRAW] frame=%u count=%u prim=0x%X mtx3d=%d curid=%u p1=%d pos0=(%.1f,%.1f,%.1f) col0=(%.2f,%.2f,%.2f,%.2f) proj00=%.3f\n",
           (unsigned)g_state.frame_count, count, g_state.prim_type, (int)g_state.mtx3d_active,
@@ -3042,7 +3076,7 @@ static void bridge_upload_and_draw(void)
          * draw (white-surface debugging, roadmap M1). */
         static int _chan_from = -1;
         if (_chan_from < 0) {
-            const char* cf = ENV_FLAG("MELEE_CHAN_FROM");
+            const char* cf = getenv("MELEE_CHAN_FROM");
             _chan_from = cf ? atoi(cf) : 8;
         }
         if (ENV_FLAG("MELEE_CHAN") && g_state.vert_count > 0 &&
@@ -5545,6 +5579,7 @@ static void apply_tev_uniforms(void)
     if (g_chan1_lit_loc >= 0) {
         UP1I(g_chan1_lit_loc, g_state.chan_lit[1] ? 1 : 0);
     }
+    UP1I(g_kasel_strict_loc, ENV_FLAG("MELEE_KASEL_STRICT"));
     { static int _c1 = -1; static unsigned long lit1, mask1, stages1, specdir, n;
       if (_c1 < 0) _c1 = (getenv("MELEE_SPECTALLY") != NULL);
       if (_c1) {
@@ -7590,6 +7625,11 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
     g_state.tex_cache_h[best] = h;
     g_state.tex_cache_fmt[best] = fmt;
     g_state.tex_cache_hits[best] = 0;
+    /* An evicted slot keeps its GL texture object but gets new image data, so
+     * whatever mip chain the previous occupant had is gone. Leaving this set
+     * hands the next texture a mipmap minification filter with no chain
+     * behind it, which GL treats as incomplete and samples as pure white. */
+    g_tex_cache_hasmip[best] = FALSE;
     return best;
 }
 
@@ -8008,7 +8048,7 @@ bind_tex:
      * invisible while gx_wrap_mode() collapsed everything to CLAMP and
      * gx_filter_mode() to NEAREST; now that both actually vary, it is not. */
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                    g_tex_cache_hasmip[slot]
+                    (g_tex_cache_hasmip[slot] && !ENV_FLAG("MELEE_NOMIP"))
                         ? gx_min_filter_mode(g_state.current_tex.min_filter)
                         : gx_filter_mode(g_state.current_tex.min_filter));
     /* GX only permits GX_NEAR/GX_LINEAR for magnification. */
