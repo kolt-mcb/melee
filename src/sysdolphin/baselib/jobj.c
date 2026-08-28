@@ -789,10 +789,12 @@ inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
         return NULL;
     }
     #if BUILD_TARGET_PC
-    /* PC port: Guard against obviously-invalid pointers.
-     * After archive conversion, valid joints are heap-allocated x86_64 structs.
-     * Keep a low threshold as a safety net for any unconverted data. */
-    if ((uintptr_t)joint < 0x1000ULL || (uintptr_t)joint > 0xFFFFFFFFFFFFFULL) {
+    /* PC port: guard against pointers that are not real joints. This used a
+     * numeric threshold of 0x1000, which a value of exactly 0x1000 walks
+     * straight through -- and that is what one costume joint turned out to
+     * be, faulting on class_name at address 0x1000. Ask whether the memory is
+     * actually mapped instead; pc_mem_readable answers that properly now. */
+    if (!pc_mem_readable(joint, sizeof(*joint))) {
         port_guard_warn("jobj.c:JObjLoadJointSub");
         return NULL;
     }

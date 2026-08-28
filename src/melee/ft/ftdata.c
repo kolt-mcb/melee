@@ -1586,6 +1586,17 @@ void ftData_80085820(FighterKind kind, int costume_id)
 #endif
     UnkCostumeStruct* temp_r5 =
         &CostumeListsForeachCharacter[kind].costume_list[costume_id];
+#if BUILD_TARGET_PC
+    /* PC port: this test gates the load *and* the conversion below it, so a
+     * costume slot that already holds something is skipped entirely. A slot
+     * holding a raw GameCube value therefore looks loaded and never gets
+     * converted -- which is how a second Link ended up with a costume joint
+     * of 0x1000 while the first was fine. Only a pointer that is actually
+     * mapped counts as loaded. */
+    if (temp_r5->joint != NULL && !pc_mem_readable(temp_r5->joint, 4)) {
+        temp_r5->joint = NULL;
+    }
+#endif
     if (temp_r5->joint == NULL) {
         if (ftData_803C2360[kind][costume_id].matanim_joint_name != NULL) {
             lbArchive_80017040(

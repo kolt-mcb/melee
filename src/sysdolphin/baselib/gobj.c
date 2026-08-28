@@ -373,16 +373,24 @@ void HSD_GObj_FogCallback(HSD_GObj* gobj, int unused)
 void HSD_GObj_803910D8(HSD_GObj* gobj, int renderpass)
 {
 #if BUILD_TARGET_PC
-    /* PC port: camera objects from archive data are big-endian and corrupted on LE.
-     * Skip camera setup until endianness conversion is implemented. */
-    (void)gobj;
-    (void)renderpass;
-#else
+    /* PC port: this was stubbed out entirely -- "camera objects from archive
+     * data are big-endian and corrupted on LE" -- which meant every screen
+     * driven by it rendered nothing at all. The character select came up
+     * black for exactly that reason: its models were built and linked, but no
+     * camera pass ever traversed them.
+     *
+     * Those descriptors are converted now (pc_conv_CObjDescAt), so run the
+     * pass. Screens whose camera has not been converted still reach here with
+     * a bad HSD_CObj, so require a plausible one rather than trusting it. */
+    (void) renderpass;
+    if (!pc_ptr_sane(gobj->hsd_obj)) {
+        return;
+    }
+#endif
     if (HSD_CObjSetCurrent(gobj->hsd_obj)) {
         HSD_GObj_80390ED0(gobj, 7);
         HSD_CObjEndCurrent();
     }
-#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_GObj_80391120(HSD_Obj* obj)

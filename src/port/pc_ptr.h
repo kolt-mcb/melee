@@ -17,6 +17,7 @@ static inline int pc_ptr_sane(const void* p)
 /* Safe C-string check: pointer sane, bytes probe-readable via write(2)
  * (EFAULT on unmapped), printable ASCII, NUL within max. */
 #include <unistd.h>
+#include <sys/mman.h>
 #include <fcntl.h>
 static inline int pc_str_sane(const char* p, int max)
 {
@@ -37,24 +38,32 @@ static inline int pc_str_sane(const char* p, int max)
     }
     return 0;
 }
-/* Probe that [p, p+n) is readable without faulting (write(2) returns
- * EFAULT on unmapped memory). Checks first and last byte only. */
+/* Probe that [p, p+n) is actually mapped.
+ *
+ * This used to write(2) each page to /dev/null and treat EFAULT as "not
+ * mapped". That never worked: /dev/null's write handler discards without ever
+ * copying from the buffer, so it returns success for any address at all --
+ * every guard in the tree built on this function was a no-op, silently. It
+ * came to light when a SIS glyph atlas at an unmapped address passed the
+ * check and then faulted on its first byte.
+ *
+ * msync(2) reports ENOMEM for a range that is not mapped, and touches no
+ * memory, so it answers the question being asked. */
 static inline int pc_mem_readable(const void* p, unsigned long n)
 {
-    static int pc_mem_nullfd = -1;
+    static long pc_page;
+    uintptr_t start, end, aligned;
     if (!pc_ptr_sane(p) || n == 0) return 0;
-    if (pc_mem_nullfd < 0) pc_mem_nullfd = open("/dev/null", O_WRONLY);
-    if (pc_mem_nullfd < 0) return 1;
-    {
-        /* probe every page in [p, p+n) — a first/last check misses holes */
-        const char* a = (const char*)p;
-        unsigned long off = 0;
-        for (;;) {
-            if (write(pc_mem_nullfd, a + off, 1) < 0) return 0;
-            if (off + 4096 >= n) break;
-            off += 4096;
-        }
-        if (n > 1 && write(pc_mem_nullfd, a + n - 1, 1) < 0) return 0;
+    if (pc_page == 0) {
+        pc_page = sysconf(_SC_PAGESIZE);
+        if (pc_page <= 0) pc_page = 4096;
+    }
+    start = (uintptr_t) p;
+    end = start + n;
+    if (end < start) return 0;             /* wrapped */
+    aligned = start & ~(uintptr_t) (pc_page - 1);
+    if (msync((void*) aligned, (size_t) (end - aligned), MS_ASYNC) != 0) {
+        return 0;
     }
     return 1;
 }
