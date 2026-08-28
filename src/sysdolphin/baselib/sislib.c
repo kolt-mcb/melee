@@ -2,6 +2,10 @@
 
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
+#if BUILD_TARGET_PC
+#include "port/fs.h"
+#include <stdio.h>
+#endif
 #endif
 
 #include "cobj.h"
@@ -73,6 +77,83 @@ sislib_UnkAlloc3* HSD_SisLib_804D797C;
 
 static u8
     HSD_SisLib_8040CD40; /* unable to generate initializer: unknown type */
+
+#if BUILD_TARGET_PC
+/* The default font's glyph atlas lives at .data:0x8040CD40..0x80430B40 in
+ * the original DOL -- 0x23E00 bytes of raw I4 texture that config.yml
+ * deliberately excludes from the decomp ("Raw texture array that creates
+ * spurious relocs"), which is why this translation unit has only the
+ * one-byte placeholder above. On GCN the linker supplies the real bytes.
+ * Here nothing did, so every glyph below index 0x4000 was sampled from
+ * unmapped memory one byte past a BSS placeholder: all SIS text drew blank
+ * and the GX bridge logged an endless stream of unreadable 32x32 I4 images.
+ *
+ * Read the region straight out of boot.dol on first use. It sits beside the
+ * .dat files the port already loads, so no new asset is involved, and
+ * parsing the DOL header means the offset is not hardcoded. */
+#define PC_SIS_FONT_ADDR 0x8040CD40u
+#define PC_SIS_FONT_END 0x80430B40u
+#define PC_SIS_FONT_SIZE (PC_SIS_FONT_END - PC_SIS_FONT_ADDR)
+
+static u8 pc_sis_font[PC_SIS_FONT_SIZE];
+static int pc_sis_font_state; /* 0 unread, 1 loaded, -1 failed */
+
+static u32 pc_sis_dol_be32(const u8* p)
+{
+    return ((u32) p[0] << 24) | ((u32) p[1] << 16) | ((u32) p[2] << 8) | p[3];
+}
+
+static void pc_sis_load_font(void)
+{
+    char path[FS_MAX_PATH];
+    u8 header[0x100];
+    FILE* fp;
+    int i;
+
+    pc_sis_font_state = -1;
+    if (vf_resolve_path("boot.dol", path, sizeof(path)) == NULL) {
+        return;
+    }
+    fp = fopen(path, "rb");
+    if (fp == NULL) {
+        OSReport("SIS: cannot open %s for the default font atlas\n", path);
+        return;
+    }
+    if (fread(header, 1, sizeof(header), fp) != sizeof(header)) {
+        fclose(fp);
+        return;
+    }
+    /* DOL header: 18 file offsets, then 18 load addresses, then 18 sizes. */
+    for (i = 0; i < 18; i++) {
+        u32 off = pc_sis_dol_be32(header + 4 * i);
+        u32 addr = pc_sis_dol_be32(header + 0x48 + 4 * i);
+        u32 size = pc_sis_dol_be32(header + 0x90 + 4 * i);
+        if (size == 0 || PC_SIS_FONT_ADDR < addr ||
+            PC_SIS_FONT_ADDR >= addr + size)
+        {
+            continue;
+        }
+        if (fseek(fp, (long) (off + (PC_SIS_FONT_ADDR - addr)), SEEK_SET) == 0 &&
+            fread(pc_sis_font, 1, sizeof(pc_sis_font), fp) == sizeof(pc_sis_font))
+        {
+            pc_sis_font_state = 1;
+        }
+        break;
+    }
+    fclose(fp);
+    if (pc_sis_font_state != 1) {
+        OSReport("SIS: could not read the default font atlas from %s\n", path);
+    }
+}
+
+static u8* pc_sis_default_font(void)
+{
+    if (pc_sis_font_state == 0) {
+        pc_sis_load_font();
+    }
+    return (pc_sis_font_state == 1) ? pc_sis_font : NULL;
+}
+#endif
 
 static HSD_Archive* HSD_SisLib_804D1110[5];
 SIS* HSD_SisLib_804D1124[5];
@@ -1897,7 +1978,11 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
     u16 saved_x6C;
     u8 saved_kerning;
 
+#if BUILD_TARGET_PC
+    u8 *data = pc_sis_default_font();
+#else
     u8 *data = &HSD_SisLib_8040CD40;
+#endif
     u8 *default_kerning = HSD_SisLib_8040CB00;
 
     if (gobj != NULL) {
@@ -2339,12 +2424,39 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                                             }
                                         }
                                     }
-                                    if (draw_glyph != 0U) {
+                                    /* PC: the offset mask allows values far
+                                     * past the atlas. On GCN whatever follows
+                                     * it in .data absorbed that; here it would
+                                     * be a wild read, so drop the glyph. */
+                                    if (draw_glyph != 0U
+#if BUILD_TARGET_PC
+                                        && (glyph_idx >= 0x4000U ||
+                                            (data != NULL &&
+                                             (((tex_offset << 9) & 0x01FFFE00) +
+                                              512u) <= PC_SIS_FONT_SIZE))
+#endif
+                                    ) {
                                         if (glyph_idx < 0x4000U) {
                                             GXInitTexObj(&tex_obj, data + ((tex_offset << 9) & 0x01FFFE00), 0x20U, 0x20U, GX_TF_I4, GX_CLAMP, GX_CLAMP, 0U);
                                         } else {
-                                            GXInitTexObj(&tex_obj, HSD_SisLib_BytePtr(kerning) + ((tex_offset << 9) & 0x01FFFE00), 0x20U, 0x20U, GX_TF_I4, GX_CLAMP, GX_CLAMP, 0U);
+                                            u8* sis_glyph = HSD_SisLib_BytePtr(kerning) + ((tex_offset << 9) & 0x01FFFE00);
+#if BUILD_TARGET_PC
+                                            /* Same unbounded mask as the
+                                             * built-in font, but relative to
+                                             * the archive's kerning table --
+                                             * a large offset walks off the end
+                                             * of the mapping. */
+                                            if (!pc_mem_readable(sis_glyph, 512)) {
+                                                sis_glyph = NULL;
+                                            }
+#endif
+                                            if (sis_glyph == NULL) {
+                                                draw_glyph = 0U;
+                                            } else {
+                                                GXInitTexObj(&tex_obj, sis_glyph, 0x20U, 0x20U, GX_TF_I4, GX_CLAMP, GX_CLAMP, 0U);
+                                            }
                                         }
+                                        if (draw_glyph != 0U) {
                                         GXLoadTexObj(&tex_obj, GX_TEXMAP0);
                                         GXSetTevColor(GX_TEVREG0, *(GXColor*)&text->active_color);
                                         GXBegin(GX_QUADS, GX_VTXFMT0, 4U);
@@ -2360,6 +2472,7 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                                             GXTexCoord2f32(uv_right, uv_bottom);
                                             GXPosition3f32(glyph_x, neg_quad_bottom, glyph_depth);
                                             GXTexCoord2f32(uv_left, uv_bottom);
+                                        }
                                         }
                                     }
                                     text->current_width = (f32) ((text->x88 * (text->x80.x * (32.0F + text->x78.x))) + text->current_width);

@@ -1453,6 +1453,17 @@ void HSD_PadRenewGameStatus(void)
         cur->nml_analogA = 0.0f;
         cur->nml_analogB = 0.0f;
         
+        /* MELEE_PADLOG=1 shows what actually reached each pad -- the quickest
+         * way to tell a port bug from someone leaning on the keyboard. */
+        {
+            static int padlog = -1;
+            if (padlog < 0) padlog = (getenv("MELEE_PADLOG") != NULL);
+            if (padlog && cur->button != 0) {
+                fprintf(stderr, "[PADLOG] pad%d btn=%08x stick=%d,%d\n", pad,
+                        cur->button, (int) cur->stickX, (int) cur->stickY);
+                fflush(stderr);
+            }
+        }
         /* Compute trigger/repeat/release from delta */
         cur->trigger = cur->button & ~g_gc_pads_last[pad].button;
         cur->release = ~cur->button & g_gc_pads_last[pad].button;

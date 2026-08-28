@@ -1,3 +1,4 @@
+#include <execinfo.h>
 /**
  * @file gx_gl_bridge.c
  * @brief GX → OpenGL bridge — captures vertex commands and translates to GL.
@@ -7685,8 +7686,19 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         if (probe == 0) probe = 1;
         if (!pc_mem_readable(img, probe)) {
             static int warned = 0;
-            if (warned < 8) { warned++;
-                PORT_LOG_WARN("TX: unreadable image %p (%ux%u fmt=0x%X); skipping", img, w, h, fmt); }
+            static int cap = -1;
+            if (cap < 0) {
+                const char* e = getenv("MELEE_TXWARN");
+                cap = (e != NULL) ? atoi(e) : 8;
+            }
+            if (warned < cap) { warned++;
+                PORT_LOG_WARN("TX: unreadable image %p (%ux%u fmt=0x%X); skipping", img, w, h, fmt);
+                if (getenv("MELEE_TXTRACE") != NULL) {
+                    void* bt[20];
+                    int nbt = backtrace(bt, 20);
+                    backtrace_symbols_fd(bt, nbt, 2);
+                }
+            }
             g_tx_unreadable++;
             return;
         }
