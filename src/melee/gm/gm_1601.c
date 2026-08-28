@@ -4007,23 +4007,34 @@ int gm_80168940(MatchEnd* match_end)
     return 0;
 }
 
+#if BUILD_TARGET_PC
+/* PC port: these three arrays come out of a DynamicModelDesc that stage code
+ * computes from raw archive data (grOnett_801E56FC returns
+ * `(char*) dat->unk8 + 0x34`). Their members are still 4-byte big-endian GCN
+ * offsets read as 8-byte host pointers, so a NULL test is not enough: the
+ * value is routinely non-null *and* unmapped, and indexing it faults. Onett's
+ * on_init died here on desc->shapeanims. Require the array to be readable
+ * before indexing; no animation is the right answer for a model whose
+ * animation table was never converted. */
+#define GM_ANIM_AT(arr, i)                                                    \
+    (pc_mem_readable((arr), sizeof(*(arr))) ? (arr)[i] : NULL)
+#else
+#define GM_ANIM_AT(arr, i) ((arr) != NULL ? (arr)[i] : NULL)
+#endif
+
 void gm_8016895C(HSD_JObj* arg0, DynamicModelDesc* arg1, int idx)
 {
-    HSD_AnimJoint* anim = arg1->anims != NULL ? arg1->anims[idx] : NULL;
-    HSD_MatAnimJoint* matanim =
-        arg1->matanims != NULL ? arg1->matanims[idx] : NULL;
-    HSD_ShapeAnimJoint* shapeanim =
-        arg1->shapeanims != NULL ? arg1->shapeanims[idx] : NULL;
+    HSD_AnimJoint* anim = GM_ANIM_AT(arg1->anims, idx);
+    HSD_MatAnimJoint* matanim = GM_ANIM_AT(arg1->matanims, idx);
+    HSD_ShapeAnimJoint* shapeanim = GM_ANIM_AT(arg1->shapeanims, idx);
     HSD_JObjAddAnimAll(arg0, anim, matanim, shapeanim);
 }
 
 void fn_801689E4(HSD_JObj* arg0, DynamicModelDesc* arg1, int idx)
 {
-    HSD_AnimJoint* anim = arg1->anims != NULL ? arg1->anims[idx] : NULL;
-    HSD_MatAnimJoint* matanim =
-        arg1->matanims != NULL ? arg1->matanims[idx] : NULL;
-    HSD_ShapeAnimJoint* shapeanim =
-        arg1->shapeanims != NULL ? arg1->shapeanims[idx] : NULL;
+    HSD_AnimJoint* anim = GM_ANIM_AT(arg1->anims, idx);
+    HSD_MatAnimJoint* matanim = GM_ANIM_AT(arg1->matanims, idx);
+    HSD_ShapeAnimJoint* shapeanim = GM_ANIM_AT(arg1->shapeanims, idx);
     HSD_JObjAddAnimAll(arg0, anim, matanim, shapeanim);
 }
 

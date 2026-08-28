@@ -1211,6 +1211,19 @@ void Item_80268E5C(HSD_GObj* gobj, enum_t msid, Item_StateChangeFlags flags)
     ItemStateDesc* temp_r23;
     s32 temp_r0;
 
+#if BUILD_TARGET_PC
+    /* PC port: stage code calls this directly on gobjs from
+     * grMaterial_801C8CFC/801C8D44, which return NULL while item creation is
+     * refused for the unconverted ItCo archive -- grOnett_WaitCar drives one
+     * of the four Onett cars here every time the car timer expires, and none
+     * of the four exists. grmaterial.c already absorbs the NULL at its own
+     * wrappers for exactly this reason; the eleven direct calls out of gr/
+     * bypass those. Doing nothing is correct for an item that was never
+     * created. */
+    if (gobj == NULL) {
+        return;
+    }
+#endif
     item_jobj = (HSD_JObj*) HSD_GObjGetHSDObj(gobj);
     item_data = (Item*) HSD_GObjGetUserData(gobj);
 

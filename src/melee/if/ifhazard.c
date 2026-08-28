@@ -1,5 +1,10 @@
 #include "ifhazard.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#include "port/platform.h"
+#endif
+
 #include "baselib/forward.h"
 
 #include "gm/gm_unsplit.h"
@@ -65,8 +70,26 @@ void un_802FD704(void) {}
 
 void un_802FD708(DynamicModelDesc* desc, int arg1)
 {
-    HSD_GObj* gobj = GObj_Create(HSD_GOBJ_CLASS_UI, 15, 0);
-    HSD_JObj* jobj = HSD_JObjLoadJoint(desc->joint);
+    HSD_GObj* gobj;
+    HSD_JObj* jobj;
+
+#if BUILD_TARGET_PC
+    /* PC port: the stage accessors that produce this descriptor return NULL
+     * when their archive slot has no data -- grOnett_801E56FC does so
+     * explicitly, and reaches here through un_802FD8A0 in the stage's
+     * on_init. It can also return a *non-null* address computed from an
+     * unconverted GCN offset (`(char*) dat->unk8 + 0x34`), which is worse:
+     * the NULL check passes and gm_8016895C then faults reading
+     * desc->anims. Require the descriptor to be a plausible host pointer and
+     * readable. No usable descriptor means no hazard model, which is a
+     * complete answer rather than a papered-over one. */
+    if (!pc_mem_readable(desc, sizeof(*desc))) {
+        port_guard_warn("ifhazard.c:un_802FD708 unusable desc");
+        return;
+    }
+#endif
+    gobj = GObj_Create(HSD_GOBJ_CLASS_UI, 15, 0);
+    jobj = HSD_JObjLoadJoint(desc->joint);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
     GObj_SetupGXLink(gobj, fn_802FD6CC, 11, 0);
     gm_8016895C(jobj, desc, 0);
