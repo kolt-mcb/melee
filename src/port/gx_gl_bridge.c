@@ -465,6 +465,15 @@ enum {
  * BridgeState for the same reason as the TEV output registers below. */
 static Bool g_tex_cache_hasmip[MAX_TEXTURES];
 
+/* Whether GXSetChanAmbColor has ever run for a colour channel. The bridge
+ * stored those colours in chan_amb_colors[] but the shader's ambient came
+ * from ambient_color[], which only GXSetLightColors writes -- and that is a
+ * bridge invention the game never calls. So the ambient term was pinned at
+ * its 0.1 initialiser for the whole run while the value HSD actually
+ * programs (0.56-0.70 in a match) was discarded. Kept out of BridgeState for
+ * the reason given at the TEV output registers. */
+static Bool g_chan_amb_valid[3];
+
 
 /* TLUT palette slot structure */
 typedef struct {
@@ -963,6 +972,11 @@ static GLint g_light_color_loc = -1;
 static GLint g_light_directional_loc = -1;
 static GLint g_light_count_loc = -1;
 static GLint g_light_mask_loc = -1;
+static GLint g_light_mask1_loc = -1;
+static GLint g_light_spec_dir_loc = -1;
+static GLint g_ambient_color1_loc = -1;
+static GLint g_chan1_lit_loc = -1;
+static GLint g_tev_ras_chan_loc = -1;
 static GLint g_camera_pos_loc = -1;
 static GLint g_ambient_color_loc = -1;
 static GLint g_model_loc = -1;
@@ -1051,7 +1065,10 @@ static const char* g_vert_src =
 "uniform vec4 u_light_color[8];   // Light RGBA colors\n"
 "uniform int u_light_directional[8]; // 1=directional, 0=point\n"
 "uniform int u_light_count;       // Number of active lights\n"
-"uniform int u_light_mask;        // Bitmask of active lights (bit 0 = light 0)\n"
+"uniform int u_light_mask;        // Channel 0 light mask (bit 0 = light 0)\n"
+"uniform int u_light_mask1;       // Channel 1 light mask (GX specular)\n"
+"uniform vec3 u_light_spec_dir[8]; // Half-vector per light (GXInitSpecularDir)\n"
+"uniform vec3 u_ambient_color1;   // Channel 1 ambient\n"
 "uniform vec3 u_camera_pos;       // Camera position for point lights\n"
 "uniform vec3 u_ambient_color;    // Ambient light color\n"
 "// Per-light attenuation and spot/distance params\n"
@@ -1067,7 +1084,8 @@ static const char* g_vert_src =
 "out vec2 v_uv1;\n"
 "out vec3 v_nrm;\n"
 "out vec3 v_world_pos;\n"
-"out vec4 v_lit_color;            // Per-vertex lit color (GCN channel color)\n"
+"out vec4 v_lit_color;            // Per-vertex channel-0 lit color\n"
+"out vec4 v_lit_color1;           // Per-vertex channel-1 lit color (specular)\n"
 "void main() {\n"
 "    gl_Position = u_mvp * vec4(a_pos, 1.0);\n"
 "    v_col = a_col;\n"
@@ -1166,6 +1184,29 @@ static const char* g_vert_src =
 "    // v_lit_color = ambient + diffuse (clamped to [0,1])\n"
 "    v_lit_color = vec4(u_ambient_color + diffuse_sum, 1.0);\n"
 "    v_lit_color = clamp(v_lit_color, 0.0, 1.0);\n"
+"\n"
+"    // Colour channel 1 is GX's specular channel. HSD does not use a\n"
+"    // separate specular model: HSD_LObjSetup loads a *second* light\n"
+"    // object whose direction is the half-vector (GXInitSpecularDir) and\n"
+"    // whose attenuation encodes cos^shininess, then points channel 1 at\n"
+"    // it with GX_AF_SPEC. So this is the ordinary GX attenuation\n"
+"    // evaluated against N.H instead of a distance:\n"
+"    //   ratio = max(0, dot(N, H)); av = (1, ratio, ratio^2)\n"
+"    //   attn  = max(0, dot(av, cosatt)) / dot(av, distatt)\n"
+"    // with cosatt = (a0,a1,a2) and distatt = (k0,k1,k2).\n"
+"    vec3 spec_sum = vec3(0.0);\n"
+"    for (int i = 0; i < 8; i++) {\n"
+"        if (mod(u_light_mask1 / (1 << i), 2) == 0) continue;\n"
+"        vec3 H = u_light_spec_dir[i];\n"
+"        if (dot(H, H) < 1e-8) continue;\n"
+"        float ratio = max(0.0, dot(N, normalize(H)));\n"
+"        vec3 av = vec3(1.0, ratio, ratio * ratio);\n"
+"        float num = max(0.0, dot(av, u_light_atten_a[i]));\n"
+"        float den = dot(av, u_light_atten_k[i]);\n"
+"        float attn = (den > 1e-6) ? num / den : 0.0;\n"
+"        spec_sum += u_light_color[i].rgb * attn;\n"
+"    }\n"
+"    v_lit_color1 = clamp(vec4(u_ambient_color1 + spec_sum, 1.0), 0.0, 1.0);\n"
 "}\n";
 
 /* Fragment shader — GLSL TEV pipeline implementation.
@@ -1196,6 +1237,9 @@ static const char* g_frag_src =
 "in vec3 v_nrm;\n"
 "in vec3 v_world_pos;\n"
 "in vec4 v_lit_color;             // Per-vertex lit color (ambient + diffuse)\n"
+"in vec4 v_lit_color1;            // Per-vertex channel-1 lit color (specular)\n"
+"uniform int u_tev_ras_chan[8];   // GXSetTevOrder channel per stage\n"
+"uniform int u_chan1_lit;         // Channel 1 lighting enable\n"
 "out vec4 frag_color;\n"
 "\n"
 "// Texture uniforms (GLSL 3.30: no dynamic sampler indexing)\n"
@@ -1448,6 +1492,11 @@ static const char* g_frag_src =
 "    if (u_lighting_enabled != 0) {\n"
 "        ras.rgb = clamp(ras.rgb * v_lit_color.rgb, 0.0, 1.0);\n"
 "    }\n"
+"    // Colour channel 1, selected per TEV stage by GXSetTevOrder.\n"
+"    vec4 ras1 = (u_chan_src[1] == 1) ? v_col : u_chan_color[1];\n"
+"    if (u_chan1_lit != 0) {\n"
+"        ras1.rgb = clamp(ras1.rgb * v_lit_color1.rgb, 0.0, 1.0);\n"
+"    }\n"
 "    // The four TEV colour registers. On hardware these persist across draws\n"
 "    // and hold whatever GXSetTevColor last wrote; stages read and write them\n"
 "    // by index. reg[0] is TEVPREV.\n"
@@ -1467,7 +1516,10 @@ static const char* g_frag_src =
 "        vec2 tex_uv = indirect_texcoord(base_uv, ind_uv, stage);\n"
 "        vec4 tex = sample_tex(u_tev_tex_map[stage], tex_uv, tex_uv);\n"
 "        // Apply TEV swap mode to ras and tex\n"
-"        vec4 ras_s = vec4(tev_swap(ras.rgb, u_tev_swap_ras[stage]), ras.a);\n"
+"        // GXChannelID: COLOR1 = 1 and COLOR1A1 = 5 both name channel 1.\n"
+"        int rc = u_tev_ras_chan[stage];\n"
+"        vec4 ras_c = (rc == 1 || rc == 5) ? ras1 : ras;\n"
+"        vec4 ras_s = vec4(tev_swap(ras_c.rgb, u_tev_swap_ras[stage]), ras_c.a);\n"
 "        vec4 tex_s = vec4(tev_swap(tex.rgb, u_tev_swap_tex[stage]), tex.a);\n"
 "\n"
 "        // Color processing\n"
@@ -1723,6 +1775,14 @@ static void bridge_compile_shaders(void)
     g_light_directional_loc = glGetUniformLocation(g_shader_program, "u_light_directional");
     g_light_count_loc = glGetUniformLocation(g_shader_program, "u_light_count");
     g_light_mask_loc = glGetUniformLocation(g_shader_program, "u_light_mask");
+    g_light_mask1_loc = glGetUniformLocation(g_shader_program, "u_light_mask1");
+    g_light_spec_dir_loc =
+        glGetUniformLocation(g_shader_program, "u_light_spec_dir");
+    g_ambient_color1_loc =
+        glGetUniformLocation(g_shader_program, "u_ambient_color1");
+    g_chan1_lit_loc = glGetUniformLocation(g_shader_program, "u_chan1_lit");
+    g_tev_ras_chan_loc =
+        glGetUniformLocation(g_shader_program, "u_tev_ras_chan");
     g_camera_pos_loc = glGetUniformLocation(g_shader_program, "u_camera_pos");
     g_ambient_color_loc = glGetUniformLocation(g_shader_program, "u_ambient_color");
     g_model_loc = glGetUniformLocation(g_shader_program, "u_model");
@@ -5266,6 +5326,19 @@ static void apply_tev_uniforms(void)
             glUniform1iv(g_tev_swap_ras_loc, num_stages, swap_ras_arr);
         if (g_tev_swap_tex_loc >= 0)
             glUniform1iv(g_tev_swap_tex_loc, num_stages, swap_tex_arr);
+
+        /* Which colour channel each stage rasterises. GXSetTevOrder has
+         * always recorded this; it was simply never uploaded, so every stage
+         * used channel 0 and channel 1 -- GX's specular channel -- could not
+         * reach the TEV at all. */
+        {
+            GLint ras_chan_arr[8];
+            for (u32 i = 0; i < num_stages; i++) {
+                ras_chan_arr[i] = (GLint) g_state.tev_stages[i].tex_chan;
+            }
+            if (g_tev_ras_chan_loc >= 0)
+                glUniform1iv(g_tev_ras_chan_loc, num_stages, ras_chan_arr);
+        }
         
         /* Upload TEV input arrays (flat: 8 stages × 4 inputs = 32 elements) */
         GLint cin_arr[32] = {0};
@@ -5362,26 +5435,100 @@ static void apply_tev_uniforms(void)
         if (nlc > 8) nlc = 8;
         glUniform1i(g_light_count_loc, (int)nlc);
     }
+    /* Light masks are per colour channel, not global. ORing them together
+     * put channel 1's specular lights into channel 0's diffuse sum, where
+     * they were evaluated against the light position instead of the
+     * half-vector -- brightening the diffuse term with a light that should
+     * only ever have contributed specular.
+     *
+     * GX light masks are 8 bits (GX_LIGHT0..7); unconverted channel data
+     * yields values like 0xfd8fcf03, which lit every slot including garbage
+     * ones and blew the scene out to full saturation, so keep only the real
+     * light bits. */
     if (g_light_mask_loc >= 0) {
-        // Combine light masks from all enabled channels
-        int combined_mask = 0;
-        for (int i = 0; i < 8 && i < (int)g_state.num_chans; i++) {
-            if (g_state.chan_enabled[i]) {
-                combined_mask |= (int)g_state.chan_diffuse_light[i];
+        int m0 = g_state.chan_enabled[0]
+                     ? (int) (g_state.chan_diffuse_light[0] & 0xFF)
+                     : 0;
+        glUniform1i(g_light_mask_loc, m0);
+    }
+    if (g_light_mask1_loc >= 0) {
+        int m1 = g_state.chan_enabled[1]
+                     ? (int) (g_state.chan_diffuse_light[1] & 0xFF)
+                     : 0;
+        glUniform1i(g_light_mask1_loc, m1);
+    }
+    if (g_chan1_lit_loc >= 0) {
+        glUniform1i(g_chan1_lit_loc, g_state.chan_lit[1] ? 1 : 0);
+    }
+    { static int _c1 = -1; static unsigned long lit1, mask1, stages1, specdir, n;
+      if (_c1 < 0) _c1 = (getenv("MELEE_SPECTALLY") != NULL);
+      if (_c1) {
+        u32 st; int i; static unsigned long chan1_used, any_ras;
+        if (g_state.chan_lit[1]) lit1++;
+        if ((g_state.chan_diffuse_light[1] & 0xFF) != 0) mask1++;
+        for (st = 0; st < g_state.num_tev_stages && st < 8; st++) {
+            u32 rc = g_state.tev_stages[st].tex_chan;
+            if (rc == 1 || rc == 5) { stages1++; break; }
+        }
+        /* Rasterising channel 1 only matters if the stage also reads it:
+         * GX_CC_RASC = 10, GX_CC_RASA = 11 as TEV colour inputs. */
+        for (st = 0; st < g_state.num_tev_stages && st < 8; st++) {
+            TevStage* t = &g_state.tev_stages[st];
+            u32 rc = t->tex_chan;
+            int uses_ras = 0, k;
+            for (k = 0; k < 4; k++)
+                if (t->color_inputs[k] == 10 || t->color_inputs[k] == 11)
+                    uses_ras = 1;
+            if (uses_ras && (rc == 1 || rc == 5)) { chan1_used++; }
+            else if (uses_ras) { any_ras++; }
+        }
+        for (i = 0; i < 8; i++) {
+            LightSlot* L = &g_state.g_lights[i];
+            if (L->spec_nx != 0.0f || L->spec_ny != 0.0f || L->spec_nz != 0.0f) {
+                specdir++; break;
             }
         }
-        /* PC port: GX light masks are 8 bits (GX_LIGHT0..7). Unconverted
-         * channel data yields values like 0xfd8fcf03, which lit every slot
-         * (including garbage ones) and blew the scene out to full
-         * saturation. Keep only the real light bits. */
-        combined_mask &= 0xFF;
-        glUniform1i(g_light_mask_loc, combined_mask);
+        if (++n % 5000 == 0)
+            fprintf(stderr, "[SPECTALLY] draws=%lu chan1_lit=%lu mask1!=0=%lu "
+                            "stage_uses_chan1=%lu any_specdir=%lu chan1_RASC=%lu ch0_RASC=%lu\n",
+                    n, lit1, mask1, stages1, specdir, chan1_used, any_ras);
+      } }
+    if (g_ambient_color1_loc >= 0) {
+        f32 a1[3];
+        if (g_chan_amb_valid[1]) {
+            a1[0] = (f32) g_state.chan_amb_colors[1].r / 255.0f;
+            a1[1] = (f32) g_state.chan_amb_colors[1].g / 255.0f;
+            a1[2] = (f32) g_state.chan_amb_colors[1].b / 255.0f;
+        } else {
+            a1[0] = a1[1] = a1[2] = 0.0f;
+        }
+        glUniform3f(g_ambient_color1_loc, a1[0], a1[1], a1[2]);
+    }
+    if (g_light_spec_dir_loc >= 0) {
+        GLfloat sd[8][3];
+        for (int i = 0; i < 8; i++) {
+            sd[i][0] = g_state.g_lights[i].spec_nx;
+            sd[i][1] = g_state.g_lights[i].spec_ny;
+            sd[i][2] = g_state.g_lights[i].spec_nz;
+        }
+        glUniform3fv(g_light_spec_dir_loc, 8, &sd[0][0]);
     }
     if (g_ambient_color_loc >= 0) {
         f32 amb[3];
         int ai;
+        /* Prefer the ambient the game actually programmed for colour channel
+         * 0 (GXSetChanAmbColor, reached from HSD_SetupChannel). ambient_color[]
+         * is only ever written by GXSetLightColors, which nothing in the game
+         * calls, so before this it stayed at the 0.1 initialiser forever. */
+        if (g_chan_amb_valid[0]) {
+            amb[0] = (f32) g_state.chan_amb_colors[0].r / 255.0f;
+            amb[1] = (f32) g_state.chan_amb_colors[0].g / 255.0f;
+            amb[2] = (f32) g_state.chan_amb_colors[0].b / 255.0f;
+        } else {
+            for (ai = 0; ai < 3; ai++) amb[ai] = g_state.ambient_color[ai];
+        }
         for (ai = 0; ai < 3; ai++) {
-            f32 v = g_state.ambient_color[ai];
+            f32 v = amb[ai];
             if (!isfinite(v) || v < 0.0f) v = 0.0f;
             else if (v > 1.0f) v = 1.0f;
             amb[ai] = v;
@@ -5709,6 +5856,9 @@ void GXSetChanAmbColor(u32 chan, GXColor amb_color)
             g_state.chan_amb_colors[slot].r = amb_color.r;
             g_state.chan_amb_colors[slot].g = amb_color.g;
             g_state.chan_amb_colors[slot].b = amb_color.b;
+            if (slot >= 0 && slot < 3) {
+                g_chan_amb_valid[slot] = TRUE;
+            }
         }
         if (do_a) {
             g_state.chan_amb_colors[slot].a = amb_color.a;
