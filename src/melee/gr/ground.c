@@ -326,18 +326,34 @@ void* Ground_801C49F8(void)
 {
     /* Returns the stage's own parameter block. Which block that is, this tree
      * does not say: the function has no definition and no declaration, and
-     * each of the four callers (Castle, Old Kongo, Mute City, Shrine Route)
-     * casts the result to a different private struct.
+     * each caller casts the result to a different private struct. The callers
+     * are Castle, Old Kongo, Mute City and Shrine Route -- which survive a
+     * NULL -- plus Zebes, Corneria, Fourside and Big Blue, which crash on it
+     * (grZe_804D6990->x74, grCn_804D69A0->x3C, grFs_804D69D8[0]->crane_wait,
+     * grBb_804D69C8[0]->x134_translate: every fault address is the field
+     * offset).
      *
      * Two candidates were tried and both are wrong. stage_info.param is the
      * shared GroundParam header -- Old Kongo survives on it, Castle divides by
      * zero. &stage_info.xA0 is the per-StKind row Ground_801C28CC fills, but
      * those are s32 products of two s16s and the callers read floats.
      *
-     * So: NULL, which the callers must check, rather than a guess that reads
-     * one struct through another's field offsets. Returning it from here
-     * rather than from a weak `void` stub at least makes that deterministic --
-     * the stub left whatever was in rax. */
+     * A third candidate was tried and measured on 2026-08-27:
+     * stage_info.yakumono_param, which grdatfiles.c fills from the archive's
+     * "yakumono_param" public symbol. The *pointer* is right -- Fourside goes
+     * from crashing to running on it, which is the first positive evidence
+     * any candidate has produced. But the block is raw big-endian, and
+     * handing it back simply trades one set of crashes for another: Fourside
+     * starts, Castle, Mute City and Old Kongo stop. Sweep 26 -> 24 of 33.
+     *
+     * Byte-swapping the whole block a word at a time does not rescue it
+     * either (same 24), so those three stages' param structs are not the pure
+     * 4-byte scalar layouts that Zebes' and Big Blue's turned out to be. The
+     * conversion has to be per stage, driven by each grXx_YakumonoParam.
+     *
+     * So: still NULL, which callers must check, rather than a guess that
+     * reads one struct through another's field offsets -- but now with a
+     * known-good starting point for whoever writes those converters. */
     return NULL;
 }
 #endif
