@@ -1200,6 +1200,18 @@ void it_80274C60(Item_GObj* item_gobj)
 {
     Item* item;
 
+#if BUILD_TARGET_PC
+    /* PC port: stage code reaches this through grMaterial_801C8CFC, which
+     * returns NULL while item creation is refused for the unconverted ItCo
+     * archive -- and the stage modules do not check (grOnett_801E41C8 spawns
+     * the four Onett cars and configures each one immediately). grmaterial.c
+     * already absorbs the NULL at its own leaves for exactly this reason;
+     * this is the one such leaf that lives in it/. Doing nothing is the right
+     * answer for a car that was never created. */
+    if (item_gobj == NULL) {
+        return;
+    }
+#endif
     item = item_gobj->user_data;
     item->xDC8_word.flags.xC = 0;
 }
