@@ -1,5 +1,9 @@
 #include "gm_1832.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#endif
+
 #include "gm_1B03.static.h"
 
 #include "gm_unsplit.h"
@@ -1067,6 +1071,19 @@ void fn_80186400(void)
 
 static char lbl_804D40B0[] = "IrRdMap";
 
+#if BUILD_TARGET_PC
+/* pc_conv_SceneDesc leaves SceneDesc::fogs NULL -- an unconverted
+ * HSD_FogDesc is worse than an absent one -- so every fogs[0] read here has
+ * to tolerate that. The scene simply renders unfogged. */
+static HSD_Fog* pc_scene_fog(const SceneDesc* scene)
+{
+    if (scene == NULL || scene->fogs == NULL) {
+        return NULL;
+    }
+    return HSD_FogLoadDesc(scene->fogs[0].desc);
+}
+#endif
+
 void fn_80186634(void* arg0)
 {
     HSD_GObj* gobj;
@@ -1100,6 +1117,23 @@ void fn_80186634(void* arg0)
                            "ScItrAllstar_scene_data", 0);
     lbl_804D65F8 = lbArchive_80016DBC(lbl_804D40B0, &lbl_804D6600,
                                       "ScItrAllstar_scene_data", 0);
+
+#if BUILD_TARGET_PC
+    /* lbArchive_80016DBC hands back raw archive data: both of these are
+     * still big-endian and GameCube-packed, so every field read below is a
+     * byte-swapped offset rather than a pointer. That is how ->lights
+     * reached lb_80011AC4 pointing near zero. Convert them, and give up on
+     * the scene if either cannot be -- the cameras, models and fogs that
+     * follow are dereferenced unconditionally. */
+    lbl_804D65FC = pc_conv_SceneDesc(
+        lbl_804D65FC, lbl_804D65F4 != NULL ? lbl_804D65F4->data : NULL);
+    lbl_804D6600 = pc_conv_SceneDesc(
+        lbl_804D6600, lbl_804D65F8 != NULL ? lbl_804D65F8->data : NULL);
+    if (lbl_804D65FC == NULL || lbl_804D6600 == NULL) {
+        OSReport("fn_80186634: no usable ScItrAllstar_scene_data\n");
+        return;
+    }
+#endif
 
     gobj = GObj_Create(0xB, 3, 0);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784A,
@@ -1140,7 +1174,7 @@ void fn_80186634(void* arg0)
         lb_80011E24(jobj, &lbl_804735A8.x4[5], 1, -1);
         gobj = GObj_Create(0xE, 0xF, 0);
         {
-            HSD_Fog* fog = HSD_FogLoadDesc(lbl_804D65FC->fogs[0].desc);
+            HSD_Fog* fog = pc_scene_fog(lbl_804D65FC);
             HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7848, fog);
         }
         GObj_SetupGXLink(gobj, HSD_GObj_FogCallback, 0xB, 0);
@@ -1177,7 +1211,7 @@ void fn_80186634(void* arg0)
         lb_80011E24(jobj, &lbl_804735A8.x4[5], 1, -1);
         gobj = GObj_Create(0xE, 0xF, 0);
         {
-            HSD_Fog* fog = HSD_FogLoadDesc(lbl_804D65FC->fogs[0].desc);
+            HSD_Fog* fog = pc_scene_fog(lbl_804D65FC);
             HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7848, fog);
         }
         GObj_SetupGXLink(gobj, HSD_GObj_FogCallback, 0xB, 0);
@@ -1214,7 +1248,7 @@ void fn_80186634(void* arg0)
         lb_80011E24(jobj, &lbl_804735A8.x4[5], 1, -1);
         gobj = GObj_Create(0xE, 0xF, 0);
         HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7848,
-                                HSD_FogLoadDesc(lbl_804D65FC->fogs[0].desc));
+                                pc_scene_fog(lbl_804D65FC));
         GObj_SetupGXLink(gobj, HSD_GObj_FogCallback, 0xB, 0);
         fn_801861B8();
         fn_80185D64();
@@ -1498,7 +1532,7 @@ void gm_801877A8_OnEnter(void* arg0_)
     fn_801874FC();
 
     temp_r30_3 = GObj_Create(0xE, 0xF, 0);
-    fog = HSD_FogLoadDesc(lbl_804D6614->fogs[0].desc);
+    fog = pc_scene_fog(lbl_804D6614);
     HSD_GObjObject_80390A70(temp_r30_3, HSD_GObj_804D7848, fog);
     GObj_SetupGXLink(temp_r30_3, HSD_GObj_FogCallback, 0xB, 0);
     fn_801873F0();
