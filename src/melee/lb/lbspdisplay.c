@@ -1,5 +1,9 @@
 #include "lbspdisplay.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #include "platform.h"
 #include "stdarg.h"
 #include "stddef.h"
@@ -69,11 +73,13 @@ HSD_LObj* lb_80011AC4(LightList** list)
     HSD_LightAnim** temp_r4;
 
 #if BUILD_TARGET_PC
-    /* PC port: archive data is big-endian, pointers are garbage on LE.
-     * Return NULL until endianness conversion is implemented. */
-    if (list == NULL || *list == NULL) return NULL;
-    /* Sanity check: pointer should be in the low-memory archive region. */
-    if ((uintptr_t)*list > 0xFFFFFFFFULL) return NULL;
+    /* PC port: callers that got their SceneDesc from lbArchive_80016DBC hand
+     * over raw archive data, so `list` is an unconverted big-endian pointer.
+     * The old check only rejected values above 4GB, which a byte-swapped
+     * archive offset comfortably passes -- fn_80186634 reached here with one
+     * that dereferenced near zero. Probe both levels for real. */
+    if (!pc_mem_readable(list, sizeof(*list))) return NULL;
+    if (!pc_ptr_sane(*list)) return NULL;
 #endif /* BUILD_TARGET_PC */
 
     prev = NULL;

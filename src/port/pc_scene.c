@@ -574,8 +574,9 @@ SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
     out->lights = pc_conv_LightListArray(off_to_ptr(be32(r + 0x08), dataBase),
                                          dataBase);
 
-    /* +0x0C fogs is left NULL. Nothing that loads a scene here reads it, and
-     * an unconverted HSD_FogDesc would be worse than an absent one. */
+    /* +0x0C fogs is left NULL: an unconverted HSD_FogDesc would be worse
+     * than an absent one. Readers must cope -- gm_1832.c's All-Star intro
+     * does read fogs[0], and went through a null here. */
     out->fogs = NULL;
 
     if (pc_scene_cache_n < PC_SCENE_CACHE) {
