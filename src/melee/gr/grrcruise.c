@@ -1,5 +1,9 @@
 #include "grrcruise.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #include "grzakogenerator.h"
 #include "placeholder.h"
 
@@ -303,8 +307,28 @@ void grRCruise_801FF5B4(Ground_GObj* gobj)
     Ground_801C2ED0(jobj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
     gp->gv.rcruise.x10 = 1;
+#if BUILD_TARGET_PC
+    /* PC port: two GameCube assumptions in one line.
+     *
+     * The block is written through u.map.chikuwa and read back through
+     * gv.rcruise.entries -- the same union, and both fields sit at +6C of
+     * their own member, so on GameCube they are the same word. Pointer
+     * widening moves them apart here: entries lands at 0x90 and chikuwa at
+     * 0xA0, so the allocation went into a field nothing reads and entries
+     * stayed null. grRCruise_80200B48 then indexed it and faulted at 0x2.
+     *
+     * And 0x198 is a GameCube byte count: 17 entries of 0x18. grRCruise_Entry
+     * holds an HSD_JObj* and is 0x20 here, so the array needs 0x220 and the
+     * original size would have overrun it by 0x88.
+     *
+     * Allocate by sizeof, through the field that is actually read. */
+    gp->gv.rcruise.entries =
+        HSD_MemAlloc(17 * sizeof(struct grRCruise_Entry));
+    HSD_ASSERT(0x19A, gp->gv.rcruise.entries);
+#else
     gp->u.map.chikuwa = HSD_MemAlloc(0x198);
     HSD_ASSERT(0x19A, gp->u.map.chikuwa);
+#endif
     grRCruise_80201410(gobj);
     Ground_801C10B8(gobj, grRCruise_801FF444);
     grRCruise_80200540(gobj);
@@ -504,12 +528,37 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
     if (!(((u8) gp->u.scroll.x0 >> 7U) & 1)) {
         Stage_UnkSetVec3TCam_Offset(&cam_offset);
         HSD_ASSERT(0x2E0U, gp->u.scroll.anim_gobj);
+#if BUILD_TARGET_PC
+        /* PC port: HSD_ASSERT reports and returns here, so a missing scroll
+         * anim gobj fell straight into ->user_data. Without it there is no
+         * camera pair to read, so there is nothing to offset. */
+        if (!pc_ptr_sane(gp->u.scroll.anim_gobj)) {
+            port_guard_warn("grrcruise.c:801FFADC no scroll anim gobj");
+            return;
+        }
+#endif
         {
             HSD_GObj* anim_gobj = gp->u.scroll.anim_gobj;
             anim_gp = anim_gobj->user_data;
         }
+#if BUILD_TARGET_PC
+        /* The scroll gobj passes a pointer check but carries no Ground, so
+         * reading its camera and centre joints faulted at Ground+0x118. Guard
+         * the user data itself, before the reads -- not the joints, which are
+         * read out of it. */
+        if (!pc_ptr_sane(anim_gp)) {
+            port_guard_warn("grrcruise.c:801FFADC scroll gobj has no ground");
+            return;
+        }
+#endif
         cam_jobj = anim_gp->u.scroll.cam_jobj;
         ctr_jobj = anim_gp->u.scroll.ctr_jobj;
+#if BUILD_TARGET_PC
+        if (!pc_ptr_sane(cam_jobj) || !pc_ptr_sane(ctr_jobj)) {
+            port_guard_warn("grrcruise.c:801FFADC no scroll cam joints");
+            return;
+        }
+#endif
         Stage_UnkSetVec3TCam_Offset(&cam_offset2);
         lb_8000B1CC(ctr_jobj, NULL, &sp18);
         lb_8000B1CC(cam_jobj, NULL, &sp24);
@@ -1293,6 +1342,13 @@ void grRCruise_80201B60(HSD_JObj* jobj, bool arg1)
     HSD_DObj* next;
     PAD_STACK(8);
 
+#if BUILD_TARGET_PC
+    /* PC port: called with a joint that was never built, faulting at 0x20 --
+     * the DObj list head. No joint, no display objects to walk. */
+    if (!pc_ptr_sane(jobj)) {
+        return;
+    }
+#endif
     dobj = HSD_JObjGetDObj(jobj);
     while (dobj != NULL) {
         if (arg1 != 0) {
