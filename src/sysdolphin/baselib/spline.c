@@ -1,5 +1,9 @@
 #include "spline.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #include <placeholder.h>
 
 #include "forward.h"
@@ -84,6 +88,16 @@ void splGetSplinePoint(Vec3* p, HSD_Spline* spline, f32 u)
 {
     Vec3* cp;
     s16 idx;
+#if BUILD_TARGET_PC
+    /* PC port: stage code reaches this with a NULL spline when the spline's
+     * archive data has not been converted -- Kongo Jungle drives a platform
+     * along one every frame and faulted on spline->numcv. Return without
+     * writing p, which is exactly what the out-of-range test below already
+     * does, so every caller already copes with "no point produced". */
+    if (p == NULL || !pc_ptr_sane(spline)) {
+        return;
+    }
+#endif
     if (u < 0.0F || u > 1.0F) {
         return;
     }
