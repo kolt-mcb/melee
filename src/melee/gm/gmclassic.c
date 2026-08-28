@@ -81,7 +81,30 @@ typedef struct gmClassicSceneData {
 STATIC_ASSERT(sizeof(gmClassicSceneData) == 0x560);
 
 static gmClassic_80490880Data gmClassic_80490880;
+#if BUILD_TARGET_PC
+/* gmClassic_803DDEC8 is initialised .data in the original: the Classic-mode
+ * matchup tables. Nothing in this tree reconstructs it, so the PC build was
+ * resolving it against a weak *function* stub in pc_stub/undef_stubs.c --
+ * &gmClassic_803DDEC8 was a code address, and every read below came out of
+ * instruction bytes. Define it for real so the symbol is at least data.
+ * Zeroed means Classic mode has no matchups yet, which the bounded scans
+ * below now survive; it no longer takes the process down. */
+gmClassic_803DDEC8Data gmClassic_803DDEC8 = {
+    /* Terminator-only. Every reader of this table scans for a sentinel --
+     * 0x0D in gm_803DDEC8Struct::x0, 0x148 in gmClassicMatchup::x00 -- and a
+     * table of zeroes presents neither, so each scan would run off the end.
+     * An empty-but-terminated table reads as "Classic mode has no matchups",
+     * which every one of those loops handles. */
+    .x00 = { { .x0 = 0x0D } },
+    .x0C0 = { { .x00 = 0x148 } },
+    .x0CC = { { .x00 = 0x148 } },
+    .x1B8 = { { .x00 = 0x148 } },
+    .x26C = { { .x00 = 0x148 } },
+    .x2B0 = { { .x00 = 0x148 } },
+};
+#else
 extern gmClassic_803DDEC8Data gmClassic_803DDEC8;
+#endif
 
 GameScene gm_803DDC58_Scenes[] = {
     {
@@ -390,6 +413,14 @@ static inline void gmClassic_InitMatchupOrder(const gmClassicMatchup* matchups,
     s32 i;
 
     for (count = 0; matchups[count].x00 != 0x148; count++) {
+#if BUILD_TARGET_PC
+        /* An absent or zeroed table never presents the sentinel, and this
+         * scan then walks until it faults. The largest of the four tables
+         * this is called with holds 39 entries. */
+        if (count >= 39) {
+            return;
+        }
+#endif
     }
 
     for (i = 0; i < count; i++) {
@@ -493,12 +524,22 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
 {
     gmClassic_80490880Data* o = &gmClassic_80490880;
     gm_803DDEC8Struct* ptr;
+#if BUILD_TARGET_PC
+    /* The original reaches the matchup tables by casting the scene array and
+     * reading past its end -- gmClassic_803DDEC8 immediately follows
+     * gm_803DDC58_Scenes in .data there. GameScene is 0x18 bytes on GCN and
+     * 0x28 here, so scenes[26] spans 0x410 rather than 0x270 and that pun
+     * lands on nothing. Address the table by name instead. */
+    gmClassic_803DDEC8Data* scene_matchups = &gmClassic_803DDEC8;
+#else
     gmClassicSceneData* scene_data = (gmClassicSceneData*) gm_803DDC58_Scenes;
+    gmClassic_803DDEC8Data* scene_matchups = &scene_data->matchups;
+#endif
 
     for (ptr = arg0; (u8) ptr->x0 != 0xD; ptr++) {
         if (ptr->x1 & 8) {
             gmClassicMatchup* result =
-                gmClassic_801B2BA4(scene_data->matchups.x2B0, o->x80, arg0);
+                gmClassic_801B2BA4(scene_matchups->x2B0, o->x80, arg0);
             if (result != NULL) {
                 ptr->xC = result;
             } else {
@@ -512,7 +553,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         u8 flags = ptr->x1;
         if ((flags & 2) && !(flags & 0x20)) {
             gmClassicMatchup* result =
-                gmClassic_801B2BA4(scene_data->matchups.x26C, o->x74, arg0);
+                gmClassic_801B2BA4(scene_matchups->x26C, o->x74, arg0);
             if (result != NULL) {
                 ptr->xC = result;
             } else {
@@ -526,7 +567,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         u8 flags = ptr->x1;
         if ((flags & 0x10) && !(flags & 0x20)) {
             gmClassicMatchup* result =
-                gmClassic_801B2BA4(scene_data->matchups.x1B8, o->x54, arg0);
+                gmClassic_801B2BA4(scene_matchups->x1B8, o->x54, arg0);
             if (result != NULL) {
                 ptr->xC = result;
             } else {
@@ -540,7 +581,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         u8 flags = ptr->x1;
         if (flags == 0 || flags == 4) {
             gmClassicMatchup* result =
-                gmClassic_801B2BA4(scene_data->matchups.x0CC, o->x2C, arg0);
+                gmClassic_801B2BA4(scene_matchups->x0CC, o->x2C, arg0);
             if (result != NULL) {
                 ptr->xC = result;
             } else {
@@ -569,7 +610,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
 
     for (ptr = arg0; (u8) ptr->x0 != 0xD; ptr++) {
         if (ptr->x1 & 0x20) {
-            ptr->xC = scene_data->matchups.x0C0;
+            ptr->xC = scene_matchups->x0C0;
             return ptr;
         }
     }
@@ -579,23 +620,33 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
 void gmClassic_OnLoad(void)
 {
     UnkAllstarData* data;
+#if BUILD_TARGET_PC
+    /* The original reaches the matchup tables by casting the scene array and
+     * reading past its end -- gmClassic_803DDEC8 immediately follows
+     * gm_803DDC58_Scenes in .data there. GameScene is 0x18 bytes on GCN and
+     * 0x28 here, so scenes[26] spans 0x410 rather than 0x270 and that pun
+     * lands on nothing. Address the table by name instead. */
+    gmClassic_803DDEC8Data* scene_matchups = &gmClassic_803DDEC8;
+#else
     gmClassicSceneData* scene_data = (gmClassicSceneData*) gm_803DDC58_Scenes;
+    gmClassic_803DDEC8Data* scene_matchups = &scene_data->matchups;
+#endif
     gmClassic_80490880Data* o = &gmClassic_80490880;
     gm_803DDEC8Struct* entry;
     s32 i;
     PAD_STACK(32);
 
-    for (entry = scene_data->matchups.x00; entry->x0 != 0x0D; entry++) {
+    for (entry = scene_matchups->x00; entry->x0 != 0x0D; entry++) {
         entry->xC = NULL;
     }
 
-    gmClassic_InitMatchupOrder(scene_data->matchups.x2B0,
+    gmClassic_InitMatchupOrder(scene_matchups->x2B0,
                                gmClassic_80490880.x80);
-    gmClassic_InitMatchupOrder(scene_data->matchups.x26C,
+    gmClassic_InitMatchupOrder(scene_matchups->x26C,
                                gmClassic_80490880.x74);
-    gmClassic_InitMatchupOrder(scene_data->matchups.x1B8,
+    gmClassic_InitMatchupOrder(scene_matchups->x1B8,
                                gmClassic_80490880.x54);
-    gmClassic_InitMatchupOrder(scene_data->matchups.x0CC,
+    gmClassic_InitMatchupOrder(scene_matchups->x0CC,
                                gmClassic_80490880.x2C);
 
     data = gm_GetAllStarData();
