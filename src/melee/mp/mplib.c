@@ -50,12 +50,27 @@
 #include <melee/gr/stage.h>
 #include <melee/lb/types.h>
 
+/* PC port: mpLib_804D64B4 is the collision world, and it is legitimately
+ * NULL before any is loaded -- so the bounds test in this macro dereferenced
+ * null while checking whether an id was in bounds. Testing the pointer first
+ * only changes when the *assert* fires; it introduces no control flow of its
+ * own, which matters because this macro appears in about fifty places. */
+#if BUILD_TARGET_PC
+#define LINEID_CHECK(line, line_id)                                           \
+    do {                                                                      \
+        if ((line_id) == -1 || mpLib_804D64B4 == NULL ||                      \
+            (line_id) >= mpLib_804D64B4->line_count)                          \
+            HSD_ASSERTREPORT(line, 0, "%s:%d:not found lineID=%d\n",          \
+                             __FILE__, line, line_id);                        \
+    } while (0)
+#else
 #define LINEID_CHECK(line, line_id)                                           \
     do {                                                                      \
         if ((line_id) == -1 || (line_id) >= mpLib_804D64B4->line_count)       \
             HSD_ASSERTREPORT(line, 0, "%s:%d:not found lineID=%d\n",          \
                              __FILE__, line, line_id);                                   \
     } while (0)
+#endif
 
 struct mpLib_803BF248_t_x4 {
     float x0;
@@ -5175,9 +5190,28 @@ void mpLineSetPos(int line_id, float x0, float y0, float x1, float y1)
 
 void mpLib_80056758(int line_id, float x0, float y0, float x1, float y1)
 {
-    CollLine* line = &groundCollLine[line_id];
+    CollLine* line;
+    CollVtx* vtx;
 
-    CollVtx* vtx = &groundCollVtx[line->x0->v0_idx];
+#if BUILD_TARGET_PC
+    /* PC port: a CollLine's x0 is NULL under the empty collision world that
+     * mpLib_PCInstallEmptyCollision installs, and this walks it without
+     * checking -- Kongo Jungle nudges fifteen collision lines every frame and
+     * died on the first. Moving vertices that do not exist is a no-op, which
+     * is the right answer here: the function returns nothing and the caller
+     * loops on regardless. */
+    if (groundCollLine == NULL || groundCollVtx == NULL) {
+        return;
+    }
+    line = &groundCollLine[line_id];
+    if (line->x0 == NULL) {
+        return;
+    }
+#else
+    line = &groundCollLine[line_id];
+#endif
+
+    vtx = &groundCollVtx[line->x0->v0_idx];
     vtx->pos.x = vtx->x0 + x0;
     vtx->pos.y = vtx->x4 + y0;
 
@@ -5291,6 +5325,26 @@ int mpJointFromLine(int line_id)
         CollJoint* joint;
         int count;
         LINEID_CHECK(5459, line_id);
+#if BUILD_TARGET_PC
+        /* No collision world means no joints, so nothing owns this line. */
+        if (mpLib_804D64B4 == NULL || groundCollLine == NULL) {
+            return -1;
+        }
+#endif
+#if BUILD_TARGET_PC
+        /* PC port: a CollLine's x0 is legitimately NULL here -- that is
+         * exactly the world mpLib_PCInstallEmptyCollision installs when
+         * stage collision has not been loaded. LINEID_CHECK only bounds the
+         * id, and HSD_ASSERTREPORT returns rather than aborting, so Pokemon
+         * Stadium fell through into `x0->v0_idx` and faulted at 0x18.
+         *
+         * -1 is already this function's "no joint owns that line" answer and
+         * every caller handles it -- mpLib_800575B0, the one that crashed,
+         * tests for it on the very next line. */
+        if (groundCollLine[line_id].x0 == NULL) {
+            return -1;
+        }
+#endif
         v0_idx = groundCollLine[line_id].x0->v0_idx;
         count = mpLib_804D64B4->joint_count;
         joint = groundCollJoint;
