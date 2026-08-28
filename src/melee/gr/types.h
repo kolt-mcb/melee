@@ -144,6 +144,34 @@ typedef struct StageCallbacks {
     /*  +C */ void (*callback3)(Ground_GObj*);
     /* +10 */ union {
         /* +10 */ u32 flags;
+#if BUILD_TARGET_PC
+        /* PC port: PowerPC allocates bit-fields from the MSB of their storage
+         * unit, so on GameCube flags_b0 is bit 31 of this union's u32 -- which
+         * is why every stage table in gr/ writes `(1 << 30) | (1 << 31)` to
+         * mean "b0 and b1". x86_64 allocates from the LSB, so the original
+         * declaration put flags_b0 on bit 0 and all three readers
+         * (Ground_801C466C_inline's light-list lookup, and the flags_b1/b2
+         * tests in ground.c) saw zero on every stage.
+         *
+         * The visible cost was not a crash: the light-list lookup silently
+         * fell back to the generic default list, so every surface -- fighters
+         * included -- was lit by defaults instead of the stage's own ambient.
+         * Against Dolphin that reads as flat, over-saturated characters.
+         *
+         * Declared here in reverse with 24 bits of padding so that b0 lands on
+         * bit 31, b1 on 30, and so on, matching the GameCube layout exactly. */
+        struct {
+            u32 /* pad */ : 24;
+            /* +10:7 */ u32 flags_b7 : 1;
+            /* +10:6 */ u32 flags_b6 : 1;
+            /* +10:5 */ u32 flags_b5 : 1;
+            /* +10:4 */ u32 flags_b4 : 1;
+            /* +10:3 */ u32 flags_b3 : 1;
+            /* +10:2 */ u32 flags_b2 : 1;
+            /* +10:1 */ u32 flags_b1 : 1;
+            /* +10:0 */ u32 flags_b0 : 1;
+        };
+#else
         struct {
             /* +10:0 */ u8 flags_b0 : 1;
             /* +10:1 */ u8 flags_b1 : 1;
@@ -154,6 +182,7 @@ typedef struct StageCallbacks {
             /* +10:6 */ u8 flags_b6 : 1;
             /* +10:7 */ u8 flags_b7 : 1;
         };
+#endif
     };
 } StageCallbacks;
 

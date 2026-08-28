@@ -270,6 +270,18 @@ static HSD_LightDesc* conv_light(u32 off, u8* dataBase, int depth)
     }
 
     out->next = conv_light(be32(r + 0x04), dataBase, depth + 1);
+    if (getenv("MELEE_LOBJLOG") != NULL) {
+        Vec3 p = { 0, 0, 0 }, it = { 0, 0, 0 };
+        if (out->position != NULL) p = out->position->pos;
+        if (out->interest != NULL) it = out->interest->pos;
+        fprintf(stderr,
+                "[LIGHTCONV] type=%u attn=0x%x colour=(%u,%u,%u,%u) "
+                "pos=(%.1f,%.1f,%.1f) interest=(%.1f,%.1f,%.1f)\n",
+                (unsigned) (out->flags & LOBJ_TYPE_MASK),
+                (unsigned) out->attnflags, out->color.r, out->color.g,
+                out->color.b, out->color.a, (double) p.x, (double) p.y,
+                (double) p.z, (double) it.x, (double) it.y, (double) it.z);
+    }
     return out;
 }
 
@@ -355,6 +367,52 @@ static DynamicModelDesc* conv_model(u32 off, u8* dataBase)
         pc_model_cache[pc_model_cache_n].conv = out;
         pc_model_cache_n++;
     }
+    return out;
+}
+
+/* A NULL-terminated array of LightList offsets, each entry
+ * { HSD_LightDesc* desc; HSD_LightAnim** anims; }. Both the array and the
+ * LightList itself have to be rebuilt rather than rebased: the entries are
+ * 4-byte GameCube offsets where x86_64 wants 8-byte pointers, and LightList
+ * grows from 8 bytes to 16.
+ *
+ * Scenes reach this through their SceneDesc, but stages need it too --
+ * UnkStageDat_x8_t::x18 is the stage's own light list, and until it was
+ * converted Ground_801C466C_inline could only return NULL, so every stage
+ * fell back to the generic default light list in Ground_803E06C8. */
+LightList** pc_conv_LightListArray(const void* arrBase, u8* dataBase)
+{
+    const u8* arr = arrBase;
+    LightList** out;
+    int n, i;
+
+    if (arr == NULL) {
+        return NULL;
+    }
+    n = count_offsets(arr, PC_SCENE_MAX_LIGHTS);
+    if (n <= 0) {
+        return NULL;
+    }
+    out = scene_alloc(sizeof(LightList*) * (unsigned long) (n + 1));
+    if (out == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < n; i++) {
+        const u8* e = off_to_ptr(be32(arr + (size_t) i * 4), dataBase);
+        LightList* ll;
+        out[i] = NULL;
+        if (e == NULL) {
+            continue;
+        }
+        ll = scene_alloc(sizeof(LightList));
+        if (ll == NULL) {
+            continue;
+        }
+        ll->desc = conv_light(be32(e + 0x00), dataBase, 0);
+        ll->anims = NULL;
+        out[i] = ll;
+    }
+    out[n] = NULL;
     return out;
 }
 
@@ -478,34 +536,9 @@ SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
         }
     }
 
-    /* +0x08 lights: NULL-terminated array of LightList offsets, each
-     * { HSD_LightDesc* desc; HSD_LightAnim** anims; }. */
-    {
-        const u8* arr = off_to_ptr(be32(r + 0x08), dataBase);
-        n = count_offsets(arr, PC_SCENE_MAX_LIGHTS);
-        if (n > 0) {
-            out->lights =
-                scene_alloc(sizeof(LightList*) * (unsigned long) (n + 1));
-            if (out->lights != NULL) {
-                for (i = 0; i < n; i++) {
-                    const u8* e =
-                        off_to_ptr(be32(arr + (size_t) i * 4), dataBase);
-                    LightList* ll;
-                    if (e == NULL) {
-                        continue;
-                    }
-                    ll = scene_alloc(sizeof(LightList));
-                    if (ll == NULL) {
-                        continue;
-                    }
-                    ll->desc = conv_light(be32(e + 0x00), dataBase, 0);
-                    ll->anims = NULL;
-                    out->lights[i] = ll;
-                }
-                out->lights[n] = NULL;
-            }
-        }
-    }
+    /* +0x08 lights. */
+    out->lights = pc_conv_LightListArray(off_to_ptr(be32(r + 0x08), dataBase),
+                                         dataBase);
 
     /* +0x0C fogs is left NULL. Nothing that loads a scene here reads it, and
      * an unconverted HSD_FogDesc would be worse than an absent one. */

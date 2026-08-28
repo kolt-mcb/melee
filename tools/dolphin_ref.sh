@@ -155,7 +155,20 @@ if [ -n "${MELEE_REF_INPUT:-}" ] && [ -p "$PIPE" ]; then
                 x="${rest#MAIN:}"; y="${x#*:}"; x="${x%%:*}"
                 printf 'SET MAIN %s %s\n' "$x" "$y" >&"$fd"
                 ;;
+              +*)
+                # Frame-accurate press: hold until an explicit -<BUTTON>.
+                printf 'PRESS %s\n' "${rest#+}" >&"$fd"
+                ;;
+              -*)
+                printf 'RELEASE %s\n' "${rest#-}" >&"$fd"
+                ;;
               *)
+                # Wall-clock hold. Only safe when nothing else is competing
+                # for the GPU: the hold is 0.25 real seconds but the gating is
+                # in emulated frames, so anything that slows emulation makes
+                # the press last many more emulated frames and register as a
+                # repeat. That is how a stage-select navigation once walked
+                # itself into Options -> Erase Data. Prefer +A / -A.
                 printf 'PRESS %s\n' "$rest" >&"$fd"
                 sleep 0.25
                 printf 'RELEASE %s\n' "$rest" >&"$fd"
@@ -168,6 +181,20 @@ if [ -n "${MELEE_REF_INPUT:-}" ] && [ -p "$PIPE" ]; then
     echo "dolphin_ref: input script $MELEE_REF_INPUT"
 fi
 
+# Stop as soon as the requested range has been dumped. TIMEOUT below is sized
+# for the worst case (FRAMES/4 + 180s), so without this every run costs the
+# full budget even when the last frame of interest arrived minutes earlier --
+# which, at ~5.6 emulated fps, is several minutes per iteration.
+(
+    want=$(( KEEP_TO + 5 ))
+    while [ "$(ls "$DUMPDIR" 2>/dev/null | wc -l)" -lt "$want" ]; do
+        sleep 1
+        pgrep -x dolphin-emu-nog > /dev/null || exit 0
+    done
+    for p in $(pgrep -x dolphin-emu-nog); do kill -9 "$p"; done
+) &
+STOPPER=$!
+
 timeout -s KILL "$TIMEOUT" "$DOLPHIN" -p headless -e "$ISO" \
   -C Dolphin.FifoPlayer.RecordFrames="$FRAMES" \
   -C Dolphin.FifoPlayer.RecordOutput="$OUTDIR/ref.dff" \
@@ -175,6 +202,7 @@ timeout -s KILL "$TIMEOUT" "$DOLPHIN" -p headless -e "$ISO" \
   -C Graphics.Settings.DumpFramesAsImages=True \
   > "$OUTDIR/dolphin.log" 2>&1
 rc=$?
+[ -n "${STOPPER:-}" ] && kill "$STOPPER" 2>/dev/null
 [ -n "${MASHER:-}" ] && kill "$MASHER" 2>/dev/null
 [ -n "${INPUTTER:-}" ] && kill "$INPUTTER" 2>/dev/null
 for p in $(pgrep -x dolphin-emu-nog); do kill -9 "$p"; done

@@ -3581,7 +3581,11 @@ void GXSetCopyClear(void* color, u32 z)
         g_state.copy_clear_b = (f32)c->b / 255.0f;
         g_state.copy_clear_a = (f32)c->a / 255.0f;
     }
-    g_state.copy_clear_z = (f32)z / 65535.0f;
+    /* GXSetCopyClear takes a 24-bit depth (GX_MAX_Z24 = 0x00FFFFFF), not a
+     * 16-bit one. Dividing by 65535 gave 256.0 for the value the game
+     * actually passes, which glClearDepth clamps to 1.0 -- right answer,
+     * wrong arithmetic, and wrong for any partial clear depth. */
+    g_state.copy_clear_z = (f32) z / (f32) 0x00FFFFFF;
 }
 
 void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
@@ -4254,6 +4258,26 @@ void GXSetBlendMode(u32 mode, u32 src, u32 dst, u32 logic_op)
 void GXSetZMode(u32 enable, u32 func, u32 update)
 {
     GX_TRACE("GXSetZMode(%u, %u, %u)", enable, func, update);
+#if BUILD_TARGET_PC
+    /* MELEE_ZTRACE=1 tallies the depth modes actually used in a frame. A
+     * background layer painting over the foreground looks the same whether
+     * the compare is inverted or simply disabled, and the tally tells them
+     * apart without guessing. */
+    { static int _z_on = -1; static unsigned tally[3][8][2];
+      if (_z_on < 0) _z_on = (getenv("MELEE_ZTRACE") != NULL);
+      if (_z_on) {
+        static unsigned n = 0;
+        tally[enable ? 1 : 0][func & 7][update ? 1 : 0]++;
+        if (++n % 2000 == 0) {
+            int e, f, u;
+            fprintf(stderr, "[ZTALLY]");
+            for (e = 0; e < 2; e++) for (f = 0; f < 8; f++) for (u = 0; u < 2; u++)
+                if (tally[e][f][u])
+                    fprintf(stderr, " en%d/fn%d/wr%d=%u", e, f, u, tally[e][f][u]);
+            fprintf(stderr, "\n");
+        }
+      } }
+#endif
     g_state.z_enabled = enable;
     g_state.z_func = func;
     g_state.z_update = update;
@@ -5128,6 +5152,15 @@ static void apply_alpha_compare_uniforms(void)
         int lit = g_state.chan_lit[0] ? 1 : 0;
         static int no_light = -1;
         if (no_light < 0) no_light = (getenv("MELEE_NOLIGHT") != NULL);
+        /* MELEE_LITTALLY counts draws by whether channel 0 was lit. Sampling
+         * the first N GXSetChanCtrl calls says nothing here: tev.c only calls
+         * it when the channel state *changes*, so the early calls are whatever
+         * transitions happened first, not what the bulk of draws use. */
+        { static int _lt_on = -1; static unsigned long _lt[2]; static unsigned long _n2;
+          if (_lt_on < 0) _lt_on = (getenv("MELEE_LITTALLY") != NULL);
+          if (_lt_on) { _lt[lit]++;
+            if (++_n2 % 5000 == 0)
+                fprintf(stderr, "[LITTALLY] draws unlit=%lu lit=%lu\n", _lt[0], _lt[1]); } }
         glUniform1i(g_lighting_enabled_loc, no_light ? 0 : lit);
     }
 }

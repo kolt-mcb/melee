@@ -1445,15 +1445,22 @@ LightList** Ground_801C20E0(UnkArchiveStruct* archive, LightList** lightset)
     bool b6, b7, b5;
     bool matched;
 
-    HSD_ASSERT(1907, lightset);
-    HSD_ASSERT(1908, *lightset);
-
 #if BUILD_TARGET_PC
-    /* PC port: lightset entries can be unconverted BE pointers. */
+    /* PC port: lightset entries can be unconverted BE pointers, and the list
+     * pointer itself is NULL whenever the stage's archive slot has no light
+     * data. This guard has to come BEFORE the asserts: HSD_ASSERT compiles to
+     * __assert, whose PC stub *returns* rather than aborting, so execution
+     * falls straight through the failed assert into `*lightset` and faults on
+     * NULL -- GCC even constant-folds it to a load from absolute address 0.
+     * The guard was already here; it was simply sitting below the thing that
+     * crashed first. */
     if (!pc_ptr_sane(lightset)) {
         return lightset;
     }
 #endif
+    HSD_ASSERT(1907, lightset);
+    HSD_ASSERT(1908, *lightset);
+
     walker = lightset;
     matched = 0;
     while (*walker != NULL) {
@@ -3045,7 +3052,21 @@ void Ground_801C466C(void)
 
     if ((var_r28_2 = Ground_801C466C_inline()) == NULL) {
         var_r28_2 = Ground_803E06C8;
+#if BUILD_TARGET_PC
+        /* PC port: falling back here means the stage's own light list was not
+         * found, so every surface is lit by the generic default instead of the
+         * stage's ambient. That does not crash and does not look obviously
+         * broken -- it just makes everything flat and over-bright, which is
+         * exactly the difference measured against Dolphin on Onett. Say so. */
+        port_guard_warn("ground.c:Ground_801C466C default light list");
+#endif
     }
+#if BUILD_TARGET_PC
+    else if (getenv("MELEE_LOBJLOG") != NULL) {
+        fprintf(stderr, "[LIGHTS] using stage light list %p\n",
+                (void*) var_r28_2);
+    }
+#endif
     temp_r3 = GObj_Create(0xD, 3, 0);
     if (temp_r3 == NULL) {
         OSReport("%s:%d: couldn t get gobj\n", __FILE__, 0xEAF);
