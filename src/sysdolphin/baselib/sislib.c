@@ -1834,7 +1834,16 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
     } else {
         text = (HSD_Text*) pass;
     }
+    /* PC port: sis_buffer is null-checked but not sanity-checked, and an
+     * unconverted archive offset reaches here as a non-null pointer into
+     * nothing. The opcode loop below then walks it a byte at a time --
+     * Pokemon Stadium died on the first read, with SIGBUS rather than the
+     * usual SIGSEGV. Probe it once here rather than per character. */
+#if BUILD_TARGET_PC
+    if (text->hidden == 0 && pc_mem_readable(text->sis_buffer, 1)) {
+#else
     if (text->hidden == 0 && text->sis_buffer != NULL) {
+#endif
         u8 *sis_cursor = (u8 *)text->sis_buffer;
         if (gobj != NULL) {
             SIS *sis = HSD_SisLib_804D1124[text->font_idx];

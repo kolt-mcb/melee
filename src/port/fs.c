@@ -10,7 +10,17 @@
 typedef struct {
     FILE* fp;
     int size;
+    /* Set on open, cleared on close. The DVD bridge above this layer
+     * hands the same handle around by index and has closed a file while
+     * another table entry still pointed at it; without a marker the
+     * stale pointer reaches fread/ftell and dies inside libc, where a
+     * backtrace shows only '??'. Cheap to check, and it turns a
+     * use-after-free into a clean -1. */
+    unsigned magic;
 } VfFile;
+
+#define VF_MAGIC 0x56664631u /* 'VfF1' */
+#define VF_VALID(h) ((h) != NULL && ((VfFile*) (h))->magic == VF_MAGIC)
 
 /* Internal directory representation */
 typedef struct {
@@ -73,6 +83,7 @@ VfHandle vf_open(const char* path, const char* mode)
     VfFile* file = malloc(sizeof(VfFile));
     file->fp = fp;
     file->size = -1; /* Unknown until seek'd */
+    file->magic = VF_MAGIC;
 
     return (VfHandle)file;
 }
@@ -109,7 +120,7 @@ static void vf_check_dest(const void* buffer, int size)
 
 int vf_read(VfHandle handle, void* buffer, int size)
 {
-    if (!handle) return 0;
+    if (!VF_VALID(handle)) return 0;
     VfFile* file = (VfFile*)handle;
     vf_check_dest(buffer, size);
     return fread(buffer, 1, size, file->fp);
@@ -117,36 +128,37 @@ int vf_read(VfHandle handle, void* buffer, int size)
 
 int vf_seek(VfHandle handle, int offset, int whence)
 {
-    if (!handle) return -1;
+    if (!VF_VALID(handle)) return -1;
     VfFile* file = (VfFile*)handle;
     return fseek(file->fp, offset, whence);
 }
 
 int vf_tell(VfHandle handle)
 {
-    if (!handle) return -1;
+    if (!VF_VALID(handle)) return -1;
     VfFile* file = (VfFile*)handle;
     return ftell(file->fp);
 }
 
 Bool vf_eof(VfHandle handle)
 {
-    if (!handle) return TRUE;
+    if (!VF_VALID(handle)) return TRUE;
     VfFile* file = (VfFile*)handle;
     return feof(file->fp) ? TRUE : FALSE;
 }
 
 void vf_close(VfHandle handle)
 {
-    if (!handle) return;
+    if (!VF_VALID(handle)) return;
     VfFile* file = (VfFile*)handle;
+    file->magic = 0;
     fclose(file->fp);
     free(file);
 }
 
 int vf_size(VfHandle handle)
 {
-    if (!handle) return -1;
+    if (!VF_VALID(handle)) return -1;
     VfFile* file = (VfFile*)handle;
 
     if (file->size >= 0) return file->size;

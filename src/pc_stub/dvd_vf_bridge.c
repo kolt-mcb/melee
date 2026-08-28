@@ -164,14 +164,26 @@ BOOL DVDOpen(char* filename, DVDFileInfo* fileInfo)
 BOOL DVDClose(DVDFileInfo* fileInfo)
 {
     if (!fileInfo) return FALSE;
-    /* Find which file corresponds to this fileInfo struct
-     * by checking startAddr values */
-    for (int i = 0; i < MAX_DVD_FILES; i++) {
-        if (g_dvd_files[i].open && g_dvd_files[i].handle &&
-            (u32)vf_tell(g_dvd_files[i].handle) == fileInfo->startAddr) {
-            vf_close(g_dvd_files[i].handle);
-            g_dvd_files[i].handle = NULL;
-            return TRUE;
+    /* Resolve the file the same way DVDReadPrio and DVDReadAsyncPrio do:
+     * DVDFastOpen stashes the entry index in fileInfo->callback.
+     *
+     * This used to scan for a file whose vf_tell() equalled
+     * fileInfo->startAddr. A read offset has nothing to do with a start
+     * address, and DVDFastOpen sets startAddr to 0 unconditionally -- so the
+     * scan closed whichever file happened to be sitting at offset 0, freed
+     * its VfFile, and left the file the caller actually meant still marked
+     * open with a dangling handle. The next vf_tell over the table then
+     * called ftell() on freed memory and died inside libc, which is how
+     * Pokemon Stadium ended its run. */
+    {
+        s32 entry = (s32) (uintptr_t) fileInfo->callback;
+        if (entry >= 0 && entry < MAX_DVD_FILES) {
+            DVDFile* file = &g_dvd_files[entry];
+            if (file->open && file->handle) {
+                vf_close(file->handle);
+                file->handle = NULL;
+                return TRUE;
+            }
         }
     }
     return FALSE;
