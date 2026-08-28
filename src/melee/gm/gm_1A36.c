@@ -1,5 +1,8 @@
 #include "gm_1A36.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "gm/gm_1A36.static.h"
 
 #include <baselib/controller.h>
@@ -12,6 +15,7 @@
 
 /* PC port: bridge from g_gc_pads to controller_map. */
 void gm_SyncPadToControllerMap(void);
+
 #endif /* BUILD_TARGET_PC */
 
 u64 gm_GetButtonsPressed(u8 idx)
@@ -180,20 +184,22 @@ void gm_801A3EF4(void)
 /* PC port: bridge from g_gc_pads to controller_map. */
 void gm_SyncPadToControllerMap(void)
 {
-    extern GCPadStatus g_gc_pads[4];
-    for (int i = 0; i < 4; i++) {
-        controller_map.x0[i].button = g_gc_pads[i].button;
-        controller_map.x0[i].trigger = g_gc_pads[i].trigger;
-        controller_map.x0[i].release = g_gc_pads[i].release;
-    }
-    /* Index 4 = PAD_ALL_CONTROLLERS = union of all pads */
-    controller_map.x0[4].button = 0;
-    controller_map.x0[4].trigger = 0;
-    controller_map.x0[4].release = 0;
-    for (int i = 0; i < 4; i++) {
-        controller_map.x0[4].button |= g_gc_pads[i].button;
-        controller_map.x0[4].trigger |= g_gc_pads[i].trigger;
-        controller_map.x0[4].release |= g_gc_pads[i].release;
+    /* This used to copy button/trigger/release straight from g_gc_pads into
+     * controller_map and stop there. That skipped everything the menus
+     * actually read: repeat2 (gm_801A36C0), and the derived PAD_CONFIRM /
+     * PAD_CANCEL / PAD_ANY_* bits. mn_80229624 asks for exactly those, so
+     * no menu cursor could ever move.
+     *
+     * gm_801A4510's frame loop already calls gm_EvaluateAllControllerInputs
+     * at the right point, and that derives all of it from HSD_PadCopyStatus
+     * -- which the port now fills, synthetic PAD_STICK_* bits included (see
+     * pc_pad_publish). Evaluating a second time here only made the repeat
+     * timer count down twice per frame, so a held stick scrolled a menu at
+     * double speed. All this needs to do is guarantee the repeat state is
+     * initialised: gm_801A3E88 installs the per-controller xF0 callback the
+     * evaluator invokes. */
+    if (controller_map.xF0 == NULL) {
+        gm_801A3E88();
     }
 }
 #endif /* BUILD_TARGET_PC */

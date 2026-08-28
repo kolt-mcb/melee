@@ -636,6 +636,17 @@ u32 mn_80229624(u32 slot)
     u64 inputs_trigger;
     inputs_repeated = gm_801A36C0(slot);
     inputs_trigger = gm_GetButtonsTriggered(slot);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MENULOG") != NULL) {
+        fprintf(stderr,
+                "[MENU] slot=%u rep=%llx trig=%llx cooldown=%u sel=%u\n",
+                (unsigned) slot, (unsigned long long) inputs_repeated,
+                (unsigned long long) inputs_trigger,
+                (unsigned) mn_804D6BC8.cooldown,
+                (unsigned) mn_804A04F0.hovered_selection);
+        fflush(stderr);
+    }
+#endif
     if (mn_804D6BC8.cooldown != 0) {
         Menu_DecrementAnimTimer();
         return 0;
