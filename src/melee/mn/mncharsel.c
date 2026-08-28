@@ -1,5 +1,14 @@
 #include "mncharsel.h"
 
+#if BUILD_TARGET_PC
+#include "gr/grdatfiles.h"
+#include "port/pc_ptr.h"
+#endif
+
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#endif
+
 #include "inlines.h"
 
 #include "mncharsel.static.h"
@@ -63,6 +72,24 @@ TextKerning* mnCharSel_8025BC20(TextKerning* arg0, u32 arg1)
     u32 render_zeroes;
     render_zeroes = 0;
     kerning = HSD_SisLib_804D1124[0][41].kerning;
+#if BUILD_TARGET_PC
+    /* PC port: this SIS font entry carries no kerning table here, so every
+     * digit lookup below read through null. Emit an empty run -- the caller
+     * treats a zero `left` as the terminator -- rather than a number. */
+    /* arg0 is itself a SIS kerning pointer at the call sites (font entries 37
+     * and 41), from the same unconverted table -- non-null and unmapped. Up
+     * to five entries plus a terminator are written. */
+    if (!pc_mem_readable(arg0, sizeof(TextKerning) * 6)) {
+        return arg0;
+    }
+    /* Not just null: this table is reached through SIS font data that is not
+     * converted for this target, so it arrives as a non-null pointer into
+     * nothing. Ten entries are indexed below (digits 0-9). */
+    if (!pc_mem_readable(kerning, sizeof(TextKerning) * 10)) {
+        arg0->left = 0;
+        return arg0;
+    }
+#endif
     if (arg1 >= 10000) {
         arg1 = 9999;
     }
@@ -514,6 +541,14 @@ void mnCharSel_8025D1C4(int arg0, int arg1)
         joint = stars->joint;
         lb_80011E24(mnCharSel_804D6CC0, &sp10, joint, -1);
 
+#if BUILD_TARGET_PC
+        /* PC port: the KO-star text objects are only created once the screen's
+         * SIS text setup has run, and that is skipped when its data does not
+         * convert. Without one there is no counter to show or hide. */
+        if (!pc_ptr_sane(temp_r30)) {
+            return;
+        }
+#endif
         if (arg1 == 0 || temp_r29 == 0) {
             temp_r30->hidden = 1;
             HSD_JObjSetFlagsAll(sp10, JOBJ_HIDDEN);
@@ -3882,7 +3917,101 @@ static GXColor mnCharSel_804DC590 = { 180, 80, 0, 255 };
 static GXColor mnCharSel_804DC594 = { 220, 0, 0, 255 };
 
 #define MODELS ((CSSSceneModels*) mnCharSel_804D6CB4)
+
+#if BUILD_TARGET_PC
+/* CSSSceneModels is four pointers, and mnCharSel_804D6CB4 points straight at
+ * the archive's "MnSelectChrDataTable". On GameCube those are four 4-byte
+ * slots at 0/4/8/0xC; here the struct is 32 bytes with fields at 0/8/0x10/
+ * 0x18, so reading it in place splices the camera and first light offsets
+ * into one 64-bit number and puts everything after them in the wrong place.
+ * HSD_CObjLoadDesc then dereferenced that and took the character select down
+ * on entry.
+ *
+ * The base pointer has to stay raw regardless -- mnCharSel_804D6CD8 is
+ * derived from it as `+ 0x10`, which is the GameCube size of this table --
+ * so read each slot at its GameCube offset and convert it there. */
+static u32 pc_css_be32(const void* p)
+{
+    const u8* b = (const u8*) p;
+    return ((u32) b[0] << 24) | ((u32) b[1] << 16) | ((u32) b[2] << 8) |
+           (u32) b[3];
+}
+
+#define CSS_SLOT(i) ((const void*) ((const u8*) mnCharSel_804D6CB4 + (i) * 4))
+#define CSS_CAM()    pc_conv_CObjDescAt(CSS_SLOT(0), css_scene_database())
+#define CSS_LIGHT0() pc_conv_LightDescAt(CSS_SLOT(1), css_scene_database())
+#define CSS_LIGHT1() pc_conv_LightDescAt(CSS_SLOT(2), css_scene_database())
+/* Fog is left out: pc_scene.c does not convert HSD_FogDesc, and
+ * HSD_FogLoadDesc already treats NULL as "no fog". */
+#define CSS_FOG()    NULL
+
+static u8* css_scene_database(void)
+{
+    return mnCharSel_804D6CD0 != NULL ? mnCharSel_804D6CD0->data : NULL;
+}
+#else
+#define CSS_CAM()    (MODELS->cam)
+#define CSS_LIGHT0() (MODELS->light0)
+#define CSS_LIGHT1() (MODELS->light1)
+#define CSS_FOG()    (MODELS->fog)
+#endif
+#if BUILD_TARGET_PC
+/* Same shape of problem as CSSSceneModels above, one level worse because it
+ * is an array. CSSAnimSet is four pointers: 0x10 bytes per entry in the
+ * archive, 0x20 here, so indexing the raw table walks at the wrong stride
+ * *and* reads each field at the wrong offset. Convert the nine entries the
+ * character select uses into a real array once, and point ANIM at that. */
+#define CSS_ANIM_SETS 9
+static CSSAnimSet mnCharSel_pc_anim[CSS_ANIM_SETS];
+static int mnCharSel_pc_anim_ready;
+
+static void css_convert_anim_sets(void)
+{
+    const u8* raw = mnCharSel_804D6CD8;
+    u8* base = css_scene_database();
+    int i;
+
+    mnCharSel_pc_anim_ready = 1;
+    memset(mnCharSel_pc_anim, 0, sizeof(mnCharSel_pc_anim));
+    if (raw == NULL || base == NULL) {
+        return;
+    }
+    for (i = 0; i < CSS_ANIM_SETS; i++) {
+        const u8* e = raw + (size_t) i * 0x10;
+        u32 off;
+        if (!pc_mem_readable(e, 0x10)) {
+            break;
+        }
+        off = pc_css_be32(e + 0x00);
+        if (off != 0) {
+            mnCharSel_pc_anim[i].joint =
+                grDatFiles_ConvertJointTreeGCNtoX64(base + off, base, 0, NULL);
+        }
+        off = pc_css_be32(e + 0x04);
+        if (off != 0) {
+            mnCharSel_pc_anim[i].anim =
+                grDatFiles_ConvertAnimJointTreeGCNtoX64(base + off, base, 0);
+        }
+        off = pc_css_be32(e + 0x08);
+        if (off != 0) {
+            mnCharSel_pc_anim[i].matanim =
+                grDatFiles_ConvertMatAnimJointTreeGCNtoX64(base + off, base, 0);
+        }
+        off = pc_css_be32(e + 0x0C);
+        if (off != 0) {
+            mnCharSel_pc_anim[i].shapeanim =
+                grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(base + off, base,
+                                                            0);
+        }
+    }
+}
+
+#define ANIM (mnCharSel_pc_anim_ready ? mnCharSel_pc_anim \
+                                      : (css_convert_anim_sets(), \
+                                         mnCharSel_pc_anim))
+#else
 #define ANIM ((CSSAnimSet*) mnCharSel_804D6CD8)
+#endif
 
 s32 mnCharSel_802640A0(void)
 {
@@ -3972,7 +4101,7 @@ s32 mnCharSel_802640A0(void)
     gobj = mnCharSel_804D6CB8 = GObj_Create(2, 3, 0x80);
     {
         HSD_CObj* cobj;
-        cobj = HSD_CObjLoadDesc(MenMain_cam = MODELS->cam);
+        cobj = HSD_CObjLoadDesc(MenMain_cam = CSS_CAM());
         HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
     }
     GObj_SetupGXLinkMax(gobj, HSD_GObj_803910D8, 0);
@@ -3982,8 +4111,8 @@ s32 mnCharSel_802640A0(void)
 
     gobj = GObj_Create(3, 4, 0x80);
     {
-        HSD_LObj* lobj0 = HSD_LObjLoadDesc(MODELS->light0);
-        HSD_LObj* lobj1 = HSD_LObjLoadDesc(MODELS->light1);
+        HSD_LObj* lobj0 = HSD_LObjLoadDesc(CSS_LIGHT0());
+        HSD_LObj* lobj1 = HSD_LObjLoadDesc(CSS_LIGHT1());
         HSD_LObjSetNext(lobj0, lobj1);
         HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784A, lobj0);
     }
@@ -3991,7 +4120,7 @@ s32 mnCharSel_802640A0(void)
 
     gobj = GObj_Create(0xE, 2, 0);
     {
-        HSD_Fog* fog = HSD_FogLoadDesc(MODELS->fog);
+        HSD_Fog* fog = HSD_FogLoadDesc(CSS_FOG());
         HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7848, fog);
     }
     GObj_SetupGXLink(gobj, (GObj_RenderFunc) (Event) fn_8026407C, 0, 0x80);
@@ -4974,6 +5103,9 @@ void mnCharSel_8026688C_OnEnter(void* arg0)
     mnCharSel_804D6CB4 = HSD_ArchiveGetPublicAddress(mnCharSel_804D6CD0,
                                                      "MnSelectChrDataTable");
     mnCharSel_804D6CD8 = (u8*) mnCharSel_804D6CB4 + 0x10;
+#if BUILD_TARGET_PC
+    mnCharSel_pc_anim_ready = 0;
+#endif
     if (lbLang_IsSavedLanguageJP() != 0) {
         HSD_SisLib_803A62A0(0, "SdSlChr.dat", "SIS_SelCharData");
     } else {
