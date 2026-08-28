@@ -3068,6 +3068,33 @@ void Ground_801C466C(void)
     }
 #endif
     temp_r3 = GObj_Create(0xD, 3, 0);
+#if BUILD_TARGET_PC
+    /* Both failure paths below spin forever on purpose -- that is the
+     * GameCube's fatal-error handler, and on a console "hang with a message on
+     * screen" is a reasonable end state. Here it is a process that pegs a core
+     * and does not even die on SIGTERM, so an unattended sweep wedges on it
+     * instead of reporting a failure. Bail out instead.
+     *
+     * The lobj case is reachable in normal play: Princess Peach's Castle
+     * builds no HSD_LObj from its own converted light list, so retry with the
+     * generic default list before giving up. Losing a stage's lighting is
+     * survivable; losing the process is not. */
+    if (temp_r3 == NULL) {
+        port_guard_warn("ground.c:Ground_801C466C no gobj");
+        return;
+    }
+    temp_r3_2 = lb_80011AC4(var_r28_2);
+    if (temp_r3_2 == NULL && var_r28_2 != Ground_803E06C8) {
+        port_guard_warn("ground.c:Ground_801C466C stage light list gave no "
+                        "lobj; falling back to the default list");
+        var_r28_2 = Ground_803E06C8;
+        temp_r3_2 = lb_80011AC4(var_r28_2);
+    }
+    if (temp_r3_2 == NULL) {
+        port_guard_warn("ground.c:Ground_801C466C no lobj; stage unlit");
+        return;
+    }
+#else
     if (temp_r3 == NULL) {
         OSReport("%s:%d: couldn t get gobj\n", __FILE__, 0xEAF);
         while (true) {
@@ -3079,6 +3106,7 @@ void Ground_801C466C(void)
         while (true) {
         }
     }
+#endif
     HSD_GObjObject_80390A70(temp_r3, HSD_GObj_804D784A, temp_r3_2);
     GObj_SetupGXLink(temp_r3, Ground_801C4640, 0, 0);
     var_r27 = temp_r3_2;
