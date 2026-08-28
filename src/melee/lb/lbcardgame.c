@@ -1,6 +1,10 @@
 #include "lbcardgame.h"
 #include <stdint.h>
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #include "lbcardgame.static.h"
 
 #include "gm/gm_unsplit.h"
@@ -95,6 +99,13 @@ int lb_8001C820(void)
     } else {
         var_r0 = 0;
     }
+#if BUILD_TARGET_PC
+    /* The memory-card icon archive never loads on this port, so x5C stays
+     * null and the save-banner path dereferenced it during scene teardown. */
+    if (!pc_ptr_sane(_p(x5C))) {
+        return 0;
+    }
+#endif
     return _p(x5C)[var_r0];
 }
 
@@ -192,12 +203,17 @@ void lb_8001CC84(void)
 {
     int temp_r24;
     int temp_r3;
-    static int count = 0;
-    count++;
-    if (count <= 3) {
-        fprintf(stderr, "[LBCARD] lb_8001CC84 call #%d: x10=%d xC=%d\n", count, _p(x10), _p(xC));
-        fflush(stderr);
+#if BUILD_TARGET_PC
+    /* No memory card and no icon archive on this port: every state in the
+     * machine below reads _p(x5C)[...] for the save banner. Retire the
+     * pending work so lb_8001CDB4's wait loop terminates instead of
+     * spinning on a request that can never complete. */
+    if (!pc_ptr_sane(_p(x5C))) {
+        _p(xC) = 0;
+        _p(x10) = 0;
+        return;
     }
+#endif
 
     do {
         switch (_p(x10)) {

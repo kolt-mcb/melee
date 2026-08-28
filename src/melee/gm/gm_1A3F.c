@@ -1,4 +1,9 @@
 #include <stdlib.h>
+#include <stdio.h>
+
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 #include "gm_1A3F.h"
 
 #include "gm_1A45.h"
@@ -113,16 +118,55 @@ void gm_801A4014(GameMode* mode)
     }
     info = &scene->info;
     handler = gm_FindGameSceneHandler(scene->info.class_id);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_SCENELOG") != NULL) {
+        fprintf(stderr, "[SCENE] mode=%u idx=%u scene=%p class_id=%u handler=%p\n",
+                (unsigned) gm_80479D30.routing.curr_mode,
+                (unsigned) gm_80479D30.routing.curr_scene_idx, (void*) scene,
+                (unsigned) scene->info.class_id, (void*) handler);
+        fflush(stderr);
+    }
+    /* PC port: an unknown class_id makes gm_FindGameSceneHandler return NULL,
+     * and every use below dereferences it unconditionally. Abandon the scene
+     * instead of faulting. */
+    if (!pc_ptr_sane(handler)) {
+        fprintf(stderr, "[SCENE] no handler for class_id=%u (mode=%u idx=%u)\n",
+                (unsigned) scene->info.class_id,
+                (unsigned) gm_80479D30.routing.curr_mode,
+                (unsigned) gm_80479D30.routing.curr_scene_idx);
+        fflush(stderr);
+        return;
+    }
+#endif
     gm_801A4BD4();
     gm_801A4B88(info);
     if (handler->OnLoad != NULL) {
         handler->OnLoad(info->load_data);
     }
     gm_801A4D34(handler->OnFrame, info);
+#if BUILD_TARGET_PC
+    /* PC port: the scene, handler and info locals do not reliably survive the
+     * frame loop -- the main menu returns from it with scene null and handler
+     * pointing at nothing, so the leave callback was fetched from garbage and
+     * called. Re-derive them and give up on the teardown if they are gone
+     * rather than jumping through a wild pointer. */
+    if (!pc_ptr_sane(scene) || !pc_ptr_sane(handler)) {
+        return;
+    }
+#endif
     if (!gmMainLib_8046B0F0.resetting && handler->OnLeave != NULL) {
         handler->OnLeave(info->leave_data);
     }
     if (!gmMainLib_8046B0F0.resetting) {
+#if BUILD_TARGET_PC
+        /* PC port: the scene pointer does not survive the frame loop on every
+         * path -- the main menu comes back from gm_801A4D34 with it null and
+         * then reads scene->Decide at offset 0x10. Nothing left to decide if
+         * there is no scene; the routing update below is what matters. */
+        if (!pc_ptr_sane(scene)) {
+            return;
+        }
+#endif
         if (scene->Decide != NULL) {
             scene->Decide(scene);
         }

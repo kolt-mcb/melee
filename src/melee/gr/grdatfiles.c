@@ -505,6 +505,21 @@ struct HSD_MatAnim_gcn {
     u32 renderanim;   /* 0x0C HSD_RenderAnim* */
 };
 
+/* GCN HSD_TexAnim (4-byte pointers, 20 bytes total)
+ * x86_64 layout: next(8) id(4) pad(4) aobjdesc(8) imagetbl(8) tluttbl(8)
+ * n_imagetbl(2) n_tluttbl(2) = 48 bytes. The two tables are arrays of
+ * 4-byte offsets on disc and must be rebuilt as arrays of host pointers --
+ * this is what selects which texture a material shows on a given frame. */
+struct HSD_TexAnim_gcn {
+    u32 next;         /* 0x00 HSD_TexAnim* */
+    u32 id;           /* 0x04 GXTexMapID */
+    u32 aobjdesc;     /* 0x08 HSD_AObjDesc* */
+    u32 imagetbl;     /* 0x0C HSD_ImageDesc** */
+    u32 tluttbl;      /* 0x10 HSD_TlutDesc** */
+    u16 n_imagetbl;   /* 0x14 */
+    u16 n_tluttbl;    /* 0x16 */
+};
+
 /* GCN HSD_ShapeAnimJoint (4-byte pointers, 12 bytes total)
  * x86_64 layout: child(8) next(8) shapeanimdobj(8) = 24 bytes */
 struct HSD_ShapeAnimJoint_gcn {
@@ -709,11 +724,77 @@ HSD_AnimJoint* grDatFiles_ConvertAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dat
     return x64;
 }
 
+/* Convert an HSD_TexAnim chain. Each one owns an imagetbl (and optionally a
+ * tluttbl) of 4-byte disc offsets; TObjUpdateFunc indexes those tables with
+ * the animated frame value to swap the material's texture. Without this the
+ * table stayed unconverted and every frame resolved to entry 0 -- which is
+ * why all five main-menu buttons read "1-P Mode". */
+static HSD_TexAnim* grDatFiles_ConvertTexAnimGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
+{
+    HSD_TexAnim* x64;
+    const struct HSD_TexAnim_gcn* gcn;
+    u32 val;
+    u32 i;
+
+    if (gcnPtr == NULL || depth > 10000) return NULL;
+
+    gcn = (const struct HSD_TexAnim_gcn*)gcnPtr;
+    x64 = lbHeap_80015BD0(0, sizeof(HSD_TexAnim));
+    if (x64 == NULL) return NULL;
+    memset(x64, 0, sizeof(HSD_TexAnim));
+
+    val = be32_swap(gcn->next);
+    x64->next = grDatFiles_ConvertTexAnimGCNtoX64(
+        val ? dataBase + val : NULL, dataBase, depth + 1);
+
+    x64->id = (GXTexMapID) be32_swap(gcn->id);
+    x64->n_imagetbl = be16_swap(gcn->n_imagetbl);
+    x64->n_tluttbl = be16_swap(gcn->n_tluttbl);
+
+    val = be32_swap(gcn->aobjdesc);
+    if (val != 0 && val < 0x80000000U) {
+        x64->aobjdesc = grDatFiles_ConvertAObjDescGCNtoX64(dataBase + val, dataBase);
+    }
+
+    val = be32_swap(gcn->imagetbl);
+    if (val != 0 && val < 0x80000000U && x64->n_imagetbl != 0) {
+        const u32* src = (const u32*) (dataBase + val);
+        struct HSD_ImageDesc** tbl =
+            lbHeap_80015BD0(0, sizeof(*tbl) * x64->n_imagetbl);
+        if (tbl != NULL) {
+            for (i = 0; i < x64->n_imagetbl; i++) {
+                u32 off = be32_swap(src[i]);
+                tbl[i] = (off != 0 && off < 0x80000000U)
+                             ? grDatFiles_ConvertImageDescGCNtoX64(dataBase + off, dataBase)
+                             : NULL;
+            }
+            x64->imagetbl = tbl;
+        }
+    }
+
+    val = be32_swap(gcn->tluttbl);
+    if (val != 0 && val < 0x80000000U && x64->n_tluttbl != 0) {
+        const u32* src = (const u32*) (dataBase + val);
+        HSD_TlutDesc** tbl = lbHeap_80015BD0(0, sizeof(*tbl) * x64->n_tluttbl);
+        if (tbl != NULL) {
+            for (i = 0; i < x64->n_tluttbl; i++) {
+                u32 off = be32_swap(src[i]);
+                tbl[i] = (off != 0 && off < 0x80000000U)
+                             ? grDatFiles_ConvertTlutDescGCNtoX64(dataBase + off, dataBase)
+                             : NULL;
+            }
+            x64->tluttbl = (struct _HSD_TlutDesc**) tbl;
+        }
+    }
+
+    return x64;
+}
+
 /* Convert HSD_MatAnim chain (linked list via next). Each matanim carries an
  * aobjdesc whose keyframes drive the material ambient/diffuse/specular/alpha
- * (MObjUpdateFunc) — the source of the title tunnel's animated colors. texanim
- * and renderanim are left NULL for now: the base texture still renders (texanim
- * only animates it) and the diffuse color (aobjdesc) is what we need. */
+ * (MObjUpdateFunc) — the source of the title tunnel's animated colors, and a
+ * texanim chain that swaps the material's texture per frame. renderanim is
+ * still left NULL: nothing on the port reads it. */
 static HSD_MatAnim* grDatFiles_ConvertMatAnimGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
 {
     HSD_MatAnim* x64;
@@ -736,7 +817,12 @@ static HSD_MatAnim* grDatFiles_ConvertMatAnimGCNtoX64(const u8* gcnPtr, u8* data
         x64->aobjdesc = grDatFiles_ConvertAObjDescGCNtoX64(dataBase + val, dataBase);
     }
 
-    /* texanim / renderanim: NULL for now (see comment above). */
+    val = be32_swap(gcn->texanim);
+    if (val != 0 && val < 0x80000000U) {
+        x64->texanim = grDatFiles_ConvertTexAnimGCNtoX64(dataBase + val, dataBase, 0);
+    }
+
+    /* renderanim: still NULL -- nothing on the port consumes it yet. */
 
     return x64;
 }

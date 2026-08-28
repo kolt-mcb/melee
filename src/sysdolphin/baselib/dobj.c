@@ -1,5 +1,9 @@
 #include "dobj.h"
 
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
+
 #include "aobj.h"
 #include "class.h"
 #include "debug.h"
@@ -119,9 +123,17 @@ void HSD_DObjAddAnimAll(HSD_DObj* dobj, HSD_MatAnim* matanim,
 
 void HSD_DObjReqAnimByFlags(HSD_DObj* dobj, f32 startframe, u32 flags)
 {
+#if BUILD_TARGET_PC
+    /* Not just null: display objects reached from unconverted archive data
+     * are non-null and unmapped, and this walks straight into ->pobj. */
+    if (!pc_mem_readable(dobj, sizeof(*dobj))) {
+        return;
+    }
+#else
     if (dobj == NULL) {
         return;
     }
+#endif
 
     HSD_PObjReqAnimAllByFlags(dobj->pobj, startframe, flags);
     HSD_MObjReqAnimByFlags(dobj->mobj, startframe, flags);
@@ -135,9 +147,15 @@ void HSD_DObjReqAnimAllByFlags(HSD_DObj* dobj, f32 startframe, u32 flags)
         return;
     }
 
+#if BUILD_TARGET_PC
+    for (dp = dobj; pc_mem_readable(dp, sizeof(*dp)); dp = dp->next) {
+        HSD_DObjReqAnimByFlags(dp, startframe, flags);
+    }
+#else
     for (dp = dobj; dp != NULL; dp = dp->next) {
         HSD_DObjReqAnimByFlags(dp, startframe, flags);
     }
+#endif
 }
 
 void HSD_DObjReqAnimAll(HSD_DObj* dobj, f32 startframe)

@@ -387,6 +387,17 @@ static DynamicModelDesc* conv_model(u32 off, u8* dataBase)
  * read in place: each slot is 4 bytes on GameCube and the struct declaring
  * them is 8-byte-per-pointer here, so field two onward lands in the wrong
  * place and field one splices two offsets into one number. */
+/* The same two descriptors, but addressed directly rather than through a slot
+ * holding an offset. HSD_ArchiveGetPublicAddress hands back a pointer into the
+ * archive's data section, so recover the offset and convert from there. */
+HSD_CObjDesc* pc_conv_CObjDescRaw(const void* raw, u8* dataBase)
+{
+    if (raw == NULL || dataBase == NULL || (const u8*) raw < dataBase) {
+        return NULL;
+    }
+    return conv_cobj((u32) ((const u8*) raw - dataBase), dataBase);
+}
+
 HSD_CObjDesc* pc_conv_CObjDescAt(const void* slot, u8* dataBase)
 {
     if (slot == NULL) {

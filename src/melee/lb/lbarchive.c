@@ -1,4 +1,11 @@
 #include "lbarchive.h"
+
+#if BUILD_TARGET_PC
+#include <string.h>
+#include "gr/grdatfiles.h"
+#include "port/pc_ptr.h"
+#include "port/pc_scene.h"
+#endif
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
@@ -58,6 +65,66 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
 }
 #pragma pop
 
+#if BUILD_TARGET_PC
+/* PC port: every section this resolves is a raw pointer into big-endian
+ * archive data -- joint trees, camera and light descriptors, the lot -- and
+ * every caller then uses it as a native struct. The menu system loads its
+ * whole scene through here, so converting at this one point covers all of it
+ * rather than each screen separately.
+ *
+ * The symbol names carry the type, which is what makes that possible:
+ * "..._joint", "..._animjoint", "..._matanim_joint", "..._shapeanim_joint",
+ * "..._camera", "..._lights", "..._fog". Anything else is left alone. */
+static void* pc_convert_section(HSD_Archive* archive, const char* name,
+                                void* raw)
+{
+    u8* base;
+    size_t n;
+
+    if (raw == NULL || archive == NULL || name == NULL) {
+        return raw;
+    }
+    base = archive->data;
+    if (!pc_ptr_sane(base) || (u8*) raw < base) {
+        return raw;
+    }
+    n = strlen(name);
+    if (getenv("MELEE_SECLOG") != NULL) {
+        fprintf(stderr, "[SEC] %s raw=%p\n", name, raw);
+    }
+#define PC_SEC_ENDS(suf)                                                      \
+    (n >= sizeof(suf) - 1 &&                                                  \
+     strcmp(name + n - (sizeof(suf) - 1), suf) == 0)
+
+    if (PC_SEC_ENDS("_shapeanim_joint")) {
+        return grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(raw, base, 0);
+    }
+    if (PC_SEC_ENDS("_matanim_joint")) {
+        return grDatFiles_ConvertMatAnimJointTreeGCNtoX64(raw, base, 0);
+    }
+    if (PC_SEC_ENDS("_animjoint")) {
+        return grDatFiles_ConvertAnimJointTreeGCNtoX64(raw, base, 0);
+    }
+    if (PC_SEC_ENDS("_joint")) {
+        grDatFiles_ResetJointMap();
+        return grDatFiles_ConvertJointTreeGCNtoX64(raw, base, 0, NULL);
+    }
+    if (PC_SEC_ENDS("_camera")) {
+        return pc_conv_CObjDescRaw(raw, base);
+    }
+    if (PC_SEC_ENDS("_lights")) {
+        return pc_conv_LightListArray(raw, base);
+    }
+    if (PC_SEC_ENDS("_fog")) {
+        /* HSD_FogDesc is not converted; HSD_FogLoadDesc treats NULL as
+         * "no fog", which beats an unconverted descriptor. */
+        return NULL;
+    }
+#undef PC_SEC_ENDS
+    return raw;
+}
+#endif
+
 void lbArchive_LoadSections(HSD_Archive* archive, void** symbol, ...)
 {
     const char* symbol_name;
@@ -71,6 +138,9 @@ void lbArchive_LoadSections(HSD_Archive* archive, void** symbol, ...)
         if (*symbol == NULL) {
             OSReport("Cannot find symbol %s.\n", symbol_name);
         }
+#if BUILD_TARGET_PC
+        *symbol = pc_convert_section(archive, symbol_name, *symbol);
+#endif
     }
     va_end(symbols);
 }
@@ -192,11 +262,35 @@ HSD_Archive* lbArchive_LoadSymbols(const char* filename, void* symbols, ...)
     lbFile_8001668C(filename, data, &length);
     lbArchive_InitializeDAT(archive, data, length);
     /* PC port: deliberately NOT resolving the (ptr, "name") pairs here.
-     * Restoring GCN symbol resolution regressed the title screen: several
-     * PC callers (gmtitle and friends) run their own GCN->x64 conversion
-     * keyed on these out-pointers staying untouched. Callers that DO read
-     * their out-pointer (Player_80036DD8, it_8027870C) are individually
-     * guarded. Revisit with the M4 conversion tooling. */
+     * Restoring plain GCN symbol resolution regressed the title screen:
+     * several PC callers run their own GCN->x64 conversion keyed on these
+     * out-pointers staying untouched, and handing them a raw archive address
+     * made them convert it twice.
+     *
+     * Resolving *and converting* is a different proposition, and it is what
+     * the main menu needs: mn_8022DDA8_OnEnter loads its whole scene through
+     * here, so with the pairs dropped every model global stayed empty and the
+     * menu animated joints that had never been loaded. pc_convert_section
+     * hands back a finished x64 structure, which is what those callers wanted
+     * to end up with anyway.
+     *
+     * MELEE_NO_SYMCONV=1 restores the old drop-everything behaviour. */
+    if (getenv("MELEE_NO_SYMCONV") == NULL) {
+        void** slot = (void**) symbols;
+        va_list pairs;
+        va_start(pairs, symbols);
+        while (slot != NULL) {
+            const char* name = va_arg(pairs, const char*);
+            void* raw;
+            if (name == NULL) {
+                break;
+            }
+            raw = HSD_ArchiveGetPublicAddress(archive, name);
+            *slot = pc_convert_section(archive, name, raw);
+            slot = va_arg(pairs, void**);
+        }
+        va_end(pairs);
+    }
     return archive;
 #else
     data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(filename)));

@@ -146,11 +146,48 @@ static void TObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
         return;
     }
 
+#if BUILD_TARGET_PC
+    /* lod and tev are optional sub-structs that the DAT converters leave
+     * null on this port; HSD_ASSERT reports and returns here rather than
+     * aborting, so every track below would fall through into the null
+     * deref. Drop the track instead of taking the material down with it. */
+    switch (type) {
+    case HSD_A_T_LOD_BIAS:
+        if (tobj->lod == NULL) {
+            return;
+        }
+        break;
+    case HSD_A_T_KONST_R:
+    case HSD_A_T_KONST_G:
+    case HSD_A_T_KONST_B:
+    case HSD_A_T_KONST_A:
+    case HSD_A_T_TEV0_R:
+    case HSD_A_T_TEV0_G:
+    case HSD_A_T_TEV0_B:
+    case HSD_A_T_TEV0_A:
+    case HSD_A_T_TEV1_R:
+    case HSD_A_T_TEV1_G:
+    case HSD_A_T_TEV1_B:
+    case HSD_A_T_TEV1_A:
+        if (tobj->tev == NULL) {
+            return;
+        }
+        break;
+    default:
+        break;
+    }
+#endif
+
     switch (type) {
     case HSD_A_T_TIMG: {
         int n;
         HSD_ASSERT(276, tobj->imagetbl);
         n = (int) val->fv;
+#if BUILD_TARGET_PC
+        if (tobj->imagetbl == NULL || n < 0) {
+            break;
+        }
+#endif
         if (tobj->imagetbl[n]) {
             tobj->imagedesc = tobj->imagetbl[n];
         }
