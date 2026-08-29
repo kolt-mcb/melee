@@ -200,6 +200,9 @@ static int MObjLoad(HSD_MObj* mobj, HSD_MObjDesc* desc)
         static int n = 0, skip = -1;
         if (skip < 0) skip = atoi(getenv("MELEE_MATLOG"));
         n++;
+        { extern u32 pc_frame_number; static int _late = 0;
+          if (pc_frame_number >= 255 && _late++ < 8)
+              fprintf(stderr, "MATLOAD-LATE frame=%u #%d mobj=%p rmode=0x%x texdesc=%p\n", (unsigned)pc_frame_number, n, (void*)mobj, (unsigned)mobj->rendermode, (void*)desc->texdesc); }
         if (n > skip && n <= skip + 60) {
             const HSD_PEDesc* pe = desc->pedesc;
             fprintf(stderr, "MATLOAD #%d mobj=%p rmode=0x%x diffuse=(%u,%u,%u,%u) "
@@ -493,6 +496,24 @@ void HSD_MObjCompileTev(HSD_MObj* mobj)
             *tail = NULL;
         }
     }
+#if BUILD_TARGET_PC
+    if (mobj != NULL && getenv("MELEE_TEVLOG") != NULL) {
+        int nt = 0, ns = 0; HSD_TObj* t; HSD_TevDesc* td;
+        for (t = mobj->tobj; t; t = t->next) nt++;
+        for (td = mobj->tevdesc; td; td = td->next) ns++;
+        fprintf(stderr, "TEVCOMPILE mobj=%p rmode=0x%x tobjs=%d stages=%d texp=%p\n", (void*)mobj, (unsigned)mobj->rendermode, nt, ns, (void*)mobj->texp);
+        { HSD_TExp* c = mobj->texp; fprintf(stderr, "  CNSTS mat=%p texp=%p:", (void*)mobj->mat, (void*)c);
+          while (c && c->type == HSD_TE_CNST) { fprintf(stderr, " [reg=%d comp=%d ct=%d val=%p mat+%ld]", c->cnst.reg, c->cnst.comp, c->cnst.ctype, c->cnst.val, (long)((char*)c->cnst.val - (char*)mobj->mat)); c = c->cnst.next; }
+          fprintf(stderr, "\n"); }
+        for (t = mobj->tobj; t; t = t->next) {
+            HSD_TObjTevDesc* tv = t->tev;
+            if (tv) fprintf(stderr, "  TOBJTEV tobj=%p id=%u fmt=%d tev=%p active=0x%x cop=%d aop=%d konst=(%d,%d,%d,%d) tev0=(%d,%d,%d,%d) tev1=(%d,%d,%d,%d)\n",
+                (void*)t, (unsigned)t->id, t->imagedesc ? (int)t->imagedesc->format : -1, (void*)tv, (unsigned)tv->active, tv->color_op, tv->alpha_op,
+                tv->konst.r, tv->konst.g, tv->konst.b, tv->konst.a, tv->tev0.r, tv->tev0.g, tv->tev0.b, tv->tev0.a, tv->tev1.r, tv->tev1.g, tv->tev1.b, tv->tev1.a);
+            else fprintf(stderr, "  TOBJTEV tobj=%p id=%u fmt=%d tev=NULL\n", (void*)t, (unsigned)t->id, t->imagedesc ? (int)t->imagedesc->format : -1);
+        }
+    }
+#endif
 }
 
 #ifndef BUGFIX
@@ -504,6 +525,13 @@ static char unused1[] = "hsdIsDescendantOf(info, &hsdMObj)";
 
 void MObjSetupTev(HSD_MObj* mobj, HSD_TObj* tobj, u32 arg2)
 {
+#if BUILD_TARGET_PC
+    { static int _st = -1, _sn = 0; if (_st < 0) _st = (getenv("MELEE_TEVLOG") != NULL);
+      extern u32 pc_frame_number;
+      if (_st && (mobj->rendermode & 0x30) == 0x30 && pc_frame_number >= 259 && pc_frame_number <= 261 && _sn < 60) { _sn++;
+        int ns = 0; HSD_TevDesc* td; for (td = mobj->tevdesc; td; td = td->next) ns++;
+        fprintf(stderr, "MOBJSETUPTEV mobj=%p tevdesc=%p stages=%d\n", (void*)mobj, (void*)mobj->tevdesc, ns); } }
+#endif
     if (mobj->tevdesc == NULL) { return; }
     HSD_TExpSetupTev(mobj->tevdesc, mobj->texp);
     HSD_TObjSetupVolatileTev(tobj, arg2);
@@ -511,6 +539,16 @@ void MObjSetupTev(HSD_MObj* mobj, HSD_TObj* tobj, u32 arg2)
 
 void HSD_MObjSetup(HSD_MObj* mobj, u32 rendermode)
 {
+#if BUILD_TARGET_PC
+    { static int _ms_on = -1, _ms_n = 0; if (_ms_on < 0) _ms_on = (getenv("MELEE_TEVLOG") != NULL);
+      extern u32 pc_frame_number;
+      if (_ms_on && mobj != NULL && (mobj->rendermode & 0x30) == 0x30 && pc_frame_number == 260 && _ms_n < 400) { _ms_n++;
+        int nt = 0, ns = 0; HSD_TObj* t; HSD_TevDesc* td;
+        for (t = mobj->tobj; t; t = t->next) nt++;
+        for (td = mobj->tevdesc; td; td = td->next) ns++;
+        fprintf(stderr, "MOBJSETUP mobj=%p rmode=0x%x arg=0x%x tobjs=%d stages=%d texp=%p mat=%p diffuse=(%d,%d,%d) alpha=%.2f aobj=%p\n", (void*)mobj, (unsigned)mobj->rendermode, (unsigned)rendermode, nt, ns, (void*)mobj->texp,
+            (void*)mobj->mat, mobj->mat->diffuse.r, mobj->mat->diffuse.g, mobj->mat->diffuse.b, (double)mobj->mat->alpha, (void*)mobj->aobj); } }
+#endif
 
     HSD_TObj *tobj, **tail;
 
@@ -544,6 +582,8 @@ void HSD_MObjSetup(HSD_MObj* mobj, u32 rendermode)
     /* PC port: guard against corrupted method pointers. */
     HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(mobj);
     if (mobj_info != NULL && mobj_info->setup_tev != NULL) {
+        { static int _sv = -1; if (_sv < 0) _sv = (getenv("MELEE_TEVLOG") != NULL);
+          if (_sv && (mobj->rendermode & 0x30) == 0x30) fprintf(stderr, "SETUPTEV-CALL mobj=%p fn=%p\n", (void*)mobj, (void*)mobj_info->setup_tev); }
         mobj_info->setup_tev(mobj, tobj, rendermode);
     }
     else {

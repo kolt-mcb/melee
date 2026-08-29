@@ -2207,8 +2207,11 @@ static u32 s_pc_draws = 0;  /* PC diag: per-frame GL draw count (MELEE_STAGE_DIA
  * it, and MELEE_DRAWTRACE prints the same number -- so "which draw painted
  * this button" stops being guesswork. */
 static u32 g_frame_draw_idx = 0;
+/* Frame number for diagnostics in game code (mobj.c logs gate on it). */
+u32 pc_frame_number = 0;
 void gx_frame_begin(void)
 {
+    pc_frame_number = g_state.frame_count + 1;
     gx_trace_frame_begin();
     g_state.frame_count++;
     g_frame_draw_idx = 0;
@@ -3768,6 +3771,14 @@ static void bridge_upload_and_draw(void)
                         (double)g_state.model_matrix[8], (double)g_state.model_matrix[9], (double)g_state.model_matrix[10], (double)g_state.model_matrix[11]);
                 if (getenv("MELEE_DRAWTRACE_VERTS") != NULL && (int)g_frame_draw_idx == atoi(getenv("MELEE_DRAWTRACE_VERTS"))) {
                     u32 vi;
+                    for (vi = 0; vi < 8; vi++) {
+                        TevStage* st = &g_state.tev_stages[vi];
+                        fprintf(stderr, "  STAGE%u cen=%d aen=%d tex=%u cin=[%u,%u,%u,%u] kcol=%u ain=[%u,%u,%u,%u]\n", vi,
+                                (int)st->color_enabled, (int)st->alpha_enabled, st->tex_map,
+                                st->color_inputs[0], st->color_inputs[1], st->color_inputs[2], st->color_inputs[3], st->kcolor_sel,
+                                st->alpha_inputs[0], st->alpha_inputs[1], st->alpha_inputs[2], st->alpha_inputs[3]);
+                    }
+                    fprintf(stderr, "  NUMSTAGES=%u\n", (unsigned)g_state.num_tev_stages);
                     /* Also dump the GL texture bound to the first active slot. */
                     if (g_active_tex_count > 0 && g_state.tex_cache_valid[g_active_tex_slots[0]]) {
                         u32 sl = g_active_tex_slots[0];
@@ -4928,6 +4939,8 @@ void GXSetNumTevStages(u32 n)
      * GXSetTevColorIn/GXSetTevAlphaIn/GXSetTevColorOp/GXSetTevAlphaOp.
      * We track the actual max stage index via tev_track_stage() and use
      * that when n=0 to avoid disabling TEV entirely. */
+    { static int _nl = -1; if (_nl < 0) _nl = (getenv("MELEE_NUMSTAGELOG") != NULL);
+      if (_nl && g_state.frame_count == 260) fprintf(stderr, "NUMTEVSTAGES(%u) tracked=%u\n", (unsigned)n, (unsigned)g_state.num_tev_stages); }
     if (n == 0) {
         /* Keep the tracked stage count from direct TEV calls */
         /* g_state.num_tev_stages is already set by tev_track_stage() */

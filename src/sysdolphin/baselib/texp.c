@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "texp.h"
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
@@ -271,6 +273,11 @@ HSD_TExp* HSD_TExpCnst(void* val, HSD_TEInput comp, HSD_TEType type,
     HSD_TExp* texp;
 
     HSD_ASSERT(361, texp_list);
+#if BUILD_TARGET_PC
+    { extern u32 pc_frame_number; static int _cl = -1, _cn = 0; if (_cl < 0) _cl = getenv("MELEE_TEVLOG") != NULL;
+      if (_cl && pc_frame_number >= 255 && _cn < 20000) { _cn++;
+        fprintf(stderr, "TEXPCNST list=%p val=%p comp=%d type=%d ra=%p\n", (void*)texp_list, val, (int)comp, (int)type, __builtin_return_address(0)); } }
+#endif
 
     texp = *texp_list;
     do {
@@ -296,20 +303,14 @@ HSD_TExp* HSD_TExpCnst(void* val, HSD_TEInput comp, HSD_TEType type,
         texp->cnst.ctype = type;
         texp->cnst.reg = 0xFF;
         texp->cnst.idx = 0xFF;
-#if BUILD_TARGET_PC
-        /* PC port: copy constant values instead of storing pointers.
-         * The original val pointer may be freed or corrupted during rendering.
-         * Copy up to 16 bytes (enough for GXColor + alpha). */
-        if (val != NULL && (uintptr_t) val >= 0x10000) {
-            __builtin_memcpy(texp->cnst.val_buf, val, sizeof(texp->cnst.val_buf));
-            texp->cnst.val = texp->cnst.val_buf;
-        } else {
-            __builtin_memset(texp->cnst.val_buf, 0, sizeof(texp->cnst.val_buf));
-            texp->cnst.val = texp->cnst.val_buf;
-        }
-#else
+        /* PC port note: this used to snapshot the value into a per-node
+         * buffer ("the pointer may be freed during rendering").  The pointer
+         * is the point: it aims at mobj->mat / tobj->tev fields that material
+         * and texture animations write every frame, and the owning mobj/tobj
+         * frees the texp with them.  Snapshotting froze every animated
+         * colour/alpha at its load-time value (the title logo's diffuse, for
+         * one) and broke dedup, since the compare above matched on `val`. */
         texp->cnst.val = val;
-#endif /* BUILD_TARGET_PC */
         return texp;
     } while (true);
 
@@ -1348,6 +1349,14 @@ void HSD_TExpSetReg(HSD_TExp* texp)
         #endif /* BUILD_TARGET_PC */
         clist = &clist->next->cnst;
     }
+#if BUILD_TARGET_PC
+    { extern u32 pc_frame_number; static int _kc = -1, _kn = 0; if (_kc < 0) _kc = getenv("MELEE_TEVLOG") != NULL;
+      if (_kc && pc_frame_number == 260 && _kn < 400) { HSD_TECnst* c = &texp->cnst; _kn++;
+        fprintf(stderr, "KCONST texp=%p changed=0x%x K0=(%d,%d,%d,%d) K1=(%d,%d,%d,%d) R0=(%d,%d,%d,%d) R1=(%d,%d,%d,%d) |", (void*)texp, (unsigned)changed,
+          reg[0].r,reg[0].g,reg[0].b,reg[0].a, reg[1].r,reg[1].g,reg[1].b,reg[1].a, reg[4].r,reg[4].g,reg[4].b,reg[4].a, reg[5].r,reg[5].g,reg[5].b,reg[5].a);
+        while (c && c->type == HSD_TE_CNST) { fprintf(stderr, " [reg=%d comp=%d ctype=%d val=%p]", c->reg, c->comp, c->ctype, c->val); if (!c->next) break; c = &c->next->cnst; }
+        fprintf(stderr, "\n"); } }
+#endif
     if (changed != 0) {
         GXPixModeSync();
         for (i = 0; i < 4; i++) {
@@ -1376,6 +1385,10 @@ void HSD_TExpSetupTev(HSD_TExpTevDesc* tevdesc, HSD_TExp* texp)
         HSD_StateAssignTev();
         HSD_SetupTevStage(&tevdesc->desc);
     }
+#if BUILD_TARGET_PC
+    { static int _tl = -1, _tn = 0; if (_tl < 0) _tl = (getenv("MELEE_TEVLOG") != NULL);
+      extern u32 pc_frame_number; if (_tl && pc_frame_number >= 259 && pc_frame_number <= 261 && _tn < 200) { _tn++; fprintf(stderr, "TEXPSETUPTEV done: numstages_now=%d\n", HSD_StateGetNumTevStages()); } }
+#endif
 }
 
 int HSD_TExpCompile(HSD_TExp* texp, HSD_TExpTevDesc** tevdesc,

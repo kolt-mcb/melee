@@ -2171,29 +2171,26 @@ static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8
     const struct HSD_TObjDesc_gcn* gcnTobj;
     u32 val;
     u32 raw;
-    static int convert_count = 0;
-    static int last_map_id = -1;
+    /* Recursion-depth guard against a corrupt `next` chain.  This used to be a
+     * *lifetime* cap of 500 conversions, which silently dropped every texture
+     * loaded after the 500th of the process: the second scene load on the
+     * title (after the menu) came back with no tobjs at all and the logo
+     * rendered as black konstant stages.  Depth is the thing that can loop. */
+    static int convert_depth = 0;
 
     if (gcnTobjPtr == NULL) return NULL;
 
     gcnTobj = (const struct HSD_TObjDesc_gcn*)gcnTobjPtr;
 
-    /* Reset counter when map_id changes (detected via different base pointers) */
-    // Note: convert_count is intentionally NOT reset - it tracks total conversions
-    // to prevent infinite loops across all map loads.
-
-    /* Safety: limit conversion count to prevent infinite loops */
-    if (convert_count > 500) {
-        fprintf(stderr, "[GRDAT] TObjDesc conversion limit reached (%d)\n", convert_count);
+    if (convert_depth > 256) {
+        fprintf(stderr, "[GRDAT] TObjDesc chain deeper than 256, truncating\n");
         return NULL;
     }
 
-    gcnTobj = (const struct HSD_TObjDesc_gcn*)gcnTobjPtr;
     x64Tobj = lbHeap_80015BD0(0, sizeof(HSD_TObjDesc));
     if (x64Tobj == NULL) return NULL;
 
     memset(x64Tobj, 0, sizeof(HSD_TObjDesc));
-    convert_count++;
 
     /* class_name - points to symbol table, set NULL for now */
     x64Tobj->class_name = NULL;
@@ -2201,7 +2198,9 @@ static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8
     /* next - convert linked list */
     val = be32_swap(gcnTobj->next);
     if (val != 0 && val < 0x80000000U) {
+        convert_depth++;
         x64Tobj->next = grDatFiles_ConvertTObjDescGCNtoX64(dataBase + val, dataBase);
+        convert_depth--;
     }
 
     /* id - GXTexMapID (u32 big-endian) */

@@ -339,7 +339,8 @@ void FObjUpdateAnim(HSD_FObj* fobj, void* obj, HSD_ObjUpdateFunc obj_update)
 {
 #if BUILD_TARGET_PC
     { static int _fl = -1; if (_fl < 0) _fl = (getenv("MELEE_FOBJLOG") != NULL);
-      if (_fl && fobj->obj_type == 1) {
+      extern u32 pc_frame_number;
+      if (_fl && fobj->obj_type >= 4 && fobj->obj_type <= 6 && pc_frame_number >= 259 && pc_frame_number <= 260) {
         fprintf(stderr, "FOBJUPD obj=%p track=%u op=%u intrp=%u time=%.2f fterm=%u p0=%.3f p1=%.3f d0=%.3f flags=0x%x len=%u nb=%u start=%d head=%02x %02x %02x %02x %02x %02x %02x %02x\n",
                 obj, (unsigned)fobj->obj_type, (unsigned)fobj->op, (unsigned)fobj->op_intrp, (double)fobj->time, (unsigned)fobj->fterm,
                 (double)fobj->p0, (double)fobj->p1, (double)fobj->d0, (unsigned)fobj->flags, (unsigned)fobj->length, (unsigned)fobj->nb_pack, (int)fobj->startframe,
