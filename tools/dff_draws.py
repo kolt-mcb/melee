@@ -695,6 +695,11 @@ def describe_draw(state, d, idx, want_vertices):
         (mia >> 6) & 0x3F, (mia >> 12) & 0x3F, (mia >> 18) & 0x3F, (mia >> 24) & 0x3F,
         xfr[0x19] & 0x3F, (xfr[0x19] >> 6) & 0x3F, (xfr[0x19] >> 12) & 0x3F, (xfr[0x19] >> 18) & 0x3F,
         cp[0x30]))
+    lines.append("  PROJ: A=%.5f B=%.5f C=%.5f D=%.5f E=%.5f F=%.5f ortho=%d viewport xs=%.1f ys=%.1f xo=%.1f yo=%.1f" % (
+        f32(xfr[0x20]), f32(xfr[0x21]), f32(xfr[0x22]), f32(xfr[0x23]), f32(xfr[0x24]), f32(xfr[0x25]),
+        xfr[0x26] & 1, f32(xfr[0x1A]), f32(xfr[0x1B]), f32(xfr[0x1D]), f32(xfr[0x1E])))
+    lines.append("  PNMTX rows: [%s | %s | %s]" % tuple(
+        " ".join("%.4f" % f32(xfm[m + r * 4 + c]) for c in range(4)) for r in range(3)))
     if pn != 0:
         lines.append("  MTX0: t=(%.3f,%.3f,%.3f)" % (f32(xfm[3]), f32(xfm[7]), f32(xfm[11])))
     bb = screen_bbox(state, d)

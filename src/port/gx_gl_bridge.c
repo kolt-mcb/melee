@@ -3304,12 +3304,20 @@ static void bridge_upload_and_draw(void)
                     s += g_state.proj_matrix[i][k] * mv4[k][j];
                 mvp[i][j] = s;
             }
-        /* GL NDC depth: GCN clip z/w is in [-1,0] (near=-1, far=0); the
-         * hardware depth buffer is -z/w in [0,1] (near=1). GL NDC wants
-         * [-1,1] (near=-1, far=+1), so the mapping is gl = -2*gcn - 1,
-         * i.e. in clip space: z' = -2z - w (Dolphin: z'=-z, then 2z'-w). */
+        /* GL NDC depth: GCN clip z/w is in [-1,0] (near=-1, far=0) and the
+         * viewport maps that to screen z with near=0, far=2^24-1, which
+         * GX_LEQUAL then compares. GL NDC wants [-1,1] with near=-1,
+         * far=+1, so the mapping is gl = 2*gcn + 1, i.e. in clip space
+         * z' = 2z + w. This used to be z' = -2z - w -- Dolphin's reversed-Z
+         * convention (near=+1, far=-1) -- but Dolphin pairs that with a
+         * reversed compare-function table (GX LEQUAL -> GL_GEQUAL), which
+         * the bridge never had. So every depth test ran backwards: the
+         * farther fragment won. It went unnoticed while scenes were drawn
+         * roughly back-to-front; Onett draws its far hills last and they
+         * painted over the whole town. Keep GL's own orientation and the
+         * GX compare functions map one-to-one. */
         for (int j = 0; j < 4; j++)
-            mvp[2][j] = -2.0f * mvp[2][j] - mvp[3][j];
+            mvp[2][j] = 2.0f * mvp[2][j] + mvp[3][j];
         /* PC diag: compute the EXACT GPU clip for the first vertex using the
          * final mvp (after z-remap). Check if it's in the GL clip volume
          * (-w<=x,y,z<=w, w>0). */
@@ -3875,7 +3883,7 @@ static void bridge_upload_and_draw(void)
                     for (k = 0; k < nb; k++) fprintf(stderr, " %p", bt[k]);
                     fprintf(stderr, "\n");
                 }
-                fprintf(stderr, "DRAW frame=%u #%02u n=%u prim=%u mat=(%u,%u,%u,%u) v0c=(%d,%d,%d,%d) ctr=(%.1f,%.1f,%.1f) texb=%u texfmt=0x%x ci=%d tex=%ux%u wrap=%u/%u z=%d/%u/%d cull=%u acmp=%d:%u/%.2f,%u/%.2f op=%u dsta=%d/%u clr_en=%d blend=%d/%u/%u mm_t=(%.2f,%.2f,%.2f) mm_s=(%.2f,%.2f,%.2f) bbox=[(%.1f,%.1f,%.1f)..(%.1f,%.1f,%.1f)]\n",
+                fprintf(stderr, "DRAW frame=%u #%02u n=%u prim=%u mat=(%u,%u,%u,%u) v0c=(%d,%d,%d,%d) ctr=(%.1f,%.1f,%.1f) texb=%u texfmt=0x%x ci=%d tex=%ux%u wrap=%u/%u z=%d/%u/%d cull=%u acmp=%d:%u/%.2f,%u/%.2f op=%u dsta=%d/%u clr_en=%d blend=%d/%u/%u mm_t=(%.2f,%.2f,%.2f) mm_s=(%.2f,%.2f,%.2f) bbox=[(%.1f,%.1f,%.1f)..(%.1f,%.1f,%.1f)] proj=(%.3f,%.3f,%.4f,%.3f) vp=(%.0f,%.0f,%.0f,%.0f)\n",
                         (unsigned)fc2, g_frame_draw_idx, (unsigned)count, (unsigned)g_state.prim_type,
                         (unsigned)g_state.cur_color.r, (unsigned)g_state.cur_color.g, (unsigned)g_state.cur_color.b, (unsigned)g_state.cur_color.a,
                         (count>0)?(int)(g_state.verts[0].col[0]*255):0, (count>0)?(int)(g_state.verts[0].col[1]*255):0, (count>0)?(int)(g_state.verts[0].col[2]*255):0, (count>0)?(int)(g_state.verts[0].col[3]*255):0,
@@ -3891,7 +3899,9 @@ static void bridge_upload_and_draw(void)
                         (int)g_state.blend_enabled, (unsigned)g_state.blend_src, (unsigned)g_state.blend_dst,
                         (double)g_state.model_matrix[3], (double)g_state.model_matrix[7], (double)g_state.model_matrix[11],
                         (double)g_state.model_matrix[0], (double)g_state.model_matrix[5], (double)g_state.model_matrix[10],
-                        mnx,mny,mnz,mxx,mxy,mxz);
+                        mnx,mny,mnz,mxx,mxy,mxz,
+                        (double)g_state.proj_matrix[0][0], (double)g_state.proj_matrix[1][1], (double)g_state.proj_matrix[2][2], (double)g_state.proj_matrix[2][3],
+                        (double)g_state.vp_x, (double)g_state.vp_y, (double)g_state.vp_w, (double)g_state.vp_h);
                 /* PC diag: dump the TEV pipeline for this draw so we can see
                  * how the final color is derived (esp. for the bright tunnel). */
                 {
