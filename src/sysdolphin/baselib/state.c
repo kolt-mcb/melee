@@ -361,6 +361,21 @@ void HSD_StateSetLineWidth(u8 arg0, int arg1)
     }
 }
 
+
+#if BUILD_TARGET_PC
+#include <stdlib.h>
+/* MELEE_STATE_NOCACHE=1: push every HSD_StateSet* value to GX regardless of
+ * the cached copy -- a test for whether something is changing GX state
+ * behind the cache's back. */
+static int pc_state_nocache(void)
+{
+    static int v = -1;
+    if (v < 0) v = (getenv("MELEE_STATE_NOCACHE") != NULL);
+    return v;
+}
+#else
+#define pc_state_nocache() 0
+#endif
 void HSD_StateSetCullMode(int mode)
 {
     if (state_cull_mode != mode) {
@@ -371,7 +386,7 @@ void HSD_StateSetCullMode(int mode)
 
 void HSD_StateSetBlendMode(int type, int src_factor, int dst_factor, int op)
 {
-    if (state_blend_type != type || state_src_factor != src_factor ||
+    if (pc_state_nocache() || state_blend_type != type || state_src_factor != src_factor ||
         state_dst_factor != dst_factor || state_logic_op != op)
     {
         GXSetBlendMode(type, src_factor, dst_factor, op);
@@ -387,7 +402,7 @@ void HSD_StateSetZMode(int arg0, int arg1, int arg2)
     arg0 = arg0 ? GX_TRUE : GX_FALSE;
     arg2 = arg2 ? GX_TRUE : GX_FALSE;
 
-    if (state_z_enable != arg0 || state_z_func != arg1 ||
+    if (pc_state_nocache() || state_z_enable != arg0 || state_z_func != arg1 ||
         state_z_update != arg2)
     {
         GXSetZMode(arg0, arg1, arg2);

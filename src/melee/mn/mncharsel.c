@@ -3994,13 +3994,24 @@ static u32 pc_css_be32(const void* p)
 #define CSS_CAM()    pc_conv_CObjDescAt(CSS_SLOT(0), css_scene_database())
 #define CSS_LIGHT0() pc_conv_LightDescAt(CSS_SLOT(1), css_scene_database())
 #define CSS_LIGHT1() pc_conv_LightDescAt(CSS_SLOT(2), css_scene_database())
-/* Fog is left out: pc_scene.c does not convert HSD_FogDesc, and
- * HSD_FogLoadDesc already treats NULL as "no fog". */
-#define CSS_FOG()    NULL
+/* The fog descriptor also carries the scene's erase colour (see the same
+ * fix for the main menu in lbarchive.c), so convert it rather than leave the
+ * screen clearing to black. */
+#define CSS_FOG()    css_conv_fog()
+static HSD_FogDesc* css_conv_fog(void);
 
 static u8* css_scene_database(void)
 {
     return mnCharSel_804D6CD0 != NULL ? mnCharSel_804D6CD0->data : NULL;
+}
+static HSD_FogDesc* css_conv_fog(void)
+{
+    u8* base = css_scene_database();
+    u32 off;
+    if (base == NULL || mnCharSel_804D6CB4 == NULL) return NULL;
+    off = pc_css_be32(CSS_SLOT(3));
+    if (off == 0 || off >= 0x80000000U) return NULL;
+    return grDatFiles_ConvertFogDescGCNtoX64(base + off, base);
 }
 #else
 #define CSS_CAM()    (MODELS->cam)

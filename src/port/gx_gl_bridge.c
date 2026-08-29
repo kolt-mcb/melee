@@ -3746,7 +3746,7 @@ static void bridge_upload_and_draw(void)
                 _dt_from = df ? atoi(df) : 6;
             }
             if (_dt_on && (int) fc2 >= _dt_from && (int) fc2 <= _dt_from + 2 &&
-                _dt_n < 400) {
+                _dt_n < 3000) {
                 _dt_n++;
                 f64 cx = 0, cy = 0, cz = 0;
                 u32 cn = (count < 200 ? count : 200);
