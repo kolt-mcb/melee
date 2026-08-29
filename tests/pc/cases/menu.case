@@ -1,0 +1,25 @@
+# The main menu, reached by each side's own shortest route: the port has
+# MELEE_BOOT_MODE, Dolphin has to be walked there with real presses -- Start
+# to leave the movie, Start again to leave the title. The Gecko boot-to-mode
+# patch only takes effect at the title's scene transition, so both are needed.
+#
+# align: search, not movie. There is no movie on screen to anchor against, the
+# two sides arrive at wildly different frame numbers, and the menu background
+# animates -- so comparing frame N to frame N would score an animation phase
+# difference as if it were renderer error.
+description: main menu, settled
+run_frames: 420
+ref_frames: 900
+align: search
+# Measured, not derived: Dolphin reaches the menu at dump ~440 after two
+# Start presses, the port at frame ~20 via MELEE_BOOT_MODE. Port check 300
+# maps to dump 600, well inside the settled region.
+ref_lead: -300
+window: 8
+env: MELEE_BOOT_MODE=1
+ref_env: MELEE_REF_MODE=1
+ref_input: 236:+START
+ref_input: 240:-START
+ref_input: 400:+START
+ref_input: 404:-START
+checks: 300, 400

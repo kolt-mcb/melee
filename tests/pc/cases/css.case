@@ -1,0 +1,30 @@
+# Character select, reached by navigating the menu on both sides rather than
+# by a boot shortcut. The Gecko boot-to-mode patch was tried first and does
+# not work for GM_VS: MELEE_REF_MODE=2 applies cleanly and Dolphin still
+# lands on the Main Menu, so the route has to be real button presses.
+#
+# This is the case the CSS work most needs an oracle for -- the grid cells and
+# player panels render untextured on the port and there has never been a
+# reference to say what they should look like.
+description: character select, settled
+run_frames: 480
+ref_frames: 1000
+align: search
+window: 8
+# Measured: the port settles on the CSS by frame ~320, Dolphin by dump ~720.
+ref_lead: -340
+env: MELEE_BOOT_MODE=1
+input: 100: down
+input: 160: a
+input: 240: a
+ref_input: 236:+START
+ref_input: 240:-START
+ref_input: 400:+START
+ref_input: 404:-START
+ref_input: 520:MAIN:0.5:0.0
+ref_input: 526:MAIN:0.5:0.5
+ref_input: 580:+A
+ref_input: 584:-A
+ref_input: 660:+A
+ref_input: 664:-A
+checks: 380, 440
