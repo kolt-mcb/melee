@@ -3708,12 +3708,14 @@ static void bridge_upload_and_draw(void)
                     if(pz<mnz)mnz=pz; if(pz>mxz)mxz=pz;
                 }
                 if (cn > 0) { cx /= cn; cy /= cn; cz /= cn; }
-                fprintf(stderr, "DRAW frame=%u #%02u n=%u prim=%u mat=(%u,%u,%u,%u) v0c=(%d,%d,%d,%d) ctr=(%.1f,%.1f,%.1f) texb=%u clr_en=%d blend=%d/%u/%u mm_t=(%.2f,%.2f,%.2f) mm_s=(%.2f,%.2f,%.2f) bbox=[(%.1f,%.1f,%.1f)..(%.1f,%.1f,%.1f)]\n",
+                fprintf(stderr, "DRAW frame=%u #%02u n=%u prim=%u mat=(%u,%u,%u,%u) v0c=(%d,%d,%d,%d) ctr=(%.1f,%.1f,%.1f) texb=%u texfmt=0x%x ci=%d clr_en=%d blend=%d/%u/%u mm_t=(%.2f,%.2f,%.2f) mm_s=(%.2f,%.2f,%.2f) bbox=[(%.1f,%.1f,%.1f)..(%.1f,%.1f,%.1f)]\n",
                         (unsigned)fc2, g_frame_draw_idx, (unsigned)count, (unsigned)g_state.prim_type,
                         (unsigned)g_state.cur_color.r, (unsigned)g_state.cur_color.g, (unsigned)g_state.cur_color.b, (unsigned)g_state.cur_color.a,
                         (count>0)?(int)(g_state.verts[0].col[0]*255):0, (count>0)?(int)(g_state.verts[0].col[1]*255):0, (count>0)?(int)(g_state.verts[0].col[2]*255):0, (count>0)?(int)(g_state.verts[0].col[3]*255):0,
                         cx, cy, cz,
                         (g_active_tex_count > 0 && g_state.tex_cache_valid[g_active_tex_slots[0]]) ? (unsigned)g_state.tex_cache[g_active_tex_slots[0]] : 0u,
+                        (unsigned)g_state.current_tex.fmt,
+                        (int)g_state.current_tex.is_ci,
                         (int)g_state.clr_enabled,
                         (int)g_state.blend_enabled, (unsigned)g_state.blend_src, (unsigned)g_state.blend_dst,
                         (double)g_state.model_matrix[3], (double)g_state.model_matrix[7], (double)g_state.model_matrix[11],
