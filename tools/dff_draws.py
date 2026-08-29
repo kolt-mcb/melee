@@ -852,6 +852,14 @@ def describe_draw(state, d, idx, want_vertices):
             "STQ" if (v >> 1) & 1 else "ST", "ABC1" if (v >> 2) & 1 else "AB11",
             tmi[t], pm & 0x3F, " norm" if (pm >> 8) & 1 else "", v))
     lines.append("  TEXGEN n=%d %s dualtex=%d" % (ntexgen, " ".join(tg), xfr[0x12] & 1))
+    if xfr[0x12] & 1:
+        for t in range(ntexgen):
+            idx = xfr[0x50 + t] & 0x3F
+            rows = []
+            for r in range(3):
+                base = 0x500 + idx * 4 + r * 4
+                rows.append(" ".join("%.3f" % struct.unpack(">f", struct.pack(">I", xfm[base + c] & 0xFFFFFFFF))[0] for c in range(4)))
+            lines.append("  POSTMTX t%d idx=%d [%s]" % (t, idx, " | ".join(rows)))
     return lines
 
 

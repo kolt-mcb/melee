@@ -112,7 +112,16 @@ static void* pc_convert_section(HSD_Archive* archive, const char* name,
     }
     if (PC_SEC_ENDS("_joint")) {
         grDatFiles_ResetJointMap();
-        return grDatFiles_ConvertJointTreeGCNtoX64(raw, base, 0, NULL);
+        {
+            /* Skinned PObjs (menu panels, title text) reference joints by
+             * archive offset; resolve them against the map this tree just
+             * built, as the fighter loaders do.  Unresolved envelopes made
+             * HSD fall back to one rigid matrix per slot, and the vertices
+             * bound to the missing slots picked up stale matrices. */
+            HSD_Joint* j = grDatFiles_ConvertJointTreeGCNtoX64(raw, base, 0, NULL);
+            grDatFiles_ResolvePObjJoints();
+            return j;
+        }
     }
     if (PC_SEC_ENDS("_camera")) {
         return pc_conv_CObjDescRaw(raw, base);
