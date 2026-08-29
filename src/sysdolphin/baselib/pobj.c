@@ -1338,6 +1338,11 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                     bad = 1;
                 }
             }
+            { static int _el = -1, _en = 0; extern u32 pc_frame_number; if (_el < 0) _el = getenv("MELEE_ENVLOG") != NULL;
+              if (_el && pc_frame_number == 300 && _en < 200) { HSD_Envelope* e3 = envelope; int ne = 0; _en++;
+                  fprintf(stderr, "ENVLOG pobj=%p mtx_no=%u bad=%d:", (void*)pobj, (unsigned)mtx_no, bad);
+                  for (; e3; e3 = e3->next) { ne++; fprintf(stderr, " [jobj=%p w=%.2f emtx=%p]", (void*)e3->jobj, (double)e3->weight, e3->jobj ? (void*)e3->jobj->envelopemtx : NULL); }
+                  fprintf(stderr, " n=%d\n", ne); } }
             if (bad) {
                 if (getenv("MELEE_ENV_STATS") != NULL) {
                     extern unsigned long pc_env_bad, pc_env_ok;

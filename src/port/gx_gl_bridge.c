@@ -650,6 +650,7 @@ typedef struct {
     f32 last_tex0[2];
     f32 last_tex1[2];
     u8 last_mtx_idx;            /* Last matrix index (GXMatrixIndex1u8) */
+    int batch_mid_min, batch_mid_max, batch_skinned; /* diag: per-batch PNMTXIDX range */
     
     /* Light storage: up to 8 lights (GX_LIGHT0-7) */
     u32 canary_before_lights[4];
@@ -3818,7 +3819,13 @@ static void bridge_upload_and_draw(void)
                         (double)g_state.model_matrix[0], (double)g_state.model_matrix[1], (double)g_state.model_matrix[2], (double)g_state.model_matrix[3],
                         (double)g_state.model_matrix[4], (double)g_state.model_matrix[5], (double)g_state.model_matrix[6], (double)g_state.model_matrix[7],
                         (double)g_state.model_matrix[8], (double)g_state.model_matrix[9], (double)g_state.model_matrix[10], (double)g_state.model_matrix[11]);
-                fprintf(stderr, "  UVRANGE n=%u u=[%.3f..%.3f] v=[%.3f..%.3f]\n", cn, mnu, mxu, mnv, mxv);
+                fprintf(stderr, "  UVRANGE n=%u u=[%.3f..%.3f] v=[%.3f..%.3f] va0=%d mtx3d=%d skinned=%d mid=[%d..%d] cur=%u\n", cn, mnu, mxu, mnv, mxv,
+                        (int)g_state.va_mode[0], (int)g_state.mtx3d_active, g_state.batch_skinned, g_state.batch_mid_min, g_state.batch_mid_max, (unsigned)g_state.current_mtx_id);
+                g_state.batch_mid_min = -1; g_state.batch_mid_max = -1; g_state.batch_skinned = 0;
+                { u32 c; for (c = 0; c < 2; c++) { u32 id = g_state.tex_gen_pt_id[c];
+                    if (g_state.tex_gen_enabled[c] && id >= 64 && id <= 124 && ((id - 64) % 3) == 0) { const f32 (*P)[4] = g_state.pt_mtx_array[(id - 64) / 3];
+                        fprintf(stderr, "  PTMTX%u id=%u loaded=%d [%.3f %.3f %.3f %.3f | %.3f %.3f %.3f %.3f | %.3f %.3f %.3f %.3f] main=%u\n", c, id, (int)g_state.pt_mtx_loaded[(id - 64) / 3],
+                            P[0][0],P[0][1],P[0][2],P[0][3],P[1][0],P[1][1],P[1][2],P[1][3],P[2][0],P[2][1],P[2][2],P[2][3], g_state.tex_gen_mat_id[c]); } } }
                 { int vi; fprintf(stderr, "  UV");
                   for (vi = 0; vi < 4 && vi < (int) count; vi++) fprintf(stderr, " v%d=(%.3f,%.3f)", vi, (double)g_state.verts[vi].tex0[0], (double)g_state.verts[vi].tex0[1]);
                   fprintf(stderr, "\n"); }
@@ -4609,6 +4616,9 @@ static void bridge_add_vertex(void)
          * fighters rendered as garbled shards. */
         if (g_state.va_mode[0] != 0 && g_state.mtx3d_active) {
             u32 mid = g_state.last_mtx_idx;
+            if (g_state.batch_mid_min < 0 || (int) mid < g_state.batch_mid_min) g_state.batch_mid_min = (int) mid;
+            if ((int) mid > g_state.batch_mid_max) g_state.batch_mid_max = (int) mid;
+            g_state.batch_skinned++;
             { static int _sv = 0;
               if (_sv < 8) { _sv++;
                   const f32 (*mm)[4] = (const f32 (*)[4])g_state.mtx_array[mid < 28 ? mid : 0];

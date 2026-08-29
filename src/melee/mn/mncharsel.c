@@ -4051,8 +4051,10 @@ static void css_convert_anim_sets(void)
         }
         off = pc_css_be32(e + 0x00);
         if (off != 0) {
+            grDatFiles_ResetJointMap();
             mnCharSel_pc_anim[i].joint =
                 grDatFiles_ConvertJointTreeGCNtoX64(base + off, base, 0, NULL);
+            grDatFiles_ResolvePObjJoints();
         }
         off = pc_css_be32(e + 0x04);
         if (off != 0) {

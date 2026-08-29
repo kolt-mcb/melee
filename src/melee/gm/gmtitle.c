@@ -488,7 +488,9 @@ HSD_Archive* gmTitle_801A1AC0(void)
 
         /* TtlMoji (title text) joint tree */
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_joint");
+        grDatFiles_ResetJointMap();
         gmTitle_80479B28.joint = grDatFiles_ConvertJointTreeGCNtoX64(raw, dataBase, 0, NULL);
+        grDatFiles_ResolvePObjJoints();
 
         /* TtlMoji animation trees */
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_animjoint");
