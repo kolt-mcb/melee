@@ -125,6 +125,11 @@ static MapJoint mp_pc_empty_inner;
 static CollJoint mp_pc_empty_joints[MP_COLL_JOINT_MAX];
 static CollVtx mp_pc_empty_vtx[8];
 static CollLine mp_pc_empty_lines[8];
+/* How many CollLine entries groundCollLine currently holds: the 8-entry
+ * empty world until mpLibLoad allocates the real 0x3000-byte table. Stage
+ * code addresses lines by constant id (Kongo Jungle: 0x27..0x45) and does so
+ * from map callbacks that can run before the world is loaded. */
+static int mp_pc_line_cap = 8;
 
 /* Run before main: mplib is reached from several stage paths (Ground_OnLoad,
  * Ground_801C0800, Ground_801C2ED0's per-frame update) and chasing the call
@@ -171,6 +176,7 @@ __attribute__((constructor)) void mpLib_PCInstallEmptyCollision(void)
     groundCollJoint = mp_pc_empty_joints;
     groundCollVtx = mp_pc_empty_vtx;
     groundCollLine = mp_pc_empty_lines;
+    mp_pc_line_cap = 8;
     jointListStart = NULL;
 }
 #endif
@@ -996,6 +1002,10 @@ void mpLibLoad(MapCollData* coll_data)
     groundCollLine = HSD_MemAlloc(0x3000);
     HSD_ASSERT(413, groundCollLine);
 #if BUILD_TARGET_PC
+    mp_pc_line_cap = (int) (0x3000 / sizeof(CollLine));
+    memset(groundCollLine, 0, 0x3000);
+#endif
+#if BUILD_TARGET_PC
     /* PC port: 0x3400 is a GameCube *byte* count -- 0x3400 / sizeof(CollJoint)
      * is exactly 256 there, matching the joint_id < 256 bound this file
      * already checks (mpLib_80057D9C). CollJoint holds seven pointers, so it
@@ -1123,6 +1133,48 @@ void mpLibLoad(MapCollData* coll_data)
     } else {
         mpIsland_8005A6F8();
     }
+#if BUILD_TARGET_PC
+    /* MELEE_MPDUMP=1: print the converted collision world once -- every
+     * joint's line ranges and every line's endpoints and flags -- so a
+     * fighter falling through a platform can be checked against the data
+     * rather than the picture. */
+    if (getenv("MELEE_MPDUMP") != NULL) {
+        int jn, ln;
+        fprintf(stderr, "[MPDUMP] verts=%d lines=%d joints=%d floors=%d..+%d "
+                "ceil=%d..+%d rwall=%d..+%d lwall=%d..+%d dyn=%d..+%d scale=%.3f\n",
+                coll_data->vert_count, coll_data->line_count,
+                coll_data->joint_count, coll_data->floor_start,
+                coll_data->floor_count, coll_data->ceiling_start,
+                coll_data->ceiling_count, coll_data->right_wall_start,
+                coll_data->right_wall_count, coll_data->left_wall_start,
+                coll_data->left_wall_count, coll_data->dynamic_start,
+                coll_data->dynamic_count, (double) f31);
+        for (jn = 0; jn < coll_data->joint_count; jn++) {
+            MapJoint* mj = &coll_data->joints[jn];
+            fprintf(stderr, "[MPDUMP] joint %d: floor=%d+%d ceil=%d+%d rw=%d+%d "
+                    "lw=%d+%d dyn=%d+%d vtx=%d+%d bounds=[%.1f,%.1f..%.1f,%.1f]\n",
+                    jn, mj->floor_start, mj->floor_count, mj->ceiling_start,
+                    mj->ceiling_count, mj->right_wall_start,
+                    mj->right_wall_count, mj->left_wall_start,
+                    mj->left_wall_count, mj->dynamic_start, mj->dynamic_count,
+                    mj->vtx_start, mj->vtx_count, (double) mj->left_bound,
+                    (double) mj->bottom_bound, (double) mj->right_bound,
+                    (double) mj->top_bound);
+        }
+        for (ln = 0; ln < coll_data->line_count; ln++) {
+            MapLine* ml = &coll_data->lines[ln];
+            fprintf(stderr, "[MPDUMP] line %d: v%d(%.1f,%.1f)-v%d(%.1f,%.1f) "
+                    "prev=%d/%d next=%d/%d hi=%04x lo=%04x en=%d\n",
+                    ln, ml->v0_idx, (double) groundCollVtx[ml->v0_idx].pos.x,
+                    (double) groundCollVtx[ml->v0_idx].pos.y, ml->v1_idx,
+                    (double) groundCollVtx[ml->v1_idx].pos.x,
+                    (double) groundCollVtx[ml->v1_idx].pos.y, ml->prev_id0,
+                    ml->prev_id1, ml->next_id0, ml->next_id1, ml->hi_flags,
+                    ml->lo_flags,
+                    (int) ((groundCollLine[ln].flags & LINE_FLAG_ENABLED) != 0));
+        }
+    }
+#endif
     mpUncheckBounding();
 }
 
@@ -4983,6 +5035,20 @@ void mpLib_80055E9C(int joint_id)
     HSD_JObjSetupMatrix(jobj);
     mtx = HSD_JObjGetMtxPtr(jobj);
     m0_0 = ((volatile float*) mtx)[0];
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MPDUMP") != NULL) {
+        static int n = 0;
+        if (n < 40) { n++;
+            fprintf(stderr, "[MPJOINT] joint %d jobj=%p mtx=[%.2f %.2f %.2f %.2f | "
+                    "%.2f %.2f %.2f %.2f | %.2f %.2f %.2f %.2f]\n", joint_id,
+                    (void*) jobj, (double) mtx[0][0], (double) mtx[0][1],
+                    (double) mtx[0][2], (double) mtx[0][3], (double) mtx[1][0],
+                    (double) mtx[1][1], (double) mtx[1][2], (double) mtx[1][3],
+                    (double) mtx[2][0], (double) mtx[2][1], (double) mtx[2][2],
+                    (double) mtx[2][3]);
+        }
+    }
+#endif
     if (m0_0 == mtx[1][1] && m0_0 == mtx[2][2]) {
         m0_3 = mtx[0][3];
         m1_3 = mtx[1][3];
@@ -5184,6 +5250,17 @@ void mpVtxSetPos(int vtx_id, float x, float y)
 void mpLineSetPos(int line_id, float x0, float y0, float x1, float y1)
 {
     CollLine* line = &groundCollLine[line_id];
+#if BUILD_TARGET_PC
+    /* Same shape as mpLib_80056758 below: Kongo Jungle's per-map setup
+     * (grKongo_801D7134) positions fifteen lines by id the moment the stage
+     * JObjs are bound to their collision joints, and a line with no MapLine
+     * behind it cannot be moved. */
+    if (groundCollLine == NULL || groundCollVtx == NULL ||
+        (unsigned) line_id >= (unsigned) mp_pc_line_cap || line->x0 == NULL)
+    {
+        return;
+    }
+#endif
     mpVtxSetPos(line->x0->v0_idx, x0, y0);
     mpVtxSetPos(line->x0->v1_idx, x1, y1);
 }
@@ -5200,7 +5277,9 @@ void mpLib_80056758(int line_id, float x0, float y0, float x1, float y1)
      * died on the first. Moving vertices that do not exist is a no-op, which
      * is the right answer here: the function returns nothing and the caller
      * loops on regardless. */
-    if (groundCollLine == NULL || groundCollVtx == NULL) {
+    if (groundCollLine == NULL || groundCollVtx == NULL ||
+        (unsigned) line_id >= (unsigned) mp_pc_line_cap)
+    {
         return;
     }
     line = &groundCollLine[line_id];

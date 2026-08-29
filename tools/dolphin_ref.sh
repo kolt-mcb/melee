@@ -59,6 +59,12 @@ EnableCheats = True
 041A4300 90640000
 [Gecko_Enabled]
 \$Boot to mode $MELEE_REF_MODE
+[OnFrame]
+\$Boot to mode $MELEE_REF_MODE (patch)
+0x801BFA20:dword:0x3C60$mm
+0x801A4300:dword:0x90640000
+[OnFrame_Enabled]
+\$Boot to mode $MELEE_REF_MODE (patch)
 INI
     done
     echo "dolphin_ref: forcing game mode $MELEE_REF_MODE (lis r3, 0x$mm)"
@@ -100,6 +106,7 @@ if [ -n "${MELEE_REF_TAP_FRAMES:-}" ] && [ -p "$PIPE" ]; then
         # into the menus. The frame dump directory fills as frames render, so
         # counting the files in it is a reliable emulated-frame clock.
         exec 3> "$PIPE"
+        printf 'SET L -1\nSET R -1\nSET C 0.5 0.5\n' >&3
         for target in $(echo "$MELEE_REF_TAP_FRAMES" | tr ',' ' '); do
             while [ "$(ls "$DUMPDIR" 2>/dev/null | wc -l)" -lt "$target" ]; do
                 sleep 0.2
@@ -134,6 +141,17 @@ if [ -n "${MELEE_REF_INPUT:-}" ] && [ -p "$PIPE" ]; then
         # Opening the second pipe unconditionally would block forever when
         # Dolphin has not created it, so only open it if it is there.
         if [ -p "$PIPE2" ]; then exec 4> "$PIPE2"; else exec 4>&3; fi
+        # Release the shoulder triggers on both pads. Dolphin's pipe device
+        # creates the L/R axes with both their + and - halves at 0, and the
+        # GCPadNew.ini mapping `Axis L -+` is a full-range surface that reads
+        # (hi - lo + 1) / 2 = 0.5 from that -- a permanently half-pressed
+        # trigger. On the character select that is invisible; in a match it
+        # is a light shield held from the first frame, which is why every
+        # captured fighter stood in a shrinking bubble. SET with one value v
+        # maps to (v / 2 + 0.5), so -1 lands on lo = 1, hi = 0: released.
+        for fd_ in 3 4; do
+            printf 'SET L -1\nSET R -1\nSET C 0.5 0.5\n' >&"$fd_"
+        done
         for step in $(echo "$MELEE_REF_INPUT" | tr ',' ' '); do
             target="${step%%:*}"
             rest="${step#*:}"

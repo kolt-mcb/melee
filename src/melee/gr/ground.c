@@ -365,6 +365,45 @@ static void* pc_yakumono_convert(u32 size, u32 u16_from)
     cached_u16 = u16_from;
     return buf;
 }
+
+/* Layout-driven variant: walk a string of field widths and swap each. */
+static void* pc_yakumono_convert_layout(const char* layout)
+{
+    static u8 buf[0x400];
+    static const void* cached_src;
+    static const char* cached_layout;
+    const u8* src = stage_info.yakumono_param;
+    const char* c;
+    u32 o = 0;
+
+    if (src == NULL) {
+        return NULL;
+    }
+    if (src == cached_src && layout == cached_layout) {
+        return buf;
+    }
+    for (c = layout; *c != '\0'; c++) {
+        u32 w = (u32) (*c - '0');
+        if (o + w > sizeof(buf)) {
+            break;
+        }
+        if (!pc_mem_readable(src + o, w)) {
+            port_guard_warn("ground.c:yakumono block unreadable");
+            return NULL;
+        }
+        if (w == 4) {
+            *(u32*) (buf + o) = __builtin_bswap32(*(const u32*) (src + o));
+        } else if (w == 2) {
+            *(u16*) (buf + o) = __builtin_bswap16(*(const u16*) (src + o));
+        } else {
+            buf[o] = src[o];
+        }
+        o += w;
+    }
+    cached_src = src;
+    cached_layout = layout;
+    return buf;
+}
 #endif
 
 void* Ground_801C49F8(void)
@@ -637,31 +676,30 @@ void Ground_801C0800(StageIdPair* pair)
 #endif
     
 #if BUILD_TARGET_PC
-    /* PC port: stage_info.param is big-endian archive data.
-     * The struct layout differs on x86_64 due to pointer sizes.
-     * Skip the param field access but call on_init() which creates
-     * stage GObjs with render callbacks. */
-    /* Call on_init to create stage GObjs with render callbacks.
-     * Validate the pointers land in the text segment — StageData read
-     * through unconverted BE data yields garbage function pointers. */
+    /* PC port: on_init used to be called right here, first thing, from the
+     * days when stage_info.param was still big-endian and everything below
+     * was skipped. The GameCube order (the #else branch at the end of this
+     * function) is parameters -> mpLibLoad -> fog -> lights -> on_init, and
+     * the order matters: the map-init callbacks on_init runs bind stage
+     * JObjs to collision joints (Ground_801C2ED0) and position lines by id
+     * (Kongo Jungle), which only means something once mpLibLoad has built
+     * the real collision world. Calling on_init first bound everything to the
+     * 8-entry empty world that mpLibLoad then threw away. on_init is now
+     * called where the console calls it, below. */
     {
         extern char etext;
-        if (stage_data != NULL && (uintptr_t)stage_data > 0x10000 &&
-            stage_data->on_init != NULL &&
-            (uintptr_t)stage_data->on_init < (uintptr_t)&etext)
+        if (!(stage_data != NULL && (uintptr_t)stage_data > 0x10000 &&
+              stage_data->on_init != NULL &&
+              (uintptr_t)stage_data->on_init < (uintptr_t)&etext))
         {
-            stage_data->on_init();
-        } else {
             PORT_LOG_WARN("Ground_801C0800: skipping invalid on_init (stage_data=%p)\n",
                           (void*)stage_data);
             return;
         }
     }
-    /* PC port: grGroundParam is byte-swapped at load now (grdatfiles.c), so
-     * the parameter setup below is finally safe to run — it is what gives the
-     * match camera its bounds and zoom limits and the stage its gravity and
-     * blast zones. This function used to `return` here, leaving all of that
-     * dead and the camera on defaults, sitting inside the stage. */
+    /* grGroundParam is byte-swapped at load (grdatfiles.c), so the parameter
+     * setup below is safe to run — it is what gives the match camera its
+     * bounds and zoom limits and the stage its gravity and blast zones. */
     if (stage_info.param == NULL) {
         return;
     }
@@ -742,6 +780,7 @@ void Ground_801C0800(StageIdPair* pair)
     if (getenv("MELEE_STAGE_NOLIGHTS") == NULL) {
         Ground_801C466C();
     }
+    stage_data->on_init();
 #else
     mpLibLoad(stage_info.coll_data);
     mpLib_80058820();
@@ -2057,13 +2096,14 @@ bool Ground_801C2ED0(HSD_JObj* jobj, s32 arg1)
     bool result = false;
     UnkArchiveStruct* temp_r3;
 #if BUILD_TARGET_PC
-    /* PC port: this binds stage JObjs to mp/ collision joints, but the
-     * stage's coll_data is still raw big-endian and mpLibLoad has never run
-     * (Ground_801C0800 returns before it). Every id passed to mpLib_* here is
-     * therefore garbage. Skip the binding until the MapCollData converter
-     * lands (roadmap M2 stage 3); the stage still renders, it just has no
-     * collision. */
-    if (getenv("MELEE_STAGE_COLL") == NULL) {
+    /* PC port: this binds stage JObjs to mp/ collision joints. It was gated
+     * off (opt-in via MELEE_STAGE_COLL) from before MapCollData was
+     * converted, and the gate outlived the reason: with collision on, every
+     * joint-driven platform in the game -- Onett's awnings, every moving
+     * platform -- kept its vertices in joint-local space around the origin,
+     * and fighters fell straight through to the static floor. Bind unless
+     * collision itself is off. */
+    if (getenv("MELEE_NO_STAGE_COLL") != NULL) {
         return false;
     }
 #endif
@@ -3283,6 +3323,59 @@ LightList** Ground_801C49B4(void)
 
 void* Ground_GetYakumonoParam(void)
 {
+#if BUILD_TARGET_PC
+    /* The block is raw big-endian archive data; every stage casts it to its
+     * own private struct. Convert per stage, from each struct's layout, the
+     * way Ground_801C49F8 does for its callers. Unlisted stages still get
+     * the raw block (wrong values, no crash) until their layout is read. */
+    /* Layout strings: one character per field, '4' = 32-bit scalar,
+     * '2' = 16-bit, '1' = byte (copied). Sizes and offsets come from each
+     * stage's own struct declaration (src/melee/gr/gr*.c). Stages whose
+     * block holds pointers (Pushon, Ice Mountain, the trophy stages) are
+     * not listed: an archive offset cannot be swapped into a pointer. */
+    {
+        const char* layout = NULL;
+        switch (stage_info.grkind) {
+        case Gr_Kind_Battle:      layout = "44"; break;           /* 0x08 */
+        case Gr_Kind_FigureGet:   layout = "444444"; break;       /* 0x18 */
+        case Gr_Kind_Flatzone:    layout = "4444444444444444"; break; /* 0x40 */
+        case Gr_Kind_Garden:      layout = "44444444"; break;     /* 0x20 */
+        case Gr_Kind_Greens:      layout = "4444444444444444444444444444444"; break; /* 0x7C */
+        case Gr_Kind_Heal:        layout = "44"; break;           /* 0x08 */
+        case Gr_Kind_Izumi:       layout = "444444444444444444444"; break; /* 0x54 */
+        case Gr_Kind_Kraid:       layout = "4444444444444"; break; /* 0x34 */
+        case Gr_Kind_Last:        layout = "4444"; break;         /* 0x10 */
+        case Gr_Kind_Onett:
+            /* gronett.c grOnett_StageParam: 26 f32. With this raw, the awning
+             * spring constants read as 0 / -4e8 and the awnings never
+             * settled. */
+            layout = "44444444444444444444444444"; break;        /* 0x68 */
+        case Gr_Kind_Story:       layout = "444444444"; break;    /* 0x24 */
+        case Gr_Kind_Yorster:     layout = "44444444"; break;     /* 0x20 */
+        case Gr_Kind_ZebesRoute:  layout = "44"; break;           /* 0x08 */
+        case Gr_Kind_Kongo:       /* grkongo.static.h: 0x44 of 32-bit, eight
+                                   * s16 at 0x44..0x54, 32-bit to 0xBC */
+            layout = "44444444444444444" "22222222" "4444444444444444444444444444"; break;
+        case Gr_Kind_OldPupupu:   layout = "2222" "44444444444"; break; /* 0x34 */
+        case Gr_Kind_OldYoshi:    layout = "22" "444" "22222" "11"; break; /* 0x1C */
+        case Gr_Kind_Inishie1:    /* 32-bit to 0x14, six s16, 32-bit to 0x54 */
+            layout = "44444" "222222" "4444444444444"; break;
+        case Gr_Kind_Inishie2:    /* ten s16, 2 Vec3, f32, 2 Vec3, two s16 */
+            layout = "2222222222" "444444" "4" "444444" "22"; break;
+        case Gr_Kind_PStadium:    /* 32-bit to 0x1C, rgb+pad, 32-bit to 0x48, five s16, pad */
+            layout = "4444444" "1111" "4444444444" "22222" "11"; break;
+        case Gr_Kind_KinokoRoute: layout = "4" "211"; break;      /* 0x08 */
+        case Gr_Kind_GreatBay:    /* grGb_StageAttr, 0xA4 */
+            layout = "22" "4444444444444444" "2222" "444444444" "2222" "4"
+                     "22222222222222222222"; break;
+        default:
+            break;
+        }
+        if (layout != NULL) {
+            return pc_yakumono_convert_layout(layout);
+        }
+    }
+#endif
     return stage_info.yakumono_param;
 }
 
