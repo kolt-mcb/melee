@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "tev.h"
 
 #include "debug.h"
@@ -210,6 +212,10 @@ int HSD_StateAssignTev(void)
 
 void HSD_StateSetNumTevStages(void)
 {
+#if BUILD_TARGET_PC
+    { static int _tl = -1, _tn = 0; if (_tl < 0) _tl = (getenv("MELEE_TEVLOG") != NULL);
+      extern u32 pc_frame_number; if (_tl && pc_frame_number >= 259 && pc_frame_number <= 261 && _tn < 400) { _tn++; fprintf(stderr, "STATESETNUMTEV current_tev=%d\n", current_tev); } }
+#endif
     GXSetNumTevStages(current_tev);
     current_tev = 0;
 }
