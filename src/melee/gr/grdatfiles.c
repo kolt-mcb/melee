@@ -1872,9 +1872,10 @@ static HSD_WObjDesc* grDatFiles_ConvertWObjDescGCNtoX64(const u8* gcnPtr, u8* da
     if (x64 == NULL) return NULL;
 
     x64->class_name = NULL;
-    raw = be32_swap(gcn->pos_x); x64->pos.x = *(f32*)&raw;
-    raw = be32_swap(gcn->pos_y); x64->pos.y = *(f32*)&raw;
-    raw = be32_swap(gcn->pos_z); x64->pos.z = *(f32*)&raw;
+    /* Same f32-through-u32 trap as the TObj blending field. */
+    raw = be32_swap(*(const u32*) &gcn->pos_x); x64->pos.x = *(f32*)&raw;
+    raw = be32_swap(*(const u32*) &gcn->pos_y); x64->pos.y = *(f32*)&raw;
+    raw = be32_swap(*(const u32*) &gcn->pos_z); x64->pos.z = *(f32*)&raw;
     x64->robjdesc = NULL;
     return x64;
 }
@@ -2238,7 +2239,12 @@ static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8
     x64Tobj->blend_flags = be32_swap(gcnTobj->blend_flags);
 
     /* blending - f32 big-endian */
-    raw = be32_swap(gcnTobj->blending);
+    /* `blending` is declared f32 in the mirror struct: passing it to
+     * be32_swap(u32) converted the float *numerically* before the swap, so a
+     * big-endian 0.9 (bytes 3F 66 66 66, read little-endian as a tiny
+     * denormal) became 0. That zero was the lerp factor for every
+     * colormap-BLEND texture, which is how the menu's grid overlay vanished. */
+    raw = be32_swap(*(const u32*) &gcnTobj->blending);
     x64Tobj->blending = *(f32*)&raw;
 
     /* magFilt - GXTexFilter (u32 big-endian) */
@@ -2259,9 +2265,43 @@ static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8
     } else {
         x64Tobj->tlutdesc = NULL;
     }
-    /* lod, tev - set NULL for now (advanced features) */
+    /* lod - HSD_TexLODDesc: minFilt u32, LODBias f32, bias_clamp u8,
+     * edgeLODEnable u8, pad, max_anisotropy u32. No pointers, 16 bytes on
+     * both sides; only the 32-bit fields need swapping. */
     x64Tobj->lod = NULL;
+    val = be32_swap(gcnTobj->lod);
+    if (val != 0 && val < 0x80000000U && val < 0x200000U) {
+        const u8* g = dataBase + val;
+        HSD_TexLODDesc* lod = lbHeap_80015BD0(0, sizeof(HSD_TexLODDesc));
+        if (lod != NULL) {
+            memset(lod, 0, sizeof(*lod));
+            lod->minFilt = (GXTexFilter)be32_swap(*(const u32*)(g + 0));
+            raw = be32_swap(*(const u32*)(g + 4));
+            lod->LODBias = *(f32*)&raw;
+            lod->bias_clamp = g[8];
+            lod->edgeLODEnable = g[9];
+            lod->max_anisotropy = (GXAnisotropy)be32_swap(*(const u32*)(g + 12));
+            x64Tobj->lod = lod;
+        }
+    }
+
+    /* tev - HSD_TObjTevDesc: the texture's custom TEV stage. Sixteen u8
+     * selectors, three GXColors (konst, tev0, tev1) and a u32 active mask;
+     * 32 bytes with no pointers, so everything but `active` copies as-is.
+     * Dropping this block (as the converter did until now) loses every
+     * konstant-tinted texture: the menu's amber buttons and blue panels are
+     * intensity textures whose only colour is tev->konst. */
     x64Tobj->tev = NULL;
+    val = be32_swap(gcnTobj->tev);
+    if (val != 0 && val < 0x80000000U && val < 0x200000U) {
+        const u8* g = dataBase + val;
+        HSD_TObjTevDesc* tev = lbHeap_80015BD0(0, sizeof(HSD_TObjTevDesc));
+        if (tev != NULL) {
+            memcpy(tev, g, 28);
+            tev->active = be32_swap(*(const u32*)(g + 28));
+            x64Tobj->tev = tev;
+        }
+    }
 
     return x64Tobj;
 }

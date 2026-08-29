@@ -191,6 +191,14 @@ static void TObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
         if (tobj->imagetbl[n]) {
             tobj->imagedesc = tobj->imagetbl[n];
         }
+#if BUILD_TARGET_PC
+        { static int _ti_on = -1, _ti_n = 0;
+          if (_ti_on < 0) _ti_on = (getenv("MELEE_AOBJLOG") != NULL);
+          if (_ti_on && _ti_n < 400) { _ti_n++;
+            fprintf(stderr, "TIMG tobj=%p n=%d (fv=%.2f) entry=%p -> %ux%u fmt=%u\n", (void*)tobj, n, (double)val->fv,
+                    (void*)tobj->imagetbl[n], tobj->imagedesc ? tobj->imagedesc->width : 0u,
+                    tobj->imagedesc ? tobj->imagedesc->height : 0u, tobj->imagedesc ? (unsigned)tobj->imagedesc->format : 0u); } }
+#endif
     } break;
     case HSD_A_T_TCLT: {
         if (tobj->tluttbl) {
@@ -199,6 +207,10 @@ static void TObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
     } break;
     case HSD_A_T_BLEND:
         tobj->blending = val->fv;
+#if BUILD_TARGET_PC
+        { static int _ab = -1, _an = 0; if (_ab < 0) _ab = (getenv("MELEE_AOBJLOG") != NULL);
+          if (_ab && _an < 60) { _an++; fprintf(stderr, "TBLEND tobj=%p blending=%.3f\n", (void*)tobj, (double)val->fv); } }
+#endif
         break;
     case HSD_A_T_ROTX:
         tobj->rotate.x = val->fv;
@@ -324,6 +336,13 @@ static int TObjLoad(HSD_TObj* tobj, HSD_TObjDesc* td)
     tobj->flags |= TEX_MTX_DIRTY;
     tobj->tlut_no = (u8) -1;
     tobj->tev = HSD_TObjTevLoadDesc(td->tev);
+#if BUILD_TARGET_PC
+    { static int _bl = -1, _bn = 0; if (_bl < 0) _bl = (getenv("MELEE_AOBJLOG") != NULL);
+      if (_bl && _bn < 300) { _bn++;
+        fprintf(stderr, "TOBJLOAD tobj=%p id=%u flags=0x%x blending=%.3f img=%ux%u fmt=%u\n", (void*)tobj, (unsigned)tobj->id,
+                (unsigned)tobj->flags, (double)tobj->blending, tobj->imagedesc ? tobj->imagedesc->width : 0u,
+                tobj->imagedesc ? tobj->imagedesc->height : 0u, tobj->imagedesc ? (unsigned)tobj->imagedesc->format : 0u); } }
+#endif
 
     return 0;
 }

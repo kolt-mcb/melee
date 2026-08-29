@@ -112,6 +112,14 @@ void HSD_CObjEraseScreen(HSD_CObj* cobj, s32 enable_color, s32 enable_alpha,
         break;
     }
 
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_CAMLOG") != NULL) {
+        fprintf(stderr, "ERASESCREEN cobj=%p type=%u near=%g far=%g fov=%g aspect=%g -> top=%g right=%g z=%g\n",
+                (void*)cobj, (unsigned)HSD_CObjGetProjectionType(cobj), (double)HSD_CObjGetNear(cobj), (double)HSD_CObjGetFar(cobj),
+                (double)cobj->projection_param.perspective.fov, (double)cobj->projection_param.perspective.aspect,
+                (double)top_res, (double)right_res, (double)-z_val);
+    }
+#endif
     HSD_EraseRect(top_res, bottom_res, left_res, right_res, -z_val,
                   enable_color, enable_alpha, enable_depth);
 }

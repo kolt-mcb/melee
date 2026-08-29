@@ -663,8 +663,8 @@ void HSD_LObjAddCurrent(HSD_LObj* lobj)
         if (_la_on < 0) _la_on = (getenv("MELEE_LOBJLOG") != NULL);
         if (_la_on && lobj != NULL && _la_n < 40) {
             _la_n++;
-            fprintf(stderr, "LOBJADD type=%d col=(%u,%u,%u,%u) flags=0x%x prio=%d\n",
-                    (int)HSD_LObjGetType(lobj), lobj->color.r, lobj->color.g, lobj->color.b, lobj->color.a,
+            fprintf(stderr, "LOBJADD lobj=%p type=%d col=(%u,%u,%u,%u) flags=0x%x prio=%d\n",
+                    (void*)lobj, (int)HSD_LObjGetType(lobj), lobj->color.r, lobj->color.g, lobj->color.b, lobj->color.a,
                     (unsigned)lobj->flags, (int)HSD_LObjGetPriority(lobj));
         }
     }
