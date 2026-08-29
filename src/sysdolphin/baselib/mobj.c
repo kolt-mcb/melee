@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "mobj.h"
 
 #include "aobj.h"
@@ -176,6 +178,19 @@ static int MObjLoad(HSD_MObj* mobj, HSD_MObjDesc* desc)
     mobj->tobj = HSD_TObjLoadDesc(desc->texdesc);
     mobj->mat = HSD_MaterialAlloc();
     memcpy(mobj->mat, desc->mat, sizeof(HSD_Material));
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MATLOG") != NULL) {
+        static int n = 0;
+        if (n < 40) { n++;
+            fprintf(stderr, "MATLOAD rmode=0x%x diffuse=(%u,%u,%u,%u) "
+                    "amb=(%u,%u,%u) alpha=%.3f\n",
+                    (unsigned) mobj->rendermode,
+                    mobj->mat->diffuse.r, mobj->mat->diffuse.g,
+                    mobj->mat->diffuse.b, mobj->mat->diffuse.a,
+                    mobj->mat->ambient.r, mobj->mat->ambient.g,
+                    mobj->mat->ambient.b, (double) mobj->mat->alpha); }
+    }
+#endif
     mobj->rendermode |= RENDER_TOON;
     if (desc->pedesc != NULL) {
         mobj->pe = hsdAllocMemPiece(sizeof(HSD_PEDesc));
