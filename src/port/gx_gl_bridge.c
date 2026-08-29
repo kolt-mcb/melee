@@ -928,6 +928,8 @@ static GLint g_alpha_cmp_mask_loc = -1;
 static GLint g_dst_alpha_enabled_loc = -1;
 static GLint g_dst_alpha_loc = -1;
 static GLint g_lighting_enabled_loc = -1;
+static GLint g_dbg_drawid_loc = -1;
+static GLint g_dbg_mode_loc = -1;
 static GLint g_diff_fn_loc = -1;
 
 /* TEV pipeline uniform locations */
@@ -1323,6 +1325,8 @@ static const char* g_frag_src =
 "uniform float u_dst_alpha;\n"
 "// Lighting (per-vertex lit color modulates channel colors)\n"
 "uniform int u_lighting_enabled;  // 1 if any channel has lighting enabled\n"
+"uniform int u_dbg_drawid;        // MELEE_DRAWID: index of this draw\n"
+"uniform int u_dbg_mode;          // MELEE_DRAWID: 1 = paint the index\n"
 "\n"
 "// Indirect texture (bump mapping / refraction) uniforms\n"
 "uniform int u_ind_tex_enabled;       // 1 if indirect TEV is active\n"
@@ -1703,6 +1707,11 @@ static const char* g_frag_src =
 "    }\n"
 "\n"
 "    frag_color = col;\n"
+"    if (u_dbg_mode != 0) {\n"
+"        frag_color = vec4(float(u_dbg_drawid % 256) / 255.0,\n"
+"                          float((u_dbg_drawid / 256) % 256) / 255.0,\n"
+"                          0.75, 1.0);\n"
+"    }\n"
 "}\n";
 
 static GLuint compile_shader(GLenum type, const char* src)
@@ -1781,6 +1790,8 @@ static void bridge_compile_shaders(void)
     g_dst_alpha_enabled_loc = glGetUniformLocation(g_shader_program, "u_dst_alpha_enabled");
     g_dst_alpha_loc = glGetUniformLocation(g_shader_program, "u_dst_alpha");
     g_lighting_enabled_loc = glGetUniformLocation(g_shader_program, "u_lighting_enabled");
+    g_dbg_drawid_loc = glGetUniformLocation(g_shader_program, "u_dbg_drawid");
+    g_dbg_mode_loc = glGetUniformLocation(g_shader_program, "u_dbg_mode");
     g_diff_fn_loc = glGetUniformLocation(g_shader_program, "u_diff_fn");
     
     /* TEV pipeline uniform locations */
@@ -2191,10 +2202,16 @@ void gx_bridge_init(void)
 }
 
 static u32 s_pc_draws = 0;  /* PC diag: per-frame GL draw count (MELEE_STAGE_DIAG) */
+/* Index of the current draw within the frame. MELEE_DRAWID paints each draw
+ * with its own index so a pixel can be traced back to the draw that produced
+ * it, and MELEE_DRAWTRACE prints the same number -- so "which draw painted
+ * this button" stops being guesswork. */
+static u32 g_frame_draw_idx = 0;
 void gx_frame_begin(void)
 {
     gx_trace_frame_begin();
     g_state.frame_count++;
+    g_frame_draw_idx = 0;
     { static int _dd=-1; if(_dd<0)_dd=(getenv("MELEE_STAGE_DIAG")!=NULL);
       if(_dd && g_state.frame_count<=23) s_pc_draws=0; }
     g_state.in_primitive = FALSE;
@@ -3426,6 +3443,18 @@ static void bridge_upload_and_draw(void)
     /* Upload alpha compare uniforms */
     apply_alpha_compare_uniforms();
     
+    g_frame_draw_idx++;
+    if (g_dbg_mode_loc >= 0) {
+        int on = ENV_FLAG("MELEE_DRAWID");
+        UP1I(g_dbg_mode_loc, on);
+        if (on && g_dbg_drawid_loc >= 0) {
+            UP1I(g_dbg_drawid_loc, (GLint) g_frame_draw_idx);
+            /* Blending would mix two draws' indices into a colour that
+             * decodes to a third draw that never ran. */
+            glDisable(GL_BLEND);
+        }
+    }
+
     /* Upload TEV pipeline uniforms (includes KColors) */
     apply_tev_uniforms();
     
@@ -3680,7 +3709,7 @@ static void bridge_upload_and_draw(void)
                 }
                 if (cn > 0) { cx /= cn; cy /= cn; cz /= cn; }
                 fprintf(stderr, "DRAW frame=%u #%02u n=%u prim=%u mat=(%u,%u,%u,%u) v0c=(%d,%d,%d,%d) ctr=(%.1f,%.1f,%.1f) texb=%u clr_en=%d blend=%d/%u/%u mm_t=(%.2f,%.2f,%.2f) mm_s=(%.2f,%.2f,%.2f) bbox=[(%.1f,%.1f,%.1f)..(%.1f,%.1f,%.1f)]\n",
-                        (unsigned)fc2, _dt_n, (unsigned)count, (unsigned)g_state.prim_type,
+                        (unsigned)fc2, g_frame_draw_idx, (unsigned)count, (unsigned)g_state.prim_type,
                         (unsigned)g_state.cur_color.r, (unsigned)g_state.cur_color.g, (unsigned)g_state.cur_color.b, (unsigned)g_state.cur_color.a,
                         (count>0)?(int)(g_state.verts[0].col[0]*255):0, (count>0)?(int)(g_state.verts[0].col[1]*255):0, (count>0)?(int)(g_state.verts[0].col[2]*255):0, (count>0)?(int)(g_state.verts[0].col[3]*255):0,
                         cx, cy, cz,
@@ -6844,6 +6873,10 @@ void GXSetIndTevColor(void) {}
 void GXSetIndTevAlpha(void) {}
 void GXSetTevKColor(u32 kcolor, GXColor color)
 {
+    if (ENV_FLAG("MELEE_KCOLLOG") && g_state.frame_count == 180) {
+        fprintf(stderr, "  KSET draw=%u k%u=(%u,%u,%u,%u)\n",
+                g_frame_draw_idx, kcolor, color.r, color.g, color.b, color.a);
+    }
     GX_TRACE("GXSetTevKColor(%u, {%u,%u,%u,%u})", kcolor, (u32)color.r, (u32)color.g, (u32)color.b, (u32)color.a);
     {
         static int _kc_on = -1, _kc_n = 0;
