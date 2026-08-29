@@ -2,19 +2,20 @@
 # walk right for a second, jump, attack. Scores the dynamics -- walk speed,
 # jump arc, animation timing -- not just the settled frame. Dolphin runs the
 # match.case menu route, then the same three inputs in dump frames
-# (port frame + 1530). The port holds the stick with an explicit hold count
+# (port frame + 1515: the timers put the console match start at dump
+# 1648 and the port at frame 133). The port holds the stick with an explicit hold count
 # because its stick tokens auto-release after four frames.
 description: VS match with P1 walking, jumping and attacking (Onett)
 run_frames: 340
 ref_frames: 2400
 align: search
 window: 8
-ref_lead: -1530
+ref_lead: -1515
 env: MELEE_BOOT_MODE=14
 env: MELEE_BOOT_MATCH=13,12,9,0,0
-input: 130: right*60
-input: 220: x
-input: 260: a
+input: 145: right*60
+input: 235: x
+input: 275: a
 ref_input: 236:+START
 ref_input: 240:-START
 ref_input: 400:+START
@@ -55,4 +56,4 @@ ref_input: 1750:+X
 ref_input: 1754:-X
 ref_input: 1790:+A
 ref_input: 1794:-A
-checks: 180, 235, 300
+checks: 195, 251, 315

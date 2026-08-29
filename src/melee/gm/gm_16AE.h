@@ -11,7 +11,14 @@
 /* 16AE44 */ lbl_8046B6A0_t* gm_16AE_GetUnkData_1(void);
 /* 16AE50 */ struct StartMeleeRules* gm_GetRules(void);
 /* 16AE60 */ UNK_T fn_8016AE60(void);
-/* 16AE80 */ bool gm_8016AE80(void);
+/* 16AE80 */
+#if BUILD_TARGET_PC
+/* Returns the item-frequency rule, whose "items off" value is -1; declared
+ * bool, that is 1 on x86_64 (_Bool) and every `!= -1` test passed. */
+s32 gm_8016AE80(void);
+#else
+bool gm_8016AE80(void);
+#endif
 /* 16AE94 */ f32 gm_8016AE94(void);
 /* 16AEA4 */ u64 gm_8016AEA4(void);
 /* 16AEB8 */ s32 gm_8016AEB8(void);
