@@ -140,7 +140,8 @@ if ASAN:
     OUT_DIR = BUILD / "pc-asan"
 CFLAGS = PROF_FLAGS + " " + "-m64 -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "")
 LDFLAGS = "-m64 -no-pie" + SAN_FLAGS + PROF_FLAGS
-LIBS = "-lSDL2 -lGL -lpthread -ldl -lm -lc -lstdc++"
+# libjpeg decodes the motion-JPEG frames in MTH movies (src/port/pc_mth.c).
+LIBS = "-lSDL2 -lGL -ljpeg -lpthread -ldl -lm -lc -lstdc++"
 out_objs = " ".join(str(OUT_DIR/"obj"/(Path(s).stem+".o")) for s in ALL_SOURCES)
 OUT_PATH = str(OUT_DIR / "melee-pc")
 

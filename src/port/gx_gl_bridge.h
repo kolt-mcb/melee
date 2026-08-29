@@ -192,6 +192,11 @@ void gx_set_default_3d_camera(void);
 void pc_render_tex_test(void);
 void pc_render_stage_test(void);
 
+/* PC port: draw one decoded movie frame (tightly packed 24-bit RGB, rows
+ * top-down) across the whole current viewport. Replaces the GameCube's
+ * three-plane YUV SObj, which depended on the THP hardware decoder. */
+void pc_gx_draw_movie(const unsigned char* rgb, int width, int height);
+
 /* Depth testing toggles for multi-pass rendering */
 void gx_enable_depth_test(void);
 void gx_disable_depth_test(void);
