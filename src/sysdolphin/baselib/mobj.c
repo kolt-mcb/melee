@@ -195,15 +195,22 @@ static int MObjLoad(HSD_MObj* mobj, HSD_MObjDesc* desc)
     memcpy(mobj->mat, desc->mat, sizeof(HSD_Material));
 #if BUILD_TARGET_PC
     if (getenv("MELEE_MATLOG") != NULL) {
-        static int n = 0;
-        if (n < 40) { n++;
-            fprintf(stderr, "MATLOAD rmode=0x%x diffuse=(%u,%u,%u,%u) "
-                    "amb=(%u,%u,%u) alpha=%.3f\n",
-                    (unsigned) mobj->rendermode,
+        /* MELEE_MATLOG=N skips the first N loads, so a later scene's
+         * materials can be seen past the menu's. */
+        static int n = 0, skip = -1;
+        if (skip < 0) skip = atoi(getenv("MELEE_MATLOG"));
+        n++;
+        if (n > skip && n <= skip + 60) {
+            const HSD_PEDesc* pe = desc->pedesc;
+            fprintf(stderr, "MATLOAD #%d mobj=%p rmode=0x%x diffuse=(%u,%u,%u,%u) "
+                    "amb=(%u,%u,%u) alpha=%.3f pe=%p flags=0x%x type=%u src=%u dst=%u zcomp=%u\n",
+                    n, (void*) mobj, (unsigned) mobj->rendermode,
                     mobj->mat->diffuse.r, mobj->mat->diffuse.g,
                     mobj->mat->diffuse.b, mobj->mat->diffuse.a,
                     mobj->mat->ambient.r, mobj->mat->ambient.g,
-                    mobj->mat->ambient.b, (double) mobj->mat->alpha); }
+                    mobj->mat->ambient.b, (double) mobj->mat->alpha,
+                    (void*) pe, pe ? (unsigned) pe->flags : 0u, pe ? (unsigned) pe->type : 0u,
+                    pe ? (unsigned) pe->src_factor : 0u, pe ? (unsigned) pe->dst_factor : 0u, pe ? (unsigned) pe->z_comp : 0u); }
     }
 #endif
     mobj->rendermode |= RENDER_TOON;

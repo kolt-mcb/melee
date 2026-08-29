@@ -71,6 +71,13 @@ static void order_data(void)
  * The GCN archive data section is big-endian with 32-bit pointers.
  * On x86_64, the C structs have 64-bit pointers with different field offsets.
  * This function reads GCN-packed structs and converts them to x86_64 structs. */
+/* Upper bound for a plausible archive data offset. This was 2 MB, which
+ * silently rejected 435 of MnSlChr.usd's 445 texture descriptors -- its data
+ * section is 3.6 MB -- so the character select had no portraits, no panels
+ * and no background art. Real offsets are bounded by the archive's data
+ * size; anything at or above 0x80000000 is a pointer, caught separately. */
+#define PC_ARCHIVE_MAX_OFFSET 0x4000000U
+
 static inline u32 be32_swap(u32 x)
 {
     return ((x >> 24) & 0xFF) | ((x >> 8) & 0xFF00) |
@@ -1645,7 +1652,7 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
 
     /* texdesc - convert from GCN data */
     val = be32_swap(gcnMobj->texdesc);
-    if (val != 0 && val < 0x80000000U && val < 0x200000U) {
+    if (val != 0 && val < 0x80000000U && val < PC_ARCHIVE_MAX_OFFSET) {
         x64Mobj->texdesc = grDatFiles_ConvertTObjDescGCNtoX64(dataBase + val, dataBase);
     }
     if (getenv("MELEE_GRDAT_TRACE") != NULL) {
@@ -1734,7 +1741,7 @@ static struct HSD_ImageDesc* grDatFiles_ConvertImageDescGCNtoX64(const u8* gcnIm
 
     /* image_ptr - relocate from GCN offset to archive data base */
     val = be32_swap(gcnImg->image_ptr);
-    if (val != 0 && val < 0x80000000U && val < 0x200000U) {  /* Sanity: < 2MB offset */
+    if (val != 0 && val < 0x80000000U && val < PC_ARCHIVE_MAX_OFFSET) {  /* Sanity: < 2MB offset */
         x64Img->image_ptr = (void*)(dataBase + val);
     }
 
@@ -1815,7 +1822,7 @@ static HSD_TlutDesc* grDatFiles_ConvertTlutDescGCNtoX64(const u8* gcnPtr, u8* da
     memset(x64, 0, sizeof(HSD_TlutDesc));
 
     val = be32_swap(gcn->lut);
-    x64->lut = (val != 0 && val < 0x80000000U && val < 0x200000U)
+    x64->lut = (val != 0 && val < 0x80000000U && val < PC_ARCHIVE_MAX_OFFSET)
         ? (void*)(dataBase + val) : NULL;
     x64->fmt = (GXTlutFmt)be32_swap(gcn->fmt);
     x64->tlut_name = be32_swap(gcn->tlut_name);
@@ -2252,7 +2259,7 @@ static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8
 
     /* imagedesc - convert image descriptor */
     val = be32_swap(gcnTobj->imagedesc);
-    if (val != 0 && val < 0x80000000U && val < 0x200000U) {  /* Sanity: < 2MB offset */
+    if (val != 0 && val < 0x80000000U && val < PC_ARCHIVE_MAX_OFFSET) {  /* Sanity: < 2MB offset */
         x64Tobj->imagedesc = grDatFiles_ConvertImageDescGCNtoX64(dataBase + val, dataBase);
     }
 
@@ -2260,7 +2267,7 @@ static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8
      * C4/C8/C14X2 textures; a NULL tlutdesc leaves the TObj with no TLUT
      * and crashes HSD_TObjSetup). */
     val = be32_swap(gcnTobj->tlutdesc);
-    if (val != 0 && val < 0x80000000U && val < 0x200000U) {
+    if (val != 0 && val < 0x80000000U && val < PC_ARCHIVE_MAX_OFFSET) {
         x64Tobj->tlutdesc = grDatFiles_ConvertTlutDescGCNtoX64(dataBase + val, dataBase);
     } else {
         x64Tobj->tlutdesc = NULL;
@@ -2270,7 +2277,7 @@ static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8
      * both sides; only the 32-bit fields need swapping. */
     x64Tobj->lod = NULL;
     val = be32_swap(gcnTobj->lod);
-    if (val != 0 && val < 0x80000000U && val < 0x200000U) {
+    if (val != 0 && val < 0x80000000U && val < PC_ARCHIVE_MAX_OFFSET) {
         const u8* g = dataBase + val;
         HSD_TexLODDesc* lod = lbHeap_80015BD0(0, sizeof(HSD_TexLODDesc));
         if (lod != NULL) {
@@ -2293,7 +2300,7 @@ static HSD_TObjDesc* grDatFiles_ConvertTObjDescGCNtoX64(const u8* gcnTobjPtr, u8
      * intensity textures whose only colour is tev->konst. */
     x64Tobj->tev = NULL;
     val = be32_swap(gcnTobj->tev);
-    if (val != 0 && val < 0x80000000U && val < 0x200000U) {
+    if (val != 0 && val < 0x80000000U && val < PC_ARCHIVE_MAX_OFFSET) {
         const u8* g = dataBase + val;
         HSD_TObjTevDesc* tev = lbHeap_80015BD0(0, sizeof(HSD_TObjTevDesc));
         if (tev != NULL) {

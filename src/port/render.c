@@ -325,8 +325,15 @@ void render_debug_overlay(void)
     static int enabled = -1;
     if (enabled < 0) {
         enabled = getenv("MELEE_DEBUG_OVERLAY") != NULL;
-        if (!enabled) return;
     }
+    /* This return used to live inside the init block above, so it only
+     * fired on the first frame: every later frame drew the test triangle
+     * with raw GXSetBlendMode(GX_BM_NONE) / GXSetZMode(0,0,0) behind
+     * HSD's render-state cache, which then believed blending and the depth
+     * test were still on and skipped re-setting them. The character select's
+     * background particles rendered as opaque white quads with no depth test
+     * for exactly that reason. */
+    if (!enabled) return;
 
     long now = get_time_ms();
     g_frame_count++;
