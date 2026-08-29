@@ -68,7 +68,11 @@ UNK_T fn_8016AE60(void)
     return gm_1601_GetUnkData();
 }
 
+#if BUILD_TARGET_PC
+s32 gm_8016AE80(void)
+#else
 bool gm_8016AE80(void)
+#endif
 {
     return gm_GetRules()->xB;
 }

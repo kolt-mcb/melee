@@ -644,8 +644,21 @@ bool grCorneria_801DD9A0(Ground_GObj* arg)
     return false;
 }
 
+#if BUILD_TARGET_PC
+/* Not decompiled; both fell through to weak function stubs, so
+ * grCorneria_801DD9A8 wrote five Vec3 into .text and faulted. Offsets from
+ * the DOL at 0x803E1F70 (the five Arwing hardpoints); the second array is
+ * the per-frame world position it writes. */
+Vec3 grCn_803E1F70[5] = {
+    { -274.14f, 48.58f, 0.0f }, { -200.81f, -20.1f, 0.0f },
+    { -59.31f, -58.74f, 0.0f }, { -40.19f, -73.77f, 0.0f },
+    { 78.44f, -73.48f, 0.0f },
+};
+Vec3 grCn_803E1FAC[5];
+#else
 extern Vec3 grCn_803E1F70[5];
 extern Vec3 grCn_803E1FAC[5];
+#endif
 
 void grCorneria_801DD9A8(Ground_GObj* gobj)
 {
