@@ -524,6 +524,27 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         }
     }
 
+    /* +0x3C UnkFloat6_Camera: two Vec3, the fighter's camera-box extents.
+     * ftCamera_UpdateCameraBox scales these by the fighter's own scale and
+     * writes them into the CmSubject the gameplay camera frames. Left NULL,
+     * the PC guard in ftcamera.c skipped the whole update, every subject
+     * had zero extent, and the camera framed the fighters' origins exactly
+     * -- both of them cut in half at the screen edges. */
+    off = pc_be32(*(const u32*) (raw + 0x3C));
+    if (off != 0 && off + sizeof(struct UnkFloat6_Camera) <= len) {
+        struct UnkFloat6_Camera* c =
+            pc_lowmem_alloc(sizeof(struct UnkFloat6_Camera));
+        if (c != NULL) {
+            const u32* s = (const u32*) (base + off);
+            u32* d = (u32*) c;
+            unsigned i;
+            for (i = 0; i < sizeof(struct UnkFloat6_Camera) / 4u; i++) {
+                d[i] = pc_be32(s[i]);
+            }
+            out->x3C = c;
+        }
+    }
+
     /* +0x4C FtSFX: one pointer plus thirteen ints, so it does change shape
      * (0x38 on GCN, 0x40 here). Four sites in ft_0D31.c's death path
      * dereference it unconditionally, and they became reachable the moment
@@ -659,7 +680,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
     }
 
     /* Deliberately left NULL until something needs them:
-     * x1C, x20, x24, x28, x2C(dynamics), x34, x38, x3C, x44, x58, x5C. */
+     * x1C, x20, x24, x28, x2C(dynamics), x34, x38, x44, x58, x5C. */
 
     if (pc_ftconv_trace()) {
         fprintf(stderr,

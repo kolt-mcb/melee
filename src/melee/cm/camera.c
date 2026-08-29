@@ -1567,8 +1567,26 @@ void Camera_8002B3D4(void* arg0)
     update_avg_bounds_width();
 #if BUILD_TARGET_PC
     if (getenv("MELEE_CAMTRACE") != NULL) {
+        extern u32 pc_frame_number;
         static int n = 0;
-        if (n < 6) { n++;
+        if ((n++ % 60) == 0) {
+            int slot;
+            for (slot = 0; slot < 4; slot++) {
+                HSD_GObj* g = Player_GetEntity(slot);
+                CmSubject* s = g ? ftLib_80086B74(g) : NULL;
+                if (s != NULL) {
+                    fprintf(stderr,
+                            "[CAMSUBJ] frame=%d slot=%d pos=(%.1f,%.1f,%.1f) "
+                            "x1C=(%.1f,%.1f,%.1f) ext=(%.1f,%.1f) "
+                            "x48=(%.1f,%.1f,%.1f)\n",
+                            (int) pc_frame_number, slot, (double) s->x10.x,
+                            (double) s->x10.y, (double) s->x10.z,
+                            (double) s->x1C.x, (double) s->x1C.y,
+                            (double) s->x1C.z, (double) s->x40.x,
+                            (double) s->x40.y, (double) s->x48.x,
+                            (double) s->x48.y, (double) s->x48.z);
+                }
+            }
             fprintf(stderr,
                     "[CAMBOUNDS] subjects=%d x=[%.1f..%.1f] y=[%.1f..%.1f] "
                     "z=%.1f | tpos=(%.1f,%.1f,%.1f) tint=(%.1f,%.1f,%.1f) "

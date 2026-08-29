@@ -2844,25 +2844,50 @@ void Player_80036DA4(void)
 
 void Player_80036DD8(void)
 {
-    void** sp8;
+    void** sp8 = NULL;
 
-    lbArchive_LoadSymbols(str_PdPmdat_start_of_data, (void**) &sp8,
-                          str_plLoadCommonData, 0);
 #if BUILD_TARGET_PC
-    /* PC port: sp8 is NULL when the archive/symbol is missing, and even on
-     * success it points at raw big-endian data whose embedded pointers are
-     * GCN offsets — *sp8 would be a garbage pointer on x86_64. Keep
-     * pl_804D6470 NULL until the archive conversion tooling (roadmap M4)
-     * covers PdPm.dat. */
+    /* PC port: the archive stays raw big-endian and unrelocated, so *sp8 is
+     * a 4-byte data-section offset, not a pointer. The block it names
+     * (pl_804D6470_t, 0x184 bytes) is all 4-byte scalars -- the bonus
+     * thresholds and point values the results screen scores with -- so it
+     * converts with a wholesale word swap. With a zero arena here every
+     * threshold was 0, and pl_CalculateAverage asserted 200 times a match on
+     * `hits_total >= 0` comparisons that the real table never lets through.
+     * A missing file still falls back to the zero arena. */
     {
-        /* Zero arena, not NULL: the bonus/points system reads dozens of
-         * fields through this. Zeros are safe until PdPm conversion. */
-        static u8 pc_plco_zero[0x100000];
-        (void)sp8;
-        PORT_LOG_WARN("Player_80036DD8: plLoadCommonData unconverted; using zero arena\n");
-        pl_804D6470 = (void*)pc_plco_zero;
+        static u8 pc_plco_zero[0x1000];
+        static u32 pc_plco_conv[0x184 / 4];
+        HSD_Archive* ar = (HSD_Archive*) (void*) lbArchive_LoadSymbols(
+            str_PdPmdat_start_of_data, (void**) &sp8, str_plLoadCommonData,
+            0);
+        pl_804D6470 = (void*) pc_plco_zero;
+        if (ar != NULL && sp8 != NULL && ar->data != NULL) {
+            const u8* p = (const u8*) sp8;
+            u32 off = ((u32) p[0] << 24) | ((u32) p[1] << 16) |
+                      ((u32) p[2] << 8) | (u32) p[3];
+            if (off + sizeof(pc_plco_conv) <= ar->header.data_size) {
+                const u8* src = ar->data + off;
+                unsigned i;
+                for (i = 0; i < sizeof(pc_plco_conv) / 4u; i++) {
+                    pc_plco_conv[i] = ((u32) src[i * 4] << 24) |
+                                      ((u32) src[i * 4 + 1] << 16) |
+                                      ((u32) src[i * 4 + 2] << 8) |
+                                      (u32) src[i * 4 + 3];
+                }
+                pl_804D6470 = (void*) pc_plco_conv;
+            } else {
+                PORT_LOG_WARN("Player_80036DD8: plLoadCommonData offset %u "
+                              "out of range\n", off);
+            }
+        } else {
+            PORT_LOG_WARN("Player_80036DD8: PdPm.dat missing; bonus table "
+                          "zeroed\n");
+        }
     }
 #else
+    lbArchive_LoadSymbols(str_PdPmdat_start_of_data, (void**) &sp8,
+                          str_plLoadCommonData, 0);
     pl_804D6470 = *sp8;
 #endif
 }
