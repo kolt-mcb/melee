@@ -85,6 +85,23 @@ static void gm_801A3820(s32 idx, u64 arg1, u64 arg2)
 static void fn_801A396C(int idx)
 {
     struct controller_map* controller = &controller_map;
+#if BUILD_TARGET_PC
+    if (idx == 0 && getenv("MELEE_MENULOG") != NULL &&
+        (controller_map.x0[idx].button || controller_map.x0[idx].repeat2))
+    {
+        fprintf(stderr,
+                "[REPEAT] btn=%llx trig=%llx rel=%llx rep2=%llx timer=%u "
+                "xF4=%u x2C=%u\n",
+                (unsigned long long) controller_map.x0[idx].button,
+                (unsigned long long) controller_map.x0[idx].trigger,
+                (unsigned long long) controller_map.x0[idx].release,
+                (unsigned long long) controller_map.x0[idx].repeat2,
+                (unsigned) controller_map.x0[idx].repeat_timer,
+                (unsigned) controller->xF4,
+                (unsigned) controller_map.x0[idx].x2C);
+        fflush(stderr);
+    }
+#endif
     if (controller_map.x0[idx].trigger || controller_map.x0[idx].release) {
         controller_map.x0[idx].repeat2 = controller->x0[idx].trigger;
         controller_map.x0[idx].repeat_timer = controller->xF4;

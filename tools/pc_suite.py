@@ -51,6 +51,13 @@ ALIGN = os.path.join(HERE, "pc_movie_align.py")
 # identifying the movie frame on both sides: the port's movie counter runs
 # from its frame 0 and Dolphin's from dump index -4. See
 # tools/pc_movie_align.py.
+#
+# This holds only while both sides are playing the movie from power-on. A case
+# that reaches its scene by different routes -- the port through
+# MELEE_BOOT_MODE, Dolphin through button presses and a Gecko patch -- has its
+# own lead, which has to be measured once and written into the case as
+# `ref_lead`. There is no way to derive it: it is the difference between two
+# unrelated boot paths.
 PORT_LEAD = 4
 
 # The port holds a scripted button for this many frames (PC_PAD_SCRIPT_HOLD in
@@ -71,7 +78,9 @@ BUTTONS = {"a": "A", "b": "B", "x": "X", "y": "Y", "z": "Z",
 def load_case(path):
     case = {"name": os.path.basename(path).rsplit(".", 1)[0],
             "description": "", "run_frames": 300, "align": "search",
-            "input": [], "checks": [], "env": []}
+            "input": [], "checks": [], "env": [], "ref_env": [],
+            "ref_input": [], "window": 8, "ref_frames": 0,
+            "ref_lead": PORT_LEAD}
     for line in open(path):
         line = line.split("#", 1)[0].strip()
         if not line:
@@ -83,10 +92,16 @@ def load_case(path):
             case["input"].append((int(frame), tok.strip().lower()))
         elif key == "checks":
             case["checks"] = [int(x) for x in val.split(",") if x.strip()]
-        elif key == "env":
-            case["env"].append(val)
-        elif key == "run_frames":
-            case["run_frames"] = int(val)
+        elif key in ("env", "ref_env"):
+            case[key].append(val)
+        elif key == "ref_input":
+            # Raw Dolphin steps, in dump-frame numbers. Needed because the two
+            # sides reach a scene by different routes: the port has
+            # MELEE_BOOT_MODE, while Dolphin has to be walked there through
+            # the intro and the title with real button presses.
+            case["ref_input"].append(val)
+        elif key in ("run_frames", "window", "ref_frames", "ref_lead"):
+            case[key] = int(val)
         elif key in ("description", "align"):
             case[key] = val
     case["input"].sort()
@@ -107,7 +122,7 @@ def dolphin_input(case):
     """
     steps = []
     for frame, tok in case["input"]:
-        d = frame - PORT_LEAD
+        d = frame - case["ref_lead"]
         if tok in STICK:
             x, y = STICK[tok]
             steps.append("%d:MAIN:%s:%s" % (d, x, y))
@@ -126,6 +141,16 @@ def dolphin_input(case):
 
 def load_img(path):
     return Image.open(path).convert("RGB").resize(CMP_SIZE, Image.BILINEAR)
+
+
+def save_golden(src, dst):
+    """Store goldens at comparison resolution.
+
+    Scoring downsamples to CMP_SIZE anyway, so a full-resolution golden costs
+    four times the disk for a byte-identical result. It matters once cases
+    keep a search window rather than a single frame.
+    """
+    load_img(src).save(dst)
 
 
 def score(a, b):
@@ -148,6 +173,10 @@ def movie_frame(path):
 # --------------------------------------------------------------- running
 
 def run_port(case, outdir):
+    # A leftover instance holding the window is the likeliest cause of the
+    # rare start-up hang seen on this port; never pkill -f, which matches the
+    # caller's own command line.
+    subprocess.run(["pkill", "-x", "melee-pc"], capture_output=True)
     os.makedirs(outdir, exist_ok=True)
     for f in glob.glob(os.path.join(outdir, "*.ppm")):
         os.unlink(f)
@@ -183,15 +212,26 @@ def run_dolphin(case, reuse_dump=False):
     """
     if not reuse_dump:
         env = dict(os.environ)
-        di = dolphin_input(case)
-        if di:
-            env["MELEE_REF_INPUT"] = di
-        for kv in case["env"]:
-            if kv.startswith("MELEE_REF_MODE="):
-                env["MELEE_REF_MODE"] = kv.split("=", 1)[1]
-        subprocess.run([DOLPHIN_REF, str(case["run_frames"]), "0",
-                        str(case["run_frames"]), REF_OUT, "1"],
-                       cwd=REPO, env=env)
+        # A case that spells out ref_input is describing a route Dolphin has
+        # to take that the port does not -- walking the menus where the port
+        # boots straight in. The shared `input` script then belongs to the
+        # port alone; translating it as well would put two conflicting sets
+        # of presses on the same timeline.
+        if case["ref_input"]:
+            steps = list(case["ref_input"])
+        else:
+            steps = [x for x in [dolphin_input(case)] if x]
+        # The tapper walks the list in order, waiting for each frame to
+        # arrive; an out-of-order entry fires immediately instead of waiting.
+        steps.sort(key=lambda x: int(x.split(":", 1)[0]))
+        if steps:
+            env["MELEE_REF_INPUT"] = ",".join(steps)
+        for kv in case["ref_env"]:
+            k, _, v = kv.partition("=")
+            env[k] = v
+        frames = case["ref_frames"] or case["run_frames"]
+        subprocess.run([DOLPHIN_REF, str(frames), "0", str(frames),
+                        REF_OUT, "1"], cwd=REPO, env=env)
     frames = {}
     for d in (REF_OUT, DUMPDIR):
         for p in glob.glob(os.path.join(d, "framedump_*.png")):
@@ -214,20 +254,40 @@ def capture(cases, reuse_dump):
         outdir = os.path.join(REFS, case["name"])
         os.makedirs(outdir, exist_ok=True)
         for check in case["checks"]:
-            d = check - PORT_LEAD
-            if d not in dumps:
-                print("   frame %d (dump %d): not captured" % (check, d))
-                continue
-            dst = os.path.join(outdir, "ref_%d.png" % check)
-            shutil.copy(dumps[d], dst)
-            note = ""
+            d = check - case["ref_lead"]
             if case["align"] == "movie":
+                if d not in dumps:
+                    print("   frame %d (dump %d): not captured" % (check, d))
+                    continue
+                dst = os.path.join(outdir, "ref_%d.png" % check)
+                save_golden(dumps[d], dst)
                 mf = movie_frame(dst)
-                note = "  movie frame %s" % mf
                 if mf is not None:
                     json.dump({"movie_frame": mf},
                               open(dst.replace(".png", ".json"), "w"))
-            print("   frame %d <- dump %d%s" % (check, d, note))
+                print("   frame %d <- dump %d  movie frame %s" %
+                      (check, d, mf))
+                continue
+
+            # Search alignment: keep a window around the nominal frame. The
+            # two sides reach these scenes by different routes and the
+            # backgrounds animate, so comparing frame N against frame N would
+            # be comparing two different moments of the same animation and
+            # scoring the phase difference as if it were renderer error.
+            w = case["window"]
+            kept = []
+            for off in range(-w, w + 1, 2):
+                if d + off in dumps:
+                    save_golden(dumps[d + off],
+                                os.path.join(outdir, "ref_%d_%+d.png"
+                                             % (check, off)))
+                    kept.append(off)
+            if not kept:
+                print("   frame %d (dump %d +/-%d): not captured"
+                      % (check, d, w))
+            else:
+                print("   frame %d <- dumps %d%+d..%+d (%d kept)"
+                      % (check, d, kept[0], kept[-1], len(kept)))
 
 
 def check(cases, update):
@@ -242,13 +302,21 @@ def check(cases, update):
         shots = run_port(case, "/tmp/pc_suite/%s" % case["name"])
         results[case["name"]] = {}
         for chk in case["checks"]:
-            ref = os.path.join(refdir, "ref_%d.png" % chk)
-            if not os.path.exists(ref) or chk not in shots:
+            if case["align"] == "movie":
+                refs = [(0, os.path.join(refdir, "ref_%d.png" % chk))]
+                refs = [(o, p) for o, p in refs if os.path.exists(p)]
+            else:
+                refs = sorted(
+                    (int(re.search(r"_([+-]\d+)\.png$", p).group(1)), p)
+                    for p in glob.glob(os.path.join(refdir,
+                                                    "ref_%d_*.png" % chk)))
+            if not refs or chk not in shots:
                 print("   frame %-5d MISSING (%s)" %
-                      (chk, "no golden" if not os.path.exists(ref)
+                      (chk, "no golden" if not refs
                        else "port captured nothing"))
                 failures.append("%s:%d missing" % (case["name"], chk))
                 continue
+            ref = refs[0][1]
             # Where the movie is on screen the alignment is absolute, so a
             # mismatch means the two sides really are showing different
             # moments -- worth saying out loud rather than silently scoring.
@@ -264,7 +332,19 @@ def check(cases, update):
                     failures.append("%s:%d misaligned" % (case["name"], chk))
                 else:
                     aligned = "  [movie frame %d, aligned]" % got
-            s = score(load_img(shots[chk]), load_img(ref))
+            port_im = load_img(shots[chk])
+            scored = sorted((score(port_im, load_img(p)), o) for o, p in refs)
+            s, best_off = scored[0]
+            if case["align"] != "movie":
+                # Report which frame won. An offset pinned to the edge of the
+                # window means the true match is outside it and the score is
+                # a floor, not a measurement -- say so rather than let it read
+                # as a clean result.
+                edge = " AT WINDOW EDGE" if abs(best_off) >= case["window"] \
+                    else ""
+                aligned = "  [dump offset %+d%s]" % (best_off, edge)
+                if edge:
+                    failures.append("%s:%d window edge" % (case["name"], chk))
             results[case["name"]][str(chk)] = round(s, 3)
             was = baseline.get(case["name"], {}).get(str(chk))
             verdict = ""

@@ -1052,6 +1052,10 @@ size_t g_heap_size = 0;
 #define PC_PAD_SCRIPT_HOLD 4
 
 struct pc_pad_event {
+    /* Frames to hold, from `frame`. 0 means PC_PAD_SCRIPT_HOLD. A scripted
+     * walk or charged attack needs a longer hold than a menu tap, so the
+     * token may carry one: "300:right*40". */
+    int hold;
     long frame;
     u32 button; /* 0 for a stick event */
     int sx, sy;
@@ -1111,9 +1115,16 @@ static void pc_pad_script_parse(void)
         struct pc_pad_event ev;
         char name[32];
         long frame;
+        char* star;
+        int hold = 0;
         if (sscanf(tok, "%ld:%31s", &frame, name) != 2) {
             fprintf(stderr, "[PADSCRIPT] bad entry '%s'\n", tok);
             continue;
+        }
+        star = strchr(name, '*');
+        if (star != NULL) {
+            *star = '\0';
+            hold = atoi(star + 1);
         }
         memset(&ev, 0, sizeof(ev));
         if (!pc_pad_token(name, &ev)) {
@@ -1125,6 +1136,7 @@ static void pc_pad_script_parse(void)
             break;
         }
         ev.frame = frame;
+        ev.hold = hold;
         g_pad_script[g_pad_script_n++] = ev;
     }
     fprintf(stderr, "[PADSCRIPT] %d event(s) loaded\n", g_pad_script_n);
@@ -1146,15 +1158,26 @@ static void pc_pad_run_script(GCPadStatus* pad)
     }
 
     frame = g_pad_script_frame++;
+    stick_x = 0;
+    stick_y = 0;
     for (i = 0; i < g_pad_script_n; i++) {
         const struct pc_pad_event* ev = &g_pad_script[i];
+        int hold = ev->hold > 0 ? ev->hold : PC_PAD_SCRIPT_HOLD;
+
+        if (frame < ev->frame || frame >= ev->frame + hold) {
+            continue;
+        }
         if (ev->button == 0) {
-            if (frame == ev->frame) {
-                stick_x = ev->sx;
-                stick_y = ev->sy;
-            }
-        } else if (frame >= ev->frame && frame < ev->frame + PC_PAD_SCRIPT_HOLD)
-        {
+            /* Directions used to latch: the stick was set on the event's
+             * frame and never returned to neutral, so one scripted `down`
+             * deflected the stick for the rest of the run. The menus' own
+             * auto-repeat then walked the cursor on for as long as the run
+             * lasted -- one press moved one, two or three items depending on
+             * how many frames elapsed and how loaded the machine was. Give
+             * directions the same release window buttons already had. */
+            stick_x = ev->sx;
+            stick_y = ev->sy;
+        } else {
             pressed |= ev->button;
         }
     }

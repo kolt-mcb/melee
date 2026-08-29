@@ -45,17 +45,45 @@ MISALIGNED if the two sides are showing different moments.
 `align: search` is for scenes with no movie on screen; it falls back to the
 correlation search in `tools/pc_ref_compare.py`.
 
+## Alignment when there is no movie on screen
+
+`align: search` keeps a window of console frames per checkpoint (`window: N`,
+stride 2) and picks the best match at check time, reporting the offset it
+chose. This is not laziness about timing -- the menu and CSS backgrounds
+animate, so comparing frame N to frame N would score an animation phase
+difference as if it were renderer error.
+
+An offset pinned to the edge of the window is reported as `AT WINDOW EDGE`
+and fails the case: it means the true match is outside the window and the
+score is a floor, not a measurement.
+
+The nominal frame comes from `ref_lead`, which is the difference between the
+two boot paths and has to be **measured once, not derived**. The port reaches
+the menu at frame ~20 through MELEE_BOOT_MODE; Dolphin needs two Start presses
+and arrives at dump ~440. Capture with a wide `ref_frames`, find where the
+scene settles, and write the difference into the case.
+
 ## Adding a case
 
 `cases/<name>.case`:
 
     description: what it exercises
-    run_frames: 400
-    align: movie
-    input: 240: start
+    run_frames: 400          # frames to run the port for
+    ref_frames: 1000         # frames to run Dolphin for (default: run_frames)
+    align: movie             # or: search
+    window: 8                # search only: +/- frames of console kept
+    ref_lead: -340           # port frame F <-> Dolphin dump F - ref_lead
+    input: 240: start        # port script; also Dolphin's unless ref_input
     input: 300: down
+    ref_input: 400:+START    # Dolphin-only route, in dump frames
+    ref_input: 404:-START
     checks: 200, 260, 320
-    env: MELEE_BOOT_MODE=1
+    env: MELEE_BOOT_MODE=1   # port environment
+    ref_env: MELEE_REF_MODE=1
+
+A case that spells out `ref_input` is describing a route Dolphin has to take
+that the port does not -- walking the menus where the port boots straight in.
+The shared `input` script then drives the port alone.
 
 Input is written once, in port frame numbers, and translated to both sides.
 Tokens are the port's (`a b x y z l r start up down left right neutral`).
@@ -74,7 +102,14 @@ otherwise, so directions need an explicit recentre that the translator emits.
    it. Keep cases inside one scene, or re-anchor after the load.
 3. **Matches are not deterministic.** Gameplay runs on `HSD_Randi`. Alignment
    gives comparability, not determinism; equality there needs seeded RNG.
-4. **The movie's colour is not bit-identical and should not be.** The console
+4. **The Gecko boot-to-mode patch does not reach every scene.**
+   `MELEE_REF_MODE=2` applies cleanly and Dolphin still lands on the Main
+   Menu, so `css.case` navigates there with real presses instead. Check where
+   a capture actually landed before trusting a shortcut.
+5. **Goldens are ~190KB each and a search window keeps nine of them.** The
+   refs directory is a few MB per case. Widen `window` only when a case needs
+   it; raising the stride in `capture` is the knob if it grows.
+6. **The movie's colour is not bit-identical and should not be.** The console
    converts YUV to RGB in the TEV, the port uses libjpeg's JFIF conversion.
    The residual is about 1.3/0.8/2.4 out of 255 with a consistent sign. That
    is the floor for movie cases, not a defect.
