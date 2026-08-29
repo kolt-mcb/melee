@@ -1,6 +1,7 @@
 // Auto-generated (PC port): zero-initialized definitions for the mn/ data
 // symbols that the decomp declares `extern` but defines only in ROM/assembly.
-// Values are 0 for now; extract actual values from boot.dol later for fidelity.
+// Values below were extracted from orig/GALE01/sys/main.dol (the DOL is the
+// only definition of these tables); entries still at 0 are BSS/runtime state.
 #include <melee/mn/types.h>
 #include <melee/mn/forward.h>
 #include <baselib/gobj.h>
@@ -34,16 +35,21 @@ f32 mn_804DBE20 = 0.0f;
 f32 mn_804DBE24 = 0.0f;
 f32 mn_804DBE28 = 0.0f;
 f32 mn_804DBE2C = 0.0f;
-u8 mnCharSel_804D50C8[4] = {0};
-u8 mnCharSel_804D50CC[4] = {0};
-u8 mnCharSel_804D50D0[8] = {0};
-u8 mnCharSel_804D50D8[8] = {0};
-u8 mnCharSel_804D50E0[3] = {0};
-MnDiagram2RowLayout mnDiagram2_803EEAD0 = {0};
-AnimLoopSettings mnDiagram2_803EEB60[2] = {0};
-GXColor mnDiagram2_804D4FB8 = {0};
-GXColor mnDiagram2_804D4FBC = {0};
-u8 mnDiagram2_804D4FD0[3] = {0};
+u8 mnCharSel_804D50C8[4] = { 0x01, 0x02, 0x04, 0x08 };
+/* Door label texanim frame per player kind: HMN 1, CPU 0, DEMO 0, NONE 2 ("N/A"). */
+u8 mnCharSel_804D50CC[4] = { 0x01, 0x00, 0x00, 0x02 };
+u8 mnCharSel_804D50D0[8] = { 0x02, 0x00, 0x01, 0x00, 0x05, 0x03, 0x04, 0x00 };
+u8 mnCharSel_804D50D8[8] = { 0x02, 0x00, 0x08, 0x01, 0x07, 0x07, 0x07, 0x07 };
+u8 mnCharSel_804D50E0[3] = { 0x00, 0x01, 0x03 };
+MnDiagram2RowLayout mnDiagram2_803EEAD0 = {
+    { -2.5f, 0.3f, 0.0f }, { -2.2f, 0.5f, 0.0f }, { -1.0f, 0.5f, 0.0f }, { -2.0f, 0.0f, 0.0f },
+    { 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61 },
+    { 0x7A, 0x7A, 0x7A, 0x7C, 0x7C, 0x7C, 0x7C, 0x7C, 0x7A, 0x7A, 0x7A, 0xFFFF, 0x7C, 0x7B, 0x7E, 0x7E, 0x7E, 0x7E, 0x7D, 0x7D, 0x7D, 0xFFFF, 0xFFFF, 0xFFFF }
+};
+AnimLoopSettings mnDiagram2_803EEB60[2] = { { 10.0f, 19.0f, -0.1f }, { 0.0f, 199.0f, 0.0f } };
+GXColor mnDiagram2_804D4FB8 = { 0, 0, 0, 255 };
+GXColor mnDiagram2_804D4FBC = { 255, 200, 0, 255 };
+u8 mnDiagram2_804D4FD0[3] = { 0x81, 0x7C, 0x00 };
 HSD_GObj* mnDiagram2_804D6C18 = NULL;
 f32 mnDiagram2_804DBFC8 = 0.0f;
 f32 mnDiagram2_804DBFCC = 0.0f;
@@ -77,11 +83,11 @@ u8 mnEvent_804D6C64 = 0;
 u8 mnEvent_804D6C65 = 0;
 HSD_GObj* mnItemSw_804D6BE8 = NULL;
 u8 mnItemSw_804D6BEC = 0;
-f32 mnName_804D4BD0[2] = {0};
-f32 mnName_804D4BD8[2] = {0};
+f32 mnName_804D4BD0[2] = { 39.0f, 59.0f };
+f32 mnName_804D4BD8[2] = { 39.0f, 19.0f };
 GXColor mnName_804D4BE0 = {0};
 GXColor mnName_804D4BE4 = {0};
-u8 mnName_804D4BE8[3] = {0};
+u8 mnName_804D4BE8[3] = { 0x93, 0x94, 0x95 };
 char mnName_804D4BF0 = 0;
 HSD_GObj* mnName_804D6BF8 = NULL;
 HSD_Text* mnName_804D6BFC = NULL;
@@ -301,7 +307,7 @@ char mnNameNew_804D4F58[] = {0};
 char mnNameNew_804D4F5C[] = {0};
 char mnNameNew_804D4F60[] = {0};
 char mnNameNew_804D4F64[] = {0};
-u8 mnNameNew_804D4F7C[4] = {0};
+u8 mnNameNew_804D4F7C[4] = { 0x42, 0x43, 0x44, 0x45 };
 HSD_GObj* mnNameNew_804D6C08 = NULL;
 const GXColor mnNameNew_804DBF44 = {0};
 const GXColor mnNameNew_804DBF48 = {0};
