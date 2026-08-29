@@ -66,6 +66,21 @@ void HSD_MObjAddAnim(HSD_MObj* mobj, HSD_MatAnim* matanim)
             HSD_AObjRemove(mobj->aobj);
         }
         mobj->aobj = HSD_AObjLoadDesc(matanim->aobjdesc);
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_AOBJLOG") != NULL) {
+            HSD_FObj* fo;
+            int n = 0;
+            fprintf(stderr, "AOBJ desc=%p aobj=%p", (void*) matanim->aobjdesc,
+                    (void*) mobj->aobj);
+            if (mobj->aobj != NULL) {
+                for (fo = mobj->aobj->fobj; fo != NULL && n < 12;
+                     fo = fo->next, n++) {
+                    fprintf(stderr, " t%u", (unsigned) fo->obj_type);
+                }
+            }
+            fprintf(stderr, " ntracks=%d\n", n);
+        }
+#endif
         HSD_TObjAddAnimAll(mobj->tobj, matanim->texanim);
     }
 }
