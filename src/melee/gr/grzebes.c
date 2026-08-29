@@ -540,6 +540,11 @@ void grZebes_801D881C(HSD_GObj* gobj)
             HSD_JObj* sima_jobj;
             sima_jobj = Ground_801C3FA4(gobj, 0xE);
             HSD_ASSERT(0x293, sima_jobj);
+#if BUILD_TARGET_PC
+            /* Same reasoning as the map-7 lookup below: a firing assert does
+             * not stop this port. */
+            if (sima_jobj != NULL)
+#endif
             lb_8000B1CC(sima_jobj, &sp28, &sp28);
         }
         col_x[0] = sp28.x;
@@ -547,9 +552,28 @@ void grZebes_801D881C(HSD_GObj* gobj)
 
         {
             HSD_JObj* sima_jobj;
+#if BUILD_TARGET_PC
+            /* secondary_gobj is stage map 7, created by this map's on_init
+             * (grZebes_801D8644). It has been observed NULL here while the
+             * attract demo tears its match down with this proc still
+             * scheduled, and Ground_801C3FA4 dereferences it immediately --
+             * HSD_ASSERT returns rather than aborting on this port, so the
+             * assert below never gets the chance to stop it. sp1C still holds
+             * the untransformed default from grZe_803B7FF0, which is the
+             * right fallback for one frame of acid-column geometry. */
+            if (secondary_gobj == NULL) {
+                sima_jobj = NULL;
+            } else {
+                sima_jobj = Ground_801C3FA4(secondary_gobj, 1);
+            }
+            if (sima_jobj != NULL) {
+                lb_8000B1CC(sima_jobj, &sp1C, &sp1C);
+            }
+#else
             sima_jobj = Ground_801C3FA4(secondary_gobj, 1);
             HSD_ASSERT(0x299, sima_jobj);
             lb_8000B1CC(sima_jobj, &sp1C, &sp1C);
+#endif
         }
         col_x[5] = sp1C.x;
         col_heights[5] = sp1C.y;
