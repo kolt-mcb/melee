@@ -987,6 +987,7 @@ static GLint g_model_loc = -1;
 /* Per-light spot/distance attenuation uniforms */
 static GLint g_light_atten_a_loc = -1;
 static GLint g_light_atten_k_loc = -1;
+static GLint g_light_dir_loc = -1;
 static GLint g_light_spot_func_loc = -1;
 static GLint g_light_spot_cutoff_loc = -1;
 static GLint g_light_dist_func_loc = -1;
@@ -1079,6 +1080,8 @@ static const char* g_vert_src =
 "// Per-light attenuation and spot/distance params\n"
 "uniform vec3 u_light_atten_a[8]; // Quadratic distance atten coeffs (a0,a1,a2)\n"
 "uniform vec3 u_light_atten_k[8]; // Additional atten coeffs (k0,k1,k2)\n"
+"uniform vec3 u_light_dir[8];     // GXInitLightDir direction (the specular\n"
+"                                 // half-vector, for channel 1)\n"
 "uniform int u_light_spot_func[8];   // Spot function (0=off,1=flat,2=cos,3=cos2,4=sharp)\n"
 "uniform float u_light_spot_cutoff[8]; // cos(cutoff angle)\n"
 "uniform int u_light_dist_func[8];   // Distance atten (0=off,1=gentle,2=medium,3=steep)\n"
@@ -1211,7 +1214,13 @@ static const char* g_vert_src =
 "    vec3 spec_sum = vec3(0.0);\n"
 "    for (int i = 0; i < 8; i++) {\n"
 "        if (mod(u_light_mask1 / (1 << i), 2) == 0) continue;\n"
+"        // HSD writes the half-vector with GXInitLightDir, not\n"
+"        // GXInitSpecularDir (HSD_LObjSetupSpecularInit, lobj.c). Reading\n"
+"        // only the latter meant H was always zero, this loop skipped every\n"
+"        // light, and channel 1 was black -- which is what made every UI\n"
+"        // material that tints through RASC come out greyscale.\n"
 "        vec3 H = u_light_spec_dir[i];\n"
+"        if (dot(H, H) < 1e-8) H = u_light_dir[i];\n"
 "        if (dot(H, H) < 1e-8) continue;\n"
 "        float ratio = max(0.0, dot(N, normalize(H)));\n"
 "        vec3 av = vec3(1.0, ratio, ratio * ratio);\n"
@@ -1830,6 +1839,7 @@ static void bridge_compile_shaders(void)
     /* Per-light spot/distance attenuation */
     g_light_atten_a_loc = glGetUniformLocation(g_shader_program, "u_light_atten_a");
     g_light_atten_k_loc = glGetUniformLocation(g_shader_program, "u_light_atten_k");
+    g_light_dir_loc = glGetUniformLocation(g_shader_program, "u_light_dir");
     g_light_spot_func_loc = glGetUniformLocation(g_shader_program, "u_light_spot_func");
     g_light_spot_cutoff_loc = glGetUniformLocation(g_shader_program, "u_light_spot_cutoff");
     g_light_dist_func_loc = glGetUniformLocation(g_shader_program, "u_light_dist_func");
@@ -2170,7 +2180,13 @@ void gx_bridge_init(void)
         g_state.g_lights[i].k0 = 1.0f; g_state.g_lights[i].k1 = 0.0f; g_state.g_lights[i].k2 = 0.0f;
         g_state.g_lights[i].is_directional = FALSE;
     }
-    
+    /* The normal register has to start as something: a zero normal makes every
+     * lighting term undefined, and the flat UI geometry that never sets one is
+     * exactly what relies on it persisting. Face the viewer. */
+    g_state.last_nrm[0] = 0.0f;
+    g_state.last_nrm[1] = 0.0f;
+    g_state.last_nrm[2] = 1.0f;
+
     PORT_LOG_INFO("GX bridge ready — textures enabled, %d slots", MAX_TEXTURES);
 }
 
@@ -4443,7 +4459,15 @@ static void bridge_add_vertex(void)
             g_state.bounds_valid = TRUE;
         }
     }
-    if (g_state.nrm_enabled) { v->nrm[0] = g_state.last_nrm[0]; v->nrm[1] = g_state.last_nrm[1]; v->nrm[2] = g_state.last_nrm[2]; }
+    /* GX keeps the normal in a latched register that survives across draws:
+     * a vertex descriptor without GX_VA_NRM does not mean "no normal", it
+     * means "reuse the current one". Writing zero instead left every such
+     * vertex with a null normal, so both the diffuse N.L and the specular
+     * N.H collapsed -- which is what kept colour channel 1 black on the flat
+     * UI quads that carry the menu's tint. */
+    v->nrm[0] = g_state.last_nrm[0];
+    v->nrm[1] = g_state.last_nrm[1];
+    v->nrm[2] = g_state.last_nrm[2];
 SKIP_DEG:
     /* PC port: when the color attribute is disabled (mode 0), GCN feeds the
      * material color (last GXColor* call) to the vertex shader. Use it -
@@ -5747,6 +5771,22 @@ static void apply_tev_uniforms(void)
                      ? (int) (g_state.chan_diffuse_light[1] & 0xFF)
                      : 0;
         UP1I(g_light_mask1_loc, m1);
+        { static int _n = 0;
+          if (getenv("MELEE_SPECLOG") != NULL && g_state.frame_count >= 100 &&
+              _n < 12) { _n++;
+            fprintf(stderr,
+                    "  SPEC mask1=0x%x en1=%d nrm_en=%d L2 dir=(%.2f,%.2f,%.2f) "
+                    "col=(%u,%u,%u) k=(%.1f,%.1f,%.1f) | L3 dir=(%.2f,%.2f,%.2f)\n",
+                    m1, (int) g_state.chan_enabled[1],
+                    (int) g_state.nrm_enabled,
+                    (double) g_state.g_lights[2].nx, (double) g_state.g_lights[2].ny,
+                    (double) g_state.g_lights[2].nz,
+                    g_state.g_lights[2].r, g_state.g_lights[2].g,
+                    g_state.g_lights[2].b,
+                    (double) g_state.g_lights[2].k0, (double) g_state.g_lights[2].k1,
+                    (double) g_state.g_lights[2].k2,
+                    (double) g_state.g_lights[3].nx, (double) g_state.g_lights[3].ny,
+                    (double) g_state.g_lights[3].nz); } }
     }
     if (g_chan1_lit_loc >= 0) {
         UP1I(g_chan1_lit_loc, g_state.chan_lit[1] ? 1 : 0);
@@ -5890,6 +5930,15 @@ static void apply_tev_uniforms(void)
             lk[i][2] = g_state.g_lights[i].k2;
         }
         UP3FV(g_light_atten_k_loc, 8, &lk[0][0]);
+    }
+    if (g_light_dir_loc >= 0) {
+        GLfloat ldir[8][3];
+        for (int i = 0; i < 8; i++) {
+            ldir[i][0] = g_state.g_lights[i].nx;
+            ldir[i][1] = g_state.g_lights[i].ny;
+            ldir[i][2] = g_state.g_lights[i].nz;
+        }
+        UP3FV(g_light_dir_loc, 8, &ldir[0][0]);
     }
     if (g_light_spot_func_loc >= 0) {
         GLint sf[8];
