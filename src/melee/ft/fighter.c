@@ -945,14 +945,13 @@ void Fighter_UnkInitLoad_80068914(Fighter_GObj* gobj,
     /* PC port: player data can be zeroed/garbage — clamp the fighter kind
      * to Mario (the one character whose code is compiled) rather than
      * indexing tables with a wild kind. */
-    /* MELEE_FT_ALLKINDS=1 lifts the Mario substitution so other characters can
-     * be exercised. Off by default because non-Mario kinds walk init paths
-     * whose data has never been converted; the point of the flag is to find
-     * out which ones now survive, character by character, rather than to
-     * assume none do. */
+    /* All 26 characters load and run clean now (tools/pc_char_probe.sh),
+     * so the substitution is off by default; MELEE_FT_MARIO_ONLY=1 restores
+     * it for bisecting a character-specific crash. (MELEE_FT_ALLKINDS, the
+     * old opt-in, is accepted and means the default.) */
     {
         static int all_kinds = -1;
-        if (all_kinds < 0) all_kinds = (getenv("MELEE_FT_ALLKINDS") != NULL);
+        if (all_kinds < 0) all_kinds = (getenv("MELEE_FT_MARIO_ONLY") == NULL);
         if (fp->kind != 0 && !all_kinds) {
             PORT_LOG_WARN("Fighter_Create: kind %d unavailable on PC; "
                           "substituting Mario\n", fp->kind);

@@ -231,8 +231,17 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
                     gcn_ptr_to_x64(pval, dataBase), dataBase);
             }
 
+            /* x1C is the map's HSD_FogDesc. Rebasing it raw handed
+             * HSD_FogInit big-endian start/end floats and, through
+             * Ground_801C1E94, the console's sky-blue clear colour never
+             * reached Camera_SetBackgroundColor -- every stage cleared to
+             * black behind its skybox. Convert it like every other loader. */
             pval = be32_swap(*(const u32*)(ep + 0x1C));
-            x64Arr[i].x1C = (HSD_FogDesc*)gcn_ptr_to_x64(pval, dataBase);
+            x64Arr[i].x1C = NULL;
+            if (pval != 0) {
+                x64Arr[i].x1C = grDatFiles_ConvertFogDescGCNtoX64(
+                    gcn_ptr_to_x64(pval, dataBase), dataBase);
+            }
 
             /* PC port: unk20 is a GrJoint[] -- three s16 per entry -- and
              * unk24 is its length. Rebasing the pointer without swapping the

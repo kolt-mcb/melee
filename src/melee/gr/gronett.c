@@ -1,4 +1,8 @@
 #include "gronett.h"
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 
 #include "types.h"
 
@@ -251,6 +255,42 @@ void grOnett_801E3A34(Ground_GObj* gobj)
 
     gp->u.onett.timer = rand_range(yakumono_param->x28, yakumono_param->x24);
     gp->u.onett.gen = NULL;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_GRDAT_TRACE") != NULL) {
+        fprintf(stderr,
+                "[ONETT] awning0 jobj=%p y=%.2f awning1 jobj=%p y=%.2f | "
+                "yaku: init=%.3f maxv=%.3f velth=%.3f posth=%.3f damp=%.3f "
+                "sforce=%.3f sconst=%.3f maxd=%.3f delta=%.3f x24=%.1f x28=%.1f\n",
+                (void*) gp->u.onett.awnings[0].jobj,
+                (double) gp->u.onett.awnings[0].initial_y,
+                (void*) gp->u.onett.awnings[1].jobj,
+                (double) gp->u.onett.awnings[1].initial_y,
+                (double) yakumono_param->awning_initial,
+                (double) yakumono_param->max_velocity,
+                (double) yakumono_param->vel_threshold,
+                (double) yakumono_param->pos_threshold,
+                (double) yakumono_param->damping,
+                (double) yakumono_param->spring_force,
+                (double) yakumono_param->spring_constant,
+                (double) yakumono_param->max_displacement,
+                (double) yakumono_param->awning_delta,
+                (double) yakumono_param->x24, (double) yakumono_param->x28);
+        {
+            int di;
+            for (di = 0; di < 40; di++) {
+                HSD_JObj* j = Ground_801C3FA4(gobj, di);
+                if (j == NULL) {
+                    break;
+                }
+                fprintf(stderr, "[ONETT] dfs %2d jobj=%p flags=%08x t=(%.2f,%.2f,%.2f) "
+                        "child=%d next=%d\n", di, (void*) j, (unsigned) j->flags,
+                        (double) j->translate.x, (double) j->translate.y,
+                        (double) j->translate.z, j->child != NULL,
+                        j->next != NULL);
+            }
+        }
+    }
+#endif
 
     Ground_801C4E70(Ground_801C3FA4(gobj, 16), Ground_801C3FA4(gobj, 17),
                     Ground_801C3FA4(gobj, 19), Ground_801C3FA4(gobj, 20),

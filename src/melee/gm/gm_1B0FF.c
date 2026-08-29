@@ -286,6 +286,19 @@ void gm_801B13B8(GameScene* arg0)
         temp_r28->players[1].slot_type = Gm_PKind_Human;
         temp_r28->players[2].slot_type = Gm_PKind_NA;
         temp_r28->players[3].slot_type = Gm_PKind_NA;
+        /* Default VS rules are a 2:00 time match (gm_80167BC8: mode 0 with
+         * a time limit sets x0_6 and x10 = minutes * 60). The debug-VS
+         * scene has neither, so no timer was ever created and the HUD could
+         * not be compared against a Dolphin VS capture. MELEE_BOOT_TIME=<s>
+         * overrides; 0 disables the timer again. */
+        {
+            const char* t = getenv("MELEE_BOOT_TIME");
+            int secs = t ? atoi(t) : 120;
+            if (secs > 0) {
+                temp_r28->rules.x0_6 = 1;
+                temp_r28->rules.x10 = (u32) secs;
+            }
+        }
         OSReport("[PC] debug-VS lineup: p0=ckind%d(c%d) p1=ckind%d(c%d) "
                  "stage=%d\n",
                  ck0, col0, ck1, col1, (int) temp_r28->rules.xE);
