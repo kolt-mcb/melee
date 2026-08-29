@@ -615,6 +615,25 @@ void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
                 if (test_pos.y > max_y) {
                     max_y = test_pos.y;
                 }
+#if BUILD_TARGET_PC
+                if (getenv("MELEE_CAMTRACE_SUBJ") != NULL) {
+                    extern u32 pc_frame_number;
+                    static int n = 0;
+                    if (pc_frame_number >= 225 && n < 400) { n++;
+                        f32 g, gi;
+                        Ground_801C4368(&g, &gi);
+                        fprintf(stderr, "[CAMSOLVE] frame=%d subj=%p x10=(%.1f,%.1f) "
+                                "x2C=(%.1f,%.1f) x34=(%.1f,%.1f) mult=%.2f "
+                                "ground=%.1f/%.1f flags=%u -> running min/max y=%.1f/%.1f\n",
+                                (int) pc_frame_number, (void*) subject,
+                                (double) subject->x10.x, (double) subject->x10.y,
+                                (double) subject->x2C.x, (double) subject->x2C.y,
+                                (double) subject->x34.x, (double) subject->x34.y,
+                                (double) tracking_multiplier, (double) g, (double) gi,
+                                (unsigned) cam_bounds_flags, (double) min_y, (double) max_y);
+                    }
+                }
+#endif
             }
             subject = subject->prev;
         }
@@ -1592,6 +1611,26 @@ void Camera_8002B3D4(void* arg0)
                             (double) s->x48.y, (double) s->x48.z);
                 }
             }
+            fprintf(stderr,
+                    "[CAMPOS] frame=%d pos=(%.1f,%.1f,%.1f) int=(%.1f,%.1f,%.1f) "
+                    "smooth=%.3f ratio=%.3f zoomrate=%.1f maxdepth=%.1f "
+                    "fixedzoom=%.2f bounds=[%.1f,%.1f..%.1f,%.1f]\n",
+                    (int) pc_frame_number,
+                    (double) cm_80452C68.transform.position.x,
+                    (double) cm_80452C68.transform.position.y,
+                    (double) cm_80452C68.transform.position.z,
+                    (double) cm_80452C68.transform.interest.x,
+                    (double) cm_80452C68.transform.interest.y,
+                    (double) cm_80452C68.transform.interest.z,
+                    (double) Stage_GetCamTrackSmooth(),
+                    (double) Stage_GetCamTrackRatio(),
+                    (double) Stage_GetCamZoomRate(),
+                    (double) Stage_GetCamMaxDepth(),
+                    (double) Stage_GetCamFixedZoom(),
+                    (double) Stage_GetCamBoundsLeftOffset(),
+                    (double) Stage_GetCamBoundsBottomOffset(),
+                    (double) Stage_GetCamBoundsRightOffset(),
+                    (double) Stage_GetCamBoundsTopOffset());
             fprintf(stderr,
                     "[CAMBOUNDS] subjects=%d x=[%.1f..%.1f] y=[%.1f..%.1f] "
                     "z=%.1f | tpos=(%.1f,%.1f,%.1f) tint=(%.1f,%.1f,%.1f) "
