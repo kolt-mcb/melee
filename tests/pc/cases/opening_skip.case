@@ -1,0 +1,13 @@
+# Start during the movie leaves the opening for the title screen. Exercises
+# the movie teardown path (lbMthp_8001F800) and a scene transition driven by
+# real input rather than by a timer.
+#
+# Note this case deliberately crosses a scene load, which is where the two
+# sides are least likely to stay in step: Dolphin pays real DVD latency and
+# the port reads a local directory. The frame numbers after the press are
+# therefore the interesting measurement, not an assumption.
+description: press Start during the movie, land on the title
+run_frames: 400
+align: movie
+input: 240: start
+checks: 200, 260, 320
