@@ -6293,7 +6293,7 @@ static void apply_tev_uniforms(void)
                 for (int j = 0; j < 4; j++)
                     m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
             m[3*4 + 3] = 1.0f;
-            UPMTX4(g_texgen_mtx0_loc, 1, GL_FALSE, m);
+            UPMTX4(g_texgen_mtx0_loc, 1, GL_TRUE, m);
         }
     }
     if (g_texgen_mtx1_loc >= 0 && g_state.tex_gen_enabled[1]) {
@@ -6304,7 +6304,7 @@ static void apply_tev_uniforms(void)
                 for (int j = 0; j < 4; j++)
                     m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
             m[3*4 + 3] = 1.0f;
-            UPMTX4(g_texgen_mtx1_loc, 1, GL_FALSE, m);
+            UPMTX4(g_texgen_mtx1_loc, 1, GL_TRUE, m);
         }
     }
 }
