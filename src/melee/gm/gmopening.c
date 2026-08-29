@@ -178,15 +178,12 @@ void gm_801AA110_OnEnter(UNK_T arg0)
     lbAudioAx_80027648();
     lbAudioAx_80023F28(0x3E);
     lbAudioAx_80024E50(1);
-#if BUILD_TARGET_PC
-    /* PC port: skip movie loading - MvOpen.mth doesn't exist and decoder crashes. */
-    /* lbMthp_8001F410("MvOpen.mth", gm_803DBFB4, 0, 0, 0); */
-    /* PC port: lbMthp_8001F5C4() now returns an incrementing frame counter,
-     * so gm_804D67EC will advance through the title screen sequence naturally. */
+    /* PC port: lbMthp_8001F410 now opens the real movie (src/port/pc_mth.c).
+     * It degrades to advancing the 60Hz counter alone if MvOpen.mth is
+     * missing or MELEE_NO_MOVIE is set, which is what the port did before --
+     * the title sequence below is driven by that counter, not by the movie. */
     gm_804D67EC = 0;
-#else
     lbMthp_8001F410("MvOpen.mth", gm_803DBFB4, 0, 0, 0);
-#endif /* BUILD_TARGET_PC */
     lbAudioAx_80024E50(0);
     gm_804D6724 = fn_801AA0E8;
 }

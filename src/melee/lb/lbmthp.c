@@ -21,6 +21,23 @@
 #include <MSL/string.h>
 #include <Runtime/runtime.h>
 
+#if BUILD_TARGET_PC
+/* PC port: the console decode chain (DVD streaming into the THP hardware
+ * decoder, three I8 planes recombined by the TEV) has no equivalent here, so
+ * every entry point below forks into a native demuxer plus a fullscreen quad.
+ * See src/port/pc_mth.h for the file format and the JPEG quirk it works
+ * around. */
+#include "port/pc_mth.h"
+
+/* Declared by hand rather than including port/gx_gl_bridge.h: that header
+ * redeclares the GX entry points this translation unit already gets from
+ * dolphin/gx, with u32 where the SDK headers use sized types, and the two
+ * sets do not agree. */
+void pc_gx_draw_movie(const unsigned char* rgb, int width, int height);
+
+#include <stdlib.h>
+#endif
+
 struct lbl_803BAFE8_t {
     /* 0x00 */ s32 x0;
     /* 0x04 */ u16 x4;
@@ -455,6 +472,34 @@ void lbMthp_8001F410(const char* filename, u32* rate_table, void* buf,
 {
     size_t memoryRequired;
 
+#if BUILD_TARGET_PC
+    /* The rate table maps this 60Hz counter onto movie frames -- MvOpen is
+     * 30fps for most of its length with a 60fps stretch in the middle -- and
+     * the callers read the counter back to time everything they overlay on
+     * the movie. Keep it, drop everything else.
+     *
+     * MELEE_MTHP_START fast-forwards the counter so a run can reach the end
+     * of the opening (the persistent title screen) without sitting through
+     * 95 seconds of movie first. */
+    {
+        const char* start = getenv("MELEE_MTHP_START");
+
+        MoviePlayer.power = 1;
+        MoviePlayer.rate_table = rate_table;
+        MoviePlayer.unk_68 = loop;
+        MoviePlayer.unk_80 = start != NULL ? strtoul(start, NULL, 0) : 0;
+        MoviePlayer.unk_84 = MoviePlayer.unk_80;
+        MoviePlayer.unk_78 = -1;
+        MoviePlayer.unk_144 = 0;
+        MoviePlayer.unk_148 = 1;
+
+        if (getenv("MELEE_NO_MOVIE") == NULL) {
+            pc_mth_open(filename, loop);
+        }
+        return;
+    }
+#endif /* BUILD_TARGET_PC */
+
     HSD_ASSERT(833, !MoviePlayer.power);
     MoviePlayer.power = 1;
     fn_8001EB14((THPDecComp*) &MoviePlayer, filename);
@@ -483,6 +528,31 @@ void lbMthp_8001F578(void)
 {
     BOOL intr;
     PAD_STACK(8);
+#if BUILD_TARGET_PC
+    /* Stands in for the 60Hz OSAlarm (fn_8001F2A4) the console drives the
+     * movie from: this runs once per game frame, which is the same rate.
+     * Decoding is ~3ms for a 640x480 frame and only happens when the rate
+     * table says the picture actually changes, so it stays on this thread. */
+    if (MoviePlayer.power != 0) {
+        struct lbl_804333E0_t* player;
+        u32** rate_table;
+        u32 frame;
+
+        lbMthp_GetPlayer(&player, &rate_table);
+        MoviePlayer.unk_80 += 1;
+        frame = lbMthp_GetFrame(rate_table, MoviePlayer.unk_80);
+
+        if (pc_mth_active()) {
+            if ((s32) frame != MoviePlayer.unk_78) {
+                pc_mth_set_frame((int) frame);
+                MoviePlayer.unk_78 = (s32) frame;
+            }
+            MoviePlayer.unk_144 = pc_mth_finished();
+        }
+        MoviePlayer.unk_84 = MoviePlayer.unk_80;
+    }
+    return;
+#endif /* BUILD_TARGET_PC */
     intr = OSDisableInterrupts();
     MoviePlayer.unk_90 = MoviePlayer.unk_88;
     MoviePlayer.unk_7C = MoviePlayer.unk_78;
@@ -493,20 +563,11 @@ void lbMthp_8001F578(void)
 s32 lbMthp_8001F5C4(void)
 {
 #if BUILD_TARGET_PC
-    /* PC port: without movie player, return an incrementing frame counter.
-     * This allows gm_804D67EC to advance through the title screen sequence.
-     * The counter wraps at 0x2000 to avoid overflow issues.
-     * MELEE_MTHP_START fast-forwards the counter (skips the opening movie)
-     * so the persistent title screen (gm_804D67EC >= 0x140A) can be reached
-     * for verification without a 17-minute run. */
-    static s32 pc_frame = -1;
-    if (pc_frame < 0) {
-        const char* s = getenv("MELEE_MTHP_START");
-        pc_frame = s ? (s32) strtol(s, NULL, 0) : 0;
-    }
-    pc_frame++;
-    if (pc_frame > 0x2000) pc_frame = 0x2000;
-    return pc_frame;
+    /* The counter still has to advance when the movie could not be opened --
+     * the callers use it to sequence the title screen, and a stuck counter
+     * leaves the opening scene frozen forever. lbMthp_8001F578 advances it
+     * whether or not a movie is playing, so nothing extra is needed here. */
+    return (s32) MoviePlayer.unk_84;
 #else
     return MoviePlayer.unk_84;
 #endif /* BUILD_TARGET_PC */
@@ -558,8 +619,20 @@ HSD_SObj* lbMthp_8001F624(HSD_GObj* gobj, int width, int height)
 void lbMthp_8001F67C(HSD_GObj* gobj, int arg1)
 {
 #if BUILD_TARGET_PC
-    /* PC port: movie player is not initialized (MvOpen.mth skipped).
-     * Return immediately to avoid reading garbage state. */
+    /* The console binds Y/Cb/Cr as three I8 texture maps and lets the TEV
+     * convert them; pc_mth already hands back RGB, so this draws it directly.
+     * The SObj built by lbMthp_8001F624 stays unused -- its image_ptr is only
+     * ever filled by the hardware decoder. */
+    (void) gobj;
+    (void) arg1;
+    if (MoviePlayer.power != 0 && MoviePlayer.unk_148 != 0) {
+        int width, height;
+        const unsigned char* rgb = pc_mth_rgb(&width, &height);
+
+        if (rgb != NULL) {
+            pc_gx_draw_movie(rgb, width, height);
+        }
+    }
     return;
 #else
     struct lbl_804333E0_t* streamPlayer = &MoviePlayer;
@@ -597,6 +670,13 @@ void lbMthp_8001F67C(HSD_GObj* gobj, int arg1)
 
 void lbMthp_8001F800(void)
 {
+#if BUILD_TARGET_PC
+    /* No DVD request to drain, no alarm to cancel and no HSD heap block to
+     * free -- lbMthp_8001F410 allocated none of them. */
+    pc_mth_close();
+    MoviePlayer.power = 0;
+    return;
+#endif /* BUILD_TARGET_PC */
     if (MoviePlayer.power != 0) {
         MoviePlayer.unk_70 = 0;
 

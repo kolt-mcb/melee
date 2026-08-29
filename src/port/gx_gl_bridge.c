@@ -2695,6 +2695,162 @@ void pc_render_tex_test(void)
 }
 
 /* ============================================================
+ * Movie playback (src/port/pc_mth.c)
+ *
+ * The GameCube draws a movie frame as three I8 textures -- Y, Cb, Cr -- fed
+ * through a TEV stage that converts YUV to RGB, wrapped in an HSD_SObj. The
+ * decoder here hands back plain RGB instead, so none of that machinery
+ * applies; the frame is one texture on one quad covering the whole viewport.
+ *
+ * This deliberately bypasses the GX state machine rather than going through
+ * GXInitTexObj: the bridge's texture path de-tiles GameCube tile layouts, and
+ * a linear host buffer would come out scrambled. It keeps its own program,
+ * VAO and texture, and puts back every piece of GL state it touches -- the
+ * bridge mirrors that state in g_state and would otherwise drift out of sync.
+ * ============================================================ */
+
+static GLuint mv_prog = 0, mv_vao = 0, mv_vbo = 0, mv_tex = 0;
+static int mv_tex_w = 0, mv_tex_h = 0;
+
+static const char* mv_vert_src =
+"#version 330 core\n"
+"layout(location = 0) in vec2 a_pos;\n"
+"out vec2 v_uv;\n"
+"void main() {\n"
+"    /* Movie rows run top-down; GL texture rows run bottom-up. */\n"
+"    v_uv = vec2((a_pos.x + 1.0) * 0.5, (1.0 - a_pos.y) * 0.5);\n"
+"    gl_Position = vec4(a_pos, 0.0, 1.0);\n"
+"}\n";
+
+static const char* mv_frag_src =
+"#version 330 core\n"
+"in vec2 v_uv;\n"
+"out vec4 frag_color;\n"
+"uniform sampler2D u_frame;\n"
+"void main() {\n"
+"    frag_color = vec4(texture(u_frame, v_uv).rgb, 1.0);\n"
+"}\n";
+
+static Bool mv_init(void)
+{
+    static const GLfloat quad[12] = {
+        -1.0f, -1.0f,  1.0f, -1.0f,  1.0f, 1.0f,
+        -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, 1.0f,
+    };
+    GLuint vs, fs;
+    GLint ok = 0;
+    GLint prev_vao = 0, prev_vbo = 0;
+
+    if (mv_prog != 0) {
+        return TRUE;
+    }
+    vs = compile_shader(GL_VERTEX_SHADER, mv_vert_src);
+    fs = compile_shader(GL_FRAGMENT_SHADER, mv_frag_src);
+    if (vs == 0 || fs == 0) {
+        if (vs) glDeleteShader(vs);
+        if (fs) glDeleteShader(fs);
+        return FALSE;
+    }
+    mv_prog = glCreateProgram();
+    glAttachShader(mv_prog, vs);
+    glAttachShader(mv_prog, fs);
+    glLinkProgram(mv_prog);
+    glGetProgramiv(mv_prog, GL_LINK_STATUS, &ok);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    if (!ok) {
+        GLchar log[512];
+        glGetProgramInfoLog(mv_prog, sizeof(log), NULL, log);
+        PORT_LOG_ERROR("Movie shader link failed: %s", log);
+        glDeleteProgram(mv_prog);
+        mv_prog = 0;
+        return FALSE;
+    }
+
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prev_vao);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_vbo);
+    glGenVertexArrays(1, &mv_vao);
+    glGenBuffers(1, &mv_vbo);
+    glBindVertexArray(mv_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, mv_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat),
+                          (void*) 0);
+    glBindVertexArray((GLuint) prev_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, (GLuint) prev_vbo);
+
+    glGenTextures(1, &mv_tex);
+    return TRUE;
+}
+
+void pc_gx_draw_movie(const unsigned char* rgb, int width, int height)
+{
+    GLint prev_prog = 0, prev_vao = 0, prev_tex = 0, prev_unit = 0;
+    GLint prev_align = 4;
+    GLboolean depth_was, blend_was, cull_was, scissor_was;
+
+    if (rgb == NULL || width <= 0 || height <= 0) {
+        return;
+    }
+    if (!mv_init()) {
+        return;
+    }
+
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prev_prog);
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prev_vao);
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_unit);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align);
+    depth_was = glIsEnabled(GL_DEPTH_TEST);
+    blend_was = glIsEnabled(GL_BLEND);
+    cull_was = glIsEnabled(GL_CULL_FACE);
+    scissor_was = glIsEnabled(GL_SCISSOR_TEST);
+
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex);
+    glBindTexture(GL_TEXTURE_2D, mv_tex);
+    /* Rows are width*3 bytes; 640 keeps 4-byte alignment but 
+     * an odd width would not, so say so explicitly. */
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    if (width != mv_tex_w || height != mv_tex_h) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_RGB,
+                     GL_UNSIGNED_BYTE, rgb);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        mv_tex_w = width;
+        mv_tex_h = height;
+    } else {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB,
+                        GL_UNSIGNED_BYTE, rgb);
+    }
+
+    /* The movie is the background: no depth, no blend, no scissor, and it
+     * must cover whatever the frame drew before it. */
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_SCISSOR_TEST);
+
+    glUseProgram(mv_prog);
+    glUniform1i(glGetUniformLocation(mv_prog, "u_frame"), 0);
+    glBindVertexArray(mv_vao);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindVertexArray((GLuint) prev_vao);
+    glUseProgram((GLuint) prev_prog);
+    glBindTexture(GL_TEXTURE_2D, (GLuint) prev_tex);
+    glActiveTexture((GLenum) prev_unit);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
+    if (depth_was) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (blend_was) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (cull_was) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    if (scissor_was) glEnable(GL_SCISSOR_TEST);
+    else glDisable(GL_SCISSOR_TEST);
+}
+
+/* ============================================================
  * Depth testing controls for multi-pass rendering
  * ============================================================ */
 
