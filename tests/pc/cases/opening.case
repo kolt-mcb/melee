@@ -1,0 +1,7 @@
+# The intro movie. Pre-rendered, so it is identical on both sides by
+# construction -- this case is the suite's own calibration: if it regresses,
+# the harness is broken, not the renderer.
+description: intro movie playback, no input
+run_frames: 260
+align: movie
+checks: 200, 204, 208, 212
