@@ -705,6 +705,16 @@ void gm_801B2204(GameScene* arg0)
     sfxForward();
 }
 
+#if BUILD_TARGET_PC
+/* Defined here for the port: the decomp keeps this in a data section that
+ * is not compiled on this target, and the only definition that linked was a
+ * 5-byte weak *function* stub in weak_stubs.c. gm_801B2298_OnInit writes
+ * into it, so with the stub it faulted on .text -- the reason the game-mode
+ * Init loop had to stay disabled, and why the VS character select came up
+ * with CPU x4 instead of this mode's own N/A defaults. */
+struct TrainingMenuData gm_80473814;
+#endif
+
 void gm_801B2298_OnInit(void)
 {
     VsModeData* temp_r31 = &gmMainLib_804D3EE0->unk_D10;

@@ -48,3 +48,4 @@ u32 OSGetArenaLoSize(u32 arena) { return sizeof(_arena_lo_buf); }
 /* gr data symbol referenced by grcorneria.c at -O1 (optimized out at -O2). */
 typedef struct { float x, y, z; } pc_Vec3_stub;
 __attribute__((weak)) pc_Vec3_stub grCn_803B809C = {0};
+

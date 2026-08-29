@@ -366,14 +366,19 @@ void gm_801A4510(void)
     memzero(&gm_80479D30, sizeof(GameState));
     modes = gm_GetAllGameModes();
 #if BUILD_TARGET_PC
-    /* PC port: skip game mode init loop — many inits crash due to
-     * uninitialized global state. The game modes will be initialized
-     * lazily when their scenes are loaded. */
-    /* for (i = 0; modes[i].idx != GM_COUNT; i++) {
-        if (modes[i].Init != NULL) {
-            modes[i].Init();
+    /* The game-mode Init loop used to be skipped here ("many inits crash
+     * due to uninitialized global state"), which left every mode's saved
+     * defaults at whatever the static data held: the VS character select
+     * came up with four CPU slots and READY TO FIGHT where a fresh console
+     * shows four N/A. The inits run cleanly now that the boot path calls
+     * gmMainLib_8015FBA4 first. MELEE_SKIP_MODE_INIT=1 restores the skip. */
+    if (getenv("MELEE_SKIP_MODE_INIT") == NULL) {
+        for (i = 0; modes[i].idx != GM_COUNT; i++) {
+            if (modes[i].Init != NULL) {
+                modes[i].Init();
+            }
         }
-    } */
+    }
     if (VIGetDTVStatus() != 0 &&
         (db_gameLaunchButtonState & 0x200 || OSGetProgressiveMode() == 1))
     {
