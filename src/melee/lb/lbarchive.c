@@ -27,6 +27,11 @@
 #pragma dont_inline on
 void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
 {
+#if BUILD_TARGET_PC
+    /* New file data in memory: the GL texture cache must re-validate any
+     * image pointer it already knows (addresses get reused across loads). */
+    { extern void pc_tex_cache_bump(void); pc_tex_cache_bump(); }
+#endif
     const char* symbol;
     int i = 0;
 
