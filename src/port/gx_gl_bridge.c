@@ -8649,18 +8649,22 @@ static void tlut_decode_color(u16 val, u8* out_rgba, u32 fmt)
         out_rgba[3] = 0xFF;
         return;
     }
+    /* GX_TL_RGB5A3: bit 15 set means opaque R5 G5 B5; bit 15 clear means
+     * A3 R4 G4 B4 (alpha in bits 14-12). The two branches used to be the
+     * other way round, so every opaque palette entry was read as 4-bit
+     * colour from the wrong bits (shapes intact, colours scrambled -- the
+     * character-select portraits) and every translucent entry went fully
+     * transparent. */
     if (val & 0x8000) {
-        /* RGB5A3 mode 1: 4-bit RGB + alpha */
-        out_rgba[3] = ((val >> 12) & 0xF) * 17;
-        out_rgba[0] = ((val >>  8) & 0xF) * 17;
-        out_rgba[1] = ((val >>  4) & 0xF) * 17;
-        out_rgba[2] = ( val         & 0xF) * 17;
-    } else {
-        /* RGB5A3 mode 0: 1-bit alpha, 5-bit RGB */
-        out_rgba[3] = (val >> 15) ? 0xFF : 0x00;
+        out_rgba[3] = 0xFF;
         out_rgba[0] = ((val >> 10) & 0x1F) * 255 / 31;
         out_rgba[1] = ((val >>  5) & 0x1F) * 255 / 31;
         out_rgba[2] = ( val        & 0x1F) * 255 / 31;
+    } else {
+        out_rgba[3] = ((val >> 12) & 0x7) * 255 / 7;
+        out_rgba[0] = ((val >>  8) & 0xF) * 17;
+        out_rgba[1] = ((val >>  4) & 0xF) * 17;
+        out_rgba[2] = ( val         & 0xF) * 17;
     }
 }
 
@@ -8731,19 +8735,36 @@ void GXInitTexObjCI(void* texObj, const void* image, u16 width, u16 height,
 /* Load a TLUT palette into storage.
  * fmt: 0=GX_TL_IA8, 1=GX_TL_RGB565, 2=GX_TL_RGB5A3
  * count: 16 (for I4) or 256 (for I8) */
+/* GX semantics: GXInitTlutObj only *describes* a palette; GXLoadTlut copies
+ * it into TMEM at the named slot, and a texture created with
+ * GXInitTexObjCI selects that slot by name. The previous version decoded the
+ * palette into all sixteen slots at init time, so whichever palette was
+ * initialised last won for every paletted texture -- the character select's
+ * portraits all drew through the last-loaded palette (right shapes,
+ * scrambled colour).
+ *
+ * The description is kept in a small table keyed by the GXTlutObj address:
+ * HSD initialises and loads back to back from a stack object, so the last
+ * entry is what almost always gets loaded, but keying by address keeps two
+ * live objects apart. */
+typedef struct {
+    const void* obj;
+    const void* data;
+    u32 fmt;
+    u32 count;
+} PcTlutDesc;
+static PcTlutDesc g_tlut_descs[8];
+static u32 g_tlut_desc_next;
+
 void GXInitTlutObj(void* tlutObj, const void* tlut_data, u32 tlut_fmt, u32 tlut_count)
 {
+    PcTlutDesc* d;
+    u32 i;
     GX_TRACE("GXInitTlutObj(p, p, %u, %u)", tlut_fmt, tlut_count);
     if (!tlut_data || tlut_count == 0) return;
-    /* PC port: TLUTSlot::rgba is [256][4], but GX palettes can declare more
-     * (C14X2 allows up to 16384 entries) and an unconverted descriptor can
-     * supply garbage. The fill loop below indexes rgba[i] for i < tlut_count,
-     * so an oversized count wrote straight through the remaining TLUT slots,
-     * the whole 256KB palette decode buffer, the vertex accumulators and the
-     * light/channel state that follows them in this struct — which is what
-     * turned every material colour black and filled the light count and
-     * ambient colour with garbage. ASan cannot see it because it is all one
-     * global object. Clamp to what the slot can hold. */
+    /* TLUTSlot::rgba is [256][4]; GX allows more (C14X2 up to 16384) and an
+     * unconverted descriptor can supply garbage, which used to overrun the
+     * whole state block. Clamp to what a slot holds. */
     if (tlut_count > 256) {
         static int warned = 0;
         if (warned < 4) {
@@ -8753,59 +8774,63 @@ void GXInitTlutObj(void* tlutObj, const void* tlut_data, u32 tlut_fmt, u32 tlut_
         }
         tlut_count = 256;
     }
-#if BUILD_TARGET_PC
-    { static int _ti_on = -1, _ti_n = 0;
-      if (_ti_on < 0) _ti_on = (getenv("MELEE_MTR") != NULL);
-      if (_ti_on && _ti_n < 20) { _ti_n++;
-        const u8* r = (const u8*)tlut_data;
-        fprintf(stderr, "TLUTINIT fmt=%u count=%u lut=%p first8=%02x %02x %02x %02x %02x %02x %02x %02x\n",
-                (unsigned)tlut_fmt, (unsigned)tlut_count, tlut_data,
-                r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7]); } }
-#endif
-    
-    /* Store palette in all 16 slots simultaneously.
-     * GXLoadTlut activates which slot is "current".
-     * Melee mainly uses slot 0 (GX_TLUT0). */
-    for (u32 slot = 0; slot < 16; slot++) {
-        TLUTSlot *t = &g_state.g_tlut[slot];
-        t->fmt = tlut_fmt;
-        t->entry_count = tlut_count;
-        t->valid = TRUE;
-        
-        const u8 *raw = (const u8*)tlut_data;
-        for (u32 i = 0; i < tlut_count; i++) {
-            switch (tlut_fmt) {
-            case 0: /* GX_TL_IA8: intensity (1 byte) + alpha (1 byte) */
-                t->rgba[i][0] = raw[i * 2];
-                t->rgba[i][1] = raw[i * 2];
-                t->rgba[i][2] = raw[i * 2];
-                t->rgba[i][3] = raw[i * 2 + 1];
-                break;
-            case 1: /* GX_TL_RGB565: big-endian 16-bit */
-            case 2: /* GX_TL_RGB5A3: big-endian 16-bit with alpha mode */
-            {
-                u16 val = ((u16)raw[i * 2] << 8) | raw[i * 2 + 1];
-                tlut_decode_color(val, t->rgba[i], tlut_fmt);
-                break;
-            }
-            default:
-                memset(t->rgba[i], 0, 4);
-                break;
-            }
-        }
+    d = NULL;
+    for (i = 0; i < 8; i++) {
+        if (g_tlut_descs[i].obj == tlutObj) { d = &g_tlut_descs[i]; break; }
     }
-    
-    PORT_LOG_DEBUG("TLUT loaded: fmt=%u count=%u", tlut_fmt, tlut_count);
+    if (d == NULL) {
+        d = &g_tlut_descs[g_tlut_desc_next++ & 7];
+    }
+    d->obj = tlutObj; d->data = tlut_data; d->fmt = tlut_fmt; d->count = tlut_count;
 }
 
-/* Activate a TLUT slot. Slot becomes the "current" palette for I4/I8 textures. */
 void GXLoadTlut(void* tlutObj, u32 tlut_group)
 {
+    const PcTlutDesc* d = NULL;
+    TLUTSlot* t;
+    const u8* raw;
+    u32 i;
     gx_flush_pending();
     GX_TRACE("GXLoadTlut(p, %u)", tlut_group);
-    PORT_LOG_DEBUG("TLUT load: slot=%u", tlut_group);
-    if (tlut_group < 16) {
-        g_state.g_current_tlut = tlut_group;
+    for (i = 0; i < 8; i++) {
+        if (g_tlut_descs[i].obj == tlutObj) { d = &g_tlut_descs[i]; break; }
     }
-    (void)tlutObj;
+    if (d == NULL) {
+        /* No description for this object: fall back to the most recent one,
+         * which is what an init/load pair through a copied struct would mean. */
+        d = &g_tlut_descs[(g_tlut_desc_next + 7) & 7];
+        if (d->data == NULL) return;
+    }
+    if (tlut_group >= 16) {
+        /* GX_BIGTLUT0..3 (16..19) are 1024-entry slots; nothing here needs
+         * more than 256 entries, so fold them onto the small slots. */
+        tlut_group -= 16;
+    }
+    g_state.g_current_tlut = tlut_group;
+    t = &g_state.g_tlut[tlut_group];
+    t->fmt = d->fmt;
+    t->entry_count = d->count;
+    t->valid = TRUE;
+    raw = (const u8*) d->data;
+    for (i = 0; i < d->count; i++) {
+        switch (d->fmt) {
+        case 0: /* GX_TL_IA8: intensity (1 byte) + alpha (1 byte) */
+            t->rgba[i][0] = raw[i * 2];
+            t->rgba[i][1] = raw[i * 2];
+            t->rgba[i][2] = raw[i * 2];
+            t->rgba[i][3] = raw[i * 2 + 1];
+            break;
+        case 1: /* GX_TL_RGB565: big-endian 16-bit */
+        case 2: /* GX_TL_RGB5A3: big-endian 16-bit with alpha mode */
+        {
+            u16 val = ((u16) raw[i * 2] << 8) | raw[i * 2 + 1];
+            tlut_decode_color(val, t->rgba[i], d->fmt);
+            break;
+        }
+        default:
+            memset(t->rgba[i], 0, 4);
+            break;
+        }
+    }
+    PORT_LOG_DEBUG("TLUT loaded: slot=%u fmt=%u count=%u", tlut_group, d->fmt, d->count);
 }
