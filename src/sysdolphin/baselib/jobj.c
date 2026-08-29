@@ -513,6 +513,15 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
             HSD_ASSERT(0x24B, jobj->aobj);
             jp = (HSD_JObj*) jobj->aobj->hsd_obj;
             HSD_ASSERT(0x24D, jp);
+#if BUILD_TARGET_PC
+            /* Asserts return here; a path track whose spline joint was not
+             * found by id (see HSD_JObjLoadJoint) has nothing to follow. */
+            if (jobj->aobj == NULL || jp == NULL ||
+                !(jp->flags & JOBJ_SPLINE) || jp->u.spline == NULL)
+            {
+                break;
+            }
+#endif
             HSD_ASSERT(0x24E, jp->u.spline);
             splArcLengthPoint(&p, jp->u.spline, val->fv);
             HSD_JObjSetTranslateX(jobj, p.x);
@@ -891,6 +900,19 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
     }
     HSD_IDInsertToTable(NULL, (u32) joint, jobj);
     jobj->id = (u32) joint;
+#if BUILD_TARGET_PC
+    /* Animation descs reach joints by their GameCube address (AObjDesc
+     * obj_id -> HSD_IDGetDataFromTable in AObjUpdateAnim, the spline a
+     * HSD_A_J_PATH track follows). The converted joint lives elsewhere, so
+     * register it under the archive offset it came from as well. */
+    {
+        extern u32 grDatFiles_JointOffsetOf(const HSD_Joint*);
+        u32 off = grDatFiles_JointOffsetOf(joint);
+        if (off != 0) {
+            HSD_IDInsertToTable(NULL, off, jobj);
+        }
+    }
+#endif
 #if BUILD_TARGET_PC
     { static int _r=-1; if(_r<0)_r=(getenv("MELEE_MTR")!=NULL); if(_r){static int _n=0; if(_n++<80) fprintf(stderr,"JOBJREGISTER joint_id=%p jobj=%p\n",(void*)joint,(void*)jobj);} }
 #endif
