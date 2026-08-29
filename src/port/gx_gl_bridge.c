@@ -928,6 +928,7 @@ static GLint g_alpha_cmp_mask_loc = -1;
 static GLint g_dst_alpha_enabled_loc = -1;
 static GLint g_dst_alpha_loc = -1;
 static GLint g_lighting_enabled_loc = -1;
+static GLint g_diff_fn_loc = -1;
 
 /* TEV pipeline uniform locations */
 static GLint g_tev_num_stages_loc = -1;
@@ -1067,6 +1068,7 @@ static const char* g_vert_src =
 "uniform vec3 u_light_pos[8];     // Light positions (or directions if directional)\n"
 "uniform vec4 u_light_color[8];   // Light RGBA colors\n"
 "uniform int u_light_directional[8]; // 1=directional, 0=point\n"
+"uniform int u_diff_fn;           // GXSetChanCtrl diffuse fn, channel 0\n"
 "uniform int u_light_count;       // Number of active lights\n"
 "uniform int u_light_mask;        // Channel 0 light mask (bit 0 = light 0)\n"
 "uniform int u_light_mask1;       // Channel 1 light mask (GX specular)\n"
@@ -1182,7 +1184,16 @@ static const char* g_vert_src =
 "            }\n"
 "        }\n"
 "        float atten = dist_atten * spot_inten;\n"
-"        diffuse_sum += u_light_color[i].rgb * NdotL * atten;\n"
+"        // GX applies the N.L term only when the channel's diffuse function\n"
+"        // asks for it (GXSetChanCtrl). GX_DF_NONE means the light\n"
+"        // contributes its full colour with no angular term -- which is what\n"
+"        // flat UI geometry depends on, its normals being degenerate. An\n"
+"        // unconditional N.L made every lit 2D material black, and with it\n"
+"        // every TEV stage that tints by the rasterised colour.\n"
+"        float diff_fac = (u_diff_fn == 0) ? 1.0\n"
+"                       : (u_diff_fn == 1) ? dot(N, L)\n"
+"                       : NdotL;\n"
+"        diffuse_sum += u_light_color[i].rgb * diff_fac * atten;\n"
 "    }\n"
 "    // v_lit_color = ambient + diffuse (clamped to [0,1])\n"
 "    v_lit_color = vec4(u_ambient_color + diffuse_sum, 1.0);\n"
@@ -1761,6 +1772,7 @@ static void bridge_compile_shaders(void)
     g_dst_alpha_enabled_loc = glGetUniformLocation(g_shader_program, "u_dst_alpha_enabled");
     g_dst_alpha_loc = glGetUniformLocation(g_shader_program, "u_dst_alpha");
     g_lighting_enabled_loc = glGetUniformLocation(g_shader_program, "u_lighting_enabled");
+    g_diff_fn_loc = glGetUniformLocation(g_shader_program, "u_diff_fn");
     
     /* TEV pipeline uniform locations */
     g_tev_num_stages_loc = glGetUniformLocation(g_shader_program, "u_tev_num_stages");
@@ -5499,6 +5511,9 @@ static void apply_alpha_compare_uniforms(void)
                 fprintf(stderr, "[LITTALLY] draws unlit=%lu lit=%lu\n", _lt[0], _lt[1]); } }
         UP1I(g_lighting_enabled_loc, no_light ? 0 : lit);
     }
+    if (g_diff_fn_loc >= 0) {
+        UP1I(g_diff_fn_loc, (GLint) g_state.chan_diff_fn[0]);
+    }
 }
 
 /* Upload TEV pipeline uniforms to the shader */
@@ -6124,6 +6139,9 @@ static void pc_chan_slot(u32 chan, int* slot, int* do_rgb, int* do_a)
 void GXSetChanAmbColor(u32 chan, GXColor amb_color)
 {
     GX_TRACE("GXSetChanAmbColor(%u, {%u,%u,%u,%u})", chan, (u32)amb_color.r, (u32)amb_color.g, (u32)amb_color.b, (u32)amb_color.a);
+    { static int _n=0; if (getenv("MELEE_CHAN") && g_state.frame_count>=8 && _n<20) { _n++;
+        fprintf(stderr, "  SETAMB chan=%u col=(%u,%u,%u,%u) f=%u\n", chan,
+                amb_color.r, amb_color.g, amb_color.b, amb_color.a, (unsigned)g_state.frame_count); } }
     /* Set ambient color for a channel (used by TEV as C0, C1, C2) */
     /* GX_COLOR0=0, GX_COLOR1=1, GX_COLOR0A0=2, GX_COLOR1A1=3 */
     {

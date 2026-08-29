@@ -121,6 +121,14 @@ s32 HSD_LObjGetNbActive(void)
 HSD_LObj* HSD_LObjGetActiveByID(GXLightID id)
 {
     s32 idx = HSD_LightID2Index(id);
+#if BUILD_TARGET_PC
+    { static int _n = 0;
+      if (getenv("MELEE_LOBJLOG") != NULL && _n < 10) { _n++;
+        fprintf(stderr, "LOBJGET id=0x%x idx=%d nbactive=%d slot=%p\n",
+                (unsigned) id, (int) idx, (int) nb_active_lights,
+                (idx >= 0 && idx < MAX_GXLIGHT) ? (void*) active_lights[idx]
+                                                : (void*) 0); } }
+#endif
     if (0 <= idx && idx < MAX_GXLIGHT) {
         return active_lights[idx];
     } else {

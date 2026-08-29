@@ -207,7 +207,10 @@ void HSD_SetupChannelMode(u32 arg0)
             extern unsigned long g_dbg_lobj_clear, g_dbg_lobj_amb,
                 g_dbg_lobj_other;
             static int n = 0;
-            if (n < 8) { n++;
+            /* Sample periodically, not the first N: the first channel setups
+             * happen during scene load before any light is active, so an
+             * early sample reports no ambient light for every scene. */
+            if (++n % 700 == 0) {
                 fprintf(stderr,
                         "[CHAN] rm&7=4 amb_lobj=%p flags=0x%x matamb=(%u,%u,%u) "
                         "-> amb=(%u,%u,%u) matdif=(%u,%u,%u) "
