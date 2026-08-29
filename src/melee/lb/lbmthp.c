@@ -550,6 +550,21 @@ void lbMthp_8001F578(void)
             MoviePlayer.unk_144 = pc_mth_finished();
         }
         MoviePlayer.unk_84 = MoviePlayer.unk_80;
+
+        /* MELEE_MTHPLOG=1 reports the counter -> movie-frame mapping. The
+         * rate table is the only thing setting playback speed, so this is
+         * what a frame-alignment harness needs to check the port against a
+         * console capture. */
+        {
+            static int logging = -1;
+            if (logging < 0) {
+                logging = getenv("MELEE_MTHPLOG") != NULL;
+            }
+            if (logging && (MoviePlayer.unk_80 % 100) == 0) {
+                OSReport("[MTHP] counter=%u frame=%u rate_table=%p\n",
+                         MoviePlayer.unk_80, frame, (void*) *rate_table);
+            }
+        }
     }
     return;
 #endif /* BUILD_TARGET_PC */
