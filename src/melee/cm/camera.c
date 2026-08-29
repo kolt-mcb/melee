@@ -1568,8 +1568,13 @@ void Camera_8002B3D4(void* arg0)
 #if BUILD_TARGET_PC
     if (getenv("MELEE_CAMTRACE") != NULL) {
         extern u32 pc_frame_number;
-        static int n = 0;
-        if ((n++ % 60) == 0) {
+        static int n = 0, every = -1;
+        if (every < 0) {
+            const char* e = getenv("MELEE_CAMTRACE_EVERY");
+            every = e ? atoi(e) : 60;
+            if (every < 1) every = 1;
+        }
+        if ((n++ % every) == 0) {
             int slot;
             for (slot = 0; slot < 4; slot++) {
                 HSD_GObj* g = Player_GetEntity(slot);

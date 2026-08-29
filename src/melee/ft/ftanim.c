@@ -1357,6 +1357,16 @@ void ftAnim_80070A10(Fighter* ft, Fighter_Part part, FigaTree* tree)
     int r27;
     int r22;
 
+#if BUILD_TARGET_PC
+    /* A motion whose FigaTree could not be converted (ftData_80085E50
+     * returns NULL for those) used to crash here; Nana's Fall reaches it.
+     * The console never sees a NULL tree, so this guards only the
+     * unconverted case. */
+    if (tree == NULL) {
+        port_guard_warn("ftanim.c:80070A10-no-tree");
+        return;
+    }
+#endif
     nodes = tree->nodes;
     tracks = tree->tracks;
     r29 = ft->x594_bits;

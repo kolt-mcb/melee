@@ -4067,7 +4067,15 @@ void fn_80168A6C(void* arg0, void* arg1, s32 idx)
 
 f32 gm_80168B34(CharacterKind ckind, int arg1, int arg2)
 {
+#if BUILD_TARGET_PC
+    /* For every ordinary character (ckind <= CKIND_SEAK, not Zelda/Sheik
+     * or Popo) no branch below assigns `base`; the matched code reads it
+     * out of the register that still holds ckind. Say so, or every stock
+     * icon and series emblem is whatever the stack held. */
+    int base = ckind;
+#else
     int base;
+#endif
     if (ckind == CKIND_GKOOPS) {
         return 58.0F;
     }
@@ -4100,7 +4108,15 @@ float gm_80168BF8(int arg0)
 {
     CharacterKind ckind = Player_GetPlayerCharacter(arg0);
     u32 costume = Player_GetCostumeId(arg0);
+#if BUILD_TARGET_PC
+    /* The original falls off the end and returns whatever gm_80168B34 left
+     * in f1 -- which is its result. GCC leaves xmm0 undefined instead, so
+     * the stock-icon texture frame this feeds was garbage and every player
+     * wore Mario's icon. */
+    return gm_80168B34(ckind, Player_80036394(arg0), costume);
+#else
     gm_80168B34(ckind, Player_80036394(arg0), costume);
+#endif
 }
 
 void gm_80168C5C(u32 arg0)

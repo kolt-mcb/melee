@@ -1573,7 +1573,7 @@ void ftData_80085820(FighterKind kind, int costume_id)
      * filenames/heap handles. */
     {
         static int all_kinds = -1;
-        if (all_kinds < 0) all_kinds = (getenv("MELEE_FT_ALLKINDS") != NULL);
+        if (all_kinds < 0) all_kinds = (getenv("MELEE_FT_MARIO_ONLY") == NULL);
         if (kind != 0 && !all_kinds) {
             static int warned = 0;
             if (warned < 4) { warned++;
@@ -1721,7 +1721,7 @@ void ftData_80085A14(FighterKind kind)
      * filenames/heap handles. */
     {
         static int all_kinds = -1;
-        if (all_kinds < 0) all_kinds = (getenv("MELEE_FT_ALLKINDS") != NULL);
+        if (all_kinds < 0) all_kinds = (getenv("MELEE_FT_MARIO_ONLY") == NULL);
         if (kind != 0 && !all_kinds) {
             static int warned = 0;
             if (warned < 4) { warned++;

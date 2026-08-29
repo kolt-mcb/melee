@@ -5060,85 +5060,43 @@ void GXSetTevOp(u32 stage, u32 mode)
      * GX_REPLACE=3: Replace with TEX
      * GX_PASSCLR=4: Pass through RAS unchanged */
     
-    /* Set color and alpha inputs based on mode */
-    /* Alpha inputs use the 3-bit GXTevAlphaArg encoding (NOT the 4-bit color
-     * encoding): APREV=0, A0=1, A1=2, A2=3, TEXA=4, RASA=5, KONST/ONE=6, ZERO=7.
-     * The color inputs above use the 4-bit GXTevColorArg encoding (RASC=10,
-     * TEXC=8, ONE=12, ZERO=15) — do not mix the two. */
+    /* The SDK's own tables, for the combiner the shader implements:
+     *   out = (1 - c) * a + c * b + d.
+     * Colour args in the 4-bit GXTevColorArg encoding (RASC=10, TEXC=8,
+     * TEXA=9, ONE=12, ZERO=15); alpha args in the 3-bit GXTevAlphaArg
+     * encoding (TEXA=4, RASA=5, ZERO=7). The previous tables put the
+     * pass-through input in `a` with c = ONE, which under that formula is
+     * (1 - 1) * a = 0: HSD_EraseRect's PASSCLR quad came out black, and
+     * MODULATE was (1 - TEX) * RAS. */
+#define TEVOP(ca, cb, cc, cd, aa, ab, ac, ad)                                 \
+    do {                                                                      \
+        s->color_inputs[0] = (ca); s->color_inputs[1] = (cb);                 \
+        s->color_inputs[2] = (cc); s->color_inputs[3] = (cd);                 \
+        s->alpha_inputs[0] = (aa); s->alpha_inputs[1] = (ab);                 \
+        s->alpha_inputs[2] = (ac); s->alpha_inputs[3] = (ad);                 \
+        s->color_op = 0; s->alpha_op = 0;                                     \
+    } while (0)
     switch (mode) {
     case 0: /* GX_MODULATE: RAS * TEX */
-        s->color_inputs[0] = 10;  // RASC
-        s->color_inputs[1] = 15;  // ZERO
-        s->color_inputs[2] = 8;   // TEXC (multiplier)
-        s->color_inputs[3] = 15;  // ZERO
-        s->alpha_inputs[0] = 5;   // RASA
-        s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 4;   // TEXA (multiplier)
-        s->alpha_inputs[3] = 7;   // ZERO
-        s->color_op = 0;  // ADD
-        s->alpha_op = 0;  // ADD
+        TEVOP(15, 8, 10, 15,  7, 4, 5, 7);
         break;
-    case 1: /* GX_DECAL: TEX color, RAS alpha */
-        s->color_inputs[0] = 8;   // TEXC
-        s->color_inputs[1] = 15;  // ZERO
-        s->color_inputs[2] = 12;  // ONE (pass-through)
-        s->color_inputs[3] = 15;  // ZERO
-        s->alpha_inputs[0] = 5;   // RASA
-        s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 6;   // ONE (pass-through) = KONST
-        s->alpha_inputs[3] = 7;   // ZERO
-        s->color_op = 0;
-        s->alpha_op = 0;
+    case 1: /* GX_DECAL: lerp(RAS, TEX, TEX.a); alpha = RAS.a */
+        TEVOP(10, 8, 9, 15,  7, 7, 7, 5);
         break;
-    case 2: /* GX_BLEND: TEX * RAS + (1-TEX.a) * RAS ≈ RAS * TEX */
-        s->color_inputs[0] = 10;  // RASC
-        s->color_inputs[1] = 15;  // ZERO
-        s->color_inputs[2] = 8;   // TEXC (multiplier)
-        s->color_inputs[3] = 15;  // ZERO
-        s->alpha_inputs[0] = 5;   // RASA
-        s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 4;   // TEXA (multiplier)
-        s->alpha_inputs[3] = 7;   // ZERO
-        s->color_op = 0;
-        s->alpha_op = 0;
+    case 2: /* GX_BLEND: (1 - TEX) * RAS + TEX; alpha = RAS.a * TEX.a */
+        TEVOP(10, 12, 8, 15,  7, 4, 5, 7);
         break;
-    case 3: /* GX_REPLACE: Replace with TEX */
-        s->color_inputs[0] = 8;   // TEXC
-        s->color_inputs[1] = 15;  // ZERO
-        s->color_inputs[2] = 12;  // ONE (pass-through)
-        s->color_inputs[3] = 15;  // ZERO
-        s->alpha_inputs[0] = 4;   // TEXA
-        s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 6;   // ONE (pass-through) = KONST
-        s->alpha_inputs[3] = 7;   // ZERO
-        s->color_op = 0;
-        s->alpha_op = 0;
+    case 3: /* GX_REPLACE: TEX */
+        TEVOP(15, 15, 15, 8,  7, 7, 7, 4);
         break;
-    case 4: /* GX_PASSCLR: Pass through RAS */
-        s->color_inputs[0] = 10;  // RASC
-        s->color_inputs[1] = 15;  // ZERO
-        s->color_inputs[2] = 12;  // ONE (pass-through)
-        s->color_inputs[3] = 15;  // ZERO
-        s->alpha_inputs[0] = 5;   // RASA
-        s->alpha_inputs[1] = 7;   // ZERO
-        s->alpha_inputs[2] = 6;   // ONE (pass-through) = KONST
-        s->alpha_inputs[3] = 7;   // ZERO
-        s->color_op = 0;
-        s->alpha_op = 0;
+    case 4: /* GX_PASSCLR: RAS */
+        TEVOP(15, 15, 15, 10,  7, 7, 7, 5);
         break;
-    default:
-        s->color_inputs[0] = 10;  // RASC
-        s->color_inputs[1] = 15;
-        s->color_inputs[2] = 12;  // ONE (pass-through)
-        s->color_inputs[3] = 15;
-        s->alpha_inputs[0] = 5;   // RASA
-        s->alpha_inputs[1] = 7;
-        s->alpha_inputs[2] = 6;   // ONE (pass-through) = KONST
-        s->alpha_inputs[3] = 7;
-        s->color_op = 0;
-        s->alpha_op = 0;
+    default: /* unknown mode: pass RAS through, like PASSCLR */
+        TEVOP(15, 15, 15, 10,  7, 7, 7, 5);
         break;
     }
+#undef TEVOP
     s->color_enabled = TRUE;
     s->alpha_enabled = TRUE;
     s->color_bias = 0;
@@ -5715,7 +5673,20 @@ void GXSetFog(u32 type, f32 startz, f32 endz, f32 nearz, f32 farz, GXColor color
 {
     gx_flush_pending();
     GX_TRACE("GXSetFog(%u, %.3f, %.3f, %.3f, %.3f, {%u,%u,%u})", type, startz, endz, nearz, farz, (u32)color.r, (u32)color.g, (u32)color.b);
+    { static int n = 0;
+      if (n < 6 && g_state.frame_count >= 60 && getenv("MELEE_GRDAT_TRACE") != NULL) { n++;
+        fprintf(stderr, "[GXFOG] frame=%u type=%u start=%.1f end=%.1f near=%.1f far=%.1f color=(%u,%u,%u)\n", (unsigned) g_state.frame_count,
+                type, (double) startz, (double) endz, (double) nearz, (double) farz,
+                (unsigned) color.r, (unsigned) color.g, (unsigned) color.b); } }
     g_state.fog_enabled = (type != 0);  /* GX_FOG_NONE = 0 */
+    /* GX_FOG_LIN with endz <= startz: the SDK's fog coefficients divide by
+     * (end - start), so the hardware evaluates NaN and draws no fog. Onett
+     * reaches this every frame -- Ground_801C4FAC derives start/end from
+     * two boundary joints that sit at the same point. Treating it as a
+     * step at startz painted the whole far background in the fog colour. */
+    if (type == 2 && !(endz > startz)) {
+        g_state.fog_enabled = FALSE;
+    }
     g_state.fog_type = type;
     g_state.fog_startz = startz;
     g_state.fog_endz = endz;

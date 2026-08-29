@@ -54,6 +54,17 @@ struct FighterPartsTable {
 };
 
 /// Points to data in PlCo.dat
+/* ftCommonData is a pointer-free block of 4-byte scalars read straight out
+ * of PlCo.dat (0x818 bytes). The unidentified members were typed UNK_T,
+ * which is void* here, so on x86_64 the struct grew to 0x890 and every
+ * field after x1DC read the file 4..0x78 bytes off -- x25C, the
+ * platform drop-through stick threshold, read 8.0 instead of -0.56 and no
+ * fighter could ever land on a pass-through platform. Keep them 4 bytes. */
+#if BUILD_TARGET_PC
+#define ftCD_UNK u32
+#else
+#define ftCD_UNK UNK_T
+#endif
 struct ftCommonData {
     /*   +0 */ float x0;
     /*   +4 */ float x4;
@@ -174,7 +185,7 @@ struct ftCommonData {
     /* +1D0 */ float x1D0;
     /* +1D4 */ float x1D4;
     /* +1D8 */ float x1D8;
-    /* +1DC */ UNK_T x1DC;
+    /* +1DC */ ftCD_UNK x1DC;
     /* +1E0 */ float x1E0;
     /* +1E4 */ float x1E4;
     /* +1E8 */ float x1E8_radians;
@@ -198,7 +209,7 @@ struct ftCommonData {
     /* +230 */ float x230;
     /* +234 */ float x234_radians;
     /* +238 */ float x238_radians;
-    /* +23C */ UNK_T x23C;
+    /* +23C */ ftCD_UNK x23C;
     /* +240 */ float x240;
     /* +244 */ float x244;
     /* +248 */ float x248;
@@ -212,7 +223,7 @@ struct ftCommonData {
     /* +268 */ float x268;
     /* +26C */ float x26C;
     /* +270 */ float x270;
-    /* +274 */ UNK_T x274;
+    /* +274 */ ftCD_UNK x274;
     /* +278 */ float x278;
     /* +27C */ float x27C;
     /* +280 */ float x280_unkShieldHealth;
@@ -299,8 +310,8 @@ struct ftCommonData {
     /* +3E8 */ float x3E8_shieldKnockbackFrameDecay;
     /* +3EC */ float x3EC_shieldGroundFrictionMultiplier;
     /* +3F0 */ float x3F0;
-    /* +3F4 */ UNK_T x3F4;
-    /* +3F8 */ UNK_T x3F8;
+    /* +3F4 */ ftCD_UNK x3F4;
+    /* +3F8 */ ftCD_UNK x3F8;
     /* +3FC */ int x3FC;
     /* +400 */ float x400;
     /* +404 */ float x404;
@@ -363,24 +374,24 @@ struct ftCommonData {
     /* +4F4 */ float x4F4;
     /* +4F8 */ u32 x4F8;
     /* +4FC */ u32 x4FC;
-    /* +500 */ UNK_T x500;
+    /* +500 */ ftCD_UNK x500;
     /* +504 */ int x504;
-    /* +508 */ UNK_T x508;
-    /* +50C */ UNK_T x50C;
+    /* +508 */ ftCD_UNK x508;
+    /* +50C */ ftCD_UNK x50C;
     /* +510 */ float x510;
     /* +514 */ float x514;
-    /* +518 */ UNK_T x518;
+    /* +518 */ ftCD_UNK x518;
     /* +51C */ float x51C_radians;
     /* +520 */ int x520;
-    /* +524 */ UNK_T x524;
-    /* +528 */ UNK_T x528;
-    /* +52C */ UNK_T x52C;
-    /* +530 */ UNK_T x530;
-    /* +534 */ UNK_T x534;
-    /* +538 */ UNK_T x538;
+    /* +524 */ ftCD_UNK x524;
+    /* +528 */ ftCD_UNK x528;
+    /* +52C */ ftCD_UNK x52C;
+    /* +530 */ ftCD_UNK x530;
+    /* +534 */ ftCD_UNK x534;
+    /* +538 */ ftCD_UNK x538;
     /* +53C */ float x53C;
     /* +540 */ float x540;
-    /* +544 */ UNK_T x544;
+    /* +544 */ ftCD_UNK x544;
     /* +548 */ float x548;
     /* +54C */ float x54C;
     /* +550 */ float x550;
@@ -410,19 +421,19 @@ struct ftCommonData {
     /* +5B0 */ float x5B0;
     /* +5B4 */ int x5B4;
     /* +5B8 */ float x5B8;
-    /* +5BC */ UNK_T x5BC;
+    /* +5BC */ ftCD_UNK x5BC;
     /* +5C0 */ float x5C0;
-    /* +5C4 */ UNK_T x5C4;
+    /* +5C4 */ ftCD_UNK x5C4;
     /* +5C8 */ int x5C8;
     /* +5CC */ float x5CC;
-    /* +5D0 */ UNK_T x5D0;
-    /* +5D4 */ UNK_T x5D4;
+    /* +5D0 */ ftCD_UNK x5D0;
+    /* +5D4 */ ftCD_UNK x5D4;
     /* +5D8 */ int x5D8;
     /* +5DC */ u32 bury_timer_unk1;
     /* +5E0 */ u32 bury_timer_unk2;
     /* +5E4 */ u32 bury_timer_unk3;
     /* +5E8 */ float x5E8;
-    /* +5EC */ UNK_T x5EC;
+    /* +5EC */ ftCD_UNK x5EC;
     /* +5F0 */ u32 x5F0;
     /* +5F4 */ int x5F4;
     /* +5F8 */ float x5F8;

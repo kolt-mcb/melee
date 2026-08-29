@@ -1390,6 +1390,20 @@ bool mpColl_80044628_Floor(CollData* coll, bool (*cb)(Fighter_GObj*, int),
             coll->joint_id_only, cb, gobj);
     }
 
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_FLOORTRACE") != NULL) {
+        static int n = 0;
+        if (n < 400) { n++;
+            fprintf(stderr, "[FLOOR] coll=%p prev=(%.2f,%.2f) cur=(%.2f,%.2f) hit=%d "
+                    "idx=%d flags=%04x skip=%d contact=(%.2f,%.2f)\n",
+                    (void*) coll, (double) prev_bottom.x, (double) prev_bottom.y,
+                    (double) bottom.x, (double) bottom.y, (int) hit_floor,
+                    coll->floor.index, (unsigned) coll->floor.flags,
+                    coll->floor_skip, (double) coll->contact.x,
+                    (double) coll->contact.y);
+        }
+    }
+#endif
     if (hit_floor) {
         if (!(coll->floor.flags & LINE_FLAG_PLATFORM) ||
             coll->floor.index != coll->floor_skip)
