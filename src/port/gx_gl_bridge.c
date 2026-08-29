@@ -3444,6 +3444,21 @@ static void bridge_upload_and_draw(void)
     apply_alpha_compare_uniforms();
     
     g_frame_draw_idx++;
+    /* MELEE_SKIPDRAW=N drops one draw, to see what it was covering.
+     * MELEE_DRAWID cannot answer that: it disables blending, so it reports
+     * the topmost draw over a pixel rather than the ones that blend to make
+     * the visible colour. */
+    {
+        static int skip = -2;
+        if (skip == -2) {
+            const char* e = getenv("MELEE_SKIPDRAW");
+            skip = e ? atoi(e) : -1;
+        }
+        if (skip >= 0 && (int) g_frame_draw_idx == skip) {
+            g_state.vert_count = 0;
+            return;
+        }
+    }
     if (g_dbg_mode_loc >= 0) {
         int on = ENV_FLAG("MELEE_DRAWID");
         UP1I(g_dbg_mode_loc, on);
