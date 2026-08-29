@@ -1620,7 +1620,22 @@ void pc_pad_publish(void)
         d->nml_subStickY = pc_pad_nml(s->subStickY);
         d->nml_analogL = (float) s->analogL / 255.0f;
         d->nml_analogR = (float) s->analogR / 255.0f;
-        d->err = 0;
+        /* Only the first MELEE_PADS ports (default 2, which is what the
+         * Dolphin reference captures are configured with) report a
+         * controller. Every port used to read as connected, so the
+         * character select showed four hands and four CPU slots where the
+         * console shows two hands and N/A. A missing controller reports
+         * PAD_ERR_NO_CONTROLLER (-1) with no input, as the SI driver does. */
+        { static int pads = -1;
+          if (pads < 0) { const char* e = getenv("MELEE_PADS"); pads = e ? atoi(e) : 2;
+                          if (pads < 1) pads = 1; if (pads > 4) pads = 4; }
+          if ((int) i < pads) {
+              d->err = 0;
+          } else {
+              memset(d, 0, sizeof(*d));
+              d->err = -1;
+          }
+        }
         HSD_PadMasterStatus[i] = *d;
         HSD_PadCopyStatus[i] = *d;
     }

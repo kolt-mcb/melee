@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "gmvsmelee.h"
 
 #include "gmvsmelee.static.h"
@@ -114,6 +116,13 @@ void gm_801A5618(GameScene* scene_data, VsModeData* vs_data, int match_type)
     css_data->match_type = match_type;
     css_data->ko_star_counts = gm_804D6730;
     css_data->data = *vs_data;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_CSSLOG") != NULL) {
+        fprintf(stderr, "[CSS] vs->css copy: slot types %d %d %d %d match_type=%d\n",
+                vs_data->data.players[0].slot_type, vs_data->data.players[1].slot_type,
+                vs_data->data.players[2].slot_type, vs_data->data.players[3].slot_type, match_type);
+    }
+#endif
     lbDvd_800174BC();
 }
 

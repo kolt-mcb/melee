@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "fobj.h"
 
 #include "debug.h"
@@ -335,6 +337,15 @@ inline u32 FObjLoadData(HSD_FObj* fobj)
 
 void FObjUpdateAnim(HSD_FObj* fobj, void* obj, HSD_ObjUpdateFunc obj_update)
 {
+#if BUILD_TARGET_PC
+    { static int _fl = -1; if (_fl < 0) _fl = (getenv("MELEE_FOBJLOG") != NULL);
+      if (_fl && fobj->obj_type == 1) {
+        fprintf(stderr, "FOBJUPD obj=%p track=%u op=%u intrp=%u time=%.2f fterm=%u p0=%.3f p1=%.3f d0=%.3f flags=0x%x len=%u nb=%u start=%d head=%02x %02x %02x %02x %02x %02x %02x %02x\n",
+                obj, (unsigned)fobj->obj_type, (unsigned)fobj->op, (unsigned)fobj->op_intrp, (double)fobj->time, (unsigned)fobj->fterm,
+                (double)fobj->p0, (double)fobj->p1, (double)fobj->d0, (unsigned)fobj->flags, (unsigned)fobj->length, (unsigned)fobj->nb_pack, (int)fobj->startframe,
+                fobj->ad_head ? fobj->ad_head[0] : 0, fobj->ad_head ? fobj->ad_head[1] : 0, fobj->ad_head ? fobj->ad_head[2] : 0, fobj->ad_head ? fobj->ad_head[3] : 0,
+                fobj->ad_head ? fobj->ad_head[4] : 0, fobj->ad_head ? fobj->ad_head[5] : 0, fobj->ad_head ? fobj->ad_head[6] : 0, fobj->ad_head ? fobj->ad_head[7] : 0); } }
+#endif
     f32 phi_f0;
     HSD_ObjData fobjdata;
 

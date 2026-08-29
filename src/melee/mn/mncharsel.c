@@ -2239,6 +2239,9 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                         }
                     }
                     if (CSS_DOORS_DATA.doors[cursor->x4].p_kind == 0) {
+#if BUILD_TARGET_PC
+                        if (getenv("MELEE_CSSLOG") != NULL) fprintf(stderr, "[CSS] door %d HMN->CPU (site 2242)\n", (int)cursor->x4);
+#endif
                         CSS_DOORS_DATA.doors[cursor->x4].p_kind = 1;
                         mnCharSel_804D6CB0->data.data.players[cursor->x4]
                             .slot_type = 1;
@@ -5202,6 +5205,17 @@ void mnCharSel_8026688C_OnEnter(void* arg0)
 
 void mnCharSel_802669F4_OnFrame(void)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_CSSLOG") != NULL) {
+        static int f = 0;
+        if (++f % 30 == 1 && mnCharSel_804D6CB0 != NULL) {
+            fprintf(stderr, "[CSS] frame %d doors p_kind=%d %d %d %d slot=%d %d %d %d\n", f,
+                    CSS_DOORS_DATA.doors[0].p_kind, CSS_DOORS_DATA.doors[1].p_kind, CSS_DOORS_DATA.doors[2].p_kind, CSS_DOORS_DATA.doors[3].p_kind,
+                    mnCharSel_804D6CB0->data.data.players[0].slot_type, mnCharSel_804D6CB0->data.data.players[1].slot_type,
+                    mnCharSel_804D6CB0->data.data.players[2].slot_type, mnCharSel_804D6CB0->data.data.players[3].slot_type);
+        }
+    }
+#endif
     int num_slots;
     u8 temp_r0;
     struct GameCache* temp_r3;

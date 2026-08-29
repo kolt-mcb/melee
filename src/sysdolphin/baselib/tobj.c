@@ -194,7 +194,7 @@ static void TObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
 #if BUILD_TARGET_PC
         { static int _ti_on = -1, _ti_n = 0;
           if (_ti_on < 0) _ti_on = (getenv("MELEE_AOBJLOG") != NULL);
-          if (_ti_on && _ti_n < 400) { _ti_n++;
+          if (_ti_on && _ti_n < 4000) { _ti_n++;
             fprintf(stderr, "TIMG tobj=%p n=%d (fv=%.2f) entry=%p -> %ux%u fmt=%u\n", (void*)tobj, n, (double)val->fv,
                     (void*)tobj->imagetbl[n], tobj->imagedesc ? tobj->imagedesc->width : 0u,
                     tobj->imagedesc ? tobj->imagedesc->height : 0u, tobj->imagedesc ? (unsigned)tobj->imagedesc->format : 0u); } }
