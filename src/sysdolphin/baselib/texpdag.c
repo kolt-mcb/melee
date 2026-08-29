@@ -134,10 +134,8 @@ void CalcDistance(HSD_TExp** tevs, int* dist, HSD_TExp* tev, int num,
     #if BUILD_TARGET_PC
     /* PC port: guard against garbage pointers */
     if (tev == NULL || (uintptr_t) tev < 0x10000) {
-        return;
-    }
-    else {
         port_guard_warn("texpdag.c:134");
+        return;
     }
     #endif /* BUILD_TARGET_PC */
 

@@ -507,6 +507,46 @@ cinematic is not usable as a shared scene even though it would otherwise be the
 ideal one: deterministic, input-free, and rich in textures, lighting and fog.
 Fixing that boot path would make the cheapest possible reference available.
 
+## Match rendering vs the console *(2026-08-29)*
+
+`tests/pc/cases/match.case` scores a settled VS match (Pikachu vs Peach on
+Onett, no input) against a Dolphin capture: **4.4/255**, the same band as the
+menus. The reference cannot be reached by patching the boot mode -- both the
+Gecko and `[OnFrame]` variants leave Dolphin on the Main Menu -- so the case
+navigates the real menus with two pipe controllers. Dolphin's pipe device
+starts the L/R axes half-pressed under the `-+` mapping; `dolphin_ref.sh`
+releases them first, or every fighter spawns holding a light shield.
+
+What was wrong, each a class:
+
+- **Every depth test ran backwards.** The bridge used Dolphin's reversed-Z
+  clip mapping without Dolphin's reversed compare table, so the farther
+  fragment won. Back-to-front scenes hid it; Onett draws its hills last.
+- **`Ground_801C0800` called `on_init()` before `mpLibLoad`.** The console
+  order is parameters -> collision -> fog -> lights -> on_init. Map-init
+  callbacks bind JObjs to collision joints and position lines by id; on PC
+  they bound an 8-entry empty world that was then thrown away. A separate
+  stale gate (`MELEE_STAGE_COLL`) had skipped the binding altogether.
+- **`ftCommonData` was 0x890 bytes, not 0x818**: 21 `UNK_T` (void*) members.
+  Every field past 0x1DC read the file off by up to 0x78; `x25C`, the
+  drop-through threshold, read 8.0 and no fighter could land on a platform.
+- **`GXSetTevOp`'s tables were inverted** for the shader's `(1-c)a + cb + d`:
+  PASSCLR produced 0 (the erase quad drew black), MODULATE `(1-TEX)*RAS`.
+- **PowerPC register passthrough:** `gm_80168B34` never assigns `base` for
+  ordinary characters and `gm_80168BF8` has no `return`; both read the
+  value out of the register that still held it. Stock icons were Mario's.
+- **Unconverted data:** `ftData::x3C` (camera-box extents -> fighters cut
+  in half at the screen edges), `yakumono_param` (33 stages; per-stage
+  layouts now in `Ground_GetYakumonoParam`), the per-map `HSD_FogDesc`
+  (black clear colour), PlCo's bonus table (200 asserts a match).
+- Linear fog with `start == end` is NaN on hardware (= no fog); the bridge
+  stepped to full fog. Debug-VS now runs the default 2:00 time match so the
+  timer and player tags exist.
+
+Diagnostics: `MELEE_MPDUMP` (collision world), `MELEE_CAMTRACE[_EVERY]`
+(camera subjects), `MELEE_FLOORTRACE` (floor checks), `MELEE_GRDAT_TRACE`
+(fog/erase/yakumono), `dff_draws.py` now prints `PNMTX rows` and `PROJ`.
+
 ## Sequencing
 
 ```

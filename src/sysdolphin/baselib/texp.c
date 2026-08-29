@@ -696,14 +696,12 @@ static void HSD_TExpAlphaInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
                 (uintptr_t) tev->a_in[idx].exp == (uintptr_t) -1 ||
                 (uintptr_t) tev->a_in[idx].exp == (uintptr_t) -2)
             {
+                port_guard_warn("texp.c:618");
                 tev->a_in[idx].exp = NULL;
                 tev->a_in[idx].type = HSD_TE_ZERO;
                 tev->a_in[idx].sel = HSD_TE_0;
                 tev->a_in[idx].arg = GX_CA_ZERO;
                 break;
-            }
-            else {
-                port_guard_warn("texp.c:618");
             }
             #endif /* BUILD_TARGET_PC */
             HSD_ASSERT(771, sel == HSD_TE_A);

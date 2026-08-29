@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 #include "ftCo_FallSpecial.h"
 
 #include "ftCo_DamageFall.h"
@@ -137,6 +141,18 @@ void ftCo_FallSpecial_Coll(Fighter_GObj* gobj)
 bool ftCo_80096CC8(Fighter_GObj* gobj, int line_id)
 {
     Fighter* fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_FLOORTRACE") != NULL) {
+        static int n = 0;
+        if (n < 3 && line_id == 24) { n++;
+            fprintf(stderr, "[FLOOR] ftCo_80096CC8: lstick.y=%.3f x25C=%.3f "
+                    "x260=%.3f flags=%x\n", (double) fp->input.lstick.y,
+                    (double) p_ftCommonData->x25C,
+                    (double) p_ftCommonData->x260_startShieldHealth,
+                    (unsigned) mpLineGetFlags(line_id));
+        }
+    }
+#endif
     if (line_id != -1 && (!(mpLineGetFlags(line_id) & LINE_FLAG_PLATFORM) ||
                           fp->input.lstick.y > p_ftCommonData->x25C))
     {

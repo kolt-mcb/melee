@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 #include "displayfunc.h"
 
 #include "baselib/cobj.h"
@@ -615,6 +619,11 @@ void HSD_JObjSetSPtclCallback(void (*func)(s32, s32, s32, HSD_JObj*))
 
 void HSD_SetEraseColor(u8 r, u8 g, u8 b, u8 a)
 {
+#if BUILD_TARGET_PC
+    { extern u32 pc_frame_number; static int n = 0;
+      if (n < 12 && pc_frame_number >= 60 && getenv("MELEE_GRDAT_TRACE") != NULL) { n++;
+        fprintf(stderr, "[ERASE] frame=%u color=(%u,%u,%u,%u) from=%p\n", (unsigned) pc_frame_number, r, g, b, a, __builtin_return_address(0)); } }
+#endif
     erase_color.r = r;
     erase_color.g = g;
     erase_color.b = b;
@@ -687,6 +696,15 @@ void HSD_EraseRect(f32 top, f32 bottom, f32 left, f32 right, f32 z,
     GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
 
     color = erase_color;
+#if BUILD_TARGET_PC
+    { extern u32 pc_frame_number; static int n = 0;
+      if (n < 10 && pc_frame_number >= 60 && getenv("MELEE_GRDAT_TRACE") != NULL) { n++;
+        fprintf(stderr, "[ERASERECT] frame=%u color=(%u,%u,%u,%u) en=%d/%d/%d z=%.1f rect=(%.0f,%.0f,%.0f,%.0f) from=%p\n",
+                (unsigned) pc_frame_number, color.r, color.g, color.b, color.a,
+                enable_color, enable_alpha, enable_depth, (double) z,
+                (double) left, (double) top, (double) right, (double) bottom,
+                __builtin_return_address(0)); } }
+#endif
     GXBegin(GX_QUADS, GX_VTXFMT0, 4);
     GXPosition3f32(left, top, z);
     GXColor4u8(color.r, color.g, color.b, color.a);

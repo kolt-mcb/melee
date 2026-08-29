@@ -774,7 +774,12 @@ void Ground_801C0800(StageIdPair* pair)
      * without it current_lights is empty, so HSD_LObjSetupInit clears the
      * active lights and every surface renders with no light and a black
      * ambient. Try it by default; MELEE_STAGE_NOLIGHTS=1 backs it out. */
-    if (getenv("MELEE_STAGE_ANIM") != NULL) {
+    /* Ground_801C1E94 itself only loads the (now converted) fog desc and
+     * sets the clear colour from it; the stage-animation walk it used to be
+     * gated with has its own gate in grAnime_801C7C1C. Without this every
+     * stage cleared to black behind its sky. MELEE_NO_STAGE_FOG=1 backs it
+     * out. */
+    if (getenv("MELEE_NO_STAGE_FOG") == NULL) {
         Ground_801C1E94();
     }
     if (getenv("MELEE_STAGE_NOLIGHTS") == NULL) {
@@ -1455,6 +1460,15 @@ void Ground_801C1E94(void)
         Camera_SetBackgroundColor(temp_r29_2->color.r, temp_r29_2->color.g,
                                   temp_r29_2->color.b);
         stageinfo->x12C = temp_r30_2;
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_GRDAT_TRACE") != NULL) {
+            fprintf(stderr, "[GRDAT] stage fog: type=%u start=%.1f end=%.1f "
+                    "color=(%u,%u,%u,%u) desc=%p\n", (unsigned) temp_r29_2->type,
+                    (double) temp_r29_2->start, (double) temp_r29_2->end,
+                    temp_r29_2->color.r, temp_r29_2->color.g,
+                    temp_r29_2->color.b, temp_r29_2->color.a, (void*) phi_r0);
+        }
+#endif
     } else {
         Camera_SetBackgroundColor(0, 0, 0);
     }

@@ -299,6 +299,13 @@ void gm_801B13B8(GameScene* arg0)
                 temp_r28->rules.x10 = (u32) secs;
             }
         }
+        /* gm_80167BC8 gives every slot rules->stock_count (default 4) even
+         * in a time match; the debug scene left them at 0, and the P1/P2
+         * start markers (ifnametag.c) hide themselves for a slot with no
+         * stocks. */
+        for (i = 0; i < 6; i++) {
+            temp_r28->players[i].stocks = 4;
+        }
         OSReport("[PC] debug-VS lineup: p0=ckind%d(c%d) p1=ckind%d(c%d) "
                  "stage=%d\n",
                  ck0, col0, ck1, col1, (int) temp_r28->rules.xE);

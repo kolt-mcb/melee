@@ -173,6 +173,22 @@ def movie_frame(path):
 
 # --------------------------------------------------------------- running
 
+def frame_is_blank(path):
+    """True when a port screenshot is (almost) a single flat colour."""
+    try:
+        from PIL import Image
+        im = Image.open(path).convert("RGB").resize((64, 48))
+        px = list(im.getdata())
+        counts = {}
+        for v in px:
+            counts[v] = counts.get(v, 0) + 1
+        # A rendered scene never has nine tenths of its pixels in one flat
+        # colour; the raced frame is the erase colour plus a line of text.
+        return max(counts.values()) > 0.9 * len(px)
+    except Exception:
+        return False
+
+
 def run_port(case, outdir):
     # A leftover instance holding the window is the likeliest cause of the
     # rare start-up hang seen on this port; never pkill -f, which matches the
@@ -306,6 +322,15 @@ def check(cases, update):
             continue
         print("== %s: %s" % (case["name"], case["description"]))
         shots = run_port(case, "/tmp/pc_suite/%s" % case["name"])
+        # Roughly one run in five the port's scene load races and the frame
+        # holds nothing but the erase colour and a line of text. It is not
+        # the renderer under test, so a near-empty checkpoint gets one
+        # retry before it is scored -- and is reported, so a real blank
+        # screen still shows up as two consecutive misses.
+        if any(frame_is_blank(p) for p in shots.values()):
+            print("   port rendered a near-empty frame (scene-load race); "
+                  "retrying once")
+            shots = run_port(case, "/tmp/pc_suite/%s" % case["name"])
         results[case["name"]] = {}
         for chk in case["checks"]:
             if case["align"] == "movie":

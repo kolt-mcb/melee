@@ -1814,6 +1814,16 @@ bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
             int line_offset;
         block_8:
             if (cb != NULL && !cb(gobj, line_r26 - groundCollLine)) {
+#if BUILD_TARGET_PC
+                if (getenv("MELEE_FLOORTRACE") != NULL) {
+                    static int n = 0;
+                    if (n < 200 && (line_r26 - groundCollLine) == 24) { n++;
+                        fprintf(stderr, "[FLOOR] cb rejected line %d (cb=%p) a=(%.2f,%.2f) b=(%.2f,%.2f)\n",
+                                (int) (line_r26 - groundCollLine), (void*) cb,
+                                (double) ax, (double) ay, (double) bx, (double) by);
+                    }
+                }
+#endif
                 continue;
             }
 
@@ -1854,6 +1864,16 @@ bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
 #endif
             y0_sp44 += y_offset;
             y1_sp3C += y_offset;
+#if BUILD_TARGET_PC
+            if (getenv("MELEE_FLOORTRACE") != NULL && line_offset == 24) {
+                static int n2 = 0;
+                if (n2 < 200) { n2++;
+                    fprintf(stderr, "[FLOOR] line 24 seg=(%.2f,%.2f)-(%.2f,%.2f) path=(%.2f,%.2f)-(%.2f,%.2f) flags=%x\n",
+                            (double) x0_sp48, (double) y0_sp44, (double) x1_sp40, (double) y1_sp3C,
+                            (double) ax, (double) ay, (double) bx, (double) by, (unsigned) line_r26->flags);
+                }
+            }
+#endif
             if (ABS(y0_sp44 - y1_sp3C) > 0.0001) {
                 if (mpLineIntersection(x0_sp48, y0_sp44, x1_sp40, y1_sp3C, ax,
                                        ay, bx, by, &px_sp54, &py_sp50))
