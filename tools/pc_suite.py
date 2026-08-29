@@ -34,6 +34,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 from PIL import Image, ImageChops
 
@@ -177,6 +178,11 @@ def run_port(case, outdir):
     # rare start-up hang seen on this port; never pkill -f, which matches the
     # caller's own command line.
     subprocess.run(["pkill", "-x", "melee-pc"], capture_output=True)
+    # Give the previous instance time to release the window and GL context.
+    # Without this, a case run straight after another scored differently from
+    # the same case run alone -- and picked a different alignment offset, which
+    # is what made it visible.
+    time.sleep(1.0)
     os.makedirs(outdir, exist_ok=True)
     for f in glob.glob(os.path.join(outdir, "*.ppm")):
         os.unlink(f)
