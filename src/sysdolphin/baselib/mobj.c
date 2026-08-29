@@ -510,7 +510,12 @@ void HSD_MObjCompileTev(HSD_MObj* mobj)
             if (tv) fprintf(stderr, "  TOBJTEV tobj=%p id=%u fmt=%d tev=%p active=0x%x cop=%d aop=%d konst=(%d,%d,%d,%d) tev0=(%d,%d,%d,%d) tev1=(%d,%d,%d,%d)\n",
                 (void*)t, (unsigned)t->id, t->imagedesc ? (int)t->imagedesc->format : -1, (void*)tv, (unsigned)tv->active, tv->color_op, tv->alpha_op,
                 tv->konst.r, tv->konst.g, tv->konst.b, tv->konst.a, tv->tev0.r, tv->tev0.g, tv->tev0.b, tv->tev0.a, tv->tev1.r, tv->tev1.g, tv->tev1.b, tv->tev1.a);
-            else fprintf(stderr, "  TOBJTEV tobj=%p id=%u fmt=%d tev=NULL\n", (void*)t, (unsigned)t->id, t->imagedesc ? (int)t->imagedesc->format : -1);
+            fprintf(stderr, "  TOBJIMG tobj=%p id=%u img=%p ptr=%p %ux%u fmt=%d imagetbl=%p aobj=%p flags=0x%x\n", (void*)t, (unsigned)t->id, (void*)t->imagedesc,
+                t->imagedesc ? t->imagedesc->image_ptr : NULL, t->imagedesc ? t->imagedesc->width : 0, t->imagedesc ? t->imagedesc->height : 0, t->imagedesc ? (int)t->imagedesc->format : -1,
+                (void*)t->imagetbl, (void*)t->aobj, (unsigned)t->flags);
+            if (t->imagedesc && t->imagedesc->image_ptr) { int bi; const u8* bp = (const u8*)t->imagedesc->image_ptr; fprintf(stderr, "  TOBJBYTES");
+                for (bi = 0; bi < 32; bi++) fprintf(stderr, " %02x", bp[bi]); fprintf(stderr, "\n"); }
+            if (!tv) fprintf(stderr, "  TOBJTEV tobj=%p id=%u fmt=%d tev=NULL\n", (void*)t, (unsigned)t->id, t->imagedesc ? (int)t->imagedesc->format : -1);
         }
     }
 #endif

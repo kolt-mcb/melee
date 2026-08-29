@@ -579,6 +579,13 @@ typedef struct {
     Bool tex_mtx_loaded[68];  /* set by GXLoadTexMtxImm; unloaded slots are 0 */
     u32 tex_gen_src[8];       /* GX_TEXGEN_SRC_MATRIX/MAPPED */
     u32 tex_gen_mat_id[8];    /* Matrix ID for LIGHT sources */
+    /* Post-transform texture matrices (GX_PTTEXMTX0..19 = ids 64..121 step 3,
+     * GX_PTIDENTITY = 125).  HSD loads every tobj's scale/rotate/translate/
+     * repeat here and generates coords with GX_IDENTITY as the main matrix,
+     * so without these no texture ever repeats or scrolls. */
+    f32 pt_mtx_array[21][3][4];
+    Bool pt_mtx_loaded[21];
+    u32 tex_gen_pt_id[8];
     
     /* Z-texture (depth texture) state */
     u32 ztex_op;              /* GX_ZT_DISABLE/ADD/REPLACE */
@@ -875,6 +882,8 @@ static GLint g_uv_scale_loc = -1;
 static GLint g_texmtx0_loc = -1;
 static GLint g_texmtx1_loc = -1;
 static GLint g_texmtx0_enable_loc = -1;
+static GLint g_pttexmtx0_loc = -1, g_pttexmtx1_loc = -1;
+static GLint g_pttexmtx0_enable_loc = -1, g_pttexmtx1_enable_loc = -1;
 static GLint g_texmtx1_enable_loc = -1;
 
 /* Texture shader uniform locations */
@@ -1054,6 +1063,10 @@ static const char* g_vert_src =
 "uniform mat4 u_texmtx1;\n"
 "uniform int u_texmtx0_enable;\n"
 "uniform int u_texmtx1_enable;\n"
+"uniform mat4 u_pttexmtx0;           // post-transform texture matrix, coord 0\n"
+"uniform mat4 u_pttexmtx1;\n"
+"uniform int u_pttexmtx0_enable;\n"
+"uniform int u_pttexmtx1_enable;\n"
 "// Indirect texture (bump mapping / refraction) support\n"
 "uniform int u_ind_tex_enabled;       // 1 if indirect TEV is active\n"
 "uniform int u_ind_tex_stage;         // Indirect stage ID (0-1)\n"
@@ -1117,15 +1130,16 @@ static const char* g_vert_src =
 "        vec4 t = u_texmtx1 * vec4(uv1, 0.0, 1.0);\n"
 "        uv1 = t.xy;\n"
 "    }\n"
+"    float tcz0 = 1.0, tcz1 = 1.0;   // third texgen component (1 for 2x4)\n"
 "    // Texture coordinate generation (GXSetTexCoordGen2)\n"
 "    // GX_TG_MTX3x4=1, GX_TG_MTX2x4=2; GX_TG_TEX=0, GX_TG_POS=1, GX_TG_NRM=2\n"
 "    if (u_texgen0_mode == 1) { // MTX3x4\n"
 "        if (u_texgen0_src == 1) { // POS\n"
 "            vec4 t = u_texgen_mtx0 * vec4(v_world_pos, 1.0);\n"
-"            uv0 = t.xy;\n"
+"            uv0 = t.xy; tcz0 = t.z;\n"
 "        } else if (u_texgen0_src == 2) { // NRM\n"
 "            vec4 t = u_texgen_mtx0 * vec4(v_nrm, 1.0);\n"
-"            uv0 = t.xy;\n"
+"            uv0 = t.xy; tcz0 = t.z;\n"
 "        }\n"
 "    } else if (u_texgen0_mode == 2) { // MTX2x4\n"
 "        vec4 t = u_texgen_mtx0 * vec4(uv0, 0.0, 1.0);\n"
@@ -1134,15 +1148,18 @@ static const char* g_vert_src =
 "    if (u_texgen1_mode == 1) { // MTX3x4\n"
 "        if (u_texgen1_src == 1) { // POS\n"
 "            vec4 t = u_texgen_mtx1 * vec4(v_world_pos, 1.0);\n"
-"            uv1 = t.xy;\n"
+"            uv1 = t.xy; tcz1 = t.z;\n"
 "        } else if (u_texgen1_src == 2) { // NRM\n"
 "            vec4 t = u_texgen_mtx1 * vec4(v_nrm, 1.0);\n"
-"            uv1 = t.xy;\n"
+"            uv1 = t.xy; tcz1 = t.z;\n"
 "        }\n"
 "    } else if (u_texgen1_mode == 2) { // MTX2x4\n"
 "        vec4 t = u_texgen_mtx1 * vec4(uv1, 0.0, 1.0);\n"
 "        uv1 = t.xy;\n"
 "    }\n"
+"    // Post-transform (dual-tex) matrices: hardware multiplies (s, t, z, 1)\n"
+"    if (u_pttexmtx0_enable != 0) { vec4 t = u_pttexmtx0 * vec4(uv0, tcz0, 1.0); uv0 = t.xy; }\n"
+"    if (u_pttexmtx1_enable != 0) { vec4 t = u_pttexmtx1 * vec4(uv1, tcz1, 1.0); uv1 = t.xy; }\n"
 "    v_uv0 = uv0;\n"
 "    v_uv1 = uv1;\n"
 "    // World-space position and normal\n"
@@ -1765,6 +1782,10 @@ static void bridge_compile_shaders(void)
     g_texmtx0_loc = glGetUniformLocation(g_shader_program, "u_texmtx0");
     g_texmtx1_loc = glGetUniformLocation(g_shader_program, "u_texmtx1");
     g_texmtx0_enable_loc = glGetUniformLocation(g_shader_program, "u_texmtx0_enable");
+    g_pttexmtx0_loc = glGetUniformLocation(g_shader_program, "u_pttexmtx0");
+    g_pttexmtx1_loc = glGetUniformLocation(g_shader_program, "u_pttexmtx1");
+    g_pttexmtx0_enable_loc = glGetUniformLocation(g_shader_program, "u_pttexmtx0_enable");
+    g_pttexmtx1_enable_loc = glGetUniformLocation(g_shader_program, "u_pttexmtx1_enable");
     g_texmtx1_enable_loc = glGetUniformLocation(g_shader_program, "u_texmtx1_enable");
     
     /* Texture uniforms for fragment shader (tex0 + tex1 with TEV compositing) */
@@ -3443,7 +3464,7 @@ static void bridge_upload_and_draw(void)
             f32 mtx[4][4] = {{0}};
             memcpy(mtx, g_state.mtx_array[g_state.tex_gen_mat_id[0]], sizeof(f32) * 12);
             mtx[3][3] = 1.0f;
-            UPMTX4(g_texmtx0_loc, 1, GL_FALSE, &mtx[0][0]);
+            UPMTX4(g_texmtx0_loc, 1, GL_TRUE, &mtx[0][0]);
         }
     }
     if (g_texmtx1_enable_loc >= 0) {
@@ -3453,10 +3474,36 @@ static void bridge_upload_and_draw(void)
             f32 mtx[4][4] = {{0}};
             memcpy(mtx, g_state.mtx_array[g_state.tex_gen_mat_id[1]], sizeof(f32) * 12);
             mtx[3][3] = 1.0f;
-            UPMTX4(g_texmtx1_loc, 1, GL_FALSE, &mtx[0][0]);
+            UPMTX4(g_texmtx1_loc, 1, GL_TRUE, &mtx[0][0]);
         }
     }
     
+    /* Post-transform texture matrices */
+    {
+        u32 c;
+        for (c = 0; c < 2; c++) {
+            GLint eloc = c ? g_pttexmtx1_enable_loc : g_pttexmtx0_enable_loc;
+            GLint mloc = c ? g_pttexmtx1_loc : g_pttexmtx0_loc;
+            u32 id = g_state.tex_gen_pt_id[c];
+            int en = 0;
+            if (eloc < 0) continue;
+            if (g_state.tex_gen_enabled[c] && id >= 64 && id <= 124 && ((id - 64) % 3) == 0 &&
+                g_state.pt_mtx_loaded[(id - 64) / 3]) {
+                en = 1;
+            }
+            UP1I(eloc, en);
+            if (en && mloc >= 0) {
+                f32 mtx[4][4] = {{0}};
+                memcpy(mtx, g_state.pt_mtx_array[(id - 64) / 3], sizeof(f32) * 12);
+                mtx[3][3] = 1.0f;
+                /* GX matrices are row-major; transpose on upload so the
+                 * GLSL mat4 * vec4 product is the row-vector product the
+                 * hardware performs (GL_FALSE handed the shader M^T). */
+                UPMTX4(mloc, 1, GL_TRUE, &mtx[0][0]);
+            }
+        }
+    }
+
     /* Upload alpha compare uniforms */
     apply_alpha_compare_uniforms();
     
@@ -3754,7 +3801,9 @@ static void bridge_upload_and_draw(void)
                 f64 cx = 0, cy = 0, cz = 0;
                 u32 cn = (count < 200 ? count : 200);
                 f64 mnx=1e30,mny=1e30,mnz=1e30,mxx=-1e30,mxy=-1e30,mxz=-1e30;
+                f64 mnu=1e30,mnv=1e30,mxu=-1e30,mxv=-1e30;
                 for (u32 i = 0; i < cn; i++) {
+                    { f64 u=g_state.verts[i].tex0[0], v=g_state.verts[i].tex0[1]; if(u<mnu)mnu=u; if(u>mxu)mxu=u; if(v<mnv)mnv=v; if(v>mxv)mxv=v; }
                     cx += g_state.verts[i].pos[0]; cy += g_state.verts[i].pos[1]; cz += g_state.verts[i].pos[2];
                     f64 px=g_state.verts[i].pos[0], py=g_state.verts[i].pos[1], pz=g_state.verts[i].pos[2];
                     if(px<mnx)mnx=px; if(px>mxx)mxx=px;
@@ -3769,6 +3818,10 @@ static void bridge_upload_and_draw(void)
                         (double)g_state.model_matrix[0], (double)g_state.model_matrix[1], (double)g_state.model_matrix[2], (double)g_state.model_matrix[3],
                         (double)g_state.model_matrix[4], (double)g_state.model_matrix[5], (double)g_state.model_matrix[6], (double)g_state.model_matrix[7],
                         (double)g_state.model_matrix[8], (double)g_state.model_matrix[9], (double)g_state.model_matrix[10], (double)g_state.model_matrix[11]);
+                fprintf(stderr, "  UVRANGE n=%u u=[%.3f..%.3f] v=[%.3f..%.3f]\n", cn, mnu, mxu, mnv, mxv);
+                { int vi; fprintf(stderr, "  UV");
+                  for (vi = 0; vi < 4 && vi < (int) count; vi++) fprintf(stderr, " v%d=(%.3f,%.3f)", vi, (double)g_state.verts[vi].tex0[0], (double)g_state.verts[vi].tex0[1]);
+                  fprintf(stderr, "\n"); }
                 if (getenv("MELEE_DRAWTRACE_VERTS") != NULL && (int)g_frame_draw_idx == atoi(getenv("MELEE_DRAWTRACE_VERTS"))) {
                     u32 vi;
                     for (vi = 0; vi < 8; vi++) {
@@ -3898,8 +3951,9 @@ static void bridge_upload_and_draw(void)
         /* MELEE_SNAPDRAW=N: dump the framebuffer right after draw N of the
          * traced frame (and right before it, as N-1), so a draw's real
          * blended contribution can be measured before later draws pile on. */
-        { static int sd = -2; if (sd == -2) { const char* e = getenv("MELEE_SNAPDRAW"); sd = e ? atoi(e) : -1; }
-          if (sd >= 0 && g_state.frame_count == 300 && ((int) g_frame_draw_idx == sd || (int) g_frame_draw_idx == sd - 1)) {
+        { static int sd = -2, sf = 300; if (sd == -2) { const char* e = getenv("MELEE_SNAPDRAW"); sd = e ? atoi(e) : -1;
+              e = getenv("MELEE_SNAPFRAME"); if (e) sf = atoi(e); }
+          if (sd >= 0 && (int) g_state.frame_count == sf && ((int) g_frame_draw_idx == sd || (int) g_frame_draw_idx == sd - 1)) {
               int vp[4]; glGetIntegerv(GL_VIEWPORT, vp);
               u8* buf = malloc((size_t) vp[2] * vp[3] * 3);
               char path[128]; snprintf(path, sizeof(path), "/tmp/snapdraw_%u.ppm", g_frame_draw_idx);
@@ -4100,9 +4154,9 @@ void GXInvalidateVtxCache(void)
 void GXInvalidateTexAll(void)
 {
     GX_TRACE("GXInvalidateTexAll");
-    /* Invalidate all texture caches - ensure GPU sees updated texture data.
-     * On modern GPUs, textures are uploaded fresh each frame, but we flush
-     * to ensure any pending texture updates are processed. */
+    /* RAM images may have changed under cached GL textures (EFB copies,
+     * scene transitions): make every slot re-validate its bytes. */
+    pc_tex_cache_bump();
     glFlush();
 }
 void GXSetCopyClear(void* color, u32 z)
@@ -6603,8 +6657,9 @@ void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize, u32 p
         g_state.tex_gen_mode[tex] = type;
         g_state.tex_gen_src[tex] = mat;
         g_state.tex_gen_mat_id[tex] = mtx;
+        g_state.tex_gen_pt_id[tex] = pt_texmtx;
     }
-    (void)normalize; (void)pt_texmtx;
+    (void)normalize;
 }
 void GXSetLineWidth(u32 w, u32 texOffsets)
 {
@@ -6953,8 +7008,15 @@ void GXLoadTexMtxImm(f32 mtx[][4], u32 id, u32 type)
     gx_flush_pending();
     GX_TRACE("GXLoadTexMtxImm(p, %u, %u)", id, type);
     if (id < 68) g_state.tex_mtx_loaded[id] = TRUE;
+    if (id >= 64 && id <= 124 && ((id - 64) % 3) == 0) {
+        u32 k = (id - 64) / 3;
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 4; j++)
+                g_state.pt_mtx_array[k][i][j] = mtx[i][j];
+        g_state.pt_mtx_loaded[k] = TRUE;
+    }
     if (id >= 68) {
-        PORT_LOG_WARN("GXLoadTexMtxImm: matrix id %u out of range", id);
+        if (id > 124) PORT_LOG_WARN("GXLoadTexMtxImm: matrix id %u out of range", id);
         return;
     }
     
@@ -8118,6 +8180,33 @@ static GLenum gx_min_filter_mode(u32 gx_filt)
     }
 }
 
+/* The texture cache mirrors RAM images into GL objects keyed by (pointer,
+ * w, h, fmt).  On the console TMEM is refilled from RAM every draw, so a
+ * scene reload that lands a new image at an old address just works; here
+ * it served the *old* image (the title's tunnel lattice sampled a cloud
+ * texture after the menu->title reload).  A generation counter, bumped by
+ * GXInvalidateTexAll() and by every archive load, makes the next hit on
+ * each slot re-hash the image bytes and re-upload only if they changed. */
+static u32 g_tex_gen = 1;
+static u32 g_tex_slot_gen[MAX_TEXTURES];
+static u32 g_tex_slot_hash[MAX_TEXTURES];
+u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod);
+
+static u32 tex_content_hash(const void* img, u16 w, u16 h, u8 fmt)
+{
+    u32 n = GXGetTexBufferSize(w, h, fmt, 0, 0);
+    const u8* p = (const u8*) img;
+    u32 hsh = 2166136261u, i;
+    if (n > 0x100000) n = 0x100000;
+    for (i = 0; i < n; i++) { hsh ^= p[i]; hsh *= 16777619u; }
+    return hsh ^ n;
+}
+
+void pc_tex_cache_bump(void)
+{
+    g_tex_gen++;
+}
+
 static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
 {
     /* Check for existing matching texture (dedup by pointer + dims + format) */
@@ -8255,12 +8344,25 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
     Bool used_tlut = FALSE;
 
     /* If this is a cache hit, just bind the existing texture */
-    if (tex_id && g_state.tex_cache_img[slot] == img &&
-        g_state.tex_cache_w[slot] == w && g_state.tex_cache_h[slot] == h &&
-        g_state.tex_cache_fmt[slot] == fmt) {
-        /* Cache hit - skip upload, just set up state */
-        g_tx_hit++;
-        goto bind_tex;
+    {
+        Bool hit = tex_id && g_state.tex_cache_img[slot] == img &&
+            g_state.tex_cache_w[slot] == w && g_state.tex_cache_h[slot] == h &&
+            g_state.tex_cache_fmt[slot] == fmt;
+        if (hit && g_tex_slot_gen[slot] == g_tex_gen) {
+            g_tx_hit++;
+            goto bind_tex;
+        }
+        {
+            u32 hh = tex_content_hash(img, w, h, fmt);
+            if (hit && hh == g_tex_slot_hash[slot]) {
+                /* Same bytes since the last generation: still valid. */
+                g_tex_slot_gen[slot] = g_tex_gen;
+                g_tx_hit++;
+                goto bind_tex;
+            }
+            g_tex_slot_hash[slot] = hh;
+            g_tex_slot_gen[slot] = g_tex_gen;
+        }
     }
     if (!tex_id) {
         glGenTextures(1, &tex_id);
