@@ -116,9 +116,11 @@ static void* pc_convert_section(HSD_Archive* archive, const char* name,
         return pc_conv_LightListArray(raw, base);
     }
     if (PC_SEC_ENDS("_fog")) {
-        /* HSD_FogDesc is not converted; HSD_FogLoadDesc treats NULL as
-         * "no fog", which beats an unconverted descriptor. */
-        return NULL;
+        /* The fog descriptor carries the scene's erase (clear) colour as well
+         * as the depth fade: mnmain.c reads fog->color into HSD_SetEraseColor.
+         * Returning NULL here left every menu clearing to black where the
+         * console clears to the fog colour. */
+        return grDatFiles_ConvertFogDescGCNtoX64(raw, base);
     }
 #undef PC_SEC_ENDS
     return raw;

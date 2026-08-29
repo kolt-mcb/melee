@@ -346,9 +346,18 @@ def check(cases, update):
                 # window means the true match is outside it and the score is
                 # a floor, not a measurement -- say so rather than let it read
                 # as a clean result.
+                # ... but only when the edge actually wins. Where the score
+                # surface is flat (a static screen whose only motion is a
+                # background phase the metric barely sees), the pick between
+                # near-equal offsets is noise, and calling that a misalignment
+                # would fail every run on a coin toss. Demand a margin.
+                interior = [sc for sc, o in scored if abs(o) < case["window"]]
+                margin = (min(interior) - s) if interior else 0.0
                 edge = " AT WINDOW EDGE" if abs(best_off) >= case["window"] \
-                    else ""
-                aligned = "  [dump offset %+d%s]" % (best_off, edge)
+                    and margin > 0.75 else ""
+                flat = "" if edge or abs(best_off) < case["window"] \
+                    else " (edge, flat: interior within %.2f)" % margin
+                aligned = "  [dump offset %+d%s%s]" % (best_off, edge, flat)
                 if edge:
                     failures.append("%s:%d window edge" % (case["name"], chk))
             results[case["name"]][str(chk)] = round(s, 3)

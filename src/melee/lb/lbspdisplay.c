@@ -28,6 +28,8 @@
 
 #include "lb/lbdvd.h"
 #include "lb/types.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 #include <math_ppc.h>
 #include <trigf.h>
@@ -84,6 +86,17 @@ HSD_LObj* lb_80011AC4(LightList** list)
 
     prev = NULL;
     while (*list != NULL) {
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_LOBJLOG") != NULL) {
+            HSD_LightDesc* d = (*list)->desc;
+            fprintf(stderr, "LIGHTLIST list=%p entry=%p desc=%p anims=%p", (void*)list, (void*)*list, (void*)d, (void*)(*list)->anims);
+            for (; pc_ptr_sane(d); d = d->next)
+                fprintf(stderr, " [flags=0x%x attn=0x%x col=(%u,%u,%u,%u) cls=%s]",
+                        (unsigned)d->flags, (unsigned)d->attnflags, d->color.r, d->color.g, d->color.b, d->color.a,
+                        d->class_name ? d->class_name : "-");
+            fprintf(stderr, "\n");
+        }
+#endif
         curr = HSD_LObjLoadDesc((*list)->desc);
         temp_r4 = (*list)->anims;
         if (temp_r4 != NULL) {
@@ -97,6 +110,9 @@ HSD_LObj* lb_80011AC4(LightList** list)
         prev = curr;
         list++;
     }
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_LOBJLOG") != NULL) fprintf(stderr, "LIGHTLIST -> first lobj=%p\n", (void*)first);
+#endif
     return first;
 }
 

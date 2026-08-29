@@ -504,6 +504,7 @@ void MObjSetupTev(HSD_MObj* mobj, HSD_TObj* tobj, u32 arg2)
 
 void HSD_MObjSetup(HSD_MObj* mobj, u32 rendermode)
 {
+
     HSD_TObj *tobj, **tail;
 
     HSD_StateInitTev();

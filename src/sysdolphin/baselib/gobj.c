@@ -283,6 +283,10 @@ void HSD_GObj_80390FC0(void)
 
 void HSD_GObj_LObjCallback(HSD_GObj* gobj, int unused)
 {
+    { static int _lc_n = 0;
+      if (getenv("MELEE_LOBJLOG") != NULL && _lc_n < 80) { _lc_n++;
+        fprintf(stderr, "LOBJCB gobj=%p class=%u plink=%u gxlink=%u hsd_obj=%p\n", (void*)gobj,
+                (unsigned)gobj->classifier, (unsigned)gobj->p_link, (unsigned)gobj->gx_link, gobj->hsd_obj); } }
     /* PC port: lighting objects are converted from big-endian archive data in
      * grDatFiles_ConvertLightDescGCNtoX64 (flags, color, position/interest WObj,
      * and the type-specific union are all byte-swapped). The earlier
@@ -361,13 +365,10 @@ void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
 
 void HSD_GObj_FogCallback(HSD_GObj* gobj, int unused)
 {
-#if BUILD_TARGET_PC
-    /* PC port: fog objects from archive data are big-endian and corrupted on LE.
-     * Skip fog setting until endianness conversion is implemented. */
-    (void)gobj;
-#else
+    /* Fog descriptors are converted by lbArchive's section converter now
+     * (grDatFiles_ConvertFogDescGCNtoX64), so the stub that skipped this
+     * "until endianness conversion is implemented" is gone. */
     HSD_FogSet(gobj->hsd_obj);
-#endif /* BUILD_TARGET_PC */
 }
 
 void HSD_GObj_803910D8(HSD_GObj* gobj, int renderpass)

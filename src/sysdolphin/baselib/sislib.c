@@ -28,6 +28,19 @@
 #include <dolphin/os.h>
 #include <melee/lb/lbarchive.h>
 
+/* SIS string data is a byte stream straight out of the archive: 16-bit
+ * fields (glyph codes, positions, scales, delays) are big-endian and can sit
+ * at odd addresses. Reading them through a u16* on this target gave
+ * byte-swapped glyph codes (0x2036 "6" became 0x3620) and offsets a hundred
+ * times too large, so every menu string's glyphs were dropped. */
+#if BUILD_TARGET_PC
+#define SIS_U16(p) ((u16) ((((const u8*) (p))[0] << 8) | ((const u8*) (p))[1]))
+#define SIS_S16(p) ((s16) SIS_U16(p))
+#else
+#define SIS_U16(p) (*(u16*) (p))
+#define SIS_S16(p) (*(s16*) (p))
+#endif
+
 static HSD_WObjDesc HSD_SisLib_8040C490 = {
     NULL,
     { 0, 0, 1 },
@@ -1490,8 +1503,8 @@ loop_3:
         goto block_33;
     case 14:
         HSD_SisLib_803A7684(text, (u8*) cursor, 0x83U);
-        text->x80.x = (f32) * (u16*) ((u8*) cursor + 1) / 256.0F;
-        scale_val = *(u16*) ((u8*) cursor + 3);
+        text->x80.x = (f32) SIS_U16(((u8*) cursor + 1)) / 256.0F;
+        scale_val = SIS_U16(((u8*) cursor + 3));
         cursor = (u8*) cursor + 4;
         text->x80.y = (f32) scale_val / 256.0F;
         goto block_33;
@@ -1504,7 +1517,7 @@ loop_3:
     case 10:
         if (((SisBlock*) text->alloc_data == NULL) || (kern_enabled == 0)) {
             HSD_SisLib_803A7684(text, (u8*) cursor, 0x81U);
-            text->x78.x = (f32) * (s16*) ((u8*) cursor + 1) / 256.0F;
+            text->x78.x = (f32) SIS_S16(((u8*) cursor + 1)) / 256.0F;
         }
         cursor = (u8*) cursor + 4;
         goto block_33;
@@ -1535,7 +1548,7 @@ loop_3:
         if (opcode >= 0x20U) {
             *out_width += text->x80.x * (32.0F + text->x78.x);
             if (kern_enabled != 0) {
-                glyph_code = *(u16*) cursor;
+                glyph_code = SIS_U16(cursor);
                 if (glyph_code < 0x4000U) {
                     kern_width =
                         (s32) (default_kerning +
@@ -1875,9 +1888,9 @@ s32 HSD_SisLib_803A7F0C(HSD_Text* text, s32 flags)
             pos -= 4;
             if (target_type == 1) {
                 text->x78.x =
-                    (f32) * (s16*) (text->string_buffer + pos) / 256.0F;
+                    (f32) SIS_S16((text->string_buffer + pos)) / 256.0F;
                 text->x78.y =
-                    (f32) * (s16*) (text->string_buffer + pos + 2) / 256.0F;
+                    (f32) SIS_S16((text->string_buffer + pos + 2)) / 256.0F;
                 if (flag_hi == entry_flags) {
                     remove_size = 5;
                 }
@@ -1900,9 +1913,9 @@ s32 HSD_SisLib_803A7F0C(HSD_Text* text, s32 flags)
             pos -= 4;
             if (target_type == 3) {
                 text->x80.x =
-                    (f32) * (u16*) (text->string_buffer + pos) / 256.0F;
+                    (f32) SIS_U16((text->string_buffer + pos)) / 256.0F;
                 text->x80.y =
-                    (f32) * (u16*) (text->string_buffer + pos + 2) / 256.0F;
+                    (f32) SIS_U16((text->string_buffer + pos + 2)) / 256.0F;
                 if (flag_hi == entry_flags) {
                     remove_size = 5;
                 }
@@ -1985,6 +1998,15 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
 #endif
     u8 *default_kerning = HSD_SisLib_8040CB00;
 
+#if BUILD_TARGET_PC
+    { static int _sl_on = -1, _sl_n = 0;
+      if (_sl_on < 0) _sl_on = (getenv("MELEE_SISLOG") != NULL);
+      if (_sl_on && _sl_n < 60) { _sl_n++;
+        HSD_Text* _t = gobj ? (HSD_Text*)gobj->user_data : (HSD_Text*)pass;
+        fprintf(stderr, "SISDRAW gobj=%p pass=%d text=%p hidden=%d buf=%p readable=%d font=%d sis=%p\n", (void*)gobj, pass, (void*)_t,
+                _t ? (int)_t->hidden : -1, _t ? (void*)_t->sis_buffer : NULL, _t ? (int)pc_mem_readable(_t->sis_buffer, 1) : -1,
+                _t ? (int)_t->font_idx : -1, _t ? (void*)HSD_SisLib_804D1124[_t->font_idx] : NULL); } }
+#endif
     if (gobj != NULL) {
         if (pass != 2U) {
             return;
@@ -2076,6 +2098,8 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
             max_y = (text->box_size_y * text->font_size.y) + origin_y;
             GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0);
             GXSetTevColor(GX_TEVREG0, *(GXColor *)&text->bg_color);
+            { static int _sq_on = -1, _sq_n = 0; if (_sq_on < 0) _sq_on = (getenv("MELEE_SISLOG") != NULL);
+              if (_sq_on && _sq_n < 100000) { _sq_n++; fprintf(stderr, "SISQUAD-A\n"); } }
             GXBegin(GX_QUADS, GX_VTXFMT0, 4U);
             // @note: could be inlined
             {
@@ -2203,20 +2227,20 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                                 skip_count -= 1;
                             } else {
                                 text->x98 = (u32) (text->x98 + 1);
-                                text->x94 = *(u16*) (sis_cursor + 1);
+                                text->x94 = SIS_U16((sis_cursor + 1));
                                 text->x60 = (void *) (sis_cursor + 3);
                             }
                             sis_cursor += 2;
                             break;
                         case 6:
-                            line_delay = *(u16*) (sis_cursor + 1);
-                            char_delay = *(u16*) (sis_cursor + 3);
+                            line_delay = SIS_U16((sis_cursor + 1));
+                            char_delay = SIS_U16((sis_cursor + 3));
                             sis_cursor += 4;
                             break;
                         case 7:
                             line_started = 1U;
                             HSD_SisLib_803A8134((void*) (sis_cursor + 5), text, &line_width_out, &line_height_out);
-                            x_origin = (f32) *(s16*) (sis_cursor + 1);
+                            x_origin = (f32) SIS_S16((sis_cursor + 1));
                             if (((u8) text->fitting == 1) && (text->box_size_x < line_width_out)) {
                                 text->x88 = (f32) (text->box_size_x / line_width_out);
                             } else {
@@ -2233,7 +2257,7 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                                 text->current_width = x_origin;
                                 break;
                             }
-                            y_offset = *(s16*) (sis_cursor + 3);
+                            y_offset = SIS_S16((sis_cursor + 3));
                             sis_cursor += 4;
                             text->current_height = (f32) ((f32) y_offset * text->font_size.y);
                             break;
@@ -2246,8 +2270,8 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                         case 10:
                             if (((u32) text->alloc_data == 0U) || (saved_kerning == 0)) {
                                 HSD_SisLib_803A7684(text, sis_cursor, 1U);
-                                text->x78.x = (f32) ((f32) *(s16*) (sis_cursor + 1) * 0.00390625F);
-                                text->x78.y = (f32) ((f32) *(s16*) (sis_cursor + 3) * 0.00390625F);
+                                text->x78.x = (f32) ((f32) SIS_S16((sis_cursor + 1)) * 0.00390625F);
+                                text->x78.y = (f32) ((f32) SIS_S16((sis_cursor + 3)) * 0.00390625F);
                             }
                             sis_cursor += 4;
                             break;
@@ -2268,8 +2292,8 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                             break;
                         case 14:
                             HSD_SisLib_803A7684(text, sis_cursor, 3U);
-                            text->x80.x = (f32) ((f32) *(u16*) (sis_cursor + 1) * 0.00390625F);
-                            text->x80.y = (f32) ((f32) *(u16*) (sis_cursor + 3) * 0.00390625F);
+                            text->x80.x = (f32) ((f32) SIS_U16((sis_cursor + 1)) * 0.00390625F);
+                            text->x80.y = (f32) ((f32) SIS_U16((sis_cursor + 3)) * 0.00390625F);
                             sis_cursor += 4;
                             break;
                         case 15:
@@ -2369,7 +2393,7 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                                         }
                                     }
                                 }
-                                glyph_idx = *(u16 *)sis_cursor;
+                                glyph_idx = SIS_U16(sis_cursor);
                                 if (glyph_idx < 0x4000U) {
                                     tex_offset = glyph_idx - 0x2000;
                                 } else {
@@ -2428,6 +2452,13 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                                      * past the atlas. On GCN whatever follows
                                      * it in .data absorbed that; here it would
                                      * be a wild read, so drop the glyph. */
+#if BUILD_TARGET_PC
+                                    { static int _gl_on = -1, _gl_n = 0; if (_gl_on < 0) _gl_on = (getenv("MELEE_SISLOG") != NULL);
+                                      if (_gl_on && gobj != NULL && _gl_n < 100000) { _gl_n++;
+                                        fprintf(stderr, "SISGLYPH text=%p idx=%u texoff=%u draw=%u data=%p off=%u limit=%u\n", (void*)text,
+                                                (unsigned)glyph_idx, (unsigned)tex_offset, (unsigned)draw_glyph, (void*)data,
+                                                (unsigned)((tex_offset << 9) & 0x01FFFE00), (unsigned)PC_SIS_FONT_SIZE); } }
+#endif
                                     if (draw_glyph != 0U
 #if BUILD_TARGET_PC
                                         && (glyph_idx >= 0x4000U ||
@@ -2459,6 +2490,8 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                                         if (draw_glyph != 0U) {
                                         GXLoadTexObj(&tex_obj, GX_TEXMAP0);
                                         GXSetTevColor(GX_TEVREG0, *(GXColor*)&text->active_color);
+                                        { static int _sq_on = -1, _sq_n = 0; if (_sq_on < 0) _sq_on = (getenv("MELEE_SISLOG") != NULL);
+                                          if (_sq_on && _sq_n < 100000) { _sq_n++; fprintf(stderr, "SISQUAD-B\n"); } }
                                         GXBegin(GX_QUADS, GX_VTXFMT0, 4U);
                                         {
                                             f32 glyph_depth = text->pos_z;
