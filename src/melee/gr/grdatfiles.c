@@ -112,6 +112,9 @@ HSD_ShapeAnimJoint* grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(const u8* gcnPt
 static HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase);
 static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 static HSD_RObjAnimJoint* grDatFiles_ConvertRObjAnimJointChainGCNtoX64(const u8* gcnPtr, u8* dataBase);
+enum grdat_anim_kind { GRDAT_ANIMJOINT, GRDAT_MATANIMJOINT, GRDAT_SHAPEANIMJOINT };
+static void** grdat_conv_anim_set_array(u32 arrOff, u8* dataBase,
+                                        enum grdat_anim_kind kind);
 
 /* Convert a GCN pointer offset to an x86_64 pointer.
  * GCN pointers in the archive are offsets from the archive data section base.
@@ -187,14 +190,20 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
                 x64Arr[i].unk0 = NULL;
             }
 
+            /* The map's animation sets (see grdat_conv_anim_set_array): these
+             * used to be rebased raw and dropped again by grAnime_801C7C1C's
+             * pointer check, so no stage ever animated. */
             pval = be32_swap(*(const u32*)(ep + 0x04));
-            x64Arr[i].unk4 = (HSD_AnimJoint**)gcn_ptr_to_x64(pval, dataBase);
+            x64Arr[i].unk4 = (HSD_AnimJoint**) grdat_conv_anim_set_array(
+                pval, dataBase, GRDAT_ANIMJOINT);
 
             pval = be32_swap(*(const u32*)(ep + 0x08));
-            x64Arr[i].unk8 = (HSD_MatAnimJoint**)gcn_ptr_to_x64(pval, dataBase);
+            x64Arr[i].unk8 = (HSD_MatAnimJoint**) grdat_conv_anim_set_array(
+                pval, dataBase, GRDAT_MATANIMJOINT);
 
             pval = be32_swap(*(const u32*)(ep + 0x0C));
-            x64Arr[i].unkC = (HSD_ShapeAnimJoint**)gcn_ptr_to_x64(pval, dataBase);
+            x64Arr[i].unkC = (HSD_ShapeAnimJoint**) grdat_conv_anim_set_array(
+                pval, dataBase, GRDAT_SHAPEANIMJOINT);
 
             pval = be32_swap(*(const u32*)(ep + 0x10));
             x64Arr[i].x10 = (HSD_CameraDescPerspective*)gcn_ptr_to_x64(pval, dataBase);
@@ -273,7 +282,10 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
                 }
             }
 
-            /* x28 is UNK_T */
+            /* x28: one u8 of flags per animation set (grAnime_801C8138
+             * reads flags[set]); bytes, so a rebase is a conversion. */
+            pval = be32_swap(*(const u32*)(ep + 0x28));
+            x64Arr[i].x28 = gcn_ptr_to_x64(pval, dataBase);
 
             pval = be32_swap(*(const u32*)(ep + 0x2C));
             x64Arr[i].x2C = (s16*)gcn_ptr_to_x64(pval, dataBase);
@@ -906,6 +918,193 @@ HSD_ShapeAnimJoint* grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(const u8* gcnPt
     return x64;
 }
 
+/* ------------------------------------------------------------------ */
+/* Stage animation arrays.                                             */
+/*                                                                      */
+/* Each map in a stage archive carries three NULL-terminated arrays of  */
+/* animation sets (UnkStageDat_x8_t::unk4/unk8/unkC). Every set is a    */
+/* tree of HSD_AnimJoint / HSD_MatAnimJoint / HSD_ShapeAnimJoint that   */
+/* mirrors the map's joint tree -- and the stage code uses it BOTH ways: */
+/* grAnime_801C8138 walks it as a tree (HSD_JObjAddAnimAll), while      */
+/* grAnime_801C7C1C indexes it as a flat array, `&aj[joint_index]`,     */
+/* relying on the nodes being laid out contiguously in DFS order in the */
+/* file. The per-node tree converters above allocate each node on its   */
+/* own, which keeps the walk and breaks the indexing. These keep the    */
+/* nodes contiguous: measure the tree's extent from its root, allocate  */
+/* one x64 array, and point child/next into it. A tree whose nodes turn */
+/* out not to be contiguous falls back to the tree converter.           */
+
+static void grdat_anim_extent(const u8* root, const u8* node, u8* dataBase,
+                              u32 stride, u32 depth, int* contiguous,
+                              u32* count)
+{
+    u32 child, next;
+    if (node == NULL || depth > 10000 || !*contiguous) {
+        return;
+    }
+    if (node < root || (u32) ((node - root) % stride) != 0 ||
+        (u32) ((node - root) / stride) >= 65536)
+    {
+        *contiguous = 0;
+        return;
+    }
+    if ((u32) ((node - root) / stride) + 1 > *count) {
+        *count = (u32) ((node - root) / stride) + 1;
+    }
+    child = be32_swap(*(const u32*) (node + 0));
+    next = be32_swap(*(const u32*) (node + 4));
+    if (child != 0 && child < 0x80000000U) {
+        grdat_anim_extent(root, dataBase + child, dataBase, stride, depth + 1,
+                          contiguous, count);
+    }
+    if (next != 0 && next < 0x80000000U) {
+        grdat_anim_extent(root, dataBase + next, dataBase, stride, depth + 1,
+                          contiguous, count);
+    }
+}
+
+static void* grdat_anim_flat_node(void* arr, enum grdat_anim_kind kind, u32 idx)
+{
+    switch (kind) {
+    case GRDAT_ANIMJOINT: return &((HSD_AnimJoint*) arr)[idx];
+    case GRDAT_MATANIMJOINT: return &((HSD_MatAnimJoint*) arr)[idx];
+    default: return &((HSD_ShapeAnimJoint*) arr)[idx];
+    }
+}
+
+static void grdat_anim_flat_fill(const u8* root, const u8* node, u8* dataBase,
+                                 u32 stride, enum grdat_anim_kind kind,
+                                 void* arr, u8* done, u32 count, u32 depth)
+{
+    u32 idx, child, next, val;
+    void *cx = NULL, *nx = NULL;
+    if (node == NULL || depth > 10000) {
+        return;
+    }
+    idx = (u32) ((node - root) / stride);
+    if (idx >= count || done[idx]) {
+        return;
+    }
+    done[idx] = 1;
+    child = be32_swap(*(const u32*) (node + 0));
+    next = be32_swap(*(const u32*) (node + 4));
+    if (child != 0 && child < 0x80000000U) {
+        cx = grdat_anim_flat_node(arr, kind, (u32) ((dataBase + child - root) / stride));
+        grdat_anim_flat_fill(root, dataBase + child, dataBase, stride, kind, arr,
+                             done, count, depth + 1);
+    }
+    if (next != 0 && next < 0x80000000U) {
+        nx = grdat_anim_flat_node(arr, kind, (u32) ((dataBase + next - root) / stride));
+        grdat_anim_flat_fill(root, dataBase + next, dataBase, stride, kind, arr,
+                             done, count, depth + 1);
+    }
+    val = be32_swap(*(const u32*) (node + 8));
+    switch (kind) {
+    case GRDAT_ANIMJOINT: {
+        HSD_AnimJoint* a = &((HSD_AnimJoint*) arr)[idx];
+        u32 robj = be32_swap(*(const u32*) (node + 12));
+        a->child = cx;
+        a->next = nx;
+        a->aobjdesc = (val != 0 && val < 0x80000000U)
+                          ? grDatFiles_ConvertAObjDescGCNtoX64(dataBase + val, dataBase)
+                          : NULL;
+        a->robj_anim = (robj != 0 && robj < 0x80000000U)
+                           ? grDatFiles_ConvertRObjAnimJointChainGCNtoX64(dataBase + robj, dataBase)
+                           : NULL;
+        a->flags = be32_swap(*(const u32*) (node + 16));
+        break;
+    }
+    case GRDAT_MATANIMJOINT: {
+        HSD_MatAnimJoint* m = &((HSD_MatAnimJoint*) arr)[idx];
+        m->child = cx;
+        m->next = nx;
+        m->matanim = (val != 0 && val < 0x80000000U)
+                         ? grDatFiles_ConvertMatAnimGCNtoX64(dataBase + val, dataBase, 0)
+                         : NULL;
+        break;
+    }
+    default: {
+        HSD_ShapeAnimJoint* sh = &((HSD_ShapeAnimJoint*) arr)[idx];
+        sh->child = cx;
+        sh->next = nx;
+        sh->shapeanimdobj = NULL; /* as the tree converter: not converted */
+        break;
+    }
+    }
+}
+
+static void* grdat_conv_anim_flat(const u8* root, u8* dataBase,
+                                  enum grdat_anim_kind kind)
+{
+    u32 stride = (kind == GRDAT_ANIMJOINT) ? 0x14 : 0x0C;
+    u32 nsize = (kind == GRDAT_ANIMJOINT) ? sizeof(HSD_AnimJoint)
+                : (kind == GRDAT_MATANIMJOINT) ? sizeof(HSD_MatAnimJoint)
+                : sizeof(HSD_ShapeAnimJoint);
+    int contiguous = 1;
+    u32 count = 0;
+    void* arr;
+    u8* done;
+
+    if (root == NULL) {
+        return NULL;
+    }
+    grdat_anim_extent(root, root, dataBase, stride, 0, &contiguous, &count);
+    if (!contiguous || count == 0) {
+        if (getenv("MELEE_GRDAT_TRACE")) {
+            fprintf(stderr, "[GRDAT] anim set kind=%d at %p not contiguous; "
+                    "tree conversion\n", (int) kind, (const void*) root);
+        }
+        switch (kind) {
+        case GRDAT_ANIMJOINT:
+            return grDatFiles_ConvertAnimJointTreeGCNtoX64(root, dataBase, 0);
+        case GRDAT_MATANIMJOINT:
+            return grDatFiles_ConvertMatAnimJointTreeGCNtoX64(root, dataBase, 0);
+        default:
+            return grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(root, dataBase, 0);
+        }
+    }
+    arr = lbHeap_80015BD0(0, nsize * count);
+    done = lbHeap_80015BD0(0, count);
+    if (arr == NULL || done == NULL) {
+        return NULL;
+    }
+    memset(arr, 0, nsize * count);
+    memset(done, 0, count);
+    grdat_anim_flat_fill(root, root, dataBase, stride, kind, arr, done, count, 0);
+    return arr;
+}
+
+/* A NULL-terminated array of set offsets -> x64 pointer array. */
+static void** grdat_conv_anim_set_array(u32 arrOff, u8* dataBase,
+                                        enum grdat_anim_kind kind)
+{
+    const u8* arr;
+    void** out;
+    u32 n = 0, i;
+    if (arrOff == 0) {
+        return NULL;
+    }
+    arr = (const u8*) gcn_ptr_to_x64(arrOff, dataBase);
+    if (arr == NULL) {
+        return NULL;
+    }
+    while (n < 256 && be32_swap(*(const u32*) (arr + n * 4)) != 0) {
+        n++;
+    }
+    out = lbHeap_80015BD0(0, sizeof(void*) * (n + 1));
+    if (out == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < n; i++) {
+        u32 off = be32_swap(*(const u32*) (arr + i * 4));
+        out[i] = (off < 0x80000000U)
+                     ? grdat_conv_anim_flat(dataBase + off, dataBase, kind)
+                     : NULL;
+    }
+    out[n] = NULL;
+    return out;
+}
+
 /* ============================================================
  * Public API: archive data converters (used by title screen, etc.)
  * ============================================================ */
@@ -930,6 +1129,21 @@ static int g_grdat_pobjpending_n = 0;
  * PObjDescs with no explicit joint ref (u == 0, the title's case) are parented
  * to this joint. */
 static HSD_Joint* g_grdat_current_joint = NULL;
+
+/* Reverse lookup: the archive offset a converted joint came from, or 0.
+ * HSD_JObjLoadJoint registers each JObj under it as well as under the x64
+ * pointer, because animation descs name their target joints (AObjDesc
+ * obj_id, for HSD_A_J_PATH splines) by that GameCube address. */
+u32 grDatFiles_JointOffsetOf(const HSD_Joint* x64)
+{
+    int i;
+    for (i = 0; i < g_grdat_jointmap_n; i++) {
+        if (g_grdat_jointmap[i].x64 == x64) {
+            return g_grdat_jointmap[i].offset;
+        }
+    }
+    return 0;
+}
 
 static HSD_Joint* grdat_jointmap_find(u32 offset)
 {

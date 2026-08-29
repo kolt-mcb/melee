@@ -542,6 +542,20 @@ What was wrong, each a class:
 - Linear fog with `start == end` is NaN on hardware (= no fog); the bridge
   stepped to full fog. Debug-VS now runs the default 2:00 time match so the
   timer and player tags exist.
+- **Stage animation was stubbed out.** `grAnime_801C8138` returned on PC and
+  `grAnime_801C7C1C` dropped the raw pointers, so FD had no starfield and
+  nothing on any stage moved. The per-map animation sets are trees that the
+  stage code also indexes flat (`&aj[joint_index]`), so the converter keeps
+  each tree's nodes contiguous in file order (`grdat_conv_anim_flat`).
+  `MELEE_NO_STAGE_ANIM=1` backs it out. Light-object animation
+  (`MELEE_STAGE_ANIM` in ground.c) is still gated on `LightList.anims`.
+  Turning it on exposed three more classes: `granime.c` ends animations
+  with `__setjmp`/`longjmp` on a Gecko buffer (on PC `__setjmp` was a weak
+  stub returning 0 -- use a host `jmp_buf`); `HSD_A_J_PATH` tracks find
+  their spline by `AObjDesc::obj_id`, the joint's GameCube address, so
+  `HSD_JObjLoadJoint` now registers each JObj under its archive offset too;
+  and Venom steps through the map Grounds with `&gp->gobj`, object-pool
+  adjacency that does not hold here.
 
 Diagnostics: `MELEE_MPDUMP` (collision world), `MELEE_CAMTRACE[_EVERY]`
 (camera subjects), `MELEE_FLOORTRACE` (floor checks), `MELEE_GRDAT_TRACE`

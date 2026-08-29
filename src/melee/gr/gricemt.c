@@ -1582,6 +1582,17 @@ static inline HSD_GObj* grIceMt_801F71E8_noinline2(int id)
     return grIceMt_801F71E8_inner2(id);
 }
 
+#if BUILD_TARGET_PC
+/* Icicle Mountain looks its segments up by id and not all of them exist on
+ * PC yet; Ground_801C2BA4 then returns NULL and GET_GROUND of it is a
+ * dereference of NULL+user_data. */
+static Ground* pc_icemt_seg_gp(int id)
+{
+    HSD_GObj* g = Ground_801C2BA4(id);
+    return pc_ptr_sane(g) ? (Ground*) g->user_data : NULL;
+}
+#endif
+
 int grIceMt_801F9ACC(Ground_GObj* gobj, float y, GrIceMtSegmentLookup ev,
                      Ground_GObj* arg3)
 {
@@ -1623,16 +1634,19 @@ int grIceMt_801F9ACC(Ground_GObj* gobj, float y, GrIceMtSegmentLookup ev,
 #endif
     cur = HSD_JObjGetTranslationY(jobj);
     if (ABS(cur) < 10.0f) {
-        gp = GET_GROUND(Ground_801C2BA4(seg[1]));
+        gp = pc_icemt_seg_gp(seg[1]);
+            if (gp == NULL) { port_guard_warn("gricemt.c:no-segment-gp"); return 0; }
         ((UnkFlagStruct*) &gp->u.icemt2.xC4)->b1 = 1;
     } else if (ABS(cur + f) < 10.0f) {
-        gp = GET_GROUND(Ground_801C2BA4(seg[0]));
+        gp = pc_icemt_seg_gp(seg[0]);
+            if (gp == NULL) { port_guard_warn("gricemt.c:no-segment-gp"); return 0; }
         ((UnkFlagStruct*) &gp->u.icemt2.xC4)->b1 = 1;
     }
     if (cur < 0.5f * -f) {
         id = seg[0];
         if (id != -1) {
-            gp = GET_GROUND(Ground_801C2BA4(id));
+            gp = pc_icemt_seg_gp(id);
+            if (gp == NULL) { port_guard_warn("gricemt.c:no-segment-gp"); return 0; }
             if (!((UnkFlagStruct*) &gp->u.icemt2.xC4)->b0) {
                 ((UnkFlagStruct*) &gp->u.icemt2.xC4)->b0 = 1;
                 ((UnkFlagStruct*) &gp->u.icemt2.xC4)->b1 = 1;
@@ -1640,13 +1654,15 @@ int grIceMt_801F9ACC(Ground_GObj* gobj, float y, GrIceMtSegmentLookup ev,
         }
         id = seg[1];
         if (id != -1) {
-            gp = GET_GROUND(Ground_801C2BA4(id));
+            gp = pc_icemt_seg_gp(id);
+            if (gp == NULL) { port_guard_warn("gricemt.c:no-segment-gp"); return 0; }
             ((UnkFlagStruct*) &gp->u.icemt2.xC4)->b0 = 0;
         }
     } else {
         id = seg[1];
         if (id != -1) {
-            gp = GET_GROUND(Ground_801C2BA4(id));
+            gp = pc_icemt_seg_gp(id);
+            if (gp == NULL) { port_guard_warn("gricemt.c:no-segment-gp"); return 0; }
             if (!((UnkFlagStruct*) &gp->u.icemt2.xC4)->b0) {
                 ((UnkFlagStruct*) &gp->u.icemt2.xC4)->b0 = 1;
                 ((UnkFlagStruct*) &gp->u.icemt2.xC4)->b1 = 1;
@@ -1654,7 +1670,8 @@ int grIceMt_801F9ACC(Ground_GObj* gobj, float y, GrIceMtSegmentLookup ev,
         }
         id = seg[0];
         if (id != -1) {
-            gp = GET_GROUND(Ground_801C2BA4(id));
+            gp = pc_icemt_seg_gp(id);
+            if (gp == NULL) { port_guard_warn("gricemt.c:no-segment-gp"); return 0; }
             ((UnkFlagStruct*) &gp->u.icemt2.xC4)->b0 = 0;
         }
     }

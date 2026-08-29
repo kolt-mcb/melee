@@ -1,4 +1,7 @@
 #include "grvenom.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include <platform.h>
 
@@ -806,6 +809,21 @@ void grVenom_8020454C(Ground_GObj* gobj)
         float hi = -60000.0F;
 
         do {
+#if BUILD_TARGET_PC
+            /* The loop steps to the next Ground with `&gp->gobj`, i.e. it
+             * relies on the seven map Grounds being adjacent in the
+             * GameCube object pool. They are not adjacent here, so past the
+             * first iteration gp is whatever follows in memory and its
+             * venom2.xC4 is garbage (Venom died in lb_8000B1CC the frame
+             * stage animation started). Skip entries that do not look like
+             * a Ground holding a joint; the Great Fox's parts keep their
+             * visibility state instead of being toggled. */
+            if (!pc_ptr_sane(gp) || !pc_ptr_sane(gp->u.venom2.xC4)) {
+                i++;
+                gp = (Ground*) (&gp->gobj);
+                continue;
+            }
+#endif
             if (gp->u.venom2.xC4 != NULL) {
                 lb_8000B1CC(gp->u.venom2.xC4, NULL, &position);
                 visible = true;

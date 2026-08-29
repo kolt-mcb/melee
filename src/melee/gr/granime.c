@@ -63,6 +63,16 @@ struct padded_jmp_buf {
 };
 
 /* 49EE40 */ struct padded_jmp_buf grAnime_8049EE40;
+#if BUILD_TARGET_PC
+/* The GameCube __setjmp/longjmp pair works on the 0xF8-byte Gecko buffer
+ * above; on PC __setjmp resolved to a weak stub returning 0, so the longjmp
+ * from fn_801C82E8 jumped through garbage (Green Greens died in
+ * ____longjmp_chk the first time an animation ended). Use the host's. */
+#include <setjmp.h>
+static jmp_buf pc_anime_jmp;
+#define PC_ANIME_SETJMP() setjmp(pc_anime_jmp)
+#define PC_ANIME_LONGJMP() longjmp(pc_anime_jmp, 1)
+#endif
 
 /// @todo .sdata order hack
 static void order_sdata(void)
@@ -968,13 +978,10 @@ void grAnime_801C7C1C(HSD_JObj* jobj, s32 map_id, s32 arg2, s32 arg3, s32 arg4,
                       int arg5, f32 farg0, f32 farg1)
 {
 #if BUILD_TARGET_PC
-    /* PC port: the stage's anim/matanim/shapeanim joint trees are still raw
-     * big-endian in the archive, and this walks them recursively (child/next),
-     * so sanitizing the roots is not enough — every node below is a GCN
-     * offset too. Skip stage animation until those trees are converted;
-     * static stage geometry still renders. MELEE_STAGE_ANIM=1 re-enables it
-     * for conversion work. */
-    if (getenv("MELEE_STAGE_ANIM") == NULL) {
+    /* The map's animation sets are converted at load now
+     * (grdat_conv_anim_set_array, kept contiguous for the &aj[arg2] below).
+     * MELEE_NO_STAGE_ANIM=1 backs stage animation out. */
+    if (getenv("MELEE_NO_STAGE_ANIM") != NULL) {
         return;
     }
 #endif
@@ -1028,14 +1035,6 @@ void grAnime_801C7C1C(HSD_JObj* jobj, s32 map_id, s32 arg2, s32 arg3, s32 arg4,
     } else {
         sj = NULL;
     }
-#if BUILD_TARGET_PC
-    /* PC port: aj/mj/sj come straight out of the stage archive and are still
-     * raw big-endian GCN offsets, not pointers. Drop them rather than walking
-     * ->child chains through garbage. */
-    if (aj != NULL && !pc_ptr_sane(aj)) aj = NULL;
-    if (mj != NULL && !pc_ptr_sane(mj)) mj = NULL;
-    if (sj != NULL && !pc_ptr_sane(sj)) sj = NULL;
-#endif
     if (arg5 != 0) {
         if (jobj != NULL) {
             grAnime_801C6A54_noinline(jobj, aj, mj, sj);
@@ -1184,10 +1183,10 @@ void grAnime_801C8098(Ground_GObj* gobj, int arg1, int arg2, int arg3,
 void grAnime_801C8138(HSD_GObj* gobj, enum_t arg1, bool arg2)
 {
 #if BUILD_TARGET_PC
-    /* PC port: stub out animation loading — reads GCN-packed archive data
-     * that we haven't converted yet. The stage renders without animations. */
-    return;
-#else
+    if (getenv("MELEE_NO_STAGE_ANIM") != NULL) {
+        return;
+    }
+#endif
     HSD_JObj* jobj = gobj->hsd_obj;
     UnkArchiveStruct* archive;
     HSD_Joint* joint;
@@ -1246,13 +1245,16 @@ void grAnime_801C8138(HSD_GObj* gobj, enum_t arg1, bool arg2)
         grAnime_801C752C(jobj, 1, 0x77A4, HSD_AObjSetFlags, 3, 0x20000000);
     }
     HSD_JObjAnimAll(jobj);
-#endif /* BUILD_TARGET_PC */
 }
 
 void fn_801C82E8(int arg0, int* arg1)
 {
     *arg1 = arg0;
+#if BUILD_TARGET_PC
+    PC_ANIME_LONGJMP();
+#else
     longjmp(&grAnime_8049EE40.buf, 1);
+#endif
 }
 
 HSD_AObj* grAnime_801C8318(HSD_GObj* gobj, int arg1, u32 arg2)
@@ -1273,7 +1275,11 @@ HSD_AObj* grAnime_801C8318(HSD_GObj* gobj, int arg1, u32 arg2)
     if (arg2 & 4) {
         var_r30 |= 0x100;
     }
+#if BUILD_TARGET_PC
+    if (PC_ANIME_SETJMP() == 0) {
+#else
     if (__setjmp(&grAnime_8049EE40.buf) == 0) {
+#endif
         HSD_ForeachAnim(jobj, JOBJ_TYPE, var_r30, fn_801C82E8, AOBJ_ARG_AV,
                         &sp14);
     }

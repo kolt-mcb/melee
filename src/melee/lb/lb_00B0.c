@@ -112,6 +112,16 @@ void lb_8000B1CC(HSD_JObj* arg0, Vec3* pos0, Vec3* pos1)
     Vec3 s;
 
     if (arg0 == NULL) {
+#if BUILD_TARGET_PC
+        /* A NULL joint with no fallback position: on the console this is a
+         * crash too, so it only happens where a stage's joint lookup came
+         * back empty on PC (Venom's grVenom_8020454C once stage animation
+         * ran). A leaf accessor with nothing to read yields the origin. */
+        if (pos0 == NULL) {
+            pos1->x = pos1->y = pos1->z = 0.0f;
+            return;
+        }
+#endif
         *pos1 = *pos0;
         return;
     }
