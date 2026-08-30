@@ -21,7 +21,7 @@
 - HUD (`if/`), effects (`ef/`, GCN `va_arg` blocker), items (17/183 TUs), characters
   (only ftMario + ftCommon of 37 chara dirs), `vi/ db/ ty/ sfx/` absent.
 - ~1100 empty weak stubs + large per-character/item stub layer.
-- Audio: software AX mixer (`src/port/pc_ax.c`); music bit-exact vs an offline decode, SFX play in menus and matches. AXFX reverb/chorus still stubbed (MWCC asm).
+- Audio: software AX mixer (`src/port/pc_ax.c`); music bit-exact vs an offline decode, SFX with reverb in menus and matches.
 - Data loading relies on **hand-written** big-endian→x64 struct converters
   (83 in `grdatfiles.c` for stages alone) — the biggest structural cost.
 - Rare heap corruption (~1 in 7 runs); iteration cycle to reach a scene ≈ 200 s.
@@ -93,7 +93,10 @@ fighter loaders retrofitted onto the generator.
    (`pc_ax_pump`, ~3.3 frames per game frame) and from the load-wait ticks.
    The SDK's AXAlloc/AXVPB/AXSPB/AXProf and AXFX delay compile as-is (`long` → `s32`;
    AXVPB.c/AXAlloc.c are included through `src/port/ax_*_glue.c` for two PC-only
-   hooks). AXFX reverb std/hi and chorus are MWCC inline asm — stubbed silent.
+   hooks). AXFX standard reverb (aux A in Melee) has its one asm loop transcribed to C
+   (`PC_AXFX_C` in reverb_std.c, via `src/port/axfx_reverb_std_glue.c`); reverb hi and
+   chorus, which Melee never installs, stay stubbed. `MELEE_NO_AUXFX=1` bypasses the
+   aux effects.
 2. ~~HPS music streaming~~ — HAL's triple-buffered ARAM streamer runs unchanged once the
    hako/HPS headers are byte-swapped; `tools/pc_audio_check.py` correlates the port's
    dump against an independent decode: corr 1.0000 at a constant lag for 10 s.
@@ -122,8 +125,8 @@ rows, archive-offset pointer) instead of failing closed to id 0 (`1p_qk.hps`);
 `Ground_801C28CC` used a 0x20 stride and unswapped s16s on the same table. The
 debug-VS boot clears `rules.x6` (the 1P flag) so the stage's own music plays.
 
-Open: AXFX reverb/chorus (port the asm to C); verify SFX pitch/pan/priorities
-against a Dolphin audio dump; occasional clipping when SFX and music sum.
+Open: verify SFX pitch/pan/priorities and the reverb against a Dolphin audio dump;
+occasional clipping when SFX and music sum.
 
 **Exit:** ~~music + sfx in menu and in match.~~ Met.
 

@@ -3,8 +3,8 @@
 #include <dolphin/axfx.h>
 
 // functions
-static void DLsetdelay(struct AXFX_REVSTD_DELAYLINE* dl, long lag);
-static void DLcreate(struct AXFX_REVSTD_DELAYLINE* dl, long max_length);
+static void DLsetdelay(struct AXFX_REVSTD_DELAYLINE* dl, s32 lag);
+static void DLcreate(struct AXFX_REVSTD_DELAYLINE* dl, s32 max_length);
 static void DLdelete(struct AXFX_REVSTD_DELAYLINE* dl);
 static int ReverbSTDCreate(struct AXFX_REVSTD_WORK* rv, float coloration,
                            float time, float mix, float damping,
@@ -12,12 +12,12 @@ static int ReverbSTDCreate(struct AXFX_REVSTD_WORK* rv, float coloration,
 static int ReverbSTDModify(struct AXFX_REVSTD_WORK* rv, float coloration,
                            float time, float mix, float damping,
                            float predelay);
-static void HandleReverb(long* sptr, struct AXFX_REVSTD_WORK* rv);
-static void ReverbSTDCallback(long* left, long* right, long* surround,
+static void HandleReverb(s32* sptr, struct AXFX_REVSTD_WORK* rv);
+static void ReverbSTDCallback(s32* left, s32* right, s32* surround,
                               struct AXFX_REVSTD_WORK* rv);
 static void ReverbSTDFree(struct AXFX_REVSTD_WORK* rv);
 
-static void DLsetdelay(struct AXFX_REVSTD_DELAYLINE* dl, long lag)
+static void DLsetdelay(struct AXFX_REVSTD_DELAYLINE* dl, s32 lag)
 {
     dl->outPoint = dl->inPoint - (lag * 4);
     while (dl->outPoint < 0) {
@@ -25,7 +25,7 @@ static void DLsetdelay(struct AXFX_REVSTD_DELAYLINE* dl, long lag)
     }
 }
 
-static void DLcreate(struct AXFX_REVSTD_DELAYLINE* dl, long max_length)
+static void DLcreate(struct AXFX_REVSTD_DELAYLINE* dl, s32 max_length)
 {
     dl->length = (max_length * 4);
     dl->inputs = __AXFXAlloc(max_length * 4);
@@ -47,7 +47,7 @@ static int ReverbSTDCreate(struct AXFX_REVSTD_WORK* rv, float coloration,
 {
     u8 i;
     u8 k;
-    static long lens[4] = {
+    static s32 lens[4] = {
         0x000006FD,
         0x000007CF,
         0x000001B1,
@@ -136,7 +136,106 @@ const static float value0_3 = 0.3f;
 const static float value0_6 = 0.6f;
 const static double i2fMagic = 4503601774854144.0;
 
-asm static void HandleReverb(register long* sptr,
+#ifdef PC_AXFX_C
+/* C transcription of the asm below (PC port). Three buses follow each other
+ * in memory; channel k uses comb C[2k..2k+1], allpass AP[2k..2k+1],
+ * lpLastout[k] and preDelay*[k]. Delay-line points are byte offsets. */
+static void HandleReverb(s32* sptr, struct AXFX_REVSTD_WORK* rv)
+{
+    const float ap = rv->allPassCoeff;
+    const float damp = rv->damping;
+    const float wet = rv->level * 0.6f;
+    const float dry = 0.6f - wet;
+    int k, n;
+
+    for (k = 0; k < 3; k++) {
+        struct AXFX_REVSTD_DELAYLINE* c0 = &rv->C[k * 2];
+        struct AXFX_REVSTD_DELAYLINE* c1 = &rv->C[k * 2 + 1];
+        struct AXFX_REVSTD_DELAYLINE* a0 = &rv->AP[k * 2];
+        struct AXFX_REVSTD_DELAYLINE* a1 = &rv->AP[k * 2 + 1];
+        const float cc0 = rv->combCoef[k * 2];
+        const float cc1 = rv->combCoef[k * 2 + 1];
+        float c0last = c0->lastOutput, c1last = c1->lastOutput;
+        float a0last = a0->lastOutput, a1last = a1->lastOutput;
+        float lp = rv->lpLastout[k];
+        float* pdline = rv->preDelayLine[k];
+        float* pdptr = rv->preDelayPtr[k];
+        float* pdend = pdline + (rv->preDelayTime - 1);
+        s32 c0in = c0->inPoint, c0out = c0->outPoint;
+        s32 c1in = c1->inPoint, c1out = c1->outPoint;
+        s32 a0in = a0->inPoint, a0out = a0->outPoint;
+        s32 a1in = a1->inPoint, a1out = a1->outPoint;
+
+        for (n = 0; n < 160; n++) {
+            float x = (float) sptr[n];
+            float in = x;
+            float f8, f9, f14, o;
+            if (rv->preDelayTime != 0) {
+                in = *pdptr;
+                *pdptr++ = x;
+                if (pdptr == pdend) {
+                    pdptr = pdline;
+                }
+            }
+            /* two comb filters in parallel */
+            f8 = cc0 * c0last + in;
+            f9 = cc1 * c1last + in;
+            c0->inputs[c0in >> 2] = f8;
+            c1->inputs[c1in >> 2] = f9;
+            c0in += 4;
+            c1in += 4;
+            f14 = c0->inputs[c0out >> 2];
+            c1last = c1->inputs[c1out >> 2];
+            c0out += 4;
+            c1out += 4;
+            c0last = f14;
+            f14 += c1last;
+            if (c0in == c0->length) c0in = 0;
+            if (c0out == c0->length) c0out = 0;
+            if (c1in == c1->length) c1in = 0;
+            if (c1out == c1->length) c1out = 0;
+            /* allpass 1 */
+            f9 = ap * a0last + f14;
+            a0->inputs[a0in >> 2] = f9;
+            f14 = a0last - ap * f9;
+            a0in += 4;
+            a0last = a0->inputs[a0out >> 2];
+            a0out += 4;
+            if (a0in == a0->length) a0in = 0;
+            if (a0out == a0->length) a0out = 0;
+            /* damping low-pass */
+            f14 = f14 * 0.3f;
+            f14 = damp * lp + f14;
+            lp = f14;
+            /* allpass 2 */
+            f9 = ap * a1last + f14;
+            a1->inputs[a1in >> 2] = f9;
+            f14 = a1last - ap * f9;
+            a1last = a1->inputs[a1out >> 2];
+            a1in += 4;
+            a1out += 4;
+            if (a1in == a1->length) a1in = 0;
+            if (a1out == a1->length) a1out = 0;
+            o = wet * f14 + dry * x;
+            if (o >= 2147483648.0f) {
+                sptr[n] = 0x7FFFFFFF;
+            } else if (o <= -2147483648.0f) {
+                sptr[n] = (s32) 0x80000000;
+            } else {
+                sptr[n] = (s32) o; /* fctiwz: truncate */
+            }
+        }
+        c0->inPoint = c0in; c0->outPoint = c0out; c0->lastOutput = c0last;
+        c1->inPoint = c1in; c1->outPoint = c1out; c1->lastOutput = c1last;
+        a0->inPoint = a0in; a0->outPoint = a0out; a0->lastOutput = a0last;
+        a1->inPoint = a1in; a1->outPoint = a1out; a1->lastOutput = a1last;
+        rv->lpLastout[k] = lp;
+        rv->preDelayPtr[k] = pdptr;
+        sptr += 160;
+    }
+}
+#else
+asm static void HandleReverb(register s32* sptr,
                              register struct AXFX_REVSTD_WORK* rv)
 {
     // clang-format off
@@ -401,7 +500,9 @@ L_0000090C:
     // clang-format on
 }
 
-static void ReverbSTDCallback(long* left, long* right, long* surround,
+#endif /* PC_AXFX_C */
+
+static void ReverbSTDCallback(s32* left, s32* right, s32* surround,
                               struct AXFX_REVSTD_WORK* rv)
 {
     HandleReverb(left, rv);
