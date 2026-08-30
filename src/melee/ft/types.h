@@ -1907,6 +1907,23 @@ typedef struct ftData_UnkModelStruct {
 } ftData_UnkModelStruct;
 
 struct ftData_80085FD4_ret {
+#if defined(BUILD_TARGET_PC)
+    /* This struct only ever views a Fighter_WaitAnimData entry
+     * (ftData_80085FD4 returns &fp->x24[msid] cast), so its field offsets
+     * must match that struct's x86_64 layout exactly. The old PC widening
+     * (size_t x8) pushed x14 from 0x1C to 0x24 -- every read landed in the
+     * NEXT entry's pointer padding and returned 0, so ftData_80085E50
+     * never loaded a figatree through this path: Fighter_Create_Inline2's
+     * five anim lengths (x2DC..x2EC) were all 0 and special-fall landings
+     * ran at (0.1+0)/lag speed. */
+    const char* x0;
+    s32 x4;
+    s32 x8;
+    UNK_T xC;
+    /* +18 */ u8 x10_b0 : 1;
+    /* +18 */ u8 x10_b1 : 1;
+    /* +1C */ u32 x14;
+#else
     /* +0 */ const char* x0;
     /* +4 */ UNK_T x4;
     /* +8 */ size_t x8;
@@ -1914,6 +1931,7 @@ struct ftData_80085FD4_ret {
     /* +10:0 */ u8 x10_b0 : 1;
     /* +10:1 */ u8 x10_b1 : 1;
     /* +14 */ u32 x14;
+#endif
 };
 
 struct ArticleDynamicBones {
