@@ -306,6 +306,10 @@ void gm_801B13B8(GameScene* arg0)
         for (i = 0; i < 6; i++) {
             temp_r28->players[i].stocks = 4;
         }
+        /* rules.x6 is the 1P-mode flag (set only by gm_8016EBC0_OnEnter);
+         * stage.c picks the 1P quick-play BGM when it is set. A VS match
+         * plays the stage's own music. */
+        temp_r28->rules.x6 = 0;
         OSReport("[PC] debug-VS lineup: p0=ckind%d(c%d) p1=ckind%d(c%d) "
                  "stage=%d\n",
                  ck0, col0, ck1, col1, (int) temp_r28->rules.xE);

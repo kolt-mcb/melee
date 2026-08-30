@@ -502,31 +502,20 @@ static void pc_ax_frame(void)
 extern void pc_synth_run_deferred(void);
 void pc_ax_pump(void)
 {
-    const u32 frame_bytes = AX_FRAME_SAMPLES * 2 * sizeof(s16);
-    int n = 0;
     pc_synth_run_deferred();
     if (!g_ax_inited) {
         return;
     }
+    /* Exactly one game frame's worth of AX frames (32000/60 samples), never
+     * more or fewer by device state: HSD's per-frame work consumes the game
+     * RNG (lbAudioAx pans), so anything wall-clock-driven here would make
+     * the simulation nondeterministic. Real-time pacing is the device's
+     * problem: audio_submit() drops frames when the queue is far ahead and
+     * the device simply runs dry if the game falls behind. */
     g_ax_owed_frames += (1.0 / 60.0) / 0.005;
-    while (g_ax_owed_frames >= 1.0 && n < 8) {
+    while (g_ax_owed_frames >= 1.0) {
         pc_ax_frame();
         g_ax_owed_frames -= 1.0;
-        n++;
-    }
-    /* Do not let the owed count grow without bound during a stall, and top
-     * the queue up if the device is about to run dry. */
-    if (g_ax_owed_frames > 4.0) {
-        g_ax_owed_frames = 4.0;
-    }
-    while (!g_ax_muted && audio_queued_bytes() < frame_bytes * 2 && n < 12) {
-        pc_ax_frame();
-        n++;
-    }
-    while (!g_ax_muted && audio_queued_bytes() > frame_bytes * 16) {
-        /* device is far ahead (the game stalled): stop owing frames */
-        g_ax_owed_frames = 0.0;
-        break;
     }
 }
 

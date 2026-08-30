@@ -1696,6 +1696,58 @@ static const int BGM_Undefined = -1;
 
 #define RANDI_MAX (100)
 
+#if BUILD_TARGET_PC
+/* stage_info.param is the raw big-endian grGroundParam (a host pointer into
+ * the archive); its stage_params member is an archive offset and the rows
+ * are sizeof(StageParam) = 0x64 bytes. */
+extern u8* pc_stage_dataBase;
+static inline s16 pc_be16s(const void* p)
+{
+    const u8* b = p;
+    return (s16) (((u16) b[0] << 8) | b[1]);
+}
+static const u8* pc_stage_param_row(StKind stkind, s32* count_out)
+{
+    const u8* base = (const u8*) stage_info.param;
+    u32 off;
+    s32 count, i;
+    const u8* rows;
+    if (base == NULL || (uintptr_t) base < 0x1000000ULL) {
+        return NULL;
+    }
+    off = be32(*(const u32*) (base + 0xB0));
+    count = be32(*(const u32*) (base + 0xB4));
+    if (count_out) {
+        *count_out = count;
+    }
+    rows = pc_stage_dataBase ? pc_stage_dataBase + off
+                             : (const u8*) (0x10000000 + (uintptr_t) off);
+    if (count < 0 || count > 1000 ||
+        !pc_mem_readable(rows, (unsigned long) count * 0x64))
+    {
+        return NULL;
+    }
+    for (i = 0; i < count; i++) {
+        if ((s32) be32(*(const u32*) (rows + i * 0x64)) == (s32) stkind) {
+            return rows + i * 0x64;
+        }
+    }
+    return NULL;
+}
+static void pc_stage_param_convert(const u8* r, StageParam* out)
+{
+    memset(out, 0, sizeof(*out));
+    out->stkind = be32(*(const u32*) (r + 0x00));
+    out->x4 = be32(*(const u32*) (r + 0x04));
+    out->x8 = be32(*(const u32*) (r + 0x08));
+    out->xC = be32(*(const u32*) (r + 0x0C));
+    out->x10 = be32(*(const u32*) (r + 0x10));
+    out->x14 = pc_be16s(r + 0x14);
+    out->x16 = pc_be16s(r + 0x16);
+    out->x18 = pc_be16s(r + 0x18);
+}
+#endif
+
 static bool Ground_801C24F8(StKind stkind, u32 arg1, s32* arg2)
 {
     bool temp_r25;
@@ -1703,18 +1755,27 @@ static bool Ground_801C24F8(StKind stkind, u32 arg1, s32* arg2)
     StageParam* phi_r30;
     StageParam* phi_r30_0;
 #if BUILD_TARGET_PC
-    /* PC port: stage_info.param is NULL/unconverted BE data. */
-    if (!pc_ptr_sane(stage_info.param) ||
-        !pc_ptr_sane(stage_info.param->stage_params))
+    StageParam pc_row;
+    int pc_count = 0;
     {
-        return false;
+        const u8* r = pc_stage_param_row(stkind, NULL);
+        if (r != NULL) {
+            pc_stage_param_convert(r, &pc_row);
+            pc_count = 1;
+        }
     }
-#endif
+    phi_r30_0 = &pc_row;
+#else
     phi_r30_0 = stage_info.param->stage_params;
+#endif
     enum_t bgm = BGM_Undefined;
     bool result = false;
     int i;
+#if BUILD_TARGET_PC
+    for (i = 0; i < pc_count; i++) {
+#else
     for (i = 0; i < stage_info.param->stage_param_count; i++) {
+#endif
         phi_r30 = &phi_r30_0[i];
         if (phi_r30->stkind == stkind) {
             if (arg1 & 4) {
@@ -1875,53 +1936,19 @@ u8* pc_stage_dataBase; /* PC port: set by grdatfiles on stage convert */
 void Ground_801C28CC(s32* arg0, StKind stkind)
 {
 #if BUILD_TARGET_PC
-    /* PC port: archive data is big-endian, pointers are relative offsets from archive base.
-     * GroundParam::stage_params is at offset 0xB0 (32-bit relative offset on GCN).
-     * GroundParam::stage_param_count is at offset 0xB4 (32-bit int on GCN). */
-    /* PC port: Guard against NULL or corrupted stage_info.param. */
-    if (stage_info.param == NULL || (uintptr_t)stage_info.param < 0x1000000ULL) return;
-    
-    u8* base = (u8*)stage_info.param;
-    u32 raw_offset = be32(*(u32*)(base + 0xB0));  /* relative offset from archive base */
-    s32 count = be32(*(u32*)(base + 0xB4));  /* byte-swapped */
-    StageParam* param;
-    {
-        extern u8* pc_stage_dataBase;
-        param = (pc_stage_dataBase != NULL)
-                    ? (StageParam*)(pc_stage_dataBase + raw_offset)
-                    : (StageParam*)(0x10000000 + raw_offset);
-    }
-    s32 i;
-
-    /* PC port: Guard against corrupted count or param pointer. The pool
-     * base is only correct when the archive actually lives in the low-mem
-     * pool; probe readability instead of trusting it. */
-    if (count < 0 || count > 1000 || param == NULL ||
-        !pc_mem_readable(param, (unsigned long)count * 0x20))
-    {
-        PORT_LOG_WARN("Ground stage params unreadable (param=%p count=%d); skipping\n",
-                      (void*)param, count);
+    s32 count = 0;
+    const u8* entry = pc_stage_param_row(stkind, &count);
+    if (stage_info.param == NULL || (uintptr_t) stage_info.param < 0x1000000ULL) {
         return;
     }
-
-    for (i = 0; i < count; i++) {
-        /* PC port: archive StageParam entries are 0x20 (32) bytes apart. */
-        u8* entry = (u8*)param + i * 0x20;
-        s32 param_stkind = be32(*(u32*)entry);
-        if (param_stkind == stkind) {
-            s32 j;
-            for (j = 0; 0x23 > j; j++) {
-                arg0[j] = ((s16*) stage_info.param)[0x35 + j] *
-                          ((s16*) entry)[0xD + j];
-            }
-            return;
+    if (entry != NULL) {
+        s32 j;
+        for (j = 0; 0x23 > j; j++) {
+            arg0[j] = pc_be16s((const u8*) stage_info.param + 0x6A + j * 2) *
+                      pc_be16s(entry + 0x1A + j * 2);
         }
+        return;
     }
-
-    /* PC port: missing stage-param entry (zeroed/unconverted data table).
-     * The GCN code prints the table and hangs in while(1); reportStageParams
-     * additionally derefs the unconverted stage_params pointer (crash).
-     * Zero-fill the output and continue instead. */
     PORT_LOG_WARN("Ground stage param not found (grkind=%d stkind=%d count=%d); zero-filling\n",
                   stage_info.grkind, stkind, count);
     {

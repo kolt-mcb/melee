@@ -1230,7 +1230,13 @@ void fn_8022AFEC(HSD_GObj* gp)
     u8 state;
     u8 option_count;
     u8 pad[0x20];
+#if BUILD_TARGET_PC
+    /* Filled for every option of the menu; some menus have more than
+     * four. On the console the overrun lands in dead stack. */
+    HSD_JObj* sp20[16];
+#else
     HSD_JObj* sp20[4];
+#endif
     PAD_STACK(18);
 
     var_r26 = 0;

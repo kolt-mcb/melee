@@ -329,6 +329,15 @@ s32 Stage_80225074(s32 arg0)
     }
 
     tmp = Ground_801C28AC(selected_stage.stkind, r31, &spC);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_AXTRACE")) {
+        fprintf(stderr,
+                "[GR] stage bgm: stkind %d arg0 %d 1p %d 3A0 %d flags %#x -> "
+                "id %d (alt %d)\n",
+                (int) selected_stage.stkind, (int) arg0, (int) gm_8016B238(),
+                (int) gm_8016B3A0(), (unsigned) r31, (int) spC, (int) tmp);
+    }
+#endif
     lbAudioAx_80023F28(spC);
     Ground_801C5A84(spC);
     Ground_801C5AA4(tmp);
