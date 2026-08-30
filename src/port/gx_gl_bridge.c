@@ -1747,8 +1747,436 @@ static GLuint compile_shader(GLenum type, const char* src)
     return s;
 }
 
+
+/* ------------------------------------------------------------------
+ * Shader variants.
+ *
+ * The GX pipeline used to be one uber-program whose behaviour -- TEV
+ * stage inputs and ops, konstant selectors, swap tables, alpha test,
+ * fog type, lighting functions, texgen -- was chosen at run time from
+ * ~280 integer uniforms. The fragment shader was therefore an
+ * interpreter: a dynamic stage loop, four 15-way branch chains per
+ * stage and a dynamically indexed register array, none of which the
+ * GPU can fold. At 1280x720 that cost the main menu ~40 ms of GPU per
+ * frame for 174 draws.
+ *
+ * Now every integer uniform except u_dbg_drawid is a *specialisation
+ * constant*: its value is kept in g_spec_vals and, before each draw,
+ * the set of values selects (or builds) a program in which those
+ * declarations read `const int NAME = value;`. The compiler unrolls and
+ * folds the rest. The GLSL sources are unchanged; the substitution is
+ * textual at build time (pc_spec_source).
+ *
+ * To keep the ~100 g_*_loc call sites as they are, locations are
+ * virtual: each uniform name owns a run of consecutive slots (array
+ * elements included, so g_kcolor0_loc + 1 still addresses u_kcolor[1]),
+ * and each program maps slot -> GL location. Uploads go through the
+ * UP* macros into a per-slot latest-value store with a generation
+ * counter; pc_prog_flush() uploads to the selected program every slot
+ * whose generation that program has not seen. That also means a value
+ * set once, draws ago, reaches a program built later.
+ * ------------------------------------------------------------------ */
+extern u32 pc_frame_number;
+#define VLOC_MAX 1024
+#define VLOC_BYTES 128
+#define PROG_MAX 2048
+
+typedef struct { GLint* var; const char* name; int count; int spec; GLint base; } UniEntry;
+static UniEntry g_uni_tab[] = {
+    { &g_proj_loc, "u_proj", 1, 0, -1 },
+    { &g_mvp_loc, "u_mvp", 1, 0, -1 },
+    { &g_uv_scale_loc, "u_uv_scale", 1, 0, -1 },
+    { &g_texmtx0_loc, "u_texmtx0", 1, 0, -1 },
+    { &g_texmtx1_loc, "u_texmtx1", 1, 0, -1 },
+    { &g_texmtx0_enable_loc, "u_texmtx0_enable", 1, 1, -1 },
+    { &g_pttexmtx0_loc, "u_pttexmtx0", 1, 0, -1 },
+    { &g_pttexmtx1_loc, "u_pttexmtx1", 1, 0, -1 },
+    { &g_pttexmtx0_enable_loc, "u_pttexmtx0_enable", 1, 1, -1 },
+    { &g_pttexmtx1_enable_loc, "u_pttexmtx1_enable", 1, 1, -1 },
+    { &g_texmtx1_enable_loc, "u_texmtx1_enable", 1, 1, -1 },
+    { &g_tex0_enable_loc, "u_tex0_enable", 1, 1, -1 },
+    { &g_tex1_enable_loc, "u_tex1_enable", 1, 1, -1 },
+    { &g_tex0_loc, "u_tex0", 1, 0, -1 },
+    { &g_tex1_loc, "u_tex1", 1, 0, -1 },
+    { &g_kcolor0_loc, "u_kcolor", 4, 0, -1 },
+    { &g_tevreg_loc, "u_tevreg", 4, 0, -1 },
+    { &g_alpha_cmp_func_loc, "u_alpha_cmp_func", 1, 1, -1 },
+    { &g_alpha_cmp_ref_loc, "u_alpha_cmp_ref", 1, 0, -1 },
+    { &g_alpha_op_loc, "u_alpha_op", 1, 1, -1 },
+    { &g_alpha_cmp_func1_loc, "u_alpha_cmp_func1", 1, 1, -1 },
+    { &g_alpha_cmp_ref1_loc, "u_alpha_cmp_ref1", 1, 0, -1 },
+    { &g_dst_alpha_enabled_loc, "u_dst_alpha_enabled", 1, 1, -1 },
+    { &g_dst_alpha_loc, "u_dst_alpha", 1, 0, -1 },
+    { &g_lighting_enabled_loc, "u_lighting_enabled", 1, 1, -1 },
+    { &g_dbg_drawid_loc, "u_dbg_drawid", 1, 0, -1 },
+    { &g_dbg_mode_loc, "u_dbg_mode", 1, 1, -1 },
+    { &g_diff_fn_loc, "u_diff_fn", 1, 1, -1 },
+    { &g_attn_fn_loc, "u_attn_fn", 1, 1, -1 },
+    { &g_tev_num_stages_loc, "u_tev_num_stages", 1, 1, -1 },
+    { &g_tev_color_op_loc, "u_tev_color_op", 8, 1, -1 },
+    { &g_tev_alpha_op_loc, "u_tev_alpha_op", 8, 1, -1 },
+    { &g_tev_color_bias_loc, "u_tev_color_bias", 8, 1, -1 },
+    { &g_tev_alpha_bias_loc, "u_tev_alpha_bias", 8, 1, -1 },
+    { &g_tev_color_scale_loc, "u_tev_color_scale", 8, 1, -1 },
+    { &g_tev_alpha_scale_loc, "u_tev_alpha_scale", 8, 1, -1 },
+    { &g_tev_color_clamp_loc, "u_tev_color_clamp", 8, 1, -1 },
+    { &g_tev_alpha_clamp_loc, "u_tev_alpha_clamp", 8, 1, -1 },
+    { &g_tev_color_enabled_loc, "u_tev_color_enabled", 8, 1, -1 },
+    { &g_tev_alpha_enabled_loc, "u_tev_alpha_enabled", 8, 1, -1 },
+    { &g_tev_tex_map_loc, "u_tev_tex_map", 8, 1, -1 },
+    { &g_tev_kcolor_sel_loc, "u_tev_kcolor_sel", 8, 1, -1 },
+    { &g_tev_kalpha_sel_loc, "u_tev_kalpha_sel", 8, 1, -1 },
+    { &g_kalpha_loc, "u_kalpha", 1, 0, -1 },
+    { &g_tev_swap_ras_loc, "u_tev_swap_ras", 8, 1, -1 },
+    { &g_tev_swap_tex_loc, "u_tev_swap_tex", 8, 1, -1 },
+    { &g_chan_color_loc, "u_chan_color", 3, 0, -1 },
+    { &g_chan_src_loc, "u_chan_src", 3, 1, -1 },
+    { &g_fog_enabled_loc, "u_fog_enabled", 1, 1, -1 },
+    { &g_fog_type_loc, "u_fog_type", 1, 1, -1 },
+    { &g_fog_startz_loc, "u_fog_startz", 1, 0, -1 },
+    { &g_fog_endz_loc, "u_fog_endz", 1, 0, -1 },
+    { &g_fog_nearz_loc, "u_fog_nearz", 1, 0, -1 },
+    { &g_fog_farz_loc, "u_fog_farz", 1, 0, -1 },
+    { &g_fog_color_loc, "u_fog_color", 1, 0, -1 },
+    { &g_light_pos_loc, "u_light_pos", 8, 0, -1 },
+    { &g_light_color_loc, "u_light_color", 8, 0, -1 },
+    { &g_light_directional_loc, "u_light_directional", 8, 1, -1 },
+    { &g_light_count_loc, "u_light_count", 1, 1, -1 },
+    { &g_light_mask_loc, "u_light_mask", 1, 1, -1 },
+    { &g_light_mask1_loc, "u_light_mask1", 1, 1, -1 },
+    { &g_light_spec_dir_loc, "u_light_spec_dir", 8, 0, -1 },
+    { &g_ambient_color1_loc, "u_ambient_color1", 1, 0, -1 },
+    { &g_chan1_lit_loc, "u_chan1_lit", 1, 1, -1 },
+    { &g_tev_ras_chan_loc, "u_tev_ras_chan", 8, 1, -1 },
+    { &g_kasel_strict_loc, "u_kasel_strict", 1, 1, -1 },
+    { &g_camera_pos_loc, "u_camera_pos", 1, 0, -1 },
+    { &g_ambient_color_loc, "u_ambient_color", 1, 0, -1 },
+    { &g_model_loc, "u_model", 1, 0, -1 },
+    { &g_light_atten_a_loc, "u_light_atten_a", 8, 0, -1 },
+    { &g_light_atten_k_loc, "u_light_atten_k", 8, 0, -1 },
+    { &g_light_dir_loc, "u_light_dir", 8, 0, -1 },
+    { &g_light_spot_func_loc, "u_light_spot_func", 8, 1, -1 },
+    { &g_light_spot_cutoff_loc, "u_light_spot_cutoff", 8, 0, -1 },
+    { &g_light_dist_func_loc, "u_light_dist_func", 8, 1, -1 },
+    { &g_light_ref_dist_loc, "u_light_ref_dist", 8, 0, -1 },
+    { &g_light_ref_br_loc, "u_light_ref_br", 8, 0, -1 },
+    { &g_tev_color_in_loc, "u_tev_color_in", 32, 1, -1 },
+    { &g_tev_alpha_in_loc, "u_tev_alpha_in", 32, 1, -1 },
+    { &g_tev_color_out_loc, "u_tev_color_out", 8, 1, -1 },
+    { &g_tev_alpha_out_loc, "u_tev_alpha_out", 8, 1, -1 },
+    { &g_ind_tex_enabled_loc, "u_ind_tex_enabled", 1, 1, -1 },
+    { &g_ind_tex_stage_loc, "u_ind_tex_stage", 1, 1, -1 },
+    { &g_ind_tex_format_loc, "u_ind_tex_format", 1, 1, -1 },
+    { &g_ind_tex_bias_loc, "u_ind_tex_bias", 1, 1, -1 },
+    { &g_ind_tex_wrap_s_loc, "u_ind_tex_wrap_s", 1, 1, -1 },
+    { &g_ind_tex_wrap_t_loc, "u_ind_tex_wrap_t", 1, 1, -1 },
+    { &g_ind_tex_scale_loc, "u_ind_tex_scale", 1, 0, -1 },
+    { &g_ind_tex_mtx_loc, "u_ind_tex_mtx", 1, 0, -1 },
+    { &g_ind_tex_coord_src_loc, "u_ind_tex_coord_src", 1, 1, -1 },
+    { &g_ind_tex_base_coord_loc, "u_ind_tex_base_coord", 1, 1, -1 },
+    { &g_texgen0_mode_loc, "u_texgen0_mode", 1, 1, -1 },
+    { &g_texgen0_src_loc, "u_texgen0_src", 1, 1, -1 },
+    { &g_texgen1_mode_loc, "u_texgen1_mode", 1, 1, -1 },
+    { &g_texgen1_src_loc, "u_texgen1_src", 1, 1, -1 },
+    { &g_texgen_mtx0_loc, "u_texgen_mtx0", 1, 0, -1 },
+    { &g_texgen_mtx1_loc, "u_texgen_mtx1", 1, 0, -1 },
+};
+#define UNI_TAB_N ((int) (sizeof(g_uni_tab) / sizeof(g_uni_tab[0])))
+
+static int g_vloc_total;
+static u8 g_vloc_spec[VLOC_MAX];
+static GLint g_spec_vals[VLOC_MAX];
+static int g_spec_dirty = 1;
+
+enum { UK_I1, UK_F1, UK_IV, UK_FV, UK_F2V, UK_F3V, UK_F4V, UK_M3, UK_M4 };
+static u8 g_last[VLOC_MAX][VLOC_BYTES];
+static u16 g_last_len[VLOC_MAX];
+static u8 g_last_kind[VLOC_MAX];
+static u8 g_last_tr[VLOC_MAX];
+static u16 g_last_n[VLOC_MAX];
+static u32 g_last_gen[VLOC_MAX];
+static u16 g_set_list[VLOC_MAX];
+static int g_set_n;
+
+typedef struct Prog {
+    GLuint id;
+    u32 hash;
+    GLint* key;            /* g_spec_n ints */
+    GLint glloc[VLOC_MAX];
+    u32 gen[VLOC_MAX];
+} Prog;
+static Prog* g_progs[PROG_MAX];
+static int g_prog_n;
+static Prog* g_cur_prog;
+static int g_spec_slots[VLOC_MAX];
+static int g_spec_n;
+
+static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
+                             const void* data, unsigned bytes)
+{
+    if (vloc < 0 || vloc >= g_vloc_total || bytes > VLOC_BYTES) {
+        return;
+    }
+    if (g_vloc_spec[vloc]) {
+        const GLint* p = (const GLint*) data;
+        int k;
+        for (k = 0; k < n && vloc + k < VLOC_MAX && g_vloc_spec[vloc + k]; k++) {
+            if (g_spec_vals[vloc + k] != p[k]) {
+                g_spec_vals[vloc + k] = p[k];
+                g_spec_dirty = 1;
+            }
+        }
+        return;
+    }
+    if (g_last_gen[vloc] != 0 && g_last_len[vloc] == bytes &&
+        g_last_kind[vloc] == kind && g_last_n[vloc] == n &&
+        g_last_tr[vloc] == transpose && memcmp(g_last[vloc], data, bytes) == 0)
+    {
+        return;
+    }
+    if (g_last_gen[vloc] == 0) {
+        g_set_list[g_set_n++] = (u16) vloc;
+    }
+    memcpy(g_last[vloc], data, bytes);
+    g_last_len[vloc] = (u16) bytes;
+    g_last_kind[vloc] = (u8) kind;
+    g_last_n[vloc] = (u16) n;
+    g_last_tr[vloc] = (u8) transpose;
+    g_last_gen[vloc]++;
+}
+
+/* Rewrite `uniform int NAME[...];` declarations of specialisation slots
+ * as const declarations carrying the current values. */
+static char* pc_spec_source(const char* src)
+{
+    size_t cap = strlen(src) + 65536;
+    char* out = (char*) malloc(cap);
+    size_t o = 0;
+    const char* p = src;
+    while (*p) {
+        const char* q = strstr(p, "uniform int ");
+        if (!q || (q != src && q[-1] != '\n')) {
+            /* not at a line start (a comment): copy through it */
+            if (q) {
+                size_t l = (size_t) (q - p) + 12;
+                memcpy(out + o, p, l); o += l; p = q + 12;
+                continue;
+            }
+            size_t l = strlen(p);
+            memcpy(out + o, p, l); o += l;
+            break;
+        }
+        size_t l = (size_t) (q - p);
+        memcpy(out + o, p, l); o += l;
+        {
+            const char* nm = q + 12;
+            const char* e = nm;
+            char name[64];
+            int cnt = 1, i;
+            const UniEntry* ent = NULL;
+            while ((*e >= 'a' && *e <= 'z') || (*e >= 'A' && *e <= 'Z') ||
+                   (*e >= '0' && *e <= '9') || *e == '_') e++;
+            if ((size_t) (e - nm) >= sizeof(name)) { memcpy(out + o, q, 12); o += 12; p = q + 12; continue; }
+            memcpy(name, nm, (size_t) (e - nm)); name[e - nm] = 0;
+            if (*e == '[') cnt = atoi(e + 1);
+            for (i = 0; i < UNI_TAB_N; i++) {
+                if (g_uni_tab[i].spec && strcmp(g_uni_tab[i].name, name) == 0) { ent = &g_uni_tab[i]; break; }
+            }
+            if (!ent) { memcpy(out + o, q, 12); o += 12; p = q + 12; continue; }
+            if (cnt > ent->count) cnt = ent->count;
+            if (cnt == 1 && *e != '[') {
+                o += (size_t) sprintf(out + o, "const int %s = %d;", name, (int) g_spec_vals[ent->base]);
+            } else {
+                o += (size_t) sprintf(out + o, "const int %s[%d] = int[%d](", name, cnt, cnt);
+                for (i = 0; i < cnt; i++) {
+                    o += (size_t) sprintf(out + o, "%s%d", i ? "," : "", (int) g_spec_vals[ent->base + i]);
+                }
+                o += (size_t) sprintf(out + o, ");");
+            }
+            /* skip the original declaration up to and including ';' */
+            e = strchr(e, ';');
+            p = e ? e + 1 : q + strlen(q);
+        }
+        if (o + 4096 > cap) { cap *= 2; out = (char*) realloc(out, cap); }
+    }
+    out[o] = 0;
+    return out;
+}
+
+static GLuint compile_shader(GLenum type, const char* src);
+
+static Prog* pc_prog_build(void)
+{
+    char* vsrc = pc_spec_source(g_vert_src);
+    char* fsrc = pc_spec_source(g_frag_src);
+    GLuint vs = compile_shader(GL_VERTEX_SHADER, vsrc);
+    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fsrc);
+    GLuint id;
+    GLint linked;
+    Prog* pr;
+    int i, k;
+    if (getenv("MELEE_SHADER_DUMP")) {
+        static int dn;
+        char path[256];
+        FILE* f;
+        snprintf(path, sizeof(path), "%s/variant_%03d.frag", getenv("MELEE_SHADER_DUMP"), dn);
+        f = fopen(path, "w"); if (f) { fputs(fsrc, f); fclose(f); }
+        snprintf(path, sizeof(path), "%s/variant_%03d.vert", getenv("MELEE_SHADER_DUMP"), dn);
+        f = fopen(path, "w"); if (f) { fputs(vsrc, f); fclose(f); }
+        dn++;
+    }
+    free(vsrc); free(fsrc);
+    if (!vs || !fs) {
+        PORT_LOG_ERROR("shader variant compile failed");
+        if (vs) glDeleteShader(vs);
+        if (fs) glDeleteShader(fs);
+        return NULL;
+    }
+    id = glCreateProgram();
+    glAttachShader(id, vs);
+    glAttachShader(id, fs);
+    glBindAttribLocation(id, 0, "a_pos");
+    glBindAttribLocation(id, 1, "a_nrm");
+    glBindAttribLocation(id, 2, "a_col");
+    glBindAttribLocation(id, 3, "a_uv0");
+    glBindAttribLocation(id, 4, "a_uv1");
+    glLinkProgram(id);
+    glGetProgramiv(id, GL_LINK_STATUS, &linked);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    if (!linked) {
+        GLchar log[512];
+        glGetProgramInfoLog(id, 512, NULL, log);
+        PORT_LOG_ERROR("shader variant link failed: %s", log);
+        glDeleteProgram(id);
+        return NULL;
+    }
+    pr = (Prog*) calloc(1, sizeof(Prog));
+    pr->id = id;
+    for (i = 0; i < VLOC_MAX; i++) pr->glloc[i] = -1;
+    for (i = 0; i < UNI_TAB_N; i++) {
+        const UniEntry* ent = &g_uni_tab[i];
+        GLint gl;
+        if (ent->spec) continue;
+        gl = glGetUniformLocation(id, ent->name);
+        if (gl < 0) continue;
+        for (k = 0; k < ent->count; k++) pr->glloc[ent->base + k] = gl + k;
+    }
+    return pr;
+}
+
+static u32 pc_spec_hash(void)
+{
+    u32 h = 2166136261u;
+    int i;
+    for (i = 0; i < g_spec_n; i++) {
+        h ^= (u32) g_spec_vals[g_spec_slots[i]];
+        h *= 16777619u;
+    }
+    return h;
+}
+
+static Prog* pc_prog_select(void)
+{
+    u32 h;
+    int i;
+    Prog* pr;
+    if (!g_spec_dirty && g_cur_prog) {
+        return g_cur_prog;
+    }
+    h = pc_spec_hash();
+    for (i = 0; i < g_prog_n; i++) {
+        pr = g_progs[i];
+        if (pr->hash != h) continue;
+        {
+            int k, same = 1;
+            for (k = 0; k < g_spec_n; k++) {
+                if (pr->key[k] != g_spec_vals[g_spec_slots[k]]) { same = 0; break; }
+            }
+            if (same) { g_spec_dirty = 0; return pr; }
+        }
+    }
+    if (g_prog_n >= PROG_MAX) {
+        return g_cur_prog;
+    }
+    pr = pc_prog_build();
+    if (!pr) {
+        return g_cur_prog;
+    }
+    pr->hash = h;
+    pr->key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
+    for (i = 0; i < g_spec_n; i++) pr->key[i] = g_spec_vals[g_spec_slots[i]];
+    g_progs[g_prog_n++] = pr;
+    if (getenv("MELEE_SHADERLOG")) {
+        fprintf(stderr, "[SHADER] variant %d built (frame %u, hash %08x)\n", g_prog_n, pc_frame_number, h);
+    }
+    g_spec_dirty = 0;
+    return pr;
+}
+
+/* Select the program for the current specialisation state and bring its
+ * uniforms up to date. Call right before every draw. */
+static void pc_prog_flush(void)
+{
+    Prog* pr = pc_prog_select();
+    int i;
+    if (!pr) return;
+    if (pr != g_cur_prog) {
+        glUseProgram(pr->id);
+        g_cur_prog = pr;
+    }
+    for (i = 0; i < g_set_n; i++) {
+        int v = g_set_list[i];
+        GLint gl;
+        const void* d;
+        if (pr->gen[v] == g_last_gen[v]) continue;
+        pr->gen[v] = g_last_gen[v];
+        gl = pr->glloc[v];
+        if (gl < 0) continue;
+        d = g_last[v];
+        switch (g_last_kind[v]) {
+        case UK_I1: glUniform1i(gl, *(const GLint*) d); break;
+        case UK_F1: glUniform1f(gl, *(const GLfloat*) d); break;
+        case UK_IV: glUniform1iv(gl, g_last_n[v], (const GLint*) d); break;
+        case UK_FV: glUniform1fv(gl, g_last_n[v], (const GLfloat*) d); break;
+        case UK_F2V: glUniform2fv(gl, g_last_n[v], (const GLfloat*) d); break;
+        case UK_F3V: glUniform3fv(gl, g_last_n[v], (const GLfloat*) d); break;
+        case UK_F4V: glUniform4fv(gl, g_last_n[v], (const GLfloat*) d); break;
+        case UK_M3: glUniformMatrix3fv(gl, g_last_n[v], g_last_tr[v], (const GLfloat*) d); break;
+        case UK_M4: glUniformMatrix4fv(gl, g_last_n[v], g_last_tr[v], (const GLfloat*) d); break;
+        }
+    }
+}
+
+/* Assign the virtual slots. Runs once, before any UP* call. */
+static void pc_vloc_init(void)
+{
+    int i, k;
+    g_vloc_total = 0;
+    g_spec_n = 0;
+    for (i = 0; i < UNI_TAB_N; i++) {
+        UniEntry* ent = &g_uni_tab[i];
+        if (g_vloc_total + ent->count > VLOC_MAX) {
+            PORT_LOG_ERROR("VLOC_MAX too small");
+            ent->base = -1;
+            *ent->var = -1;
+            continue;
+        }
+        ent->base = g_vloc_total;
+        *ent->var = ent->base;
+        for (k = 0; k < ent->count; k++) {
+            g_vloc_spec[ent->base + k] = (u8) ent->spec;
+            if (ent->spec) g_spec_slots[g_spec_n++] = ent->base + k;
+        }
+        g_vloc_total += ent->count;
+    }
+    PORT_LOG_INFO("SHADER: %d uniforms, %d slots, %d specialisation constants",
+                  UNI_TAB_N, g_vloc_total, g_spec_n);
+}
+
 static void bridge_compile_shaders(void)
 {
+    pc_vloc_init();
     GLuint vs = compile_shader(GL_VERTEX_SHADER, g_vert_src);
     GLuint fs = compile_shader(GL_FRAGMENT_SHADER, g_frag_src);
     if (!vs || !fs) {
@@ -1777,134 +2205,130 @@ static void bridge_compile_shaders(void)
     glDeleteShader(vs);
     glDeleteShader(fs);
     
-    g_proj_loc = glGetUniformLocation(g_shader_program, "u_proj");
-    g_mvp_loc = glGetUniformLocation(g_shader_program, "u_mvp");
-    g_uv_scale_loc = glGetUniformLocation(g_shader_program, "u_uv_scale");
-    g_texmtx0_loc = glGetUniformLocation(g_shader_program, "u_texmtx0");
-    g_texmtx1_loc = glGetUniformLocation(g_shader_program, "u_texmtx1");
-    g_texmtx0_enable_loc = glGetUniformLocation(g_shader_program, "u_texmtx0_enable");
-    g_pttexmtx0_loc = glGetUniformLocation(g_shader_program, "u_pttexmtx0");
-    g_pttexmtx1_loc = glGetUniformLocation(g_shader_program, "u_pttexmtx1");
-    g_pttexmtx0_enable_loc = glGetUniformLocation(g_shader_program, "u_pttexmtx0_enable");
-    g_pttexmtx1_enable_loc = glGetUniformLocation(g_shader_program, "u_pttexmtx1_enable");
-    g_texmtx1_enable_loc = glGetUniformLocation(g_shader_program, "u_texmtx1_enable");
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     /* Texture uniforms for fragment shader (tex0 + tex1 with TEV compositing) */
-    g_tex0_enable_loc = glGetUniformLocation(g_shader_program, "u_tex0_enable");
-    g_tex1_enable_loc = glGetUniformLocation(g_shader_program, "u_tex1_enable");
-    g_tex0_loc        = glGetUniformLocation(g_shader_program, "u_tex0");
-    g_tex1_loc        = glGetUniformLocation(g_shader_program, "u_tex1");
-    g_kcolor0_loc     = glGetUniformLocation(g_shader_program, "u_kcolor");
+    
+    
+    
+    
+    
     /* u_kcolor is an array uniform - base location is index 0 */
     g_kcolor1_loc     = g_kcolor0_loc + 1;
     g_kcolor2_loc     = g_kcolor0_loc + 2;
     g_kcolor3_loc     = g_kcolor0_loc + 3;
-    g_tevreg_loc      = glGetUniformLocation(g_shader_program, "u_tevreg");
+    
     g_color_mult0_loc = -1; /* No longer used — TEV pipeline handles scaling */
     g_color_mult1_loc = -1;
-    g_alpha_cmp_func_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_func");
-    g_alpha_cmp_ref_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_ref");
-    g_alpha_op_loc = glGetUniformLocation(g_shader_program, "u_alpha_op");
-    g_alpha_cmp_func1_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_func1");
-    g_alpha_cmp_ref1_loc = glGetUniformLocation(g_shader_program, "u_alpha_cmp_ref1");
+    
+    
+    
+    
+    
     g_alpha_cmp_mask_loc = -1; /* No longer used — alpha test in TEV shader */
-    g_dst_alpha_enabled_loc = glGetUniformLocation(g_shader_program, "u_dst_alpha_enabled");
-    g_dst_alpha_loc = glGetUniformLocation(g_shader_program, "u_dst_alpha");
-    g_lighting_enabled_loc = glGetUniformLocation(g_shader_program, "u_lighting_enabled");
-    g_dbg_drawid_loc = glGetUniformLocation(g_shader_program, "u_dbg_drawid");
-    g_dbg_mode_loc = glGetUniformLocation(g_shader_program, "u_dbg_mode");
-    g_diff_fn_loc = glGetUniformLocation(g_shader_program, "u_diff_fn");
-    g_attn_fn_loc = glGetUniformLocation(g_shader_program, "u_attn_fn");
+    
+    
+    
+    
+    
+    
+    
     
     /* TEV pipeline uniform locations */
-    g_tev_num_stages_loc = glGetUniformLocation(g_shader_program, "u_tev_num_stages");
-    g_tev_color_op_loc = glGetUniformLocation(g_shader_program, "u_tev_color_op");
-    g_tev_alpha_op_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_op");
-    g_tev_color_bias_loc = glGetUniformLocation(g_shader_program, "u_tev_color_bias");
-    g_tev_alpha_bias_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_bias");
-    g_tev_color_scale_loc = glGetUniformLocation(g_shader_program, "u_tev_color_scale");
-    g_tev_alpha_scale_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_scale");
-    g_tev_color_clamp_loc = glGetUniformLocation(g_shader_program, "u_tev_color_clamp");
-    g_tev_alpha_clamp_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_clamp");
-    g_tev_color_enabled_loc = glGetUniformLocation(g_shader_program, "u_tev_color_enabled");
-    g_tev_alpha_enabled_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_enabled");
-    g_tev_tex_map_loc = glGetUniformLocation(g_shader_program, "u_tev_tex_map");
-    g_tev_kcolor_sel_loc = glGetUniformLocation(g_shader_program, "u_tev_kcolor_sel");
-    g_tev_kalpha_sel_loc = glGetUniformLocation(g_shader_program, "u_tev_kalpha_sel");
-    g_kalpha_loc = glGetUniformLocation(g_shader_program, "u_kalpha");
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     /* TEV swap mode uniforms */
-    g_tev_swap_ras_loc = glGetUniformLocation(g_shader_program, "u_tev_swap_ras");
-    g_tev_swap_tex_loc = glGetUniformLocation(g_shader_program, "u_tev_swap_tex");
+    
+    
     
     /* Channel color uniforms */
-    g_chan_color_loc = glGetUniformLocation(g_shader_program, "u_chan_color");
-    g_chan_src_loc = glGetUniformLocation(g_shader_program, "u_chan_src");
+    
+    
     
     /* Fog uniforms */
-    g_fog_enabled_loc = glGetUniformLocation(g_shader_program, "u_fog_enabled");
-    g_fog_type_loc = glGetUniformLocation(g_shader_program, "u_fog_type");
-    g_fog_startz_loc = glGetUniformLocation(g_shader_program, "u_fog_startz");
-    g_fog_endz_loc = glGetUniformLocation(g_shader_program, "u_fog_endz");
-    g_fog_nearz_loc = glGetUniformLocation(g_shader_program, "u_fog_nearz");
-    g_fog_farz_loc = glGetUniformLocation(g_shader_program, "u_fog_farz");
-    g_fog_color_loc = glGetUniformLocation(g_shader_program, "u_fog_color");
+    
+    
+    
+    
+    
+    
+    
 
     /* Lighting uniforms */
-    g_light_pos_loc = glGetUniformLocation(g_shader_program, "u_light_pos");
-    g_light_color_loc = glGetUniformLocation(g_shader_program, "u_light_color");
-    g_light_directional_loc = glGetUniformLocation(g_shader_program, "u_light_directional");
-    g_light_count_loc = glGetUniformLocation(g_shader_program, "u_light_count");
-    g_light_mask_loc = glGetUniformLocation(g_shader_program, "u_light_mask");
-    g_light_mask1_loc = glGetUniformLocation(g_shader_program, "u_light_mask1");
-    g_light_spec_dir_loc =
-        glGetUniformLocation(g_shader_program, "u_light_spec_dir");
-    g_ambient_color1_loc =
-        glGetUniformLocation(g_shader_program, "u_ambient_color1");
-    g_chan1_lit_loc = glGetUniformLocation(g_shader_program, "u_chan1_lit");
-    g_tev_ras_chan_loc =
-        glGetUniformLocation(g_shader_program, "u_tev_ras_chan");
-    g_kasel_strict_loc =
-        glGetUniformLocation(g_shader_program, "u_kasel_strict");
-    g_camera_pos_loc = glGetUniformLocation(g_shader_program, "u_camera_pos");
-    g_ambient_color_loc = glGetUniformLocation(g_shader_program, "u_ambient_color");
-    g_model_loc = glGetUniformLocation(g_shader_program, "u_model");
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     /* Per-light spot/distance attenuation */
-    g_light_atten_a_loc = glGetUniformLocation(g_shader_program, "u_light_atten_a");
-    g_light_atten_k_loc = glGetUniformLocation(g_shader_program, "u_light_atten_k");
-    g_light_dir_loc = glGetUniformLocation(g_shader_program, "u_light_dir");
-    g_light_spot_func_loc = glGetUniformLocation(g_shader_program, "u_light_spot_func");
-    g_light_spot_cutoff_loc = glGetUniformLocation(g_shader_program, "u_light_spot_cutoff");
-    g_light_dist_func_loc = glGetUniformLocation(g_shader_program, "u_light_dist_func");
-    g_light_ref_dist_loc = glGetUniformLocation(g_shader_program, "u_light_ref_dist");
-    g_light_ref_br_loc = glGetUniformLocation(g_shader_program, "u_light_ref_br");
+    
+    
+    
+    
+    
+    
+    
+    
     
     /* TEV input arrays: flat 32-element arrays (8 stages × 4 inputs each) */
-    g_tev_color_in_loc = glGetUniformLocation(g_shader_program, "u_tev_color_in");
-    g_tev_alpha_in_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_in");
-    g_tev_color_out_loc = glGetUniformLocation(g_shader_program, "u_tev_color_out");
-    g_tev_alpha_out_loc = glGetUniformLocation(g_shader_program, "u_tev_alpha_out");
+    
+    
+    
+    
     
     /* Indirect texture (bump mapping) uniforms */
-    g_ind_tex_enabled_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_enabled");
-    g_ind_tex_stage_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_stage");
-    g_ind_tex_format_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_format");
-    g_ind_tex_bias_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_bias");
-    g_ind_tex_wrap_s_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_wrap_s");
-    g_ind_tex_wrap_t_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_wrap_t");
-    g_ind_tex_scale_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_scale");
-    g_ind_tex_mtx_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_mtx");
-    g_ind_tex_coord_src_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_coord_src");
-    g_ind_tex_base_coord_loc = glGetUniformLocation(g_shader_program, "u_ind_tex_base_coord");
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     // Bump map uses u_tex0 (TEXMAP0) - no separate sampler needed
     
     /* Texture coordinate generation uniforms */
-    g_texgen0_mode_loc = glGetUniformLocation(g_shader_program, "u_texgen0_mode");
-    g_texgen0_src_loc = glGetUniformLocation(g_shader_program, "u_texgen0_src");
-    g_texgen1_mode_loc = glGetUniformLocation(g_shader_program, "u_texgen1_mode");
-    g_texgen1_src_loc = glGetUniformLocation(g_shader_program, "u_texgen1_src");
-    g_texgen_mtx0_loc = glGetUniformLocation(g_shader_program, "u_texgen_mtx0");
-    g_texgen_mtx1_loc = glGetUniformLocation(g_shader_program, "u_texgen_mtx1");
+    
+    
+    
+    
+    
+    
     
     PORT_LOG_INFO("SHADER: prog=%u alpha_cmp=%d,%d,%d",
                   g_shader_program, g_alpha_cmp_func_loc, g_alpha_cmp_ref_loc, g_alpha_cmp_mask_loc);
@@ -2337,74 +2761,18 @@ static GLenum gx_bl_to_gl(u32 gx_blend_factor); /* fwd decl */
 #define ENV_FLAG(name) \
     ({ static int _envf = -1; if (_envf < 0) _envf = (getenv(name) != NULL); _envf; })
 
-#define UCACHE_MAX 512
-#define UCACHE_BYTES 256
-static GLint u_shadow_i[UCACHE_MAX];
-static GLfloat u_shadow_f[UCACHE_MAX];
-static u8 u_shadow_set_i[UCACHE_MAX];
-static u8 u_shadow_set_f[UCACHE_MAX];
-static u8 u_shadow_arr[UCACHE_MAX][UCACHE_BYTES];
-static u16 u_shadow_arr_len[UCACHE_MAX];
-
-static void pc_uniform_cache_reset(void)
-{
-    memset(u_shadow_set_i, 0, sizeof(u_shadow_set_i));
-    memset(u_shadow_set_f, 0, sizeof(u_shadow_set_f));
-    memset(u_shadow_arr_len, 0, sizeof(u_shadow_arr_len));
-}
-
-static int u_changed_i(GLint loc, GLint v)
-{
-    if (loc < 0 || loc >= UCACHE_MAX) return 1;
-    if (u_shadow_set_i[loc] && u_shadow_i[loc] == v) return 0;
-    u_shadow_i[loc] = v;
-    u_shadow_set_i[loc] = 1;
-    return 1;
-}
-
-static int u_changed_f(GLint loc, GLfloat v)
-{
-    if (loc < 0 || loc >= UCACHE_MAX) return 1;
-    if (u_shadow_set_f[loc] && u_shadow_f[loc] == v) return 0;
-    u_shadow_f[loc] = v;
-    u_shadow_set_f[loc] = 1;
-    return 1;
-}
-
-/* Arrays and matrices: compare the bytes actually being uploaded. */
-static int u_changed_mem(GLint loc, const void* data, unsigned long len)
-{
-    if (loc < 0 || loc >= UCACHE_MAX || len > UCACHE_BYTES) return 1;
-    if (u_shadow_arr_len[loc] == len &&
-        memcmp(u_shadow_arr[loc], data, len) == 0)
-    {
-        return 0;
-    }
-    memcpy(u_shadow_arr[loc], data, len);
-    u_shadow_arr_len[loc] = (u16) len;
-    return 1;
-}
-
-#define UP1I(loc, v)  do { GLint _l=(loc); GLint _v=(v); \
-    if (_l >= 0 && u_changed_i(_l, _v)) glUniform1i(_l, _v); } while (0)
-#define UP1F(loc, v)  do { GLint _l=(loc); GLfloat _v=(GLfloat)(v); \
-    if (_l >= 0 && u_changed_f(_l, _v)) glUniform1f(_l, _v); } while (0)
-#define UPNIV(loc, n, p) do { GLint _l=(loc); \
-    if (_l >= 0 && u_changed_mem(_l, (p), sizeof(GLint)*(unsigned long)(n))) \
-        glUniform1iv(_l, (n), (p)); } while (0)
-#define UPNFV(loc, n, p) do { GLint _l=(loc); \
-    if (_l >= 0 && u_changed_mem(_l, (p), sizeof(GLfloat)*(unsigned long)(n))) \
-        glUniform1fv(_l, (n), (p)); } while (0)
-#define UP3FV(loc, n, p) do { GLint _l=(loc); \
-    if (_l >= 0 && u_changed_mem(_l, (p), sizeof(GLfloat)*3*(unsigned long)(n))) \
-        glUniform3fv(_l, (n), (p)); } while (0)
-#define UP4FV(loc, n, p) do { GLint _l=(loc); \
-    if (_l >= 0 && u_changed_mem(_l, (p), sizeof(GLfloat)*4*(unsigned long)(n))) \
-        glUniform4fv(_l, (n), (p)); } while (0)
-#define UPMTX4(loc, n, tr, p) do { GLint _l=(loc); \
-    if (_l >= 0 && u_changed_mem(_l, (p), sizeof(GLfloat)*16*(unsigned long)(n))) \
-        glUniformMatrix4fv(_l, (n), (tr), (p)); } while (0)
-
+#define UP1I(loc, v)  do { GLint _v=(v); pc_stage_uniform((loc), UK_I1, 1, 0, &_v, sizeof(_v)); } while (0)
+#define UP1F(loc, v)  do { GLfloat _v=(GLfloat)(v); pc_stage_uniform((loc), UK_F1, 1, 0, &_v, sizeof(_v)); } while (0)
+#define UPNIV(loc, n, p) pc_stage_uniform((loc), UK_IV, (n), 0, (p), sizeof(GLint)*(unsigned)(n))
+#define UPNFV(loc, n, p) pc_stage_uniform((loc), UK_FV, (n), 0, (p), sizeof(GLfloat)*(unsigned)(n))
+#define UP2FV(loc, n, p) pc_stage_uniform((loc), UK_F2V, (n), 0, (p), sizeof(GLfloat)*2*(unsigned)(n))
+#define UP3FV(loc, n, p) pc_stage_uniform((loc), UK_F3V, (n), 0, (p), sizeof(GLfloat)*3*(unsigned)(n))
+#define UP4FV(loc, n, p) pc_stage_uniform((loc), UK_F4V, (n), 0, (p), sizeof(GLfloat)*4*(unsigned)(n))
+#define UPMTX3(loc, n, tr, p) pc_stage_uniform((loc), UK_M3, (n), (tr), (p), sizeof(GLfloat)*9*(unsigned)(n))
+#define UPMTX4(loc, n, tr, p) pc_stage_uniform((loc), UK_M4, (n), (tr), (p), sizeof(GLfloat)*16*(unsigned)(n))
+#define UP2F(loc, x, y) do { GLfloat _v[2] = { (GLfloat)(x), (GLfloat)(y) }; UP2FV((loc), 1, _v); } while (0)
+#define UP3F(loc, x, y, z) do { GLfloat _v[3] = { (GLfloat)(x), (GLfloat)(y), (GLfloat)(z) }; UP3FV((loc), 1, _v); } while (0)
+#define UP4F(loc, x, y, z, w) do { GLfloat _v[4] = { (GLfloat)(x), (GLfloat)(y), (GLfloat)(z), (GLfloat)(w) }; UP4FV((loc), 1, _v); } while (0)
 
 static void apply_alpha_compare_uniforms(void);
 static void apply_tev_uniforms(void);
@@ -3252,8 +3620,8 @@ static void bridge_upload_and_draw(void)
     glViewport((GLint)g_state.vp_x, (GLint)g_state.vp_y,
                (GLsizei)g_state.vp_w, (GLsizei)g_state.vp_h);
     
-    /* Use shader program */
-    glUseProgram(g_shader_program);
+    /* The program is selected and its uniforms brought up to date in
+     * pc_prog_flush(), right before the draw call. */
     
     /* Upload projection matrix (as uniform)
      * g_state.proj_matrix is row-major C array. GL_TRUE transposes to column-major. */
@@ -3531,7 +3899,7 @@ static void bridge_upload_and_draw(void)
      * The overlay code can override this when rendering pixel-space geometry. */
     if (g_uv_scale_loc >= 0) {
         GLfloat uv_scale[2] = {1.0f, 1.0f};
-        glUniform2fv(g_uv_scale_loc, 1, uv_scale);
+        UP2FV(g_uv_scale_loc, 1, uv_scale);
     }
     
     /* Upload texture matrix transforms */
@@ -3644,7 +4012,7 @@ static void bridge_upload_and_draw(void)
     if (g_fog_nearz_loc >= 0) UP1F(g_fog_nearz_loc, g_state.fog_nearz);
     if (g_fog_farz_loc >= 0) UP1F(g_fog_farz_loc, g_state.fog_farz);
     if (g_fog_color_loc >= 0) {
-        glUniform4f(g_fog_color_loc,
+        UP4F(g_fog_color_loc,
             g_state.fog_color.r / 255.0f,
             g_state.fog_color.g / 255.0f,
             g_state.fog_color.b / 255.0f,
@@ -4076,13 +4444,15 @@ static void bridge_upload_and_draw(void)
             }
             glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
             glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * (nq * 6), quad_tri);
+            pc_prog_flush();
             glDrawArrays(GL_TRIANGLES, 0, nq * 6);
             pc_stat_draws++; pc_stat_verts += (unsigned)(nq*6);
             s_pc_draws++;
             pc_frame_trace("quadsN");
         } else {
         pc_diag_draws++;
-        glDrawArrays(gl_prim, 0, count);
+        pc_prog_flush();
+            glDrawArrays(gl_prim, 0, count);
         pc_stat_draws++; pc_stat_verts += (unsigned)count;
         s_pc_draws++;
         pc_frame_trace("drawN");
@@ -6098,7 +6468,7 @@ static void apply_tev_uniforms(void)
     
     /* Upload KAlpha constant */
     if (g_kalpha_loc >= 0) {
-        glUniform4f(g_kalpha_loc,
+        UP4F(g_kalpha_loc,
             (f32)g_state.k_alphas[0].r / 255.0f,
             (f32)g_state.k_alphas[0].g / 255.0f,
             (f32)g_state.k_alphas[0].b / 255.0f,
@@ -6225,7 +6595,7 @@ static void apply_tev_uniforms(void)
         } else {
             a1[0] = a1[1] = a1[2] = 0.0f;
         }
-        glUniform3f(g_ambient_color1_loc, a1[0], a1[1], a1[2]);
+        UP3F(g_ambient_color1_loc, a1[0], a1[1], a1[2]);
     }
     if (g_light_spec_dir_loc >= 0) {
         GLfloat sd[8][3];
@@ -6256,10 +6626,10 @@ static void apply_tev_uniforms(void)
             else if (v > 1.0f) v = 1.0f;
             amb[ai] = v;
         }
-        glUniform3f(g_ambient_color_loc, amb[0], amb[1], amb[2]);
+        UP3F(g_ambient_color_loc, amb[0], amb[1], amb[2]);
     }
     if (g_camera_pos_loc >= 0) {
-        glUniform3f(g_camera_pos_loc,
+        UP3F(g_camera_pos_loc,
             g_state.camera_pos[0],
             g_state.camera_pos[1],
             g_state.camera_pos[2]);
@@ -6382,7 +6752,7 @@ static void apply_tev_uniforms(void)
         UP1I(g_ind_tex_wrap_t_loc, (int)g_state.tev_stages[0].indirect_wrap_t);
     }
     if (g_ind_tex_scale_loc >= 0) {
-        glUniform2f(g_ind_tex_scale_loc,
+        UP2F(g_ind_tex_scale_loc,
             (float)g_state.ind_tex_scale_s,
             (float)g_state.ind_tex_scale_t);
     }
@@ -6392,7 +6762,7 @@ static void apply_tev_uniforms(void)
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)
                 mtx[i*3 + j] = g_state.ind_tex_mtx[0][i][j];  // Use stage 0 matrix
-        glUniformMatrix3fv(g_ind_tex_mtx_loc, 1, GL_FALSE, mtx);
+        UPMTX3(g_ind_tex_mtx_loc, 1, GL_FALSE, mtx);
     }
     if (g_ind_tex_coord_src_loc >= 0) {
         UP1I(g_ind_tex_coord_src_loc, (int)g_state.ind_tex_order[0].coord);
