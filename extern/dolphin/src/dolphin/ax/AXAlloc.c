@@ -58,6 +58,10 @@ void __AXAllocQuit(void)
 
 void __AXPushFreeStack(AXVPB* p)
 {
+#ifdef PC_AX_HOOKS
+    extern void pc_ax_on_free(AXVPB*);
+    pc_ax_on_free(p);
+#endif
     p->next = __AXStackHead[0];
     __AXStackHead[0] = p;
     p->priority = 0;
@@ -76,6 +80,10 @@ AXVPB* __AXPopFreeStack(void)
 
 void __AXPushCallbackStack(AXVPB* p)
 {
+#ifdef PC_AX_HOOKS
+    extern void pc_ax_on_callback_push(AXVPB*);
+    pc_ax_on_callback_push(p);
+#endif
     p->next1 = __AXCallbackStack;
     __AXCallbackStack = p;
 }

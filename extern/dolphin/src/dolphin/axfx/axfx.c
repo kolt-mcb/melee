@@ -1,10 +1,10 @@
 #include <dolphin/axfx.h>
 #include <dolphin/os/OSAlloc.h>
 
-void* (*__AXFXAlloc)(unsigned long) = AXFXAllocFunction;
+void* (*__AXFXAlloc)(u32) = AXFXAllocFunction;
 void (*__AXFXFree)(void*) = AXFXFreeFunction;
 
-void* AXFXAllocFunction(unsigned long size)
+void* AXFXAllocFunction(u32 size)
 {
     return OSAllocFromHeap(__OSCurrHeap, size);
 }
@@ -14,7 +14,7 @@ void AXFXFreeFunction(void* ptr)
     OSFreeToHeap(__OSCurrHeap, ptr);
 }
 
-void AXFXSetHooks(void* (*alloc_hook)(unsigned long),
+void AXFXSetHooks(void* (*alloc_hook)(u32),
                   void (*free_hook)(void*))
 {
     __AXFXAlloc = alloc_hook;

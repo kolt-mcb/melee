@@ -56,6 +56,21 @@ DISPLAY_MODULES = [
     "sislib.c",   # SIS text system: the HUD's name tags and intro text
     "archive.c",  # GCN archive parser (needed for stage data)
     "perf.c",     # performance counters (HSD_PerfCurrentStat)
+    # Sound: HAL's voice manager and SFX/stream player. They drive the
+    # Nintendo AX library, whose CPU side (voice stacks, parameter blocks)
+    # is compiled from extern/dolphin below; the DSP mixer is replaced by
+    # port/pc_ax.c.
+    "axdriver.c",
+    "synth.c",
+]
+AX_SDK_SOURCES = [
+    str(ROOT / "extern" / "dolphin" / "src" / "dolphin" / "ax" / f)
+    for f in ("AXSPB.c", "AXProf.c")  # AXVPB.c / AXAlloc.c via port/ax_*_glue.c
+] + [
+    str(ROOT / "extern" / "dolphin" / "src" / "dolphin" / "axfx" / f)
+    # chorus / reverb_hi / reverb_std are MWCC inline PowerPC assembly;
+    # port/pc_ax.c stubs them (those aux buses stay silent) until ported.
+    for f in ("axfx.c", "delay.c")
 ]
 G_DISPLAY_SOURCES = [
     str(BASELIB_SRC / f) for f in DISPLAY_MODULES
@@ -108,7 +123,7 @@ IF_SOURCES = [s for s in IF_SOURCES
               if Path(s).name not in {"soundtest.c", "ifprize.c",
                                       "textlib.c", "textdraw.c"}]
 MATH_SHIM = [str(SRC / "math_shim.c")]
-ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + DECOMP_SOURCES + GR_SOURCES + PL_SOURCES + FT_SOURCES + GM_SOURCES + EF_SOURCES + IT_SOURCES + MN_SOURCES + MP_SOURCES + CM_SOURCES + SFX_SOURCES + IF_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
+ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + AX_SDK_SOURCES + DECOMP_SOURCES + GR_SOURCES + PL_SOURCES + FT_SOURCES + GM_SOURCES + EF_SOURCES + IT_SOURCES + MN_SOURCES + MP_SOURCES + CM_SOURCES + SFX_SOURCES + IF_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
 
 INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,
