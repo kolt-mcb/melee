@@ -1363,9 +1363,13 @@ void ftAction_80073240(Fighter_GObj* fighter_gobj)
             }
             if (getenv("MELEE_CMDTRACE") != NULL) {
                 static int cn;
-                if (cn < 400) {
+                extern u32 pc_frame_number;
+                if (cn < 4000) {
                     cn++;
-                    fprintf(stderr, "[CMD] mem=%08x op=%u\n",
+                    fprintf(stderr, "[CMD] f%u p%d ms%d mem=%08x op=%u\n",
+                            pc_frame_number,
+                            ((Fighter*) fighter_gobj->user_data)->player_id,
+                            ((Fighter*) fighter_gobj->user_data)->motion_id,
                             __builtin_bswap32(*(const u32*) ftCommand->u),
                             eventCode);
                 }

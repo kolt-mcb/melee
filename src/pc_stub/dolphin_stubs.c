@@ -131,8 +131,12 @@ __attribute__((weak)) void HSD_Free(void* ptr) { free(ptr); }
 
 /* Debug/reporting — delegate to undef_stubs.c weak OSReport which uses write() syscalls */
 
-/* PPC frsqrte - fake reciprocal sqrt approximation */
-f32 __frsqrte(f32 x) { return x > 0 ? 1.0f / sqrtf(x) : 0.0f; }
+/* PPC frsqrte: reciprocal square-root estimate. The instruction (and the
+ * decomp's declaration in math_ppc.h / port/pc_prelude.h) works in double;
+ * defining it as f32 here mismatched every caller's ABI. Callers refine the
+ * estimate with Newton steps, so the exact value is fine. frsqrte(0) is
+ * +inf and negative inputs give NaN on the real hardware. */
+double __frsqrte(double x) { return x > 0 ? 1.0 / sqrt(x) : (x == 0 ? INFINITY : NAN); }
 
 /* Camera bounds stubs (weak - overridden by gr/stage.c) */
 __attribute__((weak)) s32 Stage_GetCamBoundsLeftOffset(void) { return 0; }

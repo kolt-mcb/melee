@@ -94,11 +94,17 @@ void Command_05(CommandInfo* info)
 #if BUILD_TARGET_PC
     /* The jump target is an unrelocated archive offset here, not a pointer.
      * A target that resolves to nothing ends the script instead of jumping
-     * into unmapped memory. */
-    union CmdUnion* dst =
-        pc_script_target(info->u, info->u->Command_05.off);
+     * into unmapped memory.
+     *
+     * The operand is the word AFTER the opcode word, exactly as the console
+     * path below reads it: advance first, then read. Reading before the
+     * advance took the opcode word itself (0x14000000) as the offset, which
+     * never resolved, so every script that called a subroutine ended at
+     * that call -- Samus's bomb drop never reached its throw event. */
+    union CmdUnion* dst;
     NEXT_CMD(info);
-    info->event_return[info->loop_count++] = info->u;
+    dst = pc_script_target(info->u, info->u->Command_05.off);
+    info->event_return[info->loop_count++] = info->u + 1;
     info->u = dst;
 #else
     NEXT_CMD(info);
@@ -117,6 +123,8 @@ void Command_06(CommandInfo* info)
 void Command_07(CommandInfo* info)
 {
 #if BUILD_TARGET_PC
+    /* Same operand position as Command_05: the word after the opcode. */
+    NEXT_CMD(info);
     info->u = pc_script_target(info->u, info->u->Command_07.off);
 #else
     NEXT_CMD(info);
