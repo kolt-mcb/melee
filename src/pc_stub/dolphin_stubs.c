@@ -173,9 +173,7 @@ void AXTouch(void) {}
 s32 DVDGetStatus(void) { return 0; }
 s32 DVDDiskID(void) { return 0; }
 
-/* AX stubs */
-void AXInit(void) {}
-void AXQuit(void) {}
+/* AX: AXInit/AXQuit live in port/pc_ax.c now. */
 void AXSetOutputMode(void* mode, void* unk) {}
 void AXSetCallback(void (*callback)(void)) {}
 void AXQueueBuffer(void* buf, u32 size) {}

@@ -20,6 +20,7 @@ void audio_shutdown(void);
 
 /* Stream audio data to speakers */
 void audio_submit(const void* buffer, int num_bytes);
+u32 audio_queued_bytes(void);
 
 /* Convert GCN audio format to PCM for streaming */
 void audio_mix_frame(void);

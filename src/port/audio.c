@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "audio.h"
 #include "log.h"
 
@@ -14,10 +16,12 @@ Bool audio_init(void)
 
     SDL_AudioSpec desired, obtained;
     SDL_zero(desired);
-    desired.freq = 44100;
+    /* The AX mixer (port/pc_ax.c) produces the GameCube's 32 kHz stereo in
+     * 5 ms frames; SDL converts to whatever the device wants. */
+    desired.freq = 32000;
     desired.format = AUDIO_S16SYS;
     desired.channels = 2;
-    desired.samples = 1024;
+    desired.samples = 512;
     desired.callback = NULL;  /* queue-based (SDL_QueueAudio) */
     desired.userdata = NULL;
 
@@ -54,8 +58,24 @@ void audio_shutdown(void)
 
 void audio_submit(const void* buffer, int num_bytes)
 {
+    /* MELEE_AUDIO_DUMP=<path>: also write the raw 32 kHz s16 stereo stream
+     * to a file, for checking the mix without listening. */
+    static FILE* dump = NULL;
+    static int dump_checked = 0;
+    if (!dump_checked) {
+        const char* d = getenv("MELEE_AUDIO_DUMP");
+        dump_checked = 1;
+        if (d) dump = fopen(d, "wb");
+    }
+    if (dump) fwrite(buffer, 1, (size_t) num_bytes, dump);
     if (!g_audio_dev) return;
     SDL_QueueAudio(g_audio_dev, buffer, num_bytes);
+}
+
+u32 audio_queued_bytes(void)
+{
+    if (!g_audio_dev) return 0;
+    return (u32) SDL_GetQueuedAudioSize(g_audio_dev);
 }
 
 void audio_mix_frame(void)

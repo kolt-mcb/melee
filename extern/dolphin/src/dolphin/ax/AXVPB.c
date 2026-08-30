@@ -3,10 +3,10 @@
 #include <dolphin.h>
 #include <dolphin/ax.h>
 
-static unsigned long __AXSrcCycles[5] = { 0x00000DF8, 0x00000F78, 0x000014B8,
+static u32 __AXSrcCycles[5] = { 0x00000DF8, 0x00000F78, 0x000014B8,
                                           0x000019F8, 0x000019F8 };
 
-static unsigned long __AXMixCycles[32] = {
+static u32 __AXMixCycles[32] = {
     0x000005BE, 0x00000B7C, 0x00000B7C, 0x0000113A, 0x000008B6, 0x0000116C,
     0x0000116C, 0x00001A22, 0x000009A6, 0x0000134C, 0x0000134C, 0x00001CF2,
     0x00000E97, 0x00001D2E, 0x00001D2E, 0x00002BC5, 0x00000B7C, 0x00001432,
@@ -448,6 +448,18 @@ void __AXServiceVPB(AXVPB* pvpb)
         *(dst) = *(src);
     }
 
+#ifdef PC_AX_SYNC_FIX
+    /* PC: file callbacks run synchronously, so AXSetVoiceAddr and the
+     * partial address setters can land in the same frame; the whole-block
+     * copy below would then be skipped and loopFlag/format never reach
+     * the mixer. Copy the block first. */
+    if ((sync & AX_SYNC_FLAG_COPYADDR) &&
+        (sync & (AX_SYNC_FLAG_COPYLOOP | AX_SYNC_FLAG_COPYLOOPADDR |
+                 AX_SYNC_FLAG_COPYENDADDR | AX_SYNC_FLAG_COPYCURADDR)))
+    {
+        ppbDsp->addr = ppbUser->addr;
+    }
+#endif
     if (sync & (AX_SYNC_FLAG_COPYLOOP | AX_SYNC_FLAG_COPYLOOPADDR |
                 AX_SYNC_FLAG_COPYENDADDR | AX_SYNC_FLAG_COPYCURADDR))
     {

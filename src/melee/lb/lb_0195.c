@@ -59,6 +59,12 @@ __attribute__((weak)) void lb_800195D0(void)
      * On GCN, this is set by the VI retrace interrupt. On headless PC,
      * we set it every frame to allow the game loop to progress. */
     lb_804329F0.x0[0].x10 = 1;
+    /* The sound driver's load-wait loops spin on this; the AX frame
+     * callback is what completes their state machine. */
+    {
+        extern void pc_ax_tick_once(void);
+        pc_ax_tick_once();
+    }
 #endif /* BUILD_TARGET_PC */
 }
 
