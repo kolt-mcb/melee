@@ -762,16 +762,102 @@ __attribute__((weak)) int HSD_DevComRequest(int file, uintptr_t src,
                                             void (*callback)(int, int, void*, s32),
                                             void* args)
 {
-    (void)type; (void)pri; (void)args;
+    (void)pri;
     
+    extern void* g_last_file_buf;
+    extern size_t g_last_file_buf_size;
+
+    /* The sound driver's requests (synth.c). These carry a real file
+     * offset in `src`, a real destination in `dest`, and the original
+     * callback contract: cb(request id, (int) args, buffer, cancelled).
+     *   0x21  DVD -> main memory (dest)
+     *   0x22  DVD -> a relay buffer, handed to the callback
+     *   0x23  DVD -> ARAM (dest is an ARAM offset)
+     *   3     main memory (src) -> ARAM (dest); src 0 clears
+     *   0x1B  ARAM (src) -> ARAM (dest) move (bank compaction)
+     * Everything is synchronous here, so the callback runs before this
+     * returns -- the driver copes, it only ever polls a flag afterwards.
+     * lbFile's own requests are told apart by the buffer it registers
+     * just before calling (consumed below). */
+    if (g_last_file_buf == NULL &&
+        (type == 0x21 || type == 0x22 || type == 0x23 || type == 3 ||
+         type == 0x1B)) {
+        static u8 relay[0x4000] __attribute__((aligned(32)));
+        static int req_id = 0x100;
+        int id = req_id;
+        u8* dst;
+        req_id += 4;
+        if (type == 0x1B) {
+            u8* from = pc_aram_host((unsigned long) src);
+            dst = pc_aram_host((unsigned long) dest);
+            if (dst != NULL && from != NULL) {
+                memmove(dst, from, size);
+            }
+            if (callback) callback(id, (int) (intptr_t) args, dst, 0);
+            return id;
+        }
+        if (type == 3) {
+            dst = pc_aram_host((unsigned long) dest);
+            if (dst != NULL) {
+                if (src == 0) {
+                    memset(dst, 0, size);
+                } else {
+                    memcpy(dst, (const void*) src, size);
+                }
+            }
+            if (callback) callback(id, (int) (intptr_t) args, dst, 0);
+            return id;
+        }
+        if (file < 0) return -1;
+        if (type == 0x22) {
+            if (size > sizeof(relay)) size = sizeof(relay);
+            dst = relay;
+        } else if (type == 0x23 || (uintptr_t) dest < PC_ARAM_SIZE) {
+            dst = pc_aram_host((unsigned long) dest);
+            if ((unsigned long) dest + size > PC_ARAM_SIZE) {
+                fprintf(stderr,
+                        "[DC] ARAM overrun: dest %lx + %lx > %lx (clamped)\n",
+                        (unsigned long) dest, (unsigned long) size,
+                        (unsigned long) PC_ARAM_SIZE);
+                size = (unsigned long) dest < PC_ARAM_SIZE
+                           ? PC_ARAM_SIZE - (unsigned long) dest
+                           : 0;
+            }
+        } else {
+            dst = (u8*) (uintptr_t) dest;
+        }
+        {
+            DVDFileInfo info;
+            size_t n = 0;
+            if (!DVDFastOpen(file, &info)) return -1;
+            if ((u32) src < info.length && dst != NULL) {
+                n = size;
+                if ((u32) src + n > info.length) n = info.length - (u32) src;
+                DVDReadPrio(&info, dst, (long) n, (long) src, 2);
+            }
+            if (getenv("MELEE_AXTRACE")) {
+                fprintf(stderr,
+                        "[DC] type %x entry %d src %lx dest %lx size %lx "
+                        "(file len %lx) -> read %zx\n",
+                        type, file, (unsigned long) src, (unsigned long) dest,
+                        (unsigned long) size, (unsigned long) info.length, n);
+            }
+            DVDClose(&info);
+        }
+        if (callback) callback(id, (int) (intptr_t) args, dst, 0);
+        {
+            extern void pc_objalloc_check(const char*);
+            pc_objalloc_check("after audio DevCom");
+        }
+        return id;
+    }
+
     if (file < 0) return -1;
     
     /* PC port: the src/dest params are truncated 32-bit pointers.
      * Use the original 64-bit pointer stored by lbFile_8001668C/qwer. */
-    extern void* g_last_file_buf;
-    extern size_t g_last_file_buf_size;
-    
     void* buf = g_last_file_buf;
+    g_last_file_buf = NULL; /* one request per registration */
     if (buf == NULL) {
         /* Fallback: use dest as the buffer (works when not truncated) */
         buf = (void*)(uintptr_t)dest;
@@ -2355,9 +2441,13 @@ __attribute__((weak)) void port_render_frame_end(void)
     extern void GXFlush(void);
     extern void render_debug_overlay(void);
     extern void render_present(void);
+    extern void pc_ax_pump(void);
     GXFlush();
     render_debug_overlay();
+    { extern void pc_objalloc_check(const char*); pc_objalloc_check("frame start"); }
     render_present();
+    pc_ax_pump();
+    { extern void pc_objalloc_check(const char*); pc_objalloc_check("after AX pump"); }
     /* PC diag: frame throughput, printed every 100 frames. */
     {
         static unsigned long _fr = 0;

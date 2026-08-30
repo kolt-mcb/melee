@@ -132,13 +132,22 @@ void fn_80023254(s32 arg0)
     shift_base = lbl_80433B44;
     do {
         used = local_base;
+#if BUILD_TARGET_PC
+        /* GCN addresses these tables by their offsets from lbl_803BB300
+         * (+0x2D0 = s32_arr_803BB5D0, +0x11E4 = offsets_arr_803BC4E4);
+         * on PC they are separate objects. */
+        type = (s8*) s32_arr_803BB5D0;
+        priority = (int*) offsets_arr_803BC4E4;
+#define PC_SIZE_TABLE offsets_arr_803BC4E4
+#else
         type = (s8*) (base + 0x2D0);
         priority = (int*) (base + 0x11E4);
+#define PC_SIZE_TABLE ((int (*)[2])(base + 0x11E4))
+#endif
         index = 0;
         do {
             if (arg0 == (s8) *type && *used == 0 &&
-                (u32) ((int (*)[2])(base + 0x11E4))[*list][0] <
-                    (u32) *priority)
+                (u32) PC_SIZE_TABLE[*list][0] < (u32) *priority)
             {
                 shift = &shift_base[0x37];
                 if (count < 0x37) {
@@ -2015,12 +2024,6 @@ void fn_800267B0(void)
     if (lbl_804D6450 == 0) {
         return;
     }
-#if BUILD_TARGET_PC
-    /* PC port: audio is not implemented (roadmap M5). The SFX bank tables
-     * this walks are never populated, so the indices below run wild. Newly
-     * reachable now that the stage parameter setup runs. */
-    return;
-#endif
 
     for (i = 0; i < 5; i++) {
         for (j = 0; lbl_804D6438 < lbl_804D6448 + lbl_804D6450 && j < 0x37;
@@ -2143,6 +2146,15 @@ int fn_80026C04(int arg0, int unused)
     slot = fn_80026650();
     if (slot != -1) {
         strcpy(&lbl_803BB340[lbl_804D38D0], lbl_803BBCFC[slot]);
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_AXTRACE")) {
+            fprintf(stderr,
+                    "[LBA] request slot %d '%s' size %d (loaded %d pending %d "
+                    "req %d total %d)\n",
+                    slot, lbl_803BB340, offsets_arr_803BC4E4[slot][0],
+                    lbl_804D6448, lbl_804D644C, lbl_804D6450, lbl_804D6438);
+        }
+#endif
         priority = HSD_SynthSFXLoad(lbl_803BB340, 2, fn_80026C04, 0);
         lbl_80433A64[slot] = priority;
     }
@@ -2301,6 +2313,9 @@ void lbAudioAx_80027168(void)
         strcpy(&lbl_803BB340[lbl_804D38D0], lbl_803BBCFC[slot]);
         lbl_80433A64[slot] = HSD_SynthSFXLoad(lbl_803BB340, 2, fn_80026C04, 0);
     }
+#if BUILD_TARGET_PC
+    { extern void pc_objalloc_check(const char*); pc_objalloc_check("after lbAudioAx_80027168"); }
+#endif
 }
 
 s32 fn_80027488(void)
