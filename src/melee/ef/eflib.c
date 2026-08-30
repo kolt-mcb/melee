@@ -1,3 +1,4 @@
+#include <stdlib.h>
 /*
  * TODO: I looked at the strings in the ASM, I think there was only
  *       ever eflib.c and efasync.c (?) The files in this folder
@@ -34,7 +35,14 @@
 #include <runtime.h>
 #include <trigf.h>
 // externs
+#if BUILD_TARGET_PC
+/* The command-list table (the console's 804D0E5C); particle.c's readers
+ * call the same table psCmdListArray, and the PC loader fills that one. */
+extern HSD_PSCmdList** psCmdListArray[65];
+#define ptclref_804D0E5C psCmdListArray
+#else
 extern u32* ptclref_804D0E5C[65];
+#endif
 extern EF_DAT_Entry efAsync_DatEntries[51];
 extern u32 hsd_804D7900;
 
@@ -159,7 +167,11 @@ void efLib_Init(void)
 {
     HSD_GObj* gobj;
     int i;
+#if BUILD_TARGET_PC
+    HSD_ObjAllocInit(&efLib_AllocData, sizeof(EF_Effect), 8U);
+#else
     HSD_ObjAllocInit(&efLib_AllocData, 0x2CU, 4U);
+#endif
 
     efLib_EffectCount = 0;
 
@@ -181,7 +193,11 @@ void efLib_Init(void)
 
     HSD_JObjSetSPtclCallback(efLib_Cb_SPtcl);
     HSD_JObjSetDPtclCallback(efLib_Cb_DPtcl);
+#if BUILD_TARGET_PC
+    psInitAppSRT(0, sizeof(struct HSD_psAppSRT));
+#else
     psInitAppSRT(0, 0xA4);
+#endif
     efAsync_QueueInit();
 
     for (i = 0; i < 8; i++) {
@@ -429,10 +445,203 @@ void efLib_Update(HSD_GObj* gobj)
         }
     }
     HSD_JObjAnimAll(jobj);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_EFTRACE")) {
+        static int n;
+        HSD_JObj* j = jobj;
+        while (j != NULL && j->u.dobj == NULL) j = j->child;
+        if (j != NULL && j->u.dobj != NULL && j->u.dobj->mobj != NULL && j->u.dobj->mobj->mat != NULL && n < 60) {
+            n++;
+            {
+                HSD_TObj* t = j->u.dobj->mobj->tobj;
+                HSD_AObj* ta = t ? t->aobj : NULL;
+                HSD_FObj* fo;
+                int k = 0;
+                fprintf(stderr, "[EFA] effect %p life %u mat alpha %.3f | tobj %p blending %.3f aobj %p frame %.1f/%.1f tracks:", (void*) effect,
+                        (unsigned) effect->lifetime, j->u.dobj->mobj->mat->alpha, (void*) t, t ? t->blending : -1.0f, (void*) ta,
+                        ta ? ta->curr_frame : -1.0f, ta ? ta->end_frame : -1.0f);
+                for (fo = ta ? ta->fobj : NULL; fo != NULL && k < 10; fo = fo->next, k++) {
+                    fprintf(stderr, " t%u", (unsigned) fo->obj_type);
+                }
+                if (t && t->tev) {
+                    fprintf(stderr, " | tev konst %u,%u,%u,%u tev0 %u,%u,%u,%u tev1 %u,%u,%u,%u active %x",
+                            t->tev->konst.r, t->tev->konst.g, t->tev->konst.b, t->tev->konst.a,
+                            t->tev->tev0.r, t->tev->tev0.g, t->tev->tev0.b, t->tev->tev0.a,
+                            t->tev->tev1.r, t->tev->tev1.g, t->tev->tev1.b, t->tev->tev1.a, t->tev->active);
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+    }
+#endif
     if (effect->update != NULL) {
         effect->update(effect);
     }
 }
+
+#if BUILD_TARGET_PC
+#include "gr/grdatfiles.h"
+extern u8* pc_ef_dataBase[50];
+
+/* The effect desc table is big-endian archive data: { f32 lifetime;
+ * joint, animjoint, matanim, shapeanim offsets } per entry. Converted on
+ * first use and cached per bank; a bank that reloads at another address
+ * drops its cache. */
+static EF_EffectDesc** pc_ef_cache[50];
+static u8* pc_ef_cache_base[50];
+
+static u32 pc_ef_be32(const void* p)
+{
+    const u8* b = p;
+    return ((u32) b[0] << 24) | ((u32) b[1] << 16) | ((u32) b[2] << 8) | b[3];
+}
+
+static EF_EffectDesc* pc_ef_desc(int gfx_id)
+{
+    int bank = gfx_id / 1000, id = gfx_id % 1000;
+    const u8* raw;
+    u8* base;
+    EF_EffectDesc* d;
+    u32 off, lt;
+    if (bank < 0 || bank >= 50 || efAsync_DatEntries[bank].data == NULL) {
+        return NULL;
+    }
+    base = pc_ef_dataBase[bank];
+    if (pc_ef_cache[bank] == NULL || pc_ef_cache_base[bank] != base) {
+        if (pc_ef_cache[bank] == NULL) {
+            pc_ef_cache[bank] = calloc(1000, sizeof(EF_EffectDesc*));
+        }
+        memset(pc_ef_cache[bank], 0, sizeof(EF_EffectDesc*) * 1000);
+        pc_ef_cache_base[bank] = base;
+    }
+    if (pc_ef_cache[bank][id] != NULL) {
+        return pc_ef_cache[bank][id];
+    }
+    raw = (const u8*) efAsync_DatEntries[bank].data + id * 0x14;
+    d = calloc(1, sizeof(EF_EffectDesc));
+    lt = pc_ef_be32(raw);
+    memcpy(&d->lifetime, &lt, 4);
+    off = pc_ef_be32(raw + 4);
+    if (off != 0) {
+        if (getenv("MELEE_EFTRACE")) {
+            u32 cur = off;
+            int depth = 0;
+            while (cur != 0 && depth < 6) {
+                const u8* j = base + cur;
+                u32 dobj = pc_ef_be32(j + 16);
+                fprintf(stderr,
+                        "[EFR] gfx %d d%d joint @%#x: flags %08x child %#x next %#x "
+                        "dobj %#x scale %08x %08x %08x\n",
+                        gfx_id, depth, cur, pc_ef_be32(j + 4), pc_ef_be32(j + 8),
+                        pc_ef_be32(j + 12), dobj, pc_ef_be32(j + 0x20),
+                        pc_ef_be32(j + 0x24), pc_ef_be32(j + 0x28));
+                if (dobj != 0) {
+                    const u8* d = base + dobj;
+                    u32 mobj = pc_ef_be32(d + 8);
+                    fprintf(stderr, "[EFR]   dobj @%#x: next %#x mobj %#x pobj %#x\n",
+                            dobj, pc_ef_be32(d + 4), mobj, pc_ef_be32(d + 12));
+                    if (mobj != 0) {
+                        const u8* m = base + mobj;
+                        u32 tobj = pc_ef_be32(m + 8), mat = pc_ef_be32(m + 12);
+                        fprintf(stderr, "[EFR]     mobj: rendermode %08x tobj %#x mat %#x pe %#x\n",
+                                pc_ef_be32(m + 4), tobj, mat, pc_ef_be32(m + 16));
+                        if (mat != 0) {
+                            const u8* q = base + mat;
+                            fprintf(stderr, "[EFR]     mat: amb %08x dif %08x spec %08x alpha %08x shin %08x\n",
+                                    pc_ef_be32(q), pc_ef_be32(q + 4), pc_ef_be32(q + 8), pc_ef_be32(q + 12), pc_ef_be32(q + 16));
+                        }
+                        if (tobj != 0) {
+                            const u8* t = base + tobj;
+                            fprintf(stderr, "[EFR]     tobj: flags %08x blending %08x imagedesc %#x tlut %#x tev %#x\n",
+                                    pc_ef_be32(t + 0x40), pc_ef_be32(t + 0x44), pc_ef_be32(t + 0x4C), pc_ef_be32(t + 0x50), pc_ef_be32(t + 0x5C));
+                        }
+                    }
+                }
+                cur = pc_ef_be32(j + 8);
+                depth++;
+            }
+        }
+        d->model_desc.joint =
+            grDatFiles_ConvertJointTreeGCNtoX64(base + off, base, 0, NULL);
+    }
+    off = pc_ef_be32(raw + 8);
+    if (off != 0) {
+        d->model_desc.animjoint =
+            grDatFiles_ConvertAnimJointTreeGCNtoX64(base + off, base, 0);
+    }
+    off = pc_ef_be32(raw + 12);
+    if (off != 0) {
+        if (getenv("MELEE_EFTRACE")) {
+            /* raw MatAnimJoint tree: {child, next, matanim}; MatAnim
+             * {next, aobjdesc, texanim, renderanim} */
+            u32 mj = off, depth = 0;
+            while (mj && depth < 4) {
+                u32 ma = pc_ef_be32(base + mj + 8), k = 0;
+                fprintf(stderr, "[EFM] gfx %d matanimjoint d%u @%#x child %#x next %#x matanim %#x\n",
+                        gfx_id, depth, mj, pc_ef_be32(base + mj), pc_ef_be32(base + mj + 4), ma);
+                while (ma && k < 8) {
+                    fprintf(stderr, "[EFM]    matanim @%#x: next %#x aobjdesc %#x texanim %#x renderanim %#x\n",
+                            ma, pc_ef_be32(base + ma), pc_ef_be32(base + ma + 4),
+                            pc_ef_be32(base + ma + 8), pc_ef_be32(base + ma + 12));
+                    ma = pc_ef_be32(base + ma); k++;
+                }
+                mj = pc_ef_be32(base + mj); depth++;
+            }
+        }
+        d->model_desc.matanim_joint =
+            grDatFiles_ConvertMatAnimJointTreeGCNtoX64(base + off, base, 0);
+    }
+    off = pc_ef_be32(raw + 16);
+    if (off != 0) {
+        d->model_desc.shapeanim_joint =
+            grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(base + off, base, 0);
+    }
+    pc_ef_cache[bank][id] = d;
+    return d;
+}
+#endif
+
+#if BUILD_TARGET_PC
+#include "baselib/dobj.h"
+#include "baselib/mobj.h"
+#include "baselib/tobj.h"
+static void pc_ef_dump_jobj(HSD_JObj* j, int depth)
+{
+    for (; j != NULL; j = j->next) {
+        fprintf(stderr, "[EFJ] %*sjobj %p flags %08x scale %.2f %.2f %.2f\n", depth * 2, "",
+                (void*) j, j->flags, j->scale.x, j->scale.y, j->scale.z);
+        if (!(j->flags & JOBJ_INSTANCE) && !(j->flags & JOBJ_SPLINE) && !(j->flags & JOBJ_PTCL)) {
+            HSD_DObj* d = j->u.dobj;
+            for (; d != NULL; d = d->next) {
+                HSD_MObj* m = d->mobj;
+                fprintf(stderr, "[EFJ] %*s  dobj %p mobj %p", depth * 2, "", (void*) d, (void*) m);
+                if (m != NULL) {
+                    HSD_TObj* t;
+                    fprintf(stderr, " rendermode %08x", m->rendermode);
+                    if (m->mat != NULL) {
+                        fprintf(stderr, " diffuse %u,%u,%u,%u alpha %.2f", m->mat->diffuse.r,
+                                m->mat->diffuse.g, m->mat->diffuse.b, m->mat->diffuse.a,
+                                m->mat->alpha);
+                    }
+                    for (t = m->tobj; t != NULL; t = t->next) {
+                        fprintf(stderr, " | tobj flags %08x blend %.2f tev %p img %p",
+                                t->flags, t->blending, (void*) t->tev, (void*) t->imagedesc);
+                        if (t->imagedesc != NULL) {
+                            fprintf(stderr, " %ux%u fmt %d data %p", t->imagedesc->width,
+                                    t->imagedesc->height, (int) t->imagedesc->format,
+                                    (void*) t->imagedesc->image_ptr);
+                        }
+                    }
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+        if (j->child != NULL) {
+            pc_ef_dump_jobj(j->child, depth + 1);
+        }
+    }
+}
+#endif
 
 EF_Effect* efLib_Create(int gfx_id, HSD_GObj* parent_gobj)
 {
@@ -440,8 +649,26 @@ EF_Effect* efLib_Create(int gfx_id, HSD_GObj* parent_gobj)
     EF_EffectDesc* desc;
     u8 p_link;
 
+#if BUILD_TARGET_PC
+    desc = pc_ef_desc(gfx_id);
+    {
+        static int no_ef = -1;
+        if (no_ef < 0) no_ef = getenv("MELEE_NO_EFJOBJ") != NULL;
+        if (no_ef) return NULL;
+    }
+    if (getenv("MELEE_EFTRACE")) {
+        fprintf(stderr, "[EF] create gfx %d: desc %p joint %p anim %p life %.1f\n",
+                gfx_id, (void*) desc, desc ? (void*) desc->model_desc.joint : NULL,
+                desc ? (void*) desc->model_desc.animjoint : NULL,
+                desc ? desc->lifetime : 0.0f);
+    }
+    if (desc == NULL) {
+        return NULL;
+    }
+#else
     desc = &((EF_EffectDesc*) efAsync_DatEntries[gfx_id / 1000]
                  .data)[gfx_id % 1000];
+#endif
 
     if (efLib_LoadKind == EF_LOADKIND_ASYNC) {
         if (efLib_EffectCount >= 64) {
@@ -504,6 +731,14 @@ EF_Effect* efLib_Create(int gfx_id, HSD_GObj* parent_gobj)
             HSD_GObjPLink_80390228(effect->gobj);
             return NULL;
         }
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_EFTRACE")) {
+            fprintf(stderr, "[EFJ] == gfx %d model: animjoint %p matanim %p shapeanim %p\n", gfx_id,
+                    (void*) desc->model_desc.animjoint, (void*) desc->model_desc.matanim_joint,
+                    (void*) desc->model_desc.shapeanim_joint);
+            pc_ef_dump_jobj(jobj, 0);
+        }
+#endif
         {
             u8 kind = HSD_GObj_804D7849;
             HSD_GObjObject_80390A70(effect->gobj, kind, jobj);
@@ -645,6 +880,15 @@ EF_Effect* efLib_Create_Attach_Pos(u32 gfx_id, HSD_GObj* gobj, Vec3* position)
 
 void efLib_render_callback(HSD_GObj* gobj, int code)
 {
+#if BUILD_TARGET_PC
+    {
+        static int trace = -1, n;
+        if (trace < 0) trace = getenv("MELEE_EFTRACE") != NULL;
+        if (trace && (++n % 60) == 0) {
+            fprintf(stderr, "[EF] render_callback calls %d (gx_link %u)\n", n, (unsigned) gobj->gx_link);
+        }
+    }
+#endif
     u32 particles_code;
 
     switch (code) {
@@ -661,6 +905,13 @@ void efLib_render_callback(HSD_GObj* gobj, int code)
         return;
     }
     HSD_StateSetColorUpdate(1);
+#if BUILD_TARGET_PC
+    {
+        static int no_ptcl = -1;
+        if (no_ptcl < 0) no_ptcl = getenv("MELEE_NO_PTCL") != NULL;
+        if (no_ptcl) return;
+    }
+#endif
     if (gobj->gx_link == 7) {
         psDispParticles(PTCL_RENDER_LINKNO_0 | PTCL_RENDER_LINKNO_2,
                         particles_code);
@@ -671,6 +922,9 @@ void efLib_render_callback(HSD_GObj* gobj, int code)
 
 void efLib_particles_proc_main(HSD_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    { extern void pc_ps_trace_frame(void); pc_ps_trace_frame(); }
+#endif
     hsd_8039CEAC(PTCL_SKIP_LINKNO_1 | PTCL_SKIP_LINKNO_2);
     hsd_8039EE24(PTCL_SKIP_LINKNO_1 | PTCL_SKIP_LINKNO_2);
 }
@@ -997,6 +1251,11 @@ void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
 // Static particles are managed in a list and persist across frames.
 void efLib_Cb_SPtcl(s32 linkNo, s32 bank, s32 gfx_id, HSD_JObj* jobj)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_EFTRACE")) {
+        fprintf(stderr, "[EF] SPtcl link %d bank %d gfx %d jobj %p\n", linkNo, bank, gfx_id, (void*) jobj);
+    }
+#endif
     if (bank == 0x1E) {
         grLib_801C99C0(bank, gfx_id, jobj, 0);
         return;
@@ -1008,6 +1267,15 @@ void efLib_Cb_SPtcl(s32 linkNo, s32 bank, s32 gfx_id, HSD_JObj* jobj)
 // Dynamic particles are standalone generators, not in the managed list.
 void efLib_Cb_DPtcl(int linkNo, int bank, int gfx_id, HSD_JObj* jobj)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_EFTRACE")) {
+        fprintf(stderr, "[EF] DPtcl link %d bank %d gfx %d jobj %p\n", linkNo, bank, gfx_id, (void*) jobj);
+        if (bank == 0 && gfx_id == 306) {
+            extern int pc_ps_vtrace_frames;
+            pc_ps_vtrace_frames = 8;
+        }
+    }
+#endif
     if (bank == 0x1E) {
         grLib_801C99C0(bank, gfx_id, jobj, 1);
         return;

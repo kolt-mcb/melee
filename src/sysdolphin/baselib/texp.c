@@ -1349,7 +1349,7 @@ void HSD_TExpSetReg(HSD_TExp* texp)
     }
 #if BUILD_TARGET_PC
     { extern u32 pc_frame_number; static int _kc = -1, _kn = 0; if (_kc < 0) _kc = getenv("MELEE_TEVLOG") != NULL;
-      if (_kc && pc_frame_number == 260 && _kn < 400) { HSD_TECnst* c = &texp->cnst; _kn++;
+      if (_kc && (int) pc_frame_number == atoi(getenv("MELEE_TEVLOG")) && _kn < 400) { HSD_TECnst* c = &texp->cnst; _kn++;
         fprintf(stderr, "KCONST texp=%p changed=0x%x K0=(%d,%d,%d,%d) K1=(%d,%d,%d,%d) R0=(%d,%d,%d,%d) R1=(%d,%d,%d,%d) |", (void*)texp, (unsigned)changed,
           reg[0].r,reg[0].g,reg[0].b,reg[0].a, reg[1].r,reg[1].g,reg[1].b,reg[1].a, reg[4].r,reg[4].g,reg[4].b,reg[4].a, reg[5].r,reg[5].g,reg[5].b,reg[5].a);
         while (c && c->type == HSD_TE_CNST) { fprintf(stderr, " [reg=%d comp=%d ctype=%d val=%p]", c->reg, c->comp, c->ctype, c->val); if (!c->next) break; c = &c->next->cnst; }

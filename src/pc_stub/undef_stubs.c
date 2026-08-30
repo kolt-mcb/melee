@@ -493,8 +493,12 @@ __attribute__((weak)) void* __va_arg(va_list v_list, unsigned char type) {
 __attribute__((weak)) unsigned long long __cvt_dbl_usll(double d) {
     return (unsigned long long)d;
 }
-__attribute__((weak)) unsigned int __cvt_fp2unsigned(float f) {
-    return (unsigned int)f;
+/* Declared in Runtime/runtime.h as taking a double: a float parameter
+ * here read the wrong half of xmm0 and returned 0 (effect lifetimes). */
+__attribute__((weak)) unsigned long __cvt_fp2unsigned(double d) {
+    if (d <= 0.0) return 0;
+    if (d >= 4294967295.0) return 0xFFFFFFFFul;
+    return (unsigned long) d;
 }
 
 /* Auto-generated stubs for missing symbols */

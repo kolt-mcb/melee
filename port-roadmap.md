@@ -18,8 +18,8 @@
 **Not working / missing**
 - Stage surfaces render flat white — channel-color/lighting (RASC) resolution, next bug.
 - Camera (`cm/`, 4.5k lines) not compiled — all `Camera_*` calls are empty stubs.
-- HUD (`if/`), effects (`ef/`, GCN `va_arg` blocker), items (17/183 TUs), characters
-  (only ftMario + ftCommon of 37 chara dirs), `vi/ db/ ty/ sfx/` absent.
+- Items (17/183 TUs), `vi/ db/ ty/` absent. HUD (`if/`) and effects (`ef/` +
+  the HSD particle system) are in: hit sparks, flashes, dust, electricity.
 - ~1100 empty weak stubs + large per-character/item stub layer.
 - Audio: software AX mixer (`src/port/pc_ax.c`); music bit-exact vs an offline decode, SFX with reverb in menus and matches.
 - Data loading relies on **hand-written** big-endian→x64 struct converters
@@ -134,7 +134,17 @@ occasional clipping when SFX and music sum.
 
 1. All fighters: compile remaining 36 `ft/chara/*` dirs; burn down ~700 per-character
    stubs (ftKirby's copy system is the worst case — 72 stubs).
-2. Items: `it/` 183 TUs + 599 stubs; effects: fix `ef/` GCN `va_arg` usage.
+2. Items: `it/` 183 TUs + 599 stubs. ~~Effects: fix `ef/` GCN `va_arg` usage.~~
+   Done 2026-08-29: `ef/` compiles with `particle.c psdisp.c psdisptev.c
+   psappsrt.c`; banks load host-side (`psInitDataBankLoad`), effect models
+   convert through the gr joint converters, particle quads/point sprites go
+   through a FIFO shim in `psdisp.c`. Root causes were the usual classes
+   (implicit `HSD_MemAlloc` truncating pointers, GCN-sized pools, raw
+   `GXWGFifo` stores, `GXGetProjectionv` overrun) plus one new one: the
+   particle bytecode assembles float operands a byte at a time in *memory*
+   order, which is the value on the console and the byte-reversed value on
+   x86 (`PS_B()` in particle.c). Every size/velocity/target was garbage
+   until then, so flashes shrank to nothing before their first draw.
 3. All stages incl. per-stage `on_init` data guards.
 4. Real menus: CSS/SSS (`mn/` compiles already; extract real `mn_rom_data` values from `boot.dol`).
 

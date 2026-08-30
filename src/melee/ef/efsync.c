@@ -1,5 +1,10 @@
 #include "efsync.h"
 
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
+
 #include "efalt.h"
 #include "efasync.h"
 #include "efdata.h"
@@ -38,6 +43,12 @@ extern EF_DAT_Entry efAsync_DatEntries[51];
 // position/rotation inheritance. Note there's variadic args!
 void* efSync_Spawn(s32 gfx_id, HSD_GObj* gobj, ...)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_EFTRACE")) {
+        extern u32 pc_frame_number;
+        fprintf(stderr, "[EF] spawn gfx %d gobj %p frame %u\n", gfx_id, (void*) gobj, pc_frame_number);
+    }
+#endif
     va_list vlist;
     Vec3 translate;
     Vec3 scale;
