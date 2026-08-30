@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Melee PC
+Comment=Super Smash Bros. Melee PC port (pc-port branch)
+Exec=/home/grunt/melee/tools/launcher/melee-pc.sh
+Path=/home/grunt/melee
+Icon=/home/grunt/melee/tools/launcher/melee-pc.png
+Terminal=false
+Categories=Game;
+StartupNotify=false
