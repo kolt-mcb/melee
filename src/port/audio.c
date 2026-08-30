@@ -69,6 +69,10 @@ void audio_submit(const void* buffer, int num_bytes)
     }
     if (dump) fwrite(buffer, 1, (size_t) num_bytes, dump);
     if (!g_audio_dev) return;
+    /* The mixer runs a fixed number of frames per game frame (see
+     * pc_ax_pump); when the game outruns real time the queue would grow
+     * without bound, so drop what is more than half a second ahead. */
+    if (SDL_GetQueuedAudioSize(g_audio_dev) > 32000u * 4u / 2u) return;
     SDL_QueueAudio(g_audio_dev, buffer, num_bytes);
 }
 

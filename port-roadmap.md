@@ -112,9 +112,18 @@ deferred to the next tick); `AXDriver_8038CFF4` linked new sound machines into t
 free list; and the DSP accelerator wraps on *equality* with the end address, which
 the streamer's slot rotation relies on.
 
-Open: AXFX reverb/chorus (port the asm to C); `MELEE_BOOT_MODE=14` picks the 1P quick
-BGM (`gm_8016B238` is set in the debug VS mode) — check the menu-route match BGM;
-verify SFX pitch/pan/priorities against a Dolphin audio dump.
+The mixer runs a fixed 32000/60 samples per game frame (`pc_ax_pump`); HSD's
+per-frame audio work draws from the game RNG (`lbAudioAx` pans), so a device-driven
+frame count made the simulation nondeterministic (suite scores drifted run to run).
+The device queue only bounds what is *submitted*.
+
+Stage BGM: `Ground_801C24F8` now reads the big-endian `StageParam` table (0x64-byte
+rows, archive-offset pointer) instead of failing closed to id 0 (`1p_qk.hps`);
+`Ground_801C28CC` used a 0x20 stride and unswapped s16s on the same table. The
+debug-VS boot clears `rules.x6` (the 1P flag) so the stage's own music plays.
+
+Open: AXFX reverb/chorus (port the asm to C); verify SFX pitch/pan/priorities
+against a Dolphin audio dump; occasional clipping when SFX and music sum.
 
 **Exit:** ~~music + sfx in menu and in match.~~ Met.
 
