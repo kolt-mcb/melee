@@ -21,7 +21,7 @@
 - HUD (`if/`), effects (`ef/`, GCN `va_arg` blocker), items (17/183 TUs), characters
   (only ftMario + ftCommon of 37 chara dirs), `vi/ db/ ty/ sfx/` absent.
 - ~1100 empty weak stubs + large per-character/item stub layer.
-- Audio: SDL device opens but no AX mixer — fully silent.
+- Audio: software AX mixer (`src/port/pc_ax.c`); music bit-exact vs an offline decode, SFX play in menus and matches. AXFX reverb/chorus still stubbed (MWCC asm).
 - Data loading relies on **hand-written** big-endian→x64 struct converters
   (83 in `grdatfiles.c` for stages alone) — the biggest structural cost.
 - Rare heap corruption (~1 in 7 runs); iteration cycle to reach a scene ≈ 200 s.
@@ -85,13 +85,38 @@ Hand-writing converters does not scale to 26 characters × items × effects. Opt
 **Exit:** a new archive type needs zero hand-written conversion code; stage +
 fighter loaders retrofitted onto the generator.
 
-## M5 — Audio *(independent; can run in parallel any time)*
+## M5 — Audio *(done 2026-08-29; reverb/chorus open)*
 
-1. AX voice-mixer HLE: AXVPB voices → mix → SDL queue; GC-ADPCM decode for `.ssm` sfx.
-2. HPS music streaming.
-3. Wire `lbaudio`/`sfx` and menu sounds.
+1. ~~AX voice-mixer HLE~~ — `src/port/pc_ax.c` replaces AX.c/AXOut/AXCL/DSP: 64 voices,
+   5 ms frames at 32 kHz, DSP-ADPCM/PCM16/PCM8, 16.16 SRC with linear interp, 1.15
+   volume envelopes, main + two aux buses, submitted to SDL from `port_render_frame_end`
+   (`pc_ax_pump`, ~3.3 frames per game frame) and from the load-wait ticks.
+   The SDK's AXAlloc/AXVPB/AXSPB/AXProf and AXFX delay compile as-is (`long` → `s32`;
+   AXVPB.c/AXAlloc.c are included through `src/port/ax_*_glue.c` for two PC-only
+   hooks). AXFX reverb std/hi and chorus are MWCC inline asm — stubbed silent.
+2. ~~HPS music streaming~~ — HAL's triple-buffered ARAM streamer runs unchanged once the
+   hako/HPS headers are byte-swapped; `tools/pc_audio_check.py` correlates the port's
+   dump against an independent decode: corr 1.0000 at a constant lag for 10 s.
+3. ~~`lbaudio`/`sfx`~~ — SSM banks, the SEM script tables, ARAM bank compaction and the
+   sound-machine scheduler all work; cursor sounds in the menu, attacks in a match.
 
-**Exit:** music + sfx in menu and in match.
+What it took (each a class, see the memory note `melee-pc-audio`): every audio file is
+big-endian (SSM/SEM/HPS/hako headers, and the SEM scripts are u32 words); the SSM
+bank/sound records keep the GameCube layout with 32-bit links (`SfxLoadStreamNode`),
+so the AXVPB-typed readers had to be replaced; three "u32 over a u16 hi/lo pair"
+writes (`ratioHi`, `stopRange`'s `size_t` read); synchronous DevCom made
+`AXSetVoiceAddr`'s whole-block copy lose to the partial setters in `__AXServiceVPB`
+(`PC_AX_SYNC_FIX`) and made `HSD_SynthSFXLoad`'s completion callback run before the
+caller stored the id (duplicate bank loads → ARAM overrun → heap corruption; now
+deferred to the next tick); `AXDriver_8038CFF4` linked new sound machines into the
+free list; and the DSP accelerator wraps on *equality* with the end address, which
+the streamer's slot rotation relies on.
+
+Open: AXFX reverb/chorus (port the asm to C); `MELEE_BOOT_MODE=14` picks the 1P quick
+BGM (`gm_8016B238` is set in the debug VS mode) — check the menu-route match BGM;
+verify SFX pitch/pan/priorities against a Dolphin audio dump.
+
+**Exit:** ~~music + sfx in menu and in match.~~ Met.
 
 ## M6 — Content breadth (Beta)
 

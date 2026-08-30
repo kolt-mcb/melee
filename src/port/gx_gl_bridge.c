@@ -6674,54 +6674,85 @@ void GXEnableTexOffsets(u32 coord, u32 line_en, u32 pt_en)
 void GXSetPolygonMode(void) {}
 void GXSetCoprMod(void) {}
 /* ===== Light Object Functions ===== */
+/* GXLightObj is 64 bytes on the console; LightSlot is larger. The slot for
+ * each object lives in a bridge-owned pool and the object carries only a
+ * magic + index, so nothing is ever written past the object itself. */
+#define PC_LS_MAGIC 0x4C534C54u
+#define PC_LS_POOL 1024
+static LightSlot g_ls_pool[PC_LS_POOL];
+static const void* g_ls_owner[PC_LS_POOL];
+static u32 g_ls_next;
+static LightSlot* pc_light_slot(void* obj)
+{
+    u32* d = (u32*) obj;
+    u32 i;
+    if (obj == NULL) return NULL;
+    if (d[0] == PC_LS_MAGIC && d[1] < PC_LS_POOL && g_ls_owner[d[1]] == obj) {
+        return &g_ls_pool[d[1]];
+    }
+    i = g_ls_next++ % PC_LS_POOL;
+    g_ls_owner[i] = obj;
+    memset(&g_ls_pool[i], 0, sizeof(LightSlot));
+    d[0] = PC_LS_MAGIC;
+    d[1] = i;
+    return &g_ls_pool[i];
+}
+
 /* Dolphin hides GXLightObj internals via dummy[16]. We store params locally
  * for use when material/shading is implemented. */
 
-void GXInitLightPos(LightSlot *lt_obj, f32 x, f32 y, f32 z)
+void GXInitLightPos(void *lt_obj_raw, f32 x, f32 y, f32 z)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     if (!lt_obj) return;
     lt_obj->x = x; lt_obj->y = y; lt_obj->z = z;
     lt_obj->is_directional = FALSE;
 }
 
-void GXInitLightDir(LightSlot *lt_obj, f32 nx, f32 ny, f32 nz)
+void GXInitLightDir(void *lt_obj_raw, f32 nx, f32 ny, f32 nz)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     GX_TRACE("GXInitLightDir(p, %.3f, %.3f, %.3f)", nx, ny, nz);
     if (!lt_obj) return;
     lt_obj->nx = nx; lt_obj->ny = ny; lt_obj->nz = nz;
     lt_obj->is_directional = TRUE;
 }
 
-void GXInitLightColor(LightSlot *lt_obj, GXColor color)
+void GXInitLightColor(void *lt_obj_raw, GXColor color)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     GX_TRACE("GXInitLightColor(p, {%u,%u,%u,%u})", (u32)color.r, (u32)color.g, (u32)color.b, (u32)color.a);
     if (!lt_obj) return;
     lt_obj->r = color.r; lt_obj->g = color.g;
     lt_obj->b = color.b; lt_obj->a = color.a;
 }
 
-void GXInitLightAttn(LightSlot *lt_obj, f32 a0, f32 a1, f32 a2,
+void GXInitLightAttn(void *lt_obj_raw, f32 a0, f32 a1, f32 a2,
                       f32 k0, f32 k1, f32 k2)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     if (!lt_obj) return;
     lt_obj->a0 = a0; lt_obj->a1 = a1; lt_obj->a2 = a2;
     lt_obj->k0 = k0; lt_obj->k1 = k1; lt_obj->k2 = k2;
 }
 
-void GXInitLightAttnA(LightSlot *lt_obj, f32 a0, f32 a1, f32 a2)
+void GXInitLightAttnA(void *lt_obj_raw, f32 a0, f32 a1, f32 a2)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     if (!lt_obj) return;
     lt_obj->a0 = a0; lt_obj->a1 = a1; lt_obj->a2 = a2;
 }
 
-void GXInitLightAttnK(LightSlot *lt_obj, f32 k0, f32 k1, f32 k2)
+void GXInitLightAttnK(void *lt_obj_raw, f32 k0, f32 k1, f32 k2)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     if (!lt_obj) return;
     lt_obj->k0 = k0; lt_obj->k1 = k1; lt_obj->k2 = k2;
 }
 
-void GXInitLightDistAttn(LightSlot *lt_obj, f32 ref_dist, f32 ref_br, int dist_func)
+void GXInitLightDistAttn(void *lt_obj_raw, f32 ref_dist, f32 ref_br, int dist_func)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     GX_TRACE("GXInitLightDistAttn(p, %.3f, %.3f, %d)", ref_dist, ref_br, dist_func);
     if (!lt_obj) return;
     lt_obj->dist_attn_func = dist_func;
@@ -6758,8 +6789,9 @@ void GXInitLightDistAttn(LightSlot *lt_obj, f32 ref_dist, f32 ref_br, int dist_f
     }
 }
 
-void GXInitLightSpot(LightSlot *lt_obj, f32 cutoff, int spot_func)
+void GXInitLightSpot(void *lt_obj_raw, f32 cutoff, int spot_func)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     f32 r, cr, d;
     GX_TRACE("GXInitLightSpot(p, %.3f, %d)", cutoff, spot_func);
     if (!lt_obj) return;
@@ -6802,16 +6834,18 @@ void GXInitLightSpot(LightSlot *lt_obj, f32 cutoff, int spot_func)
 }
 
 /* Specular direction setters (for future specular lighting support) */
-void GXInitSpecularDir(LightSlot *lt_obj, f32 nx, f32 ny, f32 nz)
+void GXInitSpecularDir(void *lt_obj_raw, f32 nx, f32 ny, f32 nz)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     if (!lt_obj) return;
     lt_obj->spec_nx = nx;
     lt_obj->spec_ny = ny;
     lt_obj->spec_nz = nz;
 }
 
-void GXInitSpecularDirHA(LightSlot *lt_obj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz)
+void GXInitSpecularDirHA(void *lt_obj_raw, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     if (!lt_obj) return;
     lt_obj->spec_nx = nx;
     lt_obj->spec_ny = ny;
@@ -6838,8 +6872,9 @@ static int pc_light_id_to_index(u32 id)
     return -1;
 }
 
-void GXLoadLightObjImm(LightSlot *lt_obj, u32 light_id)
+void GXLoadLightObjImm(void *lt_obj_raw, u32 light_id)
 {
+    LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
     gx_flush_pending();
     int idx = pc_light_id_to_index(light_id);
     if (!lt_obj || idx < 0) return;
