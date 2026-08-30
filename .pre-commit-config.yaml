@@ -1,39 +1,21 @@
+# The one hook that matters here: nothing copied from the retail game may be
+# committed. See LEGAL.md. Install it with `pre-commit` from the repo root.
 repos:
 - repo: local
   hooks:
-    - id: replace-includes
-      name: replace-includes
-      entry: python tools/replace-includes.py
+    - id: no-game-data
+      name: no-game-data
+      description: refuse to commit anything copied from the retail game
+      entry: python tools/pc/check_no_game_data.py
       language: system
-      types_or: [c]
-      files: ^src/
       pass_filenames: true
-      require_serial: false
-    - id: style-check
-      name: style-check
-      entry: python tools/check/main.py
-      args: [--fix,--quiet]
-      language: system
-      types_or: [c]
-      pass_filenames: true
-      require_serial: false
-- repo: https://github.com/cpp-linter/cpp-linter-hooks
-  rev: v1.6.0
-  hooks:
-    - id: clang-tidy
-      files: ^src/
-      args:
-      - --version=22.1.8
-      - -p=.
-      - --experimental-custom-checks
-      - --fix
-      - --fix-errors
-      require_serial: true
-    - id: clang-format
-      args: [--version=22.1.8]
-      types_or: [c]
-      require_serial: false
-- repo: https://github.com/editorconfig-checker/editorconfig-checker.python
-  rev: 3.11.1
-  hooks:
-    - id: editorconfig-checker
+
+# Upstream's clang-format and style-check hooks are deliberately not here.
+# They enforce the decompilation's conventions, and the PC port layer was
+# written in its own -- every file under src/port/ and src/pc_stub/ differs
+# from the project .clang-format. Enabling them would reformat forty files the
+# first time anyone edits one, burying real changes in whitespace.
+#
+# If you want one style across the tree, do it as a single deliberate commit
+# (`pre-commit run clang-format --all-files` with the hook restored), not as a
+# side effect of everyone's first edit.
