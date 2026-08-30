@@ -1508,6 +1508,14 @@ void efAsync_Spawn(HSD_GObj* gobj, void* queue_head, u32 spawn_kind,
     case EF_SPAWN_CAMERA_SHAKE:
         queued->params = *va_arg(vlist, Vec3*);
         break;
+#if BUILD_TARGET_PC
+    case EF_SPAWN_ATTACH:
+    case EF_SPAWN_POS:
+        /* No parameters to copy. ftCo_8009F834 queues gfx 0x402/0x403 with
+         * kind 0; on the console this assert is compiled out, on PC it only
+         * spammed the log ("[EfASync] unknown type 0"). */
+        break;
+#endif
     default:
         HSD_ASSERTREPORT(0xF6U, 0, "[EfASync] unknown type %d\n", spawn_kind);
         break;

@@ -30,6 +30,15 @@ typedef jmp_t jtbl_t[];
 #else
 #define UNK_T void*
 #endif
+/* A 4-byte unknown inside a struct whose layout must match the GameCube
+ * file image (ft<Xx>_DatAttrs are byte-swapped in place from archive data).
+ * UNK_T is a pointer, which is 8 bytes on the PC port and shifted every
+ * field after it -- Link's shield bone index read from the wrong word. */
+#if BUILD_TARGET_PC
+typedef unsigned int UNK4_T;
+#else
+typedef UNK_T UNK4_T;
+#endif
 #endif
 
 #ifndef UNK_RET

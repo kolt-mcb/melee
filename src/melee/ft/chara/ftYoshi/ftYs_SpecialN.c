@@ -1,3 +1,4 @@
+#include <string.h>
 #include "ftYs_SpecialN.h"
 
 #include "placeholder.h"
@@ -62,13 +63,31 @@ float ftYs_SpecialN_GetDatAttr18(HSD_GObj* gobj)
 float ftYs_SpecialN_GetDatAttr1C(HSD_GObj* gobj)
 {
     ftYoshiAttributes* da = GET_FIGHTER(gobj)->dat_attrs;
+#if BUILD_TARGET_PC
+    /* The field is a 4-byte unknown holding a float in the file image. */
+    {
+        float f;
+        memcpy(&f, &da->x1C, sizeof(f));
+        return f;
+    }
+#else
     return da->x1C;
+#endif
 }
 
 float ftYs_SpecialN_GetDatAttr20(HSD_GObj* gobj)
 {
     ftYoshiAttributes* da = GET_FIGHTER(gobj)->dat_attrs;
+#if BUILD_TARGET_PC
+    /* The field is a 4-byte unknown holding a float in the file image. */
+    {
+        float f;
+        memcpy(&f, &da->x20, sizeof(f));
+        return f;
+    }
+#else
     return da->x20;
+#endif
 }
 
 float ftYs_SpecialN_GetDatAttr24(HSD_GObj* gobj)
