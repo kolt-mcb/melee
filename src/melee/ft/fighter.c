@@ -274,12 +274,16 @@ void Fighter_LoadCommonData(void)
                 for (k = 0; k < 0x818 / 4; k++) pc_common[k] = PC_BE32(w[k]);
                 p_ftCommonData = (ftCommonData*)pc_common;
             }
-            if (off4 != 0 && off4 + FTKIND_MAX * 4 <= fsize) {
-                static struct FighterPartsTable pc_tbl[FTKIND_MAX];
-                static struct FighterPartsTable* pc_tblp[FTKIND_MAX];
+            /* FTKIND_MAX + 1 entries: index 0x21 (FTKIND_NONE) is the
+             * shared 53-part table that thrown animations select through
+             * x597_bits. Converting only 33 left ftPartsTable[33] NULL and
+             * every grab-throw crashed in ftPartsRemap. */
+            if (off4 != 0 && off4 + (FTKIND_MAX + 1) * 4 <= fsize) {
+                static struct FighterPartsTable pc_tbl[FTKIND_MAX + 1];
+                static struct FighterPartsTable* pc_tblp[FTKIND_MAX + 1];
                 const u32* kinds = (const u32*)(dataBase + off4);
                 u32 k;
-                for (k = 0; k < FTKIND_MAX; k++) {
+                for (k = 0; k < FTKIND_MAX + 1; k++) {
                     u32 to = PC_BE32(kinds[k]);
                     pc_tblp[k] = &pc_tbl[k];
                     if (to != 0 && to + 12 <= fsize) {
@@ -314,12 +318,12 @@ void Fighter_LoadCommonData(void)
              * x0 points at u8[4] rows that need no byteswap. */
             {
                 u32 off5 = PC_BE32(offs[5]);
-                if (off5 != 0 && off5 + FTKIND_MAX * 4 <= fsize) {
-                    static struct Fighter_804D6540_t pc_skip[FTKIND_MAX];
-                    static struct Fighter_804D6540_t* pc_skipp[FTKIND_MAX];
+                if (off5 != 0 && off5 + (FTKIND_MAX + 1) * 4 <= fsize) {
+                    static struct Fighter_804D6540_t pc_skip[FTKIND_MAX + 1];
+                    static struct Fighter_804D6540_t* pc_skipp[FTKIND_MAX + 1];
                     const u32* kinds5 = (const u32*)(dataBase + off5);
                     u32 k;
-                    for (k = 0; k < FTKIND_MAX; k++) {
+                    for (k = 0; k < FTKIND_MAX + 1; k++) {
                         u32 to5 = PC_BE32(kinds5[k]);
                         pc_skipp[k] = &pc_skip[k];
                         pc_skip[k].x0 = NULL;
