@@ -2231,6 +2231,9 @@ static u32 s_pc_draws = 0;  /* PC diag: per-frame GL draw count (MELEE_STAGE_DIA
 static u32 g_frame_draw_idx = 0;
 /* Frame number for diagnostics in game code (mobj.c logs gate on it). */
 u32 pc_frame_number = 0;
+/* Per-frame GL work counters for the MELEE_FPS line: texture uploads,
+ * mip generations, content hashes, draw calls. */
+u32 pc_diag_uploads, pc_diag_mipgens, pc_diag_hashes, pc_diag_draws;
 void gx_frame_begin(void)
 {
     pc_frame_number = g_state.frame_count + 1;
@@ -4078,6 +4081,7 @@ static void bridge_upload_and_draw(void)
             s_pc_draws++;
             pc_frame_trace("quadsN");
         } else {
+        pc_diag_draws++;
         glDrawArrays(gl_prim, 0, count);
         pc_stat_draws++; pc_stat_verts += (unsigned)count;
         s_pc_draws++;
@@ -8534,6 +8538,7 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         }
         {
             u32 hh = tex_content_hash(img, w, h, fmt);
+            pc_diag_hashes++;
             if (hit && hh == g_tex_slot_hash[slot]) {
                 /* Same bytes since the last generation: still valid. */
                 g_tex_slot_gen[slot] = g_tex_gen;
@@ -8856,6 +8861,7 @@ skip_tlut:
 #endif
 
     /* Upload */
+    pc_diag_uploads++;
     if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || (fmt == 0x06 && upload_src != img)) {
         /* Decompressed/converted → always RGBA8 */
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, upload_w, upload_h, 0,
@@ -8880,6 +8886,7 @@ skip_tlut:
          * is incomplete in GL and samples as white. The filters themselves
          * are selected after the bind below, so cache hits get them too. */
         glGenerateMipmap(GL_TEXTURE_2D);
+        pc_diag_mipgens++;
         g_tex_cache_hasmip[slot] = TRUE;
     }
     

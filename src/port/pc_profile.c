@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <execinfo.h>
+#include <dlfcn.h>
 
 #define PROF_SLOTS 4096
 #define PROF_DEPTH 6
@@ -87,6 +88,16 @@ void pc_profile_report(void)
                 prof_count[shown]);
         for (i = 0; i < PROF_DEPTH && prof_addr[shown][i]; i++) {
             fprintf(stderr, " %p", prof_addr[shown][i]);
+        }
+        /* Name the leaf: symbol and object, so driver time (Mesa, libc)
+         * can be told from the port's own without a maps file. */
+        {
+            Dl_info di;
+            if (dladdr(prof_addr[shown][0], &di)) {
+                const char* obj = di.dli_fname ? strrchr(di.dli_fname, '/') : NULL;
+                fprintf(stderr, "  %s!%s", obj ? obj + 1 : (di.dli_fname ? di.dli_fname : "?"),
+                        di.dli_sname ? di.dli_sname : "?");
+            }
         }
         fprintf(stderr, "\n");
     }
