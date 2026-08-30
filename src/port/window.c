@@ -6,6 +6,23 @@ static SDL_Window* g_sdl_window = NULL;
 static SDL_GLContext g_gl_context = NULL;
 volatile Bool g_should_quit = FALSE;  /* global, used by main loop */
 
+static int g_vsync_on;
+
+/* Refresh rate of the display the window is on, or 0 if unknown. */
+int window_refresh_hz(void)
+{
+    SDL_DisplayMode m;
+    if (!g_sdl_window || SDL_GetWindowDisplayMode(g_sdl_window, &m) != 0) {
+        return 0;
+    }
+    return m.refresh_rate;
+}
+
+int window_vsync_on(void)
+{
+    return g_vsync_on;
+}
+
 Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
 {
     PORT_LOG_INFO("Initializing SDL2 window");
@@ -49,8 +66,10 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
         return FALSE;
     }
 
-    /* Vsync; MELEE_NOVSYNC=1 uncaps the frame rate for throughput measurement. */
+    /* Vsync; MELEE_NOVSYNC=1 turns it off (the 60 Hz pacer in render.c
+     * then keeps the game at speed). */
     SDL_GL_SetSwapInterval(getenv("MELEE_NOVSYNC") ? 0 : 1);
+    g_vsync_on = getenv("MELEE_NOVSYNC") ? 0 : 1;
 
     /* PC port: report the actual GL renderer once, so we can tell hardware
      * (i965/anv) from software (llvmpipe/swrast) at a glance. */

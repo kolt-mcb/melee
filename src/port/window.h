@@ -15,6 +15,8 @@ typedef struct {
 } WindowConfig;
 
 Bool window_init(int* width, int* height, Bool fullscreen, const char* title);
+int window_refresh_hz(void);
+int window_vsync_on(void);
 void window_shutdown(void);
 
 /* Global quit flag (set by SDL_QUIT / ESC key) */
