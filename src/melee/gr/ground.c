@@ -1990,18 +1990,19 @@ s32* Ground_801C2AD8(void)
 float Ground_801C2AE8(StKind stkind)
 {
 #if BUILD_TARGET_PC
-    /* PC port: read fields explicitly with byte-swapping */
-    u8* base = (u8*)stage_info.param;
-    u32 raw_offset = be32(*(u32*)(base + 0xB0));
-    s32 count = be32(*(u32*)(base + 0xB4));
-    StageParam* phi_r5 = (StageParam*)(0x10000000 + raw_offset);
-    int i;
-    for (i = 0; i < count; i++) {
-        u8* entry = (u8*)phi_r5 + i * 0x20;
-        if (be32(*(u32*)entry) == stkind) {
-            return (0.01f * stage_info.param->x68) * (0.01f * phi_r5->x18);
-        }
-        phi_r5 += 1;
+    /* PC port: stage_info.param is the raw big-endian grGroundParam, so go
+     * through pc_stage_param_row like Ground_801C24F8 does. The old hand
+     * reader here fabricated a GCN-style pointer (0x10000000 + offset) and
+     * used a 0x20 stride against 0x64-byte rows; it never ran while the
+     * item system left it_804D6D28 NULL -- it_8026D018 returned before the
+     * call -- and crashed the first real VS match the moment ItCo
+     * conversion un-gated that path. */
+    const u8* row = pc_stage_param_row(stkind, NULL);
+    if (row != NULL) {
+        /* grGroundParam below 0xB0 is byteswapped in place at load
+         * (grdatfiles.c), so x68 reads directly; the rows live past 0xB0
+         * and stay raw big-endian. GrPs.dat: 100 * 100 -> 1.0. */
+        return (0.01f * stage_info.param->x68) * (0.01f * pc_be16s(row + 0x18));
     }
 #else
     StageParam* phi_r5 = stage_info.param->stage_params;
@@ -2014,8 +2015,16 @@ float Ground_801C2AE8(StKind stkind)
     }
 #endif /* BUILD_TARGET_PC */
     OSReport("%s:%d: not found stage param in DAT\n", __FILE__, 0x927);
+#if BUILD_TARGET_PC
+    /* The console hangs by design here. A stage whose param table did not
+     * resolve should not freeze the PC build over an item-frequency
+     * multiplier; 1.0 is the neutral factor. */
+    port_guard_warn("ground.c:Ground_801C2AE8 no stage param row");
+    return 1.0f;
+#else
     while (1) {
     }
+#endif
 }
 
 Ground_GObj* Ground_801C2BA4(int index)
