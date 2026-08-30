@@ -210,6 +210,35 @@ void Fighter_FirstInitialize_80067A84(void)
     HSD_ObjAllocInit(&fighter_x59C_alloc_data, 0x8000, 0x20);
 }
 
+#if BUILD_TARGET_PC
+/* PlCo symbol 22 holds the CPU's attack tables: per-kind arrays of
+ * ftCo_AttackEntry (nine 4-byte fields, cmd == 0 terminates). Copy one
+ * out of the big-endian archive, or return an empty list for a missing
+ * one -- the consumers walk `while (p->cmd)` with no NULL check. */
+static void* pc_cpu_entries(u8* base, u32 fsize, u32 off)
+{
+    static u32 pc_empty[9];
+    const u32* src;
+    u32 n = 0;
+    u32* dst;
+    u32 i;
+    if (off == 0 || off + 0x24 > fsize) {
+        return pc_empty;
+    }
+    src = (const u32*) (base + off);
+    while (n < 64 && off + (n + 1) * 0x24 <= fsize &&
+           __builtin_bswap32(src[n * 9]) != 0)
+    {
+        n++;
+    }
+    dst = (u32*) calloc(n + 1, 0x24);
+    for (i = 0; i < n * 9; i++) {
+        dst[i] = __builtin_bswap32(src[i]);
+    }
+    return dst;
+}
+#endif
+
 void Fighter_LoadCommonData(void)
 {
     void** pData = NULL;
@@ -313,6 +342,72 @@ void Fighter_LoadCommonData(void)
                                   pc_skip[FTKIND_CLINK].x4);
                 }
             }
+            /* Symbol 22, Fighter_804D64FC: the CPU AI's attack tables. On
+             * the zero arena, xC[kind] read as NULL and the level-3 CPU
+             * crashed in ftCo_800B6208 the first time it wanted to attack
+             * (and could never attack at all before that). Header is ten
+             * 32-bit offsets: command scripts (u8 streams), seven per-kind
+             * tables of attack entries, per-kind distance thresholds and
+             * six weapon reach values. */
+            {
+                u32 off22 = PC_BE32(offs[22]);
+                if (off22 != 0 && off22 + 0x28 <= fsize) {
+                    static struct Fighter_804D64FC_t pc_cpu;
+                    static u8* pc_scripts[128];
+                    static void* pc_kind_tbl[7][FTKIND_MAX];
+                    static float pc_dist[FTKIND_MAX];
+                    static float pc_reach[6];
+                    const u32* hdr = (const u32*) (dataBase + off22);
+                    u32 t, i, f, k;
+                    t = PC_BE32(hdr[0]);
+                    for (i = 0; i < 128; i++) {
+                        u32 so = (t != 0 && t + (i + 1) * 4 <= fsize)
+                                     ? PC_BE32(((const u32*) (dataBase + t))[i])
+                                     : 0;
+                        pc_scripts[i] = (so != 0 && so < fsize) ? dataBase + so : NULL;
+                    }
+                    pc_cpu.cmdscripts = pc_scripts;
+                    for (f = 1; f <= 7; f++) {
+                        t = PC_BE32(hdr[f]);
+                        /* The per-kind tables hold 32 entries (0x80 bytes
+                         * apart); kind 0x20 has none. */
+                        for (k = 0; k < FTKIND_MAX; k++) {
+                            u32 eo = (k < 32 && t != 0 && t + (k + 1) * 4 <= fsize)
+                                         ? PC_BE32(((const u32*) (dataBase + t))[k])
+                                         : 0;
+                            pc_kind_tbl[f - 1][k] = pc_cpu_entries(dataBase, fsize, eo);
+                        }
+                    }
+                    pc_cpu.x4 = pc_kind_tbl[0];
+                    pc_cpu.x8 = pc_kind_tbl[1];
+                    pc_cpu.xC = (UNK_T*) pc_kind_tbl[2];
+                    pc_cpu.x10 = pc_kind_tbl[3];
+                    pc_cpu.x14 = pc_kind_tbl[4];
+                    pc_cpu.x18 = pc_kind_tbl[5];
+                    pc_cpu.x1C = pc_kind_tbl[6];
+                    t = PC_BE32(hdr[8]);
+                    for (k = 0; k < FTKIND_MAX; k++) {
+                        u32 v = (k < 32 && t != 0 && t + (k + 1) * 4 <= fsize)
+                                    ? PC_BE32(((const u32*) (dataBase + t))[k])
+                                    : 0;
+                        memcpy(&pc_dist[k], &v, 4);
+                    }
+                    pc_cpu.x20 = pc_dist;
+                    t = PC_BE32(hdr[9]);
+                    for (k = 0; k < 6; k++) {
+                        u32 v = (t != 0 && t + (k + 1) * 4 <= fsize)
+                                    ? PC_BE32(((const u32*) (dataBase + t))[k])
+                                    : 0;
+                        memcpy(&pc_reach[k], &v, 4);
+                    }
+                    pc_cpu.x24 = pc_reach;
+                    Fighter_804D64FC = &pc_cpu;
+                    PORT_LOG_WARN("Fighter_LoadCommonData: CPU attack tables converted "
+                                  "(mario ground entries: %d, dist %.1f)\n",
+                                  (int) (((u32*) pc_kind_tbl[0][0])[0] != 0),
+                                  (double) pc_dist[0]);
+                }
+            }
             #undef PC_BE32
         }
     }
@@ -363,7 +458,7 @@ void Fighter_LoadCommonData(void)
         Fighter_804D6508 = (void*)pc_ptr_arena;
         Fighter_804D6504 = NULL; /* HSD_JObjLoadJoint input: must stay NULL */
         gCrowdConfig = (void*)pc_zero_target;
-        Fighter_804D64FC = (void*)pc_ptr_arena;
+        if (Fighter_804D64FC == NULL) Fighter_804D64FC = (void*)pc_ptr_arena;
         return;
     }
 #endif
@@ -1220,6 +1315,22 @@ void Fighter_ChangeMotionState(Fighter_GObj* gobj, FtMotionId msid,
     bool animflags_bool;
     union Struct2070 x2070;
 
+#if BUILD_TARGET_PC
+    /* MELEE_ASLOG=1: every motion-state change with the inputs that drove
+     * it. Wait=%d KneeBend=%d etc. are decoded with ftCo_MS_* by the reader. */
+    {
+        static int on = -1;
+        if (on < 0) on = getenv("MELEE_ASLOG") != NULL;
+        if (on) {
+            extern u32 pc_frame_number;
+            fprintf(stderr, "[AS] f%u p%d %d->%d lstick=(%.2f,%.2f) held=%08x trig=%08x air=%d cpu=%d y=%.1f\n",
+                    pc_frame_number, (int) fp->player_id, (int) fp->motion_id, (int) msid,
+                    (double) fp->input.lstick.x, (double) fp->input.lstick.y,
+                    (unsigned) fp->input.held_inputs, (unsigned) fp->input.x668,
+                    (int) fp->ground_or_air, (int) ftCo_800A2040(fp), (double) fp->cur_pos.y);
+        }
+    }
+#endif
     fp->motion_id = msid;
     fp->facing_dir1 = fp->facing_dir;
 

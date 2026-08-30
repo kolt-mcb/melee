@@ -8,7 +8,16 @@
 #include "baselib/particle.h"
 #include "MSL/math.h"
 
+#if BUILD_TARGET_PC
+/* __va_arg is an MWCC builtin. On PC it was an implicitly declared int
+ * function (the weak stub returns NULL), so every effect in this file read
+ * its Vec3 or f32 pointer argument as a truncated NULL and crashed the first time a
+ * fighter used one (0x49E: efLib_CreateGenerator(0x206, NULL)). */
+#include <stdarg.h>
+#define EFALT_VA_ARG(t) va_arg(vlist, t)
+#else
 #define EFALT_VA_ARG(t) (*((t*) __va_arg(vlist_arg, _var_arg_typeof(t))))
+#endif
 
 extern volatile u32 efLib_LoadKind;
 extern volatile s32 efLib_AnimCount;

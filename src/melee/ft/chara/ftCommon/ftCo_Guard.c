@@ -196,6 +196,23 @@ static inline void inlineD0(Fighter_GObj* gobj)
     }
 }
 
+#if BUILD_TARGET_PC
+/* ft_data->x20 (the shield-pose joint tree table) is not converted yet and
+ * is NULL by the convert-or-NULL rule. The three ftAnim blend functions
+ * below loop `while (joint != NULL)`, so handing them NULL skips the blend
+ * instead of crashing the first time anyone shields. */
+static HSD_Joint* pc_guard_joint(Fighter* fp)
+{
+    if (fp->ft_data == NULL || fp->ft_data->x20 == NULL) {
+        return NULL;
+    }
+    return ((HSD_Joint**) fp->ft_data->x20->x0)[2];
+}
+#define PC_GUARD_JOINT(fp) pc_guard_joint(fp)
+#else
+#define PC_GUARD_JOINT(fp) (((HSD_Joint**) (fp)->ft_data->x20->x0)[2])
+#endif
+
 void ftCo_80091E78(Fighter_GObj* gobj, float arg1)
 {
     Fighter* fp = gobj->user_data;
@@ -212,7 +229,7 @@ void ftCo_80091E78(Fighter_GObj* gobj, float arg1)
             if (fp->mv.co.guard.x4 < 1) {
                 ftAnim_80070108(fp, FtPart_TransN, 1 - fp->mv.co.guard.x4,
                                 fp->mv.co.guard.x4,
-                                ((HSD_Joint**) fp->ft_data->x20->x0)[2]);
+                                PC_GUARD_JOINT(fp));
             }
             if (arg1 < 1) {
                 ftAnim_8006FE9C(fp, FtPart_TransN, arg1, 1 - arg1);
@@ -221,10 +238,10 @@ void ftCo_80091E78(Fighter_GObj* gobj, float arg1)
             }
         } else if (arg1 < 1) {
             ftAnim_80070010(fp, FtPart_TransN, arg1, 1 - arg1,
-                            ((HSD_Joint**) fp->ft_data->x20->x0)[2]);
+                            PC_GUARD_JOINT(fp));
         } else {
             ftAnim_8006FA58(fp, FtPart_TransN,
-                            ((HSD_Joint**) fp->ft_data->x20->x0)[2]);
+                            PC_GUARD_JOINT(fp));
         }
         {
             scl.x = scl.y = scl.z = inlineB0(fp);
