@@ -109,11 +109,6 @@ static void pc_axfx_silence(struct AXFX_BUFFERUPDATE* b)
         if (b->surround) memset(b->surround, 0, AX_FRAME_SAMPLES * sizeof(s32));
     }
 }
-int AXFXReverbStdInit(struct AXFX_REVERBSTD* rev) { (void) rev; return 1; }
-int AXFXReverbStdShutdown(struct AXFX_REVERBSTD* rev) { (void) rev; return 1; }
-int AXFXReverbStdSettings(struct AXFX_REVERBSTD* rev) { (void) rev; return 1; }
-void AXFXReverbStdCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_REVERBSTD* rev)
-{ (void) rev; pc_axfx_silence(b); }
 int AXFXReverbHiInit(struct AXFX_REVERBHI* rev) { (void) rev; return 1; }
 int AXFXReverbHiShutdown(struct AXFX_REVERBHI* rev) { (void) rev; return 1; }
 int AXFXReverbHiSettings(struct AXFX_REVERBHI* rev) { (void) rev; return 1; }
@@ -464,6 +459,14 @@ static void pc_ax_frame(void)
     /* Aux effects run on the CPU between DSP passes; the DSP then adds the
      * processed aux buses back into the main mix. */
     for (i = 0; i < 2; i++) {
+        static int no_auxfx = -1;
+        if (no_auxfx < 0) {
+            no_auxfx = getenv("MELEE_NO_AUXFX") != NULL;
+        }
+        if (no_auxfx) {
+            memset(g_aux_buf, 0, sizeof(g_aux_buf));
+            break;
+        }
         if (g_aux_cb[i]) {
             struct AX_AUX_DATA d;
             d.l = g_aux_buf[i][0];
