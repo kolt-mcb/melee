@@ -92,7 +92,7 @@ static struct {
 } pc_ftconv_arch[PC_FTCONV_ARCHIVES];
 static int pc_ftconv_arch_n;
 
-static void pc_ftconv_note_archive(const u8* base, unsigned long len)
+void pc_ftconv_note_archive(const u8* base, unsigned long len)
 {
     int i;
     if (base == NULL || len == 0) return;
@@ -100,6 +100,20 @@ static void pc_ftconv_note_archive(const u8* base, unsigned long len)
         if (pc_ftconv_arch[i].base == base) {
             if (len > pc_ftconv_arch[i].len) pc_ftconv_arch[i].len = len;
             return;
+        }
+    }
+    /* Two live archives cannot overlap, so an entry overlapping the new
+     * range is a freed one; drop it before it can claim script pointers
+     * that now belong to this archive (pc_script_target matches on
+     * containment). */
+    i = 0;
+    while (i < pc_ftconv_arch_n) {
+        if (base < pc_ftconv_arch[i].base + pc_ftconv_arch[i].len &&
+            pc_ftconv_arch[i].base < base + len)
+        {
+            pc_ftconv_arch[i] = pc_ftconv_arch[--pc_ftconv_arch_n];
+        } else {
+            i++;
         }
     }
     if (pc_ftconv_arch_n < PC_FTCONV_ARCHIVES) {

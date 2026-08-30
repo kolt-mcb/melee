@@ -1,4 +1,7 @@
 #include "it_26B1.h"
+#if BUILD_TARGET_PC
+#include "port/pc_itconv.h"
+#endif
 
 #include "it_2725.h"
 #include "itanimlist.h"
@@ -198,15 +201,14 @@ void it_8026B3F8(Article* article,
                  s32 kind) // Store Item article pointer to table
 {
 #if BUILD_TARGET_PC
-    /* PC port: it_8027870C deliberately leaves it_804D6D38 NULL while the
-     * ItCo common-item data is unconverted, on the stated understanding that
-     * its users are guarded -- these two storers were not. Every character's
-     * ft<Xx>_Init_OnLoad calls straight into here right after PUSH_ATTRS, so
-     * the unguarded store through NULL killed all 24 non-Mario fighters
-     * during Fighter_Create. */
+    /* PC port: the caller hands over the raw Article from its own Pl<Xx>.dat
+     * (ft<Xx>_Init_OnLoad reads it straight out of ftData::x48_items);
+     * convert it before filing. The table is NULL only when ItCo failed to
+     * load, in which case there is nowhere to file it. */
     if (it_804D6D38 == NULL) {
         return;
     }
+    article = pc_itconv_article(article);
 #endif
     it_804D6D38[kind - It_Kind_Kuriboh] = article;
 }
@@ -215,9 +217,8 @@ void it_8026B40C(Article* article,
                  s32 kind) // Store Stage Item article pointer to table
 {
 #if BUILD_TARGET_PC
-    if (it_804A0F60 == NULL) {
-        return;
-    }
+    /* PC port: stage Articles arrive raw from the stage archive too. */
+    article = pc_itconv_article(article);
 #endif
     it_804A0F60[kind - It_Kind_Old_Kuri] = article;
 }
