@@ -392,8 +392,17 @@ void gm_801A4D34(void (*on_frame)(void), GameSceneInfo* arg1)
         lb_800195D0();
         GXInvalidateVtxCache();
         GXInvalidateTexAll();
+#if BUILD_TARGET_PC
+        /* PC port: the frame was already rendered and presented by
+         * port_render_frame_end above (render_present walks the same GX
+         * link list). Running the console's pass here as well drew a second
+         * copy into the freshly swapped backbuffer, which the next frame's
+         * clear erased before anyone saw it: 2x the GPU cost per frame for
+         * nothing. HSD_StartRender is a no-op on PC. */
+#else
         HSD_StartRender(HSD_RP_SCREEN);
         HSD_GObj_80390FC0();
+#endif
         HSD_Init_803755A8();
         HSD_PerfSetDrawTime();
         HSD_VICopyXFBAsync(HSD_RP_SCREEN);
