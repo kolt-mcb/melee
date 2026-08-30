@@ -261,14 +261,18 @@ void Fighter_LoadCommonData(void)
             off0 = PC_BE32(offs[0]);
             off4 = PC_BE32(offs[4]);
             if (off0 != 0 && off0 + 0x818 <= fsize) {
-                static int swapped = 0;
-                u32* w = (u32*)(dataBase + off0);
-                if (!swapped) {
-                    u32 k;
-                    swapped = 1;
-                    for (k = 0; k < 0x818 / 4; k++) w[k] = PC_BE32(w[k]);
-                }
-                p_ftCommonData = (ftCommonData*)w;
+                /* Convert into a private copy every time. This used to swap
+                 * the archive in place under a swap-once flag, so the second
+                 * PlCo load of a session (every match reloads it) left the
+                 * new copy big-endian: tap_jump_threshold read as garbage,
+                 * 0.0 >= garbage held every frame, and from the second match
+                 * on every fighter -- human or CPU -- jumped and double-
+                 * jumped the instant it could, with no input at all. */
+                static u32 pc_common[0x818 / 4];
+                const u32* w = (const u32*)(dataBase + off0);
+                u32 k;
+                for (k = 0; k < 0x818 / 4; k++) pc_common[k] = PC_BE32(w[k]);
+                p_ftCommonData = (ftCommonData*)pc_common;
             }
             if (off4 != 0 && off4 + FTKIND_MAX * 4 <= fsize) {
                 static struct FighterPartsTable pc_tbl[FTKIND_MAX];
