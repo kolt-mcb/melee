@@ -25,6 +25,13 @@
 - Data loading relies on **hand-written** big-endian→x64 struct converters
   (83 in `grdatfiles.c` for stages alone) — the biggest structural cost.
 - Rare heap corruption (~1 in 7 runs); iteration cycle to reach a scene ≈ 200 s.
+- Performance (2026-08-30, i7-8559U / Iris Plus 655, 1280x720): match and
+  menu hold 60 fps (match CPU 6–9 ms + GPU 8–10 ms per frame). Was 20 / 11.5
+  fps: the frame was rendered twice (`gm_1A45.c`), and the GX shader was a
+  uniform-driven interpreter, now specialised per TEV/lighting configuration
+  (~90 variants in a match, compiled on first sight; Mesa's disk cache covers
+  later runs). `MELEE_FPS=1|2` measures, `MELEE_UNCAP=1` removes the 60 Hz
+  pacer, `MELEE_SHADERLOG=1` lists variant builds.
 
 ---
 
@@ -68,7 +75,9 @@ debugging session to date.
 2. Full ftCommon action-state coverage; hitbox↔hurtbox resolution; KO, respawn,
    stocks, match end.
 3. HUD (`if/`) compiled: percent, stocks, timer.
-4. Frame pacing: fixed 60 Hz, vsync, input-latency pass.
+4. ~~Frame pacing: fixed 60 Hz, vsync~~ *(done 2026-08-30: vsync, plus a
+   60 Hz pacer whenever vsync is off or the display is not 60 Hz)*;
+   input-latency pass.
 
 **Exit:** a complete 4-stock Mario ditto that feels like Melee at 60 fps.
 
