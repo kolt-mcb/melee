@@ -1378,6 +1378,15 @@ void ftColl_800784B4(Fighter* arg0, HitCapsule* arg1, HitCapsule* arg2)
 void ftColl_80078538(Fighter_GObj* gobj, Vec3* pos, u32 dmg, float ignored,
                      float scale)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ASLOG") != NULL) {
+        extern u32 pc_frame_number;
+        Fighter* vfp = GET_FIGHTER(gobj);
+        fprintf(stderr, "[HIT] f%u victim p%d at (%.1f,%.1f) severity %u scale %.1f\n",
+                pc_frame_number, (int) vfp->player_id, (double) pos->x, (double) pos->y,
+                (unsigned) dmg, (double) scale);
+    }
+#endif
     Fighter* fp = gobj->user_data;
     PAD_STACK(20);
 
