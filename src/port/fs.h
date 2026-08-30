@@ -32,6 +32,13 @@ typedef struct {
 } FsConfig;
 
 Bool fs_init(const char* asset_dir, const char* iso_path);
+
+/** Is there game data where we were told to look?
+ *
+ * This repository ships none: the player extracts it from their own disc with
+ * tools/pc/extract_game.py. Called by fs_init(), which fails rather than
+ * starting a game with no content. */
+Bool fs_have_game_data(void);
 void fs_shutdown(void);
 
 /* Path resolution — prepends asset dir to filename */

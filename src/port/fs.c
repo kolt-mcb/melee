@@ -47,6 +47,21 @@ Bool fs_init(const char* asset_dir, const char* iso_path)
         PORT_LOG_INFO("ISO fallback: %s", g_iso_path);
     }
 
+    /* This repository ships no game data; the player supplies it. Check for
+     * it here rather than letting the game start.
+     *
+     * Every miss further down degrades to a warning -- lbFile hands back a
+     * null archive and the caller carries on -- so an unset or mistaken asset
+     * directory does not fail, it half-boots: a window opens, nothing has a
+     * model or a texture, and the log fills with hundreds of identical
+     * warnings. That reads as "the port is broken" when it means "the game
+     * files were never found". One probe turns it into a sentence the player
+     * can act on. */
+    if (!fs_have_game_data())
+    {
+        return FALSE;
+    }
+
     PORT_LOG_INFO("Filesystem initialized");
     return TRUE;
 }
