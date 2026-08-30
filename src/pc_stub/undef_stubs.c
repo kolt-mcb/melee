@@ -3196,7 +3196,8 @@ __attribute__((weak)) extern struct GameMode {
 };
 
 /* === Auto-generated weak stubs for unresolved decomp symbols === */
-__attribute__((weak)) void ABS(int x) {}
+/* ABS: a macro (port/pc_prelude.h); the weak function stub that stood in
+ * for it returned garbage at every item-physics site that used it. */
 __attribute__((weak)) void Camera_800307D0(void) {}
 
 __attribute__((weak)) float __fabsf(float x) { return x < 0 ? -x : x; }

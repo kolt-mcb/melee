@@ -21,6 +21,9 @@
 /* 1A4320 */ u8 gm_GetPreviousGameMode(void);
 /* 1A4330 */ void gm_801A4330(u8 (*)(void));
 /* 1A4340 */ bool gm_Is1PMode(u8 mode);
+/* 1A42D4 */ void gm_801A42D4(void);
+/* 1A42E8 */ void gm_801A42E8(s8 pending_mode);
+/* 1A4310 */ u8 gm_801A4310(void);
 /* 1A43A0 */ u8 gm_RunGameMode(u8 mode);
 /* 1A4510 */ void gm_801A4510(void);
 

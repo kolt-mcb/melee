@@ -118,6 +118,7 @@
 /* 1C498C */ HSD_GObj* Ground_801C498C(void);
 /* 1C49B4 */ LightList** Ground_801C49B4(void);
 /* 1C49F8 */ void* Ground_GetYakumonoParam(void);
+/* 1C49F8 */ void* Ground_801C49F8(void);
 /* 1C4A08 */ void Ground_801C4A08(HSD_GObj* gobj);
 /* 1C4B50 */ void Ground_801C4B50(HSD_Spline*, Vec3*, Vec3*, f32);
 /* 1C4D70 */ bool Ground_801C4D70(HSD_GObj*, Vec3*, f32);
