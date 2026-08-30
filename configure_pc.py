@@ -54,6 +54,9 @@ DISPLAY_MODULES = [
     "sobjlib.c",
     "displayfunc.c",
     "sislib.c",   # SIS text system: the HUD's name tags and intro text
+    # HSD particle system: what the ef/ effects module (hit sparks,
+    # explosions, electricity) is built on.
+    "particle.c", "psdisp.c", "psdisptev.c", "psappsrt.c",
     "archive.c",  # GCN archive parser (needed for stage data)
     "perf.c",     # performance counters (HSD_PerfCurrentStat)
     # Sound: HAL's voice manager and SFX/stream player. They drive the
@@ -97,7 +100,7 @@ for _chara_dir in sorted((MELEE / "ft" / "chara").iterdir()):
         FT_SOURCES += collect(_chara_dir)
 GM_SOURCES = collect(MELEE / "gm")
 GM_SOURCES = [s for s in GM_SOURCES if Path(s).name not in {"gm_1736.c", "gmmain.c", }]  # exclude duplicates and entry point
-EF_SOURCES = []  # ef/ module uses GCN-specific va_arg macros
+EF_SOURCES = collect(MELEE / "ef")
 IT_SOURCES = collect(MELEE / "it")
 # PC port: the per-item sources live in it/items and collect() does not
 # recurse. Character code calls into them directly (Fox's laser, Dr. Mario's

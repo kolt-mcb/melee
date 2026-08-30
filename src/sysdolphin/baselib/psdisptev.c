@@ -1,3 +1,4 @@
+#include <baselib/psstructs.h>
 #include "psdisptev.h"
 
 #include <dolphin/gx.h>
@@ -33,6 +34,13 @@ void psSetupTevInvalidState(void)
 
 void psSetupTev(u32* arg0)
 {
+#if BUILD_TARGET_PC
+    /* arg0 is the HSD_Particle; [1] is its kind on the console (next is
+     * 4 bytes there, 8 here). */
+    u32* pc_kind = &((HSD_Particle*) arg0)->kind;
+#define arg0 pc_kind_base
+#define pc_kind_base ((u32*) ((u8*) pc_kind - 4))
+#endif
     u32 temp_r5 = arg0[1] & 0x80100480;
     if (temp_r5 == prevTev[0]) {
         return;
@@ -201,3 +209,7 @@ void psSetupTev(u32* arg0)
         break;
     }
 }
+#if BUILD_TARGET_PC
+#undef arg0
+#undef pc_kind_base
+#endif

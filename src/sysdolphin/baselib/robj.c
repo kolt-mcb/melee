@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "robj.h"
 
 #if BUILD_TARGET_PC
@@ -844,6 +845,17 @@ static void expEvaluate(HSD_Exp* exp, u32 type, void* obj,
     if (exp->is_bytecode) {
         sp1C.fv = HSD_ByteCodeEval(exp->expr.bytecode, arg_buf, exp->nb_args);
     } else {
+#if BUILD_TARGET_PC
+        if (exp->expr.func == NULL) {
+            static int warned;
+            if (warned < 5) {
+                warned++;
+                fprintf(stderr, "[PORT WARN] robj.c: RObj expression with no function (exp %p, type %d); skipped\n",
+                        (void*) exp, (int) type);
+            }
+            return;
+        }
+#endif
         sp1C.fv = exp->expr.func(arg_buf);
     }
     if (type - 1 <= 2) {

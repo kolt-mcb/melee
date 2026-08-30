@@ -3423,6 +3423,76 @@ static void bridge_upload_and_draw(void)
                 mvp_flat[j * 4 + i] = mvp[i][j];  /* Transpose row→col major */
         UPMTX4(g_mvp_loc, 1, GL_FALSE, mvp_flat);
     }
+
+    /* GX point sprites and wide lines. GXSetPointSize/GXSetLineWidth are
+     * in 1/6-pixel units of the 640x480 frame and a textured point gets
+     * 0..1 texcoords across its face (GX_TO_ONE) -- the particle renderer
+     * draws its attached particles this way. Core GL has neither, so each
+     * point (line) becomes a screen-aligned quad in NDC, drawn with an
+     * identity MVP. */
+    if ((g_state.prim_type == GX_POINTS ||
+         (g_state.prim_type == GX_LINES && g_state.line_width > 6)) &&
+        !ENV_FLAG("MELEE_NO_POINTSPRITES") &&
+        g_state.vert_count > 0 &&
+        g_state.vert_count * 4 <= (int) (sizeof(g_state.verts) / sizeof(g_state.verts[0])))
+    {
+        static Vertex tmp[sizeof(g_state.verts) / sizeof(g_state.verts[0])];
+        int n = g_state.vert_count, out = 0, i;
+        int is_point = (g_state.prim_type == GX_POINTS);
+        f32 units = is_point ? (f32) g_state.point_size : (f32) g_state.line_width;
+        f32 hx = units / 6.0f / 640.0f;  /* half size in NDC (x2 for full, /2 for half) */
+        f32 hy = units / 6.0f / 480.0f;
+        f32 ndc[3][4];
+        int k;
+        for (i = 0; i + (is_point ? 0 : 1) < n; i += (is_point ? 1 : 2)) {
+            int ok = 1;
+            for (k = 0; k < (is_point ? 1 : 2); k++) {
+                Vertex* v = &g_state.verts[i + k];
+                f32 x = v->pos[0], y = v->pos[1], z = v->pos[2];
+                f32 cx = mvp[0][0]*x + mvp[0][1]*y + mvp[0][2]*z + mvp[0][3];
+                f32 cy = mvp[1][0]*x + mvp[1][1]*y + mvp[1][2]*z + mvp[1][3];
+                f32 cz = mvp[2][0]*x + mvp[2][1]*y + mvp[2][2]*z + mvp[2][3];
+                f32 cw = mvp[3][0]*x + mvp[3][1]*y + mvp[3][2]*z + mvp[3][3];
+                if (cw <= 0.0001f) { ok = 0; break; }
+                ndc[k][0] = cx / cw; ndc[k][1] = cy / cw; ndc[k][2] = cz / cw; ndc[k][3] = 1.0f;
+            }
+            if (!ok) continue;
+            if (is_point) {
+                static const f32 cs[4][2] = { {-1, 1}, {1, 1}, {1, -1}, {-1, -1} };
+                static const f32 uv[4][2] = { {0, 0}, {1, 0}, {1, 1}, {0, 1} };
+                for (k = 0; k < 4; k++) {
+                    Vertex* o = &tmp[out++];
+                    *o = g_state.verts[i];
+                    o->pos[0] = ndc[0][0] + cs[k][0] * hx;
+                    o->pos[1] = ndc[0][1] + cs[k][1] * hy;
+                    o->pos[2] = ndc[0][2];
+                    o->tex0[0] = uv[k][0]; o->tex0[1] = uv[k][1];
+                    o->tex1[0] = uv[k][0]; o->tex1[1] = uv[k][1];
+                }
+            } else {
+                f32 dx = (ndc[1][0] - ndc[0][0]) * 640.0f, dy = (ndc[1][1] - ndc[0][1]) * 480.0f;
+                f32 len = sqrtf(dx * dx + dy * dy);
+                f32 px = 0, py = 0;
+                if (len > 1e-6f) { px = -dy / len; py = dx / len; }
+                {
+                    Vertex* o;
+                    o = &tmp[out++]; *o = g_state.verts[i];     o->pos[0] = ndc[0][0] + px * hx; o->pos[1] = ndc[0][1] + py * hy; o->pos[2] = ndc[0][2];
+                    o = &tmp[out++]; *o = g_state.verts[i + 1]; o->pos[0] = ndc[1][0] + px * hx; o->pos[1] = ndc[1][1] + py * hy; o->pos[2] = ndc[1][2];
+                    o = &tmp[out++]; *o = g_state.verts[i + 1]; o->pos[0] = ndc[1][0] - px * hx; o->pos[1] = ndc[1][1] - py * hy; o->pos[2] = ndc[1][2];
+                    o = &tmp[out++]; *o = g_state.verts[i];     o->pos[0] = ndc[0][0] - px * hx; o->pos[1] = ndc[0][1] - py * hy; o->pos[2] = ndc[0][2];
+                }
+            }
+        }
+        if (out > 0) {
+            static const f32 ident[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+            memcpy(g_state.verts, tmp, sizeof(Vertex) * (size_t) out);
+            g_state.vert_count = out;
+            g_state.prim_type = GX_QUADS;
+            if (g_mvp_loc >= 0) UPMTX4(g_mvp_loc, 1, GL_FALSE, ident);
+        } else {
+            g_state.vert_count = 0;
+        }
+    }
     
     /* PC diag: where do vertices land in NDC under this mvp? (MELEE_MTR) */
 #if BUILD_TARGET_PC
@@ -3805,7 +3875,7 @@ static void bridge_upload_and_draw(void)
                 _dt_from = df ? atoi(df) : 6;
             }
             if (_dt_on && (int) fc2 >= _dt_from && (int) fc2 <= _dt_from + 2 &&
-                _dt_n < 3000) {
+                _dt_n < (getenv("MELEE_DRAWTRACE_MAX") ? atoi(getenv("MELEE_DRAWTRACE_MAX")) : 3000)) {
                 _dt_n++;
                 f64 cx = 0, cy = 0, cz = 0;
                 u32 cn = (count < 200 ? count : 200);
@@ -3827,6 +3897,28 @@ static void bridge_upload_and_draw(void)
                         (double)g_state.model_matrix[0], (double)g_state.model_matrix[1], (double)g_state.model_matrix[2], (double)g_state.model_matrix[3],
                         (double)g_state.model_matrix[4], (double)g_state.model_matrix[5], (double)g_state.model_matrix[6], (double)g_state.model_matrix[7],
                         (double)g_state.model_matrix[8], (double)g_state.model_matrix[9], (double)g_state.model_matrix[10], (double)g_state.model_matrix[11]);
+                {
+                    /* clip-space position of V0 through proj * MV */
+                    f32 px = (count > 0) ? g_state.verts[0].pos[0] : 0.0f, py = (count > 0) ? g_state.verts[0].pos[1] : 0.0f, pz = (count > 0) ? g_state.verts[0].pos[2] : 0.0f;
+                    f32 vx = g_state.mv_matrix[0][0]*px + g_state.mv_matrix[0][1]*py + g_state.mv_matrix[0][2]*pz + g_state.mv_matrix[0][3];
+                    f32 vy = g_state.mv_matrix[1][0]*px + g_state.mv_matrix[1][1]*py + g_state.mv_matrix[1][2]*pz + g_state.mv_matrix[1][3];
+                    f32 vz = g_state.mv_matrix[2][0]*px + g_state.mv_matrix[2][1]*py + g_state.mv_matrix[2][2]*pz + g_state.mv_matrix[2][3];
+                    f32 (*P)[4] = g_state.proj_matrix;
+                    f32 cx = P[0][0]*vx + P[0][1]*vy + P[0][2]*vz + P[0][3];
+                    f32 cy = P[1][0]*vx + P[1][1]*vy + P[1][2]*vz + P[1][3];
+                    f32 cw = P[3][0]*vx + P[3][1]*vy + P[3][2]*vz + P[3][3];
+                    fprintf(stderr, "  SCISSOR en=%d (%d,%d %dx%d) V0view=(%.2f,%.2f,%.2f) ndc=(%.3f,%.3f) w=%.2f\n",
+                            (int) g_state.scissor_enabled, (int) g_state.scissor_x, (int) g_state.scissor_y, (int) g_state.scissor_w, (int) g_state.scissor_h,
+                            (double) vx, (double) vy, (double) vz, (double) (cw != 0 ? cx / cw : 0), (double) (cw != 0 ? cy / cw : 0), (double) cw);
+                }
+                fprintf(stderr, "  VIEW valid=%d [%.3f %.3f %.3f %.3f | %.3f %.3f %.3f %.3f | %.3f %.3f %.3f %.3f] MV [%.3f %.3f %.3f %.3f | %.3f %.3f %.3f %.3f | %.3f %.3f %.3f %.3f]\n",
+                        (int) g_state.view_matrix_valid,
+                        (double) g_state.view_matrix[0][0], (double) g_state.view_matrix[0][1], (double) g_state.view_matrix[0][2], (double) g_state.view_matrix[0][3],
+                        (double) g_state.view_matrix[1][0], (double) g_state.view_matrix[1][1], (double) g_state.view_matrix[1][2], (double) g_state.view_matrix[1][3],
+                        (double) g_state.view_matrix[2][0], (double) g_state.view_matrix[2][1], (double) g_state.view_matrix[2][2], (double) g_state.view_matrix[2][3],
+                        (double) g_state.mv_matrix[0][0], (double) g_state.mv_matrix[0][1], (double) g_state.mv_matrix[0][2], (double) g_state.mv_matrix[0][3],
+                        (double) g_state.mv_matrix[1][0], (double) g_state.mv_matrix[1][1], (double) g_state.mv_matrix[1][2], (double) g_state.mv_matrix[1][3],
+                        (double) g_state.mv_matrix[2][0], (double) g_state.mv_matrix[2][1], (double) g_state.mv_matrix[2][2], (double) g_state.mv_matrix[2][3]);
                 fprintf(stderr, "  UVRANGE n=%u u=[%.3f..%.3f] v=[%.3f..%.3f] va0=%d mtx3d=%d skinned=%d mid=[%d..%d] cur=%u\n", cn, mnu, mxu, mnv, mxv,
                         (int)g_state.va_mode[0], (int)g_state.mtx3d_active, g_state.batch_skinned, g_state.batch_mid_min, g_state.batch_mid_max, (unsigned)g_state.current_mtx_id);
                 g_state.batch_mid_min = -1; g_state.batch_mid_max = -1; g_state.batch_skinned = 0;
@@ -3909,12 +4001,38 @@ static void bridge_upload_and_draw(void)
                     for (u32 s = 0; s < ns; s++) {
                         TevStage* st = &g_state.tev_stages[s];
                         if (!st->color_enabled && !st->alpha_enabled) continue;
-                        fprintf(stderr, "  TEV s%u: cin=[%u,%u,%u,%u] op=%u bias=%u scale=%u clamp=%d en=%d tex=%u kcol=%u swap=[%u,%u] | ain=[%u,%u,%u,%u] aop=%u aen=%d\n",
+                        fprintf(stderr, "  TEV s%u: cin=[%u,%u,%u,%u] op=%u bias=%u scale=%u clamp=%d en=%d tex=%u kcol=%u swap=[%u,%u] | ain=[%u,%u,%u,%u] aop=%u aen=%d kasel=%u\n",
                                 s,
                                 st->color_inputs[0], st->color_inputs[1], st->color_inputs[2], st->color_inputs[3],
                                 st->color_op, st->color_bias, st->color_scale, (int)st->color_clamp, (int)st->color_enabled, st->tex_map, st->kcolor_sel, st->swap_sel[0], st->swap_sel[1],
                                 st->alpha_inputs[0], st->alpha_inputs[1], st->alpha_inputs[2], st->alpha_inputs[3],
-                                st->alpha_op, (int)st->alpha_enabled);
+                                st->alpha_op, (int)st->alpha_enabled, st->kalpha_sel);
+                    }
+                    /* MELEE_DRAWTRACE_TEX=1: mean RGBA of the bound texture,
+                     * read back from GL. Tells whether an invisible textured
+                     * draw is invisible because the texture itself is. */
+                    if (ENV_FLAG("MELEE_DRAWTRACE_TEX") && g_active_tex_count > 0 && g_state.tex_cache_valid[g_active_tex_slots[0]]) {
+                        u32 sl = g_active_tex_slots[0];
+                        int tw = g_state.tex_cache_w[sl], th = g_state.tex_cache_h[sl];
+                        u8* buf = malloc((size_t)tw * th * 4);
+                        if (buf) {
+                            double acc[4] = {0,0,0,0}; int i; u8 amax = 0;
+                            glBindTexture(GL_TEXTURE_2D, g_state.tex_cache[sl]);
+                            glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+                            for (i = 0; i < tw * th; i++) { acc[0]+=buf[i*4]; acc[1]+=buf[i*4+1]; acc[2]+=buf[i*4+2]; acc[3]+=buf[i*4+3]; if (buf[i*4+3] > amax) amax = buf[i*4+3]; }
+                            fprintf(stderr, "  TEXMEAN slot=%u img=%p %dx%d fmt=%u mean=(%.0f,%.0f,%.0f,%.0f) amax=%u\n", sl, g_state.tex_cache_img[sl], tw, th,
+                                    (unsigned)g_state.tex_cache_fmt[sl], acc[0]/(tw*th), acc[1]/(tw*th), acc[2]/(tw*th), acc[3]/(tw*th), amax);
+                            if (getenv("MELEE_DRAWTRACE_TEXDUMP")) {
+                                char path[512]; FILE* f;
+                                snprintf(path, sizeof(path), "%s/tex_%u_%u_%dx%d.ppm", getenv("MELEE_DRAWTRACE_TEXDUMP"), pc_frame_number, g_frame_draw_idx, tw, th);
+                                f = fopen(path, "wb");
+                                if (f) { fprintf(f, "P6\n%d %d\n255\n", tw, th * 2);
+                                    for (i = 0; i < tw * th; i++) fwrite(buf + i * 4, 1, 3, f);
+                                    for (i = 0; i < tw * th; i++) { u8 a3[3] = { buf[i*4+3], buf[i*4+3], buf[i*4+3] }; fwrite(a3, 1, 3, f); }
+                                    fclose(f); }
+                            }
+                            free(buf);
+                        }
                     }
                     fprintf(stderr, "  CHAN n=%u c0: en=%d lit=%d mask=0x%x src=%u amb_src=%u diff=%u attn=%u mat=(%u,%u,%u,%u) amb=(%u,%u,%u,%u) | c1: en=%d lit=%d mask=0x%x src=%u diff=%u attn=%u mat=(%u,%u,%u,%u) amb=(%u,%u,%u,%u) | nlights=%u\n",
                             (unsigned)g_state.num_chans,
@@ -4407,6 +4525,10 @@ void GXSetProjection(f32 mtx[4][4], u32 type)
      * The SDK builders write only the 3x4; fill the w-row here:
      * perspective/frustum: w_clip = -z_view; ortho: w = 1. */
     memcpy(g_state.proj_matrix, mtx, sizeof(f32) * 3 * 4);
+    {
+        extern u32 g_proj_type_set(u32);
+        (void) g_proj_type_set(type);
+    }
     if (type == 0 /* GX_PERSPECTIVE */) {
         g_state.proj_matrix[3][0] = 0.0f;
         g_state.proj_matrix[3][1] = 0.0f;
@@ -4450,6 +4572,12 @@ void GXClearVtxDesc(void)
     g_state.pos_mode = g_state.nrm_mode = g_state.clr_mode = g_state.tex0_mode = g_state.tex1_mode = 0;
 }
 
+/* Attribute formats are per vertex format (GX_VTXFMT0..7); GXBegin names
+ * the one a primitive uses. HSD sticks to VTXFMT0, but the particle
+ * renderer declares six with different TEX0 types (u8 indexed vs f32
+ * direct), so the last declaration must not win globally. */
+static u8 g_vf_tex0_type[8], g_vf_tex0_frac[8], g_vf_tex0_set[8];
+static u8 g_vf_pos_type[8], g_vf_pos_frac[8], g_vf_pos_set[8];
 void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 {
     gx_flush_pending();
@@ -4466,6 +4594,7 @@ void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
         g_state.pos_comp_cnt = (u8)cnt;
         g_state.pos_comp_type = (u8)type;
         g_state.pos_frac = frac;
+        if (vtxfmt < 8) { g_vf_pos_type[vtxfmt] = (u8)type; g_vf_pos_frac[vtxfmt] = frac; g_vf_pos_set[vtxfmt] = 1; }
         break;
     case 10: {
         g_state.nrm_enabled = TRUE;
@@ -4474,7 +4603,9 @@ void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
         break;
     }
     case 11: g_state.clr_enabled = TRUE; break;   /* GX_VA_CLR0 */
-    case 13: g_state.tex0_enabled = TRUE; g_state.tex0_comp_type = (u8)type; g_state.tex0_frac = frac; break;  /* GX_VA_TEX0 */
+    case 13: g_state.tex0_enabled = TRUE; g_state.tex0_comp_type = (u8)type; g_state.tex0_frac = frac;
+             if (vtxfmt < 8) { g_vf_tex0_type[vtxfmt] = (u8)type; g_vf_tex0_frac[vtxfmt] = frac; g_vf_tex0_set[vtxfmt] = 1; }
+             break;  /* GX_VA_TEX0 */
     case 14: g_state.tex1_enabled = TRUE; g_state.tex1_comp_type = (u8)type; g_state.tex1_frac = frac; break;  /* GX_VA_TEX1 */
     }
 }
@@ -4524,6 +4655,10 @@ void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
 
 void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
 {
+    if (vtxfmt < 8) {
+        if (g_vf_tex0_set[vtxfmt]) { g_state.tex0_comp_type = g_vf_tex0_type[vtxfmt]; g_state.tex0_frac = g_vf_tex0_frac[vtxfmt]; }
+        if (g_vf_pos_set[vtxfmt]) { g_state.pos_comp_type = g_vf_pos_type[vtxfmt]; g_state.pos_frac = g_vf_pos_frac[vtxfmt]; }
+    }
     /* NOTE: this project defines the GX primitive "enums" as the GCN
      * display-list opcode values (GX_QUADS=0x80, GX_TRIANGLES=0x90,
      * GX_TRIANGLESTRIP=0x98, ...), so callers passing e.g. 0x98 is correct,
@@ -7319,12 +7454,24 @@ void GXGetViewportv(f32 *vp)
     }
 }
 
-/* GXGetProjectionv: return current projection matrix (4x4 row-major = 64 bytes) */
+/* GXGetProjectionv: the SDK contract is seven floats -- { type, p0..p5 },
+ * the same parameters GXSetProjection extracted (fog.c and psdisp.c both
+ * read exactly that and declare 7-float buffers; copying a 4x4 here used
+ * to overrun psdisp's into its inverse-view matrix). */
+static u32 g_proj_type;
+u32 g_proj_type_set(u32 t) { g_proj_type = t; return t; }
 void GXGetProjectionv(f32 *ptr)
 {
     if (ptr) {
-        /* Copy 4x4 matrix (64 bytes) - game expects Mtx44 format */
-        memcpy(ptr, g_state.proj_matrix, 64);
+        f32 (*m)[4] = g_state.proj_matrix;
+        int persp = (g_proj_type == 0);
+        ptr[0] = (f32) g_proj_type;
+        ptr[1] = m[0][0];
+        ptr[2] = persp ? m[0][2] : m[0][3];
+        ptr[3] = m[1][1];
+        ptr[4] = persp ? m[1][2] : m[1][3];
+        ptr[5] = m[2][2];
+        ptr[6] = m[2][3];
     }
 }
 /* DUPLICATE of line 549: void GXSetBreakPtCallback(void) {} */
@@ -7637,36 +7784,43 @@ void GXTexCoord1x16(u16 idx)
 }
 void GXTexCoord1x8(u8 idx)
 {
-    /* 8-bit indexed texture coordinate lookup.
-     * Look up from the tex0 array set by GXSetArray. */
+    /* 8-bit indexed texture coordinate: look the pair up in the TEX0 array
+     * set by GXSetArray and decode it by the TEX0 component type declared
+     * with GXSetVtxAttrFmt (psdisp's particle quads use a u8 0/1 table). */
     if (g_state.arr_tex0 != NULL) {
-        const u8* vp_tex = (const u8*)g_state.arr_tex0 + idx * g_state.arr_stride_tex0;
+        const u8* vp = (const u8*) g_state.arr_tex0 + idx * g_state.arr_stride_tex0;
+        f32 scale = 1.0f / (f32) (1u << g_state.tex0_frac);
         f32 ts, tt;
-        switch (g_state.pos_comp_type) {
-        case 3: { /* f16 */
-            u16 hs = ((u16)vp_tex[0] << 8) | vp_tex[1];
-            u16 ht = ((u16)vp_tex[2] << 8) | vp_tex[3];
-            ts = f16_to_f32(hs);
-            tt = f16_to_f32(ht);
-            break;
-        }
-        case 4: /* f32 big-endian */
-        default: {
+        switch (g_state.tex0_comp_type) {
+        case 0: /* GX_U8 */
+            ts = vp[0] * scale; tt = vp[1] * scale; break;
+        case 1: /* GX_S8 */
+            ts = (s8) vp[0] * scale; tt = (s8) vp[1] * scale; break;
+        case 2: /* GX_U16 */
+            ts = (f32) (((u16) vp[0] << 8) | vp[1]) * scale;
+            tt = (f32) (((u16) vp[2] << 8) | vp[3]) * scale; break;
+        case 3: /* GX_S16 */
+            ts = (f32) (s16) (((u16) vp[0] << 8) | vp[1]) * scale;
+            tt = (f32) (s16) (((u16) vp[2] << 8) | vp[3]) * scale; break;
+        default: { /* GX_F32, big-endian */
             u32 raw;
-            raw = ((u32)vp_tex[0] << 24) | ((u32)vp_tex[1] << 16) |
-                  ((u32)vp_tex[2] << 8) | vp_tex[3];
-            ts = *(f32*)&raw;
-            raw = ((u32)vp_tex[4] << 24) | ((u32)vp_tex[5] << 16) |
-                  ((u32)vp_tex[6] << 8) | vp_tex[7];
-            tt = *(f32*)&raw;
+            raw = ((u32) vp[0] << 24) | ((u32) vp[1] << 16) | ((u32) vp[2] << 8) | vp[3];
+            memcpy(&ts, &raw, 4);
+            raw = ((u32) vp[4] << 24) | ((u32) vp[5] << 16) | ((u32) vp[6] << 8) | vp[7];
+            memcpy(&tt, &raw, 4);
             break;
         }
         }
-        g_state.last_tex0[0] = ts; g_state.last_tex0[1] = tt;
-        if (g_state.vert_count > 0) {
-            g_state.verts[g_state.vert_count-1].tex0[0] = ts;
-            g_state.verts[g_state.vert_count-1].tex0[1] = tt;
+        {
+            static int n;
+            if (n < 12 && getenv("MELEE_EFTRACE")) {
+                n++;
+                fprintf(stderr, "[TC1x8] idx %u type %u frac %u stride %u bytes %02x %02x -> (%.3f, %.3f) verts %u\n",
+                        idx, g_state.tex0_comp_type, g_state.tex0_frac, g_state.arr_stride_tex0,
+                        vp[0], vp[1], (double) ts, (double) tt, (unsigned) g_state.vert_count);
+            }
         }
+        GXTexCoord2f32(ts, tt);
     }
 }
 

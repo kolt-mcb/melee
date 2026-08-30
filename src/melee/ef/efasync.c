@@ -98,6 +98,11 @@ void* efAsync_Dispatch(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
     } state;
 
     ret_obj = NULL;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_EFTRACE")) {
+        fprintf(stderr, "[EF] dispatch gfx %d gobj %p\n", (int) gfx_id, (void*) gobj);
+    }
+#endif
     switch (gfx_id) {
     case 0x3E8:
         if (HSD_Randi(8) == 0) {
@@ -1281,11 +1286,25 @@ void efAsync_OnLoad(HSD_Archive* archive, u8* data, u32 length, int index)
     lbArchive_InitializeDAT(archive, data, length);
     result = HSD_ArchiveGetPublicAddress(
         archive, efAsync_DatEntries[index].effDataTable_name);
+#if BUILD_TARGET_PC
+    /* Relocation is done when the bank is loaded (efAsync_LoadSync). */
+    (void) result;
+#else
     if ((u32) result->ef_DAT_file | (u32) result->effDataTable_name) {
         psInitDataBankLocate((HSD_Archive*) result->ef_DAT_file,
                              (HSD_Archive*) result->effDataTable_name, NULL);
     }
+#endif
 }
+
+#if BUILD_TARGET_PC
+u8* pc_ef_dataBase[50]; /* archive data base per EF_DAT_Entry, for the descs */
+static u32 pc_be32_raw(const void* p)
+{
+    const u8* b = p;
+    return ((u32) b[0] << 24) | ((u32) b[1] << 16) | ((u32) b[2] << 8) | b[3];
+}
+#endif
 
 void efAsync_LoadSync(int idx)
 {
@@ -1303,6 +1322,44 @@ void efAsync_LoadSync(int idx)
         return;
     }
     {
+#if BUILD_TARGET_PC
+        /* The public block is big-endian: two archive offsets (particle
+         * command bank, texture bank) then the effect desc table. */
+        HSD_Archive* archive = NULL;
+        u8* dataBase;
+        u32 cmd_off, tex_off;
+        bool chk = lbArchive_80017040(&archive, lookup->ef_DAT_file, &spC,
+                                      lookup->effDataTable_name, 0);
+        dataBase = archive != NULL ? archive->data : NULL;
+        /* GameCube layout: u32 cmd bank offset, u32 texture bank offset,
+         * then the desc table (host EF_DAT_Entry has 8-byte fields). */
+        cmd_off = pc_be32_raw((const u8*) spC + 0);
+        tex_off = pc_be32_raw((const u8*) spC + 4);
+        (void) chk;
+        if (getenv("MELEE_EFTRACE")) {
+            fprintf(stderr,
+                    "[EF] bank %d '%s' sym '%s': archive %p data %p entry %p "
+                    "cmd_off %#x tex_off %#x; tex[0..3] %08x %08x %08x %08x "
+                    "cmd[0..3] %08x %08x %08x %08x\n",
+                    idx, lookup->ef_DAT_file, lookup->effDataTable_name,
+                    (void*) archive, (void*) dataBase, (void*) spC, cmd_off,
+                    tex_off,
+                    dataBase ? pc_be32_raw(dataBase + tex_off) : 0,
+                    dataBase ? pc_be32_raw(dataBase + tex_off + 4) : 0,
+                    dataBase ? pc_be32_raw(dataBase + tex_off + 8) : 0,
+                    dataBase ? pc_be32_raw(dataBase + tex_off + 12) : 0,
+                    dataBase ? pc_be32_raw(dataBase + cmd_off) : 0,
+                    dataBase ? pc_be32_raw(dataBase + cmd_off + 4) : 0,
+                    dataBase ? pc_be32_raw(dataBase + cmd_off + 8) : 0,
+                    dataBase ? pc_be32_raw(dataBase + cmd_off + 12) : 0);
+        }
+        if ((cmd_off | tex_off) && dataBase != NULL) {
+            psInitDataBankLoad(idx, (void*) (dataBase + cmd_off),
+                               (void*) (dataBase + tex_off), NULL, NULL);
+        }
+        lookup->data = (u8*) spC + 8;
+        pc_ef_dataBase[idx] = dataBase;
+#else
         bool chk = lbArchive_80017040(NULL, lookup->ef_DAT_file, &spC,
                                       lookup->effDataTable_name, 0);
         if ((u32) spC->ef_DAT_file | (u32) spC->effDataTable_name) {
@@ -1315,6 +1372,7 @@ void efAsync_LoadSync(int idx)
             }
         }
         lookup->data = &spC->data;
+#endif
     }
 }
 
@@ -1454,7 +1512,11 @@ void efAsync_Spawn(HSD_GObj* gobj, void* queue_head, u32 spawn_kind,
         HSD_ASSERTREPORT(0xF6U, 0, "[EfASync] unknown type %d\n", spawn_kind);
         break;
     }
+#if BUILD_TARGET_PC
+    va_end(vlist);
+#else
     va_end(sp80);
+#endif
     if ((HSD_GObj_804D7838 != NULL) && (HSD_GObj_804D7838->s_link < 9U)) {
         queued->next = ((EF_QueuedEffect*) queue_head)->next;
         ((EF_QueuedEffect*) queue_head)->next = queued;
