@@ -1772,6 +1772,32 @@ void ftData_80085A14(FighterKind kind)
             }
         }
         ftData_Table_Unk0[kind].data = (void*) a_head;
+#if BUILD_TARGET_PC
+        /* MELEE_A14_GUARD=1: make the fixed-up motion table read-only so
+         * whatever is zeroing it (plain runs only; never reproduces under
+         * gdb) faults and names itself in the crash handler. Diagnostic
+         * only -- legitimate later writers (E50 caches nothing here) will
+         * also fault. */
+        if (getenv("MELEE_A14_GUARD") != NULL) {
+            extern int mprotect(void*, size_t, int);
+            uintptr_t lo = ((uintptr_t) temp_r27->xC) & ~0xFFFULL;
+            uintptr_t hi =
+                (((uintptr_t) &temp_r27->xC[ftData_Table_Unk0[kind].count]) +
+                 0xFFF) & ~0xFFFULL;
+            mprotect((void*) lo, hi - lo, 1 /* PROT_READ */);
+            fprintf(stderr, "[A14GUARD] kind=%d table %p..%p read-only\n",
+                    (int) kind, (void*) lo, (void*) hi);
+        }
+        if (getenv("MELEE_FTCONV_TRACE") != NULL) {
+            fprintf(stderr,
+                    "[FTCONV] A14 fixed kind=%d a_head=0x%x count=%d "
+                    "xC[35].x14=0x%x at %p\n",
+                    (int) kind, (unsigned) a_head,
+                    (int) ftData_Table_Unk0[kind].count,
+                    (unsigned) temp_r27->xC[35].x14,
+                    (void*) &temp_r27->xC[35].x14);
+        }
+#endif
     }
 }
 
@@ -1929,6 +1955,14 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
         }
 #endif
         temp_r3_2 = temp_r3->x14;
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_FTCONV_TRACE") != NULL) {
+            fprintf(stderr,
+                    "[FTCONV] E50 enter msid=%d r3=%p x14=0x%x x5A8=%p x598=%p\n",
+                    msid, (void*) temp_r3, (unsigned) temp_r3_2,
+                    (void*) arg0->x5A8, (void*) arg0->x598);
+        }
+#endif
         if (temp_r3_2 != (u32) arg0->x5A8) {
             if (temp_r3_2 != 0) {
                 temp_r3_3 = ftData_80086060(arg0);
@@ -1946,6 +1980,29 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
                     }
                 } else {
                     temp_r4_2 = temp_r3->x14;
+#if BUILD_TARGET_PC
+                    /* PC port: same translation as the x590 loader above --
+                     * sub-0x80000000 values are offsets into the emulated
+                     * ARAM, and the ARQ DMA queue never runs here. Without
+                     * this, every lookup through this path parsed garbage
+                     * and returned NULL, so Fighter_Create_Inline2 filled
+                     * x2DC/x2E0/x2E4/x2E8/x2EC with 0: special-fall
+                     * landings then played at (0.1+0)/lag speed -- 1/300 --
+                     * pinning the fighter in a crouch for minutes after any
+                     * air special (the "crouch and can't move" report). */
+                    if (temp_r4_2 < 0x80000000) {
+                        extern unsigned char* pc_aram_host(unsigned long off);
+                        unsigned char* srcp =
+                            pc_aram_host((unsigned long) temp_r4_2);
+                        u32 n = (u32) temp_r3->x8;
+                        if (n > 0x8000u) {
+                            n = 0x8000u;
+                        }
+                        if (srcp != NULL) {
+                            memcpy(arg0->x5A0, srcp, n);
+                        }
+                    } else
+#endif
                     if (temp_r4_2 < 0x80000000) {
                         lbArq_80014BD0(temp_r4_2, arg0->x5A0,
                                        OSRoundUp32B(temp_r3->x8), 0, 0);
@@ -1960,6 +2017,16 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
                     }
                 }
                 arg0->x598 = HSD_ArchiveGetPublicAddress(&sp10, temp_r3->x0);
+#if BUILD_TARGET_PC
+            if (getenv("MELEE_FTCONV_TRACE") != NULL) {
+                fprintf(stderr,
+                        "[FTCONV] E50 msid pull: x14=0x%x size=%d name=%s "
+                        "parsed_data=%p pub=%p\n",
+                        (unsigned) temp_r3->x14, (int) temp_r3->x8,
+                        temp_r3->x0 ? temp_r3->x0 : "(null)",
+                        (void*) sp10.data, (void*) arg0->x598);
+            }
+#endif
 #if BUILD_TARGET_PC
             /* PC port: HSD_ArchiveParse swaps the archive header and reloc
              * table but never the data section, so what comes back here is a
