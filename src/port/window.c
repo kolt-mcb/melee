@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "window.h"
 #include "log.h"
 
@@ -48,7 +49,8 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
         return FALSE;
     }
 
-    SDL_GL_SetSwapInterval(1); /* Vsync */
+    /* Vsync; MELEE_NOVSYNC=1 uncaps the frame rate for throughput measurement. */
+    SDL_GL_SetSwapInterval(getenv("MELEE_NOVSYNC") ? 0 : 1);
 
     /* PC port: report the actual GL renderer once, so we can tell hardware
      * (i965/anv) from software (llvmpipe/swrast) at a glance. */

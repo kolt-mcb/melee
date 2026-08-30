@@ -21,6 +21,7 @@ void pc_get_fb_size(float* w, float* h);
 #include <stdbool.h>
 #include <time.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 /* Simple synchronous render for archive textures */
 static void render_archive_sync_once(void)
@@ -297,7 +298,61 @@ void render_present(void)
         }
     }
 
-    window_swap();
+    /* PC port: MELEE_FPS=1 prints the measured frame rate every 60
+     * presented frames -- wall-clock time per game frame, and the
+     * CPU+GL time of the frame before the swap (so a vsync-bound run
+     * shows how much headroom the frame itself has). */
+    {
+        static int s_fps = -1;
+        static struct timespec s_t0, s_w0;
+        static double s_busy_ns;
+        static int s_n;
+        struct timespec now;
+        if (s_fps < 0) {
+            s_fps = getenv("MELEE_FPS") ? atoi(getenv("MELEE_FPS")) : 0;
+        }
+        if (s_fps) {
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            if (s_t0.tv_sec == 0) {
+                s_t0 = now;
+            }
+            if (s_n == 0) {
+                s_w0 = now;
+            }
+        }
+        /* MELEE_FPS=2 also glFinish()es before the swap and reports that
+         * wait separately: it is the GPU time of the frame, as opposed to
+         * the presentation wait inside the swap. */
+        static double s_fin_ns;
+        if (s_fps > 1) {
+            struct timespec f0, f1;
+            clock_gettime(CLOCK_MONOTONIC, &f0);
+            glFinish();
+            clock_gettime(CLOCK_MONOTONIC, &f1);
+            s_fin_ns += (f1.tv_sec - f0.tv_sec) * 1e9 + (f1.tv_nsec - f0.tv_nsec);
+        }
+        window_swap();
+        if (s_fps) {
+            struct timespec after;
+            clock_gettime(CLOCK_MONOTONIC, &after);
+            /* busy = frame end -> this frame end, minus the swap wait */
+            s_busy_ns += (now.tv_sec - s_t0.tv_sec) * 1e9 + (now.tv_nsec - s_t0.tv_nsec);
+            s_n++;
+            if (s_n == 60) {
+                double wall = (after.tv_sec - s_w0.tv_sec) * 1e9 + (after.tv_nsec - s_w0.tv_nsec);
+                extern u32 pc_diag_uploads, pc_diag_mipgens, pc_diag_hashes, pc_diag_draws;
+                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  per frame: draws %u texhash %u upload %u mipgen %u\n",
+                        s_n * 1e9 / wall, wall / s_n / 1e6, s_busy_ns / s_n / 1e6, s_fin_ns / s_n / 1e6,
+                        pc_diag_draws / s_n, pc_diag_hashes / s_n, pc_diag_uploads / s_n, pc_diag_mipgens / s_n);
+                pc_diag_draws = pc_diag_hashes = pc_diag_uploads = pc_diag_mipgens = 0;
+                s_n = 0;
+                s_busy_ns = 0;
+                s_fin_ns = 0;
+            }
+            s_t0 = after;
+        }
+        return;
+    }
 }
 
 /* ============================================================
