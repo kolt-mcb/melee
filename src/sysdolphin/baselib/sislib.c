@@ -738,7 +738,7 @@ static u32 pc_sis_be32(const void* p)
            (u32) b[3];
 }
 
-static SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase)
+SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase)
 {
     const u8* src = raw;
     u8* base = dataBase;
