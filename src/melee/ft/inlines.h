@@ -76,11 +76,36 @@
 #endif
 
 /// @todo Remove declarations. Doesn't really need to be a macro.
+#if BUILD_TARGET_PC
+/* Every ft<Xx>_Init_LoadSpecialAttrs re-copies the archive block over
+ * dat_attrs (state resets, respawn). A plain struct copy put the raw
+ * big-endian words back over the swapped ones PUSH_ATTRS had made, so a
+ * respawned Peach read her turnip table count as 0x03000000 and walked
+ * off the end of it. Same swapped copy as PUSH_ATTRS. */
+#define COPY_ATTRS(gobj, attributeName)                                       \
+    Fighter* fp = GET_FIGHTER(gobj);                                          \
+    attributeName* sA2 = (attributeName*) fp->dat_attrs;                      \
+    attributeName* ext_attr = (attributeName*) fp->ft_data->ext_attr;         \
+    do {                                                                      \
+        const u32* src_ = (const u32*) ext_attr;                              \
+        u32* d_ = (u32*) sA2;                                                 \
+        unsigned long i_;                                                     \
+        if (sA2 != NULL && pc_ptr_sane(src_) &&                               \
+            pc_mem_readable(src_, sizeof(attributeName))) {                   \
+            for (i_ = 0; i_ < sizeof(attributeName) / 4; i_++) {              \
+                u32 v_ = src_[i_];                                            \
+                d_[i_] = ((v_ >> 24) & 0xFF) | ((v_ >> 8) & 0xFF00) |         \
+                         ((v_ << 8) & 0xFF0000) | ((v_ << 24));               \
+            }                                                                 \
+        }                                                                     \
+    } while (0);
+#else
 #define COPY_ATTRS(gobj, attributeName)                                       \
     Fighter* fp = GET_FIGHTER(gobj);                                          \
     attributeName* sA2 = (attributeName*) fp->dat_attrs;                      \
     attributeName* ext_attr = (attributeName*) fp->ft_data->ext_attr;         \
     *sA2 = *ext_attr;
+#endif
 
 #ifdef M2C
 #define GET_FIGHTER(gobj) ((Fighter*) HSD_GObjGetUserData((HSD_GObj*) gobj))

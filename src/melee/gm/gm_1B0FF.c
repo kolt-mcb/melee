@@ -284,6 +284,15 @@ void gm_801B13B8(GameScene* arg0)
         temp_r28->players[1].color = (u8) col1;
         temp_r28->players[0].slot_type = Gm_PKind_Human;
         temp_r28->players[1].slot_type = Gm_PKind_Human;
+        /* MELEE_BOOT_CPU=<level> makes slot 1 a CPU of that level, so the
+         * AI can be exercised from the debug boot. */
+        {
+            const char* c = getenv("MELEE_BOOT_CPU");
+            if (c != NULL && atoi(c) > 0) {
+                temp_r28->players[1].slot_type = Gm_PKind_Cpu;
+                temp_r28->players[1].cpu_level = (u8) atoi(c);
+            }
+        }
         temp_r28->players[2].slot_type = Gm_PKind_NA;
         temp_r28->players[3].slot_type = Gm_PKind_NA;
         /* Default VS rules are a 2:00 time match (gm_80167BC8: mode 0 with
