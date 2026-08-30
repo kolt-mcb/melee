@@ -1292,26 +1292,23 @@ static void poll_keyboard_to_pad(GCPadStatus* pad)
     if (kb[SDL_SCANCODE_UP])    buttons |= GC_BTN_DPAD_U;
     if (kb[SDL_SCANCODE_DOWN])  buttons |= GC_BTN_DPAD_D;
     
-    /* A button (primary attack/confirm): Z or Space */
-    if (kb[SDL_SCANCODE_Z] || kb[SDL_SCANCODE_SPACE]) buttons |= GC_BTN_A;
-    
-    /* B button (jump): X */
+    /* GameCube layout: A attack, B special, X/Y jump, L/R shield, Z grab.
+     * The old table put X (a *jump* button) on C and called it "shield",
+     * so a keyboard player reaching for shield or grab jumped instead. */
+    /* A (attack / confirm): Z */
+    if (kb[SDL_SCANCODE_Z]) buttons |= GC_BTN_A;
+    /* B (special): X */
     if (kb[SDL_SCANCODE_X]) buttons |= GC_BTN_B;
-    
-    /* X button (shield/block): C */
-    if (kb[SDL_SCANCODE_C]) buttons |= GC_BTN_X;
-    
-    /* Y button (secondary): V */
+    /* X (jump): Space */
+    if (kb[SDL_SCANCODE_SPACE]) buttons |= GC_BTN_X;
+    /* Y (jump): V */
     if (kb[SDL_SCANCODE_V]) buttons |= GC_BTN_Y;
-    
-    /* L trigger: Left Shift */
+    /* L (shield): Shift */
     if (kb[SDL_SCANCODE_LSHIFT] || kb[SDL_SCANCODE_RSHIFT]) buttons |= GC_BTN_L;
-    
-    /* R trigger: Left Alt */
+    /* R (shield): Left Alt */
     if (kb[SDL_SCANCODE_LALT]) buttons |= GC_BTN_R;
-    
-    /* Z button: Slash/Backslash */
-    if (kb[SDL_SCANCODE_SLASH]) buttons |= GC_BTN_Z;
+    /* Z (grab): C or Slash */
+    if (kb[SDL_SCANCODE_C] || kb[SDL_SCANCODE_SLASH]) buttons |= GC_BTN_Z;
     
     /* Start: Enter */
     if (kb[SDL_SCANCODE_RETURN]) buttons |= GC_BTN_START;
@@ -1407,20 +1404,24 @@ static void poll_joystick(void* joy, GCPadStatus* pad)
     /* Main stick (axes 0-1, range [-32768, 32767]) */
     int sx = SDL_JoystickGetAxis(joy, 0);
     int sy = SDL_JoystickGetAxis(joy, 1);
+    /* SDL reports up as negative; the GameCube stick reports up as
+     * positive. Without the flip, pushing down read as an up-tap (jump). */
     pad->stickX = (s8)(sx >> 8);   /* Divide by 256 to get s8 range */
-    pad->stickY = (s8)(sy >> 8);
+    pad->stickY = (s8)(-(sy + 1) >> 8);
     
     /* C-stick (axes 3-4) */
     int csx = SDL_JoystickGetAxis(joy, 3);
     int csy = SDL_JoystickGetAxis(joy, 4);
     pad->subStickX = (s8)(csx >> 8);
-    pad->subStickY = (s8)(csy >> 8);
+    pad->subStickY = (s8)(-(csy + 1) >> 8);
     
-    /* Analog triggers (axes 2, 5, range [0, 65535]) */
+    /* Analog triggers (axes 2, 5): SDL rests at -32768 and reads 32767
+     * fully pressed; the old shift alone reported a resting trigger as
+     * half pressed. */
     int lt = SDL_JoystickGetAxis(joy, 2);
     int rt = SDL_JoystickGetAxis(joy, 5);
-    pad->analogL = (u8)(lt >> 8);   /* Shift to u8 range */
-    pad->analogR = (u8)(rt >> 8);
+    pad->analogL = (u8)((lt + 32768) >> 8);
+    pad->analogR = (u8)((rt + 32768) >> 8);
     
     pad->button = buttons;
 }
