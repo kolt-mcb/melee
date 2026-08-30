@@ -11,6 +11,7 @@
 #endif
 #if BUILD_TARGET_PC
 #include "port/log.h"
+#include "port/pc_itconv.h"
 #endif
 
 #include "lbfile.h"
@@ -57,6 +58,12 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
         memset(archive, 0, sizeof(HSD_Archive));
         return;
     }
+#if BUILD_TARGET_PC
+    /* Item Articles are converted lazily from whichever archive holds
+     * them, so every archive's data range and relocation table go on
+     * record here. */
+    pc_itconv_note_archive(archive);
+#endif
 
     while (true) {
         symbol = HSD_ArchiveGetExtern(archive, i++);

@@ -1,5 +1,8 @@
 #include "item.h"
 #if BUILD_TARGET_PC
+#include "port/pc_itconv.h"
+#endif
+#if BUILD_TARGET_PC
 #include "port/log.h"
 #endif
 
@@ -553,11 +556,9 @@ void Item_80267978(HSD_GObj* gobj)
 {
     Item* item_data = gobj->user_data;
 #if BUILD_TARGET_PC
-    /* PC port: it_8027870C leaves the four article tables NULL while the ItCo
-     * common-item data is unconverted, so each lookup below is a read through
-     * a null base. Yield NULL instead; xC4_article_data is null-checked by the
-     * stage-item branch already. */
-#define IT_PC_ART(tbl, i) (((tbl) != NULL) ? (tbl)[i] : NULL)
+    /* PC port: the ItCo tables are converted on first use (pc_itconv), and
+     * are NULL only when ItCo failed to load. */
+#define IT_PC_ART(tbl, i) (((tbl) != NULL) ? pc_itconv_table_get(tbl, i) : NULL)
 #else
 #define IT_PC_ART(tbl, i) ((tbl)[i])
 #endif
@@ -1068,6 +1069,15 @@ static HSD_GObj* Item_8026862C(SpawnItem* spawnItem)
         HSD_GObjPLink_80390228(gobj);
         return NULL;
     }
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ASLOG") != NULL) {
+        extern u32 pc_frame_number;
+        Item* ip = HSD_GObjGetUserData(gobj);
+        fprintf(stderr, "[IT] f%u spawn kind=%d at (%.1f,%.1f) gobj=%p\n",
+                pc_frame_number, ip->kind, ip->pos.x, ip->pos.y,
+                (void*) gobj);
+    }
+#endif
     return gobj;
 }
 

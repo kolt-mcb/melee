@@ -1,4 +1,7 @@
 #include "ityaku.h"
+#if BUILD_TARGET_PC
+#include "port/pc_itconv.h"
+#endif
 
 #include "it/forward.h"
 
@@ -121,10 +124,14 @@ Item_GObj* it_802E6AEC(Ground* arg0, int arg1, int arg2, HSD_JObj* arg3,
      * data is unconverted. The storers into that table are already guarded;
      * this reader was not, so four stages that spawn a yakumono item died
      * here -- Green Greens, Mushroom Kingdom, Icicle Mountain and Icetop. */
-    if (it_804D6D38 != NULL &&
-        it_804D6D38[spawn.kind - It_Kind_Kuriboh] != NULL) {
-        it_804D6D38[spawn.kind - It_Kind_Kuriboh]->x0_common_attr =
-            &it_803F8C08;
+    {
+        Article* art = it_804D6D38 != NULL
+                           ? pc_itconv_table_get(
+                                 it_804D6D38, spawn.kind - It_Kind_Kuriboh)
+                           : NULL;
+        if (art != NULL) {
+            art->x0_common_attr = &it_803F8C08;
+        }
     }
 #else
     it_804D6D38[spawn.kind - It_Kind_Kuriboh]->x0_common_attr = &it_803F8C08;
