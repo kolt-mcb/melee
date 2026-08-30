@@ -324,6 +324,40 @@ void render_present(void)
          * wait separately: it is the GPU time of the frame, as opposed to
          * the presentation wait inside the swap. */
         static double s_fin_ns;
+        /* 60 Hz pacer. The game is a fixed-step 60 Hz simulation and the
+         * port has no other clock: uncapped, the main menu runs at 340 fps
+         * in a small window, and on a 144 Hz display it would run at 2.4x
+         * with vsync on. Sleep to the next 1/60 s boundary unless vsync is
+         * on and the display is 60 Hz, where the swap already paces and a
+         * second clock would only add beat-frequency stutter. MELEE_UNCAP=1
+         * disables it for throughput measurement. */
+        {
+            static int s_pace = -1;
+            static struct timespec s_next;
+            if (s_pace < 0) {
+                int hz = window_refresh_hz();
+                s_pace = !(getenv("MELEE_UNCAP") != NULL ||
+                           (window_vsync_on() && hz >= 59 && hz <= 61));
+                if (s_pace) {
+                    clock_gettime(CLOCK_MONOTONIC, &s_next);
+                }
+                fprintf(stderr, "[PACE] display %d Hz, vsync %d -> pacer %s\n",
+                        hz, window_vsync_on(), s_pace ? "on" : "off");
+            }
+            if (s_pace) {
+                struct timespec t;
+                clock_gettime(CLOCK_MONOTONIC, &t);
+                s_next.tv_nsec += 16666667;
+                if (s_next.tv_nsec >= 1000000000) { s_next.tv_nsec -= 1000000000; s_next.tv_sec++; }
+                /* Fell behind by more than a frame: resynchronise rather
+                 * than run fast to catch up. */
+                if ((t.tv_sec - s_next.tv_sec) * 1000000000L + (t.tv_nsec - s_next.tv_nsec) > 16666667L) {
+                    s_next = t;
+                } else {
+                    while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &s_next, NULL) != 0) {}
+                }
+            }
+        }
         if (s_fps > 1) {
             struct timespec f0, f1;
             clock_gettime(CLOCK_MONOTONIC, &f0);
