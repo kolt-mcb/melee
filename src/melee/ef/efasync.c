@@ -1527,6 +1527,15 @@ void efAsync_Spawn(HSD_GObj* gobj, void* queue_head, u32 spawn_kind,
 
 void efAsync_QueueInit(void)
 {
+#if BUILD_TARGET_PC
+    /* EF_QueuedEffect_ObjAlloc is the console's 0x24-byte slot. The PC node
+     * is 48 bytes, so every queued effect overran its slot by 12 bytes and
+     * the last one in each chunk wrote into the neighbouring efLib pool --
+     * zeroing a freed EF_Effect's free-list link, which HSD_ObjAlloc then
+     * crashed on a few frames later (hit sparks in a long CPU match). */
+    HSD_ObjAllocInit(&efAsync_AllocData, sizeof(EF_QueuedEffect), 8U);
+#else
     HSD_ObjAllocInit(&efAsync_AllocData,
                      sizeof(struct EF_QueuedEffect_ObjAlloc), 4U);
+#endif
 }

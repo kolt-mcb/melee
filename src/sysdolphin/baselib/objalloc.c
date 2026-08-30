@@ -59,6 +59,37 @@ static int pc_pool_owns(HSD_ObjAllocData* data, void* p)
 extern HSD_ObjAllocData hsd_iddata;
 extern HSD_IDTable default_table;
 
+/* MELEE_OBJCHECK_EVERY=1: verify one allocator's free list at every
+ * alloc/free on it, so a corruption is caught at the first allocator
+ * operation after the write rather than at the frame checkpoint. */
+static int pc_objcheck_every = -1;
+static void pc_objalloc_check_one(HSD_ObjAllocData* data, const char* where)
+{
+    HSD_ObjAllocLink* l;
+    u32 n = 0;
+    if (pc_objcheck_every < 0) {
+        pc_objcheck_every = getenv("MELEE_OBJCHECK_EVERY") != NULL;
+    }
+    if (!pc_objcheck_every) {
+        return;
+    }
+    l = data->freehead;
+    while (l != NULL && n <= data->free) {
+        if (!pc_pool_owns(data, l)) {
+            fprintf(stderr, "[OBJCHECK] %s: allocator %p (size %u) free link #%u = %p bad (free=%u)\n",
+                    where, (void*) data, data->size, n, (void*) l, data->free);
+            abort();
+        }
+        n++;
+        l = l->next;
+    }
+    if (n != data->free) {
+        fprintf(stderr, "[OBJCHECK] %s: allocator %p (size %u) free list has %u links, free=%u head=%p\n",
+                where, (void*) data, data->size, n, data->free, (void*) data->freehead);
+        abort();
+    }
+}
+
 void pc_objalloc_check(const char* where)
 {
     HSD_ObjAllocData* data;
@@ -239,6 +270,9 @@ s32 HSD_ObjAllocAddFree(HSD_ObjAllocData* data, u32 num)
 
 void* HSD_ObjAlloc(HSD_ObjAllocData* data)
 {
+#if BUILD_TARGET_PC
+    pc_objalloc_check_one(data, "alloc");
+#endif
     HSD_ObjAllocLink* cur;
     u32 size;
 
@@ -287,6 +321,9 @@ void* HSD_ObjAlloc(HSD_ObjAllocData* data)
 
 void HSD_ObjFree(HSD_ObjAllocData* data, void* obj)
 {
+#if BUILD_TARGET_PC
+    pc_objalloc_check_one(data, "free");
+#endif
     HSD_ObjAllocLink* link = obj;
     link->next = data->freehead;
     data->freehead = link;
