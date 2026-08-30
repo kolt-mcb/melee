@@ -2609,6 +2609,11 @@ void grCorneria_801E277C(Ground_GObj* gobj, struct grSmashTaunt_GroundVars* gv)
             HSD_SisLib_803A611C(1, NULL, 9, 0xD, 0, 1, 0, 7);
             HSD_SisLib_804D1124[1] = HSD_ArchiveGetPublicAddress(
                 archive->unk0, "SIS_GrCorneriaData");
+#if BUILD_TARGET_PC
+            HSD_SisLib_804D1124[1] = pc_sis_convert(
+                1, HSD_SisLib_804D1124[1],
+                ((HSD_Archive*) archive->unk0)->data);
+#endif
             text =
                 HSD_SisLib_803A5ACC(1, 0, 140.0f, 380.0f, 0.0f, 288.0f, 96.0f);
             text->text_color = sp18;
