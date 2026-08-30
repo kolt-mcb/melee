@@ -3488,6 +3488,13 @@ void gm_801BF3F8(void)
         }
     }
     temp_ret |= lbAudioAx_80026EBC(gm_801BF694());
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_AXTRACE")) {
+        fprintf(stderr, "[GM] scene banks: chars %d %d %d %d stage %d -> mask %llx\n",
+                gm_801BF648(0), gm_801BF648(1), gm_801BF648(2), gm_801BF648(3),
+                gm_801BF694(), (unsigned long long) temp_ret);
+    }
+#endif
     lbAudioAx_80026F2C(0x1E);
     lbAudioAx_8002702C(0xE, temp_ret);
     lbAudioAx_80027168();

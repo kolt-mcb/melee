@@ -247,6 +247,13 @@ void AXDriver_8038BF6C(HSD_SM* v)
                     v->track, pitch1, pitch2, left_inv_sqrt * tmp2, left_sqrt,
                     right_sqrt * left_inv_sqrt);
 
+#if BUILD_TARGET_PC
+                if (getenv("MELEE_AXTRACE")) {
+                    fprintf(stderr,
+                            "[AXD] script play fid %u (sound %d) pri %d vol %d -> vID %d\n",
+                            v->fid, v->x16, v->pri, v->volume, v->vID);
+                }
+#endif
                 if (v->vID != -1) {
                     AXDriver_804C5920[v->vID & 0x3F] = v;
                     v->flags &= 0xFFF4FF99;
@@ -583,12 +590,24 @@ int AXDriver_8038CFF4(int sound_id, u8 volume, u8 pan, int track, int channel)
 
     v = AXDriver_8038CFF4_inline();
 
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_AXTRACE")) {
+        fprintf(stderr, "[AXD] sfx %d (bank %d idx %d) vol %d pan %d ch %d -> %s\n",
+                sound_id, bank_idx, sample_idx, volume, pan, channel,
+                v ? "ok" : "no slot");
+    }
+#endif
     if (v == NULL) {
         return -1;
     }
 
     v->x16 = sound_id;
+#if BUILD_TARGET_PC
+    /* The table holds 32-bit (truncated, low-memory) pointers. */
+    v->cmd_stream = (u32*) (uintptr_t) ((u32*) AXDriver_804D77BC)[sample_idx];
+#else
     v->cmd_stream = AXDriver_804D77BC[sample_idx];
+#endif
     v->x1A = 0xFF;
     v->volume = volume;
     v->x1C = 0x80;
@@ -615,7 +634,14 @@ int AXDriver_8038CFF4(int sound_id, u8 volume, u8 pan, int track, int channel)
 
     enabled = OSDisableInterrupts();
     v->flags = (v->flags & ~SMSTATE_MASK) | SMSTATE_ACTIVE;
+#if BUILD_TARGET_PC
+    /* AXDriver_804D7790 is the free list (the allocator above pops from
+     * it, init fills it, finished machines return to it); the scheduler
+     * fn_8038CC1C walks AXDriver_804D7794. Link the new machine there. */
+    unk_inline(v, &AXDriver_804D7794);
+#else
     unk_inline(v, &AXDriver_804D7790);
+#endif
     AXDriver_804D77D0++;
     OSRestoreInterrupts(enabled);
 
@@ -840,6 +866,20 @@ void AXDriver_8038DA70(const char* path, void (*callback)(void))
     }
 
     DVDClose(&fileInfo);
+
+#if BUILD_TARGET_PC
+    /* The file is 32-bit words throughout -- five offset tables, then the
+     * sound scripts AXDriver_8038C6C0 reads a word at a time -- and it is
+     * big-endian. Swap it once here, before the tables are relocated. */
+    {
+        u32* w = (u32*) AXDriver_804D7798;
+        s32 n = alignedSize / 4;
+        s32 k;
+        for (k = 0; k < n; k++) {
+            w[k] = __builtin_bswap32(w[k]);
+        }
+    }
+#endif
 
     AXDriver_804D77A0 = ((s32*) AXDriver_804D7798)[0];
     count = AXDriver_804D77A0;
@@ -1314,6 +1354,12 @@ bool AXDriver_8038E8EC(const char* path, u8 volume, int track)
     }
     AXDriver_804D6038 = HSD_Synth_8038B5AC(entrynum, -1, volume, track);
     AXDriver_804D77E8 = AXDriver_804D778C;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_AXTRACE")) {
+        fprintf(stderr, "[AXD] bgm '%s' entry %d vol %d track %d -> node %d\n",
+                path, entrynum, volume, track, AXDriver_804D6038);
+    }
+#endif
     return true;
 }
 
