@@ -83,7 +83,16 @@ typedef struct ftCo_803C6594_t {
     /* 50 */ struct ftCo_803C6594_t* next;
 } ftCo_803C6594_t;
 
+#if BUILD_TARGET_PC
+/* The CPU's per-stage waypoint lists live in the DOL's .data, so on PC this
+ * was a weak *function* stub: ftCo_803C6594[grkind] read code bytes as a
+ * pointer and the AI crashed in mpIsland_8005AC14 on any stage but FD. A
+ * NULL table makes ftCo_800A1CC4 skip waypoint navigation until the real
+ * lists are lifted out of the DOL (pc_dol.c can read .data). */
+ftCo_803C6594_t* ftCo_803C6594[64];
+#else
 /* static */ extern ftCo_803C6594_t* ftCo_803C6594[];
+#endif
 /* 0A2638 */ static void ftCo_800B1DA0(Fighter* fp);
 
 static inline void ftCo_CpuSetNeutralStick(Fighter* fp)
