@@ -4,6 +4,8 @@
 #include "memory.h"
 
 #include <__mem.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <dolphin/os/OSAlloc.h>
 #if BUILD_TARGET_PC
 #include <execinfo.h>
@@ -15,6 +17,98 @@ static uintptr_t obj_heap_saved_curr = 0; /* PC port: save curr before corruptio
 #endif
 
 static HSD_ObjAllocData* alloc_datas;
+
+#if BUILD_TARGET_PC
+/* MELEE_OBJCHECK=1: verify every allocator's free list at the checkpoints
+ * the port calls pc_objalloc_check() from; abort at the first bad link so
+ * the corrupting interval is bracketed. */
+struct pc_pool {
+    HSD_ObjAllocData* data;
+    u8* start;
+    size_t bytes;
+};
+static struct pc_pool pc_pools[16384];
+static int pc_npools;
+static int pc_objcheck_on = -1;
+
+static void pc_pool_register(HSD_ObjAllocData* data, void* start, size_t bytes)
+{
+    if (pc_npools < (int) (sizeof(pc_pools) / sizeof(pc_pools[0]))) {
+        pc_pools[pc_npools].data = data;
+        pc_pools[pc_npools].start = start;
+        pc_pools[pc_npools].bytes = bytes;
+        pc_npools++;
+    }
+}
+
+static int pc_pool_owns(HSD_ObjAllocData* data, void* p)
+{
+    int i;
+    for (i = 0; i < pc_npools; i++) {
+        if (pc_pools[i].data == data && (u8*) p >= pc_pools[i].start &&
+            (u8*) p < pc_pools[i].start + pc_pools[i].bytes &&
+            (((u8*) p - pc_pools[i].start) % data->size) == 0)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+#include "id.h"
+extern HSD_ObjAllocData hsd_iddata;
+extern HSD_IDTable default_table;
+
+void pc_objalloc_check(const char* where)
+{
+    HSD_ObjAllocData* data;
+    int b;
+    if (pc_objcheck_on < 0) {
+        pc_objcheck_on = getenv("MELEE_OBJCHECK") != NULL;
+    }
+    if (!pc_objcheck_on) {
+        return;
+    }
+    for (b = 0; b < 101; b++) {
+        IDEntry* e = default_table.table[b];
+        int k = 0;
+        while (e != NULL && k < 100000) {
+            if (!pc_pool_owns(&hsd_iddata, e)) {
+                fprintf(stderr,
+                        "[OBJCHECK] %s: ID table bucket %d entry #%d = %p is "
+                        "not an IDEntry slot\n",
+                        where, b, k, (void*) e);
+                abort();
+            }
+            e = e->next;
+            k++;
+        }
+    }
+    for (data = alloc_datas; data != NULL; data = data->next) {
+        HSD_ObjAllocLink* l = data->freehead;
+        u32 n = 0;
+        while (l != NULL && n <= data->free) {
+            if (!pc_pool_owns(data, l)) {
+                fprintf(stderr,
+                        "[OBJCHECK] %s: allocator %p (size %u) free link #%u "
+                        "= %p is not a pool slot (free=%u used=%u)\n",
+                        where, (void*) data, data->size, n, (void*) l,
+                        data->free, data->used);
+                abort();
+            }
+            n++;
+            l = l->next;
+        }
+        if (n != data->free) {
+            fprintf(stderr,
+                    "[OBJCHECK] %s: allocator %p (size %u) free list has %u "
+                    "links, free=%u\n",
+                    where, (void*) data, data->size, n, data->free);
+            abort();
+        }
+    }
+}
+#endif
 
 void HSD_ObjSetHeap(uintptr_t size, void* ptr)
 {
@@ -125,6 +219,7 @@ s32 HSD_ObjAllocAddFree(HSD_ObjAllocData* data, u32 num)
         if (pool_start == NULL) {
             return 0;
         }
+        pc_pool_register(data, pool_start, (size_t) data->size * num);
         /* Zero the pool memory to prevent uninitialized field crashes.
          * On x86_64, structs are larger than on GCN due to 8-byte pointers,
          * so fields beyond what CreateGObj initializes contain garbage. */
