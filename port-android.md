@@ -173,6 +173,52 @@ at 0x10000000`). Android mandates PIE + ASLR.
   (most already do; `qwer`, the `lbHeap` fallbacks are the known ones).
 - Est: 1 session + device validation.
 
+### Phase 3 results (2026-08-30): green suite as a PIE binary
+
+Desktop gate first: `PC_PIE=1 python3 configure_pc.py` → `build.ninja.pc-pie`,
+`build/pc-pie/melee-pc`, linked `-pie`. That reproduces Android's memory
+layout on the desktop (image, malloc and stack all above 4 GB) and the
+suite runs against it with `MELEE_SUITE_PORT=build/pc-pie/melee-pc`.
+First run: crash in the first frame. Now: every case within baseline, scores
+identical to the `-no-pie` build.
+
+What the `-no-pie` link had been hiding, in the order found:
+
+1. **`(u32) &global` arithmetic** in the decomp (`lbheap.c` heap-view cursor,
+   `sislib.c` kerning-pair address through `s32`, `AXAlloc.c` stack pops):
+   `uintptr_t` where GCN semantics are preserved (`uintptr_t` is `u32`
+   there), PC-guarded copies elsewhere. 279 explicit pointer→u32 casts
+   were harvested (`-Wpointer-to-int-cast` over the tree) and triaged:
+   the rest truncate low-pool or archive pointers (fine), differences,
+   hash keys, or DSP command words.
+2. **A callback in a `u32` global** (`eflib.c` `hsd_804D7900`): pointer type
+   on PC.
+3. **Every small allocation was `malloc()`**: `OSAllocFromHeap` sent ≤64 KB
+   to glibc, plus `HSD_MemAlign`, the figatree buffers and the movie frame
+   buffer. Under `-no-pie` the brk heap sat at 0x4xxxxx so it all "worked".
+   Now `pc_lowmem_malloc/free/realloc/memalign` serve everything from a
+   **1 GB `MAP_NORESERVE` reservation below 4 GB** (hint scan +
+   `MAP_FIXED_NOREPLACE`, result address verified), power-of-two free lists,
+   carves from the top. Frees actually recycle (zeroed on reuse).
+4. **The port's own heuristics** were the biggest visible failure: the
+   render-callback guard in `gobj.c` accepted only code addresses
+   `<= 0xFFFFFFFF`, so under PIE it skipped every render callback — black
+   frames, no crash. `pc_code_ptr_ok()` now checks the executable PT_LOAD
+   of the image via `dl_iterate_phdr` (bionic has it). `dobj.c` /
+   `displayfunc.c` `> 4 GB ⇒ garbage` checks → canonical-range test.
+5. **A latent bug PIE made visible**: the PlCo arena-fill handed
+   `Fighter_804D6514` (trophy-platform joint) an arena pointer that
+   `HSD_JObjLoadJoint` parsed as a joint; its flags were the low bits of a
+   host pointer. With ASLR off those bits included IK → crash in the IK
+   resolver on the first attack. NULL now (the platform is still a
+   fidelity TODO: convert PlCo entry 16).
+
+Debug knobs added: `MELEE_LOWMEM_NOFREE`, `MELEE_LOWMEM_POISON`,
+`MELEE_LOWMEM_FREELOG` (image-relative caller offsets for addr2line).
+Trap for next time: gdb disables ASLR, so a gdb-only reproduction means
+"depends on the image base", not "depends on the thing you changed" —
+`setarch -R` separates the two without gdb.
+
 ## Phase 4 — app shell, assets, packaging
 
 - SDL2's stock `android-project` Gradle template + `SDL_main`; the port's

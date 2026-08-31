@@ -178,6 +178,7 @@ fabric.properties
 # PC port generated files
 build.ninja.pc
 build.ninja.pc-asan
+build.ninja.pc-pie
 build.ninja.android
 build/
 melee-pc

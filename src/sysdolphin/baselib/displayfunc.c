@@ -1,4 +1,5 @@
 #if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
 #include <stdio.h>
 #include <stdlib.h>
 #endif
@@ -333,7 +334,7 @@ void HSD_JObjDispSub(HSD_JObj* jobj, MtxPtr vmtx, MtxPtr pmtx,
     for (dobj = jobj->u.dobj; dobj; dobj = dobj->next) {
         #if BUILD_TARGET_PC
         /* PC port: guard against corrupted dobj->next pointers. */
-                if ((uintptr_t)dobj > 0xFFFFFFFFULL) {
+        if (!pc_ptr_sane(dobj)) {
             port_guard_warn("displayfunc.c:305");
             break;
         }

@@ -181,9 +181,7 @@ inline void render_gobj(HSD_GObj* cur, int i)
     HSD_GObj_804D7814 = cur;
     #if BUILD_TARGET_PC
     /* PC port: guard against corrupted callback pointers. */
-    if (cur->render_cb != NULL &&
-        (uintptr_t)cur->render_cb >= 0x400000ULL &&
-        (uintptr_t)cur->render_cb <= 0xFFFFFFFFULL) {
+    if (cur->render_cb != NULL && pc_code_ptr_ok((const void*) cur->render_cb)) {
         cur->render_cb(cur, i);
     }
         else {
@@ -253,8 +251,7 @@ void HSD_GObj_80390FC0(void)
             HSD_GObj* next_cur = cur->next_gx;
             if (cur->render_cb != NULL) {
                 /* PC port: guard against corrupted callback pointers. */
-                if ((uintptr_t)cur->render_cb < 0x400000ULL ||
-                    (uintptr_t)cur->render_cb > 0xFFFFFFFFULL) {
+                if (!pc_code_ptr_ok((const void*) cur->render_cb)) {
                     port_guard_warn("gobj.c:211");
                     cur = next_cur;
                     continue;  /* Skip corrupted callback */
