@@ -71,7 +71,7 @@ AXVPB* __AXPopFreeStack(void)
 {
     AXVPB* p;
 
-    p = (void*) (u32) &__AXStackHead[0]->next;
+    p = (void*) (uintptr_t) &__AXStackHead[0]->next;
     if (p) {
         __AXStackHead[0] = p->next;
     }
@@ -92,7 +92,7 @@ AXVPB* __AXPopCallbackStack(void)
 {
     AXVPB* p;
 
-    p = (void*) (u32) &__AXCallbackStack[0];
+    p = (void*) (uintptr_t) &__AXCallbackStack[0];
     if (p) {
         __AXCallbackStack = p->next1;
     }

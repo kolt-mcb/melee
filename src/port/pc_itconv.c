@@ -61,6 +61,7 @@ struct arch {
     u32* bounds;  /* sorted, unique object starts: reloc targets + roots */
     unsigned nbounds;
     unsigned gen;
+    unsigned char* swapped; /* pc_script: bit per word, set at object start */
 };
 static struct arch g_arch[ARCH_MAX];
 static int g_arch_n;
@@ -155,6 +156,56 @@ static struct arch* find_arch(const void* p)
         }
     }
     return NULL;
+}
+
+int pc_itconv_object(const void* p, const unsigned char** start,
+                     const unsigned char** end)
+{
+    struct arch* a = find_arch(p);
+    u32 off;
+    unsigned lo, hi;
+    if (a == NULL) {
+        return 0;
+    }
+    off = (u32) ((const u8*) p - a->base);
+    /* largest bound <= off */
+    lo = 0;
+    hi = a->nbounds;
+    while (lo < hi) {
+        unsigned mid = (lo + hi) / 2;
+        if (a->bounds[mid] <= off) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    *start = a->base + (lo > 0 ? a->bounds[lo - 1] : 0);
+    *end = a->base + (lo < a->nbounds ? a->bounds[lo] : (u32) a->len);
+    return 1;
+}
+
+int pc_itconv_object_mark(const unsigned char* start)
+{
+    struct arch* a = find_arch(start);
+    u32 idx;
+    unsigned char bit;
+    if (a == NULL) {
+        return 1;
+    }
+    if (a->swapped == NULL) {
+        /* one bit per 4-byte word of the data section */
+        a->swapped = calloc(a->len / 32 + 1, 1);
+        if (a->swapped == NULL) {
+            return 1;
+        }
+    }
+    idx = (u32) (start - a->base) / 4;
+    bit = (unsigned char) (1u << (idx & 7));
+    if (a->swapped[idx >> 3] & bit) {
+        return 1;
+    }
+    a->swapped[idx >> 3] |= bit;
+    return 0;
 }
 
 int pc_itconv_locate(const void* p, const unsigned char** base,

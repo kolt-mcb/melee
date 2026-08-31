@@ -14,6 +14,52 @@ static inline int pc_ptr_sane(const void* p)
     if (up > 0x7fffffffffffULL) return 0;
     return 1;
 }
+/* Is `fn` a code address inside the game image? Used by the render-callback
+ * guards. The old test was `<= 0xFFFFFFFF`, which is only true of a -no-pie
+ * executable at 0x400000: under PIE (Android, PC_PIE=1) the text sits at
+ * 0x5555xxxxxxxx / 0x7xxxxxxxxxxx and that guard skipped EVERY render
+ * callback -- black frames, no crash. The executable PT_LOAD of the module
+ * containing port_guard_warn (libmain.so on Android, the binary here) is
+ * looked up once through dl_iterate_phdr, which bionic also provides.
+ *
+ * Bounding to the EXECUTABLE segment, rather than the whole module, is what
+ * makes this useful: a pointer into .rodata or .eh_frame passed the old
+ * 0x400000..0xFFFFFFFF test just as happily as a real function. The results
+ * screen produces exactly that -- lbl_803B7B68 stands in as a weak *function*
+ * stub for a data symbol, so the render callbacks read out of it are that
+ * stub's own instruction bytes. */
+#include <link.h>
+void port_guard_warn(const char* site);
+static uintptr_t pc_text_lo_, pc_text_hi_;
+static int pc_text_cb_(struct dl_phdr_info* info, size_t sz, void* data)
+{
+    uintptr_t probe = (uintptr_t) data;
+    int i;
+    (void) sz;
+    for (i = 0; i < info->dlpi_phnum; i++) {
+        const ElfW(Phdr)* ph = &info->dlpi_phdr[i];
+        if (ph->p_type == PT_LOAD && (ph->p_flags & PF_X)) {
+            uintptr_t lo = info->dlpi_addr + ph->p_vaddr;
+            uintptr_t hi = lo + ph->p_memsz;
+            if (probe >= lo && probe < hi) {
+                pc_text_lo_ = lo;
+                pc_text_hi_ = hi;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+static inline int pc_code_ptr_ok(const void* fn)
+{
+    uintptr_t up = (uintptr_t) fn;
+    if (pc_text_lo_ == 0) {
+        dl_iterate_phdr(pc_text_cb_, (void*) &port_guard_warn);
+        if (pc_text_lo_ == 0) { pc_text_lo_ = 1; pc_text_hi_ = 0; }
+    }
+    if (pc_text_hi_ == 0) return pc_ptr_sane(fn); /* lookup failed: canonical */
+    return up >= pc_text_lo_ && up < pc_text_hi_;
+}
 /* Safe C-string check: pointer sane, bytes probe-readable via write(2)
  * (EFAULT on unmapped), printable ASCII, NUL within max. */
 #include <unistd.h>

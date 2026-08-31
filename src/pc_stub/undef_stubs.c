@@ -1,5 +1,7 @@
 #include "../port/pc_ptr.h"
 #include <stdlib.h>
+#include <malloc.h>
+#include <dlfcn.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -467,7 +469,25 @@ __attribute__((weak)) void HSD_GObjPLink_803902B8(void) {}
 
 /* stdio internal */
 #include <stdio.h>
+#if defined(__GLIBC__)
 FILE __files[3] = {0};
+#else
+FILE* __files[3]; /* bionic's FILE is opaque; nothing on PC indexes this */
+#endif
+
+/* The boot init chain below calls these before any header declares them;
+ * Clang refuses implicit declarations that later conflict with the weak
+ * void(void) stubs further down. */
+void lbMemory_8001564C(void);
+void lbHeap_80015F3C(void);
+void lbDvd_80018F68(void);
+void lbArq_80014D2C(void);
+void lbSnap_8001E290(void);
+void lbAudioAx_8002838C(void);
+void gmMainLib_8015FCC0(void);
+void lbMthp_8001F87C(void);
+void gmMainLib_8015FBA4(void);
+void lbAudioAx_80028690(void);
 
 
 /* MSL va_list internals */
@@ -3803,76 +3823,196 @@ __attribute__((weak)) void PSMTXInverse(void) {}
 /* Video functions — not needed on PC (no GCN video output) */
 __attribute__((weak)) void VIGetNextField(void) {}
 
-/* Heap allocation — our stubs use HSD_AllocMem/HSD_FreeMem instead */
-static void* g_low_mem_base = NULL;
+/* ------------------------------------------------------------------
+ * PC port low-memory pool (port-android.md Phase 3).
+ *
+ * The game stores pointers in u32 fields and does its heap arithmetic in
+ * u32 (lbHeap/lbMemory, the archive converters, every `(u32) ptr` in the
+ * decomp). Anything the game can address therefore has to live below
+ * 4 GB. The desktop build used to get most of that for free: linked
+ * -no-pie, glibc's brk heap sat just above the image at 0x4xxxxx, so
+ * even the malloc() fallbacks truncated harmlessly. Android mandates
+ * PIE + ASLR (and PC_PIE=1 reproduces it here): malloc lands at
+ * 0x7xxx_xxxx_xxxx and every such site silently corrupts.
+ *
+ * So: one reservation, below 4 GB, at process start, and EVERY game
+ * allocation comes from it. 1 GB of address space (MAP_NORESERVE: pages
+ * cost nothing until touched). Two cursors: pc_lowmem_carve() hands out
+ * permanent regions from the top (the HSD object heap, the lbHeap
+ * arenas, the converters' bump arena); pc_lowmem_malloc() serves
+ * OSAllocFromHeap from the bottom through power-of-two free lists, so
+ * OSFreeToHeap can recycle instead of leaking.
+ *
+ * MAP_FIXED_NOREPLACE is mandatory: plain MAP_FIXED silently REPLACED
+ * whatever glibc had already mapped there (the intermittent malloc():
+ * corrupted double-linked list during the title load). A kernel that
+ * does not know the flag treats it as a hint, so the result is checked
+ * against the request. */
+#define PC_LOWMEM_POOL_SIZE (1024UL << 20)
+static unsigned char* g_low_mem_base = NULL;
 static size_t g_low_mem_size = 0;
-static size_t g_low_mem_used = 0;
+static size_t g_low_mem_used = 0;   /* bump cursor, bottom up */
+static size_t g_low_mem_top = 0;    /* carve cursor, top down */
 
 #ifndef MAP_FIXED_NOREPLACE
 #define MAP_FIXED_NOREPLACE 0x100000
 #endif
+#ifndef MAP_NORESERVE
+#define MAP_NORESERVE 0x4000
+#endif
 
-/* PC port: reserve the low-memory pool. MUST use MAP_FIXED_NOREPLACE:
- * plain MAP_FIXED silently REPLACED whatever glibc malloc had already
- * mapped in [0x10000000, +64MB) — ASLR decides whether an arena lands
- * there, which was the intermittent (~1/20) malloc(): invalid size /
- * corrupted double-linked list abort during the title archive load.
- * Called early from main() (before malloc traffic grows) and lazily as
- * a fallback. */
+/* Where the pool may go: below 4 GB, and clear of [0x80000000, 0xC0000000)
+ * -- pc_ptr_sane() rejects that window as "unconverted GCN address", so a
+ * pool there would fail every guard (the x86_64 emulator handed out
+ * 0x80000000 when the low hints were taken). Sizes fall back 1 GB ->
+ * 512 MB -> 256 MB. */
+/* The pool must lie ENTIRELY below 0x80000000.
+ *
+ * Two independent reasons, both found on a Pixel 9 where the only free
+ * 512 MB window below 4 GB is at 0xC0000000:
+ *
+ *  - Sign extension. The decomp stores pointers in s32 fields all over
+ *    (heap->start, gobj user data, the 1-P match record, ...). On the
+ *    GameCube that is harmless because pointers are 32 bits; on a 64-bit
+ *    host, a pool address with bit 31 set sign-extends on the way back to
+ *    a pointer -- 0xFB04B3F8 becomes 0xFFFFFFFFFB04B3F8, which is what
+ *    crashed the particle code (hsd_80398C04) with the pool at
+ *    0xC0000000.
+ *  - The port's own guards. pc_ptr_sane() and HSD_JOBJ_SANE() reject
+ *    [0x80000000, 0xC0000000) as "unconverted GCN address", because that
+ *    is where MEM1 lives on the console (and 0xC0000000 is its uncached
+ *    mirror). Allocations there are treated as garbage and skipped: with
+ *    a 1 GB pool pinned at 0x50000000 -- straddling the line -- the HUD
+ *    loaded null descriptors and died on a near-NULL read.
+ *
+ * So: hint + size <= 0x80000000, always. MELEE_LOWMEM_BASE forces a base
+ * anyway (that is how the two failures above were reproduced on the
+ * desktop); it warns rather than silently misbehaving. */
+#define PC_LOWMEM_LIMIT 0x80000000ULL
+
+static int pc_lowmem_try_at(uintptr_t hint, size_t size, int force)
+{
+    void* p;
+    if (hint == 0 || size == 0) return 0;
+    if ((unsigned long long) hint + size > PC_LOWMEM_LIMIT) {
+        if (!force) return 0;
+        fprintf(stderr, "[MEM] WARNING: forced pool %#lx+%luMB crosses "
+                        "0x80000000; pointers there sign-extend and the "
+                        "port's guards reject them\n",
+                (unsigned long) hint, (unsigned long) (size >> 20));
+    }
+    p = mmap((void*) hint, size, PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE,
+             -1, 0);
+    if (p == MAP_FAILED) return 0;
+    if (p != (void*) hint) {
+        /* old kernel: the flag was a hint and it went elsewhere */
+        munmap(p, size);
+        return 0;
+    }
+    g_low_mem_base = (unsigned char*) p;
+    g_low_mem_size = size;
+    g_low_mem_used = 0;
+    g_low_mem_top = size;
+    fprintf(stderr, "[MEM] Low-memory pool reserved at %p (%lu MB)\n", p,
+            (unsigned long) (size >> 20));
+    fflush(stderr);
+    return 1;
+}
+
+static void pc_lowmem_dump_maps(void)
+{
+    FILE* f = fopen("/proc/self/maps", "r");
+    char line[512];
+    int n = 0;
+    if (f == NULL) return;
+    fprintf(stderr, "[MEM] mappings below 4 GB:\n");
+    while (fgets(line, sizeof(line), f) != NULL && n < 40) {
+        unsigned long lo = strtoul(line, NULL, 16);
+        if (lo < 0x100000000ULL) { fputs("[MEM]   ", stderr); fputs(line, stderr); n++; }
+    }
+    fclose(f);
+}
+
 void pc_lowmem_init(void)
 {
-    static const uintptr_t candidates[] = { 0x10000000, 0x20000000, 0x30000000, 0x40000000 };
-    unsigned i;
+    /* Descending: take the largest window that fits. The carves alone
+     * need ~176 MB (16 game heap + 64 HSD + 96 converter arena), so
+     * anything under 256 MB is a warning and 128 MB is the floor. */
+    static const size_t sizes[] = {
+        1024UL << 20, 768UL << 20, 512UL << 20, 384UL << 20,
+        256UL << 20, 192UL << 20, 128UL << 20,
+    };
+    unsigned si;
     if (g_low_mem_base != NULL) return;
-    for (i = 0; i < sizeof(candidates)/sizeof(candidates[0]); i++) {
-        void* p = mmap((void*)candidates[i], 256*1024*1024, PROT_READ | PROT_WRITE,
-                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
-        if (p != MAP_FAILED) {
-            g_low_mem_base = p;
-            g_low_mem_size = 256*1024*1024;
-            g_low_mem_used = 0;
-            fprintf(stderr, "[MEM] Low-memory pool reserved at %p\n", p);
-            fflush(stderr);
-            return;
+    {
+        const char* pin = getenv("MELEE_LOWMEM_BASE");
+        if (pin != NULL) {
+            uintptr_t hint = (uintptr_t) strtoull(pin, NULL, 16);
+            for (si = 0; si < sizeof(sizes) / sizeof(sizes[0]); si++) {
+                if (pc_lowmem_try_at(hint, sizes[si], 1)) return;
+            }
+            fprintf(stderr, "[MEM] MELEE_LOWMEM_BASE=%s unavailable\n", pin);
         }
     }
-    fprintf(stderr, "[MEM] Low-memory pool reservation FAILED\n");
+    for (si = 0; si < sizeof(sizes) / sizeof(sizes[0]); si++) {
+        uintptr_t hint;
+        /* 64 MB steps: Android's ART heaps chop the low address space into
+         * irregular pieces, and a coarser stride walked straight past the
+         * only usable window on a Pixel 9. */
+        for (hint = 0x10000000; hint + sizes[si] <= PC_LOWMEM_LIMIT;
+             hint += 0x04000000)
+        {
+            if (pc_lowmem_try_at(hint, sizes[si], 0)) {
+                if (sizes[si] < (256UL << 20)) {
+                    fprintf(stderr, "[MEM] WARNING: only %lu MB below "
+                                    "0x80000000; the game may run out\n",
+                            (unsigned long) (sizes[si] >> 20));
+                    pc_lowmem_dump_maps();
+                }
+                return;
+            }
+        }
+    }
+    fprintf(stderr, "[MEM] Low-memory pool reservation FAILED: no window "
+                    "below 0x80000000\n");
+    pc_lowmem_dump_maps();
     fflush(stderr);
 }
 
-/* Carve a permanent region out of the low pool (sub-4GB addresses so the
- * game's u32 heap arithmetic works). Used to give lbHeap real arena/ARAM
- * bounds — the GCN values live in zeroed .bss on PC, so the ARAM heap was
- * a zero-byte arena and every allocation fell back to malloc. */
+int pc_lowmem_contains(const void* p)
+{
+    return g_low_mem_base != NULL &&
+           (const unsigned char*) p >= g_low_mem_base &&
+           (const unsigned char*) p < g_low_mem_base + g_low_mem_size;
+}
+
+/* Carve a permanent region out of the low pool (from the top). Used to
+ * give lbHeap real arena/ARAM bounds and HSD its object heap. */
 void* pc_lowmem_carve(unsigned long size)
 {
     void* p;
-    void pc_lowmem_init(void);
     if (g_low_mem_base == NULL) pc_lowmem_init();
     if (g_low_mem_base == NULL) return NULL;
     size = (size + 4095UL) & ~4095UL;
-    if (g_low_mem_used + size > g_low_mem_size) return NULL;
-    p = (unsigned char*)g_low_mem_base + g_low_mem_used;
-    g_low_mem_used += size;
+    if (g_low_mem_top - g_low_mem_used < size) return NULL;
+    g_low_mem_top -= size;
+    p = g_low_mem_base + g_low_mem_top;
     fprintf(stderr, "[MEM] carved %lu MB at %p for game heap\n", size >> 20, p);
     return p;
 }
 
-/* PC port: sub-4GB bump allocator for game structures. The game's heap code
- * (lbHeap/lbMemory) and the archive converters store pointers in u32 fields,
- * so anything reachable from converted archive data MUST live below 4 GB.
- * malloc() returns high addresses, which silently truncated — that was the
- * intermittent "scene loads but has no meshes" failure. */
+/* Sub-4GB bump arena for the archive converters (pc_ftconv, pc_itconv):
+ * never freed, so a plain bump. */
 void* pc_lowmem_alloc(unsigned long size)
 {
     static unsigned char* base = NULL;
     static unsigned long used = 0, cap = 0;
-    void* pc_lowmem_carve(unsigned long size);
     void* p;
 
     if (base == NULL) {
         cap = 96UL * 1024UL * 1024UL;
-        base = (unsigned char*)pc_lowmem_carve(cap);
+        base = (unsigned char*) pc_lowmem_carve(cap);
         if (base == NULL) return NULL;
         used = 0;
     }
@@ -3883,32 +4023,163 @@ void* pc_lowmem_alloc(unsigned long size)
     return p;
 }
 
+/* General allocator over the pool: power-of-two size classes (32 B ..
+ * 512 MB), a 32-byte header so user pointers keep the 32-byte alignment
+ * GCN code assumes for DMA buffers, LIFO free lists per class. Recycled
+ * blocks are zeroed, matching the fresh-mmap zeros of the bump path
+ * (and of the old >64 KB path) that code may have come to rely on. */
+#define PC_LM_MAGIC 0x4C4D454Du
+#define PC_LM_FREED 0xDEADBEEFu
+#define PC_LM_NCLASS 30
+struct pc_lm_hdr {
+    u32 magic;
+    u32 cls;
+    u32 size;
+    u32 pad0;
+    struct pc_lm_hdr* next;
+    u64 pad1;
+};
+static struct pc_lm_hdr* g_lm_free[PC_LM_NCLASS];
+static unsigned long g_lm_live, g_lm_fallback;
+
+void* pc_lowmem_malloc(size_t size)
+{
+    struct pc_lm_hdr* h;
+    size_t need;
+    u32 c;
+    if (g_low_mem_base == NULL) pc_lowmem_init();
+    if (g_low_mem_base == NULL) return malloc(size);
+    if (size == 0) size = 1;
+    need = size + sizeof(struct pc_lm_hdr);
+    for (c = 5; c < PC_LM_NCLASS && ((size_t) 1 << c) < need; c++) {}
+    if (c >= PC_LM_NCLASS) return malloc(size);
+    if (g_lm_free[c] != NULL) {
+        h = g_lm_free[c];
+        g_lm_free[c] = h->next;
+        memset(h + 1, 0, ((size_t) 1 << c) - sizeof(*h));
+    } else {
+        size_t blk = (size_t) 1 << c;
+        if (g_low_mem_top - g_low_mem_used < blk) {
+            if (g_lm_fallback++ == 0)
+                fprintf(stderr, "[MEM] low pool EXHAUSTED (%lu MB used); "
+                                "falling back to malloc (>4GB!)\n",
+                        (unsigned long) (g_low_mem_used >> 20));
+            return malloc(size);
+        }
+        h = (struct pc_lm_hdr*) (g_low_mem_base + g_low_mem_used);
+        g_low_mem_used += blk;
+    }
+    h->magic = PC_LM_MAGIC;
+    h->cls = c;
+    h->size = (u32) size;
+    h->next = NULL;
+    g_lm_live++;
+    return h + 1;
+}
+
+/* Debug knobs (the no-op OSFreeToHeap of the old port hid every
+ * use-after-free; recycling exposes them):
+ *   MELEE_LOWMEM_NOFREE=1   never recycle (bisect: does the bug vanish?)
+ *   MELEE_LOWMEM_POISON=1   fill freed blocks with 0xEF and quarantine them,
+ *                           so a stale read shows 0xEFEF.. instead of the
+ *                           next tenant's data
+ *   MELEE_LOWMEM_FREELOG=1  log each free with its caller */
+static void pc_lowmem_free_from(void* p, const void* caller)
+{
+    struct pc_lm_hdr* h;
+    static int mode = -1;
+    if (mode < 0) {
+        mode = 0;
+        if (getenv("MELEE_LOWMEM_NOFREE")) mode |= 1;
+        if (getenv("MELEE_LOWMEM_POISON")) mode |= 2;
+        if (getenv("MELEE_LOWMEM_FREELOG")) mode |= 4;
+    }
+    if (p == NULL) return;
+    if (!pc_lowmem_contains(p)) { free(p); return; }
+    h = (struct pc_lm_hdr*) p - 1;
+    if (h->magic != PC_LM_MAGIC) {
+        /* a carve/bump-arena pointer, or a double free: leave it */
+        if (h->magic == PC_LM_FREED)
+            fprintf(stderr, "[MEM] double free of %p\n", p);
+        return;
+    }
+    if (mode & 4) {
+        /* image-relative offset: addr2line -e <binary> <off> */
+        Dl_info di;
+        unsigned long off = (unsigned long) (uintptr_t) caller;
+        if (dladdr(caller, &di) && di.dli_fbase)
+            off -= (unsigned long) (uintptr_t) di.dli_fbase;
+        fprintf(stderr, "[MEM] free %p size=%u cls=%u from +0x%lx\n", p,
+                (unsigned) h->size, (unsigned) h->cls, off);
+    }
+    if (mode & 1) return;
+    if (mode & 2) {
+        memset(p, 0xEF, ((size_t) 1 << h->cls) - sizeof(*h));
+        h->magic = PC_LM_FREED;
+        return; /* quarantined: never reused */
+    }
+    h->magic = PC_LM_FREED;
+    h->next = g_lm_free[h->cls];
+    g_lm_free[h->cls] = h;
+    g_lm_live--;
+}
+
+void pc_lowmem_free(void* p)
+{
+    pc_lowmem_free_from(p, __builtin_return_address(0));
+}
+
+/* realloc over the pool: grows in place while the block's class still
+ * fits, else moves. A non-pool pointer (legacy malloc) is migrated in. */
+void* pc_lowmem_realloc(void* p, size_t need)
+{
+    struct pc_lm_hdr* h;
+    void* n;
+    if (p == NULL) return pc_lowmem_malloc(need);
+    if (pc_lowmem_contains(p)) {
+        h = (struct pc_lm_hdr*) p - 1;
+        if (h->magic == PC_LM_MAGIC) {
+            if (need + sizeof(*h) <= ((size_t) 1 << h->cls)) {
+                h->size = (u32) need;
+                return p;
+            }
+            n = pc_lowmem_malloc(need);
+            if (n == NULL) return NULL;
+            memcpy(n, p, h->size < need ? h->size : need);
+            pc_lowmem_free(p);
+            return n;
+        }
+        return NULL; /* carve/bump pointers do not grow */
+    }
+    n = pc_lowmem_malloc(need);
+    if (n == NULL) return NULL;
+    memcpy(n, p, malloc_usable_size(p) < need ? malloc_usable_size(p) : need);
+    free(p);
+    return n;
+}
+
+/* Aligned allocation: pool blocks are 32-byte aligned already; larger
+ * alignments over-allocate and align within (those few are never freed:
+ * the header is not reachable from the aligned pointer). */
+void* pc_lowmem_memalign(size_t align, size_t size)
+{
+    if (align <= 32) return pc_lowmem_malloc(size);
+    {
+        unsigned char* p = (unsigned char*) pc_lowmem_malloc(size + align);
+        if (p == NULL) return NULL;
+        return (void*) (((uintptr_t) p + align - 1) & ~(uintptr_t) (align - 1));
+    }
+}
+
 __attribute__((weak)) void* OSAllocFromHeap(void* heap, size_t size)
 {
-    (void)heap;
-    /* PC port: for large allocations (>64KB), use low-memory pool
-     * to ensure archive pointers work correctly with 32-bit arithmetic. */
-    if (size > 65536) {
-        if (g_low_mem_base == NULL) {
-            pc_lowmem_init();
-        }
-        if (g_low_mem_base != NULL && g_low_mem_used + size <= g_low_mem_size) {
-            void* ptr = (u8*)g_low_mem_base + g_low_mem_used;
-            fprintf(stderr, "[MEM] Low-mem alloc: size=%zu ptr=%p\n", size, ptr);
-            fflush(stderr);
-            g_low_mem_used += (size + 31) & ~31;  /* align to 32 bytes */
-            return ptr;
-        }
-    }
-    return malloc(size);
+    (void) heap;
+    return pc_lowmem_malloc(size);
 }
 __attribute__((weak)) void OSFreeToHeap(void* heap, void* ptr)
 {
-    (void)heap;
-    (void)ptr;
-    /* Don't free low-memory pool allocations — they're from the fixed pool */
-    /* Don't free mmap'd memory — it's from the fixed pool */
-    /* For now, just leak memory (simpler than tracking allocations) */
+    (void) heap;
+    pc_lowmem_free_from(ptr, __builtin_return_address(0));
 }
 /* HSD render pass query — initialize.c not compiled yet */
 __attribute__((weak)) long HSD_GetCurrentRenderPass(void) { return 0; } /* decl: HSD_RenderPass */

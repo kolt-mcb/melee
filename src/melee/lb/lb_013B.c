@@ -4,6 +4,9 @@
 #include "lb/lbarchive.h"
 #include "lb/lbcommand.h"
 #include "lb/types.h"
+#if BUILD_TARGET_PC
+#include "port/pc_script.h"
+#endif
 
 #include <math_ppc.h>
 #include <trigf.h>
@@ -173,6 +176,9 @@ bool lb_80014258(Fighter_GObj* gobj, void* arg1, FtCmd2 cmd)
     }
 
     while (co->x8_ptr1 != NULL && co->x0_timer == 0) {
+#if BUILD_TARGET_PC
+        pc_script_prepare(co->x8_ptr1);
+#endif
         u32 opcode = co->x8_ptr1->unk.unk;
         if (!Command_Execute((CommandInfo*) co, opcode)) {
             if (opcode < 0x15U) {

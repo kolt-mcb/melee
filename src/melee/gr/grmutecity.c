@@ -1131,7 +1131,7 @@ void grMuteCity_801F1328(void)
     int j;
 
     for (offset = 4, i = 1; i < 30; i++, offset += 4) {
-        p = (s32*) ((u32) arr + offset);
+        p = (s32*) ((uintptr_t) arr + offset);
         for (j = i; j >= 0; j--) {
             s32 temp = p[0];
             s32 prev = p[-1];

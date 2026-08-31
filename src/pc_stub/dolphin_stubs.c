@@ -123,9 +123,10 @@ int __GXCurrentRaster = 0;
 
 /* Memory allocation */
 __attribute__((weak)) void* HSD_MemAlloc(s32 size) { return malloc(size); }
+/* The game stores these in u32 fields: sub-4GB pool, not malloc. */
 void* HSD_MemAlign(s32 align, s32 size) {
-    void* p = malloc(size + align);
-    return p ? (void*)((((uintptr_t)p + align - 1) / align) * align) : NULL;
+    extern void* pc_lowmem_memalign(size_t align, size_t size);
+    return pc_lowmem_memalign((size_t) (align > 0 ? align : 32), (size_t) size);
 }
 __attribute__((weak)) void HSD_Free(void* ptr) { free(ptr); }
 

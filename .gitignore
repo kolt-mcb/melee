@@ -177,6 +177,10 @@ fabric.properties
 
 # PC port generated files
 build.ninja.pc
+build.ninja.pc-asan
+build.ninja.pc-pie
+build.ninja.android
+build.ninja.android-*
 build/
 melee-pc
 melee-pc-debug
@@ -193,3 +197,9 @@ get_undef.sh
 # PC port working artifacts
 run_log*.txt
 screenshot*
+tools/android/deps
+tools/android/app/app/jniLibs
+tools/android/app/.gradle
+tools/android/app/app/build
+tools/android/app/build
+tools/android/app/local.properties

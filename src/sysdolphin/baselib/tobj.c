@@ -1,4 +1,7 @@
 #include "tobj.h"
+#if BUILD_TARGET_PC
+#include "port/pc_execinfo.h"
+#endif
 
 #include "aobj.h"
 #include "cobj.h"

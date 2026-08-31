@@ -140,6 +140,7 @@ inc = " ".join("-I" + str(p) for p in INCLUDE_DIRS)
 # separate ninja file (build.ninja.pc-asan), separate obj dir, -O1 for
 # usable backtraces. Used by M0 to hunt the heap-corruption crash.
 import os
+import sys
 ASAN = os.environ.get("PC_ASAN") == "1"
 SAN_FLAGS = " -fsanitize=address -fno-omit-frame-pointer" if ASAN else ""
 # PC_TEXDUMP=1 compiles in the texture dump that tools/pc_tex_verify.py
@@ -156,25 +157,112 @@ PROF_FLAGS = " -pg" if PROFILE else ""
 OPT = "-O1" if ASAN else "-O2"
 if ASAN:
     OUT_DIR = BUILD / "pc-asan"
-CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " -m64 -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "")
-LDFLAGS = "-m64 -no-pie" + SAN_FLAGS + PROF_FLAGS
-# libjpeg decodes the motion-JPEG frames in MTH movies (src/port/pc_mth.c).
-LIBS = "-lSDL2 -lGL -ljpeg -lpthread -ldl -lm -lc -lstdc++"
+# PC_PIE=1 links the desktop binary position-independent (build.ninja.pc-pie,
+# build/pc-pie). The normal build is -no-pie, which puts glibc's brk heap
+# below 4 GB and so lets every small malloc() survive the port's u32
+# pointer truncation by accident. Android mandates PIE + ASLR, where the
+# heap lands at 0x7xxx_xxxx_xxxx; this flavour reproduces that on the
+# desktop (port-android.md Phase 3) so the suite can find the sites.
+PIE = os.environ.get("PC_PIE") == "1" and not ASAN
+if PIE:
+    OUT_DIR = BUILD / "pc-pie"
+# ANDROID_NDK=<ndk root> produces the Android cross flavour
+# (build.ninja.android, build/android): NDK clang for aarch64, API 31,
+# PIE. Phase 0 of port-android.md: this exists to compile every TU and
+# collect Clang's objections -- there is no link step yet. Two things make
+# that honest:
+#  - Clang silently IGNORES GCC's scalar_storage_order attribute (a warning,
+#    not an error), which would compile the big-endian script structs into
+#    little-endian ones and misbehave at run time. -Werror=unknown-attributes
+#    turns every such site into a hard error so the list is complete.
+#  - Desktop GL headers do not exist in the NDK sysroot; tools/android/glshim
+#    maps <GL/*.h> onto GLES 3.2 so that every desktop-only symbol the bridge
+#    uses shows up as an error too (that is the Phase 2 work list).
+# SDL2 headers come from the host for now (header-only use; the ABI is not
+# exercised without a link).
+ANDROID_NDK = os.environ.get("ANDROID_NDK")
+ANDROID = ANDROID_NDK is not None
+# Prebuilt dependencies for the Android link (see port-android.md, Phase 4):
+# SDL2 2.30 and libjpeg-turbo built for arm64-v8a with the NDK's CMake
+# toolchain. ANDROID_DEPS points at a directory holding SDL2-<ver>/,
+# sdl2-build/, libjpeg-turbo-<ver>/ and jpeg-build/.
+ANDROID_DEPS = Path(os.environ.get("ANDROID_DEPS", str(ROOT / "tools" / "android" / "deps")))
+# ANDROID_ABI selects the target: arm64-v8a (default, devices) or x86_64
+# (the SDK emulator with KVM). The dependency build dirs carry the ABI as
+# a suffix for anything but arm64 (sdl2-build-x86_64, jpeg-build-x86_64),
+# and so do the ninja file and the output tree.
+ANDROID_ABI = os.environ.get("ANDROID_ABI", "arm64-v8a")
+_ABI_TRIPLE = {"arm64-v8a": "aarch64-linux-android31-clang",
+               "x86_64": "x86_64-linux-android31-clang"}
+_ABI_SUFFIX = "" if ANDROID_ABI == "arm64-v8a" else "-" + ANDROID_ABI
+if ANDROID:
+    if ANDROID_ABI not in _ABI_TRIPLE:
+        sys.exit("ANDROID_ABI must be one of " + ", ".join(_ABI_TRIPLE))
+    OUT_DIR = BUILD / ("android" + _ABI_SUFFIX)
+    _ndk_bin = Path(ANDROID_NDK) / "toolchains" / "llvm" / "prebuilt" / "linux-x86_64" / "bin"
+    CC = str(_ndk_bin / _ABI_TRIPLE[ANDROID_ABI])
+    _sdl_build = ANDROID_DEPS / ("sdl2-build" + _ABI_SUFFIX)
+    _jpeg_build = ANDROID_DEPS / ("jpeg-build" + _ABI_SUFFIX)
+    _sdl_src = sorted(ANDROID_DEPS.glob("SDL2-2.*"))
+    _jpeg_src = sorted(ANDROID_DEPS.glob("libjpeg-turbo-*"))
+    _dep_inc = ""
+    if _sdl_src:
+        _dep_inc += (" -isystem " + str(_sdl_build / "include-config-release" / "SDL2")
+                     + " -isystem " + str(_sdl_src[-1] / "include"))
+    if _jpeg_src:
+        _dep_inc += (" -isystem " + str(_jpeg_build)
+                     + " -isystem " + str(_jpeg_src[-1]))
+    # ANDROID_SPIKE=1 is the "list everything" mode: the attribute error and
+    # Clang's implicit-declaration error are downgraded to warnings and the
+    # per-file error limit is lifted, so one pass reports every remaining
+    # objection instead of stopping at the first noisy class. Never ship a
+    # build made that way -- both downgrades hide real miscompiles.
+    if os.environ.get("ANDROID_SPIKE") == "1":
+        _attr = " -Wno-error=implicit-function-declaration -ferror-limit=0"
+    else:
+        _attr = " -Werror=unknown-attributes"
+    # Warning parity with GCC: Clang promotes these to errors by default
+    # while the GCC build has always compiled (and shipped) with them as
+    # warnings. bool/int callback mismatches and int<->pointer stores are
+    # ABI-identical on both targets; implicit declarations are the latent
+    # hazard pc_prelude.h keeps chipping at.
+    _attr += (" -Wno-error=incompatible-function-pointer-types"
+              " -Wno-error=int-conversion"
+              " -Wno-error=implicit-function-declaration"
+              " -Wno-error=return-type")
+    ARCH_FLAGS = ("-fPIC" + _attr + " -Wno-unknown-warning-option"
+                  " -isystem " + str(ROOT / "tools" / "android" / "glshim")
+                  + _dep_inc + " -DBUILD_TARGET_ANDROID=1")
+else:
+    CC = "gcc"
+    ARCH_FLAGS = "-m64" + (" -fPIE" if PIE else "")
+CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "")
+if ANDROID:
+    # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
+    LDFLAGS = "-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"
+    LIBS = ("-L" + str(_sdl_build) + " -lSDL2"
+            " -L" + str(_jpeg_build) + " -ljpeg"
+            " -lGLESv3 -lEGL -llog -landroid -lm -ldl")
+    OUT_PATH = str(OUT_DIR / ANDROID_ABI / "libmain.so")
+else:
+    LDFLAGS = "-m64 " + ("-pie" if PIE else "-no-pie") + SAN_FLAGS + PROF_FLAGS
+    # libjpeg decodes the motion-JPEG frames in MTH movies (src/port/pc_mth.c).
+    LIBS = "-lSDL2 -lGL -ljpeg -lpthread -ldl -lm -lc -lstdc++"
+    OUT_PATH = str(OUT_DIR / "melee-pc")
 out_objs = " ".join(str(OUT_DIR/"obj"/(Path(s).stem+".o")) for s in ALL_SOURCES)
-OUT_PATH = str(OUT_DIR / "melee-pc")
 
 n = ""
 n += "# PC Port Build\n"
 n += "builddir = $out\n\n"
 n += "rule cc\n"
-n += "  command = gcc $in $cflags -MMD -MF $out.d -c -o $out\n"
+n += "  command = " + CC + " $in $cflags -MMD -MF $out.d -c -o $out\n"
 n += "  description = CC $in\n"
 n += "  depfile = $out.d\n"
 n += "  deps = gcc\n\n"
 n += "rule link\n"
-n += "  command = gcc $in -o $out $ldflags $libs\n"
+n += "  command = " + CC + " $in -o $out $ldflags $libs\n"
 n += "  description = LINK $out\n\n"
-n += "compilers = gcc\n"
+n += "compilers = " + CC + "\n"
 n += "cflags = " + CFLAGS + "\n"
 n += "ldflags = " + LDFLAGS + "\n"
 n += "libs = " + LIBS + "\n\n"
@@ -190,14 +278,15 @@ for s in ALL_SOURCES:
 n += "build " + OUT_PATH + ": link " + out_objs + "\n"
 n += "  ldflags = $ldflags\n"
 n += "  libs = $libs\n\n"
-
 n += "default " + OUT_PATH + "\n\n"
 
-
-Path("build.ninja.pc-asan" if ASAN else "build.ninja.pc").write_text(n)
+NINJA_FILE = ("build.ninja.android" + _ABI_SUFFIX if ANDROID
+              else "build.ninja.pc-asan" if ASAN
+              else "build.ninja.pc-pie" if PIE else "build.ninja.pc")
+Path(NINJA_FILE).write_text(n)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 (OUT_DIR / "obj").mkdir(parents=True, exist_ok=True)
 
-print("Generated " + ("build.ninja.pc-asan" if ASAN else "build.ninja.pc"))
+print("Generated " + NINJA_FILE)
 print(f"Sources: {len(PORT_SOURCES)} port + {len(PC_STUB_SOURCES)} stub + {len(DECOMP_SOURCES)} decomp + {len(GR_SOURCES)} gr + {len(G_OBJ_SOURCES)} baselib-gobj + {len(G_DISPLAY_SOURCES)} baselib-display = {len(ALL_SOURCES)} total")
 print(f"Output: {OUT_PATH}")

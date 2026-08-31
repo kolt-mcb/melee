@@ -7,8 +7,18 @@ static SDL_GLContext g_gl_context = NULL;
 volatile Bool g_should_quit = FALSE;  /* global, used by main loop */
 
 static int g_vsync_on;
+static int g_swap_interval;
 
 /* Refresh rate of the display the window is on, or 0 if unknown. */
+int window_gl_es(void)
+{
+#ifdef __ANDROID__
+    return 1;
+#else
+    return getenv("MELEE_GLES") != NULL;
+#endif
+}
+
 int window_refresh_hz(void)
 {
     SDL_DisplayMode m;
@@ -23,6 +33,17 @@ int window_vsync_on(void)
     return g_vsync_on;
 }
 
+/* The rate frames actually reach the display: refresh / swap interval.
+ * 0 when vsync is off (nothing paces the swap). */
+int window_present_hz(void)
+{
+    int hz = window_refresh_hz();
+    if (!g_vsync_on || g_swap_interval < 1) {
+        return 0;
+    }
+    return hz / g_swap_interval;
+}
+
 Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
 {
     PORT_LOG_INFO("Initializing SDL2 window");
@@ -33,13 +54,32 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
         return FALSE;
     }
 
-    /* Request OpenGL 3.3 Core profile */
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    /* OpenGL 3.3 core on the desktop; OpenGL ES on Android, or on the
+     * desktop with MELEE_GLES=1 (Mesa gives an ES context through GLX/EGL,
+     * which lets the Android shader dialect be checked against the golden
+     * suite without a device).
+     *
+     * EGL is picky about the (version, depth, stencil) combination and
+     * fails eglCreateContext with EGL_BAD_CONFIG rather than degrading --
+     * the SDK emulator's SwiftShader has no ES 3.1 + D24S8 config, for
+     * one. SDL applies GL attributes at window creation, so each attempt
+     * recreates the window. The stencil buffer is not used by the bridge;
+     * a 16-bit depth buffer is a last resort (the GX depth range is 24-bit
+     * and z-fighting would show). */
+    struct gl_attempt { int major, minor, depth, stencil; };
+    static const struct gl_attempt es_attempts[] = {
+        { 3, 2, 24, 8 }, { 3, 1, 24, 8 }, { 3, 0, 24, 8 },
+        { 3, 2, 24, 0 }, { 3, 1, 24, 0 }, { 3, 0, 24, 0 },
+        { 3, 1, 16, 0 }, { 3, 0, 16, 0 },
+    };
+    static const struct gl_attempt gl_attempts[] = {
+        { 3, 3, 24, 8 }, { 3, 3, 24, 0 },
+    };
+    const struct gl_attempt* attempts = window_gl_es() ? es_attempts : gl_attempts;
+    int n_attempts = window_gl_es()
+        ? (int) (sizeof(es_attempts) / sizeof(es_attempts[0]))
+        : (int) (sizeof(gl_attempts) / sizeof(gl_attempts[0]));
+    int ai;
 
     Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN;
     if (fullscreen)
@@ -47,29 +87,97 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
         flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
     }
 
-    g_sdl_window = SDL_CreateWindow(title,
-                                    SDL_WINDOWPOS_CENTERED,
-                                    SDL_WINDOWPOS_CENTERED,
-                                    *width, *height, flags);
-    if (!g_sdl_window)
+    for (ai = 0; ai < n_attempts; ai++)
     {
-        PORT_LOG_ERROR("SDL window creation failed: %s", SDL_GetError());
-        return FALSE;
-    }
+        const struct gl_attempt* a = &attempts[ai];
+        SDL_GL_ResetAttributes();
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, a->major);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, a->minor);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                            window_gl_es() ? SDL_GL_CONTEXT_PROFILE_ES
+                                           : SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, a->depth);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, a->stencil);
 
-    g_gl_context = SDL_GL_CreateContext(g_sdl_window);
-    if (!g_gl_context)
-    {
-        PORT_LOG_ERROR("SDL GL context creation failed: %s", SDL_GetError());
+        g_sdl_window = SDL_CreateWindow(title,
+                                        SDL_WINDOWPOS_CENTERED,
+                                        SDL_WINDOWPOS_CENTERED,
+                                        *width, *height, flags);
+        if (!g_sdl_window)
+        {
+            PORT_LOG_WARN("SDL window creation failed (%s %d.%d D%d S%d): %s",
+                          window_gl_es() ? "ES" : "GL", a->major, a->minor,
+                          a->depth, a->stencil, SDL_GetError());
+            continue;
+        }
+        g_gl_context = SDL_GL_CreateContext(g_sdl_window);
+        if (g_gl_context)
+        {
+            if (ai != 0)
+            {
+                PORT_LOG_WARN("GL context: fell back to %s %d.%d D%d S%d",
+                              window_gl_es() ? "ES" : "GL", a->major,
+                              a->minor, a->depth, a->stencil);
+            }
+            break;
+        }
+        PORT_LOG_WARN("SDL GL context creation failed (%s %d.%d D%d S%d): %s",
+                      window_gl_es() ? "ES" : "GL", a->major, a->minor,
+                      a->depth, a->stencil, SDL_GetError());
         SDL_DestroyWindow(g_sdl_window);
         g_sdl_window = NULL;
+    }
+    if (!g_gl_context)
+    {
+        PORT_LOG_ERROR("No usable GL context after %d attempts", n_attempts);
         return FALSE;
     }
 
     /* Vsync; MELEE_NOVSYNC=1 turns it off (the 60 Hz pacer in render.c
-     * then keeps the game at speed). */
-    SDL_GL_SetSwapInterval(getenv("MELEE_NOVSYNC") ? 0 : 1);
+     * then keeps the game at speed).
+     *
+     * On a display that refreshes at a multiple of 60 Hz -- every recent
+     * phone, a Pixel 9 is 120 Hz -- present once every N refreshes so the
+     * swap itself paces the game at 60. Interval 1 there presents at 120
+     * while the simulation runs at 60, so render.c's sleep pacer runs as
+     * well and the two clocks beat: frames land 8.3 ms apart, then 16.7,
+     * which reads as constant micro-stutter however good the frame rate
+     * looks. MELEE_SWAP_INTERVAL overrides the choice. */
     g_vsync_on = getenv("MELEE_NOVSYNC") ? 0 : 1;
+    g_swap_interval = 0;
+    if (g_vsync_on)
+    {
+        int hz = window_refresh_hz();
+        const char* forced = getenv("MELEE_SWAP_INTERVAL");
+        g_swap_interval = 1;
+        if (forced != NULL)
+        {
+            g_swap_interval = atoi(forced);
+            if (g_swap_interval < 1) g_swap_interval = 1;
+        }
+        else if (hz >= 110)
+        {
+            /* nearest multiple of 60: 120->2, 144->2 (72 Hz, still smoother
+             * than beating), 180->3, 240->4 */
+            g_swap_interval = (hz + 30) / 60;
+            if (g_swap_interval < 1) g_swap_interval = 1;
+        }
+        if (SDL_GL_SetSwapInterval(g_swap_interval) != 0 && g_swap_interval != 1)
+        {
+            PORT_LOG_WARN("swap interval %d rejected (%s); using 1",
+                          g_swap_interval, SDL_GetError());
+            g_swap_interval = 1;
+            SDL_GL_SetSwapInterval(1);
+        }
+        PORT_LOG_INFO("Vsync on: %d Hz display, swap interval %d -> %d Hz",
+                      hz, g_swap_interval,
+                      g_swap_interval > 0 ? hz / g_swap_interval : hz);
+    }
+    else
+    {
+        SDL_GL_SetSwapInterval(0);
+    }
 
     /* PC port: report the actual GL renderer once, so we can tell hardware
      * (i965/anv) from software (llvmpipe/swrast) at a glance. */

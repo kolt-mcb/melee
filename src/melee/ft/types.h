@@ -1880,15 +1880,20 @@ STATIC_ASSERT(sizeof(struct Fighter) == 0x23EC);
  * lb/types.h. Without it the opcode is the wrong six bits of the wrong byte. */
 #ifndef PC_SCRIPT_BE
 #if defined(BUILD_TARGET_PC)
-#define PC_SCRIPT_BE __attribute__((scalar_storage_order("big-endian")))
+#define PC_SCRIPT_BE /* host-order words now; see lb/types.h */
 #else
 #define PC_SCRIPT_BE
 #endif
 #endif
 
 struct gmScriptEventDefault {
+#if defined(BUILD_TARGET_PC)
+    u32 value1 : 26;
+    u32 opcode : 6;
+#else
     u32 opcode : 6;
     u32 value1 : 26;
+#endif
 } PC_SCRIPT_BE;
 
 struct ftData_UnkCountStruct {

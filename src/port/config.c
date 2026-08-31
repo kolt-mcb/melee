@@ -1,8 +1,12 @@
 #include "config.h"
 #include "log.h"
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 #include <strings.h>
+#if defined(__ANDROID__)
+#include <SDL2/SDL.h>
+#endif
 
 static void config_defaults(Config* config)
 {
@@ -16,6 +20,19 @@ static void config_defaults(Config* config)
      * (the game is normally run from the repo root). Override with -a. */
     strncpy(config->fs.asset_dir, "orig/GALE01", sizeof(config->fs.asset_dir) - 1);
     config->fs.asset_dir[sizeof(config->fs.asset_dir) - 1] = '\0';
+#if defined(__ANDROID__)
+    /* Android apps have no working directory to speak of: the extracted
+     * disc lives in the app's external files dir
+     * (/sdcard/Android/data/<package>/files/GALE01), which needs no storage
+     * permission and survives app updates. */
+    {
+        const char* ext = SDL_AndroidGetExternalStoragePath();
+        if (ext != NULL) {
+            snprintf(config->fs.asset_dir, sizeof(config->fs.asset_dir),
+                     "%s/GALE01", ext);
+        }
+    }
+#endif
 
     config->fs.iso_path[0] = '\0';
 
