@@ -305,6 +305,43 @@ Result: the opening movie plays, ~17 fps on the software rasteriser, no
 crash over 900+ frames. The device black screen almost certainly was (1)
 or (4); the new APK reports either in `adb logcat -s melee`.
 
+### On a real phone (2026-08-31, Pixel 9 / Mali-G715 / Android 16)
+
+Boots to a VS match at a steady **60 fps** (16.5 ms/frame, 11 ms of it
+work, ~1500 draws). What stood in the way, beyond the emulator's list:
+
+1. **A dangling pointer that only Clang punished.** `ifStatus_802F66A4`
+   converts the HUD's model descriptors into block-locals, points
+   `num`/`mrk` at them, and dereferences after the block ends. GCC/x86-64
+   left the dead stack slots intact, so the desktop never noticed;
+   Clang/AArch64 reuses them, and the HUD walked a garbage joint tree.
+   Fixed by giving the locals function scope.
+2. **The pool must sit entirely below 0x80000000** — sign extension
+   through the decomp's `s32` pointer fields, plus `pc_ptr_sane()`
+   rejecting the GCN window. The only free 512 MB window on a Pixel 9 is
+   at 0xC0000000, so the scan had to get pickier (64 MB steps, sizes down
+   to 128 MB). `MELEE_LOWMEM_BASE` reproduces any device layout on the
+   desktop — that is how both failures were debugged in gdb.
+3. **Vertex streaming, worth 75x.** Every GX primitive is its own draw and
+   each rewrote the same VBO bytes; Mali resolves that by copying the
+   whole buffer per draw. 1227 ms/frame (0.8 fps) and 6.7 GB resident,
+   which had Android's low-memory killer taking down the game and half
+   the system. Now a ring written with `glMapBufferRange` +
+   `GL_MAP_UNSYNCHRONIZED_BIT`: 60 fps, 290 MB.
+4. **Frame pacing.** Android's EGL accepts `eglSwapInterval(2)` on a
+   120 Hz panel and ignores it, so the loop free-ran at 97 fps and the
+   fixed-step simulation — audio included — ran 1.6x fast. Only a true
+   60 Hz vsync is trusted as the clock now.
+
+Device debuggability, previously absent: crash addresses are printed
+module-relative for `llvm-addr2line`, and on Android the handler
+re-raises so debuggerd writes a real tombstone instead of `_exit()`
+suppressing it.
+
+Still open: input (no controller or touch mapping tested on device), the
+`texp.c` guard skips that fire on every stage load, and the fidelity
+gaps the desktop already has.
+
 ## Order and gates
 
 ```
