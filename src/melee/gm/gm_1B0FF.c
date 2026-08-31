@@ -284,13 +284,32 @@ void gm_801B13B8(GameScene* arg0)
         temp_r28->players[1].color = (u8) col1;
         temp_r28->players[0].slot_type = Gm_PKind_Human;
         temp_r28->players[1].slot_type = Gm_PKind_Human;
-        /* MELEE_BOOT_CPU=<level> makes slot 1 a CPU of that level, so the
-         * AI can be exercised from the debug boot. */
+        /* MELEE_BOOT_CPU makes a slot a CPU of the given level (1-9), so the
+         * AI can be exercised from the debug boot.
+         *
+         * "<lvl>" is slot 1 only, leaving slot 0 on the pad -- that is the
+         * original form and what a human-vs-CPU run wants. "<lvl0>,<lvl1>"
+         * sets both slots, which is how you get two CPUs playing each other
+         * with no controller attached; a level of 0 leaves that slot human.
+         *
+         * CPU type (players[].xE) is already 4 for every slot above; a CPU
+         * with no type set never commits to an attack. */
         {
             const char* c = getenv("MELEE_BOOT_CPU");
-            if (c != NULL && atoi(c) > 0) {
-                temp_r28->players[1].slot_type = Gm_PKind_Cpu;
-                temp_r28->players[1].cpu_level = (u8) atoi(c);
+            if (c != NULL) {
+                int lvl0 = 0, lvl1 = 0;
+                if (sscanf(c, "%d,%d", &lvl0, &lvl1) < 2) {
+                    lvl1 = lvl0; /* one number: slot 1 only */
+                    lvl0 = 0;
+                }
+                if (lvl0 > 0) {
+                    temp_r28->players[0].slot_type = Gm_PKind_Cpu;
+                    temp_r28->players[0].cpu_level = (u8) lvl0;
+                }
+                if (lvl1 > 0) {
+                    temp_r28->players[1].slot_type = Gm_PKind_Cpu;
+                    temp_r28->players[1].cpu_level = (u8) lvl1;
+                }
             }
         }
         temp_r28->players[2].slot_type = Gm_PKind_NA;
@@ -319,9 +338,15 @@ void gm_801B13B8(GameScene* arg0)
          * stage.c picks the 1P quick-play BGM when it is set. A VS match
          * plays the stage's own music. */
         temp_r28->rules.x6 = 0;
-        OSReport("[PC] debug-VS lineup: p0=ckind%d(c%d) p1=ckind%d(c%d) "
-                 "stage=%d\n",
-                 ck0, col0, ck1, col1, (int) temp_r28->rules.xE);
+        OSReport("[PC] debug-VS lineup: p0=ckind%d(c%d,%s) "
+                 "p1=ckind%d(c%d,%s) stage=%d\n",
+                 ck0, col0,
+                 temp_r28->players[0].slot_type == Gm_PKind_Cpu ? "cpu"
+                                                                : "human",
+                 ck1, col1,
+                 temp_r28->players[1].slot_type == Gm_PKind_Cpu ? "cpu"
+                                                                : "human",
+                 (int) temp_r28->rules.xE);
     }
 #endif
 
