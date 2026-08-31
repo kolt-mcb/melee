@@ -338,9 +338,15 @@ module-relative for `llvm-addr2line`, and on Android the handler
 re-raises so debuggerd writes a real tombstone instead of `_exit()`
 suppressing it.
 
-Still open: input (no controller or touch mapping tested on device), the
-`texp.c` guard skips that fire on every stage load, and the fidelity
-gaps the desktop already has.
+**Input works**: a USB keyboard plugged into the phone plays the game as
+it does on the desktop, so SDL's event path and the pad bridge need
+nothing Android-specific. That is most of Phase 5 answered -- what is
+left there is a Bluetooth controller (same SDL GameController path,
+untested) and the touch overlay, which remains the only real work before
+the game is playable without accessories.
+
+Still open: the touch overlay, the `texp.c` guard skips that fire on
+every stage load, and the fidelity gaps the desktop already has.
 
 ## Order and gates
 
