@@ -3,6 +3,8 @@
 
 #include <platform.h>
 
+#include <stdint.h>
+
 #include "ft/forward.h"
 
 #include "ftCommon/types.h"
@@ -89,7 +91,28 @@ union ftPikachu_MotionVars {
     } unk3;
 
     struct ftPikachu_SpecialHiVars {
+#ifdef BUILD_TARGET_PC
+        /* PC port: Thunder deliberately aliases this view over `speciallw`.
+         * ftPk_SpecialLw_Enter clears the live thunder item through
+         * `specialhi.x0` and sets the move's state through `specialhi.x4`,
+         * and ftPk_SpecialLw_8012765C reads that same state word back as
+         * `speciallw.x4` (the original build reads it whole: `lwz r0,
+         * 0x2344(r31)` at 0x80127674). On GCN both views line up because a
+         * pointer is a word; here `speciallw.x0` is eight bytes, so
+         * `specialhi.x0 = 0` cleared only half of it and `specialhi.x4 = 1`
+         * wrote 1 into the *upper* half -- leaving the thunder pointer at
+         * 0x100000000. ftPk_SpecialLw_SpawnEffect's `!speciallw.x0` guard
+         * then saw a live bolt that did not exist, so down-B ran its
+         * animation and never spawned thunder at all.
+         *
+         * Widening x0 to a pointer-sized slot restores both aliases: x0
+         * covers the whole pointer, and x4 lands on `speciallw.x4`. The
+         * fields after it only ever alias each other, so shifting them is
+         * harmless. */
+        intptr_t x0;
+#else
         int x0;
+#endif
         s32 x4;
         s32 x8;
         int xC;
