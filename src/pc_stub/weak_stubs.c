@@ -2357,7 +2357,6 @@ __attribute__((weak)) void lbl_803B7C08(void) { }
 __attribute__((weak)) void lbl_803B7C18(void) { }
 __attribute__((weak)) void lbl_803B7C28(void) { }
 __attribute__((weak)) void lbl_803B7C40(void) { }
-__attribute__((weak)) void lbl_803B7C68(void) { }
 __attribute__((weak)) void lbl_803B7C80(void) { }
 __attribute__((weak)) void lbl_803B7CA8(void) { }
 __attribute__((weak)) void lbl_803B7CE0(void) { }

@@ -114,10 +114,36 @@ typedef struct {
 extern ClassicProcArray lbl_803B7C40;
 extern ClassicProcArray lbl_803B7C28;
 
+#ifdef BUILD_TARGET_PC
+/* PC port: lbl_803B7C28 and lbl_803B7C40 are .rodata tables of six GameCube
+ * *function addresses* (0x801849E0, 0x80184A04, 0x80184A28, 0x80184A4C,
+ * 0x80184A70, 0x80184A94 -- identical in both), read out through
+ * ClassicProcArray's `s32 v[6]` and cast to a callback. Neither survives the
+ * port: they were stubbed as weak *functions*, so `local = lbl_803B7C28`
+ * copied 0x18 bytes of the stub's own instructions, and even with real data a
+ * host function pointer does not fit in an s32.
+ *
+ * The six targets are all present in this file, so name them directly. The
+ * demo fighters on the Classic intro got these as their priority-0x16 proc;
+ * with garbage there every one of them was skipped, which is what produced
+ * the [GOBJGUARD] lines in the 1-P path. */
+static const HSD_GObjEvent pc_classic_demo_procs[6] = {
+    fn_801849E0, fn_80184A04, fn_80184A28,
+    fn_80184A4C, fn_80184A70, fn_80184A94,
+};
+#endif
+
 extern DynamicModelDesc** lbl_804D662C;
 extern HSD_Archive* lbl_804D6628;
 extern u8 lbl_803D9828[];
+#ifdef BUILD_TARGET_PC
+/* PC port: the menu's game-speed divisors, another .rodata table lost to a
+ * weak function stub -- gm_801891F4_GetTickRate was being divided by
+ * instruction bytes. Values read back from the original .rodata. */
+f32 lbl_803B7C68[6] = { 2.0f, 1.5f, 1.0f, 0.666f, 0.5f, 0.25f };
+#else
 extern f32 lbl_803B7C68[];
+#endif
 
 typedef struct TrainingItemEntry {
     s16 item_id;
@@ -932,8 +958,13 @@ s32 fn_80185E34(void)
             Player_SetModelScale(player_slot, 1.0f);
             Player_SetFlagsBit5(player_slot, lbl_8047368C.xFD[i]);
             Player_80036F34(player_slot, 5);
+#ifdef BUILD_TARGET_PC
+            HSD_GObj_SetupProc(Player_GetEntity(player_slot),
+                               pc_classic_demo_procs[i], 0x16);
+#else
             HSD_GObj_SetupProc(Player_GetEntity(player_slot),
                                (HSD_GObjEvent) (Event) local.v[i], 0x16);
+#endif
             player_slot++;
         }
     }
@@ -958,8 +989,13 @@ void fn_80185F5C(s32 arg0)
             Player_SetModelScale(arg0, 1.0f);
             Player_SetFlagsBit5(arg0, lbl_8047368C.x100[i]);
             Player_80036F34(arg0, 6);
+#ifdef BUILD_TARGET_PC
+            HSD_GObj_SetupProc(Player_GetEntity(arg0),
+                               pc_classic_demo_procs[i + 3], 0x16);
+#else
             HSD_GObj_SetupProc(Player_GetEntity(arg0),
                                (HSD_GObjEvent) (Event) local.v[i + 3], 0x16);
+#endif
             arg0++;
         }
         i++;
