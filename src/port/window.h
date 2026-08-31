@@ -16,6 +16,8 @@ typedef struct {
 
 Bool window_init(int* width, int* height, Bool fullscreen, const char* title);
 int window_refresh_hz(void);
+/* 1 when the GL context is OpenGL ES (Android, or MELEE_GLES=1). */
+int window_gl_es(void);
 int window_vsync_on(void);
 void window_shutdown(void);
 

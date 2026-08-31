@@ -1189,7 +1189,7 @@ static const char* g_vert_src =
 "    vec3 diffuse_sum = vec3(0.0);\n"
 "    for (int i = 0; i < 8 && i < u_light_count; i++) {\n"
 "        // Check if this light is in the channel's light mask (bit shift)\n"
-"        if (mod(u_light_mask / (1 << i), 2) == 0) continue;\n"
+"        if (((u_light_mask >> i) & 1) == 0) continue;\n"
 "        // GX lighting as the XF unit evaluates it (and as Dolphin's\n"
 "        // LightingShaderGen writes it). Every light has a position; an\n"
 "        // infinite light is one placed 2^20 units away, which is how HSD\n"
@@ -1238,7 +1238,7 @@ static const char* g_vert_src =
 "    // with cosatt = (a0,a1,a2) and distatt = (k0,k1,k2).\n"
 "    vec3 spec_sum = vec3(0.0);\n"
 "    for (int i = 0; i < 8; i++) {\n"
-"        if (mod(u_light_mask1 / (1 << i), 2) == 0) continue;\n"
+"        if (((u_light_mask1 >> i) & 1) == 0) continue;\n"
 "        // HSD writes the half-vector with GXInitLightDir, not\n"
 "        // GXInitSpecularDir (HSD_LObjSetupSpecularInit, lobj.c). Reading\n"
 "        // only the latter meant H was always zero, this loop skipped every\n"
@@ -1749,17 +1749,61 @@ static const char* g_frag_src =
 "    }\n"
 "}\n";
 
+/* Every shader in the bridge is written once, in GLSL 3.30 core. On an
+ * OpenGL ES context the "#version" line is swapped for the ES 3.10
+ * header (the bodies are kept in the common subset of the two dialects:
+ * explicit float literals, no implicit int->float conversion). */
+int window_gl_es(void);
+
+/* glDepthRange is not an ES entry point (on an ES context Mesa rejects
+ * it with GL_INVALID_OPERATION); glDepthRangef is in both since GL 4.1 /
+ * ARB_ES2_compatibility. The Android GL shim maps the former to the
+ * latter at compile time; the desktop chooses at run time. */
+static void pc_depth_range(float n, float f)
+{
+#ifdef __ANDROID__
+    glDepthRangef(n, f);
+#else
+    if (window_gl_es()) glDepthRangef(n, f); else glDepthRange(n, f);
+#endif
+}
+
+static void pc_clear_depth(float z)
+{
+#ifdef __ANDROID__
+    glClearDepthf(z);
+#else
+    if (window_gl_es()) glClearDepthf(z); else glClearDepth(z);
+#endif
+}
+
+static const char* const k_es_header =
+    "#version 310 es\n"
+    "precision highp float;\n"
+    "precision highp int;\n"
+    "precision highp sampler2D;\n";
+
 static GLuint compile_shader(GLenum type, const char* src)
 {
     GLuint s = glCreateShader(type);
-    glShaderSource(s, 1, &src, NULL);
+    const char* parts[2];
+    GLsizei nparts = 1;
+    parts[0] = src;
+    if (window_gl_es() && strncmp(src, "#version ", 9) == 0) {
+        const char* nl = strchr(src, '\n');
+        parts[0] = k_es_header;
+        parts[1] = nl ? nl + 1 : "";
+        nparts = 2;
+    }
+    glShaderSource(s, nparts, parts, NULL);
     glCompileShader(s);
     GLint ok;
     glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
     if (!ok) {
-        GLchar log[512];
-        glGetShaderInfoLog(s, 512, NULL, log);
-        PORT_LOG_ERROR("Shader compile failed: %s", log);
+        GLchar log[4096];
+        glGetShaderInfoLog(s, sizeof(log), NULL, log);
+        PORT_LOG_ERROR("Shader compile failed (%s): %s",
+                       type == GL_VERTEX_SHADER ? "vert" : "frag", log);
         return 0;
     }
     return s;
@@ -3615,11 +3659,7 @@ static void bridge_upload_and_draw(void)
      * replace draw via a collapsed depth range (the erase quad is flushed
      * while REPLACE is active — see GXSetZTexture, which flushes pending
      * geometry before the op changes). Reset for all normal draws. */
-    if (g_state.ztex_op == GX_ZT_REPLACE) {
-        glDepthRange(1.0, 1.0);
-    } else {
-        glDepthRange(0.0, 1.0);
-    }
+    pc_depth_range(g_state.ztex_op == GX_ZT_REPLACE ? 1.0f : 0.0f, 1.0f);
 
     /* State — cull. This block used to be `if (FALSE && ...)`, so every draw
      * unconditionally disabled culling and threw away whatever GXSetCullMode
@@ -4615,7 +4655,7 @@ static void pc_gl_clear(f32 r, f32 g, f32 b, f32 a, f32 z)
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDepthMask(GL_TRUE);
     glClearColor(r, g, b, a);
-    glClearDepth(z);
+    pc_clear_depth((float) z);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     if (scissor_was) glEnable(GL_SCISSOR_TEST);
     /* The per-draw state block reasserts colour/depth masks, so leaving them
@@ -7190,7 +7230,11 @@ void GXSetPointSize(u32 sz, u32 texOffsets)
 {
     gx_flush_pending();
     g_state.point_size = (u8)sz;
-    glPointSize((float)sz);
+#ifndef __ANDROID__
+    /* ES has no glPointSize (gl_PointSize only); GX points are drawn as
+     * quads by the bridge, so the GL point size is cosmetic anyway. */
+    if (!window_gl_es()) glPointSize((float)sz);
+#endif
     (void)texOffsets;
 }
 void GXEnableTexOffsets(u32 coord, u32 line_en, u32 pt_en)

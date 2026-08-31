@@ -9,6 +9,15 @@ volatile Bool g_should_quit = FALSE;  /* global, used by main loop */
 static int g_vsync_on;
 
 /* Refresh rate of the display the window is on, or 0 if unknown. */
+int window_gl_es(void)
+{
+#ifdef __ANDROID__
+    return 1;
+#else
+    return getenv("MELEE_GLES") != NULL;
+#endif
+}
+
 int window_refresh_hz(void)
 {
     SDL_DisplayMode m;
@@ -33,10 +42,22 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
         return FALSE;
     }
 
-    /* Request OpenGL 3.3 Core profile */
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    /* OpenGL 3.3 core on the desktop; OpenGL ES 3.1 on Android, or on
+     * the desktop with MELEE_GLES=1 (Mesa gives an ES context through
+     * GLX/EGL, which lets the Android shader dialect be checked against
+     * the golden suite without a device). */
+    if (window_gl_es())
+    {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    }
+    else
+    {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    }
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
