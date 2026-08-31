@@ -2114,7 +2114,7 @@ void hsd_80394434(void* text)
 // @TODO: Currently 91.32% match - needs register allocation fix
 void hsd_80394544(s32 col, s32 row, u32 num_cols, u32 num_rows, s32 x, s32 y,
                   s32 xfb_buf, s32 xfb_w, s32 xfb_h, s32 xfb_stride,
-                  s32 font_data, void* color_data)
+                  intptr_t font_data, void* color_data)
 {
     struct ParticleScreenState* sp = &hsd_804CF810;
     s32 mode;
@@ -4220,7 +4220,7 @@ void* fn_80397814(void* arg)
 
         hsd_80394544(*x18_ptr, *x14_ptr, *x20_ptr, *nrows_ptr, 20,
                      *fb_ptr - 40, fb_array[*col_ptr], *x3C_ptr, *fb_ptr,
-                     *fb2_ptr, (s32) lbl_804088B8, NULL);
+                     *fb2_ptr, (intptr_t) lbl_804088B8, NULL);
 
         sp->xC8 = 0;
         c8_ptr = &sp->xC8;
@@ -4296,7 +4296,7 @@ void* fn_80397814(void* arg)
 
                 hsd_80394544(*x18_ptr, *x14_ptr, *x20_ptr, *nrows_ptr, 20,
                              *fb_ptr - 40, (&sp->x24)[*col_ptr], *x3C_ptr,
-                             *fb_ptr, *fb2_ptr, (s32) lbl_ptr, NULL);
+                             *fb_ptr, *fb2_ptr, (intptr_t) lbl_ptr, NULL);
 
                 *c8_ptr = 0;
                 *cc_ptr = *nrows_ptr - 1;

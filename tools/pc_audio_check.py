@@ -94,7 +94,7 @@ def main():
         for e in args.env:
             k, v = e.split("=", 1)
             env[k] = v
-        subprocess.run([os.path.join(ROOT, "build/pc/melee-pc")], env=env,
+        subprocess.run([os.environ.get("MELEE_SUITE_PORT", os.path.join(ROOT, "build/pc/melee-pc"))], env=env,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        timeout=600, cwd=ROOT)
 

@@ -595,13 +595,13 @@ void mnSnap_80253F60(void)
             } else {
                 t = 0.0F;
             }
-            HSD_JObjReqAnimAll(*(HSD_JObj**) ((u32) snap + byte_off + 0x98),
+            HSD_JObjReqAnimAll(*(HSD_JObj**) ((uintptr_t) snap + byte_off + 0x98),
                                t);
         } else {
-            HSD_JObjReqAnimAll(*(HSD_JObj**) ((u32) snap + byte_off + 0x98),
+            HSD_JObjReqAnimAll(*(HSD_JObj**) ((uintptr_t) snap + byte_off + 0x98),
                                2.0F);
         }
-        HSD_JObjAnimAll(*(HSD_JObj**) ((u32) snap + byte_off + 0x98));
+        HSD_JObjAnimAll(*(HSD_JObj**) ((uintptr_t) snap + byte_off + 0x98));
     }
 }
 
@@ -719,12 +719,12 @@ static inline void mnSnap_RefreshSlotSelection(mnSnap_State* snap,
                     t = 0.0F;
                 }
                 HSD_JObjReqAnimAll(
-                    *(HSD_JObj**) ((u32) snap + byte_off + 0x98), t);
+                    *(HSD_JObj**) ((uintptr_t) snap + byte_off + 0x98), t);
             } else {
                 HSD_JObjReqAnimAll(
-                    *(HSD_JObj**) ((u32) snap + byte_off + 0x98), 2.0F);
+                    *(HSD_JObj**) ((uintptr_t) snap + byte_off + 0x98), 2.0F);
             }
-            HSD_JObjAnimAll(*(HSD_JObj**) ((u32) snap + byte_off + 0x98));
+            HSD_JObjAnimAll(*(HSD_JObj**) ((uintptr_t) snap + byte_off + 0x98));
         }
     }
 
@@ -1012,19 +1012,19 @@ void fn_802545C4(void)
                         t = 0.0F;
                     }
                     HSD_JObjReqAnimAll(
-                        *((HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) +
+                        *((HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) +
                                          byte_off) +
                                         0x98)),
                         t);
                 } else {
                     HSD_JObjReqAnimAll(
-                        *((HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) +
+                        *((HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) +
                                          byte_off) +
                                         0x98)),
                         2.0F);
                 }
                 HSD_JObjAnimAll(
-                    *((HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) + byte_off) +
+                    *((HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) + byte_off) +
                                     0x98)));
                 i++;
                 byte_off += 8;
@@ -1112,19 +1112,19 @@ void fn_802545C4(void)
                         t = 0.0F;
                     }
                     HSD_JObjReqAnimAll(
-                        *((HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) +
+                        *((HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) +
                                          byte_off) +
                                         0x98)),
                         t);
                 } else {
                     HSD_JObjReqAnimAll(
-                        *((HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) +
+                        *((HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) +
                                          byte_off) +
                                         0x98)),
                         2.0F);
                 }
                 HSD_JObjAnimAll(
-                    *((HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) + byte_off) +
+                    *((HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) + byte_off) +
                                     0x98)));
             }
 
@@ -1143,19 +1143,19 @@ void fn_802545C4(void)
                             t = 0.0F;
                         }
                         HSD_JObjReqAnimAll(
-                            *((HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) +
+                            *((HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) +
                                              byte_off) +
                                             0x98)),
                             t);
                     } else {
                         HSD_JObjReqAnimAll(
-                            *((HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) +
+                            *((HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) +
                                              byte_off) +
                                             0x98)),
                             2.0F);
                     }
                     HSD_JObjAnimAll(*(
-                        (HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) + byte_off) +
+                        (HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) + byte_off) +
                                       0x98)));
                 }
 
@@ -1174,19 +1174,19 @@ void fn_802545C4(void)
                             t = 0.0F;
                         }
                         HSD_JObjReqAnimAll(
-                            *((HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) +
+                            *((HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) +
                                              byte_off2) +
                                             0x98)),
                             t);
                     } else {
                         HSD_JObjReqAnimAll(
-                            *((HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) +
+                            *((HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) +
                                              byte_off2) +
                                             0x98)),
                             2.0F);
                     }
                     HSD_JObjAnimAll(*((
-                        HSD_JObj**) ((((u32) (&mnSnap_804A0A10)) + byte_off2) +
+                        HSD_JObj**) ((((uintptr_t) (&mnSnap_804A0A10)) + byte_off2) +
                                      0x98)));
                 }
 
