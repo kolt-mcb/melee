@@ -141,10 +141,10 @@ void HSD_GObj_80390CFC(void)
                          * canonical userspace address sailed through it and
                          * was called. */
                         fprintf(stderr,
-                                "[GOBJGUARD] bad proc: gobj=%p on_invoke=%p "
-                                "pri=%d\n",
-                                (void*) proc->gobj, (void*) proc->on_invoke,
-                                i);
+                                "[GOBJGUARD] skipped proc: gobj=%p "
+                                "on_invoke=%p pri=%d\n",
+                                (void*) proc->gobj,
+                                (void*) proc->on_invoke, i);
                         port_guard_warn("gobj.c:proc_invoke");
                     } else
 #endif
