@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "ftaction.h"
+#if BUILD_TARGET_PC
+#include "port/pc_script.h"
+#endif
 
 #include <placeholder.h>
 #include <platform.h>
@@ -1336,6 +1339,9 @@ void ftAction_80073240(Fighter_GObj* fighter_gobj)
             } else if (ftCommand->timer > 0.0f) {
                 break;
             }
+#if BUILD_TARGET_PC
+            pc_script_prepare(ftCommand->u);
+#endif
             eventCode =
                 gmScriptEventCast(ftCommand->u, gmScriptEventDefault)->opcode;
 #if BUILD_TARGET_PC
@@ -1355,8 +1361,8 @@ void ftAction_80073240(Fighter_GObj* fighter_gobj)
                             (const void*) w);
                     for (k = 0; k < 24; k++) {
                         fprintf(stderr, "  [%2d] mem=%08x op=%2u\n", k,
-                                __builtin_bswap32(w[k]),
-                                (unsigned) (__builtin_bswap32(w[k]) >> 26));
+                                w[k],
+                                (unsigned) (w[k] >> 26));
                         if (w[k] == 0) break;
                     }
                 }
@@ -1370,7 +1376,7 @@ void ftAction_80073240(Fighter_GObj* fighter_gobj)
                             pc_frame_number,
                             ((Fighter*) fighter_gobj->user_data)->player_id,
                             ((Fighter*) fighter_gobj->user_data)->motion_id,
-                            __builtin_bswap32(*(const u32*) ftCommand->u),
+                            *(const u32*) ftCommand->u,
                             eventCode);
                 }
             }
@@ -1419,6 +1425,9 @@ void ftAction_80073354(Fighter_GObj* gobj)
             }
             {
                 float timer = cmd->timer;
+#if BUILD_TARGET_PC
+                pc_script_prepare(cmd->u);
+#endif
                 eventCode =
                     gmScriptEventCast(cmd->u, gmScriptEventDefault)->opcode;
 #if BUILD_TARGET_PC
@@ -1466,6 +1475,9 @@ void ftAction_8007349C(Fighter_GObj* gobj)
             break;
         }
         {
+#if BUILD_TARGET_PC
+            pc_script_prepare(cmd->u);
+#endif
             u32 id = cmd->u->Command_09.id;
             if (!Command_Execute(cmd, id)) {
                 cmd->u += ftAction_803C0870[id - 10];

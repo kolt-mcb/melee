@@ -865,7 +865,9 @@ static void* pc_figatree_buf(const void* owner, unsigned long need)
         pc_figatree_slots[i].owner = owner;
     }
     if (pc_figatree_slots[i].cap < need) {
-        void* nb = realloc(pc_figatree_slots[i].buf, need);
+        /* animation data the game addresses in u32: sub-4GB pool */
+        extern void* pc_lowmem_realloc(void* p, size_t need);
+        void* nb = pc_lowmem_realloc(pc_figatree_slots[i].buf, need);
         if (nb == NULL) return NULL;
         pc_figatree_slots[i].buf = nb;
         pc_figatree_slots[i].cap = need;

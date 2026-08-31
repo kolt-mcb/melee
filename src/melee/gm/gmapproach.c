@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#include "port/log.h"
+#endif
 #include "gmapproach.h"
 
 #include "gm_1A45.h"
@@ -100,6 +104,22 @@ static void gm_801ADB04(void)
 
     gm_80480D98.x0 =
         lbArchive_80016DBC("NtAppro", &spC, "ScNtcApproach_scene_data", 0);
+#if BUILD_TARGET_PC
+    /* The scene arrives GameCube-packed and big-endian straight out of
+     * NtAppro, like every other scene the port loads (gmpause, gmresult,
+     * ifall, ...). Reading spC->cameras[0].desc raw is a wild pointer: it
+     * crashed the moment Start left the title screen. */
+    if (gm_80480D98.x0 != NULL) {
+        spC = pc_conv_SceneDesc(spC, gm_80480D98.x0->data);
+    }
+    if (spC == NULL || spC->cameras == NULL || spC->lights == NULL ||
+        spC->models == NULL || spC->models[0] == NULL)
+    {
+        PORT_LOG_WARN("gm_801ADB04: ScNtcApproach scene data would not "
+                      "convert; approach scene skipped\n");
+        return;
+    }
+#endif
     gobj = GObj_Create(0x13, 0x14, 0);
     cobj = HSD_CObjLoadDesc(spC->cameras[0].desc);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);

@@ -73,6 +73,9 @@ static unsigned mth_be32(const unsigned char* p)
            ((unsigned) p[2] << 8) | p[3];
 }
 
+extern void* pc_lowmem_realloc(void* p, size_t need);
+extern void pc_lowmem_free(void* p);
+
 static int mth_grow(unsigned char** buf, size_t* cap, size_t need)
 {
     unsigned char* p;
@@ -80,7 +83,8 @@ static int mth_grow(unsigned char** buf, size_t* cap, size_t need)
     if (*cap >= need) {
         return 1;
     }
-    p = (unsigned char*) realloc(*buf, need);
+    /* frame buffers become GX texture images (u32 in GXTexObj) */
+    p = (unsigned char*) pc_lowmem_realloc(*buf, need);
     if (p == NULL) {
         return 0;
     }
@@ -399,9 +403,9 @@ void pc_mth_close(void)
     if (m->fp != NULL) {
         fclose(m->fp);
     }
-    free(m->chunk);
-    free(m->jpg);
-    free(m->rgb);
+    pc_lowmem_free(m->chunk);
+    pc_lowmem_free(m->jpg);
+    pc_lowmem_free(m->rgb);
     memset(m, 0, sizeof(*m));
     m->decoded_frame = -1;
 }

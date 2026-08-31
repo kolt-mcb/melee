@@ -14,6 +14,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* Byte-swap helper (hoisted out of a GCC nested function for Clang). */
+static unsigned int swap32_fn(unsigned int v)
+{
+    return (v >> 24) | ((v >> 8) & 0xFF00) | ((v << 8) & 0xFF0000) | (v << 24);
+}
 #include <stdbool.h>
 #include <stdint.h>
 #include <GL/gl.h>
@@ -426,10 +432,7 @@ static bool load_texture_from_archive(const char* archive_file,
     }
     fclose(fp);
 
-    /* Byte-swap helper */
-    uint32_t swap32_fn(uint32_t v) {
-        return (v >> 24) | ((v >> 8) & 0xFF00) | ((v << 8) & 0xFF0000) | (v << 24);
-    }
+    /* Byte-swap helper: swap32_fn, file scope (was a GCC nested function). */
 
     /* Parse big-endian header */
     uint32_t raw_fs  = swap32_fn(*((uint32_t*)(data_buf + 0)));

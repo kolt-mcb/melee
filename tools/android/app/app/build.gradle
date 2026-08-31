@@ -1,0 +1,48 @@
+// Melee PC port -- Android app module.
+//
+// The native code is NOT built by Gradle: configure_pc.py's ANDROID_NDK
+// flavour produces build/android/arm64-v8a/libmain.so, and SDL2 is built
+// with the NDK's CMake toolchain (see port-android.md, Phase 4). Both are
+// staged, stripped, into app/jniLibs/arm64-v8a by tools/android/build_apk.sh
+// before Gradle runs. SDL's Java shell (org.libsdl.app.SDLActivity) loads
+// libSDL2 and libmain and calls SDL_main.
+apply plugin: 'com.android.application'
+
+android {
+    namespace "org.libsdl.app"
+    compileSdkVersion 34
+    defaultConfig {
+        applicationId "com.melee.pcport"
+        minSdkVersion 31
+        targetSdkVersion 34
+        versionCode 1
+        versionName "0.1"
+        ndk {
+            // arm64-v8a for devices; x86_64 for the SDK emulator (KVM).
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    sourceSets.main {
+        jniLibs.srcDir 'jniLibs'
+    }
+    packagingOptions {
+        jniLibs {
+            // libmain.so is already stripped; keep the loader happy with
+            // extractable libs (large, and SDL dlopens by name).
+            useLegacyPackaging true
+        }
+    }
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+}

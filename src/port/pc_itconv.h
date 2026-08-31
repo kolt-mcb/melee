@@ -45,6 +45,16 @@ int pc_itconv_public(struct HSD_Archive* arc, const void* raw,
 int pc_itconv_locate(const void* p, const unsigned char** base,
                      unsigned long* len);
 
+/* Bounds of the archive object containing `p`: from the nearest reloc
+ * target at or before it to the next one after (or the end of the data
+ * section). Returns 0 if `p` is in no known archive. */
+int pc_itconv_object(const void* p, const unsigned char** start,
+                     const unsigned char** end);
+
+/* Mark the object starting at `start` as converted to host order. Returns
+ * the previous state (1 if it was already marked). Used by pc_script.c. */
+int pc_itconv_object_mark(const unsigned char* start);
+
 /* Look an Article up in one of the ItCo tables, converting it on first use.
  * Tables this file does not own (the stage item table) are read through
  * unchanged. */

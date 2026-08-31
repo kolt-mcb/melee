@@ -13,24 +13,6 @@
 #include "lobj.h"
 #include "object.h"
 
-#if BUILD_TARGET_PC
-/* PC port: a render callback is only ever a function in this binary's own
- * text. The original bound here was 0x400000..0xFFFFFFFF, which is the whole
- * low address space -- it passed a pointer into .rodata or .eh_frame just as
- * happily as a real function, so a GObj that picked up a garbage callback
- * still jumped to it. (The results screen does exactly that: lbl_803B7B68
- * stands in as a weak *function* stub for a data symbol, so the render
- * callbacks read out of it are that stub's own instruction bytes.) Bound it
- * to [__executable_start, etext) instead. */
-extern char __executable_start[];
-extern char etext[];
-
-static bool pc_render_cb_sane(const void* cb)
-{
-    uintptr_t p = (uintptr_t) cb;
-    return p >= (uintptr_t) __executable_start && p < (uintptr_t) etext;
-}
-#endif
 
 u8 HSD_GObj_804D784B;
 s8 HSD_GObj_804D784A;
@@ -200,8 +182,7 @@ inline void render_gobj(HSD_GObj* cur, int i)
     HSD_GObj_804D7814 = cur;
     #if BUILD_TARGET_PC
     /* PC port: guard against corrupted callback pointers. */
-    if (cur->render_cb != NULL &&
-        pc_render_cb_sane(cur->render_cb)) {
+    if (cur->render_cb != NULL && pc_code_ptr_ok((const void*) cur->render_cb)) {
         cur->render_cb(cur, i);
     }
         else {
@@ -273,7 +254,7 @@ void HSD_GObj_80390FC0(void)
             HSD_GObj* next_cur = cur->next_gx;
             if (cur->render_cb != NULL) {
                 /* PC port: guard against corrupted callback pointers. */
-                if (!pc_render_cb_sane(cur->render_cb)) {
+                if (!pc_code_ptr_ok((const void*) cur->render_cb)) {
                     port_guard_warn("gobj.c:211");
                     cur = next_cur;
                     continue;  /* Skip corrupted callback */

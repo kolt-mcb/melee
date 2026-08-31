@@ -44,7 +44,12 @@ extern HSD_PSCmdList** psCmdListArray[65];
 extern u32* ptclref_804D0E5C[65];
 #endif
 extern EF_DAT_Entry efAsync_DatEntries[51];
+#if BUILD_TARGET_PC
+/* A function pointer; the u32 view truncates it under PIE. */
+extern void (*hsd_804D7900)(HSD_Generator*);
+#else
 extern u32 hsd_804D7900;
+#endif
 
 // forward declarations to avoid sdata2 pollution
 void HSD_MtxGetScale(Mtx, Vec3*);
@@ -181,7 +186,11 @@ void efLib_Init(void)
 
     hsd_8039D354(0);
     hsd_80398A08(0);
+#if BUILD_TARGET_PC
+    hsd_804D7900 = (void (*)(HSD_Generator*)) efLib_Cb_PtclAppSRTHook;
+#else
     hsd_804D7900 = (u32) efLib_Cb_PtclAppSRTHook;
+#endif
 
     gobj = GObj_Create(8U, 0xBU, 1U);
     GObj_SetupGXLink(gobj, efLib_render_callback, 7U, 2U);

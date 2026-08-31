@@ -25,9 +25,15 @@ double __frsqrte(double);
 float sqrtf__Ff(float);
 float sqrtf_accurate(float);
 float __fnmsubs(float, float, float);
+float __fabsf(float);
 
 #ifndef ABS
 #define ABS(x) ((x) < 0 ? -(x) : (x))
 #endif
+
+/* A handful of .c-local helpers are declared plain `inline` (C99: no
+ * out-of-line body). GCC inlined every call; Clang leaves some out of line
+ * and the link fails with an undefined symbol. On PC they are static. */
+#define PC_STATIC_INLINE static inline
 
 #endif

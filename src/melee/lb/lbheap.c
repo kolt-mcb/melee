@@ -32,7 +32,7 @@ struct lbHeap_HeapDesc lbHeap_803BA380[5] = {
 };
 
 #define lbHeap_GetHeapOffsetView(offset)                                      \
-    ((struct lbHeap_HeapOffsetView*) ((u32) (&lbHeap_80431FA0) + (offset)))
+    ((struct lbHeap_HeapOffsetView*) ((uintptr_t) (&lbHeap_80431FA0) + (offset)))
 
 static inline void lbHeap_ResetHeap(struct Heap* heap)
 {
@@ -112,7 +112,7 @@ void lbHeap_80015900(void)
     struct Heap* main_heap;
     s32 destroy_i;
     struct Heap* aram_heap;
-    u32 destroy_cursor;
+    uintptr_t destroy_cursor;
 
 #if BUILD_TARGET_PC
     /* PC port: this runs once per scene entry (via lbDvd_80018CF4), and each
@@ -132,7 +132,7 @@ void lbHeap_80015900(void)
 
     /// @remarks 0 and 1 are reserved for HSD and ARAM
     destroy_i = 2;
-    destroy_cursor = (u32) &lbHeap_80431FA0.heap_array[destroy_i] - 0x10;
+    destroy_cursor = (uintptr_t) &lbHeap_80431FA0.heap_array[destroy_i] - 0x10;
     heap_offset = 0x38;
     for (; destroy_i < 6; destroy_i++, destroy_cursor += sizeof(struct Heap),
                           heap_offset += sizeof(struct Heap))
@@ -260,10 +260,9 @@ void* lbHeap_80015BD0(int arg0, int arg1)
                 OSReport("[HEAP] lbHeap_80015BD0: heap %d exhausted; low-pool(%d) fallback\n", arg0, arg1);
                 OSRestoreInterrupts(enabled);
                 {
-                    extern void* pc_lowmem_alloc(unsigned long size);
-                    void* lp = pc_lowmem_alloc((unsigned long)arg1);
                     /* Must stay sub-4GB: callers store these in u32 fields. */
-                    return lp ? lp : malloc(arg1);
+                    extern void* pc_lowmem_malloc(size_t size);
+                    return pc_lowmem_malloc((size_t) arg1);
                 }
             }
 #endif
@@ -288,9 +287,8 @@ void* lbHeap_80015BD0(int arg0, int arg1)
 #if BUILD_TARGET_PC
         /* PC port fallback: use malloc when heap isn't created */
         {
-            extern void* pc_lowmem_alloc(unsigned long size);
-            result = pc_lowmem_alloc((unsigned long)arg1);
-            if (result == NULL) result = malloc(arg1);
+            extern void* pc_lowmem_malloc(size_t size);
+            result = pc_lowmem_malloc((size_t) arg1);
         }
 #else
         result = NULL;

@@ -1,4 +1,4 @@
-#include <execinfo.h>
+#include "pc_execinfo.h"
 /**
  * @file gx_gl_bridge.c
  * @brief GX → OpenGL bridge — captures vertex commands and translates to GL.
@@ -22,6 +22,24 @@
 #include "log.h"
 #if BUILD_TARGET_PC
 #include "pc_ptr.h"
+
+/* GX entry points implemented further down but used above their
+ * definitions; Clang refuses the implicit declarations GCC tolerated. */
+void GXSetVtxDesc(u32 attr, u32 type);
+void GXClearVtxDesc(void);
+void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac);
+void GXBegin(u32 type, u32 vtxfmt, u16 nverts);
+void GXEnd(void);
+void GXPosition3f32(f32 x, f32 y, f32 z);
+void GXTexCoord2f32(f32 s, f32 t);
+void GXSetTevOrder(u32 stage, u32 coord, u32 tex, u32 chan);
+void GXSetTevOp(u32 stage, u32 mode);
+void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize,
+                       u32 pt_texmtx);
+void GXInitTexObj(void* texObj, const void* image, u16 width, u16 height,
+                  u8 fmt, u8 s_clamp, u8 t_clamp, u8 mipmap);
+void GXLoadTexObj(void* texObj, u32 texEnv);
+void pc_tex_cache_bump(void);
 #endif
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -1171,7 +1189,7 @@ static const char* g_vert_src =
 "    vec3 diffuse_sum = vec3(0.0);\n"
 "    for (int i = 0; i < 8 && i < u_light_count; i++) {\n"
 "        // Check if this light is in the channel's light mask (bit shift)\n"
-"        if (mod(u_light_mask / (1 << i), 2) == 0) continue;\n"
+"        if (((u_light_mask >> i) & 1) == 0) continue;\n"
 "        // GX lighting as the XF unit evaluates it (and as Dolphin's\n"
 "        // LightingShaderGen writes it). Every light has a position; an\n"
 "        // infinite light is one placed 2^20 units away, which is how HSD\n"
@@ -1220,7 +1238,7 @@ static const char* g_vert_src =
 "    // with cosatt = (a0,a1,a2) and distatt = (k0,k1,k2).\n"
 "    vec3 spec_sum = vec3(0.0);\n"
 "    for (int i = 0; i < 8; i++) {\n"
-"        if (mod(u_light_mask1 / (1 << i), 2) == 0) continue;\n"
+"        if (((u_light_mask1 >> i) & 1) == 0) continue;\n"
 "        // HSD writes the half-vector with GXInitLightDir, not\n"
 "        // GXInitSpecularDir (HSD_LObjSetupSpecularInit, lobj.c). Reading\n"
 "        // only the latter meant H was always zero, this loop skipped every\n"
@@ -1731,17 +1749,153 @@ static const char* g_frag_src =
 "    }\n"
 "}\n";
 
+/* Every shader in the bridge is written once, in GLSL 3.30 core. On an
+ * OpenGL ES context the "#version" line is swapped for the ES 3.10
+ * header (the bodies are kept in the common subset of the two dialects:
+ * explicit float literals, no implicit int->float conversion). */
+int window_gl_es(void);
+
+/* ------------------------------------------------------------------
+ * Streaming vertex buffer.
+ *
+ * Every GX primitive becomes its own glDrawArrays, so a match issues
+ * ~1300 draws a frame, each preceded by an upload of its vertices.
+ * Rewriting the SAME bytes each time (glBufferSubData at offset 0) makes
+ * the driver reconcile the write against the draws still reading them.
+ * On a tile-based mobile GPU that is not a stall but something worse:
+ * Mali "ghosts" the buffer, copying the whole thing per update. Measured
+ * on a Pixel 9 (Mali-G715): 1227 ms/frame -- 0.8 fps -- and, once the
+ * buffer was enlarged, 6.7 GB of resident memory on an 11.8 GB phone,
+ * which had Android's low-memory killer taking down the game and half
+ * the system with it.
+ *
+ * So: sub-allocate a ring, and write each span with glMapBufferRange +
+ * GL_MAP_UNSYNCHRONIZED_BIT. Unsynchronized is the promise that makes
+ * this cheap -- it tells the driver not to wait for, or copy around,
+ * work in flight, which is safe precisely because the ring hands out
+ * bytes no earlier draw is using. The ring holds several frames of
+ * vertices; on wrap it is orphaned once (glBufferData with NULL) so the
+ * driver can hand back fresh storage instead of waiting for the frames
+ * still reading the old contents. */
+#define PC_VBO_RING_VERTS (64u * 1024u)
+#define PC_VBO_RING_BYTES ((GLsizeiptr) (sizeof(Vertex) * PC_VBO_RING_VERTS))
+static GLintptr g_vbo_off;
+/* First vertex of the span most recently streamed (draws use it). */
+static GLint g_vbo_first;
+
+/* Upload `count` vertices and return the first-vertex index for the draw.
+ * The caller must have bound g_vbo. */
+static GLint pc_vbo_stream(const Vertex* src, unsigned count)
+{
+    GLsizeiptr bytes = (GLsizeiptr) (sizeof(Vertex) * (size_t) count);
+    GLint first;
+    if (count == 0) {
+        return 0;
+    }
+    if (bytes > PC_VBO_RING_BYTES) {
+        /* Larger than the ring (cannot happen with MAX_VERTS, but do not
+         * corrupt memory if it ever does): fall back to a full upload. */
+        glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, PC_VBO_RING_BYTES, src);
+        g_vbo_off = PC_VBO_RING_BYTES;
+        return 0;
+    }
+    if (g_vbo_off + bytes > PC_VBO_RING_BYTES) {
+        glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
+        g_vbo_off = 0;
+    }
+    {
+        void* dst = glMapBufferRange(GL_ARRAY_BUFFER, g_vbo_off, bytes,
+                                     GL_MAP_WRITE_BIT |
+                                         GL_MAP_UNSYNCHRONIZED_BIT |
+                                         GL_MAP_INVALIDATE_RANGE_BIT);
+        if (dst != NULL) {
+            memcpy(dst, src, (size_t) bytes);
+            glUnmapBuffer(GL_ARRAY_BUFFER);
+        } else {
+            /* Should not happen; correctness does not depend on the map. */
+            glBufferSubData(GL_ARRAY_BUFFER, g_vbo_off, bytes, src);
+        }
+    }
+    first = (GLint) (g_vbo_off / (GLintptr) sizeof(Vertex));
+    g_vbo_off += bytes;
+    return first;
+}
+
+
+/* glDepthRange is not an ES entry point (on an ES context Mesa rejects
+ * it with GL_INVALID_OPERATION); glDepthRangef is in both since GL 4.1 /
+ * ARB_ES2_compatibility. The Android GL shim maps the former to the
+ * latter at compile time; the desktop chooses at run time. */
+static void pc_depth_range(float n, float f)
+{
+#ifdef __ANDROID__
+    glDepthRangef(n, f);
+#else
+    if (window_gl_es()) glDepthRangef(n, f); else glDepthRange(n, f);
+#endif
+}
+
+static void pc_clear_depth(float z)
+{
+#ifdef __ANDROID__
+    glClearDepthf(z);
+#else
+    if (window_gl_es()) glClearDepthf(z); else glClearDepth(z);
+#endif
+}
+
+/* The ES header follows the context: "310 es" on ES 3.1+, "300 es" on an
+ * ES 3.0 context (the SDK emulator's SwiftShader offers nothing newer,
+ * and a 3.0 compiler rejects "310"). The bodies use nothing past 3.00.
+ * MELEE_GLSL_ES=300 forces the older header on a newer context to check
+ * that on the desktop. */
+static const char* pc_es_header(void)
+{
+    static const char* hdr;
+    if (hdr == NULL) {
+        GLint major = 3, minor = 1;
+        const char* force = getenv("MELEE_GLSL_ES");
+        glGetIntegerv(GL_MAJOR_VERSION, &major);
+        glGetIntegerv(GL_MINOR_VERSION, &minor);
+        if ((force != NULL && strcmp(force, "300") == 0) ||
+            (major == 3 && minor == 0))
+            hdr = "#version 300 es\n"
+                  "precision highp float;\n"
+                  "precision highp int;\n"
+                  "precision highp sampler2D;\n";
+        else
+            hdr = "#version 310 es\n"
+                  "precision highp float;\n"
+                  "precision highp int;\n"
+                  "precision highp sampler2D;\n";
+        fprintf(stderr, "[GLINFO] GLSL ES header: %.15s (context %d.%d)\n",
+                hdr + 9, (int) major, (int) minor);
+    }
+    return hdr;
+}
+
 static GLuint compile_shader(GLenum type, const char* src)
 {
     GLuint s = glCreateShader(type);
-    glShaderSource(s, 1, &src, NULL);
+    const char* parts[2];
+    GLsizei nparts = 1;
+    parts[0] = src;
+    if (window_gl_es() && strncmp(src, "#version ", 9) == 0) {
+        const char* nl = strchr(src, '\n');
+        parts[0] = pc_es_header();
+        parts[1] = nl ? nl + 1 : "";
+        nparts = 2;
+    }
+    glShaderSource(s, nparts, parts, NULL);
     glCompileShader(s);
     GLint ok;
     glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
     if (!ok) {
-        GLchar log[512];
-        glGetShaderInfoLog(s, 512, NULL, log);
-        PORT_LOG_ERROR("Shader compile failed: %s", log);
+        GLchar log[4096];
+        glGetShaderInfoLog(s, sizeof(log), NULL, log);
+        PORT_LOG_ERROR("Shader compile failed (%s): %s",
+                       type == GL_VERTEX_SHADER ? "vert" : "frag", log);
         return 0;
     }
     return s;
@@ -2343,7 +2497,8 @@ static void bridge_create_gl(void)
     glGenBuffers(1, &g_vbo);
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * MAX_VERTS, NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
+    g_vbo_off = 0;
     
     /* Set up vertex attribute pointers in VAO */
     glEnableVertexAttribArray(0);
@@ -3509,7 +3664,7 @@ static void bridge_upload_and_draw(void)
      * size would reallocate every draw; glBufferSubData does not. */
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * count, g_state.verts);
+    g_vbo_first = pc_vbo_stream(g_state.verts, count);
 
     /* PC diag: read back the VBO's first vertex to confirm the GPU has the
      * same data the CPU used for the NDCCHECK (rules out a bad upload). */
@@ -3519,7 +3674,9 @@ static void bridge_upload_and_draw(void)
         if (_rb_n < 300) {
             _rb_n++;
             Vertex rb;
-            glGetBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex), &rb);
+            glGetBufferSubData(GL_ARRAY_BUFFER,
+                               (GLintptr) g_vbo_first * (GLintptr) sizeof(Vertex),
+                               sizeof(Vertex), &rb);
             fprintf(stderr, "  VBORB v0 in=(%.2f,%.2f,%.2f) vbo=(%.2f,%.2f,%.2f) match=%d n=%u\n",
                     (double)g_state.verts[0].pos[0],(double)g_state.verts[0].pos[1],(double)g_state.verts[0].pos[2],
                     (double)rb.pos[0],(double)rb.pos[1],(double)rb.pos[2],
@@ -3597,11 +3754,7 @@ static void bridge_upload_and_draw(void)
      * replace draw via a collapsed depth range (the erase quad is flushed
      * while REPLACE is active — see GXSetZTexture, which flushes pending
      * geometry before the op changes). Reset for all normal draws. */
-    if (g_state.ztex_op == GX_ZT_REPLACE) {
-        glDepthRange(1.0, 1.0);
-    } else {
-        glDepthRange(0.0, 1.0);
-    }
+    pc_depth_range(g_state.ztex_op == GX_ZT_REPLACE ? 1.0f : 0.0f, 1.0f);
 
     /* State — cull. This block used to be `if (FALSE && ...)`, so every draw
      * unconditionally disabled culling and threw away whatever GXSetCullMode
@@ -4088,7 +4241,7 @@ static void bridge_upload_and_draw(void)
         tri_verts[5] = g_state.verts[3];
         
         glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, 6 * sizeof(Vertex), tri_verts);
+        g_vbo_first = pc_vbo_stream(tri_verts, 6);
         
         /* Rebind VAO attributes */
         glBindVertexArray(g_vao);
@@ -4100,7 +4253,7 @@ static void bridge_upload_and_draw(void)
         glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                               (void *)(uintptr_t)offsetof(Vertex, col));
         
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDrawArrays(GL_TRIANGLES, g_vbo_first, 6);
         pc_frame_trace("quad4");
         /* PC diag: quad draw summary (MELEE_MTR) */
         {
@@ -4443,16 +4596,16 @@ static void bridge_upload_and_draw(void)
                 quad_tri[q*6+3] = *a; quad_tri[q*6+4] = *c; quad_tri[q*6+5] = *d;
             }
             glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * (nq * 6), quad_tri);
+            g_vbo_first = pc_vbo_stream(quad_tri, (unsigned) (nq * 6));
             pc_prog_flush();
-            glDrawArrays(GL_TRIANGLES, 0, nq * 6);
+            glDrawArrays(GL_TRIANGLES, g_vbo_first, nq * 6);
             pc_stat_draws++; pc_stat_verts += (unsigned)(nq*6);
             s_pc_draws++;
             pc_frame_trace("quadsN");
         } else {
         pc_diag_draws++;
         pc_prog_flush();
-            glDrawArrays(gl_prim, 0, count);
+            glDrawArrays(gl_prim, g_vbo_first, count);
         pc_stat_draws++; pc_stat_verts += (unsigned)count;
         s_pc_draws++;
         pc_frame_trace("drawN");
@@ -4597,7 +4750,7 @@ static void pc_gl_clear(f32 r, f32 g, f32 b, f32 a, f32 z)
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDepthMask(GL_TRUE);
     glClearColor(r, g, b, a);
-    glClearDepth(z);
+    pc_clear_depth((float) z);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     if (scissor_was) glEnable(GL_SCISSOR_TEST);
     /* The per-draw state block reasserts colour/depth masks, so leaving them
@@ -7172,7 +7325,11 @@ void GXSetPointSize(u32 sz, u32 texOffsets)
 {
     gx_flush_pending();
     g_state.point_size = (u8)sz;
-    glPointSize((float)sz);
+#ifndef __ANDROID__
+    /* ES has no glPointSize (gl_PointSize only); GX points are drawn as
+     * quads by the bridge, so the GL point size is cosmetic anyway. */
+    if (!window_gl_es()) glPointSize((float)sz);
+#endif
     (void)texOffsets;
 }
 void GXEnableTexOffsets(u32 coord, u32 line_en, u32 pt_en)
