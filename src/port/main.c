@@ -188,6 +188,28 @@ int main(int argc, char* argv[])
     struct rlimit rl = { .rlim_cur = 0x1000000, .rlim_max = 0x1000000 };
     prlimit(0, RLIMIT_STACK, &rl, NULL);
 
+    /* Android has no stderr anyone reads and no environment: forward fds
+     * 1/2 to logcat and load MELEE_* knobs from melee.env in the asset
+     * dir (pc_android.c). Both testable on Linux via MELEE_LOGCAT_TEST=1
+     * and MELEE_ENV_FILE=<path>. */
+    {
+        extern void pc_logcat_init(void);
+        extern int pc_env_file_load(const char* path);
+#ifdef __ANDROID__
+        const char* ext;
+        pc_logcat_init();
+        ext = SDL_AndroidGetExternalStoragePath();
+        if (ext != NULL) {
+            char envpath[1024];
+            snprintf(envpath, sizeof(envpath), "%s/melee.env", ext);
+            pc_env_file_load(envpath);
+        }
+#else
+        if (getenv("MELEE_LOGCAT_TEST") != NULL) pc_logcat_init();
+        if (getenv("MELEE_ENV_FILE") != NULL) pc_env_file_load(getenv("MELEE_ENV_FILE"));
+#endif
+    }
+
     /* PC port: install crash handler for debugging */
     install_crash_handler();
     { extern void pc_profile_init(void); pc_profile_init(); }
