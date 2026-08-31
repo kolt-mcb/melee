@@ -263,14 +263,25 @@ five desktop calls. Dependencies live outside the tree
 (`tools/android/deps`, gitignored): SDL2 2.30.11 and libjpeg-turbo 3.0.4
 built with the NDK CMake toolchain.
 
-Not yet done, in the order they will bite on a device:
-1. **Shaders** — still `#version 330 core`; the bridge will fail to
-   compile them on GLES and draw nothing (Phase 2).
-2. **Low pointer pool** under PIE/ASLR (Phase 3) — unverified.
-3. **Logging** — stderr goes nowhere on Android; route OSReport/PORT_LOG
-   to `__android_log_print`.
-4. **Assets** — the app reads `<external files dir>/GALE01`; nothing copies
-   them there yet (`adb push` for now).
+Later the same day: shaders (Phase 2) and the memory model (Phase 3) were
+done and verified on Linux; logging and knobs followed:
+
+- **Logging** — `src/port/pc_android.c` dup2's a pipe onto fds 1 and 2 and
+  a thread forwards each line to `__android_log_write` (tag `melee`), so
+  every `fprintf(stderr)`, `PORT_LOG_*` and `OSReport` `write(2)` site
+  reaches `adb logcat -s melee` unchanged. Verified on Linux with
+  `MELEE_LOGCAT_TEST=1` (sink = original stderr): 217/217 lines forwarded.
+- **Knobs** — Android apps have no environment, so `files/melee.env`
+  (`KEY=VALUE`) is fed to `setenv` at startup; every `getenv("MELEE_*")`
+  keeps working. Verified on Linux with `MELEE_ENV_FILE`.
+- **Assets** — `adb push orig/GALE01` into the app's external files dir
+  (no permission needed). The SAF first-run picker is deferred until the
+  build has been seen running on a device. `tools/android/README.md` has
+  the exact commands, logcat tags and symbolising recipe.
+
+No device was attached during this work; the next step is entirely
+device-side (Adreno/Mali shader compilers, the low pool's `mmap` hint,
+pacing).
 
 ## Order and gates
 
