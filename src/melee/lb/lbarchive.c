@@ -3,6 +3,7 @@
 #if BUILD_TARGET_PC
 #include <string.h>
 #include "gr/grdatfiles.h"
+#include "lb/types.h"
 #include "port/pc_ptr.h"
 #include "port/pc_scene.h"
 #endif
@@ -78,6 +79,61 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
 #pragma pop
 
 #if BUILD_TARGET_PC
+/* lbBgFlashColAnimData is a table of {colour-anim script, priority, flag}
+ * records.  The archive stores each as 8 bytes whose first word is a
+ * big-endian offset; x64 needs 16-byte records holding a real pointer, so
+ * the table is rebuilt.  The scripts it points at are bitfield words read
+ * in place (PC_SCRIPT_BE), so those stay where they are. */
+#define PC_COLANIM_MAX 64
+static struct Fighter_804D653C_t pc_bgflash_colanim[PC_COLANIM_MAX];
+
+static bool pc_archive_is_reloc(HSD_Archive* archive, u32 off)
+{
+    u32 i;
+    for (i = 0; i < archive->header.nb_reloc; i++) {
+        if (archive->reloc_info[i].offset == off) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void* pc_conv_ColAnimTable(HSD_Archive* archive, void* raw)
+{
+    const u8* src = raw;
+    u32 off, n, i;
+
+    if (archive->data == NULL || archive->header.data_size == 0) {
+        return raw;
+    }
+    off = (u32) ((const u8*) raw - archive->data);
+    if (off >= archive->header.data_size) {
+        return raw;
+    }
+    /* The table runs to the end of the data section. */
+    n = (archive->header.data_size - off) / 8;
+    if (n > PC_COLANIM_MAX) {
+        n = PC_COLANIM_MAX;
+    }
+    memset(pc_bgflash_colanim, 0, sizeof(pc_bgflash_colanim));
+    for (i = 0; i < n; i++) {
+        const u8* e = src + i * 8;
+        u32 script = ((u32) e[0] << 24) | ((u32) e[1] << 16) |
+                     ((u32) e[2] << 8) | (u32) e[3];
+        /* A record whose first word carries no relocation has no script;
+         * a relocated one may legitimately point at offset 0. */
+        if (pc_archive_is_reloc(archive, off + i * 8) &&
+            script < archive->header.data_size)
+        {
+            pc_bgflash_colanim[i].unk = archive->data + script;
+        }
+        pc_bgflash_colanim[i].unk4 = e[4];
+        pc_bgflash_colanim[i].unk5 = e[5];
+    }
+    PORT_LOG_INFO("pc_conv_ColAnimTable: %u colour-anim entries\n", n);
+    return pc_bgflash_colanim;
+}
+
 /* PC port: every section this resolves is a raw pointer into big-endian
  * archive data -- joint trees, camera and light descriptors, the lot -- and
  * every caller then uses it as a native struct. The menu system loads its
@@ -144,6 +200,9 @@ static void* pc_convert_section(HSD_Archive* archive, const char* name,
         return grDatFiles_ConvertFogDescGCNtoX64(raw, base);
     }
 #undef PC_SEC_ENDS
+    if (strcmp(name, "lbBgFlashColAnimData") == 0) {
+        return pc_conv_ColAnimTable(archive, raw);
+    }
     return raw;
 }
 #endif

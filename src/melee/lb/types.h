@@ -12,6 +12,14 @@
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 
+#ifndef PC_SCRIPT_BE
+#if defined(BUILD_TARGET_PC)
+#define PC_SCRIPT_BE __attribute__((scalar_storage_order("big-endian")))
+#else
+#define PC_SCRIPT_BE
+#endif
+#endif
+
 struct HitResult {
     HSD_JObj* bone;
 
@@ -368,13 +376,20 @@ struct ColorOverlay_UnkInner {
     /* +7B */ u8 x7B;
 };
 
+/* A word of the colour-overlay script, read straight out of the DAT the
+ * same way subaction commands are: big-endian, bitfields MSB-first.  The
+ * colour is spelled out rather than reusing GXColor because a default-order
+ * aggregate inside a reversed-order union warns (-Wscalar-storage-order) on
+ * every include; the layout is the same four bytes. */
 union ColorOverlay_x8_t {
-    GXColor light_color;
+    struct {
+        u8 r, g, b, a;
+    } light_color;
     struct {
         s32 unk : 6;
         s32 x : 13;
         s32 yz : 13;
-    } light_rot1;
+    } PC_SCRIPT_BE light_rot1;
     struct {
         u32 x0_0 : 1;
         u32 x0_1 : 1;
@@ -386,12 +401,12 @@ union ColorOverlay_x8_t {
         u32 x0_7 : 1;
         s32 x : 12;
         s32 yz : 12;
-    } light_rot2;
+    } PC_SCRIPT_BE light_rot2;
     struct {
         u32 unk : 6;
         u32 timer : 26;
-    } unk;
-};
+    } PC_SCRIPT_BE unk;
+} PC_SCRIPT_BE;
 STATIC_ASSERT(sizeof(union ColorOverlay_x8_t) == 0x4);
 
 struct ColorOverlay {

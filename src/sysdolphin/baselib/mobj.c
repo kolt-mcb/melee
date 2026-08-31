@@ -192,7 +192,24 @@ static int MObjLoad(HSD_MObj* mobj, HSD_MObjDesc* desc)
     mobj->rendermode = desc->rendermode;
     mobj->tobj = HSD_TObjLoadDesc(desc->texdesc);
     mobj->mat = HSD_MaterialAlloc();
+#if BUILD_TARGET_PC
+    /* PC port: the `desc == NULL` guard above does not cover a descriptor
+     * that converted but carries no material -- memcpy from NULL then takes
+     * the whole scene down (the post-match clear screen died here). An
+     * all-zero material renders wrong; it does not stop the game. */
+    if (mobj->mat == NULL) {
+        port_guard_warn("mobj.c:mat-alloc");
+        return 0;
+    }
+    if (desc->mat == NULL) {
+        port_guard_warn("mobj.c:null-mat");
+        memset(mobj->mat, 0, sizeof(HSD_Material));
+    } else {
+        memcpy(mobj->mat, desc->mat, sizeof(HSD_Material));
+    }
+#else
     memcpy(mobj->mat, desc->mat, sizeof(HSD_Material));
+#endif
 #if BUILD_TARGET_PC
     if (getenv("MELEE_MATLOG") != NULL) {
         /* MELEE_MATLOG=N skips the first N loads, so a later scene's

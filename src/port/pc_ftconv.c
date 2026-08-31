@@ -40,6 +40,7 @@
 #include <melee/ft/forward.h>
 #include <melee/ft/dobjlist.h>
 #include <melee/ft/chara/ftCommon/types.h>
+#include <melee/ft/chara/ftSamus/types.h>
 #include <sysdolphin/baselib/archive.h>
 
 #include "pc_ptr.h"
@@ -206,6 +207,122 @@ void* pc_ftconv_vislookup(void* raw, unsigned model_num)
     return NULL;
 }
 
+
+/* Samus's ftData::x48_items[4] is not an Article either: it is a raw
+ * { HSD_Joint*, HSD_AnimJoint**, HSD_AnimJoint*, HSD_MatAnimJoint* } record
+ * (struct UNK_SAMUS_S1) describing the grapple beam that
+ * ftSs_Init_CreateThrowGrappleBeam hangs off her hand on every throw.  All
+ * four fields are 32-bit file offsets, so on x86_64 the record is a
+ * different size *and* every field needs converting -- read in place it
+ * gave x0_joint = two glued-together offsets, which the jobj guard rejected
+ * (accessory left NULL) before the anim-joint lookup dereferenced garbage.
+ * LEN: x4_anim_joints has one entry per throw direction -- the caller
+ * indexes it with msid - ftCo_MS_ThrowF, and there are four throws
+ * (F/B/Hi/Lw). */
+#define PC_SS_GBEAM_THROWS 4
+
+void* pc_ftconv_samus_gbeam(void* raw)
+{
+    /* Keyed on the archive as well as the record: Samus reloads on every
+     * match, and a converted tree belongs to the archive it was read from. */
+    static struct {
+        void* raw;
+        const u8* base;
+        unsigned long len;
+        void* conv;
+    } cache[4];
+    static int cache_n;
+    const u8* p = (const u8*) raw;
+    int i;
+
+    if (raw == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < pc_ftconv_arch_n; i++) {
+        u8* b = (u8*) pc_ftconv_arch[i].base;
+        unsigned long len = pc_ftconv_arch[i].len;
+        struct UNK_SAMUS_S1* out;
+        HSD_AnimJoint** anims;
+        u32 off;
+        int t;
+
+        if (!(p > b && (unsigned long) (p - b) < len)) {
+            continue;
+        }
+        for (t = 0; t < cache_n; t++) {
+            if (cache[t].raw == raw && cache[t].base == b &&
+                cache[t].len == len)
+            {
+                return cache[t].conv;
+            }
+        }
+
+        out = pc_lowmem_alloc(sizeof(*out));
+        anims = pc_lowmem_alloc(sizeof(*anims) * PC_SS_GBEAM_THROWS);
+        if (out == NULL || anims == NULL) {
+            return NULL;
+        }
+        memset(out, 0, sizeof(*out));
+        memset(anims, 0, sizeof(*anims) * PC_SS_GBEAM_THROWS);
+
+        /* Same reason as pc_ftconv_joint: the joint map keys on per-archive
+         * offsets, so entries left from another archive would capture this
+         * tree's envelope lookups. */
+        grDatFiles_ResetJointMap();
+        off = pc_be32(*(const u32*) (p + 0));
+        if (off != 0 && off < len) {
+            out->x0_joint =
+                grDatFiles_ConvertJointTreeGCNtoX64(b + off, b, 0, NULL);
+        }
+        grDatFiles_ResolvePObjJoints();
+
+        off = pc_be32(*(const u32*) (p + 4));
+        if (off != 0 && off + PC_SS_GBEAM_THROWS * 4u <= len) {
+            for (t = 0; t < PC_SS_GBEAM_THROWS; t++) {
+                u32 a = pc_be32(*(const u32*) (b + off + (u32) t * 4u));
+                if (a != 0 && a < len) {
+                    anims[t] =
+                        grDatFiles_ConvertAnimJointTreeGCNtoX64(b + a, b, 0);
+                }
+            }
+        }
+        out->x4_anim_joints = anims;
+
+        off = pc_be32(*(const u32*) (p + 8));
+        if (off != 0 && off < len) {
+            out->x8_anim_joint =
+                grDatFiles_ConvertAnimJointTreeGCNtoX64(b + off, b, 0);
+        }
+        off = pc_be32(*(const u32*) (p + 12));
+        if (off != 0 && off < len) {
+            out->xC_matanim_joint =
+                grDatFiles_ConvertMatAnimJointTreeGCNtoX64(b + off, b, 0);
+        }
+
+        if (cache_n < (int) (sizeof(cache) / sizeof(cache[0]))) {
+            cache[cache_n].raw = raw;
+            cache[cache_n].base = b;
+            cache[cache_n].len = len;
+            cache[cache_n].conv = out;
+            cache_n++;
+        }
+        if (pc_ftconv_trace()) {
+            fprintf(stderr,
+                    "[FTCONV] samus gbeam %p -> %p (joint=%p anim=%p matanim=%p "
+                    "throws=%p/%p/%p/%p)\n",
+                    raw, (void*) out, (void*) out->x0_joint,
+                    (void*) out->x8_anim_joint, (void*) out->xC_matanim_joint,
+                    (void*) anims[0], (void*) anims[1], (void*) anims[2],
+                    (void*) anims[3]);
+        }
+        return out;
+    }
+    fprintf(stderr,
+            "[PORT WARN] pc_ftconv_samus_gbeam: %p is in no known fighter "
+            "archive; skipping\n",
+            raw);
+    return NULL;
+}
 
 static void* pc_off_to_ptr(u32 off, const u8* base, unsigned long len)
 {
