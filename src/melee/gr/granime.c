@@ -58,8 +58,13 @@
 /* 4D695C */ static float grAnime_804D695C;
 
 struct padded_jmp_buf {
+#if defined(__GLIBC__) || !defined(BUILD_TARGET_PC)
     __jmp_buf buf;
     u8 pad[0x118 - 0xF8];
+#else
+    jmp_buf buf; /* bionic has no __jmp_buf; the padding only matched GCN */
+    u8 pad[8];
+#endif
 };
 
 /* 49EE40 */ struct padded_jmp_buf grAnime_8049EE40;

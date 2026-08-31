@@ -172,10 +172,24 @@ if ASAN:
 # exercised without a link).
 ANDROID_NDK = os.environ.get("ANDROID_NDK")
 ANDROID = ANDROID_NDK is not None
+# Prebuilt dependencies for the Android link (see port-android.md, Phase 4):
+# SDL2 2.30 and libjpeg-turbo built for arm64-v8a with the NDK's CMake
+# toolchain. ANDROID_DEPS points at a directory holding SDL2-<ver>/,
+# sdl2-build/, libjpeg-turbo-<ver>/ and jpeg-build/.
+ANDROID_DEPS = Path(os.environ.get("ANDROID_DEPS", str(ROOT / "tools" / "android" / "deps")))
 if ANDROID:
     OUT_DIR = BUILD / "android"
     _ndk_bin = Path(ANDROID_NDK) / "toolchains" / "llvm" / "prebuilt" / "linux-x86_64" / "bin"
     CC = str(_ndk_bin / "aarch64-linux-android31-clang")
+    _sdl_src = sorted(ANDROID_DEPS.glob("SDL2-2.*"))
+    _jpeg_src = sorted(ANDROID_DEPS.glob("libjpeg-turbo-*"))
+    _dep_inc = ""
+    if _sdl_src:
+        _dep_inc += (" -isystem " + str(ANDROID_DEPS / "sdl2-build" / "include-config-release" / "SDL2")
+                     + " -isystem " + str(_sdl_src[-1] / "include"))
+    if _jpeg_src:
+        _dep_inc += (" -isystem " + str(ANDROID_DEPS / "jpeg-build")
+                     + " -isystem " + str(_jpeg_src[-1]))
     # ANDROID_SPIKE=1 is the "list everything" mode: the attribute error and
     # Clang's implicit-declaration error are downgraded to warnings and the
     # per-file error limit is lifted, so one pass reports every remaining
@@ -185,18 +199,35 @@ if ANDROID:
         _attr = " -Wno-error=implicit-function-declaration -ferror-limit=0"
     else:
         _attr = " -Werror=unknown-attributes"
-    ARCH_FLAGS = ("-fPIE" + _attr + " -Wno-unknown-warning-option"
+    # Warning parity with GCC: Clang promotes these to errors by default
+    # while the GCC build has always compiled (and shipped) with them as
+    # warnings. bool/int callback mismatches and int<->pointer stores are
+    # ABI-identical on both targets; implicit declarations are the latent
+    # hazard pc_prelude.h keeps chipping at.
+    _attr += (" -Wno-error=incompatible-function-pointer-types"
+              " -Wno-error=int-conversion"
+              " -Wno-error=implicit-function-declaration"
+              " -Wno-error=return-type")
+    ARCH_FLAGS = ("-fPIC" + _attr + " -Wno-unknown-warning-option"
                   " -isystem " + str(ROOT / "tools" / "android" / "glshim")
-                  + " -isystem /usr/include/SDL2 -DBUILD_TARGET_ANDROID=1")
+                  + _dep_inc + " -DBUILD_TARGET_ANDROID=1")
 else:
     CC = "gcc"
     ARCH_FLAGS = "-m64"
 CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "")
-LDFLAGS = ("-fPIE -pie" if ANDROID else "-m64 -no-pie") + SAN_FLAGS + PROF_FLAGS
-# libjpeg decodes the motion-JPEG frames in MTH movies (src/port/pc_mth.c).
-LIBS = "-lSDL2 -lGL -ljpeg -lpthread -ldl -lm -lc -lstdc++"
+if ANDROID:
+    # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
+    LDFLAGS = "-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"
+    LIBS = ("-L" + str(ANDROID_DEPS / "sdl2-build") + " -lSDL2"
+            " -L" + str(ANDROID_DEPS / "jpeg-build") + " -ljpeg"
+            " -lGLESv3 -lEGL -llog -landroid -lm -ldl")
+    OUT_PATH = str(OUT_DIR / "arm64-v8a" / "libmain.so")
+else:
+    LDFLAGS = "-m64 -no-pie" + SAN_FLAGS + PROF_FLAGS
+    # libjpeg decodes the motion-JPEG frames in MTH movies (src/port/pc_mth.c).
+    LIBS = "-lSDL2 -lGL -ljpeg -lpthread -ldl -lm -lc -lstdc++"
+    OUT_PATH = str(OUT_DIR / "melee-pc")
 out_objs = " ".join(str(OUT_DIR/"obj"/(Path(s).stem+".o")) for s in ALL_SOURCES)
-OUT_PATH = str(OUT_DIR / "melee-pc")
 
 n = ""
 n += "# PC Port Build\n"
@@ -222,14 +253,10 @@ for s in ALL_SOURCES:
     n += "build " + o + ": cc " + s + "\n"
     n += "  cflags = $cflags\n\n"
 
-if ANDROID:
-    # Phase 0: compile everything, link nothing. Objects are the deliverable.
-    n += "default " + out_objs + "\n\n"
-else:
-    n += "build " + OUT_PATH + ": link " + out_objs + "\n"
-    n += "  ldflags = $ldflags\n"
-    n += "  libs = $libs\n\n"
-    n += "default " + OUT_PATH + "\n\n"
+n += "build " + OUT_PATH + ": link " + out_objs + "\n"
+n += "  ldflags = $ldflags\n"
+n += "  libs = $libs\n\n"
+n += "default " + OUT_PATH + "\n\n"
 
 NINJA_FILE = ("build.ninja.android" if ANDROID
               else "build.ninja.pc-asan" if ASAN else "build.ninja.pc")

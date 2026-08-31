@@ -256,7 +256,7 @@ void lbFile_8001668C(const char* basename, u32* src, u32* dest)
     } while (!lbFile_800161A0());
 }
 
-inline void qwer(s32 a, const char* basename, u32* src, u32* dest)
+PC_STATIC_INLINE void qwer(s32 a, const char* basename, u32* src, u32* dest)
 {
     *dest = lbFile_800163D8(basename);
 #if BUILD_TARGET_PC

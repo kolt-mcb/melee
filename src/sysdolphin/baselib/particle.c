@@ -12,6 +12,13 @@ static PerfDispItem hsd_804CE3F8[6];
 #include "particle.static.h"
 #if BUILD_TARGET_PC
 #include "particle_pc.h"
+
+/* Defined later in this file / in the debug console; declared here so the
+ * earlier uses are not implicit (Clang errors on the later conflict). */
+void hsd_80393844(void);
+void hsd_80393A54(int level);
+s32 hsd_80393328(void);
+int baselib_mfspr(int spr);
 #define PC_BUS_CLOCK 972000000u /* OS_BUS_CLOCK; the low-memory word is unmapped here */
 #else
 #define PC_BUS_CLOCK (*(u32*) 0x800000F8)

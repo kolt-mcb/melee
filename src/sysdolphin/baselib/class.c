@@ -369,7 +369,7 @@ inline HSD_ClassInfo* HSD_PushClassInfo(HSD_ClassInfo* class_info)
     return ret = class_info;
 }
 
-inline bool hsdChangeClass_inline(HSD_Obj* object, HSD_ClassInfo* class_info)
+PC_STATIC_INLINE bool hsdChangeClass_inline(HSD_Obj* object, HSD_ClassInfo* class_info)
 {
     HSD_ClassInfo* var_r29;
     HSD_ClassInfo* var_r28;

@@ -113,4 +113,10 @@ typedef UNK_T UNK4_T;
         UNUSED u64 _0 = 0, _1 = 0, _2 = 0, _3 = 0;                            \
     } while (0)
 
+/* PC builds define this as `static inline` (port/pc_prelude.h); the
+ * GameCube build keeps the plain `inline` the matching depends on. */
+#ifndef PC_STATIC_INLINE
+#define PC_STATIC_INLINE inline
+#endif
+
 #endif

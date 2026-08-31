@@ -1,5 +1,14 @@
 #include "gr/grpura.h"
 
+/* Used above their definitions in this file; explicit for Clang. */
+void grPura_802125F0(HSD_GObj* arg0);
+void grPura_80212CD4(HSD_GObj* arg0);
+void grPura_80212EF4(HSD_GObj* arg0);
+void grPura_80212FC0(HSD_GObj* arg0);
+void grPura_80213030(Ground_GObj* arg0);
+void grPura_80213224(HSD_DObj* dobj);
+void grPura_80213250(HSD_JObj* jobj);
+
 #include <platform.h>
 
 #include "baselib/debug.h"

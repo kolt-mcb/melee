@@ -467,7 +467,25 @@ __attribute__((weak)) void HSD_GObjPLink_803902B8(void) {}
 
 /* stdio internal */
 #include <stdio.h>
+#if defined(__GLIBC__)
 FILE __files[3] = {0};
+#else
+FILE* __files[3]; /* bionic's FILE is opaque; nothing on PC indexes this */
+#endif
+
+/* The boot init chain below calls these before any header declares them;
+ * Clang refuses implicit declarations that later conflict with the weak
+ * void(void) stubs further down. */
+void lbMemory_8001564C(void);
+void lbHeap_80015F3C(void);
+void lbDvd_80018F68(void);
+void lbArq_80014D2C(void);
+void lbSnap_8001E290(void);
+void lbAudioAx_8002838C(void);
+void gmMainLib_8015FCC0(void);
+void lbMthp_8001F87C(void);
+void gmMainLib_8015FBA4(void);
+void lbAudioAx_80028690(void);
 
 
 /* MSL va_list internals */
