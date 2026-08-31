@@ -951,12 +951,15 @@ void fn_800219E4(void* arg0)
 
 f32 lbl_804D63D8;
 
-typedef struct {
-    char pad[0x2C];
-    void* x2C;
-} BgFlashGlobal;
+/* The user data hung off the bg-flash GObj: a mode byte and the colour
+ * overlay the flash animates. */
+typedef struct BgFlashUserData {
+    u8 x0;
+    u8 pad_01[3];
+    ColorOverlay x4;
+} BgFlashUserData;
 
-BgFlashGlobal* lbl_804D63E0[2];
+HSD_GObj* lbl_804D63E0[2];
 struct Fighter_804D653C_t* lbl_804D63DC;
 
 void lbBgFlash_80021A10(f32 arg8)
@@ -969,13 +972,13 @@ void lbBgFlash_80021A18(int arg0)
     HSD_GObj* gobj;
     u8* user_data;
 
-    HSD_ObjAllocInit(&lbl_804336A0, 0x84, 4);
+    HSD_ObjAllocInit(&lbl_804336A0, sizeof(BgFlashUserData), 4);
     gobj = GObj_Create(0xE, 0xE, 0);
     if (gobj != NULL) {
         user_data = HSD_ObjAlloc(&lbl_804336A0);
         if (user_data != NULL) {
             GObj_InitUserData(gobj, 0xE, fn_800219E4, user_data);
-            lbl_804D63E0[0] = (BgFlashGlobal*) gobj;
+            lbl_804D63E0[0] = gobj;
             lbl_804D63D8 = 1.0f;
             *user_data = (u8) arg0;
             lbArchive_LoadSymbols("LbBf.dat", &lbl_804D63DC,
@@ -988,12 +991,6 @@ void lbBgFlash_80021A18(int arg0)
         HSD_GObjPLink_80390228(gobj);
     }
 }
-
-typedef struct BgFlashUserData {
-    u8 x0;
-    u8 pad_01[3];
-    ColorOverlay x4;
-} BgFlashUserData;
 
 #pragma dont_inline on
 
@@ -1029,26 +1026,19 @@ static void fn_80021C18(HSD_GObj* gobj, CommandInfo* cmd, int arg2) {}
 
 void fn_80021C1C(void)
 {
-    HSD_GObj* gobj = (HSD_GObj*) lbl_804D63E0[0];
-    u8* user_data = gobj->user_data;
-    lb_80014498((ColorOverlay*) (user_data + 4));
+    BgFlashUserData* user_data = lbl_804D63E0[0]->user_data;
+    lb_80014498(&user_data->x4);
 }
 
 void lbBgFlash_80021C48(u32 arg0, u32 arg1)
 {
-    struct {
-        u8 unk0[4];
-        ColorOverlay x4;
-    }* data = lbl_804D63E0[0]->x2C;
+    BgFlashUserData* data = lbl_804D63E0[0]->user_data;
     lb_800144C8(&data->x4, lbl_804D63DC, arg0, arg1);
 }
 
 void fn_80021C80(HSD_GObj* gobj)
 {
-    struct {
-        u8 unk0[4];
-        ColorOverlay x4;
-    }* user_data = gobj->user_data;
+    BgFlashUserData* user_data = gobj->user_data;
 
     while (lb_80014258(gobj, &user_data->x4, fn_80021C18)) {
         lb_80014498(&user_data->x4);

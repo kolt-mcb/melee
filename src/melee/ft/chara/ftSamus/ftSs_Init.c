@@ -1,3 +1,6 @@
+#if BUILD_TARGET_PC
+extern void* pc_ftconv_samus_gbeam(void* raw);
+#endif
 #include "ftSs_Init.h"
 
 #include "ftSs_SpecialHi.h"
@@ -359,7 +362,17 @@ void ftSs_Init_CreateThrowGrappleBeam(HSD_GObj* gobj, s32 motion_state,
 
     Fighter* fp = getFighter(gobj);
     void** item_list = fp->ft_data->x48_items;
+#if BUILD_TARGET_PC
+    /* PC port: item_list[4] is not an Article -- it is a raw grapple-beam
+     * record whose four fields are all 32-bit file offsets, so it has to be
+     * rebuilt rather than read in place (see pc_ftconv_samus_gbeam). */
+    struct UNK_SAMUS_S1* beam = pc_ftconv_samus_gbeam(item_list[4]);
+    if (beam == NULL) {
+        return;
+    }
+#else
     struct UNK_SAMUS_S1* beam = item_list[4];
+#endif
     ftCommon_SetAccessory(fp, beam->x0_joint);
 
     scale.x = scale.y = scale.z = fp->x34_scale.y;

@@ -3,6 +3,11 @@
 #include "gm/types.h"
 #include "lb/lb_013B.h"
 
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#include "port/pc_scene.h"
+#endif
+
 /// @todo .sdata order hack
 static void order_sdata(void)
 {
@@ -13,7 +18,17 @@ static void order_sdata(void)
     (void) "flmsce";
 }
 
+/* PC port: gmresultplayer.c declares these `extern`. On GameCube the two
+ * files' statics were placed at fixed addresses by the linker script, so an
+ * extern reference resolved to the same storage; here a file-static is
+ * private to this object file and gmresultplayer.c bound to the zeroed weak
+ * stub instead -- which is why every `data->pnlsce` it read was NULL. Give
+ * them external linkage so the one real definition wins. */
+#if BUILD_TARGET_PC
+struct ResultsData lbl_8046DBE8;
+#else
 static struct ResultsData lbl_8046DBE8;
+#endif
 static u32 lbl_804D3F8C[2] = { 0x817C817C, 0x817C0000 };
 u32 lbl_804D3FA0 = 0x817C0000;
 u32 lbl_804D3FA4 = 0x817B0000;
@@ -513,7 +528,11 @@ static StatsEntry lbl_803D6858[] = {
     { 0x08, { 0 }, NULL, NULL, NULL },
 };
 
+#if BUILD_TARGET_PC
+StatsList lbl_803D6878[] = {
+#else
 static StatsList lbl_803D6878[] = {
+#endif
     { 0, 0x0D, { 0 }, lbl_803D6488 },
     { 1, 0x30, { 0 }, lbl_803D6558 },
     { 2, 0x02, { 0 }, lbl_803D6858 },
@@ -1741,6 +1760,22 @@ static inline void gmResultLoadArchive(ResultsData* data)
         OSReport("Error : Cannot read archive file (File Name : %s).",
                  "GmRst");
     }
+#if BUILD_TARGET_PC
+    /* PC port: lbArchive_80016DBC resolves the symbols but hands back raw
+     * big-endian archive data -- both of these are SceneDescs, four pointer
+     * arrays that widen on x86_64, so nothing below can walk them in place.
+     * Reading pnlsce->cameras->desc raw is what faulted in fn_80176A6C on
+     * the first frame of the results screen. */
+    if (lbl_804D65B8 != NULL) {
+        data->pnlsce = pc_conv_SceneDesc(data->pnlsce, lbl_804D65B8->data);
+        data->flmsce = pc_conv_SceneDesc(data->flmsce, lbl_804D65B8->data);
+    }
+    if (data->pnlsce == NULL || data->flmsce == NULL) {
+        PORT_LOG_WARN("gmResultLoadArchive: GmRst scene data would not "
+                      "convert (pnlsce=%p flmsce=%p)\n",
+                      (void*) data->pnlsce, (void*) data->flmsce);
+    }
+#endif
 }
 
 static inline void gmResultReportLightGObj(void)

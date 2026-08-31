@@ -10,6 +10,11 @@
 
 #include "mn/inlines.h"
 
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#include "port/pc_scene.h"
+#endif
+
 #include <math_ppc.h>
 #include <dolphin/gx.h>
 #include <sysdolphin/baselib/aobj.h>
@@ -2747,7 +2752,31 @@ void fn_80180630(int arg0, int arg1, int arg2, bool arg3,
         OSReport("Error : Cannot open archive file (File Name : %s).",
                  "GmRegClr");
     }
+#if BUILD_TARGET_PC
+    /* PC port: lbArchive_80016DBC hands back raw big-endian archive data.
+     * fn_80168A6C flattens the SceneDesc and its models[idx] into a run of
+     * 32-bit words, which is only a layout on GameCube -- on x86_64 every
+     * one of those words is half a pointer, and src->x0[0] faulted on the
+     * first read. Convert the scene and copy the same four things out by
+     * name. */
+    {
+        SceneDesc* scene =
+            pc_conv_SceneDesc(sp38, archive != NULL ? archive->data : NULL);
+        if (scene == NULL) {
+            PORT_LOG_WARN("fn_80180630: GmRegClr scene data would not "
+                          "convert; clear screen skipped\n");
+            return;
+        }
+        memzero(&state->x4C, sizeof(state->x4C));
+        if (scene->models != NULL && scene->models[0] != NULL) {
+            state->x4C = *scene->models[0];
+        }
+        state->x5C = scene->lights;
+        state->x60 = scene->cameras != NULL ? scene->cameras[0].desc : NULL;
+    }
+#else
     fn_80168A6C(sp38, &state->x4C, 0);
+#endif
 
     fn_80180630_CreateLightAndCamera(state, &cam_gobj);
     HSD_GObjObject_80390A70(cam_gobj, HSD_GObj_804D784B,
