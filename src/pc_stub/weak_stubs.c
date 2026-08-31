@@ -2372,9 +2372,15 @@ __attribute__((weak, aligned(16))) unsigned char lbl_803D7038[256]; /* data (GCN
 __attribute__((weak, aligned(16))) unsigned char lbl_803D7058[256]; /* data (GCN 0x803D7058), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D7910[256]; /* data (GCN 0x803D7910), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D7AC0[256]; /* data (GCN 0x803D7AC0), was void-fn stub */
-__attribute__((weak, aligned(16))) unsigned char lbl_803D85F0[256]; /* data (GCN 0x803D85F0), was void-fn stub */
-__attribute__((weak, aligned(16))) unsigned char lbl_803D9828[256]; /* data (GCN 0x803D9828), was void-fn stub */
-__attribute__((weak, aligned(16))) unsigned char lbl_803D9910[256]; /* data (GCN 0x803D9910), was void-fn stub */
+/* 1-P difficulty tables (Classic/Adventure/All-Star stage + CPU ratio
+ * scaling). Sized for their real extents -- AllstarStageEntry[55] is 1430
+ * bytes and ClassicStageEntry[65] is 1040, so the old 256-byte stubs were
+ * also silent overflows waiting for the day they got filled. Populated from
+ * boot.dol by pc_dol_load_1p_tables(); until then they read as zero, which
+ * is why 1-P opponents had attack/defense ratio 0 (scaleN_pct / 100). */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D85F0[1440]; /* data (GCN 0x803D85F0) */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D9828[256]; /* data (GCN 0x803D9828) */
+__attribute__((weak, aligned(16))) unsigned char lbl_803D9910[1056]; /* data (GCN 0x803D9910) */
 __attribute__((weak, aligned(16))) unsigned char lbl_803DA3D0[256]; /* data (GCN 0x803DA3D0), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_8046DBD8[256]; /* data (GCN 0x8046DBD8), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_8046DBE8[256]; /* data (GCN 0x8046DBE8), was void-fn stub */

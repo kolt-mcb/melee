@@ -20,4 +20,9 @@
  *  loaded section. Diagnoses failures via OSReport. */
 int pc_dol_read(unsigned int gcn_addr, void* dst, unsigned int size);
 
+/** Fill the 1-P difficulty tables (lbl_803D85F0 / lbl_803D9910 /
+ *  lbl_803D9828) from the DOL, byteswapping their u16 fields. Idempotent;
+ *  call any time after the filesystem is up. */
+void pc_dol_load_1p_tables(void);
+
 #endif /* PORT_PC_DOL_H */

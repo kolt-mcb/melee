@@ -66,3 +66,61 @@ int pc_dol_read(unsigned int gcn_addr, void* dst, unsigned int size)
     }
     return ok;
 }
+
+/* ------------------------------------------------------------------ */
+/* 1-P difficulty tables.
+ *
+ * Three initialised-.data tables the decomp excludes, all feeding 1-P mode:
+ *   0x803D85F0  AllstarStageEntry[55]  (0x1A each) -- Classic/All-Star
+ *   0x803D9910  ClassicStageEntry[65]  (0x10 each) -- Adventure/training
+ *   0x803D9828  training-menu data     (0xE8: u16 ids, then text from +0xA0)
+ * The scaleN_pct u16s are the CPU attack/defense ratios (percent); zeroed
+ * stubs meant gm_8017ED3C returned 0.0 and no 1-P hit ever launched anyone.
+ */
+extern unsigned char lbl_803D85F0[];
+extern unsigned char lbl_803D9910[];
+extern unsigned char lbl_803D9828[];
+
+static void pc_dol_swap16_at(unsigned char* p)
+{
+    unsigned char t = p[0];
+    p[0] = p[1];
+    p[1] = t;
+}
+
+void pc_dol_load_1p_tables(void)
+{
+    static int done;
+    int i;
+
+    if (done) {
+        return;
+    }
+    done = 1;
+
+    if (pc_dol_read(0x803D85F0u, lbl_803D85F0, 55u * 0x1Au)) {
+        for (i = 0; i < 55; i++) {
+            unsigned char* e = lbl_803D85F0 + i * 0x1A;
+            pc_dol_swap16_at(e + 0x2);  /* scale0_pct */
+            pc_dol_swap16_at(e + 0x4);  /* scale1_pct */
+            pc_dol_swap16_at(e + 0x10); /* scale2_pct */
+            pc_dol_swap16_at(e + 0x12); /* scale3_pct */
+        }
+    }
+    if (pc_dol_read(0x803D9910u, lbl_803D9910, 65u * 0x10u)) {
+        for (i = 0; i < 65; i++) {
+            unsigned char* e = lbl_803D9910 + i * 0x10;
+            pc_dol_swap16_at(e + 0x2);
+            pc_dol_swap16_at(e + 0x4);
+        }
+    }
+    if (pc_dol_read(0x803D9828u, lbl_803D9828, 0xE8u)) {
+        /* u16 ids up to +0xA0; text (archive symbol names) after. */
+        for (i = 0; i < 0xA0; i += 2) {
+            pc_dol_swap16_at(lbl_803D9828 + i);
+        }
+    }
+    OSReport("[DOL] 1-P difficulty tables loaded (round1 atk %d%% def %d%%)\n",
+             (int) *(unsigned short*) (lbl_803D85F0 + 2),
+             (int) *(unsigned short*) (lbl_803D85F0 + 4));
+}
