@@ -2013,9 +2013,22 @@ void it_802A7168(Item* arg0, Vec3* arg1, f32 arg8)
         item_link = arg0->xDD4_itemVar.linkhookshot.x4;
     }
 
+#if BUILD_TARGET_PC
+    /* No link flagged anchored walks this straight off the end of the
+     * chain (NULL->x2C faulted here on Link's first retraction). The
+     * sibling walks at it_802A45xx/it_802A55xx all carry the NULL guard;
+     * give this one the same and fall back to the chain head. */
+    while (item_link != NULL && !item_link->x2C_b0) {
+        item_link = item_link->prev;
+    }
+    if (item_link == NULL) {
+        item_link = arg0->xDD4_itemVar.linkhookshot.x4;
+    }
+#else
     while (!item_link->x2C_b0) {
         item_link = item_link->prev;
     }
+#endif
 
     while (item_link != NULL) {
         if (item_link->next != NULL) {
