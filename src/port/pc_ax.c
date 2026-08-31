@@ -162,7 +162,7 @@ void AXInit(void)
                   AX_MAX_VOICES);
 }
 
-#include <execinfo.h>
+#include "pc_execinfo.h"
 void pc_ax_on_free(AXVPB* p)
 {
     if (pc_ax_trace_on() && p->index >= 62) {
