@@ -131,7 +131,20 @@ void HSD_GObj_80390CFC(void)
                     /* PC port: a proc whose gobj/callback came from
                      * unconverted data would fault inside the callback
                      * (e.g. HSD_GObjGetUserData on a near-NULL gobj). */
-                    if (!pc_ptr_sane(proc->gobj) || !pc_ptr_sane((void*)proc->on_invoke)) {
+                    if (!pc_ptr_sane(proc->gobj) ||
+                        !pc_code_ptr_ok((void*) proc->on_invoke))
+                    {
+                        /* PC port: on_invoke is a *code* pointer, so it has
+                         * to be bounded to the executable segment --
+                         * pc_ptr_sane only rejects obvious junk, and a
+                         * corrupt callback that happens to look like a
+                         * canonical userspace address sailed through it and
+                         * was called. */
+                        fprintf(stderr,
+                                "[GOBJGUARD] bad proc: gobj=%p on_invoke=%p "
+                                "pri=%d\n",
+                                (void*) proc->gobj, (void*) proc->on_invoke,
+                                i);
                         port_guard_warn("gobj.c:proc_invoke");
                     } else
 #endif

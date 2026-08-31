@@ -872,8 +872,13 @@ void lb_800138D8(HSD_GObj* gobj, s8 arg1)
 static const Vec3 lb_803B72A8 = { 0.0F, 0.0F, 1.0F };
 static const Vec3 lb_803B72B4 = { 0.0F, 0.0F, 0.0F };
 
+#ifdef BUILD_TARGET_PC
+HSD_GObj* lb_800138EC(HSD_ImageDesc* arg0, GObj_RenderFunc render_func,
+                      u32 arg2, s8 arg3, f32 x, f32 y, f32 w, f32 h)
+#else
 void lb_800138EC(s32 arg0, GObj_RenderFunc render_func, u32 arg2, s8 arg3,
                  f32 x, f32 y, f32 w, f32 h)
+#endif
 {
     HSD_GObj* gobj;
     HSD_CObj* cobj;
@@ -933,6 +938,9 @@ void lb_800138EC(s32 arg0, GObj_RenderFunc render_func, u32 arg2, s8 arg3,
     } else {
         GObj_SetupGXLinkMax(gobj, render_func, arg2);
     }
+#ifdef BUILD_TARGET_PC
+    return gobj;
+#endif
 }
 
 HSD_CObj* lb_80013B14(HSD_CameraDescPerspective* desc)

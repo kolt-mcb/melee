@@ -2564,7 +2564,6 @@ __attribute__((weak)) void gm_801A42E8(void) {}
 __attribute__((weak)) void gm_801A42F8(void) {}
 __attribute__((weak)) void gm_801A4310(void) {}
 __attribute__((weak)) void gm_801A4320(void) {}
-__attribute__((weak)) void gm_804908A0(void) {}
 __attribute__((weak)) void gm_804D42B8(void) {}
 __attribute__((weak)) void gm_804D42BC(void) {}
 __attribute__((weak)) void gm_804D42C0(void) {}
