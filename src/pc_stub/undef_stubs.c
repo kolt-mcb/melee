@@ -3866,11 +3866,41 @@ static size_t g_low_mem_top = 0;    /* carve cursor, top down */
  * pool there would fail every guard (the x86_64 emulator handed out
  * 0x80000000 when the low hints were taken). Sizes fall back 1 GB ->
  * 512 MB -> 256 MB. */
-static int pc_lowmem_try(uintptr_t hint, size_t size)
+/* The pool must lie ENTIRELY below 0x80000000.
+ *
+ * Two independent reasons, both found on a Pixel 9 where the only free
+ * 512 MB window below 4 GB is at 0xC0000000:
+ *
+ *  - Sign extension. The decomp stores pointers in s32 fields all over
+ *    (heap->start, gobj user data, the 1-P match record, ...). On the
+ *    GameCube that is harmless because pointers are 32 bits; on a 64-bit
+ *    host, a pool address with bit 31 set sign-extends on the way back to
+ *    a pointer -- 0xFB04B3F8 becomes 0xFFFFFFFFFB04B3F8, which is what
+ *    crashed the particle code (hsd_80398C04) with the pool at
+ *    0xC0000000.
+ *  - The port's own guards. pc_ptr_sane() and HSD_JOBJ_SANE() reject
+ *    [0x80000000, 0xC0000000) as "unconverted GCN address", because that
+ *    is where MEM1 lives on the console (and 0xC0000000 is its uncached
+ *    mirror). Allocations there are treated as garbage and skipped: with
+ *    a 1 GB pool pinned at 0x50000000 -- straddling the line -- the HUD
+ *    loaded null descriptors and died on a near-NULL read.
+ *
+ * So: hint + size <= 0x80000000, always. MELEE_LOWMEM_BASE forces a base
+ * anyway (that is how the two failures above were reproduced on the
+ * desktop); it warns rather than silently misbehaving. */
+#define PC_LOWMEM_LIMIT 0x80000000ULL
+
+static int pc_lowmem_try_at(uintptr_t hint, size_t size, int force)
 {
     void* p;
-    if (hint + size > 0x100000000ULL) return 0;
-    if (hint < 0xC0000000ULL && hint + size > 0x80000000ULL) return 0;
+    if (hint == 0 || size == 0) return 0;
+    if ((unsigned long long) hint + size > PC_LOWMEM_LIMIT) {
+        if (!force) return 0;
+        fprintf(stderr, "[MEM] WARNING: forced pool %#lx+%luMB crosses "
+                        "0x80000000; pointers there sign-extend and the "
+                        "port's guards reject them\n",
+                (unsigned long) hint, (unsigned long) (size >> 20));
+    }
     p = mmap((void*) hint, size, PROT_READ | PROT_WRITE,
              MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE,
              -1, 0);
@@ -3906,15 +3936,38 @@ static void pc_lowmem_dump_maps(void)
 
 void pc_lowmem_init(void)
 {
-    static const size_t sizes[] = { PC_LOWMEM_POOL_SIZE, 512UL << 20, 256UL << 20 };
+    /* Descending: take the largest window that fits. The carves alone
+     * need ~176 MB (16 game heap + 64 HSD + 96 converter arena), so
+     * anything under 256 MB is a warning and 128 MB is the floor. */
+    static const size_t sizes[] = {
+        1024UL << 20, 768UL << 20, 512UL << 20, 384UL << 20,
+        256UL << 20, 192UL << 20, 128UL << 20,
+    };
     unsigned si;
     if (g_low_mem_base != NULL) return;
+    {
+        const char* pin = getenv("MELEE_LOWMEM_BASE");
+        if (pin != NULL) {
+            uintptr_t hint = (uintptr_t) strtoull(pin, NULL, 16);
+            for (si = 0; si < sizeof(sizes) / sizeof(sizes[0]); si++) {
+                if (pc_lowmem_try_at(hint, sizes[si], 1)) return;
+            }
+            fprintf(stderr, "[MEM] MELEE_LOWMEM_BASE=%s unavailable\n", pin);
+        }
+    }
     for (si = 0; si < sizeof(sizes) / sizeof(sizes[0]); si++) {
         uintptr_t hint;
-        for (hint = 0x10000000; hint < 0x100000000ULL; hint += 0x10000000) {
-            if (pc_lowmem_try(hint, sizes[si])) {
-                if (si != 0) {
-                    fprintf(stderr, "[MEM] (1 GB window unavailable; see maps)\n");
+        /* 64 MB steps: Android's ART heaps chop the low address space into
+         * irregular pieces, and a coarser stride walked straight past the
+         * only usable window on a Pixel 9. */
+        for (hint = 0x10000000; hint + sizes[si] <= PC_LOWMEM_LIMIT;
+             hint += 0x04000000)
+        {
+            if (pc_lowmem_try_at(hint, sizes[si], 0)) {
+                if (sizes[si] < (256UL << 20)) {
+                    fprintf(stderr, "[MEM] WARNING: only %lu MB below "
+                                    "0x80000000; the game may run out\n",
+                            (unsigned long) (sizes[si] >> 20));
                     pc_lowmem_dump_maps();
                 }
                 return;
@@ -3922,7 +3975,7 @@ void pc_lowmem_init(void)
         }
     }
     fprintf(stderr, "[MEM] Low-memory pool reservation FAILED: no window "
-                    "below 4 GB outside the GCN range\n");
+                    "below 0x80000000\n");
     pc_lowmem_dump_maps();
     fflush(stderr);
 }

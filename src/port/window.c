@@ -7,6 +7,7 @@ static SDL_GLContext g_gl_context = NULL;
 volatile Bool g_should_quit = FALSE;  /* global, used by main loop */
 
 static int g_vsync_on;
+static int g_swap_interval;
 
 /* Refresh rate of the display the window is on, or 0 if unknown. */
 int window_gl_es(void)
@@ -30,6 +31,17 @@ int window_refresh_hz(void)
 int window_vsync_on(void)
 {
     return g_vsync_on;
+}
+
+/* The rate frames actually reach the display: refresh / swap interval.
+ * 0 when vsync is off (nothing paces the swap). */
+int window_present_hz(void)
+{
+    int hz = window_refresh_hz();
+    if (!g_vsync_on || g_swap_interval < 1) {
+        return 0;
+    }
+    return hz / g_swap_interval;
 }
 
 Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
@@ -123,9 +135,49 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
     }
 
     /* Vsync; MELEE_NOVSYNC=1 turns it off (the 60 Hz pacer in render.c
-     * then keeps the game at speed). */
-    SDL_GL_SetSwapInterval(getenv("MELEE_NOVSYNC") ? 0 : 1);
+     * then keeps the game at speed).
+     *
+     * On a display that refreshes at a multiple of 60 Hz -- every recent
+     * phone, a Pixel 9 is 120 Hz -- present once every N refreshes so the
+     * swap itself paces the game at 60. Interval 1 there presents at 120
+     * while the simulation runs at 60, so render.c's sleep pacer runs as
+     * well and the two clocks beat: frames land 8.3 ms apart, then 16.7,
+     * which reads as constant micro-stutter however good the frame rate
+     * looks. MELEE_SWAP_INTERVAL overrides the choice. */
     g_vsync_on = getenv("MELEE_NOVSYNC") ? 0 : 1;
+    g_swap_interval = 0;
+    if (g_vsync_on)
+    {
+        int hz = window_refresh_hz();
+        const char* forced = getenv("MELEE_SWAP_INTERVAL");
+        g_swap_interval = 1;
+        if (forced != NULL)
+        {
+            g_swap_interval = atoi(forced);
+            if (g_swap_interval < 1) g_swap_interval = 1;
+        }
+        else if (hz >= 110)
+        {
+            /* nearest multiple of 60: 120->2, 144->2 (72 Hz, still smoother
+             * than beating), 180->3, 240->4 */
+            g_swap_interval = (hz + 30) / 60;
+            if (g_swap_interval < 1) g_swap_interval = 1;
+        }
+        if (SDL_GL_SetSwapInterval(g_swap_interval) != 0 && g_swap_interval != 1)
+        {
+            PORT_LOG_WARN("swap interval %d rejected (%s); using 1",
+                          g_swap_interval, SDL_GetError());
+            g_swap_interval = 1;
+            SDL_GL_SetSwapInterval(1);
+        }
+        PORT_LOG_INFO("Vsync on: %d Hz display, swap interval %d -> %d Hz",
+                      hz, g_swap_interval,
+                      g_swap_interval > 0 ? hz / g_swap_interval : hz);
+    }
+    else
+    {
+        SDL_GL_SetSwapInterval(0);
+    }
 
     /* PC port: report the actual GL renderer once, so we can tell hardware
      * (i965/anv) from software (llvmpipe/swrast) at a glance. */

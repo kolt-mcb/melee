@@ -1755,6 +1755,74 @@ static const char* g_frag_src =
  * explicit float literals, no implicit int->float conversion). */
 int window_gl_es(void);
 
+/* ------------------------------------------------------------------
+ * Streaming vertex buffer.
+ *
+ * Every GX primitive becomes its own glDrawArrays, so a match issues
+ * ~1300 draws a frame, each preceded by an upload of its vertices.
+ * Rewriting the SAME bytes each time (glBufferSubData at offset 0) makes
+ * the driver reconcile the write against the draws still reading them.
+ * On a tile-based mobile GPU that is not a stall but something worse:
+ * Mali "ghosts" the buffer, copying the whole thing per update. Measured
+ * on a Pixel 9 (Mali-G715): 1227 ms/frame -- 0.8 fps -- and, once the
+ * buffer was enlarged, 6.7 GB of resident memory on an 11.8 GB phone,
+ * which had Android's low-memory killer taking down the game and half
+ * the system with it.
+ *
+ * So: sub-allocate a ring, and write each span with glMapBufferRange +
+ * GL_MAP_UNSYNCHRONIZED_BIT. Unsynchronized is the promise that makes
+ * this cheap -- it tells the driver not to wait for, or copy around,
+ * work in flight, which is safe precisely because the ring hands out
+ * bytes no earlier draw is using. The ring holds several frames of
+ * vertices; on wrap it is orphaned once (glBufferData with NULL) so the
+ * driver can hand back fresh storage instead of waiting for the frames
+ * still reading the old contents. */
+#define PC_VBO_RING_VERTS (64u * 1024u)
+#define PC_VBO_RING_BYTES ((GLsizeiptr) (sizeof(Vertex) * PC_VBO_RING_VERTS))
+static GLintptr g_vbo_off;
+/* First vertex of the span most recently streamed (draws use it). */
+static GLint g_vbo_first;
+
+/* Upload `count` vertices and return the first-vertex index for the draw.
+ * The caller must have bound g_vbo. */
+static GLint pc_vbo_stream(const Vertex* src, unsigned count)
+{
+    GLsizeiptr bytes = (GLsizeiptr) (sizeof(Vertex) * (size_t) count);
+    GLint first;
+    if (count == 0) {
+        return 0;
+    }
+    if (bytes > PC_VBO_RING_BYTES) {
+        /* Larger than the ring (cannot happen with MAX_VERTS, but do not
+         * corrupt memory if it ever does): fall back to a full upload. */
+        glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, PC_VBO_RING_BYTES, src);
+        g_vbo_off = PC_VBO_RING_BYTES;
+        return 0;
+    }
+    if (g_vbo_off + bytes > PC_VBO_RING_BYTES) {
+        glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
+        g_vbo_off = 0;
+    }
+    {
+        void* dst = glMapBufferRange(GL_ARRAY_BUFFER, g_vbo_off, bytes,
+                                     GL_MAP_WRITE_BIT |
+                                         GL_MAP_UNSYNCHRONIZED_BIT |
+                                         GL_MAP_INVALIDATE_RANGE_BIT);
+        if (dst != NULL) {
+            memcpy(dst, src, (size_t) bytes);
+            glUnmapBuffer(GL_ARRAY_BUFFER);
+        } else {
+            /* Should not happen; correctness does not depend on the map. */
+            glBufferSubData(GL_ARRAY_BUFFER, g_vbo_off, bytes, src);
+        }
+    }
+    first = (GLint) (g_vbo_off / (GLintptr) sizeof(Vertex));
+    g_vbo_off += bytes;
+    return first;
+}
+
+
 /* glDepthRange is not an ES entry point (on an ES context Mesa rejects
  * it with GL_INVALID_OPERATION); glDepthRangef is in both since GL 4.1 /
  * ARB_ES2_compatibility. The Android GL shim maps the former to the
@@ -2429,7 +2497,8 @@ static void bridge_create_gl(void)
     glGenBuffers(1, &g_vbo);
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * MAX_VERTS, NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
+    g_vbo_off = 0;
     
     /* Set up vertex attribute pointers in VAO */
     glEnableVertexAttribArray(0);
@@ -3595,7 +3664,7 @@ static void bridge_upload_and_draw(void)
      * size would reallocate every draw; glBufferSubData does not. */
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * count, g_state.verts);
+    g_vbo_first = pc_vbo_stream(g_state.verts, count);
 
     /* PC diag: read back the VBO's first vertex to confirm the GPU has the
      * same data the CPU used for the NDCCHECK (rules out a bad upload). */
@@ -3605,7 +3674,9 @@ static void bridge_upload_and_draw(void)
         if (_rb_n < 300) {
             _rb_n++;
             Vertex rb;
-            glGetBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex), &rb);
+            glGetBufferSubData(GL_ARRAY_BUFFER,
+                               (GLintptr) g_vbo_first * (GLintptr) sizeof(Vertex),
+                               sizeof(Vertex), &rb);
             fprintf(stderr, "  VBORB v0 in=(%.2f,%.2f,%.2f) vbo=(%.2f,%.2f,%.2f) match=%d n=%u\n",
                     (double)g_state.verts[0].pos[0],(double)g_state.verts[0].pos[1],(double)g_state.verts[0].pos[2],
                     (double)rb.pos[0],(double)rb.pos[1],(double)rb.pos[2],
@@ -4170,7 +4241,7 @@ static void bridge_upload_and_draw(void)
         tri_verts[5] = g_state.verts[3];
         
         glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, 6 * sizeof(Vertex), tri_verts);
+        g_vbo_first = pc_vbo_stream(tri_verts, 6);
         
         /* Rebind VAO attributes */
         glBindVertexArray(g_vao);
@@ -4182,7 +4253,7 @@ static void bridge_upload_and_draw(void)
         glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                               (void *)(uintptr_t)offsetof(Vertex, col));
         
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDrawArrays(GL_TRIANGLES, g_vbo_first, 6);
         pc_frame_trace("quad4");
         /* PC diag: quad draw summary (MELEE_MTR) */
         {
@@ -4525,16 +4596,16 @@ static void bridge_upload_and_draw(void)
                 quad_tri[q*6+3] = *a; quad_tri[q*6+4] = *c; quad_tri[q*6+5] = *d;
             }
             glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * (nq * 6), quad_tri);
+            g_vbo_first = pc_vbo_stream(quad_tri, (unsigned) (nq * 6));
             pc_prog_flush();
-            glDrawArrays(GL_TRIANGLES, 0, nq * 6);
+            glDrawArrays(GL_TRIANGLES, g_vbo_first, nq * 6);
             pc_stat_draws++; pc_stat_verts += (unsigned)(nq*6);
             s_pc_draws++;
             pc_frame_trace("quadsN");
         } else {
         pc_diag_draws++;
         pc_prog_flush();
-            glDrawArrays(gl_prim, 0, count);
+            glDrawArrays(gl_prim, g_vbo_first, count);
         pc_stat_draws++; pc_stat_verts += (unsigned)count;
         s_pc_draws++;
         pc_frame_trace("drawN");
