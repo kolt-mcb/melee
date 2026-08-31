@@ -1,4 +1,4 @@
-#include <execinfo.h>
+#include "pc_execinfo.h"
 /**
  * @file gx_gl_bridge.c
  * @brief GX → OpenGL bridge — captures vertex commands and translates to GL.

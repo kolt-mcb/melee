@@ -23,6 +23,45 @@ else. No SDL/GL yet — the goal is the *compiler error list*, not a binary.
   the `msync` probe in `pc_ptr.h` is fine — both exist on Android).
 - Est: 1 session.
 
+### Phase 0 results (2026-08-30, NDK r27 / clang 18, `ANDROID_NDK=... python3 configure_pc.py`)
+
+Infrastructure: `configure_pc.py` gained the `ANDROID_NDK` flavour
+(`build.ninja.android`, `build/android`, aarch64 API 31, PIE, compile-only);
+`tools/android/glshim/` maps `<GL/*.h>` onto GLES 3.2 and stands in for the
+Debian multiarch `SDL_config.h`/`jconfig.h`; `src/port/pc_execinfo.h` wraps
+`<execinfo.h>` with a bionic fallback. The PC flavour is unchanged — its
+generated `build.ninja.pc` is byte-identical to `pc-port`'s.
+
+Strict pass (`-Werror=unknown-attributes`): 757/910 TUs fail; **14,079 of
+14,909 errors are `scalar_storage_order`** — every TU that includes
+`lb/types.h`. In `ANDROID_SPIKE=1` mode (attribute and implicit-declaration
+errors downgraded, error limit lifted) the gate shows as 59,954 warnings and
+what remains is **94 TUs / 467 errors**, all in classes Clang refuses where
+GCC merely warned:
+
+| class | count | where | fix |
+|---|---|---|---|
+| `void f(...)` stubs with no named parameter (GCC extension) | 247 | `pc_stub/gr_stubs.c` | mechanical: give them a parameter |
+| incompatible function-pointer types (`bool` vs `int` callbacks, `mpColl_Callback`, `GmRouteCallback`) | ~116 | `gr/*.c`, `gm/*.c`, `ftdata.c` | ABI-identical on both targets; `-Wno-error=incompatible-function-pointer-types` for parity, tidy decls over time |
+| int ↔ pointer conversions (u32 fields holding pointers) | ~40 | `gm_1BA8.c`, `ft_0D31.c`, `grgreens.c`, `lbheap.c`, … | the sub-4 GB pointer scheme; audit in Phase 3, `-Wno-error=int-conversion` meanwhile |
+| implicit function declarations (Clang: error) | 127 | `undef_stubs.c` init chain, `gm_80164840`/`gm_801A427C`… , `__fabsf`, `baselib_mfspr`, `swap32_fn` | add real prototypes (same latent-ABI class `pc_prelude.h` fixed for math) |
+| conflicting types: weak stubs vs real signatures | 32 | `undef_stubs.c`, `particle.c`, `gx_gl_bridge.c` GX shims | fix the stubs' signatures |
+| x86 signal context (`gregs`, `REG_RIP/RSP/RBP`) | 12 | `port/main.c` crash handler | `#if` an aarch64 branch (`uc_mcontext.pc/sp/regs[29]`) |
+| `va_list` stored in `void*` | 8 | `ef/efalt.c` | real ARM64 bug (va_list is a struct there); keep a `va_list` |
+| glibc-only: `printf.h` | 4 | `sislib.c`, `gmtou_0/1.c`, `gmtoulib.c`, `ifnametag.c` | custom printf registration → replace |
+| glibc-only: `__jmp_buf`, `FILE[]` array | 2 | `granime.c`, `undef_stubs.c` | portable types |
+| GCC nested function | 1 | `port/texture_render.c:430` | hoist |
+| **desktop-only GL** | **5** | `GL_DRAW_BUFFER`, `glDepthRange` ×2, `glGetTexImage` ×2 (diagnostics) | `glDepthRangef`; compile the readback diagnostics out on GLES |
+
+Take-aways that reshape the plan:
+- The Phase 2 risk is almost entirely **shader dialect**, not API surface:
+  the bridge already parses against GLES 3.2 headers with five exceptions.
+- Roughly 200 of the 467 are warning-parity flags (Clang errors by default
+  where GCC warns); the genuinely platform-specific work is `main.c`'s
+  signal context, `efalt.c`'s `va_list`, and the glibc-only headers — small.
+- The gate is exactly as predicted and dwarfs everything else: Phase 1
+  stands.
+
 ## Phase 1 — the script-interpreter gate (Clang has no scalar_storage_order)
 
 The single hard blocker. 89 `PC_SCRIPT_BE` struct declarations

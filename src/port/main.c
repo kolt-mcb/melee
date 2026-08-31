@@ -29,7 +29,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ucontext.h>
-#include <execinfo.h>
+#include "pc_execinfo.h"
 
 /* PC port: crash handler for debugging segfaults */
 static void crash_handler(int sig, siginfo_t* info, void* ctx)

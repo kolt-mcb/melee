@@ -11,7 +11,7 @@ extern unsigned int pc_ax_bus_clock;
 #include "../../extern/dolphin/src/dolphin/ax/AXVPB.c"
 #undef AXSetVoiceLoop
 #undef AXSetVoiceState
-#include <execinfo.h>
+#include "pc_execinfo.h"
 void AXSetVoiceState(AXVPB* p, u16 state)
 {
     if (pc_ax_trace_on() && state == 0 && p->pb.state == 1) {
