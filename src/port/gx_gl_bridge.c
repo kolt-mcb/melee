@@ -1777,11 +1777,35 @@ static void pc_clear_depth(float z)
 #endif
 }
 
-static const char* const k_es_header =
-    "#version 310 es\n"
-    "precision highp float;\n"
-    "precision highp int;\n"
-    "precision highp sampler2D;\n";
+/* The ES header follows the context: "310 es" on ES 3.1+, "300 es" on an
+ * ES 3.0 context (the SDK emulator's SwiftShader offers nothing newer,
+ * and a 3.0 compiler rejects "310"). The bodies use nothing past 3.00.
+ * MELEE_GLSL_ES=300 forces the older header on a newer context to check
+ * that on the desktop. */
+static const char* pc_es_header(void)
+{
+    static const char* hdr;
+    if (hdr == NULL) {
+        GLint major = 3, minor = 1;
+        const char* force = getenv("MELEE_GLSL_ES");
+        glGetIntegerv(GL_MAJOR_VERSION, &major);
+        glGetIntegerv(GL_MINOR_VERSION, &minor);
+        if ((force != NULL && strcmp(force, "300") == 0) ||
+            (major == 3 && minor == 0))
+            hdr = "#version 300 es\n"
+                  "precision highp float;\n"
+                  "precision highp int;\n"
+                  "precision highp sampler2D;\n";
+        else
+            hdr = "#version 310 es\n"
+                  "precision highp float;\n"
+                  "precision highp int;\n"
+                  "precision highp sampler2D;\n";
+        fprintf(stderr, "[GLINFO] GLSL ES header: %.15s (context %d.%d)\n",
+                hdr + 9, (int) major, (int) minor);
+    }
+    return hdr;
+}
 
 static GLuint compile_shader(GLenum type, const char* src)
 {
@@ -1791,7 +1815,7 @@ static GLuint compile_shader(GLenum type, const char* src)
     parts[0] = src;
     if (window_gl_es() && strncmp(src, "#version ", 9) == 0) {
         const char* nl = strchr(src, '\n');
-        parts[0] = k_es_header;
+        parts[0] = pc_es_header();
         parts[1] = nl ? nl + 1 : "";
         nparts = 2;
     }

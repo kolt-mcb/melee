@@ -140,6 +140,7 @@ inc = " ".join("-I" + str(p) for p in INCLUDE_DIRS)
 # separate ninja file (build.ninja.pc-asan), separate obj dir, -O1 for
 # usable backtraces. Used by M0 to hunt the heap-corruption crash.
 import os
+import sys
 ASAN = os.environ.get("PC_ASAN") == "1"
 SAN_FLAGS = " -fsanitize=address -fno-omit-frame-pointer" if ASAN else ""
 # PC_TEXDUMP=1 compiles in the texture dump that tools/pc_tex_verify.py
@@ -186,18 +187,30 @@ ANDROID = ANDROID_NDK is not None
 # toolchain. ANDROID_DEPS points at a directory holding SDL2-<ver>/,
 # sdl2-build/, libjpeg-turbo-<ver>/ and jpeg-build/.
 ANDROID_DEPS = Path(os.environ.get("ANDROID_DEPS", str(ROOT / "tools" / "android" / "deps")))
+# ANDROID_ABI selects the target: arm64-v8a (default, devices) or x86_64
+# (the SDK emulator with KVM). The dependency build dirs carry the ABI as
+# a suffix for anything but arm64 (sdl2-build-x86_64, jpeg-build-x86_64),
+# and so do the ninja file and the output tree.
+ANDROID_ABI = os.environ.get("ANDROID_ABI", "arm64-v8a")
+_ABI_TRIPLE = {"arm64-v8a": "aarch64-linux-android31-clang",
+               "x86_64": "x86_64-linux-android31-clang"}
+_ABI_SUFFIX = "" if ANDROID_ABI == "arm64-v8a" else "-" + ANDROID_ABI
 if ANDROID:
-    OUT_DIR = BUILD / "android"
+    if ANDROID_ABI not in _ABI_TRIPLE:
+        sys.exit("ANDROID_ABI must be one of " + ", ".join(_ABI_TRIPLE))
+    OUT_DIR = BUILD / ("android" + _ABI_SUFFIX)
     _ndk_bin = Path(ANDROID_NDK) / "toolchains" / "llvm" / "prebuilt" / "linux-x86_64" / "bin"
-    CC = str(_ndk_bin / "aarch64-linux-android31-clang")
+    CC = str(_ndk_bin / _ABI_TRIPLE[ANDROID_ABI])
+    _sdl_build = ANDROID_DEPS / ("sdl2-build" + _ABI_SUFFIX)
+    _jpeg_build = ANDROID_DEPS / ("jpeg-build" + _ABI_SUFFIX)
     _sdl_src = sorted(ANDROID_DEPS.glob("SDL2-2.*"))
     _jpeg_src = sorted(ANDROID_DEPS.glob("libjpeg-turbo-*"))
     _dep_inc = ""
     if _sdl_src:
-        _dep_inc += (" -isystem " + str(ANDROID_DEPS / "sdl2-build" / "include-config-release" / "SDL2")
+        _dep_inc += (" -isystem " + str(_sdl_build / "include-config-release" / "SDL2")
                      + " -isystem " + str(_sdl_src[-1] / "include"))
     if _jpeg_src:
-        _dep_inc += (" -isystem " + str(ANDROID_DEPS / "jpeg-build")
+        _dep_inc += (" -isystem " + str(_jpeg_build)
                      + " -isystem " + str(_jpeg_src[-1]))
     # ANDROID_SPIKE=1 is the "list everything" mode: the attribute error and
     # Clang's implicit-declaration error are downgraded to warnings and the
@@ -227,10 +240,10 @@ CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " +
 if ANDROID:
     # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
     LDFLAGS = "-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"
-    LIBS = ("-L" + str(ANDROID_DEPS / "sdl2-build") + " -lSDL2"
-            " -L" + str(ANDROID_DEPS / "jpeg-build") + " -ljpeg"
+    LIBS = ("-L" + str(_sdl_build) + " -lSDL2"
+            " -L" + str(_jpeg_build) + " -ljpeg"
             " -lGLESv3 -lEGL -llog -landroid -lm -ldl")
-    OUT_PATH = str(OUT_DIR / "arm64-v8a" / "libmain.so")
+    OUT_PATH = str(OUT_DIR / ANDROID_ABI / "libmain.so")
 else:
     LDFLAGS = "-m64 " + ("-pie" if PIE else "-no-pie") + SAN_FLAGS + PROF_FLAGS
     # libjpeg decodes the motion-JPEG frames in MTH movies (src/port/pc_mth.c).
@@ -267,7 +280,7 @@ n += "  ldflags = $ldflags\n"
 n += "  libs = $libs\n\n"
 n += "default " + OUT_PATH + "\n\n"
 
-NINJA_FILE = ("build.ninja.android" if ANDROID
+NINJA_FILE = ("build.ninja.android" + _ABI_SUFFIX if ANDROID
               else "build.ninja.pc-asan" if ASAN
               else "build.ninja.pc-pie" if PIE else "build.ninja.pc")
 Path(NINJA_FILE).write_text(n)

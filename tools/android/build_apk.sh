@@ -20,13 +20,18 @@ DEPS=${ANDROID_DEPS:-$ROOT/tools/android/deps}
 VARIANT=${1:-debug}
 STRIP="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
 
-python3 configure_pc.py
-ninja -f build.ninja.android
-
-JNI="$ROOT/tools/android/app/app/jniLibs/arm64-v8a"
-mkdir -p "$JNI"
-"$STRIP" -o "$JNI/libmain.so" "$ROOT/build/android/arm64-v8a/libmain.so"
-cp "$DEPS/sdl2-build/libSDL2.so" "$JNI/"
+# arm64-v8a always; x86_64 (the SDK emulator) when its deps were built.
+ABIS="arm64-v8a"
+[ -f "$DEPS/sdl2-build-x86_64/libSDL2.so" ] && ABIS="$ABIS x86_64"
+for ABI in $ABIS; do
+    SUFFIX=""; [ "$ABI" != arm64-v8a ] && SUFFIX="-$ABI"
+    ANDROID_ABI=$ABI python3 configure_pc.py
+    ninja -f "build.ninja.android$SUFFIX"
+    JNI="$ROOT/tools/android/app/app/jniLibs/$ABI"
+    mkdir -p "$JNI"
+    "$STRIP" -o "$JNI/libmain.so" "$ROOT/build/android$SUFFIX/$ABI/libmain.so"
+    cp "$DEPS/sdl2-build$SUFFIX/libSDL2.so" "$JNI/"
+done
 
 cd "$ROOT/tools/android/app"
 if [ "$VARIANT" = release ]; then
