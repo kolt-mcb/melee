@@ -34,6 +34,12 @@ struct Article* pc_itconv_article(const void* raw);
 int pc_itconv_public(struct HSD_Archive* arc, const void* raw,
                      struct it_804D6D20_t* out);
 
+/* Find the noted archive containing `p`; fills base/len. Returns 0 if the
+ * pointer is in no known archive. Used by other raw-data converters
+ * (GmEvent.dat) that only have a symbol pointer. */
+int pc_itconv_locate(const void* p, const unsigned char** base,
+                     unsigned long* len);
+
 /* Look an Article up in one of the ItCo tables, converting it on first use.
  * Tables this file does not own (the stage item table) are read through
  * unchanged. */

@@ -156,6 +156,18 @@ static struct arch* find_arch(const void* p)
     return NULL;
 }
 
+int pc_itconv_locate(const void* p, const unsigned char** base,
+                     unsigned long* len)
+{
+    struct arch* a = find_arch(p);
+    if (a == NULL) {
+        return 0;
+    }
+    *base = a->base;
+    *len = a->len;
+    return 1;
+}
+
 /* Offset of the first object that starts after `off`, or the end of the
  * data section. Objects in a DAT are laid out back to back, so this is the
  * end of the object at `off`. */

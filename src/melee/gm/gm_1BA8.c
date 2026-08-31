@@ -88,10 +88,16 @@ GameScene gm_803DF618_Scenes[] = {
 extern u8 gm_804D68F8;
 extern u8 gm_804D68F9;
 
+#if BUILD_TARGET_PC
+static void pc_gmevent_convert2(void);
+#endif
 void gm_801BA8FC(void)
 {
     lbArchive_LoadSymbols("GmEvent.dat", &gm_804D6900,
                           "sqEventInitDataLevelTbl", 0);
+#if BUILD_TARGET_PC
+    pc_gmevent_convert2();
+#endif
 }
 
 void gm_801BA938(struct EventData* arg0, int lo, int hi, bool arg3)
@@ -330,6 +336,206 @@ struct gm_evlevel {
     /* 0x14 */ gm_801BAB40_src* player_init[5];
 };
 
+#if BUILD_TARGET_PC
+/* PC port: GmEvent.dat drives every 1-P match -- rules, opponents, stages,
+ * bonus criteria -- and arrives raw big-endian with 4-byte offsets. Reading
+ * it through the host structs gave zero/garbage everywhere; the visible
+ * symptom was Player_Set{Attack,Defense}Ratio(cpu, 4.6e-41): the ratio
+ * floats are BE 0x3F800000 (1.0) read unswapped, so every 1-P opponent had
+ * defense ratio ~0 and no hit ever launched anyone ("when I hit people
+ * they should go flying").
+ *
+ * pc_gmevent_convert() rebuilds the level table as host structs after each
+ * load. Dual-typed views the console got for free from common offsets are
+ * preserved deliberately:
+ *  - evlevel vs gm_804D6900_t: field offsets coincide on x86_64 too;
+ *  - x8: bytes 0-1 are read both as StartMeleeRules bitfields and as
+ *    gm_evinit bytes -- the rule bits are re-encoded through the host
+ *    bitfield struct (MWCC packs from the MSB, GCC from the LSB);
+ *  - xC: gm_evbonus floats swapped in place, byte fields untouched so the
+ *    unk0[]/x16 byte view stays right;
+ *  - x10 (kind 2): one blob serving both the u16 stage list (head) and the
+ *    spawn table (entries at +0x10).
+ * x4 stays a pointer into the raw bytes: its main reader is a plain byte
+ * list; gm_801BC670's two integer reads are patched to be32 below. */
+#include "port/pc_itconv.h"
+#include "port/log.h"
+#define PC_EV_MAX 64
+static struct gm_evlevel pc_ev_lvls[PC_EV_MAX];
+static struct gm_804D6900_t* pc_ev_lvl_ptrs[PC_EV_MAX];
+static struct gm_evinit pc_ev_inits[PC_EV_MAX];
+static struct gm_evbonus pc_ev_bonus[PC_EV_MAX];
+struct pc_ev_x10_t {
+    u16 head[8];
+    gm_801BAB40_src* entries[5];
+};
+static struct pc_ev_x10_t pc_ev_x10s[PC_EV_MAX];
+static gm_801BAB40_src pc_ev_pinit[PC_EV_MAX][5];
+static gm_801BAB40_src pc_ev_spawn[PC_EV_MAX][5];
+
+static u32 pc_ev_be32(const u8* p)
+{
+    return ((u32) p[0] << 24) | ((u32) p[1] << 16) | ((u32) p[2] << 8) | p[3];
+}
+static u16 pc_ev_be16(const u8* p)
+{
+    return (u16) (((u16) p[0] << 8) | p[1]);
+}
+
+static void pc_ev_conv_pinit(gm_801BAB40_src* out, const u8* r)
+{
+    memcpy(out, r, 0xC);
+    out->x12 = pc_ev_be16(r + 0xC);
+    out->hp = pc_ev_be16(r + 0xE);
+    {
+        u32 v;
+        v = pc_ev_be32(r + 0x10); memcpy(&out->x18, &v, 4);
+        v = pc_ev_be32(r + 0x14); memcpy(&out->x1C, &v, 4);
+        v = pc_ev_be32(r + 0x18); memcpy(&out->x20, &v, 4);
+    }
+}
+
+static void pc_gmevent_convert(void)
+{
+    const u8* base;
+    unsigned long len;
+    const u8* raw_tbl;
+    u32 root_off;
+    int n, i, j;
+
+    raw_tbl = (const u8*) gm_804D6900[0];
+    if (raw_tbl == NULL || (const void*) raw_tbl == (const void*) pc_ev_lvl_ptrs) {
+        return;
+    }
+    if (!pc_itconv_locate(raw_tbl, &base, &len)) {
+        PORT_LOG_WARN("pc_gmevent_convert: table %p in no known archive\n",
+                      (const void*) raw_tbl);
+        return;
+    }
+    root_off = (u32) (raw_tbl - base);
+    n = (int) ((len - root_off) / 4);
+    if (n > PC_EV_MAX) {
+        n = PC_EV_MAX;
+    }
+    memset(pc_ev_lvl_ptrs, 0, sizeof(pc_ev_lvl_ptrs));
+    for (i = 0; i < n; i++) {
+        u32 loff = pc_ev_be32(raw_tbl + 4 * i);
+        const u8* lr;
+        struct gm_evlevel* lvl = &pc_ev_lvls[i];
+        u32 off;
+        pc_ev_lvl_ptrs[i] = (struct gm_804D6900_t*) lvl;
+        memset(lvl, 0, sizeof(*lvl));
+        if (loff == 0 || loff + 0x28 > len) {
+            continue;
+        }
+        lr = base + loff;
+        lvl->kind = lr[0];
+        lvl->flags = lr[1];
+        lvl->pad2[0] = lr[2];
+        lvl->pad2[1] = lr[3];
+
+        off = pc_ev_be32(lr + 0x4);
+        lvl->x4 = (off != 0 && off < len)
+                      ? (struct gm_804D6900_x4_t*) (base + off)
+                      : NULL;
+
+        off = pc_ev_be32(lr + 0x8);
+        if (off != 0 && off + 0x28 <= len) {
+            const u8* r = base + off;
+            struct gm_evinit* init = &pc_ev_inits[i];
+            struct StartMeleeRules rb;
+            memcpy(init, r, 6); /* unk0..unk5 (bytes 0-1 re-encoded below) */
+            init->unk6 = pc_ev_be16(r + 6);
+            init->unk8 = pc_ev_be32(r + 8);
+            init->x10 = pc_ev_be32(r + 0x10);
+            init->unk14 = (s32) pc_ev_be32(r + 0x14);
+            init->x18 = (s32) pc_ev_be32(r + 0x18);
+            {
+                u32 v;
+                v = pc_ev_be32(r + 0x1C); memcpy(&init->x1C, &v, 4);
+                v = pc_ev_be32(r + 0x20); memcpy(&init->unk20, &v, 4);
+                v = pc_ev_be32(r + 0x24); memcpy(&init->unk24, &v, 4);
+            }
+            /* Bytes 0-1 double as StartMeleeRules bitfields. Decode the
+             * console positions (MSB-first) and let the compiler encode the
+             * host layout. */
+            memset(&rb, 0, sizeof(rb));
+            rb.x0_0 = (r[0] >> 5) & 7;
+            rb.x0_3 = (r[0] >> 2) & 7;
+            rb.x0_6 = (r[0] >> 1) & 1;
+            rb.x0_7 = r[0] & 1;
+            rb.x1_0 = (r[1] >> 7) & 1;
+            rb.x1_1 = (r[1] >> 6) & 1;
+            rb.x1_2 = (r[1] >> 5) & 1;
+            rb.x1_3 = (r[1] >> 4) & 1;
+            rb.x1_4 = (r[1] >> 3) & 1;
+            rb.x1_5 = (r[1] >> 2) & 1;
+            rb.timer_shows_hours = (r[1] >> 1) & 1;
+            rb.x1_7 = r[1] & 1;
+            memcpy(init, &rb, 2);
+            lvl->x8 = (StartMeleeRules*) init;
+        }
+
+        off = pc_ev_be32(lr + 0xC);
+        if (off != 0 && off + 0x18 <= len) {
+            const u8* r = base + off;
+            struct gm_evbonus* b = &pc_ev_bonus[i];
+            memcpy(b, r, 0x18);
+            {
+                u32 v;
+                v = pc_ev_be32(r + 0x8); memcpy(&b->x8, &v, 4);
+                v = pc_ev_be32(r + 0xC); memcpy(&b->xC, &v, 4);
+                v = pc_ev_be32(r + 0x10); memcpy(&b->x10, &v, 4);
+            }
+            lvl->xC = b;
+        }
+
+        off = pc_ev_be32(lr + 0x10);
+        if (off != 0 && off + 0x30 <= len) {
+            const u8* r = base + off;
+            struct pc_ev_x10_t* x = &pc_ev_x10s[i];
+            for (j = 0; j < 8; j++) {
+                x->head[j] = pc_ev_be16(r + 2 * j);
+            }
+            for (j = 0; j < 5; j++) {
+                u32 eo = pc_ev_be32(r + 0x10 + 4 * j);
+                if (eo != 0 && eo + 0x1C <= len) {
+                    pc_ev_conv_pinit(&pc_ev_spawn[i][j], base + eo);
+                    x->entries[j] = &pc_ev_spawn[i][j];
+                } else {
+                    x->entries[j] = NULL;
+                }
+            }
+            lvl->x10 = x;
+        }
+
+        for (j = 0; j < 5; j++) {
+            u32 po = pc_ev_be32(lr + 0x14 + 4 * j);
+            if (po != 0 && po + 0x1C <= len) {
+                pc_ev_conv_pinit(&pc_ev_pinit[i][j], base + po);
+                lvl->player_init[j] = &pc_ev_pinit[i][j];
+            } else {
+                lvl->player_init[j] = NULL;
+            }
+        }
+    }
+    gm_804D6900[0] = pc_ev_lvl_ptrs;
+    if (getenv("MELEE_GMEV_TRACE") != NULL) {
+        fprintf(stderr,
+                "[GMEV] converted %d levels (lvl0 kind=%d init x1C=%.2f "
+                "pinit0 x1C=%.2f)\n",
+                n, pc_ev_lvls[0].kind,
+                pc_ev_lvls[0].x8
+                    ? (double) ((struct gm_evinit*) pc_ev_lvls[0].x8)->x1C
+                    : -1.0,
+                pc_ev_lvls[0].player_init[0]
+                    ? (double) pc_ev_lvls[0].player_init[0]->x1C
+                    : -1.0);
+    }
+}
+static void pc_gmevent_convert2(void) { pc_gmevent_convert(); }
+#endif
+
 struct gm_random_history {
     u8 pad0[2];
     u8 character_usage[0x1A];
@@ -353,6 +559,9 @@ void gm_801BAD70(GameScene* arg0)
 
     lbArchive_LoadSymbols("GmEvent.dat", &gm_804D6900,
                           "sqEventInitDataLevelTbl", 0);
+#if BUILD_TARGET_PC
+    pc_gmevent_convert();
+#endif
     levels = gm_804D6900[0];
     gm_80167A64(&md->rules);
     lvlpp = &levels[level];
@@ -410,7 +619,13 @@ void gm_801BAD70(GameScene* arg0)
     if (r3b[0] & 1) {
         ev->xB_0 = 1;
     }
+#if BUILD_TARGET_PC
+    /* Byte 1 was re-encoded into host bitfield order; read the bit through
+     * the rules view it aliases (console unk1 bit7 == x1_0). */
+    if (((StartMeleeRules*) (*lvlpp)->x8)->x1_0) {
+#else
     if ((((struct gm_evinit*) (*lvlpp)->x8)->unk1 >> 7) & 1) {
+#endif
         ev->xB_6 = 1;
     }
     if (((struct gm_evinit*) (*lvlpp)->x8)->unk24 != 1.0f) {
@@ -853,6 +1068,26 @@ s32 gm_801BBB64(void)
         ev->x4C[1] = 0x21;
         ev->x50[1] = 0;
     }
+#if BUILD_TARGET_PC
+    /* +0x1C/+0x20 are the GCN offsets of player_init[2]/[3]; the host
+     * layout has 8-byte pointers, so use the named fields. */
+    player_init = (s8*) ((struct gm_evlevel*) *pp)->player_init[2];
+    if (player_init != NULL) {
+        ev->x4C[2] = *player_init;
+        ev->x50[2] = ((u8*) player_init)[3];
+    } else {
+        ev->x4C[2] = 0x21;
+        ev->x50[2] = 0;
+    }
+    player_init = (s8*) ((struct gm_evlevel*) *pp)->player_init[3];
+    if (player_init != NULL) {
+        ev->x4C[3] = *player_init;
+        ev->x50[3] = ((u8*) player_init)[3];
+    } else {
+        ev->x4C[3] = 0x21;
+        ev->x50[3] = 0;
+    }
+#else
     player_init = *(s8**) ((u8*) *pp + 0x1C);
     if (player_init != NULL) {
         ev->x4C[2] = *player_init;
@@ -869,6 +1104,7 @@ s32 gm_801BBB64(void)
         ev->x4C[3] = 0x21;
         ev->x50[3] = 0;
     }
+#endif
     if (*(u8*) *pp == 1) {
         ev->x4C[1] = (s8) (*pp)->xC->unk0[0];
         if ((*pp)->xC->unk0[5] == 1) {
@@ -1756,7 +1992,23 @@ void gm_801BC670(HSD_GObj* arg0)
     struct EventData* temp_r31 = &gmMainLib_804D3EE0->unk_530;
     struct gm_804D6900_x4_t* temp_r30 = gm_804D6900[0][0]->x4;
     PAD_STACK(0x10);
-
+#if BUILD_TARGET_PC
+    /* x4 stays a pointer into the raw archive bytes (its other reader is a
+     * byte list); this reader wants two big-endian ints from it. */
+    {
+        const u8* r = (const u8*) temp_r30;
+        s32 v0 = r ? (s32) pc_ev_be32(r + 0) : 0;
+        s32 v4 = r ? (s32) pc_ev_be32(r + 4) : 0;
+        temp_r31->xB_2 = true;
+        temp_r31->x10 = 0x78 - v4;
+        temp_r31->x2C = gm_8016AEEC();
+        temp_r31->x30 = gm_8016AEFC();
+        if (temp_r31->x2C < v0) {
+            temp_r31->x2C = v0;
+            temp_r31->x30 = 0;
+        }
+    }
+#else
     temp_r31->xB_2 = true;
     temp_r31->x10 = 0x78 - temp_r30->x4;
     temp_r31->x2C = gm_8016AEEC();
@@ -1765,6 +2017,7 @@ void gm_801BC670(HSD_GObj* arg0)
         temp_r31->x2C = temp_r30->x0;
         temp_r31->x30 = 0;
     }
+#endif
     if (Player_80036394(0) == 7) {
         temp_r31->x38 = 0x13;
     } else {
