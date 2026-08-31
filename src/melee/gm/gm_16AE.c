@@ -911,7 +911,7 @@ MatchOutcome gm_GetMatchOutcome(void)
     return OUTCOME_NONE;
 }
 
-void fn_8016C46C(int arg0)
+void fn_8016C46C(intptr_t arg0)
 {
     if (gm_16AE_GetUnkData_0()->unk_9 != 0) {
         switch (gm_GetCurrentGameMode()) {
@@ -928,7 +928,7 @@ void fn_8016C46C(int arg0)
     }
 }
 
-static inline void fn_8016C46C_dontinline(int arg0)
+static inline void fn_8016C46C_dontinline(intptr_t arg0)
 {
     fn_8016C46C(arg0);
 }
@@ -1481,7 +1481,7 @@ static inline void fn_8016D634_inline(struct lbl_8046B6A0_24C_t* dst)
         dst->is_teams = tmp->x24C8.is_teams;
         dst->x4 = tmp->match_result;
         gm_80166378(dst);
-        fn_8016C46C_dontinline((int) dst);
+        fn_8016C46C_dontinline((intptr_t) dst);
         if (tmp->match_result != OUTCOME_NO_CONTEST &&
             tmp->match_result != OUTCOME_RETRY)
         {
@@ -1524,7 +1524,7 @@ void fn_8016D634(void)
             copied_dst->is_teams = lbl_8046B6A0.x24C8.is_teams;
             copied_dst->x4 = tmp->match_result;
             gm_80166378(copied_dst);
-            fn_8016C46C_dontinline((int) copied_dst);
+            fn_8016C46C_dontinline((intptr_t) copied_dst);
             if (tmp->match_result != OUTCOME_NO_CONTEST &&
                 tmp->match_result != OUTCOME_RETRY)
             {
@@ -2116,7 +2116,7 @@ void gm_8016E9C8(void* arg0_raw)
         arg0->xC.is_teams = lbl_8046B6A0.x24C8.is_teams;
         arg0->xC.x4 = lbl_8046B6A0.match_result;
         gm_80166378(&arg0->xC);
-        fn_8016C46C_dontinline((int) &arg0->xC);
+        fn_8016C46C_dontinline((intptr_t) &arg0->xC);
         if (tmp->match_result != OUTCOME_NO_CONTEST &&
             tmp->match_result != OUTCOME_RETRY)
         {

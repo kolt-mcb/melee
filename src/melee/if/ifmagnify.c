@@ -607,7 +607,7 @@ void ifMagnify_802FC750(void)
 
     for (i = 0; i < 6; i++) {
         if (*(HSD_GObj**) ((u8*) base + (i << 4) + 0x14) != NULL) {
-            gobj_ptr = (HSD_GObj**) ((u32) base + (i << 4) + 0x14);
+            gobj_ptr = (HSD_GObj**) ((uintptr_t) base + (i << 4) + 0x14);
             HSD_GObjPLink_80390228(*gobj_ptr);
             *gobj_ptr = NULL;
         }
