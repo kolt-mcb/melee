@@ -103,5 +103,7 @@ ends), `highp` precision limits, and pacing against the display refresh.
 If the screen stays black, `adb logcat -s melee` has the answer: the
 context attempts (`SDL GL context creation failed (...)`), the pool
 (`[MEM] Low-memory pool reserved at`), shader errors (`Shader compile
-failed`), or `vf_open: open failed` (asset permissions, above). Input is
-SDL GameController — a Bluetooth pad works, touch does not yet.
+failed`), or `vf_open: open failed` (asset permissions, above). Input: a USB keyboard is
+confirmed working on device (same bindings as the desktop); a Bluetooth
+controller should work through SDL GameController but is untested, and
+there is no touch overlay yet — so a phone on its own cannot play.
