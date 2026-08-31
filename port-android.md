@@ -136,6 +136,30 @@ cache) ports as-is.
 - Est: 3-4 sessions to green suite on Linux-GLES; unknowable extra for
   device drivers (budget 2).
 
+### Phase 2 results (2026-08-30): green suite on Linux-GLES, one binary
+
+Done as a **runtime** switch rather than a configure flavour: `MELEE_GLES=1`
+(always on under `__ANDROID__`) makes `window.c` request an ES 3.1 context
+(Mesa hands out ES 3.2 through GLX) and `compile_shader` swap the
+`#version 330 core` line for the ES 3.10 header (`precision highp`
+float/int/sampler2D). The shader bodies stay single-source in the common
+subset; the specialiser (`pc_spec_source`) needed nothing.
+
+- ES-strictness fixes were tiny: two `mod(int,int)` light-mask tests →
+  `(mask >> i) & 1`. The fragment shader, variants and movie shaders
+  compiled first time.
+- Desktop-only entry points, chosen at run time: `glDepthRange(f)`,
+  `glClearDepth(f)`, `glPointSize` (skipped; GX points are quads); the
+  screenshot readback uses `GL_RGBA` on ES (`GL_RGB` is
+  `GL_INVALID_OPERATION` there and silently reads black).
+- Gate: `MELEE_GLES=1 tools/pc_suite.py check` — all cases within baseline,
+  and the three boot frames are byte-identical to the GL path.
+  `MESA_DEBUG=1` under ES through a full VS match and the title/menu path:
+  zero GL errors.
+
+Still unknowable from the desktop: Adreno/Mali compiler quirks and
+`highp` precision/`GL_MAX_*` limits on real devices.
+
 ## Phase 3 — memory model on ARM64/Android
 
 Converted GCN structs store host pointers in u32 fields, backed by

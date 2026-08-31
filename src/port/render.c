@@ -253,7 +253,7 @@ void render_present(void)
                 }
             }
 
-            pixels = (GLubyte*) malloc((size_t) cw * (size_t) ch * 3u);
+            pixels = (GLubyte*) malloc((size_t) cw * (size_t) ch * 4u);
             if (pixels != NULL) {
                 char shotpath[512];
                 FILE* f;
@@ -261,7 +261,20 @@ void render_present(void)
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);
                 glFinish();
                 glReadBuffer(GL_BACK);
-                glReadPixels(cx, cy, cw, ch, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+                if (window_gl_es()) {
+                    /* ES guarantees only RGBA/UNSIGNED_BYTE readback;
+                     * GL_RGB is GL_INVALID_OPERATION and reads nothing. */
+                    glReadPixels(cx, cy, cw, ch, GL_RGBA, GL_UNSIGNED_BYTE,
+                                 pixels);
+                    for (i = 0; i < cw * ch; i++) {
+                        pixels[i * 3]     = pixels[i * 4];
+                        pixels[i * 3 + 1] = pixels[i * 4 + 1];
+                        pixels[i * 3 + 2] = pixels[i * 4 + 2];
+                    }
+                } else {
+                    glReadPixels(cx, cy, cw, ch, GL_RGB, GL_UNSIGNED_BYTE,
+                                 pixels);
+                }
                 for (i = 0; i < cw * ch; i++) {
                     if (pixels[i * 3] > 10 || pixels[i * 3 + 1] > 10 ||
                         pixels[i * 3 + 2] > 10)
