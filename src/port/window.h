@@ -18,6 +18,9 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title);
 int window_refresh_hz(void);
 /* 1 when the GL context is OpenGL ES (Android, or MELEE_GLES=1). */
 int window_gl_es(void);
+/* Rate at which frames reach the display (refresh / swap interval); 0 when
+ * vsync is off. 60 here means the swap paces the game on its own. */
+int window_present_hz(void);
 int window_vsync_on(void);
 void window_shutdown(void);
 

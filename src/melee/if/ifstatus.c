@@ -983,24 +983,32 @@ void ifStatus_802F66A4(void)
     DynamicModelDesc** num;
     HSD_Archive** arch;
     s32 reset;
+#if BUILD_TARGET_PC
+    /* Function scope on purpose: num/mrk are repointed at these below and
+     * dereferenced further down, so they have to outlive the conversion
+     * block. They used to be declared inside it -- the dereference then
+     * read a dead stack slot, which GCC/x86-64 happened to leave intact
+     * and Clang/AArch64 reused, so the HUD loaded a garbage joint tree and
+     * the game died on a Pixel 9 while working on the desktop. */
+    DynamicModelDesc* cnum;
+    DynamicModelDesc* cmrk;
+#endif
     arch = ifAll_GetArchive();
     lbArchive_LoadSections(*arch, (void**) &num, num_models_name,
                            (void**) &mrk, mrk_models_name, 0);
 #if BUILD_TARGET_PC
     /* Each of these symbols is a bare 32-bit offset to a DynamicModelDesc,
      * unrelocated and big-endian like the rest of the archive. */
-    {
-        DynamicModelDesc* cnum = pc_conv_ModelDescAt(num, (*arch)->data);
-        DynamicModelDesc* cmrk = pc_conv_ModelDescAt(mrk, (*arch)->data);
-        if (cnum == NULL || cmrk == NULL) {
-            PORT_LOG_WARN("ifStatus_802F66A4: HUD digit/marker models would "
-                          "not convert (num=%p mrk=%p)\n", (void*) cnum,
-                          (void*) cmrk);
-            return;
-        }
-        num = &cnum;
-        mrk = &cmrk;
+    cnum = pc_conv_ModelDescAt(num, (*arch)->data);
+    cmrk = pc_conv_ModelDescAt(mrk, (*arch)->data);
+    if (cnum == NULL || cmrk == NULL) {
+        PORT_LOG_WARN("ifStatus_802F66A4: HUD digit/marker models would "
+                      "not convert (num=%p mrk=%p)\n", (void*) cnum,
+                      (void*) cmrk);
+        return;
     }
+    num = &cnum;
+    mrk = &cmrk;
 #endif
     hud->unk258 = (*num)->joint;
     hud->jobj_desc_parent = (*num)->anims;

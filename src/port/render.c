@@ -349,8 +349,19 @@ void render_present(void)
             static struct timespec s_next;
             if (s_pace < 0) {
                 int hz = window_refresh_hz();
+                /* Only a 60 Hz vsync is allowed to be the sole clock.
+                 * A swap interval of 2 on a 120 Hz panel looks like it
+                 * should pace at 60, and window_present_hz() says so, but
+                 * Android's EGL accepts the interval and then ignores it:
+                 * the loop free-ran at 97 fps, so the fixed-step 60 Hz
+                 * simulation -- and the audio it drives -- ran 1.6x fast.
+                 * Trust the refresh rate only, and let the sleep pacer own
+                 * the clock everywhere else; the interval still aligns
+                 * presents to 60 Hz boundaries, in phase with the pacer. */
+                int phz = window_present_hz();
                 s_pace = !(getenv("MELEE_UNCAP") != NULL ||
                            (window_vsync_on() && hz >= 59 && hz <= 61));
+                (void) phz;
                 if (s_pace) {
                     clock_gettime(CLOCK_MONOTONIC, &s_next);
                 }

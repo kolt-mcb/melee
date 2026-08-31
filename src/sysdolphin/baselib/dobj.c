@@ -2,6 +2,7 @@
 
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
+#include "port/log.h"
 #endif
 
 #include "aobj.h"
@@ -241,9 +242,23 @@ HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
         return NULL;
     }
 
-    /* PC port: guard against GCN-packed DObjDesc with garbage fields. */
+    /* PC port: guard against GCN-packed DObjDesc with garbage fields.
+     * The low-address test alone let a wild 64-bit value through and the
+     * dereference in DObjLoad took the process down on a device; check the
+     * pointer is canonical AND mapped, and name the caller so the source
+     * of the bad descriptor can be found. */
     if ((uintptr_t)desc < 0x1000000ULL  /* GCN offsets are <1MB; valid pointers are >=16MB */) {
         port_guard_warn("dobj.c:220");
+        return NULL;
+    }
+    if (!pc_ptr_sane(desc) || !pc_mem_readable(desc, sizeof(HSD_DObjDesc))) {
+        static int _n;
+        if (_n++ < 8) {
+            PORT_LOG_WARN("HSD_DObjLoadDesc: unusable desc %p (caller %p); "
+                          "skipping", (void*) desc,
+                          __builtin_return_address(0));
+        }
+        port_guard_warn("dobj.c:desc-unmapped");
         return NULL;
     }
 

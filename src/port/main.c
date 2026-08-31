@@ -29,6 +29,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ucontext.h>
+#include <dlfcn.h>
 #include "pc_execinfo.h"
 
 /* Machine-context accessors for the crash handler and profiler. */
@@ -59,25 +60,51 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
     char buf[256];
     int n;
     ucontext_t* uc = (ucontext_t*)ctx;
-    n = snprintf(buf, sizeof(buf), "%d at address %p, rip=%p\n", 
-                 sig, info->si_addr, 
-                 (void*)PC_CTX_PC(uc));
+    unsigned long pc = (unsigned long)PC_CTX_PC(uc);
+    /* Text bounds of the module we are executing in. Under -no-pie this is
+     * the historical [0x400000, 0x800000); under PIE, and inside
+     * libmain.so on Android, it is wherever the loader put us -- so ask
+     * dladdr rather than assume, and print PC as module+offset, which is
+     * what llvm-addr2line/addr2line consume directly. */
+    unsigned long mod_base = 0, mod_end = 0;
+    const char* mod_name = "?";
+    {
+        Dl_info di;
+        if (dladdr((void*)&crash_handler, &di) != 0 && di.dli_fbase != NULL) {
+            mod_base = (unsigned long)di.dli_fbase;
+            if (di.dli_fname != NULL) {
+                const char* slash = strrchr(di.dli_fname, '/');
+                mod_name = slash != NULL ? slash + 1 : di.dli_fname;
+            }
+            /* Text size is not exposed; 64 MB covers the port's ~59 MB
+             * library and is only used to filter the stack dump. */
+            mod_end = mod_base + (64UL << 20);
+        }
+    }
+    n = snprintf(buf, sizeof(buf), "%d at address %p, pc=%p (%s+0x%lx)\n",
+                 sig, info->si_addr, (void*)pc, mod_name,
+                 mod_base != 0 ? pc - mod_base : pc);
     write(2, buf, n);
     /* Raw stack dump first: backtrace() below can itself fault (it lazily
      * dlopens libgcc_s / mallocs, which dies on a corrupted heap). Dumping
-     * words from RSP only reads mapped stack memory and cannot fault; map
-     * the values that fall in the (non-PIE) text segment with nm/addr2line.
-     * Also print RBP-chain frames when frame pointers are present. */
+     * words from SP only reads mapped stack memory and cannot fault; the
+     * values that fall in this module's text are return addresses --
+     * printed module-relative for addr2line. Also print frame-pointer
+     * chain frames when frame pointers are present. */
     {
         unsigned long rsp = (unsigned long)PC_CTX_SP(uc);
         unsigned long rbp = (unsigned long)PC_CTX_FP(uc);
-        n = snprintf(buf, sizeof(buf), "[CRASH] rsp=%#lx rbp=%#lx\n", rsp, rbp);
+        n = snprintf(buf, sizeof(buf), "[CRASH] sp=%#lx fp=%#lx module %s base=%#lx\n",
+                     rsp, rbp, mod_name, mod_base);
         write(2, buf, n);
+        unsigned long lo = mod_base != 0 ? mod_base : 0x400000UL;
+        unsigned long hi = mod_end != 0 ? mod_end : 0x800000UL;
         unsigned long* sp = (unsigned long*)(rsp & ~7UL);
         for (int i = 0; i < 512; i++) {
             unsigned long v = sp[i];
-            if (v >= 0x400000UL && v < 0x800000UL) {
-                n = snprintf(buf, sizeof(buf), "[CRASH] stack[%d]=%#lx\n", i, v);
+            if (v >= lo && v < hi) {
+                n = snprintf(buf, sizeof(buf), "[CRASH] stack[%d]=%s+%#lx\n",
+                             i, mod_name, v - lo);
                 write(2, buf, n);
             }
         }
@@ -89,24 +116,40 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
             fp = (unsigned long*)fp[0];
         }
     }
-    /* Print a backtrace so we can pinpoint the faulting call site — but
-     * only from a plausible state: with a wild rip or trashed rbp,
+    /* Print a backtrace so we can pinpoint the faulting call site -- but
+     * only from a plausible state: with a wild pc or trashed fp,
      * backtrace()'s unwinder has hung for the full run timeout before.
      * The raw stack dump above is enough in that case. */
-    extern char etext;
-    if ((unsigned long)PC_CTX_PC(uc) > (unsigned long)&etext ||
+    if ((mod_base != 0 && (pc < mod_base || pc >= mod_end)) ||
         PC_CTX_FP(uc) == 0)
     {
         fsync(2);
-        _exit(128 + sig);
     }
-    void* frames[64];
-    int cnt = backtrace(frames, 64);
-    n = snprintf(buf, sizeof(buf), "[CRASH] backtrace (%d frames):\n", cnt);
-    write(2, buf, n);
-    backtrace_symbols_fd(frames, cnt, 2);
-    fsync(2);
-    /* Note: SIGABRT (e.g. glibc free() corruption) is NOT swallowed —
+    else
+    {
+        void* frames[64];
+        int cnt = backtrace(frames, 64);
+        n = snprintf(buf, sizeof(buf), "[CRASH] backtrace (%d frames):\n", cnt);
+        write(2, buf, n);
+        backtrace_symbols_fd(frames, cnt, 2);
+        fsync(2);
+    }
+#ifdef __ANDROID__
+    /* Hand the signal back to the system. debuggerd then writes a
+     * tombstone whose backtrace is produced by libunwindstack, which can
+     * step across the signal frame that _Unwind_Backtrace cannot -- it is
+     * the only complete backtrace available on a device, and _exit()ing
+     * here would suppress it. It lands in `adb logcat -b crash` (tag
+     * DEBUG) with module-relative offsets ready for llvm-addr2line. */
+    {
+        struct sigaction dfl;
+        memset(&dfl, 0, sizeof(dfl));
+        dfl.sa_handler = SIG_DFL;
+        sigaction(sig, &dfl, NULL);
+        raise(sig);
+    }
+#endif
+    /* Note: SIGABRT (e.g. glibc free() corruption) is NOT swallowed --
      * exiting 0 here used to hide memory corruption as a clean shutdown.
      * Exit with the conventional 128+signal so failures are visible. */
     _exit(128 + sig);
