@@ -2203,6 +2203,13 @@ int game_init(void)
     HSD_SisLib_803A6048(0xC000);
     OSReport("[INIT] gmMainLib_8015FBA4\n");
     gmMainLib_8015FBA4();
+    {
+        /* 1-P difficulty tables come from the DOL; the filesystem is up by
+         * now. Without them every 1-P opponent has zero attack/defense
+         * ratio. */
+        extern void pc_dol_load_1p_tables(void);
+        pc_dol_load_1p_tables();
+    }
     OSReport("[INIT] lbAudioAx_80028690\n");
     lbAudioAx_80028690();
     OSReport("[INIT] All done — entering main loop\n");

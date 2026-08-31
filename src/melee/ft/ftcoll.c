@@ -2377,6 +2377,22 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
             stage = gm_8016B248();
             kb = ftColl_80079AB0(fp, hit, unk_count, stage, attack, defense,
                                  co->weight);
+#if BUILD_TARGET_PC
+            /* Every factor of the knockback product, so a zero names its
+             * source (stage = rules damage ratio, attack/defense = player
+             * handicap ratios, x24/x28/x2C = hitbox growth/set/base). */
+            if (getenv("MELEE_ASLOG") != NULL) {
+                extern u32 pc_frame_number;
+                fprintf(stderr,
+                        "[KB] f%u victim p%d kb=%.1f stage=%.2f atk=%.2f "
+                        "def=%.2f w=%.1f hit(dmg=%.1f grow=%d set=%d "
+                        "base=%d) pct=%.1f\n",
+                        pc_frame_number, fp->player_id, kb, stage, attack,
+                        defense, co->weight, hit->damage, (int) hit->x24,
+                        (int) hit->x28, (int) hit->x2C,
+                        fp->dmg.x1830_percent);
+            }
+#endif
 
             if (arg4 != 0) {
                 u32 u_dmg = (u32) entry->x20;
