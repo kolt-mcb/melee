@@ -2381,6 +2381,13 @@ __attribute__((weak, aligned(16))) unsigned char lbl_803D7AC0[256]; /* data (GCN
 __attribute__((weak, aligned(16))) unsigned char lbl_803D85F0[1440]; /* data (GCN 0x803D85F0) */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D9828[256]; /* data (GCN 0x803D9828) */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D9910[1056]; /* data (GCN 0x803D9910) */
+/* Classic mode's per-round result array (1 = round cleared, 2 = lost). The
+ * symbol map has it as .bss, 0x70 bytes of byte data, but it was stubbed as a
+ * weak *function* -- so `extern u8 gm_804908A0[]` resolved into .text, and
+ * gmClassic_801B3B40 (the scene-leave callback that advances Classic to the
+ * next round) segfaulted writing to read-only memory the moment round 1
+ * ended. .bss zero-init is the correct initial state, so no DOL load. */
+__attribute__((weak, aligned(16))) unsigned char gm_804908A0[0x70]; /* data (GCN 0x804908A0), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_803DA3D0[256]; /* data (GCN 0x803DA3D0), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_8046DBD8[256]; /* data (GCN 0x8046DBD8), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_8046DBE8[256]; /* data (GCN 0x8046DBE8), was void-fn stub */

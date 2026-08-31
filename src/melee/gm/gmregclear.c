@@ -13,6 +13,7 @@
 #if BUILD_TARGET_PC
 #include "port/log.h"
 #include "port/pc_scene.h"
+#include <stdlib.h>
 #endif
 
 #include <math_ppc.h>
@@ -94,8 +95,31 @@ lbl_804706D8_t lbl_804706D8[12];
 /* 47086C */ u8 gmClassic_8047086C[0x228C];
 /* 472AF8 */ u8 gmClassic_80472AF8[0x138];
 
+/* PC port: this and the old `fn_8017FA1C_arg` were two hand-laid views of the
+ * *same* singleton (`lbl_80472D28`) -- one naming the fields the setup code
+ * touches, the other the fields the per-frame code touches, each padding over
+ * the other's with GCN-sized `char pad[]`. That works only while a pointer is
+ * four bytes. Here every named pointer grows to eight while the pads stay
+ * GCN-sized, so the two views drift by *different* amounts and stop agreeing
+ * on where any field is: fn_80180630 wrote the clear-screen model through
+ * `state->x4C` and fn_801803FC read a different address as `p->x4C`, so the
+ * model desc came back zeroed. Its joint tree read as a single root, the
+ * 10-joint lookup found nothing, and the 1-P stage-clear screen dereferenced
+ * NULL -- Classic could not advance past round 1.
+ *
+ * Merging both field sets into one struct is what makes the two agree; the
+ * sets do not conflict (each names only what the other padded over). Offsets
+ * no longer match GCN, which is fine -- nothing indexes this by raw offset
+ * and it is file-local, never memcpy'd or sized. */
 struct lbl_80472D28_t {
-    /*   +0 */ char pad_0[0x20];
+    /*   +0 */ HSD_GObj* x0;
+    /*   +4 */ HSD_JObj* x4;
+    /*   +8 */ HSD_JObj* x8;
+    /*   +C */ HSD_JObj* xC;
+    /*  +10 */ HSD_JObj* x10;
+    /*  +14 */ HSD_JObj* x14;
+    /*  +18 */ HSD_JObj* x18;
+    /*  +1C */ HSD_JObj* x1C;
     /* +20 */ HSD_JObj* x20;
     /* +24 */ HSD_JObj* x24;
     /* +28 */ char pad_28[4];
@@ -105,9 +129,27 @@ struct lbl_80472D28_t {
     /* +4C */ DynamicModelDesc x4C;
     /* +5C */ void* x5C;
     /* +60 */ void* x60;
-    /* +64 */ char pad_64[0x20];
-    /* +84 */ HSD_Text* x84;
-    /* +88 */ char pad_88[0x38];
+    /* +64 */ char pad_64[8];
+    /* +6C */ HSD_Text* x6C;
+    /* +70 */ HSD_Text* x70;
+    /* +74 */ HSD_Text* x74;
+    /* +78 */ HSD_Text* x78;
+    /* +7C */ HSD_Text* x7C;
+    /* +80 */ HSD_Text* x80;
+    /* PC port: x84 is the base of an eight-entry HSD_Text* array, not a lone
+     * pointer -- fn_8017F2A4 fills arg0[0] then arg0[1..7], and fn_8017F47C
+     * reads them back the same way. Only the first was declared; the other
+     * seven lived inside `pad_88`, which is GCN-sized, so on x86_64 entries
+     * 1..7 landed in padding and were read back as garbage. Declaring the
+     * array makes the eight slots contiguous at the right width. */
+    /* +84 */ HSD_Text* x84[8];
+    /* PC port: the seven slots the score lines cache their last-printed
+     * value in. fn_8017F47C used to reach them as `((s32*) x84)[8]` with the
+     * cursor walking the text array -- four bytes per step, eight words in.
+     * That lands past the eighth pointer only while a pointer *is* four
+     * bytes; here it walked straight over x84's own entries and overwrote
+     * them with score values, which is what fn_8016F39C then dereferenced. */
+    /* +A4 */ s32 xA4[7];
     /* +C0 */ u16 xC0;
     /* +C2 */ u16 pad_C2;
     /* +C4 */ u32 xC4;
@@ -868,6 +910,26 @@ s32 gm_8017CE34(StartMeleeData* arg0, UnkAdventureData* arg1, s8* arg2,
                 arg1->x0.slot);
     arg0->players[0].xA = arg1->x0.x4;
     arg0->players[0].spawn_dir = (s8) arg1->x0.xA;
+
+#if BUILD_TARGET_PC
+    /* PC port: MELEE_1P_CPU=<level> hands the human slot to the AI in every
+     * 1-P mode (Classic, Adventure, All-Star, Event). Progression through
+     * those modes can only be tested by actually *winning* a round, and a pad
+     * script cannot reliably beat a CPU; without this a headless run reaches
+     * the time limit and the next-stage path is never exercised.
+     *
+     * xE is the CPU type -- a CPU given a level but no type never commits to
+     * an attack, so both must be set (same pairing as the debug-VS lineup in
+     * gm_1B0FF.c). */
+    {
+        const char* c = getenv("MELEE_1P_CPU");
+        if (c != NULL && atoi(c) > 0) {
+            arg0->players[0].slot_type = Gm_PKind_Cpu;
+            arg0->players[0].cpu_level = (u8) atoi(c);
+            arg0->players[0].xE = 4;
+        }
+    }
+#endif
 
     {
         u8 team_color;
@@ -2001,11 +2063,10 @@ s32 fn_8017F2A4(HSD_Text** arg0, f32 farg0, f32 farg1)
     PAD_STACK(8);
 }
 
-s32 fn_8017F47C(HSD_Text** arg0, int arg1)
+s32 fn_8017F47C(HSD_Text** arg0, s32* cache, int arg1)
 {
     u8 mask;
     s32 val;
-    s32* p;
     s32 i;
     int entry;
     s32 prev_idx;
@@ -2017,7 +2078,6 @@ s32 fn_8017F47C(HSD_Text** arg0, int arg1)
     fn_8016F39C(arg0 + 1, gm_8016B774(), 7, arg1, mask, 0);
 
     i = 0;
-    p = (s32*) arg0;
 
     do {
         mask = fn_8017F008();
@@ -2029,18 +2089,17 @@ s32 fn_8017F47C(HSD_Text** arg0, int arg1)
             break;
         }
 
-        if (p[8] != val) {
+        if (cache[i] != val) {
             if (val < 0) {
                 HSD_SisLib_803A70A0(*arg0, i, "%s%d", "－", -val);
             } else {
                 HSD_SisLib_803A70A0(*arg0, i, "%d", val);
             }
-            p[8] = val;
+            cache[i] = val;
         }
 
         prev_idx = idx;
         entry = idx + 1;
-        p++;
         i++;
     } while (i < 7);
 
@@ -2058,52 +2117,9 @@ s32 fn_8017F47C(HSD_Text** arg0, int arg1)
     PAD_STACK(0x18);
 }
 
-typedef struct fn_8017FA1C_arg {
-    /* 0x000 */ HSD_GObj* x0;
-    /* 0x004 */ HSD_JObj* x4;
-    /* 0x008 */ HSD_JObj* x8;
-    /* 0x00C */ HSD_JObj* xC;
-    /* 0x010 */ HSD_JObj* x10;
-    /* 0x014 */ HSD_JObj* x14;
-    /* 0x018 */ HSD_JObj* x18;
-    /* 0x01C */ HSD_JObj* x1C;
-    /* 0x020 */ HSD_JObj* x20;
-    /* 0x024 */ HSD_JObj* x24;
-    /* 0x028 */ char pad_28[0x24];
-    /* 0x04C */ DynamicModelDesc x4C;
-    /* 0x05C */ char pad_5C[0x10];
-    /* 0x06C */ HSD_Text* x6C;
-    /* 0x070 */ HSD_Text* x70;
-    /* 0x074 */ HSD_Text* x74;
-    /* 0x078 */ HSD_Text* x78;
-    /* 0x07C */ HSD_Text* x7C;
-    /* 0x080 */ HSD_Text* x80;
-    /* 0x084 */ char pad_84[0x48];
-    /* 0x0CC */ s32 xCC;
-    /* 0x0D0 */ s32 xD0;
-    /* 0x0D4 */ s32 xD4;
-    /* 0x0D8 */ s32 xD8;
-    /* 0x0DC */ s32 xDC;
-    /* 0x0E0 */ s32 xE0;
-    /* 0x0E4 */ s32 xE4;
-    /* 0x0E8 */ char pad_E8[0x08];
-    /* 0x0F0 */ s32 xF0;
-    /* 0x0F4 */ s32 xF4;
-    /* 0x0F8 */ s32 xF8;
-    /* 0x0FC */ s32 xFC;
-    /* 0x100 */ s32 x100;
-    /* 0x104 */ s32 x104;
-    /* 0x108 */ s16 x108;
-    /* 0x10A */ s16 x10A;
-    /* 0x10C */ char pad_10C[0x08];
-    /* 0x114 */ u8 x114;
-    /* 0x115 */ u8 x115;
-    /* 0x116 */ char pad_116[2];
-    /* 0x118 */ u8 x118;
-    /* 0x119 */ char pad_119;
-    /* 0x11A */ u8 x11A;
-    /* 0x11B */ u8 x11B;
-} fn_8017FA1C_arg;
+/* PC port: one view only -- see struct lbl_80472D28_t above. This used to
+ * be a second, independently padded description of the same object. */
+typedef struct lbl_80472D28_t fn_8017FA1C_arg;
 
 extern Vec3 lbl_803B7C18;
 
@@ -2416,7 +2432,7 @@ void fn_8017FF1C(HSD_GObj* gobj)
     fn_8017FBA4(state);
 
     if (state->x117 != 0 && state->x110 > 0x29U) {
-        state->xC0 = fn_8017F47C(&state->x84, (s32) state->xC0);
+        state->xC0 = fn_8017F47C(state->x84, state->xA4, (s32) state->xC0);
 
         mask = fn_8017F008();
         if (fn_8016F9A8(gm_8016B774(), state->xC0, mask, 0) > 7) {
@@ -2661,7 +2677,27 @@ void fn_80180630(int arg0, int arg1, int arg2, bool arg3,
 
     special_score = 0;
     coins = arg4->x58[0].xE;
+
+#if BUILD_TARGET_PC
+    /* PC port: this screen's "PRESS START" only listens to slots whose type
+     * is Gm_PKind_Human (see the pad loops in fn_8017FF1C). MELEE_1P_CPU
+     * hands slot 0 to the AI so a headless run can win a round, which also
+     * leaves nobody able to dismiss the results -- the run would sit here
+     * forever. Give the slot back for the duration of the clear screen;
+     * gm_8017CE34 makes it a CPU again when it builds the next round. */
+    if (getenv("MELEE_1P_CPU") != NULL) {
+        Player_GetPtrForSlot(0)->slot_type = Gm_PKind_Human;
+    }
+#endif
+#ifdef BUILD_TARGET_PC
+    /* PC port: 0x120 is the GameCube size of this struct. Every pointer in it
+     * is twice as wide here, so the literal cleared only the front of the
+     * object and left everything past it -- the HSD_Text array among them --
+     * holding whatever the previous scene had put there. */
+    memzero(state, sizeof(*state));
+#else
     memzero(state, 0x120);
+#endif
     state->xD4 = -1;
     state->xD8 = 0;
     state->xE0 = -1;
@@ -2803,7 +2839,14 @@ void fn_80180630(int arg0, int arg1, int arg2, bool arg3,
 
     Camera_8002F7AC(0);
     lb_800121FC(&state->x30, 0x280, 0x1E0, GX_TF_RGB5A3, 0);
+#ifdef BUILD_TARGET_PC
+    /* PC port: keep the GObj the original stores in x2C (see lbspdisplay.h);
+     * the two calls below both need it. */
+    state->x2C = lb_800138EC(&state->x30, NULL, 2U, 0x32, 0.0f, 0.0f, 1.0f,
+                             1.0f);
+#else
     lb_800138EC((s32) &state->x30, NULL, 2U, 0x32, 0.0f, 0.0f, 1.0f, 1.0f);
+#endif
     lb_800138D8(state->x2C, 1);
     lb_800138CC(state->x2C, fn_8017FE54);
 
@@ -2816,7 +2859,7 @@ void fn_80180630(int arg0, int arg1, int arg2, bool arg3,
     }
 
     arg4->x58[0].xE = coins;
-    fn_8017F2A4(&state->x84, 264.0f, 211.0f);
+    fn_8017F2A4(state->x84, 264.0f, 211.0f);
     PAD_STACK(0x38);
 }
 

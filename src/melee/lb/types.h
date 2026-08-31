@@ -311,8 +311,19 @@ struct lb_800138D8_t {
     /* +12 */ s8 x12;
     /* +13 */ char pad_13[0x18 - 0x13];
     /* +18 */ HSD_GObjEvent x18;
+#ifdef BUILD_TARGET_PC
+    /* PC port: the setup path (lb_800138EC) writes this field through this
+     * struct while the render path reads it through `struct CameraBlurData`
+     * in lbspdisplay.c, which types it HSD_ImageDesc*. As an s32 the write
+     * truncated a 64-bit pointer to its low half and left the top half as
+     * whatever HSD_MemAlloc had there, so the reader got a bogus pointer.
+     * Both views must agree on the type, not just the offset. */
+    /* +1C */ HSD_ImageDesc* x1C;
+    /* +20 */ f32 x20;
+#else
     /* +1C */ s32 x1C;
     /* +20 */ char pad_20[0x24 - 0x20];
+#endif
 };
 
 struct lb_80432A68_38_t {
