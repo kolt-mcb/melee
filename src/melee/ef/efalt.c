@@ -32,9 +32,17 @@ void* efAlt_Spawn(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
     Vec3 scale;
     f32* value_ptr;
     void* ret_obj;
+#if BUILD_TARGET_PC
+    /* va_list is a struct on AArch64 (and an array on x86-64 that only
+     * happens to decay to a pointer); keep it a va_list. */
+    va_list vlist_arg;
+
+    va_copy(vlist_arg, vlist);
+#else
     void* vlist_arg;
 
     vlist_arg = vlist;
+#endif
     ret_obj = NULL;
     efLib_LoadKind = EF_LOADKIND_SYNC;
     PAD_STACK(80);

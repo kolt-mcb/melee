@@ -1,6 +1,9 @@
 #include "synth.h"
 
 #include "synth.static.h"
+#if BUILD_TARGET_PC
+#include "port/pc_execinfo.h"
+#endif
 
 #include <math_ppc.h>
 #include <dolphin/ai.h>

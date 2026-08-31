@@ -297,7 +297,7 @@ static u32 FObjAnimKey(HSD_FObj* fobj)
     return HSD_FObjSetState(fobj, st == FOBJ_LOAD_DATA0 ? 3 : 4);
 }
 
-inline u32 FObjLoadData(HSD_FObj* fobj)
+PC_STATIC_INLINE u32 FObjLoadData(HSD_FObj* fobj)
 {
     if ((unsigned) (fobj->ad - fobj->ad_head) >= fobj->length) {
         return 6;

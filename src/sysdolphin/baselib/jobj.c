@@ -790,7 +790,7 @@ void HSD_JObjSetDefaultClass(HSD_ClassInfo* info)
     default_class = info;
 }
 
-inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
+PC_STATIC_INLINE HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
 {
     HSD_JObj* jobj;
     HSD_ClassInfo* info;

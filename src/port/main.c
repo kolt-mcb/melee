@@ -31,6 +31,26 @@
 #include <ucontext.h>
 #include "pc_execinfo.h"
 
+/* Machine-context accessors for the crash handler and profiler. */
+#if defined(__x86_64__)
+#define PC_CTX_PC(uc) ((uc)->uc_mcontext.gregs[REG_RIP])
+#define PC_CTX_SP(uc) ((uc)->uc_mcontext.gregs[REG_RSP])
+#define PC_CTX_FP(uc) ((uc)->uc_mcontext.gregs[REG_RBP])
+#elif defined(__aarch64__)
+#define PC_CTX_PC(uc) ((uc)->uc_mcontext.pc)
+#define PC_CTX_SP(uc) ((uc)->uc_mcontext.sp)
+#define PC_CTX_FP(uc) ((uc)->uc_mcontext.regs[29])
+#else
+#error "no machine-context accessors for this architecture"
+#endif
+
+#if defined(__ANDROID__)
+/* SDL's Java shell (SDLActivity) dlopens libmain.so and calls SDL_main;
+ * the port is built with SDL_MAIN_HANDLED, so rename our entry point. */
+int SDL_main(int argc, char* argv[]);
+#define main SDL_main
+#endif
+
 /* PC port: crash handler for debugging segfaults */
 static void crash_handler(int sig, siginfo_t* info, void* ctx)
 {
@@ -41,7 +61,7 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
     ucontext_t* uc = (ucontext_t*)ctx;
     n = snprintf(buf, sizeof(buf), "%d at address %p, rip=%p\n", 
                  sig, info->si_addr, 
-                 (void*)uc->uc_mcontext.gregs[REG_RIP]);
+                 (void*)PC_CTX_PC(uc));
     write(2, buf, n);
     /* Raw stack dump first: backtrace() below can itself fault (it lazily
      * dlopens libgcc_s / mallocs, which dies on a corrupted heap). Dumping
@@ -49,8 +69,8 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
      * the values that fall in the (non-PIE) text segment with nm/addr2line.
      * Also print RBP-chain frames when frame pointers are present. */
     {
-        unsigned long rsp = (unsigned long)uc->uc_mcontext.gregs[REG_RSP];
-        unsigned long rbp = (unsigned long)uc->uc_mcontext.gregs[REG_RBP];
+        unsigned long rsp = (unsigned long)PC_CTX_SP(uc);
+        unsigned long rbp = (unsigned long)PC_CTX_FP(uc);
         n = snprintf(buf, sizeof(buf), "[CRASH] rsp=%#lx rbp=%#lx\n", rsp, rbp);
         write(2, buf, n);
         unsigned long* sp = (unsigned long*)(rsp & ~7UL);
@@ -74,8 +94,8 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
      * backtrace()'s unwinder has hung for the full run timeout before.
      * The raw stack dump above is enough in that case. */
     extern char etext;
-    if ((unsigned long)uc->uc_mcontext.gregs[REG_RIP] > (unsigned long)&etext ||
-        uc->uc_mcontext.gregs[REG_RBP] == 0)
+    if ((unsigned long)PC_CTX_PC(uc) > (unsigned long)&etext ||
+        PC_CTX_FP(uc) == 0)
     {
         fsync(2);
         _exit(128 + sig);
@@ -105,7 +125,7 @@ static void prof_handler(int sig, siginfo_t* info, void* ctx)
     (void)sig; (void)info;
     if (g_prof_n < PROF_MAX) {
         ucontext_t* uc = (ucontext_t*)ctx;
-        g_prof_rips[g_prof_n++] = (unsigned long)uc->uc_mcontext.gregs[REG_RIP];
+        g_prof_rips[g_prof_n++] = (unsigned long)PC_CTX_PC(uc);
     }
 }
 static void prof_dump(void)

@@ -22,6 +22,24 @@
 #include "log.h"
 #if BUILD_TARGET_PC
 #include "pc_ptr.h"
+
+/* GX entry points implemented further down but used above their
+ * definitions; Clang refuses the implicit declarations GCC tolerated. */
+void GXSetVtxDesc(u32 attr, u32 type);
+void GXClearVtxDesc(void);
+void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac);
+void GXBegin(u32 type, u32 vtxfmt, u16 nverts);
+void GXEnd(void);
+void GXPosition3f32(f32 x, f32 y, f32 z);
+void GXTexCoord2f32(f32 s, f32 t);
+void GXSetTevOrder(u32 stage, u32 coord, u32 tex, u32 chan);
+void GXSetTevOp(u32 stage, u32 mode);
+void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize,
+                       u32 pt_texmtx);
+void GXInitTexObj(void* texObj, const void* image, u16 width, u16 height,
+                  u8 fmt, u8 s_clamp, u8 t_clamp, u8 mipmap);
+void GXLoadTexObj(void* texObj, u32 texEnv);
+void pc_tex_cache_bump(void);
 #endif
 #include <stdlib.h>
 #include <sys/mman.h>

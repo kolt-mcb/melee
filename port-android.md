@@ -183,6 +183,25 @@ punish mid-frame state churn differently.
   uniform staging (the `gen[]` counters already minimise re-uploads).
 - Est: unknown until device measurements; budget 2 sessions.
 
+### Phases 0-remainder and 4 results (2026-08-30): an APK builds
+
+`tools/android/build_apk.sh` produces `app-debug.apk` (~5 MB: libmain.so
+6.9 MB stripped + libSDL2.so 6.2 MB, arm64-v8a). Every one of the 910 TUs
+compiles under NDK clang 18 with warning-parity flags; the link needed
+only a `static` on five `.c`-local `inline` helpers and a GLES shim for
+five desktop calls. Dependencies live outside the tree
+(`tools/android/deps`, gitignored): SDL2 2.30.11 and libjpeg-turbo 3.0.4
+built with the NDK CMake toolchain.
+
+Not yet done, in the order they will bite on a device:
+1. **Shaders** — still `#version 330 core`; the bridge will fail to
+   compile them on GLES and draw nothing (Phase 2).
+2. **Low pointer pool** under PIE/ASLR (Phase 3) — unverified.
+3. **Logging** — stderr goes nowhere on Android; route OSReport/PORT_LOG
+   to `__android_log_print`.
+4. **Assets** — the app reads `<external files dir>/GALE01`; nothing copies
+   them there yet (`adb push` for now).
+
 ## Order and gates
 
 ```

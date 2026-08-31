@@ -60,7 +60,7 @@ void fn_8010B2E8(Fighter_GObj* gobj)
     fp->mv.kb.specialn_ms.cur_frame = 0;
 }
 
-inline void setupStartAccessory(HSD_GObj* gobj, Vec3* scale)
+PC_STATIC_INLINE void setupStartAccessory(HSD_GObj* gobj, Vec3* scale)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     HSD_JObj* jobj;
