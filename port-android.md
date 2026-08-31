@@ -95,6 +95,26 @@ Two viable strategies:
   this phase is done — no Android needed.
 - Est: 3-5 sessions. Gate for everything after it.
 
+### Phase 1 results (2026-08-30)
+
+Done in one session, with a design that turned out simpler than either
+strategy above: **byteswap script words to host order lazily, per archive
+object, at opcode dispatch** (`src/port/pc_script.c`), and declare the
+command structs for the host word (`tools/pc_script_le.py` reverses each
+32-bit unit's members for little-endian packing). Why it beats a
+load-time opcode walk: the 315 scripts of a fighter form one cluster but
+47 of their subroutine/goto operands point *outside* it, and internal
+jump targets split scripts into reloc-table pieces — dispatch-time
+conversion handles both without knowing any opcode lengths. Only one
+struct needed hand conversion (`spawn_hitbox_skip`, byte-15 flags); it
+was also the one verification caught (skipped hitbox → no bat hit).
+
+Verification, all on GCC before Clang was involved: Samus's four
+projectile spawns frame- and coordinate-exact, Ness's bat hit at f676 /
+knockback 78.5 with identical hitlag, identical `[CMD]` opcode streams.
+Strict Android compile: **0 attribute errors**; 102 TUs still fail, all
+from the Phase 0 remainder table.
+
 ## Phase 2 — GL 3.3 Core → GLES 3.1
 
 `src/port/gx_gl_bridge.c` compiles three `#version 330 core` programs and

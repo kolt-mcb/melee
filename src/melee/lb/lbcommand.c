@@ -5,6 +5,7 @@
 #include "lb/types.h"
 
 #if BUILD_TARGET_PC
+#include "port/pc_script.h"
 void* pc_script_target(const void* cur, u32 off);
 #endif
 
@@ -104,6 +105,7 @@ void Command_05(CommandInfo* info)
     union CmdUnion* dst;
     NEXT_CMD(info);
     dst = pc_script_target(info->u, info->u->Command_05.off);
+    pc_script_prepare(dst);
     info->event_return[info->loop_count++] = info->u + 1;
     info->u = dst;
 #else
@@ -126,6 +128,7 @@ void Command_07(CommandInfo* info)
     /* Same operand position as Command_05: the word after the opcode. */
     NEXT_CMD(info);
     info->u = pc_script_target(info->u, info->u->Command_07.off);
+    pc_script_prepare(info->u);
 #else
     NEXT_CMD(info);
     info->u = info->u->Command_07.ptr;
