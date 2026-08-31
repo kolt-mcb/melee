@@ -87,6 +87,13 @@ $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-addr2line \
     -f -e build/android/arm64-v8a/libmain.so 0x<offset>
 ```
 
+## Status on hardware
+
+Verified on a Pixel 9 (Mali-G715, Android 16): boots to a VS match at a
+steady 60 fps, ~290 MB resident. Sound and speed are correct (the game is
+a fixed-step 60 Hz simulation; if it ever runs fast, the pacer has been
+defeated — check the `[PACE]` line in logcat).
+
 ## What to expect first time
 
 Verified in the emulator (2026-08-31): boots, plays the opening movie,
