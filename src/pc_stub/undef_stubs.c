@@ -3861,35 +3861,69 @@ static size_t g_low_mem_top = 0;    /* carve cursor, top down */
 #define MAP_NORESERVE 0x4000
 #endif
 
+/* Where the pool may go: below 4 GB, and clear of [0x80000000, 0xC0000000)
+ * -- pc_ptr_sane() rejects that window as "unconverted GCN address", so a
+ * pool there would fail every guard (the x86_64 emulator handed out
+ * 0x80000000 when the low hints were taken). Sizes fall back 1 GB ->
+ * 512 MB -> 256 MB. */
+static int pc_lowmem_try(uintptr_t hint, size_t size)
+{
+    void* p;
+    if (hint + size > 0x100000000ULL) return 0;
+    if (hint < 0xC0000000ULL && hint + size > 0x80000000ULL) return 0;
+    p = mmap((void*) hint, size, PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE,
+             -1, 0);
+    if (p == MAP_FAILED) return 0;
+    if (p != (void*) hint) {
+        /* old kernel: the flag was a hint and it went elsewhere */
+        munmap(p, size);
+        return 0;
+    }
+    g_low_mem_base = (unsigned char*) p;
+    g_low_mem_size = size;
+    g_low_mem_used = 0;
+    g_low_mem_top = size;
+    fprintf(stderr, "[MEM] Low-memory pool reserved at %p (%lu MB)\n", p,
+            (unsigned long) (size >> 20));
+    fflush(stderr);
+    return 1;
+}
+
+static void pc_lowmem_dump_maps(void)
+{
+    FILE* f = fopen("/proc/self/maps", "r");
+    char line[512];
+    int n = 0;
+    if (f == NULL) return;
+    fprintf(stderr, "[MEM] mappings below 4 GB:\n");
+    while (fgets(line, sizeof(line), f) != NULL && n < 40) {
+        unsigned long lo = strtoul(line, NULL, 16);
+        if (lo < 0x100000000ULL) { fputs("[MEM]   ", stderr); fputs(line, stderr); n++; }
+    }
+    fclose(f);
+}
+
 void pc_lowmem_init(void)
 {
-    uintptr_t hint;
+    static const size_t sizes[] = { PC_LOWMEM_POOL_SIZE, 512UL << 20, 256UL << 20 };
+    unsigned si;
     if (g_low_mem_base != NULL) return;
-    for (hint = 0x10000000; hint + PC_LOWMEM_POOL_SIZE <= 0x100000000ULL;
-         hint += 0x10000000)
-    {
-        void* p = mmap((void*) hint, PC_LOWMEM_POOL_SIZE,
-                       PROT_READ | PROT_WRITE,
-                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE |
-                           MAP_FIXED_NOREPLACE,
-                       -1, 0);
-        if (p == MAP_FAILED) continue;
-        if (p != (void*) hint) {
-            /* old kernel: the flag was a hint and it went elsewhere */
-            munmap(p, PC_LOWMEM_POOL_SIZE);
-            continue;
+    for (si = 0; si < sizeof(sizes) / sizeof(sizes[0]); si++) {
+        uintptr_t hint;
+        for (hint = 0x10000000; hint < 0x100000000ULL; hint += 0x10000000) {
+            if (pc_lowmem_try(hint, sizes[si])) {
+                if (si != 0) {
+                    fprintf(stderr, "[MEM] (1 GB window unavailable; see maps)\n");
+                    pc_lowmem_dump_maps();
+                }
+                return;
+            }
         }
-        g_low_mem_base = (unsigned char*) p;
-        g_low_mem_size = PC_LOWMEM_POOL_SIZE;
-        g_low_mem_used = 0;
-        g_low_mem_top = PC_LOWMEM_POOL_SIZE;
-        fprintf(stderr, "[MEM] Low-memory pool reserved at %p (%lu MB)\n", p,
-                (unsigned long) (PC_LOWMEM_POOL_SIZE >> 20));
-        fflush(stderr);
-        return;
     }
-    fprintf(stderr, "[MEM] Low-memory pool reservation FAILED: no 1 GB "
-                    "window below 4 GB\n");
+    fprintf(stderr, "[MEM] Low-memory pool reservation FAILED: no window "
+                    "below 4 GB outside the GCN range\n");
+    pc_lowmem_dump_maps();
     fflush(stderr);
 }
 

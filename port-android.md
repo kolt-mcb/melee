@@ -279,9 +279,31 @@ done and verified on Linux; logging and knobs followed:
   build has been seen running on a device. `tools/android/README.md` has
   the exact commands, logcat tags and symbolising recipe.
 
-No device was attached during this work; the next step is entirely
-device-side (Adreno/Mali shader compilers, the low pool's `mmap` hint,
-pacing).
+### First run on Android (2026-08-31, SDK emulator, x86_64 API 35)
+
+A device install showed a black screen, so an x86_64 flavour was added
+(`ANDROID_ABI=x86_64`; the APK carries both ABIs) and the game was run in
+the SDK emulator with SwiftShader. Four things stood between the APK and a
+picture, none of them visible without logcat:
+
+1. **`eglCreateContext: EGL_BAD_CONFIG`** — ES 3.1 + D24S8 has no config on
+   this stack. `window.c` now walks a ladder (3.2/3.1/3.0 × D24S8/D24/D16)
+   and recreates the window per attempt; the emulator lands on ES 3.0.
+2. **`#version 310 es` on an ES 3.0 context** — the header now follows the
+   context version (`300 es` on 3.0; forced on the desktop with
+   `MELEE_GLSL_ES=300`, suite green).
+3. **The low pool landed at `0x80000000`** — inside the window
+   `pc_ptr_sane()` rejects as GCN addresses; the scan now avoids
+   `[0x80000000, 0xC0000000)` and falls back 1 GB → 512 MB → 256 MB,
+   dumping `/proc/self/maps` when it shrinks (Dalvik holds
+   `0x14000000-0x20000000` and `0x40000000+` on x86_64 Android).
+4. **`adb shell mkdir` made the asset dir `drwxrws---` owned by `shell`** —
+   every `vf_open` failed. `tools/android/push_assets.sh` launches the app
+   first and `chmod -R a+rwX` afterwards.
+
+Result: the opening movie plays, ~17 fps on the software rasteriser, no
+crash over 900+ frames. The device black screen almost certainly was (1)
+or (4); the new APK reports either in `adb logcat -s melee`.
 
 ## Order and gates
 

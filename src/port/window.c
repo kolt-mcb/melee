@@ -42,25 +42,32 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
         return FALSE;
     }
 
-    /* OpenGL 3.3 core on the desktop; OpenGL ES 3.1 on Android, or on
-     * the desktop with MELEE_GLES=1 (Mesa gives an ES context through
-     * GLX/EGL, which lets the Android shader dialect be checked against
-     * the golden suite without a device). */
-    if (window_gl_es())
-    {
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    }
-    else
-    {
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    }
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    /* OpenGL 3.3 core on the desktop; OpenGL ES on Android, or on the
+     * desktop with MELEE_GLES=1 (Mesa gives an ES context through GLX/EGL,
+     * which lets the Android shader dialect be checked against the golden
+     * suite without a device).
+     *
+     * EGL is picky about the (version, depth, stencil) combination and
+     * fails eglCreateContext with EGL_BAD_CONFIG rather than degrading --
+     * the SDK emulator's SwiftShader has no ES 3.1 + D24S8 config, for
+     * one. SDL applies GL attributes at window creation, so each attempt
+     * recreates the window. The stencil buffer is not used by the bridge;
+     * a 16-bit depth buffer is a last resort (the GX depth range is 24-bit
+     * and z-fighting would show). */
+    struct gl_attempt { int major, minor, depth, stencil; };
+    static const struct gl_attempt es_attempts[] = {
+        { 3, 2, 24, 8 }, { 3, 1, 24, 8 }, { 3, 0, 24, 8 },
+        { 3, 2, 24, 0 }, { 3, 1, 24, 0 }, { 3, 0, 24, 0 },
+        { 3, 1, 16, 0 }, { 3, 0, 16, 0 },
+    };
+    static const struct gl_attempt gl_attempts[] = {
+        { 3, 3, 24, 8 }, { 3, 3, 24, 0 },
+    };
+    const struct gl_attempt* attempts = window_gl_es() ? es_attempts : gl_attempts;
+    int n_attempts = window_gl_es()
+        ? (int) (sizeof(es_attempts) / sizeof(es_attempts[0]))
+        : (int) (sizeof(gl_attempts) / sizeof(gl_attempts[0]));
+    int ai;
 
     Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN;
     if (fullscreen)
@@ -68,22 +75,50 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
         flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
     }
 
-    g_sdl_window = SDL_CreateWindow(title,
-                                    SDL_WINDOWPOS_CENTERED,
-                                    SDL_WINDOWPOS_CENTERED,
-                                    *width, *height, flags);
-    if (!g_sdl_window)
+    for (ai = 0; ai < n_attempts; ai++)
     {
-        PORT_LOG_ERROR("SDL window creation failed: %s", SDL_GetError());
-        return FALSE;
-    }
+        const struct gl_attempt* a = &attempts[ai];
+        SDL_GL_ResetAttributes();
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, a->major);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, a->minor);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                            window_gl_es() ? SDL_GL_CONTEXT_PROFILE_ES
+                                           : SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, a->depth);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, a->stencil);
 
-    g_gl_context = SDL_GL_CreateContext(g_sdl_window);
-    if (!g_gl_context)
-    {
-        PORT_LOG_ERROR("SDL GL context creation failed: %s", SDL_GetError());
+        g_sdl_window = SDL_CreateWindow(title,
+                                        SDL_WINDOWPOS_CENTERED,
+                                        SDL_WINDOWPOS_CENTERED,
+                                        *width, *height, flags);
+        if (!g_sdl_window)
+        {
+            PORT_LOG_WARN("SDL window creation failed (%s %d.%d D%d S%d): %s",
+                          window_gl_es() ? "ES" : "GL", a->major, a->minor,
+                          a->depth, a->stencil, SDL_GetError());
+            continue;
+        }
+        g_gl_context = SDL_GL_CreateContext(g_sdl_window);
+        if (g_gl_context)
+        {
+            if (ai != 0)
+            {
+                PORT_LOG_WARN("GL context: fell back to %s %d.%d D%d S%d",
+                              window_gl_es() ? "ES" : "GL", a->major,
+                              a->minor, a->depth, a->stencil);
+            }
+            break;
+        }
+        PORT_LOG_WARN("SDL GL context creation failed (%s %d.%d D%d S%d): %s",
+                      window_gl_es() ? "ES" : "GL", a->major, a->minor,
+                      a->depth, a->stencil, SDL_GetError());
         SDL_DestroyWindow(g_sdl_window);
         g_sdl_window = NULL;
+    }
+    if (!g_gl_context)
+    {
+        PORT_LOG_ERROR("No usable GL context after %d attempts", n_attempts);
         return FALSE;
     }
 

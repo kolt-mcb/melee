@@ -21,23 +21,42 @@ One-time prerequisites (all outside the tree, see `build_apk.sh` header):
   Gradle wrapper fetches AGP 8.1.1.
 
 Output: `tools/android/app/app/build/outputs/apk/debug/app-debug.apk`
-(arm64-v8a only, minSdk 31, GLES 3.2 required, landscape).
+(arm64-v8a + x86_64, minSdk 31, GLES 3.0+ (3.2 preferred), landscape).
 
 ## Run on a device
 
-The app reads the extracted disc from its external files directory, which
-needs no storage permission:
-
 ```
 adb install -r tools/android/app/app/build/outputs/apk/debug/app-debug.apk
-adb shell mkdir -p /sdcard/Android/data/com.melee.pcport/files
-adb push orig/GALE01 /sdcard/Android/data/com.melee.pcport/files/GALE01   # ~1 GB
+tools/android/push_assets.sh orig/GALE01          # ~1 GB; see the script header
 adb shell am start -n com.melee.pcport/org.libsdl.app.SDLActivity
 adb logcat -s melee SDL SDL/APP AndroidRuntime libc DEBUG
 ```
 
+The app reads the extracted disc from its external files directory, which
+needs no storage permission. Do not `adb shell mkdir` that directory by
+hand: adb creates it `drwxrws---` owned by `shell` and the app cannot
+traverse it (every `vf_open` fails, black screen). `push_assets.sh`
+launches the app once so Android creates `files/` with the right owner,
+pushes, then `chmod -R a+rwX`.
+
 `boot.dol` must be in `GALE01/sys/` — the 1-P difficulty tables, the SIS font
 atlas and several data tables come from it.
+
+## Run in the SDK emulator
+
+The APK also carries x86_64 (`build_apk.sh` builds it when
+`tools/android/deps/sdl2-build-x86_64` exists — same CMake recipe with
+`-DANDROID_ABI=x86_64`). An API-35 x86_64 AVD with KVM runs the game;
+headless works:
+
+```
+emulator -avd <name> -no-window -gpu swiftshader_indirect -no-snapshot -no-audio -memory 3072
+```
+
+Expect: no ES 3.1/3.2 config (`fell back to ES 3.0 D24 S8`, shaders as
+`#version 300 es`), the low pool at `0x20000000` (512 MB: Dalvik owns
+`0x14000000-0x20000000` and `0x40000000+` there), and ~17 fps — SwiftShader
+is a software rasteriser. `adb exec-out screencap -p > shot.png` for frames.
 
 ### Knobs
 
@@ -70,10 +89,12 @@ $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-addr2line \
 
 ## What to expect first time
 
-Untested territory, in the order it is likely to bite: the GLES shader
-compilers on Adreno/Mali (the shaders pass Mesa's ES 3.2 front end — a
-stricter or laxer driver may differ); the 1 GB `MAP_NORESERVE` low-memory
-reservation (`[MEM] Low-memory pool reserved at ...` must appear in logcat
-with an address below 4 GB); `highp` precision limits; frame pacing against
-the display's refresh. Input is SDL GameController — a Bluetooth pad works,
-touch does not yet.
+Verified in the emulator (2026-08-31): boots, plays the opening movie,
+runs the title. On a real device the unknowns are the Adreno/Mali shader
+compilers (the shaders pass Mesa's ES 3.2 and SwiftShader's ES 3.0 front
+ends), `highp` precision limits, and pacing against the display refresh.
+If the screen stays black, `adb logcat -s melee` has the answer: the
+context attempts (`SDL GL context creation failed (...)`), the pool
+(`[MEM] Low-memory pool reserved at`), shader errors (`Shader compile
+failed`), or `vf_open: open failed` (asset permissions, above). Input is
+SDL GameController — a Bluetooth pad works, touch does not yet.
