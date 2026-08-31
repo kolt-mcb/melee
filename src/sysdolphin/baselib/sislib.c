@@ -1549,6 +1549,22 @@ loop_3:
             *out_width += text->x80.x * (32.0F + text->x78.x);
             if (kern_enabled != 0) {
                 glyph_code = SIS_U16(cursor);
+#if BUILD_TARGET_PC
+                /* The GCN code round-trips the pair's address through s32.
+                 * HSD_SisLib_8040CB00 is a static table, which under PIE
+                 * lives above 4 GB, so that truncated -- the menu crashed
+                 * measuring its first string. Same arithmetic, in pointers. */
+                if (glyph_code < 0x4000U) {
+                    kern_data = (TextKerning*) (default_kerning +
+                               (((glyph_code - 0x2000) * 2) & 0x1FFFE));
+                } else {
+                    kern_data = (TextKerning*) &glyph_tex
+                            ->data[((glyph_code - 0x4000) * 2) & 0x1FFFE];
+                }
+                kern_width = (kern_data->right - 2) + kern_data->left;
+                *out_width =
+                    -((text->x80.x * (f32) kern_width) - *out_width);
+#else
                 if (glyph_code < 0x4000U) {
                     kern_width =
                         (s32) (default_kerning +
@@ -1569,6 +1585,7 @@ loop_3:
                     *out_width =
                         -((text->x80.x * (f32) kern_width) - *out_width);
                 }
+#endif
             }
             if (*out_height < (32.0F * text->x80.y)) {
                 *out_height = 32.0F * text->x80.y;

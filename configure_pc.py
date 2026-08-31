@@ -156,6 +156,15 @@ PROF_FLAGS = " -pg" if PROFILE else ""
 OPT = "-O1" if ASAN else "-O2"
 if ASAN:
     OUT_DIR = BUILD / "pc-asan"
+# PC_PIE=1 links the desktop binary position-independent (build.ninja.pc-pie,
+# build/pc-pie). The normal build is -no-pie, which puts glibc's brk heap
+# below 4 GB and so lets every small malloc() survive the port's u32
+# pointer truncation by accident. Android mandates PIE + ASLR, where the
+# heap lands at 0x7xxx_xxxx_xxxx; this flavour reproduces that on the
+# desktop (port-android.md Phase 3) so the suite can find the sites.
+PIE = os.environ.get("PC_PIE") == "1" and not ASAN
+if PIE:
+    OUT_DIR = BUILD / "pc-pie"
 # ANDROID_NDK=<ndk root> produces the Android cross flavour
 # (build.ninja.android, build/android): NDK clang for aarch64, API 31,
 # PIE. Phase 0 of port-android.md: this exists to compile every TU and
@@ -213,7 +222,7 @@ if ANDROID:
                   + _dep_inc + " -DBUILD_TARGET_ANDROID=1")
 else:
     CC = "gcc"
-    ARCH_FLAGS = "-m64"
+    ARCH_FLAGS = "-m64" + (" -fPIE" if PIE else "")
 CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "")
 if ANDROID:
     # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
@@ -223,7 +232,7 @@ if ANDROID:
             " -lGLESv3 -lEGL -llog -landroid -lm -ldl")
     OUT_PATH = str(OUT_DIR / "arm64-v8a" / "libmain.so")
 else:
-    LDFLAGS = "-m64 -no-pie" + SAN_FLAGS + PROF_FLAGS
+    LDFLAGS = "-m64 " + ("-pie" if PIE else "-no-pie") + SAN_FLAGS + PROF_FLAGS
     # libjpeg decodes the motion-JPEG frames in MTH movies (src/port/pc_mth.c).
     LIBS = "-lSDL2 -lGL -ljpeg -lpthread -ldl -lm -lc -lstdc++"
     OUT_PATH = str(OUT_DIR / "melee-pc")
@@ -259,7 +268,8 @@ n += "  libs = $libs\n\n"
 n += "default " + OUT_PATH + "\n\n"
 
 NINJA_FILE = ("build.ninja.android" if ANDROID
-              else "build.ninja.pc-asan" if ASAN else "build.ninja.pc")
+              else "build.ninja.pc-asan" if ASAN
+              else "build.ninja.pc-pie" if PIE else "build.ninja.pc")
 Path(NINJA_FILE).write_text(n)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 (OUT_DIR / "obj").mkdir(parents=True, exist_ok=True)

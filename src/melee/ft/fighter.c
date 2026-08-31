@@ -460,7 +460,11 @@ void Fighter_LoadCommonData(void)
         Fighter_804D6520 = (void*)pc_ptr_arena;
         Fighter_804D651C = (void*)pc_ptr_arena;
         Fighter_804D6518 = (void*)pc_ptr_arena;
-        Fighter_804D6514 = (void*)pc_ptr_arena;
+        /* Trophy platform joint (PlCo entry 16): an arena pointer parsed as
+         * an HSD_Joint gave a JObj whose flags were the low bits of a host
+         * pointer -- under PIE that included the IK bits and the renderer
+         * crashed on a missing IK hint. HSD_JObjLoadJoint(NULL) is NULL. */
+        Fighter_804D6514 = NULL;
         Fighter_804D6510 = (void*)pc_ptr_arena;
         Fighter_804D650C = (void*)pc_ptr_arena;
         Fighter_804D6508 = (void*)pc_ptr_arena;

@@ -401,7 +401,7 @@ void HSD_DObjDisp(HSD_DObj* dobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
     for (p = dobj->pobj; p != NULL; p = p->next) {
         #if BUILD_TARGET_PC
         /* PC port: guard against corrupted pobj->next pointers. */
-                if ((uintptr_t)p > 0xFFFFFFFFULL) {
+        if (!pc_ptr_sane(p)) {
             port_guard_warn("dobj.c:333");
             break;
         }
