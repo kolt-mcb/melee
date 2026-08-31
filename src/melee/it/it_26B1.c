@@ -208,7 +208,7 @@ void it_8026B3F8(Article* article,
     if (it_804D6D38 == NULL) {
         return;
     }
-    article = pc_itconv_article(article);
+    article = pc_itconv_article_kind(article, kind);
 #endif
     it_804D6D38[kind - It_Kind_Kuriboh] = article;
 }

@@ -9,6 +9,7 @@
 #include <melee/gr/grdatfiles.h>
 #include <melee/it/forward.h>
 #include <melee/it/it_3F14.h>
+#include <melee/it/itCharItems.h>
 #include <melee/it/types.h>
 #include <melee/lb/types.h>
 
@@ -462,6 +463,178 @@ static Article* conv_article(const struct arch* a, u32 off)
 }
 
 /* ------------------------------------------------------------------ */
+/* Per-kind attribute fixups.
+ *
+ * Most items' per-item attributes are pure scalars, but a handful embed
+ * pointers: joint trees for extra models (Samus's grapple beam segments,
+ * Link's hookshot chain, boomerang/arrow pickup models, the Ice Climbers'
+ * rope) and slots of animation trees. Two problems at once: the flat
+ * 32-bit swap leaves those fields as file offsets (the first grapple grab
+ * faulted at 0x15864 -- an offset used as a pointer), and the HOST struct
+ * layout diverges from the file's once pointer fields widen to 8 bytes.
+ * So these kinds get real host structs built field by field. */
+
+static void* conv_joint_at(const struct arch* a, u32 off)
+{
+    if (off == 0 || off >= a->len) {
+        return NULL;
+    }
+    grDatFiles_ResetJointMap();
+    {
+        void* j = grDatFiles_ConvertJointTreeGCNtoX64(a->base + off,
+                                                      (u8*) a->base, 0, NULL);
+        grDatFiles_ResolvePObjJoints();
+        return j;
+    }
+}
+
+static void* conv_anim_at(const struct arch* a, u32 off, int type)
+{
+    if (off == 0 || off >= a->len) {
+        return NULL;
+    }
+    switch (type) {
+    case 0:
+        return grDatFiles_ConvertAnimJointTreeGCNtoX64(a->base + off,
+                                                       (u8*) a->base, 0);
+    case 1:
+        return grDatFiles_ConvertMatAnimJointTreeGCNtoX64(a->base + off,
+                                                          (u8*) a->base, 0);
+    default:
+        return grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(a->base + off,
+                                                            (u8*) a->base, 0);
+    }
+}
+
+/* A "slot": the attribute holds a pointer to a pointer to the tree. */
+static void* conv_anim_slot_at(const struct arch* a, u32 off, int type)
+{
+    void** slot;
+    if (off == 0 || off + 4 > a->len) {
+        return NULL;
+    }
+    slot = zalloc(sizeof(void*));
+    if (slot == NULL) {
+        return NULL;
+    }
+    /* The file slot itself holds the tree's offset. */
+    *slot = conv_anim_at(a, be32(a->base + off), type);
+    return slot;
+}
+
+static void conv_scalars(void* dst, const u8* src, unsigned long nbytes)
+{
+    swap_words(dst, src, nbytes);
+}
+
+static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
+                            int kind)
+{
+    u32 spec_off;
+    const u8* r;
+
+    if (art == NULL || art_off + 0x18 > a->len) {
+        return;
+    }
+    spec_off = be32(a->base + art_off + 0x4);
+    if (spec_off == 0 || spec_off >= a->len) {
+        return;
+    }
+    r = a->base + spec_off;
+
+    switch (kind) {
+    case It_Kind_Samus_GBeam: {
+        itSamusGrappleAttributes* g = zalloc(sizeof(*g));
+        int i;
+        if (g == NULL) {
+            return;
+        }
+        conv_scalars(g, r, 0x64); /* x0..x60: same offsets both layouts */
+        g->x64 = conv_joint_at(a, be32(r + 0x64));
+        g->x68 = conv_joint_at(a, be32(r + 0x68));
+        g->x6C = conv_joint_at(a, be32(r + 0x6C));
+        g->x70 = conv_joint_at(a, be32(r + 0x70));
+        {
+            void** slots[15];
+            slots[0] = (void**) &g->x74; slots[1] = (void**) &g->x78;
+            slots[2] = (void**) &g->x7C; slots[3] = (void**) &g->x80;
+            slots[4] = (void**) &g->x84; slots[5] = (void**) &g->x88;
+            slots[6] = (void**) &g->x8C; slots[7] = (void**) &g->x90;
+            slots[8] = (void**) &g->x94; slots[9] = (void**) &g->x98;
+            slots[10] = (void**) &g->x9C; slots[11] = (void**) &g->xA0;
+            slots[12] = (void**) &g->xA4; slots[13] = (void**) &g->xA8;
+            slots[14] = (void**) &g->xAC;
+            for (i = 0; i < 15; i++) {
+                *slots[i] =
+                    conv_anim_slot_at(a, be32(r + 0x74 + 4u * i), i % 3);
+            }
+        }
+        art->x4_specialAttributes = g;
+        break;
+    }
+    case It_Kind_Link_HShot:
+    case It_Kind_CLink_HShot: {
+        itLinkHookshotAttributes* h = zalloc(sizeof(*h));
+        if (h == NULL) {
+            return;
+        }
+        conv_scalars(h, r, 0x54); /* x0..x50 scalars share offsets */
+        h->x54 = conv_joint_at(a, be32(r + 0x54));
+        h->x58 = conv_joint_at(a, be32(r + 0x58));
+        h->x5C = conv_joint_at(a, be32(r + 0x5C));
+        art->x4_specialAttributes = h;
+        break;
+    }
+    case It_Kind_Link_Boomerang:
+    case It_Kind_CLink_Boomerang: {
+        itLinkBoomerangAttributes* b = zalloc(sizeof(*b));
+        if (b == NULL) {
+            return;
+        }
+        conv_scalars(b, r, 0x44);
+        b->x44 = conv_joint_at(a, be32(r + 0x44));
+        b->x48 = conv_joint_at(a, be32(r + 0x48));
+        b->x4C_anim.anim = conv_anim_at(a, be32(r + 0x4C), 0);
+        b->x4C_anim.matanim = conv_anim_at(a, be32(r + 0x50), 1);
+        b->x4C_anim.shapeanim = conv_anim_at(a, be32(r + 0x54), 2);
+        b->x58_anim.anim = conv_anim_at(a, be32(r + 0x58), 0);
+        b->x58_anim.matanim = conv_anim_at(a, be32(r + 0x5C), 1);
+        b->x58_anim.shapeanim = conv_anim_at(a, be32(r + 0x60), 2);
+        art->x4_specialAttributes = b;
+        break;
+    }
+    case It_Kind_Link_Arrow:
+    case It_Kind_CLink_Arrow: {
+        itLinkArrowAttributes* w = zalloc(sizeof(*w));
+        u32 v;
+        if (w == NULL) {
+            return;
+        }
+        conv_scalars(w, r, 0x24);
+        w->x24 = conv_joint_at(a, be32(r + 0x24));
+        w->x28 = conv_joint_at(a, be32(r + 0x28));
+        v = be32(r + 0x2C);
+        memcpy(&w->x2C, &v, 4);
+        art->x4_specialAttributes = w;
+        break;
+    }
+    case It_Kind_IceClimber_GumStrings: {
+        itClimbersStringAttributes* c = zalloc(sizeof(*c));
+        if (c == NULL) {
+            return;
+        }
+        conv_scalars(c, r, 0x24);
+        c->x24_joint = conv_joint_at(a, be32(r + 0x24));
+        c->x28_joint = conv_joint_at(a, be32(r + 0x28));
+        art->x4_specialAttributes = c;
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /* Public entry points                                                  */
 
 #define CACHE_MAX 256
@@ -471,6 +644,7 @@ static struct {
     unsigned gen;
 } g_cache[CACHE_MAX];
 static int g_cache_n;
+static int g_last_was_fresh;
 
 Article* pc_itconv_article(const void* raw)
 {
@@ -488,6 +662,7 @@ Article* pc_itconv_article(const void* raw)
                 raw);
         return NULL;
     }
+    g_last_was_fresh = 0;
     for (i = 0; i < g_cache_n; i++) {
         if (g_cache[i].raw == raw && g_cache[i].gen == a->gen) {
             return g_cache[i].conv;
@@ -497,6 +672,7 @@ Article* pc_itconv_article(const void* raw)
      * command interpreter's goto/subroutine targets resolve. */
     pc_ftconv_note_archive(a->base, a->len);
     conv = conv_article(a, (u32) ((const u8*) raw - a->base));
+    g_last_was_fresh = 1;
     if (g_cache_n >= CACHE_MAX) {
         g_cache_n = 0;
     }
@@ -610,6 +786,18 @@ int pc_itconv_public(HSD_Archive* arc, const void* raw, it_804D6D20_t* out)
     return 1;
 }
 
+Article* pc_itconv_article_kind(const void* raw, int kind)
+{
+    Article* art = pc_itconv_article(raw);
+    if (art != NULL && g_last_was_fresh) {
+        struct arch* a = find_arch(raw);
+        if (a != NULL) {
+            pc_itconv_fixup(a, art, (u32) ((const u8*) raw - a->base), kind);
+        }
+    }
+    return art;
+}
+
 Article* pc_itconv_table_get(Article** table, int idx)
 {
     int t;
@@ -629,7 +817,15 @@ Article* pc_itconv_table_get(Article** table, int idx)
         return NULL;
     }
     if (table[idx] == NULL && pc_tab_raw[t][idx] != 0 && pc_tab_arch != NULL) {
-        table[idx] = pc_itconv_article(pc_tab_arch->base + pc_tab_raw[t][idx]);
+        int kind = idx;
+        if (t == 1) {
+            kind += (int) It_Kind_Kuriboh;
+        } else if (t == 2) {
+            kind += (int) It_PKind_Start;
+        }
+        table[idx] =
+            pc_itconv_article_kind(pc_tab_arch->base + pc_tab_raw[t][idx],
+                                   kind);
     }
     return table[idx];
 }

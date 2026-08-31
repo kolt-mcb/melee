@@ -28,6 +28,11 @@ void pc_itconv_note_archive(struct HSD_Archive* arc);
  * per archive load; NULL for a pointer in no known archive. */
 struct Article* pc_itconv_article(const void* raw);
 
+/* Like pc_itconv_article, but also applies per-kind attribute fixups for
+ * items whose per-item attributes embed pointers (grapple beam, hookshots,
+ * boomerangs, arrows, the Ice Climbers' rope). */
+struct Article* pc_itconv_article_kind(const void* raw, int kind);
+
 /* Convert ItCo.dat's itPublicData root into `out`. The three Article tables
  * it publishes are converted lazily through pc_itconv_table_get. Returns 0
  * if the root could not be read. */

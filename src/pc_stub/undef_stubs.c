@@ -2680,7 +2680,12 @@ __attribute__((weak)) void it_2725_Logic109_HitShield_inline(void) {}
 __attribute__((weak)) void it_8026E_inline(void) {}
 __attribute__((weak)) void it_802D472C_inline(void) {}
 __attribute__((weak)) void it_802EAAEC_inline(void) {}
-__attribute__((weak)) void it_803B8650(void) {}
+/* Vec3 zero (DOL 0x803B8650): the hookshot chain's park position and rest
+ * velocity. As a void-function stub, link->vel read x86 instruction bytes
+ * (-2.05e35) and the chain's first physics tick flung every link to
+ * infinity -- the wall scan then wedged the whole game on Link's first
+ * grab. */
+__attribute__((weak)) float it_803B8650[3] = { 0.0f, 0.0f, 0.0f };
 __attribute__((weak)) void it_803B8660(void) {}
 __attribute__((weak)) void it_803B8674(void) {}
 __attribute__((weak)) void it_803F73A8(void) {}
