@@ -671,6 +671,11 @@ __attribute__((weak)) unsigned long __cvt_fp2unsigned(double d) {
  * ARQPostRequest below. */
 static unsigned char* pc_aram_base = 0;
 static unsigned long pc_aram_used = 0x20; /* skip 0: 0 means NULL to the game */
+/* PC port: pc_aram_host() below WRAPS an out-of-range offset with a modulo
+ * rather than failing, so a bad offset silently reads someone else's bytes
+ * instead of announcing itself. ARAlloc now warns if the region is ever
+ * exhausted, which is the case that wrap was hiding. (Measured: it is not
+ * currently exhausted -- offsets far past the end come from elsewhere.) */
 #define PC_ARAM_SIZE 0x01000000UL
 unsigned char* pc_aram_host(unsigned long aram_off)
 {
@@ -737,6 +742,18 @@ __attribute__((weak)) unsigned long ARAlloc(unsigned long length)
     (void)pc_aram_host(0); /* ensure backing */
     off = pc_aram_used;
     pc_aram_used += (length + 0x1F) & ~0x1FUL;
+    if (pc_aram_used > PC_ARAM_SIZE) {
+        static int warned = 0;
+        if (!warned) {
+            warned = 1;
+            fprintf(stderr,
+                    "[ARAM] exhausted: %lu bytes requested past the %lu-byte "
+                    "region. pc_aram_host() wraps, so data will alias and "
+                    "archives will fail to parse.\n",
+                    (unsigned long) pc_aram_used,
+                    (unsigned long) PC_ARAM_SIZE);
+        }
+    }
     return off;
 }
 __attribute__((weak)) unsigned long ARGetSize(void) { PC_STUB_HIT("ARGetSize"); return PC_ARAM_SIZE; }
