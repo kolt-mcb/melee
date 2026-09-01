@@ -31,6 +31,14 @@ void it_8029B6F8(Item_GObj* gobj, Vec3* pos, ItemKind kind, f32 facing_dir)
     Item_InitSpawnCommonFields(&spawn_item, gobj, facing_dir, true);
 
     spawned_gobj = Item_80268B18(&spawn_item);
+#if BUILD_TARGET_PC
+    /* Item_80268B18 returns NULL when the spawn is refused (missing article
+     * data or, for Kirby's copied fireball, an article with no common
+     * attributes). The three calls below all dereference it. */
+    if (spawned_gobj == NULL) {
+        return;
+    }
+#endif
     it_8029B7C0(spawned_gobj);
     db_80225DD8(spawned_gobj, gobj);
     it_802750F8(spawned_gobj);

@@ -643,6 +643,22 @@ static void Item_80267AA8(HSD_GObj* gobj, SpawnItem* spawnItem)
         }
         return;
     }
+    /* Same unwind when the article carries no common attributes. Kirby's
+     * copied-ability articles (e.g. It_Kind_Kirby_MarioFire, reached through
+     * the hat record in PlKb's archive) have offset 0 in their x0 slot, so
+     * x0_common_attr is legitimately NULL -- the data says so; it is not a
+     * conversion failure, since that article's special/state/model offsets
+     * all resolve. Everything below dereferences xCC_item_attr, so bail
+     * rather than fault. The copy ability then does not spawn.
+     *
+     * Where those attributes are meant to come from is NOT yet understood --
+     * on GameCube this same NULL would fault the same way, so something
+     * must supply them that the port is not doing. */
+    if (item_data->xC4_article_data->x0_common_attr == NULL) {
+        port_guard_warn("item.c:Item_80267AA8 article has no common attrs; "
+                        "item not built");
+        return;
+    }
 #endif
     item_data->xC8_joint =
         item_data->xC4_article_data->x10_modelDesc->x0_joint;

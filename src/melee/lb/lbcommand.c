@@ -5,8 +5,46 @@
 #include "types.h"
 
 #if BUILD_TARGET_PC
+#include "port/log.h"
 #include "port/pc_script.h"
 void* pc_script_target(const void* cur, u32 off);
+#endif
+
+#if BUILD_TARGET_PC
+/* PC port: bound the call/loop stack.
+ *
+ * `CommandInfo::event_return` carries the comment "Array Size is purely made
+ * up for now", and it is: three 4-byte pointers at GCN 0x10 would run to
+ * 0x1B, straight over loop_count_dup (0x14) and unk_x18 (0x18). Nothing
+ * bounds loop_count in either direction, so a Return (Command_06) with an
+ * empty stack indexes event_return[-1] and loads an adjacent field as a
+ * script pointer -- a wild jump, seen as a SIGSEGV on a garbage address
+ * while running Samus's charge-shot item script.
+ *
+ * Command_03 (SetLoop) pushes two entries and Command_05 (Call) pushes one,
+ * so a loop plus a call already fills the array. Refuse to push past the end
+ * and refuse to pop past the start; an unbalanced Return ends the script the
+ * way Command_00 (Reset) does, rather than jumping somewhere arbitrary. */
+#define PC_CMD_STACK_MAX                                                      \
+    ((int) (sizeof(((CommandInfo*) 0)->event_return) /                        \
+            sizeof(((CommandInfo*) 0)->event_return[0])))
+
+static bool pc_cmd_can_push(CommandInfo* info, int n)
+{
+    if ((int) info->loop_count + n <= PC_CMD_STACK_MAX) {
+        return true;
+    }
+    {
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            PORT_LOG_WARN("lbCommand: script stack overflow (depth=%u, +%d, "
+                          "max=%d); ignoring push",
+                          (unsigned) info->loop_count, n, PC_CMD_STACK_MAX);
+        }
+    }
+    return false;
+}
 #endif
 
 void (*lbCommand_803B9840[16])(CommandInfo*) = {
@@ -38,6 +76,12 @@ void Command_02(CommandInfo* info)
 /// SetLoop
 void Command_03(CommandInfo* info)
 {
+#if BUILD_TARGET_PC
+    if (!pc_cmd_can_push(info, 2)) {
+        NEXT_CMD(info);
+        return;
+    }
+#endif
     info->event_return[info->loop_count++] = info->u + 1;
     info->event_return[info->loop_count++] =
         (union CmdUnion*) info->u->Command_03.value;
@@ -106,6 +150,9 @@ void Command_05(CommandInfo* info)
     NEXT_CMD(info);
     dst = pc_script_target(info->u, info->u->Command_05.off);
     pc_script_prepare(dst);
+    if (!pc_cmd_can_push(info, 1)) {
+        return; /* stay on the next command rather than losing the return */
+    }
     info->event_return[info->loop_count++] = info->u + 1;
     info->u = dst;
 #else
@@ -118,6 +165,18 @@ void Command_05(CommandInfo* info)
 /// Return
 void Command_06(CommandInfo* info)
 {
+#if BUILD_TARGET_PC
+    if (info->loop_count == 0) {
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            PORT_LOG_WARN("lbCommand: Return with an empty script stack; "
+                          "ending the script instead of jumping");
+        }
+        info->u = NULL; /* same terminator Command_00 uses */
+        return;
+    }
+#endif
     info->u = info->event_return[info->loop_count -= 1];
 }
 
