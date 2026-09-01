@@ -1905,7 +1905,6 @@ __attribute__((weak)) void MTXLightOrtho(void) {}
 __attribute__((weak)) void MTXLightPerspective(void) {}
 __attribute__((weak)) void MTXOrtho(void) {}
 __attribute__((weak)) void MTXPerspective(void) {}
-__attribute__((weak)) void MTXRotRad(void) {}
 __attribute__((weak)) void MagnetStateVarCalc(void) {}
 __attribute__((weak)) long MatToQuat(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) void NessFloatMath_PKThunder2(void) {}
