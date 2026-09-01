@@ -1662,7 +1662,11 @@ static void* pc_figatree_buf(const void* owner, unsigned long need)
         /* animation data the game addresses in u32: sub-4GB pool */
         extern void* pc_lowmem_realloc(void* p, size_t need);
         void* nb = pc_lowmem_realloc(pc_figatree_slots[i].buf, need);
-        if (nb == NULL) return NULL;
+        if (nb == NULL) {
+            fprintf(stderr, "[FTCONV] figatree realloc FAILED need=%lu\n",
+                    (unsigned long) need);
+            return NULL;
+        }
         pc_figatree_slots[i].buf = nb;
         pc_figatree_slots[i].cap = need;
     }
