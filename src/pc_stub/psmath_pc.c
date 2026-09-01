@@ -300,3 +300,27 @@ u32 PSMTXInverse(Mtx src, Mtx inv)
     }
     return 1;
 }
+
+
+/* MTXRotRad.
+ *
+ * Another empty weak stub, and a silent one: the caller passes an
+ * uninitialised `Mtx` and expects this to fill it, so a no-op leaves the
+ * rotation as whatever was on the stack. mkRBillBoardMtx (displayfunc.c)
+ * builds every rotational billboard through it, which is why Samus's grapple
+ * beam was invisible -- each segment is a flat disc that the billboard should
+ * spin to face the camera, and it got stack garbage instead (observed: the
+ * [0][0] term alternating between 0.0 and 4.52 for a constant 2.194 rad
+ * angle, against an expected cos = -0.583). lbbgflash's rotating flash and
+ * toy.c's trophy rotation go through it too.
+ *
+ * MTXRotTrig is #defined to PSMTXRotTrig, which is already implemented
+ * above; only the sin/cos wrapper was missing. Matches MTXRotRad in
+ * extern/dolphin/src/dolphin/mtx/mtx.c. */
+void MTXRotRad(Mtx m, char axis, f32 rad)
+{
+    if (!ps_ptr_valid(m)) {
+        return;
+    }
+    MTXRotTrig(m, axis, (f32) sin((double) rad), (f32) cos((double) rad));
+}
