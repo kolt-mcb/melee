@@ -282,7 +282,8 @@ elif WASM:
                " -Wno-error=implicit-function-declaration"
                " -Wno-error=return-type")
     ARCH_FLAGS = ("-fPIC" + _wattr + " -Wno-unknown-warning-option"
-                  " --use-port=sdl2 --use-port=libjpeg"
+                  " -isystem " + str(ROOT / "tools" / "wasm" / "glshim")
+                  + " --use-port=sdl2 --use-port=libjpeg"
                   " -DBUILD_TARGET_WASM=1")
 else:
     CC = "gcc"
@@ -296,16 +297,40 @@ if ANDROID:
             " -lGLESv3 -lEGL -llog -landroid -lm -ldl")
     OUT_PATH = str(OUT_DIR / ANDROID_ABI / "libmain.so")
 elif WASM:
-    # Phase 0 compiles only; these are recorded for Phase 1 so the intent is
-    # written down, not rediscovered. ASYNCIFY is not optional: the frame
-    # loop lives inside decompiled game code (gm_1A45.c, gm_801A4D34) and
-    # cannot be inverted into emscripten_set_main_loop. The single blocking
-    # site is render.c's 60 Hz clock_nanosleep pacer, which is where the
-    # yield goes.
+    # -sSTACK_SIZE replaces main.c's prlimit: emscripten defaults to 64 KB,
+    # which the port's init path overruns at once. 16 MB matches what the
+    # desktop build asks the kernel for.
+    #
+    # ASYNCIFY is not optional: the frame loop lives inside decompiled game
+    # code (gm_1A45.c, gm_801A4D34) and cannot be inverted into
+    # emscripten_set_main_loop. The single blocking site is render.c's 60 Hz
+    # clock_nanosleep pacer, which is where the yield goes.
     LDFLAGS = ("-sASYNCIFY=1 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=536870912"
-               " -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sEXIT_RUNTIME=0")
+               " -sSTACK_SIZE=16777216"
+               " -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sEXIT_RUNTIME=0"
+               " -sASSERTIONS=1 -Wl,--error-limit=0")
+    # WASM_NODE=1 builds the headless node harness instead of the web page:
+    # NODERAWFS gives the real filesystem, so orig/GALE01 needs no packaging
+    # and the boot path can be exercised from the terminal. There is no WebGL
+    # under node -- this flavour exists to find everything that goes wrong
+    # before rendering does.
+    if os.environ.get("WASM_NODE") == "1":
+        LDFLAGS += (" -sNODERAWFS=1 -sENVIRONMENT=node"
+                    " --pre-js " + str(ROOT / "tools" / "wasm" / "node_shim.js"))
+        OUT_PATH = str(OUT_DIR / "melee-node.js")
+    else:
+        # WASM_ASSETS=<dir> packages a tree into the page's virtual
+        # filesystem, rooted so that the port's default asset_dir
+        # ("orig/GALE01", relative to a CWD of "/") resolves. Phase 4
+        # replaces this with the File System Access API reading the
+        # player's own files -- packaging 300 MB into the page is a
+        # development convenience, not the shipping shape, and it is why
+        # the movies and audio/ are left out of the staging tree.
+        _assets = os.environ.get("WASM_ASSETS")
+        if _assets:
+            LDFLAGS += " --preload-file " + _assets + "@/"
+        OUT_PATH = str(OUT_DIR / "melee.html")
     LIBS = "--use-port=sdl2 --use-port=libjpeg"
-    OUT_PATH = str(OUT_DIR / "melee.html")
 else:
     LDFLAGS = "-m64 " + ("-pie" if PIE else "-no-pie") + SAN_FLAGS + PROF_FLAGS
     # libjpeg decodes the motion-JPEG frames in MTH movies (src/port/pc_mth.c).
@@ -337,7 +362,7 @@ for s in ALL_SOURCES:
     n += "build " + o + ": cc " + s + "\n"
     n += "  cflags = $cflags\n\n"
 
-if WASM:
+if WASM and os.environ.get("WASM_LINK") != "1":
     # Phase 0: no link edge. Building the objects is the whole deliverable.
     n += "default " + out_objs + "\n\n"
 else:

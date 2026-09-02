@@ -1,3 +1,5 @@
+#include <stddef.h>
+#include <stdio.h>
 #include "class.h"
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
@@ -56,18 +58,22 @@ void hsdInitClassInfo(HSD_ClassInfo* class_info, HSD_ClassInfo* parent_info,
         }
         HSD_ASSERT(94, class_info->head.obj_size >= parent_info->head.obj_size);
         HSD_ASSERT(95, class_info->head.info_size >= parent_info->head.info_size);
-#if BUILD_TARGET_PC
-        /* PC port: on x86_64 the class head is 0x48 bytes (64-bit pointers),
-         * not 0x28. The method-pointer section therefore starts at 0x48.
-         * Using 0x28 over-copies by 32 bytes and corrupts the class info
-         * struct that follows in memory (e.g. hsdCObj init clobbered
-         * hsdJObj, leaving its alloc/info_init NULL/garbage). */
+        /* Copy the parent's method-pointer section, which is everything
+         * after the class head. The head's size is not a constant across
+         * targets because it is mostly pointers: 0x28 on GCN, 0x48 on
+         * x86_64, and 0x28 again on wasm32 -- so neither literal is right
+         * everywhere and BUILD_TARGET_PC is the wrong thing to switch on.
+         * It selected the 64-bit figure for the wasm build, where pointers
+         * are four bytes like GCN's, making the length
+         * `info_size - 0x48` = 60 - 72 = -12; as a size_t that is a memcpy
+         * of ~4 GB, which wasm's bounds check caught at once and x86 would
+         * simply have performed.
+         *
+         * offsetof is the head size by definition, on every target, and
+         * stays correct if the head ever gains a field. */
         memcpy(&class_info->alloc, &parent_info->alloc,
-               parent_info->head.info_size - 0x48);
-#else
-        memcpy(&class_info->alloc, &parent_info->alloc,
-               parent_info->head.info_size - 0x28);
-#endif /* BUILD_TARGET_PC */
+               parent_info->head.info_size
+                   - offsetof(HSD_ClassInfo, alloc));
         class_info->head.next = parent_info->head.child;
         parent_info->head.child = class_info;
     }

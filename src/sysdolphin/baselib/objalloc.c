@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <dolphin/os/OSAlloc.h>
 #if BUILD_TARGET_PC
-#include <execinfo.h>
+#include "pc_execinfo.h"
 #endif
 
 static objheap obj_heap = { 0, 0, -1, -1 };

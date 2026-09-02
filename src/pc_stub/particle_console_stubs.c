@@ -29,23 +29,23 @@ __attribute__((weak)) int hsd_804D78AC;
 __attribute__((weak)) void FIOExit(void) {}
 __attribute__((weak)) int FIOFclose(int f) { (void) f; return 0; }
 __attribute__((weak)) int FIOFopen(const char* n, int m) { (void) n; (void) m; return -1; }
-__attribute__((weak)) int FIOFwrite(const void* b, int s, int n, int f) { (void) b; (void) s; (void) n; (void) f; return 0; }
+__attribute__((weak)) int FIOFwrite(int a0, int a1, int a2) { return 0; }
 __attribute__((weak)) int FIOInit(int a, int b, int c) { (void) a; (void) b; (void) c; return 0; }
 __attribute__((weak)) int FIOQuery(void) { return 0; }
 __attribute__((weak)) void HSD_SetReportCallback(void* cb) { (void) cb; }
 __attribute__((weak)) void HSD_VIWaitXFBFlushNoYield(void) {}
 __attribute__((weak)) int MCCClose(int ch) { (void) ch; return 0; }
-__attribute__((weak)) int MCCEnumDevices(void) { return 0; }
+__attribute__((weak)) int MCCEnumDevices(int a0) { return 0; }
 __attribute__((weak)) void MCCExit(void) {}
-__attribute__((weak)) int MCCGetConnectionStatus(void) { return 0; }
+__attribute__((weak)) int MCCGetConnectionStatus(int a0, int a1) { return 0; }
 __attribute__((weak)) int MCCGetFreeBlocks(int ch) { (void) ch; return 0; }
 __attribute__((weak)) int MCCGetLastError(void) { return 0; }
 __attribute__((weak)) int MCCInit(int a, int b, void* c) { (void) a; (void) b; (void) c; return 0; }
 __attribute__((weak)) int MCCNotify(int ch, int v) { (void) ch; (void) v; return 0; }
 __attribute__((weak)) int MCCOpen(int ch, int b, void* cb) { (void) ch; (void) b; (void) cb; return 0; }
-__attribute__((weak)) int MCCRead(int ch, int o, void* b, int n) { (void) ch; (void) o; (void) b; (void) n; return 0; }
+__attribute__((weak)) int MCCRead(int a0, int a1, int a2, int a3, int a4) { return 0; }
 __attribute__((weak)) int MCCStreamOpen(int ch, int b) { (void) ch; (void) b; return 0; }
-__attribute__((weak)) int MCCWrite(int ch, int o, const void* b, int n) { (void) ch; (void) o; (void) b; (void) n; return 0; }
+__attribute__((weak)) int MCCWrite(int a0, int a1, int a2, int a3, int a4) { return 0; }
 __attribute__((weak)) void OSClearContext(void* c) { (void) c; }
 __attribute__((weak)) int OSCreateThread(void* t, void* f, void* a, void* s, unsigned long ss, int p, unsigned long at) { (void) t; (void) f; (void) a; (void) s; (void) ss; (void) p; (void) at; return 0; }
 __attribute__((weak)) unsigned long OSGetPhysicalMemSize(void) { return 0x1800000; }

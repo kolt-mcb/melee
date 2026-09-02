@@ -17,7 +17,7 @@
 #if BUILD_TARGET_PC
 #include <stdio.h>
 #include <stdlib.h>
-#include <execinfo.h>
+#include "pc_execinfo.h"
 #endif
 #include <dolphin/mtx.h>
 #include <MetroTRK/intrinsics.h>

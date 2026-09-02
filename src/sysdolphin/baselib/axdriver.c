@@ -450,8 +450,17 @@ void AXDriver_8038C6C0(HSD_SM* v)
     }
 }
 
-static void fn_8038CC1C(void)
+/* The argument is HSD_Synth_804D775C, passed by the call site in
+ * HSD_SynthCallback through a `void (*)(int)` pointer. This callee
+ * declared no parameters, which UNK_T on the setter hid: nothing
+ * ever compared the two types. x86-64 and ARM64 let the call through
+ * -- the value simply sits unread in a register -- but wasm checks
+ * the callee's type against the call site on every indirect call and
+ * traps. Take the argument and ignore it, which is what the other
+ * targets were already doing. */
+static void fn_8038CC1C(int unused)
 {
+    (void) unused;
     HSD_SM* v;
     HSD_SM* next;
     PAD_STACK(4);

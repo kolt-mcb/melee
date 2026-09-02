@@ -40,7 +40,15 @@ void GXBegin(u32 type, u32 vtxfmt, u16 nverts);
 void GXEnd(void);
 void GXPosition2f32(float x, float y);
 void GXColor4u8(u8 r, u8 g, u8 b, u8 a);
-void GXSetTexCoordGen(int tex, int gen, int mtx, int genmode);
+/* The real GX API spells GXSetTexCoordGen as a static inline in
+ * <dolphin/gx/GXGeometry.h> that forwards to GXSetTexCoordGen2; only the
+ * latter is an out-of-line symbol the bridge defines. Declaring the former
+ * here as a four-argument function bound this call to a stray one-argument
+ * definition in gx_gl_bridge.c instead -- which did nothing, so this
+ * texcoord gen was never set up on any target. x86-64 let the mismatch pass
+ * silently; wasm type-checks the call and traps on it. */
+void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize,
+                       u32 pt_texmtx);
 void GXSetTevOrder(int tev, int texcoord, int tex, int color);
 void GXSetTevOp(int tev, int op);
 void GXTexCoord2f32(float u, float v);
@@ -576,7 +584,8 @@ void render_archive_textures(void)
         GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_U8, 0);
         GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
         
-        GXSetTexCoordGen(GX_TEXCOORD0, GX_TEXGEN_MATRIX, GX_TEXMAP0, GX_MTX3x4);
+        GXSetTexCoordGen2(GX_TEXCOORD0, GX_TEXGEN_MATRIX, GX_TEXMAP0,
+                          GX_MTX3x4, 0 /* GX_FALSE */, 125 /* GX_PTIDENTITY */);
         GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0);
         GXSetTevOp(GX_TEVSTAGE0, GX_TEV_REPLACE);
         
