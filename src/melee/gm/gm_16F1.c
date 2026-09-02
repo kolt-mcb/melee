@@ -2,6 +2,11 @@
 #include "port/log.h"
 #endif
 #include "gm_16F1.h"
+#include <stdlib.h>
+#include <stdio.h>
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include "gm_16F1.static.h"
 
