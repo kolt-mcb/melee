@@ -181,6 +181,7 @@ build.ninja.pc-asan
 build.ninja.pc-pie
 build.ninja.android
 build.ninja.android-*
+build.ninja.wasm
 build/
 melee-pc
 melee-pc-debug
