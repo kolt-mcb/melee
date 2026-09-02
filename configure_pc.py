@@ -308,7 +308,13 @@ elif WASM:
     LDFLAGS = ("-sASYNCIFY=1 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=536870912"
                " -sSTACK_SIZE=16777216"
                " -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sEXIT_RUNTIME=0"
-               " -sASSERTIONS=1 -Wl,--error-limit=0")
+               " -sASSERTIONS=1 -Wl,--error-limit=0"
+               # Keep the wasm name section: without it a trap reports
+               # "wasm-function[545]" and a render callback stored as a table
+               # index cannot be named at all -- which is most of what
+               # debugging this target consists of. tools/wasm/fnname.py reads
+               # the same section from the module.
+               " --profiling-funcs")
     # WASM_NODE=1 builds the headless node harness instead of the web page:
     # NODERAWFS gives the real filesystem, so orig/GALE01 needs no packaging
     # and the boot path can be exercised from the terminal. There is no WebGL
