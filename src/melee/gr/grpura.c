@@ -32,6 +32,7 @@ void grPura_80213250(HSD_JObj* jobj);
 #include <baselib/jobj.h>
 #include <baselib/tobj.h>
 #include <sysdolphin/baselib/dobj.h>
+#include "lb/lb_00F9.h"
 
 /* Forward declarations */
 void grPura_80211CFC(bool num);

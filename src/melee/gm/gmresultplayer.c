@@ -42,6 +42,7 @@
 #include <baselib/mobj.h>
 #include <baselib/random.h>
 #include <baselib/tobj.h>
+#include "ft/ftlib.h"
 
 extern ResultsData lbl_8046DBE8;
 
@@ -1129,7 +1130,7 @@ int fn_80179854(void)
     }
 }
 
-extern s32 ftLib_800876B4(HSD_GObj*);
+/* declared in ft/ftlib.h, included above */
 
 static inline HSD_ImageDesc* get_player_img2(int slot,
                                              ResultsDisplayData* disp)

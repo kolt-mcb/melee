@@ -31,6 +31,7 @@
 #include "lb/lbspdisplay.h"
 #include "lb/types.h"
 #include "mp/mplib.h"
+#include "baselib/fog.h"
 
 /* Forward declarations */
 void fn_8021E994(Ground* arg0, s32 arg1, CollData* arg2, s32 arg3, s32 arg4, f32 arg5);

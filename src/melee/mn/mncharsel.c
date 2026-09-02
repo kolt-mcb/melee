@@ -66,6 +66,7 @@
 #include <melee/mn/mnmainrule.h>
 #include <melee/mn/mnname.h>
 #include <melee/mn/mnnamenew.h>
+#include "mn/mncharsel.h"
 
 typedef struct CSSAllData {
     u8 gnw_name[0x1C];

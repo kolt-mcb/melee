@@ -9,10 +9,33 @@
 static inline int pc_ptr_sane(const void* p)
 {
     uintptr_t up = (uintptr_t)p;
+#if defined(__EMSCRIPTEN__)
+    /* Retargeted for wasm32, where the x86_64 clauses are wrong in both
+     * directions.
+     *
+     * The 47-bit ceiling can never be exceeded by a 32-bit pointer, so it is
+     * merely dead. The GCN-range rejection is worse than dead: on GCN and
+     * x86_64 nothing legitimate lives in [0x80000000, 0xC0000000), but on
+     * wasm32 that is ordinary linear memory, so a heap grown past 2 GB would
+     * start handing out valid pointers that this function calls garbage --
+     * silently, since callers respond by skipping work rather than failing.
+     * The 4 MB floor is guesswork here too; emscripten places static data
+     * from GLOBAL_BASE (1024 by default) upward.
+     *
+     * Linear memory answers all of it: valid means inside [GLOBAL_BASE,
+     * memory.size). Beyond that a load traps rather than reading something
+     * it should not, which is the outcome this heuristic exists to
+     * approximate. */
+    unsigned long long mem_bytes =
+        (unsigned long long) __builtin_wasm_memory_size(0) * 65536ULL;
+    if (up < 1024ULL) return 0;
+    return (unsigned long long) up < mem_bytes;
+#else
     if (up < 0x400000ULL) return 0;
     if (up >= 0x80000000ULL && up < 0xC0000000ULL) return 0; /* GCN range */
     if (up > 0x7fffffffffffULL) return 0;
     return 1;
+#endif
 }
 /* Is `fn` a code address inside the game image? Used by the render-callback
  * guards. The old test was `<= 0xFFFFFFFF`, which is only true of a -no-pie
@@ -107,6 +130,31 @@ static inline int pc_str_sane(const char* p, int max)
  *
  * msync(2) reports ENOMEM for a range that is not mapped, and touches no
  * memory, so it answers the question being asked. */
+#if defined(__EMSCRIPTEN__)
+/* wasm has exactly one mapped region -- linear memory, [0, memory.size) --
+ * and no msync to interrogate it with. Emscripten's msync is a stub that
+ * fails, which does not read as "unmapped range" here but as "every range is
+ * unmapped": pc_mem_readable() returned 0 for every pointer in the process,
+ * so every guard built on it rejected its argument. That is not a quiet
+ * degradation like the vacuous range checks elsewhere in this header -- it
+ * inverts the guard. JObjLoadJointSub skipped every joint it was given, the
+ * scene graph came out empty, and HSD_JObjDispAll was handed a NULL jobj
+ * frame after frame.
+ *
+ * The bounds question is exactly answerable instead: memory.size is the end
+ * of the only region there is, and anything past it traps deterministically
+ * rather than reading someone else's data. */
+static inline int pc_mem_readable(const void* p, unsigned long n)
+{
+    uintptr_t start = (uintptr_t) p;
+    uintptr_t end = start + n;
+    unsigned long long mem_bytes =
+        (unsigned long long) __builtin_wasm_memory_size(0) * 65536ULL;
+    if (!pc_ptr_sane(p) || n == 0) return 0;
+    if (end < start) return 0;                 /* wrapped */
+    return (unsigned long long) end <= mem_bytes;
+}
+#else
 static inline int pc_mem_readable(const void* p, unsigned long n)
 {
     static long pc_page;
@@ -125,4 +173,5 @@ static inline int pc_mem_readable(const void* p, unsigned long n)
     }
     return 1;
 }
+#endif /* __EMSCRIPTEN__ */
 #endif

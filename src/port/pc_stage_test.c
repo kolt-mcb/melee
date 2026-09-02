@@ -29,6 +29,8 @@
 #include <sysdolphin/baselib/dobj.h>
 #include <sysdolphin/baselib/mobj.h>
 #include <sysdolphin/baselib/lobj.h>
+#include "lb/lbarchive.h"
+#include "baselib/displayfunc.h"
 
 static HSD_GObj* s_floor_gobj = NULL;
 static HSD_GObj* s_fighter_gobj = NULL;

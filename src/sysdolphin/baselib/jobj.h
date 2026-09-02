@@ -27,11 +27,22 @@ void port_guard_warn(const char* site);
 /* Not just NULL: an unconverted big-endian field yields a plausible-looking
  * but wild pointer just as often, and it faults identically. Same test as
  * port/pc_ptr.h, spelled out so this header stays cheap to include. */
+#if defined(__EMSCRIPTEN__)
+/* See pc_ptr_sane in port/pc_ptr.h for why the x86_64 clauses do not carry
+ * to wasm32: the 47-bit ceiling is unreachable, and [0x80000000, 0xC0000000)
+ * is ordinary linear memory here rather than a range nothing legitimate
+ * occupies. Bound by linear memory instead. */
+#define HSD_JOBJ_SANE(p)                                                      \
+    ((unsigned long) (p) >= 1024UL &&                                         \
+     (unsigned long long) (unsigned long) (p) <                               \
+         (unsigned long long) __builtin_wasm_memory_size(0) * 65536ULL)
+#else
 #define HSD_JOBJ_SANE(p)                                                      \
     ((unsigned long) (p) >= 0x400000UL &&                                     \
      (unsigned long) (p) <= 0x7fffffffffffUL &&                               \
      !((unsigned long) (p) >= 0x80000000UL &&                                 \
        (unsigned long) (p) < 0xC0000000UL))
+#endif
 #define HSD_JOBJ_REQUIRE(p, retval)                                           \
     do {                                                                      \
         if (!HSD_JOBJ_SANE(p)) {                                              \

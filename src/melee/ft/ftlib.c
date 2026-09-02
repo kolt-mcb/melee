@@ -1005,9 +1005,16 @@ void ftLib_80087610(u8 arg0)
     }
 }
 
-void ftLib_800876B4(HSD_GObj* gobj)
+/* Returns what ftAnim_IsFramesRemaining returns. The decomp had this as a
+ * void function that computed the value and dropped it, which on PowerPC and
+ * x86-64 is not visible: the callee leaves the result in the return register
+ * and gmresultplayer.c's `if (ftLib_800876B4(entity) == 0)` reads it there,
+ * with a local `extern s32` declaration disagreeing with the header all the
+ * while. wasm type-checks the call, so the missing return became a link
+ * error rather than a value that happens to survive. */
+bool ftLib_800876B4(HSD_GObj* gobj)
 {
-    ftAnim_IsFramesRemaining(gobj);
+    return ftAnim_IsFramesRemaining(gobj);
 }
 
 bool ftLib_800876D4(HSD_GObj* gobj)
