@@ -127,7 +127,7 @@ void pc_synth_run_deferred(void)
 #endif
 
 #if BUILD_TARGET_PC
-#include <execinfo.h>
+#include "pc_execinfo.h"
 static void pc_synth_bt(const char* what, int id)
 {
     if (getenv("MELEE_AXTRACE")) {
@@ -1554,7 +1554,7 @@ void HSD_SynthSFXSetDriverInactivatedCallback(UNK_T callback)
     driverInactivatedCallback = callback;
 }
 
-void HSD_SynthSFXSetDriverMasterClockCallback(UNK_T callback)
+void HSD_SynthSFXSetDriverMasterClockCallback(void (*callback)(int))
 {
     driverMasterClockCallback = callback;
 }

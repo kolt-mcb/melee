@@ -12,7 +12,12 @@ static int g_swap_interval;
 /* Refresh rate of the display the window is on, or 0 if unknown. */
 int window_gl_es(void)
 {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
+    /* A browser has no desktop GL at all: WebGL2 is GLES 3.0, so asking for
+     * a 3.3 Core context fails outright ("context attributes are not
+     * supported") and the port dies in window_init(). The ES attempt list
+     * below starts at 3.2 and walks down to 3.0, which is where a browser
+     * answers. */
     return 1;
 #else
     return getenv("MELEE_GLES") != NULL;
@@ -48,10 +53,24 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
 {
     PORT_LOG_INFO("Initializing SDL2 window");
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0)
+    /* Video and timer are required; audio is not. main.c already treats
+     * audio_init() failure as a warning and plays on, but folding
+     * SDL_INIT_AUDIO into this call made an absent audio device fatal
+     * anyway -- the two disagreed. They no longer do.
+     *
+     * This is not a hypothetical: under emscripten there is no AudioContext
+     * before a user gesture (and none at all under node), so the whole port
+     * died in window_init() having never opened a file. A headless or
+     * muted machine on any target hits the same path. */
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0)
     {
         PORT_LOG_ERROR("SDL2 init failed: %s", SDL_GetError());
         return FALSE;
+    }
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0)
+    {
+        PORT_LOG_WARN("SDL2 audio unavailable, continuing muted: %s",
+                      SDL_GetError());
     }
 
     /* OpenGL 3.3 core on the desktop; OpenGL ES on Android, or on the

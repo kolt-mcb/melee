@@ -20,6 +20,9 @@ void pc_get_fb_size(float* w, float* h);
 #include <math.h>
 #include <stdbool.h>
 #include <time.h>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -368,6 +371,45 @@ void render_present(void)
                 fprintf(stderr, "[PACE] display %d Hz, vsync %d -> pacer %s\n",
                         hz, window_vsync_on(), s_pace ? "on" : "off");
             }
+#if defined(__EMSCRIPTEN__)
+            /* The browser is the one target where pacing and yielding are
+             * the same act. Nothing here presents a frame: emscripten's
+             * SDL_GL_SwapWindow does not block, and the canvas only reaches
+             * the screen once control returns to the event loop. A native
+             * clock_nanosleep would hold the single browser thread and the
+             * tab would freeze mid-frame having drawn nothing -- which is
+             * exactly what it did before this branch existed.
+             *
+             * emscripten_sleep() is the yield: under ASYNCIFY it unwinds the
+             * stack, schedules the resume, and lets the browser paint. That
+             * is why ASYNCIFY is not optional for this port -- the frame
+             * loop lives inside decompiled game code (gm_801A4D34) and
+             * cannot be inverted into emscripten_set_main_loop, so this one
+             * call is where the whole loop gets to be asynchronous.
+             *
+             * Unconditional on purpose: s_pace is false when a 60 Hz vsync
+             * is trusted to pace, but there is no vsync to trust here. */
+            {
+                static double s_next_ms;
+                double now = emscripten_get_now();
+                double wait;
+                if (s_next_ms == 0.0) {
+                    s_next_ms = now;
+                }
+                s_next_ms += 1000.0 / 60.0;
+                wait = s_next_ms - now;
+                /* More than a frame behind: resynchronise rather than run
+                 * fast to catch up, as the native pacer does. */
+                if (wait < 0.0) {
+                    s_next_ms = now;
+                    wait = 0.0;
+                }
+                if (wait > 1000.0 / 60.0) {
+                    wait = 1000.0 / 60.0;
+                }
+                emscripten_sleep((unsigned int) (wait + 0.5));
+            }
+#else
             if (s_pace) {
                 struct timespec t;
                 clock_gettime(CLOCK_MONOTONIC, &t);
@@ -381,6 +423,7 @@ void render_present(void)
                     while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &s_next, NULL) != 0) {}
                 }
             }
+#endif /* __EMSCRIPTEN__ */
         }
         if (s_fps > 1) {
             struct timespec f0, f1;

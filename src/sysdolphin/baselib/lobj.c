@@ -1,4 +1,4 @@
-#include <execinfo.h>
+#include "pc_execinfo.h"
 #include "lobj.h"
 
 #include "aobj.h"

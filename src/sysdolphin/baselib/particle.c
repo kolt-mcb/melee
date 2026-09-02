@@ -1232,132 +1232,14 @@ extern s32 hsd_804D78A8;
 extern s32 hsd_804D78AC;
 extern int hsd_804D78A0;
 
-// @TODO: Currently 92.84% match - needs minor register allocation fix
-void hsd_80392E80(void)
-{
-    s32 status;
-    s32 event;
-    s32 head;
-    u32 ticksPerUnit;
-    s32 startTick;
-    s32 waiting;
-    s32 intr;
-    s32* channel_flags;
-    PAD_STACK(16);
-
-    ticksPerUnit = PC_BUS_CLOCK >> 2;
-
-    for (;;) {
-        intr = OSDisableInterrupts();
-        if (hsd_804D7898 == 0) {
-            OSRestoreInterrupts(intr);
-            break;
-        }
-
-        head = hsd_804D789C + 1;
-        event = hsd_804CE728[hsd_804D789C];
-        hsd_804D7898 -= 1;
-        hsd_804D789C = head - (head / 256) * 256;
-        OSRestoreInterrupts(intr);
-
-        switch (event) {
-        case 2:
-            OSReport("Connecting...\n");
-            hsd_804D78AC = 0;
-            hsd_804D78A8 = 0;
-            OSReport("FIO Init...");
-            if (FIOInit(hsd_804D7890, 1, 10) == 0) {
-                OSReport("NG\n");
-            } else {
-                OSReport("OK\n");
-                hsd_804D78A0 = 1;
-            }
-            OSReport("MCC Open...");
-            if (MCCOpen(0xF, 1, (MCC_CBEvent) fn_803932D0) == 0) {
-                OSReport("NG\n");
-                OSReport("Reseting...\n");
-                FIOExit();
-                hsd_804D78A0 = 0;
-                MCCExit();
-                if (MCCInit(hsd_804D7890, 0, (MCC_CBSysEvent) fn_80392E2C) ==
-                    0)
-                {
-                    OSReport("MCCInit Failed.\n");
-                }
-            } else {
-                OSReport("Waiting for connection...");
-                waiting = 1;
-                startTick = OSGetTick();
-                for (;;) {
-                    if (MCCGetConnectionStatus(
-                            0xF, (enum MCC_CONNECT*) &status) != 0 &&
-                        status == 3)
-                    {
-                        waiting = 0;
-                    } else if ((u32) ((u32) (OSGetTick() - startTick) /
-                                      ticksPerUnit) < 3U)
-                    {
-                        continue;
-                    }
-                    break;
-                }
-                if (waiting != 0) {
-                    OSReport("NG\n");
-                    OSReport("Reseting...\n");
-                    FIOExit();
-                    hsd_804D78A0 = 0;
-                    MCCExit();
-                    if (MCCInit(hsd_804D7890, 0,
-                                (MCC_CBSysEvent) fn_80392E2C) == 0)
-                    {
-                        OSReport("MCCInit Failed.\n");
-                    }
-                } else {
-                    OSReport("OK\n");
-                    channel_flags = (s32*) hsd_804CF740;
-                    channel_flags[0] = 0;
-                    channel_flags[1] = 0;
-                    channel_flags[2] = 0;
-                    channel_flags[3] = 0;
-                    channel_flags[4] = 0;
-                    channel_flags[5] = 0;
-                    channel_flags[6] = 0;
-                    channel_flags[7] = 0;
-                    channel_flags[8] = 0;
-                    channel_flags[9] = 0;
-                    channel_flags[10] = 0;
-                    channel_flags[11] = 0;
-                    channel_flags[12] = 0;
-                    channel_flags[13] = 0;
-                    channel_flags[14] = 0;
-                    channel_flags[15] = 0;
-                    channel_flags[0] = 1;
-                    channel_flags[8] = 1;
-                    channel_flags[15] = 1;
-                }
-            }
-            break;
-        case 1:
-            OSReport("Disconnecting...\n");
-            if (hsd_80393328() == 0) {
-                OSReport("Disconnection failed.\n");
-                OSReport("Reseting...\n");
-                FIOExit();
-                hsd_804D78A0 = 0;
-                MCCExit();
-                if (MCCInit(hsd_804D7890, 0, (MCC_CBSysEvent) fn_80392E2C) ==
-                    0)
-                {
-                    OSReport("MCCInit Failed.\n");
-                }
-            } else {
-                OSReport("Disconnection OK.\n");
-            }
-            break;
-        }
-    }
-    hsd_80393844();
-}
+/* hsd_80392E80 is defined in hsd_392C.c, which is where the header
+ * (hsd_392C.h) declares it and where it returns int. A second copy
+ * lived here returning void -- the same decomp, down to its "92.84%
+ * match" TODO, duplicated into this file. ELF let the two coexist and
+ * silently bound callers to whichever the linker reached first;
+ * wasm-ld type-checks the call and trapped on the disagreement.
+ * Declared, not defined, so every caller reaches the one definition. */
+int hsd_80392E80(void);
 
 bool hsd_803931A4(s32 exi_channel)
 {

@@ -28,6 +28,17 @@ static inline int pc_ptr_sane(const void* p)
  * screen produces exactly that -- lbl_803B7B68 stands in as a weak *function*
  * stub for a data symbol, so the render callbacks read out of it are that
  * stub's own instruction bytes. */
+#if defined(__EMSCRIPTEN__)
+/* wasm has no text segment to bound: a function pointer is an index into the
+ * module's function table, not an address, so "is this inside the executable
+ * PT_LOAD" has no analogue and <link.h> does not exist. Accepting every code
+ * pointer is not a loss of safety here -- call_indirect type-checks the
+ * callee against the call site and traps on a mismatch, which catches
+ * strictly more than a range check did (it rejects a *wrongly typed*
+ * function, not merely a non-function). */
+void port_guard_warn(const char* site);
+static inline int pc_code_ptr_ok(const void* fn) { (void) fn; return 1; }
+#else
 #include <link.h>
 void port_guard_warn(const char* site);
 static uintptr_t pc_text_lo_, pc_text_hi_;
@@ -60,6 +71,7 @@ static inline int pc_code_ptr_ok(const void* fn)
     if (pc_text_hi_ == 0) return pc_ptr_sane(fn); /* lookup failed: canonical */
     return up >= pc_text_lo_ && up < pc_text_hi_;
 }
+#endif /* __EMSCRIPTEN__ */
 /* Safe C-string check: pointer sane, bytes probe-readable via write(2)
  * (EFAULT on unmapped), printable ASCII, NUL within max. */
 #include <unistd.h>

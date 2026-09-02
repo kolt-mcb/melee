@@ -19,7 +19,54 @@
 /* Keyed on __ANDROID__, not __GLIBC__: this header is included before any
  * libc header in several TUs, and __GLIBC__ only exists once <features.h>
  * has been pulled in -- so the glibc build silently took the fallback. */
-#if !defined(__ANDROID__)
+#if defined(__EMSCRIPTEN__)
+/* wasm32 has no unwinder that hands back an array of PCs: the call stack
+ * lives in the VM, not in linear memory, and dladdr has nothing to resolve
+ * against. Emscripten's own emscripten_get_callstack() returns the whole
+ * stack as pre-formatted text instead, which fits the two diagnostic call
+ * sites (pc_ax's voice-free and callback-push traces) but not an array API.
+ *
+ * So: backtrace() reports no frames, and backtrace_symbols_fd() ignores the
+ * array it is handed and prints the live stack. That combination is what
+ * keeps the existing call sites working -- they pass `bt + 1, n - 1`, so an
+ * implementation that honoured n would print nothing.
+ *
+ * pc_profile.c's sampling profiler goes quiet as a result, which is correct:
+ * it is driven by a SIGPROF handler, and wasm has no signals. Use the
+ * browser's own profiler there. */
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <emscripten/emscripten.h>
+
+static inline int backtrace(void** bt, int n)
+{
+    (void) bt;
+    (void) n;
+    return 0;
+}
+
+static inline void backtrace_symbols_fd(void* const* bt, int n, int fd)
+{
+    char buf[4096];
+    (void) bt;
+    (void) n;
+    /* EM_LOG_C_STACK | EM_LOG_JS_STACK == 8 | 16; spelled numerically so
+     * this header stays includable before <emscripten.h> in TUs that pull
+     * it in early. */
+    if (emscripten_get_callstack(8 | 16, buf, (int) sizeof(buf)) > 0) {
+        ssize_t w = write(fd, buf, strlen(buf));
+        (void) w;
+    }
+}
+
+static inline char** backtrace_symbols(void* const* bt, int n)
+{
+    (void) bt;
+    (void) n;
+    return NULL;
+}
+#elif !defined(__ANDROID__)
 #include <execinfo.h>
 #else
 #include <dlfcn.h>

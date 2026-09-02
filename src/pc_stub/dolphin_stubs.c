@@ -140,14 +140,14 @@ __attribute__((weak)) void HSD_Free(void* ptr) { free(ptr); }
 double __frsqrte(double x) { return x > 0 ? 1.0 / sqrt(x) : (x == 0 ? INFINITY : NAN); }
 
 /* Camera bounds stubs (weak - overridden by gr/stage.c) */
-__attribute__((weak)) s32 Stage_GetCamBoundsLeftOffset(void) { return 0; }
-__attribute__((weak)) s32 Stage_GetCamBoundsRightOffset(void) { return 0; }
-__attribute__((weak)) s32 Stage_GetCamBoundsTopOffset(void) { return 0; }
-__attribute__((weak)) s32 Stage_GetCamBoundsBottomOffset(void) { return 0; }
-__attribute__((weak)) s32 Stage_GetCamTrackRatio(void) { return 0; }
+__attribute__((weak)) float Stage_GetCamBoundsLeftOffset(void) { return 0; }
+__attribute__((weak)) float Stage_GetCamBoundsRightOffset(void) { return 0; }
+__attribute__((weak)) float Stage_GetCamBoundsTopOffset(void) { return 0; }
+__attribute__((weak)) float Stage_GetCamBoundsBottomOffset(void) { return 0; }
+__attribute__((weak)) float Stage_GetCamTrackRatio(void) { return 0; }
 
 /* Ground stubs (weak - overridden by gr/ground.c) */
-__attribute__((weak)) void Ground_801C4368(void* gobj) {}
+__attribute__((weak)) void Ground_801C4368(int a0, int a1) {}
 
 /* Ctype map - needed by ctype.h */
 const unsigned char __ctype_map[257] = {0};
@@ -210,7 +210,7 @@ float get_follow_speed(void) { return 1.0f; }
 float get_delta(void) { return 0.0f; }
 
 /* More common undefined references */
-__attribute__((weak)) void HSD_JObjLoadJoint(void* joint) {}
+__attribute__((weak)) int HSD_JObjLoadJoint(int a0) { return 0; }
 __attribute__((weak)) void HSD_JObjReqAnimAll(void* jobj, f32 speed) {}
 __attribute__((weak)) void HSD_JObjAnimAll(void* jobj) {}
 __attribute__((weak)) void HSD_JObjSetupMtx(void* jobj, void* mtx, void* work) {}

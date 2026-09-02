@@ -6322,14 +6322,12 @@ dl_end:
 #pragma GCC diagnostic pop
 
 /* GObj_SetupGXLink/Max defined in gobjgxlink.c (sysdolphin) */
-void GXSetTexCoordGen(u32 mask)
-{
-    gx_flush_pending();
-    /* Enable/disable texture coordinate generation per texgen unit.
-     * Mask bit N enables texgen N (0-7).
-     * Currently all texgens are handled via GXSetTexCoordGen2. */
-    (void)mask;
-}
+/* No GXSetTexCoordGen here on purpose. The GX header defines it as a static
+ * inline forwarding to GXSetTexCoordGen2, so an out-of-line definition can
+ * only ever be reached by a caller that re-declares it -- and any such
+ * declaration will disagree with this one about the arity. Exactly that
+ * happened in texture_render.c, where the four-argument call landed on a
+ * one-argument no-op. */
 
 void GXSetFog(u32 type, f32 startz, f32 endz, f32 nearz, f32 farz, GXColor color)
 {

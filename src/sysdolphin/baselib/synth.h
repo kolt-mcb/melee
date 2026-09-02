@@ -49,7 +49,8 @@ void HSD_SynthSFXKeyOff(int);
 /* 38A600 */ void HSD_SynthSFXUpdateMix(struct HSD_SynthSFXNode*, int);
 /* 38AAB0 */ void HSD_SynthSFXUpdateAllVolume(int, u16, int);
 /* 38ABBC */ void HSD_SynthSFXSetDriverInactivatedCallback(UNK_T);
-/* 38ABC4 */ void HSD_SynthSFXSetDriverMasterClockCallback(UNK_T);
+/* 38ABC4 */ void HSD_SynthSFXSetDriverMasterClockCallback(
+    void (*callback)(int));
 /* 38ABCC */ void HSD_SynthSFXSetDriverPauseCallback(void (*)(s32));
 /* 38ABD4 */ void HSD_SynthCallback(void);
 /* 38AD60 */ void HSD_SynthResetStreamCounters(int, int, void*, bool);

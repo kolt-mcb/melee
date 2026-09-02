@@ -204,3 +204,5 @@ tools/android/app/.gradle
 tools/android/app/app/build
 tools/android/app/build
 tools/android/app/local.properties
+wasm_*.log
+undef_data.txt

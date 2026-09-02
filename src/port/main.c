@@ -41,6 +41,15 @@
 #define PC_CTX_PC(uc) ((uc)->uc_mcontext.pc)
 #define PC_CTX_SP(uc) ((uc)->uc_mcontext.sp)
 #define PC_CTX_FP(uc) ((uc)->uc_mcontext.regs[29])
+#elif defined(__EMSCRIPTEN__)
+/* wasm has no signals and no machine registers in linear memory, so the
+ * crash handler below never runs: install_crash_handler() skips sigaction
+ * entirely on this target. The accessors are defined as zero only so the
+ * handler body still compiles rather than being #if'd out in six places.
+ * A wasm trap surfaces in the host's console with a real stack instead. */
+#define PC_CTX_PC(uc) ((void) (uc), 0UL)
+#define PC_CTX_SP(uc) ((void) (uc), 0UL)
+#define PC_CTX_FP(uc) ((void) (uc), 0UL)
 #else
 #error "no machine-context accessors for this architecture"
 #endif
@@ -200,6 +209,13 @@ static void prof_init(void)
 
 static void install_crash_handler(void)
 {
+#if defined(__EMSCRIPTEN__)
+    /* No signals on wasm: sigaction here would install a handler that can
+     * never fire, and sigaltstack is not meaningful. A trap is reported by
+     * the host with a real stack trace, which is strictly better than what
+     * this handler could print. */
+    return;
+#else
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = crash_handler;
@@ -218,6 +234,7 @@ static void install_crash_handler(void)
     sigaction(SIGABRT, &sa, NULL);
     sigaction(SIGBUS, &sa, NULL);
     prof_init();
+#endif
 }
 
 /* Forward declarations for decomp integration */
@@ -228,8 +245,15 @@ extern void game_shutdown(void);
 int main(int argc, char* argv[])
 {
     /* Increase main thread stack from 128KB to 2MB */
+#if defined(__EMSCRIPTEN__)
+    /* wasm has no prlimit: the stack is sized at link time and lives in
+     * linear memory. -sSTACK_SIZE in the wasm LDFLAGS carries the same
+     * 16 MB this call asks for -- emscripten's default is 64 KB, which the
+     * port's init path overruns immediately. */
+#else
     struct rlimit rl = { .rlim_cur = 0x1000000, .rlim_max = 0x1000000 };
     prlimit(0, RLIMIT_STACK, &rl, NULL);
+#endif
 
     /* Android has no stderr anyone reads and no environment: forward fds
      * 1/2 to logcat and load MELEE_* knobs from melee.env in the asset
