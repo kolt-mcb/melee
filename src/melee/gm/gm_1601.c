@@ -2547,30 +2547,22 @@ static inline bool fn_80164B48_check(u8 idx, u16* ptr)
     return false;
 }
 
-static inline u8 fn_80164B48_lookup(s32 t, const u8* es, const u8* base)
+/* The GameCube build reached the two tables below by byte offset from
+ * lbl_803B75F8, relying on the linker having placed them consecutively:
+ * base[0x2C0 + n] is ckind_to_selkind_map[0x14 + n], and base[0x2D0] is the
+ * first byte of lbl_803B78C8 (stride 6).  Host layout gives no such
+ * guarantee, so name both tables directly. */
+static inline u8 fn_80164B48_lookup(u8 ckind)
 {
+    u8 selkind = ckind_to_selkind_map[ckind];
     s32 i;
 
-    for (i = 0; i < 0xB; i++) {
-        if (t == (s32) es[1]) {
-            return (base + i * 6)[0x2D0];
+    for (i = 0; i < NUM_UNLOCKABLE_CHARACTERS; i++) {
+        if ((s32) selkind == (s32) lbl_803B78C8[i].selkind) {
+            return lbl_803B78C8[i].idx;
         }
-        es += 6;
     }
-    return 0xB;
-}
-
-static inline u8 fn_80164B48_lookup_last(s32 t, const u8** es, const u8* base)
-{
-    s32 i;
-
-    for (i = 0; i < 0xB; i++) {
-        if (t == (s32) (*es)[1]) {
-            return (base + i * 6)[0x2D0];
-        }
-        *es += 6;
-    }
-    return 0xB;
+    return NUM_UNLOCKABLE_CHARACTERS;
 }
 
 #if BUILD_TARGET_PC
@@ -2621,57 +2613,20 @@ bool fn_80164B48(void)
 #else
 bool fn_80164B48(void)
 {
-    const u8* base = (const u8*) lbl_803B75F8;
-    u8 idx;
-    u16* ptr;
-    const u8* es_base;
-    s32 ok = 0;
+    static const u8 secret_ckinds[6] = {
+        CKIND_DRMARIO, CKIND_GANON, CKIND_CLINK,
+        CKIND_FALCO,   CKIND_PICHU, CKIND_EMBLEM,
+    };
+    s32 i;
 
     PAD_STACK(8);
 
-    ptr = gmMainLib_GetUnlockedCharactersBitmaskPtr();
-    es_base = base + 0x2D0;
-    idx = fn_80164B48_lookup(base[0x2C2], es_base, base);
-    ok = fn_80164B48_check(idx, ptr);
-    if (ok == 0) {
-        return 0;
+    for (i = 0; i < 6; i++) {
+        u16* ptr = gmMainLib_GetUnlockedCharactersBitmaskPtr();
+        if (!fn_80164B48_check(fn_80164B48_lookup(secret_ckinds[i]), ptr)) {
+            return 0;
+        }
     }
-
-    ptr = gmMainLib_GetUnlockedCharactersBitmaskPtr();
-    idx = fn_80164B48_lookup(base[0x2C5], es_base, base);
-    ok = fn_80164B48_check(idx, ptr);
-    if (ok == 0) {
-        return 0;
-    }
-
-    ptr = gmMainLib_GetUnlockedCharactersBitmaskPtr();
-    idx = fn_80164B48_lookup(base[0x2C1], es_base, base);
-    ok = fn_80164B48_check(idx, ptr);
-    if (ok == 0) {
-        return 0;
-    }
-
-    ptr = gmMainLib_GetUnlockedCharactersBitmaskPtr();
-    idx = fn_80164B48_lookup(base[0x2C0], es_base, base);
-    ok = fn_80164B48_check(idx, ptr);
-    if (ok == 0) {
-        return 0;
-    }
-
-    ptr = gmMainLib_GetUnlockedCharactersBitmaskPtr();
-    idx = fn_80164B48_lookup(base[0x2C4], es_base, base);
-    ok = fn_80164B48_check(idx, ptr);
-    if (ok == 0) {
-        return 0;
-    }
-
-    ptr = gmMainLib_GetUnlockedCharactersBitmaskPtr();
-    idx = fn_80164B48_lookup_last(base[0x2C3], &es_base, base);
-    ok = fn_80164B48_check(idx, ptr);
-    if (ok == 0) {
-        return 0;
-    }
-
     return 1;
 }
 #endif
