@@ -567,16 +567,28 @@ bool ftSk_SpecialS_CheckInitChain(HSD_GObj* gobj)
                 vec0 = vec0_init;
                 {
                     HSD_GObj* item_gobj = fp->u.sk.x8;
-                    Item* item_data = item_gobj->user_data;
-                    Article* article = item_data->xC4_article_data;
-                    itChainSegment* chainSegment =
-                        article->x4_specialAttributes;
+                    Item* item_data;
+                    Article* article;
+                    itChainSegment* chainSegment;
+#if BUILD_TARGET_PC
+                    /* PC port: the chain item can be absent -- this file
+                     * already NULL-checks fp->u.sk.x8 at its other three
+                     * uses; this one dereferenced it unguarded and faulted at
+                     * HSD_GObj::user_data (0x48). Reached once Classic runs
+                     * at a difficulty where Sheik actually uses the chain. */
+                    if (item_gobj != NULL)
+#endif
+                    {
+                    item_data = item_gobj->user_data;
+                    article = item_data->xC4_article_data;
+                    chainSegment = article->x4_specialAttributes;
 
                     vec0.x = chainSegment->x50;
 
                     {
                         vec0.x *= item_data->facing_dir;
                         it_802BCFC4(item_gobj, &vec0);
+                    }
                     }
                 }
             }

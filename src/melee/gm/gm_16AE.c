@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include "port/log.h"
 #include "gm_16AE.h"
 
 #include "gm_16AE.static.h"
@@ -1125,6 +1126,19 @@ void gm_DoPauseChecksAndRoutine(lbl_8046B6A0_t* arg0, int arg1)
         } else {
             pauser = gm_DefaultVSGetPauser();
         }
+#if BUILD_TARGET_PC
+        /* MELEE_NO_PAUSE=1: never enter the pause menu. Unattended runs have
+         * to tap START to dismiss the between-round screens, and there is no
+         * way to aim a tap at only those screens -- the same press pauses the
+         * match, which freezes the fighters and leaves the round unable to
+         * finish. MELEE_1P_CPU does not protect against this: the pause fires
+         * with pauserSlot -1, so the Gm_PKind_Human check never gates it, and
+         * slot -1 selects the zoomed-out pause camera, which drops the frame
+         * rate by roughly 7x as well. */
+        { static int np = -1;
+          if (np < 0) np = (getenv("MELEE_NO_PAUSE") != NULL);
+          if (np) pauser = -1; }
+#endif
         if (pauser != -1) {
             lbAudioAx_80024E84(1);
             lbAudioAx_80024030(5);
