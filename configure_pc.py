@@ -314,7 +314,23 @@ elif WASM:
                # index cannot be named at all -- which is most of what
                # debugging this target consists of. tools/wasm/fnname.py reads
                # the same section from the module.
-               " --profiling-funcs")
+               " --profiling-funcs"
+               # The MELEE_* getenv knobs are the port's whole diagnostic
+               # surface; tools/wasm/env_shim.js maps the page's query string
+               # onto them, which needs ENV reachable from Module.
+               " -sEXPORTED_RUNTIME_METHODS=ENV"
+               " --pre-js " + str(ROOT / "tools" / "wasm" / "env_shim.js")
+               # The decomp calls function pointers through signatures wider
+               # than the callee -- grAnime_801C6F50 casts to a 4-argument
+               # Callback1 and calls the 2-argument HSD_AObjSetRate. On
+               # PowerPC and x86-64 that is harmless, because integers and
+               # floats occupy separate register files and the unread integer
+               # arguments never displace the float. wasm type-checks every
+               # indirect call against one flat parameter list, so it traps.
+               # Emulation generates the thunks; it costs about 2 MB of code.
+               # Removing it means dispatching each call at the callee's real
+               # arity, site by site.
+               + " -sEMULATE_FUNCTION_POINTER_CASTS=1")
     # WASM_NODE=1 builds the headless node harness instead of the web page:
     # NODERAWFS gives the real filesystem, so orig/GALE01 needs no packaging
     # and the boot path can be exercised from the terminal. There is no WebGL

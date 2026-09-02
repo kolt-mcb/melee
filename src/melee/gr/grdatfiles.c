@@ -11,6 +11,7 @@
 
 #include "lb/lb_00B0.h"
 #include "lb/lbarchive.h"
+#include "lb/lbfile.h"
 #include "lb/lbheap.h"
 
 #include <baselib/archive.h>

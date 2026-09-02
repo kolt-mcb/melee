@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include "port/pc_ptr.h"
 #include "gr/granime.h"
@@ -551,6 +552,22 @@ typedef void (*Callback2)(HSD_AObj* aobj, int param);
 typedef void (*Callback4)(HSD_AObj* aobj, HSD_TObj* obj, u32 flags, int param);
 typedef void (*Callback3)(HSD_AObj* aobj, HSD_TObj* obj, int param);
 
+/* The casts below are the reason the wasm build links with
+ * -sEMULATE_FUNCTION_POINTER_CASTS. `type` selects a signature to call `func`
+ * through, and the signature is routinely wider than the callee: type 1 casts
+ * to Callback1 -- (HSD_AObj*, HSD_TObj*, u32, f32) -- and calls
+ * HSD_AObjSetRate, which is (HSD_AObj*, f32).
+ *
+ * That is not a bug on the original hardware or on the desktop. PowerPC and
+ * x86-64 both pass integers and floats in *separate* register files, so the
+ * two unread integer arguments in the middle do not displace the float:
+ * the callee reads r3/f1 (or rdi/xmm0) and gets exactly aobj and rate.
+ *
+ * wasm has one flat positional parameter list and type-checks every indirect
+ * call against it, so (i32, i32, i32, f32) simply is not (i32, f32) and the
+ * call traps. Emulation restores the behaviour by generating thunks; the
+ * targeted fix is to dispatch each type at the arity its callee really has,
+ * which needs the full type-to-callee mapping the animation data encodes. */
 void grAnime_801C6F50(HSD_AObj* aobj, void* obj, u32 flags, void* func,
                       u32 type, void* param)
 {
