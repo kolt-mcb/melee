@@ -16,6 +16,24 @@
 #include <string.h>
 
 /* Byte-swap helper (hoisted out of a GCC nested function for Clang). */
+/* Per-pixel CMPR tracing, off unless MELEE_CMPR_DUMP is set.
+ *
+ * These lines decode one block at a time -- endpoint colours, selector bits,
+ * then eight pixels individually -- which is the right granularity when a
+ * texture decodes wrong and the wrong pixel needs pinning down. It is the
+ * wrong granularity for every other run: a boot emits hundreds of them per
+ * archive before anything reaches the screen. In a browser that is not
+ * merely noise but time, since console.log costs far more than an fputs to
+ * a terminal and the whole lot lands during startup. */
+static int cmpr_dump_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        on = getenv("MELEE_CMPR_DUMP") != NULL;
+    }
+    return on;
+}
+
 static unsigned int swap32_fn(unsigned int v)
 {
     return (v >> 24) | ((v >> 8) & 0xFF00) | ((v << 8) & 0xFF0000) | (v << 24);
@@ -361,7 +379,7 @@ static void decompress_cmpr_tile(const u8* src, u8* dst, const char* name)
     uint16_t c0 = (uint16_t)((src[0] << 8) | src[1]);
     uint16_t c1 = (uint16_t)((src[2] << 8) | src[3]);
     
-    PORT_LOG_INFO("  CMPR '%s': c0=0x%04X(%s) c1=0x%04X(%s)",
+    if (cmpr_dump_on()) PORT_LOG_INFO("  CMPR '%s': c0=0x%04X(%s) c1=0x%04X(%s)",
                    name, c0, (c0&0x8000)?"5A5A5":"5A3", c1, (c1&0x8000)?"5A5A5":"5A3");
 
     uint8_t col0[4], col1[4];
@@ -369,7 +387,7 @@ static void decompress_cmpr_tile(const u8* src, u8* dst, const char* name)
     rgb5a3_to_rgba8(c1, col1);
 
     /* Print selection bits for debugging */
-    PORT_LOG_INFO("  Sel bytes: %02X %02X %02X %02X %02X %02X", src[4],src[5],src[6],src[7],src[8],src[9]);
+    if (cmpr_dump_on()) PORT_LOG_INFO("  Sel bytes: %02X %02X %02X %02X %02X %02X", src[4],src[5],src[6],src[7],src[8],src[9]);
     
     /* Selection bits: 2 bits per pixel, MSB-first */
     for (int px = 0; px < 64; px++) {
@@ -391,15 +409,17 @@ static void decompress_cmpr_tile(const u8* src, u8* dst, const char* name)
     }
     
     /* Print first row selection bits and colors */
-    PORT_LOG_INFO("  First row pixels: {");
-    for (int px = 0; px < 8; px++) {
-        int bi = (px >> 2) + 4;
-        int bo = (3 - (px & 3)) << 1;
-        uint8_t sel = (src[bi] >> bo) & 3;
-        int di = px << 2;
-        PORT_LOG_INFO("    px[%d]: sel=%d -> {%d,%d,%d}", px, sel, dst[di], dst[di+1], dst[di+2]);
+    if (cmpr_dump_on()) {
+        PORT_LOG_INFO("  First row pixels: {");
+        for (int px = 0; px < 8; px++) {
+            int bi = (px >> 2) + 4;
+            int bo = (3 - (px & 3)) << 1;
+            uint8_t sel = (src[bi] >> bo) & 3;
+            int di = px << 2;
+            PORT_LOG_INFO("    px[%d]: sel=%d -> {%d,%d,%d}", px, sel, dst[di], dst[di+1], dst[di+2]);
+        }
+        PORT_LOG_INFO("  }");
     }
-    PORT_LOG_INFO("  }");
 }
 
 /* ----------------------------------------------------------------
@@ -496,7 +516,7 @@ static bool load_texture_from_archive(const char* archive_file,
         bool c1_valid = (c1 & 0x8000) || (c1 & 0x7FFF);
         if (!c0_valid || !c1_valid) continue;
 
-        PORT_LOG_INFO("  Found CMPR '%s' at off=0x%X", name, off);
+        if (cmpr_dump_on()) PORT_LOG_INFO("  Found CMPR '%s' at off=0x%X", name, off);
 
         /* Decompress: assume 1×1 tiles (8×8 pixels) for now */
         TextureEntry* entry = &g_texture_cache[g_texture_count];
@@ -509,7 +529,7 @@ static bool load_texture_from_archive(const char* archive_file,
         entry->rgba_data = (u8*)malloc(TILE_SIZE * TILE_SIZE * 4);
         if (entry->rgba_data) {
             decompress_cmpr_tile(cmpr_data, entry->rgba_data, entry->name);
-            PORT_LOG_INFO("    Pixels: {%d,%d,%d} + {%d,%d,%d}",
+            if (cmpr_dump_on()) PORT_LOG_INFO("    Pixels: {%d,%d,%d} + {%d,%d,%d}",
                           entry->rgba_data[0], entry->rgba_data[1],
                           entry->rgba_data[2], entry->rgba_data[4],
                           entry->rgba_data[5], entry->rgba_data[6]);

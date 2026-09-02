@@ -255,7 +255,32 @@ __attribute__((weak)) void OSGetConsoleSimulatedMemSize(void) {}
 __attribute__((weak)) void OSResetSystem(int a0, int a1, int a2) {}
 __attribute__((weak)) int OSRestoreInterrupts(int a0) { return 0; }
 __attribute__((weak)) void OSSetAlarm(int a0, long long a1, int a2) {}
-__attribute__((weak)) int OSGetTick(void) { return 0; }
+/* A real monotonic tick, not a constant.
+ *
+ * This returned 0 unconditionally, which does not read as "time is stopped"
+ * so much as "every elapsed-time test is false": the SDK idiom is
+ * `start = OSGetTick(); ... while ((OSGetTick() - start) < timeout)`, and
+ * with a constant source the difference is always zero, so no timeout in the
+ * tree can ever expire. hsd_80392E80's MCC connection wait is one such loop,
+ * and it spins with no exit -- on wasm that holds the browser's only thread,
+ * because unlike the other wait loops in the game it never calls
+ * lb_800195D0 and so never reaches a yield.
+ *
+ * GCN's OSGetTick is the low 32 bits of the time base, which counts at the
+ * bus clock over four -- 972 MHz / 4 = 243 MHz. Report the same rate from a
+ * monotonic clock so the SDK's tick arithmetic keeps its intended units. */
+__attribute__((weak)) int OSGetTick(void)
+{
+    struct timespec ts;
+    unsigned long long ns;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        return 0;
+    }
+    ns = (unsigned long long) ts.tv_sec * 1000000000ULL +
+         (unsigned long long) ts.tv_nsec;
+    /* 243 MHz = 243 ticks per microsecond. */
+    return (int) (unsigned int) ((ns / 1000ULL) * 243ULL);
+}
 __attribute__((weak)) void OSAllocFromArenaHi(void) {}
 __attribute__((weak)) void OSAllocFromArenaLo(void) {}
 

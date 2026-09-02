@@ -85,7 +85,24 @@ HSD_LObj* lb_80011AC4(LightList** list)
 #endif /* BUILD_TARGET_PC */
 
     prev = NULL;
+    first = NULL;
+#if BUILD_TARGET_PC
+    /* Re-probe every step, not just the first. `list` is an array of
+     * LightList* walked to a NULL terminator, and the checks above ran once
+     * before the loop while `list++` moves the target each iteration -- so an
+     * array whose terminator is missing (or is a byte-swapped non-zero, which
+     * is exactly the unconverted archive data the comment above describes)
+     * kept reading past the end. x86-64 wanders into whatever is mapped next
+     * and usually finds a zero eventually; wasm has nothing mapped past
+     * memory.size and traps, which is how this surfaced in fighter init. */
+    while (pc_mem_readable(list, sizeof(*list)) && *list != NULL) {
+        if (!pc_mem_readable(*list, sizeof(**list))) {
+            port_guard_warn("lbspdisplay.c:lb_80011AC4");
+            break;
+        }
+#else
     while (*list != NULL) {
+#endif
 #if BUILD_TARGET_PC
         if (getenv("MELEE_LOBJLOG") != NULL) {
             HSD_LightDesc* d = (*list)->desc;
