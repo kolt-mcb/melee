@@ -1,4 +1,5 @@
 #include "itcoin.h"
+#include "port/log.h"
 
 #include "cm/camera.h"
 #include "gm/gm_1A36.h"
@@ -64,8 +65,23 @@ ItemStateTable it_803F93C8[] = {
 void it_802F13B4(Item_GObj* gobj, int arg1)
 {
     Item* ip = GET_ITEM(gobj);
-    itCoinAttributes* attr = ip->xC4_article_data->x4_specialAttributes;
-    HSD_JObj* jobj = GET_JOBJ(gobj)->child;
+    itCoinAttributes* attr;
+    HSD_JObj* jobj;
+#if BUILD_TARGET_PC
+    /* PC port: the coin/trophy item is built from article data the port does
+     * not have (the Toy_* trophy subsystem is unported), so a coin can reach
+     * its state functions with no article data and no model. Both
+     * dereferences below then fault -- xC4_article_data at its own offset,
+     * and GET_JOBJ(gobj)->child at 0x20. Booting the trophy stage (0x53)
+     * straight into VS reproduces it in about twenty seconds. */
+    if (ip == NULL || ip->xC4_article_data == NULL ||
+        GET_JOBJ(gobj) == NULL) {
+        port_guard_warn("itcoin.c:it_802F13B4 coin has no article data/model");
+        return;
+    }
+#endif
+    attr = ip->xC4_article_data->x4_specialAttributes;
+    jobj = GET_JOBJ(gobj)->child;
 
     if (ip->xDD4_itemVar.coin.x4 != 0) {
         if (((gm_801A45E8(1) != false) &&

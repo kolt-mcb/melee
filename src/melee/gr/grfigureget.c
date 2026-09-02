@@ -267,6 +267,20 @@ void grFigureGet_80219898(Ground_GObj* gobj)
             temp_r3_2 = it_802F2094(gobj, &pos,
                                     gp->u.figureget.x10[temp_r6 - 1], temp_r6);
             gp->u.figureget.x34[gp->u.figureget.x4 - 1] = temp_r3_2;
+#if BUILD_TARGET_PC
+            /* PC port: it_802F2094 returns NULL when the coin/trophy item
+             * cannot be built -- Item_8026862C refuses the spawn because the
+             * article data is missing, the trophy content being unported (see
+             * the Toy_* stubs). On GameCube the spawn always succeeds, so the
+             * original dereferences the result unchecked and this stage
+             * segfaulted at HSD_GObj::user_data. x34 is memzero'd at init and
+             * never read back in this file, so leaving the slot NULL is the
+             * same state as "not spawned yet". */
+            if (temp_r3_2 == NULL) {
+                port_guard_warn("grfigureget.c: trophy spawn refused; "
+                                "no trophy this cycle");
+            } else
+#endif
             it_802F2014(temp_r3_2, 0);
             temp_r3 = yakumono_param->x4;
             if (temp_r3 != 0) {
