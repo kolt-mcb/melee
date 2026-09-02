@@ -856,7 +856,29 @@ __attribute__((weak)) int HSD_DevComRequest(int file, uintptr_t src,
             if (callback) callback(id, (int) (intptr_t) args, dst, 0);
             return id;
         }
-        if (file < 0) return -1;
+        /* A failed request must still complete its callback.
+         *
+         * The contract stated above -- everything is synchronous here, so the
+         * callback runs before this returns and the driver need only poll a
+         * flag afterwards -- was honoured on the success path and abandoned
+         * on both failure paths. The sound driver takes it literally:
+         * HSD_Synth_8038B5AC sets HSD_Synth_804D7778 = 1, issues the request,
+         * and the *next* call opens with
+         *
+         *     do { } while (HSD_Synth_804D7778 != 0);
+         *
+         * an empty spin whose only exit is a completion callback clearing
+         * that flag. One unopenable stream therefore wedges the game for
+         * good. On wasm the loop calls nothing at all -- no lb_800195D0, no
+         * pacer -- so it holds the browser's single thread and the tab stops
+         * responding entirely; a match boot hit exactly this on Onett.
+         *
+         * The fourth callback argument is the cancelled flag, which is how
+         * the driver is meant to hear that a request will deliver no data. */
+        if (file < 0) {
+            if (callback) callback(id, (int) (intptr_t) args, NULL, 1);
+            return -1;
+        }
         if (type == 0x22) {
             if (size > sizeof(relay)) size = sizeof(relay);
             dst = relay;
@@ -877,7 +899,12 @@ __attribute__((weak)) int HSD_DevComRequest(int file, uintptr_t src,
         {
             DVDFileInfo info;
             size_t n = 0;
-            if (!DVDFastOpen(file, &info)) return -1;
+            if (!DVDFastOpen(file, &info)) {
+                /* Same contract as above: report the cancellation rather than
+                 * leaving the driver's flag set for ever. */
+                if (callback) callback(id, (int) (intptr_t) args, NULL, 1);
+                return -1;
+            }
             if ((u32) src < info.length && dst != NULL) {
                 n = size;
                 if ((u32) src + n > info.length) n = info.length - (u32) src;
