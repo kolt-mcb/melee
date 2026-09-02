@@ -155,6 +155,13 @@ TEXDUMP = os.environ.get("PC_TEXDUMP") == "1"
 PROFILE = os.environ.get("PC_PROFILE") == "1"
 PROF_FLAGS = " -pg" if PROFILE else ""
 OPT = "-O1" if ASAN else "-O2"
+# wasm pays for code size and call overhead in ways the native targets do not:
+# ASYNCIFY instruments every function it believes can reach a sleep, which
+# adds a state check and a local save/restore around every call it makes. -O3
+# buys back some of that by inlining more aggressively, and the download-size
+# cost of doing so is small next to the asset bundle.
+if os.environ.get("EMSDK") and not ASAN:
+    OPT = "-O3"
 if ASAN:
     OUT_DIR = BUILD / "pc-asan"
 # PC_PIE=1 links the desktop binary position-independent (build.ninja.pc-pie,
@@ -308,7 +315,12 @@ elif WASM:
     LDFLAGS = ("-sASYNCIFY=1 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=536870912"
                " -sSTACK_SIZE=16777216"
                " -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sEXIT_RUNTIME=0"
-               " -sASSERTIONS=1 -Wl,--error-limit=0"
+               # ASSERTIONS adds a runtime check to a great many operations
+               # and is worth its cost only while bringing the target up.
+               # WASM_DEBUG=1 puts it back.
+               + (" -sASSERTIONS=1" if os.environ.get("WASM_DEBUG") == "1"
+                  else " -sASSERTIONS=0")
+               + " -Wl,--error-limit=0"
                # Keep the wasm name section: without it a trap reports
                # "wasm-function[545]" and a render callback stored as a table
                # index cannot be named at all -- which is most of what
