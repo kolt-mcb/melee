@@ -195,6 +195,30 @@ ANDROID_ABI = os.environ.get("ANDROID_ABI", "arm64-v8a")
 _ABI_TRIPLE = {"arm64-v8a": "aarch64-linux-android31-clang",
                "x86_64": "x86_64-linux-android31-clang"}
 _ABI_SUFFIX = "" if ANDROID_ABI == "arm64-v8a" else "-" + ANDROID_ABI
+
+# EMSDK=<emsdk root> produces the WebAssembly cross flavour
+# (build.ninja.wasm, build/wasm): emcc for wasm32, targeting WebGL2.
+# Phase 0 of port-wasm.md, and deliberately the same shape as the Android
+# Phase 0 above: this exists to compile every TU and collect emcc's
+# objections. There is no link step -- `ninja -f build.ninja.wasm` builds
+# objects only.
+#
+# emcc is Clang, so it inherits every Android lesson:
+#  - scalar_storage_order is gone from the tree, but -Werror=unknown-attributes
+#    stays so it can never come back silently (Clang only warns).
+#  - the same four GCC-parity downgrades, for the same reason.
+# What is new to this target:
+#  - wasm32 has 4-byte pointers and 4-byte long, exactly like GCN. That is
+#    why -m64 is absent and why pc_lowmem's u32-truncation defence is
+#    expected to become dead weight rather than a porting problem.
+#  - SDL2 and libjpeg come from emscripten's own ports (--use-port), which
+#    supply the headers at compile time; no host headers are involved.
+#  - GL: emscripten's <GL/gl.h> over WebGL2. -sFULL_ES3 is what makes the
+#    desktop-shaped entry points the bridge uses (glMapBufferRange and
+#    friends) resolve at all. Whatever it does not cover is precisely the
+#    Phase 2 work list, the way tools/android/glshim was for Android.
+EMSDK = os.environ.get("EMSDK")
+WASM = EMSDK is not None and not ANDROID
 if ANDROID:
     if ANDROID_ABI not in _ABI_TRIPLE:
         sys.exit("ANDROID_ABI must be one of " + ", ".join(_ABI_TRIPLE))
@@ -233,6 +257,33 @@ if ANDROID:
     ARCH_FLAGS = ("-fPIC" + _attr + " -Wno-unknown-warning-option"
                   " -isystem " + str(ROOT / "tools" / "android" / "glshim")
                   + _dep_inc + " -DBUILD_TARGET_ANDROID=1")
+elif WASM:
+    OUT_DIR = BUILD / "wasm"
+    CC = str(Path(EMSDK) / "upstream" / "emscripten" / "emcc")
+    # WASM_SPIKE=1 is the "list everything" mode, exactly as ANDROID_SPIKE:
+    # the attribute error and Clang's implicit-declaration error drop to
+    # warnings and the per-file error limit is lifted, so one pass reports
+    # every remaining objection instead of stopping at the first noisy
+    # class. Never ship a build made that way -- both downgrades hide real
+    # miscompiles.
+    if os.environ.get("WASM_SPIKE") == "1":
+        _wattr = " -Wno-error=implicit-function-declaration -ferror-limit=0"
+    else:
+        _wattr = " -Werror=unknown-attributes"
+    # Same warning-parity list as Android, plus one the Android spike could
+    # not have seen: plain -Wincompatible-pointer-types became a Clang
+    # default-error after clang 18, so emcc rejects struct-pointer sloppiness
+    # (mobj.c's TevDesc/TExpTevDesc, the gr/ stage callbacks) that GCC has
+    # always merely warned about. Not a wasm32 issue -- a compiler-version
+    # one -- so it is downgraded here and audited on its own schedule.
+    _wattr += (" -Wno-error=incompatible-function-pointer-types"
+               " -Wno-error=incompatible-pointer-types"
+               " -Wno-error=int-conversion"
+               " -Wno-error=implicit-function-declaration"
+               " -Wno-error=return-type")
+    ARCH_FLAGS = ("-fPIC" + _wattr + " -Wno-unknown-warning-option"
+                  " --use-port=sdl2 --use-port=libjpeg"
+                  " -DBUILD_TARGET_WASM=1")
 else:
     CC = "gcc"
     ARCH_FLAGS = "-m64" + (" -fPIE" if PIE else "")
@@ -244,6 +295,17 @@ if ANDROID:
             " -L" + str(_jpeg_build) + " -ljpeg"
             " -lGLESv3 -lEGL -llog -landroid -lm -ldl")
     OUT_PATH = str(OUT_DIR / ANDROID_ABI / "libmain.so")
+elif WASM:
+    # Phase 0 compiles only; these are recorded for Phase 1 so the intent is
+    # written down, not rediscovered. ASYNCIFY is not optional: the frame
+    # loop lives inside decompiled game code (gm_1A45.c, gm_801A4D34) and
+    # cannot be inverted into emscripten_set_main_loop. The single blocking
+    # site is render.c's 60 Hz clock_nanosleep pacer, which is where the
+    # yield goes.
+    LDFLAGS = ("-sASYNCIFY=1 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=536870912"
+               " -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sEXIT_RUNTIME=0")
+    LIBS = "--use-port=sdl2 --use-port=libjpeg"
+    OUT_PATH = str(OUT_DIR / "melee.html")
 else:
     LDFLAGS = "-m64 " + ("-pie" if PIE else "-no-pie") + SAN_FLAGS + PROF_FLAGS
     # libjpeg decodes the motion-JPEG frames in MTH movies (src/port/pc_mth.c).
@@ -275,12 +337,17 @@ for s in ALL_SOURCES:
     n += "build " + o + ": cc " + s + "\n"
     n += "  cflags = $cflags\n\n"
 
-n += "build " + OUT_PATH + ": link " + out_objs + "\n"
-n += "  ldflags = $ldflags\n"
-n += "  libs = $libs\n\n"
-n += "default " + OUT_PATH + "\n\n"
+if WASM:
+    # Phase 0: no link edge. Building the objects is the whole deliverable.
+    n += "default " + out_objs + "\n\n"
+else:
+    n += "build " + OUT_PATH + ": link " + out_objs + "\n"
+    n += "  ldflags = $ldflags\n"
+    n += "  libs = $libs\n\n"
+    n += "default " + OUT_PATH + "\n\n"
 
 NINJA_FILE = ("build.ninja.android" + _ABI_SUFFIX if ANDROID
+              else "build.ninja.wasm" if WASM
               else "build.ninja.pc-asan" if ASAN
               else "build.ninja.pc-pie" if PIE else "build.ninja.pc")
 Path(NINJA_FILE).write_text(n)
