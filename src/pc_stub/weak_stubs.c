@@ -132,6 +132,17 @@ __attribute__((weak)) void ifStatus_802F6D10(int a0) {}
 __attribute__((weak)) void ifStatus_802F6E1C(int a0) {}
 
 /* db module stubs */
+/* PC port: the headers declare these as DATA, but they were emitted as weak
+ * *function* stubs, so their addresses landed in .text. Reading one returns
+ * the stub's own instruction bytes; writing one segfaults. That is how
+ * All-Star died (gm_80473A18) and how gm_804908A0 broke Classic's round
+ * advance before it.
+ *
+ * Found by intersecting the stub list with the headers' `extern <type> name;`
+ * declarations and then keeping only the symbols whose final address falls
+ * inside .text -- the rest are shadowed by real definitions in the decomp and
+ * are inert. Sizes are sizeof() on this target, read from the debugger. */
+__attribute__((weak, aligned(16))) unsigned char db_804D4AF8[4]; /* int */
 
 /* HSD baselib stubs */
 __attribute__((weak)) void HSD_PadRumbleRemoveId(int a0, int a1) {}
@@ -1989,6 +2000,12 @@ __attribute__((weak)) void it_802F13B4(int a0, int a1) {}
 __attribute__((weak)) void it_802F2BDC(int a0, int a1) {}
 __attribute__((weak)) void lbl_803B7C28(void) { }
 __attribute__((weak)) void lbl_803B7C40(void) { }
+__attribute__((weak)) void lbl_803B7C80(void) { }
+__attribute__((weak)) void lbl_803B7CA8(void) { }
+__attribute__((weak)) void lbl_803B7CE0(void) { }
+__attribute__((weak)) void lbl_803B7D04(void) { }
+__attribute__((weak, aligned(16))) unsigned char lbl_803B7D18[36]; /* union TmAnimFrameTable */
+__attribute__((weak)) void lbl_803B7D3C(void) { }
 __attribute__((weak, aligned(16))) unsigned char lbl_803D6878[256]; /* data (GCN 0x803D6878), was void-fn stub */
 /* lbl_803D6A08: defined for real in src/pc_stub/pc_dol_data.c. */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D6A18[256]; /* data (GCN 0x803D6A18), was void-fn stub */
@@ -2138,6 +2155,19 @@ __attribute__((weak)) void un_8031F980(int a0, int a1) {}
 __attribute__((weak)) void un_803204B0(int a0, int a1) {}
 __attribute__((weak)) void un_80321900(void) { }
 __attribute__((weak)) void vi0401_8031D020(int a0, int a1) {}
+__attribute__((weak, aligned(16))) unsigned char un_803F9FA4[64]; /* struct SoundTestData */
+__attribute__((weak)) void un_803FA258(void) { }
+__attribute__((weak)) void un_803FA4E0(void) { }
+__attribute__((weak)) void un_803FA790(void) { }
+__attribute__((weak)) void un_803FC4CC(void) { }
+__attribute__((weak)) void un_804A1F48(void) { }
+__attribute__((weak, aligned(16))) unsigned char un_804D6F3C[8]; /* u8[8] */
+__attribute__((weak, aligned(16))) unsigned char un_804D6F60[8]; /* u8[8] */
+__attribute__((weak, aligned(16))) unsigned char un_804D6F84[8]; /* u8[8] */
+__attribute__((weak, aligned(16))) unsigned char un_804D6FA8[16]; /* ViCharaDesc*[2] */
+__attribute__((weak, aligned(16))) unsigned char un_804D6FD8[8]; /* u8[8] */
+__attribute__((weak, aligned(16))) unsigned char un_804D7004[8]; /* un_804D7004_t */
+__attribute__((weak, aligned(16))) unsigned char un_804D7038[8]; /* u8[8] */
 
 /* Auto-generated weak stubs (batch 4) */
 
