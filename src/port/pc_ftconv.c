@@ -696,8 +696,18 @@ static struct ftData_x8* pc_conv_PartsDesc(const u8* raw, const u8* base,
                     u32 e = pc_be32(*(const u32*) (rb + ((size_t) r * 4 + c) * 4));
                     /* Rule 1: the row targets are themselves GCN-packed, so
                      * convert them rather than handing over a sane-looking
-                     * pointer to raw big-endian data. */
-                    rows[r][c] = (e < len)
+                     * pointer to raw big-endian data.
+                     *
+                     * Offset 0 here means NULL, not "the start of the data
+                     * section": only costume 0 carries a parts-visibility
+                     * table, and every other costume stores 0 so that
+                     * ftParts_8007487C's `vis_table[costume][i] ? ... :
+                     * vis_table[0][i]` falls back to it. Converting offset 0
+                     * yields a non-NULL pointer to whatever the file begins
+                     * with, which defeats that fallback and leaves the
+                     * costume with a junk table -- for Yoshi that left the
+                     * Egg Lay egg unhidden on every costume but the first. */
+                    rows[r][c] = (e != 0 && e < len)
                                      ? (void*) pc_conv_VisLookup(base + e, base, len,
                                                                  out->x0.model_num)
                                      : NULL;
