@@ -1,6 +1,7 @@
 #include "lbarchive.h"
 
 #if BUILD_TARGET_PC
+#include <stdint.h>
 #include <string.h>
 #include "gr/grdatfiles.h"
 #include "lb/types.h"
@@ -370,6 +371,18 @@ HSD_Archive* lbArchive_LoadSymbols(const char* filename, void* symbols, ...)
             raw = HSD_ArchiveGetPublicAddress(archive, name);
             *slot = pc_convert_section(archive, name, raw);
             slot = va_arg(pairs, void**);
+            /* Callers terminate the pair list with a bare `0`, which is an
+             * int.  On AArch64 a variadic int occupies a full 8-byte slot but
+             * only its low 32 bits are stored (clang emits `str wzr`), so the
+             * upper half is stack garbage and the terminator reads back as a
+             * non-NULL pointer -- the loop then walks off the end of the
+             * argument list.  x86_64 happens to zero the whole slot, which is
+             * why this only ever faulted on Android.  A genuine symbol
+             * pointer is never 4 GB-aligned, so low-half-zero means the
+             * terminator. */
+            if ((u32) (uintptr_t) slot == 0) {
+                slot = NULL;
+            }
         }
         va_end(pairs);
     }
