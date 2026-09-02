@@ -1088,6 +1088,28 @@ void gmClassic_801B3E44(GameScene* scene)
     temp_r31->x0.ckind = temp_r29->c_kind;
     temp_r31->x0.color = temp_r29->color;
     temp_r31->x0.cpu_level = temp_r29->cpu_level;
+#if BUILD_TARGET_PC
+    /* PC port, test knob: MELEE_1P_DIFFICULTY=<0..4> sets the Classic
+     * difficulty. Booting straight to GM_CLASSIC skips the difficulty-select
+     * screen, so an unattended run always got 0 (Very Easy). That is not a
+     * neutral default: enemy level and CPU type come from
+     * lbl_803D85F0[difficulty + round*5], and at difficulty 0 the early
+     * rounds specify level 0 and 1 -- opponents that barely act, which reads
+     * as "the enemies do not fight". Difficulty 4 gives level 7-9.
+     *
+     * MELEE_1P_CPU is a different knob: it hands the *player* slot to the AI
+     * and has no effect on enemies. */
+    {
+        const char* dv = getenv("MELEE_1P_DIFFICULTY");
+        if (dv != NULL) {
+            int d = atoi(dv);
+            if (d < 0) d = 0;
+            if (d > 4) d = 4;
+            temp_r31->x0.cpu_level = (u8) d;
+            PORT_LOG_WARN("[CLASSIC] MELEE_1P_DIFFICULTY: difficulty=%d", d);
+        }
+    }
+#endif
     temp_r31->x0.stocks = temp_r29->stocks;
     temp_r31->x0.x4 = temp_r29->x4;
     gmClassic_801B2D54(r4);

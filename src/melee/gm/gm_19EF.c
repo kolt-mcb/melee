@@ -2,6 +2,7 @@
 
 #if BUILD_TARGET_PC
 #include "port/log.h"
+#include "port/pc_scene.h"
 #endif
 
 #include "gm_1601.h"
@@ -395,6 +396,9 @@ void fn_8019F9C4(u32 arg0)
     HSD_JObj** ptr;
     s32 char_idx;
     s32 i;
+#if BUILD_TARGET_PC
+    HSD_Archive* coin_arc = NULL;
+#endif
     f32 f;
     f32 scale;
     PAD_STACK(8);
@@ -404,8 +408,34 @@ void fn_8019F9C4(u32 arg0)
     fn_80168F7C();
     lbl_804D6698 = lbArchive_80016DBC("GmGover.dat", &lbl_804D669C,
                                       "ScGamRegGover_scene_data", 0);
+#if BUILD_TARGET_PC
+    /* Keep the second archive: its SceneDesc must be converted against its
+     * own data section, not GmGover's. */
+    coin_arc =
+#endif
     lbArchive_80016DBC("GmGoCoin.dat", &lbl_804D66A0,
                        "ScGamRegGover_scene_data", 0);
+#if BUILD_TARGET_PC
+    /* PC port: lbArchive_80016DBC hands back *raw* archive bytes, so the
+     * SceneDesc still holds big-endian file offsets where the host expects
+     * pointers -- `lbl_804D669C->cameras` then reads as a wild address and
+     * HSD_CObjLoadDesc below faults. Convert, the same way gmresult.c and
+     * gmapproach.c already do for their scenes. This path only runs when the
+     * player *loses* a 1P round, which is why it went unnoticed: an
+     * unattended ladder ran on difficulty 0 and always won. */
+    if (lbl_804D6698 != NULL) {
+        lbl_804D669C = pc_conv_SceneDesc(lbl_804D669C, lbl_804D6698->data);
+    }
+    if (coin_arc != NULL) {
+        lbl_804D66A0 = pc_conv_SceneDesc(lbl_804D66A0, coin_arc->data);
+    }
+    if (lbl_804D669C == NULL || lbl_804D669C->cameras == NULL) {
+        PORT_LOG_WARN("fn_8019F9C4: GmGover scene data would not convert "
+                      "(scene=%p); Game Over screen skipped",
+                      (void*) lbl_804D669C);
+        return;
+    }
+#endif
     Toy_803124BC();
     Toy_803102D0();
     {
@@ -430,9 +460,42 @@ void fn_8019F9C4(u32 arg0)
 #else
         lbArchive_LoadSymbols(scene_name, &lbl_804D66AC, model_name, 0);
 #endif
+#if BUILD_TARGET_PC
+        /* PC port: pc_convert_section dispatches on the symbol-name suffix
+         * and has no _scene_data / standScene case, so both of these come
+         * back as raw archive bytes with big-endian file offsets where the
+         * host wants pointers -- `lbl_804D66A4->models[0]` then reads as a
+         * wild address.
+         *
+         * Convert here rather than teaching pc_convert_section the suffix:
+         * doing it generically hands every caller an already-converted
+         * pointer, and the ones that convert by hand afterwards would do it
+         * twice. (Tried that; it moved the crash to ifAll_802F370C.) */
+        {
+            HSD_Archive* a;
+            a = lbArchive_LoadSymbols("GmGoAnim.dat", &lbl_804D66A4,
+                                      "ScGamRegGover_scene_data", 0);
+            if (a != NULL) {
+                lbl_804D66A4 = pc_conv_SceneDesc(lbl_804D66A4, a->data);
+            }
+            a = lbArchive_LoadSymbols("GmRgStnd.dat", &lbl_804D66A8,
+                                      "standScene", 0);
+            if (a != NULL) {
+                lbl_804D66A8 = pc_conv_SceneDesc(lbl_804D66A8, a->data);
+            }
+        }
+        if (lbl_804D66A4 == NULL || lbl_804D66A4->models == NULL ||
+            lbl_804D66A4->models[0] == NULL)
+        {
+            PORT_LOG_WARN("fn_8019F9C4: GmGoAnim scene would not convert; "
+                          "Game Over screen skipped");
+            return;
+        }
+#else
         lbArchive_LoadSymbols("GmGoAnim.dat", &lbl_804D66A4,
-                              "ScGamRegGover_scene_data", NULL);
-        lbArchive_LoadSymbols("GmRgStnd.dat", &lbl_804D66A8, "standScene", NULL);
+                              "ScGamRegGover_scene_data", 0);
+        lbArchive_LoadSymbols("GmRgStnd.dat", &lbl_804D66A8, "standScene", 0);
+#endif
     }
     cobj = HSD_CObjLoadDesc(lbl_804D669C->cameras->desc);
     cam_gobj = GObj_Create(0x13, 0x14, 0);
