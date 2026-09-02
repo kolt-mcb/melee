@@ -1998,6 +1998,262 @@ __attribute__((weak)) int it_802F022C(int a0) { return 0; }
 __attribute__((weak)) void it_802F0320(int a0, int a1) {}
 __attribute__((weak)) void it_802F13B4(int a0, int a1) {}
 __attribute__((weak)) void it_802F2BDC(int a0, int a1) {}
+__attribute__((weak)) void* itBat_Logic11_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itBombhei_Logic6_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itBox_Logic1_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itCapsule_Logic0_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itCerebi_Logic23_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itChicoritaLeaf_Logic30_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itCoin_Logic116_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itDKinoko_Logic27_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itDosei_Logic7_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itEgg_Logic3_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itEvYoshiEgg_Logic42_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itEvYoshiEgg_Spawn(void) { return NULL; }
+__attribute__((weak)) void* itFFlowerFlame_Logic41_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itFFlower_Logic25_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itFire_Logic6_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itFlipper_Spawn(void) { return NULL; }
+__attribute__((weak)) void* itFlipper_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itFoods_Logic18_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itFushigibana_Logic29_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itGShell_Logic14_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itHammerHead_Logic40_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itHammer_Logic28_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itHarisen_Logic24_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itHeart_Logic8_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itKinoko_Logic26_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itKireihana_Logic15_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itKusudama_Logic4_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itLGun_Logic16_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itLipstick_Logic23_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itLizardon_Logic34_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itLizardon_Logic35_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itLizardon_Logic36_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itLizardon_Logic37_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itLucky_Logic44_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itLugia_Logic39_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itLugia_Logic40_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itLugia_Logic41_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itMSBomb_Logic19_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itMaril_Logic28_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itMarumine_Logic16_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itMball_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itMetalB_Logic32_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itMew_Logic22_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itParasol_Logic13_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itPippi_Logic20_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itPorygon2_Logic26_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itRabbitC_Logic31_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itSScope_Logic21_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itSamusGrapple_Logic53_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itScball_Logic30_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itSpyCloak_Logic33_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itStarRod_Logic22_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itStar_Logic10_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itSuikun_Logic14_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itSword_Logic12_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itSword_Spawn(void) { return NULL; }
+__attribute__((weak)) void* itThunder_Logic7_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itTogepy_Logic21_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itTomato_Logic9_Spawned(void) { return NULL; }
+__attribute__((weak)) void* itWStar_Logic29_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_2725_Logic17_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_2725_Logic18_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_2725_Logic24_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_2725_Logic31_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_2725_Logic32_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_2725_Logic33_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_2725_Logic38_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_2725_Logic42_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_2725_Logic43_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_3F14_Logic15_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_3F14_Logic17_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_3F14_Logic2_Spawned(void) { return NULL; }
+__attribute__((weak)) void* it_3F14_Logic5_Spawned(void) { return NULL; }
+__attribute__((weak)) void it_803F5468(void) { }
+__attribute__((weak)) void it_803F54D8(void) { }
+__attribute__((weak)) void it_803F55D0(void) { }
+__attribute__((weak)) void it_803F56C8(void) { }
+__attribute__((weak)) void it_803F5740(void) { }
+__attribute__((weak)) void it_803F57A0(void) { }
+__attribute__((weak)) void it_803F57B0(void) { }
+__attribute__((weak)) void it_803F5800(void) { }
+__attribute__((weak)) void it_803F5850(void) { }
+__attribute__((weak)) void it_803F58E0(void) { }
+__attribute__((weak)) void it_803F5988(void) { }
+__attribute__((weak)) void it_803F59F8(void) { }
+__attribute__((weak)) void it_803F5AB0(void) { }
+__attribute__((weak)) void it_803F5BA8(void) { }
+__attribute__((weak)) void it_803F5C48(void) { }
+__attribute__((weak)) void it_803F5CC8(void) { }
+__attribute__((weak)) void it_803F5D28(void) { }
+__attribute__((weak)) void it_803F5DB0(void) { }
+__attribute__((weak)) void it_803F5F40(void) { }
+__attribute__((weak)) void it_803F5F90(void) { }
+__attribute__((weak)) void it_803F5FF0(void) { }
+__attribute__((weak)) void it_803F6090(void) { }
+__attribute__((weak)) void it_803F6110(void) { }
+__attribute__((weak)) void it_803F6130(void) { }
+__attribute__((weak)) void it_803F6150(void) { }
+__attribute__((weak)) void it_803F61B0(void) { }
+__attribute__((weak)) void it_803F6220(void) { }
+__attribute__((weak)) void it_803F6270(void) { }
+__attribute__((weak)) void it_803F62C0(void) { }
+__attribute__((weak)) void it_803F6310(void) { }
+__attribute__((weak)) void it_803F6370(void) { }
+__attribute__((weak)) void it_803F63C0(void) { }
+__attribute__((weak)) void it_803F6488(void) { }
+__attribute__((weak)) void it_803F64F8(void) { }
+__attribute__((weak)) void it_803F6530(void) { }
+__attribute__((weak)) void it_803F6568(void) { }
+__attribute__((weak)) void it_803F6630(void) { }
+__attribute__((weak)) void it_803F6640(void) { }
+__attribute__((weak)) void it_803F6680(void) { }
+__attribute__((weak)) void it_803F66C8(void) { }
+__attribute__((weak)) void it_803F6728(void) { }
+__attribute__((weak)) void it_803F6788(void) { }
+__attribute__((weak)) void it_803F6798(void) { }
+__attribute__((weak)) void it_803F67D0(void) { }
+__attribute__((weak)) void it_803F6818(void) { }
+__attribute__((weak)) void it_803F6888(void) { }
+__attribute__((weak)) void it_803F6920(void) { }
+__attribute__((weak)) void it_803F6998(void) { }
+__attribute__((weak)) void it_803F6A28(void) { }
+__attribute__((weak)) void it_803F6B28(void) { }
+__attribute__((weak)) void it_803F6B60(void) { }
+__attribute__((weak)) void it_803F6B70(void) { }
+__attribute__((weak)) void it_803F6BC8(void) { }
+__attribute__((weak)) void it_803F6C08(void) { }
+__attribute__((weak)) void it_803F6C68(void) { }
+__attribute__((weak)) void it_803F6C88(void) { }
+__attribute__((weak)) void it_803F6C98(void) { }
+__attribute__((weak)) void it_803F6CA8(void) { }
+__attribute__((weak)) void it_803F6E98(void) { }
+__attribute__((weak)) void it_803F6F40(void) { }
+__attribute__((weak)) void it_803F6F50(void) { }
+__attribute__((weak)) void it_803F70A8(void) { }
+__attribute__((weak)) void it_803F70B8(void) { }
+__attribute__((weak)) void it_803F70C8(void) { }
+__attribute__((weak)) void it_803F70F8(void) { }
+__attribute__((weak)) void it_803F7118(void) { }
+__attribute__((weak)) void it_803F7158(void) { }
+__attribute__((weak)) void it_803F7190(void) { }
+__attribute__((weak)) void it_803F71D8(void) { }
+__attribute__((weak)) void it_803F7220(void) { }
+__attribute__((weak)) void it_803F7288(void) { }
+__attribute__((weak)) void it_803F7340(void) { }
+__attribute__((weak)) void it_803F7438(void) { }
+__attribute__((weak)) void it_803F7488(void) { }
+__attribute__((weak)) void it_803F74A8(void) { }
+__attribute__((weak)) void it_803F74F8(void) { }
+__attribute__((weak)) void it_803F7528(void) { }
+__attribute__((weak)) void it_803F7548(void) { }
+__attribute__((weak)) void it_803F7558(void) { }
+__attribute__((weak)) void it_803F75C0(void) { }
+__attribute__((weak)) void it_803F75D0(void) { }
+__attribute__((weak)) void it_803F7668(void) { }
+__attribute__((weak)) void it_803F76A8(void) { }
+__attribute__((weak)) void it_803F76B8(void) { }
+__attribute__((weak)) void it_803F7740(void) { }
+__attribute__((weak)) void it_803F7750(void) { }
+__attribute__((weak)) void it_803F7760(void) { }
+__attribute__((weak)) void it_803F7898(void) { }
+__attribute__((weak)) void it_803F78D8(void) { }
+__attribute__((weak)) void it_803F78E8(void) { }
+__attribute__((weak)) void it_803F78F8(void) { }
+__attribute__((weak)) void it_803F7918(void) { }
+__attribute__((weak)) void it_803F7938(void) { }
+__attribute__((weak)) void it_803F7958(void) { }
+__attribute__((weak)) void it_803F7968(void) { }
+__attribute__((weak)) void it_803F79A0(void) { }
+__attribute__((weak)) void it_803F79C0(void) { }
+__attribute__((weak)) void it_803F79E0(void) { }
+__attribute__((weak)) void it_803F7A28(void) { }
+__attribute__((weak)) void it_803F7A48(void) { }
+__attribute__((weak)) void it_803F7A98(void) { }
+__attribute__((weak)) void it_803F7AC8(void) { }
+__attribute__((weak)) void it_803F7AD8(void) { }
+__attribute__((weak)) void it_803F7B08(void) { }
+__attribute__((weak)) void it_803F7B48(void) { }
+__attribute__((weak)) void it_803F7B58(void) { }
+__attribute__((weak)) void it_803F7BB0(void) { }
+__attribute__((weak)) void it_803F7BC0(void) { }
+__attribute__((weak)) void it_803F7C00(void) { }
+__attribute__((weak)) void it_803F7C10(void) { }
+__attribute__((weak)) void it_803F7C40(void) { }
+__attribute__((weak)) void it_803F7C70(void) { }
+__attribute__((weak)) void it_803F7CA0(void) { }
+__attribute__((weak)) void it_803F7CF8(void) { }
+__attribute__((weak)) void it_803F7D60(void) { }
+__attribute__((weak)) void it_803F7DC8(void) { }
+__attribute__((weak)) void it_803F7DE8(void) { }
+__attribute__((weak)) void it_803F7E08(void) { }
+__attribute__((weak)) void it_803F7E28(void) { }
+__attribute__((weak)) void it_803F7E78(void) { }
+__attribute__((weak)) void it_803F7EE8(void) { }
+__attribute__((weak)) void it_803F7F48(void) { }
+__attribute__((weak)) void it_803F7F58(void) { }
+__attribute__((weak)) void it_803F7FB8(void) { }
+__attribute__((weak)) void it_803F7FC8(void) { }
+__attribute__((weak)) void it_803F7FF8(void) { }
+__attribute__((weak)) void it_803F8058(void) { }
+__attribute__((weak)) void it_803F80C8(void) { }
+__attribute__((weak)) void it_803F80F8(void) { }
+__attribute__((weak)) void it_803F8128(void) { }
+__attribute__((weak)) void it_803F8180(void) { }
+__attribute__((weak)) void it_803F8190(void) { }
+__attribute__((weak)) void it_803F8200(void) { }
+__attribute__((weak)) void it_803F8250(void) { }
+__attribute__((weak)) void it_803F8270(void) { }
+__attribute__((weak)) void it_803F82A0(void) { }
+__attribute__((weak)) void it_803F82B0(void) { }
+__attribute__((weak)) void it_803F82F0(void) { }
+__attribute__((weak)) void it_803F8320(void) { }
+__attribute__((weak)) void it_803F83E0(void) { }
+__attribute__((weak)) void it_803F83F0(void) { }
+__attribute__((weak)) void it_803F8468(void) { }
+__attribute__((weak)) void it_803F85F0(void) { }
+__attribute__((weak)) void it_803F86C8(void) { }
+__attribute__((weak)) void it_803F87F0(void) { }
+__attribute__((weak)) void it_803F88C0(void) { }
+__attribute__((weak)) void it_803F8940(void) { }
+__attribute__((weak)) void it_803F89C8(void) { }
+__attribute__((weak)) void it_803F8A88(void) { }
+__attribute__((weak)) void it_803F8B48(void) { }
+__attribute__((weak)) void it_803F8BD8(void) { }
+__attribute__((weak)) void it_803F8C8C(void) { }
+__attribute__((weak)) void it_803F8DE8(void) { }
+__attribute__((weak)) void it_803F8E90(void) { }
+__attribute__((weak)) void it_803F8EB0(void) { }
+__attribute__((weak)) void it_803F8FD0(void) { }
+__attribute__((weak)) void it_803F9000(void) { }
+__attribute__((weak)) void it_803F90D0(void) { }
+__attribute__((weak)) void it_803F91D0(void) { }
+__attribute__((weak)) void it_803F9260(void) { }
+__attribute__((weak)) void it_803F9328(void) { }
+__attribute__((weak)) void it_803F9378(void) { }
+__attribute__((weak)) void it_803F9388(void) { }
+__attribute__((weak)) void it_803F93A8(void) { }
+__attribute__((weak)) void it_803F93C8(void) { }
+__attribute__((weak)) void it_803F9470(void) { }
+__attribute__((weak)) void it_803F94A0(void) { }
+/* PC port: gm_1601.c declares this `extern struct lbl_803B7A44_t
+ * lbl_803B7A44;` -- six floats in .data, not a function. As a weak *function*
+ * stub its address was in .text, so fn_80167638's `sp = lbl_803B7A44` copied
+ * the stub's instruction bytes and `(&sp.x0)[idx]` read them as floats. That
+ * is the per-player respawn X offset: every fighter respawned at about
+ * -3.3e36, outside the blast zone, died on the spot and respawned again --
+ * an endless death loop after the first KO, on every stage and every mode.
+ *
+ * Real values from boot.dol at 0x803B7A44: the multipliers are scaled by 16
+ * in fn_80167638, giving spawn offsets of 0, +16, -16 and +32. */
+__attribute__((weak, aligned(16))) float lbl_803B7A44[6] = {
+    0.0f, 1.0f, -1.0f, 2.0f, 0.0f, 0.0f,
+};
+__attribute__((weak)) void lbl_803B7B68(void) { }
+__attribute__((weak)) void lbl_803B7C08(void) { }
+__attribute__((weak)) void lbl_803B7C18(void) { }
 __attribute__((weak)) void lbl_803B7C28(void) { }
 __attribute__((weak)) void lbl_803B7C40(void) { }
 __attribute__((weak)) void lbl_803B7C80(void) { }
