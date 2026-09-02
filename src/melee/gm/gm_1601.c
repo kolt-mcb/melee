@@ -533,7 +533,20 @@ char* gm_801604DC(CharacterKind ckind, GameModeKind mode)
         var_r3 = lbl_803B7A00[ckind];
         break;
     }
+#if BUILD_TARGET_PC
+/* PC port: ty/ (the trophy system) is not in the build, so Toy_8030813C is a
+ * weak stub returning NULL and these become the literal pointers 0x4 and
+ * 0x24. Both are handed to lbArchive_LoadSymbols as filenames -- that is the
+ * `invalid basename ptr 0x4` seen on the Game Over screen, and the SIGSEGV
+ * at address 0x4 inside libc right after it. Return NULL so callers can tell
+ * "no trophy name" from a bogus one. */
+    {
+        char* rec = Toy_8030813C(var_r3);
+        return rec != NULL ? rec + 4 : NULL;
+    }
+#else
     return Toy_8030813C(var_r3) + 4;
+#endif
 }
 
 char* gm_80160564(CharacterKind ckind, GameModeKind mode)
@@ -553,7 +566,20 @@ char* gm_80160564(CharacterKind ckind, GameModeKind mode)
         var_r3 = lbl_803B7A00[ckind];
         break;
     }
+#if BUILD_TARGET_PC
+/* PC port: ty/ (the trophy system) is not in the build, so Toy_8030813C is a
+ * weak stub returning NULL and these become the literal pointers 0x4 and
+ * 0x24. Both are handed to lbArchive_LoadSymbols as filenames -- that is the
+ * `invalid basename ptr 0x4` seen on the Game Over screen, and the SIGSEGV
+ * at address 0x4 inside libc right after it. Return NULL so callers can tell
+ * "no trophy name" from a bogus one. */
+    {
+        char* rec = Toy_8030813C(var_r3);
+        return rec != NULL ? rec + 0x24 : NULL;
+    }
+#else
     return Toy_8030813C(var_r3) + 0x24;
+#endif
 }
 
 u8 gm_SelKindToUnlockIndex(SelectableCharacterKind selkind)

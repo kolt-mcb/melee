@@ -1,5 +1,9 @@
 #include "gm_19EF.h"
 
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
+
 #include "gm_1601.h"
 #include "gm_1A36.h"
 #include "gm_1A3F.h"
@@ -408,7 +412,24 @@ void fn_8019F9C4(u32 arg0)
         u8 game_mode = gm_801A4310();
         char* model_name = gm_80160564(arg0, game_mode);
         char* scene_name = gm_801604DC(arg0, game_mode);
-        lbArchive_LoadSymbols(scene_name, &lbl_804D66AC, model_name, NULL);
+#if BUILD_TARGET_PC
+        /* Both names come from Toy_8030813C, which is a stub while ty/ is
+         * unbuilt; skip the load rather than pass it a bogus filename.
+         * lbl_804D66AC stays NULL, and the HSD_JObjLoadJoint below already
+         * handles that -- the Game Over screen just has no trophy model. */
+        if (scene_name == NULL || model_name == NULL) {
+            static bool warned = false;
+            if (!warned) {
+                warned = true;
+                PORT_LOG_WARN("fn_8019F9C4: no trophy name (ty/ unbuilt); "
+                              "Game Over trophy model skipped");
+            }
+        } else {
+            lbArchive_LoadSymbols(scene_name, &lbl_804D66AC, model_name, 0);
+        }
+#else
+        lbArchive_LoadSymbols(scene_name, &lbl_804D66AC, model_name, 0);
+#endif
         lbArchive_LoadSymbols("GmGoAnim.dat", &lbl_804D66A4,
                               "ScGamRegGover_scene_data", NULL);
         lbArchive_LoadSymbols("GmRgStnd.dat", &lbl_804D66A8, "standScene", NULL);
