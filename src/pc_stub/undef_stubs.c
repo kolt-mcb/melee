@@ -3871,6 +3871,52 @@ void pc_lowmem_init(void)
     };
     unsigned si;
     if (g_low_mem_base != NULL) return;
+#if defined(__EMSCRIPTEN__)
+    /* wasm32 has no address space above 4 GB to be kept clear of, so the
+     * search below has nothing to search for: every pointer is 32 bits by
+     * construction, and the u32 arithmetic in lbHeap/lbMemory that this pool
+     * exists to protect cannot truncate. Take the pool from linear memory
+     * and keep the cursors, so carve/malloc/free/contains behave exactly as
+     * they do on the other targets.
+     *
+     * Failing here is not the harmless outcome it is elsewhere.
+     * pc_lowmem_carve() calls this whenever the base is still NULL, so a
+     * pool that never succeeds re-runs the entire probe on every single
+     * allocation -- a full descending scan of address hints that cannot
+     * exist on this target. That is what filled the browser console with
+     * hundreds of "reservation FAILED" lines, and it cost far more than the
+     * logging did.
+     *
+     * Sized down from the 1 GB reservation deliberately: mmap's
+     * MAP_NORESERVE made a large arena free until touched and malloc makes
+     * no such promise, so this is committed memory. 256 MB clears the
+     * ~176 MB of carves and fits inside INITIAL_MEMORY without forcing a
+     * heap growth during startup. */
+    {
+        static const size_t wasm_sizes[] = {
+            256UL << 20, 192UL << 20, 128UL << 20,
+        };
+        unsigned wi;
+        for (wi = 0; wi < sizeof(wasm_sizes) / sizeof(wasm_sizes[0]); wi++) {
+            void* p = malloc(wasm_sizes[wi]);
+            if (p != NULL) {
+                g_low_mem_base = (unsigned char*) p;
+                g_low_mem_size = wasm_sizes[wi];
+                g_low_mem_used = 0;
+                g_low_mem_top = wasm_sizes[wi];
+                fprintf(stderr, "[MEM] wasm low pool: %lu MB at %p\n",
+                        (unsigned long) (wasm_sizes[wi] >> 20), p);
+                return;
+            }
+        }
+        /* Claim the base anyway so callers stop retrying; the zero size
+         * makes every carve fail cleanly through its own size check. */
+        fprintf(stderr, "[MEM] wasm low pool allocation FAILED\n");
+        g_low_mem_base = (unsigned char*) &g_low_mem_size;
+        g_low_mem_size = g_low_mem_used = g_low_mem_top = 0;
+        return;
+    }
+#endif
     {
         const char* pin = getenv("MELEE_LOWMEM_BASE");
         if (pin != NULL) {
