@@ -1,0 +1,73 @@
+# A VS match settled after "Go!": Yoshi (P1) vs Yoshi (P2) on Onett, no input,
+# so both stand at their spawn points. Authored to give Yoshi -- and his Egg
+# Lay egg -- a reference; the shipped match case is Pikachu vs Peach and never
+# puts a Yoshi on screen.
+#
+# Same route as match.case (Dolphin cannot be booted into a match; the
+# boot-to-mode patches leave it on the Main Menu), with only the character
+# picks changed. The CSS grid is
+#     row 1: Mario Pikachu Bowser Peach Yoshi DK C.Falcon
+#     row 2: Fox Ness IceClimbers Kirby Samus Zelda Link
+# Icon pitch measured off a Dolphin dump is ~65 px at 640 wide and the hand
+# moves ~7.5 px/frame at full deflection, so a column is ~8.7 frames -- which
+# is why match.case's single 10-frame nudge moves exactly one icon.
+#
+# P1's hand starts over column 1 and P2's over column 3 (that is how the same
+# movement lands match.case on Pikachu and Peach). Yoshi is column 5, so P1
+# travels 4 columns and P2 travels 2.
+#
+# The hand accelerates rather than moving at a constant rate, so the frames
+# are not proportional to the distance: a first pass with P1 held right for
+# 35 frames overshot to Donkey Kong (5 columns, 9.3 px/frame averaged) while
+# P2's 18 frames covered 2 columns (7.2 px/frame). P1 is held 30.
+#
+# Everything after the picks is match.case's stage-select route shifted +40
+# frames to make room, so ref_lead moves with it.
+#
+# Costumes: picking the same character for both players makes the CSS hand
+# the second one a different costume, so the reference is green Yoshi (P1)
+# against red Yoshi (P2) and the port has to be told colour 1 for P2. A
+# different costume is a different texture set, which swamps a frame diff.
+description: VS match settled, Yoshi vs Yoshi on Onett
+run_frames: 360
+ref_frames: 2400
+align: search
+window: 8
+ref_lead: -1570
+env: MELEE_BOOT_MODE=14
+env: MELEE_BOOT_MATCH=17,17,9,0,1
+ref_input: 236:+START
+ref_input: 240:-START
+ref_input: 400:+START
+ref_input: 404:-START
+ref_input: 760:MAIN:0.5:0.0
+ref_input: 768:MAIN:0.5:0.5
+ref_input: 820:+A
+ref_input: 824:-A
+ref_input: 950:+A
+ref_input: 954:-A
+ref_input: 1000:P2:+A
+ref_input: 1004:P2:-A
+ref_input: 1060:MAIN:0.5:1.0
+ref_input: 1120:MAIN:0.5:0.5
+ref_input: 1130:MAIN:1.0:0.5
+ref_input: 1160:MAIN:0.5:0.5
+ref_input: 1175:MAIN:0.5:0.0
+ref_input: 1182:MAIN:0.5:0.5
+ref_input: 1195:+A
+ref_input: 1199:-A
+ref_input: 1210:P2:MAIN:0.5:1.0
+ref_input: 1270:P2:MAIN:0.5:0.5
+ref_input: 1280:P2:MAIN:1.0:0.5
+ref_input: 1298:P2:MAIN:0.5:0.5
+ref_input: 1308:P2:MAIN:0.5:0.0
+ref_input: 1315:P2:MAIN:0.5:0.5
+ref_input: 1328:P2:+A
+ref_input: 1332:P2:-A
+ref_input: 1380:+START
+ref_input: 1384:-START
+ref_input: 1460:MAIN:0.5:1.0
+ref_input: 1492:MAIN:0.5:0.5
+ref_input: 1520:+A
+ref_input: 1524:-A
+checks: 250, 320
