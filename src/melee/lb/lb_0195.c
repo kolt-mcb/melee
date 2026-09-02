@@ -1,3 +1,6 @@
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 #include "lb_0195.h"
 
 #include "lb_0192.h"
@@ -65,6 +68,29 @@ __attribute__((weak)) void lb_800195D0(void)
         extern void pc_ax_tick_once(void);
         pc_ax_tick_once();
     }
+#if defined(__EMSCRIPTEN__)
+    /* This is the VI-retrace wait, and every load-wait loop in the game
+     * spins on it -- the pad queue in gm_801A4D34, the sound driver's state
+     * machine, the archive loaders. None of them reach render.c's pacer,
+     * which is where the browser normally gets its turn, so a spin here
+     * holds the page's only thread and the tab stops responding entirely:
+     * no rendering, no input, no console.
+     *
+     * Yielding on a timer rather than on every call, because
+     * emscripten_sleep(0) still costs a full setTimeout round trip -- about
+     * 4 ms in every browser -- and this is called several times per frame in
+     * the ordinary case. Yielding unconditionally would cap the frame rate
+     * on that floor rather than on the game's own 60 Hz. 4 ms bounds how
+     * long a spin can hold the thread while leaving the common path alone. */
+    {
+        static double last_yield_ms;
+        double now = emscripten_get_now();
+        if (now - last_yield_ms >= 4.0) {
+            last_yield_ms = now;
+            emscripten_sleep(0);
+        }
+    }
+#endif
 #endif /* BUILD_TARGET_PC */
 }
 
