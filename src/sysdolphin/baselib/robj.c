@@ -246,6 +246,16 @@ int HSD_RObjGetGlobalPosition(HSD_RObj* robj, int type, Vec3* p)
                 (unsigned) type == HSD_RObjGetConstraintType(rp))
             {
                 HSD_ASSERT(498, rp->u.jobj);
+#if BUILD_TARGET_PC
+                /* The assert above aborts on GameCube but returns here, so a
+                 * constraint whose target joint did not resolve ran straight
+                 * into the dereferences below (SIGSEGV at 0x6c while drawing
+                 * the Game Over scene). Skip the unresolved constraint and
+                 * average over the ones that did resolve. */
+                if (rp->u.jobj == NULL) {
+                    continue;
+                }
+#endif
                 HSD_JObjSetupMatrix(rp->u.jobj);
                 n += 1;
                 v.x += rp->u.jobj->mtx[0][3];
@@ -423,6 +433,15 @@ static void resolveCnsOrientation(HSD_RObj* robj, void* obj,
     if (robj == NULL) {
         return;
     }
+#if BUILD_TARGET_PC
+    /* Same unresolved-constraint case as HSD_RObjGetGlobalPosition above: the
+     * target joint is NULL here, and every path below dereferences it
+     * (PSMTXCopy(HSD_JObjGetMtxPtr(NULL), ...) copied from address 0). Treat
+     * it as "no orientation constraint" rather than faulting. */
+    if (robj->u.jobj == NULL) {
+        return;
+    }
+#endif
     if (!(HSD_JObjGetFlags(robj->u.jobj) & 8) ||
         jobj_parent(robj->u.jobj) == NULL)
     {

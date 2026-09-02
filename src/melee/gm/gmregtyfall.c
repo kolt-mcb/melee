@@ -315,17 +315,7 @@ void gm_801A6C54(void)
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
     GObj_SetupGXLinkMax(gobj, fn_801A6ACC, 8);
     gobj->gxlink_prios = 0x61;
-#if BUILD_TARGET_PC
-    /* pc_conv_SceneDesc does not convert camera animations -- it sets
-     * cameras[i].anims = NULL -- so this dereference faults. The Game Over
-     * camera is then static rather than animated; converting HSD_CameraAnim
-     * is the real fix and is not done yet. */
-    if (gm_804D6748->cameras[0].anims != NULL) {
-        HSD_CObjAddAnim(cobj, gm_804D6748->cameras[0].anims[0]);
-    }
-#else
     HSD_CObjAddAnim(cobj, gm_804D6748->cameras[0].anims[0]);
-#endif
     HSD_CObjReqAnim(cobj, 0.0F);
     HSD_CObjAnim(cobj);
     HSD_GObj_SetupProc(gobj, fn_801A6C30, 0);
@@ -359,17 +349,7 @@ void gm_801A6DC0(void)
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
     GObj_SetupGXLinkMax(gobj, fn_801A6D78, 0xB);
     gobj->gxlink_prios = 0x801;
-#if BUILD_TARGET_PC
-    /* pc_conv_SceneDesc does not convert camera animations -- it sets
-     * cameras[i].anims = NULL -- so this dereference faults. The Game Over
-     * camera is then static rather than animated; converting HSD_CameraAnim
-     * is the real fix and is not done yet. */
-    if (gm_804D6748->cameras[0].anims != NULL) {
-        HSD_CObjAddAnim(cobj, gm_804D6748->cameras[0].anims[0]);
-    }
-#else
     HSD_CObjAddAnim(cobj, gm_804D6748->cameras[0].anims[0]);
-#endif
     HSD_CObjReqAnim(cobj, 0.0F);
     HSD_CObjAnim(cobj);
     HSD_GObj_SetupProc(gobj, fn_801A6B6C, 0);
@@ -436,11 +416,15 @@ void gm_801A6EE4(void)
         if (PC_RAW_IN(gm_804D6744, gm_804D6748)) {
             gm_804D6748 = pc_conv_SceneDesc(gm_804D6748, gm_804D6744->data);
         }
-        /* Only the two that get dereferenced: gm_804D6748->cameras[0] in
-         * gm_801A6C54 and gm_804D67AC->models[0] further down. cut2/cut3/
-         * cut3Bg are loaded but never read in this file, and cut3BgScene is
-         * not a plain SceneDesc -- converting it walks a bogus camera array
-         * and faults. Leave them as the archive gave them. */
+        if (PC_RAW_IN(gm_804D6744, gm_804D67A8)) {
+            gm_804D67A8 = pc_conv_SceneDesc(gm_804D67A8, gm_804D6744->data);
+        }
+        if (PC_RAW_IN(gm_804D6744, gm_804D67A4)) {
+            gm_804D67A4 = pc_conv_SceneDesc(gm_804D67A4, gm_804D6744->data);
+        }
+        if (PC_RAW_IN(gm_804D6744, gm_804D67A0)) {
+            gm_804D67A0 = pc_conv_SceneDesc(gm_804D67A0, gm_804D6744->data);
+        }
         if (PC_RAW_IN(stnd, gm_804D67AC)) {
             gm_804D67AC = pc_conv_SceneDesc(gm_804D67AC, stnd->data);
         }

@@ -5,6 +5,7 @@
 
 #include "port/log.h"
 #include "port/pc_ptr.h"
+#include "port/pc_itconv.h"
 
 #include <sc/types.h>
 #include <gr/grdatfiles.h>
@@ -51,12 +52,40 @@ static f32 bef32(const void* p)
 
 /* Same rule grdatfiles.c uses: a scene offset is relative to the data
  * section, and an absolute GameCube address is something we cannot follow. */
-static void* off_to_ptr(u32 off, u8* dataBase)
+/* Length of the archive `dataBase` belongs to, or 0 if unknown.
+ *
+ * Every archive is registered by lbArchive (pc_itconv_note_archive), so the
+ * data section's extent is recoverable here without changing this file's API.
+ * Without a bound, a SceneDesc holding an offset that is merely plausible --
+ * not zero, under 0x80000000 -- sends count_offsets walking off the end of
+ * the archive and into unmapped memory, which is what the Game Over scene's
+ * cut2/cut3 descriptors did. */
+static unsigned long arch_len_of(const u8* dataBase)
+{
+    const unsigned char* base;
+    unsigned long len;
+    if (dataBase != NULL && pc_itconv_locate(dataBase, &base, &len) &&
+        base == dataBase)
+    {
+        return len;
+    }
+    return 0;
+}
+
+static void* off_to_ptr_bounded(u32 off, u8* dataBase, unsigned long len)
 {
     if (off == 0 || off >= 0x80000000U) {
         return NULL;
     }
+    if (len != 0 && (unsigned long) off >= len) {
+        return NULL;
+    }
     return dataBase + off;
+}
+
+static void* off_to_ptr(u32 off, u8* dataBase)
+{
+    return off_to_ptr_bounded(off, dataBase, arch_len_of(dataBase));
 }
 
 static void* scene_alloc(unsigned long size)
@@ -69,6 +98,20 @@ static void* scene_alloc(unsigned long size)
 }
 
 /* Count a NULL-terminated array of 32-bit offsets, capped. */
+static int count_offsets_bounded(const u8* arr, int cap, const u8* end)
+{
+    int n = 0;
+    if (arr == NULL) {
+        return 0;
+    }
+    while (n < cap && (end == NULL || arr + (size_t) n * 4 + 4 <= end) &&
+           be32(arr + (size_t) n * 4) != 0)
+    {
+        n++;
+    }
+    return n;
+}
+
 static int count_offsets(const u8* arr, int cap)
 {
     int n = 0;
@@ -371,6 +414,8 @@ static DynamicModelDesc* conv_model(u32 off, u8* dataBase)
     return out;
 }
 
+static HSD_LightAnim** conv_light_anims(u32 off, u8* dataBase);
+
 /* A NULL-terminated array of LightList offsets, each entry
  * { HSD_LightDesc* desc; HSD_LightAnim** anims; }. Both the array and the
  * LightList itself have to be rebuilt rather than rebased: the entries are
@@ -444,7 +489,7 @@ LightList** pc_conv_LightListArray(const void* arrBase, u8* dataBase)
             continue;
         }
         ll->desc = conv_light(be32(e + 0x00), dataBase, 0);
-        ll->anims = NULL;
+        ll->anims = conv_light_anims(be32(e + 0x04), dataBase);
         out[i] = ll;
     }
     out[n] = NULL;
@@ -549,6 +594,97 @@ static HSD_FogDesc* conv_fog(u32 off, u8* dataBase)
     return out;
 }
 
+/* HSD_CameraAnim { HSD_AObjDesc* aobjdesc; HSD_WObjAnim* eye_anim;
+ * HSD_WObjAnim* interest_anim } -- three pointers, 0xC on GameCube and 0x18
+ * here, so it cannot be read in place. `anims` is a NULL-terminated array of
+ * offsets to these.
+ *
+ * The aobjdesc carries the keyframe chain and is what HSD_CObjAddAnim turns
+ * into the cobj's HSD_AObj; leaving these NULL is why the Game Over screen
+ * read cobj->aobj as NULL in fn_801A6B6C. The two HSD_WObjAnim members move
+ * the eye/interest points and are left NULL for now -- the camera animates,
+ * but does not travel. */
+/* HSD_LightAnim { HSD_LightAnim* next; HSD_AObjDesc* aobjdesc;
+ * HSD_WObjAnim* position_anim; HSD_WObjAnim* interest_anim } -- four
+ * pointers, 0x10 on GameCube and 0x20 here. Same story as the camera anims:
+ * only the aobjdesc keyframe chain is converted, so the light animates
+ * without its position/interest tracks. gmregenddisp.c reads
+ * (*scene->lights)->anims[0]. */
+static HSD_LightAnim** conv_light_anims(u32 off, u8* dataBase)
+{
+    const u8* arr = off_to_ptr(off, dataBase);
+    HSD_LightAnim** out;
+    int n, i;
+
+    if (arr == NULL) {
+        return NULL;
+    }
+    n = count_offsets(arr, PC_SCENE_MAX_CAMERAS);
+    if (n <= 0) {
+        return NULL;
+    }
+    out = scene_alloc(sizeof(HSD_LightAnim*) * (unsigned long) (n + 1));
+    if (out == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < n; i++) {
+        const u8* rec = off_to_ptr(be32(arr + (size_t) i * 4), dataBase);
+        HSD_LightAnim* la;
+        if (rec == NULL) {
+            continue;
+        }
+        la = scene_alloc(sizeof(HSD_LightAnim));
+        if (la == NULL) {
+            break;
+        }
+        la->next = NULL;
+        la->aobjdesc = grDatFiles_ConvertAObjDescGCNtoX64(
+            off_to_ptr(be32(rec + 0x04), dataBase), dataBase);
+        la->position_anim = NULL;
+        la->interest_anim = NULL;
+        out[i] = la;
+    }
+    out[n] = NULL;
+    return out;
+}
+
+static HSD_CameraAnim** conv_camera_anims(u32 off, u8* dataBase)
+{
+    const u8* arr = off_to_ptr(off, dataBase);
+    HSD_CameraAnim** out;
+    int n, i;
+
+    if (arr == NULL) {
+        return NULL;
+    }
+    n = count_offsets(arr, PC_SCENE_MAX_CAMERAS);
+    if (n <= 0) {
+        return NULL;
+    }
+    out = scene_alloc(sizeof(HSD_CameraAnim*) * (unsigned long) (n + 1));
+    if (out == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < n; i++) {
+        const u8* rec = off_to_ptr(be32(arr + (size_t) i * 4), dataBase);
+        HSD_CameraAnim* ca;
+        if (rec == NULL) {
+            continue;
+        }
+        ca = scene_alloc(sizeof(HSD_CameraAnim));
+        if (ca == NULL) {
+            break;
+        }
+        ca->aobjdesc = grDatFiles_ConvertAObjDescGCNtoX64(
+            off_to_ptr(be32(rec + 0x00), dataBase), dataBase);
+        ca->eye_anim = NULL;
+        ca->interest_anim = NULL;
+        out[i] = ca;
+    }
+    out[n] = NULL;
+    return out;
+}
+
 SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
 {
     const u8* r = raw;
@@ -571,8 +707,10 @@ SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
 
     /* +0x00 models: NULL-terminated array of DynamicModelDesc offsets. */
     {
+        unsigned long alen = arch_len_of(dataBase);
+        const u8* aend = alen != 0 ? dataBase + alen : NULL;
         const u8* arr = off_to_ptr(be32(r + 0x00), dataBase);
-        n = count_offsets(arr, PC_SCENE_MAX_MODELS);
+        n = count_offsets_bounded(arr, PC_SCENE_MAX_MODELS, aend);
         if (n > 0) {
             out->models = scene_alloc(sizeof(DynamicModelDesc*) *
                                       (unsigned long) (n + 1));
@@ -589,10 +727,13 @@ SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
     /* +0x04 cameras: an array of { desc, anims } pairs -- not pointers -- so
      * it terminates on a null desc rather than a null element. */
     {
+        unsigned long alen = arch_len_of(dataBase);
+        const u8* aend = alen != 0 ? dataBase + alen : NULL;
         const u8* arr = off_to_ptr(be32(r + 0x04), dataBase);
         n = 0;
         if (arr != NULL) {
             while (n < PC_SCENE_MAX_CAMERAS &&
+                   (aend == NULL || arr + (size_t) n * 8 + 8 <= aend) &&
                    be32(arr + (size_t) n * 8) != 0)
             {
                 n++;
@@ -605,7 +746,8 @@ SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
                 for (i = 0; i < n; i++) {
                     out->cameras[i].desc =
                         conv_cobj(be32(arr + (size_t) i * 8), dataBase);
-                    out->cameras[i].anims = NULL;
+                    out->cameras[i].anims = conv_camera_anims(
+                        be32(arr + (size_t) i * 8 + 4), dataBase);
                 }
                 out->cameras[n].desc = NULL;
                 out->cameras[n].anims = NULL;
@@ -637,7 +779,10 @@ SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
             out->fogs = scene_alloc(sizeof(*out->fogs) * 2);
             if (out->fogs != NULL) {
                 out->fogs[0].desc = conv_fog(be32(arr), dataBase);
-                out->fogs[0].anims = NULL;
+                /* SceneDesc declares the fog pair's anims as HSD_CameraAnim**,
+                 * the same shape the camera pairs use, so the same converter
+                 * applies. gmregenddisp.c reads fogs->anims[0]->aobjdesc. */
+                out->fogs[0].anims = conv_camera_anims(be32(arr + 4), dataBase);
                 out->fogs[1].desc = NULL;
                 out->fogs[1].anims = NULL;
             }

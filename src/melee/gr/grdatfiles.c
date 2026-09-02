@@ -232,7 +232,7 @@ HSD_AnimJoint* grDatFiles_ConvertAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dat
 HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 HSD_ShapeAnimJoint* grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 /* AObjDesc/RObjAnimJoint converters */
-static HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase);
+HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase);
 static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth);
 static HSD_RObjAnimJoint* grDatFiles_ConvertRObjAnimJointChainGCNtoX64(const u8* gcnPtr, u8* dataBase);
 enum grdat_anim_kind { GRDAT_ANIMJOINT, GRDAT_MATANIMJOINT, GRDAT_SHAPEANIMJOINT };
@@ -794,7 +794,7 @@ static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* da
 }
 
 /* Convert HSD_AObjDesc (animation object descriptor) */
-static HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
+HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
     HSD_AObjDesc* x64;
     const struct HSD_AObjDesc_gcn* gcn;
