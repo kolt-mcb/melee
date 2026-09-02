@@ -1,3 +1,8 @@
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#include "port/pc_scene.h"
+#endif
+
 #include "gm_1601.h"
 #include "gm_1A3F.h"
 #include "gm_1A45.h"
@@ -2929,6 +2934,26 @@ void gm_801963B4_OnEnter(void* arg0)
                                       "ScGamTour_scene_data", 0);
     lbl_804D6644 = lbArchive_80016DBC("GmTou2p", &lbl_804D6650,
                                       "ScGamTour_scene_data", 0);
+#if BUILD_TARGET_PC
+    /* PC port: lbArchive_80016DBC resolves the symbol but hands back raw
+     * big-endian archive data -- a SceneDesc is four pointer arrays that
+     * widen on x86_64, so nothing can walk it in place. fn_801935B8 reads
+     * lbl_804D664C->cameras->desc on the very first call and faulted there,
+     * killing Tournament before it drew a frame. Same fix and same reason as
+     * the results screens in gmresult.c and the approach scene. */
+    if (lbl_804D6640 != NULL) {
+        lbl_804D664C = pc_conv_SceneDesc(lbl_804D664C, lbl_804D6640->data);
+    }
+    if (lbl_804D6644 != NULL) {
+        lbl_804D6650 = pc_conv_SceneDesc(lbl_804D6650, lbl_804D6644->data);
+    }
+    if (lbl_804D664C == NULL || lbl_804D6650 == NULL) {
+        PORT_LOG_WARN("gm_801963B4_OnEnter: GmTou scene data would not "
+                      "convert (1p=%p 2p=%p)",
+                      (void*) lbl_804D664C, (void*) lbl_804D6650);
+        return;
+    }
+#endif
     lbl_804D6648 = lbArchive_LoadArchive("MnExtAll");
     filename = "TmBox.dat";
     lbl_804D6638 = lbArchive_80016DBC(

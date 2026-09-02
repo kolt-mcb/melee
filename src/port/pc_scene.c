@@ -1,4 +1,5 @@
 #include "port/pc_scene.h"
+#include <sysdolphin/baselib/fog.h>
 
 #if defined(BUILD_TARGET_PC)
 
@@ -520,6 +521,34 @@ static struct {
 } pc_scene_cache[PC_SCENE_CACHE];
 static int pc_scene_cache_n;
 
+/* HSD_FogDesc: {u32 type; HSD_FogAdjDesc* fogadjdesc; f32 start; f32 end;
+ * GXColor color} -- 0x14 on GameCube, and the only pointer is fogadjdesc.
+ * GXColor is four bytes and needs no swap. */
+static HSD_FogDesc* conv_fog(u32 off, u8* dataBase)
+{
+    const u8* src = off_to_ptr(off, dataBase);
+    HSD_FogDesc* out;
+
+    if (src == NULL) {
+        return NULL;
+    }
+    out = scene_alloc(sizeof(HSD_FogDesc));
+    if (out == NULL) {
+        return NULL;
+    }
+    out->type = be32(src + 0x00);
+    /* fogadjdesc is left NULL: nothing in the port reads it yet, and an
+     * unconverted one would be worse than an absent one. */
+    out->fogadjdesc = NULL;
+    out->start = bef32(src + 0x08);
+    out->end = bef32(src + 0x0C);
+    out->color.r = src[0x10];
+    out->color.g = src[0x11];
+    out->color.b = src[0x12];
+    out->color.a = src[0x13];
+    return out;
+}
+
 SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
 {
     const u8* r = raw;
@@ -588,10 +617,32 @@ SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
     out->lights = pc_conv_LightListArray(off_to_ptr(be32(r + 0x08), dataBase),
                                          dataBase);
 
-    /* +0x0C fogs is left NULL: an unconverted HSD_FogDesc would be worse
-     * than an absent one. Readers must cope -- gm_1832.c's All-Star intro
-     * does read fogs[0], and went through a null here. */
-    out->fogs = NULL;
+    /* +0x0C fogs: a { desc, anims } pair array like cameras, but -- unlike
+     * cameras -- NOT null-terminated. In GmTou1p the fogs array is at
+     * 0x1dddc and the SceneDesc itself starts at 0x1dde4, eight bytes later,
+     * so scanning for a null desc runs straight through the SceneDesc and
+     * everything after it (it found 64 phantom entries and allocated for
+     * them). The length is only recoverable from the archive's object
+     * bounds, which this converter does not have.
+     *
+     * Convert exactly one entry and terminate. Every reader in the tree uses
+     * fogs[0] only -- gmtou_0.c's fn_801935B8 and gm_1832.c's All-Star intro
+     * -- so this is what is actually needed, and it is bounded by
+     * construction. This used to be left NULL entirely, which crashed both
+     * of those readers.  */
+    {
+        const u8* arr = off_to_ptr(be32(r + 0x0C), dataBase);
+        out->fogs = NULL;
+        if (arr != NULL && be32(arr) != 0) {
+            out->fogs = scene_alloc(sizeof(*out->fogs) * 2);
+            if (out->fogs != NULL) {
+                out->fogs[0].desc = conv_fog(be32(arr), dataBase);
+                out->fogs[0].anims = NULL;
+                out->fogs[1].desc = NULL;
+                out->fogs[1].anims = NULL;
+            }
+        }
+    }
 
     if (pc_scene_cache_n < PC_SCENE_CACHE) {
         pc_scene_cache[pc_scene_cache_n].raw = raw;
