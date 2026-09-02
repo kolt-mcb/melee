@@ -54,4 +54,12 @@ void grDatFiles_ResetJointMap(void);
 struct HSD_ImageDesc* grDatFiles_LookupImageDesc(const void* raw);
 #endif /* BUILD_TARGET_PC */
 
+
+#if BUILD_TARGET_PC
+/* Shared with port/pc_scene.c: scenes need the same keyframe-chain
+ * conversion stage animations already use. */
+HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr,
+                                                u8* dataBase);
+#endif
+
 #endif
