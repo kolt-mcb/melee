@@ -1827,6 +1827,24 @@ void HSD_SynthPStreamHeaderCallback(int arg0, int arg1, void* arg2,
     struct HSD_SynthSFXNode* node;
     int i;
 
+    /* cancelflag is what a request that will deliver no data reports, and
+     * this callback ignored it -- going straight on to byte-swap a header
+     * that was never read. With no buffer to swap, entry[2] and entry[3] are
+     * addresses 8 and 12, so a cancelled stream wrote through null into the
+     * bottom of linear memory; on wasm that is emscripten's stack cookie,
+     * which then aborts with "stack overflow" for a stack that never
+     * overflowed (the giveaway was the cookie coming back byte-reversed
+     * rather than clobbered).
+     *
+     * Nothing has been set up at this point, so the right response is the
+     * one the node == NULL branch below already makes: release the stream
+     * lock and stop. Leaving it held is what wedges HSD_Synth_8038B5AC's
+     * `do {} while (HSD_Synth_804D7778 != 0)` for ever. */
+    if (cancelflag || entry == NULL) {
+        HSD_Synth_804D7778 = 0;
+        return;
+    }
+
 #if BUILD_TARGET_PC
     /* HPS header: u32 magic, u32, u32 sample rate, u32 voices, then per
      * voice AXPBADDR + AXPBADPCM as 28 u16. */

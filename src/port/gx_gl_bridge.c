@@ -1804,6 +1804,20 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
         glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
         g_vbo_off = 0;
     }
+#if defined(__EMSCRIPTEN__)
+    /* WebGL2 has no buffer mapping at all. Emscripten emulates
+     * glMapBufferRange with a shadow copy, but rejects the two bits that make
+     * the ring worth having -- MAP_UNSYNCHRONIZED and MAP_READ -- and warns
+     * on the console for each one. That is a console write per draw call:
+     * 111k lines in a single match here, and console output is expensive
+     * enough in a browser to dominate the frame.
+     *
+     * The fallback below is what the emulation would have degenerated into
+     * anyway, so call it directly. The ring still earns its keep: writes go
+     * to fresh bytes and the orphan-on-wrap above still lets the driver hand
+     * back new storage rather than wait on frames in flight. */
+    glBufferSubData(GL_ARRAY_BUFFER, g_vbo_off, bytes, src);
+#else
     {
         void* dst = glMapBufferRange(GL_ARRAY_BUFFER, g_vbo_off, bytes,
                                      GL_MAP_WRITE_BIT |
@@ -1817,6 +1831,7 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
             glBufferSubData(GL_ARRAY_BUFFER, g_vbo_off, bytes, src);
         }
     }
+#endif /* __EMSCRIPTEN__ */
     first = (GLint) (g_vbo_off / (GLintptr) sizeof(Vertex));
     g_vbo_off += bytes;
     return first;
