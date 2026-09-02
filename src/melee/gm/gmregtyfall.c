@@ -1,5 +1,10 @@
 #include "gmregtyfall.h"
 
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#include "port/pc_scene.h"
+#endif
+
 #include "gm_unsplit.h"
 #include "math.h"
 
@@ -310,7 +315,17 @@ void gm_801A6C54(void)
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
     GObj_SetupGXLinkMax(gobj, fn_801A6ACC, 8);
     gobj->gxlink_prios = 0x61;
+#if BUILD_TARGET_PC
+    /* pc_conv_SceneDesc does not convert camera animations -- it sets
+     * cameras[i].anims = NULL -- so this dereference faults. The Game Over
+     * camera is then static rather than animated; converting HSD_CameraAnim
+     * is the real fix and is not done yet. */
+    if (gm_804D6748->cameras[0].anims != NULL) {
+        HSD_CObjAddAnim(cobj, gm_804D6748->cameras[0].anims[0]);
+    }
+#else
     HSD_CObjAddAnim(cobj, gm_804D6748->cameras[0].anims[0]);
+#endif
     HSD_CObjReqAnim(cobj, 0.0F);
     HSD_CObjAnim(cobj);
     HSD_GObj_SetupProc(gobj, fn_801A6C30, 0);
@@ -344,7 +359,17 @@ void gm_801A6DC0(void)
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
     GObj_SetupGXLinkMax(gobj, fn_801A6D78, 0xB);
     gobj->gxlink_prios = 0x801;
+#if BUILD_TARGET_PC
+    /* pc_conv_SceneDesc does not convert camera animations -- it sets
+     * cameras[i].anims = NULL -- so this dereference faults. The Game Over
+     * camera is then static rather than animated; converting HSD_CameraAnim
+     * is the real fix and is not done yet. */
+    if (gm_804D6748->cameras[0].anims != NULL) {
+        HSD_CObjAddAnim(cobj, gm_804D6748->cameras[0].anims[0]);
+    }
+#else
     HSD_CObjAddAnim(cobj, gm_804D6748->cameras[0].anims[0]);
+#endif
     HSD_CObjReqAnim(cobj, 0.0F);
     HSD_CObjAnim(cobj);
     HSD_GObj_SetupProc(gobj, fn_801A6B6C, 0);
@@ -385,8 +410,51 @@ void gm_801A6EE4(void)
     gm_804D6744 = lbArchive_LoadSymbols(
         "GmRegEnd", &gm_804D6748, "cut1CanimScene", &gm_804D67A8,
         "cut2CanimScene", &gm_804D67A4, "cut3CanimScene", &gm_804D67A0,
-        "cut3BgScene", NULL);
-    lbArchive_LoadSymbols("GmRgStnd.dat", &gm_804D67AC, "standScene", NULL);
+        "cut3BgScene", 0);
+    {
+        HSD_Archive* stnd =
+            lbArchive_LoadSymbols("GmRgStnd.dat", &gm_804D67AC, "standScene", 0);
+#if BUILD_TARGET_PC
+        /* PC port: lbArchive_LoadSymbols converts sections it recognises by
+         * type suffix, and these scene symbols ("cut1CanimScene",
+         * "standScene", ...) match none of them, so they arrive raw. A
+         * SceneDesc is four pointer arrays that widen here, so
+         * gm_804D6748->cameras[0].desc read a file offset as a pointer and
+         * faulted -- every Game Over mode (21/22/23/26) died in gm_801A6C54
+         * before drawing a frame. Same fix as gmtou_0.c and gmresult.c. */
+        /* Convert only the symbols that actually came back raw. Some
+         * sections lbArchive_LoadSymbols recognises are converted already,
+         * and running pc_conv_SceneDesc over a converted one reads host
+         * pointers as file offsets -- which crashed inside conv_cobj. A raw
+         * symbol still points inside the archive's data block; a converted
+         * one points at heap. */
+#define PC_RAW_IN(arc, p)                                                     \
+    ((arc) != NULL && (const u8*) (p) >= (const u8*) (arc)->data &&           \
+     (const u8*) (p) <                                                        \
+         (const u8*) (arc)->data + (arc)->header.data_size)
+
+        if (PC_RAW_IN(gm_804D6744, gm_804D6748)) {
+            gm_804D6748 = pc_conv_SceneDesc(gm_804D6748, gm_804D6744->data);
+        }
+        /* Only the two that get dereferenced: gm_804D6748->cameras[0] in
+         * gm_801A6C54 and gm_804D67AC->models[0] further down. cut2/cut3/
+         * cut3Bg are loaded but never read in this file, and cut3BgScene is
+         * not a plain SceneDesc -- converting it walks a bogus camera array
+         * and faults. Leave them as the archive gave them. */
+        if (PC_RAW_IN(stnd, gm_804D67AC)) {
+            gm_804D67AC = pc_conv_SceneDesc(gm_804D67AC, stnd->data);
+        }
+#undef PC_RAW_IN
+        if (gm_804D6748 == NULL || gm_804D67AC == NULL) {
+            PORT_LOG_WARN("gm_801A7070_OnEnter: GmRegEnd/GmRgStnd scene data "
+                          "would not convert (cut1=%p stand=%p)",
+                          (void*) gm_804D6748, (void*) gm_804D67AC);
+            return;
+        }
+#else
+        (void) stnd;
+#endif
+    }
     switch (var_r29) {
     case GM_CLASSIC_GOVER:
     case GM_CLASSIC:
