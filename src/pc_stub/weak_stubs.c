@@ -2251,7 +2251,6 @@ __attribute__((weak)) void it_803F94A0(void) { }
 __attribute__((weak, aligned(16))) float lbl_803B7A44[6] = {
     0.0f, 1.0f, -1.0f, 2.0f, 0.0f, 0.0f,
 };
-__attribute__((weak)) void lbl_803B7B68(void) { }
 __attribute__((weak)) void lbl_803B7C08(void) { }
 __attribute__((weak)) void lbl_803B7C18(void) { }
 __attribute__((weak)) void lbl_803B7C28(void) { }
