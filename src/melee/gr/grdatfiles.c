@@ -37,6 +37,22 @@
 /// @todo Merge declaration and definition
 /* static */ extern UnkStageDat grDatFiles_803E0924;
 
+/* Per-object conversion tracing, off unless MELEE_GRDAT_TRACE is set.
+ *
+ * These fire once per DObj, PObj, joint and vertex -- hundreds to thousands
+ * of lines for one stage load. On a terminal that is merely noise. In a
+ * browser each is a console write, which is far more expensive than an fputs
+ * and lands squarely in the load the player is waiting through. The one-shot
+ * summaries below are not gated; only the per-object lines are. */
+static int grdat_trace_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        on = getenv("MELEE_GRDAT_TRACE") != NULL;
+    }
+    return on;
+}
+
 void grDatFiles_801C5FC0(HSD_Archive* archive, void* data, u32 length)
 {
     HSD_Archive* map_ptcl;
@@ -1347,13 +1363,19 @@ MapCollData* grDatFiles_ConvertMapCollDataGCNtoX64(const u8* raw, u8* dataBase)
                 out->vert_count, out->line_count, out->joint_count,
                 out->floor_start, out->floor_count);
         for (q = 0; q < out->vert_count && q < 6; q++) {
-            fprintf(stderr, "[GRDAT]   v%d=(%.1f,%.1f)\n", q,
-                    (double) out->verts[q].x, (double) out->verts[q].y);
+            if (grdat_trace_on())
+            {
+                fprintf(stderr, "[GRDAT]   v%d=(%.1f,%.1f)\n", q,
+                        (double) out->verts[q].x, (double) out->verts[q].y);
+            }
         }
         for (q = 0; q < out->line_count && q < 6; q++) {
-            fprintf(stderr, "[GRDAT]   l%d: v%u->v%u flags=%04x/%04x\n", q,
-                    out->lines[q].v0_idx, out->lines[q].v1_idx,
-                    out->lines[q].hi_flags, out->lines[q].lo_flags);
+            if (grdat_trace_on())
+            {
+                fprintf(stderr, "[GRDAT]   l%d: v%u->v%u flags=%04x/%04x\n", q,
+                        out->lines[q].v0_idx, out->lines[q].v1_idx,
+                        out->lines[q].hi_flags, out->lines[q].lo_flags);
+            }
         }
         fflush(stderr);
     }
@@ -1452,8 +1474,11 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
     /* Convert dobjdesc chain (mesh data) from GCN to x64 */
     val = be32_swap(gcnJoint->u);
     if (visited_count < 3) {
-        fprintf(stderr, "[GRDAT] Joint[%u] gcn_u=0x%08x\n",
-                visited_count, val);
+        if (grdat_trace_on())
+        {
+            fprintf(stderr, "[GRDAT] Joint[%u] gcn_u=0x%08x\n",
+                    visited_count, val);
+        }
         fflush(stderr);
     }
     /* PC port: HSD_Joint::u is a union selected by flags -- dobjdesc normally,
@@ -1474,8 +1499,11 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         x64Joint->u.dobjdesc = grDatFiles_ConvertDObjDescGCNtoX64(
             dataBase + val, dataBase);
         if (visited_count < 3) {
-            fprintf(stderr, "[GRDAT] Joint[%u] -> x64_dobjdesc=%p\n",
-                    visited_count, (const void*)x64Joint->u.dobjdesc);
+            if (grdat_trace_on())
+            {
+                fprintf(stderr, "[GRDAT] Joint[%u] -> x64_dobjdesc=%p\n",
+                        visited_count, (const void*)x64Joint->u.dobjdesc);
+            }
             fflush(stderr);
         }
     } else {
@@ -1547,10 +1575,13 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
     }
     
     if (visited_count < 3) {
-        fprintf(stderr, "[GRDAT] Joint[%u] pos=(%.1f,%.1f,%.1f) scl=(%.1f,%.1f,%.1f)\n",
-                visited_count,
-                x64Joint->position.x, x64Joint->position.y, x64Joint->position.z,
-                x64Joint->scale.x, x64Joint->scale.y, x64Joint->scale.z);
+        if (grdat_trace_on())
+        {
+            fprintf(stderr, "[GRDAT] Joint[%u] pos=(%.1f,%.1f,%.1f) scl=(%.1f,%.1f,%.1f)\n",
+                    visited_count,
+                    x64Joint->position.x, x64Joint->position.y, x64Joint->position.z,
+                    x64Joint->scale.x, x64Joint->scale.y, x64Joint->scale.z);
+        }
         fflush(stderr);
     }
     
@@ -1712,11 +1743,14 @@ static HSD_ShapeSetDesc* grDatFiles_ConvertShapeSetDescGCNtoX64(const u8* gcnPtr
     }
 
     if (shape_count < 10) {
-        fprintf(stderr, "[GRDAT] ShapeSetDesc[%d]: gcn=%p dataBase=%p flags=0x%04x nb_shape=%u nb_vtx=%d vdesc=%p(voff=0x%x) vidx=%p nrm_desc=%p nb_nrm=%d\n",
-                shape_count, (const void*)gcnPtr, (const void*)dataBase,
-                (unsigned)x64->flags, (unsigned)x64->nb_shape, x64->nb_vertex_index,
-                (const void*)x64->vertex_desc, vertex_desc_off,
-                (const void*)x64->vertex_idx_list, (const void*)x64->normal_desc, x64->nb_normal_index);
+        if (grdat_trace_on())
+        {
+            fprintf(stderr, "[GRDAT] ShapeSetDesc[%d]: gcn=%p dataBase=%p flags=0x%04x nb_shape=%u nb_vtx=%d vdesc=%p(voff=0x%x) vidx=%p nrm_desc=%p nb_nrm=%d\n",
+                    shape_count, (const void*)gcnPtr, (const void*)dataBase,
+                    (unsigned)x64->flags, (unsigned)x64->nb_shape, x64->nb_vertex_index,
+                    (const void*)x64->vertex_desc, vertex_desc_off,
+                    (const void*)x64->vertex_idx_list, (const void*)x64->normal_desc, x64->nb_normal_index);
+        }
         if (x64->vertex_idx_list) {
             for (u32 i = 0; i < x64->nb_shape && i < 4; i++)
                 fprintf(stderr, "    vidx[%u]=%p\n", i, (const void*)x64->vertex_idx_list[i]);
@@ -1752,11 +1786,14 @@ static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8
     if (pobj_count < 10) {
         u16 gcn_flags = (gcnPobjPtr[0x0C] << 8) | gcnPobjPtr[0x0D];
         u16 gcn_ndisp = (gcnPobjPtr[0x0E] << 8) | gcnPobjPtr[0x0F];
-        fprintf(stderr, "[GRDAT] PObjDesc[%d]: gcn=%p class=0x%08x next=0x%08x verts=0x%08x flags=0x%04x n_display=%u display=0x%08x\n",
-                pobj_count, (const void*)gcnPobjPtr,
-                be32_swap(gcnPobj->class_name), be32_swap(gcnPobj->next), val,
-                gcn_flags, gcn_ndisp,
-                be32_swap(gcnPobj->display));
+        if (grdat_trace_on())
+        {
+            fprintf(stderr, "[GRDAT] PObjDesc[%d]: gcn=%p class=0x%08x next=0x%08x verts=0x%08x flags=0x%04x n_display=%u display=0x%08x\n",
+                    pobj_count, (const void*)gcnPobjPtr,
+                    be32_swap(gcnPobj->class_name), be32_swap(gcnPobj->next), val,
+                    gcn_flags, gcn_ndisp,
+                    be32_swap(gcnPobj->display));
+        }
         fflush(stderr);
     }
     pobj_count++;
@@ -1775,8 +1812,11 @@ static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8
         fflush(stderr);
     }
     if ((x64Pobj->flags & 0x3000) == POBJ_SHAPEANIM) {
-        fprintf(stderr, "[GRDAT] PObjDesc SHAPEANIM found: gcn=%p flags=0x%04x n_display=%u u=0x%08x\n",
-                (const void*)gcnPobjPtr, (unsigned)x64Pobj->flags, (unsigned)x64Pobj->n_display, be32_swap(gcnPobj->u));
+        if (grdat_trace_on())
+        {
+            fprintf(stderr, "[GRDAT] PObjDesc SHAPEANIM found: gcn=%p flags=0x%04x n_display=%u u=0x%08x\n",
+                    (const void*)gcnPobjPtr, (unsigned)x64Pobj->flags, (unsigned)x64Pobj->n_display, be32_swap(gcnPobj->u));
+        }
         fflush(stderr);
     }
 
@@ -1815,7 +1855,10 @@ static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8
             x64Pobj->u.shape_set =
                 grDatFiles_ConvertShapeSetDescGCNtoX64(dataBase + val, dataBase);
         } else {
-            fprintf(stderr, "[GRDAT] PObjDesc: POBJ_SHAPEANIM but u=0x%08x (no shape set)\n", val);
+            if (grdat_trace_on())
+            {
+                fprintf(stderr, "[GRDAT] PObjDesc: POBJ_SHAPEANIM but u=0x%08x (no shape set)\n", val);
+            }
             fflush(stderr);
         }
     }
@@ -1830,16 +1873,22 @@ static HSD_PObjDesc* grDatFiles_ConvertPObjDescGCNtoX64(const u8* gcnPobjPtr, u8
     /* display - raw byte stream (GX command list), keep as direct pointer */
     val = be32_swap(gcnPobj->display);
     if (pobj_count <= 5) {
-        fprintf(stderr, "[GRDAT] PObjDesc[%d]: dataBase=%p display_offset=0x%08x relocated=%p\n",
-                pobj_count, (const void*)dataBase, val, (const void*)(dataBase + val));
+        if (grdat_trace_on())
+        {
+            fprintf(stderr, "[GRDAT] PObjDesc[%d]: dataBase=%p display_offset=0x%08x relocated=%p\n",
+                    pobj_count, (const void*)dataBase, val, (const void*)(dataBase + val));
+        }
         fflush(stderr);
     }
     if (val != 0 && val < 0x80000000U) {
         x64Pobj->display = (u8*)(dataBase + val);
     }
     if (pobj_count <= 5) {
-        fprintf(stderr, "[GRDAT] PObjDesc[%d] FINAL: display=%p n_display=%u\n",
-                pobj_count, (const void*)x64Pobj->display, x64Pobj->n_display);
+        if (grdat_trace_on())
+        {
+            fprintf(stderr, "[GRDAT] PObjDesc[%d] FINAL: display=%p n_display=%u\n",
+                    pobj_count, (const void*)x64Pobj->display, x64Pobj->n_display);
+        }
         fflush(stderr);
     }
     
@@ -1884,9 +1933,12 @@ static HSD_MObjDesc* grDatFiles_ConvertMObjDescGCNtoX64(const u8* gcnMobjPtr, u8
         n_mobj++;
         if (val != 0) n_off++;
         if (x64Mobj->texdesc != NULL) n_tex++;
-        fprintf(stderr, "[GRDAT] mobj#%d texdesc_off=0x%x -> %s (with-offset=%d "
-                        "converted=%d of %d)\n",
-                n_mobj, val, x64Mobj->texdesc ? "ok" : "NULL", n_off, n_tex, n_mobj);
+        if (grdat_trace_on())
+        {
+            fprintf(stderr, "[GRDAT] mobj#%d texdesc_off=0x%x -> %s (with-offset=%d "
+                            "converted=%d of %d)\n",
+                    n_mobj, val, x64Mobj->texdesc ? "ok" : "NULL", n_off, n_tex, n_mobj);
+        }
     }
 
     /* mat - HSD_Material is 3 GXColor + 2 f32 and has the same layout on both
@@ -2551,8 +2603,11 @@ static HSD_DObjDesc* grDatFiles_ConvertDObjDescGCNtoX64(const u8* gcnDobjPtr, u8
     if (x64Dobj == NULL) return NULL;
 
     if (convert_count++ < 5) {
-        fprintf(stderr, "[GRDAT] ConvertDObjDesc: gcn=%p x64=%p\n",
-                (const void*)gcnDobjPtr, (void*)x64Dobj);
+        if (grdat_trace_on())
+        {
+            fprintf(stderr, "[GRDAT] ConvertDObjDesc: gcn=%p x64=%p\n",
+                    (const void*)gcnDobjPtr, (void*)x64Dobj);
+        }
         fflush(stderr);
     }
 
@@ -2572,8 +2627,11 @@ static HSD_DObjDesc* grDatFiles_ConvertDObjDescGCNtoX64(const u8* gcnDobjPtr, u8
     if (val != 0 && val < 0x80000000U) {
         x64Dobj->pobjdesc = grDatFiles_ConvertPObjDescGCNtoX64(dataBase + val, dataBase);
         if (x64Dobj->pobjdesc != NULL) {
-            fprintf(stderr, "[GRDAT] DObjDesc pobjdesc: gcn_offset=0x%08x x64=%p display=%p n_display=%u\n",
-                    val, (const void*)x64Dobj->pobjdesc, (const void*)x64Dobj->pobjdesc->display, x64Dobj->pobjdesc->n_display);
+            if (grdat_trace_on())
+            {
+                fprintf(stderr, "[GRDAT] DObjDesc pobjdesc: gcn_offset=0x%08x x64=%p display=%p n_display=%u\n",
+                        val, (const void*)x64Dobj->pobjdesc, (const void*)x64Dobj->pobjdesc->display, x64Dobj->pobjdesc->n_display);
+            }
             fflush(stderr);
         }
     }
