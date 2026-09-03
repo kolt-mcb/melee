@@ -1063,12 +1063,32 @@ void lb_80011710(DynamicsDesc* arg0, DynamicsDesc* arg1)
     arg1->pos.x = arg0->pos.x;
     arg1->pos.y = arg0->pos.y;
     arg1->pos.z = arg0->pos.z;
+#if BUILD_TARGET_PC
+    /* The list this walks is built by lb_8000FD48, which yields no list at
+     * all when the bone's jobj is NULL, and a short one when the
+     * DynamicsData pool runs dry -- yet the loop below is bounded by
+     * arg0->count, the descriptor's length, not by the list. On GameCube a
+     * fighter always had the bone and the pool always had room, so neither
+     * gap existed. The results screen's demo fighters do hit it: a NULL
+     * data here segfaulted in ftCo_8009CF84 the moment the screen loaded.
+     *
+     * lb_800117F4, just below, already walks this same list `cur != NULL`.
+     * Bound by the list as it does. */
+    if (arg0->data == NULL || arg1->data == NULL) {
+        return;
+    }
+#endif
     data1 = arg1->data;
     data0 = &arg0->data->desc.lb_unk1.array[0];
     for (data1 = arg1->data, i = 0; i < (int) arg0->count;
          data1 = data1->next, i++)
     {
         s32 tmp0, tmp1;
+#if BUILD_TARGET_PC
+        if (data1 == NULL) {
+            break;
+        }
+#endif
         data1->desc.lb_unk0.unk_4C = data0[i].unk_0;
         data1->desc.lb_unk0.unk_50 = data0[i].unk_4;
         data1->desc.lb_unk0.unk_58 = data0[i].unk_8;

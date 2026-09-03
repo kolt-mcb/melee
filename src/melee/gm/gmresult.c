@@ -1219,6 +1219,42 @@ void fn_80175DC8(HSD_GObj* gobj)
     spFC = jobj;
     lb_80011E24(jobj, &spFC, 0xA, -1);
     data->x30 = spFC;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_RESULTLOG") != NULL) {
+        /* Count the tree lb_80011E24 actually walks, and report which of the
+         * lookups above came back NULL. */
+        int n = 0;
+        HSD_JObj* w = jobj;
+        int inst = 0;
+        while (w != NULL && n < 512) {
+            HSD_JObj* nx;
+            if (w->flags & JOBJ_INSTANCE) {
+                inst++;
+            }
+            if (!(w->flags & JOBJ_INSTANCE) && HSD_JObjGetChild(w) != NULL) {
+                nx = HSD_JObjGetChild(w);
+            } else if (HSD_JObjGetNext(w) != NULL) {
+                nx = HSD_JObjGetNext(w);
+            } else {
+                HSD_JObj* sv = w;
+                for (;;) {
+                    if (HSD_JObjGetParent(sv) == NULL) { nx = NULL; break; }
+                    if (HSD_JObjGetNext(HSD_JObjGetParent(sv)) != NULL) {
+                        nx = HSD_JObjGetNext(HSD_JObjGetParent(sv));
+                        break;
+                    }
+                    sv = HSD_JObjGetParent(sv);
+                }
+            }
+            w = nx;
+            n++;
+        }
+        OSReport("[RESULT] root=%p walk_len=%d instance_nodes=%d "
+                 "x30(0xA)=%p x24(0x68)=%p x28(0x69)=%p sp108(0x41)=%p\n",
+                 (void*) jobj, n, inst, (void*) data->x30,
+                 (void*) data->x24, (void*) data->x28, (void*) sp108);
+    }
+#endif
 
     data_iter = data;
     for (j = 0; j < 4; j++) {
