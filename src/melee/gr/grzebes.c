@@ -2626,6 +2626,25 @@ bool grZebes_801DCBFC(Ground_GObj* gobj, HSD_GObj* fobj, void* arg)
 #else
         *(void**) arg = ((HSD_GObj*) grZe_804D6990)->user_data;
 #endif
+        /* MELEE_ACIDLOG=1: every acid touch, with the attack parameters the
+         * converted block yields. The acid failing silently is how this went
+         * unnoticed for so long -- a touch that never lands looks identical
+         * to a fighter that simply never entered the acid, so there needs to
+         * be something to grep for. Expect dmg=14 angle=90 kbg=35 bkb=110 on
+         * Zebes, and the fighter to enter DamageFlyTop on the same frame. */
+        if (getenv("MELEE_ACIDLOG") != NULL) {
+            extern u32 pc_frame_number;
+            static int n = 0;
+            if (n < 40) { n++;
+                fprintf(stderr, "[ACID] f%u TOUCH pos=(%.1f,%.1f) slope=%.1f "
+                        "params(dmg=%u angle=%u kbg=%u bkb=%u)\n",
+                        (unsigned) pc_frame_number, (double) pos.x,
+                        (double) pos.y, (double) slope,
+                        (unsigned) ((const u32*) *(void**) arg)[1],
+                        (unsigned) ((const u32*) *(void**) arg)[2],
+                        (unsigned) ((const u32*) *(void**) arg)[3],
+                        (unsigned) ((const u32*) *(void**) arg)[5]); }
+        }
         if (prev.y > slope) {
             Ground_801C43A4(&pos);
             Ground_801C53EC(0x61A82);
