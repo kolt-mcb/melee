@@ -1211,6 +1211,20 @@ void fn_80179990(HSD_GObj* arg0, int arg1, int arg2)
             }
         } else {
             HSD_GObj* entity = Player_GetEntity(arg2);
+#if BUILD_TARGET_PC
+            if (getenv("MELEE_RESULTLOG") != NULL) {
+                static int n;
+                if (n < 8) {
+                    n++;
+                    OSReport("[RESDRAW] slot%d lookup=%d entity=%p "
+                             "frames_remaining=%d player_flags=%d x0_6=%d\n",
+                             arg2, lookup, (void*) entity,
+                             (int) ftLib_800876B4(entity),
+                             (int) disp->state.player_flags[arg2],
+                             (int) disp->state.x0_6);
+                }
+            }
+#endif
             if (ftLib_800876B4(entity) == 0) {
                 if (disp->state.player_flags[arg2] == 0 && disp->state.x0_6) {
                     GXColor color;
@@ -1509,6 +1523,18 @@ HSD_GObj* fn_8017A318(s32 arg0)
     HSD_CObjSetInterest(cobj, &interest);
     HSD_CObjSetScissor(cobj, (Scissor*) scissor);
     GObj_SetupGXLinkMax(gobj, callbacks.funcs[arg0], 0);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_RESULTLOG") != NULL) {
+        OSReport("[RESCAM] slot%d kind=%d variant=%d place=%d "
+                 "eye=(%.1f,%.1f,%.1f) interest=(%.1f,%.1f,%.1f) "
+                 "scissor=%d,%d cb=%p gobj=%p\n",
+                 (int) arg0, (int) kind_data, (int) variant, (int) slot,
+                 (double) eye.x, (double) eye.y, (double) eye.z,
+                 (double) interest.x, (double) interest.y, (double) interest.z,
+                 (int) scissor[0], (int) scissor[1],
+                 (void*) callbacks.funcs[arg0], (void*) gobj);
+    }
+#endif
 
     if (slot == 0) {
         fn_8017A078(arg0);
