@@ -9458,13 +9458,34 @@ bind_tex:
      * wearing whichever settings the first loader happened to have. That was
      * invisible while gx_wrap_mode() collapsed everything to CLAMP and
      * gx_filter_mode() to NEAREST; now that both actually vary, it is not. */
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                    (g_tex_cache_hasmip[slot] && !ENV_FLAG("MELEE_NOMIP"))
-                        ? gx_min_filter_mode(g_state.current_tex.min_filter)
-                        : gx_filter_mode(g_state.current_tex.min_filter));
-    /* GX only permits GX_NEAR/GX_LINEAR for magnification. */
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
-                    gx_filter_mode(g_state.current_tex.mag_filter));
+    /* A depth-format texture must be point-sampled. GLES 3 and WebGL2 make a
+     * DEPTH_COMPONENT texture with any LINEAR filter *incomplete*, and an
+     * incomplete texture bound to a sampler the program references fails the
+     * whole draw -- not just that sampler -- so a single Z-texture with a
+     * TObj asking for GX_LINEAR silently dropped every primitive that shared
+     * the draw. Firefox reports it as
+     *
+     *   TEXTURE_2D at unit 1 is incomplete: Minification or magnification
+     *   filtering is not NEAREST..., and the texture's format is not
+     *   "texture-filterable"
+     *
+     * Desktop GL permits the filter, which is why this never showed there.
+     * NEAREST is also what the hardware does: GX's Z-textures are a lookup
+     * of the depth value, not a filtered sample, so this is a correction on
+     * every target rather than a concession to one. */
+    {
+        u8 tf = g_state.current_tex.fmt;
+        Bool is_depth = (tf == 0x11 || tf == 0x13 || tf == 0x16);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                        is_depth ? GL_NEAREST
+                        : (g_tex_cache_hasmip[slot] && !ENV_FLAG("MELEE_NOMIP"))
+                            ? gx_min_filter_mode(g_state.current_tex.min_filter)
+                            : gx_filter_mode(g_state.current_tex.min_filter));
+        /* GX only permits GX_NEAR/GX_LINEAR for magnification. */
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
+                        is_depth ? GL_NEAREST
+                                 : gx_filter_mode(g_state.current_tex.mag_filter));
+    }
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
                     gx_wrap_mode(g_state.current_tex.wrap_s));
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
