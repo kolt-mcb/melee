@@ -559,8 +559,9 @@ void fn_80184AB8(HSD_GObj* arg0)
     }
 }
 
-void fn_8018504C(void)
+void fn_8018504C(HSD_GObj* gobj)
 {
+    (void) gobj;
     int new_var;
     PAD_STACK(16);
     new_var = 0x32;
@@ -649,8 +650,9 @@ s32 fn_801851C0(void)
     return result;
 }
 
-void fn_801852FC(HSD_GObj* gobj)
+void fn_801852FC(HSD_GObj* gobj, int pc_render_code)
 {
+    (void) pc_render_code;
     int i;
     int j;
 
@@ -747,14 +749,16 @@ double fn_801855BC(double arg8)
 }
 #pragma dont_inline reset
 
-void fn_8018564C(HSD_GObj* gobj)
+void fn_8018564C(HSD_GObj* gobj, int pc_render_code)
 {
+    (void) pc_render_code;
     fn_80185408(0xFC8000, 0.0F, 480.0F, 200.0F, 640.0F);
     HSD_SObjLib_803A54EC(gobj, 7);
 }
 
-void fn_8018569C(HSD_GObj* gobj)
+void fn_8018569C(HSD_GObj* gobj, int pc_render_code)
 {
+    (void) pc_render_code;
     int i;
     PAD_STACK(8);
     if (HSD_CObjSetCurrent(GET_COBJ(gobj))) {
@@ -772,8 +776,9 @@ void fn_8018569C(HSD_GObj* gobj)
     }
 }
 
-void fn_8018575C(HSD_GObj* gobj)
+void fn_8018575C(HSD_GObj* gobj, int pc_render_code)
 {
+    (void) pc_render_code;
     if (HSD_CObjSetCurrent(GET_COBJ(gobj))) {
         Camera_800313E0(gobj, 1);
         gobj->gxlink_prios = 0x1001;
@@ -879,7 +884,7 @@ s32 fn_80185A0C(void)
     HSD_SObjLib_803A55DC(gobj, 0x280, 0x1E0, 0xB);
     gobj->gxlink_prios = 0x20000;
     HSD_GObjGXLink_8039084C(gobj);
-    GObj_SetupGXLinkMax(gobj, (GObj_RenderFunc) (Event) fn_8018564C, 0xB);
+    GObj_SetupGXLinkMax(gobj, fn_8018564C, 0xB);
 
     gobj2 = GObj_Create(0xE, 0xF, 0);
     HSD_GObjObject_80390A70(gobj2, HSD_SObjLib_804D7960, NULL);
@@ -908,7 +913,7 @@ s32 fn_80185A0C(void)
     gobj3 = GObj_Create(0x13, 0x14, 0);
     cobj = HSD_CObjLoadDesc(lbl_804D6600->cameras->desc);
     HSD_GObjObject_80390A70(gobj3, HSD_GObj_804D784B, cobj);
-    GObj_SetupGXLinkMax(gobj3, (GObj_RenderFunc) (Event) fn_801852FC, 0);
+    GObj_SetupGXLinkMax(gobj3, fn_801852FC, 0);
     gobj3->gxlink_prios = 0x61;
     lbl_804D65F0 = gobj3;
     return fn_801851C0();
@@ -1191,10 +1196,10 @@ void fn_80186634(void* arg0)
         gobj3 = GObj_Create(0x13, 0x15, 0);
         HSD_GObjObject_80390A70(gobj3, HSD_GObj_804D784B, cobj2);
         if ((s32) lbl_8047368C.model_scale_kind == 4) {
-            GObj_SetupGXLinkMax(gobj3, (GObj_RenderFunc) (Event) fn_8018569C,
+            GObj_SetupGXLinkMax(gobj3, fn_8018569C,
                                 8);
         } else {
-            GObj_SetupGXLinkMax(gobj3, (GObj_RenderFunc) (Event) fn_8018575C,
+            GObj_SetupGXLinkMax(gobj3, fn_8018575C,
                                 8);
         }
         fn_80186400();
@@ -1202,7 +1207,7 @@ void fn_80186634(void* arg0)
         jobj = HSD_JObjLoadJoint(lbl_804D6600->models[0]->joint);
         HSD_GObjObject_80390A70(gobj4, HSD_GObj_804D7849, jobj);
         GObj_SetupGXLink(gobj4, HSD_GObj_JObjCallback, 0xC, 0);
-        HSD_GObj_SetupProc(gobj4, (HSD_GObjEvent) (Event) fn_8018504C, 0x11);
+        HSD_GObj_SetupProc(gobj4, fn_8018504C, 0x11);
         gm_8016895C(jobj, lbl_804D6600->models[0], 0);
         HSD_JObjReqAnimAll(jobj, (f32) ((lbl_8047368C.xEE - 1) * 0x32));
         HSD_JObjAnimAll(jobj);
@@ -1228,10 +1233,10 @@ void fn_80186634(void* arg0)
         gobj3 = GObj_Create(0x13, 0x15, 0);
         HSD_GObjObject_80390A70(gobj3, HSD_GObj_804D784B, cobj2);
         if ((s32) lbl_8047368C.model_scale_kind == 4) {
-            GObj_SetupGXLinkMax(gobj3, (GObj_RenderFunc) (Event) fn_8018569C,
+            GObj_SetupGXLinkMax(gobj3, fn_8018569C,
                                 8);
         } else {
-            GObj_SetupGXLinkMax(gobj3, (GObj_RenderFunc) (Event) fn_8018575C,
+            GObj_SetupGXLinkMax(gobj3, fn_8018575C,
                                 8);
         }
         fn_80186400();
@@ -1239,7 +1244,7 @@ void fn_80186634(void* arg0)
         jobj = HSD_JObjLoadJoint(lbl_804D6600->models[0]->joint);
         HSD_GObjObject_80390A70(gobj4, HSD_GObj_804D7849, jobj);
         GObj_SetupGXLink(gobj4, HSD_GObj_JObjCallback, 0xC, 0);
-        HSD_GObj_SetupProc(gobj4, (HSD_GObjEvent) (Event) fn_8018504C, 0x11);
+        HSD_GObj_SetupProc(gobj4, fn_8018504C, 0x11);
         gm_8016895C(jobj, lbl_804D6600->models[0], 0);
         HSD_JObjReqAnimAll(jobj, (f32) ((lbl_8047368C.xEE - 1) * 0x32));
         HSD_JObjAnimAll(jobj);
@@ -1265,10 +1270,10 @@ void fn_80186634(void* arg0)
         gobj3 = GObj_Create(0x13, 0x15, 0);
         HSD_GObjObject_80390A70(gobj3, HSD_GObj_804D784B, cobj2);
         if ((s32) lbl_8047368C.model_scale_kind == 4) {
-            GObj_SetupGXLinkMax(gobj3, (GObj_RenderFunc) (Event) fn_8018569C,
+            GObj_SetupGXLinkMax(gobj3, fn_8018569C,
                                 8);
         } else {
-            GObj_SetupGXLinkMax(gobj3, (GObj_RenderFunc) (Event) fn_8018575C,
+            GObj_SetupGXLinkMax(gobj3, fn_8018575C,
                                 8);
         }
         fn_80186400();
@@ -1276,7 +1281,7 @@ void fn_80186634(void* arg0)
         jobj = HSD_JObjLoadJoint(lbl_804D6600->models[0]->joint);
         HSD_GObjObject_80390A70(gobj4, HSD_GObj_804D7849, jobj);
         GObj_SetupGXLink(gobj4, HSD_GObj_JObjCallback, 0xC, 0);
-        HSD_GObj_SetupProc(gobj4, (HSD_GObjEvent) (Event) fn_8018504C, 0x11);
+        HSD_GObj_SetupProc(gobj4, fn_8018504C, 0x11);
         gm_8016895C(jobj, lbl_804D6600->models[0], 0);
         HSD_JObjReqAnimAll(jobj, (f32) ((lbl_8047368C.xEE - 1) * 0x32));
         HSD_JObjAnimAll(jobj);
@@ -1891,7 +1896,7 @@ static inline void gm_80187F48_OnEnter_inline(gm_80187F48_EnterData* arg0)
     data->x8 = gobj;
     cobj = HSD_CObjLoadDesc((HSD_CObjDesc*) *data->x4);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
-    GObj_SetupGXLinkMax(gobj, (GObj_RenderFunc) (Event) Camera_800304E0, 8);
+    GObj_SetupGXLinkMax(gobj, Camera_800304E0, 8);
     HSD_GObj_SetupProc(gobj, fn_80187910, 0);
     HSD_CObjAddAnim(cobj, *(HSD_CameraAnim**) data->x4[1]);
     HSD_CObjReqAnim(cobj, 0.0f);
@@ -2437,8 +2442,9 @@ static inline u32 gm_801891F4_GetTickRate(void)
     return *(u32*) 0x800000F8 >> 2;
 }
 
-void fn_801891F4(void)
+void fn_801891F4(HSD_GObj* gobj)
 {
+    (void) gobj;
     CssSubStruct* sub;
     u64 buttons;
     int count;
@@ -2759,7 +2765,7 @@ void fn_80189B88(void)
     sub = &state->css;
     sub->x00 = 0;
     sub->x01 = 0;
-    HSD_GObj_SetupProc(GObj_Create(0xE, 2, 0), (HSD_GObjEvent) fn_801891F4,
+    HSD_GObj_SetupProc(GObj_Create(0xE, 2, 0), fn_801891F4,
                        0x15);
     gobj = GObj_Create(0xE, 0xF, 0);
     jobj = HSD_JObjLoadJoint((*lbl_804D662C)->joint);

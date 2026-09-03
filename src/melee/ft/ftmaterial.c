@@ -55,10 +55,16 @@ void ftMaterial_800BF260(void)
     hsdInitClassInfo(&ftMObj.parent, &hsdMObj.parent,
                      "sysdolphin_base_library", "ft_mobj",
                      sizeof(HSD_MObjInfo), sizeof(HSD_MObj));
-    ftMObj.setup = (HSD_MObjSetupFunc) (Event) ftMaterial_800BF2B8;
+    ftMObj.setup = ftMaterial_800BF2B8;
 }
 
-void ftMaterial_800BF2B8(HSD_MObj* mobj, u32 rendermode, u32 unused)
+/* Two parameters, matching HSD_MObjSetupFunc, which is what this is
+ * installed as. The third was never referenced -- it was named `unused` --
+ * and cost nothing on PowerPC or x86-64, where a caller that passes two
+ * arguments to a three-parameter function simply leaves the third register
+ * holding whatever it held. wasm checks the callee's parameter list against
+ * the call site, so the extra one made every fighter material setup trap. */
+void ftMaterial_800BF2B8(HSD_MObj* mobj, u32 rendermode)
 {
     Fighter* fp;
     HSD_TObj* tobj;

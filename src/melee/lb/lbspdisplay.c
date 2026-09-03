@@ -771,8 +771,9 @@ static HSD_Chan chan1 = {
     GX_AF_NONE,
 };
 
-void fn_80013614(HSD_GObj* gobj)
+void fn_80013614(HSD_GObj* gobj, int pc_render_code)
 {
+    (void) pc_render_code;
     struct CameraBlurData* data = gobj->user_data;
     u8 pad8[8];
     Mtx view_mtx;
@@ -951,7 +952,7 @@ void lb_800138EC(s32 arg0, GObj_RenderFunc render_func, u32 arg2, s8 arg3,
     GObj_InitUserData(gobj, 0, fn_800138AC, data);
 
     if (render_func == NULL) {
-        GObj_SetupGXLinkMax(gobj, (GObj_RenderFunc) (Event) fn_80013614, arg2);
+        GObj_SetupGXLinkMax(gobj, fn_80013614, arg2);
     } else {
         GObj_SetupGXLinkMax(gobj, render_func, arg2);
     }

@@ -549,6 +549,9 @@ enum {
 typedef void (*Callback1)(HSD_AObj* aobj, HSD_TObj* obj, u32 flags,
                           float param);
 typedef void (*Callback2)(HSD_AObj* aobj, int param);
+/* The two shapes every callee in this tree actually has. */
+typedef void (*AObjVoid)(HSD_AObj* aobj);
+typedef void (*AObjFloat)(HSD_AObj* aobj, f32 rate);
 typedef void (*Callback4)(HSD_AObj* aobj, HSD_TObj* obj, u32 flags, int param);
 typedef void (*Callback3)(HSD_AObj* aobj, HSD_TObj* obj, int param);
 
@@ -564,19 +567,43 @@ typedef void (*Callback3)(HSD_AObj* aobj, HSD_TObj* obj, int param);
  * the callee reads r3/f1 (or rdi/xmm0) and gets exactly aobj and rate.
  *
  * wasm has one flat positional parameter list and type-checks every indirect
- * call against it, so (i32, i32, i32, f32) simply is not (i32, f32) and the
- * call traps. Emulation restores the behaviour by generating thunks; the
- * targeted fix is to dispatch each type at the arity its callee really has,
- * which needs the full type-to-callee mapping the animation data encodes. */
+ * call against it, so the call traps rather than quietly working.
+ *
+ * Every (func, type) pair in the tree is a literal at a call site, so the
+ * mapping is knowable exactly rather than by inference:
+ *
+ *   type 0   fn_801C6EE4, fn_801C6F2C        void (HSD_AObj*)
+ *   type 1   HSD_AObjSetRate                 void (HSD_AObj*, f32)
+ *   type 3   HSD_AObjSetFlags/ClearFlags     void (HSD_AObj*, u32)
+ *
+ * and nothing else reaches here -- the remaining cases are unexercised in
+ * this codebase. Two of the three were wrong. Type 0 called through
+ * `Event`, taking no arguments at all, while its callees read an HSD_AObj*:
+ * that works only because r3 (rdi) still holds this function's own first
+ * argument, untouched since entry. Type 1 called through a four-argument
+ * Callback1 while HSD_AObjSetRate takes two, which survives for the
+ * companion reason -- the float rides in f1/xmm0 and the two unread integer
+ * arguments in between cannot displace it.
+ *
+ * Dispatching at each callee's real arity costs nothing on the register
+ * targets and lets wasm drop -sEMULATE_FUNCTION_POINTER_CASTS, whose
+ * trampolines route every indirect call in the module through JS -- which
+ * ASYNCIFY then has to assume might sleep.
+ *
+ * The unexercised cases keep their original casts. If one ever fires, wasm
+ * reports a signature mismatch naming it, which is a better outcome than a
+ * silent dependence on argument registers. */
 void grAnime_801C6F50(HSD_AObj* aobj, void* obj, u32 flags, void* func,
                       u32 type, void* param)
 {
+    (void) obj;
+    (void) flags;
     switch (type) {
     case 0:
-        ((Event) func)();
+        ((AObjVoid) func)(aobj);
         break;
     case 1:
-        ((Callback1) func)(aobj, obj, flags, *(float*) param);
+        ((AObjFloat) func)(aobj, *(float*) param);
         break;
     case 2:
         ((Callback2) func)(aobj, *(int*) param);
@@ -585,13 +612,13 @@ void grAnime_801C6F50(HSD_AObj* aobj, void* obj, u32 flags, void* func,
         ((Callback2) func)(aobj, *(int*) param);
         break;
     case 4:
-        ((Event) func)();
+        ((AObjVoid) func)(aobj);
         break;
     case 8:
-        ((Event) func)();
+        ((AObjVoid) func)(aobj);
         break;
     case 5:
-        ((Callback1) func)(aobj, obj, flags, *(float*) param);
+        ((AObjFloat) func)(aobj, *(float*) param);
         break;
     case 6:
         ((Callback3) func)(aobj, obj, *(int*) param);
@@ -600,7 +627,7 @@ void grAnime_801C6F50(HSD_AObj* aobj, void* obj, u32 flags, void* func,
         ((Callback3) func)(aobj, obj, *(int*) param);
         break;
     case 9:
-        ((Callback1) func)(aobj, obj, flags, *(float*) param);
+        ((AObjFloat) func)(aobj, *(float*) param);
         break;
     case 10:
         ((Callback4) func)(aobj, obj, flags, *(int*) param);

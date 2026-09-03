@@ -332,17 +332,14 @@ elif WASM:
                # onto them, which needs ENV reachable from Module.
                " -sEXPORTED_RUNTIME_METHODS=ENV"
                " --pre-js " + str(ROOT / "tools" / "wasm" / "env_shim.js")
-               # The decomp calls function pointers through signatures wider
-               # than the callee -- grAnime_801C6F50 casts to a 4-argument
-               # Callback1 and calls the 2-argument HSD_AObjSetRate. On
-               # PowerPC and x86-64 that is harmless, because integers and
-               # floats occupy separate register files and the unread integer
-               # arguments never displace the float. wasm type-checks every
-               # indirect call against one flat parameter list, so it traps.
-               # Emulation generates the thunks; it costs about 2 MB of code.
-               # Removing it means dispatching each call at the callee's real
-               # arity, site by site.
-               + " -sEMULATE_FUNCTION_POINTER_CASTS=1")
+               # No -sEMULATE_FUNCTION_POINTER_CASTS. It was needed while
+               # grAnime_801C6F50 dispatched through casts wider than its
+               # callees; that now calls each at its real arity. The
+               # trampolines are worth avoiding for more than their own cost:
+               # they route every indirect call through a JS invoke_*, which
+               # ASYNCIFY treats as an import that may sleep, so the
+               # instrumentation closes over the whole module.
+               )
     # WASM_NODE=1 builds the headless node harness instead of the web page:
     # NODERAWFS gives the real filesystem, so orig/GALE01 needs no packaging
     # and the boot path can be exercised from the terminal. There is no WebGL
