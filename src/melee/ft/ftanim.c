@@ -1297,8 +1297,8 @@ void ftAnim_80070200(Fighter* fp, ftData_x8_x8* r4, CostumeTObjList* r5,
         }
         return;
     }
-    /* NOTE: check xC itself before indexing it — it is NULL by design until
-     * pc_conv_ftData converts the costume-tobj table. */
+    /* NOTE: check xC itself before indexing it — pc_conv_PartsDesc leaves it
+     * NULL when the file carries no costume-tobj table. */
     if (r4->x8 == 0 || !pc_ptr_sane(r4->xC) || !pc_ptr_sane(r4->xC[0])) {
         r5->n_costume_tobjs = 0;
         return;
@@ -1314,6 +1314,11 @@ void ftAnim_80070200(Fighter* fp, ftData_x8_x8* r4, CostumeTObjList* r5,
 
     for (i = 0; i < r5->n_costume_tobjs; i++) {
         r5->costume_tobjs[i] = ftParts_80075240(r6, r5->x5D0[i]);
+#if BUILD_TARGET_PC
+        if (r5->costume_tobjs[i] == NULL) {
+            continue;
+        }
+#endif
         if (r5->costume_tobjs[i]->aobj == NULL) {
             HSD_ASSERTREPORT(1236, 0, "can't find fighter texture anim!\n");
         }
@@ -1354,11 +1359,10 @@ void ftAnim_80070458(Fighter* fp, CostumeTObjList* tobj_list, u32 tobj_idx,
                          tobj_idx);
 #if BUILD_TARGET_PC
         /* On GameCube the assert halts; here it only reports, and the read
-         * below then walks off an empty list. Fighter texture-animation
-         * lists are not built yet on PC (n_costume_tobjs is 0), and the
-         * set_tex_anim command only started reaching this function once
-         * subaction opcodes decoded correctly. Skip the animation instead
-         * of crashing. */
+         * below then walks off the end of the list. Skip the animation
+         * instead of crashing. Until pc_conv_PartsDesc converted the
+         * costume-tobj table this fired for every set_tex_anim command,
+         * which left every fighter's face textures undriven. */
         port_guard_warn("ftanim.c:1264");
         return;
 #endif

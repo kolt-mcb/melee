@@ -60,6 +60,11 @@ static u32 pc_be32(u32 v)
            ((v << 24) & 0xFF000000);
 }
 
+static u16 pc_be16(u16 v)
+{
+    return (u16) (((v >> 8) & 0xFF) | ((v << 8) & 0xFF00));
+}
+
 static int pc_ftconv_trace(void)
 {
     static int on = -1;
@@ -678,7 +683,7 @@ static struct ftData_x8* pc_conv_PartsDesc(const u8* raw, const u8* base,
     out->x0.model_num = pc_be32(*(const u32*) (raw + 0x00));
     out->x0.vis_table = NULL;
     out->x8.x8 = pc_be32(*(const u32*) (raw + 0x08));
-    out->x8.xC = NULL; /* rule 1: not converted yet */
+    out->x8.xC = NULL; /* filled in below */
     out->x10 = raw[0x10];
     out->x11 = raw[0x11];
     out->x12 = raw[0x12];
@@ -714,6 +719,49 @@ static struct ftData_x8* pc_conv_PartsDesc(const u8* raw, const u8* base,
                 }
             }
             out->x0.vis_table = rows;
+        }
+    }
+
+    /* x8.xC: per-costume arrays of TObj indices, x8.x8 entries each. These
+     * name the fighter's texture animations -- the face: eyes, blinking,
+     * expressions. ftAnim_80070200 walks them to call HSD_AObjSetRate(..., 0)
+     * on each one, which pins the animation so the game can drive it a frame
+     * at a time through the set_tex_anim subaction command. Leaving xC NULL
+     * left n_costume_tobjs at 0, so nothing was ever pinned and every
+     * set_tex_anim was dropped with "texture no exist!".
+     *
+     * Offset 0 means NULL here for the same reason as vis_table above:
+     * ftAnim_80070200 does `xC[costume] ? xC[costume] : xC[0]`, so only
+     * costume 0 need carry a table. */
+    off = pc_be32(*(const u32*) (raw + 0x0C));
+    if (off != 0 && off < len && costumes > 0 && costumes <= 32 &&
+        out->x8.x8 > 0 && out->x8.x8 <= 64)
+    {
+        u16** rows =
+            pc_lowmem_alloc(sizeof(u16*) * (unsigned long) costumes);
+        if (rows != NULL) {
+            const u8* rb = base + off;
+            int r;
+            u32 t;
+            memset(rows, 0, sizeof(u16*) * (size_t) costumes);
+            for (r = 0; r < costumes; r++) {
+                u32 e = pc_be32(*(const u32*) (rb + (size_t) r * 4));
+                if (e == 0 || e >= len ||
+                    e + (unsigned long) out->x8.x8 * 2u > len)
+                {
+                    continue;
+                }
+                rows[r] = pc_lowmem_alloc(sizeof(u16) *
+                                          (unsigned long) out->x8.x8);
+                if (rows[r] == NULL) {
+                    continue;
+                }
+                for (t = 0; t < out->x8.x8; t++) {
+                    rows[r][t] =
+                        pc_be16(*(const u16*) (base + e + (size_t) t * 2));
+                }
+            }
+            out->x8.xC = rows;
         }
     }
 

@@ -1012,6 +1012,13 @@ HSD_TObj* ftParts_80075240(DObjList* arg0, int n)
         }
     }
     HSD_ASSERTREPORT(948, 0, "can't find tobj!\n");
+#if BUILD_TARGET_PC
+    /* The GameCube build halts in the assert, so falling off the end here
+     * never mattered. On PC the assert only reports and the caller then
+     * dereferences whatever was left in the return register. Say NULL and
+     * let ftAnim_80070200 skip the entry. */
+    return NULL;
+#endif
 }
 
 /**
