@@ -93,8 +93,14 @@ struct SfxLoadStreamNode {
 };
 
 #if BUILD_TARGET_PC
+/* The completion callback's type is the one HSD_SynthSFXLoad declares:
+ * int (*)(int, int). Storing it as void (*)(s32, s32) and calling it that way
+ * discards a return value that was never read anyway, which costs nothing on
+ * PowerPC or x86-64 -- the caller simply ignores r3/eax. wasm checks the
+ * return type as part of the indirect call signature, so the two must agree.
+ * The result stays discarded; only the type is corrected. */
 static struct {
-    void (*fn)(s32, s32);
+    int (*fn)(s32, s32);
     s32 a, b;
 } pc_synth_deferred[32];
 static int pc_synth_ndeferred;
@@ -103,12 +109,12 @@ static int pc_synth_ndeferred;
 void pc_synth_run_deferred(void)
 {
     while (pc_synth_ndeferred > 0) {
-        void (*fn)(s32, s32) = pc_synth_deferred[0].fn;
+        int (*fn)(s32, s32) = pc_synth_deferred[0].fn;
         s32 a = pc_synth_deferred[0].a, b = pc_synth_deferred[0].b;
         pc_synth_ndeferred--;
         memmove(&pc_synth_deferred[0], &pc_synth_deferred[1],
                 pc_synth_ndeferred * sizeof(pc_synth_deferred[0]));
-        fn(a, b);
+        (void) fn(a, b);
     }
 }
 #endif
@@ -387,7 +393,7 @@ void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
                                            sizeof(pc_synth_deferred[0])))
             {
                 pc_synth_deferred[pc_synth_ndeferred].fn =
-                    (void (*)(s32, s32)) HSD_Synth_804C2A60[0].x8;
+                    (int (*)(s32, s32)) HSD_Synth_804C2A60[0].x8;
                 pc_synth_deferred[pc_synth_ndeferred].a =
                     HSD_Synth_804C2A60[0].entrynum;
                 pc_synth_deferred[pc_synth_ndeferred].b =
@@ -1633,12 +1639,21 @@ static void pc_synth_swap_hako(int idx)
 }
 #endif
 
-void HSD_Synth_8038AD74(u32 offset, uintptr_t src)
+/* Declared at the DevCom callback signature rather than cast to it. The
+ * caller passes the next stream offset as the request's `args`, and the stub
+ * hands that back as the second argument -- which is what this reads. The
+ * old two-parameter form relied on the extra arguments simply not
+ * displacing the ones it wanted, which holds on PowerPC and x86-64 and not
+ * on wasm. */
+void HSD_Synth_8038AD74(int result, int src, void* buf, int cancelflag)
 {
+    (void) result;
+    (void) buf;
+    (void) cancelflag;
 #if BUILD_TARGET_PC
     pc_synth_swap_hako(HSD_Synth_804D7768);
 #endif
-    HSD_DevComRequest(HSD_Synth_804D7764, src,
+    HSD_DevComRequest(HSD_Synth_804D7764, (uintptr_t) src,
                       HSD_Synth_804D7780 + ((u32) HSD_Synth_804D7768 << 16),
                       lbl_804C4540[HSD_Synth_804D7768].x0, 0x23, 0,
                       HSD_SynthResetStreamCounters, 0);
@@ -1731,7 +1746,7 @@ void HSD_Synth_8038ADD0(void)
                 HSD_DevComRequest(
                     HSD_Synth_804D7764, src,
                     (uintptr_t) &lbl_804C4540[HSD_Synth_804D7768], 0x20, 0x21,
-                    0, (HSD_DevComCallback) (Event) HSD_Synth_8038AD74,
+                    0, HSD_Synth_8038AD74,
                     (void*) (src + 0x20));
             }
         }
@@ -1739,8 +1754,14 @@ void HSD_Synth_8038ADD0(void)
     }
 }
 
-void HSD_Synth_8038B120(void)
+/* DevCom callback signature; the arguments are unused here but the
+ * stub passes four and wasm checks that it does. */
+void HSD_Synth_8038B120(int result, int length, void* buf, int cancelflag)
 {
+    (void) result;
+    (void) length;
+    (void) buf;
+    (void) cancelflag;
     AXPBVE ve;
     int i;
     bool enabled;
@@ -1806,15 +1827,21 @@ void HSD_Synth_8038B120(void)
     }
 }
 
-void HSD_SynthPStreamFirstHakoHeaderCallback(void)
+/* DevCom callback signature; the arguments are unused here but the
+ * stub passes four and wasm checks that it does. */
+void HSD_SynthPStreamFirstHakoHeaderCallback(int result, int length, void* buf, int cancelflag)
 {
+    (void) result;
+    (void) length;
+    (void) buf;
+    (void) cancelflag;
 #if BUILD_TARGET_PC
     pc_synth_swap_hako(HSD_Synth_804D7768);
 #endif
     HSD_DevComRequest(HSD_Synth_804D7764, 0xA0,
                       HSD_Synth_804D7780 + ((u32) HSD_Synth_804D7768 << 16),
                       lbl_804C4540[HSD_Synth_804D7768].x0, 0x23, 0,
-                      (HSD_DevComCallback) HSD_Synth_8038B120, 0);
+                      HSD_Synth_8038B120, 0);
 }
 
 extern u32 HSD_Synth_804D7770;
@@ -1886,7 +1913,7 @@ void HSD_SynthPStreamHeaderCallback(int arg0, int arg1, void* arg2,
         HSD_DevComRequest(
             HSD_Synth_804D7764, 0x80,
             (uintptr_t) &lbl_804C4540[HSD_Synth_804D7768], 0x20, 0x21, 0,
-            (HSD_DevComCallback) HSD_SynthPStreamFirstHakoHeaderCallback,
+            HSD_SynthPStreamFirstHakoHeaderCallback,
             NULL);
     } else {
         HSD_Synth_804D7778 = 0;

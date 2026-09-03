@@ -256,7 +256,7 @@ void grHomeRun_8021CB20(Ground_GObj* gobj)
     cobj = lb_80013B14(&cobj_desc);
     HSD_CObjSetPerspective(cobj, 30.0F, 1.4F);
     HSD_GObjObject_80390A70(vars->xD4, HSD_GObj_804D784B, cobj);
-    GObj_SetupGXLinkMax(vars->xD4, (GObj_RenderFunc) (Event) fn_8021EB10, 7);
+    GObj_SetupGXLinkMax(vars->xD4, fn_8021EB10, 7);
     vars->xD4->gxlink_prios = 2;
     HSD_SisLib_803A611C(1, vars->xD4, 9, 0xD, 0, 1, 0, 7);
     HSD_SisLib_804D1124[1] =
@@ -896,8 +896,9 @@ void grHomeRun_8021EAF8(void)
 }
 
 /// Copies the main camera into a target camera
-void fn_8021EB10(HSD_GObj* target_cam_gobj)
+void fn_8021EB10(HSD_GObj* target_cam_gobj, int pc_render_code)
 {
+    (void) pc_render_code;
     HSD_GObj* main_cam_gobj;
     HSD_CObj* main_cam_cobj;
     HSD_CObj* target_cam_cobj;

@@ -24,7 +24,7 @@
 /* 01285C */ void lb_8001285C(HSD_ImageDesc*, GXTexObj*);
 /* 012994 */ void lb_80012994(HSD_ImageDesc*, u8, u8, float, float, float,
                               float, float);
-/* 013614 */ void fn_80013614(HSD_GObj*);
+/* 013614 */ void fn_80013614(HSD_GObj*, int);
 /* 0138AC */ void fn_800138AC(void* ptr);
 /* 0138CC */ void lb_800138CC(HSD_GObj* gobj, HSD_GObjEvent arg1);
 /* 0138D8 */ void lb_800138D8(HSD_GObj* gobj, s8 arg1);

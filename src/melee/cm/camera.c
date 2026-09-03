@@ -4076,8 +4076,9 @@ static void fn_800301D0(HSD_GObj* gobj, int arg1)
     }
 }
 
-void Camera_800304E0(HSD_GObj* gobj)
+void Camera_800304E0(HSD_GObj* gobj, int pc_render_code)
 {
+    (void) pc_render_code;
     s64 prio8;
     s64 prio1;
     HSD_CObj* cobj;

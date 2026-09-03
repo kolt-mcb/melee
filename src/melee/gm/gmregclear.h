@@ -114,7 +114,7 @@
 /* 181B64 */ void gm_80181B64(int c_kind, int, s32);
 /* 181BFC */ int fn_80181BFC(int*);
 /* 181C80 */ void fn_80181C80(s32 arg0);
-/* 181E18 */ UNK_RET fn_80181E18(UNK_PARAMS);
+/* 181E18 */ void fn_80181E18(HSD_GObj* gobj);
 /* 182174 */ UNK_RET gm_80182174(UNK_PARAMS);
 /* 182510 */ bool gm_IsMultimanSmashMode(void);
 /* 182554 */ void gm_80182554(int, int);

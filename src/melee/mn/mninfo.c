@@ -232,8 +232,9 @@ static inline s32 mnInfo_CountUnlocked(void)
     return count;
 }
 
-void fn_80251FE4(void)
+void fn_80251FE4(HSD_GObj* pc_proc_gobj)
 {
+    (void) pc_proc_gobj;
     mnInfo_GObj* gobj;
     MnInfoData* data;
     u64 buttons;
@@ -554,7 +555,7 @@ s32 mnInfo_80252758(void)
     HSD_SisLib_803A6368(description, 0xA3);
 
     proc = HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80),
-                              (HSD_GObjEvent) fn_80251FE4, 0);
+                              fn_80251FE4, 0);
     proc->flags_3 = (u16) HSD_GObj_804D783C;
     return (s32) proc;
 }

@@ -258,8 +258,9 @@ void ifMagnify_802FB8C0(HSD_GObj* arg0, s32 arg1)
     }
 }
 
-void ifMagnify_802FBBDC(HSD_GObj* arg0)
+void ifMagnify_802FBBDC(HSD_GObj* arg0, int pc_render_code)
 {
+    (void) pc_render_code;
     int i;
     f32 mix2;
     f32 right;
@@ -582,7 +583,7 @@ void ifMagnify_802FC618(void)
     gobj = GObj_Create(14, 15, 0);
     cobj = lb_80013B14(&ifMagnify_803F97E8);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
-    GObj_SetupGXLinkMax(gobj, (GObj_RenderFunc) (Event) ifMagnify_802FBBDC, 0);
+    GObj_SetupGXLinkMax(gobj, ifMagnify_802FBBDC, 0);
     gobj->gxlink_prios = 0x10;
 
     idesc = *player0_idesc;

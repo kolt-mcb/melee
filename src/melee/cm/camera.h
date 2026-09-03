@@ -88,7 +88,7 @@
 /* 030154 */ bool Camera_80030154(void);
 /* 030178 */ bool Camera_80030178(void);
 /* 03019C */ Vec3* Camera_8003019C(void);
-/* 0304E0 */ void Camera_800304E0(HSD_GObj*);
+/* 0304E0 */ void Camera_800304E0(HSD_GObj*, int);
 /* 030688 */ void Camera_80030688(void);
 /* 030730 */ void Camera_80030730(f32);
 /* 030740 */ void Camera_SetBackgroundColor(u8, u8, u8);

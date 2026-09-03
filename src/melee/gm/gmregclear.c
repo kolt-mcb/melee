@@ -3422,8 +3422,9 @@ static inline s32 fn_80181E18_ComputeRemaining100(s32 count)
     return 0x64 - (count + lbl_80472ED8.x4);
 }
 
-void fn_80181E18(void)
+void fn_80181E18(HSD_GObj* gobj)
 {
+    (void) gobj;
     s32 entry_idx;
     s32 next;
     s32 temp;
@@ -3689,7 +3690,7 @@ void gm_80182174(void)
     lbl_80472ED8.record[0].x10 = Player_GetPlayerId(0);
     lbl_80472ED8.record[0].x11 = Player_GetNametagSlotID(0);
     HSD_GObj_SetupProc(GObj_Create(0xFU, 0x11U, 0U),
-                       (HSD_GObjEvent) fn_80181E18, 0x15U);
+                       fn_80181E18, 0x15U);
     gm_80168F88();
     PAD_STACK(8);
 }
