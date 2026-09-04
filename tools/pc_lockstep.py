@@ -542,6 +542,9 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
     ready = {"port": rendezvous is None, "ref": rendezvous is None}
     zero_at = {"port": 0, "ref": 0}
     skew = {}
+    trans = {"port": 0, "ref": 0}
+    last_scene = {"port": None, "ref": None}
+    resyncing = False
     locked = rendezvous is None
 
     compared = 0
@@ -617,21 +620,59 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
                             side.release()
                     continue
 
-            if rendezvous is None:
-                # The older cases drop the port straight into a match and let
-                # each side reach it however it likes, so they can only be
-                # paired once both are there.
-                if rg == 0 and pg == 0:
-                    port.release(); ref.release(); continue
-                if rg == 0:
-                    ref.release(); continue       # console still in the menus
-                if pg == 0:
-                    port.release(); continue      # port still booting
-                want = rg - shift
-                if pg < want:
-                    port.release(); continue
-                if pg > want:
-                    ref.release(); continue
+            # Outside a match the two advance together, one frame each.
+            # Inside one they are paired on the match frame counter instead:
+            # entering a match means loading fighters off the disc, and that
+            # takes the console frames the port does not spend, so the port
+            # arrives with its fighters already standing while the console is
+            # still loading. The counter is the only thing that says which
+            # frame of the match each side is on.
+            if rg == 0 and pg == 0:
+                port.release(); ref.release(); continue
+            if rg == 0:
+                ref.release(); continue           # console still loading
+            if pg == 0:
+                port.release(); continue          # port still loading
+            want = rg - shift
+            if pg < want:
+                port.release(); continue
+            if pg > want:
+                ref.release(); continue
+            # A scene change is not instantaneous on the console: it reads
+            # the next scene off the disc, which takes real drive time that
+            # Dolphin emulates. The port's DVD layer completes a read
+            # synchronously, so its loads take no frames at all -- the port
+            # was entering the title about 24 frames before the console and
+            # the match earlier still. Frames spent on different screens are
+            # not comparable, and no amount of input timing fixes that.
+            #
+            # So the two are re-synchronised at every scene boundary, the same
+            # way they were at the first one: whichever side has advanced
+            # further waits for the other, and lockstep resumes when they
+            # agree again. Frames are compared only while both are on the same
+            # screen -- which is every frame that means anything.
+            for side in (port, ref):
+                key = (side.row["mode"], side.row["scene"])
+                if last_scene[side.name] is None:
+                    last_scene[side.name] = key
+                elif key != last_scene[side.name]:
+                    last_scene[side.name] = key
+                    trans[side.name] += 1
+            if trans["port"] != trans["ref"]:
+                behind = port if trans["port"] < trans["ref"] else ref
+                if not resyncing:
+                    resyncing = True
+                    print("   scene boundary: %s is loading, holding the "
+                          "other" % ("console" if behind is ref else "port"))
+                behind.release()
+                continue
+            if resyncing:
+                resyncing = False
+                print("   back in step at %s scene %s (console frame %s, "
+                      "port frame %s)"
+                      % (port.row["mode"], port.row["scene"],
+                         ref.row["frame"], port.row["frame"]))
+
             # With a rendezvous there is nothing left to pair on: both sides
             # were held at the same screen, both have advanced one frame per
             # turn since, and both have had the same inputs. So every frame is
