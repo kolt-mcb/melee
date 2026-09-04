@@ -172,16 +172,38 @@ def run_cell(ck, st, frames, timeout):
                 "MELEE_MAX_FRAMES": str(frames),
                 "MELEE_TRACE": trace,
                 "MELEE_UNCAP": "1",
-                "MELEE_NOVSYNC": "1"})
+                "MELEE_NOVSYNC": "1",
+                # A cell that stalls gets killed by the timeout below and
+                # recorded as "crash" with nothing to show for it. Several
+                # cells have failed inside a long run and passed on their own
+                # -- Kirby and Donkey Kong on Kongo Jungle N64, Samus on
+                # Kongo, Mr. Game & Watch on Kongo Jungle N64 -- and at least
+                # one of those was a userspace spin, which no debugger can
+                # attach to after the fact under the default ptrace policy.
+                # The port's own watchdog is the only thing that produces a
+                # stack for those, so arm it well inside the timeout and keep
+                # the output when it fires.
+                "MELEE_WATCHDOG": str(max(15, timeout // 4))})
     # Discard the port's output rather than capture it. Only the return code
     # matters here, and a stage that fires an assert every frame can produce
     # millions of lines -- Big Blue's lane loop asserts a thousand times a
     # frame, and capturing 26 cells of that filled the disk.
+    stall_log = "/tmp/pc_matrix.stall.%d_%d" % (ck, st)
     with open(os.devnull, "w") as null:
         rc = subprocess.run(["timeout", "-s", "KILL", str(timeout), PORT],
                             cwd=REPO, env=env, stdout=null,
                             stderr=subprocess.STDOUT).returncode
-    return judge(trace, rc, frames)
+    verdict, info = judge(trace, rc, frames)
+    # rc 3 is the watchdog's own exit. Re-run once with the output kept, so
+    # the stack it prints survives instead of going to /dev/null -- a stall
+    # that leaves no evidence is the thing that made these cells expensive.
+    if rc == 3:
+        with open(stall_log, "w") as f:
+            subprocess.run(["timeout", "-s", "KILL", str(timeout), PORT],
+                           cwd=REPO, env=env, stdout=f,
+                           stderr=subprocess.STDOUT)
+        info["stall_log"] = stall_log
+    return verdict, info
 
 
 def load(path):
@@ -189,7 +211,12 @@ def load(path):
 
 
 def run(chars, stages, frames, timeout, redo, update):
-    results = {} if redo else load(RESULTS)
+    # --redo means "run these cells again even though they are already
+    # recorded", not "throw the file away". Starting from {} here discarded
+    # every cell outside the requested subset: a two-cell --redo turned an
+    # 806-cell result file into a two-cell one, and the baseline written from
+    # it was worthless.
+    results = load(RESULTS)
     total = len(chars) * len(stages)
     done = 0
     t0 = time.time()
