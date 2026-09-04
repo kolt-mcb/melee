@@ -5008,8 +5008,36 @@ static void ps_swap16(void* p)
 
 /* Structs converted in place must not be converted twice (a preloaded
  * archive can be handed to the loader again). */
+/* Which archive blocks have already been byte-swapped in place. Keyed by
+ * address *and by the bank they came from*: an effect bank is freed and
+ * reloaded between scenes, and the heap hands back the same addresses, so a
+ * set keyed on the pointer alone reports the fresh big-endian copy as already
+ * converted and leaves it that way. Its genLife then reads byte-swapped, every
+ * generator dies within a frame or two, no child generators are ever spawned,
+ * and the port stops consuming randomness that the console consumes every
+ * frame. (Same shape as the PlCo swap-once bug in Fighter_LoadCommonData.)
+ *
+ * Dropping a bank's marks when that bank is reloaded is what makes the second
+ * load convert. Clearing the whole set would be wrong -- the other banks' data
+ * is still converted, and swapping it twice puts it back. */
 static const void* ps_converted[4096];
+static int ps_converted_bank[4096];
 static int ps_nconverted;
+
+static void ps_forget_bank(int bank)
+{
+    int i, n = 0;
+    for (i = 0; i < ps_nconverted; i++) {
+        if (ps_converted_bank[i] != bank) {
+            ps_converted[n] = ps_converted[i];
+            ps_converted_bank[n] = ps_converted_bank[i];
+            n++;
+        }
+    }
+    ps_nconverted = n;
+}
+
+static int ps_conv_bank;
 static int ps_mark_converted(const void* p)
 {
     int i;
@@ -5019,6 +5047,7 @@ static int ps_mark_converted(const void* p)
         }
     }
     if (ps_nconverted < (int) (sizeof(ps_converted) / sizeof(ps_converted[0]))) {
+        ps_converted_bank[ps_nconverted] = ps_conv_bank;
         ps_converted[ps_nconverted++] = p;
     }
     return 1;
@@ -5113,6 +5142,10 @@ void psInitDataBankLoad(int bank, int* cmdBank, int* texBank, u32* ref,
     if (bank < 0 || bank >= 65) {
         return;
     }
+    /* This bank's blocks are about to be replaced; forget that the old ones
+     * at those addresses were converted. */
+    ps_forget_bank(bank);
+    ps_conv_bank = bank;
     ptclref_804D0E5C[bank] = ref;
     /* texture groups */
     {
