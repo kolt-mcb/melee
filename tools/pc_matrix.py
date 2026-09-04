@@ -258,7 +258,8 @@ def run(chars, stages, frames, timeout, redo, update):
             rate = (time.time() - t0) / max(done, 1)
             print("%-10s %-12s %-16s  (%d/%d, ~%.0f min left)"
                   % (CHARS.get(ck, ck), STAGES.get(st, st), verdict, done,
-                     total, rate * (total - done) / 60))
+                     total, rate * (total - done) / 60),
+                  flush=True)
     if update:
         json.dump({k: v["verdict"] for k, v in results.items()},
                   open(BASELINE, "w"), indent=0, sort_keys=True)
