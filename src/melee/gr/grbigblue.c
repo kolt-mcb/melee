@@ -89,8 +89,27 @@ extern f32 grBb_804DB3F0;
  * lane and asserted a thousand times a frame. */
 #define GRBB_CAR_BASE(gp)                                                     \
     ((u8*) &((Ground*) (gp))->gv.bigblue.car - 0xC4)
+
+/* Every bitfield view of the word at gp+0xC4 below describes the console's
+ * layout: a big-endian u32 with its fields allocated from the most
+ * significant bit down. x86 allocates from the least significant bit up and
+ * stores little-endian, so each of these structs put its field somewhere
+ * else. The lane index the track's show/hide reads at (word >> 15) & 0x7F sat
+ * at bit 10 instead, so every frame unhid a section of track that was not the
+ * one under the players, the real sections stayed hidden, and mpJointHide
+ * took their collision out of the world -- the stage had a floor on the first
+ * frame and none after it.
+ *
+ * scalar_storage_order gives these structs the console's byte order and, with
+ * it, MSB-first bitfield allocation, so the offsets and shifts written for the
+ * GameCube mean here what they meant there. The u32 reads of the same word
+ * still need a swap; see GRBB_C4_WORD. */
+#define GRBB_BE __attribute__((scalar_storage_order("big-endian")))
+#define GRBB_C4_WORD(gp) __builtin_bswap32(*(u32*) (GRBB_CAR_BASE(gp) + 0xC4))
 #else
 #define GRBB_CAR_BASE(gp) ((u8*) (gp))
+#define GRBB_BE
+#define GRBB_C4_WORD(gp) (*(u32*) (GRBB_CAR_BASE(gp) + 0xC4))
 #endif
 
 static grBb_YakumonoParam* grBb_804D69C8[2];
@@ -2326,16 +2345,16 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
         u16 pad0 : 3;
         u16 lane : 7;
         u16 pad1 : 6;
-    } grBb_InitC4HalfBits;
+    } GRBB_BE grBb_InitC4HalfBits;
     typedef struct grBb_InitC4WordBits {
         u32 pad0 : 10;
         u32 lane : 7;
         u32 pad1 : 15;
-    } grBb_InitC4WordBits;
+    } GRBB_BE grBb_InitC4WordBits;
     typedef struct grBb_InitByteLo7 {
         u8 pad0 : 1;
         u8 lo7 : 7;
-    } grBb_InitByteLo7;
+    } GRBB_BE grBb_InitByteLo7;
     typedef struct grBb_InitByteBits {
         u8 b0 : 1;
         u8 b1 : 1;
@@ -2345,11 +2364,11 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
         u8 b5 : 1;
         u8 b6 : 1;
         u8 b7 : 1;
-    } grBb_InitByteBits;
+    } GRBB_BE grBb_InitByteBits;
     typedef struct grBb_InitNibbleBits {
         u8 hi : 4;
         u8 lo : 4;
-    } grBb_InitNibbleBits;
+    } GRBB_BE grBb_InitNibbleBits;
     HSD_JObj* jobj = GET_JOBJ(gobj);
     Ground* gp = (Ground*) gobj->user_data;
     Vec3 pos;
@@ -2404,11 +2423,11 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
         HSD_ASSERT(2330, end_jobj);
     }
 
-    ((grBb_InitC4HalfBits*) &gp->gv.bigblue.x0_w)->lane = 0xFFFF;
+    gp->gv.bigblue.prev_lane = 0xFFFF;
 
-    ((grBb_InitC4WordBits*) &gp->gv.bigblue.x0_w)->lane = 4;
+    gp->gv.bigblue.cur_lane = 4;
 
-    ((grBb_InitByteLo7*) (GRBB_CAR_BASE(gp) + 0xC6))->lo7 = 0;
+    gp->gv.bigblue.next_lane = 0;
 
     *(f32*) (GRBB_CAR_BASE(gp) + 0xC8) = -1000.0F * Ground_801C0498();
     *(f32*) (GRBB_CAR_BASE(gp) + 0xCC) = 10.0F * Ground_801C0498();
@@ -2424,12 +2443,12 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
         *(f32*) (GRBB_CAR_BASE(gp) + 0xF8) = fval;
 
         ((grBb_InitNibbleBits*) (GRBB_CAR_BASE(gp) + 0xC7))->hi = 0;
-        ((grBb_InitByteBits*) &gp->gv.bigblue.x0)->b1 = 0;
-        ((grBb_InitByteBits*) &gp->gv.bigblue.x0)->b2 = 0;
+        gp->gv.bigblue.b1 = 0;
+        gp->gv.bigblue.b2 = 0;
     }
 
     {
-        u32 idx = (*(u32*) (GRBB_CAR_BASE(gp) + 0xC4) >> 15) & 0x7F;
+        u32 idx = (GRBB_C4_WORD(gp) >> 15) & 0x7F;
         HSD_JObj* active =
             Ground_801C3FA4(gobj, grBb_TrackEntries[idx].jobj_index);
 
@@ -2450,7 +2469,7 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
 
         HSD_JObjClearFlagsAll(next, JOBJ_HIDDEN);
 
-        active_idx = (*(u32*) (GRBB_CAR_BASE(gp) + 0xC4) >> 15) & 0x7F;
+        active_idx = (GRBB_C4_WORD(gp) >> 15) & 0x7F;
         pos.x += grBb_TrackEntries[active_idx].delta.x;
         pos.y += grBb_TrackEntries[active_idx].delta.y;
         pos.z += grBb_TrackEntries[active_idx].delta.z;
@@ -2467,20 +2486,20 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
         u16 pad0 : 3;
         u16 lane : 7;
         u16 pad1 : 6;
-    } grBb_B4C4HalfBits;
+    } GRBB_BE grBb_B4C4HalfBits;
     typedef struct grBb_B4C4WordBits {
         u32 pad0 : 10;
         u32 lane : 7;
         u32 pad1 : 15;
-    } grBb_B4C4WordBits;
+    } GRBB_BE grBb_B4C4WordBits;
     typedef struct grBb_B4C6Lo7Bits {
         u8 pad0 : 1;
         u8 lane : 7;
-    } grBb_B4C6Lo7Bits;
+    } GRBB_BE grBb_B4C6Lo7Bits;
     typedef struct grBb_B4C7Nibbles {
         u8 hi : 4;
         u8 lo : 4;
-    } grBb_B4C7Nibbles;
+    } GRBB_BE grBb_B4C7Nibbles;
     u8* gp = (u8*) GET_GROUND(gobj);
     s32 count = 0;
     HSD_JObj* jobj;
@@ -2494,7 +2513,7 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
     HSD_JObjSetFlagsAll(
         Ground_801C3FA4(
             gobj,
-            grBb_TrackEntries[(*(u32*) (GRBB_CAR_BASE(gp) + 0xC4) >> 15) & 0x7F].jobj_index),
+            grBb_TrackEntries[(GRBB_C4_WORD(gp) >> 15) & 0x7F].jobj_index),
         JOBJ_HIDDEN);
 
     /* Copy current lane to previous lane: rlwimi hw, word, 23, 19, 25 */
@@ -2573,7 +2592,7 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
         }
 
         /* Reject if same as current lane */
-        if (((*(u32*) (GRBB_CAR_BASE(gp) + 0xC4) >> 15) & 0x7F) == (u32) random_lane) {
+        if (((GRBB_C4_WORD(gp) >> 15) & 0x7F) == (u32) random_lane) {
             continue;
         }
 
@@ -2603,7 +2622,7 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
 
             /* Reachability check */
             if (sp_pos.y +
-                    grBb_TrackEntries[(*(u32*) (GRBB_CAR_BASE(gp) + 0xC4) >> 15) & 0x7F]
+                    grBb_TrackEntries[(GRBB_C4_WORD(gp) >> 15) & 0x7F]
                         .delta.y +
                     entry->delta.y <
                 grBb_804D69C8[0]->x8 * Ground_801C0498() + *(f32*) (GRBB_CAR_BASE(gp) + 0xCC))
@@ -2627,9 +2646,9 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
     HSD_JObjClearFlagsAll(jobj, JOBJ_HIDDEN);
 
     /* Add current lane deltas (re-extract lane each time, no CSE) */
-    sp_pos.x += grBb_TrackEntries[(*(u32*) (GRBB_CAR_BASE(gp) + 0xC4) >> 15) & 0x7F].delta.x;
-    sp_pos.y += grBb_TrackEntries[(*(u32*) (GRBB_CAR_BASE(gp) + 0xC4) >> 15) & 0x7F].delta.y;
-    sp_pos.z += grBb_TrackEntries[(*(u32*) (GRBB_CAR_BASE(gp) + 0xC4) >> 15) & 0x7F].delta.z;
+    sp_pos.x += grBb_TrackEntries[(GRBB_C4_WORD(gp) >> 15) & 0x7F].delta.x;
+    sp_pos.y += grBb_TrackEntries[(GRBB_C4_WORD(gp) >> 15) & 0x7F].delta.y;
+    sp_pos.z += grBb_TrackEntries[(GRBB_C4_WORD(gp) >> 15) & 0x7F].delta.z;
 
     /* Set translate on new jobj (inline expands assert + dirty) */
     HSD_JObjSetTranslate(jobj, &sp_pos);
@@ -2720,12 +2739,12 @@ typedef struct grBb_ByteBits {
     u8 b5 : 1;
     u8 b6 : 1;
     u8 b7 : 1;
-} grBb_ByteBits;
+} GRBB_BE grBb_ByteBits;
 
 typedef struct grBb_NibbleBits {
     u8 hi : 4;
     u8 lo : 4;
-} grBb_NibbleBits;
+} GRBB_BE grBb_NibbleBits;
 
 #if BUILD_TARGET_PC
 /* see the note on lbl_803E2DFC above: +0x6D8 past grBb_803E2938 is this. */
@@ -2763,7 +2782,7 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
 
     prev = *(Vec3*) (GRBB_CAR_BASE(gp) + 0xC8);
 
-    entry = &grBb_TrackEntries[((*(u32*) (GRBB_CAR_BASE(gp) + 0xC4)) >> 15) & 0x7F];
+    entry = &grBb_TrackEntries[(GRBB_C4_WORD(gp) >> 15) & 0x7F];
 
     lb_8000B1CC(Ground_801C3FA4(gobj, entry->start_index), NULL, &bone_pos);
 
@@ -2789,7 +2808,7 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
                 }
             } else {
                 if (!((grBb_ByteBits*) (GRBB_CAR_BASE(gp) + 0xC4))->b2 &&
-                    (((*(u32*) (GRBB_CAR_BASE(gp) + 0xC4)) >> 15) & 0x7F) == 0xB)
+                    ((GRBB_C4_WORD(gp) >> 15) & 0x7F) == 0xB)
                 {
                     ((grBb_ByteBits*) (GRBB_CAR_BASE(gp) + 0xC4))->b2 = 1;
                 }
@@ -2797,7 +2816,7 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
         }
     }
 
-    if ((((*(u32*) (GRBB_CAR_BASE(gp) + 0xC4)) >> 15) & 0x7F) == 0xB) {
+    if (((GRBB_C4_WORD(gp) >> 15) & 0x7F) == 0xB) {
         u32 state = ((grBb_NibbleBits*) (GRBB_CAR_BASE(gp) + 0xC7))->hi;
         if (state == 0) {
             ((grBb_NibbleBits*) (GRBB_CAR_BASE(gp) + 0xC7))->hi = 1;
@@ -2854,7 +2873,7 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
         target.y = target_y;
         target.z = center.z;
 
-        if ((((*(u32*) (GRBB_CAR_BASE(gp) + 0xC4)) >> 15) & 0x7F) == 0xB &&
+        if (((GRBB_C4_WORD(gp) >> 15) & 0x7F) == 0xB &&
             ((grBb_ByteBits*) (GRBB_CAR_BASE(gp) + 0xC4))->b2)
         {
             rot_z = -atan2f(-normal_out.x, normal_out.y);

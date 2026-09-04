@@ -1397,7 +1397,17 @@ struct grBigBlue_GroundVars {
                     /* +3 gp+C7:0 */ u32 nibble_hi : 4;
                     /* +3 gp+C7:4 */ u32 nibble_lo : 4;
                 };
-            };
+            }
+#if BUILD_TARGET_PC
+            /* The console allocates these fields from the most significant
+             * bit of a big-endian word; x86 does the opposite in both
+             * respects, which moved every lane index. grbigblue.c addresses
+             * the same word through its own cast structs and through raw
+             * shifts written for the console, so the storage has to keep the
+             * console's order for any of them to agree. */
+            __attribute__((scalar_storage_order("big-endian")))
+#endif
+            ;
 #if !BUILD_TARGET_PC
             /*  +4 gp+C8 */ void* xC8;
             /*  +8 gp+CC */ void* xCC;
