@@ -1,4 +1,5 @@
 #include "gr/grkongo.h"
+#include <stddef.h>
 
 #include "grkongo.static.h"
 
@@ -1369,6 +1370,24 @@ void fn_801D7700(void* user_data, int joint_id, CollData* coll, int coll_x50,
     }
 }
 
+/* The loop below runs twice over the same Ground, the second pass reaching
+ * the (xD4, xD8) pair through the (xC4, xC8) field names by stepping the
+ * pointer 0x10 bytes. That is the console's distance from xC4 to xD4 -- but
+ * grKongo_GroundVars has a pointer (u.taru.keep) between them, so here xD4 is
+ * at +0x18 and the step landed on kongo3.xD0 instead: a HSD_JObj* overwritten
+ * with a rotation angle, and dereferenced two lines later. It crashed a few
+ * characters per full run of the stage, never the same ones twice.
+ *
+ * The step is the real distance between the two pairs on whichever target is
+ * building. Both pairs are adjacent f32s, so the second field follows. */
+#if BUILD_TARGET_PC
+#define GRKONGO_PAIR_STRIDE                                                   \
+    (offsetof(struct grKongo_GroundVars, xD4) -                               \
+     offsetof(struct grKongo_GroundVars, xC4))
+#else
+#define GRKONGO_PAIR_STRIDE 0x10
+#endif
+
 void grKongo_801D77E0(HSD_GObj* gobj, s32 arg1)
 {
     Ground* gp = gobj->user_data;
@@ -1418,7 +1437,7 @@ void grKongo_801D77E0(HSD_GObj* gobj, s32 arg1)
                     q->u.kongo.xC8 = 0.0f;
                 }
             }
-            q = (Ground*) ((u8*) q + 0x10);
+            q = (Ground*) ((u8*) q + GRKONGO_PAIR_STRIDE);
         }
     }
     HSD_JObjSetRotationZ(gp->u.kongo3.xCC, gp->u.kongo.xC4);
