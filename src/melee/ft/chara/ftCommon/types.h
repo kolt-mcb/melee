@@ -357,7 +357,7 @@ union ftCommon_MotionVars {
         /* fp+2358 */ HSD_JObj* x18;
     } capturedamage;
     struct {
-        /* fp+2340 */ bool timer;
+        /* fp+2340 */ int timer; /* a countdown, not a flag -- see below */
         /* fp+2344 */ float x4;
         /* fp+2348 */ Vec3 x8;
         /* fp+2354 */ Vec3 x14;
