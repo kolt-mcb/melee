@@ -27,6 +27,8 @@ void pc_get_fb_size(float* w, float* h);
 #include <stdlib.h>
 #include <stdio.h>
 
+int pc_render_frame_now = 0;
+
 /* Simple synchronous render for archive textures */
 static void render_archive_sync_once(void)
 {
@@ -173,6 +175,9 @@ void render_present(void)
      * letterboxed into, so a diff against a 640x528 Dolphin frame measures
      * the picture and not the black bars around it. */
     static int g_render_frame = 0;
+    /* Readable from diagnostics in game code, which cannot see a file-local
+     * counter but often needs to say "on which frame did this happen". */
+    extern int pc_render_frame_now;
     static int g_shot_init = -1;
     static int g_shot_wanted = 0;
     static int g_shot_frames[16];
@@ -182,6 +187,7 @@ void render_present(void)
     static int g_shot_full = 0;
 
     g_render_frame++;
+    pc_render_frame_now = g_render_frame;
     /* State trace for the divergence test (MELEE_TRACE). Same frame numbering
      * as the screenshots below, so a trace line and a screenshot with the same
      * number are the same frame on both sides of the comparison. */
