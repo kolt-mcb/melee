@@ -319,7 +319,7 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
     # default lands on a whole day, so the seconds field is zero and the title
     # draws nothing on either side.
     rtc = case.get("fake_rtc", GC_DEFAULT_RTC)
-    argv += ["-C", "Dolphin.Core.CustomRTCEnable=True",
+    argv += ["-C", "Dolphin.Core.EnableCustomRTC=True",
              "-C", "Dolphin.Core.CustomRTCValue=%d" % (GC_EPOCH_UNIX + rtc)]
     if dumping:
         # Only while learning the route: the dumped-PNG count is the clock the
@@ -514,6 +514,13 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
         os.environ["MELEE_FORCE_CPU"] = cpu
     if seed:
         os.environ["MELEE_SEED"] = seed
+    if case.get("rendezvous") is not None:
+        # Compared from the title, the two sides must agree on the seed there
+        # -- not merely once a match starts. Both read this and write the same
+        # value on the first frame they reach the rendezvous mode. Set before
+        # either child is launched, since both take it from the environment.
+        os.environ.setdefault("MELEE_SEED", case.get("seed", "3F2A1B0C"))
+        os.environ["MELEE_SEED_AT_MODE"] = str(case["rendezvous"])
     ref_proc, port_proc, steps = launch(case, headless, dumping=False,
                                         with_port=True, size=size, route=route)
     sides = accept_sides(server, 2)

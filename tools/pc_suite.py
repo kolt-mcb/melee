@@ -124,7 +124,7 @@ def load_case(path):
             # knows differ for reasons of route rather than of correctness.
             case.setdefault("ignore", []).extend(
                 x.strip() for x in val.split(",") if x.strip())
-        elif key in ("description", "align", "ref_clock", "anchor"):
+        elif key in ("description", "align", "ref_clock", "anchor", "seed"):
             case[key] = val
     case["input"].sort()
     return case
