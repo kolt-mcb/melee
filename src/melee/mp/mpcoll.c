@@ -25,6 +25,12 @@
 #include <baselib/debug.h>
 #include <baselib/gobj.h>
 
+#if BUILD_TARGET_PC
+/* One frame of movement is never more than a few hundred units, so a few
+ * hundred substeps is already far past anything real. */
+#define MP_MAX_COLL_STEPS 512
+#endif
+
 struct mpColl_80458810_t {
     /*  +0 */ int right[9];
     /* +24 */ int left[9];
@@ -959,6 +965,32 @@ bool mpColl_80043754(mpColl_Callback cb, CollData* coll, u32 flags)
     if (x > flt_804D7FD8) {       // 6.0F float order hack
         steps = x / flt_804D7FD8; // 6.0F float order hack
         steps = steps + 1;
+#if BUILD_TARGET_PC
+        /* The substep count is a distance divided by six, so one nonsense
+         * coordinate anywhere upstream -- an unconverted field, a -FLT_MAX
+         * "no ground here" sentinel that leaked into a position -- turns this
+         * into billions of collision substeps. The console would hang here
+         * too; the difference is that it never gets a nonsense coordinate.
+         *
+         * This was the intermittent stall on the character-vs-stage matrix:
+         * Kirby and Donkey Kong on Kongo Jungle N64 froze roughly one run in
+         * three, in a spin no debugger could be attached to (ptrace_scope
+         * blocks attaching after the fact), which read as a crash. Bounding it
+         * turns the freeze into one message and a frame that finishes wrong,
+         * which is something the suite can see and report. */
+        if (!(steps >= 1) || steps > MP_MAX_COLL_STEPS) {
+            static int said;
+            if (!said) {
+                said = 1;
+                fprintf(stderr,
+                        "[MPCOLL] absurd collision substep count (%d from "
+                        "distance %g); clamping to %d -- a position or ECB "
+                        "upstream is nonsense\n",
+                        steps, (double) x, MP_MAX_COLL_STEPS);
+            }
+            steps = MP_MAX_COLL_STEPS;
+        }
+#endif
         vel.x /= steps;
         vel.y /= steps;
         vel.z /= steps;
