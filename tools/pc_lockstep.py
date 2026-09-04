@@ -531,6 +531,8 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
     sides = accept_sides(server, 2)
     port, ref = sides["port"], sides["ref"]
 
+    dump_path = os.environ.get("MELEE_LOCKSTEP_DUMP")
+    dump_fp = open(dump_path, "w") if dump_path else None
     pads = Pads()
     console_input = console_steps(steps)
     # How long each side takes to boot is not interesting and should not have
@@ -565,6 +567,11 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
                     if not side.read_frame():
                         print("   %s stopped" % side.name)
                         return finish(first, compared, time.time() - (t0 or time.time()))
+                    if dump_fp is not None:
+                        dump_fp.write("%s %s\n" % (
+                            side.name[0].upper(),
+                            " ".join("%s=%s" % (k, v)
+                                     for k, v in sorted(side.row.items()))))
             pg = int(port.row["gframe"])
             rg = int(ref.row["gframe"])
             rframe = int(ref.row["frame"])
