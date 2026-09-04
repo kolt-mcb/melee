@@ -101,14 +101,14 @@ PC_DATA_STUB(grMc_803E34A4);
 PC_DATA_STUB(grMc_803E34E0);
 PC_DATA_STUB(grMc_803E3B7C);
 PC_DATA_STUB(grNKr_804DB868);
-PC_DATA_STUB(grOk_804DB9CC);
-PC_DATA_STUB(grOk_804DBA04);
-PC_DATA_STUB(grOk_804DBA08);
-PC_DATA_STUB(grOk_804DBA0C);
-PC_DATA_STUB(grOk_804DBA10);
-PC_DATA_STUB(grOk_804DBA14);
-PC_DATA_STUB(grOk_804DBA18);
-PC_DATA_STUB(grOk_804DBA1C);
+/* grOk_804DB9CC: real value now defined in gr/groldkongo.c */
+/* grOk_804DBA04: real value now defined in gr/groldkongo.c */
+/* grOk_804DBA08: real value now defined in gr/groldkongo.c */
+/* grOk_804DBA0C: real value now defined in gr/groldkongo.c */
+/* grOk_804DBA10: real value now defined in gr/groldkongo.c */
+/* grOk_804DBA14: real value now defined in gr/groldkongo.c */
+/* grOk_804DBA18: real value now defined in gr/groldkongo.c */
+/* grOk_804DBA1C: real value now defined in gr/groldkongo.c */
 PC_DATA_STUB(grRc_803B8288);
 PC_DATA_STUB(grRc_804D4790);
 PC_DATA_STUB(grSh_Route_803B8360);
