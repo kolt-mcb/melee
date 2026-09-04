@@ -977,9 +977,22 @@ struct grZebes_GroundVars4 {
     /* +08 gp+CC */ f32 xCC;
     /* +0C gp+D0 */ f32 xD0;
     /* +10 gp+D4 */ f32 xD4;
+#if BUILD_TARGET_PC
+    /* PC port: these three hold pointers, and grZebes_801D925C hands this
+     * whole block to grZebes_801DA528 as a grZe_AcidState -- whose x14_jobj1,
+     * x18_jobj2 and x1C_mat are the same three slots. On GCN both views agree
+     * because a pointer is four bytes; here the acid view's pointers are
+     * eight, so x1C_mat sits at +0x24 while a u32 xE0 sits at +0x1C, and the
+     * material read back was whatever followed. Declaring them as pointers
+     * puts the two views back in step. */
+    /* +14 gp+D8 */ void* xD8;
+    /* +1C gp+DC */ void* xDC;
+    /* +24 gp+E0 */ void* xE0;
+#else
     /* +14 gp+D8 */ u32 xD8;
     /* +18 gp+DC */ u32 xDC;
     /* +1C gp+E0 */ u32 xE0;
+#endif
     /* +20 gp+E4 */ s16 xE4;
     /* +22 gp+E6 */ s16 xE6;
     /* +24 gp+E8 */ s32 xE8;
@@ -1385,11 +1398,13 @@ struct grBigBlue_GroundVars {
                     /* +3 gp+C7:4 */ u32 nibble_lo : 4;
                 };
             };
+#if !BUILD_TARGET_PC
             /*  +4 gp+C8 */ void* xC8;
             /*  +8 gp+CC */ void* xCC;
             /*  +C gp+D0 */ f32 xD0;
             /* +10 gp+D4 */ HSD_JObj* xD4[3];
             /* pad */ char pad_3[4];
+#endif
             /* +20 gp+E4 */ struct grBigBlue_GroundData data[3];
         };
         struct grBigBlue_PlatformVars platform;
@@ -1398,6 +1413,23 @@ struct grBigBlue_GroundVars {
             /* +10 gp+D4 */ struct grBigBlue_CarLane lanes[4];
         } car;
     };
+#if BUILD_TARGET_PC
+    /* On the console these four live inside the union above, at gp+0xC8
+     * through gp+0xDF, where the `car` arm's pad and first lane slot cover
+     * them harmlessly -- the car code writes its lanes from gp+0xD4 up and
+     * never touches gp+0xC8/0xCC, so the two readings coexist.
+     *
+     * Here they cannot. A pointer is eight bytes, so xC8 lands at union+8 and
+     * xCC at union+16 -- and union+16 is lanes[0]. Writing the first car slot
+     * destroyed xCC, and the next `((u8*) xCC)[line_idx] = 1` wrote through
+     * the wreckage. They are the two 30-entry arrays this stage allocates, so
+     * they are given storage outside the union; nothing indexes them by
+     * offset. */
+    void* xC8;
+    void* xCC;
+    f32 xD0;
+    HSD_JObj* xD4[3];
+#endif
 };
 
 struct grBigBlueRoute_GroundVars {
