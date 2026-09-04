@@ -455,6 +455,33 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
     PAD_STACK(0xDC - 0x50);
 
     mnStageSel_804D6C90 = (SSSData*) arg0;
+#if BUILD_TARGET_PC
+    /* MELEE_FORCE_STAGE=<StKind> picks the stage without entering the stage
+     * select. The game already supports this for the modes that choose for
+     * you: the block below is skipped when a stage is forced, and OnFrame
+     * commits it on the first frame. Set here rather than in the scene's
+     * loader because the VS path uses a loader of its own.
+     *
+     * It matters because this screen is not ported yet. MnSelectStageDataTable
+     * is a bare table of 4-byte descriptor offsets -- camera, two lights, fog,
+     * then a large block of joints and anims -- and a C struct of 8-byte
+     * pointers cannot be laid over it: the camera came back as
+     * 0xa8850900ec850900, two GameCube fields read as one host pointer, and
+     * HSD_CObjLoadDesc walked into it. Converting the table is its own job
+     * (pc_conv_CObjDescAt and pc_conv_LightDescAt are the shape of it, plus a
+     * converter for the x10 block). Until then this lets a run driven through
+     * the menus reach a match. */
+    {
+        const char* fs = getenv("MELEE_FORCE_STAGE");
+        if (fs != NULL) {
+            mnStageSel_804D6C90->force_stage_id = (s8) atoi(fs);
+        }
+        if (getenv("MELEE_SSSLOG") != NULL) {
+            fprintf(stderr, "[SSS] OnEnter force_stage_id=%d\n",
+                    (int) mnStageSel_804D6C90->force_stage_id);
+        }
+    }
+#endif
 
     if (mnStageSel_804D6C90->force_stage_id < 0) {
         if (lbLang_IsSavedLanguageUS() != 0) {
@@ -465,6 +492,12 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
         temp_r3 = HSD_ArchiveGetPublicAddress(mnStageSel_804D6C94,
                                               "MnSelectStageDataTable");
         MenMain_cam = temp_r3->unk0;
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_SSSLOG") != NULL) {
+            fprintf(stderr, "[SSS] table=%p unk0=%p\n", (void*) temp_r3,
+                    (void*) MenMain_cam);
+        }
+#endif
         mnStageSel_804D6C98 = &temp_r3->x10;
         mnStageSel_804D6CAF = 0;
         mnStageSel_804D6CA0 = 0;

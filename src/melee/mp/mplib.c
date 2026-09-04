@@ -105,6 +105,43 @@ struct mpLib_803BF248_t {
 /* 4D64C4 */ static CollJoint* jointListStart;
 
 #if BUILD_TARGET_PC
+/* PC port: every one of these searches walks the collision-joint list, and a
+ * list that loops back on itself turns the walk into a hang rather than a
+ * crash -- which is far harder to see: the process just stops, and gdb cannot
+ * attach after the fact under the default ptrace policy. Kirby on Mute City
+ * stalled here about one run in three. The walk is bounded by the number of
+ * joints the list was built with, and says so once, so a corrupt list shows up
+ * as a message and a dropped frame instead of a dead process. */
+static int mpJointCount;
+
+static bool mp_walk_ok(int* n)
+{
+    if (++*n <= mpJointCount + 8) {
+        return true;
+    }
+    {
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr,
+                    "[MPLIB] collision joint list does not terminate "
+                    "(walked past %d joints); truncating the walk\n",
+                    mpJointCount);
+        }
+    }
+    return false;
+}
+
+#define MP_JOINT_WALK(j)                                                      \
+    int _mp_walk_n = 0;                                                       \
+    for ((j) = jointListStart; (j) != NULL && mp_walk_ok(&_mp_walk_n);        \
+         (j) = (j)->next)
+#else
+#define MP_JOINT_WALK(j) for ((j) = jointListStart; (j) != NULL; (j) = (j)->next)
+#endif
+
+
+#if BUILD_TARGET_PC
 /* PC port: collision data is still unconverted, so ground.c gates mpLibLoad
  * behind MELEE_STAGE_COLL and none of these tables are normally allocated.
  * Stages do not know that: their on_load calls mpJointSetCb1/Cb2,
@@ -1052,6 +1089,9 @@ void mpLibLoad(MapCollData* coll_data)
     }
     joint->next = NULL;
     jointListEnd = joint;
+#if BUILD_TARGET_PC
+    mpJointCount = coll_data->joint_count;
+#endif
     mpPruneEmptyLines(coll_data);
 
     floor_count = coll_data->floor_count;
@@ -1782,7 +1822,7 @@ bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
         mpBoundingCheck2(ax, ay, bx, by);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         CollLine* line_r26;
         int var_r25;
         int var_r24;
@@ -1966,7 +2006,7 @@ bool mpCheckFloorRemap(float ax, float ay, float bx, float by, float y_offset,
         mpBoundingCheck2(ax, ay, bx, by);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         CollLine* line;
         int count;
         int count2;
@@ -2135,7 +2175,7 @@ bool mpCheckCeiling(float ax, float ay, float bx, float by, Vec3* vec_out,
         mpBoundingCheck2(ax, ay, bx, by);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         CollLine* line_r26;
         int var_r25;
         int var_r24;
@@ -2272,7 +2312,7 @@ bool mpCheckCeilingRemap(float ax, float ay, float bx, float by, Vec3* vec_out,
         mpBoundingCheck2(ax, ay, bx, by);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         CollLine* r26;
         int r25;
         int r24;
@@ -2502,7 +2542,7 @@ bool mpCheckLeftWall(float ax, float ay, float bx, float by, Vec3* vec_out,
         mpBoundingCheck2(ax, ay, bx, by);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         if (joint->flags & CollJoint_TooFar) {
             continue;
         }
@@ -2641,7 +2681,7 @@ bool mpCheckLeftWallRemap(float ax, float ay, float bx, float by,
         mpBoundingCheck2(ax, ay, bx, by);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         if (joint->flags & CollJoint_TooFar) {
             continue;
         }
@@ -2812,7 +2852,7 @@ bool mpCheckRightWall(float ax, float ay, float bx, float by, Vec3* vec_out,
         mpBoundingCheck2(ax, ay, bx, by);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         if (joint->flags & CollJoint_TooFar) {
             continue;
         }
@@ -2946,7 +2986,7 @@ bool mpCheckRightWallRemap(float ax, float ay, float bx, float by,
         mpBoundingCheck2(ax, ay, bx, by);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         CollLine* line;
         int count;
         int dynamic_count;
@@ -3118,7 +3158,7 @@ bool mpLib_800511A4_RightWall(float ax, float ay, float bx, float by, float cx,
         mpBoundingCheck3(ax, ay, bx, by, cx, cy, dx, dy);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         CollLine* line;
         int count;
         int dynamic_count;
@@ -3261,7 +3301,7 @@ bool mpLib_800515A0_LeftWall(float a0x, float a0y, float a1x, float a1y,
         mpBoundingCheck3(a0x, a0y, a1x, a1y, b0x, b0y, b1x, b1y);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         CollLine* line;
         int count;
         int dynamic_count;
@@ -3399,7 +3439,7 @@ int mpLib_8005199C_Floor(Vec3* vec, int joint_id_skip, int joint_id_only)
         mpBoundingCheck2(x, y, x, y - 30000.0F);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         if (joint->flags & CollJoint_TooFar ||
             joint_id_skip == joint - groundCollJoint)
         {
@@ -3490,7 +3530,7 @@ int mpLib_80051BA8_Floor(Vec3* out_vec, int line_id_skip, int joint_id_skip,
         mpBoundingCheck(left, bottom, right, top);
     }
 
-    for (joint = jointListStart; joint != NULL; joint = joint->next) {
+    MP_JOINT_WALK(joint) {
         if (joint->flags & CollJoint_TooFar) {
             continue;
         }

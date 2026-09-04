@@ -1068,7 +1068,20 @@ void grVenom_80204F20(Ground_GObj* arg0)
 
     grVe_803E5348.arwing.arwing_gobj[gp->u.venom.xC8 = grVe_804D6A34] = arg0;
 
+#if BUILD_TARGET_PC
+    /* PC port: another static-data anchor, the same shape as the callback
+     * table above. Reading &grVe_803E5348 as an s32 array, index 14 is byte
+     * 0x38 -- one past grVe_Data on the GameCube, where MWCC placed
+     * grVe_803E5380 -- and index +170 is byte 0x2A8, which lands at index 48
+     * of grVe_803E5530. grVe_Data grew from 0x38 to 0x48 here (it holds
+     * HSD_GObj*[3]) and GCC does not preserve that adjacency in any case, so
+     * the computed id was garbage and grVenom_80203EAC indexed the callback
+     * table with it. Name the two tables instead. */
+    other = grVenom_80203EAC(
+        grVe_803E5530[48 + grVe_803E5380[gp->u.venom.xC8]]);
+#else
     other = grVenom_80203EAC(base[base[gp->u.venom.xC8 + 14] + 170]);
+#endif
     if (other != NULL) {
         Ground* other_gp = other->user_data;
         other_gp->x10_flags.b2 = 0;

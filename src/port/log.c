@@ -1,3 +1,5 @@
+#include "port/pc_execinfo.h"
+#include <stdlib.h>
 #include "log.h"
 #include <stdarg.h>
 #include <string.h>
@@ -80,10 +82,37 @@ static const char* g_guard_sites[GUARD_SITE_MAX];
 static int g_guard_site_count = 0;
 static int g_guard_counts[GUARD_SITE_MAX];
 
+/* MELEE_GUARD_BT=<substring>: dump a call stack the first few times a guard
+ * whose site name contains that substring fires. A guard reports where the
+ * bad value was *used*, which for the inline accessors in jobj.h is a header
+ * line shared by hundreds of callers -- the caller is the thing worth
+ * knowing, and on wasm there is no frame pointer to walk, so ask the host. */
+static void port_guard_backtrace(const char* site)
+{
+    static int budget = -1;
+    const char* want = getenv("MELEE_GUARD_BT");
+    if (want == NULL || strstr(site, want) == NULL) {
+        return;
+    }
+    if (budget < 0) {
+        budget = 4;
+    }
+    if (budget == 0) {
+        return;
+    }
+    budget--;
+    fprintf(stderr, "[GUARDBT] %s\n", site);
+    {
+        void* bt[1];
+        backtrace_symbols_fd(bt, 0, 2);
+    }
+}
+
 void port_guard_warn(const char* site)
 {
     int i;
     if (site == NULL) return;
+    port_guard_backtrace(site);
     if (g_guard_site_count < 0 || g_guard_site_count > GUARD_SITE_MAX) {
         g_guard_site_count = 0; /* table corrupted; reset */
     }

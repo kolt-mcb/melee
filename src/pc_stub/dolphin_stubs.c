@@ -38,9 +38,23 @@ typedef u64 OSTick;
 u32 __OSCoreClock = 243000000;
 u32 __OSBusClock = 972000000;
 
-/* Calendar time */
+/* Calendar time. This must match dolphin/os.h exactly -- it is the struct the
+ * game reads. The local definition here was seven u16s with different member
+ * names (day/month rather than mday/mon, and no yday/msec/usec), so it
+ * described neither the right field widths nor the right offsets; the only
+ * reason it never corrupted anything is that the one function taking it was
+ * an empty stub. */
 typedef struct {
-    u16 sec; u16 min; u16 hour; u16 day; u16 month; u16 year; u16 wday;
+    /*0x00*/ int sec;
+    /*0x04*/ int min;
+    /*0x08*/ int hour;
+    /*0x0C*/ int mday;
+    /*0x10*/ int mon;
+    /*0x14*/ int year;
+    /*0x18*/ int wday;
+    /*0x1C*/ int yday;
+    /*0x20*/ int msec;
+    /*0x24*/ int usec;
 } OSCalendarTime;
 
 /* Simple struct stubs */
@@ -86,8 +100,31 @@ OSContext *OSGetCurrentContext(void) { return &_os_current_context; }
 OSTick OSGetTime(void)
 {
     struct timespec ts;
+    u64 ns;
+    /* MELEE_FAKE_RTC=<unix seconds> freezes the console clock. The game reads
+     * the wall clock and uses it as an entropy source -- the title screen
+     * draws one random number per second of the current time
+     * (gmtitle.c: `second = sp8.second; while (second--) HSD_Rand();`) -- so
+     * two machines started a few seconds apart consume different numbers of
+     * random values and every draw after that is off by that many.
+     *
+     * That is not a difference between the port and the console, it is the
+     * game reading something outside itself. Comparing two runs frame by
+     * frame means pinning it on both sides; Dolphin has the same thing as
+     * Core.CustomRTCValue, and the lockstep runner passes both the same
+     * number. */
+    {
+        static long long fixed = -2;
+        if (fixed == -2) {
+            const char* e = getenv("MELEE_FAKE_RTC");
+            fixed = e ? atoll(e) : -1;
+        }
+        if (fixed >= 0) {
+            return (u64) fixed * (u64) __OSCoreClock;
+        }
+    }
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    u64 ns = (u64)ts.tv_sec * 1000000000ULL + (u64)ts.tv_nsec;
+    ns = (u64)ts.tv_sec * 1000000000ULL + (u64)ts.tv_nsec;
     return ns * (u64)__OSCoreClock / 1000000000ULL;
 }
 void OSGetTimeStruct(struct tm *timep) {}
@@ -96,7 +133,45 @@ void OSGetTimeStruct(struct tm *timep) {}
  * dolphin/os.h (= __OSBusClock / 4 = core clock). */
 u64 OSTicksToSeconds(u64 ticks) { return ticks / (u64)__OSCoreClock; }
 u64 OSSecondsToTicks(u64 secs) { return secs * (u64)__OSCoreClock; }
-void OSTicksToCalendarTime(u64 ticks, struct tm *timep) {}
+/* This did nothing at all, and it is read on the way to the title screen:
+ *
+ *     gm_801692E8(lbTime_8000AFBC(), &sp8);
+ *     second = sp8.second;
+ *     while (second != 0) { HSD_Rand(); second--; }
+ *
+ * The title draws one random number per second of the current time. With the
+ * conversion empty, `second` was uninitialised stack -- 29 draws one boot and
+ * something else the next -- so the port started every run from a different
+ * point in the random sequence. Nothing downstream that touches HSD_Rand
+ * could be compared against a reference, or against the port's own last run.
+ *
+ * The GameCube counts from 2000-01-01 UTC; gmtime_r counts from 1970. */
+void OSTicksToCalendarTime(u64 ticks, OSCalendarTime *td)
+{
+    u64 rem;
+    time_t unix_secs;
+    struct tm g;
+
+    if (td == NULL) {
+        return;
+    }
+    rem = ticks % (u64) __OSCoreClock;
+    unix_secs = (time_t) (ticks / (u64) __OSCoreClock) + 946684800;
+    if (gmtime_r(&unix_secs, &g) == NULL) {
+        memset(td, 0, sizeof(*td));
+        return;
+    }
+    td->sec = g.tm_sec;
+    td->min = g.tm_min;
+    td->hour = g.tm_hour;
+    td->mday = g.tm_mday;
+    td->mon = g.tm_mon;
+    td->year = g.tm_year + 1900;
+    td->wday = g.tm_wday;
+    td->yday = g.tm_yday;
+    td->msec = (int) (rem * 1000 / (u64) __OSCoreClock);
+    td->usec = (int) (rem * 1000000 / (u64) __OSCoreClock % 1000);
+}
 u32 __OSSimulatedMemSize = 0x20000000;
 u32 __OSPhysicalMemSize = 0x20000000;
 OSThread *__gCurrentThread = NULL;

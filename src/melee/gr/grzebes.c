@@ -1,5 +1,19 @@
 #include "grzebes.h"
 
+#if BUILD_TARGET_PC
+/* grZebes_GroundVars4's three pointer slots are declared as pointers on this
+ * target (see gr/types.h); on GCN they are u32 and the casts truncate as the
+ * original does. */
+#define PC_GVPTR(p) ((void*) (p))
+#else
+#define PC_GVPTR(p) ((u32) (p))
+#endif
+
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
+
 #include <platform.h>
 
 #include "cm/camera.h"
@@ -645,10 +659,10 @@ void grZebes_801D9100(HSD_GObj* gobj)
     gp->gv.zebes4.xCC = 0.0f;
     gp->gv.zebes4.xD0 = 0.0f;
     gp->gv.zebes4.xD4 = 0.0f;
-    gp->gv.zebes4.xD8 = (u32) child_jobj;
+    gp->gv.zebes4.xD8 = PC_GVPTR(child_jobj);
     new_var = 0xD;
-    gp->gv.zebes4.xDC = (u32) Ground_801C3FA4(gobj, 0x11);
-    gp->gv.zebes4.xE0 = (u32) mat_gobj;
+    gp->gv.zebes4.xDC = PC_GVPTR(Ground_801C3FA4(gobj, 0x11));
+    gp->gv.zebes4.xE0 = PC_GVPTR(mat_gobj);
     gp->gv.zebes4.xE4 = new_var;
     gp->gv.zebes4.xE8 = 0;
     gp->gv.zebes4.xEC = (u32) grZakoGenerator_801CA394(
@@ -1167,7 +1181,7 @@ void grZebes_801DA254(Ground_GObj* gobj, f32 level)
 {
     Ground* gp = GET_GROUND(gobj);
     HSD_LObj* lobj = (HSD_LObj*) gp->gv.zebes4.xDC;
-    gp->gv.zebes4.xDC = (u32) lobj;
+    gp->gv.zebes4.xDC = PC_GVPTR(lobj);
     if (lobj == NULL) {
         HSD_GObj* lgobj = HSD_GObjGXLinkHead[4];
         if (lgobj != NULL) {
@@ -1179,7 +1193,7 @@ void grZebes_801DA254(Ground_GObj* gobj, f32 level)
                 lobj = HSD_LObjGetNext(lobj);
             }
         }
-        gp->gv.zebes4.xDC = (u32) lobj;
+        gp->gv.zebes4.xDC = PC_GVPTR(lobj);
     }
 
     if (lobj != NULL) {
@@ -1423,11 +1437,26 @@ s32 grZebes_801DAA08(void)
             HSD_JObjAddChild(parent_child, (&grZe_8049F170[selected])->x04);
 
             {
+#if BUILD_TARGET_PC
+                /* PC port: the literals are GameCube offsets into the model
+                 * set -- an entry is 0x34 bytes there, so 0x6C/0x70/0x74 are
+                 * entry[2]'s unk4/unk8/unkC. Here the entry is larger (its
+                 * four leading fields are pointers), so the same literals land
+                 * mid-struct and the animation pointers came back as raw file
+                 * offsets, which HSD_JObjAddAnimAll then walked. Say which
+                 * fields they are instead of where they used to sit. */
+                struct UnkStageDat_x8_t* e =
+                    &grDatFiles_801C6330(2)->unk4->unk8[2];
+                HSD_ShapeAnimJoint** sap = e->unkC;
+                HSD_AnimJoint** ajp = e->unk4;
+                HSD_MatAnimJoint** mjp = e->unk8;
+#else
                 u8* dat = (0, (u8*) grDatFiles_801C6330(2)->unk4->unk8);
                 HSD_ShapeAnimJoint** sap =
                     *(HSD_ShapeAnimJoint***) (dat + 0x74);
                 HSD_AnimJoint** ajp = *(HSD_AnimJoint***) (dat + 0x6C);
                 HSD_MatAnimJoint** mjp = *(HSD_MatAnimJoint***) (dat + 0x70);
+#endif
                 HSD_ShapeAnimJoint* sa;
                 HSD_MatAnimJoint* ma;
                 HSD_AnimJoint* aj;

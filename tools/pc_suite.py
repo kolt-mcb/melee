@@ -102,9 +102,29 @@ def load_case(path):
             # MELEE_BOOT_MODE, while Dolphin has to be walked there through
             # the intro and the title with real button presses.
             case["ref_input"].append(val)
-        elif key in ("run_frames", "window", "ref_frames", "ref_lead"):
+        elif key == "tol":
+            # Per-field tolerance for tools/pc_divergence.py (p_x=0.01).
+            case.setdefault("tol", []).append(val)
+        elif key in ("run_frames", "window", "ref_frames", "ref_lead",
+                     "trace_frames", "ref_trace_frames", "ref_shift",
+                     # The game mode both sides are held at before the lockstep
+                     # driver engages its barrier, and the console frame the
+                     # route's numbers are measured from. See sync_title.case.
+                     "rendezvous", "route_zero", "port_input_lag",
+                     "scene_skew", "fake_rtc"):
             case[key] = int(val)
-        elif key in ("description", "align"):
+        elif key == "sync_input":
+            # Input for tools/pc_lockstep.py, keyed by MATCH frame and sent to
+            # both sides. Unlike `input`/`ref_input` it is written once: the
+            # lockstep driver holds both games at the same match frame, so it
+            # can put the same press into both on the frame it means.
+            case.setdefault("sync_input", []).append(val)
+        elif key == "ignore":
+            # Columns tools/pc_divergence.py must not compare: fields a case
+            # knows differ for reasons of route rather than of correctness.
+            case.setdefault("ignore", []).extend(
+                x.strip() for x in val.split(",") if x.strip())
+        elif key in ("description", "align", "ref_clock", "anchor"):
             case[key] = val
     case["input"].sort()
     return case

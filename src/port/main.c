@@ -207,6 +207,39 @@ static void prof_init(void)
     fprintf(stderr, "[PROF] sampling profiler armed (SIGPROF 500 Hz)\n");
 }
 
+/* MELEE_WATCHDOG=<seconds>: if a frame ever takes longer than this, print the
+ * stack and quit. A hang is harder to diagnose than a crash -- gdb cannot
+ * attach after the fact under the default ptrace policy, and the run just
+ * sits there -- so the process reports its own stack instead. The alarm is
+ * re-armed once per frame (src/port/render.c), so it only fires when a frame
+ * genuinely stops making progress. */
+static void watchdog_handler(int sig)
+{
+    void* frames[64];
+    int cnt;
+    const char* msg = "[WATCHDOG] frame stalled; stack follows\n";
+    (void) sig;
+    write(2, msg, strlen(msg));
+    cnt = backtrace(frames, 64);
+    backtrace_symbols_fd(frames, cnt, 2);
+    _exit(3);
+}
+
+void pc_watchdog_pet(void)
+{
+    static int secs = -1;
+    if (secs < 0) {
+        const char* e = getenv("MELEE_WATCHDOG");
+        secs = (e != NULL) ? atoi(e) : 0;
+        if (secs > 0) {
+            signal(SIGALRM, watchdog_handler);
+        }
+    }
+    if (secs > 0) {
+        alarm((unsigned) secs);
+    }
+}
+
 static void install_crash_handler(void)
 {
 #if defined(__EMSCRIPTEN__)

@@ -331,8 +331,18 @@ void gm_801B13B8(GameScene* arg0)
          * in a time match; the debug scene left them at 0, and the P1/P2
          * start markers (ifnametag.c) hide themselves for a slot with no
          * stocks. */
-        for (i = 0; i < 6; i++) {
-            temp_r28->players[i].stocks = 4;
+        /* MELEE_BOOT_STOCKS=<n> overrides the count. The divergence test
+         * (tools/pc_divergence.py) needs it: the debug-VS boot and the VS
+         * match Dolphin reaches through the menus are the same match only if
+         * they are playing by the same rules, and a stock count that differs
+         * shows up on every frame of the comparison as a difference in every
+         * player. */
+        {
+            const char* st = getenv("MELEE_BOOT_STOCKS");
+            int stocks = st ? atoi(st) : 4;
+            for (i = 0; i < 6; i++) {
+                temp_r28->players[i].stocks = (s8) stocks;
+            }
         }
         /* rules.x6 is the 1P-mode flag (set only by gm_8016EBC0_OnEnter);
          * stage.c picks the 1P quick-play BGM when it is set. A VS match

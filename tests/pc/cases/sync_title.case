@@ -1,0 +1,69 @@
+# Both games from power-on: intro, title, menus, character select, match --
+# held to one frame each by the barrier the whole way, not just once they are
+# fighting. The port boots the way the console does rather than jumping to a
+# debug match, and takes the same recorded route as a pad script, so the two
+# are pressing the same buttons on the same frames from the title screen on.
+#
+#   tools/pc_lockstep.py sync_title --size 1200x900
+#
+# Nothing is skipped and nothing about where each side is is ignored: `mode`
+# and `scene` are compared like everything else, every frame, so the run stops
+# the moment the two are on different screens. That is the point -- the port's
+# stage select is not ported yet (MnSelectStageDataTable is a bare table of
+# 4-byte descriptor offsets and a struct of 8-byte pointers cannot be laid over
+# it), and this case is supposed to say so rather than route around it.
+description: both games from the title screen, in step every frame
+# Both sides run freely until they reach the intro (mode 24), wait there for
+# each other, and are only then held to one frame each -- so how long each
+# takes to boot does not matter. The route's frame numbers are measured from
+# the console's arrival there (route_zero), which is what makes the same
+# numbers mean the same moment on both.
+rendezvous: 24
+route_zero: 187
+# The port acts on a press ~2 frames after it arrives, the console ~5, so the
+# same press on the same frame moves the port's screen first every time.
+# Measured at three transitions: 3, 2, 2 frames. The port's script is delayed
+# to match. Same offset match_move.case carries as ref_shift: 3.
+port_input_lag: 3
+# A scene change lands up to a frame apart even after that compensation, so
+# mode and scene may disagree for this many frames while one side is
+# mid-transition. Bounded on purpose: a port sitting on the wrong screen, or
+# never reaching one, disagrees for good and still stops the run.
+scene_skew: 4
+# The console reaches the match through screens the port skips, so it burns RNG
+# draws the port never makes. rng_draws carries the comparable part of that.
+ignore: seed
+ref_input: 236:+START
+ref_input: 240:-START
+ref_input: 400:+START
+ref_input: 404:-START
+ref_input: 760:MAIN:0.5:0.0
+ref_input: 768:MAIN:0.5:0.5
+ref_input: 820:+A
+ref_input: 824:-A
+ref_input: 950:+A
+ref_input: 954:-A
+ref_input: 1000:P2:+A
+ref_input: 1004:P2:-A
+ref_input: 1060:MAIN:0.5:1.0
+ref_input: 1120:MAIN:0.5:0.5
+ref_input: 1130:MAIN:1.0:0.5
+ref_input: 1140:MAIN:0.5:0.5
+ref_input: 1150:MAIN:0.5:0.0
+ref_input: 1157:MAIN:0.5:0.5
+ref_input: 1170:+A
+ref_input: 1174:-A
+ref_input: 1180:P2:MAIN:0.5:1.0
+ref_input: 1240:P2:MAIN:0.5:0.5
+ref_input: 1250:P2:MAIN:1.0:0.5
+ref_input: 1260:P2:MAIN:0.5:0.5
+ref_input: 1270:P2:MAIN:0.5:0.0
+ref_input: 1277:P2:MAIN:0.5:0.5
+ref_input: 1290:P2:+A
+ref_input: 1294:P2:-A
+ref_input: 1340:+START
+ref_input: 1344:-START
+ref_input: 1420:MAIN:0.5:1.0
+ref_input: 1452:MAIN:0.5:0.5
+ref_input: 1480:+A
+ref_input: 1484:-A
