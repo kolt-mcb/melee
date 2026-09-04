@@ -437,6 +437,104 @@ static inline HSD_JObj* get_jobj(HSD_GObj* gobj)
     return jobj;
 }
 
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#include "melee/gr/grdatfiles.h"
+
+/* MnSelectStageDataTable is a bare table of 32-bit offsets into the archive:
+ * a camera, two lights and a fog descriptor, then eleven StaticModelDescs and
+ * four loose joint/anim offsets. Every one of those slots is four bytes wide,
+ * so a C struct of real pointers cannot be laid over it -- the camera came
+ * back as 0xa8850900ec850900, two GameCube fields read as one host pointer,
+ * and HSD_CObjLoadDesc walked straight into it.
+ *
+ * So it is read as what it is -- big-endian offsets -- and rebuilt in host
+ * layout. Everything below the top level already has a converter. */
+static u32 sss_be32(const u8* p)
+{
+    return ((u32) p[0] << 24) | ((u32) p[1] << 16) | ((u32) p[2] << 8) |
+           (u32) p[3];
+}
+
+static void sss_conv_model(struct StaticModelDesc* out, const u8* raw,
+                           u8* data)
+{
+    u32 joint = sss_be32(raw + 0x0);
+    u32 anim = sss_be32(raw + 0x4);
+    u32 matanim = sss_be32(raw + 0x8);
+    u32 shapeanim = sss_be32(raw + 0xC);
+
+    /* Offset 0 means "absent" in this format, not "the first byte of the
+     * data section". */
+    out->joint = joint ? grDatFiles_ConvertJointTreeGCNtoX64(data + joint,
+                                                             data, 0, NULL)
+                       : NULL;
+    out->animjoint =
+        anim ? grDatFiles_ConvertAnimJointTreeGCNtoX64(data + anim, data, 0)
+             : NULL;
+    out->matanim_joint =
+        matanim ? grDatFiles_ConvertMatAnimJointTreeGCNtoX64(data + matanim,
+                                                             data, 0)
+                : NULL;
+    out->shapeanim_joint =
+        shapeanim ? grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(
+                        data + shapeanim, data, 0)
+                  : NULL;
+}
+
+/* GameCube layout of the table: 4 descriptor offsets, then the block the game
+ * calls x10 -- eleven 0x10-byte StaticModelDescs and four more offsets. */
+#define SSS_RAW_MODELS 0x10
+#define SSS_RAW_JOINTS 0xC0
+
+static struct mnStageSel_804D6C98_t* sss_conv_table(const u8* raw, u8* data)
+{
+    static const u8* cached_raw;
+    static struct mnStageSel_804D6C98_t* cached;
+    struct mnStageSel_804D6C98_t* out;
+    struct StaticModelDesc* models;
+    u32 off;
+    int i;
+
+    if (raw == NULL || data == NULL) {
+        return NULL;
+    }
+    if (raw == cached_raw) {
+        return cached;
+    }
+    out = HSD_MemAlloc(sizeof(*out));
+    if (out == NULL) {
+        return NULL;
+    }
+    memset(out, 0, sizeof(*out));
+
+    models = &out->x0;
+    for (i = 0; i < 11; i++) {
+        sss_conv_model(&models[i],
+                       raw + SSS_RAW_MODELS + i * 0x10, data);
+    }
+    off = sss_be32(raw + SSS_RAW_JOINTS + 0x0);
+    out->xB0 = off ? grDatFiles_ConvertJointTreeGCNtoX64(data + off, data, 0,
+                                                         NULL)
+                   : NULL;
+    off = sss_be32(raw + SSS_RAW_JOINTS + 0x4);
+    out->xB4 = off ? grDatFiles_ConvertAnimJointTreeGCNtoX64(data + off, data,
+                                                             0)
+                   : NULL;
+    off = sss_be32(raw + SSS_RAW_JOINTS + 0x8);
+    out->xB8 = off ? grDatFiles_ConvertMatAnimJointTreeGCNtoX64(data + off,
+                                                               data, 0)
+                   : NULL;
+    off = sss_be32(raw + SSS_RAW_JOINTS + 0xC);
+    out->xBC = off ? grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(data + off,
+                                                                 data, 0)
+                   : NULL;
+    cached_raw = raw;
+    cached = out;
+    return out;
+}
+#endif
+
 void mnStageSel_8025A998_OnEnter(void* arg0)
 {
     HSD_JObj* spDC[0x13];
@@ -491,6 +589,14 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
         }
         temp_r3 = HSD_ArchiveGetPublicAddress(mnStageSel_804D6C94,
                                               "MnSelectStageDataTable");
+#if BUILD_TARGET_PC
+        {
+            const u8* raw = (const u8*) temp_r3;
+            u8* data = mnStageSel_804D6C94->data;
+            MenMain_cam = pc_conv_CObjDescAt(raw + 0x0, data);
+            mnStageSel_804D6C98 = sss_conv_table(raw, data);
+        }
+#else
         MenMain_cam = temp_r3->unk0;
 #if BUILD_TARGET_PC
         if (getenv("MELEE_SSSLOG") != NULL) {
@@ -499,6 +605,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
         }
 #endif
         mnStageSel_804D6C98 = &temp_r3->x10;
+#endif
         mnStageSel_804D6CAF = 0;
         mnStageSel_804D6CA0 = 0;
         mnStageSel_804D6CAC = 0;
@@ -521,8 +628,17 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
             HSD_LObj* lobj1;
             HSD_LObj* lobj2;
             gobj = GObj_Create(3, 4, 0x80);
+#if BUILD_TARGET_PC
+            lobj1 = HSD_LObjLoadDesc(
+                pc_conv_LightDescAt((const u8*) temp_r3 + 0x4,
+                                    mnStageSel_804D6C94->data));
+            lobj2 = HSD_LObjLoadDesc(
+                pc_conv_LightDescAt((const u8*) temp_r3 + 0x8,
+                                    mnStageSel_804D6C94->data));
+#else
             lobj1 = HSD_LObjLoadDesc(temp_r3->unk4);
             lobj2 = HSD_LObjLoadDesc(temp_r3->unk8);
+#endif
             HSD_LObjSetNext(lobj1, lobj2);
             HSD_GObjObject_80390A70(gobj, (u8) HSD_GObj_804D784A, lobj1);
             GObj_SetupGXLink(gobj, HSD_GObj_LObjCallback, 0, 0x80);
@@ -530,7 +646,16 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
 
         {
             HSD_GObj* gobj = GObj_Create(0xE, 0xF, 0);
+#if BUILD_TARGET_PC
+            u32 fog_off = sss_be32((const u8*) temp_r3 + 0xC);
+            HSD_Fog* fog = HSD_FogLoadDesc(
+                fog_off ? grDatFiles_ConvertFogDescGCNtoX64(
+                              mnStageSel_804D6C94->data + fog_off,
+                              mnStageSel_804D6C94->data)
+                        : NULL);
+#else
             HSD_Fog* fog = HSD_FogLoadDesc(temp_r3->unkC);
+#endif
             HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7848, fog);
             GObj_SetupGXLink(gobj, fn_8025A974, 0, 0x80);
         }

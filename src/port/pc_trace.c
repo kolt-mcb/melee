@@ -288,7 +288,25 @@ void pc_trace_frame(int frame)
     {
         static int seeded = 0;
         const char* want = getenv("MELEE_SEED");
-        if (want != NULL && !seeded && gm_8016AEDC() == 1) {
+        /* MELEE_SEED_AT_MODE=<mode> applies it on the first frame the game
+         * reaches that mode instead of on the first frame of a match. A run
+         * compared from the title screen needs the two sides to agree on the
+         * seed there: the console burns draws on logos this never shows, and
+         * the title's own code then draws a seed-dependent number of values
+         * (a rejection loop picking four distinct characters), so the two
+         * disagree about how much randomness a frame consumed long before
+         * either reaches a match. The local Dolphin build reads the same
+         * variable and writes the same value at the same point. */
+        const char* at_mode = getenv("MELEE_SEED_AT_MODE");
+        if (want != NULL && !seeded && at_mode != NULL &&
+            (int) gm_GetCurrentGameMode() == atoi(at_mode))
+        {
+            seeded = 1;
+            seed = (u32) strtoul(want, NULL, 16);
+        }
+        if (want != NULL && !seeded && at_mode == NULL &&
+            gm_8016AEDC() == 1)
+        {
             seeded = 1;
             seed = (u32) strtoul(want, NULL, 16);
         }
