@@ -521,6 +521,11 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
         # either child is launched, since both take it from the environment.
         os.environ.setdefault("MELEE_SEED", case.get("seed", "3F2A1B0C"))
         os.environ["MELEE_SEED_AT_MODE"] = str(case["rendezvous"])
+        # And again at every scene change, on each side's own first frame in
+        # the new scene: the console spends load frames the port does not and
+        # draws during them, so one forcing is not enough to keep the two
+        # sequences together across a scene.
+        os.environ["MELEE_SEED_EACH_SCENE"] = "1"
     ref_proc, port_proc, steps = launch(case, headless, dumping=False,
                                         with_port=True, size=size, route=route)
     sides = accept_sides(server, 2)

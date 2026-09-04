@@ -383,6 +383,29 @@ void pc_trace_frame(int frame)
             seeded_mode = 1;
             seed = (u32) strtoul(want, NULL, 16);
         }
+        /* MELEE_SEED_EACH_SCENE=1 sets it again on the first frame of every
+         * scene. Seeding once is not enough for a run compared from
+         * power-on: the console spends frames loading each scene that this
+         * does not, and draws during them, so the two arrive at the next
+         * scene with different seeds even though every frame either of them
+         * actually ran consumed the same number of values. Onett's traffic
+         * shows it plainly -- car_speed is picked from one draw as the stage
+         * starts, and a different seed there gives a different speed, so the
+         * two cars cross at different rates and the whole cycle drifts.
+         *
+         * Both sides do it at their own first frame in the new scene, which
+         * is the same moment in the game even when it is not the same frame
+         * number. The Dolphin build reads the same variable. */
+        if (want != NULL && getenv("MELEE_SEED_EACH_SCENE") != NULL) {
+            static int last_mode = -1, last_scene = -1;
+            int m = (int) gm_GetCurrentGameMode();
+            int sc = (int) gm_GetCurrentSceneIndex();
+            if (m != last_mode || sc != last_scene) {
+                last_mode = m;
+                last_scene = sc;
+                seed = (u32) strtoul(want, NULL, 16);
+            }
+        }
         if (want != NULL && !seeded && gm_8016AEDC() == 1) {
             seeded = 1;
             seed = (u32) strtoul(want, NULL, 16);
