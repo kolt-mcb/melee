@@ -36,7 +36,18 @@
 #include <trigf.h>
 
 /* 094D70 */ bool ftCo_800951D0(Fighter_GObj* gobj);
+#if BUILD_TARGET_PC
+/* 094E7C */
+/* Declared without `static` here on purpose. ftCo_Attack100.c calls this
+ * across the TU boundary, but the static declaration gives the definition
+ * below internal linkage, and since nothing in this file calls it the compiler
+ * drops it entirely -- so that cross-TU call bound to the do-nothing weak stub
+ * in src/pc_stub/undef_stubs.c instead. Found with MELEE_STUBLOG=1, which
+ * names every stub a run actually reaches. */
+bool ftCo_800952DC(Fighter_GObj* gobj);
+#else
 /* 094E7C */ static bool ftCo_800952DC(Fighter_GObj* gobj);
+#endif
 /* 0952C8 */ static UNK_RET lbl_80095728(UNK_PARAMS);
 /* 0952D8 */ static UNK_RET lbl_80095738(UNK_PARAMS);
 /* 09549C */ static void ftCo_800958FC(Fighter_GObj* gobj, int);

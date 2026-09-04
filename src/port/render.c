@@ -11,6 +11,7 @@
 #define GL_GLEXT_PROTOTYPES
 
 #include "render.h"
+#include "port/pc_trace.h"
 #include "window.h"
 #include "log.h"
 #include "gx_gl_bridge.h"
@@ -181,6 +182,15 @@ void render_present(void)
     static int g_shot_full = 0;
 
     g_render_frame++;
+    /* State trace for the divergence test (MELEE_TRACE). Same frame numbering
+     * as the screenshots below, so a trace line and a screenshot with the same
+     * number are the same frame on both sides of the comparison. */
+    pc_trace_frame(g_render_frame);
+    {
+        /* Re-arm the frame watchdog (MELEE_WATCHDOG); no-op unless set. */
+        extern void pc_watchdog_pet(void);
+        pc_watchdog_pet();
+    }
     if (g_shot_init < 0) {
         const char* sf;
         const char* sr;
@@ -433,6 +443,10 @@ void render_present(void)
             s_fin_ns += (f1.tv_sec - f0.tv_sec) * 1e9 + (f1.tv_nsec - f0.tv_nsec);
         }
         window_swap();
+        /* Lockstep barrier, after the present: with MELEE_SYNC set this blocks
+         * until tools/pc_lockstep.py has compared this frame against the same
+         * frame on the console and released it. */
+        pc_trace_sync_wait();
         if (s_fps) {
             struct timespec after;
             clock_gettime(CLOCK_MONOTONIC, &after);

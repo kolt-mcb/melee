@@ -569,6 +569,18 @@ int AXDriver_8038CFF4(int sound_id, u8 volume, u8 pan, int track, int channel)
     bank_idx = sound_id / 10000;
     bank_mem = sound_id % 10000;
 
+#if BUILD_TARGET_PC
+    /* PC port: the original only bounds-checks the top of the range, because
+     * on the console a sound id always comes from stage data that was read
+     * correctly. Here a stage that reads its id out of an unconverted data
+     * section can hand over a negative one, and the table index below then
+     * reads behind the array -- Big Blue died this way, in snprintf, three
+     * frames from anything that looked like audio. Rejecting it is what the
+     * upper bound already does for the other end. */
+    if (bank_idx < 0 || bank_mem < 0) {
+        return -1;
+    }
+#endif
     if (AXDriver_804D77B0 <= bank_idx) {
         return -1;
     }

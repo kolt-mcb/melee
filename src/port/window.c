@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include "window.h"
 #include "log.h"
@@ -119,9 +120,23 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, a->depth);
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, a->stencil);
 
-        g_sdl_window = SDL_CreateWindow(title,
-                                        SDL_WINDOWPOS_CENTERED,
-                                        SDL_WINDOWPOS_CENTERED,
+        /* MELEE_WINDOW_POS=<x>,<y> pins the window instead of centring it,
+         * so two runs can be tiled side by side -- the lockstep runner puts
+         * the port next to Dolphin that way, and there is no window-manager
+         * tool on this machine to do it from outside. */
+        int win_x = SDL_WINDOWPOS_CENTERED;
+        int win_y = SDL_WINDOWPOS_CENTERED;
+        {
+            const char* wp = getenv("MELEE_WINDOW_POS");
+            int px, py;
+            if (wp != NULL && sscanf(wp, "%d,%d", &px, &py) == 2)
+            {
+                win_x = px;
+                win_y = py;
+            }
+        }
+
+        g_sdl_window = SDL_CreateWindow(title, win_x, win_y,
                                         *width, *height, flags);
         if (!g_sdl_window)
         {

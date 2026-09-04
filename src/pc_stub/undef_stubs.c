@@ -134,7 +134,33 @@ extern HSD_Archive* lbArchive_LoadArchive(const char *filename);
 extern void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length);
 
 /* OS stubs */
-__attribute__((weak)) void OSPanic(int a0, int a1, int a2, int a3) {}
+
+/* MELEE_STUBLOG=1 names every weak stub the run actually reaches, once each.
+ * A stub that is never called costs nothing; one that is called is a function
+ * the game expects to do something and that returns without doing it. That is
+ * how the missing quaternion slerp went unnoticed for so long, so the list is
+ * worth being able to ask for. */
+void pc_stub_hit(const char* name)
+{
+    static int enabled = -1;
+    if (enabled < 0) {
+        enabled = getenv("MELEE_STUBLOG") != NULL;
+    }
+    if (enabled) {
+        fprintf(stderr, "[STUB] %s\n", name);
+    }
+}
+
+#define PC_STUB_HIT(n)                                                        \
+    do {                                                                      \
+        static int _pc_stub_seen;                                             \
+        if (!_pc_stub_seen) {                                                 \
+            _pc_stub_seen = 1;                                                \
+            pc_stub_hit(n);                                                   \
+        }                                                                     \
+    } while (0)
+
+__attribute__((weak)) void OSPanic(int a0, int a1, int a2, int a3) { PC_STUB_HIT("OSPanic");}
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -247,14 +273,14 @@ void __assert(const char *file, unsigned int line, const char *msg) {
     /* abort(); */
 }
 
-__attribute__((weak)) void OSInit(void) {}
-__attribute__((weak)) void OSInitAlarm(void) {}
-__attribute__((weak)) void OSCancelAlarm(int a0) {}
-__attribute__((weak)) u32 OSDisableInterrupts(void) { return 0; }
-__attribute__((weak)) void OSGetConsoleSimulatedMemSize(void) {}
-__attribute__((weak)) void OSResetSystem(int a0, int a1, int a2) {}
-__attribute__((weak)) int OSRestoreInterrupts(int a0) { return 0; }
-__attribute__((weak)) void OSSetAlarm(int a0, long long a1, int a2) {}
+__attribute__((weak)) void OSInit(void) { PC_STUB_HIT("OSInit");}
+__attribute__((weak)) void OSInitAlarm(void) { PC_STUB_HIT("OSInitAlarm");}
+__attribute__((weak)) void OSCancelAlarm(int a0) { PC_STUB_HIT("OSCancelAlarm");}
+__attribute__((weak)) u32 OSDisableInterrupts(void) { PC_STUB_HIT("OSDisableInterrupts"); return 0; }
+__attribute__((weak)) void OSGetConsoleSimulatedMemSize(void) { PC_STUB_HIT("OSGetConsoleSimulatedMemSize");}
+__attribute__((weak)) void OSResetSystem(int a0, int a1, int a2) { PC_STUB_HIT("OSResetSystem");}
+__attribute__((weak)) int OSRestoreInterrupts(int a0) { PC_STUB_HIT("OSRestoreInterrupts"); return 0; }
+__attribute__((weak)) void OSSetAlarm(int a0, long long a1, int a2) { PC_STUB_HIT("OSSetAlarm");}
 /* A real monotonic tick, not a constant.
  *
  * This returned 0 unconditionally, which does not read as "time is stopped"
@@ -281,18 +307,18 @@ __attribute__((weak)) int OSGetTick(void)
     /* 243 MHz = 243 ticks per microsecond. */
     return (int) (unsigned int) ((ns / 1000ULL) * 243ULL);
 }
-__attribute__((weak)) void OSAllocFromArenaHi(void) {}
-__attribute__((weak)) void OSAllocFromArenaLo(void) {}
+__attribute__((weak)) void OSAllocFromArenaHi(void) { PC_STUB_HIT("OSAllocFromArenaHi");}
+__attribute__((weak)) void OSAllocFromArenaLo(void) { PC_STUB_HIT("OSAllocFromArenaLo");}
 
 /* Audio/AR/CARD/etc stubs */
-__attribute__((weak)) void AIInit(int a0) {}
-__attribute__((weak)) int ARInit(int a0, int a1) { return 0; }
-__attribute__((weak)) int ARFree(int a0) { return 0; }
-__attribute__((weak)) void ARQInit(void) {}
-__attribute__((weak)) void CARDInit(void) {}
-__attribute__((weak)) int CARDClose(int a0) { return 0; }
-__attribute__((weak)) int CARDOpen(int a0, int a1, int a2) { return 0; }
-__attribute__((weak)) int CARDProbe(int a0) { return 0; }
+__attribute__((weak)) void AIInit(int a0) { PC_STUB_HIT("AIInit");}
+__attribute__((weak)) int ARInit(int a0, int a1) { PC_STUB_HIT("ARInit"); return 0; }
+__attribute__((weak)) int ARFree(int a0) { PC_STUB_HIT("ARFree"); return 0; }
+__attribute__((weak)) void ARQInit(void) { PC_STUB_HIT("ARQInit");}
+__attribute__((weak)) void CARDInit(void) { PC_STUB_HIT("CARDInit");}
+__attribute__((weak)) int CARDClose(int a0) { PC_STUB_HIT("CARDClose"); return 0; }
+__attribute__((weak)) int CARDOpen(int a0, int a1, int a2) { PC_STUB_HIT("CARDOpen"); return 0; }
+__attribute__((weak)) int CARDProbe(int a0) { PC_STUB_HIT("CARDProbe"); return 0; }
 
 /* DVD stubs with synthetic data support */
 
@@ -477,18 +503,18 @@ WEAK_VOID(SDL_AppQuit)
 
 
 /* Camera stubs */
-__attribute__((weak)) void Stage_UnkSetVec3TCam_Offset(int a0) {}
-__attribute__((weak)) float Stage_GetCamZoomRate(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamMaxDepth(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamInfoX20(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamInfoX24(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamPanAngleRadians(void) { return 0; }
-__attribute__((weak)) void HSD_CObjSetNear(int a0, float a1) {}
-__attribute__((weak)) void HSD_CObjSetFar(int a0, float a1) {}
-__attribute__((weak)) void HSD_GObjPLink_80390228(int a0) {}
-__attribute__((weak)) void HSD_GObjPLink_80390264(void) {}
-__attribute__((weak)) void HSD_GObjPLink_80390284(void) {}
-__attribute__((weak)) void HSD_GObjPLink_803902B8(void) {}
+__attribute__((weak)) void Stage_UnkSetVec3TCam_Offset(int a0) { PC_STUB_HIT("Stage_UnkSetVec3TCam_Offset");}
+__attribute__((weak)) float Stage_GetCamZoomRate(void) { PC_STUB_HIT("Stage_GetCamZoomRate"); return 0; }
+__attribute__((weak)) float Stage_GetCamMaxDepth(void) { PC_STUB_HIT("Stage_GetCamMaxDepth"); return 0; }
+__attribute__((weak)) float Stage_GetCamInfoX20(void) { PC_STUB_HIT("Stage_GetCamInfoX20"); return 0; }
+__attribute__((weak)) float Stage_GetCamInfoX24(void) { PC_STUB_HIT("Stage_GetCamInfoX24"); return 0; }
+__attribute__((weak)) float Stage_GetCamPanAngleRadians(void) { PC_STUB_HIT("Stage_GetCamPanAngleRadians"); return 0; }
+__attribute__((weak)) void HSD_CObjSetNear(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetNear");}
+__attribute__((weak)) void HSD_CObjSetFar(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetFar");}
+__attribute__((weak)) void HSD_GObjPLink_80390228(int a0) { PC_STUB_HIT("HSD_GObjPLink_80390228");}
+__attribute__((weak)) void HSD_GObjPLink_80390264(void) { PC_STUB_HIT("HSD_GObjPLink_80390264");}
+__attribute__((weak)) void HSD_GObjPLink_80390284(void) { PC_STUB_HIT("HSD_GObjPLink_80390284");}
+__attribute__((weak)) void HSD_GObjPLink_803902B8(void) { PC_STUB_HIT("HSD_GObjPLink_803902B8");}
 
 
 
@@ -568,7 +594,7 @@ __attribute__((weak)) unsigned long ARAlloc(unsigned long length)
     pc_aram_used += (length + 0x1F) & ~0x1FUL;
     return off;
 }
-__attribute__((weak)) unsigned long ARGetSize(void) { return PC_ARAM_SIZE; }
+__attribute__((weak)) unsigned long ARGetSize(void) { PC_STUB_HIT("ARGetSize"); return PC_ARAM_SIZE; }
 /* ARGetSize implemented above (ARAM emulation) */
 /* PC port: no ARAM. Complete ARQ requests synchronously by invoking the
  * callback so DevCom relay-path (type 0x23) loads finish instead of
@@ -608,175 +634,175 @@ __attribute__((weak)) int AXDriver_8038D3B8(int a0, int a1) { return 0; } /* dec
 __attribute__((weak)) int AXDriver_8038D4E4(int a0, int a1) { return 0; } /* decl: bool */
 __attribute__((weak)) int AXDriver_8038D914(int a0, int a1, int a2) { return 0; } /* decl: bool */
 __attribute__((weak)) int AXDriver_8038D9D8(int a0) { return 0; } /* decl: bool */
-__attribute__((weak)) void AXDriver_8038DA70(int a0, int a1) {}
-__attribute__((weak)) void AXDriver_8038DCFC(void) {}
+__attribute__((weak)) void AXDriver_8038DA70(int a0, int a1) { PC_STUB_HIT("AXDriver_8038DA70");}
+__attribute__((weak)) void AXDriver_8038DCFC(void) { PC_STUB_HIT("AXDriver_8038DCFC");}
 __attribute__((weak)) int AXDriver_8038E30C(int a0, int a1, int a2, int a3, int a4) { return 0; } /* decl: bool */
 __attribute__((weak)) int AXDriver_8038E37C(int a0, int a1) { return 0; } /* decl: bool */
-__attribute__((weak)) void AXDriver_8038E498(int a0, int a1, int a2, int a3) {}
+__attribute__((weak)) void AXDriver_8038E498(int a0, int a1, int a2, int a3) { PC_STUB_HIT("AXDriver_8038E498");}
 __attribute__((weak)) long AXDriver_8038E5D4(void) { return 0; } /* decl: int */
 __attribute__((weak)) long AXDriver_8038E5DC(void) { return 0; } /* decl: int */
 __attribute__((weak)) int AXDriver_8038E6C0(int a0) { return 0; } /* decl: bool */
 __attribute__((weak)) int AXDriver_8038E844(int a0) { return 0; } /* decl: bool */
 __attribute__((weak)) int AXDriver_8038E8EC(int a0, int a1, int a2) { return 0; } /* decl: bool */
 __attribute__((weak)) long AXDriver_8038EA18(void) { return 0; } /* decl: bool */
-__attribute__((weak)) void AddCharacterToName_getGlyphs(void) {}
-__attribute__((weak)) int CARDCheckAsync(int a0, int a1) { return 0; }
-__attribute__((weak)) int CARDDeleteAsync(int a0, int a1, int a2) { return 0; }
-__attribute__((weak)) int CARDFormatAsync(int a0, int a1) { return 0; }
-__attribute__((weak)) int CARDFreeBlocks(int a0, int a1, int a2) { return 0; }
-__attribute__((weak)) int CARDGetStatus(int a0, int a1, int a2) { return 0; }
-__attribute__((weak)) int CARDMountAsync(int a0, int a1, int a2, int a3) { return 0; }
-__attribute__((weak)) int CARDProbeEx(int a0, int a1, int a2) { return 0; }
-__attribute__((weak)) int CARDRenameAsync(int a0, int a1, int a2, int a3) { return 0; }
-__attribute__((weak)) int CARDUnmount(int a0) { return 0; }
-__attribute__((weak)) void C_MTXLookAt(int a0, int a1, int a2, int a3) {}
-__attribute__((weak)) void CopyCurrentNameToNametag(void) {}
-__attribute__((weak)) void DBIsDebuggerPresent(void) {}
-__attribute__((weak)) void DCFlushRange(int a0, int a1) {}
-__attribute__((weak)) void DCInvalidateRange(int a0, int a1) {}
-__attribute__((weak)) void DCStoreRange(int a0, int a1) {}
-__attribute__((weak)) void DevText_AdvanceLine(void) {}
-__attribute__((weak)) void DevText_Clamp(void) {}
-__attribute__((weak)) float DrawASCII(int a0, float a1, float a2, int a3) { return 0; }
-__attribute__((weak)) void DrawRectangle(float a0, float a1, float a2, float a3, int a4) {}
+__attribute__((weak)) void AddCharacterToName_getGlyphs(void) { PC_STUB_HIT("AddCharacterToName_getGlyphs");}
+__attribute__((weak)) int CARDCheckAsync(int a0, int a1) { PC_STUB_HIT("CARDCheckAsync"); return 0; }
+__attribute__((weak)) int CARDDeleteAsync(int a0, int a1, int a2) { PC_STUB_HIT("CARDDeleteAsync"); return 0; }
+__attribute__((weak)) int CARDFormatAsync(int a0, int a1) { PC_STUB_HIT("CARDFormatAsync"); return 0; }
+__attribute__((weak)) int CARDFreeBlocks(int a0, int a1, int a2) { PC_STUB_HIT("CARDFreeBlocks"); return 0; }
+__attribute__((weak)) int CARDGetStatus(int a0, int a1, int a2) { PC_STUB_HIT("CARDGetStatus"); return 0; }
+__attribute__((weak)) int CARDMountAsync(int a0, int a1, int a2, int a3) { PC_STUB_HIT("CARDMountAsync"); return 0; }
+__attribute__((weak)) int CARDProbeEx(int a0, int a1, int a2) { PC_STUB_HIT("CARDProbeEx"); return 0; }
+__attribute__((weak)) int CARDRenameAsync(int a0, int a1, int a2, int a3) { PC_STUB_HIT("CARDRenameAsync"); return 0; }
+__attribute__((weak)) int CARDUnmount(int a0) { PC_STUB_HIT("CARDUnmount"); return 0; }
+__attribute__((weak)) void C_MTXLookAt(int a0, int a1, int a2, int a3) { PC_STUB_HIT("C_MTXLookAt");}
+__attribute__((weak)) void CopyCurrentNameToNametag(void) { PC_STUB_HIT("CopyCurrentNameToNametag");}
+__attribute__((weak)) void DBIsDebuggerPresent(void) { PC_STUB_HIT("DBIsDebuggerPresent");}
+__attribute__((weak)) void DCFlushRange(int a0, int a1) { PC_STUB_HIT("DCFlushRange");}
+__attribute__((weak)) void DCInvalidateRange(int a0, int a1) { PC_STUB_HIT("DCInvalidateRange");}
+__attribute__((weak)) void DCStoreRange(int a0, int a1) { PC_STUB_HIT("DCStoreRange");}
+__attribute__((weak)) void DevText_AdvanceLine(void) { PC_STUB_HIT("DevText_AdvanceLine");}
+__attribute__((weak)) void DevText_Clamp(void) { PC_STUB_HIT("DevText_Clamp");}
+__attribute__((weak)) float DrawASCII(int a0, float a1, float a2, int a3) { PC_STUB_HIT("DrawASCII"); return 0; }
+__attribute__((weak)) void DrawRectangle(float a0, float a1, float a2, float a3, int a4) { PC_STUB_HIT("DrawRectangle");}
 __attribute__((weak)) int EulerToQuat(int a0, int a1) { return 0; } /* decl: s32 */
-__attribute__((weak)) void Exception_ReportCodeline(int a0, int a1, int a2, int a3) {}
-__attribute__((weak)) void Exception_ReportStackTrace(int a0, int a1) {}
-__attribute__((weak)) void Exception_StoreDebugLevel(int a0) {}
-__attribute__((weak)) void GET_EVENTDATA(void) {}
-__attribute__((weak)) void GetAnimEndFrame(void) {}
-__attribute__((weak)) void GetAnimStartFrame(void) {}
-__attribute__((weak)) void GetNumNameList(void) {}
-__attribute__((weak)) void GravityDelay(void) {}
-__attribute__((weak)) void Ground_801C0378(int a0) {}
-__attribute__((weak)) float Ground_801C0498(void) { return 0; }
-__attribute__((weak)) void Ground_801C04BC(float a0) {}
-__attribute__((weak)) int Ground_801C0508(void) { return 0; }
-__attribute__((weak)) int Ground_801C0604(void) { return 0; }
-__attribute__((weak)) int Ground_801C0618(void) { return 0; }
-__attribute__((weak)) int Ground_801C062C(void) { return 0; }
-__attribute__((weak)) int Ground_801C0640(void) { return 0; }
-__attribute__((weak)) int Ground_801C0654(void) { return 0; }
-__attribute__((weak)) int Ground_801C0668(void) { return 0; }
-__attribute__((weak)) int Ground_801C067C(void) { return 0; }
-__attribute__((weak)) int Ground_801C0690(void) { return 0; }
-__attribute__((weak)) int Ground_801C06A4(void) { return 0; }
-__attribute__((weak)) void Ground_801C1154(void) {}
-__attribute__((weak)) void Ground_801C1158(void) {}
-__attribute__((weak)) int Ground_801C1D84(void) { return 0; }
-__attribute__((weak)) int Ground_801C1D98(void) { return 0; }
-__attribute__((weak)) int Ground_801C1DAC(void) { return 0; }
-__attribute__((weak)) int Ground_801C1DC0(void) { return 0; }
-__attribute__((weak)) int Ground_801C1DD4(void) { return 0; }
-__attribute__((weak)) void Ground_801C1DE4(int a0, int a1) {}
-__attribute__((weak)) float Ground_801C20D0(void) { return 0; }
-__attribute__((weak)) void Ground_801C2374(int a0) {}
-__attribute__((weak)) int Ground_801C2AD8(void) { return 0; }
-__attribute__((weak)) float Ground_801C2AE8(int a0) { return 0; }
-__attribute__((weak)) int Ground_801C2D24(int a0, int a1) { return 0; }
-__attribute__((weak)) void Ground_801C38BC(float a0, float a1) {}
-__attribute__((weak)) void Ground_801C4338(void) {}
-__attribute__((weak)) int Ground_801C49B4(void) { return 0; }
-__attribute__((weak)) int Ground_801C4DA0(int a0, int a1) { return 0; }
-__attribute__((weak)) int Ground_801C4DD0(void) { return 0; }
-__attribute__((weak)) int Ground_801C4E20(void) { return 0; }
-__attribute__((weak)) void Ground_801C4FAC(int a0) {}
-__attribute__((weak)) int Ground_801C5700(int a0) { return 0; }
-__attribute__((weak)) int Ground_801C5774(void) { return 0; }
-__attribute__((weak)) int Ground_801C5794(void) { return 0; }
-__attribute__((weak)) int Ground_801C57A4(void) { return 0; }
-__attribute__((weak)) float Ground_801C57F0(int a0) { return 0; }
-__attribute__((weak)) int Ground_801C5840(void) { return 0; }
-__attribute__((weak)) void Ground_801C5A28(void) {}
-__attribute__((weak)) void Ground_801C5A60(void) {}
-__attribute__((weak)) int Ground_801C5ABC(void) { return 0; }
-__attribute__((weak)) int Ground_801C5AD0(int a0) { return 0; }
-__attribute__((weak)) void Ground_ApplyStageBackgroundColor(void) {}
-__attribute__((weak)) void Ground_EnableMatchCamera(void) {}
-__attribute__((weak)) int HSD_AObjAlloc(void) { return 0; }
-__attribute__((weak)) int HSD_AObjGetFlags(int a0) { return 0; }
-__attribute__((weak)) void HSD_AObjInitEndCallBack(void) {}
-__attribute__((weak)) void HSD_AObjInvokeCallBacks(void) {}
-__attribute__((weak)) void HSD_AObjRemove(int a0) {}
-__attribute__((weak)) void HSD_AObjReqAnim(int a0, float a1) {}
-__attribute__((weak)) void HSD_AObjSetCurrentFrame(int a0, float a1) {}
-__attribute__((weak)) void HSD_AObjSetEndFrame(int a0, float a1) {}
-__attribute__((weak)) void HSD_AObjSetFObj(int a0, int a1) {}
-__attribute__((weak)) void HSD_AObjSetFlags(int a0, int a1) {}
-__attribute__((weak)) void HSD_AObjSetRate(int a0, float a1) {}
-__attribute__((weak)) void HSD_AObjSetRewindFrame(int a0, float a1) {}
-__attribute__((weak)) void HSD_AObjStopAnim(int a0, int a1, int a2) {}
+__attribute__((weak)) void Exception_ReportCodeline(int a0, int a1, int a2, int a3) { PC_STUB_HIT("Exception_ReportCodeline");}
+__attribute__((weak)) void Exception_ReportStackTrace(int a0, int a1) { PC_STUB_HIT("Exception_ReportStackTrace");}
+__attribute__((weak)) void Exception_StoreDebugLevel(int a0) { PC_STUB_HIT("Exception_StoreDebugLevel");}
+__attribute__((weak)) void GET_EVENTDATA(void) { PC_STUB_HIT("GET_EVENTDATA");}
+__attribute__((weak)) void GetAnimEndFrame(void) { PC_STUB_HIT("GetAnimEndFrame");}
+__attribute__((weak)) void GetAnimStartFrame(void) { PC_STUB_HIT("GetAnimStartFrame");}
+__attribute__((weak)) void GetNumNameList(void) { PC_STUB_HIT("GetNumNameList");}
+__attribute__((weak)) void GravityDelay(void) { PC_STUB_HIT("GravityDelay");}
+__attribute__((weak)) void Ground_801C0378(int a0) { PC_STUB_HIT("Ground_801C0378");}
+__attribute__((weak)) float Ground_801C0498(void) { PC_STUB_HIT("Ground_801C0498"); return 0; }
+__attribute__((weak)) void Ground_801C04BC(float a0) { PC_STUB_HIT("Ground_801C04BC");}
+__attribute__((weak)) int Ground_801C0508(void) { PC_STUB_HIT("Ground_801C0508"); return 0; }
+__attribute__((weak)) int Ground_801C0604(void) { PC_STUB_HIT("Ground_801C0604"); return 0; }
+__attribute__((weak)) int Ground_801C0618(void) { PC_STUB_HIT("Ground_801C0618"); return 0; }
+__attribute__((weak)) int Ground_801C062C(void) { PC_STUB_HIT("Ground_801C062C"); return 0; }
+__attribute__((weak)) int Ground_801C0640(void) { PC_STUB_HIT("Ground_801C0640"); return 0; }
+__attribute__((weak)) int Ground_801C0654(void) { PC_STUB_HIT("Ground_801C0654"); return 0; }
+__attribute__((weak)) int Ground_801C0668(void) { PC_STUB_HIT("Ground_801C0668"); return 0; }
+__attribute__((weak)) int Ground_801C067C(void) { PC_STUB_HIT("Ground_801C067C"); return 0; }
+__attribute__((weak)) int Ground_801C0690(void) { PC_STUB_HIT("Ground_801C0690"); return 0; }
+__attribute__((weak)) int Ground_801C06A4(void) { PC_STUB_HIT("Ground_801C06A4"); return 0; }
+__attribute__((weak)) void Ground_801C1154(void) { PC_STUB_HIT("Ground_801C1154");}
+__attribute__((weak)) void Ground_801C1158(void) { PC_STUB_HIT("Ground_801C1158");}
+__attribute__((weak)) int Ground_801C1D84(void) { PC_STUB_HIT("Ground_801C1D84"); return 0; }
+__attribute__((weak)) int Ground_801C1D98(void) { PC_STUB_HIT("Ground_801C1D98"); return 0; }
+__attribute__((weak)) int Ground_801C1DAC(void) { PC_STUB_HIT("Ground_801C1DAC"); return 0; }
+__attribute__((weak)) int Ground_801C1DC0(void) { PC_STUB_HIT("Ground_801C1DC0"); return 0; }
+__attribute__((weak)) int Ground_801C1DD4(void) { PC_STUB_HIT("Ground_801C1DD4"); return 0; }
+__attribute__((weak)) void Ground_801C1DE4(int a0, int a1) { PC_STUB_HIT("Ground_801C1DE4");}
+__attribute__((weak)) float Ground_801C20D0(void) { PC_STUB_HIT("Ground_801C20D0"); return 0; }
+__attribute__((weak)) void Ground_801C2374(int a0) { PC_STUB_HIT("Ground_801C2374");}
+__attribute__((weak)) int Ground_801C2AD8(void) { PC_STUB_HIT("Ground_801C2AD8"); return 0; }
+__attribute__((weak)) float Ground_801C2AE8(int a0) { PC_STUB_HIT("Ground_801C2AE8"); return 0; }
+__attribute__((weak)) int Ground_801C2D24(int a0, int a1) { PC_STUB_HIT("Ground_801C2D24"); return 0; }
+__attribute__((weak)) void Ground_801C38BC(float a0, float a1) { PC_STUB_HIT("Ground_801C38BC");}
+__attribute__((weak)) void Ground_801C4338(void) { PC_STUB_HIT("Ground_801C4338");}
+__attribute__((weak)) int Ground_801C49B4(void) { PC_STUB_HIT("Ground_801C49B4"); return 0; }
+__attribute__((weak)) int Ground_801C4DA0(int a0, int a1) { PC_STUB_HIT("Ground_801C4DA0"); return 0; }
+__attribute__((weak)) int Ground_801C4DD0(void) { PC_STUB_HIT("Ground_801C4DD0"); return 0; }
+__attribute__((weak)) int Ground_801C4E20(void) { PC_STUB_HIT("Ground_801C4E20"); return 0; }
+__attribute__((weak)) void Ground_801C4FAC(int a0) { PC_STUB_HIT("Ground_801C4FAC");}
+__attribute__((weak)) int Ground_801C5700(int a0) { PC_STUB_HIT("Ground_801C5700"); return 0; }
+__attribute__((weak)) int Ground_801C5774(void) { PC_STUB_HIT("Ground_801C5774"); return 0; }
+__attribute__((weak)) int Ground_801C5794(void) { PC_STUB_HIT("Ground_801C5794"); return 0; }
+__attribute__((weak)) int Ground_801C57A4(void) { PC_STUB_HIT("Ground_801C57A4"); return 0; }
+__attribute__((weak)) float Ground_801C57F0(int a0) { PC_STUB_HIT("Ground_801C57F0"); return 0; }
+__attribute__((weak)) int Ground_801C5840(void) { PC_STUB_HIT("Ground_801C5840"); return 0; }
+__attribute__((weak)) void Ground_801C5A28(void) { PC_STUB_HIT("Ground_801C5A28");}
+__attribute__((weak)) void Ground_801C5A60(void) { PC_STUB_HIT("Ground_801C5A60");}
+__attribute__((weak)) int Ground_801C5ABC(void) { PC_STUB_HIT("Ground_801C5ABC"); return 0; }
+__attribute__((weak)) int Ground_801C5AD0(int a0) { PC_STUB_HIT("Ground_801C5AD0"); return 0; }
+__attribute__((weak)) void Ground_ApplyStageBackgroundColor(void) { PC_STUB_HIT("Ground_ApplyStageBackgroundColor");}
+__attribute__((weak)) void Ground_EnableMatchCamera(void) { PC_STUB_HIT("Ground_EnableMatchCamera");}
+__attribute__((weak)) int HSD_AObjAlloc(void) { PC_STUB_HIT("HSD_AObjAlloc"); return 0; }
+__attribute__((weak)) int HSD_AObjGetFlags(int a0) { PC_STUB_HIT("HSD_AObjGetFlags"); return 0; }
+__attribute__((weak)) void HSD_AObjInitEndCallBack(void) { PC_STUB_HIT("HSD_AObjInitEndCallBack");}
+__attribute__((weak)) void HSD_AObjInvokeCallBacks(void) { PC_STUB_HIT("HSD_AObjInvokeCallBacks");}
+__attribute__((weak)) void HSD_AObjRemove(int a0) { PC_STUB_HIT("HSD_AObjRemove");}
+__attribute__((weak)) void HSD_AObjReqAnim(int a0, float a1) { PC_STUB_HIT("HSD_AObjReqAnim");}
+__attribute__((weak)) void HSD_AObjSetCurrentFrame(int a0, float a1) { PC_STUB_HIT("HSD_AObjSetCurrentFrame");}
+__attribute__((weak)) void HSD_AObjSetEndFrame(int a0, float a1) { PC_STUB_HIT("HSD_AObjSetEndFrame");}
+__attribute__((weak)) void HSD_AObjSetFObj(int a0, int a1) { PC_STUB_HIT("HSD_AObjSetFObj");}
+__attribute__((weak)) void HSD_AObjSetFlags(int a0, int a1) { PC_STUB_HIT("HSD_AObjSetFlags");}
+__attribute__((weak)) void HSD_AObjSetRate(int a0, float a1) { PC_STUB_HIT("HSD_AObjSetRate");}
+__attribute__((weak)) void HSD_AObjSetRewindFrame(int a0, float a1) { PC_STUB_HIT("HSD_AObjSetRewindFrame");}
+__attribute__((weak)) void HSD_AObjStopAnim(int a0, int a1, int a2) { PC_STUB_HIT("HSD_AObjStopAnim");}
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 __attribute__((weak)) int HSD_AudioGetAuxHeapSize(int a0, int a1) { return 0; } /* decl: s32 */
-__attribute__((weak)) void HSD_AudioSFXKeyOffAll(void) {}
-__attribute__((weak)) void HSD_AudioSFXKeyOffTrack(int a0) {}
-__attribute__((weak)) void HSD_CObjAddAnim(int a0, int a1) {}
-__attribute__((weak)) int HSD_CObjAlloc(void) { return 0; }
-__attribute__((weak)) void HSD_CObjAnim(int a0) {}
-__attribute__((weak)) void HSD_CObjEndCurrent(void) {}
-__attribute__((weak)) void HSD_CObjEraseScreen(int a0, int a1, int a2, int a3) {}
-__attribute__((weak)) float HSD_CObjGetAspect(int a0) { return 0; }
-__attribute__((weak)) float HSD_CObjGetBottom(int a0) { return 0; }
-__attribute__((weak)) int HSD_CObjGetCurrent(void) { return 0; }
-__attribute__((weak)) float HSD_CObjGetEyeDistance(int a0) { return 0; }
-__attribute__((weak)) void HSD_CObjGetEyePosition(int a0, int a1) {}
-__attribute__((weak)) int HSD_CObjGetEyeVector(int a0, int a1) { return 0; }
-__attribute__((weak)) float HSD_CObjGetFov(int a0) { return 0; }
-__attribute__((weak)) void HSD_CObjGetInterest(int a0, int a1) {}
-__attribute__((weak)) int HSD_CObjGetInvViewingMtxPtr(int a0) { return 0; }
-__attribute__((weak)) float HSD_CObjGetLeft(int a0) { return 0; }
-__attribute__((weak)) int HSD_CObjGetLeftVector(int a0, int a1) { return 0; }
-__attribute__((weak)) float HSD_CObjGetNear(int a0) { return 0; }
-__attribute__((weak)) void HSD_CObjGetOrtho(int a0, int a1, int a2, int a3, int a4) {}
-__attribute__((weak)) int HSD_CObjGetProjectionType(int a0) { return 0; }
-__attribute__((weak)) float HSD_CObjGetRight(int a0) { return 0; }
-__attribute__((weak)) void HSD_CObjGetScissor(int a0, int a1) {}
-__attribute__((weak)) float HSD_CObjGetTop(int a0) { return 0; }
-__attribute__((weak)) int HSD_CObjGetUpVector(int a0, int a1) { return 0; }
-__attribute__((weak)) void HSD_CObjGetViewingMtx(int a0, int a1) {}
-__attribute__((weak)) int HSD_CObjGetViewingMtxPtr(int a0) { return 0; }
-__attribute__((weak)) void HSD_CObjInit(int a0, int a1) {}
-__attribute__((weak)) int HSD_CObjLoadDesc(int a0) { return 0; }
-__attribute__((weak)) void HSD_CObjRemoveAnim(int a0) {}
-__attribute__((weak)) void HSD_CObjReqAnim(int a0, float a1) {}
-__attribute__((weak)) void HSD_CObjSetAspect(int a0, float a1) {}
-__attribute__((weak)) void HSD_CObjSetBottom(int a0, float a1) {}
-__attribute__((weak)) int HSD_CObjSetCurrent(int a0) { return 0; }
-__attribute__((weak)) void HSD_CObjSetEyePosition(int a0, int a1) {}
-__attribute__((weak)) void HSD_CObjSetFlags(int a0, int a1) {}
-__attribute__((weak)) void HSD_CObjSetFov(int a0, float a1) {}
-__attribute__((weak)) void HSD_CObjSetFrustum(int a0, float a1, float a2, float a3, float a4) {}
-__attribute__((weak)) void HSD_CObjSetInterest(int a0, int a1) {}
-__attribute__((weak)) void HSD_CObjSetLeft(int a0, float a1) {}
-__attribute__((weak)) void HSD_CObjSetMtxDirty(int a0) {}
-__attribute__((weak)) void HSD_CObjSetOrtho(int a0, float a1, float a2, float a3, float a4) {}
-__attribute__((weak)) void HSD_CObjSetProjectionType(int a0, int a1) {}
-__attribute__((weak)) void HSD_CObjSetRight(int a0, float a1) {}
-__attribute__((weak)) void HSD_CObjSetRoll(int a0, float a1) {}
-__attribute__((weak)) void HSD_CObjSetScissor(int a0, int a1) {}
-__attribute__((weak)) void HSD_CObjSetScissorx4(int a0, int a1, int a2, int a3, int a4) {}
-__attribute__((weak)) void HSD_CObjSetTop(int a0, float a1) {}
-__attribute__((weak)) void HSD_CObjSetUpVector(int a0, int a1) {}
-__attribute__((weak)) void HSD_CObjSetViewport(int a0, int a1) {}
-__attribute__((weak)) void HSD_CObjSetupViewingMtx(int a0) {}
-__attribute__((weak)) void HSD_ClearVtxDesc(void) {}
+__attribute__((weak)) void HSD_AudioSFXKeyOffAll(void) { PC_STUB_HIT("HSD_AudioSFXKeyOffAll");}
+__attribute__((weak)) void HSD_AudioSFXKeyOffTrack(int a0) { PC_STUB_HIT("HSD_AudioSFXKeyOffTrack");}
+__attribute__((weak)) void HSD_CObjAddAnim(int a0, int a1) { PC_STUB_HIT("HSD_CObjAddAnim");}
+__attribute__((weak)) int HSD_CObjAlloc(void) { PC_STUB_HIT("HSD_CObjAlloc"); return 0; }
+__attribute__((weak)) void HSD_CObjAnim(int a0) { PC_STUB_HIT("HSD_CObjAnim");}
+__attribute__((weak)) void HSD_CObjEndCurrent(void) { PC_STUB_HIT("HSD_CObjEndCurrent");}
+__attribute__((weak)) void HSD_CObjEraseScreen(int a0, int a1, int a2, int a3) { PC_STUB_HIT("HSD_CObjEraseScreen");}
+__attribute__((weak)) float HSD_CObjGetAspect(int a0) { PC_STUB_HIT("HSD_CObjGetAspect"); return 0; }
+__attribute__((weak)) float HSD_CObjGetBottom(int a0) { PC_STUB_HIT("HSD_CObjGetBottom"); return 0; }
+__attribute__((weak)) int HSD_CObjGetCurrent(void) { PC_STUB_HIT("HSD_CObjGetCurrent"); return 0; }
+__attribute__((weak)) float HSD_CObjGetEyeDistance(int a0) { PC_STUB_HIT("HSD_CObjGetEyeDistance"); return 0; }
+__attribute__((weak)) void HSD_CObjGetEyePosition(int a0, int a1) { PC_STUB_HIT("HSD_CObjGetEyePosition");}
+__attribute__((weak)) int HSD_CObjGetEyeVector(int a0, int a1) { PC_STUB_HIT("HSD_CObjGetEyeVector"); return 0; }
+__attribute__((weak)) float HSD_CObjGetFov(int a0) { PC_STUB_HIT("HSD_CObjGetFov"); return 0; }
+__attribute__((weak)) void HSD_CObjGetInterest(int a0, int a1) { PC_STUB_HIT("HSD_CObjGetInterest");}
+__attribute__((weak)) int HSD_CObjGetInvViewingMtxPtr(int a0) { PC_STUB_HIT("HSD_CObjGetInvViewingMtxPtr"); return 0; }
+__attribute__((weak)) float HSD_CObjGetLeft(int a0) { PC_STUB_HIT("HSD_CObjGetLeft"); return 0; }
+__attribute__((weak)) int HSD_CObjGetLeftVector(int a0, int a1) { PC_STUB_HIT("HSD_CObjGetLeftVector"); return 0; }
+__attribute__((weak)) float HSD_CObjGetNear(int a0) { PC_STUB_HIT("HSD_CObjGetNear"); return 0; }
+__attribute__((weak)) void HSD_CObjGetOrtho(int a0, int a1, int a2, int a3, int a4) { PC_STUB_HIT("HSD_CObjGetOrtho");}
+__attribute__((weak)) int HSD_CObjGetProjectionType(int a0) { PC_STUB_HIT("HSD_CObjGetProjectionType"); return 0; }
+__attribute__((weak)) float HSD_CObjGetRight(int a0) { PC_STUB_HIT("HSD_CObjGetRight"); return 0; }
+__attribute__((weak)) void HSD_CObjGetScissor(int a0, int a1) { PC_STUB_HIT("HSD_CObjGetScissor");}
+__attribute__((weak)) float HSD_CObjGetTop(int a0) { PC_STUB_HIT("HSD_CObjGetTop"); return 0; }
+__attribute__((weak)) int HSD_CObjGetUpVector(int a0, int a1) { PC_STUB_HIT("HSD_CObjGetUpVector"); return 0; }
+__attribute__((weak)) void HSD_CObjGetViewingMtx(int a0, int a1) { PC_STUB_HIT("HSD_CObjGetViewingMtx");}
+__attribute__((weak)) int HSD_CObjGetViewingMtxPtr(int a0) { PC_STUB_HIT("HSD_CObjGetViewingMtxPtr"); return 0; }
+__attribute__((weak)) void HSD_CObjInit(int a0, int a1) { PC_STUB_HIT("HSD_CObjInit");}
+__attribute__((weak)) int HSD_CObjLoadDesc(int a0) { PC_STUB_HIT("HSD_CObjLoadDesc"); return 0; }
+__attribute__((weak)) void HSD_CObjRemoveAnim(int a0) { PC_STUB_HIT("HSD_CObjRemoveAnim");}
+__attribute__((weak)) void HSD_CObjReqAnim(int a0, float a1) { PC_STUB_HIT("HSD_CObjReqAnim");}
+__attribute__((weak)) void HSD_CObjSetAspect(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetAspect");}
+__attribute__((weak)) void HSD_CObjSetBottom(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetBottom");}
+__attribute__((weak)) int HSD_CObjSetCurrent(int a0) { PC_STUB_HIT("HSD_CObjSetCurrent"); return 0; }
+__attribute__((weak)) void HSD_CObjSetEyePosition(int a0, int a1) { PC_STUB_HIT("HSD_CObjSetEyePosition");}
+__attribute__((weak)) void HSD_CObjSetFlags(int a0, int a1) { PC_STUB_HIT("HSD_CObjSetFlags");}
+__attribute__((weak)) void HSD_CObjSetFov(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetFov");}
+__attribute__((weak)) void HSD_CObjSetFrustum(int a0, float a1, float a2, float a3, float a4) { PC_STUB_HIT("HSD_CObjSetFrustum");}
+__attribute__((weak)) void HSD_CObjSetInterest(int a0, int a1) { PC_STUB_HIT("HSD_CObjSetInterest");}
+__attribute__((weak)) void HSD_CObjSetLeft(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetLeft");}
+__attribute__((weak)) void HSD_CObjSetMtxDirty(int a0) { PC_STUB_HIT("HSD_CObjSetMtxDirty");}
+__attribute__((weak)) void HSD_CObjSetOrtho(int a0, float a1, float a2, float a3, float a4) { PC_STUB_HIT("HSD_CObjSetOrtho");}
+__attribute__((weak)) void HSD_CObjSetProjectionType(int a0, int a1) { PC_STUB_HIT("HSD_CObjSetProjectionType");}
+__attribute__((weak)) void HSD_CObjSetRight(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetRight");}
+__attribute__((weak)) void HSD_CObjSetRoll(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetRoll");}
+__attribute__((weak)) void HSD_CObjSetScissor(int a0, int a1) { PC_STUB_HIT("HSD_CObjSetScissor");}
+__attribute__((weak)) void HSD_CObjSetScissorx4(int a0, int a1, int a2, int a3, int a4) { PC_STUB_HIT("HSD_CObjSetScissorx4");}
+__attribute__((weak)) void HSD_CObjSetTop(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetTop");}
+__attribute__((weak)) void HSD_CObjSetUpVector(int a0, int a1) { PC_STUB_HIT("HSD_CObjSetUpVector");}
+__attribute__((weak)) void HSD_CObjSetViewport(int a0, int a1) { PC_STUB_HIT("HSD_CObjSetViewport");}
+__attribute__((weak)) void HSD_CObjSetupViewingMtx(int a0) { PC_STUB_HIT("HSD_CObjSetupViewingMtx");}
+__attribute__((weak)) void HSD_ClearVtxDesc(void) { PC_STUB_HIT("HSD_ClearVtxDesc");}
 __attribute__((weak)) int HSD_CreateMainHeap(void* lo, void* hi)
 {
     (void)lo; (void)hi;
     return 0; /* default heap handle */
 }
-__attribute__((weak)) void HSD_DObjAddAnimAll(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_DObjClearFlags(int a0, int a1) {}
-__attribute__((weak)) int HSD_DObjGetFlags(int a0) { return 0; }
-__attribute__((weak)) int HSD_DObjLoadDesc(int a0) { return 0; }
-__attribute__((weak)) void HSD_DObjModifyFlags(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_DObjRemoveAll(int a0) {}
-__attribute__((weak)) void HSD_DObjReqAnimAll(int a0, float a1) {}
-__attribute__((weak)) void HSD_DObjResolveRefsAll(int a0, int a1) {}
-__attribute__((weak)) void HSD_DObjSetFlags(int a0, int a1) {}
+__attribute__((weak)) void HSD_DObjAddAnimAll(int a0, int a1, int a2) { PC_STUB_HIT("HSD_DObjAddAnimAll");}
+__attribute__((weak)) void HSD_DObjClearFlags(int a0, int a1) { PC_STUB_HIT("HSD_DObjClearFlags");}
+__attribute__((weak)) int HSD_DObjGetFlags(int a0) { PC_STUB_HIT("HSD_DObjGetFlags"); return 0; }
+__attribute__((weak)) int HSD_DObjLoadDesc(int a0) { PC_STUB_HIT("HSD_DObjLoadDesc"); return 0; }
+__attribute__((weak)) void HSD_DObjModifyFlags(int a0, int a1, int a2) { PC_STUB_HIT("HSD_DObjModifyFlags");}
+__attribute__((weak)) void HSD_DObjRemoveAll(int a0) { PC_STUB_HIT("HSD_DObjRemoveAll");}
+__attribute__((weak)) void HSD_DObjReqAnimAll(int a0, float a1) { PC_STUB_HIT("HSD_DObjReqAnimAll");}
+__attribute__((weak)) void HSD_DObjResolveRefsAll(int a0, int a1) { PC_STUB_HIT("HSD_DObjResolveRefsAll");}
+__attribute__((weak)) void HSD_DObjSetFlags(int a0, int a1) { PC_STUB_HIT("HSD_DObjSetFlags");}
 /* Forward declare struct DVDDiskID for DVDGetCurrentDiskID stub */
 struct DVDDiskID;
 
@@ -995,32 +1021,32 @@ __attribute__((weak)) void lbFile_8001668C_timeout(const char* basename, u32* sr
 {
     (void)basename; (void)src; (void)dest;
 }
-__attribute__((weak)) int HSD_FObjAlloc(void) { return 0; }
-__attribute__((weak)) void HSD_FObjStopAnim(int a0, int a1, int a2, float a3) {}
-__attribute__((weak)) void HSD_FogInterpretAnim(int a0) {}
-__attribute__((weak)) int HSD_FogLoadDesc(int a0) { return 0; }
-__attribute__((weak)) void HSD_FogReqAnim(int a0, float a1) {}
-__attribute__((weak)) void HSD_FogSet(int a0) {}
-__attribute__((weak)) void HSD_Fog_8037DE7C(int a0, int a1) {}
-__attribute__((weak)) void HSD_ForeachAnim(int a0, int a1, int a2, int a3, int a4, int a5) {}
+__attribute__((weak)) int HSD_FObjAlloc(void) { PC_STUB_HIT("HSD_FObjAlloc"); return 0; }
+__attribute__((weak)) void HSD_FObjStopAnim(int a0, int a1, int a2, float a3) { PC_STUB_HIT("HSD_FObjStopAnim");}
+__attribute__((weak)) void HSD_FogInterpretAnim(int a0) { PC_STUB_HIT("HSD_FogInterpretAnim");}
+__attribute__((weak)) int HSD_FogLoadDesc(int a0) { PC_STUB_HIT("HSD_FogLoadDesc"); return 0; }
+__attribute__((weak)) void HSD_FogReqAnim(int a0, float a1) { PC_STUB_HIT("HSD_FogReqAnim");}
+__attribute__((weak)) void HSD_FogSet(int a0) { PC_STUB_HIT("HSD_FogSet");}
+__attribute__((weak)) void HSD_Fog_8037DE7C(int a0, int a1) { PC_STUB_HIT("HSD_Fog_8037DE7C");}
+__attribute__((weak)) void HSD_ForeachAnim(int a0, int a1, int a2, int a3, int a4, int a5) { PC_STUB_HIT("HSD_ForeachAnim");}
 
-__attribute__((weak)) void HSD_GObjProc_8038FE24(int a0) {}
-__attribute__((weak)) void HSD_GObjProc_8038FED4(int a0) {}
-__attribute__((weak)) void HSD_GObjProc_8038FC18(int a0) {}
-__attribute__((weak)) void HSD_GObjProc_8038FAA8(int a0) {}
-__attribute__((weak)) void HSD_GObj_80390C5C(int a0) {}
-__attribute__((weak)) void HSD_GObj_80390C84(int a0) {}
-__attribute__((weak)) void HSD_GObj_80390CAC(int a0) {}
-__attribute__((weak)) void HSD_GObj_80390CD4(int a0) {}
-__attribute__((weak)) void HSD_GObj_80390CFC(void) {}
-__attribute__((weak)) int HSD_GObj_80390EB8(int a0) { return 0; }
+__attribute__((weak)) void HSD_GObjProc_8038FE24(int a0) { PC_STUB_HIT("HSD_GObjProc_8038FE24");}
+__attribute__((weak)) void HSD_GObjProc_8038FED4(int a0) { PC_STUB_HIT("HSD_GObjProc_8038FED4");}
+__attribute__((weak)) void HSD_GObjProc_8038FC18(int a0) { PC_STUB_HIT("HSD_GObjProc_8038FC18");}
+__attribute__((weak)) void HSD_GObjProc_8038FAA8(int a0) { PC_STUB_HIT("HSD_GObjProc_8038FAA8");}
+__attribute__((weak)) void HSD_GObj_80390C5C(int a0) { PC_STUB_HIT("HSD_GObj_80390C5C");}
+__attribute__((weak)) void HSD_GObj_80390C84(int a0) { PC_STUB_HIT("HSD_GObj_80390C84");}
+__attribute__((weak)) void HSD_GObj_80390CAC(int a0) { PC_STUB_HIT("HSD_GObj_80390CAC");}
+__attribute__((weak)) void HSD_GObj_80390CD4(int a0) { PC_STUB_HIT("HSD_GObj_80390CD4");}
+__attribute__((weak)) void HSD_GObj_80390CFC(void) { PC_STUB_HIT("HSD_GObj_80390CFC");}
+__attribute__((weak)) int HSD_GObj_80390EB8(int a0) { PC_STUB_HIT("HSD_GObj_80390EB8"); return 0; }
 /* HSD_GObj_80390ED0/HSD_GObj_80390FC0 already defined above as strong functions */
-__attribute__((weak)) void HSD_GObj_803910D8(int a0, int a1) {}
+__attribute__((weak)) void HSD_GObj_803910D8(int a0, int a1) { PC_STUB_HIT("HSD_GObj_803910D8");}
 /* HSD_GObj_804D7814 defined as global ptr above, not a function */
-__attribute__((weak)) void HSD_GObj_FogCallback(int a0, int a1) {}
-__attribute__((weak)) void HSD_GObj_JObjCallback(int a0, int a1) {}
-__attribute__((weak)) void HSD_GObj_LObjCallback(int a0, int a1) {}
-__attribute__((weak)) int HSD_GObj_SetupProc(int a0, int a1, int a2) { return 0; }
+__attribute__((weak)) void HSD_GObj_FogCallback(int a0, int a1) { PC_STUB_HIT("HSD_GObj_FogCallback");}
+__attribute__((weak)) void HSD_GObj_JObjCallback(int a0, int a1) { PC_STUB_HIT("HSD_GObj_JObjCallback");}
+__attribute__((weak)) void HSD_GObj_LObjCallback(int a0, int a1) { PC_STUB_HIT("HSD_GObj_LObjCallback");}
+__attribute__((weak)) int HSD_GObj_SetupProc(int a0, int a1, int a2) { PC_STUB_HIT("HSD_GObj_SetupProc"); return 0; }
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 __attribute__((weak)) int HSD_GetHeap(void) { return 0; } /* default heap */
@@ -1035,89 +1061,89 @@ __attribute__((weak)) void HSD_GetNextArena(void** lo, void** hi)
     *lo = OSGetArenaLo();
     *hi = OSGetArenaHi();
 }
-__attribute__((weak)) void HSD_IDInsertToTable(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_ImageDescCopyFromEFB(int a0, int a1, int a2, int a3, int a4) {}
-__attribute__((weak)) int HSD_Index2PosNrmMtx(int a0) { return 0; }
-__attribute__((weak)) int HSD_Index2TexMtx(int a0) { return 0; }
+__attribute__((weak)) void HSD_IDInsertToTable(int a0, int a1, int a2) { PC_STUB_HIT("HSD_IDInsertToTable");}
+__attribute__((weak)) void HSD_ImageDescCopyFromEFB(int a0, int a1, int a2, int a3, int a4) { PC_STUB_HIT("HSD_ImageDescCopyFromEFB");}
+__attribute__((weak)) int HSD_Index2PosNrmMtx(int a0) { PC_STUB_HIT("HSD_Index2PosNrmMtx"); return 0; }
+__attribute__((weak)) int HSD_Index2TexMtx(int a0) { PC_STUB_HIT("HSD_Index2TexMtx"); return 0; }
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void HSD_Init_803755A8(void) {}
-__attribute__((weak)) void HSD_JObjAddAnim(int a0, int a1, int a2, int a3) {}
-__attribute__((weak)) void HSD_JObjAddAnimAll(int a0, int a1, int a2, int a3) {}
-__attribute__((weak)) void HSD_JObjAddChild(int a0, int a1) {}
-__attribute__((weak)) void HSD_JObjAddDObj(int a0, int a1) {}
-__attribute__((weak)) void HSD_JObjAnim(int a0) {}
-__attribute__((weak)) void HSD_JObjClearFlags(int a0, int a1) {}
-__attribute__((weak)) void HSD_JObjClearFlagsAll(int a0, int a1) {}
-__attribute__((weak)) void HSD_JObjDeleteRObj(int a0, int a1) {}
-__attribute__((weak)) void HSD_JObjDispAll(int a0, int a1, int a2, int a3) {}
-__attribute__((weak)) int HSD_JObjGetCurrent(void) { return 0; }
-__attribute__((weak)) int HSD_JObjGetDObj(int a0) { return 0; }
-__attribute__((weak)) int HSD_JObjGetFlags(int a0) { return 0; }
-__attribute__((weak)) void HSD_JObjPrependRObj(int a0, int a1) {}
-__attribute__((weak)) int HSD_JObjRemove(int a0) { return 0; }
-__attribute__((weak)) void HSD_JObjRemoveAll(int a0) {}
-__attribute__((weak)) void HSD_JObjRemoveAnim(int a0) {}
-__attribute__((weak)) void HSD_JObjRemoveAnimAll(int a0) {}
-__attribute__((weak)) void HSD_JObjRemoveAnimAllByFlags(int a0, int a1) {}
-__attribute__((weak)) int HSD_JObjReparent(int a0, int a1) { return 0; }
-__attribute__((weak)) void HSD_JObjReqAnim(int a0, float a1) {}
-__attribute__((weak)) void HSD_JObjReqAnimAllByFlags(int a0, int a1, float a2) {}
-__attribute__((weak)) void HSD_JObjReqAnimByFlags(int a0, int a1, float a2) {}
-__attribute__((weak)) void HSD_JObjSetDPtclCallback(int a0) {}
-__attribute__((weak)) void HSD_JObjSetDefaultClass(int a0) {}
-__attribute__((weak)) void HSD_JObjSetFlags(int a0, int a1) {}
-__attribute__((weak)) void HSD_JObjSetFlagsAll(int a0, int a1) {}
-__attribute__((weak)) void HSD_JObjSetMtxDirtySub(int a0) {}
-__attribute__((weak)) void HSD_JObjSetSPtclCallback(int a0) {}
-__attribute__((weak)) void HSD_JObjSetScale_2(void) {}
-__attribute__((weak)) void HSD_JObjSetupMatrix(int a0) {}
-__attribute__((weak)) void HSD_JObjSetupMatrixSub(int a0) {}
-__attribute__((weak)) void HSD_JObjUnref(int a0) {}
-__attribute__((weak)) void HSD_JObjWalkTree(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_LObjAddAnimAll(int a0, int a1) {}
-__attribute__((weak)) void HSD_LObjAddCurrent(int a0) {}
-__attribute__((weak)) void HSD_LObjAnimAll(int a0) {}
-__attribute__((weak)) void HSD_LObjClearFlags(int a0, int a1) {}
-__attribute__((weak)) void HSD_LObjDeleteCurrentAll(int a0) {}
-__attribute__((weak)) int HSD_LObjGetFlags(int a0) { return 0; }
-__attribute__((weak)) int HSD_LObjGetInterest(int a0, int a1) { return 0; }
-__attribute__((weak)) int HSD_LObjGetPosition(int a0, int a1) { return 0; }
-__attribute__((weak)) int HSD_LObjLoadDesc(int a0) { return 0; }
-__attribute__((weak)) void HSD_LObjRemoveAll(int a0) {}
-__attribute__((weak)) void HSD_LObjReqAnimAll(int a0, float a1) {}
-__attribute__((weak)) void HSD_LObjSetColor(int a0, int a1) {}
-__attribute__((weak)) void HSD_LObjSetCurrentAll(int a0) {}
-__attribute__((weak)) void HSD_LObjSetFlags(int a0, int a1) {}
-__attribute__((weak)) void HSD_LObjSetInterest(int a0, int a1) {}
-__attribute__((weak)) void HSD_LObjSetPosition(int a0, int a1) {}
-__attribute__((weak)) void HSD_LObjSetupInit(int a0) {}
-__attribute__((weak)) void HSD_LObj_803668EC(int a0) {}
+__attribute__((weak)) void HSD_Init_803755A8(void) { PC_STUB_HIT("HSD_Init_803755A8");}
+__attribute__((weak)) void HSD_JObjAddAnim(int a0, int a1, int a2, int a3) { PC_STUB_HIT("HSD_JObjAddAnim");}
+__attribute__((weak)) void HSD_JObjAddAnimAll(int a0, int a1, int a2, int a3) { PC_STUB_HIT("HSD_JObjAddAnimAll");}
+__attribute__((weak)) void HSD_JObjAddChild(int a0, int a1) { PC_STUB_HIT("HSD_JObjAddChild");}
+__attribute__((weak)) void HSD_JObjAddDObj(int a0, int a1) { PC_STUB_HIT("HSD_JObjAddDObj");}
+__attribute__((weak)) void HSD_JObjAnim(int a0) { PC_STUB_HIT("HSD_JObjAnim");}
+__attribute__((weak)) void HSD_JObjClearFlags(int a0, int a1) { PC_STUB_HIT("HSD_JObjClearFlags");}
+__attribute__((weak)) void HSD_JObjClearFlagsAll(int a0, int a1) { PC_STUB_HIT("HSD_JObjClearFlagsAll");}
+__attribute__((weak)) void HSD_JObjDeleteRObj(int a0, int a1) { PC_STUB_HIT("HSD_JObjDeleteRObj");}
+__attribute__((weak)) void HSD_JObjDispAll(int a0, int a1, int a2, int a3) { PC_STUB_HIT("HSD_JObjDispAll");}
+__attribute__((weak)) int HSD_JObjGetCurrent(void) { PC_STUB_HIT("HSD_JObjGetCurrent"); return 0; }
+__attribute__((weak)) int HSD_JObjGetDObj(int a0) { PC_STUB_HIT("HSD_JObjGetDObj"); return 0; }
+__attribute__((weak)) int HSD_JObjGetFlags(int a0) { PC_STUB_HIT("HSD_JObjGetFlags"); return 0; }
+__attribute__((weak)) void HSD_JObjPrependRObj(int a0, int a1) { PC_STUB_HIT("HSD_JObjPrependRObj");}
+__attribute__((weak)) int HSD_JObjRemove(int a0) { PC_STUB_HIT("HSD_JObjRemove"); return 0; }
+__attribute__((weak)) void HSD_JObjRemoveAll(int a0) { PC_STUB_HIT("HSD_JObjRemoveAll");}
+__attribute__((weak)) void HSD_JObjRemoveAnim(int a0) { PC_STUB_HIT("HSD_JObjRemoveAnim");}
+__attribute__((weak)) void HSD_JObjRemoveAnimAll(int a0) { PC_STUB_HIT("HSD_JObjRemoveAnimAll");}
+__attribute__((weak)) void HSD_JObjRemoveAnimAllByFlags(int a0, int a1) { PC_STUB_HIT("HSD_JObjRemoveAnimAllByFlags");}
+__attribute__((weak)) int HSD_JObjReparent(int a0, int a1) { PC_STUB_HIT("HSD_JObjReparent"); return 0; }
+__attribute__((weak)) void HSD_JObjReqAnim(int a0, float a1) { PC_STUB_HIT("HSD_JObjReqAnim");}
+__attribute__((weak)) void HSD_JObjReqAnimAllByFlags(int a0, int a1, float a2) { PC_STUB_HIT("HSD_JObjReqAnimAllByFlags");}
+__attribute__((weak)) void HSD_JObjReqAnimByFlags(int a0, int a1, float a2) { PC_STUB_HIT("HSD_JObjReqAnimByFlags");}
+__attribute__((weak)) void HSD_JObjSetDPtclCallback(int a0) { PC_STUB_HIT("HSD_JObjSetDPtclCallback");}
+__attribute__((weak)) void HSD_JObjSetDefaultClass(int a0) { PC_STUB_HIT("HSD_JObjSetDefaultClass");}
+__attribute__((weak)) void HSD_JObjSetFlags(int a0, int a1) { PC_STUB_HIT("HSD_JObjSetFlags");}
+__attribute__((weak)) void HSD_JObjSetFlagsAll(int a0, int a1) { PC_STUB_HIT("HSD_JObjSetFlagsAll");}
+__attribute__((weak)) void HSD_JObjSetMtxDirtySub(int a0) { PC_STUB_HIT("HSD_JObjSetMtxDirtySub");}
+__attribute__((weak)) void HSD_JObjSetSPtclCallback(int a0) { PC_STUB_HIT("HSD_JObjSetSPtclCallback");}
+__attribute__((weak)) void HSD_JObjSetScale_2(void) { PC_STUB_HIT("HSD_JObjSetScale_2");}
+__attribute__((weak)) void HSD_JObjSetupMatrix(int a0) { PC_STUB_HIT("HSD_JObjSetupMatrix");}
+__attribute__((weak)) void HSD_JObjSetupMatrixSub(int a0) { PC_STUB_HIT("HSD_JObjSetupMatrixSub");}
+__attribute__((weak)) void HSD_JObjUnref(int a0) { PC_STUB_HIT("HSD_JObjUnref");}
+__attribute__((weak)) void HSD_JObjWalkTree(int a0, int a1, int a2) { PC_STUB_HIT("HSD_JObjWalkTree");}
+__attribute__((weak)) void HSD_LObjAddAnimAll(int a0, int a1) { PC_STUB_HIT("HSD_LObjAddAnimAll");}
+__attribute__((weak)) void HSD_LObjAddCurrent(int a0) { PC_STUB_HIT("HSD_LObjAddCurrent");}
+__attribute__((weak)) void HSD_LObjAnimAll(int a0) { PC_STUB_HIT("HSD_LObjAnimAll");}
+__attribute__((weak)) void HSD_LObjClearFlags(int a0, int a1) { PC_STUB_HIT("HSD_LObjClearFlags");}
+__attribute__((weak)) void HSD_LObjDeleteCurrentAll(int a0) { PC_STUB_HIT("HSD_LObjDeleteCurrentAll");}
+__attribute__((weak)) int HSD_LObjGetFlags(int a0) { PC_STUB_HIT("HSD_LObjGetFlags"); return 0; }
+__attribute__((weak)) int HSD_LObjGetInterest(int a0, int a1) { PC_STUB_HIT("HSD_LObjGetInterest"); return 0; }
+__attribute__((weak)) int HSD_LObjGetPosition(int a0, int a1) { PC_STUB_HIT("HSD_LObjGetPosition"); return 0; }
+__attribute__((weak)) int HSD_LObjLoadDesc(int a0) { PC_STUB_HIT("HSD_LObjLoadDesc"); return 0; }
+__attribute__((weak)) void HSD_LObjRemoveAll(int a0) { PC_STUB_HIT("HSD_LObjRemoveAll");}
+__attribute__((weak)) void HSD_LObjReqAnimAll(int a0, float a1) { PC_STUB_HIT("HSD_LObjReqAnimAll");}
+__attribute__((weak)) void HSD_LObjSetColor(int a0, int a1) { PC_STUB_HIT("HSD_LObjSetColor");}
+__attribute__((weak)) void HSD_LObjSetCurrentAll(int a0) { PC_STUB_HIT("HSD_LObjSetCurrentAll");}
+__attribute__((weak)) void HSD_LObjSetFlags(int a0, int a1) { PC_STUB_HIT("HSD_LObjSetFlags");}
+__attribute__((weak)) void HSD_LObjSetInterest(int a0, int a1) { PC_STUB_HIT("HSD_LObjSetInterest");}
+__attribute__((weak)) void HSD_LObjSetPosition(int a0, int a1) { PC_STUB_HIT("HSD_LObjSetPosition");}
+__attribute__((weak)) void HSD_LObjSetupInit(int a0) { PC_STUB_HIT("HSD_LObjSetupInit");}
+__attribute__((weak)) void HSD_LObj_803668EC(int a0) { PC_STUB_HIT("HSD_LObj_803668EC");}
 __attribute__((weak)) int HSD_Leak_80387DF8(int a0) { return 0; } /* decl: int */
-__attribute__((weak)) void HSD_MObjAnim(int a0) {}
-__attribute__((weak)) int HSD_MObjGetTObj(int a0) { return 0; }
-__attribute__((weak)) void HSD_MObjRemoveAnimByFlags(int a0, int a1) {}
-__attribute__((weak)) void HSD_MObjReqAnim(int a0, float a1) {}
-__attribute__((weak)) void HSD_MObjSetAlpha(int a0, float a1) {}
-__attribute__((weak)) void HSD_MkRotationMtx(int a0, int a1) {}
-__attribute__((weak)) void HSD_MtxGetRotation(int a0, int a1) {}
-__attribute__((weak)) void HSD_MtxGetScale(int a0, int a1) {}
-__attribute__((weak)) void HSD_MtxGetTranslate(int a0, int a1) {}
-__attribute__((weak)) void HSD_MtxInverse(int a0, int a1) {}
-__attribute__((weak)) void HSD_MtxInverseConcat(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_MtxInverseTranspose(int a0, int a1) {}
-__attribute__((weak)) void HSD_MtxQuat(int a0, int a1) {}
-__attribute__((weak)) void HSD_MtxSRT(int a0, int a1, int a2, int a3, int a4) {}
-__attribute__((weak)) void HSD_MtxScaledAdd(int a0, int a1, int a2, float a3) {}
-__attribute__((weak)) int HSD_ObjAlloc(int a0) { return 0; }
-__attribute__((weak)) void HSD_ObjAllocInit(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_ObjDumpStat(void) {}
-__attribute__((weak)) void HSD_ObjFree(int a0, int a1) {}
-__attribute__((weak)) void HSD_PObjClearMtxMark(int a0, int a1) {}
-__attribute__((weak)) int HSD_PObjGetFlags(int a0) { return 0; }
-__attribute__((weak)) void HSD_PObjGetMtxMark(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_PObjSetDefaultClass(int a0) {}
-__attribute__((weak)) void HSD_PObjSetMtxMark(int a0, int a1, int a2) {}
+__attribute__((weak)) void HSD_MObjAnim(int a0) { PC_STUB_HIT("HSD_MObjAnim");}
+__attribute__((weak)) int HSD_MObjGetTObj(int a0) { PC_STUB_HIT("HSD_MObjGetTObj"); return 0; }
+__attribute__((weak)) void HSD_MObjRemoveAnimByFlags(int a0, int a1) { PC_STUB_HIT("HSD_MObjRemoveAnimByFlags");}
+__attribute__((weak)) void HSD_MObjReqAnim(int a0, float a1) { PC_STUB_HIT("HSD_MObjReqAnim");}
+__attribute__((weak)) void HSD_MObjSetAlpha(int a0, float a1) { PC_STUB_HIT("HSD_MObjSetAlpha");}
+__attribute__((weak)) void HSD_MkRotationMtx(int a0, int a1) { PC_STUB_HIT("HSD_MkRotationMtx");}
+__attribute__((weak)) void HSD_MtxGetRotation(int a0, int a1) { PC_STUB_HIT("HSD_MtxGetRotation");}
+__attribute__((weak)) void HSD_MtxGetScale(int a0, int a1) { PC_STUB_HIT("HSD_MtxGetScale");}
+__attribute__((weak)) void HSD_MtxGetTranslate(int a0, int a1) { PC_STUB_HIT("HSD_MtxGetTranslate");}
+__attribute__((weak)) void HSD_MtxInverse(int a0, int a1) { PC_STUB_HIT("HSD_MtxInverse");}
+__attribute__((weak)) void HSD_MtxInverseConcat(int a0, int a1, int a2) { PC_STUB_HIT("HSD_MtxInverseConcat");}
+__attribute__((weak)) void HSD_MtxInverseTranspose(int a0, int a1) { PC_STUB_HIT("HSD_MtxInverseTranspose");}
+__attribute__((weak)) void HSD_MtxQuat(int a0, int a1) { PC_STUB_HIT("HSD_MtxQuat");}
+__attribute__((weak)) void HSD_MtxSRT(int a0, int a1, int a2, int a3, int a4) { PC_STUB_HIT("HSD_MtxSRT");}
+__attribute__((weak)) void HSD_MtxScaledAdd(int a0, int a1, int a2, float a3) { PC_STUB_HIT("HSD_MtxScaledAdd");}
+__attribute__((weak)) int HSD_ObjAlloc(int a0) { PC_STUB_HIT("HSD_ObjAlloc"); return 0; }
+__attribute__((weak)) void HSD_ObjAllocInit(int a0, int a1, int a2) { PC_STUB_HIT("HSD_ObjAllocInit");}
+__attribute__((weak)) void HSD_ObjDumpStat(void) { PC_STUB_HIT("HSD_ObjDumpStat");}
+__attribute__((weak)) void HSD_ObjFree(int a0, int a1) { PC_STUB_HIT("HSD_ObjFree");}
+__attribute__((weak)) void HSD_PObjClearMtxMark(int a0, int a1) { PC_STUB_HIT("HSD_PObjClearMtxMark");}
+__attribute__((weak)) int HSD_PObjGetFlags(int a0) { PC_STUB_HIT("HSD_PObjGetFlags"); return 0; }
+__attribute__((weak)) void HSD_PObjGetMtxMark(int a0, int a1, int a2) { PC_STUB_HIT("HSD_PObjGetMtxMark");}
+__attribute__((weak)) void HSD_PObjSetDefaultClass(int a0) { PC_STUB_HIT("HSD_PObjSetDefaultClass");}
+__attribute__((weak)) void HSD_PObjSetMtxMark(int a0, int a1, int a2) { PC_STUB_HIT("HSD_PObjSetMtxMark");}
 /* ============================================================
  * PAD INPUT BRIDGE — SDL2 → GC Controller
  * ============================================================
@@ -1200,6 +1226,9 @@ size_t g_heap_size = 0;
  * token. Button tokens (a/b/x/y/z/l/r/start/dup/ddown/dleft/dright) are
  * pressed for PC_PAD_SCRIPT_HOLD frames from the given frame, and the game's
  * gm_GetButtonsTriggered reads .trigger, so the press edge is published too. */
+/* gm_1A3F.h is not included here; this is its one use. */
+extern u8 gm_GetCurrentGameMode(void);
+
 #define PC_PAD_SCRIPT_MAX 64
 #define PC_PAD_SCRIPT_HOLD 4
 
@@ -1211,6 +1240,9 @@ struct pc_pad_event {
     long frame;
     u32 button; /* 0 for a stick event */
     int sx, sy;
+    /* Which controller. Defaults to 0; "1200:P2:a" drives the second, which
+     * the character select needs -- one pad cannot pick two fighters. */
+    int pad;
 };
 
 static struct pc_pad_event g_pad_script[PC_PAD_SCRIPT_MAX];
@@ -1269,8 +1301,16 @@ static void pc_pad_script_parse(void)
         long frame;
         char* star;
         int hold = 0;
-        if (sscanf(tok, "%ld:%31s", &frame, name) != 2) {
+        int which = 0;
+        if (sscanf(tok, "%ld:P%d:%31s", &frame, &which, name) == 3) {
+            /* "1538:P2:a" -- one-based, as the console-side routes spell it */
+            which -= 1;
+        } else if (sscanf(tok, "%ld:%31s", &frame, name) != 2) {
             fprintf(stderr, "[PADSCRIPT] bad entry '%s'\n", tok);
+            continue;
+        }
+        if (which < 0 || which >= 4) {
+            fprintf(stderr, "[PADSCRIPT] bad controller in '%s'\n", tok);
             continue;
         }
         star = strchr(name, '*');
@@ -1289,15 +1329,18 @@ static void pc_pad_script_parse(void)
         }
         ev.frame = frame;
         ev.hold = hold;
+        ev.pad = which;
         g_pad_script[g_pad_script_n++] = ev;
     }
     fprintf(stderr, "[PADSCRIPT] %d event(s) loaded\n", g_pad_script_n);
 }
 
-static void pc_pad_run_script(GCPadStatus* pad)
+static void pc_pad_run_script(GCPadStatus* pad, int which)
 {
-    static int stick_x, stick_y;
-    static u32 held;
+    /* Per controller: two pads sharing one `held` reported every edge twice
+     * and every release on whichever ran second. */
+    static int stick_x[4], stick_y[4];
+    static u32 held[4];
     long frame;
     u32 pressed = 0;
     int i;
@@ -1309,13 +1352,42 @@ static void pc_pad_run_script(GCPadStatus* pad)
         return;
     }
 
-    frame = g_pad_script_frame++;
-    stick_x = 0;
-    stick_y = 0;
+    /* The clock advances once per frame, on the first controller, not once
+     * per controller polled.
+     *
+     * MELEE_PAD_SCRIPT_ZERO=<mode> holds it at zero until the game first
+     * reaches that mode. A script written against power-on frames is only
+     * meaningful on the machine it was recorded on: the port and the console
+     * take different numbers of frames to finish booting, so the same frame
+     * number is a different moment on each. Starting the clock at a screen
+     * both sides can be waited for -- the intro, the title -- makes the same
+     * numbers mean the same thing on both, which is what lets one recorded
+     * route drive them together. */
+    if (which == 0) {
+        static int zero_seen = -1;
+        const char* z = getenv("MELEE_PAD_SCRIPT_ZERO");
+        if (z != NULL && zero_seen != 1) {
+            if (zero_seen < 0) {
+                zero_seen = 0;
+            }
+            if ((int) gm_GetCurrentGameMode() == atoi(z)) {
+                zero_seen = 1;
+            }
+        }
+        if (z == NULL || zero_seen == 1) {
+            g_pad_script_frame++;
+        }
+    }
+    frame = g_pad_script_frame - 1;
+    stick_x[which] = 0;
+    stick_y[which] = 0;
     for (i = 0; i < g_pad_script_n; i++) {
         const struct pc_pad_event* ev = &g_pad_script[i];
         int hold = ev->hold > 0 ? ev->hold : PC_PAD_SCRIPT_HOLD;
 
+        if (ev->pad != which) {
+            continue;
+        }
         if (frame < ev->frame || frame >= ev->frame + hold) {
             continue;
         }
@@ -1327,18 +1399,18 @@ static void pc_pad_run_script(GCPadStatus* pad)
              * lasted -- one press moved one, two or three items depending on
              * how many frames elapsed and how loaded the machine was. Give
              * directions the same release window buttons already had. */
-            stick_x = ev->sx;
-            stick_y = ev->sy;
+            stick_x[which] = ev->sx;
+            stick_y[which] = ev->sy;
         } else {
             pressed |= ev->button;
         }
     }
 
-    pad->stickX = (s8) stick_x;
-    pad->stickY = (s8) stick_y;
+    pad->stickX = (s8) stick_x[which];
+    pad->stickY = (s8) stick_y[which];
     pad->button |= pressed;
-    pad->trigger |= pressed & ~held;
-    held = pressed;
+    pad->trigger |= pressed & ~held[which];
+    held[which] = pressed;
 }
 
 /* Keyboard-to-GC-pad mapping for Player 1.
@@ -1577,8 +1649,11 @@ void HSD_PadRenewRawStatus(bool unused)
                 }
             }
 
-            pc_pad_run_script(&g_gc_pads[pad]);
         }
+
+        /* Outside the pad == 0 block: the script can drive any controller,
+         * and the character select needs a second one. */
+        pc_pad_run_script(&g_gc_pads[pad], pad);
 
         /* Synthesize the stick-direction bits into the raw button word.
          * sysdolphin's HSD_PadADConvert does this on GCN (controller.c,
@@ -1820,148 +1895,148 @@ s32 HSD_PadGetResetSwitch(void)
     return 0;  /* No reset switch */
 }
 
-__attribute__((weak)) void HSD_Panic(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_PerfSetTotalTime(void) {}
+__attribute__((weak)) void HSD_Panic(int a0, int a1, int a2) { PC_STUB_HIT("HSD_Panic");}
+__attribute__((weak)) void HSD_PerfSetTotalTime(void) { PC_STUB_HIT("HSD_PerfSetTotalTime");}
 __attribute__((weak)) int HSD_QuatLib_8037EB28(int a0, int a1) { return 0; } /* decl: s32 */
 __attribute__((weak)) int HSD_QuatLib_8037EC4C(int a0, int a1, int a2) { return 0; } /* decl: s32 */
 __attribute__((weak)) int HSD_QuatLib_8037ECE0(int a0, int a1, float a2) { return 0; } /* decl: s32 */
 __attribute__((weak)) int HSD_QuatLib_8037EF28(int a0, int a1, int a2, float a3) { return 0; } /* decl: s32 */
-__attribute__((weak)) int HSD_RObjAlloc(void) { return 0; }
-__attribute__((weak)) int HSD_RObjGetByType(int a0, int a1, int a2) { return 0; }
-__attribute__((weak)) void HSD_RObjRemove(int a0) {}
-__attribute__((weak)) void HSD_RObjSetConstraintObj(int a0, int a1) {}
-__attribute__((weak)) void HSD_RObjSetFlags(int a0, int a1) {}
-__attribute__((weak)) int HSD_Rand(void) { return 0; }
-__attribute__((weak)) float HSD_Randf(void) { return 0; }
-__attribute__((weak)) int HSD_Randi(int a0) { return 0; }
-__attribute__((weak)) void HSD_Rumble_80378524(int a0) {}
-__attribute__((weak)) void HSD_SObjLib_803A44A4(void) {}
-__attribute__((weak)) void HSD_SObjLib_803A4740(int a0) {}
+__attribute__((weak)) int HSD_RObjAlloc(void) { PC_STUB_HIT("HSD_RObjAlloc"); return 0; }
+__attribute__((weak)) int HSD_RObjGetByType(int a0, int a1, int a2) { PC_STUB_HIT("HSD_RObjGetByType"); return 0; }
+__attribute__((weak)) void HSD_RObjRemove(int a0) { PC_STUB_HIT("HSD_RObjRemove");}
+__attribute__((weak)) void HSD_RObjSetConstraintObj(int a0, int a1) { PC_STUB_HIT("HSD_RObjSetConstraintObj");}
+__attribute__((weak)) void HSD_RObjSetFlags(int a0, int a1) { PC_STUB_HIT("HSD_RObjSetFlags");}
+__attribute__((weak)) int HSD_Rand(void) { PC_STUB_HIT("HSD_Rand"); return 0; }
+__attribute__((weak)) float HSD_Randf(void) { PC_STUB_HIT("HSD_Randf"); return 0; }
+__attribute__((weak)) int HSD_Randi(int a0) { PC_STUB_HIT("HSD_Randi"); return 0; }
+__attribute__((weak)) void HSD_Rumble_80378524(int a0) { PC_STUB_HIT("HSD_Rumble_80378524");}
+__attribute__((weak)) void HSD_SObjLib_803A44A4(void) { PC_STUB_HIT("HSD_SObjLib_803A44A4");}
+__attribute__((weak)) void HSD_SObjLib_803A4740(int a0) { PC_STUB_HIT("HSD_SObjLib_803A4740");}
 /* HSD_SObjLib_803A477C implemented in sobjlib.c — removed stub */
-__attribute__((weak)) void HSD_SObjLib_803A49E0(int a0, int a1) {}
-__attribute__((weak)) void HSD_SObjLib_803A54EC(int a0, int a1) {}
-__attribute__((weak)) void HSD_SObjLib_803A55DC(int a0, int a1, int a2, int a3) {}
+__attribute__((weak)) void HSD_SObjLib_803A49E0(int a0, int a1) { PC_STUB_HIT("HSD_SObjLib_803A49E0");}
+__attribute__((weak)) void HSD_SObjLib_803A54EC(int a0, int a1) { PC_STUB_HIT("HSD_SObjLib_803A54EC");}
+__attribute__((weak)) void HSD_SObjLib_803A55DC(int a0, int a1, int a2, int a3) { PC_STUB_HIT("HSD_SObjLib_803A55DC");}
 __attribute__((weak)) u8 HSD_SObjLib_804D7960;
-__attribute__((weak)) void HSD_SetEraseColor(int a0, int a1, int a2, int a3) {}
-__attribute__((weak)) void HSD_SetHeap(int handle) { (void)handle; }
+__attribute__((weak)) void HSD_SetEraseColor(int a0, int a1, int a2, int a3) { PC_STUB_HIT("HSD_SetEraseColor");}
+__attribute__((weak)) void HSD_SetHeap(int handle) { PC_STUB_HIT("HSD_SetHeap"); (void)handle; }
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void HSD_SetMaterialColor(int a0, int a1, int a2, float a3) {}
-__attribute__((weak)) void HSD_SetMaterialShininess(float a0) {}
-__attribute__((weak)) void HSD_SetPanicCallback(void) {}
-__attribute__((weak)) void HSD_SetTevRegAll(void) {}
-__attribute__((weak)) void HSD_SetupChannel(int a0) {}
-__attribute__((weak)) void HSD_SetupChannelAll(int a0) {}
-__attribute__((weak)) void HSD_SetupPEMode(int a0, int a1) {}
-__attribute__((weak)) void HSD_SetupRenderMode(int a0) {}
-__attribute__((weak)) void HSD_SetupRenderModeWithCustomPE(int a0, int a1) {}
-__attribute__((weak)) void HSD_SetupTevStage(int a0) {}
-__attribute__((weak)) void HSD_ShadowAddObject(int a0, int a1) {}
-__attribute__((weak)) int HSD_ShadowAlloc(void) { return 0; }
-__attribute__((weak)) void HSD_ShadowDeleteObject(int a0, int a1) {}
-__attribute__((weak)) void HSD_ShadowEndRender(int a0) {}
-__attribute__((weak)) void HSD_ShadowInit(int a0) {}
-__attribute__((weak)) void HSD_ShadowRemove(int a0) {}
-__attribute__((weak)) void HSD_ShadowSetActive(int a0, int a1) {}
-__attribute__((weak)) void HSD_ShadowSetSize(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_ShadowSetViewingRect(int a0, float a1, float a2, float a3, float a4) {}
-__attribute__((weak)) void HSD_ShadowStartRender(int a0) {}
+__attribute__((weak)) void HSD_SetMaterialColor(int a0, int a1, int a2, float a3) { PC_STUB_HIT("HSD_SetMaterialColor");}
+__attribute__((weak)) void HSD_SetMaterialShininess(float a0) { PC_STUB_HIT("HSD_SetMaterialShininess");}
+__attribute__((weak)) void HSD_SetPanicCallback(void) { PC_STUB_HIT("HSD_SetPanicCallback");}
+__attribute__((weak)) void HSD_SetTevRegAll(void) { PC_STUB_HIT("HSD_SetTevRegAll");}
+__attribute__((weak)) void HSD_SetupChannel(int a0) { PC_STUB_HIT("HSD_SetupChannel");}
+__attribute__((weak)) void HSD_SetupChannelAll(int a0) { PC_STUB_HIT("HSD_SetupChannelAll");}
+__attribute__((weak)) void HSD_SetupPEMode(int a0, int a1) { PC_STUB_HIT("HSD_SetupPEMode");}
+__attribute__((weak)) void HSD_SetupRenderMode(int a0) { PC_STUB_HIT("HSD_SetupRenderMode");}
+__attribute__((weak)) void HSD_SetupRenderModeWithCustomPE(int a0, int a1) { PC_STUB_HIT("HSD_SetupRenderModeWithCustomPE");}
+__attribute__((weak)) void HSD_SetupTevStage(int a0) { PC_STUB_HIT("HSD_SetupTevStage");}
+__attribute__((weak)) void HSD_ShadowAddObject(int a0, int a1) { PC_STUB_HIT("HSD_ShadowAddObject");}
+__attribute__((weak)) int HSD_ShadowAlloc(void) { PC_STUB_HIT("HSD_ShadowAlloc"); return 0; }
+__attribute__((weak)) void HSD_ShadowDeleteObject(int a0, int a1) { PC_STUB_HIT("HSD_ShadowDeleteObject");}
+__attribute__((weak)) void HSD_ShadowEndRender(int a0) { PC_STUB_HIT("HSD_ShadowEndRender");}
+__attribute__((weak)) void HSD_ShadowInit(int a0) { PC_STUB_HIT("HSD_ShadowInit");}
+__attribute__((weak)) void HSD_ShadowRemove(int a0) { PC_STUB_HIT("HSD_ShadowRemove");}
+__attribute__((weak)) void HSD_ShadowSetActive(int a0, int a1) { PC_STUB_HIT("HSD_ShadowSetActive");}
+__attribute__((weak)) void HSD_ShadowSetSize(int a0, int a1, int a2) { PC_STUB_HIT("HSD_ShadowSetSize");}
+__attribute__((weak)) void HSD_ShadowSetViewingRect(int a0, float a1, float a2, float a3, float a4) { PC_STUB_HIT("HSD_ShadowSetViewingRect");}
+__attribute__((weak)) void HSD_ShadowStartRender(int a0) { PC_STUB_HIT("HSD_ShadowStartRender");}
 __attribute__((weak)) int HSD_SisLib_803A5ACC(int a0, int a1, float a2, float a3, float a4, float a5, float a6) { return 0; } /* decl: HSD_Text* */
-__attribute__((weak)) void HSD_SisLib_803A5CC4(int a0) {}
-__attribute__((weak)) void HSD_SisLib_803A5D30(void) {}
-__attribute__((weak)) void HSD_SisLib_803A5E70(void) {}
-__attribute__((weak)) void HSD_SisLib_803A5F50(int a0) {}
-__attribute__((weak)) void HSD_SisLib_803A5FBC(void) {}
-__attribute__((weak)) void HSD_SisLib_803A6048(u32 arg) {(void)arg;}
+__attribute__((weak)) void HSD_SisLib_803A5CC4(int a0) { PC_STUB_HIT("HSD_SisLib_803A5CC4");}
+__attribute__((weak)) void HSD_SisLib_803A5D30(void) { PC_STUB_HIT("HSD_SisLib_803A5D30");}
+__attribute__((weak)) void HSD_SisLib_803A5E70(void) { PC_STUB_HIT("HSD_SisLib_803A5E70");}
+__attribute__((weak)) void HSD_SisLib_803A5F50(int a0) { PC_STUB_HIT("HSD_SisLib_803A5F50");}
+__attribute__((weak)) void HSD_SisLib_803A5FBC(void) { PC_STUB_HIT("HSD_SisLib_803A5FBC");}
+__attribute__((weak)) void HSD_SisLib_803A6048(u32 arg) { PC_STUB_HIT("HSD_SisLib_803A6048");(void)arg;}
 __attribute__((weak)) int HSD_SisLib_803A611C(int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7) { return 0; } /* decl: s32 */
-__attribute__((weak)) void HSD_SisLib_803A62A0(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_SisLib_803A6368(int a0, int a1) {}
+__attribute__((weak)) void HSD_SisLib_803A62A0(int a0, int a1, int a2) { PC_STUB_HIT("HSD_SisLib_803A62A0");}
+__attribute__((weak)) void HSD_SisLib_803A6368(int a0, int a1) { PC_STUB_HIT("HSD_SisLib_803A6368");}
 __attribute__((weak)) int HSD_SisLib_803A6478(int a0, int a1) { return 0; } /* decl: u8* */
 __attribute__((weak)) int HSD_SisLib_803A6530(int a0, int a1, int a2) { return 0; } /* decl: u8* */
-__attribute__((weak)) void HSD_SisLib_803A660C(int a0, int a1, int a2) {}
+__attribute__((weak)) void HSD_SisLib_803A660C(int a0, int a1, int a2) { PC_STUB_HIT("HSD_SisLib_803A660C");}
 __attribute__((weak)) int HSD_SisLib_803A6754(int a0, int a1) { return 0; } /* decl: HSD_Text* */
 __attribute__((weak)) int HSD_SisLib_803A6B98(int a0, float a1, float a2, int a3, int a4) { return 0; } /* decl: int */
 __attribute__((weak)) int HSD_SisLib_803A70A0(int a0, int a1, int a2, int a3) { return 0; } /* decl: s32 */
-__attribute__((weak)) void HSD_SisLib_803A746C(int a0, int a1, float a2, float a3) {}
-__attribute__((weak)) void HSD_SisLib_803A74F0(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_SisLib_803A7548(int a0, int a1, float a2, float a3) {}
-__attribute__((weak)) void HSD_SisLib_803A75E0(int a0, int a1) {}
-__attribute__((weak)) void HSD_SisLib_803A7664(int a0) {}
-__attribute__((weak)) void HSD_SisLib_803A84BC(int a0, int a1) {}
-__attribute__((weak)) void HSD_StartRender(int a0) {}
-__attribute__((weak)) int HSD_StateAssignTev(void) { return 0; }
-__attribute__((weak)) void HSD_StateInitDirect(int a0, int a1) {}
-__attribute__((weak)) void HSD_StateInitTev(void) {}
-__attribute__((weak)) void HSD_StateInvalidate(int a0) {}
-__attribute__((weak)) void HSD_StateSetColorUpdate(int a0) {}
-__attribute__((weak)) void HSD_StateSetCullMode(int a0) {}
-__attribute__((weak)) void HSD_StateSetLineWidth(int a0, int a1) {}
-__attribute__((weak)) void HSD_StateSetNumChans(int a0) {}
-__attribute__((weak)) void HSD_StateSetNumTevStages(void) {}
-__attribute__((weak)) void HSD_StateSetNumTexGens(void) {}
-__attribute__((weak)) void HSD_StateSetZMode(int a0, int a1, int a2) {}
+__attribute__((weak)) void HSD_SisLib_803A746C(int a0, int a1, float a2, float a3) { PC_STUB_HIT("HSD_SisLib_803A746C");}
+__attribute__((weak)) void HSD_SisLib_803A74F0(int a0, int a1, int a2) { PC_STUB_HIT("HSD_SisLib_803A74F0");}
+__attribute__((weak)) void HSD_SisLib_803A7548(int a0, int a1, float a2, float a3) { PC_STUB_HIT("HSD_SisLib_803A7548");}
+__attribute__((weak)) void HSD_SisLib_803A75E0(int a0, int a1) { PC_STUB_HIT("HSD_SisLib_803A75E0");}
+__attribute__((weak)) void HSD_SisLib_803A7664(int a0) { PC_STUB_HIT("HSD_SisLib_803A7664");}
+__attribute__((weak)) void HSD_SisLib_803A84BC(int a0, int a1) { PC_STUB_HIT("HSD_SisLib_803A84BC");}
+__attribute__((weak)) void HSD_StartRender(int a0) { PC_STUB_HIT("HSD_StartRender");}
+__attribute__((weak)) int HSD_StateAssignTev(void) { PC_STUB_HIT("HSD_StateAssignTev"); return 0; }
+__attribute__((weak)) void HSD_StateInitDirect(int a0, int a1) { PC_STUB_HIT("HSD_StateInitDirect");}
+__attribute__((weak)) void HSD_StateInitTev(void) { PC_STUB_HIT("HSD_StateInitTev");}
+__attribute__((weak)) void HSD_StateInvalidate(int a0) { PC_STUB_HIT("HSD_StateInvalidate");}
+__attribute__((weak)) void HSD_StateSetColorUpdate(int a0) { PC_STUB_HIT("HSD_StateSetColorUpdate");}
+__attribute__((weak)) void HSD_StateSetCullMode(int a0) { PC_STUB_HIT("HSD_StateSetCullMode");}
+__attribute__((weak)) void HSD_StateSetLineWidth(int a0, int a1) { PC_STUB_HIT("HSD_StateSetLineWidth");}
+__attribute__((weak)) void HSD_StateSetNumChans(int a0) { PC_STUB_HIT("HSD_StateSetNumChans");}
+__attribute__((weak)) void HSD_StateSetNumTevStages(void) { PC_STUB_HIT("HSD_StateSetNumTevStages");}
+__attribute__((weak)) void HSD_StateSetNumTexGens(void) { PC_STUB_HIT("HSD_StateSetNumTexGens");}
+__attribute__((weak)) void HSD_StateSetZMode(int a0, int a1, int a2) { PC_STUB_HIT("HSD_StateSetZMode");}
 __attribute__((weak)) long HSD_SynthGetSoundMode(void) { return 0; } /* decl: u32 */
-__attribute__((weak)) void HSD_SynthSFXAllocateBank(int a0) {}
-__attribute__((weak)) void HSD_SynthSFXBankDeflag(int a0) {}
-__attribute__((weak)) void HSD_SynthSFXBankDeflagSync(void) {}
+__attribute__((weak)) void HSD_SynthSFXAllocateBank(int a0) { PC_STUB_HIT("HSD_SynthSFXAllocateBank");}
+__attribute__((weak)) void HSD_SynthSFXBankDeflag(int a0) { PC_STUB_HIT("HSD_SynthSFXBankDeflag");}
+__attribute__((weak)) void HSD_SynthSFXBankDeflagSync(void) { PC_STUB_HIT("HSD_SynthSFXBankDeflagSync");}
 __attribute__((weak)) int HSD_SynthSFXCancelLoad(int a0) { return 0; } /* decl: int */
 __attribute__((weak)) long HSD_SynthSFXGetPendingLoadCount(void) { return 0; } /* decl: int */
 __attribute__((weak)) int HSD_SynthSFXLoad(int a0, int a1, int a2, int a3) { return 0; } /* decl: int */
-__attribute__((weak)) void HSD_SynthSFXUnloadBank(int a0) {}
-__attribute__((weak)) void HSD_SynthSFXUpdateAllVolume(int a0, int a1, int a2) {}
-__attribute__((weak)) void HSD_SynthSFXWaitForLoadCompletion(int a0) {}
-__attribute__((weak)) void HSD_SynthSetSoundMode(int a0) {}
-__attribute__((weak)) void HSD_SynthStreamSetVolume(float a0) {}
-__attribute__((weak)) void HSD_Synth_80388E08(int a0) {}
-__attribute__((weak)) void HSD_TExpSetReg(int a0) {}
-__attribute__((weak)) void HSD_TObjAddAnimAll(int a0, int a1) {}
-__attribute__((weak)) void HSD_TObjAnim(int a0) {}
-__attribute__((weak)) int HSD_TObjGetNext(int a0) { return 0; }
-__attribute__((weak)) int HSD_TObjLoadDesc(int a0) { return 0; }
-__attribute__((weak)) void HSD_TObjReqAnim(int a0, float a1) {}
-__attribute__((weak)) void HSD_TObjReqAnimAll(int a0, float a1) {}
-__attribute__((weak)) void HSD_TObjSetup(int a0) {}
-__attribute__((weak)) void HSD_TObjSetupTextureCoordGen(int a0) {}
-__attribute__((weak)) void HSD_VICopyXFBAsync(int a0) {}
-__attribute__((weak)) void HSD_VIDrawDoneXFB(void) {}
-__attribute__((weak)) int HSD_VIGetXFBLastDrawDone(void) { return 0; }
-__attribute__((weak)) void HSD_VISetBlack(int a0) {}
-__attribute__((weak)) void HSD_VISetConfigure(int a0) {}
+__attribute__((weak)) void HSD_SynthSFXUnloadBank(int a0) { PC_STUB_HIT("HSD_SynthSFXUnloadBank");}
+__attribute__((weak)) void HSD_SynthSFXUpdateAllVolume(int a0, int a1, int a2) { PC_STUB_HIT("HSD_SynthSFXUpdateAllVolume");}
+__attribute__((weak)) void HSD_SynthSFXWaitForLoadCompletion(int a0) { PC_STUB_HIT("HSD_SynthSFXWaitForLoadCompletion");}
+__attribute__((weak)) void HSD_SynthSetSoundMode(int a0) { PC_STUB_HIT("HSD_SynthSetSoundMode");}
+__attribute__((weak)) void HSD_SynthStreamSetVolume(float a0) { PC_STUB_HIT("HSD_SynthStreamSetVolume");}
+__attribute__((weak)) void HSD_Synth_80388E08(int a0) { PC_STUB_HIT("HSD_Synth_80388E08");}
+__attribute__((weak)) void HSD_TExpSetReg(int a0) { PC_STUB_HIT("HSD_TExpSetReg");}
+__attribute__((weak)) void HSD_TObjAddAnimAll(int a0, int a1) { PC_STUB_HIT("HSD_TObjAddAnimAll");}
+__attribute__((weak)) void HSD_TObjAnim(int a0) { PC_STUB_HIT("HSD_TObjAnim");}
+__attribute__((weak)) int HSD_TObjGetNext(int a0) { PC_STUB_HIT("HSD_TObjGetNext"); return 0; }
+__attribute__((weak)) int HSD_TObjLoadDesc(int a0) { PC_STUB_HIT("HSD_TObjLoadDesc"); return 0; }
+__attribute__((weak)) void HSD_TObjReqAnim(int a0, float a1) { PC_STUB_HIT("HSD_TObjReqAnim");}
+__attribute__((weak)) void HSD_TObjReqAnimAll(int a0, float a1) { PC_STUB_HIT("HSD_TObjReqAnimAll");}
+__attribute__((weak)) void HSD_TObjSetup(int a0) { PC_STUB_HIT("HSD_TObjSetup");}
+__attribute__((weak)) void HSD_TObjSetupTextureCoordGen(int a0) { PC_STUB_HIT("HSD_TObjSetupTextureCoordGen");}
+__attribute__((weak)) void HSD_VICopyXFBAsync(int a0) { PC_STUB_HIT("HSD_VICopyXFBAsync");}
+__attribute__((weak)) void HSD_VIDrawDoneXFB(void) { PC_STUB_HIT("HSD_VIDrawDoneXFB");}
+__attribute__((weak)) int HSD_VIGetXFBLastDrawDone(void) { PC_STUB_HIT("HSD_VIGetXFBLastDrawDone"); return 0; }
+__attribute__((weak)) void HSD_VISetBlack(int a0) { PC_STUB_HIT("HSD_VISetBlack");}
+__attribute__((weak)) void HSD_VISetConfigure(int a0) { PC_STUB_HIT("HSD_VISetConfigure");}
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void HSD_VISetUserPostRetraceCallback(void) {}
-__attribute__((weak)) void HSD_VISetUserPreRetraceCallback(void) {}
-__attribute__((weak)) void HSD_VIWaitXFBFlush(void) {}
-__attribute__((weak)) void HSD_ViewingRectAddRect(int a0, int a1, float a2, float a3, float a4, float a5) {}
-__attribute__((weak)) int HSD_ViewingRectCheck(int a0) { return 0; }
-__attribute__((weak)) void HSD_ViewingRectInit(int a0, int a1, int a2, int a3, int a4) {}
-__attribute__((weak)) void HitCapsuleGetPtr(void) {}
-__attribute__((weak)) void Locate(void) {}
-__attribute__((weak)) void MTXLightFrustum(int a0, float a1, float a2, float a3, float a4, float a5, float a6, float a7, float a8, float a9) {}
-__attribute__((weak)) void MTXLightOrtho(int a0, float a1, float a2, float a3, float a4, float a5, float a6, float a7, float a8) {}
-__attribute__((weak)) void MTXLightPerspective(int a0, float a1, float a2, float a3, float a4, float a5, float a6) {}
-__attribute__((weak)) void MTXOrtho(int a0, float a1, float a2, float a3, float a4, float a5, float a6) {}
-__attribute__((weak)) void MTXPerspective(int a0, float a1, float a2, float a3, float a4) {}
-__attribute__((weak)) void MagnetStateVarCalc(void) {}
+__attribute__((weak)) void HSD_VISetUserPostRetraceCallback(void) { PC_STUB_HIT("HSD_VISetUserPostRetraceCallback");}
+__attribute__((weak)) void HSD_VISetUserPreRetraceCallback(void) { PC_STUB_HIT("HSD_VISetUserPreRetraceCallback");}
+__attribute__((weak)) void HSD_VIWaitXFBFlush(void) { PC_STUB_HIT("HSD_VIWaitXFBFlush");}
+__attribute__((weak)) void HSD_ViewingRectAddRect(int a0, int a1, float a2, float a3, float a4, float a5) { PC_STUB_HIT("HSD_ViewingRectAddRect");}
+__attribute__((weak)) int HSD_ViewingRectCheck(int a0) { PC_STUB_HIT("HSD_ViewingRectCheck"); return 0; }
+__attribute__((weak)) void HSD_ViewingRectInit(int a0, int a1, int a2, int a3, int a4) { PC_STUB_HIT("HSD_ViewingRectInit");}
+__attribute__((weak)) void HitCapsuleGetPtr(void) { PC_STUB_HIT("HitCapsuleGetPtr");}
+__attribute__((weak)) void Locate(void) { PC_STUB_HIT("Locate");}
+__attribute__((weak)) void MTXLightFrustum(int a0, float a1, float a2, float a3, float a4, float a5, float a6, float a7, float a8, float a9) { PC_STUB_HIT("MTXLightFrustum");}
+__attribute__((weak)) void MTXLightOrtho(int a0, float a1, float a2, float a3, float a4, float a5, float a6, float a7, float a8) { PC_STUB_HIT("MTXLightOrtho");}
+__attribute__((weak)) void MTXLightPerspective(int a0, float a1, float a2, float a3, float a4, float a5, float a6) { PC_STUB_HIT("MTXLightPerspective");}
+__attribute__((weak)) void MTXOrtho(int a0, float a1, float a2, float a3, float a4, float a5, float a6) { PC_STUB_HIT("MTXOrtho");}
+__attribute__((weak)) void MTXPerspective(int a0, float a1, float a2, float a3, float a4) { PC_STUB_HIT("MTXPerspective");}
+__attribute__((weak)) void MagnetStateVarCalc(void) { PC_STUB_HIT("MagnetStateVarCalc");}
 __attribute__((weak)) int MatToQuat(int a0, int a1) { return 0; } /* decl: s32 */
-__attribute__((weak)) void NessFloatMath_PKThunder2(void) {}
-__attribute__((weak)) int OSCheckActiveThreads(void) { return 0; }
-__attribute__((weak)) size_t OSCheckHeap(void* heap) { (void)heap; return SIZE_MAX; }
-__attribute__((weak)) void OSCreateAlarm(int a0) {}
-__attribute__((weak)) int OSCreateHeap(int a0, int a1) { return 0; }
-__attribute__((weak)) void OSDestroyHeap(int a0) {}
-__attribute__((weak)) int OSGetProgressiveMode(void) { return 0; }
-__attribute__((weak)) int OSGetResetCode(void) { return 0; }
-__attribute__((weak)) void OSSetErrorHandler(void) {}
-__attribute__((weak)) void OSSetPeriodicAlarm(int a0, long long a1, long long a2, int a3) {}
-__attribute__((weak)) void OSSetProgressiveMode(int a0) {}
-__attribute__((weak)) void OSTicksToCalendarTime(long long a0, int a1) {}
-__attribute__((weak)) void PADInit(void) {}
-__attribute__((weak)) int PADRead(int a0) { return 0; }
-__attribute__((weak)) void PADSetSamplingRate(int a0) {}
-__attribute__((weak)) void PADSetSpec(void) {}
-__attribute__((weak)) void PPCMfmsr(void) {}
-__attribute__((weak)) void PPCMtmsr(void) {}
+__attribute__((weak)) void NessFloatMath_PKThunder2(void) { PC_STUB_HIT("NessFloatMath_PKThunder2");}
+__attribute__((weak)) int OSCheckActiveThreads(void) { PC_STUB_HIT("OSCheckActiveThreads"); return 0; }
+__attribute__((weak)) size_t OSCheckHeap(void* heap) { PC_STUB_HIT("OSCheckHeap"); (void)heap; return SIZE_MAX; }
+__attribute__((weak)) void OSCreateAlarm(int a0) { PC_STUB_HIT("OSCreateAlarm");}
+__attribute__((weak)) int OSCreateHeap(int a0, int a1) { PC_STUB_HIT("OSCreateHeap"); return 0; }
+__attribute__((weak)) void OSDestroyHeap(int a0) { PC_STUB_HIT("OSDestroyHeap");}
+__attribute__((weak)) int OSGetProgressiveMode(void) { PC_STUB_HIT("OSGetProgressiveMode"); return 0; }
+__attribute__((weak)) int OSGetResetCode(void) { PC_STUB_HIT("OSGetResetCode"); return 0; }
+__attribute__((weak)) void OSSetErrorHandler(void) { PC_STUB_HIT("OSSetErrorHandler");}
+__attribute__((weak)) void OSSetPeriodicAlarm(int a0, long long a1, long long a2, int a3) { PC_STUB_HIT("OSSetPeriodicAlarm");}
+__attribute__((weak)) void OSSetProgressiveMode(int a0) { PC_STUB_HIT("OSSetProgressiveMode");}
+__attribute__((weak)) void OSTicksToCalendarTime(long long a0, int a1) { PC_STUB_HIT("OSTicksToCalendarTime");}
+__attribute__((weak)) void PADInit(void) { PC_STUB_HIT("PADInit");}
+__attribute__((weak)) int PADRead(int a0) { PC_STUB_HIT("PADRead"); return 0; }
+__attribute__((weak)) void PADSetSamplingRate(int a0) { PC_STUB_HIT("PADSetSamplingRate");}
+__attribute__((weak)) void PADSetSpec(void) { PC_STUB_HIT("PADSetSpec");}
+__attribute__((weak)) void PPCMfmsr(void) { PC_STUB_HIT("PPCMfmsr");}
+__attribute__((weak)) void PPCMtmsr(void) { PC_STUB_HIT("PPCMtmsr");}
 /* Mtx type for matrix functions (from Dolphin mtx.h) */
 typedef f32 Mtx[3][4];
 
@@ -1998,211 +2073,211 @@ __attribute__((weak)) void PSMTXIdentity(Mtx m)
     m[1][0] = 0.0f; m[1][1] = 1.0f; m[1][2] = 0.0f; m[1][3] = 0.0f;
     m[2][0] = 0.0f; m[2][1] = 0.0f; m[2][2] = 1.0f; m[2][3] = 0.0f;
 }
-__attribute__((weak)) void PSMTXMultVec(int a0, int a1, int a2) {}
-__attribute__((weak)) void PSMTXMultVecSR(int a0, int a1, int a2) {}
-__attribute__((weak)) void PSMTXQuat(int a0, int a1) {}
-__attribute__((weak)) void PSMTXRotAxisRad(int a0, int a1, float a2) {}
-__attribute__((weak)) void PSMTXScale(int a0, float a1, float a2, float a3) {}
-__attribute__((weak)) void PSMTXTrans(int a0, float a1, float a2, float a3) {}
-__attribute__((weak)) void PSMTXTranspose(int a0, int a1) {}
-__attribute__((weak)) void PSVECAdd(int a0, int a1, int a2) {}
-__attribute__((weak)) void PSVECCrossProduct(int a0, int a1, int a2) {}
-__attribute__((weak)) float PSVECDotProduct(int a0, int a1) { return 0; }
-__attribute__((weak)) float PSVECMag(int a0) { return 0; }
-__attribute__((weak)) void PSVECNormalize(int a0, int a1) {}
-__attribute__((weak)) void PSVECScale(int a0, int a1, float a2) {}
-__attribute__((weak)) void PSVECSubtract(int a0, int a1, int a2) {}
-__attribute__((weak)) void RunCallbackUnk(void) {}
-__attribute__((weak)) void SDL_GetTicksNS(void) {}
-__attribute__((weak)) void SetPKFlashAttr(void) {}
-__attribute__((weak)) void Stage_80224CAC(int a0) {}
-__attribute__((weak)) int Stage_80224DC8(int a0) { return 0; }
-__attribute__((weak)) void Stage_80224E38(int a0, int a1) {}
-__attribute__((weak)) void Stage_80224E64(int a0, int a1) {}
-__attribute__((weak)) int Stage_80224FDC(int a0) { return 0; }
-__attribute__((weak)) int Stage_80225074(int a0) { return 0; }
-__attribute__((weak)) int Stage_80225194(void) { return 0; }
-__attribute__((weak)) int Stage_8022519C(int a0) { return 0; }
-__attribute__((weak)) void Stage_802251B4(int a0) {}
-__attribute__((weak)) void Stage_802251E8(int a0, int a1) {}
-__attribute__((weak)) void Stage_8022524C(void) {}
-__attribute__((weak)) void Stage_80225298(void) {}
-__attribute__((weak)) void Stage_802252E4(int a0, int a1) {}
-__attribute__((weak)) void Stage_8022532C(int a0, int a1) {}
-__attribute__((weak)) float Stage_CalcUnkCamY(void) { return 0; }
-__attribute__((weak)) float Stage_CalcUnkCamYBounds(void) { return 0; }
-__attribute__((weak)) float Stage_GetBlastZoneBottomOffset(void) { return 0; }
-__attribute__((weak)) float Stage_GetBlastZoneLeftOffset(void) { return 0; }
-__attribute__((weak)) float Stage_GetBlastZoneRightOffset(void) { return 0; }
-__attribute__((weak)) float Stage_GetBlastZoneTopOffset(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamAngleRadiansDown(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamAngleRadiansLeft(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamAngleRadiansRight(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamAngleRadiansUp(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamFixedFov(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamFixedZoom(void) { return 0; }
-__attribute__((weak)) float Stage_GetCamTrackSmooth(void) { return 0; }
-__attribute__((weak)) float Stage_GetPauseCamZPosInit(void) { return 0; }
-__attribute__((weak)) float Stage_GetPauseCamZPosMax(void) { return 0; }
-__attribute__((weak)) float Stage_GetPauseCamZPosMin(void) { return 0; }
-__attribute__((weak)) void Stage_SetVecToFixedCamPos(int a0) {}
+__attribute__((weak)) void PSMTXMultVec(int a0, int a1, int a2) { PC_STUB_HIT("PSMTXMultVec");}
+__attribute__((weak)) void PSMTXMultVecSR(int a0, int a1, int a2) { PC_STUB_HIT("PSMTXMultVecSR");}
+__attribute__((weak)) void PSMTXQuat(int a0, int a1) { PC_STUB_HIT("PSMTXQuat");}
+__attribute__((weak)) void PSMTXRotAxisRad(int a0, int a1, float a2) { PC_STUB_HIT("PSMTXRotAxisRad");}
+__attribute__((weak)) void PSMTXScale(int a0, float a1, float a2, float a3) { PC_STUB_HIT("PSMTXScale");}
+__attribute__((weak)) void PSMTXTrans(int a0, float a1, float a2, float a3) { PC_STUB_HIT("PSMTXTrans");}
+__attribute__((weak)) void PSMTXTranspose(int a0, int a1) { PC_STUB_HIT("PSMTXTranspose");}
+__attribute__((weak)) void PSVECAdd(int a0, int a1, int a2) { PC_STUB_HIT("PSVECAdd");}
+__attribute__((weak)) void PSVECCrossProduct(int a0, int a1, int a2) { PC_STUB_HIT("PSVECCrossProduct");}
+__attribute__((weak)) float PSVECDotProduct(int a0, int a1) { PC_STUB_HIT("PSVECDotProduct"); return 0; }
+__attribute__((weak)) float PSVECMag(int a0) { PC_STUB_HIT("PSVECMag"); return 0; }
+__attribute__((weak)) void PSVECNormalize(int a0, int a1) { PC_STUB_HIT("PSVECNormalize");}
+__attribute__((weak)) void PSVECScale(int a0, int a1, float a2) { PC_STUB_HIT("PSVECScale");}
+__attribute__((weak)) void PSVECSubtract(int a0, int a1, int a2) { PC_STUB_HIT("PSVECSubtract");}
+__attribute__((weak)) void RunCallbackUnk(void) { PC_STUB_HIT("RunCallbackUnk");}
+__attribute__((weak)) void SDL_GetTicksNS(void) { PC_STUB_HIT("SDL_GetTicksNS");}
+__attribute__((weak)) void SetPKFlashAttr(void) { PC_STUB_HIT("SetPKFlashAttr");}
+__attribute__((weak)) void Stage_80224CAC(int a0) { PC_STUB_HIT("Stage_80224CAC");}
+__attribute__((weak)) int Stage_80224DC8(int a0) { PC_STUB_HIT("Stage_80224DC8"); return 0; }
+__attribute__((weak)) void Stage_80224E38(int a0, int a1) { PC_STUB_HIT("Stage_80224E38");}
+__attribute__((weak)) void Stage_80224E64(int a0, int a1) { PC_STUB_HIT("Stage_80224E64");}
+__attribute__((weak)) int Stage_80224FDC(int a0) { PC_STUB_HIT("Stage_80224FDC"); return 0; }
+__attribute__((weak)) int Stage_80225074(int a0) { PC_STUB_HIT("Stage_80225074"); return 0; }
+__attribute__((weak)) int Stage_80225194(void) { PC_STUB_HIT("Stage_80225194"); return 0; }
+__attribute__((weak)) int Stage_8022519C(int a0) { PC_STUB_HIT("Stage_8022519C"); return 0; }
+__attribute__((weak)) void Stage_802251B4(int a0) { PC_STUB_HIT("Stage_802251B4");}
+__attribute__((weak)) void Stage_802251E8(int a0, int a1) { PC_STUB_HIT("Stage_802251E8");}
+__attribute__((weak)) void Stage_8022524C(void) { PC_STUB_HIT("Stage_8022524C");}
+__attribute__((weak)) void Stage_80225298(void) { PC_STUB_HIT("Stage_80225298");}
+__attribute__((weak)) void Stage_802252E4(int a0, int a1) { PC_STUB_HIT("Stage_802252E4");}
+__attribute__((weak)) void Stage_8022532C(int a0, int a1) { PC_STUB_HIT("Stage_8022532C");}
+__attribute__((weak)) float Stage_CalcUnkCamY(void) { PC_STUB_HIT("Stage_CalcUnkCamY"); return 0; }
+__attribute__((weak)) float Stage_CalcUnkCamYBounds(void) { PC_STUB_HIT("Stage_CalcUnkCamYBounds"); return 0; }
+__attribute__((weak)) float Stage_GetBlastZoneBottomOffset(void) { PC_STUB_HIT("Stage_GetBlastZoneBottomOffset"); return 0; }
+__attribute__((weak)) float Stage_GetBlastZoneLeftOffset(void) { PC_STUB_HIT("Stage_GetBlastZoneLeftOffset"); return 0; }
+__attribute__((weak)) float Stage_GetBlastZoneRightOffset(void) { PC_STUB_HIT("Stage_GetBlastZoneRightOffset"); return 0; }
+__attribute__((weak)) float Stage_GetBlastZoneTopOffset(void) { PC_STUB_HIT("Stage_GetBlastZoneTopOffset"); return 0; }
+__attribute__((weak)) float Stage_GetCamAngleRadiansDown(void) { PC_STUB_HIT("Stage_GetCamAngleRadiansDown"); return 0; }
+__attribute__((weak)) float Stage_GetCamAngleRadiansLeft(void) { PC_STUB_HIT("Stage_GetCamAngleRadiansLeft"); return 0; }
+__attribute__((weak)) float Stage_GetCamAngleRadiansRight(void) { PC_STUB_HIT("Stage_GetCamAngleRadiansRight"); return 0; }
+__attribute__((weak)) float Stage_GetCamAngleRadiansUp(void) { PC_STUB_HIT("Stage_GetCamAngleRadiansUp"); return 0; }
+__attribute__((weak)) float Stage_GetCamFixedFov(void) { PC_STUB_HIT("Stage_GetCamFixedFov"); return 0; }
+__attribute__((weak)) float Stage_GetCamFixedZoom(void) { PC_STUB_HIT("Stage_GetCamFixedZoom"); return 0; }
+__attribute__((weak)) float Stage_GetCamTrackSmooth(void) { PC_STUB_HIT("Stage_GetCamTrackSmooth"); return 0; }
+__attribute__((weak)) float Stage_GetPauseCamZPosInit(void) { PC_STUB_HIT("Stage_GetPauseCamZPosInit"); return 0; }
+__attribute__((weak)) float Stage_GetPauseCamZPosMax(void) { PC_STUB_HIT("Stage_GetPauseCamZPosMax"); return 0; }
+__attribute__((weak)) float Stage_GetPauseCamZPosMin(void) { PC_STUB_HIT("Stage_GetPauseCamZPosMin"); return 0; }
+__attribute__((weak)) void Stage_SetVecToFixedCamPos(int a0) { PC_STUB_HIT("Stage_SetVecToFixedCamPos");}
 __attribute__((weak)) int THPDec_8032F8D4(int a0, int a1) { return 0; } /* decl: s32 */
 __attribute__((weak)) int THPDec_8032FD40(int a0, int a1) { return 0; } /* decl: s32 */
-__attribute__((weak)) void THPDec_80331340(int a0, int a1, int a2, int a3) {}
-__attribute__((weak)) void THPDec_803313D0(int a0, int a1, int a2, int a3, int a4) {}
+__attribute__((weak)) void THPDec_80331340(int a0, int a1, int a2, int a3) { PC_STUB_HIT("THPDec_80331340");}
+__attribute__((weak)) void THPDec_803313D0(int a0, int a1, int a2, int a3, int a4) { PC_STUB_HIT("THPDec_803313D0");}
 __attribute__((weak)) long THPInit(void) { return 0; } /* decl: BOOL */
 __attribute__((weak)) int THPVideoDecode(int a0, int a1, int a2, int a3, int a4) { return 0; } /* decl: s32 */
-__attribute__((weak)) void ThunderPhysTimer(void) {}
-__attribute__((weak)) void VIFlush(void) {}
-__attribute__((weak)) int VIGetDTVStatus(void) { return 0; }
-__attribute__((weak)) void VIInit(void) {}
-__attribute__((weak)) void VISetBlack(int a0) {}
-__attribute__((weak)) int VISetPostRetraceCallback(int a0) { return 0; }
-__attribute__((weak)) int VISetPreRetraceCallback(int a0) { return 0; }
-__attribute__((weak)) void VIWaitForRetrace(void) {}
-__attribute__((weak)) void Vec2_Interpolate(void) {}
-__attribute__((weak)) int _HSD_TObjGetCurrentByType(int a0, int a1) { return 0; }
+__attribute__((weak)) void ThunderPhysTimer(void) { PC_STUB_HIT("ThunderPhysTimer");}
+__attribute__((weak)) void VIFlush(void) { PC_STUB_HIT("VIFlush");}
+__attribute__((weak)) int VIGetDTVStatus(void) { PC_STUB_HIT("VIGetDTVStatus"); return 0; }
+__attribute__((weak)) void VIInit(void) { PC_STUB_HIT("VIInit");}
+__attribute__((weak)) void VISetBlack(int a0) { PC_STUB_HIT("VISetBlack");}
+__attribute__((weak)) int VISetPostRetraceCallback(int a0) { PC_STUB_HIT("VISetPostRetraceCallback"); return 0; }
+__attribute__((weak)) int VISetPreRetraceCallback(int a0) { PC_STUB_HIT("VISetPreRetraceCallback"); return 0; }
+__attribute__((weak)) void VIWaitForRetrace(void) { PC_STUB_HIT("VIWaitForRetrace");}
+__attribute__((weak)) void Vec2_Interpolate(void) { PC_STUB_HIT("Vec2_Interpolate");}
+__attribute__((weak)) int _HSD_TObjGetCurrentByType(int a0, int a1) { PC_STUB_HIT("_HSD_TObjGetCurrentByType"); return 0; }
 /* REMOVED: __fabs, __fabsf, __fnmsubs conflict with system math internals */
-__attribute__((weak)) int _HSD_mkEnvelopeModelNodeMtx(int a0, int a1) { return 0; }
-__attribute__((weak)) void _func_8007E2FC_inline(void) {}
-__attribute__((weak)) void _func_8007F948_inline(void) {}
-__attribute__((weak)) void _stack_addr(void) {}
-__attribute__((weak)) void _stack_end(void) {}
-__attribute__((weak)) void attrRand(void) {}
-__attribute__((weak)) void between_A1_D0(void) {}
-__attribute__((weak)) void checkStringRest(void) {}
-__attribute__((weak)) void check_distance(void) {}
-__attribute__((weak)) void clamp_above(void) {}
-__attribute__((weak)) void clamp_above_2(void) {}
-__attribute__((weak)) void clamp_below(void) {}
-__attribute__((weak)) void clamp_below_2(void) {}
-__attribute__((weak)) void comboCount_Push(void) {}
-__attribute__((weak)) void decelerateItemX(void) {}
-__attribute__((weak)) void devtext_drawlist(void) {}
-__attribute__((weak)) void devtext_poolhead(void) {}
-__attribute__((weak)) void doAnim0(void) {}
-__attribute__((weak)) void doAnim1(void) {}
-__attribute__((weak)) void eflib_create_effect_and_attach(void) {}
-__attribute__((weak)) void eflib_create_generator_add_appsrt(void) {}
-__attribute__((weak)) void eflib_generator_add_appsrt(void) {}
-__attribute__((weak)) void fake_sqrtf(void) {}
-__attribute__((weak)) void findScene(void) {}
-__attribute__((weak)) int fn_800F9260_inline(int a0) { return 0; }
-__attribute__((weak)) int fn_801605EC(int a0) { return 0; }
-__attribute__((weak)) int fn_801606A8(int a0) { return 0; }
+__attribute__((weak)) int _HSD_mkEnvelopeModelNodeMtx(int a0, int a1) { PC_STUB_HIT("_HSD_mkEnvelopeModelNodeMtx"); return 0; }
+__attribute__((weak)) void _func_8007E2FC_inline(void) { PC_STUB_HIT("_func_8007E2FC_inline");}
+__attribute__((weak)) void _func_8007F948_inline(void) { PC_STUB_HIT("_func_8007F948_inline");}
+__attribute__((weak)) void _stack_addr(void) { PC_STUB_HIT("_stack_addr");}
+__attribute__((weak)) void _stack_end(void) { PC_STUB_HIT("_stack_end");}
+__attribute__((weak)) void attrRand(void) { PC_STUB_HIT("attrRand");}
+__attribute__((weak)) void between_A1_D0(void) { PC_STUB_HIT("between_A1_D0");}
+__attribute__((weak)) void checkStringRest(void) { PC_STUB_HIT("checkStringRest");}
+__attribute__((weak)) void check_distance(void) { PC_STUB_HIT("check_distance");}
+__attribute__((weak)) void clamp_above(void) { PC_STUB_HIT("clamp_above");}
+__attribute__((weak)) void clamp_above_2(void) { PC_STUB_HIT("clamp_above_2");}
+__attribute__((weak)) void clamp_below(void) { PC_STUB_HIT("clamp_below");}
+__attribute__((weak)) void clamp_below_2(void) { PC_STUB_HIT("clamp_below_2");}
+__attribute__((weak)) void comboCount_Push(void) { PC_STUB_HIT("comboCount_Push");}
+__attribute__((weak)) void decelerateItemX(void) { PC_STUB_HIT("decelerateItemX");}
+__attribute__((weak)) void devtext_drawlist(void) { PC_STUB_HIT("devtext_drawlist");}
+__attribute__((weak)) void devtext_poolhead(void) { PC_STUB_HIT("devtext_poolhead");}
+__attribute__((weak)) void doAnim0(void) { PC_STUB_HIT("doAnim0");}
+__attribute__((weak)) void doAnim1(void) { PC_STUB_HIT("doAnim1");}
+__attribute__((weak)) void eflib_create_effect_and_attach(void) { PC_STUB_HIT("eflib_create_effect_and_attach");}
+__attribute__((weak)) void eflib_create_generator_add_appsrt(void) { PC_STUB_HIT("eflib_create_generator_add_appsrt");}
+__attribute__((weak)) void eflib_generator_add_appsrt(void) { PC_STUB_HIT("eflib_generator_add_appsrt");}
+__attribute__((weak)) void fake_sqrtf(void) { PC_STUB_HIT("fake_sqrtf");}
+__attribute__((weak)) void findScene(void) { PC_STUB_HIT("findScene");}
+__attribute__((weak)) int fn_800F9260_inline(int a0) { PC_STUB_HIT("fn_800F9260_inline"); return 0; }
+__attribute__((weak)) int fn_801605EC(int a0) { PC_STUB_HIT("fn_801605EC"); return 0; }
+__attribute__((weak)) int fn_801606A8(int a0) { PC_STUB_HIT("fn_801606A8"); return 0; }
 __attribute__((weak)) long fn_801693A8(void) { return 0; } /* decl: s32 */
 __attribute__((weak)) long fn_8016A1E4(void) { return 0; } /* decl: s32 */
-__attribute__((weak)) void fn_801884F8_inline(void) {}
-__attribute__((weak)) void fn_801A7FB4_inline(void) {}
-__attribute__((weak)) void fn_801A7FB4_inline2(void) {}
-__attribute__((weak)) void fn_8024FC48_inline(void) {}
-__attribute__((weak)) void fn_80252E4C_inline_GetJObjChild(void) {}
-__attribute__((weak)) void fn_80252E4C_inline_GetJObjNext(void) {}
-__attribute__((weak)) void fn_802590C4_inline(void) {}
-__attribute__((weak)) int ftCo_800952DC(int a0) { return 0; }
-__attribute__((weak)) void ftCo_8009D18C(int a0) {}
-__attribute__((weak)) void ftCo_8009D2A4(int a0) {}
-__attribute__((weak)) void ftCo_8009D3BC(int a0) {}
-__attribute__((weak)) void ftCo_8009D4D4(int a0) {}
-__attribute__((weak)) void ftCo_8009D5EC(int a0) {}
-__attribute__((weak)) void ftCo_8009D81C(int a0) {}
-__attribute__((weak)) void ftCo_8009D920(int a0) {}
-__attribute__((weak)) void ftCo_8009DA38(int a0) {}
-__attribute__((weak)) void ftCo_8009DB50(int a0) {}
-__attribute__((weak)) void ftCo_800A648C_inline2(void) {}
-__attribute__((weak)) void ftCo_800A648C_inline3(void) {}
-__attribute__((weak)) void ftCo_800C1718_inline(void) {}
-__attribute__((weak)) void ftFox_SpecialHiBound_SetVars(void) {}
-__attribute__((weak)) void ftFox_SpecialLwHit_CreateReflectInline(void) {}
-__attribute__((weak)) void ftFox_SpecialLwTurn_SetVarAll(void) {}
-__attribute__((weak)) void ftFox_SpecialLw_SetReflectVars(void) {}
-__attribute__((weak)) void ftFox_SpecialN_SetCall(void) {}
-__attribute__((weak)) void ftFox_SpecialN_SetNULL(void) {}
-__attribute__((weak)) void ftFox_SpecialSEnd_SetVars(void) {}
-__attribute__((weak)) void ftFox_SpecialS_SetVars(void) {}
-__attribute__((weak)) void ftGameWatch_SpecialLw_SetVars(void) {}
-__attribute__((weak)) void ftGrabDist(void) {}
-__attribute__((weak)) void ftKbGetAirEndMotionId(void) {}
-__attribute__((weak)) void ftKbGetAirLoopMotionId(void) {}
-__attribute__((weak)) void ftKbGetAirStartMotionId(void) {}
-__attribute__((weak)) void ftKbGetEndMotionId(void) {}
-__attribute__((weak)) void ftKbGetLoopMotionId(void) {}
-__attribute__((weak)) void ftKbGetStartMotionId(void) {}
-__attribute__((weak)) void ftKbUnkInline(void) {}
-__attribute__((weak)) void ftKb_Init_800EE854(void) {}
-__attribute__((weak)) void ftKb_Init_800EE874(void) {}
-__attribute__((weak)) void ftKb_Init_800EE8B0(void) {}
-__attribute__((weak)) void ftKb_Init_800EE8EC(void) {}
-__attribute__((weak)) void ftKb_Init_800EE904(void) {}
-__attribute__((weak)) void ftKb_MtSpecialAirNCancel_Anim_inline(void) {}
-__attribute__((weak)) void ftKb_SpecialNMt_SetRecoil(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1708(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F171C(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1730(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1744(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1764(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1784(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F17A4(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F17C4(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F17E4(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F17F8(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1818(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1838(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1858(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F186C(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1880(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1894(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F18B4(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F18C8(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F18E8(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F18F8(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F19E8(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F19F4(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1A00(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1A0C(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1A20(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1A2C(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1A38(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1A44(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1A50(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1A64(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1A70(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1A78(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1AC8(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1AD4(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1AE0(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1AEC(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1B00(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1B0C(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1B18(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1B24(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1B30(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1B44(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1B50(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1B58(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1CC8(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1CD0(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1D00(void) {}
-__attribute__((weak)) void ftKb_SpecialN_800F1D08(void) {}
-__attribute__((weak)) void ftKoopa_SpecialS_ChangeAction(void) {}
-__attribute__((weak)) void ftKp_SpecialSWait_IASA_inline(void) {}
-__attribute__((weak)) int ftLib_800872A4(int a0) { return 0; }
-__attribute__((weak)) void ftMewtwo_SpecialAirN_ChangeAction(void) {}
-__attribute__((weak)) void ftMewtwo_SpecialLw_SetCall(void) {}
-__attribute__((weak)) void ftMewtwo_SpecialN_ChangeAction(void) {}
-__attribute__((weak)) void ftMewtwo_SpecialN_CreateHeldShadow(void) {}
-__attribute__((weak)) void ftMewtwo_SpecialN_RemoveShadowBall2(void) {}
-__attribute__((weak)) void ftMewtwo_SpecialN_SetCall(void) {}
-__attribute__((weak)) void ftNess_atan2(void) {}
-__attribute__((weak)) void ftPurin_SpecialHi_SetActionFromFacingDirection(void) {}
-__attribute__((weak)) void ftSamus_80128B1C_inner(void) {}
-__attribute__((weak)) void ftSeakSpecialS_LoopChainHitActivate(void) {}
-__attribute__((weak)) void ftSeakSpecialS_LoopChainHitCollisions(void) {}
-__attribute__((weak)) void ftYoshi_SpecialLw_SetVars(void) {}
-__attribute__((weak)) void ft_800852B0_Reset_ft_8045993C(void) {}
-__attribute__((weak)) void ftpickupitem_800942A0_inline(void) {}
-__attribute__((weak)) void func_80151484_inline1(int a0) {}
-__attribute__((weak)) void func_8015ADD0_inline(int a0) {}
+__attribute__((weak)) void fn_801884F8_inline(void) { PC_STUB_HIT("fn_801884F8_inline");}
+__attribute__((weak)) void fn_801A7FB4_inline(void) { PC_STUB_HIT("fn_801A7FB4_inline");}
+__attribute__((weak)) void fn_801A7FB4_inline2(void) { PC_STUB_HIT("fn_801A7FB4_inline2");}
+__attribute__((weak)) void fn_8024FC48_inline(void) { PC_STUB_HIT("fn_8024FC48_inline");}
+__attribute__((weak)) void fn_80252E4C_inline_GetJObjChild(void) { PC_STUB_HIT("fn_80252E4C_inline_GetJObjChild");}
+__attribute__((weak)) void fn_80252E4C_inline_GetJObjNext(void) { PC_STUB_HIT("fn_80252E4C_inline_GetJObjNext");}
+__attribute__((weak)) void fn_802590C4_inline(void) { PC_STUB_HIT("fn_802590C4_inline");}
+__attribute__((weak)) int ftCo_800952DC(int a0) { PC_STUB_HIT("ftCo_800952DC"); return 0; }
+__attribute__((weak)) void ftCo_8009D18C(int a0) { PC_STUB_HIT("ftCo_8009D18C");}
+__attribute__((weak)) void ftCo_8009D2A4(int a0) { PC_STUB_HIT("ftCo_8009D2A4");}
+__attribute__((weak)) void ftCo_8009D3BC(int a0) { PC_STUB_HIT("ftCo_8009D3BC");}
+__attribute__((weak)) void ftCo_8009D4D4(int a0) { PC_STUB_HIT("ftCo_8009D4D4");}
+__attribute__((weak)) void ftCo_8009D5EC(int a0) { PC_STUB_HIT("ftCo_8009D5EC");}
+__attribute__((weak)) void ftCo_8009D81C(int a0) { PC_STUB_HIT("ftCo_8009D81C");}
+__attribute__((weak)) void ftCo_8009D920(int a0) { PC_STUB_HIT("ftCo_8009D920");}
+__attribute__((weak)) void ftCo_8009DA38(int a0) { PC_STUB_HIT("ftCo_8009DA38");}
+__attribute__((weak)) void ftCo_8009DB50(int a0) { PC_STUB_HIT("ftCo_8009DB50");}
+__attribute__((weak)) void ftCo_800A648C_inline2(void) { PC_STUB_HIT("ftCo_800A648C_inline2");}
+__attribute__((weak)) void ftCo_800A648C_inline3(void) { PC_STUB_HIT("ftCo_800A648C_inline3");}
+__attribute__((weak)) void ftCo_800C1718_inline(void) { PC_STUB_HIT("ftCo_800C1718_inline");}
+__attribute__((weak)) void ftFox_SpecialHiBound_SetVars(void) { PC_STUB_HIT("ftFox_SpecialHiBound_SetVars");}
+__attribute__((weak)) void ftFox_SpecialLwHit_CreateReflectInline(void) { PC_STUB_HIT("ftFox_SpecialLwHit_CreateReflectInline");}
+__attribute__((weak)) void ftFox_SpecialLwTurn_SetVarAll(void) { PC_STUB_HIT("ftFox_SpecialLwTurn_SetVarAll");}
+__attribute__((weak)) void ftFox_SpecialLw_SetReflectVars(void) { PC_STUB_HIT("ftFox_SpecialLw_SetReflectVars");}
+__attribute__((weak)) void ftFox_SpecialN_SetCall(void) { PC_STUB_HIT("ftFox_SpecialN_SetCall");}
+__attribute__((weak)) void ftFox_SpecialN_SetNULL(void) { PC_STUB_HIT("ftFox_SpecialN_SetNULL");}
+__attribute__((weak)) void ftFox_SpecialSEnd_SetVars(void) { PC_STUB_HIT("ftFox_SpecialSEnd_SetVars");}
+__attribute__((weak)) void ftFox_SpecialS_SetVars(void) { PC_STUB_HIT("ftFox_SpecialS_SetVars");}
+__attribute__((weak)) void ftGameWatch_SpecialLw_SetVars(void) { PC_STUB_HIT("ftGameWatch_SpecialLw_SetVars");}
+__attribute__((weak)) void ftGrabDist(void) { PC_STUB_HIT("ftGrabDist");}
+__attribute__((weak)) void ftKbGetAirEndMotionId(void) { PC_STUB_HIT("ftKbGetAirEndMotionId");}
+__attribute__((weak)) void ftKbGetAirLoopMotionId(void) { PC_STUB_HIT("ftKbGetAirLoopMotionId");}
+__attribute__((weak)) void ftKbGetAirStartMotionId(void) { PC_STUB_HIT("ftKbGetAirStartMotionId");}
+__attribute__((weak)) void ftKbGetEndMotionId(void) { PC_STUB_HIT("ftKbGetEndMotionId");}
+__attribute__((weak)) void ftKbGetLoopMotionId(void) { PC_STUB_HIT("ftKbGetLoopMotionId");}
+__attribute__((weak)) void ftKbGetStartMotionId(void) { PC_STUB_HIT("ftKbGetStartMotionId");}
+__attribute__((weak)) void ftKbUnkInline(void) { PC_STUB_HIT("ftKbUnkInline");}
+__attribute__((weak)) void ftKb_Init_800EE854(void) { PC_STUB_HIT("ftKb_Init_800EE854");}
+__attribute__((weak)) void ftKb_Init_800EE874(void) { PC_STUB_HIT("ftKb_Init_800EE874");}
+__attribute__((weak)) void ftKb_Init_800EE8B0(void) { PC_STUB_HIT("ftKb_Init_800EE8B0");}
+__attribute__((weak)) void ftKb_Init_800EE8EC(void) { PC_STUB_HIT("ftKb_Init_800EE8EC");}
+__attribute__((weak)) void ftKb_Init_800EE904(void) { PC_STUB_HIT("ftKb_Init_800EE904");}
+__attribute__((weak)) void ftKb_MtSpecialAirNCancel_Anim_inline(void) { PC_STUB_HIT("ftKb_MtSpecialAirNCancel_Anim_inline");}
+__attribute__((weak)) void ftKb_SpecialNMt_SetRecoil(void) { PC_STUB_HIT("ftKb_SpecialNMt_SetRecoil");}
+__attribute__((weak)) void ftKb_SpecialN_800F1708(void) { PC_STUB_HIT("ftKb_SpecialN_800F1708");}
+__attribute__((weak)) void ftKb_SpecialN_800F171C(void) { PC_STUB_HIT("ftKb_SpecialN_800F171C");}
+__attribute__((weak)) void ftKb_SpecialN_800F1730(void) { PC_STUB_HIT("ftKb_SpecialN_800F1730");}
+__attribute__((weak)) void ftKb_SpecialN_800F1744(void) { PC_STUB_HIT("ftKb_SpecialN_800F1744");}
+__attribute__((weak)) void ftKb_SpecialN_800F1764(void) { PC_STUB_HIT("ftKb_SpecialN_800F1764");}
+__attribute__((weak)) void ftKb_SpecialN_800F1784(void) { PC_STUB_HIT("ftKb_SpecialN_800F1784");}
+__attribute__((weak)) void ftKb_SpecialN_800F17A4(void) { PC_STUB_HIT("ftKb_SpecialN_800F17A4");}
+__attribute__((weak)) void ftKb_SpecialN_800F17C4(void) { PC_STUB_HIT("ftKb_SpecialN_800F17C4");}
+__attribute__((weak)) void ftKb_SpecialN_800F17E4(void) { PC_STUB_HIT("ftKb_SpecialN_800F17E4");}
+__attribute__((weak)) void ftKb_SpecialN_800F17F8(void) { PC_STUB_HIT("ftKb_SpecialN_800F17F8");}
+__attribute__((weak)) void ftKb_SpecialN_800F1818(void) { PC_STUB_HIT("ftKb_SpecialN_800F1818");}
+__attribute__((weak)) void ftKb_SpecialN_800F1838(void) { PC_STUB_HIT("ftKb_SpecialN_800F1838");}
+__attribute__((weak)) void ftKb_SpecialN_800F1858(void) { PC_STUB_HIT("ftKb_SpecialN_800F1858");}
+__attribute__((weak)) void ftKb_SpecialN_800F186C(void) { PC_STUB_HIT("ftKb_SpecialN_800F186C");}
+__attribute__((weak)) void ftKb_SpecialN_800F1880(void) { PC_STUB_HIT("ftKb_SpecialN_800F1880");}
+__attribute__((weak)) void ftKb_SpecialN_800F1894(void) { PC_STUB_HIT("ftKb_SpecialN_800F1894");}
+__attribute__((weak)) void ftKb_SpecialN_800F18B4(void) { PC_STUB_HIT("ftKb_SpecialN_800F18B4");}
+__attribute__((weak)) void ftKb_SpecialN_800F18C8(void) { PC_STUB_HIT("ftKb_SpecialN_800F18C8");}
+__attribute__((weak)) void ftKb_SpecialN_800F18E8(void) { PC_STUB_HIT("ftKb_SpecialN_800F18E8");}
+__attribute__((weak)) void ftKb_SpecialN_800F18F8(void) { PC_STUB_HIT("ftKb_SpecialN_800F18F8");}
+__attribute__((weak)) void ftKb_SpecialN_800F19E8(void) { PC_STUB_HIT("ftKb_SpecialN_800F19E8");}
+__attribute__((weak)) void ftKb_SpecialN_800F19F4(void) { PC_STUB_HIT("ftKb_SpecialN_800F19F4");}
+__attribute__((weak)) void ftKb_SpecialN_800F1A00(void) { PC_STUB_HIT("ftKb_SpecialN_800F1A00");}
+__attribute__((weak)) void ftKb_SpecialN_800F1A0C(void) { PC_STUB_HIT("ftKb_SpecialN_800F1A0C");}
+__attribute__((weak)) void ftKb_SpecialN_800F1A20(void) { PC_STUB_HIT("ftKb_SpecialN_800F1A20");}
+__attribute__((weak)) void ftKb_SpecialN_800F1A2C(void) { PC_STUB_HIT("ftKb_SpecialN_800F1A2C");}
+__attribute__((weak)) void ftKb_SpecialN_800F1A38(void) { PC_STUB_HIT("ftKb_SpecialN_800F1A38");}
+__attribute__((weak)) void ftKb_SpecialN_800F1A44(void) { PC_STUB_HIT("ftKb_SpecialN_800F1A44");}
+__attribute__((weak)) void ftKb_SpecialN_800F1A50(void) { PC_STUB_HIT("ftKb_SpecialN_800F1A50");}
+__attribute__((weak)) void ftKb_SpecialN_800F1A64(void) { PC_STUB_HIT("ftKb_SpecialN_800F1A64");}
+__attribute__((weak)) void ftKb_SpecialN_800F1A70(void) { PC_STUB_HIT("ftKb_SpecialN_800F1A70");}
+__attribute__((weak)) void ftKb_SpecialN_800F1A78(void) { PC_STUB_HIT("ftKb_SpecialN_800F1A78");}
+__attribute__((weak)) void ftKb_SpecialN_800F1AC8(void) { PC_STUB_HIT("ftKb_SpecialN_800F1AC8");}
+__attribute__((weak)) void ftKb_SpecialN_800F1AD4(void) { PC_STUB_HIT("ftKb_SpecialN_800F1AD4");}
+__attribute__((weak)) void ftKb_SpecialN_800F1AE0(void) { PC_STUB_HIT("ftKb_SpecialN_800F1AE0");}
+__attribute__((weak)) void ftKb_SpecialN_800F1AEC(void) { PC_STUB_HIT("ftKb_SpecialN_800F1AEC");}
+__attribute__((weak)) void ftKb_SpecialN_800F1B00(void) { PC_STUB_HIT("ftKb_SpecialN_800F1B00");}
+__attribute__((weak)) void ftKb_SpecialN_800F1B0C(void) { PC_STUB_HIT("ftKb_SpecialN_800F1B0C");}
+__attribute__((weak)) void ftKb_SpecialN_800F1B18(void) { PC_STUB_HIT("ftKb_SpecialN_800F1B18");}
+__attribute__((weak)) void ftKb_SpecialN_800F1B24(void) { PC_STUB_HIT("ftKb_SpecialN_800F1B24");}
+__attribute__((weak)) void ftKb_SpecialN_800F1B30(void) { PC_STUB_HIT("ftKb_SpecialN_800F1B30");}
+__attribute__((weak)) void ftKb_SpecialN_800F1B44(void) { PC_STUB_HIT("ftKb_SpecialN_800F1B44");}
+__attribute__((weak)) void ftKb_SpecialN_800F1B50(void) { PC_STUB_HIT("ftKb_SpecialN_800F1B50");}
+__attribute__((weak)) void ftKb_SpecialN_800F1B58(void) { PC_STUB_HIT("ftKb_SpecialN_800F1B58");}
+__attribute__((weak)) void ftKb_SpecialN_800F1CC8(void) { PC_STUB_HIT("ftKb_SpecialN_800F1CC8");}
+__attribute__((weak)) void ftKb_SpecialN_800F1CD0(void) { PC_STUB_HIT("ftKb_SpecialN_800F1CD0");}
+__attribute__((weak)) void ftKb_SpecialN_800F1D00(void) { PC_STUB_HIT("ftKb_SpecialN_800F1D00");}
+__attribute__((weak)) void ftKb_SpecialN_800F1D08(void) { PC_STUB_HIT("ftKb_SpecialN_800F1D08");}
+__attribute__((weak)) void ftKoopa_SpecialS_ChangeAction(void) { PC_STUB_HIT("ftKoopa_SpecialS_ChangeAction");}
+__attribute__((weak)) void ftKp_SpecialSWait_IASA_inline(void) { PC_STUB_HIT("ftKp_SpecialSWait_IASA_inline");}
+__attribute__((weak)) int ftLib_800872A4(int a0) { PC_STUB_HIT("ftLib_800872A4"); return 0; }
+__attribute__((weak)) void ftMewtwo_SpecialAirN_ChangeAction(void) { PC_STUB_HIT("ftMewtwo_SpecialAirN_ChangeAction");}
+__attribute__((weak)) void ftMewtwo_SpecialLw_SetCall(void) { PC_STUB_HIT("ftMewtwo_SpecialLw_SetCall");}
+__attribute__((weak)) void ftMewtwo_SpecialN_ChangeAction(void) { PC_STUB_HIT("ftMewtwo_SpecialN_ChangeAction");}
+__attribute__((weak)) void ftMewtwo_SpecialN_CreateHeldShadow(void) { PC_STUB_HIT("ftMewtwo_SpecialN_CreateHeldShadow");}
+__attribute__((weak)) void ftMewtwo_SpecialN_RemoveShadowBall2(void) { PC_STUB_HIT("ftMewtwo_SpecialN_RemoveShadowBall2");}
+__attribute__((weak)) void ftMewtwo_SpecialN_SetCall(void) { PC_STUB_HIT("ftMewtwo_SpecialN_SetCall");}
+__attribute__((weak)) void ftNess_atan2(void) { PC_STUB_HIT("ftNess_atan2");}
+__attribute__((weak)) void ftPurin_SpecialHi_SetActionFromFacingDirection(void) { PC_STUB_HIT("ftPurin_SpecialHi_SetActionFromFacingDirection");}
+__attribute__((weak)) void ftSamus_80128B1C_inner(void) { PC_STUB_HIT("ftSamus_80128B1C_inner");}
+__attribute__((weak)) void ftSeakSpecialS_LoopChainHitActivate(void) { PC_STUB_HIT("ftSeakSpecialS_LoopChainHitActivate");}
+__attribute__((weak)) void ftSeakSpecialS_LoopChainHitCollisions(void) { PC_STUB_HIT("ftSeakSpecialS_LoopChainHitCollisions");}
+__attribute__((weak)) void ftYoshi_SpecialLw_SetVars(void) { PC_STUB_HIT("ftYoshi_SpecialLw_SetVars");}
+__attribute__((weak)) void ft_800852B0_Reset_ft_8045993C(void) { PC_STUB_HIT("ft_800852B0_Reset_ft_8045993C");}
+__attribute__((weak)) void ftpickupitem_800942A0_inline(void) { PC_STUB_HIT("ftpickupitem_800942A0_inline");}
+__attribute__((weak)) void func_80151484_inline1(int a0) { PC_STUB_HIT("func_80151484_inline1");}
+__attribute__((weak)) void func_8015ADD0_inline(int a0) { PC_STUB_HIT("func_8015ADD0_inline");}
 /* Real game initialization - calls through to decomp game code */
 int game_init(void)
 {
@@ -2293,10 +2368,10 @@ void window_swap(void);
 void render_clear(void);
 
 /* Stub implementations for window/render operations (fallback if not linked) */
-__attribute__((weak)) int window_should_close(void) { return 0; }
-__attribute__((weak)) void window_poll_events(void) {}
-__attribute__((weak)) void window_swap(void) {}
-__attribute__((weak)) void render_clear(void) {}
+__attribute__((weak)) int window_should_close(void) { PC_STUB_HIT("window_should_close"); return 0; }
+__attribute__((weak)) void window_poll_events(void) { PC_STUB_HIT("window_poll_events");}
+__attribute__((weak)) void window_swap(void) { PC_STUB_HIT("window_swap");}
+__attribute__((weak)) void render_clear(void) { PC_STUB_HIT("render_clear");}
 /* REMOVED: SDL_PollEvent, SDL_Event conflict with SDL2 headers */
 
 /* ============================================================
@@ -2443,7 +2518,11 @@ void window_poll_events(void);
     extern void input_read_frame(void);
     extern void HSD_PadRenewStatus(void);
     extern void gm_SyncPadToControllerMap(void);
-    extern int gm_GetCurrentGameMode(void);
+    /* Declared u8, as gm_1A3F.h has it. This said `int`, which reads eax
+     * where the callee only sets al -- the upper bits are whatever was
+     * there. It happened to work because the mode is compared for equality
+     * against small constants that never set those bits. */
+    extern u8 gm_GetCurrentGameMode(void);
     window_poll_events();
     input_read_frame();
     HSD_PadRenewStatus();
@@ -2551,121 +2630,121 @@ __attribute__((weak)) void port_render_frame_end(void)
     }
 }
 
-__attribute__((weak)) void game_shutdown(void) {}
-__attribute__((weak)) void getAirSpecialMotionId(void) {}
-__attribute__((weak)) void getAnimSpeed(void) {}
-__attribute__((weak)) void getFtSpecialAttrs2(void) {}
-__attribute__((weak)) void getGroundSpecialMotionId(void) {}
-__attribute__((weak)) void getPlayerByHUDParent(void) {}
-__attribute__((weak)) void getRandMax(void) {}
-__attribute__((weak)) void get_bone_by_id(void) {}
-__attribute__((weak)) void get_slot_pad(void) {}
-__attribute__((weak)) void get_stage_floor_height(void) {}
-__attribute__((weak)) void get_stick_x(void) {}
-__attribute__((weak)) void get_stick_y(void) {}
-__attribute__((weak)) void gmClassic_803DDEC8(void) {}
-__attribute__((weak)) void gmMainLib_8045A6C0(void) {}
-__attribute__((weak)) int gm_80160638(int a0) { return 0; }
-__attribute__((weak)) int gm_8016400C(int a0) { return 0; }
-__attribute__((weak)) int gm_80164024(int a0) { return 0; }
+__attribute__((weak)) void game_shutdown(void) { PC_STUB_HIT("game_shutdown");}
+__attribute__((weak)) void getAirSpecialMotionId(void) { PC_STUB_HIT("getAirSpecialMotionId");}
+__attribute__((weak)) void getAnimSpeed(void) { PC_STUB_HIT("getAnimSpeed");}
+__attribute__((weak)) void getFtSpecialAttrs2(void) { PC_STUB_HIT("getFtSpecialAttrs2");}
+__attribute__((weak)) void getGroundSpecialMotionId(void) { PC_STUB_HIT("getGroundSpecialMotionId");}
+__attribute__((weak)) void getPlayerByHUDParent(void) { PC_STUB_HIT("getPlayerByHUDParent");}
+__attribute__((weak)) void getRandMax(void) { PC_STUB_HIT("getRandMax");}
+__attribute__((weak)) void get_bone_by_id(void) { PC_STUB_HIT("get_bone_by_id");}
+__attribute__((weak)) void get_slot_pad(void) { PC_STUB_HIT("get_slot_pad");}
+__attribute__((weak)) void get_stage_floor_height(void) { PC_STUB_HIT("get_stage_floor_height");}
+__attribute__((weak)) void get_stick_x(void) { PC_STUB_HIT("get_stick_x");}
+__attribute__((weak)) void get_stick_y(void) { PC_STUB_HIT("get_stick_y");}
+__attribute__((weak)) void gmClassic_803DDEC8(void) { PC_STUB_HIT("gmClassic_803DDEC8");}
+__attribute__((weak)) void gmMainLib_8045A6C0(void) { PC_STUB_HIT("gmMainLib_8045A6C0");}
+__attribute__((weak)) int gm_80160638(int a0) { PC_STUB_HIT("gm_80160638"); return 0; }
+__attribute__((weak)) int gm_8016400C(int a0) { PC_STUB_HIT("gm_8016400C"); return 0; }
+__attribute__((weak)) int gm_80164024(int a0) { PC_STUB_HIT("gm_80164024"); return 0; }
 /* gm_80164840(ckind): returns nonzero if the character is unlocked/available.
  * The real function checks per-character unlock state; for a fresh game all
  * base characters (CKIND 0..0x19) are unlocked. The previous empty void stub
  * returned garbage, so the title's character picker (gm_801BF128) built an
  * empty character_pool and read uninitialized stack entries -> SIGSEGV. */
-__attribute__((weak)) int gm_80164840(int ckind) { return (ckind >= 0 && ckind <= 0x19) ? 1 : 0; }
-__attribute__((weak)) int gm_8016AE38(void) { return 0; }
-__attribute__((weak)) int gm_8016AE44(void) { return 0; }
-__attribute__((weak)) int gm_8017E424(void) { return 0; }
-__attribute__((weak)) int gm_801A36A0(int a0) { return 0; }
-__attribute__((weak)) int gm_801A427C(int a0) { return 0; }
-__attribute__((weak)) int gm_801A4284(int a0) { return 0; }
-__attribute__((weak)) void gm_801A42D4(void) {}
-__attribute__((weak)) void gm_801A42E8(int a0) {}
-__attribute__((weak)) void gm_801A42F8(int a0) {}
-__attribute__((weak)) int gm_801A4310(void) { return 0; }
-__attribute__((weak)) int gm_801A4320(void) { return 0; }
-__attribute__((weak)) int gm_SetPendingScene(int a0) { return 0; }
-__attribute__((weak)) int gm_SetScene(int a0) { return 0; }
-__attribute__((weak)) void grBigBlueRoute_8020DAB4(int a0, float a1, int a2) {}
-__attribute__((weak)) int grBigBlue_801EF844(int a0) { return 0; }
-__attribute__((weak)) int grCastle_801CDF54(int a0) { return 0; }
-__attribute__((weak)) float grCastle_801D0FF0(void) { return 0; }
-__attribute__((weak)) void grCorneria_801DDCF0(int a0) {}
-__attribute__((weak)) int grCorneria_801E1BF0(void) { return 0; }
-__attribute__((weak)) void grCorneria_801E2AF4(void) {}
-__attribute__((weak)) int grCorneria_801E2B80(void) { return 0; }
-__attribute__((weak)) int grCorneria_801E2C34(void) { return 0; }
-__attribute__((weak)) int grCorneria_801E2CE8(void) { return 0; }
-__attribute__((weak)) int grCorneria_801E2D14(void) { return 0; }
-__attribute__((weak)) int grCorneria_801E2D90(int a0) { return 0; }
-__attribute__((weak)) int grCorneria_801E2E50(int a0) { return 0; }
-__attribute__((weak)) float grCorneria_801E2FCC(void) { return 0; }
-__attribute__((weak)) void grDatFiles_801C5FC0(int a0, int a1, int a2) {}
-__attribute__((weak)) void grDynamicAttr_801CA0B4(void) {}
-__attribute__((weak)) void grDynamicAttr_801CA224(void) {}
-__attribute__((weak)) int grDynamicAttr_801CA284(int a0, int a1) { return 0; }
-__attribute__((weak)) void grFigureGet_80219C34(int a0) {}
-__attribute__((weak)) int grFigureGet_80219C50(int a0) { return 0; }
-__attribute__((weak)) float grGarden_80203624(void) { return 0; }
-__attribute__((weak)) int grGreatBay_801F66A4(void) { return 0; }
-__attribute__((weak)) float grHomeRun_8021EF10(void) { return 0; }
-__attribute__((weak)) void grIceMt_801FA6D8(int a0) {}
-__attribute__((weak)) int grInishie1_801FCAAC(int a0) { return 0; }
-__attribute__((weak)) void grInishie2_801FD448(int a0) {}
-__attribute__((weak)) void grInishie2_801FD4CC(int a0) {}
-__attribute__((weak)) float grKinokoRoute_802087B0(void) { return 0; }
-__attribute__((weak)) void grKongo_801D8058(int a0) {}
-__attribute__((weak)) void grLib_801C99C0(int a0, int a1, int a2, int a3) {}
-__attribute__((weak)) int grLib_801C9A10(void) { return 0; }
-__attribute__((weak)) int grLib_801C9CEC(int a0) { return 0; }
-__attribute__((weak)) int grLib_801C9E40(void) { return 0; }
-__attribute__((weak)) void grLib_801C9E50(int a0) {}
-__attribute__((weak)) int grLib_801C9E60(int a0) { return 0; }
-__attribute__((weak)) void grPushOn_80219204(int a0, int a1, int a2) {}
-__attribute__((weak)) int grPushOn_80219230(int a0) { return 0; }
-__attribute__((weak)) int grRCruise_80201988(int a0) { return 0; }
-__attribute__((weak)) void grStadium_801D3B4C(int a0, int a1) {}
-__attribute__((weak)) void grStadium_801D4040(void) {}
-__attribute__((weak)) void grStadium_801D4084(void) {}
-__attribute__((weak)) void grStadium_801D40C8(void) {}
-__attribute__((weak)) void grStadium_801D410C(void) {}
-__attribute__((weak)) void grStadium_801D4150(void) {}
-__attribute__((weak)) int grStadium_801D4FF8(int a0) { return 0; }
-__attribute__((weak)) int grVenom_80206D10(int a0) { return 0; }
-__attribute__((weak)) void grZakoGenerator_801CAC14(int a0) {}
-__attribute__((weak)) void grZakoGenerator_801CACB8(int a0) {}
-__attribute__((weak)) float grZebes_801DCCC8(void) { return 0; }
-__attribute__((weak)) void helper(void) {}
-__attribute__((weak)) int hsdChangeClass(int a0, int a1) { return 0; }
-__attribute__((weak)) void hsdDumpClassStat(int a0, int a1, int a2) {}
-__attribute__((weak)) void hsdInitClassInfo(int a0, int a1, int a2, int a3, int a4, int a5) {}
-__attribute__((weak)) void hsd_80391A04(float a0, float a1, int a2) {}
+__attribute__((weak)) int gm_80164840(int ckind) { PC_STUB_HIT("gm_80164840"); return (ckind >= 0 && ckind <= 0x19) ? 1 : 0; }
+__attribute__((weak)) int gm_8016AE38(void) { PC_STUB_HIT("gm_8016AE38"); return 0; }
+__attribute__((weak)) int gm_8016AE44(void) { PC_STUB_HIT("gm_8016AE44"); return 0; }
+__attribute__((weak)) int gm_8017E424(void) { PC_STUB_HIT("gm_8017E424"); return 0; }
+__attribute__((weak)) int gm_801A36A0(int a0) { PC_STUB_HIT("gm_801A36A0"); return 0; }
+__attribute__((weak)) int gm_801A427C(int a0) { PC_STUB_HIT("gm_801A427C"); return 0; }
+__attribute__((weak)) int gm_801A4284(int a0) { PC_STUB_HIT("gm_801A4284"); return 0; }
+__attribute__((weak)) void gm_801A42D4(void) { PC_STUB_HIT("gm_801A42D4");}
+__attribute__((weak)) void gm_801A42E8(int a0) { PC_STUB_HIT("gm_801A42E8");}
+__attribute__((weak)) void gm_801A42F8(int a0) { PC_STUB_HIT("gm_801A42F8");}
+__attribute__((weak)) int gm_801A4310(void) { PC_STUB_HIT("gm_801A4310"); return 0; }
+__attribute__((weak)) int gm_801A4320(void) { PC_STUB_HIT("gm_801A4320"); return 0; }
+__attribute__((weak)) int gm_SetPendingScene(int a0) { PC_STUB_HIT("gm_SetPendingScene"); return 0; }
+__attribute__((weak)) int gm_SetScene(int a0) { PC_STUB_HIT("gm_SetScene"); return 0; }
+__attribute__((weak)) void grBigBlueRoute_8020DAB4(int a0, float a1, int a2) { PC_STUB_HIT("grBigBlueRoute_8020DAB4");}
+__attribute__((weak)) int grBigBlue_801EF844(int a0) { PC_STUB_HIT("grBigBlue_801EF844"); return 0; }
+__attribute__((weak)) int grCastle_801CDF54(int a0) { PC_STUB_HIT("grCastle_801CDF54"); return 0; }
+__attribute__((weak)) float grCastle_801D0FF0(void) { PC_STUB_HIT("grCastle_801D0FF0"); return 0; }
+__attribute__((weak)) void grCorneria_801DDCF0(int a0) { PC_STUB_HIT("grCorneria_801DDCF0");}
+__attribute__((weak)) int grCorneria_801E1BF0(void) { PC_STUB_HIT("grCorneria_801E1BF0"); return 0; }
+__attribute__((weak)) void grCorneria_801E2AF4(void) { PC_STUB_HIT("grCorneria_801E2AF4");}
+__attribute__((weak)) int grCorneria_801E2B80(void) { PC_STUB_HIT("grCorneria_801E2B80"); return 0; }
+__attribute__((weak)) int grCorneria_801E2C34(void) { PC_STUB_HIT("grCorneria_801E2C34"); return 0; }
+__attribute__((weak)) int grCorneria_801E2CE8(void) { PC_STUB_HIT("grCorneria_801E2CE8"); return 0; }
+__attribute__((weak)) int grCorneria_801E2D14(void) { PC_STUB_HIT("grCorneria_801E2D14"); return 0; }
+__attribute__((weak)) int grCorneria_801E2D90(int a0) { PC_STUB_HIT("grCorneria_801E2D90"); return 0; }
+__attribute__((weak)) int grCorneria_801E2E50(int a0) { PC_STUB_HIT("grCorneria_801E2E50"); return 0; }
+__attribute__((weak)) float grCorneria_801E2FCC(void) { PC_STUB_HIT("grCorneria_801E2FCC"); return 0; }
+__attribute__((weak)) void grDatFiles_801C5FC0(int a0, int a1, int a2) { PC_STUB_HIT("grDatFiles_801C5FC0");}
+__attribute__((weak)) void grDynamicAttr_801CA0B4(void) { PC_STUB_HIT("grDynamicAttr_801CA0B4");}
+__attribute__((weak)) void grDynamicAttr_801CA224(void) { PC_STUB_HIT("grDynamicAttr_801CA224");}
+__attribute__((weak)) int grDynamicAttr_801CA284(int a0, int a1) { PC_STUB_HIT("grDynamicAttr_801CA284"); return 0; }
+__attribute__((weak)) void grFigureGet_80219C34(int a0) { PC_STUB_HIT("grFigureGet_80219C34");}
+__attribute__((weak)) int grFigureGet_80219C50(int a0) { PC_STUB_HIT("grFigureGet_80219C50"); return 0; }
+__attribute__((weak)) float grGarden_80203624(void) { PC_STUB_HIT("grGarden_80203624"); return 0; }
+__attribute__((weak)) int grGreatBay_801F66A4(void) { PC_STUB_HIT("grGreatBay_801F66A4"); return 0; }
+__attribute__((weak)) float grHomeRun_8021EF10(void) { PC_STUB_HIT("grHomeRun_8021EF10"); return 0; }
+__attribute__((weak)) void grIceMt_801FA6D8(int a0) { PC_STUB_HIT("grIceMt_801FA6D8");}
+__attribute__((weak)) int grInishie1_801FCAAC(int a0) { PC_STUB_HIT("grInishie1_801FCAAC"); return 0; }
+__attribute__((weak)) void grInishie2_801FD448(int a0) { PC_STUB_HIT("grInishie2_801FD448");}
+__attribute__((weak)) void grInishie2_801FD4CC(int a0) { PC_STUB_HIT("grInishie2_801FD4CC");}
+__attribute__((weak)) float grKinokoRoute_802087B0(void) { PC_STUB_HIT("grKinokoRoute_802087B0"); return 0; }
+__attribute__((weak)) void grKongo_801D8058(int a0) { PC_STUB_HIT("grKongo_801D8058");}
+__attribute__((weak)) void grLib_801C99C0(int a0, int a1, int a2, int a3) { PC_STUB_HIT("grLib_801C99C0");}
+__attribute__((weak)) int grLib_801C9A10(void) { PC_STUB_HIT("grLib_801C9A10"); return 0; }
+__attribute__((weak)) int grLib_801C9CEC(int a0) { PC_STUB_HIT("grLib_801C9CEC"); return 0; }
+__attribute__((weak)) int grLib_801C9E40(void) { PC_STUB_HIT("grLib_801C9E40"); return 0; }
+__attribute__((weak)) void grLib_801C9E50(int a0) { PC_STUB_HIT("grLib_801C9E50");}
+__attribute__((weak)) int grLib_801C9E60(int a0) { PC_STUB_HIT("grLib_801C9E60"); return 0; }
+__attribute__((weak)) void grPushOn_80219204(int a0, int a1, int a2) { PC_STUB_HIT("grPushOn_80219204");}
+__attribute__((weak)) int grPushOn_80219230(int a0) { PC_STUB_HIT("grPushOn_80219230"); return 0; }
+__attribute__((weak)) int grRCruise_80201988(int a0) { PC_STUB_HIT("grRCruise_80201988"); return 0; }
+__attribute__((weak)) void grStadium_801D3B4C(int a0, int a1) { PC_STUB_HIT("grStadium_801D3B4C");}
+__attribute__((weak)) void grStadium_801D4040(void) { PC_STUB_HIT("grStadium_801D4040");}
+__attribute__((weak)) void grStadium_801D4084(void) { PC_STUB_HIT("grStadium_801D4084");}
+__attribute__((weak)) void grStadium_801D40C8(void) { PC_STUB_HIT("grStadium_801D40C8");}
+__attribute__((weak)) void grStadium_801D410C(void) { PC_STUB_HIT("grStadium_801D410C");}
+__attribute__((weak)) void grStadium_801D4150(void) { PC_STUB_HIT("grStadium_801D4150");}
+__attribute__((weak)) int grStadium_801D4FF8(int a0) { PC_STUB_HIT("grStadium_801D4FF8"); return 0; }
+__attribute__((weak)) int grVenom_80206D10(int a0) { PC_STUB_HIT("grVenom_80206D10"); return 0; }
+__attribute__((weak)) void grZakoGenerator_801CAC14(int a0) { PC_STUB_HIT("grZakoGenerator_801CAC14");}
+__attribute__((weak)) void grZakoGenerator_801CACB8(int a0) { PC_STUB_HIT("grZakoGenerator_801CACB8");}
+__attribute__((weak)) float grZebes_801DCCC8(void) { PC_STUB_HIT("grZebes_801DCCC8"); return 0; }
+__attribute__((weak)) void helper(void) { PC_STUB_HIT("helper");}
+__attribute__((weak)) int hsdChangeClass(int a0, int a1) { PC_STUB_HIT("hsdChangeClass"); return 0; }
+__attribute__((weak)) void hsdDumpClassStat(int a0, int a1, int a2) { PC_STUB_HIT("hsdDumpClassStat");}
+__attribute__((weak)) void hsdInitClassInfo(int a0, int a1, int a2, int a3, int a4, int a5) { PC_STUB_HIT("hsdInitClassInfo");}
+__attribute__((weak)) void hsd_80391A04(float a0, float a1, int a2) { PC_STUB_HIT("hsd_80391A04");}
 __attribute__((weak)) void hsd_80392474(void) {} /* decl: UNK_RET */
-__attribute__((weak)) void hsd_80392528(int a0) {}
+__attribute__((weak)) void hsd_80392528(int a0) { PC_STUB_HIT("hsd_80392528");}
 __attribute__((weak)) int hsd_80392E80(void) { return 0; } /* decl: int */
-__attribute__((weak)) int hsd_803931A4(int a0) { return 0; }
-__attribute__((weak)) int hsd_80393A04(void) { return 0; }
-__attribute__((weak)) void hsd_80393A54(int a0) {}
-__attribute__((weak)) int hsd_80393A5C(int a0, int a1, int a2) { return 0; }
-__attribute__((weak)) void hsd_80393DA0(int a0, int a1) {}
-__attribute__((weak)) void hsd_80397DA4(int a0) {}
-__attribute__((weak)) void hsd_80397DFC(int a0) {}
+__attribute__((weak)) int hsd_803931A4(int a0) { PC_STUB_HIT("hsd_803931A4"); return 0; }
+__attribute__((weak)) int hsd_80393A04(void) { PC_STUB_HIT("hsd_80393A04"); return 0; }
+__attribute__((weak)) void hsd_80393A54(int a0) { PC_STUB_HIT("hsd_80393A54");}
+__attribute__((weak)) int hsd_80393A5C(int a0, int a1, int a2) { PC_STUB_HIT("hsd_80393A5C"); return 0; }
+__attribute__((weak)) void hsd_80393DA0(int a0, int a1) { PC_STUB_HIT("hsd_80393DA0");}
+__attribute__((weak)) void hsd_80397DA4(int a0) { PC_STUB_HIT("hsd_80397DA4");}
+__attribute__((weak)) void hsd_80397DFC(int a0) { PC_STUB_HIT("hsd_80397DFC");}
 __attribute__((weak)) int hsd_80398310(int a0, int a1, int a2, int a3) { return 0; } /* decl: HSD_GObj* */
-__attribute__((weak)) void hsd_80398A08(int a0) {}
-__attribute__((weak)) void hsd_8039CEAC(int a0) {}
-__attribute__((weak)) void hsd_8039D1E4(int a0, int a1) {}
-__attribute__((weak)) void hsd_8039D354(int a0) {}
-__attribute__((weak)) void hsd_8039D4DC(int a0) {}
-__attribute__((weak)) void hsd_8039D688(int a0, int a1, int a2) {}
-__attribute__((weak)) void hsd_8039EE24(int a0) {}
+__attribute__((weak)) void hsd_80398A08(int a0) { PC_STUB_HIT("hsd_80398A08");}
+__attribute__((weak)) void hsd_8039CEAC(int a0) { PC_STUB_HIT("hsd_8039CEAC");}
+__attribute__((weak)) void hsd_8039D1E4(int a0, int a1) { PC_STUB_HIT("hsd_8039D1E4");}
+__attribute__((weak)) void hsd_8039D354(int a0) { PC_STUB_HIT("hsd_8039D354");}
+__attribute__((weak)) void hsd_8039D4DC(int a0) { PC_STUB_HIT("hsd_8039D4DC");}
+__attribute__((weak)) void hsd_8039D688(int a0, int a1, int a2) { PC_STUB_HIT("hsd_8039D688");}
+__attribute__((weak)) void hsd_8039EE24(int a0) { PC_STUB_HIT("hsd_8039EE24");}
 __attribute__((weak)) int hsd_8039EFAC(int a0, int a1, int a2, int a3) { return 0; } /* decl: HSD_Generator* */
 __attribute__((weak)) int hsd_8039F05C(int a0, int a1, int a2) { return 0; } /* decl: HSD_Generator* */
 __attribute__((weak)) int hsd_8039F6CC(int a0, int a1, int a2, int a3) { return 0; } /* decl: HSD_Generator* */
 __attribute__((weak)) long hsd_803AAA48(void) { return 0; } /* decl: s32 */
-__attribute__((weak)) void hsd_803AC3E0(int a0, int a1, int a2, int a3, int a4) {}
-__attribute__((weak)) void hsd_803B2374(void) {}
-__attribute__((weak)) void hsd_803B24E4(int a0, int a1, int a2, int a3) {}
+__attribute__((weak)) void hsd_803AC3E0(int a0, int a1, int a2, int a3, int a4) { PC_STUB_HIT("hsd_803AC3E0");}
+__attribute__((weak)) void hsd_803B2374(void) { PC_STUB_HIT("hsd_803B2374");}
+__attribute__((weak)) void hsd_803B24E4(int a0, int a1, int a2, int a3) { PC_STUB_HIT("hsd_803B24E4");}
 __attribute__((weak)) int hsd_803B2550(int a0, int a1, int a2) { return 0; } /* decl: int */
 __attribute__((weak)) int hsd_803B2674(int a0) { return 0; } /* decl: s32 */
 __attribute__((weak)) int hsd_803B27F4(int a0, int a1, int a2, int a3, int a4) { return 0; } /* decl: int */
@@ -2675,28 +2754,28 @@ __attribute__((weak)) int hsd_803B29D8(int a0, int a1, int a2, int a3) { return 
 __attribute__((weak)) int hsd_803B2A4C(int a0, int a1, int a2, int a3) { return 0; } /* decl: int */
 __attribute__((weak)) int hsd_803B2ADC(int a0, int a1) { return 0; } /* decl: int */
 __attribute__((weak)) int hsd_803B51C8(int a0, int a1, int a2, int a3, int a4) { return 0; } /* decl: s32 */
-__attribute__((weak)) void hsd_803B5C2C(int a0) {}
+__attribute__((weak)) void hsd_803B5C2C(int a0) { PC_STUB_HIT("hsd_803B5C2C");}
 __attribute__((weak)) int hsd_803B6BE4(int a0, int a1, int a2) { return 0; } /* decl: s32 */
-__attribute__((weak)) void ifAll_802F3404(void) {}
-__attribute__((weak)) void inlineA0(void) {}
-__attribute__((weak)) void inlineB0(void) {}
-__attribute__((weak)) void inlineC0(void) {}
-__attribute__((weak)) void inline_itTarucann_SetRotationZ(int a0) {}
-__attribute__((weak)) void inline_itTarucann_UnkMotion7_Phys(void) {}
-__attribute__((weak)) void isSamusmissile_MotionAnim(void) {}
-__attribute__((weak)) void itCoin_ResetRotation(int a0) {}
-__attribute__((weak)) void itHassam_802CE400_sub(void) {}
-__attribute__((weak)) void itLinkArrow_802A850C_inline(void) {}
-__attribute__((weak)) void itLinkArrow_802A850C_inline_2(void) {}
-__attribute__((weak)) void itNesspkfirepillar_INLINE_Anim_SetScale(void) {}
-__attribute__((weak)) void itNesspkfirepillar_INLINE_SpawnItem_Init(void) {}
-__attribute__((weak)) void itSamusBomb_UnkMotion_PreProcess(int a0) {}
-__attribute__((weak)) void itSamusBomb_UnkMotion_Process(int a0) {}
-__attribute__((weak)) void itTarucann_UnkMotion9_Anim_inline(void) {}
-__attribute__((weak)) int it_2725_Logic109_HitShield_inline(int a0, int a1) { return 0; }
-__attribute__((weak)) void it_8026E_inline(void) {}
-__attribute__((weak)) void it_802D472C_inline(void) {}
-__attribute__((weak)) void it_802EAAEC_inline(void) {}
+__attribute__((weak)) void ifAll_802F3404(void) { PC_STUB_HIT("ifAll_802F3404");}
+__attribute__((weak)) void inlineA0(void) { PC_STUB_HIT("inlineA0");}
+__attribute__((weak)) void inlineB0(void) { PC_STUB_HIT("inlineB0");}
+__attribute__((weak)) void inlineC0(void) { PC_STUB_HIT("inlineC0");}
+__attribute__((weak)) void inline_itTarucann_SetRotationZ(int a0) { PC_STUB_HIT("inline_itTarucann_SetRotationZ");}
+__attribute__((weak)) void inline_itTarucann_UnkMotion7_Phys(void) { PC_STUB_HIT("inline_itTarucann_UnkMotion7_Phys");}
+__attribute__((weak)) void isSamusmissile_MotionAnim(void) { PC_STUB_HIT("isSamusmissile_MotionAnim");}
+__attribute__((weak)) void itCoin_ResetRotation(int a0) { PC_STUB_HIT("itCoin_ResetRotation");}
+__attribute__((weak)) void itHassam_802CE400_sub(void) { PC_STUB_HIT("itHassam_802CE400_sub");}
+__attribute__((weak)) void itLinkArrow_802A850C_inline(void) { PC_STUB_HIT("itLinkArrow_802A850C_inline");}
+__attribute__((weak)) void itLinkArrow_802A850C_inline_2(void) { PC_STUB_HIT("itLinkArrow_802A850C_inline_2");}
+__attribute__((weak)) void itNesspkfirepillar_INLINE_Anim_SetScale(void) { PC_STUB_HIT("itNesspkfirepillar_INLINE_Anim_SetScale");}
+__attribute__((weak)) void itNesspkfirepillar_INLINE_SpawnItem_Init(void) { PC_STUB_HIT("itNesspkfirepillar_INLINE_SpawnItem_Init");}
+__attribute__((weak)) void itSamusBomb_UnkMotion_PreProcess(int a0) { PC_STUB_HIT("itSamusBomb_UnkMotion_PreProcess");}
+__attribute__((weak)) void itSamusBomb_UnkMotion_Process(int a0) { PC_STUB_HIT("itSamusBomb_UnkMotion_Process");}
+__attribute__((weak)) void itTarucann_UnkMotion9_Anim_inline(void) { PC_STUB_HIT("itTarucann_UnkMotion9_Anim_inline");}
+__attribute__((weak)) int it_2725_Logic109_HitShield_inline(int a0, int a1) { PC_STUB_HIT("it_2725_Logic109_HitShield_inline"); return 0; }
+__attribute__((weak)) void it_8026E_inline(void) { PC_STUB_HIT("it_8026E_inline");}
+__attribute__((weak)) void it_802D472C_inline(void) { PC_STUB_HIT("it_802D472C_inline");}
+__attribute__((weak)) void it_802EAAEC_inline(void) { PC_STUB_HIT("it_802EAAEC_inline");}
 /* Vec3 zero (DOL 0x803B8650): the hookshot chain's park position and rest
  * velocity. As a void-function stub, link->vel read x86 instruction bytes
  * (-2.05e35) and the chain's first physics tick flung every link to
@@ -2707,9 +2786,9 @@ __attribute__((weak)) float it_803B8650[3] = { 0.0f, 0.0f, 0.0f };
  * (it_804A0E60.x8 = 0). The old void-function stub landed in .text and
  * writes to it faulted. 512 zeroed bytes covers the real struct size. */
 __attribute__((weak, aligned(16))) unsigned char it_804A0E60[512];
-__attribute__((weak)) int it_damage_inline(int a0) { return 0; }
-__attribute__((weak)) void jobj_get(void) {}
-__attribute__((weak)) void jobj_parent(void) {}
+__attribute__((weak)) int it_damage_inline(int a0) { PC_STUB_HIT("it_damage_inline"); return 0; }
+__attribute__((weak)) void jobj_get(void) { PC_STUB_HIT("jobj_get");}
+__attribute__((weak)) void jobj_parent(void) { PC_STUB_HIT("jobj_parent");}
 /* Additional game init stubs */
 /* ============================================================
  * PAD TIMING SYSTEM (replaces alarm-based lb_0195.c)
@@ -2728,21 +2807,21 @@ static void pad_timing_init(void)
     g_pad_target_period[1] = 470220;
 }
 
-__attribute__((weak)) void lbMemory_8001564C(void) {}
-__attribute__((weak)) void lbHeap_80015F3C(void) {}
-__attribute__((weak)) void lbDvd_80018F68(void) {}
-__attribute__((weak)) void lbArq_80014D2C(void) {}
-__attribute__((weak)) void lb_8001C5BC(void) {}
-__attribute__((weak)) void lb_8001D21C(void) {}
-__attribute__((weak)) void lbSnap_8001E290(void) {}
-__attribute__((weak)) void lbMthp_8001F87C(void) {}
-__attribute__((weak)) void lbAudioAx_8002838C(void) {}
-__attribute__((weak)) int lbAudioAx_80028690(void) { return 0; }
+__attribute__((weak)) void lbMemory_8001564C(void) { PC_STUB_HIT("lbMemory_8001564C");}
+__attribute__((weak)) void lbHeap_80015F3C(void) { PC_STUB_HIT("lbHeap_80015F3C");}
+__attribute__((weak)) void lbDvd_80018F68(void) { PC_STUB_HIT("lbDvd_80018F68");}
+__attribute__((weak)) void lbArq_80014D2C(void) { PC_STUB_HIT("lbArq_80014D2C");}
+__attribute__((weak)) void lb_8001C5BC(void) { PC_STUB_HIT("lb_8001C5BC");}
+__attribute__((weak)) void lb_8001D21C(void) { PC_STUB_HIT("lb_8001D21C");}
+__attribute__((weak)) void lbSnap_8001E290(void) { PC_STUB_HIT("lbSnap_8001E290");}
+__attribute__((weak)) void lbMthp_8001F87C(void) { PC_STUB_HIT("lbMthp_8001F87C");}
+__attribute__((weak)) void lbAudioAx_8002838C(void) { PC_STUB_HIT("lbAudioAx_8002838C");}
+__attribute__((weak)) int lbAudioAx_80028690(void) { PC_STUB_HIT("lbAudioAx_80028690"); return 0; }
 
 /* lb_80019AAC: Initializes pad timer system for 60Hz game tick */
-__attribute__((weak)) void gmMainLib_8015FCC0(void) {}
-__attribute__((weak)) void gmMainLib_8015FBA4(void) {}
-__attribute__((weak)) void gm_801A4510(void) {}
+__attribute__((weak)) void gmMainLib_8015FCC0(void) { PC_STUB_HIT("gmMainLib_8015FCC0");}
+__attribute__((weak)) void gmMainLib_8015FBA4(void) { PC_STUB_HIT("gmMainLib_8015FBA4");}
+__attribute__((weak)) void gm_801A4510(void) { PC_STUB_HIT("gm_801A4510");}
 
 /* lb_0195.c override stubs — these weak functions access GCN-style virtual
  * addresses (0x80xxxxxx) which crash on x86_64. Override with safe no-ops.
@@ -2777,10 +2856,10 @@ __attribute__((weak)) int DbLevel = 1;
 __attribute__((weak)) bool db_804D6B20 = false;
 __attribute__((weak)) u16 db_gameLaunchButtonState = 0;
 __attribute__((weak)) char db_build_timestamp[] = "unknown";
-__attribute__((weak)) void db_GetGameLaunchButtonState(void) {}
+__attribute__((weak)) void db_GetGameLaunchButtonState(void) { PC_STUB_HIT("db_GetGameLaunchButtonState");}
 /* Player setup functions */
-__attribute__((weak)) void Player_80031CB0(u32 kind, u8 color) {}
-__attribute__((weak)) void Player_80031D2C(u32 kind, u8 color) {}
+__attribute__((weak)) void Player_80031CB0(u32 kind, u8 color) { PC_STUB_HIT("Player_80031CB0");}
+__attribute__((weak)) void Player_80031D2C(u32 kind, u8 color) { PC_STUB_HIT("Player_80031D2C");}
 
 /* Void stub: Toy_803048C0 */
 __attribute__((weak)) int Toy_803048C0(int a0) { return 0; } /* decl: s32 */
@@ -2789,298 +2868,298 @@ __attribute__((weak)) int Toy_803048C0(int a0) { return 0; } /* decl: s32 */
 __attribute__((weak)) int Toy_80305058(int a0, int a1, int a2, float a3) { return 0; } /* decl: s32 */
 
 /* Void stub: Toy_80311960 */
-__attribute__((weak)) void Toy_80311960(void) {}
+__attribute__((weak)) void Toy_80311960(void) { PC_STUB_HIT("Toy_80311960");}
 
 /* Void stub: Toy_803124BC */
-__attribute__((weak)) void Toy_803124BC(void) {}
+__attribute__((weak)) void Toy_803124BC(void) { PC_STUB_HIT("Toy_803124BC");}
 
 /* Void stub: Toy_803127D4 */
-__attribute__((weak)) void Toy_803127D4(void) {}
+__attribute__((weak)) void Toy_803127D4(void) { PC_STUB_HIT("Toy_803127D4");}
 
 /* Void stub: Toy_SetUnlockState */
-__attribute__((weak)) void Toy_SetUnlockState(int a0, int a1) {}
+__attribute__((weak)) void Toy_SetUnlockState(int a0, int a1) { PC_STUB_HIT("Toy_SetUnlockState");}
 
 /* Void stub: db_ClearFPUExceptions */
-__attribute__((weak)) void db_ClearFPUExceptions(void) {}
+__attribute__((weak)) void db_ClearFPUExceptions(void) { PC_STUB_HIT("db_ClearFPUExceptions");}
 
 /* Void stub: db_EnableItemSpawns */
-__attribute__((weak)) void db_EnableItemSpawns(void) {}
+__attribute__((weak)) void db_EnableItemSpawns(void) { PC_STUB_HIT("db_EnableItemSpawns");}
 
 /* Void stub: db_InitScreenshot */
-__attribute__((weak)) void db_InitScreenshot(void) {}
+__attribute__((weak)) void db_InitScreenshot(void) { PC_STUB_HIT("db_InitScreenshot");}
 
 /* Void stub: db_SetupCrashHandler */
-__attribute__((weak)) void db_SetupCrashHandler(void) {}
+__attribute__((weak)) void db_SetupCrashHandler(void) { PC_STUB_HIT("db_SetupCrashHandler");}
 
 /* Void stub: efAsync_OnLoad */
-__attribute__((weak)) void efAsync_OnLoad(int a0, int a1, int a2, int a3) {}
+__attribute__((weak)) void efAsync_OnLoad(int a0, int a1, int a2, int a3) { PC_STUB_HIT("efAsync_OnLoad");}
 
 /* Void stub: ft_80087C1C */
-__attribute__((weak)) int ft_80087C1C(void) { return 0; }
+__attribute__((weak)) int ft_80087C1C(void) { PC_STUB_HIT("ft_80087C1C"); return 0; }
 
 /* Void stub: gm_801623FC */
-__attribute__((weak)) void gm_801623FC(int a0) {}
+__attribute__((weak)) void gm_801623FC(int a0) { PC_STUB_HIT("gm_801623FC");}
 
 /* Void stub: gm_80164430 */
-__attribute__((weak)) int gm_80164430(int a0) { return 0; }
+__attribute__((weak)) int gm_80164430(int a0) { PC_STUB_HIT("gm_80164430"); return 0; }
 
 /* Void stub: gm_80164504 */
-__attribute__((weak)) void gm_80164504(int a0) {}
+__attribute__((weak)) void gm_80164504(int a0) { PC_STUB_HIT("gm_80164504");}
 
 /* Void stub: gm_80164600 */
-__attribute__((weak)) int gm_80164600(void) { return 0; }
+__attribute__((weak)) int gm_80164600(void) { PC_STUB_HIT("gm_80164600"); return 0; }
 
 /* Void stub: gm_8016468C */
-__attribute__((weak)) void gm_8016468C(void) {}
+__attribute__((weak)) void gm_8016468C(void) { PC_STUB_HIT("gm_8016468C");}
 
 /* Void stub: gm_801647D0 */
-__attribute__((weak)) void gm_801647D0(void) {}
+__attribute__((weak)) void gm_801647D0(void) { PC_STUB_HIT("gm_801647D0");}
 
 /* Void stub: gm_80164ABC */
-__attribute__((weak)) int gm_80164ABC(void) { return 0; }
+__attribute__((weak)) int gm_80164ABC(void) { PC_STUB_HIT("gm_80164ABC"); return 0; }
 
 /* Void stub: gm_80164F18 */
-__attribute__((weak)) void gm_80164F18(void) {}
+__attribute__((weak)) void gm_80164F18(void) { PC_STUB_HIT("gm_80164F18");}
 
 /* Void stub: gm_8016505C */
-__attribute__((weak)) void gm_8016505C(void) {}
+__attribute__((weak)) void gm_8016505C(void) { PC_STUB_HIT("gm_8016505C");}
 
 /* Void stub: gm_801692E8 */
-__attribute__((weak)) void gm_801692E8(int a0, int a1) {}
+__attribute__((weak)) void gm_801692E8(int a0, int a1) { PC_STUB_HIT("gm_801692E8");}
 
 /* Void stub: gm_8016B004 */
-__attribute__((weak)) int gm_8016B004(void) { return 0; }
+__attribute__((weak)) int gm_8016B004(void) { PC_STUB_HIT("gm_8016B004"); return 0; }
 
 /* Void stub: gm_8017297C */
-__attribute__((weak)) void gm_8017297C(void) {}
+__attribute__((weak)) void gm_8017297C(void) { PC_STUB_HIT("gm_8017297C");}
 
 /* Void stub: gm_801729EC */
-__attribute__((weak)) void gm_801729EC(void) {}
+__attribute__((weak)) void gm_801729EC(void) { PC_STUB_HIT("gm_801729EC");}
 
 /* Void stub: gm_801741FC */
-__attribute__((weak)) void gm_801741FC(void) {}
+__attribute__((weak)) void gm_801741FC(void) { PC_STUB_HIT("gm_801741FC");}
 
 /* Void stub: gm_80174238 */
-__attribute__((weak)) void gm_80174238(void) {}
+__attribute__((weak)) void gm_80174238(void) { PC_STUB_HIT("gm_80174238");}
 
 /* Void stub: gm_801A3EF4 */
-__attribute__((weak)) void gm_801A3EF4(void) {}
+__attribute__((weak)) void gm_801A3EF4(void) { PC_STUB_HIT("gm_801A3EF4");}
 
 /* Void stub: gm_801A4B88 */
-__attribute__((weak)) void gm_801A4B88(int a0) {}
+__attribute__((weak)) void gm_801A4B88(int a0) { PC_STUB_HIT("gm_801A4B88");}
 
 /* Void stub: gm_801A4BD4 */
-__attribute__((weak)) void gm_801A4BD4(void) {}
+__attribute__((weak)) void gm_801A4BD4(void) { PC_STUB_HIT("gm_801A4BD4");}
 
 /* Void stub: gm_801A4D34 */
-__attribute__((weak)) void gm_801A4D34(int a0, int a1) {}
+__attribute__((weak)) void gm_801A4D34(int a0, int a1) { PC_STUB_HIT("gm_801A4D34");}
 
 /* Void stub: gm_801B23F0 */
-__attribute__((weak)) void gm_801B23F0(void) {}
+__attribute__((weak)) void gm_801B23F0(void) { PC_STUB_HIT("gm_801B23F0");}
 
 /* Void stub: gm_80497618 */
 
 /* Void stub: gm_FindGameSceneHandler */
-__attribute__((weak)) int gm_FindGameSceneHandler(int a0) { return 0; }
+__attribute__((weak)) int gm_FindGameSceneHandler(int a0) { PC_STUB_HIT("gm_FindGameSceneHandler"); return 0; }
 
 /* Void stub: gm_GetAllGameModes */
-__attribute__((weak)) int gm_GetAllGameModes(void) { return 0; }
+__attribute__((weak)) int gm_GetAllGameModes(void) { PC_STUB_HIT("gm_GetAllGameModes"); return 0; }
 
 /* Void stub: gm_IncrementPowerCount */
-__attribute__((weak)) void gm_IncrementPowerCount(void) {}
+__attribute__((weak)) void gm_IncrementPowerCount(void) { PC_STUB_HIT("gm_IncrementPowerCount");}
 
 /* Void stub: it_8026C47C */
-__attribute__((weak)) void it_8026C47C(int a0) {}
+__attribute__((weak)) void it_8026C47C(int a0) { PC_STUB_HIT("it_8026C47C");}
 
 /* Void stub: lbAudioAx_80027DBC */
-__attribute__((weak)) void lbAudioAx_80027DBC(void) {}
+__attribute__((weak)) void lbAudioAx_80027DBC(void) { PC_STUB_HIT("lbAudioAx_80027DBC");}
 
 /* Void stub: lbMthp_8001F800 */
-__attribute__((weak)) void lbMthp_8001F800(void) {}
+__attribute__((weak)) void lbMthp_8001F800(void) { PC_STUB_HIT("lbMthp_8001F800");}
 
 
 /* Void stub: lb_8001B6E0 */
-__attribute__((weak)) int lb_8001B6E0(int a0) { return 0; }
+__attribute__((weak)) int lb_8001B6E0(int a0) { PC_STUB_HIT("lb_8001B6E0"); return 0; }
 
 /* Void stub: lb_8001B6F8 */
-__attribute__((weak)) int lb_8001B6F8(void) { return 0; }
+__attribute__((weak)) int lb_8001B6F8(void) { PC_STUB_HIT("lb_8001B6F8"); return 0; }
 
 /* Void stub: lb_8001B760 */
-__attribute__((weak)) int lb_8001B760(int a0) { return 0; }
+__attribute__((weak)) int lb_8001B760(int a0) { PC_STUB_HIT("lb_8001B760"); return 0; }
 
 /* Void stub: lb_8001B99C */
-__attribute__((weak)) int lb_8001B99C(int a0, int a1, int a2) { return 0; }
+__attribute__((weak)) int lb_8001B99C(int a0, int a1, int a2) { PC_STUB_HIT("lb_8001B99C"); return 0; }
 
 /* Void stub: lb_8001BB48 */
-__attribute__((weak)) int lb_8001BB48(int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7) { return 0; }
+__attribute__((weak)) int lb_8001BB48(int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7) { PC_STUB_HIT("lb_8001BB48"); return 0; }
 
 /* Void stub: lb_8001BF04 */
-__attribute__((weak)) int lb_8001BF04(int a0, int a1, int a2, int a3, int a4, int a5, int a6) { return 0; }
+__attribute__((weak)) int lb_8001BF04(int a0, int a1, int a2, int a3, int a4, int a5, int a6) { PC_STUB_HIT("lb_8001BF04"); return 0; }
 
 /* Void stub: lb_8001BFD8 */
-__attribute__((weak)) int lb_8001BFD8(int a0, int a1, int a2, int a3) { return 0; }
+__attribute__((weak)) int lb_8001BFD8(int a0, int a1, int a2, int a3) { PC_STUB_HIT("lb_8001BFD8"); return 0; }
 
 /* Void stub: lb_8001C0F4 */
-__attribute__((weak)) int lb_8001C0F4(int a0, int a1, int a2, int a3, int a4) { return 0; }
+__attribute__((weak)) int lb_8001C0F4(int a0, int a1, int a2, int a3, int a4) { PC_STUB_HIT("lb_8001C0F4"); return 0; }
 
 /* Void stub: lb_8001C4A8 */
-__attribute__((weak)) int lb_8001C4A8(int a0, int a1) { return 0; }
+__attribute__((weak)) int lb_8001C4A8(int a0, int a1) { PC_STUB_HIT("lb_8001C4A8"); return 0; }
 
 /* Void stub: lb_8001C5A4 */
-__attribute__((weak)) void lb_8001C5A4(void) {}
+__attribute__((weak)) void lb_8001C5A4(void) { PC_STUB_HIT("lb_8001C5A4");}
 
 /* Void stub: lb_8001CDB4 */
-__attribute__((weak)) void lb_8001CDB4(void) {}
+__attribute__((weak)) void lb_8001CDB4(void) { PC_STUB_HIT("lb_8001CDB4");}
 
 /* Void stub: lb_8001D1F4 */
-__attribute__((weak)) void lb_8001D1F4(void) {}
+__attribute__((weak)) void lb_8001D1F4(void) { PC_STUB_HIT("lb_8001D1F4");}
 
 /* Void stub: tyDisplay_8031C8B8 */
-__attribute__((weak)) void tyDisplay_8031C8B8(void) {}
+__attribute__((weak)) void tyDisplay_8031C8B8(void) { PC_STUB_HIT("tyDisplay_8031C8B8");}
 
 /* Void stub: db_DisableItemSpawns */
-__attribute__((weak)) void db_DisableItemSpawns(void) {}
+__attribute__((weak)) void db_DisableItemSpawns(void) { PC_STUB_HIT("db_DisableItemSpawns");}
 
 /* ===== AUTO-GENERATED WEAK STUBS FOR gmscdata.o ===== */
 
 /* GameMode callbacks */
-__attribute__((weak)) void Toy_OnEnter_80311AB0(void) {}
-__attribute__((weak)) void Toy_OnFrame_80312018(void) {}
-__attribute__((weak)) void Toy_OnInit_803122D0(void) {}
-__attribute__((weak)) void gmCamera_801A34FC_OnFrame(void) {}
-__attribute__((weak)) void gmCamera_801A3634_OnEnter(int a0) {}
-__attribute__((weak)) void gmCamera_801A367C_OnLeave(int a0) {}
-__attribute__((weak)) void gmClassic_OnInit(void) {}
-__attribute__((weak)) void gmClassic_OnLoad(void) {}
-__attribute__((weak)) void gmTitle_801A1C18_OnFrame(void) {}
-__attribute__((weak)) void gmTitle_801A1E20_OnEnter(int a0) {}
-__attribute__((weak)) void gm_8016D32C_OnFrame(void) {}
-__attribute__((weak)) void gm_8016E934_OnEnter(int a0) {}
-__attribute__((weak)) void gm_8016EBC0_OnEnter(int a0) {}
-__attribute__((weak)) void gm_8016EC28_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801737E8_OnLoad(void) {}
-__attribute__((weak)) void gm_80177368_OnEnter(int a0) {}
-__attribute__((weak)) void gm_80177704_OnLeave(int a0) {}
-__attribute__((weak)) void gm_80186DFC_OnFrame(void) {}
-__attribute__((weak)) void gm_80186E30_OnEnter(int a0) {}
-__attribute__((weak)) void gm_8018776C_OnFrame(void) {}
-__attribute__((weak)) void gm_801877A8_OnEnter(int a0) {}
-__attribute__((weak)) void gm_80187F48_OnEnter(int a0) {}
-__attribute__((weak)) void gm_80188364_OnLeave(int a0) {}
-__attribute__((weak)) void gm_8018838C_OnFrame(void) {}
-__attribute__((weak)) void gm_8019628C_OnFrame(void) {}
-__attribute__((weak)) void gm_801963B4_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801964A4_OnLeave(int a0) {}
-__attribute__((weak)) void gm_8019B2DC_OnFrame(void) {}
-__attribute__((weak)) void gm_8019B8C4_OnEnter(int a0) {}
-__attribute__((weak)) void gm_8019B9C8_OnLeave(int a0) {}
-__attribute__((weak)) void gm_8019DF8C_OnFrame(void) {}
-__attribute__((weak)) void gm_8019ECAC_OnEnter(int a0) {}
-__attribute__((weak)) void gm_8019EE54_OnLeave(int a0) {}
-__attribute__((weak)) void gm_801A0A10_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801A0B18_OnLeave(int a0) {}
-__attribute__((weak)) void gm_801A0C6C_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801A0E0C_OnLeave(int a0) {}
-__attribute__((weak)) void gm_801A50B8_OnLoad(void) {}
-__attribute__((weak)) void gm_801A5130_OnLoad(void) {}
-__attribute__((weak)) void gm_801A51A8_OnLoad(void) {}
-__attribute__((weak)) void gm_801A5220_OnLoad(void) {}
-__attribute__((weak)) void gm_801A5598_OnInit(void) {}
-__attribute__((weak)) void gm_801A55EC_OnLoad(void) {}
-__attribute__((weak)) void gm_801A5614_OnUnload(void) {}
-__attribute__((weak)) void gm_801A632C_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801A637C_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801A64A8_OnFrame(void) {}
-__attribute__((weak)) void gm_801A7070_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801A79D4_OnFrame(void) {}
-__attribute__((weak)) void gm_801A9B30_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801A9D0C_OnFrame(void) {}
-__attribute__((weak)) void gm_801AA110_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801AA28C_OnFrame(void) {}
-__attribute__((weak)) void gm_801AA7C4_OnFrame(void) {}
-__attribute__((weak)) void gm_801AC6D8_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801ACC90_OnLeave(int a0) {}
-__attribute__((weak)) void gm_801ACCA0_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801ACD8C_OnFrame(void) {}
-__attribute__((weak)) void gm_801ACE94_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801ACF8C_OnFrame(void) {}
-__attribute__((weak)) void gm_801AD620_OnFrame(void) {}
-__attribute__((weak)) void gm_801AD874_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801AD8EC_OnLeave(int a0) {}
-__attribute__((weak)) void gm_801ADC88_OnFrame(void) {}
-__attribute__((weak)) void gm_801ADCE4_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801ADDA8_OnLeave(int a0) {}
-__attribute__((weak)) void gm_801AF568_OnFrame(void) {}
-__attribute__((weak)) void gm_801B0264_OnEnter(int a0) {}
-__attribute__((weak)) void gm_801B0304_OnLeave(int a0) {}
-__attribute__((weak)) void gm_801B2298_OnInit(void) {}
-__attribute__((weak)) void gm_801B23C4_OnLoad(void) {}
-__attribute__((weak)) void gm_801B2B7C_OnInit(void) {}
-__attribute__((weak)) void gm_801B51CC_OnInit(void) {}
-__attribute__((weak)) void gm_801B5214_OnLoad(void) {}
-__attribute__((weak)) void gm_801B60A4_OnLoad(void) {}
-__attribute__((weak)) void gm_801B62D8_OnInit(void) {}
-__attribute__((weak)) void gm_801B67E8_OnInit(void) {}
-__attribute__((weak)) void gm_801B6808_OnLoad(void) {}
-__attribute__((weak)) void gm_801B8D60_OnInit(void) {}
-__attribute__((weak)) void gm_801B8D88_OnLoad(void) {}
-__attribute__((weak)) void gm_801B8F70_OnInit(void) {}
-__attribute__((weak)) void gm_801B8F98_OnLoad(void) {}
-__attribute__((weak)) void gm_801B9180_OnInit(void) {}
-__attribute__((weak)) void gm_801B91A8_OnLoad(void) {}
-__attribute__((weak)) void gm_801B95B0_OnInit(void) {}
-__attribute__((weak)) void gm_801B95D8_OnLoad(void) {}
-__attribute__((weak)) void gm_801B9EB8_OnInit(void) {}
-__attribute__((weak)) void gm_801B9EE4_OnLoad(void) {}
-__attribute__((weak)) void gm_801BA0C4_OnInit(void) {}
-__attribute__((weak)) void gm_801BA0EC_OnLoad(void) {}
-__attribute__((weak)) void gm_801BA2C4_OnInit(void) {}
-__attribute__((weak)) void gm_801BA2EC_OnLoad(void) {}
-__attribute__((weak)) void gm_801BA4C4_OnInit(void) {}
-__attribute__((weak)) void gm_801BA4EC_OnLoad(void) {}
-__attribute__((weak)) void gm_801BA6BC_OnInit(void) {}
-__attribute__((weak)) void gm_801BA6E4_OnLoad(void) {}
-__attribute__((weak)) void gm_801BA8B4_OnInit(void) {}
-__attribute__((weak)) void gm_801BA8DC_OnLoad(void) {}
-__attribute__((weak)) void gm_801BBA60_OnInit(void) {}
-__attribute__((weak)) void gm_801BBEA8_OnLoad(void) {}
-__attribute__((weak)) void gm_801BBFE4_OnUnload(void) {}
-__attribute__((weak)) void mnCharSel_8026688C_OnEnter(int a0) {}
-__attribute__((weak)) void mnCharSel_802669F4_OnFrame(void) {}
-__attribute__((weak)) void mnCharSel_80266D70_OnLeave(int a0) {}
-__attribute__((weak)) void mnStageSel_8025A998_OnEnter(int a0) {}
-__attribute__((weak)) void mnStageSel_8025B850_OnFrame(void) {}
-__attribute__((weak)) void mnStageSel_8025BB5C_OnLeave(int a0) {}
-__attribute__((weak)) void mn_8022DD38_OnFrame(void) {}
-__attribute__((weak)) void mn_8022DDA8_OnEnter(int a0) {}
-__attribute__((weak)) void tyDisplay_OnEnter_8031B460(void) {}
-__attribute__((weak)) void tyDisplay_OnFrame_8031B9A4(void) {}
-__attribute__((weak)) void tyFigupon_OnEnter_80317D80(void) {}
-__attribute__((weak)) void tyFigupon_OnFrame_803182D4(void) {}
-__attribute__((weak)) void un_802FEBE0_OnEnter(void) {}
-__attribute__((weak)) void un_802FED10_OnLeave(void) {}
-__attribute__((weak)) void un_8031D288_OnEnter(void) {}
-__attribute__((weak)) void un_8031D698_OnFrame(void) {}
-__attribute__((weak)) void un_8031D858_OnEnter(void) {}
-__attribute__((weak)) void un_8031DE58_OnEnter(void) {}
-__attribute__((weak)) void un_8031E444_OnEnter(void) {}
-__attribute__((weak)) void un_8031EBBC_OnEnter(void) {}
-__attribute__((weak)) void un_8031F714_OnEnter(void) {}
-__attribute__((weak)) void un_8031F960_OnFrame(void) {}
-__attribute__((weak)) void un_8031FD18_OnEnter(void) {}
-__attribute__((weak)) void un_80320490_OnFrame(void) {}
-__attribute__((weak)) void un_80320A40_OnEnter(void) {}
-__attribute__((weak)) void un_803210EC_OnFrame(void) {}
-__attribute__((weak)) void vi0102_8031D000_OnFrame(void) {}
-__attribute__((weak)) void vi0102_Initialize_OnEnter(void) {}
-__attribute__((weak)) void vi0801_OnEnter(void) {}
-__attribute__((weak)) void vi0801_OnFrame(void) {}
-__attribute__((weak)) void vi1202_OnEnter(void) {}
-__attribute__((weak)) void vi1202_OnFrame(void) {}
-__attribute__((weak)) void vi_8031D9C4_OnFrame(void) {}
-__attribute__((weak)) void vi_8031E0F0_OnFrame(void) {}
-__attribute__((weak)) void vi_8031E6CC_OnFrame(void) {}
-__attribute__((weak)) void vi_8031ED50_OnFrame(void) {}
+__attribute__((weak)) void Toy_OnEnter_80311AB0(void) { PC_STUB_HIT("Toy_OnEnter_80311AB0");}
+__attribute__((weak)) void Toy_OnFrame_80312018(void) { PC_STUB_HIT("Toy_OnFrame_80312018");}
+__attribute__((weak)) void Toy_OnInit_803122D0(void) { PC_STUB_HIT("Toy_OnInit_803122D0");}
+__attribute__((weak)) void gmCamera_801A34FC_OnFrame(void) { PC_STUB_HIT("gmCamera_801A34FC_OnFrame");}
+__attribute__((weak)) void gmCamera_801A3634_OnEnter(int a0) { PC_STUB_HIT("gmCamera_801A3634_OnEnter");}
+__attribute__((weak)) void gmCamera_801A367C_OnLeave(int a0) { PC_STUB_HIT("gmCamera_801A367C_OnLeave");}
+__attribute__((weak)) void gmClassic_OnInit(void) { PC_STUB_HIT("gmClassic_OnInit");}
+__attribute__((weak)) void gmClassic_OnLoad(void) { PC_STUB_HIT("gmClassic_OnLoad");}
+__attribute__((weak)) void gmTitle_801A1C18_OnFrame(void) { PC_STUB_HIT("gmTitle_801A1C18_OnFrame");}
+__attribute__((weak)) void gmTitle_801A1E20_OnEnter(int a0) { PC_STUB_HIT("gmTitle_801A1E20_OnEnter");}
+__attribute__((weak)) void gm_8016D32C_OnFrame(void) { PC_STUB_HIT("gm_8016D32C_OnFrame");}
+__attribute__((weak)) void gm_8016E934_OnEnter(int a0) { PC_STUB_HIT("gm_8016E934_OnEnter");}
+__attribute__((weak)) void gm_8016EBC0_OnEnter(int a0) { PC_STUB_HIT("gm_8016EBC0_OnEnter");}
+__attribute__((weak)) void gm_8016EC28_OnEnter(int a0) { PC_STUB_HIT("gm_8016EC28_OnEnter");}
+__attribute__((weak)) void gm_801737E8_OnLoad(void) { PC_STUB_HIT("gm_801737E8_OnLoad");}
+__attribute__((weak)) void gm_80177368_OnEnter(int a0) { PC_STUB_HIT("gm_80177368_OnEnter");}
+__attribute__((weak)) void gm_80177704_OnLeave(int a0) { PC_STUB_HIT("gm_80177704_OnLeave");}
+__attribute__((weak)) void gm_80186DFC_OnFrame(void) { PC_STUB_HIT("gm_80186DFC_OnFrame");}
+__attribute__((weak)) void gm_80186E30_OnEnter(int a0) { PC_STUB_HIT("gm_80186E30_OnEnter");}
+__attribute__((weak)) void gm_8018776C_OnFrame(void) { PC_STUB_HIT("gm_8018776C_OnFrame");}
+__attribute__((weak)) void gm_801877A8_OnEnter(int a0) { PC_STUB_HIT("gm_801877A8_OnEnter");}
+__attribute__((weak)) void gm_80187F48_OnEnter(int a0) { PC_STUB_HIT("gm_80187F48_OnEnter");}
+__attribute__((weak)) void gm_80188364_OnLeave(int a0) { PC_STUB_HIT("gm_80188364_OnLeave");}
+__attribute__((weak)) void gm_8018838C_OnFrame(void) { PC_STUB_HIT("gm_8018838C_OnFrame");}
+__attribute__((weak)) void gm_8019628C_OnFrame(void) { PC_STUB_HIT("gm_8019628C_OnFrame");}
+__attribute__((weak)) void gm_801963B4_OnEnter(int a0) { PC_STUB_HIT("gm_801963B4_OnEnter");}
+__attribute__((weak)) void gm_801964A4_OnLeave(int a0) { PC_STUB_HIT("gm_801964A4_OnLeave");}
+__attribute__((weak)) void gm_8019B2DC_OnFrame(void) { PC_STUB_HIT("gm_8019B2DC_OnFrame");}
+__attribute__((weak)) void gm_8019B8C4_OnEnter(int a0) { PC_STUB_HIT("gm_8019B8C4_OnEnter");}
+__attribute__((weak)) void gm_8019B9C8_OnLeave(int a0) { PC_STUB_HIT("gm_8019B9C8_OnLeave");}
+__attribute__((weak)) void gm_8019DF8C_OnFrame(void) { PC_STUB_HIT("gm_8019DF8C_OnFrame");}
+__attribute__((weak)) void gm_8019ECAC_OnEnter(int a0) { PC_STUB_HIT("gm_8019ECAC_OnEnter");}
+__attribute__((weak)) void gm_8019EE54_OnLeave(int a0) { PC_STUB_HIT("gm_8019EE54_OnLeave");}
+__attribute__((weak)) void gm_801A0A10_OnEnter(int a0) { PC_STUB_HIT("gm_801A0A10_OnEnter");}
+__attribute__((weak)) void gm_801A0B18_OnLeave(int a0) { PC_STUB_HIT("gm_801A0B18_OnLeave");}
+__attribute__((weak)) void gm_801A0C6C_OnEnter(int a0) { PC_STUB_HIT("gm_801A0C6C_OnEnter");}
+__attribute__((weak)) void gm_801A0E0C_OnLeave(int a0) { PC_STUB_HIT("gm_801A0E0C_OnLeave");}
+__attribute__((weak)) void gm_801A50B8_OnLoad(void) { PC_STUB_HIT("gm_801A50B8_OnLoad");}
+__attribute__((weak)) void gm_801A5130_OnLoad(void) { PC_STUB_HIT("gm_801A5130_OnLoad");}
+__attribute__((weak)) void gm_801A51A8_OnLoad(void) { PC_STUB_HIT("gm_801A51A8_OnLoad");}
+__attribute__((weak)) void gm_801A5220_OnLoad(void) { PC_STUB_HIT("gm_801A5220_OnLoad");}
+__attribute__((weak)) void gm_801A5598_OnInit(void) { PC_STUB_HIT("gm_801A5598_OnInit");}
+__attribute__((weak)) void gm_801A55EC_OnLoad(void) { PC_STUB_HIT("gm_801A55EC_OnLoad");}
+__attribute__((weak)) void gm_801A5614_OnUnload(void) { PC_STUB_HIT("gm_801A5614_OnUnload");}
+__attribute__((weak)) void gm_801A632C_OnEnter(int a0) { PC_STUB_HIT("gm_801A632C_OnEnter");}
+__attribute__((weak)) void gm_801A637C_OnEnter(int a0) { PC_STUB_HIT("gm_801A637C_OnEnter");}
+__attribute__((weak)) void gm_801A64A8_OnFrame(void) { PC_STUB_HIT("gm_801A64A8_OnFrame");}
+__attribute__((weak)) void gm_801A7070_OnEnter(int a0) { PC_STUB_HIT("gm_801A7070_OnEnter");}
+__attribute__((weak)) void gm_801A79D4_OnFrame(void) { PC_STUB_HIT("gm_801A79D4_OnFrame");}
+__attribute__((weak)) void gm_801A9B30_OnEnter(int a0) { PC_STUB_HIT("gm_801A9B30_OnEnter");}
+__attribute__((weak)) void gm_801A9D0C_OnFrame(void) { PC_STUB_HIT("gm_801A9D0C_OnFrame");}
+__attribute__((weak)) void gm_801AA110_OnEnter(int a0) { PC_STUB_HIT("gm_801AA110_OnEnter");}
+__attribute__((weak)) void gm_801AA28C_OnFrame(void) { PC_STUB_HIT("gm_801AA28C_OnFrame");}
+__attribute__((weak)) void gm_801AA7C4_OnFrame(void) { PC_STUB_HIT("gm_801AA7C4_OnFrame");}
+__attribute__((weak)) void gm_801AC6D8_OnEnter(int a0) { PC_STUB_HIT("gm_801AC6D8_OnEnter");}
+__attribute__((weak)) void gm_801ACC90_OnLeave(int a0) { PC_STUB_HIT("gm_801ACC90_OnLeave");}
+__attribute__((weak)) void gm_801ACCA0_OnEnter(int a0) { PC_STUB_HIT("gm_801ACCA0_OnEnter");}
+__attribute__((weak)) void gm_801ACD8C_OnFrame(void) { PC_STUB_HIT("gm_801ACD8C_OnFrame");}
+__attribute__((weak)) void gm_801ACE94_OnEnter(int a0) { PC_STUB_HIT("gm_801ACE94_OnEnter");}
+__attribute__((weak)) void gm_801ACF8C_OnFrame(void) { PC_STUB_HIT("gm_801ACF8C_OnFrame");}
+__attribute__((weak)) void gm_801AD620_OnFrame(void) { PC_STUB_HIT("gm_801AD620_OnFrame");}
+__attribute__((weak)) void gm_801AD874_OnEnter(int a0) { PC_STUB_HIT("gm_801AD874_OnEnter");}
+__attribute__((weak)) void gm_801AD8EC_OnLeave(int a0) { PC_STUB_HIT("gm_801AD8EC_OnLeave");}
+__attribute__((weak)) void gm_801ADC88_OnFrame(void) { PC_STUB_HIT("gm_801ADC88_OnFrame");}
+__attribute__((weak)) void gm_801ADCE4_OnEnter(int a0) { PC_STUB_HIT("gm_801ADCE4_OnEnter");}
+__attribute__((weak)) void gm_801ADDA8_OnLeave(int a0) { PC_STUB_HIT("gm_801ADDA8_OnLeave");}
+__attribute__((weak)) void gm_801AF568_OnFrame(void) { PC_STUB_HIT("gm_801AF568_OnFrame");}
+__attribute__((weak)) void gm_801B0264_OnEnter(int a0) { PC_STUB_HIT("gm_801B0264_OnEnter");}
+__attribute__((weak)) void gm_801B0304_OnLeave(int a0) { PC_STUB_HIT("gm_801B0304_OnLeave");}
+__attribute__((weak)) void gm_801B2298_OnInit(void) { PC_STUB_HIT("gm_801B2298_OnInit");}
+__attribute__((weak)) void gm_801B23C4_OnLoad(void) { PC_STUB_HIT("gm_801B23C4_OnLoad");}
+__attribute__((weak)) void gm_801B2B7C_OnInit(void) { PC_STUB_HIT("gm_801B2B7C_OnInit");}
+__attribute__((weak)) void gm_801B51CC_OnInit(void) { PC_STUB_HIT("gm_801B51CC_OnInit");}
+__attribute__((weak)) void gm_801B5214_OnLoad(void) { PC_STUB_HIT("gm_801B5214_OnLoad");}
+__attribute__((weak)) void gm_801B60A4_OnLoad(void) { PC_STUB_HIT("gm_801B60A4_OnLoad");}
+__attribute__((weak)) void gm_801B62D8_OnInit(void) { PC_STUB_HIT("gm_801B62D8_OnInit");}
+__attribute__((weak)) void gm_801B67E8_OnInit(void) { PC_STUB_HIT("gm_801B67E8_OnInit");}
+__attribute__((weak)) void gm_801B6808_OnLoad(void) { PC_STUB_HIT("gm_801B6808_OnLoad");}
+__attribute__((weak)) void gm_801B8D60_OnInit(void) { PC_STUB_HIT("gm_801B8D60_OnInit");}
+__attribute__((weak)) void gm_801B8D88_OnLoad(void) { PC_STUB_HIT("gm_801B8D88_OnLoad");}
+__attribute__((weak)) void gm_801B8F70_OnInit(void) { PC_STUB_HIT("gm_801B8F70_OnInit");}
+__attribute__((weak)) void gm_801B8F98_OnLoad(void) { PC_STUB_HIT("gm_801B8F98_OnLoad");}
+__attribute__((weak)) void gm_801B9180_OnInit(void) { PC_STUB_HIT("gm_801B9180_OnInit");}
+__attribute__((weak)) void gm_801B91A8_OnLoad(void) { PC_STUB_HIT("gm_801B91A8_OnLoad");}
+__attribute__((weak)) void gm_801B95B0_OnInit(void) { PC_STUB_HIT("gm_801B95B0_OnInit");}
+__attribute__((weak)) void gm_801B95D8_OnLoad(void) { PC_STUB_HIT("gm_801B95D8_OnLoad");}
+__attribute__((weak)) void gm_801B9EB8_OnInit(void) { PC_STUB_HIT("gm_801B9EB8_OnInit");}
+__attribute__((weak)) void gm_801B9EE4_OnLoad(void) { PC_STUB_HIT("gm_801B9EE4_OnLoad");}
+__attribute__((weak)) void gm_801BA0C4_OnInit(void) { PC_STUB_HIT("gm_801BA0C4_OnInit");}
+__attribute__((weak)) void gm_801BA0EC_OnLoad(void) { PC_STUB_HIT("gm_801BA0EC_OnLoad");}
+__attribute__((weak)) void gm_801BA2C4_OnInit(void) { PC_STUB_HIT("gm_801BA2C4_OnInit");}
+__attribute__((weak)) void gm_801BA2EC_OnLoad(void) { PC_STUB_HIT("gm_801BA2EC_OnLoad");}
+__attribute__((weak)) void gm_801BA4C4_OnInit(void) { PC_STUB_HIT("gm_801BA4C4_OnInit");}
+__attribute__((weak)) void gm_801BA4EC_OnLoad(void) { PC_STUB_HIT("gm_801BA4EC_OnLoad");}
+__attribute__((weak)) void gm_801BA6BC_OnInit(void) { PC_STUB_HIT("gm_801BA6BC_OnInit");}
+__attribute__((weak)) void gm_801BA6E4_OnLoad(void) { PC_STUB_HIT("gm_801BA6E4_OnLoad");}
+__attribute__((weak)) void gm_801BA8B4_OnInit(void) { PC_STUB_HIT("gm_801BA8B4_OnInit");}
+__attribute__((weak)) void gm_801BA8DC_OnLoad(void) { PC_STUB_HIT("gm_801BA8DC_OnLoad");}
+__attribute__((weak)) void gm_801BBA60_OnInit(void) { PC_STUB_HIT("gm_801BBA60_OnInit");}
+__attribute__((weak)) void gm_801BBEA8_OnLoad(void) { PC_STUB_HIT("gm_801BBEA8_OnLoad");}
+__attribute__((weak)) void gm_801BBFE4_OnUnload(void) { PC_STUB_HIT("gm_801BBFE4_OnUnload");}
+__attribute__((weak)) void mnCharSel_8026688C_OnEnter(int a0) { PC_STUB_HIT("mnCharSel_8026688C_OnEnter");}
+__attribute__((weak)) void mnCharSel_802669F4_OnFrame(void) { PC_STUB_HIT("mnCharSel_802669F4_OnFrame");}
+__attribute__((weak)) void mnCharSel_80266D70_OnLeave(int a0) { PC_STUB_HIT("mnCharSel_80266D70_OnLeave");}
+__attribute__((weak)) void mnStageSel_8025A998_OnEnter(int a0) { PC_STUB_HIT("mnStageSel_8025A998_OnEnter");}
+__attribute__((weak)) void mnStageSel_8025B850_OnFrame(void) { PC_STUB_HIT("mnStageSel_8025B850_OnFrame");}
+__attribute__((weak)) void mnStageSel_8025BB5C_OnLeave(int a0) { PC_STUB_HIT("mnStageSel_8025BB5C_OnLeave");}
+__attribute__((weak)) void mn_8022DD38_OnFrame(void) { PC_STUB_HIT("mn_8022DD38_OnFrame");}
+__attribute__((weak)) void mn_8022DDA8_OnEnter(int a0) { PC_STUB_HIT("mn_8022DDA8_OnEnter");}
+__attribute__((weak)) void tyDisplay_OnEnter_8031B460(void) { PC_STUB_HIT("tyDisplay_OnEnter_8031B460");}
+__attribute__((weak)) void tyDisplay_OnFrame_8031B9A4(void) { PC_STUB_HIT("tyDisplay_OnFrame_8031B9A4");}
+__attribute__((weak)) void tyFigupon_OnEnter_80317D80(void) { PC_STUB_HIT("tyFigupon_OnEnter_80317D80");}
+__attribute__((weak)) void tyFigupon_OnFrame_803182D4(void) { PC_STUB_HIT("tyFigupon_OnFrame_803182D4");}
+__attribute__((weak)) void un_802FEBE0_OnEnter(void) { PC_STUB_HIT("un_802FEBE0_OnEnter");}
+__attribute__((weak)) void un_802FED10_OnLeave(void) { PC_STUB_HIT("un_802FED10_OnLeave");}
+__attribute__((weak)) void un_8031D288_OnEnter(void) { PC_STUB_HIT("un_8031D288_OnEnter");}
+__attribute__((weak)) void un_8031D698_OnFrame(void) { PC_STUB_HIT("un_8031D698_OnFrame");}
+__attribute__((weak)) void un_8031D858_OnEnter(void) { PC_STUB_HIT("un_8031D858_OnEnter");}
+__attribute__((weak)) void un_8031DE58_OnEnter(void) { PC_STUB_HIT("un_8031DE58_OnEnter");}
+__attribute__((weak)) void un_8031E444_OnEnter(void) { PC_STUB_HIT("un_8031E444_OnEnter");}
+__attribute__((weak)) void un_8031EBBC_OnEnter(void) { PC_STUB_HIT("un_8031EBBC_OnEnter");}
+__attribute__((weak)) void un_8031F714_OnEnter(void) { PC_STUB_HIT("un_8031F714_OnEnter");}
+__attribute__((weak)) void un_8031F960_OnFrame(void) { PC_STUB_HIT("un_8031F960_OnFrame");}
+__attribute__((weak)) void un_8031FD18_OnEnter(void) { PC_STUB_HIT("un_8031FD18_OnEnter");}
+__attribute__((weak)) void un_80320490_OnFrame(void) { PC_STUB_HIT("un_80320490_OnFrame");}
+__attribute__((weak)) void un_80320A40_OnEnter(void) { PC_STUB_HIT("un_80320A40_OnEnter");}
+__attribute__((weak)) void un_803210EC_OnFrame(void) { PC_STUB_HIT("un_803210EC_OnFrame");}
+__attribute__((weak)) void vi0102_8031D000_OnFrame(void) { PC_STUB_HIT("vi0102_8031D000_OnFrame");}
+__attribute__((weak)) void vi0102_Initialize_OnEnter(void) { PC_STUB_HIT("vi0102_Initialize_OnEnter");}
+__attribute__((weak)) void vi0801_OnEnter(void) { PC_STUB_HIT("vi0801_OnEnter");}
+__attribute__((weak)) void vi0801_OnFrame(void) { PC_STUB_HIT("vi0801_OnFrame");}
+__attribute__((weak)) void vi1202_OnEnter(void) { PC_STUB_HIT("vi1202_OnEnter");}
+__attribute__((weak)) void vi1202_OnFrame(void) { PC_STUB_HIT("vi1202_OnFrame");}
+__attribute__((weak)) void vi_8031D9C4_OnFrame(void) { PC_STUB_HIT("vi_8031D9C4_OnFrame");}
+__attribute__((weak)) void vi_8031E0F0_OnFrame(void) { PC_STUB_HIT("vi_8031E0F0_OnFrame");}
+__attribute__((weak)) void vi_8031E6CC_OnFrame(void) { PC_STUB_HIT("vi_8031E6CC_OnFrame");}
+__attribute__((weak)) void vi_8031ED50_OnFrame(void) { PC_STUB_HIT("vi_8031ED50_OnFrame");}
 
 /* Scene tables */
 __attribute__((weak)) void *gm_803DD6A0_Scenes = NULL;
@@ -3125,10 +3204,10 @@ __attribute__((weak)) void *gm_803DFDD8_Scenes = NULL;
 __attribute__((weak)) void *gm_803DFE18_Scenes = NULL;
 __attribute__((weak)) void *gm_803DFE48_Scenes = NULL;
 __attribute__((weak)) void *gm_CameraModeScenes = NULL;
-__attribute__((weak)) void gm_8016D800(void) {}
-__attribute__((weak)) void gm_8016E9C8(int a0) {}
-__attribute__((weak)) void gm_801B6834(void) {}
-__attribute__((weak)) void gm_801B685C(void) {}
+__attribute__((weak)) void gm_8016D800(void) { PC_STUB_HIT("gm_8016D800");}
+__attribute__((weak)) void gm_8016E9C8(int a0) { PC_STUB_HIT("gm_8016E9C8");}
+__attribute__((weak)) void gm_801B6834(void) { PC_STUB_HIT("gm_801B6834");}
+__attribute__((weak)) void gm_801B685C(void) { PC_STUB_HIT("gm_801B685C");}
 
 /* ============================================================
  * Temporary stubs for decomp symbols needed during port bootstrap
@@ -3208,23 +3287,23 @@ __attribute__((weak)) extern struct GameMode {
 /* === Auto-generated weak stubs for unresolved decomp symbols === */
 /* ABS: a macro (port/pc_prelude.h); the weak function stub that stood in
  * for it returned garbage at every item-physics site that used it. */
-__attribute__((weak)) int Camera_800307D0(int a0, int a1, int a2) { return 0; }
+__attribute__((weak)) int Camera_800307D0(int a0, int a1, int a2) { PC_STUB_HIT("Camera_800307D0"); return 0; }
 
-__attribute__((weak)) float __fabsf(float x) { return x < 0 ? -x : x; }
-__attribute__((weak)) float __fnmsubs(float a, float b, float c) { return -(a * b) + c; }
-__attribute__((weak)) void ftDrawCommon_80081168(void) {}
-__attribute__((weak)) void ftDrawCommon_80081200(void) {}
-__attribute__((weak)) void ftLib_80086644(int a0, int a1) {}
-__attribute__((weak)) int ftLib_80086960(int a0) { return 0; }
-__attribute__((weak)) int ftLib_800872B0(int a0) { return 0; }
-__attribute__((weak)) int ftLib_800872BC(int a0) { return 0; }
-__attribute__((weak)) void gm_801603B0(void) {}
-__attribute__((weak)) void gm_8016895C(int a0, int a1, int a2) {}
-__attribute__((weak)) int gm_80169370(int a0) { return 0; }
-__attribute__((weak)) int gm_8016B184(void) { return 0; }
-__attribute__((weak)) int gm_GetPowerTime(void) { return 0; }
-__attribute__((weak)) void* gmMainLib_8015CC4C(void) { return NULL; }
-__attribute__((weak)) int gmMainLib_8015FC74(void) { return 0; }
+__attribute__((weak)) float __fabsf(float x) { PC_STUB_HIT("__fabsf"); return x < 0 ? -x : x; }
+__attribute__((weak)) float __fnmsubs(float a, float b, float c) { PC_STUB_HIT("__fnmsubs"); return -(a * b) + c; }
+__attribute__((weak)) void ftDrawCommon_80081168(void) { PC_STUB_HIT("ftDrawCommon_80081168");}
+__attribute__((weak)) void ftDrawCommon_80081200(void) { PC_STUB_HIT("ftDrawCommon_80081200");}
+__attribute__((weak)) void ftLib_80086644(int a0, int a1) { PC_STUB_HIT("ftLib_80086644");}
+__attribute__((weak)) int ftLib_80086960(int a0) { PC_STUB_HIT("ftLib_80086960"); return 0; }
+__attribute__((weak)) int ftLib_800872B0(int a0) { PC_STUB_HIT("ftLib_800872B0"); return 0; }
+__attribute__((weak)) int ftLib_800872BC(int a0) { PC_STUB_HIT("ftLib_800872BC"); return 0; }
+__attribute__((weak)) void gm_801603B0(void) { PC_STUB_HIT("gm_801603B0");}
+__attribute__((weak)) void gm_8016895C(int a0, int a1, int a2) { PC_STUB_HIT("gm_8016895C");}
+__attribute__((weak)) int gm_80169370(int a0) { PC_STUB_HIT("gm_80169370"); return 0; }
+__attribute__((weak)) int gm_8016B184(void) { PC_STUB_HIT("gm_8016B184"); return 0; }
+__attribute__((weak)) int gm_GetPowerTime(void) { PC_STUB_HIT("gm_GetPowerTime"); return 0; }
+__attribute__((weak)) void* gmMainLib_8015CC4C(void) { PC_STUB_HIT("gmMainLib_8015CC4C"); return NULL; }
+__attribute__((weak)) int gmMainLib_8015FC74(void) { PC_STUB_HIT("gmMainLib_8015FC74"); return 0; }
 __attribute__((weak)) struct { char _[0x10000]; } gmMainLib_8046B0F0;
 __attribute__((weak)) struct { char _[0x10A30]; } gmMainLib_804D3EE0;
 /* Minimal save data structure — mimics real gmmSaveData layout */
@@ -3259,12 +3338,12 @@ struct gmSaveData {
 
 
 __attribute__((weak)) int HSD_PadRumbleAdd(int a0, int a1, int a2, int a3, int a4) { return 0; } /* decl: int */
-__attribute__((weak)) void HSD_PadRumbleOn(int a0) {}
-__attribute__((weak)) void HSD_PadRumbleRemove(int a0) {}
-__attribute__((weak)) void it_8026B294(int a0, int a1) {}
-__attribute__((weak)) int mpCheckFloor(float a0, float a1, float a2, float a3, float a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12, int a13) { return 0; }
-__attribute__((weak)) int Player_GetPlayerCharacter(int a0) { return 0; }
-__attribute__((weak)) int Player_GetPlayerSlotType(int a0) { return 0; }
+__attribute__((weak)) void HSD_PadRumbleOn(int a0) { PC_STUB_HIT("HSD_PadRumbleOn");}
+__attribute__((weak)) void HSD_PadRumbleRemove(int a0) { PC_STUB_HIT("HSD_PadRumbleRemove");}
+__attribute__((weak)) void it_8026B294(int a0, int a1) { PC_STUB_HIT("it_8026B294");}
+__attribute__((weak)) int mpCheckFloor(float a0, float a1, float a2, float a3, float a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12, int a13) { PC_STUB_HIT("mpCheckFloor"); return 0; }
+__attribute__((weak)) int Player_GetPlayerCharacter(int a0) { PC_STUB_HIT("Player_GetPlayerCharacter"); return 0; }
+__attribute__((weak)) int Player_GetPlayerSlotType(int a0) { PC_STUB_HIT("Player_GetPlayerSlotType"); return 0; }
 __attribute__((weak)) long un_80304470(void) { return 0; } /* decl: bool */
 __attribute__((weak, aligned(16))) unsigned char lbl_804336A0[256]; /* data (GCN 0x804336A0), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_803BB0E0[256]; /* data (GCN 0x803BB0E0), was void-fn stub */
@@ -3478,7 +3557,7 @@ __attribute__((weak, aligned(16))) unsigned char lbl_80433658[128];
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void GXSetZCompLoc_jit(void) {}
+__attribute__((weak)) void GXSetZCompLoc_jit(void) { PC_STUB_HIT("GXSetZCompLoc_jit");}
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
@@ -3489,7 +3568,7 @@ __attribute__((weak)) void GXSetZCompLoc_jit(void) {}
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void GXSetCullMode(int a0) {}
+__attribute__((weak)) void GXSetCullMode(int a0) { PC_STUB_HIT("GXSetCullMode");}
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
@@ -3508,7 +3587,7 @@ __attribute__((weak)) void GXSetCullMode(int a0) {}
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void GXSetPixelFmt_jit(void) {}
+__attribute__((weak)) void GXSetPixelFmt_jit(void) { PC_STUB_HIT("GXSetPixelFmt_jit");}
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
@@ -3567,7 +3646,7 @@ __attribute__((weak)) void GXSetPixelFmt_jit(void) {}
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void *GXRedirectWriteGatherPipe(void) { return NULL; }
+__attribute__((weak)) void *GXRedirectWriteGatherPipe(void) { PC_STUB_HIT("GXRedirectWriteGatherPipe"); return NULL; }
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
@@ -3668,7 +3747,7 @@ __attribute__((weak)) void *GXRedirectWriteGatherPipe(void) { return NULL; }
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void GXSetTexCopyClear_jit(void) {}
+__attribute__((weak)) void GXSetTexCopyClear_jit(void) { PC_STUB_HIT("GXSetTexCopyClear_jit");}
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
@@ -3768,7 +3847,7 @@ __asm__( ".globl GXMpal480IntDf\nGXMpal480IntDf = _pc_gx_rmode_ntsc480_int_df" )
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) void GXSetTevOrderEx(void) {}
+__attribute__((weak)) void GXSetTevOrderEx(void) { PC_STUB_HIT("GXSetTevOrderEx");}
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 /* REMOVED: strong impl in gx_gl_bridge.c */
@@ -3790,16 +3869,16 @@ __attribute__((weak)) void GXSetTevOrderEx(void) {}
  * ============================================================ */
 
 /* GX query functions — no-op on PC, values not queried in game path */
-__attribute__((weak)) void GXGetProjectionv(int a0) {}
-__attribute__((weak)) void GXGetViewportv(int a0) {}
-__attribute__((weak)) void GXSetTevColorS10(int a0, int a1) {}
+__attribute__((weak)) void GXGetProjectionv(int a0) { PC_STUB_HIT("GXGetProjectionv");}
+__attribute__((weak)) void GXGetViewportv(int a0) { PC_STUB_HIT("GXGetViewportv");}
+__attribute__((weak)) void GXSetTevColorS10(int a0, int a1) { PC_STUB_HIT("GXSetTevColorS10");}
 
 /* MTX/PSMATH math functions */
-__attribute__((weak)) void MTXFrustum(int a0, float a1, float a2, float a3, float a4, float a5, float a6) {}
-__attribute__((weak)) int PSMTXInverse(int a0, int a1) { return 0; }
+__attribute__((weak)) void MTXFrustum(int a0, float a1, float a2, float a3, float a4, float a5, float a6) { PC_STUB_HIT("MTXFrustum");}
+__attribute__((weak)) int PSMTXInverse(int a0, int a1) { PC_STUB_HIT("PSMTXInverse"); return 0; }
 
 /* Video functions — not needed on PC (no GCN video output) */
-__attribute__((weak)) void VIGetNextField(void) {}
+__attribute__((weak)) void VIGetNextField(void) { PC_STUB_HIT("VIGetNextField");}
 
 /* ------------------------------------------------------------------
  * PC port low-memory pool (port-android.md Phase 3).
@@ -4209,10 +4288,10 @@ __attribute__((weak)) void OSFreeToHeap(void* heap, void* ptr)
 __attribute__((weak)) long HSD_GetCurrentRenderPass(void) { return 0; } /* decl: HSD_RenderPass */
 
 /* TExp (texture expression) dag — stubs from texpdag.c */
-__attribute__((weak)) void HSD_TExpSchedule(int a0, int a1, int a2, int a3) {}
-__attribute__((weak)) int HSD_TExpMakeDag(int a0, int a1) { return 0; }
-__attribute__((weak)) int HSD_TExpSimplify(int a0) { return 0; }
-__attribute__((weak)) int HSD_TExpSimplify2(int a0) { return 0; }
+__attribute__((weak)) void HSD_TExpSchedule(int a0, int a1, int a2, int a3) { PC_STUB_HIT("HSD_TExpSchedule");}
+__attribute__((weak)) int HSD_TExpMakeDag(int a0, int a1) { PC_STUB_HIT("HSD_TExpMakeDag"); return 0; }
+__attribute__((weak)) int HSD_TExpSimplify(int a0) { PC_STUB_HIT("HSD_TExpSimplify"); return 0; }
+__attribute__((weak)) int HSD_TExpSimplify2(int a0) { PC_STUB_HIT("HSD_TExpSimplify2"); return 0; }
 
 /* ByteCode evaluator */
 __attribute__((weak)) float HSD_ByteCodeEval(int a0, int a1, int a2) { return 0; } /* decl: float */
@@ -4228,7 +4307,7 @@ __attribute__((weak)) float HSD_ByteCodeEval(int a0, int a1, int a2) { return 0;
 /* stubs, which silently handed a function address to code expecting a    */
 /* filename. These three are genuine functions whose absence means the    */
 /* feature is simply not present yet, which is a different thing.          */
-__attribute__((weak)) unsigned int db_ShowCoinPickupRange(void) { return 0; }
+__attribute__((weak)) unsigned int db_ShowCoinPickupRange(void) { PC_STUB_HIT("db_ShowCoinPickupRange"); return 0; }
 __attribute__((weak)) void efLib_SetFlags(void* gobj, int expires)
 {
     (void) gobj; (void) expires;
