@@ -2488,6 +2488,15 @@ void gm_801A4510(void);
         extern void GXFlush(void);
         extern void GXSetZMode(u32, u32, u32);
         
+        /* gmmain.c does this unconditionally at boot (its flag is set
+         * false one line earlier); the PC port excludes gmmain.c, so the
+         * call has to happen here or itspawn.c's countdown never runs and
+         * no VS item ever spawns. */
+        {
+            extern void db_EnableItemSpawns(void);
+            db_EnableItemSpawns();
+        }
+
         PORT_LOG_INFO("[MAIN] Starting game mode loop (gm_801A4510)...");
         
         /* Call gm_801A4510() which runs the full game loop.
