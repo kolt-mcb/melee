@@ -318,6 +318,13 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
     # the Unix epoch and the GameCube from 2000-01-01, hence the offset; the
     # default lands on a whole day, so the seconds field is zero and the title
     # draws nothing on either side.
+    if os.environ.get("MELEE_RNG_WATCH"):
+        # The seed watchpoint logs through Dolphin's MEMMAP channel, and the
+        # JIT only emits memcheck code when debugging is on.
+        argv += ["-C", "Dolphin.Interface.DebugModeEnabled=True",
+                 "-C", "Logger.Logs.MEMMAP=True",
+                 "-C", "Logger.Options.WriteToConsole=True",
+                 "-C", "Logger.Options.Verbosity=5"]
     rtc = case.get("fake_rtc", GC_DEFAULT_RTC)
     argv += ["-C", "Dolphin.Core.EnableCustomRTC=True",
              "-C", "Dolphin.Core.CustomRTCValue=%d" % (GC_EPOCH_UNIX + rtc)]
