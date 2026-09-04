@@ -188,21 +188,27 @@ def run_cell(ck, st, frames, timeout):
     # matters here, and a stage that fires an assert every frame can produce
     # millions of lines -- Big Blue's lane loop asserts a thousand times a
     # frame, and capturing 26 cells of that filled the disk.
-    stall_log = "/tmp/pc_matrix.stall.%d_%d" % (ck, st)
-    with open(os.devnull, "w") as null:
+    # Keep the run's own output, not a re-run's. These failures are
+    # intermittent -- every re-run of a crashed Kongo cell has come back
+    # clean -- so a second run proves nothing and the first one carries the
+    # port's SIGSEGV backtrace. The output is discarded when the cell passes,
+    # and truncated to its tail when it does not: a stage that asserts every
+    # frame can produce millions of lines (Big Blue once filled the disk this
+    # way), and the backtrace is at the end regardless.
+    raw = "/tmp/pc_matrix.out.%d_%d" % (ck, st)
+    with open(raw, "w") as out:
         rc = subprocess.run(["timeout", "-s", "KILL", str(timeout), PORT],
-                            cwd=REPO, env=env, stdout=null,
+                            cwd=REPO, env=env, stdout=out,
                             stderr=subprocess.STDOUT).returncode
     verdict, info = judge(trace, rc, frames)
-    # rc 3 is the watchdog's own exit. Re-run once with the output kept, so
-    # the stack it prints survives instead of going to /dev/null -- a stall
-    # that leaves no evidence is the thing that made these cells expensive.
-    if rc == 3:
-        with open(stall_log, "w") as f:
-            subprocess.run(["timeout", "-s", "KILL", str(timeout), PORT],
-                           cwd=REPO, env=env, stdout=f,
-                           stderr=subprocess.STDOUT)
-        info["stall_log"] = stall_log
+    if verdict == "ok":
+        os.unlink(raw)
+    else:
+        tail = subprocess.run(["tail", "-c", "200000", raw],
+                              capture_output=True).stdout
+        with open(raw, "wb") as f:
+            f.write(tail)
+        info["log"] = raw
     return verdict, info
 
 
