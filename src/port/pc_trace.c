@@ -277,40 +277,6 @@ void pc_trace_frame(int frame)
         sync_open();
     }
 
-    /* MELEE_SEED=<hex> forces the RNG seed on the first frame of the match.
-     * The two sides reach a match by different routes and so arrive with
-     * different seeds -- the console has burned hundreds of draws on logos the
-     * port never shows -- and anything random then diverges immediately. That
-     * does not matter while nobody is asking the game for a random number, but
-     * it decides everything once the CPU players are the ones playing. The
-     * local Dolphin build takes the same variable and writes the same value on
-     * the same match frame. */
-    {
-        static int seeded = 0;
-        const char* want = getenv("MELEE_SEED");
-        /* MELEE_SEED_AT_MODE=<mode> applies it on the first frame the game
-         * reaches that mode instead of on the first frame of a match. A run
-         * compared from the title screen needs the two sides to agree on the
-         * seed there: the console burns draws on logos this never shows, and
-         * the title's own code then draws a seed-dependent number of values
-         * (a rejection loop picking four distinct characters), so the two
-         * disagree about how much randomness a frame consumed long before
-         * either reaches a match. The local Dolphin build reads the same
-         * variable and writes the same value at the same point. */
-        const char* at_mode = getenv("MELEE_SEED_AT_MODE");
-        if (want != NULL && !seeded && at_mode != NULL &&
-            (int) gm_GetCurrentGameMode() == atoi(at_mode))
-        {
-            seeded = 1;
-            seed = (u32) strtoul(want, NULL, 16);
-        }
-        if (want != NULL && !seeded && at_mode == NULL &&
-            gm_8016AEDC() == 1)
-        {
-            seeded = 1;
-            seed = (u32) strtoul(want, NULL, 16);
-        }
-    }
     pc_trace_items();
     pc_trace_bones();
     if (out == NULL && sync_fd < 0) {
@@ -375,6 +341,54 @@ void pc_trace_frame(int frame)
         fflush(out);
     }
     sync_send(line);
+
+    /* Written after the trace line, not before it, so the two sides agree on
+     * which frame first shows the forced value: the Dolphin build writes it
+     * at the end of its frame, after its own line. Forcing here first made
+     * the port's match frame 1 show the new seed while the console's still
+     * showed the old one, and the console then spent that frame drawing from
+     * a different sequence. */
+    /* MELEE_SEED=<hex> forces the RNG seed on the first frame of the match.
+     * The two sides reach a match by different routes and so arrive with
+     * different seeds -- the console has burned hundreds of draws on logos the
+     * port never shows -- and anything random then diverges immediately. That
+     * does not matter while nobody is asking the game for a random number, but
+     * it decides everything once the CPU players are the ones playing. The
+     * local Dolphin build takes the same variable and writes the same value on
+     * the same match frame. */
+    {
+        static int seeded = 0;
+        const char* want = getenv("MELEE_SEED");
+        /* MELEE_SEED_AT_MODE=<mode> applies it on the first frame the game
+         * reaches that mode instead of on the first frame of a match. A run
+         * compared from the title screen needs the two sides to agree on the
+         * seed there: the console burns draws on logos this never shows, and
+         * the title's own code then draws a seed-dependent number of values
+         * (a rejection loop picking four distinct characters), so the two
+         * disagree about how much randomness a frame consumed long before
+         * either reaches a match. The local Dolphin build reads the same
+         * variable and writes the same value at the same point. */
+        const char* at_mode = getenv("MELEE_SEED_AT_MODE");
+        static int seeded_mode;
+        /* Both points, independently. Seeding at the rendezvous is what lets
+         * the menus be compared, but it cannot be the only one: the console
+         * spends frames loading each scene that the port does not, and it
+         * draws during them. By the time a match starts the two have taken
+         * different numbers of values and pick different idle animations.
+         * Seeding again on the first frame of the match puts them back
+         * together for the part that matters most. */
+        if (want != NULL && at_mode != NULL && !seeded_mode &&
+            (int) gm_GetCurrentGameMode() == atoi(at_mode))
+        {
+            seeded_mode = 1;
+            seed = (u32) strtoul(want, NULL, 16);
+        }
+        if (want != NULL && !seeded && gm_8016AEDC() == 1) {
+            seeded = 1;
+            seed = (u32) strtoul(want, NULL, 16);
+        }
+    }
+
 }
 
 #endif /* BUILD_TARGET_PC */
