@@ -72,13 +72,13 @@ PC_DATA_STUB(gm_804D42CC);
 PC_DATA_STUB(gm_804DAAEC);
 PC_DATA_STUB(grBb_803B8120);
 /* grBb_803B8134: real table now defined in gr/grbigblue.c */
-PC_DATA_STUB(grBb_804DB2F0);
-PC_DATA_STUB(grBb_804DB2F4);
-PC_DATA_STUB(grBb_804DB304);
-PC_DATA_STUB(grBb_804DB308);
-PC_DATA_STUB(grBb_804DB30C);
-PC_DATA_STUB(grBb_804DB310);
-PC_DATA_STUB(grBb_804DB3F0);
+/* grBb_804DB2F0: real value now defined in gr/grbigblue.c */
+/* grBb_804DB2F4: real value now defined in gr/grbigblue.c */
+/* grBb_804DB304: real value now defined in gr/grbigblue.c */
+/* grBb_804DB308: real value now defined in gr/grbigblue.c */
+/* grBb_804DB30C: real value now defined in gr/grbigblue.c */
+/* grBb_804DB310: real value now defined in gr/grbigblue.c */
+/* grBb_804DB3F0: real value now defined in gr/grbigblue.c */
 PC_DATA_STUB(grBb_Route_803E6200);
 PC_DATA_STUB(grCn_803B8090);
 PC_DATA_STUB(grCn_803B80B4);

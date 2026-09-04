@@ -70,6 +70,26 @@ extern f32 grBb_804DB308;
 extern f32 grBb_804DB30C;
 extern f32 grBb_804DB310;
 extern f32 grBb_804DB3F0;
+#if BUILD_TARGET_PC
+/* Seven .sdata2 float constants this file reads. They live in the DOL, not in
+ * any archive, so the port had only zero-filled weak stubs for them -- and
+ * two of them are the raycast height and the "no ground found" sentinel that
+ * the whole track placement is built on. With 0x804DB30C zero the ray was a
+ * zero-length segment that could never hit anything, and with 0x804DB310 zero
+ * the miss went undetected, so grBigBlue_801E8D64 set the track root's
+ * translate from -FLT_MAX. Every collision joint hanging off that root left
+ * the world with it, which is why Big Blue had a floor on its first frame and
+ * none after it.
+ *
+ * Recovered from orig/GALE01/boot.dol. */
+f32 grBb_804DB2F0 = 1.0f;
+f32 grBb_804DB2F4 = 0.0f;
+f32 grBb_804DB304 = 1.5707964f;     /* pi/2 */
+f32 grBb_804DB308 = 10.0f;
+f32 grBb_804DB30C = 500.0f;         /* raycast half-height */
+f32 grBb_804DB310 = -3.4028235e38f; /* "no ground found" */
+f32 grBb_804DB3F0 = -10.0f;
+#endif
 
 
 #if BUILD_TARGET_PC
