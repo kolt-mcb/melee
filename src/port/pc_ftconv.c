@@ -637,18 +637,6 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                     tbl[n].u.i.x = -1;
                     tbl[n].u.i.y = 0;
                 }
-                if (getenv("MELEE_WAITLOG") != NULL) {
-                    unsigned long k;
-                    int sum = 0;
-                    fprintf(stderr, "[WAITTBL] kind=%d +0x%02x n=%lu:",
-                            kind, field, n);
-                    for (k = 0; k < n; k++) {
-                        fprintf(stderr, " {%d,%d}", tbl[k].u.i.x,
-                                tbl[k].u.i.y);
-                        sum += tbl[k].u.i.y;
-                    }
-                    fprintf(stderr, "  sum=%d\n", sum);
-                }
                 if (slot == 0) {
                     out->x24 = tbl;
                 } else {
