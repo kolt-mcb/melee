@@ -720,6 +720,21 @@ extern f32 grOk_804DBA14;
 extern f32 grOk_804DBA18;
 extern f32 grOk_804DBA1C;
 
+#if BUILD_TARGET_PC
+/* The barrel cannon's firing angles, plus one zero. They are .sdata2 floats
+ * in the DOL rather than archive data, so the port had zero-filled weak stubs
+ * for the lot and every angle read back as 0. Recovered from
+ * orig/GALE01/boot.dol. */
+f32 grOk_804DB9CC = 0.0f;
+f32 grOk_804DBA04 = 2.3561945f;  /*  3*pi/4 */
+f32 grOk_804DBA08 = 1.5707964f;  /*    pi/2 */
+f32 grOk_804DBA0C = 0.7853982f;  /*    pi/4 */
+f32 grOk_804DBA10 = -0.7853982f; /*   -pi/4 */
+f32 grOk_804DBA14 = -1.5707964f; /*   -pi/2 */
+f32 grOk_804DBA18 = -2.3561945f; /* -3*pi/4 */
+f32 grOk_804DBA1C = -3.1415927f; /*     -pi */
+#endif
+
 f32 grOldKongo_80210650(void)
 {
     f32 result;

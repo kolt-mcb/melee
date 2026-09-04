@@ -2098,6 +2098,22 @@ bool Ground_801C2D24(enum_t arg0, Vec3* arg1)
     Vec3 sp20;
     Vec3 sp14;
     u32 _;
+#if BUILD_TARGET_PC
+    /* Every path that finds no spawn point returns false without touching
+     * arg1, and the callers pass an uninitialised stack Vec3 and ignore the
+     * result -- which is fine on the console, where a stage always has spawn
+     * points. Here Kongo Jungle N64 has none (its x280[] table is never
+     * populated; see the walker diagnostic in Ground_801C34AC), so the
+     * fighter's start position was whatever the stack held: x came back as
+     * 3e27, -1.4e13, -4e31, different every run, and the match began with a
+     * player already past the blast zone. It failed a handful of the stage's
+     * 26 cells per run, never the same ones, and looked like flakiness.
+     *
+     * Defining the output turns "no spawn point" into the origin, which is a
+     * wrong answer but the same wrong answer every time -- and the stage is
+     * playable from it. The spawn data itself is still missing. */
+    arg1->x = arg1->y = arg1->z = 0.0f;
+#endif
     if (arg0 == 8) {
         Ground_801C2D24(4, arg1);
         Ground_801C2D24(5, &sp20);
