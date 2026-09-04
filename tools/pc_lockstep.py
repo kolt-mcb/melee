@@ -628,6 +628,16 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
             # still loading. The counter is the only thing that says which
             # frame of the match each side is on.
             if rg == 0 and pg == 0:
+                if watch:
+                    # Pre-match frames are worth watching too: the entry
+                    # sequence happens here, and it is the only place to see
+                    # how long each side takes over it.
+                    print("   pre  %s"
+                          % "  |  ".join(
+                              "%s port %s console %s" % (c,
+                                                         port.row.get(c, "?"),
+                                                         ref.row.get(c, "?"))
+                              for c in watch))
                 port.release(); ref.release(); continue
             if rg == 0:
                 ref.release(); continue           # console still loading
