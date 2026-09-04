@@ -1121,6 +1121,14 @@ HSD_Generator* efLib_CreateGenerator_AppSRT_SetFacingDirScale(s32 gfx_id,
 
 void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_EFSPAWN") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[EFSPAWN] gframe=%u bank=%d gfx=0x%x jobj=%p\n",
+                (unsigned) gm_8016AEDC(), bank, (unsigned) gfx_id,
+                (void*) jobj);
+    }
+#endif
     HSD_Generator* generator;
     HSD_JObj* root = jobj;
     s32 chk = 0;
