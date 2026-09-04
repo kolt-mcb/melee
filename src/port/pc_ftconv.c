@@ -45,6 +45,7 @@
 
 #include "pc_ptr.h"
 #include <melee/gr/grdatfiles.h>
+#include "ft/ftwaitanim.h"
 
 extern void* pc_lowmem_alloc(unsigned long size);
 /* LEN: the motion-table entry count per fighter kind lives in a separate
@@ -592,6 +593,57 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
     off = pc_be32(*(const u32*) (raw + 0x14));
     if (off < len) {
         out->x14 = pc_conv_WaitAnimTable(base + off, base, len, motion_count);
+    }
+
+    /* +0x24 and +0x28 are the wait-animation tables: which idle a fighter
+     * picks when the current one runs out, and with what weight. Each is an
+     * array of {anim_id, weight} 4-byte pairs terminated by anim_id == -1.
+     *
+     * Leaving them NULL is not harmless. ftCo_8008A7A8 takes the pointer and,
+     * when it is NULL, replays the same idle for ever without asking the RNG.
+     * The console picks a variant each time an idle ends -- one HSD_Rand draw
+     * -- so the port and the console drifted apart in both the animation
+     * played and the number of random values consumed, which is the last
+     * thing that stopped a run from power-on comparing frame for frame.
+     *
+     * LEN: no count is stored, so the terminator bounds the walk; a table
+     * without one stops at the end of the archive rather than running off. */
+    {
+        int slot;
+        for (slot = 0; slot < 2; slot++) {
+            u32 field = slot == 0 ? 0x24 : 0x28;
+            off = pc_be32(*(const u32*) (raw + field));
+            if (off == 0 || off >= len) {
+                continue;
+            }
+            {
+                const u32* src = (const u32*) (base + off);
+                unsigned long max = (len - off) / 8;
+                unsigned long n = 0;
+                WaitStruct* tbl;
+                while (n < max && (s32) pc_be32(src[n * 2]) != -1) {
+                    n++;
+                }
+                tbl = pc_lowmem_alloc((n + 1) * sizeof(WaitStruct));
+                if (tbl == NULL) {
+                    continue;
+                }
+                {
+                    unsigned long k;
+                    for (k = 0; k < n; k++) {
+                        tbl[k].u.i.x = (int) pc_be32(src[k * 2]);
+                        tbl[k].u.i.y = (int) pc_be32(src[k * 2 + 1]);
+                    }
+                    tbl[n].u.i.x = -1;
+                    tbl[n].u.i.y = 0;
+                }
+                if (slot == 0) {
+                    out->x24 = tbl;
+                } else {
+                    out->x28 = tbl;
+                }
+            }
+        }
     }
 
     /* +0x10 and +0x18 are u8[2] arrays — plain bytes, so a rebase is enough;
