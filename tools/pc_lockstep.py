@@ -533,6 +533,20 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
         # draws during them, so one forcing is not enough to keep the two
         # sequences together across a scene.
         os.environ["MELEE_SEED_EACH_SCENE"] = "1"
+        # And once more on every frame of the match's own load. Per-scene
+        # seeding puts the two together at the moment the match scene opens,
+        # but the load that follows is not the same length on both -- the
+        # console takes 185 frames where the port takes 123, because it is
+        # emulating a disc -- and particle generators tick on every one of
+        # them, so the two reach match frame 1 having consumed different
+        # numbers of values (4316 against 4512). Stage on_start runs inside
+        # that window (Onett chooses which car comes next there), so the
+        # difference is latched into stage state before match frame 1 and no
+        # later seeding can undo it. Rewriting the seed at the top of every
+        # load frame makes each of those frames start from the same value on
+        # both sides whichever frame of the load it is. Both children read
+        # this.
+        os.environ["MELEE_SEED_EACH_LOAD"] = "1"
     ref_proc, port_proc, steps = launch(case, headless, dumping=False,
                                         with_port=True, size=size, route=route)
     sides = accept_sides(server, 2)

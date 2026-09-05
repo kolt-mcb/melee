@@ -406,6 +406,23 @@ void pc_trace_frame(int frame)
                 seed = (u32) strtoul(want, NULL, 16);
             }
         }
+        /* MELEE_SEED_EACH_LOAD=1 sets it again on EVERY frame of the match's
+         * own load (gframe still 0, match scene). Seeding once per scene is
+         * not enough here: the console's load takes 185 frames and this one
+         * takes 123, and generators tick on every one of them, so the two
+         * arrive at match frame 1 having consumed different numbers of values
+         * (4316 against 4512) even though neither is doing anything wrong.
+         * Stage on_start runs inside that window -- Onett picks which car
+         * comes next there -- so the difference is latched into stage state
+         * before the per-scene seeding can help. Rewriting the seed at the top
+         * of every load frame makes each of those frames start from the same
+         * value on both sides, whichever frame of the load it happens to be.
+         * The Dolphin build reads the same variable. */
+        if (want != NULL && getenv("MELEE_SEED_EACH_LOAD") != NULL &&
+            gm_8016AEDC() == 0 && (int) gm_GetCurrentSceneIndex() == 2)
+        {
+            seed = (u32) strtoul(want, NULL, 16);
+        }
         if (want != NULL && !seeded && gm_8016AEDC() == 1) {
             seeded = 1;
             seed = (u32) strtoul(want, NULL, 16);
