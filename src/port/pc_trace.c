@@ -249,6 +249,35 @@ static void pc_trace_ailog(void)
         fprintf(stderr, "[AI-PORT] gframe=%u%s\n",
                 (unsigned) gm_8016AEDC(), line);
     }
+    /* MELEE_FTVEL=<slot> dumps the ground-velocity chain as raw bit patterns:
+     * gr_vel and the two walk attributes it is derived from. gr_vel_new is
+     * gr_vel_old plus an acceleration, an exact addition, so if gr_vel starts
+     * differing while the stick (an integer) agrees, the difference is in the
+     * acceleration -- and its inputs are those attributes. Bit patterns, not
+     * decimals: the whole question is the last bit. */
+    {
+        const char* vs = getenv("MELEE_FTVEL");
+        if (vs != NULL) {
+            int vslot = atoi(vs);
+            StaticPlayer* vsp = Player_GetPtrForSlot(vslot);
+            HSD_GObj* vg = (vsp != NULL) ? vsp->player_entity[0] : NULL;
+            Fighter* vfp = (vg != NULL) ? (Fighter*) vg->user_data : NULL;
+            if (vfp != NULL) {
+                union { float f; unsigned u; } a, b, c;
+                a.f = vfp->gr_vel;
+                b.f = vfp->co_attrs.walk_init_vel;
+                c.f = vfp->co_attrs.walk_max_vel;
+                fprintf(stderr,
+                        "[FTVEL-PORT] gframe=%u p%d grvel=%08x initvel=%08x "
+                        "maxvel=%08x norm=%08x,%08x,%08x floor=%d\n",
+                        (unsigned) gm_8016AEDC(), vslot, a.u, b.u, c.u,
+                        *(const unsigned*) &vfp->coll_data.floor.normal.x,
+                        *(const unsigned*) &vfp->coll_data.floor.normal.y,
+                        *(const unsigned*) &vfp->coll_data.floor.normal.z,
+                        (int) vfp->coll_data.floor.index);
+            }
+        }
+    }
     /* MELEE_AIBUF=<slot> dumps that fighter's CPU command buffer and the
      * position it is executing from. The AI copies a canned script into this
      * buffer and runs it, so two sides can run different AI with every traced
