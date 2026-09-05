@@ -1,3 +1,4 @@
+#include <string.h>
 #include "gmmain_lib.static.h"
 
 #include "placeholder.h"
@@ -1253,8 +1254,37 @@ void gmMainLib_8015F600(int arg0, int arg1)
                                1);
         }
 
+#if BUILD_TARGET_PC
+        /* gmMainLib_803D4A60 is not really an int array: it is a big-endian
+         * byte image of gmm_x1CB0, reinterpreted by this cast. Most fields
+         * are u8, so on x86 they come out of the wrong byte of each word --
+         * item_freq is the first byte of 0x02000000, which is 2 (Normal) on
+         * PowerPC and 0 (Very Low) here. That is why VS matches dropped
+         * items on a ~1698-frame timer instead of the console's ~603, and it
+         * also flipped deflicker off and saved_language to 1.
+         *
+         * Rebuild the byte image explicitly, then byteswap the two fields
+         * that are wider than a byte. */
+        {
+            u8 img[sizeof(struct gmm_x1CB0)];
+            struct gmm_x1CB0 def;
+            unsigned i;
+            for (i = 0; i < sizeof(img) / 4; i++) {
+                u32 w = (u32) gmMainLib_803D4A60[i];
+                img[i * 4 + 0] = (u8) (w >> 24);
+                img[i * 4 + 1] = (u8) (w >> 16);
+                img[i * 4 + 2] = (u8) (w >> 8);
+                img[i * 4 + 3] = (u8) w;
+            }
+            memcpy(&def, img, sizeof(def));
+            def.item_mask = __builtin_bswap64(def.item_mask);
+            def.stage_mask = __builtin_bswap32(def.stage_mask);
+            gmMainLib_804D3EE0->thing.x1CB0 = def;
+        }
+#else
         gmMainLib_804D3EE0->thing.x1CB0 =
             *(struct gmm_x1CB0*) gmMainLib_803D4A60;
+#endif
 
         {
             switch (lbLang_GetLanguageSetting()) {
