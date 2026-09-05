@@ -20,6 +20,8 @@
  * empty stubs are implemented here; PSMTXConcat / PSMTXCopy / PSMTXIdentity
  * have real implementations in undef_stubs.c (note: PSMTXCopy is (src, dst)).
  */
+extern double __frsqrte(double);
+
 #include <dolphin/mtx.h>
 #include <math.h>
 #include <stdint.h>
@@ -84,7 +86,16 @@ void PSVECNormalize(Vec* vec1, Vec* dst)
     if (mag == 0.0f) {
         return;  /* zero-magnitude vector: leave dst unchanged */
     }
-    f32 inv = 1.0f / (f32)sqrt((double)mag);
+    /* The SDK's PSVECNormalize does not compute an exact reciprocal square
+     * root. It takes the hardware's frsqrte estimate and refines it with a
+     * single Newton-Raphson step, which lands a bit or so away from the
+     * correctly-rounded answer. Every surface normal in the stage collision
+     * data goes through here (mplib.c normalises each line's normal), so an
+     * exact reciprocal put every normal ~1 ULP from the console's -- and with
+     * it every velocity projected along a floor. */
+    f32 est = (f32) __frsqrte((double) mag);
+    est = 0.5f * est * (3.0f - est * est * mag);
+    f32 inv = est;
     dst->x = vec1->x * inv;
     dst->y = vec1->y * inv;
     dst->z = vec1->z * inv;
