@@ -245,6 +245,42 @@ static void pc_trace_ailog(void)
     }
 }
 
+/* MELEE_ANIMSCRIPT=<slot> prints that fighter's current animation id, the
+ * command script the animation table points at, and the script's first words.
+ * The live script pointer in CommandInfo is consumed during the frame and is
+ * NULL by the time a frame-end probe runs; the table entry it came from is
+ * static and can be read here. The local Dolphin build prints
+ * [ANIMSCRIPT-REF] under the same variable. */
+static void pc_trace_animscript(void)
+{
+    const char* spec = getenv("MELEE_ANIMSCRIPT");
+    StaticPlayer* sp;
+    HSD_GObj* g;
+    Fighter* fp;
+    const u32* w;
+    int slot, k;
+
+    if (spec == NULL) {
+        return;
+    }
+    slot = atoi(spec);
+    sp = Player_GetPtrForSlot(slot);
+    g = (sp != NULL) ? sp->player_entity[0] : NULL;
+    fp = (g != NULL) ? (Fighter*) g->user_data : NULL;
+    if (fp == NULL || fp->x24 == NULL || fp->anim_id < 0) {
+        return;
+    }
+    w = (const u32*) fp->x24[fp->anim_id].xC;
+    fprintf(stderr, "[ANIMSCRIPT-PORT] gframe=%u p%d motion=%d anim=%d "
+                    "tbl=%p script=%p",
+            (unsigned) gm_8016AEDC(), slot, (int) fp->motion_id,
+            (int) fp->anim_id, (void*) fp->x24, (const void*) w);
+    for (k = 0; w != NULL && k < 10; k++) {
+        fprintf(stderr, " %08x", w[k]);
+    }
+    fprintf(stderr, "\n");
+}
+
 /* MELEE_GRLINK=1 lists the stage GObjs once a frame: p-link 5 is where
  * Ground_801C0FB8 puts them, and Ground::map_id says which stage each one is.
  * This answers whether a scene loaded a stage at all, which the frame trace
@@ -403,6 +439,7 @@ void pc_trace_frame(int frame)
     pc_trace_animid();
     pc_trace_grlink();
     pc_trace_ailog();
+    pc_trace_animscript();
     pc_trace_bones();
     if (out == NULL && sync_fd < 0) {
         return;
