@@ -182,6 +182,39 @@ def score(a, b):
     return sum(sum(p) for p in px) / (3.0 * len(px))
 
 
+# The frame is split into this many tiles for the worst-tile score below.
+WORST_GRID = (8, 6)
+
+
+def worst_tile(a, b, grid=WORST_GRID):
+    """Highest per-tile mean difference, and which tile it was.
+
+    The frame-wide mean is the wrong instrument for a broken object. A
+    fighter is a few per cent of the pixels, so a character rendered wrong
+    from head to foot moves the mean by a fraction of a unit and lands
+    inside a passing score -- Peach's hair drew as a dark faceted mass on
+    Onett while the frame scored 3.8/255 and the suite called it fine.
+    Scoring each tile and reporting the worst one keeps a local fault local:
+    the tile holding the character carries its full error instead of having
+    it averaged away against a correct background.
+    """
+    diff = ImageChops.difference(a, b)
+    w, h = diff.size
+    cols, rows = grid
+    best, where = 0.0, (0, 0)
+    for cy in range(rows):
+        for cx in range(cols):
+            box = (w * cx // cols, h * cy // rows,
+                   w * (cx + 1) // cols, h * (cy + 1) // rows)
+            px = list(diff.crop(box).getdata())
+            if not px:
+                continue
+            v = sum(sum(t) for t in px) / (3.0 * len(px))
+            if v > best:
+                best, where = v, (cx, cy)
+    return best, where
+
+
 def movie_frame(path):
     """Absolute movie-frame identity, or None if this is not movie footage."""
     out = subprocess.run([sys.executable, ALIGN, path], cwd=REPO,
@@ -406,7 +439,10 @@ def check(cases, update):
                 aligned = "  [dump offset %+d%s%s]" % (best_off, edge, flat)
                 if edge:
                     failures.append("%s:%d window edge" % (case["name"], chk))
+            best_ref = dict(refs)[best_off]
+            wt, wxy = worst_tile(port_im, load_img(best_ref))
             results[case["name"]][str(chk)] = round(s, 3)
+            results[case["name"]]["%s.worst" % chk] = round(wt, 3)
             was = baseline.get(case["name"], {}).get(str(chk))
             verdict = ""
             if was is not None:
@@ -416,8 +452,22 @@ def check(cases, update):
                     failures.append("%s:%d regressed" % (case["name"], chk))
                 elif delta < -0.5:
                     verdict = "  improved (was %.3f)" % was
-            print("   frame %-5d score %6.3f/255%s%s" % (chk, s, aligned,
-                                                        verdict))
+            # The worst tile is reported next to the frame mean, and
+            # baselined the same way. A fault confined to one object shows up
+            # here and nowhere else.
+            wwas = baseline.get(case["name"], {}).get("%s.worst" % chk)
+            wverdict = ""
+            if wwas is not None:
+                wdelta = wt - wwas
+                if wdelta > max(1.0, wwas * 0.10):
+                    wverdict = " REGRESSED (was %.3f)" % wwas
+                    failures.append("%s:%d worst-tile regressed" %
+                                    (case["name"], chk))
+                elif wdelta < -1.0:
+                    wverdict = " improved (was %.3f)" % wwas
+            print("   frame %-5d score %6.3f/255%s%s\n"
+                  "                worst tile %6.3f/255 at col %d row %d%s"
+                  % (chk, s, aligned, verdict, wt, wxy[0], wxy[1], wverdict))
     if update:
         merged = dict(baseline)
         merged.update(results)
