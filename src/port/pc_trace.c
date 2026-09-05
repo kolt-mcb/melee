@@ -212,6 +212,39 @@ static void pc_trace_items(void)
     fprintf(stderr, "%s\n", n == 0 ? " (none)" : "");
 }
 
+/* MELEE_AILOG=1 prints each of the first two slots' CPU-AI timer and level
+ * once a frame. Fighter::x1A88 is the AI struct: `level`, and `x7C`, the
+ * free-running timer the AI gates its random decisions on ("every 300th
+ * frame, roll for..."). Two sides whose fighters agree on every traced field
+ * can still be running the AI from different points in that timer, and
+ * nothing else shows it. The local Dolphin build prints [AI-REF] under the
+ * same variable. */
+static void pc_trace_ailog(void)
+{
+    int slot;
+    char line[256];
+    int n = 0;
+    if (getenv("MELEE_AILOG") == NULL) {
+        return;
+    }
+    for (slot = 0; slot < 2; slot++) {
+        StaticPlayer* sp = Player_GetPtrForSlot(slot);
+        HSD_GObj* g = (sp != NULL) ? sp->player_entity[0] : NULL;
+        Fighter* fp = (g != NULL) ? (Fighter*) g->user_data : NULL;
+        if (fp == NULL) {
+            continue;
+        }
+        n += snprintf(line + n, sizeof(line) - n,
+                      " p%d x7C=%d lvl=%d slot_type=%d", slot,
+                      (int) fp->x1A88.x7C, (int) fp->x1A88.level,
+                      (int) sp->slot_type);
+    }
+    if (n > 0) {
+        fprintf(stderr, "[AI-PORT] gframe=%u%s\n",
+                (unsigned) gm_8016AEDC(), line);
+    }
+}
+
 /* MELEE_GRLINK=1 lists the stage GObjs once a frame: p-link 5 is where
  * Ground_801C0FB8 puts them, and Ground::map_id says which stage each one is.
  * This answers whether a scene loaded a stage at all, which the frame trace
@@ -369,6 +402,7 @@ void pc_trace_frame(int frame)
     pc_trace_items();
     pc_trace_animid();
     pc_trace_grlink();
+    pc_trace_ailog();
     pc_trace_bones();
     if (out == NULL && sync_fd < 0) {
         return;
@@ -522,6 +556,66 @@ void pc_trace_frame(int frame)
              (int) gm_GetCurrentSceneIndex() == 3))
         {
             seed = (u32) strtoul(want, NULL, 16);
+        }
+        /* MELEE_FORCE_CPU=<lvl0>,<lvl1> turns the first two player slots into
+         * CPUs of that level, on every frame of the match's own load, exactly
+         * as the local Dolphin build does under the same variable. The port
+         * has MELEE_BOOT_CPU as well, but that only reaches the debug-VS boot;
+         * a run compared from the title screen walks the menus like a person
+         * and arrives with two human slots, so the console turned into CPUs
+         * and this did not -- the two fought different matches from frame 1.
+         * CPU type 4 as well: a CPU with no type set never commits to an
+         * attack. */
+        {
+            const char* cpu = getenv("MELEE_FORCE_CPU");
+            /* From match frame 1 rather than during the load. Setting the
+             * slots to CPU before the match starts changes the entry: the
+             * fighters are still descending at match frame 1 instead of
+             * standing, and the two sides' entries then run out of phase by
+             * the difference in their load lengths (measured: 29 frames, port
+             * ahead). Left human through the load, both sides' entries are
+             * identical to the frame, and the slots become CPUs together at
+             * the first frame either of them is playing. */
+            if (cpu != NULL) {
+                int lvl[2] = { 0, 0 };
+                int slot;
+                sscanf(cpu, "%d,%d", &lvl[0], &lvl[1]);
+                for (slot = 0; slot < 2; slot++) {
+                    StaticPlayer* sp = Player_GetPtrForSlot(slot);
+                    if (lvl[slot] <= 0 || sp == NULL) {
+                        continue;
+                    }
+                    /* Level and type are plain data and are written from the
+                     * first frame: the AI copies them when it initialises,
+                     * and a slot that becomes a CPU without them fights at
+                     * level 1 whatever was asked for. slot_type is what
+                     * actually makes the slot a CPU, and it waits: set during
+                     * the load it changes the entry sequence, leaving the
+                     * fighters still descending at match frame 1 and the two
+                     * sides' entries out of phase by the difference in their
+                     * load lengths. */
+                    sp->cpu_level = (u8) lvl[slot];
+                    sp->cpu_type = 4;
+                    if (gm_8016AEDC() >= 2) {
+                        sp->slot_type = Gm_PKind_Cpu;
+                    }
+                    /* The AI copies the level once, in ftCo_800A101C, and
+                     * here that runs before this hook has written the slot
+                     * even once -- the fighter then fights at level 1 whatever
+                     * was asked for, while the console, whose longer load
+                     * gives its own hook several frames first, gets the real
+                     * level. Correct the live AI struct too, up to the point
+                     * the match starts. */
+                    if (gm_8016AEDC() <= 2) {
+                        HSD_GObj* g = sp->player_entity[0];
+                        Fighter* fp = (g != NULL) ? (Fighter*) g->user_data
+                                                  : NULL;
+                        if (fp != NULL) {
+                            fp->x1A88.level = lvl[slot];
+                        }
+                    }
+                }
+            }
         }
         if (want != NULL && !seeded && gm_8016AEDC() == 1) {
             seeded = 1;
