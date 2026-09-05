@@ -8890,9 +8890,13 @@ void hsd_8039EE24(u32 mask)
         HSD_Generator* g2 = gen;
         fprintf(stderr, "[GENLIST] gframe=%u", (unsigned) gm_8016AEDC());
         while (g2 != NULL) {
-            fprintf(stderr, " [bank=%d id=%d kind=%08x genLife=%d life=%d]",
+            fprintf(stderr,
+                    " [bank=%d id=%d kind=%08x genLife=%d life=%d "
+                    "count=%08x random=%08x]",
                     (int) g2->bank, (int) g2->idnum, (unsigned) g2->kind,
-                    (int) g2->genLife, (int) g2->life);
+                    (int) g2->genLife, (int) g2->life,
+                    *(const unsigned*) &g2->count,
+                    *(const unsigned*) &g2->random);
             g2 = g2->next;
         }
         fprintf(stderr, "\n");
