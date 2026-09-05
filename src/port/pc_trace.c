@@ -38,6 +38,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <melee/gr/types.h>
 #include <melee/ft/fighter.h>
 #include <melee/ft/types.h>
 #include <melee/gm/gm_16AE.h>
@@ -211,6 +212,30 @@ static void pc_trace_items(void)
     fprintf(stderr, "%s\n", n == 0 ? " (none)" : "");
 }
 
+/* MELEE_GRLINK=1 lists the stage GObjs once a frame: p-link 5 is where
+ * Ground_801C0FB8 puts them, and Ground::map_id says which stage each one is.
+ * This answers whether a scene loaded a stage at all, which the frame trace
+ * cannot see. The local Dolphin build prints [GRLINK-REF] under the same
+ * variable. */
+static void pc_trace_grlink(void)
+{
+    HSD_GObj* gobj;
+    int n = 0;
+    if (getenv("MELEE_GRLINK") == NULL || HSD_GObj_Entities == NULL) {
+        return;
+    }
+    fprintf(stderr, "[GRLINK-PORT] gframe=%u scene=%d",
+            (unsigned) gm_8016AEDC(), (int) gm_GetCurrentSceneIndex());
+    for (gobj = ((HSD_GObj**) HSD_GObj_Entities)[5]; gobj != NULL && n < 16;
+         gobj = gobj->next, n++)
+    {
+        Ground* gp = (Ground*) gobj->user_data;
+        fprintf(stderr, " [gobj=%p map=%d]", (void*) gobj,
+                gp != NULL ? (int) gp->map_id : -1);
+    }
+    fprintf(stderr, "%s\n", n == 0 ? " (none)" : "");
+}
+
 /* MELEE_ANIMID=<slot> prints that player's animation id and the frame window
  * of the first fighter part still animating. The wait animation is re-picked
  * at random when the parts stop animating, so when the port and the console
@@ -343,6 +368,7 @@ void pc_trace_frame(int frame)
 
     pc_trace_items();
     pc_trace_animid();
+    pc_trace_grlink();
     pc_trace_bones();
     if (out == NULL && sync_fd < 0) {
         return;
