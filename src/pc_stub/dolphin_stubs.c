@@ -212,7 +212,81 @@ __attribute__((weak)) void HSD_Free(void* ptr) { free(ptr); }
  * defining it as f32 here mismatched every caller's ABI. Callers refine the
  * estimate with Newton steps, so the exact value is fine. frsqrte(0) is
  * +inf and negative inputs give NaN on the real hardware. */
-double __frsqrte(double x) { return x > 0 ? 1.0 / sqrt(x) : (x == 0 ? INFINITY : NAN); }
+/* PowerPC's frsqrte is not 1/sqrt(x). It is a deliberately coarse estimate --
+ * a 32-entry piecewise-linear table over the mantissa, about five bits of
+ * precision -- which the game then refines with Newton-Raphson (sqrtf_accurate,
+ * lb_sqrtf and the thirty-odd __frsqrte sites). Starting that refinement from
+ * an exact value converges to a different last bit than starting it from the
+ * hardware's estimate, so every square root in the game came out one or two
+ * ULP away from the console's. That is invisible while nothing compares
+ * against a threshold and decisive the moment something does: the CPU AI's
+ * attack decision at match frame 104 turns on a distance, and the two sides
+ * had already drifted apart in the low bits of velocity by frame 38.
+ *
+ * The table and the arithmetic are the 750CL's, as implemented in Dolphin's
+ * Common/FloatUtils.cpp (ApproximateReciprocalSquareRoot). */
+static const struct {
+    int base;
+    int dec;
+} pc_frsqrte_tbl[32] = {
+    { 0x1a7e800, -0x568 }, { 0x17cb800, -0x4f3 }, { 0x1552800, -0x48d },
+    { 0x130c000, -0x435 }, { 0x10f2000, -0x3e7 }, { 0x0eff000, -0x3a2 },
+    { 0x0d2e000, -0x365 }, { 0x0b7c000, -0x32e }, { 0x09e5000, -0x2fc },
+    { 0x0867000, -0x2d0 }, { 0x06ff000, -0x2a8 }, { 0x05ab800, -0x283 },
+    { 0x046a000, -0x261 }, { 0x0339800, -0x243 }, { 0x0218800, -0x226 },
+    { 0x0105800, -0x20b }, { 0x3ffa000, -0x7a4 }, { 0x3c29000, -0x700 },
+    { 0x38aa000, -0x670 }, { 0x3572000, -0x5f2 }, { 0x3279000, -0x584 },
+    { 0x2fb7000, -0x524 }, { 0x2d26000, -0x4cc }, { 0x2ac0000, -0x47e },
+    { 0x2881000, -0x43a }, { 0x2665000, -0x3fa }, { 0x2468000, -0x3c2 },
+    { 0x2287000, -0x38e }, { 0x20c1000, -0x35e }, { 0x1f12000, -0x332 },
+    { 0x1d79000, -0x30a }, { 0x1bf4000, -0x2e6 },
+};
+
+double __frsqrte(double x)
+{
+    union {
+        double d;
+        int64_t i;
+    } u;
+    int64_t mantissa, sign, exponent, exponent_lsb;
+    int idx;
+
+    u.d = x;
+    mantissa = u.i & ((1LL << 52) - 1);
+    sign = u.i & (1LL << 63);
+    exponent = u.i & (0x7FFLL << 52);
+
+    if (mantissa == 0 && exponent == 0) {
+        return sign ? -INFINITY : INFINITY;
+    }
+    if (exponent == (0x7FFLL << 52)) {
+        if (mantissa == 0) {
+            return sign ? NAN : 0.0;
+        }
+        return NAN;
+    }
+    if (sign) {
+        return NAN;
+    }
+    if (exponent == 0) {
+        do {
+            exponent -= 1LL << 52;
+            mantissa <<= 1;
+        } while (!(mantissa & (1LL << 52)));
+        mantissa &= (1LL << 52) - 1;
+        exponent += 1LL << 52;
+    }
+
+    exponent_lsb = exponent & (1LL << 52);
+    exponent = ((0x3FFLL << 52) - ((exponent - (0x3FELL << 52)) / 2)) &
+               (0x7FFLL << 52);
+    u.i = sign | exponent;
+    idx = (int) ((exponent_lsb | mantissa) >> 37);
+    u.i |= (int64_t) (pc_frsqrte_tbl[idx / 2048].base +
+                      pc_frsqrte_tbl[idx / 2048].dec * (idx % 2048))
+           << 26;
+    return u.d;
+}
 
 /* Camera bounds stubs (weak - overridden by gr/stage.c) */
 __attribute__((weak)) float Stage_GetCamBoundsLeftOffset(void) { return 0; }
