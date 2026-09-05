@@ -187,12 +187,24 @@ static void pc_trace_items(void)
         if (ip != NULL) {
             HitCapsule* h = &ip->x5D4_hitboxes[0].hit;
             fprintf(stderr,
-                    " %d@(%.1f,%.1f,z%.2f)s%d[hb st=%d dmg=%.0f scl=%.2f "
+                    " %d@(%.1f,%.1f,z%.2f)s%d v(%.4f,%.4f)ln%u f%02x "
+                    "e%x p%x fl%d/%x lw%d rw%d a58=%.4f a5c=%.4f[hb st=%d dmg=%.0f scl=%.2f "
                     "seg=(%.1f,%.1f,z%.2f)-(%.1f,%.1f,z%.2f)]",
                     (int) ip->kind, ip->pos.x, ip->pos.y, ip->pos.z,
-                    (int) ip->msid, (int) h->state, (double) h->damage,
-                    (double) h->scale, h->x4C.x, h->x4C.y, h->x4C.z, h->x58.x,
-                    h->x58.y, h->x58.z);
+                    (int) ip->msid, ip->x40_vel.x, ip->x40_vel.y,
+                    (unsigned) ip->xD50_landNum,
+                    (unsigned) *((u8*) ip + 0xDCF),
+                    (unsigned) ip->x378_itemColl.env_flags,
+                    (unsigned) ip->x378_itemColl.prev_env_flags,
+                    ip->x378_itemColl.floor.index,
+                    (unsigned) ip->x378_itemColl.floor.flags,
+                    ip->x378_itemColl.left_facing_wall.index,
+                    ip->x378_itemColl.right_facing_wall.index,
+                    ip->xCC_item_attr != NULL ? ip->xCC_item_attr->x58 : -1.0f,
+                    ip->xCC_item_attr != NULL ? ip->xCC_item_attr->x5c : -1.0f,
+                    (int) h->state,
+                    (double) h->damage, (double) h->scale, h->x4C.x, h->x4C.y,
+                    h->x4C.z, h->x58.x, h->x58.y, h->x58.z);
         }
     }
     fprintf(stderr, "%s\n", n == 0 ? " (none)" : "");
