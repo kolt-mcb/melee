@@ -1,3 +1,9 @@
+#if BUILD_TARGET_PC
+/* The PC build excludes MSL/math.h (GCC type conflicts), so the fixed-width
+ * names come from the platform header. */
+#include <platform.h>
+#endif
+
 #include "trigf.h"
 
 #include "math.h"
@@ -21,7 +27,17 @@ void __sinit_trigf_c(void)
     __four_over_pi_m1[3] = tmp_float[3];
 }
 
+#if BUILD_TARGET_PC
+/* SECTION_CTORS is the GameCube toolchain's static-initialiser list, and
+ * nothing walks it here -- __four_over_pi_m1 would stay zero and every sine
+ * would be wrong. GCC's constructor attribute runs it at load instead. */
+__attribute__((constructor)) static void pc_sinit_trigf(void)
+{
+    __sinit_trigf_c();
+}
+#else
 SECTION_CTORS void* const __sinit_trigf_c_reference = __sinit_trigf_c;
+#endif
 
 f32 sinf(f32 x)
 {
