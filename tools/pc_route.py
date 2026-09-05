@@ -74,16 +74,22 @@ def load_grid(path=ICONS_SRC):
     for name, fields in re.findall(r"\{\s*//\s*([^\n]*)\n(.*?)\}", body, re.S):
         toks = [t.strip() for t in fields.split(",") if t.strip()]
         kinds = [t for t in toks if t.startswith("CKIND_")]
-        bnds = [t for t in toks if t.startswith("ICONBNDS_")]
         rows = [t for t in toks if t.startswith("ICONROWHT_")]
+        # Pichu and Roy give one bound as a bare float (-23.4, 18.6) where
+        # every other entry names a column macro -- the bottom row is inset,
+        # so those cells do not start on a column edge. Take a literal where
+        # there is one rather than skipping the character.
+        bnds = [defs[t] if t.startswith("ICONBNDS_") else
+                (float(t) if re.fullmatch(r"-?\d+(\.\d+)?F?", t) else None)
+                for t in toks
+                if t.startswith("ICONBNDS_") or
+                re.fullmatch(r"-?\d+\.\d+F?", t)]
+        bnds = [b for b in bnds if b is not None]
         if not kinds or len(bnds) != 2 or len(rows) != 2:
-            # Two entries spell a bound differently; they are reported rather
-            # than guessed at, because a guessed cell picks a wrong character
-            # silently.
             grid.setdefault("_unparsed", []).append(
                 (name.strip(" -"), kinds[0][6:] if kinds else "?"))
             continue
-        l, r = defs[bnds[0]], defs[bnds[1]]
+        l, r = bnds[0], bnds[1]
         u, d = defs[rows[0]], defs[rows[1]]
         grid[kinds[0][6:]] = ((l + r) / 2.0, (u + d) / 2.0)
     return grid
