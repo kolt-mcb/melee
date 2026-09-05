@@ -608,7 +608,8 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
                 if side.row is None:
                     if not side.read_frame():
                         print("   %s stopped" % side.name)
-                        return finish(first, compared, time.time() - (t0 or time.time()))
+                        return finish(first, compared, time.time() - (t0 or time.time()),
+                                      frames)
                     if dump_fp is not None:
                         dump_fp.write("%s %s\n" % (
                             side.name[0].upper(),
@@ -792,14 +793,14 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
                         input("   press return to release them...")
                     except EOFError:
                         pass
-                    return finish(first, compared, time.time() - t0)
+                    return finish(first, compared, time.time() - t0, frames)
             if compared % 120 == 0:
                 print("   match frame %-5d  %d compared, %d fields differ  "
                       "(%.1f fps)"
                       % (pg, compared, len(first),
                          compared / max(time.time() - t0, 1e-6)))
             if frames and compared >= frames:
-                return finish(first, compared, time.time() - t0)
+                return finish(first, compared, time.time() - t0, frames)
             port.release()
             ref.release()
     finally:
@@ -861,9 +862,20 @@ def compare_row(a, b, columns, tol, ignore, first, pending_skew=None,
     return new
 
 
-def finish(first, compared, secs):
+def finish(first, compared, secs, wanted=0):
     print("\n   %d frames compared in %.0fs (%.1f fps)"
           % (compared, secs, compared / secs if secs else 0))
+    # A run that ended early compares nothing and finds nothing, which is not
+    # the same as agreeing. Saying IDENTICAL there is the worst possible
+    # failure mode for this tool: a side that died on launch reported a pass.
+    if compared == 0:
+        print("   NO FRAMES COMPARED -- a side stopped before the barrier "
+              "engaged; this is a failure, not a match")
+        return 1
+    if wanted and compared < wanted:
+        print("   STOPPED EARLY after %d of %d frames -- treating as a "
+              "failure" % (compared, wanted))
+        return 1
     if not first:
         print("   IDENTICAL on every compared frame")
         return 0
