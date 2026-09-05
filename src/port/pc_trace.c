@@ -38,6 +38,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <melee/ft/fighter.h>
 #include <melee/ft/types.h>
 #include <melee/gm/gm_16AE.h>
 #include <melee/gm/gm_1A3F.h>
@@ -210,6 +211,57 @@ static void pc_trace_items(void)
     fprintf(stderr, "%s\n", n == 0 ? " (none)" : "");
 }
 
+/* MELEE_ANIMID=<slot> prints that player's animation id and the frame window
+ * of the first fighter part still animating. The wait animation is re-picked
+ * at random when the parts stop animating, so when the port and the console
+ * part company on an idle fighter, this says whether they picked different
+ * animations or the same animation with different lengths. The local Dolphin
+ * build prints [ANIMID-REF] under the same variable. */
+static void pc_trace_animid(void)
+{
+    const char* spec = getenv("MELEE_ANIMID");
+    StaticPlayer* sp;
+    HSD_GObj* g;
+    Fighter* fp;
+    int slot, i, n;
+
+    if (spec == NULL) {
+        return;
+    }
+    slot = atoi(spec);
+    sp = Player_GetPtrForSlot(slot);
+    g = (sp != NULL) ? sp->player_entity[0] : NULL;
+    fp = (g != NULL) ? (Fighter*) g->user_data : NULL;
+    if (fp == NULL) {
+        return;
+    }
+    n = ftPartsTable[fp->kind]->parts_num;
+    for (i = 0; i < n; i++) {
+        HSD_JObj* j = (fp->x8A4_animBlendFrames == 0.0f)
+                          ? fp->parts[i].joint
+                          : fp->parts[i].x4_jobj2;
+        HSD_AObj* a = (j != NULL) ? j->aobj : NULL;
+        if (!fp->parts[i].flags_b1 || fp->parts[i].flags_b0 ||
+            fp->parts[i].flags_b5 || a == NULL)
+        {
+            continue;
+        }
+        fprintf(stderr,
+                "[ANIMID-PORT] gframe=%u p%d anim=%d motion=%d f=%.1f part=%d "
+                "cur=%.1f end=%.1f rew=%.1f rate=%.2f fl=%08x\n",
+                (unsigned) gm_8016AEDC(), slot, (int) fp->anim_id,
+                (int) fp->motion_id, (double) fp->cur_anim_frame, i,
+                (double) a->curr_frame, (double) a->end_frame,
+                (double) a->rewind_frame, (double) a->framerate,
+                (unsigned) a->flags);
+        return;
+    }
+    fprintf(stderr,
+            "[ANIMID-PORT] gframe=%u p%d anim=%d motion=%d f=%.1f part=none\n",
+            (unsigned) gm_8016AEDC(), slot, (int) fp->anim_id,
+            (int) fp->motion_id, (double) fp->cur_anim_frame);
+}
+
 /* MELEE_BONES=<player>:<match frame> dumps every bone of that fighter once, as
  * an offset from the fighter's own position. Same format as the local Dolphin
  * build prints under the same variable, so the two can be diffed. Hurtboxes
@@ -290,6 +342,7 @@ void pc_trace_frame(int frame)
     }
 
     pc_trace_items();
+    pc_trace_animid();
     pc_trace_bones();
     if (out == NULL && sync_fd < 0) {
         return;
