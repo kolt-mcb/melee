@@ -248,6 +248,34 @@ static void pc_trace_ailog(void)
         fprintf(stderr, "[AI-PORT] gframe=%u%s\n",
                 (unsigned) gm_8016AEDC(), line);
     }
+    /* MELEE_AIBUF=<slot> dumps that fighter's CPU command buffer and the
+     * position it is executing from. The AI copies a canned script into this
+     * buffer and runs it, so two sides can run different AI with every traced
+     * field agreeing -- and the buffer says whether they enqueued different
+     * commands or are at different offsets in the same ones. */
+    {
+        const char* bs = getenv("MELEE_AIBUF");
+        if (bs != NULL) {
+            int bslot = atoi(bs);
+            StaticPlayer* bsp = Player_GetPtrForSlot(bslot);
+            HSD_GObj* bg = (bsp != NULL) ? bsp->player_entity[0] : NULL;
+            Fighter* bfp = (bg != NULL) ? (Fighter*) bg->user_data : NULL;
+            if (bfp != NULL) {
+                int q;
+                fprintf(stderr, "[AIBUF-PORT] gframe=%u p%d dur=%u off=%d",
+                        (unsigned) gm_8016AEDC(), bslot,
+                        (unsigned) bfp->x1A88.command_duration,
+                        bfp->x1A88.csP != NULL
+                            ? (int) (bfp->x1A88.csP - bfp->x1A88.buffer)
+                            : -1);
+                for (q = 0; q < 24; q++) {
+                    fprintf(stderr, " %02x",
+                            (unsigned) (u8) bfp->x1A88.buffer[q]);
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+    }
 }
 
 /* MELEE_ANIMSCRIPT=<slot> prints that fighter's current animation id, the

@@ -509,6 +509,24 @@ void Fighter_LoadCommonData(void)
                                     cnt++;
                                 }
                                 fprintf(stderr, " %d", cnt);
+                                /* MELEE_CPUTBL=<kind> also dumps that
+                                 * character's entries: the pick is a weighted
+                                 * random over them, so a wrong weight changes
+                                 * the choice with the same draw and equal
+                                 * counts prove nothing. */
+                                if (atoi(getenv("MELEE_CPUTBL")) == k2 &&
+                                    e != NULL)
+                                {
+                                    int q;
+                                    for (q = 0; q < cnt; q++) {
+                                        float w;
+                                        memcpy(&w, &e[q * 9 + 6], 4);
+                                        fprintf(stderr, "\n    [%d] cmd=%u "
+                                                "w=%.4f x04=%u",
+                                                q, e[q * 9], (double) w,
+                                                e[q * 9 + 1]);
+                                    }
+                                }
                             }
                             fprintf(stderr, "\n");
                         }
