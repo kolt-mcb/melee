@@ -1474,6 +1474,14 @@ void efAsync_Spawn(HSD_GObj* gobj, void* queue_head, u32 spawn_kind,
     PAD_STACK(0x4);
 
     va_start(vlist, jobj);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_EFQ") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[EFQ] gframe=%u kind=%u gfx=0x%x\n",
+                (unsigned) gm_8016AEDC(), (unsigned) spawn_kind,
+                (unsigned) gfx_id);
+    }
+#endif
     queued = HSD_ObjAlloc(&efAsync_AllocData);
     queued->spawn_kind = spawn_kind;
     queued->gfx_id = gfx_id;

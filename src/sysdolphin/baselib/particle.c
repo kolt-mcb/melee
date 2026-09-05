@@ -8987,6 +8987,18 @@ HSD_Generator* hsd_8039F05C(s32 linkNo, s32 bank, s32 idx)
     }
 
     cmdListArr = psCmdListArray[bank];
+#if BUILD_TARGET_PC
+    /* MELEE_PSNEW=1 names every generator this side creates: the command-list
+     * index is the effect's identity, unlike the idnum the generator list
+     * carries. The local Dolphin build gets the same from MELEE_CODE_BP at
+     * 8039F05C, whose r4/r5 are bank and idx. */
+    if (getenv("MELEE_PSNEW") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[PSNEW] gframe=%u link=%d bank=%d idx=%d ret=%p\n",
+                (unsigned) gm_8016AEDC(), (int) linkNo, (int) bank, (int) idx,
+                __builtin_return_address(0));
+    }
+#endif
     ofs = idx * 4;
 #if BUILD_TARGET_PC
     /* The console tests the slot by stepping a s32* four bytes at a time,
