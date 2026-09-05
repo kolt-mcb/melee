@@ -862,8 +862,81 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         }
     }
 
+    /* +0x2C dynamics -- the fighter's dynamic-bone chains. Peach's ponytail
+     * and the eight panels of her skirt, DK's tie, Samus's hair: bones the
+     * animation does not drive, moved each frame by lb_00F9's spring
+     * simulation instead.
+     *
+     * ftDynamics is {dynamicsNum, ArticleDynamicBones*, ...}, and
+     * ArticleDynamicBones is an array of BoneDynamicsDesc -- {bone_id,
+     * {DynamicsData* data, count, Vec3 pos}}, 0x18 bytes each in the file.
+     * `data` points at `count` records of 0x3C bytes of floats, which
+     * lb_80011710 copies into the live chain. Same shape as an item's
+     * dynamics, which pc_itconv.c already converts; only the outer struct
+     * differs.
+     *
+     * Left NULL this whole time, ftCo_8009CF84 set dynamics_num to 0 and no
+     * chain was ever driven: those bones stayed where the animation left
+     * them while the body moved around them, which draws Peach's hair as a
+     * dark faceted mass jutting from her head instead of a ponytail that
+     * hangs, and DK's tie as a rigid board.
+     *
+     * x4/x8/x10 stay NULL. x10 is the per-animation FigaTree table; both of
+     * its readers already take a "no tree" path when it is absent. */
+    off = pc_be32(*(const u32*) (raw + 0x2C));
+    if (off != 0 && off + 8u <= len) {
+        const u8* d = base + off;
+        int dnum = (int) pc_be32(*(const u32*) d);
+        u32 boff = pc_be32(*(const u32*) (d + 4));
+        if (dnum > 0 && dnum <= Ft_Dynamics_NumMax && boff != 0 &&
+            boff + (u32) dnum * 0x18u <= len)
+        {
+            ftDynamics* dy = pc_lowmem_alloc(sizeof(*dy));
+            ArticleDynamicBones* ab = pc_lowmem_alloc(sizeof(*ab));
+            if (dy != NULL && ab != NULL) {
+                int i;
+                for (i = 0; i < dnum; i++) {
+                    const u8* e = base + boff + (u32) i * 0x18u;
+                    BoneDynamicsDesc* b = &ab->array[i];
+                    u32 ioff = pc_be32(*(const u32*) (e + 4));
+                    u32 icount = pc_be32(*(const u32*) (e + 8));
+                    u32* pos = (u32*) &b->dyn_desc.pos;
+                    int w;
+                    b->bone_id = (int) pc_be32(*(const u32*) e);
+                    b->dyn_desc.count = icount;
+                    for (w = 0; w < 3; w++) {
+                        pos[w] = pc_be32(*(const u32*) (e + 0xC + w * 4));
+                    }
+                    if (ioff != 0 && icount <= 64 &&
+                        ioff + icount * 0x3Cu <= len)
+                    {
+                        u32* inner = pc_lowmem_alloc(icount * 0x3Cu);
+                        if (inner != NULL) {
+                            const u32* si = (const u32*) (base + ioff);
+                            u32 nw = icount * 0x3Cu / 4u;
+                            for (w = 0; w < (int) nw; w++) {
+                                inner[w] = pc_be32(si[w]);
+                            }
+                            b->dyn_desc.data = (struct DynamicsData*) inner;
+                        }
+                    }
+                }
+                dy->dynamicsNum = dnum;
+                dy->ftDynamicBones = ab;
+                out->x2C = dy;
+                if (pc_ftconv_trace()) {
+                    fprintf(stderr,
+                            "[FTCONV] dynamics: %d chains, [0] bone=%d "
+                            "count=%u\n",
+                            dnum, (int) ab->array[0].bone_id,
+                            (unsigned) ab->array[0].dyn_desc.count);
+                }
+            }
+        }
+    }
+
     /* Deliberately left NULL until something needs them:
-     * x1C, x20, x24, x28, x2C(dynamics), x34, x38, x44, x58, x5C. */
+     * x1C, x20, x24, x28, x34, x38, x44, x58, x5C. */
 
     if (pc_ftconv_trace()) {
         fprintf(stderr,

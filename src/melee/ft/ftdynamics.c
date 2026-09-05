@@ -559,7 +559,29 @@ void ftCo_8009E4A8(Fighter* fp)
     int i;
 
     if (fp->x594_b4) {
-        FigaTree** tree = fp->ft_data->x2C->x10[fp->x28[fp->anim_id][1]];
+        FigaTree** tree;
+#if BUILD_TARGET_PC
+        /* PC port: pc_conv_ftData fills in x2C's bone chains but leaves x10,
+         * the per-animation FigaTree table, NULL. ftCo_8009DB50's reader of
+         * x10 answers a NULL table by driving every chain with no tree, and
+         * so must this one -- returning instead would leave the chains
+         * un-driven, which is the state that drew Peach's hair wrong in the
+         * first place. */
+        if (!pc_ptr_sane(fp->ft_data->x2C) ||
+            fp->ft_data->x2C->x10 == NULL)
+        {
+            for (i = 0; i < fp->dynamics_num; i++) {
+                ftCo_8009CB40(fp, i, 1, NULL);
+                if (fp->x590 != NULL) {
+                    ftAnim_8006EED4(
+                        fp, fp->ft_data->x2C->ftDynamicBones->array[i].bone_id,
+                        fp->x590, frame, speed);
+                }
+            }
+            return;
+        }
+#endif
+        tree = fp->ft_data->x2C->x10[fp->x28[fp->anim_id][1]];
         if (tree != NULL) {
             for (i = 0; i < fp->dynamics_num; i++) {
                 ftCo_8009CB40(fp, i, 1, tree[i]);
