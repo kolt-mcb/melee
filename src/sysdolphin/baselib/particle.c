@@ -5172,12 +5172,31 @@ void psInitDataBankLoad(int bank, int* cmdBank, int* texBank, u32* ref,
     {
         u16 version = ps_be16(cb);
         u32 count;
+        u32 base_idx;
+        u32 total;
+        HSD_PSCmdList** prev;
+        int prev_n;
         const u8* table;
         HSD_PSCmdList** lists;
         if (version == 0) {
+            base_idx = 0;
             count = ps_be32(cb + 4);
             table = cb + 8;
         } else if (version >= 0x40 && version <= 0x43) {
+            /* A version-0x40 archive does not own the whole bank: it declares
+             * the GLOBAL index its lists start at (cb+4) and how many it
+             * brings (cb+8). psInitDataBanks registers it as
+             *     psNumCmdList[bank]   = cb[2] + cb[1]
+             *     psCmdListArray[bank] = (cb + 3) - cb[1]
+             * i.e. the array is biased so lists[base_idx + k] finds entry k,
+             * and everything an earlier archive put below base_idx stays
+             * reachable. Ignoring the bias put each archive's lists at 0..N-1
+             * and let the next load overwrite them, so bank 0 ended up holding
+             * only the last archive: hsd_8039F05C(0, 0, 445) and (0, 0, 449)
+             * found NULL entries and spawned nothing, and with 445 absent its
+             * children 446/447 (80 generators each per match load) never
+             * existed either. */
+            base_idx = ps_be32(cb + 4);
             count = ps_be32(cb + 8);
             table = cb + 12;
         } else {
@@ -5187,7 +5206,20 @@ void psInitDataBankLoad(int bank, int* cmdBank, int* texBank, u32* ref,
         if (count > 4096) {
             count = 0;
         }
-        lists = calloc(count + 1, sizeof(HSD_PSCmdList*));
+        if (base_idx > 65536) {
+            base_idx = 0;
+        }
+        total = base_idx + count;
+        prev = psCmdListArray[bank];
+        prev_n = psNumCmdList[bank];
+        lists = calloc(total + 1, sizeof(HSD_PSCmdList*));
+        /* keep whatever a previous archive registered below base_idx */
+        if (prev != NULL && prev_n > 0) {
+            int keep = prev_n < (int) total ? prev_n : (int) total;
+            for (i = 0; i < keep; i++) {
+                lists[i] = prev[i];
+            }
+        }
         for (i = 0; i < (int) count; i++) {
             u32 off = ps_be32(table + i * 4);
             HSD_PSCmdList* cl = off ? (HSD_PSCmdList*) (cb + off) : NULL;
@@ -5205,11 +5237,12 @@ void psInitDataBankLoad(int bank, int* cmdBank, int* texBank, u32* ref,
                 /* the console's phase-2 fix of the kind bits */
                 cl->kind = (cl->kind & 0xF1FFFFFF) | 0x08000000;
             }
-            lists[i] = cl;
+            lists[base_idx + i] = cl;
         }
-        lists[count] = NULL;
-        psNumCmdList[bank] = (int) count;
+        lists[total] = NULL;
+        psNumCmdList[bank] = (int) total;
         psCmdListArray[bank] = lists;
+        free(prev);
     }
     (void) psInitDataBankLoad_gcn;
     (void) psInitDataBankLocate_gcn;
@@ -8951,9 +8984,21 @@ HSD_Generator* hsd_8039F05C(s32 linkNo, s32 bank, s32 idx)
 
     cmdListArr = psCmdListArray[bank];
     ofs = idx * 4;
+#if BUILD_TARGET_PC
+    /* The console tests the slot by stepping a s32* four bytes at a time,
+     * because its command-list array is an array of 4-byte pointers. Here the
+     * entries are 8 bytes, so that walk lands half-way into a different slot
+     * and reported "empty" for perfectly good lists -- gfx 445 and 449 among
+     * them, which is why the common effect bank looked half missing. The
+     * fetch below already indexes correctly; only the test was wrong. */
+    if (cmdListArr == NULL || cmdListArr[idx] == NULL) {
+        return NULL;
+    }
+#else
     if ((u32) * ((s32*) cmdListArr + idx) == 0) {
         return NULL;
     }
+#endif
 
     gen = hsd_8039D9C8();
     if (gen != NULL) {
