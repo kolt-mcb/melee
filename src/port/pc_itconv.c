@@ -623,6 +623,35 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         art->x4_specialAttributes = g;
         break;
     }
+    case It_Kind_Foods: {
+        /* Food is an ARRAY of variants, not a single struct: itfoods.c reads
+         * attr[0].x0 as the variant count, picks one at random and hands
+         * attr[i].x4 to it_80273318 as the model's joint tree. The file
+         * entries are 16 bytes ({s32, offset, s32, s32}); the host struct is
+         * 24 once the pointer widens, so a flat swap gets both the stride
+         * and the pointer wrong -- the joint came out NULL and the item died
+         * in it_2725_JObjSetTranslateInline's "jobj" assert the first time a
+         * match dropped food. */
+        u32 n = be32(r);
+        itFoodsAttributes* f;
+        u32 i;
+        if (n == 0 || n > 64 || spec_off + n * 16 > a->len) {
+            return;
+        }
+        f = zalloc(sizeof(*f) * n);
+        if (f == NULL) {
+            return;
+        }
+        for (i = 0; i < n; i++) {
+            const u8* e = r + i * 16;
+            f[i].x0 = (s32) be32(e);
+            f[i].x4 = conv_joint_at(a, be32(e + 4));
+            f[i].x8 = (s32) be32(e + 8);
+            f[i].xC = (s32) be32(e + 12);
+        }
+        art->x4_specialAttributes = f;
+        break;
+    }
     case It_Kind_Link_HShot:
     case It_Kind_CLink_HShot: {
         itLinkHookshotAttributes* h = zalloc(sizeof(*h));
