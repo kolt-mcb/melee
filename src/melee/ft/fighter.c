@@ -519,8 +519,10 @@ void Fighter_LoadCommonData(void)
         Fighter_804D6548 = (void*)pc_ptr_arena;
         if (ftPartsTable == NULL) ftPartsTable = (void*)pc_ptr_arena;
         if (Fighter_804D6540 == NULL) Fighter_804D6540 = (void*)pc_ptr_arena;
-        Fighter_804D653C = (void*)pc_ptr_arena;
-        Fighter_804D6538 = (void*)pc_ptr_arena;
+        /* Only if the conversion above did not manage them -- the arena fill
+         * runs after it, and an unguarded assignment here silently undid it. */
+        if (Fighter_804D653C == NULL) Fighter_804D653C = (void*)pc_ptr_arena;
+        if (Fighter_804D6538 == NULL) Fighter_804D6538 = (void*)pc_ptr_arena;
         Fighter_804D6534 = (void*)pc_ptr_arena;
         Fighter_804D6530 = (void*)pc_ptr_arena;
         Fighter_804D652C = (void*)pc_ptr_arena;

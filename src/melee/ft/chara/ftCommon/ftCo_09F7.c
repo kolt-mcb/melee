@@ -86,6 +86,14 @@ block_2:
         goto block_5;
     }
 
+#if BUILD_TARGET_PC
+    /* Converted to a real pointer now, but a fighter whose data has no such
+     * list still reads NULL here, and this is reached from the colour overlay
+     * scripts for every character. */
+    if (fp->ft_data->x54 == NULL) {
+        return;
+    }
+#endif
     part = ((int*) fp->ft_data->x54)[fp->x2220_b0];
 
     fp->x2220_b0++;

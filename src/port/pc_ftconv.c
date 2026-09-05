@@ -826,8 +826,31 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         }
     }
 
-    /* +0x54 is a plain int, not a pointer. */
-    out->x54 = (int) pc_be32(*(const u32*) (raw + 0x54));
+    /* +0x54 looks like a plain int and is declared one, but it holds a
+     * pointer: ftCo_8009F834 casts it to int* and indexes it for the rotating
+     * bone list a GFX command with bone 0x8D uses. Storing the raw file offset
+     * here meant that cast produced a small integer, and the first colour
+     * overlay animation to ask for bone 0x8D dereferenced it. */
+    {
+        u32 off54 = pc_be32(*(const u32*) (raw + 0x54));
+        /* Its five entries are big-endian ints and are used as indices into
+         * fp->parts, so they need swapping as well as the rebase -- read raw
+         * they are hundreds of millions and index off the end of the array.
+         * ftCo_8009F834 cycles fp->x2220_b0 over 0..4, so five is the count. */
+        if (off54 != 0 && off54 + 5 * 4 <= len) {
+            int* list = pc_lowmem_alloc(sizeof(int) * 5);
+            if (list != NULL) {
+                const u32* src54 = (const u32*) (base + off54);
+                int i54;
+                for (i54 = 0; i54 < 5; i54++) {
+                    list[i54] = (int) pc_be32(src54[i54]);
+                }
+            }
+            out->x54 = list;
+        } else {
+            out->x54 = NULL;
+        }
+    }
 
     /* +0x04 ext_attr -- the per-character attribute blob (ftMario_DatAttrs,
      * ftFox_DatAttrs, ...). Every field in every one of those structs is a
