@@ -222,7 +222,14 @@ static void* pc_cpu_entries(u8* base, u32 fsize, u32 off)
     u32 n = 0;
     u32* dst;
     u32 i;
-    if (off == 0 || off + 0x24 > fsize) {
+    /* Offset 0 is a real offset, not "absent". Mario's ground attack table is
+     * the first object in this file's data, so it lives at 0 -- and rejecting
+     * it left Mario, and Dr. Mario who shares the table, with no ground
+     * attacks at all: 0 entries here against 17 on the console, while all the
+     * other 7 tables x 26 characters converted exactly. Same trap as DAT
+     * optional-pointer tables, in reverse: there a stored 0 means NULL and
+     * must stay NULL, here it means the start of the data. */
+    if (off + 0x24 > fsize) {
         return pc_empty;
     }
     src = (const u32*) (base + off);
@@ -479,6 +486,33 @@ void Fighter_LoadCommonData(void)
                     }
                     pc_cpu.x24 = pc_reach;
                     Fighter_804D64FC = &pc_cpu;
+                    /* MELEE_CPUTBL=1 counts the entries in each per-kind
+                     * table, the way the local Dolphin build does under the
+                     * same variable, so the two conversions can be compared
+                     * rather than guessed at. The old line printed a boolean
+                     * and said "0", which reads as "empty" but could equally
+                     * have been a table that legitimately starts with a zero
+                     * command. */
+                    if (getenv("MELEE_CPUTBL") != NULL) {
+                        static const char* const nm[7] = {
+                            "ground", "air", "ranged", "smash",
+                            "special", "weapon", "edgeguard"
+                        };
+                        int f2, k2;
+                        for (f2 = 0; f2 < 7; f2++) {
+                            fprintf(stderr, "[CPUTBL-PORT] %-9s", nm[f2]);
+                            for (k2 = 0; k2 < 26; k2++) {
+                                const u32* e = (const u32*) pc_kind_tbl[f2][k2];
+                                int cnt = 0;
+                                while (e != NULL && cnt < 64 &&
+                                       e[cnt * 9] != 0) {
+                                    cnt++;
+                                }
+                                fprintf(stderr, " %d", cnt);
+                            }
+                            fprintf(stderr, "\n");
+                        }
+                    }
                     PORT_LOG_WARN("Fighter_LoadCommonData: CPU attack tables converted "
                                   "(mario ground entries: %d, dist %.1f)\n",
                                   (int) (((u32*) pc_kind_tbl[0][0])[0] != 0),
