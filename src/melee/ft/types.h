@@ -679,7 +679,19 @@ struct ftData {
                                 ///< ftPr_Init_8013C360
     /* +4C */ FtSFX* x4C_sfx;
     /* +50 */ Vec2* x50;
+#if BUILD_TARGET_PC
+    /* +54 */ /* Declared `int` because that is its width in the file, but it
+               * holds a pointer: ftCo_8009F834 does
+               * `((int*) fp->ft_data->x54)[fp->x2220_b0]` -- the rotating bone
+               * list a GFX command with bone 0x8D indexes. On the GameCube the
+               * archive's relocation turns the stored offset into a pointer in
+               * place and the cast is free. Here a host pointer does not fit in
+               * an int, so the field has to be pointer-typed and rebased by
+               * the converter. */
+    int* x54;
+#else
     /* +54 */ int x54;
+#endif
     /* +58 */ struct ftData_x58_t* x58;
     /* +5C */ HSD_Joint* x5C;
 };

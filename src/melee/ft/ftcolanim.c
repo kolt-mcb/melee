@@ -111,6 +111,27 @@ void ftCo_800BFFAC(Fighter* fp)
 bool ftCo_800BFFD0(Fighter* fp, int arg1, int arg2)
 {
     long tmp;
+#if BUILD_TARGET_PC
+    /* MELEE_COLANIM=1 names every colour-overlay animation start: which
+     * fighter, which table index, and where it was asked from. The console
+     * gives the same from MELEE_CODE_BP at 800BFFD0 (r4/r5 are the index and
+     * the priority, and the link register names the caller). */
+    if (getenv("MELEE_COLANIM") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        struct Fighter_804D653C_t* dbg =
+            (arg1 >= 0x7B) ? (Fighter_804D6538 ? &Fighter_804D6538[arg1 - 0x7B]
+                                               : NULL)
+                           : (Fighter_804D653C ? &Fighter_804D653C[arg1]
+                                               : NULL);
+        fprintf(stderr,
+                "[COLANIM] gframe=%u p%d idx=%d pri=%d ret=%p "
+                "script=%p unk4=%u unk5=%u\n",
+                (unsigned) gm_8016AEDC(), (int) fp->player_id, arg1, arg2,
+                __builtin_return_address(0),
+                dbg ? dbg->unk : NULL, dbg ? (unsigned) dbg->unk4 : 0u,
+                dbg ? (unsigned) dbg->unk5 : 0u);
+    }
+#endif
     if (arg1 >= 0x7B) {
         arg1 -= (tmp = 0x7B);
         if (lb_800144C8(&fp->x508, Fighter_804D6538, arg1, arg2)) {
