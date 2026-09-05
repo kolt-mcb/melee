@@ -18,6 +18,23 @@ void pc_rng_note(void* ret)
         const char* e = getenv("MELEE_RNGLOG");
         armed = e ? atoi(e) : 0;
     }
+    /* MELEE_RNGAT=<gframe> narrows that to one match frame, which is what a
+     * lockstep divergence gives you. */
+    {
+        static int at = -2;
+        if (at == -2) {
+            const char* e = getenv("MELEE_RNGAT");
+            at = e ? atoi(e) : -1;
+        }
+        if (at >= 0) {
+            extern u32 gm_8016AEDC(void);
+            u32 f = gm_8016AEDC();
+            if ((int) f >= at - 1 && (int) f <= at + 1) {
+                fprintf(stderr, "[RNGAT] f%u %p\n", f, ret);
+            }
+            return;
+        }
+    }
     if (armed <= 0) {
         return;
     }
