@@ -30,7 +30,9 @@ void pc_rng_note(void* ret)
             extern u32 gm_8016AEDC(void);
             u32 f = gm_8016AEDC();
             if ((int) f >= at - 1 && (int) f <= at + 1) {
-                fprintf(stderr, "[RNGAT] f%u %p\n", f, ret);
+                extern u32 pc_frame_number;
+                fprintf(stderr, "[RNGAT] gframe=%u pcf=%u %p\n", f,
+                        (unsigned) pc_frame_number, ret);
             }
             return;
         }
