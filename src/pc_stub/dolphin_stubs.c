@@ -419,6 +419,5 @@ GameMode* findMode(u8 idx)
     return &gm_803DACA4[0];
 }
 
-
-
-
+/* MWCC's mangled name for fabsf, needed by MSL's trigf.c. */
+float fabsf__Ff(float x) { return x < 0.0f ? -x : x; }
