@@ -21,6 +21,23 @@
  * whole class at once; `tools`-free check: build with
  * -Wimplicit-function-declaration and expect no hits. */
 
+/* The GameCube build's <stdbool.h> is src/MSL/stdbool.h -- `typedef int bool`,
+ * which keeps whatever you assign to it. The host's is C99 `_Bool`, which
+ * normalises every nonzero value to 1. The game stores collision flag bits in
+ * a `bool`: it_8026E_inline returns 1 floor | 2 ceiling | 4 right wall | 8
+ * left wall, and it_8026E15C tests `res & 1` to decide an item has landed.
+ * Under _Bool a left-wall hit (8) arrived at that test as 1, so items landed
+ * on walls -- a capsule sliding down Onett's kerb re-landed every fifth frame
+ * and fired a collision spark the console never fires. Take MWCC's definition,
+ * ahead of every include, and keep the host's header out. */
+#ifndef __cplusplus
+#define _STDBOOL_H 1
+#define __bool_true_false_are_defined 1
+typedef int bool;
+#define true 1
+#define false 0
+#endif
+
 double __frsqrte(double);
 float sqrtf__Ff(float);
 float sqrtf_accurate(float);
