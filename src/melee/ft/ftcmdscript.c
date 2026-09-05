@@ -50,6 +50,19 @@ void ftCo_800B3E04(Fighter* fp)
         HSD_ASSERTREPORT(0x24, 0, "csP is bad address\n");
     }
     while (data->command_duration == 0) {
+#if BUILD_TARGET_PC
+        /* MELEE_CPUCMD=1 logs the CPU command-script opcode stream. The
+         * script is a byte stream the AI writes into its own buffer, so a
+         * side that writes different bytes runs a different AI without any
+         * traced field moving. The console gives the same from
+         * MELEE_CODE_BP at 800B3E04 (entry only; the opcodes need this). */
+        if (getenv("MELEE_CPUCMD") != NULL) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr, "[CPUCMD] gframe=%u p%d op=0x%02x\n",
+                    (unsigned) gm_8016AEDC(), (int) fp->player_id,
+                    (unsigned) (u8) *cur);
+        }
+#endif
         switch ((u8) *cur++) {
         case CpuCmd_PressA:
             data->x0 |= HSD_PAD_A;
