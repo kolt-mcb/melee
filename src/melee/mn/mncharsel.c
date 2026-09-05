@@ -2287,6 +2287,19 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
 
         cursor->xC = (f32) ((0.0002f * dx) + cursor->xC);
         cursor->x10 = (f32) ((0.0002f * dy) + cursor->x10);
+#if BUILD_TARGET_PC
+        /* MELEE_CSSLOG=1 prints the character-select cursor and the raw stick
+         * that is moving it, once per cursor per frame. The local Dolphin
+         * build prints [CSS-REF] under the same variable. The menus are not
+         * compared frame by frame, so nothing else says whether the two sides
+         * are steering the same hand at the same speed. */
+        if (getenv("MELEE_CSSLOG") != NULL) {
+            fprintf(stderr,
+                    "[CSS-PORT] port=%d x=%.3f y=%.3f sx=%d sy=%d\n",
+                    (int) cursor->x4, (double) cursor->xC,
+                    (double) cursor->x10, (int) stick_x, (int) stick_y);
+        }
+#endif
 
         CSS_DOORS_DATA.tags[cursor->x4].data->scroll_amt = 0.0f;
 
