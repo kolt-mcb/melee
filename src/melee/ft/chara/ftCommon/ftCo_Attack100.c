@@ -103,17 +103,20 @@ extern f32 ftCo_804D90D0; // 0.0f
 extern f32 ftCo_804D90D4; // Decrement value
 extern f64 ftCo_804D90D8; // Increment value (Double)
 
-typedef struct {
-    u8 pad_1A4C[0x1A4C];
-    f32 x1A4C; // 0x1A4C
-    u8 pad_1A58[0x1A58 - 0x1A50];
-    void* x1A58; // 0x1A58
-    u8 pad_2340[0x2340 - 0x1A5C];
-    f32 x2340; // 0x2340
-    f32 x2344; // 0x2344
-    s32 x2348; // 0x2348
-    u8 x234C;  // 0x234C
-} FighterOverlay;
+/* This was a struct laid over Fighter by raw GameCube byte offsets, reaching
+ * grab_timer (fp+1A4C), victim_gobj (fp+1A58) and the capturewait arm of the
+ * motion-vars union (fp+2340..234C) by padding to them. Two things break that
+ * here. Its own padding arithmetic -- `pad_2340[0x2340 - 0x1A5C]` -- assumes
+ * the pointer before it is four bytes wide, so on a 64-bit host every field
+ * after victim_gobj sits four bytes late. And Fighter is laid out by the host
+ * compiler, whose pointers are eight bytes, so none of the offsets land where
+ * the GameCube put them in the first place.
+ *
+ * The fields it wanted all have names, so use them. On the GameCube they are
+ * the same bytes the overlay was reading. This is what crashed the port the
+ * moment two CPUs got as far as a grab: ftCo_CaptureWaitHi_Anim read a
+ * victim_gobj that was really four bytes of something else, and handed it to
+ * ftCo_800DA698 to dereference. */
 
 typedef struct {
     u8 pad_0[0x9C];
@@ -731,7 +734,7 @@ void fn_800D7938(Fighter_GObj* gobj)
     temp_r31 = GET_FIGHTER(temp_r30);
     if (temp_r31->item_gobj != NULL) {
         temp_r4 = it_80291DAC(temp_r31->item_gobj,
-                              (s32) ((FighterOverlay*) temp_r31)->x2340);
+                              (s32) temp_r31->mv.co.capturewait.x0);
         if (temp_r4 != -1) {
             it_80291F14(temp_r31->item_gobj, temp_r4);
         }
@@ -2721,18 +2724,16 @@ void fn_800DB8A4(Fighter_GObj* gobj)
 void ftCo_CaptureWaitHi_Anim(Fighter_GObj* gobj)
 {
     Fighter* fp;
-    FighterOverlay* fp_ovl;
     f32 dec;
     f32 zero;
     fp = GET_FIGHTER(gobj);
-    fp_ovl = (FighterOverlay*) fp;
-    fp_ovl->x2340 = (f32) ((f64) fp_ovl->x2340 + ftCo_804D90D8);
-    fp_ovl->x1A4C -= *(f32*) ((u8*) p_ftCommonData + 0x3A4);
-    fp_ovl->x2348 =
-        ftCommon_GrabMash(fp, *(f32*) ((u8*) p_ftCommonData + 0x3A8));
-    if (fp_ovl->x1A4C <= ftCo_804D90D0) {
-        ftCo_800DA698(fp_ovl->x1A58, 0);
-        if (fp_ovl->x234C != 0 || fn_800DC044(gobj)) {
+#define cw (fp->mv.co.capturewait)
+    cw.x0 = (f32) ((f64) cw.x0 + ftCo_804D90D8);
+    fp->grab_timer -= *(f32*) ((u8*) p_ftCommonData + 0x3A4);
+    cw.x8 = ftCommon_GrabMash(fp, *(f32*) ((u8*) p_ftCommonData + 0x3A8));
+    if (fp->grab_timer <= ftCo_804D90D0) {
+        ftCo_800DA698(fp->victim_gobj, 0);
+        if (cw.xC != 0 || fn_800DC044(gobj)) {
             fn_800DC070(gobj);
             return;
         }
@@ -2742,20 +2743,20 @@ void ftCo_CaptureWaitHi_Anim(Fighter_GObj* gobj)
     }
 
     zero = ftCo_804D90D0;
-    if (fp_ovl->x2344 != zero) {
+    if (cw.x4 != zero) {
         dec = ftCo_804D90D4;
-        fp_ovl->x2344 -= dec;
-        if (fp_ovl->x2344 <= zero && fp_ovl->x2348 == 0) {
+        cw.x4 -= dec;
+        if (cw.x4 <= zero && cw.x8 == 0) {
             ftAnim_SetAnimRate(gobj, dec);
-            fp_ovl->x2344 = ftCo_804D90D0;
+            cw.x4 = ftCo_804D90D0;
         }
     }
 
-    if (*(volatile f32*) &fp_ovl->x2344 <= ftCo_804D90D0 && fp_ovl->x2348 != 0)
-    {
-        fp_ovl->x2344 = *(f32*) ((u8*) p_ftCommonData + 0x3B0);
+    if (*(volatile f32*) &cw.x4 <= ftCo_804D90D0 && cw.x8 != 0) {
+        cw.x4 = *(f32*) ((u8*) p_ftCommonData + 0x3B0);
         ftAnim_SetAnimRate(gobj, *(f32*) ((u8*) p_ftCommonData + 0x3B4));
     }
+#undef cw
 }
 
 void ftCo_CaptureWaitHi_IASA(Fighter_GObj* gobj)

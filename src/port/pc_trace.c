@@ -612,6 +612,23 @@ void pc_trace_frame(int frame)
                                                   : NULL;
                         if (fp != NULL) {
                             fp->x1A88.level = lvl[slot];
+                            /* The AI's decision timer is seeded from the one
+                             * random draw ftCo_800A101C makes, and that draw
+                             * happens while the fighters are being created --
+                             * inside the load, where the console is reading
+                             * the disc and this side is not, so the two are at
+                             * different points in the RNG stream and get
+                             * different timers (measured: console 8 and 8,
+                             * this side 5 and 2). Every AI decision is gated
+                             * on that timer, so the fight diverges within
+                             * thirty frames however well the rest is aligned.
+                             * Start both sides' timers from the same place.
+                             * Once, on the frame the slots become CPUs --
+                             * writing it every frame would stop the clock. */
+                            if (gm_8016AEDC() == 2) {
+                                fp->x1A88.x7C = 0;
+                                fp->x1A88.x80 = 0;
+                            }
                         }
                     }
                 }
