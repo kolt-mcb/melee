@@ -3299,7 +3299,13 @@ __attribute__((weak)) extern struct GameMode {
 __attribute__((weak)) int Camera_800307D0(int a0, int a1, int a2) { PC_STUB_HIT("Camera_800307D0"); return 0; }
 
 __attribute__((weak)) float __fabsf(float x) { PC_STUB_HIT("__fabsf"); return x < 0 ? -x : x; }
-__attribute__((weak)) float __fnmsubs(float a, float b, float c) { PC_STUB_HIT("__fnmsubs"); return -(a * b) + c; }
+/* PowerPC fnmsubs computes -((a*b) - c) with a SINGLE rounding -- it is a
+ * fused instruction. Written as `-(a * b) + c` it rounds twice, and the
+ * result is liable to be an ULP away. lbtrigf.c's sine and cosine are built
+ * on it, so that ULP reaches every angle, and from there every velocity and
+ * position the game derives from one. fmaf is the C99 spelling of the fused
+ * operation: fnmsubs(a,b,c) == -(a*b - c) == fmaf(-a, b, c). */
+__attribute__((weak)) float __fnmsubs(float a, float b, float c) { return fmaf(-a, b, c); }
 __attribute__((weak)) void ftDrawCommon_80081168(void) { PC_STUB_HIT("ftDrawCommon_80081168");}
 __attribute__((weak)) void ftDrawCommon_80081200(void) { PC_STUB_HIT("ftDrawCommon_80081200");}
 __attribute__((weak)) void ftLib_80086644(int a0, int a1) { PC_STUB_HIT("ftLib_80086644");}
