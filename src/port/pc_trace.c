@@ -267,6 +267,25 @@ static void pc_trace_ailog(void)
                 a.f = vfp->gr_vel;
                 b.f = vfp->co_attrs.walk_init_vel;
                 c.f = vfp->co_attrs.walk_max_vel;
+                {
+                    /* The six joints the ECB is built from: mpColl's
+                     * LoadECB_JObj takes each one's world position and
+                     * expands a box to contain them, so an ULP in any of
+                     * them reaches ecb.bottom.y. */
+                    int q;
+                    fprintf(stderr, "[FTECB-PORT] gframe=%u p%d",
+                            (unsigned) gm_8016AEDC(), vslot);
+                    for (q = 0; q < 6; q++) {
+                        Vec3 jp;
+                        lb_8000B1CC(vfp->coll_data.ecb_source.x10C_joint[q],
+                                    NULL, &jp);
+                        fprintf(stderr, " %08x,%08x",
+                                *(const unsigned*) &jp.x,
+                                *(const unsigned*) &jp.y);
+                    }
+                    fprintf(stderr, " ecbby=%08x\n",
+                            *(const unsigned*) &vfp->coll_data.ecb.bottom.y);
+                }
                 fprintf(stderr,
                         "[FTVEL-PORT] gframe=%u p%d grvel=%08x initvel=%08x "
                         "maxvel=%08x norm=%08x,%08x,%08x floor=%d\n",
