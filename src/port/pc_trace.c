@@ -482,9 +482,18 @@ void pc_trace_frame(int frame)
          * before the per-scene seeding can help. Rewriting the seed at the top
          * of every load frame makes each of those frames start from the same
          * value on both sides, whichever frame of the load it happens to be.
+         *
+         * The results scene (3) has the same shape and needs the same
+         * treatment: it loads from the disc on the console and not here, its
+         * own frame counter sits at 0 through the load, and the two sides
+         * otherwise enter it having drawn different numbers of values -- which
+         * shows up much later as the two fighters picking different idle
+         * animations while every other column still agrees.
          * The Dolphin build reads the same variable. */
         if (want != NULL && getenv("MELEE_SEED_EACH_LOAD") != NULL &&
-            gm_8016AEDC() == 0 && (int) gm_GetCurrentSceneIndex() == 2)
+            gm_8016AEDC() == 0 &&
+            ((int) gm_GetCurrentSceneIndex() == 2 ||
+             (int) gm_GetCurrentSceneIndex() == 3))
         {
             seed = (u32) strtoul(want, NULL, 16);
         }
