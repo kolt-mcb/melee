@@ -235,9 +235,13 @@ static void pc_trace_ailog(void)
             continue;
         }
         n += snprintf(line + n, sizeof(line) - n,
-                      " p%d x7C=%d lvl=%d slot_type=%d", slot,
+                      " p%d x7C=%d lvl=%d xC=%d x18=%d x84=%d x88=%d x8C=%d "
+                      "x90=%d xA4=%d xC8=%d xEC=%d", slot,
                       (int) fp->x1A88.x7C, (int) fp->x1A88.level,
-                      (int) sp->slot_type);
+                      (int) fp->x1A88.xC, (int) fp->x1A88.x18,
+                      (int) fp->x1A88.x84, (int) fp->x1A88.x88,
+                      (int) fp->x1A88.x8C, (int) fp->x1A88.x90,
+                      (int) fp->x1A88.xA4);
     }
     if (n > 0) {
         fprintf(stderr, "[AI-PORT] gframe=%u%s\n",
