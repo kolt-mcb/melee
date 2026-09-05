@@ -306,6 +306,75 @@ void Fighter_LoadCommonData(void)
                 PORT_LOG_WARN("Fighter_LoadCommonData: PlCo converted (mario parts_num=%u)\n",
                               (unsigned)pc_tbl[0].parts_num);
             }
+            /* Symbols 6 and 7, Fighter_804D653C and Fighter_804D6538: the
+             * colour-overlay animation tables. ftCo_800BFFD0 indexes 653C
+             * below 0x7B and 6538 above it, and lb_800144C8 takes the entry's
+             * `unk` as the script the colanim interpreter then runs -- a
+             * second command stream, dispatched through ftCo_803C6AD0 rather
+             * than ftAction_803C06E8, and carrying GFX spawns of its own.
+             *
+             * Left on the zero arena, every entry's script is NULL and no
+             * fighter ever plays a colour-overlay effect. That is what the
+             * CPU fight's first divergence was: at match frame 103 the console
+             * spawns gfx 0x412 from this stream and the port spawns nothing,
+             * with both fighters in the same motion on the same animation
+             * frame and both animation scripts byte-identical.
+             *
+             * A record is {u32 script_off; u8 unk4; u8 unk5; u16 pad} -- eight
+             * bytes there, sixteen here once the offset becomes a host
+             * pointer, so the array has to be rebuilt rather than pointed at.
+             * The file does not record how many entries each table has;
+             * convert a generous fixed count and leave anything out of range
+             * NULL, the way the item-list conversion above does. */
+            {
+                static struct Fighter_804D653C_t pc_colanim_lo[256];
+                static struct Fighter_804D653C_t pc_colanim_hi[256];
+                struct {
+                    u32 off;
+                    struct Fighter_804D653C_t* out;
+                    struct Fighter_804D653C_t** dst;
+                } tbl[2];
+                int t;
+                tbl[0].off = PC_BE32(offs[6]);
+                tbl[0].out = pc_colanim_lo;
+                tbl[0].dst = &Fighter_804D653C;
+                tbl[1].off = PC_BE32(offs[7]);
+                tbl[1].out = pc_colanim_hi;
+                tbl[1].dst = &Fighter_804D6538;
+                for (t = 0; t < 2; t++) {
+                    u32 off = tbl[t].off;
+                    u32 i;
+                    if (off == 0 || off >= fsize) {
+                        continue;
+                    }
+                    for (i = 0; i < 256; i++) {
+                        const u8* e;
+                        u32 so;
+                        tbl[t].out[i].unk = NULL;
+                        tbl[t].out[i].unk4 = 0;
+                        tbl[t].out[i].unk5 = 0;
+                        if (off + (i + 1) * 8 > fsize) {
+                            continue;
+                        }
+                        e = dataBase + off + i * 8;
+                        so = PC_BE32(*(const u32*) e);
+                        if (so != 0 && so < fsize) {
+                            tbl[t].out[i].unk = (void*) (dataBase + so);
+                        }
+                        tbl[t].out[i].unk4 = e[4];
+                        tbl[t].out[i].unk5 = e[5];
+                    }
+                    *tbl[t].dst = tbl[t].out;
+                }
+                PORT_LOG_WARN("Fighter_LoadCommonData: colanim tables "
+                              "converted (653C[1].script=%p unk4=%u, "
+                              "6538[0].script=%p)\n",
+                              Fighter_804D653C ? Fighter_804D653C[1].unk : NULL,
+                              Fighter_804D653C
+                                  ? (unsigned) Fighter_804D653C[1].unk4 : 0u,
+                              Fighter_804D6538 ? Fighter_804D6538[0].unk
+                                               : NULL);
+            }
             /* Symbol 5, Fighter_804D6540: the per-kind "skip this part slot"
              * list that ftParts_8007506C consults. Leaving it on the zero
              * arena silently disabled the skip mechanism for everyone, which
