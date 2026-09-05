@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <stdlib.h>
 #include "particle.h"
 
@@ -8847,6 +8849,22 @@ void hsd_8039EE24(u32 mask)
 
     gen = hsd_804D78FC;
     hsd_804D78F8 = 0;
+#if BUILD_TARGET_PC
+    /* Mirror of the console harness's [GENLIST]: name every live generator
+     * once per frame so the two particle populations can be diffed. */
+    if (getenv("MELEE_GENLIST") != NULL) {
+        extern u32 pc_frame_number;
+        HSD_Generator* g2 = gen;
+        fprintf(stderr, "[GENLIST] f%u", pc_frame_number);
+        while (g2 != NULL) {
+            fprintf(stderr, " [bank=%d id=%d kind=%08x genLife=%d life=%d]",
+                    (int) g2->bank, (int) g2->idnum, (unsigned) g2->kind,
+                    (int) g2->genLife, (int) g2->life);
+            g2 = g2->next;
+        }
+        fprintf(stderr, "\n");
+    }
+#endif
 
     while (gen != NULL) {
         if (mask & (1 << (gen->linkNo + 16))) {
