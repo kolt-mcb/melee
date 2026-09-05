@@ -241,6 +241,18 @@ void ftAction_80071028(Fighter_GObj* gobj, CommandInfo* cmd)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     float unk;
+#if BUILD_TARGET_PC
+    /* MELEE_FTGFX=1 reports every entry to the animation script's GFX-spawn
+     * opcode, and whether the fighter's `invisible` flag sent it down the
+     * skip path. Separates "the script never reached this command" from
+     * "it reached it and declined". */
+    if (getenv("MELEE_FTGFX") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[FTGFX] gframe=%u p%d invisible=%d\n",
+                (unsigned) gm_8016AEDC(), (int) fp->player_id,
+                (int) fp->invisible);
+    }
+#endif
     Vec3 offset;
     Vec3 range;
     int bone;
@@ -1350,6 +1362,28 @@ void ftAction_80073240(Fighter_GObj* fighter_gobj)
              * decode them the way PowerPC did. MELEE_CMDTRACE=1 logs each
              * dispatched command, MELEE_CMDDUMP=1 dumps the first non-empty
              * script. */
+            /* MELEE_CMDDUMP_MS=<motion id> dumps that motion's script the
+             * first time it is dispatched, rather than whichever script came
+             * first. A script that ends early -- a zero word where the console
+             * has more commands -- is invisible from the trace alone. */
+            {
+                const char* want_ms = getenv("MELEE_CMDDUMP_MS");
+                static int ms_dumped;
+                Fighter* dfp = (Fighter*) fighter_gobj->user_data;
+                if (want_ms != NULL && !ms_dumped && ftCommand->u != NULL &&
+                    (int) dfp->motion_id == atoi(want_ms))
+                {
+                    const u32* w = (const u32*) ftCommand->u;
+                    int k;
+                    ms_dumped = 1;
+                    fprintf(stderr, "[CMDDUMP-MS] ms=%d script at %p\n",
+                            (int) dfp->motion_id, (const void*) w);
+                    for (k = 0; k < 24; k++) {
+                        fprintf(stderr, "  [%2d] mem=%08x op=%2u\n", k, w[k],
+                                (unsigned) (w[k] >> 26));
+                    }
+                }
+            }
             if (getenv("MELEE_CMDDUMP") != NULL) {
                 static int dumped;
                 if (!dumped && ftCommand->u != NULL &&

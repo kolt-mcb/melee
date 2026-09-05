@@ -66,6 +66,17 @@ void ftCo_8009F834(Fighter_GObj* gobj, int arg1, enum Fighter_Part part,
 
     gfx_id = arg1;
     fp = gobj->user_data;
+#if BUILD_TARGET_PC
+    /* MELEE_FTFX=1 names every fighter effect this dispatch is asked for.
+     * The local Dolphin build gets the same from MELEE_CODE_BP at 8009F834,
+     * whose r4 is the gfx id and r5 the bone. */
+    if (getenv("MELEE_FTFX") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[FTFX] gframe=%u p%d gfx=0x%x part=%d\n",
+                (unsigned) gm_8016AEDC(), (int) fp->player_id,
+                (unsigned) gfx_id, (int) part);
+    }
+#endif
     if (arg4 == 0) {
         goto block_2;
     }
