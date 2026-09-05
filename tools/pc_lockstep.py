@@ -82,6 +82,8 @@ class Side:
         self.row = None        # the frame it is waiting on
         self.frames = 0
         self.prev_seed = None
+        self.prev_gframe = None
+        self.skipped_frames = 0
 
     def greet(self):
         """Read the HELLO, which carries the field list this build writes."""
@@ -115,6 +117,25 @@ class Side:
                 n += 1
             draws = str(n) if v == cur else "-"
         self.prev_seed = cur
+        # rng_draws is a delta between two samples, so it is only meaningful
+        # when those samples are one match frame apart. Dolphin runs at
+        # 60000/1001 Hz against this side's flat 60, so roughly once every
+        # 1001 frames it advances two game frames inside a single barrier step
+        # and the frame in between is never sampled. The delta then covers two
+        # frames and reads as a divergence (6 against 3) when the two sides
+        # actually drew the same 3 and 3. Every other column is a snapshot and
+        # is still compared normally on the frames that do line up.
+        gf = self.row.get("gframe")
+        try:
+            gf = int(gf)
+        except (TypeError, ValueError):
+            gf = None
+        if (gf is not None and self.prev_gframe is not None and
+                gf - self.prev_gframe > 1):
+            draws = "-"
+            self.skipped_frames += gf - self.prev_gframe - 1
+        if gf is not None:
+            self.prev_gframe = gf
         self.row["rng_draws"] = draws
         self.frames += 1
         return True
