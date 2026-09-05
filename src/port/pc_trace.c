@@ -235,9 +235,10 @@ static void pc_trace_ailog(void)
             continue;
         }
         n += snprintf(line + n, sizeof(line) - n,
-                      " p%d x7C=%d lvl=%d xC=%d x18=%d x1C=%d x20=%d "
+                      " p%d x7C=%d lvl=%d lsx=%d lsy=%d xC=%d x18=%d x1C=%d x20=%d "
                       "x84=%d x88=%d x8C=%d x90=%d xA4=%d", slot,
                       (int) fp->x1A88.x7C, (int) fp->x1A88.level,
+                      (int) fp->x1A88.lstickX, (int) fp->x1A88.lstickY,
                       (int) fp->x1A88.xC, (int) fp->x1A88.x18,
                       (int) fp->x1A88.x1C, (int) fp->x1A88.x20,
                       (int) fp->x1A88.x84, (int) fp->x1A88.x88,
