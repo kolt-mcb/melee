@@ -10,6 +10,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <math.h>
+#include <float.h>
 
 /* Minimal type definitions (matching dolphin/types.h) */
 typedef signed char s8;
@@ -421,3 +422,61 @@ GameMode* findMode(u8 idx)
 
 /* MWCC's mangled name for fabsf, needed by MSL's trigf.c. */
 float fabsf__Ff(float x) { return x < 0.0f ? -x : x; }
+
+/* PowerPC's fres: the reciprocal estimate, a 32-entry piecewise-linear table
+ * of about five bits, which code then refines with Newton-Raphson. Same shape
+ * as frsqrte above and the same reason for wanting it -- the SDK's paired
+ * single routines divide with ps_res, not an exact division, and an exact one
+ * lands an ULP away. Table and arithmetic from Dolphin's
+ * Common/FloatUtils.cpp (ApproximateReciprocal). */
+static const struct {
+    int base;
+    int dec;
+} pc_fres_tbl[32] = {
+    { 0x7ff800, 0x3e1 }, { 0x783800, 0x3a7 }, { 0x70ea00, 0x371 },
+    { 0x6a0800, 0x340 }, { 0x638800, 0x313 }, { 0x5d6200, 0x2ea },
+    { 0x579000, 0x2c4 }, { 0x520800, 0x2a0 }, { 0x4cc800, 0x27f },
+    { 0x47ca00, 0x261 }, { 0x430800, 0x245 }, { 0x3e8000, 0x22a },
+    { 0x3a2c00, 0x212 }, { 0x360800, 0x1fb }, { 0x321400, 0x1e5 },
+    { 0x2e4a00, 0x1d1 }, { 0x2aa800, 0x1be }, { 0x272c00, 0x1ac },
+    { 0x23d600, 0x19b }, { 0x209e00, 0x18b }, { 0x1d8800, 0x17c },
+    { 0x1a9000, 0x16e }, { 0x17ae00, 0x15b }, { 0x14f800, 0x15b },
+    { 0x124400, 0x143 }, { 0x0fbe00, 0x143 }, { 0x0d3800, 0x12d },
+    { 0x0ade00, 0x12d }, { 0x088400, 0x11a }, { 0x065000, 0x11a },
+    { 0x041c00, 0x108 }, { 0x020c00, 0x106 },
+};
+
+double __fres(double x)
+{
+    union {
+        double d;
+        int64_t i;
+    } u;
+    int64_t mantissa, sign, exponent;
+    int idx;
+
+    u.d = x;
+    mantissa = u.i & ((1LL << 52) - 1);
+    sign = u.i & (1LL << 63);
+    exponent = u.i & (0x7FFLL << 52);
+
+    if (exponent == (0x7FFLL << 52)) {
+        return mantissa == 0 ? copysign(0.0, x) : NAN;
+    }
+    if (mantissa == 0 && exponent == 0) {
+        return copysign(INFINITY, x);
+    }
+    if (exponent < (895LL << 52)) {
+        return copysign((double) FLT_MAX, x);
+    }
+    if (exponent >= (1149LL << 52)) {
+        return copysign(0.0, x);
+    }
+    exponent = (0x7FDLL << 52) - exponent;
+    idx = (int) (mantissa >> 37);
+    u.i = sign | exponent;
+    u.i |= (int64_t) (pc_fres_tbl[idx / 1024].base -
+                      (pc_fres_tbl[idx / 1024].dec * (idx % 1024) + 1) / 2)
+           << 29;
+    return u.d;
+}
