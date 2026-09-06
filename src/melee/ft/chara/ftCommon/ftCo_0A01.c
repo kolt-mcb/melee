@@ -7946,6 +7946,17 @@ void ftCo_800B2790(Fighter* fp)
         }
         ftCo_800ADC28(fp);
         cmd = data->x18;
+#if BUILD_TARGET_PC
+        /* MELEE_AIDISP=1 reports the value the behaviour dispatch actually
+         * switches on. Every earlier reading of x18 was taken at frame end,
+         * which is not the value this switch used. */
+        if (getenv("MELEE_AIDISP") != NULL) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr, "[AIDISP] gframe=%u p%d x18=%d x1C=%d\n",
+                    (unsigned) gm_8016AEDC(), (int) fp->player_id, (int) cmd,
+                    (int) data->x1C);
+        }
+#endif
         {
             switch (cmd) {
             case 1:
