@@ -963,6 +963,21 @@ void ftCo_800B658C(Fighter* fp)
         }
     }
 
+#if BUILD_TARGET_PC
+    /* MELEE_AIGATE=1 says which of the three gates before the attack enqueue
+     * this side takes. The console commits an attack script on a frame where
+     * this side stays idle, and the AI state feeding the decision is equal,
+     * so the question is which gate answers differently. */
+    if (getenv("MELEE_AIGATE") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[AIGATE] gframe=%u p%d g630C=%d xA4=%d goa=%d "
+                        "g2C08=%d g8A9C=%d\n",
+                (unsigned) gm_8016AEDC(), (int) fp->player_id,
+                (int) ftCo_800B630C(fp), (int) temp_r31->xA4,
+                (int) fp->ground_or_air, (int) ftCo_800A2C08(fp),
+                (int) ftCo_800B8A9C(fp));
+    }
+#endif
     if (ftCo_800B630C(fp)) {
         ftCo_800A0C8C(fp);
         temp_r31->xA4 = 0;
