@@ -902,6 +902,19 @@ static void pc_trace_ecbdump(void)
      * compared against, so it decides an attack without appearing in any
      * traced field. The reference build reads the same four words at
      * fighter+0x1FE4. */
+    /* MELEE_WATCHJ=<part> aims the one-joint write watch at this fighter's
+     * displayed joint for that part, so every function that touches its SRT
+     * reports. A joint that changes on a frame with no animation load and no
+     * blend has a writer, and naming it beats reading every candidate. */
+    {
+        const char* wj = getenv("MELEE_WATCHJ");
+        if (wj != NULL) {
+            int wp = atoi(wj);
+            if (wp >= 0 && wp < 80 && fp->parts != NULL) {
+                pc_watch_jobj = fp->parts[wp].joint;
+            }
+        }
+    }
     fprintf(stderr, "[REACH-PORT] p%d gframe=%u %08x %08x %08x %08x n=%d\n",
             slot, gf, *(const u32*) &fp->x1A88.x55C,
             *(const u32*) &fp->x1A88.x560, *(const u32*) &fp->x1A88.x564,

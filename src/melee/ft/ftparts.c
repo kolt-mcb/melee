@@ -866,6 +866,29 @@ void ftParts_80074E58(Fighter* fp)
     fp->parts[ftParts_GetBoneIndex(fp, FtPart_TransN2)].flags_b3 = true;
     fp->parts[ftParts_GetBoneIndex(fp, FtPart_TransN)].flags_b4 = true;
     fp->parts[ftParts_GetBoneIndex(fp, 0x35)].flags_b4 = true;
+#if BUILD_TARGET_PC
+    /* MELEE_PARTIDX=1: which part indices the six b3 flags and the two b4
+     * flags landed on. flags_b4 chooses lbCopyJObjSRT over lb_8000C490 for
+     * that part, so a wrong index makes one joint blend where the console
+     * copies -- which is a different pose, not a different last bit. */
+    if (getenv("MELEE_PARTIDX") != NULL) {
+        static int said[32];
+        int k = (int) fp->kind & 31;
+        if (!said[k]) {
+            said[k] = 1;
+            fprintf(stderr,
+                    "[PARTIDX] kind=%d n=%d TransN=%d XRotN=%d YRotN=%d "
+                    "HipN=%d TransN2=%d p0x35=%d\n",
+                    (int) fp->kind, (int) ftPartsTable[fp->kind]->parts_num,
+                    (int) ftParts_GetBoneIndex(fp, FtPart_TransN),
+                    (int) ftParts_GetBoneIndex(fp, FtPart_XRotN),
+                    (int) ftParts_GetBoneIndex(fp, FtPart_YRotN),
+                    (int) ftParts_GetBoneIndex(fp, FtPart_HipN),
+                    (int) ftParts_GetBoneIndex(fp, FtPart_TransN2),
+                    (int) ftParts_GetBoneIndex(fp, 0x35));
+        }
+    }
+#endif
 }
 
 #if BUILD_TARGET_PC

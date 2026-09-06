@@ -1285,9 +1285,22 @@ struct Fighter {
          * the bit order *within* a multi-bit field, which matters for
          * x594_bits (used as a mask) and x597_bits (a FighterKind). */
         struct {
-            u32 x596_pad : 14;
+            /* x596_bits is a *nested* struct on GCN, so it starts at the
+             * union's second u16 -- byte 596, word bits 15..0 -- and byte 595
+             * is padding. Inside it, `u8 x0 : 7` takes bits 7..1 of byte 596
+             * (word bits 15..9) and `u16 x7 : 3` then opens a u16 unit and
+             * takes its bits 7..9, which are word bits 8..6. Reversing the
+             * declaration is not enough on its own: the padding has to go in
+             * the right place too, or both fields slide. Putting x596_x7 at
+             * bits 14..16 made it read 0 where the console reads 3, and 3 is
+             * the part index whose joint Fighter_ChangeMotionState resets
+             * before a blend. The second struct below is the check: its
+             * x594_pad2 occupies exactly bits 6..8 and its x594_bits exactly
+             * 9..21. */
+            u32 x596_pad : 6;
             u32 x596_x7 : 3;
             u32 x596_x0 : 7;
+            u32 x595_pad : 8;
             u32 x594_b7 : 1;
             u32 x594_b6 : 1;
             u32 x594_b5 : 1;
