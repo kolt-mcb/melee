@@ -591,6 +591,8 @@ void ftCo_Damage_OnEveryHitlag(Fighter_GObj* gobj)
  * and the y square is the addend. */
 #if BUILD_TARGET_PC
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #define DMG_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define DMG_FMA(a, b, c) ((a) * (b) + (c))
@@ -602,11 +604,18 @@ void ftCo_8008E5A4(Fighter* fp)
         float kb_x = fp->x8c_kb_vel.x;
         float kb_y = fp->x8c_kb_vel.y;
         float kb_vel_x_neg = -kb_x;
+        /* 8008E5F4/8008E5FC: the y square is the plain multiply and the
+         * negated x square is the one that fuses onto it -- the other way
+         * round from the pairing further down. */
         float kb_mag =
-            DMG_FMA(kb_y, kb_y, kb_vel_x_neg * kb_vel_x_neg);
+            DMG_FMA(kb_vel_x_neg, kb_vel_x_neg, kb_y * kb_y);
         if (!(kb_mag < 0.00001f)) {
-            float f3 = DMG_FMA(kb_vel_x_neg, fp->input.lstick.y,
-                               kb_y * fp->input.lstick.x);
+            /* 8008E618/8008E624: kb_vel_x_neg * lstick.y is the plain
+             * multiply; kb_y * lstick.x fuses onto it. The stack vector built
+             * around it at 0x20/0x24 is what says which stick component each
+             * register holds. */
+            float f3 = DMG_FMA(kb_y, fp->input.lstick.x,
+                               kb_vel_x_neg * fp->input.lstick.y);
             float f30 = f3 * f3 / kb_mag;
             Vec3 lstick_vec3, kb_vel_cross_lstick;
             lstick_vec3.x = fp->input.lstick.x;
@@ -620,11 +629,35 @@ void ftCo_8008E5A4(Fighter* fp)
             {
                 float angle = atan2f(kb_y, kb_x);
                 float scale;
-                kb_mag = sqrtf(DMG_FMA(kb_y, kb_y, kb_x * kb_x));
+                float angle0 = angle;
+                /* 8008E660: kb_y*kb_y is still live from the test above,
+                 * so it is the addend and the x square is the fused one. */
+                kb_mag = sqrtf(DMG_FMA(kb_x, kb_x, kb_y * kb_y));
                 scale = deg_to_rad * p_ftCommonData->x1A8;
                 angle = DMG_FMA(scale, f30, angle);
                 fp->x8c_kb_vel.x = kb_mag * cosf(angle);
                 fp->x8c_kb_vel.y = kb_mag * sinf(angle);
+#if BUILD_TARGET_PC
+                {
+                    static int on = -1;
+                    if (on < 0) {
+                        on = getenv("MELEE_DIDBG") != NULL;
+                    }
+                    if (on) {
+                        float c = cosf(angle), sn = sinf(angle);
+                        fprintf(stderr,
+                                "[DI-PORT] kb=(%08x,%08x) f3=%08x f30=%08x "
+                                "atan2=%08x mag=%08x scale=%08x angle=%08x "
+                                "cos=%08x sin=%08x -> (%08x,%08x)\n",
+                                *(u32*) &kb_x, *(u32*) &kb_y, *(u32*) &f3,
+                                *(u32*) &f30, *(u32*) &angle0,
+                                *(u32*) &kb_mag, *(u32*) &scale,
+                                *(u32*) &angle, *(u32*) &c, *(u32*) &sn,
+                                *(u32*) &fp->x8c_kb_vel.x,
+                                *(u32*) &fp->x8c_kb_vel.y);
+                    }
+                }
+#endif
             }
         }
     }
@@ -665,8 +698,11 @@ void ftCo_Damage_OnExitHitlag(Fighter_GObj* gobj)
         float kb_y = fp->x8c_kb_vel.y;
         if (kb_x || kb_y) {
             float kb_angle = atan2f(kb_y, kb_x);
+            /* 8008E860: atan2f's argument order says which square is
+             * fused -- the x one. */
             float scaled_kb_mag =
-                sqrtf(kb_x * kb_x + kb_y * kb_y) * p_ftCommonData->x1AC;
+                sqrtf(DMG_FMA(kb_x, kb_x, kb_y * kb_y)) *
+                p_ftCommonData->x1AC;
             fp->x8c_kb_vel.x = scaled_kb_mag * cosf(kb_angle);
             fp->x8c_kb_vel.y = scaled_kb_mag * sinf(kb_angle);
         }

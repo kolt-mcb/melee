@@ -5,31 +5,25 @@
 #include <trigf.h>
 #include <MSL/math.h>
 
+/* PC: no local sqrtf. <math.h> has already declared it, so this definition
+ * would be an external one and collide with src/math_shim.c the moment
+ * -fno-builtin-sqrtf stops GCC folding sqrtf calls into SQRTSS -- and the
+ * shim is this same routine, with the same fused Newton step. */
+#if !BUILD_TARGET_PC
 inline float sqrtf(float x)
 {
     volatile float y;
     if (x > 0.0f) {
         double guess = __frsqrte((double) x); // returns an approximation to
-#if BUILD_TARGET_PC
-        /* Retail's Newton step is fnmsub: `3.0 - x * (e*e)` with the multiply
-         * and the subtract rounded once together (8037EB7C and its two
-         * repeats). Written out, `3.0 - guess * guess * x` rounds three times
-         * instead of two, and the difference survives the round to single
-         * often enough to matter -- this is the sqrt every joint matrix's
-         * Euler extraction runs through. */
-        guess = .5 * guess * fma(-x, guess * guess, 3.0);
-        guess = .5 * guess * fma(-x, guess * guess, 3.0);
-        guess = .5 * guess * fma(-x, guess * guess, 3.0);
-#else
         guess = .5 * guess * (3.0 - guess * guess * x); // now have 12 sig bits
         guess = .5 * guess * (3.0 - guess * guess * x); // now have 24 sig bits
         guess = .5 * guess * (3.0 - guess * guess * x); // now have 32 sig bits
-#endif
         y = (float) (x * guess);
         return y;
     }
     return x;
 }
+#endif
 
 s32 MatToQuat(Mtx m, Quaternion* q)
 {

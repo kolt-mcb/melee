@@ -3,7 +3,11 @@
 /* sqrtf wrapper matching the MWCC ABI exactly.
  * On PPC, sqrtf was implemented via __frsqrte (approximate reciprocal sqrt).
  * On x86_64, we replicate the same algorithm for ABI compatibility.
- * Marked weak so the system sqrtf from <math.h> takes precedence.
+ * Not weak, and the build passes -fno-builtin-sqrtf: otherwise GCC turns
+ * every sqrtf call into the x86 SQRTSS instruction, which is correctly
+ * rounded and therefore *not* what the console computes. The console's answer
+ * is three Newton steps from a five-bit table estimate and lands one ULP
+ * above the correctly-rounded value often enough to matter.
  *
  * The Newton-Raphson refinement below has to start where the hardware starts.
  * Seeded with an exact 1.0/sqrt(x) it converges to a different last bit than
@@ -19,27 +23,32 @@
 
 extern double __frsqrte(double);
 
-__attribute__((weak)) float sqrtf(float x)
+float sqrtf(float x)
 {
     if (x > 0.0f) {
         double guess = __frsqrte((double) x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        return (float)(x * guess);
+        /* One fused instruction on the console: fnmsub at 8008E884 computes
+         * 3.0 - x*guess*guess with a single rounding, in double. Written as
+         * `3.0 - guess * guess * x` it rounds twice, and then every square
+         * root in the game -- knockback magnitudes, distances, vector
+         * normalisation -- is a bit away from the console's. */
+        guess = 0.5 * guess * fma(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * fma(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * fma(-(double) x, guess * guess, 3.0);
+        return (float) (x * guess);
     }
     return x;
 }
 
-__attribute__((weak)) float sqrtf_accurate(float x)
+float sqrtf_accurate(float x)
 {
     if (x > 0.0f) {
         double guess = __frsqrte((double) x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        return (float)(x * guess);
+        guess = 0.5 * guess * fma(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * fma(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * fma(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * fma(-(double) x, guess * guess, 3.0);
+        return (float) (x * guess);
     }
     return x;
 }
