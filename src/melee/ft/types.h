@@ -894,6 +894,37 @@ struct MotionState {
     union {
         /// @todo Try to match without this being a @c union.
         u32 _;
+#if BUILD_TARGET_PC
+        /* Every character's motion-state table writes this union as
+         * `FtMoveId_X << 24`, which on a big-endian target puts the move id
+         * in the first byte -- where move_id is. Here the same u32 puts it in
+         * the last, so the named fields are laid out to read the same values
+         * back out: bytes reversed, and the flag bits with them, because
+         * x9_b0 is the top bit of its byte there and GCC allocates bitfields
+         * from the bottom here.
+         *
+         * Left alone, move_id read 0 for every character-specific state. The
+         * stale-move queue is keyed on it, so no move ever entered the queue
+         * and no move ever staled: measured on match frame 302 of a level-9
+         * CPU fight, a repeated hit did 1.0 damage here and 0.91 on the
+         * console, and the gap carried through every later hit. x9_b0..b7
+         * were reading the wrong byte with it. */
+        struct {
+            u8 xB;
+            u8 xA;
+            struct {
+                u8 x9_b7 : 1;
+                u8 x9_b6 : 1;
+                u8 x9_b5 : 1;
+                u8 x9_b4 : 1;
+                u8 x9_b3 : 1;
+                u8 x9_b2 : 1;
+                u8 x9_b1 : 1;
+                u8 x9_b0 : 1;
+            };
+            u8 move_id;
+        };
+#else
         struct {
             u8 move_id : 8;
             struct {
@@ -909,6 +940,7 @@ struct MotionState {
             u8 xA;
             u8 xB;
         };
+#endif
     };
 
     HSD_GObjEvent anim_cb;

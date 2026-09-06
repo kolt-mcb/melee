@@ -382,6 +382,35 @@ void Fighter_LoadCommonData(void)
                               Fighter_804D6538 ? Fighter_804D6538[0].unk
                                                : NULL);
             }
+            /* Symbol 3, Fighter_804D6548: the stale-move table. Nine
+             * floats, one per slot of the ten-entry queue of recently used
+             * moves; ft_80089118 subtracts one of them from 1.0 for every
+             * occurrence of the move it is asked about, and ft_80089228
+             * multiplies the hit's damage by the result. On the zero arena
+             * every value read as 0.0, so the multiplier was always 1.0 and
+             * **no move ever staled**: a repeated hit did full damage here
+             * and 91% of it on the console. Measured on match frame 302 of a
+             * level-9 CPU fight -- percent 34.0 here against 33.91 there,
+             * and every later hit of that string carried the gap forward.
+             * Big-endian floats, so they have to be rebuilt, not pointed at.
+             */
+            {
+                u32 off3 = PC_BE32(offs[3]);
+                if (off3 != 0 && off3 + 10 * 4 <= fsize) {
+                    static float pc_stale[10];
+                    const u32* v3 = (const u32*) (dataBase + off3);
+                    u32 k3;
+                    for (k3 = 0; k3 < 10; k3++) {
+                        u32 w = PC_BE32(v3[k3]);
+                        memcpy(&pc_stale[k3], &w, 4);
+                    }
+                    Fighter_804D6548 = pc_stale;
+                    PORT_LOG_WARN("Fighter_LoadCommonData: stale-move table "
+                                  "converted (%.4f %.4f %.4f ...)\n",
+                                  (double) pc_stale[0], (double) pc_stale[1],
+                                  (double) pc_stale[2]);
+                }
+            }
             /* Symbol 5, Fighter_804D6540: the per-kind "skip this part slot"
              * list that ftParts_8007506C consults. Leaving it on the zero
              * arena silently disabled the skip mechanism for everyone, which
@@ -577,7 +606,9 @@ void Fighter_LoadCommonData(void)
         if (p_ftCommonData == NULL) p_ftCommonData = (void*)pc_zero_target;
         Fighter_804D6550 = (void*)pc_ptr_arena;
         Fighter_804D654C = (void*)pc_ptr_arena;
-        Fighter_804D6548 = (void*)pc_ptr_arena;
+        if (Fighter_804D6548 == NULL) {
+            Fighter_804D6548 = (void*)pc_ptr_arena;
+        }
         if (ftPartsTable == NULL) ftPartsTable = (void*)pc_ptr_arena;
         if (Fighter_804D6540 == NULL) Fighter_804D6540 = (void*)pc_ptr_arena;
         /* Only if the conversion above did not manage them -- the arena fill
