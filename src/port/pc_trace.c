@@ -762,6 +762,33 @@ static void pc_trace_bones(void)
                 for (k = 0; k < 12; k++) {
                     fprintf(stderr, " m%d=%08x", k, w[k]);
                 }
+                /* The animation skeleton as well as the displayed one: these
+                 * two are what the blend combines, so a difference in the
+                 * displayed joint alone is a blend-weight difference and a
+                 * difference in both is the animation itself. */
+                {
+                    HSD_JObj* j2 = fp->parts[b].x4_jobj2;
+                    if (j2 != NULL) {
+                        fprintf(stderr, " a_flags=%08x", (unsigned) j2->flags);
+                        w = (const u32*) &j2->rotate;
+                        for (k = 0; k < 4; k++) {
+                            fprintf(stderr, " ar%d=%08x", k, w[k]);
+                        }
+                        w = (const u32*) &j2->translate;
+                        for (k = 0; k < 3; k++) {
+                            fprintf(stderr, " at%d=%08x", k, w[k]);
+                        }
+                        /* and the AObj driving it: which curve, how far into
+                         * it, and at what rate. */
+                        if (j2->aobj != NULL) {
+                            const u32* a = (const u32*) j2->aobj;
+                            fprintf(stderr,
+                                    " aobj=%p aoflags=%08x aocurr=%08x "
+                                    "aorate=%08x",
+                                    (void*) j2->aobj, a[0], a[1], a[4]);
+                        }
+                    }
+                }
                 fprintf(stderr, "\n");
             }
         }
@@ -809,6 +836,66 @@ static void pc_trace_ftdump(void)
     fprintf(stderr, "\n");
 }
 
+/* MELEE_ECBDUMP=<slot>:<from>-<to> prints a fighter's ECB, the ECB it is
+ * interpolating towards, and the source it was built from, as raw words. The
+ * local Dolphin build prints the same format under the same variable; the two
+ * structures do not share offsets -- the port's pointers are eight bytes --
+ * so each side reads its own fields by name and the values line up. */
+static void pc_trace_ecbdump(void)
+{
+    const char* spec = getenv("MELEE_ECBDUMP");
+    int slot = 0;
+    unsigned from = 0, to = 0xFFFFFFFFu, gf;
+    StaticPlayer* sp;
+    HSD_GObj* g;
+    Fighter* fp;
+    CollData* c;
+    int k;
+
+    if (spec == NULL || *spec == '\0') {
+        return;
+    }
+    if (sscanf(spec, "%d:%u-%u", &slot, &from, &to) != 3) {
+        if (sscanf(spec, "%d:%u", &slot, &from) != 2) {
+            return;
+        }
+        to = from;
+    }
+    gf = (unsigned) gm_8016AEDC();
+    if (gf < from || gf > to) {
+        return;
+    }
+    sp = Player_GetPtrForSlot(slot);
+    g = sp->player_entity[0];
+    fp = (g != NULL) ? (Fighter*) g->user_data : NULL;
+    if (fp == NULL) {
+        return;
+    }
+    c = &fp->coll_data;
+    fprintf(stderr, "[ECB-PORT] p%d gframe=%u ecb=", slot, gf);
+    for (k = 0; k < 8; k++) {
+        fprintf(stderr, "%08x ", ((const u32*) &c->ecb)[k]);
+    }
+    fprintf(stderr, "want=");
+    for (k = 0; k < 8; k++) {
+        fprintf(stderr, "%08x ", ((const u32*) &c->desired_ecb)[k]);
+    }
+    fprintf(stderr, "src=%d up=%08x down=%08x front=%08x back=%08x ang=%08x "
+                    "x124=%08x x128=%08x x12C=%08x flags=%08x env=%08x\n",
+            (int) c->ecb_source.kind, *(const u32*) &c->ecb_source.up,
+            *(const u32*) &c->ecb_source.down,
+            *(const u32*) &c->ecb_source.front,
+            *(const u32*) &c->ecb_source.back,
+            *(const u32*) &c->ecb_source.angle,
+            *(const u32*) &c->ecb_source.x124,
+            *(const u32*) &c->ecb_source.x128,
+            *(const u32*) &c->ecb_source.x12C, (unsigned) c->x130_flags,
+            (unsigned) c->env_flags);
+    fprintf(stderr, "[X594-PORT] p%d gframe=%u x594=%08x loop=%d animid=%d\n",
+            slot, gf, (unsigned) fp->x594_s32, (int) fp->x594_b1_loop,
+            (int) fp->anim_id);
+}
+
 void pc_trace_frame(int frame)
 {
     static int init = 0;
@@ -838,6 +925,7 @@ void pc_trace_frame(int frame)
     pc_trace_animscript();
     pc_trace_bones();
     pc_trace_ftdump();
+    pc_trace_ecbdump();
     if (out == NULL && sync_fd < 0) {
         return;
     }

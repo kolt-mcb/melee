@@ -1969,8 +1969,18 @@ struct ftData_80085FD4_ret {
     s32 x4;
     s32 x8;
     UNK_T xC;
-    /* +18 */ u8 x10_b0 : 1;
-    /* +18 */ u8 x10_b1 : 1;
+    /* +18: the same MSB-first/LSB-first problem as x594. This word is a
+     * byte-swapped s32 (Fighter_WaitAnimData::x10_animCurrFlags), and on GCN
+     * a u8 bitfield in its first byte starts at the top: x10_b0 is bit 31 of
+     * the word and x10_b1 is bit 30. Declared LSB-first they landed on bits 0
+     * and 1, so x10_b1 -- the loop flag, 0x40000000 -- always read 0 and
+     * ftAnim_8006EDD0 never gave the animation skeleton AOBJ_LOOP. The
+     * displayed skeleton got it from x594_b1_loop and looped correctly, so
+     * the fighter looked right; only the tree the blend interpolates *from*
+     * stopped dead on its last frame. */
+    u32 x10_pad : 30;
+    u32 x10_b1 : 1;
+    u32 x10_b0 : 1;
     /* +1C */ u32 x14;
 #else
     /* +0 */ const char* x0;

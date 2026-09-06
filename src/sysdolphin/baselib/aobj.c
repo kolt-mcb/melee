@@ -42,6 +42,25 @@ u32 HSD_AObjGetFlags(HSD_AObj* aobj)
 
 void HSD_AObjSetFlags(HSD_AObj* aobj, u32 flags)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_LOOPDBG=1 counts the AObjs this actually reaches. A fighter whose
+     * animations run once and stop has either not been given AOBJ_LOOP or has
+     * had it taken away again, and the two look identical from outside. */
+    {
+        static int on = -1;
+        static long n;
+        if (on < 0) {
+            on = getenv("MELEE_LOOPDBG") != NULL;
+        }
+        if (on && (flags & AOBJ_LOOP)) {
+            extern u32 gm_8016AEDC(void);
+            n++;
+            fprintf(stderr, "[LOOPSET] gframe=%u #%ld aobj=%p was=%08x\n",
+                    (unsigned) gm_8016AEDC(), n, (void*) aobj,
+                    aobj ? (unsigned) aobj->flags : 0u);
+        }
+    }
+#endif
     if (aobj) {
         flags &= (AOBJ_LOOP | AOBJ_NO_UPDATE);
         aobj->flags |= flags;
