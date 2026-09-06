@@ -6,6 +6,7 @@
  * path from a fighter's bones to where it ends up standing. */
 #define MPC_FMA(a, b, c) fmaf((a), (b), (c))
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 extern int gm_8016AEDC(void);
 #else
@@ -3295,6 +3296,31 @@ bool mpColl_800491C8_RightWall(CollData* coll)
     line_id = mpColl_804D6494_line_id;
     flags = mpColl_804D6498_flags;
     normal = mpColl_80458810.normal;
+#if BUILD_TARGET_PC
+    /* MELEE_WALLDBG=<lo>-<hi>: how many wall candidates this pass had and the
+     * bound it computed. A fighter the console pushes off a wall and the port
+     * does not has either no candidate or a different bound, and the two look
+     * identical from outside. */
+    {
+        static int lo = -2, hi;
+        if (lo == -2) {
+            const char* e = getenv("MELEE_WALLDBG");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            lo = e ? atoi(e) : -1;
+            hi = dash ? atoi(dash + 1) : lo;
+        }
+        if (lo >= 0) {
+            int f = (int) gm_8016AEDC();
+            if (f >= lo && f <= hi) {
+                fprintf(stderr,
+                        "[WALL] gframe=%d right n=%d max_x=%08x x=%08x\n", f,
+                        (int) mpColl_804D6488,
+                        *(u32*) &mpColl_804D6490_max_x,
+                        *(u32*) &coll->cur_pos.x);
+            }
+        }
+    }
+#endif
     if (coll->cur_pos.x < mpColl_804D6490_max_x) {
         coll->cur_pos.x = mpColl_804D6490_max_x;
         coll->right_facing_wall.index = line_id;
