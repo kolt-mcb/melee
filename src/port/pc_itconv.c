@@ -448,6 +448,24 @@ static ItemStateArray* conv_states(const struct arch* a, u32 off, int* n_out)
             out[i].xC_script = (void*) (a->base + o3);
         }
     }
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ITHIT") != NULL) {
+        u32 k, nz = 0;
+        for (k = 0; k < n; k++) {
+            if (out[k].xC_script != NULL) {
+                nz++;
+            }
+        }
+        fprintf(stderr,
+                "[ITCONV] states off=%x n=%u scripts=%u end=%x len=%x raw0=",
+                off, n, nz, end, (unsigned) a->len);
+        {
+            const u8* e = a->base + off;
+            fprintf(stderr, "%08x %08x %08x %08x\n", be32(e), be32(e + 4),
+                    be32(e + 8), be32(e + 12));
+        }
+    }
+#endif
     *n_out = (int) n;
     return (ItemStateArray*) out;
 }

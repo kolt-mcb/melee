@@ -1303,6 +1303,38 @@ void Item_80268E5C(HSD_GObj* gobj, enum_t msid, Item_StateChangeFlags flags)
     item_data->x5CC_currentAnimFrame = 0.0F;
     temp_r0 = item_data->anim_id;
 
+#if BUILD_TARGET_PC
+    /* MELEE_ITHIT=1: what the item state loader found for this animation.
+     * cmd->u comes from xC_script here, and an item whose script pointer is
+     * null runs no commands at all -- no hitboxes, no effects. */
+    {
+        static int on = -1;
+        if (on < 0) {
+            on = getenv("MELEE_ITHIT") != NULL;
+        }
+        if (on) {
+            static int said[512];
+            int k = ((int) item_data->kind & 255) * 2 + (temp_r0 != -1);
+            if (!said[k]) {
+                void* st = item_data->xC4_article_data != NULL
+                               ? (void*) item_data->xC4_article_data
+                                     ->xC_itemStates
+                               : NULL;
+                said[k] = 1;
+                fprintf(stderr,
+                        "[ITLOAD] kind=%d anim=%d article=%p states=%p "
+                        "script=%p flags=%x\n",
+                        (int) item_data->kind, (int) temp_r0,
+                        (void*) item_data->xC4_article_data, st,
+                        (st != NULL && temp_r0 != -1)
+                            ? (void*) ((struct ItemStateDesc*) st)[temp_r0]
+                                  .xC_script
+                            : NULL,
+                        (unsigned) flags);
+            }
+        }
+    }
+#endif
     if (temp_r0 != -1) {
         item_data->xD0_itemStateDesc =
             (temp_r23 =
