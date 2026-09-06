@@ -313,11 +313,19 @@ static void pc_trace_ailog(void)
                         int depth = 0;
                         fprintf(stderr, "[FTCHAIN-PORT] gframe=%u p%d",
                                 (unsigned) gm_8016AEDC(), vslot);
-                        while (j != NULL && depth < 5) {
-                            fprintf(stderr, " %d:%08x,%08x/r%08x,%08x,%08x",
-                                    depth,
-                                    *(const unsigned*) &j->mtx[0][3],
-                                    *(const unsigned*) &j->mtx[1][3],
+                        while (j != NULL && depth < 12) {
+                            fprintf(stderr, " %d:", depth);
+                            {
+                                int mi, mj;
+                                for (mi = 0; mi < 3; mi++) {
+                                    for (mj = 0; mj < 4; mj++) {
+                                        fprintf(stderr, "%08x.",
+                                                *(const unsigned*)
+                                                    &j->mtx[mi][mj]);
+                                    }
+                                }
+                            }
+                            fprintf(stderr, "/r%08x,%08x,%08x",
                                     ((const unsigned*) &j->rotate)[0],
                                     ((const unsigned*) &j->rotate)[1],
                                     ((const unsigned*) &j->rotate)[2]);
