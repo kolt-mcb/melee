@@ -2047,12 +2047,27 @@ __attribute__((weak)) void PSMTXConcat(Mtx mA, Mtx mB, Mtx mAB)
      * PSMTXConcat(parent->mtx, jobj->mtx, jobj->mtx) with mB == mAB.
      * The original PPC SIMD implementation loads all of mB into
      * FPRs before storing, so in-place concatenation is legal. */
+    /* Accumulate the way 80342208 does: the k=0 term is a plain multiply and
+     * the other two are ps_madds, which do not round the product before the
+     * add. Three roundings here against five, and the difference shows: a
+     * fighter's joint matrices came out one ULP from the console's four
+     * joints up the chain from the ECB, and grew to a dozen by the time it
+     * reached the box the ground is tested against. fmaf is the scalar
+     * ps_madd. The translation column's + mA[i][3] is retail's ps_madds1
+     * against a constant 1.0, which is a plain add. */
     f32 tmp[3][4];
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
-            tmp[i][j] = mA[i][0] * mB[0][j] + mA[i][1] * mB[1][j] + mA[i][2] * mB[2][j];
+            f32 t = mA[i][0] * mB[0][j];
+            t = fmaf(mA[i][1], mB[1][j], t);
+            tmp[i][j] = fmaf(mA[i][2], mB[2][j], t);
         }
-        tmp[i][3] = mA[i][0] * mB[0][3] + mA[i][1] * mB[1][3] + mA[i][2] * mB[2][3] + mA[i][3];
+        {
+            f32 t = mA[i][0] * mB[0][3];
+            t = fmaf(mA[i][1], mB[1][3], t);
+            t = fmaf(mA[i][2], mB[2][3], t);
+            tmp[i][3] = t + mA[i][3];
+        }
     }
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 4; j++)
