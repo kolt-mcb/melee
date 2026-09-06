@@ -409,6 +409,28 @@ void ftCo_800A0CB0(Fighter* fp)
 
 void ftCo_800A0DA4(Fighter* fp)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_REACHDBG=<lo>-<hi>: every rebuild of the CPU AI's reach. The
+     * other fighter's attack decision reads these three numbers, so a rebuild
+     * on a frame the console does not rebuild -- or from hurtboxes refreshed
+     * at a different point in the frame -- decides an attack. */
+    {
+        static int lo = -2, hi;
+        if (lo == -2) {
+            const char* e = getenv("MELEE_REACHDBG");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            lo = e ? atoi(e) : -1;
+            hi = dash ? atoi(dash + 1) : lo;
+        }
+        if (lo >= 0) {
+            int f = (int) gm_8016AEDC();
+            if (f >= lo && f <= hi) {
+                fprintf(stderr, "[REACHUPD] gframe=%d p%d from=%p\n", f,
+                        (int) fp->player_id, __builtin_return_address(0));
+            }
+        }
+    }
+#endif
     int i;
     FighterHurtCapsule* hurt;
     struct Fighter_x1A88_t* temp_r28;

@@ -894,6 +894,15 @@ static void pc_trace_ecbdump(void)
     fprintf(stderr, "[X594-PORT] p%d gframe=%u x594=%08x loop=%d animid=%d\n",
             slot, gf, (unsigned) fp->x594_s32, (int) fp->x594_b1_loop,
             (int) fp->anim_id);
+    /* The CPU AI's idea of how far this fighter reaches, rebuilt every frame
+     * from its hurtboxes. It is what the *other* fighter's attack decision is
+     * compared against, so it decides an attack without appearing in any
+     * traced field. The reference build reads the same four words at
+     * fighter+0x1FE4. */
+    fprintf(stderr, "[REACH-PORT] p%d gframe=%u %08x %08x %08x %08x n=%d\n",
+            slot, gf, *(const u32*) &fp->x1A88.x55C,
+            *(const u32*) &fp->x1A88.x560, *(const u32*) &fp->x1A88.x564,
+            *(const u32*) &fp->x1A88.x568, (int) fp->hurt_capsules_len);
 }
 
 void pc_trace_frame(int frame)
