@@ -499,6 +499,15 @@ void Fighter_LoadCommonData(void)
                             "special", "weapon", "edgeguard"
                         };
                         int f2, k2;
+                        {
+                            int q;
+                            fprintf(stderr, "[CPUDIST-PORT]");
+                            for (q = 0; q < 26; q++) {
+                                fprintf(stderr, " %08x",
+                                        *(const unsigned*) &pc_dist[q]);
+                            }
+                            fprintf(stderr, "\n");
+                        }
                         for (f2 = 0; f2 < 7; f2++) {
                             fprintf(stderr, "[CPUTBL-PORT] %-9s", nm[f2]);
                             for (k2 = 0; k2 < 26; k2++) {
