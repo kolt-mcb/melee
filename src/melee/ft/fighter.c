@@ -2242,6 +2242,35 @@ void Fighter_8006A360(Fighter_GObj* gobj)
             }
         }
 
+#if BUILD_TARGET_PC
+        /* MELEE_OFFSCR=<slot>: the four things the off-screen damage tick
+         * asks. A fighter launched past the top of the screen takes a point
+         * of damage every x7AC frames, and none of it is visible in any
+         * traced field until the percent moves. */
+        {
+            static int want = -2;
+            if (want == -2) {
+                const char* e = getenv("MELEE_OFFSCR");
+                want = (e != NULL) ? atoi(e) : -1;
+            }
+            if (want >= 0 && fp->player_id == want) {
+                fprintf(stderr,
+                        "[OFFSCR] p%d gframe=%u b4=%d cam=%08x pct=%08x "
+                        "x7B0=%08x magn=%d bit3=%d x1910=%d x7AC=%d "
+                        "offcam=%d scr=(%d,%d)\n",
+                        (int) fp->player_id, (unsigned) gm_8016AEDC(),
+                        (int) fp->x221F_b4,
+                        *(u32*) &(f32) { Camera_80031144() },
+                        *(u32*) &fp->dmg.x1830_percent,
+                        *(u32*) &p_ftCommonData->x7B0,
+                        (int) ifMagnify_802FC998(fp->player_id),
+                        (int) Player_GetMoreFlagsBit3(fp->player_id),
+                        (int) fp->dmg.x1910, (int) p_ftCommonData->x7AC,
+                        (int) fp->x221F_b0, (int) fp->x2188.x,
+                        (int) fp->x2188.y);
+            }
+        }
+#endif
         if (!fp->x221F_b4 && Camera_80031144() == 1.0f) {
             if (fp->dmg.x1830_percent < p_ftCommonData->x7B0) {
                 if (ifMagnify_802FC998(fp->player_id) &&
