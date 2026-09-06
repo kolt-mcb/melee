@@ -579,6 +579,7 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
 
     dump_path = os.environ.get("MELEE_LOCKSTEP_DUMP")
     dump_fp = open(dump_path, "w") if dump_path else None
+    last_gframe = {"port": 0, "ref": 0}
     pads = Pads()
     console_input = console_steps(steps)
     # How long each side takes to boot is not interesting and should not have
@@ -621,6 +622,25 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
                                      for k, v in sorted(side.row.items()))))
             pg = int(port.row["gframe"])
             rg = int(ref.row["gframe"])
+            # A match-frame counter of 0 means "not in a match", and the
+            # pairing below uses it to let whichever side is still loading run
+            # on alone. The console reads 0 for a single frame in the middle
+            # of a match -- once in 1400 frames, at its raw frame 3641 of a run
+            # that was otherwise identical -- and that one reading handed it a
+            # free frame, which its particle generators spent drawing from the
+            # RNG. Everything after that was a different match.
+            #
+            # So a zero is only believed while that side has yet to reach a
+            # match, or once the other side has left one too. Mid-match it is
+            # a bad reading and the last good value stands.
+            if rg == 0 and last_gframe["ref"] > 0 and pg > 0:
+                rg = last_gframe["ref"]
+            if pg == 0 and last_gframe["port"] > 0 and rg > 0:
+                pg = last_gframe["port"]
+            if pg > 0:
+                last_gframe["port"] = pg
+            if rg > 0:
+                last_gframe["ref"] = rg
             rframe = int(ref.row["frame"])
 
             # The route on the clock both sides share: frames since the
