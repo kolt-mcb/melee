@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 #include "itanimlist.h"
 #if BUILD_TARGET_PC
 #include "port/pc_script.h"
@@ -92,6 +96,21 @@ void it_802790C0(Item_GObj* item_gobj, CommandInfo* cmd)
     u32 bone_idx;
     hb = &item->x5D4_hitboxes[hitbox_idx];
     hit = &hb->hit;
+#if BUILD_TARGET_PC
+    /* MELEE_ITHIT=1: every item hitbox this script command creates. A stage
+     * article whose script never reaches here has no hitbox at all, and the
+     * absence is invisible until something measures it. */
+    {
+        static int on = -1;
+        if (on < 0) {
+            on = getenv("MELEE_ITHIT") != NULL;
+        }
+        if (on) {
+            fprintf(stderr, "[ITHIT] kind=%d idx=%u group=%u\n",
+                    (int) item->kind, (unsigned) hitbox_idx, (unsigned) x4);
+        }
+    }
+#endif
 
     if (hit->state == HitCapsule_Disabled || hit->x4 != x4) {
         hit->x4 = x4;
@@ -347,6 +366,24 @@ void it_802799E4(Item_GObj* item_gobj)
     cmd->frame_count = item->x5CC_currentAnimFrame;
     item->xDBC_itcmd_var4_word = 0;
 
+#if BUILD_TARGET_PC
+    {
+        static int on = -1;
+        if (on < 0) {
+            on = getenv("MELEE_ITHIT") != NULL;
+        }
+        if (on) {
+            static int said[512];
+            int k = ((int) item->kind & 255) * 2 + (cmd->u != NULL);
+            if (!said[k]) {
+                said[k] = 1;
+                fprintf(stderr, "[ITSCRIPT] kind=%d cmd=%p anim=%d\n",
+                        (int) item->kind, (void*) cmd->u,
+                        (int) item->anim_id);
+            }
+        }
+    }
+#endif
     if (cmd->u == NULL) {
         return;
     }
@@ -376,6 +413,18 @@ loop:
         goto loop;
     }
     opcode -= 10;
+#if BUILD_TARGET_PC
+    {
+        static int on = -1;
+        if (on < 0) {
+            on = getenv("MELEE_ITHIT") != NULL;
+        }
+        if (on) {
+            fprintf(stderr, "[ITCMD] kind=%d op=%u\n", (int) item->kind,
+                    (unsigned) (opcode + 10));
+        }
+    }
+#endif
     it_803F22A8[opcode](item_gobj, cmd);
     goto loop;
 }
