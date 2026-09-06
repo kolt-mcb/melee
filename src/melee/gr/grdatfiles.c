@@ -2870,12 +2870,18 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
             stage_info.quake_model_set =
                 HSD_ArchiveGetPublicAddress(sp14, "quake_model_set");
 #if BUILD_TARGET_PC
-            /* PC port: raw big-endian like itemdata and ald_yaku_all, which
-             * are already nulled for the same reason. grLib_801C9CEC walks
-             * its ->joint and ->anims[] as native pointers; those are 4-byte
-             * file offsets. Reached as soon as fighter physics started
-             * running. Screen-shake models are not needed to play. */
-            stage_info.quake_model_set = NULL;
+            /* Raw big-endian like itemdata and ald_yaku_all: grLib_801C9CEC
+             * walks ->joint and ->anims[] as native pointers and those are
+             * 4-byte file offsets. This used to be nulled on the grounds that
+             * screen-shake models are not needed to play -- but they are:
+             * grLib_801C9BC8 feeds the shake joint's translation to
+             * Camera_8002A278, which is the whole of the camera's jolt, and
+             * with the model missing the port's camera sat still where the
+             * console's moved half a unit on every hit. That is not visible
+             * in any traced field until something asks where the edge of the
+             * screen is -- the off-screen damage tick does. */
+            stage_info.quake_model_set = pc_conv_ModelDescRaw(
+                stage_info.quake_model_set, sp14->data);
 #endif
         }
         temp_r3->unk0 = sp14;
