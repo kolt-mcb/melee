@@ -423,6 +423,57 @@ void Fighter_LoadCommonData(void)
                                   (double) pc_stale[2]);
                 }
             }
+            /* Symbol 1, Fighter_804D6550: the item-throw table. Two pieces
+             * of code index it, and they disagree about where it starts --
+             * ftCo_80095D5C reads floats at `base + motion*3 - 0x468` while
+             * ftCo_80095EFC reads a {velocity_mul, angle, x8} record at
+             * `base + (motion - ftCo_MS_LightThrowF) * 12`. Rather than pick
+             * one reading, byte-swap a window of the file either side of the
+             * symbol and hand back a pointer at the same relative position,
+             * so both forms land on real numbers.
+             *
+             * On the zero arena every one of them read 0.0, so a thrown item
+             * left the fighter's hand with zero velocity and its hitbox with
+             * zero damage. That is invisible in the traced fields -- the
+             * fighter is identical -- until the item lands somewhere it
+             * would not have on the console and draws from the RNG. */
+            {
+                u32 off1 = PC_BE32(offs[1]);
+                static u8 pc_throwtbl[0x1000];
+                if (off1 != 0 && off1 < fsize) {
+                    u32 lo = off1 > 0x800 ? off1 - 0x800 : 0;
+                    u32 hi = off1 + 0x800 < fsize ? off1 + 0x800 : fsize;
+                    u32 k1;
+                    for (k1 = 0; lo + k1 * 4 + 4 <= hi &&
+                                 k1 * 4 < sizeof(pc_throwtbl);
+                         k1++)
+                    {
+                        u32 w = PC_BE32(((const u32*) (dataBase + lo))[k1]);
+                        memcpy(pc_throwtbl + k1 * 4, &w, 4);
+                    }
+                    Fighter_804D6550 = (int**) (pc_throwtbl + (off1 - lo));
+                    {
+                        const float* r =
+                            (const float*) ((u8*) Fighter_804D6550);
+                        int q;
+                        PORT_LOG_WARN("Fighter_LoadCommonData: item-throw "
+                                      "table converted (LightThrowF "
+                                      "mul=%.3f ang=%.3f x8=%.3f)\n",
+                                      (double) r[0], (double) r[1],
+                                      (double) r[2]);
+                        if (getenv("MELEE_THROWDBG") != NULL) {
+                            for (q = 0; q < 24; q++) {
+                                fprintf(stderr,
+                                        "[THROWTBL] %2d (motion %3d) "
+                                        "%.4f %.4f %.4f\n",
+                                        q, 94 + q, (double) r[q * 3],
+                                        (double) r[q * 3 + 1],
+                                        (double) r[q * 3 + 2]);
+                            }
+                        }
+                    }
+                }
+            }
             /* Symbol 5, Fighter_804D6540: the per-kind "skip this part slot"
              * list that ftParts_8007506C consults. Leaving it on the zero
              * arena silently disabled the skip mechanism for everyone, which
@@ -616,7 +667,12 @@ void Fighter_LoadCommonData(void)
         }
         PORT_LOG_WARN("Fighter_LoadCommonData: arena-filling unconverted PlCo globals\n");
         if (p_ftCommonData == NULL) p_ftCommonData = (void*)pc_zero_target;
-        Fighter_804D6550 = (void*)pc_ptr_arena;
+        /* Guarded for the same reason as the block below: the item-throw
+         * table is converted above and an unguarded assignment here undoes
+         * it silently. */
+        if (Fighter_804D6550 == NULL) {
+            Fighter_804D6550 = (void*)pc_ptr_arena;
+        }
         Fighter_804D654C = (void*)pc_ptr_arena;
         if (Fighter_804D6548 == NULL) {
             Fighter_804D6548 = (void*)pc_ptr_arena;

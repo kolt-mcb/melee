@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 #include "it_2725.h"
 
 #include "it_279C.h"
@@ -692,6 +696,21 @@ void it_80273748(Item_GObj* item_gobj, Vec3* pos, Vec3* vel)
     if (item->xDC8_word.flags.x0) {
         owner = item->x51C;
     }
+#if BUILD_TARGET_PC
+    /* MELEE_THROWDBG=1: the velocity a thrown item is released with and the
+     * attribute that scales it. An item that leaves a fighter's hand with zero
+     * velocity has one of the two zero, and the item list cannot tell which. */
+    if (getenv("MELEE_THROWDBG") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr,
+                "[THROW] gframe=%u kind=%d vel=(%08x,%08x,%08x) mul=%08x "
+                "attr=%p\n",
+                (unsigned) gm_8016AEDC(), (int) item->kind,
+                *(u32*) &vel->x, *(u32*) &vel->y, *(u32*) &vel->z,
+                *(u32*) &item->xCC_item_attr->x4_throw_speed_mul,
+                (void*) item->xCC_item_attr);
+    }
+#endif
     item->x40_vel = *vel;
     item->x40_vel.x *= item->xCC_item_attr->x4_throw_speed_mul;
     item->x40_vel.y *= item->xCC_item_attr->x4_throw_speed_mul;
@@ -787,6 +806,21 @@ void it_80273B50(Item_GObj* item_gobj, Vec3* vel)
     if (item->xDC8_word.flags.x0) {
         owner_gobj = item->x51C;
     }
+#if BUILD_TARGET_PC
+    /* MELEE_THROWDBG=1: the velocity a thrown item is released with and the
+     * attribute that scales it. An item that leaves a fighter's hand with zero
+     * velocity has one of the two zero, and the item list cannot tell which. */
+    if (getenv("MELEE_THROWDBG") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr,
+                "[THROW] gframe=%u kind=%d vel=(%08x,%08x,%08x) mul=%08x "
+                "attr=%p\n",
+                (unsigned) gm_8016AEDC(), (int) item->kind,
+                *(u32*) &vel->x, *(u32*) &vel->y, *(u32*) &vel->z,
+                *(u32*) &item->xCC_item_attr->x4_throw_speed_mul,
+                (void*) item->xCC_item_attr);
+    }
+#endif
     item->x40_vel = *vel;
     item->x40_vel.x *= item->xCC_item_attr->x4_throw_speed_mul;
     item->x40_vel.y *= item->xCC_item_attr->x4_throw_speed_mul;

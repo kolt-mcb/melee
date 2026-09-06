@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 #include "ftCo_ItemThrow.h"
 
 #include "ftCo_FallSpecial.h"
@@ -496,7 +500,23 @@ void ftCo_80095D5C(Fighter* fp, Vec3* arg1)
     if (cmd_var0 != 0) {
         vel = 0.01f * ((cmd_var0 >> 12) & 0x3FF);
     }
+#if BUILD_TARGET_PC
+    /* The original indexes Fighter_804D6550 as a *pointer array* --
+     * &Fighter_804D6550[motion_id * 3] -- which is four bytes a step on the
+     * console, so the byte offset is motion_id * 12. Writing the (u8*) cast
+     * first makes it motion_id * 1, which lands three quarters of the way
+     * back into the wrong record. The check is the other reader:
+     * ftCo_80095EFC indexes the same table as {velocity_mul, angle, x8}
+     * records from ftCo_MS_LightThrowF, and motion*12 - 0x468 is exactly
+     * (motion - ftCo_MS_LightThrowF) * 12.
+     *
+     * With Fighter_804D6550 on the zero arena this read 0 either way; once
+     * the table is real, the wrong stride is the difference between a thrown
+     * item leaving the hand at 2.4 units a frame and not moving at all. */
+    array_element = (u8*) Fighter_804D6550 + (fp->motion_id * 3) * 4;
+#else
     array_element = (u8*) Fighter_804D6550 + (fp->motion_id * 3);
+#endif
     vel *= fp->co_attrs.item_throw_velocity_multiplier *
            *(float*) (array_element - 0x468);
     if (cmd_var0 != 0) {
@@ -513,6 +533,22 @@ void ftCo_80095D5C(Fighter* fp, Vec3* arg1)
     arg1->x = fp->mv.co.itemthrow.facing_dir * (vel * cosf(angle));
     arg1->y = vel * sinf(angle);
     arg1->z = 0;
+#if BUILD_TARGET_PC
+    /* MELEE_THROWDBG=1: the two numbers the release velocity is built from.
+     * Both come out of Fighter_804D6550 -- symbol 1 of PlCo -- which two
+     * pieces of code index in different ways. */
+    if (getenv("MELEE_THROWDBG") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr,
+                "[THROWVEL] gframe=%u motion=%d vel=%08x ang=%08x "
+                "mul=%08x tbl=%08x base=%p elem=%p\n",
+                (unsigned) gm_8016AEDC(), (int) fp->motion_id,
+                *(u32*) &vel, *(u32*) &angle,
+                *(u32*) &fp->co_attrs.item_throw_velocity_multiplier,
+                *(const u32*) (array_element - 0x468),
+                (void*) Fighter_804D6550, (void*) array_element);
+    }
+#endif
 }
 
 void ftCo_ItemThrow_Anim(Fighter_GObj* gobj)
