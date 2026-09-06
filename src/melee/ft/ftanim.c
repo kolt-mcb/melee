@@ -740,6 +740,26 @@ void ftAnim_8006F4C8(Fighter* fp, bool do_blending, FigaTree* tree)
             HSD_ASSERTREPORT(767, 0, "atree data error! player %d\n",
                              fp->player_id);
         }
+#if BUILD_TARGET_PC
+        /* MELEE_BLENDAT: the part each node of the animation is attached to
+         * and how many tracks it carries. A part that never appears here, or
+         * appears with none, keeps whatever the bind-pose seed left. */
+        {
+            static int bl4 = -2;
+            if (bl4 == -2) {
+                const char* e = getenv("MELEE_BLENDAT");
+                bl4 = e != NULL ? atoi(e) : -1;
+            }
+            if (bl4 >= 0) {
+                extern u32 gm_8016AEDC(void);
+                if ((int) gm_8016AEDC() == bl4) {
+                    fprintf(stderr, "[WALK] attach p%d i=%d n=%d skip=%d\n",
+                            (int) fp->player_id, i, (int) *cur_node,
+                            fp->parts[i].flags_b0 || fp->parts[i].flags_b5);
+                }
+            }
+        }
+#endif
         if (!fp->parts[i].flags_b0 && !fp->parts[i].flags_b5) {
             HSD_JObj* jobj = get_part_joint(fp, i, do_blending);
             lbAnim_8001E6D8(jobj, tree, cur_track, *cur_node);
@@ -967,6 +987,22 @@ void ftAnim_8006FB88(Fighter* fp, Fighter_Part part, HSD_Joint* joint)
         while (ftParts_8007506C(fp->kind, i) != 0) {
             i++;
         }
+#if BUILD_TARGET_PC
+        {
+            static int bl5 = -2;
+            if (bl5 == -2) {
+                const char* e = getenv("MELEE_BLENDAT");
+                bl5 = e != NULL ? atoi(e) : -1;
+            }
+            if (bl5 >= 0) {
+                extern u32 gm_8016AEDC(void);
+                if ((int) gm_8016AEDC() == bl5) {
+                    fprintf(stderr, "[WALK] seed p%d i=%d\n",
+                            (int) fp->player_id, i);
+                }
+            }
+        }
+#endif
         if (i == fp->ft_data->x8->x10) {
             if (fp->parts[i].flags_b0) {
                 lb_8000B760(fp->parts[i].x4_jobj2, joint);
