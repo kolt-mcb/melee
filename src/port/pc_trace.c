@@ -891,9 +891,12 @@ static void pc_trace_ecbdump(void)
             *(const u32*) &c->ecb_source.x128,
             *(const u32*) &c->ecb_source.x12C, (unsigned) c->x130_flags,
             (unsigned) c->env_flags);
-    fprintf(stderr, "[X594-PORT] p%d gframe=%u x594=%08x loop=%d animid=%d\n",
+    fprintf(stderr,
+            "[X594-PORT] p%d gframe=%u x594=%08x loop=%d animid=%d "
+            "blendlen=%08x blendframe=%08x motion=%d\n",
             slot, gf, (unsigned) fp->x594_s32, (int) fp->x594_b1_loop,
-            (int) fp->anim_id);
+            (int) fp->anim_id, *(const u32*) &fp->x8A4_animBlendFrames,
+            *(const u32*) &fp->x8A8_anim_frame, (int) fp->motion_id);
     /* The CPU AI's idea of how far this fighter reaches, rebuilt every frame
      * from its hurtboxes. It is what the *other* fighter's attack decision is
      * compared against, so it decides an attack without appearing in any
