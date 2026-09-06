@@ -1021,6 +1021,35 @@ void ftAnim_8006FCE4(Fighter* fp, bool do_blending)
         }
 
         part = ftPartsRemap(fp->kind, kind, i);
+#if BUILD_TARGET_PC
+        /* MELEE_BLENDAT: which joint each track of a borrowed animation is
+         * attached to. When a fighter plays another character's animation the
+         * tracks are indexed by that character's joints and have to be
+         * remapped; a part that comes back FTPART_INVALID, or is skipped by
+         * its own flags, gets no track and holds its bind pose. */
+        {
+            static int blat2 = -2;
+            if (blat2 == -2) {
+                const char* e = getenv("MELEE_BLENDAT");
+                blat2 = e != NULL ? atoi(e) : -1;
+            }
+            if (blat2 >= 0) {
+                extern u32 gm_8016AEDC(void);
+                if ((int) gm_8016AEDC() == blat2) {
+                    fprintf(stderr,
+                            "[REMAP] p%d kind=%d from=%d i=%d part=%d "
+                            "b1=%d b0=%d b5=%d b3=%d blend=%d n=%d\n",
+                            (int) fp->player_id, (int) fp->kind, (int) kind,
+                            i, (int) part,
+                            part != 0xFF ? (int) fp->parts[part].flags_b1 : -1,
+                            part != 0xFF ? (int) fp->parts[part].flags_b0 : -1,
+                            part != 0xFF ? (int) fp->parts[part].flags_b5 : -1,
+                            part != 0xFF ? (int) fp->parts[part].flags_b3 : -1,
+                            (int) do_blending, (int) *cur_node);
+                }
+            }
+        }
+#endif
         if (part != 0xFFU) {
             if (fp->parts[part].flags_b1 && !fp->parts[part].flags_b0 &&
                 !fp->parts[part].flags_b5)
@@ -1042,6 +1071,28 @@ void ftAnim_8006FCE4(Fighter* fp, bool do_blending)
 
 void ftAnim_8006FE08(Fighter* fp, bool do_blending)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_BLENDAT: which of the two attach paths a fighter takes when its
+     * animation is (re)loaded, and whether the tracks go to the animation
+     * skeleton or the displayed one. */
+    {
+        static int blat3 = -2;
+        if (blat3 == -2) {
+            const char* e = getenv("MELEE_BLENDAT");
+            blat3 = e != NULL ? atoi(e) : -1;
+        }
+        if (blat3 >= 0) {
+            extern u32 gm_8016AEDC(void);
+            if ((int) gm_8016AEDC() == blat3) {
+                fprintf(stderr,
+                        "[ATTACH] p%d kind=%d x597=%d blend=%d tree=%p\n",
+                        (int) fp->player_id, (int) fp->kind,
+                        (int) fp->x597_bits, (int) do_blending,
+                        (void*) fp->x590);
+            }
+        }
+    }
+#endif
     if (fp->kind != fp->x597_bits) {
         ftAnim_8006FCE4(fp, do_blending);
     } else {
