@@ -887,6 +887,37 @@ void Camera_80029CF8(CameraBounds* bounds, CameraTransformState* transform)
     transform->target_position.x = transform->target_interest.x + x_off;
     transform->target_position.y = transform->target_interest.y - y_off;
     transform->target_position.z = transform->target_interest.z + cam_dist;
+#if BUILD_TARGET_PC
+    /* MELEE_CAMSOLVE=1: the bounding box the camera is solving for and the
+     * target it produced. The console's is at cm_80452C68+0x14 (the
+     * CameraTransformState) and is reachable through MELEE_MEMWATCH; the box
+     * itself is a local on both sides, so it has to be printed. */
+    {
+        static int on = -1;
+        extern u32 gm_8016AEDC(void);
+        if (on < 0) {
+            on = getenv("MELEE_CAMSOLVE") != NULL;
+        }
+        if (on) {
+            fprintf(stderr,
+                "[CAMSOLVE] gframe=%u box=(%08x,%08x,%08x,%08x) n=%d "
+                "z=%08x ti=(%08x,%08x) tp=(%08x,%08x) yoff=%08x dy=%08x "
+                "camb=(%08x,%08x,%08x,%08x)\n",
+                (unsigned) gm_8016AEDC(), *(u32*) &bounds->x_min,
+                *(u32*) &bounds->y_min, *(u32*) &bounds->x_max,
+                *(u32*) &bounds->y_max, (int) bounds->total_subjects,
+                *(u32*) &bounds->z_pos, *(u32*) &transform->target_interest.x,
+                *(u32*) &transform->target_interest.y,
+                *(u32*) &transform->target_position.x,
+                *(u32*) &transform->target_position.y, *(u32*) &y_off,
+                *(u32*) &dist_y,
+                *(u32*) &(f32) { Stage_GetCamBoundsTopOffset() },
+                *(u32*) &(f32) { Stage_GetCamBoundsBottomOffset() },
+                *(u32*) &(f32) { Stage_GetCamBoundsLeftOffset() },
+                *(u32*) &(f32) { Stage_GetCamBoundsRightOffset() });
+        }
+    }
+#endif
 }
 
 void Camera_8002A0C0(CameraBounds* bounds, CameraTransformState* state)
@@ -899,12 +930,33 @@ void Camera_8002A0C0(CameraBounds* bounds, CameraTransformState* state)
     f32 input_x;
     f32 input_y;
     f32 depth_ratio;
+#if BUILD_TARGET_PC
+    /* The retail code reaches the camera desc by casting the address of the
+     * first of four adjacent .data statics and walking past the other three.
+     * Nothing keeps separate statics adjacent here, and both HSD_WObjDesc and
+     * HSD_CameraDescPerspective are wider anyway (they hold pointers), so the
+     * cast landed short of the desc: the viewport read as zeros, the two
+     * divisions below produced inf, and the guard that used to stand here
+     * zeroed the camera translation to keep the view matrix finite.
+     *
+     * That translation is the camera shake -- Camera_8002A278 feeds it and
+     * Camera_8002AF68 adds it to the eye and the interest -- so zeroing it
+     * left the port's camera smooth where the console's jolts on every hit,
+     * about 0.3 to 0.6 units of vertical difference at a time. Nothing in the
+     * traced state depends on the camera, so it went unnoticed until the
+     * off-screen damage tick started asking where the top of the screen was.
+     *
+     * cm_803BCB64 is the same desc, by name. */
+#define CAM_DESC cm_803BCB64
+#else
     struct CameraStaticData {
         CameraModeCallbacks callbacks;
         HSD_WObjDesc interest;
         HSD_WObjDesc eyepos;
         HSD_CameraDescPerspective desc;
     }* data = (struct CameraStaticData*) &cm_803BCB18;
+#define CAM_DESC data->desc
+#endif
 
     input_x = cm_80452C68.xA4 * cm_80452C68.xAC;
     input_y = cm_80452C68.xA8 * cm_80452C68.xAC;
@@ -920,29 +972,13 @@ void Camera_8002A0C0(CameraBounds* bounds, CameraTransformState* state)
     input_y *= cm_80452C68.x2BC;
     half_view_height =
         bounds->z_pos * tanf(0.5f * (0.017453292f * state->fov));
-#if BUILD_TARGET_PC
-    /* PC port: an unconverted camera desc has an all-zero viewport, so these
-     * divisions produced inf and then NaN, poisoning cm_80452C68.translation
-     * — which Camera_8002AF68 adds to the eye/interest, making the whole
-     * view matrix NaN and silently clipping the entire match away. */
-    {
-        f32 vw = (f32) (data->desc.viewport.xmax - data->desc.viewport.xmin);
-        f32 vh = (f32) (data->desc.viewport.ymax - data->desc.viewport.ymin);
-        if (!(vw > 0.0f) || !(vh > 0.0f)) {
-            Camera_80030DE4(0.0f, 0.0f);
-            cm_80452C68.xA4 = 0.0f;
-            cm_80452C68.xA8 = 0.0f;
-            return;
-        }
-    }
-#endif
     viewport_x_scale =
-        data->desc.aspect *
+        CAM_DESC.aspect *
         (half_view_height /
-         (0.5f * (f32) (data->desc.viewport.xmax - data->desc.viewport.xmin)));
+         (0.5f * (f32) (CAM_DESC.viewport.xmax - CAM_DESC.viewport.xmin)));
     viewport_y_scale =
         half_view_height /
-        (0.5f * (f32) (data->desc.viewport.ymax - data->desc.viewport.ymin));
+        (0.5f * (f32) (CAM_DESC.viewport.ymax - CAM_DESC.viewport.ymin));
     depth_factor_y = Stage_GetCamZoomRate();
     depth_factor_x = Stage_GetCamMaxDepth() - depth_factor_y;
 
@@ -962,6 +998,24 @@ void Camera_8002A0C0(CameraBounds* bounds, CameraTransformState* state)
         f32 ty = depth_factor_y * (input_y * viewport_y_scale);
 #if BUILD_TARGET_PC
         if (!isfinite(tx) || !isfinite(ty)) { tx = 0.0f; ty = 0.0f; }
+        {
+            static int on = -1;
+            extern u32 gm_8016AEDC(void);
+            if (on < 0) {
+                on = getenv("MELEE_CAMSHAKE") != NULL;
+            }
+            if (on) {
+                fprintf(stderr,
+                        "[CAMSHAKE] gframe=%u in=(%08x,%08x) xAC=%08x "
+                        "hvh=%08x vs=(%08x,%08x) df=(%08x,%08x) "
+                        "t=(%08x,%08x)\n",
+                        (unsigned) gm_8016AEDC(), *(u32*) &input_x,
+                        *(u32*) &input_y, *(u32*) &cm_80452C68.xAC,
+                        *(u32*) &half_view_height, *(u32*) &viewport_x_scale,
+                        *(u32*) &viewport_y_scale, *(u32*) &depth_factor_x,
+                        *(u32*) &depth_factor_y, *(u32*) &tx, *(u32*) &ty);
+            }
+        }
 #endif
         Camera_80030DE4(tx, ty);
     }

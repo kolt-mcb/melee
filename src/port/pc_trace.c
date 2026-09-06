@@ -879,6 +879,44 @@ static void pc_trace_ftdump(void)
     fprintf(stderr, "\n");
 }
 
+/* MELEE_CAMDUMP=<from>-<to>: the game camera's eye and interest, raw. The
+ * camera is in no traced field, and it is what the off-screen test and every
+ * screen-space decision are built on. The local Dolphin build reads the same
+ * two HSD_WObj positions through MELEE_MEMWATCH. */
+static void pc_trace_camdump(void)
+{
+    extern HSD_GObj* Camera_80030A50(void);
+    const char* spec = getenv("MELEE_CAMDUMP");
+    unsigned from = 0, to = 0xFFFFFFFFu, gf;
+    HSD_GObj* g;
+    HSD_CObj* c;
+    Vec3 eye, tgt;
+
+    if (spec == NULL) {
+        return;
+    }
+    if (sscanf(spec, "%u-%u", &from, &to) != 2 &&
+        sscanf(spec, "%u", &from) != 1)
+    {
+        return;
+    }
+    gf = (unsigned) gm_8016AEDC();
+    if (gf < from || gf > to) {
+        return;
+    }
+    g = Camera_80030A50();
+    c = (g != NULL) ? (HSD_CObj*) g->hsd_obj : NULL;
+    if (c == NULL) {
+        return;
+    }
+    HSD_CObjGetEyePosition(c, &eye);
+    HSD_CObjGetInterest(c, &tgt);
+    fprintf(stderr, "[CAM-PORT] gframe=%u eye=%08x %08x %08x tgt=%08x %08x %08x\n",
+            gf, *(const u32*) &eye.x, *(const u32*) &eye.y,
+            *(const u32*) &eye.z, *(const u32*) &tgt.x, *(const u32*) &tgt.y,
+            *(const u32*) &tgt.z);
+}
+
 /* MELEE_PCTDUMP=<slot>:<from>-<to>: the damage percent as the float the game
  * keeps, not the integer the HUD shows. A fraction either side of a whole
  * number reads as a whole point of difference in the traced pct column, so
@@ -1077,6 +1115,7 @@ void pc_trace_frame(int frame)
     pc_trace_itang();
     pc_trace_hurtdump();
     pc_trace_pctdump();
+    pc_trace_camdump();
     pc_trace_animid();
     pc_trace_grlink();
     pc_trace_ailog();

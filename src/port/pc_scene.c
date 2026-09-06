@@ -497,6 +497,20 @@ DynamicModelDesc* pc_conv_ModelDescAt(const void* slot, u8* dataBase)
     return conv_model(be32(slot), dataBase);
 }
 
+/* Same conversion, but for a public symbol that names the DynamicModelDesc
+ * itself rather than a slot holding its offset -- HSD_ArchiveGetPublicAddress
+ * hands back `archive->data + offset`, so the struct is already located and
+ * only its four fields need following. */
+DynamicModelDesc* pc_conv_ModelDescRaw(const void* raw, u8* dataBase)
+{
+    if (!pc_ptr_sane(raw) || !pc_ptr_sane(dataBase) ||
+        (const u8*) raw < dataBase)
+    {
+        return NULL;
+    }
+    return conv_model((u32) ((const u8*) raw - dataBase), dataBase);
+}
+
 /* Converting the same scene twice would leak a whole second tree, and callers
  * legitimately ask more than once (the HUD is rebuilt per match). */
 #define PC_SCENE_CACHE 16

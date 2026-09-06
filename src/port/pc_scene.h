@@ -28,6 +28,7 @@ SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase);
  * scene -- the HUD's digit and marker models arrive that way. `slot` is the
  * host address the archive handed back, holding a 32-bit offset. */
 DynamicModelDesc* pc_conv_ModelDescAt(const void* slot, u8* dataBase);
+DynamicModelDesc* pc_conv_ModelDescRaw(const void* raw, u8* dataBase);
 
 /* And some are a NULL-terminated array of DynamicModelDesc offsets -- the
  * stock icons, the timer digits, the "ready" arrows. `arrBase` is the host
