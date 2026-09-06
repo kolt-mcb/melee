@@ -560,6 +560,23 @@ void HSD_MkRotationMtx(Mtx arg0, Vec3* arg1)
     f32 temp1;
     f32 temp2;
 
+/* Retail builds the four combined terms of a rotation matrix with fmsubs and
+ * fmadds -- see 8037A388 and 8037A38C in HSD_MtxSRT -- which round once for a
+ * multiply and a subtract or add together. GCC on x86-64 rounds twice, and a
+ * ULP here is a ULP in a joint's world matrix, which grows down the skeleton:
+ * measured, one ULP four joints above a fighter's ECB became a dozen by the
+ * time it reached the box the ground is tested against. fmaf is fmadds; a
+ * negated addend is fmsubs. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define MTX_FMA(a, b, c) fmaf((a), (b), (c))
+#define MTX_FMS(a, b, c) fmaf((a), (b), -(c))
+#else
+#define MTX_FMA(a, b, c) ((a) * (b) + (c))
+#define MTX_FMS(a, b, c) ((a) * (b) - (c))
+#endif
+
+
     sinX = sinf(arg1->x);
     cosX = cosf(arg1->x);
     sinY = sinf(arg1->y);
@@ -572,11 +589,11 @@ void HSD_MkRotationMtx(Mtx arg0, Vec3* arg1)
     arg0[1][0] = cosY * sinZ;
     arg0[2][0] = -sinY;
     temp2 = cosX * sinY;
-    arg0[0][1] = (cosZ * temp1) - (cosX * sinZ);
-    arg0[1][1] = (sinZ * temp1) + (cosX * cosZ);
+    arg0[0][1] = MTX_FMS(cosZ, temp1, cosX * sinZ);
+    arg0[1][1] = MTX_FMA(sinZ, temp1, cosX * cosZ);
     arg0[2][1] = sinX * cosY;
-    arg0[0][2] = (cosZ * temp2) + (sinX * sinZ);
-    arg0[1][2] = (sinZ * temp2) - (sinX * cosZ);
+    arg0[0][2] = MTX_FMA(cosZ, temp2, sinX * sinZ);
+    arg0[1][2] = MTX_FMS(sinZ, temp2, sinX * cosZ);
     arg0[2][2] = cosX * cosY;
     arg0[0][3] = 0;
     arg0[1][3] = 0;
@@ -627,11 +644,11 @@ void HSD_MtxSRT(Mtx m, Vec3* vec1, Vec3* vec2, Vec3* vec3, Vec3* vec4)
     m[0][0] = cosZ * (vec1x_2 * cosY);
     m[1][0] = sinZ * (vec1x_1 * cosY);
     m[2][0] = -vec1x * sinY;
-    m[0][1] = vec1y_2 * ((cosZ * (sinX * sinY)) - (cosX * sinZ));
-    m[1][1] = vec1y_1 * ((sinZ * (sinX * sinY)) + (cosX * cosZ));
+    m[0][1] = vec1y_2 * MTX_FMS(cosZ, sinX * sinY, cosX * sinZ);
+    m[1][1] = vec1y_1 * MTX_FMA(sinZ, sinX * sinY, cosX * cosZ);
     m[2][1] = cosY * (vec1y * sinX);
-    m[0][2] = vec1z_2 * ((cosZ * (cosX * sinY)) + (sinX * sinZ));
-    m[1][2] = vec1z_1 * ((sinZ * (cosX * sinY)) - (sinX * cosZ));
+    m[0][2] = vec1z_2 * MTX_FMA(cosZ, cosX * sinY, sinX * sinZ);
+    m[1][2] = vec1z_1 * MTX_FMS(sinZ, cosX * sinY, sinX * cosZ);
     m[2][2] = cosY * (vec1z * cosX);
     m[0][3] = vec3->x;
     m[1][3] = vec3->y;
