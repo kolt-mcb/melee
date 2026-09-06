@@ -1,4 +1,9 @@
 #include "mp/mpcoll.h"
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+extern int gm_8016AEDC(void);
+#endif
 
 #include "math.h"
 #include "platform.h"
@@ -3606,6 +3611,7 @@ bool mpColl_8004A45C_Floor(CollData* coll, int line_id)
         float right_x;
         float right_y;
         floor_id = mpLib_8004DD90_Floor(line_id, &edge, &y, &flags, &normal);
+
         edge_x = edge.x + 1.0F;
         edge_y = edge.y + 1.0F;
         right_x = edge.x + coll->ecb.right.x - coll->ecb.bottom.x;
@@ -3643,6 +3649,24 @@ bool mpColl_8004A45C_Floor(CollData* coll, int line_id)
     }
 
     if (on_edge) {
+#if BUILD_TARGET_PC
+        /* MELEE_COLLDBG=1 prints the edge this snap came from as raw words.
+         * The reference build's write watch names 8004A610 as the last
+         * instruction to touch a fighter's x on the frame it hits a wall, and
+         * the two inputs to that store are all that can differ. */
+        static int dbg = -1;
+        if (dbg < 0) {
+            dbg = getenv("MELEE_COLLDBG") != NULL;
+        }
+        if (dbg) {
+            fprintf(stderr,
+                    "[COLLSNAP] gframe=%u edge=(%08x,%08x) ecbbot=(%08x,%08x) "
+                    "-> %08x\n",
+                    (unsigned) gm_8016AEDC(), *(u32*) &edge.x, *(u32*) &edge.y,
+                    *(u32*) &coll->ecb.bottom.x, *(u32*) &coll->ecb.bottom.y,
+                    *(u32*) &(f32) { edge.x - coll->ecb.bottom.x });
+        }
+#endif
         coll->cur_pos.x = edge.x - coll->ecb.bottom.x;
         coll->cur_pos.y = edge.y - coll->ecb.bottom.y;
         coll->cur_pos.z = edge.z;
