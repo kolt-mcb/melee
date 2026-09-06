@@ -380,7 +380,15 @@ void FObjUpdateAnim(HSD_FObj* fobj, void* obj, HSD_ObjUpdateFunc obj_update)
                 fobj->p0 = fobj->p1;
             }
         }
+#if BUILD_TARGET_PC
+        /* MWCC emits fmadds here: the multiply and the add round once
+         * together. Two roundings put every linearly interpolated animation
+         * value a bit away, and those values are the joint rotations and
+         * translations every bone matrix is built from. */
+        fobjdata.fv = fmaf(fobj->d0, fobj->time, fobj->p0);
+#else
         fobjdata.fv = fobj->d0 * fobj->time + fobj->p0;
+#endif
         break;
     case HSD_A_OP_SPL0:
     case HSD_A_OP_SPL:

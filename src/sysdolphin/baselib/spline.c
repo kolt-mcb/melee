@@ -27,9 +27,27 @@ f32 splGetHelmite(f32 fterm, f32 time, f32 p0, f32 p1, f32 d0, f32 d1)
     _2t3_T3 = 2.0f * t3_T2 * fterm;
     _3t2_T2 = 3.0f * _1_T2 * t2;
 
+#if BUILD_TARGET_PC
+    /* MWCC fuses each `x*y + z` in this chain into fmadds -- one rounding for
+     * the product and the sum together. Plain arithmetic rounds twice at each
+     * step, and this is the interpolator every fighter animation runs through,
+     * so the error reaches each joint's rotation and translation and from
+     * there every bone matrix. */
+    {
+        f32 A = t3_T2 - t2_T;
+        f32 B = time + ((t3_T2 - t2_T) - t2_T);
+        f32 C = 1.0f + (_2t3_T3 - _3t2_T2);
+        f32 D = -_2t3_T3 + _3t2_T2;
+        f32 acc = p1 * D;
+        acc = fmaf(p0, C, acc);
+        acc = fmaf(d0, B, acc);
+        return fmaf(d1, A, acc);
+    }
+#else
     return (d1 * (t3_T2 - t2_T)) + ((d0 * (time + ((t3_T2 - t2_T) - t2_T))) +
                                     ((p0 * (1.0f + (_2t3_T3 - _3t2_T2))) +
                                      (p1 * (-_2t3_T3 + _3t2_T2))));
+#endif
 }
 
 inline void splGetCardinalPoint(Vec3* p, Vec3* cp, f32 tension, f32 u)
