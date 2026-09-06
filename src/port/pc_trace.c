@@ -285,8 +285,9 @@ static void pc_trace_ailog(void)
                                 *(const unsigned*) &jp.x,
                                 *(const unsigned*) &jp.y);
                     }
-                    fprintf(stderr, " ecbby=%08x",
-                            *(const unsigned*) &vfp->coll_data.ecb.bottom.y);
+                    fprintf(stderr, " ecbby=%08x blend=%08x",
+                            *(const unsigned*) &vfp->coll_data.ecb.bottom.y,
+                            *(const unsigned*) &vfp->x8A4_animBlendFrames);
                     {
                         /* Joint 0's own transform, before any matrix is built
                          * from it. If these agree and the world position does
