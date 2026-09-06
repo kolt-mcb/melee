@@ -199,7 +199,13 @@ s32 HSD_QuatLib_8037EF28(Quaternion* p, Quaternion* q, Quaternion* out, f32 t)
     f32 sp;
     f32 sq;
 
-    cosom = p->x * q->x + p->y * q->y + p->z * q->z + p->w * q->w;
+    /* Retail's dot product is a chain of fmadds off p->y * q->y (8037EF6C
+     * onward), and every `sp * p + sq * q` below is a multiply followed by
+     * an fmadds (8037EFFC). This is the slerp the fighter animation blend
+     * runs each joint through on every frame of a blend, so a rounding here
+     * reaches the pose directly. */
+    cosom = Q_FMA(p->w, q->w,
+                  Q_FMA(p->z, q->z, Q_FMA(p->x, q->x, p->y * q->y)));
 
     if ((1.0F + cosom) > 1e-10F) {
         if ((1.0F - cosom) > 1e-10F) {
@@ -211,10 +217,10 @@ s32 HSD_QuatLib_8037EF28(Quaternion* p, Quaternion* q, Quaternion* out, f32 t)
             sq = t;
             sp = (f32) (1.0 - (f64) t);
         }
-        out->x = sp * p->x + sq * q->x;
-        out->y = sp * p->y + sq * q->y;
-        out->z = sp * p->z + sq * q->z;
-        out->w = sp * p->w + sq * q->w;
+        out->x = Q_FMA(sp, p->x, sq * q->x);
+        out->y = Q_FMA(sp, p->y, sq * q->y);
+        out->z = Q_FMA(sp, p->z, sq * q->z);
+        out->w = Q_FMA(sp, p->w, sq * q->w);
     } else {
         out->x = -p->y;
         out->y = p->x;
@@ -224,19 +230,19 @@ s32 HSD_QuatLib_8037EF28(Quaternion* p, Quaternion* q, Quaternion* out, f32 t)
         if (t < 0.5F) {
             sp = sinf((f32) (M_PI_2 * (1.0F - (2.0F * t))));
             sq = sinf((f32) (M_PI_2 * (2.0F * t)));
-            out->x = sp * p->x + sq * q->x;
-            out->y = sp * p->y + sq * q->y;
-            out->z = sp * p->z + sq * q->z;
-            out->w = sp * p->w + sq * q->w;
+            out->x = Q_FMA(sp, p->x, sq * q->x);
+            out->y = Q_FMA(sp, p->y, sq * q->y);
+            out->z = Q_FMA(sp, p->z, sq * q->z);
+            out->w = Q_FMA(sp, p->w, sq * q->w);
         } else {
             t -= 0.5F;
             t2 = 2.0F * t;
             sp = sinf((f32) (M_PI_2 * (1.0F - t2)));
             sq = sinf((f32) (M_PI_2 * t2));
-            out->x = sp * p->x + sq * q->x;
-            out->y = sp * p->y + sq * q->y;
-            out->z = sp * p->z + sq * q->z;
-            out->w = sp * p->w + sq * q->w;
+            out->x = Q_FMA(sp, p->x, sq * q->x);
+            out->y = Q_FMA(sp, p->y, sq * q->y);
+            out->z = Q_FMA(sp, p->z, sq * q->z);
+            out->w = Q_FMA(sp, p->w, sq * q->w);
         }
     }
 

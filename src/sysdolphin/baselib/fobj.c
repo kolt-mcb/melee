@@ -354,9 +354,9 @@ void FObjUpdateAnim(HSD_FObj* fobj, void* obj, HSD_ObjUpdateFunc obj_update)
             extern u32 gm_8016AEDC(void);
             if ((int) gm_8016AEDC() == fobjat) {
                 fprintf(stderr,
-                        "[FOBJ] obj=%p type=%u intrp=%u time=%08x fterm=%u "
-                        "p0=%08x p1=%08x d0=%08x d1=%08x\n",
-                        (void*) fobj, (unsigned) fobj->obj_type,
+                        "[FOBJ] obj=%p fobj=%p type=%u intrp=%u time=%08x "
+                        "fterm=%u p0=%08x p1=%08x d0=%08x d1=%08x\n",
+                        obj, (void*) fobj, (unsigned) fobj->obj_type,
                         (unsigned) fobj->op_intrp,
                         *(const unsigned*) &fobj->time,
                         (unsigned) fobj->fterm,
