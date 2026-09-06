@@ -162,8 +162,11 @@ void PSMTXRotAxisRad(Mtx m, Vec* axis, f32 rad)
     if (!ps_ptr_valid(m) || !ps_ptr_valid(axis)) return;
     Vec n;
     PSVECNormalize(axis, &n);
-    f32 s = (f32)sin((double)rad);
-    f32 c = (f32)cos((double)rad);
+    /* The SDK calls the single-precision sinf/cosf, which are MSL's
+     * polynomial. Going through double sin/cos and rounding at the end is a
+     * different function and lands a bit away. */
+    f32 s = sinf(rad);
+    f32 c = cosf(rad);
     f32 t = 1.0f - c;
     f32 x = n.x, y = n.y, z = n.z;
     f32 xSq = x * x, ySq = y * y, zSq = z * z;
@@ -333,5 +336,6 @@ void MTXRotRad(Mtx m, char axis, f32 rad)
     if (!ps_ptr_valid(m)) {
         return;
     }
-    MTXRotTrig(m, axis, (f32) sin((double) rad), (f32) cos((double) rad));
+    /* sinf/cosf, not double sin/cos rounded -- see PSMTXRotAxisRad. */
+    MTXRotTrig(m, axis, sinf(rad), cosf(rad));
 }
