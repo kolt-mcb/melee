@@ -1,5 +1,17 @@
 #include "fighter.h"
 #if BUILD_TARGET_PC
+#include <math.h>
+/* Fighter_procUpdate is where a fighter's position is finally written, and
+ * MWCC fused three of the expressions that get it there. The interpolation
+ * one matters most: while dmg.x1948 is running -- a throw, or the frames
+ * after a hit -- self_vel reads as zero and the whole of the fighter's
+ * movement is that single fmadds at 8006BC7C. Rounding it twice put the
+ * position one bit off the console's within four hundred frames. */
+#define FT_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define FT_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+#if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
 #if BUILD_TARGET_PC
@@ -2833,17 +2845,20 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                 } else {
                     float kb_angle = atan2f(kb_vel_y, kb_vel_x);
 
-                    if (sqrtf(kb_vel_x * kb_vel_x + kb_vel_y * kb_vel_y) <
+                    if (sqrtf(FT_FMA(kb_vel_x, kb_vel_x,
+                                     kb_vel_y * kb_vel_y)) <
                         p_ftCommonData->x204_knockbackFrameDecay)
                     {
                         p_kb_vel->x = p_kb_vel->y = 0;
                     } else {
-                        p_kb_vel->x -=
-                            p_ftCommonData->x204_knockbackFrameDecay *
-                            cosf(kb_angle);
-                        p_kb_vel->y -=
-                            p_ftCommonData->x204_knockbackFrameDecay *
-                            sinf(kb_angle);
+                        /* 8006B9C8, 8006B9E4: fnmsubs -- the decay comes
+                         * off in one rounding, not two. */
+                        p_kb_vel->x =
+                            FT_FMA(-p_ftCommonData->x204_knockbackFrameDecay,
+                                   cosf(kb_angle), p_kb_vel->x);
+                        p_kb_vel->y =
+                            FT_FMA(-p_ftCommonData->x204_knockbackFrameDecay,
+                                   sinf(kb_angle), p_kb_vel->y);
                     }
                 }
 
@@ -2879,7 +2894,7 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                 float kb_y = pAtkShieldKB->y;
                 float atkShieldKBAngle = atan2f(kb_y, kb_x);
 
-                if (sqrtf(kb_x * kb_x + kb_y * kb_y) <
+                if (sqrtf(FT_FMA(kb_x, kb_x, kb_y * kb_y)) <
                     p_ftCommonData->x3E8_shieldKnockbackFrameDecay)
                 {
                     /// @bug IN THE MELEE CODE THAT CAUSES THE INVISIBLE
@@ -2892,12 +2907,13 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                     // p_stc_ftcommon->x3e8_shield_kb_frameDecay)/atkShieldKB_len
                     // float atkShieldKBAngle = atan2_80022C30(pAtkShieldKB->y,
                     // pAtkShieldKB->x);
-                    pAtkShieldKB->x -=
-                        p_ftCommonData->x3E8_shieldKnockbackFrameDecay *
-                        cosf(atkShieldKBAngle);
-                    pAtkShieldKB->y -=
-                        p_ftCommonData->x3E8_shieldKnockbackFrameDecay *
-                        sinf(atkShieldKBAngle);
+                    /* 8006BB34, 8006BB50 */
+                    pAtkShieldKB->x = FT_FMA(
+                        -p_ftCommonData->x3E8_shieldKnockbackFrameDecay,
+                        cosf(atkShieldKBAngle), pAtkShieldKB->x);
+                    pAtkShieldKB->y = FT_FMA(
+                        -p_ftCommonData->x3E8_shieldKnockbackFrameDecay,
+                        sinf(atkShieldKBAngle), pAtkShieldKB->y);
                 }
                 fp->xF4_ground_attacker_shield_kb_vel = 0;
             } else {
@@ -2951,10 +2967,11 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
             float C1 = 1.0f;
             float C2 = C1 - (float) fp->dmg.x194C / (float) fp->dmg.x1948;
 
-            selfVel.x =
-                C2 * (fp->self_vel.x - fp->xA4_unk_vel.x) + fp->xA4_unk_vel.x;
-            selfVel.y =
-                C2 * (fp->self_vel.y - fp->xA4_unk_vel.y) + fp->xA4_unk_vel.y;
+            /* 8006BC7C, 8006BC90 */
+            selfVel.x = FT_FMA(C2, fp->self_vel.x - fp->xA4_unk_vel.x,
+                               fp->xA4_unk_vel.x);
+            selfVel.y = FT_FMA(C2, fp->self_vel.y - fp->xA4_unk_vel.y,
+                               fp->xA4_unk_vel.y);
 
             fp->dmg.x194C--;
             if (fp->dmg.x194C == 0) {
