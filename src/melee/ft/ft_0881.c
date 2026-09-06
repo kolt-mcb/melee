@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 #include "ft_0881.h"
 
 #include <sysdolphin/baselib/random.h>
@@ -367,6 +371,26 @@ f32 ft_80089228(Fighter* fp, int attack_id, int arg2, f32 arg3)
     var_f31 = arg3;
     tmp = Player_GetStaleMoveTableIndexPtr(fp->player_id);
     temp_f1 = ft_80089118(tmp, attack_id, arg2);
+#if BUILD_TARGET_PC
+    /* MELEE_STALE=1: the damage a hit is about to do, the move it came from,
+     * and the queue of recently used moves the multiplier is read out of. A
+     * move that never enters the queue never stales, and full damage where
+     * the console does 91% of it is a whole point of percent. */
+    if (getenv("MELEE_STALE") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        int q;
+        fprintf(stderr, "[STALE] gframe=%u p%d id=%d inst=%d dmg=%.4f "
+                        "mul=%.4f idx=%d q=[",
+                (unsigned) gm_8016AEDC(), (int) fp->player_id, attack_id,
+                arg2, (double) arg3, (double) temp_f1,
+                (int) tmp->current_index);
+        for (q = 0; q < 10; q++) {
+            fprintf(stderr, "%d/%d ", (int) tmp->StaleMoves[q].move_id,
+                    (int) tmp->StaleMoves[q].attack_instance);
+        }
+        fprintf(stderr, "] tbl0=%.4f\n", (double) Fighter_804D6548[0]);
+    }
+#endif
     if (temp_f1 != 1.0F) {
         var_f31 *= temp_f1;
     }
