@@ -429,6 +429,19 @@ void Camera_800293E0(void)
     }
 }
 
+/* The camera is a feedback loop -- this frame's target is built from last
+ * frame's position -- so a last-bit difference here does not stay small. Every
+ * `a * b + c` below is one fmadds on the console (80029718, 800297CC, 80029880,
+ * 80029934 and 80029A64 in Camera_8002958C alone), rounded once; written out
+ * in C it rounds twice, and the camera's bounding box came out a few ULPs
+ * wide. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define CM_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define CM_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
 {
     f32 z_pos;
@@ -480,6 +493,28 @@ void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
         subject = cm_804D6468[0];
         while (subject != NULL) {
             if (Camera_8002928C(subject)) {
+#if BUILD_TARGET_PC
+                {
+                    static int on = -1;
+                    extern u32 gm_8016AEDC(void);
+                    if (on < 0) {
+                        on = getenv("MELEE_CAMSUBJ") != NULL;
+                    }
+                    if (on) {
+                        fprintf(stderr,
+                                "[CAMSUBJ] gframe=%u s=%d x10=(%08x,%08x) "
+                                "x2C=(%08x,%08x) x34=(%08x,%08x) mult=%08x\n",
+                                (unsigned) gm_8016AEDC(), (int) subject_count,
+                                *(u32*) &subject->x10.x,
+                                *(u32*) &subject->x10.y,
+                                *(u32*) &subject->x2C.x,
+                                *(u32*) &subject->x2C.y,
+                                *(u32*) &subject->x34.x,
+                                *(u32*) &subject->x34.y,
+                                *(u32*) &tracking_multiplier);
+                    }
+                }
+#endif
                 subject_count++;
                 base_pos = subject->x10;
                 test_pos = subject->x10;
@@ -504,7 +539,7 @@ void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
                     }
                 }
                 test_pos.x =
-                    (subject->x2C.x * tracking_multiplier) + base_pos.x;
+                    CM_FMA(subject->x2C.x, tracking_multiplier, base_pos.x);
                 cam_bounds_flags = Camera_80029124(&test_pos, 0);
                 if (cam_bounds_flags != CAM_BOUNDS_INSIDE) {
                     Ground_801C4368(&x_extent_ground, &x_extent_intercept);
@@ -532,7 +567,7 @@ void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
                     max_x = test_pos.x;
                 }
                 test_pos.x =
-                    (subject->x2C.y * tracking_multiplier) + base_pos.x;
+                    CM_FMA(subject->x2C.y, tracking_multiplier, base_pos.x);
                 cam_bounds_flags = Camera_80029124(&test_pos, 0);
                 if (cam_bounds_flags != CAM_BOUNDS_INSIDE) {
                     Ground_801C4368(&alt_x_ground, &alt_x_intercept);
@@ -560,7 +595,7 @@ void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
                     max_x = test_pos.x;
                 }
                 test_pos.y =
-                    (subject->x34.y * tracking_multiplier) + base_pos.y;
+                    CM_FMA(subject->x34.y, tracking_multiplier, base_pos.y);
                 cam_bounds_flags = Camera_80029124(&test_pos, 0);
                 if (cam_bounds_flags != CAM_BOUNDS_INSIDE) {
                     Ground_801C4368(&y_extent_ground, &y_extent_intercept);
@@ -588,7 +623,7 @@ void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
                     max_y = test_pos.y;
                 }
                 test_pos.y =
-                    (subject->x34.x * tracking_multiplier) + base_pos.y;
+                    CM_FMA(subject->x34.x, tracking_multiplier, base_pos.y);
                 cam_bounds_flags = Camera_80029124(&test_pos, 0);
                 if (cam_bounds_flags != CAM_BOUNDS_INSIDE) {
                     Ground_801C4368(&alt_y_ground, &alt_y_intercept);
@@ -655,7 +690,7 @@ void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
         z_factor = (z_pos - 80.0f) / 4920.0f;
     }
     new_bounds->x_min = min_x;
-    new_bounds->y_min = min_y - ((390.0f * z_factor) + 10.0f);
+    new_bounds->y_min = min_y - CM_FMA(390.0f, z_factor, 10.0f);
     new_bounds->x_max = max_x;
     new_bounds->y_max = max_y;
     new_bounds->total_subjects = subject_count;
@@ -670,9 +705,10 @@ inline float get_follow_speed(float temp_f4, float spread,
     } else if (spread < globals->x34) {
         return globals->x2C;
     } else {
-        return (((spread - globals->x34) / (temp_f4 - globals->x34)) *
-                (globals->x30 - globals->x2C)) +
-               globals->x2C;
+        /* 80029B50 */
+        return CM_FMA(globals->x30 - globals->x2C,
+                      (spread - globals->x34) / (temp_f4 - globals->x34),
+                      globals->x2C);
     }
 }
 
@@ -725,8 +761,9 @@ void Camera_80029AAC(CameraBounds* bounds, CameraTransformState* transform,
         lerp_factor = 0.0001f;
     }
 
-    transform->interest.x += offset_x * lerp_factor;
-    transform->interest.y += offset_y * lerp_factor;
+    /* 80029BAC, 80029BB8 */
+    transform->interest.x = CM_FMA(offset_x, lerp_factor, transform->interest.x);
+    transform->interest.y = CM_FMA(offset_y, lerp_factor, transform->interest.y);
 }
 
 #pragma dont_inline on
@@ -765,9 +802,10 @@ void Camera_80029C88(CameraBounds* unused, CameraTransformState* transform,
         scale = 1.0f;
     }
 
-    transform->position.x += dist.x * scale;
-    transform->position.y += dist.y * scale;
-    transform->position.z += dist.z * scale;
+    /* 80029CD4, 80029CE0, 80029CEC */
+    transform->position.x = CM_FMA(dist.x, scale, transform->position.x);
+    transform->position.y = CM_FMA(dist.y, scale, transform->position.y);
+    transform->position.z = CM_FMA(dist.z, scale, transform->position.z);
 }
 #pragma dont_inline reset
 
@@ -778,10 +816,11 @@ static inline f32 get_y_bias(f32 spread)
     } else if (spread < cm_803BCCA0.x24) {
         return cm_803BCCA0.x1C;
     } else {
-        return (cm_803BCCA0.x20 - cm_803BCCA0.x1C) *
-                   ((spread - cm_803BCCA0.x24) /
-                    (cm_803BCCA0.x28 - cm_803BCCA0.x24)) +
-               cm_803BCCA0.x1C;
+        /* 80029DB0 */
+        return CM_FMA(cm_803BCCA0.x20 - cm_803BCCA0.x1C,
+                      (spread - cm_803BCCA0.x24) /
+                          (cm_803BCCA0.x28 - cm_803BCCA0.x24),
+                      cm_803BCCA0.x1C);
     }
 }
 
@@ -827,7 +866,8 @@ void Camera_80029CF8(CameraBounds* bounds, CameraTransformState* transform)
 
     t = get_y_bias(spread);
     y_sum = (bounds->y_min - sp24.y) + (bounds->y_max - sp24.y);
-    base = y_sum * (0.5f - t) + sp24.y;
+    /* 80029DCC */
+    base = CM_FMA(y_sum, 0.5f - t, sp24.y);
     angle = -MTXDegToRad((base + cm_803BCCA0.x8) * Stage_GetCamInfoX24());
 
     if (angle > MTXDegToRad(cm_803BCCA0.xC)) {
@@ -839,9 +879,11 @@ void Camera_80029CF8(CameraBounds* bounds, CameraTransformState* transform)
 
     angle += Stage_GetCamPanAngleRadians();
     y_angle = angle;
-    fov_u = 0.5f * MTXDegToRad(transform->fov) + angle;
+    /* 80029E48 */
+    fov_u = CM_FMA(0.5f, MTXDegToRad(transform->fov), angle);
     HSD_ASSERT(1274, fov_u<MTXDegToRad(90.0F));
-    fov_d = 0.5f * MTXDegToRad(transform->fov) - angle;
+    /* 80029E7C: fmsubs, so the negation is inside the same rounding. */
+    fov_d = CM_FMA(0.5f, MTXDegToRad(transform->fov), -angle);
     HSD_ASSERT(1275, fov_d<MTXDegToRad(90.0F));
     tan_u = tanf(fov_u);
     tan_d = tanf(fov_d);
@@ -849,7 +891,10 @@ void Camera_80029CF8(CameraBounds* bounds, CameraTransformState* transform)
     Stage_GetCamBoundsBottomOffset();
     Stage_GetCamBoundsTopOffset();
     y_off = dist_y * tanf(y_angle);
-    transform->target_interest.y = y_off + (bounds->y_max - dist_y * tan_u);
+    /* 80029EE0: fnmsubs -- y_max - dist_y*tan_u is one rounding, and the
+     * y_off is added after it. */
+    transform->target_interest.y =
+        y_off + CM_FMA(-dist_y, tan_u, bounds->y_max);
     Stage_UnkSetVec3TCam_Offset(&sp14);
     x_center = 0.5f * (bounds->x_min + bounds->x_max);
     angle = -MTXDegToRad((x_center - sp14.x) * Stage_GetCamInfoX20());
@@ -861,9 +906,11 @@ void Camera_80029CF8(CameraBounds* bounds, CameraTransformState* transform)
         angle = MTXDegToRad(cm_803BCCA0.x18);
     }
 
-    fov_r = 0.5f * MTXDegToRad(transform->fov) - angle;
+    /* 80029F70 */
+    fov_r = CM_FMA(0.5f, MTXDegToRad(transform->fov), -angle);
     HSD_ASSERT(1288, fov_r<MTXDegToRad(90.0F));
-    fov_l = 0.5f * MTXDegToRad(transform->fov) + angle;
+    /* 80029FA4 */
+    fov_l = CM_FMA(0.5f, MTXDegToRad(transform->fov), angle);
     HSD_ASSERT(1289, fov_l<MTXDegToRad(90.0F));
     scaled_tan = cm_803BCB64.aspect * tanf(fov_r);
     tan_r = scaled_tan;
@@ -872,7 +919,9 @@ void Camera_80029CF8(CameraBounds* bounds, CameraTransformState* transform)
     Stage_GetCamBoundsLeftOffset();
     Stage_GetCamBoundsRightOffset();
     x_off = cm_803BCB64.aspect * (dist_x * tanf(angle));
-    transform->target_interest.x = (bounds->x_max - dist_x * tan_r) - x_off;
+    /* 8002A01C: fnmsubs again. */
+    transform->target_interest.x =
+        CM_FMA(-dist_x, tan_r, bounds->x_max) - x_off;
     transform->target_interest.z = 0.0f;
     dist_y = (dist_y > dist_x) ? dist_y : dist_x;
     cam_dist = dist_y;

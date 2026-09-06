@@ -117,13 +117,22 @@ def plan(target, port, grid=None):
     return out
 
 
-def emit(char0, char1, base, gap=60, hold_gap=10):
-    """Route lines in the .case `ref_input:` syntax, for both hands."""
+def emit(char0, char1, base, gap=60, hold_gap=10, lag=5):
+    """Route lines in the .case `ref_input:` syntax, for both hands.
+
+    `lag` is the stick latency: a press set on frame f does not reach the
+    cursor update until a few frames later, so a hold of n frames moves the
+    cursor for fewer than n. Measured at 5 frames against p_char -- a route
+    generated without it landed two cells short on both axes (Mewtwo instead
+    of Samus). Verify the result against the p0.char/p1.char columns; the aim
+    has 3.5 units of slack either way and this only has to be close.
+    """
     grid = load_grid()
     lines, f = [], base
     for port, ch in ((0, char0), (1, char1)):
         pfx = "" if port == 0 else "P2:"
         for tok, n in plan(ch, port, grid):
+            n += lag
             xy = {"right": "1.0:0.5", "left": "0.0:0.5",
                   "up": "0.5:1.0", "down": "0.5:0.0"}[tok]
             lines.append("ref_input: %d:%sMAIN:%s" % (f, pfx, xy))
@@ -177,6 +186,8 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("plan"); p.add_argument("char0"); p.add_argument("char1")
     p.add_argument("--base", type=int, default=1060)
+    p.add_argument("--lag", type=int, default=5,
+                   help="frames of stick latency to add to each hold")
     sub.add_parser("grid")
     v = sub.add_parser("verify"); v.add_argument("log")
     a = ap.parse_args()
@@ -189,7 +200,7 @@ def main():
         return 0
     if a.cmd == "verify":
         return verify(a.log)
-    for line in emit(a.char0.upper(), a.char1.upper(), a.base):
+    for line in emit(a.char0.upper(), a.char1.upper(), a.base, lag=a.lag):
         print(line)
     return 0
 
