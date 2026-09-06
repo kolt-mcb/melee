@@ -138,7 +138,19 @@ void ftCo_80091BC4(Fighter* fp)
         deg_delta += 360;
     }
 
-    smoothed_deg = deg_delta * p_ftCommonData->x44C + guard_deg;
+/* Retail fuses both of these -- 80091C78 and 80091D3C -- so the multiply and
+ * the add round once together. The first is the shield's angle, which is the
+ * frame the guard pose is seeked to (ftAnim_80070710 below); the second is
+ * the weight it is blended in with. A ULP in either is a different pose, and
+ * the pose is what the ECB is measured from. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define GD_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define GD_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
+    smoothed_deg = GD_FMA(deg_delta, p_ftCommonData->x44C, guard_deg);
     if (smoothed_deg > 360) {
         guard_deg = smoothed_deg;
         guard_deg -= 360;
@@ -155,8 +167,9 @@ void ftCo_80091BC4(Fighter* fp)
     if (stick_mag > 1) {
         stick_mag = 1;
     }
-    fp->mv.co.guard.x4 +=
-        p_ftCommonData->x44C * (stick_mag - fp->mv.co.guard.x4);
+    fp->mv.co.guard.x4 =
+        GD_FMA(p_ftCommonData->x44C, stick_mag - fp->mv.co.guard.x4,
+               fp->mv.co.guard.x4);
 }
 
 static inline float inlineB0(Fighter* fp)
