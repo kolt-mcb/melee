@@ -26,6 +26,12 @@ struct CostumeTObjList {
  * provides. Kept next to the struct it sizes so the two cannot drift. */
 #define FT_DOBJ_LIST_MAX 124
 
+/* ftParts_80075650 asserts at 0x20 entries and fills arg2->data up to it, so
+ * the pool behind a sub-model's DObjList has to hold that many pointers.
+ * 0x80 bytes is that count times four -- the console's pointer -- and sizing
+ * the pool in bytes gave sixteen slots here instead of thirty-two. */
+#define FT_SUBMODEL_DOBJ_MAX 0x20
+
 struct TempS {
     int x0;
     u8* x4;

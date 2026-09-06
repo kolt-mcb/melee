@@ -1175,7 +1175,7 @@ void ftParts_80075650(Fighter_GObj* arg0, HSD_JObj* jobj, DObjList* arg2)
             if (dobj == NULL) {
                 break;
             }
-            if (var_r30 >= 0x20) {
+            if (var_r30 >= FT_SUBMODEL_DOBJ_MAX) {
                 HSD_ASSERTREPORT(1063, 0,
                                  "fighter parts model dobj num over!\n");
             }

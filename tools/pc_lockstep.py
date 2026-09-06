@@ -495,8 +495,20 @@ def calibrate(case, headless):
                       % (dumps, frame, "P2 " if pad else "", cmd))
             ref.release()
         # Run on to the match so the recording covers the load after the last
-        # press, and so the caller can see it worked.
+        # press, and so the caller can see it worked. Bounded: a route whose
+        # presses miss -- a cursor that stops on no icon, an A that lands on a
+        # menu that has moved -- leaves the game sitting in the character
+        # select with gframe stuck at 0, and this loop used to spin there for
+        # as long as anyone let it. 3000 frames is about four times the load
+        # after the last press.
+        CALIB_TAIL_MAX = 3000
+        waited = 0
         while ref.read_frame() and int(ref.row["gframe"]) == 0:
+            waited += 1
+            if waited > CALIB_TAIL_MAX:
+                print("   gave up after %d frames with no match: the route's "
+                      "presses did not take" % CALIB_TAIL_MAX)
+                break
             ref.release()
         reached = ref.row is not None and int(ref.row["gframe"]) > 0
         print("   reached a match: %s (frame %s)"
