@@ -583,16 +583,30 @@ void ftCo_Damage_OnEveryHitlag(Fighter_GObj* gobj)
     }
 }
 
+/* Retail fuses these multiply-and-add pairs into fmadds -- see 8008E5F4
+ * onward -- which rounds once where GCC on x86-64 rounds twice. One ULP in
+ * the knockback that comes out of here is a fighter in a different place
+ * two hundred frames later. Which operand is the fused one is taken from
+ * the instruction stream, not guessed: the x square is the plain multiply
+ * and the y square is the addend. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DMG_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DMG_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftCo_8008E5A4(Fighter* fp)
 {
     if (fp->input.lstick.x || fp->input.lstick.y) {
         float kb_x = fp->x8c_kb_vel.x;
         float kb_y = fp->x8c_kb_vel.y;
         float kb_vel_x_neg = -kb_x;
-        float kb_mag = kb_vel_x_neg * kb_vel_x_neg + kb_y * kb_y;
+        float kb_mag =
+            DMG_FMA(kb_y, kb_y, kb_vel_x_neg * kb_vel_x_neg);
         if (!(kb_mag < 0.00001f)) {
-            float f3 =
-                kb_y * fp->input.lstick.x + kb_vel_x_neg * fp->input.lstick.y;
+            float f3 = DMG_FMA(kb_vel_x_neg, fp->input.lstick.y,
+                               kb_y * fp->input.lstick.x);
             float f30 = f3 * f3 / kb_mag;
             Vec3 lstick_vec3, kb_vel_cross_lstick;
             lstick_vec3.x = fp->input.lstick.x;
@@ -606,9 +620,9 @@ void ftCo_8008E5A4(Fighter* fp)
             {
                 float angle = atan2f(kb_y, kb_x);
                 float scale;
-                kb_mag = sqrtf(kb_x * kb_x + kb_y * kb_y);
+                kb_mag = sqrtf(DMG_FMA(kb_y, kb_y, kb_x * kb_x));
                 scale = deg_to_rad * p_ftCommonData->x1A8;
-                angle += scale * f30;
+                angle = DMG_FMA(scale, f30, angle);
                 fp->x8c_kb_vel.x = kb_mag * cosf(angle);
                 fp->x8c_kb_vel.y = kb_mag * sinf(angle);
             }
