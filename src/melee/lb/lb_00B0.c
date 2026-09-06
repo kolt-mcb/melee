@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 #include "lb/lb_00B0.h"
 
 #include <placeholder.h>
@@ -536,6 +540,37 @@ void lb_8000C490(HSD_JObj* jobj1, HSD_JObj* jobj2, HSD_JObj* arg2, float arg8,
         BL_FMA(jobj1->scale.z, arg8, jobj2->scale.z * arg9);
     is_quat_1 = HSD_JObjGetFlags(jobj1) & 0x20000;
     is_quat_2 = HSD_JObjGetFlags(jobj2) & 0x20000;
+#if BUILD_TARGET_PC
+    /* MELEE_BLENDAT=<match frame>: for every joint blended on that frame,
+     * whether either side is already a quaternion and how far apart the two
+     * Euler rotations are. Retail copies instead of slerping when all three
+     * are within 1e-4, and the two paths leave the joint in different
+     * representations, so which one is taken is not a rounding question. */
+    {
+        static int blat = -2;
+        if (blat == -2) {
+            const char* e = getenv("MELEE_BLENDAT");
+            blat = e != NULL ? atoi(e) : -1;
+        }
+        if (blat >= 0) {
+            extern u32 gm_8016AEDC(void);
+            if ((int) gm_8016AEDC() == blat) {
+                fprintf(stderr,
+                        "[BLEND] out=%p from=%p q1=%d q2=%d "
+                        "r1=%08x,%08x,%08x r2=%08x,%08x,%08x t=%08x\n",
+                        (void*) arg2, __builtin_return_address(0),
+                        is_quat_1 != 0, is_quat_2 != 0,
+                        *(const unsigned*) &jobj1->rotate.x,
+                        *(const unsigned*) &jobj1->rotate.y,
+                        *(const unsigned*) &jobj1->rotate.z,
+                        *(const unsigned*) &jobj2->rotate.x,
+                        *(const unsigned*) &jobj2->rotate.y,
+                        *(const unsigned*) &jobj2->rotate.z,
+                        *(const unsigned*) &arg8);
+            }
+        }
+    }
+#endif
     if (!is_quat_1 && !is_quat_2) {
         dx = jobj1->rotate.x - jobj2->rotate.x;
         dy = jobj1->rotate.y - jobj2->rotate.y;
