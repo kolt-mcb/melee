@@ -1067,6 +1067,43 @@ void Player_SetPlayerId(int slot, int player_id)
     player->player_id = player_id;
 }
 
+#if BUILD_TARGET_PC
+#include <stdlib.h>
+#include <stdio.h>
+
+/* MELEE_FORCE_CPU=<lvl0>,<lvl1> is applied per frame by the trace hook, which
+ * writes the two slots' cpu_level and cpu_type straight into player_slots[].
+ * On the console that is enough: entering a match takes many frames of disc
+ * reads, so the hook runs again after the character-select data has been
+ * copied over the slots and before the fighters are built, and the AI reads
+ * the forced level. Here the whole load happens inside one frame -- copy,
+ * then build, with no hook in between -- so the AI read the level the
+ * character select left behind (1) while cpu_type, which the copy does not
+ * touch, still held the forced 4. The cooldown the AI sets from that level on
+ * its first frame is (10 - level) * (15..30) + 10: 25-40 frames at level 9,
+ * 160-310 at level 1. That one number put the two sides' random streams out
+ * of step on the frame the console's cooldown expired and this side's did not.
+ *
+ * Answer the forced level here instead, and write it back, so it cannot
+ * depend on when in the frame the question is asked. */
+static int pc_forced_cpu_level(int slot)
+{
+    static int parsed = 0;
+    static int lvl[2] = { 0, 0 };
+    if (!parsed) {
+        const char* e = getenv("MELEE_FORCE_CPU");
+        parsed = 1;
+        if (e != NULL) {
+            sscanf(e, "%d,%d", &lvl[0], &lvl[1]);
+        }
+    }
+    if (slot < 0 || slot > 1 || lvl[slot] <= 0) {
+        return 0;
+    }
+    return lvl[slot];
+}
+#endif
+
 int Player_GetCpuLevel(int slot)
 {
     int cpu_level;
@@ -1078,6 +1115,14 @@ int Player_GetCpuLevel(int slot)
     if ((unsigned) (slot) >= (unsigned) Gm_Player_NumMax) slot = 0;
 #endif
     player = &player_slots[slot];
+#if BUILD_TARGET_PC
+    {
+        int forced = pc_forced_cpu_level(slot);
+        if (forced != 0) {
+            player->cpu_level = (u8) forced;
+        }
+    }
+#endif
     cpu_level = player->cpu_level;
     return cpu_level;
 }
