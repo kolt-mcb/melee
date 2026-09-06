@@ -331,7 +331,7 @@ static void pc_trace_ailog(void)
                                 "[BLPART-PORT] gframe=%u p%d i=3 "
                                 "j1=%08x,%08x,%08x f=%08x "
                                 "j2=%08x,%08x,%08x f=%08x x594=%08x "
-                                "g4=%08x g8=%08x\n",
+                                "g4=%08x g8=%08x a1=%08x,%08x,%08x\n",
                                 (unsigned) gm_8016AEDC(), vslot,
                                 b1 ? *(const unsigned*) &b1->rotate.x : 0,
                                 b1 ? *(const unsigned*) &b1->rotate.y : 0,
@@ -343,7 +343,15 @@ static void pc_trace_ailog(void)
                                 b2 ? (unsigned) b2->flags : 0,
                                 (unsigned) vfp->x594_s32,
                                 *(const unsigned*) &vfp->mv.co.guard.x4,
-                                *(const unsigned*) &vfp->mv.co.guard.x8);
+                                *(const unsigned*) &vfp->mv.co.guard.x8,
+                                (b1 && b1->aobj) ? (unsigned) b1->aobj->flags
+                                                 : 0,
+                                (b1 && b1->aobj)
+                                    ? *(const unsigned*) &b1->aobj->curr_frame
+                                    : 0,
+                                (b1 && b1->aobj)
+                                    ? *(const unsigned*) &b1->aobj->framerate
+                                    : 0);
                     }
                     fprintf(stderr, "[FTECB-PORT] gframe=%u p%d",
                             (unsigned) gm_8016AEDC(), vslot);
