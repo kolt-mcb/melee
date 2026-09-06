@@ -282,13 +282,14 @@ static void pc_trace_ailog(void)
                      * the last bits. */
                     fprintf(stderr,
                             "[FTKB-PORT] gframe=%u p%d kbx=%08x kby=%08x "
-                            "lsx=%08x lsy=%08x kbapp=%08x\n",
+                            "lsx=%08x lsy=%08x kbapp=%08x pct=%08x\n",
                             (unsigned) gm_8016AEDC(), vslot,
                             *(const unsigned*) &vfp->x8c_kb_vel.x,
                             *(const unsigned*) &vfp->x8c_kb_vel.y,
                             *(const unsigned*) &vfp->input.lstick.x,
                             *(const unsigned*) &vfp->input.lstick.y,
-                            *(const unsigned*) &vfp->dmg.x18d8.kb_applied1);
+                            *(const unsigned*) &vfp->dmg.x18d8.kb_applied1,
+                            *(const unsigned*) &vfp->dmg.x1830_percent);
                     fprintf(stderr, "[FTECB-PORT] gframe=%u p%d",
                             (unsigned) gm_8016AEDC(), vslot);
                     for (q = 0; q < 6; q++) {
@@ -299,9 +300,10 @@ static void pc_trace_ailog(void)
                                 *(const unsigned*) &jp.x,
                                 *(const unsigned*) &jp.y);
                     }
-                    fprintf(stderr, " ecbby=%08x blend=%08x",
+                    fprintf(stderr, " ecbby=%08x blend=%08x bf=%08x",
                             *(const unsigned*) &vfp->coll_data.ecb.bottom.y,
-                            *(const unsigned*) &vfp->x8A4_animBlendFrames);
+                            *(const unsigned*) &vfp->x8A4_animBlendFrames,
+                            *(const unsigned*) &vfp->x8A8_anim_frame);
                     {
                         /* Joint 0's own transform, before any matrix is built
                          * from it. If these agree and the world position does
