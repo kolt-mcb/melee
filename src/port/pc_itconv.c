@@ -606,6 +606,10 @@ static Article* conv_article(const struct arch* a, u32 off)
 
     if (itconv_trace()) {
         fprintf(stderr,
+                "[ITCONV] article raw off=%#x: %08x %08x %08x %08x %08x %08x\n",
+                off, be32(src), be32(src + 4), be32(src + 8), be32(src + 0xC),
+                be32(src + 0x10), be32(src + 0x14));
+        fprintf(stderr,
                 "[ITCONV] article base=%p off=%#x -> %p: attr=%p spec=%u "
                 "bytes hurt=%d states=%d joint=%p bones=%u dyn=%d\n",
                 (const void*) a->base, off, (void*) out,
@@ -1012,6 +1016,11 @@ Article* pc_itconv_table_get(Article** table, int idx)
         table[idx] =
             pc_itconv_article_kind(pc_tab_arch->base + pc_tab_raw[t][idx],
                                    kind);
+        if (itconv_trace()) {
+            fprintf(stderr,
+                    "[ITCONV] table %d idx %d (kind %d) raw off=%#x -> %p\n",
+                    t, idx, kind, pc_tab_raw[t][idx], (void*) table[idx]);
+        }
     }
     return table[idx];
 }
