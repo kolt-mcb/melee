@@ -5,6 +5,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "mplib.h"
+#if BUILD_TARGET_PC
+#include <math.h>
+/* mpLineIntersection works in double and MWCC fused every one of its
+ * cross products (fmsub) and both of the final coordinates (fmadd at
+ * 8004EBA4/8004EBA8). This is where a fighter's position comes from when it
+ * is pushed off a wall or snapped to a floor edge, so a double rounded twice
+ * here is a fighter one bit away from the console's for the rest of the
+ * match. These are the double fma, not fmaf: the operands are doubles and
+ * only the stored result is a float. */
+#define MP_FMA(a, b, c) fma((a), (b), (c))
+#define MP_FMAF(a, b, c) fmaf((a), (b), (c))
+#else
+#define MP_FMA(a, b, c) ((a) * (b) + (c))
+#define MP_FMAF(a, b, c) ((a) * (b) + (c))
+#endif
 
 #include "mpisland.h"
 #include "placeholder.h"
@@ -1272,18 +1287,22 @@ static void mpRemap2d(float* x_out, float* y_out, float ax0, float ay0,
     dy = ay1 - ay0;
     f30 = px - ax0;
     f29 = py - ay0;
-    dist2 = (dy * dy) + (dx * dx);
+    dist2 = MP_FMA(dy, dy, dx * dx); /* 8004DCB0 */
     if (ABS(dist2) > 0.0001) {
         // how far along line a is point p
-        double t = (dy * f29 + dx * f30) / dist2;
+        double t = MP_FMA(dy, f29, dx * f30) / dist2; /* 8004DCF0 */
         if (t > 1.0) {
             t = 1.0;
         } else if (t < 0.0) {
             t = 0.0;
         }
 
-        *x_out = px + (1.0 - t) * (bx0 - ax0) + t * (bx1 - ax1);
-        *y_out = py + (1.0 - t) * (by0 - ay0) + t * (by1 - ay1);
+        /* 8004DD30..8004DD3C: each coordinate is two fmadds, so px is the
+         * addend of the first rather than a separate sum. */
+        *x_out = MP_FMA(t, (double) (bx1 - ax1),
+                        MP_FMA(1.0 - t, (double) (bx0 - ax0), (double) px));
+        *y_out = MP_FMA(t, (double) (by1 - ay1),
+                        MP_FMA(1.0 - t, (double) (by0 - ay0), (double) py));
     } else {
         *x_out = px + (bx0 - ax0) + (bx1 - ax0);
         *y_out = py + (by0 - ay0) + (by1 - ay0);
@@ -1625,7 +1644,7 @@ bool mpLineIntersection(float a0x, float a0y, float a1x, float a1y, float b0x,
         double d0x = b0x - a0x;
         double aw = a1x - a0x;
         double d0y = b0y - a0y;
-        double hs_b0_a = (aw * d0y) - (ah * d0x);
+        double hs_b0_a = MP_FMA(aw, d0y, -(ah * d0x)); /* 8004EA64 */
         double d1y;
         double d1x;
         double det;
@@ -1643,7 +1662,7 @@ bool mpLineIntersection(float a0x, float a0y, float a1x, float a1y, float b0x,
         d1x = b1x - a1x;
         d1y = b1y - a1y;
 
-        hs_b1_a = (aw * d1y) - (ah * d1x);
+        hs_b1_a = MP_FMA(aw, d1y, -(ah * d1x)); /* 8004EA98 */
         if (hs_b1_a > 0.0) {
             if (hs_b1_a > 0.1) {
                 return false;
@@ -1656,7 +1675,7 @@ bool mpLineIntersection(float a0x, float a0y, float a1x, float a1y, float b0x,
             return false;
         }
 
-        det = (d0x * d1y) - (d0y * d1x);
+        det = MP_FMA(d0x, d1y, -(d0y * d1x)); /* 8004EADC */
         if (det < hs_b0_a) {
             if (det < hs_b1_a) {
                 return false;
@@ -1672,15 +1691,16 @@ bool mpLineIntersection(float a0x, float a0y, float a1x, float a1y, float b0x,
         if (!((bw == 0.0 && bh == 0.0) || (b1_below_a && b2_above_a) ||
               (hs_b0_a >= 0.0 && b2_above_a)))
         {
-            double area = (bw * ah) - (bh * aw);
+            double area = MP_FMA(bw, ah, -(bh * aw)); /* 8004EB58 */
 
             if (ABS(area) > 0.0001F) {
-                double t =
-                    ((bw * d0y) - (bh * d0x)) / area; // barycentric weight
+                /* 8004EB88 then fdiv */
+                double t = MP_FMA(bw, d0y, -(bh * d0x)) / area;
                 if (t > 0.0) {
                     if (t < 1.0) {
-                        *int_x = (aw * t) + a0x;
-                        *int_y = (ah * t) + a0y;
+                        /* 8004EBA4, 8004EBA8 */
+                        *int_x = MP_FMA(aw, t, (double) a0x);
+                        *int_y = MP_FMA(ah, t, (double) a0y);
                     } else {
                         *int_x = a1x;
                         *int_y = a1y;
@@ -1734,7 +1754,7 @@ bool mpLineIntersectionH(float* int_x, float* int_y, float a0x, float a0y,
     if (ABS(dby) < 0.0001) {
         return false;
     }
-    new_x = dbx / dby * (a0y - b0y) + b0x;
+    new_x = MP_FMA(dbx / dby, (double) (a0y - b0y), (double) b0x); /* 8004ECF4 */
     dx = new_x - min_ax;
     if (dx < 0.0) {
         if (dx < -0.1) {
@@ -2499,7 +2519,7 @@ bool mpLineIntersectionV(float* int_x, float* int_y, float a0x, float a0y,
     if (ABS(dbx) < 0.0001) {
         return false;
     }
-    new_y = (dby / dbx * (a0x - b0x)) + b0y;
+    new_y = MP_FMA(dby / dbx, (double) (a0x - b0x), (double) b0y); /* 80050164 */
     dy = new_y - min_ay;
     if (dy < 0.0) {
         if (dy < -0.1) {
@@ -2737,8 +2757,11 @@ bool mpCheckLeftWallRemap(float ax, float ay, float bx, float by,
                         dx2 = SQ(int_x - old_x);
                         dy2 = SQ(int_y - old_y);
                         dist2 = dx2 + dy2;
-                        if ((dx * (int_x - old_x)) + (dy * (int_y - old_y)) <
-                            0.0F)
+                        /* 800507A0: the x term is the plain multiply here and the y
+                         * term fuses onto it -- the reverse of the pairing in
+                         * mpLib_800515A0_LeftWall. */
+                        if (MP_FMAF(dy, int_y - old_y,
+                                    dx * (int_x - old_x)) < 0.0F)
                         {
                             dist2 = -dist2;
                         }
@@ -2777,8 +2800,11 @@ bool mpCheckLeftWallRemap(float ax, float ay, float bx, float by,
                         dx2 = SQ(int_x - old_x);
                         dy2 = SQ(int_y - old_y);
                         dist2 = dx2 + dy2;
-                        if ((dx * (int_x - old_x)) + (dy * (int_y - old_y)) <
-                            0.0F)
+                        /* 800507A0: the x term is the plain multiply here and the y
+                         * term fuses onto it -- the reverse of the pairing in
+                         * mpLib_800515A0_LeftWall. */
+                        if (MP_FMAF(dy, int_y - old_y,
+                                    dx * (int_x - old_x)) < 0.0F)
                         {
                             dist2 = -dist2;
                         }
@@ -3047,8 +3073,11 @@ bool mpCheckRightWallRemap(float ax, float ay, float bx, float by,
                         dx2 = SQ(int_x - old_x);
                         dy2 = SQ(int_y - old_y);
                         dist2 = dx2 + dy2;
-                        if ((dx * (int_x - old_x)) + (dy * (int_y - old_y)) <
-                            0.0F)
+                        /* 800507A0: the x term is the plain multiply here and the y
+                         * term fuses onto it -- the reverse of the pairing in
+                         * mpLib_800515A0_LeftWall. */
+                        if (MP_FMAF(dy, int_y - old_y,
+                                    dx * (int_x - old_x)) < 0.0F)
                         {
                             dist2 = -dist2;
                         }
@@ -3087,8 +3116,11 @@ bool mpCheckRightWallRemap(float ax, float ay, float bx, float by,
                         dx2 = SQ(int_x - old_x);
                         dy2 = SQ(int_y - old_y);
                         dist2 = dx2 + dy2;
-                        if ((dx * (int_x - old_x)) + (dy * (int_y - old_y)) <
-                            0.0F)
+                        /* 800507A0: the x term is the plain multiply here and the y
+                         * term fuses onto it -- the reverse of the pairing in
+                         * mpLib_800515A0_LeftWall. */
+                        if (MP_FMAF(dy, int_y - old_y,
+                                    dx * (int_x - old_x)) < 0.0F)
                         {
                             dist2 = -dist2;
                         }
@@ -3210,13 +3242,15 @@ bool mpLib_800511A4_RightWall(float ax, float ay, float bx, float by, float cx,
                     vdx = x0 - x;
                     vdy = y0 - y;
 
-                    if (SQ(vdx) + SQ(vdy) > 0.001F) {
+                    /* 80051758: fmadds -- the y square is the plain one. */
+                    if (MP_FMAF(vdx, vdx, vdy * vdy) > 0.001F) {
                         if (mpLineIntersection(cx, cy, dx, dy, x, y, x0, y0,
                                                &int_x, &int_y))
                         {
                             dist2 = SQ(int_x - x1) + SQ(int_y - y1);
-                            if ((vdx * (int_x - x1)) + (vdy * (int_y - y1)) <
-                                0.0F)
+                            /* 800517AC */
+                            if (MP_FMAF(vdx, int_x - x1,
+                                        vdy * (int_y - y1)) < 0.0F)
                             {
                                 dist2 = -dist2;
                             }
@@ -3242,13 +3276,15 @@ bool mpLib_800511A4_RightWall(float ax, float ay, float bx, float by, float cx,
                     vdx = x0 - x;
                     vdy = y0 - y;
 
-                    if (SQ(vdx) + SQ(vdy) > 0.001F) {
+                    /* 80051758: fmadds -- the y square is the plain one. */
+                    if (MP_FMAF(vdx, vdx, vdy * vdy) > 0.001F) {
                         if (mpLineIntersection(cx, cy, dx, dy, x, y, x0, y0,
                                                &int_x, &int_y))
                         {
                             dist2 = SQ(int_x - x1) + SQ(int_y - y1);
-                            if ((vdx * (int_x - x1)) + (vdy * (int_y - y1)) <
-                                0.0F)
+                            /* 800517AC */
+                            if (MP_FMAF(vdx, int_x - x1,
+                                        vdy * (int_y - y1)) < 0.0F)
                             {
                                 dist2 = -dist2;
                             }
@@ -3354,13 +3390,15 @@ bool mpLib_800515A0_LeftWall(float a0x, float a0y, float a1x, float a1y,
                     vdx = x0 - x;
                     vdy = y0 - y;
 
-                    if (SQ(vdx) + SQ(vdy) > 0.001F) {
+                    /* 80051758: fmadds -- the y square is the plain one. */
+                    if (MP_FMAF(vdx, vdx, vdy * vdy) > 0.001F) {
                         if (mpLineIntersection(b0x, b0y, b1x, b1y, x, y, x0,
                                                y0, &int_x, &int_y))
                         {
                             dist2 = SQ(int_x - x1) + SQ(int_y - y1);
-                            if ((vdx * (int_x - x1)) + (vdy * (int_y - y1)) <
-                                0.0F)
+                            /* 800517AC */
+                            if (MP_FMAF(vdx, int_x - x1,
+                                        vdy * (int_y - y1)) < 0.0F)
                             {
                                 dist2 = -dist2;
                             }
@@ -3387,13 +3425,15 @@ bool mpLib_800515A0_LeftWall(float a0x, float a0y, float a1x, float a1y,
                     vdx = x0 - x;
                     vdy = y0 - y;
 
-                    if (SQ(vdx) + SQ(vdy) > 0.001F) {
+                    /* 80051758: fmadds -- the y square is the plain one. */
+                    if (MP_FMAF(vdx, vdx, vdy * vdy) > 0.001F) {
                         if (mpLineIntersection(b0x, b0y, b1x, b1y, x, y, x0,
                                                y0, &int_x, &int_y))
                         {
                             dist2 = SQ(int_x - x1) + SQ(int_y - y1);
-                            if ((vdx * (int_x - x1)) + (vdy * (int_y - y1)) <
-                                0.0F)
+                            /* 800517AC */
+                            if (MP_FMAF(vdx, int_x - x1,
+                                        vdy * (int_y - y1)) < 0.0F)
                             {
                                 dist2 = -dist2;
                             }
@@ -3476,7 +3516,7 @@ int mpLib_8005199C_Floor(Vec3* vec, int joint_id_skip, int joint_id_only)
                         if (ABS(x1 - x0) > 0.0001) {
                             float dx = x1 - x0;
                             float dy = y1 - y0;
-                            if (y >= dy / dx * (x - x0) + y0) {
+                            if (y >= MP_FMA(dy / dx, x - x0, y0)) { /* 80051B1C */
                                 line_id = line - groundCollLine;
                                 goto end;
                             }
@@ -5114,17 +5154,37 @@ void mpLib_80055E9C(int joint_id)
         m1_3 = mtx[1][3];
         v_r4 = &groundCollVtx[joint->inner->vtx_start];
         for (i = 0; i < vtx_count; i++, v_r4++) {
-            v_r4->pos.x = v_r4->x0 * m0_0 + m0_3;
-            v_r4->pos.y = v_r4->x4 * m0_0 + m1_3;
+            /* 80056150: fmadds -- one rounding for the whole transform. */
+            v_r4->pos.x = MP_FMAF(v_r4->x0, m0_0, m0_3);
+            v_r4->pos.y = MP_FMAF(v_r4->x4, m0_0, m1_3);
         }
+#if BUILD_TARGET_PC
+        static int dump = -1;
+        if (dump < 0) {
+            dump = getenv("MELEE_MPDUMP") != NULL;
+        }
+        if (dump) {
+            static int said[64];
+            if (joint_id < 64 && !said[joint_id]) {
+                said[joint_id] = 1;
+                fprintf(stderr,
+                        "[MPUNIFORM] joint %d n=%d m00=%08x m03=%08x "
+                        "m13=%08x v0=(%08x->%08x)\n",
+                        joint_id, vtx_count, *(u32*) &m0_0, *(u32*) &m0_3,
+                        *(u32*) &m1_3,
+                        *(u32*) &groundCollVtx[joint->inner->vtx_start].x0,
+                        *(u32*) &groundCollVtx[joint->inner->vtx_start].pos.x);
+            }
+        }
+#endif
         joint->bounding_min.x =
-            (joint->inner->left_bound * m0_0 + m0_3) - 30.0F;
+            MP_FMAF(joint->inner->left_bound, m0_0, m0_3) - 30.0F;
         joint->bounding_min.y =
-            (joint->inner->bottom_bound * m0_0 + m1_3) - 30.0F;
+            MP_FMAF(joint->inner->bottom_bound, m0_0, m1_3) - 30.0F;
         joint->bounding_max.x =
-            30.0F + (joint->inner->right_bound * m0_0 + m0_3);
+            30.0F + MP_FMAF(joint->inner->right_bound, m0_0, m0_3);
         joint->bounding_max.y =
-            30.0F + (joint->inner->top_bound * m0_0 + m1_3);
+            30.0F + MP_FMAF(joint->inner->top_bound, m0_0, m1_3);
         joint->flags |= CollJoint_B8;
         goto after0;
     }
