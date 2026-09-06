@@ -305,6 +305,34 @@ static void pc_trace_ailog(void)
                         }
                     }
                     fprintf(stderr, "\n");
+                    {
+                        /* Up the parent chain from ECB joint 0, printing each
+                         * ancestor's world translation. The first ancestor
+                         * whose matrix differs is where the drift enters. */
+                        HSD_JObj* j = vfp->coll_data.ecb_source.x10C_joint[0];
+                        int depth = 0;
+                        fprintf(stderr, "[FTCHAIN-PORT] gframe=%u p%d",
+                                (unsigned) gm_8016AEDC(), vslot);
+                        while (j != NULL && depth < 5) {
+                            fprintf(stderr, " %d:%08x,%08x/r%08x,%08x,%08x",
+                                    depth,
+                                    *(const unsigned*) &j->mtx[0][3],
+                                    *(const unsigned*) &j->mtx[1][3],
+                                    ((const unsigned*) &j->rotate)[0],
+                                    ((const unsigned*) &j->rotate)[1],
+                                    ((const unsigned*) &j->rotate)[2]);
+                            fprintf(stderr, "/s%08x,%08x,%08x/t%08x,%08x,%08x",
+                                    ((const unsigned*) &j->scale)[0],
+                                    ((const unsigned*) &j->scale)[1],
+                                    ((const unsigned*) &j->scale)[2],
+                                    ((const unsigned*) &j->translate)[0],
+                                    ((const unsigned*) &j->translate)[1],
+                                    ((const unsigned*) &j->translate)[2]);
+                            j = j->parent;
+                            depth++;
+                        }
+                        fprintf(stderr, "\n");
+                    }
                 }
                 fprintf(stderr,
                         "[FTVEL-PORT] gframe=%u p%d grvel=%08x initvel=%08x "
