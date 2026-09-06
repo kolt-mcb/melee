@@ -2,6 +2,9 @@
 
 #if BUILD_TARGET_PC
 #include "port/pc_scene.h"
+#if BUILD_TARGET_PC
+#include "port/pc_grconv.h"
+#endif
 #endif
 #include "grdatfiles.h"
 
@@ -2839,6 +2842,23 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
                 HSD_ArchiveGetPublicAddress(sp14, "itemdata");
             stage_info.ald_yaku_all =
                 HSD_ArchiveGetPublicAddress(sp14, "ALDYakuAll");
+#if BUILD_TARGET_PC
+            /* Both are arrays of big-endian file offsets, so walking them as
+             * host pointers reads garbage -- which is why they used to be
+             * nulled here and in Ground_801C3C34, and why no stage Article was
+             * ever filed in it_804A0F60. Rebuild them as host pointer arrays
+             * instead: the archive's own data base is all that is needed.
+             *
+             * The cost of not doing it is invisible until something measures
+             * it: Onett's cars spawn with no state descriptors, so they run no
+             * script commands and never create a hitbox, and the hurtbox
+             * refresh that the hit test would have done happens somewhere else
+             * in the frame. */
+            stage_info.itemdata =
+                pc_grconv_itemdata(sp14, stage_info.itemdata);
+            stage_info.ald_yaku_all =
+                pc_grconv_ptr_array(sp14, stage_info.ald_yaku_all, 1);
+#endif
             stage_info.map_ptcl =
                 HSD_ArchiveGetPublicAddress(sp14, "map_ptcl");
             stage_info.map_texg =
