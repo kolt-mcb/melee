@@ -953,10 +953,17 @@ void pc_jobj_note(const char* who, void* j)
     }
     {
         HSD_JObj* w = pc_watch_jobj;
-        fprintf(stderr, "[JWRITE] %s jobj=%p rot=%08x,%08x,%08x\n", who, j,
-                *(const unsigned*) &w->rotate.x,
+        HSD_AObj* a = w->aobj;
+        fprintf(stderr,
+                "[JWRITE] %s jobj=%p rot=%08x,%08x,%08x aobj=%p cur=%08x "
+                "rate=%08x end=%08x fl=%08x\n",
+                who, j, *(const unsigned*) &w->rotate.x,
                 *(const unsigned*) &w->rotate.y,
-                *(const unsigned*) &w->rotate.z);
+                *(const unsigned*) &w->rotate.z, (void*) a,
+                a ? *(const unsigned*) &a->curr_frame : 0,
+                a ? *(const unsigned*) &a->framerate : 0,
+                a ? *(const unsigned*) &a->end_frame : 0,
+                a ? (unsigned) a->flags : 0);
     }
 }
 
