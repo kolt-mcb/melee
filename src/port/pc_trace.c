@@ -300,6 +300,26 @@ static void pc_trace_ailog(void)
                                 *(const unsigned*) &jp.x,
                                 *(const unsigned*) &jp.y);
                     }
+                    /* Mirror of the console's [BLPART-REF]: the two joints
+                     * of part 3, the one whose blend takes a different path
+                     * on the two sides. */
+                    {
+                        HSD_JObj* b1 = vfp->parts[3].x4_jobj2;
+                        HSD_JObj* b2 = vfp->parts[3].joint;
+                        fprintf(stderr,
+                                "[BLPART-PORT] gframe=%u p%d i=3 "
+                                "j1=%08x,%08x,%08x f=%08x "
+                                "j2=%08x,%08x,%08x f=%08x\n",
+                                (unsigned) gm_8016AEDC(), vslot,
+                                b1 ? *(const unsigned*) &b1->rotate.x : 0,
+                                b1 ? *(const unsigned*) &b1->rotate.y : 0,
+                                b1 ? *(const unsigned*) &b1->rotate.z : 0,
+                                b1 ? (unsigned) b1->flags : 0,
+                                b2 ? *(const unsigned*) &b2->rotate.x : 0,
+                                b2 ? *(const unsigned*) &b2->rotate.y : 0,
+                                b2 ? *(const unsigned*) &b2->rotate.z : 0,
+                                b2 ? (unsigned) b2->flags : 0);
+                    }
                     fprintf(stderr, " ecbby=%08x blend=%08x bf=%08x",
                             *(const unsigned*) &vfp->coll_data.ecb.bottom.y,
                             *(const unsigned*) &vfp->x8A4_animBlendFrames,

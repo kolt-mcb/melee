@@ -1061,10 +1061,33 @@ void ftAnim_8006FE48(Fighter_GObj* fighter_gobj)
 void ftAnim_8006FE9C(Fighter* fp, Fighter_Part start, float t, float t_inv)
 {
     int i;
+#if BUILD_TARGET_PC
+    /* MELEE_BLENDAT also names the part index behind each blended joint.
+     * Two parts sharing one joint blend it twice in a frame, and the second
+     * call sees the quaternion flag the first left. */
+    static int blat = -2;
+    if (blat == -2) {
+        const char* e = getenv("MELEE_BLENDAT");
+        blat = e != NULL ? atoi(e) : -1;
+    }
+#endif
     for (i = start; i < ftPartsTable[fp->kind]->parts_num; i++) {
         if (fp->parts[i].flags_b1 && !fp->parts[i].flags_b0 &&
             !fp->parts[i].flags_b5)
         {
+#if BUILD_TARGET_PC
+            if (blat >= 0) {
+                extern u32 gm_8016AEDC(void);
+                if ((int) gm_8016AEDC() == blat) {
+                    fprintf(stderr,
+                            "[BLPART] p%d i=%d joint=%p j2=%p b4=%d\n",
+                            (int) fp->player_id, i,
+                            (void*) fp->parts[i].joint,
+                            (void*) fp->parts[i].x4_jobj2,
+                            (int) fp->parts[i].flags_b4);
+                }
+            }
+#endif
             if (fp->parts[i].flags_b4) {
                 lbCopyJObjSRT(fp->parts[i].x4_jobj2, fp->parts[i].joint);
             } else {
