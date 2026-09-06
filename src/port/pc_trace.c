@@ -49,6 +49,9 @@
 #include <sysdolphin/baselib/aobj.h>
 #include <sysdolphin/baselib/gobj.h>
 
+/* MELEE_BLENDAT's one-joint write watch; see pc_jobj_note below. */
+HSD_JObj* pc_watch_jobj;
+
 /* sysdolphin/baselib/random.c. Not in random.h, which exports only the
  * functions; the trace wants the state itself. */
 extern u32 seed;
@@ -295,11 +298,13 @@ static void pc_trace_ailog(void)
                      * on the two sides. */
                     {
                         HSD_JObj* b1 = vfp->parts[3].x4_jobj2;
+                        pc_watch_jobj = b1;
                         HSD_JObj* b2 = vfp->parts[3].joint;
                         fprintf(stderr,
                                 "[BLPART-PORT] gframe=%u p%d i=3 "
                                 "j1=%08x,%08x,%08x f=%08x "
-                                "j2=%08x,%08x,%08x f=%08x x594=%08x\n",
+                                "j2=%08x,%08x,%08x f=%08x x594=%08x "
+                                "g4=%08x g8=%08x\n",
                                 (unsigned) gm_8016AEDC(), vslot,
                                 b1 ? *(const unsigned*) &b1->rotate.x : 0,
                                 b1 ? *(const unsigned*) &b1->rotate.y : 0,
@@ -309,7 +314,9 @@ static void pc_trace_ailog(void)
                                 b2 ? *(const unsigned*) &b2->rotate.y : 0,
                                 b2 ? *(const unsigned*) &b2->rotate.z : 0,
                                 b2 ? (unsigned) b2->flags : 0,
-                                (unsigned) vfp->x594_s32);
+                                (unsigned) vfp->x594_s32,
+                                *(const unsigned*) &vfp->mv.co.guard.x4,
+                                *(const unsigned*) &vfp->mv.co.guard.x8);
                     }
                     fprintf(stderr, "[FTECB-PORT] gframe=%u p%d",
                             (unsigned) gm_8016AEDC(), vslot);
@@ -896,6 +903,34 @@ void pc_seed_at_fighter_create(void)
     }
     done = 1;
     seed = (u32) strtoul(want, NULL, 16);
+}
+
+
+/* MELEE_BLENDAT arms a one-joint watch: the trace hook records
+ * parts[3].x4_jobj2 of the slot MELEE_FTVEL names, and the handful of
+ * functions that write a joint's SRT report when they touch it. A joint that
+ * changes on a frame with no animation load and no blend has a writer, and
+ * naming it is faster than reading every candidate. */
+void pc_jobj_note(const char* who, void* j)
+{
+    static int at = -2;
+    if (at == -2) {
+        const char* e = getenv("MELEE_BLENDAT");
+        at = e != NULL ? atoi(e) : -1;
+    }
+    if (at < 0 || pc_watch_jobj == NULL || j != (void*) pc_watch_jobj) {
+        return;
+    }
+    if ((int) gm_8016AEDC() != at) {
+        return;
+    }
+    {
+        HSD_JObj* w = pc_watch_jobj;
+        fprintf(stderr, "[JWRITE] %s jobj=%p rot=%08x,%08x,%08x\n", who, j,
+                *(const unsigned*) &w->rotate.x,
+                *(const unsigned*) &w->rotate.y,
+                *(const unsigned*) &w->rotate.z);
+    }
 }
 
 #endif /* BUILD_TARGET_PC */

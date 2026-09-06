@@ -695,6 +695,12 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
 
 void HSD_JObjAnim(HSD_JObj* jobj)
 {
+#if BUILD_TARGET_PC
+    {
+        extern void pc_jobj_note(const char*, void*);
+        pc_jobj_note(__func__, jobj);
+    }
+#endif
     #if BUILD_TARGET_PC
     if (PC_PTR_VALID(jobj)) {
     #else

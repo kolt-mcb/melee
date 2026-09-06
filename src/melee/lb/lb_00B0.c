@@ -1,4 +1,7 @@
 #if BUILD_TARGET_PC
+extern void pc_jobj_note(const char*, void*);
+#endif
+#if BUILD_TARGET_PC
 #include <stdio.h>
 #include <stdlib.h>
 #endif
@@ -159,6 +162,9 @@ void lb_8000B1CC(HSD_JObj* arg0, Vec3* pos0, Vec3* pos1)
 
 void lb_8000B4FC(HSD_JObj* jobj, HSD_Joint* joint)
 {
+#if BUILD_TARGET_PC
+    pc_jobj_note(__func__, jobj);
+#endif
     if (jobj == NULL || joint == NULL) {
         return;
     }
@@ -175,6 +181,9 @@ void lb_8000B4FC(HSD_JObj* jobj, HSD_Joint* joint)
 
 void lb_8000B5DC(HSD_JObj* jobj, HSD_Joint* joint)
 {
+#if BUILD_TARGET_PC
+    pc_jobj_note(__func__, jobj);
+#endif
     if (jobj == NULL || joint == NULL) {
         return;
     }
@@ -190,6 +199,9 @@ void lb_8000B5DC(HSD_JObj* jobj, HSD_Joint* joint)
 
 void lb_8000B6A4(HSD_JObj* jobj, HSD_Joint* joint)
 {
+#if BUILD_TARGET_PC
+    pc_jobj_note(__func__, jobj);
+#endif
     if (jobj == NULL || joint == NULL) {
         return;
     }
@@ -202,6 +214,9 @@ void lb_8000B6A4(HSD_JObj* jobj, HSD_Joint* joint)
 
 void lb_8000B760(HSD_JObj* jobj, HSD_Joint* joint)
 {
+#if BUILD_TARGET_PC
+    pc_jobj_note(__func__, jobj);
+#endif
     if (jobj == NULL || joint == NULL) {
         return;
     }
@@ -506,6 +521,9 @@ void lb_8000C420(HSD_JObj* jobj, u32 flags, float limit)
 void lb_8000C490(HSD_JObj* jobj1, HSD_JObj* jobj2, HSD_JObj* arg2, float arg8,
                  float arg9)
 {
+#if BUILD_TARGET_PC
+    pc_jobj_note(__func__, arg2);
+#endif
     float dx;
     float dy;
     float dz;
@@ -625,6 +643,9 @@ void lb_8000C490(HSD_JObj* jobj1, HSD_JObj* jobj2, HSD_JObj* arg2, float arg8,
 
 void lbCopyJObjSRT(HSD_JObj* src, HSD_JObj* dst)
 {
+#if BUILD_TARGET_PC
+    pc_jobj_note(__func__, dst);
+#endif
     dst->rotate = src->rotate;
     dst->scale = src->scale;
     dst->translate = src->translate;
