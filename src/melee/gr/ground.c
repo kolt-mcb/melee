@@ -4,6 +4,9 @@
 #endif
 #if BUILD_TARGET_PC
 #include "port/log.h"
+#if BUILD_TARGET_PC
+#include "port/pc_itconv.h"
+#endif
 #endif
 
 #include "grbattle.h"
@@ -725,12 +728,16 @@ void Ground_801C0800(StageIdPair* pair)
     {
         int i;
 #if BUILD_TARGET_PC
-        /* PC port: itemdata and ald_yaku_all are arrays of GCN pointers still
-         * in big-endian archive form, so walking them as host pointers reads
-         * garbage. Newly reachable now that the parameter setup runs. */
-        stage_info.itemdata = NULL;
-        stage_info.ald_yaku_all = NULL;
+#define PC_ONLY_ELSE(a, b) (a)
+#else
+#define PC_ONLY_ELSE(a, b) (b)
 #endif
+        /* PC port: itemdata and ald_yaku_all used to be nulled here, because
+         * they are arrays of big-endian file offsets and walking them as host
+         * pointers reads garbage. They are rebuilt as host pointer arrays at
+         * load now (src/port/pc_grconv.c), so the loop below runs and the
+         * stage's own Articles reach it_804A0F60 -- without which Onett's cars
+         * spawn with no state descriptors and never create a hitbox. */
         if (stage_info.itemdata != NULL) {
             for (i = 0; stage_info.itemdata[i] != NULL; i++) {
                 it_8026B40C(stage_info.itemdata[i]->unk4,
@@ -740,10 +747,21 @@ void Ground_801C0800(StageIdPair* pair)
 
         if (stage_info.ald_yaku_all != NULL) {
             for (i = 1; stage_info.ald_yaku_all[i] != NULL; i++) {
-                Article* a = (it_804D6D38 != NULL)
-                                 ? it_804D6D38[It_PKind_Random -
-                                               It_Kind_Kuriboh]
-                                 : NULL;
+                /* PC port: the ItCo tables are converted lazily, so reading
+                 * the slot directly gives NULL until something spawns that
+                 * kind -- and this runs at stage load, before anything has.
+                 * The stage's yakumono scripts (Onett's cars are
+                 * It_PKind_Random items driven by ALDYakuAll) were therefore
+                 * never installed, and the items ran no script commands at
+                 * all. */
+                Article* a =
+                    (it_804D6D38 != NULL)
+                        ? PC_ONLY_ELSE(
+                              pc_itconv_table_get(
+                                  it_804D6D38,
+                                  It_PKind_Random - It_Kind_Kuriboh),
+                              it_804D6D38[It_PKind_Random - It_Kind_Kuriboh])
+                        : NULL;
                 if (a == NULL) {
                     continue;
                 }
@@ -751,6 +769,7 @@ void Ground_801C0800(StageIdPair* pair)
                     stage_info.ald_yaku_all[i];
             }
         }
+#undef PC_ONLY_ELSE
     }
     if (stage_info.map_ptcl != NULL && stage_info.map_texg != NULL) {
         psInitDataBankLoad(0x1E, stage_info.map_ptcl, stage_info.map_texg, 0,
