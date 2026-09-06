@@ -1873,6 +1873,32 @@ void ftColl_8007925C(Fighter_GObj* gobj)
             struct ItemHitbox* item_hitbox = &item->x5D4_hitboxes[j];
             hurt = &item_hitbox->hit;
 
+#if BUILD_TARGET_PC
+            /* MELEE_HITTEST=<gframe>: which of the six item-hitbox filters
+             * turned this fighter away. A hitbox that never reaches the
+             * hurtbox loop is invisible in [HITOFFER]. */
+            {
+                static int want = -2;
+                extern u32 gm_8016AEDC(void);
+                if (want == -2) {
+                    const char* e = getenv("MELEE_HITTEST");
+                    want = (e != NULL) ? atoi(e) : -1;
+                }
+                if (want >= 0 && (int) gm_8016AEDC() == want) {
+                    fprintf(stderr,
+                            "[HITFILT] item=%d j=%d ft=%p st=%d b5=%d b2=%d "
+                            "b3=%d ga=%d x42_b2=%d ftdir=%08x itdir=%08x "
+                            "x138=%d acfc=%d\n",
+                            (int) item->kind, (int) j, (void*) fp,
+                            (int) hurt->state, (int) hurt->x42_b5,
+                            (int) hurt->x40_b2, (int) hurt->x40_b3,
+                            (int) fp->ground_or_air, (int) hurt->x42_b2,
+                            *(u32*) &fp->facing_dir, *(u32*) &item->facing_dir,
+                            (int) item_hitbox->x138,
+                            (int) lbColl_8000ACFC(fp, hurt));
+                }
+            }
+#endif
             if (hurt->state == HitCapsule_Disabled) {
                 continue;
             }

@@ -68,6 +68,34 @@ HSD_CameraDescPerspective ifMagnify_803F97E8 = {
 static char ifMagnify_803F988C[] = "!(jobj->flags & JOBJ_USE_QUATERNION)";
 static char ifMagnify_804D57F0[] = "jobj.h";
 static char ifMagnify_804D57F8[] = "jobj";
+#if BUILD_TARGET_PC
+/* These live in .sdata2 at 804DDB08..804DDB60 and are not decompiled, so on
+ * the host they resolved to weak *function* stubs and reading one as an f32
+ * returned instruction bytes -- 804DDB4C came back as 1.6e36, HSD_CObjSetOrtho
+ * got a degenerate frustum and the render callback divided by zero. That is
+ * why the magnifier used to be switched off here entirely, and switching it
+ * off cost more than a missing display: ifMagnify_802FC998 is what
+ * Fighter_8006A360 asks before applying the off-screen damage tick, so a
+ * fighter launched past the top of the screen stopped taking it.
+ *
+ * The values are read straight out of the retail DOL at those addresses. They
+ * are screen geometry: half-width and half-height of the safe area (162.7,
+ * 252.7), the 320x240 viewport, the tangent bounds of the corner (+-0.6438),
+ * the icon scale (0.09125), the ortho half-height (0.1), and 0/1 constants. */
+/* 4DDB08 */ f32 ifMagnify_804DDB08 = 0.0f;
+/* 4DDB28 */ f32 ifMagnify_804DDB28 = 162.6999969482422f;
+/* 4DDB2C */ f32 ifMagnify_804DDB2C = -162.6999969482422f;
+/* 4DDB30 */ f32 ifMagnify_804DDB30 = 0.6438463926315308f;
+/* 4DDB34 */ f32 ifMagnify_804DDB34 = -0.6438463926315308f;
+/* 4DDB38 */ f32 ifMagnify_804DDB38 = -252.70001220703125f;
+/* 4DDB3C */ f32 ifMagnify_804DDB3C = 252.70001220703125f;
+/* 4DDB40 */ f32 ifMagnify_804DDB40 = 320.0f;
+/* 4DDB44 */ f32 ifMagnify_804DDB44 = 240.0f;
+/* 4DDB48 */ f32 ifMagnify_804DDB48 = 0.09125000238418579f;
+/* 4DDB4C */ f32 ifMagnify_804DDB4C = 0.10000000149011612f;
+/* 4DDB50 */ f64 ifMagnify_804DDB50 = 4503601774854144.0;
+/* 4DDB60 */ int ifMagnify_804DDB60 = 0;
+#else
 /* 4DDB08 */ extern f32 ifMagnify_804DDB08;
 /* 4DDB28 */ extern f32 ifMagnify_804DDB28;
 /* 4DDB2C */ extern f32 ifMagnify_804DDB2C;
@@ -81,6 +109,7 @@ static char ifMagnify_804D57F8[] = "jobj";
 /* 4DDB4C */ extern f32 ifMagnify_804DDB4C;
 /* 4DDB50 */ extern f64 ifMagnify_804DDB50;
 /* 4DDB60 */ extern int ifMagnify_804DDB60;
+#endif
 
 ifMagnify ifMagnify_804A1DE0;
 
@@ -654,23 +683,6 @@ void ifMagnify_802FC870(void)
     HSD_Archive** archive;
     s32 i;
 
-#if BUILD_TARGET_PC
-    /* The magnifier -- the off-screen player indicator -- is driven entirely
-     * by ~20 float constants in .data (ifMagnify_804DDB08..804DDB60) that are
-     * not decompiled. They resolve to weak *function* stubs, so reading one as
-     * an f32 returns instruction bytes: ifMagnify_804DDB4C came back as 1.6e36
-     * and HSD_CObjSetOrtho got a degenerate frustum, which divided by zero in
-     * the render callback. Zeroing them instead just collapses the projection.
-     *
-     * This is a display-only element and the rest of the HUD does not depend
-     * on it; the query side (ifMagnify_802FB6E8 / ifMagnify_802FC998) reads
-     * ifMagnify_804A1DE0.player[].state, which stays zeroed. Skip building it
-     * until those constants are recovered. */
-    memzero(&ifMagnify_804A1DE0, sizeof(ifMagnify_804A1DE0));
-    PORT_LOG_WARN("ifMagnify_802FC870: magnifier constants are undecompiled "
-                  ".data; off-screen indicator disabled\n");
-    return;
-#endif
     memzero(&ifMagnify_804A1DE0, sizeof(ifMagnify_804A1DE0));
     ifMagnify_802FC7C0(&ifMagnify_804A1DE0);
     archive = ifAll_GetArchive();

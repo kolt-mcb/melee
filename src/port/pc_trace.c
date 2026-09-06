@@ -879,6 +879,42 @@ static void pc_trace_ftdump(void)
     fprintf(stderr, "\n");
 }
 
+/* MELEE_PCTDUMP=<slot>:<from>-<to>: the damage percent as the float the game
+ * keeps, not the integer the HUD shows. A fraction either side of a whole
+ * number reads as a whole point of difference in the traced pct column, so
+ * this is what says whether a hit was missed or a sum rounded differently.
+ * The local Dolphin build prints the same word under MELEE_FTDUMP=<slot>:1830:1. */
+static void pc_trace_pctdump(void)
+{
+    const char* spec = getenv("MELEE_PCTDUMP");
+    int slot = -1;
+    unsigned from = 0, to = 0xFFFFFFFFu, gf;
+    StaticPlayer* sp;
+    HSD_GObj* g;
+    Fighter* fp;
+
+    if (spec == NULL) {
+        return;
+    }
+    if (sscanf(spec, "%d:%u-%u", &slot, &from, &to) != 3 &&
+        sscanf(spec, "%d:%u", &slot, &from) != 2)
+    {
+        return;
+    }
+    gf = (unsigned) gm_8016AEDC();
+    if (gf < from || gf > to) {
+        return;
+    }
+    sp = Player_GetPtrForSlot(slot);
+    g = (sp != NULL) ? sp->player_entity[0] : NULL;
+    fp = (g != NULL) ? (Fighter*) g->user_data : NULL;
+    if (fp == NULL) {
+        return;
+    }
+    fprintf(stderr, "[PCT-PORT] p%d gframe=%u +1830 %08x\n", slot, gf,
+            *(const u32*) &fp->dmg.x1830_percent);
+}
+
 /* MELEE_ECBDUMP=<slot>:<from>-<to> prints a fighter's ECB, the ECB it is
  * interpolating towards, and the source it was built from, as raw words. The
  * local Dolphin build prints the same format under the same variable; the two
@@ -1040,6 +1076,7 @@ void pc_trace_frame(int frame)
     pc_trace_items();
     pc_trace_itang();
     pc_trace_hurtdump();
+    pc_trace_pctdump();
     pc_trace_animid();
     pc_trace_grlink();
     pc_trace_ailog();

@@ -4344,6 +4344,42 @@ bool Camera_80030BBC(Vec3* arg0, S32Vec2* arg1)
 
     px = point.x;
     py = point.y;
+#if BUILD_TARGET_PC
+    /* MELEE_PROJDBG=<gframe>: everything the world-to-screen projection is
+     * built from. A fighter whose world position matches and whose screen
+     * position does not has a camera or a viewport that differs, and nothing
+     * else says which. */
+    {
+        static int want = -2;
+        extern u32 gm_8016AEDC(void);
+        if (want == -2) {
+            const char* e = getenv("MELEE_PROJDBG");
+            want = (e != NULL) ? atoi(e) : -1;
+        }
+        if (want >= 0 && (int) gm_8016AEDC() == want) {
+            Vec3 pc_eye, pc_tgt, pc_up;
+            HSD_CObjGetEyePosition(cobj, &pc_eye);
+            HSD_CObjGetInterest(cobj, &pc_tgt);
+            HSD_CObjGetUpVector(cobj, &pc_up);
+            fprintf(stderr,
+                    "[PROJ] w=(%08x,%08x,%08x) s=(%08x,%08x) vp=(%08x,%08x,"
+                    "%08x,%08x) near=%08x far=%08x fov=%08x asp=%08x pt=%d "
+                    "eye=(%08x,%08x,%08x) tgt=(%08x,%08x,%08x) "
+                    "up=(%08x,%08x,%08x)\n",
+                    *(u32*) &arg0->x, *(u32*) &arg0->y, *(u32*) &arg0->z,
+                    *(u32*) &point.x, *(u32*) &point.y,
+                    *(u32*) &cobj->viewport.xmin, *(u32*) &cobj->viewport.ymin,
+                    *(u32*) &cobj->viewport.xmax, *(u32*) &cobj->viewport.ymax,
+                    *(u32*) &cobj->near, *(u32*) &cobj->far,
+                    *(u32*) &cobj->projection_param.perspective.fov,
+                    *(u32*) &cobj->projection_param.perspective.aspect,
+                    (int) cobj->projection_type, *(u32*) &pc_eye.x,
+                    *(u32*) &pc_eye.y, *(u32*) &pc_eye.z, *(u32*) &pc_tgt.x,
+                    *(u32*) &pc_tgt.y, *(u32*) &pc_tgt.z, *(u32*) &pc_up.x,
+                    *(u32*) &pc_up.y, *(u32*) &pc_up.z);
+        }
+    }
+#endif
     if (arg1 != NULL) {
         arg1->x = px;
         arg1->y = py;
