@@ -39,15 +39,28 @@ float atan2f(float y, float x)
     return y;
 }
 
+/* Retail's Newton refinement is `(0.5 * g) * (3.0 - x * (g*g))` with the
+ * multiply and the subtract rounded once together -- fnmsubs at 80022D54 and
+ * its repeats -- and the squared-term setups are fnmsubs too (80022D30).
+ * Written out, each rounds one more time. acosf is what the animation
+ * blend's quaternion slerp takes its angle from, so this is on the path from
+ * a blend to a pose. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define TG_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define TG_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 float acosf(float x)
 {
-    float result = 1.0F - x * x;
+    float result = TG_FMA(-x, x, 1.0F);
     if (result > 0) {
         float guess;
         guess = __frsqrte(result);
-        guess = 0.5f * guess * (3.0f - guess * guess * result);
-        guess = 0.5f * guess * (3.0f - guess * guess * result);
-        guess = 0.5f * guess * (3.0f - guess * guess * result);
+        guess = (0.5f * guess) * TG_FMA(-result, guess * guess, 3.0f);
+        guess = (0.5f * guess) * TG_FMA(-result, guess * guess, 3.0f);
+        guess = (0.5f * guess) * TG_FMA(-result, guess * guess, 3.0f);
         result = guess;
     } else if (result) {
         result = NAN;
@@ -59,7 +72,7 @@ float acosf(float x)
 
 float asinf(float x)
 {
-    return atanf(x * lb_sqrtf(-(x * x - 1.0f)));
+    return atanf(x * lb_sqrtf(TG_FMA(-x, x, 1.0f)));
 }
 
 static float lb_sqrtf(float x)
@@ -67,9 +80,9 @@ static float lb_sqrtf(float x)
     if (x > 0.0f) {
         float guess;
         guess = __frsqrte(x);
-        guess = 0.5f * guess * (3.0f - guess * guess * x);
-        guess = 0.5f * guess * (3.0f - guess * guess * x);
-        guess = 0.5f * guess * (3.0f - guess * guess * x);
+        guess = (0.5f * guess) * TG_FMA(-x, guess * guess, 3.0f);
+        guess = (0.5f * guess) * TG_FMA(-x, guess * guess, 3.0f);
+        guess = (0.5f * guess) * TG_FMA(-x, guess * guess, 3.0f);
         return guess;
     }
 

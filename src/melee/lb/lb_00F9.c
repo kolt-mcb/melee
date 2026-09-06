@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 #include "lb_00F9.h"
 
 #include "math.h"
@@ -921,6 +925,34 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
             }
         }
 
+#if BUILD_TARGET_PC
+        /* MELEE_DYNLOG=<match frame> names every joint the dynamics solver
+         * writes on that frame and the rotation it leaves behind. A joint
+         * that no animation track writes (MELEE_FOBJAT) and that this does
+         * write is a joint whose value is integrated frame to frame, which
+         * is a different kind of divergence from an interpolated one. */
+        {
+            static int dynlog = -2;
+            if (dynlog == -2) {
+                const char* e = getenv("MELEE_DYNLOG");
+                dynlog = e != NULL ? atoi(e) : -1;
+            }
+            if (dynlog >= 0) {
+                extern u32 gm_8016AEDC(void);
+                if ((int) gm_8016AEDC() == dynlog) {
+                    fprintf(stderr,
+                            "[DYN] jobj=%p rot=%08x,%08x,%08x axis=%d "
+                            "angle=%08x\n",
+                            (void*) jobj,
+                            *(const unsigned*) &jobj->rotate.x,
+                            *(const unsigned*) &jobj->rotate.y,
+                            *(const unsigned*) &jobj->rotate.z,
+                            (int) cur->desc.lb_unk0.unk_54,
+                            *(const unsigned*) &angle_diff);
+                }
+            }
+        }
+#endif
         /* Dominant axis damping */
         {
             s32 axis = cur->desc.lb_unk0.unk_54;
