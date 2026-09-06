@@ -339,9 +339,12 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
     # the Unix epoch and the GameCube from 2000-01-01, hence the offset; the
     # default lands on a whole day, so the seconds field is zero and the title
     # draws nothing on either side.
-    if os.environ.get("MELEE_RNG_WATCH"):
+    if os.environ.get("MELEE_RNG_WATCH") or os.environ.get("MELEE_CODE_BP"):
         # The seed watchpoint logs through Dolphin's MEMMAP channel, and the
-        # JIT only emits memcheck code when debugging is on.
+        # JIT only emits memcheck code when debugging is on. The same is true
+        # of a code breakpoint: Jit64 emits the check only under
+        # IsDebuggingEnabled(), so without this the breakpoint arms and is
+        # never reached.
         argv += ["-C", "Dolphin.Interface.DebugModeEnabled=True",
                  "-C", "Logger.Logs.MEMMAP=True",
                  "-C", "Logger.Options.WriteToConsole=True",

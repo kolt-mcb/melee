@@ -715,17 +715,57 @@ static void pc_trace_bones(void)
                 h->a_pos.z);
     }
     fprintf(stderr, "\n");
+    /* Raw bit patterns of the world-matrix translation, not two decimals:
+     * the differences worth chasing here are last-bit ones, and a rounded
+     * print says "identical" for every one of them. The reference build reads
+     * the same two words out of the same matrix. */
     fprintf(stderr, "[BONES-PORT] p%d gframe=%u", want_p, want_f);
     for (b = 0; b < 80; b++) {
-        Vec3 v;
-        if (fp->parts[b].joint == NULL) {
+        HSD_JObj* j = fp->parts[b].joint;
+        if (j == NULL) {
             continue;
         }
-        lb_8000B1CC(fp->parts[b].joint, NULL, &v);
-        fprintf(stderr, " %d:(%.2f,%.2f)", b, v.x - fp->cur_pos.x,
-                v.y - fp->cur_pos.y);
+        fprintf(stderr, " %d:(%08x,%08x)", b,
+                *(const u32*) &j->mtx[0][3], *(const u32*) &j->mtx[1][3]);
     }
     fprintf(stderr, "\n");
+    /* MELEE_BONESFULL=<first>-<last> adds, for that range of bones, the whole
+     * local transform and the world matrix as raw words. The translation
+     * alone says which bone first went wrong; this says whether it went wrong
+     * in its own rotation -- an animation difference -- or only in the matrix
+     * built from it, which is a difference in the concatenation. */
+    {
+        const char* full = getenv("MELEE_BONESFULL");
+        int lo = 0, hi = -1, k;
+        if (full != NULL && sscanf(full, "%d-%d", &lo, &hi) == 2) {
+            for (b = lo; b <= hi && b < 80; b++) {
+                HSD_JObj* j = fp->parts[b].joint;
+                const u32* w;
+                if (j == NULL) {
+                    continue;
+                }
+                fprintf(stderr, "[BONEFULL-PORT] p%d gframe=%u b=%d flags=%08x",
+                        want_p, want_f, b, (unsigned) j->flags);
+                w = (const u32*) &j->rotate;
+                for (k = 0; k < 4; k++) {
+                    fprintf(stderr, " r%d=%08x", k, w[k]);
+                }
+                w = (const u32*) &j->scale;
+                for (k = 0; k < 3; k++) {
+                    fprintf(stderr, " s%d=%08x", k, w[k]);
+                }
+                w = (const u32*) &j->translate;
+                for (k = 0; k < 3; k++) {
+                    fprintf(stderr, " t%d=%08x", k, w[k]);
+                }
+                w = (const u32*) &j->mtx[0][0];
+                for (k = 0; k < 12; k++) {
+                    fprintf(stderr, " m%d=%08x", k, w[k]);
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+    }
 }
 
 void pc_trace_frame(int frame)

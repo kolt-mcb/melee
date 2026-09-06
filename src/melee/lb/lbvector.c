@@ -24,6 +24,21 @@
 #include <baselib/cobj.h>
 #include <baselib/debug.h>
 
+/* MWCC turned every `a * b + c` in this file into a single fmadds -- one
+ * rounding, not two -- and the port's compiler does not.  Each place below is
+ * paired with the instruction it comes from, because the operand pairing is
+ * not recoverable from the C: `fmadds x, y, t` and `fmadds y, x, t` are the
+ * same value but `a*b + c*d` can be fused either way and the two answers
+ * differ.  This matters here because lbVector_CreateEulerMatrix and
+ * lbVector_Rotate are on the path from a fighter's joint angles to its ECB,
+ * so a last-bit difference here is a position difference a few hundred frames
+ * later. */
+#if BUILD_TARGET_PC
+#define LV_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define LV_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static float lbVector_Len(Vec3* vec)
 {
     return sqrtf(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
@@ -107,7 +122,10 @@ float lbVector_Angle(Vec3* a, Vec3* b)
     float lena_lenb = lbVector_Len(a) * lbVector_Len(b);
 
     if (lena_lenb > 0.0000000001f) {
-        float cosine = (a->x * b->x + a->y * b->y + a->z * b->z) / lena_lenb;
+        /* 8000D748, 8000D750: the y term is the plain multiply and the
+         * other two fuse onto it, in that order. */
+        float cosine =
+            LV_FMA(a->z, b->z, LV_FMA(a->x, b->x, a->y * b->y)) / lena_lenb;
         if (cosine > 1.0f) {
             cosine = 1.0f;
         }
@@ -126,7 +144,7 @@ float lbVector_AngleXY(Vec3* a, Vec3* b)
     float lena_lenb = lbVector_Len_xy(a) * lbVector_Len_xy(b);
 
     if (lena_lenb) {
-        float cosine = (a->x * b->x + a->y * b->y) / lena_lenb;
+        float cosine = LV_FMA(a->x, b->x, a->y * b->y) / lena_lenb;
         if (cosine > 1.0f) {
             cosine = 1.0f;
         }
@@ -150,9 +168,25 @@ static float _lb_sin(float angle)
     } else if (angle < -M_PI) {
         angle += M_TAU;
     }
+#if BUILD_TARGET_PC
+    /* 8000E5A8: fmsubs C1,angle,cubic -- the cubic leaves in one rounding.
+     * 8000E5AC: fmadds angle,quartic,that -- and so does the quintic. */
+    {
+        float cubic = 0.15527099370956421f * angle;
+        float quartic = 0.0056429998949170113f * angle;
+        cubic = cubic * angle;
+        cubic = angle * cubic;
+        quartic = quartic * angle;
+        quartic = angle * quartic;
+        quartic = angle * quartic;
+        return LV_FMA(angle, quartic,
+                      LV_FMA(0.9878619909286499f, angle, -cubic));
+    }
+#else
     return 0.9878619909286499f * angle -
            0.15527099370956421f * angle * angle * angle +
            0.0056429998949170113f * angle * angle * angle * angle * angle;
+#endif
 }
 
 static float _lb_cos(float angle)
@@ -163,9 +197,25 @@ static float _lb_cos(float angle)
     } else if (angle < -M_PI) {
         angle += M_TAU;
     }
+#if BUILD_TARGET_PC
+    /* 8000E5A8: fmsubs C1,angle,cubic -- the cubic leaves in one rounding.
+     * 8000E5AC: fmadds angle,quartic,that -- and so does the quintic. */
+    {
+        float cubic = 0.15527099370956421f * angle;
+        float quartic = 0.0056429998949170113f * angle;
+        cubic = cubic * angle;
+        cubic = angle * cubic;
+        quartic = quartic * angle;
+        quartic = angle * quartic;
+        quartic = angle * quartic;
+        return LV_FMA(angle, quartic,
+                      LV_FMA(0.9878619909286499f, angle, -cubic));
+    }
+#else
     return 0.9878619909286499f * angle -
            0.15527099370956421f * angle * angle * angle +
            0.0056429998949170113f * angle * angle * angle * angle * angle;
+#endif
 }
 
 /// 8000D8F4
@@ -196,8 +246,9 @@ void lbVector_RotateAboutUnitAxis(Vec3* v, Vec3* axis, float angle)
         unit_axis_yz_z = axis->y / len_axis_yz;
 
         x = v->x;
-        y = v->y * unit_axis_yz_y - v->z * unit_axis_yz_z;
-        z = v->y * unit_axis_yz_z + v->z * unit_axis_yz_y;
+        /* 8000DA6C, 8000DA70 */
+        y = LV_FMA(v->y, unit_axis_yz_y, -(v->z * unit_axis_yz_z));
+        z = LV_FMA(v->y, unit_axis_yz_z, v->z * unit_axis_yz_y);
     } else {
         x = v->x;
         y = v->y;
@@ -206,26 +257,30 @@ void lbVector_RotateAboutUnitAxis(Vec3* v, Vec3* axis, float angle)
 
     // rotation (2) about the y-axis: rotate everything such that the rotation
     // axis aligns with the z-axis new v is then (x2,y2,z2)
-    x2 = x * len_axis_yz - z * axis->x;
+    /* 8000DAA0, 8000DA98 */
+    x2 = LV_FMA(x, len_axis_yz, -(z * axis->x));
     // y2 = y
-    z2 = x * axis->x + z * len_axis_yz;
+    z2 = LV_FMA(x, axis->x, z * len_axis_yz);
 
     // rotate by 'angle' about the z axis, which now aligns with the rotation
     // axis
-    x3 = x2 * c - y * s; // remember that y2=y
-    y3 = x2 * s + y * c;
+    /* 8000DAAC, 8000DAB4 */
+    x3 = LV_FMA(x2, c, -(y * s)); // remember that y2=y
+    y3 = LV_FMA(x2, s, y * c);
     // z3 = z2
 
     // opposite of rotation (2). We overwrite (x,y,z) with the resulting new v.
-    x = x3 * len_axis_yz + z2 * axis->x; // remember that z3=z2
+    /* 8000DABC, 8000DAC0 */
+    x = LV_FMA(x3, len_axis_yz, z2 * axis->x); // remember that z3=z2
     y = y3;
-    z = -x3 * axis->x + z2 * len_axis_yz;
+    z = LV_FMA(-x3, axis->x, z2 * len_axis_yz);
 
     // opposite of rotation (1)
     if (len_axis_yz > 0.0000000001f) {
         v->x = x;
-        v->y = y * unit_axis_yz_y + z * unit_axis_yz_z;
-        v->z = -y * unit_axis_yz_z + z * unit_axis_yz_y;
+        /* 8000DAD8, 8000DADC */
+        v->y = LV_FMA(y, unit_axis_yz_y, z * unit_axis_yz_z);
+        v->z = LV_FMA(-y, unit_axis_yz_z, z * unit_axis_yz_y);
     } else {
         v->x = x;
         v->y = y;
@@ -244,17 +299,17 @@ void lbVector_Rotate(Vec3* v, int axis, float angle)
     switch (axis) {
     case 1: // rotate about x axis
         x = v->x;
-        y = v->y * c - v->z * s;
-        z = v->y * s + v->z * c;
+        y = LV_FMA(v->y, c, -(v->z * s));
+        z = LV_FMA(v->y, s, v->z * c);
         break;
     case 2: // rotate about y axis
-        x = v->x * c + v->z * s;
+        x = LV_FMA(v->x, c, v->z * s);
         y = v->y;
-        z = v->z * c - v->x * s;
+        z = LV_FMA(v->z, c, -(v->x * s));
         break;
     case 4: // rotate about z axis
-        x = v->x * c - v->y * s;
-        y = v->x * s + v->y * c;
+        x = LV_FMA(v->x, c, -(v->y * s));
+        y = LV_FMA(v->x, s, v->y * c);
         z = v->z;
         break;
     }
@@ -272,19 +327,21 @@ float dummy(void)
 /// at the plane that is perpendicular to b and contains the origin.
 void lbVector_Mirror(Vec3* a, Vec3* unit_mirror_axis)
 {
-    float f =
-        (unit_mirror_axis->x * a->x + unit_mirror_axis->y * a->y) * -2.0f;
+    float f = LV_FMA(unit_mirror_axis->x, a->x,
+                     unit_mirror_axis->y * a->y) *
+              -2.0f;
 
-    a->x += unit_mirror_axis->x * f;
-    a->y += unit_mirror_axis->y * f;
+    a->x = LV_FMA(unit_mirror_axis->x, f, a->x);
+    a->y = LV_FMA(unit_mirror_axis->y, f, a->y);
 }
 
 /// 8000DCA8 - returns <a/|a|, b/|b|>, which is the cosine of the angle between
 /// a and b.
 float lbVector_CosAngle(Vec3* a, Vec3* b)
 {
-    return (a->x * b->x + a->y * b->y) / (sqrtf(a->x * a->x + a->y * a->y) *
-                                          sqrtf(b->x * b->x + b->y * b->y));
+    return LV_FMA(a->x, b->x, a->y * b->y) /
+           (sqrtf(a->x * a->x + a->y * a->y) *
+            sqrtf(b->x * b->x + b->y * b->y));
 }
 
 /// 8000DDAC - linearly interpolates between a and b as f goes from 0 to 1,
@@ -501,13 +558,13 @@ void lbVector_CreateEulerMatrix(Mtx m, Quaternion* angles)
     m[2][0] = -sy;
 
     // column 2
-    m[0][1] = cz * sxsy - cx * sz;
-    m[1][1] = sz * sxsy + cx * cz;
+    m[0][1] = LV_FMA(cz, sxsy, -(cx * sz));
+    m[1][1] = LV_FMA(sz, sxsy, cx * cz);
     m[2][1] = sx * cy;
 
     // column 3
-    m[0][2] = cz * cxsy + sx * sz;
-    m[1][2] = sz * cxsy - sx * cz;
+    m[0][2] = LV_FMA(cz, cxsy, sx * sz);
+    m[1][2] = LV_FMA(sz, cxsy, -(sx * cz));
     m[2][2] = cx * cy;
 
     // column 4 - no translational component

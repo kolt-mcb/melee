@@ -246,46 +246,60 @@ void PSMTXTranspose(Mtx src, Mtx xPose)
 void PSMTXQuat(Mtx m, QuaternionPtr q)
 {
     if (!ps_ptr_valid(m) || !ps_ptr_valid(q)) return;
-    f32 s, xs, ys, zs, wx, wy, wz, xx, xy, xz, yy, yz, zz;
-    /* The paired-single routine divides with ps_res -- the hardware's
-     * reciprocal estimate refined by one Newton step -- not an exact
-     * division. Same reason as PSVECNormalize: every joint matrix built from
-     * a quaternion goes through here, and an exact reciprocal puts each bone
-     * world position an ULP from the console's. */
-    {
-        f32 n = (q->w * q->w) + (q->z * q->z + (q->x * q->x + q->y * q->y));
-        f32 e = (f32) __fres((double) n);
-        /* Retail's Newton step is ps_nmsub then ps_mul: e * (2 - n*e), with
-         * the multiply and the subtract rounded once together (803426C4,
-         * 803426CC). `e + e * (1 - n*e)` is the same number in exact
-         * arithmetic and a different one in single precision. */
-        e = e * fmaf(-n, e, 2.0f);
-        s = 2.0f * e;
-    }
-    /* Retail keeps the scale out of the products and folds it into the last
-     * operation: the diagonal is ps_nmsub -- 1 - (a*a + b*b) * s, one
-     * rounding -- and each off-diagonal is a ps_madd or ps_msub of the two
-     * products followed by a single multiply by s (803426E4 onward).
-     * Scaling first, as `xs = x * s` does, rounds in a different place. */
-    (void) xs; (void) ys; (void) zs;
-    (void) wx; (void) wy; (void) wz;
-    (void) xx; (void) xy; (void) xz;
-    (void) yy; (void) yz; (void) zz;
-    {
-        f32 x = q->x, y = q->y, z = q->z, w = q->w;
-        m[0][0] = fmaf(-(y * y + z * z), s, 1.0f);
-        m[1][1] = fmaf(-(x * x + z * z), s, 1.0f);
-        m[2][2] = fmaf(-(x * x + y * y), s, 1.0f);
-        m[0][1] = fmaf(x, y, -(w * z)) * s;
-        m[1][0] = fmaf(x, y, w * z) * s;
-        m[0][2] = fmaf(x, z, w * y) * s;
-        m[2][0] = fmaf(x, z, -(w * y)) * s;
-        m[1][2] = fmaf(y, z, -(w * x)) * s;
-        m[2][1] = fmaf(y, z, w * x) * s;
-        m[0][3] = 0;
-        m[1][3] = 0;
-        m[2][3] = 0;
-    }
+    /* 80342690. Read off the paired-single routine instruction by
+     * instruction, because every difference below is a difference of one
+     * rounding and every fighter bone that is mid-blend is built here.
+     *
+     *   f4 = (x, y), f5 = (z, w)
+     *   f6 = (x*x, y*y)              ps_mul
+     *   f8 = (z*z + x*x, w*w + y*y)  ps_madd   -- fused, both halves
+     *   f3 = f8.ps0 + f8.ps1         ps_sum0   -- |q|^2, a plain add
+     *   f11 = fres(f3)               the hardware estimate, not 1/n
+     *   f8 = (f8.ps0, z*z + y*y)     ps_sum1   -- ps0 keeps the fused value
+     *   f6 = (x*x + y*y, y*y)        ps_sum0
+     *
+     * so |q|^2 is not `x*x + y*y + z*z + w*w` in any order: its two halves
+     * are fused multiply-adds. The same asymmetry survives into the
+     * diagonal, where m[1][1] is built from the fused z*z + x*x while the
+     * other two diagonal terms are plain adds. */
+    f32 x = q->x, y = q->y, z = q->z, w = q->w;
+    f32 xxzz = fmaf(z, z, x * x);
+    f32 yyww = fmaf(w, w, y * y);
+    f32 n = xxzz + yyww;
+    f32 e = (f32) __fres((double) n);
+    f32 s;
+    /* f10 = (y*w, x*w) (ps_muls1), f7.ps0 = z*w (ps_muls1). */
+    f32 yw = y * w, xw = x * w, zw = z * w;
+    /* 803426D8/DC: ps_madd and ps_msub of the same pair. */
+    f32 xy_p = fmaf(x, y, zw);
+    f32 xy_m = fmaf(x, y, -zw);
+    /* 803426FC: ps_madds0 -- both of these are one fused step. */
+    f32 xz_p = fmaf(x, z, yw);
+    f32 yz_p = fmaf(y, z, xw);
+
+    /* 803426C4/CC/D4: one Newton step on the estimate, the multiply and the
+     * subtract rounded once together, then doubled. */
+    e = e * fmaf(-n, e, 2.0f);
+    s = 2.0f * e;
+
+    /* 803426E4/E8: ps_nmsub, so each diagonal term is one rounding. */
+    m[0][0] = fmaf(-(z * z + y * y), s, 1.0f);
+    m[1][1] = fmaf(-xxzz, s, 1.0f);
+    m[2][2] = fmaf(-(x * x + y * y), s, 1.0f);
+
+    m[0][1] = xy_m * s;
+    m[1][0] = xy_p * s;
+    m[0][2] = xz_p * s;
+    m[2][1] = yz_p * s;
+    /* 80342704: the remaining two are not `x*z - y*w`. The routine already
+     * has x*z + y*w in hand and takes 2*y*w back off it in one ps_nmsub,
+     * which is a different last bit. */
+    m[2][0] = fmaf(-yw, 2.0f, xz_p) * s;
+    m[1][2] = fmaf(-xw, 2.0f, yz_p) * s;
+
+    m[0][3] = 0;
+    m[1][3] = 0;
+    m[2][3] = 0;
 }
 
 u32 PSMTXInverse(Mtx src, Mtx inv)
