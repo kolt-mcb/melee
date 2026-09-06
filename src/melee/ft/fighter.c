@@ -1507,8 +1507,12 @@ void Fighter_ChangeMotionState(Fighter_GObj* gobj, FtMotionId msid,
         if (on < 0) on = getenv("MELEE_ASLOG") != NULL;
         if (on) {
             extern u32 pc_frame_number;
-            fprintf(stderr, "[AS] f%u p%d %d->%d lstick=(%.2f,%.2f) held=%08x trig=%08x air=%d cpu=%d y=%.1f x=%.1f dir=%+.0f\n",
+            fprintf(stderr, "[AS] f%u p%d %d->%d blend=%08x start=%08x "
+                            "lstick=(%.2f,%.2f) held=%08x trig=%08x air=%d "
+                            "cpu=%d y=%.1f x=%.1f dir=%+.0f\n",
                     pc_frame_number, (int) fp->player_id, (int) fp->motion_id, (int) msid,
+                    *(const unsigned*) &anim_blend,
+                    *(const unsigned*) &anim_start,
                     (double) fp->input.lstick.x, (double) fp->input.lstick.y,
                     (unsigned) fp->input.held_inputs, (unsigned) fp->input.x668,
                     (int) fp->ground_or_air, (int) ftCo_800A2040(fp), (double) fp->cur_pos.y,

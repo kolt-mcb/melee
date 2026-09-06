@@ -418,6 +418,35 @@ void ftAnim_8006EBE8(HSD_GObj* gobj, float anim_start, float anim_rate,
     HSD_JObj* root_jobj = GET_JOBJ(gobj);
     Fighter* fp = GET_FIGHTER(gobj);
     HSD_JObj* anim_jobj = fp->x8AC_animSkeleton;
+#if BUILD_TARGET_PC
+    /* MELEE_BLENDAT: the blend length each animation change is made with.
+     * Zero takes the arm that attaches the new animation to the *displayed*
+     * tree; non-zero attaches it to the animation skeleton and leaves the
+     * displayed one holding the old pose for the blend to interpolate from.
+     * Which arm runs first in a frame decides what the blend reads. */
+    {
+        static int bl6 = -2;
+        if (bl6 == -2) {
+            const char* e = getenv("MELEE_BLENDAT");
+            bl6 = e != NULL ? atoi(e) : -1;
+        }
+        if (bl6 >= 0) {
+            extern u32 gm_8016AEDC(void);
+            extern u32 pc_frame_number;
+            if ((int) gm_8016AEDC() == bl6) {
+                fprintf(stderr,
+                        "[CHANGE] gframe=%u pcf=%u p%d start=%08x rate=%08x "
+                        "blendlen=%08x from=%p\n",
+                        (unsigned) gm_8016AEDC(),
+                        (unsigned) pc_frame_number, (int) fp->player_id,
+                        *(const unsigned*) &anim_start,
+                        *(const unsigned*) &anim_rate,
+                        *(const unsigned*) &anim_blend_frames,
+                        __builtin_return_address(0));
+            }
+        }
+    }
+#endif
     ftAnim_80070758(root_jobj);
     ftAnim_80070758(anim_jobj);
     if (anim_blend_frames == 0) {
@@ -1123,11 +1152,13 @@ void ftAnim_8006FE08(Fighter* fp, bool do_blending)
             if ((int) gm_8016AEDC() == blat3) {
                 fprintf(stderr,
                         "[ATTACH] gframe=%u pcf=%u p%d kind=%d x597=%d "
-                        "blend=%d tree=%p\n",
+                        "blend=%d x8A4=%08x tree=%p\n",
                         (unsigned) gm_8016AEDC(),
                         (unsigned) pc_frame_number, (int) fp->player_id,
                         (int) fp->kind, (int) fp->x597_bits,
-                        (int) do_blending, (void*) fp->x590);
+                        (int) do_blending,
+                        *(const unsigned*) &fp->x8A4_animBlendFrames,
+                        (void*) fp->x590);
             }
         }
     }
