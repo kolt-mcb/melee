@@ -1,5 +1,10 @@
 #include "ftcpuattack.h"
 
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
+
 #include "ftcmdscript.h"
 
 #include "baselib/debug.h"
@@ -2140,6 +2145,17 @@ void ftCo_800B9704(Fighter* fp)
     if (cpu->xC == 7) {
         cpu->x34 /= 2;
     }
+#if BUILD_TARGET_PC
+    /* The only writer of the ranged-attack cooldown, and the level it reads
+     * is the whole of it: at level 9 the cooldown is 25-40 frames, at level 0
+     * it is 160-310. Under MELEE_CPUATK say which was in effect. */
+    if (getenv("MELEE_CPUATK") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[CPUATK] gframe=%u p%d SET x34=%d lvl=%d rand=%.6f\n",
+                (unsigned) gm_8016AEDC(), (int) fp->player_id, (int) cpu->x34,
+                (int) cpu->level, (double) rand);
+    }
+#endif
 }
 
 bool ftCo_800B9790(Fighter* fp, f32 arg1, f32 arg2)
@@ -2313,6 +2329,22 @@ bool ftCo_800B9CBC(Fighter* fp)
     temp_r31 = &fp->x1A88;
     temp_r29 = temp_r31->x44;
     temp_r31->xA4 = 0;
+#if BUILD_TARGET_PC
+    /* MELEE_CPUATK=1 says whether the ranged-attack decision was reached and
+     * which of its three guards turned it away. The console reaches the draw
+     * inside it on frames the port does not, and the draw is what puts the
+     * two random streams out of step; the guards are the only thing between
+     * the call and the draw. Mirror of the console harness's CODEBP at
+     * 800B9CBC. */
+    if (getenv("MELEE_CPUATK") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr,
+                "[CPUATK] gframe=%u p%d tgt=%d b5=%d x34=%d xC=%d lvl=%d\n",
+                (unsigned) gm_8016AEDC(), (int) fp->player_id,
+                temp_r29 != NULL, (int) temp_r31->xF9_b5, (int) temp_r31->x34,
+                (int) temp_r31->xC, (int) temp_r31->level);
+    }
+#endif
     if (temp_r29 == NULL) {
         return false;
     }
