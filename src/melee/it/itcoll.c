@@ -1,3 +1,6 @@
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#endif
 #include "it/itcoll.h"
 
 #include "inlines.h"
@@ -73,11 +76,22 @@ typedef struct ItCollDynamicsDesc {
     f32 size;
 } ItCollDynamicsDesc;
 
+#if BUILD_TARGET_PC
+/* Same two fields, reached by name rather than by padding past a pair of
+ * four-byte pointers that are eight bytes here. See ItemDynamics. */
+typedef struct ItCollDynamics {
+    s32 _bone_count;
+    void* _bone_descs;
+    s32 count;
+    ItCollDynamicsDesc* descs;
+} ItCollDynamics;
+#else
 typedef struct ItCollDynamics {
     u8 _pad[8];
     s32 count;
     ItCollDynamicsDesc* descs;
 } ItCollDynamics;
+#endif
 
 void it_8026F9A0(void)
 {
@@ -1135,6 +1149,23 @@ void it_8027163C(Item_GObj* item_gobj)
         cnt = 0U;
         item->xB68 = it_dynams->count;
         index = 0;
+#if BUILD_TARGET_PC
+        /* Retail has no guard here: an article with dynamics descriptors is
+         * assumed to have a bone table, which it gets when its model
+         * descriptor reports a nonzero bone count. Name the article if it
+         * does not, rather than dereferencing NULL and losing the run. */
+        if (it_dynams->count != 0 && item->xBBC_dynamicBoneTable == NULL) {
+            fprintf(stderr,
+                    "[ITDYN] item kind=%d has %d dynamics descs and no "
+                    "bone table (model bone_count=%d)\n",
+                    (int) item->kind, (int) it_dynams->count,
+                    item->xC4_article_data != NULL &&
+                            item->xC4_article_data->x10_modelDesc != NULL
+                        ? (int) item->xC4_article_data->x10_modelDesc
+                              ->x4_bone_count
+                        : -1);
+        }
+#endif
         while (cnt < it_dynams->count) {
             struct xB6C_t* vars = &item->xB6C_vars[cnt];
             ItCollDynamicsDesc* bone_dyn_desc = &it_dynams->descs[index];
