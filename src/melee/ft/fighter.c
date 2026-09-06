@@ -940,6 +940,15 @@ void Fighter_UnkInitReset_80067C98(Fighter* fp)
 void Fighter_UnkProcessDeath_80068354(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+    /* The two draws below -- the AI's decision timer and its ranged-attack
+     * cooldown -- are the first this side makes in the match's load frame on
+     * the console and the fourth and fifth here. See pc_trace.c. */
+    {
+        extern void pc_seed_at_fighter_create(void);
+        pc_seed_at_fighter_create();
+    }
+#endif
 
     Fighter_UnkInitReset_80067C98(fp);
     HSD_JObjSetTranslate(GET_JOBJ(gobj), &fp->cur_pos);

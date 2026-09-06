@@ -790,18 +790,20 @@ void pc_trace_frame(int frame)
                         if (fp != NULL) {
                             fp->x1A88.level = lvl[slot];
                             /* The AI's decision timer is seeded from the one
-                             * random draw ftCo_800A101C makes, and that draw
-                             * happens while the fighters are being created --
-                             * inside the load, where the console is reading
-                             * the disc and this side is not, so the two are at
-                             * different points in the RNG stream and get
-                             * different timers (measured: console 8 and 8,
-                             * this side 5 and 2). Every AI decision is gated
-                             * on that timer, so the fight diverges within
-                             * thirty frames however well the rest is aligned.
-                             * Start both sides' timers from the same place.
-                             * Once, on the frame the slots become CPUs --
-                             * writing it every frame would stop the clock. */
+                             * random draw ftCo_800A101C makes as the fighter
+                             * is created. Both sides start it from zero, and
+                             * both do it here -- the local Dolphin build makes
+                             * the same two writes under the same variable, so
+                             * this is an alignment and not a correction. Once,
+                             * on the frame the slots become CPUs; writing it
+                             * every frame would stop the clock.
+                             *
+                             * The load frame is reseeded immediately before
+                             * the fighters are built now (see
+                             * pc_seed_at_fighter_create), so the draw itself
+                             * lands in the same place on both sides; dropping
+                             * these two writes on this side alone is what is
+                             * wrong, not the writes. */
                             if (gm_8016AEDC() == 2) {
                                 fp->x1A88.x7C = 0;
                                 fp->x1A88.x80 = 0;
@@ -817,6 +819,40 @@ void pc_trace_frame(int frame)
         }
     }
 
+}
+
+/* Called once per match load, from the first fighter the load builds.
+ *
+ * MELEE_SEED_EACH_LOAD puts both sides on the same seed at the top of every
+ * frame of the match's own load, which is enough as long as the two make the
+ * same draws in the same order within a frame. They do not: the console's
+ * load is spread over many frames and builds the stage in one of them and the
+ * fighters in a later one, so its fighter frame opens with the reseed and the
+ * two draws each fighter makes as it is created. Here the whole load is one
+ * frame, and Onett's stage init and the item spawner draw first -- three
+ * draws, measured -- so each fighter was created from a different point in
+ * the stream than its console counterpart. The two numbers a fighter draws as
+ * it is created are its AI's decision timer and its ranged-attack cooldown,
+ * and both are read every frame for the rest of the match: the cooldown alone
+ * put the two sides' streams out of step at match frame 35, when the console's
+ * expired and this side's did not.
+ *
+ * So reseed once more, immediately before the fighters are built, which is
+ * where the console's own frame reseed falls. */
+void pc_seed_at_fighter_create(void)
+{
+    static int done = 0;
+    const char* want = getenv("MELEE_SEED");
+
+    if (gm_8016AEDC() != 0) {
+        done = 0;              /* a respawn mid-match; arm for the next load */
+        return;
+    }
+    if (done || want == NULL || getenv("MELEE_SEED_EACH_LOAD") == NULL) {
+        return;
+    }
+    done = 1;
+    seed = (u32) strtoul(want, NULL, 16);
 }
 
 #endif /* BUILD_TARGET_PC */
