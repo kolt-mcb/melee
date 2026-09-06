@@ -1119,12 +1119,15 @@ void ftAnim_8006FE08(Fighter* fp, bool do_blending)
         }
         if (blat3 >= 0) {
             extern u32 gm_8016AEDC(void);
+            extern u32 pc_frame_number;
             if ((int) gm_8016AEDC() == blat3) {
                 fprintf(stderr,
-                        "[ATTACH] p%d kind=%d x597=%d blend=%d tree=%p\n",
-                        (int) fp->player_id, (int) fp->kind,
-                        (int) fp->x597_bits, (int) do_blending,
-                        (void*) fp->x590);
+                        "[ATTACH] gframe=%u pcf=%u p%d kind=%d x597=%d "
+                        "blend=%d tree=%p\n",
+                        (unsigned) gm_8016AEDC(),
+                        (unsigned) pc_frame_number, (int) fp->player_id,
+                        (int) fp->kind, (int) fp->x597_bits,
+                        (int) do_blending, (void*) fp->x590);
             }
         }
     }
