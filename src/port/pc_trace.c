@@ -298,7 +298,13 @@ static void pc_trace_ailog(void)
                      * on the two sides. */
                     {
                         HSD_JObj* b1 = vfp->parts[3].x4_jobj2;
-                        pc_watch_jobj = b1;
+                        /* MELEE_WATCHJ=1 moves the one-joint write watch to
+                         * the *displayed* joint instead of the animation
+                         * one, which is the half of the blend whose value
+                         * differs at frame 507. */
+                        pc_watch_jobj = (getenv("MELEE_WATCHJ") != NULL)
+                                            ? vfp->parts[3].joint
+                                            : b1;
                         /* The animation's node list: one signed byte per
                          * part saying how many tracks it carries. The attach
                          * walk advances through the track array by whole
@@ -350,6 +356,38 @@ static void pc_trace_ailog(void)
                                 fprintf(stderr, " %d", (int) nd2[q]);
                             }
                             fprintf(stderr, "\n");
+                        }
+                        /* The same first five FigaTrack entries, rebuilt at
+                         * host widths: {u16 length; u16 startframe; u8
+                         * obj_type; u8 frac_value; u8 frac_slope; pad; u8*
+                         * ad} -- 0x10 bytes here, 0xC there. */
+                        if (vfp->x598 != NULL) {
+                            const char* tb =
+                                *(const char* const*) ((const char*) vfp->x598 +
+                                                       24);
+                            int k;
+                            for (k = 0; tb != NULL && k < 5; k++) {
+                                const unsigned char* e =
+                                    (const unsigned char*) tb + k * 0x10;
+                                const unsigned char* ad =
+                                    *(const unsigned char* const*) (e + 8);
+                                fprintf(stderr,
+                                        "[TRACK-PORT] gframe=%u p%d k=%d "
+                                        "len=%u sf=%d type=%u fracv=%02x "
+                                        "fracs=%02x ad=%p head=",
+                                        (unsigned) gm_8016AEDC(), vslot, k,
+                                        (unsigned) *(const u16*) e,
+                                        (int) *(const s16*) (e + 2),
+                                        (unsigned) e[4], (unsigned) e[5],
+                                        (unsigned) e[6], (const void*) ad);
+                                if (ad != NULL) {
+                                    int b;
+                                    for (b = 0; b < 6; b++) {
+                                        fprintf(stderr, "%02x", ad[b]);
+                                    }
+                                }
+                                fprintf(stderr, "\n");
+                            }
                         }
                         /* Every part's flag word, once per frame. The track
                          * walk in ftAnim_8006F4C8 advances its part index
