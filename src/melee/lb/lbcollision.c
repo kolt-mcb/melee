@@ -24,6 +24,46 @@
 #include <baselib/tev.h>
 #include <MetroTRK/intrinsics.h>
 
+#if BUILD_TARGET_PC
+/* MELEE_HBDBG=<lo>-<hi> reports every place a hurtbox position is actually
+ * recomputed. The console refreshes them all inside the hit-versus-hurt test
+ * (lbColl_8000805C) and so never recomputes in lbColl_800083C4; if the port
+ * reports site 5 instead, the CPU AI is measuring a fighter's reach from
+ * positions taken at a different point in the frame. */
+int pc_hb_window(void)
+{
+    static int lo = -2, hi;
+    if (lo == -2) {
+        const char* e = getenv("MELEE_HBDBG");
+        const char* dash = e ? strchr(e, '-') : NULL;
+        lo = e ? atoi(e) : -1;
+        hi = dash ? atoi(dash + 1) : lo;
+    }
+    if (lo < 0) {
+        return 0;
+    }
+    {
+        extern u32 gm_8016AEDC(void);
+        int f = (int) gm_8016AEDC();
+        return f >= lo && f <= hi;
+    }
+}
+
+void pc_hb_note(int site, const void* capsule)
+{
+    if (pc_hb_window()) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[HBUPD] gframe=%u site=%d capsule=%p\n",
+                (unsigned) gm_8016AEDC(), site, capsule);
+    }
+}
+#define PC_HB_NOTE(site, c) pc_hb_note((site), (c))
+#else
+#define PC_HB_NOTE(site, c) ((void) 0)
+#endif
+
+
+
 /* 006E58 */ static bool
 lbColl_80006E58(Vec3* hit_start, Vec3* hit_end, Vec3* hurt_start,
                 Vec3* hurt_end, Vec3* hit_closest, Vec3* hurt_closest,
@@ -1777,6 +1817,7 @@ bool lbColl_80007BCC(HitCapsule* arg0, HitResult* shield_hit, void* arg2,
     Mtx sp38;
 
     if (!shield_hit->skip_update_pos) {
+        PC_HB_NOTE(0, shield_hit);
         lb_8000B1CC(shield_hit->bone, &shield_hit->offset, &shield_hit->pos);
         if (arg2 != NULL) {
             shield_hit->pos.z = arg6;
@@ -1851,6 +1892,8 @@ bool lbColl_80007ECC(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2,
 
     if (arg1->state == HurtCapsule_Enabled) {
         if (!arg1->skip_update_pos) {
+        PC_HB_NOTE(2, arg1);
+            PC_HB_NOTE(1, arg1);
             lb_8000B1CC(arg1->bone, &arg1->a_offset, &arg1->a_pos);
             lb_8000B1CC(arg1->bone, &arg1->b_offset, &arg1->b_pos);
             if (arg2 != NULL) {
@@ -1891,6 +1934,8 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
 
     if (arg1->state != HurtCapsule_Intangible) {
         if (!arg1->skip_update_pos) {
+        PC_HB_NOTE(2, arg1);
+            PC_HB_NOTE(1, arg1);
             lb_8000B1CC(arg1->bone, &arg1->a_offset, &arg1->a_pos);
             lb_8000B1CC(arg1->bone, &arg1->b_offset, &arg1->b_pos);
             if (arg2 != NULL) {
@@ -1931,6 +1976,7 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
 inline void checkPos(HurtCapsule* hurt, Mtx mtx, float arg5)
 {
     if (!hurt->skip_update_pos) {
+        PC_HB_NOTE(3, hurt);
         lb_8000B1CC(hurt->bone, &hurt->a_offset, &hurt->a_pos);
         lb_8000B1CC(hurt->bone, &hurt->b_offset, &hurt->b_pos);
 
@@ -1984,6 +2030,7 @@ bool lbColl_80008248(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, f32 arg3,
     MtxPtr var_r9;
 
     if (!arg1->skip_update_pos) {
+        PC_HB_NOTE(2, arg1);
         lb_8000B1CC(arg1->bone, &arg1->a_offset, &arg1->a_pos);
         lb_8000B1CC(arg1->bone, &arg1->b_offset, &arg1->b_pos);
         if (arg2 != NULL) {
@@ -2016,6 +2063,7 @@ void lbColl_800083C4(HurtCapsule* arg0)
     if (arg0->skip_update_pos) {
         return;
     }
+    PC_HB_NOTE(5, arg0);
 
     lb_8000B1CC(arg0->bone, &arg0->a_offset, &arg0->a_pos);
     lb_8000B1CC(arg0->bone, &arg0->b_offset, &arg0->b_pos);
@@ -2693,6 +2741,8 @@ bool lbColl_8000A244(HurtCapsule* hurt, u32 arg1, Mtx arg2, float arg3)
     }
     if (var_r0 == arg1) {
         if (!hurt->skip_update_pos) {
+            PC_HB_NOTE(6, hurt);
+        PC_HB_NOTE(3, hurt);
             lb_8000B1CC(hurt->bone, &hurt->a_offset, &hurt->a_pos);
             lb_8000B1CC(hurt->bone, &hurt->b_offset, &hurt->b_pos);
             if (arg2 != NULL) {
@@ -2809,6 +2859,9 @@ bool lbColl_8000A584(HurtCapsule* hurt, u32 arg1, u32 arg2, Mtx arg3, f32 arg8)
         }
         if (var_r0 == arg2) {
             if (!hurt->skip_update_pos) {
+            PC_HB_NOTE(6, hurt);
+                PC_HB_NOTE(4, hurt);
+        PC_HB_NOTE(3, hurt);
                 lb_8000B1CC(hurt->bone, &hurt->a_offset, &hurt->a_pos);
                 lb_8000B1CC(hurt->bone, &hurt->b_offset, &hurt->b_pos);
                 if (arg3 != NULL) {
