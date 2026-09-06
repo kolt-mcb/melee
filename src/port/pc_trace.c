@@ -768,6 +768,47 @@ static void pc_trace_bones(void)
     }
 }
 
+/* MELEE_FTDUMP=<slot>:<hex offset>:<words>:<from>-<to> prints raw words out of
+ * a fighter each frame, in the same format the local Dolphin build prints
+ * under the same variable. The traced fields are a summary; when a divergence
+ * is in something the summary does not carry -- a saved velocity, a counter --
+ * this is the only way to compare the two sides at all. */
+static void pc_trace_ftdump(void)
+{
+    const char* spec = getenv("MELEE_FTDUMP");
+    int slot = 0;
+    unsigned off = 0, n = 1, from = 0, to = 0xFFFFFFFFu, gf;
+    StaticPlayer* sp;
+    HSD_GObj* g;
+    const unsigned char* fp;
+    unsigned k;
+
+    if (spec == NULL || *spec == '\0') {
+        return;
+    }
+    if (sscanf(spec, "%d:%x:%u:%u-%u", &slot, &off, &n, &from, &to) != 5) {
+        if (sscanf(spec, "%d:%x:%u:%u", &slot, &off, &n, &from) != 4) {
+            return;
+        }
+        to = 0xFFFFFFFFu;
+    }
+    gf = (unsigned) gm_8016AEDC();
+    if (gf < from || gf > to || n > 64) {
+        return;
+    }
+    sp = Player_GetPtrForSlot(slot);
+    g = sp->player_entity[0];
+    fp = (g != NULL) ? (const unsigned char*) g->user_data : NULL;
+    if (fp == NULL) {
+        return;
+    }
+    fprintf(stderr, "[FTDUMP-PORT] p%d gframe=%u +%x", slot, gf, off);
+    for (k = 0; k < n; k++) {
+        fprintf(stderr, " %08x", *(const u32*) (fp + off + k * 4));
+    }
+    fprintf(stderr, "\n");
+}
+
 void pc_trace_frame(int frame)
 {
     static int init = 0;
@@ -796,6 +837,7 @@ void pc_trace_frame(int frame)
     pc_trace_ailog();
     pc_trace_animscript();
     pc_trace_bones();
+    pc_trace_ftdump();
     if (out == NULL && sync_fd < 0) {
         return;
     }
