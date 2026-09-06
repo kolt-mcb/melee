@@ -283,8 +283,28 @@ static void pc_trace_ailog(void)
                                 *(const unsigned*) &jp.x,
                                 *(const unsigned*) &jp.y);
                     }
-                    fprintf(stderr, " ecbby=%08x\n",
+                    fprintf(stderr, " ecbby=%08x",
                             *(const unsigned*) &vfp->coll_data.ecb.bottom.y);
+                    {
+                        /* Joint 0's own transform, before any matrix is built
+                         * from it. If these agree and the world position does
+                         * not, the matrix builder is at fault; if they differ,
+                         * the animation feeding them is. */
+                        HSD_JObj* j0 =
+                            vfp->coll_data.ecb_source.x10C_joint[0];
+                        if (j0 != NULL) {
+                            const unsigned* r = (const unsigned*) &j0->rotate;
+                            const unsigned* sc = (const unsigned*) &j0->scale;
+                            const unsigned* tr =
+                                (const unsigned*) &j0->translate;
+                            fprintf(stderr,
+                                    " rot=%08x,%08x,%08x,%08x scl=%08x,%08x,"
+                                    "%08x tr=%08x,%08x,%08x",
+                                    r[0], r[1], r[2], r[3], sc[0], sc[1],
+                                    sc[2], tr[0], tr[1], tr[2]);
+                        }
+                    }
+                    fprintf(stderr, "\n");
                 }
                 fprintf(stderr,
                         "[FTVEL-PORT] gframe=%u p%d grvel=%08x initvel=%08x "
