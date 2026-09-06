@@ -6199,6 +6199,18 @@ static bool ftCo_800ADE48(Fighter* fp)
             } else {
                 data2->xFA_b1 = false;
             }
+            /* Retail never writes switch_cmd on this arm: MWCC gave it r31,
+             * which the function saves in its prologue and does not set
+             * before the test below, so the console tests whatever its caller
+             * left there. In the callers that reach here that is the fighter
+             * pointer, so the console always takes the branch -- this is the
+             * arm where the fighter is in hitlag and the AI decides how to DI
+             * out of it. Written out here because a different compiler leaves
+             * a different value in that slot: measured, this side read zero,
+             * never entered behaviour 18, and so never held the stick during
+             * hitlag. On the console the same hit sends p0 diagonally at 89
+             * of 127 and moves it 4.2 units; here it did nothing at all. */
+            switch_cmd = 1;
         }
         if (switch_cmd != 0) {
             ftCo_800B4A78(fp);
