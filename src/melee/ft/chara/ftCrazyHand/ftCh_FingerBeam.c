@@ -53,7 +53,7 @@ void fn_80159288(HSD_GObj* gobj);
 void ftCh_Init_80158B3C(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftCrazyHand_DatAttrs* da = fp->ft_data->ext_attr;
+    ftCrazyHand_DatAttrs* da = FT_EXT_ATTR(fp);
     Fighter_ChangeMotionState(gobj, 0x16A, 0, fp->cur_anim_frame, 1.0f, 0.0f,
                               NULL);
     ftAnim_SetAnimRate(gobj, da->xCC_pos.x);
@@ -89,7 +89,7 @@ void ftCh_FingerBeamLoop_IASA(HSD_GObj* gobj)
 void ftCh_FingerBeamLoop_Phys(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftCrazyHand_DatAttrs* da = fp->ft_data->ext_attr;
+    ftCrazyHand_DatAttrs* da = FT_EXT_ATTR(fp);
     float len;
     float speed;
     Vec3 sp28_pos;
@@ -156,7 +156,7 @@ void ftCh_FingerBeamEnd_Coll(HSD_GObj* gobj) {}
 void ftCh_Init_80158F34(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftCrazyHand_DatAttrs* da = fp->ft_data->ext_attr;
+    ftCrazyHand_DatAttrs* da = FT_EXT_ATTR(fp);
     Fighter_ChangeMotionState(gobj, 0x172, 0, 0.0f, 1.0f, 0.0f, NULL);
     ftAnim_8006EBA4(gobj);
     fp->mv.ch.unk0.xC.x = da->x18;
@@ -182,7 +182,7 @@ void ftCh_BackPunch_IASA(HSD_GObj* gobj)
 void ftCh_BackPunch_Phys(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftCrazyHand_DatAttrs* da = fp->ft_data->ext_attr;
+    ftCrazyHand_DatAttrs* da = FT_EXT_ATTR(fp);
     ft_80085134(gobj);
     ftBossLib_8015BE40(gobj, &fp->mv.ch.unk0.xC, &fp->mv.ch.unk0.x18, da->x14,
                        da->x10);
@@ -193,7 +193,7 @@ void ftCh_BackPunch_Coll(HSD_GObj* gobj) {}
 void ftCh_Init_80159098(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftCrazyHand_DatAttrs* da = fp->ft_data->ext_attr;
+    ftCrazyHand_DatAttrs* da = FT_EXT_ATTR(fp);
     Fighter_ChangeMotionState(gobj, 0x16C, 0, 0.0f, 1.0f, 0.0f, NULL);
     ftAnim_8006EBA4(gobj);
     fp->mv.ch.unk0.x24 = da->xD8;
@@ -230,7 +230,7 @@ void ftCh_FingerGun1_IASA(HSD_GObj* gobj)
 void ftCh_FingerGun1_Phys(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftCrazyHand_DatAttrs* da = fp->ft_data->ext_attr;
+    ftCrazyHand_DatAttrs* da = FT_EXT_ATTR(fp);
     ft_80085134(gobj);
     ftBossLib_8015BE40(gobj, &fp->mv.ch.unk0.xC, &fp->mv.ch.unk0.x18, da->x14,
                        da->x10);

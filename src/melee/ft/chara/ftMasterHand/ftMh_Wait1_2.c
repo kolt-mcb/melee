@@ -112,7 +112,7 @@ void ftMh_Wait1_2_Coll(HSD_GObj* gobj)
 void ftMh_MS_389_80151018(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
     fp->mv.mh.unk0.x20 = 0;
     {
         Vec3 pos;

@@ -1235,7 +1235,7 @@ s32 it_802A4BFC(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* attr,
     Vec3 pos1;
     UNUSED u8 pad1[8];
     Vec3 pos2;
-    ftLk_DatAttrs* lk_attr = fp->ft_data->ext_attr;
+    ftLk_DatAttrs* lk_attr = FT_EXT_ATTR(fp);
     PAD_STACK(7 * 4);
     if (fp->motion_id == 0xD4) {
         if (fp->mv.ca.specials.grav == lk_attr->x88) {
@@ -1847,7 +1847,7 @@ bool it_802A6A78(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* arg2,
     Vec3 vec;
     f32 inv;
 
-    lk_attr = arg3->ft_data->ext_attr;
+    lk_attr = FT_EXT_ATTR(arg3);
     if (arg3->motion_id == 0xD4) {
         if (arg3->mv.ca.specials.grav < lk_attr->x88) {
             return true;

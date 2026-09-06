@@ -30,7 +30,7 @@ void ftCh_WalkLoop_Anim(HSD_GObj* gobj)
 {
     if (!ftAnim_IsFramesRemaining(gobj)) {
         Fighter* fp = gobj->user_data;
-        ftCrazyHand_DatAttrs* da = fp->ft_data->ext_attr;
+        ftCrazyHand_DatAttrs* da = FT_EXT_ATTR(fp);
         ftCh_Init_801579F4(gobj);
         fp->mv.ch.unk0.x8 = da->x64;
     }

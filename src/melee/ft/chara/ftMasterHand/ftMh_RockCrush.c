@@ -22,7 +22,7 @@ void ftMh_RockCrushUp_Anim(HSD_GObj* gobj)
 {
     if (!ftAnim_IsFramesRemaining(gobj)) {
         Fighter* fp = gobj->user_data;
-        ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+        ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
         ftMh_MS_355_8015247C(gobj);
         fp->mv.mh.unk0.x8 = da->xA0;
     }

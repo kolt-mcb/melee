@@ -444,6 +444,20 @@ void ftPe_Init_OnLoad(HSD_GObj* gobj)
     extAtrrs->floatfallf_anim_start = lbAnim_8001E8F8(ftData_80085E50(fp, 18));
     extAtrrs->floatfallb_anim_start = lbAnim_8001E8F8(ftData_80085E50(fp, 19));
     PUSH_ATTRS(fp, ftPe_DatAttrs);
+#if BUILD_TARGET_PC
+    /* Those two writes go into the archive's own attribute block, which is
+     * still big-endian here -- PUSH_ATTRS then byteswaps them along with
+     * everything else, so a host float written before the copy comes out
+     * reversed after it. Write them again on the converted side, which is
+     * what the console's single copy of the block amounts to. */
+    {
+        ftPe_DatAttrs* conv = fp->dat_attrs;
+        if (conv != NULL) {
+            conv->floatfallf_anim_start = extAtrrs->floatfallf_anim_start;
+            conv->floatfallb_anim_start = extAtrrs->floatfallb_anim_start;
+        }
+    }
+#endif
     it_8026B3F8(items[0], It_Kind_Peach_Explode);
     it_8026B3F8(items[1], It_Kind_Peach_Turnip);
     it_8026B3F8(items[2], It_Kind_Peach_Parasol);

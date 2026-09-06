@@ -111,7 +111,7 @@ void ftMh_WalkLoop_Anim(HSD_GObj* gobj)
 
     /// @todo #GET_FIGHTER uses slightly too much stack; inline issue.
     Fighter* fp = gobj->user_data;
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
 
     u8 _[4];
 
