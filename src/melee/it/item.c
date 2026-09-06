@@ -1262,6 +1262,42 @@ void Item_80268E5C(HSD_GObj* gobj, enum_t msid, Item_StateChangeFlags flags)
     item_data = (Item*) HSD_GObjGetUserData(gobj);
 
     item_data->msid = msid;
+#if BUILD_TARGET_PC
+    /* MELEE_MSDBG=<kind>: every motion-state change of one item kind, with
+     * the caller. An item that re-enters a state every frame is doing so from
+     * one place, and this names it. */
+    {
+        static int want = -2;
+        if (want == -2) {
+            const char* e = getenv("MELEE_MSDBG");
+            want = (e != NULL) ? atoi(e) : -1;
+        }
+        if (want >= 0 && (int) item_data->kind == want) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr,
+                    "[MSDBG] gframe=%u kind=%d msid=%d y=%08x scl=%08x "
+                    "des=%08x %08x %08x %08x ecb=%08x %08x %08x %08x "
+                    "cur=%08x ang=%08x b7=%d up=%08x dn=%08x lr=%p\n",
+                    (unsigned) gm_8016AEDC(), (int) item_data->kind, (int) msid,
+                    *(unsigned*) &item_data->pos.y,
+                    *(unsigned*) &item_data->scl,
+                    *(unsigned*) &item_data->x378_itemColl.desired_ecb.top.y,
+                    *(unsigned*) &item_data->x378_itemColl.desired_ecb.bottom.y,
+                    *(unsigned*) &item_data->x378_itemColl.desired_ecb.right.x,
+                    *(unsigned*) &item_data->x378_itemColl.desired_ecb.left.x,
+                    *(unsigned*) &item_data->x378_itemColl.ecb.top.y,
+                    *(unsigned*) &item_data->x378_itemColl.ecb.bottom.y,
+                    *(unsigned*) &item_data->x378_itemColl.ecb.right.x,
+                    *(unsigned*) &item_data->x378_itemColl.ecb.left.x,
+                    *(unsigned*) &item_data->x378_itemColl.cur_pos.y,
+                    *(unsigned*) &item_data->x378_itemColl.ecb_source.angle,
+                    (int) item_data->xDCE_flag.b7,
+                    *(unsigned*) &item_data->x378_itemColl.ecb_source.up,
+                    *(unsigned*) &item_data->x378_itemColl.ecb_source.down,
+                    __builtin_return_address(0));
+        }
+    }
+#endif
     item_data->xDC8_word.flags.x14 = 0;
     HSD_JObjSetTranslate(gobj->hsd_obj, &item_data->pos);
     efAsync_QueueFlush(gobj, &item_data->xBC0);

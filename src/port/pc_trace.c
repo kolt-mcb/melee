@@ -215,6 +215,49 @@ static void pc_trace_items(void)
     fprintf(stderr, "%s\n", n == 0 ? " (none)" : "");
 }
 
+/* MELEE_ITANG=<kind>: the ECB rotation angle one item kind is carrying, and
+ * where it came from. An item at rest has angle 0 on the console; a port that
+ * keeps a stale angle rests the item below the floor by the difference. */
+static void pc_trace_itang(void)
+{
+    static int want = -2;
+    HSD_GObj* gobj;
+    if (want == -2) {
+        const char* e = getenv("MELEE_ITANG");
+        want = (e != NULL) ? atoi(e) : -1;
+    }
+    if (want < 0 || HSD_GObj_Entities == NULL) {
+        return;
+    }
+    for (gobj = ((HSD_GObj**) HSD_GObj_Entities)[9]; gobj != NULL;
+         gobj = gobj->next)
+    {
+        Item* ip = (Item*) gobj->user_data;
+        HSD_JObj* j;
+        unsigned bits;
+        int k;
+        if (ip == NULL || (int) ip->kind != want) {
+            continue;
+        }
+        bits = (ip->xC4_article_data != NULL &&
+                ip->xC4_article_data->x10_modelDesc != NULL)
+                   ? (unsigned) ip->xC4_article_data->x10_modelDesc->xC_bit_field
+                   : 0xFFFFFFFFu;
+        fprintf(stderr, "[ITANG-PORT] gframe=%u kind=%d ang=%08x bits=%08x x17=%d",
+                (unsigned) gm_8016AEDC(), (int) ip->kind,
+                *(const unsigned*) &ip->x378_itemColl.ecb_source.angle, bits,
+                (int) ip->xDC8_word.flags.x17);
+        j = (HSD_JObj*) gobj->hsd_obj;
+        for (k = 0; k < 3 && j != NULL; k++, j = j->child) {
+            fprintf(stderr, " j%d=(%08x %08x %08x)", k,
+                    *(const unsigned*) &j->rotate.x,
+                    *(const unsigned*) &j->rotate.y,
+                    *(const unsigned*) &j->rotate.z);
+        }
+        fprintf(stderr, "\n");
+    }
+}
+
 /* MELEE_AILOG=1 prints each of the first two slots' CPU-AI timer and level
  * once a frame. Fighter::x1A88 is the AI struct: `level`, and `x7C`, the
  * free-running timer the AI gates its random decisions on ("every 300th
@@ -944,6 +987,7 @@ void pc_trace_frame(int frame)
     }
 
     pc_trace_items();
+    pc_trace_itang();
     pc_trace_animid();
     pc_trace_grlink();
     pc_trace_ailog();

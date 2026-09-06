@@ -2600,7 +2600,19 @@ void lbAudioAx_80027DF8(void)
 
 void lbAudioAx_8002835C(void)
 {
+#if BUILD_TARGET_PC
+    /* 0x48 is the console's sizeof(lbAudioAx_UserData). The host struct is
+     * 0x60: four of its members are pointers (gobj, entity, the x10 callback
+     * and the x2C union), and each is twice as wide here. Allocating the
+     * console's size meant every sound object wrote 24 bytes past its slot --
+     * over the next object in this pool, and, for the last object in a pool
+     * chunk, over whatever the heap put after it. Staryu's throw sound put
+     * `arg8` (60) and `f1` (3.0f) straight through a live HSD_GObjProc's
+     * `next` pointer, and the gobj walk faulted on it a frame later. */
+    HSD_ObjAllocInit(&lbl_80433710.alloc, sizeof(lbAudioAx_UserData), 8);
+#else
     HSD_ObjAllocInit(&lbl_80433710.alloc, 0x48, 4);
+#endif
 }
 
 void lbAudioAx_8002838C(void)

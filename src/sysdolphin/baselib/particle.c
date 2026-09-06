@@ -8363,7 +8363,7 @@ f32 hsd_8039DAD4(HSD_Generator* gen)
     }
 
     /* Main particle emission loop */
-    eps = 1e-10;
+    eps = 0.001F; /* the console keeps (f64)0.001f here */
     while (gen->count >= 1.0F) {
         switch (gen->type & 0xF) {
         case 0: /* point, disc, cone, sphere, etc. */
@@ -8748,19 +8748,24 @@ f32 hsd_8039DAD4(HSD_Generator* gen)
 
         case 8: /* sphere emission */
         {
+            /* 8039EAE4.  An aux.cone.height of 0 -- or of pi, within the
+             * console's 0.001f epsilon -- means "spread over the whole
+             * sphere": the polar angle is pi/2 * sqrt(u), mirrored about
+             * pi/2 half the time.  Any other height scales sqrt(u) by the
+             * height itself.  (The two bodies used to be the wrong way
+             * round, and the epsilon was 1e-10.) */
             f32 r0 = gen->aux.cone.height;
-            if (0.0F == r0) {
-                goto sphere_random;
-            }
-            {
-                f32 diff = r0 - (f32) M_PI;
-                f32 absdiff = __fabsf(diff);
-                if (absdiff < (f32) eps) {
-                    goto sphere_random;
+            int whole_sphere = (0.0F == r0);
+
+            if (!whole_sphere) {
+                f64 diff = (f64) r0 - M_PI;
+                if ((diff < 0.0 ? -diff : diff) < eps) {
+                    whole_sphere = 1;
                 }
             }
-            /* Non-random sphere emission */
-            {
+
+            if (whole_sphere) {
+                /* 8039EB04 */
                 f32 rnd = HSD_Randf();
                 if (rnd > 0.0F) {
                     f64 e = __frsqrte(rnd);
@@ -8769,36 +8774,16 @@ f32 hsd_8039DAD4(HSD_Generator* gen)
                     e = 0.5 * e * -(rnd * (e * e) - 3.0);
                     rnd = (f32) (rnd * e);
                 }
-                radius = (f32) (M_PI * rnd);
+                radius = (f32) (M_PI_2 * (f64) rnd);
                 {
                     f32 rnd2 = HSD_Randf();
                     if (rnd2 < 0.5F) {
-                        radius = (f32) (M_PI - radius);
+                        radius = (f32) (M_PI - (f64) radius);
                     }
                 }
-                goto sphere_common;
-            }
-        sphere_random: {
-            f32 rnd = HSD_Randf();
-            if (rnd > 0.0F) {
-                f64 e = __frsqrte(rnd);
-                e = 0.5 * e * -(rnd * (e * e) - 3.0);
-                e = 0.5 * e * -(rnd * (e * e) - 3.0);
-                e = 0.5 * e * -(rnd * (e * e) - 3.0);
-                rnd = (f32) (rnd * e);
-            }
-            radius = gen->aux.cone.height * rnd;
-        }
-        sphere_common: {
-            f32 rnd = HSD_Randf();
-            f32 az_angle;
-            f32 r2 = gen->radius;
-            az_angle = (f32) ((f64) M_TAU * (f64) rnd);
-            cone_angle = (f32) ((f64) M_TAU * az_angle);
-
-            if (r2 < 0.0F) {
-                sin_az = -r2;
             } else {
+                /* 8039EB74 */
+                f32 rnd = HSD_Randf();
                 if (rnd > 0.0F) {
                     f64 e = __frsqrte(rnd);
                     e = 0.5 * e * -(rnd * (e * e) - 3.0);
@@ -8806,18 +8791,42 @@ f32 hsd_8039DAD4(HSD_Generator* gen)
                     e = 0.5 * e * -(rnd * (e * e) - 3.0);
                     rnd = (f32) (rnd * e);
                 }
-                sin_az = r2 * rnd;
+                radius = gen->aux.cone.height * rnd;
             }
-        }
+
+            /* 8039EBCC */
             {
-                f32 cos_r;
-                f32 sin_r;
-                cos_r = cosf(cone_angle);
+                f32 rnd = HSD_Randf();
+                f32 r2 = gen->radius;
+
+                cone_angle = (f32) (2.0 * (M_PI * (f64) rnd));
+
+                if (r2 < 0.0F) {
+                    sin_az = -r2;
+                } else {
+                    /* the console draws a *second* random here rather than
+                     * reusing the azimuth's */
+                    rnd = HSD_Randf();
+                    if (rnd > 0.0F) {
+                        f64 e = __frsqrte(rnd);
+                        e = 0.5 * e * -(rnd * (e * e) - 3.0);
+                        e = 0.5 * e * -(rnd * (e * e) - 3.0);
+                        e = 0.5 * e * -(rnd * (e * e) - 3.0);
+                        rnd = (f32) (rnd * e);
+                    }
+                    sin_az = r2 * rnd;
+                }
+            }
+            {
+                /* 8039EC44: x = sin(polar)cos(azimuth),
+                 *           y = sin(polar)sin(azimuth),
+                 *           z = cos(polar) */
+                f32 cos_cone = cosf(cone_angle);
                 cos_az = sinf(radius);
-                vel_out.x = cos_az * cos_r;
-                sin_el = cosf(cone_angle);
-                sin_r = sinf(radius);
-                vel_out.y = cos_az * sin_r;
+                vel_out.x = cos_az * cos_cone;
+                sin_el = sinf(cone_angle);
+                cos_az = sinf(radius);
+                vel_out.y = cos_az * sin_el;
                 vel_out.z = cosf(radius);
             }
 

@@ -133,7 +133,15 @@ IF_SOURCES = [s for s in IF_SOURCES
 MATH_SHIM = [str(SRC / "math_shim.c")]
 # MSL's own sinf/cosf. Without them the game's trig resolves to glibc, which
 # is correctly rounded where the console's is a polynomial.
-MSL_TRIG = [str(SRC / "MSL" / "trigf.c"), str(SRC / "MSL" / "math_data.c")]
+#
+# float.c is the two ROM words the trig code calls NAN and INF. They are not
+# decoration: lbtrigf's acosf returns `M_PI_2 - atanf(x * rsqrt(1 - x*x))`,
+# and for x == +-1 the reciprocal square root is the INF word -- atanf(inf)
+# is pi/2 and the result is 0. With the weak zero stub standing in, acosf(1)
+# came back as pi/2 instead of 0, which is what made a landing item bounce
+# off a flat floor forever.
+MSL_TRIG = [str(SRC / "MSL" / "trigf.c"), str(SRC / "MSL" / "math_data.c"),
+            str(SRC / "MSL" / "float.c")]
 
 ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + MSL_TRIG + AX_SDK_SOURCES + DECOMP_SOURCES + GR_SOURCES + PL_SOURCES + FT_SOURCES + GM_SOURCES + EF_SOURCES + IT_SOURCES + MN_SOURCES + MP_SOURCES + CM_SOURCES + SFX_SOURCES + IF_SOURCES + G_OBJ_SOURCES + G_DISPLAY_SOURCES
 
