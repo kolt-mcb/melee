@@ -39,6 +39,97 @@ __attribute__((constructor)) static void pc_sinit_trigf(void)
 SECTION_CTORS void* const __sinit_trigf_c_reference = __sinit_trigf_c;
 #endif
 
+#if BUILD_TARGET_PC
+/* Retail's sinf and cosf are chains of fmadds: one rounding for a multiply
+ * and an add together, both in single precision. GCC on x86-64 has no such
+ * instruction unless the target has FMA, so it emits a multiply and an add
+ * and rounds twice, and the two sides' answers part company in the last bits.
+ * That is not academic here: a fighter's knockback velocity is
+ * magnitude * cosf(angle), and four ULPs in it were enough, two hundred
+ * frames later, to land a hit on this side that the console did not land.
+ *
+ * fmaf is exactly fmadds: the product is not rounded before the add. These
+ * follow 80326240 (cosf) and 803263E4 (sinf) instruction for instruction,
+ * including which operand order each fmadds uses and where retail negates
+ * with fnmadds or fnmsubs instead. The GameCube build keeps the plain
+ * expressions below, which is what MWCC fuses.
+ */
+#include <math.h>
+
+static inline f32 trigf_reduce(f32 x, int* np)
+{
+    f32 y;
+    f32 z = (2.0f / (f32) M_PI) * x;
+    int n = (__HI(x) & 0x80000000) ? (int) (z - 0.5f) : (int) (z + 0.5f);
+    y = x - (f32) (n * 2);
+    y = fmaf(__four_over_pi_m1[0], x, y);
+    y = fmaf(__four_over_pi_m1[1], x, y);
+    y = fmaf(__four_over_pi_m1[2], x, y);
+    y = fmaf(__four_over_pi_m1[3], x, y);
+    *np = n & 3;
+    return y;
+}
+
+f32 sinf(f32 x)
+{
+    int n;
+    f32 z;
+    f32 ysq;
+    f32 y = trigf_reduce(x, &n);
+
+    if (fabsf__Ff(y) < __epsilon) {
+        n <<= 1;
+        return fmaf(__sincos_poly[9], __sincos_on_quadrant[n + 1] * y,
+                    __sincos_on_quadrant[n]);
+    }
+    ysq = y * y;
+    if (n & 1) {
+        n <<= 1;
+        z = fmaf(__sincos_poly[0], ysq, __sincos_poly[2]);
+        z = fmaf(ysq, z, __sincos_poly[4]);
+        z = fmaf(ysq, z, __sincos_poly[6]);
+        z = fmaf(ysq, z, __sincos_poly[8]);
+        return z * __sincos_on_quadrant[n];
+    } else {
+        n <<= 1;
+        z = fmaf(__sincos_poly[1], ysq, __sincos_poly[3]);
+        z = fmaf(ysq, z, __sincos_poly[5]);
+        z = fmaf(ysq, z, __sincos_poly[7]);
+        z = fmaf(ysq, z, __sincos_poly[9]);
+        return (y * z) * __sincos_on_quadrant[n + 1];
+    }
+}
+
+f32 cosf(f32 x)
+{
+    int n;
+    f32 z;
+    f32 ysq;
+    f32 y = trigf_reduce(x, &n);
+
+    if (fabsf__Ff(y) < __epsilon) {
+        n <<= 1;
+        /* fnmsubs: quadrant[n+1] - y * quadrant[n], rounded once. */
+        return fmaf(-y, __sincos_on_quadrant[n], __sincos_on_quadrant[n + 1]);
+    }
+    ysq = y * y;
+    if (n & 1) {
+        n <<= 1;
+        z = fmaf(__sincos_poly[1], ysq, __sincos_poly[3]);
+        z = fmaf(ysq, z, __sincos_poly[5]);
+        z = fmaf(ysq, z, __sincos_poly[7]);
+        z = -fmaf(ysq, z, __sincos_poly[9]); /* fnmadds */
+        return (y * z) * __sincos_on_quadrant[n];
+    } else {
+        n <<= 1;
+        z = fmaf(__sincos_poly[0], ysq, __sincos_poly[2]);
+        z = fmaf(ysq, z, __sincos_poly[4]);
+        z = fmaf(ysq, z, __sincos_poly[6]);
+        z = fmaf(ysq, z, __sincos_poly[8]);
+        return z * __sincos_on_quadrant[n + 1];
+    }
+}
+#else
 f32 sinf(f32 x)
 {
     int n;
@@ -123,6 +214,7 @@ f32 cosf(f32 x)
         return z * __sincos_on_quadrant[n + 1];
     }
 }
+#endif /* BUILD_TARGET_PC */
 
 #pragma dont_inline on
 

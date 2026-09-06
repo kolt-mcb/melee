@@ -2158,18 +2158,33 @@ static inline s32 ftColl_GetDamageCount(Fighter* fp, ftCommonData* ftd)
     return (s32) fp->dmg.x1830_percent;
 }
 
+/* Retail compiles the two multiply-and-add pairs in the knockback formula as
+ * fmadds: the product is not rounded before the add. GCC on x86-64 rounds
+ * twice, and the answers part company in the last bit. Measured against the
+ * console: one ULP in the knockback a hit produces, which is two ULPs in the
+ * velocity it becomes, which two hundred frames later is a hit landing on one
+ * side and not the other. fmaf is exactly fmadds. On the GameCube the macro
+ * expands to the plain expression, which is what MWCC fuses. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /// Shared knockback formula shell. @p inner is the per-branch scaling term.
 /// @remarks Must stay one nested expression; step assignments change the
 /// float register webs (see ftColl_80079C70).
 #define KNOCKBACK(defense, attack, arg3, one, ftd, hit, w, inner)             \
     ((defense) *                                                              \
      ((attack) *                                                              \
-      ((arg3) * ((0.01F * (hit)->x24 *                                        \
-                  ((ftd)->x11C *                                              \
-                       (((ftd)->xF8 - (((w) * (ftd)->xF8) / ((one) + (w)))) * \
-                        (inner)) +                                            \
-                   (ftd)->x120)) +                                            \
-                 (hit)->x2C))))
+      ((arg3) *                                                               \
+       KB_FMA(0.01F * (hit)->x24,                                             \
+              KB_FMA((ftd)->x11C,                                             \
+                     (((ftd)->xF8 - (((w) * (ftd)->xF8) / ((one) + (w)))) *   \
+                      (inner)),                                               \
+                     (ftd)->x120),                                            \
+              (hit)->x2C))))
 
 float ftColl_80079AB0(Fighter* fp, HitCapsule* hit, u32 unk_count, float arg3,
                       float attack, float defense, float weight)
@@ -2187,7 +2202,8 @@ float ftColl_80079AB0(Fighter* fp, HitCapsule* hit, u32 unk_count, float arg3,
         x118 = ftd->x118;
 
         result = KNOCKBACK(defense, attack, arg3, 1.0F, ftd, hit, w,
-                           x118 * ftd->x110 + ftd->x114 * (x118 * hit->x28));
+                           KB_FMA(ftd->x114, x118 * hit->x28,
+                                  x118 * ftd->x110));
     } else {
         s32 count;
 
@@ -2195,8 +2211,9 @@ float ftColl_80079AB0(Fighter* fp, HitCapsule* hit, u32 unk_count, float arg3,
 
         result = KNOCKBACK(
             defense, attack, arg3, 1.0F, ftd, hit, w,
-            ftd->x110 * (count + fp->dmg.x1838_percentTemp) +
-                ftd->x114 * (unk_count * (count + fp->dmg.x1838_percentTemp)));
+            KB_FMA(ftd->x114,
+                   unk_count * (count + fp->dmg.x1838_percentTemp),
+                   ftd->x110 * (count + fp->dmg.x1838_percentTemp)));
     }
 
     if (result >= ftd->x108) {
@@ -2227,12 +2244,13 @@ float ftColl_80079C70(Fighter* fp, Fighter* attacker, HitCapsule* hit,
             defense *
             (attack *
              (stage *
-              ((0.01F * (float) (u32) hit->x24 *
-                (ftd->x11C * ((decay - ((w * decay) / (1.0F + w))) *
-                              ((x118 * ftd->x110) +
-                               (ftd->x114 * (x118 * (float) (u32) x28)))) +
-                 ftd->x120)) +
-               (float) (u32) hit->x2C)));
+              KB_FMA(0.01F * (float) (u32) hit->x24,
+                     KB_FMA(ftd->x11C,
+                            ((decay - ((w * decay) / (1.0F + w))) *
+                             KB_FMA(ftd->x114, x118 * (float) (u32) x28,
+                                    x118 * ftd->x110)),
+                            ftd->x120),
+                     (float) (u32) hit->x2C)));
     } else {
         s32 count;
 
@@ -2255,16 +2273,18 @@ float ftColl_80079C70(Fighter* fp, Fighter* attacker, HitCapsule* hit,
                 defense *
                 (attack *
                  (stage *
-                  ((0.01F * (float) (u32) hit->x24 *
-                    (ftd->x11C *
-                         ((decay - ((w * decay) / (1.0F + w))) *
-                          ((ftd->x110 *
-                            ((float) count + fp->dmg.x1838_percentTemp)) +
-                           (ftd->x114 *
-                            ((float) (u32) unk_count *
-                             ((float) count + fp->dmg.x1838_percentTemp))))) +
-                     ftd->x120)) +
-                   (float) (u32) hit->x2C)));
+                  KB_FMA(
+                      0.01F * (float) (u32) hit->x24,
+                      KB_FMA(ftd->x11C,
+                             ((decay - ((w * decay) / (1.0F + w))) *
+                              KB_FMA(ftd->x114,
+                                     ((float) (u32) unk_count *
+                                      ((float) count +
+                                       fp->dmg.x1838_percentTemp)),
+                                     ftd->x110 * ((float) count +
+                                                  fp->dmg.x1838_percentTemp))),
+                             ftd->x120),
+                      (float) (u32) hit->x2C)));
         }
     }
 
@@ -2291,7 +2311,8 @@ float ftColl_80079EA8(Fighter* fp, HitCapsule* hit, u32 unk_count)
         x118 = ftd->x118;
 
         result = KNOCKBACK(one, one, one, one, ftd, hit, w,
-                           x118 * ftd->x110 + ftd->x114 * (x118 * hit->x28));
+                           KB_FMA(ftd->x114, x118 * hit->x28,
+                                  x118 * ftd->x110));
     } else {
         s32 count;
 
@@ -2302,9 +2323,9 @@ float ftColl_80079EA8(Fighter* fp, HitCapsule* hit, u32 unk_count)
 
             result = KNOCKBACK(
                 one, one, one, one, ftd, hit, w,
-                ftd->x110 * (count + fp->dmg.x1838_percentTemp) +
-                    ftd->x114 *
-                        (unk_count * (count + fp->dmg.x1838_percentTemp)));
+                KB_FMA(ftd->x114,
+                       unk_count * (count + fp->dmg.x1838_percentTemp),
+                       ftd->x110 * (count + fp->dmg.x1838_percentTemp)));
         }
     }
 

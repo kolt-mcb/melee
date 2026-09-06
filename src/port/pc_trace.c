@@ -275,6 +275,20 @@ static void pc_trace_ailog(void)
                      * expands a box to contain them, so an ULP in any of
                      * them reaches ecb.bottom.y. */
                     int q;
+                    /* Knockback velocity and the stick the fighter is
+                     * holding. A launched fighter's position is driven by the
+                     * first, and the first is magnitude * cos/sin of an angle
+                     * the second bends. Bit patterns: the whole question is
+                     * the last bits. */
+                    fprintf(stderr,
+                            "[FTKB-PORT] gframe=%u p%d kbx=%08x kby=%08x "
+                            "lsx=%08x lsy=%08x kbapp=%08x\n",
+                            (unsigned) gm_8016AEDC(), vslot,
+                            *(const unsigned*) &vfp->x8c_kb_vel.x,
+                            *(const unsigned*) &vfp->x8c_kb_vel.y,
+                            *(const unsigned*) &vfp->input.lstick.x,
+                            *(const unsigned*) &vfp->input.lstick.y,
+                            *(const unsigned*) &vfp->dmg.x18d8.kb_applied1);
                     fprintf(stderr, "[FTECB-PORT] gframe=%u p%d",
                             (unsigned) gm_8016AEDC(), vslot);
                     for (q = 0; q < 6; q++) {
