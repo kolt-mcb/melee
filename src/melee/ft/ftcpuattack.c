@@ -190,7 +190,29 @@ static inline void ftCo_CpuClearTargetAndFinish(Fighter* fp)
 int ftCo_800B4AB0(Fighter* fp, Fighter* target, void* arg2)
 {
     ftCo_AttackEntry sp3C[32];
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_CPUATK") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[CPUATK] gframe=%u p%d PICK from %p\n",
+                (unsigned) gm_8016AEDC(), (int) fp->player_id,
+                __builtin_return_address(0));
+    }
+#endif
+#if BUILD_TARGET_PC
+    /* The scratch slots exist to pin MWCC's per-call-site sqrtf temporaries
+     * at the stack offsets retail used, and one call site below writes
+     * through a pointer *before* the array. On the GameCube that lands on
+     * another of retail's own slots; here it lands on whatever the compiler
+     * happened to put below, and what that is changes with the code around
+     * it. Measured: adding a printf to this function moved it, and with it
+     * one of the attack filter's predictions by a third of a unit, which was
+     * the difference between the CPU attacking on match frame 110 and not.
+     * Give the slot below a real home instead. */
+    float sqrt_tmp_store[5];
+    float* const sqrt_tmp = sqrt_tmp_store + 1;
+#else
     float sqrt_tmp[4]; /* pins sqrtf volatile slots at 0x28..0x34 */
+#endif
     ftCo_AttackEntry* list = arg2;
     ftCo_AttackEntry* sel; /* layout/reg pressure; unused */
     struct Fighter_x1A88_t* cpu = &fp->x1A88;
@@ -348,6 +370,24 @@ int ftCo_800B4AB0(Fighter* fp, Fighter* target, void* arg2)
         }
         lower = list->x10 * fp->x34_scale.y;
         lower *= halfRange;
+#if BUILD_TARGET_PC
+        /* MELEE_CPUATK: the four margins that admit an attack. All four are
+         * predictions of where the target will be in list->x04 frames, built
+         * from square roots and mixed single/double arithmetic, so a margin
+         * near zero is a coin toss between this side and the console. */
+        if (getenv("MELEE_CPUATK") != NULL) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr,
+                    "[CPUATK] gframe=%u p%d cmd=%d t=%.1f m=[%.6f %.6f %.6f "
+                    "%.6f] x80=%d per=%d\n",
+                    (unsigned) gm_8016AEDC(), (int) fp->player_id,
+                    (int) list->cmd, (double) t, (double) (upper - relPredY),
+                    (double) ((relPredY + x568) - lower),
+                    (double) ((relx + rangeF) - dirx),
+                    (double) (diry - (relx - rangeB)), (int) cpu->x80,
+                    (int) list->x1C);
+        }
+#endif
         if (upper > relPredY && lower < relPredY + x568 &&
             dirx < relx + rangeF && diry > relx - rangeB)
         {
@@ -365,6 +405,23 @@ int ftCo_800B4AB0(Fighter* fp, Fighter* target, void* arg2)
         }
         list++;
     }
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_CPUATK") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        int k;
+        fprintf(stderr, "[CPUATK] gframe=%u p%d count=%d xC8=%d want=[",
+                (unsigned) gm_8016AEDC(), (int) fp->player_id, (int) count,
+                (int) cpu->xC8);
+        for (k = 0; k < (int) cpu->xC8 && k < 8; k++) {
+            fprintf(stderr, "%d ", (int) cpu->xA8_array[k]);
+        }
+        fprintf(stderr, "] got=[");
+        for (k = 0; k < count; k++) {
+            fprintf(stderr, "%d ", (int) sp3C[k].cmd);
+        }
+        fprintf(stderr, "]\\n");
+    }
+#endif
     if (count == 0) {
         return 0;
     }

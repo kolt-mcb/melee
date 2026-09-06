@@ -5507,7 +5507,21 @@ bool mpLib_80056C54(int line_id, Vec3* pos, int* line_id_out, Vec3* vec_out,
     float sp64;
     Vec3 sp58;
     Vec3 sp4C;
+#if BUILD_TARGET_PC
+    /* The scratch slots exist to pin MWCC's per-call-site sqrtf temporaries
+     * at the stack offsets retail used, and one call site below writes
+     * through a pointer *before* the array. On the GameCube that lands on
+     * another of retail's own slots; here it lands on whatever the compiler
+     * happened to put below, and what that is changes with the code around
+     * it. Measured: adding a printf to this function moved it, and with it
+     * one of the attack filter's predictions by a third of a unit, which was
+     * the difference between the CPU attacking on match frame 110 and not.
+     * Give the slot below a real home instead. */
+    float sqrt_tmp_store[7];
+    float* const sqrt_tmp = sqrt_tmp_store + 5;
+#else
     float sqrt_tmp[2];
+#endif
     float dist_f28;
     float total_dist_f27;
     float x_f2;
