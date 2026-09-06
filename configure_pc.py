@@ -36,6 +36,11 @@ DISPLAY_MODULES = [
     "util.c", "memory.c", "object.c",
     "objalloc.c",
     "mtx.c",
+    # Quaternions: MatToQuat, EulerToQuat and the slerp the animation blend
+    # runs through. Without them the weak stubs answer, every slerp returns
+    # nothing, and a fighter changing animation holds the wrong pose for the
+    # frame the blend covers.
+    "quatlib.c",
     "state.c",
     "fobj.c",
     "texp.c", "texpdag.c", "tobj.c",
