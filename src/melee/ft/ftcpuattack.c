@@ -911,6 +911,14 @@ void ftCo_800B658C(Fighter* fp)
 {
     struct Fighter_x1A88_t* temp_r31 = &fp->x1A88;
     Fighter* temp_r0 = fp->x1A88.x44;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_AIGATE") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[AIENTRY] gframe=%u p%d tgt=%d\n",
+                (unsigned) gm_8016AEDC(), (int) fp->player_id,
+                temp_r0 != NULL ? 1 : 0);
+    }
+#endif
 
     if (temp_r0 == NULL) {
         ftCo_CpuClearTargetAndFinish(fp);
