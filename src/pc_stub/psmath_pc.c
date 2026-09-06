@@ -132,27 +132,63 @@ f32 PSVECSquareDistance(Vec* a, Vec* b)
 
 /* ------------------------------------------------------------------ MTX --- */
 
+/* 80342AFC. Read off the paired-single sequence rather than written as
+ * algebra, because the association and the fusing both show:
+ *
+ *   ps_mul  f8, f0, f6      (m00*x, m01*y)   -- two separate roundings
+ *   ps_sum0 f8, f8, f8, f8  ps0 = m00*x + m01*y
+ *   ps_madd f9, f1, f7, f8  ps0 = m02*z + (m00*x + m01*y), fused
+ *
+ * so the row is one fmaf over an already-rounded sum, not a chain of three
+ * multiplies and two adds in whatever order C evaluates them. */
+static inline f32 ps_row_sr(const f32* r, f32 x, f32 y, f32 z)
+{
+    return fmaf(r[2], z, r[0] * x + r[1] * y);
+}
+
 void PSMTXMultVecSR(Mtx44 m, Vec* src, Vec* dst)
 {
-    if (!ps_ptr_valid(m) || !ps_ptr_valid(src) || !ps_ptr_valid(dst)) return;
-    /* Rotate only (3x3), no translation. */
     Vec t;
-    t.x = m[0][2] * src->z + (m[0][0] * src->x + m[0][1] * src->y);
-    t.y = m[1][2] * src->z + (m[1][0] * src->x + m[1][1] * src->y);
-    t.z = m[2][2] * src->z + (m[2][0] * src->x + m[2][1] * src->y);
+    f32 x, y, z;
+    if (!ps_ptr_valid(m) || !ps_ptr_valid(src) || !ps_ptr_valid(dst)) return;
+    x = src->x;
+    y = src->y;
+    z = src->z;
+    t.x = ps_row_sr(m[0], x, y, z);
+    t.y = ps_row_sr(m[1], x, y, z);
+    t.z = ps_row_sr(m[2], x, y, z);
     dst->x = t.x;
     dst->y = t.y;
     dst->z = t.z;
 }
 
+/* 80342AA8. Same shape, but the translation column rides the second half of
+ * the paired register, so the two halves are fused *separately* and only then
+ * added:
+ *
+ *   ps_mul  f4, f2, f0      (m00*x,          m01*y)
+ *   ps_madd f5, f3, f1, f4  (m02*z + m00*x,  m03*1 + m01*y)   -- both fused
+ *   ps_sum0 f6, f5, f5, f5  ps0 = (m02*z + m00*x) + (m03 + m01*y)
+ *
+ * The port used to compute `m03 + (m02*z + (m00*x + m01*y))`, which is a
+ * different number in the last bit. Every hurtbox, hitbox and ECB corner is
+ * placed through here, so that bit decides whether an attack reached. */
+static inline f32 ps_row(const f32* r, f32 x, f32 y, f32 z)
+{
+    return fmaf(r[2], z, r[0] * x) + fmaf(r[3], 1.0f, r[1] * y);
+}
+
 void PSMTXMultVec(Mtx44 m, Vec* src, Vec* dst)
 {
-    if (!ps_ptr_valid(m) || !ps_ptr_valid(src) || !ps_ptr_valid(dst)) return;
-    /* Full transform (3x3 + translation). */
     Vec t;
-    t.x = m[0][3] + (m[0][2] * src->z + (m[0][0] * src->x + m[0][1] * src->y));
-    t.y = m[1][3] + (m[1][2] * src->z + (m[1][0] * src->x + m[1][1] * src->y));
-    t.z = m[2][3] + (m[2][2] * src->z + (m[2][0] * src->x + m[2][1] * src->y));
+    f32 x, y, z;
+    if (!ps_ptr_valid(m) || !ps_ptr_valid(src) || !ps_ptr_valid(dst)) return;
+    x = src->x;
+    y = src->y;
+    z = src->z;
+    t.x = ps_row(m[0], x, y, z);
+    t.y = ps_row(m[1], x, y, z);
+    t.z = ps_row(m[2], x, y, z);
     dst->x = t.x;
     dst->y = t.y;
     dst->z = t.z;

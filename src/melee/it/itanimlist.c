@@ -161,21 +161,21 @@ void it_802790C0(Item_GObj* item_gobj, CommandInfo* cmd)
     hit->x40_b3 = cmd->u->it_create_hitbox_4.x40_b3;
     ++cmd->u;
 
-    hit->x40_b4 = ((u8*) cmd->u)[0];
-    hit->x41_b4 = (((u8*) cmd->u)[1] >> 7) & 1;
-    hit->x41_b5 = (((u8*) cmd->u)[1] >> 6) & 1;
-    hit->x41_b6 = (((u8*) cmd->u)[1] >> 5) & 1;
-    hit->x41_b7 = (((u8*) cmd->u)[1] >> 4) & 1;
-    hit->x42_b0 = (((u8*) cmd->u)[1] >> 3) & 1;
-    hit->x42_b1 = (((u8*) cmd->u)[1] >> 2) & 1;
-    hit->x42_b2 = (((u8*) cmd->u)[1] >> 1) & 1;
-    hit->x42_b3 = ((u8*) cmd->u)[1] & 1;
-    hit->x42_b4 = (((u8*) cmd->u)[2] >> 7) & 1;
-    hit->x42_b5 = (((u8*) cmd->u)[2] >> 6) & 1;
-    hit->x42_b6 = (((u8*) cmd->u)[2] >> 5) & 1;
-    hit->x42_b7 = (((u8*) cmd->u)[2] >> 4) & 1;
-    hit->x43_b0 = (((u8*) cmd->u)[2] >> 3) & 1;
-    hb->x138 = (((u8*) cmd->u)[2] >> 2) & 1;
+    hit->x40_b4 = ((u8*) cmd->u)[PC_SCRIPT_BIDX(0)];
+    hit->x41_b4 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(1)] >> 7) & 1;
+    hit->x41_b5 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(1)] >> 6) & 1;
+    hit->x41_b6 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(1)] >> 5) & 1;
+    hit->x41_b7 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(1)] >> 4) & 1;
+    hit->x42_b0 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(1)] >> 3) & 1;
+    hit->x42_b1 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(1)] >> 2) & 1;
+    hit->x42_b2 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(1)] >> 1) & 1;
+    hit->x42_b3 = ((u8*) cmd->u)[PC_SCRIPT_BIDX(1)] & 1;
+    hit->x42_b4 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(2)] >> 7) & 1;
+    hit->x42_b5 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(2)] >> 6) & 1;
+    hit->x42_b6 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(2)] >> 5) & 1;
+    hit->x42_b7 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(2)] >> 4) & 1;
+    hit->x43_b0 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(2)] >> 3) & 1;
+    hb->x138 = (((u8*) cmd->u)[PC_SCRIPT_BIDX(2)] >> 2) & 1;
     ++cmd->u;
 
     hit->x43_b2 = 0;
@@ -288,7 +288,7 @@ low_opcode:
     arg1 = PC_SCRIPT_W(*(u32*) cmd->u);
     ++cmd->u;
     arg2 = ((u8*) cmd->u)[PC_SCRIPT_BIDX(2)];
-    arg3 = ((u8*) cmd->u)[3];
+    arg3 = ((u8*) cmd->u)[PC_SCRIPT_BIDX(3)];
     switch (opcode) {
     case 0:
         Item_8026AE84(item, arg1, arg2, arg3);
