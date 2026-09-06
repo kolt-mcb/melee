@@ -185,6 +185,18 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
             *jobj->scl = jobj->scale;
         }
     }
+#if BUILD_TARGET_PC
+    /* MELEE_MTXPATH=1 counts which matrix builder each joint uses, so the
+     * question "do the fighter bones go through the quaternion path" is
+     * measured rather than assumed. */
+    if (getenv("MELEE_MTXPATH") != NULL) {
+        static long nq, ns;
+        if (jobj->flags & 0x20000) { nq++; } else { ns++; }
+        if (((nq + ns) % 20000) == 0) {
+            fprintf(stderr, "[MTXPATH] quat=%ld srt=%ld\n", nq, ns);
+        }
+    }
+#endif
     if (jobj->flags & 0x20000) {
         /* Guard against zero parent scale to prevent NaN in HSD_MtxSRTQuat */
         if (has_scl(jobj->parent) && jobj->parent->scl->x != 0.0f &&

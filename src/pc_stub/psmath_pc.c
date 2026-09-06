@@ -21,6 +21,7 @@
  * have real implementations in undef_stubs.c (note: PSMTXCopy is (src, dst)).
  */
 extern double __frsqrte(double);
+extern double __fres(double);
 
 #include <dolphin/mtx.h>
 #include <math.h>
@@ -246,7 +247,17 @@ void PSMTXQuat(Mtx m, QuaternionPtr q)
 {
     if (!ps_ptr_valid(m) || !ps_ptr_valid(q)) return;
     f32 s, xs, ys, zs, wx, wy, wz, xx, xy, xz, yy, yz, zz;
-    s = 2.0f / ((q->w * q->w) + (q->z * q->z + (q->x * q->x + q->y * q->y)));
+    /* The paired-single routine divides with ps_res -- the hardware's
+     * reciprocal estimate refined by one Newton step -- not an exact
+     * division. Same reason as PSVECNormalize: every joint matrix built from
+     * a quaternion goes through here, and an exact reciprocal puts each bone
+     * world position an ULP from the console's. */
+    {
+        f32 n = (q->w * q->w) + (q->z * q->z + (q->x * q->x + q->y * q->y));
+        f32 e = (f32) __fres((double) n);
+        e = e + e * (1.0f - n * e);
+        s = 2.0f * e;
+    }
     xs = q->x * s;
     ys = q->y * s;
     zs = q->z * s;
