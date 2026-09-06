@@ -31,6 +31,21 @@ struct ft_MObjInfo {
     HSD_TECnst texp_tmpl;
 };
 
+#if BUILD_TARGET_PC
+/* ftMObj (0x803C6980, 0x50 bytes), ftMaterial_803C69D0 (0x74) and
+ * ftMaterial_803C6A44 (0x18) are three adjacent .data statics on the console,
+ * and `(struct ft_MObjInfo*) &ftMObj` walks from the first into the other
+ * two. Nothing keeps separate statics adjacent here, and HSD_MObjInfo is
+ * wider anyway -- it is nothing but function pointers -- so the cast landed
+ * short and both templates read whatever the host linker put after ftMObj.
+ * They have names; use them. (Same trap as Camera_8002A0C0's camera desc.) */
+#define FT_TEVDESC_TMPL ftMaterial_803C69D0
+#define FT_TECNST_TMPL ftMaterial_803C6A44
+#else
+#define FT_TEVDESC_TMPL (((struct ft_MObjInfo*) &ftMObj)->tevdesc_tmpl)
+#define FT_TECNST_TMPL (((struct ft_MObjInfo*) &ftMObj)->texp_tmpl)
+#endif
+
 static HSD_TevDesc ftMaterial_803C69D0 = {
     NULL,
     TEVCONF_MODE,
@@ -168,12 +183,11 @@ HSD_TExp* ftMaterial_800BF534(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp,
     HSD_TevDesc sp_tevdesc;
     s32 reg;
     bool chk;
-    struct ft_MObjInfo* info = (struct ft_MObjInfo*) &ftMObj;
     ColorOverlay* overlay = ftCo_800C0658(fp);
 
     if (overlay->x7C_flag2 && overlay->x7C_light_enable) {
         if (!(rendermode & RENDER_XLU) && !fp->x2223_b2) {
-            texp->cnst = info->texp_tmpl;
+            texp->cnst = FT_TECNST_TMPL;
             chk = lbGetFreeColorRegister(0, mobj, NULL);
             reg = chk;
             if (reg == -1) {
@@ -183,7 +197,7 @@ HSD_TExp* ftMaterial_800BF534(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp,
             texp->cnst.val = &overlay->x50_light_color;
             HSD_TExpSetReg(texp);
 
-            sp_tevdesc = info->tevdesc_tmpl;
+            sp_tevdesc = FT_TEVDESC_TMPL;
             sp_tevdesc.stage = HSD_StateAssignTev();
             sp_tevdesc.color = 2;
             sp_tevdesc.u.tevconf.clr_a = GX_CC_ZERO;
@@ -222,7 +236,6 @@ void ftMaterial_800BF6BC(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp)
     s32 var_r3;
     ColorOverlay* overlay;
     s32 var_r5;
-    struct ft_MObjInfo* info = (struct ft_MObjInfo*) &ftMObj;
 
     if (!fp->x2223_b3) {
         overlay = ftCo_800C0658(fp);
@@ -293,7 +306,7 @@ void ftMaterial_800BF6BC(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp)
             sp168 = overlay->x2C_hex;
         }
         if (chk1 != 0) {
-            sp_cnst1 = info->texp_tmpl;
+            sp_cnst1 = FT_TECNST_TMPL;
             reg1 = lbGetFreeColorRegister(0, mobj, texp);
             if (reg1 == -1) {
                 HSD_ASSERTREPORT(352, 0, "can't find free color register!\n");
@@ -318,7 +331,7 @@ void ftMaterial_800BF6BC(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp)
                                  "can't find free color ratio register!\n");
             }
             if ((u8) fp->x61D != 0xFF) {
-                sp_cnst2 = info->texp_tmpl;
+                sp_cnst2 = FT_TECNST_TMPL;
                 sp_cnst2.reg = (u8) reg2;
                 sp_cnst2.comp = 5;
                 sp_cnst2.idx = 3;
@@ -339,7 +352,7 @@ void ftMaterial_800BF6BC(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp)
                 sp_cnst1.val = color;
             }
             HSD_TExpSetReg((HSD_TExp*) &sp_cnst1);
-            sp_tevdesc = info->tevdesc_tmpl;
+            sp_tevdesc = FT_TEVDESC_TMPL;
             sp_tevdesc.stage = HSD_StateAssignTev();
             sp_tevdesc.u.tevconf.clr_b = lb_8000CC8C(reg1);
             sp_tevdesc.u.tevconf.clr_c = lb_8000CC8C(reg2);

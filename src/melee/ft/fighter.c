@@ -205,7 +205,17 @@ void Fighter_800679B0(void)
     HSD_ObjAllocInit(&fighter_dobj_list_alloc_data, /*size*/ 0x1f0,
                      /*align*/ 4);
 #endif
+#if BUILD_TARGET_PC
+    /* Same byte-count-versus-entry-count trap as fighter_dobj_list_alloc_data
+     * above: 0x80 bytes is ftParts_80075650's 0x20 entries times the console's
+     * four-byte pointer, and a fighter whose sub-model has more than sixteen
+     * DObjs wrote past the slot here. */
+    HSD_ObjAllocInit(&fighter_x2040_alloc_data,
+                     /*size*/ FT_SUBMODEL_DOBJ_MAX * sizeof(HSD_DObj*),
+                     /*align*/ 4);
+#else
     HSD_ObjAllocInit(&fighter_x2040_alloc_data, /*size*/ 0x80, /*align*/ 4);
+#endif
 
     g_spawnNumCounter = 1;
 
