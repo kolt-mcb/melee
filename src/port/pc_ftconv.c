@@ -958,8 +958,61 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         }
     }
 
+    /* +0x20 the shield-pose joint table: { HSD_Joint** joints; HSD_Joint*
+     * x8 }. ftCo_80091E78 takes joints[2] and blends a shielding fighter's
+     * skeleton toward it every frame the shield is up. Leaving it NULL does
+     * not crash -- the three ftAnim blend functions loop `while (joint !=
+     * NULL)` -- it silently skips the blend, so the pose is the raw
+     * animation where the console's is part of the way to the shield pose.
+     * Measured against the console at match frame 475: this side's joint
+     * held the animation's key exactly (-862/16384, a value only a key can
+     * take) and the console's sat between it and the shield pose.
+     *
+     * Only index 2 is read anywhere, but the array is converted whole to a
+     * generous fixed count, the way the other tables here are, with anything
+     * out of range left NULL. */
+    off = pc_be32(*(const u32*) (raw + 0x20));
+    if (off != 0 && off + 8 <= len) {
+        const u8* s20 = base + off;
+        u32 arr_off = pc_be32(*(const u32*) (s20 + 0x00));
+        u32 j8_off = pc_be32(*(const u32*) (s20 + 0x04));
+        struct ftData_x20_pc {
+            void* x0;
+            HSD_Joint* x8;
+        }* rec = pc_lowmem_alloc(sizeof(*rec));
+        if (rec != NULL) {
+            memset(rec, 0, sizeof(*rec));
+            if (arr_off != 0 && arr_off + 3 * 4 <= len) {
+                static HSD_Joint* pc_guard_joints[FTKIND_MAX + 1][3];
+                int slot = (kind >= 0 && kind <= FTKIND_MAX) ? kind : 0;
+                HSD_Joint** jp = pc_guard_joints[slot];
+                u32 jo = pc_be32(((const u32*) (base + arr_off))[2]);
+                jp[0] = jp[1] = NULL;
+                /* Only index 2 is read, and converting the neighbours blind
+                 * faulted: the array is shorter than it looks and entry 3
+                 * was not a joint tree at all. Convert what is used. */
+                jp[2] = (jo != 0 && jo < len)
+                            ? (HSD_Joint*) pc_ftconv_joint((void*) (base + jo))
+                            : NULL;
+                rec->x0 = jp;
+            }
+            /* x8 is nominally a joint too, but nothing reads it and a blind
+             * conversion is what faulted above. */
+            (void) j8_off;
+            rec->x8 = NULL;
+            out->x20 = (void*) rec;
+            if (pc_ftconv_trace()) {
+                fprintf(stderr,
+                        "[FTCONV] shield joints: arr=%p [2]=%p x8=%p\n",
+                        rec->x0,
+                        rec->x0 ? ((HSD_Joint**) rec->x0)[2] : NULL,
+                        (void*) rec->x8);
+            }
+        }
+    }
+
     /* Deliberately left NULL until something needs them:
-     * x1C, x20, x24, x28, x34, x38, x44, x58, x5C. */
+     * x1C, x24, x28, x34, x38, x44, x58, x5C. */
 
     if (pc_ftconv_trace()) {
         fprintf(stderr,
