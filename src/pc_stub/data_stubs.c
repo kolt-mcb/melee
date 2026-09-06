@@ -45,8 +45,9 @@ __attribute__((weak, aligned(16))) unsigned char etext[16];
 
 PC_DATA_STUB(AutoNamesList);
 PC_DATA_STUB(HSD_VIData);
-PC_DATA_STUB(MSL_TrigF_80400770);
-PC_DATA_STUB(MSL_TrigF_80400774);
+/* MSL_TrigF_80400770 (NaN) and _80400774 (+Inf) are real values, not
+ * placeholders -- src/MSL/float.c defines them; a zero stub silently turns
+ * acosf(+-1) into pi/2. */
 PC_DATA_STUB(NotAllowedNamesList);
 PC_DATA_STUB(db_804D4AF8);
 PC_DATA_STUB(ftCo_804D9018);

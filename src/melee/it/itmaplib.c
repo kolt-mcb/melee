@@ -742,6 +742,28 @@ bool it_80277040(Item_GObj* item_gobj)
     if (angle1 < 0.0f) {
         angle1 = -angle1;
     }
+#if BUILD_TARGET_PC
+    /* MELEE_BOUNCEDBG=<kind>: the angle between the surface the item just met
+     * and straight up, against the threshold that decides bounce-or-rest. */
+    {
+        static int want = -2;
+        if (want == -2) {
+            const char* e = getenv("MELEE_BOUNCEDBG");
+            want = (e != NULL) ? atoi(e) : -1;
+        }
+        if (want >= 0 && (int) item1->kind == want) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr,
+                    "[BOUNCE] gframe=%u kind=%d env=%x ang=%08x thr=%08x "
+                    "n=(%08x,%08x,%08x) x50=%08x\n",
+                    (unsigned) gm_8016AEDC(), (int) item1->kind,
+                    (unsigned) coll->env_flags, *(unsigned*) &angle1,
+                    *(unsigned*) &it_804D6D28->xC0, *(unsigned*) &sp5C.x,
+                    *(unsigned*) &sp5C.y, *(unsigned*) &sp5C.z,
+                    *(unsigned*) &item1->xCC_item_attr->x50);
+        }
+    }
+#endif
     if (angle1 >= it_804D6D28->xC0) {
         sp50.z = 0.0f;
         sp50.x = 0.0f;

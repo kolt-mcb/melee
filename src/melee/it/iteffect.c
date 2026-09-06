@@ -103,6 +103,25 @@ void it_80278800(Item_GObj* item_gobj, s32 ef_id, s32 arg2, Vec3* arg3,
 
     item = item_gobj->user_data;
 
+#if BUILD_TARGET_PC
+    /* MELEE_EFDBG=1: which item asks for which effect, on which frame. The
+     * console fires the same call one frame later, so the two logs line up
+     * only if the item's script is in step. */
+    {
+        static int on = -1;
+        if (on < 0) {
+            on = getenv("MELEE_EFDBG") != NULL;
+        }
+        if (on) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr,
+                    "[EFDBG] gframe=%u kind=%d ef=%03x anim=%d msid=%d\n",
+                    (unsigned) gm_8016AEDC(), (int) item->kind, (unsigned) ef_id,
+                    (int) item->anim_id, (int) item->msid);
+        }
+    }
+#endif
+
     // Not sure what to make of mixing this case statement with the if's below.
     // Commenting out those cases did not affect the % match *shrug*
     switch (ef_id) {

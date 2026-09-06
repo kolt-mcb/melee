@@ -90,6 +90,68 @@ void HSD_GObj_80390CD4(HSD_GObj* gobj)
 }
 
 /// GObj_RunProcs
+#if BUILD_TARGET_PC
+/* Is this pointer one of the gobjs currently on a p-link list? Pure pointer
+ * comparison -- the suspect is never dereferenced, so a garbage value is
+ * reported rather than followed. */
+static int pc_gobj_is_live(const HSD_GObj* g)
+{
+    int link;
+    if (g == NULL || !pc_ptr_sane(g) || HSD_GObj_Entities == NULL) {
+        return 0;
+    }
+    for (link = 0; link <= HSD_GObjLibInitData.p_link_max; link++) {
+        HSD_GObj* cur = ((HSD_GObj**) HSD_GObj_Entities)[link];
+        int n = 0;
+        while (cur != NULL && n < 4096) {
+            if (cur == (const HSD_GObj*) g) {
+                return 1;
+            }
+            if (!pc_ptr_sane(cur->next)) {
+                break;
+            }
+            cur = cur->next;
+            n++;
+        }
+    }
+    return 0;
+}
+#endif
+
+#if BUILD_TARGET_PC
+/* MELEE_PROCCHECK=1: walk every priority list and report the first link that
+ * is not a pointer, tagged with where the caller says it is. Sprinkle calls
+ * through a suspect callback to bisect down to the write. */
+int pc_proclist_check(const char* where)
+{
+    static int on = -1;
+    static int said = 0;
+    int k;
+    if (on < 0) {
+        on = getenv("MELEE_PROCCHECK") != NULL;
+    }
+    if (!on || said) {
+        return 0;
+    }
+    for (k = 0; k <= HSD_GObjLibInitData.gproc_pri_max; k++) {
+        HSD_GObjProc* q = HSD_GObj_804D7840[k];
+        int n = 0;
+        while (q != NULL && n < 4096) {
+            if (!pc_ptr_sane(q)) {
+                said = 1;
+                fprintf(stderr,
+                        "[PROCCHECK] %s: priority %d link %d is %p\n",
+                        where, k, n, (void*) q);
+                return 1;
+            }
+            q = q->next;
+            n++;
+        }
+    }
+    return 0;
+}
+#endif
+
 void HSD_GObj_80390CFC(void)
 {
     s32 i;
@@ -108,13 +170,54 @@ void HSD_GObj_80390CFC(void)
     }
 
     for (i = 0; i <= HSD_GObjLibInitData.gproc_pri_max; i++) {
+#if BUILD_TARGET_PC
+        HSD_GObjProc* pc_prev_proc = NULL;
+#endif
         HSD_GObj_804D7834 = i;
         proc = HSD_GObj_804D7840[i];
         while (proc != NULL) {
+#if BUILD_TARGET_PC
+            /* PC port: name a bad link before dereferencing it. The list is
+             * relinked by callbacks that run inside this loop, so a proc that
+             * is not a pointer at all means one of them freed something it
+             * was still on. */
+            if (!pc_ptr_sane(proc)) {
+                fprintf(stderr,
+                        "[GOBJGUARD] priority %d: proc=%p is not a pointer "
+                        "(previous proc %p, head %p)\n",
+                        i, (void*) proc, (void*) pc_prev_proc,
+                        (void*) HSD_GObj_804D7840[i]);
+                port_guard_warn("gobj.c:proc_link");
+                break;
+            }
+            pc_prev_proc = proc;
+#endif
             HSD_GObj_804D7830 = proc->next;
             if (proc->flags_3 != HSD_GObj_804D783C) {
                 proc->flags_3 = HSD_GObj_804D783C;
                 gobj = proc->gobj;
+#if BUILD_TARGET_PC
+                /* PC port: p_link is read off the gobj before any of the
+                 * guards below, so a proc that has lost its gobj faults here
+                 * rather than being skipped. Say what the proc looked like --
+                 * a freed proc still linked into the priority list and a
+                 * proc that never got a gobj are different bugs and this
+                 * tells them apart. */
+                if (!pc_ptr_sane(gobj)) {
+                    fprintf(stderr,
+                            "[GOBJGUARD] proc %p has gobj=%p: pri=%d s_link=%u "
+                            "flags=%u/%u/%u next=%p prev=%p child=%p "
+                            "on_invoke=%p\n",
+                            (void*) proc, (void*) gobj, i,
+                            (unsigned) proc->s_link, (unsigned) proc->flags_1,
+                            (unsigned) proc->flags_2, (unsigned) proc->flags_3,
+                            (void*) proc->next, (void*) proc->prev,
+                            (void*) proc->child, (void*) proc->on_invoke);
+                    port_guard_warn("gobj.c:proc_no_gobj");
+                    proc = HSD_GObj_804D7830;
+                    continue;
+                }
+#endif
                 if (!(var_r31 & (1LL << gobj->p_link)) && !(proc->flags_1) &&
                     !(proc->flags_2))
                 {
@@ -149,6 +252,57 @@ void HSD_GObj_80390CFC(void)
                     } else
 #endif
                     proc->on_invoke(proc->gobj);
+#if BUILD_TARGET_PC
+                    /* MELEE_PROCCHECK=1: walk every priority list after each
+                     * callback and name the first one that leaves a link that
+                     * is not a pointer. A corrupted list only faults on the
+                     * next frame's walk, by which time the callback that did
+                     * it is long gone. */
+                    {
+                        static int on = -1;
+                        static int said = 0;
+                        if (on < 0) {
+                            on = getenv("MELEE_PROCCHECK") != NULL;
+                        }
+                        if (on && !said) {
+                            int k;
+                            for (k = 0;
+                                 k <= HSD_GObjLibInitData.gproc_pri_max; k++) {
+                                HSD_GObjProc* q = HSD_GObj_804D7840[k];
+                                int n = 0;
+                                while (q != NULL && n < 4096) {
+                                    const char* why = NULL;
+                                    if (!pc_ptr_sane(q)) {
+                                        why = "link is not a pointer";
+                                    } else if (!pc_gobj_is_live(q->gobj)) {
+                                        why = "proc->gobj is not a live gobj";
+                                    }
+                                    if (why != NULL) {
+                                        said = 1;
+                                        fprintf(stderr,
+                                                "[PROCCHECK] after %p "
+                                                "(gobj=%p pri=%d): priority "
+                                                "%d link %d proc=%p gobj=%p "
+                                                "-- %s\n",
+                                                (void*) proc->on_invoke,
+                                                (void*) gobj, i, k, n,
+                                                (void*) q,
+                                                pc_ptr_sane(q)
+                                                    ? (void*) q->gobj
+                                                    : NULL,
+                                                why);
+                                        break;
+                                    }
+                                    q = q->next;
+                                    n++;
+                                }
+                                if (said) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+#endif
                     HSD_GObj_804D7830 = proc->next;
                     if (HSD_GObj_804CE3E4.flags != 0) {
                         HSD_GObj_804CE3E4.b0 = 1;
