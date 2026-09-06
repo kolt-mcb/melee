@@ -338,14 +338,35 @@ PC_STATIC_INLINE u32 FObjLoadData(HSD_FObj* fobj)
 void FObjUpdateAnim(HSD_FObj* fobj, void* obj, HSD_ObjUpdateFunc obj_update)
 {
 #if BUILD_TARGET_PC
-    { static int _fl = -1; if (_fl < 0) _fl = (getenv("MELEE_FOBJLOG") != NULL);
-      extern u32 pc_frame_number;
-      if (_fl && fobj->obj_type >= 4 && fobj->obj_type <= 6 && pc_frame_number >= 259 && pc_frame_number <= 260) {
-        fprintf(stderr, "FOBJUPD obj=%p track=%u op=%u intrp=%u time=%.2f fterm=%u p0=%.3f p1=%.3f d0=%.3f flags=0x%x len=%u nb=%u start=%d head=%02x %02x %02x %02x %02x %02x %02x %02x\n",
-                obj, (unsigned)fobj->obj_type, (unsigned)fobj->op, (unsigned)fobj->op_intrp, (double)fobj->time, (unsigned)fobj->fterm,
-                (double)fobj->p0, (double)fobj->p1, (double)fobj->d0, (unsigned)fobj->flags, (unsigned)fobj->length, (unsigned)fobj->nb_pack, (int)fobj->startframe,
-                fobj->ad_head ? fobj->ad_head[0] : 0, fobj->ad_head ? fobj->ad_head[1] : 0, fobj->ad_head ? fobj->ad_head[2] : 0, fobj->ad_head ? fobj->ad_head[3] : 0,
-                fobj->ad_head ? fobj->ad_head[4] : 0, fobj->ad_head ? fobj->ad_head[5] : 0, fobj->ad_head ? fobj->ad_head[6] : 0, fobj->ad_head ? fobj->ad_head[7] : 0); } }
+    /* MELEE_FOBJAT=<match frame> dumps every animation track evaluated on
+     * that frame: the interpolation kind, the segment time and length, the
+     * four Hermite coefficients and the value that comes out, all as bit
+     * patterns. A joint rotation that is one ULP from the console's is
+     * either an arithmetic difference in here or a different coefficient
+     * coming out of the key stream, and nothing else tells the two apart. */
+    {
+        static int fobjat = -2;
+        if (fobjat == -2) {
+            const char* e = getenv("MELEE_FOBJAT");
+            fobjat = e != NULL ? atoi(e) : -1;
+        }
+        if (fobjat >= 0) {
+            extern u32 gm_8016AEDC(void);
+            if ((int) gm_8016AEDC() == fobjat) {
+                fprintf(stderr,
+                        "[FOBJ] obj=%p type=%u intrp=%u time=%08x fterm=%u "
+                        "p0=%08x p1=%08x d0=%08x d1=%08x\n",
+                        (void*) fobj, (unsigned) fobj->obj_type,
+                        (unsigned) fobj->op_intrp,
+                        *(const unsigned*) &fobj->time,
+                        (unsigned) fobj->fterm,
+                        *(const unsigned*) &fobj->p0,
+                        *(const unsigned*) &fobj->p1,
+                        *(const unsigned*) &fobj->d0,
+                        *(const unsigned*) &fobj->d1);
+            }
+        }
+    }
 #endif
     f32 phi_f0;
     HSD_ObjData fobjdata;

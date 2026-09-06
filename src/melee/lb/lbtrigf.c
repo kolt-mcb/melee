@@ -207,6 +207,22 @@ float atanf(float x)
         float result_squared = result * result;
         lookup_ptr = &atanf_lookup[lookup_index];
 
+#if BUILD_TARGET_PC
+        /* Retail's polynomial is a chain of fmadds -- 80022FC8 through
+         * 80022FEC -- each rounding the multiply and the add once together,
+         * including the last, which folds `result * result_squared` into the
+         * final sum. atanf is what atan2f is built from, and atan2f is how
+         * every joint matrix is turned back into Euler angles, so this is on
+         * the path from any rotation to the pose it produces. */
+        {
+            f32 t = fmaf(result_squared, atanf_lookup[6], atanf_lookup[5]);
+            t = fmaf(result_squared, t, atanf_lookup[4]);
+            t = fmaf(result_squared, t, atanf_lookup[3]);
+            t = fmaf(result_squared, t, atanf_lookup[2]);
+            t = fmaf(result_squared, t, atanf_lookup[1]);
+            result = fmaf(result * result_squared, t, result);
+        }
+#else
         // clang-format off
         result = result *
             result_squared * (
@@ -223,6 +239,7 @@ float atanf(float x)
                 ) + atanf_lookup[1]
             ) + result;
         // clang-format on
+#endif
 
         result += lookup_ptr[27];
         result += lookup_ptr[20];

@@ -255,33 +255,37 @@ void PSMTXQuat(Mtx m, QuaternionPtr q)
     {
         f32 n = (q->w * q->w) + (q->z * q->z + (q->x * q->x + q->y * q->y));
         f32 e = (f32) __fres((double) n);
-        e = e + e * (1.0f - n * e);
+        /* Retail's Newton step is ps_nmsub then ps_mul: e * (2 - n*e), with
+         * the multiply and the subtract rounded once together (803426C4,
+         * 803426CC). `e + e * (1 - n*e)` is the same number in exact
+         * arithmetic and a different one in single precision. */
+        e = e * fmaf(-n, e, 2.0f);
         s = 2.0f * e;
     }
-    xs = q->x * s;
-    ys = q->y * s;
-    zs = q->z * s;
-    wx = q->w * xs;
-    wy = q->w * ys;
-    wz = q->w * zs;
-    xx = q->x * xs;
-    xy = q->x * ys;
-    xz = q->x * zs;
-    yy = q->y * ys;
-    yz = q->y * zs;
-    zz = q->z * zs;
-    m[0][0] = 1 - (yy + zz);
-    m[0][1] = xy - wz;
-    m[0][2] = xz + wy;
-    m[0][3] = 0;
-    m[1][0] = xy + wz;
-    m[1][1] = 1 - (xx + zz);
-    m[1][2] = yz - wx;
-    m[1][3] = 0;
-    m[2][0] = xz - wy;
-    m[2][1] = yz + wx;
-    m[2][2] = 1 - (xx + yy);
-    m[2][3] = 0;
+    /* Retail keeps the scale out of the products and folds it into the last
+     * operation: the diagonal is ps_nmsub -- 1 - (a*a + b*b) * s, one
+     * rounding -- and each off-diagonal is a ps_madd or ps_msub of the two
+     * products followed by a single multiply by s (803426E4 onward).
+     * Scaling first, as `xs = x * s` does, rounds in a different place. */
+    (void) xs; (void) ys; (void) zs;
+    (void) wx; (void) wy; (void) wz;
+    (void) xx; (void) xy; (void) xz;
+    (void) yy; (void) yz; (void) zz;
+    {
+        f32 x = q->x, y = q->y, z = q->z, w = q->w;
+        m[0][0] = fmaf(-(y * y + z * z), s, 1.0f);
+        m[1][1] = fmaf(-(x * x + z * z), s, 1.0f);
+        m[2][2] = fmaf(-(x * x + y * y), s, 1.0f);
+        m[0][1] = fmaf(x, y, -(w * z)) * s;
+        m[1][0] = fmaf(x, y, w * z) * s;
+        m[0][2] = fmaf(x, z, w * y) * s;
+        m[2][0] = fmaf(x, z, -(w * y)) * s;
+        m[1][2] = fmaf(y, z, -(w * x)) * s;
+        m[2][1] = fmaf(y, z, w * x) * s;
+        m[0][3] = 0;
+        m[1][3] = 0;
+        m[2][3] = 0;
+    }
 }
 
 u32 PSMTXInverse(Mtx src, Mtx inv)

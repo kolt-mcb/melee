@@ -10,9 +10,21 @@ inline float sqrtf(float x)
     volatile float y;
     if (x > 0.0f) {
         double guess = __frsqrte((double) x); // returns an approximation to
+#if BUILD_TARGET_PC
+        /* Retail's Newton step is fnmsub: `3.0 - x * (e*e)` with the multiply
+         * and the subtract rounded once together (8037EB7C and its two
+         * repeats). Written out, `3.0 - guess * guess * x` rounds three times
+         * instead of two, and the difference survives the round to single
+         * often enough to matter -- this is the sqrt every joint matrix's
+         * Euler extraction runs through. */
+        guess = .5 * guess * fma(-x, guess * guess, 3.0);
+        guess = .5 * guess * fma(-x, guess * guess, 3.0);
+        guess = .5 * guess * fma(-x, guess * guess, 3.0);
+#else
         guess = .5 * guess * (3.0 - guess * guess * x); // now have 12 sig bits
         guess = .5 * guess * (3.0 - guess * guess * x); // now have 24 sig bits
         guess = .5 * guess * (3.0 - guess * guess * x); // now have 32 sig bits
+#endif
         y = (float) (x * guess);
         return y;
     }
@@ -90,6 +102,22 @@ s32 HSD_QuatLib_8037EB28(Mtx m, Vec3* euler)
     return 0;
 }
 
+/* Retail fuses the multiply-and-add pairs in the two functions below into
+ * fmadds and fmsubs -- 8037EC94 onward for the product, 8037EED0 onward for
+ * the Euler conversion -- rounding once where plain arithmetic rounds twice.
+ * The dynamics solver runs a bone's rotation through EulerToQuat, this
+ * product and back every frame, so the difference does not stay put: it was
+ * one ULP in a fighter's joint rotation by match frame 7. The operand
+ * pairing is taken from the instruction stream. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define Q_FMA(a, b, c) fmaf((a), (b), (c))
+#define Q_FMS(a, b, c) fmaf((a), (b), -(c))
+#else
+#define Q_FMA(a, b, c) ((a) * (b) + (c))
+#define Q_FMS(a, b, c) ((a) * (b) - (c))
+#endif
+
 s32 HSD_QuatLib_8037EC4C(Quaternion* p, Quaternion* q, Quaternion* out)
 {
     f32 x;
@@ -97,10 +125,11 @@ s32 HSD_QuatLib_8037EC4C(Quaternion* p, Quaternion* q, Quaternion* out)
     f32 z;
     f32 w;
 
-    x = q->w * p->x + p->w * q->x + (p->y * q->z - q->y * p->z);
-    y = q->w * p->y + p->w * q->y + (q->x * p->z - p->x * q->z);
-    z = q->w * p->z + p->w * q->z + (p->x * q->y - q->x * p->y);
-    w = p->w * q->w - (p->z * q->z + (p->x * q->x + p->y * q->y));
+    x = Q_FMA(q->w, p->x, p->w * q->x) + Q_FMS(p->y, q->z, q->y * p->z);
+    y = Q_FMA(q->w, p->y, p->w * q->y) + Q_FMS(q->x, p->z, p->x * q->z);
+    z = Q_FMA(q->w, p->z, p->w * q->z) + Q_FMS(p->x, q->y, q->x * p->y);
+    w = Q_FMS(p->w, q->w,
+              Q_FMA(p->z, q->z, Q_FMA(p->x, q->x, p->y * q->y)));
 
     out->x = x;
     out->y = y;
@@ -153,10 +182,10 @@ s32 EulerToQuat(Vec3* euler, Quaternion* q)
 
     ss = sy * sz;
     cc = cy * cz;
-    q->w = cx * cc + sx * ss;
-    q->x = sx * cc - cx * ss;
-    q->y = cz * (cx * sy) + sz * (sx * cy);
-    q->z = sz * (cx * cy) - cz * (sx * sy);
+    q->w = Q_FMA(cx, cc, sx * ss);
+    q->x = Q_FMS(sx, cc, cx * ss);
+    q->y = Q_FMA(cz, cx * sy, sz * (sx * cy));
+    q->z = Q_FMS(sz, cx * cy, cz * (sx * sy));
 
     return 0;
 }

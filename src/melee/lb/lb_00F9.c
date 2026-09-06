@@ -409,6 +409,22 @@ static inline float groundHeight(struct DynamicsData* data, Vec3* floor_point)
 }
 
 /// @todo Only the placement of one @c li differs.
+/* Retail fuses each of these multiply-and-add pairs -- 80010AE4, 80010CF8,
+ * 80010EC4 and their neighbours -- into fmadds, and the two squared-length
+ * differences into fmsubs and fnmsubs. One rounding, not two. This is the
+ * dynamics solver: it integrates a bone's position from its own previous
+ * position every frame, so a rounding here does not stay one ULP -- it is
+ * the drift that put a fighter's joint rotations one ULP from the console's
+ * by match frame 7 and a visible amount apart by 616. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DYN_FMA(a, b, c) fmaf((a), (b), (c))
+#define DYN_FMS(a, b, c) fmaf((a), (b), -(c))
+#else
+#define DYN_FMA(a, b, c) ((a) * (b) + (c))
+#define DYN_FMS(a, b, c) ((a) * (b) - (c))
+#endif
+
 void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                  float pos_y, bool use_floor_fn, Fighter_Part part,
                  int first_active, bool ground_check)
@@ -648,14 +664,14 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                     s32 ci;
                     for (ci = 0; ci < num_colliders; ci++) {
                         next_bone_pos.x =
-                            link_dir.x * cur->desc.lb_unk0.unk_48 +
-                            cur->desc.lb_unk0.unk_2C.x;
+                            DYN_FMA(link_dir.x, cur->desc.lb_unk0.unk_48,
+                                    cur->desc.lb_unk0.unk_2C.x);
                         next_bone_pos.y =
-                            link_dir.y * cur->desc.lb_unk0.unk_48 +
-                            cur->desc.lb_unk0.unk_2C.y;
+                            DYN_FMA(link_dir.y, cur->desc.lb_unk0.unk_48,
+                                    cur->desc.lb_unk0.unk_2C.y);
                         next_bone_pos.z =
-                            link_dir.z * cur->desc.lb_unk0.unk_48 +
-                            cur->desc.lb_unk0.unk_2C.z;
+                            DYN_FMA(link_dir.z, cur->desc.lb_unk0.unk_48,
+                                    cur->desc.lb_unk0.unk_2C.z);
 
                         coll_dir.x =
                             collider->position.x - cur->desc.lb_unk0.unk_2C.x;
@@ -681,8 +697,9 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                                     f32 adj_radius =
                                         (f32) (0.1 + (f64) collider->radius);
                                     f32 side_sq =
-                                        sqrtf(coll_dist * coll_dist -
-                                              adj_radius * adj_radius);
+                                        sqrtf(DYN_FMS(coll_dist, coll_dist,
+                                                      adj_radius *
+                                                          adj_radius));
                                     {
                                         f32 avoidance_angle =
                                             atan2f(adj_radius, side_sq);
@@ -723,10 +740,12 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                     gnd_norm = lb_803B7280.v1;
                     lbVector_Normalize(&link_dir);
                     {
-                        f32 end_x = link_dir.x * cur->desc.lb_unk0.unk_48 +
-                                    cur->desc.lb_unk0.unk_2C.x;
-                        f32 end_y = link_dir.y * cur->desc.lb_unk0.unk_48 +
-                                    cur->desc.lb_unk0.unk_2C.y;
+                        f32 end_x =
+                            DYN_FMA(link_dir.x, cur->desc.lb_unk0.unk_48,
+                                    cur->desc.lb_unk0.unk_2C.x);
+                        f32 end_y =
+                            DYN_FMA(link_dir.y, cur->desc.lb_unk0.unk_48,
+                                    cur->desc.lb_unk0.unk_2C.y);
                         s32 floor_hit;
                         if (use_floor_fn != 0) {
                             floor_hit = lb_800103D8(
@@ -789,11 +808,11 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                             link_dir = gnd_norm2;
                         } else {
                             f32 end_x2 =
-                                link_dir.x * cur->desc.lb_unk0.unk_48 +
-                                cur->desc.lb_unk0.unk_2C.x;
+                                DYN_FMA(link_dir.x, cur->desc.lb_unk0.unk_48,
+                                        cur->desc.lb_unk0.unk_2C.x);
                             f32 end_y2 =
-                                link_dir.y * cur->desc.lb_unk0.unk_48 +
-                                cur->desc.lb_unk0.unk_2C.y;
+                                DYN_FMA(link_dir.y, cur->desc.lb_unk0.unk_48,
+                                        cur->desc.lb_unk0.unk_2C.y);
                             s32 floor_hit3;
                             if (use_floor_fn != 0) {
                                 floor_hit3 = lb_800103D8(
@@ -812,10 +831,10 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                             if (floor_hit3 != 0) {
                                 f32 height_diff =
                                     groundHeight(cur, &floor_point2);
-                                f32 horiz_dist =
-                                    sqrtf(-(height_diff * height_diff -
-                                            cur->desc.lb_unk0.unk_48 *
-                                                cur->desc.lb_unk0.unk_48));
+                                f32 horiz_dist = sqrtf(-DYN_FMS(
+                                    height_diff, height_diff,
+                                    cur->desc.lb_unk0.unk_48 *
+                                        cur->desc.lb_unk0.unk_48));
                                 f32 ground_angle =
                                     ABS(atan2f(horiz_dist, height_diff));
                                 PSVECCrossProduct(&gnd_norm2, &link_dir,
