@@ -328,6 +328,7 @@ static void pc_trace_ailog(void)
                                     ((const unsigned*) &j->translate)[0],
                                     ((const unsigned*) &j->translate)[1],
                                     ((const unsigned*) &j->translate)[2]);
+                            fprintf(stderr, "/f%08x", (unsigned) j->flags);
                             j = j->parent;
                             depth++;
                         }
