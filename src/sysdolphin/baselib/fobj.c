@@ -355,7 +355,9 @@ void FObjUpdateAnim(HSD_FObj* fobj, void* obj, HSD_ObjUpdateFunc obj_update)
             if ((int) gm_8016AEDC() == fobjat) {
                 fprintf(stderr,
                         "[FOBJ] obj=%p fobj=%p type=%u intrp=%u time=%08x "
-                        "fterm=%u p0=%08x p1=%08x d0=%08x d1=%08x\n",
+                        "fterm=%u p0=%08x p1=%08x d0=%08x d1=%08x "
+                        "fracv=%02x fracs=%02x len=%u sf=%d ad=%p "
+                        "head=%02x%02x%02x%02x%02x%02x\n",
                         obj, (void*) fobj, (unsigned) fobj->obj_type,
                         (unsigned) fobj->op_intrp,
                         *(const unsigned*) &fobj->time,
@@ -363,7 +365,17 @@ void FObjUpdateAnim(HSD_FObj* fobj, void* obj, HSD_ObjUpdateFunc obj_update)
                         *(const unsigned*) &fobj->p0,
                         *(const unsigned*) &fobj->p1,
                         *(const unsigned*) &fobj->d0,
-                        *(const unsigned*) &fobj->d1);
+                        *(const unsigned*) &fobj->d1,
+                        (unsigned) fobj->frac_value,
+                        (unsigned) fobj->frac_slope,
+                        (unsigned) fobj->length, (int) fobj->startframe,
+                        (void*) fobj->ad_head,
+                        fobj->ad_head ? fobj->ad_head[0] : 0,
+                        fobj->ad_head ? fobj->ad_head[1] : 0,
+                        fobj->ad_head ? fobj->ad_head[2] : 0,
+                        fobj->ad_head ? fobj->ad_head[3] : 0,
+                        fobj->ad_head ? fobj->ad_head[4] : 0,
+                        fobj->ad_head ? fobj->ad_head[5] : 0);
             }
         }
     }
