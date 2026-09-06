@@ -333,7 +333,11 @@ static void pc_trace_ailog(void)
                         fprintf(stderr, "[FTCHAIN-PORT] gframe=%u p%d",
                                 (unsigned) gm_8016AEDC(), vslot);
                         while (j != NULL && depth < 12) {
-                            fprintf(stderr, " %d:", depth);
+                            /* The joint's own address, so a rotation that
+                             * differs can be traced back to the animation
+                             * track that wrote it (MELEE_FOBJAT prints the
+                             * same pointer). */
+                            fprintf(stderr, " %d@%p:", depth, (void*) j);
                             {
                                 int mi, mj;
                                 for (mi = 0; mi < 3; mi++) {
