@@ -1,5 +1,5 @@
 # The same walk from power-on as sync_title, with a different pair of
-# characters. sync_title is Samus vs Pikachu and every fix measured against it
+# characters. sync_title is Pikachu vs Peach and every fix measured against it
 # risks being a fix for that lineup: a bone table, a hurtbox count, an
 # article, a special move, a per-character data conversion. This case exists
 # so that a change that helps one lineup and breaks another is visible as a
@@ -7,16 +7,16 @@
 #
 #   tools/pc_lockstep.py sync_pair2 --cpu 9,9 --frames 3000 --headless
 #
-# The character-select route below was generated with
+# Samus and Donkey Kong, which is p0.char 16 and p1.char 1 -- those columns
+# are CKIND_* (ft/forward.h), the character-select ids, not FighterKind.
+# Samus brings the grapple beam and DK the cargo throw, so this exercises
+# tether items and a grab chain that Pikachu vs Peach never touches.
 #
-#   tools/pc_route.py plan SAMUS DONKEY --lag 0
+# The route below is generated:
 #
-# and it lands one cell short on both axes, so what it actually selects is
-# **Mewtwo (p0, char 16) and Fox (p1, char 1)**. That is recorded rather than
-# corrected because the pair only has to differ from sync_title's, and the
-# route that aims true (--lag 5, the measured stick latency) has not been
-# calibrated: read p0.char/p1.char out of a run before believing a route.
-description: Mewtwo vs Fox from the title screen, in step every frame
+#   tools/pc_route.py plan SAMUS DONKEY
+#
+description: Samus vs Donkey Kong from the title screen, in step every frame
 rendezvous: 24
 route_zero: 187
 port_input_lag: 3
