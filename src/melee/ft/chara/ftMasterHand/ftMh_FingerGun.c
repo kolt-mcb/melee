@@ -45,7 +45,7 @@ void ftMh_FingerBeamEnd_Coll(HSD_GObj* gobj) {}
 void ftMh_MS_363_801530A4(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
 
     u8 _[8];
 
@@ -137,7 +137,7 @@ void ftMh_FingerGun1_Phys(HSD_GObj* gobj)
 
     ft_80085134(gobj);
     if (fp->cmd_vars[2] != 0) {
-        da = fp->ft_data->ext_attr;
+        da = FT_EXT_ATTR(fp);
         ftBossLib_8015C208(gobj, &pos);
         pos.x += da->xDC;
         pos.y += da->xE0;
@@ -166,7 +166,7 @@ void ftMh_FingerGun1_Coll(HSD_GObj* gobj) {}
 void ftMh_MS_364_801533CC(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
     Fighter_ChangeMotionState(gobj, ftMh_MS_FingerGun2, 0, 0, 1, 0, 0);
     ftAnim_8006EBA4(gobj);
     if (ftLib_80087120(gobj) > da->xEC) {
@@ -180,7 +180,7 @@ void ftMh_MS_364_801533CC(HSD_GObj* gobj)
 static inline void lbl_8015346C_inline(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
     Fighter_ChangeMotionState(gobj, ftMh_MS_FingerGun2, 0, 0, 1, 0, 0);
     ftAnim_8006EBA4(gobj);
     if (ftLib_80087120(gobj) > da->xEC) {
@@ -225,7 +225,7 @@ static void ftMh_MS_365_8015364C(HSD_GObj* gobj, HSD_JObj* arg1, float arg2,
 void ftMh_MS_365_801535B0(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
 
     if (fp->cmd_vars[0] != 0) {
         ftMh_MS_365_8015364C(gobj, fp->parts[FtPart_LKneeJ].joint, da->xF8,
@@ -243,7 +243,7 @@ void ftMh_MS_365_8015364C(HSD_GObj* gobj, HSD_JObj* arg1, float arg2,
                           float arg3)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
     bool b = false;
 
     {

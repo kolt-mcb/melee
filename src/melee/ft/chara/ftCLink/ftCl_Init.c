@@ -336,7 +336,19 @@ void ftCl_Init_OnLoad(HSD_GObj* gobj)
     ea->attackairlw_hit_anim_frame_end =
         lbAnim_8001E8F8(ftData_80085E50(fp, 72));
     ftLk_Init_OnLoadForCLink(fp);
-    ea = fp->dat_attrs;
+    {
+        float airlw_end = ea->attackairlw_hit_anim_frame_end;
+        ea = fp->dat_attrs;
+#if BUILD_TARGET_PC
+        /* Same as ftLk_Init_OnLoad: the write above lands in the archive's
+         * big-endian block and PUSH_ATTRS reverses it on the way across. */
+        if (ea != NULL) {
+            ea->attackairlw_hit_anim_frame_end = airlw_end;
+        }
+#else
+        (void) airlw_end;
+#endif
+    }
     it_8026B3F8(items[0], ea->x48);
     it_8026B3F8(items[1], ea->x2C);
     it_8026B3F8(items[2], ea->xBC);
@@ -423,7 +435,7 @@ void ftCl_Init_OnKnockbackExit(HSD_GObj* gobj)
 void ftCl_Init_80149114(HSD_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
-    ftLk_DatAttrs* ea = fp->ft_data->ext_attr;
+    ftLk_DatAttrs* ea = FT_EXT_ATTR(fp);
     float ftmp = ftCo_80092ED8(fp->x19A4, ea->xD8);
     fp->gr_vel = ftmp * p_ftCommonData->x294;
     if (fp->specialn_facing_dir < 0.0f) {

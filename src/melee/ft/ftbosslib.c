@@ -273,7 +273,7 @@ s32 ftBossLib_8015C530(int cpu_level)
 
     if (gobj != NULL) {
         ftMasterHand_SpecialAttrs* ftCo_DatAttrs =
-            GET_FIGHTER(gobj)->ft_data->ext_attr;
+            FT_EXT_ATTR(GET_FIGHTER(gobj));
         switch (cpu_level) {
         case 0:
             return ftCo_DatAttrs->x0;
@@ -332,7 +332,7 @@ ftMasterHand_SpecialAttrs* ftBossLib_8015C6BC(void)
 
             {
                 ftMasterHand_SpecialAttrs* ftCo_DatAttrs =
-                    fp->ft_data->ext_attr;
+                    FT_EXT_ATTR(fp);
                 if (ftCo_DatAttrs == NULL) {
                     return NULL;
                 }

@@ -2093,4 +2093,23 @@ struct ftData_x58_t {
     /* 0x18 */ f32 x18;
 };
 
+
+/* The character's extended attributes.
+ *
+ * On the console `ft_data->ext_attr` points straight at the attribute block
+ * in the loaded PlXX.dat and reading it is free. On the host that block is
+ * still big-endian: PUSH_ATTRS byteswaps it once into `fp->dat_attrs` (see
+ * ft/inlines.h), and that copy is the one to read. Ninety-odd sites reached
+ * for `ft_data->ext_attr` directly and got byte-reversed values -- Samus's
+ * grapple compared an animation frame against 0x11000000 where the console
+ * compares it against 17, so the beam's head link never attached to her hand
+ * and the whole chain snapped taut on its first frame.
+ *
+ * Both sides go through this macro so the two cannot drift apart again. */
+#if BUILD_TARGET_PC
+#define FT_EXT_ATTR(fp) ((fp)->dat_attrs)
+#else
+#define FT_EXT_ATTR(fp) ((fp)->ft_data->ext_attr)
+#endif
+
 #endif

@@ -1069,7 +1069,7 @@ s32 it_802B9328(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
     ItemLink* cur;
     ItemLink* next;
     Item* grapple_ip = fp->u.ss.x223C->user_data;
-    ftSs_DatAttrs* da = fp->ft_data->ext_attr;
+    ftSs_DatAttrs* da = FT_EXT_ATTR(fp);
     Vec3 dir;
     Vec3 d2;
     u8 _padB[4];
@@ -1165,6 +1165,31 @@ s32 it_802B9328(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
             }
             it_802A43EC(next);
         } else {
+#if BUILD_TARGET_PC
+            /* MELEE_GRAPPLE=1: the test that lets the beam grow by one link.
+             * The chain should activate a link at a time as the hand pulls
+             * away; a chain that activates all forty at once has a bad tip
+             * position or a bad x38. */
+            {
+                static int on = -1;
+                extern u32 gm_8016AEDC(void);
+                if (on < 0) {
+                    on = getenv("MELEE_GRAPPLE") != NULL;
+                }
+                if (on) {
+                    Vec3 dbg;
+                    f32 dd = it_802A3C98(pos, &cur->pos, &dbg);
+                    fprintf(stderr,
+                            "[GRAPPLE] gframe=%u tip=(%08x,%08x,%08x) "
+                            "cur=(%08x,%08x,%08x) d=%08x x38=%08x jobj=%p\n",
+                            (unsigned) gm_8016AEDC(), *(u32*) &pos->x,
+                            *(u32*) &pos->y, *(u32*) &pos->z,
+                            *(u32*) &cur->pos.x, *(u32*) &cur->pos.y,
+                            *(u32*) &cur->pos.z, *(u32*) &dd,
+                            *(u32*) &attrs->x38, (void*) link->jobj);
+                }
+            }
+#endif
             if (it_802A3C98(pos, &cur->pos, &dir) > attrs->x38) {
                 next->pos.x = dir.x * attrs->x38 + cur->pos.x;
                 next->pos.y = dir.y * attrs->x38 + cur->pos.y;
@@ -1208,6 +1233,35 @@ s32 it_802B99A0(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
         }
     }
 
+#if BUILD_TARGET_PC
+    /* MELEE_GRAPPLE=1: the attributes the link chain is driven by, and how
+     * many of its links are active. A chain that activates every link at once
+     * has a bad x38 (the spacing the next link is pulled out at), and that is
+     * a converted archive field. */
+    {
+        static int on = -1;
+        extern u32 gm_8016AEDC(void);
+        if (on < 0) {
+            on = getenv("MELEE_GRAPPLE") != NULL;
+        }
+        if (on) {
+            ItemLink* q;
+            int n = 0, act = 0;
+            for (q = link; q != NULL && n < 200; q = q->next) {
+                n++;
+                if (q->x2C_b0) {
+                    act++;
+                }
+            }
+            fprintf(stderr,
+                    "[GRAPPLE] gframe=%u links=%d active=%d attrs=%p "
+                    "x34=%08x x38=%08x x3C=%08x x58=%08x\n",
+                    (unsigned) gm_8016AEDC(), n, act, (void*) attrs,
+                    *(u32*) &attrs->x34, *(u32*) &attrs->x38,
+                    *(u32*) &attrs->x3C, *(u32*) &attrs->x58);
+        }
+    }
+#endif
     next = link->next;
     cur = link;
     link->vel.y -= samus_grapple_calc_grav(link->vel.y);
@@ -1570,7 +1624,7 @@ bool it_802BA760(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
     u8 _padA[16];
     Vec3 dir;
     Vec3* dir_ptr;
-    ftSs_DatAttrs* da = fp->ft_data->ext_attr;
+    ftSs_DatAttrs* da = FT_EXT_ATTR(fp);
     ItemLink* cur;
     ItemLink* next;
 
@@ -1687,7 +1741,7 @@ void it_802BABB8(Item_GObj* gobj)
 {
     Item* ip = gobj->user_data;
     Fighter* fp = ip->owner->user_data;
-    ftSs_DatAttrs* da = fp->ft_data->ext_attr;
+    ftSs_DatAttrs* da = FT_EXT_ATTR(fp);
     PAD_STACK(24);
     Item_80268E5C(gobj, 8, ITEM_ANIM_UPDATE);
     it_802A2428(gobj);

@@ -123,7 +123,7 @@ void ftMh_MS_341_8014FFDC(HSD_GObj* gobj)
 static void ifStage251(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
     fp->u.mh.x2258 = ftMh_MS_Wait1_0;
     fp->motion_id = ftMh_MS_Entry;
     fp->cur_pos.x = da->x30_pos2.x;
@@ -214,7 +214,7 @@ void ftMh_Wait1_0_Anim(HSD_GObj* gobj)
         }
     } else {
         if (--fp->u.mh.x223C < 0) {
-            ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+            ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
             Vec3 vec;
 
             u8 _[20];
@@ -374,7 +374,7 @@ void ftMh_Wait1_0_Coll(HSD_GObj* gobj) {}
 void ftMh_MS_341_80150894(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
     Vec3 pos;
     u32 l_pressed = buttons & HSD_PAD_L;
     // why just l_pressed and not temps for the others?

@@ -23,7 +23,7 @@ void ftMh_PaperCrush_Coll(HSD_GObj* gobj) {}
 void ftMh_MS_358_80152880(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
 
     u8 _[8];
 
