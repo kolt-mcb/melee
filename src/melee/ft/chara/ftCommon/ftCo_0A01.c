@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 #include "ftCo_0A01.h"
 
 #include "ftpickupitem.h"
@@ -519,6 +523,17 @@ void ftCo_800A101C(Fighter* arg0, int arg1, int arg2, int arg3)
     PAD_STACK(0xC);
 
     temp_r30 = &arg0->x1A88;
+#if BUILD_TARGET_PC
+    /* Under MELEE_CPUATK: the AI's type and level arrive here once, from the
+     * player slot, and everything the CPU does is scaled by them. */
+    if (getenv("MELEE_CPUATK") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        extern void pc_rng_recent(const char*);
+        fprintf(stderr, "[CPUATK] gframe=%u p%d INIT type=%d level=%d\n",
+                (unsigned) gm_8016AEDC(), (int) arg0->player_id, arg1, arg2);
+        pc_rng_recent("at-ai-init");
+    }
+#endif
     if (arg0->kind == FTKIND_NANA) {
         temp_r30->xF9_b2 = true;
         temp_r30->xC = 6;

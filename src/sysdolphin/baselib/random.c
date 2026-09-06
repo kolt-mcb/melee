@@ -10,26 +10,57 @@ u32* seed_ptr = &seed;
  * not which code; this says which. */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+/* The last draws made, newest last: the load frame that creates the fighters
+ * makes only a handful, and which code made them is the difference between
+ * two sides that reseed together and still disagree. pc_rng_recent() prints
+ * them; the count is not reset, so the difference between two readings is the
+ * number of draws between them. */
+#define PC_RNG_RING 24
+static void* pc_rng_ring[PC_RNG_RING];
+u32 pc_rng_count;
+
+void pc_rng_recent(const char* tag)
+{
+    u32 i, n = pc_rng_count < PC_RNG_RING ? pc_rng_count : PC_RNG_RING;
+    fprintf(stderr, "[RNGRING] %s count=%u", tag, (unsigned) pc_rng_count);
+    for (i = n; i > 0; i--) {
+        fprintf(stderr, " %p", pc_rng_ring[(pc_rng_count - i) % PC_RNG_RING]);
+    }
+    fprintf(stderr, "\n");
+}
+
 void pc_rng_note(void* ret)
 {
     static int armed = -1;
     static long n;
+
+    pc_rng_ring[pc_rng_count % PC_RNG_RING] = ret;
+    pc_rng_count++;
+
     if (armed < 0) {
         const char* e = getenv("MELEE_RNGLOG");
         armed = e ? atoi(e) : 0;
     }
     /* MELEE_RNGAT=<gframe> narrows that to one match frame, which is what a
-     * lockstep divergence gives you. */
+     * lockstep divergence gives you. MELEE_RNGAT=<lo>-<hi> takes a range, for
+     * reading the shape of a frame's draws either side of the one that
+     * diverged. */
     {
-        static int at = -2;
+        static int at = -2, hi;
         if (at == -2) {
             const char* e = getenv("MELEE_RNGAT");
+            const char* dash = e ? strchr(e, '-') : NULL;
             at = e ? atoi(e) : -1;
+            hi = dash ? atoi(dash + 1) : (at >= 0 ? at + 1 : -1);
+            if (!dash && at >= 0) {
+                at -= 1;
+            }
         }
         if (at >= 0) {
             extern u32 gm_8016AEDC(void);
             u32 f = gm_8016AEDC();
-            if ((int) f >= at - 1 && (int) f <= at + 1) {
+            if ((int) f >= at && (int) f <= hi) {
                 extern u32 pc_frame_number;
                 fprintf(stderr, "[RNGAT] gframe=%u pcf=%u %p\n", f,
                         (unsigned) pc_frame_number, ret);
