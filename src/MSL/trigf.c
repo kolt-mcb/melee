@@ -1,7 +1,13 @@
 #if BUILD_TARGET_PC
 /* The PC build excludes MSL/math.h (GCC type conflicts), so the fixed-width
- * names come from the platform header. */
+ * names come from the platform header. MSL's own declarations go with it, so
+ * declare the one this file calls -- implicitly it would be int fabsf__Ff(),
+ * the argument would be passed as a double and the answer read out of a
+ * general register, and `fabsf__Ff(y) < __epsilon` would then be a comparison
+ * against whatever was in eax. That is not a warning to live with here: it
+ * is the small-angle branch of every sine and cosine, and it was dead. */
 #include <platform.h>
+float fabsf__Ff(float);
 #endif
 
 #include "trigf.h"
