@@ -299,6 +299,33 @@ static void pc_trace_ailog(void)
                     {
                         HSD_JObj* b1 = vfp->parts[3].x4_jobj2;
                         pc_watch_jobj = b1;
+                        /* Every part's flag word, once per frame. The track
+                         * walk in ftAnim_8006F4C8 advances its part index
+                         * through these, so one that differs lands every
+                         * track after it on the wrong joint. */
+                        {
+                            int q;
+                            int n = ftPartsTable[vfp->kind]->parts_num;
+                            fprintf(stderr, "[PFLAGS-PORT] gframe=%u p%d n=%d",
+                                    (unsigned) gm_8016AEDC(), vslot, n);
+                            for (q = 0; q < n && q < 0x60; q++) {
+                                /* The console's copy is a big-endian u16 with
+                                 * the bitfields allocated MSB-first, and this
+                                 * one is little-endian LSB-first, so the same
+                                 * flag sits at the opposite end. Reverse the
+                                 * sixteen bits here rather than in the eye of
+                                 * whoever reads the two logs. */
+                                unsigned v = vfp->parts[q].flags8, w = 0;
+                                int b;
+                                for (b = 0; b < 16; b++) {
+                                    if (v & (1u << b)) {
+                                        w |= 1u << (15 - b);
+                                    }
+                                }
+                                fprintf(stderr, " %04x", w);
+                            }
+                            fprintf(stderr, "\n");
+                        }
                         HSD_JObj* b2 = vfp->parts[3].joint;
                         fprintf(stderr,
                                 "[BLPART-PORT] gframe=%u p%d i=3 "
