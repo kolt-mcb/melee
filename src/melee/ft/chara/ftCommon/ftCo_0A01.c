@@ -2407,6 +2407,40 @@ Fighter* ftCo_800A4BEC(Fighter* fp)
             }
         }
     }
+#if BUILD_TARGET_PC
+    /* MELEE_TGT=1: why the CPU's target search answered what it did. The
+     * candidate is rejected if it is outside the blast zone shrunk by the
+     * searcher's own margin, so the margin and the four offsets are printed
+     * with it -- a candidate a hair outside on one side and a hair inside on
+     * the other is a target on one side and none on the other. */
+    if (getenv("MELEE_TGT") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        HSD_GObj* c2;
+        for (c2 = HSD_GObj_Entities->fighters; c2 != NULL; c2 = c2->next) {
+            Fighter* o;
+            if (fp->gobj == c2) {
+                continue;
+            }
+            o = GET_FIGHTER(c2);
+            fprintf(stderr,
+                    "[TGT] gframe=%u p%d cand=p%d closest=%d xF9_b0=%d "
+                    "x=%.4f y=%.4f hw=%.4f hh=%.4f "
+                    "bz=[%.4f %.4f %.4f %.4f] "
+                    "b1=%d x2164=%d x2168=%d x2338x=%.4f b3=%d b2=%d\n",
+                    (unsigned) gm_8016AEDC(), (int) fp->player_id,
+                    (int) o->player_id, closest != NULL, (int) data->xF9_b0,
+                    (double) o->cur_pos.x, (double) o->cur_pos.y,
+                    (double) data->half_width, (double) data->half_height,
+                    (double) Stage_GetBlastZoneLeftOffset(),
+                    (double) Stage_GetBlastZoneRightOffset(),
+                    (double) Stage_GetBlastZoneBottomOffset(),
+                    (double) Stage_GetBlastZoneTopOffset(),
+                    (int) o->x2219_b1, (int) o->x2164, (int) o->x2168,
+                    (double) o->x2338.x, (int) o->x221F_b3,
+                    (int) o->x2224_b2);
+        }
+    }
+#endif
     if (closest == NULL) {
         data->xF9_b0 = false;
     } else {
