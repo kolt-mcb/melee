@@ -299,6 +299,58 @@ static void pc_trace_ailog(void)
                     {
                         HSD_JObj* b1 = vfp->parts[3].x4_jobj2;
                         pc_watch_jobj = b1;
+                        /* The animation's node list: one signed byte per
+                         * part saying how many tracks it carries. The attach
+                         * walk advances through the track array by whole
+                         * entries, so an extra or missing entry moves every
+                         * part after it onto its neighbour's tracks. */
+                        {
+                            /* lbanim.h is not in this file's includes and
+                             * pulling it in drags the whole animation header
+                             * set with it; the layout is fixed and short.
+                             * FigaTree: {s32 type; u32 flags; f32 frames;
+                             * s8* nodes; FigaTrack* tracks}. */
+                            const signed char* nd =
+                                (vfp->x590 != NULL)
+                                    ? *(signed char* const*) ((const char*)
+                                                                  vfp->x590 +
+                                                              16)
+                                    : NULL;
+                            int q;
+                            fprintf(stderr, "[NODES-PORT] gframe=%u p%d tree=%p",
+                                    (unsigned) gm_8016AEDC(), vslot,
+                                    (void*) vfp->x590);
+                            for (q = 0; nd != NULL && q < 0x60; q++) {
+                                if (nd[q] == -1) {
+                                    break;
+                                }
+                                fprintf(stderr, " %d", (int) nd[q]);
+                            }
+                            fprintf(stderr, "\n");
+                        }
+                        /* Fighter+0x598: the tree the streamed-in animation
+                         * lookup leaves behind -- the one the guard pose is
+                         * built from, converted to host widths. */
+                        {
+                            const signed char* nd2 =
+                                (vfp->x598 != NULL)
+                                    ? *(signed char* const*) ((const char*)
+                                                                  vfp->x598 +
+                                                              16)
+                                    : NULL;
+                            int q;
+                            fprintf(stderr,
+                                    "[NODES2-PORT] gframe=%u p%d tree=%p",
+                                    (unsigned) gm_8016AEDC(), vslot,
+                                    (void*) vfp->x598);
+                            for (q = 0; nd2 != NULL && q < 0x60; q++) {
+                                if (nd2[q] == -1) {
+                                    break;
+                                }
+                                fprintf(stderr, " %d", (int) nd2[q]);
+                            }
+                            fprintf(stderr, "\n");
+                        }
                         /* Every part's flag word, once per frame. The track
                          * walk in ftAnim_8006F4C8 advances its part index
                          * through these, so one that differs lands every
