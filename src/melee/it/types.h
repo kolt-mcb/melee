@@ -131,6 +131,14 @@ struct ItemAttr {
     s32 x80; // 0x80
 };
 
+/// A collision-dynamics descriptor: 0x14 bytes on the GameCube and here,
+/// read at it_8027163C's 802717C0 with a stride of 0x14.
+typedef struct ItCollDynDesc {
+    s32 bone_id;
+    Vec3 offset;
+    f32 size;
+} ItCollDynDesc;
+
 /// @sz{8}
 struct ItemDynamics {
     /// @todo Combine with ftDynamics? Can see in it_8027163C that this struct
@@ -140,6 +148,19 @@ struct ItemDynamics {
 
     /// @at{4} @sz{4}
     BoneDynamicsDesc* dyn_descs;
+
+#if BUILD_TARGET_PC
+    /* The GameCube record carries a second list right after the first: a
+     * count at +8 and a pointer at +0xC, the collision-dynamics descriptors
+     * that it_8027163C reads. Retail gets at them by casting this pointer to
+     * a struct whose first eight bytes are padding, which works only while a
+     * pointer is four bytes. Name them instead, and let both readers use the
+     * names. Unconverted, the cast read the low half of dyn_descs as a count
+     * and ran off the end of the record for the pointer -- a null deref on
+     * the first article that has any, measured at match frame 603. */
+    s32 coll_count;
+    ItCollDynDesc* coll_descs;
+#endif
 };
 
 /// @sz{10}

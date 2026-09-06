@@ -60,6 +60,15 @@ struct arch {
     unsigned long len;
     u32* bounds;  /* sorted, unique object starts: reloc targets + roots */
     unsigned nbounds;
+    /* Sorted, unique file offsets of the words the archive's relocation table
+     * patches -- that is, the words that are pointers. A stored offset of
+     * zero means two different things depending on whether it is in here: a
+     * relocated zero is a pointer to the start of the data section, and an
+     * unrelocated zero is a null pointer. Guessing "zero means null" left a
+     * dynamics descriptor with no data and crashed lb_80011710 on the first
+     * article that had one. */
+    u32* relocs;
+    unsigned nrelocs;
     unsigned gen;
     unsigned char* swapped; /* pc_script: bit per word, set at object start */
 };
@@ -95,6 +104,7 @@ void pc_itconv_note_archive(HSD_Archive* arc)
         struct arch* e = &g_arch[i];
         if (base < e->base + e->len && e->base < base + len) {
             free(e->bounds);
+            free(e->relocs);
             *e = g_arch[--g_arch_n];
         } else {
             i++;
@@ -103,6 +113,7 @@ void pc_itconv_note_archive(HSD_Archive* arc)
     if (g_arch_n >= ARCH_MAX) {
         /* Evict the oldest. */
         free(g_arch[0].bounds);
+        free(g_arch[0].relocs);
         memmove(&g_arch[0], &g_arch[1], sizeof(g_arch[0]) * (ARCH_MAX - 1));
         g_arch_n = ARCH_MAX - 1;
     }
@@ -143,7 +154,52 @@ void pc_itconv_note_archive(HSD_Archive* arc)
     a->len = len;
     a->bounds = b;
     a->nbounds = n;
+    a->relocs = NULL;
+    a->nrelocs = 0;
     a->gen = ++g_gen;
+
+    if (arc->header.nb_reloc != 0 && arc->reloc_info != NULL) {
+        u32* r = malloc(sizeof(u32) * arc->header.nb_reloc);
+        if (r != NULL) {
+            unsigned m = 0, w;
+            for (i = 0; i < arc->header.nb_reloc; i++) {
+                u32 off = arc->reloc_info[i].offset;
+                if (off + 4 <= len) {
+                    r[m++] = off;
+                }
+            }
+            qsort(r, m, sizeof(u32), cmp_u32);
+            for (i = 0, w = 0; i < m; i++) {
+                if (w == 0 || r[w - 1] != r[i]) {
+                    r[w++] = r[i];
+                }
+            }
+            a->relocs = r;
+            a->nrelocs = w;
+        }
+    }
+}
+
+/* True if the word at this file offset is one the archive relocates, i.e. a
+ * pointer field rather than a plain number. */
+static int arch_is_ptr(const struct arch* a, u32 off)
+{
+    unsigned lo = 0, hi = a->nrelocs;
+    if (a->relocs == NULL) {
+        return 0;
+    }
+    while (lo < hi) {
+        unsigned mid = lo + (hi - lo) / 2;
+        if (a->relocs[mid] == off) {
+            return 1;
+        }
+        if (a->relocs[mid] < off) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    return 0;
 }
 
 static struct arch* find_arch(const void* p)
@@ -452,6 +508,27 @@ static ItemDynamics* conv_dynamics(const struct arch* a, u32 off)
     if (out == NULL) {
         return NULL;
     }
+    /* The second list, at +8 and +0xC: the collision-dynamics descriptors
+     * it_8027163C copies into the item's xB6C_vars. Entries are 0x14 bytes,
+     * {bone_id, Vec3 offset, f32 size} -- the same size here, so a word swap
+     * is the whole conversion. Retail reaches them by casting this record to
+     * a view whose first eight bytes are padding; that stops working the
+     * moment a pointer is eight bytes, so they are named fields here. */
+    {
+        s32 ccount = (s32) be32(src + 8);
+        u32 coff = be32(src + 0xC);
+        if (ccount > 0 && ccount <= 32 && coff != 0 &&
+            coff + (u32) ccount * 0x14 <= a->len)
+        {
+            ItCollDynDesc* cd = zalloc(sizeof(ItCollDynDesc) *
+                                       (unsigned long) ccount);
+            if (cd != NULL) {
+                swap_words(cd, a->base + coff, (u32) ccount * 0x14);
+                out->coll_count = ccount;
+                out->coll_descs = cd;
+            }
+        }
+    }
     out->dyn_descs = zalloc(sizeof(BoneDynamicsDesc) * (unsigned long) count);
     if (out->dyn_descs == NULL) {
         return NULL;
@@ -459,17 +536,28 @@ static ItemDynamics* conv_dynamics(const struct arch* a, u32 off)
     for (i = 0; i < count; i++) {
         const u8* e = a->base + doff + (u32) i * 0x18;
         BoneDynamicsDesc* d = &out->dyn_descs[i];
+        u32 field = doff + (u32) i * 0x18 + 4;
         u32 data_off = be32(e + 4);
         u32 n = be32(e + 8);
+        int have = (data_off != 0) || arch_is_ptr(a, field);
         d->bone_id = (s32) be32(e);
         d->dyn_desc.count = n;
         swap_words(&d->dyn_desc.pos, e + 0xC, 12);
-        if (data_off != 0 && n <= 64 && data_off + n * 0x3C <= a->len) {
+        if (have && n <= 64 && data_off + n * 0x3C <= a->len) {
             void* inner = zalloc(n * 0x3C);
             if (inner != NULL) {
                 swap_words(inner, a->base + data_off, n * 0x3C);
                 d->dyn_desc.data = inner;
             }
+        } else {
+            /* lb_80011710 dereferences dyn_desc.data without checking, so a
+             * descriptor left NULL here is a crash later rather than a
+             * silently missing effect. Say which one and why. */
+            fprintf(stderr,
+                    "[ITCONV] conv_dynamics: bone %d desc data left NULL "
+                    "(off=%08x n=%u reloc=%d len=%08x)\n",
+                    (int) d->bone_id, (unsigned) data_off, (unsigned) n,
+                    arch_is_ptr(a, field), (unsigned) a->len);
         }
     }
     out->count = count;
