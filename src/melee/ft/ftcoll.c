@@ -2089,6 +2089,23 @@ void ftColl_8007925C(Fighter_GObj* gobj)
                 }
 
                 for (n = 0; n < fp->hurt_capsules_len; n++) {
+#if BUILD_TARGET_PC
+                    {
+                        static int want = -2;
+                        extern u32 gm_8016AEDC(void);
+                        if (want == -2) {
+                            const char* e = getenv("MELEE_HITTEST");
+                            want = (e != NULL) ? atoi(e) : -1;
+                        }
+                        if (want >= 0 && (int) gm_8016AEDC() == want) {
+                            fprintf(stderr,
+                                    "[HITLOOP] n=%d/%d b6=%d grab=%d\n",
+                                    (int) n, (int) fp->hurt_capsules_len,
+                                    (int) hurt->x42_b6,
+                                    (int) fp->hurt_capsules[n].is_grabbable);
+                        }
+                    }
+#endif
                     if ((u8) hurt->x42_b6 &&
                         !fp->hurt_capsules[n].is_grabbable)
                     {

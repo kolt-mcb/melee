@@ -1932,6 +1932,30 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
     MtxPtr var_r9;
     float var_f1;
 
+#if BUILD_TARGET_PC
+    /* MELEE_HITTEST=<gframe>: every hitbox-vs-hurtbox pair *offered* on that
+     * frame, before the state test, so a pair that is never compared is as
+     * visible as one that compares differently. */
+    {
+        static int want = -2;
+        extern u32 gm_8016AEDC(void);
+        if (want == -2) {
+            const char* e = getenv("MELEE_HITTEST");
+            want = (e != NULL) ? atoi(e) : -1;
+        }
+        if (want >= 0 && (int) gm_8016AEDC() == want) {
+            fprintf(stderr,
+                    "[HITOFFER] hit(%08x,%08x)-(%08x,%08x) hurt(%08x,%08x)"
+                    " scl=%08x st=%d skip=%d bone=%p bi=%d arg3=%d\n",
+                    *(u32*) &arg0->x58.x, *(u32*) &arg0->x58.y,
+                    *(u32*) &arg0->x4C.x, *(u32*) &arg0->x4C.y,
+                    *(u32*) &arg1->a_pos.x, *(u32*) &arg1->a_pos.y,
+                    *(u32*) &arg1->scale, (int) arg1->state,
+                    (int) arg1->skip_update_pos, (void*) arg1->bone,
+                    (int) arg1->bone_idx, (int) arg3);
+        }
+    }
+#endif
     if (arg1->state != HurtCapsule_Intangible) {
         if (!arg1->skip_update_pos) {
         PC_HB_NOTE(2, arg1);
@@ -1965,6 +1989,40 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
             var_f1 = arg0->scale * arg4;
         }
 
+#if BUILD_TARGET_PC
+        /* MELEE_HITTEST=<gframe>: every hitbox-vs-hurtbox pair tested on that
+         * frame, with the two segments, the two radii and the verdict. A hit
+         * that lands on one side and not the other is either a pair that was
+         * never tested or a test that answered differently, and nothing else
+         * tells them apart. */
+        {
+            static int want = -2;
+            extern u32 gm_8016AEDC(void);
+            if (want == -2) {
+                const char* e = getenv("MELEE_HITTEST");
+                want = (e != NULL) ? atoi(e) : -1;
+            }
+            if (want >= 0 && (int) gm_8016AEDC() == want) {
+                bool res = lbColl_80006E58(
+                    &arg0->x58, &arg0->x4C, &arg1->a_pos, &arg1->b_pos, &sp74,
+                    &sp68, var_r9, &arg0->hurt_coll_pos, &arg0->coll_distance,
+                    var_f1, arg1->scale, lbColl_804D7A38 * arg5);
+                fprintf(stderr,
+                        "[HITTEST] hit(%08x,%08x,%08x)-(%08x,%08x,%08x) r=%08x"
+                        " hurt(%08x,%08x,%08x)-(%08x,%08x,%08x) r=%08x"
+                        " bp=%08x mtx=%p -> %d\n",
+                        *(u32*) &arg0->x58.x, *(u32*) &arg0->x58.y,
+                        *(u32*) &arg0->x58.z, *(u32*) &arg0->x4C.x,
+                        *(u32*) &arg0->x4C.y, *(u32*) &arg0->x4C.z,
+                        *(u32*) &var_f1, *(u32*) &arg1->a_pos.x,
+                        *(u32*) &arg1->a_pos.y, *(u32*) &arg1->a_pos.z,
+                        *(u32*) &arg1->b_pos.x, *(u32*) &arg1->b_pos.y,
+                        *(u32*) &arg1->b_pos.z, *(u32*) &arg1->scale,
+                        *(u32*) &arg5, (void*) var_r9, (int) res);
+                return res;
+            }
+        }
+#endif
         return lbColl_80006E58(&arg0->x58, &arg0->x4C, &arg1->a_pos,
                                &arg1->b_pos, &sp74, &sp68, var_r9,
                                &arg0->hurt_coll_pos, &arg0->coll_distance,

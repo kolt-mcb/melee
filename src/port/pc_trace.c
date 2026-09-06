@@ -884,6 +884,57 @@ static void pc_trace_ftdump(void)
  * local Dolphin build prints the same format under the same variable; the two
  * structures do not share offsets -- the port's pointers are eight bytes --
  * so each side reads its own fields by name and the values line up. */
+/* MELEE_HURTDUMP=<slot>:<from>-<to>: the world-space hurt capsules the hit
+ * test uses. Two sides whose traced position, motion and animation frame all
+ * agree can still disagree about whether an attack reached; this is the only
+ * thing that says so. The local Dolphin build prints [HURT-REF] under the
+ * same variable. */
+static void pc_trace_hurtdump(void)
+{
+    const char* hd = getenv("MELEE_HURTDUMP");
+    int hslot = -1;
+    unsigned hfrom = 0, hto = 0xFFFFFFFFu;
+    unsigned gf;
+    StaticPlayer* sp;
+    HSD_GObj* g;
+    Fighter* fp;
+    int k;
+
+    if (hd == NULL) {
+        return;
+    }
+    if (sscanf(hd, "%d:%u-%u", &hslot, &hfrom, &hto) != 3 &&
+        sscanf(hd, "%d:%u", &hslot, &hfrom) != 2)
+    {
+        return;
+    }
+    gf = (unsigned) gm_8016AEDC();
+    if (gf < hfrom || gf > hto) {
+        return;
+    }
+    sp = Player_GetPtrForSlot(hslot);
+    g = (sp != NULL) ? sp->player_entity[0] : NULL;
+    fp = (g != NULL) ? (Fighter*) g->user_data : NULL;
+    if (fp == NULL) {
+        return;
+    }
+    fprintf(stderr, "[HURT-PORT] p%d gframe=%u n=%d", hslot, gf,
+            (int) fp->hurt_capsules_len);
+    for (k = 0; k < (int) fp->hurt_capsules_len && k < 15; k++) {
+        const HurtCapsule* c = &fp->hurt_capsules[k].capsule;
+        fprintf(stderr,
+                " [%d st=%08x scl=%08x a=(%08x,%08x,%08x)"
+                " b=(%08x,%08x,%08x) h=%d g=%d bi=%d]",
+                k, (unsigned) c->state, *(const u32*) &c->scale,
+                *(const u32*) &c->a_pos.x, *(const u32*) &c->a_pos.y,
+                *(const u32*) &c->a_pos.z, *(const u32*) &c->b_pos.x,
+                *(const u32*) &c->b_pos.y, *(const u32*) &c->b_pos.z,
+                (int) fp->hurt_capsules[k].height,
+                (int) fp->hurt_capsules[k].is_grabbable, (int) c->bone_idx);
+    }
+    fprintf(stderr, "\n");
+}
+
 static void pc_trace_ecbdump(void)
 {
     const char* spec = getenv("MELEE_ECBDUMP");
@@ -988,6 +1039,7 @@ void pc_trace_frame(int frame)
 
     pc_trace_items();
     pc_trace_itang();
+    pc_trace_hurtdump();
     pc_trace_animid();
     pc_trace_grlink();
     pc_trace_ailog();
