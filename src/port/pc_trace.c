@@ -290,16 +290,6 @@ static void pc_trace_ailog(void)
                             *(const unsigned*) &vfp->input.lstick.y,
                             *(const unsigned*) &vfp->dmg.x18d8.kb_applied1,
                             *(const unsigned*) &vfp->dmg.x1830_percent);
-                    fprintf(stderr, "[FTECB-PORT] gframe=%u p%d",
-                            (unsigned) gm_8016AEDC(), vslot);
-                    for (q = 0; q < 6; q++) {
-                        Vec3 jp;
-                        lb_8000B1CC(vfp->coll_data.ecb_source.x10C_joint[q],
-                                    NULL, &jp);
-                        fprintf(stderr, " %08x,%08x",
-                                *(const unsigned*) &jp.x,
-                                *(const unsigned*) &jp.y);
-                    }
                     /* Mirror of the console's [BLPART-REF]: the two joints
                      * of part 3, the one whose blend takes a different path
                      * on the two sides. */
@@ -319,6 +309,16 @@ static void pc_trace_ailog(void)
                                 b2 ? *(const unsigned*) &b2->rotate.y : 0,
                                 b2 ? *(const unsigned*) &b2->rotate.z : 0,
                                 b2 ? (unsigned) b2->flags : 0);
+                    }
+                    fprintf(stderr, "[FTECB-PORT] gframe=%u p%d",
+                            (unsigned) gm_8016AEDC(), vslot);
+                    for (q = 0; q < 6; q++) {
+                        Vec3 jp;
+                        lb_8000B1CC(vfp->coll_data.ecb_source.x10C_joint[q],
+                                    NULL, &jp);
+                        fprintf(stderr, " %08x,%08x",
+                                *(const unsigned*) &jp.x,
+                                *(const unsigned*) &jp.y);
                     }
                     fprintf(stderr, " ecbby=%08x blend=%08x bf=%08x",
                             *(const unsigned*) &vfp->coll_data.ecb.bottom.y,
