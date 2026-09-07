@@ -286,6 +286,17 @@ void Fighter_LoadCommonData(void)
             const u32* offs = (const u32*)raw;
             u32 fsize = arc->header.file_size;
             u32 off0, off4;
+            /* The colour-overlay scripts converted below live in this data
+             * section and jump within it by file offset, so pc_script_target
+             * has to be able to find the section from a pointer into it.
+             * Unregistered, every Goto in a colanim script resolved to NULL
+             * and ended the script: Pikachu's ran four iterations of its loop
+             * instead of continuing, and the gfx 0x412 it spawns each pass
+             * stopped, which is where sync_title's RNG streams parted. */
+            {
+                extern void pc_ftconv_note_archive(const u8*, unsigned long);
+                pc_ftconv_note_archive(dataBase, fsize);
+            }
             #define PC_BE32(x) __builtin_bswap32(x)
             off0 = PC_BE32(offs[0]);
             off4 = PC_BE32(offs[4]);

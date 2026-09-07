@@ -180,6 +180,18 @@ bool lb_80014258(Fighter_GObj* gobj, void* arg1, FtCmd2 cmd)
         pc_script_prepare(co->x8_ptr1);
 #endif
         u32 opcode = co->x8_ptr1->unk.unk;
+#if BUILD_TARGET_PC
+        /* MELEE_COLOPS=1: the colour-overlay command stream as executed.
+         * This interpreter runs a second script per fighter, carries GFX
+         * spawns of its own, and nothing traced shows where it is. */
+        if (getenv("MELEE_COLOPS") != NULL) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr,
+                    "[COLOPS] gframe=%u pc=%p op=%u loop=%d cnt=%d\n",
+                    (unsigned) gm_8016AEDC(), (void*) co->x8_ptr1,
+                    (unsigned) opcode, (int) co->xC_loop, (int) co->x14);
+        }
+#endif
         if (!Command_Execute((CommandInfo*) co, opcode)) {
             if (opcode < 0x15U) {
                 u32 idx = opcode - 0xA;
