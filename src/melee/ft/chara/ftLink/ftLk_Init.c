@@ -338,16 +338,9 @@ void ftLk_Init_OnLoad(HSD_GObj* gobj)
     ftLk_DatAttrs* da = fp->ft_data->ext_attr;
     void** item_list = fp->ft_data->x48_items;
     float airlw_end = lbAnim_8001E8F8(ftData_80085E50(fp, 72));
-    da->attackairlw_hit_anim_frame_end = airlw_end;
+    PC_ATTR_STORE(da->attackairlw_hit_anim_frame_end, airlw_end);
     PUSH_ATTRS(fp, ftLk_DatAttrs);
     da = fp->dat_attrs;
-#if BUILD_TARGET_PC
-    /* Written into the still-big-endian archive block above and byteswapped
-     * by PUSH_ATTRS on its way across; put it back on the converted side. */
-    if (da != NULL) {
-        da->attackairlw_hit_anim_frame_end = airlw_end;
-    }
-#endif
     it_8026B3F8(item_list[0], da->x48);
     it_8026B3F8(item_list[1], da->x2C);
     it_8026B3F8(item_list[2], da->xBC);
