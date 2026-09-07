@@ -321,6 +321,31 @@ def cmd_report(a):
                  ("  [" + ",".join(sorted(set(other))) + "]") if other else ""))
     print("\n%d stages identical, %d part at the start of the match, "
           "%d drift, %d neither" % (nident, nstart, ndrift, nother))
+
+    # And the same cells down the other axis. A stage row and a character row
+    # answer different questions, and a bug shows up as a whole row in one of
+    # them: Peach parting on match frame 35 on nearly every stage is a Peach
+    # bug, and every character parting on frame 1 on one stage is a stage bug.
+    byc = {}
+    for k, v in res.items():
+        p = k.split(",")
+        byc.setdefault(int(p[0]), []).append(v)
+    print("\n%-12s %4s %5s %5s %5s  %s"
+          % ("character", "n", "ident", "start", "drift",
+             "where the drifts part"))
+    for ck in sorted(byc):
+        rows = byc[ck]
+        ident = [v for v in rows if v["verdict"] == "identical"]
+        div = [v for v in rows if v["verdict"] == "diverged"]
+        # Split the same way the stage table does. A character's own bugs are
+        # in the drift column: the frame-1 failures belong to the stage and
+        # would be there whoever was standing on it.
+        start = [v for v in div if v.get("frame", 0) <= 1]
+        drift = sorted((v.get("frame", 0), v.get("field", "")) for v in div
+                       if v.get("frame", 0) > 1)
+        print("%-12s %4d %5d %5d %5d  %s"
+              % (mx.CHARS[ck], len(rows), len(ident), len(start), len(drift),
+                 ", ".join("%d:%s" % d for d in drift[:4])))
     return 0
 
 
