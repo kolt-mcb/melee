@@ -484,6 +484,39 @@ void Fighter_LoadCommonData(void)
                     }
                 }
             }
+            /* Symbol 2, Fighter_804D654C: the item-swing speed table, a
+             * plain [swing_type][5] array of floats. ftCo_Attack_800CCF58
+             * reads f = Fighter_804D654C[swing_type][arg1] and hands it to
+             * Fighter_ChangeMotionState as the animation speed, so on the
+             * zero arena every item swing ran at speed 0: the animation
+             * stopped on its first frame and ftAnim_8006F3DC then reported
+             * that frame forever. Same window trick as the throw table --
+             * these are floats, so byte-swapping the file either side of the
+             * symbol is the whole conversion. */
+            {
+                u32 off2 = PC_BE32(offs[2]);
+                static u8 pc_swingtbl[0x400];
+                if (off2 != 0 && off2 < fsize) {
+                    u32 lo2 = off2 > 0x100 ? off2 - 0x100 : 0;
+                    u32 hi2 = off2 + 0x300 < fsize ? off2 + 0x300 : fsize;
+                    u32 k2;
+                    for (k2 = 0; lo2 + k2 * 4 + 4 <= hi2 &&
+                                 k2 * 4 < sizeof(pc_swingtbl);
+                         k2++)
+                    {
+                        u32 w = PC_BE32(((const u32*) (dataBase + lo2))[k2]);
+                        memcpy(pc_swingtbl + k2 * 4, &w, 4);
+                    }
+                    Fighter_804D654C =
+                        (float(*)[5]) (pc_swingtbl + (off2 - lo2));
+                    PORT_LOG_WARN("Fighter_LoadCommonData: item-swing speed "
+                                  "table converted (%.3f %.3f %.3f %.3f)\n",
+                                  (double) Fighter_804D654C[0][0],
+                                  (double) Fighter_804D654C[0][1],
+                                  (double) Fighter_804D654C[5][0],
+                                  (double) Fighter_804D654C[5][1]);
+                }
+            }
             /* Symbol 5, Fighter_804D6540: the per-kind "skip this part slot"
              * list that ftParts_8007506C consults. Leaving it on the zero
              * arena silently disabled the skip mechanism for everyone, which
@@ -683,7 +716,11 @@ void Fighter_LoadCommonData(void)
         if (Fighter_804D6550 == NULL) {
             Fighter_804D6550 = (void*)pc_ptr_arena;
         }
-        Fighter_804D654C = (void*)pc_ptr_arena;
+        /* Guarded like the throw table above: converted, an unguarded
+         * assignment here silently undoes it. */
+        if (Fighter_804D654C == NULL) {
+            Fighter_804D654C = (void*)pc_ptr_arena;
+        }
         if (Fighter_804D6548 == NULL) {
             Fighter_804D6548 = (void*)pc_ptr_arena;
         }
