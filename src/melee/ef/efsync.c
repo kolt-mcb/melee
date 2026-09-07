@@ -48,6 +48,13 @@ void* efSync_Spawn(s32 gfx_id, HSD_GObj* gobj, ...)
         extern u32 pc_frame_number;
         fprintf(stderr, "[EF] spawn gfx %d gobj %p frame %u\n", gfx_id, (void*) gobj, pc_frame_number);
     }
+    /* MELEE_EFREQ=1: every effect spawn request by id, on the match clock, so
+     * it lines up with the console breakpoint on the same function. */
+    if (getenv("MELEE_EFREQ") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[EFSPAWN] gframe=%u id=%x\n",
+                (unsigned) gm_8016AEDC(), (unsigned) gfx_id);
+    }
 #endif
     va_list vlist;
     Vec3 translate;

@@ -5390,6 +5390,16 @@ s32 hsd_803991D8(HSD_Generator* gen, HSD_JObj* jobj, f32 force, f32 range)
 
 // @TODO: Currently 93.95% match - register allocation differences (stmw
 // r20 vs r21), r27/r28 swap, and PC advance codegen patterns
+#if BUILD_TARGET_PC
+/* src/port/pc_trace.c reads the live particle lists through this: they are
+ * file-static, and the probe has to run at the frame boundary the trace runs
+ * at, not inside the update -- the update runs more than once a frame. */
+void** pc_particle_lists(void)
+{
+    return (void**) hsd_804D0908;
+}
+#endif
+
 void* hsd_8039930C(void* pp_arg, void* prev_arg)
 {
     HSD_Particle* pp = pp_arg;
@@ -5896,6 +5906,20 @@ void* hsd_8039930C(void* pp_arg, void* prev_arg)
                     idx = (pc[0] << 8) + pc[1];
                     flags = pc[2];
                     pc += 3;
+#if BUILD_TARGET_PC
+                    /* MELEE_PSSPAWN=1: every 0xEF spawn, with the particle
+                     * that ran it. The generator it makes is invisible in the
+                     * generator list until the next frame, and the particle
+                     * that ran it can be born and die inside one frame. */
+                    if (getenv("MELEE_PSSPAWN") != NULL) {
+                        extern u32 gm_8016AEDC(void);
+                        fprintf(stderr,
+                                "[PSSPAWN] gframe=%u idnum=%d idx=%d "
+                                "flags=%02x\n",
+                                (unsigned) gm_8016AEDC(), (int) pp->idnum,
+                                idx, (unsigned) flags);
+                    }
+#endif
                     gchild = hsd_8039F05C(pp->linkNo, pp->bank, idx);
                     if (gchild == NULL) {
                         break;

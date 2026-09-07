@@ -47,6 +47,7 @@
 #include <melee/lb/lb_00B0.h>
 #include <melee/pl/player.h>
 #include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/psstructs.h>
 #include <sysdolphin/baselib/gobj.h>
 
 /* MELEE_BLENDAT's one-joint write watch; see pc_jobj_note below. */
@@ -229,6 +230,35 @@ static void pc_trace_items(void)
         }
     }
     fprintf(stderr, "%s\n", n == 0 ? " (none)" : "");
+}
+
+/* MELEE_PTCLIST=1: every live particle, once per frame, in the order the
+ * update walks them -- same format the local Dolphin build prints under the
+ * same variable. Particles run the command lists that spawn generators, so a
+ * particle whose command pointer is a step behind emits on a different frame
+ * and parts the RNG streams, with nothing in the generator list to show it. */
+static void pc_trace_ptclist(void)
+{
+    extern void** pc_particle_lists(void);
+    void** lists;
+    int q;
+    if (getenv("MELEE_PTCLIST") == NULL) {
+        return;
+    }
+    lists = pc_particle_lists();
+    fprintf(stderr, "[PTCLIST] gframe=%u", (unsigned) gm_8016AEDC());
+    for (q = 0; q < 16; q++) {
+        HSD_Particle* pq = (HSD_Particle*) lists[q];
+        int n = 0;
+        while (pq != NULL && n < 256) {
+            fprintf(stderr, " [%d,%d,%d,%d,%d,%d]", q, (int) pq->bank,
+                    (int) pq->idnum, (int) pq->life, (int) pq->cmdPtr,
+                    (int) pq->cmdWait);
+            pq = pq->next;
+            n++;
+        }
+    }
+    fprintf(stderr, "\n");
 }
 
 /* MELEE_ITJOINT=<kind>: one item kind's joint tree, local transforms and all,
@@ -1246,6 +1276,7 @@ void pc_trace_frame(int frame)
     pc_trace_items();
     pc_trace_itang();
     pc_trace_itjoint();
+    pc_trace_ptclist();
     pc_trace_hurtdump();
     pc_trace_pctdump();
     pc_trace_camdump();
