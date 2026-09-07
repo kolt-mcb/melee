@@ -215,6 +215,47 @@ static void pc_trace_items(void)
     fprintf(stderr, "%s\n", n == 0 ? " (none)" : "");
 }
 
+/* MELEE_ITJOINT=<kind>: one item kind's joint tree, local transforms and all,
+ * once per frame. A held item's grip joint is what the throw releases from, so
+ * a joint that is animated on the console and static here moves the release
+ * point without moving anything the trace carries. */
+static void pc_trace_itjoint(void)
+{
+    static int want = -2;
+    HSD_GObj* gobj;
+    if (want == -2) {
+        const char* e = getenv("MELEE_ITJOINT");
+        want = (e != NULL) ? atoi(e) : -1;
+    }
+    if (want < 0 || HSD_GObj_Entities == NULL) {
+        return;
+    }
+    for (gobj = ((HSD_GObj**) HSD_GObj_Entities)[9]; gobj != NULL;
+         gobj = gobj->next)
+    {
+        Item* ip = (Item*) gobj->user_data;
+        HSD_JObj* j;
+        int k;
+        if (ip == NULL || (int) ip->kind != want) {
+            continue;
+        }
+        j = (HSD_JObj*) gobj->hsd_obj;
+        for (k = 0; k < 3 && j != NULL; k++, j = j->child) {
+            fprintf(stderr,
+                    "[ITJOINT] gframe=%u kind=%d %d tr=(%08x,%08x,%08x) "
+                    "rot=(%08x,%08x,%08x) m=(%08x,%08x) fl=%08x aobj=%p\n",
+                    (unsigned) gm_8016AEDC(), (int) ip->kind, k,
+                    *(const u32*) &j->translate.x,
+                    *(const u32*) &j->translate.y,
+                    *(const u32*) &j->translate.z,
+                    *(const u32*) &j->rotate.x, *(const u32*) &j->rotate.y,
+                    *(const u32*) &j->rotate.z, *(const u32*) &j->mtx[0][3],
+                    *(const u32*) &j->mtx[1][3], (unsigned) j->flags,
+                    (void*) j->aobj);
+        }
+    }
+}
+
 /* MELEE_ITANG=<kind>: the ECB rotation angle one item kind is carrying, and
  * where it came from. An item at rest has angle 0 on the console; a port that
  * keeps a stale angle rests the item below the floor by the difference. */
@@ -1113,6 +1154,7 @@ void pc_trace_frame(int frame)
 
     pc_trace_items();
     pc_trace_itang();
+    pc_trace_itjoint();
     pc_trace_hurtdump();
     pc_trace_pctdump();
     pc_trace_camdump();
