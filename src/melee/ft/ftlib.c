@@ -260,6 +260,26 @@ float ftLib_800864A8(Vec3* v, HSD_GObj* gobj)
             }
 
             ftLib_800866DC(cur, &vec);
+#if BUILD_TARGET_PC
+            /* MELEE_FACEPICK=1: the left/right vote that decides which way a
+             * spawned item faces. A tie is broken with a random draw, so the
+             * vote itself has to agree or the two sides' RNG streams part. */
+            {
+                static int on = -1;
+                extern u32 gm_8016AEDC(void);
+                if (on < 0) {
+                    on = getenv("MELEE_FACEPICK") != NULL;
+                }
+                if (on) {
+                    fprintf(stderr,
+                            "[FACEPICK] gframe=%u cur=%p bone=(%08x) v=(%08x)"
+                            " sgn=%d running=%d\n",
+                            (unsigned) gm_8016AEDC(), (void*) cur,
+                            *(u32*) &vec.x, *(u32*) &v->x,
+                            (int) sgn(vec.x - v->x), (int) result);
+                }
+            }
+#endif
             result += sgn(vec.x - v->x);
         }
     }

@@ -605,6 +605,48 @@ void ftCo_80095EFC(Fighter_GObj* gobj)
                                         base_throw_speed, cd_xB4, throw_speed,
                                         vec0.x, vec0.y, fsm);
                         }
+#if BUILD_TARGET_PC
+                        /* MELEE_THROWPOS=1: where a thrown item is released
+                         * from. vec0 is the item's attach bone, x8 the throw
+                         * target the move recorded, fsm how far through the
+                         * throw the release is. */
+                        {
+                            static int on = -1;
+                            extern u32 gm_8016AEDC(void);
+                            if (on < 0) {
+                                on = getenv("MELEE_THROWPOS") != NULL;
+                            }
+                            if (on) {
+                                fprintf(stderr,
+                                        "[THROWPOS] gframe=%u m=%d fsm=%08x "
+                                        "vec0=(%08x,%08x) x8=(%08x,%08x) "
+                                        "vec2=(%08x,%08x) timer=%08x "
+                                        "fsmul=%08x attach=%d bones=%u "
+                                        "bits=%02x jobj=%p\n",
+                                        (unsigned) gm_8016AEDC(),
+                                        (int) fp->motion_id, *(u32*) &fsm,
+                                        *(u32*) &vec0.x, *(u32*) &vec0.y,
+                                        *(u32*) &fp->mv.co.itemthrow4.x8.x,
+                                        *(u32*) &fp->mv.co.itemthrow4.x8.y,
+                                        *(u32*) &vec2.x, *(u32*) &vec2.y,
+                                        *(u32*) &fp->cmd_timer,
+                                        *(u32*) &fp->frame_speed_mul,
+                                        (int) ((Item*) fp->item_gobj
+                                                   ->user_data)
+                                            ->xC4_article_data->x10_modelDesc
+                                            ->x8_bone_attach_id,
+                                        (unsigned) ((Item*) fp->item_gobj
+                                                        ->user_data)
+                                            ->xC4_article_data->x10_modelDesc
+                                            ->x4_bone_count,
+                                        (unsigned) ((Item*) fp->item_gobj
+                                                        ->user_data)
+                                            ->xC4_article_data->x10_modelDesc
+                                            ->xC_bit_field,
+                                        (void*) it_80272C90(fp->item_gobj));
+                            }
+                        }
+#endif
                         {
                             FtMoveId msid = fp->motion_id;
                             if (msid == (FtMoveId) ftCo_MS_LightThrowDrop) {
