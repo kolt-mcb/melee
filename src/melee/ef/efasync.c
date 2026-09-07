@@ -74,6 +74,17 @@ static inline void efAsync_SetEffectFacingDir(EF_Effect* effect,
  */
 void* efAsync_Dispatch(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_EFREQ=1: every async effect request, by id. An effect the console
+     * starts and this side does not spends a generator's worth of RNG draws,
+     * and nothing in the particle or generator lists shows which request went
+     * missing. */
+    if (getenv("MELEE_EFREQ") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[EFREQ] gframe=%u id=%x gobj=%p\n",
+                (unsigned) gm_8016AEDC(), (unsigned) gfx_id, (void*) gobj);
+    }
+#endif
     Vec3 translate;
     Vec3 scale;
     HSD_Generator* generator;
@@ -1532,6 +1543,18 @@ void efAsync_Spawn(HSD_GObj* gobj, void* queue_head, u32 spawn_kind,
     va_end(vlist);
 #else
     va_end(sp80);
+#endif
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_EFREQ") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr,
+                "[EFQUEUE] gframe=%u id=%x kind=%u defer=%d ret=%p\n",
+                (unsigned) gm_8016AEDC(), (unsigned) queued->gfx_id,
+                (unsigned) spawn_kind,
+                (int) ((HSD_GObj_804D7838 != NULL) &&
+                       (HSD_GObj_804D7838->s_link < 9U)),
+                __builtin_return_address(0));
+    }
 #endif
     if ((HSD_GObj_804D7838 != NULL) && (HSD_GObj_804D7838->s_link < 9U)) {
         queued->next = ((EF_QueuedEffect*) queue_head)->next;
