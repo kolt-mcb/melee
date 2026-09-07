@@ -2,8 +2,9 @@
 """Every character on every stage, judged by the state trace.
 
     tools/pc_matrix.py run [--chars 0-25] [--stages 2-32] [--frames 240]
+    tools/pc_matrix.py run --pair rotate        # every cell, two characters
     tools/pc_matrix.py run --update-baseline
-    tools/pc_matrix.py show
+    tools/pc_matrix.py show [--pair rotate]
     tools/pc_matrix.py list
 
 The other suites compare the port against the console, which pins them to the
@@ -22,6 +23,25 @@ whether their animations advanced. Those are cheap to check and they catch the
 failures this matrix is for -- a character that never spawns on one stage, a
 stage whose collision drops everyone through the floor, a fighter frozen on
 frame one.
+
+There are two passes over the same grid. --pair mirror (the default) puts the
+character in both slots and asks whether it stands up on the stage at all;
+that is the question the recorded baseline answers, and its cells keep their
+bare "char,stage" keys. --pair rotate puts a different character in the second
+slot -- the one half a roster away, so every cell still covers every character
+-- and asks the other half: a good deal of the port's data is per-pair rather
+than per-character (the grab and throw tables, one fighter's hitboxes against
+another's hurtboxes, a held item's article), and a mirror match never has two
+characters' data live at once. Its cells are keyed "char,stage,r".
+
+Both passes also record which of the port's own NULL guards each cell tripped.
+A guard firing is not a failure -- turning a bad pointer into a skipped step is
+what it is for -- but it marks data the port did not convert, and this suite
+used to discard that evidence on every cell that passed. Several root causes
+found in the frame-by-frame work sat behind a guard exactly like this, so the
+report names each site with how much of the matrix reaches it: a site that
+fires for one character is that character's data, one that fires everywhere is
+something structural.
 
 Results are written to tests/pc/matrix.json as they are produced, so a run of
 this size can be interrupted and resumed, and `run` skips cells it already has
@@ -153,7 +173,30 @@ def judge(trace_path, rc, frames):
 
 # ------------------------------------------------------------------ running
 
-def run_cell(ck, st, frames, timeout):
+GUARD_RE = re.compile(r"GUARD SKIP \[([^\]]+)\]")
+
+
+def guard_sites(path):
+    """The distinct port guards a run tripped.
+
+    port_guard_warn logs "GUARD SKIP [site]" the first few times each site
+    fires. A guard firing is not a failure -- that is the point of it, it
+    turns a NULL deref into a skipped step -- but it does mark data the port
+    did not convert, and this suite used to throw the evidence away on every
+    cell that passed. Every root cause found in the lockstep work of
+    2026-09-06/07 (the per-part animation table, the dynamics blend table,
+    the mushroom's animations) sat behind a guard exactly like this, so a
+    passing cell that trips one is worth naming.
+    """
+    try:
+        with open(path, "rb") as f:
+            return sorted({m.group(1) for m in
+                           GUARD_RE.finditer(f.read().decode("utf-8", "replace"))})
+    except OSError:
+        return []
+
+
+def run_cell(ck, st, frames, timeout, opponent=None):
     trace = "/tmp/pc_matrix.trace"
     if os.path.exists(trace):
         os.unlink(trace)
@@ -167,7 +210,8 @@ def run_cell(ck, st, frames, timeout):
         time.sleep(0.5)
     env = dict(os.environ)
     env.update({"MELEE_BOOT_MODE": "14",
-                "MELEE_BOOT_MATCH": "%d,%d,%d" % (ck, ck, st),
+                "MELEE_BOOT_MATCH": "%d,%d,%d" % (ck, ck if opponent is None
+                                                  else opponent, st),
                 "MELEE_BOOT_STOCKS": "3",
                 "MELEE_MAX_FRAMES": str(frames),
                 "MELEE_TRACE": trace,
@@ -195,12 +239,15 @@ def run_cell(ck, st, frames, timeout):
     # and truncated to its tail when it does not: a stage that asserts every
     # frame can produce millions of lines (Big Blue once filled the disk this
     # way), and the backtrace is at the end regardless.
-    raw = "/tmp/pc_matrix.out.%d_%d" % (ck, st)
+    raw = "/tmp/pc_matrix.out.%d_%d_%s" % (ck, st, opponent)
     with open(raw, "w") as out:
         rc = subprocess.run(["timeout", "-s", "KILL", str(timeout), PORT],
                             cwd=REPO, env=env, stdout=out,
                             stderr=subprocess.STDOUT).returncode
     verdict, info = judge(trace, rc, frames)
+    guards = guard_sites(raw)
+    if guards:
+        info["guards"] = guards
     if verdict == "ok":
         os.unlink(raw)
     else:
@@ -216,7 +263,25 @@ def load(path):
     return json.load(open(path)) if os.path.exists(path) else {}
 
 
-def run(chars, stages, frames, timeout, redo, update):
+def opponent_for(ck, chars, pair):
+    """Who this character fights.
+
+    "mirror" is the suite's original question -- does this character stand up
+    on this stage at all -- and it is the one the recorded baseline answers.
+    "rotate" asks the other half: half the port's data is per-pair rather than
+    per-character (the item a fighter is holding, the grab and throw tables,
+    the hurtbox against someone else's hitbox), and a mirror match never
+    exercises two different characters' data at once. Pairing i with
+    i + half the roster keeps every character in every cell while making the
+    opponent different from itself, which is the cheapest arrangement that
+    covers the second question in the same number of runs as the first.
+    """
+    if pair == "mirror":
+        return None
+    return chars[(chars.index(ck) + len(chars) // 2) % len(chars)]
+
+
+def run(chars, stages, frames, timeout, redo, update, pair="mirror"):
     # --redo means "run these cells again even though they are already
     # recorded", not "throw the file away". Starting from {} here discarded
     # every cell outside the requested subset: a two-cell --redo turned an
@@ -226,16 +291,22 @@ def run(chars, stages, frames, timeout, redo, update):
     total = len(chars) * len(stages)
     done = 0
     t0 = time.time()
+    # "mirror" keys stay bare so the recorded baseline keeps applying to them;
+    # a rotated cell is a different run and gets its own key.
+    suffix = "" if pair == "mirror" else ",r"
     for st in stages:
         for ck in chars:
-            key = "%d,%d" % (ck, st)
+            key = "%d,%d%s" % (ck, st, suffix)
             done += 1
             if STAGES.get(st) in ABSENT_FROM_DISC:
                 results[key] = {"verdict": "absent-from-disc"}
                 continue
             if key in results and not redo:
                 continue
-            verdict, info = run_cell(ck, st, frames, timeout)
+            opp = opponent_for(ck, chars, pair)
+            verdict, info = run_cell(ck, st, frames, timeout, opp)
+            if opp is not None:
+                info["vs"] = CHARS.get(opp, opp)
             if verdict == "never-landed":
                 # Some stages hand you the ground on a cycle rather than
                 # immediately -- Mute City's platform arrives well after the
@@ -244,7 +315,7 @@ def run(chars, stages, frames, timeout, redo, update):
                 # A window too short to see the ground is not the same claim
                 # as a stage with no ground, so this one verdict gets a longer
                 # look before it is believed.
-                verdict, info = run_cell(ck, st, frames * 3, timeout * 3)
+                verdict, info = run_cell(ck, st, frames * 3, timeout * 3, opp)
                 info["retried"] = True
             results[key] = {"verdict": verdict, **info}
             # Write to a temp file and rename. Writing in place means a
@@ -256,19 +327,22 @@ def run(chars, stages, frames, timeout, redo, update):
                 json.dump(results, f, indent=0, sort_keys=True)
             os.replace(tmp, RESULTS)
             rate = (time.time() - t0) / max(done, 1)
-            print("%-10s %-12s %-16s  (%d/%d, ~%.0f min left)"
-                  % (CHARS.get(ck, ck), STAGES.get(st, st), verdict, done,
+            print("%-10s %-10s %-12s %-16s  (%d/%d, ~%.0f min left)"
+                  % (CHARS.get(ck, ck),
+                     "" if opp is None else "vs " + CHARS.get(opp, str(opp)),
+                     STAGES.get(st, st), verdict, done,
                      total, rate * (total - done) / 60),
                   flush=True)
     if update:
         json.dump({k: v["verdict"] for k, v in results.items()},
                   open(BASELINE, "w"), indent=0, sort_keys=True)
         print("baseline updated: %s" % os.path.relpath(BASELINE, REPO))
-    return report(results, chars, stages)
+    return report(results, chars, stages, pair)
 
 
-def report(results, chars, stages):
+def report(results, chars, stages, pair="mirror"):
     base = load(BASELINE)
+    suffix = "" if pair == "mirror" else ",r"
     # One row per stage, one column per character: the point of a matrix is
     # seeing whether a failure follows the stage or the character.
     marks = {"ok": ".", "no-match": "M", "fighter-missing": "F",
@@ -280,7 +354,7 @@ def report(results, chars, stages):
     for st in stages:
         line = ""
         for ck in chars:
-            r = results.get("%d,%d" % (ck, st))
+            r = results.get("%d,%d%s" % (ck, st, suffix))
             if r is None:
                 # Not run yet: a partial matrix should read as blank rather
                 # than as an unrecognised verdict.
@@ -290,7 +364,7 @@ def report(results, chars, stages):
             line += marks.get(v, "?")
             if r and v not in ("ok", "absent-from-disc"):
                 fails.setdefault(v, []).append((ck, st))
-            was = base.get("%d,%d" % (ck, st))
+            was = base.get("%d,%d%s" % (ck, st, suffix))
             if was == "ok" and r and v != "ok":
                 regressed.append((ck, st, v))
         print("%3d  %s  %s" % (st, line, STAGES.get(st, "")))
@@ -301,6 +375,32 @@ def report(results, chars, stages):
                           for c, s in cells[:6])
         print("\n%-16s %3d cells: %s%s"
               % (v, len(cells), names, " ..." if len(cells) > 6 else ""))
+    # A guard that fires is data the port did not convert. The cell still
+    # passes -- that is what the guard is for -- so this is reported next to
+    # the verdicts rather than as one, ordered by how much of the matrix trips
+    # it: a site that fires on one character is that character's data, a site
+    # that fires everywhere is something structural.
+    guards = {}
+    for st in stages:
+        for ck in chars:
+            r = results.get("%d,%d%s" % (ck, st, suffix)) or {}
+            for site in r.get("guards", []):
+                g = guards.setdefault(site, {"cells": 0, "chars": set(),
+                                             "stages": set()})
+                g["cells"] += 1
+                g["chars"].add(CHARS.get(ck, ck))
+                g["stages"].add(STAGES.get(st, st))
+    if guards:
+        print("\nport guards tripped (cells still pass; each is unconverted "
+              "data):")
+        for site, g in sorted(guards.items(), key=lambda kv: -kv[1]["cells"]):
+            who = ("all %d chars" % len(g["chars"]) if len(g["chars"]) > 4
+                   else ",".join(sorted(g["chars"])))
+            where = ("all %d stages" % len(g["stages"])
+                     if len(g["stages"]) > 4 else
+                     ",".join(sorted(str(x) for x in g["stages"])))
+            print("  %-44s %4d cells  %s on %s" % (site, g["cells"], who, where))
+
     if regressed:
         print("\nREGRESSED (%d):" % len(regressed))
         for ck, st, v in regressed[:20]:
@@ -333,6 +433,12 @@ def main():
                          "can take far longer, and a tight limit turns that "
                          "into a fake failure -- 45 made KIRBY/MuteCity look "
                          "like a crash")
+    ap.add_argument("--pair", choices=["mirror", "rotate"], default="mirror",
+                    help="mirror runs each character against itself (the "
+                         "original question: does this character stand up on "
+                         "this stage). rotate pairs it with the character half "
+                         "a roster away, so every cell has two different "
+                         "characters' data live at once")
     ap.add_argument("--redo", action="store_true",
                     help="re-run cells already in matrix.json")
     ap.add_argument("--update-baseline", action="store_true")
@@ -345,9 +451,9 @@ def main():
         print("stages:     " + ", ".join("%d=%s" % (k, STAGES[k]) for k in stages))
         return 0
     if args.mode == "show":
-        return report(load(RESULTS), chars, stages)
+        return report(load(RESULTS), chars, stages, args.pair)
     return run(chars, stages, args.frames, args.timeout, args.redo,
-               args.update_baseline)
+               args.update_baseline, args.pair)
 
 
 if __name__ == "__main__":
