@@ -36,6 +36,24 @@
 #endif
 
 typedef struct FlagsX {
+#if BUILD_TARGET_PC
+    /* The names are the GameCube masks: b80 is 0x80 of the byte at +0x10, the
+     * same byte IfDamageFlags describes. PowerPC allocates bitfields MSB-first
+     * and x86_64 LSB-first, so declared in this order b80 landed on 0x01 and
+     * b40 -- the "randomise the digit velocities" bit the death-percent
+     * animation tests -- on 0x02. Reversed, each is back on its own mask.
+     *
+     * Only eight bits of the unit are used, so `x` still follows at +1 and
+     * `y` at +2 either way: the struct stays four bytes and UnkX's filler
+     * still lands x34_vec where it belongs. */
+    u32 b1 : 1;
+    u32 b4 : 2;
+    u32 b8 : 1;
+    u32 b10 : 1;
+    u32 b20 : 1;
+    u32 b40 : 1;
+    u32 b80 : 1;
+#else
     u32 b80 : 1;
     u32 b40 : 1;
     u32 b20 : 1;
@@ -43,14 +61,31 @@ typedef struct FlagsX {
     u32 b8 : 1;
     u32 b4 : 2;
     u32 b1 : 1;
+#endif
     u8 x;
     u16 y;
 } FlagsX;
 
+/* UnkX is an alias of IfDamageState: x10_flags is its `flags`, x34_vec and
+ * x44_vec its velocity_x/velocity_y, x54_jobj its `jobjs`. The GameCube
+ * offsets in the fillers are that struct's, and they only line up while a
+ * pointer is four bytes. Here IfDamageState's two leading pointers push
+ * everything eight bytes along, so x10_flags landed on player_slot: the
+ * death-percent animation read the slot number as its flags, never saw the
+ * randomise bit, and skipped the eight random draws it makes on a KO --
+ * which is where sync_pair2's RNG streams parted. Size the fillers from the
+ * struct being aliased instead of from the console's layout. */
 typedef struct UnkX {
+#if BUILD_TARGET_PC
+    u8 filler1[offsetof(struct IfDamageState, flags)];
+    FlagsX x10_flags;
+    u8 filler2[offsetof(struct IfDamageState, velocity_x) -
+               offsetof(struct IfDamageState, flags) - sizeof(FlagsX)];
+#else
     u8 filler1[0x10];
     FlagsX x10_flags;
     u8 filler2[0x34 - 0x14];
+#endif
     Vec4 x34_vec; // or float[4] instead of Vec4
     Vec4 x44_vec;
     HSD_JObj* x54_jobj[4];
@@ -189,6 +224,15 @@ void ifStatus_PercentOnDeathAnimationThink(UnkX* value, s32 arg1, s32 arg2)
 {
     s32 i;
 
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_IFFLAGS") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[IFDEATH] gframe=%u raw=%02x b40=%d sz=%d\n",
+                (unsigned) gm_8016AEDC(),
+                (unsigned) *((const u8*) &value->x10_flags),
+                (int) value->x10_flags.b40, (int) sizeof(FlagsX));
+    }
+#endif
     if (value->x10_flags.b40) {
         for (i = 0; i < 4; i++) // i@r28
         {
@@ -358,6 +402,18 @@ void ifStatus_802F4EDC(HSD_GObj* gobj)
     }
 #endif
 
+#if BUILD_TARGET_PC
+    /* MELEE_IFFLAGS=1: the HUD damage flags byte per slot. The console's is
+     * reachable with MELEE_CODE_BP at ifStatus_DamageThink, whose r3 is the
+     * state and whose byte at +0x10 is this. */
+    if (getenv("MELEE_IFFLAGS") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr, "[IFFLAGS] gframe=%u slot=%d raw=%02x pct=%d\n",
+                (unsigned) gm_8016AEDC(), (int) state->player_slot,
+                (unsigned) *((const u8*) &state->flags),
+                (int) state->damage_percent);
+    }
+#endif
     /* Check for death animation flag (bit 7 of flags byte at offset 0x10) */
     if (state->flags.explode_animation) {
         ifStatus_PercentOnDeathAnimationThink((UnkX*) state, i, (u32) ptr);

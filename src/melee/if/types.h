@@ -14,6 +14,23 @@
 #endif
 
 struct IfDamageFlags {
+#if BUILD_TARGET_PC
+    /* PowerPC allocates bitfields MSB-first and x86_64 LSB-first, so on GCN
+     * explode_animation is bit 7 of the byte and here it landed on bit 0.
+     * ifStatus_DamageThink tests it to run the death-percent animation, which
+     * draws eight randoms a frame; reading the wrong bit it never ran, and
+     * the two RNG streams parted the first time a player died.
+     *
+     * Declaring the members in reverse puts each one back on the bit GCN gave
+     * it, and keeps the bit order inside animation_status_id as well. */
+    u8 unk1 : 1;
+    u8 animation_status_id : 2;
+    u8 hide_all_digits : 1;
+    u8 unk10 : 1;
+    u8 force_digit_shake : 1;
+    u8 randomize_velocity : 1;
+    u8 explode_animation : 1;
+#else
     u8 explode_animation : 1;
     u8 randomize_velocity : 1;
     u8 force_digit_shake : 1;
@@ -21,6 +38,7 @@ struct IfDamageFlags {
     u8 hide_all_digits : 1;
     u8 animation_status_id : 2;
     u8 unk1 : 1;
+#endif
 };
 
 struct UnknownClassTypeE {
