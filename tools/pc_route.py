@@ -161,6 +161,27 @@ SSS_KIND_OFF = 0xB
 SSS_PANELS = 30
 
 
+def sss_kinds(path=None):
+    """The StKinds the stage select can actually reach.
+
+    The +0xB column of mnStageSel_803F06D0 in mn/mnstagesel.static.h. Parsed
+    rather than copied so it cannot drift from the game, and needed because
+    the StKind enum names stages the screen does not offer: Icetop is one, and
+    a cell asking for it selects a stage the VS flow never loads. Three of
+    those cost ten minutes of timeout each before this existed.
+    """
+    src = open(path or os.path.join(REPO, "src", "melee", "mn",
+                                    "mnstagesel.static.h")).read()
+    body = src[src.index("mnStageSel_803F06D0"):]
+    body = body[body.index("{"):body.index("};")]
+    out = set()
+    for row in re.findall(r"\{([^{}]*)\}", body):
+        cols = [c.strip() for c in row.split(",")]
+        if len(cols) >= 6 and cols[5].startswith("0x"):
+            out.add(int(cols[5], 16))
+    return out
+
+
 def stage_poke(kind):
     """MELEE_POKE spec that makes every stage-select panel commit `kind`."""
     return ",".join("%x:1:%x" % (SSS_TABLE + SSS_STRIDE * i + SSS_KIND_OFF,

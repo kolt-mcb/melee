@@ -233,9 +233,14 @@ def cells(chars, stages, pair):
     # a divergence has so far been about, so finishing one stage across the
     # whole roster says more early than finishing one character.
     modes = ("mirror", "rotate") if pair == "both" else (pair,)
+    # Only stages the stage select can reach. The StKind enum names more than
+    # the screen offers, and a cell asking for one of those selects a stage
+    # the VS flow never loads: Icetop cost three ten-minute timeouts before
+    # this was here. The list is parsed out of the game's own panel table.
+    reachable = rt.sss_kinds()
     for st in stages:
         for ck in chars:
-            if mx.STAGES[st] in mx.ABSENT_FROM_DISC:
+            if mx.STAGES[st] in mx.ABSENT_FROM_DISC or st not in reachable:
                 continue
             for mode in modes:
                 opp = mx.opponent_for(ck, chars, mode)
