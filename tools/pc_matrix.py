@@ -2,7 +2,7 @@
 """Every character on every stage, judged by the state trace.
 
     tools/pc_matrix.py run [--chars 0-25] [--stages 2-32] [--frames 240]
-    tools/pc_matrix.py run --pair rotate        # every cell, two characters
+    tools/pc_matrix.py run --pair both          # both passes, 1612 cells
     tools/pc_matrix.py run --update-baseline
     tools/pc_matrix.py show [--pair rotate]
     tools/pc_matrix.py list
@@ -433,7 +433,8 @@ def main():
                          "can take far longer, and a tight limit turns that "
                          "into a fake failure -- 45 made KIRBY/MuteCity look "
                          "like a crash")
-    ap.add_argument("--pair", choices=["mirror", "rotate"], default="mirror",
+    ap.add_argument("--pair", choices=["mirror", "rotate", "both"],
+                    default="mirror",
                     help="mirror runs each character against itself (the "
                          "original question: does this character stand up on "
                          "this stage). rotate pairs it with the character half "
@@ -450,10 +451,21 @@ def main():
         print("characters: " + ", ".join("%d=%s" % (k, CHARS[k]) for k in chars))
         print("stages:     " + ", ".join("%d=%s" % (k, STAGES[k]) for k in stages))
         return 0
+    passes = ["mirror", "rotate"] if args.pair == "both" else [args.pair]
     if args.mode == "show":
-        return report(load(RESULTS), chars, stages, args.pair)
-    return run(chars, stages, args.frames, args.timeout, args.redo,
-               args.update_baseline, args.pair)
+        rc = 0
+        for pair in passes:
+            if len(passes) > 1:
+                print("\n=== %s ===" % pair)
+            rc |= report(load(RESULTS), chars, stages, pair)
+        return rc
+    rc = 0
+    for pair in passes:
+        if len(passes) > 1:
+            print("\n=== %s pass ===" % pair, flush=True)
+        rc |= run(chars, stages, args.frames, args.timeout, args.redo,
+                  args.update_baseline, pair)
+    return rc
 
 
 if __name__ == "__main__":
