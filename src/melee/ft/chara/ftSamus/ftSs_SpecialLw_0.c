@@ -39,6 +39,25 @@ void ftSs_Init_80128944(HSD_GObj* gobj, float farg1, float farg2)
 
     u8 _[8];
 
+#if BUILD_TARGET_PC
+    /* MELEE_BOMBJUMP=1: Samus's own bomb asking to launch her, and the tests
+     * that decide whether it does. The console gets the same from a code
+     * breakpoint at 80128944. */
+    if (getenv("MELEE_BOMBJUMP") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        fprintf(stderr,
+                "[BOMBJUMP] gframe=%u ang=%08x coll=%d st=%d x2073=%d "
+                "b5=%d idx=%d raw=%08x bytes=%02x%02x%02x%02x sz=%d\n",
+                (unsigned) gm_8016AEDC(), *(u32*) &float_result,
+                (int) ftColl_8007B868(gobj), (int) fp->x2070.x2071_b0_3,
+                (int) fp->x2070.x2073, (int) fp->x2070.x2071_b5,
+                (int) fp->x5F4_arr[0].idx,
+                (unsigned) fp->x2070.x2070_int,
+                ((const u8*) &fp->x2070)[0], ((const u8*) &fp->x2070)[1],
+                ((const u8*) &fp->x2070)[2], ((const u8*) &fp->x2070)[3],
+                (int) sizeof(fp->x2070));
+    }
+#endif
     if (!ftColl_8007B868(gobj)) {
         switch (fp->x2070.x2071_b0_3) {
         case 0:
