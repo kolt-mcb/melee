@@ -579,6 +579,30 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
                     (int) mnStageSel_804D6C90->force_stage_id);
         }
     }
+    /* MELEE_SSS_KIND=<StKind> makes every panel on this screen commit that
+     * stage. OnFrame below sets the match's stage from
+     * mnStageSel_803F06D0[selected].xB and nothing else, so a route that
+     * lands the cursor anywhere selectable now selects the stage asked for.
+     *
+     * This exists for tools/pc_lockstep_matrix.py, which compares every
+     * character on every stage against Dolphin. Dolphin cannot be booted
+     * into a match, so it walks these menus, and writing 806 stage-select
+     * routes is not a plan; the harness rewrites the same table in the
+     * console's memory through MELEE_POKE. Doing it here as well keeps the
+     * two sides walking the same screens with the same presses, which is
+     * what makes their frames comparable in the first place -- forcing the
+     * stage on one side and selecting it on the other would have the port
+     * skip a scene the console runs. */
+    {
+        const char* sk = getenv("MELEE_SSS_KIND");
+        if (sk != NULL) {
+            int i;
+            u8 kind = (u8) atoi(sk);
+            for (i = 0; i < 30; i++) {
+                mnStageSel_803F06D0[i].xB = kind;
+            }
+        }
+    }
 #endif
 
     if (mnStageSel_804D6C90->force_stage_id < 0) {

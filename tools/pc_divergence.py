@@ -607,7 +607,11 @@ def show(case, limit):
 
 def load_cases(names):
     cases = []
-    for path in sorted(pc_suite.glob.glob(os.path.join(pc_suite.CASES, "*.case"))):
+    # Generated cases live in a subdirectory so that tools/pc_suite.py's own
+    # glob does not pick up the 806 that tools/pc_lockstep_matrix.py writes.
+    paths = (pc_suite.glob.glob(os.path.join(pc_suite.CASES, "*.case")) +
+             pc_suite.glob.glob(os.path.join(pc_suite.CASES, "auto", "*.case")))
+    for path in sorted(paths):
         case = pc_suite.load_case(path)
         # Trace runs want to be long: a divergence test is only as good as the
         # number of frames it watched, and traces cost almost nothing to keep.
