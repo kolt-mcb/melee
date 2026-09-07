@@ -875,7 +875,7 @@ static void pc_trace_bones(void)
     {
         int pn = ftPartsTable[fp->kind]->parts_num;
         fprintf(stderr, "[PARTFLAGS-PORT] p%d gframe=%u n=%d x594=%08x dyn=%d "
-                "af=%08x fsm=%08x blend=%08x cmdt=%08x cmdfc=%08x col=(%d,%d,%p,%d,%p,%d,%p)",
+                "af=%08x fsm=%08x blend=%08x cmdt=%08x cmdfc=%08x col=(%d,%d,%p,%d,%p,%d,%p) in=(%08x,%08x,%08x,%08x,%08x)",
                 want_p, want_f, pn, (unsigned) fp->x594_s32,
                 (int) fp->dynamics_num, *(u32*) &fp->cur_anim_frame,
                 *(u32*) &fp->frame_speed_mul,
@@ -885,7 +885,10 @@ static void pc_trace_bones(void)
                 (int) fp->x488.x0_timer, (int) fp->x488.x4_pri,
                 (void*) fp->x488.x8_ptr1, (int) fp->x488.xC_loop,
                 (void*) fp->x488.x10_ptr2, (int) fp->x488.x14,
-                (void*) fp->x488.x18_alloc);
+                (void*) fp->x488.x18_alloc,
+                *(u32*) &fp->input.lstick.x, *(u32*) &fp->input.lstick.y,
+                (unsigned) fp->input.held_inputs,
+                (unsigned) fp->input.x668, (unsigned) fp->input.x66C);
         for (b = 0; b < pn && b < 80; b++) {
             fprintf(stderr, " %02x", (unsigned) fp->parts[b].hi);
         }
