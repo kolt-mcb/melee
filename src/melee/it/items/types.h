@@ -84,9 +84,14 @@ struct itSword_UnkBytes {
 };
 
 struct itSword_UnkArticle1 {
-    /*  +0 */ UNK_T x0;
-    /*  +4 */ UNK_T x4;
-    /*  +8 */ UNK_T x8;
+    /* These are four-byte scalars in the file image this struct is laid over,
+     * not pointers. As UNK_T they are eight bytes here and every field after
+     * them shifted: xC read the file's word 6 instead of word 3, so a Beam
+     * Sword spawned with no upward velocity. UNK4_T is the four-byte spelling.
+     */
+    /*  +0 */ UNK4_T x0;
+    /*  +4 */ UNK4_T x4;
+    /*  +8 */ UNK4_T x8;
     /*  +C */ float xC;
     /* +10 */ float x10;
     /* +14 */ float x14;
