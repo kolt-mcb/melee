@@ -162,18 +162,26 @@ def run_cell(name, frames, timeout, cpu):
             "--frames", str(frames), "--headless", "--stop-on-divergence"]
     if cpu:
         argv += ["--cpu", cpu]
-    try:
-        # --stop-on-divergence waits on a keypress before releasing the two
-        # games, which is the point of it interactively and a hang here.
-        p = subprocess.run(argv, cwd=REPO, capture_output=True, text=True,
-                           stdin=subprocess.DEVNULL, timeout=timeout)
-        out = p.stdout + p.stderr
-        rc = p.returncode
-    except subprocess.TimeoutExpired as e:
-        out = (e.stdout or "") + (e.stderr or "")
-        if isinstance(out, bytes):
-            out = out.decode("utf-8", "replace")
-        rc = -1
+    # Stream to a file rather than capture into memory. A cell that times out
+    # is killed with its pipes still open, and subprocess hands back nothing:
+    # the first four timeouts in this sweep left a zero-byte log and no way to
+    # tell a hung emulator from a hung game. On disk the output survives the
+    # kill, and the run's own output is what says where it stopped.
+    os.makedirs(LOGS, exist_ok=True)
+    path = os.path.join(LOGS, name + ".log")
+    with open(path, "w") as f:
+        try:
+            # --stop-on-divergence waits on a keypress before releasing the
+            # two games, which is the point of it interactively and a hang
+            # here.
+            p = subprocess.run(argv, cwd=REPO, stdout=f,
+                               stderr=subprocess.STDOUT,
+                               stdin=subprocess.DEVNULL, timeout=timeout)
+            rc = p.returncode
+        except subprocess.TimeoutExpired:
+            rc = -1
+    with open(path, errors="replace") as f:
+        out = f.read()
     info = {"rc": rc}
     m = DIVERGE_RE.search(out)
     early = EARLY_RE.search(out)
@@ -193,14 +201,11 @@ def run_cell(name, frames, timeout, cpu):
         info["frame"] = int(early.group(1))
     else:
         info["verdict"] = "timeout" if rc == -1 else "no-verdict"
-    # The log goes to a file rather than into the results, which are read
-    # whole every time a cell finishes: 750 cells of it is a results file
-    # nobody can open and a dictionary that grows all run.
-    if info["verdict"] != "identical":
-        os.makedirs(LOGS, exist_ok=True)
-        path = os.path.join(LOGS, name + ".log")
-        with open(path, "w") as f:
-            f.write(out[-40000:])
+    # A cell that agreed has nothing to say; keep the log only when it did
+    # not, so the directory is the list of things to look at.
+    if info["verdict"] == "identical":
+        os.unlink(path)
+    else:
         info["log"] = os.path.relpath(path, REPO)
     return info
 
