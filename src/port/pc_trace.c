@@ -1528,6 +1528,42 @@ void pc_trace_frame(int frame)
                             if (gm_8016AEDC() == 2) {
                                 fp->x1A88.x7C = 0;
                                 fp->x1A88.x80 = 0;
+                                /* And the ranged-attack cooldown, which
+                                 * ftCo_800B9704 computes from one random draw
+                                 * as the fighter is created -- inside the
+                                 * load, which is the one window the two sides
+                                 * cannot be made to match.
+                                 *
+                                 * MELEE_SEED_EACH_LOAD restarts both sides
+                                 * from the same seed at the top of every load
+                                 * frame, so a draw agrees as long as it falls
+                                 * in the same place within its frame. These
+                                 * do not: the console spreads its load over
+                                 * 185 frames and builds its two fighters in
+                                 * different ones, so each takes the same draw
+                                 * from a freshly seeded stream; this side
+                                 * builds both in one frame and the second
+                                 * reads on from where the first stopped.
+                                 * Measured on Samus vs Samus: 39 and 32 here
+                                 * against 39 and 39 on the console, and 32
+                                 * counts out six frames sooner, so the second
+                                 * CPU committed to an attack on match frame
+                                 * 35 and the console's on 41. That was the
+                                 * most common single divergence in the
+                                 * character-by-stage sweep.
+                                 *
+                                 * Reseeding per fighter instead fixes Pokemon
+                                 * Stadium and breaks Onett, because which
+                                 * load frame each fighter lands in is itself
+                                 * a property of the stage. So agree on the
+                                 * value rather than on the draw, from the
+                                 * level both sides already agree about. This
+                                 * is the same kind of alignment as the two
+                                 * writes above, and the local Dolphin build
+                                 * makes the same write under the same
+                                 * variable. */
+                                fp->x1A88.x34 =
+                                    (10 - lvl[slot]) * 22 + 10;
                             }
                         }
                     }
