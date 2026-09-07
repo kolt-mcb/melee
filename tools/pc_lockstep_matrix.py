@@ -269,6 +269,15 @@ def key(c):
 
 
 def cmd_report(a):
+    """One row per stage: how far it agreed, and on what it stopped.
+
+    The frame is the finding. A stage that parts on match frame 1 disagrees
+    about how the match starts -- spawn heights, entry animation, the stage's
+    own init -- and every character on it will part at 1. A stage that runs
+    hundreds of frames and then parts has a simulation that drifts, which is
+    the class every fix in tests/pc has been about so far. They are different
+    bugs and they are worth telling apart at a glance.
+    """
     res = load()
     if not res:
         print("nothing recorded yet")
@@ -277,20 +286,41 @@ def cmd_report(a):
     for k, v in res.items():
         p = k.split(",")
         by.setdefault(int(p[2]), []).append((int(p[0]), int(p[1]), v))
-    print("%-12s %5s %5s %5s %5s   worst" % ("stage", "ident", "div",
-                                             "route", "other"))
+    print("%-12s %4s %5s %5s  %-7s  %s"
+          % ("stage", "n", "ident", "worst", "class", "first field(s) to differ"))
+    nident = nstart = ndrift = nother = 0
     for st in sorted(by):
-        rows = by[st]
-        ident = sum(1 for _, _, v in rows if v["verdict"] == "identical")
-        div = [(v.get("frame", 0), c0, c1) for c0, c1, v in rows
-               if v["verdict"] == "diverged"]
-        rf = sum(1 for _, _, v in rows if v["verdict"] == "route-failed")
-        other = len(rows) - ident - len(div) - rf
-        worst = min(div) if div else None
-        print("%-12s %5d %5d %5d %5d   %s"
-              % (mx.STAGES[st], ident, len(div), rf, other,
-                 "" if worst is None else "%s vs %s at %d"
-                 % (mx.CHARS[worst[1]], mx.CHARS[worst[2]], worst[0])))
+        rows = sorted(by[st])
+        ident = [v for _, _, v in rows if v["verdict"] == "identical"]
+        div = [v for _, _, v in rows if v["verdict"] == "diverged"]
+        frames = sorted(v.get("frame", 0) for v in div)
+        worst = frames[0] if frames else None
+        fields = []
+        for v in div:
+            f = v.get("field")
+            if f and f not in fields:
+                fields.append(f)
+        if not div and ident:
+            kind = "ok"
+            nident += 1
+        elif worst is not None and worst <= 1:
+            kind = "start"
+            nstart += 1
+        elif worst is not None:
+            kind = "drift"
+            ndrift += 1
+        else:
+            kind = "?"
+            nother += 1
+        other = [v["verdict"] for _, _, v in rows
+                 if v["verdict"] not in ("identical", "diverged")]
+        print("%-12s %4d %5d %5s  %-7s  %s%s"
+              % (mx.STAGES[st], len(rows), len(ident),
+                 "-" if worst is None else worst, kind,
+                 ", ".join(fields[:3]),
+                 ("  [" + ",".join(sorted(set(other))) + "]") if other else ""))
+    print("\n%d stages identical, %d part at the start of the match, "
+          "%d drift, %d neither" % (nident, nstart, ndrift, nother))
     return 0
 
 
