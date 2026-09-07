@@ -164,6 +164,22 @@ void ftWalkCommon_800DFEC8(HSD_GObj* gobj, void (*arg_cb)(HSD_GObj*, float))
         quotient = init_animFrame / float_result;
         adjusted_animFrame = fp->cur_anim_frame - float_result * quotient;
         final_animFrame = frame * (adjusted_animFrame / float_result);
+#if BUILD_TARGET_PC
+        /* MELEE_WALKFRAME=1: the animation frame a change of walk speed
+         * carries over. It is scaled by the ratio of the two animations'
+         * lengths, so an end frame read from the wrong place restarts the
+         * walk cycle -- and a fighter carrying another moves its victim. */
+        if (getenv("MELEE_WALKFRAME") != NULL) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr,
+                    "[WALKFRAME] gframe=%u frame=%08x end=%08x cur=%08x "
+                    "q=%d adj=%08x final=%d\n",
+                    (unsigned) gm_8016AEDC(), *(u32*) &frame,
+                    *(u32*) &float_result, *(u32*) &init_animFrame,
+                    (int) quotient, *(u32*) &adjusted_animFrame,
+                    (int) final_animFrame);
+        }
+#endif
         arg_cb(gobj, final_animFrame);
     }
 }
