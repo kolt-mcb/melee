@@ -244,20 +244,6 @@ void itSword_Logic12_Spawned(Item_GObj* gobj)
     itSword_UnkArticle1* attrs = ip->xC4_article_data->x4_specialAttributes;
     PAD_STACK(8);
     it_8026B390(gobj);
-#if BUILD_TARGET_PC
-    if (getenv("MELEE_SWORDATTR") != NULL) {
-        const u32* w = (const u32*) attrs;
-        int q;
-        extern u32 gm_8016AEDC(void);
-        fprintf(stderr, "[SWORDATTR] gframe=%u attrs=%p vy_before=%08x",
-                (unsigned) gm_8016AEDC(), (void*) attrs,
-                *(u32*) &ip->x40_vel.y);
-        for (q = 0; q < 8; q++) {
-            fprintf(stderr, " %08x", w[q]);
-        }
-        fprintf(stderr, "\n");
-    }
-#endif
     ip->x40_vel.x = 0.0f;
     ip->x40_vel.y = attrs->xC;
     ip->x40_vel.z = 0.0f;
@@ -278,14 +264,6 @@ void itSword_Logic12_Spawned(Item_GObj* gobj)
     ip->xDD4_itemVar.sword.x38 = 0;
     ip->xDD4_itemVar.sword.x3C = 0;
     ip->xDD4_itemVar.sword.x40 = 1.0f;
-#if BUILD_TARGET_PC
-    if (getenv("MELEE_SWORDATTR") != NULL) {
-        extern u32 gm_8016AEDC(void);
-        fprintf(stderr, "[SWORDEND] gframe=%u vy=%08x msid=%d\n",
-                (unsigned) gm_8016AEDC(), *(u32*) &ip->x40_vel.y,
-                (int) ip->msid);
-    }
-#endif
     ip->xDD4_itemVar.sword.x44 = 1.0f;
     ip->xDD4_itemVar.sword.x48 = 0.0f;
     ip->xDD4_itemVar.sword.x50 = 0.0f;

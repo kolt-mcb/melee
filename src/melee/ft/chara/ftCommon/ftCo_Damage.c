@@ -339,6 +339,23 @@ void ftCo_8008DCE0(Fighter_GObj* gobj, int arg1, float facing_dir)
         x = scaled_kb * cosf(kb_angle);
         y = scaled_kb * sinf(kb_angle);
     block_20:
+#if BUILD_TARGET_PC
+        /* MELEE_KBDBG=1: the knockback vector a hit or throw release produces
+         * and the two multipliers behind it. The console gives the same from
+         * a code breakpoint at ftCo_Damage_CalcVel, whose f1/f2 are x and y. */
+        if (getenv("MELEE_KBDBG") != NULL) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr,
+                    "[KB] gframe=%u kb_applied=%08x scaled=%08x ang=%08x "
+                    "x100=%08x x190=%08x air=%d x=%08x y=%08x\n",
+                    (unsigned) gm_8016AEDC(), *(u32*) &kb_applied,
+                    *(u32*) &scaled_kb, *(u32*) &kb_angle,
+                    *(u32*) &p_ftCommonData->x100,
+                    *(u32*) &p_ftCommonData->x190,
+                    (int) ftCo_Damage_CheckAirMotion(fp), *(u32*) &x,
+                    *(u32*) &y);
+        }
+#endif
         ftCo_Damage_CalcVel(fp, -x * fp->facing_dir, y);
         fp->xF0_ground_kb_vel = 0;
         goto block_28;

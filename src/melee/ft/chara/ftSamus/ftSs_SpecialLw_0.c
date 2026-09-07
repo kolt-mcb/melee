@@ -47,15 +47,12 @@ void ftSs_Init_80128944(HSD_GObj* gobj, float farg1, float farg2)
         extern u32 gm_8016AEDC(void);
         fprintf(stderr,
                 "[BOMBJUMP] gframe=%u ang=%08x coll=%d st=%d x2073=%d "
-                "b5=%d idx=%d raw=%08x bytes=%02x%02x%02x%02x sz=%d\n",
+                "b5=%d idx=%d raw=%08x\n",
                 (unsigned) gm_8016AEDC(), *(u32*) &float_result,
                 (int) ftColl_8007B868(gobj), (int) fp->x2070.x2071_b0_3,
                 (int) fp->x2070.x2073, (int) fp->x2070.x2071_b5,
                 (int) fp->x5F4_arr[0].idx,
-                (unsigned) fp->x2070.x2070_int,
-                ((const u8*) &fp->x2070)[0], ((const u8*) &fp->x2070)[1],
-                ((const u8*) &fp->x2070)[2], ((const u8*) &fp->x2070)[3],
-                (int) sizeof(fp->x2070));
+                (unsigned) fp->x2070.x2070_int);
     }
 #endif
     if (!ftColl_8007B868(gobj)) {

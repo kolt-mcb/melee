@@ -282,22 +282,8 @@ static void Item_80267130(HSD_GObj* gobj, SpawnItem* spawnItem)
     }
 
     it_8027B0C4(gobj, spawnItem);
-#if BUILD_TARGET_PC
-    if (getenv("MELEE_SWORDATTR") != NULL && item_data->kind == 12) {
-        extern u32 gm_8016AEDC(void);
-        fprintf(stderr, "[SPAWNVEL] gframe=%u after 8027B0C4 vy=%08x\n",
-                (unsigned) gm_8016AEDC(), *(u32*) &item_data->x40_vel.y);
-    }
-#endif
     it_80279B64(item_data);
     ItUnkHoldKind(gobj);
-#if BUILD_TARGET_PC
-    if (getenv("MELEE_SWORDATTR") != NULL && item_data->kind == 12) {
-        extern u32 gm_8016AEDC(void);
-        fprintf(stderr, "[SPAWNVEL] gframe=%u end vy=%08x\n",
-                (unsigned) gm_8016AEDC(), *(u32*) &item_data->x40_vel.y);
-    }
-#endif
 }
 
 /// Remove Camera Box
