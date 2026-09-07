@@ -8927,7 +8927,21 @@ void hsd_8039EE24(u32 mask)
         if (gen->random < 0.0F) {
             gen->count -= gen->random;
         } else {
+#if BUILD_TARGET_PC
+            /* 8039EF0C is an fmadds: random * Randf() + count is one
+             * rounding. Rounded twice, the count drifts by a few ULP a frame
+             * and eventually crosses 1.0 a frame early or late -- which emits
+             * a particle on a different frame, and every RNG draw after it
+             * belongs to the other side's stream. Measured: the two counts
+             * part at match frame 226 and the draw counts finally disagree at
+             * 2145. The draw is taken first, as the console does. */
+            {
+                f32 r = HSD_Randf();
+                gen->count = fmaf(gen->random, r, gen->count);
+            }
+#else
             gen->count += gen->random * HSD_Randf();
+#endif
         }
         if (gen->count >= 1.0F) {
             gen->count = hsd_8039DAD4(gen);
