@@ -333,22 +333,10 @@ void ftCl_Init_OnLoad(HSD_GObj* gobj)
     void** items = ftdata->x48_items;
 
     fp->can_walljump = true;
-    ea->attackairlw_hit_anim_frame_end =
-        lbAnim_8001E8F8(ftData_80085E50(fp, 72));
+    PC_ATTR_STORE(ea->attackairlw_hit_anim_frame_end,
+                  lbAnim_8001E8F8(ftData_80085E50(fp, 72)));
     ftLk_Init_OnLoadForCLink(fp);
-    {
-        float airlw_end = ea->attackairlw_hit_anim_frame_end;
-        ea = fp->dat_attrs;
-#if BUILD_TARGET_PC
-        /* Same as ftLk_Init_OnLoad: the write above lands in the archive's
-         * big-endian block and PUSH_ATTRS reverses it on the way across. */
-        if (ea != NULL) {
-            ea->attackairlw_hit_anim_frame_end = airlw_end;
-        }
-#else
-        (void) airlw_end;
-#endif
-    }
+    ea = fp->dat_attrs;
     it_8026B3F8(items[0], ea->x48);
     it_8026B3F8(items[1], ea->x2C);
     it_8026B3F8(items[2], ea->xBC);
