@@ -161,6 +161,35 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
     }
 #endif
     HSD_JObjSetupMatrix(jobj->parent);
+#if BUILD_TARGET_PC
+    {
+        extern void pc_jobj_note(const char*, void*);
+        pc_jobj_note("HSD_JObjMakeMatrix", jobj);
+    }
+#endif
+#if BUILD_TARGET_PC
+    /* MELEE_JOBJWATCH=<player>:<bone>: every rebuild of one skeleton joint's
+     * matrix, with the caller and the inputs it used. Two runs can agree on a
+     * joint's local transform and its parent's matrix at frame end and still
+     * disagree on its matrix, because one of them built it at a different
+     * point in the frame; only the call itself says when. */
+    {
+        extern void* pc_jobj_watch_ptr;
+        if (pc_jobj_watch_ptr == (void*) jobj) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr,
+                    "[JOBJMK] gframe=%u j=%p ret=%p t=(%08x,%08x) "
+                    "r=(%08x,%08x,%08x) par=%p parm=(%08x,%08x)\n",
+                    (unsigned) gm_8016AEDC(), (void*) jobj,
+                    __builtin_return_address(0), *(u32*) &jobj->translate.x,
+                    *(u32*) &jobj->translate.y, *(u32*) &jobj->rotate.x,
+                    *(u32*) &jobj->rotate.y, *(u32*) &jobj->rotate.z,
+                    (void*) jobj->parent,
+                    jobj->parent ? *(u32*) &jobj->parent->mtx[0][3] : 0,
+                    jobj->parent ? *(u32*) &jobj->parent->mtx[1][3] : 0);
+        }
+    }
+#endif
     if (jobj->flags & 8) {
         if (jobj->parent != NULL && jobj->parent->scl != NULL) {
             if (jobj->scl == NULL) {
@@ -510,6 +539,10 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
     Mtx mtx;
 
     #if BUILD_TARGET_PC
+    {
+        extern void pc_jobj_note(const char*, void*);
+        pc_jobj_note("JObjUpdateFunc", jobj);
+    }
     if (PC_PTR_VALID(jobj)) {
     #else
     if (jobj != NULL) {

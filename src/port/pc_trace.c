@@ -193,18 +193,34 @@ static void pc_trace_items(void)
             HitCapsule* h = &ip->x5D4_hitboxes[0].hit;
             fprintf(stderr,
                     " %d@(%.1f,%.1f,z%.2f)s%d v(%.4f,%.4f)ln%u f%02x "
-                    "e%x p%x fl%d/%x lw%d rw%d a58=%.4f a5c=%.4f[hb st=%d dmg=%.0f scl=%.2f "
+                    "e%x p%x fl%d/%x lw%d rw%d"
+                    " lwf%xn(%.4f,%.4f) rwf%xn(%.4f,%.4f) c30=%d"
+                    " md(%u,%d,%x)"
+                    " a58=%.4f a5c=%.4f[hb st=%d dmg=%.0f scl=%.2f "
                     "seg=(%.1f,%.1f,z%.2f)-(%.1f,%.1f,z%.2f)]",
                     (int) ip->kind, ip->pos.x, ip->pos.y, ip->pos.z,
                     (int) ip->msid, ip->x40_vel.x, ip->x40_vel.y,
                     (unsigned) ip->xD50_landNum,
-                    (unsigned) *((u8*) ip + 0xDCF),
+                    (unsigned) ip->xDCF_flag.u8,
                     (unsigned) ip->x378_itemColl.env_flags,
                     (unsigned) ip->x378_itemColl.prev_env_flags,
                     ip->x378_itemColl.floor.index,
                     (unsigned) ip->x378_itemColl.floor.flags,
                     ip->x378_itemColl.left_facing_wall.index,
                     ip->x378_itemColl.right_facing_wall.index,
+                    (unsigned) ip->x378_itemColl.left_facing_wall.flags,
+                    ip->x378_itemColl.left_facing_wall.normal.x,
+                    ip->x378_itemColl.left_facing_wall.normal.y,
+                    (unsigned) ip->x378_itemColl.right_facing_wall.flags,
+                    ip->x378_itemColl.right_facing_wall.normal.x,
+                    ip->x378_itemColl.right_facing_wall.normal.y,
+                    (int) ip->xC30,
+                    (unsigned) ip->xC4_article_data->x10_modelDesc
+                        ->x4_bone_count,
+                    (int) ip->xC4_article_data->x10_modelDesc
+                        ->x8_bone_attach_id,
+                    (unsigned) ip->xC4_article_data->x10_modelDesc
+                        ->xC_bit_field,
                     ip->xCC_item_attr != NULL ? ip->xCC_item_attr->x58 : -1.0f,
                     ip->xCC_item_attr != NULL ? ip->xCC_item_attr->x5c : -1.0f,
                     (int) h->state,
@@ -760,8 +776,40 @@ static void pc_trace_animid(void)
  * build prints under the same variable, so the two can be diffed. Hurtboxes
  * and the ECB are both built from bones, so this is what to compare when
  * either lands in the wrong place. */
+void* pc_jobj_watch_ptr;
+int pc_jobj_watch_lo = -1, pc_jobj_watch_hi = -1;
+
 static void pc_trace_bones(void)
 {
+    /* MELEE_JOBJWATCH=<player>:<bone> republishes that joint's pointer each
+     * frame, so HSD_JObjMakeMatrix can report every rebuild of it. */
+    {
+        static int wp = -2, wb, wlo, whi;
+        if (wp == -2) {
+            const char* e = getenv("MELEE_JOBJWATCH");
+            if (e == NULL || sscanf(e, "%d:%d:%d-%d", &wp, &wb, &wlo, &whi) != 4)
+            {
+                if (e == NULL || sscanf(e, "%d:%d", &wp, &wb) != 2) {
+                    wp = -1;
+                } else {
+                    wlo = 0;
+                    whi = 0x7FFFFFFF;
+                }
+            }
+        }
+        if (wp >= 0) {
+            pc_jobj_watch_lo = wlo;
+            pc_jobj_watch_hi = whi;
+            StaticPlayer* wsp = Player_GetPtrForSlot(wp);
+            HSD_GObj* wg = (wsp != NULL) ? wsp->player_entity[0] : NULL;
+            Fighter* wfp = (wg != NULL) ? (Fighter*) wg->user_data : NULL;
+            if (wfp != NULL && wfp->parts != NULL) {
+                pc_jobj_watch_ptr = wfp->parts[wb].joint;
+                pc_watch_jobj = wfp->parts[wb].joint;
+            }
+        }
+    }
+
     const char* spec = getenv("MELEE_BONES");
     int want_p = 0, b;
     unsigned want_f = 0, want_to = 0;
@@ -828,8 +876,14 @@ static void pc_trace_bones(void)
                 if (j == NULL) {
                     continue;
                 }
-                fprintf(stderr, "[BONEFULL-PORT] p%d gframe=%u b=%d flags=%08x",
-                        want_p, want_f, b, (unsigned) j->flags);
+                fprintf(stderr,
+                        "[BONEFULL-PORT] p%d gframe=%u b=%d flags=%08x"
+                        " jp=%p j2p=%p robj=%p par=%p parm=(%08x,%08x)",
+                        want_p, want_f, b, (unsigned) j->flags, (void*) j,
+                        (void*) fp->parts[b].x4_jobj2, (void*) j->robj,
+                        (void*) j->parent,
+                        j->parent ? *(const u32*) &j->parent->mtx[0][3] : 0,
+                        j->parent ? *(const u32*) &j->parent->mtx[1][3] : 0);
                 w = (const u32*) &j->rotate;
                 for (k = 0; k < 4; k++) {
                     fprintf(stderr, " r%d=%08x", k, w[k]);
@@ -1039,13 +1093,17 @@ static void pc_trace_hurtdump(void)
         const HurtCapsule* c = &fp->hurt_capsules[k].capsule;
         fprintf(stderr,
                 " [%d st=%08x scl=%08x a=(%08x,%08x,%08x)"
-                " b=(%08x,%08x,%08x) h=%d g=%d bi=%d]",
+                " b=(%08x,%08x,%08x) h=%d g=%d bi=%d"
+                " ao=(%08x,%08x,%08x) bo=(%08x,%08x,%08x)]",
                 k, (unsigned) c->state, *(const u32*) &c->scale,
                 *(const u32*) &c->a_pos.x, *(const u32*) &c->a_pos.y,
                 *(const u32*) &c->a_pos.z, *(const u32*) &c->b_pos.x,
                 *(const u32*) &c->b_pos.y, *(const u32*) &c->b_pos.z,
                 (int) fp->hurt_capsules[k].height,
-                (int) fp->hurt_capsules[k].is_grabbable, (int) c->bone_idx);
+                (int) fp->hurt_capsules[k].is_grabbable, (int) c->bone_idx,
+                *(const u32*) &c->a_offset.x, *(const u32*) &c->a_offset.y,
+                *(const u32*) &c->a_offset.z, *(const u32*) &c->b_offset.x,
+                *(const u32*) &c->b_offset.y, *(const u32*) &c->b_offset.z);
     }
     fprintf(stderr, "\n");
 }
@@ -1445,6 +1503,8 @@ void pc_seed_at_fighter_create(void)
  * functions that write a joint's SRT report when they touch it. A joint that
  * changes on a frame with no animation load and no blend has a writer, and
  * naming it is faster than reading every candidate. */
+extern int pc_jobj_watch_lo, pc_jobj_watch_hi;
+
 void pc_jobj_note(const char* who, void* j)
 {
     static int at = -2;
@@ -1452,11 +1512,16 @@ void pc_jobj_note(const char* who, void* j)
         const char* e = getenv("MELEE_BLENDAT");
         at = e != NULL ? atoi(e) : -1;
     }
-    if (at < 0 || pc_watch_jobj == NULL || j != (void*) pc_watch_jobj) {
+    if (pc_watch_jobj == NULL || j != (void*) pc_watch_jobj) {
         return;
     }
-    if ((int) gm_8016AEDC() != at) {
-        return;
+    {
+        int f = (int) gm_8016AEDC();
+        int in_range = pc_jobj_watch_lo >= 0 && f >= pc_jobj_watch_lo &&
+                       f <= pc_jobj_watch_hi;
+        if (!in_range && (at < 0 || f != at)) {
+            return;
+        }
     }
     {
         HSD_JObj* w = pc_watch_jobj;

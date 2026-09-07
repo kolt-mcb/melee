@@ -1,4 +1,10 @@
 #include "ftanim.h"
+
+#if BUILD_TARGET_PC
+/* src/port/pc_ftconv.c -- one lazily converted entry of a part animation. */
+extern HSD_AnimJoint* pc_ftconv_partanim(struct ftData_x1C* rec, int k);
+#endif
+
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
@@ -1598,11 +1604,11 @@ void ftAnim_ApplyPartAnim(Fighter_GObj* gobj, s32 arg1, s32 arg2, f32 arg3)
     temp_r30->x4 = arg3;
     temp_r30->x8 = 0.0F;
     if (arg3) {
-        temp_r30->xC = lb_8000BFF0(temp_r29->x8[arg2]) / arg3;
+        temp_r30->xC = lb_8000BFF0(FT_PARTANIM(temp_r29, arg2)) / arg3;
     } else {
         temp_r30->xC = 0.0F;
     }
-    ftAnim_80070904(fp, temp_r29->x0, temp_r29->x8[arg2]);
+    ftAnim_80070904(fp, temp_r29->x0, FT_PARTANIM(temp_r29, arg2));
 }
 
 void ftAnim_80070C48(Fighter_GObj* gobj, s32 arg1)
@@ -1645,7 +1651,7 @@ void ftAnim_80070CC4(Fighter_GObj* gobj, int arg1)
     }
     r28 = fp->ft_data->x1C[arg1];
 
-    some_inline(fp, r28->x0, r28->x8[r30->x11]);
+    some_inline(fp, r28->x0, FT_PARTANIM(r28, r30->x11));
 
     r30->x11 = -1;
     if (fp->x590 != NULL) {

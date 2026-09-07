@@ -646,11 +646,32 @@ struct ftData {
     /* +10 */ u8 (*x10)[2];
     /* +14 */ struct Fighter_WaitAnimData* x14;
     /* +18 */ u8 (*x18)[2];
-    /* +1C */ struct ftData_x1C {
+    /* +1C */
+#if BUILD_TARGET_PC
+/* fp->x8B0[5] bounds the outer array; the anims array is capped only as a
+ * sanity limit, since lazy conversion never touches an unused entry. */
+#define FT_PARTANIM_SLOTS 5
+#define FT_PARTANIM_MAX 16
+#define FT_PARTANIM(rec, k) pc_ftconv_partanim((rec), (int) (k))
+#else
+#define FT_PARTANIM(rec, k) ((rec)->x8[k])
+#endif
+    struct ftData_x1C {
         u16 x0; ///< Fighter_Part
         u16 x2;
         u8* x4; ///< an array of Fighter part indices
         HSD_AnimJoint** x8;
+#if BUILD_TARGET_PC
+        /* x8 is an array of file offsets whose length nothing in the file
+         * records, so it is converted one entry at a time, the first time
+         * the game asks for that entry -- an index the game never uses is
+         * never converted, and cannot fault on data that is not a tree.
+         * FT_PARTANIM() is the accessor; these are what it needs. */
+        const u8* pc_base;
+        unsigned long pc_len;
+        u32 pc_x8_off;
+        u32 pc_x8_max;
+#endif
     }** x1C;
     /* +20 */ struct {
         /* +0 */ UNK_T x0;

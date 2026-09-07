@@ -3465,7 +3465,11 @@ bool mpColl_80049EAC_LeftWall(CollData* coll)
     int i;
 
     mpColl_804D6490_max_x = F32_MAX;
-    for (i = 0; i < mpColl_804D6488; arr++, i++) {
+    /* The left candidate list is counted by mpColl_804D648C, not the right
+     * list's mpColl_804D6488: 8004A3C0 loads -21012(r13). Bounding the walk by
+     * the right count leaves left_facing_wall untouched whenever no right wall
+     * was a candidate, so an item bounces off a wall the game never records. */
+    for (i = 0; i < mpColl_804D648C; arr++, i++) {
         float top;
         float mid;
         float bot;
@@ -3619,6 +3623,30 @@ bool mpColl_80049EAC_LeftWall(CollData* coll)
     flags = mpColl_804D6498_flags;
     normal = mpColl_80458810.normal;
 
+#if BUILD_TARGET_PC
+    /* The left-wall twin of the MELEE_WALLDBG probe above: an item the console
+     * pushes off a wall and records the line for, while the port records no
+     * line at all, differs either in the candidate count or in the bound. */
+    {
+        static int lo = -2, hi;
+        if (lo == -2) {
+            const char* e = getenv("MELEE_WALLDBG");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            lo = e ? atoi(e) : -1;
+            hi = dash ? atoi(dash + 1) : lo;
+        }
+        if (lo >= 0) {
+            int f = (int) gm_8016AEDC();
+            if (f >= lo && f <= hi) {
+                fprintf(stderr,
+                        "[WALL] gframe=%d left n=%d max_x=%08x x=%08x id=%d\n",
+                        f, (int) mpColl_804D6488,
+                        *(u32*) &mpColl_804D6490_max_x,
+                        *(u32*) &coll->cur_pos.x, (int) line_id);
+            }
+        }
+    }
+#endif
     if (coll->cur_pos.x > mpColl_804D6490_max_x) {
         coll->cur_pos.x = mpColl_804D6490_max_x;
         coll->left_facing_wall.index = line_id;

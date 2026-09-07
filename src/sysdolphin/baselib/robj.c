@@ -260,6 +260,41 @@ int HSD_RObjGetGlobalPosition(HSD_RObj* robj, int type, Vec3* p)
         p->y = f * v.y;
         p->z = f * v.z;
     }
+#if BUILD_TARGET_PC
+    /* MELEE_ROBJPOS=<lo>-<hi>: the constraint that positions a joint from other
+     * joints, over a window of match frames. A held item's grip joint is one of
+     * these, so its release point is this average; n says how many references
+     * were counted, which is what differs when a reference is dropped. */
+    {
+        static int lo = -2, hi;
+        if (lo == -2) {
+            const char* e = getenv("MELEE_ROBJPOS");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            lo = e ? atoi(e) : -1;
+            hi = dash ? atoi(dash + 1) : lo;
+        }
+        if (lo >= 0 && n != 0) {
+            extern u32 gm_8016AEDC(void);
+            int f2 = (int) gm_8016AEDC();
+            if (f2 >= lo && f2 <= hi) {
+                fprintf(stderr, "[ROBJPOS] gframe=%d type=%d n=%d p=(%08x,%08x)",
+                        f2, type, n, *(u32*) &p->x, *(u32*) &p->y);
+                for (rp = robj; rp != NULL; rp = rp->next) {
+                    if ((rp->flags & ROBJ_TYPE_MASK) == REFTYPE_JOBJ &&
+                        (rp->flags & 0x80000000) &&
+                        (unsigned) type == HSD_RObjGetConstraintType(rp))
+                    {
+                        fprintf(stderr, " [j=%p id=%u (%08x,%08x)]",
+                                (void*) rp->u.jobj, (unsigned) rp->u.jobj->id,
+                                *(u32*) &rp->u.jobj->mtx[0][3],
+                                *(u32*) &rp->u.jobj->mtx[1][3]);
+                    }
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+    }
+#endif
     return n;
 }
 
