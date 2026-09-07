@@ -82,6 +82,22 @@
  * big-endian words back over the swapped ones PUSH_ATTRS had made, so a
  * respawned Peach read her turnip table count as 0x03000000 and walked
  * off the end of it. Same swapped copy as PUSH_ATTRS. */
+/* A character's OnLoad hook computes a few attributes and writes them back
+ * into ft_data->ext_attr, which on the console is the one live copy of the
+ * block. Here ext_attr is still the archive's big-endian image and both
+ * PUSH_ATTRS and COPY_ATTRS byteswap it into dat_attrs, so a host float
+ * written there comes out reversed -- and re-applying it on dat_attrs after
+ * PUSH_ATTRS is undone by the next COPY_ATTRS. Store it big-endian instead
+ * and every copy downstream lands the right way up. */
+#define PC_ATTR_STORE(dst, value)                                             \
+    do {                                                                      \
+        f32 v_ = (value);                                                     \
+        u32 w_ = *(u32*) &v_;                                                 \
+        w_ = ((w_ >> 24) & 0xFF) | ((w_ >> 8) & 0xFF00) |                     \
+             ((w_ << 8) & 0xFF0000) | ((w_ << 24));                           \
+        *(u32*) &(dst) = w_;                                                  \
+    } while (0)
+
 #define COPY_ATTRS(gobj, attributeName)                                       \
     Fighter* fp = GET_FIGHTER(gobj);                                          \
     attributeName* sA2 = (attributeName*) fp->dat_attrs;                      \
@@ -100,6 +116,8 @@
         }                                                                     \
     } while (0);
 #else
+#define PC_ATTR_STORE(dst, value) ((dst) = (value))
+
 #define COPY_ATTRS(gobj, attributeName)                                       \
     Fighter* fp = GET_FIGHTER(gobj);                                          \
     attributeName* sA2 = (attributeName*) fp->dat_attrs;                      \

@@ -630,9 +630,10 @@ void ftDk_Init_OnLoad(HSD_GObj* gobj)
     Fighter* fp = gobj->user_data;
     ftData* ftdata = fp->ft_data;
     ftDonkeyAttributes* ftData_attr = ftdata->ext_attr;
-    ftData_attr->x8 = lbAnim_8001E8F8(ftData_80085E50(fp, 296));
-    ftData_attr->xC = lbAnim_8001E8F8(ftData_80085E50(fp, 297));
-    ftData_attr->x10 = lbAnim_8001E8F8(ftData_80085E50(fp, 298));
+    PC_ATTR_STORE(ftData_attr->x8, lbAnim_8001E8F8(ftData_80085E50(fp, 296)));
+    PC_ATTR_STORE(ftData_attr->xC, lbAnim_8001E8F8(ftData_80085E50(fp, 297)));
+    PC_ATTR_STORE(ftData_attr->x10,
+                  lbAnim_8001E8F8(ftData_80085E50(fp, 298)));
     PUSH_ATTRS(fp, ftDonkeyAttributes);
     fp->x2222_b0 = true;
     fp->x2CC = fp->dat_attrs;
