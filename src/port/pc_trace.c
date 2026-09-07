@@ -1032,10 +1032,17 @@ static void pc_trace_camdump(void)
     }
     HSD_CObjGetEyePosition(c, &eye);
     HSD_CObjGetInterest(c, &tgt);
-    fprintf(stderr, "[CAM-PORT] gframe=%u eye=%08x %08x %08x tgt=%08x %08x %08x\n",
-            gf, *(const u32*) &eye.x, *(const u32*) &eye.y,
-            *(const u32*) &eye.z, *(const u32*) &tgt.x, *(const u32*) &tgt.y,
-            *(const u32*) &tgt.z);
+    {
+        extern void pc_camera_transform(float*);
+        float t[14];
+        int q;
+        pc_camera_transform(t);
+        fprintf(stderr, "[CAM-PORT] gframe=%u xf=", gf);
+        for (q = 0; q < 14; q++) {
+            fprintf(stderr, "%08x ", *(const u32*) &t[q]);
+        }
+        fprintf(stderr, "\n");
+    }
 }
 
 /* MELEE_PCTDUMP=<slot>:<from>-<to>: the damage percent as the float the game

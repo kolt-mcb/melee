@@ -949,6 +949,12 @@ void Camera_80029CF8(CameraBounds* bounds, CameraTransformState* transform)
         }
         if (on) {
             fprintf(stderr,
+                "[CAMSOLVE] ychain t=%08x ysum=%08x base=%08x ya=%08x "
+                "tanu=%08x tand=%08x disty=%08x yoff=%08x spread=%08x\n",
+                *(u32*) &t, *(u32*) &y_sum, *(u32*) &base, *(u32*) &y_angle,
+                *(u32*) &tan_u, *(u32*) &tan_d, *(u32*) &dist_y,
+                *(u32*) &y_off, *(u32*) &spread);
+            fprintf(stderr,
                 "[CAMSOLVE] gframe=%u box=(%08x,%08x,%08x,%08x) n=%d "
                 "z=%08x ti=(%08x,%08x) tp=(%08x,%08x) yoff=%08x dy=%08x "
                 "camb=(%08x,%08x,%08x,%08x)\n",
@@ -1440,6 +1446,43 @@ void Camera_8002A768(CameraTransformState* transform, s32 arg1)
         cam_correction.x *= temp_f1;
         cam_correction.y *= temp_f1;
         cam_correction.z *= temp_f1;
+#if BUILD_TARGET_PC
+        /* MELEE_CAMCLAMP=1: the frustum-corner clamp against the stage's
+         * camera bounds. The corners come out of two rotations and an
+         * atan2f each, so a bound crossed on one side and not the other
+         * moves the camera by the whole overlap, and nothing traced shows
+         * it -- the fighters are identical and the camera is not traced. */
+        if (getenv("MELEE_CAMCLAMP") != NULL) {
+            extern u32 gm_8016AEDC(void);
+            fprintf(stderr,
+                    "[CAMCLAMP] gframe=%u r30=%d r31=%d ov=(%08x,%08x,%08x,"
+                    "%08x) corr=(%08x,%08x) tl=(%08x,%08x) tr=(%08x,%08x) "
+                    "br=(%08x,%08x) bl=(%08x,%08x) pitch=%08x yaw=%08x "
+                    "hfov=%08x\n",
+                    (unsigned) gm_8016AEDC(), (int) var_r30, (int) var_r31,
+                    *(u32*) &top_overlap, *(u32*) &bottom_overlap,
+                    *(u32*) &left_overlap, *(u32*) &right_overlap,
+                    *(u32*) &cam_correction.x, *(u32*) &cam_correction.y,
+                    *(u32*) &top_left.x, *(u32*) &top_left.y,
+                    *(u32*) &top_right.x, *(u32*) &top_right.y,
+                    *(u32*) &bottom_right.x, *(u32*) &bottom_right.y,
+                    *(u32*) &bottom_left.x, *(u32*) &bottom_left.y,
+                    *(u32*) &pitch_angle, *(u32*) &temp_f0,
+                    *(u32*) &half_fov);
+            fprintf(stderr,
+                    "[CAMCLAMP] dist=(%08x,%08x,%08x) tfov=%08x asp=%08x "
+                    "tp=(%08x,%08x,%08x) ti=(%08x,%08x,%08x)\n",
+                    *(u32*) &dist.x, *(u32*) &dist.y, *(u32*) &dist.z,
+                    *(u32*) &transform->target_fov,
+                    *(u32*) &cm_803BCB64.aspect,
+                    *(u32*) &transform->target_position.x,
+                    *(u32*) &transform->target_position.y,
+                    *(u32*) &transform->target_position.z,
+                    *(u32*) &transform->target_interest.x,
+                    *(u32*) &transform->target_interest.y,
+                    *(u32*) &transform->target_interest.z);
+        }
+#endif
         lbVector_Add(&transform->target_position, &cam_correction);
         lbVector_Add(&transform->target_interest, &cam_correction);
     }
@@ -4341,6 +4384,19 @@ bool Camera_800307D0(f32* left, f32* center, f32* right)
     }
     return result;
 }
+
+#if BUILD_TARGET_PC
+/* src/port/pc_trace.c reads the camera through this rather than the CObj: the
+ * transform is what the solver writes and what the off-screen test is built
+ * on, and the CObj is a frame behind it. cm_80452C68 is static, so the trace
+ * cannot reach it any other way. */
+void pc_camera_transform(float* out14)
+{
+    /* The whole CameraTransformState in file order, so the tweened value and
+     * the target it is heading for can be told apart. */
+    memcpy(out14, &cm_80452C68.transform, 14 * sizeof(float));
+}
+#endif
 
 HSD_GObj* Camera_80030A50(void)
 {
