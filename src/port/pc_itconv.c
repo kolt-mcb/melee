@@ -426,25 +426,50 @@ static ItemStateArray* conv_states(const struct arch* a, u32 off, int* n_out)
     if (out == NULL) {
         return NULL;
     }
+    /* An archive registered without its relocation table cannot answer the
+     * question below. Say so rather than silently converting nothing: with
+     * no relocations every field would read as "not a pointer" and the item
+     * would lose its scripts, which looks like an item that does nothing. */
+    if (a->nrelocs == 0) {
+        port_guard_warn("pc_itconv.c:states-no-relocs");
+    }
     for (i = 0; i < n; i++) {
-        const u8* e = a->base + off + i * 16;
+        u32 fo = off + i * 16;
+        const u8* e = a->base + fo;
         u32 o0 = be32(e), o1 = be32(e + 4), o2 = be32(e + 8),
             o3 = be32(e + 12);
-        if (o0 != 0 && o0 < a->len) {
+        /* Only the words the archive relocates are pointers. Three stages
+         * leave a non-zero, in-range value in a field they do not use --
+         * Corneria, Brinstar Depths and Venom all store `own offset + 0x10`
+         * in the matanim and shapeanim words of every state -- and the
+         * console never notices, because it never reads a field it did not
+         * relocate. Converting them walked a "tree" whose child and next
+         * both point into the state array itself, which branches twice per
+         * node and never terminates: the depth cap is 10000, so it ran the
+         * arena dry and lbHeap_80015BD0 handed back a pointer 4 GB past the
+         * end, and the memset at the top of the joint converter faulted on
+         * it. Every character crashed on Corneria and only there, because
+         * only the stage-item path reaches this with such a file.
+         *
+         * Zero and -1 were already rejected. The relocation table is what
+         * separates the rest, and it is the same rule the dynamics
+         * descriptor needed: an offset means nothing until the archive says
+         * it is one. */
+        if (o0 != 0 && o0 < a->len && (a->nrelocs == 0 || arch_is_ptr(a, fo))) {
             out[i].x0_anim_joint = grDatFiles_ConvertAnimJointTreeGCNtoX64(
                 a->base + o0, (u8*) a->base, 0);
         }
-        if (o1 != 0 && o1 < a->len) {
+        if (o1 != 0 && o1 < a->len && (a->nrelocs == 0 || arch_is_ptr(a, fo + 4))) {
             out[i].x4_matanim_joint =
                 grDatFiles_ConvertMatAnimJointTreeGCNtoX64(a->base + o1,
                                                            (u8*) a->base, 0);
         }
-        if (o2 != 0 && o2 < a->len) {
+        if (o2 != 0 && o2 < a->len && (a->nrelocs == 0 || arch_is_ptr(a, fo + 8))) {
             out[i].x8_parameters =
                 grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(
                     a->base + o2, (u8*) a->base, 0);
         }
-        if (o3 != 0 && o3 < a->len) {
+        if (o3 != 0 && o3 < a->len && (a->nrelocs == 0 || arch_is_ptr(a, fo + 12))) {
             out[i].xC_script = (void*) (a->base + o3);
         }
     }
