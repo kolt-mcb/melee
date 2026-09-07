@@ -213,3 +213,4 @@ undef_data.txt
 # this build, so the driver replays a recorded route instead.)
 tests/pc/states/
 tests/pc/lockstep_logs/
+tests/pc/lockstep_matrix.json
