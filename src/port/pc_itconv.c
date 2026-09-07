@@ -688,6 +688,10 @@ static void conv_scalars(void* dst, const u8* src, unsigned long nbytes)
     swap_words(dst, src, nbytes);
 }
 
+/* it_80293660 in itkinoko.c takes the two poison-mushroom animations from
+ * here; see the It_Kind_Kinoko case below. */
+void* pc_kinoko_anim[2];
+
 static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
                             int kind)
 {
@@ -704,6 +708,22 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
     r = a->base + spec_off;
 
     switch (kind) {
+    case It_Kind_Kinoko: {
+        /* The mushroom's attribute block is read two ways: itkinoko.c reads
+         * it as KinokoAttrs (three scalars, same offsets both layouts, which
+         * the flat swapped copy already serves) and it_80293660 reads words
+         * two and three of it as HSD_AnimJoint*. A pointer is eight bytes
+         * here, so the second view cannot share the flat copy -- KinokoAnim's
+         * stride is wrong and the offsets are not pointers. Convert the two
+         * trees once, here, and let it_80293660 take them from this table.
+         *
+         * Left unconverted, Fighter_PoisonMushroomApply walked off a null
+         * article into HSD_JObjAddAnim and the port died on the first poison
+         * mushroom -- match frame 6175 of the CPU fight. */
+        pc_kinoko_anim[0] = conv_anim_at(a, be32(r + 0x8), 0);
+        pc_kinoko_anim[1] = conv_anim_at(a, be32(r + 0xC), 0);
+        break;
+    }
     case It_Kind_Samus_GBeam: {
         itSamusGrappleAttributes* g = zalloc(sizeof(*g));
         int i;

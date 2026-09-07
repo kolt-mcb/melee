@@ -17,8 +17,20 @@ ItemStateTable it_803F6110[] = {
 
 HSD_AnimJoint* it_80293660(int idx)
 {
+#if BUILD_TARGET_PC
+    /* KinokoAnim is a bare HSD_AnimJoint*, so on GCN this indexes the
+     * attribute block by four-byte words; here the stride would be eight and
+     * the words are file offsets rather than pointers. src/port/pc_itconv.c
+     * converts the two trees when it builds the article. */
+    extern void* pc_kinoko_anim[2];
+    if (idx < 0 || idx > 1) {
+        return NULL;
+    }
+    return (HSD_AnimJoint*) pc_kinoko_anim[idx];
+#else
     KinokoAnim* attrs = it_804D6D24[It_Kind_Kinoko]->x4_specialAttributes;
     return attrs[idx + 2].joint;
+#endif
 }
 
 void itKinoko_Logic26_Spawned(Item_GObj* gobj)
