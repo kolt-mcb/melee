@@ -3005,6 +3005,20 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                     }
                 }
 
+#if BUILD_TARGET_PC
+                /* MELEE_KBDBG=1: which branch the airborne knockback decay
+                 * takes and what it leaves behind. The console gives the same
+                 * from MELEE_FTDUMP=<slot>:80:6. */
+                if (getenv("MELEE_KBDBG") != NULL) {
+                    extern u32 gm_8016AEDC(void);
+                    fprintf(stderr,
+                            "[KBDECAY] gframe=%u b2=%d in=(%08x,%08x) "
+                            "out=(%08x,%08x)\n",
+                            (unsigned) gm_8016AEDC(), (int) fp->x2228_b2,
+                            *(u32*) &kb_vel_x, *(u32*) &kb_vel_y,
+                            *(u32*) &p_kb_vel->x, *(u32*) &p_kb_vel->y);
+                }
+#endif
                 fp->xF0_ground_kb_vel = 0;
             } else {
                 Vec3* pNormal = &fp->coll_data.floor.normal;
