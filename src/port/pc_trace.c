@@ -38,6 +38,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <melee/gr/ground.h>
 #include <melee/gr/types.h>
 #include <melee/ft/fighter.h>
 #include <melee/ft/types.h>
@@ -59,7 +60,7 @@ extern u32 seed;
 
 /* Kept identical to MELEE_TRACE_HEADER in the local Dolphin's Core.cpp. */
 #define PC_TRACE_HEADER                                                       \
-    "#fields frame gframe mode scene seed"                                               \
+    "#fields frame gframe mode scene seed stage"                                         \
     " p_state p_char p_pct p_stk p_motion p_animf p_x p_y p_face p_vx p_vy "  \
     "p_goa p_floor p_env p_ecbbx p_ecbby"
 
@@ -1304,9 +1305,14 @@ void pc_trace_frame(int frame)
      * divergence report cannot distinguish "the simulation drifted" from "the
      * two sides are in different scenes entirely", which is the failure that
      * actually happens when an input script goes off the rails. */
-    n += snprintf(line + n, sizeof(line) - n, "%d %u %u %u %08X", frame,
+    /* And the stage says *which match*. A per-stage comparison has to be
+     * able to tell a stage that behaves differently from a route that
+     * selected the wrong one -- without this column the two look identical
+     * from here, as a pile of position differences on the first frame. */
+    n += snprintf(line + n, sizeof(line) - n, "%d %u %u %u %08X %d", frame,
                   (unsigned) gm_8016AEDC(), (unsigned) gm_GetCurrentGameMode(),
-                  (unsigned) gm_GetCurrentSceneIndex(), (unsigned) seed);
+                  (unsigned) gm_GetCurrentSceneIndex(), (unsigned) seed,
+                  (int) stage_info.grkind);
 
     for (i = 0; i < PC_TRACE_PLAYERS; i++) {
         StaticPlayer* sp = Player_GetPtrForSlot(i);

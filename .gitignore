@@ -206,3 +206,10 @@ tools/android/app/build
 tools/android/app/local.properties
 wasm_*.log
 undef_data.txt
+
+# Dolphin save states written by the local build's MELEE_SAVE_STATE hook.
+# 21 MB each and regenerable. (Booting from one would remove the lockstep
+# driver's menu walk, but dolphin-emu's -s hangs before emulation starts in
+# this build, so the driver replays a recorded route instead.)
+tests/pc/states/
+tests/pc/lockstep_logs/

@@ -133,7 +133,31 @@ NOMATCH_RE = re.compile(r"NO FRAMES COMPARED")
 EARLY_RE = re.compile(r"STOPPED EARLY after (\d+) of (\d+) frames")
 
 
+LOGS = os.path.join(REPO, "tests", "pc", "lockstep_logs")
+
+
+def reap():
+    """Kill anything the last cell left behind.
+
+    A run leaves two heavyweight processes and the sweep is 750 runs long, so
+    one that does not clean up after itself is not a leak, it is an
+    out-of-memory kill several hours in with nothing to show for it. The
+    matrix suite has needed the same guard since the beginning.
+    """
+    for pat in (["pkill", "-x", "melee-pc"],
+                ["pkill", "-f", "dolphin-emu-nogui"]):
+        subprocess.run(pat, capture_output=True)
+    for _ in range(40):
+        if (subprocess.run(["pgrep", "-x", "melee-pc"],
+                           capture_output=True).returncode != 0 and
+                subprocess.run(["pgrep", "-f", "dolphin-emu-nogui"],
+                               capture_output=True).returncode != 0):
+            return
+        time.sleep(0.5)
+
+
 def run_cell(name, frames, timeout, cpu):
+    reap()
     argv = [sys.executable, os.path.join(HERE, "pc_lockstep.py"), name,
             "--frames", str(frames), "--headless", "--stop-on-divergence"]
     if cpu:
@@ -169,7 +193,15 @@ def run_cell(name, frames, timeout, cpu):
         info["frame"] = int(early.group(1))
     else:
         info["verdict"] = "timeout" if rc == -1 else "no-verdict"
-    info["log"] = out[-20000:]
+    # The log goes to a file rather than into the results, which are read
+    # whole every time a cell finishes: 750 cells of it is a results file
+    # nobody can open and a dictionary that grows all run.
+    if info["verdict"] != "identical":
+        os.makedirs(LOGS, exist_ok=True)
+        path = os.path.join(LOGS, name + ".log")
+        with open(path, "w") as f:
+            f.write(out[-40000:])
+        info["log"] = os.path.relpath(path, REPO)
     return info
 
 
@@ -192,9 +224,12 @@ def cells(chars, stages, pair):
     "rotate" pairs it with the character half a roster away, which is the
     cheapest way to get two different characters' data into the same match.
     """
+    # Stage-major, the way tools/pc_matrix.py walks it: a stage is the axis
+    # a divergence has so far been about, so finishing one stage across the
+    # whole roster says more early than finishing one character.
     modes = ("mirror", "rotate") if pair == "both" else (pair,)
-    for ck in chars:
-        for st in stages:
+    for st in stages:
+        for ck in chars:
             if mx.STAGES[st] in mx.ABSENT_FROM_DISC:
                 continue
             for mode in modes:
@@ -263,7 +298,12 @@ def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
-    r.add_argument("--chars"); r.add_argument("--stages")
+    # The same ranges tools/pc_matrix.py runs: every character, and every
+    # stage from Izumi to Last. Sheik has no character-select icon (Zelda
+    # transforms into her), so that row records as no-icon rather than
+    # pretending to a route that cannot exist.
+    r.add_argument("--chars", default="0-25")
+    r.add_argument("--stages", default="2-32")
     r.add_argument("--frames", type=int, default=1200)
     r.add_argument("--timeout", type=int, default=900)
     r.add_argument("--cpu", default="9,9")
