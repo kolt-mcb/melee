@@ -288,10 +288,63 @@ void lbVector_RotateAboutUnitAxis(Vec3* v, Vec3* axis, float angle)
     }
 }
 
+#if BUILD_TARGET_PC
+/* MWCC does not call sin()/cos() here: 8000DB00 inlines a fifth-order minimax
+ * polynomial for both. The argument is reduced into [-pi, pi] by adding or
+ * subtracting 2*pi once -- in double, then rounded to float with frsp -- and
+ * then
+ *     sin(x) ~ 0.98786199f*x - 0.15527099f*x^3 + 0.0056429999f*x^5
+ * with cos(x) the same polynomial evaluated at x + pi/2 (also reduced).
+ *
+ * It is not an accurate sine. At 15 degrees it is 1.2% low, so calling the C
+ * library's sin() here does not reproduce the console: the camera builds its
+ * frustum corners out of two of these rotations, and with a true sine the
+ * corners came out 1.7% further from the centre. On the one frame a corner
+ * crossed the stage's camera bound the clamp then pushed the camera by 2.26
+ * units where the console pushed it by 1.27, and the camera never came back
+ * -- which is what decided the off-screen damage tick a few frames later.
+ *
+ * Every product is single-rounded and the last two are fused, in the order
+ * 8000DB40-8000DB78 does them; the polynomial is close enough to zero at
+ * these angles that the pairing is visible in the result. */
+static f32 lb_rot_reduce(f32 angle)
+{
+    if ((f64) angle > 3.141592653589793) {
+        return (f32) ((f64) angle - 6.283185307179586);
+    }
+    if ((f64) angle < -3.141592653589793) {
+        return (f32) ((f64) angle + 6.283185307179586);
+    }
+    return angle;
+}
+
+static f32 lb_rot_sin(f32 x)
+{
+    f32 c5 = 0.005642999894917011f;
+    f32 c3 = 0.1552709937095642f;
+    f32 c1 = 0.9878619909286499f;
+    f32 a = c5 * x;   /* 8000DB40 */
+    f32 b = c3 * x;   /* 8000DB48 */
+    a = a * x;        /* 8000DB54 */
+    b = b * x;        /* 8000DB5C */
+    a = x * a;        /* 8000DB64 */
+    b = x * b;        /* 8000DB68 */
+    a = x * a;        /* 8000DB70 */
+    /* 8000DB74 fmsubs, 8000DB78 fmadds */
+    return LV_FMA(x, a, LV_FMA(c1, x, -b));
+}
+#endif
+
 void lbVector_Rotate(Vec3* v, int axis, float angle)
 {
+#if BUILD_TARGET_PC
+    float s = lb_rot_sin(lb_rot_reduce(angle));
+    float c = lb_rot_sin(
+        lb_rot_reduce((f32) ((f64) angle + 1.5707963267948966)));
+#else
     float s = sin(angle);
     float c = cos(angle);
+#endif
     float x;
     float y;
     float z;
