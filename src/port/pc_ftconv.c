@@ -222,6 +222,31 @@ void* pc_ftconv_vislookup(void* raw, unsigned model_num)
  * (F/B/Hi/Lw). */
 #define PC_SS_GBEAM_THROWS 4
 
+/* One entry of a part animation's HSD_AnimJoint* array, converted the first
+ * time it is asked for. The array's length is not recorded anywhere in the
+ * file, so converting it eagerly would mean handing whatever follows it to
+ * the anim-joint reader; converting on demand only ever touches an index the
+ * game itself named. */
+HSD_AnimJoint* pc_ftconv_partanim(struct ftData_x1C* rec, int k)
+{
+    u32 a;
+    if (rec == NULL || rec->x8 == NULL || k < 0 ||
+        (u32) k >= rec->pc_x8_max)
+    {
+        return NULL;
+    }
+    if (rec->x8[k] != NULL) {
+        return rec->x8[k];
+    }
+    a = pc_be32(((const u32*) (rec->pc_base + rec->pc_x8_off))[k]);
+    if (a == 0 || a >= rec->pc_len) {
+        return NULL;
+    }
+    rec->x8[k] = grDatFiles_ConvertAnimJointTreeGCNtoX64(
+        (void*) (rec->pc_base + a), (void*) rec->pc_base, 0);
+    return rec->x8[k];
+}
+
 void* pc_ftconv_samus_gbeam(void* raw)
 {
     /* Keyed on the archive as well as the record: Samus reloads on every
@@ -1007,6 +1032,104 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                         rec->x0,
                         rec->x0 ? ((HSD_Joint**) rec->x0)[2] : NULL,
                         (void*) rec->x8);
+            }
+        }
+    }
+
+    /* +0x1C the per-part animation table: an array of pointers to
+     * { u16 start_part; u16 part_count; u8* parts; HSD_AnimJoint** anims }.
+     * ftAnim_800707B0 blends the animation skeleton into the displayed one
+     * for each listed part every frame a slot is active, and ftAnim_80070CC4
+     * ends it. Left NULL, none of that ran: the parts a part-animation owns
+     * kept whatever the main animation left them, and -- because
+     * lbCopyJObjSRT is also what marks those joints' matrices dirty -- their
+     * world matrices were then rebuilt at a different point in the frame
+     * than on the console. DK's item-carry joint is one of them, so a thrown
+     * item left his hand from the wrong place.
+     *
+     * LEN: the records are contiguous and sit immediately before the pointer
+     * array, so the count is (array - first record) / 0xC; DK has three and
+     * Ness one. Anything past that in the array is unrelated file data, and
+     * the field checks below reject it. fp->x8B0[5] bounds it regardless.
+     *
+     * The anims array is converted lazily -- see ftData_x1C in ft/types.h. */
+    off = pc_be32(*(const u32*) (raw + 0x1C));
+    if (off != 0 && off + 4u <= len) {
+        u32 first = pc_be32(*(const u32*) (base + off));
+        unsigned n = 0;
+        if (first != 0 && first < off && (off - first) % 0xCu == 0) {
+            n = (off - first) / 0xCu;
+        }
+        if (n > FT_PARTANIM_SLOTS) {
+            n = FT_PARTANIM_SLOTS;
+        }
+        if (n != 0 && off + n * 4u <= len) {
+            struct ftData_x1C** arr =
+                pc_lowmem_alloc(sizeof(*arr) * FT_PARTANIM_SLOTS);
+            if (arr != NULL) {
+                unsigned q;
+                memset(arr, 0, sizeof(*arr) * FT_PARTANIM_SLOTS);
+                for (q = 0; q < n; q++) {
+                    u32 ro = pc_be32(((const u32*) (base + off))[q]);
+                    const u8* r;
+                    u32 c, x4o, x8o;
+                    struct ftData_x1C* rec;
+                    if (ro == 0 || ro + 0xCu > len) {
+                        continue;
+                    }
+                    r = base + ro;
+                    c = (u32) (u16) ((r[2] << 8) | r[3]);
+                    x4o = pc_be32(*(const u32*) (r + 4));
+                    x8o = pc_be32(*(const u32*) (r + 8));
+                    if (c == 0 || c > 64 || x4o == 0 || x4o + c > len ||
+                        x8o == 0 || x8o + 4u > len)
+                    {
+                        continue;
+                    }
+                    rec = pc_lowmem_alloc(sizeof(*rec));
+                    if (rec == NULL) {
+                        continue;
+                    }
+                    memset(rec, 0, sizeof(*rec));
+                    rec->x0 = (u16) ((r[0] << 8) | r[1]);
+                    rec->x2 = (u16) c;
+                    /* The part list is one byte per entry, so it needs no
+                     * swapping and can be read where it lies. */
+                    rec->x4 = (u8*) (base + x4o);
+                    rec->pc_base = base;
+                    rec->pc_len = len;
+                    rec->pc_x8_off = x8o;
+                    /* Bounded by the next record's part list where there is
+                     * one: the two arrays are laid out back to back. */
+                    rec->pc_x8_max = FT_PARTANIM_MAX;
+                    if (q + 1 < n) {
+                        u32 nro = pc_be32(((const u32*) (base + off))[q + 1]);
+                        if (nro != 0 && nro + 0xCu <= len) {
+                            u32 nx4 = pc_be32(*(const u32*) (base + nro + 4));
+                            if (nx4 > x8o && (nx4 - x8o) % 4u == 0 &&
+                                (nx4 - x8o) / 4u <= FT_PARTANIM_MAX)
+                            {
+                                rec->pc_x8_max = (nx4 - x8o) / 4u;
+                            }
+                        }
+                    }
+                    rec->x8 = pc_lowmem_alloc(sizeof(HSD_AnimJoint*) *
+                                              rec->pc_x8_max);
+                    if (rec->x8 == NULL) {
+                        continue;
+                    }
+                    memset(rec->x8, 0,
+                           sizeof(HSD_AnimJoint*) * rec->pc_x8_max);
+                    arr[q] = rec;
+                    if (pc_ftconv_trace()) {
+                        fprintf(stderr,
+                                "[FTCONV] part anim %u: start=%u parts=%u "
+                                "anims<=%u\n",
+                                q, (unsigned) rec->x0, (unsigned) rec->x2,
+                                (unsigned) rec->pc_x8_max);
+                    }
+                }
+                out->x1C = arr;
             }
         }
     }
