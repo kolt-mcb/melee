@@ -158,6 +158,7 @@ def emit(char0, char1, base, gap=60, hold_gap=10, lag=0):
 SSS_TABLE = 0x803F06D0
 SSS_STRIDE = 0x1C
 SSS_KIND_OFF = 0xB
+SSS_SEL_OFF = 0x8
 SSS_PANELS = 30
 
 
@@ -184,9 +185,20 @@ def sss_kinds(path=None):
 
 def stage_poke(kind):
     """MELEE_POKE spec that makes every stage-select panel commit `kind`."""
-    return ",".join("%x:1:%x" % (SSS_TABLE + SSS_STRIDE * i + SSS_KIND_OFF,
-                                 kind)
-                    for i in range(SSS_PANELS))
+    out = []
+    for i in range(SSS_PANELS):
+        base = SSS_TABLE + SSS_STRIDE * i
+        out.append("%x:1:%x" % (base + SSS_KIND_OFF, kind))
+        # And selectable. +0x8 is set at load from gm_80164430(kind), the
+        # unlock check, and mnStageSel's A press requires it to be >= 2.
+        # Poking only the kind gave every panel the lock state of the stage
+        # being asked for, so the six unlockable stages -- Flat Zone, the
+        # three N64 stages, Battlefield and Final Destination -- had no
+        # selectable panel at all: the press played the denied sound and the
+        # run sat in the stage select until the harness killed it. Both sides
+        # get the same treatment, which is what keeps them comparable.
+        out.append("%x:1:2" % (base + SSS_SEL_OFF))
+    return ",".join(out)
 
 
 # The parts of the walk that do not depend on the lineup: intro, title, the

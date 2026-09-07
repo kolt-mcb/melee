@@ -4,6 +4,10 @@
 
 #include "mnstagesel.static.h"
 
+#if BUILD_TARGET_PC
+void pc_sss_force_panels(void);
+#endif
+
 #include "placeholder.h"
 
 #include "lb/lb_013B.h"
@@ -593,16 +597,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
      * what makes their frames comparable in the first place -- forcing the
      * stage on one side and selecting it on the other would have the port
      * skip a scene the console runs. */
-    {
-        const char* sk = getenv("MELEE_SSS_KIND");
-        if (sk != NULL) {
-            int i;
-            u8 kind = (u8) atoi(sk);
-            for (i = 0; i < 30; i++) {
-                mnStageSel_803F06D0[i].xB = kind;
-            }
-        }
-    }
+    pc_sss_force_panels();
 #endif
 
     if (mnStageSel_804D6C90->force_stage_id < 0) {
@@ -948,8 +943,58 @@ static inline HSD_PadStatus* get_pad(u8 i)
 }
 
 /// OnFrame
+#if BUILD_TARGET_PC
+/* MELEE_SSS_KIND=<StKind> makes every panel on this screen commit that stage.
+ * OnFrame below sets the match's stage from
+ * mnStageSel_803F06D0[selected].xB and nothing else, so a route that lands
+ * the cursor anywhere selectable now selects the stage asked for.
+ *
+ * This exists for tools/pc_lockstep_matrix.py, which compares every character
+ * on every stage against Dolphin. Dolphin cannot be booted into a match, so
+ * it walks these menus, and writing 806 stage-select routes is not a plan;
+ * the harness rewrites the same table in the console's memory through
+ * MELEE_POKE. Doing it here as well keeps the two sides walking the same
+ * screens with the same presses, which is what makes their frames comparable
+ * at all -- forcing the stage on one side and selecting it on the other would
+ * have the port skip a scene the console runs.
+ *
+ * x8 has to go with it. It is the selectable flag, written at load from
+ * gm_80164430(xB) -- the unlock check -- and the A press requires it to be
+ * >= 2. Setting only the kind gave every panel the lock state of the stage
+ * being asked for, so the six unlockable stages had no panel that could be
+ * picked at all.
+ *
+ * Called every frame, not once on entry: the load path writes x8 from the
+ * unlock check *after* OnEnter runs, so a single write there is overwritten
+ * and the screen sits there forever. The console's side of this is a
+ * per-frame write for the same reason. */
+void pc_sss_force_panels(void)
+{
+    static const char* sk;
+    static int checked;
+    int i;
+    u8 kind;
+
+    if (!checked) {
+        checked = 1;
+        sk = getenv("MELEE_SSS_KIND");
+    }
+    if (sk == NULL) {
+        return;
+    }
+    kind = (u8) atoi(sk);
+    for (i = 0; i < 30; i++) {
+        mnStageSel_803F06D0[i].xB = kind;
+        mnStageSel_803F06D0[i].x8 = 2;
+    }
+}
+#endif
+
 void mnStageSel_8025B850_OnFrame(void)
 {
+#if BUILD_TARGET_PC
+    pc_sss_force_panels();
+#endif
     if (mnStageSel_804D6C90->force_stage_id >= 0) {
         mnStageSel_804D6CAF = 2;
         mnStageSel_804D6C90->data.data.rules.xE =
