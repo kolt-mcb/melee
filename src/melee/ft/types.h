@@ -2031,6 +2031,13 @@ struct ArticleDynamicBones {
     BoneDynamicsDesc array[Ft_Dynamics_NumMax];
 };
 
+#if BUILD_TARGET_PC
+/* Blend slots in ftDynamics::x10. The index comes from ftData::x10, a byte
+ * per animation; a slot past what the file holds is left NULL, which is the
+ * same "no table" answer the console gives for an empty entry. */
+#define FT_DYNSLOT_MAX 16
+#endif
+
 struct ftDynamics {
     /// @todo Very similar to #ItemDynamics.
     struct {

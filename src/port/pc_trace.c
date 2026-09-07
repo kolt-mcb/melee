@@ -838,6 +838,23 @@ static void pc_trace_bones(void)
     if (fp == NULL || fp->parts == NULL) {
         return;
     }
+    /* The per-part flag byte: b5 is the "a part animation owns this part"
+     * bit, and ftAnim_8006F3DC picks the joint it reads the animation frame
+     * from by skipping every part that has it. A part animation that runs on
+     * one side and not the other shows here before it shows anywhere else. */
+    {
+        int pn = ftPartsTable[fp->kind]->parts_num;
+        fprintf(stderr, "[PARTFLAGS-PORT] p%d gframe=%u n=%d x594=%08x dyn=%d "
+                "af=%08x fsm=%08x blend=%08x",
+                want_p, want_f, pn, (unsigned) fp->x594_s32,
+                (int) fp->dynamics_num, *(u32*) &fp->cur_anim_frame,
+                *(u32*) &fp->frame_speed_mul,
+                *(u32*) &fp->x8A4_animBlendFrames);
+        for (b = 0; b < pn && b < 80; b++) {
+            fprintf(stderr, " %02x", (unsigned) fp->parts[b].hi);
+        }
+        fprintf(stderr, "\n");
+    }
     fprintf(stderr, "[HURTBONE-PORT] p%d n=%d", want_p,
             (int) fp->hurt_capsules_len);
     for (b = 0; b < (int) fp->hurt_capsules_len; b++) {
@@ -899,6 +916,15 @@ static void pc_trace_bones(void)
                 w = (const u32*) &j->mtx[0][0];
                 for (k = 0; k < 12; k++) {
                     fprintf(stderr, " m%d=%08x", k, w[k]);
+                }
+                /* The AObj on the *displayed* joint: ftAnim_8006F3DC reads
+                 * the fighter's animation frame straight off it, so a frame
+                 * that stops advancing shows here and nowhere else. */
+                fprintf(stderr, " jao=%d", j->aobj != NULL);
+                if (j->aobj != NULL) {
+                    const u32* a = (const u32*) j->aobj;
+                    fprintf(stderr, " jaofl=%08x jaocurr=%08x jaorate=%08x",
+                            a[0], a[1], a[4]);
                 }
                 /* The animation skeleton as well as the displayed one: these
                  * two are what the blend combines, so a difference in the

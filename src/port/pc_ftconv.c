@@ -971,6 +971,66 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                 }
                 dy->dynamicsNum = dnum;
                 dy->ftDynamicBones = ab;
+                /* +0x10 of the dynamics record is a per-blend-slot table of
+                 * per-chain values. ftCo_8009CB40 compares its loop counter
+                 * against the value, so it says how many joints at the head
+                 * of a chain the animation still drives rather than the
+                 * physics; DK's one chain has the value 1. The decomp types
+                 * it FigaTree*** because the console hands the value straight
+                 * through a pointer parameter -- these really are 0, 1, 2 --
+                 * so it is stored the same way here.
+                 *
+                 * Left NULL, ftCo_8009E7B4 took its "no table" path and
+                 * switched every chain off the frame the fighter's first
+                 * animation with the b4 bit began: on DK that is the tie, and
+                 * with the tie's parts no longer flagged, ftAnim_8006F3DC
+                 * read the animation frame off one of them and returned 0
+                 * forever.
+                 *
+                 * LEN: the per-slot arrays are contiguous and sit immediately
+                 * before the table, as the part-animation records do, so the
+                 * slot count is (table - first array) / (chains * 4). */
+                {
+                    u32 xoff = pc_be32(*(const u32*) (d + 0x10));
+                    u32 stride = (u32) dnum * 4u;
+                    if (xoff != 0 && xoff + 4u <= len && stride != 0) {
+                        u32 f0 = pc_be32(*(const u32*) (base + xoff));
+                        unsigned slots = 0;
+                        if (f0 != 0 && f0 < xoff && (xoff - f0) % stride == 0) {
+                            slots = (xoff - f0) / stride;
+                        }
+                        if (slots > FT_DYNSLOT_MAX) {
+                            slots = FT_DYNSLOT_MAX;
+                        }
+                        if (slots != 0 && xoff + slots * 4u <= len) {
+                            FigaTree*** tbl = pc_lowmem_alloc(
+                                sizeof(*tbl) * FT_DYNSLOT_MAX);
+                            unsigned q;
+                            if (tbl != NULL) {
+                                memset(tbl, 0, sizeof(*tbl) * FT_DYNSLOT_MAX);
+                                for (q = 0; q < slots; q++) {
+                                    u32 ao =
+                                        pc_be32(((const u32*) (base + xoff))[q]);
+                                    FigaTree** row;
+                                    int k;
+                                    if (ao == 0 || ao + stride > len) {
+                                        continue;
+                                    }
+                                    row = pc_lowmem_alloc(sizeof(*row) * dnum);
+                                    if (row == NULL) {
+                                        continue;
+                                    }
+                                    for (k = 0; k < dnum; k++) {
+                                        row[k] = (FigaTree*) (uintptr_t)
+                                            pc_be32(((const u32*) (base + ao))[k]);
+                                    }
+                                    tbl[q] = row;
+                                }
+                                dy->x10 = tbl;
+                            }
+                        }
+                    }
+                }
                 out->x2C = dy;
                 if (pc_ftconv_trace()) {
                     fprintf(stderr,
