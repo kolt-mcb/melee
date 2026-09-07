@@ -375,7 +375,15 @@ void ftYs_Init_8012B6E8(Fighter* fp, struct S_UNK_YOSHI1* unk_struct_arg)
     s32 i;
     float zero_float;
 
-    attr_r26 = FT_EXT_ATTR(fp);
+    /* ftYs_Init_OnLoad calls this before its PUSH_ATTRS, so on this side
+     * fp->dat_attrs -- what FT_EXT_ATTR resolves to -- is still NULL and the
+     * xC below dereferenced it. The console has one live copy of the block
+     * and this hook writes into it; here the raw archive block is the only
+     * one that exists yet, and PUSH_ATTRS byteswaps it into dat_attrs
+     * afterwards, so the value is stored big-endian and read back the same
+     * way. Same shape as ftPe_Init_OnLoad and the other write-before-push
+     * hooks. */
+    attr_r26 = fp->ft_data->ext_attr;
     index = (unk_struct1 = unk_struct_arg)->unk_struct->xC_start_index;
     ptr2EndIndex = (s32*) (&unk_struct1->unk_struct->x8_end_index);
     zero_float = 0.0f;
@@ -394,10 +402,10 @@ void ftYs_Init_8012B6E8(Fighter* fp, struct S_UNK_YOSHI1* unk_struct_arg)
         aobj_r24 = mobj_r3->aobj;
         HSD_AObjSetRate(aobj_r24, 0.0f);
 
-        if (zero_float == attr_r26->xC) {
-            attr_r26->xC = HSD_AObjGetEndFrame(aobj_r24);
+        if (zero_float == PC_ATTR_LOAD(attr_r26->xC)) {
+            PC_ATTR_STORE(attr_r26->xC, HSD_AObjGetEndFrame(aobj_r24));
         } else {
-            if (attr_r26->xC != HSD_AObjGetEndFrame(aobj_r24)) {
+            if (PC_ATTR_LOAD(attr_r26->xC) != HSD_AObjGetEndFrame(aobj_r24)) {
                 HSD_ASSERTREPORT(97, 0, "yoshi matanim frame not same\n");
             }
         }

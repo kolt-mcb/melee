@@ -89,6 +89,16 @@
  * written there comes out reversed -- and re-applying it on dat_attrs after
  * PUSH_ATTRS is undone by the next COPY_ATTRS. Store it big-endian instead
  * and every copy downstream lands the right way up. */
+/* The read side of PC_ATTR_STORE, for a hook that reads back what it wrote
+ * before PUSH_ATTRS has run. */
+#define PC_ATTR_LOAD(src)                                                     \
+    ((f32) ({                                                                 \
+        u32 w_ = *(const u32*) &(src);                                        \
+        w_ = ((w_ >> 24) & 0xFF) | ((w_ >> 8) & 0xFF00) |                     \
+             ((w_ << 8) & 0xFF0000) | ((w_ << 24));                           \
+        *(f32*) &w_;                                                          \
+    }))
+
 #define PC_ATTR_STORE(dst, value)                                             \
     do {                                                                      \
         f32 v_ = (value);                                                     \
@@ -116,6 +126,7 @@
         }                                                                     \
     } while (0);
 #else
+#define PC_ATTR_LOAD(src) (src)
 #define PC_ATTR_STORE(dst, value) ((dst) = (value))
 
 #define COPY_ATTRS(gobj, attributeName)                                       \
