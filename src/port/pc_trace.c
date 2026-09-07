@@ -875,11 +875,17 @@ static void pc_trace_bones(void)
     {
         int pn = ftPartsTable[fp->kind]->parts_num;
         fprintf(stderr, "[PARTFLAGS-PORT] p%d gframe=%u n=%d x594=%08x dyn=%d "
-                "af=%08x fsm=%08x blend=%08x",
+                "af=%08x fsm=%08x blend=%08x cmdt=%08x cmdfc=%08x col=(%d,%d,%p,%d,%p,%d,%p)",
                 want_p, want_f, pn, (unsigned) fp->x594_s32,
                 (int) fp->dynamics_num, *(u32*) &fp->cur_anim_frame,
                 *(u32*) &fp->frame_speed_mul,
-                *(u32*) &fp->x8A4_animBlendFrames);
+                *(u32*) &fp->x8A4_animBlendFrames,
+                *(u32*) &fp->x3E4_fighterCmdScript.timer,
+                *(u32*) &fp->x3E4_fighterCmdScript.frame_count,
+                (int) fp->x488.x0_timer, (int) fp->x488.x4_pri,
+                (void*) fp->x488.x8_ptr1, (int) fp->x488.xC_loop,
+                (void*) fp->x488.x10_ptr2, (int) fp->x488.x14,
+                (void*) fp->x488.x18_alloc);
         for (b = 0; b < pn && b < 80; b++) {
             fprintf(stderr, " %02x", (unsigned) fp->parts[b].hi);
         }
