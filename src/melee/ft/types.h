@@ -996,6 +996,35 @@ struct Fighter_DemoStrings {
 /// @todo Rename this and its members; investigate using it elsewhere.
 /* fp+2070 */ union Struct2070 {
     /* fp+2070 */ struct {
+#if BUILD_TARGET_PC
+        /* This union is written and read both ways round -- as the whole word
+         * (pl_80037C60 takes x2070_int) and a byte or a bit at a time. On GCN
+         * the word is big-endian over the four bytes and the bitfields fill
+         * MSB-first, so both views agree. Here the word is little-endian and
+         * the bitfields fill LSB-first, so they disagreed twice over: with
+         * x2070_int holding the console's value 0x00002064, x2073 read 0
+         * where the byte is 0x64 and x2071_b5 read 1 where it is 0.
+         *
+         * Reversing the whole declaration -- the bytes and the bits within
+         * each byte -- puts every member back on the bits GCN gave it.
+         * ftSs_Init_80128944 reads exactly these two to decide whether
+         * Samus's own bomb launches her, so on this side it never did. */
+        /* fp+2073 */ u8 x2073;
+        /* fp+2072:7 */ u8 count_specials : 1;
+        /* fp+2072:6 */ u8 count_x1A0 : 1;
+        /* fp+2072:5 */ u8 count_aerials : 1;
+        /* fp+2072:4 */ u8 count_thrown_items : 1;
+        /* fp+2072:3 */ u8 count_x1A4 : 1;
+        /* fp+2072:2 */ u8 x2072_b2 : 1;
+        /* fp+2072:1 */ u8 x2072_b1 : 1;
+        /* fp+2072:0 */ u8 x2072_b0 : 1;
+        /* fp+2071:7 */ u8 x2071_b7 : 1;
+        /* fp+2071:6 */ u8 x2071_b6 : 1;
+        /* fp+2071:5 */ u8 x2071_b5 : 1;
+        /* fp+2071:4 */ u8 x2071_b4 : 1;
+        /* fp+2071:0 */ u8 x2071_b0_3 : 4;
+        /* fp+2070 */ s8 x2070;
+#else
         /* fp+2070 */ s8 x2070;
         /* fp+2071:0 */ u8 x2071_b0_3 : 4;
         /* fp+2071:4 */ u8 x2071_b4 : 1;
@@ -1011,6 +1040,7 @@ struct Fighter_DemoStrings {
         /* fp+2072:6 */ u8 count_x1A0 : 1;
         /* fp+2072:7 */ u8 count_specials : 1;
         /* fp+2073 */ u8 x2073;
+#endif
     };
     /* fp+2070 */ s32 x2070_int;
 };
