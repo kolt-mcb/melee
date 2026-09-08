@@ -167,12 +167,17 @@ the progress metric, not the number of green cells, which lags it.
 Budget this honestly: 2,700 single-precision sites at even ten minutes each
 is weeks of focused work, months at a realistic pace. The tooling is what makes it months rather than years.
 
-**Status (2026-09-08, evening).** The checklist went from 197 to 1,745 of
-2,807 credited (62%) in one pass, file by file, without a build -- the sweep
-owns the binary. Of the 2,075 single-precision sites, 291 are still
-uncredited in `ft/ mp/ lb/ it/ gr/ cm/ pl/`, almost all in files with two
-or three sites; the double-precision remainder is inlined `sqrtf` Newton
-steps (already fused by `src/math_shim.c`) and exact-anyway lerps.
+**Status (2026-09-08, night).** The checklist went from 197 to 1,984 of
+2,807 credited (70%) in one pass, file by file, without a build -- the sweep
+owns the binary. Of the 2,075 single-precision sites, 76 are still
+uncredited in `ft/ mp/ lb/ it/ gr/ cm/ pl/` and every one is rendering
+(`lbbgflash`, `lbspdisplay`, `lbgx`), 1P-only (Home-Run, Master/Crazy
+Hand), a loop the console unrolled (`mplib`, Green Greens) or a port
+function named differently from the symbol map. Of the double-precision
+sites, the ones whose product is inexact (a genuine double operand:
+0.3*rand + 0.2, 2*pi/25*speed, DEG_TO_RAD*x ...) are spelled out; the rest
+are the inlined `sqrtf` Newton chain (`src/math_shim.c` fuses it) or
+0.5/2/8-times-float terms that round identically either way.
 
 The per-site method, which is fast enough to be the plan:
 
