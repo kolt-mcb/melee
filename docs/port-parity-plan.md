@@ -29,16 +29,19 @@ reachable stage, 600 frames each, two level-9 CPUs:
 
 Two numbers that set the strategy:
 
-- The original DOL has **8,085** fused multiply-add instructions
-  (`fmadds`/`fmsubs`/`fnmadds`/`fnmsubs`). The port has **142** written out
-  as `fma()`. This is the dominant divergence class in the port's history,
-  covered at under 2%, one bisect at a time.
+- The original DOL's text sections hold **3,683** fused multiply-adds:
+  2,690 single-precision (`fmadds` 2,204, `fmsubs` 215, `fnmadds` 13,
+  `fnmsubs` 258), which is the game's float math, and 993 double-precision,
+  mostly the SDK's. The port has **142** written out as `fma()`. This is the
+  dominant divergence class in the port's history, covered at about 5%, one
+  bisect at a time. (An earlier figure of 8,085 was the DOL decoded
+  little-endian with its data sections read as code; it is wrong.)
 - `sync_pair2` (Samus vs DK, Onett) is bit-identical for **7200 frames from
   power-on.** The bar is reachable; the question is only breadth.
 
 The method that got here -- find the first differing frame, compare ordered
 RNG draws, walk back to the caller -- costs a day per bug and does not scale
-to 8,000 sites. Everything below is about replacing it with enumeration.
+to 3,700 sites. Everything below is about replacing it with enumeration.
 
 ## Phase 0 -- Guardrails (days)
 
@@ -66,7 +69,8 @@ The console binary and the source already know where every instance of each
 class is. Build the lists once; work the lists.
 
 1. **The fusing census.** `tools/pc_fma_census.py`: disassemble the DOL
-   (`build/binutils/powerpc-eabi-objdump`), list every fused op with its
+   (`build/binutils/powerpc-eabi-objdump`), list every fused op in the two text sections (`-EB`, correct VMAs --
+   the data sections read as code produce thousands of false ones) with its
    address, map each to a function through the symbol map, and to a source
    file through the decomp's own function index. Output: a table of
    `function, count, addresses, done?` where *done* means the port's source
@@ -144,8 +148,8 @@ census names the fused ops in it, the disassembly shows the operand pairing
 they are what the contract is about -- and let the count on the checklist be
 the progress metric, not the number of green cells, which lags it.
 
-Budget this honestly: 8,000 sites at even ten minutes each is months of
-work. The tooling is what makes it months rather than years.
+Budget this honestly: 2,700 single-precision sites at even ten minutes each
+is weeks of focused work, months at a realistic pace. The tooling is what makes it months rather than years.
 
 ## Phase 5 -- The exceptions register
 
