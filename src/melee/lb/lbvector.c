@@ -38,10 +38,16 @@
 #else
 #define LV_FMA(a, b, c) ((a) * (b) + (c))
 #endif
+/* Every dot product and squared length in this file, as the console
+ * computes it: y plain, then x fused in, then z (fmuls y,y / fmadds x,x /
+ * fmadds z,z). Not the left-to-right x + y + z the C reads as. */
+#define LV_DOT(ax, ay, az, bx, by, bz) \
+    LV_FMA((az), (bz), LV_FMA((ax), (bx), (ay) * (by)))
 
 static float lbVector_Len(Vec3* vec)
 {
-    return sqrtf(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
+    /* Inlined everywhere on the console; the squared length is LV_DOT. */
+    return sqrtf(LV_DOT(vec->x, vec->y, vec->z, vec->x, vec->y, vec->z));
 }
 
 static float lbVector_Len_xy(Vec3* vec)
@@ -433,17 +439,20 @@ Vec3* lbVector_8000DE38(Mtx m, Vec3* v, float c)
         c = 0.0f;
     }
 
-    var1 = m[0][0] * 2.0f - m[0][3] * 4.0f + m[1][2] * 2.0f;
-    var2 = m[0][0] * -3.0f + m[0][3] * 4.0f - m[1][2];
-    v->x = m[0][0] + (var1 * c * c + var2 * c);
+    /* 8000DE68-8000DE94 and the two copies after it: 4*m[0][3] plain, then
+     * fmsubs 2*m[0][0] - that, fmadds 2*m[1][2] onto it; fmadds -3*m[0][0] + 4*m[0][3], minus
+     * m[1][2] plain; c*(var1*c) + var2*c is one fmadds. */
+    var1 = LV_FMA(2.0f, m[1][2], LV_FMA(2.0f, m[0][0], -(4.0f * m[0][3])));
+    var2 = LV_FMA(-3.0f, m[0][0], 4.0f * m[0][3]) - m[1][2];
+    v->x = m[0][0] + LV_FMA(c, var1 * c, var2 * c);
 
-    var1 = m[0][1] * 2.0f - m[1][0] * 4.0f + m[1][3] * 2.0f;
-    var2 = m[0][1] * -3.0f + m[1][0] * 4.0f - m[1][3];
-    v->y = m[0][1] + (var1 * c * c + var2 * c);
+    var1 = LV_FMA(2.0f, m[1][3], LV_FMA(2.0f, m[0][1], -(4.0f * m[1][0])));
+    var2 = LV_FMA(-3.0f, m[0][1], 4.0f * m[1][0]) - m[1][3];
+    v->y = m[0][1] + LV_FMA(c, var1 * c, var2 * c);
 
-    var1 = m[0][2] * 2.0f - m[1][1] * 4.0f + m[2][0] * 2.0f;
-    var2 = m[0][2] * -3.0f + m[1][1] * 4.0f - m[2][0];
-    v->z = m[0][2] + (var1 * c * c + var2 * c);
+    var1 = LV_FMA(2.0f, m[2][0], LV_FMA(2.0f, m[0][2], -(4.0f * m[1][1])));
+    var2 = LV_FMA(-3.0f, m[0][2], 4.0f * m[1][1]) - m[2][0];
+    v->z = m[0][2] + LV_FMA(c, var1 * c, var2 * c);
 
     return v;
 }
@@ -586,13 +595,16 @@ Vec3* lbVector_WorldToScreen(HSD_CObj* cobj, const Vec3* pos3d,
         mvMtx = HSD_CObjGetViewingMtxPtr(cobj);
     }
 
-    f1 = mvMtx[2][0] * pos3d->x + mvMtx[2][1] * pos3d->y +
-         mvMtx[2][2] * pos3d->z + mvMtx[2][3];
+    /* 8000E498-8000E4B8: m21*y plain, m20*x and m22*z fused, m23 added
+     * plain after. */
+    f1 = LV_DOT(mvMtx[2][0], mvMtx[2][1], mvMtx[2][2],
+                pos3d->x, pos3d->y, pos3d->z) + mvMtx[2][3];
     if (f1 > -0.01f) {
         f1 = -f1 - 0.01f;
-        point.x += mvMtx[2][0] * f1;
-        point.y += mvMtx[2][1] * f1;
-        point.z += mvMtx[2][2] * f1;
+        /* 8000E4D4-8000E4EC: one fmadds per axis. */
+        point.x = LV_FMA(mvMtx[2][0], f1, point.x);
+        point.y = LV_FMA(mvMtx[2][1], f1, point.y);
+        point.z = LV_FMA(mvMtx[2][2], f1, point.z);
     }
 
     GXProject(point.x, point.y, point.z, mvMtx, projection, viewport,
@@ -661,7 +673,8 @@ float lbVector_8000E838(Vec3* a, Vec3* b, Vec3* c, Vec3* d)
     int tooSmall;
 
     lbVector_Diff(b, a, &b_a);
-    sqrlen_b_a = b_a.x * b_a.x + b_a.y * b_a.y + b_a.z * b_a.z;
+    /* 8000E864-8000E884. */
+    sqrlen_b_a = LV_DOT(b_a.x, b_a.y, b_a.z, b_a.x, b_a.y, b_a.z);
     lbVector_Diff(c, a, &c_a);
     if (sqrlen_b_a < 9.9999997473787516e-06f &&
         sqrlen_b_a > -9.9999997473787516e-06f)
@@ -675,12 +688,12 @@ float lbVector_8000E838(Vec3* a, Vec3* b, Vec3* c, Vec3* d)
         return lbVector_Len(&c_a);
     } else {
         Vec3 v3;
-        float f1 =
-            (b_a.x * c_a.x + b_a.y * c_a.y + b_a.z * c_a.z) / sqrlen_b_a;
+        /* 8000E930-8000E938, then the three lerps are one fmadds each. */
+        float f1 = LV_DOT(b_a.x, b_a.y, b_a.z, c_a.x, c_a.y, c_a.z) / sqrlen_b_a;
 
-        d->x = a->x + b_a.x * f1;
-        d->y = a->y + b_a.y * f1;
-        d->z = a->z + b_a.z * f1;
+        d->x = LV_FMA(b_a.x, f1, a->x);
+        d->y = LV_FMA(b_a.y, f1, a->y);
+        d->z = LV_FMA(b_a.z, f1, a->z);
         lbVector_Diff(c, d, &v3);
         return lbVector_Len(&v3);
     }
