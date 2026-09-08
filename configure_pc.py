@@ -312,7 +312,16 @@ elif WASM:
 else:
     CC = "gcc"
     ARCH_FLAGS = "-m64" + (" -fPIE" if PIE else "")
-CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -std=gnu11 -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "")
+# -ffp-contract=off: GNU C mode defaults to `fast`, which lets GCC fuse a*b+c
+# into one rounding wherever the target can. Plain x86-64 cannot, so today it
+# changes nothing; the day anyone builds with -march=native the port starts
+# fusing expressions the console does not, on top of the ~8,000 the console
+# fuses and the port does not. Every one of those is a divergence from the
+# original, and the whole parity effort (docs/port-parity-plan.md) is about
+# reproducing the console's roundings exactly -- explicitly, with fma(), at
+# the sites the console fuses, and nowhere else. -fexcess-precision=standard
+# for the same reason: no intermediate precision the console does not have.
+CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -std=gnu11 -ffp-contract=off -fexcess-precision=standard -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "")
 if ANDROID:
     # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
     LDFLAGS = "-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"
