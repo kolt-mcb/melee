@@ -16,6 +16,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <dolphin/types.h>
 #include <baselib/archive.h>
 
@@ -150,6 +151,97 @@ void* pc_grconv_itemdata(HSD_Archive* archive, void* raw)
             fprintf(stderr, "[GRCONV]   kind=%d article=%p\n",
                     (int) recs[i].kind, recs[i].article);
         }
+    }
+    return out;
+}
+
+
+/* A stage's DynamicsDesc, read out of the archive by public name.
+ *
+ * Rainbow Cruise's "dynamicsdata_shipflag" and Peach's Castle's three
+ * "dynamicsdata_flag*" blocks are handed straight to grLib_801C9B20, and from
+ * there to lb_80011710, which does `&desc->data->desc...` -- a big-endian
+ * file offset dereferenced as a host pointer. That is Rainbow Cruise's "port
+ * stopped" before the barrier ever engages, on every character, on the
+ * menu-walked path. (Castle never gets that far: its init bails on the
+ * missing param block first.)
+ *
+ * The file's layout is {u32 data_off; u32 count; Vec3 pos}, and `data` is
+ * `count` records of 0x3C bytes of floats -- the same shape
+ * src/port/pc_itconv.c converts for item articles. Read out of the disc:
+ *
+ *     GrRc dynamicsdata_shipflag  data=0x0  count=6
+ *     GrCs dynamicsdata_flag3     data=0x0  count=3
+ *     GrCs dynamicsdata_flag4     data=0xb4 count=4
+ *     GrCs dynamicsdata_flag6     data=0x1a4 count=6
+ *
+ * Note data=0x0 on two of them. That word is relocated in the file: it is a
+ * pointer to the start of the data section, not a null, and treating zero as
+ * null here would silently give those two stages no dynamics at all. A
+ * count of zero is what "none" looks like.
+ *
+ * Cached by source pointer: this runs on every stage load, and a stage that
+ * reloads would otherwise leak a block per match. */
+void* pc_grconv_dynamics(HSD_Archive* archive, void* raw)
+{
+    static const void* cached_raw[8];
+    static void* cached_out[8];
+    static unsigned cached_n;
+    const u8* base;
+    u32 len, off, data_off, count, i;
+    const u8* e;
+    struct {
+        void* data;
+        unsigned int count;
+        f32 pos[3];
+    }* out;
+    u32* inner;
+
+    if (raw == NULL || !gr_arch_span(archive, &base, &len)) {
+        return NULL;
+    }
+    for (i = 0; i < cached_n; i++) {
+        if (cached_raw[i] == raw) {
+            return cached_out[i];
+        }
+    }
+    e = raw;
+    off = (u32) (e - base);
+    if (off + 20 > len) {
+        return NULL;
+    }
+    data_off = gr_be32(e);
+    count = gr_be32(e + 4);
+    if (count == 0 || count > 64 || data_off + count * 0x3C > len) {
+        fprintf(stderr,
+                "[GRCONV] dynamics at +%#x: count=%u data=%#x does not fit "
+                "in %#x bytes; left NULL\n", off, count, data_off, len);
+        return NULL;
+    }
+    out = calloc(1, sizeof(*out));
+    inner = calloc(count, 0x3C);
+    if (out == NULL || inner == NULL) {
+        free(out);
+        free(inner);
+        return NULL;
+    }
+    for (i = 0; i < count * 0x3C / 4; i++) {
+        inner[i] = gr_be32(base + data_off + i * 4);
+    }
+    out->data = inner;
+    out->count = count;
+    for (i = 0; i < 3; i++) {
+        u32 w = gr_be32(e + 8 + i * 4);
+        memcpy(&out->pos[i], &w, 4);
+    }
+    if (cached_n < 8) {
+        cached_raw[cached_n] = raw;
+        cached_out[cached_n] = out;
+        cached_n++;
+    }
+    if (getenv("MELEE_ITCONV_TRACE") != NULL) {
+        fprintf(stderr, "[GRCONV] dynamics at +%#x: %u records from +%#x\n",
+                off, count, data_off);
     }
     return out;
 }
