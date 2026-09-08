@@ -23,6 +23,14 @@
 
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
+
+/* The console fuses a*b+c into one rounding; x86 rounds twice. Every site
+ * below that the DOL executes as fmadds is written with this. */
+#if BUILD_TARGET_PC
+#define AI_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define AI_FMA(a, b, c) ((a) * (b) + (c))
+#endif
 #endif
 
 typedef struct AfterimageVtx {
@@ -151,9 +159,10 @@ void ftCo_800C2600(Fighter_GObj* gobj, u32 arg1)
             for (i = (s8) (u8) fp->x2100 - 1; i >= 0; i--) {
                 struct Fighter_x20B0_t* entry = &fp->x20B0[curIdx];
 
-                delta.x = entry->xC.x * x20FC + entry->x0.x - prevPos.x;
-                delta.y = entry->xC.y * x20FC + entry->x0.y - prevPos.y;
-                delta.z = entry->xC.z * x20FC + entry->x0.z - prevPos.z;
+                /* 800C2840-800C2870: fmadds, then the fsubs of prevPos. */
+                delta.x = AI_FMA(entry->xC.x, x20FC, entry->x0.x) - prevPos.x;
+                delta.y = AI_FMA(entry->xC.y, x20FC, entry->x0.y) - prevPos.y;
+                delta.z = AI_FMA(entry->xC.z, x20FC, entry->x0.z) - prevPos.z;
 
                 if (i != (s8) (u8) fp->x2100 - 1) {
                     d2 = delta.z * delta.z +
@@ -185,8 +194,9 @@ void ftCo_800C2600(Fighter_GObj* gobj, u32 arg1)
             Vec3 tempDir, crossProd;
             f32 scaleDiff = x20FC - x20F8;
             s32 curIdx2;
-            f32 blendedInner = params->x0 * scaleDiff + x20F8;
-            f32 blendedOuter = params->x4 * scaleDiff + x20F8;
+            /* 800C2974 / 800C2978. */
+            f32 blendedInner = AI_FMA(params->x0, scaleDiff, x20F8);
+            f32 blendedOuter = AI_FMA(params->x4, scaleDiff, x20F8);
             f32 interpFactor = 1.0f;
             f32 innerDiff = x20F8 - blendedInner;
             f32 outerDiff = x20FC - blendedOuter;
@@ -212,25 +222,28 @@ void ftCo_800C2600(Fighter_GObj* gobj, u32 arg1)
                 s32 alpha;
 
                 struct Fighter_x20B0_t* curEntry = &fp->x20B0[curIdx2];
-                outerScale = interpFactor * outerDiff + blendedOuter;
-                innerScale = interpFactor * innerDiff + blendedInner;
+                /* 800C29DC / 800C29E8. */
+                outerScale = AI_FMA(interpFactor, outerDiff, blendedOuter);
+                innerScale = AI_FMA(interpFactor, innerDiff, blendedInner);
                 numVerts += 2;
                 distPtr++;
 
-                alpha = (s32) (interpFactor * (f32) (params->x8 - params->x9) +
-                               (f32) params->x9);
+                /* 800C2A48: fmadds. */
+                alpha = (s32) AI_FMA(interpFactor, (f32) (params->x8 - params->x9),
+                                     (f32) params->x9);
 
-                vp->x = curEntry->xC.x * innerScale + curEntry->x0.x;
-                vp->y = curEntry->xC.y * innerScale + curEntry->x0.y;
-                vp->z = curEntry->xC.z * innerScale + curEntry->x0.z;
+                /* 800C2A0C-800C2A58: one fmadds per axis, inner then outer. */
+                vp->x = AI_FMA(curEntry->xC.x, innerScale, curEntry->x0.x);
+                vp->y = AI_FMA(curEntry->xC.y, innerScale, curEntry->x0.y);
+                vp->z = AI_FMA(curEntry->xC.z, innerScale, curEntry->x0.z);
                 vp->r = params->xA;
                 vp->g = params->xB;
                 vp->b = params->xC;
                 vp->a = alpha;
 
-                (vp + 1)->x = curEntry->xC.x * outerScale + curEntry->x0.x;
-                (vp + 1)->y = curEntry->xC.y * outerScale + curEntry->x0.y;
-                (vp + 1)->z = curEntry->xC.z * outerScale + curEntry->x0.z;
+                (vp + 1)->x = AI_FMA(curEntry->xC.x, outerScale, curEntry->x0.x);
+                (vp + 1)->y = AI_FMA(curEntry->xC.y, outerScale, curEntry->x0.y);
+                (vp + 1)->z = AI_FMA(curEntry->xC.z, outerScale, curEntry->x0.z);
                 (vp + 1)->r = params->xE;
                 (vp + 1)->g = params->xF;
                 (vp + 1)->b = params->x10;
@@ -272,14 +285,13 @@ void ftCo_800C2600(Fighter_GObj* gobj, u32 arg1)
 
                             frac = 1.0f / (f32) (numSubdiv + 1);
 
+                            /* 800C2B68 / 800C2B6C: the inner fmadds, then fsubs and fmuls. */
                             interpInner2 =
-                                frac *
-                                ((interpFactor * innerDiff + blendedInner) -
-                                 innerScale);
+                                frac * (AI_FMA(interpFactor, innerDiff, blendedInner) -
+                                        innerScale);
                             interpOuter2 =
-                                frac *
-                                ((interpFactor * outerDiff + blendedOuter) -
-                                 outerScale);
+                                frac * (AI_FMA(interpFactor, outerDiff, blendedOuter) -
+                                        outerScale);
 
                             basePosX = curEntry->x0.x;
                             basePosY = curEntry->x0.y;
@@ -290,11 +302,12 @@ void ftCo_800C2600(Fighter_GObj* gobj, u32 arg1)
                             stepPosY = frac * (nextEntry->x0.y - basePosY);
                             stepPosZ = frac * (nextEntry->x0.z - basePosZ);
 
+                            /* 800C2C10: the inner fmadds, then fsubs and fmuls. */
                             alphaStep =
                                 (s32) (frac *
-                                       ((interpFactor *
-                                             (f32) (params->x8 - params->x9) +
-                                         (f32) params->x9) -
+                                       (AI_FMA(interpFactor,
+                                               (f32) (params->x8 - params->x9),
+                                               (f32) params->x9) -
                                         (f32) alpha));
 
                             for (j = 0; j < numSubdiv; j++) {
@@ -311,19 +324,17 @@ void ftCo_800C2600(Fighter_GObj* gobj, u32 arg1)
                                     &tempDir, &crossProd, cumAngle);
 
                                 numVerts += 2;
-                                vp->x = tempDir.x * innerScale + basePosX;
-                                vp->y = tempDir.y * innerScale + basePosY;
-                                vp->z = tempDir.z * innerScale + basePosZ;
+                                /* 800C2CA4-800C2CFC: one fmadds per axis, inner then outer. */
+                                vp->x = AI_FMA(tempDir.x, innerScale, basePosX);
+                                vp->y = AI_FMA(tempDir.y, innerScale, basePosY);
+                                vp->z = AI_FMA(tempDir.z, innerScale, basePosZ);
                                 vp->r = params->xA;
                                 vp->g = params->xB;
                                 vp->b = params->xC;
                                 vp->a = alpha;
-                                (vp + 1)->x =
-                                    tempDir.x * outerScale + basePosX;
-                                (vp + 1)->y =
-                                    tempDir.y * outerScale + basePosY;
-                                (vp + 1)->z =
-                                    tempDir.z * outerScale + basePosZ;
+                                (vp + 1)->x = AI_FMA(tempDir.x, outerScale, basePosX);
+                                (vp + 1)->y = AI_FMA(tempDir.y, outerScale, basePosY);
+                                (vp + 1)->z = AI_FMA(tempDir.z, outerScale, basePosZ);
                                 (vp + 1)->r = params->xE;
                                 (vp + 1)->g = params->xF;
                                 (vp + 1)->b = params->x10;
