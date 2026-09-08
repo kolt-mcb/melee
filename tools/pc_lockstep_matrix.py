@@ -412,6 +412,77 @@ def cmd_grid(a):
     return 0
 
 
+BASELINE = os.path.join(REPO, "tests", "pc", "lockstep_baseline.json")
+
+
+def reached(v, frames_budget=None):
+    """How far a cell got, as a number that only ever means one thing.
+
+    identical -> the frame budget it was run to; diverged -> the frame it
+    parted on; anything else -> 0. "Identical" on its own is not a result:
+    Jigglypuff and Ganondorf were both identical at 600 frames and part at
+    1321 and 633.
+    """
+    d = v.get("verdict")
+    if d == "identical":
+        return int(v.get("frames") or frames_budget or 0)
+    if d == "diverged":
+        return int(v.get("frame") or 0)
+    return 0
+
+
+def cmd_baseline(a):
+    """Record every cell's frame as the floor a later run must not go under."""
+    res = load()
+    if not res:
+        print("nothing recorded yet")
+        return 1
+    base = {k: reached(v) for k, v in res.items()}
+    with open(BASELINE, "w") as f:
+        json.dump(base, f, indent=1, sort_keys=True)
+    print("baseline: %d cells written to %s"
+          % (len(base), os.path.relpath(BASELINE, REPO)))
+    return 0
+
+
+def cmd_check(a):
+    """Fail if any cell reached fewer frames than the baseline says it did.
+
+    A green suite that is not re-checked is worth nothing: tools/pc_matrix.py
+    had a green baseline that nobody re-ran while Yoshi crashed on every
+    stage. This is the ratchet -- a cell may only ever get further.
+    """
+    res = load()
+    if not os.path.exists(BASELINE):
+        print("no baseline; run `baseline` first")
+        return 1
+    base = json.load(open(BASELINE))
+    worse, better, missing = [], [], []
+    for k, was in sorted(base.items()):
+        if k not in res:
+            missing.append(k)
+            continue
+        now = reached(res[k])
+        if now < was:
+            worse.append((k, was, now))
+        elif now > was:
+            better.append((k, was, now))
+
+    def name(k):
+        p = k.split(",")
+        return "%s vs %s on %s" % (mx.CHARS[int(p[0])], mx.CHARS[int(p[1])],
+                                   mx.STAGES[int(p[2])])
+    for k, was, now in worse:
+        print("REGRESSED  %-40s %5d -> %d" % (name(k), was, now))
+    for k, was, now in better:
+        print("improved   %-40s %5d -> %d" % (name(k), was, now))
+    print("%d regressed, %d improved, %d unchanged, %d not run"
+          % (len(worse), len(better),
+             len(base) - len(worse) - len(better) - len(missing),
+             len(missing)))
+    return 1 if worse else 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -430,11 +501,17 @@ def main():
     r.add_argument("--redo", action="store_true")
     sub.add_parser("report")
     sub.add_parser("grid")
+    sub.add_parser("baseline")
+    sub.add_parser("check")
     a = ap.parse_args()
     if a.cmd == "run":
         return cmd_run(a)
     if a.cmd == "grid":
         return cmd_grid(a)
+    if a.cmd == "baseline":
+        return cmd_baseline(a)
+    if a.cmd == "check":
+        return cmd_check(a)
     return cmd_report(a)
 
 
