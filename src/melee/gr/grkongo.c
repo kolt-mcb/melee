@@ -36,6 +36,17 @@
 #include <baselib/random.h>
 #include <baselib/spline.h>
 
+/* Kongo Jungle: the random lerps, the barrel spin steps, the roll
+ * weights and the hand-written rsqrt are fused on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KG_FMA(a, b, c) fmaf((a), (b), (c))
+#define KG_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define KG_FMA(a, b, c) ((a) * (b) + (c))
+#define KG_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 GrJoint grKg_803E16E0[] = {
     { 2, 10, 19 }, { 3, 10, 22 }, { 5, 10, 43 },
     { 6, 10, 44 }, { 0, 1, 0 },   { 1, 2, 2 },
@@ -446,7 +457,7 @@ void grKongo_801D577C(Ground_GObj* arg0)
             {
                 f32 rand_val = HSD_Randf();
                 f32 diff = yakumono_param->unk24 - yakumono_param->unk20;
-                gp->u.kongo3.xCA = (diff * rand_val) + yakumono_param->unk20;
+                gp->u.kongo3.xCA = KG_FMA(diff, rand_val, yakumono_param->unk20);
             }
             gp->u.kongo.u.taru.keep = item_gobj;
             gp->u.kongo3.xC6 = 1;
@@ -568,7 +579,7 @@ void grKongo_801D6074(Ground_GObj* arg0)
     temp_r31->u.kongo2.xD0 = -99999.0f;
     temp_r31->u.kongo2.xD4 = 3.4028235e38f;
     if ((enum GrKind) temp_r31->map_id == Gr_Kind_Test) {
-        temp_r31->u.kongo.xCC = (f32) ((45.0 * HSD_Randf()) + -15.0);
+        temp_r31->u.kongo.xCC = (f32) KG_FMAD(45.0, HSD_Randf(), -15.0);
     } else {
         temp_r31->u.kongo.xCC = (f32) (9.0 * HSD_Randf());
     }
@@ -703,9 +714,9 @@ void grKongo_801D637C(Ground_GObj* arg0)
     grAnime_801C8138(arg0, temp_r31->map_id, 0);
     grAnime_801C78FC(arg0, 0, 7);
     if (temp_r31->map_id == Gr_Kind_Shrine) {
-        temp_r31->u.kongo.xCC = (f32) ((45.0 * HSD_Randf()) + -15.0);
+        temp_r31->u.kongo.xCC = (f32) KG_FMAD(45.0, HSD_Randf(), -15.0);
     } else if (temp_r31->map_id == Gr_Kind_Zebes) {
-        temp_r31->u.kongo.xCC = (f32) ((20.0 * HSD_Randf()) + -10.0);
+        temp_r31->u.kongo.xCC = (f32) KG_FMAD(20.0, HSD_Randf(), -10.0);
     } else {
         temp_r31->u.kongo.xCC = (f32) (9.0 * HSD_Randf());
     }
@@ -820,9 +831,9 @@ void grKongo_801D6668(Ground_GObj* arg0)
         dist = dz + dist;
         if (dist > 0.0F) {
             f64 guess = __frsqrte(dist);
-            guess = 0.5 * guess * (3.0 - (guess * guess * dist));
-            guess = 0.5 * guess * (3.0 - (guess * guess * dist));
-            guess = 0.5 * guess * (3.0 - (guess * guess * dist));
+            guess = 0.5 * guess * KG_FMAD(-(f64) dist, guess * guess, 3.0);
+            guess = 0.5 * guess * KG_FMAD(-(f64) dist, guess * guess, 3.0);
+            guess = 0.5 * guess * KG_FMAD(-(f64) dist, guess * guess, 3.0);
             length = (f32) ((f64) dist * guess);
             dist = length;
         }
@@ -907,9 +918,9 @@ static inline void rad_compare_c(f32 a, f32 b, f32 d, f32* ret)
 {
     f32 c = deg_to_rad * b;
     if (a > c) {
-        *ret += d * (a - c);
+        *ret = KG_FMA(d, a - c, *ret); /* 801D6FD4 */
     } else if (a < -c) {
-        *ret += d * (a + c);
+        *ret = KG_FMA(d, a + c, *ret);
     }
 }
 
@@ -1327,7 +1338,7 @@ void fn_801D542C(HSD_GObj* arg0)
     rand = HSD_Randf();
     min = yakumono_param->unk0;
     range = yakumono_param->unk4 - min;
-    gp->u.kongo.xE4 = (s16) ((range * rand) + min);
+    gp->u.kongo.xE4 = (s16) KG_FMA(range, rand, min);
 }
 
 /// @copydoc mpLib_JointCollisionCallback
@@ -1363,8 +1374,9 @@ void fn_801D7700(void* user_data, int joint_id, CollData* coll, int coll_x50,
                     idx2 = 14;
                 }
 
-                grKg_803E188C[idx2].unk10 +=
-                    0.017453292F * yakumono_param->unkA4;
+                grKg_803E188C[idx2].unk10 =
+                    KG_FMA(0.017453292F, yakumono_param->unkA4,
+                           grKg_803E188C[idx2].unk10);
             }
         }
     }
@@ -1420,8 +1432,8 @@ void grKongo_801D77E0(HSD_GObj* gobj, s32 arg1)
                 q->u.kongo.xC8 += step;
             }
             q->u.kongo.xC4 += q->u.kongo.xC8;
-            limit = 0.017453292f * (yakumono_param->unkB8 -
-                                    0.017453292f * yakumono_param->unkAC);
+            limit = 0.017453292f * KG_FMA(-0.017453292f, yakumono_param->unkAC,
+                                          yakumono_param->unkB8); /* fnmsubs */
             if (q->u.kongo.xC4 > limit) {
                 q->u.kongo.xC4 = limit;
                 q->u.kongo.xC8 = 0.0f;
@@ -1476,14 +1488,15 @@ void grKongo_801D7BBC(Ground_GObj* gobj)
     }
     {
         f32 rand = HSD_Randf();
-        roll = rand * (yakumono_param->unk10 * (1.0f - yakumono_param->unk18) +
-                       (yakumono_param->unk10 * yakumono_param->unk18 +
-                        (yakumono_param->unk8 + roll)));
+        /* 801D7C60/C64: unk8 + roll plain, the two unk10 terms fmadds on */
+        roll = rand * KG_FMA(yakumono_param->unk10, 1.0f - yakumono_param->unk18,
+                             KG_FMA(yakumono_param->unk10, yakumono_param->unk18,
+                                    yakumono_param->unk8 + roll));
     }
     {
         f32 r = HSD_Randf();
         f32 delta = yakumono_param->unk4 - yakumono_param->unk0;
-        gp->u.kongo.xE4 = (s16) (delta * r + yakumono_param->unk0);
+        gp->u.kongo.xE4 = (s16) KG_FMA(delta, r, yakumono_param->unk0);
     }
     roll -= yakumono_param->unk8;
     if (roll < 0.0f) {
@@ -1516,7 +1529,7 @@ void grKongo_801D7BBC(Ground_GObj* gobj)
                     }
                     event_kind = 3;
                 } else {
-                    roll -= base_weight * (1.0f - box_rate);
+                    roll = KG_FMA(-base_weight, 1.0f - box_rate, roll); /* fnmsubs */
                     if (roll < zero) {
                         rand_kind = HSD_Randi(3);
                         if (rand_kind == 0) {
@@ -1702,7 +1715,7 @@ static int fn_801D8134(HSD_GObj* arg0, HSD_GObj* arg1)
 
     rand_val = HSD_Randf();
     diff = yakumono_param->unk24 - yakumono_param->unk20;
-    gp->u.kongo3.xCA = (s16) (diff * rand_val + yakumono_param->unk20);
+    gp->u.kongo3.xCA = (s16) KG_FMA(diff, rand_val, yakumono_param->unk20);
     gp->u.kongo3.xD0 = (HSD_JObj*) arg1;
     gp->u.kongo3.xC6 = 1;
     Ground_801C5440(gp, 0, 0x129U);

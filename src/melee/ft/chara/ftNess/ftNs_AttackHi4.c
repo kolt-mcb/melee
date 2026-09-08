@@ -31,6 +31,15 @@
 #include <trigf.h>
 #include <dolphin/mtx.h>
 
+/* Yo-yo: the charge damage terms, the hitbox position lerps (new*t
+ * fused onto old*(1-t)) and the -1*scale offsets are fmadds/fmsubs. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define NA_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define NA_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftNs_AttackHi4_YoyoUpdateHitPos(HSD_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
@@ -80,10 +89,10 @@ static void ftNs_AttackHi4_YoyoApplyDamage(float unk_float, HSD_GObj* gobj)
 
             charge_duration = ness_attr->xAC_YOYO_CHARGE_DURATION;
             charge_duration2 = unk_float / charge_duration;
-            damage_mul = ness_attr->xB0_YOYO_DAMAGE_MUL * mul - 1.0f;
+            damage_mul = NA_FMA(mul, ness_attr->xB0_YOYO_DAMAGE_MUL, -1.0f); /* fmsubs */
 
             final_damage =
-                fp->x914->damage * (damage_mul * charge_duration2 + 1.0f);
+                fp->x914->damage * NA_FMA(damage_mul, charge_duration2, 1.0f);
 
             ftColl_8007ABD0(&fp->x914[0], final_damage, gobj);
         }
@@ -251,11 +260,11 @@ void ftNs_AttackHi4_YoyoSetHitPosUnk(HSD_GObj* gobj, float pos_unk)
     sp30 = fp->u.ns.yoyo_hitbox_pos;
     pos_update = 1.0f - pos_unk;
     fp->u.ns.yoyo_hitbox_pos.x =
-        (float) ((sp3C.x * pos_unk) + (sp30.x * pos_update));
+        NA_FMA(sp3C.x, pos_unk, sp30.x * pos_update);
     fp->u.ns.yoyo_hitbox_pos.y =
-        (float) ((sp3C.y * pos_unk) + (sp30.y * pos_update));
+        NA_FMA(sp3C.y, pos_unk, sp30.y * pos_update);
     fp->u.ns.yoyo_hitbox_pos.z =
-        (float) ((sp3C.z * pos_unk) + (sp30.z * pos_update));
+        NA_FMA(sp3C.z, pos_unk, sp30.z * pos_update);
 }
 
 bool ftNs_AttackHi4_YoyoCheckNoObstruct(HSD_GObj* gobj)
@@ -282,7 +291,7 @@ bool ftNs_AttackHi4_YoyoCheckNoObstruct(HSD_GObj* gobj)
         sp14 = fp->u.ns.yoyo_hitbox_pos;
         sp20 = sp14;
         sp20.y += fp->x34_scale.y;
-        sp14.y += -1.0f * fp->x34_scale.y;
+        sp14.y = NA_FMA(-1.0f, fp->x34_scale.y, sp14.y);
         if ((ftNs_AttackHi4_YoyoCheckEnvColl(gobj, &sp20, &sp14, 1.5f) &
              Collide_FloorPush) != 0)
         {
@@ -699,7 +708,7 @@ void ftNs_AttackHi4_Anim(HSD_GObj* gobj)
                  0) &&
                 (sp24 = fighter_data2->u.ns.yoyo_hitbox_pos, sp18 = sp24,
                  sp18.y += fighter_data2->x34_scale.y,
-                 sp24.y += -1.0f * fighter_data2->x34_scale.y,
+                 sp24.y = NA_FMA(-1.0f, fighter_data2->x34_scale.y, sp24.y),
                  (((ftNs_AttackHi4_YoyoCheckEnvColl(gobj, &sp18, &sp24, 1.5f) &
                     Collide_FloorPush) == 0) == 0)))
             {
@@ -965,11 +974,11 @@ void ftNs_AttackHi4Release_Phys(
         sp30 = fighter_data2->u.ns.yoyo_hitbox_pos;
         temp_f2 = 1.0f - phi_f31;
         fighter_data2->u.ns.yoyo_hitbox_pos.x =
-            (float) ((sp24.x * phi_f31) + (sp30.x * temp_f2));
+            NA_FMA(sp24.x, phi_f31, sp30.x * temp_f2);
         fighter_data2->u.ns.yoyo_hitbox_pos.y =
-            (float) ((sp24.y * phi_f31) + (sp30.y * temp_f2));
+            NA_FMA(sp24.y, phi_f31, sp30.y * temp_f2);
         fighter_data2->u.ns.yoyo_hitbox_pos.z =
-            (float) ((sp24.z * phi_f31) + (sp30.z * temp_f2));
+            NA_FMA(sp24.z, phi_f31, sp30.z * temp_f2);
         return;
     }
     fighter_data3 = GET_FIGHTER(gobj);
