@@ -1246,8 +1246,10 @@ void mpColl_80043F40(CollData* coll, int line_id, bool ignore_bottom)
         f1 = 2.0F + pos.x;
         f2 = pos.y;
         // 2.0 * (ecb bottom -> ecb left).normal() + ecb left
-        pos.x = 2.0F * left_dx + f1;
-        pos.y = -(2.0F * (coll->ecb.left.y - coll->ecb.bottom.y)) + f2;
+        /* 80044098: fmadds; the y line is fnmsubs, f2 - 2*(left - bottom)
+         * in one rounding, which fma(-2, d, f2) is exactly. */
+        pos.x = MPC_FMA(2.0F, left_dx, f1);
+        pos.y = MPC_FMA(-2.0F, coll->ecb.left.y - coll->ecb.bottom.y, f2);
         if (mpCheckFloor(f1, f2, pos.x, pos.y, 0.0F, &coll->contact, NULL,
                          NULL, NULL, coll->floor_skip, coll->joint_id_skip,
                          coll->joint_id_only, NULL, NULL))
@@ -1920,8 +1922,11 @@ bool mpColl_800454A4_RightWall(CollData* coll)
                     mpLineGetKind(line_id) & CollLine_RightWall)
                 {
                     mpLineGetNormal(line_id, &nrm);
-                    x = (pos.y - top.y) / nrm.x * -nrm.y + top.x - pos.x +
-                        0.5F;
+                    /* The mirror of mpColl_80046224_LeftWall's projection: the quotient
+                     * is a plain fdivs, its product with -nrm.y and the
+                     * add of top.x one fmadds, then - pos.x + 0.5 plain. */
+                    x = MPC_FMA(-nrm.y, (pos.y - top.y) / nrm.x, top.x) -
+                        pos.x + 0.5F;
                     if (mpColl_804D6490_max_x < coll->cur_pos.x + x) {
                         u32 temp = mpLineGetFlags(line_id);
                         mpColl_804D6490_max_x = coll->cur_pos.x + x;
@@ -1950,9 +1955,9 @@ bool mpColl_800454A4_RightWall(CollData* coll)
             mpLineGetV1Pos(j, &pos);
 
             if (bot <= pos.y && pos.y <= mid) {
-                x = f27 * (pos.y - bot) + coll->ecb.bottom.x;
+                x = MPC_FMA(f27, pos.y - bot, coll->ecb.bottom.x);
             } else if (mid <= pos.y && pos.y <= top) {
-                x = f26 * (pos.y - top) + coll->ecb.top.x;
+                x = MPC_FMA(f26, pos.y - top, coll->ecb.top.x);
             } else if (pos.y < bot) {
                 break;
             } else {
@@ -1977,9 +1982,9 @@ bool mpColl_800454A4_RightWall(CollData* coll)
             mpLineGetV0Pos(wall_id, &pos);
 
             if (bot <= pos.y && pos.y <= mid) {
-                x = f27 * (pos.y - bot) + coll->ecb.bottom.x;
+                x = MPC_FMA(f27, pos.y - bot, coll->ecb.bottom.x);
             } else if (mid <= pos.y && pos.y <= top) {
-                x = f26 * (pos.y - top) + coll->ecb.top.x;
+                x = MPC_FMA(f26, pos.y - top, coll->ecb.top.x);
             } else if (pos.y > top) {
                 break;
             } else {
@@ -3864,8 +3869,9 @@ bool mpColl_8004A908_Floor(CollData* coll, int line_id)
         coll->floor.normal = normal;
         return true;
     }
-    prev_bottom_y = 0.5F * (coll->prev_ecb.top.y + coll->prev_ecb.bottom.y) +
-                    coll->prev_pos.y;
+    /* 8004AA6C: fmadds. */
+    prev_bottom_y = MPC_FMA(0.5F, coll->prev_ecb.top.y + coll->prev_ecb.bottom.y,
+                            coll->prev_pos.y);
     if (coll->x38 != mpColl_804D64AC) {
         hit_floor = mpCheckFloorRemap(
             prev_bottom_x, prev_bottom_y, bottom_x, bottom_y, 0.0F, NULL,

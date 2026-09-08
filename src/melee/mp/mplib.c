@@ -16,6 +16,15 @@
  * only the stored result is a float. */
 #define MP_FMA(a, b, c) fma((a), (b), (c))
 #define MP_FMAF(a, b, c) fmaf((a), (b), (c))
+/* fnmsub on the console: c - a*b with ONE rounding, in double, in the
+ * reciprocal-square-root refinements of sqrtf_store. The console form is
+ * the original expression, kept textually so MWCC emits the same
+ * instruction. */
+#if BUILD_TARGET_PC
+#define MP_NMSUB(a, b, c) fma(-(a), (b), (c))
+#else
+#define MP_NMSUB(a, b, c) (-(((a) * (b)) - (c)))
+#endif
 #else
 #define MP_FMA(a, b, c) ((a) * (b) + (c))
 #define MP_FMAF(a, b, c) ((a) * (b) + (c))
@@ -5507,9 +5516,11 @@ static inline float sqrtf_store(float x, volatile float* y)
 {
     if (x > 0.0F) {
         double guess = __frsqrte((double) x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
+        /* fmul g,g / fmul 0.5,g / fnmsub x,g*g,3.0 / fmul: the 3.0 - x*g*g
+         * rounds once. */
+        guess = 0.5 * guess * MP_NMSUB((double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * MP_NMSUB((double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * MP_NMSUB((double) x, guess * guess, 3.0);
         *y = (float) (x * guess);
         return *y;
     }
@@ -5691,9 +5702,10 @@ bool mpLib_80056C54(int line_id, Vec3* pos, int* line_id_out, Vec3* vec_out,
                 *vec_out = sp58;
             } else {
                 float temp_f2_5 = var_f25 / dist_f28;
-                vec_out->x = (temp_f2_5 * (sp4C.x - sp58.x)) + sp58.x;
-                vec_out->y = (temp_f2_5 * (sp4C.y - sp58.y)) + sp58.y;
-                vec_out->z = (temp_f2_5 * (sp4C.z - sp58.z)) + sp58.z;
+                /* One fmadds per axis on the console. */
+                vec_out->x = MP_FMAF(temp_f2_5, sp4C.x - sp58.x, sp58.x);
+                vec_out->y = MP_FMAF(temp_f2_5, sp4C.y - sp58.y, sp58.y);
+                vec_out->z = MP_FMAF(temp_f2_5, sp4C.z - sp58.z, sp58.z);
             }
         } else {
             *vec_out = sp4C;
