@@ -55,6 +55,16 @@
 #include <melee/ft/ftcmdscript.h>
 #include <MetroTRK/intrinsics.h>
 
+/* The console fuses a*b+c into one rounding; x86 rounds twice. The squared
+ * distances in this file are all the same shape on the console: the second
+ * term as a plain multiply, the first fused onto it (fmuls y,y / fmadds
+ * x,x), and for three axes z fused on after that. */
+#if BUILD_TARGET_PC
+#define CO_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define CO_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /**
  * Priority table, mapping ItemKind to priority number,
  * for which items the CPU should prefer to target.
@@ -1081,32 +1091,35 @@ s32 ftCo_800A229C(Fighter* fp, Vec3* arg1)
     if (stage == Gr_Kind_RCruise) {
         w = Stage_GetBlastZoneRightOffset() - Stage_GetBlastZoneLeftOffset();
         if (sp2C.x < 0.0) {
-            if (fp->cur_pos.x < 0.4f * w + Stage_GetBlastZoneLeftOffset()) {
+            if (fp->cur_pos.x < CO_FMA(0.4f, w, Stage_GetBlastZoneLeftOffset()) /* 800A23E0 */) {
                 *arg1 = fp->cur_pos;
                 return 2;
             }
             goto block_18;
         }
-        if (fp->cur_pos.x > -(0.4f * w - Stage_GetBlastZoneRightOffset())) {
+        if (fp->cur_pos.x > CO_FMA(-0.4f, w, Stage_GetBlastZoneRightOffset()) /* fnmsubs 800A2418 */) {
             *arg1 = fp->cur_pos;
             return 2;
         }
     block_18:
         h = Stage_GetBlastZoneTopOffset() - Stage_GetBlastZoneBottomOffset();
         if (sp2C.y > 0.0) {
-            if (fp->cur_pos.y > -(0.4f * h - Stage_GetBlastZoneTopOffset())) {
+            if (fp->cur_pos.y > CO_FMA(-0.4f, h, Stage_GetBlastZoneTopOffset()) /* fnmsubs 800A2470 */) {
                 *arg1 = fp->cur_pos;
                 return 2;
             }
             goto block_23;
         }
-        if (fp->cur_pos.y < 0.4f * h + Stage_GetBlastZoneBottomOffset()) {
+        if (fp->cur_pos.y < CO_FMA(0.4f, h, Stage_GetBlastZoneBottomOffset()) /* 800A24A8 */) {
             *arg1 = fp->cur_pos;
             return 2;
         }
     block_23:
-        if (fp->cur_pos.x < 0.2f * w + Stage_GetBlastZoneLeftOffset() ||
-            fp->cur_pos.x > Stage_GetBlastZoneRightOffset() - 0.2f * w ||
+        /* 800A2654 / 800A2688: the two w tests are fmadds and fnmsubs; the
+         * two h tests after them, and all four in the Big Blue block, are
+         * plain on the console. */
+        if (fp->cur_pos.x < CO_FMA(0.2f, w, Stage_GetBlastZoneLeftOffset()) ||
+            fp->cur_pos.x > CO_FMA(-0.2f, w, Stage_GetBlastZoneRightOffset()) ||
             fp->cur_pos.y > Stage_GetBlastZoneTopOffset() - 0.2f * h ||
             fp->cur_pos.y < 0.2f * h + Stage_GetBlastZoneBottomOffset())
         {
@@ -1996,7 +2009,7 @@ bool ftCo_800A3908(Fighter* fp, bool arg1)
                     ok = 0;
                 }
                 if (ok != 0) {
-                    dist = sqrtf(ddx * ddx + ddy * ddy);
+                    dist = sqrtf(CO_FMA(ddx, ddx, ddy * ddy));
                     if (data->x5C > dist) {
                         if (fp->x1A88.x60 == 0) {
                             data2->x54.x = px;
@@ -2211,7 +2224,7 @@ bool ftCo_800A4038(Fighter* fp, bool arg1)
                     ok = 0;
                 }
                 if (ok != 0) {
-                    dist = sqrtf(ddx * ddx + ddy * ddy);
+                    dist = sqrtf(CO_FMA(ddx, ddx, ddy * ddy));
                     if (data->x5C > dist) {
                         if (fp->x1A88.x60 == 0) {
                             data2->x54.x = px;
@@ -2266,7 +2279,7 @@ s32 ftCo_800A4768(Fighter* fp, Vec3* arg1)
             dx = fp->cur_pos.x - pt.x;
             if (dx > 0.0f) {
                 dy = fp->cur_pos.y - pt.y;
-                dist = dx * dx + dy * dy;
+                dist = CO_FMA(dx, dx, dy * dy);
                 if (best < 0.0 || best > dist) {
                     best = dist;
                     tmp_x = pt.x - 5.0;
@@ -2281,7 +2294,7 @@ s32 ftCo_800A4768(Fighter* fp, Vec3* arg1)
             dx = fp->cur_pos.x - pt.x;
             if (dx < 0.0f) {
                 dy = fp->cur_pos.y - pt.y;
-                dist = dx * dx + dy * dy;
+                dist = CO_FMA(dx, dx, dy * dy);
                 if (best < 0.0 || best > dist) {
                     best = dist;
                     arg1->x = pt.x + 5.0;
@@ -2299,7 +2312,7 @@ void ftCo_800A49B4(Fighter* fp)
     struct Fighter_x1A88_t* data = &fp->x1A88;
     f32 dx = fp->cur_pos.x - data->x54.x;
     f32 dy = fp->cur_pos.y - data->x54.y;
-    data->x5C = sqrtf(dx * dx + dy * dy);
+    data->x5C = sqrtf(CO_FMA(dx, dx, dy * dy));
 }
 
 static inline bool inlineD0(Fighter* fp, Fighter* fp1)
@@ -2503,13 +2516,13 @@ Fighter* ftCo_800A4E8C(Fighter* fp, Vec3* arg1)
                             dy = cur_fp->cur_pos.y - arg1->y;
                             dx = distance;
                             dz = cur_fp->cur_pos.z - arg1->z;
-                            closest = sqrtf__Ff(dz * dz + (dx * dx + dy * dy));
+                            closest = sqrtf__Ff(CO_FMA(dz, dz, CO_FMA(dx, dx, dy * dy)));
                         } else {
                             dx = cur_fp->cur_pos.x - arg1->x;
                             dz = cur_fp->cur_pos.z - arg1->z;
                             dy = cur_fp->cur_pos.y - arg1->y;
                             distance =
-                                sqrtf__Ff(dz * dz + (dx * dx + dy * dy));
+                                sqrtf__Ff(CO_FMA(dz, dz, CO_FMA(dx, dx, dy * dy)));
                             if (closest > distance) {
                                 closest = distance;
                                 closest_fp = cur_fp;
@@ -2966,7 +2979,7 @@ static inline float ftCo_GetItemDistance(Fighter* fp, Item* ip)
     }
     dx = fp->cur_pos.x - ip->pos.x;
     dy = fp->cur_pos.y - ip->pos.y;
-    return sqrtf(dx * dx + dy * dy);
+    return sqrtf(CO_FMA(dx, dx, dy * dy));
 }
 
 /// Decide which common item to target
@@ -3188,7 +3201,7 @@ bool ftCo_800A6700(Fighter* fp, Vec3* arg1, Vec3* arg2)
                 if (!ftCo_800A6700_inline0(fp, px, ay)) {
                     px = px - arg1->x;
                     dy = ay - arg1->y;
-                    dist = px * px + dy * dy;
+                    dist = CO_FMA(px, px, dy * dy);
                     if (dist > best) {
                         best = dist;
                         arg2->x = ax + 5.0;
@@ -3212,7 +3225,7 @@ bool ftCo_800A6700(Fighter* fp, Vec3* arg1, Vec3* arg2)
                 if (!ftCo_800A6700_inline0(fp, px, ay)) {
                     px = px - arg1->x;
                     dy = ay - arg1->y;
-                    dist = px * px + dy * dy;
+                    dist = CO_FMA(px, px, dy * dy);
                     if (dist > best) {
                         best = dist;
                         arg2->x = ax - 5.0;
@@ -3969,7 +3982,7 @@ void ftCo_800A80E4(Fighter* fp)
         f32 dx = fp->cur_pos.x - other_fp->cur_pos.x;
         f32 dy = fp->cur_pos.y - other_fp->cur_pos.y;
         Vec3 vec;
-        if (!(sqrtf(dx * dx + dy * dy) > 50.0) &&
+        if (!(sqrtf(CO_FMA(dx, dx, dy * dy)) > 50.0) &&
             ftCo_800A6700(fp, &other_fp->cur_pos, &vec))
         {
             ftCo_800A1F3C(fp, vec.x, vec.y, 5.0F);
@@ -4970,7 +4983,7 @@ void ftCo_800AA42C(Fighter* fp)
     {
         float dx = data->x54.x - fp->cur_pos.x;
         float dy = data->x54.y - fp->cur_pos.y;
-        dist = sqrtf(dx * dx + dy * dy);
+        dist = sqrtf(CO_FMA(dx, dx, dy * dy));
     }
     near = data->x38;
     if (dist - near > data->x3C) {
@@ -6212,7 +6225,7 @@ static bool ftCo_800ADE48(Fighter* fp)
         f32 dist;
 
         dx = fp->cur_pos.x - data->x54.x;
-        dist = sqrtf(dx * dx + dy * dy);
+        dist = sqrtf(CO_FMA(dx, dx, dy * dy));
         data->x5C = dist;
     }
     if (data->x88 > 0) {
@@ -6963,7 +6976,7 @@ void ftCo_800AF290(Fighter* fp)
             if (nearby_fp != NULL && fp->ground_or_air != GA_Air) {
                 dy = fp->cur_pos.y - nearby_fp->cur_pos.y;
                 dx = fp->cur_pos.x - nearby_fp->cur_pos.x;
-                dist = sqrtf(dx * dx + dy * dy);
+                dist = sqrtf(CO_FMA(dx, dx, dy * dy));
                 if (!(dist > 50.0) &&
                     ftCo_800A6700(fp, &nearby_fp->cur_pos, &sp30) != 0)
                 {
@@ -7042,7 +7055,7 @@ void ftCo_800AF78C(Fighter* fp)
             if (nearby_fp != NULL && fp->ground_or_air != GA_Air) {
                 dy = fp->cur_pos.y - nearby_fp->cur_pos.y;
                 dx = fp->cur_pos.x - nearby_fp->cur_pos.x;
-                dist = sqrtf(dx * dx + dy * dy);
+                dist = sqrtf(CO_FMA(dx, dx, dy * dy));
                 if (!(dist > 50.0) &&
                     ftCo_800A6700(fp, &nearby_fp->cur_pos, &approach_pos))
                 {
@@ -7319,7 +7332,7 @@ void ftCo_800B04DC(Fighter* fp)
         if (target != NULL && fp->ground_or_air != GA_Air) {
             f32 dy = fp->cur_pos.y - target->cur_pos.y;
             f32 dx = fp->cur_pos.x - target->cur_pos.x;
-            dist[0] = sqrtf(dx * dx + dy * dy);
+            dist[0] = sqrtf(CO_FMA(dx, dx, dy * dy));
             if (!(dist[0] > 50.0) &&
                 ftCo_800A6700(fp, &target->cur_pos, &approach_pos))
             {
@@ -8592,7 +8605,7 @@ void ftCo_800B33B0(Fighter* fp)
     }
     vy = fp->coll_data.cur_pos.y - fp->coll_data.last_pos.y;
     vx = fp->coll_data.cur_pos.x - fp->coll_data.last_pos.x;
-    vmag = sqrtf(vx * vx + vy * vy);
+    vmag = sqrtf(CO_FMA(vx, vx, vy * vy));
     if (vmag < 0.01) {
         result = 1;
     } else {
