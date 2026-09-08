@@ -16,6 +16,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PE_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PE_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 11C2F4 */ static void reset(HSD_GObj* gobj);
 /* 11C430 */ static void doAirEnd0(HSD_GObj* gobj);
 /* 11C7B0 */ static void enterAirStart(HSD_GObj* gobj);
@@ -129,8 +137,8 @@ void ftPe_SpecialSStart_Anim(HSD_GObj* gobj)
         enterEndSmash(gobj);
     } else {
         ftCommon_8007D5D4(fp);
-        fp->cur_pos.x += -4 * fp->facing_dir * fp->x34_scale.y;
-        fp->cur_pos.y += 3.5f * fp->x34_scale.y;
+        fp->cur_pos.x = PE_FMA(-4.0f * fp->facing_dir, fp->x34_scale.y, fp->cur_pos.x);
+        fp->cur_pos.y = PE_FMA(3.5f, fp->x34_scale.y, fp->cur_pos.y);
         enterAirJump(gobj);
     }
 }

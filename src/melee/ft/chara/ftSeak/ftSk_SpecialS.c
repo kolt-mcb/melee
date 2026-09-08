@@ -29,6 +29,14 @@
 #include <trigf.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /// @todo Fix common data struct
 #define COMMON_DATA_F32 ((float*) p_ftCommonData)
 
@@ -60,7 +68,7 @@ void ftSk_SpecialS_80110490(Fighter* fp)
         v5 += 360;
     }
 
-    v6 = v5 * COMMON_DATA_F32[275] + fp->mv.sk.specials.x18;
+    v6 = SS_FMA(v5, COMMON_DATA_F32[275], fp->mv.sk.specials.x18);
 
     if (v6 > 360) {
         v6 -= 360;
@@ -77,8 +85,8 @@ void ftSk_SpecialS_80110490(Fighter* fp)
         v8 = 1;
     }
 
-    fp->mv.sk.specials.x14 +=
-        COMMON_DATA_F32[275] * (v8 - fp->mv.sk.specials.x14);
+    fp->mv.sk.specials.x14 = SS_FMA(COMMON_DATA_F32[275], v8 - fp->mv.sk.specials.x14,
+                                    fp->mv.sk.specials.x14);
 }
 
 void ftSk_SpecialS_80110610(HSD_GObj* gobj, s32 arg1, float arg2)
@@ -99,7 +107,7 @@ void ftSk_SpecialS_80110610(HSD_GObj* gobj, s32 arg1, float arg2)
     ftSk_SpecialS_80110490(fp);
 
     {
-        float f = 0.0556F * fp->mv.sk.specials.x18 + 4;
+        float f = SS_FMA(0.0556F, fp->mv.sk.specials.x18, 4.0F);
 
         if (fp->mv.sk.specials.x14) {
             HSD_JObj* bone = fp->x8AC_animSkeleton;

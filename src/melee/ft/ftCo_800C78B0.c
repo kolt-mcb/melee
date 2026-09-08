@@ -20,6 +20,14 @@
 #include "mp/mpcoll.h"
 #include "pl/player.h"
 
+/* The grab-timer handicap terms are fmadds on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define GR_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define GR_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 0C7890 */ void fn_800C7890(Fighter_GObj* gobj);
 
 static void orderTest(Vec3* ptr)
@@ -50,10 +58,9 @@ void ftCo_800C78B0(HSD_GObj* gobj, HSD_GObj* owner)
     {
         f32 tmp1 =
             cd->x74C * (cd->x750 - (f32) (Player_80033BB8(fp->player_id) + 1));
-        f32 tmp2 = (cd->x744 * (cd->x748 - Player_GetHandicap(fp->player_id)) +
-                    cd->x740);
+        f32 tmp2 = GR_FMA(cd->x744, cd->x748 - Player_GetHandicap(fp->player_id), cd->x740);
         tmp2 += tmp1;
-        ftCommon_InitGrab(fp, 0, fp->dmg.x1830_percent * cd->x754 + tmp2);
+        ftCommon_InitGrab(fp, 0, GR_FMA(fp->dmg.x1830_percent, cd->x754, tmp2));
     }
     fp->x1988 = 2;
     fp->invisible = true;

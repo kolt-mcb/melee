@@ -20,6 +20,14 @@
 #include <dolphin/os/OSError.h>
 #include <baselib/debug.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define WC_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define WC_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 FtWalkType ftWalkCommon_GetWalkType(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -162,7 +170,7 @@ void ftWalkCommon_800DFEC8(HSD_GObj* gobj, void (*arg_cb)(HSD_GObj*, float))
         float_result = ftAnim_8006F484(gobj);
         init_animFrame = fp->cur_anim_frame;
         quotient = init_animFrame / float_result;
-        adjusted_animFrame = fp->cur_anim_frame - float_result * quotient;
+        adjusted_animFrame = WC_FMA(-float_result, (f32) quotient, fp->cur_anim_frame); /* fnmsubs */
         final_animFrame = frame * (adjusted_animFrame / float_result);
 #if BUILD_TARGET_PC
         /* MELEE_WALKFRAME=1: the animation frame a change of walk speed

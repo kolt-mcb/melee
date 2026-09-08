@@ -29,6 +29,14 @@
 #include <sysdolphin/baselib/memory.h>
 #include <sysdolphin/baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IN_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IN_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 1FA908 */ static void grInishie1_801FA908(bool);
 /* 1FA90C */ static void grInishie1_801FA90C(void);
 /* 1FA984 */ static void grInishie1_801FA984(void);
@@ -963,7 +971,7 @@ void grInishie1_801FC110(HSD_GObj* gobj)
     } else {
         f32 accel = dist_hi - dist_lo;
         gp->u.inishie1.xF4 =
-            accel * yakumono_param->unk24 + gp->u.inishie1.xF4;
+            IN_FMA(accel, yakumono_param->unk24, gp->u.inishie1.xF4);
 
         if (gp->u.inishie1.xF4 > yakumono_param->unk28) {
             gp->u.inishie1.xF4 = yakumono_param->unk28;
@@ -1136,14 +1144,14 @@ void fn_801FC9AC(void* user_data, int joint_id, CollData* coll, int coll_x50,
     if (joint_id == 0x14) {
         gp->u.inishie1.xE8 += 1;
         if (ground_kind == 1) {
-            gp->u.inishie1.xE0 += (f32) coll_x50 * yakumono_param->unk2C[1].z;
+            gp->u.inishie1.xE0 = IN_FMA((f32) coll_x50, yakumono_param->unk2C[1].z, gp->u.inishie1.xE0);
         } else {
             gp->u.inishie1.xE0 += (f32) coll_x50;
         }
     } else if (joint_id == 0x15) {
         gp->u.inishie1.xEA += 1;
         if (ground_kind == 1) {
-            gp->u.inishie1.xE4 += (f32) coll_x50 * yakumono_param->unk2C[1].z;
+            gp->u.inishie1.xE4 = IN_FMA((f32) coll_x50, yakumono_param->unk2C[1].z, gp->u.inishie1.xE4);
         } else {
             gp->u.inishie1.xE4 += (f32) coll_x50;
         }

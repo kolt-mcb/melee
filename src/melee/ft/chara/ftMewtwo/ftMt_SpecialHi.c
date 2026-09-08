@@ -29,6 +29,14 @@
 #include <trigf.h>
 #include <dolphin/mtx.h>
 #include <MSL/math.h>
+
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define MT_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define MT_FMA(a, b, c) ((a) * (b) + (c))
+#endif
 /// Create Teleport Start GFX
 void ftMt_SpecialHi_CreateGFX(HSD_GObj* gobj)
 {
@@ -429,8 +437,8 @@ void ftMt_SpecialHi_Enter(HSD_GObj* gobj)
             fp->mv.mt.SpecialHi.stickY = stickVec.y;
             fp->gr_vel =
                 fp->facing_dir *
-                (((mewtwoAttrs->x5C_MEWTWO_TELEPORT_MOMENTUM * sqrt_stick) +
-                  mewtwoAttrs->x60_MEWTWO_TELEPORT_MOMENTUM_ADD) *
+                ((MT_FMA(mewtwoAttrs->x5C_MEWTWO_TELEPORT_MOMENTUM, sqrt_stick,
+                       mewtwoAttrs->x60_MEWTWO_TELEPORT_MOMENTUM_ADD)) *
                  cosf(vel));
 
             Fighter_ChangeMotionState(gobj, ftMt_MS_SpecialHiLost, 0, 35, 1, 0,
@@ -496,12 +504,12 @@ void ftMt_SpecialAirHi_Enter(HSD_GObj* gobj)
     }
 
     fp->self_vel.x = fp->facing_dir *
-                     ((mewtwoAttrs->x5C_MEWTWO_TELEPORT_MOMENTUM * sqrt_stick +
-                       mewtwoAttrs->x60_MEWTWO_TELEPORT_MOMENTUM_ADD) *
-                      cosf(floatVar));
+                     (MT_FMA(mewtwoAttrs->x5C_MEWTWO_TELEPORT_MOMENTUM, sqrt_stick,
+                            mewtwoAttrs->x60_MEWTWO_TELEPORT_MOMENTUM_ADD) *
+                     cosf(floatVar));
 
-    fp->self_vel.y = (mewtwoAttrs->x5C_MEWTWO_TELEPORT_MOMENTUM * sqrt_stick +
-                      mewtwoAttrs->x60_MEWTWO_TELEPORT_MOMENTUM_ADD) *
+    fp->self_vel.y = MT_FMA(mewtwoAttrs->x5C_MEWTWO_TELEPORT_MOMENTUM, sqrt_stick,
+                            mewtwoAttrs->x60_MEWTWO_TELEPORT_MOMENTUM_ADD) *
                      sinf(floatVar);
 
     Fighter_ChangeMotionState(gobj, ftMt_MS_SpecialAirHiLost, 0, 35, 1, 0,

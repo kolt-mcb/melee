@@ -27,6 +27,14 @@
 #include <baselib/gobj.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define TK_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define TK_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void sdata2_order(void)
 {
     (void) 0.0f;
@@ -224,7 +232,7 @@ void ftCo_ThrownKirbyStar_Coll(Fighter_GObj* gobj)
     if (normal.x || normal.y || normal.z) {
         self_vel = fp->self_vel;
         lbVector_Mirror(&fp->self_vel, &normal);
-        if (self_vel.x * fp->self_vel.x + self_vel.y * fp->self_vel.y < 0) {
+        if (TK_FMA(self_vel.x, fp->self_vel.x, self_vel.y * fp->self_vel.y) < 0) {
             ftCo_800BE494(gobj);
             fp->mv.co.thrownkirby.x8 = normal.x < 0 ? -1 : +1;
         }
@@ -274,7 +282,7 @@ void ftCo_ThrownCopyStar_Coll(Fighter_GObj* gobj)
     if (normal.x || normal.y || normal.z) {
         self_vel = fp->self_vel;
         lbVector_Mirror(&fp->self_vel, &normal);
-        if (self_vel.x * fp->self_vel.x + self_vel.y * fp->self_vel.y < 0) {
+        if (TK_FMA(self_vel.x, fp->self_vel.x, self_vel.y * fp->self_vel.y) < 0) {
             ftCo_800BE494(gobj);
             fp->mv.co.thrownkirby.x8 = normal.x < 0 ? -1 : +1;
         }

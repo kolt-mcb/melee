@@ -27,6 +27,14 @@
 #include <dolphin/mtx.h>
 #include <MetroTRK/intrinsics.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define ZH_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define ZH_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftZd_SpecialHi_801396AC(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -423,7 +431,7 @@ void ftZd_SpecialHi_8013A058(HSD_GObj* gobj)
                 fp->mv.zd.specialhi.x4.y = inputVector.y;
 
                 // Update ground velocity
-                temp_f6 = ((attributes->x54 * var_f31) + attributes->x58) *
+                temp_f6 = ZH_FMA(attributes->x54, var_f31, attributes->x58) *
                           cosf(temp_f5);
                 fp->gr_vel = fp->facing_dir * temp_f6;
 
@@ -515,9 +523,9 @@ void ftZd_SpecialHi_8013A244(HSD_GObj* gobj)
 
     fp->self_vel.x =
         fp->facing_dir *
-        (((attributes->x54 * var_f31) + attributes->x58) * cosf(var_f30));
+        (ZH_FMA(attributes->x54, var_f31, attributes->x58) * cosf(var_f30));
     fp->self_vel.y =
-        ((attributes->x54 * var_f31) + attributes->x58) * sinf(var_f30);
+        ZH_FMA(attributes->x54, var_f31, attributes->x58) * sinf(var_f30);
 
     Fighter_ChangeMotionState(gobj, 353, 0, 35.0, 1.0, 0, NULL);
     ftAnim_8006EBA4(gobj);

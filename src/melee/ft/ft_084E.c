@@ -4,6 +4,14 @@
 #include <melee/ft/fighter.h>
 #include <melee/ft/ftcommon.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define FA_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define FA_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ft_80084E1C(Fighter_GObj* gobj, float threshold, float drift_max,
                  float target_max)
 {
@@ -79,8 +87,7 @@ void ft_80085030(Fighter_GObj* gobj, float gr_friction, float facing_dir)
 {
     Fighter* fp = gobj->user_data;
     if (fp->x594_b0) {
-        fp->xE4_ground_accel_1 =
-            fp->x6A4_transNOffset.z * facing_dir - fp->gr_vel;
+        fp->xE4_ground_accel_1 = FA_FMA(fp->x6A4_transNOffset.z, facing_dir, -fp->gr_vel); /* fmsubs */
     } else {
         ftCommon_ApplyFrictionGround(fp, gr_friction);
     }
@@ -130,8 +137,8 @@ void ft_80085154(Fighter_GObj* gobj)
     f32 lstick_y = sinf(fp->lstick_angle);
     f32 temp_f0 = fp->x6A4_transNOffset.y;
     f32 temp_f3 = fp->x6A4_transNOffset.z * fp->facing_dir;
-    fp->self_vel.x = (temp_f3 * lstick_x) - (temp_f0 * lstick_y);
-    fp->self_vel.y = (temp_f3 * lstick_y) + (temp_f0 * lstick_x);
+    fp->self_vel.x = FA_FMA(temp_f3, lstick_x, -(temp_f0 * lstick_y)); /* fmsubs */
+    fp->self_vel.y = FA_FMA(temp_f3, lstick_y, temp_f0 * lstick_x);
 }
 
 void ft_800851C0(Fighter_GObj* gobj)

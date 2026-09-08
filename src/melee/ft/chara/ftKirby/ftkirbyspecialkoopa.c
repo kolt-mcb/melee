@@ -14,6 +14,14 @@
 #include "it/items/itkoopaflame.h"
 #include "lb/lb_00B0.h"
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KO_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KO_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 enum_t ftKb_Init_803CB540[] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1,
     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -36,9 +44,9 @@ void ftKb_SpecialNKp_800FA588(Fighter_GObj* gobj)
     offset.y = 0.5f;
     offset.z = 3.0f;
     lb_8000B1CC(fp->parts[12].joint, &offset, &pos);
-    pos.x +=
-        fp->x34_scale.y * (da->specialn_kp_breath_x_offset * fp->facing_dir);
-    pos.y += da->specialn_kp_breath_y_offset * fp->x34_scale.y;
+    pos.x = KO_FMA(fp->x34_scale.y,
+                   da->specialn_kp_breath_x_offset * fp->facing_dir, pos.x);
+    pos.y = KO_FMA(da->specialn_kp_breath_y_offset, fp->x34_scale.y, pos.y);
 
     {
         Fighter* fp2 = GET_FIGHTER(gobj);

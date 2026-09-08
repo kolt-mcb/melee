@@ -13,6 +13,14 @@
 #include <math.h>
 #include <trigf.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define CB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define CB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F6798[] = {
     NULL,
     itKirbycutterbeam_UnkMotion0_Anim,
@@ -93,7 +101,7 @@ void itKirbycutterbeam_UnkMotion0_Phys(Item_GObj* gobj)
                     sinf(ip->xDD4_itemVar.kirbycutterbeam.angle);
     if (ip->ground_or_air == GA_Ground) {
         if (ip->x40_vel.y < 0.0f) {
-            ip->x40_vel.y += (0.05f * ip->x40_vel.y);
+            ip->x40_vel.y = CB_FMA(0.05f, ip->x40_vel.y, ip->x40_vel.y);
         }
     }
     ip->x40_vel.z = 0.0f;

@@ -24,6 +24,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define FH_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define FH_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 #define FTFOX_SPECIALHI_COLL_FLAG                                             \
     Ft_MF_KeepGfx | Ft_MF_SkipMatAnim | Ft_MF_UpdateCmd | Ft_MF_SkipColAnim | \
         Ft_MF_SkipItemVis | Ft_MF_Unk19 | Ft_MF_SkipModelPartVis |            \
@@ -277,13 +285,14 @@ void ftFx_SpecialAirHi_Phys(HSD_GObj* gobj)
     fp->mv.fx.SpecialHi.unk++;
 
     if (fp->mv.fx.SpecialHi.unk >= da->x70_FOX_FIREFOX_DURATION_END) {
-        fp->self_vel.x =
-            -((fp->facing_dir * (da->x78_FOX_FIREFOX_REVERSE_ACCEL *
-                                 cosf(fp->mv.fx.SpecialHi.rotateModel))) -
-              fp->self_vel.x);
-        fp->self_vel.y = -((da->x78_FOX_FIREFOX_REVERSE_ACCEL *
-                            sinf(fp->mv.fx.SpecialHi.rotateModel)) -
-                           fp->self_vel.y);
+        /* 800E77C8/77E0: fnmsubs */
+        fp->self_vel.x = FH_FMA(-fp->facing_dir,
+                                da->x78_FOX_FIREFOX_REVERSE_ACCEL *
+                                    cosf(fp->mv.fx.SpecialHi.rotateModel),
+                                fp->self_vel.x);
+        fp->self_vel.y = FH_FMA(-da->x78_FOX_FIREFOX_REVERSE_ACCEL,
+                                sinf(fp->mv.fx.SpecialHi.rotateModel),
+                                fp->self_vel.y);
     }
 }
 

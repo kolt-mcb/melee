@@ -22,6 +22,14 @@
 #include <baselib/random.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define NT_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define NT_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F6F50[] = {
     { 0, itSeakneedlethrown_UnkMotion0_Anim,
       itSeakneedlethrown_UnkMotion0_Phys, itSeakneedlethrown_UnkMotion0_Coll },
@@ -136,14 +144,14 @@ void it_802AFF08(Item_GObj* gobj, Fighter_GObj* owner)
         angle_factor = 1.5707964f;
     }
     ip->xDD4_itemVar.seakneedlethrown.xDF0 =
-        (ip->facing_dir * angle_factor) + 1.5707964f;
+        NT_FMA(ip->facing_dir, angle_factor, 1.5707964f);
     ip->x40_vel.x = -attr->x8 * cosf(ip->xDD4_itemVar.seakneedlethrown.xDF0);
     ip->x40_vel.y = attr->x8 * sinf(ip->xDD4_itemVar.seakneedlethrown.xDF0);
     ip->x40_vel.z = 0.0f;
     ip->xDD4_itemVar.seakneedlethrown.xDE4.x =
-        ip->pos.x - 3.0f * ip->x40_vel.x;
+        NT_FMA(-3.0f, ip->x40_vel.x, ip->pos.x); /* fnmsubs */
     ip->xDD4_itemVar.seakneedlethrown.xDE4.y =
-        ip->pos.y - 3.0f * ip->x40_vel.y;
+        NT_FMA(-3.0f, ip->x40_vel.y, ip->pos.y); /* fnmsubs */
     ip->xDD4_itemVar.seakneedlethrown.xDE4.z = 0.0f;
     HSD_JObjSetRotationX(
         child,

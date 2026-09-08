@@ -22,6 +22,14 @@
 #include "mp/mpcoll.h"
 #include "MSL/math.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define LB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define LB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 const Vec3 it_803B8640 = { 0 };
 
 ItemStateTable it_803F6888[] = {
@@ -511,7 +519,7 @@ void itLinkbomb_UnkMotion4_Phys(HSD_GObj* gobj)
         temp_f2 = item->x40_vel.x;
         if (temp_f2 != zero) {
             item->x40_vel.x =
-                (sa->x2C * item->xDD4_itemVar.linkbomb.x4) + temp_f2;
+                LB_FMA(sa->x2C, item->xDD4_itemVar.linkbomb.x4, temp_f2);
         }
         if (ABS(item->x40_vel.x) < sa->x30) {
             item->x40_vel.x = zero;

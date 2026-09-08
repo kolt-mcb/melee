@@ -20,6 +20,14 @@
 #include "MSL/math.h"
 #include "sysdolphin/baselib/random.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define RS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define RS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 typedef struct itRShell_Attrs {
     float x0;
     float x4;
@@ -125,7 +133,7 @@ set_vel:
 
 add_vel:
     it_8028D390(gobj);
-    ip->x40_vel.x += -ip->xCCC_incDamageDirection * (ip->xCA0 * attrs->x24);
+    ip->x40_vel.x = RS_FMA(-ip->xCCC_incDamageDirection, ip->xCA0 * attrs->x24, ip->x40_vel.x);
     goto check_speed;
 
 check_speed:
@@ -184,7 +192,7 @@ set_vel:
 
 add_vel:
     it_8028D390(gobj);
-    ip->x40_vel.x += attrs->x2C * -ip->xCD0;
+    ip->x40_vel.x = RS_FMA(attrs->x2C, -ip->xCD0, ip->x40_vel.x);
     goto check_speed;
 
 check_speed:
@@ -313,7 +321,7 @@ f32 it_8028D56C(Item_GObj* gobj, f32 f1, f32 f2)
 {
     itRshellAttributes* attrs =
         GET_ITEM(gobj)->xC4_article_data->x4_specialAttributes;
-    f32 f = (f1 * -attrs->x14.x) + (-attrs->x14.y * f2);
+    f32 f = RS_FMA(f1, -attrs->x14.x, -attrs->x14.y * f2);
     return f * attrs->x14.z;
 }
 

@@ -17,6 +17,14 @@
 #include <baselib/random.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define UN_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define UN_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F7D60[] = {
     { 0, itUnknown_UnkMotion0_Anim, itUnknown_UnkMotion0_Phys,
       itUnknown_UnkMotion0_Coll },
@@ -86,7 +94,7 @@ void itUnknown_UnkMotion0_Phys(Item_GObj* gobj)
     Item* ip = GET_ITEM(gobj);
     itUnknownAttributes* attr = ip->xC4_article_data->x4_specialAttributes;
     it_80272860(gobj, attr->xC, attr->x10);
-    ip->x40_vel.x += attr->x4 * ip->xDD4_itemVar.unknown.x60;
+    ip->x40_vel.x = UN_FMA(attr->x4, ip->xDD4_itemVar.unknown.x60, ip->x40_vel.x);
 }
 
 bool itUnknown_UnkMotion0_Coll(Item_GObj* gobj)
@@ -228,12 +236,14 @@ void it_802CED54(Item_GObj* gobj)
     case 1:
         spawn.prev_pos.x = ip->xDD4_itemVar.unknown.x6C.x;
         spawn.prev_pos.y =
-            ip->xDD4_itemVar.unknown.x6C.y + (randi_perm(range) - range / 2);
+            ip->xDD4_itemVar.unknown.x6C.y +
+            UN_FMA(-range, 0.5f, (f32) randi_perm(range)); /* fnmsubs */
         break;
     case 2:
     case 3:
         spawn.prev_pos.x =
-            ip->xDD4_itemVar.unknown.x6C.x + (randi_perm(range) - range / 2);
+            ip->xDD4_itemVar.unknown.x6C.x +
+            UN_FMA(-range, 0.5f, (f32) randi_perm(range)); /* fnmsubs */
         spawn.prev_pos.y = ip->xDD4_itemVar.unknown.x6C.y;
         break;
     }

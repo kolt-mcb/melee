@@ -20,6 +20,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SL1_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SL1_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static MotionFlags const ftSs_MF_SpecialLw_Coll =
     ftCommon_GroundAirColl_MF | Ft_MF_KeepColAnimHitStatus | Ft_MF_SkipHit |
     Ft_MF_SkipModel;
@@ -32,7 +40,7 @@ void ftSs_SpecialLw_8012ADF0(Fighter_GObj* gobj)
         Vec3 vec;
         PAD_STACK(4);
         lb_8000B1CC(fp->parts[FtPart_TopN].joint, NULL, &vec);
-        vec.x += samus_attr->x74_vec.x * fp->facing_dir;
+        vec.x = SL1_FMA(samus_attr->x74_vec.x, fp->facing_dir, vec.x);
         vec.y += samus_attr->x74_vec.y;
         vec.z += samus_attr->x74_vec.z;
         it_802B4AC8(gobj, &vec, fp->facing_dir);

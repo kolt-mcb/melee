@@ -26,6 +26,14 @@
 #include <dolphin/mtx.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define NN_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define NN_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 1230D0 */ static bool ftNn_Init_801230D0(Fighter_GObj* nana_gobj);
 /* 123218 */ static void fn_80123218(Fighter_GObj* nana_gobj);
 /* 1233F8 */ static void ftNn_Init_801233F8(Fighter_GObj* gobj);
@@ -137,7 +145,7 @@ void ftPp_SpecialHi_0_Phys(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     if (!ftNn_Init_801230D0(gobj)) {
-        fp->cur_pos.x = -((8.0f * fp->facing_dir) - fp->cur_pos.x);
+        fp->cur_pos.x = NN_FMA(-8.0f, fp->facing_dir, fp->cur_pos.x); /* fnmsubs */
         ftCo_Fall_Enter(gobj);
     }
 }
@@ -276,8 +284,8 @@ void ftNn_Init_801237F8(Fighter_GObj* nana_gobj)
     nana_fp->self_vel.x =
         nana_fp->facing_dir * (attrs->x13C * cosf(attrs->x140));
     nana_fp->self_vel.y = attrs->x13C * sinf(attrs->x140);
-    nana_fp->cur_pos.x += 4.0f * nana_fp->facing_dir * nana_fp->x34_scale.y;
-    nana_fp->cur_pos.y += 7.0f * nana_fp->x34_scale.y;
+    nana_fp->cur_pos.x = NN_FMA(4.0f * nana_fp->facing_dir, nana_fp->x34_scale.y, nana_fp->cur_pos.x);
+    nana_fp->cur_pos.y = NN_FMA(7.0f, nana_fp->x34_scale.y, nana_fp->cur_pos.y);
     Fighter_ChangeMotionState(nana_gobj, 365, 0, 0.0f, 1.0f, 0.0f, NULL);
     nana_fp->accessory4_cb = fn_80123218;
 }

@@ -39,6 +39,14 @@
 #include <melee/mp/mplib.h>
 #include <melee/pl/player.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PS2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PS2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static struct grPStadium_YakumonoParam {
     int x0;
     int x4;
@@ -2206,8 +2214,8 @@ void grStadium_801D4548(Ground_GObj* gobj)
         break;
     case 4:
         temp_r27_2 = GET_JOBJ(temp_r31->u.stadium.xE4);
-        temp_f29 = -((temp_f31 * (0.95f / yakumono_param->x14)) -
-                     HSD_JObjGetScaleY(temp_r27_2));
+        temp_f29 = PS2_FMA(-temp_f31, 0.95f / yakumono_param->x14,
+                           HSD_JObjGetScaleY(temp_r27_2)); /* fnmsubs */
         temp_f30 = 0.05f * temp_f31;
         if (temp_f29 > temp_f30) {
             HSD_JObjSetScaleY(temp_r27_2, temp_f29);

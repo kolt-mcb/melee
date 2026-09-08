@@ -19,6 +19,14 @@
 #include <baselib/gobj.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define F9_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define F9_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 08998C */ static bool fn_8008998C(Fighter* fp, IKState* ik, Vec3* normal);
 
 static bool fn_8008998C(Fighter* fp, IKState* ik, Vec3* normal)
@@ -196,7 +204,7 @@ void ft_80089B08(Fighter_GObj* gobj)
             dy = sp38.y - sp2C.y;
             dx = sp38.x;
             dx -= sp2C.x;
-            line_len = dx * dx + dy * dy;
+            line_len = F9_FMA(dx, dx, dy * dy);
             (void) line_len;
             if (line_len > 0.0f) {
                 f64 guess = __frsqrte((f64) line_len);
@@ -226,8 +234,8 @@ void ft_80089B08(Fighter_GObj* gobj)
                     {
                         mpLineGetNormal(prev_id, &sp1C);
                         adj_angle =
-                            0.5f * ((fp->facing_dir * atan2f(sp1C.x, sp1C.y)) +
-                                    adj_angle);
+                            0.5f * F9_FMA(fp->facing_dir, atan2f(sp1C.x, sp1C.y),
+                                          adj_angle);
                     }
                 }
                 {

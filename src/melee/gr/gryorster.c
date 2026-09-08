@@ -21,6 +21,14 @@
 #include <baselib/gobjproc.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define YO_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define YO_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 2024F0 */ static void grYorster_802024F0(void* user_data, int joint_id,
                                             CollData* coll, int coll_x50,
                                             mpLib_GroundEnum ground_kind,
@@ -391,7 +399,7 @@ void grYorster_8020266C(HSD_GObj* gobj)
             if (gp->u.yorster.elements[i].x0C >= 0x143) {
                 HSD_JObjGetTranslation(gp->u.yorster.elements[i].x18, &pos);
 
-                if (grLib_801C9EE8(&pos, 10.0f * Ground_801C0498() - 2.0f)) {
+                if (grLib_801C9EE8(&pos, YO_FMA(10.0f, Ground_801C0498(), -2.0f))) { /* fmsubs */
                     grAnime_801C7FF8(gobj, gp2->u.yorster.elements[i].x14, 7,
                                      2, 0.0f, 0.3f);
                     gp->u.yorster.elements[i].x0C = 0;

@@ -29,6 +29,14 @@
 #include <baselib/gobj.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define YE_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define YE_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 0BBCC0 */ static void ftCo_800BBCC0(Fighter_GObj* gobj);
 
 void ftCo_800BBC88(Fighter_GObj* gobj)
@@ -198,8 +206,8 @@ void ftCo_800BC3AC(Fighter_GObj* gobj)
 void ftCo_800BC3D0(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    fp->grab_timer = -(fp->dmg.x1838_percentTemp * ftYs_SpecialN_8012CDB4() -
-                       fp->grab_timer);
+    fp->grab_timer = YE_FMA(-fp->dmg.x1838_percentTemp, ftYs_SpecialN_8012CDB4(),
+                            fp->grab_timer); /* fnmsubs */
     if (fp->dmg.x18CC == 3 && ftCo_800C0C88(fp->dmg.x18D0)) {
         fp->grab_timer = 0;
     }

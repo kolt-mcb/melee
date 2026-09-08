@@ -27,6 +27,14 @@
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define E5_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define E5_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 const Vec3 it_803B8718 = { 0.0f, 0.0f, 0.0f };
 const Vec3 it_803B8724 = { 0.0f, 0.0f, 0.0f };
 
@@ -125,8 +133,8 @@ bool it_802E5AC4(Item_GObj* item_gobj, bool arg_check)
             sp28 = it_803B8724;
             var_f31 = sqrtf_accurate_store(
                 SQ(item->x40_vel.x) + SQ(item->x40_vel.y), &sqrt_0);
-            if (((item->x40_vel.x * coll_data->floor.normal.x) +
-                 (item->x40_vel.y * coll_data->floor.normal.y)) < 0.0f)
+            if (E5_FMA(item->x40_vel.x, coll_data->floor.normal.x,
+                       item->x40_vel.y * coll_data->floor.normal.y) < 0.0f)
             {
                 sp40 = item->x40_vel;
                 lbVector_Mirror(&sp40, &coll_data->floor.normal);
@@ -276,7 +284,7 @@ s32 it_802E61C4(Item_GObj* item_gobj, s32 arg1, s32 arg2)
     var_r29 = arg1 * attr->x2C[arg2];
     new_var = HSD_Randf();
     temp_f1 = attr->x24 * new_var;
-    var_r29 *= (0.01F * temp_f1) + 1.0F;
+    var_r29 *= E5_FMA(0.01F, temp_f1, 1.0F);
     if (var_r29 < 1) {
         do {
             var_r29 = 1;
@@ -306,7 +314,7 @@ void it_802E628C(Item_GObj* item_gobj, f32 arg8, f32 arg9)
     if (((arg8 >= (temp_f0 / 3)) && (arg8 <= (2 * (temp_f0 / 3)))) ||
         ((arg8 >= (4 * (temp_f0 / 3))) && (arg8 <= (5 * (temp_f0 / 3)))))
     {
-        var_f30 += attr->x10 * cosf((temp_f1));
+        var_f30 = E5_FMA(attr->x10, cosf((temp_f1)), var_f30);
     }
     item->x40_vel.x = var_f30;
     temp_f0 = attr->x20;

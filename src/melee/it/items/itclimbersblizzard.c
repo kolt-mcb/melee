@@ -21,6 +21,14 @@
 
 #include <math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define BZ_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define BZ_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 #define M_TAU 6.283185307179586
 
 #define GET_ATTRS(ip)                                                         \
@@ -86,7 +94,7 @@ void itClimbersBlizzard_802C2248(Item_GObj* gobj)
     attrs = GET_ATTRS(ip);
     rand = HSD_Randf();
     var_f2 = attrs->x10 - attrs->xC;
-    temp_f0 = (var_f2 * rand) + attrs->xC;
+    temp_f0 = BZ_FMA(var_f2, rand, attrs->xC);
     if (ip->facing_dir == 1.0f) {
         var_f2 = temp_f0;
     } else {

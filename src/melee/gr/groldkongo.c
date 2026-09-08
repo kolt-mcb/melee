@@ -29,6 +29,14 @@
 
 #if BUILD_TARGET_PC
 #include <platform.h>
+
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define OK_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define OK_FMA(a, b, c) ((a) * (b) + (c))
+#endif
 #endif
 
 /* Forward declarations for functions used in struct initializers */
@@ -600,9 +608,9 @@ void grOldKongo_802100FC(Ground_GObj* arg0)
             f32 x;
 
             grAnime_801C8138(arg0, gp->map_id, 0);
-            HSD_JObjSetTranslateY(jobj, (grOk_804D6A90[0]->x4 *
-                                         ((2.0f * (0, HSD_Randf())) - 1.0f)) +
-                                            70.0f);
+            HSD_JObjSetTranslateY(jobj, OK_FMA(grOk_804D6A90[0]->x4,
+                                               OK_FMA(2.0f, (0, HSD_Randf()), -1.0f),
+                                               70.0f));
             HSD_JObjSetTranslateZ(jobj, -200.0f);
             Camera_800307D0(&left, &center, &right);
             if (HSD_Randi(2) != 0) {
@@ -673,7 +681,7 @@ bool grOldKongo_80210454(Ground_GObj* ground_gobj, Fighter_GObj* keep)
 
     rand_val = HSD_Randf();
     diff = grOk_804D6A90[0]->xC - grOk_804D6A90[0]->x8;
-    gp->gv.taru.xC4 = (s16) (diff * rand_val + grOk_804D6A90[0]->x8);
+    gp->gv.taru.xC4 = (s16) OK_FMA(diff, rand_val, grOk_804D6A90[0]->x8);
     gp->gv.taru.keep = keep;
     gp->gv.taru.xC4 = 1;
     Ground_801C5440(gp, 0, 0x129U);

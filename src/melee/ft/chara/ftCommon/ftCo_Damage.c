@@ -85,10 +85,10 @@ float ftCo_Damage_CalcAngle(Fighter* fp, float f)
         return 0;
     } else {
         float result =
-            deg_to_rad * (p_ftCommonData->x148 *
-                              ((f - p_ftCommonData->x14C) /
-                               (p_ftCommonData->x150 - p_ftCommonData->x14C)) +
-                          1);
+            deg_to_rad * DMG_FMA(p_ftCommonData->x148,
+                                 (f - p_ftCommonData->x14C) /
+                                     (p_ftCommonData->x150 - p_ftCommonData->x14C),
+                                 1.0f);
         if (result > deg_to_rad * p_ftCommonData->x148) {
             result = deg_to_rad * p_ftCommonData->x148;
         }
@@ -232,7 +232,7 @@ static float calcAngle(float angle)
 {
     float x = cosf(angle) + cosf(M_PI_2_F);
     float y = sinf(angle) + sinf(M_PI_2_F);
-    if (x * x + y * y <= 0.0001f) {
+    if (DMG_FMA(x, x, y * y) <= 0.0001f) {
         return 0;
     }
     return atan2f(y, x);

@@ -24,6 +24,14 @@
 #include "mp/mpcoll.h"
 #include "mp/mplib.h"
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define CC_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define CC_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftCo_CaptureCut_Enter(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -128,9 +136,9 @@ void ftCo_800DC920(Fighter_GObj* arg0, Fighter_GObj* gobj)
                 var_r30->parts[ftParts_GetBoneIndex(var_r30, FtPart_XRotN)]
                     .joint;
             lb_8000B1CC(temp_r28, NULL, &sp4C);
-            sp4C.x += var_r30->facing_dir *
-                      (var_r30->x1A70.z * var_r30->x34_scale.y);
-            sp4C.y += var_r30->x1A70.y * var_r30->x34_scale.y;
+            sp4C.x = CC_FMA(var_r30->facing_dir,
+                            var_r30->x1A70.z * var_r30->x34_scale.y, sp4C.x);
+            sp4C.y = CC_FMA(var_r30->x1A70.y, var_r30->x34_scale.y, sp4C.y);
             sp4C.z = 0.0F;
             lb_8000C390(temp_r28);
             var_r30->x2226_b2 = false;

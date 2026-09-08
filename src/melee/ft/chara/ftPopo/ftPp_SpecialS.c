@@ -16,6 +16,14 @@
 #include <math.h>
 #include <trigf.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PP_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PP_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static inline void setRefGObjFlagAndClear(Fighter* fp)
 {
     Fighter_GObj* gobj = fp->x1A5C;
@@ -357,8 +365,9 @@ void ftPp_SpecialS1_Phys(Fighter_GObj* gobj)
         temp_r5 = GET_FIGHTER(gobj);
         {
             ftIceClimberAttributes* da = temp_r5->dat_attrs;
-            temp_r5->xE4_ground_accel_1 +=
-                da->x6C * temp_r5->coll_data.floor.normal.x;
+            temp_r5->xE4_ground_accel_1 =
+                PP_FMA(da->x6C, temp_r5->coll_data.floor.normal.x,
+                       temp_r5->xE4_ground_accel_1);
         }
         ftCommon_ClampGrVel(fp, temp_r30->x38);
         ftCommon_ApplyGroundMovementNoSlide(gobj);
@@ -415,8 +424,9 @@ void ftPp_SpecialS2_Phys(Fighter_GObj* gobj)
         temp_r5 = GET_FIGHTER(gobj);
         {
             ftIceClimberAttributes* da = temp_r5->dat_attrs;
-            temp_r5->xE4_ground_accel_1 +=
-                da->x6C * temp_r5->coll_data.floor.normal.x;
+            temp_r5->xE4_ground_accel_1 =
+                PP_FMA(da->x6C, temp_r5->coll_data.floor.normal.x,
+                       temp_r5->xE4_ground_accel_1);
         }
         ftCommon_ClampGrVel(temp_r31, temp_r30->x38);
         ftCommon_ApplyGroundMovementNoSlide(gobj);

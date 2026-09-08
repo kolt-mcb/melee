@@ -10,6 +10,14 @@
 
 #include <baselib/gobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define FO_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define FO_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 28FC84 */ bool itFoods_UnkMotion0_Anim(Item_GObj* arg0);
 /* 28FC8C */ void itFoods_UnkMotion0_Phys(Item_GObj* arg0);
 /* 28FCBC */ bool itFoods_UnkMotion0_Coll(Item_GObj* arg0);
@@ -39,7 +47,7 @@ void it_8028F9D8(Item_GObj* arg0, Vec3* arg1, f32 arg8)
     Vec4* temp_r6 = temp_r30->xC4_article_data->x4_specialAttributes;
     f32 var_2;
     temp_r30->pos.x =
-        arg1->x + (arg8 * temp_r6[temp_r30->xDD4_itemVar.foods.x0].w);
+        FO_FMA(arg8, temp_r6[temp_r30->xDD4_itemVar.foods.x0].w, arg1->x);
     var_2 = temp_r6[temp_r30->xDD4_itemVar.foods.x0 + 1].x;
     temp_r30->pos.y = var_2 + arg1->y;
     temp_r30->pos.z = arg1->z;

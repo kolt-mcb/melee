@@ -31,6 +31,14 @@
 #include <trigf.h>
 #include <baselib/gobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SH_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SH_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static MotionFlags const ftSk_MF_SpecialHi_Coll =
     ftCommon_GroundAirColl_MF | Ft_MF_KeepGfx | Ft_MF_KeepColAnimHitStatus |
     Ft_MF_SkipHit;
@@ -455,7 +463,7 @@ void ftSk_SpecialHi_80113838(Fighter_GObj* gobj)
                     {
                         f32 temp_f6;
                         temp_f6 =
-                            ((attributes->x44 * stick_mag) + attributes->x48) *
+                            SH_FMA(attributes->x44, stick_mag, attributes->x48) *
                             cosf(temp_f1_5);
                         fp->gr_vel = fp->facing_dir * temp_f6;
                     }
@@ -517,9 +525,9 @@ void ftSk_SpecialHi_80113A30(Fighter_GObj* gobj)
     }
     fp->self_vel.x =
         fp->facing_dir *
-        (((attributes->x44 * var_f31) + attributes->x48) * cosf(var_f30));
+        (SH_FMA(attributes->x44, var_f31, attributes->x48) * cosf(var_f30));
     fp->self_vel.y =
-        ((attributes->x44 * var_f31) + attributes->x48) * sinf(var_f30);
+        SH_FMA(attributes->x44, var_f31, attributes->x48) * sinf(var_f30);
     Fighter_ChangeMotionState(gobj, 0x167, 0U, 35.0f, 1.0f, 0.0f, NULL);
     ftAnim_8006EBA4(gobj);
     ftAnim_SetAnimRate(gobj, 0.0f);

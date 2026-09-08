@@ -23,6 +23,14 @@
 #include <math.h>
 #include <trigf.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PH_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PH_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void sdata2_order(void)
 {
     (void) 0.0f;
@@ -64,7 +72,7 @@ void ftPp_SpecialS_80120E68(Fighter_GObj* gobj)
         fp->self_vel.x = fp2->cur_pos.x - fp->cur_pos.x;
         fp->self_vel.y = fp2->cur_pos.y - fp->cur_pos.y;
         fp->self_vel.z = 0.0F;
-        fp->self_vel.x = -(3.0F * fp2->facing_dir - fp->self_vel.x);
+        fp->self_vel.x = PH_FMA(-3.0F, fp2->facing_dir, fp->self_vel.x); /* fnmsubs */
         fp->self_vel.y += 5.0F;
         lbVector_Normalize(&fp->self_vel);
         dx = SQ(fp->cur_pos.x - fp2->cur_pos.x);

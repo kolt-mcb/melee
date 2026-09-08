@@ -25,6 +25,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define MR_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define MR_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void setCallbacks(Fighter* fp)
 {
     if (fp->u.mr.x223C_capeGObj != NULL) {
@@ -199,7 +207,7 @@ void ftMr_SpecialS_Phys(HSD_GObj* gobj)
             lb_8000B1CC(fp->parts[ftParts_GetBoneIndex(fp, FtPart_HipN)].joint,
                         NULL, &coords);
 
-            coords.x += 3 * fp->facing_dir;
+            coords.x = MR_FMA(3.0f, fp->facing_dir, coords.x);
             lb_800119DC(&coords, 120, 0.9, 0.02, M_PI_3);
         }
     }
@@ -237,7 +245,7 @@ void ftMr_SpecialAirS_Phys(HSD_GObj* gobj)
             }
             lb_8000B1CC(fp->parts[ftParts_GetBoneIndex(fp, FtPart_HipN)].joint,
                         NULL, &coords);
-            coords.x += 3 * fp->facing_dir;
+            coords.x = MR_FMA(3.0f, fp->facing_dir, coords.x);
             lb_800119DC(&coords, 120, 3, 0.1, M_PI_3);
         }
         ftCommon_Fall(fp, sa->specials.grav, sa->specials.terminal_vel);

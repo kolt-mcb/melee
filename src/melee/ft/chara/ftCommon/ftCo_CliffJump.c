@@ -17,6 +17,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define CJ_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define CJ_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 09B1B8 */ static void ftCo_8009B1B8(Fighter_GObj* gobj);
 /* 09B2F8 */ static void ftCo_8009B2F8(Fighter_GObj* gobj);
 
@@ -72,8 +80,9 @@ void ftCo_8009B2F8(Fighter_GObj* gobj)
     Fighter_ChangeMotionState(gobj, msid, Ft_MF_None, 0, 1, 0, NULL);
     ftAnim_8006EBA4(gobj);
     fp->mv.co.cliffjump.x0 = false;
-    fp->self_vel.x +=
-        fp->facing_dir * fp->co_attrs.ledge_jump_horizontal_velocity;
+    fp->self_vel.x = CJ_FMA(fp->facing_dir,
+                            fp->co_attrs.ledge_jump_horizontal_velocity,
+                            fp->self_vel.x);
     fp->self_vel.y = fp->co_attrs.ledge_jump_vertical_velocity;
 }
 

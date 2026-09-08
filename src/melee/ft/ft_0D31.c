@@ -26,6 +26,14 @@
 #include <melee/pl/plbonuslib.h>
 #include <melee/pl/plstale.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define D31_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define D31_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 const Quaternion lbl_803B7500 = { 0, 3.1415927f, 0, 0 };
 
 bool ftCo_800D3158(Fighter_GObj* gobj)
@@ -646,9 +654,9 @@ void ftCo_DeadUpStar_Anim(Fighter_GObj* gobj)
         switch (fp->mv.co.unk_deadup.x44) {
         case 0:
             fp->self_vel.y =
-                (*(f32*) (data + 4) * Stage_GetCamBoundsTopOffset() -
-                 fp->cur_pos.y) /
-                (f32) data[1];
+                D31_FMA(*(f32*) (data + 4), Stage_GetCamBoundsTopOffset(),
+                        -fp->cur_pos.y) /
+                (f32) data[1]; /* fmsubs */
             fp->self_vel.z = *(f32*) (data + 3) / (f32) data[1];
             fp->mv.co.unk_deadup.x40 = data[1];
             fp->mv.co.unk_deadup.x44 = 1;

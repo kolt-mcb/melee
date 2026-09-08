@@ -37,6 +37,14 @@
 #include <baselib/debug.h>
 #include <baselib/gobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PI_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PI_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 094B6C */ static void ftpickupitem_80094B6C(Fighter_GObj* gobj,
                                                Item_GObj* item_gobj);
 
@@ -66,7 +74,7 @@ bool ftpickupitem_80094150(Fighter_GObj* gobj, Item_GObj* item_gobj)
                 float y_range = itGetGrabRangeY(item_gobj);
                 Vec4* offset1 = !b ? offset0 : &pickup->gr_heavy_offset;
                 float x1 = offset1->z;
-                float x0 = (fp->facing_dir * offset1->x) + fp->cur_pos.x;
+                float x0 = PI_FMA(fp->facing_dir, offset1->x, fp->cur_pos.x);
                 float y0 = fp->cur_pos.y + offset1->y;
                 float y1 = offset1->w;
                 if (x0 - x1 - x_range < it_pos.x &&
@@ -127,7 +135,7 @@ Item_GObj* ftpickupitem_800942A0(Fighter_GObj* gobj, u32 flags)
                             {
                                 float x1 = vec->z;
                                 float x0 =
-                                    fp->facing_dir * vec->x + fp->cur_pos.x;
+                                    PI_FMA(fp->facing_dir, vec->x, fp->cur_pos.x);
                                 float y0 = fp->cur_pos.y + vec->y;
                                 float y1 = vec->w;
                                 if (x0 - x1 - x_range < it_pos.x &&
@@ -137,7 +145,7 @@ Item_GObj* ftpickupitem_800942A0(Fighter_GObj* gobj, u32 flags)
                                 {
                                     float y_diff = it_pos.y - y0;
                                     float x_diff = it_pos.x - x0;
-                                    float dist_sq = SQ(x_diff) + SQ(y_diff);
+                                    float dist_sq = PI_FMA(x_diff, x_diff, y_diff * y_diff);
                                     if (dist_sq < min_dist_sq) {
                                         result = cur;
                                         min_dist_sq = dist_sq;

@@ -13,6 +13,14 @@
 #include <melee/it/it_26B1.h>
 #include <melee/it/item.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define YS2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define YS2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F7158[] = { {
     0,
     itYoshistar_UnkMotion0_Anim,
@@ -108,7 +116,7 @@ void itYoshistar_UnkMotion0_Phys(Item_GObj* item_gobj)
     ItemAttr* attr = item->xCC_item_attr;
     StarAttrs* star = item->xC4_article_data->x4_specialAttributes;
     it_80272860(item_gobj, attr->x10_fall_speed, attr->x14_fall_speed_max);
-    item->x40_vel.x += star->accel * item->facing_dir;
+    item->x40_vel.x = YS2_FMA(star->accel, item->facing_dir, item->x40_vel.x);
 }
 
 bool itYoshistar_UnkMotion0_Coll(Item_GObj* item_gobj)

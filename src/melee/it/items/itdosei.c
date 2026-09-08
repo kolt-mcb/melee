@@ -12,6 +12,14 @@
 #include <math.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DO_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DO_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void sdata2_order(void)
 {
     (void) 1.0f;
@@ -186,7 +194,7 @@ bool itDosei_UnkMotion1_Anim(Item_GObj* gobj)
     ip->xDD4_itemVar.dosei.xDE4 = ip->pos;
     ip2 = gobj->user_data;
     frame_speed =
-        0.5F * (ip2->x378_itemColl.floor.normal.x * ip2->facing_dir) + 1.0F;
+        DO_FMA(0.5F, ip2->x378_itemColl.floor.normal.x * ip2->facing_dir, 1.0F);
     jobj = gobj->hsd_obj;
     ip->x5D0_animFrameSpeed = frame_speed;
     lb_8000BA0C(jobj, frame_speed);

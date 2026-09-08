@@ -14,6 +14,14 @@
 
 #include <math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define FP_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define FP_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable ItemStateTable_Flipper[] = {
     {
         -1,
@@ -490,7 +498,7 @@ bool itFlipper_DmgDealt(Item_GObj* gobj)
             itColl_BounceOffVictim(gobj);
         } else {
             ip->x40_vel.x = -1.0f * ip->x40_vel.x;
-            ip->x40_vel.y = -1.0f * ip->x40_vel.y + it_804D6D28->x60_float;
+            ip->x40_vel.y = FP_FMA(-1.0f, ip->x40_vel.y, it_804D6D28->x60_float);
         }
     } else {
         ip->xDD4_itemVar.flipper.xDDC_hitboxTimer = attrs->x14_hitboxInterval;
@@ -516,7 +524,7 @@ bool itFlipper_Clanked(Item_GObj* gobj)
             itColl_BounceOffVictim(gobj);
         } else {
             ip->x40_vel.x = -1.0f * ip->x40_vel.x;
-            ip->x40_vel.y = -1.0f * ip->x40_vel.y + it_804D6D28->x60_float;
+            ip->x40_vel.y = FP_FMA(-1.0f, ip->x40_vel.y, it_804D6D28->x60_float);
         }
     } else {
         ip->xDD4_itemVar.flipper.xDDC_hitboxTimer = attrs->x14_hitboxInterval;
@@ -541,7 +549,7 @@ bool itFlipper_HitShield(Item_GObj* gobj)
             itColl_BounceOffVictim(gobj);
         } else {
             ip->x40_vel.x = -1.0f * ip->x40_vel.x;
-            ip->x40_vel.y = -1.0f * ip->x40_vel.y + it_804D6D28->x60_float;
+            ip->x40_vel.y = FP_FMA(-1.0f, ip->x40_vel.y, it_804D6D28->x60_float);
         }
     } else {
         ip->xDD4_itemVar.flipper.xDDC_hitboxTimer = attrs->x14_hitboxInterval;

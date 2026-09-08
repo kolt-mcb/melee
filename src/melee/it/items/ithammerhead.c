@@ -17,6 +17,14 @@
 
 #include "it/itmaplib.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define HH2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define HH2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F6640[] = {
     {
         -1,
@@ -70,7 +78,7 @@ void it_80299C48(Item_GObj* parent_gobj, Vec3* pos, Vec3* velocity,
         it_80299D7C(gobj);
         it->facing_dir = facing_dir;
         it->x40_vel.x = velocity->x * attrs->initial_velocity * it->facing_dir;
-        it->x40_vel.y = velocity->y * attrs->initial_velocity + 0.5f;
+        it->x40_vel.y = HH2_FMA(velocity->y, attrs->initial_velocity, 0.5f);
         db_80225DD8(gobj, parent_gobj);
     }
 }

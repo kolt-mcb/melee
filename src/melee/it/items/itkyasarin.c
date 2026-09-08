@@ -23,6 +23,14 @@
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KY2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KY2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F90D0[] = {
     {
         0,
@@ -368,7 +376,7 @@ bool itKyasarin_UnkMotion7_Anim(Item_GObj* gobj)
         itKyasarinAttributes* attr =
             ip->xC4_article_data->x4_specialAttributes;
         spawn_pos = ip->pos;
-        spawn_pos.x += attr->x38 * ip->facing_dir;
+        spawn_pos.x = KY2_FMA(attr->x38, ip->facing_dir, spawn_pos.x);
         spawn_pos.y += attr->x3C;
         spawn_pos.z = 0;
         it_802EFA44(gobj, &spawn_pos, ip->facing_dir);

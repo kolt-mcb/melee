@@ -10,6 +10,14 @@
 #include <baselib/gobj.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PA_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PA_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /// @todo Fix these to be in a single file, not math.h
 #define M_PI 3.14159265358979323846
 #if BUILD_TARGET_PC
@@ -115,7 +123,7 @@ bool itParasol_UnkMotion2_Anim(Item_GObj* item_gobj)
         ry = HSD_JObjGetRotationY(jobj);
         fm = attrs[2] + fabsf(item->x40_vel.y * attrs[3]);
         fm *= item->facing_dir;
-        ry = deg_to_rad * fm + ry;
+        ry = PA_FMA(deg_to_rad, fm, ry);
         HSD_JObjSetRotationY(jobj, ry);
     }
     return false;

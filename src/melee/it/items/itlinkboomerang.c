@@ -20,7 +20,15 @@
 #include <math_ppc.h>
 #include <trigf.h>
 
-#define HYPOT(x, y) sqrtf((x) * (x) + (y) * (y))
+/* dx*dx + dy*dy: dy*dy plain, dx*dx fused (802A143C). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define BM_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define BM_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
+#define HYPOT(x, y) sqrtf(BM_FMA((x), (x), (y) * (y)))
 #define VEC_XY_LENGTH(v) HYPOT((v)->x, (v)->y)
 
 ItemStateTable it_803F6920[] = {

@@ -24,6 +24,14 @@
 #include <baselib/gobj.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SW_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SW_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 284E30 */ static void it_80284E30(Item_GObj* gobj);
 /* 285084 */ static void it_80285084(Item_GObj* gobj);
 /* 285140 */ static void it_80285140(Item_GObj* gobj);
@@ -85,7 +93,7 @@ void it_80284E30(Item_GObj* gobj)
     {
         Vec3 scale;
         if (ip->msid == 2) {
-            float temp_scale = 1.5f * ip->xDD4_itemVar.sword.x40 + scale_y;
+            float temp_scale = SW_FMA(1.5f, ip->xDD4_itemVar.sword.x40, scale_y);
             scale.x = temp_scale;
             scale.y = scale_y + ip->xDD4_itemVar.sword.x40;
             scale.z = temp_scale;

@@ -20,6 +20,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define ML_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define ML_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /// SpecialLw/SpecialAirLw
 
 #define FTMEWTWO_SPECIALLW_COLL_FLAG                                          \
@@ -219,7 +227,7 @@ void ftMt_SpecialLw_CreateDisable(HSD_GObj* gobj)
 
         lb_8000B1CC(fp->parts[FtPart_L3rdNb].joint, NULL, &sp18);
 
-        sp18.x += (mewtwoAttrs->x80_MEWTWO_DISABLE_OFFSET_X * fp->facing_dir);
+        sp18.x = ML_FMA(mewtwoAttrs->x80_MEWTWO_DISABLE_OFFSET_X, fp->facing_dir, sp18.x);
         sp18.y += mewtwoAttrs->x84_MEWTWO_DISABLE_OFFSET_Y;
 
         fp->u.mt.x222C_disableGObj =

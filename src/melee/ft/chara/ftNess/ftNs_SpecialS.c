@@ -17,6 +17,14 @@
 #include <trigf.h>
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define NP_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define NP_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /// https://decomp.me/scratch/apf7Y
 void ftNs_SpecialS_ItemPKFireSpawn(
     HSD_GObj* gobj) //* Ness's PK Fire spawn function, stored as Accessory4
@@ -45,7 +53,7 @@ void ftNs_SpecialS_ItemPKFireSpawn(
     if (FlagResult != false) {
         lb_8000B1CC(fp->parts[FtPart_R2ndNa].joint, NULL, &ItemBonePos);
 
-        ItemBonePos.x += ness_attr->x30_PKFIRE_SPAWN_X * fp->facing_dir;
+        ItemBonePos.x = NP_FMA(ness_attr->x30_PKFIRE_SPAWN_X, fp->facing_dir, ItemBonePos.x);
         ItemBonePos.y += ness_attr->x34_PKFIRE_SPAWN_Y;
         ItemBonePos.z = 0.0f;
 

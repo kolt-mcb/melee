@@ -23,6 +23,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define NL_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define NL_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /// SpecialLw (PSI Magnet)
 #define FTNESS_SPECIALLW_COLL_FLAG                                            \
     Ft_MF_KeepGfx | Ft_MF_SkipMatAnim | Ft_MF_SkipColAnim | Ft_MF_UpdateCmd | \
@@ -466,8 +474,8 @@ static inline void getAttrStuff(HSD_GObj* arg0)
         temp_r30->facing_dir = -temp_r30->facing_dir;
     }
     ftPartSetRotY(temp_r30, 0,
-                  -((deg_to_rad * (180.0F / temp_r31->x78_PSI_MAGNET_UNK1)) -
-                    ftPartGetRotZ(temp_r30, 0)));
+                  NL_FMA(-deg_to_rad, 180.0F / temp_r31->x78_PSI_MAGNET_UNK1,
+                         ftPartGetRotZ(temp_r30, 0))); /* fnmsubs */
 }
 
 /// Ness's grounded PSI Magnet Turnaround Animation callback - _

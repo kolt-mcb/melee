@@ -16,6 +16,14 @@
 
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define WA_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define WA_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F91D0[] = {
     {
         1,
@@ -154,7 +162,7 @@ void it_802EE374(Item_GObj* gobj)
     it_80275158(gobj, (f32) attrs->x8);
     ip->xDD4_itemVar.whispyapple.xDD4_heal = attrs->x4;
     rand = HSD_Randf();
-    ip->x40_vel.x = 2.0f * attrs->x18 * rand - attrs->x18;
+    ip->x40_vel.x = WA_FMA(2.0f * attrs->x18, rand, -attrs->x18); /* fmsubs */
     ip->x40_vel.y = attrs->x14;
     ip->x40_vel.z = ABS(ip->pos.z / 20.0f);
 }

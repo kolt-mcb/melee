@@ -14,6 +14,14 @@
 
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define OS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define OS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F8E90[] = {
     { 0, itOctarockstone_UnkMotion0_Anim, itOctarockstone_UnkMotion0_Phys,
       itOctarockstone_UnkMotion0_Coll },
@@ -151,7 +159,7 @@ void it_802E89D0(Item_GObj* gobj, f32 horiz_speed, f32 min_vy, f32 max_vy)
         x *= 0.5f;
         ip->x40_vel.y = x / speed;
         ip->x40_vel.y =
-            HSD_Randf() * ((pos.y - ip->pos.y) / 10.0f) + ip->x40_vel.y;
+            OS_FMA(HSD_Randf(), (pos.y - ip->pos.y) / 10.0f, ip->x40_vel.y);
 
         if (ip->x40_vel.y > max_vy) {
             ip->x40_vel.y = max_vy;

@@ -39,6 +39,14 @@
 #include <math.h>
 #include <trigf.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IT2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IT2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 094D70 */ bool ftCo_800951D0(Fighter_GObj* gobj);
 #if BUILD_TARGET_PC
 /* 094E7C */
@@ -593,12 +601,9 @@ void ftCo_80095EFC(Fighter_GObj* gobj)
                                      .x8;
                     float throw_speed = throw_scale * base_throw_speed;
                     {
-                        vec2.x = fsm * (fp->mv.co.itemthrow4.x8.x - vec0.x) +
-                                 vec0.x;
+                        vec2.x = IT2_FMA(fsm, fp->mv.co.itemthrow4.x8.x - vec0.x, vec0.x);
                         {
-                            vec2.y =
-                                fsm * (fp->mv.co.itemthrow4.x8.y - vec0.y) +
-                                vec0.y;
+                            vec2.y = IT2_FMA(fsm, fp->mv.co.itemthrow4.x8.y - vec0.y, vec0.y);
                             vec2.z = 0;
                             pl_8003E978(fp->player_id, fp->x221F_b4,
                                         fp->item_gobj, vec2.y,
