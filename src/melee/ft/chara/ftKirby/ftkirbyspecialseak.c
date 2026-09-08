@@ -33,6 +33,15 @@
 #include <baselib/random.h>
 #include <MSL/math.h>
 
+/* Kirby's needles: scale*offset onto the position (and 2*table + y
+ * inside it) are fmadds on the console (801060C4, 80106E30..). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 106DB0 */ static void fn_80106DB0(Fighter_GObj*);
 /* 3CB770 */ static float ftKb_Init_803CB770[] = {
     -1.0f, -0.75f, -0.5f, -0.25f, 0.0f, +0.25f, +0.5f, +0.75f, +1.0f,
@@ -79,7 +88,7 @@ void ftKb_SpecialNSk_8010603C(Fighter_GObj* gobj)
                 } else {
                     y_offset = da->specialn_sk_graphic_y_offset_air;
                 }
-                pos.y += fp->x34_scale.y * y_offset;
+                pos.y = KS_FMA(fp->x34_scale.y, y_offset, pos.y);
             }
             pos.z = 0.0f;
             {
@@ -482,19 +491,21 @@ void fn_80106DB0(Fighter_GObj* gobj)
             Vec3 pos = fp->cur_pos;
             PAD_STACK(4);
             if (fp->ground_or_air == GA_Ground) {
-                pos.x +=
-                    fp->x34_scale.y *
-                    (da->specialn_sk_graphic_x_offset_ground * fp->facing_dir);
-                pos.y += fp->x34_scale.y *
-                         (da->specialn_sk_graphic_y_offset_ground +
-                          ftKb_Init_803CB770[perm_randi(9)]);
+                pos.x = KS_FMA(fp->x34_scale.y,
+                               da->specialn_sk_graphic_x_offset_ground * fp->facing_dir,
+                               pos.x);
+                pos.y = KS_FMA(fp->x34_scale.y,
+                               da->specialn_sk_graphic_y_offset_ground +
+                                   ftKb_Init_803CB770[perm_randi(9)],
+                               pos.y);
             } else {
-                pos.x +=
-                    fp->x34_scale.y *
-                    (da->specialn_sk_graphic_x_offset_air * fp->facing_dir);
-                pos.y += fp->x34_scale.y *
-                         (2.0f * ftKb_Init_803CB770[perm_randi(9)] +
-                          da->specialn_sk_graphic_y_offset_air);
+                pos.x = KS_FMA(fp->x34_scale.y,
+                               da->specialn_sk_graphic_x_offset_air * fp->facing_dir,
+                               pos.x);
+                pos.y = KS_FMA(fp->x34_scale.y,
+                               KS_FMA(2.0f, ftKb_Init_803CB770[perm_randi(9)],
+                                      da->specialn_sk_graphic_y_offset_air),
+                               pos.y);
             }
             pos.z = 0.0f;
             {

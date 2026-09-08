@@ -27,6 +27,15 @@
 #include <baselib/random.h>
 #include <MSL/math.h>
 
+/* Kirby's Thunder Jolt spawn: scale*(offset*facing) + pos and
+ * offset*scale + pos are fmadds on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KK_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KK_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftKb_SpecialNPk_800F9FD4(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -92,26 +101,18 @@ void ftKb_PkSpecialN_Anim(Fighter_GObj* gobj)
             fp->cmd_vars[1] = 1;
             switch (fp->u.kb.hat.kind) {
             case FTKIND_PIKACHU:
-                sp14.x =
-                    (fp->x34_scale.y * (da->specialn_pk_ground_spawn_offset_x *
-                                        fp->facing_dir)) +
-                    fp->cur_pos.x;
-                sp14.y =
-                    (da->specialn_pk_ground_spawn_offset_y * fp->x34_scale.y) +
-                    fp->cur_pos.y;
+                sp14.x = KK_FMA(fp->x34_scale.y, da->specialn_pk_ground_spawn_offset_x * fp->facing_dir,
+                                fp->cur_pos.x);
+                sp14.y = KK_FMA(da->specialn_pk_ground_spawn_offset_y, fp->x34_scale.y, fp->cur_pos.y);
                 sp14.z = 0.0f;
                 it_802B338C(gobj, &sp14, fp->facing_dir,
                             da->specialn_pk_grounded_item_id);
                 ft_PlaySFX(fp, 240076, 127, 64);
                 break;
             case FTKIND_PICHU:
-                sp14.x =
-                    (fp->x34_scale.y * (da->specialn_pc_ground_spawn_offset_x *
-                                        fp->facing_dir)) +
-                    fp->cur_pos.x;
-                sp14.y =
-                    (da->specialn_pc_ground_spawn_offset_y * fp->x34_scale.y) +
-                    fp->cur_pos.y;
+                sp14.x = KK_FMA(fp->x34_scale.y, da->specialn_pc_ground_spawn_offset_x * fp->facing_dir,
+                                fp->cur_pos.x);
+                sp14.y = KK_FMA(da->specialn_pc_ground_spawn_offset_y, fp->x34_scale.y, fp->cur_pos.y);
                 sp14.z = 0.0f;
                 it_802B338C(gobj, &sp14, fp->facing_dir,
                             da->specialn_pc_grounded_item_id);
@@ -143,26 +144,18 @@ void ftKb_PkSpecialAirN_Anim(Fighter_GObj* gobj)
             fp->cmd_vars[1] = 1;
             switch (fp->u.kb.hat.kind) {
             case FTKIND_PIKACHU:
-                sp14.x =
-                    (fp->x34_scale.y *
-                     (da->specialn_pk_air_spawn_offset_x * fp->facing_dir)) +
-                    fp->cur_pos.x;
-                sp14.y =
-                    (da->specialn_pk_air_spawn_offset_y * fp->x34_scale.y) +
-                    fp->cur_pos.y;
+                sp14.x = KK_FMA(fp->x34_scale.y, da->specialn_pk_air_spawn_offset_x * fp->facing_dir,
+                                fp->cur_pos.x);
+                sp14.y = KK_FMA(da->specialn_pk_air_spawn_offset_y, fp->x34_scale.y, fp->cur_pos.y);
                 sp14.z = 0.0f;
                 it_802B338C(gobj, &sp14, fp->facing_dir,
                             da->specialn_pk_grounded_item_id);
                 ft_PlaySFX(fp, 240076, 127, 64);
                 break;
             case FTKIND_PICHU:
-                sp14.x =
-                    (fp->x34_scale.y *
-                     (da->specialn_pc_air_spawn_offset_x * fp->facing_dir)) +
-                    fp->cur_pos.x;
-                sp14.y =
-                    (da->specialn_pc_air_spawn_offset_y * fp->x34_scale.y) +
-                    fp->cur_pos.y;
+                sp14.x = KK_FMA(fp->x34_scale.y, da->specialn_pc_air_spawn_offset_x * fp->facing_dir,
+                                fp->cur_pos.x);
+                sp14.y = KK_FMA(da->specialn_pc_air_spawn_offset_y, fp->x34_scale.y, fp->cur_pos.y);
                 sp14.z = 0.0f;
                 it_802B338C(gobj, &sp14, fp->facing_dir,
                             da->specialn_pc_grounded_item_id);

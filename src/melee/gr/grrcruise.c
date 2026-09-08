@@ -44,6 +44,18 @@
 #include <MSL/math_ppc.h>
 #include <MSL/trigf.h>
 
+/* Rainbow Cruise: the ship's projected offsets (fnmsubs), the sail
+ * distance (dy*dy plain, dx fused), the rotation wrap and damping,
+ * and the double fmadd random scales. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define RC_FMA(a, b, c) fmaf((a), (b), (c))
+#define RC_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define RC_FMA(a, b, c) ((a) * (b) + (c))
+#define RC_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 // Aliases for Map_VanishDesc/Entry used in RCruise
 struct grRCruise_VanishDesc { s16 x0; s16 x2; bool x4; u8 pad_5[3]; };
 struct grRCruise_VanishEntry { s16 x0; s16 x2; HSD_JObj* jobj; };
@@ -577,8 +589,8 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
         lb_8000B1CC(cam_jobj, NULL, &sp24);
         lbVector_Diff(&sp24, &sp18, &diff);
         temp_f4 = sp18.z / diff.z;
-        sp64.x = -((diff.x * temp_f4) - sp18.x);
-        sp64.y = -((diff.y * temp_f4) - sp18.y);
+        sp64.x = RC_FMA(-diff.x, temp_f4, sp18.x); /* fnmsubs */
+        sp64.y = RC_FMA(-diff.y, temp_f4, sp18.y);
         sp64.z = 0.0f;
         lbVector_Sub(&sp64, &cam_offset2);
         sp64.y += 10.0f;
@@ -814,12 +826,12 @@ void grRCruise_80200578(Ground* gp_arg, s32 joint_id, CollData* cd, s32 arg3,
     lb_8000B1CC(jobj, NULL, &pos);
     dx = pos.x - cd->cur_pos.x;
     dy = pos.y - cd->cur_pos.y;
-    dist = sqrtf(dy * dy + dx * dx);
+    dist = sqrtf(RC_FMA(dx, dx, dy * dy));
     if (dist > 4.0f) {
         if (pos.x < cd->cur_pos.x) {
-            gp->gv.rcruise.x24 += dist * ((f32) arg3 / 1000.0f);
+            gp->gv.rcruise.x24 = RC_FMA(dist, (f32) arg3 / 1000.0f, gp->gv.rcruise.x24);
         } else {
-            gp->gv.rcruise.x28 += dist * ((f32) arg3 / 1000.0f);
+            gp->gv.rcruise.x28 = RC_FMA(dist, (f32) arg3 / 1000.0f, gp->gv.rcruise.x28);
         }
     }
     gp->gv.rcruise.x34++;
@@ -832,7 +844,7 @@ void grRCruise_8020071C(Ground_GObj* gobj)
     HSD_JObj* jobj5 = Ground_801C3FA4(Ground_801C2BA4(5), 8);
     f32 abs_rot =
         gp->gv.rcruise.x18 < 0.0f ? -gp->gv.rcruise.x18 : gp->gv.rcruise.x18;
-    f32 wrapped = abs_rot - (360.0f * (s32) (abs_rot / 360.0f));
+    f32 wrapped = RC_FMA(-360.0f, (f32) (s32) (abs_rot / 360.0f), abs_rot); /* fnmsubs */
     PAD_STACK(8);
 
     switch (gp->gv.rcruise.x2C) {
@@ -875,7 +887,7 @@ void grRCruise_8020071C(Ground_GObj* gobj)
             }
         } else {
             gp->gv.rcruise.x38--;
-            gp->gv.rcruise.x20 += 0.008f * -gp->gv.rcruise.x1C;
+            gp->gv.rcruise.x20 = RC_FMA(0.008f, -gp->gv.rcruise.x1C, gp->gv.rcruise.x20);
             if ((gp->gv.rcruise.x20 < 0.0f ? -gp->gv.rcruise.x20
                                            : gp->gv.rcruise.x20) <= 0.008f)
             {
@@ -1080,10 +1092,10 @@ void grRCruise_80201110(Ground_GObj* gobj)
         }
     }
     if (gp->gv.rcruise.xC != 0) {
-        gp->gv.rcruise.x4->unk_scale = 0.3 * HSD_Randf() + 0.2;
+        gp->gv.rcruise.x4->unk_scale = RC_FMAD(0.3, HSD_Randf(), 0.2);
         return;
     }
-    gp->gv.rcruise.x4->unk_scale = 0.2 * HSD_Randf() + 0.1;
+    gp->gv.rcruise.x4->unk_scale = RC_FMAD(0.2, HSD_Randf(), 0.1);
 }
 
 inline struct HSD_DObj* grRCruise_80201288_inline(HSD_JObj* arg0)

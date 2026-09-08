@@ -23,6 +23,15 @@
 #include <math.h>
 #include <sysdolphin/baselib/random.h>
 
+/* Link's arrow: the table lerps (t*(b-a)/n + a), the random spread
+ * angle and the bow-string offsets are fmadds on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define LA_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define LA_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void sdata2_order(void)
 {
     (void) 0.0199999996f;
@@ -123,7 +132,7 @@ s32 itLinkArrow_802A81C4(Item_GObj* gobj)
     case 6:
         rand = HSD_Randf();
         lookup_table = &it_803F6A84[ip->xDD4_itemVar.linkarrow.x9C];
-        temp = deg_to_rad * ((lookup_table[8] * rand) + lookup_table[0]);
+        temp = deg_to_rad * LA_FMA(lookup_table[8], rand, lookup_table[0]);
         z = ip->xDD4_itemVar.linkarrow.x94 + temp;
         break;
     case 1:
@@ -131,7 +140,7 @@ s32 itLinkArrow_802A81C4(Item_GObj* gobj)
     case 5:
         rand = HSD_Randf();
         lookup_table = &it_803F6A84[ip->xDD4_itemVar.linkarrow.x9C];
-        temp = deg_to_rad * ((lookup_table[8] * rand) + lookup_table[0]);
+        temp = deg_to_rad * LA_FMA(lookup_table[8], rand, lookup_table[0]);
         z = ip->xDD4_itemVar.linkarrow.x94 - temp;
         break;
     default:
@@ -279,9 +288,9 @@ bool itLinkArrow_802A850C(Item_GObj* gobj, Vec3* arg1, Vec3* arg2, f32 arg3,
         ip->xDC8_word.flags.x14 = 0;
         it_8026B3A8(gobj);
         ip->xDD4_itemVar.linkarrow.xA8 =
-            (arg4 * ((attr->x8 - attr->x4) / arg5)) + attr->x4;
+            LA_FMA(arg4, (attr->x8 - attr->x4) / arg5, attr->x4);
         ip->xDD4_itemVar.linkarrow.xA4 =
-            (arg4 * ((attr->x10 - attr->xC) / arg5)) + attr->xC;
+            LA_FMA(arg4, (attr->x10 - attr->xC) / arg5, attr->xC);
         ip->facing_dir = ftLib_800865C0(ip->xDD4_itemVar.linkarrow.xE0);
         HSD_JObjSetRotationY(jobj, M_PI_2 * ip->facing_dir);
         ip->pos = *arg1;
@@ -569,12 +578,12 @@ void itLinkarrow_UnkMotion2_Phys(HSD_GObj* gobj)
         (ftCo_80094098(item->xDD4_itemVar.linkarrow.xC4,
                        &item->xDD4_itemVar.linkarrow.xC8) *
          ftLib_800869D4(item->xDD4_itemVar.linkarrow.xC4));
-    item->pos.x = (item->xDD4_itemVar.linkarrow.xD4 *
-                   cosf(item->xDD4_itemVar.linkarrow.xD8)) +
-                  item->xDD4_itemVar.linkarrow.xC8;
-    item->pos.y = (item->xDD4_itemVar.linkarrow.xD4 *
-                   sinf(item->xDD4_itemVar.linkarrow.xD8)) +
-                  item->xDD4_itemVar.linkarrow.xCC;
+    item->pos.x = LA_FMA(item->xDD4_itemVar.linkarrow.xD4,
+                       cosf(item->xDD4_itemVar.linkarrow.xD8),
+                       item->xDD4_itemVar.linkarrow.xC8);
+    item->pos.y = LA_FMA(item->xDD4_itemVar.linkarrow.xD4,
+                       sinf(item->xDD4_itemVar.linkarrow.xD8),
+                       item->xDD4_itemVar.linkarrow.xCC);
     item->pos.z = 0.0f;
 }
 
@@ -673,7 +682,7 @@ bool itLinkarrow_UnkMotion4_Anim(Item_GObj* gobj)
     case 6:
         rand = HSD_Randf();
         temp_r3 = (f32*) &it_803F6A28 + ip->xDD4_itemVar.linkarrow.x9C;
-        var_f32 = deg_to_rad * ((temp_r3[31] * rand) + temp_r3[23]);
+        var_f32 = deg_to_rad * LA_FMA(temp_r3[31], rand, temp_r3[23]);
         var_f31 = ip->xDD4_itemVar.linkarrow.x94 + var_f32;
         break;
     case 1:
@@ -681,7 +690,7 @@ bool itLinkarrow_UnkMotion4_Anim(Item_GObj* gobj)
     case 5:
         rand = HSD_Randf();
         temp_r3 = (f32*) &it_803F6A28 + ip->xDD4_itemVar.linkarrow.x9C;
-        var_f32 = deg_to_rad * ((temp_r3[31] * rand) + temp_r3[23]);
+        var_f32 = deg_to_rad * LA_FMA(temp_r3[31], rand, temp_r3[23]);
         var_f31 = ip->xDD4_itemVar.linkarrow.x94 - var_f32;
         break;
     default:
@@ -800,12 +809,12 @@ bool itLinkArrow_Logic98_HitShield(Item_GObj* gobj)
                     atan2f(half_y - ip->xDD4_itemVar.linkarrow.xCC,
                            half_x - ip->xDD4_itemVar.linkarrow.xC8);
             }
-            ip->pos.x = ip->xDD4_itemVar.linkarrow.xD4 *
-                            cosf(ip->xDD4_itemVar.linkarrow.xD8) +
-                        ip->xDD4_itemVar.linkarrow.xC8;
-            ip->pos.y = ip->xDD4_itemVar.linkarrow.xD4 *
-                            sinf(ip->xDD4_itemVar.linkarrow.xD8) +
-                        ip->xDD4_itemVar.linkarrow.xCC;
+            ip->pos.x = LA_FMA(ip->xDD4_itemVar.linkarrow.xD4,
+                       cosf(ip->xDD4_itemVar.linkarrow.xD8),
+                       ip->xDD4_itemVar.linkarrow.xC8);
+            ip->pos.y = LA_FMA(ip->xDD4_itemVar.linkarrow.xD4,
+                       sinf(ip->xDD4_itemVar.linkarrow.xD8),
+                       ip->xDD4_itemVar.linkarrow.xCC);
             ip->pos.z = 0.0f;
             goto end;
         }

@@ -61,8 +61,10 @@
  * x,x), and for three axes z fused on after that. */
 #if BUILD_TARGET_PC
 #define CO_FMA(a, b, c) fmaf((a), (b), (c))
+#define CO_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define CO_FMA(a, b, c) ((a) * (b) + (c))
+#define CO_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
 /**
@@ -788,7 +790,7 @@ f32 ftCo_800A1AB4(Fighter* fp0, Fighter* fp1)
 {
     float dx = fp0->cur_pos.x - fp1->cur_pos.x;
     float dy = fp0->cur_pos.y - fp1->cur_pos.y;
-    return sqrtf(SQ(dx) + SQ(dy));
+    return sqrtf(CO_FMA(dx, dx, dy * dy)); /* 800A1AD8: dy*dy plain, dx fused */
 }
 
 bool ftCo_800A1B38_noinline(enum_t arg0);
@@ -965,7 +967,7 @@ bool ftCo_800A1F98(int x, float y)
     if (y < slope) {
         return true;
     }
-    if (y < intercept * x + slope) {
+    if (y < CO_FMA(intercept, (f32) x, slope)) {
         return true;
     }
     return false;
@@ -1329,11 +1331,11 @@ float ftCo_800A2A70(Fighter* fp, bool arg1)
             if (arg1) {
                 float x = data->x8.x - fp->cur_pos.x,
                       y = data->x8.y - fp->cur_pos.y;
-                r = sqrtf(SQ(x) + SQ(y));
+                r = sqrtf(CO_FMA(x, x, y * y));
             } else {
                 float x = data->x14.x - fp->cur_pos.x,
                       y = data->x14.y - fp->cur_pos.y;
-                r = sqrtf(SQ(x) + SQ(y));
+                r = sqrtf(CO_FMA(x, x, y * y));
             }
             return r;
         }
@@ -1450,8 +1452,8 @@ s32 ftCo_800A2C80(Fighter* fp)
         ax = bottom_x;
         ay = bottom_y;
     }
-    ex = 1000.0f * dir.x + ax;
-    ey = 1000.0f * dir.y + ay;
+    ex = CO_FMA(1000.0f, dir.x, ax);
+    ey = CO_FMA(1000.0f, dir.y, ay);
     line_id = -1;
     blocked = 0;
     result =
@@ -1732,7 +1734,7 @@ bool ftCo_800A3554(Fighter* fp, float arg1)
     }
     {
         float x = data->x54.x - fp->cur_pos.x, y = data->x54.y - fp->cur_pos.y;
-        if (sqrtf(SQ(x) + SQ(y)) < data->x38 + arg1) {
+        if (sqrtf(CO_FMA(x, x, y * y)) < data->x38 + arg1) {
             if (data->x60 != 0) {
                 data->x60 = 0;
                 data->x54.x = data->x64.x;
@@ -4249,12 +4251,12 @@ void ftCo_800A8940(Fighter* fp)
     rnd2 = HSD_Randf();
     width = island->x14.x - island->x8.x;
     if (width > 10.0) {
-        px = (width - 10.0) * rnd2 + (5.0 + chosen->x8.x);
+        px = (f32) CO_FMAD(width - 10.0, rnd2, 5.0 + chosen->x8.x);
     } else {
-        px = width * rnd2 + chosen->x8.x;
+        px = CO_FMA(width, rnd2, chosen->x8.x);
     }
     blocked = 0;
-    py = rnd2 * (island->x14.y - island->x8.y) + chosen->x8.y;
+    py = CO_FMA(rnd2, island->x14.y - island->x8.y, chosen->x8.y);
     line_id = -1;
     {
         f32 bottom = py - 100.0f;
@@ -4617,7 +4619,7 @@ void ftCo_800A9904(Fighter* fp)
                 -(-fp->co_attrs.terminal_vel - fp->pos_delta.y) / gravity;
         }
         if (terminal_time <= 0.0F) {
-            predicted_y = (fp->pos_delta.y * x_time) + fp->cur_pos.y;
+            predicted_y = CO_FMA(fp->pos_delta.y, x_time, fp->cur_pos.y);
         } else if (x_time < terminal_time) {
             ftCo_800A9904_sqrtf_store(sqrt_time, x_time, sqrt_time_store);
             predicted_y = fp->cur_pos.y + (fp->pos_delta.y * x_time -
@@ -4632,7 +4634,7 @@ void ftCo_800A9904(Fighter* fp)
                  ((x_time - terminal_time) * ftCo_GetTerminalVelocity(fp)));
         }
         {
-            int stick = 4.7000003F * (data->level + 1) + 80.0f;
+            int stick = CO_FMA(4.7000003F, (f32) (data->level + 1), 80.0f);
             if (x_time < 0.0 || predicted_y < data->x54.y) {
                 ftCo_800B46B8(fp, CpuCmd_LstickXTowardDestination, stick);
             } else {
@@ -4801,7 +4803,7 @@ void ftCo_800A9CB4(Fighter* fp)
             -(-fp->co_attrs.terminal_vel - fp->pos_delta.y) / gravity;
     }
     if (terminal_time <= 0.0f) {
-        y_pos = (fp->pos_delta.y * x_time) + fp->cur_pos.y;
+        y_pos = CO_FMA(fp->pos_delta.y, x_time, fp->cur_pos.y);
     } else if (x_time < terminal_time) {
         ftCo_800A9CB4_sqrtf_store(sqrt_x_time, x_time, sqrt_x_time_store);
         y_pos = fp->cur_pos.y +
@@ -4943,7 +4945,7 @@ static inline int ftCo_800AA42C_inline0(float clamp, float dist, float near,
     }
     {
         float scale = (dist - near) / (far - near);
-        float tmp = raw + scale * (clamp - raw);
+        float tmp = CO_FMA(scale, clamp - raw, raw); /* 800AA7A0 */
         int new_clamp = tmp;
         if (new_clamp > clamp) {
             new_clamp = clamp;
@@ -5179,7 +5181,7 @@ bool ftCo_800AAF48(Fighter* fp)
             {
                 continue;
             }
-            if (dy < 2.0F * temp_r29->x558 + temp_r29->x568 &&
+            if (dy < CO_FMA(2.0F, temp_r29->x558, temp_r29->x568) &&
                 dx < 5.0F * temp_r29->x564)
             {
                 fp->x1A88.x60 = 0x12C;
@@ -5212,7 +5214,7 @@ bool ftCo_800AAF48(Fighter* fp)
             {
                 continue;
             }
-            if (dy < 2.0F * temp_r29->x558 + temp_r29->x568 &&
+            if (dy < CO_FMA(2.0F, temp_r29->x558, temp_r29->x568) &&
                 dx < 5.0F * temp_r29->x564)
             {
                 fp->x1A88.x60 = 0x12C;
@@ -5728,7 +5730,7 @@ void ftCo_800AC5A0(Fighter* fp)
         float kb_x = fp->x8c_kb_vel.x;
         float kb_y = fp->x8c_kb_vel.y;
         float kb_mag;
-        kb_mag = kb_x * kb_x + (kb_mag = kb_y * kb_y);
+        kb_mag = CO_FMA(kb_x, kb_x, kb_y * kb_y);
         kb_mag = sqrtf(kb_mag);
         if (!ftCo_IsNearlyZero(kb_mag)) {
             float x = kb_x * (1.0F / kb_mag);
@@ -7603,14 +7605,14 @@ bool ftCo_800B0E98(Fighter* fp0, Fighter* fp1)
             float x = fp0->pos_delta.x - fp1->pos_delta.x,
                   y = fp0->pos_delta.y - fp1->pos_delta.y,
                   r = fp0->co_attrs.mid_walk_point;
-            if (SQ(x) + SQ(y) > SQ(r)) {
+            if (CO_FMA(x, x, y * y) > SQ(r)) {
                 return false;
             }
         }
         {
             float x = fp0->cur_pos.x - fp1->cur_pos.x,
                   y = fp1->cur_pos.y - fp0->cur_pos.y;
-            if (SQ(x) + SQ(y) < SQ(25.0)) {
+            if (CO_FMA(x, x, y * y) < SQ(25.0)) {
                 return true;
             }
         }
@@ -8546,7 +8548,7 @@ void ftCo_800B33B0(Fighter* fp)
     Vec3 ceiling_pos;
 
     if (*timer % 300 == 0) {
-        if (HSD_Randf() < 0.04f * data->level + 0.3f) {
+        if (HSD_Randf() < CO_FMA(0.04f, (f32) data->level, 0.3f)) {
             data->xFA_b34 = 1;
         } else {
             data->xFA_b34 = 0;

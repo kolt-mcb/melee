@@ -23,6 +23,15 @@
 #include "it/itmaplib.h"
 #include "it/itspawn.h"
 #include "sysdolphin/baselib/random.h"
+
+/* Party-ball contents: the spawn velocities are fmsubs on the console
+ * (80289CB0 and siblings). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KU_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KU_FMA(a, b, c) ((a) * (b) + (c))
+#endif
 #if BUILD_TARGET_PC
 /* PC port: M_TAU_F comes from MSL/math.h, which this file does not include on
  * this target; platform.h supplies M_TAU with the same value and type. */
@@ -186,8 +195,8 @@ static inline void it_80289BE8_inline(Item_GObj* gobj, f32 vel_scale,
     Item* ip = GET_ITEM(gobj);
     *pos = ip->pos;
     pos->y -= 5.0f;
-    vel->x = (vel_scale * HSD_Randf()) - (vel_scale * 0.5f);
-    vel->y = ((vel_scale * 0.5f) * HSD_Randf()) - (vel_scale * 0.25f);
+    vel->x = KU_FMA(vel_scale, HSD_Randf(), -(vel_scale * 0.5f));
+    vel->y = KU_FMA(vel_scale * 0.5f, HSD_Randf(), -(vel_scale * 0.25f));
     vel->z = 0.0f;
 }
 

@@ -14,6 +14,15 @@
 #include <baselib/gobj.h>
 #include <melee/ft/ftcmdscript.h>
 
+/* The effect spawn jitter is one fmadds per axis on the console
+ * (8009F94C..): (2*range) * (rand - 0.5) onto the position. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define EJ_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define EJ_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 struct _m2c_stack_ftCo_8009F834 {
     /* 0x00 */ char pad_0[0x7C];
     /* 0x7C */ f32 sp7C; /* inferred */
@@ -123,12 +132,12 @@ block_9:
 block_11:
     spA8 = *arg5;
     rand_val = HSD_Randf();
-    spA8.x += 2.0f * arg6->x * (rand_val - 0.5f);
+    spA8.x = EJ_FMA(2.0f * arg6->x, rand_val - 0.5f, spA8.x);
     rand_val = HSD_Randf();
-    spA8.y += 2.0f * arg6->y * (rand_val - 0.5f);
+    spA8.y = EJ_FMA(2.0f * arg6->y, rand_val - 0.5f, spA8.y);
     rand_val = HSD_Randf();
     z_spread = 2.0f * arg6->z;
-    spA8.z += z_spread * (rand_val - 0.5f);
+    spA8.z = EJ_FMA(z_spread, rand_val - 0.5f, spA8.z);
     efAsync_Spawn(gobj, &GET_FIGHTER(gobj)->x60C, 2, gfx_id,
                   fp->parts[part].joint, &spA8);
     return;
@@ -220,12 +229,12 @@ block_67:
 block_70:
     sp84 = *arg5;
     random_or_angle = HSD_Randf();
-    sp84.x += 2.0f * arg6->x * (random_or_angle - 0.5f);
+    sp84.x = EJ_FMA(2.0f * arg6->x, random_or_angle - 0.5f, sp84.x);
     random_or_angle = HSD_Randf();
-    sp84.y += 2.0f * arg6->y * (random_or_angle - 0.5f);
+    sp84.y = EJ_FMA(2.0f * arg6->y, random_or_angle - 0.5f, sp84.y);
     random_or_angle = HSD_Randf();
     z_range = 2.0f * arg6->z;
-    sp84.z += z_range * (random_or_angle - 0.5f);
+    sp84.z = EJ_FMA(z_range, random_or_angle - 0.5f, sp84.z);
     switch (gfx_id) {
     case 0x3E8: {
         HSD_JObj* joint = fp->parts[part].joint;

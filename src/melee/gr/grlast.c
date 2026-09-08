@@ -22,6 +22,15 @@
 #include <melee/lb/lb_00B0.h>
 #include <melee/lb/lbvector.h>
 
+/* Final Destination: the random rotation rates are fmadds/fmsubs on the
+ * console (8021AC78 and siblings). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define LT_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define LT_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 21A620 */ static void grLast_OnDemoInit(enum_t);
 /* 21A740 */ static void grLast_OnInit(void);
 /* 21A7C4 */ static void grLast_OnLoad(void);
@@ -437,9 +446,9 @@ static void grLast_8021AC30(Ground_GObj* gobj)
     gp->u.last.xC8 = 0;
     gp->u.last.xCC = 0;
     gp->u.last.xD0 = 0;
-    gp->u.last.xD4 = HSD_Randf() * grLast_804DBB80 + grLast_804DBB7C;
+    gp->u.last.xD4 = LT_FMA(grLast_804DBB80, HSD_Randf(), grLast_804DBB7C);
     gp->u.last.xD4 *= HSD_Randi(2) ? +1.0F : -1.0F;
-    gp->u.last.xD8 = HSD_Randf() * grLast_804DBB80 + grLast_804DBB7C;
+    gp->u.last.xD8 = LT_FMA(grLast_804DBB80, HSD_Randf(), grLast_804DBB7C);
     gp->u.last.xD8 *= HSD_Randi(2) ? +1.0F : -1.0F;
     gp->u.last.xDC = 0;
     gp->u.last.xE0 = 0;
@@ -494,12 +503,12 @@ static void grLast_8021ADD0(Ground_GObj* gobj)
         gp->u.last.xC4 = grLast_804DBB94;
         gp->u.last.xCC = -ABS(gp->u.last.xCC);
         randf = HSD_Randf();
-        gp->u.last.xD4 = grLast_804DBB80 * -randf - grLast_804DBB7C;
+        gp->u.last.xD4 = LT_FMA(grLast_804DBB80, -randf, -grLast_804DBB7C); /* fmsubs */
     } else if (gp->u.last.xC4 < grLast_804DBB98) {
         float randf;
         gp->u.last.xC4 = grLast_804DBB98;
         gp->u.last.xCC = ABS(gp->u.last.xCC);
-        gp->u.last.xD4 = grLast_804DBB80 * HSD_Randf() + grLast_804DBB7C;
+        gp->u.last.xD4 = LT_FMA(grLast_804DBB80, HSD_Randf(), grLast_804DBB7C);
     }
     HSD_JObjSetRotationX(jobj, gp->u.last.xC4 * gp->u.last.xDC);
     gp->u.last.xC8 += gp->u.last.xD0;
@@ -508,11 +517,11 @@ static void grLast_8021ADD0(Ground_GObj* gobj)
         gp->u.last.xC8 = grLast_804DBB9C;
         gp->u.last.xD0 = -ABS(gp->u.last.xD0);
         randf = HSD_Randf();
-        gp->u.last.xD8 = grLast_804DBB80 * -randf - grLast_804DBB7C;
+        gp->u.last.xD8 = LT_FMA(grLast_804DBB80, -randf, -grLast_804DBB7C); /* fmsubs */
     } else if (gp->u.last.xC8 < grLast_804DBBA0) {
         gp->u.last.xC8 = grLast_804DBBA0;
         gp->u.last.xD0 = ABS(gp->u.last.xD0);
-        gp->u.last.xD8 = grLast_804DBB80 * HSD_Randf() + grLast_804DBB7C;
+        gp->u.last.xD8 = LT_FMA(grLast_804DBB80, HSD_Randf(), grLast_804DBB7C);
     }
     HSD_JObjSetRotationY(jobj, gp->u.last.xC8 * gp->u.last.xDC);
     if (gp->u.last.xE0 != NULL && gp->u.last.xE0->appsrt != NULL) {

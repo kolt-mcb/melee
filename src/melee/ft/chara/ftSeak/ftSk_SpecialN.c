@@ -22,6 +22,15 @@
 #include "it/items/itseakneedleheld.h"
 #include "it/items/itseakneedlethrown.h"
 
+/* Needle spawn offsets: scale*offset onto the position and 2*table + xC
+ * are fmadds on the console (80112044, 80112DC4..). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SN_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SN_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 1120D4 */ static void ftSk_SpecialN_801120D4(Fighter_GObj* gobj);
 /* 112D44 */ static void shootNeedles(Fighter_GObj* gobj);
 
@@ -46,7 +55,7 @@ void ftSk_SpecialN_80111FBC(HSD_GObj* gobj)
                 } else {
                     y_scale = da->xC;
                 }
-                pos.y += fp->x34_scale.y * y_scale;
+                pos.y = SN_FMA(fp->x34_scale.y, y_scale, pos.y);
             }
             pos.z = 0;
             {
@@ -448,16 +457,16 @@ void shootNeedles(Fighter_GObj* gobj)
             int rand;
             if (fp->ground_or_air == GA_Ground) {
                 x_scale = da->x0 * fp->facing_dir;
-                pos.x += fp->x34_scale.y * x_scale;
+                pos.x = SN_FMA(fp->x34_scale.y, x_scale, pos.x);
                 rand = HSD_Randi(9);
                 y_scale = da->x4 + needleYPosScale[rand];
-                pos.y += fp->x34_scale.y * y_scale;
+                pos.y = SN_FMA(fp->x34_scale.y, y_scale, pos.y);
             } else {
                 x_scale = da->x8 * fp->facing_dir;
-                pos.x += fp->x34_scale.y * x_scale;
+                pos.x = SN_FMA(fp->x34_scale.y, x_scale, pos.x);
                 rand = HSD_Randi(9);
-                y_scale = (2.0f * needleYPosScale[rand]) + da->xC;
-                pos.y += fp->x34_scale.y * y_scale;
+                y_scale = SN_FMA(2.0f, needleYPosScale[rand], da->xC);
+                pos.y = SN_FMA(fp->x34_scale.y, y_scale, pos.y);
             }
             pos.z = 0;
 

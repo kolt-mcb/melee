@@ -21,6 +21,15 @@
 #include <trigf.h>
 #include <baselib/jobj.h>
 
+/* PK Flash: the launch angle, the stick steering and the charge lerps
+ * are fmadds on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PF_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PF_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 2AB29C */ static bool itNesspkflash_UnkMotion1_Coll(Item_GObj* gobj);
 /* 2AB2A4 */ static bool itNesspkflash_UnkMotion2_Coll(Item_GObj* gobj);
 
@@ -37,11 +46,12 @@ static inline void itNesspkflash_SetScale(HSD_JObj* jobj, Item* ip,
                                           itFlashAttributes* attr)
 {
     Vec3 scale;
-    scale.x = scale.y = scale.z = (ip->xDD4_itemVar.pkflush.xDD8_PKFlash *
-                                   ((attr->xC_FLASH_GRAPHIC_SIZE_GROWTH_MUL -
-                                     attr->x8_FLASH_GRAPHIC_SIZE_INIT_MUL) /
-                                    attr->x4_FLASH_HITBOX_SIZE_MUL)) +
-                                  attr->x8_FLASH_GRAPHIC_SIZE_INIT_MUL;
+    scale.x = scale.y = scale.z =
+        PF_FMA(ip->xDD4_itemVar.pkflush.xDD8_PKFlash,
+               (attr->xC_FLASH_GRAPHIC_SIZE_GROWTH_MUL -
+                attr->x8_FLASH_GRAPHIC_SIZE_INIT_MUL) /
+                   attr->x4_FLASH_HITBOX_SIZE_MUL,
+               attr->x8_FLASH_GRAPHIC_SIZE_INIT_MUL);
     HSD_JObjSetScale(jobj, &scale);
 }
 
@@ -172,7 +182,7 @@ void it_802AAA80(Item_GObj* gobj)
     ip->xDD4_itemVar.pkflush.xDD8_PKFlash = 0.0f;
     ip->xDD4_itemVar.pkflush.xDDC_PKFlash = 0;
     angle =
-        (0.017453292f * attr->x10_FLASH_UNK1 * ip->facing_dir) + (f32) M_PI_2;
+        PF_FMA(0.017453292f * attr->x10_FLASH_UNK1, ip->facing_dir, (f32) M_PI_2);
     ip->x40_vel.x = -attr->x14_FLASH_PEAK_RISE_HEIGHT * cosf(angle);
     ip->x40_vel.y = attr->x14_FLASH_PEAK_RISE_HEIGHT * sinf(angle);
     ip->x40_vel.z = 0.0f;
@@ -303,7 +313,7 @@ void itNesspkflash_UnkMotion0_Phys(Item_GObj* gobj)
                 ftLib_800865D8(ip->xDD4_itemVar.pkflush.xDE0_PKFlash_Owner,
                                &stick_x, &stick_y);
                 if (ABS(stick_x) > 0.2f) {
-                    ip->x40_vel.x += stick_x * attr->x18_FLASH_CONTROL;
+                    ip->x40_vel.x = PF_FMA(stick_x, attr->x18_FLASH_CONTROL, ip->x40_vel.x);
                     if (ABS(ip->x40_vel.x) > attr->x20_FLASH_UNK2) {
                         ip->x40_vel.x = (ip->x40_vel.x > 0.0f)
                                             ? attr->x20_FLASH_UNK2
