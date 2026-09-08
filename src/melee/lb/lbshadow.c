@@ -26,23 +26,39 @@
 #include <melee/lb/lbvector.h>
 #include <melee/lb/types.h>
 
+/* The spline tangents are what Mute City's and Big Blue's cars steer by.
+ * MWCC fuses each coefficient's inner sum and then accumulates the four
+ * control points as cp[1] plain, cp[0], cp[2], cp[3] fused in that order
+ * (8000EB44..4C and siblings); the light placement is three fnmsubs. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SH_FMA(a, b, c) fmaf((a), (b), (c))
+#define SH_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define SH_FMA(a, b, c) ((a) * (b) + (c))
+#define SH_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void splGetCardinalTangent(Vec3* p, Vec3* cp, f32 tension, f32 u)
 {
     f32 u2 = u * u;
     f32 car0, car1, car2, car3;
 
-    car0 = tension * (((-3.0F * u2) + (4.0F * u)) - 1.0F);
-    car1 = (3.0F * (2.0F - tension) * u2) + (2.0F * (tension - 3.0F) * u);
-    car2 = tension + ((3.0F * (tension - 2.0F) * u2) +
-                      (2.0F * -((2.0F * tension) - 3.0F) * u));
-    car3 = tension * ((3.0F * u2) - (2.0F * u));
+    car0 = tension * (SH_FMA(-3.0F, u2, 4.0F * u) - 1.0F);
+    car1 = SH_FMA(3.0F * (2.0F - tension), u2, 2.0F * (tension - 3.0F) * u);
+    car2 = tension + SH_FMA(3.0F * (tension - 2.0F), u2,
+                            2.0F * SH_FMA(-2.0F, tension, 3.0F) * u);
+    car3 = tension * SH_FMA(3.0F, u2, -(2.0F * u));
 
-    p->x = (cp[0].x * car0) + (cp[1].x * car1) + (cp[2].x * car2) +
-           (cp[3].x * car3);
-    p->y = (cp[0].y * car0) + (cp[1].y * car1) + (cp[2].y * car2) +
-           (cp[3].y * car3);
-    p->z = (cp[0].z * car0) + (cp[1].z * car1) + (cp[2].z * car2) +
-           (cp[3].z * car3);
+    p->x = SH_FMA(cp[3].x, car3,
+                  SH_FMA(cp[2].x, car2,
+                         SH_FMA(cp[0].x, car0, cp[1].x * car1)));
+    p->y = SH_FMA(cp[3].y, car3,
+                  SH_FMA(cp[2].y, car2,
+                         SH_FMA(cp[0].y, car0, cp[1].y * car1)));
+    p->z = SH_FMA(cp[3].z, car3,
+                  SH_FMA(cp[2].z, car2,
+                         SH_FMA(cp[0].z, car0, cp[1].z * car1)));
 }
 
 static void splGetBSplineTangent(Vec3* p, Vec3* cp, f32 u)
@@ -51,13 +67,19 @@ static void splGetBSplineTangent(Vec3* p, Vec3* cp, f32 u)
     f32 u_1 = 1.0F - u;
     f32 half = 0.5F;
     f32 b0 = u_1 * (-half * u_1);
-    f32 b1 = half * ((3.0F * u2) - (4.0F * u));
-    f32 b2 = half * (1.0F + ((-3.0F * u2) + (2.0F * u)));
+    f32 b1 = half * SH_FMA(3.0F, u2, -(4.0F * u));
+    f32 b2 = half * (1.0F + SH_FMA(-3.0F, u2, 2.0F * u));
     f32 b3 = half * u2;
 
-    p->x = (cp[0].x * b0) + (cp[1].x * b1) + (cp[2].x * b2) + (cp[3].x * b3);
-    p->y = (cp[0].y * b0) + (cp[1].y * b1) + (cp[2].y * b2) + (cp[3].y * b3);
-    p->z = (cp[0].z * b0) + (cp[1].z * b1) + (cp[2].z * b2) + (cp[3].z * b3);
+    p->x = SH_FMA(cp[3].x, b3,
+                  SH_FMA(cp[2].x, b2,
+                         SH_FMA(cp[0].x, b0, cp[1].x * b1)));
+    p->y = SH_FMA(cp[3].y, b3,
+                  SH_FMA(cp[2].y, b2,
+                         SH_FMA(cp[0].y, b0, cp[1].y * b1)));
+    p->z = SH_FMA(cp[3].z, b3,
+                  SH_FMA(cp[2].z, b2,
+                         SH_FMA(cp[0].z, b0, cp[1].z * b1)));
 }
 
 static void splGetBezierTangent(Vec3* p, Vec3* cp, f32 u)
@@ -65,16 +87,19 @@ static void splGetBezierTangent(Vec3* p, Vec3* cp, f32 u)
     f32 u_1 = u - 1.0F;
     f32 u2 = u * u;
     f32 bez0 = -3.0F * u_1 * u_1;
-    f32 bez1 = 3.0F * ((1.0F - (4.0F * u)) + (3.0F * u2));
-    f32 bez2 = 3.0F * ((2.0F * u) - (3.0F * u2));
+    f32 bez1 = 3.0F * (SH_FMA(-4.0F, u, 1.0F) + (3.0F * u2));
+    f32 bez2 = 3.0F * SH_FMA(2.0F, u, -(3.0F * u2));
     f32 bez3 = 3.0F * u2;
 
-    p->x = (cp[0].x * bez0) + (cp[1].x * bez1) + (cp[2].x * bez2) +
-           (cp[3].x * bez3);
-    p->y = (cp[0].y * bez0) + (cp[1].y * bez1) + (cp[2].y * bez2) +
-           (cp[3].y * bez3);
-    p->z = (cp[0].z * bez0) + (cp[1].z * bez1) + (cp[2].z * bez2) +
-           (cp[3].z * bez3);
+    p->x = SH_FMA(cp[3].x, bez3,
+                  SH_FMA(cp[2].x, bez2,
+                         SH_FMA(cp[0].x, bez0, cp[1].x * bez1)));
+    p->y = SH_FMA(cp[3].y, bez3,
+                  SH_FMA(cp[2].y, bez2,
+                         SH_FMA(cp[0].y, bez0, cp[1].y * bez1)));
+    p->z = SH_FMA(cp[3].z, bez3,
+                  SH_FMA(cp[2].z, bez2,
+                         SH_FMA(cp[0].z, bez0, cp[1].z * bez1)));
 }
 
 void lbShadow_8000E9F0(Vec3* p, HSD_Spline* spline, f32 u)
@@ -304,9 +329,9 @@ static inline f32 lbShadow_Sqrtf(f32 x)
 
     if (x > 0.0f) {
         f64 guess = __frsqrte((f64) x);
-        guess = half * guess * (three - guess * guess * x);
-        guess = half * guess * (three - guess * guess * x);
-        guess = half * guess * (three - guess * guess * x);
+        guess = half * guess * SH_FMAD(-(f64) x, guess * guess, three);
+        guess = half * guess * SH_FMAD(-(f64) x, guess * guess, three);
+        guess = half * guess * SH_FMAD(-(f64) x, guess * guess, three);
         y = (f32) (x * guess);
         return y;
     }
@@ -430,9 +455,9 @@ void lbShadow_8000F38C(s32 arg0)
             upVec.y = 1.0f;
             lbVector_Diff(&lightDir, &lightPos, &normDir);
             if (lbVector_Normalize(&normDir) < 100.0f) {
-                lightPos.x = -((100.0f * normDir.x) - lightDir.x);
-                lightPos.y = -((100.0f * normDir.y) - lightDir.y);
-                lightPos.z = -((100.0f * normDir.z) - lightDir.z);
+                lightPos.x = SH_FMA(-100.0f, normDir.x, lightDir.x); /* fnmsubs */
+                lightPos.y = SH_FMA(-100.0f, normDir.y, lightDir.y); /* fnmsubs */
+                lightPos.z = SH_FMA(-100.0f, normDir.z, lightDir.z); /* fnmsubs */
             }
             lbVector_CrossprodNormalized(&upVec, &normDir, &rightVec);
             lbVector_CrossprodNormalized(&normDir, &rightVec, &upVec);

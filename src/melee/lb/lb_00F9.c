@@ -36,6 +36,24 @@
 #include <baselib/quatlib.h>
 #include <melee/mp/mplib.h>
 
+/* Retail fuses each of these multiply-and-add pairs -- 80010AE4, 80010CF8,
+ * 80010EC4 and their neighbours -- into fmadds, and the two squared-length
+ * differences into fmsubs and fnmsubs. One rounding, not two. This is the
+ * dynamics solver: it integrates a bone's position from its own previous
+ * position every frame, so a rounding here does not stay one ULP -- it is
+ * the drift that put a fighter's joint rotations one ULP from the console's
+ * by match frame 7 and a visible amount apart by 616. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DYN_FMA(a, b, c) fmaf((a), (b), (c))
+#define DYN_FMS(a, b, c) fmaf((a), (b), -(c))
+#define DYN_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define DYN_FMA(a, b, c) ((a) * (b) + (c))
+#define DYN_FMS(a, b, c) ((a) * (b) - (c))
+#define DYN_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 struct lb_Collider {
     /* 0x00 */ char pad_00[0x0C];
     /* 0x0C */ f32 radius;
@@ -218,12 +236,13 @@ void lb_8000FD48(HSD_JObj* jobj, DynamicsDesc* desc, size_t max_count)
             dx = prev->desc.lb_unk0.unk_2C.x - next->desc.lb_unk0.unk_2C.x;
             dy = prev->desc.lb_unk0.unk_2C.y - next->desc.lb_unk0.unk_2C.y;
             dz = prev->desc.lb_unk0.unk_2C.z - next->desc.lb_unk0.unk_2C.z;
-            if ((dist_sq = dz * dz + (dx * dx + dy * dy)) > 0.0f) {
+            /* 8000FFA8/AC: dy*dy plain, dx then dz fused onto it */
+            if ((dist_sq = DYN_FMA(dz, dz, DYN_FMA(dx, dx, dy * dy))) > 0.0f) {
                 volatile float y;
                 double guess = __frsqrte((double) dist_sq);
-                guess = .5 * guess * (3.0 - guess * guess * dist_sq);
-                guess = .5 * guess * (3.0 - guess * guess * dist_sq);
-                guess = .5 * guess * (3.0 - guess * guess * dist_sq);
+                guess = .5 * guess * DYN_FMAD(-(double) dist_sq, guess * guess, 3.0);
+                guess = .5 * guess * DYN_FMAD(-(double) dist_sq, guess * guess, 3.0);
+                guess = .5 * guess * DYN_FMAD(-(double) dist_sq, guess * guess, 3.0);
                 y = (float) (dist_sq * guess);
                 dist_sq = y;
             }
@@ -331,9 +350,9 @@ float lb_800101C8(Vec3* arg0, Vec3* arg1)
         if (var_r30->x0 == 1) {
             if (arg0->x > var_r30->x10 && arg0->x < var_r30->x18) {
                 if (arg0->y < var_r30->x14 && arg0->y > var_r30->x1C) {
-                    arg1->x += var_r30->x4.x * scale0;
-                    arg1->y += var_r30->x4.y * scale0;
-                    arg1->z += var_r30->x4.z * scale0;
+                    arg1->x = DYN_FMA(var_r30->x4.x, scale0, arg1->x);
+                    arg1->y = DYN_FMA(var_r30->x4.y, scale0, arg1->y);
+                    arg1->z = DYN_FMA(var_r30->x4.z, scale0, arg1->z);
                 }
             }
         } else {
@@ -348,9 +367,9 @@ float lb_800101C8(Vec3* arg0, Vec3* arg1)
                     var_f0 = 1.0f;
                 }
                 scale1 = 1.0 / (var_f0 * var_f0);
-                arg1->x += scale1 * (delta.x * scale0);
-                arg1->y += scale1 * (delta.y * scale0);
-                arg1->z += scale1 * (delta.z * scale0);
+                arg1->x = DYN_FMA(scale1, delta.x * scale0, arg1->x);
+                arg1->y = DYN_FMA(scale1, delta.y * scale0, arg1->y);
+                arg1->z = DYN_FMA(scale1, delta.z * scale0, arg1->z);
             }
         }
     }
@@ -376,7 +395,7 @@ bool lb_800103D8(Vec3* vec, float x0, float x1, float x2, float x3,
         return false;
     }
     if ((double) dist0 > 0.0 && (double) dist1 < 0.0) {
-        vec->x = -dist1 / (dist0 - dist1) * (x0 - x2) + x2;
+        vec->x = DYN_FMA(-dist1 / (dist0 - dist1), x0 - x2, x2); /* 80010428 */
         vec->y = offset;
         vec->z = 0.0f;
         return true;
@@ -413,21 +432,6 @@ static inline float groundHeight(struct DynamicsData* data, Vec3* floor_point)
 }
 
 /// @todo Only the placement of one @c li differs.
-/* Retail fuses each of these multiply-and-add pairs -- 80010AE4, 80010CF8,
- * 80010EC4 and their neighbours -- into fmadds, and the two squared-length
- * differences into fmsubs and fnmsubs. One rounding, not two. This is the
- * dynamics solver: it integrates a bone's position from its own previous
- * position every frame, so a rounding here does not stay one ULP -- it is
- * the drift that put a fighter's joint rotations one ULP from the console's
- * by match frame 7 and a visible amount apart by 616. */
-#if BUILD_TARGET_PC
-#include <math.h>
-#define DYN_FMA(a, b, c) fmaf((a), (b), (c))
-#define DYN_FMS(a, b, c) fmaf((a), (b), -(c))
-#else
-#define DYN_FMA(a, b, c) ((a) * (b) + (c))
-#define DYN_FMS(a, b, c) ((a) * (b) - (c))
-#endif
 
 void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                  float pos_y, bool use_floor_fn, Fighter_Part part,
