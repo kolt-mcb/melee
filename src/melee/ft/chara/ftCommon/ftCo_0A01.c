@@ -1147,7 +1147,7 @@ s32 ftCo_800A229C(Fighter* fp, Vec3* arg1)
         h = Stage_GetBlastZoneTopOffset() - Stage_GetBlastZoneBottomOffset();
         grLib_801C9E60(&sp20);
         mag = ABS(sp20.y);
-        frac = 0.4 * mag + 0.4;
+        frac = CO_FMAD(0.4, mag, 0.4); /* 800A2640: double fmadd */
         if (sp20.y < 0.0) {
             if (fp->cur_pos.y < h * frac + Stage_GetBlastZoneBottomOffset()) {
                 *arg1 = fp->cur_pos;

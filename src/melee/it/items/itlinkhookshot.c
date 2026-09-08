@@ -36,8 +36,10 @@
  * and z fused), the square root, and one fmadds per axis for each link. */
 #if BUILD_TARGET_PC
 #define LK_FMA(a, b, c) fmaf((a), (b), (c))
+#define LK_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define LK_FMA(a, b, c) ((a) * (b) + (c))
+#define LK_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 #define LK_DOT(ax, ay, az, bx, by, bz) \
     LK_FMA((az), (bz), LK_FMA((ax), (bx), (ay) * (by)))
@@ -395,8 +397,8 @@ bool itLinkhookshot_UnkMotion8_Anim(Item_GObj* arg0)
     }
     temp_f1 = (f32) var_r5 / (f32) attr->x2C;
     jobj->child->child->rotate.z = 6.2831855f * temp_f1;
-    temp_f0 = (f32) ((0.6499999761581421 * (1.0 - (f64) temp_f1)) +
-                     0.3499999940395355);
+    temp_f0 = (f32) LK_FMAD(0.6499999761581421, 1.0 - (f64) temp_f1,
+                            0.3499999940395355); /* 802A2E28 */
     jobj->child->child->scale.x = temp_f0;
     jobj->child->child->scale.y = temp_f0;
     return 0;

@@ -31,8 +31,10 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define E5_FMA(a, b, c) fmaf((a), (b), (c))
+#define E5_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define E5_FMA(a, b, c) ((a) * (b) + (c))
+#define E5_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
 const Vec3 it_803B8718 = { 0.0f, 0.0f, 0.0f };
@@ -477,7 +479,7 @@ void it_802E66A0(HSD_GObj* item_gobj)
 bool it_2E5A_UnkMotion1_Anim(HSD_GObj* item_gobj)
 {
     Item* item = GET_ITEM(item_gobj);
-    item->x5D0_animFrameSpeed = (0.1 * ABS(item->x40_vel.y)) + 1.0;
+    item->x5D0_animFrameSpeed = E5_FMAD(0.1, ABS(item->x40_vel.y), 1.0); /* double fmadd */
     return it_802E657C(item_gobj);
 }
 

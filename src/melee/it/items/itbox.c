@@ -25,6 +25,15 @@
 
 #include <math.h>
 
+/* DEG_TO_RAD is a double constant, so the rotation nudges are double
+ * fmadds on the console (8028713C/718C), rounded to single once. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static double const ROT_VEL_SCALE = 0.03490658476948738;
 
 ItemStateTable it_803F5850[] = {
@@ -584,7 +593,8 @@ void itBox_UnkMotion8_Phys(Item_GObj* gobj)
     Quaternion rot;
     f32 vel;
 
-    ip->xDD4_itemVar.box.rot_vel_x += DEG_TO_RAD * (HSD_Randf() - 0.2F);
+    ip->xDD4_itemVar.box.rot_vel_x =
+        (f32) IB_FMAD(DEG_TO_RAD, HSD_Randf() - 0.2F, ip->xDD4_itemVar.box.rot_vel_x);
     vel = ip->xDD4_itemVar.box.rot_vel_x;
     if (vel > MAX_ROT_VEL) {
         ip->xDD4_itemVar.box.rot_vel_x = MAX_ROT_VEL;
@@ -592,7 +602,8 @@ void itBox_UnkMotion8_Phys(Item_GObj* gobj)
         ip->xDD4_itemVar.box.rot_vel_x = -MAX_ROT_VEL;
     }
 
-    ip->xDD4_itemVar.box.rot_vel_y += DEG_TO_RAD * (HSD_Randf() - 0.2F);
+    ip->xDD4_itemVar.box.rot_vel_y =
+        (f32) IB_FMAD(DEG_TO_RAD, HSD_Randf() - 0.2F, ip->xDD4_itemVar.box.rot_vel_y);
     vel = ip->xDD4_itemVar.box.rot_vel_y;
     if (vel > MAX_ROT_VEL) {
         ip->xDD4_itemVar.box.rot_vel_y = MAX_ROT_VEL;

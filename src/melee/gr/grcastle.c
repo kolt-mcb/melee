@@ -53,8 +53,10 @@ typedef struct unkCastle {
 #if BUILD_TARGET_PC
 #include <math.h>
 #define CS_FMA(a, b, c) fmaf((a), (b), (c))
+#define CS_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define CS_FMA(a, b, c) ((a) * (b) + (c))
+#define CS_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
 /* Forward declarations */
@@ -2065,7 +2067,7 @@ void grCastle_801D0BBC(void)
         }
     }
     if (grCs_804D45E4 != 0) {
-        grCs_804D6974->unk_scale = 0.3 * HSD_Randf() + 0.2;
+        grCs_804D6974->unk_scale = CS_FMAD(0.3, HSD_Randf(), 0.2); /* double fmadd */
         return;
     }
     grCs_804D6974->unk_scale = 0.05 * HSD_Randf();
@@ -2075,7 +2077,7 @@ void grCastle_801D0BBC(void)
 void grCastle_801D0D24(void)
 {
     if (grCs_804D45E4 != 0) {
-        grCs_804D6974->unk_scale = 0.3 * HSD_Randf() + 0.2;
+        grCs_804D6974->unk_scale = CS_FMAD(0.3, HSD_Randf(), 0.2); /* double fmadd */
     } else {
         grCs_804D6974->unk_scale = 0.05 * HSD_Randf();
     }
