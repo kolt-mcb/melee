@@ -167,6 +167,31 @@ the progress metric, not the number of green cells, which lags it.
 Budget this honestly: 2,700 single-precision sites at even ten minutes each
 is weeks of focused work, months at a realistic pace. The tooling is what makes it months rather than years.
 
+**Status (2026-09-08, evening).** The checklist went from 197 to 1,745 of
+2,807 credited (62%) in one pass, file by file, without a build -- the sweep
+owns the binary. Of the 2,075 single-precision sites, 291 are still
+uncredited in `ft/ mp/ lb/ it/ gr/ cm/ pl/`, almost all in files with two
+or three sites; the double-precision remainder is inlined `sqrtf` Newton
+steps (already fused by `src/math_shim.c`) and exact-anyway lerps.
+
+The per-site method, which is fast enough to be the plan:
+
+1. `tools/pc_fma_census.py --file <f>` lists each function's sites.
+2. `scratchpad/dis.sh <addr>` shows the console's operand registers.
+3. The pairing rules that held every time: in `a*b + c*d` the *right*
+   product is a plain `fmuls` and the left fuses onto it
+   (`x*x + y*y` is `fma(x, x, y*y)`); a chain `a + b + c + d` of products
+   fuses each further term onto the running sum; `-(a*b - c)` is
+   `fnmsubs`, spelled `fma(-a, b, c)`; a double-precision `fmadd` on a
+   widened float is `fma()` then one `(f32)`; an unrolled loop shows N
+   copies of one source line; a `static` or same-file helper's sites
+   appear in every caller (the census credits them).
+4. Write the site, `gcc -fsyntax-only` with the build's cflags, re-census.
+
+Everything written this way is unverified against the console until the
+next build and lockstep run; the sweep result decides whether any pairing
+was read wrong.
+
 ## Phase 5 -- The exceptions register
 
 Some of the original's behaviour is not C. Keep an explicit list, each entry
