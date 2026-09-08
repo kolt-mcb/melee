@@ -41,6 +41,17 @@
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 
+/* The item knockback formula fuses the same way as ftcoll's KNOCKBACK:
+ * from the inside out, [10]*[8] (or [8]*(xC9C+xCA0)) fused onto the
+ * plain [9]*(...) product, [11]*(...) fused onto [12], and 0.01*x24*(...)
+ * fused onto x2C (80270D38/D60/D64 and siblings). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IC_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IC_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 271830 */ static void it_80271830(Item* item, f32 arg_angle);
 /* 271B60 */ static void it_80271B60(Item_GObj* item_gobj);
 /* 271D2C */ static void it_80271D2C(Item_GObj* arg_item_gobj);
@@ -780,23 +791,27 @@ f32 it_80270CD8(Item* ip, HitCapsule* hit)
     f32 f1;
 
     if (hit->x28 != 0) {
-        f1 = (0.01f * hit->x24 *
-              ((it_804D6D28->x80_float[11] *
-                (attr->x1C_damage_mul *
-                 ((it_804D6D28->x80_float[10] * it_804D6D28->x80_float[8]) +
-                  (it_804D6D28->x80_float[9] *
-                   (it_804D6D28->x80_float[10] * hit->x28))))) +
-               it_804D6D28->x80_float[12])) +
-             hit->x2C;
+        f1 = IC_FMA(
+            0.01f * hit->x24,
+            IC_FMA(it_804D6D28->x80_float[11],
+                   attr->x1C_damage_mul *
+                       IC_FMA(it_804D6D28->x80_float[10],
+                              it_804D6D28->x80_float[8],
+                              it_804D6D28->x80_float[9] *
+                                  (it_804D6D28->x80_float[10] * hit->x28)),
+                   it_804D6D28->x80_float[12]),
+            hit->x2C);
     } else {
-        f1 = ((0.01f * hit->x24) *
-              ((it_804D6D28->x80_float[11] *
-                (attr->x1C_damage_mul *
-                 ((it_804D6D28->x80_float[8] * (ip->xC9C + (f32) ip->xCA0)) +
-                  (it_804D6D28->x80_float[9] *
-                   (hit->damage * (ip->xC9C + (f32) ip->xCA0)))))) +
-               it_804D6D28->x80_float[12])) +
-             hit->x2C;
+        f1 = IC_FMA(
+            0.01f * hit->x24,
+            IC_FMA(it_804D6D28->x80_float[11],
+                   attr->x1C_damage_mul *
+                       IC_FMA(it_804D6D28->x80_float[8],
+                              ip->xC9C + (f32) ip->xCA0,
+                              it_804D6D28->x80_float[9] *
+                                  (hit->damage * (ip->xC9C + (f32) ip->xCA0))),
+                   it_804D6D28->x80_float[12]),
+            hit->x2C);
     }
     if (f1 >= it_804D6D28->x80_float[7]) {
         f1 = it_804D6D28->x80_float[7];
@@ -844,26 +859,30 @@ void it_80270E30(Item_GObj* arg_item_gobj)
             attr = arg_item->xCC_item_attr;
             (void) attr;
             if (hit->x28 != 0) {
-                knockback = (0.01f * hit->x24 *
-                             ((it_804D6D28->x80_float[11] *
-                               (attr->x1C_damage_mul *
-                                ((it_804D6D28->x80_float[10] *
-                                  it_804D6D28->x80_float[8]) +
-                                 (it_804D6D28->x80_float[9] *
-                                  (it_804D6D28->x80_float[10] * hit->x28))))) +
-                              it_804D6D28->x80_float[12])) +
-                            hit->x2C;
+                knockback = IC_FMA(
+                    0.01f * hit->x24,
+                    IC_FMA(it_804D6D28->x80_float[11],
+                           attr->x1C_damage_mul *
+                               IC_FMA(it_804D6D28->x80_float[10],
+                                      it_804D6D28->x80_float[8],
+                                      it_804D6D28->x80_float[9] *
+                                          (it_804D6D28->x80_float[10] *
+                                           hit->x28)),
+                           it_804D6D28->x80_float[12]),
+                    hit->x2C);
             } else {
-                knockback = ((0.01f * hit->x24) *
-                             ((it_804D6D28->x80_float[11] *
-                               (attr->x1C_damage_mul *
-                                ((it_804D6D28->x80_float[8] *
-                                  (arg_item->xC9C + (f32) arg_item->xCA0)) +
-                                 (it_804D6D28->x80_float[9] *
-                                  (hit->damage * (arg_item->xC9C +
-                                                  (f32) arg_item->xCA0)))))) +
-                              it_804D6D28->x80_float[12])) +
-                            hit->x2C;
+                knockback = IC_FMA(
+                    0.01f * hit->x24,
+                    IC_FMA(it_804D6D28->x80_float[11],
+                           attr->x1C_damage_mul *
+                               IC_FMA(it_804D6D28->x80_float[8],
+                                      arg_item->xC9C + (f32) arg_item->xCA0,
+                                      it_804D6D28->x80_float[9] *
+                                          (hit->damage *
+                                           (arg_item->xC9C +
+                                            (f32) arg_item->xCA0))),
+                           it_804D6D28->x80_float[12]),
+                    hit->x2C);
             }
             knockback_cap = it_804D6D28->x80_float[7];
             if (knockback >= knockback_cap) {

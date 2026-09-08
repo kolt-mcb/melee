@@ -12,6 +12,15 @@
 #include "mp/mpcoll.h"
 #include "mp/mplib.h"
 
+/* The console fuses the item/wall dot products: y product plain, x and
+ * z fmadds onto it (802777B8/C0; product_xy at 80277928 and siblings). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IM_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IM_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void sdata2_order(void)
 {
     (void) 0.5f;
@@ -968,8 +977,10 @@ bool it_8027770C(Item_GObj* item_gobj)
         sp38 = coll->right_facing_wall.normal;
     }
     if (var_r5 != 0) {
-        if (((item->x40_vel.z * sp38.z) +
-             ((item->x40_vel.x * sp38.x) + (item->x40_vel.y * sp38.y))) < 0.0f)
+        /* 802777B8/C0: y product plain, then x and z fused onto it */
+        if (IM_FMA(item->x40_vel.z, sp38.z,
+                   IM_FMA(item->x40_vel.x, sp38.x,
+                          item->x40_vel.y * sp38.y)) < 0.0f)
         {
             lbVector_Mirror(&item->x40_vel, &sp38);
         }
