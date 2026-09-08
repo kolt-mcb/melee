@@ -41,6 +41,15 @@
 #include <baselib/gobj.h>
 #include <baselib/jobj.h>
 
+/* The console fuses a*b+c into one rounding; x86 rounds twice. Every site
+ * in this file that the DOL executes as fmadds is written with this. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define GD_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define GD_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 bool ftCo_80091A2C(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
@@ -143,13 +152,6 @@ void ftCo_80091BC4(Fighter* fp)
  * frame the guard pose is seeked to (ftAnim_80070710 below); the second is
  * the weight it is blended in with. A ULP in either is a different pose, and
  * the pose is what the ECB is measured from. */
-#if BUILD_TARGET_PC
-#include <math.h>
-#define GD_FMA(a, b, c) fmaf((a), (b), (c))
-#else
-#define GD_FMA(a, b, c) ((a) * (b) + (c))
-#endif
-
     smoothed_deg = GD_FMA(deg_delta, p_ftCommonData->x44C, guard_deg);
     if (smoothed_deg > 360) {
         guard_deg = smoothed_deg;
@@ -177,13 +179,16 @@ static inline float inlineB0(Fighter* fp)
     if (fp->kind == FTKIND_YOSHI) {
         return fp->co_attrs.initial_shield_size;
     } else {
+        /* 80091DAC / 80091DB4, and the same pair everywhere this is inlined:
+         * the light-shield blend is one fmadds, the health ratio times it a
+         * plain fmuls, and (1 - x264) * that + x264 one fmadds. */
         float n1 =
             (fp->shield_health / p_ftCommonData->x260_startShieldHealth) *
-            (fp->lightshield_amount *
-                 (p_ftCommonData->x2D8 - p_ftCommonData->x2D4) +
-             p_ftCommonData->x2D4);
+            GD_FMA(fp->lightshield_amount,
+                   p_ftCommonData->x2D8 - p_ftCommonData->x2D4,
+                   p_ftCommonData->x2D4);
         float n2 = 1 - p_ftCommonData->x264;
-        float n3 = n2 * n1 + p_ftCommonData->x264;
+        float n3 = GD_FMA(n2, n1, p_ftCommonData->x264);
         return n3 * fp->co_attrs.initial_shield_size;
     }
 }
@@ -424,10 +429,12 @@ bool ftCo_800925A4(HSD_GObj* gobj)
                     : (fp->input.x650 - p_ftCommonData->x10) /
                           (1 - p_ftCommonData->x10);
         }
-        fp->shield_health -= p_ftCommonData->x278 *
-                             ((fp->lightshield_amount *
-                               (p_ftCommonData->x2F0 - p_ftCommonData->x2EC)) +
-                              p_ftCommonData->x2EC);
+        /* 80092624: the blend is one fmadds, then the fmuls. */
+        fp->shield_health -=
+            p_ftCommonData->x278 *
+            GD_FMA(fp->lightshield_amount,
+                   p_ftCommonData->x2F0 - p_ftCommonData->x2EC,
+                   p_ftCommonData->x2EC);
         if (fp->shield_health < 0) {
             fp->shield_health = 0;
             fp->x221A_b7 = false;
@@ -662,11 +669,12 @@ void ftCo_80092E50(Fighter_GObj* gobj)
 
 float ftCo_80092ED8(int arg0, float arg1)
 {
-    return p_ftCommonData->x28C *
-               (arg0 *
-                (1 - (arg1 * (p_ftCommonData->x2E8 - p_ftCommonData->x2E4) +
-                      p_ftCommonData->x2E4))) +
-           p_ftCommonData->x290;
+    /* 80092F08 / 80092F20. */
+    return GD_FMA(p_ftCommonData->x28C,
+                  arg0 * (1 - GD_FMA(arg1,
+                                     p_ftCommonData->x2E8 - p_ftCommonData->x2E4,
+                                     p_ftCommonData->x2E4)),
+                  p_ftCommonData->x290);
 }
 
 void ftCo_80092F2C(HSD_GObj* gobj, bool arg1)
@@ -687,12 +695,14 @@ void ftCo_80092F2C(HSD_GObj* gobj, bool arg1)
         fp->x2219_b0 = true;
     }
     {
-        float f = (p_ftCommonData->x28C *
-                   (fp->x19A4 *
-                    (1.0f - ((fp->lightshield_amount *
-                              (p_ftCommonData->x2E8 - p_ftCommonData->x2E4)) +
-                             p_ftCommonData->x2E4)))) +
-                  p_ftCommonData->x290;
+        /* 80093038 / 8009305C: ftCo_80092ED8's shape, inlined. */
+        float f = GD_FMA(p_ftCommonData->x28C,
+                         fp->x19A4 *
+                             (1.0f - GD_FMA(fp->lightshield_amount,
+                                            p_ftCommonData->x2E8 -
+                                                p_ftCommonData->x2E4,
+                                            p_ftCommonData->x2E4)),
+                         p_ftCommonData->x290);
         ftAnim_SetAnimRate(gobj,
                            (0.1f + lbGetJObjEndFrame(GET_JOBJ(gobj))) / f);
         if (!arg1) {
@@ -735,8 +745,9 @@ void ftCo_80093240(Fighter_GObj* gobj)
         {
             float scl = p_ftCommonData->x4C0 *
                         (fp->input.lstick.x * p_ftCommonData->sdi_pos_scale);
-            fp->cur_pos.x += fp->coll_data.floor.normal.y * scl;
-            fp->cur_pos.y += -fp->coll_data.floor.normal.x * scl;
+            /* fmadds each: normal.y * scl + x, and -normal.x * scl + y. */
+            fp->cur_pos.x = GD_FMA(fp->coll_data.floor.normal.y, scl, fp->cur_pos.x);
+            fp->cur_pos.y = GD_FMA(-fp->coll_data.floor.normal.x, scl, fp->cur_pos.y);
             fp->x670_timer_lstick_tilt_x = 254;
         }
     }
@@ -752,8 +763,9 @@ void ftCo_800932DC(Fighter_GObj* gobj)
         {
             float scl = p_ftCommonData->x4C0 *
                         (fp->input.lstick.x * p_ftCommonData->x4BC);
-            fp->cur_pos.x += fp->coll_data.floor.normal.y * scl;
-            fp->cur_pos.y += -fp->coll_data.floor.normal.x * scl;
+            /* fmadds each: normal.y * scl + x, and -normal.x * scl + y. */
+            fp->cur_pos.x = GD_FMA(fp->coll_data.floor.normal.y, scl, fp->cur_pos.x);
+            fp->cur_pos.y = GD_FMA(-fp->coll_data.floor.normal.x, scl, fp->cur_pos.y);
 
             /// @todo Fake.
             !gobj;
