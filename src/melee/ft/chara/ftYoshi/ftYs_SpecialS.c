@@ -42,6 +42,16 @@
 #include <dolphin/mtx.h>
 #include <baselib/gobj.h>
 
+/* Egg Roll: the (2*pi/25) roll-speed terms are double fmadds on the
+ * console (8012FA14 and siblings) -- the constant is a genuine double, so
+ * the product is inexact and the fusing shows -- rounded to single once. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define YS3_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define YS3_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* The console fuses a*b+c into one rounding; x86 rounds twice. */
 #if BUILD_TARGET_PC
 #define YS_FMA(a, b, c) fmaf((a), (b), (c))
@@ -471,8 +481,9 @@ void ftYs_SpecialAirSLoop_0_Anim(Fighter_GObj* gobj)
         }
     }
 
-    fp->mv.ys.specials.x14 +=
-        M_TAU / 25.0 * (attributes->xD8 * ABS(fp->mv.ys.specials.x1C));
+    fp->mv.ys.specials.x14 = (f32) YS3_FMAD(
+        M_TAU / 25.0, attributes->xD8 * ABS(fp->mv.ys.specials.x1C),
+        fp->mv.ys.specials.x14);
 
     ftYs_SpecialS_WrapAndSetRotX(gobj);
 
@@ -530,7 +541,7 @@ static inline void ftYs_SpecialS_UpdateLoop1Rotation2(Fighter* fp, f32* angle,
         } else {
             delta = ABS(fp->mv.ys.specials.x10) + ABS(fp->gr_vel);
         }
-        *angle = delta / total * M_PI + M_PI_2;
+        *angle = YS3_FMAD(M_PI, delta / total, M_PI_2); /* 8012FE64 */
     } else {
         f32 delta;
         if (fp->gr_vel < 0.0F) {
@@ -538,7 +549,7 @@ static inline void ftYs_SpecialS_UpdateLoop1Rotation2(Fighter* fp, f32* angle,
         } else {
             delta = ABS(fp->mv.ys.specials.x10) + ABS(fp->gr_vel);
         }
-        *angle = delta / total * M_PI + 3.0 * M_PI_2;
+        *angle = YS3_FMAD(M_PI, delta / total, 3.0 * M_PI_2); /* 8012FEC8 */
     }
 
     while (*angle < 0.0F) {
@@ -560,8 +571,8 @@ void ftYs_SpecialAirSLoop_1_Anim(Fighter_GObj* gobj)
     ftYs_SpecialS_8012EB48(gobj);
     ftYs_SpecialS_UpdateScale2(gobj);
 
-    fp->mv.ys.specials.x14 =
-        2.0 * M_PI / 25.0 * attributes->xA0 + fp->mv.ys.specials.x14;
+    fp->mv.ys.specials.x14 = (f32) YS3_FMAD(2.0 * M_PI / 25.0, attributes->xA0,
+                                            fp->mv.ys.specials.x14);
 
     ftYs_SpecialS_WrapAndSetRotX(gobj);
     ftYs_SpecialS_UpdateLoop1Rotation(fp, attributes);
@@ -709,8 +720,8 @@ void ftYs_SpecialAirSLoop_3_Anim(Fighter_GObj* gobj)
             abs_speed = -abs_speed;
         }
         fp->mv.ys.specials.x14 =
-            (f32) ((f64) (2.0 * M_PI / 25.0) * (attributes->xD8 * abs_speed) +
-                   (f64) fp->mv.ys.specials.x14);
+            (f32) YS3_FMAD(2.0 * M_PI / 25.0, attributes->xD8 * abs_speed,
+                           (f64) fp->mv.ys.specials.x14);
     }
 
     ftYs_SpecialS_WrapAndSetRotX(gobj);
@@ -1348,10 +1359,10 @@ void ftYs_SpecialAirSLoop_3_Coll(Fighter_GObj* gobj)
             fp->self_vel.z = 0.0F;
             fp->self_vel.y = 0.0F;
             fp->mv.ys.specials.x14 =
-                ((2.0 * M_PI / 25.0) *
-                     perm_mul_inline(attributes->xD8,
-                                     ABS(fp->mv.ys.specials.x1C)) +
-                 fp->mv.ys.specials.x14);
+                (f32) YS3_FMAD(2.0 * M_PI / 25.0,
+                               perm_mul_inline(attributes->xD8,
+                                               ABS(fp->mv.ys.specials.x1C)),
+                               fp->mv.ys.specials.x14);
             ftYs_SpecialS_WrapAndSetRotX(gobj);
             ftCommon_8007EBAC(fp, 1, 0);
         } else {
