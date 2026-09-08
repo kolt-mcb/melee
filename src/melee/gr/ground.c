@@ -142,6 +142,14 @@ static inline u32 be32(u32 x)
 #include <baselib/spline.h>
 #include <baselib/wobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define GD2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define GD2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 1BFFA8 */ static void Ground_OnStart(void);
 /* 1BFFAC */ static void Ground_801BFFAC(bool);
 /* 1C0478 */ static void mem_free(void* ptr);
@@ -3744,7 +3752,7 @@ void Ground_801C4FAC(HSD_CObj* cobj)
             sp44 = stage_info.x16C;
         }
         if (sp74.z < 0) {
-            xz_inv_len = 1.0f / sqrtf((sp74.x * sp74.x) + (sp74.z * sp74.z));
+            xz_inv_len = 1.0f / sqrtf(GD2_FMA(sp74.x, sp74.x, sp74.z * sp74.z));
             xz_x_weight = xz_inv_len * fabsf(sp74.x);
             xz_z_weight = xz_inv_len * fabsf(sp74.z);
             sp50.x *= xz_x_weight;

@@ -27,6 +27,14 @@
 #include "ftCommon/ftCo_SpecialS.h"
 #include "ftCommon/ftCo_Turn.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DA_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DA_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 bool ftCo_Dash_CheckInput(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
@@ -140,7 +148,7 @@ void ftCo_Dash_IASA(Fighter_GObj* gobj)
     {
         float friction = ft_GetGroundFrictionMultiplier(fp);
         float temp_f0 = fp->gr_vel * p_ftCommonData->x54;
-        fp->gr_vel += -temp_f0 * friction;
+        fp->gr_vel = DA_FMA(-temp_f0, friction, fp->gr_vel);
     }
 }
 

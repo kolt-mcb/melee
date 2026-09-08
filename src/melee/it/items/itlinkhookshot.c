@@ -172,7 +172,7 @@ static inline HSD_JObj* it_link_get_joint_c(Item* arg0)
 
 static inline f32 it_link_lerp(f32 a, f32 b, f32 t)
 {
-    return t * a + (1.0F - t) * b;
+    return LK_FMA(t, a, (1.0F - t) * b); /* 802A2680: (1-t)*b plain */
 }
 
 static inline void it_link_attr_math(itLinkHookshotAttributes* attr, s32 arg2,

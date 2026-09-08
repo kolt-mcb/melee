@@ -39,6 +39,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DK_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DK_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 MotionState ftDk_Init_MotionStateTable[ftDk_MS_SelfCount] = {
     {
         // ftDk_MS_HeavyWait = 341
@@ -664,8 +672,8 @@ void ftDk_Init_8010DB3C(HSD_GObj* gobj)
         Vec3 vec_list[4];
         int i;
         for (i = 0; i < 4; i++) {
-            float temp_f5 = (donkey_attr->SpecialLw.x68 * i) -
-                            (donkey_attr->SpecialLw.x68 * 1.5f);
+            float temp_f5 = DK_FMA(donkey_attr->SpecialLw.x68, (f32) i,
+                                   -(donkey_attr->SpecialLw.x68 * 1.5f)); /* fmsubs */
             float temp_f3 = donkey_attr->SpecialLw.x6C * fp->facing_dir;
             float temp_f6 = temp_f5 + temp_f3;
 

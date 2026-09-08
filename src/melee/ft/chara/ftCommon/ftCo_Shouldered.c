@@ -23,6 +23,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SD_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SD_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 #pragma force_active on
 
 /* 09C744 */ static void ftCo_8009C744(Fighter_GObj* gobj);
@@ -47,8 +55,8 @@ void ftCo_8009C640(Fighter_GObj* gobj, FtMotionId msid)
     Fighter* fp = gobj->user_data;
     PAD_STACK(8);
     ftCommon_InitGrab(fp, 0,
-                      (int) (fp->dmg.x1830_percent * p_ftCommonData->x4A0 +
-                             p_ftCommonData->x4A4));
+                      (int) (SD_FMA(fp->dmg.x1830_percent, p_ftCommonData->x4A0,
+                             p_ftCommonData->x4A4)));
     fp->mv.co.shouldered.x0 = 0;
     fp->mv.co.shouldered.x4 = 0;
     ftCo_8009C5A4(gobj, msid);

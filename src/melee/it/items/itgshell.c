@@ -24,6 +24,14 @@
 #include <sysdolphin/baselib/random.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define GS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define GS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 typedef struct itGShell_Attrs {
     float x0;
     float x4;
@@ -137,8 +145,8 @@ void it_8028BAD8(Item_GObj* gobj)
     case 6:
     case 7:
     case 8:
-        ip->x40_vel.x +=
-            -ip->xCCC_incDamageDirection * (ip->xCA0 * attrs->x14);
+        ip->x40_vel.x = GS_FMA(-ip->xCCC_incDamageDirection,
+                               ip->xCA0 * attrs->x14, ip->x40_vel.x);
         ip->xDD4_itemVar.gshell.xDEC_b2 = 1;
         break;
     default:

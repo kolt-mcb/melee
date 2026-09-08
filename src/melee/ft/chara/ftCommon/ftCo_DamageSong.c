@@ -16,18 +16,27 @@
 #include "ftCommon/ftCo_Throw.h"
 #include "pl/player.h"
 
+/* The grab-timer handicap terms: x628*(x62C-h)+x624 is one fmadds, the
+ * x630 term is added plain, and percent*x638 fuses onto the sum. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 0C3390 */ static void ftCo_800C3390(Fighter_GObj* gobj);
 /* 0C3480 */ static void ftCo_800C3480(Fighter_GObj* gobj);
 
 static float inlineA0(Fighter* fp, bool arg1)
 {
-    float result =
-        (fp->dmg.x1830_percent * p_ftCommonData->x638) +
-        ((p_ftCommonData->x628 *
-          (p_ftCommonData->x62C - Player_GetHandicap(fp->player_id))) +
-         p_ftCommonData->x624 +
-         p_ftCommonData->x630 *
-             (p_ftCommonData->x634 - ((Player_80033BB8(fp->player_id)) + 1)));
+    float result = DS_FMA(
+        fp->dmg.x1830_percent, p_ftCommonData->x638,
+        DS_FMA(p_ftCommonData->x628,
+               p_ftCommonData->x62C - Player_GetHandicap(fp->player_id),
+               p_ftCommonData->x624) +
+            p_ftCommonData->x630 *
+                (p_ftCommonData->x634 - ((Player_80033BB8(fp->player_id)) + 1)));
     if (arg1) {
         result *= p_ftCommonData->x644;
     }

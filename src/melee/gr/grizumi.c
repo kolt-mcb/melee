@@ -44,6 +44,14 @@
 #include <baselib/tobj.h>
 #include <baselib/wobj.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IZ_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IZ_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 struct grIzumi_YakumonoParam {
     float x0;
     int x4;
@@ -617,7 +625,7 @@ void grIzumi_801CC358(Ground_GObj* gobj)
             if (f < 0.01f) {
                 f = 0.01f;
             }
-            HSD_JObjSetScaleX(jobj2, 0.5f * f + 0.5f);
+            HSD_JObjSetScaleX(jobj2, IZ_FMA(0.5f, f, 0.5f));
             HSD_JObjSetScaleY(jobj2, f);
             HSD_JObjSetTranslateY(gp->u.izumi3.xCC, gp->u.izumi3.xD0);
         }

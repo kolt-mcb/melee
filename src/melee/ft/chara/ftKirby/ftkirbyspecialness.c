@@ -30,13 +30,21 @@
 #include <baselib/random.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KN2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KN2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void ftKb_NsSpecialNStart_Anim_inline(HSD_GObj* gobj, Vec3* flash_pos)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     if (fp->u.kb.ns_flash_gobj == NULL) {
         lb_8000B1CC(fp->parts[FtPart_WaistN].joint, NULL, flash_pos);
         flash_pos->z = 0;
-        flash_pos->y += fp->x34_scale.y * 3.0f;
+        flash_pos->y = KN2_FMA(3.0f, fp->x34_scale.y, flash_pos->y);
         {
             HSD_GObj* flash_gobj = it_802AA8C0(
                 gobj, flash_pos, It_Kind_Kirby_NessPKFlush, fp->facing_dir);

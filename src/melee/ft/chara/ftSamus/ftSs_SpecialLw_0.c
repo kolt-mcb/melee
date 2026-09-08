@@ -31,6 +31,14 @@
 #include <trigf.h>
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SL0_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SL0_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftSs_Init_80128944(HSD_GObj* gobj, float farg1, float farg2)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -100,7 +108,7 @@ float ftSs_Init_80128AC8(HSD_GObj* gobj, float farg1, float farg2)
     if (value <= -1.0f) {
         value = -1.0f;
     }
-    return (-da->x4 * value) + 1.5707963705062866f;
+    return SL0_FMA(-da->x4, value, 1.5707963705062866f);
 }
 
 inline void ftSamus_80128B1C_inner(HSD_GObj* gobj, float angle)

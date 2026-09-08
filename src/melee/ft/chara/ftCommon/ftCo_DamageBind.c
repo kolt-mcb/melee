@@ -18,6 +18,15 @@
 #include "ftCommon/ftCo_Throw.h"
 #include "pl/player.h"
 
+/* The grab-timer handicap terms: x65C*(x660-h)+x658 is one fmadds, the
+ * x664 term is added plain, and percent*x66C fuses onto the sum. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 bool ftCo_800C44CC(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -40,12 +49,13 @@ static void commonCall(Fighter* fp)
 {
     ftCommon_InitGrab(
         fp, 0,
-        (fp->dmg.x1830_percent * p_ftCommonData->x66C) +
-            (p_ftCommonData->x65C *
-                 (p_ftCommonData->x660 - Player_GetHandicap(fp->player_id)) +
-             p_ftCommonData->x658 +
-             p_ftCommonData->x664 * (p_ftCommonData->x668 -
-                                     (Player_80033BB8(fp->player_id) + 1))));
+        DB_FMA(fp->dmg.x1830_percent, p_ftCommonData->x66C,
+               DB_FMA(p_ftCommonData->x65C,
+                      p_ftCommonData->x660 - Player_GetHandicap(fp->player_id),
+                      p_ftCommonData->x658) +
+                   p_ftCommonData->x664 *
+                       (p_ftCommonData->x668 -
+                        (Player_80033BB8(fp->player_id) + 1))));
 }
 
 void ftCo_800C4550(Fighter_GObj* gobj)

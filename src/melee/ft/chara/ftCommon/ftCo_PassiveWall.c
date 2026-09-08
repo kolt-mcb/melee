@@ -35,6 +35,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PW_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PW_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 bool ftCo_800C1D38(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -105,7 +113,7 @@ void ftCo_800C1E64(Fighter_GObj* gobj, int msid, int timer, int vel_y_exponent,
                       (1 << 0) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 10),
                       NULL, &ef_pos);
         fp->cur_pos.x =
-            -(fp->x68C_transNPos.z * -fp->facing_dir - pos_x_offset);
+            PW_FMA(fp->x68C_transNPos.z, fp->facing_dir, pos_x_offset); /* fnmsubs of -facing */
     }
     ft_80081F2C(gobj);
     ft_800881D8(fp, fp->ft_data->x4C_sfx->x24, 0x7F, 0x40);

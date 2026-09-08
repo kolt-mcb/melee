@@ -16,6 +16,14 @@
 #include "lb/lb_00F9.h"
 #include "mp/mpcoll.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define MB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define MB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 typedef struct {
     float x0;
     float x4;
@@ -130,7 +138,7 @@ void it_80290238(Item_GObj* gobj)
     ip->xDCE_flag.b3 = 1;
     if (it_802763B8(gobj) != 1) {
         if (it_802763E0(gobj) == 2) {
-            ip->pos.y += ip->scl * (attrs->x8.top - attrs->x8.bottom);
+            ip->pos.y = MB_FMA(ip->scl, attrs->x8.top - attrs->x8.bottom, ip->pos.y);
         } else {
             int x = it_80276308(gobj);
             if (x == 8) {

@@ -28,6 +28,14 @@
 #include <dolphin/mtx.h>
 #include <baselib/gobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define YH_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define YH_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void setDamageCallbacks(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -78,8 +86,8 @@ void ftYs_SpecialS_8012DF8C(Fighter_GObj* gobj, Vec3* arg1)
         } else {
             angle = M_PI - da->specialhi_base_angle - mag;
         }
-        arg1->x = (fp->mv.ys.specialhi.x4 * da->x100 + da->xFC) * cosf(angle);
-        arg1->y = (fp->mv.ys.specialhi.x4 * da->x100 + da->xFC) * sinf(angle);
+        arg1->x = YH_FMA((f32) fp->mv.ys.specialhi.x4, da->x100, da->xFC) * cosf(angle);
+        arg1->y = YH_FMA((f32) fp->mv.ys.specialhi.x4, da->x100, da->xFC) * sinf(angle);
         arg1->z = 0.0f;
     }
 }
@@ -115,7 +123,7 @@ void fn_8012E110(Fighter_GObj* gobj)
         ftYs_SpecialS_8012DF8C_outline(gobj, &sp18);
         {
             float x4 = fp->mv.ys.specialhi.x4;
-            it_802B28C8(fp->u.ys.x2238, &sp18, &sp24, x4 * da->x110 + da->x10C,
+            it_802B28C8(fp->u.ys.x2238, &sp18, &sp24, YH_FMA((f32) x4, da->x110, da->x10C),
                         x4);
         }
         fp->u.ys.x2238 = NULL;

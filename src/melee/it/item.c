@@ -51,6 +51,14 @@
 #include <baselib/gobjuserdata.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IM2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IM2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 267130 */ static void Item_80267130(HSD_GObj* gobj, SpawnItem* spawnItem);
 /* 2674AC */ static void Item_802674AC(SpawnItem* spawnItem);
 /* 2675A8 */ static void Item_802675A8(HSD_GObj* gobj);
@@ -1799,9 +1807,8 @@ static bool Item_80269F14(HSD_GObj* gobj)
                                 // available in the vanilla Item struct
         {
             if (temp_item->x5D4_hitboxes[i].hit.state != HitCapsule_Disabled) {
-                temp_f30 =
-                    temp_item->x5D4_hitboxes[i].hit.damage * temp_item->xC6C +
-                    0.99f;
+                temp_f30 = IM2_FMA(temp_item->x5D4_hitboxes[i].hit.damage,
+                                   temp_item->xC6C, 0.99f);
                 var_r27 = temp_f30;
                 if (var_r27 > it_804D6D28->xD8) {
                     var_r27 = it_804D6D28->xD8;

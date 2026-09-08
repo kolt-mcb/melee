@@ -38,6 +38,14 @@ typedef struct grBigBlueRoute_8020DA9C_t {
 #include <baselib/random.h>
 #include <baselib/spline.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define BR_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define BR_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void grBigBlue_801E8D04(Ground_GObj*);
 
 StageCallbacks grBb_Route_803E5E78[38] = {
@@ -621,7 +629,7 @@ void grBigBlueRoute_8020C85C(Ground_GObj* gobj)
         {
             f32 rand = HSD_Randf();
             re = &((RouteEntry*) gp->u.car.car_info)[route_idx];
-            re->x20 = 5.2359877f * rand - 2.6179938f;
+            re->x20 = BR_FMA(5.2359877f, rand, -2.6179938f); /* fmsubs */
         }
 
         if (!((RouteEntry*) gp->u.car.car_info)[route_idx].flags.b1) {
@@ -757,7 +765,7 @@ void grBigBlueRoute_8020CD20(Ground_GObj* gobj)
                     RE_ENTRY->flags.b2_5 = 2;
                     RE_ENTRY->x14 = 0.0f;
                     RE_ENTRY->x1C = 0.0f;
-                    RE_ENTRY->x20 = 5.2359877f * HSD_Randf() - 2.6179938f;
+                    RE_ENTRY->x20 = BR_FMA(5.2359877f, HSD_Randf(), -2.6179938f);
                     RE_ENTRY->x24 = RE_ENTRY->x4;
                 }
                 break;
@@ -834,7 +842,7 @@ void grBigBlueRoute_8020CD20(Ground_GObj* gobj)
 
                 prog = (RE_ENTRY->x4 - RE_ENTRY->x24) / (1.0f - RE_ENTRY->x24);
                 t = RE_ENTRY->x4;
-                frac = ((1.0f - prog) * (RE_ENTRY->xC - 0.5f)) + 0.5f;
+                frac = BR_FMA(1.0f - prog, RE_ENTRY->xC - 0.5f, 0.5f);
                 splGetSplinePoint(&p0, gp->u.car.xD0, t);
                 splGetSplinePoint(&p1, gp->u.car.xD4, t);
                 lbShadow_8000E9F0(&road_tan, gp->u.car.xD0, t);

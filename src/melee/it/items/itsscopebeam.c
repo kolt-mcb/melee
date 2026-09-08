@@ -12,6 +12,14 @@
 #include <trigf.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F6568[] = {
     { 0, itSscopebeam_UnkMotion9_Anim, itSscopebeam_UnkMotion9_Phys,
       itSscopebeam_UnkMotion9_Coll },
@@ -171,7 +179,7 @@ bool itSscopebeam_UnkMotion9_Coll(Item_GObj* gobj)
             rand = HSD_Randf();
             lbVector_RotateAboutUnitAxis(
                 &vel, &axis,
-                (2.0f * angle) + (ip->facing_dir * (attrs->x78 * rand)));
+                SB_FMA(2.0f, angle, ip->facing_dir * (attrs->x78 * rand)));
             ip->x40_vel.x = vel.x;
             ip->x40_vel.y = vel.y;
             if (ip->x40_vel.y <= 0.0f) {

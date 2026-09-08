@@ -18,6 +18,14 @@
 #include <baselib/jobj.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define FZ_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define FZ_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F5D28[] = { {
                                      0,
                                      itFreeze_UnkMotion0_Anim,
@@ -151,8 +159,8 @@ void it_8028EDBC(Item_GObj* gobj)
                 ip->xDD4_itemVar.freeze.x0 = attrs->x4_float * ip->facing_dir;
             } else {
                 ip->xDD4_itemVar.freeze.x0 =
-                    (ip->xDD4_itemVar.freeze.x4.x * attrs->xC) +
-                    ip->xDD4_itemVar.freeze.x0;
+                    FZ_FMA(ip->xDD4_itemVar.freeze.x4.x, attrs->xC,
+                           ip->xDD4_itemVar.freeze.x0);
             }
         } else {
             if (ABS(ip->xDD4_itemVar.freeze.x0) < attrs->x4_float) {

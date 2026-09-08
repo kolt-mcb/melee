@@ -19,6 +19,14 @@
 #include "ftCommon/ftCo_Jump.h"
 #include "ftCommon/ftCo_Run.h"
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define TR2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define TR2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 bool fn_800C9CEC(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -97,16 +105,16 @@ void ftCo_TurnRun_Phys(Fighter_GObj* gobj)
     } else if (fp->mv.co.turnrun.accel_mul * accel < 0) {
         if (accel > 0) {
             if (fp->gr_vel + accel > target_vel) {
-                accel -= co_attrs->gr_friction *
-                         p_ftCommonData->x60_someFrictionMul;
+                accel = TR2_FMA(-co_attrs->gr_friction,
+                                p_ftCommonData->x60_someFrictionMul, accel); /* fnmsubs */
                 if (fp->gr_vel + accel < target_vel) {
                     accel = target_vel - fp->gr_vel;
                 }
             }
         } else {
             if (fp->gr_vel + accel < target_vel) {
-                accel += co_attrs->gr_friction *
-                         p_ftCommonData->x60_someFrictionMul;
+                accel = TR2_FMA(co_attrs->gr_friction,
+                                p_ftCommonData->x60_someFrictionMul, accel);
                 if (fp->gr_vel + accel > target_vel) {
                     accel = target_vel - fp->gr_vel;
                 }

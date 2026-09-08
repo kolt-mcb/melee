@@ -47,6 +47,14 @@
 #include <melee/pl/plbonuslib.h>
 #include <melee/pl/plstale.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DF0_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DF0_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftCo_800DEE84(Fighter_GObj* gobj, u32 arg1, float arg2, float dmg_mult)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -70,9 +78,8 @@ f32 ftCo_800DEEB8(Fighter* fp, f32 arg1)
     if (attrs->state != SmashState_Release) {
         return arg1;
     }
-    return arg1 * ((attrs->x2120_damageMul - 1.0F) *
-                       (attrs->x2118_frames / attrs->x211C_holdFrame) +
-                   1.0F);
+    return arg1 * DF0_FMA(attrs->x2120_damageMul - 1.0F,
+                          attrs->x2118_frames / attrs->x211C_holdFrame, 1.0F);
 }
 
 Vec2* ftCo_800DEEE8(Fighter* fp, Vec2* shift)

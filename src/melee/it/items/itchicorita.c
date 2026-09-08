@@ -11,6 +11,14 @@
 #include "it/item.h"
 #include "it/itmaplib.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define CH_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define CH_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F7A98[] = {
     { 0, itChicorita_UnkMotion0_Anim, itChicorita_UnkMotion0_Phys,
       itChicorita_UnkMotion0_Coll },
@@ -234,7 +242,7 @@ void it_802C9B20(Item_GObj* chicorita_gobj)
     chicorita = GET_ITEM((HSD_GObj*) chicorita_gobj);
     attr = chicorita->xC4_article_data->x4_specialAttributes;
     spawn.prev_pos = chicorita->pos;
-    spawn.prev_pos.x += attr->x8 * chicorita->facing_dir;
+    spawn.prev_pos.x = CH_FMA(attr->x8, chicorita->facing_dir, spawn.prev_pos.x);
     spawn.prev_pos.y += attr->xC;
     it_8026BB88(chicorita_gobj, &spawn.pos);
     spawn.facing_dir = chicorita->facing_dir;

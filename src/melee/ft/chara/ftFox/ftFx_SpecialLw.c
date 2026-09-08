@@ -24,6 +24,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define FX_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define FX_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static MotionFlags const ftFx_MF_SpecialLw_Coll =
     ftCommon_GroundAirColl_MF | Ft_MF_KeepGfx;
 static MotionFlags const ftFx_MF_SpecialLwEnd_Coll =
@@ -456,8 +464,8 @@ static void ftFx_SpecialLw_Turn(HSD_GObj* gobj)
         fp->facing_dir = -fp->facing_dir;
     }
     ftPartSetRotY(fp, 0,
-                  -((180 / da->x9C_FOX_REFLECTOR_TURN_FRAMES * deg_to_rad) -
-                    ftPartGetRotZ(fp, 0)));
+                  FX_FMA(-deg_to_rad, 180 / da->x9C_FOX_REFLECTOR_TURN_FRAMES,
+                         ftPartGetRotZ(fp, 0))); /* fnmsubs */
 }
 #pragma pop
 
@@ -476,8 +484,8 @@ static inline void ftFox_SpecialLw_Turn_Inline(HSD_GObj* gobj)
     }
 
     ftPartSetRotY(fp, 0,
-                  -((deg_to_rad * (180 / da->x9C_FOX_REFLECTOR_TURN_FRAMES)) -
-                    ftPartGetRotZ(fp, 0)));
+                  FX_FMA(-deg_to_rad, 180 / da->x9C_FOX_REFLECTOR_TURN_FRAMES,
+                         ftPartGetRotZ(fp, 0)));
 }
 
 void ftFx_SpecialLwTurn_Anim(HSD_GObj* gobj)

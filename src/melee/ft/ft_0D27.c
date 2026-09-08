@@ -52,6 +52,14 @@
 #include <melee/pl/plbonuslib.h>
 #include <melee/pl/plstale.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define D27_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define D27_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftCo_800D2770(Fighter_GObj* gobj, f32 arg8)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -169,7 +177,7 @@ bool fn_800D2A3C(HSD_GObj* gobj)
         f32 scale = HSD_JObjGetScaleX(fp->x2184);
         f32 mid = fp->mv.co.walk.middle_anim_frame;
         f32 fast = fp->mv.co.walk.fast_anim_frame;
-        ftLib_SetScale(gobj, (fast - mid) * scale + mid);
+        ftLib_SetScale(gobj, D27_FMA(fast - mid, scale, mid));
     }
     if (HSD_AObjGetFlags(fp->x2184->aobj) & 0x40000000) {
         return false;

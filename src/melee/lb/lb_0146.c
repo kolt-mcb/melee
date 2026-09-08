@@ -19,6 +19,14 @@
 #include <baselib/psstructs.h>
 #include <baselib/tobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define L6_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define L6_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 bool lb_80014638(struct lb_80014638_arg0_t* arg0,
                  struct lb_80014638_arg1_t* arg1)
 {
@@ -46,10 +54,10 @@ bool lb_80014638(struct lb_80014638_arg0_t* arg0,
         } else {
             z = (z - sp30.z) / (sp24.z - sp30.z);
         }
-        if (z * (sp24.x - sp30.x) + sp30.x > sp18.y) {
+        if (L6_FMA(z, sp24.x - sp30.x, sp30.x) > sp18.y) {
             return false;
         }
-        if (z * (sp24.y - sp30.y) + sp30.y < sp18.x) {
+        if (L6_FMA(z, sp24.y - sp30.y, sp30.y) < sp18.x) {
             return false;
         }
     }

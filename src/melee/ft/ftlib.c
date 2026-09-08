@@ -41,6 +41,15 @@
 #include <baselib/random.h>
 #include <baselib/rumble.h>
 
+/* dx*dx + dy*dy: dy*dy is a plain fmuls and dx*dx fuses onto it
+ * (8008632C, 80086460). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define FLB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define FLB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 s32 ftLib_800860C4(void)
 {
     s32 ret = 0;
@@ -159,7 +168,7 @@ HSD_GObj* ftLib_8008627C(Vec3* pos, HSD_GObj* gobj)
         ftLib_800866DC(cur, &cur_v);
         dx = pos->x - cur_v.x;
         dy = pos->y - cur_v.y;
-        dist = (dx * dx) + (dy * dy);
+        dist = FLB_FMA(dx, dx, dy * dy);
 
         if (dist < min_dist) {
             min_dist = dist;
@@ -211,7 +220,7 @@ Fighter_GObj* ftLib_80086368(Vec3* v, Fighter_GObj* gobj, float facing_dir)
 
         dx = v->x - sp24.x;
         dy = v->y - sp24.y;
-        diff = dx * dx + dy * dy;
+        diff = FLB_FMA(dx, dx, dy * dy);
 
         if (diff < min_diff) {
             min_diff = diff;

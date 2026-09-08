@@ -59,7 +59,7 @@ FUSED_RE = re.compile(r"^\s*([0-9a-f]{8}):\s+(?:[0-9a-f]{2} ){4}\s*(f(?:n)?m(?:a
 # Every spelling of an explicit fused op in the port. The per-file macros
 # (FT_FMA, MP_FMA, KB_FMA, ...) expand to fmaf() on PC and to plain
 # arithmetic on the console, so the macro token is the site either way.
-PORT_FMA_RE = re.compile(r"\b(?:fmaf?|[A-Z][A-Z0-9]*_(?:FMAF?D?|FMS|NMSUBF?))\s*\(")
+PORT_FMA_RE = re.compile(r"\b(?:fmaf?|__fnmsubs|[A-Z][A-Z0-9]*_(?:FMAF?D?|FMS|NMSUBF?))\s*\(")
 SYM_RE = re.compile(r"^(\S+) = \.(\w+):0x([0-9A-Fa-f]+); // type:function size:0x([0-9A-Fa-f]+)")
 
 # The simulation first. Anything the contract in docs/port-parity-plan.md is

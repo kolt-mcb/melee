@@ -59,6 +59,14 @@
 #include <melee/pl/plbonuslib.h>
 #include <melee/pl/plstale.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define TH_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define TH_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void fn_800DD568(Fighter_GObj* gobj);
 void fn_800DD5EC(Fighter_GObj* gobj);
 void fn_800DD684(Fighter_GObj* gobj);
@@ -581,8 +589,8 @@ void ftCo_800DDDE4(Fighter_GObj* gobj, Fighter_GObj* gobj2, bool arg)
         fp4->x2226_b2 = 0;
         HSD_JObjSetTranslate(jobj2, &fp4->x2174);
         if (arg) {
-            vec.x += fp4->facing_dir * (fp4->x1A70.z * fp4->x34_scale.y);
-            vec.y += fp4->x1A70.y * fp4->x34_scale.y;
+            vec.x = TH_FMA(fp4->facing_dir, fp4->x1A70.z * fp4->x34_scale.y, vec.x);
+            vec.y = TH_FMA(fp4->x1A70.y, fp4->x34_scale.y, vec.y);
             vec.z = 0.0f;
         }
         cd = &fp4->coll_data;

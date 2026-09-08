@@ -10,6 +10,14 @@
 #include "ft/types.h"
 #include "ftCommon/types.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define RB2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define RB2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 099E44 */ static void ftCo_80099E44(Fighter_GObj* gobj);
 
 void ftCo_80099D9C(Fighter_GObj* gobj)
@@ -23,7 +31,7 @@ void ftCo_80099D9C(Fighter_GObj* gobj)
         fp->mv.co.rebound.anim_start = (fp->co_attrs.x9C + 0.1f) / fp_x191C;
         fp->mv.co.rebound.x0 =
             -fp->dmg.facing_dir *
-            (fp_x191C * p_ftCommonData->x3D8 + p_ftCommonData->x3DC);
+            RB2_FMA(fp_x191C, p_ftCommonData->x3D8, p_ftCommonData->x3DC);
     }
     ftCommon_800804A0(fp, fp->mv.co.rebound.x0);
 }

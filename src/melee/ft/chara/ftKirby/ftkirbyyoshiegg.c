@@ -26,6 +26,14 @@
 #include <baselib/random.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KY_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KY_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void fn_8010AA64(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -185,7 +193,7 @@ void fn_8010B148(Fighter_GObj* gobj)
 void fn_8010B16C(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
-    fp->grab_timer -= fp->dmg.x1838_percentTemp * ftKb_SpecialNYs_80109380();
+    fp->grab_timer = KY_FMA(-fp->dmg.x1838_percentTemp, ftKb_SpecialNYs_80109380(), fp->grab_timer); /* fnmsubs */
     if ((s32) fp->dmg.x18CC == 3 && ftCo_800C0C88(fp->dmg.x18D0) != 0) {
         fp->grab_timer = 0.0f;
     }

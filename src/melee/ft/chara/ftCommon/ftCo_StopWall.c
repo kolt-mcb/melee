@@ -14,6 +14,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SWL_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SWL_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 09EE30 */ static void ftCo_8009EE30(Fighter_GObj* gobj);
 
 bool ftCo_8009EDA4(Fighter_GObj* gobj)
@@ -52,8 +60,8 @@ void ftCo_8009EE30(Fighter_GObj* gobj)
         ftKb_SpecialN_800F1F1C(gobj, &vec);
         Fighter_ChangeMotionState(gobj, ftCo_MS_StopWall, Ft_MF_None, 0, 1, 0,
                                   NULL);
-        fp->cur_pos.x = -(fp->x68C_transNPos.z * -fp->facing_dir -
-                          (fp->cur_pos.x + vec.x));
+        fp->cur_pos.x = SWL_FMA(fp->x68C_transNPos.z, fp->facing_dir,
+                                fp->cur_pos.x + vec.x); /* fnmsubs of -facing */
     }
     ft_800843FC(gobj);
     ftCommon_8007E2FC(gobj);

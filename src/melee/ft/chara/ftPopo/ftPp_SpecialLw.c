@@ -19,6 +19,14 @@
 
 #include <trigf.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PL_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PL_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftPp_SpecialHi_80122898(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
@@ -182,7 +190,7 @@ void fn_80122D2C(Fighter_GObj* gobj)
         if (fp->mv.pp.speciallw.x0 == 0) {
             ftIceClimberAttributes* da = fp->dat_attrs;
             lb_8000B1CC(fp->parts[FtPart_L3rdNa].joint, NULL, &pos);
-            pos.x += da->xBC * fp->facing_dir;
+            pos.x = PL_FMA(da->xBC, fp->facing_dir, pos.x);
             pos.y += da->xC0;
             itClimbersBlizzard_Spawn(gobj, &pos, fp->facing_dir);
             fp->mv.pp.speciallw.x0 = da->xB8;

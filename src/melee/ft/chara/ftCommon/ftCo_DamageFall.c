@@ -28,6 +28,14 @@
 
 #include <baselib/forward.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DF_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DF_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftCo_80090574(Fighter_GObj* gobj)
 {
     ft_80081DD4(gobj);
@@ -36,7 +44,7 @@ void ftCo_80090574(Fighter_GObj* gobj)
 static u16 calcShift(float hitlag_mul, FtMotionId msid, int dmg)
 {
     ftCommonData* fcp = p_ftCommonData;
-    return fcp->x168 * ftCommon_CalcHitlag(dmg, msid, hitlag_mul) + fcp->x16C;
+    return DF_FMA(fcp->x168, ftCommon_CalcHitlag(dmg, msid, hitlag_mul), fcp->x16C);
 }
 
 void ftCo_80090594(Fighter* fp, HitElement element, int dmg, FtMotionId msid,
@@ -75,7 +83,7 @@ Vec2* ftCo_80090690(Fighter* fp, Vec2* shift)
         if (fp_x18F8 == 1) {
             float x = vec->x * fp->facing_dir;
             shift->x = fp->dmg.x1904 * x;
-            shift->y = -fp->dmg.x1900 * x + vec->y;
+            shift->y = DF_FMA(-fp->dmg.x1900, x, vec->y);
         } else {
             shift->x = vec->x * fp->facing_dir;
             shift->y = vec->y;

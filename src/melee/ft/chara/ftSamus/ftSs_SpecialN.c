@@ -29,6 +29,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SSN_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SSN_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void ftSamus_801293BC_inner(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -427,7 +435,7 @@ void ftSs_SpecialS_8012A074(Fighter_GObj* gobj)
         Vec3 position;
         fp->u.ss.x2238++;
         lb_8000B1CC(fp->parts[FtPart_56].joint, NULL, &position);
-        position.x += samus_attr->x34 * fp->facing_dir;
+        position.x = SSN_FMA(samus_attr->x34, fp->facing_dir, position.x);
 
         if (fp->motion_id == ftSs_MS_SpecialS ||
             fp->motion_id == ftSs_MS_SpecialAirS)

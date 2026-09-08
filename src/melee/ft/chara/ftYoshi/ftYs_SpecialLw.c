@@ -25,6 +25,14 @@
 #include <dolphin/mtx.h>
 #include <baselib/gobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define YL_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define YL_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 12E644 */ static void fn_8012E644(Fighter_GObj*);
 /* 12EAD8 */ static void ftYs_SpecialS_8012EAD8(Fighter_GObj*);
 
@@ -36,7 +44,7 @@ void fn_8012E644(Fighter_GObj* gobj)
     PAD_STACK(4);
 
     lb_8000B1CC(fp->parts[FtPart_TransN].joint, NULL, &transn_pos);
-    star_pos.x = (-1.0f * da->speciallw_star_offset.x) + transn_pos.x;
+    star_pos.x = YL_FMA(-1.0f, da->speciallw_star_offset.x, transn_pos.x);
     star_pos.y = transn_pos.y + da->speciallw_star_offset.y;
     star_pos.z = transn_pos.z;
     it_802B2FC8(gobj, &star_pos, -1.0f);

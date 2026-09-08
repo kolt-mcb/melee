@@ -7,6 +7,14 @@
 #include "it/it_2725.h"
 #include "it/item.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PF2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PF2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /**
  * <rei wolf> i do know 1.0f and 0.0 are swapped but idk how to get a 1.0 in
  * the higher functions x_x <Altafen#6776> itll get dead stripped by the linker
@@ -134,7 +142,7 @@ bool itNesspkfirepillar_Logic24_DmgReceived(Item_GObj* item_gobj)
     Item* item = GET_ITEM(item_gobj);
     itNessPKFirepillarAttributes* attrs =
         item->xC4_article_data->x4_specialAttributes;
-    item->xD44_lifeTimer = -((item->xC9C * attrs->x4) - item->xD44_lifeTimer);
+    item->xD44_lifeTimer = PF2_FMA(-(f32) item->xC9C, attrs->x4, item->xD44_lifeTimer); /* fnmsubs */
     if (item->xD44_lifeTimer <= 0.0F) {
         item->xD44_lifeTimer = get_min_life();
     }

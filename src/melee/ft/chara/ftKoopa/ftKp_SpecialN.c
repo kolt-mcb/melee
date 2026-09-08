@@ -20,6 +20,14 @@
 #include <melee/it/items/itkoopaflame.h>
 #include <melee/lb/lb_00B0.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KP2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KP2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static MotionFlags const ftKp_MF_SpecialN_Coll =
     ftCommon_GroundAirColl_MF | Ft_MF_SkipRumble;
 
@@ -62,8 +70,8 @@ void ftKp_SpecialLw_80134ACC(Fighter_GObj* gobj)
     enum_t* dirs = ftKp_Init_803CF2A0;
     PAD_STACK(12);
     lb_8000B1CC(fp->parts[48].joint, NULL, &v);
-    v.x += fp->x34_scale.y * (da->x24 * fp->facing_dir);
-    v.y += da->x28 * fp->x34_scale.y;
+    v.x = KP2_FMA(fp->x34_scale.y, da->x24 * fp->facing_dir, v.x);
+    v.y = KP2_FMA(da->x28, fp->x34_scale.y, v.y);
     itKoopaFlame_Spawn(gobj, &v, fp->facing_dir, fp->mv.kp.specials.x4,
                        ftKp_SpecialLw_80134ACC_inline(gobj, dirs),
                        fp->u.kp.x222C, fp->u.kp.x2230, It_Kind_Koopa_Flame);

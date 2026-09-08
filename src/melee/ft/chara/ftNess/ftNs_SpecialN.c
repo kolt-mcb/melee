@@ -22,6 +22,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define NS2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define NS2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /// SpecialN/SpecialAirN (PK Flash)
 #define FTNESS_SPECIALN_COLL_FLAG                                             \
     Ft_MF_SkipMatAnim | Ft_MF_SkipColAnim | Ft_MF_UpdateCmd |                 \
@@ -210,7 +218,7 @@ void ftNs_SpecialNStart_Anim(HSD_GObj* gobj)
 
             lb_8000B1CC(fp->parts[FtPart_L2ndNa].joint, NULL, &vec);
             vec.z = 0;
-            vec.y += 3 * fp->x34_scale.y;
+            vec.y = NS2_FMA(3.0f, fp->x34_scale.y, vec.y);
 
             {
                 HSD_GObj* pk_flash = it_802AA8C0(
@@ -331,7 +339,7 @@ void ftNs_SpecialAirNStart_Anim(HSD_GObj* gobj)
                 lb_8000B1CC(fighter_data2->parts[FtPart_L2ndNa].joint, NULL,
                             &vec);
                 vec.z = 0;
-                vec.y += 3 * fighter_data2->x34_scale.y;
+                vec.y = NS2_FMA(3.0f, fighter_data2->x34_scale.y, vec.y);
 
                 {
                     HSD_GObj* flash_GObj =

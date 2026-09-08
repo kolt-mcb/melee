@@ -695,8 +695,8 @@ bool it_3F14_Logic2_DmgReceived(Item_GObj* gobj)
                 }
             } else if ((u32) (ip->msid - 4) <= 1u) {
                 ip->xDD4_itemVar.taru.xDE4 =
-                    (-ip->xCCC_incDamageDirection * (ip->xCA0 * attr->x10)) +
-                    ip->xDD4_itemVar.taru.xDE4;
+                    TR_FMA(-ip->xCCC_incDamageDirection, ip->xCA0 * attr->x10,
+                           ip->xDD4_itemVar.taru.xDE4);
                 it_8027236C(gobj);
                 it_80275444(gobj);
             }

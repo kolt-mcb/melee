@@ -34,6 +34,14 @@ void grPura_80213250(HSD_JObj* jobj);
 #include <sysdolphin/baselib/dobj.h>
 #include "lb/lb_00F9.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PU_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PU_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* Forward declarations */
 void grPura_80211CFC(bool num);
 void grPura_80211D00(void);
@@ -355,11 +363,11 @@ void grPura_802120E0(Ground_GObj* arg0)
         gp->gv.pura.xC8 = cur + 1;
         t = (f32) cur / 3600.0f;
         sp18.r =
-            (s8) (t * (f32) ((u8) spilC.r - (u8) sp18.r) + (f32) (u8) sp18.r);
+            (s8) PU_FMA(t, (f32) ((u8) spilC.r - (u8) sp18.r), (f32) (u8) sp18.r);
         sp18.g =
-            (s8) (t * (f32) ((u8) spilC.g - (u8) sp18.g) + (f32) (u8) sp18.g);
+            (s8) PU_FMA(t, (f32) ((u8) spilC.g - (u8) sp18.g), (f32) (u8) sp18.g);
         sp18.b =
-            (s8) (t * (f32) ((u8) spilC.b - (u8) sp18.b) + (f32) (u8) sp18.b);
+            (s8) PU_FMA(t, (f32) ((u8) spilC.b - (u8) sp18.b), (f32) (u8) sp18.b);
         Ground_801C205C(&sp18);
         Camera_SetBackgroundColor(sp18.r, sp18.g, sp18.b);
         return;

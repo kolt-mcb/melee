@@ -16,6 +16,14 @@
 #include <baselib/gobjproc.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define ST_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define ST_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 struct grStory_YakumonoParam {
     float timer_min;
     float timer_rand;
@@ -282,7 +290,7 @@ void grStory_801E3418(Ground_GObj* gobj)
             it_802D8618(i, &pos, temp_r29, 25.0F * i);
 
             // Jitter the vertical position of the each subsequent shy guy
-            pos.y = 3.0F * frand_amp1() + yakumono_param->vpos[spawn_pattern];
+            pos.y = ST_FMA(3.0F, frand_amp1(), yakumono_param->vpos[spawn_pattern]);
         }
     }
 }

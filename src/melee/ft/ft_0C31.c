@@ -149,8 +149,7 @@ void ftCo_800C6408(Fighter_GObj* gobj)
         temp_r31->mv.co.entry.x28 = temp_f0_2;
         temp_r31->mv.co.entry.x20 = temp_f0_2;
         temp_r29_3 = gobj->user_data;
-        sp20.x = -(temp_r29_3->facing_dir * ftCommon_800804EC(temp_r29_3) -
-                   temp_r29_3->cur_pos.x);
+        sp20.x = EN_FMA(-temp_r29_3->facing_dir, ftCommon_800804EC(temp_r29_3), temp_r29_3->cur_pos.x);
         sp20.y = temp_r29_3->cur_pos.y;
         sp20.z = temp_r29_3->cur_pos.z;
 
@@ -252,8 +251,7 @@ void fn_800C69F4(Fighter_GObj* gobj)
             }
         }
         temp_r31_2 = GET_FIGHTER(gobj);
-        sp20.x = -(temp_r31_2->facing_dir * ftCommon_800804EC(temp_r31_2) -
-                   temp_r31_2->cur_pos.x);
+        sp20.x = EN_FMA(-temp_r31_2->facing_dir, ftCommon_800804EC(temp_r31_2), temp_r31_2->cur_pos.x);
         sp20.y = temp_r31_2->cur_pos.y;
         sp20.z = temp_r31_2->cur_pos.z;
         HSD_JObjSetTranslateWithMtxDirtyOutOfLine(temp_r31_2->x20A0_accessory,

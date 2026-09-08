@@ -53,6 +53,14 @@
 #include <melee/pl/plbonuslib.h>
 #include <melee/pl/plstale.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define TN_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define TN_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 0DE5A4 */ static void ftCo_800DE5A4(Fighter_GObj*);
 
 void ftCo_800DE3FC(Fighter_GObj* gobj, FtMotionId msid, float anim_speed)
@@ -89,8 +97,8 @@ void ftCo_800DE508(Fighter_GObj* gobj)
 
     lb_8000B1CC(fp->parts[ftParts_GetBoneIndex(fp, FtPart_XRotN)].joint, NULL,
                 &pos);
-    pos.x = (fp->facing_dir * (fp->x1A70.z * fp->x34_scale.y)) + pos.x;
-    pos.y += fp->x1A70.y * fp->x34_scale.y;
+    pos.x = TN_FMA(fp->facing_dir, fp->x1A70.z * fp->x34_scale.y, pos.x);
+    pos.y = TN_FMA(fp->x1A70.y, fp->x34_scale.y, pos.y);
     pos.z = 0.0f;
     fp->cur_pos = pos;
 }

@@ -21,6 +21,14 @@
 #include <baselib/gobj.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IE_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IE_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void it_8027870C(s32 arg0)
 {
 #if BUILD_TARGET_PC
@@ -76,11 +84,11 @@ void it_802787B4(Item_GObj* item_gobj, s32 arg1)
 static inline void it_80278800_rand_vec(Vec3* out, Vec3* v)
 {
     f32 f = HSD_Randf();
-    out->x += 2.0f * v->x * (f - 0.5f);
+    out->x = IE_FMA(2.0f * v->x, f - 0.5f, out->x);
     f = HSD_Randf();
-    out->y += 2.0f * v->y * (f - 0.5f);
+    out->y = IE_FMA(2.0f * v->y, f - 0.5f, out->y);
     f = HSD_Randf();
-    out->z += 2.0f * v->z * (f - 0.5f);
+    out->z = IE_FMA(2.0f * v->z, f - 0.5f, out->z);
 }
 
 void it_80278800(Item_GObj* item_gobj, s32 ef_id, s32 arg2, Vec3* arg3,

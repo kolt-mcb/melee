@@ -15,6 +15,14 @@
 
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define TL_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define TL_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F9260[] = {
     { 0, itTools_UnkMotion4_Anim, itTools_UnkMotion4_Phys,
       itTools_UnkMotion4_Coll },
@@ -89,7 +97,7 @@ bool itTools_UnkMotion4_Anim(Item_GObj* gobj)
     HSD_JObj* jobj = GET_JOBJ(gobj);
     itToolsAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
     f32 rz = HSD_JObjGetRotationZ(jobj);
-    rz += attrs->motions[ip->xDD4_itemVar.tools.x0].xC * ip->facing_dir;
+    rz = TL_FMA(attrs->motions[ip->xDD4_itemVar.tools.x0].xC, ip->facing_dir, rz);
     HSD_JObjSetRotationZ(jobj, rz);
     ip->xD44_lifeTimer -= 1.0f;
     if (ip->xD44_lifeTimer <= 0.0f) {

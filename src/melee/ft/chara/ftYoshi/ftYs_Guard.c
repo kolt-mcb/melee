@@ -28,6 +28,14 @@
 
 #include <baselib/forward.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define YG_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define YG_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 char ftYs_Init_DatFilename[] = "PlYs.dat";
 char ftYs_Init_DataName[] = "ftDataYoshi";
 char ftYs_Unk2_803CEAB0[] = "PlYsNr.dat";
@@ -330,9 +338,9 @@ void ftYs_Shield_8012C600(Fighter_GObj* gobj, bool arg1)
         ftParts_80074B0C(gobj, 0, 1);
     }
     inlineA0(gobj);
-    temp = (p_ftCommonData->x28C *
-            (fp->x19A4 * (1.0F - fp->lightshield_amount))) +
-           p_ftCommonData->x290;
+    temp = YG_FMA(p_ftCommonData->x28C,
+                  fp->x19A4 * (1.0F - fp->lightshield_amount),
+                  p_ftCommonData->x290);
     if (arg1 == false) {
         fp->gr_vel = temp * p_ftCommonData->x294;
         if (fp->specialn_facing_dir < 0.0F) {

@@ -19,6 +19,14 @@
 #include <baselib/jobj.h>
 #include <melee/it/item.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define EL_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define EL_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F94A0[] = {
     { -1, it_27CF_UnkMotion0_Anim, it_27CF_UnkMotion0_Phys,
       it_27CF_UnkMotion0_Coll },
@@ -175,7 +183,7 @@ bool it_27CF_Logic114_DmgReceived(Item_GObj* item_gobj)
     Item* item;
 
     item = GET_ITEM(item_gobj);
-    item->xD44_lifeTimer -= item->xCA0 * item->xDD4_itemVar.yoshiegglay.x0;
+    item->xD44_lifeTimer = EL_FMA(-(f32) item->xCA0, item->xDD4_itemVar.yoshiegglay.x0, item->xD44_lifeTimer); /* fnmsubs */
     return false;
 }
 

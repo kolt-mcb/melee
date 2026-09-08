@@ -23,6 +23,14 @@
 #include <dolphin/mtx.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define NS3_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define NS3_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 123B3C */ static void ftNn_Init_80123B3C(Fighter_GObj* nana_gobj);
 /* 123BF0 */ static void ftNn_Init_80123BF0(Fighter_GObj* gobj);
 /* 3CDD60 */ ftCollisionBox ftNn_Unk2_803CDD60 = {
@@ -293,8 +301,8 @@ static inline void ftPp_SpecialS_0_Coll_inline4(Fighter_GObj* nana_gobj,
             nana_fp->mv.pp.unk_80123954.x0 = 5;
         }
         nana_fp->cur_pos.x =
-            -((1.5f * (nana_fp->mv.pp.unk_80123954.x0 * nana_fp->facing_dir)) -
-              popo_fp->cur_pos.x);
+            NS3_FMA(-1.5f, nana_fp->mv.pp.unk_80123954.x0 * nana_fp->facing_dir,
+                    popo_fp->cur_pos.x); /* fnmsubs */
         if (!ft_80082888(nana_gobj, &ftNn_Unk2_803CDD60)) {
             ftPp_SpecialS_0_Coll_inline3(nana_gobj);
         }
@@ -350,8 +358,8 @@ static inline void ftPp_SpecialS_1_Coll_inline4(Fighter_GObj* nana_gobj,
             nana_fp->mv.pp.unk_80123954.x0 = 5;
         }
         nana_fp->cur_pos.x =
-            -((1.5f * (nana_fp->mv.pp.unk_80123954.x0 * nana_fp->facing_dir)) -
-              popo_fp->cur_pos.x);
+            NS3_FMA(-1.5f, nana_fp->mv.pp.unk_80123954.x0 * nana_fp->facing_dir,
+                    popo_fp->cur_pos.x); /* fnmsubs */
         if (ft_800824A0(nana_gobj, &ftNn_Unk2_803CDD60)) {
             ftPp_SpecialS_1_Coll_inline3(nana_gobj);
         }

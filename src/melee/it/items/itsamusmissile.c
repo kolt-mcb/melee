@@ -15,6 +15,14 @@
 #include <trigf.h>
 #include <baselib/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SM_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SM_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F7340[] = {
     { 0, itSamusmissile_UnkMotion0_Anim, itSamusmissile_UnkMotion0_Phys,
       itSamusmissile_UnkMotion0_Coll },
@@ -312,7 +320,7 @@ void itSamusmissile_UnkMotion1_Phys(Item_GObj* gobj)
         ip->xC4_article_data->x4_specialAttributes;
 
     if (ip->xDB0_itcmd_var1 != 0) {
-        ip->x40_vel.x = attrs->x30 * ip->facing_dir + ip->x40_vel.x;
+        ip->x40_vel.x = SM_FMA(attrs->x30, ip->facing_dir, ip->x40_vel.x);
         {
             float xvel = ABS(ip->x40_vel.x);
             float maxSpeed = attrs->x34;

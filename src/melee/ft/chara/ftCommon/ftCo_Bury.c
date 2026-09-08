@@ -53,6 +53,15 @@
 #include <baselib/gobj.h>
 #include <baselib/jobj.h>
 
+/* The grab-timer handicap terms: x5FC*(x600-h)+x5F8 is one fmadds, the
+ * x604 term is added plain, and percent*x60C fuses onto the sum. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define BU_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define BU_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 #pragma force_active on
 const double ftCo_804D8C28 = 4503599627370496.0;
 const double ftCo_804D8C30 = 4503601774854144.0;
@@ -239,12 +248,13 @@ void ftCo_800C0D0C(Fighter_GObj* gobj)
     ftCommon_8007E2FC(gobj);
     ftCommon_InitGrab(
         fp, 0,
-        (fp->dmg.x1830_percent * p_ftCommonData->x60C) +
-            ((p_ftCommonData->x5FC *
-              (p_ftCommonData->x600 - Player_GetHandicap(fp->player_id))) +
-             p_ftCommonData->x5F8 +
-             (p_ftCommonData->x604 *
-              (p_ftCommonData->x608 - (Player_80033BB8(fp->player_id) + 1)))));
+        BU_FMA(fp->dmg.x1830_percent, p_ftCommonData->x60C,
+               BU_FMA(p_ftCommonData->x5FC,
+                      p_ftCommonData->x600 - Player_GetHandicap(fp->player_id),
+                      p_ftCommonData->x5F8) +
+                   (p_ftCommonData->x604 *
+                    (p_ftCommonData->x608 -
+                     (Player_80033BB8(fp->player_id) + 1)))));
     ftCommon_8007E2F4(fp, 0x1FF);
     fp->x221D_b5 = true;
     fp->x2220_b3 = true;

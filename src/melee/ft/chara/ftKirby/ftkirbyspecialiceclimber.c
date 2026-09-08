@@ -31,6 +31,14 @@
 #include <baselib/random.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KI_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KI_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 1090D4 */ static void fn_801090D4(Fighter_GObj*);
 
 void ftKb_SpecialNIc_80108CE8(Fighter_GObj* gobj, Item_GObj* it_gobj)
@@ -186,7 +194,7 @@ void fn_801090D4(Fighter_GObj* gobj)
         Vec3 pos;
         PAD_STACK(8);
         lb_8000B1CC(fp->parts[0].joint, NULL, &pos);
-        pos.x += da->specialn_pp_x_spawn * fp->facing_dir;
+        pos.x = KI_FMA(da->specialn_pp_x_spawn, fp->facing_dir, pos.x);
         pos.y += da->specialn_pp_y_spawn + fp->u.kb.xC8;
         fp->u.kb.xC0 = it_802C1590(gobj, &pos, It_Kind_Kirby_IceClimberIce,
                                    fp->facing_dir);
