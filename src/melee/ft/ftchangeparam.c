@@ -10,6 +10,13 @@
 #include <melee/ft/fighter.h>
 #include <melee/ft/inlines.h>
 
+/* The console fuses a*b+c into one rounding; x86 rounds twice. */
+#if BUILD_TARGET_PC
+#define CP_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define CP_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 float ftCo_CalcYScaledKnockback(float arg0, float scale, float arg2)
 {
     HSD_ASSERT(0x1E, scale != 0.0F);
@@ -20,7 +27,11 @@ float ftCo_CalcYScaledKnockback(float arg0, float scale, float arg2)
         return arg0 / ftCo_CalcYScaledKnockback(1.0F, scale, -arg2);
     }
     if (scale >= 1.0F || arg2 <= 1.0F) {
-        return (scale - 1.0F) * arg0 * arg2 + arg0;
+        /* 800CF678 / 800CF6B8: (scale - 1) * arg0 is a plain fmuls, and
+         * arg2 * that + arg0 is one fmadds. ftCo_800CF6E8 inlines this
+         * thirty-seven times, once per scaled attribute, so this one
+         * line is every fused op in that file. */
+        return CP_FMA(arg2, (scale - 1.0F) * arg0, arg0);
     }
     return arg0 * scale / arg2;
 }
