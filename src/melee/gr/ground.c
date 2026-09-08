@@ -485,6 +485,35 @@ void* Ground_801C49F8(void)
         /* grzebes.c grZe_YakumonoParam -- f32/s32 through 0x9C, then
          * grZe_AcidLevelEntry[30], four s16 apiece, from 0xA0 to 0x190. */
         return pc_yakumono_convert(0x190, 0xA0);
+    case Gr_Kind_RCruise:
+        /* grrcruise.c grRc_804D6A10 -- f32/s32 through 0x44. */
+        return pc_yakumono_convert(0x48, 0x48);
+    case Gr_Kind_BigBlueRoute:
+        /* grbigblueroute.c grBb_Route_804D6A68 -- the fields it reads are
+         * all 32-bit (x0, x4, x20, x3C..x4C); the padding between them is
+         * never read, so a word swap is right for every read. */
+        return pc_yakumono_convert(0x50, 0x50);
+    case Gr_Kind_OldKongo:
+        /* groldkongo.c grOk_804D6A90 -- two s16, ten 32-bit, eight s16,
+         * thirteen 32-bit; 0x70. This is why a whole-block word swap
+         * stopped Old Kongo: the s16 pairs come out crossed. */
+        return pc_yakumono_convert_layout("22" "4444444444" "22222222"
+                                          "4444444444444");
+    case Gr_Kind_ShrineRoute:
+        /* grshrineroute.c grSh_Route_804D6A58 -- ten 32-bit, then a
+         * grZakoGenerator_SpawnDesc (u16, u8, u8); 0x2C. */
+        return pc_yakumono_convert_layout("4444444444" "211");
+    case Gr_Kind_Castle:
+        /* grcastle.c grCastleParams -- s16 x8, f32 x3, pad, f32 x8, s16 x3,
+         * pad, f32 x3, (s16, pad) x2, nine grCastleParams_Entry {s16, pad,
+         * f32, Vec3}, f32, s32, f32 x4, pad, s16 x4; 0x134. The s16 runs
+         * are why the whole-block word swap stopped Castle. */
+        return pc_yakumono_convert_layout(
+            "22222222" "444" "4" "44444444" "222" "2" "444" "2" "2" "2" "2"
+            "211" "4" "444" "211" "4" "444" "211" "4" "444"
+            "211" "4" "444" "211" "4" "444" "211" "4" "444"
+            "211" "4" "444" "211" "4" "444" "211" "4" "444"
+            "4" "4" "4444" "4" "2222");
     default:
         break;
     }
@@ -3516,6 +3545,10 @@ void* Ground_GetYakumonoParam(void)
         case Gr_Kind_Story:       layout = "444444444"; break;    /* 0x24 */
         case Gr_Kind_Yorster:     layout = "44444444"; break;     /* 0x20 */
         case Gr_Kind_ZebesRoute:  layout = "44"; break;           /* 0x08 */
+        case Gr_Kind_Venom:       /* grvenom.c grVenom_YakumonoParam: the read
+                                   * fields (x0..x10, x2C, x34, x38) are all
+                                   * 32-bit; the two opaque runs are unread */
+            layout = "444444444444444"; break;                   /* 0x3C */
         case Gr_Kind_Kongo:       /* grkongo.static.h: 0x44 of 32-bit, eight
                                    * s16 at 0x44..0x54, 32-bit to 0xBC */
             layout = "44444444444444444" "22222222" "4444444444444444444444444444"; break;

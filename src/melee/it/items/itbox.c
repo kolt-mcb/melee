@@ -30,8 +30,10 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define IB_FMA(a, b, c) fmaf((a), (b), (c))
+#define IB_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define IB_FMA(a, b, c) ((a) * (b) + (c))
+#define IB_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
 static double const ROT_VEL_SCALE = 0.03490658476948738;

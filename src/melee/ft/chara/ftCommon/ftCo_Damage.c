@@ -62,6 +62,15 @@
 #include <baselib/random.h>
 #include <MetroTRK/intrinsics.h>
 
+#if BUILD_TARGET_PC
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#define DMG_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DMG_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 int ftCo_803C5520[2][12] = {
     { 81, 78, 75, 82, 79, 76, 83, 80, 77, 89, 88, 87 },
     { 84, 84, 84, 85, 85, 85, 86, 86, 86, 89, 88, 87 },
@@ -606,14 +615,6 @@ void ftCo_Damage_OnEveryHitlag(Fighter_GObj* gobj)
  * two hundred frames later. Which operand is the fused one is taken from
  * the instruction stream, not guessed: the x square is the plain multiply
  * and the y square is the addend. */
-#if BUILD_TARGET_PC
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#define DMG_FMA(a, b, c) fmaf((a), (b), (c))
-#else
-#define DMG_FMA(a, b, c) ((a) * (b) + (c))
-#endif
 
 void ftCo_8008E5A4(Fighter* fp)
 {
