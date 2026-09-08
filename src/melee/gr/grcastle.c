@@ -49,6 +49,14 @@ typedef struct unkCastle {
 #include <MetroTRK/intrinsics.h>
 #include <MSL/trigf.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define CS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define CS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* Forward declarations */
 void grCastle_801CF750(Ground* gp, s32 arg1, CollData* cd, s32 arg3, mpLib_GroundEnum arg4, f32 arg5);
 
@@ -625,7 +633,7 @@ void grCastle_801CDC44(Ground_GObj* gobj)
                 f32 max_val;
                 f32 cur;
 
-                speed = wind * grCs_804D6970->x20 + grCs_804D6970->x24;
+                speed = CS_FMA(wind, grCs_804D6970->x20, grCs_804D6970->x24);
                 if (speed > speed_cap) {
                     speed = speed_cap;
                 }
@@ -655,7 +663,7 @@ void grCastle_801CDC44(Ground_GObj* gobj)
                 f32 cur;
                 f32 min_val;
 
-                speed = wind * grCs_804D6970->x2C + grCs_804D6970->x30;
+                speed = CS_FMA(wind, grCs_804D6970->x2C, grCs_804D6970->x30);
                 if (speed > speed_cap) {
                     speed = speed_cap;
                 }

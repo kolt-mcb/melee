@@ -11,6 +11,14 @@
 #include <baselib/debug.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define STG_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define STG_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 extern struct StageInfo stage_info;
 
 /// One #stage_id_map entry: the #GrKind for a #StKind.
@@ -192,8 +200,8 @@ void Stage_80224CAC(Vec3* arg0)
         Vec3 last_vec;
         f32 temp_f4 = (arg0->z / -another_vec.z);
 
-        last_vec.x = (another_vec.x * temp_f4) + arg0->x;
-        last_vec.y = (another_vec.y * temp_f4) + arg0->y;
+        last_vec.x = STG_FMA(another_vec.x, temp_f4, arg0->x);
+        last_vec.y = STG_FMA(another_vec.y, temp_f4, arg0->y);
         last_vec.z = 0.0F;
         *arg0 = last_vec;
     }

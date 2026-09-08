@@ -15,6 +15,14 @@
 #include <math.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KL_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KL_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F8940[] = {
     {
         0,
@@ -290,8 +298,8 @@ void it_802E215C(Item_GObj* gobj)
     Quaternion quat;
 
     Ground_801C4DA0(&pos, &angle);
-    pos.x += 6.0f * -sinf(angle);
-    pos.y += 6.0f * cosf(angle);
+    pos.x = KL_FMA(6.0f, -sinf(angle), pos.x);
+    pos.y = KL_FMA(6.0f, cosf(angle), pos.y);
     ip->pos = pos;
     HSD_JObjSetTranslate(jobj, &ip->pos);
     quat.x = 1.5707964f;

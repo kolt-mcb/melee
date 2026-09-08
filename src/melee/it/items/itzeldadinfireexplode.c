@@ -15,6 +15,14 @@
 #include "it/itcoll.h"
 #include "it/item.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DE_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DE_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 2C4998 */ bool itZeldadinfireexplode_UnkMotion0_Coll(Item_GObj* gobj);
 
 ItemStateTable it_803F7740[] = { { 0, itZeldadinfireexplode_UnkMotion0_Anim,
@@ -109,12 +117,12 @@ bool itZeldadinfireexplode_UnkMotion0_Anim(Item_GObj* gobj)
 
     temp_f1 = (attrs->x8 - attrs->x4) / attrs->x0;
     scale.x = scale.y = scale.z =
-        ip->xDD4_itemVar.zeldadinfireexplode.xDD4 * temp_f1 + attrs->x4;
+        DE_FMA(ip->xDD4_itemVar.zeldadinfireexplode.xDD4, temp_f1, attrs->x4);
     HSD_JObjSetScale(jobj, &scale);
 
     if (ip->x5D4_hitboxes[0].hit.state != HitCapsule_Disabled) {
-        temp_f1 = (ip->xDD4_itemVar.zeldadinfireexplode.xDD4 * attrs->x10 +
-                   attrs->xC);
+        temp_f1 = DE_FMA(ip->xDD4_itemVar.zeldadinfireexplode.xDD4, attrs->x10,
+                         attrs->xC);
         it_80272460(&ip->x5D4_hitboxes[0].hit, temp_f1, gobj);
 
         if (ip->xDD4_itemVar.zeldadinfireexplode.xDD8 == 0.0f) {

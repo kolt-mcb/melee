@@ -23,6 +23,14 @@
 #include <baselib/dobj.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define C7_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define C7_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 HSD_MObj* ft_804D6580;
 
 bool ftCo_800C7CA0(Fighter_GObj* gobj)
@@ -113,8 +121,8 @@ void fn_800C7DC4(HSD_GObj* gobj, s32 motion_state, Vec3* normal, Vec3* offset)
         goto t2;
     }
 t1:
-    fp->cur_pos.x = -(fp->x68C_transNPos.z * -fp->facing_dir -
-                      (fp->cur_pos.x + offset->x));
+    fp->cur_pos.x = C7_FMA(fp->x68C_transNPos.z, fp->facing_dir,
+                           fp->cur_pos.x + offset->x); /* fnmsubs of -facing */
     goto end;
 t2:
     fp->cur_pos.y = fp->x68C_transNPos.y + (fp->cur_pos.y + offset->y);

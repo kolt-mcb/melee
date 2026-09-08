@@ -19,6 +19,14 @@
 #include <string.h>
 #include <trigf.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PT_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PT_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 2AC000 */ static bool itNesspkthunderball_UnkMotion0_Coll(Item_GObj* gobj);
 
 ItemStateTable it_803F6BC8[] = { { 0, itNesspkthunderball_UnkMotion0_Anim,
@@ -330,11 +338,13 @@ void itNesspkthunderball_UnkMotion0_Phys(Item_GObj* gobj)
 
             if (angle >= deg_to_rad * 45.0f) {
                 if (cross.z > 0.0f) {
-                    ip->xDD4_itemVar.pkthunder.angles[0] +=
-                        deg_to_rad * attr->x10_PKTHUNDER_TURN_RADIUS;
+                    ip->xDD4_itemVar.pkthunder.angles[0] =
+                        PT_FMA(deg_to_rad, attr->x10_PKTHUNDER_TURN_RADIUS,
+                               ip->xDD4_itemVar.pkthunder.angles[0]);
                 } else if (cross.z < 0.0f) {
-                    ip->xDD4_itemVar.pkthunder.angles[0] -=
-                        deg_to_rad * attr->x10_PKTHUNDER_TURN_RADIUS;
+                    ip->xDD4_itemVar.pkthunder.angles[0] =
+                        PT_FMA(-deg_to_rad, attr->x10_PKTHUNDER_TURN_RADIUS,
+                               ip->xDD4_itemVar.pkthunder.angles[0]); /* fnmsubs */
                 }
             }
             if (angle < deg_to_rad * 45.0f) {

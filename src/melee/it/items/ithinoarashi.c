@@ -20,6 +20,14 @@
 #include <math.h>
 #include <trigf.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define HA_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define HA_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 2D60C8 */ static bool itHinoarashi_UnkMotion2_Anim(Item_GObj* gobj);
 
 ItemStateTable it_803F8270[] = {
@@ -291,7 +299,7 @@ void it_802D64B8(HSD_GObj* gobj, Vec3* pos, u32 arg2, f32 facing_dir)
             {
                 f32 rand = HSD_Randf();
                 f32 new_var; // permuterslop
-                f32 a = (attr->x14 - attr->x10) * (new_var = rand) + attr->x10;
+                f32 a = HA_FMA(attr->x14 - attr->x10, (new_var = rand), attr->x10);
                 angle = ((new_ip->facing_dir == 1.0f) ? a : -a) - M_PI_2;
             }
 
@@ -306,7 +314,7 @@ void it_802D64B8(HSD_GObj* gobj, Vec3* pos, u32 arg2, f32 facing_dir)
             {
                 f32 rand = HSD_Randf();
                 f32 new_var;
-                speed = ((attr->x8 - attr->x4) * (new_var = rand)) + attr->x4;
+                speed = HA_FMA(attr->x8 - attr->x4, (new_var = rand), attr->x4);
             }
             new_ip->x40_vel.x = speed * cosf(angle);
             new_ip->x40_vel.y = speed * sinf(angle);

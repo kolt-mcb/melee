@@ -16,6 +16,14 @@
 
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KG2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KG2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F7AD8[] = {
     { 0, itKabigon_UnkMotion0_Anim, itKabigon_UnkMotion0_Phys,
       itKabigon_UnkMotion0_Coll },
@@ -220,9 +228,9 @@ void it_802CA3F4(Item_GObj* gobj)
     f32 r;
 
     r = HSD_Randf();
-    pos.x += 2.0F * attr->x18 * r - attr->x18;
+    pos.x += KG2_FMA(2.0F * attr->x18, r, -attr->x18); /* fmsubs */
     r = HSD_Randf();
-    pos.y += 2.0F * attr->x18 * r - attr->x18;
+    pos.y += KG2_FMA(2.0F * attr->x18, r, -attr->x18); /* fmsubs */
 
     efSync_Spawn(0x405, gobj, &pos);
 }

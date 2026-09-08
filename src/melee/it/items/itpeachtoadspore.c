@@ -18,6 +18,14 @@
 
 #include <math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define TS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define TS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F7548[] = { {
     0,
     itPeachtoadspore_UnkMotion0_Anim,
@@ -58,12 +66,12 @@ void it_802BE2E8(Item_GObj* item_gobj, HSD_GObj* arg1)
     item_1->xDAC_itcmd_var0 = 0;
 
     rand = HSD_Randf();
-    speed = attr->x0_min_speed + attr->x4_max_speed_offset * rand;
+    speed = TS_FMA(attr->x4_max_speed_offset, rand, attr->x0_min_speed);
 
     rand = HSD_Randf();
     double_angle = ((f32) M_PI) - attr->xc_angle;
     angle_offset = attr->xc_angle * rand;
-    angle = 0.5F * double_angle + angle_offset;
+    angle = TS_FMA(0.5F, double_angle, angle_offset);
 
     item_1->x40_vel.x = item_1->facing_dir * (speed * sinf(angle));
     item_1->x40_vel.y = speed * cosf(angle);
