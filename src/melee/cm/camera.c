@@ -438,8 +438,10 @@ void Camera_800293E0(void)
 #if BUILD_TARGET_PC
 #include <math.h>
 #define CM_FMA(a, b, c) fmaf((a), (b), (c))
+#define CM_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define CM_FMA(a, b, c) ((a) * (b) + (c))
+#define CM_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
 void Camera_8002958C(CameraBounds* bounds, CameraTransformState* transform)
@@ -1044,10 +1046,10 @@ void Camera_8002A0C0(CameraBounds* bounds, CameraTransformState* state)
             (bounds->z_pos - Stage_GetCamZoomRate()) / depth_factor_x;
     }
 
-    depth_factor_y =
-        (depth_ratio * (cm_803BCCA0.x5C - cm_803BCCA0.x54)) + cm_803BCCA0.x54;
+    depth_factor_y = /* 8002A230/A234: fmadds onto the low end */
+        CM_FMA(depth_ratio, cm_803BCCA0.x5C - cm_803BCCA0.x54, cm_803BCCA0.x54);
     depth_factor_x =
-        (depth_ratio * (cm_803BCCA0.x60 - cm_803BCCA0.x58)) + cm_803BCCA0.x58;
+        CM_FMA(depth_ratio, cm_803BCCA0.x60 - cm_803BCCA0.x58, cm_803BCCA0.x58);
     {
         f32 tx = depth_factor_x * (input_x * viewport_x_scale);
         f32 ty = depth_factor_y * (input_y * viewport_y_scale);
@@ -1572,7 +1574,7 @@ void Camera_8002B0E0(void)
         } else {
             cm_80452C68.x2BA = cm_803BCCA0.xE0;
         }
-        cm_80452C68.x2BC -= var_f2 * cm_803BCCA0.xD4;
+        cm_80452C68.x2BC = CM_FMA(-var_f2, cm_803BCCA0.xD4, cm_80452C68.x2BC); /* fnmsubs 8002B1B4 */
         if (cm_80452C68.x2BC < cm_803BCCA0.xDC) {
             cm_80452C68.x2BC = cm_803BCCA0.xDC;
             return;
@@ -1964,9 +1966,10 @@ void Camera_8002BAA8(f32 zoom_amt)
         cm_80452C68.pause_eye_distance = 10.0F;
     }
 
+    /* 8002BBBC/BBC0: both products fused, the inner one first. */
     cm_80452C68.pause_eye_distance =
-        ((zoom_amt * ((offset_len * cm_803BCCA0.x9C) + cm_803BCCA0.xA0)) +
-         cm_80452C68.pause_eye_distance);
+        CM_FMA(zoom_amt, CM_FMA(offset_len, cm_803BCCA0.x9C, cm_803BCCA0.xA0),
+               cm_80452C68.pause_eye_distance);
 
     if (cm_80452C68.pause_eye_distance < cm_80452C68.x2D0.unk28) {
         cm_80452C68.pause_eye_distance = cm_80452C68.x2D0.unk28;
@@ -2062,7 +2065,7 @@ void Camera_8002BD88(f32 x, f32 y)
     cm_80452C68.pause_up = up;
 
     if (y != 0.0F) {
-        scale = y * ((view_dir * cm_803BCCA0.xBC) + cm_803BCCA0.xC0);
+        scale = y * CM_FMA(view_dir, cm_803BCCA0.xBC, cm_803BCCA0.xC0); /* 8002BF20 */
         up.x *= scale;
         up.y *= scale;
         up.z *= scale;
@@ -2070,7 +2073,7 @@ void Camera_8002BD88(f32 x, f32 y)
     }
 
     if (x != 0.0F) {
-        scale = x * ((view_dir * cm_803BCCA0.xBC) + cm_803BCCA0.xC0);
+        scale = x * CM_FMA(view_dir, cm_803BCCA0.xBC, cm_803BCCA0.xC0); /* 8002BF74 */
         right.x *= -scale;
         right.y *= -scale;
         right.z *= -scale;
@@ -2112,7 +2115,7 @@ void Camera_8002C010(f32 farg0, f32 farg1)
     Camera_8002BC78(&forward, &up, &right);
 
     if (farg1 != 0.0f) {
-        movement_scale = (eye_dist * cm_803BCCA0.xB4) + cm_803BCCA0.xB8;
+        movement_scale = CM_FMA(eye_dist, cm_803BCCA0.xB4, cm_803BCCA0.xB8); /* 8002C104 */
         scale = farg1 * movement_scale;
         up.x *= scale;
         up.y *= scale;
@@ -2121,7 +2124,7 @@ void Camera_8002C010(f32 farg0, f32 farg1)
     }
 
     if (farg0 != 0.0f) {
-        scale = farg0 * ((eye_dist * cm_803BCCA0.xB4) + cm_803BCCA0.xB8);
+        scale = farg0 * CM_FMA(eye_dist, cm_803BCCA0.xB4, cm_803BCCA0.xB8); /* 8002C158 */
         right.x *= -scale;
         right.y *= -scale;
         right.z *= -scale;
@@ -2216,7 +2219,7 @@ void Camera_8002C1A8(void)
     }
 
     if (dir != 0) {
-        scale = cm_80452C68.x32C * cm_803BCCA0.x8C + cm_803BCCA0.x90;
+        scale = CM_FMA(cm_80452C68.x32C, cm_803BCCA0.x8C, cm_803BCCA0.x90);
         cm_80452C68.x304 = Camera_8002BA00(cm_80452C68.x304, dir);
         slot = cm_80452C68.x304;
         cm_80452C68.x314.x = cm_80452C68.x314.y = cm_80452C68.x314.z = 0.0f;
@@ -2453,7 +2456,8 @@ static inline void track_subject(CameraTransformState* transform,
 
     cm_80452C68.transform.target_fov = *target_fov;
     delta = cm_80452C68.transform.target_fov - cm_80452C68.transform.fov;
-    cm_80452C68.transform.fov += delta * *fov_rate;
+    cm_80452C68.transform.fov =
+        CM_FMA(delta, *fov_rate, cm_80452C68.transform.fov); /* 8002D06C.. */
 }
 
 /// @todo this and Camera_8002C908 share the body of track_subject, there
@@ -2517,7 +2521,8 @@ void Camera_8002C908(void* arg0)
 
     cm_80452C68.transform.target_fov = cm_80452C68.x32C;
     delta = cm_80452C68.transform.target_fov - cm_80452C68.transform.fov;
-    cm_80452C68.transform.fov += delta * cm_803BCCA0.x88;
+    cm_80452C68.transform.fov =
+        CM_FMA(delta, cm_803BCCA0.x88, cm_80452C68.transform.fov); /* 8002CAE0 */
 
     Camera_8002A28C(&bounds);
     Camera_8002A0C0(&bounds, &cm_80452C68.transform);
@@ -3066,7 +3071,7 @@ bool Camera_8002E158(f32* arg0, f32 farg0, f32 farg1)
     if (ret) {
         *arg0 = farg1;
     } else {
-        *arg0 = (var_f4 * (farg1 - farg0)) + farg0;
+        *arg0 = CM_FMA(var_f4, farg1 - farg0, farg0); /* 8002E220 */
     }
 
     return ret;
@@ -3205,8 +3210,9 @@ void Camera_8002E490(void* unused)
         }
         break;
     case 2:
-        cm_80452C68.x378.f32 +=
-            (1.0f - cm_80452C68.x378.f32) * cm_80452C68.x37C.f32;
+        cm_80452C68.x378.f32 = CM_FMA(1.0f - cm_80452C68.x378.f32,
+                                      cm_80452C68.x37C.f32,
+                                      cm_80452C68.x378.f32); /* 8002E6A0 */
         if (cm_80452C68.x378.f32 > 0.999f) {
             cm_80452C68.x378.f32 = 1.0f;
         }
@@ -3790,14 +3796,15 @@ void Camera_8002F7AC(s8 slot)
             randf = HSD_Randf();
             // pitch between +-pi/16
             // (M_PI_8 * randf) - M_PI_16
-            cm_80452C68.pitch_offset = (((M_PI / 8) * randf) - (M_PI / 16));
+            /* 8002F89C: fmsub in double on the widened randf, rounded to single once */
+            cm_80452C68.pitch_offset = CM_FMAD(M_PI / 8, randf, -(M_PI / 16));
             return;
         }
     }
     // random pitch and yaw if no player or cambox
-    cm_80452C68.pitch_offset = (((M_PI / 8) * HSD_Randf()) - (M_PI / 16));
+    cm_80452C68.pitch_offset = CM_FMAD(M_PI / 8, HSD_Randf(), -(M_PI / 16));
     randf = HSD_Randf();
-    cm_80452C68.yaw_offset = ((M_TAU * randf) - M_PI);
+    cm_80452C68.yaw_offset = CM_FMAD(M_TAU, randf, -M_PI); /* 8002F8D0 */
 }
 
 void Camera_SetModeToFixed(void)
@@ -3853,7 +3860,7 @@ void Camera_8002F9E4(s8 arg0, s8 arg1)
     cm_80452C68.x2D0.angle_right = Stage_GetCamAngleRadiansRight();
     cm_80452C68.x2D0.angle_left = Stage_GetCamAngleRadiansLeft();
 
-    scale = cm_80452C68.x32C * cm_803BCCA0.x8C + cm_803BCCA0.x90;
+    scale = CM_FMA(cm_80452C68.x32C, cm_803BCCA0.x8C, cm_803BCCA0.x90);
     cm_80452C68.x2D0.unk28 = scale * cm_803BCCA0.x94;
     cm_80452C68.x2D0.unk2C = scale * cm_803BCCA0.x98;
     cm_80452C68.x2D0.callback = (void (*)(Camera_x2D0*))(Event) fn_8002F908;
@@ -3935,7 +3942,7 @@ void Camera_8002FC7C(s8 arg0, s8 arg1)
     cm_80452C68.x2D0.angle_down = Stage_GetCamAngleRadiansDown();
     cm_80452C68.x2D0.angle_right = Stage_GetCamAngleRadiansRight();
     cm_80452C68.x2D0.angle_left = Stage_GetCamAngleRadiansLeft();
-    temp_f2 = (cm_80452C68.x32C * (*new_var).x8C) + (*new_var).x90;
+    temp_f2 = CM_FMA(cm_80452C68.x32C, (*new_var).x8C, (*new_var).x90);
     cm_80452C68.x2D0.unk28 = temp_f2 * (*new_var).x94;
     cm_80452C68.x2D0.unk2C = temp_f2 * (*new_var).x98;
     cm_80452C68.x2D0.callback = (void (*)(Camera_x2D0*))(Event) fn_8002FBA0;
