@@ -1505,7 +1505,17 @@ void pc_trace_frame(int frame)
                      * level. Correct the live AI struct too, up to the point
                      * the match starts. */
                     if (gm_8016AEDC() <= 2) {
-                        HSD_GObj* g = sp->player_entity[0];
+                        /* Both entities, not just the first.
+                         * player_entity[1] is the follower -- Nana -- and she
+                         * is a fighter with an AI struct of her own, created
+                         * in the same load and drawing from the same stream.
+                         * Forcing only the leader left the Ice Climbers
+                         * parting from the console on match frame 14 with
+                         * three extra draws, the same signature the leaders
+                         * had on frame 35. */
+                        int ei;
+                        for (ei = 0; ei < 2; ei++) {
+                        HSD_GObj* g = sp->player_entity[ei];
                         Fighter* fp = (g != NULL) ? (Fighter*) g->user_data
                                                   : NULL;
                         if (fp != NULL) {
@@ -1565,6 +1575,7 @@ void pc_trace_frame(int frame)
                                 fp->x1A88.x34 =
                                     (10 - lvl[slot]) * 22 + 10;
                             }
+                        }
                         }
                     }
                 }
