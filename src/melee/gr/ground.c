@@ -439,7 +439,28 @@ void* Ground_801C49F8(void)
      * conversion has to be per stage, driven by each grXx_YakumonoParam.
      *
      * So: NULL by default, with a per-stage conversion added as each layout
-     * is read and measured. */
+     * is read and measured.
+     *
+     * What the NULL costs, measured 2026-09-07 with MELEE_STAGE_DIAG, which
+     * counts the x280[] spawn slots Ground_801C34AC manages to fill:
+     *
+     *     Izumi 18   Castle 19   Kongo 22   Zebes 23   Onett 23
+     *     Icemt 53   Last 21     MuteCity 0            OldKongo 0
+     *
+     * Mute City and Old Kongo fill none, because grMuteCity_801EFC6C -- and
+     * its opposite number in grcastle.c -- returns the moment this yields
+     * NULL, and the stage's whole init goes with it, the spawn-point walk
+     * included. Both then start their fighters somewhere the console does
+     * not: Mute City puts p0 at x -4.5 against a console -39.0, Old Kongo at
+     * -4.5 against -58.0. Every character, every run.
+     *
+     * And yakumono_param is not the block Mute City wants, on structure
+     * rather than on crashes this time. Its first two words are relocated
+     * pointers into GX display-list data (0x48000000, 0x2c000002...) and the
+     * next two point at small integer tables, where grMc_UnkStruct expects an
+     * int, an int, and two DynamicsDesc -- whose own {data, count, pos} does
+     * not fit what is there either (data would be 1). Read straight out of
+     * orig/GALE01/GrMc.dat at the yakumono_param public. */
 #if BUILD_TARGET_PC
     switch (stage_info.grkind) {
     case Gr_Kind_Fourside:
@@ -2130,7 +2151,18 @@ bool Ground_801C2D24(enum_t arg0, Vec3* arg1)
      *
      * Defining the output turns "no spawn point" into the origin, which is a
      * wrong answer but the same wrong answer every time -- and the stage is
-     * playable from it. The spawn data itself is still missing. */
+     * playable from it.
+     *
+     * The data is NOT missing, which is worth saying because this comment
+     * used to claim it was and that is where anyone reading would stop.
+     * GrNKr's map_head carries two spawn entries and the second one's pair
+     * table names slots 0 and 4 (joint indices 12 and 23); the stage simply
+     * does not define slots 1 to 3, which is why the fallback below sends
+     * them to slot 0. Mute City has all five. Both were read straight out of
+     * orig/GALE01 -- take the map_head public as UnkStageDat_gcn, walk the
+     * 12-byte entries, and the pairs are big-endian s16 couples of (joint
+     * index, x280 slot). So a stage that comes up with an empty x280[] here
+     * failed to walk to those joints, and that is the thing to fix. */
     arg1->x = arg1->y = arg1->z = 0.0f;
 #endif
     if (arg0 == 8) {
@@ -2559,7 +2591,18 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
             fprintf(stderr, "[X280]   slot=%d <- jobj=%p (joint idx %d)\n",
                     (int) pair[1], (void*) jobj, (int) pair[0]);
         }
-        if ((unsigned) pair[1] >= 0x100u) { pair += 2; continue; }
+        /* A slot index this large is not a slot: the pairs are big-endian
+         * s16 in the file, and an unswapped one reads as thousands. Skipping
+         * it keeps the walk from writing outside x280[], but a stage that
+         * trips this has lost a spawn point, and a lost spawn point is why a
+         * fighter starts the match somewhere the console does not. Count it
+         * so the character-by-stage sweep can say which stages are missing
+         * one rather than leaving it to be inferred from a position. */
+        if ((unsigned) pair[1] >= 0x100u) {
+            port_guard_warn("ground.c:x280-slot-out-of-range");
+            pair += 2;
+            continue;
+        }
 #endif
         stage_info.x280[pair[1]] = jobj;
         pair += 2;
