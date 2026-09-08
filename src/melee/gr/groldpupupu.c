@@ -25,6 +25,14 @@
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define OP_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define OP_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 struct grOldpupupu_YakumonoParam {
     s16 x0;
     s16 x2;
@@ -392,18 +400,18 @@ void grOldPupupu_80210D10(Ground_GObj* gobj)
             if (cam_right < 200.0F) {
                 cam_right = 200.0F;
             }
-            x = -(((f32) count * step) - (50.0F + cam_right));
+            x = OP_FMA(-(f32) count, step, 50.0F + cam_right); /* fnmsubs */
         } else {
             step = 10.0F;
             if (cam_left > -200.0F) {
                 cam_left = -200.0F;
             }
-            x = -(((f32) count * step) - (cam_left - 50.0F));
+            x = OP_FMA(-(f32) count, step, cam_left - 50.0F);
         }
         {
             f32 rand = HSD_Randf();
             y = direction *
-                (((f32) yakumono_param->x4 * ((2.0F * rand) - 1.0F)) + 20.0F);
+                OP_FMA((f32) yakumono_param->x4, OP_FMA(2.0F, rand, -1.0F), 20.0F);
         }
         z = -150.0F * direction;
         for (i = 0; i < count; i++) {

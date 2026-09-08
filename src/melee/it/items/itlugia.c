@@ -18,6 +18,14 @@
 #include <math.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define LG_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define LG_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F7EE8[] = {
     { 0, it_802D1DB4, it_802D1DD8, it_802D1E64 },
     { 1, itLugia_UnkMotion1_Anim, itLugia_UnkMotion1_Phys,
@@ -230,7 +238,7 @@ void it_802D1830(Item_GObj* gobj)
     disc = ip->pos.y - ip->xDD4_itemVar.lugia.x64.y;
     x18 = attrs->x18;
     prod = 8.0f * x18;
-    sqrtval = my_sqrtf_accurate(-((prod * -disc) - (x18 * x18)));
+    sqrtval = my_sqrtf_accurate(LG_FMA(-prod, -disc, x18 * x18)); /* fnmsubs */
     ip->xDD4_itemVar.lugia.xE50.x = -((-x18 + sqrtval) / 2);
 }
 
@@ -453,17 +461,18 @@ void it_802D208C(Item_GObj* gobj)
         random_offset = HSD_Randi(((attrs->x34 - attrs->x38) / 2));
 
         if (HSD_Rand() % 2 != 0) {
-            new_angle = (random_offset +
-                         (ip->xDD4_itemVar.lugia.xA4 - attrs->x34 / 2));
+            /* 802D2158: xA4 - x34*0.5 is one fnmsubs, then + offset */
+            new_angle = random_offset + LG_FMA(-attrs->x34, 0.5f,
+                                               (f32) ip->xDD4_itemVar.lugia.xA4);
         } else {
-            new_angle = (random_offset +
-                         (ip->xDD4_itemVar.lugia.xA4 + attrs->x38 / 2));
+            new_angle = random_offset + LG_FMA(attrs->x38, 0.5f,
+                                               (f32) ip->xDD4_itemVar.lugia.xA4);
         }
 
         target = ip->xDD4_itemVar.lugia.x8C;
         angle = deg_to_rad * new_angle;
-        target.x += attrs->x3C * cosf(angle);
-        target.y += attrs->x3C * sinf(angle);
+        target.x = LG_FMA(attrs->x3C, cosf(angle), target.x);
+        target.y = LG_FMA(attrs->x3C, sinf(angle), target.y);
 
         // permuterslop
         dx = dz = ip->xDD4_itemVar.lugia.x64.x - target.x;

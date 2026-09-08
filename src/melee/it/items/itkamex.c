@@ -14,6 +14,14 @@
 
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KX_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KX_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F7B08[] = {
     { 0, it_802CA5D8, it_802CA618, it_802CA654 },
     { 1, itKamex_UnkMotion1_Anim, itKamex_UnkMotion1_Phys,
@@ -136,7 +144,7 @@ void itKamex_UnkMotion1_Phys(Item_GObj* gobj)
         if ((ip->x40_vel.x > 0.0f && ip->facing_dir <= 0.0f) ||
             (ip->x40_vel.x <= 0.0f && ip->facing_dir > 0.0f))
         {
-            ip->x40_vel.x += ip->xDD4_itemVar.pokemon.x6C * ip->facing_dir;
+            ip->x40_vel.x = KX_FMA(ip->xDD4_itemVar.pokemon.x6C, ip->facing_dir, ip->x40_vel.x);
         }
     }
     if (ip->ground_or_air == GA_Air) {
@@ -227,12 +235,12 @@ void it_802CAB10(Item_GObj* gobj)
     itKamexAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
 
     spawn.prev_pos = ip->pos;
-    spawn.prev_pos.x += attrs->x8 * ip->facing_dir;
+    spawn.prev_pos.x = KX_FMA(attrs->x8, ip->facing_dir, spawn.prev_pos.x);
     spawn.prev_pos.y += attrs->xC;
     if (ip->xDD4_itemVar.pokemon.x64 != 0) {
-        spawn.prev_pos.z += -1.0f * (attrs->x10 * ip->facing_dir);
+        spawn.prev_pos.z = KX_FMA(-1.0f, attrs->x10 * ip->facing_dir, spawn.prev_pos.z);
     } else {
-        spawn.prev_pos.z += attrs->x10 * ip->facing_dir;
+        spawn.prev_pos.z = KX_FMA(attrs->x10, ip->facing_dir, spawn.prev_pos.z);
     }
     it_8026BB88(gobj, &spawn.pos);
     spawn.facing_dir = ip->facing_dir;

@@ -45,6 +45,14 @@
 #include <baselib/mtx.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DI_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DI_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 0909D0 */ static void ftCo_800909D0(Fighter* fp);
 /* 090B48 */ static void ftCo_DamageIce_OnHit(Fighter_GObj* gobj);
 /* 091274 */ static void ftCo_DamageIce_OnHit2(Fighter_GObj* gobj);
@@ -141,7 +149,7 @@ static inline void ftCo_DamageIce_StartJump(Fighter* fp)
         rot_min = p_ftCommonData->damageice_rot_speed_min;
         rot_max = p_ftCommonData->damageice_rot_speed_max;
         rand_range = rot_max - rot_min;
-        fp->mv.co.damageice.rot_speed = rand_range * rand + rot_min;
+        fp->mv.co.damageice.rot_speed = DI_FMA(rand_range, rand, rot_min);
     }
 
     ftCo_800909D0(fp);
@@ -283,7 +291,7 @@ void ftCo_DamageIce_HitWhileFrozen(Fighter_GObj* gobj)
     rot_min = p_ftCommonData->damageice_rot_speed_min;
     rot_max = p_ftCommonData->damageice_rot_speed_max;
     rand_range = rot_max - rot_min;
-    fp->mv.co.damageice.rot_speed = rand_range * rand + rot_min;
+    fp->mv.co.damageice.rot_speed = DI_FMA(rand_range, rand, rot_min);
     ftCo_800909D0(fp);
 
     effect_joint = fp->parts[ftParts_GetBoneIndex(fp, FtPart_XRotN)].joint;
@@ -315,8 +323,7 @@ void ftCo_DamageIce_HitWhileFrozen(Fighter_GObj* gobj)
 void ftCo_DamageIce_OnHit2(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
-    fp->grab_timer -= fp->dmg.x1838_percentTemp *
-                      p_ftCommonData->damageice_dmg_time_reduction_mult;
+    fp->grab_timer = DI_FMA(-fp->dmg.x1838_percentTemp, p_ftCommonData->damageice_dmg_time_reduction_mult, fp->grab_timer);
     if (fp->dmg.x1860_element == HitElement_Fire) {
         fp->grab_timer = 0;
     }
@@ -468,8 +475,8 @@ void ftCo_DamageIce_Collide(Fighter_GObj* gobj, Vec3* normal, Vec3* vec)
         if ((coll_data->env_flags & Collide_RightWallHug) != 0 ||
             (coll_data->env_flags & Collide_RightWallHug) != 0)
         {
-            fp->cur_pos.x = -((fp->x68C_transNPos.z * -fp->facing_dir) -
-                              (fp->cur_pos.x + vec->x));
+            fp->cur_pos.x = DI_FMA(fp->x68C_transNPos.z, fp->facing_dir,
+                                   fp->cur_pos.x + vec->x); /* fnmsubs */
         } else {
             fp->cur_pos.y = fp->cur_pos.y + vec->y + fp->x68C_transNPos.y;
         }

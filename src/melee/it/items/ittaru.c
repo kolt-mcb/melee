@@ -20,6 +20,14 @@
 
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define TR_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define TR_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F58E0[] = {
     { -1, itTaru_UnkMotion0_Anim, itTaru_UnkMotion0_Phys,
       itTaru_UnkMotion0_Coll },
@@ -104,7 +112,7 @@ void it_802874F0(Item_GObj* gobj)
                 var_f1 = -var_f1;
             }
             if (var_f1 < attr->x2C) {
-                ip->xDD4_itemVar.taru.xDE4 += temp_f2 * attr->x24;
+                ip->xDD4_itemVar.taru.xDE4 = TR_FMA(temp_f2, attr->x24, ip->xDD4_itemVar.taru.xDE4);
             }
         } else {
             temp_f1 = ip->xDD4_itemVar.taru.xDE4;
@@ -136,11 +144,11 @@ void it_802874F0(Item_GObj* gobj)
         ip->x40_vel.x =
             ip->xDD4_itemVar.taru.xDE4 * ip->xDD4_itemVar.taru.xDE8.y;
         var_f2 = inline_fabsf(ip->xDD4_itemVar.taru.xDE4);
-        ip->xDD4_itemVar.taru.xDE0 = (0.12217305f * var_f2 * -ip->facing_dir) +
-                                     ip->xDD4_itemVar.taru.xDE0;
+        ip->xDD4_itemVar.taru.xDE0 = TR_FMA(0.12217305f * var_f2, -ip->facing_dir,
+                                            ip->xDD4_itemVar.taru.xDE0);
     } else {
         ip->xDD4_itemVar.taru.xDE0 =
-            (0.10471976f * -ip->facing_dir) + ip->xDD4_itemVar.taru.xDE0;
+            TR_FMA(0.10471976f, -ip->facing_dir, ip->xDD4_itemVar.taru.xDE0);
     }
 }
 

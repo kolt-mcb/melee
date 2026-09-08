@@ -31,6 +31,14 @@
 #include <baselib/gobjgxlink.h>
 #include <baselib/gobjproc.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define ON_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define ON_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 1E40E4 */ static void grOnett_801E40E4(void* user_data, int joint_id,
                                           CollData* coll, int coll_x50,
                                           mpLib_GroundEnum ground_kind,
@@ -403,7 +411,7 @@ void grOnett_801E3DA0(Ground_GObj* gobj)
             f32 rand = HSD_Randf();
             f32 lo = yakumono_param->x3C;
             f32 range = yakumono_param->x40 - lo;
-            gp->u.onett_building.timer = (s32) (range * rand + lo);
+            gp->u.onett_building.timer = (s32) ON_FMA(range, rand, lo);
             gp->u.onett_building.next_state = 6;
         }
         if (gp->u.onett_building.frame == 0x14) {
@@ -594,7 +602,7 @@ static inline void grOnett_WaitCar(Ground* gp, s8 saved_car)
         {
             f32 rand = HSD_Randf();
             gp->u.onettcar.car_speed =
-                yakumono_param->x58 * rand + yakumono_param->x54;
+                ON_FMA(yakumono_param->x58, rand, yakumono_param->x54);
         }
         if (gp->u.onettcar.car_speed > 0.0f) {
             gp->u.onettcar.car_speed *= -1.0f;
@@ -877,9 +885,9 @@ void grOnett_801E5214(Ground_GObj* gobj)
         abs_ratio /= yakumono_param->max_displacement;
 
         if (error < 0.0) {
-            force = -(yakumono_param->spring_force * abs_ratio - force);
+            force = ON_FMA(-yakumono_param->spring_force, abs_ratio, force); /* fnmsubs */
         } else {
-            force = yakumono_param->spring_force * abs_ratio + force;
+            force = ON_FMA(yakumono_param->spring_force, abs_ratio, force);
         }
 
         force -= spring;

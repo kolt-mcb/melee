@@ -32,6 +32,14 @@
 #include "ftCommon/ftCo_SpecialAir.h"
 #include "ftPeach/ftPe_Float.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define JA_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define JA_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 0CC3C4 */ static void ftYs_JumpAerial_Anim_Cb(Fighter_GObj* gobj);
 /* 0CC654 */ static void ftNs_JumpAerial_Phys_Cb(Fighter_GObj* gobj);
 
@@ -39,8 +47,22 @@ void ft_800CB6EC(Fighter* fp, s32 arg1)
 {
     if (fp->mv.co.jumpaerial.x0 != 0) {
         fp->mv.co.jumpaerial.x0 -= 1;
+#if BUILD_TARGET_PC
+        {
+            /* 800CB76C: the console inlines HSD_JObjAddRotationY and fuses
+             * its add into one fnmsubs of deg_to_rad*(180/arg1) off
+             * rotate.y. */
+            HSD_JObj* jobj = fp->parts->joint;
+            HSD_ASSERT(1041, jobj);
+            jobj->rotate.y = JA_FMA(-deg_to_rad, 180.0F / arg1, jobj->rotate.y);
+            if (!(jobj->flags & JOBJ_MTX_INDEP_SRT)) {
+                HSD_JObjSetMtxDirty(jobj);
+            }
+        }
+#else
         HSD_JObjAddRotationY(fp->parts->joint,
                              -(deg_to_rad * (180.0F / arg1)));
+#endif
         if (fp->mv.co.jumpaerial.x0 == (arg1 / 2)) {
             fp->facing_dir = -fp->facing_dir;
         }
@@ -315,8 +337,8 @@ void ftNs_JumpAerial_Phys_Cb(Fighter_GObj* gobj)
     ftCommon_8007D28C(fp, fp->mv.co.jumpaerial.init_h_vel);
     fp->mv.co.jumpaerial.init_h_vel += fp->x74_anim_vel.x;
     fp->x74_anim_vel.x = 0.0F;
-    fp->self_vel.x = fp->x6A4_transNOffset.z * fp->facing_dir +
-                     fp->mv.co.jumpaerial.init_h_vel;
+    fp->self_vel.x = JA_FMA(fp->x6A4_transNOffset.z, fp->facing_dir,
+                            fp->mv.co.jumpaerial.init_h_vel);
     ft_800851D0(gobj);
 }
 

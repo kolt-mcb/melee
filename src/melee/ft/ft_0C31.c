@@ -41,6 +41,14 @@
 #include <baselib/dobj.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define EN_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define EN_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 0C63BC */ static void fn_800C63BC(Fighter_GObj* gobj);
 /* 0C63E0 */ static void fn_800C63E0(Fighter_GObj* gobj);
 
@@ -186,7 +194,7 @@ void ftCo_EntryStart_Phys(Fighter_GObj* gobj)
     temp_f4 = p_ftCommonData->x6C4;
     temp_f31 = (f32) (temp_r6 - temp_r31->mv.co.entry.timer) / temp_r6;
     temp_r31->mv.co.entry.x14.y =
-        (temp_f31 * (temp_r31->mv.co.entry.x8.y - temp_f4)) + temp_f4;
+        EN_FMA(temp_f31, temp_r31->mv.co.entry.x8.y - temp_f4, temp_f4);
 
     HSD_JObjSetScale(gobj->hsd_obj, &temp_r31->mv.co.entry.x14);
 
@@ -364,7 +372,7 @@ void fn_800C6F34(Fighter_GObj* gobj)
             }
         }
         fp = GET_FIGHTER(gobj);
-        sp20.x = -((fp->facing_dir * ftCommon_800804EC(fp)) - fp->cur_pos.x);
+        sp20.x = EN_FMA(-fp->facing_dir, ftCommon_800804EC(fp), fp->cur_pos.x); /* fnmsubs */
         sp20.y = fp->cur_pos.y;
         sp20.z = fp->cur_pos.z;
 

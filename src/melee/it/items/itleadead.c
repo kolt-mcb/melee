@@ -25,6 +25,14 @@
 #include <baselib/jobj.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define LD_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define LD_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F8EB0[] = {
     {
         0,
@@ -975,7 +983,7 @@ s32 it_802EA6F4(Item_GObj* gobj)
 
 static inline f32 neg_dot(Vec3* a, Vec3* b)
 {
-    return -(a->x * b->x) - (a->y * b->y) - (a->z * b->z);
+    return LD_FMA(-a->z, b->z, LD_FMA(-a->y, b->y, -(a->x * b->x))); /* two fnmsubs */
 }
 
 bool it_802EA804(Item_GObj* gobj, f32 range)

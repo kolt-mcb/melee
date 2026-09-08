@@ -27,6 +27,14 @@
 #include <baselib/psstructs.h>
 #include <sysdolphin/baselib/random.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define ZG_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define ZG_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 grZakoGenerator_Config*
 grZakoGenerator_801CA394(grZakoGenerator_Spawn* spawn_descs, int count,
                          grZakoGenerator_SpawnFunc callback, f32 arg4)
@@ -56,9 +64,9 @@ static inline void
 grZakoGenerator_801CA43C_inline(f32 t, grZakoGenerator_Spawn* spawns,
                                 f32 height, Vec3* pos)
 {
-    pos->x = t * (spawns->pos1.x - spawns->pos0.x) + spawns->pos0.x;
+    pos->x = ZG_FMA(t, spawns->pos1.x - spawns->pos0.x, spawns->pos0.x);
     pos->y = height,
-    pos->z = t * (spawns->pos1.z - spawns->pos0.z) + spawns->pos0.z;
+    pos->z = ZG_FMA(t, spawns->pos1.z - spawns->pos0.z, spawns->pos0.z);
 }
 
 s32 grZakoGenerator_801CA43C(grZakoGenerator_Config* config, HSD_JObj* jobj,
