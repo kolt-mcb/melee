@@ -1,4 +1,5 @@
 #if BUILD_TARGET_PC
+#include <stdlib.h>
 #include "port/pc_ptr.h"
 #endif
 #include "grizumi.h"
@@ -196,12 +197,15 @@ void grIzumi_801CBB88(void)
     grIzumi_801CBCE8(1);
     r3 = grIzumi_801CBCE8(3);
 #if BUILD_TARGET_PC
-    /* PC port: skip grAnime_801C8780 - reads GCN-packed archive data */
-    if (0 && r3) {
-        grAnime_801C8780(r3, 3, 0, 0.0f, 1.0f);
-    }
-    /* PC port: skip - reads GCN-packed stage params */
-    if (0) {
+    /* These were skipped as "reads GCN-packed archive data", which was true
+     * when it was written and is not any more: Izumi has a yakumono layout in
+     * ground.c (Gr_Kind_Izumi, 21 words) so Ground_GetYakumonoParam hands
+     * this file a converted block. MELEE_IZUMI_STUB=1 puts the skips back for
+     * a bisect. */
+    if (getenv("MELEE_IZUMI_NO_ANIM") == NULL) {
+        if (r3 != NULL) {
+            grAnime_801C8780(r3, 3, 0, 0.0f, 1.0f);
+        }
         Ground_801C39C0();
         Ground_801C3BB4();
     }
@@ -267,8 +271,23 @@ HSD_GObj* grIzumi_801CBCE8(int gobj_id)
 
         if (callbacks->on_init != NULL) {
 #if BUILD_TARGET_PC
-            /* PC port: skip - reads GCN-packed archive structs */
-            if (0) {
+            /* Still off by default, but no longer for the reason the old
+             * comment gave. The params are converted now; what stops this is
+             * a second fault further in. With the star joint converted (see
+             * grIzumi_801CCB18) on_init gets past HSD_RObjLoadDesc and then
+             * dies in the GObj dispatch loop on an on_invoke that is a heap
+             * address rather than code -- a callback read out of data
+             * somewhere in grIzumi_801CBE64 that this file still hands over
+             * unconverted. MELEE_PROCCHECK finds nothing, so the proc list is
+             * intact and the pointer was wrong when it was installed.
+             *
+             * This is the divergence, not a cosmetic one: the console draws
+             * 45 random numbers on the first frame of a Fountain of Dreams
+             * match and this side draws none, and every character parts from
+             * the console on match frame 1 there.
+             *
+             * MELEE_IZUMI_INIT=1 turns it on to work on it. */
+            if (getenv("MELEE_IZUMI_INIT") != NULL) {
                 callbacks->on_init(gobj);
             }
 #else
@@ -667,6 +686,38 @@ void grIzumi_801CCB18(HSD_GObj* gobj)
 {
     HSD_Joint* j = HSD_ArchiveGetPublicAddress(grDatFiles_GetArchive()->unk0,
                                                "GrdIzumiStar_TopN_joint");
+#if BUILD_TARGET_PC
+    /* This is the only place a stage reaches into its archive for a joint by
+     * public name, and a public address is a pointer into the raw file image
+     * -- big-endian, four-byte pointers, nothing converted. Walking it as a
+     * host HSD_Joint took HSD_JObjLoadJoint into HSD_RObjLoadDesc on a
+     * robjdesc that is a file offset, and the process took SIGBUS.
+     *
+     * That crash is why this whole file's on_init was skipped, and skipping
+     * it is why the port draws no random numbers on the first frame of a
+     * Fountain of Dreams match where the console draws 45. Convert the tree
+     * the same way every other joint in the stage archive is converted --
+     * reset the joint map, walk, then resolve the skinned PObjs against what
+     * was just built. Once: this runs on every load, and converting again
+     * would leak a tree per match. */
+    {
+        static const void* converted_from;
+        static HSD_Joint* converted;
+        HSD_Archive* arc = grDatFiles_GetArchive()->unk0;
+        if (j != NULL && arc != NULL && arc->data != NULL) {
+            if (j != converted_from) {
+                converted_from = j;
+                grDatFiles_ResetJointMap();
+                converted = grDatFiles_ConvertJointTreeGCNtoX64(
+                    (const u8*) j, (u8*) arc->data, 0, NULL);
+                grDatFiles_ResolvePObjJoints();
+            }
+            j = converted;
+        } else {
+            j = NULL;
+        }
+    }
+#endif
     if (j != NULL) {
         HSD_GObj* sub = Ground_801C1A20(j, -1);
         if (sub != NULL) {
