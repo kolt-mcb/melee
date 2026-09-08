@@ -42,6 +42,17 @@
 #include <baselib/particle.h>
 #include <baselib/random.h>
 
+/* Corneria's half-width offsets (K*scale/2 +- x, exact either way but
+ * fused on the console), the -35*scale speeds and the Great Fox's
+ * approach curve are single fmadds/fmsubs/fnmsubs.  Pairings read off
+ * the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define CN_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define CN_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 int grCn_803E1D80[3] = { 0, 0, 0 };
 int grCn_803E2190[5] = { 0, 0, 1, 2, 5 };
 
@@ -672,11 +683,11 @@ void grCorneria_801DD9A8(Ground_GObj* gobj)
         grCorneria_801E1970(gobj);
         grCorneria_801E2228(gobj);
 
-        speed = -35.0f * Ground_801C0498() - gp->gv.corneria.xD0;
+        speed = CN_FMA(-35.0f, Ground_801C0498(), -gp->gv.corneria.xD0); /* fmsubs */
         grZakoGenerator_801CA43C(gp->gv.corneria.xC8, Ground_801C3FA4(gobj, 0),
                                  speed);
 
-        speed = -35.0f * Ground_801C0498() - gp->gv.corneria.xD0;
+        speed = CN_FMA(-35.0f, Ground_801C0498(), -gp->gv.corneria.xD0); /* fmsubs */
         grZakoGenerator_801CA43C(gp->gv.corneria.xCC, Ground_801C3FA4(gobj, 0),
                                  speed);
 
@@ -1628,7 +1639,7 @@ void grCorneria_801DFC98(Ground_GObj* gobj)
         switch ((s8) gp->gv.corneria.xC5) {
         case 0:
             if (HSD_JObjGetTranslationX(jobj) >=
-                3200.0f * Ground_801C0498() / 2 + -1400.0f)
+                CN_FMA(3200.0f * Ground_801C0498(), 0.5f, -1400.0f))
             {
                 grCorneria_801E03C8(gobj, 9);
                 gp->gv.corneria.xC5 = 1;
@@ -1637,7 +1648,7 @@ void grCorneria_801DFC98(Ground_GObj* gobj)
             break;
         case 1:
             if (HSD_JObjGetTranslationX(jobj) >=
-                3200.0f * Ground_801C0498() / 2 + 1400.0f)
+                CN_FMA(3200.0f * Ground_801C0498(), 0.5f, 1400.0f))
             {
                 Ground_801C4A08(gobj);
             }
@@ -1675,7 +1686,7 @@ void grCorneria_801DFF20(Ground_GObj* gobj)
         switch ((s8) gp->gv.corneria.xC5) {
         case 0:
             if (HSD_JObjGetTranslationX(jobj) >=
-                3200.0f * Ground_801C0498() / 2 + -1400.0f)
+                CN_FMA(3200.0f * Ground_801C0498(), 0.5f, -1400.0f))
             {
                 grCorneria_801E03C8(gobj, 4);
                 gp->gv.corneria.xC5 = 1;
@@ -1684,7 +1695,7 @@ void grCorneria_801DFF20(Ground_GObj* gobj)
             break;
         case 1:
             if (HSD_JObjGetTranslationX(jobj) >=
-                3200.0f * Ground_801C0498() / 2 + 1400.0f)
+                CN_FMA(3200.0f * Ground_801C0498(), 0.5f, 1400.0f))
             {
                 Ground_801C4A08(gobj);
             }
@@ -1722,7 +1733,7 @@ void grCorneria_801E01A8(Ground_GObj* gobj)
         switch ((s8) gp->gv.corneria.xC5) {
         case 0:
             if (HSD_JObjGetTranslationX(jobj) >=
-                4800.0f * Ground_801C0498() / 2 + -1400.0f)
+                CN_FMA(4800.0f * Ground_801C0498(), 0.5f, -1400.0f))
             {
                 grCorneria_801E03C8(gobj, 8);
                 gp->gv.corneria.xC5 = 1;
@@ -1731,7 +1742,7 @@ void grCorneria_801E01A8(Ground_GObj* gobj)
             break;
         case 1:
             if (HSD_JObjGetTranslationX(jobj) >=
-                4800.0f * Ground_801C0498() / 2 + 1400.0f)
+                CN_FMA(4800.0f * Ground_801C0498(), 0.5f, 1400.0f))
             {
                 Ground_801C4A08(gobj);
             }
@@ -1756,17 +1767,17 @@ void grCorneria_801E03C8(Ground_GObj* gobj, int id)
     if (id == 8) {
         f32 half = 3200.0f * Ground_801C0498() / 2;
         HSD_JObjSetTranslateX(HSD_GObjGetHSDObj(new_gobj),
-                              x - (4800.0f * Ground_801C0498() / 2 + half));
+                              x - CN_FMA(4800.0f * Ground_801C0498(), 0.5f, half));
         gp->gv.corneria.xC5 = 0;
     } else if (id == 9) {
         f32 half = 3200.0f * Ground_801C0498() / 2;
         HSD_JObjSetTranslateX(new_gobj->hsd_obj,
-                              x - (3200.0f * Ground_801C0498() / 2 + half));
+                              x - CN_FMA(3200.0f * Ground_801C0498(), 0.5f, half));
         gp->gv.corneria.xC5 = 0;
     } else if (id == 4) {
         f32 half = 4800.0f * Ground_801C0498() / 2;
         HSD_JObjSetTranslateX(new_gobj->hsd_obj,
-                              x - (3200.0f * Ground_801C0498() / 2 + half));
+                              x - CN_FMA(3200.0f * Ground_801C0498(), 0.5f, half));
         gp->gv.corneria.xC5 = 0;
     }
     if (new_gobj != NULL) {
@@ -1794,7 +1805,7 @@ void grCorneria_801E0678(void)
     {
         f32 half = 3200.0f * Ground_801C0498() / 2;
         HSD_JObjSetTranslateX(gobj->hsd_obj,
-                              -(3200.0f * Ground_801C0498() / 2 + half));
+                              -CN_FMA(3200.0f * Ground_801C0498(), 0.5f, half) /* fnmadds */);
     }
 
     gobj = Ground_801C2BA4(4);
@@ -1803,7 +1814,7 @@ void grCorneria_801E0678(void)
     {
         f32 half = 4800.0f * Ground_801C0498() / 2;
         HSD_JObjSetTranslateX(gobj->hsd_obj,
-                              3200.0f * Ground_801C0498() / 2 + half);
+                              CN_FMA(3200.0f * Ground_801C0498(), 0.5f, half));
     }
 }
 
@@ -1820,8 +1831,8 @@ int grCorneria_801E08CC(void)
     gobj = Ground_801C2BA4(8);
     if (gobj != NULL) {
         f32 x = HSD_JObjGetTranslationX(gobj->hsd_obj);
-        if (cam_x > -(3200.0f * Ground_801C0498() / 2 - x) &&
-            cam_x < 3200.0f * Ground_801C0498() / 2 + x)
+        if (cam_x > CN_FMA(-(3200.0f * Ground_801C0498()), 0.5f, x) &&
+            cam_x < CN_FMA(3200.0f * Ground_801C0498(), 0.5f, x))
         {
             return 8;
         }
@@ -1829,8 +1840,8 @@ int grCorneria_801E08CC(void)
     gobj = Ground_801C2BA4(9);
     if (gobj != NULL) {
         f32 x = HSD_JObjGetTranslationX(gobj->hsd_obj);
-        if (cam_x > -(3200.0f * Ground_801C0498() / 2 - x) &&
-            cam_x < 3200.0f * Ground_801C0498() / 2 + x)
+        if (cam_x > CN_FMA(-(3200.0f * Ground_801C0498()), 0.5f, x) &&
+            cam_x < CN_FMA(3200.0f * Ground_801C0498(), 0.5f, x))
         {
             return 9;
         }
@@ -1838,8 +1849,8 @@ int grCorneria_801E08CC(void)
     gobj = Ground_801C2BA4(4);
     if (gobj != NULL) {
         f32 x = HSD_JObjGetTranslationX(gobj->hsd_obj);
-        if (cam_x > -(4800.0f * Ground_801C0498() / 2 - x) &&
-            cam_x < 4800.0f * Ground_801C0498() / 2 + x)
+        if (cam_x > CN_FMA(-(4800.0f * Ground_801C0498()), 0.5f, x) &&
+            cam_x < CN_FMA(4800.0f * Ground_801C0498(), 0.5f, x))
         {
             return 4;
         }
@@ -1855,8 +1866,8 @@ int grCorneria_801E0A74(f32* arg0)
     gobj = Ground_801C2BA4(8);
     if (gobj != NULL) {
         f32 x = HSD_JObjGetTranslationX(gobj->hsd_obj);
-        if (*arg0 > x - 3200.0f * Ground_801C0498() / 2 &&
-            *arg0 < x + 3200.0f * Ground_801C0498() / 2)
+        if (*arg0 > CN_FMA(-(3200.0f * Ground_801C0498()), 0.5f, x) &&
+            *arg0 < CN_FMA(3200.0f * Ground_801C0498(), 0.5f, x))
         {
             return 8;
         }
@@ -1864,8 +1875,8 @@ int grCorneria_801E0A74(f32* arg0)
     gobj = Ground_801C2BA4(9);
     if (gobj != NULL) {
         f32 x = HSD_JObjGetTranslationX(gobj->hsd_obj);
-        if (*arg0 > x - 3200.0f * Ground_801C0498() / 2 &&
-            *arg0 < x + 3200.0f * Ground_801C0498() / 2)
+        if (*arg0 > CN_FMA(-(3200.0f * Ground_801C0498()), 0.5f, x) &&
+            *arg0 < CN_FMA(3200.0f * Ground_801C0498(), 0.5f, x))
         {
             return 9;
         }
@@ -1873,8 +1884,8 @@ int grCorneria_801E0A74(f32* arg0)
     gobj = Ground_801C2BA4(4);
     if (gobj != NULL) {
         f32 x = HSD_JObjGetTranslationX(gobj->hsd_obj);
-        if (*arg0 > x - 4800.0f * Ground_801C0498() / 2 &&
-            *arg0 < x + 4800.0f * Ground_801C0498() / 2)
+        if (*arg0 > CN_FMA(-(4800.0f * Ground_801C0498()), 0.5f, x) &&
+            *arg0 < CN_FMA(4800.0f * Ground_801C0498(), 0.5f, x))
         {
             return 4;
         }
@@ -2060,23 +2071,24 @@ void grCorneria_801E1060(Ground_GObj* gobj)
 
     pos = gm_801883C0();
     total = 3200.0f * Ground_801C0498();
-    pos *= ((4800.0f * Ground_801C0498() / 2 +
-             (total + 3200.0f * Ground_801C0498() / 2)) /
-            2400.0f);
+    pos *= CN_FMA(4800.0f * Ground_801C0498(), 0.5f,
+                  CN_FMA(3200.0f * Ground_801C0498(), 0.5f, total)) /
+           2400.0f;
 
     bg = Ground_801C2BA4(8);
     if (bg != NULL) {
         Fake_HSD_JObjSetTranslateX(bg->hsd_obj, pos);
     }
-    pos = pos -
-          (3200.0f * Ground_801C0498() / 2 + 3200.0f * Ground_801C0498() / 2);
+    /* the left half is a plain fmuls, the right one fuses onto it */
+    pos = pos - CN_FMA(3200.0f * Ground_801C0498(), 0.5f,
+                       3200.0f * Ground_801C0498() / 2);
 
     bg = Ground_801C2BA4(9);
     if (bg != NULL) {
         Fake_HSD_JObjSetTranslateX(bg->hsd_obj, pos);
     }
-    pos = pos -
-          (4800.0f * Ground_801C0498() / 2 + 3200.0f * Ground_801C0498() / 2);
+    pos = pos - CN_FMA(3200.0f * Ground_801C0498(), 0.5f,
+                       4800.0f * Ground_801C0498() / 2);
 
     bg = Ground_801C2BA4(4);
     if (bg != NULL) {
@@ -2271,7 +2283,7 @@ void grCorneria_801E1970(Ground_GObj* gobj)
     if (gp->gv.corneria.x104 <= 0) {
         f32 randf = HSD_Randf();
         f32 a = grCn_804D69A0->x4 - grCn_804D69A0->x0;
-        gp->gv.corneria.x104 = a * randf + grCn_804D69A0->x0;
+        gp->gv.corneria.x104 = CN_FMA(a, randf, grCn_804D69A0->x0);
         randf = HSD_Randf();
         gp->gv.corneria.xF4 = grCn_804D69A0->x8 * (2.0f * (randf - 0.5f));
         randf = HSD_Randf();
@@ -2422,8 +2434,9 @@ void grCorneria_801E2228(Ground_GObj* gobj)
         if (timer < 0x384) {
             f32 speed = gp->gv.corneria.xFC;
             f32 t = speed / 0.005f;
-            if ((gp->gv.corneria.xD0 - (50.0f * Ground_801C0498() - 250.0f)) >
-                (speed * t + -0.0025f * t * t))
+            if ((gp->gv.corneria.xD0 -
+                 CN_FMA(50.0f, Ground_801C0498(), -250.0f)) >
+                CN_FMA(speed, t, -0.0025f * t * t))
             {
                 gp->gv.corneria.xFC += 0.005f;
                 if (gp->gv.corneria.xFC > 3.0f) {
@@ -2436,13 +2449,13 @@ void grCorneria_801E2228(Ground_GObj* gobj)
                 }
             }
             gp->gv.corneria.xD0 -= gp->gv.corneria.xFC;
-            if (gp->gv.corneria.xD0 < 50.0f * Ground_801C0498() - 250.0f) {
-                gp->gv.corneria.xD0 = 50.0f * Ground_801C0498() - 250.0f;
+            if (gp->gv.corneria.xD0 < CN_FMA(50.0f, Ground_801C0498(), -250.0f)) {
+                gp->gv.corneria.xD0 = CN_FMA(50.0f, Ground_801C0498(), -250.0f);
             }
         } else {
             f32 speed = gp->gv.corneria.xFC;
             f32 t = speed / 0.005f;
-            if (-gp->gv.corneria.xD0 > (speed * t + -0.0025f * t * t)) {
+            if (-gp->gv.corneria.xD0 > CN_FMA(speed, t, -0.0025f * t * t)) {
                 t = 0.005f;
                 gp->gv.corneria.xFC = speed + t;
                 if (gp->gv.corneria.xFC > 3.0f) {
@@ -2823,10 +2836,9 @@ bool grCorneria_801E2EEC(Vec3* v, int arg1, HSD_JObj* jobj)
         temp_r3_2 = temp_r3->user_data;
         if (temp_r3_2 != NULL && temp_r3_2->gv.corneria.x12C == jobj) {
             temp_f31 = 106.0f * Ground_801C0498();
-            temp_f31_2 =
-                ((v->y - sp14.y) * ((107.0f * Ground_801C0498()) / temp_f31)) +
-                sp14.x;
-            if (v->x > -((107.0f * Ground_801C0498()) - temp_f31_2)) {
+            temp_f31_2 = CN_FMA(v->y - sp14.y,
+                                (107.0f * Ground_801C0498()) / temp_f31, sp14.x);
+            if (v->x > CN_FMA(-107.0f, Ground_801C0498(), temp_f31_2)) {
                 return false;
             }
         }
@@ -2846,7 +2858,7 @@ f32 grCorneria_801E2FCC(void)
     if (gobj != NULL) {
         gp = gobj->user_data;
         if (gp != NULL) {
-            return (Ground_801C0498() * -35.0f - gp->gv.corneria.xD0) + 5.0f;
+            return CN_FMA(-35.0f, Ground_801C0498(), -gp->gv.corneria.xD0) + 5.0f;
         }
     }
     return -3.4028235e38f;
