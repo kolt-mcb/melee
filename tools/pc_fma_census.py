@@ -153,11 +153,12 @@ def port_sites(path):
     written inside the function body said two, and 6-of-6 read as 2-of-6.
     """
     counts = {}
+    uses = {}
     cur = None
     try:
         text = open(path, errors="replace").read()
     except OSError:
-        return counts
+        return counts, {}, uses
     # Macro bodies, joined across backslash continuations, and how many
     # fused ops each carries -- including through macros they use. The
     # continuation alternative goes FIRST: with [^\n] first the match
@@ -235,7 +236,18 @@ def port_sites(path):
                     counts[cur] += macro_count(used)
                 elif used in inline_n and used != cur:
                     counts[cur] += inline_n[used]
-    return counts
+                elif used != cur and used in counts:
+                    uses.setdefault(cur, []).append(used)
+    # A non-static function MWCC inlined anyway shows the same way as a
+    # static one: its fused ops sit in the caller's console count.
+    # ftCo_800CF6E8 carries thirty-seven copies of
+    # ftCo_CalcYScaledKnockback's one fmadds. census() credits each use,
+    # capped at the caller's console count so a helper that was NOT
+    # inlined cannot push a caller past 100%. (A bl to the callee does not
+    # settle it either way: the inlined copy keeps the callee's own
+    # recursive bl.) The cap is the honest limit of what a census can
+    # know; the disassembly settles any function that matters.
+    return counts, dict(counts), uses
 
 
 def priority(path):
@@ -264,7 +276,11 @@ def census():
     for (path, fn), lst in by_func.items():
         if path not in port_cache:
             port_cache[path] = port_sites(os.path.join(SRC, path))
-        have = port_cache[path].get(fn, 0)
+        counts, own, uses = port_cache[path]
+        have = counts.get(fn, 0)
+        via = sum(own.get(callee, 0) for callee in uses.get(fn, ()))
+        if via:
+            have = min(have + via, max(have, len(lst)))
         rows.append({"file": path, "function": fn,
                      "console": len(lst),
                      "console_single": sum(1 for x in lst if x[2]),
