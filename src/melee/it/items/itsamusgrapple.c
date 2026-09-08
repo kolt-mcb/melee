@@ -63,6 +63,20 @@ const itSamusGrapple_Hitbox it_803B8660 = {
 
 const Vec3 it_803B8674 = { 0.0f, 0.0f, 0.0f };
 
+/* The console fuses every "dir * k + base" of the chain solver into one
+ * fmadds (802B9060 and 80-odd siblings), the random gravity into an
+ * fnmsubs/fmadds pair on the raw HSD_Randf() result, and the 0.12 lerps
+ * at 802BA294/2A8 into a double fmadd rounded once.  Spell those out on
+ * PC so the chain lands on the same bits. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SG_FMA(a, b, c) fmaf((a), (b), (c))
+#define SG_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define SG_FMA(a, b, c) ((a) * (b) + (c))
+#define SG_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 static inline bool samus_grapple_fighter_compare(FtMotionId id)
 {
     if ((id == 0x165) || (id == 0x166) || (id == 0xD4) || (id == 0xD6)) {
@@ -90,9 +104,9 @@ static inline f32 samus_grapple_calc_grav(f32 vel_y)
 {
     if (HSD_Randf() > 0.9) {
         if (vel_y < 0.0) {
-            return -((0.6f * HSD_Randf()) - vel_y);
+            return SG_FMA(-0.6f, HSD_Randf(), vel_y); /* fnmsubs */
         } else {
-            return (0.6f * HSD_Randf()) + vel_y;
+            return SG_FMA(0.6f, HSD_Randf(), vel_y);
         }
     } else {
         return 0.0f;
@@ -358,8 +372,10 @@ HSD_JObj* it_802B75FC(Item* ip, HSD_JObj* jobj_arg, s32 arg2, f32 scale)
     attrs->x58 = attrs->x30 * scale;
 
     if (scale > 1.0) {
-        temp = (attrs->x8 * (attrs->xC * attrs->x38)) +
-               ((1.0f - attrs->x8) * (attrs->xC * attrs->x10));
+        /* 802B772C: the x8-weighted term is the fused one, added onto the
+         * (1 - x8) product, which is plain fmuls. */
+        temp = SG_FMA(attrs->x8, attrs->xC * attrs->x38,
+                      (1.0f - attrs->x8) * (attrs->xC * attrs->x10));
     } else {
         temp = attrs->xC * attrs->x38;
     }
@@ -975,9 +991,9 @@ void it_802B900C(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
     f32 d;
 
     it_802A3C98(&link->pos, pos, &dir);
-    link->pos.x = (dir.x * dist) + pos->x;
-    link->pos.y = (dir.y * dist) + pos->y;
-    link->pos.z = (dir.z * dist) + pos->z;
+    link->pos.x = SG_FMA(dir.x, dist, pos->x);
+    link->pos.y = SG_FMA(dir.y, dist, pos->y);
+    link->pos.z = SG_FMA(dir.z, dist, pos->z);
 
     while (prev != NULL) {
         prev->vel.y -= samus_grapple_calc_grav(prev->vel.y);
@@ -986,13 +1002,13 @@ void it_802B900C(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
 
         d = it_802A3C98(&prev->pos, &link->pos, &dir);
         if (d > attrs->x38) {
-            prev->pos.x = (dir.x * attrs->x38) + link->pos.x;
-            prev->pos.y = (dir.y * attrs->x38) + link->pos.y;
-            prev->pos.z = (dir.z * attrs->x38) + link->pos.z;
+            prev->pos.x = SG_FMA(dir.x, attrs->x38, link->pos.x);
+            prev->pos.y = SG_FMA(dir.y, attrs->x38, link->pos.y);
+            prev->pos.z = SG_FMA(dir.z, attrs->x38, link->pos.z);
         } else if (d < attrs->x3C) {
-            prev->pos.x = (dir.x * attrs->x3C) + link->pos.x;
-            prev->pos.y = (dir.y * attrs->x3C) + link->pos.y;
-            prev->pos.z = (dir.z * attrs->x3C) + link->pos.z;
+            prev->pos.x = SG_FMA(dir.x, attrs->x3C, link->pos.x);
+            prev->pos.y = SG_FMA(dir.y, attrs->x3C, link->pos.y);
+            prev->pos.z = SG_FMA(dir.z, attrs->x3C, link->pos.z);
         }
 
         link = prev;
@@ -1009,9 +1025,9 @@ void it_802B91C4(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
     f32 d;
 
     it_802A3C98(&link->pos, pos, &dir);
-    link->pos.x = (dir.x * dist) + pos->x;
-    link->pos.y = (dir.y * dist) + pos->y;
-    link->pos.z = (dir.z * dist) + pos->z;
+    link->pos.x = SG_FMA(dir.x, dist, pos->x);
+    link->pos.y = SG_FMA(dir.y, dist, pos->y);
+    link->pos.z = SG_FMA(dir.z, dist, pos->z);
 
     while (prev != NULL) {
         prev->vel.y -= attrs->x44;
@@ -1020,13 +1036,13 @@ void it_802B91C4(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
 
         d = it_802A3C98(&prev->pos, &link->pos, &dir);
         if (d > attrs->x38) {
-            prev->pos.x = (dir.x * attrs->x38) + link->pos.x;
-            prev->pos.y = (dir.y * attrs->x38) + link->pos.y;
-            prev->pos.z = (dir.z * attrs->x38) + link->pos.z;
+            prev->pos.x = SG_FMA(dir.x, attrs->x38, link->pos.x);
+            prev->pos.y = SG_FMA(dir.y, attrs->x38, link->pos.y);
+            prev->pos.z = SG_FMA(dir.z, attrs->x38, link->pos.z);
         } else if (d < attrs->x3C) {
-            prev->pos.x = (dir.x * attrs->x3C) + link->pos.x;
-            prev->pos.y = (dir.y * attrs->x3C) + link->pos.y;
-            prev->pos.z = (dir.z * attrs->x3C) + link->pos.z;
+            prev->pos.x = SG_FMA(dir.x, attrs->x3C, link->pos.x);
+            prev->pos.y = SG_FMA(dir.y, attrs->x3C, link->pos.y);
+            prev->pos.z = SG_FMA(dir.z, attrs->x3C, link->pos.z);
         }
 
         link = prev;
@@ -1053,9 +1069,9 @@ static inline f32 it_802B9328_grav(f32 vely)
 
     if (HSD_Randf() > 0.9) {
         if (vely < 0.0) {
-            return -((one * HSD_Randf()) - vely);
+            return SG_FMA(-one, HSD_Randf(), vely); /* fnmsubs */
         } else {
-            return (one * HSD_Randf()) + vely;
+            return SG_FMA(one, HSD_Randf(), vely);
         }
     } else {
         return 0.0f;
@@ -1155,13 +1171,13 @@ s32 it_802B9328(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
             next->pos.y += next->vel.y;
             d = it_802A3C98(&next->pos, &cur->pos, &dir);
             if (d > attrs->x38) {
-                next->pos.x = dir.x * attrs->x38 + cur->pos.x;
-                next->pos.y = dir.y * attrs->x38 + cur->pos.y;
-                next->pos.z = dir.z * attrs->x38 + cur->pos.z;
+                next->pos.x = SG_FMA(dir.x, attrs->x38, cur->pos.x);
+                next->pos.y = SG_FMA(dir.y, attrs->x38, cur->pos.y);
+                next->pos.z = SG_FMA(dir.z, attrs->x38, cur->pos.z);
             } else if (d < attrs->x3C) {
-                next->pos.x = dir.x * attrs->x3C + cur->pos.x;
-                next->pos.y = dir.y * attrs->x3C + cur->pos.y;
-                next->pos.z = dir.z * attrs->x3C + cur->pos.z;
+                next->pos.x = SG_FMA(dir.x, attrs->x3C, cur->pos.x);
+                next->pos.y = SG_FMA(dir.y, attrs->x3C, cur->pos.y);
+                next->pos.z = SG_FMA(dir.z, attrs->x3C, cur->pos.z);
             }
             it_802A43EC(next);
         } else {
@@ -1191,9 +1207,9 @@ s32 it_802B9328(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
             }
 #endif
             if (it_802A3C98(pos, &cur->pos, &dir) > attrs->x38) {
-                next->pos.x = dir.x * attrs->x38 + cur->pos.x;
-                next->pos.y = dir.y * attrs->x38 + cur->pos.y;
-                next->pos.z = dir.z * attrs->x38 + cur->pos.z;
+                next->pos.x = SG_FMA(dir.x, attrs->x38, cur->pos.x);
+                next->pos.y = SG_FMA(dir.y, attrs->x38, cur->pos.y);
+                next->pos.z = SG_FMA(dir.z, attrs->x38, cur->pos.z);
                 next->x2C_b0 = 1;
                 it_802A43B8(next);
             } else {
@@ -1289,20 +1305,20 @@ s32 it_802B99A0(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
             it_802A4420(next);
             d = it_802A3C98(&next->pos, &cur->pos, &dir);
             if (d > attrs->x38) {
-                next->pos.x = (dir.x * attrs->x38) + cur->pos.x;
-                next->pos.y = (dir.y * attrs->x38) + cur->pos.y;
-                next->pos.z = (dir.z * attrs->x38) + cur->pos.z;
+                next->pos.x = SG_FMA(dir.x, attrs->x38, cur->pos.x);
+                next->pos.y = SG_FMA(dir.y, attrs->x38, cur->pos.y);
+                next->pos.z = SG_FMA(dir.z, attrs->x38, cur->pos.z);
             } else if (d < attrs->x3C) {
-                next->pos.x = (dir.x * attrs->x3C) + cur->pos.x;
-                next->pos.y = (dir.y * attrs->x3C) + cur->pos.y;
-                next->pos.z = (dir.z * attrs->x3C) + cur->pos.z;
+                next->pos.x = SG_FMA(dir.x, attrs->x3C, cur->pos.x);
+                next->pos.y = SG_FMA(dir.y, attrs->x3C, cur->pos.y);
+                next->pos.z = SG_FMA(dir.z, attrs->x3C, cur->pos.z);
             }
             it_802A43EC(next);
         } else {
             if (it_802A3C98(pos, &cur->pos, &dir) > attrs->x38) {
-                next->pos.x = (dir.x * attrs->x38) + cur->pos.x;
-                next->pos.y = (dir.y * attrs->x38) + cur->pos.y;
-                next->pos.z = (dir.z * attrs->x38) + cur->pos.z;
+                next->pos.x = SG_FMA(dir.x, attrs->x38, cur->pos.x);
+                next->pos.y = SG_FMA(dir.y, attrs->x38, cur->pos.y);
+                next->pos.z = SG_FMA(dir.z, attrs->x38, cur->pos.z);
                 next->x2C_b0 = 1;
                 it_802A43B8(next);
             } else {
@@ -1352,9 +1368,9 @@ void it_802B9CE8(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
     it_802A4420(link);
     d = it_802A3C98(&link->pos, pos, &dir);
     if (d > attrs->x38) {
-        link->pos.x = (dir.x * attrs->x38) + pos->x;
-        link->pos.y = (dir.y * attrs->x38) + pos->y;
-        link->pos.z = (dir.z * attrs->x38) + pos->z;
+        link->pos.x = SG_FMA(dir.x, attrs->x38, pos->x);
+        link->pos.y = SG_FMA(dir.y, attrs->x38, pos->y);
+        link->pos.z = SG_FMA(dir.z, attrs->x38, pos->z);
     }
     while (prev != NULL) {
         prev->vel.y -= samus_grapple_calc_grav(prev->vel.y);
@@ -1362,13 +1378,13 @@ void it_802B9CE8(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
         d = it_802A3C98(&prev->pos, &link->pos, &dir);
         dir_ptr = &dir;
         if (d > attrs->x38) {
-            prev->pos.x = (dir_ptr->x * attrs->x38) + link->pos.x;
-            prev->pos.y = (dir_ptr->y * attrs->x38) + link->pos.y;
-            prev->pos.z = (dir_ptr->z * attrs->x38) + link->pos.z;
+            prev->pos.x = SG_FMA(dir_ptr->x, attrs->x38, link->pos.x);
+            prev->pos.y = SG_FMA(dir_ptr->y, attrs->x38, link->pos.y);
+            prev->pos.z = SG_FMA(dir_ptr->z, attrs->x38, link->pos.z);
         } else if (d < attrs->x3C) {
-            prev->pos.x = (dir_ptr->x * attrs->x3C) + link->pos.x;
-            prev->pos.y = (dir_ptr->y * attrs->x3C) + link->pos.y;
-            prev->pos.z = (dir_ptr->z * attrs->x3C) + link->pos.z;
+            prev->pos.x = SG_FMA(dir_ptr->x, attrs->x3C, link->pos.x);
+            prev->pos.y = SG_FMA(dir_ptr->y, attrs->x3C, link->pos.y);
+            prev->pos.z = SG_FMA(dir_ptr->z, attrs->x3C, link->pos.z);
         }
         link = prev;
         prev = prev->prev;
@@ -1399,17 +1415,17 @@ bool it_802B9FD4(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs)
             it_802A4420(next);
             if (it_802A3C98(&next->pos, &cur->pos, &dir) > attrs->x38) {
                 dir_ptr = &dir;
-                next->pos.x = (dir_ptr->x * attrs->x38) + cur->pos.x;
-                next->pos.y = (dir_ptr->y * attrs->x38) + cur->pos.y;
-                next->pos.z = (dir_ptr->z * attrs->x38) + cur->pos.z;
+                next->pos.x = SG_FMA(dir_ptr->x, attrs->x38, cur->pos.x);
+                next->pos.y = SG_FMA(dir_ptr->y, attrs->x38, cur->pos.y);
+                next->pos.z = SG_FMA(dir_ptr->z, attrs->x38, cur->pos.z);
             }
             it_802A43EC(next);
         } else {
             if (it_802A3C98(pos, &cur->pos, &dir) > attrs->x38) {
                 dir_ptr = &dir;
-                next->pos.x = (dir_ptr->x * attrs->x38) + cur->pos.x;
-                next->pos.y = (dir_ptr->y * attrs->x38) + cur->pos.y;
-                next->pos.z = (dir_ptr->z * attrs->x38) + cur->pos.z;
+                next->pos.x = SG_FMA(dir_ptr->x, attrs->x38, cur->pos.x);
+                next->pos.y = SG_FMA(dir_ptr->y, attrs->x38, cur->pos.y);
+                next->pos.z = SG_FMA(dir_ptr->z, attrs->x38, cur->pos.z);
                 next->x2C_b0 = 1;
                 it_802A43B8(next);
             } else {
@@ -1467,8 +1483,8 @@ bool it_802BA194(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
         f32 dx = iter->coll_data.cur_pos.x - iter->coll_data.last_pos.x;
         f32 dz = iter->coll_data.cur_pos.z - iter->coll_data.last_pos.z;
         remaining = dz - iter->vel.z;
-        iter->vel.x += 0.12 * (dx - iter->vel.x);
-        iter->vel.z += 0.12 * remaining;
+        iter->vel.x = SG_FMAD(0.12, dx - iter->vel.x, iter->vel.x);
+        iter->vel.z = SG_FMAD(0.12, remaining, iter->vel.z);
         iter = iter->prev;
     }
     return result;
@@ -1538,10 +1554,10 @@ bool it_802BA3BC(ItemLink* tail, ItemLink* head, Vec3* pos,
     while (link != NULL && link->x2C_b0) {
         count++;
         if (it_802A3C98(&link->pos, &head->pos, &dir) > attrs->x38) {
-            link->pos.x = (dir_ptr->x * attrs->x38) + head->pos.x;
+            link->pos.x = SG_FMA(dir_ptr->x, attrs->x38, head->pos.x);
             dir_ptr = &dir;
-            link->pos.y = (dir_ptr->y * attrs->x38) + head->pos.y;
-            link->pos.z = (dir_ptr->z * attrs->x38) + head->pos.z;
+            link->pos.y = SG_FMA(dir_ptr->y, attrs->x38, head->pos.y);
+            link->pos.z = SG_FMA(dir_ptr->z, attrs->x38, head->pos.z);
         }
         head = link;
         link = head->next;
@@ -1549,9 +1565,9 @@ bool it_802BA3BC(ItemLink* tail, ItemLink* head, Vec3* pos,
 
     if (it_802A3C98(pos, &head->pos, &dir) > attrs->x38) {
         dir_ptr = &dir;
-        pos->x = (dir_ptr->x * attrs->x38) + head->pos.x;
-        pos->y = (dir_ptr->y * attrs->x38) + head->pos.y;
-        pos->z = (dir_ptr->z * attrs->x38) + head->pos.z;
+        pos->x = SG_FMA(dir_ptr->x, attrs->x38, head->pos.x);
+        pos->y = SG_FMA(dir_ptr->y, attrs->x38, head->pos.y);
+        pos->z = SG_FMA(dir_ptr->z, attrs->x38, head->pos.z);
     }
 
     if (count != 0) {
@@ -1598,9 +1614,9 @@ void it_802BA5DC(ItemLink* tail, ItemLink* head, Vec3* pos,
                     attrs->x38)
                 {
                     dir_ptr = &dir;
-                    link->pos.x = (dir_ptr->x * attrs->x38) + head_link->pos.x;
-                    link->pos.y = (dir_ptr->y * attrs->x38) + head_link->pos.y;
-                    link->pos.z = (dir_ptr->z * attrs->x38) + head_link->pos.z;
+                    link->pos.x = SG_FMA(dir_ptr->x, attrs->x38, head_link->pos.x);
+                    link->pos.y = SG_FMA(dir_ptr->y, attrs->x38, head_link->pos.y);
+                    link->pos.z = SG_FMA(dir_ptr->z, attrs->x38, head_link->pos.z);
                 } else {
                     retracted = true;
                 }
@@ -1611,9 +1627,9 @@ void it_802BA5DC(ItemLink* tail, ItemLink* head, Vec3* pos,
 
         if (it_802A3C98(pos_ptr = pos, &head_link->pos, &dir) > attrs->x38) {
             dir_ptr = &dir;
-            pos_ptr->x = (dir_ptr->x * attrs->x38) + head_link->pos.x;
-            pos->y = (dir_ptr->y * attrs->x38) + head_link->pos.y;
-            pos_ptr->z = (dir_ptr->z * attrs->x38) + head_link->pos.z;
+            pos_ptr->x = SG_FMA(dir_ptr->x, attrs->x38, head_link->pos.x);
+            pos->y = SG_FMA(dir_ptr->y, attrs->x38, head_link->pos.y);
+            pos_ptr->z = SG_FMA(dir_ptr->z, attrs->x38, head_link->pos.z);
         }
     }
 }
@@ -1647,17 +1663,17 @@ bool it_802BA760(ItemLink* link, Vec3* pos, itSamusGrappleAttributes* attrs,
         if (next->x2C_b0) {
             if (it_802A3C98(&next->pos, &cur->pos, &dir) > attrs->x38) {
                 dir_ptr = &dir;
-                next->pos.x = (dir_ptr->x * attrs->x38) + cur->pos.x;
-                next->pos.y = (dir_ptr->y * attrs->x38) + cur->pos.y;
-                next->pos.z = (dir_ptr->z * attrs->x38) + cur->pos.z;
+                next->pos.x = SG_FMA(dir_ptr->x, attrs->x38, cur->pos.x);
+                next->pos.y = SG_FMA(dir_ptr->y, attrs->x38, cur->pos.y);
+                next->pos.z = SG_FMA(dir_ptr->z, attrs->x38, cur->pos.z);
             }
             it_802A43EC(next);
         } else {
             if (it_802A3C98(pos, &cur->pos, &dir) > attrs->x38) {
                 dir_ptr = &dir;
-                next->pos.x = (dir_ptr->x * attrs->x38) + cur->pos.x;
-                next->pos.y = (dir_ptr->y * attrs->x38) + cur->pos.y;
-                next->pos.z = (dir_ptr->z * attrs->x38) + cur->pos.z;
+                next->pos.x = SG_FMA(dir_ptr->x, attrs->x38, cur->pos.x);
+                next->pos.y = SG_FMA(dir_ptr->y, attrs->x38, cur->pos.y);
+                next->pos.z = SG_FMA(dir_ptr->z, attrs->x38, cur->pos.z);
                 next->x2C_b0 = 1;
                 it_802A43B8(next);
             } else {
