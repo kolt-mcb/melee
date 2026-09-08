@@ -24,6 +24,10 @@
 
 #include "mncharsel.static.h"
 
+#if BUILD_TARGET_PC
+#include <stdlib.h>
+#endif
+
 #include "types.h"
 
 #include "baselib/forward.h"
@@ -5220,8 +5224,49 @@ void mnCharSel_8026688C_OnEnter(void* arg0)
     mnCharSel_802640A0();
 }
 
+#if BUILD_TARGET_PC
+/* MELEE_CSS_UNLOCK=1 makes every character icon selectable.
+ *
+ * icons[i].state gates the A press -- mnCharSel takes an icon only when the
+ * cursor is inside its bounds AND state >= 1 -- and the save decides it. The
+ * character-by-stage console sweep hit that head on: eleven of twenty-five
+ * characters timed out on every single stage, and the cursor was measured
+ * sitting on the right icon when it happened (Pikachu at -13.52, 2.06 against
+ * a cell centre of -13.90, 2.50). The route was fine; the roster was locked.
+ * That is the whole bottom row and the four characters on the ends of the
+ * other two, which is the outer ring of the grid.
+ *
+ * The same shape as MELEE_SSS_KIND on the stage select, and the same fix on
+ * both sides: this here, and MELEE_POKE writing the same byte in the console's
+ * copy. Every frame, not once on entry -- the screen writes state from the
+ * save data after OnEnter runs, so a single write is overwritten and the
+ * press still does nothing. */
+void pc_css_force_unlock(void)
+{
+    static const char* on;
+    static int checked;
+    int i;
+
+    if (!checked) {
+        checked = 1;
+        on = getenv("MELEE_CSS_UNLOCK");
+    }
+    if (on == NULL) {
+        return;
+    }
+    for (i = 0; i < (int) (sizeof(icons) / sizeof(icons[0])); i++) {
+        if (icons[i].state < 2) {
+            icons[i].state = 2;
+        }
+    }
+}
+#endif
+
 void mnCharSel_802669F4_OnFrame(void)
 {
+#if BUILD_TARGET_PC
+    pc_css_force_unlock();
+#endif
 #if BUILD_TARGET_PC
     if (getenv("MELEE_CSSLOG") != NULL) {
         static int f = 0;

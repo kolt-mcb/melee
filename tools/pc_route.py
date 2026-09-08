@@ -155,6 +155,18 @@ def emit(char0, char1, base, gap=60, hold_gap=10, lag=0):
 # route select any stage. That is what lets a character-by-stage sweep run
 # against the console at all: the console cannot be booted into a match, and
 # 806 hand-authored stage-select routes are not a thing anyone should write.
+# The character-select icon table, `icons[]` in mn/mncharsel.static.h:
+# twenty-six 0x1C-byte records whose +0x02 byte is the state that gates the A
+# press (0 locked, 1 unlocked, 2 unlocked and shown). The save decides it, and
+# a save without the unlocks leaves eleven of twenty-five characters
+# unselectable -- the whole bottom row of the grid and the four on the ends of
+# the other two rows. The cursor lands on them and nothing happens, so the run
+# sits in the character select until the harness kills it.
+CSS_TABLE = 0x803F0B24
+CSS_STRIDE = 0x1C
+CSS_STATE_OFF = 0x2
+CSS_ICONS = 26
+
 SSS_TABLE = 0x803F06D0
 SSS_STRIDE = 0x1C
 SSS_KIND_OFF = 0xB
@@ -198,6 +210,10 @@ def stage_poke(kind):
         # run sat in the stage select until the harness killed it. Both sides
         # get the same treatment, which is what keeps them comparable.
         out.append("%x:1:2" % (base + SSS_SEL_OFF))
+    # And every character icon selectable, for the same reason: the port does
+    # this with MELEE_CSS_UNLOCK, the console needs the byte written.
+    for i in range(CSS_ICONS):
+        out.append("%x:1:2" % (CSS_TABLE + CSS_STRIDE * i + CSS_STATE_OFF))
     return ",".join(out)
 
 
@@ -244,6 +260,7 @@ def case_lines(char0, char1, stage_name, stage_kind, lag=0):
         "scene_skew: 4",
         "ignore: seed",
         "env: MELEE_SSS_KIND=%d" % stage_kind,
+        "env: MELEE_CSS_UNLOCK=1",
         "ref_env: MELEE_POKE=%s" % stage_poke(stage_kind),
     ]
     out += ["ref_input: " + s for s in CASE_PROLOGUE]

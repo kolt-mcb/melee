@@ -2607,6 +2607,33 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
         stage_info.x280[pair[1]] = jobj;
         pair += 2;
     }
+#if BUILD_TARGET_PC
+    /* And what the four player spawns came out as. The table being filled is
+     * not the same as it being right, and the position is the thing that can
+     * be checked against the file: take the map_head public as
+     * UnkStageDat_gcn, walk its 12-byte entries to the pair table, and the
+     * world position is the sum of the translations up the parents. Onett's
+     * slot 0 is (-53, 28) and Fountain of Dreams' is (-55, 28), both of which
+     * this prints when it is working.
+     *
+     * Without it a fighter in the wrong place on match frame 1 is ambiguous:
+     * it could be the spawn point, or the right spawn point and a stage that
+     * does not catch the fighter where the console's does. Those are
+     * different bugs in different files. */
+    if (getenv("MELEE_STAGE_DIAG") != NULL) {
+        int s;
+        for (s = 0; s < 4; s++) {
+            if (stage_info.x280[s] != NULL) {
+                Vec3 v;
+                lb_8000B1CC(stage_info.x280[s], NULL, &v);
+                fprintf(stderr, "[X280] spawn %d = (%.4f, %.4f, %.4f)\n", s,
+                        (double) v.x, (double) v.y, (double) v.z);
+            } else {
+                fprintf(stderr, "[X280] spawn %d = NONE\n", s);
+            }
+        }
+    }
+#endif
 }
 
 void Ground_801C36F4(int map_id, HSD_JObj* root, UNK_T joint)
