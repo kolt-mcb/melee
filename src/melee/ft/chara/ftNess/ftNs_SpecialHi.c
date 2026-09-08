@@ -704,9 +704,9 @@ void ftNs_SpecialAirHi_Enter(HSD_GObj* gobj)
     fighter_data3 = GET_FIGHTER(gobj);
     ftPartSetRotX(
         fighter_data3, 0,
-        (fighter_data3->facing_dir *
-         atan2f(fighter_data3->self_vel.x, fighter_data3->self_vel.y)) -
-            (float) M_PI_2);
+        NS_FMA(fighter_data3->facing_dir,
+               atan2f(fighter_data3->self_vel.x, fighter_data3->self_vel.y),
+               -(float) M_PI_2)); /* fmsubs */
     fighter_data2->death2_cb = NULL;
     fighter_data2->take_dmg_cb = NULL;
     fighter_data2->x1968_jumpsUsed = fighter_data2->co_attrs.max_jumps;
@@ -1326,9 +1326,9 @@ inline void ftNess_atan2(HSD_GObj* gobj)
 
     ftPartSetRotX(
         fighter_data2, 0,
-        (fighter_data2->facing_dir *
-         atan2f(fighter_data2->self_vel.x, fighter_data2->self_vel.y)) -
-            (float) M_PI_2);
+        NS_FMA(fighter_data2->facing_dir,
+               atan2f(fighter_data2->self_vel.x, fighter_data2->self_vel.y),
+               -(float) M_PI_2)); /* fmsubs */
 }
 
 inline void* getFtSpecialAttrs2(Fighter* fp)

@@ -24,6 +24,18 @@
 #include "pl/plbonuslib.h"
 #include "ty/tydisplay.h"
 
+/* Arwing/Wolfen enemies: the rotations are fmsubs/fmadds pairs with
+ * the right-hand product plain, the knockback angle and the spawn
+ * offsets are fmadds, the rsqrt a double fnmsub. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define ZK_FMA(a, b, c) fmaf((a), (b), (c))
+#define ZK_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define ZK_FMA(a, b, c) ((a) * (b) + (c))
+#define ZK_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 static void sdata2_order(void)
 {
     (void) 0.0f;
@@ -131,9 +143,10 @@ static inline f32 it_8027B798_CalcAngle(GroundOrAir ground_or_air, s32 angle,
     } else {
         f32 temp_angle =
             0.017453292f *
-            ((common_data->x148 * ((knockback - common_data->x14C) /
-                                   (common_data->x150 - common_data->x14C))) +
-             1.0f);
+            ZK_FMA(common_data->x148,
+                   (knockback - common_data->x14C) /
+                       (common_data->x150 - common_data->x14C),
+                   1.0f);
         if (temp_angle > 0.017453292f * common_data->x148) {
             temp_angle = 0.017453292f * common_data->x148;
         }
@@ -222,8 +235,8 @@ int it_8027BA54(HSD_GObj* item_gobj, Vec3* arg1)
 
     item = GET_ITEM(item_gobj);
     Camera_GetTransformPosition(&sp20);
-    sp20.x = ((10.0f * (HSD_Randf() - 0.5)) + sp20.x);
-    sp20.y += 30.0f * HSD_Randf();
+    sp20.x = (f32) ZK_FMAD(10.0, HSD_Randf() - 0.5, sp20.x);
+    sp20.y = ZK_FMA(30.0f, HSD_Randf(), sp20.y);
     lbVector_Diff(&sp20, &item->pos, &sp14);
     lbVector_Normalize(&sp14);
     sp14.x *= 10.0f;
@@ -244,8 +257,8 @@ void it_8027BB1C(Vec3* arg0, Vec3* arg1)
         sin = sinf(arg1->x);
         t1 = arg0->y;
         t2 = arg0->z;
-        arg0->y = (t1 * cos) - (t2 * sin);
-        arg0->z = (t1 * sin) + (t2 * cos);
+        arg0->y = ZK_FMA(t1, cos, -(t2 * sin)); /* fmsubs */
+        arg0->z = ZK_FMA(t1, sin, t2 * cos);
     }
 
     {
@@ -253,15 +266,15 @@ void it_8027BB1C(Vec3* arg0, Vec3* arg1)
         sin = sinf(arg1->y);
         t1 = arg0->x;
         t2 = arg0->z;
-        arg0->x = (t1 * cos) + (t2 * sin);
-        arg0->z = (t2 * cos) - (t1 * sin);
+        arg0->x = ZK_FMA(t1, cos, t2 * sin);
+        arg0->z = ZK_FMA(t2, cos, -(t1 * sin));
     }
 
     {
         cos = cosf(arg1->z);
         sin = sinf(arg1->z);
-        t1 = (arg0->x * cos) - (arg0->y * sin);
-        t2 = (arg0->x * sin) + (arg0->y * cos);
+        t1 = ZK_FMA(arg0->x, cos, -(arg0->y * sin));
+        t2 = ZK_FMA(arg0->x, sin, arg0->y * cos);
         arg0->x = t1;
         arg0->y = t2;
     }
@@ -322,13 +335,13 @@ block_7:
     } else {
         var_f29 = temp_f1 / (f32) item->xDD4_itemVar.zako.x14.x;
         item->xDD4_itemVar.zako.x14.x--;
-        if (((sp5C.x * sp68.y) - (sp5C.y * sp68.x)) < 0) {
+        if (ZK_FMA(sp5C.x, sp68.y, -(sp5C.y * sp68.x)) < 0) {
             var_f29 = -var_f29;
         }
         temp_f30 = cosf(var_f29);
         temp_f1 = sinf(var_f29);
-        var_f29 = (sp5C.x * temp_f30) - (sp5C.y * temp_f1);
-        var_f28 = (sp5C.x * temp_f1) + (sp5C.y * temp_f30);
+        var_f29 = ZK_FMA(sp5C.x, temp_f30, -(sp5C.y * temp_f1));
+        var_f28 = ZK_FMA(sp5C.x, temp_f1, sp5C.y * temp_f30);
     }
 
     sp44 = vecs[0];
@@ -402,13 +415,13 @@ void it_8027C0F0(Item_GObj* item_gobj, Vec3* arg1, f64 arg8, f32 arg9)
         } else {
             var_f29 = temp_f1 / (f32) item->xDD4_itemVar.zako.x14.x;
             item->xDD4_itemVar.zako.x14.x--;
-            if (((sp5C.x * sp68.y) - (sp5C.y * sp68.x)) < 0) {
+            if (ZK_FMA(sp5C.x, sp68.y, -(sp5C.y * sp68.x)) < 0) {
                 var_f29 = -var_f29;
             }
             temp_f30 = cosf(var_f29);
             temp_f1 = sinf(var_f29);
-            var_f29 = (sp5C.x * temp_f30) - (sp5C.y * temp_f1);
-            var_f28 = (sp5C.x * temp_f1) + (sp5C.y * temp_f30);
+            var_f29 = ZK_FMA(sp5C.x, temp_f30, -(sp5C.y * temp_f1));
+            var_f28 = ZK_FMA(sp5C.x, temp_f1, sp5C.y * temp_f30);
         }
 
         sp44 = vecs[0];
@@ -503,9 +516,9 @@ static inline float itzako_sqrtf(float x)
 
     if (x > 0.0f) {
         double guess = __frsqrte((double) x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
+        guess = 0.5 * guess * ZK_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * ZK_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * ZK_FMAD(-(double) x, guess * guess, 3.0);
         y = (float) (x * guess);
         return y;
     }
@@ -539,8 +552,8 @@ void it_8027C8D0(Vec3* arg0, Vec3* arg1, f32 arg8)
         return;
     }
 
-    arg0->x = vec_mag * ((sp1C.x * var_f6) - (sp1C.y * dir));
-    arg0->y = vec_mag * ((sp1C.x * dir) + (sp1C.y * var_f6));
+    arg0->x = vec_mag * ZK_FMA(sp1C.x, var_f6, -(sp1C.y * dir));
+    arg0->y = vec_mag * ZK_FMA(sp1C.x, dir, sp1C.y * var_f6);
     arg0->z = 0.0f;
 }
 

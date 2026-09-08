@@ -153,12 +153,12 @@ def port_sites(path):
     written inside the function body said two, and 6-of-6 read as 2-of-6.
     """
     counts = {}
-    uses = {}
+    calls = {}
     cur = None
     try:
         text = open(path, errors="replace").read()
     except OSError:
-        return counts, {}, uses
+        return counts, {}, {}
     # Macro bodies, joined across backslash continuations, and how many
     # fused ops each carries -- including through macros they use. The
     # continuation alternative goes FIRST: with [^\n] first the match
@@ -191,7 +191,10 @@ def port_sites(path):
         macro_n[name] = n
         return n
 
-    defn = re.compile(r"^[A-Za-z_][\w\s\*]*?\b([A-Za-z_]\w*)\s*\([^;]*$")
+    # The name may be the first thing on the line (return type on the line
+    # above -- NessFloatMath_PKThunder2 in ftNs_SpecialHi.c), so the
+    # first-character test is a lookahead and the prefix may be empty.
+    defn = re.compile(r"^(?=[A-Za-z_])[\w\s\*]*?\b([A-Za-z_]\w*)\s*\([^;]*$")
     # Inline helpers the console has no symbol for -- lb_rot_sin, end(),
     # sqrDistance, lbVector_Len -- count at each call, like macros. Their
     # fused ops sit in the caller's console count and nowhere else, so
@@ -236,8 +239,8 @@ def port_sites(path):
                     counts[cur] += macro_count(used)
                 elif used in inline_n and used != cur:
                     counts[cur] += inline_n[used]
-                elif used != cur and used in counts:
-                    uses.setdefault(cur, []).append(used)
+                elif used != cur:
+                    calls.setdefault(cur, []).append(used)
     # A non-static function MWCC inlined anyway shows the same way as a
     # static one: its fused ops sit in the caller's console count.
     # ftCo_800CF6E8 carries thirty-seven copies of
@@ -247,6 +250,8 @@ def port_sites(path):
     # settle it either way: the inlined copy keeps the callee's own
     # recursive bl.) The cap is the honest limit of what a census can
     # know; the disassembly settles any function that matters.
+    uses = {fn: [u for u in lst if u in counts]
+            for fn, lst in calls.items()}
     return counts, dict(counts), uses
 
 

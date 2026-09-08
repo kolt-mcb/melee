@@ -64,6 +64,19 @@ static s32 grMc_8049F440[30];
 
 #if BUILD_TARGET_PC
 #include <platform.h>
+
+/* Mute City: the track-line offsets (10*cos + x, 0.35*d + x), the car
+ * position blend (single fmadds inside a double fmadd), the range
+ * check (x*x + y*y plain, z fused), and the slope lerp are fused on
+ * the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define MC_FMA(a, b, c) fmaf((a), (b), (c))
+#define MC_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define MC_FMA(a, b, c) ((a) * (b) + (c))
+#define MC_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
 #endif
 
 /* Forward declarations */
@@ -984,10 +997,10 @@ void grMuteCity_801F0D20(Ground_GObj* gobj)
         angle = atan2f(sp1C.y - sp28.y, sp1C.x - sp28.x);
         angle_back = (3.1415927f + angle) - 0.2617994f;
         angle_fwd = 0.2617994f + angle;
-        mpLineSetPos(0x31, (10.0f * cosf(angle_back)) + sp28.x,
-                     (10.0f * sinf(angle_back)) + sp28.y, sp28.x, sp28.y);
-        mpLineSetPos(0x35, sp1C.x, sp1C.y, (10.0f * cosf(angle_fwd)) + sp1C.x,
-                     (10.0f * sinf(angle_fwd)) + sp1C.y);
+        mpLineSetPos(0x31, MC_FMA(10.0f, cosf(angle_back), sp28.x),
+                     MC_FMA(10.0f, sinf(angle_back), sp28.y), sp28.x, sp28.y);
+        mpLineSetPos(0x35, sp1C.x, sp1C.y, MC_FMA(10.0f, cosf(angle_fwd), sp1C.x),
+                     MC_FMA(10.0f, sinf(angle_fwd), sp1C.y));
     } else {
         mpLineSetPos(0x31, sp28.x - 5.0f, sp28.y, sp28.x, sp28.y);
         mpLineSetPos(0x35, sp1C.x, sp1C.y, 5.0f + sp1C.x, sp1C.y);
@@ -996,8 +1009,8 @@ void grMuteCity_801F0D20(Ground_GObj* gobj)
     gp->gv.mutecity.xE4 = sp28;
     gp->gv.mutecity.xF0 = sp1C;
     lbVector_Diff(&sp1C, &sp28, &sp10);
-    mpLineSetPos(0x33, sp28.x + (0.35f * sp10.x), sp28.y + (0.35f * sp10.y),
-                 sp28.x + (0.65f * sp10.x), sp28.y + (0.65f * sp10.y));
+    mpLineSetPos(0x33, MC_FMA(0.35f, sp10.x, sp28.x), MC_FMA(0.35f, sp10.y, sp28.y),
+                 MC_FMA(0.65f, sp10.x, sp28.x), MC_FMA(0.65f, sp10.y, sp28.y));
     mpLib_80055E24(4);
     mpLib_8005667C(4);
 }
@@ -1523,9 +1536,12 @@ void grMuteCity_801F1A34(HSD_GObj* arg0, Ground_GObj* arg1)
         PSVECCrossProduct(&spB4, &sp90, &spA8);
         lbVector_Normalize(&spA8);
 
-        car_pos.x = (3.0 * sp90.x) + (((spC0.x - spCC.x) * car->xC) + spCC.x);
-        car_pos.y = (3.0 * sp90.y) + (((spC0.y - spCC.y) * car->xC) + spCC.y);
-        car_pos.z = (3.0 * sp90.z) + (((spC0.z - spCC.z) * car->xC) + spCC.z);
+        car_pos.x = (f32) MC_FMAD(
+            3.0, sp90.x, MC_FMA(spC0.x - spCC.x, car->xC, spCC.x));
+        car_pos.y = (f32) MC_FMAD(
+            3.0, sp90.y, MC_FMA(spC0.y - spCC.y, car->xC, spCC.y));
+        car_pos.z = (f32) MC_FMAD(
+            3.0, sp90.z, MC_FMA(spC0.z - spCC.z, car->xC, spCC.z));
         *(Vec3*) &car->x14 = car_pos;
 
         HSD_JObjSetTranslate(jobj, &car_pos);
@@ -1542,9 +1558,10 @@ void grMuteCity_801F1A34(HSD_GObj* arg0, Ground_GObj* arg1)
                 grLib_801C96F8(0x11A, 0, &car_pos);
                 if (var_r26 < 1) {
                     if (car_pos.z < 0.0f) {
-                        var_f31 = (car_pos.z * car_pos.z) +
-                                  ((car_pos.x * car_pos.x) +
-                                   (car_pos.y * car_pos.y));
+                        /* 801F22C0: x*x + y*y plain, z*z fused on */
+                        var_f31 = MC_FMA(car_pos.z, car_pos.z,
+                                         (car_pos.x * car_pos.x) +
+                                             (car_pos.y * car_pos.y));
                         sp1C = sqrtf(var_f31);
                         var_f31 = sp1C;
                         if (var_f31 < 300.0f) {
@@ -1587,7 +1604,7 @@ void grMuteCity_801F1A34(HSD_GObj* arg0, Ground_GObj* arg1)
                             f32 rand_y;
                             spawn_pos = grMc_803B81B8;
                             HSD_JObjAddChild(jobj, new_jobj);
-                            rand_y = (1.0471976f * HSD_Randf()) - 0.5235988f;
+                            rand_y = MC_FMA(1.0471976f, HSD_Randf(), -0.5235988f); /* fmsubs */
                             HSD_JObjSetTranslateY(new_jobj, rand_y);
                             HSD_JObjSetTranslate(new_jobj, &spawn_pos);
                         }
@@ -1886,7 +1903,7 @@ bool grMuteCity_801F2C10(Vec3* pos, int arg, HSD_JObj* jobj)
                 }
                 slope = (gp->gv.mutecity.xF0.y - gp->gv.mutecity.xE4.y) /
                         (x_max - x_min);
-                y = slope * (x - x_min) + gp->gv.mutecity.xE4.y;
+                y = MC_FMA(slope, x - x_min, gp->gv.mutecity.xE4.y);
                 if (pos->y > y - 3.0F) {
                     return true;
                 }
