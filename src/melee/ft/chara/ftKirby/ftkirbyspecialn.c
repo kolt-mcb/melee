@@ -64,6 +64,15 @@
 #include <baselib/random.h>
 #include <MSL/math.h>
 
+/* Kirby's Inhale: offset*facing onto the position is one fmadds on the
+ * console (800F5B88 and siblings). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KN_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KN_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static MotionFlags const ftKb_MF_SpecialN_Coll =
     ftCommon_GroundAirColl_MF | Ft_MF_KeepGfx;
 static MotionFlags const ftKb_MF_SpecialN_Capture_Coll =
@@ -425,9 +434,8 @@ void ftKb_SpecialHi_800F3570(Fighter_GObj* gobj)
         bottom_y = pos_y - slide_speed;
         pos_x = fp->cur_pos.x;
         if (mpCheckAllRemap(NULL, 0, NULL, &sp1C, -1, -1, pos_x, top_y,
-                            (fp->mv.kb.specialhi.x18.y * slide_speed *
-                             floor_normal_x_sign) +
-                                pos_x,
+                            KN_FMA(fp->mv.kb.specialhi.x18.y * slide_speed,
+                                   floor_normal_x_sign, pos_x),
                             bottom_y) == 0)
         {
             sp1C = p->vec;
@@ -1876,7 +1884,7 @@ void ftKb_SpecialN_800F5B5C(Fighter_GObj* gobj, Vec3* output)
     Fighter* fp = GET_FIGHTER(gobj);
     ftKb_DatAttrs* da = fp->dat_attrs;
     *output = fp->cur_pos;
-    output->x += da->specialn_x_offset_inhaled * fp->facing_dir;
+    output->x = KN_FMA(da->specialn_x_offset_inhaled, fp->facing_dir, output->x);
     output->y += da->specialn_y_offset_inhaled;
 }
 
@@ -1950,7 +1958,7 @@ void ftKb_SpecialN_800F5DE8(Fighter_GObj* gobj)
     Vec3 pos = fp->cur_pos;
     PAD_STACK(20);
 
-    pos.x += da->specialn_x_offset_inhaled * fp->facing_dir;
+    pos.x = KN_FMA(da->specialn_x_offset_inhaled, fp->facing_dir, pos.x);
     pos.y += da->specialn_y_offset_inhaled;
     if (it_802F23AC(fp->target_item_gobj, &pos) <
         da->specialn_inhale_velocity * da->specialn_inhale_velocity)
@@ -1971,7 +1979,7 @@ void ftKb_SpecialN_800F5EA8(Fighter_GObj* gobj)
     Vec3 pos = fp->cur_pos;
     PAD_STACK(20);
 
-    pos.x += da->specialn_x_offset_inhaled * fp->facing_dir;
+    pos.x = KN_FMA(da->specialn_x_offset_inhaled, fp->facing_dir, pos.x);
     pos.y += da->specialn_y_offset_inhaled;
     if (ftCo_800BD19C(fp->victim_gobj, &pos) <
         da->specialn_inhale_velocity * da->specialn_inhale_velocity)
@@ -2445,7 +2453,7 @@ void ftKb_SpecialNCapture0_Anim(Fighter_GObj* gobj)
     Vec3 pos = fp->cur_pos;
     u8 _pad[32];
 
-    pos.x += da->specialn_x_offset_inhaled * fp->facing_dir;
+    pos.x = KN_FMA(da->specialn_x_offset_inhaled, fp->facing_dir, pos.x);
     pos.y += da->specialn_y_offset_inhaled;
     if (it_802F23AC(fp->target_item_gobj, &pos) <
         SQ(da->specialn_inhale_velocity))
@@ -2467,7 +2475,7 @@ void ftKb_SpecialNCapture_Anim(Fighter_GObj* gobj)
     Vec3 pos = fp->cur_pos;
     u8 _pad[32];
 
-    pos.x += da->specialn_x_offset_inhaled * fp->facing_dir;
+    pos.x = KN_FMA(da->specialn_x_offset_inhaled, fp->facing_dir, pos.x);
     pos.y += da->specialn_y_offset_inhaled;
     if (ftCo_800BD19C(fp->victim_gobj, &pos) <
         SQ(da->specialn_inhale_velocity))

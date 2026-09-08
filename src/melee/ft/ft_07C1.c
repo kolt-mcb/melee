@@ -23,6 +23,15 @@
 
 #include <baselib/gobj.h>
 
+/* The attacker/defender momentum share is one fmadds per axis on the
+ * console (8007C388 and siblings): diff*ratio, or delta*ratio, onto x98. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SK_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SK_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ft_8007C224(HSD_GObj* gobj);
 
 void ft_8007C114(HSD_GObj* gobj)
@@ -94,16 +103,16 @@ static inline void inlineA0(Fighter* fp0, Fighter* fp1, HitCapsule* hit1)
         }
         temp_f5 = temp_f1 * p_ftCommonData->hit_weight_mul;
         if (fp0->pos_delta.x * fp1->pos_delta.x >= 0) {
-            fp1->x98_atk_shield_kb.x +=
-                (fp0->pos_delta.x - fp1->pos_delta.x) * temp_f5;
+            fp1->x98_atk_shield_kb.x = SK_FMA(
+                temp_f5, fp0->pos_delta.x - fp1->pos_delta.x, fp1->x98_atk_shield_kb.x);
         } else {
-            fp1->x98_atk_shield_kb.x += fp0->pos_delta.x * temp_f5;
+            fp1->x98_atk_shield_kb.x = SK_FMA(fp0->pos_delta.x, temp_f5, fp1->x98_atk_shield_kb.x);
         }
         if (fp0->pos_delta.y * fp1->pos_delta.y >= 0) {
-            fp1->x98_atk_shield_kb.y +=
-                (fp0->pos_delta.y - fp1->pos_delta.y) * temp_f5;
+            fp1->x98_atk_shield_kb.y = SK_FMA(
+                temp_f5, fp0->pos_delta.y - fp1->pos_delta.y, fp1->x98_atk_shield_kb.y);
         } else {
-            fp1->x98_atk_shield_kb.y += fp0->pos_delta.y * temp_f5;
+            fp1->x98_atk_shield_kb.y = SK_FMA(fp0->pos_delta.y, temp_f5, fp1->x98_atk_shield_kb.y);
         }
     }
 }
@@ -127,16 +136,16 @@ void ft_8007C2E0(Fighter* fp0, HitCapsule* hit0, Fighter* fp1,
             }
             weight_ratio *= p_ftCommonData->hit_weight_mul;
             if (fp0->pos_delta.x * fp1->pos_delta.x >= 0) {
-                fp1->x98_atk_shield_kb.x +=
-                    (fp0->pos_delta.x - fp1->pos_delta.x) * weight_ratio;
+                fp1->x98_atk_shield_kb.x = SK_FMA(
+                weight_ratio, fp0->pos_delta.x - fp1->pos_delta.x, fp1->x98_atk_shield_kb.x);
             } else {
-                fp1->x98_atk_shield_kb.x += fp0->pos_delta.x * weight_ratio;
+                fp1->x98_atk_shield_kb.x = SK_FMA(fp0->pos_delta.x, weight_ratio, fp1->x98_atk_shield_kb.x);
             }
             if (fp0->pos_delta.y * fp1->pos_delta.y >= 0) {
-                fp1->x98_atk_shield_kb.y +=
-                    (fp0->pos_delta.y - fp1->pos_delta.y) * weight_ratio;
+                fp1->x98_atk_shield_kb.y = SK_FMA(
+                weight_ratio, fp0->pos_delta.y - fp1->pos_delta.y, fp1->x98_atk_shield_kb.y);
             } else {
-                fp1->x98_atk_shield_kb.y += fp0->pos_delta.y * weight_ratio;
+                fp1->x98_atk_shield_kb.y = SK_FMA(fp0->pos_delta.y, weight_ratio, fp1->x98_atk_shield_kb.y);
             }
         }
     }
@@ -150,16 +159,16 @@ void ft_8007C2E0(Fighter* fp0, HitCapsule* hit0, Fighter* fp1,
             }
             weight_ratio *= p_ftCommonData->hit_weight_mul;
             if (fp0->pos_delta.x * fp1->pos_delta.x >= 0) {
-                fp0->x98_atk_shield_kb.x +=
-                    (fp1->pos_delta.x - fp0->pos_delta.x) * weight_ratio;
+                fp0->x98_atk_shield_kb.x = SK_FMA(
+                weight_ratio, fp1->pos_delta.x - fp0->pos_delta.x, fp0->x98_atk_shield_kb.x);
             } else {
-                fp0->x98_atk_shield_kb.x += fp1->pos_delta.x * weight_ratio;
+                fp0->x98_atk_shield_kb.x = SK_FMA(fp1->pos_delta.x, weight_ratio, fp0->x98_atk_shield_kb.x);
             }
             if (fp0->pos_delta.y * fp1->pos_delta.y >= 0) {
-                fp0->x98_atk_shield_kb.y +=
-                    (fp1->pos_delta.y - fp0->pos_delta.y) * weight_ratio;
+                fp0->x98_atk_shield_kb.y = SK_FMA(
+                weight_ratio, fp1->pos_delta.y - fp0->pos_delta.y, fp0->x98_atk_shield_kb.y);
             } else {
-                fp0->x98_atk_shield_kb.y += fp1->pos_delta.y * weight_ratio;
+                fp0->x98_atk_shield_kb.y = SK_FMA(fp1->pos_delta.y, weight_ratio, fp0->x98_atk_shield_kb.y);
             }
         }
     }

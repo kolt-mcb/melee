@@ -31,6 +31,15 @@
 #include <melee/lb/lbaudio_ax.h>
 #include <melee/mp/mplib.h>
 
+/* Green Greens: the apple spawn lerp, the block grid positions and the
+ * 5*scale lifts are fmadds on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define GG_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define GG_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 struct grGreens_YakumonoParam {
     int x0_blockTimerMin;
     int x4_blockTimerMax;
@@ -690,7 +699,7 @@ void grGreens_80213C10(Ground_GObj* gobj)
                 apple_pos.x = sign * (40.0f * rand);
                 rand = HSD_Randf();
                 diff = yakumono_param->x70 - yakumono_param->x6C;
-                apple_pos.y = (diff * rand) + yakumono_param->x6C;
+                apple_pos.y = GG_FMA(diff, rand, yakumono_param->x6C);
                 apple_pos.z = -40.0f;
                 lbAudioAx_800237A8(0x68FB3, 0x7F, 0x40);
                 it_802EE200(gobj, &apple_pos, yakumono_param->x74,
@@ -835,9 +844,9 @@ void grGreens_8021483C(Ground_GObj* gobj)
     y_scale = (left_top - left_bottom) / 4;
     for (i = 0; i < 5; i++) {
         for (j = 0; j < 3; j++) {
-            ((Vec(*)[6]) gp->u.greens.x4)[i][j].x = (x_scale * j) + left_min;
+            ((Vec(*)[6]) gp->u.greens.x4)[i][j].x = GG_FMA(x_scale, (f32) j, left_min);
             ((Vec(*)[6]) gp->u.greens.x4)[i][j].y =
-                (y_scale * i) + left_bottom;
+                GG_FMA(y_scale, (f32) i, left_bottom);
             ((Vec(*)[6]) gp->u.greens.x4)[i][j].z = 0.0f;
         }
     }
@@ -846,9 +855,9 @@ void grGreens_8021483C(Ground_GObj* gobj)
     for (i = 0; i < 5; i++) {
         for (j = 3; j < 6; j++) {
             ((Vec(*)[6]) gp->u.greens.x4)[i][j].x =
-                (x_scale * (j - 3)) + right_min;
+                GG_FMA(x_scale, (f32) (j - 3), right_min);
             ((Vec(*)[6]) gp->u.greens.x4)[i][j].y =
-                (y_scale * i) + right_bottom;
+                GG_FMA(y_scale, (f32) i, right_bottom);
             ((Vec(*)[6]) gp->u.greens.x4)[i][j].z = 0.0f;
         }
     }
@@ -1111,14 +1120,14 @@ void grGreens_802159B8(Ground* gp, int i, int j, int value)
             it_80275414(gobj);
             gp->u.greens.x8_blocks[j][i].x1_2 = 1;
             HSD_JObjGetTranslation(gobj->hsd_obj, &vec);
-            vec.y += 5.0f * Ground_801C0498();
+            vec.y = GG_FMA(5.0f, Ground_801C0498(), vec.y);
             efSync_Spawn(1039, gobj, &vec);
         } else {
             f = 0.0f;
             gp->u.greens.x8_blocks[j][i].x1_3 = 1;
             Camera_80030E44(2, NULL);
             HSD_JObjGetTranslation(gobj->hsd_obj, &vec);
-            vec.y += 5.0f * Ground_801C0498();
+            vec.y = GG_FMA(5.0f, Ground_801C0498(), vec.y);
             efSync_Spawn(1032, gobj, &vec, &f);
             Ground_801C5414(430007, 186);
         }

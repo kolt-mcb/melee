@@ -2,6 +2,16 @@
 
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
+
+/* Icicle Mountain: the scroll wrap (fnmsubs/fmadds of 3500*scale), the
+ * lerp pair in grIceMt_801F993C, the platform braking test and the
+ * base height are fused on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IC_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IC_FMA(a, b, c) ((a) * (b) + (c))
+#endif
 #endif
 
 struct grIceMt_YakumonoParam {
@@ -737,8 +747,8 @@ void grIceMt_801F7A2C(Ground_GObj* arg0)
             gp->u.icemt.xD4 = 0.0f;
         } else {
             ratio = gp->u.icemt.xD4 / yakumono_param->xA0;
-            if ((gp->u.icemt.xD4 * ratio) -
-                    (ratio * (0.5f * yakumono_param->xA0 * ratio)) >
+            if (IC_FMA(gp->u.icemt.xD4, ratio,
+                       -(ratio * (0.5f * yakumono_param->xA0 * ratio))) >
                 dist)
             {
                 gp->u.icemt.xD4 -= yakumono_param->xA0;
@@ -1148,9 +1158,9 @@ void grIceMt_801F8B10(Ground_GObj* arg0)
     cur = HSD_JObjGetTranslationY(jobj);
     cur = cur - mul;
     if (cur > 0.5f * (3500.0f * Ground_801C0498())) {
-        cur = -(3500.0f * Ground_801C0498() - cur);
+        cur = IC_FMA(-3500.0f, Ground_801C0498(), cur); /* fnmsubs */
     } else if (cur < 0.5f * -(3500.0f * Ground_801C0498())) {
-        cur += 3500.0f * Ground_801C0498();
+        cur = IC_FMA(3500.0f, Ground_801C0498(), cur);
     }
     HSD_JObjSetTranslateY(jobj, cur);
 }
@@ -1568,8 +1578,8 @@ f32 grIceMt_801F993C(s32 arg0, s32 arg1)
     }
     HSD_ASSERT(0xAA2, under_ix<ICEMT_FIELD_MAX);
 
-    return -((t * grIm_803E4068[upper_ix].x8) -
-             (t * grIm_803E4068[under_ix].x4 + yakumono_param->x40));
+    return IC_FMA(-t, grIm_803E4068[upper_ix].x8,
+                  IC_FMA(t, grIm_803E4068[under_ix].x4, yakumono_param->x40));
 }
 
 static inline HSD_GObj* grIceMt_801F71E8_inner2(int id)
@@ -1794,7 +1804,7 @@ void grIceMt_801FA0BC(s16* arg0)
         HSD_ASSERT (2884, mgobj);
         jobj = mgobj->hsd_obj;
         HSD_ASSERT(2886, jobj);
-        HSD_JObjSetTranslateY(jobj, grIm_804DB570 * Ground_801C0498() + frame);
+        HSD_JObjSetTranslateY(jobj, IC_FMA(grIm_804DB570, Ground_801C0498(), frame));
         Ground_801C3214(arg0[0]);
         Ground_801C2FE0(mgobj);
         Ground_801C32AC(arg0[0]);

@@ -25,6 +25,15 @@
 #include <baselib/gobjplink.h>
 #include <baselib/gobjproc.h>
 
+/* The ECB box test: 0.5*extent + offset and 0.5*(a+b) + pos are
+ * fmadds on the console (801C9F40..). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define GL_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define GL_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 1C9BC8 */ static void grLib_801C9BC8(HSD_GObj*);
 /* 1C9C40 */ static void grLib_801C9C40(HSD_GObj*);
 
@@ -327,8 +336,8 @@ static inline bool PointInsideColl(CollData* cd, Vec3* point, float offset)
     bottom = cd->ecb.bottom.y;
     topn = cd->cur_pos.y;
     height = top - bottom;
-    comp = 0.5f * height + offset;
-    y = 0.5f * (top + bottom) + topn - point->y;
+    comp = GL_FMA(0.5f, height, offset);
+    y = GL_FMA(0.5f, top + bottom, topn) - point->y;
     if (ABS(y) > comp) {
         return false;
     }
@@ -337,8 +346,8 @@ static inline bool PointInsideColl(CollData* cd, Vec3* point, float offset)
     left = cd->ecb.left.x;
     topn = cd->cur_pos.x;
     width = right - left;
-    comp = 0.5f * width + offset;
-    x = 0.5f * (left + right) + topn - point->x;
+    comp = GL_FMA(0.5f, width, offset);
+    x = GL_FMA(0.5f, left + right, topn) - point->x;
     if (ABS(x) > comp) {
         return false;
     }

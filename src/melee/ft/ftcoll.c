@@ -55,6 +55,21 @@
 #include <baselib/random.h>
 #include <Runtime/runtime.h>
 
+
+/* Retail compiles the two multiply-and-add pairs in the knockback formula as
+ * fmadds: the product is not rounded before the add. GCC on x86-64 rounds
+ * twice, and the answers part company in the last bit. Measured against the
+ * console: one ULP in the knockback a hit produces, which is two ULPs in the
+ * velocity it becomes, which two hundred frames later is a hit landing on one
+ * side and not the other. fmaf is exactly fmadds. On the GameCube the macro
+ * expands to the plain expression, which is what MWCC fuses. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /// @todo .sdata2 order hack
 static void sdata2_order(void)
 {
@@ -163,8 +178,8 @@ inline void comboCount_Push(Fighter* fp)
         var_f2 = p_ftCommonData->x4D4;
     }
     temp_f2 = fp->facing_dir * var_f2;
-    fp->cur_pos.x = -(pos->y * temp_f2 - fp->cur_pos.x);
-    fp->cur_pos.y = -(-pos->x * temp_f2 - fp->cur_pos.y);
+    fp->cur_pos.x = KB_FMA(-pos->y, temp_f2, fp->cur_pos.x); /* fnmsubs */
+    fp->cur_pos.y = KB_FMA(pos->x, temp_f2, fp->cur_pos.y);
 }
 
 /// Combo count something + adjust FtPart_TopN
@@ -358,7 +373,7 @@ static inline void inlineA0(Fighter* fp0, Fighter* fp1, HitCapsule* hit1,
         fp1->dmg.int_value = int_dmg;
         if (hit1->x40_b1 == true && fp1->ground_or_air == GA_Ground) {
             fp1->dmg.x191C =
-                int_dmg * p_ftCommonData->x3D0 + p_ftCommonData->x3D4;
+                KB_FMA((f32) int_dmg, p_ftCommonData->x3D0, p_ftCommonData->x3D4);
             {
                 float facing_dir;
                 if (fp1->cur_pos.x < fp0->cur_pos.x) {
@@ -406,7 +421,7 @@ static inline bool inlineA1(Fighter* fp0, HitCapsule* hit0, Fighter* fp1,
         fp0->dmg.int_value = int_dmg;
         if (hit0->x40_b1 == true && fp0->ground_or_air == GA_Ground) {
             fp0->dmg.x191C =
-                int_dmg * p_ftCommonData->x3D0 + p_ftCommonData->x3D4;
+                KB_FMA((f32) int_dmg, p_ftCommonData->x3D0, p_ftCommonData->x3D4);
             {
                 float facing_dir;
                 if (fp1->cur_pos.x > fp0->cur_pos.x) {
@@ -1000,7 +1015,7 @@ static inline void inlineItemA0(Item* item, Fighter* fp, HitCapsule* hit,
         fp->dmg.int_value = int_dmg;
         if (hit->x40_b1 == true && fp->ground_or_air == GA_Ground) {
             fp->dmg.x191C =
-                int_dmg * p_ftCommonData->x3D0 + p_ftCommonData->x3D4;
+                KB_FMA((f32) int_dmg, p_ftCommonData->x3D0, p_ftCommonData->x3D4);
             {
                 float facing_dir;
                 if (fp->cur_pos.x < item->pos.x) {
@@ -2201,20 +2216,6 @@ static inline s32 ftColl_GetDamageCount(Fighter* fp, ftCommonData* ftd)
     return (s32) fp->dmg.x1830_percent;
 }
 
-/* Retail compiles the two multiply-and-add pairs in the knockback formula as
- * fmadds: the product is not rounded before the add. GCC on x86-64 rounds
- * twice, and the answers part company in the last bit. Measured against the
- * console: one ULP in the knockback a hit produces, which is two ULPs in the
- * velocity it becomes, which two hundred frames later is a hit landing on one
- * side and not the other. fmaf is exactly fmadds. On the GameCube the macro
- * expands to the plain expression, which is what MWCC fuses. */
-#if BUILD_TARGET_PC
-#include <math.h>
-#define KB_FMA(a, b, c) fmaf((a), (b), (c))
-#else
-#define KB_FMA(a, b, c) ((a) * (b) + (c))
-#endif
-
 /// Shared knockback formula shell. @p inner is the per-branch scaling term.
 /// @remarks Must stay one nested expression; step assignments change the
 /// float register webs (see ftColl_80079C70).
@@ -2516,13 +2517,14 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
                     defense *
                     (attack *
                      (stage *
-                      ((0.01F * (float) (u32) hit->x24 *
-                        (ftd->x11C * ((decay - ((w * decay) / (1.0F + w))) *
-                                      ((x118 * ftd->x110) +
-                                       (ftd->x114 *
-                                        (x118 * (float) (u32) hit->x28)))) +
-                         ftd->x120)) +
-                       (float) (u32) hit->x2C)));
+                      KB_FMA(0.01F * (float) (u32) hit->x24,
+                             KB_FMA(ftd->x11C,
+                                    (decay - ((w * decay) / (1.0F + w))) *
+                                        KB_FMA(x118, ftd->x110,
+                                               ftd->x114 *
+                                                   (x118 * (float) (u32) hit->x28)),
+                                    ftd->x120),
+                             (float) (u32) hit->x2C)));
             } else {
                 s32 count;
 
@@ -2543,17 +2545,17 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
                         defense *
                         (attack *
                          (stage *
-                          ((0.01F * (float) (u32) hit->x24 *
-                            (ftd->x11C *
-                                 ((decay - ((w * decay) / (1.0F + w))) *
-                                  ((ftd->x110 * ((float) count +
-                                                 fp->dmg.x1838_percentTemp)) +
-                                   (ftd->x114 *
-                                    ((float) (u32) entry->size_of_xC *
-                                     ((float) count +
-                                      fp->dmg.x1838_percentTemp))))) +
-                             ftd->x120)) +
-                           (float) (u32) hit->x2C)));
+                          KB_FMA(0.01F * (float) (u32) hit->x24,
+                             KB_FMA(ftd->x11C,
+                                    (decay - ((w * decay) / (1.0F + w))) *
+                                        KB_FMA(ftd->x110,
+                                               (float) count + fp->dmg.x1838_percentTemp,
+                                               ftd->x114 *
+                                                   ((float) (u32) entry->size_of_xC *
+                                                    ((float) count +
+                                                     fp->dmg.x1838_percentTemp))),
+                                    ftd->x120),
+                             (float) (u32) hit->x2C)));
                 }
             }
 
@@ -2612,14 +2614,14 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
                 result = defense *
                          (attack *
                           (stage *
-                           ((0.01F * (float) (u32) stack_hit.x24 *
-                             (ftd->x11C *
-                                  ((decay - ((w * decay) / (1.0F + w))) *
-                                   ((x118 * ftd->x110) +
-                                    (ftd->x114 *
-                                     (x118 * (float) (u32) stack_hit.x28)))) +
-                              ftd->x120)) +
-                            (float) (u32) stack_hit.x2C)));
+                           KB_FMA(0.01F * (float) (u32) stack_hit.x24,
+                             KB_FMA(ftd->x11C,
+                                    (decay - ((w * decay) / (1.0F + w))) *
+                                        KB_FMA(x118, ftd->x110,
+                                               ftd->x114 *
+                                                   (x118 * (float) (u32) stack_hit.x28)),
+                                    ftd->x120),
+                             (float) (u32) stack_hit.x2C)));
             } else {
                 s32 count;
 
@@ -2640,17 +2642,17 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
                         defense *
                         (attack *
                          (stage *
-                          ((0.01F * (float) (u32) stack_hit.x24 *
-                            (ftd->x11C *
-                                 ((decay - ((w * decay) / (1.0F + w))) *
-                                  ((ftd->x110 * ((float) count +
-                                                 fp->dmg.x1838_percentTemp)) +
-                                   (ftd->x114 *
-                                    ((float) (u32) stack_hit.unk_count *
-                                     ((float) count +
-                                      fp->dmg.x1838_percentTemp))))) +
-                             ftd->x120)) +
-                           (float) (u32) stack_hit.x2C)));
+                          KB_FMA(0.01F * (float) (u32) stack_hit.x24,
+                             KB_FMA(ftd->x11C,
+                                    (decay - ((w * decay) / (1.0F + w))) *
+                                        KB_FMA(ftd->x110,
+                                               (float) count + fp->dmg.x1838_percentTemp,
+                                               ftd->x114 *
+                                                   ((float) (u32) stack_hit.unk_count *
+                                                    ((float) count +
+                                                     fp->dmg.x1838_percentTemp))),
+                                    ftd->x120),
+                             (float) (u32) stack_hit.x2C)));
                 }
             }
 

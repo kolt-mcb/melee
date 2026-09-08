@@ -37,6 +37,14 @@
 
 #if BUILD_TARGET_PC
 #include <platform.h>
+
+/* Temple: the random rotation rates are fmadds/fmsubs on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SR_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SR_FMA(a, b, c) ((a) * (b) + (c))
+#endif
 #endif
 
 /* Forward declarations */
@@ -826,9 +834,9 @@ void grShrineRoute_80209AF0(Ground_GObj* gobj)
     grShrineRoute_8020A8A4(gobj);
     gp->gv.shrineroute3.xCC = 0.0f;
     gp->gv.shrineroute3.xC8 = 0.0f;
-    gp->gv.shrineroute3.xD0 = 0.00006981317F * HSD_Randf() + 0.000017453292F;
+    gp->gv.shrineroute3.xD0 = SR_FMA(0.00006981317F, HSD_Randf(), 0.000017453292F);
     gp->gv.shrineroute3.xD0 *= (HSD_Randi(2) != 0) ? 1.0f : -1.0F;
-    gp->gv.shrineroute3.xD4 = 0.00006981317F * HSD_Randf() + 0.000017453292F;
+    gp->gv.shrineroute3.xD4 = SR_FMA(0.00006981317F, HSD_Randf(), 0.000017453292F);
     gp->gv.shrineroute3.xD4 *= (HSD_Randi(2) != 0) ? 1.0f : -1.0F;
 }
 
@@ -871,7 +879,7 @@ void grShrineRoute_80209BEC(Ground_GObj* gobj)
         }
         gp->gv.shrineroute3.xC8 = -vel;
         gp->gv.shrineroute3.xD0 =
-            0.00006981317f * -HSD_Randf() - 0.000017453292f;
+            SR_FMA(0.00006981317f, -HSD_Randf(), -0.000017453292f);
     } else if (rot < -0.2617994f) {
         rot = -0.2617994f;
         if (vel < 0.0f) {
@@ -879,7 +887,7 @@ void grShrineRoute_80209BEC(Ground_GObj* gobj)
         }
         gp->gv.shrineroute3.xC8 = vel;
         gp->gv.shrineroute3.xD0 =
-            0.00006981317f * HSD_Randf() + 0.000017453292f;
+            SR_FMA(0.00006981317f, HSD_Randf(), 0.000017453292f);
     }
     HSD_JObjSetRotationX(jobj, rot);
 
@@ -892,7 +900,7 @@ void grShrineRoute_80209BEC(Ground_GObj* gobj)
         }
         gp->gv.shrineroute3.xCC = -vel;
         gp->gv.shrineroute3.xD4 =
-            0.00006981317f * -HSD_Randf() - 0.000017453292f;
+            SR_FMA(0.00006981317f, -HSD_Randf(), -0.000017453292f);
     } else if (rot < -0.17453292f) {
         rot = -0.17453292f;
         if (vel < 0.0f) {
@@ -900,7 +908,7 @@ void grShrineRoute_80209BEC(Ground_GObj* gobj)
         }
         gp->gv.shrineroute3.xCC = vel;
         gp->gv.shrineroute3.xD4 =
-            0.00006981317f * HSD_Randf() + 0.000017453292f;
+            SR_FMA(0.00006981317f, HSD_Randf(), 0.000017453292f);
     }
     HSD_JObjSetRotationY(jobj, rot);
 
@@ -1208,9 +1216,9 @@ void grShrineRoute_8020A8A4(Ground_GObj* gobj)
         HSD_JObjSetTranslateX(gp->gv.shrineroute3.xC4, 300.0f * cosf(angle));
         HSD_JObjSetTranslateY(gp->gv.shrineroute3.xC4, 300.0f * sinf(angle));
         gp->gv.shrineroute3.xD8 =
-            0.04363323f * ((2.0f * grShrineRoute_8020A8A4_rand()) - 1.0f);
+            0.04363323f * SR_FMA(2.0f, grShrineRoute_8020A8A4_rand(), -1.0f);
         gp->gv.shrineroute3.xDC =
-            0.04363323f * ((2.0f * grShrineRoute_8020A8A4_rand()) - 1.0f);
+            0.04363323f * SR_FMA(2.0f, grShrineRoute_8020A8A4_rand(), -1.0f);
     }
 }
 

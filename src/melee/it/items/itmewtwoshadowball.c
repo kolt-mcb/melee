@@ -18,6 +18,16 @@
 #include <baselib/mtx.h>
 #include <baselib/random.h>
 
+/* Shadow Ball: the wobble (x40*x50 plain, then fmadds with sin/cos),
+ * the charge lerps ((f32)x18 * (b-a)/n + a) and the 0.5 scale are
+ * fmadds on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define MS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define MS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 2C5B18 */ static void it_802C5B18(Item_GObj*, Item_GObj*);
 
 ItemStateTable it_803F7760[] = {
@@ -95,14 +105,16 @@ u32 it_802C4D10(Item_GObj* gobj)
         ip->xDD4_itemVar.mewtwoshadowball.x40 +=
             ip->xDD4_itemVar.mewtwoshadowball.x44;
         ip->xDD4_itemVar.mewtwoshadowball.x30.x = 0.0f;
-        ip->xDD4_itemVar.mewtwoshadowball.x30.y +=
+        ip->xDD4_itemVar.mewtwoshadowball.x30.y = MS_FMA(
             ip->xDD4_itemVar.mewtwoshadowball.x40 *
-            ip->xDD4_itemVar.mewtwoshadowball.x50 *
-            sinf(ip->xDD4_itemVar.mewtwoshadowball.x3C);
-        ip->xDD4_itemVar.mewtwoshadowball.x30.z +=
+                ip->xDD4_itemVar.mewtwoshadowball.x50,
+            sinf(ip->xDD4_itemVar.mewtwoshadowball.x3C),
+            ip->xDD4_itemVar.mewtwoshadowball.x30.y);
+        ip->xDD4_itemVar.mewtwoshadowball.x30.z = MS_FMA(
             ip->xDD4_itemVar.mewtwoshadowball.x40 *
-            ip->xDD4_itemVar.mewtwoshadowball.x50 *
-            cosf(ip->xDD4_itemVar.mewtwoshadowball.x3C);
+                ip->xDD4_itemVar.mewtwoshadowball.x50,
+            cosf(ip->xDD4_itemVar.mewtwoshadowball.x3C),
+            ip->xDD4_itemVar.mewtwoshadowball.x30.z);
     } else {
         ip->xDD4_itemVar.mewtwoshadowball.x30.z = 0.0f;
         ip->xDD4_itemVar.mewtwoshadowball.x30.y = 0.0f;
@@ -251,18 +263,18 @@ Item_GObj* it_802C519C(Item_GObj* parent, Vec3* pos, s32 kind, s32 max_charge,
         {
             f32 base = attr->x18;
             ip->xDD4_itemVar.mewtwoshadowball.x10 =
-                (ip->xDD4_itemVar.mewtwoshadowball.x18 *
-                 ((attr->x1C - base) /
-                  ip->xDD4_itemVar.mewtwoshadowball.x1C)) +
-                base;
+                MS_FMA((f32) ip->xDD4_itemVar.mewtwoshadowball.x18,
+                       (attr->x1C - base) /
+                           ip->xDD4_itemVar.mewtwoshadowball.x1C,
+                       base);
         }
         {
             f32 base = attr->x10;
             ip->xDD4_itemVar.mewtwoshadowball.x24 =
-                ((ip->xDD4_itemVar.mewtwoshadowball.x18 *
-                  ((attr->x14 - base) /
-                   ip->xDD4_itemVar.mewtwoshadowball.x1C)) +
-                 base);
+                MS_FMA((f32) ip->xDD4_itemVar.mewtwoshadowball.x18,
+                       (attr->x14 - base) /
+                           ip->xDD4_itemVar.mewtwoshadowball.x1C,
+                       base);
         }
         ip->x40_vel.x = ip->xDD4_itemVar.mewtwoshadowball.x4.y *
                         cosf(ip->xDD4_itemVar.mewtwoshadowball.x4.x);
@@ -312,21 +324,21 @@ void it_802C53F0(Item_GObj* gobj, Vec3* pos, float angle, float charge,
         {
             f32 base = attr->x8;
             ip->xDD4_itemVar.mewtwoshadowball.x4.y =
-                base + (charge * ((attr->xC - base) / max_charge));
+                MS_FMA(charge, (attr->xC - base) / max_charge, base);
         }
         {
             f32 base = attr->x10;
             ip->xDD4_itemVar.mewtwoshadowball.x24 =
-                (u32) ((charge * ((attr->x14 - base) / max_charge)) + base);
+                (u32) MS_FMA(charge, (attr->x14 - base) / max_charge, base);
         }
         ip->xDD4_itemVar.mewtwoshadowball.x4.z = 0.0f;
         {
             f32 base = attr->x18;
             ip->xDD4_itemVar.mewtwoshadowball.x10 =
-                (ip->xDD4_itemVar.mewtwoshadowball.x18 *
-                 ((attr->x1C - base) /
-                  ip->xDD4_itemVar.mewtwoshadowball.x1C)) +
-                base;
+                MS_FMA((f32) ip->xDD4_itemVar.mewtwoshadowball.x18,
+                       (attr->x1C - base) /
+                           ip->xDD4_itemVar.mewtwoshadowball.x1C,
+                       base);
         }
         ip->xDD4_itemVar.mewtwoshadowball.x20 = 0;
         ip->facing_dir = ftLib_800865C0(ip->xDD4_itemVar.mewtwoshadowball.x2C);
@@ -452,9 +464,9 @@ bool itMewtwoshadowball_UnkMotion0_Anim(Item_GObj* gobj)
         }
     }
     scale.x = scale.y = scale.z =
-        (ip->xDD4_itemVar.mewtwoshadowball.x18 *
-         ((attr->x1C - attr->x18) / ip->xDD4_itemVar.mewtwoshadowball.x1C)) +
-        attr->x18;
+        MS_FMA((f32) ip->xDD4_itemVar.mewtwoshadowball.x18,
+               (attr->x1C - attr->x18) / ip->xDD4_itemVar.mewtwoshadowball.x1C,
+               attr->x18);
     HSD_JObjSetScale(grandchild, &scale);
     if (ip->xDD4_itemVar.mewtwoshadowball.x58.x == 0.0f &&
         ip->xDD4_itemVar.mewtwoshadowball.x58.y == 0.0f &&
@@ -501,9 +513,10 @@ void it_802C5B18(Item_GObj* gobj, Item_GObj* arg1)
                   ITEM_ANIM_UPDATE);
     ip->on_accessory = fn_802C5E18;
     ip->xDD4_itemVar.mewtwoshadowball.x50 =
-        0.5F * ((f32) ip->xDD4_itemVar.mewtwoshadowball.x18 /
-                ip->xDD4_itemVar.mewtwoshadowball.x1C) +
-        0.5F;
+        MS_FMA(0.5F,
+               (f32) ip->xDD4_itemVar.mewtwoshadowball.x18 /
+                   ip->xDD4_itemVar.mewtwoshadowball.x1C,
+               0.5F);
 }
 
 bool itMewtwoshadowball_UnkMotion8_Anim(Item_GObj* gobj)

@@ -421,12 +421,12 @@ void ftNs_AttackHi4_YoyoSetChargeDamage(HSD_GObj* gobj)
     {
         ftColl_8007ABD0(fighter_data2->x914,
                         (u32) (fighter_data2->x914->damage *
-                               ((((0.0039059999398887157f *
-                                   ness_attr->xB0_YOYO_DAMAGE_MUL) -
-                                  1.0f) *
-                                 (smashChargeFrames /
-                                  ness_attr->xAC_YOYO_CHARGE_DURATION)) +
-                                1.0f)),
+                               NA_FMA(NA_FMA(0.0039059999398887157f,
+                                             ness_attr->xB0_YOYO_DAMAGE_MUL,
+                                             -1.0f),
+                                      smashChargeFrames /
+                                          ness_attr->xAC_YOYO_CHARGE_DURATION,
+                                      1.0f)),
                         gobj);
     }
 }
