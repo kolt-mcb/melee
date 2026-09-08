@@ -18,6 +18,14 @@
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define FZ2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define FZ2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 struct grFlatzone_YakumonoParam {
     s32 unk0;
     s32 unk4;
@@ -478,7 +486,7 @@ void grFlatzone_802176BC(Ground_GObj* gobj)
     case 1:
         if ((gp->u.unk.xD4 % yakumono_param->unk2C) == 1) {
             HSD_JObjGetTranslation(jobj, &pos);
-            pos.x += yakumono_param->unk38 * gp->u.flatzone2.xC8;
+            pos.x = FZ2_FMA(yakumono_param->unk38, gp->u.flatzone2.xC8, pos.x);
             HSD_JObjSetTranslate(jobj, &pos);
         }
         gp->u.flatzone2.xD4 -= 1;
@@ -502,7 +510,7 @@ void grFlatzone_802176BC(Ground_GObj* gobj)
             gp->u.unk.xD0 = 3;
             gp->u.unk.xD4 = yakumono_param->unk3C;
             HSD_JObjGetTranslation(jobj, &pos);
-            pos.x = (36.0f * gp->u.flatzone2.xC8) + pos.x;
+            pos.x = FZ2_FMA(36.0f, gp->u.flatzone2.xC8, pos.x);
             pos.y -= 27.0f;
             other_x = pos.x;
             other_z = 5.0f + pos.y;

@@ -14,6 +14,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SPS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define SPS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 0960CC */ static void doEnter(Fighter_GObj* gobj);
 
 /// Check @c SpecialS input without entering the state.
@@ -47,7 +55,7 @@ static void doEnter(Fighter_GObj* gobj)
 {
     u8 _[8] = { 0 };
     Fighter* fp = gobj->user_data;
-    fp->gr_vel += -(fp->gr_vel * (1 - fp->co_attrs.xB8)) *
-                  ft_GetGroundFrictionMultiplier(fp);
+    fp->gr_vel = SPS_FMA(-(fp->gr_vel * (1 - fp->co_attrs.xB8)),
+                         ft_GetGroundFrictionMultiplier(fp), fp->gr_vel);
     ftData_SpecialS[fp->kind](gobj);
 }

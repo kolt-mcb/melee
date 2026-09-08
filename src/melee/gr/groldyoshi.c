@@ -17,6 +17,14 @@
 #include <baselib/gobj.h>
 #include <baselib/gobjproc.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define OY_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define OY_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 20F2A8 */ static void fn_8020F2A8(void* user_data, int joint_id,
                                      CollData* coll, int coll_x50,
                                      mpLib_GroundEnum ground_kind,
@@ -376,7 +384,7 @@ void grOldYoshi_8020F088(Ground_GObj* arg)
         }
         grAnime_801C8138(arg, gp->map_id, 0);
         dVar10 = HSD_Randf();
-        dVar9 = yakumono_param->x18 * (dVar10 * 2.0f - 1.0f);
+        dVar9 = yakumono_param->x18 * OY_FMA(dVar10, 2.0f, -1.0f); /* fmsubs */
         HSD_JObjSetTranslateY(arg->hsd_obj, dVar9);
     } else {
         HSD_JObj* jobj = Ground_801C3FA4(arg, gp->u.oldyoshiguest.xC6);
@@ -466,7 +474,7 @@ float grOldYoshi_8020F31C(float param1, float param2, float param3,
     } else {
         fVar2 = param1;
     }
-    fVar4 = fVar3 * (-param2 * 0.5f * fVar3) + (fVar3 * fVar2);
+    fVar4 = OY_FMA(fVar3, -param2 * 0.5f * fVar3, fVar3 * fVar2);
     param1 = grOldYoshi_8020F31C_inline(param1, param2, param3, param4, fVar4);
     if (param1 > param5) {
         return param5;

@@ -20,6 +20,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define CF_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define CF_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 bool ftCliffCommon_80081298(Fighter_GObj* gobj)
 {
     Fighter* other_fp;
@@ -119,7 +127,7 @@ void ftCo_CliffCatch_Phys(Fighter_GObj* gobj)
         } else {
             mpLib_80053DA4_Floor(fp->mv.co.cliff.ledge_id, &vec);
         }
-        fp->cur_pos.x = fp->x68C_transNPos.z * fp->facing_dir + vec.x;
+        fp->cur_pos.x = CF_FMA(fp->x68C_transNPos.z, fp->facing_dir, vec.x);
         fp->cur_pos.y = vec.y + fp->x68C_transNPos.y;
     } else {
         ftCo_Fall_Enter(gobj);

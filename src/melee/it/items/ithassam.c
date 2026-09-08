@@ -25,6 +25,14 @@
 #include <baselib/gobj.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define HS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define HS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 2CDC5C */ static void itHassam_802CDC5C(Item_GObj* gobj);
 /* 2CDC80 */ static void itHassam_802CDC80(Item_GObj* gobj);
 /* 2CDCB4 */ static void itHassam_802CDCB4(Item_GObj* gobj);
@@ -163,7 +171,7 @@ Item_GObj* itHassam_802CDE1C(Vec3* vec, Item_GObj* gobj)
                 ftLib_800866DC(cur_fgobj, &sp20);
                 y_dist = vec->y - sp20.y;
                 x_dist = vec->x - sp20.x;
-                temp_f0 = (x_dist * x_dist) + (y_dist * y_dist);
+                temp_f0 = HS_FMA(x_dist, x_dist, y_dist * y_dist);
                 if ((temp_f0 < min_dist) && (sp20.y > vec->y)) {
                     min_dist = temp_f0;
                     closest_fgobj = cur_fgobj;
@@ -236,7 +244,7 @@ bool itHassam_UnkMotion1_Anim(Item_GObj* gobj)
         jobj = (HSD_JObj*) gobj->hsd_obj;
 
         ip->xDD4_itemVar.hassam.x68 = HSD_JObjGetRotationY(gobj->hsd_obj);
-        ip->xDD4_itemVar.hassam.x68 += deg_to_rad * (180 / attr->x20);
+        ip->xDD4_itemVar.hassam.x68 = HS_FMA(deg_to_rad, 180 / attr->x20, ip->xDD4_itemVar.hassam.x68);
         HSD_JObjSetRotationY(jobj, ip->xDD4_itemVar.hassam.x68);
 
         if (++ip->xDB0_itcmd_var1 > (u32) attr->x20) {

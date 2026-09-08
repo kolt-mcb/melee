@@ -25,6 +25,14 @@
 #include <melee/lb/lbvector.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define KF_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define KF_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 #define itkpf_Floor 1
 #define itkpf_Ceiling 2
 #define itkpf_LeftWall 4
@@ -157,11 +165,11 @@ Item_GObj* itKoopaFlame_Spawn(Fighter_GObj* parent, Vec* pos, f32 facing_dir,
         min = attrs->x8_min_speed;
         range = attrs->xC_max_speed - min;
         it->xDD4_itemVar.koopaflame.x28_speed =
-            it->xDD4_itemVar.koopaflame.x38_base_speed * (range * rng + min);
+            it->xDD4_itemVar.koopaflame.x38_base_speed * KF_FMA(range, rng, min);
         rng = HSD_Randf();
         range = attrs->x14_max_angle - attrs->x10_min_angle;
         it->xDD4_itemVar.koopaflame.x24_angle =
-            range * rng + attrs->x10_min_angle;
+            KF_FMA(range, rng, attrs->x10_min_angle);
         it->xDD4_itemVar.koopaflame.x24_angle =
             (it->facing_dir == 1.0f) ? it->xDD4_itemVar.koopaflame.x24_angle
                                      : -it->xDD4_itemVar.koopaflame.x24_angle;

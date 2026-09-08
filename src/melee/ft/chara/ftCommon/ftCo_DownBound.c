@@ -32,6 +32,14 @@
 #include <dolphin/mtx.h>
 #include <baselib/jobj.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define DB2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define DB2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 097040 */ static void ftCo_800976A4(Fighter_GObj* gobj);
 /* 0972E8 */ static void ftCo_8009794C(Fighter_GObj* gobj);
 /* 097490 */ static void ftCo_80097AF4(Fighter_GObj* gobj);
@@ -81,7 +89,7 @@ void ftCo_800976A4(Fighter_GObj* gobj)
     Vec3 vec0;
     vel_x = fp->self_vel.x + fp->x8c_kb_vel.x;
     vel_y = fp->self_vel.y + fp->x8c_kb_vel.y;
-    dist = sqrtf(SQ(vel_x) + SQ(vel_y));
+    dist = sqrtf(DB2_FMA(vel_x, vel_x, vel_y * vel_y)); /* vel_y*vel_y plain */
     ftCo_800976A4_inline(fp, &dist);
     ef_id = 1031;
     arg2 = 1;

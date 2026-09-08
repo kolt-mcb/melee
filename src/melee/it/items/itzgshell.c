@@ -23,6 +23,14 @@
 
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define ZG2_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define ZG2_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 typedef struct itGShell_Attrs {
     float x0;
     float x4;
@@ -149,8 +157,8 @@ void it_802DDD38(Item_GObj* gobj)
     case 6:
     case 7:
     case 8:
-        ip->x40_vel.x +=
-            -ip->xCCC_incDamageDirection * ((f32) ip->xCA0 * attrs->x14);
+        ip->x40_vel.x = ZG2_FMA(-ip->xCCC_incDamageDirection,
+                                (f32) ip->xCA0 * attrs->x14, ip->x40_vel.x);
         ip->xDD4_itemVar.zgshell.xE08_b1 = 1;
         break;
     }
@@ -689,7 +697,7 @@ void it_802DF230(Item_GObj* gobj)
     jobj = GET_JOBJ(gobj);
     angle = rad_to_deg * HSD_JObjGetRotationY(jobj);
     child = HSD_JObjGetChild(jobj);
-    angle += rad_to_deg * HSD_JObjGetRotationY(child);
+    angle = ZG2_FMA(rad_to_deg, HSD_JObjGetRotationY(child), angle);
 
     if (-90.0f == angle || 90.f == angle) {
         ip->facing_dir = (angle < 0.0f) ? -1.0f : 1.0f;

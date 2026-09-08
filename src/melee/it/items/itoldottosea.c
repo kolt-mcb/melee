@@ -18,6 +18,14 @@
 
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define OT_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define OT_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F89C8[] = {
     { 0, itOldottosea_UnkMotion0_Anim, itOldottosea_UnkMotion0_Phys,
       itOldottosea_UnkMotion0_Coll },
@@ -160,7 +168,7 @@ void it_802E27B4(Item_GObj* gobj)
 
     if (ip->xDD4_itemVar.oldottosea.x2C != 0) {
         pos = ip->pos;
-        pos.x += attr->x14 * ip->facing_dir;
+        pos.x = OT_FMA(attr->x14, ip->facing_dir, pos.x);
         ip->xDD4_itemVar.oldottosea.x20 =
             it_8028EB88(gobj, &pos, ip->facing_dir, attr->x24);
         if (ip->xDD4_itemVar.oldottosea.x20 != NULL) {
@@ -408,7 +416,7 @@ void itOldottosea_UnkMotion7_Phys(Item_GObj* gobj)
             threshold = 0x19;
         }
         if (ip->xDD4_itemVar.oldottosea.x24 > threshold) {
-            ip->x40_vel.x += -ip->facing_dir * attr->xC;
+            ip->x40_vel.x = OT_FMA(-ip->facing_dir, attr->xC, ip->x40_vel.x);
         }
     }
     ip->xDD4_itemVar.oldottosea.x24++;

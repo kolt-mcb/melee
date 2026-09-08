@@ -18,6 +18,14 @@
 
 #include <MSL/math.h>
 
+/* dx*dx + dy*dy + dz*dz: dy*dy plain, dx then dz fused (802E36EC/F0). */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define WB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define WB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F8A88[] = {
     { 0, itWhitebea_UnkMotion0_Anim, itWhitebea_UnkMotion0_Phys,
       itWhitebea_UnkMotion0_Coll },
@@ -210,7 +218,7 @@ bool it_802E35CC(Item_GObj* gobj)
         dx = pos->x - sp30.x;
         dy = pos->y - sp30.y;
         dz = pos->z - sp30.z;
-        dist = sqrtf__Ff(dx * dx + dy * dy + dz * dz);
+        dist = sqrtf__Ff(WB_FMA(dz, dz, WB_FMA(dx, dx, dy * dy)));
         if (dist > attrs->x18) {
             it_8028ECE0(ip->xDD4_itemVar.whitebea.x20);
             it_802E37A4(gobj);

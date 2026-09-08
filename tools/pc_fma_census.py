@@ -170,6 +170,7 @@ def port_sites(path):
         macro_src[m.group(1)] = m.group(0).replace("\\\n", " ")
     macro_n = {}
     inline_n = {}
+    inline_uses = {}
 
     def macro_count(name, seen=()):
         if name in macro_n:
@@ -219,6 +220,19 @@ def port_sites(path):
             if used in macro_src and not PORT_FMA_RE.match(used + "("):
                 n += macro_count(used)
         inline_n[m.group(1)] = n
+        inline_uses[m.group(1)] = [u for u in re.findall(r"\b([A-Za-z_]\w*)\s*\(", body)
+                                   if u != m.group(1)]
+    # A helper that calls another helper (it_802A2568 -> its inline ->
+    # it_link_lerp) carries the callee's sites too. Resolve after all
+    # helpers are known; a cycle counts once.
+    def inline_total(name, seen=()):
+        n = inline_n.get(name, 0)
+        for u in inline_uses.get(name, ()):
+            if u in inline_n and u not in seen:
+                n += inline_total(u, seen + (name,))
+        return n
+    for name in list(inline_n):
+        inline_n[name] = inline_total(name)
     in_macro = False
     for line in text.split("\n"):
         if line.startswith("#define"):

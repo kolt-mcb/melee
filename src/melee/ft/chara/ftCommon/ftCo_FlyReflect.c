@@ -13,6 +13,14 @@
 #include "lb/lbrefract.h"
 #include "lb/lbvector.h"
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define FR_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define FR_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 #pragma force_active on
 
 bool ftCo_800C15F4(Fighter_GObj* gobj)
@@ -203,8 +211,8 @@ void ftCo_800C18A8(Fighter_GObj* gobj, ftCommon_MotionState msid, Vec3* normal,
                                   Ft_MF_SkipHitStun,
                               0, 1, 0, NULL);
     if (msid == ftCo_MS_FlyReflectWall) {
-        fp->cur_pos.x = -(fp->x68C_transNPos.z * -fp->facing_dir -
-                          (fp->cur_pos.x + offset->x));
+        fp->cur_pos.x = FR_FMA(fp->x68C_transNPos.z, fp->facing_dir,
+                               fp->cur_pos.x + offset->x); /* fnmsubs of -facing */
         ft_80081F2C(gobj);
     } else {
         fp->cur_pos.y = fp->x68C_transNPos.y + (fp->cur_pos.y + offset->y);
@@ -216,7 +224,7 @@ void ftCo_800C18A8(Fighter_GObj* gobj, ftCommon_MotionState msid, Vec3* normal,
     {
         float vel_x = fp->self_vel.x + fp->x8c_kb_vel.x;
         float vel_y = fp->self_vel.y + fp->x8c_kb_vel.y;
-        float mag = fake_sqrtf(SQ(vel_x) + SQ(vel_y));
+        float mag = fake_sqrtf(FR_FMA(vel_x, vel_x, vel_y * vel_y));
         ftCo_80097630(fp, ftCo_DownBound_SfxIds, mag * fp->co_attrs.weight);
     }
 }

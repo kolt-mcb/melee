@@ -23,6 +23,14 @@
 #include <melee/it/item.h>
 #include <melee/lb/lbrefract.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define LGB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define LGB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 2993E0 */ static void it_802993E0(Item_GObj* gobj, int flags);
 /* 299528 */ static void it_80299528(Item_GObj* gobj, int arg1);
 /* 2998A0 */ static void it_802998A0(Item_GObj*, HSD_GObj*, s32);
@@ -137,13 +145,13 @@ Item_GObj* it_802996D0(HSD_GObj* owner_gobj, Vec3* pos, u32 arg2,
                 f32 r = HSD_Randf();
                 f32 lo = item_spec_attr->x4;
                 diff = item_spec_attr->x8 - lo;
-                item->xDD4_itemVar.lgunbeam.angle1 = diff * r + lo;
+                item->xDD4_itemVar.lgunbeam.angle1 = LGB_FMA(diff, r, lo);
             }
             {
                 f32 r = HSD_Randf();
                 f32 lo = item_spec_attr->xC;
                 diff = item_spec_attr->x10 - lo;
-                item->xDD4_itemVar.lgunbeam.angle0 = diff * r + lo;
+                item->xDD4_itemVar.lgunbeam.angle0 = LGB_FMA(diff, r, lo);
             }
             {
                 f32 angle;

@@ -532,7 +532,7 @@ void grIzumi_801CC358(Ground_GObj* gobj)
             if (f < 0.0) {
                 float fff = HSD_Randf();
                 float ff = (yakumono_param->x1C - yakumono_param->x18);
-                ff = ff * fff + yakumono_param->x18;
+                ff = IZ_FMA(ff, fff, yakumono_param->x18);
                 gp->u.izumi3.xC4 = 2;
                 if (gp->u.izumi3.xD0 < gp->u.izumi3.xDC) {
                     if (HSD_Randf() < yakumono_param->x30) {
