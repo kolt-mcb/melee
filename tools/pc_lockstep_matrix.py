@@ -359,6 +359,54 @@ def cmd_report(a):
     return 0
 
 
+def cmd_grid(a):
+    """The whole thing as a grid: a row per character, a column per stage.
+
+    The tables in `report` aggregate, which is what you want once you know
+    what you are looking for. This is what you read first -- a column that is
+    solid is a stage, a row that is solid is a character, and the two are told
+    apart at a glance rather than by comparing two lists.
+    """
+    res = load()
+    if not res:
+        print("nothing recorded yet")
+        return 1
+    chars = sorted({int(k.split(",")[0]) for k in res})
+    stages = sorted({int(k.split(",")[2]) for k in res})
+    # Digits are the frame it reached, logarithmically: a cell that agreed for
+    # 600 frames and one that agreed for 6 should not look the same.
+    def mark(v):
+        if v is None:
+            return " "
+        d = v["verdict"]
+        if d == "identical":
+            return "#"
+        if d == "diverged":
+            f = v.get("frame", 0)
+            return "." if f <= 1 else ("1" if f < 10 else
+                                       "2" if f < 50 else
+                                       "3" if f < 200 else "4")
+        return {"route-failed": "R", "timeout": "T", "stopped-early": "S",
+                "no-icon": "-", "no-verdict": "?"}.get(d, "?")
+    # One letter per column, assigned by position rather than taken from the
+    # name: half a dozen stage names share a first letter (Castle/Corneria,
+    # Kongo/Kraid, Inishie1/Inishie2) and a header nobody can read backwards
+    # is not a header.
+    alpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    key = {s: alpha[i % len(alpha)] for i, s in enumerate(stages)}
+    hdr = "".join(key[s] for s in stages)
+    print("%-11s %s" % ("", hdr))
+    for ck in chars:
+        row = "".join(mark(res.get("%d,%d,%d" % (ck, ck, st))) for st in stages)
+        print("%-11s %s" % (mx.CHARS[ck], row))
+    print("\n  # identical   . parts on frame 1   1/2/3/4 parts by frame "
+          "10/50/200/600")
+    print("  R route failed   T timeout   S stopped early   - no icon")
+    print("  columns: " + ", ".join("%s=%s" % (key[s], mx.STAGES[s])
+                                    for s in stages))
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -376,8 +424,13 @@ def main():
                    choices=("mirror", "rotate", "both"))
     r.add_argument("--redo", action="store_true")
     sub.add_parser("report")
+    sub.add_parser("grid")
     a = ap.parse_args()
-    return cmd_run(a) if a.cmd == "run" else cmd_report(a)
+    if a.cmd == "run":
+        return cmd_run(a)
+    if a.cmd == "grid":
+        return cmd_grid(a)
+    return cmd_report(a)
 
 
 if __name__ == "__main__":
