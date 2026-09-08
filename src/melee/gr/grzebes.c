@@ -41,6 +41,20 @@
 #include <baselib/random.h>
 #include <MSL/math_ppc.h>
 
+/* Zebes fuses its random lerps (K*rand + base), the bubble solver's
+ * distance sums (x fused onto a plain y*y) and its push/clip steps into
+ * single fmadds, and the placement fractions (0.2*range + base ...) into
+ * double fmadds rounded once.  Pairings read off the DOL; see
+ * docs/port-parity-plan.md. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define ZB_FMA(a, b, c) fmaf((a), (b), (c))
+#define ZB_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define ZB_FMA(a, b, c) ((a) * (b) + (c))
+#define ZB_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 1D84A0 */ static void grZebes_801D84A0(bool arg);
 /* 1D8528 */ static void grZebes_801D8528(void);
 /* 1D852C */ void grZebes_801D852C(void);
@@ -395,7 +409,7 @@ void grZebes_801D881C(HSD_GObj* gobj)
                 f32 rand = HSD_Randf();
                 f32 base = grZe_804D6990->x08;
                 f32 diff = grZe_804D6990->x0C - base;
-                gp->gv.zebes5.xF8 = (s16) (diff * rand + base);
+                gp->gv.zebes5.xF8 = (s16) ZB_FMA(diff, rand, base); /* 801D8910 */
             }
         }
     }
@@ -425,7 +439,7 @@ void grZebes_801D881C(HSD_GObj* gobj)
                 rand = HSD_Randf();
                 base = grZe_804D6990->x00;
                 diff = grZe_804D6990->x04 - base;
-                gp->gv.zebes5.xC6 = (s16) (diff * rand + base);
+                gp->gv.zebes5.xC6 = (s16) ZB_FMA(diff, rand, base); /* 801D8A10 */
             }
             break;
         case 2:
@@ -456,15 +470,15 @@ void grZebes_801D881C(HSD_GObj* gobj)
                     f32 rand = HSD_Randf();
                     grZebes_801DAE70(spawn_phase, 4, *(f32*) (base + 0x14),
                                      *(f32*) (base + 0x18),
-                                     (grZe_804D6990->x5C - scale_min) * rand +
-                                         scale_min);
+                                     ZB_FMA(grZe_804D6990->x5C - scale_min,
+                                            rand, scale_min));
                 }
                 if (spawn_phase <= mirror) {
                     u8* base2 = (u8*) grZe_8049F140 + mirror * 0x24;
                     f32 rand2 = HSD_Randf();
                     grZebes_801DAE70(mirror, 4, *(f32*) (base2 + 0x5C),
                                      *(f32*) (base2 + 0x60),
-                                     (f32) (0.5 * rand2 + 1.0));
+                                     (f32) ZB_FMAD(0.5, rand2, 1.0));
                 }
             }
             if (grAnime_801C83D0(gobj, 0xE, 1) != 0) {
@@ -515,8 +529,8 @@ void grZebes_801D881C(HSD_GObj* gobj)
             for (j = 0; j < 20; j++, entry++) {
                 if (entry->x00_active == 1) {
                     f32 dx = entry->x08_x - left_x;
-                    f32 top = (f32) (1.8 * (f64) entry->x18_size +
-                                     (f64) entry->x0C_y);
+                    f32 top = (f32) ZB_FMAD(1.8, (f64) entry->x18_size,
+                                            (f64) entry->x0C_y); /* 801D8D50 */
                     {
                         f32 left_frac = (f32) ((f64) dx - 0.9) / colWidth;
                         s32 col_left = (s32) (0.5 + (f64) left_frac);
@@ -525,7 +539,7 @@ void grZebes_801D881C(HSD_GObj* gobj)
                         } else if (col_left < 0) {
                             col_left = 0;
                         }
-                        col_x[col_left] = (f32) col_left * colWidth + left_x;
+                        col_x[col_left] = ZB_FMA((f32) col_left, colWidth, left_x);
                         if (top > col_heights[col_left]) {
                             col_heights[col_left] = top;
                         }
@@ -538,7 +552,7 @@ void grZebes_801D881C(HSD_GObj* gobj)
                         } else if (col_right < 0) {
                             col_right = 0;
                         }
-                        col_x[col_right] = (f32) col_right * colWidth + left_x;
+                        col_x[col_right] = ZB_FMA((f32) col_right, colWidth, left_x);
                         if (top > col_heights[col_right]) {
                             col_heights[col_right] = top;
                         }
@@ -845,8 +859,8 @@ void grZebes_801D9798(HSD_GObj* gobj)
     }
 
     rand = HSD_Randf();
-    gp->gv.zebes5.xD8 = grZe_804D6990->x94 * rand +
-                        (f32) grZe_804D6990->xA0_entries[j].x6_level;
+    gp->gv.zebes5.xD8 = ZB_FMA(grZe_804D6990->x94, rand,
+                               (f32) grZe_804D6990->xA0_entries[j].x6_level);
     gp->gv.zebes5.xD4 = gp->gv.zebes5.xD8;
 
     jobj = Ground_801C3FA4(gobj, 0);
@@ -884,9 +898,9 @@ void grZebes_801D99E0(HSD_GObj* gobj)
             f32 discriminant;
             f32 rand = HSD_Randf();
 
-            gp->gv.zebes5.xD4 =
-                grZe_804D6990->x94 * rand +
-                (f32) grZe_804D6990->xA0_entries[gp->gv.zebes5.xC4].x6_level;
+            gp->gv.zebes5.xD4 = ZB_FMA(
+                grZe_804D6990->x94, rand,
+                (f32) grZe_804D6990->xA0_entries[gp->gv.zebes5.xC4].x6_level);
 
             if (gp->gv.zebes5.xD4 > grZe_804D6990->x8C) {
                 gp->gv.zebes5.xD4 = grZe_804D6990->x8C;
@@ -946,8 +960,9 @@ void grZebes_801D99E0(HSD_GObj* gobj)
         accel = grZe_804D6990->x9C;
         t = vel / accel;
         delta = gp->gv.zebes5.xD4 - gp->gv.zebes5.xD8;
-        threshold =
-            (f32) ((f64) (vel * t) - (0.5 * (f64) accel * (f64) (t * t)));
+        /* 801D9C6C: a double fnmsub of (0.5*accel)*(t*t) off vel*t */
+        threshold = (f32) ZB_FMAD(-(0.5 * (f64) accel), (f64) (t * t),
+                                  (f64) (vel * t));
 
         abs_delta = delta;
         if (delta < 0.0f) {
@@ -1153,14 +1168,14 @@ void grZebes_801DA0C4(f32 level)
 
         if (Ground_801C2090(&color)) {
             f32 r0 = table[idx - 1].r;
-            color.r = (u8) (t * (table[idx].r - r0) + r0);
+            color.r = (u8) ZB_FMA(t, table[idx].r - r0, r0);
             {
                 f32 g0 = table[idx - 1].g;
-                color.g = (u8) (t * (table[idx].g - g0) + g0);
+                color.g = (u8) ZB_FMA(t, table[idx].g - g0, g0);
             }
             {
                 f32 b0 = table[idx - 1].b;
-                color.b = (u8) (t * (table[idx].b - b0) + b0);
+                color.b = (u8) ZB_FMA(t, table[idx].b - b0, b0);
             }
             Ground_801C205C(&color);
         }
@@ -1204,9 +1219,9 @@ void grZebes_801DA254(Ground_GObj* gobj, f32 level)
 
         t = (level - grZe_804D6990->x90) /
             (grZe_804D6990->x8C - grZe_804D6990->x90);
-        result.r = (u8) (t * (f32) (c1.r - c2.r) + (f32) c2.r);
-        result.g = (u8) (t * (f32) (c1.g - c2.g) + (f32) c2.g);
-        result.b = (u8) (t * (f32) (c1.b - c2.b) + (f32) c2.b);
+        result.r = (u8) ZB_FMA(t, (f32) (c1.r - c2.r), (f32) c2.r);
+        result.g = (u8) ZB_FMA(t, (f32) (c1.g - c2.g), (f32) c2.g);
+        result.b = (u8) ZB_FMA(t, (f32) (c1.b - c2.b), (f32) c2.b);
         result.a = 0xFF;
         grZebes_801DA254_inline2(lobj, result);
     }
@@ -1263,7 +1278,7 @@ s32 grZebes_801DA528(HSD_GObj* arg0, void* arg1, s32 arg2, s32 arg3)
         case 2: {
             f1 = HSD_Randf();
             f0 = (grZe_804D6990->x54 - grZe_804D6990->x50);
-            st->x02_timer = (s16) (f0 * f1 + grZe_804D6990->x50);
+            st->x02_timer = (s16) ZB_FMA(f0, f1, grZe_804D6990->x50); /* 801DA5F8 */
             break;
         }
         case 3:
@@ -1744,7 +1759,7 @@ s32 grZebes_801DB3CC(HSD_GObj* gobj)
                     if (left->x00_active != 0) {
                         f32 dy = left->x0C_y - cur->x0C_y;
                         f32 dx = left->x08_x - cur->x08_x;
-                        f32 dist = dx * dx + dy * dy;
+                        f32 dist = ZB_FMA(dx, dx, dy * dy); /* 801DB614 */
                         if (dist > zero) {
                             dist = sqrtf(dist);
                         }
@@ -1758,8 +1773,8 @@ s32 grZebes_801DB3CC(HSD_GObj* gobj)
                                 if (push > max_force) {
                                     push = max_force;
                                 }
-                                fx = norm_x * push + zero;
-                                fy = norm_y * push + zero;
+                                fx = ZB_FMA(norm_x, push, zero);
+                                fy = ZB_FMA(norm_y, push, zero);
                             }
                         }
                         neighbor_count = 1;
@@ -1769,7 +1784,7 @@ s32 grZebes_801DB3CC(HSD_GObj* gobj)
                         if (right->x00_active != 0) {
                             f32 dy2 = right->x0C_y - cur->x0C_y;
                             f32 dx2 = right->x08_x - cur->x08_x;
-                            f32 dist2 = dx2 * dx2 + dy2 * dy2;
+                            f32 dist2 = ZB_FMA(dx2, dx2, dy2 * dy2);
                             if (dist2 > zero) {
                                 dist2 = sqrtf(dist2);
                             }
@@ -1783,8 +1798,8 @@ s32 grZebes_801DB3CC(HSD_GObj* gobj)
                                     if (push2 > max_force2) {
                                         push2 = max_force2;
                                     }
-                                    fx += norm_x2 * push2;
-                                    fy += norm_y2 * push2;
+                                    fx = ZB_FMA(norm_x2, push2, fx);
+                                    fy = ZB_FMA(norm_y2, push2, fy);
                                 }
                             }
                             neighbor_count += 1;
@@ -1814,7 +1829,7 @@ s32 grZebes_801DB3CC(HSD_GObj* gobj)
                         if (eb->x00_active != 0) {
                             f32 dy = eb->x0C_y - ea->x0C_y;
                             f32 dx = eb->x08_x - ea->x08_x;
-                            f32 dist_sq = dx * dx + dy * dy;
+                            f32 dist_sq = ZB_FMA(dx, dx, dy * dy); /* 801DB824 */
                             f32 dist;
                             if (dist_sq > 0.0f) {
                                 dist = sqrtf(dist_sq);
@@ -2053,7 +2068,7 @@ s32 grZebes_801DBB60(HSD_GObj* yaku)
             int k = 0;
             grZe_BubbleEntry* bp = bubbles;
 
-            inv_len_sq = 1.0f / (dx * dx + dy * dy);
+            inv_len_sq = 1.0f / ZB_FMA(dx, dx, dy * dy);
 
             for (k = 0; k < 20; k++, bp++) {
                 if (bp->x00_active == 1 && k != 0 && k != 6) {
@@ -2061,26 +2076,26 @@ s32 grZebes_801DBB60(HSD_GObj* yaku)
                     f32 bx = bp->x08_x;
                     f32 dpx = by - y1;
                     f32 dpy = bx - x1;
-                    f32 t = inv_len_sq * (dx * dpy + dy * dpx);
+                    f32 t = inv_len_sq * ZB_FMA(dx, dpy, dy * dpx);
                     f32 closest_dist;
 
                     if (t < 0.0f) {
-                        closest_dist = dpy * dpy + dpx * dpx;
+                        closest_dist = ZB_FMA(dpy, dpy, dpx * dpx);
                     } else if (t > 1.0f) {
                         f32 ex = bx - x2;
                         f32 ey = by - y2;
                         closest_dist = ex * ex + ey * ey;
                     } else {
-                        f32 cx = (dx * t + x1) - bx;
-                        f32 cy = (dy * t + y1) - by;
+                        f32 cx = ZB_FMA(dx, t, x1) - bx;
+                        f32 cy = ZB_FMA(dy, t, y1) - by;
                         closest_dist = cx * cx + cy * cy;
                     }
 
                     closest_dist = sqrtf(closest_dist);
 
                     {
-                        f32 check = (f32) (2.0 * (f64) bp->x18_size +
-                                           (f64) closest_dist);
+                        f32 check = (f32) ZB_FMAD(2.0, (f64) bp->x18_size,
+                                                  (f64) closest_dist);
                         if (check > width) {
                             if (t < 0.5f) {
                                 f32 dpx2 = bp->x08_x - x1;
@@ -2090,28 +2105,27 @@ s32 grZebes_801DBB60(HSD_GObj* yaku)
                                 dist2 = sqrtf(dist2);
                                 {
                                     f32 sum = dist2 + width;
-                                    new_width =
-                                        (f32) (0.5 *
-                                               (2.0 * (f64) bp->x18_size +
-                                                (f64) sum));
+                                    new_width = (f32) (
+                                        0.5 * ZB_FMAD(2.0, (f64) bp->x18_size,
+                                                      (f64) sum));
                                 }
                                 if (dist2 > 0.001f) {
                                     f32 ratio = (new_width - width) / dist2;
-                                    x1 += ratio * (bp->x08_x - x1);
-                                    y1 += ratio * (bp->x0C_y - y1);
+                                    x1 = ZB_FMA(ratio, bp->x08_x - x1, x1);
+                                    y1 = ZB_FMA(ratio, bp->x0C_y - y1, y1);
                                 }
                                 {
                                     f32 ddy = y1 - y2;
                                     f32 ddx = x1 - x2;
-                                    f32 dist3 = ddx * ddx + ddy * ddy;
+                                    f32 dist3 = ZB_FMA(ddx, ddx, ddy * ddy);
                                     f32 expand;
                                     dist3 = sqrtf(dist3);
                                     expand = new_width - width;
                                     width = new_width;
                                     {
                                         f32 ratio2 = expand / dist3;
-                                        x2 += ddx * ratio2;
-                                        y2 += ddy * ratio2;
+                                        x2 = ZB_FMA(ddx, ratio2, x2);
+                                        y2 = ZB_FMA(ddy, ratio2, y2);
                                     }
                                 }
                             } else {
@@ -2122,34 +2136,33 @@ s32 grZebes_801DBB60(HSD_GObj* yaku)
                                 dist2 = sqrtf(dist2);
                                 {
                                     f32 sum = dist2 + width;
-                                    new_width =
-                                        (f32) (0.5 *
-                                               (2.0 * (f64) bp->x18_size +
-                                                (f64) sum));
+                                    new_width = (f32) (
+                                        0.5 * ZB_FMAD(2.0, (f64) bp->x18_size,
+                                                      (f64) sum));
                                 }
                                 if (dist2 > 0.001f) {
                                     f32 ratio = (new_width - width) / dist2;
-                                    x2 += ratio * (bp->x08_x - x2);
-                                    y2 += ratio * (bp->x0C_y - y2);
+                                    x2 = ZB_FMA(ratio, bp->x08_x - x2, x2);
+                                    y2 = ZB_FMA(ratio, bp->x0C_y - y2, y2);
                                 }
                                 {
                                     f32 ddy = y2 - y1;
                                     f32 ddx = x2 - x1;
-                                    f32 dist3 = ddx * ddx + ddy * ddy;
+                                    f32 dist3 = ZB_FMA(ddx, ddx, ddy * ddy);
                                     f32 expand;
                                     dist3 = sqrtf(dist3);
                                     expand = new_width - width;
                                     width = new_width;
                                     {
                                         f32 ratio2 = expand / dist3;
-                                        x1 += ddx * ratio2;
-                                        y1 += ddy * ratio2;
+                                        x1 = ZB_FMA(ddx, ratio2, x1);
+                                        y1 = ZB_FMA(ddy, ratio2, y1);
                                     }
                                 }
                             }
                             dy = y2 - y1;
                             dx = x2 - x1;
-                            inv_len_sq = 1.0f / (dx * dx + dy * dy);
+                            inv_len_sq = 1.0f / ZB_FMA(dx, dx, dy * dy);
                         }
                     }
                 }
@@ -2219,15 +2232,16 @@ void grZebes_801DC408(Ground_GObj* gobj)
                 f32 y_min = grZe_8049F158[0].y;
                 f32 bubble_r = grZe_804D6990->x74;
                 f32 x_base = grZe_8049F158[0].x + bubble_r;
-                f32 x_range = -((2.0f * bubble_r) -
-                                (grZe_8049F140[1].x - grZe_8049F158[0].x));
+                f32 x_range = ZB_FMA(-2.0f, bubble_r, /* fnmsubs 801DC634 */
+                                     grZe_8049F140[1].x - grZe_8049F158[0].x);
                 f32 y_range = grZe_8049F140[1].y - y_min;
                 f32 rscale = HSD_Randf();
                 f32 ry = HSD_Randf();
 
-                grZebes_801DAE70(first_free, 1, x_range * HSD_Randf() + x_base,
-                                 y_range * ry + y_min,
-                                 (f32) (0.5 * (f64) rscale + 1.0));
+                grZebes_801DAE70(first_free, 1,
+                                 ZB_FMA(x_range, HSD_Randf(), x_base),
+                                 ZB_FMA(y_range, ry, y_min),
+                                 (f32) ZB_FMAD(0.5, (f64) rscale, 1.0));
                 grZe_8049F170[first_free].x18_size = 0.001f;
                 Ground_801C53EC(0x61A83);
             }
@@ -2266,8 +2280,8 @@ void grZebes_801DC744(s32 arg0, u8 arg1)
         f32 y_step = (base[3].y - y_start) / 6.0f;
 
         for (i = 0; i < 7; i++) {
-            grZebes_801DAE70(i, arg1, x_step * (f32) i + x_start,
-                             y_step * (f32) i + y_start, scales[i]);
+            grZebes_801DAE70(i, arg1, ZB_FMA(x_step, (f32) i, x_start),
+                             ZB_FMA(y_step, (f32) i, y_start), scales[i]);
         }
     }
 
@@ -2276,36 +2290,36 @@ void grZebes_801DC744(s32 arg0, u8 arg1)
         f32 y_min = base[2].y;
         f32 bubble_r = grZe_804D6990->x74;
         f32 x_base = p_x + bubble_r;
-        f32 x_range = (base[1].x - p_x) - 2.0f * bubble_r;
+        f32 x_range = ZB_FMA(-2.0f, bubble_r, base[1].x - p_x); /* fnmsubs */
         f32 y_range = base[1].y - y_min;
-        f64 mid_x = 0.5 * x_range + x_base;
+        f64 mid_x = ZB_FMAD(0.5, x_range, x_base);
         f64 lo_x, hi_x, lo_y, hi_y, near_max_y, max_y;
 
-        grZebes_801DAE70(7, arg1, (f32) mid_x, (f32) (0.5 * y_range + y_min),
+        grZebes_801DAE70(7, arg1, (f32) mid_x, (f32) ZB_FMAD(0.5, y_range, y_min),
                          1.0f);
 
-        hi_y = 0.8 * y_range + y_min;
-        grZebes_801DAE70(8, arg1, (f32) (0.2 * x_range + x_base), (f32) hi_y,
+        hi_y = ZB_FMAD(0.8, y_range, y_min);
+        grZebes_801DAE70(8, arg1, (f32) ZB_FMAD(0.2, x_range, x_base), (f32) hi_y,
                          1.2f);
 
-        hi_x = 0.8 * x_range + x_base;
-        lo_y = 0.2 * y_range + y_min;
+        hi_x = ZB_FMAD(0.8, x_range, x_base);
+        lo_y = ZB_FMAD(0.2, y_range, y_min);
         grZebes_801DAE70(9, arg1, (f32) hi_x, (f32) lo_y, 1.1f);
 
         grZebes_801DAE70(10, arg1, (f32) hi_x, (f32) hi_y, 1.1f);
 
         grZebes_801DAE70(11, arg1, (f32) mid_x, (f32) lo_y, 1.2f);
 
-        near_max_y = 0.9 * y_range + y_min;
+        near_max_y = ZB_FMAD(0.9, y_range, y_min);
         grZebes_801DAE70(12, arg1, (f32) mid_x, (f32) near_max_y, 1.3f);
 
         grZebes_801DAE70(13, arg1, (f32) mid_x, (f32) near_max_y, 1.3f);
 
         max_y = (f64) y_min + (f64) y_range;
-        grZebes_801DAE70(14, arg1, (f32) (0.6 * x_range + x_base), (f32) max_y,
+        grZebes_801DAE70(14, arg1, (f32) ZB_FMAD(0.6, x_range, x_base), (f32) max_y,
                          1.1f);
 
-        grZebes_801DAE70(15, arg1, (f32) (0.2 * x_range + x_base), (f32) max_y,
+        grZebes_801DAE70(15, arg1, (f32) ZB_FMAD(0.2, x_range, x_base), (f32) max_y,
                          1.0f);
     }
 }
