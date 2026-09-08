@@ -43,6 +43,18 @@
 #include <baselib/memory.h>
 #include <baselib/random.h>
 
+/* Big Blue's "K * scale + base" and "base - K * scale" steps are single
+ * fmadds/fnmsubs on the console; the car-velocity rotation is a double
+ * fmadd/fmsub rounded once.  Pairings read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define BB_FMA(a, b, c) fmaf((a), (b), (c))
+#define BB_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define BB_FMA(a, b, c) ((a) * (b) + (c))
+#define BB_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 #define M_TAU 6.283185307179586
 
 extern ItemKind grBb_803B8120[5];
@@ -1340,7 +1352,7 @@ void fn_801E8560(Ground* gp, s32 param, CollData* coll, s32 time_param,
     {
         f32 dx = pos.x - coll->cur_pos.x;
         f32 dy = pos.y - coll->cur_pos.y;
-        dist = sqrtf(dy * dy + dx * dx);
+        dist = sqrtf(BB_FMA(dx, dx, dy * dy)); /* 801E8640: dy*dy plain */
     }
 
     if (dist > 2.0F) {
@@ -1354,11 +1366,13 @@ void fn_801E8560(Ground* gp, s32 param, CollData* coll, s32 time_param,
         }
 
         if (pos.x < coll->cur_pos.x) {
-            gp->gv.bigblue.data[active_joint].x24 +=
-                dist * ((f32) time_param / 1000.0F);
+            gp->gv.bigblue.data[active_joint].x24 = BB_FMA(
+                dist, (f32) time_param / 1000.0F,
+                gp->gv.bigblue.data[active_joint].x24);
         } else {
-            gp->gv.bigblue.data[active_joint].x28 +=
-                dist * ((f32) time_param / 1000.0F);
+            gp->gv.bigblue.data[active_joint].x28 = BB_FMA(
+                dist, (f32) time_param / 1000.0F,
+                gp->gv.bigblue.data[active_joint].x28);
         }
 
         gp->gv.bigblue.data[active_joint].x2C++;
@@ -1728,10 +1742,10 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
         } else {
             f32 speed2 = 140.0f * Ground_801C0498();
             if (grBigBlue_801E8794(jobj, &pos, 1,
-                                   (60.0f * Ground_801C0498()) + 30.0f,
+                                   BB_FMA(60.0f, Ground_801C0498(), 30.0f),
                                    speed2) != 0 ||
                 grBigBlue_801EAB50(&pos, 1,
-                                   (60.0f * Ground_801C0498()) + 30.0f,
+                                   BB_FMA(60.0f, Ground_801C0498(), 30.0f),
                                    140.0f * Ground_801C0498()) != 0)
             {
                 *(f32*) (GRBB_CAR_BASE(bp) + 0xD8) = 0.0f;
@@ -2053,10 +2067,10 @@ void grBigBlue_801EA05C(Ground_GObj* gobj)
     case 2: {
         f32 cam_top = Stage_GetCamBoundsTopOffset();
         f32 cam_bot = Stage_GetCamBoundsBottomOffset();
-        f32 left_x = pos.x - (68.0f * Ground_801C0498() / 2 + 20.0f);
+        f32 left_x = pos.x - BB_FMA(68.0f * Ground_801C0498(), 0.5f, 20.0f);
         f32 bounds_y = grBigBlue_801E8B84_noinline_2(
             cam_top, cam_bot, left_x,
-            pos.x + (68.0f * Ground_801C0498() / 2 + 20.0f));
+            pos.x + BB_FMA(68.0f * Ground_801C0498(), 0.5f, 20.0f));
         f32 surface_y;
         f32 half_h;
         s32 ace_result;
@@ -2066,10 +2080,10 @@ void grBigBlue_801EA05C(Ground_GObj* gobj)
 
         surface_y = grBigBlue_801EC58C(&pos2, NULL, 500.0f);
 
-        half_h = 52.0f * Ground_801C0498() / 2 + 4.0f;
+        half_h = BB_FMA(52.0f * Ground_801C0498(), 0.5f, 4.0f);
         ace_result =
             grBigBlue_801EACE8(jobj, &pos, &y_check,
-                               68.0f * Ground_801C0498() / 2 + 10.0f, half_h);
+                               BB_FMA(68.0f * Ground_801C0498(), 0.5f, 10.0f), half_h);
 
         if (ace_result == 0 || (ace_result == 1 && pos.y < y_check)) {
             if (bounds_y <= surface_y) {
@@ -2317,8 +2331,8 @@ s32 grBigBlue_801EACE8(HSD_JObj* exclude, Vec3* point, f32* out_y,
     if (exclude != jobj && (int) gp->gv.bigblue.x0 == 2) {
         HSD_JObjGetTranslation2(jobj, &route_pos);
 
-        left_x = route_pos.x - 68.0F * Ground_801C0498() / 2;
-        right_x = route_pos.x + 68.0F * Ground_801C0498() / 2;
+        left_x = BB_FMA(-(68.0F * Ground_801C0498()), 0.5F, route_pos.x);
+        right_x = BB_FMA(68.0F * Ground_801C0498(), 0.5F, route_pos.x);
 
         if ((right_x > left_bound && right_x < right_bound) ||
             (left_x < right_bound && left_x > left_bound))
@@ -2645,7 +2659,8 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
                     grBb_TrackEntries[(GRBB_C4_WORD(gp) >> 15) & 0x7F]
                         .delta.y +
                     entry->delta.y <
-                grBb_804D69C8[0]->x8 * Ground_801C0498() + *(f32*) (GRBB_CAR_BASE(gp) + 0xCC))
+                BB_FMA(grBb_804D69C8[0]->x8, Ground_801C0498(),
+                       *(f32*) (GRBB_CAR_BASE(gp) + 0xCC)))
             {
                 continue;
             }
@@ -2915,11 +2930,12 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
 
         if (target_y != grBb_804DB310) {
             *(f32*) (GRBB_CAR_BASE(gp) + 0xEC) =
-                -(3.0F * (grBb_804D69C8[0]->x78 * Ground_801C0498()) -
-                  *(f32*) (GRBB_CAR_BASE(gp) + 0xEC));
+                BB_FMA(-3.0F, grBb_804D69C8[0]->x78 * Ground_801C0498(),
+                       *(f32*) (GRBB_CAR_BASE(gp) + 0xEC)); /* fnmsubs */
         } else {
-            *(f32*) (GRBB_CAR_BASE(gp) + 0xEC) = -(grBb_804D69C8[0]->x78 * Ground_801C0498() -
-                                    *(f32*) (GRBB_CAR_BASE(gp) + 0xEC));
+            *(f32*) (GRBB_CAR_BASE(gp) + 0xEC) =
+                BB_FMA(-grBb_804D69C8[0]->x78, Ground_801C0498(),
+                       *(f32*) (GRBB_CAR_BASE(gp) + 0xEC));
         }
 
         target.x = center.x;
@@ -2950,8 +2966,10 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
     if (angular_vel != 0.0F) {
         f32 s = sinf(angular_vel);
         f32 c = (f32) cosf(angular_vel);
-        f32 new_y = (f32) ((f64) vel.x * (f64) s + (f64) vel.y * (f64) c);
-        vel.x = (f32) ((f64) vel.x * (f64) c - (f64) vel.y * (f64) s);
+        /* 801EBFAC/FB0: the vel.y products are plain double fmuls; the
+         * vel.x products fuse onto them. */
+        f32 new_y = (f32) BB_FMAD((f64) vel.x, (f64) s, (f64) vel.y * (f64) c);
+        vel.x = (f32) BB_FMAD((f64) vel.x, (f64) c, -((f64) vel.y * (f64) s));
         vel.y = new_y;
     }
 
@@ -2981,7 +2999,8 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
     }
 
     *(f32*) (GRBB_CAR_BASE(gp) + 0xC8) =
-        -(grBb_804D69C8[0]->x6C * Ground_801C0498() - *(f32*) (GRBB_CAR_BASE(gp) + 0xC8));
+        BB_FMA(-grBb_804D69C8[0]->x6C, Ground_801C0498(),
+               *(f32*) (GRBB_CAR_BASE(gp) + 0xC8)); /* fnmsubs 801EC070 */
 
     {
         f32 lat_adj = 0.6F * (entry->delta.z / entry->delta.x) *
@@ -3148,7 +3167,8 @@ void grBigBlue_801EC6C0(Ground_GObj* gobj)
 
             scale = Ground_801C0498();
             params = grBb_804D69C8[0];
-            *(f32*) (car + 0xE0) = lerp + 0.5F * (-(f32) params->x1C * scale);
+            *(f32*) (car + 0xE0) =
+                BB_FMA(0.5F, -(f32) params->x1C * scale, lerp);
 
             scale = Ground_801C0498();
             params = grBb_804D69C8[0];
@@ -3156,7 +3176,7 @@ void grBigBlue_801EC6C0(Ground_GObj* gobj)
 
             scale = Ground_801C0498();
             params = grBb_804D69C8[0];
-            *(f32*) (car + 0xE4) = params->x0 * scale + lerp;
+            *(f32*) (car + 0xE4) = BB_FMA(params->x0, scale, lerp);
 
             *(f32*) (car + 0xE8) = 0.0F;
 
@@ -3167,7 +3187,8 @@ void grBigBlue_801EC6C0(Ground_GObj* gobj)
 
             scale = Ground_801C0498();
             params = grBb_804D69C8[0];
-            *(f32*) (car + 0xD8) = lerp + 0.5F * (-(f32) params->x1C * scale);
+            *(f32*) (car + 0xD8) =
+                BB_FMA(0.5F, -(f32) params->x1C * scale, lerp);
 
             *(f32*) (car + 0xDC) = 0.0F;
 
@@ -3688,7 +3709,7 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
             {
                 f32 scale = Ground_801C0498();
                 s32 total = grBb_804D69C8[0]->x1C;
-                target = 0.5F * (-(f32) total * scale) + rank_factor;
+                target = BB_FMA(0.5F, -(f32) total * scale, rank_factor);
             }
         } else {
             target = *(f32*) (lane_gp + 0xD8);
@@ -3750,7 +3771,7 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
         f32 scale = Ground_801C0498();
         f32 grav = grBb_804D69C8[0]->x48;
 
-        *(f32*) (lane_gp + 0xF4) += grav * scale;
+        *(f32*) (lane_gp + 0xF4) = BB_FMA(grav, scale, *(f32*) (lane_gp + 0xF4));
         *(f32*) (lane_gp + 0xF8) += *(f32*) (lane_gp + 0xF4);
 
         if (*(f32*) (lane_gp + 0xF8) > 0.0F) {
@@ -3784,11 +3805,11 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
             {
                 f32 s3 = Ground_801C0498();
                 f32 curve = grBb_804D69C8[0]->x38;
-                rank_factor = vel * ((curve * s3 - rank_factor) / ground_y);
+                rank_factor = vel * (BB_FMA(curve, s3, -rank_factor) / ground_y); /* fmsubs */
             }
             {
                 f32 s4 = Ground_801C0498();
-                heading_val = grBb_804D69C8[0]->x34 * s4 + rank_factor;
+                heading_val = BB_FMA(grBb_804D69C8[0]->x34, s4, rank_factor);
             }
         } else if (vel < 0.0F) {
             f32 s1 = Ground_801C0498();
@@ -3800,11 +3821,11 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
             {
                 f32 s3 = Ground_801C0498();
                 f32 curve = grBb_804D69C8[0]->x30;
-                rank_factor = vel * ((curve * s3 - rank_factor) / ground_y);
+                rank_factor = vel * (BB_FMA(curve, s3, -rank_factor) / ground_y); /* fmsubs */
             }
             {
                 f32 s4 = Ground_801C0498();
-                heading_val = grBb_804D69C8[0]->x34 * s4 + rank_factor;
+                heading_val = BB_FMA(grBb_804D69C8[0]->x34, s4, rank_factor);
             }
         } else {
             f32 s1 = Ground_801C0498();
@@ -3818,7 +3839,7 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
     {
         f32 ht = *(f32*) (lane_gp + 0x108);
         f32 interp = grBb_804D69C8[0]->x3C;
-        ht += interp * (heading_val - ht);
+        ht = BB_FMA(interp, heading_val - ht, ht);
         *(f32*) (lane_gp + 0x108) = ht;
     }
 
@@ -3827,7 +3848,8 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
         f32 rotation;
         f32 ang_accel = grBb_804D69C8[0]->x40;
 
-        *(f32*) (lane_gp + 0x104) += (f32) 0.017453292F * ang_accel;
+        *(f32*) (lane_gp + 0x104) =
+            BB_FMA((f32) 0.017453292F, ang_accel, *(f32*) (lane_gp + 0x104));
         rotation = *(f32*) (lane_gp + 0x104);
 
         if (rotation > M_TAU) {
@@ -3845,7 +3867,7 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
         f32 lat = *(f32*) (lane_gp + 0xE4);
         f32 height = *(f32*) (lane_gp + 0xF8);
 
-        rank_factor = (lat - drag * scale) - height - heading_osc;
+        rank_factor = BB_FMA(-drag, scale, lat) - height - heading_osc; /* fnmsubs */
     }
 
     /* Collision/grounding check */
@@ -3867,11 +3889,13 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
         if (0.0F != ground_y) {
             f32 s = Ground_801C0498();
             f32 decay = grBb_804D69C8[0]->x80;
-            *(f32*) (lane_gp + 0x10C) -= 3.0F * decay * s;
+            /* 801EDC8C: decay*s plain, then an fnmsubs of 3*that off x10C */
+            *(f32*) (lane_gp + 0x10C) =
+                BB_FMA(-3.0F, decay * s, *(f32*) (lane_gp + 0x10C));
         } else {
             f32 s = Ground_801C0498();
             f32 decay = grBb_804D69C8[0]->x80;
-            *(f32*) (lane_gp + 0x10C) -= decay * s;
+            *(f32*) (lane_gp + 0x10C) = BB_FMA(-decay, s, *(f32*) (lane_gp + 0x10C));
         }
 
         /* Lateral position += angular velocity */
@@ -3897,7 +3921,7 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
         if (0.0F != ground_y) {
             f32 s2 = Ground_801C0498();
             f32 drag = grBb_804D69C8[0]->x2C;
-            f32 base_y = drag * s2 + ground_y;
+            f32 base_y = BB_FMA(drag, s2, ground_y);
             *(f32*) (lane_gp + 0xE4) =
                 heading_osc + *(f32*) (lane_gp + 0xF8) + base_y;
         } else {
@@ -3915,11 +3939,13 @@ heading_converge:
     if (0.0F != ground_y && !((lane_gp[0xD4] >> 1) & 1)) {
         f32 angle = atan2f(-sp_vec.x, sp_vec.y);
         f32 smooth = grBb_804D69C8[0]->x50;
-        f31_rot += smooth * (angle - f31_rot);
+        f31_rot = BB_FMA(smooth, angle - f31_rot, f31_rot);
     } else {
-        f32 target_angle = (f32) 0.017453292F * grBb_804D69C8[0]->x58;
+        /* 801EDDEC: only the difference is fused (an fmsubs of the
+         * degree conversion off f31_rot); the damp step is plain. */
         f32 damp = grBb_804D69C8[0]->x54;
-        f31_rot += damp * (target_angle - f31_rot);
+        f31_rot += damp * BB_FMA((f32) 0.017453292F, grBb_804D69C8[0]->x58,
+                                 -f31_rot);
     }
 
     /* Update jobj transform */
@@ -3954,7 +3980,7 @@ s32 grBigBlue_801EDF44(Ground_GObj* gobj, s32 index)
         f32 scale = Ground_801C0498();
 
         if (*(f32*) (gp + offset + 0xE0) >
-            blast + grBb_804D69C8[0]->x68 * scale)
+            BB_FMA(grBb_804D69C8[0]->x68, scale, blast))
         {
             if (0.0F != *(f32*) (gp + offset + 0xEC)) {
                 result = 9;
@@ -3969,7 +3995,7 @@ s32 grBigBlue_801EDF44(Ground_GObj* gobj, s32 index)
         f32 scale = Ground_801C0498();
 
         if (*(f32*) (gp + offset + 0xE0) <
-            blast - grBb_804D69C8[0]->x68 * scale)
+            BB_FMA(-grBb_804D69C8[0]->x68, scale, blast))
         {
             if (0.0F != *(f32*) (gp + offset + 0xEC)) {
                 result = 9;
@@ -4218,7 +4244,7 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
     case 5: {
         f32 blast = Stage_GetBlastZoneRightOffset();
 
-        pos.x = (grBb_804D69C8[0]->x68 * Ground_801C0498()) + blast;
+        pos.x = BB_FMA(grBb_804D69C8[0]->x68, Ground_801C0498(), blast);
         pos.z = 0.0f;
         pos.y = 0.0f;
         pos.y = grBigBlue_801EC58C(&pos, NULL, 1000.0f);
@@ -4288,7 +4314,7 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
 
                 *(f32*) (car + 0xE0) = pos.x;
                 *(f32*) (car + 0xE4) =
-                    (grBb_804D69C8[0]->x2C * Ground_801C0498()) + pos.y;
+                    BB_FMA(grBb_804D69C8[0]->x2C, Ground_801C0498(), pos.y);
                 *(f32*) (car + 0xE8) = 0.0f;
                 *(f32*) (car + 0xD8) = pos.x;
                 *(f32*) (car + 0xDC) = 0.0f;
@@ -4367,7 +4393,7 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
     case 6: {
         f32 blast = Stage_GetBlastZoneLeftOffset();
 
-        pos.x = -((grBb_804D69C8[0]->x68 * Ground_801C0498()) - blast);
+        pos.x = BB_FMA(-grBb_804D69C8[0]->x68, Ground_801C0498(), blast);
         pos.z = 0.0f;
         pos.y = 0.0f;
         pos.y = grBigBlue_801EC58C(&pos, NULL, 1000.0f);
@@ -4438,7 +4464,7 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
 
                 *(f32*) (car + 0xE0) = pos.x;
                 *(f32*) (car + 0xE4) =
-                    (grBb_804D69C8[0]->x2C * Ground_801C0498()) + pos.y;
+                    BB_FMA(grBb_804D69C8[0]->x2C, Ground_801C0498(), pos.y);
                 *(f32*) (car + 0xE8) = 0.0f;
                 *(f32*) (car + 0xD8) = pos.x;
                 *(f32*) (car + 0xDC) = 0.0f;
@@ -4688,10 +4714,10 @@ bool grBigBlue_801EEF00(Ground_GObj* gobj, s32 index)
                 total = grBb_804D69C8[0]->x28 * scale;
                 spd = *(f32*) (gp + offset + 0xFC);
                 pos = *(f32*) (gp + offset + 0xE0);
-                predicted = spd * norm + pos;
+                predicted = BB_FMA(spd, norm, pos);
                 total = 0.5F * total;
                 total = norm * total;
-                predicted -= norm * total;
+                predicted = BB_FMA(-norm, total, predicted); /* fnmsubs */
 
                 if (predicted < target) {
                     scale = Ground_801C0498();
@@ -4717,11 +4743,11 @@ bool grBigBlue_801EEF00(Ground_GObj* gobj, s32 index)
                 total = grBb_804D69C8[0]->x28 * scale;
                 spd = *(f32*) (gp + offset + 0xFC);
                 pos = *(f32*) (gp + offset + 0xE0);
-                predicted = spd * norm + pos;
+                predicted = BB_FMA(spd, norm, pos);
                 total = -total;
                 total = 0.5F * total;
                 total = norm * total;
-                predicted -= norm * total;
+                predicted = BB_FMA(-norm, total, predicted); /* fnmsubs */
 
                 if (predicted < target) {
                     scale = Ground_801C0498();
