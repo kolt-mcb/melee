@@ -25,6 +25,32 @@
 #include <MetroTRK/intrinsics.h>
 
 #if BUILD_TARGET_PC
+/* The console fuses a*b+c into one rounding; x86 rounds twice. Every site
+ * below that the DOL executes as fmadds/fmsubs is written with these so the
+ * two round the same way. LBC_DOT is the shape every dot product and squared
+ * length in this file takes on the console: the y term first as a plain
+ * multiply, then x fused in, then z -- fmuls f,y,y / fmadds x,x,f / fmadds
+ * z,z,f -- which is not the left-to-right x + y + z the C reads as. The
+ * order is the result; get it wrong and the last bit is wrong. */
+#define LBC_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define LBC_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+#define LBC_DOT(ax, ay, az, bx, by, bz) \
+    LBC_FMA((az), (bz), LBC_FMA((ax), (bx), (ay) * (by)))
+/* The 2-D form: y plain, x fused. */
+#define LBC_DOT2(ax, ay, bx, by) LBC_FMA((ax), (bx), (ay) * (by))
+/* fnmsub on the console: c - a*b with ONE rounding, in double. The port's
+ * form is fma(-a, b, c); the console's is the original expression, kept
+ * textually so MWCC still emits the same instruction. Used by the two
+ * reciprocal-square-root refinements at the end of lbColl_80006E58. */
+#if BUILD_TARGET_PC
+#define LBC_NMSUB(a, b, c) fma(-(a), (b), (c))
+#else
+#define LBC_NMSUB(a, b, c) (-(((a) * (b)) - (c)))
+#endif
+
+#if BUILD_TARGET_PC
 /* MELEE_HBDBG=<lo>-<hi> reports every place a hurtbox position is actually
  * recomputed. The console refreshes them all inside the hit-versus-hurt test
  * (lbColl_8000805C) and so never recomputes in lbColl_800083C4; if the port
@@ -389,8 +415,9 @@ bool lbColl_80005C44(const Vec3* arg0, const Vec3* arg1, const Vec3* arg2,
     d2_z = sp38.z - sp2C.z;
 
     {
-        float d1_dot_d1 = d1.x * d1.x + d1.y * d1.y + d1.z * d1.z;
-        float d1_dot_d2 = d1.x * d2_x + d1.y * d2_y + d1.z * d2_z;
+        /* 80005DD0-80005DF8: two dot products, y first, x and z fused. */
+        float d1_dot_d1 = LBC_DOT(d1.x, d1.y, d1.z, d1.x, d1.y, d1.z);
+        float d1_dot_d2 = LBC_DOT(d1.x, d1.y, d1.z, d2_x, d2_y, d2_z);
         float scale;
 
         if (nearzero(d1_dot_d1)) {
@@ -404,16 +431,18 @@ bool lbColl_80005C44(const Vec3* arg0, const Vec3* arg1, const Vec3* arg2,
             }
         }
 
-        arg3->x = d1.x * scale + sp38.x;
-        arg3->y = d1.y * scale + sp38.y;
-        arg3->z = d1.z * scale + sp38.z;
+        /* 80005E5C-80005E64: the closest point, each axis one fmadds. */
+        arg3->x = LBC_FMA(d1.x, scale, sp38.x);
+        arg3->y = LBC_FMA(d1.y, scale, sp38.y);
+        arg3->z = LBC_FMA(d1.z, scale, sp38.z);
     }
 
     d2_x = arg3->x - sp2C.x;
     d2_y = arg3->y - sp2C.y;
     d2_z = arg3->z - sp2C.z;
 
-    if (SQ(temp_f2) < SQ(d2_x) + SQ(d2_y) + SQ(d2_z)) {
+    /* 80005E94-80005E9C: squared distance, same shape as the dots. */
+    if (SQ(temp_f2) < LBC_DOT(d2_x, d2_y, d2_z, d2_x, d2_y, d2_z)) {
         return false;
     } else {
         return true;
@@ -444,8 +473,9 @@ float lbColl_80005EBC(const Vec3* arg0, const Vec3* arg1, const Vec3* arg2,
     d2.y = sp50.y - sp38.y;
     d2.z = sp50.z - sp38.z;
 
-    d1_dot_d1 = d1.x * d1.x + d1.y * d1.y + d1.z * d1.z;
-    d1_dot_d2 = d1.x * d2.x + d1.y * d2.y + d1.z * d2.z;
+    /* 80005F08-80005F50: as in lbColl_80005C44. */
+    d1_dot_d1 = LBC_DOT(d1.x, d1.y, d1.z, d1.x, d1.y, d1.z);
+    d1_dot_d2 = LBC_DOT(d1.x, d1.y, d1.z, d2.x, d2.y, d2.z);
 
     scale = -d1_dot_d2 / d1_dot_d1;
     if (scale > lbColl_804D7A00) {
@@ -454,12 +484,14 @@ float lbColl_80005EBC(const Vec3* arg0, const Vec3* arg1, const Vec3* arg2,
         scale = lbColl_804D79F8;
     }
 
-    x = d1.x * scale + sp50.x - arg2->x;
-    y = d1.y * scale + sp50.y - arg2->y;
-    z = d1.z * scale + sp50.z - arg2->z;
+    /* 80005F80-80005FA8: the lerp is one fmadds per axis, the subtraction
+     * of arg2 a separate fsubs after it. */
+    x = LBC_FMA(d1.x, scale, sp50.x) - arg2->x;
+    y = LBC_FMA(d1.y, scale, sp50.y) - arg2->y;
+    z = LBC_FMA(d1.z, scale, sp50.z) - arg2->z;
 
     *arg3 = scale;
-    return x * x + y * y + z * z;
+    return LBC_DOT(x, y, z, x, y, z);
 }
 
 float lbColl_80005FC0(Vec3* arg0, Vec3* arg1, Vec3* arg2, float* arg3)
@@ -483,8 +515,9 @@ float lbColl_80005FC0(Vec3* arg0, Vec3* arg1, Vec3* arg2, float* arg3)
     d2.x = sp50.x - sp38.x;
     d2.y = sp50.y - sp38.y;
 
-    d1_dot_d1 = d1.x * d1.x + d1.y * d1.y;
-    d1_dot_d2 = d1.x * d2.x + d1.y * d2.y;
+    /* 80006008-80006034: the 2-D dots, y plain then x fused in. */
+    d1_dot_d1 = LBC_FMA(d1.x, d1.x, d1.y * d1.y);
+    d1_dot_d2 = LBC_FMA(d1.x, d2.x, d1.y * d2.y);
 
     scale = -d1_dot_d2 / d1_dot_d1;
     if (scale > lbColl_804D7A00) {
@@ -493,11 +526,13 @@ float lbColl_80005FC0(Vec3* arg0, Vec3* arg1, Vec3* arg2, float* arg3)
         scale = lbColl_804D79F8;
     }
 
-    x = d1.x * scale + sp50.x - arg2->x;
-    y = d1.y * scale + sp50.y - arg2->y;
+    /* 80006064-80006088: one fmadds per axis, then fsubs; the squared
+     * length is y plain, x fused. */
+    x = LBC_FMA(d1.x, scale, sp50.x) - arg2->x;
+    y = LBC_FMA(d1.y, scale, sp50.y) - arg2->y;
 
     *arg3 = scale;
-    return x * x + y * y;
+    return LBC_FMA(x, x, y * y);
 }
 
 inline bool end(Vec3* a, Vec3* b, float unk_sum)
@@ -506,7 +541,9 @@ inline bool end(Vec3* a, Vec3* b, float unk_sum)
     float x = a->x - b->x;
     float z = a->z - b->z;
 
-    if (unk_sum * unk_sum < z * z + (x * x + y * y)) {
+    /* 80006788-80006794: y plain, x and z fused, against the plain
+     * square of the reach. */
+    if (unk_sum * unk_sum < LBC_DOT(x, y, z, x, y, z)) {
         return false;
     }
 
@@ -648,20 +685,21 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
             float d2_x = arg3_x - arg5_offset.x;
             float arg3_z = arg3->z;
             float d2_z = arg3_z - arg5_offset.z;
-            float d1_dot_d2 = d1_x * d2_x + d1_z * d2_z + d1_y * d2_y;
-            float d2_z_sq = d2_z * d2_z;
-            float d2_len_sq = d2_z_sq + d2_x * d2_x + d2_y * d2_y;
+            /* 80006358-8000637C, and the four dots after it: y first, x and z
+             * fused, the shape every dot in this file takes. */
+            float d1_dot_d2 = LBC_DOT(d1_x, d1_y, d1_z, d2_x, d2_y, d2_z);
+            float d2_len_sq = LBC_DOT(d2_x, d2_y, d2_z, d2_x, d2_y, d2_z);
             float offset_delta_x = arg4_offset.x - arg5_offset.x;
-            float d1_len_sq = (d1_z * d1_z) + ((d1_x * d1_x) + (d1_y * d1_y));
+            float d1_len_sq = LBC_DOT(d1_x, d1_y, d1_z, d1_x, d1_y, d1_z);
             float offset_delta_z = arg4_offset.z - arg5_offset.z;
-            float d2_y_offset = d2_y * offset_delta_y;
-            float d2_dot_offset_delta =
-                d2_z * offset_delta_z + d2_x * offset_delta_x + d2_y_offset;
-            float d1_dot_offset_delta = (d1_z * offset_delta_z) +
-                                        d1_x * offset_delta_x +
-                                        d1_y * offset_delta_y;
-            float len_product = d1_len_sq * d2_len_sq;
-            float denom = len_product - d1_dot_d2 * d1_dot_d2;
+            float d2_dot_offset_delta = LBC_DOT(d2_x, d2_y, d2_z, offset_delta_x,
+                                                offset_delta_y, offset_delta_z);
+            float d1_dot_offset_delta = LBC_DOT(d1_x, d1_y, d1_z, offset_delta_x,
+                                                offset_delta_y, offset_delta_z);
+            /* 800063B0: fmsubs -- the product of the lengths minus the plain
+             * square of the dot, one rounding. */
+            float d1_dot_d2_sq = d1_dot_d2 * d1_dot_d2;
+            float denom = LBC_FMA(d1_len_sq, d2_len_sq, -d1_dot_d2_sq);
 
             {
                 float arg5_scl;
@@ -695,12 +733,15 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
                         float arg1_mid_z = arg1->z - mid_z;
 
                         // lhs and rhs each the same inline
-                        if ((arg4_offset_z * arg4_offset_z +
-                             ((arg4_mid_x * arg4_mid_x) +
-                              (arg4_mid_y * arg4_mid_y))) <
-                            ((arg1_mid_z * arg1_mid_z) +
-                             ((arg1_mid_x * arg1_mid_x) +
-                              (arg1_mid_y * arg1_mid_y))))
+                        /* 800064A4-800064C4: two squared distances, y plain, x and z
+                         * fused. The mid_* above are double-precision fmadd
+                         * with 0.5 on the console; 0.5 * x is exact in
+                         * double, so mul-then-add rounds identically and
+                         * they need nothing. */
+                        if (LBC_DOT(arg4_mid_x, arg4_mid_y, arg4_offset_z,
+                                    arg4_mid_x, arg4_mid_y, arg4_offset_z) <
+                            LBC_DOT(arg1_mid_x, arg1_mid_y, arg1_mid_z,
+                                    arg1_mid_x, arg1_mid_y, arg1_mid_z))
                         {
                             Vec3 c3;
                             float arg3_arg2_x;
@@ -716,12 +757,11 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
                                 a2 = vec4;
                                 arg3_arg2_z = arg3_z - arg2->z;
                                 arg4_scl = 0.0f;
-                                dot = (arg3_arg2_z * (c3.z - a2.z)) +
-                                      ((arg3_arg2_x * (c3.x - a2.x)) +
-                                       (arg3_arg2_y * (c3.y - a2.y)));
-                                scale = -dot / ((arg3_arg2_z * arg3_arg2_z) +
-                                                ((arg3_arg2_x * arg3_arg2_x) +
-                                                 (arg3_arg2_y * arg3_arg2_y)));
+                                /* 80006514-80006558. */
+                                dot = LBC_DOT(arg3_arg2_x, arg3_arg2_y, arg3_arg2_z,
+                                              c3.x - a2.x, c3.y - a2.y, c3.z - a2.z);
+                                scale = -dot / LBC_DOT(arg3_arg2_x, arg3_arg2_y, arg3_arg2_z,
+                                                       arg3_arg2_x, arg3_arg2_y, arg3_arg2_z);
                                 if (scale > lbColl_804D7A00) {
                                     scale = lbColl_804D7A08;
                                 } else if (scale < lbColl_804D7A10) {
@@ -750,15 +790,11 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
                                             float scale;
                                             float d2_from_arg2_len_sq;
                                             dot =
-                                                (arg3_arg2_z * (c2.z - b0.z)) +
-                                                ((arg3_arg2_x *
-                                                  (c2.x - b0.x)) +
-                                                 (arg3_arg2_y *
-                                                  (c2.y - b0.y)));
+                                                LBC_DOT(arg3_arg2_x, arg3_arg2_y, arg3_arg2_z,
+                                                        c2.x - b0.x, c2.y - b0.y, c2.z - b0.z);
                                             d2_from_arg2_len_sq =
-                                                (arg3_arg2_z * arg3_arg2_z) +
-                                                ((arg3_arg2_x * arg3_arg2_x) +
-                                                 (arg3_arg2_y * arg3_arg2_y));
+                                                LBC_DOT(arg3_arg2_x, arg3_arg2_y, arg3_arg2_z,
+                                                        arg3_arg2_x, arg3_arg2_y, arg3_arg2_z);
                                             scale = -dot / d2_from_arg2_len_sq;
 
                                             if (scale > lbColl_804D7A00) {
@@ -775,11 +811,13 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
                             }
                         }
                     } else {
-                        float temp_f1_3 = ((d1_dot_d2 * d2_dot_offset_delta) -
-                                           (d2_len_sq * d1_dot_offset_delta)) /
+                        /* 80006648-80006658: each numerator is an fmsubs whose
+                         * subtrahend is a plain product. */
+                        float temp_f1_3 = LBC_FMA(d1_dot_d2, d2_dot_offset_delta,
+                                                  -(d2_len_sq * d1_dot_offset_delta)) /
                                           denom;
-                        arg5_scl = ((d1_len_sq * d2_dot_offset_delta) -
-                                    (d1_dot_d2 * d1_dot_offset_delta)) /
+                        arg5_scl = LBC_FMA(d1_len_sq, d2_dot_offset_delta,
+                                   -(d1_dot_d2 * d1_dot_offset_delta)) /
                                    denom;
                         arg4_scl = temp_f1_3;
                         if (temp_f1_3 > lbColl_804D7A00 ||
@@ -825,13 +863,14 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
                     }
                 }
 
-                arg4->x = d1_x * arg4_scl + arg4_offset.x;
-                arg4->y = d1_y * arg4_scl + arg4_offset.y;
-                arg4->z = d1_z * arg4_scl + arg4_offset.z;
+                /* 80006730-80006758: one fmadds per axis. */
+                arg4->x = LBC_FMA(d1_x, arg4_scl, arg4_offset.x);
+                arg4->y = LBC_FMA(d1_y, arg4_scl, arg4_offset.y);
+                arg4->z = LBC_FMA(d1_z, arg4_scl, arg4_offset.z);
 
-                arg5->x = d2_x * arg5_scl + arg5_offset.x;
-                arg5->y = d2_y * arg5_scl + arg5_offset.y;
-                arg5->z = d2_z * arg5_scl + arg5_offset.z;
+                arg5->x = LBC_FMA(d2_x, arg5_scl, arg5_offset.x);
+                arg5->y = LBC_FMA(d2_y, arg5_scl, arg5_offset.y);
+                arg5->z = LBC_FMA(d2_z, arg5_scl, arg5_offset.z);
             }
         }
             PAD_STACK(84);
@@ -843,7 +882,8 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
 
 static inline float lbColl_Dot2(float ax, float ay, float bx, float by)
 {
-    return ax * bx + ay * by;
+    /* 80006A08/80006A1C: y plain, x fused, like every dot in this file. */
+    return LBC_DOT2(ax, ay, bx, by);
 }
 
 static inline float lbColl_GetY(Vec3* v)
@@ -966,20 +1006,18 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
                         dot2_diff_ba_dc = lbColl_Dot2(diff_ba_x, diff_ba_y,
                                                       diff_dc_x, diff_dc_y);
 
-                        sqdist2_dc =
-                            diff_dc_x * diff_dc_x + diff_dc_y * diff_dc_y;
-                        sqdist2_ba =
-                            diff_ba_x * diff_ba_x + diff_ba_y * diff_ba_y;
+                        /* 80006A08-80006A44: the five 2-D dots and the determinant. y first
+                         * as a plain multiply, x fused in. */
+                        sqdist2_dc = LBC_DOT2(diff_dc_x, diff_dc_y, diff_dc_x, diff_dc_y);
+                        sqdist2_ba = LBC_DOT2(diff_ba_x, diff_ba_y, diff_ba_x, diff_ba_y);
                         diff_ac_x = a1.x - c1.x;
 
-                        dot2_diff_dc_ac =
-                            diff_dc_x * diff_ac_x + diff_dc_y * diff_ac_y;
+                        dot2_diff_dc_ac = LBC_DOT2(diff_dc_x, diff_dc_y, diff_ac_x, diff_ac_y);
 
-                        dot2_diff_ba_ac =
-                            diff_ba_x * diff_ac_x + diff_ba_y * diff_ac_y;
+                        dot2_diff_ba_ac = LBC_DOT2(diff_ba_x, diff_ba_y, diff_ac_x, diff_ac_y);
 
-                        determinant = sqdist2_ba * sqdist2_dc -
-                                      dot2_diff_ba_dc * dot2_diff_ba_dc;
+                        determinant = LBC_FMA(sqdist2_ba, sqdist2_dc,
+                                              -(dot2_diff_ba_dc * dot2_diff_ba_dc));
 
                         {
                             float scl_e;
@@ -1011,9 +1049,10 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
                                     float temp_scl_f;
                                     float f4 = a1.x - temp_f5_2;
                                     float temp_f5_3 = b_x - temp_f5_2;
-                                    if ((f4 * f4 + temp_f6_2 * temp_f6_2) <
-                                        (temp_f5_3 * temp_f5_3 +
-                                         temp_f7_3 * temp_f7_3))
+                                    /* 80006B30-80006B40: y plain, x fused; the temp_f7_2/f5_2 above are
+                                     * double fmadd with 0.5, exact either way. */
+                                    if (LBC_DOT2(f4, temp_f6_2, f4, temp_f6_2) <
+                                        LBC_DOT2(temp_f5_3, temp_f7_3, temp_f5_3, temp_f7_3))
                                     {
                                         float diff_dc_x;
                                         float temp_f8_2;
@@ -1030,18 +1069,11 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
                                                 diff_dc_z = d->z;
                                                 diff_dc_z -= c->z;
                                                 scl_e = 0.0f;
-                                                dot =
-                                                    diff_dc_z * (c3.z - a2.z) +
-                                                    ((diff_dc_x *
-                                                      (c3.x - a2.x)) +
-                                                     (temp_f8_2 *
-                                                      (c3.y - a2.y)));
-                                                temp_scl_f =
-                                                    -dot /
-                                                    ((diff_dc_z * diff_dc_z) +
-                                                     ((diff_dc_x * diff_dc_x) +
-                                                      (temp_f8_2 *
-                                                       temp_f8_2)));
+                                                /* 80006B8C-80006BD8. */
+                                                dot = LBC_DOT(diff_dc_x, temp_f8_2, diff_dc_z,
+                                                              c3.x - a2.x, c3.y - a2.y, c3.z - a2.z);
+                                                temp_scl_f = -dot / LBC_DOT(diff_dc_x, temp_f8_2, diff_dc_z,
+                                                                            diff_dc_x, temp_f8_2, diff_dc_z);
                                             }
                                         }
                                         if (temp_scl_f > lbColl_804D7A00) {
@@ -1074,20 +1106,11 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
                                                         float dot;
                                                         float var_f2_2;
                                                         dot =
-                                                            diff_dc_z1 *
-                                                                (c2.z - b0.z) +
-                                                            ((diff_dc_x1 *
-                                                              (c2.x - b0.x)) +
-                                                             (diff_dc_y1 *
-                                                              (c2.y - b0.y)));
+                                                            LBC_DOT(diff_dc_x1, diff_dc_y1, diff_dc_z1,
+                                                                    c2.x - b0.x, c2.y - b0.y, c2.z - b0.z);
                                                         var_f2_2 =
-                                                            -dot /
-                                                            ((diff_dc_z1 *
-                                                              diff_dc_z1) +
-                                                             ((diff_dc_x1 *
-                                                               diff_dc_x1) +
-                                                              (diff_dc_y1 *
-                                                               diff_dc_y1)));
+                                                            -dot / LBC_DOT(diff_dc_x1, diff_dc_y1, diff_dc_z1,
+                                                                           diff_dc_x1, diff_dc_y1, diff_dc_z1);
                                                         if (var_f2_2 >
                                                             lbColl_804D7A00)
                                                         {
@@ -1109,11 +1132,12 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
                                 }
                             } else {
                                 float temp_f1_3 =
-                                    ((dot2_diff_ba_dc * dot2_diff_dc_ac) -
-                                     (sqdist2_dc * dot2_diff_ba_ac)) /
+                                    /* 80006CCC-80006CDC: fmsubs, the subtrahend a plain product. */
+                                    LBC_FMA(dot2_diff_ba_dc, dot2_diff_dc_ac,
+                                            -(sqdist2_dc * dot2_diff_ba_ac)) /
                                     determinant;
-                                scl_f = ((sqdist2_ba * dot2_diff_dc_ac) -
-                                         (dot2_diff_ba_dc * dot2_diff_ba_ac)) /
+                                scl_f = LBC_FMA(sqdist2_ba, dot2_diff_dc_ac,
+                                         -(dot2_diff_ba_dc * dot2_diff_ba_ac)) /
                                         determinant;
                                 scl_e = temp_f1_3;
                                 if ((temp_f1_3 > lbColl_804D7A00) ||
@@ -1157,12 +1181,13 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
                                 }
                             }
 
-                            e->x = diff_ba_x * scl_e + a1.x;
-                            e->y = diff_ba_y * scl_e + a1.y;
+                            /* 80006DB4-80006DD8: one fmadds per axis. */
+                            e->x = LBC_FMA(diff_ba_x, scl_e, a1.x);
+                            e->y = LBC_FMA(diff_ba_y, scl_e, a1.y);
                             e->z = 0.0f;
 
-                            f->x = diff_dc_x * scl_f + c1.x;
-                            f->y = diff_dc_y * scl_f + c1.y;
+                            f->x = LBC_FMA(diff_dc_x, scl_f, c1.x);
+                            f->y = LBC_FMA(diff_dc_y, scl_f, c1.y);
                             f->z = 0.0f;
                         }
                     }
@@ -1176,7 +1201,8 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
         diff_ef_y = e->y - f->y;
         diff_ef_x = e->x;
         diff_ef_x -= f->x;
-        if (sum_pq * sum_pq < diff_ef_x * diff_ef_x + (diff_ef_y * diff_ef_y))
+        /* 80006E00/80006E04: y plain, x fused. */
+        if (sum_pq * sum_pq < LBC_DOT2(diff_ef_x, diff_ef_y, diff_ef_x, diff_ef_y))
         {
             return false;
         }
@@ -1289,7 +1315,8 @@ bool lbColl_80006E58(Vec3* hit_start, Vec3* hit_end, Vec3* hurt_start,
 
     // Fast reject when the expanded hit segment AABB misses both hurt
     // endpoints.
-    broadphase_radius = (hurt_radius * broadphase_scale) + hit_radius;
+    /* 80006E80: fmadds. */
+    broadphase_radius = LBC_FMA(hurt_radius, broadphase_scale, hit_radius);
     hit_start_copy = *hit_start;
     hurt_start_copy = *hurt_start;
     hit_end_x = hit_end->x;
@@ -1390,27 +1417,29 @@ block_39:
     hurt_end_z = hurt_end->z;
     (void) hurt_end_z;
     start_delta_x = hit_start_copy.x - hurt_start_copy.x;
-    segment_dot = (hit_delta.x * hurt_delta_x) + segment_dot;
+    /* 80007130-80007174: the accumulations below are one fmadds each,
+     * in exactly this order; hit_len_sq alone is two plain fadds. */
+    segment_dot = LBC_FMA(hit_delta.x, hurt_delta_x, segment_dot);
     hurt_delta_z = hurt_end_z - hurt_start_copy.z;
     /* Cache 1.0 constant in a callee-save to avoid reloading it across the
      * several `hit_param = 1.0` / `hurt_param = 1.0` branches below. The
      * variable name is a borrow from the unused-after-broadphase-rejection
      * slot. */
     hit_start_min_z = lbColl_804D7A08;
-    hurt_len_sq = (hurt_delta_x * hurt_delta_x) + hurt_len_sq;
-    segment_dot = (hit_delta.z * hurt_delta_z) + segment_dot;
-    hurt_len_sq = (hurt_delta_z * hurt_delta_z) + hurt_len_sq;
+    hurt_len_sq = LBC_FMA(hurt_delta_x, hurt_delta_x, hurt_len_sq);
+    segment_dot = LBC_FMA(hit_delta.z, hurt_delta_z, segment_dot);
+    hurt_len_sq = LBC_FMA(hurt_delta_z, hurt_delta_z, hurt_len_sq);
     hit_start_mid_z = hit_delta.z * hit_delta.z;
     start_delta_z = hit_start_copy.z - hurt_start_copy.z;
     hit_len_sq = hit_start_mid_x + hit_start_mid_y;
     hit_len_sq = hit_start_mid_z + hit_len_sq;
     hit_start_dot = hit_delta.y * start_delta_y;
-    hit_start_dot = (hit_delta.x * start_delta_x) + hit_start_dot;
-    hurt_start_dot =
-        (hurt_delta_y * start_delta_y) + (hurt_delta_x * start_delta_x);
-    hit_start_dot = (hit_delta.z * start_delta_z) + hit_start_dot;
-    hurt_start_dot = (hurt_delta_z * start_delta_z) + hurt_start_dot;
-    closest_denom = (hit_len_sq * hurt_len_sq) - (segment_dot * segment_dot);
+    hit_start_dot = LBC_FMA(hit_delta.x, start_delta_x, hit_start_dot);
+    hurt_start_dot = LBC_FMA(hurt_delta_x, start_delta_x,
+                             hurt_delta_y * start_delta_y);
+    hit_start_dot = LBC_FMA(hit_delta.z, start_delta_z, hit_start_dot);
+    hurt_start_dot = LBC_FMA(hurt_delta_z, start_delta_z, hurt_start_dot);
+    closest_denom = LBC_FMA(hit_len_sq, hurt_len_sq, -(segment_dot * segment_dot));
     if ((hurt_len_sq < lbColl_804D79F0) && (hurt_len_sq > lbColl_804D79F4)) {
         is_hurt_segment_degenerate = 1;
     } else {
@@ -1458,12 +1487,11 @@ block_39:
             hit_end_mid_x = hit_end->x - hurt_mid_x;
             hit_start_mid_z = hit_start_copy.z - hurt_mid_z;
             hit_end_mid_z = hit_end->z - hurt_mid_z;
-            if (((hit_start_mid_z * hit_start_mid_z) +
-                 ((hit_start_mid_x * hit_start_mid_x) +
-                  (hit_start_mid_y * hit_start_mid_y))) <
-                ((hit_end_mid_z * hit_end_mid_z) +
-                 ((hit_end_mid_x * hit_end_mid_x) +
-                  (hit_end_mid_y * hit_end_mid_y))))
+            /* 80007280-80007290: y plain, x and z fused. */
+            if (LBC_DOT(hit_start_mid_x, hit_start_mid_y, hit_start_mid_z,
+                        hit_start_mid_x, hit_start_mid_y, hit_start_mid_z) <
+                LBC_DOT(hit_end_mid_x, hit_end_mid_y, hit_end_mid_z,
+                        hit_end_mid_x, hit_end_mid_y, hit_end_mid_z))
             {
                 Vec3 a2;
                 Vec3 d1;
@@ -1477,12 +1505,12 @@ block_39:
                     float dot;
 
                     a2 = *hit_start;
-                    dot = (d1.z * (c3.z - a2.z)) +
-                          ((d1.x * (c3.x - a2.x)) + (d1.y * (c3.y - a2.y)));
-                    hit_end_mid_x = d1.x * d1.x;
+                    /* 800072E0-80007324. */
+                    dot = LBC_DOT(d1.x, d1.y, d1.z,
+                                  c3.x - a2.x, c3.y - a2.y, c3.z - a2.z);
                     hurt_param_from_hit_start =
                         -dot /
-                        ((d1.z * d1.z) + (hit_end_mid_x + (d1.y * d1.y)));
+                        LBC_DOT(d1.x, d1.y, d1.z, d1.x, d1.y, d1.z);
                 }
                 if (hurt_param_from_hit_start > lbColl_804D7A00) {
                     hurt_param_from_hit_start = hit_start_min_z;
@@ -1503,11 +1531,12 @@ block_39:
                     float dot;
 
                     b0 = *hit_end;
-                    dot = (d1.z * (c2.z - b0.z)) +
-                          ((d1.x * (c2.x - b0.x)) + (d1.y * (c2.y - b0.y)));
+                    /* 8000739C-800073E0. */
+                    dot = LBC_DOT(d1.x, d1.y, d1.z,
+                                  c2.x - b0.x, c2.y - b0.y, c2.z - b0.z);
                     hurt_param_from_hit_end =
                         -dot /
-                        ((d1.z * d1.z) + ((d1.x * d1.x) + (d1.y * d1.y)));
+                        LBC_DOT(d1.x, d1.y, d1.z, d1.x, d1.y, d1.z);
                 }
                 if (hurt_param_from_hit_end > lbColl_804D7A00) {
                     hurt_param_from_hit_end = hit_param;
@@ -1518,11 +1547,12 @@ block_39:
             }
         } else {
             hit_param =
-                (hit_param_candidate = ((segment_dot * hurt_start_dot) -
-                                        (hurt_len_sq * hit_start_dot)) /
+                /* 80007414-80007424: fmsubs, subtrahend a plain product. */
+                (hit_param_candidate = LBC_FMA(segment_dot, hurt_start_dot,
+                                               -(hurt_len_sq * hit_start_dot)) /
                                        closest_denom);
-            hurt_param = ((hit_len_sq * hurt_start_dot) -
-                          (segment_dot * hit_start_dot)) /
+            hurt_param = LBC_FMA(hit_len_sq, hurt_start_dot,
+                                 -(segment_dot * hit_start_dot)) /
                          closest_denom;
             if ((hit_param_candidate > lbColl_804D7A00) ||
                 (hit_param < lbColl_804D7A10) ||
@@ -1566,36 +1596,31 @@ block_39:
             }
         }
     }
-    hit_closest->x = (hit_delta.x * hit_param) + hit_start_copy.x;
-    hit_closest->y = (hit_delta.y * hit_param) + hit_start_copy.y;
-    hit_closest->z = (hit_delta.z * hit_param) + hit_start_copy.z;
-    hurt_closest->x = (hurt_delta_x * hurt_param) + hurt_start_copy.x;
-    hurt_closest->y = (hurt_delta_y * hurt_param) + hurt_start_copy.y;
-    hurt_closest->z = (hurt_delta_z * hurt_param) + hurt_start_copy.z;
+    /* 80007500-80007538: one fmadds per axis. */
+    hit_closest->x = LBC_FMA(hit_delta.x, hit_param, hit_start_copy.x);
+    hit_closest->y = LBC_FMA(hit_delta.y, hit_param, hit_start_copy.y);
+    hit_closest->z = LBC_FMA(hit_delta.z, hit_param, hit_start_copy.z);
+    hurt_closest->x = LBC_FMA(hurt_delta_x, hurt_param, hurt_start_copy.x);
+    hurt_closest->y = LBC_FMA(hurt_delta_y, hurt_param, hurt_start_copy.y);
+    hurt_closest->z = LBC_FMA(hurt_delta_z, hurt_param, hurt_start_copy.z);
     closest_delta_y = hit_closest->y - hurt_closest->y;
     closest_delta_x = hit_closest->x - hurt_closest->x;
     closest_delta_z = hit_closest->z - hurt_closest->z;
-    closest_dist_sq = (closest_delta_z * closest_delta_z) +
-                      ((closest_delta_y * closest_delta_y) +
-                       (closest_delta_x * closest_delta_x));
+    /* 80007568-80007578: y plain, x and z fused. */
+    closest_dist_sq = LBC_DOT(closest_delta_x, closest_delta_y, closest_delta_z,
+                              closest_delta_x, closest_delta_y, closest_delta_z);
     if (closest_dist_sq > lbColl_804D79F8) {
         volatile float sp38;
 
         closest_rsqrt_estimate = __frsqrte(closest_dist_sq);
         closest_rsqrt_step1 =
             lbColl_804D7A18 * closest_rsqrt_estimate *
-            -(((f64) closest_dist_sq *
-               (closest_rsqrt_estimate * closest_rsqrt_estimate)) -
-              lbColl_804D7A20);
+            LBC_NMSUB((f64) closest_dist_sq, closest_rsqrt_estimate * closest_rsqrt_estimate, lbColl_804D7A20);
         closest_rsqrt_step2 = lbColl_804D7A18 * closest_rsqrt_step1 *
-                              -(((f64) closest_dist_sq *
-                                 (closest_rsqrt_step1 * closest_rsqrt_step1)) -
-                                lbColl_804D7A20);
+                              LBC_NMSUB((f64) closest_dist_sq, closest_rsqrt_step1 * closest_rsqrt_step1, lbColl_804D7A20);
         sp38 = (float) ((f64) closest_dist_sq *
                         (lbColl_804D7A18 * closest_rsqrt_step2 *
-                         -(((f64) closest_dist_sq *
-                            (closest_rsqrt_step2 * closest_rsqrt_step2)) -
-                           lbColl_804D7A20)));
+                         LBC_NMSUB((f64) closest_dist_sq, closest_rsqrt_step2 * closest_rsqrt_step2, lbColl_804D7A20)));
         closest_dist = sp38;
     } else {
         closest_dist = closest_dist_sq;
@@ -1619,25 +1644,20 @@ block_39:
     local_delta_y = hit_start_copy.y - hit_delta.y;
     local_delta_z = hit_start_copy.z - hit_delta.z;
     local_dist_sq =
-        (local_delta_z * local_delta_z) +
-        ((local_delta_x * local_delta_x) + (local_delta_y * local_delta_y));
+        LBC_DOT(local_delta_x, local_delta_y, local_delta_z,
+                local_delta_x, local_delta_y, local_delta_z); /* 80007680-80007690 */
     if (local_dist_sq > lbColl_804D79F8) {
         volatile float sp34;
 
         local_rsqrt_estimate = __frsqrte(local_dist_sq);
         local_rsqrt_step1 = lbColl_804D7A18 * local_rsqrt_estimate *
-                            -(((f64) local_dist_sq *
-                               (local_rsqrt_estimate * local_rsqrt_estimate)) -
-                              lbColl_804D7A20);
+                            LBC_NMSUB((f64) local_dist_sq, local_rsqrt_estimate * local_rsqrt_estimate, lbColl_804D7A20);
         local_rsqrt_step2 =
             lbColl_804D7A18 * local_rsqrt_step1 *
-            -(((f64) local_dist_sq * (local_rsqrt_step1 * local_rsqrt_step1)) -
-              lbColl_804D7A20);
+            LBC_NMSUB((f64) local_dist_sq, local_rsqrt_step1 * local_rsqrt_step1, lbColl_804D7A20);
         sp34 = (float) ((f64) local_dist_sq *
                         (lbColl_804D7A18 * local_rsqrt_step2 *
-                         -(((f64) local_dist_sq *
-                            (local_rsqrt_step2 * local_rsqrt_step2)) -
-                           lbColl_804D7A20)));
+                         LBC_NMSUB((f64) local_dist_sq, local_rsqrt_step2 * local_rsqrt_step2, lbColl_804D7A20)));
         local_dist = sp34;
     } else {
         local_dist = local_dist_sq;
@@ -1647,14 +1667,15 @@ block_39:
     allowed_distance = hit_radius + scaled_hurt_radius;
     *out_overlap = allowed_distance - closest_dist;
     hurt_closest_x = hurt_closest->x;
-    out_contact_pos->x =
-        (contact_lerp * (hit_closest->x - hurt_closest_x)) + hurt_closest_x;
+    /* 8000771C-80007744: one fmadds per axis. */
+    out_contact_pos->x = LBC_FMA(contact_lerp, hit_closest->x - hurt_closest_x,
+                                 hurt_closest_x);
     hurt_closest_y = hurt_closest->y;
-    out_contact_pos->y =
-        (contact_lerp * (hit_closest->y - hurt_closest_y)) + hurt_closest_y;
+    out_contact_pos->y = LBC_FMA(contact_lerp, hit_closest->y - hurt_closest_y,
+                                 hurt_closest_y);
     hurt_closest_z = hurt_closest->z;
-    out_contact_pos->z =
-        (contact_lerp * (hit_closest->z - hurt_closest_z)) + hurt_closest_z;
+    out_contact_pos->z = LBC_FMA(contact_lerp, hit_closest->z - hurt_closest_z,
+                                 hurt_closest_z);
     if (allowed_distance < closest_dist) {
         return 0;
     }
