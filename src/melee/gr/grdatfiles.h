@@ -16,6 +16,9 @@
 /* 1C62B4 */ static UnkArchiveStruct* grDatFiles_801C62B4(void);
 /* 1C6324 */ UnkArchiveStruct* grDatFiles_GetArchive(void);
 /* 1C6330 */ UnkArchiveStruct* grDatFiles_801C6330(s32);
+#if BUILD_TARGET_PC
+UnkArchiveStruct* pc_grdatfiles_slot(int i);
+#endif
 /* 1C6478 */ UnkArchiveStruct* grDatFiles_801C6478(void* data, s32 length);
 
 #if BUILD_TARGET_PC

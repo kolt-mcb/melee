@@ -21,6 +21,8 @@
 #include <baselib/archive.h>
 
 #include "port/pc_grconv.h"
+#include "melee/gr/types.h"
+#include "melee/gr/grdatfiles.h"
 
 #define PC_GRCONV_MAX 64
 
@@ -242,6 +244,43 @@ void* pc_grconv_dynamics(HSD_Archive* archive, void* raw)
     if (getenv("MELEE_ITCONV_TRACE") != NULL) {
         fprintf(stderr, "[GRCONV] dynamics at +%#x: %u records from +%#x\n",
                 off, count, data_off);
+    }
+    return out;
+}
+
+HSD_Archive* pc_grconv_archive_of(const void* p)
+{
+    int i;
+    for (i = 0; i < 4; i++) {
+        UnkArchiveStruct* e = pc_grdatfiles_slot(i);
+        const u8* base;
+        u32 len;
+        if (e == NULL || e->unk0 == NULL || !gr_arch_span(e->unk0, &base, &len)) {
+            continue;
+        }
+        if ((const u8*) p >= base && (const u8*) p < base + len) {
+            return e->unk0;
+        }
+    }
+    return NULL;
+}
+
+s16* pc_grconv_s16_table(HSD_Archive* archive, u32 off, u32 n)
+{
+    const u8* base;
+    u32 len, i;
+    s16* out;
+
+    if (off == 0 || !gr_arch_span(archive, &base, &len) || off + n * 2 > len) {
+        return NULL;
+    }
+    out = calloc(n, sizeof(s16));
+    if (out == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < n; i++) {
+        const u8* e = base + off + i * 2;
+        out[i] = (s16) (((u16) e[0] << 8) | e[1]);
     }
     return out;
 }

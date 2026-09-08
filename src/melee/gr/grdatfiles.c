@@ -2928,6 +2928,15 @@ static void grDatFiles_801C6228(UnkStageDat* arg0)
 
 static UnkArchiveStruct grDatFiles_8049EE10[4];
 
+#if BUILD_TARGET_PC
+/* For the converters: the i-th loaded stage archive slot (NULL past the
+ * end), so a raw archive pointer can be traced back to its HSD_Archive. */
+UnkArchiveStruct* pc_grdatfiles_slot(int i)
+{
+    return (i >= 0 && i < 4) ? &grDatFiles_8049EE10[i] : NULL;
+}
+#endif
+
 void grDatFiles_801C6288(void)
 {
     memzero(&grDatFiles_8049EE10, 0x30);

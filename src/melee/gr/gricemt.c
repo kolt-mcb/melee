@@ -72,6 +72,84 @@ struct grIceMt_YakumonoParam {
 };
 
 static struct grIceMt_YakumonoParam* yakumono_param;
+
+#if BUILD_TARGET_PC
+#include "port/pc_grconv.h"
+/* The stage's yakumono_param block is raw big-endian archive data, and its
+ * layout is not a run of 32-bit scalars: three s16* tables sit at 0xAC,
+ * 0xB0, 0xB4 as archive offsets, and two u16 at 0x38. Ground_GetYakumonoParam
+ * cannot express that (host pointers are eight bytes, so the struct's own
+ * offsets stop matching at 0xAC), so this file converts its block itself,
+ * field by field, into a host struct, and copies the three tables out of the
+ * archive byte-swapped. Without this every read of the block -- the initial
+ * scroll height that puts both spawn points 18.67 above the console's,
+ * the segment ids at xAC[0..4], the spawn table -- was reading swapped
+ * bytes. */
+static struct grIceMt_YakumonoParam pc_icemt_param_buf;
+static const void* pc_icemt_param_src;
+
+static u32 pc_icemt_be32(const u8* p)
+{
+    return ((u32) p[0] << 24) | ((u32) p[1] << 16) | ((u32) p[2] << 8) | p[3];
+}
+
+static f32 pc_icemt_bef32(const u8* p)
+{
+    union {
+        u32 u;
+        f32 f;
+    } v;
+    v.u = pc_icemt_be32(p);
+    return v.f;
+}
+
+static struct grIceMt_YakumonoParam* pc_icemt_param(const void* raw)
+{
+    const u8* p = raw;
+    struct grIceMt_YakumonoParam* d = &pc_icemt_param_buf;
+    HSD_Archive* ar;
+    u32 o;
+
+    if (raw == NULL) {
+        return NULL;
+    }
+    if (raw == pc_icemt_param_src) {
+        return d;
+    }
+    ar = pc_grconv_archive_of(raw);
+    if (ar == NULL) {
+        port_guard_warn("gricemt.c:yakumono block outside every archive");
+        return NULL;
+    }
+    /* 0x00..0xAB: 32-bit scalars, except the two u16 at 0x38. The host
+     * struct has the same offsets up to here. */
+    for (o = 0; o < 0xAC; o += 4) {
+        if (o == 0x38) {
+            d->x38 = (u16) (pc_icemt_be32(p + o) >> 16);
+            d->x3A = (u16) (pc_icemt_be32(p + o) & 0xFFFF);
+        } else {
+            *(u32*) ((u8*) d + o) = pc_icemt_be32(p + o);
+        }
+    }
+    d->xAC = pc_grconv_s16_table(ar, pc_icemt_be32(p + 0xAC), 32);
+    d->xB0 = pc_grconv_s16_table(ar, pc_icemt_be32(p + 0xB0), 32);
+    d->xB4 = pc_grconv_s16_table(ar, pc_icemt_be32(p + 0xB4), 32);
+    if (d->xAC == NULL || d->xB0 == NULL || d->xB4 == NULL) {
+        port_guard_warn("gricemt.c:yakumono s16 table did not convert");
+    }
+    d->xB8 = (s16) (pc_icemt_be32(p + 0xB8) >> 16);
+    d->pad = 0;
+    d->xBC.kind = (u16) (pc_icemt_be32(p + 0xBC) >> 16);
+    d->xBC.x2 = p[0xBE];
+    d->xBC.respawn = p[0xBF];
+    d->xC0 = pc_icemt_bef32(p + 0xC0);
+    d->xC4 = pc_icemt_bef32(p + 0xC4);
+    d->xC8 = pc_icemt_bef32(p + 0xC8);
+    d->xCC = pc_icemt_bef32(p + 0xCC);
+    pc_icemt_param_src = raw;
+    return d;
+}
+#endif
 HSD_GObj* grIm_804D69F0;
 HSD_GObj* grIm_804D69EC;
 HSD_GObj* grIm_804D69E8;
@@ -298,7 +376,11 @@ void grIceMt_801F686C(void)
     HSD_JObj* jobj;
     PAD_STACK(0x10);
 
+#if BUILD_TARGET_PC
+    yakumono_param = pc_icemt_param(Ground_GetYakumonoParam());
+#else
     yakumono_param = Ground_GetYakumonoParam();
+#endif
     stage_info.unk8C.b4 = true;
     stage_info.unk8C.b5 = false;
     grIceMt_801F71E8(0);

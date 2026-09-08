@@ -15,4 +15,11 @@ void* pc_grconv_itemdata(HSD_Archive* archive, void* raw);
  * the record array byteswapped. NULL if it does not fit the archive. */
 void* pc_grconv_dynamics(HSD_Archive* archive, void* raw);
 
+/* The loaded stage archive whose data span contains p, or NULL. */
+HSD_Archive* pc_grconv_archive_of(const void* p);
+
+/* n big-endian s16 at archive offset off, as a fresh host array; NULL if the
+ * offset is 0 or the run does not fit the archive. */
+s16* pc_grconv_s16_table(HSD_Archive* archive, u32 off, u32 n);
+
 #endif
