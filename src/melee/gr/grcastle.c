@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include "port/pc_grconv.h"
+#endif
+
 #include "grcastle.h"
 
 #include "placeholder.h"
@@ -418,19 +422,32 @@ void grCastle_801CD658(Ground_GObj* gobj)
                 flag6 = HSD_ArchiveGetPublicAddress(archive->unk0,
                                                     "dynamicsdata_flag6");
                 if (flag6 != NULL) {
+#if BUILD_TARGET_PC
+                    /* Raw file image, big-endian, four-byte pointers; the
+                     * copy below dereferences the `data` word as a host
+                     * pointer. Same fix as Rainbow Cruise's ship. A block
+                     * that does not convert leaves that entry's dynamics
+                     * NULL, which the loop already handles. */
+                    flag3 = pc_grconv_dynamics(archive->unk0, flag3);
+                    flag4 = pc_grconv_dynamics(archive->unk0, flag4);
+                    flag6 = pc_grconv_dynamics(archive->unk0, flag6);
+                    if (flag3 == NULL || flag4 == NULL || flag6 == NULL) {
+                        port_guard_warn("grcastle.c:dynamics-unconverted");
+                    }
+#endif
                     entries_s = grCs_803B7EA8;
 
                     for (i = 0; (u32) i < 4U; i++) {
                         HSD_JObj* jobj =
                             Ground_801C3FA4(gobj, entries_s.e[i].depth);
                         if (jobj != NULL) {
-                            if (entries_s.e[i].type == 3) {
+                            if (entries_s.e[i].type == 3 && flag3 != NULL) {
                                 grLib_801C9B20(jobj, flag3,
                                                &gp->gv.castle9.dynamics[i]);
-                            } else if (entries_s.e[i].type == 4) {
+                            } else if (entries_s.e[i].type == 4 && flag4 != NULL) {
                                 grLib_801C9B20(jobj, flag4,
                                                &gp->gv.castle9.dynamics[i]);
-                            } else if (entries_s.e[i].type == 6) {
+                            } else if (entries_s.e[i].type == 6 && flag6 != NULL) {
                                 grLib_801C9B20(jobj, flag6,
                                                &gp->gv.castle9.dynamics[i]);
                             } else {

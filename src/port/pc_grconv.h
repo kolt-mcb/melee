@@ -11,4 +11,8 @@
 void** pc_grconv_ptr_array(HSD_Archive* archive, void* raw, u32 start);
 void* pc_grconv_itemdata(HSD_Archive* archive, void* raw);
 
+/* A stage's DynamicsDesc by public name, converted: {data, count, pos} with
+ * the record array byteswapped. NULL if it does not fit the archive. */
+void* pc_grconv_dynamics(HSD_Archive* archive, void* raw);
+
 #endif

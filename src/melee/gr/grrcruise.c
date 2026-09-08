@@ -1,6 +1,7 @@
 #include "grrcruise.h"
 
 #if BUILD_TARGET_PC
+#include "port/pc_grconv.h"
 #include "port/pc_ptr.h"
 #endif
 
@@ -396,6 +397,18 @@ void grRCruise_801FF7A4(Ground_GObj* gobj)
                                 archive->unk0, "dynamicsdata_shipflag"),
                             data != NULL))
     {
+#if BUILD_TARGET_PC
+        /* A public address is a pointer into the raw file image. Handed on
+         * as it was, lb_80011710 dereferenced its `data` word -- a
+         * big-endian file offset -- as a host pointer, and the port died
+         * here on every character before a single frame was compared.
+         * Convert it the way the item articles' dynamics are converted. */
+        data = pc_grconv_dynamics(archive->unk0, data);
+        if (data == NULL) {
+            port_guard_warn("grrcruise.c:shipflag-unconverted");
+            gp->gv.rcruise2.xC4.data = NULL;
+        } else
+#endif
         grLib_801C9B20(Ground_801C3FA4(stage_gobj, 23), data,
                        &gp->gv.rcruise2.xC4);
     } else {
