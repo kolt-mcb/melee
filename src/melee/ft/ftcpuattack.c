@@ -761,7 +761,8 @@ int ftCo_800B5AB0(Fighter* fp, void* arg1, void* arg2)
             continue;
         }
         t = list->x04;
-        relx = (x50Vx * t + x50X) - (fpVx * t + fpX);
+        /* 800B5C28 / 800B5C2C: both predicted x's are one fmadds each. */
+        relx = CPU_FMA(x50Vx, t, x50X) - CPU_FMA(fpVx, t, fpX);
         if (x50->xC0 == 1) {
             if (fpGrav < 0.00001f && fpGrav > -0.00001f) {
                 nearzero = true;
@@ -804,21 +805,21 @@ int ftCo_800B5AB0(Fighter* fp, void* arg1, void* arg2)
                 v = -(x50TermNeg - x50Vy) / x50Grav;
             }
             if (v <= 0.0f) {
-                relPredY = (x50Vy * t + x50Y) - fpPredY;
+                relPredY = CPU_FMA(x50Vy, t, x50Y) - fpPredY; /* fmadds */
             } else if (t < v) {
                 sq = sqrtf(t);
-                relPredY = (f32) (((f64) (x50Vy * t + x50Y) -
+                relPredY = (f32) (((f64) CPU_FMA(x50Vy, t, x50Y) -
                                    0.5 * (f64) (x50Grav * sq)) -
                                   (f64) fpPredY);
             } else {
                 sq = sqrtf(v);
                 relPredY = (f32) (((f64) (x50TermNeg * (t - v)) +
-                                   ((f64) (x50Vy * t + x50Y) -
+                                   ((f64) CPU_FMA(x50Vy, t, x50Y) -
                                     0.5 * (f64) (x50Grav * sq))) -
                                   (f64) fpPredY);
             }
         } else {
-            relPredY = (x50Vy * t + x50Y) - fpPredY;
+            relPredY = CPU_FMA(x50Vy, t, x50Y) - fpPredY; /* fmadds */
         }
         if (fp->facing_dir > 0.0f) {
             dirx = list->x08 * fp->x34_scale.y;
@@ -2232,7 +2233,10 @@ void ftCo_800B9704(Fighter* fp)
 {
     struct Fighter_x1A88_t* cpu = &fp->x1A88;
     float rand = HSD_Randf();
-    cpu->x34 = (10 - cpu->level) * (rand * 15.0F + 15.0F) + 10.0F;
+    /* 800B9734 / 800B974C: rand*15 + 15 is one fmadds, and so is
+     * (10 - level) * that + 10. */
+    cpu->x34 = CPU_FMA((f32) (10 - cpu->level), CPU_FMA(rand, 15.0F, 15.0F),
+                       10.0F);
     if (cpu->xC == 7) {
         cpu->x34 /= 2;
     }
@@ -2809,9 +2813,10 @@ bool ftCo_800BB104(Fighter* fp, Fighter* arg1, Vec3* arg2, f32 arg3)
             float dx = temp_r29->x4C.x - temp_r29->x58.x;
             float dy = temp_r29->x4C.y - temp_r29->x58.y;
             float dz = temp_r29->x4C.z - temp_r29->x58.z;
-            sp28.x = 3.0f * dx + temp_r29->x4C.x;
-            sp28.y = 3.0f * dy + temp_r29->x4C.y;
-            sp28.z = 3.0f * dz + temp_r29->x4C.z;
+            /* 800BB1A4-800BB1D0: one fmadds per axis. */
+            sp28.x = CPU_FMA(3.0f, dx, temp_r29->x4C.x);
+            sp28.y = CPU_FMA(3.0f, dy, temp_r29->x4C.y);
+            sp28.z = CPU_FMA(3.0f, dz, temp_r29->x4C.z);
             if (lbColl_80006094(&temp_r29->x4C, &sp28, arg2, arg2, &sp40,
                                 &sp34, temp_r29->scale, arg3) != 0)
             {
@@ -2879,9 +2884,11 @@ int ftCo_800BB220(Fighter* fp, Item* ip, Vec3* arg2, f32 arg3)
         }
     }
 
-    dst.x = fp->pos_delta.x * count + arg2->x;
-    dst.y = fp->pos_delta.y * count + arg2->y;
-    dst.z = fp->pos_delta.z * count + arg2->z;
+    /* 800BB380-800BB3B8: one fmadds per axis, count converted to float
+     * first. */
+    dst.x = CPU_FMA(fp->pos_delta.x, (f32) count, arg2->x);
+    dst.y = CPU_FMA(fp->pos_delta.y, (f32) count, arg2->y);
+    dst.z = CPU_FMA(fp->pos_delta.z, (f32) count, arg2->z);
 
     if (fp->kind == FTKIND_NESS && temp_r31->level > 3) {
         if (count < 21) {
