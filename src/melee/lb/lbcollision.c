@@ -49,6 +49,12 @@
 #else
 #define LBC_NMSUB(a, b, c) (-(((a) * (b)) - (c)))
 #endif
+/* The single-precision fnmsubs, same shape. */
+#if BUILD_TARGET_PC
+#define LBC_NMSUBF(a, b, c) fmaf(-(a), (b), (c))
+#else
+#define LBC_NMSUBF(a, b, c) (-(((a) * (b)) - (c)))
+#endif
 
 #if BUILD_TARGET_PC
 /* MELEE_HBDBG=<lo>-<hi> reports every place a hurtbox position is actually
@@ -1687,16 +1693,19 @@ inline float sqrDistance(Vec3* a, Vec3* b)
     float x = a->x - b->x;
     float y = a->y - b->y;
     float z = a->z - b->z;
-    return x * x + y * y + z * z;
+    /* 8000788C-8000789C, inlined into lbColl_800077A0: y plain, x, z. */
+    return LBC_DOT(x, y, z, x, y, z);
 }
 
 static inline float sqrtf_store(float x, volatile float* y)
 {
     if (x > 0.0f) {
         double guess = __frsqrte((double) x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
+        /* Each refinement: fmul g,g / fmul 0.5,g / fnmsub x,g*g,3.0 / fmul.
+         * The 3.0 - x*g*g is ONE rounding on the console. */
+        guess = 0.5 * guess * LBC_NMSUB((double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * LBC_NMSUB((double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * LBC_NMSUB((double) x, guess * guess, 3.0);
         *y = (float) (x * guess);
         return *y;
     }
@@ -1764,14 +1773,18 @@ void lbColl_800077A0(Vec3* a, MtxPtr arg1, Vec3* b, Vec3* c, Vec3* d, Vec3* e,
         if (nearzero(dot_diff_cb)) {
             scl = 0.0f;
         } else {
-            n0 = 2.0f * diff_cb.x * diff_ba.x + 2.0f * diff_cb.y * diff_ba.y +
-                 2.0f * diff_cb.z * diff_ba.z;
+            /* 80007970-800079AC: each 2*cb is a plain fmuls, then y plain, x
+             * and z fused; ba_dot the same shape; the discriminant's inner
+             * term is an fnmsubs and its outer one an fmsubs. */
+            n0 = LBC_DOT(2.0f * diff_cb.x, 2.0f * diff_cb.y, 2.0f * diff_cb.z,
+                         diff_ba.x, diff_ba.y, diff_ba.z);
 
-            ba_dot = diff_ba.x * diff_ba.x + diff_ba.y * diff_ba.y +
-                     diff_ba.z * diff_ba.z;
+            ba_dot = LBC_DOT(diff_ba.x, diff_ba.y, diff_ba.z,
+                             diff_ba.x, diff_ba.y, diff_ba.z);
 
-            n1 = n0 * n0 -
-                 (4.0f * dot_diff_cb * -(offset_dist * offset_dist - ba_dot));
+            n1 = LBC_FMA(n0, n0,
+                         -(4.0f * dot_diff_cb *
+                           LBC_NMSUBF(offset_dist, offset_dist, ba_dot)));
 
             if (n1 < 0.0f) {
                 n1 = 0.0f;
@@ -1782,16 +1795,18 @@ void lbColl_800077A0(Vec3* a, MtxPtr arg1, Vec3* b, Vec3* c, Vec3* d, Vec3* e,
             scl = (-n0 - sqrtf_store(n1, sqrt_tmp - 1)) / (2.0f * dot_diff_cb);
         }
 
-        normalize_e.x = scl * diff_cb.x + b->x - a->x;
-        normalize_e.y = scl * diff_cb.y + b->y - a->y;
-        normalize_e.z = scl * diff_cb.z + b->z - a->z;
+        /* 80007A48-80007A78: fmadds then fsubs, per axis. */
+        normalize_e.x = LBC_FMA(scl, diff_cb.x, b->x) - a->x;
+        normalize_e.y = LBC_FMA(scl, diff_cb.y, b->y) - a->y;
+        normalize_e.z = LBC_FMA(scl, diff_cb.z, b->z) - a->z;
 
         PSVECNormalize(&normalize_e, e);
 
         *angle = lbVector_AngleXY(e, &diff_cb);
-        d->x = dist * e->x + a->x;
-        d->y = dist * e->y + a->y;
-        d->z = dist * e->z + a->z;
+        /* 80007AA0-80007AC0. */
+        d->x = LBC_FMA(dist, e->x, a->x);
+        d->y = LBC_FMA(dist, e->y, a->y);
+        d->z = LBC_FMA(dist, e->z, a->z);
     } else {
         *angle = M_PI;
         e->z = 0.0f;

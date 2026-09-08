@@ -59,7 +59,7 @@ FUSED_RE = re.compile(r"^\s*([0-9a-f]{8}):\s+(?:[0-9a-f]{2} ){4}\s*(f(?:n)?m(?:a
 # Every spelling of an explicit fused op in the port. The per-file macros
 # (FT_FMA, MP_FMA, KB_FMA, ...) expand to fmaf() on PC and to plain
 # arithmetic on the console, so the macro token is the site either way.
-PORT_FMA_RE = re.compile(r"\b(?:fmaf?|[A-Z][A-Z0-9]*_(?:FMAF?D?|NMSUB))\s*\(")
+PORT_FMA_RE = re.compile(r"\b(?:fmaf?|[A-Z][A-Z0-9]*_(?:FMAF?D?|NMSUBF?))\s*\(")
 SYM_RE = re.compile(r"^(\S+) = \.(\w+):0x([0-9A-Fa-f]+); // type:function size:0x([0-9A-Fa-f]+)")
 
 # The simulation first. Anything the contract in docs/port-parity-plan.md is
@@ -168,6 +168,7 @@ def port_sites(path):
                          text, re.M):
         macro_src[m.group(1)] = m.group(0).replace("\\\n", " ")
     macro_n = {}
+    inline_n = {}
 
     def macro_count(name, seen=()):
         if name in macro_n:
@@ -178,15 +179,42 @@ def port_sites(path):
         n = len(PORT_FMA_RE.findall(body))
         # A nested macro that is itself a fused-op token (KB_FMA inside
         # KNOCKBACK) was already counted above; only macros that wrap other
-        # things add their own count.
+        # things add their own count. A helper function called from the
+        # macro (LB_SIN wraps lb_rot_sin) counts too.
         for used in re.findall(r"\b([A-Za-z_]\w*)\s*\(", body):
             if (used in macro_src and used != name and
                     not PORT_FMA_RE.match(used + "(")):
                 n += macro_count(used, seen + (name,))
+            elif used in inline_n:
+                n += inline_n[used]
         macro_n[name] = n
         return n
 
     defn = re.compile(r"^[A-Za-z_][\w\s\*]*?\b([A-Za-z_]\w*)\s*\([^;]*$")
+    # Inline helpers the console has no symbol for -- lb_rot_sin, end(),
+    # sqrDistance, lbVector_Len -- count at each call, like macros. Their
+    # fused ops sit in the caller's console count and nowhere else, so
+    # without this a caller that is done reads as short by exactly what its
+    # helpers carry: lbVector_CreateEulerMatrix showed 4 of 16 with the
+    # other 12 in six sine and cosine calls.
+    # `static` is enough: MWCC inlines a file-local function whether or not
+    # it says inline, and lb_rot_sin -- the sine polynomial behind every
+    # LB_SIN -- says static and nothing else.
+    for m in re.finditer(r"^(?:static\s+(?:inline\s+)?|inline\s+)[\w\s\*]*?\b([A-Za-z_]\w*)\s*\([^)]*\)\s*\{",
+                         text, re.M):
+        depth, i = 0, m.end() - 1
+        while i < len(text):
+            if text[i] == "{": depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0: break
+            i += 1
+        body = text[m.end():i]
+        n = len(PORT_FMA_RE.findall(body))
+        for used in re.findall(r"\b([A-Za-z_]\w*)\s*\(", body):
+            if used in macro_src and not PORT_FMA_RE.match(used + "("):
+                n += macro_count(used)
+        inline_n[m.group(1)] = n
     in_macro = False
     for line in text.split("\n"):
         if line.startswith("#define"):
@@ -205,6 +233,8 @@ def port_sites(path):
             for used in re.findall(r"\b([A-Za-z_]\w*)\s*\(", line):
                 if used in macro_src and not PORT_FMA_RE.match(used + "("):
                     counts[cur] += macro_count(used)
+                elif used in inline_n and used != cur:
+                    counts[cur] += inline_n[used]
     return counts
 
 
