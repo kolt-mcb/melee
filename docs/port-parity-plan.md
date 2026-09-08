@@ -47,18 +47,20 @@ to 3,700 sites. Everything below is about replacing it with enumeration.
 
 Cheap, and everything after depends on them.
 
-1. **`-ffp-contract=off`** in `build.ninja.pc` / `configure.py`. GNU C mode
-   defaults to `fast`. Plain x86-64 cannot emit FMA so it is harmless today;
-   with `-march=native` the port would start fusing things the console does
-   not, which is a new class on top of the one being fixed. Also
-   `-fexcess-precision=standard` for the same reason.
+1. **`-ffp-contract=off`** in `configure_pc.py`. GNU C mode defaults to
+   `fast`. Plain x86-64 cannot emit FMA so it is harmless today; with
+   `-march=native` the port would start fusing things the console does not,
+   which is a new class on top of the one being fixed. Also
+   `-fexcess-precision=standard` for the same reason. **Done** (a409a7191;
+   takes effect on the next build).
 2. **The sweep runs unattended to completion.** `tools/pc_lockstep_sweep.sh`
    relaunches on kill; results are per-cell durable. Done.
 3. **Baseline and ratchet.** Record, per cell, "identical through N frames".
    A run that lowers any cell's N fails. `pc_matrix` had a green baseline that
    nobody re-ran while Yoshi crashed on every stage; the console grid must
-   not repeat that. Wire `pc_lockstep_matrix.py report --check-baseline`
-   into the same place `pc_matrix.py` is checked.
+   not repeat that. **Done**: `pc_lockstep_matrix.py baseline` /
+   `check`; the first baseline is `tests/pc/lockstep_baseline.json`. Still to
+   do: run `check` wherever `pc_matrix.py` is checked.
 4. **Quote frames, not "identical".** Every summary says "identical through
    N". Jigglypuff and Ganondorf are both `identical` at 600 and fail at 1321
    and 633.
@@ -68,7 +70,10 @@ Cheap, and everything after depends on them.
 The console binary and the source already know where every instance of each
 class is. Build the lists once; work the lists.
 
-1. **The fusing census.** `tools/pc_fma_census.py`: disassemble the DOL
+1. **The fusing census.** **Done** (`tools/pc_fma_census.py`, a409a7191):
+   the simulation has 2,807 fused ops in 751 functions and the port spells
+   out 197 -- 7%; 704 of those functions have none. Per file it is a work
+   list, per function it prints the sites. Design as planned: disassemble the DOL
    (`build/binutils/powerpc-eabi-objdump`), list every fused op in the two text sections (`-EB`, correct VMAs --
    the data sections read as code produce thousands of false ones) with its
    address, map each to a function through the symbol map, and to a source
@@ -77,7 +82,10 @@ class is. Build the lists once; work the lists.
    has an explicit `fma()` at that site (the 142 existing ones seed it).
    Sort by subsystem. `ft/`, `mp/`, `lb/`, `it/` are the simulation; `gx`,
    audio and the SDK are not in the contract and go last.
-2. **Catch divergences at their origin.** The trace compares ~20 fields. A
+2. **Catch divergences at their origin.** **First column written**
+   (`p_aihash`, f3e8a06fe): FNV-1a over every scalar of the AI struct, both
+   sides, same field order; not yet built. Next: the Fighter's own scalars,
+   the item list, stage state. The trace compares ~20 fields. A
    divergence in an untraced field surfaces N frames later as a position, and
    the walk back is where all the cost is. Add per-frame **subsystem hashes**
    on both sides: the Fighter struct with pointer fields masked, the AI struct
@@ -87,12 +95,20 @@ class is. Build the lists once; work the lists.
    console it is the same ranges at the GameCube offsets (the two layouts
    differ -- see the `FTDUMP` trap -- so each range is a (port offset,
    console offset, length) triple, not a shared one).
-3. **The raw-read audit.** Every `HSD_ArchiveGetPublicAddress` result and
+3. **The raw-read audit.** **Run**: 82 sites in `melee/`, and the ones in
+   `gr/` found Rainbow Cruise's crash in one grep (`dynamicsdata_shipflag`
+   handed raw to `lb_80011710`) and the same shape three times in Castle;
+   converter written, not yet built (69d77ba72). Every `HSD_ArchiveGetPublicAddress` result and
    every `stage_info.*` pointer that is used without passing through a
    converter. There was exactly one in `gr/` and it was crashing Fountain of
    Dreams. `grep` gets most of it; a `port_guard_warn` at each remaining raw
    use turns the rest into a counted list the sweep reports.
-4. **The bitfield audit.** Every struct with bitfields that overlays file
+4. **The bitfield audit.** **Listed**: 17 headers in `melee/` declare
+   bitfields, 8 already have PC handling; the 9 without are
+   `db/dbitem.static.h`, `ft/chara/ftMewtwo/types.h`, `ft/ftparts.static.h`,
+   `gm/gm_1B03.static.h`, `gr/grmutecity.static.h` (a runtime array, low
+   priority), `it/itCommonItems.h`, `it/items/itsamusgrapple.h`,
+   `mn/types.h`, `pl/types.h`. Every struct with bitfields that overlays file
    data or is read by the console as a word. Three bugs so far
    (`melee-pc-bitfield-order`); the set of such structs is finite and
    greppable (`: 1;` inside a struct that also appears in a `be32_swap` or a
