@@ -158,7 +158,12 @@ def reap():
 
 def run_cell(name, frames, timeout, cpu):
     reap()
-    argv = [sys.executable, os.path.join(HERE, "pc_lockstep.py"), name,
+    # -u matters. Writing to a file rather than a pipe was supposed to make a
+    # timed-out cell leave its output behind, and it did not: python
+    # block-buffers stdout when it is not a terminal, so a cell killed at the
+    # timeout loses the buffer and the log is still zero bytes. Roy timed out
+    # on every stage and left nothing to read, twice.
+    argv = [sys.executable, "-u", os.path.join(HERE, "pc_lockstep.py"), name,
             "--frames", str(frames), "--headless", "--stop-on-divergence"]
     if cpu:
         argv += ["--cpu", cpu]
