@@ -31,6 +31,17 @@
 
 #include <math_ppc.h>
 
+/* The console fuses a*b+c into one rounding; x86 rounds twice. The chain
+ * update is the same shape in every handler: a squared length (y plain, x
+ * and z fused), the square root, and one fmadds per axis for each link. */
+#if BUILD_TARGET_PC
+#define LK_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define LK_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+#define LK_DOT(ax, ay, az, bx, by, bz) \
+    LK_FMA((az), (bz), LK_FMA((ax), (bx), (ay) * (by)))
+
 /* 2A5770 */ static void it_802A5770_inline(ItemLink* link_1,
                                             itLinkHookshotAttributes* arg2,
                                             Fighter* arg3, s32 var_r29);
@@ -873,7 +884,7 @@ float it_802A3C98(Vec3* arg0, Vec3* arg1, Vec3* arg2)
     arg2->y = arg0->y - arg1->y;
     arg2->z = arg0->z - arg1->z;
 
-    len = sqrtf(arg2->x * arg2->x + arg2->y * arg2->y + arg2->z * arg2->z);
+    len = sqrtf(LK_DOT(arg2->x, arg2->y, arg2->z, arg2->x, arg2->y, arg2->z));
     if (len == (f64) 0.0F) {
         inv = (f64) 0.0F;
     } else {
@@ -1110,9 +1121,9 @@ void it_802A44CC(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* arg2,
 
     it_802A3C98(&link_0->pos, arg1, &vec);
 
-    link_0->pos.x = (vec.x * arg8) + arg1->x;
-    link_0->pos.y = (vec.y * arg8) + arg1->y;
-    link_0->pos.z = (vec.z * arg8) + arg1->z;
+    link_0->pos.x = LK_FMA(vec.x, arg8, arg1->x);
+    link_0->pos.y = LK_FMA(vec.y, arg8, arg1->y);
+    link_0->pos.z = LK_FMA(vec.z, arg8, arg1->z);
 
     while (link_1 != NULL) {
         link_1->vel.y -= arg2->x3C;
@@ -1123,9 +1134,9 @@ void it_802A44CC(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* arg2,
 
         len = it_802A3C98(&link_1->pos, &link_0->pos, &vec);
         if (len > arg2->x30) {
-            link_1->pos.x = (vec.x * arg2->x30) + link_0->pos.x;
-            link_1->pos.y = (vec.y * arg2->x30) + link_0->pos.y;
-            link_1->pos.z = (vec.z * arg2->x30) + link_0->pos.z;
+            link_1->pos.x = LK_FMA(vec.x, arg2->x30, link_0->pos.x);
+            link_1->pos.y = LK_FMA(vec.y, arg2->x30, link_0->pos.y);
+            link_1->pos.z = LK_FMA(vec.z, arg2->x30, link_0->pos.z);
         }
         link_0 = link_1;
         link_1 = link_1->prev;
@@ -1134,9 +1145,9 @@ void it_802A44CC(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* arg2,
 
 static inline void test_comp(Vec3* vec0, Vec3* vec1, Vec3* vec2, f32* arg2)
 {
-    vec0->x = (vec2->x * *arg2) + vec1->x;
-    vec0->y = (vec2->y * *arg2) + vec1->y;
-    vec0->z = (vec2->z * *arg2) + vec1->z;
+    vec0->x = LK_FMA(vec2->x, *arg2, vec1->x);
+    vec0->y = LK_FMA(vec2->y, *arg2, vec1->y);
+    vec0->z = LK_FMA(vec2->z, *arg2, vec1->z);
 }
 
 static inline Vec3* it_802A4758_permuterslop(ItemLink* link_0)
@@ -1185,18 +1196,18 @@ void it_802A49B0(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* arg2,
 
     it_802A3C98(&link_0->pos, arg1, &vec);
 
-    link_0->pos.x = (vec.x * arg8) + arg1->x;
-    link_0->pos.y = (vec.y * arg8) + arg1->y;
-    link_0->pos.z = (vec.z * arg8) + arg1->z;
+    link_0->pos.x = LK_FMA(vec.x, arg8, arg1->x);
+    link_0->pos.y = LK_FMA(vec.y, arg8, arg1->y);
+    link_0->pos.z = LK_FMA(vec.z, arg8, arg1->z);
 
     while (link_1 != NULL) {
         it_802A40D0(link_1, arg2->x30);
 
         len = it_802A3C98(&link_1->pos, &link_0->pos, &vec);
         if (len > arg2->x30) {
-            link_1->pos.x = (vec.x * arg2->x30) + link_0->pos.x;
-            link_1->pos.y = (vec.y * arg2->x30) + link_0->pos.y;
-            link_1->pos.z = (vec.z * arg2->x30) + link_0->pos.z;
+            link_1->pos.x = LK_FMA(vec.x, arg2->x30, link_0->pos.x);
+            link_1->pos.y = LK_FMA(vec.y, arg2->x30, link_0->pos.y);
+            link_1->pos.z = LK_FMA(vec.z, arg2->x30, link_0->pos.z);
         }
         link_0 = link_1;
         link_1 = link_1->prev;
@@ -1210,7 +1221,7 @@ static inline f64 it_802A6A78_normalize_diff(Vec3* a, Vec3* b, Vec3* vec)
     vec->x = a->x - b->x;
     vec->y = a->y - b->y;
     vec->z = a->z - b->z;
-    len = sqrtf(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
+    len = sqrtf(LK_DOT(vec->x, vec->y, vec->z, vec->x, vec->y, vec->z));
     if (len == 0.0F) {
         inv = 0.0F;
     } else {
@@ -1278,18 +1289,18 @@ s32 it_802A4BFC(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* attr,
         if (link_1->x2C_b0) {
             len = it_802A6A78_normalize_diff(&link_1->pos, &link_0->pos, &vec);
             if (len > attr->x30) {
-                link_1->pos.x = (vec.x * attr->x30) + link_0->pos.x;
-                link_1->pos.y = (vec.y * attr->x30) + link_0->pos.y;
-                link_1->pos.z = (vec.z * attr->x30) + link_0->pos.z;
+                link_1->pos.x = LK_FMA(vec.x, attr->x30, link_0->pos.x);
+                link_1->pos.y = LK_FMA(vec.y, attr->x30, link_0->pos.y);
+                link_1->pos.z = LK_FMA(vec.z, attr->x30, link_0->pos.z);
             }
             link_1->coll_data.last_pos = link_1->coll_data.cur_pos;
             link_1->coll_data.cur_pos = link_1->pos;
         } else {
             len = it_802A6A78_normalize_diff(arg1, &link_0->pos, &vec);
             if (len > attr->x30) {
-                link_1->pos.x = (vec.x * attr->x30) + link_0->pos.x;
-                link_1->pos.y = (vec.y * attr->x30) + link_0->pos.y;
-                link_1->pos.z = (vec.z * attr->x30) + link_0->pos.z;
+                link_1->pos.x = LK_FMA(vec.x, attr->x30, link_0->pos.x);
+                link_1->pos.y = LK_FMA(vec.y, attr->x30, link_0->pos.y);
+                link_1->pos.z = LK_FMA(vec.z, attr->x30, link_0->pos.z);
                 link_1->x2C_b0 = 1;
                 link_1->coll_data.cur_pos = link_1->pos;
                 link_1->coll_data.last_pos = link_1->coll_data.cur_pos;
@@ -1360,18 +1371,18 @@ s32 it_802A5320(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* attr,
             }
             len = it_802A3C98(&link_1->pos, &cur->pos, &vec);
             if (len > attr->x30) {
-                link_1->pos.x = (vec.x * attr->x30) + cur->pos.x;
-                link_1->pos.y = (vec.y * attr->x30) + cur->pos.y;
-                link_1->pos.z = (vec.z * attr->x30) + cur->pos.z;
+                link_1->pos.x = LK_FMA(vec.x, attr->x30, cur->pos.x);
+                link_1->pos.y = LK_FMA(vec.y, attr->x30, cur->pos.y);
+                link_1->pos.z = LK_FMA(vec.z, attr->x30, cur->pos.z);
             }
             link_1->coll_data.last_pos = link_1->coll_data.cur_pos;
             link_1->coll_data.cur_pos = link_1->pos;
         } else {
             len = it_802A3C98(arg1, &cur->pos, &vec);
             if (len > attr->x30) {
-                link_1->pos.x = (vec.x * attr->x30) + cur->pos.x;
-                link_1->pos.y = (vec.y * attr->x30) + cur->pos.y;
-                link_1->pos.z = (vec.z * attr->x30) + cur->pos.z;
+                link_1->pos.x = LK_FMA(vec.x, attr->x30, cur->pos.x);
+                link_1->pos.y = LK_FMA(vec.y, attr->x30, cur->pos.y);
+                link_1->pos.z = LK_FMA(vec.z, attr->x30, cur->pos.z);
                 link_1->x2C_b0 = 1;
                 link_1->coll_data.cur_pos = link_1->pos;
                 link_1->coll_data.last_pos = link_1->coll_data.cur_pos;
@@ -1434,9 +1445,9 @@ void it_802A5770(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* arg2,
 
     len = it_802A3C98(&cur->pos, anchor, &vec);
     if (len > attr->x30) {
-        cur->pos.x = (vec.x * attr->x30) + anchor->x;
-        cur->pos.y = (vec.y * attr->x30) + anchor->y;
-        cur->pos.z = (vec.z * attr->x30) + anchor->z;
+        cur->pos.x = LK_FMA(vec.x, attr->x30, anchor->x);
+        cur->pos.y = LK_FMA(vec.y, attr->x30, anchor->y);
+        cur->pos.z = LK_FMA(vec.z, attr->x30, anchor->z);
     }
 
     var_r29 = 0;
@@ -1450,9 +1461,9 @@ void it_802A5770(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* arg2,
 
         len = it_802A3C98(&link_1->pos, &cur->pos, &vec);
         if (len > attr->x30) {
-            link_1->pos.x = (vec.x * attr->x30) + cur->pos.x;
-            link_1->pos.y = (vec.y * attr->x30) + cur->pos.y;
-            link_1->pos.z = (vec.z * attr->x30) + cur->pos.z;
+            link_1->pos.x = LK_FMA(vec.x, attr->x30, cur->pos.x);
+            link_1->pos.y = LK_FMA(vec.y, attr->x30, cur->pos.y);
+            link_1->pos.z = LK_FMA(vec.z, attr->x30, cur->pos.z);
         }
         cur = link_1;
         link_1 = link_1->prev;
@@ -1499,16 +1510,16 @@ s32 it_802A5AE0(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* arg2)
 
             len = it_802A3C98(&link_1->pos, &cur->pos, &vec);
             if (len > arg2->x30) {
-                link_1->pos.x = (vec.x * arg2->x30) + cur->pos.x;
-                link_1->pos.y = (vec.y * arg2->x30) + cur->pos.y;
-                link_1->pos.z = (vec.z * arg2->x30) + cur->pos.z;
+                link_1->pos.x = LK_FMA(vec.x, arg2->x30, cur->pos.x);
+                link_1->pos.y = LK_FMA(vec.y, arg2->x30, cur->pos.y);
+                link_1->pos.z = LK_FMA(vec.z, arg2->x30, cur->pos.z);
             }
         } else {
             len = it_802A3C98(arg1, &cur->pos, &vec);
             if (len > arg2->x30) {
-                link_1->pos.x = (vec.x * arg2->x30) + cur->pos.x;
-                link_1->pos.y = (vec.y * arg2->x30) + cur->pos.y;
-                link_1->pos.z = (vec.z * arg2->x30) + cur->pos.z;
+                link_1->pos.x = LK_FMA(vec.x, arg2->x30, cur->pos.x);
+                link_1->pos.y = LK_FMA(vec.y, arg2->x30, cur->pos.y);
+                link_1->pos.z = LK_FMA(vec.z, arg2->x30, cur->pos.z);
                 link_1->x2C_b0 = 1;
                 link_1->coll_data.cur_pos = link_1->pos;
                 link_1->coll_data.last_pos = link_1->coll_data.cur_pos;
@@ -1615,18 +1626,18 @@ s32 it_802A5FE0(ItemLink* link_0, ItemLink* link_0_2, Vec3* arg2,
         var_r31 += 1;
         len = it_802A3C98(&link_1->pos, &link_2->pos, &vec);
         if (len > arg3->x30) {
-            link_1->pos.x = (vec.x * arg3->x30) + link_2->pos.x;
-            link_1->pos.y = (vec.y * arg3->x30) + link_2->pos.y;
-            link_1->pos.z = (vec.z * arg3->x30) + link_2->pos.z;
+            link_1->pos.x = LK_FMA(vec.x, arg3->x30, link_2->pos.x);
+            link_1->pos.y = LK_FMA(vec.y, arg3->x30, link_2->pos.y);
+            link_1->pos.z = LK_FMA(vec.z, arg3->x30, link_2->pos.z);
         }
         link_2 = link_1;
         link_1 = link_1->next;
     }
     len = it_802A3C98(arg2, &link_2->pos, &vec);
     if (len > arg3->x30) {
-        arg2->x = (vec.x * arg3->x30) + link_2->pos.x;
-        arg2->y = (vec.y * arg3->x30) + link_2->pos.y;
-        arg2->z = (vec.z * arg3->x30) + link_2->pos.z;
+        arg2->x = LK_FMA(vec.x, arg3->x30, link_2->pos.x);
+        arg2->y = LK_FMA(vec.y, arg3->x30, link_2->pos.y);
+        arg2->z = LK_FMA(vec.z, arg3->x30, link_2->pos.z);
     }
     if (var_r31 != 0) {
         return 0;
@@ -1702,9 +1713,9 @@ void it_802A6474(ItemLink* link_0, ItemLink* link_1, Vec3* pos,
             segment_dx -= cur_link->pos.x;
             segment_dz = next_link->pos.z;
             segment_dz -= cur_link->pos.z;
-            segment_len =
-                (segment_dx * segment_dx) + (segment_dy * segment_dy);
-            segment_len = (segment_dz * segment_dz) + segment_len;
+            /* y plain, x and z fused, as everywhere. */
+            segment_len = LK_DOT(segment_dx, segment_dy, segment_dz,
+                                 segment_dx, segment_dy, segment_dz);
             if (segment_len > 0.0f) {
                 segment_len_tmp = my_sqrt(segment_len);
                 segment_len = segment_len_tmp;
@@ -1719,9 +1730,9 @@ void it_802A6474(ItemLink* link_0, ItemLink* link_1, Vec3* pos,
             segment_dy *= inv_segment_len;
             segment_dz *= inv_segment_len;
             if (segment_len > max_len) {
-                next_link->pos.x = (segment_dx * max_len) + cur_link->pos.x;
-                next_link->pos.y = (segment_dy * attrs->x30) + cur_link->pos.y;
-                next_link->pos.z = (segment_dz * attrs->x30) + cur_link->pos.z;
+                next_link->pos.x = LK_FMA(segment_dx, max_len, cur_link->pos.x);
+                next_link->pos.y = LK_FMA(segment_dy, attrs->x30, cur_link->pos.y);
+                next_link->pos.z = LK_FMA(segment_dz, attrs->x30, cur_link->pos.z);
             } else {
                 limit_reached = 1;
             }
@@ -1734,8 +1745,8 @@ void it_802A6474(ItemLink* link_0, ItemLink* link_1, Vec3* pos,
     target_dx = pos->x;
     target_dx -= cur_link->pos.x;
     target_dz = pos->z - cur_link->pos.z;
-    target_len = sqrtf(target_dx * target_dx + target_dy * target_dy +
-                       target_dz * target_dz);
+    target_len = sqrtf(LK_DOT(target_dx, target_dy, target_dz,
+                              target_dx, target_dy, target_dz));
     if (0.0 == target_len) {
         inv_target_len = 0.0f;
     } else {
@@ -1746,9 +1757,9 @@ void it_802A6474(ItemLink* link_0, ItemLink* link_1, Vec3* pos,
     target_dy *= inv_target_len;
     target_dz *= inv_target_len;
     if (target_len > max_len) {
-        pos->x = (target_dx * max_len) + cur_link->pos.x;
-        pos->y = (target_dy * attrs->x30) + cur_link->pos.y;
-        pos->z = (target_dz * attrs->x30) + cur_link->pos.z;
+        pos->x = LK_FMA(target_dx, max_len, cur_link->pos.x);
+        pos->y = LK_FMA(target_dy, attrs->x30, cur_link->pos.y);
+        pos->z = LK_FMA(target_dz, attrs->x30, cur_link->pos.z);
     }
 }
 
@@ -1826,7 +1837,7 @@ static inline f64 it_802A6A78_normalize_diff_rev(Vec3* b, Vec3* a, Vec3* vec)
     vec->x = a->x - b->x;
     vec->y = a->y - b->y;
     vec->z = a->z - b->z;
-    len = sqrtf(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
+    len = sqrtf(LK_DOT(vec->x, vec->y, vec->z, vec->x, vec->y, vec->z));
     if (len == 0.0F) {
         inv = 0.0F;
     } else {
@@ -1868,18 +1879,18 @@ bool it_802A6A78(ItemLink* link_0, Vec3* arg1, itLinkHookshotAttributes* arg2,
             len = it_802A6A78_normalize_diff_rev(it_802A6A78_get_pos(link_0),
                                                  &link_1->pos, &vec);
             if (len > arg2->x30) {
-                link_1->pos.x = (vec.x * arg2->x30) + link_0->pos.x;
-                link_1->pos.y = (vec.y * arg2->x30) + link_0->pos.y;
-                link_1->pos.z = (vec.z * arg2->x30) + link_0->pos.z;
+                link_1->pos.x = LK_FMA(vec.x, arg2->x30, link_0->pos.x);
+                link_1->pos.y = LK_FMA(vec.y, arg2->x30, link_0->pos.y);
+                link_1->pos.z = LK_FMA(vec.z, arg2->x30, link_0->pos.z);
             }
             link_1->coll_data.last_pos = link_1->coll_data.cur_pos;
             link_1->coll_data.cur_pos = link_1->pos;
         } else {
             len = it_802A6A78_normalize_diff(arg1, &link_0->pos, &vec);
             if (len > arg2->x30) {
-                link_1->pos.x = (vec.x * arg2->x30) + link_0->pos.x;
-                link_1->pos.y = (vec.y * arg2->x30) + link_0->pos.y;
-                link_1->pos.z = (vec.z * arg2->x30) + link_0->pos.z;
+                link_1->pos.x = LK_FMA(vec.x, arg2->x30, link_0->pos.x);
+                link_1->pos.y = LK_FMA(vec.y, arg2->x30, link_0->pos.y);
+                link_1->pos.z = LK_FMA(vec.z, arg2->x30, link_0->pos.z);
                 link_1->x2C_b0 = 1;
                 link_1->coll_data.cur_pos = link_1->pos;
                 link_1->coll_data.last_pos = link_1->coll_data.cur_pos;
