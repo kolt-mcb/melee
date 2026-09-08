@@ -62,7 +62,7 @@ extern u32 seed;
 #define PC_TRACE_HEADER                                                       \
     "#fields frame gframe mode scene seed stage"                                         \
     " p_state p_char p_pct p_stk p_motion p_animf p_x p_y p_face p_vx p_vy "  \
-    "p_goa p_floor p_env p_ecbbx p_ecbby"
+    "p_goa p_floor p_env p_ecbbx p_ecbby p_aihash"
 
 #define PC_TRACE_PLAYERS 4
 
@@ -70,6 +70,62 @@ extern u32 seed;
  * sides differ in the last digit for reasons belonging to the printer rather
  * than to the game; the comparer converts back and applies its own tolerance,
  * which is a decision that belongs to it and not to this file. */
+/* A hash of the AI struct's scalar state, one 32-bit word per field, FNV-1a.
+ *
+ * The trace's named columns are a summary. When a divergence starts in a
+ * field they do not carry it surfaces frames later as a position, and the
+ * walk back from the position to the field is where the whole cost of a bug
+ * goes -- both of this port's CPU-cooldown bugs sat in this struct for
+ * dozens of frames before anything traced moved. A hash over the whole
+ * struct names the *struct* on the *frame* it first differs.
+ *
+ * The console side (MeleeTraceAIHash in the local Dolphin's Core.cpp) walks
+ * THE SAME FIELDS IN THE SAME ORDER at their GameCube offsets. The two lists
+ * are the contract; a field added to one and not the other makes the column
+ * disagree on every frame. Pointers are skipped (x44, x48, x4C, xF0, xF4,
+ * x444, x448, csP, write_pos), and so are the four bitfield bytes at +F8 and
+ * the xFC[30] table, until their layouts are settled. Floats go in by bit
+ * pattern; single bytes as their value; the s8 stick quartet and the
+ * command buffer as big-endian words, which is how the console reads them. */
+static u32 ai_hash(const struct Fighter_x1A88_t* a)
+{
+    u32 h = 2166136261u;
+    u32 i;
+#define AI_H(w) (h = (h ^ (u32) (w)) * 16777619u)
+#define AI_HF(f) do { union { f32 f_; u32 u_; } b_; b_.f_ = (f); AI_H(b_.u_); } while (0)
+    AI_H(a->x0);
+    AI_H(((u32) (u8) a->lstickX << 24) | ((u32) (u8) a->lstickY << 16) |
+         ((u32) (u8) a->cstickX << 8) | (u32) (u8) a->cstickY);
+    AI_H(((u32) a->ltrigger << 24) | ((u32) a->rtrigger << 16));
+    AI_H(a->xC); AI_H(a->level);
+    AI_H(a->x14); AI_H(a->x18); AI_H(a->x1C); AI_H(a->x20); AI_H(a->x24);
+    AI_H(a->x28); AI_H(a->x2C); AI_H(a->x30); AI_H(a->x34);
+    AI_HF(a->x38); AI_HF(a->x3C); AI_HF(a->x40);
+    AI_H(a->x50);
+    AI_HF(a->x54.x); AI_HF(a->x54.y); AI_HF(a->x5C); AI_H(a->x60);
+    AI_HF(a->x64.x); AI_HF(a->x64.y); AI_HF(a->x6C.x); AI_HF(a->x6C.y);
+    AI_HF(a->x74.x); AI_HF(a->x74.y);
+    AI_H(a->x7C); AI_H(a->x80); AI_H(a->x84); AI_H(a->x88); AI_H(a->x8C);
+    AI_H(a->x90); AI_H(a->x94);
+    AI_HF(a->x98.x); AI_HF(a->x98.y); AI_HF(a->x98.z);
+    AI_H(a->xA4);
+    for (i = 0; i < 8; i++) { AI_H(a->xA8_array[i]); }
+    AI_H(a->xC8);
+    for (i = 0; i < 8; i++) { AI_H(a->xCC_array[i]); }
+    AI_H(a->xEC);
+    AI_H(a->command_duration);
+    for (i = 0; i < 0x100; i += 4) {
+        AI_H(((u32) (u8) a->buffer[i] << 24) | ((u32) (u8) a->buffer[i + 1] << 16) |
+             ((u32) (u8) a->buffer[i + 2] << 8) | (u32) (u8) a->buffer[i + 3]);
+    }
+    AI_HF(a->x558); AI_HF(a->x55C); AI_HF(a->x560); AI_HF(a->x564);
+    AI_HF(a->x568); AI_HF(a->x56C); AI_HF(a->x570);
+    AI_HF(a->half_width); AI_HF(a->half_height);
+#undef AI_H
+#undef AI_HF
+    return h;
+}
+
 static int trace_f32(char* buf, int cap, f32 v)
 {
     union {
@@ -1329,7 +1385,7 @@ void pc_trace_frame(int frame)
              * fighter appearing or vanishing one frame early is itself a
              * divergence rather than a gap in the file. */
             n += snprintf(line + n, sizeof(line) - n,
-                          " - - - - - - - - - - - -");
+                          " - - - - - - - - - - - - -");
             continue;
         }
 
@@ -1354,6 +1410,8 @@ void pc_trace_frame(int frame)
                        fp->coll_data.ecb.bottom.x);
         n += trace_f32(line + n, sizeof(line) - n,
                        fp->coll_data.ecb.bottom.y);
+        n += snprintf(line + n, sizeof(line) - n, " %08X",
+                      (unsigned) ai_hash(&fp->x1A88));
     }
 
     if (out != NULL) {

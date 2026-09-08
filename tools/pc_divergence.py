@@ -159,7 +159,12 @@ class Trace:
 
 # Written as hex because that is how anyone reading a seed by hand wants it,
 # and because it is a bit pattern rather than a quantity.
-HEX_COLUMNS = ("seed",)
+# Matched on the column's base name, so "p0.env" and "p1.aihash" find
+# "env" and "aihash". env was printed as %08X on both sides all along and
+# parsed as decimal here: 00008000 read as eight thousand, and a value with a
+# letter in it would have raised. aihash is the AI-struct hash; it is nothing
+# but hex digits.
+HEX_COLUMNS = ("seed", "env", "aihash")
 
 # Columns computed from the trace rather than read from the game, which can
 # legitimately have no value on a given frame.
@@ -172,7 +177,7 @@ def parse_value(col, text):
         return ("absent", None)
     if text.startswith("f"):
         return ("float", struct.unpack(">f", bytes.fromhex(text[1:]))[0])
-    if col in HEX_COLUMNS:
+    if col.split(".")[-1] in HEX_COLUMNS:
         return ("int", int(text, 16))
     return ("int", int(text))
 
