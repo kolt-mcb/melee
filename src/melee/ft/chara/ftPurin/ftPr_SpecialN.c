@@ -34,6 +34,17 @@
 #include <melee/cm/camera.h>
 #include <melee/ef/efsync.h>
 #include <melee/mp/mplib.h>
+
+/* Rollout: the roll angle steps, the slope push and the effect offset are
+ * fmadds on the console; the turn step is a double fmadd rounded once. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PR_FMA(a, b, c) fmaf((a), (b), (c))
+#define PR_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define PR_FMA(a, b, c) ((a) * (b) + (c))
+#define PR_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
 #if BUILD_TARGET_PC
 /* PC port: SIGNF lives in MSL/math.h, not included on this path. */
 #ifndef SIGNF
@@ -410,9 +421,10 @@ void ftPr_SpecialNLoop_Anim(HSD_GObj* gobj)
         Fighter_ChangeMotionState(gobj, ftPr_MS_SpecialNFull, mf,
                                   fp->cur_anim_frame, 0, 0, NULL);
     }
-    fp->mv.pr.specialn.x14 +=
-        fp->mv.pr.specialn.x34.x *
-        (fp->mv.pr.specialn.x2C * (deg_to_rad * da->xAC));
+    fp->mv.pr.specialn.x14 = PR_FMA(
+        fp->mv.pr.specialn.x34.x,
+        fp->mv.pr.specialn.x2C * (deg_to_rad * da->xAC),
+        fp->mv.pr.specialn.x14);
     normalizeAndSetRollAngle(gobj);
     ftPartSetRotY(fp, FtPart_TopN, M_PI_2);
 }
@@ -428,9 +440,10 @@ void ftPr_SpecialNFull_Anim(HSD_GObj* gobj)
         fp->mv.pr.specialn.x2C = da->xA4;
         fp->mv.pr.specialn.x30 = 1;
     }
-    fp->mv.pr.specialn.x14 +=
-        fp->mv.pr.specialn.x34.x *
-        (fp->mv.pr.specialn.x2C * (deg_to_rad * da->xAC));
+    fp->mv.pr.specialn.x14 = PR_FMA(
+        fp->mv.pr.specialn.x34.x,
+        fp->mv.pr.specialn.x2C * (deg_to_rad * da->xAC),
+        fp->mv.pr.specialn.x14);
     normalizeAndSetRollAngle(gobj);
     ftPartSetRotY(fp, FtPart_TopN, M_PI_2);
 }
@@ -490,7 +503,8 @@ void ftPr_SpecialNTurn_Anim(HSD_GObj* gobj)
     PAD_STACK(8);
     ftPr_SpecialS_8013DD54(gobj, true);
     scaleAnimStep(gobj, &scale);
-    fp->mv.pr.specialn.x14 += 0.2 * da->x6C * -fp->mv.pr.specialn.x34.x;
+    fp->mv.pr.specialn.x14 = (f32) PR_FMAD(
+        0.2 * da->x6C, -fp->mv.pr.specialn.x34.x, fp->mv.pr.specialn.x14);
     normalizeAndSetRollAngle(gobj);
     fp->mv.pr.specialn.x0 -= 1;
     if (fp->mv.pr.specialn.x0 <= 0) {
@@ -558,9 +572,10 @@ void ftPr_SpecialAirNChargeLoop_Anim(HSD_GObj* gobj)
         Fighter_ChangeMotionState(gobj, ftPr_MS_SpecialAirNChargeFull, mf,
                                   fp->cur_anim_frame, 0, 0, NULL);
     }
-    fp->mv.pr.specialn.x14 +=
-        fp->mv.pr.specialn.x34.x *
-        (fp->mv.pr.specialn.x2C * (deg_to_rad * da->xAC));
+    fp->mv.pr.specialn.x14 = PR_FMA(
+        fp->mv.pr.specialn.x34.x,
+        fp->mv.pr.specialn.x2C * (deg_to_rad * da->xAC),
+        fp->mv.pr.specialn.x14);
     normalizeAndSetRollAngle(gobj);
     ftPartSetRotY(fp, FtPart_TopN, M_PI_2);
 }
@@ -576,9 +591,10 @@ void ftPr_SpecialAirNChargeFull_Anim(HSD_GObj* gobj)
         fp->mv.pr.specialn.x2C = da->xA4;
         fp->mv.pr.specialn.x30 = 1;
     }
-    fp->mv.pr.specialn.x14 +=
-        fp->mv.pr.specialn.x34.x *
-        (fp->mv.pr.specialn.x2C * (deg_to_rad * da->xAC));
+    fp->mv.pr.specialn.x14 = PR_FMA(
+        fp->mv.pr.specialn.x34.x,
+        fp->mv.pr.specialn.x2C * (deg_to_rad * da->xAC),
+        fp->mv.pr.specialn.x14);
     normalizeAndSetRollAngle(gobj);
     ftPartSetRotY(fp, FtPart_TopN, M_PI_2);
 }
@@ -661,8 +677,9 @@ void ftPr_SpecialAirNStartTurn_Anim(HSD_GObj* gobj)
     PAD_STACK(4);
     ftPr_SpecialS_8013DD54(gobj, true);
     scaleAnimStep(gobj, &scale);
-    fp->mv.pr.specialn.x14 +=
-        da->xBC * (f32) (0.2 * da->x6C * -fp->mv.pr.specialn.x34.x);
+    fp->mv.pr.specialn.x14 = PR_FMA(
+        da->xBC, (f32) (0.2 * da->x6C * -fp->mv.pr.specialn.x34.x),
+        fp->mv.pr.specialn.x14);
     normalizeAndSetRollAngle(gobj);
     fp->mv.pr.specialn.x0 -= 1;
     if (fp->mv.pr.specialn.x0 <= 0) {
@@ -702,8 +719,9 @@ void ftPr_SpecialNHit_Anim(HSD_GObj* gobj)
     Vec3 scale;
     PAD_STACK(4);
     scaleAnimStep(gobj, &scale);
-    fp->mv.pr.specialn.x14 +=
-        da->xBC * (f32) (0.2 * da->x6C * -fp->mv.pr.specialn.x34.x);
+    fp->mv.pr.specialn.x14 = PR_FMA(
+        da->xBC, (f32) (0.2 * da->x6C * -fp->mv.pr.specialn.x34.x),
+        fp->mv.pr.specialn.x14);
     normalizeAndSetRollAngle(gobj);
     ftPartSetRotY(fp, FtPart_TopN, M_PI_2);
 }
@@ -929,15 +947,15 @@ void ftPr_SpecialNTurn_Phys(HSD_GObj* gobj)
     f32 influence = da->xC8 * (x1C * slope);
     if (fp->coll_data.floor.normal.x > 0.0f) {
         if (x1C > 0.0f) {
-            fp->gr_vel += scale * (x1C + influence);
+            fp->gr_vel = PR_FMA(scale, x1C + influence, fp->gr_vel);
         } else {
-            fp->gr_vel += scale * (x1C + influence);
+            fp->gr_vel = PR_FMA(scale, x1C + influence, fp->gr_vel);
         }
     } else {
         if (x1C > 0.0f) {
-            fp->gr_vel += scale * (x1C - influence);
+            fp->gr_vel = PR_FMA(scale, x1C - influence, fp->gr_vel);
         } else {
-            fp->gr_vel += scale * (x1C - influence);
+            fp->gr_vel = PR_FMA(scale, x1C - influence, fp->gr_vel);
         }
     }
     fp->x74_anim_vel.y = 0;
@@ -1151,8 +1169,9 @@ static inline void wallBounceEffect(HSD_GObj* gobj, Fighter* fp, f32 dir,
     } else {
         pos->x -= ABS(fp2->coll_data.ecb.left.x);
     }
-    pos->y +=
-        0.5f * ABS(fp2->coll_data.ecb.top.y + fp2->coll_data.ecb.bottom.y);
+    pos->y = PR_FMA(
+        0.5f, ABS(fp2->coll_data.ecb.top.y + fp2->coll_data.ecb.bottom.y),
+        pos->y);
     efSync_Spawn(0x406, gobj, pos, angle);
     Camera_80030E44(3, pos);
     ftCommon_8007EBAC(fp2, 0xC, 0xA);

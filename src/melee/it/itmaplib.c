@@ -850,10 +850,10 @@ static inline float sqrtf_accurate_store(float x, volatile float* y)
 {
     if (x > 0.0f) {
         double guess = __frsqrte((double) x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
         *y = (float) (x * guess);
         return *y;
     }
@@ -922,10 +922,10 @@ static inline float sqrtf_accurate_sp18(float x)
 
     if (x > 0.0f) {
         double guess = __frsqrte((double) x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
         y[1] = (float) (x * guess);
         return y[1];
     }
@@ -995,7 +995,7 @@ bool it_8027770C(Item_GObj* item_gobj)
 
 static inline float product_xy(Vec3* a, Vec3* b)
 {
-    return (a->x * b->x + a->y * b->y);
+    return IM_FMA(a->x, b->x, a->y * b->y); /* y plain, x fused */
 }
 
 static inline float sqrtf_accurate_local(float x)
@@ -1004,10 +1004,10 @@ static inline float sqrtf_accurate_local(float x)
 
     if (x > 0.0f) {
         double guess = __frsqrte((double) x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
+        guess = 0.5 * guess * IM_FMAD(-(double) x, guess * guess, 3.0);
         y = (float) (x * guess);
         return y;
     }
