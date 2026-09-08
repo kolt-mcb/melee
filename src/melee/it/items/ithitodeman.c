@@ -17,6 +17,14 @@
 #include <math.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define HM_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define HM_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F8128[] = {
     {
         0,
@@ -130,11 +138,11 @@ void it_802D43EC(Item_GObj* gobj)
     randf = HSD_Randf();
     diff = attrs->x8;
     diff = attrs->x4 - diff;
-    ip->xDD4_itemVar.hitodeman.x60 = diff * randf + attrs->x8;
+    ip->xDD4_itemVar.hitodeman.x60 = HM_FMA(diff, randf, attrs->x8);
 
     randf = HSD_Randf();
     diff = attrs->xC - attrs->x10;
-    ip->xDD4_itemVar.hitodeman.x64 = diff * randf + attrs->x10;
+    ip->xDD4_itemVar.hitodeman.x64 = HM_FMA(diff, randf, attrs->x10);
 
     if (HSD_Randi(2) != 0) {
         ip->xDD4_itemVar.hitodeman.x60 *= -1.0f;
@@ -333,7 +341,7 @@ void itHitodeman_UnkMotion1_Phys(Item_GObj* gobj)
     Item* ip = GET_ITEM(gobj);
     itHitodemanAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
     if (ip->xDB0_itcmd_var1 != 0) {
-        ip->x40_vel.x = -((-ip->facing_dir * attrs->x4C) - ip->x40_vel.x);
+        ip->x40_vel.x = HM_FMA(ip->facing_dir, attrs->x4C, ip->x40_vel.x); /* fnmsubs of -facing */
     }
 }
 
@@ -379,7 +387,7 @@ void it_802D4C74(Item_GObj* gobj)
     Item_GObj* item_gobj;
 
     spawn.prev_pos = ip->pos;
-    spawn.prev_pos.x += ip->facing_dir * attrs->x54;
+    spawn.prev_pos.x = HM_FMA(ip->facing_dir, attrs->x54, spawn.prev_pos.x);
     spawn.prev_pos.y += attrs->x58;
     it_8026BB88(gobj, &spawn.pos);
     spawn.facing_dir = ip->facing_dir;

@@ -41,6 +41,14 @@
 #include <baselib/jobj.h>
 #include <MetroTRK/intrinsics.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IT_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IT_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 static inline float _sqrtfItem(float x)
 {
     f64 _half = 0.5;
@@ -71,7 +79,7 @@ f32 it_8026B1D4(HSD_GObj* gobj, HitCapsule* itemHitboxUnk)
                                    ip->x40_vel.y * ip->x40_vel.y +
                                    ip->x40_vel.z * ip->x40_vel.z);
 
-        ret += itemSpeed * it_804D6D28->x80_float[5];
+        ret = IT_FMA(itemSpeed, it_804D6D28->x80_float[5], ret);
         ret += it_804D6D28->x80_float[6];
         if (ret <= 1.0) {
             return ret = 1;
@@ -144,7 +152,7 @@ void it_8026B344(HSD_GObj* gobj,
     Item* ip;
 
     ip = gobj->user_data;
-    pos->x = (f32) ((ip->facing_dir * ip->xBCC_unk.x) + ip->pos.x);
+    pos->x = IT_FMA(ip->facing_dir, ip->xBCC_unk.x, ip->pos.x);
     pos->y = (f32) (ip->pos.y + ip->xBCC_unk.y);
     pos->z = (f32) ip->pos.z;
 }
@@ -227,8 +235,7 @@ f32 it_8026B424(s32 damage) // Item Damage Math
 {
     ItemCommonData* itCommonData = it_804D6D28;
 
-    return (f32) (s32) (((f32) damage * itCommonData->xB8) +
-                        itCommonData->xBC);
+    return (f32) (s32) (IT_FMA((f32) damage, itCommonData->xB8, itCommonData->xBC));
 }
 
 s32 it_8026B47C(HSD_GObj* gobj) // Get heal value of healing items
@@ -1146,7 +1153,7 @@ HSD_GObj* it_8026C258(Vec3* pos, f32 facing_dir)
         {
             f32 dist_x = pos->x - ip->pos.x;
             f32 dist_y = pos->y - ip->pos.y;
-            f32 sq_dist = dist_x * dist_x + dist_y * dist_y;
+            f32 sq_dist = IT_FMA(dist_x, dist_x, dist_y * dist_y);
 
             if (sq_dist < min_sq_dist) {
                 min_sq_dist = sq_dist;

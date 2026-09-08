@@ -21,6 +21,14 @@
 #include <baselib/memory.h>
 #include <baselib/random.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define IS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define IS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemPickTable monster;
 ItemPickTable it_804A0E50;
 RandomItemSpawner it_804A0E30;
@@ -189,7 +197,7 @@ static inline void it_8026C88C_inline(RandomItemSpawner* alloc)
                 s32* range = &it_804D6D28->xFC[gm_8016AE80() * 2];
                 f32 randf = HSD_Randf();
                 f32 diff = range[1] - range[0];
-                alloc->x0 = diff * randf + range[0];
+                alloc->x0 = IS_FMA(diff, randf, (f32) range[0]);
                 alloc->x0 *= Ground_801C2AE8(Stage_80225194());
             }
         }
@@ -213,7 +221,7 @@ void it_8026CA4C(ItemPickTable* alloc, s32* arg1, u64 arg2, s32 arg3, f32 arg4)
 
     while (i < It_Kind_L_Gun_Ray) {
         if (mask & 1) {
-            sum += arg4 * *p + 0.99f;
+            sum += IS_FMA(arg4, (f32) *p, 0.99f);
         }
         p++;
         i++;
@@ -278,7 +286,7 @@ void it_8026CB9C(s32* counts, u64 mask, f32 weight)
             (*weights)[idx] = cumulative;
             cnt2++;
             idx++;
-            cumulative = (cumulative + ((weight * *p2) + 0.99f));
+            cumulative = cumulative + IS_FMA(weight, (f32) *p2, 0.99f);
         }
         p2++;
         it_kind2++;
@@ -341,7 +349,7 @@ void it_8026CD50(s32* counts, u64 mask, f32 weight)
             (*weights)[idx] = cumulative;
             cnt2++;
             idx++;
-            cumulative = (cumulative + ((weight * *p2) + 0.99f));
+            cumulative = cumulative + IS_FMA(weight, (f32) *p2, 0.99f);
         }
         p2++;
         it_kind2++;
@@ -428,7 +436,7 @@ void it_8026D018(void)
                 s32* range = &it_804D6D28->xFC[gm_8016AE80() * 2];
                 f32 randf = HSD_Randf();
                 f32 diff = range[1] - range[0];
-                it_804A0E30.x0 = diff * randf + range[0];
+                it_804A0E30.x0 = IS_FMA(diff, randf, (f32) range[0]);
                 it_804A0E30.x0 *= Ground_801C2AE8(Stage_80225194());
             }
         }

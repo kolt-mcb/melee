@@ -36,6 +36,14 @@
 #include <baselib/state.h>
 #include <MetroTRK/intrinsics.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define RF_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define RF_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 extern HSD_DObjInfo hsdDObj;
 extern HSD_PObjInfo hsdPObj;
 extern f32 lbl_803BB0E0[6];
@@ -135,7 +143,7 @@ void lbRefract_80021CE8(void* arg0, s32 arg1)
         y_sq = y * y;
         x = -1.0f;
         for (row = 0; row < (u32) cb->width; row++) {
-            if ((dist_sq = x * x + y_sq) > 0.0f) {
+            if ((dist_sq = RF_FMA(x, x, y_sq)) > 0.0f) {
                 f64 est = __frsqrte((f64) dist_sq);
                 est = 0.5 * est * -(((f64) dist_sq * (est * est)) - 3.0);
                 est = 0.5 * est * -(((f64) dist_sq * (est * est)) - 3.0);
@@ -158,8 +166,7 @@ void lbRefract_80021CE8(void* arg0, s32 arg1)
                     if (abs_param0 > abs_dist) {
                         rem = dist;
                     } else {
-                        rem = -(param0 * (f32) (s64) (u64) (dist / param0) -
-                                dist);
+                        rem = RF_FMA(-param0, (f32) (s64) (u64) (dist / param0), dist); /* fnmsubs */
                     }
                 }
                 param0 = dist * rem;
@@ -173,8 +180,8 @@ void lbRefract_80021CE8(void* arg0, s32 arg1)
             }
             ((void (*)(lbRefract_CallbackData*, s32, s32, s32, s32, u32,
                        u32)) cb->callback0)(
-                cb, row, col, 0, 0, (u32) (127.0f * (y * param0) + 128.0f),
-                (u32) (127.0f * (x * param0) + 128.0f));
+                cb, row, col, 0, 0, (u32) RF_FMA(127.0f, y * param0, 128.0f),
+                (u32) RF_FMA(127.0f, x * param0, 128.0f));
             x += x_step;
         }
         y += y_step;

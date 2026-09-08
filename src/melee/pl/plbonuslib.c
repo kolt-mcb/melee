@@ -19,6 +19,14 @@
 #include <MetroTRK/intrinsics.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PB_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PB_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 /// @todo Lots of 6s in here
 /// pl_8004049C seems to indicate it might have actually been
 /// `Gm_Player_NumMax`
@@ -753,7 +761,7 @@ void pl_8003ED0C(int arg0, int arg1, int r5, int arg3, float arg2)
     temp_r3 = Player_GetStaleMoveTableIndexPtr2(arg0);
     temp_r3->x0_staleMoveTable.xCA4++;
     temp_r4 = temp_r3->x0_staleMoveTable.xCA4;
-    temp_f30 = temp_r3->x0_staleMoveTable.xCA0 * (temp_r4 - 1) + arg2;
+    temp_f30 = PB_FMA(temp_r3->x0_staleMoveTable.xCA0, (f32) (temp_r4 - 1), arg2);
 
     total = temp_r4;
     temp_r3->x0_staleMoveTable.xCA0 = pl_CalculateAverage(temp_f30, total);
@@ -1085,7 +1093,7 @@ void fn_8003F654(int slot, int index, Vec3* pos, Vec3* prevPos)
         if (count != 0) {
             table->xD90++;
             avg_sum = pl_CalculateAverage(sum, count);
-            avg_sum = (table->xD8C * (table->xD90 - 1)) + avg_sum;
+            avg_sum = PB_FMA(table->xD8C, (f32) (table->xD90 - 1), avg_sum);
             table->xD8C = pl_CalculateAverage(avg_sum, table->xD90);
         }
 
@@ -1095,7 +1103,7 @@ void fn_8003F654(int slot, int index, Vec3* pos, Vec3* prevPos)
         if (abs < 0.0f) {
             abs = -abs;
         }
-        dist = (table->xD94 * (table->xD98 - 1)) + (new_var = abs);
+        dist = PB_FMA(table->xD94, (f32) (table->xD98 - 1), (new_var = abs));
         table->xD94 = pl_CalculateAverage(dist, table->xD98);
     }
 }
@@ -1116,7 +1124,7 @@ void pl_8003FAA8(int slot, int index, Vec3* pos, Vec3* prevPos)
     if (pl_Verify_gm_8016AEDC() && index == 0) {
         temp_r31 = ftLib_80087120(Player_GetEntityAtIndex(slot, index));
         temp_f30 =
-            temp_r30->x0_staleMoveTable.xC9C * (gm_8016AEDC() - 1) + temp_r31;
+            PB_FMA(temp_r30->x0_staleMoveTable.xC9C, (f32) (gm_8016AEDC() - 1), temp_r31);
 
         temp_r30->x0_staleMoveTable.xC9C =
             pl_CalculateAverage(temp_f30, gm_8016AEDC());

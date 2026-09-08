@@ -19,6 +19,14 @@
 
 #include <dolphin/mtx.h>
 
+/* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PS_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PS_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 void ftPk_SpecialS_Enter(HSD_GObj* gobj)
 {
     u8 _[4];
@@ -257,7 +265,7 @@ void ftPk_SpecialS0_Anim(HSD_GObj* gobj)
     ftPikachuAttributes* sa = fp->dat_attrs;
 
     if (fp->x914[0].state == HitCapsule_Enabled) {
-        float damage_amount = fp->mv.pk.unk3.x0 * sa->x2C + sa->x28;
+        float damage_amount = PS_FMA((f32) fp->mv.pk.unk3.x0, sa->x2C, sa->x28);
         ftColl_8007ABD0(&fp->x914[0], damage_amount, gobj);
     }
 
@@ -275,7 +283,7 @@ void ftPk_SpecialAirS0_Anim(HSD_GObj* gobj)
     ftPikachuAttributes* sa = fp->dat_attrs;
 
     if (fp->x914[0].state == HitCapsule_Enabled) {
-        float damage_amount = fp->mv.pk.unk3.x0 * sa->x2C + sa->x28;
+        float damage_amount = PS_FMA((f32) fp->mv.pk.unk3.x0, sa->x2C, sa->x28);
         ftColl_8007ABD0(&fp->x914[0], damage_amount, gobj);
     }
 
@@ -417,12 +425,12 @@ void ftPk_SpecialS_ChangeMotion_Unk10(HSD_GObj* gobj)
 
     fp->cmd_vars[0] = 0;
 
-    fp->self_vel.x = sa->x40 * fp->mv.pk.unk3.x0 + sa->x3C;
+    fp->self_vel.x = PS_FMA(sa->x40, (f32) fp->mv.pk.unk3.x0, sa->x3C);
     fp->self_vel.x *= fp->facing_dir;
 
     {
         float temp = 0.5f * fp->mv.pk.unk3.x0 / sa->x24;
-        fp->self_vel.y = 0.5f * sa->x44 + sa->x44 * temp;
+        fp->self_vel.y = PS_FMA(0.5f, sa->x44, sa->x44 * temp);
     }
 
     Fighter_ChangeMotionState(gobj, 350, transition_flags3, fp->cur_anim_frame,

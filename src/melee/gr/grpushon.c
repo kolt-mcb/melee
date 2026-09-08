@@ -24,6 +24,14 @@
 #include <sysdolphin/baselib/lobj.h>
 #include <MSL/math.h>
 
+/* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define PO_FMA(a, b, c) fmaf((a), (b), (c))
+#else
+#define PO_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
 struct grPushOn_Entry {
     s32 x0;
     s16 x4;
@@ -197,18 +205,10 @@ void grPushOn_802184CC(Ground_GObj* gobj)
     Ground_801C39C0();
     Ground_801C3BB4();
     Stage_UnkSetVec3TCam_Offset(&cam_offset);
-    Ground_801C3880(0.5f * (Stage_GetCamBoundsTopOffset() +
-                            Stage_GetBlastZoneTopOffset()) -
-                    cam_offset.y);
-    Ground_801C3890(0.5f * (Stage_GetCamBoundsBottomOffset() +
-                            Stage_GetBlastZoneBottomOffset()) -
-                    cam_offset.y);
-    Ground_801C38A0(0.5f * (Stage_GetCamBoundsLeftOffset() +
-                            Stage_GetBlastZoneLeftOffset()) -
-                    cam_offset.x);
-    Ground_801C38AC(0.5f * (Stage_GetCamBoundsRightOffset() +
-                            Stage_GetBlastZoneRightOffset()) -
-                    cam_offset.x);
+    Ground_801C3880(PO_FMA(0.5f, Stage_GetCamBoundsTopOffset() + Stage_GetBlastZoneTopOffset(), -cam_offset.y)); /* fmsubs */
+    Ground_801C3890(PO_FMA(0.5f, Stage_GetCamBoundsBottomOffset() + Stage_GetBlastZoneBottomOffset(), -cam_offset.y)); /* fmsubs */
+    Ground_801C38A0(PO_FMA(0.5f, Stage_GetCamBoundsLeftOffset() + Stage_GetBlastZoneLeftOffset(), -cam_offset.x)); /* fmsubs */
+    Ground_801C38AC(PO_FMA(0.5f, Stage_GetCamBoundsRightOffset() + Stage_GetBlastZoneRightOffset(), -cam_offset.x)); /* fmsubs */
 }
 
 bool grPushOn_80218590(Ground_GObj* arg)
