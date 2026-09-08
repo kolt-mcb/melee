@@ -38,6 +38,19 @@
 #include <baselib/gobjobject.h>
 #include <baselib/gobjuserdata.h>
 
+/* The chain solvers put every link at one fmadds of dir*k onto its
+ * anchor on the console (802A3C98 direction, then fmadds x/y/z); the
+ * velocity nudges are fmadds/fnmsubs onto the running velocity.
+ * Pairings read off the DOL. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define SC_FMA(a, b, c) fmaf((a), (b), (c))
+#define SC_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define SC_FMA(a, b, c) ((a) * (b) + (c))
+#define SC_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 ItemStateTable it_803F7438[] = {
     { -1, itSeakchain_UnkMotion4_Anim, NULL, NULL },
     { -1, itSeakchain_UnkMotion4_Anim, NULL, NULL },
@@ -396,18 +409,18 @@ void it_802BBB0C(ItemLink* link, Vec3* offset, itSeakChain_Attrs* sa,
     ItemLink* prev = link->prev;
 
     it_802A3C98(&link->pos, offset, &pos);
-    link->pos.x = pos.x * scale + offset->x;
-    link->pos.y = pos.y * scale + offset->y;
-    link->pos.z = pos.z * scale + offset->z;
+    link->pos.x = SC_FMA(pos.x, scale, offset->x);
+    link->pos.y = SC_FMA(pos.y, scale, offset->y);
+    link->pos.z = SC_FMA(pos.z, scale, offset->z);
     for (; prev != NULL; link = prev, prev = prev->prev) {
         prev->vel.y -= sa->x18;
         it_802A4420(prev);
         it_802A43EC(prev);
         it_802BB938(prev, 0, sa->x4);
         if (it_802A3C98(&prev->pos, &link->pos, &pos) > sa->x4) {
-            prev->pos.x = pos.x * sa->x4 + link->pos.x;
-            prev->pos.y = pos.y * sa->x4 + link->pos.y;
-            prev->pos.z = pos.z * sa->x4 + link->pos.z;
+            prev->pos.x = SC_FMA(pos.x, sa->x4, link->pos.x);
+            prev->pos.y = SC_FMA(pos.y, sa->x4, link->pos.y);
+            prev->pos.z = SC_FMA(pos.z, sa->x4, link->pos.z);
         }
     }
 }
@@ -421,18 +434,18 @@ void it_802BBC38(ItemLink* link, Vec3* offset, itSeakChain_Attrs* sa,
     ItemLink* prev = link->prev;
 
     it_802A3C98(&link->pos, offset, &origin);
-    link->pos.x = origin.x * scale + offset->x;
-    link->pos.y = origin.y * scale + offset->y;
-    link->pos.z = origin.z * scale + offset->z;
+    link->pos.x = SC_FMA(origin.x, scale, offset->x);
+    link->pos.y = SC_FMA(origin.y, scale, offset->y);
+    link->pos.z = SC_FMA(origin.z, scale, offset->z);
     for (; prev != NULL; link = prev, prev = prev->prev) {
         prev->vel.y -= sa->x18;
         it_802A4420(prev);
         it_802A43EC(prev);
         it_802BB938(prev, 0, sa->x4);
         if (it_802A3C98(&prev->pos, &link->pos, &origin) > sa->x4) {
-            prev->pos.x = origin.x * sa->x4 + link->pos.x;
-            prev->pos.y = origin.y * sa->x4 + link->pos.y;
-            prev->pos.z = origin.z * sa->x4 + link->pos.z;
+            prev->pos.x = SC_FMA(origin.x, sa->x4, link->pos.x);
+            prev->pos.y = SC_FMA(origin.y, sa->x4, link->pos.y);
+            prev->pos.z = SC_FMA(origin.z, sa->x4, link->pos.z);
         }
     }
 }
@@ -451,16 +464,16 @@ enum_t it_802BBD64(ItemLink* link, Vec3* arg1, itSeakChain_Attrs* sa)
     while (prev != NULL) {
         if (prev->x2C_b0) {
             if (it_802A3C98(&prev->pos, &cur->pos, &vec) > sa->x4) {
-                prev->pos.x = vec.x * sa->x4 + cur->pos.x;
-                prev->pos.y = vec.y * sa->x4 + cur->pos.y;
-                prev->pos.z = vec.z * sa->x4 + cur->pos.z;
+                prev->pos.x = SC_FMA(vec.x, sa->x4, cur->pos.x);
+                prev->pos.y = SC_FMA(vec.y, sa->x4, cur->pos.y);
+                prev->pos.z = SC_FMA(vec.z, sa->x4, cur->pos.z);
             }
             it_802A43EC(prev);
         } else {
             if (it_802A3C98(arg1, &cur->pos, &vec) > sa->x4) {
-                prev->pos.x = vec.x * sa->x4 + cur->pos.x;
-                prev->pos.y = vec.y * sa->x4 + cur->pos.y;
-                prev->pos.z = vec.z * sa->x4 + cur->pos.z;
+                prev->pos.x = SC_FMA(vec.x, sa->x4, cur->pos.x);
+                prev->pos.y = SC_FMA(vec.y, sa->x4, cur->pos.y);
+                prev->pos.z = SC_FMA(vec.z, sa->x4, cur->pos.z);
                 prev->x2C_b0 = true;
                 it_802A43B8(prev);
             } else {
@@ -491,20 +504,20 @@ enum_t it_802BBED0(ItemLink* link, Point3d* arg1, itSeakChain_Attrs* sa)
         float vel_scale = 1.0f;
         while (prev != NULL) {
             if (prev->x2C_b0) {
-                prev->vel.y = -((sa->x18 * vel_scale) - prev->vel.y);
+                prev->vel.y = SC_FMA(-sa->x18, vel_scale, prev->vel.y); /* fnmsubs */
                 vel_scale *= sa->x34;
                 it_802A4420(prev);
                 if (it_802A3C98(&prev->pos, &cur->pos, &pos) > sa->x4) {
-                    prev->pos.x = pos.x * sa->x4 + cur->pos.x;
-                    prev->pos.y = pos.y * sa->x4 + cur->pos.y;
-                    prev->pos.z = pos.z * sa->x4 + cur->pos.z;
+                    prev->pos.x = SC_FMA(pos.x, sa->x4, cur->pos.x);
+                    prev->pos.y = SC_FMA(pos.y, sa->x4, cur->pos.y);
+                    prev->pos.z = SC_FMA(pos.z, sa->x4, cur->pos.z);
                 }
                 it_802A43EC(prev);
             } else {
                 if (it_802A3C98(arg1, &cur->pos, &pos) > sa->x4) {
-                    prev->pos.x = pos.x * sa->x4 + cur->pos.x;
-                    prev->pos.y = pos.y * sa->x4 + cur->pos.y;
-                    prev->pos.z = pos.z * sa->x4 + cur->pos.z;
+                    prev->pos.x = SC_FMA(pos.x, sa->x4, cur->pos.x);
+                    prev->pos.y = SC_FMA(pos.y, sa->x4, cur->pos.y);
+                    prev->pos.z = SC_FMA(pos.z, sa->x4, cur->pos.z);
                     prev->x2C_b0 = true;
                     it_802A43B8(prev);
                 } else {
@@ -562,7 +575,7 @@ void it_802BC080(ItemLink* link, Vec3* target, Item* ip)
     ItemLink* iter = link->prev;
     ItemLink* cur = link;
     itSeakChain_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
-    s32 last_idx = (s32) (0.5f * attrs->x0 - 1.0f);
+    s32 last_idx = (s32) SC_FMA(0.5f, (f32) attrs->x0, -1.0f); /* fmsubs */
     Fighter* fp;
     s32 env_flags;
     s32 use_arg = 0;
@@ -620,8 +633,10 @@ void it_802BC080(ItemLink* link, Vec3* target, Item* ip)
 
     ip->xDD4_itemVar.seakchain.x18 = *(s32*) &fp->mv.co.common.x1C;
 
-    cur->vel.x += ip->xDD4_itemVar.seakchain.history[0].x * attrs->x1C;
-    cur->vel.y += ip->xDD4_itemVar.seakchain.history[0].y * attrs->x20;
+    cur->vel.x = SC_FMA(ip->xDD4_itemVar.seakchain.history[0].x,
+                         attrs->x1C, cur->vel.x);
+    cur->vel.y = SC_FMA(ip->xDD4_itemVar.seakchain.history[0].y,
+                         attrs->x20, cur->vel.y);
     itSeakChain_clamp_x10(cur, attrs);
     if (ABS(cur->vel.x) > attrs->x24) {
         if (cur->vel.x > 0.0f) {
@@ -648,9 +663,9 @@ void it_802BC080(ItemLink* link, Vec3* target, Item* ip)
     scale = 1.0f;
     scale *= attrs->x34;
     if (it_802A3C98(&cur->pos, target, &stack.dir) > attrs->x4) {
-        cur->pos.x = stack.dir.x * attrs->x4 + target->x;
-        cur->pos.y = stack.dir.y * attrs->x4 + target->y;
-        cur->pos.z = stack.dir.z * attrs->x4 + target->z;
+        cur->pos.x = SC_FMA(stack.dir.x, attrs->x4, target->x);
+        cur->pos.y = SC_FMA(stack.dir.y, attrs->x4, target->y);
+        cur->pos.z = SC_FMA(stack.dir.z, attrs->x4, target->z);
     }
 
     use_arg = ip->xDD4_itemVar.seakchain.x10;
@@ -701,7 +716,7 @@ void it_802BC080(ItemLink* link, Vec3* target, Item* ip)
             f32 vy_lim = attrs->x18 * scale;
             if (iter->vel.y > vy_lim - attrs->x28) {
                 iter->vel.y -= vy_lim;
-            } else if (iter->vel.y < -attrs->x18 * scale - attrs->x28) {
+            } else if (iter->vel.y < SC_FMA(-attrs->x18, scale, -attrs->x28)) {
                 iter->vel.y += vy_lim;
             }
         }
@@ -739,9 +754,9 @@ void it_802BC080(ItemLink* link, Vec3* target, Item* ip)
         }
 
         if (it_802A3C98(&iter->pos, &cur->pos, &stack.dir) > attrs->x4) {
-            iter->pos.x = stack.dir.x * attrs->x4 + cur->pos.x;
-            iter->pos.y = stack.dir.y * attrs->x4 + cur->pos.y;
-            iter->pos.z = stack.dir.z * attrs->x4 + cur->pos.z;
+            iter->pos.x = SC_FMA(stack.dir.x, attrs->x4, cur->pos.x);
+            iter->pos.y = SC_FMA(stack.dir.y, attrs->x4, cur->pos.y);
+            iter->pos.z = SC_FMA(stack.dir.z, attrs->x4, cur->pos.z);
         }
 
         cur = iter;
