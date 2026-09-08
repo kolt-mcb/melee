@@ -17,8 +17,10 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define IM_FMA(a, b, c) fmaf((a), (b), (c))
+#define IM_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define IM_FMA(a, b, c) ((a) * (b) + (c))
+#define IM_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
 static void sdata2_order(void)
