@@ -28,7 +28,11 @@ simulation still compute with two roundings where the console uses one, how
 many sites each has, and their addresses so the operand pairing can be read
 off the disassembly (see the memory note melee-pc-fma-fusing for how).
 
-The counts are per function, not per site: the port's source has no way of
+Two things the counts cannot see. A callee MWCC inlined shows its fused ops
+in the caller's count as well as its own -- ftColl_8007A06C carries two
+inlined copies of ftColl_80079AB0's six, so fixing the callee clears twelve
+of its fourteen -- and the port has no way to say which. So read a caller's
+number after its callees'. And the counts are per function, not per site: the port's source has no way of
 saying which console instruction a given fmaf() corresponds to, so "3 of 5"
 means three explicit fused ops where the console has five, not that any
 particular three match. A function at 5 of 5 is probably done; one at 3 of 5
@@ -141,15 +145,56 @@ def port_sites(path):
     a name followed by an open paren, not a control keyword, not ending in a
     semicolon -- and runs to the next. Close enough for a census; the
     ambiguity is which function a site is in, never whether it exists.
+
+    Sites inside a file-scope macro count at each place the macro is used,
+    not where it is defined. ftcoll.c's KNOCKBACK carries two fused ops and
+    is used twice inside ftColl_80079AB0, which has a third of its own in
+    each branch: six, exactly the console's six. Counting only the tokens
+    written inside the function body said two, and 6-of-6 read as 2-of-6.
     """
     counts = {}
     cur = None
     try:
-        lines = open(path, errors="replace").read().split("\n")
+        text = open(path, errors="replace").read()
     except OSError:
         return counts
+    # Macro bodies, joined across backslash continuations, and how many
+    # fused ops each carries -- including through macros they use. The
+    # continuation alternative goes FIRST: with [^\n] first the match
+    # succeeds at the trailing backslash and never backtracks into it, and a
+    # multi-line macro reads as its first line.
+    macro_src = {}
+    for m in re.finditer(r"^#define\s+([A-Za-z_]\w*)\s*\((?:\\\n|[^\n])*",
+                         text, re.M):
+        macro_src[m.group(1)] = m.group(0).replace("\\\n", " ")
+    macro_n = {}
+
+    def macro_count(name, seen=()):
+        if name in macro_n:
+            return macro_n[name]
+        if name in seen:
+            return 0
+        body = macro_src.get(name, "")
+        n = len(PORT_FMA_RE.findall(body))
+        # A nested macro that is itself a fused-op token (KB_FMA inside
+        # KNOCKBACK) was already counted above; only macros that wrap other
+        # things add their own count.
+        for used in re.findall(r"\b([A-Za-z_]\w*)\s*\(", body):
+            if (used in macro_src and used != name and
+                    not PORT_FMA_RE.match(used + "(")):
+                n += macro_count(used, seen + (name,))
+        macro_n[name] = n
+        return n
+
     defn = re.compile(r"^[A-Za-z_][\w\s\*]*?\b([A-Za-z_]\w*)\s*\([^;]*$")
-    for line in lines:
+    in_macro = False
+    for line in text.split("\n"):
+        if line.startswith("#define"):
+            in_macro = line.rstrip().endswith("\\")
+            continue
+        if in_macro:
+            in_macro = line.rstrip().endswith("\\")
+            continue
         m = defn.match(line)
         if m and m.group(1) not in ("if", "while", "for", "switch",
                                     "return", "sizeof"):
@@ -157,6 +202,9 @@ def port_sites(path):
             counts.setdefault(cur, 0)
         if cur is not None:
             counts[cur] += len(PORT_FMA_RE.findall(line))
+            for used in re.findall(r"\b([A-Za-z_]\w*)\s*\(", line):
+                if used in macro_src and not PORT_FMA_RE.match(used + "("):
+                    counts[cur] += macro_count(used)
     return counts
 
 

@@ -2739,10 +2739,14 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
         FighterHurtCapsule* hurt = best_entry->hurt1;
         float dx, dy, abs_dx;
 
-        dx = 0.5F * (hurt->capsule.a_pos.x + hurt->capsule.b_pos.x) -
-             best_entry->pos.x;
-        dy = 0.5F * (hurt->capsule.a_pos.y + hurt->capsule.b_pos.y) -
-             best_entry->pos.y;
+        /* fmsubs on the console (8007A898, 8007A8A8): the half of the sum
+         * and the subtraction round once. These are the last two of this
+         * function's fourteen fused ops that are its own -- the other twelve
+         * are two inlined copies of ftColl_80079AB0's six, and live there. */
+        dx = KB_FMA(0.5F, hurt->capsule.a_pos.x + hurt->capsule.b_pos.x,
+                    -best_entry->pos.x);
+        dy = KB_FMA(0.5F, hurt->capsule.a_pos.y + hurt->capsule.b_pos.y,
+                    -best_entry->pos.y);
 
         if (dx < 0.0F) {
             dir = 1.0F;

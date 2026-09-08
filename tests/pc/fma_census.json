@@ -1588,7 +1588,7 @@
    "console_single": 6,
    "file": "melee/ft/ftcoll.c",
    "function": "ftColl_80079AB0",
-   "port": 2,
+   "port": 6,
    "sites": [
     "80079b48 fmadds f5,f11,f6,f5",
     "80079b50 fmadds f4,f8,f5,f4",
@@ -1618,7 +1618,7 @@
    "console_single": 6,
    "file": "melee/ft/ftcoll.c",
    "function": "ftColl_80079EA8",
-   "port": 2,
+   "port": 6,
    "sites": [
     "80079f44 fmadds f2,f9,f3,f2",
     "80079f4c fmadds f1,f5,f2,f1",
@@ -1958,7 +1958,7 @@
    "console_single": 2,
    "file": "melee/ft/chara/ftCommon/ftCo_Guard.c",
    "function": "ftCo_80091BC4",
-   "port": 5,
+   "port": 2,
    "sites": [
     "80091c78 fmadds f0,f3,f0,f2",
     "80091ce0 fnmsub f0,f4,f0,f2",
@@ -10256,7 +10256,7 @@
    "console_single": 4,
    "file": "sysdolphin/baselib/mtx.c",
    "function": "HSD_MkRotationMtx",
-   "port": 6,
+   "port": 2,
    "sites": [
     "8037a1b4 fmsubs f3,f1,f5,f2",
     "8037a1c4 fmadds f4,f31,f5,f0",
@@ -10357,7 +10357,7 @@
    "console_single": 0,
    "file": "sysdolphin/baselib/quatlib.c",
    "function": "HSD_QuatLib_8037EB28",
-   "port": 4,
+   "port": 0,
    "sites": [
     "8037eb7c fnmsub f0,f4,f0,f2",
     "8037eb8c fnmsub f0,f4,f0,f2",
