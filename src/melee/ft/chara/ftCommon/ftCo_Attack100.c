@@ -83,6 +83,16 @@
 #include <melee/pl/plbonuslib.h>
 #include <melee/pl/plstale.h>
 
+/* Grab-timer handicap terms and the tether offset are fmadds on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define AT_FMA(a, b, c) fmaf((a), (b), (c))
+#define AT_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define AT_FMA(a, b, c) ((a) * (b) + (c))
+#define AT_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 0D769C */ static FtMotionId fn_800D769C(Fighter* ft, FtMotionId msid);
 /* 0D84D4 */ static void fn_800D84D4(Fighter_GObj*, int);
 /* 0D8BFC */ static void fn_800D8BFC(Fighter_GObj* arg0);
@@ -2268,9 +2278,9 @@ float ftCo_800DA824(Fighter* fp)
     handicap = Player_GetHandicap(fp->player_id);
     temp = (f32) handicap;
     temp = co->x35C - temp;
-    temp = co->x358 * temp + co->x354;
+    temp = AT_FMA(co->x358, temp, co->x354);
     temp += value;
-    return fp->dmg.x1830_percent * co->x368 + temp;
+    return AT_FMA(fp->dmg.x1830_percent, co->x368, temp);
 }
 
 void fn_800DA8E4(Fighter_GObj* gobj, Fighter_GObj* victim_gobj, s32 arg2)
@@ -2294,9 +2304,9 @@ void fn_800DA8E4(Fighter_GObj* gobj, Fighter_GObj* victim_gobj, s32 arg2)
     v = (*cd2) * (cd->x364 - ((f32) (Player_80033BB8(fp->player_id) + 1)));
     {
         f32 s3 = (cd->x35C - (f32) Player_GetHandicap(fp->player_id));
-        s3 = cd->x358 * s3 + cd->x354;
+        s3 = AT_FMA(cd->x358, s3, cd->x354);
         s3 = s3 + v;
-        ftCommon_InitGrab(fp, 0, (fp->dmg.x1830_percent * cd->x368) + s3);
+        ftCommon_InitGrab(fp, 0, AT_FMA(fp->dmg.x1830_percent, cd->x368, s3));
     }
     fp->mv.ca.specials.grav = 0.0f;
     fp->mv._[0xC] = 0;
@@ -2603,8 +2613,8 @@ void ftCo_800DB464(Fighter_GObj* gobj)
     Vec3 pos;
     lb_8000B1CC(fp->parts[ftParts_GetBoneIndex(fp, FtPart_XRotN)].joint, NULL,
                 &pos);
-    pos.x = (fp->facing_dir * (fp->x1A70.z * fp->x34_scale.y)) + pos.x;
-    pos.y += fp->x1A70.y * fp->x34_scale.y;
+    pos.x = AT_FMA(fp->facing_dir, fp->x1A70.z * fp->x34_scale.y, pos.x);
+    pos.y = AT_FMA(fp->x1A70.y, fp->x34_scale.y, pos.y);
     pos.z = 0.0f;
     fp->cur_pos = pos;
 }

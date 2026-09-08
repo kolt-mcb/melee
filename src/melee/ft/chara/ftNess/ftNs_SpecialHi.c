@@ -31,6 +31,17 @@
 #include <dolphin/mtx.h>
 #include <MetroTRK/intrinsics.h>
 
+/* PK Thunder: 5*scale + pos, facing*atan2 - pi/2 (fmsubs) and the
+ * deceleration fnmsubs are single fused ops on the console. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define NS_FMA(a, b, c) fmaf((a), (b), (c))
+#define NS_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define NS_FMA(a, b, c) ((a) * (b) + (c))
+#define NS_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 /// SpecialHi/SpecialAirHi (PK Thunder)
 #define FTNESS_SPECIALHI_COLL_FLAG                                            \
     Ft_MF_SkipMatAnim | Ft_MF_SkipColAnim | Ft_MF_UpdateCmd |                 \
@@ -205,7 +216,7 @@ bool ftNs_SpecialHi_ItemPKThunder_CheckNessCollide(HSD_GObj* gobj)
     switch (fp->mv.ns.specialhi.thunderColl) {
     case 0:
         pos = fp->cur_pos;
-        pos.y += 5.0f * fp->x34_scale.y;
+        pos.y = NS_FMA(5.0f, fp->x34_scale.y, pos.y);
         it_802AB3F0(fp->u.ns.pkthunder_gobj, &pair, 0);
         if (check_distance(&pos, &pair) == true) {
             fp->mv.ns.specialhi.thunderColl = 2;
@@ -219,7 +230,7 @@ bool ftNs_SpecialHi_ItemPKThunder_CheckNessCollide(HSD_GObj* gobj)
 
     case 1:
         pos2 = fp->cur_pos;
-        pos2.y += 5.0f * fp->x34_scale.y;
+        pos2.y = NS_FMA(5.0f, fp->x34_scale.y, pos2.y);
         it_802AB3F0(fp->u.ns.pkthunder_gobj, &pair2, 0);
         if (!check_distance(&pos2, &pair2)) {
             fp->mv.ns.specialhi.thunderColl = 0;
@@ -546,7 +557,7 @@ void ftNs_SpecialHi_Enter(
 
         sp40.x = fp->cur_pos.x - fp->mv.ns.specialhi.collPos1.x;
         temp_f2 = fp->x34_scale.y;
-        temp_f1 = (temp_f3 * temp_f2) + fp->cur_pos.y;
+        temp_f1 = NS_FMA(temp_f3, temp_f2, fp->cur_pos.y);
         sp40.y = temp_f1 - fp->mv.ns.specialhi.collPos1.y;
         sp40.z = 0.0f;
 
@@ -653,7 +664,7 @@ NessFloatMath_PKThunder2(HSD_GObj* gobj) // Required for 0x80118570 to match
     fp = getFighter(gobj);
     temp_f2 = fp->cur_pos.x - fp->mv.ns.specialhi.collPos1.x;
     ness_attr = getFtSpecialAttrs(fp);
-    temp_f1 = ((5.0f * fp->x34_scale.y) + fp->cur_pos.y) -
+    temp_f1 = NS_FMA(5.0f, fp->x34_scale.y, fp->cur_pos.y) -
               fp->mv.ns.specialhi.collPos1.y;
     if (temp_f2 >= 0.0f) {
         phi_f0 = 1.0f;
@@ -1207,8 +1218,8 @@ void ftNs_SpecialHi_Phys(HSD_GObj* gobj)
     ftNessAttributes* ness_attr = fp0->dat_attrs;
 
     fp0->gr_vel =
-        -(ness_attr->x5C_PK_THUNDER_2_DECELERATION_RATE * fp0->facing_dir -
-          ground_vel);
+        NS_FMA(-ness_attr->x5C_PK_THUNDER_2_DECELERATION_RATE, fp0->facing_dir,
+               ground_vel); /* fnmsubs 80119048 */
 
     if (fp0->facing_dir == +1) {
         if (fp0->gr_vel <= vel_epsilon) {
@@ -1233,8 +1244,8 @@ void ftNs_SpecialHi_Phys(HSD_GObj* gobj)
         Fighter* fp = gobj->user_data;
         ftPartSetRotX(
             fp, 0,
-            (fp->facing_dir * atan2f(fp->self_vel.x, fp->self_vel.y)) -
-                (float) M_PI_2);
+            NS_FMA(fp->facing_dir, atan2f(fp->self_vel.x, fp->self_vel.y),
+                   -(float) M_PI_2)); /* fmsubs */
     }
 }
 

@@ -2834,9 +2834,9 @@ static inline void ftCo_CpuPredictHitboxPosition(HitCapsule* hit, int frames,
     f32 dy = hit->x4C.y - hit->x58.y;
     f32 dz = hit->x4C.z - hit->x58.z;
 
-    predicted->x = dx * frames + hit->x4C.x;
-    predicted->y = dy * frames + hit->x4C.y;
-    predicted->z = dz * frames + hit->x4C.z;
+    predicted->x = CPU_FMA(dx, (f32) frames, hit->x4C.x);
+    predicted->y = CPU_FMA(dy, (f32) frames, hit->x4C.y);
+    predicted->z = CPU_FMA(dz, (f32) frames, hit->x4C.z);
 }
 
 int ftCo_800BB220(Fighter* fp, Item* ip, Vec3* arg2, f32 arg3)
