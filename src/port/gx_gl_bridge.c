@@ -899,18 +899,20 @@ static GLuint g_shader_program = 0;
 static GLint g_proj_loc = -1;
 static GLint g_mvp_loc = -1;
 static GLint g_uv_scale_loc = -1;
-static GLint g_texmtx0_loc = -1;
-static GLint g_texmtx1_loc = -1;
-static GLint g_texmtx0_enable_loc = -1;
-static GLint g_pttexmtx0_loc = -1, g_pttexmtx1_loc = -1;
-static GLint g_pttexmtx0_enable_loc = -1, g_pttexmtx1_enable_loc = -1;
-static GLint g_texmtx1_enable_loc = -1;
+/* Four generated texture coordinates and four samplers (PC_TEXN). GX has
+ * eight of each; HSD numbers projection coords before UV coords, so a
+ * material with one texture and two fighter shadows already needs three. */
+#define PC_TEXN 4
+static GLint g_texmtx_loc = -1;          /* u_texmtx[PC_TEXN] */
+static GLint g_texmtx_enable_loc = -1;   /* u_texmtx_enable[PC_TEXN] */
+static GLint g_pttexmtx_loc = -1, g_pttexmtx_enable_loc = -1;
 
 /* Texture shader uniform locations */
 /* Per-texture-unit shader uniform locations (max 2 active in GLSL 3.30) */
-static GLint g_tex0_enable_loc = -1;
-static GLint g_tex1_enable_loc = -1;
+static GLint g_tex_enable_loc  = -1;     /* u_tex_enable[PC_TEXN] */
 static GLint g_tex0_loc        = -1;
+static GLint g_tex2_loc        = -1;
+static GLint g_tex3_loc        = -1;
 
 /* f16 to f32 conversion (half-precision float to single-precision float) */
 static f32 f16_to_f32(u16 h)
@@ -1045,18 +1047,14 @@ static GLint g_ind_tex_base_coord_loc = -1;
 // Bump map uses u_tex0 (TEXMAP0) - no separate sampler needed
 
 /* Texture coordinate generation uniform locations */
-static GLint g_texgen0_mode_loc = -1;
-static GLint g_texgen0_nrm_loc = -1;
-static GLint g_texgen1_nrm_loc = -1;
+static GLint g_texgen_mode_loc = -1;     /* u_texgen_mode[PC_TEXN] */
+static GLint g_texgen_nrm_loc = -1;
 static GLint g_tev_tex_coord_loc = -1;
-static GLint g_texgen0_src_loc = -1;
-static GLint g_texgen1_mode_loc = -1;
-static GLint g_texgen1_src_loc = -1;
-static GLint g_texgen_mtx0_loc = -1;
-static GLint g_texgen_mtx1_loc = -1;
+static GLint g_texgen_src_loc = -1;
+static GLint g_texgen_mtx_loc = -1;      /* u_texgen_mtx[PC_TEXN] */
 
 /* Active texture tracking: which bridge texture slots are bound to GL units */
-static u32 g_active_tex_slots[2];     /* GL unit N -> bridge slot index */
+static u32 g_active_tex_slots[PC_TEXN]; /* GL unit N -> bridge slot index */
 static u32 g_active_tex_count = 0;
 
 /* ============================================================
@@ -1082,14 +1080,10 @@ static const char* g_vert_src =
 "uniform mat4 u_model;\n"
 "uniform vec2 u_uv_scale;\n"
 "// Texture matrix transforms (2x4 = upper 2 rows of mat4)\n"
-"uniform mat4 u_texmtx0;\n"
-"uniform mat4 u_texmtx1;\n"
-"uniform int u_texmtx0_enable;\n"
-"uniform int u_texmtx1_enable;\n"
-"uniform mat4 u_pttexmtx0;           // post-transform texture matrix, coord 0\n"
-"uniform mat4 u_pttexmtx1;\n"
-"uniform int u_pttexmtx0_enable;\n"
-"uniform int u_pttexmtx1_enable;\n"
+"uniform mat4 u_texmtx[4];           // 2x4 UV texture matrix per coord\n"
+"uniform int u_texmtx_enable[4];\n"
+"uniform mat4 u_pttexmtx[4];         // post-transform texture matrix per coord\n"
+"uniform int u_pttexmtx_enable[4];\n"
 "// Indirect texture (bump mapping / refraction) support\n"
 "uniform int u_ind_tex_enabled;       // 1 if indirect TEV is active\n"
 "uniform int u_ind_tex_stage;         // Indirect stage ID (0-1)\n"
@@ -1103,14 +1097,10 @@ static const char* g_vert_src =
 "uniform int u_ind_tex_base_coord;    // Base texcoord to offset (0=uv0, 1=uv1)\n"
 "// Note: u_ind_tex_bump uses u_tex0 (TEXMAP0) as the bump map sampler\n"
 "// Texture coordinate generation (GXSetTexCoordGen2)\n"
-"uniform int u_texgen0_mode;          // 0=none, 1=MTX3x4, 2=MTX2x4\n"
-"uniform int u_texgen0_src;           // 0=TEX, 1=POS, 2=NRM\n"
-"uniform int u_texgen1_mode;          // 0=none, 1=MTX3x4, 2=MTX2x4\n"
-"uniform int u_texgen1_src;           // 0=TEX, 1=POS, 2=NRM\n"
-"uniform mat4 u_texgen_mtx0;          // Matrix for texgen stage 0\n"
-"uniform int u_texgen0_nrm;           // normalize flag (GX_ENABLE) for texgen 0\n"
-"uniform int u_texgen1_nrm;\n"
-"uniform mat4 u_texgen_mtx1;          // Matrix for texgen stage 1\n"
+"uniform int u_texgen_mode[4];        // GX_TG_MTX3x4=0, GX_TG_MTX2x4=1, -1 none\n"
+"uniform int u_texgen_src[4];         // GX_TG_POS=0, GX_TG_NRM=1, GX_TG_TEX0=4...\n"
+"uniform int u_texgen_nrm[4];         // normalize flag (GX_ENABLE)\n"
+"uniform mat4 u_texgen_mtx[4];        // texgen matrix per coord\n"
 "// Lighting uniforms (up to 8 lights, GCN-style)\n"
 "uniform vec3 u_light_pos[8];     // Light positions (or directions if directional)\n"
 "uniform vec4 u_light_color[8];   // Light RGBA colors\n"
@@ -1135,8 +1125,7 @@ static const char* g_vert_src =
 "uniform float u_light_ref_dist[8];  // Reference distance\n"
 "uniform float u_light_ref_br[8];    // Reference brightness\n"
 "out vec4 v_col;\n"
-"out vec3 v_uv0;                 // (s, t, q): the fragment stage divides by q\n"
-"out vec3 v_uv1;\n"
+"out vec3 v_uv[4];               // (s, t, q) per texcoord: the fragment stage divides by q\n"
 "out vec3 v_nrm;\n"
 "out vec3 v_world_pos;\n"
 "out vec4 v_lit_color;            // Per-vertex channel-0 lit color\n"
@@ -1155,42 +1144,33 @@ static const char* g_vert_src =
 "    // fed from TEX0. POS/NRM take the object-space attribute as (x,y,z,1)\n"
 "    // through the texgen matrix, as the XF unit does (the matrix carries\n"
 "    // PNMTX0 for a shadow projection, the normal matrix for a reflection);\n"
-"    // a UV texgen is the 2x4 u_texmtx path.\n"
+"    // a UV texgen is the 2x4 u_texmtx path. The mode/src arrays are\n"
+"    // specialisation constants, so the loop folds per program.\n"
 "#ifdef TEXGEN_LEGACY\n"
 "    vec3 tg_pos = vec3(0.0), tg_nrm = vec3(0.0);\n"
 "#else\n"
 "    vec3 tg_pos = a_pos, tg_nrm = a_nrm;\n"
 "#endif\n"
-"    vec2 uv0 = (u_texgen0_mode >= 0 && u_texgen0_src == 5) ? in1 : in0;\n"
-"    vec2 uv1 = (u_texgen1_mode >= 0 && u_texgen1_src != 5) ? in0 : in1;\n"
-"    float tcz0 = 1.0, tcz1 = 1.0;\n"
-"    bool proj0 = false, proj1 = false;\n"
-"    if (u_texgen0_mode == 0 && u_texgen0_src <= 1) {\n"
-"        vec4 t = u_texgen_mtx0 * vec4(u_texgen0_src == 0 ? tg_pos : tg_nrm, 1.0);\n"
-"        if (u_texgen0_src == 1 && u_texgen0_nrm != 0 && dot(t.xyz, t.xyz) > 0.0) t.xyz = normalize(t.xyz);\n"
-"        uv0 = t.xy; tcz0 = t.z; proj0 = true;\n"
-"    } else if (u_texmtx0_enable != 0) {\n"
-"        vec4 t = u_texmtx0 * vec4(uv0, 0.0, 1.0);\n"
-"        uv0 = t.xy;\n"
+"    for (int i = 0; i < 4; i++) {\n"
+"        int mode = u_texgen_mode[i];\n"
+"        int src = u_texgen_src[i];\n"
+"        vec2 uv = (mode >= 0) ? ((src == 5) ? in1 : in0) : ((i == 1) ? in1 : in0);\n"
+"        float q = 1.0;\n"
+"        bool proj = false;\n"
+"        if (mode == 0 && src <= 1) {\n"
+"            vec4 t = u_texgen_mtx[i] * vec4(src == 0 ? tg_pos : tg_nrm, 1.0);\n"
+"            if (src == 1 && u_texgen_nrm[i] != 0 && dot(t.xyz, t.xyz) > 0.0) t.xyz = normalize(t.xyz);\n"
+"            uv = t.xy; q = t.z; proj = true;\n"
+"        } else if (u_texmtx_enable[i] != 0) {\n"
+"            uv = (u_texmtx[i] * vec4(uv, 0.0, 1.0)).xy;\n"
+"        }\n"
+"        // Post-transform (dual-tex) matrix: hardware multiplies (s, t, q, 1)\n"
+"        if (u_pttexmtx_enable[i] != 0) { vec4 t = u_pttexmtx[i] * vec4(uv, q, 1.0); uv = t.xy; q = t.z; }\n"
+"        // A 3x4 texgen is projective: the coordinate used is (s/q, t/q), and\n"
+"        // the divide has to happen per fragment or a shadow projected across\n"
+"        // a large floor polygon warps. Everything else carries q = 1.\n"
+"        v_uv[i] = vec3(uv, proj ? q : 1.0);\n"
 "    }\n"
-"    if (u_texgen1_mode == 0 && u_texgen1_src <= 1) {\n"
-"        vec4 t = u_texgen_mtx1 * vec4(u_texgen1_src == 0 ? tg_pos : tg_nrm, 1.0);\n"
-"        if (u_texgen1_src == 1 && u_texgen1_nrm != 0 && dot(t.xyz, t.xyz) > 0.0) t.xyz = normalize(t.xyz);\n"
-"        uv1 = t.xy; tcz1 = t.z; proj1 = true;\n"
-"    } else if (u_texmtx1_enable != 0) {\n"
-"        vec4 t = u_texmtx1 * vec4(uv1, 0.0, 1.0);\n"
-"        uv1 = t.xy;\n"
-"    }\n"
-"    // Post-transform (dual-tex) matrices: hardware multiplies (s, t, q, 1)\n"
-"    if (u_pttexmtx0_enable != 0) { vec4 t = u_pttexmtx0 * vec4(uv0, tcz0, 1.0); uv0 = t.xy; tcz0 = t.z; }\n"
-"    if (u_pttexmtx1_enable != 0) { vec4 t = u_pttexmtx1 * vec4(uv1, tcz1, 1.0); uv1 = t.xy; tcz1 = t.z; }\n"
-"    // A 3x4 texgen is projective: the coordinate used is (s/q, t/q), and\n"
-"    // the divide has to happen per fragment or a shadow projected across a\n"
-"    // large floor polygon warps. Everything else carries q = 1.\n"
-"    if (!proj0) tcz0 = 1.0;\n"
-"    if (!proj1) tcz1 = 1.0;\n"
-"    v_uv0 = vec3(uv0, tcz0);\n"
-"    v_uv1 = vec3(uv1, tcz1);\n"
 "    // World-space position and normal\n"
 "    v_world_pos = (u_model * vec4(a_pos, 1.0)).xyz;\n"
 "    v_nrm = normalize(mat3(u_model) * a_nrm);\n"
@@ -1290,8 +1270,7 @@ static const char* g_vert_src =
 static const char* g_frag_src =
 "#version 330 core\n"
 "in vec4 v_col;\n"
-"in vec3 v_uv0;\n"
-"in vec3 v_uv1;\n"
+"in vec3 v_uv[4];\n"
 "in vec3 v_nrm;\n"
 "in vec3 v_world_pos;\n"
 "in vec4 v_lit_color;             // Per-vertex lit color (ambient + diffuse)\n"
@@ -1303,10 +1282,11 @@ static const char* g_frag_src =
 "out vec4 frag_color;\n"
 "\n"
 "// Texture uniforms (GLSL 3.30: no dynamic sampler indexing)\n"
-"uniform int u_tex0_enable;\n"
-"uniform int u_tex1_enable;\n"
+"uniform int u_tex_enable[4];\n"
 "uniform sampler2D u_tex0;\n"
 "uniform sampler2D u_tex1;\n"
+"uniform sampler2D u_tex2;\n"
+"uniform sampler2D u_tex3;\n"
 "\n"
 "// TEV pipeline uniforms (flat arrays — GLSL 3.30 has no arrays of arrays)\n"
 "uniform int u_tev_num_stages;\n"
@@ -1485,11 +1465,16 @@ static const char* g_frag_src =
 "}\n"
 "\n"
 "// Sample texture from the appropriate unit\n"
-"vec4 sample_tex(int tex_map, vec2 uv0, vec2 uv1) {\n"
-"    if (tex_map == 0 && u_tex0_enable != 0) {\n"
-"        return texture(u_tex0, uv0);\n"
-"    } else if (tex_map == 1 && u_tex1_enable != 0) {\n"
-"        return texture(u_tex1, uv1);\n"
+"vec4 sample_tex(int tex_map, vec2 uv) {\n"
+"    // Sampler arrays cannot take a per-stage index in GLSL 3.30, hence the chain.\n"
+"    if (tex_map == 0 && u_tex_enable[0] != 0) {\n"
+"        return texture(u_tex0, uv);\n"
+"    } else if (tex_map == 1 && u_tex_enable[1] != 0) {\n"
+"        return texture(u_tex1, uv);\n"
+"    } else if (tex_map == 2 && u_tex_enable[2] != 0) {\n"
+"        return texture(u_tex2, uv);\n"
+"    } else if (tex_map == 3 && u_tex_enable[3] != 0) {\n"
+"        return texture(u_tex3, uv);\n"
 "    }\n"
 "    return vec4(1.0); // Default white texture\n"
 "}\n"
@@ -1499,7 +1484,7 @@ static const char* g_frag_src =
 "// GCN indirect TEV: sample bump map → extract S/T/U → apply matrix → offset base coords\n"
 "vec2 indirect_texcoord(vec2 base_uv, vec2 ind_uv, int stage) {\n"
 "    if (u_ind_tex_enabled == 0 || u_ind_tex_stage != stage) return base_uv;\n"
-"    if (u_tex0_enable == 0) return base_uv;\n"
+"    if (u_tex_enable[0] == 0) return base_uv;\n"
 "    \n"
 "    // Sample bump map at indirect coordinates (TEXMAP0 = u_tex0)\n"
 "    vec4 bump = texture(u_tex0, ind_uv);\n"
@@ -1571,12 +1556,14 @@ static const char* g_frag_src =
 "\n"
 "void main() {\n"
 "    // Projective texcoords: divide by q (1 for ordinary UVs).\n"
+"    vec2 uvp[4];\n"
+"    for (int i = 0; i < 4; i++) {\n"
 "#ifdef NO_QDIV\n"
-"    vec2 uv0p = v_uv0.xy, uv1p = v_uv1.xy;\n"
+"        uvp[i] = v_uv[i].xy;\n"
 "#else\n"
-"    vec2 uv0p = (abs(v_uv0.z) > 1e-7) ? v_uv0.xy / v_uv0.z : v_uv0.xy;\n"
-"    vec2 uv1p = (abs(v_uv1.z) > 1e-7) ? v_uv1.xy / v_uv1.z : v_uv1.xy;\n"
+"        uvp[i] = (abs(v_uv[i].z) > 1e-7) ? v_uv[i].xy / v_uv[i].z : v_uv[i].xy;\n"
 "#endif\n"
+"    }\n"
 "    // RAS = channel-0 rasterized color: vertex color or material register,\n"
 "    // modulated by per-vertex lighting when channel 0 is lit (GCN formula\n"
 "    // approximated as mat * clamp(amb + diffuse)).\n"
@@ -1606,10 +1593,11 @@ static const char* g_frag_src =
 "        // The stage samples its map with the texcoord GXSetTevOrder gave\n"
 "        // it, which is not the map's own index once a projection coord is\n"
 "        // in play (shadow: map 1 with coord 0; base texture: map 0, coord 1).\n"
-"        vec2 base_uv = (u_tev_tex_coord[stage] == 0) ? uv0p : uv1p;\n"
-"        vec2 ind_uv = (u_tev_tex_coord[stage] == 0) ? uv1p : uv0p;\n"
+"        int tc = u_tev_tex_coord[stage];\n"
+"        vec2 base_uv = uvp[(tc >= 0 && tc < 4) ? tc : 0];\n"
+"        vec2 ind_uv = (tc == 0) ? uvp[1] : uvp[0];\n"
 "        vec2 tex_uv = indirect_texcoord(base_uv, ind_uv, stage);\n"
-"        vec4 tex = sample_tex(u_tev_tex_map[stage], tex_uv, tex_uv);\n"
+"        vec4 tex = sample_tex(u_tev_tex_map[stage], tex_uv);\n"
 "        if (u_dbg_mode == 6 && u_tev_tex_map[stage] < 8) { frag_color = vec4(tex.rgb, 1.0); return; }\n"
 "        if (u_dbg_mode == 7 && u_tev_tex_map[stage] < 8) { frag_color = vec4(tex.aaa, 1.0); return; }\n"
 "        if (u_dbg_mode == 8 && u_tev_tex_map[stage] < 8) { frag_color = vec4(fract(tex_uv), 0.0, 1.0); return; }\n"
@@ -1997,18 +1985,15 @@ static UniEntry g_uni_tab[] = {
     { &g_proj_loc, "u_proj", 1, 0, -1 },
     { &g_mvp_loc, "u_mvp", 1, 0, -1 },
     { &g_uv_scale_loc, "u_uv_scale", 1, 0, -1 },
-    { &g_texmtx0_loc, "u_texmtx0", 1, 0, -1 },
-    { &g_texmtx1_loc, "u_texmtx1", 1, 0, -1 },
-    { &g_texmtx0_enable_loc, "u_texmtx0_enable", 1, 1, -1 },
-    { &g_pttexmtx0_loc, "u_pttexmtx0", 1, 0, -1 },
-    { &g_pttexmtx1_loc, "u_pttexmtx1", 1, 0, -1 },
-    { &g_pttexmtx0_enable_loc, "u_pttexmtx0_enable", 1, 1, -1 },
-    { &g_pttexmtx1_enable_loc, "u_pttexmtx1_enable", 1, 1, -1 },
-    { &g_texmtx1_enable_loc, "u_texmtx1_enable", 1, 1, -1 },
-    { &g_tex0_enable_loc, "u_tex0_enable", 1, 1, -1 },
-    { &g_tex1_enable_loc, "u_tex1_enable", 1, 1, -1 },
+    { &g_texmtx_loc, "u_texmtx", PC_TEXN, 0, -1 },
+    { &g_texmtx_enable_loc, "u_texmtx_enable", PC_TEXN, 1, -1 },
+    { &g_pttexmtx_loc, "u_pttexmtx", PC_TEXN, 0, -1 },
+    { &g_pttexmtx_enable_loc, "u_pttexmtx_enable", PC_TEXN, 1, -1 },
+    { &g_tex_enable_loc, "u_tex_enable", PC_TEXN, 1, -1 },
     { &g_tex0_loc, "u_tex0", 1, 0, -1 },
     { &g_tex1_loc, "u_tex1", 1, 0, -1 },
+    { &g_tex2_loc, "u_tex2", 1, 0, -1 },
+    { &g_tex3_loc, "u_tex3", 1, 0, -1 },
     { &g_kcolor0_loc, "u_kcolor", 4, 0, -1 },
     { &g_tevreg_loc, "u_tevreg", 4, 0, -1 },
     { &g_alpha_cmp_func_loc, "u_alpha_cmp_func", 1, 1, -1 },
@@ -2085,15 +2070,11 @@ static UniEntry g_uni_tab[] = {
     { &g_ind_tex_mtx_loc, "u_ind_tex_mtx", 1, 0, -1 },
     { &g_ind_tex_coord_src_loc, "u_ind_tex_coord_src", 1, 1, -1 },
     { &g_ind_tex_base_coord_loc, "u_ind_tex_base_coord", 1, 1, -1 },
-    { &g_texgen0_mode_loc, "u_texgen0_mode", 1, 1, -1 },
-    { &g_texgen0_nrm_loc, "u_texgen0_nrm", 1, 1, -1 },
-    { &g_texgen1_nrm_loc, "u_texgen1_nrm", 1, 1, -1 },
+    { &g_texgen_mode_loc, "u_texgen_mode", PC_TEXN, 1, -1 },
+    { &g_texgen_nrm_loc, "u_texgen_nrm", PC_TEXN, 1, -1 },
     { &g_tev_tex_coord_loc, "u_tev_tex_coord", 8, 1, -1 },
-    { &g_texgen0_src_loc, "u_texgen0_src", 1, 1, -1 },
-    { &g_texgen1_mode_loc, "u_texgen1_mode", 1, 1, -1 },
-    { &g_texgen1_src_loc, "u_texgen1_src", 1, 1, -1 },
-    { &g_texgen_mtx0_loc, "u_texgen_mtx0", 1, 0, -1 },
-    { &g_texgen_mtx1_loc, "u_texgen_mtx1", 1, 0, -1 },
+    { &g_texgen_src_loc, "u_texgen_src", PC_TEXN, 1, -1 },
+    { &g_texgen_mtx_loc, "u_texgen_mtx", PC_TEXN, 0, -1 },
 };
 #define UNI_TAB_N ((int) (sizeof(g_uni_tab) / sizeof(g_uni_tab[0])))
 
@@ -4125,49 +4106,40 @@ static void bridge_upload_and_draw(void)
      * GX_IDENTITY is 60 and means "leave the coords alone". A slot that was
      * never filled by GXLoadTexMtxImm is all zeros and would collapse every
      * UV to the origin, so require it to have been loaded. */
-    if (g_texmtx0_enable_loc >= 0) {
-        int enable0 = pc_texmtx_active(0);
-        UP1I(g_texmtx0_enable_loc, enable0);
-        if (enable0 && g_texmtx0_loc >= 0) {
-            f32 mtx[4][4] = {{0}};
-            memcpy(mtx, g_state.mtx_array[g_state.tex_gen_mat_id[0]], sizeof(f32) * 12);
-            mtx[3][3] = 1.0f;
-            UPMTX4(g_texmtx0_loc, 1, GL_TRUE, &mtx[0][0]);
+    {
+        u32 c;
+        for (c = 0; c < PC_TEXN; c++) {
+            int en = pc_texmtx_active(c);
+            if (g_texmtx_enable_loc >= 0) UP1I(g_texmtx_enable_loc + (GLint) c, en);
+            if (en && g_texmtx_loc >= 0) {
+                f32 mtx[4][4] = {{0}};
+                memcpy(mtx, g_state.mtx_array[g_state.tex_gen_mat_id[c]], sizeof(f32) * 12);
+                mtx[3][3] = 1.0f;
+                UPMTX4(g_texmtx_loc + (GLint) c, 1, GL_TRUE, &mtx[0][0]);
+            }
         }
     }
-    if (g_texmtx1_enable_loc >= 0) {
-        int enable1 = pc_texmtx_active(1);
-        UP1I(g_texmtx1_enable_loc, enable1);
-        if (enable1 && g_texmtx1_loc >= 0) {
-            f32 mtx[4][4] = {{0}};
-            memcpy(mtx, g_state.mtx_array[g_state.tex_gen_mat_id[1]], sizeof(f32) * 12);
-            mtx[3][3] = 1.0f;
-            UPMTX4(g_texmtx1_loc, 1, GL_TRUE, &mtx[0][0]);
-        }
-    }
-    
+
     /* Post-transform texture matrices */
     {
         u32 c;
-        for (c = 0; c < 2; c++) {
-            GLint eloc = c ? g_pttexmtx1_enable_loc : g_pttexmtx0_enable_loc;
-            GLint mloc = c ? g_pttexmtx1_loc : g_pttexmtx0_loc;
+        for (c = 0; c < PC_TEXN; c++) {
             u32 id = g_state.tex_gen_pt_id[c];
             int en = 0;
-            if (eloc < 0) continue;
+            if (g_pttexmtx_enable_loc < 0) continue;
             if (g_state.tex_gen_enabled[c] && id >= 64 && id <= 124 && ((id - 64) % 3) == 0 &&
                 g_state.pt_mtx_loaded[(id - 64) / 3]) {
                 en = 1;
             }
-            UP1I(eloc, en);
-            if (en && mloc >= 0) {
+            UP1I(g_pttexmtx_enable_loc + (GLint) c, en);
+            if (en && g_pttexmtx_loc >= 0) {
                 f32 mtx[4][4] = {{0}};
                 memcpy(mtx, g_state.pt_mtx_array[(id - 64) / 3], sizeof(f32) * 12);
                 mtx[3][3] = 1.0f;
                 /* GX matrices are row-major; transpose on upload so the
                  * GLSL mat4 * vec4 product is the row-vector product the
                  * hardware performs (GL_FALSE handed the shader M^T). */
-                UPMTX4(mloc, 1, GL_TRUE, &mtx[0][0]);
+                UPMTX4(g_pttexmtx_loc + (GLint) c, 1, GL_TRUE, &mtx[0][0]);
             }
         }
     }
@@ -4237,39 +4209,22 @@ static void bridge_upload_and_draw(void)
             g_state.fog_color.a / 255.0f);
     }
     
-    /* Upload active texture info to fragment shader */
-    /* Reset texture enables first — only set if a texture is actually bound */
-    if (g_tex0_enable_loc >= 0) UP1I(g_tex0_enable_loc, 0);
-    if (g_tex1_enable_loc >= 0) UP1I(g_tex1_enable_loc, 0);
-    
-    PORT_LOG_DEBUG("TEX: active_count=%u slots[0]=%u(%s) slots[1]=%u(%s)",
-                   g_active_tex_count, g_active_tex_slots[0],
-                   g_state.tex_cache_valid[g_active_tex_slots[0]] ? "valid" : "invalid",
-                   g_active_tex_slots[1],
-                   g_state.tex_cache_valid[g_active_tex_slots[1]] ? "valid" : "invalid");
-    
-    for (u32 i = 0; i < g_active_tex_count && i < 2; i++) {
-        u32 gl_unit = i;  /* Map to GL_TEXTURE0/GL_TEXTURE1 */
-        u32 slot = g_active_tex_slots[gl_unit];
-        
+    /* Upload active texture info to fragment shader: one enable per unit,
+     * and the sampler uniforms pinned to their units. */
+    for (u32 i = 0; i < PC_TEXN; i++) {
+        u32 slot = g_active_tex_slots[i];
         GLuint tex_id = g_state.tex_cache_valid[slot] ? g_state.tex_cache[slot] : 0;
-        
-        if (tex_id && gl_unit == 0) {
-            if (g_tex0_enable_loc >= 0) UP1I(g_tex0_enable_loc, 1);
-            glActiveTexture(GL_TEXTURE0);
+        int en = tex_id != 0;
+        if (en) {
+            glActiveTexture(GL_TEXTURE0 + i);
             glBindTexture(GL_TEXTURE_2D, tex_id);
-            if (g_tex0_loc >= 0) UP1I(g_tex0_loc, 0);
-        } else if (tex_id && gl_unit == 1) {
-            if (g_tex1_enable_loc >= 0) UP1I(g_tex1_enable_loc, 1);
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, tex_id);
-            if (g_tex1_loc >= 0) UP1I(g_tex1_loc, 1);
-        } else {
-            /* No texture bound to this unit — disable it */
-            if (gl_unit == 0 && g_tex0_enable_loc >= 0) UP1I(g_tex0_enable_loc, 0);
-            if (gl_unit == 1 && g_tex1_enable_loc >= 0) UP1I(g_tex1_enable_loc, 0);
         }
+        if (g_tex_enable_loc >= 0) UP1I(g_tex_enable_loc + (GLint) i, en);
     }
+    if (g_tex0_loc >= 0) UP1I(g_tex0_loc, 0);
+    if (g_tex1_loc >= 0) UP1I(g_tex1_loc, 1);
+    if (g_tex2_loc >= 0) UP1I(g_tex2_loc, 2);
+    if (g_tex3_loc >= 0) UP1I(g_tex3_loc, 3);
     
     /* Determine GL primitive type */
     GLenum gl_prim;
@@ -6549,8 +6504,7 @@ static void apply_tev_uniforms(void)
     if (_ntex < 0) _ntex = (getenv("MELEE_NOTEX") != NULL);
     if (_ntex) {
         if (g_tev_num_stages_loc >= 0) UP1I(g_tev_num_stages_loc, 0);
-        if (g_tex0_enable_loc >= 0) UP1I(g_tex0_enable_loc, 0);
-        if (g_tex1_enable_loc >= 0) UP1I(g_tex1_enable_loc, 0);
+        if (g_tex_enable_loc >= 0) { u32 i; for (i = 0; i < PC_TEXN; i++) UP1I(g_tex_enable_loc + (GLint) i, 0); }
         return;
     }
     
@@ -7028,64 +6982,34 @@ static void apply_tev_uniforms(void)
      * texgen was set for the coord); source GX_TG_POS = 0, GX_TG_NRM = 1,
      * GX_TG_TEX0 = 4... The shader used to expect 1/2 for the modes and
      * 1/2 for POS/NRM, so no texgen ever ran. */
-    if (g_texgen0_mode_loc >= 0) {
-        UP1I(g_texgen0_mode_loc, g_state.tex_gen_enabled[0] ? (int)g_state.tex_gen_mode[0] : -1);
-    }
-    if (g_texgen0_src_loc >= 0) {
-        UP1I(g_texgen0_src_loc, (int)g_state.tex_gen_src[0]);
-    }
-    if (g_texgen0_nrm_loc >= 0) {
-        UP1I(g_texgen0_nrm_loc, (int)g_state.tex_gen_normalize[0]);
-    }
-    if (g_texgen1_mode_loc >= 0) {
-        UP1I(g_texgen1_mode_loc, g_state.tex_gen_enabled[1] ? (int)g_state.tex_gen_mode[1] : -1);
-    }
-    if (g_texgen1_src_loc >= 0) {
-        UP1I(g_texgen1_src_loc, (int)g_state.tex_gen_src[1]);
-    }
-    if (g_texgen1_nrm_loc >= 0) {
-        UP1I(g_texgen1_nrm_loc, (int)g_state.tex_gen_normalize[1]);
-    }
-    if (g_texgen_mtx0_loc >= 0 && g_state.tex_gen_enabled[0]) {
-        u32 mtx_id = g_state.tex_gen_mat_id[0];
-        if (mtx_id < 68) {
-            GLfloat m[16] = {0};
-            /* The shader applies this to the object-space attribute, as the
-             * hardware does. A pretransformed batch already carries its
-             * position matrix in the vertices, so a PN row (id < 30) is
-             * identity there; GX_IDENTITY (60) is identity everywhere. */
-            static int oldmtx = -1;
-            if (oldmtx < 0) oldmtx = getenv("MELEE_TEXGEN_OLDMTX") != NULL;
-            if (!oldmtx && (mtx_id == 60 || (g_batch_pretransformed && mtx_id < 30))) {
-                m[0] = m[5] = m[10] = 1.0f;
-            } else {
-                for (int i = 0; i < 3; i++)
-                    for (int j = 0; j < 4; j++)
-                        m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
+    {
+        u32 c;
+        static int oldmtx = -1;
+        if (oldmtx < 0) oldmtx = getenv("MELEE_TEXGEN_OLDMTX") != NULL;
+        for (c = 0; c < PC_TEXN; c++) {
+            int en = g_state.tex_gen_enabled[c] ? 1 : 0;
+            if (g_texgen_mode_loc >= 0) UP1I(g_texgen_mode_loc + (GLint) c, en ? (int) g_state.tex_gen_mode[c] : -1);
+            if (g_texgen_src_loc >= 0) UP1I(g_texgen_src_loc + (GLint) c, (int) g_state.tex_gen_src[c]);
+            if (g_texgen_nrm_loc >= 0) UP1I(g_texgen_nrm_loc + (GLint) c, (int) g_state.tex_gen_normalize[c]);
+            if (g_texgen_mtx_loc >= 0 && en) {
+                u32 mtx_id = g_state.tex_gen_mat_id[c];
+                if (mtx_id < 68) {
+                    GLfloat m[16] = {0};
+                    /* The shader applies this to the object-space attribute, as
+                     * the hardware does. A pretransformed batch already carries
+                     * its position matrix in the vertices, so a PN row (id < 30)
+                     * is identity there; GX_IDENTITY (60) is identity everywhere. */
+                    if (!oldmtx && (mtx_id == 60 || (g_batch_pretransformed && mtx_id < 30))) {
+                        m[0] = m[5] = m[10] = 1.0f;
+                    } else {
+                        for (int i = 0; i < 3; i++)
+                            for (int j = 0; j < 4; j++)
+                                m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
+                    }
+                    m[3*4 + 3] = 1.0f;
+                    UPMTX4(g_texgen_mtx_loc + (GLint) c, 1, GL_TRUE, m);
+                }
             }
-            m[3*4 + 3] = 1.0f;
-            UPMTX4(g_texgen_mtx0_loc, 1, GL_TRUE, m);
-        }
-    }
-    if (g_texgen_mtx1_loc >= 0 && g_state.tex_gen_enabled[1]) {
-        u32 mtx_id = g_state.tex_gen_mat_id[1];
-        if (mtx_id < 68) {
-            GLfloat m[16] = {0};
-            /* The shader applies this to the object-space attribute, as the
-             * hardware does. A pretransformed batch already carries its
-             * position matrix in the vertices, so a PN row (id < 30) is
-             * identity there; GX_IDENTITY (60) is identity everywhere. */
-            static int oldmtx = -1;
-            if (oldmtx < 0) oldmtx = getenv("MELEE_TEXGEN_OLDMTX") != NULL;
-            if (!oldmtx && (mtx_id == 60 || (g_batch_pretransformed && mtx_id < 30))) {
-                m[0] = m[5] = m[10] = 1.0f;
-            } else {
-                for (int i = 0; i < 3; i++)
-                    for (int j = 0; j < 4; j++)
-                        m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
-            }
-            m[3*4 + 3] = 1.0f;
-            UPMTX4(g_texgen_mtx1_loc, 1, GL_TRUE, m);
         }
     }
 }
@@ -9780,7 +9704,7 @@ bind_tex:
     
     if (pc_canary_on()) pc_check_canaries("GXLoadTexObj:exit");
     /* Activate texture unit and track for shader */
-    u32 gl_unit = texEnv % 2;  /* Clamp to 0-1 (shader only has 2 units) */
+    u32 gl_unit = texEnv % PC_TEXN; /* GX_TEXMAP0..7; the shader has PC_TEXN units */
     glActiveTexture(GL_TEXTURE0 + gl_unit);
     glBindTexture(GL_TEXTURE_2D, tex_id);
 
@@ -9827,7 +9751,7 @@ bind_tex:
     
     /* Count active texture units */
     g_active_tex_count = 0;
-    for (u32 i = 0; i < 2; i++) {
+    for (u32 i = 0; i < PC_TEXN; i++) {
         if (g_state.tex_cache_valid[g_active_tex_slots[i]]) {
             g_active_tex_count++;
         }
