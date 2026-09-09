@@ -68,6 +68,15 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
         PORT_LOG_ERROR("SDL2 init failed: %s", SDL_GetError());
         return FALSE;
     }
+    /* Gamepads. The joystick subsystem was never initialised, so
+     * SDL_JoystickOpen in the pad bridge failed every frame and the only
+     * input device that ever worked was the keyboard. GAMECONTROLLER
+     * implies JOYSTICK. */
+    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0)
+    {
+        PORT_LOG_WARN("SDL2 gamepads unavailable, keyboard only: %s",
+                      SDL_GetError());
+    }
     if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0)
     {
         PORT_LOG_WARN("SDL2 audio unavailable, continuing muted: %s",

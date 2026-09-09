@@ -1210,6 +1210,12 @@ static void lb_80019AAC_noop(void) {}
  * Open once at init time, reused each frame.
  * Initialized to NULL to prevent O2 optimization from assuming valid pointers. */
 void* g_joysticks[4] = {NULL};
+/* SDL_GameController handles for the same four ports. A pad SDL knows the
+ * layout of (anything with a mapping in its database: Xbox, PlayStation,
+ * Switch Pro, 8BitDo, the GameCube adapters) is opened as a controller so
+ * A is A and Start is Start; only an unmapped device falls back to the raw
+ * joystick numbering below. */
+void* g_controllers[4] = {NULL};
 void* g_heap_base = NULL;
 size_t g_heap_size = 0;
 
@@ -1459,6 +1465,7 @@ static void poll_keyboard_to_pad(GCPadStatus* pad)
      * IJKL drives the C-stick. */
     {
         int sx = 0, sy = 0, cx = 0, cy = 0;
+        int forced_stick = 0;
         const int FULL = 80;
         if (kb[SDL_SCANCODE_LEFT]  || kb[SDL_SCANCODE_A]) sx -= FULL;
         if (kb[SDL_SCANCODE_RIGHT] || kb[SDL_SCANCODE_D]) sx += FULL;
@@ -1490,6 +1497,7 @@ static void poll_keyboard_to_pad(GCPadStatus* pad)
                 }
             }
             if (forced) {
+                forced_stick = 1;
                 sx = fx;
                 sy = fy;
                 if (fbtn != 0) {
@@ -1502,14 +1510,119 @@ static void poll_keyboard_to_pad(GCPadStatus* pad)
                 }
             }
         }
-        pad->button = buttons;
-        pad->stickX = (s8) sx;
-        pad->stickY = (s8) sy;
-        pad->subStickX = (s8) cx;
-        pad->subStickY = (s8) cy;
+        /* Merge with whatever the controller on this port already put
+         * here. This used to assign, which threw away the gamepad's
+         * buttons and stick every frame: port 1 could only ever be driven
+         * from the keyboard. A key held wins over the stick axis it maps
+         * to; an idle keyboard leaves the pad's values alone. */
+        pad->button |= buttons;
+        if (sx != 0 || sy != 0 || forced_stick) {
+            pad->stickX = (s8) sx;
+            pad->stickY = (s8) sy;
+        }
+        if (cx != 0 || cy != 0) {
+            pad->subStickX = (s8) cx;
+            pad->subStickY = (s8) cy;
+        }
     }
-    pad->analogL = (buttons & GC_BTN_L) ? 255 : 0;
-    pad->analogR = (buttons & GC_BTN_R) ? 255 : 0;
+    if (buttons & GC_BTN_L) pad->analogL = 255;
+    if (buttons & GC_BTN_R) pad->analogR = 255;
+}
+
+/* Read an SDL2 game controller (a device SDL has a button map for) into GC
+ * pad format. GameCube layout: A attack, B special, X/Y jump, L/R the
+ * analog shields, Z grab, Start pause. Modern pads have two shoulder
+ * buttons and two analog triggers, so the triggers are L/R (analog value
+ * and the full-press click), the right bumper is Z and the left bumper is
+ * a second L. Back/Guide do nothing, as on the console. */
+static void poll_controller(void* ctl, GCPadStatus* pad)
+{
+    SDL_GameController* gc = (SDL_GameController*) ctl;
+    u32 buttons = 0;
+    int sx, sy, csx, csy, lt, rt;
+
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_A)) buttons |= GC_BTN_A;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_B)) buttons |= GC_BTN_B;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_X)) buttons |= GC_BTN_X;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_Y)) buttons |= GC_BTN_Y;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_START)) buttons |= GC_BTN_START;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) buttons |= GC_BTN_Z;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)) buttons |= GC_BTN_L;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_UP)) buttons |= GC_BTN_DPAD_U;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) buttons |= GC_BTN_DPAD_D;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) buttons |= GC_BTN_DPAD_L;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) buttons |= GC_BTN_DPAD_R;
+
+    /* Axes are [-32768, 32767]; the GameCube stick is an s8 with up
+     * positive. Dolphin maps a full deflection to the same 127, and the
+     * game's own clamp (HSD_PadClamp, radius 80) brings both down to what a
+     * real stick delivers -- see pc_pad_clamp_stick below. */
+    sx = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTX);
+    sy = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTY);
+    csx = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTX);
+    csy = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTY);
+    pad->stickX = (s8) (sx >> 8);
+    pad->stickY = (s8) (-(sy + 1) >> 8);
+    pad->subStickX = (s8) (csx >> 8);
+    pad->subStickY = (s8) (-(csy + 1) >> 8);
+
+    /* Triggers rest at 0 and read 32767 fully pressed. The console's L/R
+     * digital bit is the click at the end of the travel. */
+    lt = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
+    rt = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+    pad->analogL = (u8) (lt >> 7);
+    pad->analogR = (u8) (rt >> 7);
+    if (lt > 29000) buttons |= GC_BTN_L;
+    if (rt > 29000) buttons |= GC_BTN_R;
+    if (buttons & GC_BTN_L) pad->analogL = 255;
+
+    pad->button = buttons;
+}
+
+/* Open whatever SDL has at device index i for port i: a mapped controller
+ * where SDL knows the layout, else the raw joystick. Returns nonzero when
+ * something was opened. */
+static int pc_pad_open(int i)
+{
+    if (g_controllers[i] || g_joysticks[i]) {
+        return 1;
+    }
+    if (i >= SDL_NumJoysticks()) {
+        return 0;
+    }
+    if (SDL_IsGameController(i)) {
+        g_controllers[i] = SDL_GameControllerOpen(i);
+        if (g_controllers[i]) {
+            fprintf(stderr, "[PAD] port %d: controller %s\n", i + 1,
+                    SDL_GameControllerName((SDL_GameController*) g_controllers[i]));
+            return 1;
+        }
+    }
+    g_joysticks[i] = SDL_JoystickOpen(i);
+    if (g_joysticks[i]) {
+        fprintf(stderr, "[PAD] port %d: joystick %s (no button map; raw numbering)\n",
+                i + 1, SDL_JoystickName((SDL_Joystick*) g_joysticks[i]));
+        return 1;
+    }
+    return 0;
+}
+
+/* The console's stick clamp, HSD_PadClampCheck3 with the values gmmain.c
+ * sets (type 0, radius 80, no dead zone): the vector is scaled onto the
+ * circle of radius 80 when it is outside it. A GameCube stick never
+ * reports past that; an SDL axis reaches 127 on a cardinal and (127,127)
+ * on a diagonal, and every stick-driven thing in the game -- the
+ * character-select hand, the stage-select ring, dash and smash thresholds
+ * -- ran up to twice as fast or read a diagonal as 1.6 of full. */
+static void pc_pad_clamp_stick(s8* x, s8* y)
+{
+    const float max = 80.0f;
+    float fx = (float) *x, fy = (float) *y;
+    float r = sqrtf(fx * fx + fy * fy);
+    if (r > max) {
+        *x = (s8) (fx * max / r);
+        *y = (s8) (fy * max / r);
+    }
 }
 
 /* Read a single SDL2 joystick into GC pad format.
@@ -1608,13 +1721,13 @@ void HSD_PadRenewRawStatus(bool unused)
         /* Clear current state */
         memset(&g_gc_pads[pad], 0, sizeof(GCPadStatus));
         
-        /* Lazy-init: open joystick handle if not already open */
-        if (!g_joysticks[pad]) {
-            g_joysticks[pad] = SDL_JoystickOpen(pad);
-        }
-        
-        /* Read from persistent joystick handle (if connected) */
-        if (g_joysticks[pad]) {
+        /* Lazy-init: pick up a pad plugged in after boot */
+        pc_pad_open(pad);
+
+        /* Read from the persistent handle (if connected) */
+        if (g_controllers[pad]) {
+            poll_controller(g_controllers[pad], &g_gc_pads[pad]);
+        } else if (g_joysticks[pad]) {
             poll_joystick(g_joysticks[pad], &g_gc_pads[pad]);
         }
         
@@ -1654,6 +1767,12 @@ void HSD_PadRenewRawStatus(bool unused)
         /* Outside the pad == 0 block: the script can drive any controller,
          * and the character select needs a second one. */
         pc_pad_run_script(&g_gc_pads[pad], pad);
+
+        /* The console clamps every source the same way, after the raw read
+         * and before anything derives from it. */
+        pc_pad_clamp_stick(&g_gc_pads[pad].stickX, &g_gc_pads[pad].stickY);
+        pc_pad_clamp_stick(&g_gc_pads[pad].subStickX,
+                           &g_gc_pads[pad].subStickY);
 
         /* Synthesize the stick-direction bits into the raw button word.
          * sysdolphin's HSD_PadADConvert does this on GCN (controller.c,
@@ -1786,13 +1905,7 @@ void HSD_PadInit(u8 qnum, void* queue, u16 nb_list, void* rumble_list)
     /* Open SDL joysticks once — persistent handles reused each frame.
      * Only open if not already open (lazy-init handles normal path). */
     for (int i = 0; i < 4; i++) {
-        if (!g_joysticks[i]) {
-            g_joysticks[i] = SDL_JoystickOpen(i);
-            if (g_joysticks[i]) {
-                fprintf(stderr, "[PAD] Init: joystick %d: %s\n",
-                              i, SDL_JoystickName((void*)g_joysticks[i]));
-            }
-        }
+        pc_pad_open(i);
     }
 }
 

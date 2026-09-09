@@ -1224,6 +1224,22 @@ void mpLibLoad(MapCollData* coll_data)
                     mj->vtx_start, mj->vtx_count, (double) mj->left_bound,
                     (double) mj->bottom_bound, (double) mj->right_bound,
                     (double) mj->top_bound);
+            {
+                /* And the stage joint each collision joint rides, with its
+                 * world translation as the map sees it now: a joint whose
+                 * jobj is NULL or whose matrix is still the identity has
+                 * its lines at the origin, which is where a fighter falls
+                 * through a floor that the console has. */
+                HSD_JObj* lj = groundCollJoint[jn].x20;
+                fprintf(stderr, "[MPDUMP]   joint %d jobj=%p world=(%.2f,%.2f,%.2f) scale=(%.2f,%.2f) flags=%04x\n",
+                        jn, (void*) lj,
+                        lj ? (double) lj->mtx[0][3] : 0.0,
+                        lj ? (double) lj->mtx[1][3] : 0.0,
+                        lj ? (double) lj->mtx[2][3] : 0.0,
+                        lj ? (double) lj->mtx[0][0] : 0.0,
+                        lj ? (double) lj->mtx[1][1] : 0.0,
+                        (unsigned) groundCollJoint[jn].flags);
+            }
         }
         for (ln = 0; ln < coll_data->line_count; ln++) {
             MapLine* ml = &coll_data->lines[ln];

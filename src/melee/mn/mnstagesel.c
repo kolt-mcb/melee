@@ -304,6 +304,34 @@ void fn_8025A310(HSD_GObj* gobj)
 
     HSD_JObjSetTranslate(jobj, &sp1C);
     lb_8000B1CC(jobj, NULL, &sp1C);
+#if BUILD_TARGET_PC
+    /* MELEE_SSSLOG=1: where the cursor joint is against where it is drawn
+     * from -- its local translate and scale, its world matrix's translation,
+     * and its parent's. The ring on screen and the panel the hit test picks
+     * disagree on this port, so this is the number to compare with the
+     * console's. Printed while the cursor moves. */
+    if (getenv("MELEE_SSSLOG") != NULL &&
+        (mnStageSel_804D6CAC != 0 || mnStageSel_804D6CAD != 0))
+    {
+        HSD_JObj* par = HSD_JObjGetParent(jobj);
+        fprintf(stderr,
+                "[SSS] cursor local t=(%.2f,%.2f,%.2f) s=(%.2f,%.2f,%.2f) "
+                "world=(%.2f,%.2f,%.2f) mtx=(%.2f,%.2f,%.2f) flags=%08x "
+                "parent=%p pt=(%.2f,%.2f,%.2f) ps=(%.2f,%.2f,%.2f)\n",
+                (double) jobj->translate.x, (double) jobj->translate.y,
+                (double) jobj->translate.z, (double) jobj->scale.x,
+                (double) jobj->scale.y, (double) jobj->scale.z,
+                (double) sp1C.x, (double) sp1C.y, (double) sp1C.z,
+                (double) jobj->mtx[0][3], (double) jobj->mtx[1][3],
+                (double) jobj->mtx[2][3], (unsigned) jobj->flags, (void*) par,
+                par ? (double) par->translate.x : 0.0,
+                par ? (double) par->translate.y : 0.0,
+                par ? (double) par->translate.z : 0.0,
+                par ? (double) par->scale.x : 0.0,
+                par ? (double) par->scale.y : 0.0,
+                par ? (double) par->scale.z : 0.0);
+    }
+#endif
     for (i = 0; i < 0x1E; i++) {
         if (mnStageSel_803F06D0[i].x8 != 0) {
             lb_8000B1CC(mnStageSel_803F06D0[i].x0, NULL, &sp10);
@@ -313,6 +341,26 @@ void fn_8025A310(HSD_GObj* gobj)
                 if (sp10.y - mnStageSel_803F06D0[i].x10 < sp1C.y &&
                     sp10.y + mnStageSel_803F06D0[i].x10 > sp1C.y)
                 {
+#if BUILD_TARGET_PC
+                    /* MELEE_SSSLOG=1: the cursor's world position against
+                     * the panel it landed on, whenever that changes. The
+                     * panel jobjs come out of MnSlMap, which is only partly
+                     * converted, so a panel whose world position is wrong
+                     * catches the cursor for a neighbour. */
+                    if (getenv("MELEE_SSSLOG") != NULL &&
+                        mnStageSel_804D6CAE != i)
+                    {
+                        fprintf(stderr,
+                                "[SSS] cursor=(%.2f,%.2f) -> panel %d kind=%d "
+                                "at (%.2f,%.2f) half=(%.2f,%.2f) x8=%d\n",
+                                (double) sp1C.x, (double) sp1C.y, i,
+                                (int) mnStageSel_803F06D0[i].xB,
+                                (double) sp10.x, (double) sp10.y,
+                                (double) temp_f1,
+                                (double) mnStageSel_803F06D0[i].x10,
+                                (int) mnStageSel_803F06D0[i].x8);
+                    }
+#endif
                     mnStageSel_804D6CAE = i;
                     return;
                 }
@@ -1061,6 +1109,13 @@ void mnStageSel_8025B850_OnFrame(void)
     if (mnStageSel_804D6CAF == 2) {
         mnStageSel_804D6C90->data.data.rules.xE =
             mnStageSel_803F06D0[mnStageSel_804D6CAE].xB;
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_SSSLOG") != NULL) {
+            fprintf(stderr, "[SSS] commit panel %d -> stage kind %d\n",
+                    (int) mnStageSel_804D6CAE,
+                    (int) mnStageSel_803F06D0[mnStageSel_804D6CAE].xB);
+        }
+#endif
         gm_801A4B60();
     }
 }
