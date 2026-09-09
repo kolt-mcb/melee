@@ -644,7 +644,7 @@ inline Ground* grMaterial_801C9604_inline(HSD_GObj* arg0)
     return arg0->user_data;
 }
 
-void grMaterial_801C9604(HSD_GObj* gobj, int arg1, bool arg2)
+void grMaterial_801C9604(HSD_GObj* gobj, grMaterialArg arg1, bool arg2)
 {
 #if BUILD_TARGET_PC
     /* PC port: the grMaterial_801C8CFC/801C8D44 spawn helpers return NULL now

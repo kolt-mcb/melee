@@ -22,4 +22,19 @@ HSD_Archive* pc_grconv_archive_of(const void* p);
  * offset is 0 or the run does not fit the archive. */
 s16* pc_grconv_s16_table(HSD_Archive* archive, u32 off, u32 n);
 
+/* n big-endian 32-bit words at archive offset off, as a fresh host array of
+ * host-order words; NULL if the offset is 0 or the run does not fit. */
+u32* pc_grconv_u32_table(HSD_Archive* archive, u32 off, u32 n);
+
+/* The raw bytes at archive offset off, if n of them fit; NULL otherwise. For
+ * data the game reads in file order -- a colour-overlay script is byteswapped
+ * in place by pc_script_prepare when it is first run. */
+const u8* pc_grconv_raw(HSD_Archive* archive, u32 off, u32 n);
+
+/* pc_grconv_raw on the stage's main archive. A yakumono block's pointer words
+ * come out of the layout converters as file offsets, and the colour-overlay
+ * scripts Venom, Final Destination and Mute City hand to grMaterial_801C9604
+ * are found through them. */
+const u8* pc_grconv_stage_script(u32 off);
+
 #endif

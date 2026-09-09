@@ -513,7 +513,11 @@ void* Ground_801C49F8(void)
             "211" "4" "444" "211" "4" "444" "211" "4" "444"
             "211" "4" "444" "211" "4" "444" "211" "4" "444"
             "211" "4" "444" "211" "4" "444" "211" "4" "444"
-            "4" "4" "4444" "4" "2222");
+            "4" "4" "4444" "4" "2222" "4444");
+    case Gr_Kind_MuteCity:
+        /* Four relocated pointers then scalars: no layout string can carry
+         * it. grmutecity.c converts the raw block itself (pc_mutecity_param). */
+        return stage_info.yakumono_param;
     default:
         break;
     }

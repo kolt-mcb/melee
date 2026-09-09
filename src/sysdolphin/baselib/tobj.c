@@ -21,6 +21,9 @@
 #endif
 #include <dolphin/mtx.h>
 #include <MetroTRK/intrinsics.h>
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #define FLT_EPSILON 1.00000001335e-10F
 
@@ -357,8 +360,12 @@ HSD_TObj* HSD_TObjLoadDesc(HSD_TObjDesc* td)
         HSD_ClassInfo* info;
 
         #if BUILD_TARGET_PC
-        /* PC port: guard against GCN-packed TObjDesc with garbage fields. */
-                if ((uintptr_t)td < 0x1000000ULL  /* GCN offsets are <1MB; valid pointers are >=16MB */) {
+        /* PC port: guard against GCN-packed TObjDesc with garbage fields --
+         * a raw GameCube pointer (0x80xxxxxx) or a bare file offset. The
+         * old form rejected everything below 16MB, which is where this
+         * binary's own static data lives: mobj.c's tobj_toon_desc came back
+         * NULL and Pokefloats' toon-shaded models crashed on it. */
+        if (!pc_ptr_sane(td) || (uintptr_t) td < 0x10000ULL) {
             port_guard_warn("tobj.c:290");
             return NULL;
         }

@@ -273,7 +273,12 @@ void ftColl_80076764(int arg0, enum_t arg1, Fighter_GObj* arg2,
         entry->unk_anim0 = arg3;
         entry->hurt1 = hurt;
         entry->pos = fp->cur_pos;
+#if BUILD_TARGET_PC
+        /* arg3 is a touch-line hit descriptor (see ftCo_Bury.c). */
+        entry->size_of_xC = ((lbColl_80008D30_arg1*) arg3)->damage;
+#else
         entry->size_of_xC = arg3->count;
+#endif
         ++dmg_log0_idx;
     } else {
         HSD_ASSERTREPORT(0xF9, 0, "damage log over %d!!\n",

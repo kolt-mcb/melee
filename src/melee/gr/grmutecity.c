@@ -71,6 +71,11 @@ static s32 grMc_8049F440[30];
  * the console. */
 #if BUILD_TARGET_PC
 #include <math.h>
+#if BUILD_TARGET_PC
+#include <stddef.h>
+#include <string.h>
+#include "port/pc_grconv.h"
+#endif
 #define MC_FMA(a, b, c) fmaf((a), (b), (c))
 #define MC_FMAD(a, b, c) fma((a), (b), (c))
 #else
@@ -418,7 +423,7 @@ char grMc_803E3434[0x48] = "grmutecity.c\0\0\0\0"
                            "not found car spline (L)\n";
 
 typedef struct grMc_UnkStruct {
-    int x0;
+    grMaterialArg x0;
     void* x4;
     DynamicsDesc* x8;
     DynamicsDesc* xC;
@@ -445,12 +450,66 @@ static s32 grMc_804D46CC = 0x1;
 
 void grMuteCity_801EFC68(bool arg) {}
 
+#if BUILD_TARGET_PC
+/* Mute City's yakumono_param, read out of GrMc.dat: four relocated pointers
+ * -- two colour-overlay scripts (x0 for the road, x4 for the background) and
+ * two nine-word touch-line hit descriptors (x8 for lines 0x31/0x35, xC for
+ * 0x32..0x34; they are typed DynamicsDesc* but ftCo_Bury reads them as
+ * lbColl_80008D30_arg1) -- then the car and lighting scalars from 0x2C. The
+ * scripts stay raw pointers into the file image, which is what the colour
+ * interpreter byteswaps on first use; the descriptors become host arrays. */
+static u32 pc_mc_be32(const u8* p)
+{
+    return ((u32) p[0] << 24) | ((u32) p[1] << 16) | ((u32) p[2] << 8) | p[3];
+}
+
+static grMc_UnkStruct* pc_mutecity_param(const void* raw)
+{
+    static const void* src;
+    static grMc_UnkStruct buf;
+    const u8* p = raw;
+    HSD_Archive* ar;
+    u32 o;
+
+    if (raw == NULL) {
+        return NULL;
+    }
+    if (raw == src) {
+        return &buf;
+    }
+    ar = pc_grconv_archive_of(raw);
+    if (ar == NULL) {
+        port_guard_warn("grmutecity.c:yakumono block outside every archive");
+        return NULL;
+    }
+    memset(&buf, 0, sizeof(buf));
+    buf.x0 = (grMaterialArg) pc_grconv_raw(ar, pc_mc_be32(p + 0x0), 4);
+    buf.x4 = (void*) pc_grconv_raw(ar, pc_mc_be32(p + 0x4), 4);
+    buf.x8 = (DynamicsDesc*) pc_grconv_u32_table(ar, pc_mc_be32(p + 0x8), 9);
+    buf.xC = (DynamicsDesc*) pc_grconv_u32_table(ar, pc_mc_be32(p + 0xC), 9);
+    if (buf.x8 == NULL || buf.xC == NULL) {
+        port_guard_warn("grmutecity.c:touch-line descriptor did not convert");
+    }
+    for (o = 0x2C; o <= 0x4C; o += 4) {
+        u32 w = pc_mc_be32(p + o);
+        f32 f;
+        memcpy(&f, &w, sizeof(f));
+        *(f32*) ((u8*) &buf + offsetof(grMc_UnkStruct, x2C) + (o - 0x2C)) = f;
+    }
+    src = raw;
+    return &buf;
+}
+#endif
+
 void grMuteCity_801EFC6C(void)
 {
-    grMc_804D69D0 = Ground_801C49F8();
 #if BUILD_TARGET_PC
-    /* Ground_801C49F8 yields NULL on PC -- see ground.c. Everything after this
-     * reads through the pointer. */
+    grMc_804D69D0 = pc_mutecity_param(Ground_801C49F8());
+#else
+    grMc_804D69D0 = Ground_801C49F8();
+#endif
+#if BUILD_TARGET_PC
+    /* Everything after this reads through the pointer. */
     if (grMc_804D69D0 == NULL) {
         port_guard_warn("grmutecity.c:no-params");
         return;
@@ -863,7 +922,7 @@ void grMuteCity_801F04B8(Ground_GObj* gobj)
             HSD_GObj* bg_gobj = Ground_801C2BA4(0x1D);
             if (bg_gobj != NULL) {
                 if (param != 0) {
-                    grMaterial_801C9604(bg_gobj, (s32) grMc_804D69D0->x4, 0);
+                    grMaterial_801C9604(bg_gobj, (grMaterialArg) grMc_804D69D0->x4, 0);
                     if (gp->gv.mutecity.x110 != NULL) {
                         HSD_LObjClearFlags(gp->gv.mutecity.x110, LOBJ_HIDDEN);
                     }
@@ -1609,15 +1668,15 @@ void grMuteCity_801F1A34(HSD_GObj* arg0, Ground_GObj* arg1)
                             HSD_JObjSetTranslate(new_jobj, &spawn_pos);
                         }
                     }
-                    if ((u32) car->x24 != 0) {
+                    if (car->x24 != 0) {
                         grMaterial_801C8CDC((HSD_GObj*) car->x24);
                         car->x24 = 0;
                     }
                     car->x22_flags.b0 = 1;
                 }
-            } else if (age > grMc_804D69D0->x2C && (u32) car->x28 == 0) {
+            } else if (age > grMc_804D69D0->x2C && car->x28 == 0) {
                 grMuteCity_801F2AB0(0x116, jobj);
-                car->x28 = (s32) jobj;
+                car->x28 = (intptr_t) jobj;
             }
         }
 
@@ -1675,7 +1734,7 @@ void grMuteCity_801F1A34(HSD_GObj* arg0, Ground_GObj* arg1)
                 -200.0f < car_pos.y && car_pos.y < 200.0f &&
                 -100.0f < car_pos.z && car_pos.z < 50.0f)
             {
-                if (!car->x22_flags.b0 && (u32) car->x24 == 0) {
+                if (!car->x22_flags.b0 && car->x24 == 0) {
                     Item_GObj* item_gobj = grMaterial_801C8CFC(
                         0, 2, car_gp, jobj, grMuteCity_801F1A0C,
                         ((grMc_SpeedFn*) (grMc_803E30B0 + 0xBBC))[car_idx],
@@ -1684,11 +1743,11 @@ void grMuteCity_801F1A34(HSD_GObj* arg0, Ground_GObj* arg1)
                         grMaterial_801C8DE0(item_gobj, 0.0f, 0.0f, -12.0f,
                                             0.0f, 0.0f, 2.0f, 15.0f);
                         grMaterial_801C8E08(item_gobj);
-                        car->x24 = (s32) item_gobj;
+                        car->x24 = (intptr_t) item_gobj;
                     }
                 }
             } else {
-                if ((u32) car->x24 != 0) {
+                if (car->x24 != 0) {
                     grMaterial_801C8CDC((HSD_GObj*) car->x24);
                     car->x24 = 0;
                 }
@@ -1701,9 +1760,9 @@ void grMuteCity_801F1A34(HSD_GObj* arg0, Ground_GObj* arg1)
                     grLib_801C98A0(jobj);
                     car->x28 = 0;
                 }
-            } else if ((u32) car->x28 == 0) {
+            } else if (car->x28 == 0) {
                 grMuteCity_801F2AB0(0x119, jobj);
-                car->x28 = (s32) jobj;
+                car->x28 = (intptr_t) jobj;
             }
         }
 

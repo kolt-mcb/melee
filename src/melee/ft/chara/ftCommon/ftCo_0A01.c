@@ -5742,6 +5742,23 @@ void ftCo_800AC5A0(Fighter* fp)
                 stick_y = 127.0F * +y;
                 stick_x = 127.0F * -x;
             }
+#if BUILD_TARGET_PC
+            /* MELEE_DIDBG=1: every operand of the CPU's knockback DI, as
+             * bits, to set against MELEE_CODE_BP=800AC700 (the fctiwz) with
+             * MELEE_CODE_BP_FPRS=1 on the console. Samus vs Samus on
+             * Pokemon Stadium parted here on match frame 545 by one stick
+             * unit (0x7E against 0x7F). */
+            if (getenv("MELEE_DIDBG") != NULL) {
+                extern u32 gm_8016AEDC(void);
+                union { f32 f; u32 u; } bx, by, bm, bxx, byy;
+                bx.f = kb_x; by.f = kb_y; bm.f = kb_mag; bxx.f = x; byy.f = y;
+                fprintf(stderr,
+                        "[DIDBG] gframe=%u p%d kb=(%08X,%08X) mag=%08X "
+                        "xy=(%08X,%08X) stick=(%d,%d)\n",
+                        (unsigned) gm_8016AEDC(), (int) fp->player_id, bx.u,
+                        by.u, bm.u, bxx.u, byy.u, (int) stick_y, (int) stick_x);
+            }
+#endif
         }
         ftCo_800B46B8(fp, CpuCmd_SetLstickX, stick_y);
         ftCo_800B46B8(fp, CpuCmd_SetLstickY, stick_x);

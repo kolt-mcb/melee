@@ -547,15 +547,31 @@ struct grSmashTaunt_GroundVars {
 
 struct grVenom_GroundVars {
     /* +00 gp+C4 */ union {
+#if BUILD_TARGET_PC
+        /* Holds a GObj pointer (grvenom.c stores `(u32) gobj` and reads it
+         * back as HSD_GObj*), so it has to be pointer-sized here. */
+        uintptr_t xC4;
+#else
         u32 xC4; ///< @todo Not a #u32, either
                  /// #grSmashTaunt_GroundVars or #HSD_GObj
+#endif
         struct {
             u8 b0 : 1;
         } xC4_flags;
     };
     /* +04 gp+C8 */ u32 xC8;
+#if BUILD_TARGET_PC
+    /* a joint stored with a (u32) cast, read back as HSD_JObj* */
+    /* +08 gp+CC */ uintptr_t xCC;
+#else
     /* +08 gp+CC */ u32 xCC;
+#endif
+#if BUILD_TARGET_PC
+    /* a joint stored with a (u32) cast, read back as HSD_JObj* */
+    /* +0C gp+D0 */ uintptr_t xD0;
+#else
     /* +0C gp+D0 */ u32 xD0;
+#endif
     /* +10 gp+D4 */ s32 xD4;
     /* +14 gp+D8 */ s32 xD8;
     /* +18 gp+DC */ union {
@@ -613,10 +629,20 @@ struct grVenom_GroundVars2 {
 };
 
 struct grArwing_GroundVars {
+#if BUILD_TARGET_PC
+    /* a GObj stored with a (u32) cast, read back as a pointer */
+    uintptr_t xC4;
+#else
     u32 xC4;
+#endif
     u32 xC8;
     u32 xCC;
+#if BUILD_TARGET_PC
+    /* a GObj stored with a (u32) cast, read back as a pointer */
+    uintptr_t xD0;
+#else
     u32 xD0;
+#endif
     s32 xD4;
     s32 xD8;
     f32 xDC;
@@ -954,7 +980,12 @@ struct grYorster_GroundVars {
 
 struct grZebes_GroundVars {
     /*  +0 gp+C4:0 */ u8 x0_b0 : 1;
+#if BUILD_TARGET_PC
+    /* a joint stored with a (u32) cast, read back as HSD_JObj* */
+    /*  +4 gp+C8 */ uintptr_t x4;
+#else
     /*  +4 gp+C8 */ u32 x4;
+#endif
     /*  +8 gp+CC */ s16 x8;
     /*  +A gp+CE */ s16 xA;
     /*  +C gp+D0 */ Vec3 xC;
@@ -996,7 +1027,12 @@ struct grZebes_GroundVars4 {
     /* +20 gp+E4 */ s16 xE4;
     /* +22 gp+E6 */ s16 xE6;
     /* +24 gp+E8 */ s32 xE8;
+#if BUILD_TARGET_PC
+    /* a zako generator stored with a (u32) cast, read back as a pointer */
+    /* +28 gp+EC */ uintptr_t xEC;
+#else
     /* +28 gp+EC */ u32 xEC;
+#endif
 };
 
 struct grZebes_GroundVars5 {
@@ -1017,8 +1053,15 @@ struct grZebes_GroundVars5 {
     /* +30 gp+F4 */ s16 xF4;
     /* +32 gp+F6 */ s16 xF6;
     /* +34 gp+F8 */ u32 xF8;
+#if BUILD_TARGET_PC
+    /* A zako generator and a material GObj, stored with a (u32) cast and
+     * read back as pointers (grzebes.c 364/366 vs 420/636). */
+    /* +38 gp+FC */ uintptr_t xFC;
+    /* +3C gp+100 */ uintptr_t x100;
+#else
     /* +38 gp+FC */ u32 xFC;
     /* +3C gp+100 */ u32 x100;
+#endif
 };
 
 struct grRCruise_Entry {
@@ -1516,7 +1559,12 @@ struct grCastle_GroundVars7 {
     /* +00 gp+C4 */ s16 xC4;
     /* +02 gp+C6 */ u8 pad_xC6[0xA];
     /* +0C gp+D0 */ HSD_GObj* xD0;
+#if BUILD_TARGET_PC
+    /* a joint stored with a (u32) cast, read back as HSD_JObj* */
+    /* +10 gp+D4 */ uintptr_t xD4;
+#else
     /* +10 gp+D4 */ u32 xD4;
+#endif
     /* +14 gp+D8 */ s32 xD8;
 };
 
@@ -1579,12 +1627,30 @@ struct grCastle_GroundVars11 {
     /* +06 gp+CA */ s16 xCA;
     /* +08 gp+CC */ u32 xCC;
     /* +0C gp+D0 */ u32 xD0;
+#if BUILD_TARGET_PC
+    /* a GObj stored with a (u32) cast, read back as HSD_GObj* */
+    /* +10 gp+D4 */ uintptr_t xD4;
+#else
     /* +10 gp+D4 */ u32 xD4;
+#endif
+#if BUILD_TARGET_PC
+    /* a CmSubject stored with a (u32) cast, read back as a pointer */
+    /* +14 gp+D8 */ uintptr_t xD8;
+#else
     /* +14 gp+D8 */ u32 xD8;
+#endif
 };
 
 struct grCastle_GroundVars12 {
+#if BUILD_TARGET_PC
+    /* The same three GObj pointers grCastle_GroundVars2 names xC4/xC8/xCC.
+     * As u32 they cover a pointer and a half here, and xD0 lands inside the
+     * third pointer: grCastle_801CF868 indexed the array and dereferenced
+     * half a pointer. */
+    /* +00 gp+C4 */ HSD_GObj* xC4[3];
+#else
     /* +00 gp+C4 */ u32 xC4[3];
+#endif
     /* +0C gp+D0 */ s16 xD0;
     /* +0E gp+D2 */ s16 xD2;
 };

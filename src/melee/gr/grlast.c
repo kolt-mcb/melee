@@ -4,6 +4,9 @@
 #include "lb/lb_00F9.h"
 
 #include <math.h>
+#if BUILD_TARGET_PC
+#include "port/pc_grconv.h"
+#endif
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/gobjgxlink.h>
 #include <sysdolphin/baselib/gobjproc.h>
@@ -100,7 +103,14 @@ Vec3 const grLast_803B848C = { 0.0f, 1.0f, 0.0f };
 Vec3 const grLast_803B8498 = { 0.0f, 0.0f, 1.0f };
 
 /// @todo yakumono struct
+#if BUILD_TARGET_PC
+/* Four colour-overlay scripts. The console's block holds relocated pointers;
+ * the port's layout converter hands back file offsets, resolved once below
+ * into raw pointers that pc_script_prepare byteswaps on first use. */
+static intptr_t* yakumono_param;
+#else
 static int* yakumono_param;
+#endif
 
 static void grLast_OnDemoInit(enum_t arg0)
 {
@@ -239,6 +249,18 @@ StageData grNLa_StageData = {
 static void grLast_OnInit(void)
 {
     yakumono_param = Ground_GetYakumonoParam();
+#if BUILD_TARGET_PC
+    {
+        static intptr_t resolved[4];
+        const u32* off = (const u32*) yakumono_param;
+        int i;
+        for (i = 0; i < 4; i++) {
+            resolved[i] =
+                off != NULL ? (intptr_t) pc_grconv_stage_script(off[i]) : 0;
+        }
+        yakumono_param = resolved;
+    }
+#endif
     stage_info.unk8C.b4 = 1;
     stage_info.unk8C.b5 = 1;
     grLast_8021A7F4(0);

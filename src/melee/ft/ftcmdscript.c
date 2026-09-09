@@ -8,6 +8,15 @@
 #include <melee/ft/fighter.h>
 #include <melee/ft/types.h>
 #include <melee/lb/lb_00CE.h>
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#if BUILD_TARGET_PC
+#include <stdlib.h>
+#if BUILD_TARGET_PC
+#include <string.h>
+#endif
+#endif
+#endif
 
 void ftCo_800B3E04(Fighter* fp)
 {
@@ -351,6 +360,32 @@ void ftCo_800B463C(Fighter* fp, u8 cmd)
 
 void ftCo_800B46B8(Fighter* fp, u8 cmd, u8 arg)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_CPUCMDAT=<lo>-<hi>: who wrote each two-byte CPU command on those
+     * match frames, as the caller's return address for addr2line. The
+     * console's counterpart is MELEE_CODE_BP=800B46B8, whose hits print lr.
+     * A CPU that picks a different stick on one frame with every traced
+     * field equal is a decision made somewhere in ftcpuattack.c, and the
+     * command stream alone does not say where. */
+    {
+        static int lo = -2, hi;
+        if (lo == -2) {
+            const char* e = getenv("MELEE_CPUCMDAT");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            lo = e ? atoi(e) : -1;
+            hi = dash ? atoi(dash + 1) : lo;
+        }
+        if (lo >= 0) {
+            extern u32 gm_8016AEDC(void);
+            int f = (int) gm_8016AEDC();
+            if (f >= lo && f <= hi) {
+                fprintf(stderr, "[CPUCMD-AT] gframe=%d p%d cmd=%u arg=%u from=%p\n",
+                        f, (int) fp->player_id, (unsigned) cmd, (unsigned) arg,
+                        __builtin_return_address(0));
+            }
+        }
+    }
+#endif
     ftCo_800B463C(fp, cmd);
     ftCo_800B463C(fp, arg);
 }
