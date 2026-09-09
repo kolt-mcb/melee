@@ -43,6 +43,28 @@ The method that got here -- find the first differing frame, compare ordered
 RNG draws, walk back to the caller -- costs a day per bug and does not scale
 to 3,700 sites. Everything below is about replacing it with enumeration.
 
+**2026-09-08, later: the harness was measuring itself.** Three faults in the
+comparison, found through the new `p_aihash` column, account for the whole
+"drift" class as far as it has been re-measured:
+
+- Dolphin's frame-end hook is the GPU's frame boundary, which in single-core
+  mode lands wherever the FIFO was drained -- before or after the fighters'
+  update. On Pokémon Stadium it moved at match frame 192 and every later line
+  paired one frame's counter with the previous frame's state. The console
+  is now sampled from a breakpoint at `HSD_PerfSetCPUTime`, the call right
+  after the sim, where the port samples. PStadium: identical for 600 frames
+  (was "diverged 193").
+- The console makes its two fighters on two loop iterations, the port on one,
+  so under per-iteration reseeding the second fighter's CPU cooldown draw
+  started from a different value. That was "the CPU attacks six frames
+  early". Both sides now reseed at `Fighter_Create` too.
+- Clearing the JIT cache from that hook could free the code being executed;
+  every probe's clear is now a CoreTiming event. Earlier "ref stopped"
+  results were this.
+
+Every drift-class number above and in Phase 6 predates this and is being
+re-run. The frame-1 stage class is unaffected (those are real).
+
 ## Phase 0 -- Guardrails (days)
 
 Cheap, and everything after depends on them.
@@ -124,7 +146,7 @@ prints the four resolved spawn positions to compare against the file.
 
 | stage | shape | cause | status |
 |---|---|---|---|
-| Fountain of Dreams | spawn right, lands wrong | `on_init` faults past the star joint; a callback from unconverted data | star joint fixed; `MELEE_IZUMI_INIT=1` to work on the rest |
+| Fountain of Dreams | spawn right, lands wrong | `on_init` faults past the star joint; a callback from unconverted data | fixed by reading: `IzumiUnkCC` was a GCN-offset overlay that wrote the reflection GObj into `xC_callback`; the reflection image desc was raw file bytes, now the converter's copy (`grDatFiles_LookupImageDesc`). `on_init` on by default; unverified until the next build |
 | Mute City, Kongo Jungle 64 | no spawn points at all | `Ground_801C49F8` returns NULL, whole stage init skipped | needs each stage's real param block; `yakumono_param` is ruled out for Mute City on structure |
 | Castle, Kongo, Icicle Mtn, Zebes | spawn right, lands wrong | geometry the stage's init sets up is missing | untraced; same family as FoD |
 | Garden, Final Destination | `rng_draws` on frame 1 | not yet looked at | -- |
