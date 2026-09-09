@@ -87,11 +87,18 @@ extern u32 seed;
  * the xFC[30] table, until their layouts are settled. Floats go in by bit
  * pattern; single bytes as their value; the s8 stick quartet and the
  * command buffer as big-endian words, which is how the console reads them. */
+/* MELEE_AIDUMP=<gframe> prints every word the hash consumes on that match
+ * frame, in order, so a disagreeing hash can be read word by word against
+ * the console's MELEE_AIDUMP in Core.cpp. */
+static int ai_dump_words;
+static int ai_dump_n;
 static u32 ai_hash(const struct Fighter_x1A88_t* a)
 {
     u32 h = 2166136261u;
     u32 i;
-#define AI_H(w) (h = (h ^ (u32) (w)) * 16777619u)
+#define AI_H(w) do { u32 w_ = (u32) (w); \
+        if (ai_dump_words) fprintf(stderr, "[AIDUMP] #%d %08X\n", ai_dump_n++, w_); \
+        h = (h ^ w_) * 16777619u; } while (0)
 #define AI_HF(f) do { union { f32 f_; u32 u_; } b_; b_.f_ = (f); AI_H(b_.u_); } while (0)
     AI_H(a->x0);
     AI_H(((u32) (u8) a->lstickX << 24) | ((u32) (u8) a->lstickY << 16) |
@@ -102,21 +109,44 @@ static u32 ai_hash(const struct Fighter_x1A88_t* a)
     AI_H(a->x28); AI_H(a->x2C); AI_H(a->x30); AI_H(a->x34);
     AI_HF(a->x38); AI_HF(a->x3C); AI_HF(a->x40);
     AI_H(a->x50);
-    AI_HF(a->x54.x); AI_HF(a->x54.y); AI_HF(a->x5C); AI_H(a->x60);
+    AI_HF(a->x54.x); AI_HF(a->x54.y); AI_H(a->x60);
     AI_HF(a->x64.x); AI_HF(a->x64.y); AI_HF(a->x6C.x); AI_HF(a->x6C.y);
     AI_HF(a->x74.x); AI_HF(a->x74.y);
     AI_H(a->x7C); AI_H(a->x80); AI_H(a->x84); AI_H(a->x88); AI_H(a->x8C);
     AI_H(a->x90); AI_H(a->x94);
     AI_HF(a->x98.x); AI_HF(a->x98.y); AI_HF(a->x98.z);
     AI_H(a->xA4);
-    for (i = 0; i < 8; i++) { AI_H(a->xA8_array[i]); }
+    /* The two move queues and the command buffer are only ever read up to
+     * their fill (the counts at xC8/xEC and write_pos). Beyond that the
+     * console holds whatever the heap held before the fighter was allocated
+     * -- the words differ between the two player slots of one boot -- where
+     * the port's allocator hands out zeroes. Hashing the unread tail would
+     * make the column disagree on match frame 1 of every cell, so only the
+     * live part goes in, plus the counts themselves. x5C is skipped for the
+     * same reason: uninitialised on the console at frame 1. */
     AI_H(a->xC8);
-    for (i = 0; i < 8; i++) { AI_H(a->xCC_array[i]); }
+    for (i = 0; i < 8 && i < a->xC8; i++) { AI_H(a->xA8_array[i]); }
     AI_H(a->xEC);
+    for (i = 0; i < 8 && i < a->xEC; i++) { AI_H(a->xCC_array[i]); }
     AI_H(a->command_duration);
-    for (i = 0; i < 0x100; i += 4) {
-        AI_H(((u32) (u8) a->buffer[i] << 24) | ((u32) (u8) a->buffer[i + 1] << 16) |
-             ((u32) (u8) a->buffer[i + 2] << 8) | (u32) (u8) a->buffer[i + 3]);
+    {
+        u32 fill = 0;
+        if (a->write_pos != NULL && a->write_pos >= a->buffer) {
+            fill = (u32) (a->write_pos - a->buffer);
+        }
+        if (fill > 0x100) {
+            fill = 0x100;
+        }
+        AI_H(fill);
+        for (i = 0; i + 4 <= fill; i += 4) {
+            AI_H(((u32) (u8) a->buffer[i] << 24) |
+                 ((u32) (u8) a->buffer[i + 1] << 16) |
+                 ((u32) (u8) a->buffer[i + 2] << 8) |
+                 (u32) (u8) a->buffer[i + 3]);
+        }
+        for (; i < fill; i++) {
+            AI_H((u8) a->buffer[i]);
+        }
     }
     AI_HF(a->x558); AI_HF(a->x55C); AI_HF(a->x560); AI_HF(a->x564);
     AI_HF(a->x568); AI_HF(a->x56C); AI_HF(a->x570);
@@ -124,6 +154,22 @@ static u32 ai_hash(const struct Fighter_x1A88_t* a)
 #undef AI_H
 #undef AI_HF
     return h;
+}
+
+void pc_trace_seed_fighter_create(void)
+{
+    extern u32 gm_8016AEDC(void);
+    extern u8 gm_GetCurrentSceneIndex(void);
+    const char* want = getenv("MELEE_SEED");
+    if (want == NULL || getenv("MELEE_SEED_EACH_LOAD") == NULL) {
+        return;
+    }
+    if (gm_8016AEDC() != 0 || ((int) gm_GetCurrentSceneIndex() != 2 &&
+                               (int) gm_GetCurrentSceneIndex() != 3))
+    {
+        return;
+    }
+    seed = (u32) strtoul(want, NULL, 16);
 }
 
 static int trace_f32(char* buf, int cap, f32 v)
@@ -1410,8 +1456,22 @@ void pc_trace_frame(int frame)
                        fp->coll_data.ecb.bottom.x);
         n += trace_f32(line + n, sizeof(line) - n,
                        fp->coll_data.ecb.bottom.y);
+        {
+            static int dump_at = -2;
+            if (dump_at == -2) {
+                const char* e = getenv("MELEE_AIDUMP");
+                dump_at = e ? atoi(e) : -1;
+            }
+            ai_dump_words = dump_at >= 0 && (int) gm_8016AEDC() == dump_at;
+            if (ai_dump_words) {
+                fprintf(stderr, "[AIDUMP] gframe=%u slot=%d\n",
+                        (unsigned) gm_8016AEDC(), i);
+                ai_dump_n = 0;
+            }
+        }
         n += snprintf(line + n, sizeof(line) - n, " %08X",
                       (unsigned) ai_hash(&fp->x1A88));
+        ai_dump_words = 0;
     }
 
     if (out != NULL) {
