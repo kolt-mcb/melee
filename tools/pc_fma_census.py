@@ -276,6 +276,16 @@ def priority(path):
     return len(PRIORITY)
 
 
+# A console function whose port definition has a different name: the split
+# gives these stage procs a local name (stageGObj1_GObjProc) that several
+# stage files share, and the port defines them by address. Keyed by (file,
+# console name); the sites were checked by hand against the port's code.
+ALIASES = {
+    ("melee/gr/grpura.c", "stageGObj1_GObjProc"): "grPura_802120E0",
+    ("melee/gr/groldkongo.c", "stageGObj2_GObjProc"): "grOldKongo_802100FC",
+}
+
+
 def census():
     syms = symbols()
     files = splits()
@@ -296,8 +306,9 @@ def census():
         if path not in port_cache:
             port_cache[path] = port_sites(os.path.join(SRC, path))
         counts, own, uses = port_cache[path]
-        have = counts.get(fn, 0)
-        via = sum(own.get(callee, 0) for callee in uses.get(fn, ()))
+        pfn = ALIASES.get((path, fn), fn)
+        have = counts.get(pfn, 0)
+        via = sum(own.get(callee, 0) for callee in uses.get(pfn, ()))
         if via:
             have = min(have + via, max(have, len(lst)))
         rows.append({"file": path, "function": fn,
