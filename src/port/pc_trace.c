@@ -161,15 +161,36 @@ void pc_trace_seed_fighter_create(void)
     extern u32 gm_8016AEDC(void);
     extern u8 gm_GetCurrentSceneIndex(void);
     const char* want = getenv("MELEE_SEED");
-    if (want == NULL || getenv("MELEE_SEED_EACH_LOAD") == NULL) {
-        return;
-    }
+    const char* cpu = getenv("MELEE_FORCE_CPU");
     if (gm_8016AEDC() != 0 || ((int) gm_GetCurrentSceneIndex() != 2 &&
                                (int) gm_GetCurrentSceneIndex() != 3))
     {
         return;
     }
-    seed = (u32) strtoul(want, NULL, 16);
+    /* MELEE_FORCE_CPU's level and type go into the slots here as well as on
+     * every traced frame: Fighter_Create copies them into the AI struct
+     * (ftCo_800A101C) and computes the ranged-attack cooldown from the level
+     * (ftCo_800B9704), and it runs inside the loop iteration that enters the
+     * match scene -- after the scene's own init has refilled the slots from
+     * the menu settings and before any traced frame of the scene. Without
+     * this the AI is built at level 1 on whichever side's hook came too
+     * late. The Dolphin build makes the same writes from its Fighter_Create
+     * breakpoint. */
+    if (cpu != NULL) {
+        int lvl[2] = { 0, 0 };
+        int slot;
+        sscanf(cpu, "%d,%d", &lvl[0], &lvl[1]);
+        for (slot = 0; slot < 2; slot++) {
+            StaticPlayer* sp = Player_GetPtrForSlot(slot);
+            if (lvl[slot] > 0 && sp != NULL) {
+                sp->cpu_level = (u8) lvl[slot];
+                sp->cpu_type = 4;
+            }
+        }
+    }
+    if (want != NULL && getenv("MELEE_SEED_EACH_LOAD") != NULL) {
+        seed = (u32) strtoul(want, NULL, 16);
+    }
 }
 
 static int trace_f32(char* buf, int cap, f32 v)

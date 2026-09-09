@@ -294,8 +294,12 @@ HSD_GObj* grIzumi_801CBCE8(int gobj_id)
              * match and this side draws none, and every character parts from
              * the console on match frame 1 there.
              *
-             * MELEE_IZUMI_INIT=1 turns it on to work on it. */
-            if (getenv("MELEE_IZUMI_INIT") != NULL) {
+             * Found 2026-09-08 by reading: the IzumiUnkCC overlay in
+             * grIzumi_801CBE64 wrote the reflection GObj into xC_callback
+             * (see there), and the reflection's image desc was the raw file
+             * bytes (see grIzumi_801CCD98). Both fixed; on by default now.
+             * MELEE_IZUMI_NO_INIT=1 turns it off for a bisect. */
+            if (getenv("MELEE_IZUMI_NO_INIT") == NULL) {
                 callbacks->on_init(gobj);
             }
 #else
@@ -392,8 +396,18 @@ void grIzumi_801CBE64(Ground_GObj* gobj)
         grLib_801C96F8(0x7536, 0x1E, &y);
     }
     gp->u.izumi.xCC = grIzumi_801CBCE8(2);
+#if BUILD_TARGET_PC
+    /* IzumiUnkCC is a GameCube-offset overlay of Ground: pad[0x18] then the
+     * pointer, which is Ground's x18 on the console. With 8-byte pointers
+     * Ground's x18 sits at 0x30 and offset 0x18 is xC_callback -- so this
+     * line stored the reflection GObj in a callback slot, and the dispatch
+     * loop later called a heap address. That was the fault that kept this
+     * file's on_init off. Write the field by name. */
+    GET_GROUND(gp->u.izumi.xCC)->x18 = gp->u.izumi.xC8;
+#else
     ((IzumiUnkCC*) HSD_GObjGetUserData(gp->u.izumi.xCC))->x18 =
         gp->u.izumi.xC8;
+#endif
     jobj = Ground_801C3FA4(gobj, 4);
     { // this looks like inlines, but there's a lot of small differences
         u8 _[4] = { 0 };
@@ -833,6 +847,22 @@ HSD_GObj* grIzumi_801CCD98(void)
     dat = grDatFiles_801C6330(3);
     refl->image = HSD_ArchiveGetPublicAddress(
         dat->unk0, "GrdIzumi_cd_wt_GrdIzumiDummy1_1_image_desc");
+#if BUILD_TARGET_PC
+    /* A public address is the raw big-endian desc in the file image. The
+     * TObj that draws the reflection uses the host copy the archive
+     * converter made from those bytes, and grIzumi_801CD090 finds that TObj
+     * by pointer equality, so take the copy. Zeroing and resizing the raw
+     * bytes instead matched no TObj ("not found tobj") and left the render
+     * callback with a NULL texture. */
+    if (refl->image != NULL) {
+        HSD_ImageDesc* host = grDatFiles_LookupImageDesc(refl->image);
+        if (host == NULL) {
+            OSReport("grIzumi_801CCD98: reflection image desc %p has no "
+                     "converted copy\n", (void*) refl->image);
+        }
+        refl->image = host;
+    }
+#endif
     if (refl->image != NULL) {
         memzero(refl->image, sizeof(HSD_ImageDesc));
         lb_800121FC(refl->image, 80, 60, 4, 2001);

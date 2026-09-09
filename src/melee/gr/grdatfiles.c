@@ -1143,6 +1143,33 @@ static void** grdat_conv_anim_set_array(u32 arrOff, u8* dataBase,
 #define GRDAT_MAX_POBJPENDING 16384
 static struct { u32 offset; HSD_Joint* x64; } g_grdat_jointmap[GRDAT_MAX_JOINTMAP];
 static int g_grdat_jointmap_n = 0;
+
+/* PC port: every HSD_ImageDesc converted from the current archive, keyed by
+ * the raw bytes it came from. On the console a texture object's imagedesc IS
+ * the file's image desc, so a stage can take one by public name and find the
+ * TObj that uses it by pointer equality (grIzumi_801CCD98 and _801CD090, the
+ * water reflection). Converting a fresh host copy per TObj broke that in two
+ * ways: the public address matched no TObj, and TObjs sharing one desc on
+ * the console had separate copies here. One conversion per raw desc keeps
+ * both. Reset with the joint map, since a raw address is only unique within
+ * one loaded archive. */
+#define GRDAT_MAX_IMGMAP 4096
+static struct { const void* raw; struct HSD_ImageDesc* host; } g_grdat_imgmap[GRDAT_MAX_IMGMAP];
+static int g_grdat_imgmap_n = 0;
+
+struct HSD_ImageDesc* grDatFiles_LookupImageDesc(const void* raw)
+{
+    int i;
+    if (raw == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < g_grdat_imgmap_n; i++) {
+        if (g_grdat_imgmap[i].raw == raw) {
+            return g_grdat_imgmap[i].host;
+        }
+    }
+    return NULL;
+}
 static struct { HSD_PObjDesc* pobj; u32 offset; } g_grdat_pobjpending[GRDAT_MAX_POBJPENDING];
 static int g_grdat_pobjpending_n = 0;
 /* PC port: the joint whose DObjDesc chain is currently being converted. POBJ_SKIN
@@ -1410,6 +1437,7 @@ void grDatFiles_ResolvePObjJoints(void)
 void grDatFiles_ResetJointMap(void)
 {
     g_grdat_jointmap_n = 0;
+    g_grdat_imgmap_n = 0;
     g_grdat_pobjpending_n = 0;
     g_grdat_envpending_n = 0;
 }
@@ -2012,6 +2040,9 @@ static struct HSD_ImageDesc* grDatFiles_ConvertImageDescGCNtoX64(const u8* gcnIm
 
     if (gcnImgPtr == NULL) return NULL;
 
+    x64Img = grDatFiles_LookupImageDesc(gcnImgPtr);
+    if (x64Img != NULL) return x64Img;
+
     gcnImg = (const struct HSD_ImageDesc_gcn*)gcnImgPtr;
     x64Img = lbHeap_80015BD0(0, sizeof(struct HSD_ImageDesc));
     if (x64Img == NULL) return NULL;
@@ -2048,6 +2079,11 @@ static struct HSD_ImageDesc* grDatFiles_ConvertImageDescGCNtoX64(const u8* gcnIm
     raw = be32_swap(gcnImg->maxLOD);
     x64Img->maxLOD = *(f32*)&raw;
 
+    if (g_grdat_imgmap_n < GRDAT_MAX_IMGMAP) {
+        g_grdat_imgmap[g_grdat_imgmap_n].raw = gcnImgPtr;
+        g_grdat_imgmap[g_grdat_imgmap_n].host = x64Img;
+        g_grdat_imgmap_n++;
+    }
     return x64Img;
 }
 
