@@ -57,7 +57,8 @@ import pc_suite
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
-DOLPHIN = "/home/grunt/Dolphin-emu/build/Binaries/dolphin-emu-nogui"
+DOLPHIN = os.environ.get("MELEE_DOLPHIN_BIN",
+                         "/home/grunt/Dolphin-emu/build/Binaries/dolphin-emu-nogui")
 ISO = "/home/grunt/brashmos/Super Smash Bros. Melee (USA) (En,Ja) (v1.02).iso"
 PIPE = os.path.expanduser("~/.local/share/dolphin-emu/Pipes/brash")
 ROUTES = os.path.join(REPO, "tests", "pc", "routes")
@@ -308,6 +309,13 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
     TILE_LEFT = (left, 40)
     TILE_RIGHT = (left + w + gap, 40)
     """Start Dolphin (and usually the port), both pointed at the barrier."""
+    # The console's trace line is taken from a breakpoint right after its
+    # sim (HSD_PerfSetCPUTime), the same moment the port samples at, rather
+    # than from Dolphin's frame end: that is the GPU's frame boundary and in
+    # single-core mode it drifts across the sim when a stage's GPU load
+    # changes (Pokemon Stadium, match frame 192), after which every line
+    # pairs one frame's counter with the previous frame's state.
+    os.environ.setdefault("MELEE_TRACE_AT_PC", "8037E23C")
     ref_env = dict(os.environ, MELEE_SYNC=SOCK)
     for kv in case["ref_env"]:
         k, _, v = kv.partition("=")
@@ -340,7 +348,12 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
     # default lands on a whole day, so the seconds field is zero and the title
     # draws nothing on either side.
     if (os.environ.get("MELEE_RNG_WATCH") or os.environ.get("MELEE_CODE_BP")
-            or os.environ.get("MELEE_FTWATCH")):
+            or os.environ.get("MELEE_FTWATCH")
+            or os.environ.get("MELEE_SEED_EACH_LOAD")
+            or os.environ.get("MELEE_TRACE_AT_PC")):
+        # MELEE_SEED_EACH_LOAD is on the list because its per-fighter reseed
+        # is a breakpoint on Fighter_Create, and a breakpoint is only reached
+        # when the JIT was told to check for them.
         # The seed watchpoint logs through Dolphin's MEMMAP channel, and the
         # JIT only emits memcheck code when debugging is on. The same is true
         # of a code breakpoint: Jit64 emits the check only under

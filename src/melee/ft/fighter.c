@@ -116,6 +116,9 @@
 #include <baselib/mtx.h>
 #include <baselib/random.h>
 #include <MSL/math.h>
+#if BUILD_TARGET_PC
+#include "port/pc_trace.h"
+#endif
 
 extern struct UnkCostumeList CostumeListsForeachCharacter[FTKIND_MAX];
 
@@ -1522,6 +1525,7 @@ Fighter_GObj* Fighter_Create(struct plAllocInfo* input)
     HSD_JObj* jobj;
 
 #if BUILD_TARGET_PC
+    pc_trace_seed_fighter_create();
     /* PC port: fighter init walks real DAT data that is not converted yet
      * (raw big-endian PlMr/PlCo) — creating fighters corrupts memory.
      * Default to a stage-only scene; MELEE_FIGHTERS=1 re-enables creation
