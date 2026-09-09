@@ -361,9 +361,9 @@ void grZebes_801D8644(HSD_GObj* gobj)
     mat_gobj2 =
         grMaterial_801C8D44(0, 0, gp, &pos, 0, NULL, fn_801DAC90, NULL);
     grMaterial_801C8E08(mat_gobj2);
-    gp->gv.zebes5.x100 = (u32) mat_gobj2;
+    gp->gv.zebes5.x100 = (uintptr_t) mat_gobj2;
     grZebes_801DC9DC((s32) gobj);
-    gp->gv.zebes5.xFC = (u32) grZakoGenerator_801CA394(
+    gp->gv.zebes5.xFC = (uintptr_t) grZakoGenerator_801CA394(
         (UNK_T) &grZe_803E1B90, 0xA, (UNK_T) grZebes_801DCB64, 1.0f);
     mpJointSetB10(0);
     Ground_801C2FE0((Ground_GObj*) gobj);
@@ -679,7 +679,7 @@ void grZebes_801D9100(HSD_GObj* gobj)
     gp->gv.zebes4.xE0 = PC_GVPTR(mat_gobj);
     gp->gv.zebes4.xE4 = new_var;
     gp->gv.zebes4.xE8 = 0;
-    gp->gv.zebes4.xEC = (u32) grZakoGenerator_801CA394(
+    gp->gv.zebes4.xEC = (uintptr_t) grZakoGenerator_801CA394(
         (void*) &grZe_803E1C80, 4, (void*) grZebes_801DCBB0, 1.0f);
     Ground_801C2FE0(new_var2);
 }
@@ -764,7 +764,7 @@ void grZebes_801D9508(Ground_GObj* gobj)
     HSD_GObj* map_a_gobj = Ground_801C2BA4(6);
     PAD_STACK(0x10);
     HSD_ASSERT(909, map_a_gobj);
-    gp->gv.zebes.x4 = (u32) Ground_801C3FA4(map_a_gobj, 14);
+    gp->gv.zebes.x4 = (uintptr_t) Ground_801C3FA4(map_a_gobj, 14);
     gp->gv.zebes.x8 = 1;
     gp->gv.zebes.xA = (s16) (HSD_Randi(600) + 3000);
     gp->gv.zebes.x0_b0 = true;

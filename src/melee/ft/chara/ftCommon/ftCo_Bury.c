@@ -192,7 +192,16 @@ void ftCo_800C0B20(Fighter_GObj* gobj)
         if (unk_anim != NULL) {
             HitCapsule hit;
             Fighter* fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+            /* The stage's touch-line result is typed DynamicsDesc but is a
+             * hit descriptor (lbColl_80008D30_arg1, as the cast below says):
+             * `count` is its damage word at +4, which sits at +8 once data
+             * is an 8-byte pointer. Read the descriptor as itself. */
+            float f = ftColl_800765F0(
+                fp, NULL, ((lbColl_80008D30_arg1*) unk_anim)->damage);
+#else
             float f = ftColl_800765F0(fp, NULL, unk_anim->count);
+#endif
             fp->bury_timer_1 = p_ftCommonData->bury_timer_unk1;
             if (ftColl_80076640(fp, &f)) {
                 FighterHurtCapsule* hurt = &fp->hurt_capsules[0];

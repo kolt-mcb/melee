@@ -17,6 +17,9 @@
 #include <__mem.h>
 #include <stdarg.h>
 #include <MetroTRK/intrinsics.h>
+#if BUILD_TARGET_PC
+#include <math.h>
+#endif
 
 HSD_ObjAllocData aobj_alloc_data;
 
@@ -157,7 +160,24 @@ void HSD_AObjInterpretAnim(HSD_AObj* aobj, void* obj,
             HSD_FObjStopAnimAll(aobj->fobj, obj, update_func, rate);
             y = aobj->end_frame - aobj->rewind_frame;
             x = aobj->curr_frame - aobj->rewind_frame;
+#if BUILD_TARGET_PC
+            /* 80364340: the console's fmod is a single-precision divide,
+             * truncated to an integer, then one fnmsubs -- a - b*q rounded
+             * once. libc's fmod is the exact remainder, which differs from
+             * that in the last bit whenever b*q is not representable, and
+             * this is the frame every looping animation rewinds to. */
+            {
+                f32 q;
+                if (__builtin_fabsf(y) > __builtin_fabsf(x)) {
+                    aobj->curr_frame = x + aobj->rewind_frame;
+                } else {
+                    q = (f32) (long long) (x / y);
+                    aobj->curr_frame = fmaf(-y, q, x) + aobj->rewind_frame;
+                }
+            }
+#else
             aobj->curr_frame = fmod(x, y) + aobj->rewind_frame;
+#endif
             HSD_FObjReqAnimAll(aobj->fobj, aobj->curr_frame);
         } else {
             aobj->curr_frame = aobj->end_frame;

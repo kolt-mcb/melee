@@ -33,6 +33,7 @@
 #include <baselib/wobj.h>
 #include <baselib/psstructs.h>
 #include <dolphin/gx.h>
+#include <baselib/spline.h>
 
 /// @todo Merge declaration and definition
 /* static */ extern GroundParam grDatFiles_803E0848;
@@ -1442,6 +1443,80 @@ void grDatFiles_ResetJointMap(void)
     g_grdat_envpending_n = 0;
 }
 
+/* GCN HSD_Spline: u8 type; pad; s16 numcv; f32 tension; Vec3* cv;
+ * f32 totalLength; f32* segLength; f32 (*segPoly)[5] -- 0x18 bytes, three
+ * relocated pointers. cv holds numcv points for the cardinal/linear kinds
+ * and 3*(numcv-1)+1 for a Bezier (type 1, read as cv[idx*3]); segLength
+ * numcv entries (splArcLengthGetParameter reads [idx+1]) and segPoly
+ * numcv-1 rows of five. All big-endian floats. */
+static f32 grdat_be_f32(const u8* p)
+{
+    u32 w = ((u32) p[0] << 24) | ((u32) p[1] << 16) | ((u32) p[2] << 8) | p[3];
+    f32 f;
+    memcpy(&f, &w, sizeof(f));
+    return f;
+}
+
+static HSD_Spline* grDatFiles_ConvertSplineGCNtoX64(const u8* gcn, u8* dataBase)
+{
+    HSD_Spline* sp;
+    u32 off, n, i;
+    s16 numcv;
+
+    if (gcn == NULL) {
+        return NULL;
+    }
+    numcv = (s16) (((u16) gcn[2] << 8) | gcn[3]);
+    if (numcv <= 0 || numcv > 4096) {
+        fprintf(stderr, "[GRDAT] spline: numcv %d rejected\n", (int) numcv);
+        return NULL;
+    }
+    sp = lbHeap_80015BD0(0, sizeof(HSD_Spline));
+    if (sp == NULL) {
+        return NULL;
+    }
+    memset(sp, 0, sizeof(*sp));
+    sp->type = gcn[0];
+    sp->numcv = numcv;
+    sp->tension = grdat_be_f32(gcn + 4);
+    sp->totalLength = grdat_be_f32(gcn + 0xC);
+
+    off = be32_swap(*(const u32*) (gcn + 8));
+    n = (sp->type == 1) ? 3u * (u32) (numcv - 1) + 1u : (u32) numcv;
+    if (off != 0 && off < PC_ARCHIVE_MAX_OFFSET) {
+        Vec3* cv = lbHeap_80015BD0(0, n * sizeof(Vec3));
+        if (cv != NULL) {
+            for (i = 0; i < n; i++) {
+                cv[i].x = grdat_be_f32(dataBase + off + i * 12);
+                cv[i].y = grdat_be_f32(dataBase + off + i * 12 + 4);
+                cv[i].z = grdat_be_f32(dataBase + off + i * 12 + 8);
+            }
+        }
+        sp->cv = cv;
+    }
+    off = be32_swap(*(const u32*) (gcn + 0x10));
+    if (off != 0 && off < PC_ARCHIVE_MAX_OFFSET) {
+        f32* seg = lbHeap_80015BD0(0, (u32) numcv * sizeof(f32));
+        if (seg != NULL) {
+            for (i = 0; i < (u32) numcv; i++) {
+                seg[i] = grdat_be_f32(dataBase + off + i * 4);
+            }
+        }
+        sp->segLength = seg;
+    }
+    off = be32_swap(*(const u32*) (gcn + 0x14));
+    if (off != 0 && off < PC_ARCHIVE_MAX_OFFSET) {
+        f32 (*poly)[5] = lbHeap_80015BD0(0, (u32) numcv * sizeof(f32[5]));
+        if (poly != NULL) {
+            for (i = 0; i < (u32) numcv * 5; i++) {
+                (&poly[0][0])[i] = grdat_be_f32(dataBase + off + i * 4);
+            }
+        }
+        sp->segPoly = poly;
+    }
+    return sp;
+}
+
 HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         u8* dataBase, u32 visited_count, u32* visited)
 {
@@ -1521,7 +1596,16 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
      * Yoshi's Story have exactly one JOBJ_SPLINE joint each; no other stage
      * that loads has any, which is why only those two crashed. The spline
      * itself is not converted yet, so the joint simply gets no mesh. */
-    if ((x64Joint->flags & (JOBJ_SPLINE | JOBJ_PTCL)) != 0) {
+    if ((x64Joint->flags & JOBJ_SPLINE) != 0) {
+        /* A spline joint: the payload is an HSD_Spline. Mute City's cars
+         * ride one (grMuteCity_801EFDF8 asserts on it and lbShadow_8000E9F0
+         * walks its control points), and Kongo Jungle and Yoshi's Story
+         * carry one each. */
+        x64Joint->u.spline =
+            (val != 0 && val < PC_ARCHIVE_MAX_OFFSET)
+                ? grDatFiles_ConvertSplineGCNtoX64(dataBase + val, dataBase)
+                : NULL;
+    } else if ((x64Joint->flags & JOBJ_PTCL) != 0) {
         x64Joint->u.dobjdesc = NULL;
     } else if (val != 0 && val < 0x80000000U) {
         /* PC port: mark this joint as current so its POBJ_SKIN PObjDescs (which

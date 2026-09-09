@@ -8,6 +8,22 @@
 #include <math_ppc.h>
 #include <trigf.h>
 
+/* Retail builds the four combined terms of a rotation matrix with fmsubs and
+ * fmadds -- see 8037A388 and 8037A38C in HSD_MtxSRT -- which round once for a
+ * multiply and a subtract or add together. GCC on x86-64 rounds twice, and a
+ * ULP here is a ULP in a joint's world matrix, which grows down the skeleton:
+ * measured, one ULP four joints above a fighter's ECB became a dozen by the
+ * time it reached the box the ground is tested against. fmaf is fmadds; a
+ * negated addend is fmsubs. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define MTX_FMA(a, b, c) fmaf((a), (b), (c))
+#define MTX_FMS(a, b, c) fmaf((a), (b), -(c))
+#else
+#define MTX_FMA(a, b, c) ((a) * (b) + (c))
+#define MTX_FMS(a, b, c) ((a) * (b) - (c))
+#endif
+
 #define EPSILON 0.0000000001f
 #define FLOAT_MIN 1.1754943E-38f
 
@@ -251,7 +267,26 @@ void HSD_MtxInverse(Mtx src, Mtx dest)
 {
     Mtx tempMatrix;
     Mtx* m;
+#if BUILD_TARGET_PC
+    /* 80379310, read off the instruction stream. Every cofactor is one
+     * fmsubs/fnmsubs -- the right-hand product rounded, the left one fused
+     * with the subtraction -- and the determinant is a chain of five fused
+     * steps on a first plain product. The port had all of it as plain
+     * arithmetic: twenty extra roundings in the matrix every hurtbox is
+     * tested through (lbcollision.c inverts the hurt matrix), and in
+     * ftparts, ftanim and fighter.c. */
+    f32 m00 = src[0][0], m01 = src[0][1], m02 = src[0][2];
+    f32 m10 = src[1][0], m11 = src[1][1], m12 = src[1][2];
+    f32 m20 = src[2][0], m21 = src[2][1], m22 = src[2][2];
+    f32 det = m20 * (m01 * m12);
+    det = MTX_FMA(m22, m00 * m11, det);
+    det = MTX_FMA(m21, m02 * m10, det);
+    det = MTX_FMA(-m02, m20 * m11, det);
+    det = MTX_FMA(-m22, m10 * m01, det);
+    det = MTX_FMA(-m12, m00 * m21, det);
+#else
     f32 det = HSD_CalcDeterminantMatrix3x4(src);
+#endif
 
     if (fabsf_bitwise(det) < EPSILON) {
         MTXIdentity(dest);
@@ -267,6 +302,27 @@ void HSD_MtxInverse(Mtx src, Mtx dest)
 
     det = 1.0f / det;
 
+#if BUILD_TARGET_PC
+    dest[0][0] = MTX_FMS((*m)[1][1], (*m)[2][2], (*m)[2][1] * (*m)[1][2]) * det;
+    dest[0][1] = MTX_FMA(-(*m)[0][1], (*m)[2][2], (*m)[2][1] * (*m)[0][2]) * det;
+    dest[0][2] = MTX_FMS((*m)[0][1], (*m)[1][2], (*m)[1][1] * (*m)[0][2]) * det;
+    dest[1][0] = MTX_FMA(-(*m)[1][0], (*m)[2][2], (*m)[2][0] * (*m)[1][2]) * det;
+    dest[1][1] = MTX_FMS((*m)[0][0], (*m)[2][2], (*m)[2][0] * (*m)[0][2]) * det;
+    dest[1][2] = MTX_FMA(-(*m)[0][0], (*m)[1][2], (*m)[1][0] * (*m)[0][2]) * det;
+    dest[2][0] = MTX_FMS((*m)[1][0], (*m)[2][1], (*m)[2][0] * (*m)[1][1]) * det;
+    dest[2][1] = MTX_FMA(-(*m)[0][0], (*m)[2][1], (*m)[2][0] * (*m)[0][1]) * det;
+    dest[2][2] = MTX_FMS((*m)[0][0], (*m)[1][1], (*m)[1][0] * (*m)[0][1]) * det;
+
+    /* 803794f8..: -(d00*s03) - d01*s13 as one fmsubs on the negated d00,
+     * then the s23 term taken off with an fnmsubs. Read from src in the
+     * original's order, aliasing included. */
+    dest[0][3] = MTX_FMA(-dest[0][2], src[2][3],
+                         MTX_FMS(-dest[0][0], src[0][3], dest[0][1] * src[1][3]));
+    dest[1][3] = MTX_FMA(-dest[1][2], src[2][3],
+                         MTX_FMS(-dest[1][0], src[0][3], dest[1][1] * src[1][3]));
+    dest[2][3] = MTX_FMA(-dest[2][2], src[2][3],
+                         MTX_FMS(-dest[2][0], src[0][3], dest[2][1] * src[1][3]));
+#else
     dest[0][0] = ((*m)[1][1] * (*m)[2][2] - (*m)[2][1] * (*m)[1][2]) * det;
     dest[0][1] = -((*m)[0][1] * (*m)[2][2] - (*m)[2][1] * (*m)[0][2]) * det;
     dest[0][2] = ((*m)[0][1] * (*m)[1][2] - (*m)[1][1] * (*m)[0][2]) * det;
@@ -283,6 +339,7 @@ void HSD_MtxInverse(Mtx src, Mtx dest)
                    (-dest[1][0] * src[0][3] - dest[1][1] * src[1][3]));
     dest[2][3] = -(dest[2][2] * src[2][3] -
                    (-dest[2][0] * src[0][3] - dest[2][1] * src[1][3]));
+#endif
 }
 
 /// https://decomp.me/scratch/kalJY
@@ -304,6 +361,64 @@ void HSD_MtxInverseConcat(Mtx inv, Mtx src, Mtx dest)
     f32 temp12;
     f32 new_var; ///< @todo try to get rid of this
 
+#if BUILD_TARGET_PC
+    /* 80379598, read off the instruction stream: the determinant is the
+     * fused chain of HSD_MtxInverse, each cofactor one fmsubs/fnmsubs
+     * scaled afterwards, the three translation terms two fused steps each,
+     * and every product row is plain-times then two fmadds -- the src[1]
+     * term is the plain multiply. robj.c builds every constrained joint
+     * through here (68 fused sites, none of them in the port before). */
+    {
+        f32 i00 = inv[0][0], i01 = inv[0][1], i02 = inv[0][2], i03 = inv[0][3];
+        f32 i10 = inv[1][0], i11 = inv[1][1], i12 = inv[1][2], i13 = inv[1][3];
+        f32 i20 = inv[2][0], i21 = inv[2][1], i22 = inv[2][2], i23 = inv[2][3];
+        det = i20 * (i01 * i12);
+        det = MTX_FMA(i22, i00 * i11, det);
+        det = MTX_FMA(i21, i02 * i10, det);
+        det = MTX_FMA(-i02, i20 * i11, det);
+        det = MTX_FMA(-i22, i10 * i01, det);
+        det = MTX_FMA(-i12, i00 * i21, det);
+
+        if (fabsf_bitwise(det) < EPSILON) {
+            if (src != dest) {
+                MTXCopy(src, dest);
+            }
+            return;
+        }
+        det = 1.0f / det;
+        temp1 = MTX_FMS(i11, i22, i21 * i12) * det;
+        temp2 = MTX_FMA(-i01, i22, i21 * i02) * det;
+        temp3 = MTX_FMA(-i10, i22, i20 * i12) * det;
+        temp4 = MTX_FMS(i00, i22, i20 * i02) * det;
+        temp5 = MTX_FMS(i10, i21, i20 * i11) * det;
+        temp6 = MTX_FMA(-i00, i21, i20 * i01) * det;
+        temp7 = MTX_FMS(i01, i12, i11 * i02) * det;
+        temp8 = MTX_FMA(-i00, i12, i10 * i02) * det;
+        temp9 = MTX_FMS(i00, i11, i10 * i01) * det;
+        temp10 = MTX_FMA(-temp7, i23, MTX_FMS(-temp1, i03, temp2 * i13));
+        temp11 = MTX_FMA(-temp8, i23, MTX_FMS(-temp3, i03, temp4 * i13));
+        temp12 = MTX_FMA(-temp9, i23, MTX_FMS(-temp5, i03, temp6 * i13));
+        (void) new_var;
+    }
+    {
+        Mtx* out = (inv == dest || src == dest) ? &m : (Mtx*) dest;
+        int j;
+        for (j = 0; j < 4; j++) {
+            (*out)[0][j] = MTX_FMA(temp7, src[2][j],
+                                   MTX_FMA(temp1, src[0][j], temp2 * src[1][j]));
+            (*out)[1][j] = MTX_FMA(temp8, src[2][j],
+                                   MTX_FMA(temp3, src[0][j], temp4 * src[1][j]));
+            (*out)[2][j] = MTX_FMA(temp9, src[2][j],
+                                   MTX_FMA(temp5, src[0][j], temp6 * src[1][j]));
+        }
+        (*out)[0][3] = temp10 + (*out)[0][3];
+        (*out)[1][3] = temp11 + (*out)[1][3];
+        (*out)[2][3] = temp12 + (*out)[2][3];
+        if (out == &m) {
+            MTXCopy(m, dest);
+        }
+    }
+#else
     det = HSD_CalcDeterminantMatrix3x4(inv);
 
     if (fabsf_bitwise(det) < EPSILON) {
@@ -383,13 +498,28 @@ void HSD_MtxInverseConcat(Mtx inv, Mtx src, Mtx dest)
                          (temp5 * src[0][3] + temp6 * src[1][3]) + temp12;
         }
     }
+#endif
 }
 
 void HSD_MtxInverseTranspose(Mtx src, Mtx dest)
 {
     Mtx* m;
     Mtx tempMatrix;
+#if BUILD_TARGET_PC
+    /* 80379A20: the same fused determinant and cofactors as HSD_MtxInverse,
+     * stored transposed. */
+    f32 m00 = src[0][0], m01 = src[0][1], m02 = src[0][2];
+    f32 m10 = src[1][0], m11 = src[1][1], m12 = src[1][2];
+    f32 m20 = src[2][0], m21 = src[2][1], m22 = src[2][2];
+    f32 det = m20 * (m01 * m12);
+    det = MTX_FMA(m22, m00 * m11, det);
+    det = MTX_FMA(m21, m02 * m10, det);
+    det = MTX_FMA(-m02, m20 * m11, det);
+    det = MTX_FMA(-m22, m10 * m01, det);
+    det = MTX_FMA(-m12, m00 * m21, det);
+#else
     f32 det = HSD_CalcDeterminantMatrix3x4(src);
+#endif
 
     m = (Mtx*) src;
 
@@ -405,6 +535,17 @@ void HSD_MtxInverseTranspose(Mtx src, Mtx dest)
 
         det = 1.0f / det;
 
+#if BUILD_TARGET_PC
+        dest[0][0] = MTX_FMS((*m)[1][1], (*m)[2][2], (*m)[2][1] * (*m)[1][2]) * det;
+        dest[1][0] = MTX_FMA(-(*m)[0][1], (*m)[2][2], (*m)[2][1] * (*m)[0][2]) * det;
+        dest[2][0] = MTX_FMS((*m)[0][1], (*m)[1][2], (*m)[1][1] * (*m)[0][2]) * det;
+        dest[0][1] = MTX_FMA(-(*m)[1][0], (*m)[2][2], (*m)[2][0] * (*m)[1][2]) * det;
+        dest[1][1] = MTX_FMS((*m)[0][0], (*m)[2][2], (*m)[2][0] * (*m)[0][2]) * det;
+        dest[2][1] = MTX_FMA(-(*m)[0][0], (*m)[1][2], (*m)[1][0] * (*m)[0][2]) * det;
+        dest[0][2] = MTX_FMS((*m)[1][0], (*m)[2][1], (*m)[2][0] * (*m)[1][1]) * det;
+        dest[1][2] = MTX_FMA(-(*m)[0][0], (*m)[2][1], (*m)[2][0] * (*m)[0][1]) * det;
+        dest[2][2] = MTX_FMS((*m)[0][0], (*m)[1][1], (*m)[1][0] * (*m)[0][1]) * det;
+#else
         // This needs to be in a different order than in HSD_MtxInverse for
         // some reason
         dest[0][0] =
@@ -425,6 +566,7 @@ void HSD_MtxInverseTranspose(Mtx src, Mtx dest)
             -(((*m)[0][0] * (*m)[2][1]) - ((*m)[2][0] * (*m)[0][1])) * det;
         dest[2][2] =
             (((*m)[0][0] * (*m)[1][1]) - ((*m)[1][0] * (*m)[0][1])) * det;
+#endif
         dest[0][3] = 0;
         dest[1][3] = 0;
         dest[2][3] = 0;
@@ -560,21 +702,6 @@ void HSD_MkRotationMtx(Mtx arg0, Vec3* arg1)
     f32 temp1;
     f32 temp2;
 
-/* Retail builds the four combined terms of a rotation matrix with fmsubs and
- * fmadds -- see 8037A388 and 8037A38C in HSD_MtxSRT -- which round once for a
- * multiply and a subtract or add together. GCC on x86-64 rounds twice, and a
- * ULP here is a ULP in a joint's world matrix, which grows down the skeleton:
- * measured, one ULP four joints above a fighter's ECB became a dozen by the
- * time it reached the box the ground is tested against. fmaf is fmadds; a
- * negated addend is fmsubs. */
-#if BUILD_TARGET_PC
-#include <math.h>
-#define MTX_FMA(a, b, c) fmaf((a), (b), (c))
-#define MTX_FMS(a, b, c) fmaf((a), (b), -(c))
-#else
-#define MTX_FMA(a, b, c) ((a) * (b) + (c))
-#define MTX_FMS(a, b, c) ((a) * (b) - (c))
-#endif
 
 
     sinX = sinf(arg1->x);
@@ -685,21 +812,27 @@ void HSD_MtxScaledAdd(Mtx arg0, Mtx arg1, Mtx arg2, f32 arg3)
     f32* arr0 = (f32*) &arg0[0][0];
     f32* arr1 = (f32*) &arg1[0][0];
     f32* arr2 = (f32*) &arg2[0][0];
-
+#if BUILD_TARGET_PC
+    /* 8037A54C: twelve fmadds, s * a + b rounded once each. ftparts.c
+     * accumulates skinning envelopes through here. */
+    int i;
+    for (i = 0; i < 12; i++) {
+        arr2[i] = MTX_FMA(arg3, arr0[i], arr1[i]);
+    }
+#else
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
-
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
-
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
     *(arr2)++ = *(arr1)++ + (arg3 * *(arr0)++);
+#endif
 }
 
 void* HSD_VecAlloc(void)

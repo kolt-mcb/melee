@@ -22,8 +22,15 @@ typedef struct grMc_CarEntry {
         u8 b1 : 1;
     } x22_flags;
     /* 0x23 */ u8 x23;
+#if BUILD_TARGET_PC
+    /* An item GObj and a joint, stored with (s32) casts and read back as
+     * pointers (grmutecity.c 1672/1679). Pointer-sized here. */
+    /* 0x24 */ intptr_t x24;
+    /* 0x28 */ intptr_t x28;
+#else
     /* 0x24 */ s32 x24;
     /* 0x28 */ s32 x28;
+#endif
 } grMc_CarEntry;
 
 STATIC_ASSERT(sizeof(grMc_CarEntry) == 0x2C);

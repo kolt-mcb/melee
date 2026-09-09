@@ -284,3 +284,45 @@ s16* pc_grconv_s16_table(HSD_Archive* archive, u32 off, u32 n)
     }
     return out;
 }
+
+u32* pc_grconv_u32_table(HSD_Archive* archive, u32 off, u32 n)
+{
+    const u8* base;
+    u32 len, i;
+    u32* out;
+
+    if (off == 0 || n == 0 || !gr_arch_span(archive, &base, &len) ||
+        off + n * 4 > len)
+    {
+        return NULL;
+    }
+    out = calloc(n, sizeof(u32));
+    if (out == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < n; i++) {
+        out[i] = gr_be32(base + off + i * 4);
+    }
+    return out;
+}
+
+const u8* pc_grconv_raw(HSD_Archive* archive, u32 off, u32 n)
+{
+    const u8* base;
+    u32 len;
+
+    if (off == 0 || !gr_arch_span(archive, &base, &len) || off + n > len) {
+        return NULL;
+    }
+    return base + off;
+}
+
+const u8* pc_grconv_stage_script(u32 off)
+{
+    UnkArchiveStruct* slot = grDatFiles_GetArchive();
+    if (slot == NULL || slot->unk0 == NULL) {
+        return NULL;
+    }
+    /* Four bytes is the smallest script (one end-of-script word). */
+    return pc_grconv_raw(slot->unk0, off, 4);
+}

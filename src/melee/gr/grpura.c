@@ -428,13 +428,39 @@ void grPura_8021231C(Ground_GObj* arg0)
 
 void grPura_802125EC(Ground_GObj* arg0) {}
 
+struct Pura_UnkModelDesc {
+    s32 x0;
+    f32 x4;
+    s32 x8;
+};
+
+#if BUILD_TARGET_PC
+/* The 27 records that follow grPu_803E6800 in the original's data, read
+ * out of the DOL at 0x803E6AB0 (grPu_803E6800 + 0x2B0): the stage joint each
+ * float rides, its scale, and the model id to build for it, -1 terminated.
+ * The decomp captured only the 28 StageCallbacks in front of them, and this
+ * port's StageCallbacks is a different size, so the overlay below read
+ * callback pointers as ids and the loop had to be skipped -- which left
+ * Pokefloats with no floats: the second fighter spawns on one, and fell. */
+static const struct Pura_UnkModelDesc grPu_ModelDescs[27] = {
+    { 0, 1.0f, 2 },   { 1, 1.0f, 3 },   { 2, 1.0f, 5 },   { 3, 1.0f, 6 },
+    { 4, 1.0f, 7 },   { 5, 1.0f, 8 },   { 6, 1.0f, 9 },   { 7, 1.0f, 10 },
+    { 8, 1.0f, 11 },  { 9, 1.0f, 12 },  { 10, 1.0f, 13 }, { 11, 1.0f, 13 },
+    { 12, 1.0f, 13 }, { 13, 1.0f, 14 }, { 14, 1.0f, 15 }, { 15, 1.0f, 16 },
+    { 16, 1.0f, 17 }, { 17, 1.0f, 18 }, { 18, 1.0f, 19 }, { 19, 1.0f, 20 },
+    { 20, 1.0f, 21 }, { 21, 1.0f, 22 }, { 22, 1.0f, 23 }, { 23, 1.0f, 24 },
+    { 24, 1.0f, 25 }, { 25, 1.0f, 26 }, { -1, 1.0f, -1 },
+};
+#endif
+
 void grPura_802125F0(HSD_GObj* arg0)
 {
-    struct Pura_UnkModelDesc {
-        s32 x0;
-        f32 x4;
-        s32 x8;
-    }* desc = (void*) ((char*) grPu_803E6800 + 0x2B0);
+#if BUILD_TARGET_PC
+    const struct Pura_UnkModelDesc* desc = grPu_ModelDescs;
+#else
+    struct Pura_UnkModelDesc* desc =
+        (void*) ((char*) grPu_803E6800 + 0x2B0);
+#endif
     f32 scale;
     HSD_JObj* jobj;
     u32 i;
@@ -443,22 +469,6 @@ void grPura_802125F0(HSD_GObj* arg0)
     Ground* gp;
     HSD_JObj* child;
 
-#if BUILD_TARGET_PC
-    /* `desc` overlays grPu_803E6800 at byte offset 0x2B0. On GameCube that is
-     * past the 28 StageCallbacks entries the decomp captured (28 * 0x14 =
-     * 0x230) and into the rest of a larger blob that was never decompiled --
-     * so the table it wants is not in this tree at all. Here StageCallbacks
-     * is 0x28 (four function pointers plus the flags word), which puts 0x2B0
-     * back *inside* the array, and every desc->x8 is a misread callback
-     * pointer. Skip the loop rather than feed garbage ids into the stage. */
-    port_guard_warn("grpura.c:model-desc-overlay");
-    (void) desc;
-    (void) scale;
-    (void) jobj;
-    (void) joint;
-    (void) child;
-    return;
-#endif
     for (i = 0; i < 27; i++, desc++) {
         if (desc->x8 != -1) {
             gobj = grPura_80211E08(desc->x8);

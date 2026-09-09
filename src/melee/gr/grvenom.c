@@ -29,6 +29,9 @@
 #include <baselib/lobj.h>
 #include <baselib/random.h>
 #include <baselib/sislib.h>
+#if BUILD_TARGET_PC
+#include "port/pc_grconv.h"
+#endif
 
 typedef struct grVe_Data {
     /* +0 */ GrJoint joints[5];
@@ -473,7 +476,11 @@ void grVenom_80203B18(void)
         {
             Ground_GObj* gobj1 = grVenom_80203EAC(5);
             gp1 = GET_GROUND(gobj1);
+#if BUILD_TARGET_PC
+            gp1->u.venom.xC4 = (uintptr_t) gobj;
+#else
             gp1->u.venom.xC4 = (u32) gobj;
+#endif
             grVenom_80203EAC(9);
             gobj1 = grVenom_80203EAC(7);
             grAnime_801C8138(gobj1, 7, 0);
@@ -689,8 +696,8 @@ void grVenom_802040F0(Ground_GObj* gobj)
     grAnime_801C7FF8(gobj, 7, 7, 3, 0.0F, 1.0F);
     Ground_801C10B8(gobj, (HSD_GObjEvent) fn_802040B4);
     gp->u.venom.xC8 = -1;
-    gp->u.venom.xCC = (u32) Ground_801C3FA4(gobj, 2);
-    gp->u.venom.xD0 = (u32) Ground_801C3FA4(gobj, 3);
+    gp->u.venom.xCC = (uintptr_t) Ground_801C3FA4(gobj, 2);
+    gp->u.venom.xD0 = (uintptr_t) Ground_801C3FA4(gobj, 3);
     lb_8000B1CC((HSD_JObj*) gp->u.venom.xCC, NULL, &pos1);
     lb_8000B1CC((HSD_JObj*) gp->u.venom.xD0, NULL, &pos2);
     if (pos2.y > pos1.y) {
@@ -1699,7 +1706,17 @@ void grVenom_80205F30(Ground_GObj* gobj)
                         }
                         gp->u.venom.x100 = (gp->u.venom.x100 + 1) & 1;
                     }
+#if BUILD_TARGET_PC
+                    /* x38 is a colour-overlay script pointer on the console
+                     * and a file offset out of the layout converter here. */
+                    grMaterial_801C9604(
+                        gobj,
+                        (grMaterialArg) pc_grconv_stage_script(
+                            (u32) yakumono_param->x38),
+                        0);
+#else
                     grMaterial_801C9604(gobj, yakumono_param->x38, 0);
+#endif
                 }
             }
             break;
