@@ -3,6 +3,10 @@
 
 #include "eflib.h"
 #include "types.h"
+#include <melee/ft/types.h>
+#include <sysdolphin/baselib/generator.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/jobj.h>
 
 #include "baselib/gobj.h"
 #include "baselib/jobj.h"
@@ -228,8 +232,7 @@ void* efAlt_Spawn(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
         break;
     }
     case 0x494: {
-        void* user_data;
-        HSD_JObj** jobj_ptr;
+        Fighter* fp;
         HSD_JObj* jobj;
         HSD_JObj* jobj_2;
         EF_Effect* effect_1;
@@ -264,14 +267,14 @@ void* efAlt_Spawn(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
                 effect_2 = (void*) effect_1->next;
                 effect_2->update = efLib_Cb_SetRotYAndTransition;
                 effect_2->lifetime = effect_flags;
-                effect_2->user_data = user_data;
+                effect_2->user_data = fp;
                 next_eff = (void*) efLib_Create_Attach(0x138AU, gobj, jobj_2);
                 effect_2->next = next_eff;
                 if (next_eff != NULL) {
                     effect_1 = (void*) effect_2->next;
                     effect_1->update = efLib_Cb_SetRotYAndTransition;
                     effect_1->lifetime = effect_flags;
-                    effect_1->user_data = user_data;
+                    effect_1->user_data = fp;
                 }
             }
         }
