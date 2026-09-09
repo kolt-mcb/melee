@@ -689,6 +689,17 @@ static void TObjSetupTevModulateShadow(HSD_TObj* shadow)
         tevdesc.stage = HSD_StateAssignTev();
         tevdesc.coord = shadow->coord;
         tevdesc.map = shadow->id;
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_SHADOWLOG") != NULL) {
+            static int n = 0;
+            if (n++ < 20)
+                fprintf(stderr, "[SHADOW] tev: stage=%d coord=%d map=%d "
+                        "tobj=%p img=%p mtxid=%d\n", (int) tevdesc.stage,
+                        (int) shadow->coord, (int) shadow->id, (void*) shadow,
+                        shadow->imagedesc ? shadow->imagedesc->image_ptr : NULL,
+                        (int) shadow->mtxid);
+        }
+#endif
         HSD_SetupTevStage(&tevdesc);
     }
 }

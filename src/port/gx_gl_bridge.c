@@ -604,6 +604,7 @@ typedef struct {
     f32 pt_mtx_array[21][3][4];
     Bool pt_mtx_loaded[21];
     u32 tex_gen_pt_id[8];
+    u32 tex_gen_normalize[8];
     
     /* Z-texture (depth texture) state */
     u32 ztex_op;              /* GX_ZT_DISABLE/ADD/REPLACE */
@@ -1045,6 +1046,9 @@ static GLint g_ind_tex_base_coord_loc = -1;
 
 /* Texture coordinate generation uniform locations */
 static GLint g_texgen0_mode_loc = -1;
+static GLint g_texgen0_nrm_loc = -1;
+static GLint g_texgen1_nrm_loc = -1;
+static GLint g_tev_tex_coord_loc = -1;
 static GLint g_texgen0_src_loc = -1;
 static GLint g_texgen1_mode_loc = -1;
 static GLint g_texgen1_src_loc = -1;
@@ -1104,6 +1108,8 @@ static const char* g_vert_src =
 "uniform int u_texgen1_mode;          // 0=none, 1=MTX3x4, 2=MTX2x4\n"
 "uniform int u_texgen1_src;           // 0=TEX, 1=POS, 2=NRM\n"
 "uniform mat4 u_texgen_mtx0;          // Matrix for texgen stage 0\n"
+"uniform int u_texgen0_nrm;           // normalize flag (GX_ENABLE) for texgen 0\n"
+"uniform int u_texgen1_nrm;\n"
 "uniform mat4 u_texgen_mtx1;          // Matrix for texgen stage 1\n"
 "// Lighting uniforms (up to 8 lights, GCN-style)\n"
 "uniform vec3 u_light_pos[8];     // Light positions (or directions if directional)\n"
@@ -1129,8 +1135,8 @@ static const char* g_vert_src =
 "uniform float u_light_ref_dist[8];  // Reference distance\n"
 "uniform float u_light_ref_br[8];    // Reference brightness\n"
 "out vec4 v_col;\n"
-"out vec2 v_uv0;\n"
-"out vec2 v_uv1;\n"
+"out vec3 v_uv0;                 // (s, t, q): the fragment stage divides by q\n"
+"out vec3 v_uv1;\n"
 "out vec3 v_nrm;\n"
 "out vec3 v_world_pos;\n"
 "out vec4 v_lit_color;            // Per-vertex channel-0 lit color\n"
@@ -1138,49 +1144,53 @@ static const char* g_vert_src =
 "void main() {\n"
 "    gl_Position = u_mvp * vec4(a_pos, 1.0);\n"
 "    v_col = a_col;\n"
-"    vec2 uv0 = a_uv0 * u_uv_scale;\n"
-"    vec2 uv1 = a_uv1 * u_uv_scale;\n"
-"    // Apply texture matrix transforms (2x4 matrices)\n"
-"    if (u_texmtx0_enable != 0) {\n"
+"    vec2 in0 = a_uv0 * u_uv_scale;\n"
+"    vec2 in1 = a_uv1 * u_uv_scale;\n"
+"    // Texture coordinate generation (GXSetTexCoordGen2), raw GX values:\n"
+"    // mode GX_TG_MTX3x4 = 0, GX_TG_MTX2x4 = 1, -1 when none is set for the\n"
+"    // coord; source GX_TG_POS = 0, GX_TG_NRM = 1, GX_TG_TEX0 = 4, TEX1 = 5.\n"
+"    // Texcoord i is whatever texgen i produces, and its *source* picks the\n"
+"    // UV set: HSD numbers projection coords before UV coords, so on a\n"
+"    // material with a shadow or reflection map the plain texture is coord 1\n"
+"    // fed from TEX0. POS/NRM take the object-space attribute as (x,y,z,1)\n"
+"    // through the texgen matrix, as the XF unit does (the matrix carries\n"
+"    // PNMTX0 for a shadow projection, the normal matrix for a reflection);\n"
+"    // a UV texgen is the 2x4 u_texmtx path.\n"
+"#ifdef TEXGEN_LEGACY\n"
+"    vec3 tg_pos = vec3(0.0), tg_nrm = vec3(0.0);\n"
+"#else\n"
+"    vec3 tg_pos = a_pos, tg_nrm = a_nrm;\n"
+"#endif\n"
+"    vec2 uv0 = (u_texgen0_mode >= 0 && u_texgen0_src == 5) ? in1 : in0;\n"
+"    vec2 uv1 = (u_texgen1_mode >= 0 && u_texgen1_src != 5) ? in0 : in1;\n"
+"    float tcz0 = 1.0, tcz1 = 1.0;\n"
+"    bool proj0 = false, proj1 = false;\n"
+"    if (u_texgen0_mode == 0 && u_texgen0_src <= 1) {\n"
+"        vec4 t = u_texgen_mtx0 * vec4(u_texgen0_src == 0 ? tg_pos : tg_nrm, 1.0);\n"
+"        if (u_texgen0_src == 1 && u_texgen0_nrm != 0 && dot(t.xyz, t.xyz) > 0.0) t.xyz = normalize(t.xyz);\n"
+"        uv0 = t.xy; tcz0 = t.z; proj0 = true;\n"
+"    } else if (u_texmtx0_enable != 0) {\n"
 "        vec4 t = u_texmtx0 * vec4(uv0, 0.0, 1.0);\n"
 "        uv0 = t.xy;\n"
 "    }\n"
-"    if (u_texmtx1_enable != 0) {\n"
+"    if (u_texgen1_mode == 0 && u_texgen1_src <= 1) {\n"
+"        vec4 t = u_texgen_mtx1 * vec4(u_texgen1_src == 0 ? tg_pos : tg_nrm, 1.0);\n"
+"        if (u_texgen1_src == 1 && u_texgen1_nrm != 0 && dot(t.xyz, t.xyz) > 0.0) t.xyz = normalize(t.xyz);\n"
+"        uv1 = t.xy; tcz1 = t.z; proj1 = true;\n"
+"    } else if (u_texmtx1_enable != 0) {\n"
 "        vec4 t = u_texmtx1 * vec4(uv1, 0.0, 1.0);\n"
 "        uv1 = t.xy;\n"
 "    }\n"
-"    float tcz0 = 1.0, tcz1 = 1.0;   // third texgen component (1 for 2x4)\n"
-"    // Texture coordinate generation (GXSetTexCoordGen2)\n"
-"    // GX_TG_MTX3x4=1, GX_TG_MTX2x4=2; GX_TG_TEX=0, GX_TG_POS=1, GX_TG_NRM=2\n"
-"    if (u_texgen0_mode == 1) { // MTX3x4\n"
-"        if (u_texgen0_src == 1) { // POS\n"
-"            vec4 t = u_texgen_mtx0 * vec4(v_world_pos, 1.0);\n"
-"            uv0 = t.xy; tcz0 = t.z;\n"
-"        } else if (u_texgen0_src == 2) { // NRM\n"
-"            vec4 t = u_texgen_mtx0 * vec4(v_nrm, 1.0);\n"
-"            uv0 = t.xy; tcz0 = t.z;\n"
-"        }\n"
-"    } else if (u_texgen0_mode == 2) { // MTX2x4\n"
-"        vec4 t = u_texgen_mtx0 * vec4(uv0, 0.0, 1.0);\n"
-"        uv0 = t.xy;\n"
-"    }\n"
-"    if (u_texgen1_mode == 1) { // MTX3x4\n"
-"        if (u_texgen1_src == 1) { // POS\n"
-"            vec4 t = u_texgen_mtx1 * vec4(v_world_pos, 1.0);\n"
-"            uv1 = t.xy; tcz1 = t.z;\n"
-"        } else if (u_texgen1_src == 2) { // NRM\n"
-"            vec4 t = u_texgen_mtx1 * vec4(v_nrm, 1.0);\n"
-"            uv1 = t.xy; tcz1 = t.z;\n"
-"        }\n"
-"    } else if (u_texgen1_mode == 2) { // MTX2x4\n"
-"        vec4 t = u_texgen_mtx1 * vec4(uv1, 0.0, 1.0);\n"
-"        uv1 = t.xy;\n"
-"    }\n"
-"    // Post-transform (dual-tex) matrices: hardware multiplies (s, t, z, 1)\n"
-"    if (u_pttexmtx0_enable != 0) { vec4 t = u_pttexmtx0 * vec4(uv0, tcz0, 1.0); uv0 = t.xy; }\n"
-"    if (u_pttexmtx1_enable != 0) { vec4 t = u_pttexmtx1 * vec4(uv1, tcz1, 1.0); uv1 = t.xy; }\n"
-"    v_uv0 = uv0;\n"
-"    v_uv1 = uv1;\n"
+"    // Post-transform (dual-tex) matrices: hardware multiplies (s, t, q, 1)\n"
+"    if (u_pttexmtx0_enable != 0) { vec4 t = u_pttexmtx0 * vec4(uv0, tcz0, 1.0); uv0 = t.xy; tcz0 = t.z; }\n"
+"    if (u_pttexmtx1_enable != 0) { vec4 t = u_pttexmtx1 * vec4(uv1, tcz1, 1.0); uv1 = t.xy; tcz1 = t.z; }\n"
+"    // A 3x4 texgen is projective: the coordinate used is (s/q, t/q), and\n"
+"    // the divide has to happen per fragment or a shadow projected across a\n"
+"    // large floor polygon warps. Everything else carries q = 1.\n"
+"    if (!proj0) tcz0 = 1.0;\n"
+"    if (!proj1) tcz1 = 1.0;\n"
+"    v_uv0 = vec3(uv0, tcz0);\n"
+"    v_uv1 = vec3(uv1, tcz1);\n"
 "    // World-space position and normal\n"
 "    v_world_pos = (u_model * vec4(a_pos, 1.0)).xyz;\n"
 "    v_nrm = normalize(mat3(u_model) * a_nrm);\n"
@@ -1280,8 +1290,8 @@ static const char* g_vert_src =
 static const char* g_frag_src =
 "#version 330 core\n"
 "in vec4 v_col;\n"
-"in vec2 v_uv0;\n"
-"in vec2 v_uv1;\n"
+"in vec3 v_uv0;\n"
+"in vec3 v_uv1;\n"
 "in vec3 v_nrm;\n"
 "in vec3 v_world_pos;\n"
 "in vec4 v_lit_color;             // Per-vertex lit color (ambient + diffuse)\n"
@@ -1315,6 +1325,7 @@ static const char* g_frag_src =
 "uniform int u_tev_color_enabled[8];\n"
 "uniform int u_tev_alpha_enabled[8];\n"
 "uniform int u_tev_tex_map[8];      // texture unit per stage (0 or 1)\n"
+"uniform int u_tev_tex_coord[8];    // texcoord per stage (GXSetTevOrder)\n"
 "uniform int u_tev_kcolor_sel[8];   // KColor selector per stage\n"
 "uniform int u_tev_kalpha_sel[8];   // KAlpha selector per stage\n"
 "// Fog uniforms\n"
@@ -1559,6 +1570,13 @@ static const char* g_frag_src =
 "}\n"
 "\n"
 "void main() {\n"
+"    // Projective texcoords: divide by q (1 for ordinary UVs).\n"
+"#ifdef NO_QDIV\n"
+"    vec2 uv0p = v_uv0.xy, uv1p = v_uv1.xy;\n"
+"#else\n"
+"    vec2 uv0p = (abs(v_uv0.z) > 1e-7) ? v_uv0.xy / v_uv0.z : v_uv0.xy;\n"
+"    vec2 uv1p = (abs(v_uv1.z) > 1e-7) ? v_uv1.xy / v_uv1.z : v_uv1.xy;\n"
+"#endif\n"
 "    // RAS = channel-0 rasterized color: vertex color or material register,\n"
 "    // modulated by per-vertex lighting when channel 0 is lit (GCN formula\n"
 "    // approximated as mat * clamp(amb + diffuse)).\n"
@@ -1585,8 +1603,11 @@ static const char* g_frag_src =
 "    // Execute TEV stages\n"
 "    for (int stage = 0; stage < u_tev_num_stages && stage < 8; stage++) {\n"
 "        // Get texture coordinates (with indirect bump mapping support)\n"
-"        vec2 base_uv = (u_tev_tex_map[stage] == 0) ? v_uv0 : v_uv1;\n"
-"        vec2 ind_uv = (u_tev_tex_map[stage] == 0) ? v_uv1 : v_uv0;\n"
+"        // The stage samples its map with the texcoord GXSetTevOrder gave\n"
+"        // it, which is not the map's own index once a projection coord is\n"
+"        // in play (shadow: map 1 with coord 0; base texture: map 0, coord 1).\n"
+"        vec2 base_uv = (u_tev_tex_coord[stage] == 0) ? uv0p : uv1p;\n"
+"        vec2 ind_uv = (u_tev_tex_coord[stage] == 0) ? uv1p : uv0p;\n"
 "        vec2 tex_uv = indirect_texcoord(base_uv, ind_uv, stage);\n"
 "        vec4 tex = sample_tex(u_tev_tex_map[stage], tex_uv, tex_uv);\n"
 "        if (u_dbg_mode == 6 && u_tev_tex_map[stage] < 8) { frag_color = vec4(tex.rgb, 1.0); return; }\n"
@@ -1893,14 +1914,35 @@ static const char* pc_es_header(void)
 static GLuint compile_shader(GLenum type, const char* src)
 {
     GLuint s = glCreateShader(type);
-    const char* parts[2];
+    const char* parts[3];
     GLsizei nparts = 1;
+    /* A/B switches for the texgen path, spliced in after the version line:
+     * MELEE_TEXGEN_LEGACY=1 feeds the 3x4 texgens a zero vector (what the
+     * shader effectively did while it read v_world_pos before writing it),
+     * MELEE_NO_QDIV=1 skips the projective divide. */
+    static char defs[128];
+    static int defs_init = 0;
+    if (!defs_init) {
+        defs_init = 1;
+        defs[0] = '\0';
+        if (getenv("MELEE_TEXGEN_LEGACY") != NULL) strcat(defs, "#define TEXGEN_LEGACY 1\n");
+        if (getenv("MELEE_NO_QDIV") != NULL) strcat(defs, "#define NO_QDIV 1\n");
+    }
     parts[0] = src;
-    if (window_gl_es() && strncmp(src, "#version ", 9) == 0) {
+    if (strncmp(src, "#version ", 9) == 0) {
         const char* nl = strchr(src, '\n');
-        parts[0] = pc_es_header();
-        parts[1] = nl ? nl + 1 : "";
-        nparts = 2;
+        static char verline[64];
+        if (window_gl_es()) {
+            parts[0] = pc_es_header();
+        } else {
+            size_t n = nl ? (size_t) (nl + 1 - src) : strlen(src);
+            if (n >= sizeof(verline)) n = sizeof(verline) - 1;
+            memcpy(verline, src, n); verline[n] = '\0';
+            parts[0] = verline;
+        }
+        parts[1] = defs;
+        parts[2] = nl ? nl + 1 : "";
+        nparts = 3;
     }
     glShaderSource(s, nparts, parts, NULL);
     glCompileShader(s);
@@ -2044,6 +2086,9 @@ static UniEntry g_uni_tab[] = {
     { &g_ind_tex_coord_src_loc, "u_ind_tex_coord_src", 1, 1, -1 },
     { &g_ind_tex_base_coord_loc, "u_ind_tex_base_coord", 1, 1, -1 },
     { &g_texgen0_mode_loc, "u_texgen0_mode", 1, 1, -1 },
+    { &g_texgen0_nrm_loc, "u_texgen0_nrm", 1, 1, -1 },
+    { &g_texgen1_nrm_loc, "u_texgen1_nrm", 1, 1, -1 },
+    { &g_tev_tex_coord_loc, "u_tev_tex_coord", 8, 1, -1 },
     { &g_texgen0_src_loc, "u_texgen0_src", 1, 1, -1 },
     { &g_texgen1_mode_loc, "u_texgen1_mode", 1, 1, -1 },
     { &g_texgen1_src_loc, "u_texgen1_src", 1, 1, -1 },
@@ -2614,6 +2659,11 @@ void gx_bridge_init(void)
     g_state.vp_w = 640; g_state.vp_h = 480;
     g_state.z_enabled = TRUE; g_state.z_func = GX_LEQUAL; g_state.z_update = TRUE;
     g_state.color_update = TRUE; g_state.cull_enabled = TRUE; g_state.cull_mode = GX_CULL_BACK;
+    /* GX powers on with the copy-clear depth at GX_MAX_Z24 (far). HSD only
+     * calls GXSetCopyClear from the frame-end XFB copy, which the port does
+     * not go through, so this stayed 0: a GXCopyTex with clear then wrote
+     * the near plane into its rectangle and nothing drew there again. */
+    g_state.copy_clear_z = 1.0f;
     g_state.prim_color = (GXColor){0xFF, 0xFF, 0xFF, 0xFF};
     g_state.diff_color = (GXColor){0xFF, 0xFF, 0xFF, 0xFF};
     g_state.cur_color = (GXColor){0xFF, 0xFF, 0xFF, 0xFF};
@@ -5441,7 +5491,35 @@ SKIP_DEG:
 void GXPosition3f32(f32 x, f32 y, f32 z)
 { g_state.last_pos[0]=x; g_state.last_pos[1]=y; g_state.last_pos[2]=z; bridge_add_vertex(); }
 void GXPosition2f32(f32 x, f32 y)
-{ g_state.last_pos[0]=x; g_state.last_pos[1]=y; g_state.last_pos[2]=0; bridge_add_vertex(); }
+{
+    /* The FIFO does not know about vertices, only attribute components, and
+     * HSD streams a three-component position through GXPosition2f32 when
+     * that is convenient: shadow.c's drawBackgroundRect writes four XYZ
+     * vertices as six calls. Treating every call as an XY vertex turned that
+     * quad into six scrambled points, so the shadow texture never got its
+     * white background. Follow the vertex format: with GX_POS_XYZ, gather
+     * floats until a vertex is complete. */
+    static f32 pend[3];
+    static int npend = 0;
+    if (g_state.pos_comp_cnt == 1) { /* GX_POS_XYZ */
+        f32 in[2];
+        int i;
+        in[0] = x; in[1] = y;
+        for (i = 0; i < 2; i++) {
+            pend[npend++] = in[i];
+            if (npend == 3) {
+                g_state.last_pos[0] = pend[0];
+                g_state.last_pos[1] = pend[1];
+                g_state.last_pos[2] = pend[2];
+                npend = 0;
+                bridge_add_vertex();
+            }
+        }
+        return;
+    }
+    npend = 0;
+    g_state.last_pos[0]=x; g_state.last_pos[1]=y; g_state.last_pos[2]=0; bridge_add_vertex();
+}
 void GXPosition3u8(u8 x, u8 y, u8 z)
 { g_state.last_pos[0]=(f32)x/127.0f; g_state.last_pos[1]=(f32)y/127.0f; g_state.last_pos[2]=(f32)z/127.0f; bridge_add_vertex(); }
 void GXPosition2u8(u8 x, u8 y)
@@ -6538,6 +6616,13 @@ static void apply_tev_uniforms(void)
             UPNIV(g_tev_alpha_enabled_loc, num_stages, alpha_enabled_arr);
         if (g_tev_tex_map_loc >= 0)
             UPNIV(g_tev_tex_map_loc, num_stages, tex_map_arr);
+        if (g_tev_tex_coord_loc >= 0) {
+            int tex_coord_arr[MAX_TEV_STAGES];
+            u32 k;
+            for (k = 0; k < num_stages && k < MAX_TEV_STAGES; k++)
+                tex_coord_arr[k] = (int) g_state.tev_stages[k].tex_coord;
+            UPNIV(g_tev_tex_coord_loc, num_stages, tex_coord_arr);
+        }
         
         /* Upload KColor/KAlpha selector arrays */
         GLint kcolor_sel_arr[8], kalpha_sel_arr[8];
@@ -6939,25 +7024,45 @@ static void apply_tev_uniforms(void)
     // Bump map uses u_tex0 (TEXMAP0) - checked via u_tex0_enable in shader
     
     /* Upload texture coordinate generation state */
+    /* Raw GX values: mode GX_TG_MTX3x4 = 0, GX_TG_MTX2x4 = 1 (-1 when no
+     * texgen was set for the coord); source GX_TG_POS = 0, GX_TG_NRM = 1,
+     * GX_TG_TEX0 = 4... The shader used to expect 1/2 for the modes and
+     * 1/2 for POS/NRM, so no texgen ever ran. */
     if (g_texgen0_mode_loc >= 0) {
-        UP1I(g_texgen0_mode_loc, (int)g_state.tex_gen_mode[0]);
+        UP1I(g_texgen0_mode_loc, g_state.tex_gen_enabled[0] ? (int)g_state.tex_gen_mode[0] : -1);
     }
     if (g_texgen0_src_loc >= 0) {
         UP1I(g_texgen0_src_loc, (int)g_state.tex_gen_src[0]);
     }
+    if (g_texgen0_nrm_loc >= 0) {
+        UP1I(g_texgen0_nrm_loc, (int)g_state.tex_gen_normalize[0]);
+    }
     if (g_texgen1_mode_loc >= 0) {
-        UP1I(g_texgen1_mode_loc, (int)g_state.tex_gen_mode[1]);
+        UP1I(g_texgen1_mode_loc, g_state.tex_gen_enabled[1] ? (int)g_state.tex_gen_mode[1] : -1);
     }
     if (g_texgen1_src_loc >= 0) {
         UP1I(g_texgen1_src_loc, (int)g_state.tex_gen_src[1]);
+    }
+    if (g_texgen1_nrm_loc >= 0) {
+        UP1I(g_texgen1_nrm_loc, (int)g_state.tex_gen_normalize[1]);
     }
     if (g_texgen_mtx0_loc >= 0 && g_state.tex_gen_enabled[0]) {
         u32 mtx_id = g_state.tex_gen_mat_id[0];
         if (mtx_id < 68) {
             GLfloat m[16] = {0};
-            for (int i = 0; i < 3; i++)
-                for (int j = 0; j < 4; j++)
-                    m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
+            /* The shader applies this to the object-space attribute, as the
+             * hardware does. A pretransformed batch already carries its
+             * position matrix in the vertices, so a PN row (id < 30) is
+             * identity there; GX_IDENTITY (60) is identity everywhere. */
+            static int oldmtx = -1;
+            if (oldmtx < 0) oldmtx = getenv("MELEE_TEXGEN_OLDMTX") != NULL;
+            if (!oldmtx && (mtx_id == 60 || (g_batch_pretransformed && mtx_id < 30))) {
+                m[0] = m[5] = m[10] = 1.0f;
+            } else {
+                for (int i = 0; i < 3; i++)
+                    for (int j = 0; j < 4; j++)
+                        m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
+            }
             m[3*4 + 3] = 1.0f;
             UPMTX4(g_texgen_mtx0_loc, 1, GL_TRUE, m);
         }
@@ -6966,9 +7071,19 @@ static void apply_tev_uniforms(void)
         u32 mtx_id = g_state.tex_gen_mat_id[1];
         if (mtx_id < 68) {
             GLfloat m[16] = {0};
-            for (int i = 0; i < 3; i++)
-                for (int j = 0; j < 4; j++)
-                    m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
+            /* The shader applies this to the object-space attribute, as the
+             * hardware does. A pretransformed batch already carries its
+             * position matrix in the vertices, so a PN row (id < 30) is
+             * identity there; GX_IDENTITY (60) is identity everywhere. */
+            static int oldmtx = -1;
+            if (oldmtx < 0) oldmtx = getenv("MELEE_TEXGEN_OLDMTX") != NULL;
+            if (!oldmtx && (mtx_id == 60 || (g_batch_pretransformed && mtx_id < 30))) {
+                m[0] = m[5] = m[10] = 1.0f;
+            } else {
+                for (int i = 0; i < 3; i++)
+                    for (int j = 0; j < 4; j++)
+                        m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
+            }
             m[3*4 + 3] = 1.0f;
             UPMTX4(g_texgen_mtx1_loc, 1, GL_TRUE, m);
         }
@@ -7179,10 +7294,209 @@ void GXSetTexCopySrc(u16 left, u16 top, u16 wd, u16 ht)
     g_state.tex_copy_src[2] = wd;
     g_state.tex_copy_src[3] = ht;
 }
+/* EFB-to-texture copies (GXCopyTex). The game renders something into the
+ * framebuffer, copies a rectangle of it out as a tiled GameCube texture in
+ * RAM, and then samples that texture like any other: fighter shadows
+ * (shadow.c: each fighter drawn as a silhouette from the light, 256x256
+ * I4, projected onto the stage), the refraction effect (lbrefract.c: the
+ * whole screen at half size, RGB565) and HSD_ImageDescCopyFromEFB. The copy
+ * used to be a no-op, so every one of those textures stayed zero and the
+ * shadows never appeared.
+ *
+ * The destination is written in RAM, in the tiled layout the upload path
+ * decodes, so nothing downstream changes: HSD calls GXInvalidateTexAll after
+ * the copy, which bumps the cache generation, and the next bind re-hashes
+ * the bytes and re-uploads. A readback is what that costs; a 256x256 copy
+ * at the window's scale is a few hundred KB, twice per frame in a match. */
+static u16 g_copy_dst_w, g_copy_dst_h;
+static u32 g_copy_dst_fmt;
+static int g_copy_dst_half;
+
 void GXSetTexCopyDst(u16 wd, u16 ht, u32 fmt, u32 mipmap)
 {
     gx_flush_pending();
-    (void)wd; (void)ht; (void)fmt; (void)mipmap;
+    g_copy_dst_w = wd;
+    g_copy_dst_h = ht;
+    g_copy_dst_fmt = fmt;
+    g_copy_dst_half = mipmap != 0;
+}
+
+static inline u32 gx_tiled_index(u32 x, u32 y, u32 w, u32 tw, u32 th);
+
+/* Encode one RGBA8 texel into the tiled destination. */
+static void pc_efb_put(u8* d, u32 fmt, u32 w, u32 x, u32 y, u32 r, u32 g,
+                       u32 b, u32 a)
+{
+    u32 lum = (77 * r + 150 * g + 29 * b) >> 8;
+    switch (fmt) {
+    case 0x00: /* GX_TF_I4 */
+    case 0x20: { /* GX_CTF_R4 */
+        u32 ti = gx_tiled_index(x, y, w, 8, 8);
+        u32 v = (fmt == 0x20 ? r : lum) >> 4;
+        if (ti & 1) d[ti >> 1] = (u8) ((d[ti >> 1] & 0xF0) | v);
+        else d[ti >> 1] = (u8) ((d[ti >> 1] & 0x0F) | (v << 4));
+    } break;
+    case 0x01: /* GX_TF_I8 */
+    case 0x27: /* GX_CTF_A8 */
+    case 0x28: /* GX_CTF_R8 */
+    case 0x29: /* GX_CTF_G8 */
+    case 0x2A: { /* GX_CTF_B8 */
+        u32 ti = gx_tiled_index(x, y, w, 8, 4);
+        u32 v = fmt == 0x27 ? a : fmt == 0x28 ? r : fmt == 0x29 ? g
+              : fmt == 0x2A ? b : lum;
+        d[ti] = (u8) v;
+    } break;
+    case 0x02: /* GX_TF_IA4 */
+    case 0x22: { /* GX_CTF_RA4 */
+        u32 ti = gx_tiled_index(x, y, w, 8, 4);
+        u32 v = fmt == 0x22 ? r : lum;
+        d[ti] = (u8) ((a & 0xF0) | (v >> 4));
+    } break;
+    case 0x03: /* GX_TF_IA8 */
+    case 0x23: /* GX_CTF_RA8 */
+    case 0x2B: /* GX_CTF_RG8 */
+    case 0x2C: { /* GX_CTF_GB8 */
+        u32 ti = gx_tiled_index(x, y, w, 4, 4);
+        u32 hi = fmt == 0x2B ? r : fmt == 0x2C ? g : a;
+        u32 lo = fmt == 0x2B ? g : fmt == 0x2C ? b : fmt == 0x23 ? r : lum;
+        d[ti * 2] = (u8) hi;
+        d[ti * 2 + 1] = (u8) lo;
+    } break;
+    case 0x05: { /* GX_TF_RGB5A3 */
+        u32 ti = gx_tiled_index(x, y, w, 4, 4);
+        u32 v;
+        if (a >= 224) {
+            v = 0x8000 | ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+        } else {
+            v = ((a >> 5) << 12) | ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+        }
+        d[ti * 2] = (u8) (v >> 8);
+        d[ti * 2 + 1] = (u8) v;
+    } break;
+    case 0x06: /* GX_TF_RGBA8 */
+    case 0x26: { /* GX_CTF_YUVA8, stored as RGBA here */
+        u32 tiles_per_row = (w + 3) / 4;
+        u32 tile = (y / 4) * tiles_per_row + (x / 4);
+        u32 within = (y % 4) * 4 + (x % 4);
+        u8* t = d + tile * 64;
+        t[within * 2] = (u8) a;
+        t[within * 2 + 1] = (u8) r;
+        t[32 + within * 2] = (u8) g;
+        t[32 + within * 2 + 1] = (u8) b;
+    } break;
+    default: { /* GX_TF_RGB565 and anything unknown */
+        u32 ti = gx_tiled_index(x, y, w, 4, 4);
+        u32 v = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+        d[ti * 2] = (u8) (v >> 8);
+        d[ti * 2 + 1] = (u8) v;
+    } break;
+    }
+}
+
+static void pc_efb_copy(void* dest)
+{
+    GLint r[4];
+    u32 dw = g_copy_dst_w, dh = g_copy_dst_h;
+    u32 sw = g_state.tex_copy_src[2], sh = g_state.tex_copy_src[3];
+    u8* buf;
+    u32 dx, dy;
+    static int log_on = -1;
+
+    if (log_on < 0) log_on = getenv("MELEE_EFBLOG") != NULL;
+    if (dw == 0 || dh == 0 || sw == 0 || sh == 0) return;
+    /* A descriptor that was never converted (or was clobbered) shows up
+     * here as absurd sizes or a pointer made of repeated shorts; the console
+     * would fault on it too. Warn instead, once per site. */
+    if (dw > 1024 || dh > 1024 || !pc_ptr_sane(dest) ||
+        (g_copy_dst_fmt & ~0x2Fu) != 0)
+    {
+        static int warned = 0;
+        if (warned++ < 8)
+            PORT_LOG_WARN("GXCopyTex: insane destination %p %ux%u fmt=%x; "
+                          "skipping copy", dest, dw, dh, g_copy_dst_fmt);
+        return;
+    }
+    pc_fb_rect_to_window((f32) g_state.tex_copy_src[0],
+                         (f32) g_state.tex_copy_src[1], (f32) sw, (f32) sh, r);
+    if (r[2] <= 0 || r[3] <= 0) return;
+    buf = (u8*) malloc((size_t) r[2] * (size_t) r[3] * 4);
+    if (buf == NULL) return;
+    /* Rows come back bottom-up; EFB row 0 is the top. */
+    glReadPixels(r[0], r[1], r[2], r[3], GL_RGBA, GL_UNSIGNED_BYTE, buf);
+    if (log_on) {
+        static u32 n = 0;
+        if (n++ < 40)
+            fprintf(stderr, "[EFB] copy src=(%u,%u %ux%u) win=(%d,%d %dx%d) "
+                    "dst=%ux%u fmt=%02x half=%d -> %p clearz=%.3f\n",
+                    g_state.tex_copy_src[0], g_state.tex_copy_src[1], sw, sh,
+                    r[0], r[1], r[2], r[3], dw, dh, g_copy_dst_fmt,
+                    g_copy_dst_half, dest, (double) g_state.copy_clear_z);
+        /* MELEE_EFBDUMP=<dir>: the first few readbacks as PPMs, top-down. */
+        { static const char* dd = NULL; static int dn = 0;
+          if (dd == NULL) { dd = getenv("MELEE_EFBDUMP"); if (dd == NULL) dd = ""; }
+          if (*dd && dn < 6) {
+              char path[512]; FILE* f;
+              snprintf(path, sizeof(path), "%s/efb_%d.ppm", dd, dn++);
+              f = fopen(path, "wb");
+              if (f) { int y; fprintf(f, "P6\n%d %d\n255\n", r[2], r[3]);
+                  for (y = r[3] - 1; y >= 0; y--) { int x;
+                      for (x = 0; x < r[2]; x++) fwrite(buf + ((size_t) y * r[2] + x) * 4, 1, 3, f); }
+                  fclose(f); }
+          } }
+    }
+    for (dy = 0; dy < dh; dy++) {
+        /* Window rows covered by this destination row (box filter). */
+        u32 wy0 = (u32) r[3] - ((dy + 1) * (u32) r[3]) / dh;
+        u32 wy1 = (u32) r[3] - (dy * (u32) r[3]) / dh;
+        if (wy1 <= wy0) wy1 = wy0 + 1;
+        if (wy1 > (u32) r[3]) wy1 = (u32) r[3];
+        for (dx = 0; dx < dw; dx++) {
+            u32 wx0 = (dx * (u32) r[2]) / dw;
+            u32 wx1 = ((dx + 1) * (u32) r[2]) / dw;
+            u32 sr = 0, sg = 0, sb = 0, sa = 0, n = 0, x, y;
+            if (wx1 <= wx0) wx1 = wx0 + 1;
+            if (wx1 > (u32) r[2]) wx1 = (u32) r[2];
+            for (y = wy0; y < wy1; y++) {
+                const u8* row = buf + ((size_t) y * (u32) r[2] + wx0) * 4;
+                for (x = wx0; x < wx1; x++, row += 4) {
+                    sr += row[0]; sg += row[1]; sb += row[2]; sa += row[3];
+                    n++;
+                }
+            }
+            if (n == 0) n = 1;
+            pc_efb_put((u8*) dest, g_copy_dst_fmt, dw, dx, dy, sr / n, sg / n,
+                       sb / n, sa / n);
+        }
+    }
+    free(buf);
+}
+
+/* GXCopyTex(clear=TRUE) clears the source rectangle to the copy-clear
+ * colour and depth once the copy is done. */
+static void pc_efb_clear_src(void)
+{
+    GLint r[4];
+    pc_fb_rect_to_window((f32) g_state.tex_copy_src[0],
+                         (f32) g_state.tex_copy_src[1],
+                         (f32) g_state.tex_copy_src[2],
+                         (f32) g_state.tex_copy_src[3], r);
+    if (r[2] <= 0 || r[3] <= 0) return;
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(r[0], r[1], r[2], r[3]);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_TRUE);
+    glClearColor(g_state.copy_clear_r, g_state.copy_clear_g,
+                 g_state.copy_clear_b, g_state.copy_clear_a);
+    glClearDepth(g_state.copy_clear_z);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glColorMask(g_state.color_update ? GL_TRUE : GL_FALSE,
+                g_state.color_update ? GL_TRUE : GL_FALSE,
+                g_state.color_update ? GL_TRUE : GL_FALSE,
+                g_state.color_update ? GL_TRUE : GL_FALSE);
+    glDepthMask(g_state.z_update ? GL_TRUE : GL_FALSE);
+    /* Put the game's scissor back (GXSetScissor also handles "disabled"). */
+    GXSetScissor(g_state.scissor_x, g_state.scissor_y, g_state.scissor_w,
+                 g_state.scissor_h);
 }
 void GXSetCopyClamp(u32 clamp)
 {
@@ -7202,8 +7516,14 @@ void GXSetCopyFilter(u32 aa, const u8 sample_pattern[12][2], u32 vf, const u8 vf
 void GXCopyTex(void* dest, u32 clear)
 {
     gx_flush_pending();
-    (void)dest; (void)clear;
-    /* Texture copy from EFB - not needed for forward rendering */
+    if (dest != NULL) {
+        pc_efb_copy(dest);
+    }
+    if (clear) {
+        static int noclear = -1;
+        if (noclear < 0) noclear = getenv("MELEE_EFB_NOCLEAR") != NULL;
+        if (!noclear) pc_efb_clear_src();
+    }
 }
 void GXPixModeSync(void)
 {
@@ -7324,8 +7644,8 @@ void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize, u32 p
         g_state.tex_gen_src[tex] = mat;
         g_state.tex_gen_mat_id[tex] = mtx;
         g_state.tex_gen_pt_id[tex] = pt_texmtx;
+        g_state.tex_gen_normalize[tex] = normalize;
     }
-    (void)normalize;
 }
 void GXSetLineWidth(u32 w, u32 texOffsets)
 {
@@ -7668,22 +7988,35 @@ u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod)
     u32 tileShiftX, tileShiftY, tileBytes;
     u32 bufferSize = 0;
     
-    /* Determine tile size based on format */
+    /* Tile geometry per format, as the hardware lays them out (every tile
+     * is 32 bytes except RGBA8's 64): I4 and CMPR 8x8; I8 and IA4 8x4;
+     * IA8, RGB565 and RGB5A3 4x4; RGBA8 4x4 of 64 bytes. The 16-bit formats
+     * used to be sized as 8x4 tiles of 32 bytes, i.e. one byte per texel --
+     * half their real size -- so every buffer the game allocated for an
+     * RGB565 or RGBA8 image (Pokemon Stadium's screen copies, lb_800121FC)
+     * was half as big as what got written into it. The copy formats
+     * (0x20+) and Z formats map onto the same geometries. */
     u8 fmtIdx = format & 0x0F;
-    if (format == 0x06 || format == 0x16) {  /* RGBA8 or Z24X8 */
-        tileBytes = 64;   /* 64 bytes per 8x8 tile */
-    } else {
-        tileBytes = 32;   /* 32 bytes per 8x4 tile (most formats) */
-    }
-    
-    /* Tile shift values (log2 of tile dimensions in pixels) */
     u32 tsX, tsY;
+    if (format >= 0x20 && format <= 0x2C) {
+        switch (format) {
+        case 0x20: fmtIdx = 0x0; break; /* R4 */
+        case 0x22: fmtIdx = 0x2; break; /* RA4 */
+        case 0x23: case 0x2B: case 0x2C: fmtIdx = 0x3; break; /* RA8, RG8, GB8 */
+        case 0x26: fmtIdx = 0x6; break; /* YUVA8 */
+        default: fmtIdx = 0x1; break;   /* A8, R8, G8, B8 */
+        }
+    }
     switch (fmtIdx) {
-    case 0x00: /* I4, CMPR: 8x8 tiles, 3-bit shift */
-    case 0x0E:
-        tsX = 3; tsY = 3; break;
-    default: /* I8, IA4, IA8, RGB565, RGB5A3, Z*, etc: 8x4 tiles, 3x2 shift */
-        tsX = 3; tsY = 2; break;
+    case 0x00: case 0x0E: /* I4, CMPR */
+        tsX = 3; tsY = 3; tileBytes = 32; break;
+    case 0x01: case 0x02: /* I8, IA4 (and Z8) */
+        tsX = 3; tsY = 2; tileBytes = 32; break;
+    case 0x06: /* RGBA8 (and Z24X8) */
+        tsX = 2; tsY = 2; tileBytes = 64; break;
+    case 0x03: case 0x04: case 0x05: /* IA8, RGB565, RGB5A3 (and Z16) */
+    default:
+        tsX = 2; tsY = 2; tileBytes = 32; break;
     }
     
     if (mipmap) {

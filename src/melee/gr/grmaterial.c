@@ -1,4 +1,6 @@
 #include "grmaterial.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "gr/types.h"
 #include "it/it_2725.h"
@@ -376,6 +378,14 @@ static void fn_801C8EF8(HSD_MObj* mobj, u32 rendermode)
     }
     cur_tobj = NULL;
     tobj = mobj->tobj;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_SHADOWLOG") != NULL) {
+        static int n = 0;
+        if (tobj_shadows != NULL && n++ < 30)
+            fprintf(stderr, "[SHADOW] grMaterial: rendermode=%08x shadows=%p\n",
+                    (unsigned) mobj_rendermode, (void*) tobj_shadows);
+    }
+#endif
     if ((mobj_rendermode & RENDER_SHADOW) && tobj_shadows != NULL) {
         cur_tobj = &tobj;
         while (*cur_tobj != NULL) {

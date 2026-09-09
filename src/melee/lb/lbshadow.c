@@ -363,11 +363,11 @@ void lbShadow_8000F38C(s32 arg0)
     PAD_STACK(0x10);
 
 #if BUILD_TARGET_PC
-    /* PC port: the shadow pass corrupts the stack canary somewhere in its
-     * unconverted-data walk (deterministic SIGABRT once fighters render).
-     * Shadows are cosmetic — skip entirely until lights/shadow data are
-     * converted. Set MELEE_SHADOWS=1 to re-enable for debugging. */
-    if (getenv("MELEE_SHADOWS") == NULL) {
+    /* PC port: this pass was skipped for a long time (a stack-canary abort
+     * from unconverted data, since fixed) and would have drawn nothing
+     * anyway while the bridge's GXCopyTex was a no-op. Both are done;
+     * MELEE_NO_SHADOWS=1 skips it again for comparison. */
+    if (getenv("MELEE_NO_SHADOWS") != NULL) {
         return;
     }
 #endif
@@ -411,6 +411,9 @@ void lbShadow_8000F38C(s32 arg0)
     HSD_ASSERT(0x181, lobj);
 #if BUILD_TARGET_PC
     if (!pc_ptr_sane(lobj)) {
+        if (getenv("MELEE_SHADOWLOG") != NULL) {
+            fprintf(stderr, "[SHADOW] no light object (lobj=%p)\n", (void*) lobj);
+        }
         return; /* PC port: no shadow light available; skip shadow pass */
     }
 #endif
@@ -522,6 +525,21 @@ void lbShadow_8000F38C(s32 arg0)
             }
         }
 
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_SHADOWLOG") != NULL) {
+            static int n = 0;
+            if (n++ < 12) {
+                fprintf(stderr,
+                        "[SHADOW] fighter %p shadow=%p cm=%p b3=%d b7=%d "
+                        "invisible=%d x221E_b5=%d model=%p acc=%p noLight=%d\n",
+                        (void*) gobj, (void*) fp->x20A4.shadow, (void*) cm,
+                        (int) fp->x20A4.x0_b3, (int) fp->x21FC_flag.b7,
+                        (int) fp->invisible, (int) fp->x221E_b5,
+                        (void*) fp->x5AC.xC[1], (void*) fp->x20A0_accessory,
+                        (int) noLight);
+            }
+        }
+#endif
         if (fp->x20A4.shadow != NULL && cm != NULL && !fp->x20A4.x0_b3) {
             u8 intensity = Ground_801C0508();
             shadow2 = fp->x20A4.shadow;

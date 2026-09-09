@@ -175,6 +175,37 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
         return NULL;
     }
 
+    /* unk28/unk2C: the map_head's list of material descriptors that receive
+     * fighter shadows. On the console grDatFiles_801C6228 ORs RENDER_SHADOW
+     * (0x4000000) into each one's rendermode after the load; the MObjs made
+     * from them then carry the flag and grMaterial appends the shadow
+     * textures. Here the joint trees are converted into host copies below,
+     * so the flag has to reach the raw descriptors first: OR it into the
+     * big-endian word now, and the copies inherit it. The list itself is
+     * not needed after this. Without it no stage material ever had the
+     * flag and the shadow pass drew into textures nothing sampled. */
+    {
+        u32 arr = be32_swap(gcnDat->unk28);
+        s32 cnt = be32_swap(gcnDat->unk2C);
+        if (arr != 0 && cnt > 0 && cnt < 4096) {
+            const u8* list = dataBase + arr;
+            s32 k, done = 0;
+            for (k = 0; k < cnt; k++) {
+                u32 off = be32_swap(*(const u32*) (list + 4 * k));
+                if (off != 0) {
+                    u8* rm = dataBase + off + 4; /* HSD_MObjDesc.rendermode */
+                    u32 v = be32_swap(*(u32*) rm) | 0x4000000u;
+                    *(u32*) rm = be32_swap(v);
+                    done++;
+                }
+            }
+            if (getenv("MELEE_SHADOWLOG") != NULL) {
+                fprintf(stderr, "[SHADOW] %d of %d stage materials flagged "
+                        "as shadow receivers\n", done, cnt);
+            }
+        }
+    }
+
     /* Allocate x86_64 struct */
     x64Dat = lbHeap_80015BD0(0, sizeof(UnkStageDat));
     if (x64Dat == NULL) {
@@ -395,10 +426,11 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
     x64Dat->unk1C = be32_swap(gcnDat->unk1C);
     x64Dat->unk20 = gcn_ptr_to_x64(be32_swap(gcnDat->unk20), dataBase);
     x64Dat->unk24 = be32_swap(gcnDat->unk24);
-    /* PC port: unk28 is an array of GCN pointers that would need conversion.
-     * For now, set to NULL to avoid segfaults. */
+    /* unk28 is consumed above (the flag is applied to the raw descriptors
+     * before the joint trees are copied); grDatFiles_801C6228 then has
+     * nothing to do. */
     x64Dat->unk28 = NULL;
-    x64Dat->unk2C = 0;  /* No entries since array is NULL */
+    x64Dat->unk2C = 0;
 
     fprintf(stderr, "[GRDAT] ConvertStageDat complete: %d maps, x64Dat=%p\n", n, (void*)x64Dat);
     fflush(stderr);
@@ -2987,6 +3019,19 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
                 HSD_ArchiveGetPublicAddress(sp14, "yakumono_param");
             stage_info.map_plit =
                 HSD_ArchiveGetPublicAddress(sp14, "map_plit");
+#if BUILD_TARGET_PC
+            /* The stage's light list, read back by Ground_801C49B4 for the
+             * fighters' light (ftCo_8009F4A4) and so for the shadow pass,
+             * which needs a light to project from. Raw it is an array of
+             * big-endian offsets, lb_80011AC4 rejects the first entry and the
+             * fighters' light GObj carries no HSD_LObj at all: no shadows,
+             * and lighting from the generic default list only. Convert it
+             * the way the per-map lists (x64Arr[i].x18 above) already are. */
+            if (stage_info.map_plit != NULL) {
+                stage_info.map_plit = pc_conv_LightListArray(
+                    stage_info.map_plit, sp14->data);
+            }
+#endif
             stage_info.quake_model_set =
                 HSD_ArchiveGetPublicAddress(sp14, "quake_model_set");
 #if BUILD_TARGET_PC
