@@ -2926,18 +2926,8 @@ s32 fn_8016588C(lbl_8046B6A0_24C_t* arg0, s32 arg1)
         }
     } else {
         u16 a = arg0->x58[arg1].xA;
-        v = arg0->x58[arg1].x20 - (arg0->x58[arg1].x24 - a) +
-            a * (s8) arg0->xC;
-        lim = (1 << 24) - 1;
-        result = v;
-        if (lim < 0) {
-            lim = -lim;
-        }
-        if (v > lim) {
-            result = lim;
-        } else if (v < -lim) {
-            result = -lim;
-        }
+        return fn_8016588C_clamp(arg0->x58[arg1].x20 -
+                                 (arg0->x58[arg1].x24 - a) + a * arg0->xC);
     }
 
     return result;
