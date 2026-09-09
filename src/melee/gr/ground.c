@@ -2487,6 +2487,18 @@ s32 Ground_801C33C0(s32 arg0, s32 arg1)
                 }
             }
         }
+#if BUILD_TARGET_PC
+        /* MELEE_STAGE_DIAG: every joint-id lookup a stage makes, with the
+         * table it searched. A -1 here is a float, car or platform whose
+         * joint the stage never finds. */
+        if (getenv("MELEE_STAGE_DIAG") != NULL) {
+            fprintf(stderr, "[JOINTID] map=%d id=%d table=%p n=%d -> %d\n",
+                    (int) arg0, (int) arg1,
+                    tmp != NULL ? (void*) tmp->unk4->unk8[arg0].unk20 : NULL,
+                    tmp != NULL ? (int) tmp->unk4->unk8[arg0].unk24 : -1,
+                    (int) result);
+        }
+#endif
     }
     return result;
 }
@@ -2665,10 +2677,19 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
         int s;
         for (s = 0; s < 4; s++) {
             if (stage_info.x280[s] != NULL) {
-                Vec3 v;
-                lb_8000B1CC(stage_info.x280[s], NULL, &v);
-                fprintf(stderr, "[X280] spawn %d = (%.4f, %.4f, %.4f)\n", s,
-                        (double) v.x, (double) v.y, (double) v.z);
+                /* Read the joint's local translation, not its world matrix:
+                 * lb_8000B1CC here forced HSD_JObjSetupMatrix before the
+                 * stage's root transform was final, and the matrices it
+                 * left behind were what Ground_801C2D24 later read --
+                 * Peach's Castle spawned its fighters at twice the distance
+                 * with this diagnostic on and correctly with it off. A
+                 * probe must not set up matrices the game has not. */
+                HSD_JObj* j = stage_info.x280[s];
+                fprintf(stderr,
+                        "[X280] spawn %d = local (%.4f, %.4f, %.4f)%s\n", s,
+                        (double) j->translate.x, (double) j->translate.y,
+                        (double) j->translate.z,
+                        HSD_JObjMtxIsDirty(j) ? " mtx dirty" : "");
             } else {
                 fprintf(stderr, "[X280] spawn %d = NONE\n", s);
             }
@@ -3082,10 +3103,23 @@ HSD_JObj* Ground_801C3FA4(HSD_GObj* gobj, int depth)
 {
     HSD_JObj* jobj = GET_JOBJ(gobj);
     if (gobj->hsd_obj == NULL) {
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_STAGE_DIAG") != NULL) {
+            fprintf(stderr, "[JOINTWALK] gobj=%p has no HSD object (index %d)\n",
+                    (void*) gobj, depth);
+        }
+#endif
         return NULL;
     }
     jobj = HSD_JObjGetChild(jobj);
     if (jobj == NULL) {
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_STAGE_DIAG") != NULL) {
+            fprintf(stderr, "[JOINTWALK] gobj=%p root %p has no child (index %d, root flags %08x)\n",
+                    (void*) gobj, (void*) GET_JOBJ(gobj), depth,
+                    (unsigned) GET_JOBJ(gobj)->flags);
+        }
+#endif
         return NULL;
     }
     while (jobj != NULL && depth != 0) {
@@ -3110,6 +3144,39 @@ HSD_JObj* Ground_801C3FA4(HSD_GObj* gobj, int depth)
             jobj = HSD_JObjGetParent(jobj);
         }
     }
+#if BUILD_TARGET_PC
+    /* MELEE_STAGE_DIAG: a stage asked for a joint by walk index and the
+     * tree ran out first. Says how many joints the walk can reach, which is
+     * the converted tree's size against the index the console's tree had. */
+    if (jobj == NULL && getenv("MELEE_STAGE_DIAG") != NULL) {
+        int total = 0;
+        HSD_JObj* j = HSD_JObjGetChild(GET_JOBJ(gobj));
+        while (j != NULL && total < 100000) {
+            total++;
+            if (!(j->flags & 0x1000) && HSD_JObjGetChild(j) != NULL) {
+                j = HSD_JObjGetChild(j);
+                continue;
+            }
+            if (HSD_JObjGetNext(j) != NULL) {
+                j = HSD_JObjGetNext(j);
+                continue;
+            }
+            while (true) {
+                if (HSD_JObjGetParent(j) == NULL) {
+                    j = NULL;
+                    break;
+                }
+                if (HSD_JObjGetNext(HSD_JObjGetParent(j)) != NULL) {
+                    j = HSD_JObjGetNext(HSD_JObjGetParent(j));
+                    break;
+                }
+                j = HSD_JObjGetParent(j);
+            }
+        }
+        fprintf(stderr, "[JOINTWALK] gobj=%p wanted index past the tree: "
+                "reachable joints=%d\n", (void*) gobj, total);
+    }
+#endif
     return jobj;
 }
 

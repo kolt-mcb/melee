@@ -136,12 +136,48 @@ int lbColl_803B9880[] = {
     0x00035BAF, 0x00035BB2, 0x00035BB5, 0x00083D60, 0x00083D60, 0x0000020D,
 };
 
+#if BUILD_TARGET_PC
+/* lbColl_804D36AC: read out of the original's data at 0x804D36AC (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36AC = { 0xFF, 0xFF, 0x00, 0x80 };
+#else
 extern GXColor lbColl_804D36AC;
+#endif
+#if BUILD_TARGET_PC
+/* lbColl_804D36B0: read out of the original's data at 0x804D36B0 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36B0 = { 0x80, 0x80, 0x00, 0x80 };
+#else
 extern GXColor lbColl_804D36B0;
+#endif
+#if BUILD_TARGET_PC
+/* lbColl_804D36B4: read out of the original's data at 0x804D36B4 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36B4 = { 0x00, 0xFF, 0x00, 0x80 };
+#else
 extern GXColor lbColl_804D36B4;
+#endif
+#if BUILD_TARGET_PC
+/* lbColl_804D36B8: read out of the original's data at 0x804D36B8 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36B8 = { 0x00, 0x80, 0x00, 0x80 };
+#else
 extern GXColor lbColl_804D36B8;
+#endif
+#if BUILD_TARGET_PC
+/* lbColl_804D36BC: read out of the original's data at 0x804D36BC (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36BC = { 0x00, 0x00, 0xFF, 0x80 };
+#else
 extern GXColor lbColl_804D36BC;
+#endif
+#if BUILD_TARGET_PC
+/* lbColl_804D36C0: read out of the original's data at 0x804D36C0 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36C0 = { 0x00, 0x00, 0x80, 0x80 };
+#else
 extern GXColor lbColl_804D36C0;
+#endif
 
 struct unk {
     GXColor* pad;
@@ -2312,8 +2348,20 @@ bool lbColl_80008820(HitCapsule* capsule, int type, void* victim)
 
 GXColor const lbColl_804D7A50 = { 0 };
 
+#if BUILD_TARGET_PC
+/* lbColl_804D36CC: read out of the original's data at 0x804D36CC (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36CC = { 0x00, 0xFF, 0x80, 0x80 };
+#else
 extern GXColor lbColl_804D36CC;
+#endif
+#if BUILD_TARGET_PC
+/* lbColl_804D36D0: read out of the original's data at 0x804D36D0 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36D0 = { 0x00, 0x80, 0x40, 0x80 };
+#else
 extern GXColor lbColl_804D36D0;
+#endif
 
 void lbColl_800089B8(HitCapsule* hit, UNK_T arg1)
 {
@@ -2732,10 +2780,34 @@ void lbColl_80009DD4(Vec3* v0, Vec3* v1, GXColor* clr)
     HSD_StateInitTev();
 }
 
+#if BUILD_TARGET_PC
+/* lbColl_804D36A0: read out of the original's data at 0x804D36A0 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36A0 = { 0xFF, 0x00, 0x00, 0x80 };
+#else
 extern GXColor lbColl_804D36A0;
+#endif
+#if BUILD_TARGET_PC
+/* lbColl_804D36A4: read out of the original's data at 0x804D36A4 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36A4 = { 0xFF, 0x00, 0xFF, 0x80 };
+#else
 extern GXColor lbColl_804D36A4;
+#endif
+#if BUILD_TARGET_PC
+/* lbColl_804D36A8: read out of the original's data at 0x804D36A8 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36A8 = { 0x80, 0x00, 0x00, 0x80 };
+#else
 extern GXColor lbColl_804D36A8;
+#endif
+#if BUILD_TARGET_PC
+/* lbColl_804D36DC: read out of the original's data at 0x804D36DC (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36DC = { 0xFF, 0xFF, 0xFF, 0x80 };
+#else
 extern GXColor lbColl_804D36DC;
+#endif
 
 bool lbColl_80009F54(HitCapsule* hit, u32 arg1, float arg8)
 {
@@ -2775,8 +2847,20 @@ bool lbColl_80009F54(HitCapsule* hit, u32 arg1, float arg8)
     return 0;
 }
 
+#if BUILD_TARGET_PC
+/* lbColl_804D36E8: read out of the original's data at 0x804D36E8 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36E8 = { 0xFF, 0xFF, 0xFF, 0x80 };
+#else
 extern GXColor lbColl_804D36E8;
+#endif
+#if BUILD_TARGET_PC
+/* lbColl_804D36EC: read out of the original's data at 0x804D36EC (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor lbColl_804D36EC = { 0x80, 0x80, 0x80, 0x80 };
+#else
 extern GXColor lbColl_804D36EC;
+#endif
 
 static inline void lbColl_DrawHitResult(MtxPtr mtx, Vec3* a, Vec3* b,
                                         GXColor* c0, GXColor* c1, f32 size)

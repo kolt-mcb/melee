@@ -153,7 +153,13 @@ typedef struct grZe_YakumonoParam {
 /* 4D6994 */ static s32 grZe_804D6994;
 /* 4D6998 */ static s16 grZe_804D6998[4];
 
+#if BUILD_TARGET_PC
+/* grZe_804DB0B0: read out of the original's data at 0x804DB0B0 (4 bytes); it was a
+ * zeroed data stub on this build. */
+f32 grZe_804DB0B0 = 5.0F;
+#else
 extern f32 grZe_804DB0B0;
+#endif
 
 typedef struct grZe_BubbleEntry {
     /* 0x00 */ u8 x00_active;
@@ -641,7 +647,17 @@ void grZebes_801D881C(HSD_GObj* gobj)
 
 void grZebes_801D90FC(Ground_GObj* arg) {}
 
-u8 grZe_803E1C80[0x6C] = { 0 };
+/* The four zako spawn pairs at 0x803E1C80 in the original's data (each a
+ * start and an end position), read out of the DOL; this was a zeroed
+ * placeholder, so the generator spawned everything at the origin. The
+ * trailing "sima_jobj" string the symbol also covered is a separate string
+ * here. */
+grZakoGenerator_Spawn grZe_803E1C80[4] = {
+    { { 42.5F, -11.0F, 0.0F }, { 42.5F, -25.0F, 0.0F } },
+    { { 30.0F, 1.0F, 11.0F }, { 30.0F, -17.0F, 11.0F } },
+    { { 45.0F, -5.0F, 7.5F }, { 45.0F, -14.0F, 7.5F } },
+    { { 56.0F, 15.0F, 6.0F }, { 56.0F, 4.5F, 6.0F } },
+};
 
 void grZebes_801D9100(HSD_GObj* gobj)
 {

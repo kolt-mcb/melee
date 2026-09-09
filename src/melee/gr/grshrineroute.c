@@ -163,6 +163,13 @@ StageData grSh_Route_803E5988 = {
     NULL,
     0,
 };
+#if BUILD_TARGET_PC
+/* ground.c's stage_datas[] takes this stage by its canonical name, which
+ * only a zeroed weak stub in gr_stubs.c defined here: the stage loaded
+ * nothing. Alias the canonical name to the StageData above. */
+extern StageData grSh_Route_StageData __attribute__((alias("grSh_Route_803E5988")));
+#endif
+
 
 static struct {
     int x0;

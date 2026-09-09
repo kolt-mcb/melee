@@ -57,7 +57,13 @@
 
 #define M_TAU 6.283185307179586
 
+#if BUILD_TARGET_PC
+/* grBb_803B8120: read out of the original's data at 0x803B8120 (20 bytes); it was a
+ * zeroed data stub on this build. */
+ItemKind grBb_803B8120[5] = { 12, 21, 31, 25, 4 };
+#else
 extern ItemKind grBb_803B8120[5];
+#endif
 extern grBb_LineIds grBb_803B8134;
 #if BUILD_TARGET_PC
 /* The 32 collision-line ids of Big Blue's track. This table lives in the DOL's
@@ -881,6 +887,14 @@ void grBigBlue_801E6C60(Ground_GObj* gobj)
                         }
 
                         HSD_JObjSetTranslate(jobj, &pos);
+#if BUILD_TARGET_PC
+                        if (getenv("MELEE_STAGE_DIAG") != NULL) {
+                            extern u32 gm_8016AEDC(void);
+                            fprintf(stderr, "[BBSECTION] gframe=%u i=%d jobj=%p pos=(%.2f,%.2f,%.2f)\n",
+                                    (unsigned) gm_8016AEDC(), (int) i, (void*) jobj,
+                                    (double) pos.x, (double) pos.y, (double) pos.z);
+                        }
+#endif
                         gp->gv.bigblue.data[i].xC.z = pos.y;
 
                         gp->gv.bigblue.data[i].x38 = pos;

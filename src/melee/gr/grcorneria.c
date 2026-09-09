@@ -416,7 +416,13 @@ void grCorneria_801DD2C0(void)
     grCn_804D69AC = 1;
 }
 
+#if BUILD_TARGET_PC
+/* grCn_803B8090: read out of the original's data at 0x803B8090 (12 bytes); it was a
+ * zeroed data stub on this build. */
+Vec3 grCn_803B8090 = { 1.0F, 0.0F, 0.0F };
+#else
 extern Vec3 grCn_803B8090;
+#endif
 
 void grCorneria_801DD350(void)
 {
@@ -584,8 +590,25 @@ void grCorneria_801DD65C(Ground_GObj* gobj)
     GET_GROUND(gobj)->gv.corneria.xC4.flags.b0 = false;
 }
 
+#if BUILD_TARGET_PC
+/* grCn_803E1FE8: read out of the original's data at 0x803E1FE8 (24 bytes); it was a
+ * zeroed data stub on this build. */
+grZakoGenerator_Spawn grCn_803E1FE8[1] = {
+    { { -59.0F, -58.0F, 18.0F }, { -22.0F, -73.0F, 0.0F } }
+};
+#else
 extern grZakoGenerator_Spawn grCn_803E1FE8[];
+#endif
+#if BUILD_TARGET_PC
+/* grCn_803E2000: read out of the original's data at 0x803E2000 (48 bytes); it was a
+ * zeroed data stub on this build. */
+grZakoGenerator_Spawn grCn_803E2000[2] = {
+    { { -81.0F, -21.0F, 28.0F }, { 14.0F, -59.0F, 128.0F } },
+    { { 14.0F, -59.0F, 128.0F }, { 0.0F, -75.0F, 173.0F } }
+};
+#else
 extern grZakoGenerator_Spawn grCn_803E2000[];
+#endif
 
 void grCorneria_801DD674(Ground_GObj* ground_gobj)
 {
@@ -769,7 +792,154 @@ void grCorneria_801DDD4C(Vec3* vec)
     vec->z = 0.0f;
 }
 
+#if BUILD_TARGET_PC
+/* grCn_803E2204: read out of the original's data at 0x803E2204 (1200 bytes); it was a
+ * zeroed data stub on this build. */
+grCn_Entry grCn_803E2204[20][5] = {
+    {
+        { { 1, 7, 350014 } },
+        { { 4, 8, 350015 } },
+        { { 2, 9, 350016 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 2, 10, 350017 } },
+        { { 1, 11, 350018 } },
+        { { 4, 12, 350019 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 4, 13, 350020 } },
+        { { 1, 14, 350021 } },
+        { { 2, 15, 350022 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 2, 16, 350023 } },
+        { { 1, 17, 350024 } },
+        { { 4, 18, 350025 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 1, 47, 100119 } },
+        { { 4, 48, 100120 } },
+        { { 3, 49, 100121 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 3, 36, 100108 } },
+        { { 1, 11, 350018 } },
+        { { 4, 12, 350019 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 4, 44, 100116 } },
+        { { 1, 45, 100117 } },
+        { { 3, 46, 100118 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 4, 50, 100122 } },
+        { { 1, 51, 100123 } },
+        { { 3, 52, 100124 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 4, 19, 110112 } },
+        { { 2, 20, 110113 } },
+        { { 4, 21, 110114 } },
+        { { 1, 22, 110115 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 1, 23, 110116 } },
+        { { 4, 24, 110117 } },
+        { { 2, 25, 110118 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 4, 26, 110119 } },
+        { { 1, 27, 110120 } },
+        { { 2, 28, 110121 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 1, 29, 110122 } },
+        { { 1, 30, 110123 } },
+        { { 1, 31, 110124 } },
+        { { 4, 32, 110125 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 2, 33, 110126 } },
+        { { 1, 34, 110127 } },
+        { { 4, 35, 110128 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 3, 36, 100108 } },
+        { { 4, 37, 100109 } },
+        { { 1, 38, 100110 } },
+        { { 1, 39, 100111 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 1, 40, 100112 } },
+        { { 4, 41, 100113 } },
+        { { 3, 42, 100114 } },
+        { { 4, 43, 100115 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 4, 44, 100116 } },
+        { { 1, 45, 100117 } },
+        { { 3, 46, 100118 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 1, 47, 100119 } },
+        { { 4, 48, 100120 } },
+        { { 3, 49, 100121 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 4, 50, 100122 } },
+        { { 1, 51, 100123 } },
+        { { 3, 52, 100124 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 4, 5, 350012 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    },
+    {
+        { { 4, 6, 350013 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } },
+        { { 0, 0, 0 } }
+    }
+};
+#else
 extern grCn_Entry grCn_803E2204[][5];
+#endif
 
 void grCorneria_801DDDA8(HSD_GObj* gobj, Vec3* vec)
 {
@@ -2363,15 +2533,69 @@ HSD_GObj* grCorneria_801E1BF0(void)
     return gobj;
 }
 
+#if BUILD_TARGET_PC
+/* grCn_804DB218: read out of the original's data at 0x804DB218 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor grCn_804DB218 = { 0xAE, 0xBA, 0xD6, 0xFF };
+#else
 extern GXColor grCn_804DB218;
+#endif
+#if BUILD_TARGET_PC
+/* grCn_804DB21C: read out of the original's data at 0x804DB21C (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor grCn_804DB21C = { 0xD7, 0xE4, 0xF6, 0xFF };
+#else
 extern GXColor grCn_804DB21C;
+#endif
+#if BUILD_TARGET_PC
+/* grCn_804DB220: read out of the original's data at 0x804DB220 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor grCn_804DB220 = { 0xE0, 0xEC, 0xFA, 0xFF };
+#else
 extern GXColor grCn_804DB220;
+#endif
+#if BUILD_TARGET_PC
+/* grCn_804DB224: read out of the original's data at 0x804DB224 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor grCn_804DB224 = { 0x6A, 0x9E, 0xAD, 0xFF };
+#else
 extern GXColor grCn_804DB224;
+#endif
+#if BUILD_TARGET_PC
+/* grCn_804DB228: read out of the original's data at 0x804DB228 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor grCn_804DB228 = { 0x4F, 0x94, 0xB5, 0xFF };
+#else
 extern GXColor grCn_804DB228;
+#endif
+#if BUILD_TARGET_PC
+/* grCn_804DB22C: read out of the original's data at 0x804DB22C (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor grCn_804DB22C = { 0x49, 0x6E, 0x3F, 0xFF };
+#else
 extern GXColor grCn_804DB22C;
+#endif
+#if BUILD_TARGET_PC
+/* grCn_804DB230: read out of the original's data at 0x804DB230 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor grCn_804DB230 = { 0x6A, 0x9E, 0xAD, 0xFF };
+#else
 extern GXColor grCn_804DB230;
+#endif
+#if BUILD_TARGET_PC
+/* grCn_804DB234: read out of the original's data at 0x804DB234 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor grCn_804DB234 = { 0x4F, 0x94, 0xB5, 0xFF };
+#else
 extern GXColor grCn_804DB234;
+#endif
+#if BUILD_TARGET_PC
+/* grCn_804DB238: read out of the original's data at 0x804DB238 (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor grCn_804DB238 = { 0x00, 0x50, 0x91, 0xFF };
+#else
 extern GXColor grCn_804DB238;
+#endif
 
 void grCorneria_801E2110(void)
 {
@@ -2582,7 +2806,13 @@ void grCorneria_801E2738(HSD_GObj* gobj, void* ptr, u32 idx1, u32 idx2)
                         grCn_803E1D38.entries[idx1][idx2].data[2]);
 }
 
+#if BUILD_TARGET_PC
+/* grCn_804DB24C: read out of the original's data at 0x804DB24C (4 bytes); it was a
+ * zeroed data stub on this build. */
+GXColor grCn_804DB24C = { 0xFF, 0xFF, 0xFF, 0xFF };
+#else
 extern GXColor grCn_804DB24C;
+#endif
 
 void grCorneria_801E277C(Ground_GObj* gobj, struct grSmashTaunt_GroundVars* gv)
 {

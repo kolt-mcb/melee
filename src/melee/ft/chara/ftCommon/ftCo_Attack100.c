@@ -110,8 +110,20 @@
 /* 0DBBF8 */ void fn_800DBBF8(Fighter_GObj* gobj);
 
 extern f32 ftCo_804D90D0; // 0.0f
+#if BUILD_TARGET_PC
+/* ftCo_804D90D4: read out of the original's data at 0x804D90D4 (4 bytes); it was a
+ * zeroed data stub on this build. */
+f32 ftCo_804D90D4 = 1.0F;
+#else
 extern f32 ftCo_804D90D4; // Decrement value
+#endif
+#if BUILD_TARGET_PC
+/* ftCo_804D90D8: read out of the original's data at 0x804D90D8 (8 bytes); it was a
+ * zeroed data stub on this build. */
+f64 ftCo_804D90D8 = 1.0;
+#else
 extern f64 ftCo_804D90D8; // Increment value (Double)
+#endif
 
 /* This was a struct laid over Fighter by raw GameCube byte offsets, reaching
  * grab_timer (fp+1A4C), victim_gobj (fp+1A58) and the capturewait arm of the
@@ -635,7 +647,13 @@ void ft_800D76B8(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     extern int ftCo_804D9020;
-    extern int ftCo_804D9024;
+#if BUILD_TARGET_PC
+/* ftCo_804D9024: read out of the original's data at 0x804D9024 (4 bytes); it was a
+ * zeroed data stub on this build. */
+int ftCo_804D9024 = (int) 0x3F800000; /* float 1.0F */
+#else
+extern int ftCo_804D9024;
+#endif
 
     if (it_8026B594(fp->item_gobj) == false) {
         Fighter_ChangeMotionState(
@@ -882,7 +900,13 @@ void fn_800D7BDC(Fighter_GObj* gobj)
 void fn_800D7C60(Fighter_GObj* gobj)
 {
     extern int ftCo_804D9028;
-    extern int ftCo_804D902C;
+#if BUILD_TARGET_PC
+/* ftCo_804D902C: read out of the original's data at 0x804D902C (4 bytes); it was a
+ * zeroed data stub on this build. */
+int ftCo_804D902C = (int) 0x3F800000; /* float 1.0F */
+#else
+extern int ftCo_804D902C;
+#endif
     Fighter* fp = gobj->user_data;
     Fighter_GObj* temp_gobj;
     FtMotionId msid;
@@ -1057,7 +1081,13 @@ void fn_800D80F4(Fighter_GObj* gobj)
 void fn_800D8140(Fighter_GObj* gobj, int arg1)
 {
     extern int ftCo_804D9030;
-    extern int ftCo_804D9034;
+#if BUILD_TARGET_PC
+/* ftCo_804D9034: read out of the original's data at 0x804D9034 (4 bytes); it was a
+ * zeroed data stub on this build. */
+int ftCo_804D9034 = (int) 0x3F800000; /* float 1.0F */
+#else
+extern int ftCo_804D9034;
+#endif
     Fighter* fp = gobj->user_data;
     FtMotionId msid;
     PAD_STACK(8);
@@ -1258,7 +1288,13 @@ void fn_800D86E0(Fighter_GObj* gobj)
 void fn_800D874C(Fighter_GObj* gobj)
 {
     extern int ftCo_804D9038;
-    extern int ftCo_804D903C;
+#if BUILD_TARGET_PC
+/* ftCo_804D903C: read out of the original's data at 0x804D903C (4 bytes); it was a
+ * zeroed data stub on this build. */
+int ftCo_804D903C = (int) 0x3F800000; /* float 1.0F */
+#else
+extern int ftCo_804D903C;
+#endif
     Fighter* fp = gobj->user_data;
     Fighter_GObj* temp_gobj;
     FtMotionId msid;

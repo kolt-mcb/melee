@@ -150,7 +150,13 @@ struct StageData grRc_StageData = {
     (*(struct grRCruise_VanishDesc*) ((u8*) grRc_803E4DA8 + 0x26C))
 extern Vec3 grRc_803B8288;
 extern s16 grRc_803E4FF0[];
+#if BUILD_TARGET_PC
+/* grRc_804D4790: read out of the original's data at 0x804D4790 (6 bytes); it was a
+ * zeroed data stub on this build. */
+s16 grRc_804D4790[3] = { 1, 26, 51 };
+#else
 extern s16 grRc_804D4790[4];
+#endif
 
 static struct {
     f32 x0;
