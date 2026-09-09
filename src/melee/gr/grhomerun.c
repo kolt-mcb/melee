@@ -1023,7 +1023,13 @@ bool grHomeRun_8021EEBC(Vec3* a, int b, HSD_JObj* jobj)
     }
 }
 
+#if BUILD_TARGET_PC
+/* grHr_804DBC94: read out of the original's data at 0x804DBC94 (4 bytes); it was a
+ * zeroed data stub on this build. */
+f32 grHr_804DBC94 = 5.0F;
+#else
 extern f32 grHr_804DBC94;
+#endif
 
 f32 grHomeRun_8021EF10(void)
 {

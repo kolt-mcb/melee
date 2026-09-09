@@ -174,10 +174,58 @@ typedef struct {
     u16 x04;
     u16 x06;
     HSD_GObj* x08;
-    u8 pad_0C[4]; // pad to 0x10
-} grPu_DynObjDesc;
+} grPu_DynObjDesc; /* 12 bytes on the GameCube */
 
-static grPu_DynObjDesc grPu_803E6C0C[0x2A] = { {0} };
+/* The 42 records at 0x803E6C0C in the original's data: the stage GObj id
+ * each float's collision rides, the archive its joint table lives in, the
+ * joint id, and a slot for the joint once found. This was an all-zero
+ * placeholder, so every float looked up joint 0 of GObj 0 and the floats
+ * carried no collision -- fighters spawned onto nothing and fell. Read out
+ * of the DOL (12-byte rows, the last word a NULL pointer); -1 ends it. */
+static grPu_DynObjDesc grPu_803E6C0C[0x2A] = {
+    { 20, 2, 21, 0, NULL },
+    { 21, 2, 22, 0, NULL },
+    { 22, 2, 23, 0, NULL },
+    { 23, 2, 24, 0, NULL },
+    { 24, 2, 25, 0, NULL },
+    { 25, 2, 26, 0, NULL },
+    { 26, 2, 27, 0, NULL },
+    { 39, 2, 28, 0, NULL },
+    { 284, 12, 21, 0, NULL },
+    { 285, 12, 23, 0, NULL },
+    { 267, 12, 24, 0, NULL },
+    { 261, 12, 25, 0, NULL },
+    { 262, 12, 26, 0, NULL },
+    { 275, 12, 27, 0, NULL },
+    { 276, 12, 28, 0, NULL },
+    { 277, 12, 29, 0, NULL },
+    { 269, 12, 30, 0, NULL },
+    { 270, 12, 31, 0, NULL },
+    { 272, 12, 32, 0, NULL },
+    { 286, 12, 33, 0, NULL },
+    { 180, 8, 23, 0, NULL },
+    { 181, 8, 51, 0, NULL },
+    { 182, 8, 27, 0, NULL },
+    { 183, 8, 30, 0, NULL },
+    { 184, 8, 31, 0, NULL },
+    { 513, 25, 10, 0, NULL },
+    { 514, 25, 13, 0, NULL },
+    { 520, 25, 16, 0, NULL },
+    { 521, 25, 19, 0, NULL },
+    { 522, 25, 22, 0, NULL },
+    { 496, 25, 25, 0, NULL },
+    { 497, 25, 28, 0, NULL },
+    { 500, 25, 31, 0, NULL },
+    { 523, 25, 32, 0, NULL },
+    { 524, 25, 29, 0, NULL },
+    { 527, 25, 26, 0, NULL },
+    { 528, 25, 23, 0, NULL },
+    { 525, 25, 20, 0, NULL },
+    { 526, 25, 17, 0, NULL },
+    { 494, 25, 14, 0, NULL },
+    { 495, 25, 11, 0, NULL },
+    { -1, 0, 0, 0, NULL },
+};
 
 void* grPu_803E6E20;
 

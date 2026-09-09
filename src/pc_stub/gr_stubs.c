@@ -273,9 +273,10 @@ __attribute__((weak)) StageData grHr_StageData = { 0 };
 
 /* gricemt.h declares this as `extern f32`; it is a scroll-rate multiplier.
  * As a weak *function* it made `grIm_804DB570 * y_pos` read instruction bytes
- * as a float. 1.0f keeps the multiply neutral until the real value is
- * decompiled -- zero would freeze Icicle Mountain's scroll. */
-__attribute__((weak)) f32 grIm_804DB570 = 1.0f;
+ * as a float. The value is -20.0f, read out of the DOL at 0x804DB570
+ * (sdata2); with the 1.0f placeholder every Icicle Mountain segment sat 18
+ * units too high on match frame 1. */
+__attribute__((weak)) f32 grIm_804DB570 = -20.0f;
 
 
 

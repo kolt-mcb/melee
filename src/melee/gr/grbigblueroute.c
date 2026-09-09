@@ -127,6 +127,13 @@ static struct {
     0,
     "%s:%d: couldn t get gobj(id=%d)\n",
 };
+#if BUILD_TARGET_PC
+/* ground.c's stage_datas[] takes this stage by its canonical name, which
+ * only a zeroed weak stub in gr_stubs.c defined here: the stage loaded
+ * nothing. Alias the canonical name to the StageData above. */
+extern StageData grBb_Route_StageData __attribute__((alias("grBb_Route_803E617C")));
+#endif
+
 
 static struct {
     int x0;
@@ -422,7 +429,14 @@ void grBigBlueRoute_8020BF38(Ground_GObj* gobj)
 
 void grBigBlueRoute_8020C13C(Ground_GObj* arg) {}
 
+#if BUILD_TARGET_PC
+/* grBb_Route_803E6200: thirty s16 read out of the original's data at
+ * 0x803E6200 (grFZeroCar_801CAFBC walks it as s16*); it was a zeroed data
+ * stub on this build. */
+s16 grBb_Route_803E6200[30] = { 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 3, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 34, 35, 36, 37 };
+#else
 extern u8 grBb_Route_803E6200[0x3C];
+#endif
 
 void grBigBlueRoute_8020C140(Ground_GObj* gobj)
 {

@@ -65,6 +65,21 @@ comparison, found through the new `p_aihash` column, account for the whole
 Every drift-class number above and in Phase 6 predates this and is being
 re-run. The frame-1 stage class is unaffected (those are real).
 
+**2026-09-09.** Re-measured with the fixed harness: Captain, Peach and Samus
+on all 29 stages (87 cells): 9 identical for 600 frames, 23% of compared
+frames identical before the first difference. Nearly every mid-match cell
+now parts first on `p_aihash`; the three pinned causes are in
+docs/../memory (uninitialised DI stick bytes the console fills from `&seed`
+and the other fighter's address; a 1-ulp `kb_vel.x`; Onett frame-1 hurt
+capsules cached from a different moment). Two data classes found by reading
+and fixed from the DOL: zeroed `PC_DATA_STUB` symbols with real console
+data (Mute City's stage script -- the port hung on it -- and car tracks,
+Corneria's tables, Big Blue's route, Poké Floats' float descs, Brinstar's
+zako spawns, ftCo_Attack100's grab constants), and `(u32)`-truncated GObj
+pointer stores in four stage files. HSD_MtxInverse* / HSD_MtxScaledAdd,
+every spline evaluator and the animation-rewind fmod now follow the
+console's fused sequences.
+
 ## Phase 0 -- Guardrails (days)
 
 Cheap, and everything after depends on them.

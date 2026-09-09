@@ -124,9 +124,19 @@ static struct grIceMt_YakumonoParam* pc_icemt_param(const void* raw)
     /* 0x00..0xAB: 32-bit scalars, except the two u16 at 0x38. The host
      * struct has the same offsets up to here. */
     for (o = 0; o < 0xAC; o += 4) {
-        if (o == 0x38) {
-            d->x38 = (u16) (pc_icemt_be32(p + o) >> 16);
-            d->x3A = (u16) (pc_icemt_be32(p + o) & 0xFFFF);
+        /* Six of the words are pairs of s16 that this file reads through
+         * `((s16*) yakumono_param)[k]` -- 0x00 (1,3), 0x34 (60,360), 0x38
+         * (900,30), 0x98 (48,70), 0xA4 (15,11), 0xA8 (-190,0) in GrIm.dat --
+         * whatever the struct calls them. A word swap crossed each pair:
+         * the scroll-speed threshold at 0x98 and the timer at 0xA4 came out
+         * as the other half, and the stage scrolled at a fifth of the
+         * console's speed. Keep those halves at their console bytes. */
+        if (o == 0x00 || o == 0x34 || o == 0x38 || o == 0x98 || o == 0xA4 ||
+            o == 0xA8)
+        {
+            u32 w = pc_icemt_be32(p + o);
+            *(u16*) ((u8*) d + o) = (u16) (w >> 16);
+            *(u16*) ((u8*) d + o + 2) = (u16) (w & 0xFFFF);
         } else {
             *(u32*) ((u8*) d + o) = pc_icemt_be32(p + o);
         }
