@@ -367,11 +367,28 @@ HSD_ImageDesc* lb_800121FC(HSD_ImageDesc* image_desc, int width, int height,
     {
         size_t buffer_size = GXGetTexBufferSize(
             image_desc->width, image_desc->height, image_desc->format, 0, 0);
+#if BUILD_TARGET_PC
+        /* On the console the "preloaded archive" for one of these entries
+         * is a reserved block the EFB copy lands in. Here the preload cache
+         * holds whatever file that entry number names, sized by that file,
+         * and Pokemon Stadium's 250x160 screen copy ran off the end of it
+         * into the animation heap (JObjAnimAll faulted a few frames later).
+         * The descriptor only needs a buffer of its own size: allocate it. */
+        (void) setImageFromPreloadedArchive;
+        image_desc->image_ptr = HSD_MemAlloc((buffer_size + 0x1F) & ~0x1F);
+        if (entry_num != 0 && getenv("MELEE_EFBLOG") != NULL) {
+            fprintf(stderr, "[EFB] desc %p %dx%d fmt=%d: own buffer %p "
+                    "(%zu bytes) instead of preload entry %d\n",
+                    (void*) image_desc, width, height, (int) format,
+                    image_desc->image_ptr, buffer_size, (int) entry_num);
+        }
+#else
         if (entry_num == 0 ||
             !setImageFromPreloadedArchive(image_desc, entry_num))
         {
             image_desc->image_ptr = HSD_MemAlloc((buffer_size + 0x1F) & ~0x1F);
         }
+#endif
     }
     return image_desc;
 }

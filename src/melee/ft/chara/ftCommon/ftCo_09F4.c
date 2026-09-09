@@ -9,6 +9,8 @@
 #include "lb/lbspdisplay.h"
 
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <baselib/cobj.h>
 #include <baselib/gobj.h>
 #include <baselib/gobjgxlink.h>
@@ -57,6 +59,12 @@ void ftCo_8009F4A4(void)
 {
     HSD_GObj* gobj = GObj_Create(12, 3, 0);
     HSD_LObj* lobj = lb_80011AC4(Ground_801C49B4());
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_LOBJLOG") != NULL) {
+        fprintf(stderr, "[LIGHTS] fighter light: list=%p lobj=%p\n",
+                (void*) Ground_801C49B4(), (void*) lobj);
+    }
+#endif
     lobj0 = lobj;
     lobj1 = lb_8000CDC0(lobj);
     Ground_801C2374(lobj);
