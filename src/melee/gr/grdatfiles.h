@@ -50,6 +50,8 @@ void grDatFiles_ResolvePObjJoints(void);
 struct MapCollData* grDatFiles_ConvertMapCollDataGCNtoX64(const u8* raw,
                                                           u8* dataBase);
 void grDatFiles_ResetJointMap(void);
+/* The host HSD_ImageDesc converted from these raw archive bytes, or NULL. */
+struct HSD_ImageDesc* grDatFiles_LookupImageDesc(const void* raw);
 #endif /* BUILD_TARGET_PC */
 
 #endif
