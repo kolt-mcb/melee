@@ -1,0 +1,8 @@
+{
+  "name": "melee-pc-slippi-check",
+  "private": true,
+  "description": "Validation harness: reads the port's .slp output with Project Slippi's own parser. Install with `npm install` in this directory; node_modules/ is gitignored.",
+  "dependencies": {
+    "@slippi/slippi-js": "^7.1.0"
+  }
+}
