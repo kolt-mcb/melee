@@ -877,6 +877,41 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         }
     }
 
+    /* +0x58: the leg-IK table (ftData_x58_t, 0x1C bytes): three pairs of
+     * part indices (left/right hip, knee, foot, one byte each) with the bone
+     * lengths between them as floats. ft_80089B08 reads it every frame a
+     * fighter stands to plant the feet on the floor, rotating the leg joints
+     * through the IK solver and then putting the animation's Euler rotation
+     * back *without* dirtying the joints, so the world matrices keep the
+     * planted pose until the next frame. Left NULL, that pass was skipped
+     * and the hurt capsules on the leg bones (and the leg render) were built
+     * from the unplanted animation pose instead: the frame-1 aihash class
+     * on every stage with a standing fighter. */
+    {
+        u32 off58 = pc_be32(*(const u32*) (raw + 0x58));
+        if (off58 != 0 && off58 + 0x1C <= len) {
+            ftData_x58_t* ik = pc_lowmem_alloc(sizeof(*ik));
+            if (ik != NULL) {
+                const u8* src58 = base + off58;
+                memcpy(ik, src58, 0x1C);
+                *(u32*) &ik->x4 = pc_be32(*(const u32*) (src58 + 0x04));
+                *(u32*) &ik->xC = pc_be32(*(const u32*) (src58 + 0x0C));
+                *(u32*) &ik->x18 = pc_be32(*(const u32*) (src58 + 0x18));
+                if (pc_ftconv_trace()) {
+                    fprintf(stderr,
+                            "[FTCONV] leg ik: parts %u/%u %u/%u %u/%u len "
+                            "%.3f %.3f %.3f\n",
+                            ik->x0, ik->x1, ik->x8, ik->x9, ik->x10, ik->x11,
+                            (double) ik->x4, (double) ik->xC,
+                            (double) ik->x18);
+                }
+            }
+            out->x58 = ik;
+        } else {
+            out->x58 = NULL;
+        }
+    }
+
     /* +0x04 ext_attr -- the per-character attribute blob (ftMario_DatAttrs,
      * ftFox_DatAttrs, ...). Every field in every one of those structs is a
      * 4-byte word (the u8 members are all 4-aligned padding gaps), so the
@@ -1195,7 +1230,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
     }
 
     /* Deliberately left NULL until something needs them:
-     * x1C, x24, x28, x34, x38, x44, x58, x5C. */
+     * x1C, x24, x28, x34, x38, x44, x5C. */
 
     if (pc_ftconv_trace()) {
         fprintf(stderr,

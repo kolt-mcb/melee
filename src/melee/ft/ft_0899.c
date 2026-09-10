@@ -84,6 +84,13 @@ static bool fn_8008998C(Fighter* fp, IKState* ik, Vec3* normal)
     return 1;
 }
 
+#if BUILD_TARGET_PC
+/* The console defines this in db/dbsound.c as 1 (the debug menu's "leg IK"
+ * switch). That file is not in the PC build, so the symbol fell through to
+ * the zeroed weak data stub and the whole planting pass below was off. */
+int db_804D4AF8 = 1;
+#endif
+
 void ft_80089B08(Fighter_GObj* gobj)
 {
     u8 _[8];

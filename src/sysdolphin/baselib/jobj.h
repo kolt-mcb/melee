@@ -293,8 +293,15 @@ inline void HSD_JObjSetupMatrix(HSD_JObj* jobj)
     if (!jobj || !HSD_JObjMtxIsDirty(jobj)) {
 #if BUILD_TARGET_PC
         /* PC port: even if not dirty, ensure parent matrix is computed.
-         * This prevents uninitialized matrix reads during rendering. */
-        if (jobj && jobj->parent != NULL) {
+         * This prevents uninitialized matrix reads during rendering.
+         * MELEE_SETUPMTX_STRICT=1 restores the console's behaviour (a clean
+         * joint is left alone) for comparison. */
+        extern int pc_setupmtx_strict;
+        if (pc_setupmtx_strict < 0) {
+            extern char* getenv(const char*);
+            pc_setupmtx_strict = getenv("MELEE_SETUPMTX_STRICT") != 0;
+        }
+        if (!pc_setupmtx_strict && jobj && jobj->parent != NULL) {
             HSD_JObjSetupMatrix(jobj->parent);
         }
 #endif /* BUILD_TARGET_PC */
