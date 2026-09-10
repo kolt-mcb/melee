@@ -6,6 +6,7 @@
  * path from a fighter's bones to where it ends up standing. */
 #define MPC_FMA(a, b, c) fmaf((a), (b), (c))
 #include <stdio.h>
+#include "gm/gm_1601.h"
 #include <string.h>
 #include <stdlib.h>
 extern int gm_8016AEDC(void);
@@ -3861,9 +3862,24 @@ bool mpColl_8004A908_Floor(CollData* coll, int line_id)
             &floor_id, &flags, &normal, coll->floor_skip, coll->joint_id_skip,
             coll->joint_id_only, NULL, NULL);
     }
+#if BUILD_TARGET_PC
+    {
+        static int lo = -1, hi = -1;
+        extern int mpColl_804D64AC;
+        if (lo < 0) { const char* e = getenv("MELEE_MPTRACE"); lo = hi = 0; if (e) sscanf(e, "%d-%d", &lo, &hi); }
+        if (hi > 0) { u32 fr = gm_8016AEDC();
+            if ((int) fr >= lo && (int) fr <= hi)
+                fprintf(stderr, "[MPTRACE] f%u A908 pass%d x38=%d cnt=%d hit=%d floor_id=%d line_id=%d\n",
+                        fr, __LINE__ > 0 ? 1 : 0, (int) coll->x38, (int) mpColl_804D64AC, (int) hit_floor, floor_id, line_id); }
+    }
+#endif
     if (hit_floor && floor_id != -1 && floor_id != line_id &&
         (line_id == -1 || !mpLinesConnected(floor_id, line_id)))
     {
+#if BUILD_TARGET_PC
+        { static int lo=-1, hi=-1; if (lo<0){const char* e=getenv("MELEE_MPTRACE"); lo=hi=0; if(e) sscanf(e,"%d-%d",&lo,&hi);}
+          if (hi>0){u32 fr=gm_8016AEDC(); if((int)fr>=lo&&(int)fr<=hi) fprintf(stderr,"[MPTRACE] f%u A908 store%d floor=%d\n",fr,__COUNTER__+1,floor_id);} }
+#endif
         coll->floor.index = floor_id;
         coll->floor.flags = flags;
         coll->floor.normal = normal;
@@ -3883,9 +3899,24 @@ bool mpColl_8004A908_Floor(CollData* coll, int line_id)
             &floor_id, &flags, &normal, coll->floor_skip, coll->joint_id_skip,
             coll->joint_id_only, NULL, NULL);
     }
+#if BUILD_TARGET_PC
+    {
+        static int lo = -1, hi = -1;
+        extern int mpColl_804D64AC;
+        if (lo < 0) { const char* e = getenv("MELEE_MPTRACE"); lo = hi = 0; if (e) sscanf(e, "%d-%d", &lo, &hi); }
+        if (hi > 0) { u32 fr = gm_8016AEDC();
+            if ((int) fr >= lo && (int) fr <= hi)
+                fprintf(stderr, "[MPTRACE] f%u A908 pass%d x38=%d cnt=%d hit=%d floor_id=%d line_id=%d\n",
+                        fr, __LINE__ > 0 ? 2 : 0, (int) coll->x38, (int) mpColl_804D64AC, (int) hit_floor, floor_id, line_id); }
+    }
+#endif
     if (hit_floor && floor_id != -1 && floor_id != line_id &&
         (line_id == -1 || !mpLinesConnected(floor_id, line_id)))
     {
+#if BUILD_TARGET_PC
+        { static int lo=-1, hi=-1; if (lo<0){const char* e=getenv("MELEE_MPTRACE"); lo=hi=0; if(e) sscanf(e,"%d-%d",&lo,&hi);}
+          if (hi>0){u32 fr=gm_8016AEDC(); if((int)fr>=lo&&(int)fr<=hi) fprintf(stderr,"[MPTRACE] f%u A908 store%d floor=%d\n",fr,__COUNTER__+1,floor_id);} }
+#endif
         coll->floor.index = floor_id;
         coll->floor.flags = flags;
         coll->floor.normal = normal;
