@@ -1060,13 +1060,26 @@ static HSD_GObj* Item_8026862C(SpawnItem* spawnItem)
     GObj_InitUserData(gobj, 6, Item_OnUserDataRemove, user_data);
     Item_80267AA8(gobj, spawnItem);
 #if BUILD_TARGET_PC
-    /* Item_80267AA8 returns early when the article data is missing (see
-     * there). Unwind the same way the Item_802682F0 failure below does, so
-     * the caller gets NULL rather than a half-built item. */
-    if (((Item*) HSD_GObjGetUserData(gobj))->xC4_article_data == NULL) {
-        port_guard_warn("item.c:Item_8026862C no article data; spawn refused");
-        HSD_GObjPLink_80390228(gobj);
-        return NULL;
+    /* Item_80267AA8 returns early when the article data is missing, or when
+     * it is present but carries no model description (see there). Unwind the
+     * same way the Item_802682F0 failure below does, so the caller gets NULL
+     * rather than a half-built item.
+     *
+     * The model-description half matters as much as the article half, and it
+     * is the one this missed: every step after this point walks
+     * xC4_article_data->x10_modelDesc without checking it -- Item_802682F0
+     * reads ->x4_bone_count at item.c:890 straight away -- so refusing the
+     * spawn here is what keeps a NULL out of all of them at once. */
+    {
+        Item* it = (Item*) HSD_GObjGetUserData(gobj);
+        if (it->xC4_article_data == NULL ||
+            it->xC4_article_data->x10_modelDesc == NULL)
+        {
+            port_guard_warn("item.c:Item_8026862C no article data or model; "
+                            "spawn refused");
+            HSD_GObjPLink_80390228(gobj);
+            return NULL;
+        }
     }
 #endif
     Item_802680CC(gobj);
