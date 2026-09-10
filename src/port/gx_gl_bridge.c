@@ -7341,10 +7341,27 @@ static void pc_efb_put(u8* d, u32 fmt, u32 w, u32 x, u32 y, u32 r, u32 g,
 static GLuint g_efb_fbo, g_efb_rb;
 static GLsizei g_efb_rb_w, g_efb_rb_h;
 
+/* Where an EFB copy's time actually goes, reported per frame by MELEE_FPS.
+ * The blit and the read are timed apart because they stall for different
+ * reasons: on a tiled GPU the blit is what forces the render pass to be
+ * resolved out of tile memory, and the read is what waits for it. Knowing
+ * which of the two costs is what decides whether an asynchronous read (a
+ * PBO, consumed a frame later) would buy anything. */
+u32 pc_diag_efb_copies;
+u64 pc_diag_efb_blit_ns, pc_diag_efb_read_ns, pc_diag_efb_cpu_ns;
+
+static u64 pc_efb_now_ns(void)
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (u64) t.tv_sec * 1000000000ull + (u64) t.tv_nsec;
+}
+
 static int pc_efb_read_scaled(const GLint r[4], u32 sw, u32 sh, u8* buf)
 {
     GLint prev_read = 0, prev_draw = 0;
     GLboolean was_scissor;
+    u64 t0, t1, t2;
 
     if (g_efb_fbo == 0) {
         glGenFramebuffers(1, &g_efb_fbo);
@@ -7390,6 +7407,7 @@ static int pc_efb_read_scaled(const GLint r[4], u32 sw, u32 sh, u8* buf)
     if (was_scissor) {
         glDisable(GL_SCISSOR_TEST);
     }
+    t0 = pc_efb_now_ns();
     glBlitFramebuffer(r[0], r[1], r[0] + r[2], r[1] + r[3],
                       0, 0, (GLint) sw, (GLint) sh,
                       GL_COLOR_BUFFER_BIT, GL_LINEAR);
@@ -7397,8 +7415,13 @@ static int pc_efb_read_scaled(const GLint r[4], u32 sw, u32 sh, u8* buf)
         glEnable(GL_SCISSOR_TEST);
     }
     glBindFramebuffer(GL_READ_FRAMEBUFFER, g_efb_fbo);
+    t1 = pc_efb_now_ns();
     glReadPixels(0, 0, (GLsizei) sw, (GLsizei) sh, GL_RGBA, GL_UNSIGNED_BYTE,
                  buf);
+    t2 = pc_efb_now_ns();
+    pc_diag_efb_copies++;
+    pc_diag_efb_blit_ns += t1 - t0;
+    pc_diag_efb_read_ns += t2 - t1;
     glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
     return 1;
@@ -7412,6 +7435,7 @@ static void pc_efb_copy(void* dest)
     u8* buf;
     int bw, bh;
     u32 dx, dy;
+    u64 cpu0;
     static int log_on = -1;
 
     if (log_on < 0) log_on = getenv("MELEE_EFBLOG") != NULL;
@@ -7479,6 +7503,29 @@ static void pc_efb_copy(void* dest)
                   fclose(f); }
           } }
     }
+    cpu0 = pc_efb_now_ns();
+    /* MELEE_EFB_NOREAD=1: do the blit but neither read nor detile, to price
+     * the flush the blit forces on a tiled GPU apart from the wait for the
+     * pixels. Diagnostic only -- the destination keeps its old contents. */
+    { static int nr = -1;
+      if (nr < 0) nr = getenv("MELEE_EFB_NOREAD") != NULL;
+      if (nr) { pc_diag_efb_cpu_ns += pc_efb_now_ns() - cpu0; free(buf); return; } }
+    /* The common case since the read became console-sized: source and
+     * destination are the same size, so the box filter below reduces to one
+     * sample per texel. Skipping the four divisions, the bounds fixups and
+     * the accumulation loop is worth about 2 ms a frame on a phone. */
+    if ((u32) bw == dw && (u32) bh == dh) {
+        for (dy = 0; dy < dh; dy++) {
+            const u8* row = buf + (size_t) ((u32) bh - 1 - dy) * dw * 4;
+            for (dx = 0; dx < dw; dx++, row += 4) {
+                pc_efb_put((u8*) dest, g_copy_dst_fmt, dw, dx, dy,
+                           row[0], row[1], row[2], row[3]);
+            }
+        }
+        pc_diag_efb_cpu_ns += pc_efb_now_ns() - cpu0;
+        free(buf);
+        return;
+    }
     for (dy = 0; dy < dh; dy++) {
         /* Read-back rows covered by this destination row (box filter). */
         u32 wy0 = (u32) bh - ((dy + 1) * (u32) bh) / dh;
@@ -7503,6 +7550,7 @@ static void pc_efb_copy(void* dest)
                        sb / n, sa / n);
         }
     }
+    pc_diag_efb_cpu_ns += pc_efb_now_ns() - cpu0;
     free(buf);
 }
 
