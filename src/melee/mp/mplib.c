@@ -1896,7 +1896,7 @@ bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
             float x1_sp40;
             float y1_sp3C;
             float dist2;
-            int line_offset;
+            ssize_t line_offset;
         block_8:
             if (cb != NULL && !cb(gobj, line_r26 - groundCollLine)) {
 #if BUILD_TARGET_PC
