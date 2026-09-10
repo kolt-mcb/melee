@@ -55,6 +55,10 @@
 #include <melee/ft/ftcmdscript.h>
 #include <MetroTRK/intrinsics.h>
 
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
+
 /* The console fuses a*b+c into one rounding; x86 rounds twice. The squared
  * distances in this file are all the same shape on the console: the second
  * term as a plain multiply, the first fused onto it (fmuls y,y / fmadds
@@ -5745,6 +5749,17 @@ void ftCo_800AC5A0(Fighter* fp)
         {
             extern int pc_trace_stale_regs(u32*, u32*);
             u32 stale_r5 = 0x804D5F90, stale_r30 = 0x80CCB2A0;
+#if BUILD_SLIPPI
+            /* Slippi Online zeroes both registers here (800ac5b8) precisely
+             * because they are undefined: two peers whose code lists differ
+             * leave different values in them and the match desyncs. Doing the
+             * same is a deliberate divergence from the console, so it happens
+             * only when asked for. */
+            if (slp_compat(SLP_FIX_NANA)) {
+                stale_r5 = 0;
+                stale_r30 = 0;
+            } else
+#endif
             pc_trace_stale_regs(&stale_r5, &stale_r30);
             stick_y = (s8) (u8) stale_r5;
             stick_x = (s8) (u8) stale_r30;

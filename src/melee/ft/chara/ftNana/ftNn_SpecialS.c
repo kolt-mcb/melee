@@ -26,6 +26,10 @@
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
 #include <math.h>
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #define NS3_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define NS3_FMA(a, b, c) ((a) * (b) + (c))
@@ -74,7 +78,15 @@ bool ftNn_Init_80123954(Fighter_GObj* nana_gobj, GroundOrAir pp_ga)
         case 11:
         case 12:
         case 13:
-            nana_fp->x1A5C = NULL;
+#if BUILD_SLIPPI
+            /* tauKhan's freeze-glitch fix (801239a8) is a nop over exactly
+             * this store. Clearing the partner pointer while Nana is in a
+             * captured state is what leaves the match frozen. */
+            if (!slp_compat(SLP_FIX_FREEZE))
+#endif
+            {
+                nana_fp->x1A5C = NULL;
+            }
             ret = true;
             break;
         default: {
