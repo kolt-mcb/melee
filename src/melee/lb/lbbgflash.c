@@ -61,6 +61,20 @@ extern BgFlashData lbl_80433658;
 #include <melee/lb/lbvector.h>
 #include <MSL/math.h>
 
+/* The console fuses the plane projections, the axis dot products and the
+ * rsqrt Newton steps below (fmadds/fnmadds/fnmsub, one rounding); read off
+ * lbBgFlash_80021410, lbBgFlash_80020E38 and fn_80020AEC. Feet planted by
+ * the leg IK are a few ulps off without them, and the hurt capsules on the
+ * leg bones carry the difference into the AI hash. */
+#if BUILD_TARGET_PC
+#include <math.h>
+#define BF_FMA(a, b, c) fmaf((a), (b), (c))
+#define BF_FMAD(a, b, c) fma((a), (b), (c))
+#else
+#define BF_FMA(a, b, c) ((a) * (b) + (c))
+#define BF_FMAD(a, b, c) ((a) * (b) + (c))
+#endif
+
 /* 021C18 */ static void fn_80021C18(HSD_GObj* gobj, CommandInfo* cmd,
                                      int arg2);
 
@@ -550,9 +564,9 @@ void fn_80020AEC(HSD_JObj* jobj, Mtx out)
 
         if (scale_sq > 0.0f) {
             f64 e = __frsqrte(scale_sq);
-            e = 0.5 * e * -(((f64) scale_sq * (e * e)) - 3.0);
-            e = 0.5 * e * -(((f64) scale_sq * (e * e)) - 3.0);
-            e = 0.5 * e * -(((f64) scale_sq * (e * e)) - 3.0);
+            e = 0.5 * e * BF_FMAD(-(f64) scale_sq, e * e, 3.0);
+            e = 0.5 * e * BF_FMAD(-(f64) scale_sq, e * e, 3.0);
+            e = 0.5 * e * BF_FMAD(-(f64) scale_sq, e * e, 3.0);
             scale_mag = (f32) ((f64) scale_sq * e);
             scale_sq = scale_mag;
         }
@@ -633,14 +647,14 @@ void lbBgFlash_80020E38(HSD_JObj* jobj, Vec3* dir, f32 max_angle,
     z_col_y = jobj->mtx[1][2];
     z_col_x = jobj->mtx[0][2];
     z_col_z = jobj->mtx[2][2];
-    z_col_x = SQ(z_col_x) + SQ(z_col_y);
+    z_col_x = BF_FMA(z_col_x, z_col_x, z_col_y * z_col_y);
     mag_sq = z_col_x;
-    mag_sq = SQ(z_col_z) + mag_sq;
+    mag_sq = BF_FMA(z_col_z, z_col_z, mag_sq);
     if (mag_sq > 0.0f) {
         f64 e = __frsqrte(mag_sq);
-        e = 0.5 * e * -(((f64) mag_sq * (e * e)) - 3.0);
-        e = 0.5 * e * -(((f64) mag_sq * (e * e)) - 3.0);
-        e = 0.5 * e * -(((f64) mag_sq * (e * e)) - 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) mag_sq, e * e, 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) mag_sq, e * e, 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) mag_sq, e * e, 3.0);
         tmp = (f32) ((f64) mag_sq * e);
         mag_sq = tmp;
     }
@@ -779,40 +793,41 @@ void lbBgFlash_80021410(void* arg0)
         f32 d;
         f32 x = data->pos4.x;
 
-        dot = -((nz * data->pos1.z) +
-                ((nx * data->pos1.x) + (data->pos1.y * ny)));
+        dot = -BF_FMA(nz, data->pos1.z,
+                      BF_FMA(nx, data->pos1.x, data->pos1.y * ny));
 
-        d = -(dot + ((data->pos4.z * nz) + ((x * nx) + (data->pos4.y * ny))));
-        data->pos4.x = (d * nx) + x;
-        data->pos4.y = (d * ny) + data->pos4.y;
-        data->pos4.z = (d * nz) + data->pos4.z;
+        d = -(dot + BF_FMA(data->pos4.z, nz, BF_FMA(x, nx, data->pos4.y * ny)));
+        data->pos4.x = BF_FMA(d, nx, x);
+        data->pos4.y = BF_FMA(d, ny, data->pos4.y);
+        data->pos4.z = BF_FMA(d, nz, data->pos4.z);
 
         {
             f32 x = data->pos0.x;
             d = -(dot +
-                  ((data->pos0.z * nz) + ((x * nx) + (data->pos0.y * ny))));
-            data->pos0.x = (d * nx) + x;
+                  BF_FMA(data->pos0.z, nz, BF_FMA(x, nx, data->pos0.y * ny)));
+            data->pos0.x = BF_FMA(d, nx, x);
         }
-        data->pos0.y = (d * ny) + data->pos0.y;
-        data->pos0.z = (d * nz) + data->pos0.z;
+        data->pos0.y = BF_FMA(d, ny, data->pos0.y);
+        data->pos0.z = BF_FMA(d, nz, data->pos0.z);
 
         {
             f32 x = data->pos1.x;
             d = -(dot +
-                  ((data->pos1.z * nz) + ((x * nx) + (data->pos1.y * ny))));
-            data->pos1.x = (d * nx) + x;
+                  BF_FMA(data->pos1.z, nz, BF_FMA(x, nx, data->pos1.y * ny)));
+            data->pos1.x = BF_FMA(d, nx, x);
         }
-        data->pos1.y = (d * ny) + data->pos1.y;
-        data->pos1.z = (d * nz) + data->pos1.z;
+        data->pos1.y = BF_FMA(d, ny, data->pos1.y);
+        data->pos1.z = BF_FMA(d, nz, data->pos1.z);
     }
 
     pDiff = lbVector_Diff(&data->pos0, &data->pos1, &diff_pos0_pos1);
-    dot = (axis.z * pDiff->z) + ((axis.x * pDiff->x) + (axis.y * pDiff->y));
-    if ((sin_val = 1.0f - (dot * dot)) > 0.0f) {
+    dot = BF_FMA(axis.z, pDiff->z,
+                 BF_FMA(axis.x, pDiff->x, axis.y * pDiff->y));
+    if ((sin_val = BF_FMA(-dot, dot, 1.0f)) > 0.0f) {
         f64 e = __frsqrte(sin_val);
-        e = 0.5 * e * -(((f64) sin_val * (e * e)) - 3.0);
-        e = 0.5 * e * -(((f64) sin_val * (e * e)) - 3.0);
-        e = 0.5 * e * -(((f64) sin_val * (e * e)) - 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) sin_val, e * e, 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) sin_val, e * e, 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) sin_val, e * e, 3.0);
         sin_mag = (f32) ((f64) sin_val * e);
         sin_val = sin_mag;
     }
@@ -838,9 +853,9 @@ void lbBgFlash_80021410(void* arg0)
     dz *= dz;
     if ((len_ab = dz + (dx + dy)) > 0.0f) {
         f64 e = __frsqrte(len_ab);
-        e = 0.5 * e * -(((f64) len_ab * (e * e)) - 3.0);
-        e = 0.5 * e * -(((f64) len_ab * (e * e)) - 3.0);
-        e = 0.5 * e * -(((f64) len_ab * (e * e)) - 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) len_ab, e * e, 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) len_ab, e * e, 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) len_ab, e * e, 3.0);
         len_ab_mag = (f32) ((f64) len_ab * e);
         len_ab = len_ab_mag;
     }
@@ -856,9 +871,9 @@ void lbBgFlash_80021410(void* arg0)
         int positive = (len_bc = dz + (dx + dy)) > 0.0f;
         if (positive) {
             f64 e = __frsqrte(len_bc);
-            e = 0.5 * e * -(((f64) len_bc * (e * e)) - 3.0);
-            e = 0.5 * e * -(((f64) len_bc * (e * e)) - 3.0);
-            e = 0.5 * e * -(((f64) len_bc * (e * e)) - 3.0);
+            e = 0.5 * e * BF_FMAD(-(f64) len_bc, e * e, 3.0);
+            e = 0.5 * e * BF_FMAD(-(f64) len_bc, e * e, 3.0);
+            e = 0.5 * e * BF_FMAD(-(f64) len_bc, e * e, 3.0);
             len_bc_mag = (f32) ((f64) len_bc * e);
             len_bc = len_bc_mag;
         }
@@ -874,9 +889,9 @@ void lbBgFlash_80021410(void* arg0)
     dz *= dz;
     if ((len_ac = dz + (dx + dy)) > 0.0f) {
         f64 e = __frsqrte(len_ac);
-        e = 0.5 * e * -(((f64) len_ac * (e * e)) - 3.0);
-        e = 0.5 * e * -(((f64) len_ac * (e * e)) - 3.0);
-        e = 0.5 * e * -(((f64) len_ac * (e * e)) - 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) len_ac, e * e, 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) len_ac, e * e, 3.0);
+        e = 0.5 * e * BF_FMAD(-(f64) len_ac, e * e, 3.0);
         len_ac_mag = (f32) ((f64) len_ac * e);
         len_ac = len_ac_mag;
     }
