@@ -695,6 +695,18 @@ void grZebes_801D881C(HSD_GObj* gobj)
         if (getenv("MELEE_STAGE_DIAG") != NULL) {
             extern u32 gm_8016AEDC(void);
             u32 fr = gm_8016AEDC();
+            if (fr >= 385 && fr <= 400) {
+                extern CollVtx* mpGetGroundCollVtx(void);
+                const CollVtx* v = mpGetGroundCollVtx();
+                int k;
+                fprintf(stderr, "[ZEVTX] f%u", fr);
+                for (k = 0; k < 6; k++)
+                    fprintf(stderr, " %08x %08x %08x %08x %08x %08x",
+                            *(const u32*) &v[k].x0, *(const u32*) &v[k].x4,
+                            *(const u32*) &v[k].pos.x, *(const u32*) &v[k].pos.y,
+                            *(const u32*) &v[k].x10, *(const u32*) &v[k].x14);
+                fprintf(stderr, "\n");
+            }
             if (fr == 1 || fr == 2) {
                 const u32* w = (const u32*) grZe_8049F140;
                 int k;
@@ -705,7 +717,7 @@ void grZebes_801D881C(HSD_GObj* gobj)
                 for (k = 0; k < 12; k++) fprintf(stderr, " %08x", w[k]);
                 fprintf(stderr, "\n");
             }
-            if (fr <= 156) {
+            if (fr <= 156 || (fr >= 385 && fr <= 400)) {
                 int b;
                 for (b = 0; b < 20; b++) {
                     grZe_BubbleEntry* e = &grZe_8049F170[b];
@@ -717,7 +729,7 @@ void grZebes_801D881C(HSD_GObj* gobj)
                                 *(u32*) &e->x14, *(u32*) &e->x1C);
                 }
             }
-            if (fr >= 140 && fr <= 156) {
+            if ((fr >= 140 && fr <= 156) || (fr >= 385 && fr <= 400)) {
                 fprintf(stderr, "[ZEBES] f%u cols x=(%.2f %.2f %.2f %.2f %.2f %.2f) "
                         "h=(%.2f %.2f %.2f %.2f %.2f %.2f) ref28=(%.2f,%.2f) ref1C=(%.2f,%.2f) "
                         "result=%d width=%.2f left=%.2f\n", fr,

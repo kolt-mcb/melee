@@ -3541,6 +3541,24 @@ int mpLib_8005199C_Floor(Vec3* vec, int joint_id_skip, int joint_id_only)
                         if (ABS(x1 - x0) > 0.0001) {
                             float dx = x1 - x0;
                             float dy = y1 - y0;
+#if BUILD_TARGET_PC
+                            /* MELEE_MPTRACE=<lo>-<hi>: every floor candidate
+                             * the search evaluates in those match frames,
+                             * with the numbers the console's breakpoint at
+                             * 80051B1C would show. */
+                            {
+                                static int lo = -1, hi = -1;
+                                extern u32 gm_8016AEDC(void);
+                                if (lo < 0) { const char* e = getenv("MELEE_MPTRACE"); lo = hi = 0;
+                                    if (e) sscanf(e, "%d-%d", &lo, &hi); }
+                                if (hi > 0) { u32 fr = gm_8016AEDC();
+                                    if ((int) fr >= lo && (int) fr <= hi)
+                                        fprintf(stderr, "[MPTRACE] f%u floor: joint %d line %d x=%08x y=%08x x0=%08x y0=%08x x1=%08x y1=%08x fma=%08x\n",
+                                                fr, (int) (joint - groundCollJoint), (int) (line - groundCollLine),
+                                                *(u32*) &x, *(u32*) &y, *(u32*) &x0, *(u32*) &y0, *(u32*) &x1, *(u32*) &y1,
+                                                ({ float t = MP_FMA(dy / dx, x - x0, y0); *(u32*) &t; })); }
+                            }
+#endif
                             if (y >= MP_FMA(dy / dx, x - x0, y0)) { /* 80051B1C */
                                 line_id = line - groundCollLine;
                                 goto end;
@@ -4760,12 +4778,25 @@ bool mpLib_80054ED8(int line_id)
     return true;
 }
 
+/* The three readers below index the line flags as `flags_base[id * 2]`:
+ * a u32 walk over CollLine {MapLine* x0; u32 flags;} with the console's
+ * 8-byte stride. Here a CollLine is 16 bytes (8-byte pointer, padding), so
+ * that walk read line id/2's pointer halves as flags: mpLinesConnected then
+ * saw a different "kind" for every line and never found the neighbour, and
+ * a fighter crossing from one platform line onto the next was re-floored
+ * onto the line it had left (Brinstar, frame 395). Index the struct. */
+#if BUILD_TARGET_PC
+#define MP_LINE_FLAGS(base, id) (groundCollLine[(id)].flags)
+#else
+#define MP_LINE_FLAGS(base, id) ((base)[(id) * 2])
+#endif
+
 static inline int mpLineGetNextFrom(MapLine* line, u32* flags_base)
 {
     int result = line->next_id1;
 
     if (result != -1) {
-        u32 flags = flags_base[result * 2];
+        u32 flags = MP_LINE_FLAGS(flags_base, result);
 
         if ((flags & LINE_FLAG_ENABLED) && !(flags & LINE_FLAG_HIDDEN)) {
             CollVtx* v1 = &groundCollVtx[line->v1_idx];
@@ -4785,7 +4816,7 @@ static inline int mpLineGetPrevFrom(MapLine* line, u32* flags_base)
     int result = line->prev_id1;
 
     if (result != -1) {
-        u32 flags = flags_base[result * 2];
+        u32 flags = MP_LINE_FLAGS(flags_base, result);
 
         if ((flags & LINE_FLAG_ENABLED) && !(flags & LINE_FLAG_HIDDEN)) {
             CollVtx* v0 = &groundCollVtx[line->v0_idx];
@@ -4815,7 +4846,7 @@ bool mpLinesConnected(int start_id, int target_id)
 
     start_line = groundCollLine[start_id].x0;
     flags_base = &groundCollLine->flags;
-    kind = flags_base[start_id * 2] & LINE_FLAG_KIND;
+    kind = MP_LINE_FLAGS(flags_base, start_id) & LINE_FLAG_KIND;
     line_id = mpLineGetNextFrom(start_line, flags_base);
     while (line_id != -1 &&
            kind == (groundCollLine[line_id].flags & LINE_FLAG_KIND))
