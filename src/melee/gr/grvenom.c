@@ -479,7 +479,7 @@ void grVenom_80203B18(void)
 #if BUILD_TARGET_PC
             gp1->u.venom.xC4 = (uintptr_t) gobj;
 #else
-            gp1->u.venom.xC4 = (u32) gobj;
+            gp1->u.venom.xC4 = (uintptr_t) gobj;
 #endif
             grVenom_80203EAC(9);
             gobj1 = grVenom_80203EAC(7);

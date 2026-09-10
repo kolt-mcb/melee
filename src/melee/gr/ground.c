@@ -2272,6 +2272,12 @@ bool Ground_801C2ED0(HSD_JObj* jobj, s32 arg1)
     if (temp_r3 != NULL) {
         cur = temp_r3->unk4->unk8[arg1].unk20;
         max = temp_r3->unk4->unk8[arg1].unk24;
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_MPLINK") != NULL) {
+            fprintf(stderr, "[MPLINK] map %d: %d joints from the map_head, %d from StageData\n",
+                    arg1, max, stage_datas[stage_info.grkind]->joint_count);
+        }
+#endif
         for (i = 0; i < max; i++, cur++) {
             mpLib_800552B0(cur->x, jobj, cur->z);
             mpLib_80055E9C(cur->x);
