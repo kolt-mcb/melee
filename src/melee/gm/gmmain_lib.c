@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#include "port/pc_execinfo.h"
+#endif
 #include <string.h>
 #include "gmmain_lib.static.h"
 
@@ -665,6 +669,25 @@ bool gmMainLib_8015D984(u32 arg0)
 void gmMainLib_8015D9F4(u32 arg0)
 {
     s32* base = &gmMainLib_804D3EE0->unk_44;
+#if BUILD_TARGET_PC
+    /* The only legitimate setter of the "acquired, not yet announced" trophy
+     * bits. One of them (160) is set by the time the title screen runs on
+     * Android and not on the desktop, which is what sends Start at the title
+     * into a challenger match instead of the menu. Name the caller; if this
+     * never fires and the bit is set anyway, the write came from somewhere
+     * that has no business there. */
+    {
+        static int said = 0;
+        if (said < 6) {
+            void* bt[12];
+            int n;
+            said++;
+            PORT_LOG_WARN("trophy bit %u set", arg0);
+            n = backtrace(bt, 12);
+            backtrace_symbols_fd(bt, n, 2);
+        }
+    }
+#endif
     base[arg0 / 32] |= (1 << (arg0 % 32));
 }
 
