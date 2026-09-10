@@ -61,6 +61,51 @@ static void pc_default_hint(const char* name, const char* value)
     }
 }
 
+/* Choose the swap interval for the refresh rate the display has *now*, and
+ * apply it if it changed. Returns the interval in use.
+ *
+ * This is not a one-off decision. A phone panel switches rate underneath the
+ * app: a Pixel 9 offers 60 Hz and 120 Hz and Android moves between them as it
+ * sees fit (the display reports FLAG_ALLOWS_CONTENT_MODE_SWITCH). An interval
+ * of 2 chosen at startup on a 120 Hz panel becomes one frame in two of 60 Hz
+ * the moment Android switches -- 30 fps -- and back again later, which is felt
+ * as the game intermittently going heavy. */
+int window_sync_swap_interval(void)
+{
+    int hz, want;
+    const char* forced;
+
+    if (!g_vsync_on || g_sdl_window == NULL) {
+        return g_swap_interval;
+    }
+    hz = window_refresh_hz();
+    forced = getenv("MELEE_SWAP_INTERVAL");
+    if (forced != NULL) {
+        want = atoi(forced);
+        if (want < 1) want = 1;
+    } else if (hz >= 110) {
+        /* nearest multiple of 60: 120->2, 144->2 (72 Hz, still smoother than
+         * beating), 180->3, 240->4 */
+        want = (hz + 30) / 60;
+        if (want < 1) want = 1;
+    } else {
+        want = 1;
+    }
+    if (want == g_swap_interval) {
+        return g_swap_interval;
+    }
+    if (SDL_GL_SetSwapInterval(want) != 0 && want != 1) {
+        PORT_LOG_WARN("swap interval %d rejected (%s); using 1", want,
+                      SDL_GetError());
+        want = 1;
+        SDL_GL_SetSwapInterval(1);
+    }
+    PORT_LOG_INFO("Vsync on: %d Hz display, swap interval %d -> %d Hz", hz,
+                  want, want > 0 ? hz / want : hz);
+    g_swap_interval = want;
+    return g_swap_interval;
+}
+
 Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
 {
     PORT_LOG_INFO("Initializing SDL2 window");
@@ -265,31 +310,7 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
     g_swap_interval = 0;
     if (g_vsync_on)
     {
-        int hz = window_refresh_hz();
-        const char* forced = getenv("MELEE_SWAP_INTERVAL");
-        g_swap_interval = 1;
-        if (forced != NULL)
-        {
-            g_swap_interval = atoi(forced);
-            if (g_swap_interval < 1) g_swap_interval = 1;
-        }
-        else if (hz >= 110)
-        {
-            /* nearest multiple of 60: 120->2, 144->2 (72 Hz, still smoother
-             * than beating), 180->3, 240->4 */
-            g_swap_interval = (hz + 30) / 60;
-            if (g_swap_interval < 1) g_swap_interval = 1;
-        }
-        if (SDL_GL_SetSwapInterval(g_swap_interval) != 0 && g_swap_interval != 1)
-        {
-            PORT_LOG_WARN("swap interval %d rejected (%s); using 1",
-                          g_swap_interval, SDL_GetError());
-            g_swap_interval = 1;
-            SDL_GL_SetSwapInterval(1);
-        }
-        PORT_LOG_INFO("Vsync on: %d Hz display, swap interval %d -> %d Hz",
-                      hz, g_swap_interval,
-                      g_swap_interval > 0 ? hz / g_swap_interval : hz);
+        window_sync_swap_interval();
     }
     else
     {

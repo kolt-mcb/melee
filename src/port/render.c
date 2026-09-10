@@ -339,6 +339,13 @@ void render_present(void)
         static struct timespec s_t0, s_w0;
         static double s_busy_ns;
         static int s_n;
+        /* Hitching does not show up in a 60-frame average: a match that
+         * reads 60 fps can still drop a frame every couple of seconds, and
+         * that is what is felt as lag. Track the worst frame in the interval
+         * and how many missed the 16.7 ms budget. */
+        static double s_worst_ns;
+        static int s_late_1, s_late_2;
+        static struct timespec s_prev;
         struct timespec now;
         if (s_fps < 0) {
             s_fps = getenv("MELEE_FPS") ? atoi(getenv("MELEE_FPS")) : 0;
@@ -458,6 +465,16 @@ void render_present(void)
             clock_gettime(CLOCK_MONOTONIC, &after);
             /* busy = frame end -> this frame end, minus the swap wait */
             s_busy_ns += (now.tv_sec - s_t0.tv_sec) * 1e9 + (now.tv_nsec - s_t0.tv_nsec);
+            {
+                double wall_ns = (after.tv_sec - s_prev.tv_sec) * 1e9 +
+                                 (after.tv_nsec - s_prev.tv_nsec);
+                if (s_prev.tv_sec != 0) {
+                    if (wall_ns > s_worst_ns) s_worst_ns = wall_ns;
+                    if (wall_ns > 20e6) s_late_1++;
+                    if (wall_ns > 33e6) s_late_2++;
+                }
+                s_prev = after;
+            }
             s_n++;
             if (s_n == 60) {
                 double wall = (after.tv_sec - s_w0.tv_sec) * 1e9 + (after.tv_nsec - s_w0.tv_nsec);
@@ -469,6 +486,20 @@ void render_present(void)
                         pc_diag_draws / s_n, pc_diag_hashes / s_n, pc_diag_uploads / s_n, pc_diag_mipgens / s_n,
                         pc_diag_efb_copies / s_n, pc_diag_efb_blit_ns / (double) s_n / 1e6,
                         pc_diag_efb_read_ns / (double) s_n / 1e6, pc_diag_efb_cpu_ns / (double) s_n / 1e6);
+                /* Once a second is often enough to notice the panel
+                 * changing rate, and cheap: on Android the query is a JNI
+                 * call, so it does not belong in the frame path. */
+                {
+                    int iv = window_sync_swap_interval();
+                    (void) iv;
+                }
+                if (s_late_1 > 0 || s_worst_ns > 20e6) {
+                    fprintf(stderr, "[HITCH] %d frames over 20 ms, %d over 33 ms, "
+                            "worst %.1f ms (of %d)\n",
+                            s_late_1, s_late_2, s_worst_ns / 1e6, s_n);
+                }
+                s_worst_ns = 0;
+                s_late_1 = s_late_2 = 0;
                 pc_diag_draws = pc_diag_hashes = pc_diag_uploads = pc_diag_mipgens = 0;
                 pc_diag_efb_copies = 0;
                 pc_diag_efb_blit_ns = pc_diag_efb_read_ns = pc_diag_efb_cpu_ns = 0;
