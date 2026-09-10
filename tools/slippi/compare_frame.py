@@ -50,15 +50,52 @@ def ffmpeg():
     return imageio_ffmpeg.get_ffmpeg_exe()
 
 
-def boot_env(chars, stage, seed):
+def set_ini(path, section, values):
+    """Set keys in one section of a Dolphin-style ini, adding what is absent."""
+    lines = open(path).read().split("\n") if os.path.exists(path) else []
+    out, cur, done = [], None, {k: False for k in values}
+    for line in lines:
+        if line.startswith("[") and line.endswith("]"):
+            if cur == section:
+                for k, v in values.items():
+                    if not done[k]:
+                        out.append("%s = %s" % (k, v))
+                        done[k] = True
+            cur = line[1:-1]
+        elif cur == section:
+            key = line.split("=")[0].strip()
+            if key in values:
+                line = "%s = %s" % (key, values[key])
+                done[key] = True
+        out.append(line)
+    if cur != section and not all(done.values()):
+        out.append("[%s]" % section)
+    for k, v in values.items():
+        if not done[k]:
+            out.append("%s = %s" % (k, v))
+    open(path, "w").write("\n".join(out))
+
+
+def boot_env(chars, stage, seed, cpu="9,9"):
+    """The port's debug-boot settings, matching what recorded the replay.
+
+    `cpu` empty means both slots are human, which is the only way a replay can
+    be reproduced from its inputs alone: the game reassigns a CPU's held
+    buttons from its own AI every frame, so a CPU match played back without the
+    state resync is a different fight. MELEE_PAD_SCRIPT is inherited from the
+    environment, which is how the human slots get driven.
+    """
     e = dict(os.environ)
     e.update({
         "MELEE_BOOT_MODE": "14",
         "MELEE_BOOT_MATCH": "%s,%d,0,1" % (chars, stage),
-        "MELEE_BOOT_CPU": "9,9",
         "MELEE_SEED": seed,
         "MELEE_FAKE_RTC": "1700000000",
     })
+    if cpu:
+        e["MELEE_BOOT_CPU"] = cpu
+    else:
+        e.pop("MELEE_BOOT_CPU", None)
     return e
 
 
@@ -94,12 +131,18 @@ def shoot_port(work, chars, stage, seed, render_frame, span):
     return shots
 
 
-def play_emulator(work, replay, seconds):
+def play_emulator(work, replay, seconds, resync=False):
     userdir = os.path.join(work, "dolphin-user")
     os.makedirs(userdir, exist_ok=True)
     comm = os.path.join(work, "comm.json")
-    json.dump({"mode": "normal", "replay": os.path.abspath(replay)},
-              open(comm, "w"))
+    # shouldResync defaults to TRUE in Slippi's own playback, and with it on
+    # the game writes the replay's recorded position, facing, action state,
+    # percent and RNG seed back into the fighters every frame. That is the
+    # right default for watching a replay -- it cannot drift -- but it makes a
+    # comparison against this port meaningless, because the emulator is then
+    # being told the answer. Off, it takes only the inputs.
+    json.dump({"mode": "normal", "replay": os.path.abspath(replay),
+               "shouldResync": bool(resync)}, open(comm, "w"))
     # Frame dumping is how the emulator's picture is read without depending on
     # being able to screenshot the desktop -- this machine is on Wayland, where
     # an X11 grab of another program's window comes back blank.
@@ -110,11 +153,11 @@ def play_emulator(work, replay, seconds):
         subprocess.run([DOL, "-u", userdir, "-v", "Null", "--version"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        timeout=60)
-    if os.path.exists(ini):
-        s = open(ini).read()
-        s = s.replace("DumpFrames = False", "DumpFrames = True")
-        s = s.replace("DumpFramesSilent = False", "DumpFramesSilent = True")
-        open(ini, "w").write(s)
+    # Set the keys rather than rewriting "False" to "True": a user directory
+    # Dolphin has never written leaves no [Movie] section at all, and a
+    # search-and-replace over a file that does not contain the text silently
+    # does nothing -- which shows up much later as "no frame dump".
+    set_ini(ini, "Movie", {"DumpFrames": "True", "DumpFramesSilent": "True"})
     dump = os.path.join(userdir, "Dump", "Frames")
     for f in glob.glob(os.path.join(dump, "*")):
         os.unlink(f)

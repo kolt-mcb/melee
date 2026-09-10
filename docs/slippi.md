@@ -203,11 +203,77 @@ timer (01:30.00), both percentages (98% / 0%), the fighters' positions and the
 stage's animated background, at a mean difference of 3.2/255 over a downscaled
 greyscale. That number is a check on the pairing, not a fidelity measurement --
 the two render at different sizes and this port's renderer is not pixel-exact
-with Dolphin's.
+with Dolphin's. And read the next section before reading anything into it:
+what a comparison like this is worth depends entirely on whether the emulator
+was allowed to resync from the recording.
 
-Frame dumping is how the emulator's picture is read at all: this machine runs
-Wayland, where an X11 grab of another program's window comes back blank and
-GNOME's screenshot D-Bus method answers `AccessDenied`.
+### Across the whole match, and what playback actually does
+
+Two frames agreeing is an anecdote. `tools/slippi/compare_sweep.py` makes one
+port run and one emulator run and samples both at the same match frames, so a
+divergence has somewhere to show up. Running it is also what turned up the
+thing that matters most about this comparison.
+
+**Slippi's playback resyncs by default.** `shouldResync` is `true` unless the
+comm file says otherwise, and with it on
+`Playback/Core/RestoreGameFrame.asm` writes the replay's recorded position,
+facing, action state, percent and RNG seed back into the fighters *every
+frame*. That is the right default for watching a replay -- it cannot drift --
+but it means the emulator is being handed the answer, so a comparison run that
+way measures nothing about either simulation. With it on the two sides agree to
+a mean of 3.3/255 across eighteen samples, and that number is worth exactly as
+much as the resync makes it worth.
+
+The tools here therefore set `shouldResync: false`, and `compare_sweep.py`
+prints which mode it used.
+
+**A CPU match cannot be replayed from inputs.** With the resync off, a Fox
+ditto between two level-9 CPUs comes apart: mean 23.9/255 against 3.3, and the
+alignment search stops finding a consistent offset (spread 0.68s, against
+0.05s) because there is no longer a frame in the window that matches. The cause
+is in the game, not the format: `Fighter_Spaghetti_8006AD10` assigns a CPU's
+held buttons from its own AI (`ftCo_800A2040` -> `ftCo_800A198C`) *after*
+playback has written the recorded inputs in, so for a CPU the recorded inputs
+are discarded and the emulator runs its own match. This is a property of Melee
+and applies to Slippi's own replays of CPU games; it is why the resync exists.
+
+**A human match does replay from inputs, and the two simulations agree.** Both
+slots human, both pads driven from a script (`--cpu ""` with the same
+`MELEE_PAD_SCRIPT` that recorded it), resync off -- so the emulator is given
+nothing but the inputs and has to work out the rest for itself:
+
+```
+resync: off -- the emulator has only the inputs
+frame    timer      offset    difference
+0        02:00.00   +2.033s     4.1/255
+600      01:50.00   +2.033s     3.0/255
+1200     01:40.00   +2.033s     3.3/255
+1800     01:30.00   +2.000s     3.6/255
+2200     01:23.33   +2.017s     2.7/255
+
+samples   12
+difference  min 2.7  max 4.6  mean 3.4  (of 255)
+offset      min +2.000s  max +2.033s  spread 0.033s
+```
+
+Flat for 2200 frames, with the alignment locked to within two frames. Set
+beside the same measurement on a CPU match with the resync off -- mean 23.9,
+offset spread 0.68s -- the difference between "the same fight" and "a
+different fight" is not subtle, which is what makes 3.4 meaningful rather than
+merely small.
+
+That is the port's simulation and the console's, run independently from the
+same inputs, landing in the same place. It is a weaker statement than the
+lockstep result (exact, field by field, against Dolphin) because it compares
+pictures. It is a stronger one in a different direction: nothing here is
+shared between the two sides except a file this port wrote.
+
+`tools/slippi/tamper_check.py` is the other half of the same question. It
+copies a replay, changes nothing but the inputs over a few frames in the
+middle, and plays both copies back: with the resync off and human slots, the
+edit has to leave everything before it identical and everything after it
+different. On a CPU match it does neither, for the reason above -- which is a
+result about Melee rather than about this port.
 
 ## Online play
 
