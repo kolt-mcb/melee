@@ -2393,7 +2393,29 @@ int gm_801647F8(u8 arg0)
     if (arg0 == 0x20) {
         arg0 = 0xE;
     }
+#if BUILD_TARGET_PC
+    /* x0 is a u8 and 0x148 does not fit in one, so the console's terminator
+     * test is always true here. A loop whose only exit is the return inside
+     * it, over a condition the compiler can prove constant, is undefined
+     * behaviour -- and Clang takes the whole loop away, leaving every
+     * character with the not-found value 0x148 (328).
+     *
+     * That is a stage kind the game then hands to Stage_802251E8, which
+     * indexes stage_id_map with it: 328 against 286 entries. Multi-Man Melee
+     * and Classic (gmmultiman.c, gmclassic.c) are the two callers, and both
+     * were starting on whatever followed the table.
+     *
+     * The real table is 27 u8 pairs terminated by {0, 0} -- checked against
+     * the disc's own DOL at 0x803D5168:
+     *
+     *   22 00 24 01 27 02 38 03 ... 31 18 3a 19 48 00 | 00 00
+     *
+     * so terminate on that and keep 0x148 as the not-found answer, which is
+     * what falling out of the console's loop produces. */
+    while (var_r5->x0 != 0) {
+#else
     while (var_r5->x0 != 0x148) {
+#endif
         if (var_r5->x1 == arg0) {
             return var_r5->x0;
         }
