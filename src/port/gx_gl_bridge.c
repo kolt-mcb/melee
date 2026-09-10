@@ -7317,16 +7317,110 @@ static void pc_efb_put(u8* d, u32 fmt, u32 w, u32 x, u32 y, u32 r, u32 g,
     }
 }
 
+/* Downscale the window rectangle into an off-screen buffer the size of the
+ * console's own EFB rectangle, and read that back instead.
+ *
+ * The readback used to come back at the window's scale: a 256x256 shadow
+ * copy read as 576x576 on a 1080p phone, 1.3 MB malloc'd and box-filtered on
+ * the CPU, twice a frame. On a tiled GPU a mid-frame glReadPixels is also a
+ * pipeline flush -- the render pass is resolved out of tile memory and the
+ * CPU waits for it. Measured on a Pixel 9 (Mali-G715): 13 ms of the 26 ms
+ * frame, which is what held the game at 38 fps. A fixed-step game that misses
+ * 60 Hz also queues audio slower than it is consumed, so the sound stuttered.
+ *
+ * Reading at the console's resolution is both the cheap and the faithful
+ * choice: the GameCube's EFB is 640x480, its copy filter reduces from there,
+ * and the loop below then reduces sw x sh to dw x dh exactly as before --
+ * usually a straight copy, because a shadow's source rectangle is already
+ * its destination size.
+ *
+ * A renderbuffer, not a texture: the bridge caches texture unit bindings
+ * (g_state.tex_cache) and binding one here would desynchronise them.
+ * Returns 0 if the framebuffer cannot be set up, and the caller falls back
+ * to reading the window rectangle whole. */
+static GLuint g_efb_fbo, g_efb_rb;
+static GLsizei g_efb_rb_w, g_efb_rb_h;
+
+static int pc_efb_read_scaled(const GLint r[4], u32 sw, u32 sh, u8* buf)
+{
+    GLint prev_read = 0, prev_draw = 0;
+    GLboolean was_scissor;
+
+    if (g_efb_fbo == 0) {
+        glGenFramebuffers(1, &g_efb_fbo);
+        glGenRenderbuffers(1, &g_efb_rb);
+        if (g_efb_fbo == 0 || g_efb_rb == 0) {
+            return 0;
+        }
+    }
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw);
+
+    if ((GLsizei) sw != g_efb_rb_w || (GLsizei) sh != g_efb_rb_h) {
+        glBindRenderbuffer(GL_RENDERBUFFER, g_efb_rb);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, (GLsizei) sw,
+                              (GLsizei) sh);
+        glBindRenderbuffer(GL_RENDERBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, g_efb_fbo);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                  GL_RENDERBUFFER, g_efb_rb);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) !=
+            GL_FRAMEBUFFER_COMPLETE)
+        {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
+            g_efb_rb_w = g_efb_rb_h = 0;
+            return 0;
+        }
+        g_efb_rb_w = (GLsizei) sw;
+        g_efb_rb_h = (GLsizei) sh;
+    }
+
+    /* Blit out of whatever the game is drawing into, not out of framebuffer
+     * zero: the bridge renders to an FBO in some paths. */
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_draw);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g_efb_fbo);
+    /* A blit is subject to the scissor test where glReadPixels is not, and
+     * the bridge always has GXSetScissor's rectangle set -- in window
+     * coordinates, so it clips away almost all of a destination that starts
+     * at the origin. Left on, the shadow came back mostly unwritten and the
+     * silhouette painted onto the stage as a black slab: the golden suite's
+     * Onett match went from a worst tile of 16.8/255 to 99.0. */
+    was_scissor = glIsEnabled(GL_SCISSOR_TEST);
+    if (was_scissor) {
+        glDisable(GL_SCISSOR_TEST);
+    }
+    glBlitFramebuffer(r[0], r[1], r[0] + r[2], r[1] + r[3],
+                      0, 0, (GLint) sw, (GLint) sh,
+                      GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    if (was_scissor) {
+        glEnable(GL_SCISSOR_TEST);
+    }
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, g_efb_fbo);
+    glReadPixels(0, 0, (GLsizei) sw, (GLsizei) sh, GL_RGBA, GL_UNSIGNED_BYTE,
+                 buf);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
+    return 1;
+}
+
 static void pc_efb_copy(void* dest)
 {
     GLint r[4];
     u32 dw = g_copy_dst_w, dh = g_copy_dst_h;
     u32 sw = g_state.tex_copy_src[2], sh = g_state.tex_copy_src[3];
     u8* buf;
+    int bw, bh;
     u32 dx, dy;
     static int log_on = -1;
 
     if (log_on < 0) log_on = getenv("MELEE_EFBLOG") != NULL;
+    /* MELEE_NOEFBCOPY=1 skips the readback entirely: the destination texture
+     * stays whatever it was, so shadows and refraction go missing. It exists
+     * to price this path -- a mid-frame glReadPixels stalls a tiled GPU. */
+    { static int off = -1;
+      if (off < 0) off = getenv("MELEE_NOEFBCOPY") != NULL;
+      if (off) return; }
     if (dw == 0 || dh == 0 || sw == 0 || sh == 0) return;
     /* A descriptor that was never converted (or was clobbered) shows up
      * here as absurd sizes or a pointer made of repeated shorts; the console
@@ -7343,18 +7437,35 @@ static void pc_efb_copy(void* dest)
     pc_fb_rect_to_window((f32) g_state.tex_copy_src[0],
                          (f32) g_state.tex_copy_src[1], (f32) sw, (f32) sh, r);
     if (r[2] <= 0 || r[3] <= 0) return;
-    buf = (u8*) malloc((size_t) r[2] * (size_t) r[3] * 4);
+    /* bw x bh is the size the pixels come back at: the console's own EFB
+     * rectangle when the scaled read works, the window rectangle when it
+     * does not. Everything below reads bw/bh, not the window rect. */
+    bw = (int) sw;
+    bh = (int) sh;
+    buf = (u8*) malloc((size_t) bw * (size_t) bh * 4);
     if (buf == NULL) return;
     /* Rows come back bottom-up; EFB row 0 is the top. */
-    glReadPixels(r[0], r[1], r[2], r[3], GL_RGBA, GL_UNSIGNED_BYTE, buf);
+    if (!pc_efb_read_scaled(r, sw, sh, buf)) {
+        u8* wide;
+        bw = r[2];
+        bh = r[3];
+        wide = (u8*) realloc(buf, (size_t) bw * (size_t) bh * 4);
+        if (wide == NULL) {
+            free(buf);
+            return;
+        }
+        buf = wide;
+        glReadPixels(r[0], r[1], bw, bh, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+    }
     if (log_on) {
         static u32 n = 0;
         if (n++ < 40)
             fprintf(stderr, "[EFB] copy src=(%u,%u %ux%u) win=(%d,%d %dx%d) "
-                    "dst=%ux%u fmt=%02x half=%d -> %p clearz=%.3f\n",
+                    "dst=%ux%u fmt=%02x half=%d -> %p clearz=%.3f read=%dx%d\n",
                     g_state.tex_copy_src[0], g_state.tex_copy_src[1], sw, sh,
                     r[0], r[1], r[2], r[3], dw, dh, g_copy_dst_fmt,
-                    g_copy_dst_half, dest, (double) g_state.copy_clear_z);
+                    g_copy_dst_half, dest, (double) g_state.copy_clear_z,
+                    bw, bh);
         /* MELEE_EFBDUMP=<dir>: the first few readbacks as PPMs, top-down. */
         { static const char* dd = NULL; static int dn = 0;
           if (dd == NULL) { dd = getenv("MELEE_EFBDUMP"); if (dd == NULL) dd = ""; }
@@ -7362,26 +7473,26 @@ static void pc_efb_copy(void* dest)
               char path[512]; FILE* f;
               snprintf(path, sizeof(path), "%s/efb_%d.ppm", dd, dn++);
               f = fopen(path, "wb");
-              if (f) { int y; fprintf(f, "P6\n%d %d\n255\n", r[2], r[3]);
-                  for (y = r[3] - 1; y >= 0; y--) { int x;
-                      for (x = 0; x < r[2]; x++) fwrite(buf + ((size_t) y * r[2] + x) * 4, 1, 3, f); }
+              if (f) { int y; fprintf(f, "P6\n%d %d\n255\n", bw, bh);
+                  for (y = bh - 1; y >= 0; y--) { int x;
+                      for (x = 0; x < bw; x++) fwrite(buf + ((size_t) y * bw + x) * 4, 1, 3, f); }
                   fclose(f); }
           } }
     }
     for (dy = 0; dy < dh; dy++) {
-        /* Window rows covered by this destination row (box filter). */
-        u32 wy0 = (u32) r[3] - ((dy + 1) * (u32) r[3]) / dh;
-        u32 wy1 = (u32) r[3] - (dy * (u32) r[3]) / dh;
+        /* Read-back rows covered by this destination row (box filter). */
+        u32 wy0 = (u32) bh - ((dy + 1) * (u32) bh) / dh;
+        u32 wy1 = (u32) bh - (dy * (u32) bh) / dh;
         if (wy1 <= wy0) wy1 = wy0 + 1;
-        if (wy1 > (u32) r[3]) wy1 = (u32) r[3];
+        if (wy1 > (u32) bh) wy1 = (u32) bh;
         for (dx = 0; dx < dw; dx++) {
-            u32 wx0 = (dx * (u32) r[2]) / dw;
-            u32 wx1 = ((dx + 1) * (u32) r[2]) / dw;
+            u32 wx0 = (dx * (u32) bw) / dw;
+            u32 wx1 = ((dx + 1) * (u32) bw) / dw;
             u32 sr = 0, sg = 0, sb = 0, sa = 0, n = 0, x, y;
             if (wx1 <= wx0) wx1 = wx0 + 1;
-            if (wx1 > (u32) r[2]) wx1 = (u32) r[2];
+            if (wx1 > (u32) bw) wx1 = (u32) bw;
             for (y = wy0; y < wy1; y++) {
-                const u8* row = buf + ((size_t) y * (u32) r[2] + wx0) * 4;
+                const u8* row = buf + ((size_t) y * (u32) bw + wx0) * 4;
                 for (x = wx0; x < wx1; x++, row += 4) {
                     sr += row[0]; sg += row[1]; sb += row[2]; sa += row[3];
                     n++;
