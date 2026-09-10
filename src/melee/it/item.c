@@ -620,7 +620,25 @@ static void Item_80267AA8(HSD_GObj* gobj, SpawnItem* spawnItem)
      *
      * Leave the item half-initialised and let the spawn path unwind: it_zako
      * and the other callers already treat a NULL gobj as "no item". */
-    if (item_data->xC4_article_data == NULL) {
+    if (item_data->xC4_article_data == NULL ||
+        item_data->xC4_article_data->x10_modelDesc == NULL)
+    {
+        /* Both levels, not just the first. The article can be present and
+         * still carry no model description -- the random item spawner rolls
+         * items whose model never converted -- and the line below walks
+         * straight through it: ->x10_modelDesc->x0_joint faulted at address
+         * 0, which is how a match reached from the title's "challenger
+         * approaching" died about fifteen seconds in. */
+        static u8 said[256];
+        u32 k = (u32) item_data->kind;
+        if (k < sizeof(said) && said[k] == 0) {
+            said[k] = 1;
+            PORT_LOG_WARN("Item_80267AA8: item kind %u has %s; not spawning",
+                          k,
+                          item_data->xC4_article_data == NULL
+                              ? "no article data"
+                              : "no model description");
+        }
         return;
     }
 #endif
