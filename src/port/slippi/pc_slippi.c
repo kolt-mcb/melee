@@ -30,7 +30,11 @@
 #include <melee/gm/types.h>
 #include <melee/it/types.h>
 #include <melee/mn/types.h>
+#include <dolphin/pad.h>
 #include <sysdolphin/baselib/controller.h>
+
+/* pc_stub/globals_stub.c: the console's five-frame raw-input queue. */
+const PADStatus* pc_pad_raw_history(int slot, int back);
 #include <sysdolphin/baselib/gobj.h>
 
 /* sysdolphin/baselib/random.c. The pre-frame and frame-start events both
@@ -507,16 +511,22 @@ void slp_PreFrame(Fighter* fp)
     put_f32(p + 0x33, pad->nml_analogL);
     put_f32(p + 0x37, pad->nml_analogR);
 
-    /* The raw analog bytes UCF's dashback code reads. On the console these
-     * come out of a five-frame circular buffer of polled inputs
-     * (gmMain_8046B108); this port does not keep that buffer -- it calls
-     * HSD_PadInit with none -- so these are the current frame's raw values,
-     * which is the entry that buffer would be holding. */
-    put_u8(p + 0x3B, (unsigned char) pad->stickX);
-    put_f32(p + 0x3C, fp->dmg.x1830_percent);      /* fp+0x1830 */
-    put_u8(p + 0x40, (unsigned char) pad->stickY);
-    put_u8(p + 0x41, (unsigned char) pad->subStickX);
-    put_u8(p + 0x42, (unsigned char) pad->subStickY);
+    /* The raw analog bytes UCF's dashback code reads. The console takes these
+     * from its five-frame queue of polled inputs, at the entry for the frame
+     * just finished; this port now keeps the same queue, so they come from
+     * there rather than from the live pad. The two agree on every frame after
+     * the first -- the queue is written from the same poll -- but they are not
+     * the same thing, and a reader comparing frames wants the history. */
+    {
+        const PADStatus* raw = pc_pad_raw_history((int) slot, 0);
+        put_u8(p + 0x3B, (unsigned char) (raw ? raw->stickX : pad->stickX));
+        put_f32(p + 0x3C, fp->dmg.x1830_percent);  /* fp+0x1830 */
+        put_u8(p + 0x40, (unsigned char) (raw ? raw->stickY : pad->stickY));
+        put_u8(p + 0x41,
+               (unsigned char) (raw ? raw->substickX : pad->subStickX));
+        put_u8(p + 0x42,
+               (unsigned char) (raw ? raw->substickY : pad->subStickY));
+    }
 }
 
 void slp_PostFrame(Fighter* fp)

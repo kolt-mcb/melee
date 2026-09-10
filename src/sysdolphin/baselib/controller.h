@@ -42,6 +42,10 @@ typedef enum _HSD_FlushType {
     HSD_PAD_FLUSH_QUEUE_TERMINATE,
 } HSD_FlushType;
 
+/* gmmain.c gives HSD_PadInit five of these: the game's rolling history of
+ * raw polled inputs, one entry per frame, four controllers each. */
+#define HSD_PAD_QUEUE_LEN 5
+
 struct HSD_PadData {
     PADStatus stat[4];
 };

@@ -1980,6 +1980,14 @@ void pc_pad_publish(void)
         HSD_PadMasterStatus[i] = *d;
         HSD_PadCopyStatus[i] = *d;
     }
+
+    /* Push this frame into the raw-input queue the console keeps. It lives in
+     * globals_stub.c with the queue itself, because dolphin/pad.h cannot be
+     * included here -- see the note above PC_PAD_STICK_UP. */
+    {
+        extern void pc_pad_raw_push(void);
+        pc_pad_raw_push();
+    }
 }
 
 /* Additional pad functions needed by game code */

@@ -46,11 +46,11 @@ about them, and a reader will report them accordingly:
 * **Player placements** in the game-end event are `-1`. The placement table is
   computed by the results screen, which runs after the event has to be written.
 
-One field is a genuine approximation, marked in the source: the raw analog
-bytes the UCF dashback code reads come from a five-frame circular buffer of
-polled inputs on the console (`gmMain_8046B108`), and this port does not keep
-that buffer -- it calls `HSD_PadInit` with none. It writes the current frame's
-raw values, which is the entry that buffer would be holding.
+The raw analog bytes the UCF dashback code reads used to be an approximation
+here: the console takes them from its five-frame queue of polled inputs and
+this port kept no such queue, so the writer used the live pad instead. The port
+now keeps the queue (`HSD_PadRawQueue`, filled by `pc_pad_publish`), and these
+come from the entry for the frame just finished, as on the console.
 
 ## Where the fields come from
 
@@ -330,19 +330,28 @@ nominal lineup and then disagree about hurtboxes.
 
 ### What UCF needs first
 
-The three UCF entries share one blocker, and it is not the code. UCF's dashback
-and shield-drop tests read the game's five-frame circular buffer of *raw*
-polled inputs (`gmMain_8046B108`) and compare the current frame's raw stick
-against the value two frames earlier. This port does not keep that buffer at
-all -- `gm_1A3F.c` calls `HSD_PadInit(5, NULL, 12, NULL)`, with no queue. The
-same gap is already noted in the `.slp` pre-frame fields, where the raw analog
-bytes are written from the current frame rather than from the history.
+The three UCF entries shared one blocker, and it was not the code. UCF's
+dashback and shield-drop tests read the game's five-frame circular buffer of
+*raw* polled inputs and compare the current frame's raw stick against the value
+two frames earlier. This port kept no such buffer: `gm_1A3F.c` called
+`HSD_PadInit(5, NULL, 12, NULL)`, where `gmmain.c` hands the console five
+`HSD_PadData` entries.
 
-So the prerequisite is to give the port the input history the console keeps.
-After that the UCF codes are a transcription job: they ship as raw PowerPC
-words rather than source, but they disassemble cleanly (393 instructions across
-eight files) and every injection site maps to a function this port already
-compiles.
+**That is now fixed, and outside this gate**, because having the state the
+console has is parity work rather than a behaviour delta. Two things were
+wrong. `HSD_PadLibData` in `pc_stub/globals_stub.c` was a private nine-field
+struct starting at `clamp_stickType`, where the real `PadLibData` puts
+`qnum`/`qread`/`qwrite`/`qcount` first and the clamp fields at 0x1C -- so every
+field was at the wrong offset for anything compiled against the real header.
+Nothing in the build reads it, which is why it went unnoticed. And the queue
+itself was absent. Both are real now: `pc_pad_publish` pushes each frame the
+way `HSD_PadRawUpdate` does, and `pc_pad_raw_history(slot, back)` reads it back
+at `(qread - 1 - back) mod qnum`, which is how UCF indexes it.
+
+What remains for UCF is transcription. The codes ship as raw PowerPC words
+rather than source, but they disassemble cleanly (393 instructions across eight
+files, `scratchpad/deasm.sh`) and every injection site maps to a function this
+port already compiles.
 
 ## Online play
 
