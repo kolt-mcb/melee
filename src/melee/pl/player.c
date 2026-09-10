@@ -2905,7 +2905,7 @@ void Player_80036DD8(void)
         static u32 pc_plco_conv[0x184 / 4];
         HSD_Archive* ar = (HSD_Archive*) (void*) lbArchive_LoadSymbols(
             str_PdPmdat_start_of_data, (void**) &sp8, str_plLoadCommonData,
-            0);
+            NULL);
         pl_804D6470 = (void*) pc_plco_zero;
         if (ar != NULL && sp8 != NULL && ar->data != NULL) {
             const u8* p = (const u8*) sp8;
@@ -2932,7 +2932,7 @@ void Player_80036DD8(void)
     }
 #else
     lbArchive_LoadSymbols(str_PdPmdat_start_of_data, (void**) &sp8,
-                          str_plLoadCommonData, 0);
+                          str_plLoadCommonData, NULL);
     pl_804D6470 = *sp8;
 #endif
 }

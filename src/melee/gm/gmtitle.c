@@ -617,7 +617,7 @@ HSD_Archive* gmTitle_801A1AC0(void)
         &gmTitle_80479B38.matanim_joint, "TtlBg_Top_matanim_joint",
         &gmTitle_80479B38.shapeanim_joint, "TtlBg_Top_shapeanim_joint",
 
-        &gm_804D67F0, "TitleMark_sobjdesc", 0);
+        &gm_804D67F0, "TitleMark_sobjdesc", NULL);
 #endif /* BUILD_TARGET_PC */
 }
 

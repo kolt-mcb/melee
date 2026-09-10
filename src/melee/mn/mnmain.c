@@ -2995,7 +2995,7 @@ void mn_8022DDA8_OnEnter(MenuEnterData* data)
             &MenMainCursorSs_Top.shapeanim_joint,
             "MenMainCursorSs_Top_shapeanim_joint",
 
-            0);
+            NULL);
 
         if (lbLang_IsSavedLanguageUS()) {
             HSD_SisLib_803A62A0(0, "SdMenu.usd", "SIS_MenuData");
