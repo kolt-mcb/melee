@@ -49,7 +49,9 @@
 #include <melee/pl/player.h>
 #include <sysdolphin/baselib/aobj.h>
 #include <sysdolphin/baselib/psstructs.h>
+#include <sysdolphin/baselib/controller.h>
 #include <sysdolphin/baselib/gobj.h>
+#include <port/gc_pad.h>
 
 /* MELEE_BLENDAT's one-joint write watch; see pc_jobj_note below. */
 HSD_JObj* pc_watch_jobj;
@@ -250,6 +252,23 @@ static void sync_open(void)
     }
 }
 
+/* A side-channel line, sent as written. sync_send() below is for state rows
+ * and prefixes them with "L "; anything that is not a state row must not go
+ * through it, or the driver parses it as one. */
+static void sync_send_raw(const char* line)
+{
+    char msg[256];
+    int n;
+    if (sync_fd < 0) {
+        return;
+    }
+    n = snprintf(msg, sizeof(msg), "%s\n", line);
+    if (send(sync_fd, msg, (size_t) n, MSG_NOSIGNAL) != n) {
+        close(sync_fd);
+        sync_fd = -1;
+    }
+}
+
 static void sync_send(const char* line)
 {
     char msg[1200];
@@ -307,6 +326,36 @@ int pc_trace_stale_regs(u32* r5, u32* r30)
 
 /* Called after the frame has been presented, so the frame being compared is
  * the one on screen while the driver looks at it. */
+/* MELEE_NETPLAY=1: this side is a player in a two-program match, so the local
+ * controller has to go out on the wire as well as into the game. The driver
+ * relays it to the other side, which injects it as its remote player.
+ *
+ * The raw pad rather than the processed one: the other side is running the
+ * same game and will do its own processing, and sending the processed value
+ * would mean processing it twice. */
+static void pc_trace_send_pad(void)
+{
+    static int on = -1;
+    char line[128];
+    const GCPadStatus* p;
+    int n;
+
+    if (on < 0) {
+        on = getenv("MELEE_NETPLAY") != NULL;
+    }
+    if (!on || sync_fd < 0) {
+        return;
+    }
+    p = (const GCPadStatus*) &HSD_PadMasterStatus[0];
+    n = snprintf(line, sizeof(line), "P %08X %d %d %d %d %d %d",
+                 (unsigned) p->button, (int) p->stickX, (int) p->stickY,
+                 (int) p->subStickX, (int) p->subStickY,
+                 (int) p->analogL, (int) p->analogR);
+    if (n > 0) {
+        sync_send_raw(line);
+    }
+}
+
 void pc_trace_sync_wait(void)
 {
     char reply[64];
@@ -315,6 +364,7 @@ void pc_trace_sync_wait(void)
     if (sync_fd < 0) {
         return;
     }
+    pc_trace_send_pad();
     for (;;) {
         ssize_t got = recv(sync_fd, reply + used, sizeof(reply) - 1 - used, 0);
         if (got <= 0) {
