@@ -279,9 +279,18 @@ def pad_line_to_pipe(fields, prev_buttons):
         f = 0.5 + (v / 160.0)
         return 0.0 if f < 0.0 else (1.0 if f > 1.0 else f)
 
+    # The shoulders are a full-range axis on this pipe, -1 released to +1
+    # pressed -- not 0..1. Sending 0 for "not pressed" is half-pressed, which
+    # in a match is a light shield held from the first frame; that is the same
+    # trap the Pads constructor above writes "SET L -1" to avoid, and getting
+    # it wrong here desynced the console from the port with the pad otherwise
+    # doing nothing.
+    def trigger(v):
+        return -1.0 + 2.0 * (v / 255.0)
+
     cmds = ["SET MAIN %.4f %.4f" % (axis(sx), axis(sy)),
             "SET C %.4f %.4f" % (axis(cx), axis(cy)),
-            "SET L %.4f" % (lt / 255.0), "SET R %.4f" % (rt / 255.0)]
+            "SET L %.4f" % trigger(lt), "SET R %.4f" % trigger(rt)]
     for name, mask in PIPE_BUTTONS:
         now, was = btn & mask, prev_buttons & mask
         if now and not was:

@@ -27,7 +27,40 @@ shift 2>/dev/null || true
 
 cd "$ROOT"
 echo "netplay: $CASE"
-echo "  port   -- your controller, and one half of the simulation"
-echo "  dolphin-- the same match, from your inputs over the socket"
+echo "  port    -- your controller, and one half of the simulation"
+echo "  dolphin -- the same match, from your inputs over the socket"
 echo
+
+# The two windows do NOT appear together, and that is the single most
+# confusing thing about watching this. The port opens its window in about a
+# second. Dolphin has to boot the ISO and then walk the recorded route through
+# the menus before it has anything to show, which is the best part of a minute
+# -- so for that whole time the screen looks like the port launched alone and
+# the emulator failed. It did not. This watches for both and says so.
+if [ "${1:-}" != "--headless" ] && ! printf '%s\n' "$@" | grep -qx -- --headless
+then
+    (
+        seen_port=0; seen_dol=0
+        for _ in $(seq 1 180); do
+            tree=$(DISPLAY=${DISPLAY:-:0} xwininfo -root -tree 2>/dev/null)
+            if [ $seen_port -eq 0 ] && \
+               printf '%s' "$tree" | grep -q "Melee (PC Port)"; then
+                seen_port=1; echo "   [window] the port is up"
+            fi
+            if [ $seen_dol -eq 0 ] && \
+               printf '%s' "$tree" | grep -q "Dolphin Debug"; then
+                seen_dol=1; echo "   [window] Dolphin is up -- both on screen now"
+            fi
+            [ $seen_port -eq 1 ] && [ $seen_dol -eq 1 ] && break
+            sleep 1
+        done
+        if [ $seen_dol -eq 0 ]; then
+            echo "   [window] Dolphin never opened one; see its log" >&2
+        else
+            python3 "$ROOT/tools/slippi/tile_windows.py" \
+                "Dolphin Debug" "Melee (PC Port)" --timeout 10 >/dev/null 2>&1
+        fi
+    ) &
+fi
+
 MELEE_NETPLAY=1 exec python3 -u tools/pc_lockstep.py "$CASE" "$@"
