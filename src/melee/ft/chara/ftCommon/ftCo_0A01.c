@@ -5730,6 +5730,26 @@ void ftCo_800AC5A0(Fighter* fp)
         float kb_x = fp->x8c_kb_vel.x;
         float kb_y = fp->x8c_kb_vel.y;
         float kb_mag;
+#if BUILD_TARGET_PC
+        /* Exceptions register (docs/port-parity-plan.md). When the knockback
+         * is nearly zero the console skips the computation below and still
+         * stores stick_y and stick_x -- which are the registers r5 and r30,
+         * never assigned on that path: r5 is whatever the last helper the
+         * caller ran left in it (&seed, 0x804D5F90, is the common case; a
+         * pointer into .sdata2 was also seen), r30 is the caller's r30, this
+         * Fighter's own console address. The CPU then holds that stick for a
+         * frame, in a grab, so it is not ignorable. Under the lockstep the
+         * console reports both from the store site and they are used here;
+         * alone, the common values stand in (0x90, and 0xA0 for a fighter
+         * address) so the port is at least deterministic. */
+        {
+            extern int pc_trace_stale_regs(u32*, u32*);
+            u32 stale_r5 = 0x804D5F90, stale_r30 = 0x80CCB2A0;
+            pc_trace_stale_regs(&stale_r5, &stale_r30);
+            stick_y = (s8) (u8) stale_r5;
+            stick_x = (s8) (u8) stale_r30;
+        }
+#endif
         kb_mag = CO_FMA(kb_x, kb_x, kb_y * kb_y);
         kb_mag = sqrtf(kb_mag);
         if (!ftCo_IsNearlyZero(kb_mag)) {

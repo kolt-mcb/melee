@@ -85,6 +85,7 @@ class Side:
         self.prev_seed = None
         self.prev_gframe = None
         self.skipped_frames = 0
+        self.aux = None
 
     def greet(self):
         """Read the HELLO, which carries the field list this build writes."""
@@ -99,6 +100,11 @@ class Side:
             self.row = None
             return False
         if not line.startswith("L "):
+            # Not a state row: a side-channel message. The console sends
+            # "S <r5> <r30>" from ftCo_800AC5A0's store site (Core.cpp), the
+            # port sends "NEED" when it reaches the same site. Kept for the
+            # frame loop to pair up.
+            self.aux = line.strip()
             return True
         values = line[2:].split()
         if self.columns is None:
@@ -635,11 +641,33 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
     try:
         while True:
             for side in (port, ref):
-                if side.row is None:
+                while side.row is None:
                     if not side.read_frame():
                         print("   %s stopped" % side.name)
                         return finish(first, compared, time.time() - (t0 or time.time()),
                                       frames)
+                    if side.row is None:
+                        # The port has reached ftCo_800AC5A0's stale-register
+                        # store and wants the two registers the console is
+                        # about to store on this frame (the exceptions
+                        # register in docs/port-parity-plan.md). The console
+                        # reports them from the same site as "S r5 r30"; if
+                        # its frame ends without one, the paths differ and
+                        # the port gets "-" (its defaults).
+                        if side is port and side.aux == "NEED":
+                            val = "-"
+                            while ref.row is None:
+                                if not ref.read_frame():
+                                    print("   ref stopped")
+                                    return finish(first, compared,
+                                                  time.time() - (t0 or time.time()),
+                                                  frames)
+                                if ref.row is None and ref.aux.startswith("S "):
+                                    val = ref.aux[2:]
+                                    break
+                            port.file.write("VAL %s\n" % val)
+                            port.file.flush()
+                        continue
                     if dump_fp is not None:
                         dump_fp.write("%s %s\n" % (
                             side.name[0].upper(),
