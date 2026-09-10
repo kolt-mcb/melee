@@ -14,9 +14,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <dolphin/pad.h>
+#include <melee/ft/fighter.h>
 #include <melee/ft/forward.h>
+#include <melee/ft/types.h>
 #include <melee/gm/gm_1601.h>
 #include <melee/pl/player.h>
+#include <string.h>
+
+/* pc_stub/globals_stub.c: the console's five-frame raw-input queue, which
+ * this port keeps now. UCF is the reason it had to. */
+const PADStatus* pc_pad_raw_history(int slot, int back);
 
 struct slp_compat_entry {
     const char* name;
@@ -38,8 +46,9 @@ static const struct slp_compat_entry slp_fixes[SLP_FIX_COUNT] = {
       "otherwise loads different data on each peer" },
 
     { "ucf-dashback", 0, "800c9a44",
-      "needs the game's five-frame raw-input history, which this port does "
-      "not keep: it calls HSD_PadInit with no queue" },
+      "transcribed (slp_ucf_dashback below) but never reached: the branch it "
+      "lives in wants has_turned == 0 at Turn's IASA, and this port always "
+      "has 1 there. Unresolved -- see the note on the function" },
     { "ucf-shielddrop", 0, "800998a4",
       "same raw-input history as ucf-dashback" },
     { "ucf-sdi", 0, "8008e54c",
@@ -143,6 +152,148 @@ int slp_compat(int fix)
         return 0;
     }
     return slp_on[fix];
+}
+
+/* ---- UCF dashback: transcribed, and NOT reached ----
+ *
+ * Left in place because the transcription is done and correct as far as it
+ * goes, and throwing it away would mean redoing it. It is registered as not
+ * implemented, so it never runs.
+ *
+ * What is known. Injected at 800c9a44, the `stfs f0, 0x2C(r31)` inside
+ * ftCo_Turn_IASA's *first* `if (!has_turned) facing_dir = -facing_dir;`, so it
+ * runs with the flip applied and reads the new facing. Every operand below is
+ * the one the shipped PowerPC words load, including the last two that had to
+ * be reversed: fp->x1A88.x444 is the follower's CPU command block, and the
+ * byte written to its lstickX is the sign bit of the leader's facing float
+ * plus 127 -- 127 facing right, 128 facing left.
+ *
+ * What is not known. On this port that branch is never taken. Traced: Turn's
+ * IASA runs at exactly cur_anim_frame == 2.0, which is the frame UCF tests
+ * for, but has_turned is already true every time, because frames_to_turn is
+ * 0.0 -- so ftCo_Turn_Anim_Inner set it on its first call. frames_to_turn
+ * comes from the character attribute
+ * frames_to_change_direction_on_standing_turn, which reads 0.0 for Fox and
+ * for Bowser alike. The attribute block itself is located correctly (gravity,
+ * weight and the walk speeds beside it are all sane) and pc_ftconv byte-swaps
+ * the whole 0x180 bytes uniformly, so the port is most likely reading what the
+ * file says.
+ *
+ * Which leaves a contradiction: by that reading the code would be dead on the
+ * console too, and it plainly is not. So either this port's turn differs from
+ * the console's in a way the lockstep has not caught, or a failed dashback
+ * does not produce the standing Turn this hook sits in. The way to tell them
+ * apart is a breakpoint on 800c9a44 in the patched Dolphin during a real
+ * dashback: if the console executes it and this port does not reach the
+ * equivalent branch, the port is wrong and it is a parity bug worth more than
+ * this feature. That run has not happened yet -- it was killed for memory.
+ *
+ * What it is for: Melee decides between a dash and a turn from the *processed*
+ * stick, which ramps, so a fast dashback on a worn controller reads as a turn.
+ * UCF adds a second test on the raw analog byte -- more than 75 units of travel
+ * in two frames is a dashback whatever the processed value says -- and commits
+ * the turn when it fires.
+ *
+ * Transcribed from the shipped PowerPC words (the source is not published);
+ * every offset below is the one the original loads.
+ */
+static int slp_compat_trace(void)
+{
+    static int t = -1;
+    if (t < 0) {
+        t = getenv("MELEE_SLIPPI_COMPAT_TRACE") != NULL;
+    }
+    return t;
+}
+
+static void slp_ucf_dashback(Fighter* fp)
+{
+    const PADStatus* now;
+    const PADStatus* was;
+    int delta;
+
+    if (slp_compat_trace()) {
+        const PADStatus* a = pc_pad_raw_history((int) fp->x618_player_id, 0);
+        const PADStatus* b = pc_pad_raw_history((int) fp->x618_player_id, 2);
+        fprintf(stderr, "[SLP-COMPAT] turn p%d follower=%d animf=%.2f "
+                        "facing*lx=%+.3f thr=%+.3f tilt=%d raw %d<-%d\n",
+                (int) fp->x618_player_id, (int) fp->x221F_b4,
+                (double) fp->cur_anim_frame,
+                (double) (fp->facing_dir * fp->input.lstick.x),
+                (double) p_ftCommonData->x3C,
+                (int) fp->x670_timer_lstick_tilt_x,
+                a ? (int) a->stickX : 999, b ? (int) b->stickX : 999);
+    }
+
+    /* 0x221F bit 0x08: a follower does not decide this for itself. */
+    if (fp->x221F_b4) {
+        return;
+    }
+    /* The original compares the raw bits of cur_anim_frame against 0x40000000
+     * rather than doing a float compare, which for a value the game only ever
+     * sets from a small integer is the same test. */
+    if (fp->cur_anim_frame != 2.0f) {
+        return;
+    }
+    if (fp->facing_dir * fp->input.lstick.x < p_ftCommonData->x3C) {
+        return;
+    }
+    if (fp->x670_timer_lstick_tilt_x > 1) {
+        return;
+    }
+
+    /* The whole point of the code: this frame's raw stick against the one two
+     * frames back. Before the port kept the queue there was nothing to ask. */
+    now = pc_pad_raw_history((int) fp->x618_player_id, 0);
+    was = pc_pad_raw_history((int) fp->x618_player_id, 2);
+    if (now == NULL || was == NULL) {
+        return;
+    }
+    delta = (int) now->stickX - (int) was->stickX;
+    if (delta * delta <= 75 * 75) {
+        return;
+    }
+
+    if (slp_compat_trace()) {
+        /* Worth being able to see: the whole code is a condition, and a
+         * condition that never fires looks exactly like one that is not
+         * compiled in. */
+        fprintf(stderr, "[SLP-COMPAT] ucf-dashback fired: p%d raw %d -> %d "
+                        "(delta %d), facing %+.0f\n",
+                (int) fp->x618_player_id, (int) was->stickX,
+                (int) now->stickX, delta, (double) fp->facing_dir);
+    }
+
+    fp->mv.co.turn.has_turned = true;
+    fp->mv.co.turn.just_turned = true;
+
+    /* And tell a follower to turn with the leader, by writing the direction
+     * straight into its CPU command block. The original does not check the
+     * pointer; this does, because a null dereference here is fatal and a
+     * follower whose command block has not been built yet is a state the port
+     * can reach on its own. */
+    {
+        Fighter_GObj* follower = Player_GetEntityAtIndex(fp->player_id, 1);
+        if (follower != NULL) {
+            Fighter* ffp = GET_FIGHTER(follower);
+            struct Fighter_x1A88_xFC_t* cmd = ffp->x1A88.x444;
+            if (cmd != NULL) {
+                u32 bits;
+                memcpy(&bits, &fp->facing_dir, sizeof(bits));
+                cmd->facing_dir = fp->facing_dir;
+                /* 127 facing right, 128 facing left: the sign bit of the
+                 * facing float, added to 127. */
+                cmd->lstickX = (u8) ((bits >> 31) + 127u);
+            }
+        }
+    }
+}
+
+void slp_compat_turn_iasa(struct Fighter* fp)
+{
+    if (slp_compat(SLP_FIX_UCF_DASHBACK)) {
+        slp_ucf_dashback((Fighter*) fp);
+    }
 }
 
 /* ---- costume bounds ----
