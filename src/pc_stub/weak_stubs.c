@@ -1990,12 +1990,12 @@ __attribute__((weak)) void it_802F2BDC(int a0, int a1) {}
 __attribute__((weak)) void lbl_803B7C28(void) { }
 __attribute__((weak)) void lbl_803B7C40(void) { }
 __attribute__((weak, aligned(16))) unsigned char lbl_803D6878[256]; /* data (GCN 0x803D6878), was void-fn stub */
-__attribute__((weak, aligned(16))) unsigned char lbl_803D6A08[256]; /* data (GCN 0x803D6A08), was void-fn stub */
+/* lbl_803D6A08: defined for real in src/pc_stub/pc_dol_data.c. */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D6A18[256]; /* data (GCN 0x803D6A18), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D7018[256]; /* data (GCN 0x803D7018), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D7038[256]; /* data (GCN 0x803D7038), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D7058[256]; /* data (GCN 0x803D7058), was void-fn stub */
-__attribute__((weak, aligned(16))) unsigned char lbl_803D7910[256]; /* data (GCN 0x803D7910), was void-fn stub */
+/* lbl_803D7910: defined for real in src/pc_stub/pc_dol_data.c. */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D7AC0[256]; /* data (GCN 0x803D7AC0), was void-fn stub */
 /* 1-P difficulty tables (Classic/Adventure/All-Star stage + CPU ratio
  * scaling). Sized for their real extents -- AllstarStageEntry[55] is 1430
@@ -2016,10 +2016,11 @@ __attribute__((weak, aligned(16))) unsigned char gm_804908A0[0x70]; /* data (GCN
 __attribute__((weak, aligned(16))) unsigned char lbl_803DA3D0[256]; /* data (GCN 0x803DA3D0), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_8046DBD8[256]; /* data (GCN 0x8046DBD8), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_8046DBE8[256]; /* data (GCN 0x8046DBE8), was void-fn stub */
-__attribute__((weak, aligned(16))) unsigned char lbl_8046E1B0[256]; /* data (GCN 0x8046E1B0), was void-fn stub */
-__attribute__((weak, aligned(16))) unsigned char lbl_8046E38C[256]; /* data (GCN 0x8046E38C), was void-fn stub */
-__attribute__((weak, aligned(16))) unsigned char lbl_8046E39C[256]; /* data (GCN 0x8046E39C), was void-fn stub */
-__attribute__((weak, aligned(16))) unsigned char lbl_8046E3AC[256]; /* data (GCN 0x8046E3AC), was void-fn stub */
+/* lbl_8046E1B0 needs no stub: gmresultplayer.c defines the real
+ * ResultsDisplayData (and aliases its state member), so this was both too
+ * small and a second object. */
+/* lbl_8046E38C: a member of lbl_8046E1B0, aliased in gmresultplayer.c. */
+/* lbl_8046E39C: a member of lbl_8046E1B0, aliased in gmresultplayer.c. */
 __attribute__((weak, aligned(16))) unsigned char lbl_804D65B8[256]; /* data (GCN 0x804D65B8), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_804D65C0[256]; /* data (GCN 0x804D65C0), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_804D65C8[256]; /* data (GCN 0x804D65C8), was void-fn stub */

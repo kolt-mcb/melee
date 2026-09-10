@@ -1644,7 +1644,11 @@ void fn_80176D3C(Vec3* positions)
             HSD_JObjReqAnimAll(jobj, 0.0F);
             HSD_JObjAnimAll(jobj);
             HSD_GObj_SetupProc(gobj, fn_80176D18, 1);
+#if BUILD_TARGET_PC
+            fn_80179F6C(i, gobj);
+#else
             fn_80179F6C(i, (int) gobj);
+#endif
         }
 
     loop_end:
