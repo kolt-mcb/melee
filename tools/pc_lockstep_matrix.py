@@ -66,11 +66,15 @@ RESULTS = os.path.join(REPO, "tests", "pc", "lockstep_matrix.json")
 # calibration of sync_pair2. The first twelve steps are the fixed prologue
 # (two START presses, the menu, two A presses, and the second hand joining);
 # every character-select step sits inside one scene and shares one offset;
-# the last six are the match start and the stage select, with the CSS-to-SSS
-# load between the START press and its release.
+# the tail is the stage select, with the CSS-to-SSS load between the START
+# press and its release.
 PROLOGUE_DELTA = [276, 276, 301, 413, 414, 414, 414, 414, 414, 545, 545, 545]
 CSS_DELTA = 548
-TAIL_DELTA = [547, 580, 580, 580, 580, 580]
+# The tail starts at the START press that leaves the character select (547)
+# and everything after it -- the stage-select holds, however many the panel
+# needs, and the A press -- sits inside the stage select (580).
+TAIL_START_DELTA = 547
+TAIL_DELTA = 580
 
 STEP_RE = re.compile(r"^(\d+):(?:(P2):)?(.*)$")
 
@@ -85,10 +89,16 @@ def route_steps(case_lines):
     steps = []
     raw = [l.split(":", 1)[1].strip()
            for l in case_lines if l.startswith("ref_input:")]
-    n_css = len(raw) - len(PROLOGUE_DELTA) - len(TAIL_DELTA)
+    # The tail begins at the last START press: the one that leaves the
+    # character select. Everything after it is the stage select, and how
+    # many steps that takes depends on which panel the stage sits on.
+    toks = [STEP_RE.match(spec).group(3) for spec in raw]
+    tail_at = max(i for i, tok in enumerate(toks) if tok == "+START")
+    n_css = tail_at - len(PROLOGUE_DELTA)
     if n_css < 0:
         raise ValueError("route is shorter than its own prologue and tail")
-    deltas = PROLOGUE_DELTA + [CSS_DELTA] * n_css + TAIL_DELTA
+    deltas = (PROLOGUE_DELTA + [CSS_DELTA] * n_css + [TAIL_START_DELTA] +
+              [TAIL_DELTA] * (len(raw) - tail_at - 1))
     for spec, delta in zip(raw, deltas):
         m = STEP_RE.match(spec)
         if not m:

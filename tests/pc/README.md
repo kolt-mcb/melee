@@ -355,20 +355,35 @@ Dolphin cannot be booted into a match, so each cell walks the menus. Three
 things had to be solved, and all three are checkable rather than assumed.
 
 **The route.** `tools/pc_route.py case <C0> <C1> <STAGE>` emits a whole case
-file, character-select route included, from the game's own icon table and
-cursor integrator. The route it generates for Samus vs Donkey Kong on Onett is
-byte-identical to the hand-authored `sync_pair2.case`.
+file from the game's own tables and cursor integrators: the character select
+from `icons[]` and mnCharSel's cursor, the stage select from
+`mnStageSel_803F06D0`, the panel rectangles and mnStageSel's cursor. Both
+screens are driven entirely by controller input, on both sides -- the ring is
+walked onto the stage's own panel and A commits it, so what the run selects is
+what a person pressing the same buttons would select. The route it generates
+for Samus vs Donkey Kong on Onett is byte-identical to the hand-authored
+`sync_pair2.case` through the character select.
+
+The panel positions are the one thing not in the game's source: the panels are
+joints of the MnSlMap layout. `MELEE_SSSLOG=1` prints every panel's settled
+world rectangle and the stage it commits (`[SSS] PANEL i kind=K at (x,y)
+half=(hx,hy)`) on the first frame the stick moves the ring, and `SSS_GEOM` in
+`tools/pc_route.py` is that dump. `tests/pc/cases/auto/sss_test_onett.case`
+re-checks it: it walks to Onett's panel and the trace says which stage loaded.
+Every panel's rectangle clears its neighbours by at least 2.1 units against a
+worst-case residual of one 1.5-unit step.
 
 **The two locked tables.** Both select screens gate on a byte the save data
 writes, and a save without unlocks makes most of the grid unreachable: six
 stages including Battlefield and Final Destination, and eleven of twenty-five
-characters -- the outer ring of the icon grid. Both are forced, on both sides,
-and both must be written EVERY FRAME, because each screen writes the byte from
-the save after its own OnEnter runs.
+characters -- the outer ring of the icon grid. Both are unlocked, on both
+sides, the way a completed save would -- and nothing else about either screen
+is written. Both must be written EVERY FRAME, because each screen writes the
+byte from the save after its own OnEnter runs.
 
 | | table | field | port | console |
 |---|---|---|---|---|
-| stage | `mnStageSel_803F06D0` 0x1C | `+0x8` >= 2, `+0xB` StKind | `MELEE_SSS_KIND` | `MELEE_POKE` |
+| stage | `mnStageSel_803F06D0` 0x1C | `+0x8` >= 2 | `MELEE_CSS_UNLOCK` | `MELEE_POKE` |
 | character | `icons[]` 0x803F0B24 0x1C | `+0x02` >= 1 | `MELEE_CSS_UNLOCK` | `MELEE_POKE` |
 
 `MELEE_POKE=<addr>:<size>:<value>[,...]` is in the local Dolphin build.

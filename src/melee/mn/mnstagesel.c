@@ -4,10 +4,6 @@
 
 #include "mnstagesel.static.h"
 
-#if BUILD_TARGET_PC
-void pc_sss_force_panels(void);
-#endif
-
 #include "placeholder.h"
 
 #include "lb/lb_013B.h"
@@ -332,6 +328,35 @@ void fn_8025A310(HSD_GObj* gobj)
                 par ? (double) par->scale.z : 0.0);
     }
 #endif
+#if BUILD_TARGET_PC
+    /* MELEE_SSSLOG=1: once, every panel's world rectangle and the stage it
+     * commits, plus where the cursor is, on the first frame the stick moves
+     * it (the panels slide in for the first frames). tools/pc_route.py
+     * steers the cursor onto a panel from these numbers. */
+    {
+        static int panels_dumped;
+        if (!panels_dumped && getenv("MELEE_SSSLOG") != NULL &&
+            (mnStageSel_804D6CAC != 0 || mnStageSel_804D6CAD != 0))
+        {
+            panels_dumped = 1;
+            fprintf(stderr, "[SSS] PANELS cursor=(%.3f,%.3f)\n",
+                    (double) sp1C.x, (double) sp1C.y);
+            for (i = 0; i < 0x1E; i++) {
+                Vec3 pp = {100.0F, 100.0F, 0.0F};
+                if (mnStageSel_803F06D0[i].x0 != NULL) {
+                    lb_8000B1CC(mnStageSel_803F06D0[i].x0, NULL, &pp);
+                }
+                fprintf(stderr,
+                        "[SSS] PANEL %d kind=%d x8=%d at (%.3f,%.3f) "
+                        "half=(%.2f,%.2f)\n",
+                        i, (int) mnStageSel_803F06D0[i].xB,
+                        (int) mnStageSel_803F06D0[i].x8, (double) pp.x,
+                        (double) pp.y, (double) mnStageSel_803F06D0[i].xC,
+                        (double) mnStageSel_803F06D0[i].x10);
+            }
+        }
+    }
+#endif
     for (i = 0; i < 0x1E; i++) {
         if (mnStageSel_803F06D0[i].x8 != 0) {
             lb_8000B1CC(mnStageSel_803F06D0[i].x0, NULL, &sp10);
@@ -631,21 +656,6 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
                     (int) mnStageSel_804D6C90->force_stage_id);
         }
     }
-    /* MELEE_SSS_KIND=<StKind> makes every panel on this screen commit that
-     * stage. OnFrame below sets the match's stage from
-     * mnStageSel_803F06D0[selected].xB and nothing else, so a route that
-     * lands the cursor anywhere selectable now selects the stage asked for.
-     *
-     * This exists for tools/pc_lockstep_matrix.py, which compares every
-     * character on every stage against Dolphin. Dolphin cannot be booted
-     * into a match, so it walks these menus, and writing 806 stage-select
-     * routes is not a plan; the harness rewrites the same table in the
-     * console's memory through MELEE_POKE. Doing it here as well keeps the
-     * two sides walking the same screens with the same presses, which is
-     * what makes their frames comparable in the first place -- forcing the
-     * stage on one side and selecting it on the other would have the port
-     * skip a scene the console runs. */
-    pc_sss_force_panels();
 #endif
 
     if (mnStageSel_804D6C90->force_stage_id < 0) {
@@ -756,6 +766,18 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
             HSD_JObjAnimAll(spDC[i + 1]);
         }
 
+#if BUILD_TARGET_PC
+        /* MELEE_CSS_UNLOCK=1 (see mncharsel.c) opens the six locked stages
+         * as well, and it has to happen here, before the loop below: x8 is
+         * what the loop derives from the unlock check, and the panels of the
+         * bottom two rows are only *placed* when it comes out >= 2. Writing
+         * x8 afterwards leaves those panels at the origin, where the ring
+         * cannot reach them. The console gets the same bitmask through
+         * MELEE_POKE, for the same reason and at the same moment. */
+        if (getenv("MELEE_CSS_UNLOCK") != NULL) {
+            *gmMainLib_8015EDA4() = 0xFFFF;
+        }
+#endif
         for (i = 0; i < 0x1D; i++) {
             mnStageSel_803F06D0[i].x8 =
                 gm_80164430(mnStageSel_803F06D0[i].xB) ? 2 : 1;
@@ -991,58 +1013,8 @@ static inline HSD_PadStatus* get_pad(u8 i)
 }
 
 /// OnFrame
-#if BUILD_TARGET_PC
-/* MELEE_SSS_KIND=<StKind> makes every panel on this screen commit that stage.
- * OnFrame below sets the match's stage from
- * mnStageSel_803F06D0[selected].xB and nothing else, so a route that lands
- * the cursor anywhere selectable now selects the stage asked for.
- *
- * This exists for tools/pc_lockstep_matrix.py, which compares every character
- * on every stage against Dolphin. Dolphin cannot be booted into a match, so
- * it walks these menus, and writing 806 stage-select routes is not a plan;
- * the harness rewrites the same table in the console's memory through
- * MELEE_POKE. Doing it here as well keeps the two sides walking the same
- * screens with the same presses, which is what makes their frames comparable
- * at all -- forcing the stage on one side and selecting it on the other would
- * have the port skip a scene the console runs.
- *
- * x8 has to go with it. It is the selectable flag, written at load from
- * gm_80164430(xB) -- the unlock check -- and the A press requires it to be
- * >= 2. Setting only the kind gave every panel the lock state of the stage
- * being asked for, so the six unlockable stages had no panel that could be
- * picked at all.
- *
- * Called every frame, not once on entry: the load path writes x8 from the
- * unlock check *after* OnEnter runs, so a single write there is overwritten
- * and the screen sits there forever. The console's side of this is a
- * per-frame write for the same reason. */
-void pc_sss_force_panels(void)
-{
-    static const char* sk;
-    static int checked;
-    int i;
-    u8 kind;
-
-    if (!checked) {
-        checked = 1;
-        sk = getenv("MELEE_SSS_KIND");
-    }
-    if (sk == NULL) {
-        return;
-    }
-    kind = (u8) atoi(sk);
-    for (i = 0; i < 30; i++) {
-        mnStageSel_803F06D0[i].xB = kind;
-        mnStageSel_803F06D0[i].x8 = 2;
-    }
-}
-#endif
-
 void mnStageSel_8025B850_OnFrame(void)
 {
-#if BUILD_TARGET_PC
-    pc_sss_force_panels();
-#endif
     if (mnStageSel_804D6C90->force_stage_id >= 0) {
         mnStageSel_804D6CAF = 2;
         mnStageSel_804D6C90->data.data.rules.xE =

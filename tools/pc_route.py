@@ -147,14 +147,6 @@ def emit(char0, char1, base, gap=60, hold_gap=10, lag=0):
     return lines
 
 
-# The stage-select panel table, mnStageSel_803F06D0 in
-# mn/mnstagesel.static.h: thirty 0x1C-byte records, in the order the panels
-# sit on screen. Byte +0xB is the StKind the panel commits -- mnStageSel's
-# OnFrame does `rules.xE = mnStageSel_803F06D0[selected].xB` and nothing else
-# decides the stage -- so rewriting every panel's +0xB makes one recorded
-# route select any stage. That is what lets a character-by-stage sweep run
-# against the console at all: the console cannot be booted into a match, and
-# 806 hand-authored stage-select routes are not a thing anyone should write.
 # The character-select icon table, `icons[]` in mn/mncharsel.static.h:
 # twenty-six 0x1C-byte records whose +0x02 byte is the state that gates the A
 # press (0 locked, 1 unlocked, 2 unlocked and shown). The save decides it, and
@@ -167,54 +159,169 @@ CSS_STRIDE = 0x1C
 CSS_STATE_OFF = 0x2
 CSS_ICONS = 26
 
+# The stage select. The cursor is integrated in mnStageSel's fn_8025A310:
+#
+#     cursor += 0.03 * stick          (raw s8 from HSD_PadCopyStatus)
+#     clamped to x in [-27, 27], y in [-19, 19]
+#
+# and it starts at (0, -13). At the harness's full deflection that is 1.5
+# units per frame along an axis, measured under MELEE_SSSLOG on both sides
+# (the port and the console move the ring identically). A panel is hit when
+# the cursor is inside the rectangle around its joint's world position, half
+# extents +0xC/+0x10 of mnStageSel_803F06D0 (3.1 x 2.7 for most, 2.9 x 2.1
+# for the bottom row), first match in table order; the rectangles do not
+# overlap, so aiming at a centre leaves at least 2.1 units of slack against
+# a worst-case residual of one 1.5-unit step.
+#
+# The panel table (mnStageSel_803F06D0 in mn/mnstagesel.static.h: thirty
+# 0x1C-byte records, +0xB the StKind a panel commits) is parsed so the
+# kind of each panel cannot drift from the game. The positions are not in
+# the source -- they are joints of the MnSlMap layout -- so they are the
+# settled world positions printed by `MELEE_SSSLOG=1` ("[SSS] PANEL i ...",
+# emitted on the first frame the stick moves the cursor, once the panels
+# have slid in), with every panel unlocked. Panel 29 is Random.
 SSS_TABLE = 0x803F06D0
 SSS_STRIDE = 0x1C
-SSS_KIND_OFF = 0xB
 SSS_SEL_OFF = 0x8
 SSS_PANELS = 30
+# gmMainLib_804D3EE0 holds the save-data pointer; gmMainLib_GetSaveData is
+# *[0x804D3EE0] + 0x1868, whose first halfword is the unlocked-character
+# bitmask and whose second is the unlocked-stage bitmask.
+SAVE_PTR = 0x804D3EE0
+SAVE_STAGE_MASK = 0x1868 + 2
+SSS_START = (0.0, -13.0)
+SSS_STEP = 1.5
+SSS_CLAMP = (27.0, 19.0)
+SSS_GEOM = {
+    0: (-16.498, 15.7), 2: (-9.898, 15.7), 4: (-3.299, 15.7),
+    6: (3.3, 15.7), 8: (9.899, 15.7), 10: (16.499, 15.7),
+    1: (-16.498, 10.1), 3: (-9.898, 10.1), 5: (-3.299, 10.1),
+    7: (3.3, 10.1), 9: (9.899, 10.1), 11: (16.499, 10.1),
+    12: (-4.6, 3.7), 14: (2.0, 3.7), 16: (8.6, 3.7), 18: (15.199, 3.7),
+    20: (21.8, 3.7),
+    13: (-4.6, -1.9), 15: (2.0, -1.9), 17: (8.6, -1.9), 19: (15.199, -1.9),
+    21: (21.8, -1.9),
+    22: (-23.1, 13.7), 23: (23.1, 14.0),
+    24: (1.3, -9.1), 25: (6.6, -9.1), 26: (12.3, -9.1), 27: (17.6, -9.1),
+    28: (22.899, -9.1),
+    29: (-14.1, 3.6),
+}
+
+
+def sss_panel_kinds(path=None):
+    """Panel index -> the StKind it commits, parsed from the game's table."""
+    src = open(path or os.path.join(REPO, "src", "melee", "mn",
+                                    "mnstagesel.static.h")).read()
+    body = src[src.index("mnStageSel_803F06D0"):]
+    body = body[body.index("{"):body.index("};")]
+    out = {}
+    for i, row in enumerate(re.findall(r"\{([^{}]*)\}", body)):
+        cols = [c.strip() for c in row.split(",")]
+        if len(cols) >= 6 and cols[5].startswith("0x"):
+            out[i] = int(cols[5], 16)
+    return out
 
 
 def sss_kinds(path=None):
     """The StKinds the stage select can actually reach.
 
-    The +0xB column of mnStageSel_803F06D0 in mn/mnstagesel.static.h. Parsed
-    rather than copied so it cannot drift from the game, and needed because
-    the StKind enum names stages the screen does not offer: Icetop is one, and
-    a cell asking for it selects a stage the VS flow never loads. Three of
-    those cost ten minutes of timeout each before this existed.
+    Needed because the StKind enum names stages the screen does not offer:
+    Icetop is one, and a cell asking for it selects a stage the VS flow
+    never loads. Three of those cost ten minutes of timeout each before this
+    existed.
     """
+    return set(k for i, k in sss_panel_kinds(path).items() if i != 29)
+
+
+def sss_half_extents(path=None):
+    """Panel index -> (half width, half height), from the game's table."""
     src = open(path or os.path.join(REPO, "src", "melee", "mn",
                                     "mnstagesel.static.h")).read()
     body = src[src.index("mnStageSel_803F06D0"):]
     body = body[body.index("{"):body.index("};")]
-    out = set()
-    for row in re.findall(r"\{([^{}]*)\}", body):
+    out = {}
+    for i, row in enumerate(re.findall(r"\{([^{}]*)\}", body)):
         cols = [c.strip() for c in row.split(",")]
-        if len(cols) >= 6 and cols[5].startswith("0x"):
-            out.add(int(cols[5], 16))
+        if len(cols) >= 8:
+            out[i] = (float(cols[6].rstrip("F")), float(cols[7].rstrip("F")))
     return out
 
 
-def stage_poke(kind):
-    """MELEE_POKE spec that makes every stage-select panel commit `kind`."""
+def _sss_leg(start, target, lo, hi, half, pos, neg):
+    """One axis of the walk: (to-clamp token, walk token, steps, margin).
+
+    The ring is driven into its own clamp first and walked back from there.
+    The clamp is a hard stop, so the walk starts from a known position no
+    matter how the hold before it rounded -- the same trick the old recorded
+    route used, made deliberate. Which clamp is chosen is whichever leaves
+    the most room for the hold to be one step long or one step short, which
+    is the error a release a frame late produces: the bottom row's panels
+    are only 2.1 units tall against a 1.5-unit step, and approaching them
+    from the wrong side lands two thirds of a step off centre and puts the
+    +1 case exactly on the edge.
+    """
+    best = None
+    for corner, walk, away in ((lo, pos, neg), (hi, neg, pos)):
+        n = int(round(abs(target - corner) / SSS_STEP))
+        sign = 1.0 if walk in ("right", "up") else -1.0
+        margin = min(half - abs(corner + sign * (n + e) * SSS_STEP - target)
+                     for e in (-1, 0, 1))
+        if best is None or margin > best[3]:
+            best = (away, walk, n, margin)
+    return best
+
+
+def sss_plan(kind):
+    """[(token, frames)] taking the ring from its start onto `kind`'s panel."""
+    panels = [i for i, k in sss_panel_kinds().items() if k == kind and i != 29]
+    if not panels:
+        sys.exit("the stage select has no panel for StKind %d" % kind)
+    panel = panels[0]
+    tx, ty = SSS_GEOM[panel]
+    hx, hy = sss_half_extents()[panel]
     out = []
-    for i in range(SSS_PANELS):
-        base = SSS_TABLE + SSS_STRIDE * i
-        out.append("%x:1:%x" % (base + SSS_KIND_OFF, kind))
-        # And selectable. +0x8 is set at load from gm_80164430(kind), the
-        # unlock check, and mnStageSel's A press requires it to be >= 2.
-        # Poking only the kind gave every panel the lock state of the stage
-        # being asked for, so the six unlockable stages -- Flat Zone, the
-        # three N64 stages, Battlefield and Final Destination -- had no
-        # selectable panel at all: the press played the denied sound and the
-        # run sat in the stage select until the harness killed it. Both sides
-        # get the same treatment, which is what keeps them comparable.
-        out.append("%x:1:2" % (base + SSS_SEL_OFF))
-    # And every character icon selectable, for the same reason: the port does
-    # this with MELEE_CSS_UNLOCK, the console needs the byte written.
-    for i in range(CSS_ICONS):
-        out.append("%x:1:2" % (CSS_TABLE + CSS_STRIDE * i + CSS_STATE_OFF))
-    return ",".join(out)
+    # One axis at a time: a diagonal would need a stick position the
+    # harness cannot send. The to-clamp holds are sized from the far corner
+    # plus slack; they end against the stop, so being long costs nothing.
+    for target, lo, hi, half, pos, neg in (
+            (tx, -SSS_CLAMP[0], SSS_CLAMP[0], hx, "right", "left"),
+            (ty, -SSS_CLAMP[1], SSS_CLAMP[1], hy, "up", "down")):
+        away, walk, n, margin = _sss_leg(SSS_START, target, lo, hi, half,
+                                         pos, neg)
+        if margin <= 0.0:
+            sys.exit("no stage-select walk onto panel %d with room to spare"
+                     % panel)
+        out.append((away, int(2 * (hi - lo) / SSS_STEP) + 4))
+        if n:
+            out.append((walk, n))
+    return out
+
+
+def unlock_poke():
+    """MELEE_POKE spec giving the console the save a finished game would have.
+
+    Both select screens gate on a bitmask in the save data: without the
+    unlocks six stages -- Flat Zone, the three N64 stages, Battlefield and
+    Final Destination -- and eleven of twenty-five characters cannot be
+    picked, and the run sits on the screen until the harness kills it.
+
+    The stage mask has to be right *before* the stage select loads, not just
+    before the A press: mnStageSel derives each panel's +0x8 from the unlock
+    check, and a panel that comes out locked is never placed -- it stays at
+    the origin, where the ring cannot reach it. So the bitmask is what gets
+    written, at gmMainLib_GetSaveData() + 2, and the game unlocks itself from
+    there exactly as it would from a real save. The save is allocated, hence
+    the pointer form: *[0x804D3EE0] + 0x1868 is the block, +2 the stage mask.
+    The port does the same thing under MELEE_CSS_UNLOCK.
+
+    Nothing here decides what a screen selects. The ring is walked onto the
+    stage's own panel with the controller, on both sides.
+    """
+    return "%x+%x:2:ffff,%s" % (SAVE_PTR, SAVE_STAGE_MASK,
+                                ",".join("%x:1:2" % (CSS_TABLE + CSS_STRIDE * i
+                                                     + CSS_STATE_OFF)
+                                         for i in range(CSS_ICONS)))
+
 
 
 # The parts of the walk that do not depend on the lineup: intro, title, the
@@ -232,26 +339,34 @@ CASE_PROLOGUE = [
 CSS_BASE = 1060
 
 
-def case_lines(char0, char1, stage_name, stage_kind, lag=0):
+def case_lines(char0, char1, stage_name, stage_kind, lag=0, hold_gap=10):
     """A complete lockstep case for one character pair on one stage."""
     css = emit(char0, char1, CSS_BASE, lag=lag)
     last = max(int(l.split(":")[1]) for l in css)
     # Offsets past the end of the character-select block, measured from
     # sync_pair2.case, which ends its block at 1275 and starts the match at
-    # 1340. The stage-select hold runs the cursor into its own clamp
-    # (0.03 * 80 per frame against a +-19 bound), so it lands on the same
-    # panel every time and the poke above decides what that panel means.
+    # 1340: START 65 frames after the last press, the stage select is up
+    # and taking the stick 80 frames after that. Then the ring is walked
+    # onto the stage's own panel, one axis at a time, and A commits it.
     start = last + 65
-    tail = ["%d:+START" % start, "%d:-START" % (start + 4),
-            "%d:MAIN:0.5:1.0" % (start + 80), "%d:MAIN:0.5:0.5" % (start + 112),
-            "%d:+A" % (start + 140), "%d:-A" % (start + 144)]
+    tail = ["%d:+START" % start, "%d:-START" % (start + 4)]
+    f = start + 80
+    for tok, n in sss_plan(stage_kind):
+        xy = {"right": "1.0:0.5", "left": "0.0:0.5",
+              "up": "0.5:1.0", "down": "0.5:0.0"}[tok]
+        tail.append("%d:MAIN:%s" % (f, xy))
+        tail.append("%d:MAIN:0.5:0.5" % (f + n))
+        f += n + hold_gap
+    f += 18
+    tail += ["%d:+A" % f, "%d:-A" % (f + 4)]
     out = [
         "# Generated by tools/pc_route.py case %s %s %s -- do not hand-edit."
         % (char0, char1, stage_name),
         "#",
-        "# Both sides walk the same stage select; both are told what the",
-        "# panels mean -- the port through MELEE_SSS_KIND, the console through",
-        "# MELEE_POKE on the same table -- so one route selects any stage.",
+        "# Both sides get the same controller input: the character select",
+        "# from the icon grid, then the stage select's ring walked onto the",
+        "# stage's own panel. The only poke is the unlock of every panel and",
+        "# icon, which a completed save would give.",
         "description: %s vs %s on %s, from the title screen, in step every frame"
         % (char0, char1, stage_name),
         "rendezvous: 24",
@@ -259,9 +374,8 @@ def case_lines(char0, char1, stage_name, stage_kind, lag=0):
         "port_input_lag: 3",
         "scene_skew: 4",
         "ignore: seed",
-        "env: MELEE_SSS_KIND=%d" % stage_kind,
         "env: MELEE_CSS_UNLOCK=1",
-        "ref_env: MELEE_POKE=%s" % stage_poke(stage_kind),
+        "ref_env: MELEE_POKE=%s" % unlock_poke(),
     ]
     out += ["ref_input: " + s for s in CASE_PROLOGUE]
     out += css
