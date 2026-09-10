@@ -2182,7 +2182,16 @@ void grStadium_801D4548(Ground_GObj* gobj)
         }
         break;
     case 2:
-        temp_r31->u.display.xD8 = NULL;
+        /* The console stores zero at gp+0xD8 here, and m2c named those four
+         * bytes through the jumbotron's view of the union. That view only
+         * lines up on GameCube: every member of grStadium_Display ahead of
+         * xD8 is a pointer, so where pointers are twice as wide the write
+         * lands well past +0xD8 -- on this struct's own xE4, the ground
+         * object of the platform being raised. The transformation then
+         * dereferenced NULL two states later, which ended any Pokemon
+         * Stadium match that ran long enough to transform. Same store, named
+         * through the view this object actually is. */
+        temp_r31->u.stadium.xD8 = 0;
         temp_r3_6 = Ground_801C2BA4(1);
         if (temp_r3_6 != NULL) {
             temp_r0_2 = temp_r31->u.stadium.xDE;
@@ -2230,6 +2239,30 @@ void grStadium_801D4548(Ground_GObj* gobj)
             if (temp_r4_4 > yakumono_param->x18) {
                 grAnime_801C7A04(temp_r31->u.stadium.xE4, 0, 7, 0.0f);
                 temp_r3_7 = grStadium_801D10F8(temp_r31->u.stadium.xDE);
+#if BUILD_TARGET_PC
+                /* The transformed stage's own DAT is loaded a few states
+                 * back, but its archive header is not registered, so the new
+                 * platform cannot be built (see Ground_GetStageGObj). Put the
+                 * type back and finish the sequence on the platform already
+                 * standing, instead of dereferencing NULL: Pokemon Stadium
+                 * then simply does not transform. */
+                if (temp_r3_7 == NULL || temp_r3_7->hsd_obj == NULL) {
+                    static int warned;
+                    if (!warned) {
+                        warned = 1;
+                        fprintf(stderr,
+                                "[PSTADIUM] no gobj for stage type %d; "
+                                "transformation skipped\n",
+                                (int) temp_r31->u.stadium.xDE);
+                    }
+                    temp_r31->u.stadium.xDE = temp_r31->u.stadium.xE0;
+                    temp_r31->u.stadium.xD8 = 0;
+                    temp_r31->u.stadium.xDC = 6;
+                    grStadium_801D435C(gobj);
+                    Camera_80030E44(1, NULL);
+                    return;
+                }
+#endif
                 temp_r27_3 = GET_JOBJ(temp_r3_7);
                 HSD_JObjSetScaleY(temp_r27_3, temp_f30);
                 HSD_JObjSetTranslateY(temp_r27_3, -10.0F);

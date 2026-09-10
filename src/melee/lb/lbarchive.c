@@ -427,6 +427,14 @@ HSD_Archive* lbArchive_80016DBC(const char* filename, void* symbols, ...)
 void lbArchive_80016EFC(HSD_Archive* archive)
 {
     HSD_ASSERT(0xFC, archive);
+#if BUILD_TARGET_PC
+    /* The asserts here do not abort on this port, so a caller that never got
+     * its archive would go on to free through a null pointer. Nothing to
+     * free is not an error worth ending the game over. */
+    if (archive == NULL) {
+        return;
+    }
+#endif
     HSD_ASSERT(0xFD, archive->flags & HSD_ARCHIVE_DONT_FREE);
     lbHeap_80015CA8(0, (u32*) (archive->data - 0x20));
     lbHeap_80015CA8(0, (u32*) archive);
