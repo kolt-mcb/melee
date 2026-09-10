@@ -2528,6 +2528,56 @@ bool grZebes_801DCBB0(Vec3* vec, int val)
     return false;
 }
 
+#if BUILD_TARGET_PC
+/* The acid's attack parameters. grZe_804D6990 is the stage's yakumono block
+ * and its +0x2C is a file offset (GrZe.dat lists 0x5fb6c as a relocation site
+ * holding 0x5fb1c, so the word is a real pointer on the console, and
+ * 0x801dcc60 just copies it into *arg). The 0x24 bytes it points at carry no
+ * relocations and read 1, 14, 90, 35, 0, 110, 1, 1, 8 -- damage 14, angle 90,
+ * growth 35, base knockback 110 -- so it is a flat block of integers. Swap it
+ * a word at a time and hand back a pointer to the swapped copy.
+ *
+ * The offset has to be resolved against the *raw* block: Ground_801C49F8
+ * returns a converted copy in a static buffer, which pc_itconv_locate cannot
+ * place in any archive. */
+#define PC_ZE_ACID_PARAM_SIZE 0x24u
+
+static u32 pc_ze_acid_be32(const unsigned char* p)
+{
+    return ((u32) p[0] << 24) | ((u32) p[1] << 16) | ((u32) p[2] << 8) | p[3];
+}
+
+static DynamicsDesc* pc_ze_acid_dynamics(u32 off)
+{
+    static u32 cached[PC_ZE_ACID_PARAM_SIZE / 4];
+    static const unsigned char* cached_base;
+    static u32 cached_off;
+    static int cached_ok;
+
+    const unsigned char* base;
+    unsigned long len;
+    const void* raw;
+    u32 i;
+
+    raw = pc_ground_yakumono_raw();
+    if (off == 0 || raw == NULL || !pc_itconv_locate(raw, &base, &len) ||
+        (unsigned long) off + PC_ZE_ACID_PARAM_SIZE > len)
+    {
+        return NULL;
+    }
+    if (cached_ok && cached_base == base && cached_off == off) {
+        return (DynamicsDesc*) cached;
+    }
+    for (i = 0; i < PC_ZE_ACID_PARAM_SIZE / 4; i++) {
+        cached[i] = pc_ze_acid_be32(base + off + i * 4);
+    }
+    cached_base = base;
+    cached_off = off;
+    cached_ok = 1;
+    return (DynamicsDesc*) cached;
+}
+#endif
+
 bool grZebes_801DCBFC(Ground_GObj* gobj, HSD_GObj* fobj, void* arg)
 {
     f32 unused;
@@ -2541,7 +2591,41 @@ bool grZebes_801DCBFC(Ground_GObj* gobj, HSD_GObj* fobj, void* arg)
     ftLib_80086684(fobj, &prev);
     prev.y += intercept;
     if (pos.y < slope) {
+#if BUILD_TARGET_PC
+        /* `((HSD_GObj*) grZe_804D6990)->user_data` is a decompiler artifact
+         * for "load the word at +0x2C": grZe_804D6990 is a flat scalar block
+         * from the stage file, not a GObj, and user_data sits at 0x2C on
+         * GameCube but 0x48 here -- so the original expression read a
+         * different field and handed ftCo_800C08A0 a NULL DynamicsDesc, which
+         * it dereferences unguarded. If the block does not convert, refuse the
+         * touch instead of crashing: the acid then does not bury, which is
+         * visible but recoverable. */
+        {
+            u32 slot = *(const u32*) ((const u8*) grZe_804D6990 + 0x2C);
+            DynamicsDesc* dyn = pc_ze_acid_dynamics(slot);
+            if (dyn == NULL) {
+                static bool warned = false;
+                if (!warned) {
+                    warned = true;
+                    fprintf(stderr,
+                            "[ZEBES] yakumono +0x2C = %#x did not convert; "
+                            "acid bury disabled\n", (unsigned) slot);
+                }
+                return false;
+            }
+            *(void**) arg = dyn;
+            {
+                extern u32 gm_8016AEDC(void);
+                static int n;
+                if (getenv("MELEE_ACIDLOG") != NULL) {
+                    fprintf(stderr, "[ACID] touch #%d gframe=%u\n", ++n,
+                            (unsigned) gm_8016AEDC());
+                }
+            }
+        }
+#else
         *(void**) arg = ((HSD_GObj*) grZe_804D6990)->user_data;
+#endif
         if (prev.y > slope) {
             Ground_801C43A4(&pos);
             Ground_801C53EC(0x61A82);
