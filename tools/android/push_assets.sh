@@ -15,7 +15,7 @@ ALL=${2:-}
 PKG=com.melee.pcport
 DST=/sdcard/Android/data/$PKG/files/GALE01
 [ -d "$SRC" ] || { echo "no such directory: $SRC"; exit 1; }
-adb shell am start -n $PKG/org.libsdl.app.SDLActivity > /dev/null
+adb shell am start -n $PKG/org.libsdl.app.MeleeActivity > /dev/null
 sleep 3
 adb shell am force-stop $PKG
 adb shell mkdir -p $DST

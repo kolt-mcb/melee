@@ -1584,24 +1584,69 @@ static void poll_controller(void* ctl, GCPadStatus* pad)
  * something was opened. */
 static int pc_pad_open(int i)
 {
-    if (g_controllers[i] || g_joysticks[i]) {
-        return 1;
+    if (g_controllers[i] != NULL) {
+        /* A Bluetooth pad drops off when it sleeps or wanders out of
+         * range. SDL keeps the handle valid but detached, and polling it
+         * returns a neutral pad forever -- the port looked dead until the
+         * game was restarted. Close it here so the reconnect below can
+         * pick the pad up again on the same port. */
+        if (SDL_GameControllerGetAttached((SDL_GameController*) g_controllers[i])) {
+            return 1;
+        }
+        fprintf(stderr, "[PAD] port %d: controller disconnected\n", i + 1);
+        SDL_GameControllerClose((SDL_GameController*) g_controllers[i]);
+        g_controllers[i] = NULL;
+    }
+    if (g_joysticks[i] != NULL) {
+        if (SDL_JoystickGetAttached((SDL_Joystick*) g_joysticks[i])) {
+            return 1;
+        }
+        fprintf(stderr, "[PAD] port %d: joystick disconnected\n", i + 1);
+        SDL_JoystickClose((SDL_Joystick*) g_joysticks[i]);
+        g_joysticks[i] = NULL;
     }
     if (i >= SDL_NumJoysticks()) {
         return 0;
     }
+    /* Android's accelerometer is an SDL joystick unless the hint is off
+     * (window.c turns it off). Should a device present it anyway, it must
+     * not eat a controller port: tilt is not a control scheme. */
+    {
+        const char* nm = SDL_JoystickNameForIndex(i);
+        if (nm != NULL && strcmp(nm, "Android Accelerometer") == 0) {
+            return 0;
+        }
+    }
     if (SDL_IsGameController(i)) {
         g_controllers[i] = SDL_GameControllerOpen(i);
         if (g_controllers[i]) {
+            SDL_GameController* gc = (SDL_GameController*) g_controllers[i];
+            char* map = SDL_GameControllerMapping(gc);
+            /* The mapping is what decides whether "A" is the bottom face
+             * button; an Xbox pad over Bluetooth is recognised by SDL's
+             * built-in database on the desktop and by Android's own
+             * descriptor on a phone. Printing it makes a mis-mapped pad
+             * diagnosable from logcat alone. */
             fprintf(stderr, "[PAD] port %d: controller %s\n", i + 1,
-                    SDL_GameControllerName((SDL_GameController*) g_controllers[i]));
+                    SDL_GameControllerName(gc));
+            if (map != NULL) {
+                fprintf(stderr, "[PAD] port %d: mapping %s\n", i + 1, map);
+                SDL_free(map);
+            }
             return 1;
         }
     }
     g_joysticks[i] = SDL_JoystickOpen(i);
     if (g_joysticks[i]) {
-        fprintf(stderr, "[PAD] port %d: joystick %s (no button map; raw numbering)\n",
-                i + 1, SDL_JoystickName((SDL_Joystick*) g_joysticks[i]));
+        SDL_Joystick* js = (SDL_Joystick*) g_joysticks[i];
+        SDL_JoystickGUID guid = SDL_JoystickGetGUID(js);
+        char gs[33];
+        SDL_JoystickGetGUIDString(guid, gs, sizeof(gs));
+        /* No mapping: the raw numbering below is a guess. The GUID is what
+         * a gamecontrollerdb.txt line needs, and melee.env can carry one
+         * as SDL_GAMECONTROLLERCONFIG. */
+        fprintf(stderr, "[PAD] port %d: joystick %s guid %s (no button map; raw numbering)\n",
+                i + 1, SDL_JoystickName(js), gs);
         return 1;
     }
     return 0;
