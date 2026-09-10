@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import os
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -17,6 +19,21 @@ def collect(dir):
 PORT_SOURCES = collect(PORT_SRC)
 PORT_SOURCES = list(dict.fromkeys(PORT_SOURCES))  # deduplicate
 PORT_SOURCES = [s for s in PORT_SOURCES if Path(s).name != "test.c"]
+# PC_SLIPPI=1 compiles in Slippi support: src/port/slippi/ writes .slp replay
+# files in Project Slippi's published format (extern/slippi/slippi-wiki's
+# SPEC.md), so a match played here can be read by the same tools that read a
+# match played on Dolphin or on console.
+#
+# It is opt-in for one reason above convenience. The whole point of this port
+# is that its simulation matches the console frame for frame
+# (docs/port-parity-plan.md), and the way to keep believing that is for the
+# default binary to contain nothing that is not the game. With the flag off,
+# not one line of src/port/slippi/ is compiled and every hook site in the
+# decompiled sources is preprocessed away, so the default build is byte for
+# byte what it was before this existed.
+SLIPPI = os.environ.get("PC_SLIPPI") == "1"
+if SLIPPI:
+    PORT_SOURCES += collect(PORT_SRC / "slippi")
 PC_STUB_SOURCES = collect(PC_STUB_SRC)
 PC_STUB_SOURCES = list(dict.fromkeys(PC_STUB_SOURCES))  # deduplicate
 EXCLUDE_DECOMP = {"MSL/math.h"}  # GCC type conflicts
@@ -156,8 +173,6 @@ inc = " ".join("-I" + str(p) for p in INCLUDE_DIRS)
 # PC_ASAN=1 in the environment produces an AddressSanitizer flavor:
 # separate ninja file (build.ninja.pc-asan), separate obj dir, -O1 for
 # usable backtraces. Used by M0 to hunt the heap-corruption crash.
-import os
-import sys
 ASAN = os.environ.get("PC_ASAN") == "1"
 SAN_FLAGS = " -fsanitize=address -fno-omit-frame-pointer" if ASAN else ""
 # PC_TEXDUMP=1 compiles in the texture dump that tools/pc_tex_verify.py
@@ -321,7 +336,7 @@ else:
 # reproducing the console's roundings exactly -- explicitly, with fma(), at
 # the sites the console fuses, and nowhere else. -fexcess-precision=standard
 # for the same reason: no intermediate precision the console does not have.
-CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -std=gnu11 -ffp-contract=off -fexcess-precision=standard -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "")
+CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -std=gnu11 -ffp-contract=off -fexcess-precision=standard -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "") + (" -DBUILD_SLIPPI=1" if SLIPPI else "")
 if ANDROID:
     # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
     LDFLAGS = "-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"
@@ -436,6 +451,6 @@ Path(NINJA_FILE).write_text(n)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 (OUT_DIR / "obj").mkdir(parents=True, exist_ok=True)
 
-print("Generated " + NINJA_FILE)
+print("Generated " + NINJA_FILE + ("  [Slippi]" if SLIPPI else ""))
 print(f"Sources: {len(PORT_SOURCES)} port + {len(PC_STUB_SOURCES)} stub + {len(DECOMP_SOURCES)} decomp + {len(GR_SOURCES)} gr + {len(G_OBJ_SOURCES)} baselib-gobj + {len(G_DISPLAY_SOURCES)} baselib-display = {len(ALL_SOURCES)} total")
 print(f"Output: {OUT_PATH}")

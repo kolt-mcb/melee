@@ -214,3 +214,7 @@ undef_data.txt
 tests/pc/states/
 tests/pc/lockstep_logs/
 tests/pc/lockstep_matrix.json
+
+# Slippi upstream sources (tools/slippi/fetch.sh); reference only, never built
+extern/slippi/
+tools/slippi/__pycache__/
