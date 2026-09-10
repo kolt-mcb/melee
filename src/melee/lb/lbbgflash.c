@@ -708,7 +708,10 @@ void fn_8002113C(HSD_JObj* jobj, Vec3* axis, f32 angle)
 typedef struct IKChainData {
     /* 0x00 */ HSD_JObj* jobj0;
     /* 0x04 */ HSD_JObj* jobj1;
-    /* 0x08 */ u8 pad_08[4];
+    /* 0x08 */ HSD_JObj* jobj2; /* unused here; the caller's IKState has a
+                                 * third joint in this slot, and it is
+                                 * pointer-sized: a 4-byte pad shifted every
+                                 * position and length below on x86_64. */
     /* 0x0C */ Vec3 pos0;
     /* 0x18 */ Vec3 pos1;
     /* 0x24 */ Vec3 pos2;

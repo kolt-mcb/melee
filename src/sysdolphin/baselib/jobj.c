@@ -27,6 +27,9 @@
 #include <trigf.h>
 #include <dolphin/mtx.h>
 #include <dolphin/os.h>
+#if BUILD_TARGET_PC
+int pc_setupmtx_strict = -1;
+#endif
 
 void JObjInfoInit(void);
 HSD_JObjInfo hsdJObj = { JObjInfoInit };
@@ -531,6 +534,14 @@ typedef void (*ufc_callback)(HSD_JObj*, u32, f32);
 
 void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ORDERLOG") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        u32 fr = gm_8016AEDC();
+        if (fr <= 1)
+            fprintf(stderr, "[ORD] f%u anim jobj=%p type=%u\n", fr, obj, (unsigned) type);
+    }
+#endif
     HSD_JObj* jobj = obj;
     ufc_callback cb;
     Vec3 p;
@@ -934,6 +945,18 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
         jobj->u.dobj = HSD_DObjLoadDesc(joint->u.dobjdesc);
     }
     jobj->robj = HSD_RObjLoadDesc(joint->robjdesc);
+#if BUILD_TARGET_PC
+    if (jobj->robj != NULL && getenv("MELEE_ROBJLOG") != NULL) {
+        HSD_RObj* r;
+        int n = 0;
+        u32 types = 0;
+        for (r = jobj->robj; r != NULL && n < 16; r = r->next, n++) {
+            types = (types << 4) | ((r->flags & ROBJ_TYPE_MASK) >> 28);
+        }
+        fprintf(stderr, "[ROBJ] jobj %p joint %p flags=%08x: %d robjs types=%x\n",
+                (void*) jobj, (void*) joint, (unsigned) joint->flags, n, types);
+    }
+#endif
     jobj->rotate.x = joint->rotation.x;
     jobj->rotate.y = joint->rotation.y;
     jobj->rotate.z = joint->rotation.z;
@@ -1011,8 +1034,10 @@ void HSD_JObjResolveRefs(HSD_JObj* jobj, HSD_Joint* joint)
         return;
     }
 
-    /* PC port: skip RObj resolve - archive data corruption. */
-    /* HSD_RObjResolveRefsAll(jobj->robj, joint->robjdesc); */
+    /* The descriptors are converted now (grdatfiles.c grdat_conv_robjdesc),
+     * with joint references as archive offsets -- the key each converted
+     * joint is also registered under above. */
+    HSD_RObjResolveRefsAll(jobj->robj, joint->robjdesc);
     #else
     HSD_RObjResolveRefsAll(jobj->robj, joint->robjdesc);
     #endif /* BUILD_TARGET_PC */
@@ -1761,6 +1786,15 @@ void resolveIKJoint2(HSD_JObj* jobj)
 
 void HSD_JObjSetupMatrixSub(HSD_JObj* jobj)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_ORDERLOG") != NULL) {
+        extern u32 gm_8016AEDC(void);
+        u32 fr = gm_8016AEDC();
+        if (fr <= 1)
+            fprintf(stderr, "[ORD] f%u setup jobj=%p from=%p\n", fr, (void*) jobj,
+                    __builtin_return_address(0));
+    }
+#endif
     Vec3 sp28;
     Vec3 sp1C;
     Vec3 sp10;
