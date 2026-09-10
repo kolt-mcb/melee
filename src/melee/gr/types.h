@@ -1470,6 +1470,27 @@ struct grBigBlue_GroundVars {
                     /*  +0 gp+C7 */ u8 x2;
                     /*  +0 gp+C8 */ u8 x3;
                 };
+#if BUILD_TARGET_PC
+                /* The console allocates a bitfield from the most significant
+                 * bit down; this host allocates from the least significant
+                 * bit up. Declaring the padding first puts x0_b1 back on the
+                 * bit it has there -- the top bit of gp+C4, which is also
+                 * b0's. (The name says bit 1, but first-declared is what the
+                 * console gives it, and grbigblue.c only ever writes it.)
+                 *
+                 * The seven lane and flag fields below cannot be recovered
+                 * the same way: cur_lane straddles gp+C5 and gp+C6, and the
+                 * bytes of this word stay in the console's order (the module
+                 * reads them at absolute offsets and as a byte-swapped u32),
+                 * so no host-order bitfield lands on it. They are reached
+                 * through GRBB_GET/GRBB_SET in grbigblue.c instead, which
+                 * shift the same word the console's own code shifts. */
+                struct {
+                    u8 pad_x0_lo : 7;
+                    u8 x0_b1 : 1;
+                    u8 pad[3];
+                };
+#else
                 struct {
                     u8 x0_b1 : 1;
                     u8 pad[3];
@@ -1484,17 +1505,8 @@ struct grBigBlue_GroundVars {
                     /* +3 gp+C7:0 */ u32 nibble_hi : 4;
                     /* +3 gp+C7:4 */ u32 nibble_lo : 4;
                 };
-            }
-#if BUILD_TARGET_PC
-            /* The console allocates these fields from the most significant
-             * bit of a big-endian word; x86 does the opposite in both
-             * respects, which moved every lane index. grbigblue.c addresses
-             * the same word through its own cast structs and through raw
-             * shifts written for the console, so the storage has to keep the
-             * console's order for any of them to agree. */
-            __attribute__((scalar_storage_order("big-endian")))
 #endif
-            ;
+            };
 #if !BUILD_TARGET_PC
             /*  +4 gp+C8 */ void* xC8;
             /*  +8 gp+CC */ void* xCC;
