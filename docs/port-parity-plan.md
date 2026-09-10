@@ -239,12 +239,15 @@ was read wrong.
 Some of the original's behaviour is not C. Keep an explicit list, each entry
 with the function, the mechanism, and the port's reproduction.
 
-- `ftCo_800AC5A0`: passes a stale r5 to `ftCo_800B46B8` when a thrown
-  fighter has no knockback velocity. Deterministic on the console. If 100% is
-  the requirement it is *reproducible* -- carry the stale value in a static
-  and hand it over -- which is ugly and honest. Not reproducing it is a
-  documented exception, which is also honest. Pretending it is not there is
-  neither.
+- `ftCo_800AC5A0`: stores two never-assigned registers into the CPU's stick
+  when a grabbed fighter has no knockback velocity -- r5, whatever the last
+  helper the caller ran left in it, and r30, the Fighter's own console
+  address. Deterministic on the console and reproducible from nothing the
+  port has. **Reproduced, 2026-09-09**, by having the console hand them over:
+  Dolphin breaks on the store site and reports them to the lockstep driver,
+  the port asks for them when it reaches the same point. Alone, the port
+  stands in the common values. Final Destination went identical for 600
+  frames on the strength of it. Ugly and honest, which was the choice.
 
 ## Phase 6 -- Ratchet
 
