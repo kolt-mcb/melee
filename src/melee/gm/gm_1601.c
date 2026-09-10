@@ -2547,6 +2547,52 @@ static inline u8 fn_80164B48_lookup_last(s32 t, const u8** es, const u8* base)
     return 0xB;
 }
 
+#if BUILD_TARGET_PC
+/* Are all six secret characters unlocked? (Trophy 0xA0 is the reward.)
+ *
+ * The console reaches both tables it needs by counting bytes from an
+ * unrelated float array: base = (const u8*) lbl_803B75F8, then base[0x2C0] and
+ * base + 0x2D0. On the disc those offsets land exactly on real data --
+ * 0x803B75F8 + 0x2C0 is ckind_to_selkind_map[0x14] and + 0x2D0 is
+ * lbl_803B78C8, whose six-byte stride the loop already walks -- because the
+ * linker happened to put them there.
+ *
+ * Here lbl_803B75F8 is a 36-float, 144-byte object of its own, so those reads
+ * run some 640 bytes past its end into whatever the compiler placed next, and
+ * what that is differs between compilers. The consequence was not subtle: a
+ * lookup that misses returns 0xB, which fn_80164B48_check counts as a pass,
+ * so on garbage every check passed and the game awarded trophy 0xA0 at boot.
+ * gm_801721EC then reported an unlock waiting to be announced, and pressing
+ * Start at the title screen went to "challenger approaching" instead of the
+ * menu -- on Android, where the neighbouring bytes fell one way, and not on
+ * the desktop, where they fell the other.
+ *
+ * Name the two tables instead. The order of the checks is the console's. */
+bool fn_80164B48(void)
+{
+    /* Falco, Young Link, Dr. Mario, Marth, Pichu, Ganondorf -- the ckinds
+     * whose bytes base[0x2C0..0x2C5] spelled out. */
+    static const u8 secret_ckinds[6] = { 0x16, 0x19, 0x15, 0x14, 0x18, 0x17 };
+    u32 k;
+
+    for (k = 0; k < 6; k++) {
+        u8 selkind = ckind_to_selkind_map[secret_ckinds[k]];
+        u8 idx = 0xB;
+        s32 i;
+        for (i = 0; i < NUM_UNLOCKABLE_CHARACTERS; i++) {
+            if (selkind == lbl_803B78C8[i].selkind) {
+                idx = lbl_803B78C8[i].idx;
+                break;
+            }
+        }
+        if (!fn_80164B48_check(idx, gmMainLib_GetUnlockedCharactersBitmaskPtr()))
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+#else
 bool fn_80164B48(void)
 {
     const u8* base = (const u8*) lbl_803B75F8;
@@ -2602,6 +2648,7 @@ bool fn_80164B48(void)
 
     return 1;
 }
+#endif
 
 void gm_80164F18(void) //< Unlock all characters?
 {
