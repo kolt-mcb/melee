@@ -701,7 +701,7 @@ void Fighter_LoadCommonData(void)
     /* Fall through: the remaining 21 PlCo globals still need the zeroed
      * arena until their own conversions exist. */
 #else
-    lbArchive_LoadSymbols("PlCo.dat", (void**) &pData, "ftLoadCommonData", 0);
+    lbArchive_LoadSymbols("PlCo.dat", (void**) &pData, "ftLoadCommonData", NULL);
 #endif
 #if BUILD_TARGET_PC
     if (pData == NULL) {

@@ -1873,10 +1873,24 @@ void HSD_PadRenewGameStatus(void)
         {
             static int padlog = -1;
             if (padlog < 0) padlog = (getenv("MELEE_PADLOG") != NULL);
-            if (padlog && cur->button != 0) {
-                fprintf(stderr, "[PADLOG] pad%d btn=%08x stick=%d,%d\n", pad,
-                        cur->button, (int) cur->stickX, (int) cur->stickY);
-                fflush(stderr);
+            /* Buttons alone was not enough: a report of "the stick does not
+             * move the hand" is precisely the case where no button is held,
+             * and the old condition logged nothing at all for it. Rate-limit
+             * instead, so a held stick does not fill the log. */
+            if (padlog && (cur->button != 0 || cur->stickX != 0 ||
+                           cur->stickY != 0 || cur->subStickX != 0 ||
+                           cur->subStickY != 0))
+            {
+                static int throttle[4];
+                if (throttle[pad]++ % 15 == 0) {
+                    fprintf(stderr,
+                            "[PADLOG] pad%d btn=%08x stick=%d,%d c=%d,%d "
+                            "L=%u R=%u\n",
+                            pad, cur->button, (int) cur->stickX,
+                            (int) cur->stickY, (int) cur->subStickX,
+                            (int) cur->subStickY, cur->analogL, cur->analogR);
+                    fflush(stderr);
+                }
             }
         }
         /* Compute trigger/repeat/release from delta */
