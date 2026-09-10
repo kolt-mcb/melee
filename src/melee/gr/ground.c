@@ -347,6 +347,18 @@ void mem_free(void* ptr)
  * unconverted -- or wrongly converted -- block takes them from working to
  * crashing. A stage gets a block only once its layout has been read and the
  * sweep has confirmed it. */
+#if BUILD_TARGET_PC
+/* The stage's yakumono block as it sits in the archive, before conversion.
+ * Ground_801C49F8 hands callers a converted *copy* in a static buffer, so a
+ * file offset stored inside that block cannot be resolved against the copy --
+ * pc_itconv_locate only knows archive addresses. Callers following such an
+ * offset (grzebes.c's acid) resolve it against this instead. */
+const void* pc_ground_yakumono_raw(void)
+{
+    return stage_info.yakumono_param;
+}
+#endif
+
 static void* pc_yakumono_convert(u32 size, u32 u16_from)
 {
     static u8 buf[0x400];
