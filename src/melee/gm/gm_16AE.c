@@ -50,6 +50,7 @@
 
 #if BUILD_SLIPPI
 #include "port/slippi/pc_slippi.h"
+#include "port/slippi/pc_slippi_compat.h"
 #endif
 
 lbl_8046B6A0_t* gm_16AE_GetUnkData_0(void)
@@ -1777,6 +1778,11 @@ void fn_8016DCC0(StartMeleeData* arg0)
             fn_8016A09C();
         }
     }
+#if BUILD_SLIPPI
+    /* Slippi injects its costume bound check inside this function
+     * (8016ded4), once the lineup has been copied into the player blocks. */
+    slp_compat_clamp_costumes();
+#endif
 }
 
 static float direction(float x)

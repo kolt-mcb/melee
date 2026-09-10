@@ -274,6 +274,76 @@ because the action ends where it started, and a window with a death in it
 erases the difference entirely, because a fighter that dies respawns at a
 fixed point.
 
+## Online behaviour deltas
+
+Slippi Online is not stock Melee, and the difference is not cosmetic. Its
+required code set (`netplay.json`) changes the simulation in several places,
+and two peers that do not agree on all of them desync. So a port that wants to
+play against Slippi has to implement them -- and must never implement them by
+accident, because every one is a deliberate divergence from the console and
+this port's whole claim is that it does not diverge from the console.
+
+They are therefore gated twice: compiled only under `BUILD_SLIPPI`, and off at
+run time unless `MELEE_SLIPPI_COMPAT` names them. The default even in a Slippi
+build is stock behaviour, because the replay writing in this directory is used
+to *verify* parity and would be worthless measured against a game that had been
+quietly modified.
+
+```sh
+MELEE_SLIPPI_COMPAT=list          # print the table and carry on
+MELEE_SLIPPI_COMPAT=all           # every delta that is implemented
+MELEE_SLIPPI_COMPAT=nana,freeze   # just those
+```
+
+| delta | injects at | state |
+| --- | --- | --- |
+| `nana` | 800ac5b8 | done |
+| `freeze` | 801239a8 | done |
+| `costume` | 8016ded4 | done |
+| `ucf-dashback` | 800c9a44 | needs a raw-input history |
+| `ucf-shielddrop` | 800998a4 | needs a raw-input history |
+| `ucf-sdi` | 8008e54c | needs a raw-input history |
+| `neutral-spawns` | 8016e510 | readable, not transcribed |
+| `wobbling` | 8008f090 | needs a per-fighter counter |
+| `ps-camera` | 801d24fc | Stadium does not transform here yet |
+
+Naming one that is not implemented prints why, loudly, rather than being
+ignored -- a peer that believes it has UCF and does not is exactly the failure
+this is for.
+
+**`nana`** is the same site this port already had in its exceptions register:
+`ftCo_800AC5A0` stores two registers the game never assigned into the CPU's
+knockback DI. The port reproduces the console's values; Slippi zeroes both,
+precisely because they are undefined and two peers with different code lists
+find different garbage there. Turning this on is what makes the port match a
+Slippi peer and stop matching the console, which is the trade the whole file
+exists to make explicit.
+
+**`freeze`** is tauKhan's fix, a `nop` over one store. The store is
+`nana_fp->x1A5C = NULL` in `ftNn_Init_80123954` -- clearing Nana's partner
+pointer while she is in a captured state is what leaves the match frozen.
+
+**`costume`** walks the six slots at match init and puts a costume index that
+is out of range for its character back to 0. Out of range it reads data
+belonging to nothing, so two peers can load different models for the same
+nominal lineup and then disagree about hurtboxes.
+
+### What UCF needs first
+
+The three UCF entries share one blocker, and it is not the code. UCF's dashback
+and shield-drop tests read the game's five-frame circular buffer of *raw*
+polled inputs (`gmMain_8046B108`) and compare the current frame's raw stick
+against the value two frames earlier. This port does not keep that buffer at
+all -- `gm_1A3F.c` calls `HSD_PadInit(5, NULL, 12, NULL)`, with no queue. The
+same gap is already noted in the `.slp` pre-frame fields, where the raw analog
+bytes are written from the current frame rather than from the history.
+
+So the prerequisite is to give the port the input history the console keeps.
+After that the UCF codes are a transcription job: they ship as raw PowerPC
+words rather than source, but they disassemble cleanly (393 instructions across
+eight files) and every injection site maps to a function this port already
+compiles.
+
 ## Online play
 
 Replays are the part of Slippi that is a *format*. Online play is a service and
@@ -302,8 +372,9 @@ Melee. `netplay.json` requires, among others, UCF v0.84 (changes dashback and
 shield-drop input processing every frame), Neutral Spawns, Nana determinism,
 the polling drift fix, a Pokemon Stadium camera change, the wobbling
 prevention, tauKhan's freeze-glitch fix, and the m-ex codeset. Each of those
-changes the simulation. A peer that does not implement all of them desyncs,
-and this port implements none of them.
+changes the simulation, and a peer that does not implement all of them desyncs.
+Three are now implemented behind `MELEE_SLIPPI_COMPAT`; see **Online behaviour
+deltas** above for the rest and what each still needs.
 
 So the honest position: the replay format is done and verified against the
 console. Online play is three separate pieces of work, and the first of them --
