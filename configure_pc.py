@@ -251,8 +251,12 @@ if ANDROID:
     CC = str(_ndk_bin / _ABI_TRIPLE[ANDROID_ABI])
     _sdl_build = ANDROID_DEPS / ("sdl2-build" + _ABI_SUFFIX)
     _jpeg_build = ANDROID_DEPS / ("jpeg-build" + _ABI_SUFFIX)
-    _sdl_src = sorted(ANDROID_DEPS.glob("SDL2-2.*"))
-    _jpeg_src = sorted(ANDROID_DEPS.glob("libjpeg-turbo-*"))
+    # Directories only: the glob otherwise matches the release tarball the
+    # sources were unpacked from, and sorted()[-1] prefers "SDL2-2.30.11.tar.gz"
+    # over "SDL2-2.30.11" -- an include path with no headers in it, so every
+    # port TU fails on <SDL.h> long after the download looked fine.
+    _sdl_src = sorted(p for p in ANDROID_DEPS.glob("SDL2-2.*") if p.is_dir())
+    _jpeg_src = sorted(p for p in ANDROID_DEPS.glob("libjpeg-turbo-*") if p.is_dir())
     _dep_inc = ""
     if _sdl_src:
         _dep_inc += (" -isystem " + str(_sdl_build / "include-config-release" / "SDL2")

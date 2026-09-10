@@ -1,7 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base application theme. -->
+    <!-- The game's own theme. NoTitleBar.Fullscreen removes the title bar
+         and asks for a fullscreen window; SDL then hides the status and
+         navigation bars from native code (SDL_WINDOW_FULLSCREEN_DESKTOP in
+         window.c drives SDLActivity.setWindowStyle(true), which sets
+         IMMERSIVE_STICKY).
+
+         The cutout mode is the part SDL cannot do: with the default mode a
+         landscape activity is letterboxed clear of the camera hole, which
+         on a Pixel-class phone costs a black band down one short edge even
+         in immersive mode. shortEdges lets the surface run under the
+         cutout; the 4:3 image is centred inside it by
+         pc_fb_rect_to_window(), so nothing the game draws lands beneath
+         the camera. -->
     <style name="AppTheme" parent="android:Theme.NoTitleBar.Fullscreen">
-        <!-- Customize your theme here. -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">false</item>
     </style>
 </resources>

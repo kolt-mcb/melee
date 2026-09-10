@@ -50,6 +50,17 @@ int window_present_hz(void)
     return hz / g_swap_interval;
 }
 
+/* Set an SDL hint unless the environment (melee.env on Android) already
+ * names it, so a device can override any of these without a rebuild. */
+static void pc_default_hint(const char* name, const char* value)
+{
+    /* SDL_getenv, not getenv: on Android it is what pulls the manifest's
+     * SDL_ENV.* meta-data into the environment. */
+    if (SDL_getenv(name) == NULL) {
+        SDL_SetHint(name, value);
+    }
+}
+
 Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
 {
     PORT_LOG_INFO("Initializing SDL2 window");
@@ -63,6 +74,25 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
      * before a user gesture (and none at all under node), so the whole port
      * died in window_init() having never opened a file. A headless or
      * muted machine on any target hits the same path. */
+    /* Hints must be set before the subsystem that reads them starts.
+     * pc_env_file_load() has already run (main.c), so melee.env stays
+     * authoritative: a hint named there is left alone.
+     *
+     * SDL_ACCELEROMETER_AS_JOYSTICK: on Android SDL defaults this ON and
+     * adds the accelerometer as joystick device 0 at
+     * SDL_INIT_GAMECONTROLLER time (SDL_sysjoystick.c ANDROID_JoystickInit).
+     * A Bluetooth pad connects *after* that and is appended, so it becomes
+     * device 1 -- and the pad bridge maps device index to controller port.
+     * The phone's tilt would drive player 1 and the Xbox pad player 2.
+     *
+     * SDL_ANDROID_TRAP_BACK_BUTTON: a controller's View/Back button (and
+     * the phone's back gesture) otherwise finishes the activity, i.e. quits
+     * mid-match. Trapped, it arrives as an ordinary key the game ignores. */
+    pc_default_hint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
+#ifdef __ANDROID__
+    pc_default_hint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+#endif
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0)
     {
         PORT_LOG_ERROR("SDL2 init failed: %s", SDL_GetError());
@@ -76,6 +106,34 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
     {
         PORT_LOG_WARN("SDL2 gamepads unavailable, keyboard only: %s",
                       SDL_GetError());
+    }
+    else
+    {
+        /* An escape hatch for a pad SDL's built-in database does not know:
+         * drop a gamecontrollerdb.txt line beside the assets (or point
+         * MELEE_CONTROLLER_DB at one) rather than rebuilding the APK.
+         * Absent file is the normal case and not worth a warning. */
+        const char* db = getenv("MELEE_CONTROLLER_DB");
+        char path[1024];
+#ifdef __ANDROID__
+        if (db == NULL)
+        {
+            const char* ext = SDL_AndroidGetExternalStoragePath();
+            if (ext != NULL)
+            {
+                snprintf(path, sizeof(path), "%s/gamecontrollerdb.txt", ext);
+                db = path;
+            }
+        }
+#endif
+        if (db != NULL)
+        {
+            int n = SDL_GameControllerAddMappingsFromFile(db);
+            if (n > 0)
+            {
+                PORT_LOG_INFO("Loaded %d controller mappings from %s", n, db);
+            }
+        }
     }
     if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0)
     {
@@ -111,6 +169,22 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
     int ai;
 
     Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN;
+#ifdef __ANDROID__
+    /* Always fullscreen on a phone. The activity theme alone only removes
+     * the title bar: the status and navigation bars stay, and SDLActivity
+     * calls setWindowStyle(false) on create. The fullscreen flag is what
+     * makes SDL call Android_JNI_SetWindowStyle(true)
+     * (SDL_androidwindow.c), which sets IMMERSIVE_STICKY and hides both
+     * bars -- and re-hides them when a swipe brings them back. The surface
+     * then covers the display and the bridge letterboxes the 4:3 image
+     * into it (pc_fb_rect_to_window). MELEE_FULLSCREEN=0 turns it off, which
+     * is how the immersive surface (the whole display) is compared against
+     * the smaller one left between the system bars. */
+    {
+        const char* fs = SDL_getenv("MELEE_FULLSCREEN");
+        fullscreen = (fs == NULL || atoi(fs) != 0) ? TRUE : FALSE;
+    }
+#endif
     if (fullscreen)
     {
         flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
