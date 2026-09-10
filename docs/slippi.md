@@ -237,12 +237,29 @@ notices *that* cannot be used to argue that two sides agree on where the
 fighters are; what it can say is that they are rendering the same scene from
 the same camera, which is real but much coarser.
 
-So the numbers this produces (a human match, resync off, twelve samples over
-2200 frames: 2.7 to 4.6, mean 3.4, alignment locked to two frames) are quoted
-here as what they are -- the two sides showing the same scene throughout, with
-no point at which one becomes a different fight. They are not evidence about
-state. The exact, field-level agreement is the lockstep result against Dolphin
-and `crosscheck_console.py`, both of which compare values rather than pictures.
+**Calibrated, it does say something.** Four points on the same scale:
+
+| what is being compared | reads |
+| --- | --- |
+| one playback against itself | 0.0/255 |
+| the emulator against the port, same fight | 3.4/255 |
+| the emulator against the port, CPU match with the resync off | 23.9/255 |
+| one playback against the same replay with 90 frames of input edited | 27.1/255 |
+
+The floor is 0 and "a different fight" is around 25, so 3.4 is not merely a
+small number -- it sits with the identical case and nowhere near the divergent
+one. And the last row is the one that makes the second row mean anything: edit
+nothing but the inputs in a stretch with no death in it, and everything before
+the edit stays bit-identical while everything after it becomes a different
+fight. The emulator is reconstructing the match from the inputs in our file,
+not painting the state recorded beside them.
+
+So: a human match, resync off, twelve samples over 2200 frames, 2.7 to 4.6,
+mean 3.4, alignment locked to two frames. That is the port's simulation and the
+console's, run independently from the same inputs, staying on the same fight
+for the whole match -- at the resolution this test can see, which is "the same
+fight", not "the same state". For state, the exact results are the lockstep
+against Dolphin and `crosscheck_console.py`, both of which compare values.
 
 **What would settle it properly** is replaying a `.slp`'s inputs into this
 port's own simulation and comparing against the post-frame data recorded
