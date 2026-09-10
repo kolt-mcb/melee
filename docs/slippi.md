@@ -201,79 +201,61 @@ a bad offset shows up as a bad match rather than as a quietly wrong comparison.
 On frame 1800 of a Fox ditto on Final Destination, the two sides agree on the
 timer (01:30.00), both percentages (98% / 0%), the fighters' positions and the
 stage's animated background, at a mean difference of 3.2/255 over a downscaled
-greyscale. That number is a check on the pairing, not a fidelity measurement --
-the two render at different sizes and this port's renderer is not pixel-exact
-with Dolphin's. And read the next section before reading anything into it:
-what a comparison like this is worth depends entirely on whether the emulator
-was allowed to resync from the recording.
+greyscale. That number is a check on the pairing, not a fidelity measurement,
+and the next section is required reading before anything is read into it: it
+is dominated by camera and background, and what any of it is worth depends on
+whether the emulator was allowed to resync from the recording.
 
-### Across the whole match, and what playback actually does
+### Across the whole match, and the limits of comparing pictures
 
-Two frames agreeing is an anecdote. `tools/slippi/compare_sweep.py` makes one
-port run and one emulator run and samples both at the same match frames, so a
-divergence has somewhere to show up. Running it is also what turned up the
-thing that matters most about this comparison.
+`tools/slippi/compare_sweep.py` makes one port run and one emulator run and
+samples both at the same match frames. Running it turned up two things about
+how playback works, and then a third about the measurement itself.
 
 **Slippi's playback resyncs by default.** `shouldResync` is `true` unless the
 comm file says otherwise, and with it on
 `Playback/Core/RestoreGameFrame.asm` writes the replay's recorded position,
 facing, action state, percent and RNG seed back into the fighters *every
-frame*. That is the right default for watching a replay -- it cannot drift --
-but it means the emulator is being handed the answer, so a comparison run that
-way measures nothing about either simulation. With it on the two sides agree to
-a mean of 3.3/255 across eighteen samples, and that number is worth exactly as
-much as the resync makes it worth.
+frame*. That is right for watching a replay -- it cannot drift -- and fatal to
+a comparison, because the emulator is then being handed the answer. The tools
+here set it false, and `compare_sweep.py` prints which mode it ran in.
 
-The tools here therefore set `shouldResync: false`, and `compare_sweep.py`
-prints which mode it used.
+**A CPU match is not reproducible from its inputs.**
+`Fighter_Spaghetti_8006AD10` assigns a CPU's held buttons from its own AI
+(`ftCo_800A2040` -> `ftCo_800A198C`) *after* playback has written the recorded
+inputs in. With the resync off, a Fox ditto between two level-9 CPUs comes
+apart. That is a property of Melee, not of this port, and it is why the resync
+exists. Use `--cpu ""` with the recording's own `MELEE_PAD_SCRIPT` for a human
+match, which is what a real replay is.
 
-**A CPU match cannot be replayed from inputs.** With the resync off, a Fox
-ditto between two level-9 CPUs comes apart: mean 23.9/255 against 3.3, and the
-alignment search stops finding a consistent offset (spread 0.68s, against
-0.05s) because there is no longer a frame in the window that matches. The cause
-is in the game, not the format: `Fighter_Spaghetti_8006AD10` assigns a CPU's
-held buttons from its own AI (`ftCo_800A2040` -> `ftCo_800A198C`) *after*
-playback has written the recorded inputs in, so for a CPU the recorded inputs
-are discarded and the emulator runs its own match. This is a property of Melee
-and applies to Slippi's own replays of CPU games; it is why the resync exists.
+**And the pixel metric cannot resolve fighter state.** It is a mean absolute
+difference over the whole downscaled frame, so it is dominated by the
+background and by where the camera is pointing. Editing a replay to hold a
+fighter's stick fully right for ninety frames -- a second and a half of walking
+in the wrong direction -- moves that number by 0.6/255. A metric that barely
+notices *that* cannot be used to argue that two sides agree on where the
+fighters are; what it can say is that they are rendering the same scene from
+the same camera, which is real but much coarser.
 
-**A human match does replay from inputs, and the two simulations agree.** Both
-slots human, both pads driven from a script (`--cpu ""` with the same
-`MELEE_PAD_SCRIPT` that recorded it), resync off -- so the emulator is given
-nothing but the inputs and has to work out the rest for itself:
+So the numbers this produces (a human match, resync off, twelve samples over
+2200 frames: 2.7 to 4.6, mean 3.4, alignment locked to two frames) are quoted
+here as what they are -- the two sides showing the same scene throughout, with
+no point at which one becomes a different fight. They are not evidence about
+state. The exact, field-level agreement is the lockstep result against Dolphin
+and `crosscheck_console.py`, both of which compare values rather than pictures.
 
-```
-resync: off -- the emulator has only the inputs
-frame    timer      offset    difference
-0        02:00.00   +2.033s     4.1/255
-600      01:50.00   +2.033s     3.0/255
-1200     01:40.00   +2.033s     3.3/255
-1800     01:30.00   +2.000s     3.6/255
-2200     01:23.33   +2.017s     2.7/255
+**What would settle it properly** is replaying a `.slp`'s inputs into this
+port's own simulation and comparing against the post-frame data recorded
+beside them, field by field, the way `crosscheck_console.py` does against
+Dolphin. That needs no emulator and no screenshots, and it is the shape the
+parity plan's Phase 6 asks for. It is not built yet.
 
-samples   12
-difference  min 2.7  max 4.6  mean 3.4  (of 255)
-offset      min +2.000s  max +2.033s  spread 0.033s
-```
-
-Flat for 2200 frames, with the alignment locked to within two frames. Set
-beside the same measurement on a CPU match with the resync off -- mean 23.9,
-offset spread 0.68s -- the difference between "the same fight" and "a
-different fight" is not subtle, which is what makes 3.4 meaningful rather than
-merely small.
-
-That is the port's simulation and the console's, run independently from the
-same inputs, landing in the same place. It is a weaker statement than the
-lockstep result (exact, field by field, against Dolphin) because it compares
-pictures. It is a stronger one in a different direction: nothing here is
-shared between the two sides except a file this port wrote.
-
-`tools/slippi/tamper_check.py` is the other half of the same question. It
-copies a replay, changes nothing but the inputs over a few frames in the
-middle, and plays both copies back: with the resync off and human slots, the
-edit has to leave everything before it identical and everything after it
-different. On a CPU match it does neither, for the reason above -- which is a
-result about Melee rather than about this port.
+`tools/slippi/tamper_check.py` exists to keep this honest: it copies a replay,
+changes nothing but the inputs over a stretch, and plays both back. Two
+warnings learned by getting them wrong -- a button press can leave no trace
+because the action ends where it started, and a window with a death in it
+erases the difference entirely, because a fighter that dies respawns at a
+fixed point.
 
 ## Online play
 
