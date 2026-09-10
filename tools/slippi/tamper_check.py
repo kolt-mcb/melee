@@ -47,6 +47,8 @@ from compare_frame import play_emulator, score, ffmpeg, ROOT
 PRE_FRAME = 0x37
 OFF_FRAME = 0x00
 OFF_PORT = 0x04
+OFF_JOYSTICK_X = 0x18  # float, "Joystick X" -- the processed analog value
+OFF_RAW_X = 0x3A       # int8, "X analog for UCF" -- the raw byte
 OFF_PROCESSED = 0x2C   # uint32, "Processed Buttons"
 OFF_PHYSICAL = 0x30    # uint16, "Physical Buttons"
 BUTTON_A = 0x0100
@@ -70,6 +72,13 @@ def tamper(path, out, at, hold, port):
         if not (at <= frame < at + hold) or payload[OFF_PORT] != port:
             continue
         p = base + off + 1               # +1: past the command byte
+        # Hold the stick fully right, rather than tapping a button. A button
+        # press can leave no trace: a jab ends where it started, so a later
+        # sample sees an identical frame and the test says nothing. Walking
+        # for the whole window moves the fighter somewhere else and it stays
+        # moved.
+        struct.pack_into(">f", data, p + OFF_JOYSTICK_X, 1.0)
+        struct.pack_into(">b", data, p + OFF_RAW_X, 80)
         proc = struct.unpack_from(">I", data, p + OFF_PROCESSED)[0]
         phys = struct.unpack_from(">H", data, p + OFF_PHYSICAL)[0]
         struct.pack_into(">I", data, p + OFF_PROCESSED, proc | BUTTON_A)
@@ -79,8 +88,8 @@ def tamper(path, out, at, hold, port):
         sys.exit("no pre-frame updates for port %d in frames %d..%d"
                  % (port, at, at + hold))
     open(out, "wb").write(bytes(data))
-    print("held A for port %d over %d frames from frame %d -> %s"
-          % (port, edited, at, os.path.basename(out)))
+    print("held the stick right (and A) for port %d over %d frames from "
+          "frame %d -> %s" % (port, edited, at, os.path.basename(out)))
     return out
 
 
@@ -97,8 +106,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--replay", required=True)
     ap.add_argument("--at", type=int, default=600, help="match frame to edit")
-    ap.add_argument("--hold", type=int, default=12, help="frames to hold A")
+    ap.add_argument("--hold", type=int, default=90,
+                    help="frames to hold the edited input")
     ap.add_argument("--port", type=int, default=0)
+    ap.add_argument("--after", type=int, default=150,
+                    help="frames past the edit to sample. Keep it short and "
+                         "pick a window with no death in it: a fighter that "
+                         "dies respawns at a fixed point, which erases the "
+                         "difference the test is looking for.")
     ap.add_argument("--boot", type=float, default=2.0,
                     help="seconds of Dolphin boot before match frame 0")
     ap.add_argument("--work", default=os.path.join(ROOT, "build/pc/slippi-demo"))
@@ -110,7 +125,7 @@ def main():
     # Two samples: one before the edit, which must be unchanged, and one well
     # after it, which must not be.
     before = args.at - 120
-    after = args.at + 600
+    after = args.at + args.hold + args.after
     # One Dolphin user directory for both passes, because each pass clears the
     # frame dump before it starts; the first result is copied out of the way.
     work = os.path.join(args.work, "tamper")
