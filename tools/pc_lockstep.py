@@ -254,6 +254,43 @@ class Pads:
         self.fds[pad].flush()
 
 
+# Dolphin's pipe controller takes one command per line. A whole pad state is a
+# handful of them: the two sticks and the triggers as axes, every button as a
+# press or a release. Buttons are sent as the difference from the last frame
+# because the pipe device is edge-driven -- PRESS latches until RELEASE.
+PIPE_BUTTONS = [
+    ("A", 0x0100), ("B", 0x0200), ("X", 0x0400), ("Y", 0x0800),
+    ("Z", 0x0010), ("START", 0x1000), ("L", 0x0040), ("R", 0x0020),
+    ("D_LEFT", 0x0001), ("D_RIGHT", 0x0002), ("D_DOWN", 0x0004),
+    ("D_UP", 0x0008),
+]
+
+
+def pad_line_to_pipe(fields, prev_buttons):
+    """["P", buttons, sx, sy, cx, cy, l, r] -> pipe commands, new button mask.
+
+    The raw stick bytes are -80..80 at the gate; the pipe wants 0..1 with 0.5
+    centred, which is what Dolphin's own mapping produces for a real pad.
+    """
+    btn = int(fields[1], 16)
+    sx, sy, cx, cy, lt, rt = (int(v) for v in fields[2:8])
+
+    def axis(v):
+        f = 0.5 + (v / 160.0)
+        return 0.0 if f < 0.0 else (1.0 if f > 1.0 else f)
+
+    cmds = ["SET MAIN %.4f %.4f" % (axis(sx), axis(sy)),
+            "SET C %.4f %.4f" % (axis(cx), axis(cy)),
+            "SET L %.4f" % (lt / 255.0), "SET R %.4f" % (rt / 255.0)]
+    for name, mask in PIPE_BUTTONS:
+        now, was = btn & mask, prev_buttons & mask
+        if now and not was:
+            cmds.append("PRESS " + name)
+        elif was and not now:
+            cmds.append("RELEASE " + name)
+    return cmds, btn
+
+
 # The GameCube's clock counts from 2000-01-01; Dolphin's CustomRTCValue is a
 # Unix timestamp. 157852800 is 2005-01-01 in GameCube seconds -- a whole number
 # of days, so the seconds field is zero.
@@ -608,6 +645,16 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
     sides = accept_sides(server, 2)
     port, ref = sides["port"], sides["ref"]
 
+    # MELEE_NETPLAY=1 makes this a match rather than a comparison: the port's
+    # own controller is relayed into the console every frame, so a human plays
+    # one program and both simulate it. The frame-by-frame comparison keeps
+    # running underneath, which is the point -- a desync is visible the moment
+    # it happens rather than being argued about afterwards.
+    netplay = os.environ.get("MELEE_NETPLAY") == "1"
+    netplay_buttons = [0]
+    if netplay:
+        print("   netplay: the port's controller drives both sides")
+
     dump_path = os.environ.get("MELEE_LOCKSTEP_DUMP")
     dump_fp = open(dump_path, "w") if dump_path else None
     last_gframe = {"port": 0, "ref": 0}
@@ -716,11 +763,34 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
                     print("   note: the port's match began on frame %d, not %d"
                           % (port_match_start, PORT_MATCH_START))
 
+            # Netplay: the port is a player, not a recording. Its controller
+            # arrived on the socket as a "P" line this frame; relay it into the
+            # console's pipe so both programs simulate the same input. This is
+            # the whole transport -- delay-based, one frame of lag by
+            # construction, because the barrier already holds the two in step.
+            # Only once both sides are actually in the match. Before that the
+            # route is walking the console through its menus on this same
+            # pipe, and a second writer sending a neutral stick and button
+            # releases every frame fights it -- the console ends up in a
+            # different scene entirely, which is what the first attempt did.
+            if netplay and pg > 0 and rg > 0 and port.aux \
+                    and port.aux.startswith("P "):
+                f = port.aux.split()
+                port.aux = None
+                if len(f) >= 8:
+                    cmds, netplay_buttons[0] = pad_line_to_pipe(
+                        f, netplay_buttons[0])
+                    for c in cmds:
+                        pads.send(0, c)
+
             # The in-match input, put into the console on the same match frame
             # the port's own script gives it to the port.
             while console_input and console_input[0][0] <= rg - shift:
                 _, cmd = console_input.pop(0)
-                pads.send(0, cmd)
+                # In netplay the live pad is the in-match input, so the
+                # recording is dropped rather than played on top of it.
+                if not (netplay and pg > 0):
+                    pads.send(0, cmd)
 
             if not locked:
                 for side in (port, ref):
