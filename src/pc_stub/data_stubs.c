@@ -136,7 +136,7 @@ PC_DATA_STUB(lbColl_804D36DC);
 PC_DATA_STUB(lbColl_804D36E8);
 PC_DATA_STUB(lbColl_804D36EC);
 PC_DATA_STUB(lbl_803B7A44);
-PC_DATA_STUB(lbl_803B7B68);
+/* lbl_803B7B68: defined for real in src/pc_stub/pc_dol_data.c. */
 PC_DATA_STUB(lbl_803B7C08);
 PC_DATA_STUB(lbl_803B7C18);
 PC_DATA_STUB(lbl_803B7C80);

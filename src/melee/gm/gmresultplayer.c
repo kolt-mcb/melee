@@ -54,55 +54,20 @@ typedef struct {
 extern CharScaleEntry lbl_803D6A18[];
 extern f32 lbl_803D7058[];
 
-typedef struct {
-    GObj_RenderFunc funcs[4];
-} ResultsRenderFuncs;
 
-typedef struct {
-    /* 0x00 */ u8 pad_00[0x24];
-    /* 0x24 */ Vec3 x24;
-    /* 0x30 */ Vec3 x30;
-    /* 0x3C */ ResultsRenderFuncs x3C;
-    /* 0x4C */ Vec3 x4C;
-    /* 0x58 */ Vec3 x58;
-    /* 0x64 */ ResultsRenderFuncs x64;
-    /* 0x74 */ f32 x74;
-    /* 0x78 */ f32 x78;
-    /* 0x7C */ f32 x7C;
-    /* 0x80 */ f32 x80;
-    /* 0x84 */ f32 x84;
-    /* 0x88 */ f32 x88;
-    /* 0x8C */ f32 x8C;
-    /* 0x90 */ f32 x90;
-    /* 0x94 */ f32 x94;
-    /* 0x98 */ f32 x98;
-} ResultsPlayerConfig;
-
-extern ResultsPlayerConfig lbl_803B7B68;
-extern HSD_CObjDesc lbl_803D7910;
-
-typedef struct {
-    /* 0x00 */ f32 x_off[4];   // indexed by variant (clamped to 3)
-    /* 0x10 */ f32 y_off[4];   // indexed by variant (clamped to 3)
-    /* 0x20 */ f32 z_scale[4]; // indexed by variant (clamped to 3)
-} CameraKindParams;            // size = 0x30
-
-typedef struct {
-    /* 0x000 */ u8 pad[0x10];
-    /* 0x010 */ CameraKindParams kind[(0x6D0 - 0x10) / 0x30];
-    /* 0x6D0 */ f32 slot_off[(0xF00 - 0x6D0) / 0x30][3][4];
-    /* 0xEE0 */ u8 pad_EE0[0xF08 - 0xEE0];
-    /* 0xF08 */ HSD_CObjDesc cobj_desc;
-} CameraKindData;
-
-extern CameraKindData lbl_803D6A08;
 
 extern s32 lbl_804DA3F0;
 extern s32 lbl_804DA3F4;
 
-extern int lbl_8046E38C[4];
-
-extern HSD_JObj* lbl_8046E39C[4];
+/* Two more names for members of the object at lbl_8046E1B0, the same way
+ * lbl_8046E3AC names its `state`: +0x1DC is `gobjs` and +0x1EC is `jobjs`,
+ * and 0x8046E1B0 + 0x1DC is exactly 0x8046E38C. Separate weak stubs made
+ * them separate objects here, so fn_80179F6C stored the results screen's
+ * per-player GObjs somewhere nothing ever read, and every later use of
+ * `disp->gobjs[slot]` was a null dereference -- the crash at the end of any
+ * match where a placement box has to be drawn. */
+#define lbl_8046E38C (lbl_8046E1B0.gobjs)
+#define lbl_8046E39C (lbl_8046E1B0.jobjs)
 
 typedef union {
     s16 h[4];
@@ -133,7 +98,15 @@ typedef struct {
     /* 0x22F4 */ u32 x22F4[4][2];
 } lbl_8046E3AC_t;
 
-extern lbl_8046E3AC_t lbl_8046E3AC;
+/* On GameCube these are one object: lbl_8046E1B0 + 0x1FC == 0x8046E3AC, so
+ * `lbl_8046E3AC` names the `state` member of the struct that starts at
+ * lbl_8046E1B0, and the code below reaches it both ways -- `lbl_8046E3AC.x0_4`
+ * on one line, `disp->state.x0_4` on another. Two weak stubs gave the host
+ * build two *separate* objects, so a write through one name was invisible
+ * through the other. Aliasing restores the console's single object without
+ * depending on `state` landing at 0x1FC, which it does not here: every
+ * pointer in the struct ahead of it is twice as wide. */
+#define lbl_8046E3AC (lbl_8046E1B0.state)
 
 typedef struct ResultsDisplayData {
     /* 0x000 */ u8 pad_000[0x104];
@@ -145,7 +118,14 @@ typedef struct ResultsDisplayData {
     /* 0x1FC */ lbl_8046E3AC_t state;
 } ResultsDisplayData;
 
-extern ResultsDisplayData lbl_8046E1B0;
+/* The stub for this was 256 bytes for a struct that is over 500 before its
+ * `state` member even starts, so every write from player_img1 (+0x104) on
+ * landed in whatever weak stub the linker happened to place next -- and the
+ * per-player gobjs at +0x1DC read back NULL, which is a null dereference the
+ * moment a match ends. It lives in BSS on the console too, so
+ * zero-initialised is the right starting state; it just has to be the right
+ * size, and one object. */
+ResultsDisplayData lbl_8046E1B0;
 
 void gm_80177724(struct ResultsMatchInfo* arg0)
 {
@@ -1341,10 +1321,19 @@ void fn_80179F04(HSD_GObj* gobj, int arg1)
     }
 }
 
+#if BUILD_TARGET_PC
+/* The console's slot is four bytes and the caller casts its GObj into it.
+ * A host pointer does not fit in an int, so the port passes the pointer. */
+void fn_80179F6C(int idx, HSD_GObj* value)
+{
+    lbl_8046E38C[idx] = value;
+}
+#else
 void fn_80179F6C(int idx, int value)
 {
     lbl_8046E38C[idx] = value;
 }
+#endif
 
 void fn_80179F84(HSD_JObj* jobj)
 {
