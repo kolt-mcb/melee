@@ -264,6 +264,47 @@ static void sync_send(const char* line)
     }
 }
 
+/* The exceptions register (docs/port-parity-plan.md): ftCo_800AC5A0 hands
+ * two registers it never assigned to the CPU's stick when a grabbed fighter
+ * has no knockback. On the console r5 is whatever the last helper left and
+ * r30 is the Fighter's own address -- neither exists here. Under the
+ * lockstep the console reports both from the store site ("S r5 r30", see
+ * Core.cpp) and the driver hands them over on request; alone, the caller's
+ * defaults stand. Returns 1 when the driver supplied values. */
+int pc_trace_stale_regs(u32* r5, u32* r30)
+{
+    char reply[64];
+    size_t used = 0;
+    unsigned a, b;
+
+    if (sync_fd < 0) {
+        return 0;
+    }
+    if (send(sync_fd, "NEED\n", 5, MSG_NOSIGNAL) != 5) {
+        return 0;
+    }
+    for (;;) {
+        ssize_t got = recv(sync_fd, reply + used, sizeof(reply) - 1 - used, 0);
+        if (got <= 0) {
+            return 0;
+        }
+        used += (size_t) got;
+        reply[used] = '\0';
+        if (strchr(reply, '\n') != NULL) {
+            break;
+        }
+        if (used >= sizeof(reply) - 1) {
+            used = 0;
+        }
+    }
+    if (sscanf(reply, "VAL %x %x", &a, &b) != 2) {
+        return 0;
+    }
+    *r5 = a;
+    *r30 = b;
+    return 1;
+}
+
 /* Called after the frame has been presented, so the frame being compared is
  * the one on screen while the driver looks at it. */
 void pc_trace_sync_wait(void)
