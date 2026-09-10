@@ -215,6 +215,10 @@ tests/pc/states/
 tests/pc/lockstep_logs/
 tests/pc/lockstep_matrix.json
 
-# Slippi upstream sources (tools/slippi/fetch.sh); reference only, never built
+# Slippi upstream sources and Dolphin builds (tools/slippi/fetch*.sh):
+# reference material and prebuilt binaries, never compiled into melee-pc.
 extern/slippi/
+# The .slp validation harness's node_modules (tools/slippi/package.json).
+tools/slippi/node_modules/
+tools/slippi/package-lock.json
 tools/slippi/__pycache__/

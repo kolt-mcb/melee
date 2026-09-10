@@ -157,6 +157,58 @@ written. The match ends inside the think function, so the index has already
 advanced past the last frame that actually happened, and writing it would put
 a frame with no player data at the end of the stream.
 
+## Side by side with Slippi's own Dolphin
+
+`tools/slippi/fetch_dolphin.sh` downloads Project Slippi's two Dolphin builds
+into `extern/slippi/dolphin/` (gitignored, extracted rather than run through
+FUSE). They are not interchangeable: the **netplay** build is the one people
+play on and records `.slp` files of its own; the **playback** build takes
+`-i <comm.json>` naming a replay and plays it back through the real game.
+
+```sh
+tools/slippi/fetch_dolphin.sh     # once
+tools/slippi/side_by_side.sh
+```
+
+That records a match in the port, hands the replay to Slippi's playback
+Dolphin, and starts the port again on the same match beside it -- so the left
+window is the emulator reconstructing a match from what this port wrote and the
+right window is the port producing it. Both are tiled by asking the window
+manager (`tools/slippi/tile_windows.py`), because Dolphin rewrites its own
+config on exit and there is no `wmctrl` or `xdotool` on this machine.
+
+The port's side is deterministic given `MELEE_SEED` and `MELEE_FAKE_RTC`, which
+the launcher pins, so the second run is the same match as the recorded one.
+
+**It works.** Slippi's playback Dolphin logs
+`EXI_DeviceSlippi.cpp: Replay file loaded successfully!?`, reads the start and
+end frames straight out of our file (`[PLAYBACK_START_FRAME] -123`,
+`[GAME_END_FRAME] 7200`), runs its savestate and seek threads against it, and
+plays every frame through to the end at a full 60 fps.
+
+### The still
+
+`tools/slippi/compare_frame.py --frame N` produces the picture that can
+actually be examined: it plays the replay in Dolphin with frame dumping,
+replays the same match in the port with `MELEE_SHOT_RANGE`, and pairs the two.
+
+The pairing is searched, not assumed. The port's screenshot counter runs from
+its own boot and Dolphin's frame dump starts when Dolphin starts rendering, so
+the offset between them is a property of the run. The port's frame is the
+reference and a window of emulator frames is scanned for the closest match, so
+a bad offset shows up as a bad match rather than as a quietly wrong comparison.
+
+On frame 1800 of a Fox ditto on Final Destination, the two sides agree on the
+timer (01:30.00), both percentages (98% / 0%), the fighters' positions and the
+stage's animated background, at a mean difference of 3.2/255 over a downscaled
+greyscale. That number is a check on the pairing, not a fidelity measurement --
+the two render at different sizes and this port's renderer is not pixel-exact
+with Dolphin's.
+
+Frame dumping is how the emulator's picture is read at all: this machine runs
+Wayland, where an X11 grab of another program's window comes back blank and
+GNOME's screenshot D-Bus method answers `AccessDenied`.
+
 ## Online play
 
 Replays are the part of Slippi that is a *format*. Online play is a service and
@@ -196,7 +248,9 @@ the port would need for its own rollback, save states, or frame-stepping.
 ## The upstream sources
 
 `tools/slippi/fetch.sh` clones the repositories listed in
-`tools/slippi/manifest.json` into `extern/slippi/`, each pinned to a commit.
+`tools/slippi/manifest.json` into `extern/slippi/`, each pinned to a commit,
+and `tools/slippi/fetch_dolphin.sh` puts Slippi's two Dolphin builds beside
+them.
 Nothing there is compiled into `melee-pc`; they are reference material, and
 `extern/slippi/` is gitignored. Their licences differ from this repository's --
 `slippi-ssbm-asm` is GPL-3 and Ishiiruka is GPL-2. `src/port/slippi/` is
