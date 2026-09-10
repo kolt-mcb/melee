@@ -4918,7 +4918,19 @@ void mpLib_800552B0(int joint_id, HSD_JObj* jobj, int z)
         #endif
         CollJoint* joint = &groundCollJoint[joint_id];
         joint->x20 = r7;
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_MPLINK") != NULL) {
+            fprintf(stderr, "[MPLINK] joint %d <- jobj %p (descendant %d of %p)\n",
+                    joint_id, (void*) r7, z, (void*) jobj);
+        }
+#endif
     }
+#if BUILD_TARGET_PC
+    else if (getenv("MELEE_MPLINK") != NULL) {
+        fprintf(stderr, "[MPLINK] joint %d: no descendant %d under jobj %p\n",
+                joint_id, z, (void*) jobj);
+    }
+#endif
 }
 
 void mpJointHide(int joint_id)

@@ -1035,9 +1035,59 @@ struct grZebes_GroundVars4 {
 #endif
 };
 
+/* The acid state Brinstar's map 6 keeps at gp+C8 (grzebes.c lays it over
+ * grZebes_GroundVars5.xC8). */
+typedef struct grZe_AcidState {
+    /* +00 */ u8 x00_state;
+    /* +01 */ u8 x01_next;
+    /* +02 */ s16 x02_timer;
+    /* +04 */ f32 x04_base_x;
+    /* +08 */ f32 x08_offset;
+    /* +0C */ f32 x0C_velocity;
+    /* +10 */ f32 x10_damage;
+    /* +14 */ HSD_JObj* x14_jobj1;
+    /* +18 */ HSD_JObj* x18_jobj2;
+    /* +1C */ Item_GObj* x1C_mat;
+    /* +20 */ s16 x20_anim_idx;
+} grZe_AcidState;
+
 struct grZebes_GroundVars5 {
     /* +00 gp+C4 */ s16 xC4;
     /* +02 gp+C6 */ s16 xC6;
+#if BUILD_TARGET_PC
+    /* grzebes.c casts &xC8 to grZe_AcidState*. That struct is 0x24 bytes on
+     * the console and 0x38 here (three 8-byte pointers), so laid over the
+     * console field list it ran across xE8..xF8: the map-7 GObj kept in xF0
+     * was overwritten by the acid's material GObj, the frame proc walked an
+     * item's joint tree ("root has no child") and the acid columns never got
+     * their reference points, so fighters fell through the platform. Here
+     * the state is a real member, aligned, and the fields the console
+     * shares with its head (xC8..xDC) alias it through an anonymous union;
+     * everything the console keeps after it comes after it. */
+    u32 pc_align;
+    union {
+        grZe_AcidState acid;
+        struct {
+            u32 xC8;
+            f32 xCC;
+            f32 xD0;
+            f32 xD4;
+            f32 xD8;
+            u32 xDC;
+        };
+    };
+    s16 xE8;
+    s16 xEA;
+    u32 xEC;
+    uintptr_t xF0; /* Ground_GObj* of map 7, stored with a (u32) cast on the console */
+    s16 xF4;
+    s16 xF6;
+    u32 xF8;
+    /* A zako generator and a material GObj, stored with a (u32) cast and
+     * read back as pointers (grzebes.c 364/366 vs 420/636). */
+    uintptr_t xFC;
+    uintptr_t x100;
+#else
     /* +04 gp+C8 */ u32 xC8;
     /* +08 gp+CC */ f32 xCC;
     /* +0C gp+D0 */ f32 xD0;
@@ -1053,12 +1103,6 @@ struct grZebes_GroundVars5 {
     /* +30 gp+F4 */ s16 xF4;
     /* +32 gp+F6 */ s16 xF6;
     /* +34 gp+F8 */ u32 xF8;
-#if BUILD_TARGET_PC
-    /* A zako generator and a material GObj, stored with a (u32) cast and
-     * read back as pointers (grzebes.c 364/366 vs 420/636). */
-    /* +38 gp+FC */ uintptr_t xFC;
-    /* +3C gp+100 */ uintptr_t x100;
-#else
     /* +38 gp+FC */ u32 xFC;
     /* +3C gp+100 */ u32 x100;
 #endif

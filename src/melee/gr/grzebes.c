@@ -185,26 +185,63 @@ typedef struct grZe_BubbleConfig {
     Vec3 x4_positions[4];
 } grZe_BubbleConfig;
 
-typedef struct grZe_AcidState {
-    /* +00 */ u8 x00_state;
-    /* +01 */ u8 x01_next;
-    /* +02 */ s16 x02_timer;
-    /* +04 */ f32 x04_base_x;
-    /* +08 */ f32 x08_offset;
-    /* +0C */ f32 x0C_velocity;
-    /* +10 */ f32 x10_damage;
-    /* +14 */ HSD_JObj* x14_jobj1;
-    /* +18 */ HSD_JObj* x18_jobj2;
-    /* +1C */ Item_GObj* x1C_mat;
-    /* +20 */ s16 x20_anim_idx;
-} grZe_AcidState;
+/* grZe_AcidState lives in gr/types.h: on the PC it is a member of
+ * grZebes_GroundVars5, laid out to fit the host pointers it holds. */
 
 extern const grZe_BubbleConfig grZe_803B8044;
 
+#if BUILD_TARGET_PC
+/* The spawn code below reads `(u8*) grZe_8049F140 + phase * 0x24 + off`:
+ * on the console grZe_8049F140 (2 Vec3), grZe_8049F158 (2 Vec3) and the
+ * bubble array grZe_8049F170 are contiguous, so that walks from the two
+ * anchor pairs into bubble entry (phase - 1)'s x/y (and, for the mirror
+ * branch, entry (mirror - 2)'s). Here the three are separate globals in
+ * whatever order the linker likes, and a bubble entry holds host pointers,
+ * so the byte offsets land elsewhere. Read the console's byte at the
+ * console's offset instead. */
+static f32 grZe_pc_word(u32 off)
+{
+    if (off < 0x18) {
+        return ((const f32*) grZe_8049F140)[off / 4];
+    }
+    if (off < 0x30) {
+        return ((const f32*) grZe_8049F158)[(off - 0x18) / 4];
+    }
+    {
+        u32 e = (off - 0x30) / 0x24;
+        u32 f = (off - 0x30) % 0x24;
+        const grZe_BubbleEntry* en = &grZe_8049F170[e];
+        if (e >= 20) return 0.0f;
+        switch (f) {
+        case 0x08: return en->x08_x;
+        case 0x0C: return en->x0C_y;
+        case 0x10: return en->x10;
+        case 0x14: return en->x14;
+        case 0x18: return en->x18_size;
+        case 0x1C: return en->x1C;
+        default: return 0.0f;
+        }
+    }
+}
+#endif
+
+#if BUILD_TARGET_PC
+/* StageData.joints reads this as GrJoint {s16 joint, s16 map, s16 jobj
+ * index}. The console stored it as u32 words, whose big-endian bytes are
+ * exactly that s16 stream; on a little-endian host the words come out with
+ * each pair of halves swapped, so one wrong joint got linked and the main
+ * floor (joint 4, map 6, its 14th descendant) stayed in joint-local space
+ * around the origin -- fighters spawned at the top and fell to the bottom
+ * line. Same bytes, written as what they are. */
+GrJoint grZe_803E1A10[] = {
+    { 1, 6, 21 }, { 4, 6, 14 }, { 3, 6, 1 }, { 2, 7, 6 }, { 5, 7, 1 },
+};
+#else
 u32 grZe_803E1A10[8] = {
     0x00010006, 0x00150004, 0x0006000E, 0x00030006,
     0x00010002, 0x00070006, 0x00050007, 0x00010000,
 };
+#endif
 
 StageCallbacks grZe_callbacks[] = {
     { NULL, NULL, NULL, NULL, 0 },
@@ -338,7 +375,14 @@ void grZebes_801D8644(HSD_GObj* gobj)
     Vec3 pos;
     UNUSED u8 _[4];
 
+#if BUILD_TARGET_PC
+    /* A (u32) store of a host pointer kept the low half only; the frame
+     * proc then walked a stranger's joint tree (root with no child) and
+     * never got the acid-column reference points for the platform. */
+    gp->gv.zebes5.xF0 = (uintptr_t) grZebes_801D8558(7);
+#else
     gp->gv.zebes5.xF0 = (u32) grZebes_801D8558(7);
+#endif
     Ground_801C2ED0(jobj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
     child_jobj = Ground_801C3FA4(gobj, 0x1E);
@@ -472,18 +516,32 @@ void grZebes_801D881C(HSD_GObj* gobj)
                 s32 mirror = 6 - spawn_phase;
                 if (spawn_phase < mirror) {
                     f32 scale_min = grZe_804D6990->x58;
+#if BUILD_TARGET_PC
+                    f32 rand = HSD_Randf();
+                    grZebes_801DAE70(spawn_phase, 4,
+                                     grZe_pc_word(spawn_phase * 0x24 + 0x14),
+                                     grZe_pc_word(spawn_phase * 0x24 + 0x18),
+#else
                     u8* base = (u8*) grZe_8049F140 + spawn_phase * 0x24;
                     f32 rand = HSD_Randf();
                     grZebes_801DAE70(spawn_phase, 4, *(f32*) (base + 0x14),
                                      *(f32*) (base + 0x18),
+#endif
                                      ZB_FMA(grZe_804D6990->x5C - scale_min,
                                             rand, scale_min));
                 }
                 if (spawn_phase <= mirror) {
+#if BUILD_TARGET_PC
+                    f32 rand2 = HSD_Randf();
+                    grZebes_801DAE70(mirror, 4,
+                                     grZe_pc_word(mirror * 0x24 + 0x5C),
+                                     grZe_pc_word(mirror * 0x24 + 0x60),
+#else
                     u8* base2 = (u8*) grZe_8049F140 + mirror * 0x24;
                     f32 rand2 = HSD_Randf();
                     grZebes_801DAE70(mirror, 4, *(f32*) (base2 + 0x5C),
                                      *(f32*) (base2 + 0x60),
+#endif
                                      (f32) ZB_FMAD(0.5, rand2, 1.0));
                 }
             }
@@ -633,6 +691,47 @@ void grZebes_801D881C(HSD_GObj* gobj)
                 mpVtxSetPos(k, col_x[k], col_heights[k]);
             }
         }
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_STAGE_DIAG") != NULL) {
+            extern u32 gm_8016AEDC(void);
+            u32 fr = gm_8016AEDC();
+            if (fr == 1 || fr == 2) {
+                const u32* w = (const u32*) grZe_8049F140;
+                int k;
+                fprintf(stderr, "[ZEANCH] f%u", fr);
+                for (k = 0; k < 6; k++) fprintf(stderr, " %08x", w[k]);
+                fprintf(stderr, " |");
+                w = (const u32*) grZe_8049F158;
+                for (k = 0; k < 12; k++) fprintf(stderr, " %08x", w[k]);
+                fprintf(stderr, "\n");
+            }
+            if (fr <= 156) {
+                int b;
+                for (b = 0; b < 20; b++) {
+                    grZe_BubbleEntry* e = &grZe_8049F170[b];
+                    if (e->x00_active != 0)
+                        fprintf(stderr, "[ZEBUB] f%u b%d act=%d t=%d x=%08x y=%08x s=%08x x10=%08x x14=%08x x1C=%08x\n",
+                                fr, b, (int) e->x00_active, (int) e->x02_timer,
+                                *(u32*) &e->x08_x, *(u32*) &e->x0C_y,
+                                *(u32*) &e->x18_size, *(u32*) &e->x10,
+                                *(u32*) &e->x14, *(u32*) &e->x1C);
+                }
+            }
+            if (fr >= 140 && fr <= 156) {
+                fprintf(stderr, "[ZEBES] f%u cols x=(%.2f %.2f %.2f %.2f %.2f %.2f) "
+                        "h=(%.2f %.2f %.2f %.2f %.2f %.2f) ref28=(%.2f,%.2f) ref1C=(%.2f,%.2f) "
+                        "result=%d width=%.2f left=%.2f\n", fr,
+                        (double) col_x[0], (double) col_x[1], (double) col_x[2],
+                        (double) col_x[3], (double) col_x[4], (double) col_x[5],
+                        (double) col_heights[0], (double) col_heights[1],
+                        (double) col_heights[2], (double) col_heights[3],
+                        (double) col_heights[4], (double) col_heights[5],
+                        (double) sp28.x, (double) sp28.y, (double) sp1C.x,
+                        (double) sp1C.y, (int) result, (double) colWidth,
+                        (double) left_x);
+            }
+        }
+#endif
         mpLib_80055E24(0);
     } else {
         mpLib_80057BC0(0);
@@ -673,6 +772,13 @@ void grZebes_801D9100(HSD_GObj* gobj)
 
     grAnime_801C8138(gobj, gp->map_id, 0);
     Ground_801C2ED0(jobj, gp->map_id);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_STAGE_DIAG") != NULL) {
+        fprintf(stderr, "[ZEBES] map %d init: gobj=%p jobj=%p child=%p\n",
+                gp->map_id, (void*) gobj, (void*) jobj,
+                jobj ? (void*) jobj->child : NULL);
+    }
+#endif
     mat_gobj = gobj;
     new_var3 = mat_gobj;
     child_jobj = Ground_801C3FA4(new_var3, 0xF);
@@ -726,6 +832,17 @@ void grZebes_801D925C(HSD_GObj* gobj)
         Vec3 pos1 = { 24.1f, -4.6f, 0.0f };
         Vec3 pos2 = { 24.05f, 2.2f, 0.0f };
 
+#if BUILD_TARGET_PC
+        if (getenv("MELEE_STAGE_DIAG") != NULL) {
+            static int n = 0;
+            if (n++ < 3) {
+                HSD_JObj* rj = GET_JOBJ(gobj);
+                fprintf(stderr, "[ZEBES] map %d frame: gobj=%p jobj=%p child=%p\n",
+                        GET_GROUND(gobj)->map_id, (void*) gobj, (void*) rj,
+                        rj ? (void*) rj->child : NULL);
+            }
+        }
+#endif
         jobj = Ground_801C3FA4(gobj, 1);
         if (jobj != NULL) {
             lb_8000B1CC(jobj, &pos1, &grZe_8049F158[1]);
@@ -2290,10 +2407,19 @@ void grZebes_801DC744(s32 arg0, u8 arg1)
     }
 
     if (arg0 & 1) {
+#if BUILD_TARGET_PC
+        /* base[2] and base[3] are grZe_8049F158[0..1], which follow
+         * grZe_8049F140 in the console's .bss but not here. */
+        f32 x_start = grZe_8049F158[0].x;
+        f32 y_start = grZe_8049F158[0].y;
+        f32 x_step = (grZe_8049F158[1].x - x_start) / 6.0f;
+        f32 y_step = (grZe_8049F158[1].y - y_start) / 6.0f;
+#else
         f32 x_start = base[2].x;
         f32 y_start = base[2].y;
         f32 x_step = (base[3].x - x_start) / 6.0f;
         f32 y_step = (base[3].y - y_start) / 6.0f;
+#endif
 
         for (i = 0; i < 7; i++) {
             grZebes_801DAE70(i, arg1, ZB_FMA(x_step, (f32) i, x_start),
@@ -2302,8 +2428,14 @@ void grZebes_801DC744(s32 arg0, u8 arg1)
     }
 
     if (arg0 & 2) {
+#if BUILD_TARGET_PC
+        /* base[2] is grZe_8049F158[0] on the console (contiguous .bss). */
+        f32 p_x = grZe_8049F158[0].x;
+        f32 y_min = grZe_8049F158[0].y;
+#else
         f32 p_x = base[2].x;
         f32 y_min = base[2].y;
+#endif
         f32 bubble_r = grZe_804D6990->x74;
         f32 x_base = p_x + bubble_r;
         f32 x_range = ZB_FMA(-2.0f, bubble_r, base[1].x - p_x); /* fnmsubs */

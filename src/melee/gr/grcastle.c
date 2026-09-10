@@ -856,8 +856,15 @@ void grCastle_801CE260(Ground_GObj* gobj)
     gp->gv.flatzone.xCA = grCs_804D6970->entries[gp->gv.icemt.xC6].x0;
 
     gp2 = GET_GROUND(gobj);
+#if BUILD_TARGET_PC
+    /* The console parks the CmSubject* in a 32-bit ground var; a host
+     * pointer does not fit, and the slot aliases Corneria's state word, so
+     * ask the camera again where it is read. */
+    subject = Camera_80029044(2);
+#else
     *(u32*) &gp2->gv.arwing.xD8 = (u32) Camera_80029044(2);
     subject = (CmSubject*) *(u32*) &gp2->gv.arwing.xD8;
+#endif
     if (subject != NULL) {
         subject->x40.x = grCs_804D6970->x118;
         subject->x40.y = grCs_804D6970->x11C;
@@ -962,7 +969,7 @@ void grCastle_801CE578(Ground_GObj* gobj)
             s16 timer = gp2->gv.castle11.xCA;
             gp2->gv.castle11.xCA = timer - 1;
             if (timer < 0) {
-                gp2->gv.castle11.xCC = (u32) grCastle_801CD4D0(2);
+                gp2->gv.castle11.xCC = (uintptr_t) grCastle_801CD4D0(2);
                 Ground_801C53EC(0x53026);
                 grCastle_801CE3AC_dontinline(gobj);
             }
@@ -1112,8 +1119,12 @@ void grCastle_801CE8E8(Ground_GObj* gobj)
     grAnime_801C8138((HSD_GObj*) gobj, gp->map_id, 0);
 
     gp2 = GET_GROUND(gobj);
+#if BUILD_TARGET_PC
+    subject = Camera_80029044(2);
+#else
     gp2->gv.arwing.xC8 = (u32) Camera_80029044(2);
     subject = (CmSubject*) gp2->gv.arwing.xC8;
+#endif
     if (subject != NULL) {
         subject->x40.x = grCs_804D6970->x134;
         subject->x40.y = grCs_804D6970->x138;
@@ -1139,7 +1150,11 @@ void grCastle_801CE9E8(Ground_GObj* gobj)
     Vec3 pos;
     Ground* tmp;
     Ground* gp = GET_GROUND(gobj);
+#if BUILD_TARGET_PC
+    CmSubject* subject = Camera_80029044(2);
+#else
     CmSubject* subject = (CmSubject*) gp->gv.arwing.xC8;
+#endif
     PAD_STACK(8);
     if (subject != NULL) {
         lb_8000B1CC(Ground_801C3FA4(gobj, 0), NULL, &pos);
@@ -1154,7 +1169,11 @@ void grCastle_801CE9E8(Ground_GObj* gobj)
         gp->gv.arwing.xC4 = 0;
         {
             Ground* gp2 = gobj->user_data;
+#if BUILD_TARGET_PC
+            CmSubject* subj2 = (tmp = gp2, Camera_80029044(2));
+#else
             CmSubject* subj2 = (CmSubject*) (tmp = gp2)->gv.arwing.xC8;
+#endif
             if (subj2 != NULL) {
                 Camera_800290D4(subj2);
                 gp2->gv.arwing.xC8 = 0;
