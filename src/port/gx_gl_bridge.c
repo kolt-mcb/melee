@@ -4679,6 +4679,236 @@ void GXInit(void* base, u32 size)
 {
     PORT_LOG_INFO("GXInit fifo=%p size=%u", base, size);
 }
+/* An off-screen target for an EFB copy whose destination is known before the
+ * drawing starts.
+ *
+ * Fighter shadows are the case that matters. The game renders each fighter's
+ * silhouette into a corner of the EFB and copies that rectangle out as a
+ * texture, which it then projects onto the stage. Done literally, that means
+ * reading the framebuffer in the middle of a frame -- and on a tiled GPU any
+ * read of the framebuffer ends the render pass: the tile buffer is resolved
+ * to memory and reloaded to carry on. Measured on a Pixel 9 (Mali-G715), the
+ * whole copy path cost 10.4 ms of a 23 ms frame, of which only about 4.8 ms
+ * was the blit, the read and the detile; the rest was the pass break, showing
+ * up as more expensive draws afterwards. That is what held a VS match at
+ * 40 fps, and a fixed-step game below 60 Hz queues audio slower than it is
+ * consumed, so the sound stuttered too.
+ *
+ * Nothing forces the silhouette to be drawn into the main framebuffer. The
+ * sequence is bracketed -- HSD_ShadowStartRender ... GXCopyTex -- so the
+ * bridge renders it into its own texture instead. The main pass is never
+ * interrupted, there is no read back to the CPU, and GXCopyTex hands the
+ * texture straight to the texture cache under the address the console would
+ * have written. GX_CTF_R4 keeps the red channel and the shadow pass has
+ * blending off with the intensity in mat_color.r, so an R8 target loses
+ * nothing.
+ *
+ * MELEE_EFB_NOOFFSCREEN=1 falls back to the read-back path. */
+static int g_off_active;
+static int g_off_w, g_off_h;
+static GLuint g_off_fbo, g_off_tex, g_off_depth;
+static GLint g_off_prev_fbo;
+static GLint g_off_prev_vp[4], g_off_prev_sc[4];
+
+/* Textures standing in for a GC image the game believes is in RAM. Keyed by
+ * that address; a 16-byte marker written there says the buffer still holds
+ * what this copy put in it, so anything else writing over it falls back to
+ * the normal upload path rather than showing a stale shadow. */
+#define PC_EFB_OVERRIDES 8
+#define PC_EFB_MARK_BYTES 16
+static struct pc_efb_override {
+    void* img;
+    GLuint tex;
+    u32 w, h;
+    u8 mark[PC_EFB_MARK_BYTES];
+} g_efb_over[PC_EFB_OVERRIDES];
+static u32 g_efb_over_seq;
+/* Diagnostic: the last address any EFB copy wrote, by either path. */
+void* g_efb_last_dest;
+
+static int pc_efb_offscreen_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        on = getenv("MELEE_EFB_NOOFFSCREEN") == NULL;
+    }
+    return on;
+}
+
+/* Returns nonzero when the following draws will go to the off-screen target.
+ * The caller must reach GXCopyTex; pc_gx_offscreen_cancel() undoes it. */
+int pc_gx_offscreen_begin(int w, int h)
+{
+    if (!pc_efb_offscreen_on() || g_off_active || w <= 0 || h <= 0 ||
+        w > 2048 || h > 2048)
+    {
+        return 0;
+    }
+    gx_flush_pending();
+    if (g_off_fbo == 0) {
+        glGenFramebuffers(1, &g_off_fbo);
+        glGenTextures(1, &g_off_tex);
+        glGenRenderbuffers(1, &g_off_depth);
+        if (g_off_fbo == 0 || g_off_tex == 0) {
+            return 0;
+        }
+    }
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &g_off_prev_fbo);
+    /* The viewport and scissor are GL state, not framebuffer state: leaving
+     * the target's 256x256 rectangle behind clips whatever the game draws
+     * next into a corner, until its own GXSetViewport happens to come
+     * along. */
+    glGetIntegerv(GL_VIEWPORT, g_off_prev_vp);
+    glGetIntegerv(GL_SCISSOR_BOX, g_off_prev_sc);
+    if (w != g_off_w || h != g_off_h) {
+        glBindTexture(GL_TEXTURE_2D, g_off_tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0, GL_RED,
+                     GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        /* The uploader does not send an I4 texture as GL_R8, whatever
+         * gx_format_to_gl says: it decodes to RGBA8 with the intensity in
+         * all four channels, so the shader reads (i,i,i,i). A one-channel
+         * target reads (r,0,0,1) instead, which multiplies the green and
+         * blue out of every surface the shadow is projected onto -- the
+         * road, the roofs and the telephone pole on Onett all came out red.
+         * Swizzling green, blue and alpha onto red gives the same
+         * (i,i,i,i) from one channel. */
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_RED);
+        glBindRenderbuffer(GL_RENDERBUFFER, g_off_depth);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, w, h);
+        glBindRenderbuffer(GL_RENDERBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, g_off_fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, g_off_tex, 0);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                  GL_RENDERBUFFER, g_off_depth);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) !=
+            GL_FRAMEBUFFER_COMPLETE)
+        {
+            PORT_LOG_WARN("shadow target %dx%d incomplete; using the readback",
+                          w, h);
+            glBindFramebuffer(GL_FRAMEBUFFER, (GLuint) g_off_prev_fbo);
+            g_off_w = g_off_h = 0;
+            return 0;
+        }
+        g_off_w = w;
+        g_off_h = h;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, g_off_fbo);
+    g_off_active = 1;
+    { static int n=0; if (n<4 && getenv("MELEE_EFBLOG")) { n++;
+        fprintf(stderr, "[OFF] begin %dx%d tex=%u fbo=%u prev=%d\n",
+                w, h, g_off_tex, g_off_fbo, (int) g_off_prev_fbo); } }
+    /* The whole target is the drawable area until the game says otherwise. */
+    glViewport(0, 0, w, h);
+    glScissor(0, 0, w, h);
+    return 1;
+}
+
+void pc_gx_offscreen_cancel(void)
+{
+    if (!g_off_active) {
+        return;
+    }
+    gx_flush_pending();
+    g_off_active = 0;
+    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint) g_off_prev_fbo);
+    glViewport(g_off_prev_vp[0], g_off_prev_vp[1],
+               (GLsizei) g_off_prev_vp[2], (GLsizei) g_off_prev_vp[3]);
+    glScissor(g_off_prev_sc[0], g_off_prev_sc[1],
+              (GLsizei) g_off_prev_sc[2], (GLsizei) g_off_prev_sc[3]);
+}
+
+/* Hand the rendered target to the texture cache as the contents of `img`. */
+static void pc_efb_offscreen_publish(void* img)
+{
+    struct pc_efb_override* o = NULL;
+    int i;
+    for (i = 0; i < PC_EFB_OVERRIDES; i++) {
+        if (g_efb_over[i].img == img) { o = &g_efb_over[i]; break; }
+    }
+    if (o == NULL) {
+        for (i = 0; i < PC_EFB_OVERRIDES; i++) {
+            if (g_efb_over[i].img == NULL) { o = &g_efb_over[i]; break; }
+        }
+    }
+    if (o == NULL) {
+        o = &g_efb_over[g_efb_over_seq % PC_EFB_OVERRIDES];
+    }
+    o->img = img;
+    o->tex = g_off_tex;
+    o->w = (u32) g_off_w;
+    o->h = (u32) g_off_h;
+    /* Stamp the RAM the console would have written, so a later texture that
+     * happens to live at the same address is not served this one. */
+    {
+        u32 j;
+        for (j = 0; j < PC_EFB_MARK_BYTES; j++) {
+            o->mark[j] = (u8) (0xA5 ^ (j * 31) ^ (u8) g_efb_over_seq);
+        }
+        memcpy(img, o->mark, PC_EFB_MARK_BYTES);
+    }
+    { static int n=0; if (n<4 && getenv("MELEE_EFBLOG")) { n++;
+        fprintf(stderr, "[OFF] publish img=%p tex=%u %ux%u\n",
+                img, o->tex, o->w, o->h); } }
+    /* MELEE_EFBDUMP=<dir>: what the off-screen target actually holds. */
+    { static int dn = 0; const char* dd = getenv("MELEE_EFBDUMP");
+      if (dd != NULL && *dd && dn < 3) {
+        int nx = g_off_w, ny = g_off_h;
+        u8* px = (u8*) malloc((size_t) nx * ny);
+        if (px != NULL) {
+            GLint pr = 0; char path[512]; FILE* f;
+            unsigned long sum = 0; int i2;
+            glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &pr);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, g_off_fbo);
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glReadPixels(0, 0, nx, ny, GL_RED, GL_UNSIGNED_BYTE, px);
+            glPixelStorei(GL_PACK_ALIGNMENT, 4);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) pr);
+            for (i2 = 0; i2 < nx * ny; i2++) sum += px[i2];
+            snprintf(path, sizeof(path), "%s/off_%d.pgm", dd, dn++);
+            f = fopen(path, "wb");
+            if (f) { fprintf(f, "P5\n%d %d\n255\n", nx, ny);
+                     fwrite(px, 1, (size_t) nx * ny, f); fclose(f); }
+            fprintf(stderr, "[OFF] target mean=%.1f -> %s\n",
+                    (double) sum / (nx * ny), path);
+            free(px);
+        }
+      } }
+    g_efb_over_seq++;
+}
+
+/* The GL texture standing in for this GC image, or 0. */
+GLuint pc_efb_override_tex(const void* img, u32 w, u32 h)
+{
+    int i;
+    if (img == NULL) {
+        return 0;
+    }
+    for (i = 0; i < PC_EFB_OVERRIDES; i++) {
+        struct pc_efb_override* o = &g_efb_over[i];
+        if (o->img != img || o->tex == 0) {
+            continue;
+        }
+        if (o->w == w && o->h == h &&
+            memcmp(img, o->mark, PC_EFB_MARK_BYTES) == 0)
+        {
+            return o->tex;
+        }
+        { static int n = 0;
+          if (n < 6 && getenv("MELEE_EFBLOG")) { n++;
+            fprintf(stderr, "[OFF] miss img=%p want %ux%u got %ux%u mark=%s\n",
+                    img, o->w, o->h, w, h,
+                    memcmp(img, o->mark, PC_EFB_MARK_BYTES) == 0 ? "ok" : "gone"); } }
+    }
+    return 0;
+}
+
 /* GC framebuffer space (640x480, origin top-left, y down) -> GL window space
  * (origin bottom-left, y up), letterboxed so the 4:3 image keeps its aspect
  * inside whatever window we happen to have. Without this the game's viewport
@@ -4693,6 +4923,23 @@ void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
     pc_get_fb_size(&fb_w, &fb_h);
     f32 sx, sy, scale, off_x, off_y;
 
+    if (g_off_active) {
+        /* The shadow target is exactly the rectangle the game thinks it is
+         * drawing into, so the mapping is one to one -- and deliberately
+         * without the y flip the window path applies.
+         *
+         * The read-back path this replaces fills destination row 0 from the
+         * top of the rendered image and the uploader sends that as texture
+         * row 0. Flipping here as well would put the top of the silhouette at
+         * the far end of the texture, and the shadow lands mirrored about the
+         * fighter -- worth 75/255 in the one tile it covers, which is how
+         * the golden suite found it. */
+        out[0] = (GLint) x;
+        out[1] = (GLint) y;
+        out[2] = (GLint) w;
+        out[3] = (GLint) h;
+        return;
+    }
     window_get_size(&win_w, &win_h);
     if (fb_w <= 0.0f || fb_h <= 0.0f || win_w <= 0 || win_h <= 0) {
         out[0] = (GLint) x; out[1] = (GLint) y;
@@ -7469,6 +7716,14 @@ static void pc_efb_copy(void* dest)
     buf = (u8*) malloc((size_t) bw * (size_t) bh * 4);
     if (buf == NULL) return;
     /* Rows come back bottom-up; EFB row 0 is the top. */
+    /* MELEE_EFB_NOGPU=1 keeps everything except the two calls that touch the
+     * framebuffer, so the detile and the texture re-upload still happen on
+     * whatever the buffer holds. It prices the GPU half of the copy -- the
+     * blit, the read, and the render-pass break they force -- against the
+     * CPU half. Diagnostic; the shadow is garbage with it on. */
+    { static int ng = -1;
+      if (ng < 0) ng = getenv("MELEE_EFB_NOGPU") != NULL;
+      if (ng) goto detile; }
     if (!pc_efb_read_scaled(r, sw, sh, buf)) {
         u8* wide;
         bw = r[2];
@@ -7503,6 +7758,7 @@ static void pc_efb_copy(void* dest)
                   fclose(f); }
           } }
     }
+detile:
     cpu0 = pc_efb_now_ns();
     /* MELEE_EFB_NOREAD=1: do the blit but neither read nor detile, to price
      * the flush the blit forces on a tiled GPU apart from the wait for the
@@ -7599,7 +7855,21 @@ void GXSetCopyFilter(u32 aa, const u8 sample_pattern[12][2], u32 vf, const u8 vf
 void GXCopyTex(void* dest, u32 clear)
 {
     gx_flush_pending();
+    if (g_off_active) {
+        /* Drawn into our own target, so there is nothing to read back and
+         * nothing in the main framebuffer to clear -- the source rectangle
+         * there still holds the game's own picture, and clearing it would
+         * punch a hole in the frame. */
+        if (dest != NULL) {
+            g_efb_last_dest = dest;
+            pc_efb_offscreen_publish(dest);
+        }
+        pc_gx_offscreen_cancel();
+        pc_diag_efb_copies++;
+        return;
+    }
     if (dest != NULL) {
+        g_efb_last_dest = dest;
         pc_efb_copy(dest);
     }
     if (clear) {
@@ -9347,6 +9617,10 @@ void pc_tex_cache_bump(void)
     g_tex_gen++;
 }
 
+/* Slots whose GL texture the bridge owns rather than the uploader: it must
+ * not be deleted on eviction nor uploaded into. */
+static Bool g_tex_slot_foreign[MAX_TEXTURES];
+
 static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
 {
     /* Check for existing matching texture (dedup by pointer + dims + format) */
@@ -9374,10 +9648,17 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
             return i;
         }
     }
-    /* Evict least-used slot */
+    /* Evict least-used slot, never one holding a texture we own. */
     u32 best = 0;
-    for (u32 i = 1; i < MAX_TEXTURES; i++) {
-        if (g_state.tex_cache_hits[i] < g_state.tex_cache_hits[best])
+    while (best < MAX_TEXTURES && g_tex_slot_foreign[best]) {
+        best++;
+    }
+    if (best == MAX_TEXTURES) {
+        best = 0;
+    }
+    for (u32 i = best + 1; i < MAX_TEXTURES; i++) {
+        if (!g_tex_slot_foreign[i] &&
+            g_state.tex_cache_hits[i] < g_state.tex_cache_hits[best])
             best = i;
     }
     glDeleteTextures(1, &g_state.tex_cache[best]);
@@ -9482,6 +9763,28 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
     const void *upload_src = img;
     u32 upload_w = w, upload_h = h;
     Bool used_tlut = FALSE;
+
+    /* A texture the bridge rendered itself -- a fighter shadow drawn into
+     * the off-screen target rather than into the framebuffer -- never
+     * reached RAM, so there is nothing to hash and nothing to upload. Hand
+     * the slot our texture and mark it foreign, which keeps the eviction
+     * scan and the upload path off it. */
+    {
+        GLuint over = pc_efb_override_tex(img, w, h);
+        { static int n=0; if (n<8 && img == g_efb_last_dest &&
+                            getenv("MELEE_EFBLOG")) { n++;
+            fprintf(stderr, "[OFF] bind img=%p %ux%u fmt=%02x -> over=%u\n",
+                    img, w, h, fmt, over); } }
+        if (over != 0) {
+            tex_id = over;
+            g_state.tex_cache[slot] = over;
+            g_tex_slot_foreign[slot] = TRUE;
+            g_tex_slot_gen[slot] = g_tex_gen;
+            g_tx_hit++;
+            goto bind_tex;
+        }
+        g_tex_slot_foreign[slot] = FALSE;
+    }
 
     /* If this is a cache hit, just bind the existing texture */
     {
