@@ -5236,7 +5236,7 @@ void mnCharSel_8026688C_OnEnter(void* arg0)
  * That is the whole bottom row and the four characters on the ends of the
  * other two, which is the outer ring of the grid.
  *
- * The same shape as MELEE_SSS_KIND on the stage select, and the same fix on
+ * The same shape as the stage select's panel unlock, and the same fix on
  * both sides: this here, and MELEE_POKE writing the same byte in the console's
  * copy. Every frame, not once on entry -- the screen writes state from the
  * save data after OnEnter runs, so a single write is overwritten and the
