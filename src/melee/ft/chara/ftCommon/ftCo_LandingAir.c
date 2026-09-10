@@ -14,6 +14,10 @@
 
 #include "ftCommon/ftCo_Landing.h"
 
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi.h"
+#endif
+
 void ftCo_LandingAir_EnterWithLag(Fighter_GObj* gobj)
 {
     u8 _[20] = { 0 };
@@ -43,6 +47,15 @@ void ftCo_LandingAir_EnterWithLag(Fighter_GObj* gobj)
             lag = fp->co_attrs.landingairlw_lag;
             break;
         }
+#if BUILD_SLIPPI
+        /* The L-cancel window test. Slippi injects at the comparison itself
+         * (8008d698) and records success when the timer is inside the window,
+         * failure when it is not; there is no third outcome once an aerial is
+         * landing. */
+        if (msid != ftCo_MS_None) {
+            slp_LCancel(fp, fp->x67F < p_ftCommonData->xE4);
+        }
+#endif
         if (msid != ftCo_MS_None && fp->x67F < p_ftCommonData->xE4) {
             float div_lag = lag / p_ftCommonData->xE8;
             int int_lag = div_lag;

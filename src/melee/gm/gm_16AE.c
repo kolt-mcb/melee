@@ -48,6 +48,10 @@
 #include <melee/pl/plbonuslib.h>
 #include <melee/sfx/crowdsfx.h>
 
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi.h"
+#endif
+
 lbl_8046B6A0_t* gm_16AE_GetUnkData_0(void)
 {
     return &lbl_8046B6A0;
@@ -1339,6 +1343,12 @@ void fn_8016CFE0(void)
     int unpauser_slot;
     PAD_STACK(0x10);
 
+#if BUILD_SLIPPI
+    /* SceneThink_VSMode's running-match case, before anything game-engine
+     * related happens. Slippi advances its frame index here too (8016d294). */
+    slp_FrameStart();
+#endif
+
     fn_8016CFE0_inline();
 
     fn_8016A4C8();
@@ -1569,12 +1579,23 @@ void gm_8016D800(void)
         }
         break;
     case 3:
+#if BUILD_SLIPPI
+        /* Leaving the match scene: finish the replay file. Idempotent, and
+         * this case is reached every frame until the scene actually
+         * changes. */
+        slp_Close();
+#endif
         gm_801A4B60();
         break;
     }
     if (lbl_8046B6A0.x24C8.x4C != NULL) {
         lbl_8046B6A0.x24C8.x4C();
     }
+#if BUILD_SLIPPI
+    /* After the scene function handler, which is where Slippi checks for the
+     * end of the game (8016d884). */
+    slp_SceneThinkEnd();
+#endif
 }
 
 void fn_8016D8AC(int arg0, struct PlayerInitData* arg1)
@@ -2073,6 +2094,12 @@ void fn_8016E730(StartMeleeData* arg0)
     if (!arg0->rules.x1_4) {
         Stage_80225074(fn_8016E5C0(arg0));
     }
+#if BUILD_SLIPPI
+    /* The match is starting from this StartMeleeData; its first 0x138 bytes
+     * are the Game Info Block a .slp file opens with. Slippi injects at
+     * 8016e74c, inside this function, and copies the same block. */
+    slp_GameStart(arg0);
+#endif
 }
 
 void gm_8016E934_OnEnter(void* arg0)

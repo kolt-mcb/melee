@@ -118,6 +118,10 @@
 #include <MSL/math.h>
 #if BUILD_TARGET_PC
 #include "port/pc_trace.h"
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi.h"
+#endif
 #endif
 
 extern struct UnkCostumeList CostumeListsForeachCharacter[FTKIND_MAX];
@@ -2659,6 +2663,14 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                 }
             }
 
+#if BUILD_SLIPPI
+            /* The frame's inputs are final here -- sticks clamped, trigger
+             * resolved, held_inputs assembled -- and the fighter has not yet
+             * acted on them. Slippi records its pre-frame update at the same
+             * point (8006b0e0, inside this function). */
+            slp_PreFrame(fp);
+#endif
+
             Fighter_Spaghetti_8006AD10_Inner1(fp);
 
             // Fighter_ClampSpecificValue
@@ -3888,6 +3900,12 @@ void Fighter_UnkCallCameraCallback_8006D9EC(Fighter_GObj* gobj)
             fp->cam_cb(gobj);
         }
     }
+#if BUILD_SLIPPI
+    /* The fighter's last per-frame proc: collision has run, so this is the
+     * settled state of the frame. Slippi records its post-frame update here
+     * too (8006da34). */
+    slp_PostFrame(fp);
+#endif
 }
 
 void Fighter_8006DA4C(Fighter_GObj* gobj)

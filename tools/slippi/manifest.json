@@ -1,0 +1,45 @@
+{
+  "_comment": [
+    "Slippi upstream sources, fetched on demand by tools/slippi/fetch.sh into",
+    "extern/slippi/ (gitignored). Nothing here is compiled into melee-pc.",
+    "",
+    "They are reference material: slippi-wiki carries SPEC.md, the .slp file",
+    "format documentation that src/port/slippi/ implements, and",
+    "slippi-ssbm-asm carries the game-side injections whose field-by-field",
+    "reads pin down *which* game variable each documented field comes from.",
+    "Ishiiruka is the emulator side -- the EXI device, the matchmaking client",
+    "and the rollback savestate list -- which is what online play would have",
+    "to interoperate with.",
+    "",
+    "Licences differ from this repository's: slippi-ssbm-asm is GPL-3 and",
+    "Ishiiruka is GPL-2. src/port/slippi/ is written against the published",
+    "format documentation, not copied from either, and neither is linked."
+  ],
+  "repos": [
+    {
+      "name": "slippi-wiki",
+      "url": "https://github.com/project-slippi/slippi-wiki.git",
+      "commit": "71c6a395f841ff67f75ab4c0084fd1d6ee22c2db",
+      "why": "SPEC.md: the .slp replay format",
+      "sparse": []
+    },
+    {
+      "name": "slippi-ssbm-asm",
+      "url": "https://github.com/project-slippi/slippi-ssbm-asm.git",
+      "commit": "fcf47f10dc244152c2ebaa3a9dec142ea42243b7",
+      "why": "Recording/*.asm: which game variable each .slp field reads",
+      "sparse": []
+    },
+    {
+      "name": "Ishiiruka",
+      "url": "https://github.com/project-slippi/Ishiiruka.git",
+      "commit": "e9d048ac6f2d77f96fcd1c0b04bc1533a7ff81e1",
+      "why": "Slippi Dolphin: EXI device, matchmaking, rollback savestates",
+      "sparse": [
+        "Source/Core/Core/Slippi",
+        "Source/Core/Core/HW/EXI_DeviceSlippi.cpp",
+        "Source/Core/Core/HW/EXI_DeviceSlippi.h"
+      ]
+    }
+  ]
+}
