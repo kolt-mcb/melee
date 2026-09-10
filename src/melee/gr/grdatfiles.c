@@ -114,6 +114,107 @@ static inline u16 be16_swap(u16 x)
 static void* gcn_ptr_to_x64(u32 gcn_ptr, u8* dataBase);
 static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gcnDat, u8* dataBase);
 static UnkArchiveStruct* grDatFiles_ConvertArchiveGCNtoX64(HSD_Archive* archive, void* gcnMapHeadPtr);
+
+/* HSD_RObjDesc on the GameCube: {u32 next; u32 flags; u32 u;}. The union is
+ * a joint reference (an archive pointer -- kept as the archive offset, which
+ * is what jobj.c registers each converted joint under in the ID table, so
+ * HSD_RObjResolveRefs finds it), an angle limit (f32 bits), a pointer to an
+ * IK hint {f32 bone_length; f32 rotate_x;}, or an expression descriptor
+ * {u32 func_or_bytecode; u32 rvalue_list;} whose rvalue list is {u32 flags;
+ * u32 joint;} entries ended by joint == 0. A compiled expression's func is
+ * console code and cannot run here; it becomes NULL, which robj.c skips. */
+static f32 grdat_be_f32(const u8* p);
+
+static HSD_RvalueList* grdat_conv_rvalue(u32 off, u8* dataBase)
+{
+    u32 n = 0;
+    HSD_RvalueList* out;
+    if (off == 0 || off >= PC_ARCHIVE_MAX_OFFSET) {
+        return NULL;
+    }
+    while (n < 64 && be32_swap(*(const u32*) (dataBase + off + n * 8 + 4)) != 0) {
+        n++;
+    }
+    out = lbHeap_80015BD0(0, (n + 1) * sizeof(HSD_RvalueList));
+    if (out == NULL) {
+        return NULL;
+    }
+    memset(out, 0, (n + 1) * sizeof(HSD_RvalueList));
+    {
+        u32 k;
+        for (k = 0; k < n; k++) {
+            out[k].flags = be32_swap(*(const u32*) (dataBase + off + k * 8));
+            out[k].joint = (HSD_Joint*) (uintptr_t) be32_swap(
+                *(const u32*) (dataBase + off + k * 8 + 4));
+        }
+    }
+    return out;
+}
+
+static HSD_RObjDesc* grdat_conv_robjdesc(u32 off, u8* dataBase, int depth)
+{
+    const u8* g;
+    HSD_RObjDesc* d;
+    u32 flags, u;
+    if (off == 0 || off >= PC_ARCHIVE_MAX_OFFSET || depth > 64) {
+        return NULL;
+    }
+    g = dataBase + off;
+    d = lbHeap_80015BD0(0, sizeof(HSD_RObjDesc));
+    if (d == NULL) {
+        return NULL;
+    }
+    memset(d, 0, sizeof(*d));
+    flags = be32_swap(*(const u32*) (g + 4));
+    u = be32_swap(*(const u32*) (g + 8));
+    d->next = grdat_conv_robjdesc(be32_swap(*(const u32*) g), dataBase, depth + 1);
+    d->flags = flags;
+    switch (flags & ROBJ_TYPE_MASK) {
+    case REFTYPE_JOBJ:
+        d->u.joint = (HSD_Joint*) (uintptr_t) u;
+        break;
+    case REFTYPE_LIMIT:
+        memcpy(&d->u.limit, &u, 4);
+        break;
+    case REFTYPE_IKHINT:
+        if (u != 0 && u < PC_ARCHIVE_MAX_OFFSET) {
+            HSD_IKHintDesc* h = lbHeap_80015BD0(0, sizeof(HSD_IKHintDesc));
+            if (h != NULL) {
+                h->bone_length = grdat_be_f32(dataBase + u);
+                h->rotate_x = grdat_be_f32(dataBase + u + 4);
+            }
+            d->u.ik_hint = h;
+        }
+        break;
+    case REFTYPE_EXP:
+        if (u != 0 && u < PC_ARCHIVE_MAX_OFFSET) {
+            HSD_ExpDesc* e = lbHeap_80015BD0(0, sizeof(HSD_ExpDesc));
+            if (e != NULL) {
+                e->func = NULL;
+                e->rvalue = grdat_conv_rvalue(
+                    be32_swap(*(const u32*) (dataBase + u + 4)), dataBase);
+            }
+            d->u.exp = e;
+        }
+        break;
+    case REFTYPE_BYTECODE:
+        if (u != 0 && u < PC_ARCHIVE_MAX_OFFSET) {
+            HSD_ByteCodeExpDesc* b = lbHeap_80015BD0(0, sizeof(HSD_ByteCodeExpDesc));
+            if (b != NULL) {
+                u32 bc = be32_swap(*(const u32*) (dataBase + u));
+                b->bytecode = (bc != 0 && bc < PC_ARCHIVE_MAX_OFFSET) ? dataBase + bc : NULL;
+                b->rvalue = grdat_conv_rvalue(
+                    be32_swap(*(const u32*) (dataBase + u + 4)), dataBase);
+            }
+            d->u.bcexp = b;
+        }
+        break;
+    default:
+        break;
+    }
+    return d;
+}
+
 HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         u8* dataBase, u32 visited_count, u32* visited);
 /* DObjDesc chain converters */
@@ -1675,7 +1776,16 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
     } else {
         x64Joint->mtx = NULL;
     }
-    x64Joint->robjdesc = NULL;
+    /* Reference objects: IK hints, angle limits, joint references and
+     * expressions, which a stage joint uses to follow another joint or to
+     * hold an angle. The descriptor was dropped, so a stage joint with one
+     * simply did not follow anything.
+     *
+     * Written while chasing the frame-1 divergence, which it did not turn
+     * out to be -- that was the fighters' own leg IK (ft_80089B08), not
+     * these. Kept because the conversion is right and the field was dead. */
+    x64Joint->robjdesc =
+        grdat_conv_robjdesc(be32_swap(gcnJoint->robjdesc), dataBase, 0);
     
     /* Convert rotation, scale, position (GCN is big-endian, need byte swap) */
     {
