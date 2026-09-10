@@ -20,14 +20,29 @@
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 
+#if BUILD_TARGET_PC
+#include <port/pc_grconv.h>
+#endif
+
 /** @var ::grBattle_YakumonoParam::bg_curr_color_overlay
  * @todo ::ColorOverlay_x8_t, from ::grMaterial_801C9604
  * @var ::grBattle_YakumonoParam::bg_prev_color_overlay
  * @copydoc ::grBattle_YakumonoParam::bg_curr_color_overlay
  */
 struct grBattle_YakumonoParam {
+#if BUILD_TARGET_PC
+    /* Both are colour-overlay script pointers. On GameCube a pointer is four
+     * bytes and an int holds one; here it is eight, and grMaterialArg is
+     * intptr_t to match, so these widen too. Truncating to int would work
+     * only for as long as the archive happens to land below 2 GB, which is
+     * not a thing to rely on. grlast.c widens the same block for the same
+     * reason. */
+    intptr_t bg_curr_color_overlay;
+    intptr_t bg_prev_color_overlay;
+#else
     int bg_curr_color_overlay;
     int bg_prev_color_overlay;
+#endif
 };
 
 /* 219C98 */ static void grBattle_OnDemoInit(bool);
@@ -146,6 +161,26 @@ void grBattle_OnDemoInit(bool arg0)
 void grBattle_OnInit(void)
 {
     yakumono_param = Ground_GetYakumonoParam();
+#if BUILD_TARGET_PC
+    /* Both fields of this block are colour-overlay scripts, stored in the
+     * archive as offsets. The block's layout entry in Ground_GetYakumonoParam
+     * byte-swaps them, which gets the offset the right way round and no
+     * further -- handing an offset to grMaterial_801C9604 puts it in
+     * ColorOverlay::x8_ptr1, and lb_80014258 dereferences that on the frame
+     * the background changes. That is the crash this stage had on a long
+     * match. grLast_OnInit already does exactly this for the same reason. */
+    {
+        static struct grBattle_YakumonoParam resolved;
+        const u32* off = (const u32*) yakumono_param;
+        if (off != NULL) {
+            resolved.bg_curr_color_overlay =
+                (intptr_t) pc_grconv_stage_script(off[0]);
+            resolved.bg_prev_color_overlay =
+                (intptr_t) pc_grconv_stage_script(off[1]);
+            yakumono_param = &resolved;
+        }
+    }
+#endif
     stage_info.unk8C.b4 = 1;
     stage_info.unk8C.b5 = 1;
 
