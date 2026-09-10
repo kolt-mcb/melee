@@ -35,6 +35,8 @@
 
 #if BUILD_SLIPPI
 
+struct Fighter;
+
 enum SlpCompatFix {
     /* Implemented. */
     SLP_FIX_NANA,     /* Nana's DI reads uninitialised registers */
@@ -64,6 +66,10 @@ void slp_compat_report(void);
 /* MELEE_SLIPPI_COMPAT applies to the character-select costume bounds, which is
  * a whole-lineup pass rather than a single site. */
 void slp_compat_clamp_costumes(void);
+
+/* ftCo_Turn_IASA, inside the first facing flip, where UCF's dashback test
+ * goes (800c9a44). */
+void slp_compat_turn_iasa(struct Fighter* fp);
 
 #endif /* BUILD_SLIPPI */
 #endif /* PC_SLIPPI_COMPAT_H */

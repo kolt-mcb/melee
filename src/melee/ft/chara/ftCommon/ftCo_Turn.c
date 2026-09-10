@@ -27,6 +27,10 @@
 #include "ftCommon/ftCo_Jump.h"
 #include "ftCommon/ftCo_SpecialS.h"
 
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
+
 bool ftCo_800C97A8(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -105,6 +109,11 @@ void ftCo_Turn_IASA(Fighter_GObj* gobj)
     }
     if (!fp->mv.co.turn.has_turned) {
         fp->facing_dir = -fp->facing_dir;
+#if BUILD_SLIPPI
+        /* UCF's dashback test replaces the store just above (800c9a44) and
+         * runs with the flip already applied. */
+        slp_compat_turn_iasa(fp);
+#endif
     }
 
     RETURN_IF(ftCo_SpecialS_CheckInput(gobj));

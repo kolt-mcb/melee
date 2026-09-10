@@ -348,10 +348,31 @@ itself was absent. Both are real now: `pc_pad_publish` pushes each frame the
 way `HSD_PadRawUpdate` does, and `pc_pad_raw_history(slot, back)` reads it back
 at `(qread - 1 - back) mod qnum`, which is how UCF indexes it.
 
-What remains for UCF is transcription. The codes ship as raw PowerPC words
-rather than source, but they disassemble cleanly (393 instructions across eight
-files, `scratchpad/deasm.sh`) and every injection site maps to a function this
-port already compiles.
+The codes disassemble cleanly (393 instructions across eight files) and every
+injection site maps to a function this port compiles, so transcription is
+mechanical. Dashback is transcribed -- `slp_ucf_dashback` in
+`pc_slippi_compat.c`, including the two operands that had to be reversed: the
+follower's CPU command block at `fp->x1A88.x444`, and the byte written to its
+`lstickX`, which is the leader's facing-float sign bit plus 127.
+
+**It is registered as not implemented, because it never fires.** The branch it
+lives in wants `has_turned == 0` at Turn's IASA. On this port IASA runs at
+exactly `cur_anim_frame == 2.0` -- the frame UCF tests for, so the timing is
+right -- and `has_turned` is already true every time, because `frames_to_turn`
+is 0.0. That comes from the character attribute
+`frames_to_change_direction_on_standing_turn`, which reads 0.0 for Fox and
+Bowser alike. The attribute block is located correctly (gravity, weight and the
+walk speeds beside it are sane) and `pc_ftconv` byte-swaps the whole 0x180
+bytes uniformly, so the port is most likely reading what the file says.
+
+Which is a contradiction: by that reading the code would be dead on the console
+too, and it is not. Either this port's turn differs from the console's in a way
+600 frames of lockstep has not caught, or a failed dashback does not produce
+the standing Turn this hook sits in. **The test that separates them** is a
+breakpoint on `800c9a44` in the patched Dolphin during a real dashback: if the
+console executes it and this port never reaches the equivalent branch, the port
+is wrong, and that is a parity bug worth more than the feature that surfaced
+it. Not yet run.
 
 ## Online play
 
