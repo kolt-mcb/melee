@@ -1294,8 +1294,40 @@ Ground_GObj* Ground_GetStageGObj(int map_id)
     archive = grDatFiles_GetArchive();
     HSD_ASSERT(1358, archive);
 
+#if BUILD_TARGET_PC
+    /* Pokemon Stadium asks for a map that belongs to the DAT it has just
+     * loaded for a transformation, and that archive's header is not
+     * registered here yet, so unk4 is NULL. Say so once and hand back the
+     * gobj without a map rather than faulting: the caller (grpstadium.c)
+     * abandons the transformation and the stage keeps the platform it has. */
+    if (archive->unk4 == NULL) {
+        static int warned;
+        if (!warned) {
+            warned = 1;
+            fprintf(stderr,
+                    "[GROUND] map %d: the stage archive has no header; no "
+                    "ground object\n", (int) map_id);
+        }
+        HSD_GObjPLink_80390228(gobj);
+        return NULL;
+    }
+#endif
+
     if (map_id < archive->unk4->unkC) {
         archive = grDatFiles_801C6330(map_id);
+#if BUILD_TARGET_PC
+        if (archive == NULL || archive->unk4 == NULL) {
+            static int warned2;
+            if (!warned2) {
+                warned2 = 1;
+                fprintf(stderr,
+                        "[GROUND] map %d: no archive header for its own file; "
+                        "no ground object\n", (int) map_id);
+            }
+            HSD_GObjPLink_80390228(gobj);
+            return NULL;
+        }
+#endif
         temp_r24 = archive->unk4->unk8[map_id].unk0;
         temp_r23 = HSD_JObjLoadJoint(temp_r24);
         Ground_801C34AC(map_id, temp_r23, temp_r24);
