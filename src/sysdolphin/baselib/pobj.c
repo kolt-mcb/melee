@@ -1,4 +1,7 @@
 #include <stdio.h>
+#if BUILD_TARGET_PC
+#include "port/pc_dbgflag.h"
+#endif
 #include <stdlib.h>
 #include "pobj.h"
 
@@ -537,7 +540,7 @@ static void setupVtxDesc(HSD_PObj* pobj)
         for (desc = pobj->verts; desc->attr != GX_VA_NULL; desc++) {
             GXSetVtxDesc(desc->attr, desc->attr_type);
 #if defined(BUILD_TARGET_PC)
-            if (getenv("MELEE_STAGE_DIAG")) {
+            if (PC_DBG_FLAG("MELEE_STAGE_DIAG")) {
                 static int _vd = 0;
                 if (_vd < 4000) {
                     _vd++;

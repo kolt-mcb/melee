@@ -1,4 +1,7 @@
 #include "pc_execinfo.h"
+#if BUILD_TARGET_PC
+#include "port/pc_dbgflag.h"
+#endif
 #include "lobj.h"
 
 #include "aobj.h"
@@ -600,7 +603,7 @@ void HSD_LObjSetupInit(HSD_CObj* cobj)
     }
 
 #if BUILD_TARGET_PC
-    if (getenv("MELEE_LIGHTMASK") != NULL) {
+    if (PC_DBG_FLAG("MELEE_LIGHTMASK") != NULL) {
         static unsigned long zero_mask, nonzero_mask, n;
         int cnt = 0; HSD_SList* t = current_lights;
         while (t) { cnt++; t = t->next; }

@@ -1,5 +1,8 @@
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
+#if BUILD_TARGET_PC
+#include "port/pc_dbgflag.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #endif
@@ -253,7 +256,7 @@ void HSD_JObjMakePositionMtx(HSD_JObj* jobj, Mtx vmtx, Mtx pmtx)
         MTXConcat(vmtx, jobj->mtx, pmtx);
     }
 #if defined(BUILD_TARGET_PC)
-    if (getenv("MELEE_STAGE_DIAG")) {
+    if (PC_DBG_FLAG("MELEE_STAGE_DIAG")) {
         /* The stage floor's PNMTX0 = vmtx * jobj->mtx. The view matrix has a
          * z-translation of ~-436 (camera 435 units from the floor). If the
          * result pmtx[2][3] is missing that, either vmtx lost it or jobj->mtx

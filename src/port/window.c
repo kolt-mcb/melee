@@ -1,4 +1,7 @@
 #include <stdio.h>
+#if BUILD_TARGET_PC
+#include "port/pc_dbgflag.h"
+#endif
 #include <stdlib.h>
 #include "window.h"
 #include "log.h"
@@ -21,7 +24,7 @@ int window_gl_es(void)
      * answers. */
     return 1;
 #else
-    return getenv("MELEE_GLES") != NULL;
+    return PC_DBG_FLAG("MELEE_GLES");
 #endif
 }
 

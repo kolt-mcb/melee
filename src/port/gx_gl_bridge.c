@@ -1,4 +1,7 @@
 #include "pc_execinfo.h"
+#if BUILD_TARGET_PC
+#include "port/pc_dbgflag.h"
+#endif
 /**
  * @file gx_gl_bridge.c
  * @brief GX → OpenGL bridge — captures vertex commands and translates to GL.
@@ -6421,7 +6424,7 @@ static void apply_alpha_compare_uniforms(void)
     if (!g_shader_program) return;
     /* PC test: MELEE_STAGE_NOALPHA forces the alpha test to ALWAYS (pass),
      * to check if the floor is being discarded by the alpha test. */
-    int pc_noalpha = (getenv("MELEE_STAGE_NOALPHA") != NULL);
+    int pc_noalpha = (PC_DBG_FLAG("MELEE_STAGE_NOALPHA") != NULL);
 
     if (g_alpha_cmp_func_loc >= 0) {
         u32 gl_func = 0; /* 0 = NEVER (disabled) */
@@ -6743,7 +6746,7 @@ static void apply_tev_uniforms(void)
                      : 0;
         UP1I(g_light_mask1_loc, m1);
         { static int _n = 0;
-          if (getenv("MELEE_SPECLOG") != NULL && g_state.frame_count >= 100 &&
+          if (PC_DBG_FLAG("MELEE_SPECLOG") != NULL && g_state.frame_count >= 100 &&
               _n < 12) { _n++;
             fprintf(stderr,
                     "  SPEC mask1=0x%x en1=%d nrm_en=%d L2 dir=(%.2f,%.2f,%.2f) "
@@ -7329,6 +7332,10 @@ static void pc_efb_put(u8* d, u32 fmt, u32 w, u32 x, u32 y, u32 r, u32 g,
     }
 }
 
+u64 pc_diag_efb_ns, pc_diag_efb_read_ns;
+u32 pc_diag_efb_copies;
+static int g_efb_red_only;
+
 static void pc_efb_copy(void* dest)
 {
     GLint r[4];
@@ -7355,10 +7362,44 @@ static void pc_efb_copy(void* dest)
     pc_fb_rect_to_window((f32) g_state.tex_copy_src[0],
                          (f32) g_state.tex_copy_src[1], (f32) sw, (f32) sh, r);
     if (r[2] <= 0 || r[3] <= 0) return;
-    buf = (u8*) malloc((size_t) r[2] * (size_t) r[3] * 4);
-    if (buf == NULL) return;
-    /* Rows come back bottom-up; EFB row 0 is the top. */
-    glReadPixels(r[0], r[1], r[2], r[3], GL_RGBA, GL_UNSIGNED_BYTE, buf);
+    /* The readback buffer is the same size every frame and this runs a few
+     * times per frame; a malloc/free pair each time is pure overhead. Grow
+     * a static one instead. */
+    {
+        static u8* s_buf;
+        static size_t s_cap;
+        size_t need = (size_t) r[2] * (size_t) r[3] * 4;
+        if (need > s_cap) {
+            u8* nb = (u8*) realloc(s_buf, need);
+            if (nb == NULL) return;
+            s_buf = nb;
+            s_cap = need;
+        }
+        buf = s_buf;
+    }
+    /* Only the channels the destination format reads are needed, and the
+     * common case by far is the shadow mask -- GX_CTF_R4, one nibble of red
+     * per texel. Asking for GL_RED instead of GL_RGBA is a quarter of the
+     * pixels off the GPU and a quarter of the bytes to walk. */
+    {
+        struct timespec e0, e1;
+        int red_only = (g_copy_dst_fmt == 0x20 || g_copy_dst_fmt == 0x28);
+        clock_gettime(CLOCK_MONOTONIC, &e0);
+        /* Rows come back bottom-up; EFB row 0 is the top. */
+        if (red_only) {
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glReadPixels(r[0], r[1], r[2], r[3], GL_RED, GL_UNSIGNED_BYTE,
+                         buf);
+            glPixelStorei(GL_PACK_ALIGNMENT, 4);
+        } else {
+            glReadPixels(r[0], r[1], r[2], r[3], GL_RGBA, GL_UNSIGNED_BYTE,
+                         buf);
+        }
+        clock_gettime(CLOCK_MONOTONIC, &e1);
+        pc_diag_efb_read_ns += (u64) ((e1.tv_sec - e0.tv_sec) * 1000000000ll
+                                      + (e1.tv_nsec - e0.tv_nsec));
+        g_efb_red_only = red_only;
+    }
     if (log_on) {
         static u32 n = 0;
         if (n++ < 40)
@@ -7380,31 +7421,60 @@ static void pc_efb_copy(void* dest)
                   fclose(f); }
           } }
     }
-    for (dy = 0; dy < dh; dy++) {
-        /* Window rows covered by this destination row (box filter). */
-        u32 wy0 = (u32) r[3] - ((dy + 1) * (u32) r[3]) / dh;
-        u32 wy1 = (u32) r[3] - (dy * (u32) r[3]) / dh;
-        if (wy1 <= wy0) wy1 = wy0 + 1;
-        if (wy1 > (u32) r[3]) wy1 = (u32) r[3];
-        for (dx = 0; dx < dw; dx++) {
-            u32 wx0 = (dx * (u32) r[2]) / dw;
-            u32 wx1 = ((dx + 1) * (u32) r[2]) / dw;
-            u32 sr = 0, sg = 0, sb = 0, sa = 0, n = 0, x, y;
-            if (wx1 <= wx0) wx1 = wx0 + 1;
-            if (wx1 > (u32) r[2]) wx1 = (u32) r[2];
-            for (y = wy0; y < wy1; y++) {
-                const u8* row = buf + ((size_t) y * (u32) r[2] + wx0) * 4;
-                for (x = wx0; x < wx1; x++, row += 4) {
-                    sr += row[0]; sg += row[1]; sb += row[2]; sa += row[3];
-                    n++;
+    {
+        u32 bpp = g_efb_red_only ? 1u : 4u;
+        struct timespec c0, c1;
+        clock_gettime(CLOCK_MONOTONIC, &c0);
+        if (dw == (u32) r[2] && dh == (u32) r[3]) {
+            /* Destination and window rect are the same size, which is what
+             * every copy in a match is: the shadow buffers are 256x256 and
+             * so is the rect. The box filter below then averages exactly one
+             * source pixel per destination pixel, so skip it -- the four
+             * divisions, the two inner loops and the bounds arithmetic per
+             * texel were the whole cost, 65536 times a copy. */
+            for (dy = 0; dy < dh; dy++) {
+                const u8* row = buf + (size_t) (dh - 1 - dy) * dw * bpp;
+                for (dx = 0; dx < dw; dx++, row += bpp) {
+                    pc_efb_put((u8*) dest, g_copy_dst_fmt, dw, dx, dy, row[0],
+                               bpp == 1 ? 0 : row[1], bpp == 1 ? 0 : row[2],
+                               bpp == 1 ? 0 : row[3]);
                 }
             }
-            if (n == 0) n = 1;
-            pc_efb_put((u8*) dest, g_copy_dst_fmt, dw, dx, dy, sr / n, sg / n,
-                       sb / n, sa / n);
+        } else {
+            for (dy = 0; dy < dh; dy++) {
+                /* Window rows covered by this destination row (box filter). */
+                u32 wy0 = (u32) r[3] - ((dy + 1) * (u32) r[3]) / dh;
+                u32 wy1 = (u32) r[3] - (dy * (u32) r[3]) / dh;
+                if (wy1 <= wy0) wy1 = wy0 + 1;
+                if (wy1 > (u32) r[3]) wy1 = (u32) r[3];
+                for (dx = 0; dx < dw; dx++) {
+                    u32 wx0 = (dx * (u32) r[2]) / dw;
+                    u32 wx1 = ((dx + 1) * (u32) r[2]) / dw;
+                    u32 sr = 0, sg = 0, sb = 0, sa = 0, n = 0, x, y;
+                    if (wx1 <= wx0) wx1 = wx0 + 1;
+                    if (wx1 > (u32) r[2]) wx1 = (u32) r[2];
+                    for (y = wy0; y < wy1; y++) {
+                        const u8* row =
+                            buf + ((size_t) y * (u32) r[2] + wx0) * bpp;
+                        for (x = wx0; x < wx1; x++, row += bpp) {
+                            sr += row[0];
+                            sg += bpp == 1 ? 0 : row[1];
+                            sb += bpp == 1 ? 0 : row[2];
+                            sa += bpp == 1 ? 0 : row[3];
+                            n++;
+                        }
+                    }
+                    if (n == 0) n = 1;
+                    pc_efb_put((u8*) dest, g_copy_dst_fmt, dw, dx, dy,
+                               sr / n, sg / n, sb / n, sa / n);
+                }
+            }
         }
+        clock_gettime(CLOCK_MONOTONIC, &c1);
+        pc_diag_efb_ns += (u64) ((c1.tv_sec - c0.tv_sec) * 1000000000ll
+                                 + (c1.tv_nsec - c0.tv_nsec));
+        pc_diag_efb_copies++;
     }
-    free(buf);
 }
 
 /* GXCopyTex(clear=TRUE) clears the source rectangle to the copy-clear
