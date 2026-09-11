@@ -254,9 +254,79 @@ __attribute__((weak)) void OSReport(const char *fmt, ...) {
     write(out_fd, "\n", 1);
 }
 
-/* Game-style __assert: matches 3-param signature (file, line, msg) */
+/* Game-style __assert: matches 3-param signature (file, line, msg)
+ *
+ * Rate-limited per call site. On the console an assert halts, so no site can
+ * fire twice; here it reports and returns, and a site inside a per-PObj or
+ * per-draw loop fires tens of thousands of times a frame. Five write(2)
+ * calls apiece is then the dominant cost of the whole frame: Fountain of
+ * Dreams spent its entire budget on pobj.c:1872 (an envelope allocation that
+ * fails once and then keeps failing), and the stage timed out at 13000
+ * frames rather than crashed. Log the first few of each site and count the
+ * rest, so the diagnostic survives without the cost. `file` is __FILE__, a
+ * string literal with a stable address, so the pair (pointer, line) names
+ * the site without a strcmp. */
+#define PC_ASSERT_SITE_MAX 256
+#define PC_ASSERT_SITE_LIMIT 8
+static struct {
+    const char* file;
+    unsigned int line;
+    unsigned long count;
+} g_assert_sites[PC_ASSERT_SITE_MAX];
+static int g_assert_site_count;
+
+static void pc_assert_write_uint(int fd, unsigned long v)
+{
+    char tmp[24];
+    int j = 0;
+    if (v == 0) { write(fd, "0", 1); return; }
+    while (v) { tmp[j++] = (char) ('0' + (v % 10)); v /= 10; }
+    while (j) { char c = tmp[--j]; write(fd, &c, 1); }
+}
+
+/* Printed by an atexit hook so a run that suppressed thousands still says so. */
+void pc_assert_report_suppressed(void)
+{
+    int i;
+    for (i = 0; i < g_assert_site_count; i++) {
+        if (g_assert_sites[i].count <= PC_ASSERT_SITE_LIMIT) continue;
+        write(2, "[ASSERT] ", 9);
+        write(2, g_assert_sites[i].file, strlen(g_assert_sites[i].file));
+        write(2, ":", 1);
+        pc_assert_write_uint(2, g_assert_sites[i].line);
+        write(2, " fired ", 7);
+        pc_assert_write_uint(2, g_assert_sites[i].count);
+        write(2, " times\n", 7);
+    }
+}
+
+/* Returns nonzero when this occurrence should be printed. */
+static int pc_assert_should_log(const char* file, unsigned int line)
+{
+    int i;
+    if (g_assert_site_count < 0 || g_assert_site_count > PC_ASSERT_SITE_MAX) {
+        g_assert_site_count = 0; /* table corrupted; reset */
+    }
+    for (i = 0; i < g_assert_site_count; i++) {
+        if (g_assert_sites[i].file == file && g_assert_sites[i].line == line) {
+            g_assert_sites[i].count++;
+            return g_assert_sites[i].count <= PC_ASSERT_SITE_LIMIT;
+        }
+    }
+    if (g_assert_site_count < PC_ASSERT_SITE_MAX) {
+        g_assert_sites[g_assert_site_count].file = file;
+        g_assert_sites[g_assert_site_count].line = line;
+        g_assert_sites[g_assert_site_count].count = 1;
+        g_assert_site_count++;
+    }
+    return 1;
+}
+
 void __assert(const char *file, unsigned int line, const char *msg) {
     int out_fd = 2;
+    if (!pc_assert_should_log(file, line)) {
+        return;
+    }
     write(out_fd, "ASSERT FAILED: ", 15);
     write(out_fd, msg, strlen(msg));
     write(out_fd, " at ", 4);

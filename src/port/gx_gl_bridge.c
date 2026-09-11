@@ -4605,8 +4605,19 @@ static void bridge_upload_and_draw(void)
         if (g_state.prim_type == GX_QUADS && count >= 4) {
             static Vertex quad_tri[MAX_VERTS * 3 / 2];
             u32 nq = (u32)count / 4;
-            if (count % 4 != 0)
-                PORT_LOG_WARN("GX_QUADS batch with %u verts (not a multiple of 4); dropping %u", (unsigned)count, (unsigned)(count % 4));
+            if (count % 4 != 0) {
+                /* Per draw, and stages that hit it hit it thousands of times
+                 * a frame -- Mute City spent its frame in this fprintf and
+                 * ran at 6.6 fps. Say it a few times and then keep count. */
+                static unsigned warned, suppressed;
+                if (warned < 8) {
+                    warned++;
+                    PORT_LOG_WARN("GX_QUADS batch with %u verts (not a multiple of 4); dropping %u",
+                                  (unsigned) count, (unsigned) (count % 4));
+                } else if (++suppressed == 1) {
+                    PORT_LOG_WARN("GX_QUADS ragged-batch warnings suppressed from here on");
+                }
+            }
             for (u32 q = 0; q < nq; q++) {
                 const Vertex *a = &g_state.verts[q*4+0];
                 const Vertex *b = &g_state.verts[q*4+1];
