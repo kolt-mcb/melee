@@ -1259,10 +1259,35 @@ static void SetupSharedVtxModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
 
 unsigned long pc_env_bad, pc_env_ok;
 
+#if BUILD_TARGET_PC
+/* SetupEnvelopeModelMtx runs once per skinned PObj per frame and loops up to
+ * ten times inside that, and every diagnostic below used to ask getenv on
+ * each pass. getenv walks the whole environment block, so reading the
+ * switches cost more than the work they guard -- tens of thousands of scans
+ * a frame on a stage with a few thousand draws. Read each one once. */
+static int pc_env_stats_on = -1;
+static int pc_no_skin_on;
+static int pc_env_targets_on;
+static int pc_bind_check_on;
+static void pc_pobj_env_init(void)
+{
+    if (pc_env_stats_on >= 0) {
+        return;
+    }
+    pc_no_skin_on = getenv("MELEE_NO_SKIN") != NULL;
+    pc_env_targets_on = getenv("MELEE_ENV_TARGETS") != NULL;
+    pc_bind_check_on = getenv("MELEE_BIND_CHECK") != NULL;
+    pc_env_stats_on = getenv("MELEE_ENV_STATS") != NULL;
+}
+#endif
+
 static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                                   u32 rendermode)
 {
-    if (getenv("MELEE_ENV_STATS") != NULL)
+#if BUILD_TARGET_PC
+    pc_pobj_env_init();
+#endif
+    if (pc_env_stats_on)
         { static int _ps=0; if(_ps<4){_ps++; fprintf(stderr,"[ENVSETUP]\n");} }
     HSD_JObj* jobj;
     HSD_SList* list;
@@ -1276,7 +1301,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
     flags = GetSetupFlags(jobj, rendermode);
     right = _HSD_mkEnvelopeModelNodeMtx(jobj, mtx);
 
-    if (getenv("MELEE_ENV_TARGETS") != NULL) {
+    if (pc_env_targets_on) {
         /* One line per PObj listing every joint its envelopes bind to, so the
          * binding can be checked against the skeleton dump (MELEE_FT_JOINTS).
          * If the leg mesh never names the leg joints, the binding is the bug. */
@@ -1297,7 +1322,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
             fprintf(stderr, "\n");
         }
     }
-    if (getenv("MELEE_ENV_STATS") != NULL) {
+    if (pc_env_stats_on) {
         static int _n;
         int len = 0;
         HSD_SList* l2 = pobj->u.envelope_list;
@@ -1329,7 +1354,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
             /* MELEE_NO_SKIN=1 forces every envelope to the rigid fallback --
              * separates "the envelopes are wrong" from "the geometry is
              * wrong or hidden". */
-            if (getenv("MELEE_NO_SKIN") != NULL) bad = 1;
+            if (pc_no_skin_on) bad = 1;
             for (; e2 != NULL && !bad; e2 = e2->next) {
                 if ((uintptr_t)e2->jobj < 0x400000ULL ||
                     (e2->weight < 1.0f - FLT_EPSILON &&
@@ -1344,14 +1369,14 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                   for (; e3; e3 = e3->next) { ne++; fprintf(stderr, " [jobj=%p w=%.2f emtx=%p]", (void*)e3->jobj, (double)e3->weight, e3->jobj ? (void*)e3->jobj->envelopemtx : NULL); }
                   fprintf(stderr, " n=%d\n", ne); } }
             if (bad) {
-                if (getenv("MELEE_ENV_STATS") != NULL) {
+                if (pc_env_stats_on) {
                     extern unsigned long pc_env_bad, pc_env_ok;
                     pc_env_bad++;
                 }
                 GXLoadPosMtxImm(pmtx, mtx_no);
                 continue;
             }
-            if (getenv("MELEE_ENV_STATS") != NULL) {
+            if (pc_env_stats_on) {
                 extern unsigned long pc_env_bad, pc_env_ok;
                 pc_env_ok++;
             }
@@ -1359,7 +1384,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
 #endif
         if (envelope->weight >= (1.0f - FLT_EPSILON)) {
             HSD_JObjSetupMatrix(envelope->jobj);
-            if (getenv("MELEE_ENV_STATS") != NULL) {
+            if (pc_env_stats_on) {
                 static int _n1, _nnull;
                 _n1++;
                 if (envelope->jobj->envelopemtx == NULL) _nnull++;
@@ -1393,7 +1418,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                 HSD_ASSERT(1896, jp->envelopemtx);
 
                 MTXConcat(jp->mtx, jp->envelopemtx, tmp);
-                if (getenv("MELEE_BIND_CHECK") != NULL) {
+                if (pc_bind_check_on) {
                     /* At bind pose, world * inverse-bind must be identity.
                      * Any joint that deviates has a bad envelopemtx -- that is
                      * the one thing left that can deform a correctly-bound,
@@ -1447,7 +1472,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                 nenv++;
                 envelope = envelope->next;
             }
-            if (getenv("MELEE_ENV_STATS") != NULL) {
+            if (pc_env_stats_on) {
                 static int _n;
                 if (_n < 20) {
                     _n++;
@@ -1463,7 +1488,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
         }
         MTXConcat(vmtx, mtxp, tmp);
         GXLoadPosMtxImm(tmp, mtx_no);
-        if (getenv("MELEE_ENV_STATS") != NULL)
+        if (pc_env_stats_on)
         { static int _em=0; if(_em<12){_em++;
             fprintf(stderr,"[ENVMTX] no=%d w=%.2f r0=(%.2f,%.2f,%.2f,%.2f) r2=(%.2f,%.2f,%.2f,%.2f) vm23=%.1f\n",
                 (int)mtx_no,(double)((HSD_Envelope*)list->data)->weight,

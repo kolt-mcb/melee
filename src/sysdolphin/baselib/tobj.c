@@ -23,6 +23,23 @@
 #include <MetroTRK/intrinsics.h>
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
+
+#if BUILD_TARGET_PC
+#include <stdlib.h>
+/* PC port: these switches sit in per-joint / per-material code that runs
+ * thousands of times a frame, and getenv walks the whole environment
+ * block on every call -- reading the switch cost far more than the
+ * diagnostic it guards. Read each once. */
+static int pc_shadowlog_on = -1;
+static int pc_dbg_on(int* slot, const char* name)
+{
+    if (*slot < 0) {
+        *slot = getenv(name) != NULL;
+    }
+    return *slot;
+}
+#endif
+
 #endif
 
 #define FLT_EPSILON 1.00000001335e-10F
@@ -690,7 +707,7 @@ static void TObjSetupTevModulateShadow(HSD_TObj* shadow)
         tevdesc.coord = shadow->coord;
         tevdesc.map = shadow->id;
 #if BUILD_TARGET_PC
-        if (getenv("MELEE_SHADOWLOG") != NULL) {
+        if (pc_dbg_on(&pc_shadowlog_on, "MELEE_SHADOWLOG")) {
             static int n = 0;
             if (n++ < 20)
                 fprintf(stderr, "[SHADOW] tev: stage=%d coord=%d map=%d "

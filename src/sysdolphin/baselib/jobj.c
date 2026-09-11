@@ -27,6 +27,25 @@
 #include <trigf.h>
 #include <dolphin/mtx.h>
 #include <dolphin/os.h>
+
+#if BUILD_TARGET_PC
+#include <stdlib.h>
+/* PC port: these switches sit in per-joint / per-material code that runs
+ * thousands of times a frame, and getenv walks the whole environment
+ * block on every call -- reading the switch cost far more than the
+ * diagnostic it guards. Read each once. */
+static int pc_mtxpath_on = -1;
+static int pc_orderlog_on = -1;
+static int pc_robjlog_on = -1;
+static int pc_dbg_on(int* slot, const char* name)
+{
+    if (*slot < 0) {
+        *slot = getenv(name) != NULL;
+    }
+    return *slot;
+}
+#endif
+
 #if BUILD_TARGET_PC
 int pc_setupmtx_strict = -1;
 #endif
@@ -221,7 +240,7 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
     /* MELEE_MTXPATH=1 counts which matrix builder each joint uses, so the
      * question "do the fighter bones go through the quaternion path" is
      * measured rather than assumed. */
-    if (getenv("MELEE_MTXPATH") != NULL) {
+    if (pc_dbg_on(&pc_mtxpath_on, "MELEE_MTXPATH")) {
         static long nq, ns;
         if (jobj->flags & 0x20000) { nq++; } else { ns++; }
         if (((nq + ns) % 20000) == 0) {
@@ -535,7 +554,7 @@ typedef void (*ufc_callback)(HSD_JObj*, u32, f32);
 void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
 {
 #if BUILD_TARGET_PC
-    if (getenv("MELEE_ORDERLOG") != NULL) {
+    if (pc_dbg_on(&pc_orderlog_on, "MELEE_ORDERLOG")) {
         extern u32 gm_8016AEDC(void);
         u32 fr = gm_8016AEDC();
         if (fr <= 1)
@@ -946,7 +965,7 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
     }
     jobj->robj = HSD_RObjLoadDesc(joint->robjdesc);
 #if BUILD_TARGET_PC
-    if (jobj->robj != NULL && getenv("MELEE_ROBJLOG") != NULL) {
+    if (jobj->robj != NULL && pc_dbg_on(&pc_robjlog_on, "MELEE_ROBJLOG")) {
         HSD_RObj* r;
         int n = 0;
         u32 types = 0;
@@ -1787,7 +1806,7 @@ void resolveIKJoint2(HSD_JObj* jobj)
 void HSD_JObjSetupMatrixSub(HSD_JObj* jobj)
 {
 #if BUILD_TARGET_PC
-    if (getenv("MELEE_ORDERLOG") != NULL) {
+    if (pc_dbg_on(&pc_orderlog_on, "MELEE_ORDERLOG")) {
         extern u32 gm_8016AEDC(void);
         u32 fr = gm_8016AEDC();
         if (fr <= 1)

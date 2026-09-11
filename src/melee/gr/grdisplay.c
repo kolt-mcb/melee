@@ -1,4 +1,7 @@
 #include "grdisplay.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #include "inlines.h"
 
@@ -110,9 +113,22 @@ void grDisplay_801C5DB0(HSD_GObj* gobj, int code)
 #endif
     if (gp->x11_flags.b012 == Camera_8003108C()) {
         if (gp->x18 != NULL) {
+#if BUILD_TARGET_PC
+            /* "is this outside MEM1" -- every GameCube heap pointer has bit
+             * 31 set, so the test reads as `not a real pointer`. Host
+             * pointers do not, so it was true of every valid one and this
+             * OSReport fired once per display object per frame: about five
+             * thousand times a frame on Fountain of Dreams, five write(2)
+             * calls apiece, and the stage ran at 5.7 fps. pc_ptr_sane is the
+             * same question asked about this address space. */
+            if (!pc_ptr_sane(gp->x18)) {
+                OSReport("oioi... %p\n", (void*) gp->x18);
+            }
+#else
             if (((intptr_t) gp->x18 & ~0x7FFFFFFF) == 0) {
                 OSReport("oioi... %08x\n", gp->x18);
             }
+#endif
             if (HSD_GObj_804D7818->hsd_obj != gp->x18->hsd_obj) {
                 HSD_CObj* cobj;
                 if (gp->x10_flags.b3 == 0) {

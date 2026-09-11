@@ -13,6 +13,25 @@
 #include <dolphin/gx/GXEnum.h>
 #include <dolphin/os.h>
 
+#if BUILD_TARGET_PC
+#include <stdlib.h>
+/* PC port: these switches sit in per-joint / per-material code that runs
+ * thousands of times a frame, and getenv walks the whole environment
+ * block on every call -- reading the switch cost far more than the
+ * diagnostic it guards. Read each once. */
+static int pc_aobjlog_on = -1;
+static int pc_matlog_on = -1;
+static int pc_tevlog_on = -1;
+static int pc_dbg_on(int* slot, const char* name)
+{
+    if (*slot < 0) {
+        *slot = getenv(name) != NULL;
+    }
+    return *slot;
+}
+#endif
+
+
 static HSD_ClassInfo* default_class;
 static HSD_MObj* current_mobj;
 HSD_TObj* tobj_shadows;
@@ -67,7 +86,7 @@ void HSD_MObjAddAnim(HSD_MObj* mobj, HSD_MatAnim* matanim)
         }
         mobj->aobj = HSD_AObjLoadDesc(matanim->aobjdesc);
 #if BUILD_TARGET_PC
-        if (getenv("MELEE_AOBJLOG") != NULL) {
+        if (pc_dbg_on(&pc_aobjlog_on, "MELEE_AOBJLOG")) {
             HSD_FObj* fo;
             int n = 0;
             fprintf(stderr, "AOBJ desc=%p aobj=%p", (void*) matanim->aobjdesc,
@@ -211,7 +230,7 @@ static int MObjLoad(HSD_MObj* mobj, HSD_MObjDesc* desc)
     memcpy(mobj->mat, desc->mat, sizeof(HSD_Material));
 #endif
 #if BUILD_TARGET_PC
-    if (getenv("MELEE_MATLOG") != NULL) {
+    if (pc_dbg_on(&pc_matlog_on, "MELEE_MATLOG")) {
         /* MELEE_MATLOG=N skips the first N loads, so a later scene's
          * materials can be seen past the menu's. */
         static int n = 0, skip = -1;
@@ -514,7 +533,7 @@ void HSD_MObjCompileTev(HSD_MObj* mobj)
         }
     }
 #if BUILD_TARGET_PC
-    if (mobj != NULL && getenv("MELEE_TEVLOG") != NULL) {
+    if (mobj != NULL && pc_dbg_on(&pc_tevlog_on, "MELEE_TEVLOG")) {
         int nt = 0, ns = 0; HSD_TObj* t; HSD_TevDesc* td;
         for (t = mobj->tobj; t; t = t->next) nt++;
         for (td = mobj->tevdesc; td; td = td->next) ns++;
@@ -548,7 +567,7 @@ static char unused1[] = "hsdIsDescendantOf(info, &hsdMObj)";
 void MObjSetupTev(HSD_MObj* mobj, HSD_TObj* tobj, u32 arg2)
 {
 #if BUILD_TARGET_PC
-    { static int _st = -1, _sn = 0; if (_st < 0) _st = (getenv("MELEE_TEVLOG") != NULL);
+    { static int _st = -1, _sn = 0; if (_st < 0) _st = (pc_dbg_on(&pc_tevlog_on, "MELEE_TEVLOG"));
       extern u32 pc_frame_number;
       if (_st && (mobj->rendermode & 0x30) == 0x30 && pc_frame_number >= 259 && pc_frame_number <= 261 && _sn < 60) { _sn++;
         int ns = 0; HSD_TevDesc* td; for (td = mobj->tevdesc; td; td = td->next) ns++;
@@ -562,7 +581,7 @@ void MObjSetupTev(HSD_MObj* mobj, HSD_TObj* tobj, u32 arg2)
 void HSD_MObjSetup(HSD_MObj* mobj, u32 rendermode)
 {
 #if BUILD_TARGET_PC
-    { static int _ms_on = -1, _ms_n = 0; if (_ms_on < 0) _ms_on = (getenv("MELEE_TEVLOG") != NULL);
+    { static int _ms_on = -1, _ms_n = 0; if (_ms_on < 0) _ms_on = (pc_dbg_on(&pc_tevlog_on, "MELEE_TEVLOG"));
       extern u32 pc_frame_number;
       if (_ms_on && mobj != NULL && (mobj->rendermode & 0x30) == 0x30 && pc_frame_number == 260 && _ms_n < 400) { _ms_n++;
         int nt = 0, ns = 0; HSD_TObj* t; HSD_TevDesc* td;
@@ -604,7 +623,7 @@ void HSD_MObjSetup(HSD_MObj* mobj, u32 rendermode)
     /* PC port: guard against corrupted method pointers. */
     HSD_MObjInfo* mobj_info = HSD_MOBJ_METHOD(mobj);
     if (mobj_info != NULL && mobj_info->setup_tev != NULL) {
-        { static int _sv = -1; if (_sv < 0) _sv = (getenv("MELEE_TEVLOG") != NULL);
+        { static int _sv = -1; if (_sv < 0) _sv = (pc_dbg_on(&pc_tevlog_on, "MELEE_TEVLOG"));
           if (_sv && (mobj->rendermode & 0x30) == 0x30) fprintf(stderr, "SETUPTEV-CALL mobj=%p fn=%p\n", (void*)mobj, (void*)mobj_info->setup_tev); }
         mobj_info->setup_tev(mobj, tobj, rendermode);
     }
