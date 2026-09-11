@@ -1,3 +1,7 @@
+#if BUILD_TARGET_PC
+int pc_gx_offscreen_begin(int w, int h);
+void pc_gx_offscreen_cancel(void);
+#endif
 #include "shadow.h"
 
 #include "class.h"
@@ -186,6 +190,14 @@ void HSD_ShadowStartRender(HSD_Shadow* shadow)
     idesc = shadow->texture->imagedesc;
 
     if (list != NULL) {
+#if BUILD_TARGET_PC
+        /* Draw the silhouette into a target of its own rather than into a
+         * corner of the framebuffer. The console copies it back out of the
+         * EFB, which on a tiled GPU means ending the render pass mid-frame --
+         * 10 ms of a 23 ms frame on a Pixel 9. GXCopyTex below hands this
+         * target to the texture cache instead, and closes it. */
+        pc_gx_offscreen_begin(idesc->width, idesc->height);
+#endif
         HSD_CObjSetCurrent(cobj);
         {
             static HSD_Chan chan = {
@@ -270,6 +282,12 @@ void HSD_ShadowEndRender(HSD_Shadow* shadow)
     }
 
     GXCopyTex(idesc->image_ptr, GX_TRUE);
+#if BUILD_TARGET_PC
+    /* GXCopyTex closes the off-screen target on its way through; this catches
+     * the paths that reach here without having opened one (no objects to
+     * draw, or the target could not be created). */
+    pc_gx_offscreen_cancel();
+#endif
     GXPixModeSync();
 
     GXInvalidateTexAll();

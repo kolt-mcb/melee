@@ -15,7 +15,10 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
-    <!-- Game controller support -->
+    <!-- Game controller support. A Bluetooth gamepad reaches the app as an
+         ordinary InputDevice (SDL's SDLControllerManager reads it), which
+         needs no permission and no BLUETOOTH feature. Declaring the
+         features as optional keeps Play from filtering devices out. -->
     <uses-feature
         android:name="android.hardware.bluetooth"
         android:required="false" />
@@ -65,17 +68,27 @@
         android:theme="@style/AppTheme"
         android:hardwareAccelerated="true" >
 
-        <!-- Example of setting SDL hints from AndroidManifest.xml:
+        <!-- SDL hints, applied by SDLActivity as environment variables
+             before the native library starts. window.c sets both as well
+             (and leaves them alone when already in the environment); these
+             cover the window before SDL_Init runs.
+
+             ACCELEROMETER_AS_JOYSTICK=0: SDL otherwise adds the phone's
+             accelerometer as a joystick, which takes controller port 1 and
+             pushes a Bluetooth pad to port 2.
+             TRAP_BACK_BUTTON=1: the View button on an Xbox pad, and the
+             back gesture, would otherwise finish the activity mid-match. -->
         <meta-data android:name="SDL_ENV.SDL_ACCELEROMETER_AS_JOYSTICK" android:value="0"/>
-         -->
+        <meta-data android:name="SDL_ENV.SDL_ANDROID_TRAP_BACK_BUTTON" android:value="1"/>
      
-        <activity android:name="SDLActivity"
+        <activity android:name="MeleeActivity"
             android:label="@string/app_name"
             android:screenOrientation="sensorLandscape"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleInstance"
             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:preferMinimalPostProcessing="true"
+            android:resizeableActivity="false"
             android:exported="true"
             >
             <intent-filter>

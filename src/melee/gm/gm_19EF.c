@@ -408,10 +408,10 @@ void fn_8019F9C4(u32 arg0)
         u8 game_mode = gm_801A4310();
         char* model_name = gm_80160564(arg0, game_mode);
         char* scene_name = gm_801604DC(arg0, game_mode);
-        lbArchive_LoadSymbols(scene_name, &lbl_804D66AC, model_name, 0);
+        lbArchive_LoadSymbols(scene_name, &lbl_804D66AC, model_name, NULL);
         lbArchive_LoadSymbols("GmGoAnim.dat", &lbl_804D66A4,
-                              "ScGamRegGover_scene_data", 0);
-        lbArchive_LoadSymbols("GmRgStnd.dat", &lbl_804D66A8, "standScene", 0);
+                              "ScGamRegGover_scene_data", NULL);
+        lbArchive_LoadSymbols("GmRgStnd.dat", &lbl_804D66A8, "standScene", NULL);
     }
     cobj = HSD_CObjLoadDesc(lbl_804D669C->cameras->desc);
     cam_gobj = GObj_Create(0x13, 0x14, 0);

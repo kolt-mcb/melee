@@ -389,7 +389,7 @@ void lbRefract_800222A4(void)
     }
 #endif
     lbArchive_LoadSymbols(lbl_803BB0B0.filename, &skip8_804D63E8[0],
-                          lbl_803BB0B0.symbol, 0);
+                          lbl_803BB0B0.symbol, NULL);
     {
         s32 buf_size = GXGetTexBufferSize(0x140, 0xF0, 4, 0, 0);
         lbl_804336D0.image_ptr = HSD_MemAlloc(buf_size);

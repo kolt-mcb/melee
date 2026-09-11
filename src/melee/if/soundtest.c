@@ -241,7 +241,7 @@ extern struct un_803FA258_t un_803FA258;
 void un_802FF7DC(void)
 {
     struct un_803F9F28_t* data = &un_803F9F28;
-    lbArchive_LoadSymbols(data->x1DC, &un_804D6DA8, data->x1E8, 0);
+    lbArchive_LoadSymbols(data->x1DC, &un_804D6DA8, data->x1E8, NULL);
     data->xB4 = un_804D6DA8[0];
     data->xA8 = un_804D6DA8[1];
     data->x148 = un_804D6DA8[2];

@@ -130,24 +130,69 @@ f32 grBb_804DB3F0 = -10.0f;
 
 /* Every bitfield view of the word at gp+0xC4 below describes the console's
  * layout: a big-endian u32 with its fields allocated from the most
- * significant bit down. x86 allocates from the least significant bit up and
- * stores little-endian, so each of these structs put its field somewhere
- * else. The lane index the track's show/hide reads at (word >> 15) & 0x7F sat
- * at bit 10 instead, so every frame unhid a section of track that was not the
- * one under the players, the real sections stayed hidden, and mpJointHide
- * took their collision out of the world -- the stage had a floor on the first
- * frame and none after it.
+ * significant bit down. x86 and arm64 allocate from the least significant bit
+ * up and store little-endian, so each of these structs put its field
+ * somewhere else. The lane index the track's show/hide reads at
+ * (word >> 15) & 0x7F sat at bit 10 instead, so every frame unhid a section
+ * of track that was not the one under the players, the real sections stayed
+ * hidden, and mpJointHide took their collision out of the world -- the stage
+ * had a floor on the first frame and none after it.
  *
- * scalar_storage_order gives these structs the console's byte order and, with
- * it, MSB-first bitfield allocation, so the offsets and shifts written for the
- * GameCube mean here what they meant there. The u32 reads of the same word
- * still need a swap; see GRBB_C4_WORD. */
-#define GRBB_BE __attribute__((scalar_storage_order("big-endian")))
+ * The word's bytes stay in the console's order, because this module also
+ * reads them at absolute offsets (bp[0xC4], *(u8*) (base + 0xC6)) and as a
+ * whole through GRBB_C4_WORD, which swaps. What has to be rebuilt is the
+ * bitfield views over it:
+ *
+ *  - over a single byte, only the allocation direction differs, so the PC
+ *    copy of each struct declares its members in reverse and lands on the
+ *    same bits (see grBb_ByteBits and friends below);
+ *  - over a halfword or word, no host-order bitfield can match: cur_lane
+ *    straddles gp+C5 and gp+C6, whose bytes are not adjacent in a
+ *    little-endian value. Those views go through GRBB_GET/GRBB_SET, which
+ *    shift the swapped word exactly as the console's own code shifts it.
+ *
+ * This was scalar_storage_order("big-endian") until the Android build, which
+ * is Clang: the attribute is GCC-only, and the whole tree stopped compiling
+ * on the first #include of gr/types.h. Nothing here may reintroduce it. */
+#define GRBB_BE
 #define GRBB_C4_WORD(gp) __builtin_bswap32(*(u32*) (GRBB_CAR_BASE(gp) + 0xC4))
+
+/* Field positions in that word, as the console allocates them: the shift of
+ * the field's low bit, and its width. */
+#define GRBB_FLD_b0 31, 1
+#define GRBB_FLD_b1 30, 1
+#define GRBB_FLD_b2 29, 1
+#define GRBB_FLD_prev_lane 22, 7
+#define GRBB_FLD_cur_lane 15, 7
+#define GRBB_FLD_next_lane 8, 7
+#define GRBB_FLD_nibble_hi 4, 4
+#define GRBB_FLD_nibble_lo 0, 4
+
+static u32 grBb_c4_get(void* gp, int shift, int width)
+{
+    return (GRBB_C4_WORD(gp) >> shift) & ((1u << width) - 1);
+}
+
+static void grBb_c4_set(void* gp, u32 value, int shift, int width)
+{
+    u32* p = (u32*) (GRBB_CAR_BASE(gp) + 0xC4);
+    u32 mask = ((1u << width) - 1) << shift;
+    u32 w = __builtin_bswap32(*p);
+    /* Truncating rather than asserting matches the bitfield store it
+     * replaces: grBigBlue_801EB004 writes 0xFFFF into the 7-bit prev_lane. */
+    *p = __builtin_bswap32((w & ~mask) | ((value << shift) & mask));
+}
+
+#define GRBB_GET(gp, f) grBb_c4_get(gp, GRBB_FLD_##f)
+#define GRBB_SET(gp, f, v) grBb_c4_set(gp, (u32) (v), GRBB_FLD_##f)
 #else
 #define GRBB_CAR_BASE(gp) ((u8*) (gp))
+/* The console needs no help: it is big-endian and allocates MSB-first. */
 #define GRBB_BE
 #define GRBB_C4_WORD(gp) (*(u32*) (GRBB_CAR_BASE(gp) + 0xC4))
+/* On the console the fields are just fields. */
+#define GRBB_GET(gp, f) (((Ground*) (gp))->gv.bigblue.f)
+#define GRBB_SET(gp, f, v) (((Ground*) (gp))->gv.bigblue.f = (v))
 #endif
 
 static grBb_YakumonoParam* grBb_804D69C8[2];
@@ -2389,6 +2434,10 @@ static grBb_TrackEntry grBb_TrackEntries[12] = {
 /// generation and stack frame fix (120 vs 112 bytes)
 void grBigBlue_801EB004(Ground_GObj* gobj)
 {
+#if !BUILD_TARGET_PC
+    /* Halfword and word views of gp+C4; kept for the shape of the rlwimi
+     * this function still has to produce. The PC build reaches the same
+     * fields through GRBB_GET/GRBB_SET. */
     typedef struct grBb_InitC4HalfBits {
         u16 pad0 : 3;
         u16 lane : 7;
@@ -2417,6 +2466,28 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
         u8 hi : 4;
         u8 lo : 4;
     } GRBB_BE grBb_InitNibbleBits;
+#else
+    /* Single-byte views, members reversed for a host that allocates from the
+     * least significant bit up. */
+    typedef struct grBb_InitByteLo7 {
+        u8 lo7 : 7;
+        u8 pad0 : 1;
+    } grBb_InitByteLo7;
+    typedef struct grBb_InitByteBits {
+        u8 b7 : 1;
+        u8 b6 : 1;
+        u8 b5 : 1;
+        u8 b4 : 1;
+        u8 b3 : 1;
+        u8 b2 : 1;
+        u8 b1 : 1;
+        u8 b0 : 1;
+    } grBb_InitByteBits;
+    typedef struct grBb_InitNibbleBits {
+        u8 lo : 4;
+        u8 hi : 4;
+    } grBb_InitNibbleBits;
+#endif
     HSD_JObj* jobj = GET_JOBJ(gobj);
     Ground* gp = (Ground*) gobj->user_data;
     Vec3 pos;
@@ -2471,11 +2542,11 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
         HSD_ASSERT(2330, end_jobj);
     }
 
-    gp->gv.bigblue.prev_lane = 0xFFFF;
+    GRBB_SET(gp, prev_lane, 0xFFFF);
 
-    gp->gv.bigblue.cur_lane = 4;
+    GRBB_SET(gp, cur_lane, 4);
 
-    gp->gv.bigblue.next_lane = 0;
+    GRBB_SET(gp, next_lane, 0);
 
     *(f32*) (GRBB_CAR_BASE(gp) + 0xC8) = -1000.0F * Ground_801C0498();
     *(f32*) (GRBB_CAR_BASE(gp) + 0xCC) = 10.0F * Ground_801C0498();
@@ -2491,8 +2562,8 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
         *(f32*) (GRBB_CAR_BASE(gp) + 0xF8) = fval;
 
         ((grBb_InitNibbleBits*) (GRBB_CAR_BASE(gp) + 0xC7))->hi = 0;
-        gp->gv.bigblue.b1 = 0;
-        gp->gv.bigblue.b2 = 0;
+        GRBB_SET(gp, b1, 0);
+        GRBB_SET(gp, b2, 0);
     }
 
     {
@@ -2530,6 +2601,7 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
 /// bitfield rlwimi fixes.
 void grBigBlue_801EB4AC(Ground_GObj* gobj)
 {
+#if !BUILD_TARGET_PC
     typedef struct grBb_B4C4HalfBits {
         u16 pad0 : 3;
         u16 lane : 7;
@@ -2548,6 +2620,16 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
         u8 hi : 4;
         u8 lo : 4;
     } GRBB_BE grBb_B4C7Nibbles;
+#else
+    typedef struct grBb_B4C6Lo7Bits {
+        u8 lane : 7;
+        u8 pad0 : 1;
+    } grBb_B4C6Lo7Bits;
+    typedef struct grBb_B4C7Nibbles {
+        u8 lo : 4;
+        u8 hi : 4;
+    } grBb_B4C7Nibbles;
+#endif
     u8* gp = (u8*) GET_GROUND(gobj);
     s32 count = 0;
     HSD_JObj* jobj;
@@ -2565,11 +2647,19 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
         JOBJ_HIDDEN);
 
     /* Copy current lane to previous lane: rlwimi hw, word, 23, 19, 25 */
+#if BUILD_TARGET_PC
+    GRBB_SET(gp, prev_lane, GRBB_GET(gp, cur_lane));
+#else
     ((grBb_B4C4HalfBits*) (GRBB_CAR_BASE(gp) + 0xC4))->lane =
         ((grBb_B4C4WordBits*) (GRBB_CAR_BASE(gp) + 0xC4))->lane;
+#endif
 
     /* Update current lane from next lane: rlwimi word, byte, 15, 10, 16 */
+#if BUILD_TARGET_PC
+    GRBB_SET(gp, cur_lane, *(u8*) (GRBB_CAR_BASE(gp) + 0xC6));
+#else
     ((grBb_B4C4WordBits*) (GRBB_CAR_BASE(gp) + 0xC4))->lane = *(u8*) (GRBB_CAR_BASE(gp) + 0xC6);
+#endif
 
     /* Get new lane's jobj and position */
     jobj = Ground_801C3FA4(
@@ -2779,6 +2869,7 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
     mpLib_80058560();
 }
 
+#if !BUILD_TARGET_PC
 typedef struct grBb_ByteBits {
     u8 b0 : 1;
     u8 b1 : 1;
@@ -2794,6 +2885,24 @@ typedef struct grBb_NibbleBits {
     u8 hi : 4;
     u8 lo : 4;
 } GRBB_BE grBb_NibbleBits;
+#else
+/* Reversed: b0 is the console's top bit, which is this host's bit 7. */
+typedef struct grBb_ByteBits {
+    u8 b7 : 1;
+    u8 b6 : 1;
+    u8 b5 : 1;
+    u8 b4 : 1;
+    u8 b3 : 1;
+    u8 b2 : 1;
+    u8 b1 : 1;
+    u8 b0 : 1;
+} grBb_ByteBits;
+
+typedef struct grBb_NibbleBits {
+    u8 lo : 4;
+    u8 hi : 4;
+} grBb_NibbleBits;
+#endif
 
 #if BUILD_TARGET_PC
 /* see the note on lbl_803E2DFC above: +0x6D8 past grBb_803E2938 is this. */
