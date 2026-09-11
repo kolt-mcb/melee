@@ -53,6 +53,26 @@ typedef intptr_t grMaterialArg;
 #else
 typedef int grMaterialArg;
 #endif
+/* A colour-overlay script as it comes out of a stage's parameter block.
+ *
+ * On the console these fields hold pointers, relocated when the archive was
+ * loaded. Here the per-stage layout converters (Ground_801C49F8,
+ * Ground_GetYakumonoParam) byte-swap the block and stop there, so the field
+ * still holds the file offset the archive stored -- and handing that to
+ * grMaterial_801C9604 puts it in ColorOverlay::x8_ptr1, where lb_80014258
+ * dereferences it the next time that stage changes colour. It is a crash
+ * that waits for a specific stage event, which is why several stages carried
+ * it for a long time without anyone noticing.
+ *
+ * Wrap every such field in this. On any other target it is the value itself.
+ */
+#if BUILD_TARGET_PC
+const u8* pc_grconv_stage_script(u32 off);
+#define GR_COLOR_SCRIPT(v) ((grMaterialArg) pc_grconv_stage_script((u32) (v)))
+#else
+#define GR_COLOR_SCRIPT(v) (v)
+#endif
+
 /* 1C9604 */ void grMaterial_801C9604(HSD_GObj* bg, grMaterialArg, bool);
 /* 1C9664 */ void fn_801C9664(Item_GObj* gobj, CommandInfo* cmd, int arg2);
 /* 1C9698 */ void grMaterial_801C9698(HSD_GObj*);

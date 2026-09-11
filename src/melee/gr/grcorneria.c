@@ -1543,7 +1543,9 @@ void grCorneria_801DED50(Ground_GObj* gobj)
                                                 -1.0f, grCn_804D69A0->x70);
                                         }
                                         grMaterial_801C9604(
-                                            gobj, grCn_804D69A0->x84, 0);
+                                            gobj,
+                                            GR_COLOR_SCRIPT(grCn_804D69A0->x84),
+                                            0);
                                     }
                                 }
                             }
@@ -1657,7 +1659,7 @@ void grCorneria_801DED50(Ground_GObj* gobj)
                                 (gp->gv.corneria2.x100 + 1) & 1;
                         }
                     }
-                    grMaterial_801C9604(gobj, grCn_804D69A0->x84, 0);
+                    grMaterial_801C9604(gobj, GR_COLOR_SCRIPT(grCn_804D69A0->x84), 0);
                 }
             }
             arwing_type_done:;
