@@ -772,7 +772,10 @@ typedef struct grInishie1_Block {
     s32 x4; ///< probably a counter
     f32 x8; ///< probably a y transform
     f32 xC; ///< probably a delta for x8
-    HSD_JObj* jobj;
+    /// grInishie1_801FB3F0 raises and lowers a struck block with this as the
+    /// per-frame step (+/-1.2), so gp+DC+0x10 is a float and not the first
+    /// of two joints. Nothing reads it as a pointer.
+    f32 x10;
     HSD_JObj* jobj2;
     HSD_GObj* hatena_gobj; ///< named in an assert
     Item_GObj* item_gobj;
@@ -840,6 +843,15 @@ struct grInishie2_GroundVars {
         u8 b7 : 1;
     } xC4_flags;
     s16 xC6;
+#if BUILD_TARGET_PC
+    /* gp+C4 holds an HSD_GObj* in grInishie2_GroundVars2, and the moving
+     * ground reads that pointer (inishie22.xC4) while writing its own state
+     * through this overlay. An 8-byte pointer covers gp+C4..CB there, so
+     * gp+C8 has to start a slot later here or the flags byte and gp+CA
+     * overwrite the pointer's top half -- which is exactly what
+     * grInishie2_801FDED8 then dereferenced. */
+    u8 pc_pad_C8[4];
+#endif
     s16 xC8;
     s16 xCA;
     s16 xCC;
@@ -891,6 +903,15 @@ struct grInishie2_GroundVars2 {
 struct grInishie2_GroundVars3 {
     s16 xC4;
     s16 xC6;
+#if BUILD_TARGET_PC
+    /* gp+C4 holds an HSD_GObj* in grInishie2_GroundVars2, and the moving
+     * ground reads that pointer (inishie22.xC4) while writing its own state
+     * through this overlay. An 8-byte pointer covers gp+C4..CB there, so
+     * gp+C8 has to start a slot later here or the flags byte and gp+CA
+     * overwrite the pointer's top half -- which is exactly what
+     * grInishie2_801FDED8 then dereferenced. */
+    u8 pc_pad_C8[4];
+#endif
     struct {
         u8 b0 : 1;
         u8 b1 : 1;
@@ -1669,18 +1690,23 @@ struct grCastle_GroundVars11 {
     /* +01 gp+C5 */ u8 pad_01[3];
     /* +04 gp+C8 */ s16 xC8;
     /* +06 gp+CA */ s16 xCA;
+#if BUILD_TARGET_PC
+    /* Every one of these four words holds a pointer stashed through a (u32)
+     * cast, so each needs a full 8-byte slot -- and the slots have to be the
+     * ones grCastle_GroundVars7 gives gp+D0/D4/D8, because grCastle_801CF308
+     * reads a single Ground through both overlays.  With gp+CC/D0 still 4
+     * bytes wide here, castle11.xD4 and castle7.xD0 both landed at +0x10:
+     * grCastle_801CF0F4 wrote the target GObj there and grCastle_801CF308
+     * read it back as a joint, walking a GObj list as a parent chain until
+     * HSD_JObjSetupMatrixSub dereferenced a GObj link as a class_info. */
+    /* +08 gp+CC */ uintptr_t xCC;
+    /* +10 gp+D0 */ uintptr_t xD0;
+    /* +18 gp+D4 */ uintptr_t xD4;
+    /* +20 gp+D8 */ uintptr_t xD8;
+#else
     /* +08 gp+CC */ u32 xCC;
     /* +0C gp+D0 */ u32 xD0;
-#if BUILD_TARGET_PC
-    /* a GObj stored with a (u32) cast, read back as HSD_GObj* */
-    /* +10 gp+D4 */ uintptr_t xD4;
-#else
     /* +10 gp+D4 */ u32 xD4;
-#endif
-#if BUILD_TARGET_PC
-    /* a CmSubject stored with a (u32) cast, read back as a pointer */
-    /* +14 gp+D8 */ uintptr_t xD8;
-#else
     /* +14 gp+D8 */ u32 xD8;
 #endif
 };
