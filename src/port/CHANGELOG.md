@@ -1,3 +1,81 @@
+## [2026-09-10] — Every stage plays a match, and fits in the frame budget
+
+Two goals: no stage crashes, and every stage holds 60 fps. Both met.
+Measured at 640x480, CPU vs CPU, work per frame excluding the swap wait
+(`MELEE_FPS=2`). The worst stage went from 28.5 ms to 16.2 ms; the whole
+sweep is now inside the 16.67 ms budget, and all 33 stage indices run
+9000 frames without crashing.
+
+### Crashes
+
+Four of the five crashers were the same class: `Ground::gv` is a union of
+per-stage overlay structs written for GameCube's four-byte pointers, and a
+stage that reads one `Ground` through two of them needs both to agree
+about where each GameCube word lands here.
+
+- **Castle** (frame 800) wrote a GObj through `grCastle_GroundVars7`'s
+  gp+D0 and read it back as a joint through `grCastle_GroundVars11`'s
+  gp+D4, which sat at the same PC offset, then walked a GObj list as a
+  joint parent chain.
+- **Mushroom Kingdom II** (frame 100) had an 8-byte `inishie22.xC4`
+  covering gp+C4..CB while `inishie23` wrote its flags byte into the
+  pointer's top half.
+- **Mushroom Kingdom** (frame 100) described the `Ground` with a private
+  `u8 pad[0xC4]` header in two functions, so `block` was read out of the
+  padding. `grInishie1_Block`'s gp+DC+0x10 is the block's raise speed, a
+  float, not the first of two joints.
+- **Rainbow Cruise** (frame 0) is a data bug: its vanish table has no
+  symbol in this tree and both readers walked 0x26C past the end of a
+  138-byte array. Transcribed from the original at 0x803E5014. The record
+  is `{s16, s16, s32}` -- the `u8 pad_5[3]` after the `bool` made it 12
+  bytes, because this tree's `bool` is `typedef int bool`.
+- **Kongo Jungle 64** (frame 200) is neither: it reads `keep->p_link`
+  with `keep` NULL and so does the console, where OS low memory is mapped
+  and 0x80000002 is inside the disc id "GALE01".
+- **Gr_Kind_Unk26** has no stage data at all, so the GroundParam colour
+  accessors returned `&((GroundParam*) NULL)->xB8` -- 0xB8, which is not
+  NULL and not readable either.
+
+Castle then hung at frame 3800 instead. The PC build had been working
+around a narrow ground-var slot by asking the camera for a *new*
+`CmSubject` wherever the stored one was read, which leaks one per frame;
+the pool holds a few dozen and `Camera_80029044` spins in a `while (true)`
+when it runs dry. A drained pool now reports and returns NULL on PC.
+
+### Performance
+
+None of it was the renderer doing too much work.
+
+- **Unbounded diagnostics.** `__assert` had no rate limit -- on GCN an
+  assert halts, so no site fires twice; here it reports and returns, and a
+  site inside a per-PObj loop fires tens of thousands of times a frame.
+  And `grdisplay.c` asks `(ptr & ~0x7FFFFFFF) == 0` to mean "not a real
+  pointer", which is true of every host address, so an OSReport fired once
+  per display object per frame. Fountain of Dreams ran at 6.6 fps and
+  wrote a 4.6 MB log in 2700 frames.
+- **getenv in per-draw code**, 11% of a Venom frame across six sites;
+  `window_gl_es()` was called once per draw from `pc_depth_range`.
+  `PC_DBG_FLAG` in `port/pc_dbgflag.h` reads each switch once.
+- **A syscall per texture bind.** `pc_mem_readable` probes with
+  `msync(MS_ASYNC)`. Hits are cached now: the only `munmap` in the tree is
+  in `pc_lowmem_init`'s reservation probe, before the game starts.
+- **The EFB copy**, 31% of a low-draw frame. Every copy in a match is
+  256x256 to 256x256, so the box filter averaged one source pixel per
+  destination pixel; and it read GL_RGBA to use one channel.
+- **Per-primitive state.** Every GX primitive was its own `glDrawArrays`
+  preceded by a dozen GL state calls and ~100 memoised uniform
+  comparisons. Inside a display list that is provably redundant -- this
+  parser skips every register-load opcode -- so a list's primitives now
+  share one `glMultiDrawArrays`, one state application and one vertex
+  upload. Venom averages 7.5 primitives per list.
+- The texture hash walked a couple of megabytes a frame a byte at a time.
+
+### Tools
+
+`MELEE_FPS=2` reports the EFB copies with their readback and pack times.
+`MELEE_DRAWSEC` splits the draw path into vbo/state/uniforms/draw.
+`MELEE_DLSTATS` counts how much display-list traffic a frame repeats.
+
 ## [2026-08-27] — GL bridge vs. the real GX enums
 
 The bridge kept private copies of GX enums instead of including

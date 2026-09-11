@@ -1881,6 +1881,11 @@ static void pc_batch_flush(void)
         return;
     }
     g_batch_flushing = 1;
+    /* The flush runs from gx_flush_pending, which any of the 53
+     * state-changing GX entry points may call, so it cannot assume the draw
+     * path's bindings are still current -- the movie path saves and restores
+     * a different VAO around itself, and init leaves zero bound. */
+    glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
     base = pc_vbo_stream(g_stage, g_stage_n);
     g_batch_flushing = 0;
