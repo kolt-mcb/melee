@@ -1796,6 +1796,13 @@ static GLintptr g_vbo_off;
 static GLint g_vbo_first;
 
 static GLint pc_vbo_stream(const Vertex* src, unsigned count);
+int window_gl_es(void);
+
+#if defined(BUILD_TARGET_ANDROID) || defined(__EMSCRIPTEN__)
+#define PC_HAVE_MULTIDRAW 0
+#else
+#define PC_HAVE_MULTIDRAW 1
+#endif
 
 /* Batched multi-draw.
  *
@@ -1882,9 +1889,22 @@ static void pc_batch_flush(void)
     }
     if (g_batch_n == 1) {
         glDrawArrays(g_batch_mode, g_batch_first[0], g_batch_count[0]);
-    } else {
+    }
+#if PC_HAVE_MULTIDRAW
+    else if (!window_gl_es()) {
         glMultiDrawArrays(g_batch_mode, g_batch_first, g_batch_count,
                           g_batch_n);
+    }
+#endif
+    else {
+        /* No multi-draw here: OpenGL ES and WebGL2 have none, and the
+         * Android and wasm targets build this file against a GLES shim. The
+         * draw calls come back, but the rest of the batch -- one state and
+         * uniform application per display list, one vertex upload -- is
+         * where most of the win was, and that is unaffected. */
+        for (i = 0; i < g_batch_n; i++) {
+            glDrawArrays(g_batch_mode, g_batch_first[i], g_batch_count[i]);
+        }
     }
     pc_diag_batch_calls++;
     g_batch_n = 0;
