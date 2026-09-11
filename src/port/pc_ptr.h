@@ -155,10 +155,27 @@ static inline int pc_mem_readable(const void* p, unsigned long n)
     return (unsigned long long) end <= mem_bytes;
 }
 #else
+/* The probe is an msync(MS_ASYNC), which is a syscall, and GXLoadTexObj asks
+ * it about the same handful of texture images on every draw -- a profile of
+ * Fountain of Dreams put three of eight GXLoadTexObj samples inside msync.
+ *
+ * Remembering a *positive* answer is only safe if the mapping cannot go
+ * away, and in this port it cannot: the one munmap in the tree is in
+ * pc_lowmem_init's reservation probe, before the game starts, and every heap
+ * afterwards is carved out of pools that are never returned. So cache the
+ * hits, keyed on the page the range starts in and the furthest end already
+ * approved for it. Misses are not cached -- a failing probe is an error path
+ * that runs once per broken texture, and a range that is unreadable now
+ * could become readable after a later mmap. */
+#define PC_MEM_OK_SLOTS 256u
+static uintptr_t pc_mem_ok_page[PC_MEM_OK_SLOTS];
+static uintptr_t pc_mem_ok_end[PC_MEM_OK_SLOTS];
+
 static inline int pc_mem_readable(const void* p, unsigned long n)
 {
     static long pc_page;
     uintptr_t start, end, aligned;
+    unsigned slot;
     if (!pc_ptr_sane(p) || n == 0) return 0;
     if (pc_page == 0) {
         pc_page = sysconf(_SC_PAGESIZE);
@@ -168,8 +185,18 @@ static inline int pc_mem_readable(const void* p, unsigned long n)
     end = start + n;
     if (end < start) return 0;             /* wrapped */
     aligned = start & ~(uintptr_t) (pc_page - 1);
+    slot = (unsigned) ((aligned >> 12) * 2654435761u) % PC_MEM_OK_SLOTS;
+    if (pc_mem_ok_page[slot] == aligned && end <= pc_mem_ok_end[slot]) {
+        return 1;
+    }
     if (msync((void*) aligned, (size_t) (end - aligned), MS_ASYNC) != 0) {
         return 0;
+    }
+    if (pc_mem_ok_page[slot] == aligned) {
+        if (end > pc_mem_ok_end[slot]) pc_mem_ok_end[slot] = end;
+    } else {
+        pc_mem_ok_page[slot] = aligned;
+        pc_mem_ok_end[slot] = end;
     }
     return 1;
 }
