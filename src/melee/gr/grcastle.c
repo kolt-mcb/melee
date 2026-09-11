@@ -852,19 +852,20 @@ void grCastle_801CE260(Ground_GObj* gobj)
 
     gp->gv.castle11.xC4.b0 = 0;
     gp->gv.icemt.xC6 = gp->map_id - 8;
-    gp->gv.arwing.xCC = 0;
+    gp->gv.castle11.xCC = 0;
     gp->gv.flatzone.xCA = grCs_804D6970->entries[gp->gv.icemt.xC6].x0;
 
     gp2 = GET_GROUND(gobj);
-#if BUILD_TARGET_PC
-    /* The console parks the CmSubject* in a 32-bit ground var; a host
-     * pointer does not fit, and the slot aliases Corneria's state word, so
-     * ask the camera again where it is read. */
-    subject = Camera_80029044(2);
-#else
-    *(u32*) &gp2->gv.arwing.xD8 = (u32) Camera_80029044(2);
-    subject = (CmSubject*) *(u32*) &gp2->gv.arwing.xD8;
-#endif
+    /* gp+D8 through the castle11 overlay, which is where this ground's own
+     * think proc reads the subject back (grCastle_801CE3AC's
+     * Camera_800290D4). It used to go through grArwing_GroundVars, whose
+     * gp+D8 lands four bytes earlier here because its gp+C4 is a pointer,
+     * and the PC build worked around the mismatch by asking the camera for
+     * a *new* subject at every read -- which leaks one per frame. The pool
+     * holds a few dozen; Castle ran dry around frame 3800 and
+     * Camera_80029044 spun in its `while (true)`. */
+    gp2->gv.castle11.xD8 = (uintptr_t) Camera_80029044(2);
+    subject = (CmSubject*) gp2->gv.castle11.xD8;
     if (subject != NULL) {
         subject->x40.x = grCs_804D6970->x118;
         subject->x40.y = grCs_804D6970->x11C;
@@ -873,10 +874,10 @@ void grCastle_801CE260(Ground_GObj* gobj)
     }
 
     grMaterial_801C94D8(jobj);
-    gp->gv.arwing.xD0 = (uintptr_t) grMaterial_801C8CFC(
+    gp->gv.castle11.xD0 = (uintptr_t) grMaterial_801C8CFC(
         0, 3, gp, Ground_801C3FA4((HSD_GObj*) gobj, 0),
         (void (*)(Item_GObj*, Ground*)) fn_801CE3A0, NULL, NULL);
-    it_80275414((Item_GObj*) gp->gv.arwing.xD0);
+    it_80275414((Item_GObj*) gp->gv.castle11.xD0);
     Ground_801C5440(gp, 0, 0x53025U);
 }
 
@@ -1119,22 +1120,21 @@ void grCastle_801CE8E8(Ground_GObj* gobj)
     grAnime_801C8138((HSD_GObj*) gobj, gp->map_id, 0);
 
     gp2 = GET_GROUND(gobj);
-#if BUILD_TARGET_PC
-    subject = Camera_80029044(2);
-#else
-    gp2->gv.arwing.xC8 = (u32) Camera_80029044(2);
-    subject = (CmSubject*) gp2->gv.arwing.xC8;
-#endif
+    /* Same slot-width problem as grCastle_801CE1F8's, and the same leak: the
+     * arwing overlay makes gp+C8 four bytes. castle2 gives gp+C4 and gp+C8 a
+     * pointer each, which is what this ground stores in both. */
+    gp2->gv.castle2.xC8 = (HSD_GObj*) Camera_80029044(2);
+    subject = (CmSubject*) gp2->gv.castle2.xC8;
     if (subject != NULL) {
         subject->x40.x = grCs_804D6970->x134;
         subject->x40.y = grCs_804D6970->x138;
         subject->x48.x = grCs_804D6970->x13C;
         subject->x48.y = grCs_804D6970->x140;
     }
-    gp->gv.arwing.xC4 = (uintptr_t) grMaterial_801C8CFC(
+    gp->gv.castle2.xC4 = grMaterial_801C8CFC(
         0, 4, gp, Ground_801C3FA4((HSD_GObj*) gobj, 0),
         (void (*)(Item_GObj*, Ground*)) fn_801CE9DC, NULL, NULL);
-    it_80275414((Item_GObj*) gp->gv.arwing.xC4);
+    it_80275414((Item_GObj*) gp->gv.castle2.xC4);
     Ground_801C5440(gp, 0, 0x53024U);
 }
 
@@ -1150,11 +1150,7 @@ void grCastle_801CE9E8(Ground_GObj* gobj)
     Vec3 pos;
     Ground* tmp;
     Ground* gp = GET_GROUND(gobj);
-#if BUILD_TARGET_PC
-    CmSubject* subject = Camera_80029044(2);
-#else
-    CmSubject* subject = (CmSubject*) gp->gv.arwing.xC8;
-#endif
+    CmSubject* subject = (CmSubject*) gp->gv.castle2.xC8;
     PAD_STACK(8);
     if (subject != NULL) {
         lb_8000B1CC(Ground_801C3FA4(gobj, 0), NULL, &pos);
@@ -1162,21 +1158,17 @@ void grCastle_801CE9E8(Ground_GObj* gobj)
         subject->x1C = pos;
     }
     if (grAnime_801C83D0(gobj, 0, 1)) {
-        HSD_GObj* mat = (HSD_GObj*) (tmp = gp)->gv.arwing.xC4;
+        HSD_GObj* mat = (tmp = gp)->gv.castle2.xC4;
         if (mat != NULL) {
             grMaterial_801C8CDC(mat);
         }
-        gp->gv.arwing.xC4 = 0;
+        gp->gv.castle2.xC4 = NULL;
         {
             Ground* gp2 = gobj->user_data;
-#if BUILD_TARGET_PC
-            CmSubject* subj2 = (tmp = gp2, Camera_80029044(2));
-#else
-            CmSubject* subj2 = (CmSubject*) (tmp = gp2)->gv.arwing.xC8;
-#endif
+            CmSubject* subj2 = (CmSubject*) (tmp = gp2)->gv.castle2.xC8;
             if (subj2 != NULL) {
                 Camera_800290D4(subj2);
-                gp2->gv.arwing.xC8 = 0;
+                gp2->gv.castle2.xC8 = NULL;
             }
         }
         Ground_801C4A08(gobj);

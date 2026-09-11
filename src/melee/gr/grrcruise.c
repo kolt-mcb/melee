@@ -57,7 +57,14 @@
 #endif
 
 // Aliases for Map_VanishDesc/Entry used in RCruise
-struct grRCruise_VanishDesc { s16 x0; s16 x2; bool x4; u8 pad_5[3]; };
+/* No trailing padding: this tree's bool is `typedef int bool`
+ * (src/MSL/stdbool.h), so x4 already fills offsets 4..7 and the `u8
+ * pad_5[3]` that used to follow it pushed the record to 12 bytes. The table
+ * it describes -- twenty records at 0x803E5014 -- reads as {s16, s16, s32}
+ * and only as that: the flag word is 0 for the first eight entries and 1 for
+ * the last twelve, which at any other stride comes apart into joint indices
+ * in the thousands. */
+struct grRCruise_VanishDesc { s16 x0; s16 x2; bool x4; };
 struct grRCruise_VanishEntry { s16 x0; s16 x2; HSD_JObj* jobj; };
 
 /* Forward declarations */
@@ -146,8 +153,26 @@ struct StageData grRc_StageData = {
     ARRAY_SIZE(grRc_803E4DA8),
 };
 
+#if BUILD_TARGET_PC
+/* grRc_803E5014: read out of the original's data at 0x803E5014 (160 bytes).
+ * It has no symbol in this tree; both readers reached it by walking 0x26C
+ * past the end of grRc_803E4DA8, which is 138 bytes long and is followed on
+ * PC by whatever the linker put there rather than by this table. Each record
+ * is {joint index to animate, collision joint id, whether the block starts
+ * hidden}; mpJointListAdd took the second field, and the garbage that stood
+ * in for it asked for joint 102 of the stage's 45. */
+static struct grRCruise_VanishDesc grRc_803E5014_pc[20] = {
+    {  6,  4, 0 }, {  8,  5, 0 }, { 16, 10, 0 }, { 11,  6, 0 },
+    { 12,  7, 0 }, { 13,  8, 0 }, { 14,  9, 0 }, { 15,  8, 0 },
+    { 19, 12, 1 }, { 20, 13, 1 }, { 21, 14, 1 }, { 30, 15, 1 },
+    { 22, 16, 1 }, { 23, 17, 1 }, { 24, 18, 1 }, { 25, 19, 1 },
+    { 26, 20, 1 }, { 27, 21, 1 }, { 28, 22, 1 }, { 29, 23, 1 },
+};
+#define grRc_803E5014 (grRc_803E5014_pc[0])
+#else
 #define grRc_803E5014                                                         \
     (*(struct grRCruise_VanishDesc*) ((u8*) grRc_803E4DA8 + 0x26C))
+#endif
 extern Vec3 grRc_803B8288;
 extern s16 grRc_803E4FF0[];
 #if BUILD_TARGET_PC
@@ -1187,29 +1212,28 @@ void grRCruise_80201288(HSD_JObj* jobj, void (*callback)(HSD_DObj*, u32),
 
 void grRCruise_80201410(Ground_GObj* gobj)
 {
-    struct grRCruise_VanishDescTable {
-        u8 pad[0x26C];
-        struct grRCruise_VanishDesc desc[20];
-    };
     Ground* gp = gobj->user_data;
-    struct grRCruise_VanishDescTable* desc_table;
+    struct grRCruise_VanishDesc* desc_table;
     u32 i;
 
     gp->u.map.vanish = HSD_MemAlloc(0xA0);
     HSD_ASSERT(0x5AD, gp->u.map.vanish);
 
-    desc_table = (struct grRCruise_VanishDescTable*) grRc_803E4DA8;
+    /* Was a cast of grRc_803E4DA8 through a `u8 pad[0x26C]` header, which
+     * is the same walk off the end of that array as grRCruise_80201588's;
+     * name the table instead. */
+    desc_table = &grRc_803E5014;
     for (i = 0; i < 20; i++) {
         gp->u.map.vanish[i].jobj =
-            Ground_801C3FA4(gobj, desc_table->desc[i].x0);
+            Ground_801C3FA4(gobj, desc_table[i].x0);
         HSD_ASSERT(0x5B3, gp->u.map.vanish[i].jobj);
-        if (desc_table->desc[i].x4 != 0) {
+        if (desc_table[i].x4 != 0) {
             HSD_GObj* gobj1;
             HSD_GObj* gobj5;
             s32 joint;
 
             gp->u.map.vanish[i].x0 = 2;
-            joint = desc_table->desc[i].x0;
+            joint = desc_table[i].x0;
             gobj5 = Ground_801C2BA4(5);
             if (gobj5 != NULL) {
                 gobj1 = Ground_801C2BA4(1);
@@ -1224,11 +1248,11 @@ void grRCruise_80201410(Ground_GObj* gobj)
                     }
                 }
             }
-            mpJointListAdd(desc_table->desc[i].x2);
+            mpJointListAdd(desc_table[i].x2);
         } else {
             gp->u.map.vanish[i].x0 = 0;
-            grAnime_801C7FF8(gobj, desc_table->desc[i].x0, 2, 1, 0.0f, 1.0f);
-            mpLib_80057BC0(desc_table->desc[i].x2);
+            grAnime_801C7FF8(gobj, desc_table[i].x0, 2, 1, 0.0f, 1.0f);
+            mpLib_80057BC0(desc_table[i].x2);
         }
     }
 }

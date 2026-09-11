@@ -1,5 +1,9 @@
 #include "camera.h"
 
+#if BUILD_TARGET_PC
+void port_guard_warn(const char* site);
+#endif
+
 #include "platform.h"
 
 #include <placeholder.h>
@@ -235,8 +239,19 @@ CmSubject* Camera_80029044(int arg0)
 
     if ((CmSubject*) cm_804D6458 == NULL) {
         OSReport("couldn't get CmSubject struct.\n", arg0);
+#if BUILD_TARGET_PC
+        /* The console treats a drained pool as a fatal error and parks the
+         * CPU here; on PC that is a silent hang -- the process keeps burning
+         * a core with nothing in the log after the OSReport, which is how
+         * Castle's leaked subjects presented. Every caller in the tree
+         * null-checks the result, so report and hand back NULL instead: the
+         * stage loses one camera box and the run stays debuggable. */
+        port_guard_warn("camera.c:subject-pool-empty");
+        return NULL;
+#else
         while (true) {
         };
+#endif
     }
 
     cm_804D6458 = subject->prev;

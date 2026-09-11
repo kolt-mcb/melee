@@ -558,7 +558,14 @@ void grOldKongo_8020F888(Ground_GObj* arg0)
             {
                 Fighter_GObj* fighter_gobj = gp->gv.taru.keep;
 
-                if (fighter_gobj->p_link == 8) {
+                /* keep is NULL whenever nobody is in the barrel, which is
+                 * most of the time: the case above reaches this one through
+                 * block_123 precisely *because* keep was NULL. The console
+                 * reads p_link through the NULL anyway and gets away with
+                 * it -- GameCube OS low memory is mapped, 0x80000002 lands
+                 * inside the disc id "GALE01", and 'L' is not 8, so no shot
+                 * is fired. Give the same answer instead of faulting. */
+                if (fighter_gobj != NULL && fighter_gobj->p_link == 8) {
                     ftCo_8009EC70(fighter_gobj, &sp3C, &hit, hit_angle);
                 }
             }
@@ -686,7 +693,8 @@ bool grOldKongo_80210454(Ground_GObj* ground_gobj, Fighter_GObj* keep)
     gp->gv.taru.xC4 = 1;
     Ground_801C5440(gp, 0, 0x129U);
     grAnime_801C7FF8(ground_gobj, 2, 7, 1, 0.0f, 1.0f);
-    grMaterial_801C9604(ground_gobj, grOk_804D6A90[0]->x6C, 0);
+    grMaterial_801C9604(ground_gobj, GR_COLOR_SCRIPT(grOk_804D6A90[0]->x6C),
+                        0);
     efSync_Spawn(0x405, ground_gobj, &pos_ft);
     ftLib_80086C18(keep, 0xD, 0x1E);
     return true;
@@ -712,7 +720,9 @@ void grOldKongo_802105C8(HSD_GObj* gobj)
     /// @todo Fix field name to match. #Ground::gv should be @c u.
     HSD_ASSERTMSG(751, gp->gv.taru.keep, "gp->u.taru.keep");
 
-    if (((u8*) gp->gv.taru.keep)[2] == 8) {
+    /* Same NULL read as grOldKongo_8020F888's: the assert above reports and
+     * returns nothing on PC, and gp+D4 is NULL until a fighter is caught. */
+    if (gp->gv.taru.keep != NULL && ((u8*) gp->gv.taru.keep)[2] == 8) {
         gp->gv.taru.xC4 = 0;
         gp->gv.taru.keep = NULL;
         grMaterial_801C95C4(gobj);
