@@ -9602,14 +9602,34 @@ static u32 g_tex_slot_gen[MAX_TEXTURES];
 static u32 g_tex_slot_hash[MAX_TEXTURES];
 u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod);
 
+/* Every texture bind whose cache generation is stale re-hashes the whole
+ * image to decide whether the bytes moved. GXInvalidateTexAll bumps that
+ * generation, and the game calls it after every EFB copy, so in practice this
+ * runs for most binds -- about 160 a frame in a match. Byte at a time, that is
+ * megabytes of scalar xor-multiply per frame, and it showed up on a phone as
+ * frames over budget.
+ *
+ * Eight bytes at a time instead. The mixing is the same FNV-1a, widened: each
+ * byte still reaches the accumulator before the multiply, so a change anywhere
+ * still changes the result. The value itself is only ever compared against the
+ * previous value of this same function, so it does not matter that it differs
+ * from what the byte-wise version produced. */
 static u32 tex_content_hash(const void* img, u16 w, u16 h, u8 fmt)
 {
     u32 n = GXGetTexBufferSize(w, h, fmt, 0, 0);
     const u8* p = (const u8*) img;
-    u32 hsh = 2166136261u, i;
+    u64 hsh = 14695981039346656037ull;
+    u32 i = 0;
     if (n > 0x100000) n = 0x100000;
-    for (i = 0; i < n; i++) { hsh ^= p[i]; hsh *= 16777619u; }
-    return hsh ^ n;
+    for (; i + 8 <= n; i += 8) {
+        u64 v;
+        memcpy(&v, p + i, 8);
+        hsh = (hsh ^ v) * 1099511628211ull;
+    }
+    for (; i < n; i++) {
+        hsh = (hsh ^ p[i]) * 1099511628211ull;
+    }
+    return (u32) (hsh ^ (hsh >> 32)) ^ n;
 }
 
 void pc_tex_cache_bump(void)
