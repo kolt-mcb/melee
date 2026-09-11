@@ -1795,6 +1795,8 @@ static GLintptr g_vbo_off;
 /* First vertex of the span most recently streamed (draws use it). */
 static GLint g_vbo_first;
 
+static GLint pc_vbo_stream(const Vertex* src, unsigned count);
+
 /* Batched multi-draw.
  *
  * Every GX primitive was its own glDrawArrays, and each one re-applied the
@@ -1834,6 +1836,19 @@ static int g_batch_dl_depth;
 static int g_batch_pre_state;
 u32 pc_diag_batch_calls, pc_diag_batch_prims;
 
+/* Vertices of a batch are staged on the CPU and uploaded in one map.
+ *
+ * The ring is written with glMapBufferRange + glUnmapBuffer, and at ~23
+ * vertices per primitive that pair of GL calls cost more than the 1.5 KB
+ * they moved: 10% of a Venom frame for 9436 calls. A batch's primitives go
+ * into one contiguous span anyway, so stage them and map once. The recorded
+ * `first` of a batched primitive is an index into this staging array; the
+ * flush turns it into a vertex-buffer index by adding the base it streamed
+ * to. */
+static Vertex g_stage[PC_VBO_RING_VERTS];
+static unsigned g_stage_n;
+static int g_batch_flushing;
+
 /* The same mapping the draw site below uses, hoisted so the append path can
  * ask for it before any state is applied. */
 static GLenum pc_gl_prim_of(u32 gx_prim)
@@ -1852,8 +1867,18 @@ static GLenum pc_gl_prim_of(u32 gx_prim)
 
 static void pc_batch_flush(void)
 {
+    int i;
+    GLint base;
     if (g_batch_n == 0) {
+        g_stage_n = 0;
         return;
+    }
+    g_batch_flushing = 1;
+    glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+    base = pc_vbo_stream(g_stage, g_stage_n);
+    g_batch_flushing = 0;
+    for (i = 0; i < g_batch_n; i++) {
+        g_batch_first[i] += base;
     }
     if (g_batch_n == 1) {
         glDrawArrays(g_batch_mode, g_batch_first[0], g_batch_count[0]);
@@ -1863,6 +1888,48 @@ static void pc_batch_flush(void)
     }
     pc_diag_batch_calls++;
     g_batch_n = 0;
+    g_stage_n = 0;
+}
+
+/* Where a primitive's vertices go: into the staging array while a display
+ * list is being batched, straight into the ring otherwise. */
+static GLint pc_vbo_first_for(const Vertex* src, unsigned count);
+
+/* Append `count` vertices to the staging array; returns their index in it,
+ * or -1 if they will not fit (the caller flushes and retries). */
+static GLint pc_batch_stage(const Vertex* src, unsigned count);
+
+static GLint pc_vbo_first_for(const Vertex* src, unsigned count)
+{
+    if (g_batch_dl_depth > 0) {
+        GLint f = pc_batch_stage(src, count);
+        if (f >= 0) {
+            return f;
+        }
+        /* Staging full with nothing recorded to flush (a single primitive
+         * larger than the ring): fall back to the ring. */
+        pc_batch_flush();
+        f = pc_batch_stage(src, count);
+        if (f >= 0) {
+            return f;
+        }
+    }
+    return pc_vbo_stream(src, count);
+}
+
+static GLint pc_batch_stage(const Vertex* src, unsigned count)
+{
+    GLint first;
+    if (count == 0 || count > PC_VBO_RING_VERTS) {
+        return -1;
+    }
+    if (g_stage_n + count > PC_VBO_RING_VERTS) {
+        return -1;
+    }
+    first = (GLint) g_stage_n;
+    memcpy(g_stage + g_stage_n, src, sizeof(Vertex) * (size_t) count);
+    g_stage_n += count;
+    return first;
 }
 
 static void pc_batch_add(GLenum mode, GLint first, GLsizei count)
@@ -1895,7 +1962,7 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
     if (bytes > PC_VBO_RING_BYTES) {
         /* Larger than the ring (cannot happen with MAX_VERTS, but do not
          * corrupt memory if it ever does): fall back to a full upload. */
-        pc_batch_flush();
+        if (!g_batch_flushing) pc_batch_flush();
         glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
         glBufferSubData(GL_ARRAY_BUFFER, 0, PC_VBO_RING_BYTES, src);
         g_vbo_off = PC_VBO_RING_BYTES;
@@ -1903,8 +1970,10 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
     }
     if (g_vbo_off + bytes > PC_VBO_RING_BYTES) {
         /* Orphaning discards the bytes any recorded-but-undrawn primitive
-         * still points at, so draw them first. */
-        pc_batch_flush();
+         * still points at, so draw them first. The flush itself streams the
+         * staged vertices, and those are being written fresh, so it must not
+         * re-enter here. */
+        if (!g_batch_flushing) pc_batch_flush();
         glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
         g_vbo_off = 0;
     }
@@ -3854,7 +3923,6 @@ static void bridge_upload_and_draw(void)
     pc_sec_begin();
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-    g_vbo_first = pc_vbo_stream(g_state.verts, count);
     pc_sec_end(0);
 
 #if BUILD_TARGET_PC
@@ -3877,13 +3945,19 @@ static void bridge_upload_and_draw(void)
         g_batch_pretransformed == g_batch_pre_state &&
         pc_gl_prim_of(g_state.prim_type) == g_batch_mode)
     {
-        pc_batch_add(g_batch_mode, g_vbo_first, (GLsizei) count);
-        pc_diag_draws++;
-        pc_stat_draws++;
-        pc_stat_verts += (unsigned) count;
-        g_state.vert_count = 0;
-        g_batch_pretransformed = 0;
-        return;
+        pc_sec_begin();
+        g_vbo_first = pc_batch_stage(g_state.verts, count);
+        pc_sec_end(0);
+        if (g_vbo_first >= 0) {
+            pc_batch_add(g_batch_mode, g_vbo_first, (GLsizei) count);
+            pc_diag_draws++;
+            pc_stat_draws++;
+            pc_stat_verts += (unsigned) count;
+            g_state.vert_count = 0;
+            g_batch_pretransformed = 0;
+            return;
+        }
+        /* Staging is full: fall through, which flushes and starts again. */
     }
     /* Not joining: everything below changes GL state, so anything already
      * recorded has to be drawn first or it would be drawn under the new
@@ -3893,6 +3967,9 @@ static void bridge_upload_and_draw(void)
     pc_batch_flush();
     g_batch_pre_state = g_batch_pretransformed;
 #endif
+    pc_sec_begin();
+    g_vbo_first = pc_vbo_first_for(g_state.verts, count);
+    pc_sec_end(0);
 
     /* PC diag: read back the VBO's first vertex to confirm the GPU has the
      * same data the CPU used for the NDCCHECK (rules out a bad upload). */
@@ -4445,7 +4522,7 @@ static void bridge_upload_and_draw(void)
         tri_verts[5] = g_state.verts[3];
         
         glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-        g_vbo_first = pc_vbo_stream(tri_verts, 6);
+        g_vbo_first = pc_vbo_first_for(tri_verts, 6);
         
         /* Rebind VAO attributes */
         glBindVertexArray(g_vao);
@@ -4811,7 +4888,7 @@ static void bridge_upload_and_draw(void)
                 quad_tri[q*6+3] = *a; quad_tri[q*6+4] = *c; quad_tri[q*6+5] = *d;
             }
             glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-            g_vbo_first = pc_vbo_stream(quad_tri, (unsigned) (nq * 6));
+            g_vbo_first = pc_vbo_first_for(quad_tri, (unsigned) (nq * 6));
             pc_prog_flush();
             pc_batch_add(GL_TRIANGLES, g_vbo_first, (GLsizei) (nq * 6));
             pc_sec_end(3);
