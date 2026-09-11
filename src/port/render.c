@@ -481,6 +481,9 @@ void render_present(void)
                 extern u32 pc_diag_uploads, pc_diag_mipgens, pc_diag_hashes, pc_diag_draws;
                 extern u32 pc_diag_efb_copies;
                 extern u64 pc_diag_efb_blit_ns, pc_diag_efb_read_ns, pc_diag_efb_cpu_ns;
+                extern u64 pc_diag_hash_ns, pc_diag_upload_ns, pc_diag_hash_bytes;
+                extern u64 pc_diag_draw_ns, pc_diag_prog_ns, pc_diag_vbo_ns;
+                extern u32 pc_diag_prog_dirty;
                 fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  per frame: draws %u texhash %u upload %u mipgen %u  efb %u copies blit %.2f read %.2f cpu %.2f ms\n",
                         s_n * 1e9 / wall, wall / s_n / 1e6, s_busy_ns / s_n / 1e6, s_fin_ns / s_n / 1e6,
                         pc_diag_draws / s_n, pc_diag_hashes / s_n, pc_diag_uploads / s_n, pc_diag_mipgens / s_n,
@@ -502,6 +505,17 @@ void render_present(void)
                 s_late_1 = s_late_2 = 0;
                 pc_diag_draws = pc_diag_hashes = pc_diag_uploads = pc_diag_mipgens = 0;
                 pc_diag_efb_copies = 0;
+                fprintf(stderr, "[COST] hash %.2f ms (%lu KB) upload %.2f ms draw %.2f ms "
+                        "(prog %.2f ms, %u dirty, vbo %.2f ms) per frame\n",
+                        pc_diag_hash_ns / (double) s_n / 1e6,
+                        (unsigned long) (pc_diag_hash_bytes / s_n / 1024),
+                        pc_diag_upload_ns / (double) s_n / 1e6,
+                        pc_diag_draw_ns / (double) s_n / 1e6,
+                        pc_diag_prog_ns / (double) s_n / 1e6,
+                        pc_diag_prog_dirty / s_n,
+                        pc_diag_vbo_ns / (double) s_n / 1e6);
+                pc_diag_hash_ns = pc_diag_upload_ns = pc_diag_hash_bytes = 0;
+                pc_diag_draw_ns = pc_diag_prog_ns = pc_diag_vbo_ns = 0; pc_diag_prog_dirty = 0;
                 pc_diag_efb_blit_ns = pc_diag_efb_read_ns = pc_diag_efb_cpu_ns = 0;
                 s_n = 0;
                 s_busy_ns = 0;

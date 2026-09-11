@@ -1794,7 +1794,23 @@ static GLint g_vbo_first;
 
 /* Upload `count` vertices and return the first-vertex index for the draw.
  * The caller must have bound g_vbo. */
+static u64 pc_gx_now_ns(void);
+
+/* How much of the per-draw cost is staging vertices into the ring: a
+ * glMapBufferRange, a memcpy and a glUnmapBuffer, once per draw. */
+u64 pc_diag_vbo_ns;
+
+static GLint pc_vbo_stream_inner(const Vertex* src, unsigned count);
+
 static GLint pc_vbo_stream(const Vertex* src, unsigned count)
+{
+    u64 t0 = pc_gx_now_ns();
+    GLint r = pc_vbo_stream_inner(src, count);
+    pc_diag_vbo_ns += pc_gx_now_ns() - t0;
+    return r;
+}
+
+static GLint pc_vbo_stream_inner(const Vertex* src, unsigned count)
 {
     GLsizeiptr bytes = (GLsizeiptr) (sizeof(Vertex) * (size_t) count);
     GLint first;
@@ -2309,9 +2325,65 @@ static Prog* pc_prog_select(void)
     return pr;
 }
 
+/* Which texture each unit already has.
+ *
+ * The draw path rebound every enabled unit on every draw: up to four
+ * glActiveTexture/glBindTexture pairs, about twelve thousand driver calls a
+ * frame at 1550 draws. The game draws long runs of primitives out of the same
+ * texture, so nearly all of them asked for a binding that was already there.
+ *
+ * PC_TEX_UNKNOWN rather than 0, because 0 is a real binding ("no texture")
+ * and must not be confused with "we do not know". Anything that binds outside
+ * this path calls pc_tex_bind_reset(), or fixes the entry up itself. */
+#define PC_TEX_UNKNOWN 0xFFFFFFFFu
+static GLuint g_bound_tex[PC_TEXN];
+static int g_bound_unit = -1;
+
+static void pc_tex_bind_reset(void)
+{
+    u32 i;
+    for (i = 0; i < PC_TEXN; i++) {
+        g_bound_tex[i] = PC_TEX_UNKNOWN;
+    }
+    g_bound_unit = -1;
+}
+
+static void pc_tex_bind(u32 unit, GLuint id)
+{
+    if (unit >= PC_TEXN) {
+        return;
+    }
+    if (g_bound_tex[unit] == id) {
+        return;
+    }
+    if (g_bound_unit != (int) unit) {
+        glActiveTexture(GL_TEXTURE0 + unit);
+        g_bound_unit = (int) unit;
+    }
+    glBindTexture(GL_TEXTURE_2D, id);
+    g_bound_tex[unit] = id;
+}
+
+/* Split out of the draw timer: how much of the per-draw cost is choosing the
+ * shader variant and pushing its uniforms, as against everything else. */
+u64 pc_diag_prog_ns;
+u32 pc_diag_prog_dirty;
+
+static void pc_prog_flush_inner(void);
+
+static void pc_prog_flush(void)
+{
+    u64 t0 = pc_gx_now_ns();
+    if (g_spec_dirty) {
+        pc_diag_prog_dirty++;
+    }
+    pc_prog_flush_inner();
+    pc_diag_prog_ns += pc_gx_now_ns() - t0;
+}
+
 /* Select the program for the current specialisation state and bring its
  * uniforms up to date. Call right before every draw. */
-static void pc_prog_flush(void)
+static void pc_prog_flush_inner(void)
 {
     Prog* pr = pc_prog_select();
     int i;
@@ -3497,6 +3569,7 @@ void pc_gx_draw_movie(const unsigned char* rgb, int width, int height)
     glUseProgram((GLuint) prev_prog);
     glBindTexture(GL_TEXTURE_2D, (GLuint) prev_tex);
     glActiveTexture((GLenum) prev_unit);
+    pc_tex_bind_reset();
     glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
     if (depth_was) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
     if (blend_was) glEnable(GL_BLEND); else glDisable(GL_BLEND);
@@ -3557,7 +3630,27 @@ static void pc_frame_trace(const char* what)
             px[0], px[1], px[2], px[3], px[4], px[5], px[6], px[7], px[8]);
 }
 
+/* Time spent turning GX primitives into GL draws, reported per frame. The
+ * match issues around 1500 of these; whether that is where the CPU goes is
+ * not obvious from the outside.
+ *
+ * Timed by wrapping rather than by touching the body: it has several early
+ * returns, one of them `if (count == 0) return;` on a single line, and
+ * putting the timer before each `return` turned that guard into an
+ * unconditional return -- the whole renderer went quiet and reported a very
+ * convincing 60 fps with zero draws. */
+u64 pc_diag_draw_ns;
+
+static void bridge_upload_and_draw_inner(void);
+
 static void bridge_upload_and_draw(void)
+{
+    u64 t0 = pc_gx_now_ns();
+    bridge_upload_and_draw_inner();
+    pc_diag_draw_ns += pc_gx_now_ns() - t0;
+}
+
+static void bridge_upload_and_draw_inner(void)
 {
     if (pc_canary_on()) pc_check_canaries("upload_and_draw");
     /* PC diag: MELEE_TEVDUMP=<frame> — dump the TEV pipeline for the first
@@ -4216,8 +4309,7 @@ static void bridge_upload_and_draw(void)
         GLuint tex_id = g_state.tex_cache_valid[slot] ? g_state.tex_cache[slot] : 0;
         int en = tex_id != 0;
         if (en) {
-            glActiveTexture(GL_TEXTURE0 + i);
-            glBindTexture(GL_TEXTURE_2D, tex_id);
+            pc_tex_bind(i, tex_id);
         }
         if (g_tex_enable_loc >= 0) UP1I(g_tex_enable_loc + (GLint) i, en);
     }
@@ -4489,6 +4581,7 @@ static void bridge_upload_and_draw(void)
                         int tw = g_state.tex_cache_w[sl], th = g_state.tex_cache_h[sl];
                         u8* buf = malloc((size_t)tw * th * 4);
                         char path[256];
+                        pc_tex_bind_reset();
                         glBindTexture(GL_TEXTURE_2D, g_state.tex_cache[sl]);
                         glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
                         snprintf(path, sizeof(path), "/tmp/drawtex_%u_%dx%d.ppm", g_frame_draw_idx, tw, th);
@@ -4561,6 +4654,7 @@ static void bridge_upload_and_draw(void)
                         u8* buf = malloc((size_t)tw * th * 4);
                         if (buf) {
                             double acc[4] = {0,0,0,0}; int i; u8 amax = 0;
+                            pc_tex_bind_reset();
                             glBindTexture(GL_TEXTURE_2D, g_state.tex_cache[sl]);
                             glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
                             for (i = 0; i < tw * th; i++) { acc[0]+=buf[i*4]; acc[1]+=buf[i*4+1]; acc[2]+=buf[i*4+2]; acc[3]+=buf[i*4+3]; if (buf[i*4+3] > amax) amax = buf[i*4+3]; }
@@ -4761,6 +4855,7 @@ int pc_gx_offscreen_begin(int w, int h)
     glGetIntegerv(GL_VIEWPORT, g_off_prev_vp);
     glGetIntegerv(GL_SCISSOR_BOX, g_off_prev_sc);
     if (w != g_off_w || h != g_off_h) {
+        pc_tex_bind_reset();
         glBindTexture(GL_TEXTURE_2D, g_off_tex);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0, GL_RED,
                      GL_UNSIGNED_BYTE, NULL);
@@ -9614,13 +9709,27 @@ u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod)
  * still changes the result. The value itself is only ever compared against the
  * previous value of this same function, so it does not matter that it differs
  * from what the byte-wise version produced. */
+/* Where the frame goes, reported per frame by MELEE_FPS: hashing, uploading,
+ * and the bytes each touched. Guessing which of them mattered is what made
+ * the first pass at this slow. */
+u64 pc_diag_hash_ns, pc_diag_upload_ns, pc_diag_hash_bytes;
+
+static u64 pc_gx_now_ns(void)
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (u64) t.tv_sec * 1000000000ull + (u64) t.tv_nsec;
+}
+
 static u32 tex_content_hash(const void* img, u16 w, u16 h, u8 fmt)
 {
     u32 n = GXGetTexBufferSize(w, h, fmt, 0, 0);
     const u8* p = (const u8*) img;
     u64 hsh = 14695981039346656037ull;
+    u64 t0 = pc_gx_now_ns();
     u32 i = 0;
     if (n > 0x100000) n = 0x100000;
+    pc_diag_hash_bytes += n;
     for (; i + 8 <= n; i += 8) {
         u64 v;
         memcpy(&v, p + i, 8);
@@ -9629,6 +9738,7 @@ static u32 tex_content_hash(const void* img, u16 w, u16 h, u8 fmt)
     for (; i < n; i++) {
         hsh = (hsh ^ p[i]) * 1099511628211ull;
     }
+    pc_diag_hash_ns += pc_gx_now_ns() - t0;
     return (u32) (hsh ^ (hsh >> 32)) ^ n;
 }
 
@@ -9833,6 +9943,9 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         g_state.tex_cache[slot] = tex_id;
     }
     
+    /* Binds on whichever unit happens to be active, to upload and to set
+     * parameters; the cache cannot know which. */
+    pc_tex_bind_reset();
     glBindTexture(GL_TEXTURE_2D, tex_id);
 
     if (getenv("MELEE_TEX_FMT") != NULL) {
@@ -10141,6 +10254,7 @@ skip_tlut:
 
     /* Upload */
     pc_diag_uploads++;
+    { u64 t0 = pc_gx_now_ns(); (void) t0;
     if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || (fmt == 0x06 && upload_src != img)) {
         /* Decompressed/converted → always RGBA8 */
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, upload_w, upload_h, 0,
@@ -10149,6 +10263,7 @@ skip_tlut:
         glTexImage2D(GL_TEXTURE_2D, 0, internal_fmt, upload_w, upload_h, 0,
                      base_fmt, data_type, upload_src);
     }
+    pc_diag_upload_ns += pc_gx_now_ns() - t0; }
     
     /* Set filtering.
      *
@@ -10187,8 +10302,13 @@ bind_tex:
     if (pc_canary_on()) pc_check_canaries("GXLoadTexObj:exit");
     /* Activate texture unit and track for shader */
     u32 gl_unit = texEnv % PC_TEXN; /* GX_TEXMAP0..7; the shader has PC_TEXN units */
+    /* Not pc_tex_bind: the sampler parameters below apply to whatever is
+     * bound, so this one must happen even when the cache thinks it need not.
+     * Record it so the draw path can still skip a redundant rebind. */
     glActiveTexture(GL_TEXTURE0 + gl_unit);
     glBindTexture(GL_TEXTURE_2D, tex_id);
+    g_bound_unit = (int) gl_unit;
+    g_bound_tex[gl_unit] = tex_id;
 
     /* Sampler state belongs to the GXTexObj, not to the image: the texture
      * cache dedups on (image, w, h, format), so the same image reached
