@@ -1795,6 +1795,94 @@ static GLintptr g_vbo_off;
 /* First vertex of the span most recently streamed (draws use it). */
 static GLint g_vbo_first;
 
+/* Batched multi-draw.
+ *
+ * Every GX primitive was its own glDrawArrays, and each one re-applied the
+ * whole shader state first -- around a hundred memoised uniform comparisons
+ * and a dozen GL state calls. Venom issues 4718 primitives a frame and spent
+ * 5.2 ms in the uniform application and 2.5 ms in the state block.
+ *
+ * Inside a display list that work is provably redundant. This parser skips
+ * every register-load opcode it meets (LOAD_CP/XF/BP/INDX are pointer
+ * advances and nothing else), so no GX state can change between two
+ * primitives of the same list: whatever the first primitive applied is still
+ * current for the seventh. Venom averages 7.5 primitives per list.
+ *
+ * So while a list is being parsed, primitives are recorded as (first, count)
+ * pairs against a shared GL mode and drawn with one glMultiDrawArrays. The
+ * batch is flushed when the mode changes, when it fills, when the list ends,
+ * and from gx_flush_pending -- the function the 53 state-changing GX entry
+ * points already call before they touch anything. Outside a display list
+ * nothing is ever batched, so the immediate-mode path is unchanged.
+ *
+ * The vertex ring orphans its buffer on wrap (glBufferData with NULL), which
+ * would throw away vertices a recorded-but-undrawn primitive still refers
+ * to, so pc_vbo_stream flushes before it wraps. */
+#define PC_BATCH_MAX 512
+static GLenum g_batch_mode;
+static GLint g_batch_first[PC_BATCH_MAX];
+static GLsizei g_batch_count[PC_BATCH_MAX];
+static int g_batch_n;
+static int g_batch_dl_depth;
+/* The value of g_batch_pretransformed the batch's state was applied under.
+ * It is the one thing the vertex accumulation writes that the draw path
+ * reads: a primitive carrying per-vertex PNMTXIDX has its positions
+ * transformed to view space on the CPU, and the position matrix uploaded for
+ * it is then identity rather than PNMTX[current]. A display list can mix
+ * skinned and unskinned primitives -- the main menu does, and skipping the
+ * state for the second kind drew a band of it with the first kind's matrix. */
+static int g_batch_pre_state;
+u32 pc_diag_batch_calls, pc_diag_batch_prims;
+
+/* The same mapping the draw site below uses, hoisted so the append path can
+ * ask for it before any state is applied. */
+static GLenum pc_gl_prim_of(u32 gx_prim)
+{
+    switch (gx_prim) {
+    case GX_QUADS:         return GL_TRIANGLE_FAN;
+    case GX_TRIANGLES:     return GL_TRIANGLES;
+    case GX_TRIANGLESTRIP: return GL_TRIANGLE_STRIP;
+    case GX_TRIANGLEFAN:   return GL_TRIANGLE_FAN;
+    case GX_LINES:         return GL_LINES;
+    case GX_LINESTRIP:     return GL_LINE_STRIP;
+    case GX_POINTS:        return GL_POINTS;
+    default:               return GL_TRIANGLES;
+    }
+}
+
+static void pc_batch_flush(void)
+{
+    if (g_batch_n == 0) {
+        return;
+    }
+    if (g_batch_n == 1) {
+        glDrawArrays(g_batch_mode, g_batch_first[0], g_batch_count[0]);
+    } else {
+        glMultiDrawArrays(g_batch_mode, g_batch_first, g_batch_count,
+                          g_batch_n);
+    }
+    pc_diag_batch_calls++;
+    g_batch_n = 0;
+}
+
+static void pc_batch_add(GLenum mode, GLint first, GLsizei count)
+{
+    if (g_batch_n > 0 && g_batch_mode != mode) {
+        pc_batch_flush();
+    }
+    if (g_batch_n == PC_BATCH_MAX) {
+        pc_batch_flush();
+    }
+    g_batch_mode = mode;
+    g_batch_first[g_batch_n] = first;
+    g_batch_count[g_batch_n] = count;
+    g_batch_n++;
+    pc_diag_batch_prims++;
+    if (g_batch_dl_depth == 0) {
+        pc_batch_flush();
+    }
+}
+
 /* Upload `count` vertices and return the first-vertex index for the draw.
  * The caller must have bound g_vbo. */
 static GLint pc_vbo_stream(const Vertex* src, unsigned count)
@@ -1807,12 +1895,16 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
     if (bytes > PC_VBO_RING_BYTES) {
         /* Larger than the ring (cannot happen with MAX_VERTS, but do not
          * corrupt memory if it ever does): fall back to a full upload. */
+        pc_batch_flush();
         glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
         glBufferSubData(GL_ARRAY_BUFFER, 0, PC_VBO_RING_BYTES, src);
         g_vbo_off = PC_VBO_RING_BYTES;
         return 0;
     }
     if (g_vbo_off + bytes > PC_VBO_RING_BYTES) {
+        /* Orphaning discards the bytes any recorded-but-undrawn primitive
+         * still points at, so draw them first. */
+        pc_batch_flush();
         glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
         g_vbo_off = 0;
     }
@@ -2962,6 +3054,7 @@ static void gx_flush_pending(void)
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
+    pc_batch_flush();
 }
 static GLenum gx_bl_to_gl(u32 gx_blend_factor); /* fwd decl */
 /* Uniform upload memoisation.
@@ -3763,6 +3856,43 @@ static void bridge_upload_and_draw(void)
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
     g_vbo_first = pc_vbo_stream(g_state.verts, count);
     pc_sec_end(0);
+
+#if BUILD_TARGET_PC
+    /* Everything between here and the draw applies GX state to GL: the depth,
+     * blend, cull and scissor calls, the texture binds, and around a hundred
+     * memoised uniform comparisons. Inside a display list none of it can have
+     * changed since the previous primitive -- the parser skips every
+     * register-load opcode -- so if that primitive is still sitting in the
+     * batch under the same GL mode, this one can join it and skip the lot.
+     *
+     * The mode has to match because glMultiDrawArrays takes one; a list that
+     * mixes strips and fans simply flushes between them. GX_QUADS is excluded
+     * because its vertices are rewritten into triangles further down, and the
+     * stream above uploaded the unconverted ones.
+     *
+     * This is the difference between applying the state 4718 times a frame on
+     * Venom and applying it 629 times, once per list. */
+    if (g_batch_dl_depth > 0 && g_batch_n > 0 &&
+        g_state.prim_type != GX_QUADS &&
+        g_batch_pretransformed == g_batch_pre_state &&
+        pc_gl_prim_of(g_state.prim_type) == g_batch_mode)
+    {
+        pc_batch_add(g_batch_mode, g_vbo_first, (GLsizei) count);
+        pc_diag_draws++;
+        pc_stat_draws++;
+        pc_stat_verts += (unsigned) count;
+        g_state.vert_count = 0;
+        g_batch_pretransformed = 0;
+        return;
+    }
+    /* Not joining: everything below changes GL state, so anything already
+     * recorded has to be drawn first or it would be drawn under the new
+     * state. This is what the menu caught -- a run of GX_QUADS primitives,
+     * which the append path above declines, each applied its own state on top
+     * of the previous one's pending draw. */
+    pc_batch_flush();
+    g_batch_pre_state = g_batch_pretransformed;
+#endif
 
     /* PC diag: read back the VBO's first vertex to confirm the GPU has the
      * same data the CPU used for the NDCCHECK (rules out a bad upload). */
@@ -4683,7 +4813,7 @@ static void bridge_upload_and_draw(void)
             glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
             g_vbo_first = pc_vbo_stream(quad_tri, (unsigned) (nq * 6));
             pc_prog_flush();
-            glDrawArrays(GL_TRIANGLES, g_vbo_first, nq * 6);
+            pc_batch_add(GL_TRIANGLES, g_vbo_first, (GLsizei) (nq * 6));
             pc_sec_end(3);
             pc_stat_draws++; pc_stat_verts += (unsigned)(nq*6);
             s_pc_draws++;
@@ -4691,7 +4821,7 @@ static void bridge_upload_and_draw(void)
         } else {
         pc_diag_draws++;
         pc_prog_flush();
-            glDrawArrays(gl_prim, g_vbo_first, count);
+            pc_batch_add(gl_prim, g_vbo_first, (GLsizei) count);
             pc_sec_end(3);
         pc_stat_draws++; pc_stat_verts += (unsigned)count;
         s_pc_draws++;
@@ -6145,6 +6275,10 @@ void GXCallDisplayList(void* list, u32 nbytes)
     g_dl_depth++;
     if (g_dl_depth > 8) { g_dl_depth--; return; }
     if (nbytes > 1024 * 1024) { g_dl_depth--; return; }
+    /* Primitives inside this list may be recorded rather than drawn; see
+     * pc_batch_flush. The scope closes at dl_end, which every exit path
+     * below reaches. */
+    g_batch_dl_depth++;
 
     int n_draws = 0;
 
@@ -6469,6 +6603,14 @@ dl_end:
     /* Flush any remaining accumulated vertices */
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
+    }
+    /* Close the batching scope and draw whatever this list recorded. Nothing
+     * outside a display list ever sees a pending batch. */
+    if (g_batch_dl_depth > 0) {
+        g_batch_dl_depth--;
+    }
+    if (g_batch_dl_depth == 0) {
+        pc_batch_flush();
     }
     g_dl_depth--;
 }
