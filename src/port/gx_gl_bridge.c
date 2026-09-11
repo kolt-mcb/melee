@@ -9265,7 +9265,21 @@ static u32 tex_content_hash(const void* img, u16 w, u16 h, u8 fmt)
     struct timespec t0, t1;
     if (n > 0x100000) n = 0x100000;
     clock_gettime(CLOCK_MONOTONIC, &t0);
-    for (i = 0; i < n; i++) { hsh ^= p[i]; hsh *= 16777619u; }
+    /* FNV-1a over four bytes at a time. This walks a couple of megabytes a
+     * frame -- 2.2 ms of a Castle frame, byte at a time -- and the result is
+     * only ever compared against the previous hash of the same slot, never
+     * against a hash computed anywhere else, so the mixing function is free
+     * to change as long as it still separates the images. Keeping the
+     * per-word multiply makes it a different value, not a weaker one; the
+     * tail keeps the byte-at-a-time step so a size that is not a multiple of
+     * four still contributes every byte. */
+    for (i = 0; i + 4 <= n; i += 4) {
+        u32 word;
+        memcpy(&word, p + i, sizeof(word));
+        hsh ^= word;
+        hsh *= 16777619u;
+    }
+    for (; i < n; i++) { hsh ^= p[i]; hsh *= 16777619u; }
     clock_gettime(CLOCK_MONOTONIC, &t1);
     pc_diag_hash_bytes += n;
     pc_diag_hash_ns += (u64) ((t1.tv_sec - t0.tv_sec) * 1000000000ll
