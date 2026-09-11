@@ -462,10 +462,15 @@ void render_present(void)
             if (s_n == 60) {
                 double wall = (after.tv_sec - s_w0.tv_sec) * 1e9 + (after.tv_nsec - s_w0.tv_nsec);
                 extern u32 pc_diag_uploads, pc_diag_mipgens, pc_diag_hashes, pc_diag_draws;
-                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  per frame: draws %u texhash %u upload %u mipgen %u\n",
+                extern u64 pc_diag_hash_bytes, pc_diag_hash_ns;
+                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  per frame: draws %u texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u \n",
                         s_n * 1e9 / wall, wall / s_n / 1e6, s_busy_ns / s_n / 1e6, s_fin_ns / s_n / 1e6,
-                        pc_diag_draws / s_n, pc_diag_hashes / s_n, pc_diag_uploads / s_n, pc_diag_mipgens / s_n);
+                        pc_diag_draws / s_n, pc_diag_hashes / s_n,
+                        (double) pc_diag_hash_ns / s_n / 1e6,
+                        (double) pc_diag_hash_bytes / s_n / 1024.0,
+                        pc_diag_uploads / s_n, pc_diag_mipgens / s_n);
                 pc_diag_draws = pc_diag_hashes = pc_diag_uploads = pc_diag_mipgens = 0;
+                pc_diag_hash_bytes = pc_diag_hash_ns = 0;
                 s_n = 0;
                 s_busy_ns = 0;
                 s_fin_ns = 0;
