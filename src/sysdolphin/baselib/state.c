@@ -1,4 +1,7 @@
 #include "state.h"
+#if BUILD_TARGET_PC
+#include "port/pc_dbgflag.h"
+#endif
 
 #include "lobj.h"
 #include "mobj.h"
@@ -172,7 +175,7 @@ void HSD_SetupChannelMode(u32 arg0)
         }
     }
 #if BUILD_TARGET_PC
-    if (getenv("MELEE_CHANLOG") != NULL) {
+    if (PC_DBG_FLAG("MELEE_CHANLOG") != NULL) {
         static unsigned long hist[8];
         static int n = 0;
         static unsigned long spec_hist[2];
@@ -203,7 +206,7 @@ void HSD_SetupChannelMode(u32 arg0)
             HSD_State_80405A38_60.amb_color = dark_matter;
         }
 #if BUILD_TARGET_PC
-        if (getenv("MELEE_CHANLOG") != NULL) {
+        if (PC_DBG_FLAG("MELEE_CHANLOG") != NULL) {
             extern unsigned long g_dbg_lobj_clear, g_dbg_lobj_amb,
                 g_dbg_lobj_other;
             static int n = 0;
@@ -329,7 +332,7 @@ void HSD_SetMaterialColor(GXColor ambient, GXColor diffuse, GXColor specular,
                           f32 alpha)
 {
 #if BUILD_TARGET_PC
-    if (getenv("MELEE_CHANLOG") != NULL) {
+    if (PC_DBG_FLAG("MELEE_CHANLOG") != NULL) {
         static int n = 0;
         if (n < 10) { n++;
             fprintf(stderr,
