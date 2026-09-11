@@ -2,7 +2,7 @@
 
 Status: builds, links, packages; renders on an OpenGL ES context and runs as a
 PIE binary — both verified on Linux against the golden suite
-(`MELEE_GLES=1`, `PC_PIE=1`). Not yet run on a device. See
+(`MELEE_GLES=1`, `PC_PIE=1`), and verified on a Pixel 9 at 60 fps. See
 `../../port-android.md` for the plan and the per-phase results.
 
 ## Build
@@ -28,7 +28,7 @@ Output: `tools/android/app/app/build/outputs/apk/debug/app-debug.apk`
 ```
 adb install -r tools/android/app/app/build/outputs/apk/debug/app-debug.apk
 tools/android/push_assets.sh orig/GALE01          # ~1 GB; see the script header
-adb shell am start -n com.melee.pcport/org.libsdl.app.SDLActivity
+adb shell am start -n com.melee.pcport/org.libsdl.app.MeleeActivity
 adb logcat -s melee SDL SDL/APP AndroidRuntime libc DEBUG
 ```
 
@@ -103,7 +103,85 @@ ends), `highp` precision limits, and pacing against the display refresh.
 If the screen stays black, `adb logcat -s melee` has the answer: the
 context attempts (`SDL GL context creation failed (...)`), the pool
 (`[MEM] Low-memory pool reserved at`), shader errors (`Shader compile
-failed`), or `vf_open: open failed` (asset permissions, above). Input: a USB keyboard is
-confirmed working on device (same bindings as the desktop); a Bluetooth
-controller should work through SDL GameController but is untested, and
-there is no touch overlay yet — so a phone on its own cannot play.
+failed`), or `vf_open: open failed` (asset permissions, above). See "Controllers" below for input;
+there is still no touch overlay, so a phone with no pad attached cannot
+play.
+
+## Controllers
+
+Pair the pad in Android's Bluetooth settings first (an Xbox Wireless
+Controller: hold the pair button until the Xbox button flashes fast, then
+pick it in *Settings → Connected devices → Pair new device*). No permission
+and no in-app pairing UI is involved — a paired gamepad reaches the app as
+an ordinary `InputDevice`, which SDL's Java shell reads and presents as an
+`SDL_GameController`.
+
+The pad bridge maps a controller SDL knows the layout of onto the GameCube
+pad (`poll_controller` in `src/pc_stub/undef_stubs.c`). On an Xbox pad:
+
+| Xbox | GameCube | |
+|---|---|---|
+| A / B / X / Y | A / B / X / Y | X and Y are both jump |
+| Left stick | control stick | clamped to the console's radius 80 |
+| Right stick | C-stick | smashes, taunt |
+| RB | Z | grab |
+| LB | L (digital) | full shield |
+| LT / RT | L / R analog | light shield; a full press is the click |
+| D-pad | D-pad | |
+| Menu (☰) | Start | |
+| View (⧉) | *nothing* | trapped, see below |
+
+Two Android-only settings make this work, set natively in `window.c` and
+again as `SDL_ENV.*` meta-data in the manifest (either wins over the other
+harmlessly; a value in `melee.env` beats both):
+
+- `SDL_ACCELEROMETER_AS_JOYSTICK=0` — SDL otherwise registers the phone's
+  accelerometer as joystick device 0. The bridge assigns controller ports by
+  device index, so tilt would drive player 1 and the pad player 2.
+- `SDL_ANDROID_TRAP_BACK_BUTTON=1` — the View button and the system back
+  gesture otherwise finish the activity, i.e. quit mid-match.
+
+A Bluetooth pad that sleeps or wanders out of range is closed and reopened
+on the same port (`pc_pad_open`); before, the port stayed silently dead
+until the game was restarted. Ports are filled in SDL device order, so with
+two pads the one that connects first is player 1.
+
+For a pad SDL has no mapping for, `[PAD] port N: joystick <name> guid <guid>
+(no button map; raw numbering)` appears in logcat. Add a matching
+[gamecontrollerdb.txt](https://github.com/mdqinc/SDL_GameControllerDB) line
+next to the assets:
+
+```
+adb push gamecontrollerdb.txt /sdcard/Android/data/com.melee.pcport/files/
+```
+
+or put a single `SDL_GAMECONTROLLERCONFIG=<line>` in `melee.env`. A mapped
+pad logs its mapping string instead, which is the thing to read when a
+button lands in the wrong place.
+
+A USB keyboard also works, with the desktop bindings.
+
+## Fullscreen
+
+The game runs edge to edge: the activity theme is
+`Theme.NoTitleBar.Fullscreen` with `windowLayoutInDisplayCutoutMode`
+`shortEdges`, and `window.c` asks for `SDL_WINDOW_FULLSCREEN_DESKTOP` on
+Android, which is what drives `SDLActivity.setWindowStyle(true)` —
+`IMMERSIVE_STICKY`, both system bars hidden, and re-hidden if a swipe
+brings them back. The theme alone would not do it: SDLActivity calls
+`setWindowStyle(false)` when it starts.
+
+The cutout mode is the half SDL cannot do. Left at the default, a landscape
+activity is letterboxed clear of the camera hole, costing a black band down
+one short edge even in immersive mode. The game's own 4:3 image is centred
+inside whatever surface results (`pc_fb_rect_to_window`), so nothing it
+draws ends up under the camera.
+
+The activity is `MeleeActivity`, an `SDLActivity` subclass, for the other
+half: on Android 16 SDL's legacy `setSystemUiVisibility` hides the navigation
+bar but no longer the status bar, which returns as a transient bar and stays
+drawn over the game (`dumpsys window` shows
+`mShowingTransientInsetsTypes=statusBars` with nothing having touched the
+screen). `WindowInsetsController.hide(systemBars())` does hide it, and is
+re-applied on every focus gain because the bars come back with the activity.
+Launch it as `com.melee.pcport/org.libsdl.app.MeleeActivity`.

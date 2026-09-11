@@ -21,6 +21,8 @@ int window_gl_es(void);
 /* Rate at which frames reach the display (refresh / swap interval); 0 when
  * vsync is off. 60 here means the swap paces the game on its own. */
 int window_present_hz(void);
+/* Re-pick the swap interval for the display's current refresh rate. */
+int window_sync_swap_interval(void);
 int window_vsync_on(void);
 void window_shutdown(void);
 

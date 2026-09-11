@@ -1,3 +1,6 @@
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 #include "gm_16F1.h"
 
 #include "gm_16F1.static.h"
@@ -1470,8 +1473,39 @@ static inline bool gm_801721EC_4(void)
     return false;
 }
 
+#if BUILD_TARGET_PC
+/* Which notification, exactly, makes the game think an unlock is waiting.
+ * Pressing Start at the title fires a "challenger approaching" match on a
+ * phone and reaches the menu on the desktop, from the same build and the same
+ * inputs, so one of these bits is set on one platform and not the other. */
+static void pc_report_pending(void)
+{
+    static int said = 0;
+    s32 i;
+    if (said) {
+        return;
+    }
+    said = 1;
+    for (i = 0; i < 0x42; i++) {
+        if (gm_801721EC_1(i)) {
+            PORT_LOG_WARN("pending unlock: notify bit %d (of 0x42) set", i);
+        }
+    }
+    for (i = 0; i < 0x125; i++) {
+        if (gm_801721EC_3(i)) {
+            PORT_LOG_WARN("pending unlock: trophy bit %d (of 0x125) set", i);
+        }
+    }
+}
+#endif
+
 bool gm_801721EC(void)
 {
+#if BUILD_TARGET_PC
+    if (gm_801721EC_2() || gm_801721EC_4()) {
+        pc_report_pending();
+    }
+#endif
     if (gm_801721EC_2() || gm_801721EC_4()) {
         return true;
     }

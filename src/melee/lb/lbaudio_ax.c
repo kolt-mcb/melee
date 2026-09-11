@@ -299,7 +299,7 @@ int lbAudioAx_80023870(int arg0, int arg1, int arg2, int arg3)
 
 void lbAudioAx_8002392C(void)
 {
-    lbArchive_LoadSymbols("LbAd.dat", &lbl_804D6454, "lbAudioLoadData", 0);
+    lbArchive_LoadSymbols("LbAd.dat", &lbl_804D6454, "lbAudioLoadData", NULL);
 }
 
 static inline int* lbAudioAx_80023968_inline(int arg0)

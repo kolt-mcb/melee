@@ -635,6 +635,24 @@ void ifMagnify_802FC750(void)
     HSD_GObj** gobj_ptr;
     s32 i;
 
+#if BUILD_TARGET_PC
+    /* Same arithmetic, same problem as ifMagnify_802FBBDC above: 0x14 is
+     * offsetof(ifMagnify, player) and 0x10 the stride of ifMagnifyPlayer on
+     * GameCube, where gobj and jobj are four bytes each. Both move here, so
+     * this walked past the array reading whatever lay at those offsets and
+     * handed it to HSD_GObjPLink_80390228 as a live object.
+     *
+     * It is the HUD teardown at the end of a match, so it fired the moment a
+     * match was won: GObj_RemoveUserData dereferenced 0xcc68cb8da0907 and the
+     * game died on the results screen. It is player[i].gobj. */
+    (void) gobj_ptr;
+    for (i = 0; i < 6; i++) {
+        if (base->player[i].gobj != NULL) {
+            HSD_GObjPLink_80390228(base->player[i].gobj);
+            base->player[i].gobj = NULL;
+        }
+    }
+#else
     for (i = 0; i < 6; i++) {
         if (*(HSD_GObj**) ((u8*) base + (i << 4) + 0x14) != NULL) {
             gobj_ptr = (HSD_GObj**) ((uintptr_t) base + (i << 4) + 0x14);
@@ -642,6 +660,7 @@ void ifMagnify_802FC750(void)
             *gobj_ptr = NULL;
         }
     }
+#endif
 }
 
 void ifMagnify_802FC7C0(ifMagnify* magnify)

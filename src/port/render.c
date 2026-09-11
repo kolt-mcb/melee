@@ -339,6 +339,13 @@ void render_present(void)
         static struct timespec s_t0, s_w0;
         static double s_busy_ns;
         static int s_n;
+        /* Hitching does not show up in a 60-frame average: a match that
+         * reads 60 fps can still drop a frame every couple of seconds, and
+         * that is what is felt as lag. Track the worst frame in the interval
+         * and how many missed the 16.7 ms budget. */
+        static double s_worst_ns;
+        static int s_late_1, s_late_2;
+        static struct timespec s_prev;
         struct timespec now;
         if (s_fps < 0) {
             s_fps = getenv("MELEE_FPS") ? atoi(getenv("MELEE_FPS")) : 0;
@@ -458,6 +465,16 @@ void render_present(void)
             clock_gettime(CLOCK_MONOTONIC, &after);
             /* busy = frame end -> this frame end, minus the swap wait */
             s_busy_ns += (now.tv_sec - s_t0.tv_sec) * 1e9 + (now.tv_nsec - s_t0.tv_nsec);
+            {
+                double wall_ns = (after.tv_sec - s_prev.tv_sec) * 1e9 +
+                                 (after.tv_nsec - s_prev.tv_nsec);
+                if (s_prev.tv_sec != 0) {
+                    if (wall_ns > s_worst_ns) s_worst_ns = wall_ns;
+                    if (wall_ns > 20e6) s_late_1++;
+                    if (wall_ns > 33e6) s_late_2++;
+                }
+                s_prev = after;
+            }
             s_n++;
             if (s_n == 60) {
                 double wall = (after.tv_sec - s_w0.tv_sec) * 1e9 + (after.tv_nsec - s_w0.tv_nsec);
@@ -492,6 +509,24 @@ void render_present(void)
                 pc_diag_hash_bytes = pc_diag_hash_ns = 0;
                 pc_diag_efb_ns = pc_diag_efb_read_ns = 0;
                 pc_diag_efb_copies = 0;
+                /* Android's panel changes refresh rate underneath the app, and
+                 * the swap interval was chosen once at startup; re-pick it from
+                 * the rate the display really has. Once a second, off the frame
+                 * path: on Android the query is a JNI call. */
+                {
+                    int iv = window_sync_swap_interval();
+                    (void) iv;
+                }
+                /* A sixty-frame average reads 60 fps straight through a
+                 * dropped frame every couple of seconds, which is the thing
+                 * actually felt as lag. */
+                if (s_late_1 > 0 || s_worst_ns > 20e6) {
+                    fprintf(stderr, "[HITCH] %d frames over 20 ms, %d over 33 ms, "
+                            "worst %.1f ms (of %d)\n",
+                            s_late_1, s_late_2, s_worst_ns / 1e6, s_n);
+                }
+                s_worst_ns = 0;
+                s_late_1 = s_late_2 = 0;
                 s_n = 0;
                 s_busy_ns = 0;
                 s_fin_ns = 0;

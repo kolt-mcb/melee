@@ -1,3 +1,6 @@
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 #include <stdlib.h>
 /*
  * TODO: I looked at the strings in the ASM, I think there was only
@@ -512,13 +515,33 @@ static EF_EffectDesc* pc_ef_desc(int gfx_id)
     u8* base;
     EF_EffectDesc* d;
     u32 off, lt;
-    if (bank < 0 || bank >= 50 || efAsync_DatEntries[bank].data == NULL) {
+    /* id as well as bank. C truncates division toward zero, so a negative
+     * gfx_id gives bank 0 and a *negative* id -- which the bank check waves
+     * through, and pc_ef_cache[0][-n] then reads a pointer from before the
+     * array and hands it back as a descriptor. A fighter's deferred effect
+     * queue killed a match that way (efLib_Create <- efAsync_QueueFlush <-
+     * Fighter_8006C80C, faulting on 0x7900ff04b7). */
+    if (bank < 0 || bank >= 50 || id < 0 || id >= 1000 ||
+        efAsync_DatEntries[bank].data == NULL)
+    {
+        static u8 said[64];
+        if (bank >= 0 && bank < 50 && (id < 0 || id >= 1000) &&
+            said[bank & 63] == 0)
+        {
+            said[bank & 63] = 1;
+            PORT_LOG_WARN("pc_ef_desc: gfx id %d out of range (bank %d, id %d)",
+                          gfx_id, bank, id);
+        }
         return NULL;
     }
     base = pc_ef_dataBase[bank];
     if (pc_ef_cache[bank] == NULL || pc_ef_cache_base[bank] != base) {
         if (pc_ef_cache[bank] == NULL) {
             pc_ef_cache[bank] = calloc(1000, sizeof(EF_EffectDesc*));
+            /* memset(NULL) is not a graceful degradation. */
+            if (pc_ef_cache[bank] == NULL) {
+                return NULL;
+            }
         }
         memset(pc_ef_cache[bank], 0, sizeof(EF_EffectDesc*) * 1000);
         pc_ef_cache_base[bank] = base;

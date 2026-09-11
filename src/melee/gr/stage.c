@@ -6,6 +6,9 @@
 #include "lb/lbaudio_ax.h"
 #include "lb/lbvector.h"
 #include "mp/mplib.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include <stdio.h>
 #include <baselib/debug.h>
@@ -504,20 +507,57 @@ struct StageIdMapEntry stage_id_map[] = {
     { Gr_Kind_Shrine, 0, 0 },       { Gr_Kind_Battle, 0, 0 },
 };
 
+#if BUILD_TARGET_PC
+/* Every function below indexes stage_id_map with a stage kind that came from
+ * somewhere else -- the stage-select panel table, a saved cache entry, a game
+ * mode's default -- and the console's code has no bound check on it.
+ *
+ * A kind past the end reads whatever follows the table as a GrKind, and the
+ * callers feed that straight into another table: starting a match runs
+ * lbAudioAx_8002785C, which does s32_arr_803BB6B0[Stage_8022519C(stkind)][1],
+ * so a wild GrKind is a wild address. That is how a match started from the
+ * menus dies on Android -- "no StageData for grkind -244825088" from
+ * Ground_801C0754, then SIGSEGV in the audio table one call later.
+ *
+ * Clamping loses the stage; segfaulting loses the session and says nothing
+ * about which kind was wrong. So clamp, and report each bad value once. */
+static StKind pc_stkind_checked(StKind stkind, const char* who)
+{
+    static const int n = (int) (sizeof(stage_id_map) / sizeof(stage_id_map[0]));
+    if ((int) stkind >= 0 && (int) stkind < n) {
+        return stkind;
+    }
+    {
+        static StKind last = (StKind) -1;
+        if (stkind != last) {
+            last = stkind;
+            PORT_LOG_WARN("%s: stage kind %d out of range (0..%d); "
+                          "using %d instead", who, (int) stkind, n - 1,
+                          (int) St_Kind_Battle);
+        }
+    }
+    return St_Kind_Battle;
+}
+#define PC_STKIND(k) pc_stkind_checked((k), __func__)
+#else
+#define PC_STKIND(k) (k)
+#endif
+
 GrKind Stage_8022519C(StKind stkind)
 {
-    return stage_id_map[stkind].grkind;
+    return stage_id_map[PC_STKIND(stkind)].grkind;
 }
 
 void Stage_802251B4(StKind stkind)
 {
-    Ground_801C06B8(stage_id_map[stkind].grkind);
+    Ground_801C06B8(stage_id_map[PC_STKIND(stkind)].grkind);
 }
 
 void Stage_802251E8(StKind stkind, s32* _)
 {
     StageIdPair local_data;
 
+    stkind = PC_STKIND(stkind);
     selected_stage.stkind = stkind;
     selected_stage.entry = &stage_id_map[stkind];
 

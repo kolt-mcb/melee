@@ -144,8 +144,23 @@ u32 it_8026ECE0(Item_GObj* gobj, u32 arg1)
     return ret;
 }
 
+#if BUILD_TARGET_PC
+/* The item's variables ARE the struct; they are not reached through a pointer
+ * stored inside it. Every other use in this file says so
+ * (ip->xDD4_itemVar.it_266F.x18.b0, &ip->xDD4_itemVar.it_266F.x1C) -- only
+ * this macro took the struct's address, cast it to a pointer-to-pointer and
+ * dereferenced it, so it read the struct's own first bytes (x0, a u16, and
+ * the padding after it) as the address of the variables.
+ *
+ * That is a wild pointer on the console too, but here it read as NULL and the
+ * render callback faulted: idling at the title screen starts the attract
+ * demo, which spawns an item, and the game died on the way into it -- which
+ * is why the title screen never reached the menu. */
+#define it_8026EECC_VARS(ip) (&((ip)->xDD4_itemVar.it_266F))
+#else
 #define it_8026EECC_VARS(ip)                                                  \
     (*(it_266F_ItemVars**) &((ip)->xDD4_itemVar.it_266F))
+#endif
 
 static inline void it_8026EECC_inline_1(HSD_GObj* gobj, s32 arg1, Vec3* pos)
 {
