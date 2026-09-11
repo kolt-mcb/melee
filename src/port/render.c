@@ -474,6 +474,20 @@ void render_present(void)
                         pc_diag_efb_copies / s_n,
                         (double) pc_diag_efb_read_ns / s_n / 1e6,
                         (double) pc_diag_efb_ns / s_n / 1e6);
+                {
+                    extern u64 pc_diag_sec_ns[5];
+                    if (pc_diag_sec_ns[0] | pc_diag_sec_ns[1] |
+                        pc_diag_sec_ns[2] | pc_diag_sec_ns[3]) {
+                        fprintf(stderr,
+                                "[DRAWSEC] vbo %.2f  state %.2f  uniforms %.2f  draw %.2f ms/frame\n",
+                                (double) pc_diag_sec_ns[0] / s_n / 1e6,
+                                (double) pc_diag_sec_ns[1] / s_n / 1e6,
+                                (double) pc_diag_sec_ns[2] / s_n / 1e6,
+                                (double) pc_diag_sec_ns[3] / s_n / 1e6);
+                        pc_diag_sec_ns[0] = pc_diag_sec_ns[1] =
+                            pc_diag_sec_ns[2] = pc_diag_sec_ns[3] = 0;
+                    }
+                }
                 pc_diag_draws = pc_diag_hashes = pc_diag_uploads = pc_diag_mipgens = 0;
                 pc_diag_hash_bytes = pc_diag_hash_ns = 0;
                 pc_diag_efb_ns = pc_diag_efb_read_ns = 0;
