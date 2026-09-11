@@ -2093,6 +2093,8 @@ static u8 g_last_kind[VLOC_MAX];
 static u8 g_last_tr[VLOC_MAX];
 static u16 g_last_n[VLOC_MAX];
 static u32 g_last_gen[VLOC_MAX];
+/* bytes<<16 | kind<<8 | transpose<<7 | n, so the hit path reads one word. */
+static u32 g_last_meta[VLOC_MAX];
 static u16 g_set_list[VLOC_MAX];
 static int g_set_n;
 
@@ -2126,11 +2128,30 @@ static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
         }
         return;
     }
-    if (g_last_gen[vloc] != 0 && g_last_len[vloc] == bytes &&
-        g_last_kind[vloc] == kind && g_last_n[vloc] == n &&
-        g_last_tr[vloc] == transpose && memcmp(g_last[vloc], data, bytes) == 0)
+    /* The hit path is what matters here: this is called around a hundred
+     * times per primitive and almost every value is the one it was last
+     * draw. Four of the five metadata loads are redundant -- len, kind, n and
+     * transpose are all functions of the caller's macro and change together
+     * -- so pack them into the one word that has to be read anyway, and
+     * compare the payload inline for the sizes that actually occur (4 bytes
+     * for a scalar, 16 for a vec4). memcmp is a call and a dispatch; at this
+     * call rate that is the measurement. */
     {
-        return;
+        u32 meta = ((u32) bytes << 16) | ((u32) kind << 8) |
+                   ((u32) (transpose & 1) << 7) | ((u32) n & 0x7F);
+        if (g_last_gen[vloc] != 0 && g_last_meta[vloc] == meta &&
+            (n & ~0x7F) == 0)
+        {
+            const u8* prev = g_last[vloc];
+            if (bytes == 4) {
+                if (memcmp(prev, data, 4) == 0) return;
+            } else if (bytes == 16) {
+                if (memcmp(prev, data, 16) == 0) return;
+            } else if (memcmp(prev, data, bytes) == 0) {
+                return;
+            }
+        }
+        g_last_meta[vloc] = (n & ~0x7F) ? 0xFFFFFFFFu : meta;
     }
     if (g_last_gen[vloc] == 0) {
         g_set_list[g_set_n++] = (u16) vloc;
