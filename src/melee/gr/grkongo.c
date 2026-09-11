@@ -462,7 +462,7 @@ void grKongo_801D577C(Ground_GObj* arg0)
             gp->u.kongo.u.taru.keep = item_gobj;
             gp->u.kongo3.xC6 = 1;
             Ground_801C5440(gp, 0, 0x129U);
-            grMaterial_801C9604(arg0, yakumono_param->unk84, 0);
+            grMaterial_801C9604(arg0, GR_COLOR_SCRIPT(yakumono_param->unk84), 0);
         }
         return;
     }
@@ -1719,7 +1719,7 @@ static int fn_801D8134(HSD_GObj* arg0, HSD_GObj* arg1)
     gp->u.kongo3.xD0 = (HSD_JObj*) arg1;
     gp->u.kongo3.xC6 = 1;
     Ground_801C5440(gp, 0, 0x129U);
-    grMaterial_801C9604(arg0, yakumono_param->unk84, 0);
+    grMaterial_801C9604(arg0, GR_COLOR_SCRIPT(yakumono_param->unk84), 0);
     efSync_Spawn(0x405, arg0, &pos_ft);
     ftLib_80086C18(arg1, 0xD, 0x1E);
     return 1;

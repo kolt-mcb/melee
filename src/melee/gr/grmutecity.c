@@ -1085,7 +1085,7 @@ void grMuteCity_801F04B8(Ground_GObj* gobj)
             Ground_801C39B0(gp->gv.mutecity.x130);
             break;
         case 21:
-            grMaterial_801C9604(gobj, grMc_804D69D0->x0, 0);
+            grMaterial_801C9604(gobj, GR_COLOR_SCRIPT(grMc_804D69D0->x0), 0);
             break;
         case 20:
             un_802FD604(entry->param);
@@ -1115,7 +1115,7 @@ void grMuteCity_801F04B8(Ground_GObj* gobj)
             HSD_GObj* bg_gobj = Ground_801C2BA4(0x1D);
             if (bg_gobj != NULL) {
                 if (param != 0) {
-                    grMaterial_801C9604(bg_gobj, (grMaterialArg) grMc_804D69D0->x4, 0);
+                    grMaterial_801C9604(bg_gobj, GR_COLOR_SCRIPT(grMc_804D69D0->x4), 0);
                     if (gp->gv.mutecity.x110 != NULL) {
                         HSD_LObjClearFlags(gp->gv.mutecity.x110, LOBJ_HIDDEN);
                     }
