@@ -3560,6 +3560,32 @@ static void pc_frame_trace(const char* what)
             px[0], px[1], px[2], px[3], px[4], px[5], px[6], px[7], px[8]);
 }
 
+/* PC diag: MELEE_DRAWSEC=1 splits bridge_upload_and_draw into sections and
+ * reports the per-frame total of each alongside the MELEE_FPS=2 line. The
+ * marks are a clock_gettime apiece, so they are only armed when the switch
+ * is on; the flag is read once. */
+u64 pc_diag_sec_ns[5];
+static int pc_drawsec_on(void)
+{
+    static int on = -1;
+    if (on < 0) on = (getenv("MELEE_DRAWSEC") != NULL);
+    return on;
+}
+static struct timespec pc_sec_mark;
+static void pc_sec_begin(void)
+{
+    if (pc_drawsec_on()) clock_gettime(CLOCK_MONOTONIC, &pc_sec_mark);
+}
+static void pc_sec_end(int slot)
+{
+    struct timespec t;
+    if (!pc_drawsec_on()) return;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    pc_diag_sec_ns[slot] += (u64) ((t.tv_sec - pc_sec_mark.tv_sec) * 1000000000ll
+                                   + (t.tv_nsec - pc_sec_mark.tv_nsec));
+    pc_sec_mark = t;
+}
+
 static void bridge_upload_and_draw(void)
 {
     if (pc_canary_on()) pc_check_canaries("upload_and_draw");
@@ -3711,9 +3737,11 @@ static void bridge_upload_and_draw(void)
     /* Upload only the vertices actually used this draw (the VBO was
      * pre-allocated to MAX_VERTS at init). glBufferData with a changing
      * size would reallocate every draw; glBufferSubData does not. */
+    pc_sec_begin();
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
     g_vbo_first = pc_vbo_stream(g_state.verts, count);
+    pc_sec_end(0);
 
     /* PC diag: read back the VBO's first vertex to confirm the GPU has the
      * same data the CPU used for the NDCCHECK (rules out a bad upload). */
@@ -4148,6 +4176,7 @@ static void bridge_upload_and_draw(void)
     }
 
     /* Upload alpha compare uniforms */
+    pc_sec_end(1);
     apply_alpha_compare_uniforms();
     
     g_frame_draw_idx++;
@@ -4196,6 +4225,7 @@ static void bridge_upload_and_draw(void)
 
     /* Upload TEV pipeline uniforms (includes KColors) */
     apply_tev_uniforms();
+    pc_sec_end(2);
     
     /* Upload fog uniforms */
     if (g_fog_enabled_loc >= 0) UP1I(g_fog_enabled_loc, g_state.fog_enabled ? 1 : 0);
@@ -4633,6 +4663,7 @@ static void bridge_upload_and_draw(void)
             g_vbo_first = pc_vbo_stream(quad_tri, (unsigned) (nq * 6));
             pc_prog_flush();
             glDrawArrays(GL_TRIANGLES, g_vbo_first, nq * 6);
+            pc_sec_end(3);
             pc_stat_draws++; pc_stat_verts += (unsigned)(nq*6);
             s_pc_draws++;
             pc_frame_trace("quadsN");
@@ -4640,6 +4671,7 @@ static void bridge_upload_and_draw(void)
         pc_diag_draws++;
         pc_prog_flush();
             glDrawArrays(gl_prim, g_vbo_first, count);
+            pc_sec_end(3);
         pc_stat_draws++; pc_stat_verts += (unsigned)count;
         s_pc_draws++;
         pc_frame_trace("drawN");
