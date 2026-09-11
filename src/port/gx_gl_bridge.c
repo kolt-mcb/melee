@@ -7012,6 +7012,7 @@ static void apply_tev_uniforms(void)
             }
         }
     }
+
 }
 
 void GXSetAlphaCompare(u32 comp0, u32 ref0, u32 op, u32 comp1, u32 ref1)
@@ -9173,13 +9174,21 @@ static u32 g_tex_slot_gen[MAX_TEXTURES];
 static u32 g_tex_slot_hash[MAX_TEXTURES];
 u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod);
 
+u64 pc_diag_hash_bytes, pc_diag_hash_ns;
+
 static u32 tex_content_hash(const void* img, u16 w, u16 h, u8 fmt)
 {
     u32 n = GXGetTexBufferSize(w, h, fmt, 0, 0);
     const u8* p = (const u8*) img;
     u32 hsh = 2166136261u, i;
+    struct timespec t0, t1;
     if (n > 0x100000) n = 0x100000;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
     for (i = 0; i < n; i++) { hsh ^= p[i]; hsh *= 16777619u; }
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    pc_diag_hash_bytes += n;
+    pc_diag_hash_ns += (u64) ((t1.tv_sec - t0.tv_sec) * 1000000000ll
+                              + (t1.tv_nsec - t0.tv_nsec));
     return hsh ^ n;
 }
 

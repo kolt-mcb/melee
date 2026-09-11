@@ -184,6 +184,15 @@ TEXDUMP = os.environ.get("PC_TEXDUMP") == "1"
 # PC_PROFILE=1 builds with -pg so a normal exit writes gmon.out for
 # gprof. Needed because perf_event_paranoid is 4 on this machine, which
 # blocks perf entirely.
+#
+# It does not currently work, and why is worth knowing. gmon's buffer moves
+# the heap enough that an allocation lands above 4 GB, and this port truncates
+# some pointers to 32 bits -- which is the whole reason the normal build is
+# -no-pie (see PC_PIE below). Both a heavy stage and a light one died at
+# 0x12c01000c under -pg, just past the boundary, including one that is
+# otherwise stable. So this flag is a second witness for the u32-truncation
+# class rather than a broken flag, and it will start working when that class
+# is fixed. Until then, sample the ordinary binary with gdb instead.
 PROFILE = os.environ.get("PC_PROFILE") == "1"
 PROF_FLAGS = " -pg" if PROFILE else ""
 OPT = "-O1" if ASAN else "-O2"

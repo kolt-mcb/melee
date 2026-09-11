@@ -277,6 +277,27 @@ extern void game_shutdown(void);
 
 int main(int argc, char* argv[])
 {
+#if defined(__linux__)
+    /* MELEE_ALLOW_PTRACE=1 lets any process of this user attach.
+     *
+     * Profiling this port has no easy route on a hardened desktop.
+     * perf_event_paranoid is 4, which blocks perf outright. -pg does not
+     * survive: gmon's buffer moves the heap past 4 GB and the port's u32
+     * pointer truncation faults (see configure_pc.py's PC_PROFILE note). And
+     * ptrace_scope is 1, so gdb cannot attach to a process it did not start,
+     * which rules out sampling the running game from outside.
+     *
+     * This asks the kernel to make an exception for this process only, and
+     * only when asked. It is off by default and changes nothing about how the
+     * game runs -- it is the one lever available that does not require
+     * changing a system-wide setting on someone else's machine. */
+    if (getenv("MELEE_ALLOW_PTRACE") != NULL) {
+        extern int prctl(int, ...);
+        /* PR_SET_PTRACER = 0x59616d61 ("Yama"), PR_SET_PTRACER_ANY = -1. */
+        prctl(0x59616d61, -1L, 0L, 0L, 0L);
+    }
+#endif
+
     /* Increase main thread stack from 128KB to 2MB */
 #if defined(__EMSCRIPTEN__)
     /* wasm has no prlimit: the stack is sized at link time and lives in
