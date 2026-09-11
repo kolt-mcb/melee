@@ -630,54 +630,115 @@ void Ground_801C05EC(GXColor* arg0)
 GXColor* Ground_801C0604(void)
 {
     GroundParam* x = stage_info.param;
+#if BUILD_TARGET_PC
+    /* `&x->xNN` off a NULL x is a small non-NULL number, and these
+     * accessors are read two ways: ifMagnify_802FC7C0 tests the
+     * result and substitutes a default, while the colour-id table
+     * in ifMagnify_802FBBDC dereferences it outright. Neither
+     * survives 0xB8, which is what Gr_Kind_Unk26 -- a stage kind
+     * with no stage data at all -- handed both. Hand back the
+     * colours an absent param block would hold. */
+    if (x == NULL) {
+        static GXColor absent;
+        return &absent;
+    }
+#endif
     return &x->xB8;
 }
 
 GXColor* Ground_801C0618(void)
 {
     GroundParam* x = stage_info.param;
+#if BUILD_TARGET_PC
+    if (x == NULL) { /* see Ground_801C0604 */
+        static GXColor absent;
+        return &absent;
+    }
+#endif
     return &x->xC0;
 }
 
 GXColor* Ground_801C062C(void)
 {
     GroundParam* x = stage_info.param;
+#if BUILD_TARGET_PC
+    if (x == NULL) { /* see Ground_801C0604 */
+        static GXColor absent;
+        return &absent;
+    }
+#endif
     return &x->xD0;
 }
 
 GXColor* Ground_801C0640(void)
 {
     GroundParam* x = stage_info.param;
+#if BUILD_TARGET_PC
+    if (x == NULL) { /* see Ground_801C0604 */
+        static GXColor absent;
+        return &absent;
+    }
+#endif
     return &x->xD8;
 }
 
 GXColor* Ground_801C0654(void)
 {
     GroundParam* x = stage_info.param;
+#if BUILD_TARGET_PC
+    if (x == NULL) { /* see Ground_801C0604 */
+        static GXColor absent;
+        return &absent;
+    }
+#endif
     return &x->xC4;
 }
 
 GXColor* Ground_801C0668(void)
 {
     GroundParam* x = stage_info.param;
+#if BUILD_TARGET_PC
+    if (x == NULL) { /* see Ground_801C0604 */
+        static GXColor absent;
+        return &absent;
+    }
+#endif
     return &x->xCC;
 }
 
 GXColor* Ground_801C067C(void)
 {
     GroundParam* x = stage_info.param;
+#if BUILD_TARGET_PC
+    if (x == NULL) { /* see Ground_801C0604 */
+        static GXColor absent;
+        return &absent;
+    }
+#endif
     return &x->xD4;
 }
 
 GXColor* Ground_801C0690(void)
 {
     GroundParam* x = stage_info.param;
+#if BUILD_TARGET_PC
+    if (x == NULL) { /* see Ground_801C0604 */
+        static GXColor absent;
+        return &absent;
+    }
+#endif
     return &x->xBC;
 }
 
 GXColor* Ground_801C06A4(void)
 {
     GroundParam* x = stage_info.param;
+#if BUILD_TARGET_PC
+    if (x == NULL) { /* see Ground_801C0604 */
+        static GXColor absent;
+        return &absent;
+    }
+#endif
     return &x->xC8;
 }
 
