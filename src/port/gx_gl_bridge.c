@@ -6075,6 +6075,45 @@ static u32 dl_vat_attr_size(u32 mode, u32 cnt, u32 type)
 
 void GXCallDisplayList(void* list, u32 nbytes)
 {
+#if BUILD_TARGET_PC
+    /* PC diag: MELEE_DLSTATS=1 counts how much display-list traffic a frame
+     * repeats -- the same (pointer, size) issued more than once, and the
+     * same pointer issued in the previous frame. Both are what a decoded-DL
+     * cache would be able to skip. */
+    if (PC_DBG_FLAG("MELEE_DLSTATS")) {
+        enum { NSEEN = 4096 };
+        static const void* seen[NSEEN];
+        static u32 seen_sz[NSEEN];
+        static u32 nseen, calls, bytes, repeats, repeat_bytes;
+        static u32 last_frame = 0xFFFFFFFFu;
+        u32 i;
+        if (g_state.frame_count != last_frame) {
+            if (last_frame != 0xFFFFFFFFu) {
+                fprintf(stderr, "[DLSTATS] frame %u: %u calls (%u KB), %u "
+                        "repeats of an earlier call this frame (%u KB), %u "
+                        "distinct lists\n",
+                        last_frame, calls, bytes >> 10, repeats,
+                        repeat_bytes >> 10, nseen);
+            }
+            last_frame = g_state.frame_count;
+            nseen = calls = bytes = repeats = repeat_bytes = 0;
+        }
+        calls++;
+        bytes += nbytes;
+        for (i = 0; i < nseen; i++) {
+            if (seen[i] == list && seen_sz[i] == nbytes) {
+                repeats++;
+                repeat_bytes += nbytes;
+                break;
+            }
+        }
+        if (i == nseen && nseen < NSEEN) {
+            seen[nseen] = list;
+            seen_sz[nseen] = nbytes;
+            nseen++;
+        }
+    }
+#endif
     pc_stat_dlcalls++;
     if (!list || nbytes == 0) return;
 
