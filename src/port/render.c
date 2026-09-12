@@ -551,6 +551,14 @@ void render_present(void)
                         (double) pc_diag_efb_read_ns / s_n / 1e6,
                         (double) pc_diag_efb_ns / s_n / 1e6);
                 {
+                    extern u32 pc_diag_gxinv_vtx, pc_diag_gxinv_tex;
+                    if (pc_diag_gxinv_vtx | pc_diag_gxinv_tex) {
+                        fprintf(stderr, "[GXINV] vtx %u tex %u per frame\n",
+                                pc_diag_gxinv_vtx / s_n, pc_diag_gxinv_tex / s_n);
+                    }
+                    pc_diag_gxinv_vtx = pc_diag_gxinv_tex = 0;
+                }
+                {
                     extern u64 pc_diag_sec_ns[5];
                     if (pc_diag_sec_ns[0] | pc_diag_sec_ns[1] |
                         pc_diag_sec_ns[2] | pc_diag_sec_ns[3]) {

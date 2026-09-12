@@ -5458,6 +5458,21 @@ void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
     sx = (f32) win_w / fb_w;
     sy = (f32) win_h / fb_h;
     scale = sx < sy ? sx : sy;
+    /* MELEE_RENDER_SCALE=<f> shrinks the rendered image inside the window.
+     * This is a measurement knob, not a display mode -- it letterboxes
+     * rather than upscaling -- and exists to answer whether a scene is
+     * fill-rate bound: halve it and a fill-bound frame gets ~4x cheaper. */
+    {
+        static f32 s_rs = -1.0f;
+        if (s_rs < 0.0f) {
+            const char* e = getenv("MELEE_RENDER_SCALE");
+            s_rs = (e != NULL) ? (f32) atof(e) : 1.0f;
+            if (s_rs <= 0.0f || s_rs > 1.0f) {
+                s_rs = 1.0f;
+            }
+        }
+        scale *= s_rs;
+    }
     off_x = ((f32) win_w - fb_w * scale) * 0.5f;
     off_y = ((f32) win_h - fb_h * scale) * 0.5f;
 
@@ -5578,11 +5593,18 @@ void GXFlush(void)
         }
     }
 }
+u32 pc_diag_gxinv_vtx, pc_diag_gxinv_tex;
+
 void GXInvVtxCache(void)
 {
     /* Invalidate vertex cache - ensure GPU sees updated vertex data.
      * On modern GPUs, this is a no-op since we upload vertex data each frame.
-     * But we flush to ensure any pending commands are processed. */
+     * But we flush to ensure any pending commands are processed.
+     *
+     * The flush was suspected of forcing a tile resolve per call on Adreno
+     * and measured instead: it runs once a frame (see [GXINV]), and removing
+     * it moved the menu's 207 ms GPU frame by 0.05 ms. Left alone. */
+    pc_diag_gxinv_vtx++;
     glFlush();
 }
 void GXInvalidateVtxCache(void)
@@ -5593,7 +5615,9 @@ void GXInvalidateTexAll(void)
 {
     GX_TRACE("GXInvalidateTexAll");
     /* RAM images may have changed under cached GL textures (EFB copies,
-     * scene transitions): make every slot re-validate its bytes. */
+     * scene transitions): make every slot re-validate its bytes. The cache
+     * bump is what does that; the flush only ended the render pass. */
+    pc_diag_gxinv_tex++;
     pc_tex_cache_bump();
     glFlush();
 }
