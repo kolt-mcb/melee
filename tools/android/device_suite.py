@@ -53,19 +53,26 @@ def adb(serial, *args, **kw):
                           capture_output=True, text=True, **kw)
 
 
-def device_env(case):
+def device_env(case, gpu_split=False):
     """The melee.env the device reads, from the case's own env block.
 
     Android apps have no environment, so every knob the desktop passes
     through os.environ is written here instead -- including the pad script
     a case uses to walk itself to a screen.
+
+    MELEE_FPS=2 adds a glFinish before every swap, which is the only way to
+    attribute a frame to the GPU -- and it serialises CPU against GPU, so
+    the frame rate it reports is not the one the game runs at. Measured on
+    the tablet: a match reads 17.7 fps under it and 60.9 without. So the
+    frame-rate column and the GPU column cannot come from the same run,
+    and --gpu chooses which question this one answers.
     """
     env = {"MELEE_MAX_FRAMES": str(case["run_frames"]),
            "MELEE_SCREENSHOT": "1",
            "MELEE_SHOT_DIR": SHOTS,
            "MELEE_SCREENSHOT_FRAME":
                ",".join(str(c) for c in case["checks"]),
-           "MELEE_FPS": "2"}
+           "MELEE_FPS": "2" if gpu_split else "1"}
     if case["input"]:
         env["MELEE_PAD_SCRIPT"] = pc_suite.port_script(case)
     for kv in case["env"]:
@@ -74,14 +81,14 @@ def device_env(case):
     return env
 
 
-def run_device(case, serial, outdir, timeout=300):
+def run_device(case, serial, outdir, timeout=300, gpu_split=False):
     """Run one case on the device; return {check: local ppm path}, perf."""
     os.makedirs(outdir, exist_ok=True)
     for f in glob.glob(os.path.join(outdir, "*.ppm")):
         os.unlink(f)
     adb(serial, "shell", "am", "force-stop", PKG)
     adb(serial, "shell", "rm -rf %s; mkdir -p %s" % (SHOTS, SHOTS))
-    body = "".join("%s=%s\n" % kv for kv in device_env(case).items())
+    body = "".join("%s=%s\n" % kv for kv in device_env(case, gpu_split).items())
     adb(serial, "shell", "cat > %s/melee.env" % FILES, input=body)
     adb(serial, "shell", "input", "keyevent", "KEYCODE_WAKEUP")
     adb(serial, "logcat", "-c")
@@ -151,6 +158,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("cases", nargs="*")
     ap.add_argument("--serial", default=os.environ.get("ANDROID_SERIAL"))
+    ap.add_argument("--gpu", action="store_true",
+                    help="attribute frames to the GPU with a glFinish per "
+                         "swap. Costs the frame-rate column: it serialises "
+                         "CPU against GPU and under-reports fps ~3x.")
     ap.add_argument("--desktop-dir", default="/tmp/pc_suite",
                     help="where the desktop suite left its .ppm frames, for "
                          "the device-vs-desktop column")
@@ -169,11 +180,12 @@ def main():
             continue
         print("== %s: %s" % (case["name"], case["description"]))
         shots, perf = run_device(case, a.serial,
-                                 "/tmp/dev_suite/%s" % case["name"])
+                                 "/tmp/dev_suite/%s" % case["name"],
+                                 gpu_split=a.gpu)
         if perf:
-            print("   %.1f fps  wall %.1f ms  cpu %.1f  gpu %.1f  draws %d"
-                  % (perf["fps"], perf["wall"], perf["cpu"], perf["gpu"],
-                     perf["draws"]))
+            print("   %.1f fps%s  wall %.1f ms  cpu %.1f  gpu %.1f  draws %d"
+                  % (perf["fps"], " (glFinish-serialised)" if a.gpu else "",
+                     perf["wall"], perf["cpu"], perf["gpu"], perf["draws"]))
         else:
             print("   no frame-rate report")
         for chk in case["checks"]:
