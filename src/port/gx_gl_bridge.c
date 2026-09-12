@@ -1801,6 +1801,152 @@ static GLint g_vbo_first;
 static GLint pc_vbo_stream(const Vertex* src, unsigned count);
 int window_gl_es(void);
 
+/* Vertex streaming strategy.
+ *
+ * Batching cut the maps from one per primitive to one per batch, but a map
+ * is still a call into the driver and GL_MAP_UNSYNCHRONIZED_BIT is a hint
+ * the driver may ignore. Measured on a Galaxy Tab A9+ (Adreno 619, ES 3.2):
+ * 1.63 ms per map. Qualcomm flushes the command stream on every map, and a
+ * ring addresses copying, not flushing.
+ *
+ *   persist  EXT_buffer_storage: map the ring once, persistent and
+ *            coherent, and memcpy per span with no GL call at all.
+ *            Immutable storage cannot be orphaned on wrap, so four fenced
+ *            segments make recycling safe instead.
+ *   subdata  glBufferSubData into fresh ring bytes: no map.
+ *   map      the original unsynchronized map.
+ *
+ * MELEE_VBO_MODE names one, so the next driver is measured, not guessed at.
+ */
+enum { PC_VBO_MAP = 0, PC_VBO_SUBDATA, PC_VBO_PERSIST };
+#define PC_VBO_PERSIST_VERTS (256u * 1024u)
+#define PC_VBO_SEGS 4u
+#ifndef GL_MAP_PERSISTENT_BIT_EXT
+#define GL_MAP_PERSISTENT_BIT_EXT 0x0040
+#endif
+#ifndef GL_MAP_COHERENT_BIT_EXT
+#define GL_MAP_COHERENT_BIT_EXT 0x0080
+#endif
+typedef void (*PC_PFN_BUFFERSTORAGE)(GLenum, GLsizeiptr, const void*,
+                                     GLbitfield);
+static PC_PFN_BUFFERSTORAGE pc_gl_buffer_storage;
+static int g_vbo_mode = PC_VBO_MAP;
+static GLsizeiptr g_vbo_ring_bytes = PC_VBO_RING_BYTES;
+static unsigned char* g_vbo_base; /* persistent mapping, else NULL */
+static GLsizeiptr g_vbo_seg_bytes;
+static GLsync g_vbo_fence[PC_VBO_SEGS];
+static unsigned g_vbo_seg;
+
+/* An extension entry point is not in the ES link surface on Android. */
+extern void* SDL_GL_GetProcAddress(const char* proc);
+
+static int pc_gl_has_ext(const char* want)
+{
+    GLint n = 0;
+    GLint i;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+    for (i = 0; i < n; i++) {
+        const char* e = (const char*) glGetStringi(GL_EXTENSIONS, (GLuint) i);
+        if (e != NULL && strcmp(e, want) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Recycling a segment overwrites bytes an earlier draw may still read.
+ * Fence the segment being left, wait on the one being entered; with this
+ * ring size that fence is frames old and the wait is free. */
+static void pc_vbo_seg_sync(GLintptr off)
+{
+    unsigned seg;
+    if (g_vbo_seg_bytes <= 0) {
+        return;
+    }
+    seg = (unsigned) (off / g_vbo_seg_bytes);
+    if (seg >= PC_VBO_SEGS) {
+        seg = PC_VBO_SEGS - 1;
+    }
+    if (seg == g_vbo_seg) {
+        return;
+    }
+    if (g_vbo_fence[g_vbo_seg] != NULL) {
+        glDeleteSync(g_vbo_fence[g_vbo_seg]);
+    }
+    g_vbo_fence[g_vbo_seg] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    g_vbo_seg = seg;
+    if (g_vbo_fence[seg] != NULL) {
+        glClientWaitSync(g_vbo_fence[seg], GL_SYNC_FLUSH_COMMANDS_BIT,
+                         1000000000ull);
+        glDeleteSync(g_vbo_fence[seg]);
+        g_vbo_fence[seg] = NULL;
+    }
+}
+
+/* Allocate the ring in the chosen mode. The caller must have bound g_vbo;
+ * this may replace it, since immutable storage can only be undone by
+ * destroying the buffer. */
+static void pc_vbo_alloc(void)
+{
+    const char* e = getenv("MELEE_VBO_MODE");
+    int have;
+    unsigned i;
+
+    for (i = 0; i < PC_VBO_SEGS; i++) {
+        if (g_vbo_fence[i] != NULL) {
+            glDeleteSync(g_vbo_fence[i]);
+            g_vbo_fence[i] = NULL;
+        }
+    }
+    g_vbo_base = NULL;
+    g_vbo_seg = 0;
+    g_vbo_off = 0;
+
+    if (pc_gl_buffer_storage == NULL) {
+        pc_gl_buffer_storage = (PC_PFN_BUFFERSTORAGE)
+            SDL_GL_GetProcAddress("glBufferStorageEXT");
+    }
+    have = pc_gl_has_ext("GL_EXT_buffer_storage") &&
+           pc_gl_buffer_storage != NULL;
+
+    if (e != NULL && strcmp(e, "map") == 0) {
+        g_vbo_mode = PC_VBO_MAP;
+    } else if (e != NULL && strcmp(e, "subdata") == 0) {
+        g_vbo_mode = PC_VBO_SUBDATA;
+    } else if (e != NULL && strcmp(e, "persist") == 0) {
+        g_vbo_mode = have ? PC_VBO_PERSIST : PC_VBO_SUBDATA;
+    } else {
+        /* Desktop GL is what the golden suite measures and the map path is
+         * fine there; ES is where the flush was measured. */
+        g_vbo_mode = (have && window_gl_es()) ? PC_VBO_PERSIST : PC_VBO_MAP;
+    }
+
+    if (g_vbo_mode == PC_VBO_PERSIST) {
+        GLbitfield f = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT_EXT |
+                       GL_MAP_COHERENT_BIT_EXT;
+        g_vbo_ring_bytes =
+            (GLsizeiptr) (sizeof(Vertex) * (size_t) PC_VBO_PERSIST_VERTS);
+        pc_gl_buffer_storage(GL_ARRAY_BUFFER, g_vbo_ring_bytes, NULL, f);
+        g_vbo_base = (unsigned char*) glMapBufferRange(GL_ARRAY_BUFFER, 0,
+                                                       g_vbo_ring_bytes, f);
+        if (g_vbo_base == NULL) {
+            glDeleteBuffers(1, &g_vbo);
+            glGenBuffers(1, &g_vbo);
+            glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+            g_vbo_mode = PC_VBO_SUBDATA;
+        }
+    }
+    if (g_vbo_mode != PC_VBO_PERSIST) {
+        g_vbo_ring_bytes = PC_VBO_RING_BYTES;
+        glBufferData(GL_ARRAY_BUFFER, g_vbo_ring_bytes, NULL, GL_STREAM_DRAW);
+    }
+    g_vbo_seg_bytes = g_vbo_ring_bytes / (GLsizeiptr) PC_VBO_SEGS;
+    fprintf(stderr, "[VBO] mode %s, ring %ld KB (EXT_buffer_storage %s)\n",
+            g_vbo_mode == PC_VBO_PERSIST ? "persist" :
+            g_vbo_mode == PC_VBO_SUBDATA ? "subdata" : "map",
+            (long) (g_vbo_ring_bytes / 1024), have ? "yes" : "no");
+}
+
 #if defined(BUILD_TARGET_ANDROID) || defined(__EMSCRIPTEN__)
 #define PC_HAVE_MULTIDRAW 0
 #else
@@ -1987,22 +2133,26 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
     if (count == 0) {
         return 0;
     }
-    if (bytes > PC_VBO_RING_BYTES) {
+    if (bytes > g_vbo_ring_bytes) {
         /* Larger than the ring (cannot happen with MAX_VERTS, but do not
-         * corrupt memory if it ever does): fall back to a full upload. */
+         * corrupt memory if it ever does): take what fits. */
         if (!g_batch_flushing) pc_batch_flush();
-        glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, PC_VBO_RING_BYTES, src);
-        g_vbo_off = PC_VBO_RING_BYTES;
-        return 0;
+        count = (unsigned) (g_vbo_ring_bytes / (GLsizeiptr) sizeof(Vertex));
+        bytes = (GLsizeiptr) (sizeof(Vertex) * (size_t) count);
+        g_vbo_off = 0;
     }
-    if (g_vbo_off + bytes > PC_VBO_RING_BYTES) {
-        /* Orphaning discards the bytes any recorded-but-undrawn primitive
+    if (g_vbo_off + bytes > g_vbo_ring_bytes) {
+        /* Recycling discards the bytes any recorded-but-undrawn primitive
          * still points at, so draw them first. The flush itself streams the
          * staged vertices, and those are being written fresh, so it must not
          * re-enter here. */
         if (!g_batch_flushing) pc_batch_flush();
-        glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
+        /* Immutable storage cannot be orphaned -- the segment fences are
+         * what make recycling safe there. */
+        if (g_vbo_mode != PC_VBO_PERSIST) {
+            glBufferData(GL_ARRAY_BUFFER, g_vbo_ring_bytes, NULL,
+                         GL_STREAM_DRAW);
+        }
         g_vbo_off = 0;
     }
 #if defined(__EMSCRIPTEN__)
@@ -2019,7 +2169,12 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
      * back new storage rather than wait on frames in flight. */
     glBufferSubData(GL_ARRAY_BUFFER, g_vbo_off, bytes, src);
 #else
-    {
+    if (g_vbo_mode == PC_VBO_PERSIST) {
+        pc_vbo_seg_sync(g_vbo_off);
+        memcpy(g_vbo_base + g_vbo_off, src, (size_t) bytes);
+    } else if (g_vbo_mode == PC_VBO_SUBDATA) {
+        glBufferSubData(GL_ARRAY_BUFFER, g_vbo_off, bytes, src);
+    } else {
         void* dst = glMapBufferRange(GL_ARRAY_BUFFER, g_vbo_off, bytes,
                                      GL_MAP_WRITE_BIT |
                                          GL_MAP_UNSYNCHRONIZED_BIT |
@@ -2751,8 +2906,7 @@ static void bridge_create_gl(void)
     glGenBuffers(1, &g_vbo);
     glBindVertexArray(g_vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-    glBufferData(GL_ARRAY_BUFFER, PC_VBO_RING_BYTES, NULL, GL_STREAM_DRAW);
-    g_vbo_off = 0;
+    pc_vbo_alloc();
     
     /* Set up vertex attribute pointers in VAO */
     glEnableVertexAttribArray(0);
