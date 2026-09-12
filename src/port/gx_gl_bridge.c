@@ -1561,6 +1561,12 @@ static const char* g_frag_src =
 "}\n"
 "\n"
 "void main() {\n"
+    /* MELEE_OVERDRAW: count layers, not colour. This returns before the
+     * TEV work and before the alpha-compare discard further down -- a
+     * fragment the alpha test kills still cost rasterisation, so it
+     * belongs in a coverage count. Each layer adds 1/255 under additive
+     * blending, so the mean pixel value is the mean layer count. */
+"    if (u_dbg_mode == 10) { frag_color = vec4(1.0 / 255.0); return; }\n"
 "    // Projective texcoords: divide by q (1 for ordinary UVs).\n"
 "    vec2 uvp[4];\n"
 "    for (int i = 0; i < 4; i++) {\n"
@@ -4622,6 +4628,25 @@ static void bridge_upload_and_draw(void)
     }
     if (g_dbg_mode_loc >= 0) {
         int on = ENV_FLAG("MELEE_DRAWID");
+        /* MELEE_OVERDRAW=1 answers "how many times is each pixel painted".
+         * Every draw becomes a constant +1/255 with additive blending and
+         * no depth test, so the frame that comes back is a layer count --
+         * screenshot it, and the mean pixel value x255 is the average
+         * overdraw while the image shows where it concentrates.
+         *
+         * Asked because the tablet renders the menu at 4.6 fps, 207 ms of
+         * GPU for 174 draws, where a 1593-draw match costs 27.8 ms: ~150x
+         * the GPU cost per draw. Either each of those draws covers most of
+         * the screen, which is a cost, or they cover more than the
+         * console's did, which is a bug. */
+        if (ENV_FLAG("MELEE_OVERDRAW")) {
+            on = 10;
+            glDisable(GL_DEPTH_TEST);
+            glDepthMask(GL_FALSE);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_ONE, GL_ONE);
+            glBlendEquation(GL_FUNC_ADD);
+        }
         { static int lit = -1; if (lit < 0) { const char* e = getenv("MELEE_LITDBG"); lit = e ? atoi(e) : 0; }
           if (lit) on = (lit == 1) ? 2 : 3; }
         /* MELEE_PAINTDRAW=N: draw N is painted solid magenta with blending,
@@ -4640,7 +4665,8 @@ static void bridge_upload_and_draw(void)
           }
           else if (pd >= 0) { on = 0; } }
         UP1I(g_dbg_mode_loc, on);
-        if (on && g_dbg_drawid_loc >= 0) {
+        /* on == 10 keeps its additive blend: that is what does the counting. */
+        if (on && on != 10 && g_dbg_drawid_loc >= 0) {
             UP1I(g_dbg_drawid_loc, (GLint) g_frame_draw_idx);
             /* Blending would mix two draws' indices into a colour that
              * decodes to a third draw that never ran. */
@@ -5540,6 +5566,12 @@ static void pc_gl_clear(f32 r, f32 g, f32 b, f32 a, f32 z)
     if (scissor_was) glDisable(GL_SCISSOR_TEST);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDepthMask(GL_TRUE);
+    /* Counting layers needs a zero baseline: the game's erase colour would
+     * otherwise be added to every pixel's count. */
+    if (ENV_FLAG("MELEE_OVERDRAW")) {
+        r = g = b = 0.0f;
+        a = 1.0f;
+    }
     glClearColor(r, g, b, a);
     pc_clear_depth((float) z);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
