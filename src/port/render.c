@@ -28,6 +28,12 @@ void pc_get_fb_size(float* w, float* h);
 #include <stdio.h>
 
 int pc_render_frame_now = 0;
+/* Time spent outside render_present -- the game's simulation and the
+ * bridge's capture of GX commands. The GL draws are issued at present
+ * time, so they are NOT in this span; it exists to say which side of the
+ * present a stall is on. */
+u64 pc_diag_game_ns;
+static struct timespec s_after_swap;
 
 /* Simple synchronous render for archive textures */
 static void render_archive_sync_once(void)
@@ -98,6 +104,12 @@ static _Bool g_frame_saved = 0;
 
 void render_present(void)
 {
+    if (s_after_swap.tv_sec != 0) {
+        struct timespec entry;
+        clock_gettime(CLOCK_MONOTONIC, &entry);
+        pc_diag_game_ns += (u64) ((entry.tv_sec - s_after_swap.tv_sec) * 1000000000LL +
+                                  (entry.tv_nsec - s_after_swap.tv_nsec));
+    }
     /* Restore normal pipeline — fragment shader outputs BLUE now */
     /* No extra test code — let the pipeline run normally */
 
@@ -468,6 +480,53 @@ void render_present(void)
             {
                 double wall_ns = (after.tv_sec - s_prev.tv_sec) * 1e9 +
                                  (after.tv_nsec - s_prev.tv_nsec);
+                {
+                    /* A hitch is not a slow frame but a stalled one: a 2.3 s
+                     * freeze among 59 good frames leaves the 60-frame average
+                     * looking merely mediocre, and the average cannot say what
+                     * stalled. Diff the counters across this one frame. */
+                    extern u32 pc_diag_uploads, pc_diag_mipgens, pc_diag_hashes,
+                               pc_diag_draws, pc_diag_efb_copies;
+                    extern u64 pc_diag_hash_ns, pc_diag_efb_ns, pc_diag_efb_read_ns;
+                    extern u64 pc_diag_sec_ns[5];
+                    extern u64 pc_diag_fence_ns;
+                    extern u32 pc_diag_fence_waits, pc_diag_fence_timeouts;
+                    static u64 q_fence; static u32 q_fw, q_ft;
+                    static u64 q_game, q_hash, q_efb, q_read, q_s0, q_s1, q_s2, q_s3;
+                    static u32 q_draws, q_up, q_mip, q_hashes, q_efbc;
+                    if (s_prev.tv_sec != 0 && wall_ns > 100e6) {
+                        fprintf(stderr,
+                            "[HITCHDET] %.0f ms frame: outside present %.1f ms | "
+                            "draws %u hash %u (%.1f ms) upload %u mipgen %u "
+                            "efb %u (read %.1f pack %.1f) | vbo %.1f state %.1f "
+                            "unif %.1f draw %.1f ms | fence %.1f ms "
+                            "(%u waits, %u timeouts)\n",
+                            wall_ns / 1e6,
+                            (double) (pc_diag_game_ns - q_game) / 1e6,
+                            pc_diag_draws - q_draws, pc_diag_hashes - q_hashes,
+                            (double) (pc_diag_hash_ns - q_hash) / 1e6,
+                            pc_diag_uploads - q_up, pc_diag_mipgens - q_mip,
+                            pc_diag_efb_copies - q_efbc,
+                            (double) (pc_diag_efb_read_ns - q_read) / 1e6,
+                            (double) (pc_diag_efb_ns - q_efb) / 1e6,
+                            (double) (pc_diag_sec_ns[0] - q_s0) / 1e6,
+                            (double) (pc_diag_sec_ns[1] - q_s1) / 1e6,
+                            (double) (pc_diag_sec_ns[2] - q_s2) / 1e6,
+                            (double) (pc_diag_sec_ns[3] - q_s3) / 1e6,
+                            (double) (pc_diag_fence_ns - q_fence) / 1e6,
+                            pc_diag_fence_waits - q_fw,
+                            pc_diag_fence_timeouts - q_ft);
+                    }
+                    q_game = pc_diag_game_ns; q_hash = pc_diag_hash_ns;
+                    q_efb = pc_diag_efb_ns; q_read = pc_diag_efb_read_ns;
+                    q_s0 = pc_diag_sec_ns[0]; q_s1 = pc_diag_sec_ns[1];
+                    q_s2 = pc_diag_sec_ns[2]; q_s3 = pc_diag_sec_ns[3];
+                    q_draws = pc_diag_draws; q_up = pc_diag_uploads;
+                    q_mip = pc_diag_mipgens; q_hashes = pc_diag_hashes;
+                    q_efbc = pc_diag_efb_copies;
+                    q_fence = pc_diag_fence_ns;
+                    q_fw = pc_diag_fence_waits; q_ft = pc_diag_fence_timeouts;
+                }
                 if (s_prev.tv_sec != 0) {
                     if (wall_ns > s_worst_ns) s_worst_ns = wall_ns;
                     if (wall_ns > 20e6) s_late_1++;
@@ -532,6 +591,7 @@ void render_present(void)
                 s_fin_ns = 0;
             }
             s_t0 = after;
+            s_after_swap = after;
         }
         return;
     }

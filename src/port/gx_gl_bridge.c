@@ -1857,6 +1857,8 @@ static int pc_gl_has_ext(const char* want)
 /* Recycling a segment overwrites bytes an earlier draw may still read.
  * Fence the segment being left, wait on the one being entered; with this
  * ring size that fence is frames old and the wait is free. */
+u64 pc_diag_fence_ns;
+u32 pc_diag_fence_waits, pc_diag_fence_timeouts;
 static void pc_vbo_seg_sync(GLintptr off)
 {
     unsigned seg;
@@ -1876,8 +1878,21 @@ static void pc_vbo_seg_sync(GLintptr off)
     g_vbo_fence[g_vbo_seg] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     g_vbo_seg = seg;
     if (g_vbo_fence[seg] != NULL) {
-        glClientWaitSync(g_vbo_fence[seg], GL_SYNC_FLUSH_COMMANDS_BIT,
-                         1000000000ull);
+        /* This wait is charged to the draw bucket, not the vbo one: the
+         * stream runs inside the batch flush. Count it separately so a
+         * stall here cannot hide as "draw time". */
+        struct timespec w0, w1;
+        GLenum r;
+        clock_gettime(CLOCK_MONOTONIC, &w0);
+        r = glClientWaitSync(g_vbo_fence[seg], GL_SYNC_FLUSH_COMMANDS_BIT,
+                             1000000000ull);
+        clock_gettime(CLOCK_MONOTONIC, &w1);
+        pc_diag_fence_ns += (u64) ((w1.tv_sec - w0.tv_sec) * 1000000000LL +
+                                   (w1.tv_nsec - w0.tv_nsec));
+        pc_diag_fence_waits++;
+        if (r == GL_TIMEOUT_EXPIRED) {
+            pc_diag_fence_timeouts++;
+        }
         glDeleteSync(g_vbo_fence[seg]);
         g_vbo_fence[seg] = NULL;
     }
