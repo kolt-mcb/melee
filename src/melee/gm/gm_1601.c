@@ -4158,15 +4158,7 @@ float gm_80168BF8(int arg0)
 {
     CharacterKind ckind = Player_GetPlayerCharacter(arg0);
     u32 costume = Player_GetCostumeId(arg0);
-#if BUILD_TARGET_PC
-    /* The original falls off the end and returns whatever gm_80168B34 left
-     * in f1 -- which is its result. GCC leaves xmm0 undefined instead, so
-     * the stock-icon texture frame this feeds was garbage and every player
-     * wore Mario's icon. */
     return gm_80168B34(ckind, Player_80036394(arg0), costume);
-#else
-    gm_80168B34(ckind, Player_80036394(arg0), costume);
-#endif
 }
 
 void gm_80168C5C(u32 arg0)
