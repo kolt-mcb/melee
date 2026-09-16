@@ -42,6 +42,10 @@
 #include <melee/gr/types.h>
 #include <melee/ft/fighter.h>
 #include <melee/ft/types.h>
+#include <melee/it/it_26B1.h>
+#include <melee/it/item.h>
+#include <melee/it/itspawn.h>
+#include <melee/it/types.h>
 #include <melee/gm/gm_16AE.h>
 #include <melee/gm/gm_1A3F.h>
 #include <melee/it/types.h>
@@ -1475,8 +1479,76 @@ static void pc_trace_ecbdump(void)
             *(const u32*) &fp->x1A88.x568, (int) fp->hurt_capsules_len);
 }
 
+/* MELEE_SPAWN_ITEM=<kind>[,<frame>] spawns one item of that kind on that
+ * game frame (default 300), at the game's own random spawn point, filled in
+ * the way the VS countdown fills a spawn. Items are the bug class nothing
+ * automated reaches: their host conversions run lazily at first spawn, and
+ * the spawn is the RNG's. The Warp Star crash needed a Warp Star to exist,
+ * and 200 seconds of a debug-VS match never produced one; this asks for it
+ * by kind (It_Kind_WStar is 29).
+ *
+ * A third field, p<slot>, spawns it at that player's feet instead. The
+ * random spawn point is usually nowhere near anyone, and an untouched item
+ * expires -- the Warp Star sat for 1400 frames on the tablet and vanished
+ * unridden, which tests the conversion but not the ride. Dropped onto a
+ * fighter, a CPU grabs it, and grabbing a Warp Star is riding it. */
+static void pc_trace_spawn_item(int frame)
+{
+    static int done, want_kind = -2, want_frame = 300, want_slot = -1;
+    SpawnItem spawn;
+    Item_GObj* g;
+    if (want_kind == -2) {
+        const char* e = getenv("MELEE_SPAWN_ITEM");
+        want_kind = -1;
+        if (e != NULL) {
+            const char* c = strchr(e, ',');
+            want_kind = atoi(e);
+            if (c != NULL) {
+                const char* c2 = strchr(c + 1, ',');
+                want_frame = atoi(c + 1);
+                if (c2 != NULL && c2[1] == 'p') want_slot = atoi(c2 + 2);
+            }
+            fprintf(stderr, "[SPAWN] armed: kind %d at frame %d%s\n", want_kind, want_frame,
+                    want_slot >= 0 ? " at a player's feet" : "");
+        }
+    }
+    if (done || want_kind < 0 || frame < want_frame) {
+        return;
+    }
+    if (HSD_GObj_Entities == NULL) {
+        static int said;
+        if (!said) { said = 1; fprintf(stderr, "[SPAWN] frame %d: entity table not up yet, waiting\n", frame); }
+        return;
+    }
+    done = 1;
+    memset(&spawn, 0, sizeof(spawn));
+    spawn.kind = want_kind;
+    if (want_slot >= 0 && want_slot < PC_TRACE_PLAYERS) {
+        StaticPlayer* sp = Player_GetPtrForSlot(want_slot);
+        HSD_GObj* fg = sp != NULL ? sp->player_entity[0] : NULL;
+        Fighter* fp = fg != NULL ? (Fighter*) fg->user_data : NULL;
+        if (fp == NULL) {
+            fprintf(stderr, "[SPAWN] kind %d: player %d has no fighter yet\n", want_kind, want_slot);
+            done = 0;
+            return;
+        }
+        spawn.prev_pos = fp->cur_pos;
+        spawn.prev_pos.y += 5.0f;
+    } else if (!it_8026CB3C(&spawn.prev_pos)) {
+        fprintf(stderr, "[SPAWN] kind %d: no spawn point on this stage\n", want_kind);
+        return;
+    }
+    spawn.pos = spawn.prev_pos;
+    spawn.facing_dir = it_8026B684(&spawn.prev_pos);
+    spawn.x44_flag.b0 = 1;
+    g = Item_80268B18(&spawn);
+    fprintf(stderr, "[SPAWN] kind %d at frame %d -> %s\n", want_kind, frame,
+            g != NULL ? "spawned" : "refused");
+}
+
 void pc_trace_frame(int frame)
 {
+    pc_trace_spawn_item(frame);
     static int init = 0;
     static FILE* out = NULL;
     char line[1024];
