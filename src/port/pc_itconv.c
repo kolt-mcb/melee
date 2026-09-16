@@ -10,6 +10,7 @@
 #include <melee/it/forward.h>
 #include <melee/it/it_3F14.h>
 #include <melee/it/itCharItems.h>
+#include <melee/it/itCommonItems.h>
 #include <melee/it/types.h>
 #include <melee/lb/types.h>
 
@@ -733,6 +734,38 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
     r = a->base + spec_off;
 
     switch (kind) {
+    case It_Kind_WStar: {
+        /* The Warp Star's attribute block ends in an array of
+         * {HSD_AnimJoint*, sfx} entries -- eight bytes each on the console,
+         * sixteen here -- and it_80294364 picks one at random for the
+         * fighter's ride animation. The flat swapped copy keeps the console
+         * stride and leaves the pointers as file offsets, so the first Warp
+         * Star anyone grabbed died in HSD_JObjAddAnim on 0x11300074a80: a
+         * 32-bit offset under eight bytes of its neighbour. Same class as
+         * the mushroom below. Nine floats and the count precede the array at
+         * the same offsets in both layouts. */
+        u32 n = be32(r + 0x24);
+        itWstarAttributes* w;
+        u32 i;
+        if (n > 16 || spec_off + 0x28 + n * 8 > a->len) {
+            return;
+        }
+        w = zalloc(sizeof(*w) + n * sizeof(itWstarAttrEntry));
+        if (w == NULL) {
+            return;
+        }
+        conv_scalars(w, r, 0x28);
+        for (i = 0; i < n; i++) {
+            w->x28_entries[i].x0_anim_joint =
+                conv_anim_at(a, be32(r + 0x28 + i * 8), 0);
+            w->x28_entries[i].x4_sfx = (enum_t) be32(r + 0x28 + i * 8 + 4);
+        }
+        art->x4_specialAttributes = w;
+        if (getenv("MELEE_ITCONV_LOG") != NULL) {
+            fprintf(stderr, "[ITCONV] WStar: %u ride animations converted\n", n);
+        }
+        break;
+    }
     case It_Kind_Kinoko: {
         /* The mushroom's attribute block is read two ways: itkinoko.c reads
          * it as KinokoAttrs (three scalars, same offsets both layouts, which
