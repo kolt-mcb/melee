@@ -21,6 +21,9 @@
  */
 #define _GNU_SOURCE
 #define GL_GLEXT_PROTOTYPES
+#include <sys/stat.h>
+#include <unistd.h>
+#include <time.h>
 
 #include "log.h"
 #if BUILD_TARGET_PC
@@ -2696,6 +2699,246 @@ static char* pc_spec_source(const char* src)
 
 static GLuint compile_shader(GLenum type, const char* src);
 
+/* Fill a Prog from a linked program: the uniform locations of everything
+ * that is still a real uniform. Shared by a fresh compile and a binary
+ * loaded from the cache, so the two paths cannot drift apart. */
+static Prog* pc_prog_finish(GLuint id)
+{
+    Prog* pr = (Prog*) calloc(1, sizeof(Prog));
+    int i, k;
+    pr->id = id;
+    for (i = 0; i < VLOC_MAX; i++) pr->glloc[i] = -1;
+    for (i = 0; i < UNI_TAB_N; i++) {
+        const UniEntry* ent = &g_uni_tab[i];
+        GLint gl;
+        if (ent->spec) continue;
+        gl = glGetUniformLocation(id, ent->name);
+        if (gl < 0) continue;
+        for (k = 0; k < ent->count; k++) pr->glloc[ent->base + k] = gl + k;
+    }
+    return pr;
+}
+
+/* Program binary cache.
+ *
+ * A match compiles a few hundred distinct shader variants, and it compiles
+ * them at first use, inside the draw call that needs each one. Measured on
+ * a Galaxy Tab A9+: 344 variants in the first thirteen seconds of a match,
+ * 33 a second at the peak, every one a driver compile in the middle of a
+ * frame -- which is the READY screen crawling, and the dips afterwards as
+ * new effects appear. They are all genuinely distinct programs (228
+ * compiles, 228 distinct keys across vertex and fragment), so the count
+ * cannot be trimmed; what can change is when the work happens.
+ *
+ * So: a linked program's binary is written to disk keyed by its
+ * specialisation, and a later run loads the binary instead of compiling.
+ * A keys index lists every variant ever built, and GL init walks it, so
+ * the loads happen during start-up rather than at the first draw that
+ * needs each one. The first run on a device still compiles -- once, at
+ * start-up, off the READY screen -- and every run after that loads.
+ *
+ * Each file carries a hash of GL_VERSION and GL_RENDERER, since a binary
+ * is only good for the driver that produced it; a driver update makes
+ * every file a miss, which is a slow first run and nothing worse. The key
+ * is stored in full and compared, not trusted to the file name.
+ *
+ * MELEE_SHADER_CACHE=0 disables it; =<dir> puts it somewhere else. The
+ * default is <asset dir>/../shadercache, which on Android is the app's
+ * own files directory -- created by the app, so it owns the permissions. */
+char* vf_resolve_path(const char* path, char* out, size_t out_size);
+
+static char g_shc_dir[512];
+static u32 g_shc_drv;
+static int g_shc_on = -1;
+static int g_shc_loaded, g_shc_compiled;
+
+static u32 pc_shc_fnv(const void* p, size_t n, u32 h)
+{
+    const unsigned char* b = (const unsigned char*) p;
+    size_t i;
+    for (i = 0; i < n; i++) { h ^= b[i]; h *= 16777619u; }
+    return h;
+}
+
+static int pc_shc_enabled(void)
+{
+    if (g_shc_on < 0) {
+        const char* e = getenv("MELEE_SHADER_CACHE");
+        GLint nfmt = 0;
+        const char* v;
+        g_shc_on = 0;
+        if (e != NULL && strcmp(e, "0") == 0) {
+            return 0;
+        }
+        glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &nfmt);
+        if (nfmt <= 0) {
+            fprintf(stderr, "[SHCACHE] driver offers no program binary format; off\n");
+            return 0;
+        }
+        if (e != NULL && *e != 0) {
+            snprintf(g_shc_dir, sizeof(g_shc_dir), "%s", e);
+        } else {
+            char base[512];
+            if (vf_resolve_path("..", base, sizeof(base)) == NULL) {
+                return 0;
+            }
+            snprintf(g_shc_dir, sizeof(g_shc_dir), "%s/shadercache", base);
+        }
+        mkdir(g_shc_dir, 0777);
+        v = (const char*) glGetString(GL_VERSION);
+        g_shc_drv = pc_shc_fnv(v ? v : "", v ? strlen(v) : 0, 2166136261u);
+        v = (const char*) glGetString(GL_RENDERER);
+        g_shc_drv = pc_shc_fnv(v ? v : "", v ? strlen(v) : 0, g_shc_drv);
+        g_shc_on = 1;
+    }
+    return g_shc_on;
+}
+
+static void pc_shc_path(char* out, size_t n, u32 h)
+{
+    /* two independent hashes of the key in the name; the key itself is
+     * still compared in full inside the file */
+    u32 h2 = 2166136261u;
+    int i;
+    for (i = 0; i < g_spec_n; i++) {
+        GLint v = g_spec_vals[g_spec_slots[i]];
+        h2 = pc_shc_fnv(&v, sizeof(v), h2);
+    }
+    snprintf(out, n, "%s/%08x%08x.bin", g_shc_dir, h, h2);
+}
+
+static Prog* pc_shc_load(u32 h)
+{
+    char path[640];
+    FILE* f;
+    u32 hdr[4];
+    GLint* key;
+    void* data;
+    GLuint id;
+    GLint linked = 0;
+    int i, ok = 1;
+
+    if (!pc_shc_enabled()) return NULL;
+    pc_shc_path(path, sizeof(path), h);
+    f = fopen(path, "rb");
+    if (f == NULL) return NULL;
+    /* magic, driver hash, binary format, key count */
+    if (fread(hdr, sizeof(hdr), 1, f) != 1 || hdr[0] != 0x3143534du ||
+        hdr[1] != g_shc_drv || (int) hdr[3] != g_spec_n) {
+        fclose(f); return NULL;
+    }
+    key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
+    if (fread(key, sizeof(GLint), (size_t) g_spec_n, f) != (size_t) g_spec_n) ok = 0;
+    for (i = 0; ok && i < g_spec_n; i++) {
+        if (key[i] != g_spec_vals[g_spec_slots[i]]) ok = 0;
+    }
+    free(key);
+    {
+        u32 len = 0;
+        if (!ok || fread(&len, sizeof(len), 1, f) != 1 || len == 0 || len > (64u << 20)) {
+            fclose(f); return NULL;
+        }
+        data = malloc(len);
+        if (fread(data, 1, len, f) != len) { free(data); fclose(f); return NULL; }
+        fclose(f);
+        id = glCreateProgram();
+        glProgramBinary(id, (GLenum) hdr[2], data, (GLsizei) len);
+        free(data);
+    }
+    glGetProgramiv(id, GL_LINK_STATUS, &linked);
+    if (!linked) {
+        /* the driver rejected its own binary: drop the file, compile fresh */
+        glDeleteProgram(id);
+        unlink(path);
+        return NULL;
+    }
+    g_shc_loaded++;
+    return pc_prog_finish(id);
+}
+
+static void pc_shc_store(const Prog* pr, u32 h)
+{
+    char path[640];
+    FILE* f;
+    GLint len = 0;
+    GLsizei got = 0;
+    GLenum fmt = 0;
+    void* data;
+    u32 hdr[4];
+    int i;
+
+    if (!pc_shc_enabled()) return;
+    glGetProgramiv(pr->id, GL_PROGRAM_BINARY_LENGTH, &len);
+    if (len <= 0) return;
+    data = malloc((size_t) len);
+    glGetProgramBinary(pr->id, len, &got, &fmt, data);
+    if (got <= 0) { free(data); return; }
+    pc_shc_path(path, sizeof(path), h);
+    f = fopen(path, "wb");
+    if (f != NULL) {
+        hdr[0] = 0x3143534du; hdr[1] = g_shc_drv; hdr[2] = (u32) fmt; hdr[3] = (u32) g_spec_n;
+        fwrite(hdr, sizeof(hdr), 1, f);
+        fwrite(pr->key, sizeof(GLint), (size_t) g_spec_n, f);
+        { u32 l = (u32) got; fwrite(&l, sizeof(l), 1, f); }
+        fwrite(data, 1, (size_t) got, f);
+        fclose(f);
+    }
+    free(data);
+    /* the index the warm-up walks: one line per variant ever built */
+    snprintf(path, sizeof(path), "%s/keys.txt", g_shc_dir);
+    f = fopen(path, "a");
+    if (f != NULL) {
+        for (i = 0; i < g_spec_n; i++) fprintf(f, "%s%d", i ? " " : "", (int) pr->key[i]);
+        fputc('\n', f);
+        fclose(f);
+    }
+    g_shc_compiled++;
+}
+
+static Prog* pc_prog_select(void);
+
+/* Build (or load) every variant the index knows about, at GL init, so the
+ * work lands in start-up rather than in the first frame of a match. */
+static void pc_shc_warm(void)
+{
+    char path[640];
+    FILE* f;
+    char line[4096];
+    GLint saved[VLOC_MAX];
+    int n = 0;
+    struct timespec t0, t1;
+
+    if (!pc_shc_enabled() || g_spec_n <= 0) return;
+    snprintf(path, sizeof(path), "%s/keys.txt", g_shc_dir);
+    f = fopen(path, "r");
+    if (f == NULL) return;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    memcpy(saved, g_spec_vals, sizeof(saved));
+    while (fgets(line, sizeof(line), f) != NULL) {
+        const char* p = line;
+        int i, ok = 1;
+        for (i = 0; i < g_spec_n; i++) {
+            char* e;
+            long v = strtol(p, &e, 10);
+            if (e == p) { ok = 0; break; }
+            g_spec_vals[g_spec_slots[i]] = (GLint) v;
+            p = e;
+        }
+        if (!ok) continue;
+        g_spec_dirty = 1;
+        if (pc_prog_select() != NULL) n++;
+        if (g_prog_n >= PROG_MAX - 1) break;
+    }
+    fclose(f);
+    memcpy(g_spec_vals, saved, sizeof(saved));
+    g_spec_dirty = 1;
+    g_cur_prog = NULL;
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    fprintf(stderr, "[SHCACHE] %s: warm-up %d variants (%d loaded, %d compiled) in %.0f ms\n",
+            g_shc_dir, n, g_shc_loaded, g_shc_compiled,
+            (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6);
+}
+
 static Prog* pc_prog_build(void)
 {
     char* vsrc = pc_spec_source(g_vert_src);
@@ -2731,6 +2974,9 @@ static Prog* pc_prog_build(void)
     glBindAttribLocation(id, 2, "a_col");
     glBindAttribLocation(id, 3, "a_uv0");
     glBindAttribLocation(id, 4, "a_uv1");
+#ifdef GL_PROGRAM_BINARY_RETRIEVABLE_HINT
+    glProgramParameteri(id, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
+#endif
     glLinkProgram(id);
     glGetProgramiv(id, GL_LINK_STATUS, &linked);
     glDeleteShader(vs);
@@ -2742,18 +2988,8 @@ static Prog* pc_prog_build(void)
         glDeleteProgram(id);
         return NULL;
     }
-    pr = (Prog*) calloc(1, sizeof(Prog));
-    pr->id = id;
-    for (i = 0; i < VLOC_MAX; i++) pr->glloc[i] = -1;
-    for (i = 0; i < UNI_TAB_N; i++) {
-        const UniEntry* ent = &g_uni_tab[i];
-        GLint gl;
-        if (ent->spec) continue;
-        gl = glGetUniformLocation(id, ent->name);
-        if (gl < 0) continue;
-        for (k = 0; k < ent->count; k++) pr->glloc[ent->base + k] = gl + k;
-    }
-    return pr;
+    (void) pr; (void) i; (void) k;
+    return pc_prog_finish(id);
 }
 
 static u32 pc_spec_hash(void)
@@ -2790,13 +3026,21 @@ static Prog* pc_prog_select(void)
     if (g_prog_n >= PROG_MAX) {
         return g_cur_prog;
     }
-    pr = pc_prog_build();
-    if (!pr) {
-        return g_cur_prog;
+    {
+        int fresh = 0;
+        pr = pc_shc_load(h);
+        if (!pr) {
+            pr = pc_prog_build();
+            fresh = 1;
+        }
+        if (!pr) {
+            return g_cur_prog;
+        }
+        pr->hash = h;
+        pr->key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
+        for (i = 0; i < g_spec_n; i++) pr->key[i] = g_spec_vals[g_spec_slots[i]];
+        if (fresh) pc_shc_store(pr, h);
     }
-    pr->hash = h;
-    pr->key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
-    for (i = 0; i < g_spec_n; i++) pr->key[i] = g_spec_vals[g_spec_slots[i]];
     g_progs[g_prog_n++] = pr;
     if (getenv("MELEE_SHADERLOG")) {
         fprintf(stderr, "[SHADER] variant %d built (frame %u, hash %08x)\n", g_prog_n, pc_frame_number, h);
@@ -3341,6 +3585,10 @@ void gx_bridge_init(void)
     g_state.last_nrm[2] = 1.0f;
 
     PORT_LOG_INFO("GX bridge ready — textures enabled, %d slots", MAX_TEXTURES);
+    /* After both the base program (whose init builds the specialisation
+     * slot table) and the GL objects: the warm-up needs g_spec_n and a
+     * context, and returns silently without either. */
+    pc_shc_warm();
 }
 
 static u32 s_pc_draws = 0;  /* PC diag: per-frame GL draw count (MELEE_STAGE_DIAG) */
