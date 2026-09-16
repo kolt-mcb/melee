@@ -551,6 +551,19 @@ void render_present(void)
                         (double) pc_diag_efb_read_ns / s_n / 1e6,
                         (double) pc_diag_efb_ns / s_n / 1e6);
                 {
+                    /* Where a CPU-bound frame goes. The bridge captures GX
+                     * commands during the game's frame and issues the GL
+                     * draws at present time, so "outside" is the simulation
+                     * plus that capture, and "inside" is submission and the
+                     * present. Active gameplay on the tablet is 23 ms of CPU
+                     * for a 23.9 ms frame; this says which half. */
+                    static u64 s_game_prev;
+                    double outside = (double) (pc_diag_game_ns - s_game_prev) / s_n / 1e6;
+                    fprintf(stderr, "[SPLIT] outside present %.2f ms/frame (sim + GX capture)  inside %.2f ms/frame (submission + present)\n",
+                            outside, wall / s_n / 1e6 - outside);
+                    s_game_prev = pc_diag_game_ns;
+                }
+                {
                     extern u32 pc_diag_gxinv_vtx, pc_diag_gxinv_tex;
                     if (pc_diag_gxinv_vtx | pc_diag_gxinv_tex) {
                         fprintf(stderr, "[GXINV] vtx %u tex %u per frame\n",
