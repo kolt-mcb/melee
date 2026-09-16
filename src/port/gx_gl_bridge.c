@@ -2349,7 +2349,11 @@ static GLuint compile_shader(GLenum type, const char* src)
 extern u32 pc_frame_number;
 #define VLOC_MAX 1024
 #define VLOC_BYTES 128
-#define PROG_MAX 2048
+/* Programs are pointers, so this costs 128 KB; what it buys is never
+ * hitting the cap. A handful of lineups on the tablet produced 2048
+ * distinct variants and filled the old table exactly -- and past the cap a
+ * new variant is silently drawn with whatever program was last bound. */
+#define PROG_MAX 16384
 
 typedef struct { GLint* var; const char* name; int count; int spec; GLint base; } UniEntry;
 static UniEntry g_uni_tab[] = {
@@ -2927,7 +2931,7 @@ static void pc_shc_warm(void)
         if (!ok) continue;
         g_spec_dirty = 1;
         if (pc_prog_select() != NULL) n++;
-        if (g_prog_n >= PROG_MAX - 1) break;
+        if (g_prog_n >= PROG_MAX - 512) break; /* leave room for the match */
     }
     fclose(f);
     memcpy(g_spec_vals, saved, sizeof(saved));
@@ -3024,6 +3028,12 @@ static Prog* pc_prog_select(void)
         }
     }
     if (g_prog_n >= PROG_MAX) {
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "[SHADER] variant table full (%d): further variants draw "
+                            "with the wrong program\n", PROG_MAX);
+        }
         return g_cur_prog;
     }
     {
