@@ -1492,6 +1492,20 @@ static void pc_trace_ecbdump(void)
  * expires -- the Warp Star sat for 1400 frames on the tablet and vanished
  * unridden, which tests the conversion but not the ride. Dropped onto a
  * fighter, a CPU grabs it, and grabbing a Warp Star is riding it. */
+/* The match's character kinds, for the shader cache: which seed sets a
+ * loading screen should compile. Every slot with a plausible kind is
+ * included -- an extra set costs a few loads, a missing one costs READY. */
+int pc_lineup_chars(int out[4])
+{
+    int i, n = 0;
+    for (i = 0; i < 4 && i < PC_TRACE_PLAYERS; i++) {
+        StaticPlayer* sp = Player_GetPtrForSlot(i);
+        int ck = sp != NULL ? (int) sp->player_character : -1;
+        if (ck >= 0 && ck < 33) out[n++] = ck;
+    }
+    return n;
+}
+
 static void pc_trace_spawn_item(int frame)
 {
     static int done, want_kind = -2, want_frame = 300, want_slot = -1;

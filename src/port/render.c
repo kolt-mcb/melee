@@ -479,7 +479,14 @@ void render_present(void)
              * a few binary loads or clears the bar for one compile. */
             extern unsigned int gm_8016AEDC(void);
             extern void pc_shc_pump(long long budget_ns);
-            if (gm_8016AEDC() == 0) {
+            extern void pc_shc_match_over(void);
+            static unsigned int s_prev_gframe;
+            unsigned int gf = gm_8016AEDC();
+            if (s_prev_gframe != 0 && gf == 0) {
+                pc_shc_match_over();
+            }
+            s_prev_gframe = gf;
+            if (gf == 0) {
                 pc_shc_pump(6000000LL);
             }
         }

@@ -303,6 +303,13 @@ void Fighter_LoadCommonData(void)
             {
                 extern void pc_ftconv_note_archive(const u8*, unsigned long);
                 pc_ftconv_note_archive(dataBase, fsize);
+                /* A fighter's data loading is the match loading, on every
+                 * route; the shader cache prepares the lineup here if the
+                 * stage-load hook did not get there first. */
+                {
+                    extern void pc_shc_on_fighter_load(void);
+                    pc_shc_on_fighter_load();
+                }
             }
             #define PC_BE32(x) __builtin_bswap32(x)
             off0 = PC_BE32(offs[0]);
