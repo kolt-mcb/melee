@@ -2900,47 +2900,200 @@ static void pc_shc_store(const Prog* pr, u32 h)
 }
 
 static Prog* pc_prog_select(void);
+static Prog* pc_prog_build(void);
+static u32 pc_spec_hash(void);
+static Prog* pc_prog_find(u32 h);
+static Prog* pc_prog_register(Prog* pr, u32 h, int fresh);
 
-/* Build (or load) every variant the index knows about, at GL init, so the
- * work lands in start-up rather than in the first frame of a match. */
+/* Warm-up queue.
+ *
+ * Every variant the index knows about -- the local keys.txt, plus a
+ * shipped seed (MELEE_SHADER_SEED=<file>, or shader_keys.txt in the
+ * APK's assets on Android) -- goes into a queue at GL init. Nothing is
+ * compiled there: a few thousand compiles at start-up would turn READY's
+ * freeze into a first-launch hang, which is not an improvement.
+ *
+ * The pacer drains the queue instead, in the time it would otherwise
+ * spend asleep. The menus run vsync-paced with most of the frame idle, so
+ * that is where the work lands: a binary load is about a millisecond and
+ * happens whenever there is one to spare; a compile is twenty or more and
+ * happens only when the frame has that much real headroom. A match has no
+ * idle, so a match never pays for the queue. First launch on a device
+ * spends a minute or so of menu time compiling the seed, once; every
+ * launch after that loads binaries, and READY has nothing left to build. */
+static GLint* g_shq;          /* queued keys, g_spec_n ints each */
+static int g_shq_n, g_shq_i;  /* count, next */
+static int g_shq_loaded, g_shq_compiled;
+static struct timespec g_shq_t0;
+
+static void pc_shq_add_text(const char* text)
+{
+    const char* p = text;
+    while (*p) {
+        const char* nl = strchr(p, '\n');
+        size_t len = nl ? (size_t) (nl - p) : strlen(p);
+        const char* q = p;
+        int i, ok = 1;
+        GLint* row;
+        if (g_shq_n >= PROG_MAX - 512) break;
+        if (len == 0) { p = nl ? nl + 1 : p + len; continue; }
+        if ((g_shq_n & 255) == 0) {
+            g_shq = (GLint*) realloc(g_shq, sizeof(GLint) * (size_t) g_spec_n * (size_t) (g_shq_n + 256));
+        }
+        row = g_shq + (size_t) g_shq_n * (size_t) g_spec_n;
+        for (i = 0; i < g_spec_n; i++) {
+            char* e;
+            long v = strtol(q, &e, 10);
+            if (e == q || e > p + len) { ok = 0; break; }
+            row[i] = (GLint) v;
+            q = e;
+        }
+        if (ok) g_shq_n++;
+        p = nl ? nl + 1 : p + len;
+    }
+}
+
+static char* pc_shq_read_file(const char* path)
+{
+    FILE* f = fopen(path, "rb");
+    long n;
+    char* buf;
+    if (f == NULL) return NULL;
+    fseek(f, 0, SEEK_END); n = ftell(f); fseek(f, 0, SEEK_SET);
+    if (n <= 0 || n > (64L << 20)) { fclose(f); return NULL; }
+    buf = (char*) malloc((size_t) n + 1);
+    if (fread(buf, 1, (size_t) n, f) != (size_t) n) { free(buf); fclose(f); return NULL; }
+    buf[n] = 0;
+    fclose(f);
+    return buf;
+}
+
+/* SDL_RWFromFile reads the APK's assets on Android for a relative path
+ * (and the working directory elsewhere, where the seed is simply absent). */
+static char* pc_shq_read_asset(const char* name)
+{
+    SDL_RWops* rw = SDL_RWFromFile(name, "rb");
+    Sint64 n;
+    char* buf;
+    if (rw == NULL) return NULL;
+    n = SDL_RWsize(rw);
+    if (n <= 0 || n > (64LL << 20)) { SDL_RWclose(rw); return NULL; }
+    buf = (char*) malloc((size_t) n + 1);
+    if (SDL_RWread(rw, buf, 1, (size_t) n) != (size_t) n) { free(buf); SDL_RWclose(rw); return NULL; }
+    buf[n] = 0;
+    SDL_RWclose(rw);
+    return buf;
+}
+
 static void pc_shc_warm(void)
 {
     char path[640];
-    FILE* f;
-    char line[4096];
-    GLint saved[VLOC_MAX];
-    int n = 0;
-    struct timespec t0, t1;
+    char* text;
+    const char* seed;
+    int from_index;
 
     if (!pc_shc_enabled() || g_spec_n <= 0) return;
     snprintf(path, sizeof(path), "%s/keys.txt", g_shc_dir);
-    f = fopen(path, "r");
-    if (f == NULL) return;
-    clock_gettime(CLOCK_MONOTONIC, &t0);
-    memcpy(saved, g_spec_vals, sizeof(saved));
-    while (fgets(line, sizeof(line), f) != NULL) {
-        const char* p = line;
-        int i, ok = 1;
-        for (i = 0; i < g_spec_n; i++) {
-            char* e;
-            long v = strtol(p, &e, 10);
-            if (e == p) { ok = 0; break; }
-            g_spec_vals[g_spec_slots[i]] = (GLint) v;
-            p = e;
+    text = pc_shq_read_file(path);
+    if (text) { pc_shq_add_text(text); free(text); }
+    from_index = g_shq_n;
+    seed = getenv("MELEE_SHADER_SEED");
+    text = seed ? pc_shq_read_file(seed) : NULL;
+    if (text == NULL && seed == NULL) text = pc_shq_read_asset("shader_keys.txt");
+    if (text) { pc_shq_add_text(text); free(text); }
+    clock_gettime(CLOCK_MONOTONIC, &g_shq_t0);
+    /* Binaries load here, all of them, before the first frame: about a
+     * millisecond each, so a couple of thousand is a couple of seconds of
+     * start-up and nothing on the menu. Left to the per-frame pump they
+     * cost menu frames -- 41 fps for sixteen seconds on the tablet -- since
+     * a load is driver work, not idle. Only the keys with no binary stay
+     * queued, and those are what the pump compiles. */
+    {
+        GLint saved[VLOC_MAX];
+        int in = 0, out = 0, loaded = 0;
+        const int queued = g_shq_n;
+        memcpy(saved, g_spec_vals, sizeof(saved));
+        for (in = 0; in < g_shq_n && g_prog_n < PROG_MAX - 512; in++) {
+            const GLint* row = g_shq + (size_t) in * (size_t) g_spec_n;
+            u32 h;
+            Prog* pr;
+            int i;
+            for (i = 0; i < g_spec_n; i++) g_spec_vals[g_spec_slots[i]] = row[i];
+            h = pc_spec_hash();
+            if (pc_prog_find(h) != NULL) continue;
+            pr = pc_shc_load(h);
+            if (pr != NULL) { pc_prog_register(pr, h, 0); loaded++; continue; }
+            if (out != in) memcpy(g_shq + (size_t) out * (size_t) g_spec_n, row, sizeof(GLint) * (size_t) g_spec_n);
+            out++;
         }
-        if (!ok) continue;
+        g_shq_n = out; g_shq_i = 0;
+        memcpy(g_spec_vals, saved, sizeof(saved));
         g_spec_dirty = 1;
-        if (pc_prog_select() != NULL) n++;
-        if (g_prog_n >= PROG_MAX - 512) break; /* leave room for the match */
+        g_cur_prog = NULL;
+        {
+            struct timespec t;
+            clock_gettime(CLOCK_MONOTONIC, &t);
+            fprintf(stderr, "[SHCACHE] %s: %d binaries loaded in %.0f ms; %d to compile "
+                            "(%d keys from the index, %d from the seed)\n",
+                    g_shc_dir, loaded,
+                    (t.tv_sec - g_shq_t0.tv_sec) * 1e3 + (t.tv_nsec - g_shq_t0.tv_nsec) / 1e6,
+                    g_shq_n, from_index, queued - from_index);
+        }
+        if (g_shq_n == 0) { free(g_shq); g_shq = NULL; }
     }
-    fclose(f);
-    memcpy(g_spec_vals, saved, sizeof(saved));
-    g_spec_dirty = 1;
-    g_cur_prog = NULL;
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    fprintf(stderr, "[SHCACHE] %s: warm-up %d variants (%d loaded, %d compiled) in %.0f ms\n",
-            g_shc_dir, n, g_shc_loaded, g_shc_compiled,
-            (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6);
+}
+
+/* Spend up to `budget_ns` of this frame's slack on the warm-up queue.
+ * Loads (~1 ms) fit inside any real budget. A compile (20-40 ms) never
+ * fits inside a 60 Hz frame, so one is allowed per call when the budget
+ * is at least 5 ms and accepted as an overshoot: a menu frame becomes a
+ * 30 fps frame while the seed compiles, once, and a match -- whose work
+ * leaves no budget -- never compiles here at all. */
+void pc_shc_pump(long long budget_ns)
+{
+    GLint saved[VLOC_MAX];
+    struct timespec t;
+    long long deadline, now;
+    int touched = 0, compiled_here = 0;
+    if (g_shq_i >= g_shq_n || budget_ns < 1000000LL) return;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    deadline = (long long) t.tv_sec * 1000000000LL + t.tv_nsec + budget_ns;
+    memcpy(saved, g_spec_vals, sizeof(saved));
+    while (g_shq_i < g_shq_n && g_prog_n < PROG_MAX - 256) {
+        const GLint* row = g_shq + (size_t) g_shq_i * (size_t) g_spec_n;
+        u32 h;
+        Prog* pr;
+        int i;
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        now = (long long) t.tv_sec * 1000000000LL + t.tv_nsec;
+        if (deadline - now < 1000000LL) break;
+        for (i = 0; i < g_spec_n; i++) g_spec_vals[g_spec_slots[i]] = row[i];
+        h = pc_spec_hash();
+        if (pc_prog_find(h) != NULL) { g_shq_i++; continue; }
+        pr = pc_shc_load(h);
+        if (pr != NULL) {
+            pc_prog_register(pr, h, 0);
+            g_shq_loaded++; g_shq_i++; touched = 1;
+            continue;
+        }
+        if (compiled_here || budget_ns < 5000000LL) break;
+        pr = pc_prog_build();
+        if (pr != NULL) { pc_prog_register(pr, h, 1); g_shq_compiled++; }
+        g_shq_i++; touched = 1; compiled_here = 1;
+        break;
+    }
+    if (touched) {
+        memcpy(g_spec_vals, saved, sizeof(saved));
+        g_spec_dirty = 1;
+        g_cur_prog = NULL;
+    }
+    if (g_shq_i >= g_shq_n) {
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        fprintf(stderr, "[SHCACHE] queue drained: %d loaded, %d compiled, in %.1f s of frame slack\n",
+                g_shq_loaded, g_shq_compiled,
+                (t.tv_sec - g_shq_t0.tv_sec) + (t.tv_nsec - g_shq_t0.tv_nsec) / 1e9);
+        free(g_shq); g_shq = NULL; g_shq_n = g_shq_i = 0;
+    }
 }
 
 static Prog* pc_prog_build(void)
@@ -3007,26 +3160,47 @@ static u32 pc_spec_hash(void)
     return h;
 }
 
+static Prog* pc_prog_find(u32 h)
+{
+    int i, k;
+    for (i = 0; i < g_prog_n; i++) {
+        Prog* pr = g_progs[i];
+        int same = 1;
+        if (pr->hash != h) continue;
+        for (k = 0; k < g_spec_n; k++) {
+            if (pr->key[k] != g_spec_vals[g_spec_slots[k]]) { same = 0; break; }
+        }
+        if (same) return pr;
+    }
+    return NULL;
+}
+
+/* Take ownership of a linked program for the current specialisation. */
+static Prog* pc_prog_register(Prog* pr, u32 h, int fresh)
+{
+    int i;
+    pr->hash = h;
+    pr->key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
+    for (i = 0; i < g_spec_n; i++) pr->key[i] = g_spec_vals[g_spec_slots[i]];
+    if (fresh) pc_shc_store(pr, h);
+    g_progs[g_prog_n++] = pr;
+    if (getenv("MELEE_SHADERLOG")) {
+        fprintf(stderr, "[SHADER] variant %d %s (frame %u, hash %08x)\n", g_prog_n,
+                fresh ? "built" : "loaded", pc_frame_number, h);
+    }
+    return pr;
+}
+
 static Prog* pc_prog_select(void)
 {
     u32 h;
-    int i;
     Prog* pr;
     if (!g_spec_dirty && g_cur_prog) {
         return g_cur_prog;
     }
     h = pc_spec_hash();
-    for (i = 0; i < g_prog_n; i++) {
-        pr = g_progs[i];
-        if (pr->hash != h) continue;
-        {
-            int k, same = 1;
-            for (k = 0; k < g_spec_n; k++) {
-                if (pr->key[k] != g_spec_vals[g_spec_slots[k]]) { same = 0; break; }
-            }
-            if (same) { g_spec_dirty = 0; return pr; }
-        }
-    }
+    pr = pc_prog_find(h);
+    if (pr != NULL) { g_spec_dirty = 0; return pr; }
     if (g_prog_n >= PROG_MAX) {
         static int said;
         if (!said) {
@@ -3039,21 +3213,9 @@ static Prog* pc_prog_select(void)
     {
         int fresh = 0;
         pr = pc_shc_load(h);
-        if (!pr) {
-            pr = pc_prog_build();
-            fresh = 1;
-        }
-        if (!pr) {
-            return g_cur_prog;
-        }
-        pr->hash = h;
-        pr->key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
-        for (i = 0; i < g_spec_n; i++) pr->key[i] = g_spec_vals[g_spec_slots[i]];
-        if (fresh) pc_shc_store(pr, h);
-    }
-    g_progs[g_prog_n++] = pr;
-    if (getenv("MELEE_SHADERLOG")) {
-        fprintf(stderr, "[SHADER] variant %d built (frame %u, hash %08x)\n", g_prog_n, pc_frame_number, h);
+        if (!pr) { pr = pc_prog_build(); fresh = 1; }
+        if (!pr) return g_cur_prog;
+        pc_prog_register(pr, h, fresh);
     }
     g_spec_dirty = 0;
     return pr;

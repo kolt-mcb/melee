@@ -467,6 +467,22 @@ void render_present(void)
             clock_gettime(CLOCK_MONOTONIC, &f1);
             s_fin_ns += (f1.tv_sec - f0.tv_sec) * 1e9 + (f1.tv_nsec - f0.tv_nsec);
         }
+        {
+            /* Shader warm-up runs outside matches, on a fixed budget. The
+             * frame's slack cannot be measured from here: at the menu the
+             * CPU does 8 ms of work and then blocks inside a GL call until
+             * the GPU catches up, so its own clock reads a full frame. But
+             * that is exactly why CPU work done before the blocking call is
+             * free -- the GPU is the pacing resource -- and why a match,
+             * whose CPU work is the frame, must get none. The match frame
+             * counter is zero everywhere but a match. Six milliseconds fits
+             * a few binary loads or clears the bar for one compile. */
+            extern unsigned int gm_8016AEDC(void);
+            extern void pc_shc_pump(long long budget_ns);
+            if (gm_8016AEDC() == 0) {
+                pc_shc_pump(6000000LL);
+            }
+        }
         window_swap();
         /* Lockstep barrier, after the present: with MELEE_SYNC set this blocks
          * until tools/pc_lockstep.py has compared this frame against the same

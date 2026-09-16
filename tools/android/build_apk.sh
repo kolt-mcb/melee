@@ -33,6 +33,15 @@ for ABI in $ABIS; do
     cp "$DEPS/sdl2-build$SUFFIX/libSDL2.so" "$JNI/"
 done
 
+# A shipped shader seed (tools/android/shader_keys.txt, from a desktop sweep
+# over characters and stages) rides in the APK's assets; the port reads it
+# through SDL_RWFromFile and compiles it in the menus' idle time on first
+# launch, so READY has nothing left to build. Optional: absent is fine.
+mkdir -p "$ROOT/tools/android/app/app/src/main/assets"
+if [ -f "$ROOT/tools/android/shader_keys.txt" ]; then
+    cp "$ROOT/tools/android/shader_keys.txt" "$ROOT/tools/android/app/app/src/main/assets/"
+fi
+
 cd "$ROOT/tools/android/app"
 if [ "$VARIANT" = release ]; then
     ./gradlew assembleRelease --no-daemon
