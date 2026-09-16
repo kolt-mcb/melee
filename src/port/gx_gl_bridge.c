@@ -2531,6 +2531,103 @@ static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
 
 /* Rewrite `uniform int NAME[...];` declarations of specialisation slots
  * as const declarations carrying the current values. */
+/* Unroll the TEV stage loop into literal stages.
+ *
+ * After specialisation every operation in a stage is selected by a const
+ * array -- u_tev_color_in[stage*4+k], u_tev_tex_map[stage], and so on --
+ * so with a literal stage number the whole stage folds: one texture()
+ * instead of the four-way sampler chain, one expression per resolve
+ * instead of a sixteen-way switch, no indirect-texture path at all. A
+ * const array indexed by a literal is a compile-time constant in every
+ * compiler. Indexed by a loop variable it is a constant only if the
+ * compiler unrolls the loop first and then folds -- which is exactly the
+ * step a mobile compiler is least reliable about, and every variant this
+ * generator produced was the same 488 lines, 101 branches, 5 texture
+ * fetches whether it had one stage or five.
+ *
+ * Measured on a Galaxy Tab A9+ (Adreno 619): the menu spends 207 ms of a
+ * 216 ms frame in this shader, 11.7 ms with the shader replaced by a
+ * constant. So the loop is expanded here, textually: N copies of the body
+ * with `stage` replaced by its number, each in its own block so the
+ * body's locals do not collide. The base program keeps the real loop; it
+ * runs on live uniforms and has no N to expand to.
+ *
+ * MELEE_TEV_NOUNROLL=1 keeps the loop, for measuring a driver that folds
+ * it fine on its own. */
+static int pc_ident_boundary(char c)
+{
+    return !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+             (c >= '0' && c <= '9') || c == '_');
+}
+
+static char* pc_unroll_tev(char* src, int nstages)
+{
+    static const char head[] =
+        "    for (int stage = 0; stage < u_tev_num_stages && stage < 8; stage++) {\n";
+    static const char tail[] = "    // Final output\n";
+    const char* h;
+    const char* t;
+    const char* body;
+    const char* body_end;
+    size_t body_len, cap, o;
+    char* out;
+    int n;
+
+    if (getenv("MELEE_TEV_NOUNROLL") != NULL) {
+        return src;
+    }
+    h = strstr(src, head);
+    t = h ? strstr(h, tail) : NULL;
+    if (h == NULL || t == NULL) {
+        return src;
+    }
+    body = h + sizeof(head) - 1;
+    /* The loop's closing brace is the last "    }\n" before the tail. */
+    body_end = t;
+    while (body_end > body && !(body_end[-1] == '\n' && body_end[-2] == '}' &&
+                                body_end[-3] == ' ' && body_end[-4] == ' ' &&
+                                body_end[-5] == ' ' && body_end[-6] == ' ' &&
+                                body_end[-7] == '\n')) {
+        body_end--;
+    }
+    if (body_end <= body) {
+        return src;
+    }
+    body_end -= 6; /* back over "    }\n" to the newline that precedes it */
+    body_len = (size_t) (body_end - body);
+    if (nstages < 0) nstages = 0;
+    if (nstages > 8) nstages = 8;
+
+    cap = strlen(src) + (size_t) nstages * (body_len + 64) + 64;
+    out = (char*) malloc(cap);
+    o = (size_t) (h - src);
+    memcpy(out, src, o);
+    o += (size_t) sprintf(out + o, "    // TEV stages, unrolled: %d\n", nstages);
+    for (n = 0; n < nstages; n++) {
+        const char* b = body;
+        o += (size_t) sprintf(out + o, "    {\n");
+        while (b < body_end) {
+            if (b[0] == 's' && strncmp(b, "stage", 5) == 0 &&
+                (b == body || pc_ident_boundary(b[-1])) &&
+                pc_ident_boundary(b[5]))
+            {
+                o += (size_t) sprintf(out + o, "%d", n);
+                b += 5;
+            } else {
+                out[o++] = *b++;
+            }
+        }
+        o += (size_t) sprintf(out + o, "\n    }\n");
+    }
+    {
+        size_t rest = strlen(t);
+        memcpy(out + o, t, rest); o += rest;
+    }
+    out[o] = 0;
+    free(src);
+    return out;
+}
+
 static char* pc_spec_source(const char* src)
 {
     size_t cap = strlen(src) + 65536;
@@ -2584,6 +2681,16 @@ static char* pc_spec_source(const char* src)
         if (o + 4096 > cap) { cap *= 2; out = (char*) realloc(out, cap); }
     }
     out[o] = 0;
+    {
+        int i, ns = 0;
+        for (i = 0; i < UNI_TAB_N; i++) {
+            if (strcmp(g_uni_tab[i].name, "u_tev_num_stages") == 0) {
+                ns = (int) g_spec_vals[g_uni_tab[i].base];
+                break;
+            }
+        }
+        out = pc_unroll_tev(out, ns);
+    }
     return out;
 }
 
