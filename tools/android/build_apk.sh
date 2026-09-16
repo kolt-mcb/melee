@@ -37,9 +37,10 @@ done
 # over characters and stages) rides in the APK's assets; the port reads it
 # through SDL_RWFromFile and compiles it in the menus' idle time on first
 # launch, so READY has nothing left to build. Optional: absent is fine.
-mkdir -p "$ROOT/tools/android/app/app/src/main/assets"
-if [ -f "$ROOT/tools/android/shader_keys.txt" ]; then
-    cp "$ROOT/tools/android/shader_keys.txt" "$ROOT/tools/android/app/app/src/main/assets/"
+mkdir -p "$ROOT/tools/android/app/app/src/main/assets/shaderseed"
+rm -f "$ROOT/tools/android/app/app/src/main/assets/shaderseed"/*.txt
+if [ -d "$ROOT/tools/android/shaderseed" ]; then
+    cp "$ROOT/tools/android/shaderseed"/*.txt "$ROOT/tools/android/app/app/src/main/assets/shaderseed/" 2>/dev/null || true
 fi
 
 cd "$ROOT/tools/android/app"

@@ -2752,6 +2752,8 @@ static Prog* pc_prog_finish(GLuint id)
 char* vf_resolve_path(const char* path, char* out, size_t out_size);
 
 static char g_shc_dir[512];
+static int g_shc_cur_stkind = -1; /* set for the match being loaded */
+static int g_shc_prepared;        /* this match's lineup has been prepared */
 static u32 g_shc_drv;
 static int g_shc_on = -1;
 static int g_shc_loaded, g_shc_compiled;
@@ -2860,6 +2862,7 @@ static Prog* pc_shc_load(u32 h)
     return pc_prog_finish(id);
 }
 
+static void pc_shc_index_append(const Prog* pr);
 static void pc_shc_store(const Prog* pr, u32 h)
 {
     char path[640];
@@ -2888,15 +2891,40 @@ static void pc_shc_store(const Prog* pr, u32 h)
         fclose(f);
     }
     free(data);
-    /* the index the warm-up walks: one line per variant ever built */
+    pc_shc_index_append(pr);
+    g_shc_compiled++;
+}
+
+/* One tagged line in the index per variant. Written on a fresh compile,
+ * and on a lazy load of a key the index knows only untagged -- that is how
+ * an index from before the tags migrates: each legacy key gets a tagged
+ * line the first time it is used, and the next loading screen finds it. */
+static void pc_shc_index_append(const Prog* pr)
+{
+    char path[640];
+    FILE* f;
+    int i;
     snprintf(path, sizeof(path), "%s/keys.txt", g_shc_dir);
     f = fopen(path, "a");
     if (f != NULL) {
+        /* Tagged with where it was first needed, so a later loading screen
+         * can find every key its lineup used and load them before READY.
+         * A key first used outside a match is a menu key and loads at
+         * start-up. */
+        extern unsigned int gm_8016AEDC(void);
+        extern int pc_lineup_chars(int out[4]);
         for (i = 0; i < g_spec_n; i++) fprintf(f, "%s%d", i ? " " : "", (int) pr->key[i]);
+        if (gm_8016AEDC() != 0 || g_shc_cur_stkind >= 0) {
+            int ck[4], n = pc_lineup_chars(ck), k;
+            fprintf(f, " # c=");
+            for (k = 0; k < n; k++) fprintf(f, "%s%d", k ? "," : "", ck[k]);
+            fprintf(f, " s=%d", g_shc_cur_stkind);
+        } else {
+            fprintf(f, " # menu");
+        }
         fputc('\n', f);
         fclose(f);
     }
-    g_shc_compiled++;
 }
 
 static Prog* pc_prog_select(void);
@@ -2904,51 +2932,116 @@ static Prog* pc_prog_build(void);
 static u32 pc_spec_hash(void);
 static Prog* pc_prog_find(u32 h);
 static Prog* pc_prog_register(Prog* pr, u32 h, int fresh);
+static int pc_shc_index_has_tagged(const Prog* pr);
 
-/* Warm-up queue.
+/* Warm-up, scoped to what will be drawn.
  *
- * Every variant the index knows about -- the local keys.txt, plus a
- * shipped seed (MELEE_SHADER_SEED=<file>, or shader_keys.txt in the
- * APK's assets on Android) -- goes into a queue at GL init. Nothing is
- * compiled there: a few thousand compiles at start-up would turn READY's
- * freeze into a first-launch hang, which is not an improvement.
+ * Loading every known variant at start-up does not scale: 6219 resident
+ * programs cost 586 MB and 6.7 s on the tablet, and the whole game is
+ * three times that. Compiling every known variant at start-up is worse. So
+ * nothing is loaded that will not be drawn soon:
  *
- * The pacer drains the queue instead, in the time it would otherwise
- * spend asleep. The menus run vsync-paced with most of the frame idle, so
- * that is where the work lands: a binary load is about a millisecond and
- * happens whenever there is one to spare; a compile is twenty or more and
- * happens only when the frame has that much real headroom. A match has no
- * idle, so a match never pays for the queue. First launch on a device
- * spends a minute or so of menu time compiling the seed, once; every
- * launch after that loads binaries, and READY has nothing left to build. */
-static GLint* g_shq;          /* queued keys, g_spec_n ints each */
-static int g_shq_n, g_shq_i;  /* count, next */
+ *   - Keys in the local index carry a tag: "# menu" if first used outside
+ *     a match, "# c=<kinds> s=<stage>" if first used in one. Start-up loads
+ *     the menu keys -- a few hundred, well under a second.
+ *   - When a match loads its stage (Stage_802251B4, the loading screen),
+ *     pc_shc_prepare_match loads or compiles every key the lineup will
+ *     draw: the shipped seed sets for each character and the stage plus
+ *     the common set (shaderseed/c<N>.txt, s<N>.txt, common.txt -- APK
+ *     assets on Android, MELEE_SHADER_SEED=<dir> elsewhere), and every
+ *     local key tagged with one of those characters or that stage. A
+ *     compile there is invisible; the same compile at READY is a stall.
+ *   - Menu keys with no binary yet drain through the pump, one compile a
+ *     frame, outside matches.
+ *
+ * Programs accumulate over a session, bounded by what is played. */
+static GLint* g_shq;          /* queued rows, g_spec_n ints each */
+static int g_shq_n, g_shq_i;
 static int g_shq_loaded, g_shq_compiled;
 static struct timespec g_shq_t0;
 
-static void pc_shq_add_text(const char* text)
+typedef struct { GLint* row; int ck[4]; int nck; int stkind; int menu; } ShcRow;
+static ShcRow* g_shc_rows;  /* the local index, tagged */
+static int g_shc_rows_n;
+
+/* Does the index already hold a tagged row for this key? */
+static int pc_shc_index_has_tagged(const Prog* pr)
+{
+    int i;
+    for (i = 0; i < g_shc_rows_n; i++) {
+        if (g_shc_rows[i].menu == -1) continue;
+        if (memcmp(g_shc_rows[i].row, pr->key, sizeof(GLint) * (size_t) g_spec_n) == 0) return 1;
+    }
+    return 0;
+}
+
+static void pc_shq_push(const GLint* row)
+{
+    if (g_shq_n >= PROG_MAX - 512) return;
+    if ((g_shq_n & 255) == 0) {
+        g_shq = (GLint*) realloc(g_shq, sizeof(GLint) * (size_t) g_spec_n * (size_t) (g_shq_n + 256));
+    }
+    memcpy(g_shq + (size_t) g_shq_n * (size_t) g_spec_n, row, sizeof(GLint) * (size_t) g_spec_n);
+    g_shq_n++;
+}
+
+/* Parse one "k k k ... [# menu | # c=a,b s=n]" line into row/tag. */
+static int pc_shc_parse_line(const char* p, size_t len, GLint* row, ShcRow* tag)
+{
+    const char* q = p;
+    const char* end = p + len;
+    int i;
+    for (i = 0; i < g_spec_n; i++) {
+        char* e;
+        long v = strtol(q, &e, 10);
+        if (e == q || e > end) return 0;
+        row[i] = (GLint) v;
+        q = e;
+    }
+    if (tag) {
+        const char* h = memchr(q, '#', (size_t) (end - q));
+        tag->nck = 0; tag->stkind = -1; tag->menu = 0;
+        if (h == NULL) {
+            tag->menu = -1; /* untagged: legacy line, loaded lazily at use */
+        } else if (strncmp(h, "# menu", 6) == 0) {
+            tag->menu = 1;
+        } else {
+            const char* c = strstr(h, "c=");
+            const char* st = strstr(h, "s=");
+            if (c != NULL) {
+                c += 2;
+                while (tag->nck < 4 && c < end && *c >= '0' && *c <= '9') {
+                    char* e;
+                    tag->ck[tag->nck++] = (int) strtol(c, &e, 10);
+                    c = e;
+                    if (*c == ',') c++;
+                }
+            }
+            if (st != NULL) tag->stkind = (int) strtol(st + 2, NULL, 10);
+        }
+    }
+    return 1;
+}
+
+static void pc_shc_index_add_text(const char* text)
 {
     const char* p = text;
     while (*p) {
         const char* nl = strchr(p, '\n');
         size_t len = nl ? (size_t) (nl - p) : strlen(p);
-        const char* q = p;
-        int i, ok = 1;
-        GLint* row;
-        if (g_shq_n >= PROG_MAX - 512) break;
-        if (len == 0) { p = nl ? nl + 1 : p + len; continue; }
-        if ((g_shq_n & 255) == 0) {
-            g_shq = (GLint*) realloc(g_shq, sizeof(GLint) * (size_t) g_spec_n * (size_t) (g_shq_n + 256));
+        if (len > 0 && g_shc_rows_n < PROG_MAX) {
+            ShcRow r;
+            GLint* row = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
+            if (pc_shc_parse_line(p, len, row, &r)) {
+                r.row = row;
+                if ((g_shc_rows_n & 255) == 0) {
+                    g_shc_rows = (ShcRow*) realloc(g_shc_rows, sizeof(ShcRow) * (size_t) (g_shc_rows_n + 256));
+                }
+                g_shc_rows[g_shc_rows_n++] = r;
+            } else {
+                free(row);
+            }
         }
-        row = g_shq + (size_t) g_shq_n * (size_t) g_spec_n;
-        for (i = 0; i < g_spec_n; i++) {
-            char* e;
-            long v = strtol(q, &e, 10);
-            if (e == q || e > p + len) { ok = 0; break; }
-            row[i] = (GLint) v;
-            q = e;
-        }
-        if (ok) g_shq_n++;
         p = nl ? nl + 1 : p + len;
     }
 }
@@ -2968,8 +3061,7 @@ static char* pc_shq_read_file(const char* path)
     return buf;
 }
 
-/* SDL_RWFromFile reads the APK's assets on Android for a relative path
- * (and the working directory elsewhere, where the seed is simply absent). */
+/* SDL_RWFromFile reads the APK's assets on Android for a relative path. */
 static char* pc_shq_read_asset(const char* name)
 {
     SDL_RWops* rw = SDL_RWFromFile(name, "rb");
@@ -2985,102 +3077,167 @@ static char* pc_shq_read_asset(const char* name)
     return buf;
 }
 
+/* A seed set by name: MELEE_SHADER_SEED=<dir>/<name>, else the APK asset. */
+static char* pc_shc_read_seed(const char* name)
+{
+    const char* dir = getenv("MELEE_SHADER_SEED");
+    char path[640];
+    if (dir != NULL && *dir) {
+        snprintf(path, sizeof(path), "%s/%s", dir, name);
+        return pc_shq_read_file(path);
+    }
+    snprintf(path, sizeof(path), "shaderseed/%s", name);
+    return pc_shq_read_asset(path);
+}
+
+/* Load the binary for `row` if one exists, else queue it (or compile it
+ * now when `compile_now`). Returns 1 loaded, 2 compiled, 0 neither. */
+static int pc_shc_bring(const GLint* row, int compile_now)
+{
+    u32 h;
+    Prog* pr;
+    int i;
+    if (g_prog_n >= PROG_MAX - 256) return 0;
+    for (i = 0; i < g_spec_n; i++) g_spec_vals[g_spec_slots[i]] = row[i];
+    h = pc_spec_hash();
+    if (pc_prog_find(h) != NULL) return 0;
+    pr = pc_shc_load(h);
+    if (pr != NULL) { pc_prog_register(pr, h, 0); return 1; }
+    if (!compile_now) { pc_shq_push(row); return 0; }
+    pr = pc_prog_build();
+    if (pr != NULL) { pc_prog_register(pr, h, 1); return 2; }
+    return 0;
+}
+
 static void pc_shc_warm(void)
 {
     char path[640];
     char* text;
-    const char* seed;
-    int from_index;
+    GLint saved[VLOC_MAX];
+    int i, loaded = 0, menu = 0;
+    struct timespec t;
 
     if (!pc_shc_enabled() || g_spec_n <= 0) return;
+    clock_gettime(CLOCK_MONOTONIC, &g_shq_t0);
     snprintf(path, sizeof(path), "%s/keys.txt", g_shc_dir);
     text = pc_shq_read_file(path);
-    if (text) { pc_shq_add_text(text); free(text); }
-    from_index = g_shq_n;
-    seed = getenv("MELEE_SHADER_SEED");
-    text = seed ? pc_shq_read_file(seed) : NULL;
-    if (text == NULL && seed == NULL) text = pc_shq_read_asset("shader_keys.txt");
-    if (text) { pc_shq_add_text(text); free(text); }
-    clock_gettime(CLOCK_MONOTONIC, &g_shq_t0);
-    /* Binaries load here, all of them, before the first frame: about a
-     * millisecond each, so a couple of thousand is a couple of seconds of
-     * start-up and nothing on the menu. Left to the per-frame pump they
-     * cost menu frames -- 41 fps for sixteen seconds on the tablet -- since
-     * a load is driver work, not idle. Only the keys with no binary stay
-     * queued, and those are what the pump compiles. */
-    {
-        GLint saved[VLOC_MAX];
-        int in = 0, out = 0, loaded = 0;
-        const int queued = g_shq_n;
-        memcpy(saved, g_spec_vals, sizeof(saved));
-        for (in = 0; in < g_shq_n && g_prog_n < PROG_MAX - 512; in++) {
-            const GLint* row = g_shq + (size_t) in * (size_t) g_spec_n;
-            u32 h;
-            Prog* pr;
-            int i;
-            for (i = 0; i < g_spec_n; i++) g_spec_vals[g_spec_slots[i]] = row[i];
-            h = pc_spec_hash();
-            if (pc_prog_find(h) != NULL) continue;
-            pr = pc_shc_load(h);
-            if (pr != NULL) { pc_prog_register(pr, h, 0); loaded++; continue; }
-            if (out != in) memcpy(g_shq + (size_t) out * (size_t) g_spec_n, row, sizeof(GLint) * (size_t) g_spec_n);
-            out++;
-        }
-        g_shq_n = out; g_shq_i = 0;
-        memcpy(g_spec_vals, saved, sizeof(saved));
-        g_spec_dirty = 1;
-        g_cur_prog = NULL;
-        {
-            struct timespec t;
-            clock_gettime(CLOCK_MONOTONIC, &t);
-            fprintf(stderr, "[SHCACHE] %s: %d binaries loaded in %.0f ms; %d to compile "
-                            "(%d keys from the index, %d from the seed)\n",
-                    g_shc_dir, loaded,
-                    (t.tv_sec - g_shq_t0.tv_sec) * 1e3 + (t.tv_nsec - g_shq_t0.tv_nsec) / 1e6,
-                    g_shq_n, from_index, queued - from_index);
-        }
-        if (g_shq_n == 0) { free(g_shq); g_shq = NULL; }
+    if (text) { pc_shc_index_add_text(text); free(text); }
+    memcpy(saved, g_spec_vals, sizeof(saved));
+    for (i = 0; i < g_shc_rows_n; i++) {
+        if (g_shc_rows[i].menu != 1) continue;
+        menu++;
+        if (pc_shc_bring(g_shc_rows[i].row, 0) == 1) loaded++;
     }
+    memcpy(g_spec_vals, saved, sizeof(saved));
+    g_spec_dirty = 1;
+    g_cur_prog = NULL;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    fprintf(stderr, "[SHCACHE] %s: index %d keys; %d menu keys, %d loaded in %.0f ms, %d queued to compile\n",
+            g_shc_dir, g_shc_rows_n, menu, loaded,
+            (t.tv_sec - g_shq_t0.tv_sec) * 1e3 + (t.tv_nsec - g_shq_t0.tv_nsec) / 1e6, g_shq_n);
 }
 
-/* Spend up to `budget_ns` of this frame's slack on the warm-up queue.
- * Loads (~1 ms) fit inside any real budget. A compile (20-40 ms) never
- * fits inside a 60 Hz frame, so one is allowed per call when the budget
- * is at least 5 ms and accepted as an overshoot: a menu frame becomes a
- * 30 fps frame while the seed compiles, once, and a match -- whose work
- * leaves no budget -- never compiles here at all. */
+/* The loading screen: bring in every key this lineup will draw. */
+void pc_shc_prepare_match(int stkind)
+{
+    extern int pc_lineup_chars(int out[4]);
+    GLint saved[VLOC_MAX];
+    GLint* row;
+    int ck[4], nck, i, k;
+    int loaded = 0, compiled = 0, seen = 0;
+    struct timespec t0, t1;
+    static const char* const common_name = "common.txt";
+
+    if (g_shc_prepared) return;
+    g_shc_prepared = 1;
+    g_shc_cur_stkind = stkind;
+    if (!pc_shc_enabled() || g_spec_n <= 0) return;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    nck = pc_lineup_chars(ck);
+    row = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
+    memcpy(saved, g_spec_vals, sizeof(saved));
+
+    /* seed sets: common, each character, the stage */
+    for (k = -1; k <= nck; k++) {
+        char name[64];
+        char* text;
+        const char* p;
+        if (k == -1) snprintf(name, sizeof(name), "%s", common_name);
+        else if (k == nck) snprintf(name, sizeof(name), "s%d.txt", stkind);
+        else snprintf(name, sizeof(name), "c%d.txt", ck[k]);
+        text = pc_shc_read_seed(name);
+        if (text == NULL) continue;
+        for (p = text; *p; ) {
+            const char* nl = strchr(p, '\n');
+            size_t len = nl ? (size_t) (nl - p) : strlen(p);
+            if (len > 0 && pc_shc_parse_line(p, len, row, NULL)) {
+                int r = pc_shc_bring(row, 1);
+                seen++;
+                if (r == 1) loaded++; else if (r == 2) compiled++;
+            }
+            p = nl ? nl + 1 : p + len;
+        }
+        free(text);
+    }
+    /* local keys first used by one of these characters or on this stage */
+    for (i = 0; i < g_shc_rows_n; i++) {
+        const ShcRow* r = &g_shc_rows[i];
+        int hit = (r->stkind == stkind), j;
+        if (r->menu) continue;
+        for (j = 0; !hit && j < r->nck; j++) for (k = 0; !hit && k < nck; k++) if (r->ck[j] == ck[k]) hit = 1;
+        if (!hit) continue;
+        {
+            int rr = pc_shc_bring(r->row, 1);
+            seen++;
+            if (rr == 1) loaded++; else if (rr == 2) compiled++;
+        }
+    }
+    memcpy(g_spec_vals, saved, sizeof(saved));
+    g_spec_dirty = 1;
+    g_cur_prog = NULL;
+    free(row);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    fprintf(stderr, "[SHCACHE] match prep (stage %d, chars", stkind);
+    for (k = 0; k < nck; k++) fprintf(stderr, " %d", ck[k]);
+    fprintf(stderr, "): %d keys, %d loaded, %d compiled, in %.0f ms\n", seen, loaded, compiled,
+            (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6);
+}
+
+void pc_shc_on_fighter_load(void)
+{
+    extern int pc_selected_stkind(void);
+    if (!g_shc_prepared) pc_shc_prepare_match(pc_selected_stkind());
+}
+
+/* The match is over: keys compiled from here on are menu keys again, and
+ * the next match prepares afresh. */
+void pc_shc_match_over(void)
+{
+    g_shc_prepared = 0;
+    g_shc_cur_stkind = -1;
+}
+
+/* Menu keys with no binary yet: one compile a frame, outside matches. */
 void pc_shc_pump(long long budget_ns)
 {
     GLint saved[VLOC_MAX];
     struct timespec t;
     long long deadline, now;
-    int touched = 0, compiled_here = 0;
-    if (g_shq_i >= g_shq_n || budget_ns < 1000000LL) return;
+    int touched = 0;
+    if (g_shq_i >= g_shq_n || budget_ns < 5000000LL) return;
     clock_gettime(CLOCK_MONOTONIC, &t);
     deadline = (long long) t.tv_sec * 1000000000LL + t.tv_nsec + budget_ns;
     memcpy(saved, g_spec_vals, sizeof(saved));
     while (g_shq_i < g_shq_n && g_prog_n < PROG_MAX - 256) {
         const GLint* row = g_shq + (size_t) g_shq_i * (size_t) g_spec_n;
-        u32 h;
-        Prog* pr;
-        int i;
+        int r;
         clock_gettime(CLOCK_MONOTONIC, &t);
         now = (long long) t.tv_sec * 1000000000LL + t.tv_nsec;
         if (deadline - now < 1000000LL) break;
-        for (i = 0; i < g_spec_n; i++) g_spec_vals[g_spec_slots[i]] = row[i];
-        h = pc_spec_hash();
-        if (pc_prog_find(h) != NULL) { g_shq_i++; continue; }
-        pr = pc_shc_load(h);
-        if (pr != NULL) {
-            pc_prog_register(pr, h, 0);
-            g_shq_loaded++; g_shq_i++; touched = 1;
-            continue;
-        }
-        if (compiled_here || budget_ns < 5000000LL) break;
-        pr = pc_prog_build();
-        if (pr != NULL) { pc_prog_register(pr, h, 1); g_shq_compiled++; }
-        g_shq_i++; touched = 1; compiled_here = 1;
-        break;
+        r = pc_shc_bring(row, 1);
+        g_shq_i++;
+        if (r) { touched = 1; if (r == 1) g_shq_loaded++; else g_shq_compiled++; }
+        if (r == 2) break; /* one compile per frame */
     }
     if (touched) {
         memcpy(g_spec_vals, saved, sizeof(saved));
@@ -3089,7 +3246,7 @@ void pc_shc_pump(long long budget_ns)
     }
     if (g_shq_i >= g_shq_n) {
         clock_gettime(CLOCK_MONOTONIC, &t);
-        fprintf(stderr, "[SHCACHE] queue drained: %d loaded, %d compiled, in %.1f s of frame slack\n",
+        fprintf(stderr, "[SHCACHE] menu queue drained: %d loaded, %d compiled, %.1f s after start\n",
                 g_shq_loaded, g_shq_compiled,
                 (t.tv_sec - g_shq_t0.tv_sec) + (t.tv_nsec - g_shq_t0.tv_nsec) / 1e9);
         free(g_shq); g_shq = NULL; g_shq_n = g_shq_i = 0;
@@ -3216,6 +3373,7 @@ static Prog* pc_prog_select(void)
         if (!pr) { pr = pc_prog_build(); fresh = 1; }
         if (!pr) return g_cur_prog;
         pc_prog_register(pr, h, fresh);
+        if (!fresh && !pc_shc_index_has_tagged(pr)) pc_shc_index_append(pr);
     }
     g_spec_dirty = 0;
     return pr;

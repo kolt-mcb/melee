@@ -36,6 +36,14 @@ struct StageSelection {
 };
 
 struct StageSelection selected_stage = { St_Kind_Izumi, NULL };
+#if BUILD_TARGET_PC
+/* For the shader cache's loading-screen warm-up on routes that never reach
+ * Stage_802251B4 (the debug VS boot): the stage the match will load. */
+int pc_selected_stkind(void)
+{
+    return (int) selected_stage.stkind;
+}
+#endif
 StageIdPair default_stage_pair = { Gr_Kind_Izumi, St_Kind_Izumi };
 
 f32 Stage_GetCamBoundsLeftOffset(void)
@@ -550,6 +558,15 @@ GrKind Stage_8022519C(StKind stkind)
 
 void Stage_802251B4(StKind stkind)
 {
+#if BUILD_TARGET_PC
+    /* The loading screen: the one moment the lineup is known and READY
+     * has not happened. The shader cache compiles what this lineup will
+     * draw here, where a stall is invisible, instead of at READY. */
+    {
+        extern void pc_shc_prepare_match(int stkind);
+        pc_shc_prepare_match((int) stkind);
+    }
+#endif
     Ground_801C06B8(stage_id_map[PC_STKIND(stkind)].grkind);
 }
 
