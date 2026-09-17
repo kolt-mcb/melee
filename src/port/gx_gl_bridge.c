@@ -627,6 +627,8 @@ typedef struct {
         u8 s_clamp, t_clamp;
         u8 wrap_s, wrap_t;
         u32 min_filter, mag_filter;
+        u8 mipmap;   /* GXInitTexObj's mipmap flag: the image carries levels */
+        u8 max_lod;  /* GXInitTexObjLOD's max level, 0 without */
         /* PC port: whether this texobj was created by GXInitTexObjCI (i.e. is
          * genuinely paletted) and, if so, which TLUT it named. Without this
          * the decoder had only the format byte to go on, and `g_current_tlut`
@@ -8672,6 +8674,7 @@ typedef struct DlEntry {
 static DlEntry* g_dl_map[DL_MAP_N];
 static size_t g_dl_bytes;
 u32 pc_diag_dl_hits, pc_diag_dl_misses, pc_diag_dl_entries;
+u32 pc_diag_s3tc_uploads;
 u64 pc_diag_dl_ns;
 
 static int pc_dlcache_on(void)
@@ -12035,6 +12038,8 @@ void GXInitTexObj(void* texObj, const void* image, u16 width, u16 height,
     g_state.current_tex.wrap_t = t_clamp;
     g_state.current_tex.min_filter = GX_LINEAR;
     g_state.current_tex.mag_filter = GX_LINEAR;
+    g_state.current_tex.mipmap = mipmap;
+    g_state.current_tex.max_lod = 0;
 }
 
 /* Canonical: GXInitTexObjLOD(obj, min_filt, mag_filt, min_lod, max_lod,
@@ -12047,7 +12052,8 @@ void GXInitTexObjLOD(void* texObj, u32 min_filter, u32 mag_filter,
 {
     g_state.current_tex.min_filter = (u8)min_filter;
     g_state.current_tex.mag_filter = (u8)mag_filter;
-    (void)texObj; (void)min_lod; (void)max_lod; (void)lod_bias;
+    g_state.current_tex.max_lod = (u8) (max_lod < 0.0f ? 0.0f : max_lod > 15.0f ? 15.0f : max_lod);
+    (void)texObj; (void)min_lod; (void)lod_bias;
     (void)bias_clamp; (void)edge_lod; (void)max_aniso;
 }
 
@@ -12237,6 +12243,78 @@ static void decompress_cmpr_block(const u8 *block, PixelRGBA8 *out)
 }
 
 /* Calculate decompressed pixel count for any format */
+/* CMPR is DXT1 in GX's clothes: the same 4x4 blocks, colours big-endian,
+ * the four two-bit selectors of a row packed high-to-low, and the blocks
+ * laid out in 8x8 tiles rather than rows. The tablet's driver takes DXT1
+ * (GL_EXT_texture_compression_s3tc), so the block goes up as it is after
+ * the byte swaps and the reorder -- an eighth of the bytes the RGBA8
+ * decode uploaded, and its mip levels are the image's own instead of a
+ * glGenerateMipmap pass per texture, which is what made the first frames
+ * of a match so slow. */
+static Bool g_tex_slot_compressed[MAX_TEXTURES];
+static int pc_s3tc_ok(void)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("MELEE_NO_S3TC") == NULL && pc_gl_has_ext("GL_EXT_texture_compression_s3tc");
+    return on;
+}
+static u32 cmpr_to_dxt1(const u8* src, u8* dst, u32 w, u32 h)
+{
+    u32 bw = (w + 3) / 4, bh = (h + 3) / 4;
+    u32 tw = (w + 7) / 8, th = (h + 7) / 8, ty, tx, sb;
+    for (ty = 0; ty < th; ty++) {
+        for (tx = 0; tx < tw; tx++) {
+            for (sb = 0; sb < 4; sb++) {
+                const u8* b = src + (((ty * tw + tx) * 4) + sb) * 8;
+                u32 obx = tx * 2 + (sb & 1), oby = ty * 2 + ((sb >> 1) & 1);
+                u8* o;
+                int r;
+                if (obx >= bw || oby >= bh) continue;
+                o = dst + (oby * bw + obx) * 8;
+                o[0] = b[1]; o[1] = b[0]; o[2] = b[3]; o[3] = b[2];
+                for (r = 0; r < 4; r++) {
+                    u8 v = b[4 + r];
+                    o[4 + r] = (u8) (((v & 0x03) << 6) | ((v & 0x0C) << 2) | ((v & 0x30) >> 2) | ((v & 0xC0) >> 6));
+                }
+            }
+        }
+    }
+    return bw * bh * 8;
+}
+/* Uploads the bound texture's levels from a CMPR image; returns how many,
+ * 0 to fall back to the decode. */
+static int pc_upload_cmpr_dxt1(const u8* img, u16 w, u16 h)
+{
+    static u8* buf; static u32 cap;
+    int levels = 1, i;
+    u32 total = 0, lw = w, lh = h, off = 0;
+    if (g_state.current_tex.min_filter >= 2 && g_state.current_tex.min_filter <= 5 &&
+        (g_state.current_tex.mipmap || g_state.current_tex.max_lod > 0)) {
+        int maxl = 1;
+        u32 d = w > h ? w : h;
+        while (d > 1) { d >>= 1; maxl++; }
+        levels = (int) g_state.current_tex.max_lod + 1;
+        if (levels > maxl) levels = maxl;
+        if (levels < 1) levels = 1;
+    }
+    for (i = 0; i < levels; i++) {
+        total += GXGetTexBufferSize((u16) lw, (u16) lh, 0x0E, 0, 0);
+        lw = lw > 1 ? lw >> 1 : 1; lh = lh > 1 ? lh >> 1 : 1;
+    }
+    if (levels > 1 && !pc_mem_readable(img, total)) levels = 1;
+    lw = w; lh = h;
+    for (i = 0; i < levels; i++) {
+        u32 need = ((lw + 3) / 4) * ((lh + 3) / 4) * 8, n;
+        if (need > cap) { u8* nb = (u8*) realloc(buf, need); if (nb == NULL) return i; buf = nb; cap = need; }
+        n = cmpr_to_dxt1(img + off, buf, lw, lh);
+        glCompressedTexImage2D(GL_TEXTURE_2D, i, 0x83F1 /* GL_COMPRESSED_RGBA_S3TC_DXT1_EXT */,
+                               (GLsizei) lw, (GLsizei) lh, 0, (GLsizei) n, buf);
+        off += GXGetTexBufferSize((u16) lw, (u16) lh, 0x0E, 0, 0);
+        lw = lw > 1 ? lw >> 1 : 1; lh = lh > 1 ? lh >> 1 : 1;
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, levels - 1);
+    return levels;
+}
 static u32 calc_pixel_count(u16 w, u16 h)
 {
     return (u32)w * (u32)h;
@@ -12887,7 +12965,15 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         }
     }
 
-    if (fmt == 0x0E) {
+    int compressed_levels = 0;
+    if (fmt == 0x0E && pc_s3tc_ok()) {
+        compressed_levels = pc_upload_cmpr_dxt1((const u8*) img, w, h);
+        if (compressed_levels) {
+            g_tex_slot_compressed[slot] = TRUE;
+            pc_diag_s3tc_uploads++;
+        }
+    }
+    if (fmt == 0x0E && !compressed_levels) {
         /* CMPR: decompress to RGBA8888 temp buffer */
         tmp_buf = decompress_cmpr(img, w, h, &tmp_size);
         if (tmp_buf) {
@@ -13169,11 +13255,15 @@ skip_tlut:
 
     /* Upload */
     pc_diag_uploads++;
-    if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || (fmt == 0x06 && upload_src != img)) {
+    if (compressed_levels) {
+        /* Uploaded above, levels and all. */
+    } else if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || (fmt == 0x06 && upload_src != img)) {
         /* Decompressed/converted → always RGBA8 */
+        if (g_tex_slot_compressed[slot]) { glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1000); g_tex_slot_compressed[slot] = FALSE; }
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, upload_w, upload_h, 0,
                      GL_RGBA, GL_UNSIGNED_BYTE, upload_src);
     } else {
+        if (g_tex_slot_compressed[slot]) { glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1000); g_tex_slot_compressed[slot] = FALSE; }
         glTexImage2D(GL_TEXTURE_2D, 0, internal_fmt, upload_w, upload_h, 0,
                      base_fmt, data_type, upload_src);
     }
@@ -13186,7 +13276,9 @@ skip_tlut:
      * hold for any value below 16. Every texture in the game therefore fell
      * through to GL_NEAREST with no mip chain, and nothing was ever filtered.
      * gx_filter_mode() existed with the same defect but was never called. */
-    if (g_state.current_tex.min_filter >= 2 &&
+    if (compressed_levels) {
+        g_tex_cache_hasmip[slot] = compressed_levels > 1;
+    } else if (g_state.current_tex.min_filter >= 2 &&
         g_state.current_tex.min_filter <= 5) {
         /* A mipmapped minification filter needs a mip chain; the bridge
          * uploads level 0 only, and a mip filter over a texture without one
