@@ -3218,6 +3218,11 @@ void pc_shc_prepare_match(int stkind)
     struct timespec t0, t1;
     static const char* const common_name = "common.txt";
 
+    /* A kind outside the enum is a stale selection -- Classic never
+     * passes the stage-select screen that writes selected_stage, and the
+     * conversion hook read 89 there. Keep whatever valid kind the DVD
+     * route's Stage_802251B4 hook noted first rather than overwrite it. */
+    if (stkind < 0 || stkind >= 35) stkind = g_shc_cur_stkind;
     g_shc_cur_stkind = stkind;
     if (!pc_shc_enabled() || g_spec_n <= 0) return;
     clock_gettime(CLOCK_MONOTONIC, &t0);
@@ -3490,6 +3495,15 @@ int pc_shc_compile_one_deferred(void)
 /* How many variants the base program is standing in for this match; the
  * per-second report prints it so a slow window can be told apart from a
  * shader miss. */
+/* "In a match" for the render loop: prepared and not yet over. The match
+ * frame counter is zero during READY and stays zero in Classic, so it is
+ * the wrong signal for the valve -- Classic ran a whole match with 78
+ * variants on the base program and the valve never fired. */
+int pc_shc_in_match(void)
+{
+    return g_shc_cur_stkind >= 0;
+}
+
 int pc_shc_deferred(void)
 {
     return g_defer_n;

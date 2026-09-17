@@ -1,5 +1,3 @@
-#include <melee/gm/gm_1A36.h>
-#include <melee/gm/forward.h>
 #include <melee/mp/types.h>
 
 #if BUILD_TARGET_PC
@@ -259,40 +257,7 @@ static HSD_Joint* grdat_jointmap_find(u32 offset);
 
 static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gcnDat, u8* dataBase)
 {
-#if BUILD_TARGET_PC
-    /* The stage data is converted once per match, on every route -- the
-     * DVD cache path and the debug boot alike -- with the lineup already
-     * chosen: the loading screen. The shader cache prepares
-     * what this match will draw here, where a stall is invisible. Guarded by
-     * game mode, because the title's attract demo loads a stage too -- and
-     * the first version of this hook, on the common fighter data, fired at
-     * the title with four Marios on stage 0, froze it for two seconds, and
-     * left the real match to compile at READY. */
-    {
-        extern void pc_shc_prepare_match(int stkind);
-        extern int pc_selected_stkind(void);
-        int m = (int) gm_GetCurrentGameMode();
-        if (getenv("MELEE_SHADERLOG") != NULL) fprintf(stderr, "[SHCACHE] stage archive load in game mode %d\n", m);
-        if (m != GM_TITLE &&
-            m != GM_MENU &&
-            m != GM_DEBUG &&
-            m != GM_DEBUG_SOUND_TEST &&
-            m != GM_HANYU_CSS &&
-            m != GM_HANYU_SSS &&
-            m != GM_CAMERA_MODE &&
-            m != GM_TOY_GALLERY &&
-            m != GM_TOY_LOTTERY &&
-            m != GM_TOY_COLLECTION &&
-            m != GM_CLASSIC_GOVER &&
-            m != GM_ADVENTURE_GOVER &&
-            m != GM_ALLSTAR_GOVER &&
-            m != GM_OPENING_MV &&
-            m != GM_DEBUG_GOVER)
-        {
-            pc_shc_prepare_match(pc_selected_stkind());
-        }
-    }
-#endif
+
     UnkStageDat* x64Dat;
     const UnkStageDat_x8_t_gcn* gcnArr;
     struct UnkStageDat_x8_t* x64Arr;
