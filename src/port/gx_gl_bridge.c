@@ -2976,6 +2976,15 @@ static void pc_ubo_layout(void)
         u32 align, size, astride;
         if (ent->spec || ent->base < 0) continue;
         if (g_ubo_n >= (int) (sizeof(g_ubo_mem) / sizeof(g_ubo_mem[0]))) break;
+        /* MELEE_UBO_EXCLUDE=a,b,c keeps the named members as plain uniforms
+         * (a bisection aid: a member whose exclusion changes the frame). */
+        {
+            const char* ex = getenv("MELEE_UBO_EXCLUDE");
+            if (ex != NULL) {
+                const char* q = strstr(ex, ent->name);
+                if (q != NULL && (q == ex || q[-1] == ',') && (q[strlen(ent->name)] == 0 || q[strlen(ent->name)] == ',')) continue;
+            }
+        }
         m = &g_ubo_mem[g_ubo_n];
         if (!pc_ubo_find_decl(ent->name, m->type, &m->arr)) continue;
         if (!strcmp(m->type, "sampler2D")) continue;
@@ -4136,6 +4145,10 @@ static Prog* pc_prog_select(void)
          * the compiles happen -- so "in a match" is "prepared and not yet
          * over": set at the stage conversion, cleared at match over. */
         int in_match = g_shc_cur_stkind >= 0 || gm_8016AEDC() != 0;
+        /* MELEE_SHC_SYNC=1: compile every miss where it is met, match or
+         * not -- for the seed sweep, which needs the keys a match uses and
+         * on a desktop never sees a frame slow enough to open the valve. */
+        { static int sync = -1; if (sync < 0) sync = getenv("MELEE_SHC_SYNC") != NULL; if (sync) in_match = 0; }
         if (in_match && pc_defer_has(h) && pc_uber() != NULL) {
             g_spec_dirty = 0;
             return g_uber;
