@@ -2308,6 +2308,7 @@ static GLenum pc_gl_prim_of(u32 gx_prim)
 static int pc_indexed_on(void);
 static int pc_xdl_on(void);
 static int pc_tri_class(GLenum m);
+static void pc_ubo_commit(void);
 static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes);
 static void pc_batch_flush(void)
 {
@@ -2325,6 +2326,7 @@ static void pc_batch_flush(void)
     gls_bind_vao(g_vao);
     gls_bind_vbo(g_vbo);
     base = pc_vbo_stream(g_stage, g_stage_n);
+    pc_ubo_commit();
     g_batch_flushing = 0;
     /* GLES has no glMultiDrawArrays: a batch of N primitives was N draw
      * calls, ~1650 a frame in a match. Expanded to triangle indices the
@@ -3076,15 +3078,30 @@ static void pc_ubo_write(GLint vloc, int kind, int n, int transpose, const void*
     }
     g_ubo_dirty = 1;
 }
-/* A draw whose block changed: stream the image and bind that range. */
+/* A draw whose block changed: note it; the image is streamed and bound
+ * by pc_ubo_commit() right before the draw that reads it. Streaming it at
+ * staging time put the block in the ring before its draw existed: with
+ * batches spanning display lists the draw came later, the ring could wrap
+ * in between, and the segment's fence -- created when the write pointer
+ * left it -- did not cover that draw. A later frame then overwrote the
+ * block, or the indices behind it, while the GPU still read them: a
+ * one-frame flicker, and on the stage-clear screen a GPU fault that
+ * stalled the swap for two seconds. */
+static int g_ubo_pending;
 static void pc_ubo_bind(void)
 {
-    GLintptr off;
     if (!g_ubo_ok || !g_ubo_dirty) return;
+    g_ubo_dirty = 0;
+    g_ubo_pending = 1;
+}
+static void pc_ubo_commit(void)
+{
+    GLintptr off;
+    if (!g_ubo_pending) return;
     g_vbo_off = (g_vbo_off + g_ubo_align - 1) / g_ubo_align * g_ubo_align;
     off = pc_vbo_stream_raw(g_ubo_img, (GLsizeiptr) g_ubo_size);
     glBindBufferRange(GL_UNIFORM_BUFFER, 0, g_vbo, off, (GLsizeiptr) g_ubo_size);
-    g_ubo_dirty = 0;
+    g_ubo_pending = 0;
     pc_diag_ubo_binds++;
 }
 static void pc_ubo_init(void)
@@ -6363,6 +6380,7 @@ static void bridge_upload_and_draw(void)
         glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                               (void *)(uintptr_t)offsetof(Vertex, col));
         
+        pc_ubo_commit();
         glDrawArrays(GL_TRIANGLES, g_vbo_first, 6);
         pc_frame_trace("quad4");
         /* PC diag: quad draw summary (MELEE_MTR) */
