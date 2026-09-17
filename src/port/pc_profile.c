@@ -48,6 +48,10 @@ static void prof_tick(int sig, siginfo_t* si, void* uc)
     pc = NULL;
 #endif
     if (pc == NULL) return;
+    /* 64-byte buckets: a full table of distinct instruction addresses
+     * saturated within a minute and started dropping samples; the report
+     * is by function anyway. */
+    pc = (void*) ((unsigned long) pc & ~63ul);
     prof_samples++;
     /* Open addressing on the PC: a linear scan of the table saturated at
      * 4096 distinct addresses within seconds and then dropped every new

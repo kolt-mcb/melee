@@ -2254,6 +2254,11 @@ static void pc_vbo_alloc(void)
  * to, so pc_vbo_stream flushes before it wraps. */
 #define PC_BATCH_MAX 512
 static GLenum g_batch_mode;
+static GLenum g_batch_pmode[PC_BATCH_MAX];
+/* Indices for one batch, relative to its first staged vertex: strips and
+ * fans expanded to triangles so every triangle-class primitive of the
+ * batch is one glDrawElementsBaseVertex. */
+static u16 g_istage[3u * PC_VBO_RING_VERTS];
 static GLint g_batch_first[PC_BATCH_MAX];
 static GLsizei g_batch_count[PC_BATCH_MAX];
 static int g_batch_n;
@@ -2266,7 +2271,7 @@ static int g_batch_dl_depth;
  * skinned and unskinned primitives -- the main menu does, and skipping the
  * state for the second kind drew a band of it with the first kind's matrix. */
 static int g_batch_pre_state;
-u32 pc_diag_batch_calls, pc_diag_batch_prims;
+u32 pc_diag_batch_calls, pc_diag_batch_prims, pc_diag_draw_calls;
 
 /* Vertices of a batch are staged on the CPU and uploaded in one map.
  *
@@ -2297,6 +2302,9 @@ static GLenum pc_gl_prim_of(u32 gx_prim)
     }
 }
 
+static int pc_indexed_on(void);
+static int pc_tri_class(GLenum m);
+static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes);
 static void pc_batch_flush(void)
 {
     int i;
@@ -2314,11 +2322,57 @@ static void pc_batch_flush(void)
     gls_bind_vbo(g_vbo);
     base = pc_vbo_stream(g_stage, g_stage_n);
     g_batch_flushing = 0;
+    /* GLES has no glMultiDrawArrays: a batch of N primitives was N draw
+     * calls, ~1650 a frame in a match. Expanded to triangle indices the
+     * whole batch is one glDrawElementsBaseVertex, and strips, fans and
+     * lists can share it. Points and lines keep the per-primitive path. */
+    if (pc_indexed_on() && g_batch_n > 1 && pc_tri_class(g_batch_mode) &&
+        g_stage_n <= 65535u)
+    {
+        u32 n = 0;
+        int ok = 1;
+        for (i = 0; i < g_batch_n && ok; i++) {
+            u32 f = (u32) g_batch_first[i], c = (u32) g_batch_count[i], k;
+            switch (g_batch_pmode[i]) {
+            case GL_TRIANGLES:
+                for (k = 0; k + 2 < c; k += 3) {
+                    g_istage[n++] = (u16) (f + k); g_istage[n++] = (u16) (f + k + 1); g_istage[n++] = (u16) (f + k + 2);
+                }
+                break;
+            case GL_TRIANGLE_STRIP:
+                for (k = 0; k + 2 < c; k++) {
+                    if (k & 1) { g_istage[n++] = (u16) (f + k + 1); g_istage[n++] = (u16) (f + k); }
+                    else       { g_istage[n++] = (u16) (f + k);     g_istage[n++] = (u16) (f + k + 1); }
+                    g_istage[n++] = (u16) (f + k + 2);
+                }
+                break;
+            case GL_TRIANGLE_FAN:
+                for (k = 1; k + 1 < c; k++) {
+                    g_istage[n++] = (u16) f; g_istage[n++] = (u16) (f + k); g_istage[n++] = (u16) (f + k + 1);
+                }
+                break;
+            default:
+                ok = 0;
+                break;
+            }
+        }
+        if (ok && n > 0) {
+            GLintptr ioff = pc_vbo_stream_raw(g_istage, (GLsizeiptr) (n * sizeof(u16)));
+            glDrawElementsBaseVertex(GL_TRIANGLES, (GLsizei) n, GL_UNSIGNED_SHORT,
+                                     (const void*) ioff, base);
+            pc_diag_batch_calls++;
+            pc_diag_draw_calls++;
+            g_batch_n = 0;
+            g_stage_n = 0;
+            return;
+        }
+    }
     for (i = 0; i < g_batch_n; i++) {
         g_batch_first[i] += base;
     }
     if (g_batch_n == 1) {
         glDrawArrays(g_batch_mode, g_batch_first[0], g_batch_count[0]);
+        pc_diag_draw_calls++;
     }
 #if PC_HAVE_MULTIDRAW
     else if (!window_gl_es()) {
@@ -2334,6 +2388,7 @@ static void pc_batch_flush(void)
          * where most of the win was, and that is unaffected. */
         for (i = 0; i < g_batch_n; i++) {
             glDrawArrays(g_batch_mode, g_batch_first[i], g_batch_count[i]);
+            pc_diag_draw_calls++;
         }
     }
     pc_diag_batch_calls++;
@@ -2382,15 +2437,27 @@ static GLint pc_batch_stage(const Vertex* src, unsigned count)
     return first;
 }
 
+static int pc_indexed_on(void)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("MELEE_NO_INDEXED") == NULL;
+    return on;
+}
+static int pc_tri_class(GLenum m)
+{
+    return m == GL_TRIANGLES || m == GL_TRIANGLE_STRIP || m == GL_TRIANGLE_FAN;
+}
 static void pc_batch_add(GLenum mode, GLint first, GLsizei count)
 {
-    if (g_batch_n > 0 && g_batch_mode != mode) {
+    if (g_batch_n > 0 && g_batch_mode != mode &&
+        !(pc_indexed_on() && pc_tri_class(mode) && pc_tri_class(g_batch_mode))) {
         pc_batch_flush();
     }
     if (g_batch_n == PC_BATCH_MAX) {
         pc_batch_flush();
     }
     g_batch_mode = mode;
+    g_batch_pmode[g_batch_n] = mode;
     g_batch_first[g_batch_n] = first;
     g_batch_count[g_batch_n] = count;
     g_batch_n++;
@@ -2402,19 +2469,30 @@ static void pc_batch_add(GLenum mode, GLint first, GLsizei count)
 
 /* Upload `count` vertices and return the first-vertex index for the draw.
  * The caller must have bound g_vbo. */
+static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes);
 static GLint pc_vbo_stream(const Vertex* src, unsigned count)
 {
     GLsizeiptr bytes = (GLsizeiptr) (sizeof(Vertex) * (size_t) count);
-    GLint first;
     if (count == 0) {
         return 0;
     }
     if (bytes > g_vbo_ring_bytes) {
         /* Larger than the ring (cannot happen with MAX_VERTS, but do not
          * corrupt memory if it ever does): take what fits. */
-        if (!g_batch_flushing) pc_batch_flush();
         count = (unsigned) (g_vbo_ring_bytes / (GLsizeiptr) sizeof(Vertex));
         bytes = (GLsizeiptr) (sizeof(Vertex) * (size_t) count);
+    }
+    return (GLint) (pc_vbo_stream_raw(src, bytes) / (GLintptr) sizeof(Vertex));
+}
+/* Bytes into the ring at the next 8-byte boundary; returns their offset.
+ * Vertices (56 bytes each) and index runs share the ring. */
+static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes)
+{
+    GLintptr off;
+    g_vbo_off = (g_vbo_off + 7) & ~(GLintptr) 7;
+    if (bytes > g_vbo_ring_bytes) {
+        if (!g_batch_flushing) pc_batch_flush();
+        bytes = g_vbo_ring_bytes;
         g_vbo_off = 0;
     }
     if (g_vbo_off + bytes > g_vbo_ring_bytes) {
@@ -2464,9 +2542,9 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
         }
     }
 #endif /* __EMSCRIPTEN__ */
-    first = (GLint) (g_vbo_off / (GLintptr) sizeof(Vertex));
+    off = g_vbo_off;
     g_vbo_off += bytes;
-    return first;
+    return off;
 }
 
 
@@ -2782,7 +2860,10 @@ typedef struct Prog {
     GLint* key;            /* g_spec_n ints */
     GLint glloc[VLOC_MAX];
     u32 gen[VLOC_MAX];
+    u32 flushed_serial; /* g_stage_serial when this program last took the upload loop */
 } Prog;
+static u32 g_stage_serial = 1;
+u32 pc_diag_prog_switch, pc_diag_uni_upload, pc_diag_flush_skip;
 static Prog* g_progs[PROG_MAX];
 static int g_prog_n;
 static Prog* g_cur_prog;
@@ -2841,6 +2922,7 @@ static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
     g_last_n[vloc] = (u16) n;
     g_last_tr[vloc] = (u8) transpose;
     g_last_gen[vloc]++;
+    g_stage_serial++;
 }
 
 /* Rewrite `uniform int NAME[...];` declarations of specialisation slots
@@ -3832,6 +3914,7 @@ static void pc_prog_flush(void)
     if (pr != g_cur_prog) {
         glUseProgram(pr->id);
         g_cur_prog = pr;
+        pc_diag_prog_switch++;
         if (pr == g_uber) g_uber_spec_gen = (u32) -1;
     }
     if (pr == g_uber && g_uber_spec_gen != g_spec_gen) {
@@ -3848,6 +3931,10 @@ static void pc_prog_flush(void)
         }
         g_uber_spec_gen = g_spec_gen;
     }
+    /* Nothing staged since this program last took the loop: the hundred
+     * generation compares would all say "current". */
+    if (pr->flushed_serial == g_stage_serial) { pc_diag_flush_skip++; return; }
+    pr->flushed_serial = g_stage_serial;
     for (i = 0; i < g_set_n; i++) {
         int v = g_set_list[i];
         GLint gl;
@@ -3857,6 +3944,7 @@ static void pc_prog_flush(void)
         gl = pr->glloc[v];
         if (gl < 0) continue;
         d = g_last[v];
+        pc_diag_uni_upload++;
         switch (g_last_kind[v]) {
         case UK_I1: glUniform1i(gl, *(const GLint*) d); break;
         case UK_F1: glUniform1f(gl, *(const GLfloat*) d); break;
@@ -4109,6 +4197,11 @@ static void bridge_create_gl(void)
     glEnableVertexAttribArray(4);
     glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           (void *)(uintptr_t)offsetof(Vertex, tex1));
+    /* The vertex ring doubles as the index ring: a batch's indices are
+     * streamed into it right after the batch's vertices (see
+     * pc_batch_flush), so the same fences cover both. The element binding
+     * is VAO state, recorded here once. */
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_vbo);
     
     gls_bind_vbo(0);
     gls_bind_vao(0);
