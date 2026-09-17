@@ -1603,7 +1603,15 @@ static const char* g_frag_src =
 "    int last_a = -1;\n"
 "\n"
 "    // Execute TEV stages\n"
-"    for (int stage = 0; stage < u_tev_num_stages && stage < 8; stage++) {\n"
+    // A constant bound so every compiler unrolls this; the uniform guard is
+    // a uniform branch, which costs nearly nothing. With the bound itself a
+    // uniform, Adreno never unrolled it and the base program ran at 13.6 ns
+    // a fragment -- ten times a specialised variant. Specialised variants
+    // have this loop replaced textually (pc_unroll_tev); this form is what
+    // the base program runs, and it is the fallback for any variant a match
+    // has not compiled yet.
+"    for (int stage = 0; stage < 8; stage++) {\n"
+"        if (stage >= u_tev_num_stages) break;\n"
 "        // Get texture coordinates (with indirect bump mapping support)\n"
 "        // The stage samples its map with the texcoord GXSetTevOrder gave\n"
 "        // it, which is not the map's own index once a projection coord is\n"
@@ -2574,10 +2582,21 @@ static int pc_ident_boundary(char c)
              (c >= '0' && c <= '9') || c == '_');
 }
 
+/* `guarded`: wrap each unrolled stage in `if (N < u_tev_num_stages)` --
+ * for the base program, where the count is a uniform. Adreno will not
+ * unroll this loop in any form the source can take (a constant bound with
+ * a uniform-guarded break still measured 207 ms against 24 unrolled), so
+ * the base program gets eight textual stages behind uniform branches. */
+static char* pc_unroll_tev_ex(char* src, int nstages, int guarded);
 static char* pc_unroll_tev(char* src, int nstages)
 {
+    return pc_unroll_tev_ex(src, nstages, 0);
+}
+static char* pc_unroll_tev_ex(char* src, int nstages, int guarded)
+{
     static const char head[] =
-        "    for (int stage = 0; stage < u_tev_num_stages && stage < 8; stage++) {\n";
+        "    for (int stage = 0; stage < 8; stage++) {\n"
+        "        if (stage >= u_tev_num_stages) break;\n";
     static const char tail[] = "    // Final output\n";
     const char* h;
     const char* t;
@@ -2587,7 +2606,7 @@ static char* pc_unroll_tev(char* src, int nstages)
     char* out;
     int n;
 
-    if (getenv("MELEE_TEV_NOUNROLL") != NULL) {
+    if (!guarded && getenv("MELEE_TEV_NOUNROLL") != NULL) {
         return src;
     }
     h = strstr(src, head);
@@ -2619,7 +2638,8 @@ static char* pc_unroll_tev(char* src, int nstages)
     o += (size_t) sprintf(out + o, "    // TEV stages, unrolled: %d\n", nstages);
     for (n = 0; n < nstages; n++) {
         const char* b = body;
-        o += (size_t) sprintf(out + o, "    {\n");
+        if (guarded) o += (size_t) sprintf(out + o, "    if (%d < u_tev_num_stages) {\n", n);
+        else o += (size_t) sprintf(out + o, "    {\n");
         while (b < body_end) {
             if (b[0] == 's' && strncmp(b, "stage", 5) == 0 &&
                 (b == body || pc_ident_boundary(b[-1])) &&
@@ -3399,6 +3419,11 @@ static Prog* pc_prog_select(void)
     if (!g_spec_dirty && g_cur_prog) {
         return g_cur_prog;
     }
+    {
+        static int force = -1;
+        if (force < 0) force = getenv("MELEE_FORCE_UBER") != NULL;
+        if (force && pc_uber() != NULL) { g_spec_dirty = 0; return g_uber; }
+    }
     h = pc_spec_hash();
     pr = pc_prog_find(h);
     if (pr != NULL) { g_spec_dirty = 0; return pr; }
@@ -3522,7 +3547,11 @@ static void bridge_compile_shaders(void)
 {
     pc_vloc_init();
     GLuint vs = compile_shader(GL_VERTEX_SHADER, g_vert_src);
-    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, g_frag_src);
+    /* The base program draws whatever variant a match has not compiled;
+     * unrolled like the variants, guarded by the stage count uniform. */
+    char* base_fsrc = pc_unroll_tev_ex(strdup(g_frag_src), 8, 1);
+    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, base_fsrc);
+    free(base_fsrc);
     if (!vs || !fs) {
         PORT_LOG_ERROR("Failed to compile shaders");
         if (vs) glDeleteShader(vs);
