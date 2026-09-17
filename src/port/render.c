@@ -625,11 +625,15 @@ void render_present(void)
                 extern u32 pc_diag_dl_hits, pc_diag_dl_misses, pc_diag_dl_entries;
                 extern u64 pc_diag_dl_ns;
                 extern u32 pc_diag_stage_full, pc_diag_stage_mtx, pc_diag_stage_none;
-                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  gpu(query) %.2f ms/frame  per frame: draws %u glstate %u (skipped %u) stage %u/%u/%u dl %.2f ms (%u hit %u miss, %u cached) texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u  efb %u (read %.2f ms, pack %.2f ms)\n",
+                extern u32 pc_diag_prog_switch, pc_diag_uni_upload, pc_diag_flush_skip;
+                extern u32 pc_diag_batch_calls, pc_diag_draw_calls;
+                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  gpu(query) %.2f ms/frame  per frame: draws %u (calls %u, batches %u) glstate %u (skipped %u) stage %u/%u/%u prog %u uni %u (flush skipped %u) dl %.2f ms (%u hit %u miss, %u cached) texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u  efb %u (read %.2f ms, pack %.2f ms)\n",
                         s_n * 1e9 / wall, wall / s_n / 1e6, s_busy_ns / s_n / 1e6, s_fin_ns / s_n / 1e6,
                         pc_diag_gpu_frames ? (double) pc_diag_gpu_ns / pc_diag_gpu_frames / 1e6 : 0.0,
-                        pc_diag_draws / s_n, pc_diag_gl_calls / s_n, pc_diag_gl_skips / s_n,
+                        pc_diag_draws / s_n, pc_diag_draw_calls / s_n, pc_diag_batch_calls / s_n,
+                        pc_diag_gl_calls / s_n, pc_diag_gl_skips / s_n,
                         pc_diag_stage_full / s_n, pc_diag_stage_mtx / s_n, pc_diag_stage_none / s_n,
+                        pc_diag_prog_switch / s_n, pc_diag_uni_upload / s_n, pc_diag_flush_skip / s_n,
                         (double) pc_diag_dl_ns / s_n / 1e6, pc_diag_dl_hits / s_n, pc_diag_dl_misses / s_n, pc_diag_dl_entries,
                         pc_diag_hashes / s_n,
                         (double) pc_diag_hash_ns / s_n / 1e6,
@@ -682,6 +686,8 @@ void render_present(void)
                 pc_diag_gl_calls = pc_diag_gl_skips = 0;
                 pc_diag_dl_hits = pc_diag_dl_misses = 0; pc_diag_dl_ns = 0;
                 pc_diag_stage_full = pc_diag_stage_mtx = pc_diag_stage_none = 0;
+                pc_diag_prog_switch = pc_diag_uni_upload = pc_diag_flush_skip = 0;
+                pc_diag_batch_calls = pc_diag_draw_calls = 0;
                 pc_diag_gpu_ns = 0; pc_diag_gpu_frames = 0;
                 pc_diag_hash_bytes = pc_diag_hash_ns = 0;
                 pc_diag_efb_ns = pc_diag_efb_read_ns = 0;
