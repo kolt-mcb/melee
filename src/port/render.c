@@ -629,15 +629,16 @@ void render_present(void)
                 extern u32 pc_diag_batch_calls, pc_diag_draw_calls;
                 extern u64 pc_diag_replay_ns; extern u32 pc_diag_replay_verts, pc_diag_replay_skinned;
                 extern u64 pc_diag_fence_ns; extern u32 pc_diag_fence_waits;
+                extern u32 pc_diag_ubo_binds;
                 static u64 s_fence_prev; static u32 s_fw_prev;
-                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  gpu(query) %.2f ms/frame  fence %u waits %.2f ms  per frame: draws %u (calls %u, batches %u) glstate %u (skipped %u) stage %u/%u/%u prog %u uni %u (flush skipped %u) dl %.2f ms (%u hit %u miss, %u cached; replay %.2f ms %u verts %u skinned) texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u  efb %u (read %.2f ms, pack %.2f ms)\n",
+                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  gpu(query) %.2f ms/frame  fence %u waits %.2f ms  per frame: draws %u (calls %u, batches %u) glstate %u (skipped %u) stage %u/%u/%u prog %u uni %u ubo %u (flush skipped %u) dl %.2f ms (%u hit %u miss, %u cached; replay %.2f ms %u verts %u skinned) texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u  efb %u (read %.2f ms, pack %.2f ms)\n",
                         s_n * 1e9 / wall, wall / s_n / 1e6, s_busy_ns / s_n / 1e6, s_fin_ns / s_n / 1e6,
                         pc_diag_gpu_frames ? (double) pc_diag_gpu_ns / pc_diag_gpu_frames / 1e6 : 0.0,
                         (pc_diag_fence_waits - s_fw_prev) / s_n, (double) (pc_diag_fence_ns - s_fence_prev) / s_n / 1e6,
                         pc_diag_draws / s_n, pc_diag_draw_calls / s_n, pc_diag_batch_calls / s_n,
                         pc_diag_gl_calls / s_n, pc_diag_gl_skips / s_n,
                         pc_diag_stage_full / s_n, pc_diag_stage_mtx / s_n, pc_diag_stage_none / s_n,
-                        pc_diag_prog_switch / s_n, pc_diag_uni_upload / s_n, pc_diag_flush_skip / s_n,
+                        pc_diag_prog_switch / s_n, pc_diag_uni_upload / s_n, pc_diag_ubo_binds / s_n, pc_diag_flush_skip / s_n,
                         (double) pc_diag_dl_ns / s_n / 1e6, pc_diag_dl_hits / s_n, pc_diag_dl_misses / s_n, pc_diag_dl_entries,
                         (double) pc_diag_replay_ns / s_n / 1e6, pc_diag_replay_verts / s_n, pc_diag_replay_skinned / s_n,
                         pc_diag_hashes / s_n,
@@ -691,7 +692,7 @@ void render_present(void)
                 pc_diag_gl_calls = pc_diag_gl_skips = 0;
                 pc_diag_dl_hits = pc_diag_dl_misses = 0; pc_diag_dl_ns = 0;
                 pc_diag_stage_full = pc_diag_stage_mtx = pc_diag_stage_none = 0;
-                pc_diag_prog_switch = pc_diag_uni_upload = pc_diag_flush_skip = 0;
+                pc_diag_prog_switch = pc_diag_uni_upload = pc_diag_flush_skip = 0; pc_diag_ubo_binds = 0;
                 pc_diag_batch_calls = pc_diag_draw_calls = 0;
                 pc_diag_replay_ns = 0; pc_diag_replay_verts = pc_diag_replay_skinned = 0;
                 s_fence_prev = pc_diag_fence_ns; s_fw_prev = pc_diag_fence_waits;
