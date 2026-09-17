@@ -4489,13 +4489,34 @@ void gx_frame_begin(void)
  * would be drawn with the new state at the next flush. So every render-state
  * setter flushes first. */
 static void bridge_upload_and_draw(void);
+/* Uniform staging is gated on these: every state-changing GX entry point
+ * comes through gx_flush_pending() and bumps both, the matrix loaders bump
+ * only the first, and the draw block re-stages a group only when its
+ * generation moved since it last staged. Consecutive draws under the same
+ * state -- an effect's hundred quads, the objects of one material -- cost
+ * nothing in staging; a matrix-only change re-stages the matrices and
+ * leaves the TEV, fog and texture uniforms alone. */
+static u32 g_gen_mtx, g_gen_uni;
+u32 pc_diag_stage_full, pc_diag_stage_mtx, pc_diag_stage_none;
 static void gx_flush_pending(void)
 {
+    g_gen_mtx++;
+    g_gen_uni++;
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
     pc_batch_flush();
 }
+static void gx_flush_pending_mtx(void)
+{
+    g_gen_mtx++;
+    if (g_state.vert_count > 0) {
+        bridge_upload_and_draw();
+    }
+    pc_batch_flush();
+}
+/* For the few setters that change uniform state without flushing. */
+static void gx_state_touched(void) { g_gen_uni++; }
 static GLenum gx_bl_to_gl(u32 gx_blend_factor); /* fwd decl */
 /* Uniform upload memoisation.
  *
@@ -5453,6 +5474,17 @@ static void bridge_upload_and_draw(void)
     /* The program is selected and its uniforms brought up to date in
      * pc_prog_flush(), right before the draw call. */
     
+    static u32 s_staged_mtx = (u32) -1, s_staged_uni = (u32) -1;
+    int stage_a = s_staged_mtx != g_gen_mtx || s_staged_uni != g_gen_uni ||
+                  ENV_FLAG("MELEE_NO_STAGEGATE");
+    int stage_b = s_staged_uni != g_gen_uni || ENV_FLAG("MELEE_PAINTDRAW") ||
+                  ENV_FLAG("MELEE_NO_STAGEGATE");
+    if (stage_b) pc_diag_stage_full++; else if (stage_a) pc_diag_stage_mtx++; else pc_diag_stage_none++;
+    s_staged_mtx = g_gen_mtx;
+    s_staged_uni = g_gen_uni;
+    f32 mvp[4][4];
+    memset(mvp, 0, sizeof(mvp));
+    if (stage_a) {
     /* Upload projection matrix (as uniform)
      * g_state.proj_matrix is row-major C array. GL_TRUE transposes to column-major. */
     if (g_proj_loc >= 0) {
@@ -5773,8 +5805,10 @@ static void bridge_upload_and_draw(void)
         }
     }
 
-    /* Upload alpha compare uniforms */
+    } /* stage_a */
     pc_sec_end(1);
+    if (stage_b) {
+    /* Upload alpha compare uniforms */
     apply_alpha_compare_uniforms();
     
     g_frame_draw_idx++;
@@ -5875,6 +5909,7 @@ static void bridge_upload_and_draw(void)
     if (g_tex1_loc >= 0) UP1I(g_tex1_loc, 1);
     if (g_tex2_loc >= 0) UP1I(g_tex2_loc, 2);
     if (g_tex3_loc >= 0) UP1I(g_tex3_loc, 3);
+    } /* stage_b */
     
     /* Determine GL primitive type */
     GLenum gl_prim;
@@ -6997,7 +7032,7 @@ void GXSetCopyClear(void* color, u32 z)
 
 void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     GX_TRACE("GXLoadPosMtxImm(p, %u)", id);
     if (id >= 68) { PORT_LOG_WARN("GXLoadPosMtxImm: matrix id %u out of range", id); return; }
     
@@ -7082,7 +7117,7 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
 
 void GXLoadNrmMtxImm(f32 mtx[3][4], u32 id)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     if (id >= 68) { PORT_LOG_WARN("GXLoadNrmMtxImm: matrix id %u out of range", id); return; }
     memcpy(g_nrm_mtx_array[id], mtx, sizeof(g_nrm_mtx_array[0]));
     g_nrm_mtx_valid[id] = 1;
@@ -7090,7 +7125,7 @@ void GXLoadNrmMtxImm(f32 mtx[3][4], u32 id)
 
 void GXSetCurrentMtx(u32 id)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     if (ENV_FLAG("MELEE_MTXTRACE")) {
         static unsigned long hist[70];
         static int n = 0;
@@ -7154,7 +7189,7 @@ void GXSetCurrentMtx(u32 id)
 }
 void GXSetProjection(f32 mtx[4][4], u32 type)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     { static int n = 0;
       if (n < 3 && getenv("MELEE_VPTRACE") != NULL &&
           mtx[1][1] > 3.0f && mtx[1][1] < 4.0f) { n++;
@@ -10619,6 +10654,7 @@ void GXLoadLightObjIndx(u32 lt_obj_indx, u32 light_id)
 void GXSetLightColors(f32 amb_r, f32 amb_g, f32 amb_b,
                        f32 mat_r, f32 mat_g, f32 mat_b)
 {
+    gx_state_touched();
     /* Store ambient color for per-vertex lighting */
     g_state.ambient_color[0] = amb_r;
     g_state.ambient_color[1] = amb_g;
@@ -10746,7 +10782,7 @@ u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod)
 }
 void GXLoadTexMtxImm(f32 mtx[][4], u32 id, u32 type)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     GX_TRACE("GXLoadTexMtxImm(p, %u, %u)", id, type);
     if (id < 68) g_state.tex_mtx_loaded[id] = TRUE;
     if (id >= 64 && id <= 124 && ((id - 64) % 3) == 0) {
@@ -10786,6 +10822,7 @@ void GXInitFogAdjTable(void *table, u16 width, f32 projmtx[4][4])
 }
 void GXSetFogRangeAdj(u32 enable, u16 center, const u8 *table)
 {
+    gx_state_touched();
     g_state.fog_range_adj_enabled = (enable != 0);
     g_state.fog_range_adj_center = center;
     if (table) {
@@ -10918,6 +10955,7 @@ void GXSetTevSwapMode2(u32 stage, u32 swp0, u32 swp1)
 
 void GXSetTevSwapModeTbl(u32 entry, u32 swp0, u32 swp1)
 {
+    gx_state_touched();
     /* Legacy 3-param variant - map to full table entry */
     if (entry < 4) {
         g_state.tev_swap_table[entry][0] = swp0;  /* red */
@@ -12160,8 +12198,10 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
 #if BUILD_TARGET_PC
     /* PC port: image pointers can be garbage from unconverted archive
      * descriptors. Probe the whole nominal extent (worst case 4 B/texel)
-     * before any decoder touches it. */
-    {
+     * before any decoder touches it. The probe is a syscall (msync) per
+     * load, ~150 a frame; an image the cache already holds under this
+     * (image, w, h, format) was probed when it arrived. */
+    if (tex_map_find(img, w, h, fmt) < 0) {
         /* GX stores textures in tiles and pads to whole ones, and every
          * decoder below indexes through gx_tiled_index, which uses the padded
          * width. Probing the *unpadded* extent therefore approved textures
