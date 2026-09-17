@@ -2482,6 +2482,10 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
         count = (unsigned) (g_vbo_ring_bytes / (GLsizeiptr) sizeof(Vertex));
         bytes = (GLsizeiptr) (sizeof(Vertex) * (size_t) count);
     }
+    /* Vertices are addressed by index from offset 0 at the struct's stride,
+     * so a block must start on a stride boundary; an index run before it
+     * leaves the ring at any 8-byte offset. */
+    g_vbo_off = ((g_vbo_off + (GLintptr) sizeof(Vertex) - 1) / (GLintptr) sizeof(Vertex)) * (GLintptr) sizeof(Vertex);
     return (GLint) (pc_vbo_stream_raw(src, bytes) / (GLintptr) sizeof(Vertex));
 }
 /* Bytes into the ring at the next 8-byte boundary; returns their offset.
@@ -8655,10 +8659,15 @@ static void dl_decode(const u8* ptr, const u8* end, u32 vsize, u32 pos_cnt, DlEn
  * can still read the state this one leaves. The one thing dropped is the
  * normal transform bridge_add_vertex applies to the previous vertex's
  * normal, when this vertex carries its own normal and overwrites it. */
+u64 pc_diag_replay_ns; u32 pc_diag_replay_verts, pc_diag_replay_skinned;
 static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
 {
     u32 n = dp->nverts, i;
     int skin = g_state.va_mode[0] != 0 && g_state.mtx3d_active;
+    struct timespec r0, r1;
+    clock_gettime(CLOCK_MONOTONIC, &r0);
+    pc_diag_replay_verts += n;
+    if (skin) pc_diag_replay_skinned += n;
     for (i = 0; i < n; i++) {
         const DlVert* s = &dv[i];
         Vertex* v;
@@ -8768,6 +8777,8 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
             v->tex1[0] = s->t1[0]; v->tex1[1] = s->t1[1];
         }
     }
+    clock_gettime(CLOCK_MONOTONIC, &r1);
+    pc_diag_replay_ns += (u64) ((r1.tv_sec - r0.tv_sec) * 1000000000ll + (r1.tv_nsec - r0.tv_nsec));
 }
 
 /* The same GX calls the direct path makes per vertex, from the decode. */
