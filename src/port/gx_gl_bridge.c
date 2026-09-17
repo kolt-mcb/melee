@@ -2270,8 +2270,9 @@ static int g_batch_dl_depth;
  * it is then identity rather than PNMTX[current]. A display list can mix
  * skinned and unskinned primitives -- the main menu does, and skipping the
  * state for the second kind drew a band of it with the first kind's matrix. */
-static int g_batch_pre_state;
 u32 pc_diag_batch_calls, pc_diag_batch_prims, pc_diag_draw_calls;
+/* The generations the open batch's state was applied under. */
+static u32 g_batch_gen_mtx, g_batch_gen_uni;
 
 /* Vertices of a batch are staged on the CPU and uploaded in one map.
  *
@@ -2303,6 +2304,7 @@ static GLenum pc_gl_prim_of(u32 gx_prim)
 }
 
 static int pc_indexed_on(void);
+static int pc_xdl_on(void);
 static int pc_tri_class(GLenum m);
 static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes);
 static void pc_batch_flush(void)
@@ -2406,7 +2408,7 @@ static GLint pc_batch_stage(const Vertex* src, unsigned count);
 
 static GLint pc_vbo_first_for(const Vertex* src, unsigned count)
 {
-    if (g_batch_dl_depth > 0) {
+    if (g_batch_dl_depth > 0 || pc_xdl_on()) {
         GLint f = pc_batch_stage(src, count);
         if (f >= 0) {
             return f;
@@ -2437,6 +2439,16 @@ static GLint pc_batch_stage(const Vertex* src, unsigned count)
     return first;
 }
 
+/* Batches cross display-list boundaries and immediate-mode primitives:
+ * a batch stays open until a GX state call moves a generation, so
+ * consecutive objects under one material draw as one call. MELEE_XDL=0
+ * flushes at every list end as before. */
+static int pc_xdl_on(void)
+{
+    static int on = -1;
+    if (on < 0) { const char* e = getenv("MELEE_XDL"); on = !(e && e[0] == '0'); }
+    return on;
+}
 static int pc_indexed_on(void)
 {
     static int on = -1;
@@ -2462,7 +2474,7 @@ static void pc_batch_add(GLenum mode, GLint first, GLsizei count)
     g_batch_count[g_batch_n] = count;
     g_batch_n++;
     pc_diag_batch_prims++;
-    if (g_batch_dl_depth == 0) {
+    if (g_batch_dl_depth == 0 && !pc_xdl_on()) {
         pc_batch_flush();
     }
 }
@@ -4641,13 +4653,38 @@ static void gx_flush_pending_unused(void)
  * viewport and copy state that the GL shadow carries: they re-stage the
  * matrix group (cheap, and the viewport feeds it) and leave the TEV, alpha,
  * fog and texture uniforms alone. */
-static void gx_flush_pending_mtx(void)
+static void gx_flush_pending_gl(void)
 {
     g_gen_mtx++;
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
     pc_batch_flush();
+}
+/* The position and normal matrix loaders and the current-matrix select.
+ * A batch of CPU-skinned primitives drew with an identity matrix uniform
+ * and its vertices already in view space, so a new matrix changes nothing
+ * it will be drawn with: the batch stays open and the next primitive is
+ * transformed with the new matrices as it joins. */
+static int pc_xdl_on(void);
+static int g_batch_pre_state;
+/* The vertex descriptor, attribute formats and arrays: they shape how the
+ * next primitive is decoded and nothing about how anything is drawn.
+ * Pending vertices are already decoded, so they are drawn under the
+ * current state; the batch stays open and no generation moves. */
+static void gx_flush_pending_desc(void)
+{
+    if (g_state.vert_count > 0) {
+        bridge_upload_and_draw();
+    }
+}
+static void gx_flush_pending_mtx(void)
+{
+    g_gen_mtx++;
+    if (g_state.vert_count > 0) {
+        bridge_upload_and_draw();
+    }
+    if (!(pc_xdl_on() && g_batch_pre_state && g_batch_n > 0)) pc_batch_flush();
 }
 /* For the few setters that change uniform state without flushing. */
 #define gx_state_touched() (g_last_bump = __func__, g_gen_uni++)
@@ -4768,6 +4805,7 @@ void gx_frame_end(void)
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
+    pc_batch_flush();
 
     /* Loud guard: the extreme-position filter in bridge_add_vertex zeroes
      * out-of-range vertices silently. If it fires, geometry is being lost —
@@ -5154,6 +5192,7 @@ static Bool mv_init(void)
 void pc_gx_draw_movie(const unsigned char* rgb, int width, int height)
 {
     GLint prev_prog = 0, prev_vao = 0, prev_tex = 0, prev_unit = 0;
+    gx_flush_pending();
     GLint prev_align = 4;
     GLboolean depth_was, blend_was, cull_was, scissor_was;
 
@@ -5467,16 +5506,19 @@ static void bridge_upload_and_draw(void)
      *
      * This is the difference between applying the state 4718 times a frame on
      * Venom and applying it 629 times, once per list. */
-    if (g_batch_dl_depth > 0 && g_batch_n > 0 &&
+    if ((g_batch_dl_depth > 0 || pc_xdl_on()) && g_batch_n > 0 &&
         g_state.prim_type != GX_QUADS &&
         g_batch_pretransformed == g_batch_pre_state &&
-        pc_gl_prim_of(g_state.prim_type) == g_batch_mode)
+        (pc_gl_prim_of(g_state.prim_type) == g_batch_mode ||
+         (pc_indexed_on() && pc_tri_class(pc_gl_prim_of(g_state.prim_type)) && pc_tri_class(g_batch_mode))) &&
+        g_batch_gen_uni == g_gen_uni &&
+        (g_batch_gen_mtx == g_gen_mtx || (g_batch_pre_state && g_batch_pretransformed)))
     {
         pc_sec_begin();
         g_vbo_first = pc_batch_stage(g_state.verts, count);
         pc_sec_end(0);
         if (g_vbo_first >= 0) {
-            pc_batch_add(g_batch_mode, g_vbo_first, (GLsizei) count);
+            pc_batch_add(pc_gl_prim_of(g_state.prim_type), g_vbo_first, (GLsizei) count);
             pc_diag_draws++;
             pc_stat_draws++;
             pc_stat_verts += (unsigned) count;
@@ -5493,6 +5535,8 @@ static void bridge_upload_and_draw(void)
      * of the previous one's pending draw. */
     pc_batch_flush();
     g_batch_pre_state = g_batch_pretransformed;
+    g_batch_gen_mtx = g_gen_mtx;
+    g_batch_gen_uni = g_gen_uni;
 #endif
     pc_sec_begin();
     g_vbo_first = pc_vbo_first_for(g_state.verts, count);
@@ -6838,7 +6882,7 @@ static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt
     pc_efb_override_mark(o, dest);
     clock_gettime(CLOCK_MONOTONIC, &c1);
     pc_diag_efb_ns += (u64) ((c1.tv_sec - c0.tv_sec) * 1000000000ll + (c1.tv_nsec - c0.tv_nsec));
-    { static int n = 0; if (n < 6 && getenv("MELEE_EFBLOG")) { n++;
+    { static int n = 0; if (ENV_FLAG("MELEE_EFBLOG") && n < 6) { n++;
         fprintf(stderr, "[EFB] gpu copy img=%p %ux%u fmt=%02x from window rect %d,%d %dx%d -> tex %u\n",
                 dest, dw, dh, fmt, r[0], r[1], r[2], r[3], o->tex); } }
     return 1;
@@ -6920,7 +6964,7 @@ GLuint pc_efb_override_tex(const void* img, u32 w, u32 h)
             return o->tex;
         }
         { static int n = 0;
-          if (n < 6 && getenv("MELEE_EFBLOG")) { n++;
+          if (ENV_FLAG("MELEE_EFBLOG") && n < 6) { n++;
             fprintf(stderr, "[OFF] miss img=%p want %ux%u got %ux%u mark=%s\n",
                     img, o->w, o->h, w, h,
                     memcmp(img, o->mark, PC_EFB_MARK_BYTES) == 0 ? "ok" : "gone"); } }
@@ -6993,10 +7037,10 @@ void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
 
 void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     GX_TRACE("GXSetViewport(%.1f, %.1f, %.1f, %.1f, %.1f, %.1f)", left, top, wd, ht, nearz, farz);
     { static int n = 0;
-      if (n < 6 && getenv("MELEE_VPTRACE") != NULL) { n++;
+      if (ENV_FLAG("MELEE_VPTRACE") && n < 6) { n++;
         fprintf(stderr, "[VP] GXSetViewport(%.1f,%.1f,%.1f,%.1f) aspect=%.4f\n",
                 (double) left, (double) top, (double) wd, (double) ht,
                 ht != 0.0f ? (double) (wd / ht) : 0.0); } }
@@ -7010,7 +7054,7 @@ void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz)
 }
 void GXSetScissor(u32 x, u32 y, u32 w, u32 h)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     GX_TRACE("GXSetScissor(%u, %u, %u, %u)", x, y, w, h);
     g_state.scissor_x = x;
     g_state.scissor_y = y;
@@ -7071,6 +7115,7 @@ static void pc_gl_clear(f32 r, f32 g, f32 b, f32 a, f32 z)
 void GXClearBuff(void)
 {
     GX_TRACE("GXClearBuff");
+    gx_flush_pending();
     /* Use copy-clear color/depth if configured, otherwise defaults */
 
     /* PC diag: log every full clear + screen state before it (MELEE_MTR) */
@@ -7328,9 +7373,9 @@ void GXSetCurrentMtx(u32 id)
 }
 void GXSetProjection(f32 mtx[4][4], u32 type)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     { static int n = 0;
-      if (n < 3 && getenv("MELEE_VPTRACE") != NULL &&
+      if (ENV_FLAG("MELEE_VPTRACE") && n < 3 &&
           mtx[1][1] > 3.0f && mtx[1][1] < 4.0f) { n++;
         void* bt[16]; int bn = backtrace(bt, 16);
         fprintf(stderr, "[VP] GXSetProjection m00=%.3f m11=%.3f type=%u\n",
@@ -7403,7 +7448,7 @@ void GXSetProjection(f32 mtx[4][4], u32 type)
 
 void GXSetVtxDesc(u32 attr, u32 type)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_desc();
     GX_TRACE("GXSetVtxDesc(%u, %u)", attr, type);
     /* GXAttrType: NONE=0, DIRECT=1, INDEX8=2, INDEX16=3 */
     u8 mode = (u8)type;
@@ -7424,7 +7469,7 @@ void GXSetVtxDesc(u32 attr, u32 type)
 }
 void GXClearVtxDesc(void)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_desc();
     memset(g_state.va_mode, 0, sizeof(g_state.va_mode));
     g_state.pos_enabled = g_state.nrm_enabled = g_state.clr_enabled = g_state.tex0_enabled = g_state.tex1_enabled = FALSE;
     g_state.pos_fetch_indexed = FALSE;
@@ -7439,7 +7484,7 @@ static u8 g_vf_tex0_type[8], g_vf_tex0_frac[8], g_vf_tex0_set[8];
 static u8 g_vf_pos_type[8], g_vf_pos_frac[8], g_vf_pos_set[8];
 void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_desc();
     /* Store format params for vertex data conversion. */
     u32 a = (attr == 25 /* GX_VA_NBT */) ? 10u : attr;
     if (a <= 20) {
@@ -7470,7 +7515,7 @@ void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 }
 void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_desc();
     {
         u32 a = (attr == 25 /* GX_VA_NBT */) ? 10u : attr;
         if (a <= 20) { g_state.va_arr[a] = (const u8*)base_ptr; g_state.va_stride[a] = stride; }
@@ -7900,7 +7945,7 @@ static void pc_apply_blend_state(void)
 
 void GXSetBlendMode(u32 mode, u32 src, u32 dst, u32 logic_op)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     GX_TRACE("GXSetBlendMode(%u, %u, %u, %u)", mode, src, dst, logic_op);
     (void) logic_op;
     g_state.blend_enabled = (mode != 0);
@@ -7911,7 +7956,7 @@ void GXSetBlendMode(u32 mode, u32 src, u32 dst, u32 logic_op)
 }
 void GXSetZMode(u32 enable, u32 func, u32 update)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     GX_TRACE("GXSetZMode(%u, %u, %u)", enable, func, update);
 #if BUILD_TARGET_PC
     /* MELEE_ZTRACE=1 tallies the depth modes actually used in a frame. A
@@ -7969,7 +8014,7 @@ void GXSetColorUpdate(u32 enable) { g_state.color_update=(Bool)enable; }
 void GXSetAlphaUpdate(u32 enable) { g_state.alpha_update=(Bool)enable; }
 void GXSetCullMode(u32 mode)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     GX_TRACE("GXSetCullMode(%u)", mode);
     g_state.cull_enabled = (mode != GX_CULL_NONE);
     g_state.cull_mode = mode;
@@ -8665,7 +8710,8 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
     u32 n = dp->nverts, i;
     int skin = g_state.va_mode[0] != 0 && g_state.mtx3d_active;
     struct timespec r0, r1;
-    clock_gettime(CLOCK_MONOTONIC, &r0);
+    int timed = pc_drawsec_on();
+    if (timed) clock_gettime(CLOCK_MONOTONIC, &r0);
     pc_diag_replay_verts += n;
     if (skin) pc_diag_replay_skinned += n;
     for (i = 0; i < n; i++) {
@@ -8777,8 +8823,10 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
             v->tex1[0] = s->t1[0]; v->tex1[1] = s->t1[1];
         }
     }
-    clock_gettime(CLOCK_MONOTONIC, &r1);
-    pc_diag_replay_ns += (u64) ((r1.tv_sec - r0.tv_sec) * 1000000000ll + (r1.tv_nsec - r0.tv_nsec));
+    if (timed) {
+        clock_gettime(CLOCK_MONOTONIC, &r1);
+        pc_diag_replay_ns += (u64) ((r1.tv_sec - r0.tv_sec) * 1000000000ll + (r1.tv_nsec - r0.tv_nsec));
+    }
 }
 
 /* The same GX calls the direct path makes per vertex, from the decode. */
@@ -9252,7 +9300,7 @@ dl_end:
     if (g_batch_dl_depth > 0) {
         g_batch_dl_depth--;
     }
-    if (g_batch_dl_depth == 0) {
+    if (g_batch_dl_depth == 0 && !pc_xdl_on()) {
         pc_batch_flush();
     }
     g_dl_depth--;
@@ -10150,7 +10198,7 @@ void GXSetNumIndStages(u32 n)
 }
 void GXSetTexCopySrc(u16 left, u16 top, u16 wd, u16 ht)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     g_state.tex_copy_src[0] = left;
     g_state.tex_copy_src[1] = top;
     g_state.tex_copy_src[2] = wd;
@@ -10176,7 +10224,7 @@ static int g_copy_dst_half;
 
 void GXSetTexCopyDst(u16 wd, u16 ht, u32 fmt, u32 mipmap)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     g_copy_dst_w = wd;
     g_copy_dst_h = ht;
     g_copy_dst_fmt = fmt;
@@ -10289,7 +10337,7 @@ static void pc_efb_copy(void* dest)
         pc_diag_efb_copies++;
         return;
     }
-    { static int n = 0; if (n < 8 && getenv("MELEE_EFBLOG")) { n++;
+    { static int n = 0; if (ENV_FLAG("MELEE_EFBLOG") && n < 8) { n++;
         fprintf(stderr, "[EFB] read-back copy fmt=%02x %ux%u (no GPU path for this format)\n", g_copy_dst_fmt, dw, dh); } }
     /* The readback buffer is the same size every frame and this runs a few
      * times per frame; a malloc/free pair each time is pure overhead. Grow
@@ -10450,7 +10498,7 @@ void GXSetCopyFilter(u32 aa, const u8 sample_pattern[12][2], u32 vf, const u8 vf
 }
 void GXCopyTex(void* dest, u32 clear)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     if (g_off_active) {
         /* Drawn into our own target, so there is nothing to read back and
          * nothing in the main framebuffer to clear -- the source rectangle
@@ -10603,14 +10651,14 @@ void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize, u32 p
 }
 void GXSetLineWidth(u32 w, u32 texOffsets)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     g_state.line_width = (u8)w;
     glLineWidth((float)w);
     (void)texOffsets;
 }
 void GXSetPointSize(u32 sz, u32 texOffsets)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     g_state.point_size = (u8)sz;
 #ifndef __ANDROID__
     /* ES has no glPointSize (gl_PointSize only); GX points are drawn as
@@ -11014,7 +11062,7 @@ u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod)
 }
 void GXLoadTexMtxImm(f32 mtx[][4], u32 id, u32 type)
 {
-    gx_flush_pending_mtx();
+    gx_flush_pending_gl();
     GX_TRACE("GXLoadTexMtxImm(p, %u, %u)", id, type);
     if (id < 68) g_state.tex_mtx_loaded[id] = TRUE;
     if (id >= 64 && id <= 124 && ((id - 64) % 3) == 0) {
@@ -11667,7 +11715,7 @@ void GXTexCoord1x8(u8 idx)
         }
         {
             static int n;
-            if (n < 12 && getenv("MELEE_EFTRACE")) {
+            if (ENV_FLAG("MELEE_EFTRACE") && n < 12) {
                 n++;
                 fprintf(stderr, "[TC1x8] idx %u type %u frac %u stride %u bytes %02x %02x -> (%.3f, %.3f) verts %u\n",
                         idx, g_state.tex0_comp_type, g_state.tex0_frac, g_state.arr_stride_tex0,
