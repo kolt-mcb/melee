@@ -106,6 +106,12 @@ static _Bool g_frame_saved = 0;
 void pc_gputime_begin(void);
 void pc_fb_discard_depth(void);
 void pc_gputime_end(void);
+/* Where the frame's wall time goes, per phase: the game's render callbacks
+ * (all GX calls and the bridge's submission), the end-of-frame flush, the
+ * pacer sleep, the swap. Printed with MELEE_FPS as [FRAME]. */
+static struct timespec s_ph[6];
+static double s_ph_ns[5];
+#define PH_NS(a, b) ((s_ph[b].tv_sec - s_ph[a].tv_sec) * 1e9 + (s_ph[b].tv_nsec - s_ph[a].tv_nsec))
 void render_present(void)
 {
     if (s_after_swap.tv_sec != 0) {
@@ -177,11 +183,14 @@ void render_present(void)
     } else if (s_tex_test) {
         pc_render_tex_test();
     } else {
+        clock_gettime(CLOCK_MONOTONIC, &s_ph[0]);
         invoke_gx_render_links();
+        clock_gettime(CLOCK_MONOTONIC, &s_ph[1]);
     }
     
     /* Flush any remaining GX batches before swapping */
     gx_frame_end();
+    clock_gettime(CLOCK_MONOTONIC, &s_ph[2]);
     
     /* Capture rendered frames for the Dolphin reference harness and for
      * ad-hoc debugging. MUST read pixels BEFORE window_swap() -- after the
@@ -530,10 +539,14 @@ void render_present(void)
                 s_last = now;
             }
         }
+        clock_gettime(CLOCK_MONOTONIC, &s_ph[3]);
         pc_fb_discard_depth();
         pc_gputime_end();
         window_swap();
         pc_gputime_begin();
+        clock_gettime(CLOCK_MONOTONIC, &s_ph[4]);
+        s_ph_ns[0] += PH_NS(0, 1); s_ph_ns[1] += PH_NS(1, 2);
+        s_ph_ns[2] += PH_NS(2, 3); s_ph_ns[3] += PH_NS(3, 4);
         /* Lockstep barrier, after the present: with MELEE_SYNC set this blocks
          * until tools/pc_lockstep.py has compared this frame against the same
          * frame on the console and released it. */
@@ -639,6 +652,9 @@ void render_present(void)
                             outside, wall / s_n / 1e6 - outside, pc_shc_deferred());
                     s_game_prev = pc_diag_game_ns;
                 }
+                fprintf(stderr, "[FRAME] render %.2f  frame-end %.2f  fps-block+pacer %.2f  swap %.2f ms/frame\n",
+                        s_ph_ns[0] / s_n / 1e6, s_ph_ns[1] / s_n / 1e6, s_ph_ns[2] / s_n / 1e6, s_ph_ns[3] / s_n / 1e6);
+                memset(s_ph_ns, 0, sizeof(s_ph_ns));
                 {
                     extern u32 pc_diag_gxinv_vtx, pc_diag_gxinv_tex;
                     if (pc_diag_gxinv_vtx | pc_diag_gxinv_tex) {
@@ -659,6 +675,7 @@ void render_present(void)
                                 (double) pc_diag_sec_ns[3] / s_n / 1e6);
                         pc_diag_sec_ns[0] = pc_diag_sec_ns[1] =
                             pc_diag_sec_ns[2] = pc_diag_sec_ns[3] = 0;
+                        { extern void pc_bump_report(void); pc_bump_report(); }
                     }
                 }
                 pc_diag_draws = pc_diag_hashes = pc_diag_uploads = pc_diag_mipgens = 0;

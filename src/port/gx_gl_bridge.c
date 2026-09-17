@@ -4498,7 +4498,39 @@ static void bridge_upload_and_draw(void);
  * leaves the TEV, fog and texture uniforms alone. */
 static u32 g_gen_mtx, g_gen_uni;
 u32 pc_diag_stage_full, pc_diag_stage_mtx, pc_diag_stage_none;
-static void gx_flush_pending(void)
+/* MELEE_DRAWSEC attribution: which entry point last moved the uniform
+ * generation before a full staging. */
+static const char* g_last_bump = "";
+static const char* g_bump_names[64];
+static u32 g_bump_counts[64];
+static void gx_bump_credit(void)
+{
+    int i;
+    for (i = 0; i < 64 && g_bump_names[i] != NULL; i++) {
+        if (g_bump_names[i] == g_last_bump) { g_bump_counts[i]++; return; }
+    }
+    if (i < 64) { g_bump_names[i] = g_last_bump; g_bump_counts[i] = 1; }
+}
+void pc_bump_report(void)
+{
+    int i;
+    for (i = 0; i < 64 && g_bump_names[i] != NULL; i++) {
+        if (g_bump_counts[i] >= 30) fprintf(stderr, "[BUMP] %u %s\n", g_bump_counts[i], g_bump_names[i]);
+        g_bump_counts[i] = 0;
+    }
+}
+static void gx_flush_pending_named(const char* who)
+{
+    g_last_bump = who;
+    g_gen_mtx++;
+    g_gen_uni++;
+    if (g_state.vert_count > 0) {
+        bridge_upload_and_draw();
+    }
+    pc_batch_flush();
+}
+#define gx_flush_pending() gx_flush_pending_named(__func__)
+static void gx_flush_pending_unused(void)
 {
     g_gen_mtx++;
     g_gen_uni++;
@@ -4507,6 +4539,11 @@ static void gx_flush_pending(void)
     }
     pc_batch_flush();
 }
+/* Also used by the setters whose state reaches no uniform in the second
+ * group -- vertex descriptors and arrays, the depth, blend, cull, scissor,
+ * viewport and copy state that the GL shadow carries: they re-stage the
+ * matrix group (cheap, and the viewport feeds it) and leave the TEV, alpha,
+ * fog and texture uniforms alone. */
 static void gx_flush_pending_mtx(void)
 {
     g_gen_mtx++;
@@ -4516,7 +4553,7 @@ static void gx_flush_pending_mtx(void)
     pc_batch_flush();
 }
 /* For the few setters that change uniform state without flushing. */
-static void gx_state_touched(void) { g_gen_uni++; }
+#define gx_state_touched() (g_last_bump = __func__, g_gen_uni++)
 static GLenum gx_bl_to_gl(u32 gx_blend_factor); /* fwd decl */
 /* Uniform upload memoisation.
  *
@@ -5479,7 +5516,8 @@ static void bridge_upload_and_draw(void)
                   ENV_FLAG("MELEE_NO_STAGEGATE");
     int stage_b = s_staged_uni != g_gen_uni || ENV_FLAG("MELEE_PAINTDRAW") ||
                   ENV_FLAG("MELEE_NO_STAGEGATE");
-    if (stage_b) pc_diag_stage_full++; else if (stage_a) pc_diag_stage_mtx++; else pc_diag_stage_none++;
+    if (stage_b) { pc_diag_stage_full++; if (pc_drawsec_on()) gx_bump_credit(); }
+    else if (stage_a) pc_diag_stage_mtx++; else pc_diag_stage_none++;
     s_staged_mtx = g_gen_mtx;
     s_staged_uni = g_gen_uni;
     f32 mvp[4][4];
@@ -6858,7 +6896,7 @@ void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
 
 void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     GX_TRACE("GXSetViewport(%.1f, %.1f, %.1f, %.1f, %.1f, %.1f)", left, top, wd, ht, nearz, farz);
     { static int n = 0;
       if (n < 6 && getenv("MELEE_VPTRACE") != NULL) { n++;
@@ -6875,7 +6913,7 @@ void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz)
 }
 void GXSetScissor(u32 x, u32 y, u32 w, u32 h)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     GX_TRACE("GXSetScissor(%u, %u, %u, %u)", x, y, w, h);
     g_state.scissor_x = x;
     g_state.scissor_y = y;
@@ -7011,7 +7049,11 @@ void GXInvalidateTexAll(void)
      * scene transitions): make every slot re-validate its bytes. The cache
      * bump is what does that; the flush only ended the render pass. */
     pc_diag_gxinv_tex++;
-    pc_tex_cache_bump();
+    /* Once every fourth frame: the content check costs a hash per texture,
+     * and an image that changes under the cache changes at a scene load, not
+     * between two frames. EFB copies do not rely on this -- they publish
+     * their own textures. */
+    { static u32 last; if (g_state.frame_count - last >= 4) { last = g_state.frame_count; pc_tex_cache_bump(); } }
     if (pc_flush_wanted()) glFlush();
 }
 void GXSetCopyClear(void* color, u32 z)
@@ -7264,7 +7306,7 @@ void GXSetProjection(f32 mtx[4][4], u32 type)
 
 void GXSetVtxDesc(u32 attr, u32 type)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     GX_TRACE("GXSetVtxDesc(%u, %u)", attr, type);
     /* GXAttrType: NONE=0, DIRECT=1, INDEX8=2, INDEX16=3 */
     u8 mode = (u8)type;
@@ -7285,7 +7327,7 @@ void GXSetVtxDesc(u32 attr, u32 type)
 }
 void GXClearVtxDesc(void)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     memset(g_state.va_mode, 0, sizeof(g_state.va_mode));
     g_state.pos_enabled = g_state.nrm_enabled = g_state.clr_enabled = g_state.tex0_enabled = g_state.tex1_enabled = FALSE;
     g_state.pos_fetch_indexed = FALSE;
@@ -7300,7 +7342,7 @@ static u8 g_vf_tex0_type[8], g_vf_tex0_frac[8], g_vf_tex0_set[8];
 static u8 g_vf_pos_type[8], g_vf_pos_frac[8], g_vf_pos_set[8];
 void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     /* Store format params for vertex data conversion. */
     u32 a = (attr == 25 /* GX_VA_NBT */) ? 10u : attr;
     if (a <= 20) {
@@ -7331,7 +7373,7 @@ void GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
 }
 void GXSetArray(u32 attr, const void* base_ptr, u8 stride)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     {
         u32 a = (attr == 25 /* GX_VA_NBT */) ? 10u : attr;
         if (a <= 20) { g_state.va_arr[a] = (const u8*)base_ptr; g_state.va_stride[a] = stride; }
@@ -7761,7 +7803,7 @@ static void pc_apply_blend_state(void)
 
 void GXSetBlendMode(u32 mode, u32 src, u32 dst, u32 logic_op)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     GX_TRACE("GXSetBlendMode(%u, %u, %u, %u)", mode, src, dst, logic_op);
     (void) logic_op;
     g_state.blend_enabled = (mode != 0);
@@ -7772,7 +7814,7 @@ void GXSetBlendMode(u32 mode, u32 src, u32 dst, u32 logic_op)
 }
 void GXSetZMode(u32 enable, u32 func, u32 update)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     GX_TRACE("GXSetZMode(%u, %u, %u)", enable, func, update);
 #if BUILD_TARGET_PC
     /* MELEE_ZTRACE=1 tallies the depth modes actually used in a frame. A
@@ -7820,6 +7862,7 @@ void GXSetZMode(u32 enable, u32 func, u32 update)
 }
 void GXSetZCompLoc(u32 before_tex)
 {
+    if (g_state.zcomp_before_tex == (Bool) (before_tex != 0)) return;
     gx_flush_pending();
     /* Z comparison location: determines if Z compare happens
      * before (before_tex=1) or after (before_tex=0) texture fetch. */
@@ -7829,7 +7872,7 @@ void GXSetColorUpdate(u32 enable) { g_state.color_update=(Bool)enable; }
 void GXSetAlphaUpdate(u32 enable) { g_state.alpha_update=(Bool)enable; }
 void GXSetCullMode(u32 mode)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     GX_TRACE("GXSetCullMode(%u)", mode);
     g_state.cull_enabled = (mode != GX_CULL_NONE);
     g_state.cull_mode = mode;
@@ -7881,6 +7924,7 @@ void GXSetScissorExtend(void) { g_state.scissor_enabled = FALSE; }
 /* No-ops (delegated to stub system for now) */
 void GXSetNumTexGens(u8 n)
 {
+    if (g_state.num_tex_gens == n) return;
     gx_flush_pending();
     GX_TRACE("GXSetNumTexGens(%u)", n);
     g_state.num_tex_gens = n;
@@ -7888,6 +7932,7 @@ void GXSetNumTexGens(u8 n)
 
 void GXSetNumTevStages(u32 n)
 {
+    if (n == 0 || g_state.num_tev_stages == (n > 16 ? 16u : n)) return;
     gx_flush_pending();
     GX_TRACE("GXSetNumTevStages(%u)", n);
     if (n > 16) n = 16;
@@ -7908,6 +7953,9 @@ void GXSetNumTevStages(u32 n)
 
 void GXSetTevOrder(u32 stage, u32 coord, u32 tex, u32 chan)
 {
+    if (stage < MAX_TEV_STAGES && g_state.tev_order_valid[stage] &&
+        g_state.tev_stages[stage].tex_coord == coord && g_state.tev_stages[stage].tex_map == tex &&
+        g_state.tev_stages[stage].tex_chan == chan) return;
     gx_flush_pending();
     if (stage < MAX_TEV_STAGES) {
         g_state.tev_order_valid[stage] = TRUE;
@@ -7929,11 +7977,14 @@ static void tev_track_stage(u32 stage)
 
 void GXSetTevOp(u32 stage, u32 mode)
 {
-    gx_flush_pending();
+    TevStage tmp;
+    TevStage *s = &tmp;
     GX_TRACE("GXSetTevOp(%u, %u)", stage, mode);
     if (stage >= MAX_TEV_STAGES) return;
-    tev_track_stage(stage);
-    TevStage *s = &g_state.tev_stages[stage];
+    /* Worked out on a copy: HSD issues the same op for object after
+     * object, and an unchanged stage neither flushes nor moves the
+     * uniform generation. */
+    tmp = g_state.tev_stages[stage];
     
     /* GXSetTevOp is a convenience function that sets both color and alpha
      * operations based on a preset mode. Dolphin GXTevMode enum:
@@ -7988,9 +8039,19 @@ void GXSetTevOp(u32 stage, u32 mode)
     s->alpha_scale = 0;
     s->color_clamp = 1;
     s->alpha_clamp = 1;
+    if (memcmp(&tmp, &g_state.tev_stages[stage], sizeof(tmp)) != 0) {
+        gx_flush_pending();
+        g_state.tev_stages[stage] = tmp;
+    }
+    tev_track_stage(stage);
 }
 void GXSetTevColor(u32 reg, GXColor color)
 {
+    {
+        u32 i0 = reg & 3;
+        if (g_state.tev_regs[i0].r == color.r && g_state.tev_regs[i0].g == color.g &&
+            g_state.tev_regs[i0].b == color.b && g_state.tev_regs[i0].a == color.a) return;
+    }
     gx_flush_pending();
     GX_TRACE("GXSetTevColor(%u, {%u,%u,%u,%u})", reg, (u32)color.r, (u32)color.g, (u32)color.b, (u32)color.a);
     /* TEVREG0-2 are separate from K0-K3. GX_TEVREG0=1, GX_TEVREG1=2, GX_TEVREG2=3 */
@@ -9105,6 +9166,10 @@ dl_end:
 
 void GXSetFog(u32 type, f32 startz, f32 endz, f32 nearz, f32 farz, GXColor color)
 {
+    if (g_state.fog_type == type && g_state.fog_startz == startz && g_state.fog_endz == endz &&
+        g_state.fog_nearz == nearz && g_state.fog_farz == farz && g_state.fog_color.r == color.r &&
+        g_state.fog_color.g == color.g && g_state.fog_color.b == color.b && g_state.fog_color.a == color.a &&
+        g_state.fog_enabled == (Bool) (type != 0 && !(type == 2 && !(endz > startz)))) return;
     gx_flush_pending();
     GX_TRACE("GXSetFog(%u, %.3f, %.3f, %.3f, %.3f, {%u,%u,%u})", type, startz, endz, nearz, farz, (u32)color.r, (u32)color.g, (u32)color.b);
     { static int n = 0;
@@ -9743,6 +9808,10 @@ static void apply_tev_uniforms(void)
 
 void GXSetAlphaCompare(u32 comp0, u32 ref0, u32 op, u32 comp1, u32 ref1)
 {
+    if (g_state.alpha_compare_enabled && g_state.alpha_compare_func == comp0 &&
+        g_state.alpha_compare_ref == ref0 / 255.0f && g_state.alpha_compare_op == op &&
+        g_state.alpha_compare_func1 == comp1 && g_state.alpha_compare_ref1 == ref1 / 255.0f &&
+        !g_state.alpha_dither) return;
     gx_flush_pending();
     GX_TRACE("GXSetAlphaCompare(%u, %u, %u, %u, %u)", comp0, ref0, op, comp1, ref1);
     g_state.alpha_compare_enabled = TRUE;
@@ -9777,6 +9846,11 @@ void GXSetTevClampMode(u32 stage, u32 clamp)
 
 void GXSetTevColorIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
 {
+    if (stage < MAX_TEV_STAGES) {
+        const TevStage* t = &g_state.tev_stages[stage];
+        if (t->color_enabled && t->color_inputs[0] == a && t->color_inputs[1] == b &&
+            t->color_inputs[2] == c && t->color_inputs[3] == d) { tev_track_stage(stage); return; }
+    }
     gx_flush_pending();
     GX_TRACE("GXSetTevColorIn(%u, %u, %u, %u, %u)", stage, a, b, c, d);
     if (stage < MAX_TEV_STAGES) {
@@ -9791,6 +9865,11 @@ void GXSetTevColorIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
 
 void GXSetTevAlphaIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
 {
+    if (stage < MAX_TEV_STAGES) {
+        const TevStage* t = &g_state.tev_stages[stage];
+        if (t->alpha_enabled && t->alpha_inputs[0] == a && t->alpha_inputs[1] == b &&
+            t->alpha_inputs[2] == c && t->alpha_inputs[3] == d) { tev_track_stage(stage); return; }
+    }
     gx_flush_pending();
     GX_TRACE("GXSetTevAlphaIn(%u, %u, %u, %u, %u)", stage, a, b, c, d);
     {
@@ -9811,6 +9890,11 @@ void GXSetTevAlphaIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
 
 void GXSetTevColorOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_reg)
 {
+    if (stage < MAX_TEV_STAGES) {
+        const TevStage* t = &g_state.tev_stages[stage];
+        if (t->color_enabled && t->color_op == op && t->color_bias == bias && t->color_scale == (scl & 0x03) &&
+            t->color_clamp == clamp && g_tev_color_out_reg[stage & 7] == (out_reg & 3)) { tev_track_stage(stage); return; }
+    }
     gx_flush_pending();
     GX_TRACE("GXSetTevColorOp(%u, %u, %u, %u, %u, %u)", stage, op, bias, scl, clamp, out_reg);
     if (stage < MAX_TEV_STAGES) {
@@ -9839,6 +9923,11 @@ void GXSetTevColorOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_re
 
 void GXSetTevAlphaOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_reg)
 {
+    if (stage < MAX_TEV_STAGES) {
+        const TevStage* t = &g_state.tev_stages[stage];
+        if (t->alpha_enabled && t->alpha_op == op && t->alpha_bias == bias && t->alpha_scale == (scl & 0x03) &&
+            t->alpha_clamp == clamp && g_tev_alpha_out_reg[stage & 7] == (out_reg & 3)) { tev_track_stage(stage); return; }
+    }
     gx_flush_pending();
     GX_TRACE("GXSetTevAlphaOp(%u, %u, %u, %u, %u, %u)", stage, op, bias, scl, clamp, out_reg);
     if (stage < MAX_TEV_STAGES) {
@@ -9853,6 +9942,7 @@ void GXSetTevAlphaOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_re
 }
 void GXSetNumChans(u32 n)
 {
+    if (g_state.num_chans == n) return;
     gx_flush_pending();
     GX_TRACE("GXSetNumChans(%u)", n);
     /* Sets the number of enabled color channels (GX_COLOR0, GX_COLOR1). */
@@ -9881,9 +9971,17 @@ static void pc_chan_slot(u32 chan, int* slot, int* do_rgb, int* do_a)
 
 void GXSetChanAmbColor(u32 chan, GXColor amb_color)
 {
+    {
+        int slot, do_rgb, do_a;
+        pc_chan_slot(chan, &slot, &do_rgb, &do_a);
+        if (slot >= 0 && slot < 3 &&
+            (!do_rgb || (g_chan_amb_valid[slot] && g_state.chan_amb_colors[slot].r == amb_color.r &&
+                         g_state.chan_amb_colors[slot].g == amb_color.g && g_state.chan_amb_colors[slot].b == amb_color.b)) &&
+            (!do_a || g_state.chan_amb_colors[slot].a == amb_color.a)) return;
+    }
     gx_flush_pending();
     GX_TRACE("GXSetChanAmbColor(%u, {%u,%u,%u,%u})", chan, (u32)amb_color.r, (u32)amb_color.g, (u32)amb_color.b, (u32)amb_color.a);
-    { static int _n=0; if (getenv("MELEE_CHAN") && g_state.frame_count>=8 && _n<20) { _n++;
+    { static int _n=0; if (ENV_FLAG("MELEE_CHAN") && g_state.frame_count>=8 && _n<20) { _n++;
         fprintf(stderr, "  SETAMB chan=%u col=(%u,%u,%u,%u) f=%u\n", chan,
                 amb_color.r, amb_color.g, amb_color.b, amb_color.a, (unsigned)g_state.frame_count); } }
     /* Set ambient color for a channel (used by TEV as C0, C1, C2) */
@@ -9907,9 +10005,17 @@ void GXSetChanAmbColor(u32 chan, GXColor amb_color)
 
 void GXSetChanMatColor(u32 chan, GXColor mat_color)
 {
+    {
+        int slot, do_rgb, do_a;
+        pc_chan_slot(chan, &slot, &do_rgb, &do_a);
+        if (slot >= 0 && slot < 3 &&
+            (!do_rgb || (g_state.chan_colors[slot].r == mat_color.r && g_state.chan_colors[slot].g == mat_color.g &&
+                         g_state.chan_colors[slot].b == mat_color.b)) &&
+            (!do_a || g_state.chan_colors[slot].a == mat_color.a)) return;
+    }
     gx_flush_pending();
     GX_TRACE("GXSetChanMatColor(%u, {%u,%u,%u,%u})", chan, (u32)mat_color.r, (u32)mat_color.g, (u32)mat_color.b, (u32)mat_color.a);
-    { static int _n=0; if (getenv("MELEE_CHAN") && g_state.frame_count>=8 && _n<40) { _n++;
+    { static int _n=0; if (ENV_FLAG("MELEE_CHAN") && g_state.frame_count>=8 && _n<40) { _n++;
         fprintf(stderr, "  SETMAT chan=%u col=(%u,%u,%u,%u) f=%u\n", chan,
                 mat_color.r, mat_color.g, mat_color.b, mat_color.a, (unsigned)g_state.frame_count); } }
     /* Material colour per channel. See pc_chan_slot: GX channel ids are not
@@ -9931,6 +10037,7 @@ void GXSetChanMatColor(u32 chan, GXColor mat_color)
 void GXSetTevDirect(u32 stage) { (void)stage; }
 void GXSetNumIndStages(u32 n)
 {
+    if (g_state.num_ind_stages == n) return;
     gx_flush_pending();
     /* Sets number of indirect texture mapping stages (GXIndTexMtx).
      * Indirect tex gen uses a separate coordinate texture to transform
@@ -9939,7 +10046,7 @@ void GXSetNumIndStages(u32 n)
 }
 void GXSetTexCopySrc(u16 left, u16 top, u16 wd, u16 ht)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     g_state.tex_copy_src[0] = left;
     g_state.tex_copy_src[1] = top;
     g_state.tex_copy_src[2] = wd;
@@ -9965,7 +10072,7 @@ static int g_copy_dst_half;
 
 void GXSetTexCopyDst(u16 wd, u16 ht, u32 fmt, u32 mipmap)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     g_copy_dst_w = wd;
     g_copy_dst_h = ht;
     g_copy_dst_fmt = fmt;
@@ -10239,7 +10346,7 @@ void GXSetCopyFilter(u32 aa, const u8 sample_pattern[12][2], u32 vf, const u8 vf
 }
 void GXCopyTex(void* dest, u32 clear)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     if (g_off_active) {
         /* Drawn into our own target, so there is nothing to read back and
          * nothing in the main framebuffer to clear -- the source rectangle
@@ -10355,6 +10462,7 @@ void GXSetTevIndirect(u32 tev_stage, u32 ind_stage, u32 format, u32 bias_sel,
 
 void GXSetTevKColorSel(u32 stage, u32 sel)
 {
+    if (stage < MAX_TEV_STAGES && g_state.tev_stages[stage].kcolor_sel == sel) return;
     gx_flush_pending();
     if (stage < MAX_TEV_STAGES) {
         g_state.tev_stages[stage].kcolor_sel = sel;
@@ -10362,6 +10470,7 @@ void GXSetTevKColorSel(u32 stage, u32 sel)
 }
 void GXSetTevKAlphaSel(u32 stage, u32 sel)
 {
+    if (stage < MAX_TEV_STAGES && g_state.tev_stages[stage].kalpha_sel == sel) return;
     gx_flush_pending();
     if (stage < MAX_TEV_STAGES) {
         g_state.tev_stages[stage].kalpha_sel = sel;
@@ -10369,6 +10478,9 @@ void GXSetTevKAlphaSel(u32 stage, u32 sel)
 }
 void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize, u32 pt_texmtx)
 {
+    if (tex < 8 && g_state.tex_gen_enabled[tex] && g_state.tex_gen_mode[tex] == type &&
+        g_state.tex_gen_src[tex] == mat && g_state.tex_gen_mat_id[tex] == mtx &&
+        g_state.tex_gen_pt_id[tex] == pt_texmtx && g_state.tex_gen_normalize[tex] == normalize) return;
     gx_flush_pending();
     GX_TRACE("GXSetTexCoordGen2(%u, %u, %u, %u, %u, %u)", tex, type, mat, mtx, normalize, pt_texmtx);
     if (tex < 8) {
@@ -10387,14 +10499,14 @@ void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize, u32 p
 }
 void GXSetLineWidth(u32 w, u32 texOffsets)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     g_state.line_width = (u8)w;
     glLineWidth((float)w);
     (void)texOffsets;
 }
 void GXSetPointSize(u32 sz, u32 texOffsets)
 {
-    gx_flush_pending();
+    gx_flush_pending_mtx();
     g_state.point_size = (u8)sz;
 #ifndef __ANDROID__
     /* ES has no glPointSize (gl_PointSize only); GX points are drawn as
@@ -10612,6 +10724,11 @@ static int pc_light_id_to_index(u32 id)
 void GXLoadLightObjImm(void *lt_obj_raw, u32 light_id)
 {
     LightSlot *lt_obj = pc_light_slot(lt_obj_raw);
+    {
+        int i0 = pc_light_id_to_index(light_id);
+        if (lt_obj != NULL && i0 >= 0 && (u32) i0 < g_state.g_active_light_count &&
+            memcmp(&g_state.g_lights[i0], lt_obj, sizeof(LightSlot)) == 0) return;
+    }
     gx_flush_pending();
     int idx = pc_light_id_to_index(light_id);
     if (!lt_obj || idx < 0) return;
@@ -10669,6 +10786,7 @@ void GXSetLightColors(f32 amb_r, f32 amb_g, f32 amb_b,
 
 void GXSetZTexture(int op, u32 fmt, u32 bias)
 {
+    if (g_state.ztex_op == op && g_state.ztex_fmt == fmt && g_state.ztex_bias == bias) return;
     gx_flush_pending();
     /* Flush any geometry still pending under the current Z-texture mode
      * before changing it. HSD_EraseRect's erase quad is not always flushed
@@ -10686,6 +10804,16 @@ void GXSetZTexture(int op, u32 fmt, u32 bias)
 
 void GXSetChanCtrl(u32 chan, u32 enable, u32 amb_src, u32 mat_src, u32 light_mask, u32 diff_fn, u32 attn_fn)
 {
+    /* HSD sets the channel control for every object; an unchanged value
+     * neither flushes nor moves the uniform generation. */
+    if (chan < 8) {
+        int c = (chan == 0 || chan == 4) ? 0 : (chan == 1 || chan == 5) ? 1 : -1;
+        if (c < 0) return;
+        if (g_state.chan_enabled[c] == (Bool) enable && g_state.chan_lit[c] == (Bool) (enable != 0) &&
+            g_state.chan_diffuse_light[c] == light_mask && g_state.chan_color_source[c] == mat_src &&
+            g_state.chan_amb_src[c] == amb_src && g_state.chan_diff_fn[c] == diff_fn &&
+            g_state.chan_attn_fn[c] == attn_fn) return;
+    }
     gx_flush_pending();
     GX_TRACE("GXSetChanCtrl(%u, %u, %u, %u, %u, %u, %u)", chan, enable, amb_src, mat_src, light_mask, diff_fn, attn_fn);
     if (chan >= 8) {
@@ -10693,7 +10821,7 @@ void GXSetChanCtrl(u32 chan, u32 enable, u32 amb_src, u32 mat_src, u32 light_mas
         return;
     }
     
-    { static int _n=0; if (getenv("MELEE_CHAN") && g_state.frame_count>=8 && _n<40) { _n++;
+    { static int _n=0; if (ENV_FLAG("MELEE_CHAN") && g_state.frame_count>=8 && _n<40) { _n++;
         fprintf(stderr, "  SETCTRL chan=%u en=%u amb=%u mat=%u mask=%x diff=%u f=%u\n",
                 chan, enable, amb_src, mat_src, light_mask, diff_fn, (unsigned)g_state.frame_count); } }
     /* GXChannelID mapping: COLOR0=0, COLOR1=1, ALPHA0=2, ALPHA1=3,
@@ -10940,6 +11068,8 @@ void GXSetNumColors(void) {}
 void GXSetNumTexGensAll(void) {}
 void GXSetTevSwapMode(u32 stage, u32 swp0, u32 swp1)
 {
+    if (stage < MAX_TEV_STAGES && g_state.tev_stages[stage].swap_sel[0] == swp0 &&
+        g_state.tev_stages[stage].swap_sel[1] == swp1) return;
     gx_flush_pending();
     GX_TRACE("GXSetTevSwapMode(%u, %u, %u)", stage, swp0, swp1);
     if (stage < MAX_TEV_STAGES) {
@@ -10982,6 +11112,8 @@ void GXSetIndTevColor(void) {}
 void GXSetIndTevAlpha(void) {}
 void GXSetTevKColor(u32 kcolor, GXColor color)
 {
+    if (kcolor < 4 && g_state.k_colors[kcolor].r == color.r && g_state.k_colors[kcolor].g == color.g &&
+        g_state.k_colors[kcolor].b == color.b && g_state.k_colors[kcolor].a == color.a) return;
     gx_flush_pending();
     if (ENV_FLAG("MELEE_KCOLLOG") && g_state.frame_count == 180) {
         fprintf(stderr, "  KSET draw=%u k%u=(%u,%u,%u,%u)\n",
@@ -11991,7 +12123,7 @@ static u32 g_tex_slot_hash[MAX_TEXTURES];
 /* The sampler parameters last set on each slot's GL texture, packed
  * (min, mag, wrap_s, wrap_t), and the texture they were set on: the four
  * glTexParameteri calls per GXLoadTexObj are skipped while they match. */
-static u32 g_tex_slot_params[MAX_TEXTURES];
+static u64 g_tex_slot_params[MAX_TEXTURES];
 static GLuint g_tex_slot_params_tex[MAX_TEXTURES];
 u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod);
 
@@ -12137,7 +12269,7 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
             g_state.tex_cache_fmt[i] = fmt;
             g_state.tex_cache_hits[i] = 0;
             g_tex_cache_hasmip[i] = FALSE;
-            g_tex_slot_params[i] = 0xFFFFFFFFu;
+            g_tex_slot_params[i] = ~(u64) 0;
             tex_map_insert(i);
             return i;
         }
@@ -12163,7 +12295,7 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
     g_state.tex_cache_h[best] = h;
     g_state.tex_cache_fmt[best] = fmt;
     g_state.tex_cache_hits[best] = 0;
-    g_tex_slot_params[best] = 0xFFFFFFFFu;
+    g_tex_slot_params[best] = ~(u64) 0;
     tex_map_insert(best);
     /* An evicted slot keeps its GL texture object but gets new image data, so
      * whatever mip chain the previous occupant had is gone. Leaving this set
@@ -12177,8 +12309,46 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
 static void decode_i8_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, TLUTSlot *tlut);
 static void decode_i4_with_tlut(const u8 *src, u8 *dst, u32 width, u32 height, TLUTSlot *tlut);
 
+/* The sampler state a slot's texture would get from the current TexObj,
+ * packed as g_tex_slot_params stores it. */
+static u64 tex_params_packed(u32 slot)
+{
+    u8 tf = g_state.current_tex.fmt;
+    Bool is_depth = (tf == 0x11 || tf == 0x13 || tf == 0x16);
+    GLenum minf = is_depth ? GL_NEAREST
+                : (g_tex_cache_hasmip[slot] && !ENV_FLAG("MELEE_NOMIP"))
+                    ? gx_min_filter_mode(g_state.current_tex.min_filter)
+                    : gx_filter_mode(g_state.current_tex.min_filter);
+    GLenum magf = is_depth ? GL_NEAREST : gx_filter_mode(g_state.current_tex.mag_filter);
+    GLenum ws = gx_wrap_mode(g_state.current_tex.wrap_s);
+    GLenum wt = gx_wrap_mode(g_state.current_tex.wrap_t);
+    /* Full enums: GL_NEAREST (0x2600) and GL_NEAREST_MIPMAP_NEAREST (0x2700)
+     * share their low byte, so a byte per field could not tell a texture
+     * that just grew a mip chain from one that had not. */
+    return ((u64) minf << 48) | ((u64) magf << 32) | ((u64) ws << 16) | (u64) wt;
+}
+
 void GXLoadTexObj(void* texObj, u32 texEnv)
 {
+    /* A load that would leave everything as it is -- the same image already
+     * validated this generation, on this unit, with these sampler
+     * parameters -- is the common case object after object. It changes no
+     * GL state and no uniform, so it neither flushes nor moves the
+     * generation. */
+    if (g_state.current_tex.valid && g_state.current_tex.image_ptr != NULL) {
+        int sl = tex_map_find(g_state.current_tex.image_ptr, g_state.current_tex.width,
+                              g_state.current_tex.height, g_state.current_tex.fmt);
+        u32 unit = texEnv % PC_TEXN;
+        if (sl >= 0 && !g_tex_slot_foreign[sl] && g_tex_slot_gen[sl] == g_tex_gen &&
+            g_active_tex_slots[unit] == (u32) sl && g_state.tex_cache[sl] != 0 &&
+            g_tex_slot_params_tex[sl] == g_state.tex_cache[sl] &&
+            g_tex_slot_params[sl] == tex_params_packed((u32) sl) &&
+            g_bound_tex[unit] == g_state.tex_cache[sl]) {
+            g_tx_calls++;
+            g_tx_hit++;
+            return;
+        }
+    }
     gx_flush_pending();
     GX_TRACE("GXLoadTexObj(p, %u)", texEnv);
     if (pc_canary_on()) pc_check_canaries("GXLoadTexObj:enter");
@@ -12661,7 +12831,7 @@ bind_tex:
     }
     
     /* Stats & logging */
-    { static int _tl=0; if (getenv("MELEE_CHAN") && g_state.frame_count>=8 && _tl<30) { _tl++;
+    { static int _tl=0; if (ENV_FLAG("MELEE_CHAN") && g_state.frame_count>=8 && _tl<30) { _tl++;
         fprintf(stderr, "  TEXLOAD fmt=0x%X %ux%u img=%p slot=%u\n", fmt, w, h, img, slot); } }
     g_state.tex_upload_count++;
     g_state.tex_formats_seen[fmt & 0x0F]++;
@@ -12673,19 +12843,9 @@ bind_tex:
      * bound, so this one must happen even when the cache thinks it need not.
      * Record it so the draw path can still skip a redundant rebind. */
     {
-        u8 tf = g_state.current_tex.fmt;
-        Bool is_depth = (tf == 0x11 || tf == 0x13 || tf == 0x16);
-        GLenum minf = is_depth ? GL_NEAREST
-                    : (g_tex_cache_hasmip[slot] && !ENV_FLAG("MELEE_NOMIP"))
-                        ? gx_min_filter_mode(g_state.current_tex.min_filter)
-                        : gx_filter_mode(g_state.current_tex.min_filter);
-        /* GX only permits GX_NEAR/GX_LINEAR for magnification. */
-        GLenum magf = is_depth ? GL_NEAREST
-                               : gx_filter_mode(g_state.current_tex.mag_filter);
-        GLenum ws = gx_wrap_mode(g_state.current_tex.wrap_s);
-        GLenum wt = gx_wrap_mode(g_state.current_tex.wrap_t);
-        u32 packed = ((minf & 0xFFu) << 24) | ((magf & 0xFFu) << 16) |
-                     ((ws & 0xFFu) << 8) | (wt & 0xFFu);
+        u64 packed = tex_params_packed(slot);
+        GLint minf = (GLint) ((packed >> 48) & 0xFFFF), magf = (GLint) ((packed >> 32) & 0xFFFF);
+        GLint ws = (GLint) ((packed >> 16) & 0xFFFF), wt = (GLint) (packed & 0xFFFF);
         if (g_tex_slot_params_tex[slot] == tex_id && g_tex_slot_params[slot] == packed) {
             /* Same sampler state as last time on this very texture: the
              * bind can go through the cache and skip when redundant. */
@@ -12696,10 +12856,10 @@ bind_tex:
             glBindTexture(GL_TEXTURE_2D, tex_id);
             g_bound_unit = (int) gl_unit;
             g_bound_tex[gl_unit] = tex_id;
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLint) minf);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint) magf);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, (GLint) ws);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, (GLint) wt);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minf);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magf);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, ws);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wt);
             g_tex_slot_params_tex[slot] = tex_id;
             g_tex_slot_params[slot] = packed;
             pc_diag_gl_calls += 4;
