@@ -2466,6 +2466,48 @@ static u8 g_vloc_spec[VLOC_MAX];
 static GLint g_spec_vals[VLOC_MAX];
 static int g_spec_dirty = 1;
 static u32 g_spec_gen;          /* bumped on every specialisation change */
+/* The canonical key.
+ *
+ * A draw with three TEV stages still carried stages 3-7 in its key --
+ * whatever the previous draw left there -- and the same for texgen
+ * channels no stage reads and texture maps no stage samples. The unrolled
+ * variant never emits any of those, so two identical shaders differed by
+ * garbage: 66% of a 11048-key seed were duplicates, and a device's keys
+ * matched a desktop seed 30% of the time. Canonicalised -- unused stages,
+ * unreferenced texgen channels and unused maps zeroed -- the seed is
+ * 1491 keys and the match rate 84%.
+ *
+ * g_spec_vals stays the game's raw state (the base program's uniforms
+ * come from it); every key -- hash, lookup, registration, the emitted
+ * consts, the cache file -- comes from g_spec_canon. */
+static GLint g_spec_canon[VLOC_MAX];
+static int g_canon_ns = -1, g_canon_tc = -1, g_canon_tm = -1, g_canon_te = -1;
+static int g_canon_stage_base[24], g_canon_stage_stride[24], g_canon_stage_n;
+static int g_canon_coord_base[8], g_canon_coord_n;
+
+static void pc_spec_canonize(void)
+{
+    int n, i, s, c, m;
+    unsigned used_c = 0, used_m = 0;
+    memcpy(g_spec_canon, g_spec_vals, sizeof(g_spec_canon));
+    if (g_canon_ns < 0) return;
+    n = g_spec_canon[g_canon_ns];
+    if (n < 0) n = 0;
+    if (n > 8) n = 8;
+    for (i = 0; i < g_canon_stage_n; i++) {
+        int b = g_canon_stage_base[i], st = g_canon_stage_stride[i], j;
+        for (s = n; s < 8; s++) for (j = 0; j < st; j++) g_spec_canon[b + s * st + j] = 0;
+    }
+    for (s = 0; s < n; s++) {
+        if (g_canon_tc >= 0) { c = g_spec_canon[g_canon_tc + s]; if (c >= 0 && c < 4) used_c |= 1u << c; }
+        if (g_canon_tm >= 0) { m = g_spec_canon[g_canon_tm + s]; if (m >= 0 && m < 4) used_m |= 1u << m; }
+    }
+    for (c = 0; c < 4; c++) {
+        if (used_c & (1u << c)) continue;
+        for (i = 0; i < g_canon_coord_n; i++) g_spec_canon[g_canon_coord_base[i] + c] = 0;
+    }
+    if (g_canon_te >= 0) for (m = 0; m < 4; m++) if (!(used_m & (1u << m))) g_spec_canon[g_canon_te + m] = 0;
+}
 struct Prog;
 static struct Prog* g_uber;      /* the base program as a fallback (pc_uber) */
 static u32 g_uber_spec_gen;
@@ -2700,11 +2742,11 @@ static char* pc_spec_source(const char* src)
             if (!ent) { memcpy(out + o, q, 12); o += 12; p = q + 12; continue; }
             if (cnt > ent->count) cnt = ent->count;
             if (cnt == 1 && *e != '[') {
-                o += (size_t) sprintf(out + o, "const int %s = %d;", name, (int) g_spec_vals[ent->base]);
+                o += (size_t) sprintf(out + o, "const int %s = %d;", name, (int) g_spec_canon[ent->base]);
             } else {
                 o += (size_t) sprintf(out + o, "const int %s[%d] = int[%d](", name, cnt, cnt);
                 for (i = 0; i < cnt; i++) {
-                    o += (size_t) sprintf(out + o, "%s%d", i ? "," : "", (int) g_spec_vals[ent->base + i]);
+                    o += (size_t) sprintf(out + o, "%s%d", i ? "," : "", (int) g_spec_canon[ent->base + i]);
                 }
                 o += (size_t) sprintf(out + o, ");");
             }
@@ -2834,7 +2876,7 @@ static void pc_shc_path(char* out, size_t n, u32 h)
     u32 h2 = 2166136261u;
     int i;
     for (i = 0; i < g_spec_n; i++) {
-        GLint v = g_spec_vals[g_spec_slots[i]];
+        GLint v = g_spec_canon[g_spec_slots[i]];
         h2 = pc_shc_fnv(&v, sizeof(v), h2);
     }
     snprintf(out, n, "%s/%08x%08x.bin", g_shc_dir, h, h2);
@@ -2863,7 +2905,7 @@ static Prog* pc_shc_load(u32 h)
     key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
     if (fread(key, sizeof(GLint), (size_t) g_spec_n, f) != (size_t) g_spec_n) ok = 0;
     for (i = 0; ok && i < g_spec_n; i++) {
-        if (key[i] != g_spec_vals[g_spec_slots[i]]) ok = 0;
+        if (key[i] != g_spec_canon[g_spec_slots[i]]) ok = 0;
     }
     free(key);
     {
@@ -3338,8 +3380,9 @@ static u32 pc_spec_hash(void)
 {
     u32 h = 2166136261u;
     int i;
+    pc_spec_canonize();
     for (i = 0; i < g_spec_n; i++) {
-        h ^= (u32) g_spec_vals[g_spec_slots[i]];
+        h ^= (u32) g_spec_canon[g_spec_slots[i]];
         h *= 16777619u;
     }
     return h;
@@ -3353,7 +3396,7 @@ static Prog* pc_prog_find(u32 h)
         int same = 1;
         if (pr->hash != h) continue;
         for (k = 0; k < g_spec_n; k++) {
-            if (pr->key[k] != g_spec_vals[g_spec_slots[k]]) { same = 0; break; }
+            if (pr->key[k] != g_spec_canon[g_spec_slots[k]]) { same = 0; break; }
         }
         if (same) return pr;
     }
@@ -3366,7 +3409,7 @@ static Prog* pc_prog_register(Prog* pr, u32 h, int fresh)
     int i;
     pr->hash = h;
     pr->key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
-    for (i = 0; i < g_spec_n; i++) pr->key[i] = g_spec_vals[g_spec_slots[i]];
+    for (i = 0; i < g_spec_n; i++) pr->key[i] = g_spec_canon[g_spec_slots[i]];
     if (fresh) pc_shc_store(pr, h);
     g_progs[g_prog_n++] = pr;
     if (getenv("MELEE_SHADERLOG")) {
@@ -3454,7 +3497,7 @@ static Prog* pc_prog_select(void)
             if (g_defer_n < (int) (sizeof(g_defer_hash) / sizeof(g_defer_hash[0]))) {
                 g_defer_hash[g_defer_n++] = h;
             }
-            for (i = 0; i < g_spec_n; i++) row[i] = g_spec_vals[g_spec_slots[i]];
+            for (i = 0; i < g_spec_n; i++) row[i] = g_spec_canon[g_spec_slots[i]];
             pc_shq_push(row);
             g_spec_dirty = 0;
             return g_uber;
@@ -3541,6 +3584,27 @@ static void pc_vloc_init(void)
     }
     PORT_LOG_INFO("SHADER: %d uniforms, %d slots, %d specialisation constants",
                   UNI_TAB_N, g_vloc_total, g_spec_n);
+    /* the canonical-key rule: which slots belong to a stage, a texgen
+     * channel or a texture map */
+    g_canon_stage_n = g_canon_coord_n = 0;
+    for (i = 0; i < UNI_TAB_N; i++) {
+        const UniEntry* ent = &g_uni_tab[i];
+        if (!ent->spec) continue;
+        if (strcmp(ent->name, "u_tev_num_stages") == 0) g_canon_ns = ent->base;
+        else if (strcmp(ent->name, "u_tev_tex_coord") == 0) g_canon_tc = ent->base;
+        else if (strcmp(ent->name, "u_tev_tex_map") == 0) g_canon_tm = ent->base;
+        else if (strcmp(ent->name, "u_tex_enable") == 0) g_canon_te = ent->base;
+        if (strncmp(ent->name, "u_tev_", 6) == 0 && (ent->count == 8 || ent->count == 32) &&
+            g_canon_stage_n < 24) {
+            g_canon_stage_base[g_canon_stage_n] = ent->base;
+            g_canon_stage_stride[g_canon_stage_n++] = ent->count / 8;
+        }
+        if ((strcmp(ent->name, "u_texgen_mode") == 0 || strcmp(ent->name, "u_texgen_src") == 0 ||
+             strcmp(ent->name, "u_texgen_nrm") == 0 || strcmp(ent->name, "u_texmtx_enable") == 0 ||
+             strcmp(ent->name, "u_pttexmtx_enable") == 0) && g_canon_coord_n < 8) {
+            g_canon_coord_base[g_canon_coord_n++] = ent->base;
+        }
+    }
 }
 
 static void bridge_compile_shaders(void)
