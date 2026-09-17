@@ -2457,6 +2457,12 @@ static int g_vloc_total;
 static u8 g_vloc_spec[VLOC_MAX];
 static GLint g_spec_vals[VLOC_MAX];
 static int g_spec_dirty = 1;
+static u32 g_spec_gen;          /* bumped on every specialisation change */
+struct Prog;
+static struct Prog* g_uber;      /* the base program as a fallback (pc_uber) */
+static u32 g_uber_spec_gen;
+static u32 g_defer_hash[4096];  /* keys the base shader is covering this match */
+static int g_defer_n;
 
 enum { UK_I1, UK_F1, UK_IV, UK_FV, UK_F2V, UK_F3V, UK_F4V, UK_M3, UK_M4 };
 static u8 g_last[VLOC_MAX][VLOC_BYTES];
@@ -2496,6 +2502,7 @@ static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
             if (g_spec_vals[vloc + k] != p[k]) {
                 g_spec_vals[vloc + k] = p[k];
                 g_spec_dirty = 1;
+                g_spec_gen++;
             }
         }
         return;
@@ -2753,6 +2760,7 @@ char* vf_resolve_path(const char* path, char* out, size_t out_size);
 
 static char g_shc_dir[512];
 static int g_shc_cur_stkind = -1; /* set for the match being loaded */
+static int g_shc_last_stkind = -1; /* the last match, for tagging its deferred keys */
 static u32 g_shc_drv;
 static int g_shc_on = -1;
 static int g_shc_loaded, g_shc_compiled;
@@ -2932,6 +2940,7 @@ static u32 pc_spec_hash(void);
 static Prog* pc_prog_find(u32 h);
 static Prog* pc_prog_register(Prog* pr, u32 h, int fresh);
 static int pc_shc_index_has_tagged(const Prog* pr);
+static void pc_shq_push(const GLint* row);
 
 /* Warm-up, scoped to what will be drawn.
  *
@@ -3200,9 +3209,15 @@ void pc_shc_prepare_match(int stkind)
             (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6);
 }
 
-/* The match is over: keys compiled from here on are menu keys again. */
+/* The match is over: keys compiled from here on are menu keys again, and
+ * whatever the base program covered is now the pump's to compile. */
 void pc_shc_match_over(void)
 {
+    if (g_defer_n > 0) {
+        fprintf(stderr, "[SHCACHE] match over: %d variants were drawn by the base shader; queued to compile\n", g_defer_n);
+    }
+    g_defer_n = 0;
+    g_shc_last_stkind = g_shc_cur_stkind;
     g_shc_cur_stkind = -1;
 }
 
@@ -3214,6 +3229,7 @@ void pc_shc_pump(long long budget_ns)
     long long deadline, now;
     int touched = 0;
     if (g_shq_i >= g_shq_n || budget_ns < 5000000LL) return;
+    if (g_shc_cur_stkind >= 0) return; /* a match is loaded: READY counts as in it */
     clock_gettime(CLOCK_MONOTONIC, &t);
     deadline = (long long) t.tv_sec * 1000000000LL + t.tv_nsec + budget_ns;
     memcpy(saved, g_spec_vals, sizeof(saved));
@@ -3223,7 +3239,10 @@ void pc_shc_pump(long long budget_ns)
         clock_gettime(CLOCK_MONOTONIC, &t);
         now = (long long) t.tv_sec * 1000000000LL + t.tv_nsec;
         if (deadline - now < 1000000LL) break;
+        /* A deferred key belongs to the match it was drawn in; tag it so. */
+        g_shc_cur_stkind = g_shc_last_stkind;
         r = pc_shc_bring(row, 1);
+        g_shc_cur_stkind = -1;
         g_shq_i++;
         if (r) { touched = 1; if (r == 1) g_shq_loaded++; else g_shq_compiled++; }
         if (r == 2) break; /* one compile per frame */
@@ -3337,6 +3356,42 @@ static Prog* pc_prog_register(Prog* pr, u32 h, int fresh)
     return pr;
 }
 
+/* The base program as a fallback.
+ *
+ * A match must never compile a shader: a compile is 20-40 ms inside the
+ * draw that needs it, and a fight can produce a hundred variants the seed
+ * did not -- 165 new ones in a replay of a lineup the tablet had already
+ * played. The base program has the same source with every specialised
+ * value left as a real uniform, so it draws any variant correctly; it is
+ * only slower per fragment (the loop the driver never unrolls). A miss in
+ * a match is served by it, with the specialised values uploaded as
+ * uniforms whenever they change, and the key is queued for the pump to
+ * compile outside the match. */
+
+static Prog* pc_uber(void)
+{
+    int i, k;
+    if (g_uber != NULL || g_shader_program == 0) return g_uber;
+    g_uber = (Prog*) calloc(1, sizeof(Prog));
+    g_uber->id = g_shader_program;
+    for (i = 0; i < VLOC_MAX; i++) g_uber->glloc[i] = -1;
+    for (i = 0; i < UNI_TAB_N; i++) {
+        const UniEntry* ent = &g_uni_tab[i];
+        GLint gl = glGetUniformLocation(g_shader_program, ent->name);
+        if (gl < 0) continue;
+        for (k = 0; k < ent->count; k++) g_uber->glloc[ent->base + k] = gl + k;
+    }
+    g_uber_spec_gen = (u32) -1;
+    return g_uber;
+}
+
+static int pc_defer_has(u32 h)
+{
+    int i;
+    for (i = 0; i < g_defer_n; i++) if (g_defer_hash[i] == h) return 1;
+    return 0;
+}
+
 static Prog* pc_prog_select(void)
 {
     u32 h;
@@ -3357,8 +3412,28 @@ static Prog* pc_prog_select(void)
         return g_cur_prog;
     }
     {
+        extern unsigned int gm_8016AEDC(void);
         int fresh = 0;
+        /* The match frame counter is still zero during READY -- the moment
+         * the compiles happen -- so "in a match" is "prepared and not yet
+         * over": set at the stage conversion, cleared at match over. */
+        int in_match = g_shc_cur_stkind >= 0 || gm_8016AEDC() != 0;
+        if (in_match && pc_defer_has(h) && pc_uber() != NULL) {
+            g_spec_dirty = 0;
+            return g_uber;
+        }
         pr = pc_shc_load(h);
+        if (!pr && in_match && pc_uber() != NULL) {
+            GLint row[VLOC_MAX];
+            int i;
+            if (g_defer_n < (int) (sizeof(g_defer_hash) / sizeof(g_defer_hash[0]))) {
+                g_defer_hash[g_defer_n++] = h;
+            }
+            for (i = 0; i < g_spec_n; i++) row[i] = g_spec_vals[g_spec_slots[i]];
+            pc_shq_push(row);
+            g_spec_dirty = 0;
+            return g_uber;
+        }
         if (!pr) { pr = pc_prog_build(); fresh = 1; }
         if (!pr) return g_cur_prog;
         pc_prog_register(pr, h, fresh);
@@ -3378,6 +3453,21 @@ static void pc_prog_flush(void)
     if (pr != g_cur_prog) {
         glUseProgram(pr->id);
         g_cur_prog = pr;
+        if (pr == g_uber) g_uber_spec_gen = (u32) -1;
+    }
+    if (pr == g_uber && g_uber_spec_gen != g_spec_gen) {
+        /* The specialised values are constants in every variant and real
+         * uniforms only here; they change per draw, so upload them all. */
+        int e;
+        for (e = 0; e < UNI_TAB_N; e++) {
+            const UniEntry* ent = &g_uni_tab[e];
+            GLint gl;
+            if (!ent->spec || ent->base < 0) continue;
+            gl = pr->glloc[ent->base];
+            if (gl < 0) continue;
+            glUniform1iv(gl, ent->count, &g_spec_vals[ent->base]);
+        }
+        g_uber_spec_gen = g_spec_gen;
     }
     for (i = 0; i < g_set_n; i++) {
         int v = g_set_list[i];
