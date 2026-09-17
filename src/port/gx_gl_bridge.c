@@ -2753,7 +2753,6 @@ char* vf_resolve_path(const char* path, char* out, size_t out_size);
 
 static char g_shc_dir[512];
 static int g_shc_cur_stkind = -1; /* set for the match being loaded */
-static int g_shc_prepared;        /* this match's lineup has been prepared */
 static u32 g_shc_drv;
 static int g_shc_on = -1;
 static int g_shc_loaded, g_shc_compiled;
@@ -3148,8 +3147,6 @@ void pc_shc_prepare_match(int stkind)
     struct timespec t0, t1;
     static const char* const common_name = "common.txt";
 
-    if (g_shc_prepared) return;
-    g_shc_prepared = 1;
     g_shc_cur_stkind = stkind;
     if (!pc_shc_enabled() || g_spec_n <= 0) return;
     clock_gettime(CLOCK_MONOTONIC, &t0);
@@ -3203,17 +3200,9 @@ void pc_shc_prepare_match(int stkind)
             (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6);
 }
 
-void pc_shc_on_fighter_load(void)
-{
-    extern int pc_selected_stkind(void);
-    if (!g_shc_prepared) pc_shc_prepare_match(pc_selected_stkind());
-}
-
-/* The match is over: keys compiled from here on are menu keys again, and
- * the next match prepares afresh. */
+/* The match is over: keys compiled from here on are menu keys again. */
 void pc_shc_match_over(void)
 {
-    g_shc_prepared = 0;
     g_shc_cur_stkind = -1;
 }
 

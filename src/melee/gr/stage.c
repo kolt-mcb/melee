@@ -558,15 +558,6 @@ GrKind Stage_8022519C(StKind stkind)
 
 void Stage_802251B4(StKind stkind)
 {
-#if BUILD_TARGET_PC
-    /* The loading screen: the one moment the lineup is known and READY
-     * has not happened. The shader cache compiles what this lineup will
-     * draw here, where a stall is invisible, instead of at READY. */
-    {
-        extern void pc_shc_prepare_match(int stkind);
-        pc_shc_prepare_match((int) stkind);
-    }
-#endif
     Ground_801C06B8(stage_id_map[PC_STKIND(stkind)].grkind);
 }
 
