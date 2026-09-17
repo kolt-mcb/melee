@@ -28,6 +28,39 @@ static unsigned prof_used;
 static unsigned long prof_samples;
 static int prof_on;
 
+#ifdef __ANDROID__
+#include <ucontext.h>
+/* On Android the unwinder cannot be called from a signal handler: a
+ * SIGPROF landing inside libunwind's own DWARF stepping crashed the
+ * profiled run every time. Sample the interrupted PC from the signal
+ * context instead -- one frame, no unwinding, async-signal-safe -- which
+ * gives a flat profile by leaf function, resolved offline. */
+static void prof_tick(int sig, siginfo_t* si, void* uc)
+{
+    void* pc;
+    int s;
+    (void) sig; (void) si;
+#if defined(__aarch64__)
+    pc = (void*) ((ucontext_t*) uc)->uc_mcontext.pc;
+#elif defined(__x86_64__)
+    pc = (void*) ((ucontext_t*) uc)->uc_mcontext.gregs[REG_RIP];
+#else
+    pc = NULL;
+#endif
+    if (pc == NULL) return;
+    prof_samples++;
+    for (s = 0; s < (int) prof_used; s++) {
+        if (prof_addr[s][0] == pc) {
+            prof_count[s]++;
+            return;
+        }
+    }
+    if (prof_used >= PROF_SLOTS) return;
+    s = (int) prof_used++;
+    prof_addr[s][0] = pc;
+    prof_count[s] = 1;
+}
+#else
 static void prof_tick(int sig)
 {
     void* bt[PROF_DEPTH + 2];
@@ -56,6 +89,7 @@ static void prof_tick(int sig)
     }
     prof_count[s] = 1;
 }
+#endif
 
 void pc_profile_report(void)
 {
@@ -86,8 +120,19 @@ void pc_profile_report(void)
         fprintf(stderr, "[PROFILE] %5.1f%% (%u)", 
                 100.0 * prof_count[shown] / (prof_samples ? prof_samples : 1),
                 prof_count[shown]);
+        /* Each frame as object+offset, so a stripped-of-statics dladdr
+         * lookup is not the only way to a name: llvm-symbolizer over the
+         * unstripped object resolves the offsets to the static functions
+         * the bridge is made of. */
         for (i = 0; i < PROF_DEPTH && prof_addr[shown][i]; i++) {
-            fprintf(stderr, " %p", prof_addr[shown][i]);
+            Dl_info fi;
+            if (dladdr(prof_addr[shown][i], &fi) && fi.dli_fbase) {
+                const char* obj = fi.dli_fname ? strrchr(fi.dli_fname, '/') : NULL;
+                fprintf(stderr, " %s+0x%lx", obj ? obj + 1 : "?",
+                        (unsigned long) ((char*) prof_addr[shown][i] - (char*) fi.dli_fbase));
+            } else {
+                fprintf(stderr, " %p", prof_addr[shown][i]);
+            }
         }
         /* Name the leaf: symbol and object, so driver time (Mesa, libc)
          * can be told from the port's own without a maps file. */
@@ -112,8 +157,13 @@ void pc_profile_init(void)
         return;
     }
     memset(&sa, 0, sizeof(sa));
+#ifdef __ANDROID__
+    sa.sa_sigaction = prof_tick;
+    sa.sa_flags = SA_RESTART | SA_SIGINFO;
+#else
     sa.sa_handler = prof_tick;
     sa.sa_flags = SA_RESTART;
+#endif
     sigaction(SIGPROF, &sa, NULL);
     it.it_interval.tv_sec = 0;
     it.it_interval.tv_usec = 1000;

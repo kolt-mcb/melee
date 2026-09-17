@@ -127,6 +127,12 @@ void render_present(void)
         s_max_frames = mf ? atoi(mf) : -1;
     }
     s_present_count++;
+    /* MELEE_PROFILE's report runs at exit, which an Android force-stop
+     * never reaches: repeat it every 1500 frames as well. */
+    if (s_present_count % 1500 == 0 && getenv("MELEE_PROFILE") != NULL) {
+        extern void pc_profile_report(void);
+        pc_profile_report();
+    }
     if (s_max_frames > 0 && s_present_count >= s_max_frames) {
         g_should_quit = TRUE;
     }
@@ -603,10 +609,13 @@ void render_present(void)
                 extern u32 pc_diag_efb_copies;
                 extern u64 pc_diag_gpu_ns; extern u32 pc_diag_gpu_frames;
                 extern u32 pc_diag_gl_calls, pc_diag_gl_skips;
-                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  gpu(query) %.2f ms/frame  per frame: draws %u glstate %u (skipped %u) texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u  efb %u (read %.2f ms, pack %.2f ms)\n",
+                extern u32 pc_diag_dl_hits, pc_diag_dl_misses, pc_diag_dl_entries;
+                extern u64 pc_diag_dl_ns;
+                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  gpu(query) %.2f ms/frame  per frame: draws %u glstate %u (skipped %u) dl %.2f ms (%u hit %u miss, %u cached) texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u  efb %u (read %.2f ms, pack %.2f ms)\n",
                         s_n * 1e9 / wall, wall / s_n / 1e6, s_busy_ns / s_n / 1e6, s_fin_ns / s_n / 1e6,
                         pc_diag_gpu_frames ? (double) pc_diag_gpu_ns / pc_diag_gpu_frames / 1e6 : 0.0,
                         pc_diag_draws / s_n, pc_diag_gl_calls / s_n, pc_diag_gl_skips / s_n,
+                        (double) pc_diag_dl_ns / s_n / 1e6, pc_diag_dl_hits / s_n, pc_diag_dl_misses / s_n, pc_diag_dl_entries,
                         pc_diag_hashes / s_n,
                         (double) pc_diag_hash_ns / s_n / 1e6,
                         (double) pc_diag_hash_bytes / s_n / 1024.0,
@@ -652,6 +661,7 @@ void render_present(void)
                 }
                 pc_diag_draws = pc_diag_hashes = pc_diag_uploads = pc_diag_mipgens = 0;
                 pc_diag_gl_calls = pc_diag_gl_skips = 0;
+                pc_diag_dl_hits = pc_diag_dl_misses = 0; pc_diag_dl_ns = 0;
                 pc_diag_gpu_ns = 0; pc_diag_gpu_frames = 0;
                 pc_diag_hash_bytes = pc_diag_hash_ns = 0;
                 pc_diag_efb_ns = pc_diag_efb_read_ns = 0;
