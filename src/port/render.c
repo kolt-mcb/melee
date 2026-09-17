@@ -21,6 +21,7 @@ void pc_get_fb_size(float* w, float* h);
 #include <math.h>
 #include <stdbool.h>
 #include <time.h>
+#include <string.h>
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
 #endif
@@ -102,6 +103,9 @@ void render_clear(void)
 static bool g_archive_loaded = false;
 static _Bool g_frame_saved = 0;
 
+void pc_gputime_begin(void);
+void pc_fb_discard_depth(void);
+void pc_gputime_end(void);
 void render_present(void)
 {
     if (s_after_swap.tv_sec != 0) {
@@ -520,7 +524,10 @@ void render_present(void)
                 s_last = now;
             }
         }
+        pc_fb_discard_depth();
+        pc_gputime_end();
         window_swap();
+        pc_gputime_begin();
         /* Lockstep barrier, after the present: with MELEE_SYNC set this blocks
          * until tools/pc_lockstep.py has compared this frame against the same
          * frame on the console and released it. */
@@ -594,9 +601,13 @@ void render_present(void)
                 extern u64 pc_diag_hash_bytes, pc_diag_hash_ns;
                 extern u64 pc_diag_efb_ns, pc_diag_efb_read_ns;
                 extern u32 pc_diag_efb_copies;
-                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  per frame: draws %u texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u  efb %u (read %.2f ms, pack %.2f ms)\n",
+                extern u64 pc_diag_gpu_ns; extern u32 pc_diag_gpu_frames;
+                extern u32 pc_diag_gl_calls, pc_diag_gl_skips;
+                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  gpu(query) %.2f ms/frame  per frame: draws %u glstate %u (skipped %u) texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u  efb %u (read %.2f ms, pack %.2f ms)\n",
                         s_n * 1e9 / wall, wall / s_n / 1e6, s_busy_ns / s_n / 1e6, s_fin_ns / s_n / 1e6,
-                        pc_diag_draws / s_n, pc_diag_hashes / s_n,
+                        pc_diag_gpu_frames ? (double) pc_diag_gpu_ns / pc_diag_gpu_frames / 1e6 : 0.0,
+                        pc_diag_draws / s_n, pc_diag_gl_calls / s_n, pc_diag_gl_skips / s_n,
+                        pc_diag_hashes / s_n,
                         (double) pc_diag_hash_ns / s_n / 1e6,
                         (double) pc_diag_hash_bytes / s_n / 1024.0,
                         pc_diag_uploads / s_n, pc_diag_mipgens / s_n,
@@ -616,6 +627,19 @@ void render_present(void)
                     fprintf(stderr, "[SPLIT] outside present %.2f ms/frame (sim + GX capture)  inside %.2f ms/frame (submission + present)  base-shader variants %d\n",
                             outside, wall / s_n / 1e6 - outside, pc_shc_deferred());
                     s_game_prev = pc_diag_game_ns;
+                    {
+                        /* The submission's own buckets, per frame: the
+                         * vertex ring, the matrix/texgen uniforms, the TEV
+                         * and alpha uniforms, the draw issue itself. */
+                        extern u64 pc_diag_sec_ns[5];
+                        static u64 s_sec_prev[5];
+                        fprintf(stderr, "[SECS] vbo %.2f  mtx-unif %.2f  tev-unif %.2f  draw %.2f ms/frame\n",
+                                (double) (pc_diag_sec_ns[0] - s_sec_prev[0]) / s_n / 1e6,
+                                (double) (pc_diag_sec_ns[1] - s_sec_prev[1]) / s_n / 1e6,
+                                (double) (pc_diag_sec_ns[2] - s_sec_prev[2]) / s_n / 1e6,
+                                (double) (pc_diag_sec_ns[3] - s_sec_prev[3]) / s_n / 1e6);
+                        memcpy(s_sec_prev, pc_diag_sec_ns, sizeof(s_sec_prev));
+                    }
                 }
                 {
                     extern u32 pc_diag_gxinv_vtx, pc_diag_gxinv_tex;
@@ -640,6 +664,8 @@ void render_present(void)
                     }
                 }
                 pc_diag_draws = pc_diag_hashes = pc_diag_uploads = pc_diag_mipgens = 0;
+                pc_diag_gl_calls = pc_diag_gl_skips = 0;
+                pc_diag_gpu_ns = 0; pc_diag_gpu_frames = 0;
                 pc_diag_hash_bytes = pc_diag_hash_ns = 0;
                 pc_diag_efb_ns = pc_diag_efb_read_ns = 0;
                 pc_diag_efb_copies = 0;

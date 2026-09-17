@@ -1788,6 +1788,156 @@ static const char* g_frag_src =
 int window_gl_es(void);
 
 /* ------------------------------------------------------------------
+ * GL state shadow.
+ *
+ * The per-draw state block re-issued every enable, blend, depth, cull,
+ * scissor and viewport call on every draw: ~14 calls a draw, ~25k a frame
+ * in a match, of which almost none changed anything. On a desktop driver
+ * that is cheap validation; on Adreno each is a command-stream write, and
+ * a viewport, scissor or depth-range change is a tile-state re-emit. Only
+ * the uniforms were memoised.
+ *
+ * Every call that sets one of these goes through here, so the shadow is
+ * the truth for the bridge; a path that must touch GL directly (the movie
+ * player restores what it saved) calls gls_invalidate() afterwards. A
+ * field is "known" only once it has been set through here -- the GL
+ * defaults are not assumed, so the first call of each kind always goes
+ * out. The counters feed the [FPS] line. */
+u32 pc_diag_gl_calls, pc_diag_gl_skips;
+enum {
+    GLS_DEPTH = 1 << 0, GLS_BLEND = 1 << 1, GLS_CULL = 1 << 2,
+    GLS_SCISSOR = 1 << 3, GLS_DITHER = 1 << 4, GLS_BEQ = 1 << 5,
+    GLS_BFUNC = 1 << 6, GLS_DFUNC = 1 << 7, GLS_DMASK = 1 << 8,
+    GLS_CMASK = 1 << 9, GLS_CFACE = 1 << 10, GLS_FFACE = 1 << 11,
+    GLS_SRECT = 1 << 12, GLS_VP = 1 << 13, GLS_DRANGE = 1 << 14,
+    GLS_VAO = 1 << 15, GLS_VBO = 1 << 16
+};
+static struct {
+    u32 known;
+    GLboolean cap[5];
+    GLenum beq, bsrc, bdst, bsrca, bdsta;
+    GLenum dfunc; GLboolean dmask;
+    GLboolean cmask[4];
+    GLenum cface, fface;
+    GLint srect[4], vp[4];
+    float dr_n, dr_f;
+    GLuint vao, vbo;
+} g_gls;
+
+static int gls_cap_idx(GLenum cap)
+{
+    switch (cap) {
+    case GL_DEPTH_TEST: return 0;
+    case GL_BLEND: return 1;
+    case GL_CULL_FACE: return 2;
+    case GL_SCISSOR_TEST: return 3;
+    default: return 4; /* GL_DITHER */
+    }
+}
+static void gls_set_cap(GLenum cap, GLboolean on)
+{
+    int i = gls_cap_idx(cap);
+    if ((g_gls.known & (1u << i)) && g_gls.cap[i] == on) { pc_diag_gl_skips++; return; }
+    g_gls.known |= 1u << i; g_gls.cap[i] = on;
+    pc_diag_gl_calls++;
+    if (on) glEnable(cap); else glDisable(cap);
+}
+static void gls_enable(GLenum cap) { gls_set_cap(cap, GL_TRUE); }
+static void gls_disable(GLenum cap) { gls_set_cap(cap, GL_FALSE); }
+static GLboolean gls_is_enabled(GLenum cap)
+{
+    int i = gls_cap_idx(cap);
+    if (g_gls.known & (1u << i)) return g_gls.cap[i];
+    g_gls.known |= 1u << i;
+    g_gls.cap[i] = glIsEnabled(cap);
+    return g_gls.cap[i];
+}
+static void gls_blend_eq(GLenum e)
+{
+    if ((g_gls.known & GLS_BEQ) && g_gls.beq == e) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_BEQ; g_gls.beq = e; pc_diag_gl_calls++;
+    glBlendEquation(e);
+}
+static void gls_blend_func_sep(GLenum s, GLenum d, GLenum sa, GLenum da)
+{
+    if ((g_gls.known & GLS_BFUNC) && g_gls.bsrc == s && g_gls.bdst == d &&
+        g_gls.bsrca == sa && g_gls.bdsta == da) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_BFUNC; g_gls.bsrc = s; g_gls.bdst = d; g_gls.bsrca = sa; g_gls.bdsta = da;
+    pc_diag_gl_calls++;
+    glBlendFuncSeparate(s, d, sa, da);
+}
+static void gls_blend_func(GLenum s, GLenum d) { gls_blend_func_sep(s, d, s, d); }
+static void gls_depth_func(GLenum f)
+{
+    if ((g_gls.known & GLS_DFUNC) && g_gls.dfunc == f) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_DFUNC; g_gls.dfunc = f; pc_diag_gl_calls++;
+    glDepthFunc(f);
+}
+static void gls_depth_mask(GLboolean m)
+{
+    m = m ? GL_TRUE : GL_FALSE;
+    if ((g_gls.known & GLS_DMASK) && g_gls.dmask == m) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_DMASK; g_gls.dmask = m; pc_diag_gl_calls++;
+    glDepthMask(m);
+}
+static void gls_color_mask(GLboolean r, GLboolean g, GLboolean b, GLboolean a)
+{
+    if ((g_gls.known & GLS_CMASK) && g_gls.cmask[0] == r && g_gls.cmask[1] == g &&
+        g_gls.cmask[2] == b && g_gls.cmask[3] == a) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_CMASK;
+    g_gls.cmask[0] = r; g_gls.cmask[1] = g; g_gls.cmask[2] = b; g_gls.cmask[3] = a;
+    pc_diag_gl_calls++;
+    glColorMask(r, g, b, a);
+}
+static void gls_cull_face(GLenum f)
+{
+    if ((g_gls.known & GLS_CFACE) && g_gls.cface == f) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_CFACE; g_gls.cface = f; pc_diag_gl_calls++;
+    glCullFace(f);
+}
+static void gls_front_face(GLenum f)
+{
+    if ((g_gls.known & GLS_FFACE) && g_gls.fface == f) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_FFACE; g_gls.fface = f; pc_diag_gl_calls++;
+    glFrontFace(f);
+}
+static void gls_scissor(GLint x, GLint y, GLsizei w, GLsizei h)
+{
+    if ((g_gls.known & GLS_SRECT) && g_gls.srect[0] == x && g_gls.srect[1] == y &&
+        g_gls.srect[2] == w && g_gls.srect[3] == h) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_SRECT;
+    g_gls.srect[0] = x; g_gls.srect[1] = y; g_gls.srect[2] = w; g_gls.srect[3] = h;
+    pc_diag_gl_calls++;
+    glScissor(x, y, w, h);
+}
+static void gls_viewport(GLint x, GLint y, GLsizei w, GLsizei h)
+{
+    if ((g_gls.known & GLS_VP) && g_gls.vp[0] == x && g_gls.vp[1] == y &&
+        g_gls.vp[2] == w && g_gls.vp[3] == h) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_VP;
+    g_gls.vp[0] = x; g_gls.vp[1] = y; g_gls.vp[2] = w; g_gls.vp[3] = h;
+    pc_diag_gl_calls++;
+    glViewport(x, y, w, h);
+}
+static void gls_bind_vao(GLuint v)
+{
+    if ((g_gls.known & GLS_VAO) && g_gls.vao == v) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_VAO; g_gls.vao = v; pc_diag_gl_calls++;
+    glBindVertexArray(v);
+    /* The array-buffer binding is not VAO state, but a VAO switch is the
+     * one place the bridge changes both together; forget it to be safe. */
+    g_gls.known &= ~GLS_VBO;
+}
+static void gls_bind_vbo(GLuint b)
+{
+    if ((g_gls.known & GLS_VBO) && g_gls.vbo == b) { pc_diag_gl_skips++; return; }
+    g_gls.known |= GLS_VBO; g_gls.vbo = b; pc_diag_gl_calls++;
+    glBindBuffer(GL_ARRAY_BUFFER, b);
+}
+/* After any GL call outside the shadow that may have moved this state. */
+static void gls_invalidate(void) { g_gls.known = 0; }
+
+/* ------------------------------------------------------------------
  * Streaming vertex buffer.
  *
  * Every GX primitive becomes its own glDrawArrays, so a match issues
@@ -1869,6 +2019,100 @@ static int pc_gl_has_ext(const char* want)
         }
     }
     return 0;
+}
+
+/* GPU time per frame from a timer query, the honest replacement for the
+ * MELEE_FPS=2 glFinish: that serialised the CPU against the GPU and cost
+ * the frame rate it was measuring. GL_TIME_ELAPSED is core in GL 3.3 and
+ * GL_EXT_disjoint_timer_query on ES (Adreno has it); a ring of four keeps
+ * the read three frames behind the write so it never waits. */
+typedef void (*pc_pfn_genq)(GLsizei, GLuint*);
+typedef void (*pc_pfn_beginq)(GLenum, GLuint);
+typedef void (*pc_pfn_endq)(GLenum);
+typedef void (*pc_pfn_getqui64)(GLuint, GLenum, u64*);
+typedef void (*pc_pfn_getqui)(GLuint, GLenum, GLuint*);
+static pc_pfn_genq p_genq; static pc_pfn_beginq p_beginq; static pc_pfn_endq p_endq;
+static pc_pfn_getqui64 p_getqui64; static pc_pfn_getqui p_getqui;
+/* Tile-based GPUs write every attachment back to memory at the end of a
+ * render pass unless told the contents are dead. Nothing reads the depth
+ * buffer after the frame -- the next frame starts with a full clear -- so
+ * at 1600x1200 the D24S8 resolve was ~7.7 MB of bandwidth a frame for
+ * nothing. glInvalidateFramebuffer is ES 3.0 core; on desktop GL it is 4.3,
+ * so it is looked up and simply absent on an older context.
+ * MELEE_NO_INVALIDATE=1 keeps the old behaviour for an A/B. */
+typedef void (*pc_pfn_invalfb)(GLenum, GLsizei, const GLenum*);
+static pc_pfn_invalfb p_invalfb;
+static int g_invalfb_state = -1;
+void pc_fb_discard_depth(void)
+{
+    static const GLenum att[2] = { 0x1801 /* GL_DEPTH */, 0x1802 /* GL_STENCIL */ };
+    if (g_invalfb_state < 0) {
+        g_invalfb_state = 0;
+        if (getenv("MELEE_NO_INVALIDATE") == NULL) {
+            p_invalfb = (pc_pfn_invalfb) SDL_GL_GetProcAddress("glInvalidateFramebuffer");
+            if (p_invalfb != NULL) g_invalfb_state = 1;
+        }
+    }
+    if (g_invalfb_state != 1) return;
+    /* The offscreen pass binds its own FBO and restores; at present time the
+     * default framebuffer is bound. GL_DEPTH/GL_STENCIL name the default
+     * framebuffer's buffers; a user FBO would need GL_*_ATTACHMENT. */
+    p_invalfb(GL_FRAMEBUFFER, 2, att);
+}
+#define PC_TQ_N 4
+static GLuint g_tq[PC_TQ_N];
+static int g_tq_i = -1, g_tq_open;
+u64 pc_diag_gpu_ns; u32 pc_diag_gpu_frames;
+static int pc_tq_init(void)
+{
+    if (g_tq_i >= 0) return 1;
+    if (window_gl_es()) {
+        if (!pc_gl_has_ext("GL_EXT_disjoint_timer_query")) return 0;
+        p_genq = (pc_pfn_genq) SDL_GL_GetProcAddress("glGenQueriesEXT");
+        p_beginq = (pc_pfn_beginq) SDL_GL_GetProcAddress("glBeginQueryEXT");
+        p_endq = (pc_pfn_endq) SDL_GL_GetProcAddress("glEndQueryEXT");
+        p_getqui64 = (pc_pfn_getqui64) SDL_GL_GetProcAddress("glGetQueryObjectui64vEXT");
+        p_getqui = (pc_pfn_getqui) SDL_GL_GetProcAddress("glGetQueryObjectuivEXT");
+    } else {
+        p_genq = (pc_pfn_genq) SDL_GL_GetProcAddress("glGenQueries");
+        p_beginq = (pc_pfn_beginq) SDL_GL_GetProcAddress("glBeginQuery");
+        p_endq = (pc_pfn_endq) SDL_GL_GetProcAddress("glEndQuery");
+        p_getqui64 = (pc_pfn_getqui64) SDL_GL_GetProcAddress("glGetQueryObjectui64v");
+        p_getqui = (pc_pfn_getqui) SDL_GL_GetProcAddress("glGetQueryObjectuiv");
+    }
+    if (!p_genq || !p_beginq || !p_endq || !p_getqui64 || !p_getqui) return 0;
+    p_genq(PC_TQ_N, g_tq);
+    g_tq_i = 0;
+    return 1;
+}
+#define PC_GL_TIME_ELAPSED 0x88BF
+#define PC_GL_QUERY_RESULT 0x8866
+#define PC_GL_QUERY_RESULT_AVAILABLE 0x8867
+void pc_gputime_begin(void)
+{
+    if (!pc_tq_init() || g_tq_open) return;
+    p_beginq(PC_GL_TIME_ELAPSED, g_tq[g_tq_i]);
+    g_tq_open = 1;
+}
+void pc_gputime_end(void)
+{
+    static u32 issued;
+    if (!g_tq_open) return;
+    p_endq(PC_GL_TIME_ELAPSED);
+    g_tq_open = 0;
+    issued++;
+    g_tq_i = (g_tq_i + 1) % PC_TQ_N;
+    if (issued >= PC_TQ_N) {
+        /* g_tq_i is now the oldest query, PC_TQ_N-1 frames back. */
+        GLuint avail = 0;
+        p_getqui(g_tq[g_tq_i], PC_GL_QUERY_RESULT_AVAILABLE, &avail);
+        if (avail) {
+            u64 ns = 0;
+            p_getqui64(g_tq[g_tq_i], PC_GL_QUERY_RESULT, &ns);
+            pc_diag_gpu_ns += ns;
+            pc_diag_gpu_frames++;
+        }
+    }
 }
 
 /* Recycling a segment overwrites bytes an earlier draw may still read.
@@ -1964,7 +2208,7 @@ static void pc_vbo_alloc(void)
         if (g_vbo_base == NULL) {
             glDeleteBuffers(1, &g_vbo);
             glGenBuffers(1, &g_vbo);
-            glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+            gls_bind_vbo(g_vbo);
             g_vbo_mode = PC_VBO_SUBDATA;
         }
     }
@@ -2066,8 +2310,8 @@ static void pc_batch_flush(void)
      * state-changing GX entry points may call, so it cannot assume the draw
      * path's bindings are still current -- the movie path saves and restores
      * a different VAO around itself, and init leaves zero bound. */
-    glBindVertexArray(g_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+    gls_bind_vao(g_vao);
+    gls_bind_vbo(g_vbo);
     base = pc_vbo_stream(g_stage, g_stage_n);
     g_batch_flushing = 0;
     for (i = 0; i < g_batch_n; i++) {
@@ -2232,6 +2476,12 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
  * latter at compile time; the desktop chooses at run time. */
 static void pc_depth_range(float n, float f)
 {
+    if ((g_gls.known & GLS_DRANGE) && g_gls.dr_n == n && g_gls.dr_f == f) {
+        pc_diag_gl_skips++;
+        return;
+    }
+    g_gls.known |= GLS_DRANGE; g_gls.dr_n = n; g_gls.dr_f = f;
+    pc_diag_gl_calls++;
 #ifdef __ANDROID__
     glDepthRangef(n, f);
 #else
@@ -3839,8 +4089,8 @@ static void bridge_create_gl(void)
     if (g_vao) glDeleteVertexArrays(1, &g_vao);
     glGenVertexArrays(1, &g_vao);
     glGenBuffers(1, &g_vbo);
-    glBindVertexArray(g_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+    gls_bind_vao(g_vao);
+    gls_bind_vbo(g_vbo);
     pc_vbo_alloc();
     
     /* Set up vertex attribute pointers in VAO */
@@ -3860,8 +4110,8 @@ static void bridge_create_gl(void)
     glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           (void *)(uintptr_t)offsetof(Vertex, tex1));
     
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    gls_bind_vbo(0);
+    gls_bind_vao(0);
 }
 
 /* ============================================================
@@ -4733,14 +4983,14 @@ static Bool mv_init(void)
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_vbo);
     glGenVertexArrays(1, &mv_vao);
     glGenBuffers(1, &mv_vbo);
-    glBindVertexArray(mv_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, mv_vbo);
+    gls_bind_vao(mv_vao);
+    gls_bind_vbo(mv_vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat),
                           (void*) 0);
-    glBindVertexArray((GLuint) prev_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, (GLuint) prev_vbo);
+    gls_bind_vao((GLuint) prev_vao);
+    gls_bind_vbo((GLuint) prev_vbo);
 
     glGenTextures(1, &mv_tex);
     return TRUE;
@@ -4763,10 +5013,10 @@ void pc_gx_draw_movie(const unsigned char* rgb, int width, int height)
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prev_vao);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_unit);
     glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align);
-    depth_was = glIsEnabled(GL_DEPTH_TEST);
-    blend_was = glIsEnabled(GL_BLEND);
-    cull_was = glIsEnabled(GL_CULL_FACE);
-    scissor_was = glIsEnabled(GL_SCISSOR_TEST);
+    depth_was = gls_is_enabled(GL_DEPTH_TEST);
+    blend_was = gls_is_enabled(GL_BLEND);
+    cull_was = gls_is_enabled(GL_CULL_FACE);
+    scissor_was = gls_is_enabled(GL_SCISSOR_TEST);
 
     glActiveTexture(GL_TEXTURE0);
     glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex);
@@ -4790,26 +5040,27 @@ void pc_gx_draw_movie(const unsigned char* rgb, int width, int height)
 
     /* The movie is the background: no depth, no blend, no scissor, and it
      * must cover whatever the frame drew before it. */
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_SCISSOR_TEST);
+    gls_disable(GL_DEPTH_TEST);
+    gls_disable(GL_BLEND);
+    gls_disable(GL_CULL_FACE);
+    gls_disable(GL_SCISSOR_TEST);
 
     glUseProgram(mv_prog);
     glUniform1i(glGetUniformLocation(mv_prog, "u_frame"), 0);
-    glBindVertexArray(mv_vao);
+    gls_bind_vao(mv_vao);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    glBindVertexArray((GLuint) prev_vao);
+    gls_bind_vao((GLuint) prev_vao);
     glUseProgram((GLuint) prev_prog);
     glBindTexture(GL_TEXTURE_2D, (GLuint) prev_tex);
     glActiveTexture((GLenum) prev_unit);
     glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
-    if (depth_was) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
-    if (blend_was) glEnable(GL_BLEND); else glDisable(GL_BLEND);
-    if (cull_was) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
-    if (scissor_was) glEnable(GL_SCISSOR_TEST);
-    else glDisable(GL_SCISSOR_TEST);
+    pc_tex_bind_reset();
+    if (depth_was) gls_enable(GL_DEPTH_TEST); else gls_disable(GL_DEPTH_TEST);
+    if (blend_was) gls_enable(GL_BLEND); else gls_disable(GL_BLEND);
+    if (cull_was) gls_enable(GL_CULL_FACE); else gls_disable(GL_CULL_FACE);
+    if (scissor_was) gls_enable(GL_SCISSOR_TEST);
+    else gls_disable(GL_SCISSOR_TEST);
 }
 
 /* ============================================================
@@ -4819,19 +5070,19 @@ void pc_gx_draw_movie(const unsigned char* rgb, int width, int height)
 void gx_enable_depth_test(void)
 {
     g_state.z_enabled = TRUE;
-    glEnable(GL_DEPTH_TEST);
+    gls_enable(GL_DEPTH_TEST);
 }
 
 void gx_disable_depth_test(void)
 {
     g_state.z_enabled = FALSE;
-    glDisable(GL_DEPTH_TEST);
+    gls_disable(GL_DEPTH_TEST);
 }
 
 void gx_set_depth_mask(Bool write_depth)
 {
     g_state.z_update = write_depth;
-    glDepthMask(write_depth);
+    gls_depth_mask(write_depth);
 }
 
 /* ============================================================
@@ -5042,8 +5293,8 @@ static void bridge_upload_and_draw(void)
      * pre-allocated to MAX_VERTS at init). glBufferData with a changing
      * size would reallocate every draw; glBufferSubData does not. */
     pc_sec_begin();
-    glBindVertexArray(g_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+    gls_bind_vao(g_vao);
+    gls_bind_vbo(g_vbo);
     pc_sec_end(0);
 
 #if BUILD_TARGET_PC
@@ -5143,7 +5394,7 @@ static void bridge_upload_and_draw(void)
     
     /* State — depth */
     if (g_state.z_enabled && !ENV_FLAG("MELEE_STAGE_NODEPTH")) {
-        glEnable(GL_DEPTH_TEST);
+        gls_enable(GL_DEPTH_TEST);
         GLenum gl_func;
         switch (g_state.z_func) {
         case 0: gl_func = GL_NEVER; break;
@@ -5155,10 +5406,10 @@ static void bridge_upload_and_draw(void)
         case 6: gl_func = GL_GEQUAL; break;
         default: gl_func = GL_ALWAYS; break;
         }
-        glDepthFunc(gl_func);
-        glDepthMask(g_state.z_update);
+        gls_depth_func(gl_func);
+        gls_depth_mask(g_state.z_update);
     } else {
-        glDisable(GL_DEPTH_TEST);
+        gls_disable(GL_DEPTH_TEST);
     }
 
     /* Z-texture REPLACE: on GC hardware the fragment's depth is replaced by
@@ -5189,14 +5440,14 @@ static void bridge_upload_and_draw(void)
     
     /* State — scissor */
     if (g_state.scissor_enabled) {
-        glEnable(GL_SCISSOR_TEST);
-        glScissor((GLint)g_state.scissor_x, (GLint)g_state.scissor_y,
+        gls_enable(GL_SCISSOR_TEST);
+        gls_scissor((GLint)g_state.scissor_x, (GLint)g_state.scissor_y,
                   (GLsizei)g_state.scissor_w, (GLsizei)g_state.scissor_h);
     } else {
-        glDisable(GL_SCISSOR_TEST);
+        gls_disable(GL_SCISSOR_TEST);
     }
     
-    glViewport((GLint)g_state.vp_x, (GLint)g_state.vp_y,
+    gls_viewport((GLint)g_state.vp_x, (GLint)g_state.vp_y,
                (GLsizei)g_state.vp_w, (GLsizei)g_state.vp_h);
     
     /* The program is selected and its uniforms brought up to date in
@@ -5559,11 +5810,11 @@ static void bridge_upload_and_draw(void)
          * console's did, which is a bug. */
         if (ENV_FLAG("MELEE_OVERDRAW")) {
             on = 10;
-            glDisable(GL_DEPTH_TEST);
-            glDepthMask(GL_FALSE);
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_ONE, GL_ONE);
-            glBlendEquation(GL_FUNC_ADD);
+            gls_disable(GL_DEPTH_TEST);
+            gls_depth_mask(GL_FALSE);
+            gls_enable(GL_BLEND);
+            gls_blend_func(GL_ONE, GL_ONE);
+            gls_blend_eq(GL_FUNC_ADD);
         }
         { static int lit = -1; if (lit < 0) { const char* e = getenv("MELEE_LITDBG"); lit = e ? atoi(e) : 0; }
           if (lit) on = (lit == 1) ? 2 : 3; }
@@ -5577,9 +5828,9 @@ static void bridge_upload_and_draw(void)
            * no blend/depth/cull. */
           if (pd >= 0 && (int) g_frame_draw_idx == pd) {
               on = (pm == 3) ? 5 : (pm == 4) ? 6 : (pm == 5) ? 7 : (pm == 6) ? 8 : (pm == 7) ? 9 : 4;
-              glDisable(GL_BLEND);
-              if (pm != 8) glDisable(GL_CULL_FACE);       /* 8 = magenta, cull and depth kept */
-              if (pm != 2 && pm != 8) glDisable(GL_DEPTH_TEST);
+              gls_disable(GL_BLEND);
+              if (pm != 8) gls_disable(GL_CULL_FACE);       /* 8 = magenta, cull and depth kept */
+              if (pm != 2 && pm != 8) gls_disable(GL_DEPTH_TEST);
           }
           else if (pd >= 0) { on = 0; } }
         UP1I(g_dbg_mode_loc, on);
@@ -5588,7 +5839,7 @@ static void bridge_upload_and_draw(void)
             UP1I(g_dbg_drawid_loc, (GLint) g_frame_draw_idx);
             /* Blending would mix two draws' indices into a colour that
              * decodes to a third draw that never ran. */
-            glDisable(GL_BLEND);
+            gls_disable(GL_BLEND);
         }
     }
 
@@ -5661,11 +5912,11 @@ static void bridge_upload_and_draw(void)
         tri_verts[4] = g_state.verts[2];
         tri_verts[5] = g_state.verts[3];
         
-        glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+        gls_bind_vbo(g_vbo);
         g_vbo_first = pc_vbo_first_for(tri_verts, 6);
         
         /* Rebind VAO attributes */
-        glBindVertexArray(g_vao);
+        gls_bind_vao(g_vao);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                               (void *)(uintptr_t)offsetof(Vertex, pos));
@@ -6027,7 +6278,7 @@ static void bridge_upload_and_draw(void)
                 quad_tri[q*6+0] = *a; quad_tri[q*6+1] = *b; quad_tri[q*6+2] = *c;
                 quad_tri[q*6+3] = *a; quad_tri[q*6+4] = *c; quad_tri[q*6+5] = *d;
             }
-            glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+            gls_bind_vbo(g_vbo);
             g_vbo_first = pc_vbo_first_for(quad_tri, (unsigned) (nq * 6));
             pc_prog_flush();
             pc_batch_add(GL_TRIANGLES, g_vbo_first, (GLsizei) (nq * 6));
@@ -6075,7 +6326,7 @@ static void bridge_upload_and_draw(void)
                 glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &cfmt);
                 fprintf(stderr, "  PIXPROBE frame=%u after-draw glerr=0x%x center=(%u,%u,%u) fbo=%d drawbuf=%d glDepthTest=%d glBlend=%d depthobj=%d colorobj=%d\n",
                         (unsigned)g_state.frame_count, (unsigned)err, px[0], px[1], px[2],
-                        fbo, dbuf, (int)glIsEnabled(GL_DEPTH_TEST), (int)glIsEnabled(GL_BLEND), dstat, cfmt);
+                        fbo, dbuf, (int)gls_is_enabled(GL_DEPTH_TEST), (int)gls_is_enabled(GL_BLEND), dstat, cfmt);
             }
         }
     }
@@ -6259,8 +6510,8 @@ int pc_gx_offscreen_begin(int w, int h)
         fprintf(stderr, "[OFF] begin %dx%d tex=%u fbo=%u prev=%d\n",
                 w, h, g_off_tex, g_off_fbo, (int) g_off_prev_fbo); } }
     /* The whole target is the drawable area until the game says otherwise. */
-    glViewport(0, 0, w, h);
-    glScissor(0, 0, w, h);
+    gls_viewport(0, 0, w, h);
+    gls_scissor(0, 0, w, h);
     return 1;
 }
 
@@ -6272,9 +6523,9 @@ void pc_gx_offscreen_cancel(void)
     gx_flush_pending();
     g_off_active = 0;
     glBindFramebuffer(GL_FRAMEBUFFER, (GLuint) g_off_prev_fbo);
-    glViewport(g_off_prev_vp[0], g_off_prev_vp[1],
+    gls_viewport(g_off_prev_vp[0], g_off_prev_vp[1],
                (GLsizei) g_off_prev_vp[2], (GLsizei) g_off_prev_vp[3]);
-    glScissor(g_off_prev_sc[0], g_off_prev_sc[1],
+    gls_scissor(g_off_prev_sc[0], g_off_prev_sc[1],
               (GLsizei) g_off_prev_sc[2], (GLsizei) g_off_prev_sc[3]);
 }
 
@@ -6393,7 +6644,7 @@ static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt
 
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw);
-    scissor_was = glIsEnabled(GL_SCISSOR_TEST);
+    scissor_was = gls_is_enabled(GL_SCISSOR_TEST);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g_cp_fbo);
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
                            g_cp_tex[slot], 0);
@@ -6405,10 +6656,10 @@ static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt
     }
     /* A blit obeys the scissor (the lesson of the shadow work), and the
      * swapped source rows do the top/bottom flip. */
-    if (scissor_was) glDisable(GL_SCISSOR_TEST);
+    if (scissor_was) gls_disable(GL_SCISSOR_TEST);
     glBlitFramebuffer(r[0], r[1] + r[3], r[0] + r[2], r[1],
                       0, 0, (GLint) dw, (GLint) dh, GL_COLOR_BUFFER_BIT, GL_LINEAR);
-    if (scissor_was) glEnable(GL_SCISSOR_TEST);
+    if (scissor_was) gls_enable(GL_SCISSOR_TEST);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read);
 
@@ -6586,7 +6837,7 @@ void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz)
         pc_fb_rect_to_window(left, top, wd, ht, r);
         g_state.vp_x = (f32) r[0]; g_state.vp_y = (f32) r[1];
         g_state.vp_w = (f32) r[2]; g_state.vp_h = (f32) r[3];
-        glViewport(r[0], r[1], (GLsizei) r[2], (GLsizei) r[3]);
+        gls_viewport(r[0], r[1], (GLsizei) r[2], (GLsizei) r[3]);
     }
 }
 void GXSetScissor(u32 x, u32 y, u32 w, u32 h)
@@ -6601,10 +6852,10 @@ void GXSetScissor(u32 x, u32 y, u32 w, u32 h)
      * OpenGL would clip everything to a zero-area rectangle. */
     if (w == 0 || h == 0) {
         g_state.scissor_enabled = FALSE;
-        glDisable(GL_SCISSOR_TEST);
+        gls_disable(GL_SCISSOR_TEST);
     } else {
         g_state.scissor_enabled = TRUE;
-        glEnable(GL_SCISSOR_TEST);
+        gls_enable(GL_SCISSOR_TEST);
     }
     {
         GLint r[4];
@@ -6613,7 +6864,7 @@ void GXSetScissor(u32 x, u32 y, u32 w, u32 h)
         g_state.scissor_y = (u32) (r[1] < 0 ? 0 : r[1]);
         g_state.scissor_w = (u32) (r[2] < 0 ? 0 : r[2]);
         g_state.scissor_h = (u32) (r[3] < 0 ? 0 : r[3]);
-        glScissor(r[0], r[1], (GLsizei) r[2], (GLsizei) r[3]);
+        gls_scissor(r[0], r[1], (GLsizei) r[2], (GLsizei) r[3]);
     }
 }
 /* glClear obeys the scissor test and the colour/depth write masks. The game
@@ -6625,11 +6876,11 @@ void GXSetScissor(u32 x, u32 y, u32 w, u32 h)
  * masks open and the scissor off, then put the state back. */
 static void pc_gl_clear(f32 r, f32 g, f32 b, f32 a, f32 z)
 {
-    GLboolean scissor_was = glIsEnabled(GL_SCISSOR_TEST);
+    GLboolean scissor_was = gls_is_enabled(GL_SCISSOR_TEST);
 
-    if (scissor_was) glDisable(GL_SCISSOR_TEST);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glDepthMask(GL_TRUE);
+    if (scissor_was) gls_disable(GL_SCISSOR_TEST);
+    gls_color_mask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    gls_depth_mask(GL_TRUE);
     /* Counting layers needs a zero baseline: the game's erase colour would
      * otherwise be added to every pixel's count. */
     if (ENV_FLAG("MELEE_OVERDRAW")) {
@@ -6639,14 +6890,14 @@ static void pc_gl_clear(f32 r, f32 g, f32 b, f32 a, f32 z)
     glClearColor(r, g, b, a);
     pc_clear_depth((float) z);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    if (scissor_was) glEnable(GL_SCISSOR_TEST);
+    if (scissor_was) gls_enable(GL_SCISSOR_TEST);
     /* The per-draw state block reasserts colour/depth masks, so leaving them
      * open here is safe; restore what the bridge last recorded anyway. */
-    glColorMask(g_state.color_update ? GL_TRUE : GL_FALSE,
+    gls_color_mask(g_state.color_update ? GL_TRUE : GL_FALSE,
                 g_state.color_update ? GL_TRUE : GL_FALSE,
                 g_state.color_update ? GL_TRUE : GL_FALSE,
                 g_state.alpha_update ? GL_TRUE : GL_FALSE);
-    glDepthMask(g_state.z_update ? GL_TRUE : GL_FALSE);
+    gls_depth_mask(g_state.z_update ? GL_TRUE : GL_FALSE);
 }
 
 void GXClearBuff(void)
@@ -6672,11 +6923,24 @@ void GXClearBuff(void)
                 g_state.copy_clear_z);
     pc_frame_trace("clear");
 }
+/* The game's end-of-frame GXFlush (and the two GXInvalidate* calls, one of
+ * each a frame) map to glFlush. The theory that a tiler pays a render-pass
+ * break for each was tested on the tablet and lost: without them a level-9
+ * CPU match measured 10.2 ms of GPU time a frame against 7.9 with them, and
+ * 53-55 frames over 20 ms in 80 s against 5-18 -- the flush hands the
+ * driver the frame early enough to overlap the CPU's remaining submission.
+ * Kept everywhere; MELEE_NOGLFLUSH=1 drops them for a re-test. */
+static int pc_flush_wanted(void)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("MELEE_NOGLFLUSH") == NULL;
+    return on;
+}
 void GXFlush(void)
 {
     GX_TRACE("GXFlush");
     bridge_upload_and_draw();
-    glFlush();
+    if (pc_flush_wanted()) glFlush();
     /* PC diag: end-of-frame center pixel (MELEE_MTR) */
     {
         static int _fl_on = -1;
@@ -6701,7 +6965,7 @@ void GXInvVtxCache(void)
      * and measured instead: it runs once a frame (see [GXINV]), and removing
      * it moved the menu's 207 ms GPU frame by 0.05 ms. Left alone. */
     pc_diag_gxinv_vtx++;
-    glFlush();
+    if (pc_flush_wanted()) glFlush();
 }
 void GXInvalidateVtxCache(void)
 {
@@ -6715,7 +6979,7 @@ void GXInvalidateTexAll(void)
      * bump is what does that; the flush only ended the render pass. */
     pc_diag_gxinv_tex++;
     pc_tex_cache_bump();
-    glFlush();
+    if (pc_flush_wanted()) glFlush();
 }
 void GXSetCopyClear(void* color, u32 z)
 {
@@ -7414,7 +7678,7 @@ static GLenum gx_bl_to_gl(u32 gx_blend_factor)
 }
 
 /* Apply the whole blend state, equation included. GX_BM_SUBTRACT used to set
- * glBlendEquation(GL_FUNC_REVERSE_SUBTRACT) and nothing ever set it back, so
+ * gls_blend_eq(GL_FUNC_REVERSE_SUBTRACT) and nothing ever set it back, so
  * every later draw kept subtracting: one subtractive effect anywhere in the
  * frame inverted the rest of the scene. The per-draw state block reapplied
  * only the blend *func*, which cannot undo a sticky equation. */
@@ -7435,27 +7699,27 @@ static void pc_apply_blend_state(void)
     static int noblend = -1;
     if (noblend < 0) noblend = (getenv("MELEE_NOBLEND") != NULL);
     if (noblend || !g_state.blend_enabled) {
-        glDisable(GL_BLEND);
-        glBlendEquation(GL_FUNC_ADD);
+        gls_disable(GL_BLEND);
+        gls_blend_eq(GL_FUNC_ADD);
         return;
     }
-    glEnable(GL_BLEND);
+    gls_enable(GL_BLEND);
     switch (g_state.blend_mode) {
     case 0x03: /* GX_BM_SUBTRACT: dst - src, with the factors forced to ONE */
-        glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
-        glBlendFunc(GL_ONE, GL_ONE);
+        gls_blend_eq(GL_FUNC_REVERSE_SUBTRACT);
+        gls_blend_func(GL_ONE, GL_ONE);
         break;
     case 0x02: /* GX_BM_LOGIC: no GL equivalent here; behave as a plain copy */
-        glBlendEquation(GL_FUNC_ADD);
-        glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
+        gls_blend_eq(GL_FUNC_ADD);
+        gls_blend_func_sep(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
         break;
     case 0x01: /* GX_BM_BLEND */
     default:
-        glBlendEquation(GL_FUNC_ADD);
+        gls_blend_eq(GL_FUNC_ADD);
         if (alpha1) {
-            glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+            gls_blend_func(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         } else {
-            glBlendFunc(gx_bl_to_gl(g_state.blend_src),
+            gls_blend_func(gx_bl_to_gl(g_state.blend_src),
                         gx_bl_to_gl(g_state.blend_dst));
         }
         break;
@@ -7502,9 +7766,9 @@ void GXSetZMode(u32 enable, u32 func, u32 update)
     g_state.z_update = update;
     
     if (enable) {
-        glEnable(GL_DEPTH_TEST);
+        gls_enable(GL_DEPTH_TEST);
     } else {
-        glDisable(GL_DEPTH_TEST);
+        gls_disable(GL_DEPTH_TEST);
     }
     
     GLenum gl_func;
@@ -7518,8 +7782,8 @@ void GXSetZMode(u32 enable, u32 func, u32 update)
         case 6: gl_func = GL_GEQUAL; break;
         default: gl_func = GL_ALWAYS; break;
     }
-    glDepthFunc(gl_func);
-    glDepthMask(update);
+    gls_depth_func(gl_func);
+    gls_depth_mask(update);
 }
 void GXSetZCompLoc(u32 before_tex)
 {
@@ -7552,31 +7816,31 @@ static void pc_apply_cull_state(void)
     if (no_cull < 0) no_cull = (getenv("MELEE_NOCULL") != NULL);
 
     if (no_cull || !g_state.cull_enabled) {
-        glDisable(GL_CULL_FACE);
+        gls_disable(GL_CULL_FACE);
         return;
     }
-    glEnable(GL_CULL_FACE);
+    gls_enable(GL_CULL_FACE);
     {
         /* MELEE_CULLCCW=1 flips the front-face convention, to check the
          * GL_CW choice against the alternative without a rebuild. */
         static int ccw = -1;
         if (ccw < 0) ccw = (getenv("MELEE_CULLCCW") != NULL);
-        glFrontFace(ccw ? GL_CCW : GL_CW);
+        gls_front_face(ccw ? GL_CCW : GL_CW);
     }
     switch (g_state.cull_mode) {
-    case GX_CULL_FRONT: glCullFace(GL_FRONT); break;
-    case GX_CULL_ALL:   glCullFace(GL_FRONT_AND_BACK); break;
+    case GX_CULL_FRONT: gls_cull_face(GL_FRONT); break;
+    case GX_CULL_ALL:   gls_cull_face(GL_FRONT_AND_BACK); break;
     case GX_CULL_BACK:
-    default:            glCullFace(GL_BACK); break;
+    default:            gls_cull_face(GL_BACK); break;
     }
 }
 void GXSetDither(u32 enable)
 {
     g_state.dither_enabled = (enable != 0);
     if (enable) {
-        glEnable(GL_DITHER);
+        gls_enable(GL_DITHER);
     } else {
-        glDisable(GL_DITHER);
+        gls_disable(GL_DITHER);
     }
 }
 void GXSetScissorExtend(void) { g_state.scissor_enabled = FALSE; }
@@ -9406,19 +9670,19 @@ static void pc_efb_clear_src(void)
                          (f32) g_state.tex_copy_src[2],
                          (f32) g_state.tex_copy_src[3], r);
     if (r[2] <= 0 || r[3] <= 0) return;
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(r[0], r[1], r[2], r[3]);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glDepthMask(GL_TRUE);
+    gls_enable(GL_SCISSOR_TEST);
+    gls_scissor(r[0], r[1], r[2], r[3]);
+    gls_color_mask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    gls_depth_mask(GL_TRUE);
     glClearColor(g_state.copy_clear_r, g_state.copy_clear_g,
                  g_state.copy_clear_b, g_state.copy_clear_a);
     glClearDepth(g_state.copy_clear_z);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glColorMask(g_state.color_update ? GL_TRUE : GL_FALSE,
+    gls_color_mask(g_state.color_update ? GL_TRUE : GL_FALSE,
                 g_state.color_update ? GL_TRUE : GL_FALSE,
                 g_state.color_update ? GL_TRUE : GL_FALSE,
                 g_state.color_update ? GL_TRUE : GL_FALSE);
-    glDepthMask(g_state.z_update ? GL_TRUE : GL_FALSE);
+    gls_depth_mask(g_state.z_update ? GL_TRUE : GL_FALSE);
     /* Put the game's scissor back (GXSetScissor also handles "disabled"). */
     GXSetScissor(g_state.scissor_x, g_state.scissor_y, g_state.scissor_w,
                  g_state.scissor_h);
