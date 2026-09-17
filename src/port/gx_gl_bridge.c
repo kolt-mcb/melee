@@ -3448,6 +3448,14 @@ static Prog* pc_uber(void)
     return g_uber;
 }
 
+/* How many variants the base program is standing in for this match; the
+ * per-second report prints it so a slow window can be told apart from a
+ * shader miss. */
+int pc_shc_deferred(void)
+{
+    return g_defer_n;
+}
+
 static int pc_defer_has(u32 h)
 {
     int i;
@@ -6218,6 +6226,152 @@ void pc_gx_offscreen_cancel(void)
 }
 
 /* Hand the rendered target to the texture cache as the contents of `img`. */
+static struct pc_efb_override* pc_efb_override_slot(void* img)
+{
+    struct pc_efb_override* o = NULL;
+    int i;
+    for (i = 0; i < PC_EFB_OVERRIDES; i++) {
+        if (g_efb_over[i].img == img) { o = &g_efb_over[i]; break; }
+    }
+    if (o == NULL) {
+        for (i = 0; i < PC_EFB_OVERRIDES; i++) {
+            if (g_efb_over[i].img == NULL) { o = &g_efb_over[i]; break; }
+        }
+    }
+    if (o == NULL) {
+        o = &g_efb_over[g_efb_over_seq % PC_EFB_OVERRIDES];
+    }
+    return o;
+}
+
+static void pc_efb_override_mark(struct pc_efb_override* o, void* img)
+{
+    u32 j;
+    for (j = 0; j < PC_EFB_MARK_BYTES; j++) {
+        o->mark[j] = (u8) (0xA5 ^ (j * 31) ^ (u8) g_efb_over_seq);
+    }
+    memcpy(img, o->mark, PC_EFB_MARK_BYTES);
+    g_efb_over_seq++;
+}
+
+/* EFB copies on the GPU.
+ *
+ * Only the shadow ever took the off-screen path; every other GXCopyTex --
+ * the magnifier bubble's captures, Brinstar's effect -- went through
+ * glReadPixels, a CPU pack and a re-upload. On a tile-based GPU a
+ * mid-frame glReadPixels drains the whole pipeline: measured on the tablet
+ * at 5-110 ms a copy, 53 of Brinstar's 55 hitches, and every window with
+ * the magnifier open at 20 fps against 55 without.
+ *
+ * So the copy is a blit: the source rectangle of the framebuffer into a
+ * texture the size of the destination image, scaled by the blit (the
+ * console's copy is a box filter to that size; a linear blit is close),
+ * flipped by the blit (EFB row 0 is the top; the framebuffer's is the
+ * bottom), and published through the same override table the shadow uses.
+ * The destination format is reproduced with the texture swizzle where a
+ * swizzle can: RGB formats as they are, red-only and alpha-only formats by
+ * replication. Intensity formats want a luma the swizzle cannot express,
+ * so they keep the read-back for now; MELEE_EFBLOG names the formats that
+ * appear. MELEE_EFB_GPUCOPY=0 keeps the read-back for all. */
+extern u64 pc_diag_efb_ns;
+static GLuint g_cp_fbo;
+static GLuint g_cp_tex[PC_EFB_OVERRIDES];
+static u32 g_cp_w[PC_EFB_OVERRIDES], g_cp_h[PC_EFB_OVERRIDES];
+
+static int pc_efb_gpu_fmt_ok(u32 fmt)
+{
+    switch (fmt) {
+    case 0x04: case 0x05: case 0x06:               /* RGB565, RGB5A3, RGBA8 */
+    case 0x20: case 0x28:                          /* R4, R8 */
+    case 0x27: case 0x29: case 0x2A:               /* A8, G8, B8 */
+    case 0x22: case 0x23:                          /* RA4, RA8 */
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt)
+{
+    static int on = -1;
+    struct pc_efb_override* o;
+    int slot;
+    GLint prev_read = 0, prev_draw = 0;
+    GLboolean scissor_was;
+    GLint sr = GL_RED, sg = GL_GREEN, sb = GL_BLUE, sa = GL_ALPHA;
+    struct timespec c0, c1;
+
+    if (on < 0) {
+        const char* e = getenv("MELEE_EFB_GPUCOPY");
+        on = !(e != NULL && strcmp(e, "0") == 0);
+    }
+    if (!on || !pc_efb_gpu_fmt_ok(fmt) || dw == 0 || dh == 0) return 0;
+    clock_gettime(CLOCK_MONOTONIC, &c0);
+    o = pc_efb_override_slot(dest);
+    slot = (int) (o - g_efb_over);
+    if (g_cp_fbo == 0) glGenFramebuffers(1, &g_cp_fbo);
+    if (g_cp_tex[slot] == 0) glGenTextures(1, &g_cp_tex[slot]);
+    if (g_cp_fbo == 0 || g_cp_tex[slot] == 0) return 0;
+
+    pc_tex_bind_reset();
+    glBindTexture(GL_TEXTURE_2D, g_cp_tex[slot]);
+    if (g_cp_w[slot] != dw || g_cp_h[slot] != dh) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei) dw, (GLsizei) dh, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        g_cp_w[slot] = dw;
+        g_cp_h[slot] = dh;
+    }
+    switch (fmt) {
+    case 0x20: case 0x28: sg = sb = sa = GL_RED; break;        /* R4, R8 */
+    case 0x27: sr = sg = sb = GL_ALPHA; break;                 /* A8 */
+    case 0x29: sr = sb = sa = GL_GREEN; break;                 /* G8 */
+    case 0x2A: sr = sg = sa = GL_BLUE; break;                  /* B8 */
+    case 0x22: case 0x23: sg = sb = GL_RED; break;             /* RA4, RA8 */
+    default: break;
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, sr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, sg);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, sb);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, sa);
+
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw);
+    scissor_was = glIsEnabled(GL_SCISSOR_TEST);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g_cp_fbo);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                           g_cp_tex[slot], 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_draw);
+    if (glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read);
+        return 0;
+    }
+    /* A blit obeys the scissor (the lesson of the shadow work), and the
+     * swapped source rows do the top/bottom flip. */
+    if (scissor_was) glDisable(GL_SCISSOR_TEST);
+    glBlitFramebuffer(r[0], r[1] + r[3], r[0] + r[2], r[1],
+                      0, 0, (GLint) dw, (GLint) dh, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    if (scissor_was) glEnable(GL_SCISSOR_TEST);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read);
+
+    o->img = dest;
+    o->tex = g_cp_tex[slot];
+    o->w = dw;
+    o->h = dh;
+    pc_efb_override_mark(o, dest);
+    clock_gettime(CLOCK_MONOTONIC, &c1);
+    pc_diag_efb_ns += (u64) ((c1.tv_sec - c0.tv_sec) * 1000000000ll + (c1.tv_nsec - c0.tv_nsec));
+    { static int n = 0; if (n < 6 && getenv("MELEE_EFBLOG")) { n++;
+        fprintf(stderr, "[EFB] gpu copy img=%p %ux%u fmt=%02x from window rect %d,%d %dx%d -> tex %u\n",
+                dest, dw, dh, fmt, r[0], r[1], r[2], r[3], o->tex); } }
+    return 1;
+}
+
 static void pc_efb_offscreen_publish(void* img)
 {
     struct pc_efb_override* o = NULL;
@@ -9068,6 +9222,12 @@ static void pc_efb_copy(void* dest)
     pc_fb_rect_to_window((f32) g_state.tex_copy_src[0],
                          (f32) g_state.tex_copy_src[1], (f32) sw, (f32) sh, r);
     if (r[2] <= 0 || r[3] <= 0) return;
+    if (pc_efb_copy_gpu(dest, r, dw, dh, g_copy_dst_fmt)) {
+        pc_diag_efb_copies++;
+        return;
+    }
+    { static int n = 0; if (n < 8 && getenv("MELEE_EFBLOG")) { n++;
+        fprintf(stderr, "[EFB] read-back copy fmt=%02x %ux%u (no GPU path for this format)\n", g_copy_dst_fmt, dw, dh); } }
     /* The readback buffer is the same size every frame and this runs a few
      * times per frame; a malloc/free pair each time is pure overhead. Grow
      * a static one instead. */
