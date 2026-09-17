@@ -11450,6 +11450,11 @@ static GLenum gx_min_filter_mode(u32 gx_filt)
 static u32 g_tex_gen = 1;
 static u32 g_tex_slot_gen[MAX_TEXTURES];
 static u32 g_tex_slot_hash[MAX_TEXTURES];
+/* The sampler parameters last set on each slot's GL texture, packed
+ * (min, mag, wrap_s, wrap_t), and the texture they were set on: the four
+ * glTexParameteri calls per GXLoadTexObj are skipped while they match. */
+static u32 g_tex_slot_params[MAX_TEXTURES];
+static GLuint g_tex_slot_params_tex[MAX_TEXTURES];
 u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod);
 
 u64 pc_diag_hash_bytes, pc_diag_hash_ns;
@@ -11470,13 +11475,38 @@ static u32 tex_content_hash(const void* img, u16 w, u16 h, u8 fmt)
      * per-word multiply makes it a different value, not a weaker one; the
      * tail keeps the byte-at-a-time step so a size that is not a multiple of
      * four still contributes every byte. */
-    for (i = 0; i + 4 <= n; i += 4) {
-        u32 word;
-        memcpy(&word, p + i, sizeof(word));
-        hsh ^= word;
-        hsh *= 16777619u;
+    /* Every texture is re-validated once a frame (GXInvalidateTexAll bumps
+     * the generation each frame), so this hashed ~1 MB a frame in a match.
+     * A texture that changes under the cache changes wholesale -- a new
+     * image at the same address after a scene load, or an EFB copy landing
+     * -- so past the first 4 KB the hash samples 16 bytes of every 256:
+     * one sixteenth of the bytes, the same answer for any change that is
+     * not confined to the gaps. MELEE_TEXHASH_FULL=1 restores the walk. */
+    {
+        static int full = -1;
+        u32 head = n;
+        if (full < 0) full = getenv("MELEE_TEXHASH_FULL") != NULL;
+        if (!full && n > 8192) head = 4096;
+        for (i = 0; i + 4 <= head; i += 4) {
+            u32 word;
+            memcpy(&word, p + i, sizeof(word));
+            hsh ^= word;
+            hsh *= 16777619u;
+        }
+        if (head < n) {
+            for (i = head; i + 16 <= n; i += 256) {
+                u32 w4[4];
+                memcpy(w4, p + i, sizeof(w4));
+                hsh ^= w4[0]; hsh *= 16777619u;
+                hsh ^= w4[1]; hsh *= 16777619u;
+                hsh ^= w4[2]; hsh *= 16777619u;
+                hsh ^= w4[3]; hsh *= 16777619u;
+            }
+            for (i = n - (n % 256); i < n; i++) { hsh ^= p[i]; hsh *= 16777619u; }
+        } else {
+            for (; i < n; i++) { hsh ^= p[i]; hsh *= 16777619u; }
+        }
     }
-    for (; i < n; i++) { hsh ^= p[i]; hsh *= 16777619u; }
     clock_gettime(CLOCK_MONOTONIC, &t1);
     pc_diag_hash_bytes += n;
     pc_diag_hash_ns += (u64) ((t1.tv_sec - t0.tv_sec) * 1000000000ll
@@ -11493,22 +11523,74 @@ void pc_tex_cache_bump(void)
  * not be deleted on eviction nor uploaded into. */
 static Bool g_tex_slot_foreign[MAX_TEXTURES];
 
+/* The slot table is found by key, not scanned. Every GXLoadTexObj -- ~150
+ * a frame in a match, more on the menu -- walked all 1024 slots comparing
+ * (image, w, h, format). An open-addressed table over the same key gives
+ * the slot in one or two probes; an eviction removes its old key first.
+ * The table starts empty alongside the all-invalid slot table at init. */
+#define TEX_MAP_N (MAX_TEXTURES * 4)
+static u16 g_tex_map[TEX_MAP_N]; /* slot + 1, 0 = empty */
+static u32 tex_map_hash(const void* img, u16 w, u16 h, u8 fmt)
+{
+    u64 k = (u64) (uintptr_t) img;
+    k ^= ((u64) w << 48) ^ ((u64) h << 32) ^ ((u64) fmt << 24);
+    k *= 0x9E3779B97F4A7C15ull;
+    return (u32) (k >> 40) & (TEX_MAP_N - 1);
+}
+static int tex_map_slot_matches(u32 i, const void* img, u16 w, u16 h, u8 fmt)
+{
+    return g_state.tex_cache_valid[i] && g_state.tex_cache_img[i] == img &&
+           g_state.tex_cache_w[i] == w && g_state.tex_cache_h[i] == h &&
+           g_state.tex_cache_fmt[i] == fmt;
+}
+static void tex_map_insert(u32 slot)
+{
+    u32 h = tex_map_hash(g_state.tex_cache_img[slot], g_state.tex_cache_w[slot],
+                         g_state.tex_cache_h[slot], g_state.tex_cache_fmt[slot]);
+    while (g_tex_map[h] != 0) h = (h + 1) & (TEX_MAP_N - 1);
+    g_tex_map[h] = (u16) (slot + 1);
+}
+static void tex_map_remove(u32 slot)
+{
+    /* Delete, then reinsert the rest of the probe run so no lookup stops
+     * at the hole. */
+    u32 h = tex_map_hash(g_state.tex_cache_img[slot], g_state.tex_cache_w[slot],
+                         g_state.tex_cache_h[slot], g_state.tex_cache_fmt[slot]);
+    while (g_tex_map[h] != 0 && g_tex_map[h] != (u16) (slot + 1)) h = (h + 1) & (TEX_MAP_N - 1);
+    if (g_tex_map[h] == 0) return;
+    g_tex_map[h] = 0;
+    for (h = (h + 1) & (TEX_MAP_N - 1); g_tex_map[h] != 0; h = (h + 1) & (TEX_MAP_N - 1)) {
+        u32 s2 = g_tex_map[h] - 1u;
+        g_tex_map[h] = 0;
+        tex_map_insert(s2);
+    }
+}
+static int tex_map_find(const void* img, u16 w, u16 h, u8 fmt)
+{
+    u32 hh = tex_map_hash(img, w, h, fmt);
+    while (g_tex_map[hh] != 0) {
+        u32 i = g_tex_map[hh] - 1u;
+        if (tex_map_slot_matches(i, img, w, h, fmt)) return (int) i;
+        hh = (hh + 1) & (TEX_MAP_N - 1);
+    }
+    return -1;
+}
+static u32 g_tex_free_hint;
+
 static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
 {
-    /* Check for existing matching texture (dedup by pointer + dims + format) */
-    for (u32 i = 0; i < MAX_TEXTURES; i++) {
-        if (g_state.tex_cache_valid[i] &&
-            g_state.tex_cache_img[i] == img &&
-            g_state.tex_cache_w[i] == w &&
-            g_state.tex_cache_h[i] == h &&
-            g_state.tex_cache_fmt[i] == fmt) {
-            g_state.tex_cache_hits[i]++;
-            return i;
+    {
+        int f = tex_map_find(img, w, h, fmt);
+        if (f >= 0) {
+            g_state.tex_cache_hits[f]++;
+            return (u32) f;
         }
     }
-    /* Find empty slot */
-    for (u32 i = 0; i < MAX_TEXTURES; i++) {
+    /* Find empty slot, starting where the last search ended. */
+    for (u32 n = 0; n < MAX_TEXTURES; n++) {
+        u32 i = (g_tex_free_hint + n) % MAX_TEXTURES;
         if (!g_state.tex_cache_valid[i]) {
+            g_tex_free_hint = i + 1;
             g_state.tex_cache[i] = 0;
             g_state.tex_cache_valid[i] = TRUE;
             g_state.tex_cache_img[i] = img;
@@ -11517,6 +11599,8 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
             g_state.tex_cache_fmt[i] = fmt;
             g_state.tex_cache_hits[i] = 0;
             g_tex_cache_hasmip[i] = FALSE;
+            g_tex_slot_params[i] = 0xFFFFFFFFu;
+            tex_map_insert(i);
             return i;
         }
     }
@@ -11533,6 +11617,7 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
             g_state.tex_cache_hits[i] < g_state.tex_cache_hits[best])
             best = i;
     }
+    tex_map_remove(best);
     glDeleteTextures(1, &g_state.tex_cache[best]);
     g_state.tex_cache[best] = 0;
     g_state.tex_cache_img[best] = img;
@@ -11540,6 +11625,8 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
     g_state.tex_cache_h[best] = h;
     g_state.tex_cache_fmt[best] = fmt;
     g_state.tex_cache_hits[best] = 0;
+    g_tex_slot_params[best] = 0xFFFFFFFFu;
+    tex_map_insert(best);
     /* An evicted slot keeps its GL texture object but gets new image data, so
      * whatever mip chain the previous occupant had is gone. Leaving this set
      * hands the next texture a mipmap minification filter with no chain
@@ -12045,10 +12132,39 @@ bind_tex:
     /* Not pc_tex_bind: the sampler parameters below apply to whatever is
      * bound, so this one must happen even when the cache thinks it need not.
      * Record it so the draw path can still skip a redundant rebind. */
-    glActiveTexture(GL_TEXTURE0 + gl_unit);
-    glBindTexture(GL_TEXTURE_2D, tex_id);
-    g_bound_unit = (int) gl_unit;
-    g_bound_tex[gl_unit] = tex_id;
+    {
+        u8 tf = g_state.current_tex.fmt;
+        Bool is_depth = (tf == 0x11 || tf == 0x13 || tf == 0x16);
+        GLenum minf = is_depth ? GL_NEAREST
+                    : (g_tex_cache_hasmip[slot] && !ENV_FLAG("MELEE_NOMIP"))
+                        ? gx_min_filter_mode(g_state.current_tex.min_filter)
+                        : gx_filter_mode(g_state.current_tex.min_filter);
+        /* GX only permits GX_NEAR/GX_LINEAR for magnification. */
+        GLenum magf = is_depth ? GL_NEAREST
+                               : gx_filter_mode(g_state.current_tex.mag_filter);
+        GLenum ws = gx_wrap_mode(g_state.current_tex.wrap_s);
+        GLenum wt = gx_wrap_mode(g_state.current_tex.wrap_t);
+        u32 packed = ((minf & 0xFFu) << 24) | ((magf & 0xFFu) << 16) |
+                     ((ws & 0xFFu) << 8) | (wt & 0xFFu);
+        if (g_tex_slot_params_tex[slot] == tex_id && g_tex_slot_params[slot] == packed) {
+            /* Same sampler state as last time on this very texture: the
+             * bind can go through the cache and skip when redundant. */
+            pc_tex_bind(gl_unit, tex_id);
+            pc_diag_gl_skips += 4;
+        } else {
+            glActiveTexture(GL_TEXTURE0 + gl_unit);
+            glBindTexture(GL_TEXTURE_2D, tex_id);
+            g_bound_unit = (int) gl_unit;
+            g_bound_tex[gl_unit] = tex_id;
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLint) minf);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint) magf);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, (GLint) ws);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, (GLint) wt);
+            g_tex_slot_params_tex[slot] = tex_id;
+            g_tex_slot_params[slot] = packed;
+            pc_diag_gl_calls += 4;
+        }
+    }
 
     /* Sampler state belongs to the GXTexObj, not to the image: the texture
      * cache dedups on (image, w, h, format), so the same image reached
@@ -12072,23 +12188,6 @@ bind_tex:
      * NEAREST is also what the hardware does: GX's Z-textures are a lookup
      * of the depth value, not a filtered sample, so this is a correction on
      * every target rather than a concession to one. */
-    {
-        u8 tf = g_state.current_tex.fmt;
-        Bool is_depth = (tf == 0x11 || tf == 0x13 || tf == 0x16);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                        is_depth ? GL_NEAREST
-                        : (g_tex_cache_hasmip[slot] && !ENV_FLAG("MELEE_NOMIP"))
-                            ? gx_min_filter_mode(g_state.current_tex.min_filter)
-                            : gx_filter_mode(g_state.current_tex.min_filter));
-        /* GX only permits GX_NEAR/GX_LINEAR for magnification. */
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
-                        is_depth ? GL_NEAREST
-                                 : gx_filter_mode(g_state.current_tex.mag_filter));
-    }
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
-                    gx_wrap_mode(g_state.current_tex.wrap_s));
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
-                    gx_wrap_mode(g_state.current_tex.wrap_t));
     g_active_tex_slots[gl_unit] = slot;
     
     /* Count active texture units */
