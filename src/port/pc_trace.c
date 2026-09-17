@@ -1501,6 +1501,13 @@ int pc_lineup_chars(int out[4])
     for (i = 0; i < 4 && i < PC_TRACE_PLAYERS; i++) {
         StaticPlayer* sp = Player_GetPtrForSlot(i);
         int ck = sp != NULL ? (int) sp->player_character : -1;
+        /* player_state is not set until the fighters spawn; slot_type is
+         * written with the match description, so it is what says whether a
+         * slot is in this match. An empty slot keeps the character kind of
+         * whoever last used it -- on the tablet that made character 6 the
+         * tag on every match ever played, and every prep load all of it. */
+        int st = sp != NULL ? (int) Player_GetPlayerSlotType(i) : (int) Gm_PKind_NA;
+        if (st == (int) Gm_PKind_NA) continue;
         if (ck >= 0 && ck < 33) out[n++] = ck;
     }
     return n;
