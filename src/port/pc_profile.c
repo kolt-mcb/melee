@@ -19,7 +19,7 @@
 #include "pc_execinfo.h"
 #include <dlfcn.h>
 
-#define PROF_SLOTS 4096
+#define PROF_SLOTS 65536 /* a power of two: the Android sampler hashes into it */
 #define PROF_DEPTH 6
 
 static void* prof_addr[PROF_SLOTS][PROF_DEPTH];
@@ -49,16 +49,19 @@ static void prof_tick(int sig, siginfo_t* si, void* uc)
 #endif
     if (pc == NULL) return;
     prof_samples++;
-    for (s = 0; s < (int) prof_used; s++) {
-        if (prof_addr[s][0] == pc) {
-            prof_count[s]++;
-            return;
-        }
+    /* Open addressing on the PC: a linear scan of the table saturated at
+     * 4096 distinct addresses within seconds and then dropped every new
+     * one, which skewed the report toward whatever ran first. */
+    s = (int) (((unsigned long) pc >> 2) & (PROF_SLOTS - 1));
+    for (;;) {
+        if (prof_addr[s][0] == pc) { prof_count[s]++; return; }
+        if (prof_addr[s][0] == NULL) break;
+        s = (s + 1) & (PROF_SLOTS - 1);
+        if (s == (int) (((unsigned long) pc >> 2) & (PROF_SLOTS - 1))) return;
     }
-    if (prof_used >= PROF_SLOTS) return;
-    s = (int) prof_used++;
     prof_addr[s][0] = pc;
     prof_count[s] = 1;
+    if ((unsigned) s >= prof_used) prof_used = (unsigned) s + 1;
 }
 #else
 static void prof_tick(int sig)
