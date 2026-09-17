@@ -7093,7 +7093,7 @@ void GXLoadNrmMtxImm(f32 mtx[3][4], u32 id)
 void GXSetCurrentMtx(u32 id)
 {
     gx_flush_pending();
-    if (getenv("MELEE_MTXTRACE") != NULL) {
+    if (ENV_FLAG("MELEE_MTXTRACE")) {
         static unsigned long hist[70];
         static int n = 0;
         if (id < 70) hist[id]++;
@@ -8167,6 +8167,352 @@ static u32 dl_vat_attr_size(u32 mode, u32 cnt, u32 type)
     return 0;
 }
 
+/* ------------------------------------------------------------------
+ * Display-list decode cache.
+ *
+ * A match calls ~390 display lists a frame, 195 KB of GX vertex stream,
+ * and every call decoded every vertex again: big-endian component reads,
+ * index lookups into the attribute arrays, fixed-point conversion, then a
+ * GXPosition/GXColor/GXNormal/GXTexCoord call each. On the tablet that
+ * decode was a fifth of the whole frame's CPU (GXCallDisplayList +
+ * dl_read_comps in the profile), for lists whose bytes never change: a
+ * display list is model data, and the arrays it indexes are too (shape
+ * animation blends into its own buffer and never comes through here).
+ *
+ * The decoded vertices are kept per (list, size, vertex descriptor), with a
+ * sampled hash of the list's bytes so a model loaded into the same address
+ * later is not mistaken for the old one. Replay makes the same GX calls the
+ * decode made -- same bridge_add_vertex, same skinning, same state carried
+ * in last_* -- just without the decode in front of them, so a cached frame
+ * and a first frame draw identically. MELEE_NO_DLCACHE=1 restores the old
+ * path (the MELEE_MTR / MELEE_WHT diagnostics imply it). */
+typedef struct {
+    f32 pos[3];
+    f32 nrm[3];
+    f32 t0[2];
+    f32 t1[2];
+    u8 col[4];
+    u8 mid;
+    u8 flags;
+    u8 pad[2];
+} DlVert;
+enum { DLV_POS = 1, DLV_NRM = 2, DLV_CLR = 4, DLV_T0 = 8, DLV_T1 = 16 };
+typedef struct { u32 gcn_prim; u32 vat; u32 nverts; u32 first; } DlPrim;
+typedef struct DlEntry {
+    const void* list;
+    u32 nbytes, sig, chash;
+    u32 nprims, nverts, cap_prims, cap_verts;
+    DlPrim* prims;
+    DlVert* verts;
+    u32 last_frame;
+    struct DlEntry* next;
+} DlEntry;
+#define DL_MAP_N 4096
+#define DL_CACHE_CAP (96u << 20)
+static DlEntry* g_dl_map[DL_MAP_N];
+static size_t g_dl_bytes;
+u32 pc_diag_dl_hits, pc_diag_dl_misses, pc_diag_dl_entries;
+u64 pc_diag_dl_ns;
+
+static int pc_dlcache_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        on = getenv("MELEE_NO_DLCACHE") == NULL && getenv("MELEE_MTR") == NULL &&
+             getenv("MELEE_WHT") == NULL && getenv("MELEE_VCOUNT") == NULL;
+    }
+    return on;
+}
+static u32 dl_key_hash(const void* list, u32 nbytes)
+{
+    u64 k = (u64) (uintptr_t) list ^ ((u64) nbytes << 40);
+    k *= 0x9E3779B97F4A7C15ull;
+    return (u32) (k >> 40) & (DL_MAP_N - 1);
+}
+static u32 dl_fnv(u32 h, const void* p, u32 n)
+{
+    const u8* b = (const u8*) p;
+    u32 i;
+    for (i = 0; i < n; i++) { h ^= b[i]; h *= 16777619u; }
+    return h;
+}
+/* The first 256 bytes and 16 of every 512 after: enough to tell one model's
+ * list from another's at the same address. */
+static u32 dl_content_hash(const u8* p, u32 n)
+{
+    u32 h = 2166136261u, head = n < 256 ? n : 256, i;
+    h = dl_fnv(h, p, head);
+    for (i = 512; i + 16 <= n; i += 512) h = dl_fnv(h, p + i, 16);
+    return h ^ n;
+}
+/* Everything the decode reads besides the list's own bytes. */
+static u32 dl_desc_sig(u32 pos_cnt, u32 vsize)
+{
+    u32 h = 2166136261u, a;
+    h = dl_fnv(h, g_state.va_mode, sizeof(g_state.va_mode));
+    for (a = 9; a <= 14; a++) {
+        const u8* arr = g_state.va_arr[a];
+        h = dl_fnv(h, &g_state.va_type[a], sizeof(g_state.va_type[a]));
+        h = dl_fnv(h, &g_state.va_cnt[a], sizeof(g_state.va_cnt[a]));
+        h = dl_fnv(h, &g_state.va_frac[a], sizeof(g_state.va_frac[a]));
+        h = dl_fnv(h, &g_state.va_stride[a], sizeof(g_state.va_stride[a]));
+        h = dl_fnv(h, &arr, sizeof(arr));
+    }
+    h = dl_fnv(h, g_vf_tex0_type, sizeof(g_vf_tex0_type));
+    h = dl_fnv(h, g_vf_tex0_frac, sizeof(g_vf_tex0_frac));
+    h = dl_fnv(h, g_vf_tex0_set, sizeof(g_vf_tex0_set));
+    h = dl_fnv(h, g_vf_pos_type, sizeof(g_vf_pos_type));
+    h = dl_fnv(h, g_vf_pos_frac, sizeof(g_vf_pos_frac));
+    h = dl_fnv(h, g_vf_pos_set, sizeof(g_vf_pos_set));
+    h = dl_fnv(h, &pos_cnt, sizeof(pos_cnt));
+    h = dl_fnv(h, &vsize, sizeof(vsize));
+    return h;
+}
+static void dl_entry_free(DlEntry* e)
+{
+    g_dl_bytes -= sizeof(*e) + (size_t) e->cap_prims * sizeof(DlPrim) +
+                  (size_t) e->cap_verts * sizeof(DlVert);
+    free(e->prims);
+    free(e->verts);
+    free(e);
+    pc_diag_dl_entries--;
+}
+static void dl_cache_unlink(DlEntry* e)
+{
+    DlEntry** pp = &g_dl_map[dl_key_hash(e->list, e->nbytes)];
+    while (*pp != NULL && *pp != e) pp = &(*pp)->next;
+    if (*pp == e) *pp = e->next;
+}
+/* Past the cap, drop what has not been drawn for five seconds. */
+static void dl_cache_evict(u32 frame)
+{
+    u32 b;
+    if (g_dl_bytes < DL_CACHE_CAP) return;
+    for (b = 0; b < DL_MAP_N; b++) {
+        DlEntry** pp = &g_dl_map[b];
+        while (*pp != NULL) {
+            DlEntry* e = *pp;
+            if (e->last_frame + 300 < frame) {
+                *pp = e->next;
+                dl_entry_free(e);
+            } else {
+                pp = &e->next;
+            }
+        }
+    }
+}
+static DlEntry* dl_cache_find(const void* list, u32 nbytes, u32 sig, u32 chash)
+{
+    DlEntry* e = g_dl_map[dl_key_hash(list, nbytes)];
+    for (; e != NULL; e = e->next) {
+        if (e->list != list || e->nbytes != nbytes) continue;
+        if (e->sig == sig && e->chash == chash) return e;
+        /* Same address, different descriptor or bytes: the old decode is
+         * useless now. A list drawn under two descriptors alternately would
+         * thrash here; none has been seen. */
+        dl_cache_unlink(e);
+        dl_entry_free(e);
+        return NULL;
+    }
+    return NULL;
+}
+static DlEntry* dl_cache_new(const void* list, u32 nbytes, u32 sig, u32 chash)
+{
+    DlEntry* e = (DlEntry*) calloc(1, sizeof(DlEntry));
+    u32 b;
+    if (e == NULL) return NULL;
+    e->list = list; e->nbytes = nbytes; e->sig = sig; e->chash = chash;
+    b = dl_key_hash(list, nbytes);
+    e->next = g_dl_map[b];
+    g_dl_map[b] = e;
+    g_dl_bytes += sizeof(*e);
+    pc_diag_dl_entries++;
+    return e;
+}
+static DlVert* dl_entry_verts(DlEntry* e, u32 n)
+{
+    if (e->nverts + n > e->cap_verts) {
+        u32 cap = e->cap_verts ? e->cap_verts : 256;
+        DlVert* nv;
+        while (cap < e->nverts + n) cap *= 2;
+        nv = (DlVert*) realloc(e->verts, (size_t) cap * sizeof(DlVert));
+        if (nv == NULL) return NULL;
+        g_dl_bytes += (size_t) (cap - e->cap_verts) * sizeof(DlVert);
+        e->verts = nv;
+        e->cap_verts = cap;
+    }
+    return e->verts + e->nverts;
+}
+static DlPrim* dl_entry_prim(DlEntry* e)
+{
+    if (e->nprims + 1 > e->cap_prims) {
+        u32 cap = e->cap_prims ? e->cap_prims * 2 : 16;
+        DlPrim* np = (DlPrim*) realloc(e->prims, (size_t) cap * sizeof(DlPrim));
+        if (np == NULL) return NULL;
+        g_dl_bytes += (size_t) (cap - e->cap_prims) * sizeof(DlPrim);
+        e->prims = np;
+        e->cap_prims = cap;
+    }
+    return e->prims + e->nprims;
+}
+
+/* The decode: the same opcode walk and the same attribute reads as the
+ * direct path below, writing DlVerts instead of making GX calls. Stops
+ * where the direct path would (a malformed list draws what precedes the
+ * fault, there as here). */
+static void dl_decode(const u8* ptr, const u8* end, u32 vsize, u32 pos_cnt, DlEntry* e)
+{
+    while (ptr < end) {
+        u8 op = *ptr;
+        switch (op) {
+        case 0x00: ptr += 1; break;
+        case 0x08: if (ptr + 6 > end) return; ptr += 6; break;
+        case 0x10: {
+            u32 c2, stream;
+            if (ptr + 5 > end) return;
+            c2 = ((u32) ptr[1] << 24) | ((u32) ptr[2] << 16) | ((u32) ptr[3] << 8) | (u32) ptr[4];
+            stream = ((c2 >> 16) & 0xF) + 1;
+            if (ptr + 5 + stream * 4 > end) return;
+            ptr += 5 + stream * 4;
+            break;
+        }
+        case 0x20: case 0x28: case 0x30: case 0x38: if (ptr + 5 > end) return; ptr += 5; break;
+        case 0x40: if (ptr + 9 > end) return; ptr += 9; break;
+        case 0x60: if (ptr + 5 > end) return; ptr += 5; break;
+        default: {
+            u32 prim, gcn_prim;
+            u16 nverts;
+            const u8* p;
+            DlPrim* dp;
+            DlVert* dv;
+            u16 v;
+            if ((op & 0xC0) != 0x80) return;
+            prim = (op & 0x78) >> 3;
+            if (ptr + 3 > end) return;
+            nverts = (u16) (((u16) ptr[1] << 8) | ptr[2]);
+            if (nverts == 0) { ptr += 3; break; }
+            if (vsize == 0 || ptr + 3 + (size_t) nverts * vsize > end) return;
+            p = ptr + 3;
+            ptr += 3 + (size_t) nverts * vsize;
+            switch (prim) {
+            case 0: case 1: gcn_prim = GX_QUADS;          break;
+            case 2:  gcn_prim = GX_TRIANGLES;      break;
+            case 3:  gcn_prim = GX_TRIANGLESTRIP;  break;
+            case 4:  gcn_prim = GX_TRIANGLEFAN;    break;
+            case 5:  gcn_prim = GX_LINES;          break;
+            case 6:  gcn_prim = GX_LINESTRIP;      break;
+            default: gcn_prim = GX_POINTS;         break;
+            }
+            dp = dl_entry_prim(e);
+            dv = dl_entry_verts(e, nverts);
+            if (dp == NULL || dv == NULL) return;
+            dp->gcn_prim = gcn_prim; dp->vat = op & 7; dp->nverts = nverts; dp->first = e->nverts;
+            e->nprims++;
+            e->nverts += nverts;
+            for (v = 0; v < nverts; v++) {
+                DlVert* o = &dv[v];
+                f32 nrm[9] = {0.0f, 0.0f, 1.0f, 0,0,0, 0,0,0};
+                f32 tmp[2];
+                u8 ctmp[4];
+                u32 a;
+                memset(o, 0, sizeof(*o));
+                o->nrm[2] = 1.0f;
+                o->col[0] = o->col[1] = o->col[2] = o->col[3] = 255;
+                for (a = 0; a <= 20; a++) {
+                    u32 mode = g_state.va_mode[a];
+                    if (mode == 0) continue;
+                    if (a <= 8) {
+                        if (a == 0) o->mid = *p;
+                        p += 1; continue;
+                    }
+                    if (a == 9) {
+                        p = dl_read_comps(p, mode, pos_cnt, g_state.va_type[9], g_state.va_frac[9],
+                                          g_state.va_arr[9], g_state.va_stride[9], o->pos);
+                        o->flags |= DLV_POS;
+                    } else if (a == 10) {
+                        u32 ncnt = g_state.va_cnt[10];
+                        if (ncnt == 2 && mode != 1) {
+                            p = dl_read_comps(p, mode, 3, g_state.va_type[10], g_state.va_frac[10],
+                                              g_state.va_arr[10], g_state.va_stride[10], nrm);
+                            p += 2 * ((mode == 2) ? 1u : 2u);
+                        } else {
+                            p = dl_read_comps(p, mode, (ncnt ? 9u : 3u), g_state.va_type[10], g_state.va_frac[10],
+                                              g_state.va_arr[10], g_state.va_stride[10], nrm);
+                        }
+                        o->nrm[0] = nrm[0]; o->nrm[1] = nrm[1]; o->nrm[2] = nrm[2];
+                        o->flags |= DLV_NRM;
+                    } else if (a == 11 || a == 12) {
+                        p = dl_read_color(p, mode, g_state.va_type[a], g_state.va_arr[a], g_state.va_stride[a], ctmp);
+                        if (a == 11) { memcpy(o->col, ctmp, 4); o->flags |= DLV_CLR; }
+                    } else {
+                        u32 tc = (g_state.va_cnt[a] == 0) ? 1u : 2u;
+                        tmp[0] = tmp[1] = 0.0f;
+                        p = dl_read_comps(p, mode, tc, g_state.va_type[a], g_state.va_frac[a],
+                                          g_state.va_arr[a], g_state.va_stride[a], tmp);
+                        if (a == 13) { o->t0[0] = tmp[0]; o->t0[1] = tmp[1]; o->flags |= DLV_T0; }
+                        else if (a == 14) { o->t1[0] = tmp[0]; o->t1[1] = tmp[1]; o->flags |= DLV_T1; }
+                    }
+                }
+            }
+            break;
+        }
+        }
+    }
+}
+
+/* The same GX calls the direct path makes per vertex, from the decode. */
+static void dl_replay(const DlEntry* e)
+{
+    u32 i;
+    for (i = 0; i < e->nprims; i++) {
+        const DlPrim* dp = &e->prims[i];
+        const DlVert* dv = e->verts + dp->first;
+        u32 v;
+        GXBegin(dp->gcn_prim, dp->vat, (u16) dp->nverts);
+        for (v = 0; v < dp->nverts; v++) {
+            const DlVert* s = &dv[v];
+            if (g_state.va_mode[0] != 0) g_state.last_mtx_idx = s->mid;
+            if (s->flags & DLV_POS) {
+                g_state.last_pos[0] = s->pos[0]; g_state.last_pos[1] = s->pos[1]; g_state.last_pos[2] = s->pos[2];
+                bridge_add_vertex();
+            }
+            if (s->flags & DLV_CLR) {
+                g_state.cur_color.r = s->col[0]; g_state.cur_color.g = s->col[1];
+                g_state.cur_color.b = s->col[2]; g_state.cur_color.a = s->col[3];
+                g_state.last_clr[0] = s->col[0] / 255.0f; g_state.last_clr[1] = s->col[1] / 255.0f;
+                g_state.last_clr[2] = s->col[2] / 255.0f; g_state.last_clr[3] = s->col[3] / 255.0f;
+                if (g_state.vert_count > 0) {
+                    Vertex* o = &g_state.verts[g_state.vert_count - 1];
+                    o->col[0] = g_state.last_clr[0]; o->col[1] = g_state.last_clr[1];
+                    o->col[2] = g_state.last_clr[2]; o->col[3] = g_state.last_clr[3];
+                }
+            }
+            if (s->flags & DLV_NRM) {
+                g_state.last_nrm[0] = s->nrm[0]; g_state.last_nrm[1] = s->nrm[1]; g_state.last_nrm[2] = s->nrm[2];
+                if (g_state.vert_count > 0) {
+                    Vertex* o = &g_state.verts[g_state.vert_count - 1];
+                    o->nrm[0] = s->nrm[0]; o->nrm[1] = s->nrm[1]; o->nrm[2] = s->nrm[2];
+                }
+            }
+            if (s->flags & DLV_T0) {
+                g_state.last_tex0[0] = s->t0[0]; g_state.last_tex0[1] = s->t0[1];
+                if (g_state.vert_count > 0) {
+                    Vertex* o = &g_state.verts[g_state.vert_count - 1];
+                    o->tex0[0] = s->t0[0]; o->tex0[1] = s->t0[1];
+                }
+            }
+            if (s->flags & DLV_T1) {
+                g_state.last_tex1[0] = s->t1[0]; g_state.last_tex1[1] = s->t1[1];
+                if (g_state.vert_count > 0) {
+                    Vertex* o = &g_state.verts[g_state.vert_count - 1];
+                    o->tex1[0] = s->t1[0]; o->tex1[1] = s->t1[1];
+                }
+            }
+        }
+        GXEnd();
+    }
+}
+
 void GXCallDisplayList(void* list, u32 nbytes)
 {
 #if BUILD_TARGET_PC
@@ -8210,6 +8556,8 @@ void GXCallDisplayList(void* list, u32 nbytes)
 #endif
     pc_stat_dlcalls++;
     if (!list || nbytes == 0) return;
+    struct timespec dl_t0;
+    clock_gettime(CLOCK_MONOTONIC, &dl_t0);
 
     const u8* ptr = (const u8*)list;
     const u8* end = ptr + nbytes;
@@ -8289,6 +8637,27 @@ void GXCallDisplayList(void* list, u32 nbytes)
         }
     }
 
+    if (pc_dlcache_on() && pos_cnt == 3 && vsize != 0) {
+        u32 sig = dl_desc_sig(pos_cnt, vsize);
+        u32 ch = dl_content_hash(ptr, nbytes);
+        DlEntry* e = dl_cache_find(list, nbytes, sig, ch);
+        if (e == NULL) {
+            dl_cache_evict(g_state.frame_count);
+            e = dl_cache_new(list, nbytes, sig, ch);
+            if (e != NULL) {
+                dl_decode(ptr, end, vsize, pos_cnt, e);
+                pc_diag_dl_misses++;
+            }
+        } else {
+            pc_diag_dl_hits++;
+        }
+        if (e != NULL) {
+            e->last_frame = g_state.frame_count;
+            n_draws += (int) e->nprims;
+            dl_replay(e);
+            goto dl_end;
+        }
+    }
     while (ptr < end) {
         u8 op = *ptr;
 
@@ -8529,6 +8898,11 @@ void GXCallDisplayList(void* list, u32 nbytes)
     }
 
 dl_end:
+    {
+        struct timespec dl_t1;
+        clock_gettime(CLOCK_MONOTONIC, &dl_t1);
+        pc_diag_dl_ns += (u64) ((dl_t1.tv_sec - dl_t0.tv_sec) * 1000000000ll + (dl_t1.tv_nsec - dl_t0.tv_nsec));
+    }
     /* PC diag: log DL call -> draw count (MELEE_DLC) */
     {
         static int _dlc_on = -1, _dlc_n = 0;
@@ -11777,7 +12151,7 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
     pc_tex_bind_reset();
     glBindTexture(GL_TEXTURE_2D, tex_id);
 
-    if (getenv("MELEE_TEX_FMT") != NULL) {
+    if (ENV_FLAG("MELEE_TEX_FMT")) {
         /* Which GX texture formats actually reach the decoder, and at what
          * sizes. Run it once with fighters on screen and once on a stage to
          * see whether the two share a format set. */
@@ -11967,7 +12341,7 @@ skip_tlut:
         _td_seen++;
         /* One line per upload regardless of the file-dump cap, so a run can be
          * summarised by size/format without writing 96 files. */
-        if (_td_on || getenv("MELEE_TEXLOG") != NULL) {
+        if (_td_on || ENV_FLAG("MELEE_TEXLOG")) {
             fprintf(stderr, "TXTALLY calls=%lu invalid=%lu baddim=%lu unreadable=%lu hit=%lu\n",
                     g_tx_calls, g_tx_invalid, g_tx_baddim, g_tx_unreadable, g_tx_hit);
             fprintf(stderr, "TEXUP %dx%d fmt=0x%02x src=%s\n", upload_w, upload_h,
