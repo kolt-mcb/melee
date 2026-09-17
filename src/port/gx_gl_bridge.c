@@ -5460,8 +5460,6 @@ static void bridge_upload_and_draw(void)
     }
     
     /* Compute MVP = proj * modelview (all row-major, transpose at upload) */
-    f32 mvp[4][4];
-    memset(mvp, 0, sizeof(mvp));
     if (g_state.mtx3d_active) {
         /* GCN-faithful pipeline:
          *   clip = proj * PNMTX[posmatidx] * pos   (ONE position matrix;
@@ -8460,6 +8458,129 @@ static void dl_decode(const u8* ptr, const u8* end, u32 vsize, u32 pos_cnt, DlEn
     }
 }
 
+/* One primitive's vertices straight from the decode into the vertex
+ * accumulator: what bridge_add_vertex and the GXColor/GXNormal/GXTexCoord
+ * overrides do per vertex, in one loop without the calls between them.
+ * Each step is the corresponding step of those functions; the order of
+ * state updates (last_*, cur_color) is theirs too, since a later primitive
+ * can still read the state this one leaves. The one thing dropped is the
+ * normal transform bridge_add_vertex applies to the previous vertex's
+ * normal, when this vertex carries its own normal and overwrites it. */
+static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
+{
+    u32 n = dp->nverts, i;
+    int skin = g_state.va_mode[0] != 0 && g_state.mtx3d_active;
+    for (i = 0; i < n; i++) {
+        const DlVert* s = &dv[i];
+        Vertex* v;
+        pc_stat_vadds++;
+        if (g_state.vert_count >= MAX_VERTS) bridge_upload_and_draw();
+        if (g_state.vert_count >= MAX_VERTS) {
+            static int warned = 0;
+            if (warned < 4) {
+                warned++;
+                PORT_LOG_WARN("vertex buffer full (%u); dropping vertex",
+                              (unsigned) g_state.vert_count);
+            }
+            continue;
+        }
+        v = &g_state.verts[g_state.vert_count];
+        if (g_state.va_mode[0] != 0) g_state.last_mtx_idx = s->mid;
+        g_state.last_pos[0] = s->pos[0]; g_state.last_pos[1] = s->pos[1]; g_state.last_pos[2] = s->pos[2];
+        if (g_state.pos_enabled) {
+            f32 px = s->pos[0], py = s->pos[1], pz = s->pos[2];
+            f32 mag;
+            if (skin) {
+                u32 mid = s->mid;
+                const f32 (*m)[4];
+                if (g_state.batch_mid_min < 0 || (int) mid < g_state.batch_mid_min) g_state.batch_mid_min = (int) mid;
+                if ((int) mid > g_state.batch_mid_max) g_state.batch_mid_max = (int) mid;
+                g_state.batch_skinned++;
+                if (mid >= 28) mid = 0;
+                m = (const f32 (*)[4]) g_state.mtx_array[mid];
+                px = m[0][0]*s->pos[0] + m[0][1]*s->pos[1] + m[0][2]*s->pos[2] + m[0][3];
+                py = m[1][0]*s->pos[0] + m[1][1]*s->pos[1] + m[1][2]*s->pos[2] + m[1][3];
+                pz = m[2][0]*s->pos[0] + m[2][1]*s->pos[1] + m[2][2]*s->pos[2] + m[2][3];
+                if (g_state.nrm_enabled && !(s->flags & DLV_NRM)) {
+                    const f32 (*nm)[4] = g_nrm_mtx_valid[mid]
+                                             ? (const f32 (*)[4]) g_nrm_mtx_array[mid] : m;
+                    f32 NX = g_state.last_nrm[0], NY = g_state.last_nrm[1], NZ = g_state.last_nrm[2];
+                    g_state.last_nrm[0] = nm[0][0]*NX + nm[0][1]*NY + nm[0][2]*NZ;
+                    g_state.last_nrm[1] = nm[1][0]*NX + nm[1][1]*NY + nm[1][2]*NZ;
+                    g_state.last_nrm[2] = nm[2][0]*NX + nm[2][1]*NY + nm[2][2]*NZ;
+                }
+                g_batch_pretransformed = 1;
+            }
+            mag = px*px + py*py + pz*pz;
+            if (mag > 1e12f) {
+                v->pos[0] = 0; v->pos[1] = 0; v->pos[2] = 0;
+                if (g_dbg_degenerate_verts == 0) {
+                    g_dbg_degenerate_sample[0] = px;
+                    g_dbg_degenerate_sample[1] = py;
+                    g_dbg_degenerate_sample[2] = pz;
+                }
+                g_dbg_degenerate_verts++; pc_stat_vfilt++;
+                goto skip_deg;
+            }
+            if (px < -1e6f) px = -1e6f; if (px > 1e6f) px = 1e6f;
+            if (py < -1e6f) py = -1e6f; if (py > 1e6f) py = 1e6f;
+            if (pz < -1e6f) pz = -1e6f; if (pz > 1e6f) pz = 1e6f;
+            v->pos[0] = px; v->pos[1] = py; v->pos[2] = pz;
+            if (g_state.view_matrix_valid) {
+                mag = px*px + py*py + pz*pz;
+                if (mag > 100.0f && mag < 200000000.0f) {
+                    if (g_state.bounds_count == 0) {
+                        g_state.bounds_min[0] = px; g_state.bounds_min[1] = py; g_state.bounds_min[2] = pz;
+                        g_state.bounds_max[0] = px; g_state.bounds_max[1] = py; g_state.bounds_max[2] = pz;
+                    } else {
+                        if (px < g_state.bounds_min[0]) g_state.bounds_min[0] = px;
+                        if (py < g_state.bounds_min[1]) g_state.bounds_min[1] = py;
+                        if (pz < g_state.bounds_min[2]) g_state.bounds_min[2] = pz;
+                        if (px > g_state.bounds_max[0]) g_state.bounds_max[0] = px;
+                        if (py > g_state.bounds_max[1]) g_state.bounds_max[1] = py;
+                        if (pz > g_state.bounds_max[2]) g_state.bounds_max[2] = pz;
+                    }
+                    g_state.bounds_count++;
+                    g_state.bounds_valid = TRUE;
+                }
+            }
+        }
+        v->nrm[0] = g_state.last_nrm[0]; v->nrm[1] = g_state.last_nrm[1]; v->nrm[2] = g_state.last_nrm[2];
+    skip_deg:
+        if (g_state.clr_enabled) {
+            v->col[0] = g_state.last_clr[0]; v->col[1] = g_state.last_clr[1];
+            v->col[2] = g_state.last_clr[2]; v->col[3] = g_state.last_clr[3];
+        } else {
+            v->col[0] = g_state.cur_color.r / 255.0f; v->col[1] = g_state.cur_color.g / 255.0f;
+            v->col[2] = g_state.cur_color.b / 255.0f; v->col[3] = g_state.cur_color.a / 255.0f;
+        }
+        if (g_state.tex0_enabled) { v->tex0[0] = g_state.last_tex0[0]; v->tex0[1] = g_state.last_tex0[1]; }
+        if (g_state.tex1_enabled) { v->tex1[0] = g_state.last_tex1[0]; v->tex1[1] = g_state.last_tex1[1]; }
+        g_state.vert_count++;
+        /* The per-attribute calls that follow GXPosition in the decode. */
+        if (s->flags & DLV_CLR) {
+            g_state.cur_color.r = s->col[0]; g_state.cur_color.g = s->col[1];
+            g_state.cur_color.b = s->col[2]; g_state.cur_color.a = s->col[3];
+            g_state.last_clr[0] = s->col[0] / 255.0f; g_state.last_clr[1] = s->col[1] / 255.0f;
+            g_state.last_clr[2] = s->col[2] / 255.0f; g_state.last_clr[3] = s->col[3] / 255.0f;
+            v->col[0] = g_state.last_clr[0]; v->col[1] = g_state.last_clr[1];
+            v->col[2] = g_state.last_clr[2]; v->col[3] = g_state.last_clr[3];
+        }
+        if (s->flags & DLV_NRM) {
+            g_state.last_nrm[0] = s->nrm[0]; g_state.last_nrm[1] = s->nrm[1]; g_state.last_nrm[2] = s->nrm[2];
+            v->nrm[0] = s->nrm[0]; v->nrm[1] = s->nrm[1]; v->nrm[2] = s->nrm[2];
+        }
+        if (s->flags & DLV_T0) {
+            g_state.last_tex0[0] = s->t0[0]; g_state.last_tex0[1] = s->t0[1];
+            v->tex0[0] = s->t0[0]; v->tex0[1] = s->t0[1];
+        }
+        if (s->flags & DLV_T1) {
+            g_state.last_tex1[0] = s->t1[0]; g_state.last_tex1[1] = s->t1[1];
+            v->tex1[0] = s->t1[0]; v->tex1[1] = s->t1[1];
+        }
+    }
+}
+
 /* The same GX calls the direct path makes per vertex, from the decode. */
 static void dl_replay(const DlEntry* e)
 {
@@ -8469,6 +8590,11 @@ static void dl_replay(const DlEntry* e)
         const DlVert* dv = e->verts + dp->first;
         u32 v;
         GXBegin(dp->gcn_prim, dp->vat, (u16) dp->nverts);
+        if (g_state.va_mode[9] != 0 && !ENV_FLAG("MELEE_DL_SLOWREPLAY")) {
+            dl_replay_bulk(dp, dv);
+            GXEnd();
+            continue;
+        }
         for (v = 0; v < dp->nverts; v++) {
             const DlVert* s = &dv[v];
             if (g_state.va_mode[0] != 0) g_state.last_mtx_idx = s->mid;
