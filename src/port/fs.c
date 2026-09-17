@@ -70,10 +70,24 @@ char* vf_resolve_path(const char* path, char* out, size_t out_size)
     return NULL;
 }
 
+/* Per-frame I/O accounting for the [FPS]/[HITCHDET] lines: a stall on
+ * the stage-clear screen followed the music file being reopened. */
+#include <time.h>
+unsigned long long pc_diag_io_ns; unsigned pc_diag_io_opens, pc_diag_io_reads, pc_diag_io_bytes;
+static struct timespec pc_io_t0;
+static void pc_io_begin(void) { clock_gettime(CLOCK_MONOTONIC, &pc_io_t0); }
+static void pc_io_end(void)
+{
+    struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
+    pc_diag_io_ns += (unsigned long long) ((t.tv_sec - pc_io_t0.tv_sec) * 1000000000LL + (t.tv_nsec - pc_io_t0.tv_nsec));
+}
 VfHandle vf_open(const char* path, const char* mode)
 {
+    pc_diag_io_opens++;
+    pc_io_begin();
     /* Caller should resolve asset_dir via vf_resolve_path before calling */
     FILE* fp = fopen(path, mode);
+    pc_io_end();
     if (!fp)
     {
         PORT_LOG_WARN("vf_open: open failed: %s", path);
@@ -123,7 +137,15 @@ int vf_read(VfHandle handle, void* buffer, int size)
     if (!VF_VALID(handle)) return 0;
     VfFile* file = (VfFile*)handle;
     vf_check_dest(buffer, size);
-    return fread(buffer, 1, size, file->fp);
+    {
+        int n;
+        pc_diag_io_reads++;
+        pc_io_begin();
+        n = (int) fread(buffer, 1, size, file->fp);
+        pc_io_end();
+        if (n > 0) pc_diag_io_bytes += (unsigned) n;
+        return n;
+    }
 }
 
 int vf_seek(VfHandle handle, int offset, int whence)
