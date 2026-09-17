@@ -3448,6 +3448,45 @@ static Prog* pc_uber(void)
     return g_uber;
 }
 
+/* The safety valve on the fallback. The base program is ~26x a variant
+ * per draw on Adreno, so it is only cheap while it covers a few draws.
+ * When a stage transition hands it thirty at once -- Brinstar's acid, 32
+ * variants in one frame -- every frame is 250 ms until the match ends,
+ * since compiles are deferred past it. So when a frame is already slow and
+ * variants are deferred, compile one: a 35 ms frame instead of a 250 ms
+ * one, and the base program hands that variant back for good. */
+int pc_shc_compile_one_deferred(void)
+{
+    GLint saved[VLOC_MAX];
+    const GLint* row;
+    u32 h;
+    Prog* pr;
+    int i;
+    if (g_shq_i >= g_shq_n || g_prog_n >= PROG_MAX - 256) return 0;
+    row = g_shq + (size_t) g_shq_i * (size_t) g_spec_n;
+    memcpy(saved, g_spec_vals, sizeof(saved));
+    for (i = 0; i < g_spec_n; i++) g_spec_vals[g_spec_slots[i]] = row[i];
+    h = pc_spec_hash();
+    if (pc_prog_find(h) == NULL) {
+        pr = pc_shc_load(h);
+        if (pr != NULL) {
+            pc_prog_register(pr, h, 0);
+        } else {
+            pr = pc_prog_build();
+            if (pr != NULL) pc_prog_register(pr, h, 1);
+        }
+    }
+    /* out of the deferred set, so the next select finds the real program */
+    for (i = 0; i < g_defer_n; i++) {
+        if (g_defer_hash[i] == h) { g_defer_hash[i] = g_defer_hash[--g_defer_n]; break; }
+    }
+    g_shq_i++;
+    memcpy(g_spec_vals, saved, sizeof(saved));
+    g_spec_dirty = 1;
+    g_cur_prog = NULL;
+    return 1;
+}
+
 /* How many variants the base program is standing in for this match; the
  * per-second report prints it so a slow window can be told apart from a
  * shader miss. */

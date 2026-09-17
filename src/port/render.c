@@ -488,6 +488,30 @@ void render_present(void)
             s_prev_gframe = gf;
             if (gf == 0) {
                 pc_shc_pump(6000000LL);
+            } else {
+                /* In a match: if the last frame was already slow and the
+                 * base program is standing in for deferred variants, compile
+                 * one now -- the valve on the fallback (see
+                 * pc_shc_compile_one_deferred). Timed here so it works
+                 * without MELEE_FPS. */
+                extern int pc_shc_compile_one_deferred(void);
+                extern int pc_shc_deferred(void);
+                static struct timespec s_last;
+                struct timespec now;
+                long long dt;
+                clock_gettime(CLOCK_MONOTONIC, &now);
+                dt = (long long) (now.tv_sec - s_last.tv_sec) * 1000000000LL + (now.tv_nsec - s_last.tv_nsec);
+                if (s_last.tv_sec != 0 && dt > 40000000LL && pc_shc_deferred() > 0) {
+                    /* Scale with how slow the frame already was: a 250 ms
+                     * frame is the base program carrying thirty variants, and
+                     * one compile a frame leaves it carrying twenty-nine for
+                     * the next. Six compiles make that frame longer once and
+                     * end the episode in three frames instead of seventeen. */
+                    int n = (int) (dt / 40000000LL);
+                    if (n > 8) n = 8;
+                    while (n-- > 0 && pc_shc_compile_one_deferred()) {}
+                }
+                s_last = now;
             }
         }
         window_swap();
@@ -582,8 +606,9 @@ void render_present(void)
                      * for a 23.9 ms frame; this says which half. */
                     static u64 s_game_prev;
                     double outside = (double) (pc_diag_game_ns - s_game_prev) / s_n / 1e6;
-                    fprintf(stderr, "[SPLIT] outside present %.2f ms/frame (sim + GX capture)  inside %.2f ms/frame (submission + present)\n",
-                            outside, wall / s_n / 1e6 - outside);
+                    extern int pc_shc_deferred(void);
+                    fprintf(stderr, "[SPLIT] outside present %.2f ms/frame (sim + GX capture)  inside %.2f ms/frame (submission + present)  base-shader variants %d\n",
+                            outside, wall / s_n / 1e6 - outside, pc_shc_deferred());
                     s_game_prev = pc_diag_game_ns;
                 }
                 {
