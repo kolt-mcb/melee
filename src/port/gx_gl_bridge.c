@@ -2886,6 +2886,220 @@ static Prog* g_cur_prog;
 static int g_spec_slots[VLOC_MAX];
 static int g_spec_n;
 
+/* ------------------------------------------------------------------
+ * The uniform block.
+ *
+ * Every real uniform -- everything the specialiser does not fold into a
+ * constant, except the samplers -- lived in the program object, so a
+ * change was a glUniform call per value and a program switch re-uploaded
+ * whatever that program had not seen: ~1000 calls a frame on the tablet,
+ * each a trip through the driver. They are one std140 block now,
+ * PcUniforms, kept as an image on the CPU; the staging writes into the
+ * image, and a draw whose image changed streams it into the vertex ring
+ * and binds that range -- one call, shared by every program, so a switch
+ * uploads nothing. The block's offsets are std140's, computed here from
+ * the declarations in table order, which is the order the block declares
+ * them. MELEE_NO_UBO=1 leaves the uniforms in the programs. */
+typedef struct {
+    const UniEntry* ent;
+    char type[12];
+    int arr;      /* declared array length, 0 if scalar */
+    u32 off;      /* byte offset of element 0 */
+    u32 stride;   /* byte stride between elements */
+} UboMember;
+static UboMember g_ubo_mem[64];
+static int g_ubo_n;
+static u32 g_ubo_size;
+static int g_ubo_off[VLOC_MAX];
+static u8 g_ubo_img[16384];
+static int g_ubo_dirty, g_ubo_ok;
+static GLint g_ubo_align = 256;
+u32 pc_diag_ubo_binds;
+
+static int pc_ubo_wanted(void)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("MELEE_NO_UBO") == NULL;
+    return on;
+}
+/* std140: base alignment, size, and array element stride of a type. */
+static int pc_ubo_type_layout(const char* t, u32* align, u32* size, u32* astride)
+{
+    if (!strcmp(t, "float") || !strcmp(t, "int")) { *align = 4; *size = 4; *astride = 16; return 1; }
+    if (!strcmp(t, "vec2")) { *align = 8; *size = 8; *astride = 16; return 1; }
+    if (!strcmp(t, "vec3")) { *align = 16; *size = 12; *astride = 16; return 1; }
+    if (!strcmp(t, "vec4")) { *align = 16; *size = 16; *astride = 16; return 1; }
+    if (!strcmp(t, "mat3")) { *align = 16; *size = 48; *astride = 48; return 1; }
+    if (!strcmp(t, "mat4")) { *align = 16; *size = 64; *astride = 64; return 1; }
+    return 0;
+}
+/* Find "uniform <type> <name>" for a table entry in the shader sources. */
+static int pc_ubo_find_decl(const char* name, char* type, int* arr)
+{
+    const char* srcs[2] = { g_vert_src, g_frag_src };
+    int s;
+    for (s = 0; s < 2; s++) {
+        const char* p = srcs[s];
+        while ((p = strstr(p, "uniform ")) != NULL) {
+            const char* t = p + 8, *e = t, *n;
+            size_t tl, nl;
+            if (p != srcs[s] && p[-1] != '\n') { p = t; continue; }
+            while (*e && *e != ' ') e++;
+            tl = (size_t) (e - t);
+            n = e + 1;
+            e = n;
+            while ((*e >= 'a' && *e <= 'z') || (*e >= 'A' && *e <= 'Z') || (*e >= '0' && *e <= '9') || *e == '_') e++;
+            nl = (size_t) (e - n);
+            if (nl == strlen(name) && strncmp(n, name, nl) == 0 && tl < 12) {
+                memcpy(type, t, tl); type[tl] = 0;
+                *arr = (*e == '[') ? atoi(e + 1) : 0;
+                return 1;
+            }
+            p = t;
+        }
+    }
+    return 0;
+}
+static void pc_ubo_layout(void)
+{
+    u32 cur = 0;
+    int i, k;
+    for (i = 0; i < VLOC_MAX; i++) g_ubo_off[i] = -1;
+    g_ubo_n = 0;
+    for (i = 0; i < UNI_TAB_N; i++) {
+        const UniEntry* ent = &g_uni_tab[i];
+        UboMember* m;
+        u32 align, size, astride;
+        if (ent->spec || ent->base < 0) continue;
+        if (g_ubo_n >= (int) (sizeof(g_ubo_mem) / sizeof(g_ubo_mem[0]))) break;
+        m = &g_ubo_mem[g_ubo_n];
+        if (!pc_ubo_find_decl(ent->name, m->type, &m->arr)) continue;
+        if (!strcmp(m->type, "sampler2D")) continue;
+        if (!pc_ubo_type_layout(m->type, &align, &size, &astride)) continue;
+        m->ent = ent;
+        cur = (cur + align - 1) / align * align;
+        if (m->arr) {
+            cur = (cur + 15) & ~15u;
+            m->off = cur; m->stride = astride;
+            cur += astride * (u32) m->arr;
+            cur = (cur + 15) & ~15u;
+        } else {
+            m->off = cur; m->stride = size;
+            cur += size;
+        }
+        for (k = 0; k < ent->count; k++) {
+            if (m->arr && k >= m->arr) break;
+            g_ubo_off[ent->base + k] = (int) (m->off + (u32) k * m->stride);
+        }
+        g_ubo_n++;
+    }
+    g_ubo_size = (cur + 15) & ~15u;
+}
+/* The block declaration, and the source with the members' own uniform
+ * lines taken out. Inserted after the version line, which the ES path
+ * swaps for its header; the block follows either. */
+static char* pc_ubo_source(const char* src)
+{
+    size_t cap = strlen(src) + 8192, o = 0;
+    char* out = (char*) malloc(cap);
+    const char* p = src;
+    const char* nl = strchr(src, '\n');
+    int i;
+    if (!nl) { strcpy(out, src); return out; }
+    memcpy(out, src, (size_t) (nl - src) + 1); o = (size_t) (nl - src) + 1;
+    o += (size_t) sprintf(out + o, "layout(std140) uniform PcUniforms {\n");
+    for (i = 0; i < g_ubo_n; i++) {
+        const UboMember* m = &g_ubo_mem[i];
+        if (m->arr) o += (size_t) sprintf(out + o, "    %s %s[%d];\n", m->type, m->ent->name, m->arr);
+        else o += (size_t) sprintf(out + o, "    %s %s;\n", m->type, m->ent->name);
+    }
+    o += (size_t) sprintf(out + o, "};\n");
+    p = nl + 1;
+    while (*p) {
+        const char* eol = strchr(p, '\n');
+        size_t len = eol ? (size_t) (eol - p) + 1 : strlen(p);
+        int drop = 0;
+        if (strncmp(p, "uniform ", 8) == 0) {
+            const char* t = p + 8;
+            const char* n = strchr(t, ' ');
+            if (n && n < p + len) {
+                const char* e = ++n;
+                size_t nlen;
+                while ((*e >= 'a' && *e <= 'z') || (*e >= 'A' && *e <= 'Z') || (*e >= '0' && *e <= '9') || *e == '_') e++;
+                nlen = (size_t) (e - n);
+                for (i = 0; i < g_ubo_n; i++) {
+                    if (strlen(g_ubo_mem[i].ent->name) == nlen && strncmp(g_ubo_mem[i].ent->name, n, nlen) == 0) { drop = 1; break; }
+                }
+            }
+        }
+        if (!drop) { memcpy(out + o, p, len); o += len; }
+        p += len;
+        if (o + 1024 > cap) { cap *= 2; out = (char*) realloc(out, cap); }
+    }
+    out[o] = 0;
+    return out;
+}
+static void pc_ubo_write(GLint vloc, int kind, int n, int transpose, const void* data)
+{
+    const u8* src = (const u8*) data;
+    int e;
+    if (!g_ubo_ok) return;
+    for (e = 0; e < n; e++) {
+        int off = (vloc + e < VLOC_MAX) ? g_ubo_off[vloc + e] : -1;
+        u8* dst;
+        if (off < 0) continue;
+        dst = g_ubo_img + off;
+        switch (kind) {
+        case UK_I1: case UK_F1: case UK_IV: case UK_FV: memcpy(dst, src + e * 4, 4); break;
+        case UK_F2V: memcpy(dst, src + e * 8, 8); break;
+        case UK_F3V: memcpy(dst, src + e * 12, 12); break;
+        case UK_F4V: memcpy(dst, src + e * 16, 16); break;
+        case UK_M4: {
+            const f32* m = (const f32*) (src + e * 64);
+            f32* d = (f32*) dst;
+            int r, c;
+            if (transpose) { for (c = 0; c < 4; c++) for (r = 0; r < 4; r++) d[c * 4 + r] = m[r * 4 + c]; }
+            else memcpy(d, m, 64);
+            break;
+        }
+        case UK_M3: {
+            const f32* m = (const f32*) (src + e * 36);
+            f32* d = (f32*) dst;
+            int r, c;
+            for (c = 0; c < 3; c++) for (r = 0; r < 3; r++) d[c * 4 + r] = transpose ? m[r * 3 + c] : m[c * 3 + r];
+            break;
+        }
+        default: break;
+        }
+    }
+    g_ubo_dirty = 1;
+}
+/* A draw whose block changed: stream the image and bind that range. */
+static void pc_ubo_bind(void)
+{
+    GLintptr off;
+    if (!g_ubo_ok || !g_ubo_dirty) return;
+    g_vbo_off = (g_vbo_off + g_ubo_align - 1) / g_ubo_align * g_ubo_align;
+    off = pc_vbo_stream_raw(g_ubo_img, (GLsizeiptr) g_ubo_size);
+    glBindBufferRange(GL_UNIFORM_BUFFER, 0, g_vbo, off, (GLsizeiptr) g_ubo_size);
+    g_ubo_dirty = 0;
+    pc_diag_ubo_binds++;
+}
+static void pc_ubo_init(void)
+{
+    if (!pc_ubo_wanted()) return;
+    pc_ubo_layout();
+    if (g_ubo_n == 0 || g_ubo_size > sizeof(g_ubo_img)) return;
+    glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &g_ubo_align);
+    if (g_ubo_align < 16) g_ubo_align = 16;
+    g_vert_src = pc_ubo_source(g_vert_src);
+    g_frag_src = pc_ubo_source(g_frag_src);
+    memset(g_ubo_img, 0, sizeof(g_ubo_img));
+    g_ubo_ok = 1;
+    g_ubo_dirty = 1;
+    fprintf(stderr, "[UBO] %d members, %u bytes, offset alignment %d\n", g_ubo_n, g_ubo_size, (int) g_ubo_align);
+}
+
 static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
                              const void* data, unsigned bytes)
 {
@@ -2939,6 +3153,7 @@ static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
     g_last_tr[vloc] = (u8) transpose;
     g_last_gen[vloc]++;
     g_stage_serial++;
+    pc_ubo_write(vloc, kind, n, transpose, data);
 }
 
 /* Rewrite `uniform int NAME[...];` declarations of specialisation slots
@@ -3128,6 +3343,10 @@ static Prog* pc_prog_finish(GLuint id)
     Prog* pr = (Prog*) calloc(1, sizeof(Prog));
     int i, k;
     pr->id = id;
+    if (g_ubo_ok) {
+        GLuint bi = glGetUniformBlockIndex(id, "PcUniforms");
+        if (bi != GL_INVALID_INDEX) glUniformBlockBinding(id, bi, 0);
+    }
     for (i = 0; i < VLOC_MAX; i++) pr->glloc[i] = -1;
     for (i = 0; i < UNI_TAB_N; i++) {
         const UniEntry* ent = &g_uni_tab[i];
@@ -3212,6 +3431,9 @@ static int pc_shc_enabled(void)
         g_shc_drv = pc_shc_fnv(v ? v : "", v ? strlen(v) : 0, 2166136261u);
         v = (const char*) glGetString(GL_RENDERER);
         g_shc_drv = pc_shc_fnv(v ? v : "", v ? strlen(v) : 0, g_shc_drv);
+        /* The block moved the uniforms out of the programs: binaries
+         * from before it, or from the other setting, do not apply. */
+        g_shc_drv = pc_shc_fnv(pc_ubo_wanted() ? "ubo1" : "glu0", 4, g_shc_drv);
         g_shc_on = 1;
     }
     return g_shc_on;
@@ -3933,6 +4155,7 @@ static void pc_prog_flush(void)
         pc_diag_prog_switch++;
         if (pr == g_uber) g_uber_spec_gen = (u32) -1;
     }
+    pc_ubo_bind();
     if (pr == g_uber && g_uber_spec_gen != g_spec_gen) {
         /* The specialised values are constants in every variant and real
          * uniforms only here; they change per draw, so upload them all. */
@@ -4025,6 +4248,7 @@ static void pc_vloc_init(void)
 static void bridge_compile_shaders(void)
 {
     pc_vloc_init();
+    pc_ubo_init();
     GLuint vs = compile_shader(GL_VERTEX_SHADER, g_vert_src);
     /* The base program draws whatever variant a match has not compiled;
      * unrolled like the variants, guarded by the stage count uniform. */
