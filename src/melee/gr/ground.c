@@ -785,6 +785,23 @@ void Ground_801C0754(StageIdPair* pair)
         return;
     }
 #endif
+#if BUILD_TARGET_PC
+    /* The one stage load every route performs -- VS from the menus, the
+     * debug boot, Classic -- with the real stage kind in hand and the
+     * fighters already chosen, right before the stage data loads: the
+     * loading screen. The shader cache prepares the lineup here. (The two
+     * earlier hooks, on the DVD cache route and on the data conversion,
+     * each missed a route: Classic reached neither with a valid kind and
+     * compiled its stage at READY.) The game mode guard lives in the
+     * prep; the title's attract demo comes through here too. */
+    {
+        extern void pc_shc_prepare_match(int stkind);
+        int m = (int) gm_GetCurrentGameMode();
+        if (m != 0 /* title */ && m != 1 /* menu */ && m != 0x18 /* opening */) {
+            pc_shc_prepare_match((int) pair->stkind);
+        }
+    }
+#endif
     arg3 = (pair->stkind == St_Kind_Heal) ? 0 : 1;
     grDatFiles_801C6038(stage->data1, 0, arg3);
     Ground_801C28CC(&stage_info.xA0, pair->stkind);

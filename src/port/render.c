@@ -478,15 +478,21 @@ void render_present(void)
              * counter is zero everywhere but a match. Six milliseconds fits
              * a few binary loads or clears the bar for one compile. */
             extern unsigned int gm_8016AEDC(void);
+            extern int gm_GetCurrentGameMode(void);
             extern void pc_shc_pump(long long budget_ns);
             extern void pc_shc_match_over(void);
+            extern int pc_shc_in_match(void);
             static unsigned int s_prev_gframe;
             unsigned int gf = gm_8016AEDC();
-            if (s_prev_gframe != 0 && gf == 0) {
+            int mode = gm_GetCurrentGameMode();
+            /* A match is over when its frame counter returns to zero -- or,
+             * for the modes whose counter never moves (Classic), when the
+             * game is back at the title or the menu. */
+            if ((s_prev_gframe != 0 && gf == 0) || ((mode == 0 || mode == 1) && pc_shc_in_match())) {
                 pc_shc_match_over();
             }
             s_prev_gframe = gf;
-            if (gf == 0) {
+            if (!pc_shc_in_match()) {
                 pc_shc_pump(6000000LL);
             } else {
                 /* In a match: if the last frame was already slow and the
