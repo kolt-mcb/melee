@@ -627,19 +627,6 @@ void render_present(void)
                     fprintf(stderr, "[SPLIT] outside present %.2f ms/frame (sim + GX capture)  inside %.2f ms/frame (submission + present)  base-shader variants %d\n",
                             outside, wall / s_n / 1e6 - outside, pc_shc_deferred());
                     s_game_prev = pc_diag_game_ns;
-                    {
-                        /* The submission's own buckets, per frame: the
-                         * vertex ring, the matrix/texgen uniforms, the TEV
-                         * and alpha uniforms, the draw issue itself. */
-                        extern u64 pc_diag_sec_ns[5];
-                        static u64 s_sec_prev[5];
-                        fprintf(stderr, "[SECS] vbo %.2f  mtx-unif %.2f  tev-unif %.2f  draw %.2f ms/frame\n",
-                                (double) (pc_diag_sec_ns[0] - s_sec_prev[0]) / s_n / 1e6,
-                                (double) (pc_diag_sec_ns[1] - s_sec_prev[1]) / s_n / 1e6,
-                                (double) (pc_diag_sec_ns[2] - s_sec_prev[2]) / s_n / 1e6,
-                                (double) (pc_diag_sec_ns[3] - s_sec_prev[3]) / s_n / 1e6);
-                        memcpy(s_sec_prev, pc_diag_sec_ns, sizeof(s_sec_prev));
-                    }
                 }
                 {
                     extern u32 pc_diag_gxinv_vtx, pc_diag_gxinv_tex;
