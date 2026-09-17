@@ -30,6 +30,38 @@ static int prof_on;
 
 #ifdef __ANDROID__
 #include <ucontext.h>
+#include <link.h>
+/* The address range of the module this profiler is linked into, so a
+ * sample landing outside it (libc's memcpy, the GL driver) is recorded by
+ * its caller instead: those are leaf routines that have not saved the
+ * link register, so LR is the return address into whoever called them. */
+static unsigned long prof_lo, prof_hi;
+static int prof_phdr_cb(struct dl_phdr_info* info, size_t size, void* data)
+{
+    unsigned long me = (unsigned long) data;
+    int i;
+    (void) size;
+    for (i = 0; i < info->dlpi_phnum; i++) {
+        const ElfW(Phdr)* ph = &info->dlpi_phdr[i];
+        unsigned long lo, hi;
+        if (ph->p_type != PT_LOAD) continue;
+        lo = info->dlpi_addr + ph->p_vaddr;
+        hi = lo + ph->p_memsz;
+        if (me >= lo && me < hi) {
+            /* Take the whole module: lowest and highest PT_LOAD. */
+            int k;
+            prof_lo = (unsigned long) -1; prof_hi = 0;
+            for (k = 0; k < info->dlpi_phnum; k++) {
+                const ElfW(Phdr)* q = &info->dlpi_phdr[k];
+                if (q->p_type != PT_LOAD) continue;
+                if (info->dlpi_addr + q->p_vaddr < prof_lo) prof_lo = info->dlpi_addr + q->p_vaddr;
+                if (info->dlpi_addr + q->p_vaddr + q->p_memsz > prof_hi) prof_hi = info->dlpi_addr + q->p_vaddr + q->p_memsz;
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
 /* On Android the unwinder cannot be called from a signal handler: a
  * SIGPROF landing inside libunwind's own DWARF stepping crashed the
  * profiled run every time. Sample the interrupted PC from the signal
@@ -40,8 +72,14 @@ static void prof_tick(int sig, siginfo_t* si, void* uc)
     void* pc;
     int s;
     (void) sig; (void) si;
+    void* by_caller = NULL;
 #if defined(__aarch64__)
     pc = (void*) ((ucontext_t*) uc)->uc_mcontext.pc;
+    if (prof_hi != 0 && ((unsigned long) pc < prof_lo || (unsigned long) pc >= prof_hi)) {
+        /* Outside our module: charge the caller (LR) and remember it was. */
+        pc = (void*) ((ucontext_t*) uc)->uc_mcontext.regs[30];
+        by_caller = (void*) 1;
+    }
 #elif defined(__x86_64__)
     pc = (void*) ((ucontext_t*) uc)->uc_mcontext.gregs[REG_RIP];
 #else
@@ -64,6 +102,7 @@ static void prof_tick(int sig, siginfo_t* si, void* uc)
         if (s == (int) (((unsigned long) pc >> 2) & (PROF_SLOTS - 1))) return;
     }
     prof_addr[s][0] = pc;
+    prof_addr[s][1] = by_caller;
     prof_count[s] = 1;
     if ((unsigned) s >= prof_used) prof_used = (unsigned) s + 1;
 }
@@ -98,54 +137,47 @@ static void prof_tick(int sig)
 }
 #endif
 
+static int prof_cmp(const void* a, const void* b)
+{
+    unsigned ca = prof_count[*(const unsigned*) a], cb = prof_count[*(const unsigned*) b];
+    return ca < cb ? 1 : ca > cb ? -1 : 0;
+}
 void pc_profile_report(void)
 {
-    unsigned i, j, shown;
+    static unsigned order[PROF_SLOTS];
+    unsigned i, n = 0, shown;
     if (!prof_on) {
         return;
     }
     fprintf(stderr, "[PROFILE] %lu samples, %u distinct stacks\n",
             prof_samples, prof_used);
-    /* Simple selection sort over the top 25 -- this runs once, at exit. */
-    for (shown = 0; shown < 400 && shown < prof_used; shown++) {
-        unsigned best = shown;
-        for (j = shown + 1; j < prof_used; j++) {
-            if (prof_count[j] > prof_count[best]) {
-                best = j;
-            }
-        }
-        if (best != shown) {
-            void* ta[PROF_DEPTH];
-            unsigned tc;
-            memcpy(ta, prof_addr[shown], sizeof(ta));
-            memcpy(prof_addr[shown], prof_addr[best], sizeof(ta));
-            memcpy(prof_addr[best], ta, sizeof(ta));
-            tc = prof_count[shown];
-            prof_count[shown] = prof_count[best];
-            prof_count[best] = tc;
-        }
-        fprintf(stderr, "[PROFILE] %5.1f%% (%u)", 
-                100.0 * prof_count[shown] / (prof_samples ? prof_samples : 1),
-                prof_count[shown]);
-        /* Each frame as object+offset, so a stripped-of-statics dladdr
-         * lookup is not the only way to a name: llvm-symbolizer over the
-         * unstripped object resolves the offsets to the static functions
-         * the bridge is made of. */
-        for (i = 0; i < PROF_DEPTH && prof_addr[shown][i]; i++) {
+    for (i = 0; i < prof_used; i++) {
+        if (prof_addr[i][0] != NULL && prof_count[i] >= 3) order[n++] = i;
+    }
+    qsort(order, n, sizeof(order[0]), prof_cmp);
+    /* Every entry with three samples or more: the offline aggregation by
+     * function needs the tail, not just the top of the table. */
+    for (shown = 0; shown < n; shown++) {
+        unsigned e = order[shown];
+        fprintf(stderr, "[PROFILE] %5.1f%% (%u)",
+                100.0 * prof_count[e] / (prof_samples ? prof_samples : 1),
+                prof_count[e]);
+#ifdef __ANDROID__
+        if (prof_addr[e][1] == (void*) 1) fprintf(stderr, " via");
+#endif
+        for (i = 0; i < PROF_DEPTH && prof_addr[e][i] && prof_addr[e][i] != (void*) 1; i++) {
             Dl_info fi;
-            if (dladdr(prof_addr[shown][i], &fi) && fi.dli_fbase) {
+            if (dladdr(prof_addr[e][i], &fi) && fi.dli_fbase) {
                 const char* obj = fi.dli_fname ? strrchr(fi.dli_fname, '/') : NULL;
                 fprintf(stderr, " %s+0x%lx", obj ? obj + 1 : "?",
-                        (unsigned long) ((char*) prof_addr[shown][i] - (char*) fi.dli_fbase));
+                        (unsigned long) ((char*) prof_addr[e][i] - (char*) fi.dli_fbase));
             } else {
-                fprintf(stderr, " %p", prof_addr[shown][i]);
+                fprintf(stderr, " %p", prof_addr[e][i]);
             }
         }
-        /* Name the leaf: symbol and object, so driver time (Mesa, libc)
-         * can be told from the port's own without a maps file. */
         {
             Dl_info di;
-            if (dladdr(prof_addr[shown][0], &di)) {
+            if (dladdr(prof_addr[e][0], &di)) {
                 const char* obj = di.dli_fname ? strrchr(di.dli_fname, '/') : NULL;
                 fprintf(stderr, "  %s!%s", obj ? obj + 1 : (di.dli_fname ? di.dli_fname : "?"),
                         di.dli_sname ? di.dli_sname : "?");
@@ -175,6 +207,9 @@ void pc_profile_init(void)
     it.it_interval.tv_sec = 0;
     it.it_interval.tv_usec = 1000;
     it.it_value = it.it_interval;
+#ifdef __ANDROID__
+    dl_iterate_phdr(prof_phdr_cb, (void*) &pc_profile_init);
+#endif
     setitimer(ITIMER_PROF, &it, NULL);
     prof_on = 1;
     atexit(pc_profile_report);
