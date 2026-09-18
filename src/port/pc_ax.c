@@ -388,6 +388,14 @@ static void pc_ax_frame(void)
     if (!g_ax_inited) {
         return;
     }
+    /* AXVPB.c dumps any voice whose estimated DSP cost would take the frame
+     * past __AXMaxDspCycles, lowest priority first. The init below set that
+     * budget to "infinite", but the game's AXInit runs __AXVPBInit again and
+     * resets it to OS_BUS_CLOCK / 400: with music and a few effects running
+     * the estimate passed it, and the impact sounds -- two voices each, at
+     * the bottom of the priority stack -- were the ones dumped, every hit.
+     * There is no DSP: reassert the budget where it is consulted. */
+    AXSetMaxDspCycles(0x7FFFFFFF);
     /* 1. The CPU side publishes this frame's parameters. */
     if (g_ax_trace) {
         static u8 before[AX_MAX_VOICES];

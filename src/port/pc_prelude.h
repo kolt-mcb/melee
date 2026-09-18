@@ -32,6 +32,13 @@
  * ahead of every include, and keep the host's header out. */
 #ifndef __cplusplus
 #define _STDBOOL_H 1
+/* The NDK's C library has no <stdbool.h> of its own: clang's ships one,
+ * under its own guard, and it came in later and turned every bool back
+ * into _Bool -- on the tablet only. That is where the synth's voice ids all
+ * became 1 (a `bool` holding the id), and the whole collision-flag class
+ * above with them. Keep clang's out too. */
+#define __CLANG_STDBOOL_H 1
+#define __STDBOOL_H 1
 #define __bool_true_false_are_defined 1
 typedef int bool;
 #define true 1
