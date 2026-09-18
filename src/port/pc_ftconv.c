@@ -202,7 +202,26 @@ void* pc_ftconv_kirby_hat(void* raw)
             if (h == NULL) return NULL;
             memset(h, 0, sizeof(*h));
             joff = pc_be32(*(const u32*) p);
-            h->hat_joint = (joff != 0 && joff < len) ? pc_ftconv_joint((void*) (base + joff)) : NULL;
+            /* Not every copy kind's symbol is a hat struct (kind 24's
+             * first word was 1, and converting from it ran the joint
+             * converter off the archive). A joint tree starts with five
+             * 4-byte-aligned in-archive offsets; anything else is left as
+             * it was. */
+            if (joff == 0 || (joff & 3) != 0 || joff + 0x40 > len) {
+                return raw;
+            }
+            {
+                const u8* j = base + joff;
+                u32 k;
+                for (k = 0; k < 5; k++) {
+                    u32 v = pc_be32(*(const u32*) (j + 4 * k));
+                    if (k == 1) continue; /* flags */
+                    if (v != 0 && ((v & 3) != 0 || v >= len)) {
+                        return raw;
+                    }
+                }
+            }
+            h->hat_joint = pc_ftconv_joint((void*) (base + joff));
             h->desc.model_num = pc_be32(*(const u32*) (p + 4));
             voff = pc_be32(*(const u32*) (p + 8));
             if (voff != 0 && voff + 16 <= len) {

@@ -354,6 +354,16 @@ static inline s32 it_802E6380_tier(Item_GObj* item_gobj, it_2E5A_Attrs* attr,
     // NOTE: tiers[0].ecb[9] should be tiers[1].threshold, but writing it
     // that way produces different asm offsets
     s32 off = 2;
+#if BUILD_TARGET_PC
+    /* the console walk over ecb[9] lands on tiers[1].threshold only at
+     * the file's stride; the host struct has 8-byte pointers */
+    if (arg1->xC < attr->tiers[2].threshold) {
+        off = 1;
+        if (arg1->xC < attr->tiers[1].threshold) {
+            off = 0;
+        }
+    }
+#else
     s32* tier_thresholds = (s32*) &attr->tiers[0].ecb;
     if (arg1->xC < attr->tiers[2].threshold) {
         off = 1;
@@ -361,6 +371,7 @@ static inline s32 it_802E6380_tier(Item_GObj* item_gobj, it_2E5A_Attrs* attr,
             off = 0;
         }
     }
+#endif
     return off;
 }
 

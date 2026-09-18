@@ -915,6 +915,34 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         art->x4_specialAttributes = y;
         break;
     }
+    case It_Kind_Unk4: {
+        /* The damage-spawned item (ftCommon_8007EA90): 0x3C bytes of
+         * scalars, then three tier records of 0x2C -- a joint tree, the
+         * three animation trees, two ints, a scale and a 16-byte ECB. The
+         * raw joint of the tier picked by the hit's strength faulted in
+         * it_80273318 the first time a hit was hard enough. */
+        it_2E5A_Attrs* a4 = zalloc(sizeof(*a4));
+        int t;
+        if (a4 == NULL) {
+            return;
+        }
+        conv_scalars(a4, r, 0x3C);
+        for (t = 0; t < 3; t++) {
+            const u8* e = r + 0x3C + t * 0x2C;
+            it_2E5A_TierEntry* te = &a4->tiers[t];
+            if ((u32) (e + 0x2C - a->base) > a->len) break;
+            te->joint = conv_joint_at(a, be32(e));
+            te->anim_joint = conv_anim_at(a, be32(e + 0x4), 0);
+            te->matanim_joint = conv_anim_at(a, be32(e + 0x8), 1);
+            te->shape_anim_joint = conv_anim_at(a, be32(e + 0xC), 2);
+            te->xD84_value = (s32) be32(e + 0x10);
+            te->threshold = (s32) be32(e + 0x14);
+            conv_scalars(&te->scale, e + 0x18, 4);
+            conv_scalars(&te->ecb, e + 0x1C, 0x10);
+        }
+        art->x4_specialAttributes = a4;
+        break;
+    }
     case It_Kind_Seak_Chain: {
         /* Sheik's chain: two joint trees after the scalars. */
         itSeakChain_Attrs* c = zalloc(sizeof(*c));

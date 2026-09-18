@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include "port/pc_ptr.h"
 #include "it/itdraw.h"
 
 #include "inlines.h"
@@ -44,8 +46,38 @@ void it_8026EBC8(HSD_GObj* gobj, u16 arg1, u8* arg2)
     HSD_JObj* jobj;
     HSD_JObj* jobj_parent;
     u8* index = arg2;
+#if BUILD_TARGET_PC
+    /* The list and its count are the item's own variables; the Game &
+     * Watch items reach this draw with them never set (a count of 15780,
+     * a list of NULL or 0x100000001). Nothing sane exceeds the table. */
+    if (arg1 != 0 && (index == NULL || ip->xBBC_dynamicBoneTable == NULL || arg1 > 100 ||
+                      !pc_mem_readable(index, arg1))) {
+        static int said;
+        if (said < 10) {
+            said++;
+            fprintf(stderr, "[PORT WARN] itdraw: item kind %d: bone list %p table %p for %u bones; skipped\n",
+                    (int) ip->kind, (void*) index, (void*) ip->xBBC_dynamicBoneTable, (unsigned) arg1);
+        }
+        return;
+    }
+#endif
     while (cnt < arg1) {
         jobj = ip->xBBC_dynamicBoneTable->bones[*index];
+#if BUILD_TARGET_PC
+        /* A bone the model does not have: the index list is the item's
+         * own data, so say which item and skip it instead of faulting. */
+        if (jobj == NULL) {
+            static int said;
+            if (said < 10) {
+                said++;
+                fprintf(stderr, "[PORT WARN] itdraw: item kind %d has no bone %u (of %u listed); skipped\n",
+                        (int) ip->kind, (unsigned) *index, (unsigned) arg1);
+            }
+            index++;
+            cnt++;
+            continue;
+        }
+#endif
         jobj_parent = HSD_JObjGetParent(jobj);
         if (!(HSD_JObjGetFlags(jobj_parent) & 0x10)) {
             it_80272A18(jobj);
@@ -62,8 +94,38 @@ void it_8026EC54(HSD_GObj* gobj, u16 arg1, u8* arg2)
     HSD_JObj* jobj;
     HSD_JObj* jobj_parent;
     u8* index = arg2;
+#if BUILD_TARGET_PC
+    /* The list and its count are the item's own variables; the Game &
+     * Watch items reach this draw with them never set (a count of 15780,
+     * a list of NULL or 0x100000001). Nothing sane exceeds the table. */
+    if (arg1 != 0 && (index == NULL || ip->xBBC_dynamicBoneTable == NULL || arg1 > 100 ||
+                      !pc_mem_readable(index, arg1))) {
+        static int said;
+        if (said < 10) {
+            said++;
+            fprintf(stderr, "[PORT WARN] itdraw: item kind %d: bone list %p table %p for %u bones; skipped\n",
+                    (int) ip->kind, (void*) index, (void*) ip->xBBC_dynamicBoneTable, (unsigned) arg1);
+        }
+        return;
+    }
+#endif
     while (cnt < arg1) {
         jobj = ip->xBBC_dynamicBoneTable->bones[*index];
+#if BUILD_TARGET_PC
+        /* A bone the model does not have: the index list is the item's
+         * own data, so say which item and skip it instead of faulting. */
+        if (jobj == NULL) {
+            static int said;
+            if (said < 10) {
+                said++;
+                fprintf(stderr, "[PORT WARN] itdraw: item kind %d has no bone %u (of %u listed); skipped\n",
+                        (int) ip->kind, (unsigned) *index, (unsigned) arg1);
+            }
+            index++;
+            cnt++;
+            continue;
+        }
+#endif
         jobj_parent = HSD_JObjGetParent(jobj);
         if (!(HSD_JObjGetFlags(jobj_parent) & 0x10)) {
             it_80272A3C(jobj);
