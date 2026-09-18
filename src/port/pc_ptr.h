@@ -31,6 +31,14 @@ static inline int pc_ptr_sane(const void* p)
     if (up < 1024ULL) return 0;
     return (unsigned long long) up < mem_bytes;
 #else
+#if defined(__aarch64__)
+    /* AArch64 ignores the top byte of an address, and Android's allocator
+     * puts a tag there: every malloc'd pointer reads as 0xb4000070xxxxxxxx
+     * and failed the 47-bit test below, so every guard built on this
+     * function quietly skipped valid work on the tablet (the shield effect
+     * among them). Drop the tag before judging the address. */
+    up &= 0x00ffffffffffffffULL;
+#endif
     if (up < 0x400000ULL) return 0;
     if (up >= 0x80000000ULL && up < 0xC0000000ULL) return 0; /* GCN range */
     if (up > 0x7fffffffffffULL) return 0;
