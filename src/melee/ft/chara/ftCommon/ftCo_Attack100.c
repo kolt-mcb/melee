@@ -801,13 +801,13 @@ void fn_800D79B4(HSD_GObj* gobj, void (*cb_ground)(HSD_GObj*),
     // Access 0x2344 (Flag) via overlay
     if (fp_ovl->flag == 0) {
         // Access 0x65C (Input) via raw pointer to match ASM
-        if (*(u32*) ((u8*) fp + 0x65C) & HSD_PAD_A) {
+        if (fp->input.held_inputs & HSD_PAD_A) {
             // Access 0x2340 (Timer) via overlay
             fp_ovl->timer += *(f32*) &ftCo_804D9024;
         }
     }
 
-    if (!(*(u32*) ((u8*) fp + 0x65C) & HSD_PAD_A)) {
+    if (!(fp->input.held_inputs & HSD_PAD_A)) {
         fp_ovl->flag = 1;
     }
 
@@ -1033,7 +1033,7 @@ void ftCo_ItemScopeRapid_IASA(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     if (fp->input.x668 & HSD_PAD_A) {
-        *(s32*) ((u8*) fp + 0x2340) = *(s32*) ((u8*) p_ftCommonData + 0x5BC);
+        *(s32*) &fp->mv = *(s32*) &p_ftCommonData->x5BC;
     }
 }
 
@@ -1042,7 +1042,7 @@ void ftCo_ItemScopeAirRapid_IASA(Fighter_GObj* gobj)
     Fighter* fp = *(Fighter**) ((u8*) gobj + 0x2C);
 
     if (fp->input.x668 & HSD_PAD_A) {
-        *(s32*) ((u8*) fp + 0x2340) = *(s32*) ((u8*) p_ftCommonData + 0x5BC);
+        *(s32*) &fp->mv = *(s32*) &p_ftCommonData->x5BC;
     }
 }
 
@@ -2093,7 +2093,7 @@ void fn_800DA054(Fighter_GObj* gobj)
 void fn_800DA190(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    s32 state = *(s32*) ((u8*) fp + 0x4);
+    s32 state = (s32) fp->kind; /* fp+4 is the kind; a raw offset read the wrong field on the host */
 
     switch (state) {
     case 6:
