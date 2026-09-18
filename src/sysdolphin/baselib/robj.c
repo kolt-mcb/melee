@@ -679,6 +679,20 @@ HSD_RObj* HSD_RObjLoadDesc(HSD_RObjDesc* robjdesc)
 {
     HSD_RObj* robj;
 
+#if BUILD_TARGET_PC
+    /* A descriptor that is not mapped memory is a file offset that never
+     * went through the converter; say which and skip it, as the joint
+     * loader does, rather than fault (Kirby's copy hats). */
+    if (robjdesc != NULL && !pc_mem_readable(robjdesc, sizeof(*robjdesc))) {
+        static int said;
+        if (said < 10) {
+            said++;
+            fprintf(stderr, "[PORT WARN] HSD_RObjLoadDesc: unconverted robjdesc %p; skipped\n",
+                    (void*) robjdesc);
+        }
+        return NULL;
+    }
+#endif
     if (robjdesc != NULL) {
         robj = HSD_RObjAlloc();
         robj->next = HSD_RObjLoadDesc((HSD_RObjDesc*) robjdesc->next);

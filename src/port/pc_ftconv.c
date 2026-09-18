@@ -177,6 +177,58 @@ void* pc_ftconv_joint(void* raw)
     return NULL;
 }
 
+/* Kirby's copy hat: {HSD_Joint* hat_joint; FtPartsDesc desc; ftDynamics*
+ * hat_dynamics[5]} as the copy archive's public symbol, raw. The joint tree
+ * and the parts descriptor (one visibility row: the loader asks for costume
+ * 0) are converted; the five per-kind slots are heterogeneous (a joint here,
+ * an animation there) and stay NULL until each kind is done. */
+void* pc_ftconv_kirby_hat(void* raw)
+{
+    const u8* p = (const u8*) raw;
+    const u8* base;
+    unsigned long len;
+    extern int pc_itconv_locate(const void*, const unsigned char**, unsigned long*);
+    if (raw == NULL) return NULL;
+    /* the copy archive is in the item converter's registry (every archive
+     * lbArchive loads is); this file's own list only learns of an archive
+     * once an article of it is converted, so register it here */
+    if (pc_itconv_locate(raw, &base, &len) && p > base &&
+        (unsigned long) (p - base) + 0x20 <= len)
+    {
+        pc_ftconv_note_archive(base, len);
+        {
+            KirbyHatStruct* h = pc_lowmem_alloc(sizeof(*h));
+            u32 joff, voff;
+            if (h == NULL) return NULL;
+            memset(h, 0, sizeof(*h));
+            joff = pc_be32(*(const u32*) p);
+            h->hat_joint = (joff != 0 && joff < len) ? pc_ftconv_joint((void*) (base + joff)) : NULL;
+            h->desc.model_num = pc_be32(*(const u32*) (p + 4));
+            voff = pc_be32(*(const u32*) (p + 8));
+            if (voff != 0 && voff + 16 <= len) {
+                void* (*rows)[4] = pc_lowmem_alloc(sizeof(void*) * 4);
+                if (rows != NULL) {
+                    int c;
+                    for (c = 0; c < 4; c++) {
+                        u32 e = pc_be32(*(const u32*) (base + voff + c * 4));
+                        rows[0][c] = (e != 0 && e < len)
+                                         ? (void*) pc_conv_VisLookup(base + e, base, len, h->desc.model_num)
+                                         : NULL;
+                    }
+                    h->desc.vis_table = rows;
+                }
+            }
+            if (pc_ftconv_trace()) {
+                fprintf(stderr, "[FTCONV] kirby hat %p -> joint %p model_num %u\n", raw,
+                        (void*) h->hat_joint, (unsigned) h->desc.model_num);
+            }
+            return h;
+        }
+    }
+    fprintf(stderr, "[PORT WARN] pc_ftconv_kirby_hat: %p is in no known archive\n", raw);
+    return NULL;
+}
+
 void* pc_ftconv_vislookup(void* raw, unsigned model_num)
 {
     static struct { void* raw; void* conv; } cache[8];

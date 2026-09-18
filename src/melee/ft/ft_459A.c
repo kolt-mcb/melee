@@ -1,3 +1,4 @@
+#include "melee/ft/types.h"
 #include "ft/types.h"
 
 UnkCostumeStruct ft_8045A6A8;
@@ -30,6 +31,13 @@ UnkCostumeStruct ft_80459D90[4];
 UnkCostumeStruct ft_80459D18[5];
 UnkCostumeStruct ft_80459CA0[5];
 UnkCostumeStruct ft_80459C10[6];
+#if BUILD_TARGET_PC
+/* 34 pointers on the host, not 0x88 bytes: ftKb_SpecialN_800EED50 indexes
+ * this as an array of pointers, and the copy hats of the kinds past the
+ * sixteenth were written over whatever the linker placed next. */
+struct ft_80459B88_t ft_80459B88;
+#else
 u8 ft_80459B88[0x88];
+#endif
 UnkCostumeStruct ft_80459B28[4];
 UnkCostumeStruct ft_80459A98[6];

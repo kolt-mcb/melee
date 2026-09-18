@@ -932,6 +932,35 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
     }
 }
 
+/* A joint tree or material animation reached by a raw public symbol of a
+ * loaded archive (Kirby's copy hats: lbArchive hands the file's own
+ * pointers back). Converted in place of the raw pointer; NULL, with a
+ * warning, when the archive is not one the registry knows. */
+void* pc_itconv_joint_raw(const void* raw)
+{
+    struct arch* a = find_arch(raw);
+    if (raw == NULL) {
+        return NULL;
+    }
+    if (a == NULL) {
+        fprintf(stderr, "[PORT WARN] pc_itconv_joint_raw: %p is in no known archive\n", raw);
+        return NULL;
+    }
+    return conv_joint_at(a, (u32) ((const u8*) raw - a->base));
+}
+void* pc_itconv_matanim_raw(const void* raw)
+{
+    struct arch* a = find_arch(raw);
+    if (raw == NULL) {
+        return NULL;
+    }
+    if (a == NULL) {
+        fprintf(stderr, "[PORT WARN] pc_itconv_matanim_raw: %p is in no known archive\n", raw);
+        return NULL;
+    }
+    return conv_anim_at(a, (u32) ((const u8*) raw - a->base), 1);
+}
+
 /* ------------------------------------------------------------------ */
 /* Public entry points                                                  */
 
