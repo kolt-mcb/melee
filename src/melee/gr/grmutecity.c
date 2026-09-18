@@ -1,6 +1,7 @@
 #include "grmutecity.h"
 #if BUILD_TARGET_PC
 #include <stdio.h>
+#include <stdlib.h>
 #include "port/pc_ptr.h"
 #endif
 
@@ -1304,38 +1305,40 @@ void grMuteCity_801F0F4C(Ground_GObj* gobj)
 
 void grMuteCity_801F106C(s32 i)
 {
-    typedef struct grMc_CarState {
-        s32 idx[30];
-        grMc_CarEntry cars[30];
-    } grMc_CarState;
+    /* The console reaches the car records by casting the index array and
+     * walking off its end, because the two sit next to each other in the
+     * DOL. Nothing makes the host linker place them that way -- here the
+     * records are 1696 bytes BEFORE the index array, so every write landed
+     * in whatever followed it, which on the tablet was stage_info: the
+     * stage kind became a car's position and Mute City crashed in the
+     * first table indexed with it. Name the array instead. */
     f32 max_x8;
-    grMc_CarState* state = (grMc_CarState*) grMc_8049F440;
-    grMc_CarEntry* cars = state->cars;
-    u16 flags16 = state->cars[i].x20;
+    grMc_CarEntry* cars = grMc_8049F4B8;
+    u16 flags16 = cars[i].x20;
 
     if (!cars[i].x22_flags.b0) {
         if (flags16 & 1) {
             if (flags16 & 8) {
-                state->cars[i].x8 -= grMc_804D69D0->x4C;
+                cars[i].x8 -= grMc_804D69D0->x4C;
             } else {
                 s32 rnd = HSD_Randi(4);
                 switch (rnd) {
                 case 3:
                     break;
                 case 0:
-                    state->cars[i].x8 -= grMc_804D69D0->x4C;
+                    cars[i].x8 -= grMc_804D69D0->x4C;
                     break;
                 case 1:
                 case 2:
                     if (flags16 & 4) {
-                        state->cars[i].xC += grMc_804D69D0->x44;
-                        if (state->cars[i].xC > 0.9) {
-                            state->cars[i].xC = 0.9f;
+                        cars[i].xC += grMc_804D69D0->x44;
+                        if (cars[i].xC > 0.9) {
+                            cars[i].xC = 0.9f;
                         }
                     } else {
-                        state->cars[i].xC -= grMc_804D69D0->x44;
-                        if (state->cars[i].xC < 0.1) {
-                            state->cars[i].xC = 0.1f;
+                        cars[i].xC -= grMc_804D69D0->x44;
+                        if (cars[i].xC < 0.1) {
+                            cars[i].xC = 0.1f;
                         }
                     }
                     break;
@@ -1343,23 +1346,23 @@ void grMuteCity_801F106C(s32 i)
             }
         } else {
             grMc_UnkStruct* params = grMc_804D69D0;
-            state->cars[i].x8 += params->x40;
-            if (state->cars[i].xC > (0.7f + params->x48)) {
-                state->cars[i].xC -= params->x48;
-            } else if (state->cars[i].xC < (0.3f - params->x48)) {
-                state->cars[i].xC += params->x48;
+            cars[i].x8 += params->x40;
+            if (cars[i].xC > (0.7f + params->x48)) {
+                cars[i].xC -= params->x48;
+            } else if (cars[i].xC < (0.3f - params->x48)) {
+                cars[i].xC += params->x48;
             }
         }
         if (flags16 & 8) {
             if (flags16 & 4) {
-                state->cars[i].xC += grMc_804D69D0->x44;
-                if (state->cars[i].xC > 1.0) {
-                    state->cars[i].xC = 1.0f;
+                cars[i].xC += grMc_804D69D0->x44;
+                if (cars[i].xC > 1.0) {
+                    cars[i].xC = 1.0f;
                 }
             } else {
-                state->cars[i].xC -= grMc_804D69D0->x44;
-                if (state->cars[i].xC < 0.0) {
-                    state->cars[i].xC = 0.0f;
+                cars[i].xC -= grMc_804D69D0->x44;
+                if (cars[i].xC < 0.0) {
+                    cars[i].xC = 0.0f;
                 }
             }
         }
@@ -1370,22 +1373,22 @@ void grMuteCity_801F106C(s32 i)
         } else {
             max_x8 = grMc_804D69D0->x34;
         }
-        if (state->cars[i].x8 > max_x8) {
-            state->cars[i].x8 = max_x8;
+        if (cars[i].x8 > max_x8) {
+            cars[i].x8 = max_x8;
             return;
         }
-        if (state->cars[i].x8 < 0.0) {
-            state->cars[i].x8 = 0.0f;
+        if (cars[i].x8 < 0.0) {
+            cars[i].x8 = 0.0f;
         }
     } else {
-        if ((state->cars[i].x4 > 0.827f) && (state->cars[i].x4 < 0.914f)) {
-            if (state->cars[i].x8 < 0.001f) {
-                state->cars[i].x8 = 0.001f;
+        if ((cars[i].x4 > 0.827f) && (cars[i].x4 < 0.914f)) {
+            if (cars[i].x8 < 0.001f) {
+                cars[i].x8 = 0.001f;
             }
         } else {
-            state->cars[i].x8 *= 0.95f;
-            if (state->cars[i].x8 < 0.00001f) {
-                state->cars[i].x8 = 0.0f;
+            cars[i].x8 *= 0.95f;
+            if (cars[i].x8 < 0.00001f) {
+                cars[i].x8 = 0.0f;
             }
         }
     }
@@ -1401,7 +1404,18 @@ void grMuteCity_801F1328(void)
 
     for (offset = 4, i = 1; i < 30; i++, offset += 4) {
         p = (s32*) ((uintptr_t) arr + offset);
+        /* The car order is an insertion sort over grMc_8049F440[30]. At
+         * j == 0 the element has reached the front and p[-1] is the word
+         * BEFORE the array: comparing it indexes grMc_8049F4B8 with
+         * whatever is there, and swapping WRITES there. On the tablet that
+         * word is stage_info.grkind, so every Mute City match overwrote
+         * the stage kind with a car's position and the next reader indexed
+         * a table with 933741996. Stop at the front, as the sort means to. */
+#if BUILD_TARGET_PC
+        for (j = i; j > 0; j--) {
+#else
         for (j = i; j >= 0; j--) {
+#endif
             s32 temp = p[0];
             s32 prev = p[-1];
             if (grMc_8049F4B8[temp].x0 > grMc_8049F4B8[prev].x0) {
