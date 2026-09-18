@@ -48,7 +48,13 @@ bychar = collections.defaultdict(list); bystage = collections.defaultdict(list)
 for (c1, c2, s), k in L.items():
     bychar[c1].append(k); bystage[s].append(k)
 pair = [k for (c1, c2, s), k in L.items() if (c1, c2) == (13, 12)]
-pair_core = set.intersection(*pair) if pair else set()
+# A key of the 13-vs-12 pair is the fighters' if two or more of their stage
+# lineups used it, the stage's if only one did. The old intersection over
+# every stage held only what an idle pair draws every frame; with the
+# fighters fighting, their attack effects turned up in a few stages each
+# and were attributed to those stages, leaving c13 empty.
+cnt = collections.Counter(k for ks in pair for k in ks)
+pair_core = {k for k, n in cnt.items() if n >= 2}
 def w(name, keys):
     with open(os.path.join(dst, name), "w") as f:
         for k in sorted(keys): f.write(k + "\n")
