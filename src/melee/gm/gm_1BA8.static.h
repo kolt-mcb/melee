@@ -38,6 +38,16 @@ struct gm_804D6900_t {
 /* 49BEE8 */ static CSSData gm_8049BEE8;
 /* 49C030 */ static CSSData gm_8049C030;
 /* 49C178 */ static u8 gm_8049C178[16];
-/* 49C188 */ static UNK_T gm_8049C188[0x138 / 4];
+/* 49C188 */
+#if BUILD_TARGET_PC
+/* The demo's own StartMeleeData. Declared as 0x138 bytes -- the console's
+ * size -- it was too small for the host struct, whose rules carry two
+ * pointers and a callback; the scene wrote the lineup and stage into it and
+ * the match read them back as zero, which on the tablet was stage 0 (no
+ * ground, one fighter at scale zero, floating). */
+static StartMeleeData gm_8049C188;
+#else
+static UNK_T gm_8049C188[0x138 / 4];
+#endif
 /* 49C2C0 */ static MatchExitInfo gm_8049C2C0;
 /* 49E548 */ static struct gm_8049E548_t gm_8049E548;

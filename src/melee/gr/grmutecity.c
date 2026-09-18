@@ -1,4 +1,8 @@
 #include "grmutecity.h"
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include "port/pc_ptr.h"
+#endif
 
 #include "types.h"
 
@@ -2139,6 +2143,20 @@ bool grMuteCity_801F2C10(Vec3* pos, int arg, HSD_JObj* jobj)
     gobj = Ground_801C2BA4(0x1E);
     if (gobj != NULL) {
         gp = gobj->user_data;
+#if BUILD_TARGET_PC
+        /* Slot 30 of the map-object table is not always this stage's
+         * Ground: on the tablet's attract demo it held something whose
+         * user_data was not a pointer at all. */
+        if (gp != NULL && !pc_ptr_sane(gp)) {
+            static int said;
+            if (said < 10) {
+                said++;
+                fprintf(stderr, "[PORT WARN] grmutecity: map gobj 30 user_data %p is not a Ground; skipped\n",
+                        (void*) gp);
+            }
+            gp = NULL;
+        }
+#endif
         if (gp != NULL) {
             if (gp->gv.mutecity.xFC == jobj || gp->gv.mutecity.x100 == jobj ||
                 gp->gv.mutecity.x104 == jobj || gp->gv.mutecity.x108 == jobj ||

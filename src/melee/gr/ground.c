@@ -766,6 +766,12 @@ void Ground_801C0754(StageIdPair* pair)
 {
     StageData* stage;
     s32 arg3;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MODELOG") != NULL) {
+        fprintf(stderr, "[DEMO] ground load: pair %p grkind %d stkind %d mode %d\n", (void*) pair,
+                pair ? (int) pair->grkind : -1, pair ? (int) pair->stkind : -1, (int) gm_GetCurrentGameMode());
+    }
+#endif
     Ground_801BFFB0();
     stage_info.grkind = pair->grkind;
     stage = stage_datas[pair->grkind];

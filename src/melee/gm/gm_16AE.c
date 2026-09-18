@@ -2111,6 +2111,14 @@ void fn_8016E730(StartMeleeData* arg0)
 void gm_8016E934_OnEnter(void* arg0)
 {
     StartMeleeData* tmp = arg0;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MODELOG") != NULL) {
+        fprintf(stderr, "[DEMO] match enter: data %p stage %d players %d %d %d %d\n", arg0,
+                tmp ? (int) tmp->rules.xE : -1,
+                tmp ? tmp->players[0].c_kind : -1, tmp ? tmp->players[1].c_kind : -1,
+                tmp ? tmp->players[2].c_kind : -1, tmp ? tmp->players[3].c_kind : -1);
+    }
+#endif
     fn_8016E730(tmp);
     if (tmp->rules.x1_2) {
         ifStatus_802F6EA4(8, -1, -1, 0, fn_8016B7B4, fn_8016B7F8);

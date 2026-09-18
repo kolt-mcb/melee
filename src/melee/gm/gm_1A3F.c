@@ -244,6 +244,16 @@ void gm_SetNewGameModePending(void)
 
 void gm_SetPendingGameMode(s8 pending_mode)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_MODELOG=1: every game-mode change, with the frame -- the
+     * quickest way to learn which scene a report is about. */
+    {
+        static int on = -1;
+        if (on < 0) on = getenv("MELEE_MODELOG") != NULL;
+        if (on) fprintf(stderr, "[MODE] pending game mode %d (was %d)\n", (int) pending_mode,
+                        (int) gm_80479D30.routing.pending_mode);
+    }
+#endif
     gm_80479D30.routing.pending_mode = pending_mode;
 }
 

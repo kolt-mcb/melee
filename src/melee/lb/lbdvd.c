@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "lb_0195.h"
 #include "lbarchive.h"
 
@@ -190,6 +192,14 @@ void lbDvd_80017960(void)
         }
     }
 
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MODELOG") != NULL) {
+        fprintf(stderr, "[DEMO] preload stkind %d chars %d %d %d %d %d %d %d %d\n", (int) game_cache->stkind,
+                game_cache->entries[0].char_id, game_cache->entries[1].char_id, game_cache->entries[2].char_id,
+                game_cache->entries[3].char_id, game_cache->entries[4].char_id, game_cache->entries[5].char_id,
+                game_cache->entries[6].char_id, game_cache->entries[7].char_id);
+    }
+#endif
     if (game_cache->stkind != 0x148) {
         Stage_802251B4(game_cache->stkind);
     }

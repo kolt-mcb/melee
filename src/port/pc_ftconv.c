@@ -177,6 +177,65 @@ void* pc_ftconv_joint(void* raw)
     return NULL;
 }
 
+/* One ftDynamics record (dynamicsNum, the bone array, each bone's inner
+ * data). The blend-slot table at +0x10 is left NULL: its readers take a
+ * "no table" path, which for a copy hat costs the chain's motion, not a
+ * crash. Shared shape with the fighter's own dynamics above. */
+static ftDynamics* pc_conv_dynamics_at(const u8* base, unsigned long len, u32 off)
+{
+    const u8* d;
+    int dnum;
+    u32 boff;
+    ftDynamics* dy;
+    ArticleDynamicBones* ab;
+    int i;
+    if (off == 0 || off + 8u > len) {
+        return NULL;
+    }
+    d = base + off;
+    dnum = (int) pc_be32(*(const u32*) d);
+    boff = pc_be32(*(const u32*) (d + 4));
+    if (dnum <= 0 || dnum > Ft_Dynamics_NumMax || boff == 0 ||
+        boff + (u32) dnum * 0x18u > len)
+    {
+        return NULL;
+    }
+    dy = pc_lowmem_alloc(sizeof(*dy));
+    ab = pc_lowmem_alloc(sizeof(*ab));
+    if (dy == NULL || ab == NULL) {
+        return NULL;
+    }
+    memset(dy, 0, sizeof(*dy));
+    memset(ab, 0, sizeof(*ab));
+    for (i = 0; i < dnum; i++) {
+        const u8* e = base + boff + (u32) i * 0x18u;
+        BoneDynamicsDesc* b = &ab->array[i];
+        u32 ioff = pc_be32(*(const u32*) (e + 4));
+        u32 icount = pc_be32(*(const u32*) (e + 8));
+        u32* pos = (u32*) &b->dyn_desc.pos;
+        int w;
+        b->bone_id = (int) pc_be32(*(const u32*) e);
+        b->dyn_desc.count = icount;
+        for (w = 0; w < 3; w++) {
+            pos[w] = pc_be32(*(const u32*) (e + 0xC + w * 4));
+        }
+        if (ioff != 0 && icount <= 64 && ioff + icount * 0x3Cu <= len) {
+            u32* inner = pc_lowmem_alloc(icount * 0x3Cu);
+            if (inner != NULL) {
+                const u32* si = (const u32*) (base + ioff);
+                u32 nw = icount * 0x3Cu / 4u;
+                for (w = 0; w < (int) nw; w++) {
+                    inner[w] = pc_be32(si[w]);
+                }
+                b->dyn_desc.data = (struct DynamicsData*) inner;
+            }
+        }
+    }
+    dy->dynamicsNum = dnum;
+    dy->ftDynamicBones = ab;
+    return dy;
+}
+
 /* Kirby's copy hat: {HSD_Joint* hat_joint; FtPartsDesc desc; ftDynamics*
  * hat_dynamics[5]} as the copy archive's public symbol, raw. The joint tree
  * and the parts descriptor (one visibility row: the loader asks for costume
@@ -208,7 +267,7 @@ void* pc_ftconv_kirby_hat(void* raw)
              * 4-byte-aligned in-archive offsets; anything else is left as
              * it was. */
             if (joff == 0 || (joff & 3) != 0 || joff + 0x40 > len) {
-                return raw;
+                return h; /* empty hat: no joint, no parts, mask 0 */
             }
             {
                 const u8* j = base + joff;
@@ -217,7 +276,7 @@ void* pc_ftconv_kirby_hat(void* raw)
                     u32 v = pc_be32(*(const u32*) (j + 4 * k));
                     if (k == 1) continue; /* flags */
                     if (v != 0 && ((v & 3) != 0 || v >= len)) {
-                        return raw;
+                        return h;
                     }
                 }
             }
@@ -237,9 +296,21 @@ void* pc_ftconv_kirby_hat(void* raw)
                     h->desc.vis_table = rows;
                 }
             }
+            {
+                /* the five per-copy-kind dynamic-bone chains (Bowser's
+                 * shell spikes, Zelda's hair): ftCo_8009D074 and its
+                 * siblings read these straight off the hat */
+                int q;
+                for (q = 0; q < 5; q++) {
+                    h->hat_dynamics[q] =
+                        pc_conv_dynamics_at(base, len, pc_be32(*(const u32*) (p + 0xC + 4 * q)));
+                }
+            }
             if (pc_ftconv_trace()) {
-                fprintf(stderr, "[FTCONV] kirby hat %p -> joint %p model_num %u\n", raw,
-                        (void*) h->hat_joint, (unsigned) h->desc.model_num);
+                fprintf(stderr, "[FTCONV] kirby hat %p -> joint %p model_num %u dyn %p %p %p %p %p\n", raw,
+                        (void*) h->hat_joint, (unsigned) h->desc.model_num,
+                        (void*) h->hat_dynamics[0], (void*) h->hat_dynamics[1], (void*) h->hat_dynamics[2],
+                        (void*) h->hat_dynamics[3], (void*) h->hat_dynamics[4]);
             }
             return h;
         }

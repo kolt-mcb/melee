@@ -148,6 +148,12 @@ static inline void ftCo_SetupKirbyHatBone(Fighter* fp, KirbyHatStruct* hat,
 void ftCo_8009D074(Fighter* fp)
 {
     KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_KOOPA];
+#if BUILD_TARGET_PC
+    if (hat == NULL || hat->hat_dynamics[2] == NULL) {
+        fp->dynamics_num = 0; /* a copy hat whose chains did not convert */
+        return;
+    }
+#endif
     fp->dynamics_num = hat->hat_dynamics[2]->dynamicsNum;
     HSD_ASSERTREPORT(135, fp->dynamics_num < Ft_Dynamics_NumMax,
                      "fighter dynamics num over!\n");
@@ -162,6 +168,12 @@ void ftCo_8009D074(Fighter* fp)
 void ftCo_8009D18C(Fighter* fp)
 {
     KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_ZELDA];
+#if BUILD_TARGET_PC
+    if (hat == NULL || hat->hat_dynamics[2] == NULL) {
+        fp->dynamics_num = 0; /* a copy hat whose chains did not convert */
+        return;
+    }
+#endif
     fp->dynamics_num = hat->hat_dynamics[2]->dynamicsNum;
     HSD_ASSERTREPORT(167, fp->dynamics_num < Ft_Dynamics_NumMax,
                      "fighter dynamics num over!\n");
@@ -176,6 +188,12 @@ void ftCo_8009D18C(Fighter* fp)
 void ftCo_8009D2A4(Fighter* fp)
 {
     KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_NANA];
+#if BUILD_TARGET_PC
+    if (hat == NULL || hat->hat_dynamics[2] == NULL) {
+        fp->dynamics_num = 0; /* a copy hat whose chains did not convert */
+        return;
+    }
+#endif
     fp->dynamics_num = hat->hat_dynamics[2]->dynamicsNum;
     HSD_ASSERTREPORT(199, fp->dynamics_num < Ft_Dynamics_NumMax,
                      "fighter dynamics num over!\n");
@@ -190,6 +208,12 @@ void ftCo_8009D2A4(Fighter* fp)
 void ftCo_8009D3BC(Fighter* fp)
 {
     KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_FALCO];
+#if BUILD_TARGET_PC
+    if (hat == NULL || hat->hat_dynamics[2] == NULL) {
+        fp->dynamics_num = 0; /* a copy hat whose chains did not convert */
+        return;
+    }
+#endif
     fp->dynamics_num = hat->hat_dynamics[2]->dynamicsNum;
     HSD_ASSERTREPORT(232, fp->dynamics_num < Ft_Dynamics_NumMax,
                      "fighter dynamics num over!\n");
@@ -204,6 +228,12 @@ void ftCo_8009D3BC(Fighter* fp)
 void ftCo_8009D4D4(Fighter* fp)
 {
     KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_KIRBY];
+#if BUILD_TARGET_PC
+    if (hat == NULL || hat->hat_dynamics[1] == NULL) {
+        fp->dynamics_num = 0; /* a copy hat whose chains did not convert */
+        return;
+    }
+#endif
     fp->dynamics_num = hat->hat_dynamics[1]->dynamicsNum;
     HSD_ASSERTREPORT(265, fp->dynamics_num < Ft_Dynamics_NumMax,
                      "fighter dynamics num over!\n");

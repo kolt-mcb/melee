@@ -7,6 +7,8 @@
 
 /* 1A3EF4 */ void gm_801A3EF4(void);
 /* 1A3F48 */ void gm_801A3F48(GameScene*);
+/* 1A427C */ void* gm_801A427C(GameScene*);
+/* 1A4284 */ void* gm_801A4284(GameScene*);
 /* 1A4014 */ void gm_801A4014(GameMode*);
 /* 1A427C */ void* gm_GetGameSceneLoadDataCallback(GameScene*);
 /* 1A4284 */ void* gm_GetGameSceneLeaveDataCallback(GameScene*);
