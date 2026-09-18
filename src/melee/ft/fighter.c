@@ -2526,6 +2526,25 @@ static void Fighter_Spaghetti_8006AD10_Inner1(Fighter* fp)
     }
 }
 
+#if BUILD_TARGET_PC
+#include <stdlib.h>
+/* The console zeroes the C-stick in every single-player mode (Classic,
+ * Adventure, All-Star, Target Test, Training, the contests and multi-man
+ * matches). The port keeps it live there, except in Training, where the
+ * sub-stick already drives the camera. MELEE_CSTICK_ORIGINAL=1 restores
+ * the console rule. */
+static bool ft_cstick_blocked(void)
+{
+    static int original = -1;
+    if (original < 0) original = getenv("MELEE_CSTICK_ORIGINAL") != NULL;
+    if (!gm_8016B41C()) return false;
+    if (original) return true;
+    return gm_GetCurrentGameMode() == GM_TRAINING;
+}
+#else
+#define ft_cstick_blocked() gm_8016B41C()
+#endif
+
 void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -2568,7 +2587,7 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
             if (ftCo_800A2040(fp)) {
                 SET_STICKS(fp->input.lstick.x, fp->input.lstick.y,
                            ftCo_800A17E4(fp), ftCo_800A1874(fp));
-                if (DbLevel < 3 && !gm_8016B41C()) {
+                if (DbLevel < 3 && !ft_cstick_blocked()) {
                     SET_STICKS(fp->input.cstick.x, fp->input.cstick.y,
                                ftCo_800A1994(fp), ftCo_800A1A24(fp));
                 } else {
@@ -2585,7 +2604,7 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                 SET_STICKS(fp->input.lstick.x, fp->input.lstick.y,
                            HSD_PadGameStatus[fp->x618_player_id].nml_stickX,
                            HSD_PadGameStatus[fp->x618_player_id].nml_stickY);
-                if (DbLevel < 3 && gm_8016B41C() == 0) {
+                if (DbLevel < 3 && !ft_cstick_blocked()) {
                     SET_STICKS(
                         fp->input.cstick.x, fp->input.cstick.y,
                         HSD_PadGameStatus[fp->x618_player_id].nml_subStickX,
