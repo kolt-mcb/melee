@@ -10,6 +10,7 @@
 #include <melee/it/forward.h>
 #include <melee/it/it_3F14.h>
 #include <melee/it/itCharItems.h>
+#include <melee/it/itYoyo.h>
 #include <melee/it/itCommonItems.h>
 #include <melee/it/types.h>
 #include <melee/lb/types.h>
@@ -894,6 +895,35 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         conv_scalars(c, r, 0x24);
         c->x24_joint = conv_joint_at(a, be32(r + 0x24));
         c->x28_joint = conv_joint_at(a, be32(r + 0x28));
+        art->x4_specialAttributes = c;
+        break;
+    }
+    case It_Kind_Ness_Yoyo: {
+        /* The string's and the yo-yo's own joint trees, and the yo-yo's
+         * spin material animation. Left as file offsets, the joint loader
+         * skipped the whole tree and the first up-smash faulted on a null
+         * model (it_802BF900). */
+        itYoyoAttributes* y = zalloc(sizeof(*y));
+        if (y == NULL) {
+            return;
+        }
+        conv_scalars(y, r, 0x50);
+        y->x50_string_joint = conv_joint_at(a, be32(r + 0x50));
+        y->x54_yoyo_joint = conv_joint_at(a, be32(r + 0x54));
+        y->x58_yoyo_matanim = conv_anim_at(a, be32(r + 0x58), 1);
+        y->x5C_UNK7 = (s32) be32(r + 0x5C);
+        art->x4_specialAttributes = y;
+        break;
+    }
+    case It_Kind_Seak_Chain: {
+        /* Sheik's chain: two joint trees after the scalars. */
+        itSeakChain_Attrs* c = zalloc(sizeof(*c));
+        if (c == NULL) {
+            return;
+        }
+        conv_scalars(c, r, 0x64);
+        c->x64_joint = conv_joint_at(a, be32(r + 0x64));
+        c->x68_joint = conv_joint_at(a, be32(r + 0x68));
         art->x4_specialAttributes = c;
         break;
     }
