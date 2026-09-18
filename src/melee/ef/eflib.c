@@ -758,7 +758,23 @@ EF_Effect* efLib_Create(int gfx_id, HSD_GObj* parent_gobj)
     GObj_SetupGXLink(effect->gobj, HSD_GObj_JObjCallback, 7, 1);
     GObj_InitUserData(effect->gobj, 8, efLib_remove_user_data, effect);
     {
-        HSD_JObj* jobj = HSD_JObjLoadJoint(desc->model_desc.joint);
+        HSD_JObj* jobj;
+#if BUILD_TARGET_PC
+        /* The descriptor and its model come from the effect bank; a gfx id
+         * whose bank never loaded gave one that is not a pointer, and the
+         * shield effect faulted here on the tablet. */
+        if (!pc_mem_readable(desc, sizeof(*desc))) {
+            static int said;
+            if (said < 10) {
+                said++;
+                fprintf(stderr, "[PORT WARN] efLib_Create: gfx %d desc %p unreadable; effect skipped\n",
+                        gfx_id, (void*) desc);
+            }
+            HSD_GObjPLink_80390228(effect->gobj);
+            return NULL;
+        }
+#endif
+        jobj = HSD_JObjLoadJoint(desc->model_desc.joint);
         if (jobj == NULL) {
             HSD_GObjPLink_80390228(effect->gobj);
             return NULL;
