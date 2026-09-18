@@ -1623,10 +1623,11 @@ void fn_8018E618(int arg0, f32 farg0, int arg1)
 
     cam = lbl_803B7CA8;
 
-    while ((tmp = M2C_FIELD(HSD_GObj_Entities, HSD_GObj**, 0x6C)) != NULL) {
+    /* the entity list is an array of HSD_GObj* heads: byte 0x6C is head 27, 0x50 is head 20 (the console indexed 4-byte pointers) */
+    while ((tmp = ((HSD_GObj**) HSD_GObj_Entities)[27]) != NULL) {
         HSD_GObjPLink_80390228(tmp);
     }
-    while ((tmp = M2C_FIELD(HSD_GObj_Entities, HSD_GObj**, 0x50)) != NULL) {
+    while ((tmp = ((HSD_GObj**) HSD_GObj_Entities)[20]) != NULL) {
         HSD_GObjPLink_80390228(tmp);
     }
 
