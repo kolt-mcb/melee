@@ -774,6 +774,14 @@ void Ground_801C0754(StageIdPair* pair)
 #endif
     Ground_801BFFB0();
     stage_info.grkind = pair->grkind;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MODELOG") != NULL) {
+        fprintf(stderr, "[GRK] set: &stage_info %p &grkind %p (+%u) = %d\n", (void*) &stage_info,
+                (void*) &stage_info.grkind,
+                (unsigned) ((char*) &stage_info.grkind - (char*) &stage_info),
+                (int) stage_info.grkind);
+    }
+#endif
     stage = stage_datas[pair->grkind];
 #if BUILD_TARGET_PC
     /* Same guard Ground_801C0800 already carries: a stage with no StageData
@@ -2461,6 +2469,25 @@ bool Ground_801C2FE0(Ground_GObj* arg0)
         }
 #endif
         Ground_804D6954++;
+#if BUILD_TARGET_PC
+        /* Same bound Ground_801C0754 already applies: an out-of-range kind
+         * indexes this table into unmapped memory (Mute City on the tablet,
+         * every match). */
+        if (stage_info.grkind < 0 ||
+            stage_info.grkind >= (s32) (sizeof(stage_datas) / sizeof(stage_datas[0])) ||
+            stage_datas[stage_info.grkind] == NULL)
+        {
+            static int said;
+            if (said < 10) {
+                said++;
+                PORT_LOG_WARN("Ground_801C2FE0: grkind %d has no StageData (map %d); &stage_info %p &grkind %p (+%u)\n",
+                              (int) stage_info.grkind, map_id, (void*) &stage_info,
+                              (void*) &stage_info.grkind,
+                              (unsigned) ((char*) &stage_info.grkind - (char*) &stage_info));
+            }
+            return false;
+        }
+#endif
         stagedata = stage_datas[stage_info.grkind];
         count = stagedata->joint_count;
         vec = stagedata->joints;
