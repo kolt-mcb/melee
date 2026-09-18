@@ -59,5 +59,7 @@ int pc_itconv_object_mark(const unsigned char* start);
  * Tables this file does not own (the stage item table) are read through
  * unchanged. */
 struct Article* pc_itconv_table_get(struct Article** table, int idx);
+void* pc_itconv_joint_raw(const void* raw);
+void* pc_itconv_matanim_raw(const void* raw);
 
 #endif

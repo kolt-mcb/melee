@@ -2961,6 +2961,14 @@ void ftKb_SpecialN_800EED50(s32 arg0, s32 arg1)
                 lbArchive_80017040(NULL, ftKb_Init_803CA9D0[arg0].filename,
                                    &((HSD_Archive**) &ft_80459B88)[arg0],
                                    ftKb_Init_803CA9D0[arg0].name, 0);
+#if BUILD_TARGET_PC
+                /* the symbol is the file's own KirbyHatStruct: convert it */
+                {
+                    extern void* pc_ftconv_kirby_hat(void*);
+                    void** slot = &((void**) &ft_80459B88)[arg0];
+                    *slot = pc_ftconv_kirby_hat(*slot);
+                }
+#endif
             }
         }
         if (ftKb_Init_803CB3E8[arg0] != NULL) {
@@ -2977,6 +2985,19 @@ void ftKb_SpecialN_800EED50(s32 arg0, s32 arg1)
                                        cs->joint_name, 0);
                     item->matanim = NULL;
                 }
+#if BUILD_TARGET_PC
+                /* The hat's joint tree and its material animation come
+                 * back as the file's own pointers; every other model goes
+                 * through the converter, and this one faulted in
+                 * HSD_RObjLoadDesc the first time Kirby swallowed anyone
+                 * (its reference-object descriptors were file offsets). */
+                {
+                    extern void* pc_itconv_joint_raw(const void*);
+                    extern void* pc_itconv_matanim_raw(const void*);
+                    item->joint = pc_itconv_joint_raw(item->joint);
+                    item->matanim = pc_itconv_matanim_raw(item->matanim);
+                }
+#endif
             }
         }
         efAsync_LoadSync((u8) ftKb_Init_803CB46C[arg0]);

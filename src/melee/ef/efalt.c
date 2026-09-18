@@ -1,4 +1,5 @@
 #include "efalt.h"
+#include <melee/ft/types.h>
 
 #include "eflib.h"
 #include "types.h"
@@ -238,9 +239,19 @@ void* efAlt_Spawn(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
 
         effect_flags = 0x41;
         user_data = gobj->user_data;
+#if BUILD_TARGET_PC
+        /* fp+0x5E8 is the bone array on the console; read it by field on
+         * the host, where the struct is laid out differently. Index 0xB0
+         * of HSD_JObj* is byte 0x2C0 = bone 44, index 4 is bone 1. */
+        jobj_ptr = NULL;
+        jobj = ((Fighter*) user_data)->parts[0x2C].joint;
+        jobj_2 = ((Fighter*) user_data)->parts[1].joint;
+        (void) jobj_ptr;
+#else
         jobj_ptr = *(HSD_JObj***) ((u8*) user_data + 0x5E8);
         jobj = jobj_ptr[0xB0];
         jobj_2 = jobj_ptr[4];
+#endif
         ret_obj = efLib_Create_AttachChild(0x1388U, gobj, jobj);
         if (ret_obj != NULL) {
             effect_1 = ret_obj;

@@ -1388,7 +1388,19 @@ HSD_Joint* ftKb_SpecialN_800F5898(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftData* ca = fp->ft_data;
+#if BUILD_TARGET_PC
+    /* Byte 0x10 of the console's 4-byte item table is slot 4; the host's
+     * slots are 8 bytes and hold the file's own pointers, so take the slot
+     * by index and convert the joint tree (the copy star's model). Read in
+     * place it was slot 2, raw, and the swallow faulted in the loader. */
+    {
+        extern void* pc_ftconv_joint(void*);
+        void** items = (void**) ca->x48_items;
+        return items != NULL ? (HSD_Joint*) pc_ftconv_joint(items[4]) : NULL;
+    }
+#else
     return M2C_FIELD(&ca->x48_items[0], HSD_Joint**, 0x10);
+#endif
 }
 
 float ftKb_SpecialN_800F58AC(Fighter_GObj* gobj, Vec3* victim_self_vel,
