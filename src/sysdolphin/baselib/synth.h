@@ -31,7 +31,7 @@ struct HSD_SynthSFXNode;
 /* 3891D0 */ void dropcallback(void*);
 /* 389334 */ // s32 HSD_Synth_80389334(u16, u8, u8, u8, u8, u8, f32, f32, f32,
              //                       f32, f32);
-/* 3896F0 */ bool HSD_SynthSFXPlayWithGroup(int, u8, u8, u8, int, u8, int, f32,
+/* 3896F0 */ int HSD_SynthSFXPlayWithGroup(int, u8, u8, u8, int, u8, int, f32,
                                             f32, f32, f32, f32);
 void HSD_SynthSFXKeyOff(int);
 /* 3899B0 */ void HSD_SynthSFXStopRange(int);

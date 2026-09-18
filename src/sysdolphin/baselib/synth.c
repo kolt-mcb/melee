@@ -1066,12 +1066,12 @@ static inline struct HSD_SynthSFXNode* getNode(int sfx_id)
     }
 }
 
-bool HSD_SynthSFXPlayWithGroup(int sfx_id, u8 vol, u8 vol2, u8 pan,
+int HSD_SynthSFXPlayWithGroup(int sfx_id, u8 vol, u8 vol2, u8 pan,
                                int priority, u8 itd_flag, int group,
                                f32 pitch1, f32 pitch2, f32 mix_main,
                                f32 mix_auxA, f32 mix_auxB)
 {
-    bool result;
+    int result; /* the node id HSD_Synth_80389334 hands back, not a bool */
     int nodeID;
     struct HSD_SynthSFXNode* node;
 

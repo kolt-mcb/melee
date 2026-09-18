@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "lbcollision.h"
 
 #include "lb_00B0.h"
@@ -351,6 +353,9 @@ int lbColl_80005BB0(HitCapsule* arg0, int arg1)
     u32 temp_r6;
 
     temp_r0 = arg0->sfx_kind;
+    { static int on = -1; if (on < 0) on = getenv("MELEE_ASLOG") != NULL;
+      if (on) fprintf(stderr, "[HITSFX] kind %u severity %u -> sfx %d\n", (unsigned) temp_r0, (unsigned) arg0->sfx_severity,
+                      (temp_r0 < 14 && arg0->sfx_severity < 3) ? lbColl_803B9880[temp_r0 * 3 + arg0->sfx_severity] : -1); }
     if (temp_r0 == 0xD) {
         temp_r6 = arg0->sfx_severity;
         if (temp_r6 == 2) {
