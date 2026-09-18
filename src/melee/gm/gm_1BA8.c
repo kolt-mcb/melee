@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <stdlib.h>
 #include "gm_1BA8.h"
 typedef StKind InternalStageId;
@@ -3662,7 +3664,11 @@ void gm_801BF128(void)
     c = 0;
     do {
         do {
+#if BUILD_TARGET_PC
+            j = character_pool[HSD_Randi(count < 8 ? (count > 0 ? count : 1) : 8)];
+#else
             j = character_pool[HSD_Randi(8)];
+#endif
             dup = 0;
             for (pick = 0; pick < c; pick++) {
                 if (j == gm_801BF648(pick) ||
@@ -3683,6 +3689,12 @@ void gm_801BF128(void)
         gm_801BF6E8(HSD_Randi(4));
         prev = gm_801BF6F8();
     } while (gm_801BF6D8() == prev);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MODELOG") != NULL) {
+        fprintf(stderr, "[DEMO] pool %d unlocked; picks %d %d %d %d\n", (int) count,
+                gm_801BF648(0), gm_801BF648(1), gm_801BF648(2), gm_801BF648(3));
+    }
+#endif
 
     count = 0;
     c = 0;
@@ -3707,10 +3719,24 @@ void gm_801BF128(void)
         }
     }
     do {
+#if BUILD_TARGET_PC
+        /* The console draws from the first eight of the pool; with fewer
+         * unlocked the draw reads past the pool into the stack, and the
+         * tablet's stack said stage 0: no ground, a garbage parameter
+         * count, one fighter at scale zero. Draw from what there is. */
+        pick = stage_pool[HSD_Randi(count < 8 ? (count > 0 ? count : 1) : 8)];
+#else
         pick = stage_pool[HSD_Randi(8)];
+#endif
         cur_id = gm_801BF694();
-    } while ((s32) gm_801641CC((u8) pick) == (s32) cur_id);
+    } while ((s32) gm_801641CC((u8) pick) == (s32) cur_id && count > 1);
     gm_801BF684(gm_801641CC((u8) pick));
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MODELOG") != NULL) {
+        fprintf(stderr, "[DEMO] stage pool %d unlocked; pick %d -> stage kind %d\n", (int) count,
+                (int) pick, (int) gm_801641CC((u8) pick));
+    }
+#endif
     ((u8*) gmMainLib_804D3EE0)[pick + 0x1C] += 1;
     gm_801BF6A8(HSD_Randi(4));
 }
@@ -3731,6 +3757,14 @@ void gm_801BF3F8(void)
         var_r31->entries[i].color = gm_801BF670(i);
     }
     var_r31->stkind = gm_801BF694();
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MODELOG") != NULL) {
+        fprintf(stderr, "[DEMO] cache chars %d %d %d %d stkind %d (record %d/%u)\n",
+                var_r31->entries[0].char_id, var_r31->entries[1].char_id,
+                var_r31->entries[2].char_id, var_r31->entries[3].char_id,
+                (int) var_r31->stkind, (int) gm_8049E548.unk_C, (unsigned) gm_801BF694());
+    }
+#endif
     lbDvd_80018254();
 
     temp_ret = 4;
@@ -3764,6 +3798,9 @@ void gm_801BF4DC(GameScene* arg0)
     
 #if BUILD_TARGET_PC
     /* PC port: Guard against NULL pointer from uninitialized game mode data. */
+    if (getenv("MELEE_MODELOG") != NULL) {
+        fprintf(stderr, "[DEMO] vs setup: scene index %d\n", (int) gm_801BF718());
+    }
     if (temp_r31 == NULL || (uintptr_t)temp_r31 < 0x1000000ULL) return;
 #endif
     
@@ -3797,6 +3834,13 @@ void gm_801BF4DC(GameScene* arg0)
             temp_r31->players[i].stocks = 0x63;
         }
     }
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MODELOG") != NULL) {
+        fprintf(stderr, "[DEMO] vs setup done: stage %d players %d %d %d %d\n", (int) temp_r31->rules.xE,
+                temp_r31->players[0].c_kind, temp_r31->players[1].c_kind,
+                temp_r31->players[2].c_kind, temp_r31->players[3].c_kind);
+    }
+#endif
 }
 
 void gm_801BF634(s32 arg0, s8 character_kind)

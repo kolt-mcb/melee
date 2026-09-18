@@ -1035,6 +1035,12 @@ void ftParts_80075304(u8 type, HSD_JObj* root, HSD_JObj* new_jobj)
             }
             new_jobj->child = child;
             new_jobj->parent = root;
+#if BUILD_TARGET_PC
+            if (root == NULL) {
+                /* a part whose bone the model lacks (a Kirby hat piece) */
+                return;
+            }
+#endif
             root->child = new_jobj;
             if (child != NULL) {
                 child->parent = new_jobj;
