@@ -2001,6 +2001,10 @@ typedef void (*PC_PFN_BUFFERSTORAGE)(GLenum, GLsizeiptr, const void*,
 static PC_PFN_BUFFERSTORAGE pc_gl_buffer_storage;
 static int g_vbo_mode = PC_VBO_MAP;
 static GLsizeiptr g_vbo_ring_bytes = PC_VBO_RING_BYTES;
+/* How many times the ring has been recycled: a bound uniform-block range
+ * from before a recycle points into a store that is gone (orphaned) or
+ * about to be overwritten (persistent), so the block is streamed again. */
+static u32 g_vbo_lap;
 static unsigned char* g_vbo_base; /* persistent mapping, else NULL */
 static GLsizeiptr g_vbo_seg_bytes;
 static GLsync g_vbo_fence[PC_VBO_SEGS];
@@ -2310,6 +2314,26 @@ static int pc_xdl_on(void);
 static int pc_tri_class(GLenum m);
 static void pc_ubo_commit(void);
 static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes);
+/* Make room for `bytes` of ring before a run of streams that must land
+ * together. A wrap inside pc_vbo_stream_raw recycles the ring, and on the
+ * orphaning modes that is a new store: every byte written before it in
+ * the same flush is gone. The block streamed after the vertices did just
+ * that -- the batch drew from a fresh, empty store and a skinned mesh came
+ * out as huge flat triangles (golden match, frame 250). One wrap here,
+ * before anything is written, and the streams that follow cannot. */
+static GLintptr g_ubo_reserve(void);
+static void pc_vbo_ring_reserve(GLintptr bytes)
+{
+    g_vbo_off = (g_vbo_off + 7) & ~(GLintptr) 7;
+    if (bytes > g_vbo_ring_bytes) return; /* the streams clamp; not this path's problem */
+    if (g_vbo_off + bytes > g_vbo_ring_bytes) {
+        if (g_vbo_mode != PC_VBO_PERSIST) {
+            glBufferData(GL_ARRAY_BUFFER, g_vbo_ring_bytes, NULL, GL_STREAM_DRAW);
+        }
+        g_vbo_off = 0;
+        g_vbo_lap++;
+    }
+}
 static void pc_batch_flush(void)
 {
     int i;
@@ -2325,8 +2349,13 @@ static void pc_batch_flush(void)
      * a different VAO around itself, and init leaves zero bound. */
     gls_bind_vao(g_vao);
     gls_bind_vbo(g_vbo);
-    base = pc_vbo_stream(g_stage, g_stage_n);
+    /* the block, the vertex block at its stride, and the index run (at
+     * most three indices a vertex), each with its alignment slack */
+    pc_vbo_ring_reserve(g_ubo_reserve() +
+                        (GLintptr) sizeof(Vertex) * (GLintptr) (g_stage_n + 1) +
+                        8 + (GLintptr) g_stage_n * 3 * (GLintptr) sizeof(u16));
     pc_ubo_commit();
+    base = pc_vbo_stream(g_stage, g_stage_n);
     g_batch_flushing = 0;
     /* GLES has no glMultiDrawArrays: a batch of N primitives was N draw
      * calls, ~1650 a frame in a match. Expanded to triangle indices the
@@ -2425,6 +2454,11 @@ static GLint pc_vbo_first_for(const Vertex* src, unsigned count)
             return f;
         }
     }
+    /* straight into the ring: the flush that draws it streams the block
+     * and an index run after it, so reserve for those here */
+    pc_vbo_ring_reserve(g_ubo_reserve() +
+                        (GLintptr) sizeof(Vertex) * (GLintptr) (count + 1) +
+                        8 + (GLintptr) count * 3 * (GLintptr) sizeof(u16));
     return pc_vbo_stream(src, count);
 }
 
@@ -2514,6 +2548,7 @@ static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes)
         if (!g_batch_flushing) pc_batch_flush();
         bytes = g_vbo_ring_bytes;
         g_vbo_off = 0;
+        g_vbo_lap++;
     }
     if (g_vbo_off + bytes > g_vbo_ring_bytes) {
         /* Recycling discards the bytes any recorded-but-undrawn primitive
@@ -2528,6 +2563,7 @@ static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes)
                          GL_STREAM_DRAW);
         }
         g_vbo_off = 0;
+        g_vbo_lap++;
     }
 #if defined(__EMSCRIPTEN__)
     /* WebGL2 has no buffer mapping at all. Emscripten emulates
@@ -3103,10 +3139,23 @@ static void pc_ubo_bind(void)
     g_ubo_dirty = 0;
     g_ubo_pending = 1;
 }
+static u32 g_ubo_lap = (u32) -1; /* the ring lap the bound range was streamed in */
+static GLintptr g_ubo_reserve(void)
+{
+    return g_ubo_ok ? (GLintptr) g_ubo_align + (GLintptr) g_ubo_size : 0;
+}
 static void pc_ubo_commit(void)
 {
     GLintptr off;
-    if (!g_ubo_pending) return;
+    if (!g_ubo_ok) return;
+    /* An unchanged block still has to be streamed again once the ring
+     * has been recycled under it: the bound range then names bytes in an
+     * orphaned store (map/subdata modes) or bytes the write pointer is
+     * about to reuse (persistent). A stage building drawn from cached
+     * display lists -- no uniform change for many batches -- vanished
+     * for whole frames that way (golden match_move, frame 195). */
+    if (!g_ubo_pending && g_ubo_lap == g_vbo_lap) return;
+    g_ubo_lap = g_vbo_lap;
     g_vbo_off = (g_vbo_off + g_ubo_align - 1) / g_ubo_align * g_ubo_align;
     off = pc_vbo_stream_raw(g_ubo_img, (GLsizeiptr) g_ubo_size);
     glBindBufferRange(GL_UNIFORM_BUFFER, 0, g_vbo, off, (GLsizeiptr) g_ubo_size);
@@ -3128,12 +3177,45 @@ static void pc_ubo_init(void)
     fprintf(stderr, "[UBO] %d members, %u bytes, offset alignment %d\n", g_ubo_n, g_ubo_size, (int) g_ubo_align);
 }
 
+static int g_stage_check;
+static void pc_stage_check(GLint vloc, int n, const void* data, unsigned bytes)
+{
+    int bad = 0, e;
+    if (g_vloc_spec[vloc]) {
+        const GLint* p = (const GLint*) data;
+        int k;
+        for (k = 0; k < n && vloc + k < VLOC_MAX && g_vloc_spec[vloc + k]; k++) {
+            if (g_spec_vals[vloc + k] != p[k]) bad = 1;
+        }
+    } else if (g_last_gen[vloc] == 0 || g_last_len[vloc] != bytes ||
+               memcmp(g_last[vloc], data, bytes) != 0) {
+        bad = 1;
+    }
+    if (!bad) return;
+    for (e = 0; e < UNI_TAB_N; e++) {
+        const UniEntry* ent = &g_uni_tab[e];
+        if (ent->base >= 0 && vloc >= ent->base && vloc < ent->base + ent->count) {
+            /* MELEE_STAGECHECK=N reports from frame N on, every draw */
+            static int from = -1;
+            if (from < 0) { const char* x = getenv("MELEE_STAGECHECK"); from = x ? atoi(x) : 0; }
+            if ((int) g_state.frame_count >= from) {
+                const float* a = (const float*) g_last[vloc];
+                const float* b = (const float*) data;
+                fprintf(stderr, "[STAGECHECK] frame %u %s[%d] stale (%s) gen %u len %u/%u n %d: staged %.3f %.3f %.3f %.3f | state %.3f %.3f %.3f %.3f\n", g_state.frame_count,
+                        ent->name, (int) (vloc - ent->base), ent->spec ? "spec" : "uniform",
+                        g_last_gen[vloc], g_last_len[vloc], bytes, n, a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3]);
+            }
+            return;
+        }
+    }
+}
 static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
                              const void* data, unsigned bytes)
 {
     if (vloc < 0 || vloc >= g_vloc_total || bytes > VLOC_BYTES) {
         return;
     }
+    if (g_stage_check) { pc_stage_check(vloc, n, data, bytes); return; }
     if (g_vloc_spec[vloc]) {
         const GLint* p = (const GLint*) data;
         int k;
@@ -3462,6 +3544,24 @@ static int pc_shc_enabled(void)
         /* The block moved the uniforms out of the programs: binaries
          * from before it, or from the other setting, do not apply. */
         g_shc_drv = pc_shc_fnv(pc_ubo_wanted() ? "ubo1" : "glu0", 4, g_shc_drv);
+        /* The key names a specialisation, not a program: the same key over
+         * different templates (an edit to the GLSL, or one of the switches
+         * that reshape it -- MELEE_UBO_EXCLUDE moves members out of the
+         * block and leaves them unset in a binary built without it) loaded
+         * a binary whose uniforms no longer lined up, and a skinned mesh
+         * came out as huge flat triangles. Hash the templates and the
+         * switches in as well, so such a binary is a miss, not a load. */
+        g_shc_drv = pc_shc_fnv(g_vert_src, strlen(g_vert_src), g_shc_drv);
+        g_shc_drv = pc_shc_fnv(g_frag_src, strlen(g_frag_src), g_shc_drv);
+        {
+            static const char* const sw[] = { "MELEE_UBO_EXCLUDE", "MELEE_TEXGEN_LEGACY", "MELEE_NO_QDIV" };
+            size_t k;
+            for (k = 0; k < sizeof(sw) / sizeof(sw[0]); k++) {
+                const char* x = getenv(sw[k]);
+                g_shc_drv = pc_shc_fnv(sw[k], strlen(sw[k]), g_shc_drv);
+                if (x != NULL) g_shc_drv = pc_shc_fnv(x, strlen(x) + 1, g_shc_drv);
+            }
+        }
         g_shc_on = 1;
     }
     return g_shc_on;
@@ -4853,7 +4953,9 @@ void gx_frame_begin(void)
  * write only affects primitives issued after it; here the pending vertices
  * would be drawn with the new state at the next flush. So every render-state
  * setter flushes first. */
+static void apply_model_uniform(void);
 static void bridge_upload_and_draw(void);
+static void apply_texgen_uniforms(void);
 /* Uniform staging is gated on these: every state-changing GX entry point
  * comes through gx_flush_pending() and bumps both, the matrix loaders bump
  * only the first, and the draw block re-stages a group only when its
@@ -5591,6 +5693,449 @@ static void pc_sec_end(int slot)
     pc_sec_mark = t;
 }
 
+/* The uniform staging for a draw, in its two gated groups (see the
+ * generations in gx_flush_pending). `mvp` is handed back for the trace;
+ * returns 1 when the draw is to be dropped (MELEE_SKIPDRAW). */
+static int pc_stagecheck_on(void)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("MELEE_STAGECHECK") != NULL;
+    return on;
+}
+static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
+{
+    memset(mvp, 0, sizeof(f32) * 16);
+    if (stage_a) {
+    /* Upload projection matrix (as uniform)
+     * g_state.proj_matrix is row-major C array. GL_TRUE transposes to column-major. */
+    if (g_proj_loc >= 0) {
+        UPMTX4(g_proj_loc, 1, GL_TRUE, &g_state.proj_matrix[0][0]);
+    }
+    
+    /* Compute MVP = proj * modelview (all row-major, transpose at upload) */
+    if (g_state.mtx3d_active) {
+        /* GCN-faithful pipeline:
+         *   clip = proj * PNMTX[posmatidx] * pos   (ONE position matrix;
+         *   HSD loads vmtx*joint into PNMTX0 and uses PNMTX1 only for
+         *   normals). The z-row is remapped (2z - w) for GL NDC. */
+        f32 p0[4][4];
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++)
+                p0[i][j] = (i == j) ? 1.0f : 0.0f;
+        { u32 mid = g_state.current_mtx_id < 28 ? g_state.current_mtx_id : 0;
+          pc_stat_mtxt[0] = g_state.mtx_array[mid][0][3];
+          pc_stat_mtxt[1] = g_state.mtx_array[mid][1][3];
+          pc_stat_mtxt[2] = g_state.mtx_array[mid][2][3]; }
+        pc_stat_v0[0] = g_state.verts[0].pos[0];
+        pc_stat_v0[1] = g_state.verts[0].pos[1];
+        pc_stat_v0[2] = g_state.verts[0].pos[2];
+        pc_stat_proj[0] = g_state.proj_matrix[0][0];
+        pc_stat_proj[1] = g_state.proj_matrix[1][1];
+        pc_stat_proj[2] = g_state.proj_matrix[2][2];
+        pc_stat_proj[3] = g_state.proj_matrix[2][3];
+        pc_stat_vp[0] = g_state.vp_x; pc_stat_vp[1] = g_state.vp_y;
+        pc_stat_vp[2] = g_state.vp_w; pc_stat_vp[3] = g_state.vp_h;
+        if (g_batch_pretransformed) {
+            /* Vertices already in view space (per-vertex PNMTX applied on
+             * the CPU) — keep p0 = identity. */
+        } else if (g_state.current_mtx_id < 28) {
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 4; j++)
+                    p0[i][j] = g_state.mtx_array[g_state.current_mtx_id][i][j];
+        }
+        memcpy(g_light_model, p0, sizeof(g_light_model));
+        f32 mv4[4][4];
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++)
+                mv4[i][j] = p0[i][j];
+        /* mvp = proj * mv4 */
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++) {
+                f32 s = 0.0f;
+                for (int k = 0; k < 4; k++)
+                    s += g_state.proj_matrix[i][k] * mv4[k][j];
+                mvp[i][j] = s;
+            }
+        /* GL NDC depth: GCN clip z/w is in [-1,0] (near=-1, far=0) and the
+         * viewport maps that to screen z with near=0, far=2^24-1, which
+         * GX_LEQUAL then compares. GL NDC wants [-1,1] with near=-1,
+         * far=+1, so the mapping is gl = 2*gcn + 1, i.e. in clip space
+         * z' = 2z + w. This used to be z' = -2z - w -- Dolphin's reversed-Z
+         * convention (near=+1, far=-1) -- but Dolphin pairs that with a
+         * reversed compare-function table (GX LEQUAL -> GL_GEQUAL), which
+         * the bridge never had. So every depth test ran backwards: the
+         * farther fragment won. It went unnoticed while scenes were drawn
+         * roughly back-to-front; Onett draws its far hills last and they
+         * painted over the whole town. Keep GL's own orientation and the
+         * GX compare functions map one-to-one. */
+        for (int j = 0; j < 4; j++)
+            mvp[2][j] = 2.0f * mvp[2][j] + mvp[3][j];
+        /* PC diag: compute the EXACT GPU clip for the first vertex using the
+         * final mvp (after z-remap). Check if it's in the GL clip volume
+         * (-w<=x,y,z<=w, w>0). */
+        /* PC diag: MELEE_CHAN=1 — one line of channel/lighting state per 3D
+         * draw (white-surface debugging, roadmap M1). */
+        static int _chan_from = -1;
+        if (_chan_from < 0) {
+            const char* cf = getenv("MELEE_CHAN_FROM");
+            _chan_from = cf ? atoi(cf) : 8;
+        }
+        if (ENV_FLAG("MELEE_CHAN") && g_state.vert_count > 0 &&
+            (int)g_state.frame_count >= _chan_from) {
+            static int _ch = 0;
+            if (_ch < 80) {
+                _ch++;
+                int lit_any = 0; u32 lmask = 0;
+                for (int i = 0; i < 8; i++) { if (g_state.chan_lit[i]) lit_any = 1; lmask |= g_state.chan_diffuse_light[i]; }
+                fprintf(stderr, "  CHAN n=%u clr_en=%d src0=%u lit=%d lmask=%x nl=%u C0=(%u,%u,%u,%u) amb=(%.2f,%.2f,%.2f) v0c=(%.2f,%.2f,%.2f,%.2f) texen=%d\n",
+                        (unsigned)g_state.vert_count, (int)g_state.clr_enabled,
+                        (unsigned)g_state.chan_color_source[0], lit_any, (unsigned)lmask,
+                        (unsigned)g_state.g_active_light_count,
+                        g_state.chan_colors[0].r, g_state.chan_colors[0].g, g_state.chan_colors[0].b, g_state.chan_colors[0].a,
+                        (double)g_state.ambient_color[0], (double)g_state.ambient_color[1], (double)g_state.ambient_color[2],
+                        (double)g_state.verts[0].col[0], (double)g_state.verts[0].col[1], (double)g_state.verts[0].col[2], (double)g_state.verts[0].col[3],
+                        (int)g_state.tex0_enabled);
+                {
+                    u32 ns = g_state.num_tev_stages; if (ns > 8) ns = 8;
+                    for (u32 st = 0; st < ns; st++) {
+                        TevStage* t = &g_state.tev_stages[st];
+                        if (!t->color_enabled && !t->alpha_enabled) continue;
+                        fprintf(stderr, "    TEV%u cin=[%u,%u,%u,%u] ain=[%u,%u,%u,%u] tex=%u coord=%u en=%d/%d\n",
+                                st, t->color_inputs[0], t->color_inputs[1], t->color_inputs[2], t->color_inputs[3],
+                                t->alpha_inputs[0], t->alpha_inputs[1], t->alpha_inputs[2], t->alpha_inputs[3],
+                                t->tex_map, t->tex_coord, (int)t->color_enabled, (int)t->alpha_enabled);
+                    }
+                    for (u32 vi = 0; vi < 3 && vi < g_state.vert_count; vi++) {
+                        fprintf(stderr, "    UV%u=(%.3f,%.3f)", vi,
+                                (double)g_state.verts[vi].tex0[0], (double)g_state.verts[vi].tex0[1]);
+                    }
+                    fprintf(stderr, "\n");
+                }
+            }
+        }
+        if (ENV_FLAG("MELEE_CLIP") && g_state.vert_count > 0 && g_state.frame_count >= 8) {
+            static int _cl = 0;
+            if (_cl < 300) {
+                _cl++;
+                u32 inside = 0, wpos = 0, vi;
+                f32 mnx=1e30f,mxx=-1e30f,mny=1e30f,mxy=-1e30f;
+                for (vi = 0; vi < g_state.vert_count; vi++) {
+                    f32 x=g_state.verts[vi].pos[0], y=g_state.verts[vi].pos[1], z=g_state.verts[vi].pos[2];
+                    f32 cx = mvp[0][0]*x + mvp[0][1]*y + mvp[0][2]*z + mvp[0][3];
+                    f32 cy = mvp[1][0]*x + mvp[1][1]*y + mvp[1][2]*z + mvp[1][3];
+                    f32 cz = mvp[2][0]*x + mvp[2][1]*y + mvp[2][2]*z + mvp[2][3];
+                    f32 cw = mvp[3][0]*x + mvp[3][1]*y + mvp[3][2]*z + mvp[3][3];
+                    if (cw > 0) {
+                        f32 nx = cx/cw, ny = cy/cw;
+                        wpos++;
+                        if (nx<mnx)mnx=nx; if (nx>mxx)mxx=nx; if (ny<mny)mny=ny; if (ny>mxy)mxy=ny;
+                    }
+                    if (cw > 0 && fabsf(cx) <= cw && fabsf(cy) <= cw && fabsf(cz) <= cw) inside++;
+                }
+                const f32* pm = (const f32*)g_state.mtx_array[g_state.current_mtx_id];
+                fprintf(stderr, "  CLIP frame=%u n=%u inside=%u wpos=%u ndc_x[%.2f,%.2f] ndc_y[%.2f,%.2f] mtxid=%u p1=%d pm_t=(%.1f,%.1f,%.1f) pm_r0=(%.2f,%.2f,%.2f) pm_r1=(%.2f,%.2f,%.2f) pm_r2=(%.2f,%.2f,%.2f)\n",
+                        (unsigned)g_state.frame_count, (unsigned)g_state.vert_count, inside, wpos,
+                        (double)mnx,(double)mxx,(double)mny,(double)mxy,
+                        (unsigned)g_state.current_mtx_id, (int)g_state.p1_valid,
+                        (double)pm[3],(double)pm[7],(double)pm[11],
+                        (double)pm[0],(double)pm[1],(double)pm[2],
+                        (double)pm[4],(double)pm[5],(double)pm[6],
+                        (double)pm[8],(double)pm[9],(double)pm[10]);
+            }
+        }
+    } else {
+        /* 2D overlay path: mvp = proj * mv (mv set by gx_set_* helpers) */
+        f32 mv4[4][4];
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 4; j++)
+                mv4[i][j] = g_state.mv_matrix[i][j];
+        mv4[3][0] = 0; mv4[3][1] = 0; mv4[3][2] = 0; mv4[3][3] = 1;
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++)
+                for (int k = 0; k < 4; k++)
+                    mvp[i][j] += g_state.proj_matrix[i][k] * mv4[k][j];
+    }
+    
+    {
+        /* Sample the first vertex of every batch against the clip volume. */
+        f32 x=g_state.verts[0].pos[0], y=g_state.verts[0].pos[1], z=g_state.verts[0].pos[2];
+        f32 cx = mvp[0][0]*x + mvp[0][1]*y + mvp[0][2]*z + mvp[0][3];
+        f32 cy = mvp[1][0]*x + mvp[1][1]*y + mvp[1][2]*z + mvp[1][3];
+        f32 cz = mvp[2][0]*x + mvp[2][1]*y + mvp[2][2]*z + mvp[2][3];
+        f32 cw = mvp[3][0]*x + mvp[3][1]*y + mvp[3][2]*z + mvp[3][3];
+        pc_stat_clip_tot++;
+        if (cw > 0 && fabsf(cx) <= cw && fabsf(cy) <= cw && fabsf(cz) <= cw)
+            pc_stat_clip_in++;
+    }
+    if (g_mvp_loc >= 0) {
+        f32 mvp_flat[16];
+        /* OpenGL glUniformMatrix4fv with GL_FALSE expects column-major */
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++)
+                mvp_flat[j * 4 + i] = mvp[i][j];  /* Transpose row→col major */
+        UPMTX4(g_mvp_loc, 1, GL_FALSE, mvp_flat);
+    }
+
+    /* GX point sprites and wide lines. GXSetPointSize/GXSetLineWidth are
+     * in 1/6-pixel units of the 640x480 frame and a textured point gets
+     * 0..1 texcoords across its face (GX_TO_ONE) -- the particle renderer
+     * draws its attached particles this way. Core GL has neither, so each
+     * point (line) becomes a screen-aligned quad in NDC, drawn with an
+     * identity MVP. */
+    if ((g_state.prim_type == GX_POINTS ||
+         (g_state.prim_type == GX_LINES && g_state.line_width > 6)) &&
+        !ENV_FLAG("MELEE_NO_POINTSPRITES") &&
+        g_state.vert_count > 0 &&
+        g_state.vert_count * 4 <= (int) (sizeof(g_state.verts) / sizeof(g_state.verts[0])))
+    {
+        static Vertex tmp[sizeof(g_state.verts) / sizeof(g_state.verts[0])];
+        int n = g_state.vert_count, out = 0, i;
+        int is_point = (g_state.prim_type == GX_POINTS);
+        f32 units = is_point ? (f32) g_state.point_size : (f32) g_state.line_width;
+        f32 hx = units / 6.0f / 640.0f;  /* half size in NDC (x2 for full, /2 for half) */
+        f32 hy = units / 6.0f / 480.0f;
+        f32 ndc[3][4];
+        int k;
+        for (i = 0; i + (is_point ? 0 : 1) < n; i += (is_point ? 1 : 2)) {
+            int ok = 1;
+            for (k = 0; k < (is_point ? 1 : 2); k++) {
+                Vertex* v = &g_state.verts[i + k];
+                f32 x = v->pos[0], y = v->pos[1], z = v->pos[2];
+                f32 cx = mvp[0][0]*x + mvp[0][1]*y + mvp[0][2]*z + mvp[0][3];
+                f32 cy = mvp[1][0]*x + mvp[1][1]*y + mvp[1][2]*z + mvp[1][3];
+                f32 cz = mvp[2][0]*x + mvp[2][1]*y + mvp[2][2]*z + mvp[2][3];
+                f32 cw = mvp[3][0]*x + mvp[3][1]*y + mvp[3][2]*z + mvp[3][3];
+                if (cw <= 0.0001f) { ok = 0; break; }
+                ndc[k][0] = cx / cw; ndc[k][1] = cy / cw; ndc[k][2] = cz / cw; ndc[k][3] = 1.0f;
+            }
+            if (!ok) continue;
+            if (is_point) {
+                static const f32 cs[4][2] = { {-1, 1}, {1, 1}, {1, -1}, {-1, -1} };
+                static const f32 uv[4][2] = { {0, 0}, {1, 0}, {1, 1}, {0, 1} };
+                for (k = 0; k < 4; k++) {
+                    Vertex* o = &tmp[out++];
+                    *o = g_state.verts[i];
+                    o->pos[0] = ndc[0][0] + cs[k][0] * hx;
+                    o->pos[1] = ndc[0][1] + cs[k][1] * hy;
+                    o->pos[2] = ndc[0][2];
+                    o->tex0[0] = uv[k][0]; o->tex0[1] = uv[k][1];
+                    o->tex1[0] = uv[k][0]; o->tex1[1] = uv[k][1];
+                }
+            } else {
+                f32 dx = (ndc[1][0] - ndc[0][0]) * 640.0f, dy = (ndc[1][1] - ndc[0][1]) * 480.0f;
+                f32 len = sqrtf(dx * dx + dy * dy);
+                f32 px = 0, py = 0;
+                if (len > 1e-6f) { px = -dy / len; py = dx / len; }
+                {
+                    Vertex* o;
+                    o = &tmp[out++]; *o = g_state.verts[i];     o->pos[0] = ndc[0][0] + px * hx; o->pos[1] = ndc[0][1] + py * hy; o->pos[2] = ndc[0][2];
+                    o = &tmp[out++]; *o = g_state.verts[i + 1]; o->pos[0] = ndc[1][0] + px * hx; o->pos[1] = ndc[1][1] + py * hy; o->pos[2] = ndc[1][2];
+                    o = &tmp[out++]; *o = g_state.verts[i + 1]; o->pos[0] = ndc[1][0] - px * hx; o->pos[1] = ndc[1][1] - py * hy; o->pos[2] = ndc[1][2];
+                    o = &tmp[out++]; *o = g_state.verts[i];     o->pos[0] = ndc[0][0] - px * hx; o->pos[1] = ndc[0][1] - py * hy; o->pos[2] = ndc[0][2];
+                }
+            }
+        }
+        if (out > 0) {
+            static const f32 ident[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+            memcpy(g_state.verts, tmp, sizeof(Vertex) * (size_t) out);
+            g_state.vert_count = out;
+            g_state.prim_type = GX_QUADS;
+            if (g_mvp_loc >= 0) UPMTX4(g_mvp_loc, 1, GL_FALSE, ident);
+        } else {
+            g_state.vert_count = 0;
+        }
+    }
+    
+    /* PC diag: where do vertices land in NDC under this mvp? (MELEE_MTR) */
+#if BUILD_TARGET_PC
+    if (g_state.mtx3d_active) {
+        static int _ndc_on = -1, _ndc_n = 0;
+        if (_ndc_on < 0) _ndc_on = (ENV_FLAG("MELEE_MTR"));
+        if (_ndc_on && g_state.p1_valid && g_state.vert_count > 0) {
+            if (_ndc_n < 120) {
+                _ndc_n++;
+            f32 p0 = g_state.verts[0].pos[0], p1_ = g_state.verts[0].pos[1], p2 = g_state.verts[0].pos[2];
+            f32 cx = mvp[0][0]*p0 + mvp[0][1]*p1_ + mvp[0][2]*p2 + mvp[0][3];
+            f32 cy = mvp[1][0]*p0 + mvp[1][1]*p1_ + mvp[1][2]*p2 + mvp[1][3];
+            f32 cz = mvp[2][0]*p0 + mvp[2][1]*p1_ + mvp[2][2]*p2 + mvp[2][3];
+            f32 cw = mvp[3][0]*p0 + mvp[3][1]*p1_ + mvp[3][2]*p2 + mvp[3][3];
+            fprintf(stderr, "NDCCHECK v0=(%.2f,%.2f,%.2f) ndc=(%.3f,%.3f,%.3f) w=%.3f p1v=%d curmtx=%u\n",
+                    (double)p0,(double)p1_,(double)p2,
+                    (double)(cw? cx/cw:0),(double)(cw? cy/cw:0),(double)(cw? cz/cw:0),(double)cw,
+                    (int)g_state.p1_valid, (unsigned)g_state.current_mtx_id);
+            /* model-space bbox of this draw's vertices */
+            f32 mnx=1e30,mxx=-1e30,mny=1e30,mxy=-1e30,mnz=1e30,mxz=-1e30;
+            for (int vi=0; vi<g_state.vert_count; vi++) {
+                f32 vx=g_state.verts[vi].pos[0], vy=g_state.verts[vi].pos[1], vz=g_state.verts[vi].pos[2];
+                if(vx<mnx)mnx=vx; if(vx>mxx)mxx=vx; if(vy<mny)mny=vy; if(vy>mxy)mxy=vy; if(vz<mnz)mnz=vz; if(vz>mxz)mxz=vz;
+            }
+            fprintf(stderr, "  BBOX n=%d x[%.1f,%.1f] y[%.1f,%.1f] z[%.1f,%.1f]\n",
+                    g_state.vert_count,(double)mnx,(double)mxx,(double)mny,(double)mxy,(double)mnz,(double)mxz);
+            }
+        }
+    }
+#endif
+
+    /* UV scale — identity by default (games send normalized [0,1] UVs).
+     * The overlay code can override this when rendering pixel-space geometry. */
+    if (g_uv_scale_loc >= 0) {
+        GLfloat uv_scale[2] = {1.0f, 1.0f};
+        UP2FV(g_uv_scale_loc, 1, uv_scale);
+    }
+    
+    /* Upload texture matrix transforms */
+    /* GX_TEXMTX0..9 live at matrix-memory rows 30..57 in steps of 3;
+     * GX_IDENTITY is 60 and means "leave the coords alone". A slot that was
+     * never filled by GXLoadTexMtxImm is all zeros and would collapse every
+     * UV to the origin, so require it to have been loaded. */
+    {
+        u32 c;
+        for (c = 0; c < PC_TEXN; c++) {
+            int en = pc_texmtx_active(c);
+            if (g_texmtx_enable_loc >= 0) UP1I(g_texmtx_enable_loc + (GLint) c, en);
+            if (en && g_texmtx_loc >= 0) {
+                f32 mtx[4][4] = {{0}};
+                memcpy(mtx, g_state.mtx_array[g_state.tex_gen_mat_id[c]], sizeof(f32) * 12);
+                mtx[3][3] = 1.0f;
+                UPMTX4(g_texmtx_loc + (GLint) c, 1, GL_TRUE, &mtx[0][0]);
+            }
+        }
+    }
+
+    /* Post-transform texture matrices */
+    {
+        u32 c;
+        for (c = 0; c < PC_TEXN; c++) {
+            u32 id = g_state.tex_gen_pt_id[c];
+            int en = 0;
+            if (g_pttexmtx_enable_loc < 0) continue;
+            if (g_state.tex_gen_enabled[c] && id >= 64 && id <= 124 && ((id - 64) % 3) == 0 &&
+                g_state.pt_mtx_loaded[(id - 64) / 3]) {
+                en = 1;
+            }
+            UP1I(g_pttexmtx_enable_loc + (GLint) c, en);
+            if (en && g_pttexmtx_loc >= 0) {
+                f32 mtx[4][4] = {{0}};
+                memcpy(mtx, g_state.pt_mtx_array[(id - 64) / 3], sizeof(f32) * 12);
+                mtx[3][3] = 1.0f;
+                /* GX matrices are row-major; transpose on upload so the
+                 * GLSL mat4 * vec4 product is the row-vector product the
+                 * hardware performs (GL_FALSE handed the shader M^T). */
+                UPMTX4(g_pttexmtx_loc + (GLint) c, 1, GL_TRUE, &mtx[0][0]);
+            }
+        }
+    }
+
+    apply_texgen_uniforms();
+    apply_model_uniform();
+    } /* stage_a */
+    pc_sec_end(1);
+    if (stage_b) {
+    /* Upload alpha compare uniforms */
+    apply_alpha_compare_uniforms();
+    
+    if (!g_stage_check) g_frame_draw_idx++;
+    /* MELEE_SKIPDRAW=N drops one draw, to see what it was covering.
+     * MELEE_DRAWID cannot answer that: it disables blending, so it reports
+     * the topmost draw over a pixel rather than the ones that blend to make
+     * the visible colour. */
+    {
+        static int skip = -2;
+        if (skip == -2) {
+            const char* e = getenv("MELEE_SKIPDRAW");
+            skip = e ? atoi(e) : -1;
+        }
+        if (skip >= 0 && (int) g_frame_draw_idx == skip) {
+            g_state.vert_count = 0;
+            return 1;
+        }
+    }
+    if (g_dbg_mode_loc >= 0) {
+        int on = ENV_FLAG("MELEE_DRAWID");
+        /* MELEE_OVERDRAW=1 answers "how many times is each pixel painted".
+         * Every draw becomes a constant +1/255 with additive blending and
+         * no depth test, so the frame that comes back is a layer count --
+         * screenshot it, and the mean pixel value x255 is the average
+         * overdraw while the image shows where it concentrates.
+         *
+         * Asked because the tablet renders the menu at 4.6 fps, 207 ms of
+         * GPU for 174 draws, where a 1593-draw match costs 27.8 ms: ~150x
+         * the GPU cost per draw. Either each of those draws covers most of
+         * the screen, which is a cost, or they cover more than the
+         * console's did, which is a bug. */
+        if (ENV_FLAG("MELEE_OVERDRAW")) {
+            on = 10;
+            gls_disable(GL_DEPTH_TEST);
+            gls_depth_mask(GL_FALSE);
+            gls_enable(GL_BLEND);
+            gls_blend_func(GL_ONE, GL_ONE);
+            gls_blend_eq(GL_FUNC_ADD);
+        }
+        { static int lit = -1; if (lit < 0) { const char* e = getenv("MELEE_LITDBG"); lit = e ? atoi(e) : 0; }
+          if (lit) on = (lit == 1) ? 2 : 3; }
+        /* MELEE_PAINTDRAW=N: draw N is painted solid magenta with blending,
+         * alpha test and depth test off -- "does this geometry reach the
+         * framebuffer at all", separate from why it is invisible. */
+        { static int pd = -2, pm = 1; if (pd == -2) { const char* e = getenv("MELEE_PAINTDRAW"); pd = e ? atoi(e) : -1;
+                                             const char* m = getenv("MELEE_PAINTMODE"); pm = m ? atoi(m) : 1; }
+          /* MELEE_PAINTMODE: 1 = magenta, no blend/depth/cull; 2 = magenta,
+           * depth test kept; 3 = the real TEV colour with alpha forced to 1,
+           * no blend/depth/cull. */
+          if (pd >= 0 && (int) g_frame_draw_idx == pd) {
+              on = (pm == 3) ? 5 : (pm == 4) ? 6 : (pm == 5) ? 7 : (pm == 6) ? 8 : (pm == 7) ? 9 : 4;
+              gls_disable(GL_BLEND);
+              if (pm != 8) gls_disable(GL_CULL_FACE);       /* 8 = magenta, cull and depth kept */
+              if (pm != 2 && pm != 8) gls_disable(GL_DEPTH_TEST);
+          }
+          else if (pd >= 0) { on = 0; } }
+        UP1I(g_dbg_mode_loc, on);
+        /* on == 10 keeps its additive blend: that is what does the counting. */
+        if (on && on != 10 && g_dbg_drawid_loc >= 0) {
+            UP1I(g_dbg_drawid_loc, (GLint) g_frame_draw_idx);
+            /* Blending would mix two draws' indices into a colour that
+             * decodes to a third draw that never ran. */
+            gls_disable(GL_BLEND);
+        }
+    }
+
+    /* Upload TEV pipeline uniforms (includes KColors) */
+    apply_tev_uniforms();
+    pc_sec_end(2);
+    
+    /* Upload fog uniforms */
+    if (g_fog_enabled_loc >= 0) UP1I(g_fog_enabled_loc, g_state.fog_enabled ? 1 : 0);
+    if (g_fog_type_loc >= 0) UP1I(g_fog_type_loc, g_state.fog_type);
+    if (g_fog_startz_loc >= 0) UP1F(g_fog_startz_loc, g_state.fog_startz);
+    if (g_fog_endz_loc >= 0) UP1F(g_fog_endz_loc, g_state.fog_endz);
+    if (g_fog_nearz_loc >= 0) UP1F(g_fog_nearz_loc, g_state.fog_nearz);
+    if (g_fog_farz_loc >= 0) UP1F(g_fog_farz_loc, g_state.fog_farz);
+    if (g_fog_color_loc >= 0) {
+        UP4F(g_fog_color_loc,
+            g_state.fog_color.r / 255.0f,
+            g_state.fog_color.g / 255.0f,
+            g_state.fog_color.b / 255.0f,
+            g_state.fog_color.a / 255.0f);
+    }
+    
+    /* Upload active texture info to fragment shader: one enable per unit,
+     * and the sampler uniforms pinned to their units. */
+    for (u32 i = 0; i < PC_TEXN; i++) {
+        u32 slot = g_active_tex_slots[i];
+        GLuint tex_id = g_state.tex_cache_valid[slot] ? g_state.tex_cache[slot] : 0;
+        int en = tex_id != 0;
+        if (en) {
+            pc_tex_bind(i, tex_id);
+        }
+        if (g_tex_enable_loc >= 0) UP1I(g_tex_enable_loc + (GLint) i, en);
+    }
+    if (g_tex0_loc >= 0) UP1I(g_tex0_loc, 0);
+    if (g_tex1_loc >= 0) UP1I(g_tex1_loc, 1);
+    if (g_tex2_loc >= 0) UP1I(g_tex2_loc, 2);
+    if (g_tex3_loc >= 0) UP1I(g_tex3_loc, 3);
+    } /* stage_b */
+    return 0;
+}
+
 static void bridge_upload_and_draw(void)
 {
     if (pc_canary_on()) pc_check_canaries("upload_and_draw");
@@ -5918,433 +6463,16 @@ static void bridge_upload_and_draw(void)
     s_staged_mtx = g_gen_mtx;
     s_staged_uni = g_gen_uni;
     f32 mvp[4][4];
-    memset(mvp, 0, sizeof(mvp));
-    if (stage_a) {
-    /* Upload projection matrix (as uniform)
-     * g_state.proj_matrix is row-major C array. GL_TRUE transposes to column-major. */
-    if (g_proj_loc >= 0) {
-        UPMTX4(g_proj_loc, 1, GL_TRUE, &g_state.proj_matrix[0][0]);
+    if (pc_stage_uniforms(stage_a, stage_b, mvp)) return;
+    /* MELEE_STAGECHECK=1: run the full staging again in compare-only mode
+     * after a gated pass, so a value the gates left stale is reported by
+     * name -- the oracle for holes in the generation bookkeeping. */
+    if (pc_stagecheck_on() && !(stage_a && stage_b)) {
+        f32 chk[4][4];
+        g_stage_check = 1;
+        pc_stage_uniforms(1, 1, chk);
+        g_stage_check = 0;
     }
-    
-    /* Compute MVP = proj * modelview (all row-major, transpose at upload) */
-    if (g_state.mtx3d_active) {
-        /* GCN-faithful pipeline:
-         *   clip = proj * PNMTX[posmatidx] * pos   (ONE position matrix;
-         *   HSD loads vmtx*joint into PNMTX0 and uses PNMTX1 only for
-         *   normals). The z-row is remapped (2z - w) for GL NDC. */
-        f32 p0[4][4];
-        for (int i = 0; i < 4; i++)
-            for (int j = 0; j < 4; j++)
-                p0[i][j] = (i == j) ? 1.0f : 0.0f;
-        { u32 mid = g_state.current_mtx_id < 28 ? g_state.current_mtx_id : 0;
-          pc_stat_mtxt[0] = g_state.mtx_array[mid][0][3];
-          pc_stat_mtxt[1] = g_state.mtx_array[mid][1][3];
-          pc_stat_mtxt[2] = g_state.mtx_array[mid][2][3]; }
-        pc_stat_v0[0] = g_state.verts[0].pos[0];
-        pc_stat_v0[1] = g_state.verts[0].pos[1];
-        pc_stat_v0[2] = g_state.verts[0].pos[2];
-        pc_stat_proj[0] = g_state.proj_matrix[0][0];
-        pc_stat_proj[1] = g_state.proj_matrix[1][1];
-        pc_stat_proj[2] = g_state.proj_matrix[2][2];
-        pc_stat_proj[3] = g_state.proj_matrix[2][3];
-        pc_stat_vp[0] = g_state.vp_x; pc_stat_vp[1] = g_state.vp_y;
-        pc_stat_vp[2] = g_state.vp_w; pc_stat_vp[3] = g_state.vp_h;
-        if (g_batch_pretransformed) {
-            /* Vertices already in view space (per-vertex PNMTX applied on
-             * the CPU) — keep p0 = identity. */
-        } else if (g_state.current_mtx_id < 28) {
-            for (int i = 0; i < 3; i++)
-                for (int j = 0; j < 4; j++)
-                    p0[i][j] = g_state.mtx_array[g_state.current_mtx_id][i][j];
-        }
-        memcpy(g_light_model, p0, sizeof(g_light_model));
-        f32 mv4[4][4];
-        for (int i = 0; i < 4; i++)
-            for (int j = 0; j < 4; j++)
-                mv4[i][j] = p0[i][j];
-        /* mvp = proj * mv4 */
-        for (int i = 0; i < 4; i++)
-            for (int j = 0; j < 4; j++) {
-                f32 s = 0.0f;
-                for (int k = 0; k < 4; k++)
-                    s += g_state.proj_matrix[i][k] * mv4[k][j];
-                mvp[i][j] = s;
-            }
-        /* GL NDC depth: GCN clip z/w is in [-1,0] (near=-1, far=0) and the
-         * viewport maps that to screen z with near=0, far=2^24-1, which
-         * GX_LEQUAL then compares. GL NDC wants [-1,1] with near=-1,
-         * far=+1, so the mapping is gl = 2*gcn + 1, i.e. in clip space
-         * z' = 2z + w. This used to be z' = -2z - w -- Dolphin's reversed-Z
-         * convention (near=+1, far=-1) -- but Dolphin pairs that with a
-         * reversed compare-function table (GX LEQUAL -> GL_GEQUAL), which
-         * the bridge never had. So every depth test ran backwards: the
-         * farther fragment won. It went unnoticed while scenes were drawn
-         * roughly back-to-front; Onett draws its far hills last and they
-         * painted over the whole town. Keep GL's own orientation and the
-         * GX compare functions map one-to-one. */
-        for (int j = 0; j < 4; j++)
-            mvp[2][j] = 2.0f * mvp[2][j] + mvp[3][j];
-        /* PC diag: compute the EXACT GPU clip for the first vertex using the
-         * final mvp (after z-remap). Check if it's in the GL clip volume
-         * (-w<=x,y,z<=w, w>0). */
-        /* PC diag: MELEE_CHAN=1 — one line of channel/lighting state per 3D
-         * draw (white-surface debugging, roadmap M1). */
-        static int _chan_from = -1;
-        if (_chan_from < 0) {
-            const char* cf = getenv("MELEE_CHAN_FROM");
-            _chan_from = cf ? atoi(cf) : 8;
-        }
-        if (ENV_FLAG("MELEE_CHAN") && g_state.vert_count > 0 &&
-            (int)g_state.frame_count >= _chan_from) {
-            static int _ch = 0;
-            if (_ch < 80) {
-                _ch++;
-                int lit_any = 0; u32 lmask = 0;
-                for (int i = 0; i < 8; i++) { if (g_state.chan_lit[i]) lit_any = 1; lmask |= g_state.chan_diffuse_light[i]; }
-                fprintf(stderr, "  CHAN n=%u clr_en=%d src0=%u lit=%d lmask=%x nl=%u C0=(%u,%u,%u,%u) amb=(%.2f,%.2f,%.2f) v0c=(%.2f,%.2f,%.2f,%.2f) texen=%d\n",
-                        (unsigned)g_state.vert_count, (int)g_state.clr_enabled,
-                        (unsigned)g_state.chan_color_source[0], lit_any, (unsigned)lmask,
-                        (unsigned)g_state.g_active_light_count,
-                        g_state.chan_colors[0].r, g_state.chan_colors[0].g, g_state.chan_colors[0].b, g_state.chan_colors[0].a,
-                        (double)g_state.ambient_color[0], (double)g_state.ambient_color[1], (double)g_state.ambient_color[2],
-                        (double)g_state.verts[0].col[0], (double)g_state.verts[0].col[1], (double)g_state.verts[0].col[2], (double)g_state.verts[0].col[3],
-                        (int)g_state.tex0_enabled);
-                {
-                    u32 ns = g_state.num_tev_stages; if (ns > 8) ns = 8;
-                    for (u32 st = 0; st < ns; st++) {
-                        TevStage* t = &g_state.tev_stages[st];
-                        if (!t->color_enabled && !t->alpha_enabled) continue;
-                        fprintf(stderr, "    TEV%u cin=[%u,%u,%u,%u] ain=[%u,%u,%u,%u] tex=%u coord=%u en=%d/%d\n",
-                                st, t->color_inputs[0], t->color_inputs[1], t->color_inputs[2], t->color_inputs[3],
-                                t->alpha_inputs[0], t->alpha_inputs[1], t->alpha_inputs[2], t->alpha_inputs[3],
-                                t->tex_map, t->tex_coord, (int)t->color_enabled, (int)t->alpha_enabled);
-                    }
-                    for (u32 vi = 0; vi < 3 && vi < g_state.vert_count; vi++) {
-                        fprintf(stderr, "    UV%u=(%.3f,%.3f)", vi,
-                                (double)g_state.verts[vi].tex0[0], (double)g_state.verts[vi].tex0[1]);
-                    }
-                    fprintf(stderr, "\n");
-                }
-            }
-        }
-        if (ENV_FLAG("MELEE_CLIP") && g_state.vert_count > 0 && g_state.frame_count >= 8) {
-            static int _cl = 0;
-            if (_cl < 300) {
-                _cl++;
-                u32 inside = 0, wpos = 0, vi;
-                f32 mnx=1e30f,mxx=-1e30f,mny=1e30f,mxy=-1e30f;
-                for (vi = 0; vi < g_state.vert_count; vi++) {
-                    f32 x=g_state.verts[vi].pos[0], y=g_state.verts[vi].pos[1], z=g_state.verts[vi].pos[2];
-                    f32 cx = mvp[0][0]*x + mvp[0][1]*y + mvp[0][2]*z + mvp[0][3];
-                    f32 cy = mvp[1][0]*x + mvp[1][1]*y + mvp[1][2]*z + mvp[1][3];
-                    f32 cz = mvp[2][0]*x + mvp[2][1]*y + mvp[2][2]*z + mvp[2][3];
-                    f32 cw = mvp[3][0]*x + mvp[3][1]*y + mvp[3][2]*z + mvp[3][3];
-                    if (cw > 0) {
-                        f32 nx = cx/cw, ny = cy/cw;
-                        wpos++;
-                        if (nx<mnx)mnx=nx; if (nx>mxx)mxx=nx; if (ny<mny)mny=ny; if (ny>mxy)mxy=ny;
-                    }
-                    if (cw > 0 && fabsf(cx) <= cw && fabsf(cy) <= cw && fabsf(cz) <= cw) inside++;
-                }
-                const f32* pm = (const f32*)g_state.mtx_array[g_state.current_mtx_id];
-                fprintf(stderr, "  CLIP frame=%u n=%u inside=%u wpos=%u ndc_x[%.2f,%.2f] ndc_y[%.2f,%.2f] mtxid=%u p1=%d pm_t=(%.1f,%.1f,%.1f) pm_r0=(%.2f,%.2f,%.2f) pm_r1=(%.2f,%.2f,%.2f) pm_r2=(%.2f,%.2f,%.2f)\n",
-                        (unsigned)g_state.frame_count, (unsigned)g_state.vert_count, inside, wpos,
-                        (double)mnx,(double)mxx,(double)mny,(double)mxy,
-                        (unsigned)g_state.current_mtx_id, (int)g_state.p1_valid,
-                        (double)pm[3],(double)pm[7],(double)pm[11],
-                        (double)pm[0],(double)pm[1],(double)pm[2],
-                        (double)pm[4],(double)pm[5],(double)pm[6],
-                        (double)pm[8],(double)pm[9],(double)pm[10]);
-            }
-        }
-    } else {
-        /* 2D overlay path: mvp = proj * mv (mv set by gx_set_* helpers) */
-        f32 mv4[4][4];
-        for (int i = 0; i < 3; i++)
-            for (int j = 0; j < 4; j++)
-                mv4[i][j] = g_state.mv_matrix[i][j];
-        mv4[3][0] = 0; mv4[3][1] = 0; mv4[3][2] = 0; mv4[3][3] = 1;
-        for (int i = 0; i < 4; i++)
-            for (int j = 0; j < 4; j++)
-                for (int k = 0; k < 4; k++)
-                    mvp[i][j] += g_state.proj_matrix[i][k] * mv4[k][j];
-    }
-    
-    {
-        /* Sample the first vertex of every batch against the clip volume. */
-        f32 x=g_state.verts[0].pos[0], y=g_state.verts[0].pos[1], z=g_state.verts[0].pos[2];
-        f32 cx = mvp[0][0]*x + mvp[0][1]*y + mvp[0][2]*z + mvp[0][3];
-        f32 cy = mvp[1][0]*x + mvp[1][1]*y + mvp[1][2]*z + mvp[1][3];
-        f32 cz = mvp[2][0]*x + mvp[2][1]*y + mvp[2][2]*z + mvp[2][3];
-        f32 cw = mvp[3][0]*x + mvp[3][1]*y + mvp[3][2]*z + mvp[3][3];
-        pc_stat_clip_tot++;
-        if (cw > 0 && fabsf(cx) <= cw && fabsf(cy) <= cw && fabsf(cz) <= cw)
-            pc_stat_clip_in++;
-    }
-    if (g_mvp_loc >= 0) {
-        f32 mvp_flat[16];
-        /* OpenGL glUniformMatrix4fv with GL_FALSE expects column-major */
-        for (int i = 0; i < 4; i++)
-            for (int j = 0; j < 4; j++)
-                mvp_flat[j * 4 + i] = mvp[i][j];  /* Transpose row→col major */
-        UPMTX4(g_mvp_loc, 1, GL_FALSE, mvp_flat);
-    }
-
-    /* GX point sprites and wide lines. GXSetPointSize/GXSetLineWidth are
-     * in 1/6-pixel units of the 640x480 frame and a textured point gets
-     * 0..1 texcoords across its face (GX_TO_ONE) -- the particle renderer
-     * draws its attached particles this way. Core GL has neither, so each
-     * point (line) becomes a screen-aligned quad in NDC, drawn with an
-     * identity MVP. */
-    if ((g_state.prim_type == GX_POINTS ||
-         (g_state.prim_type == GX_LINES && g_state.line_width > 6)) &&
-        !ENV_FLAG("MELEE_NO_POINTSPRITES") &&
-        g_state.vert_count > 0 &&
-        g_state.vert_count * 4 <= (int) (sizeof(g_state.verts) / sizeof(g_state.verts[0])))
-    {
-        static Vertex tmp[sizeof(g_state.verts) / sizeof(g_state.verts[0])];
-        int n = g_state.vert_count, out = 0, i;
-        int is_point = (g_state.prim_type == GX_POINTS);
-        f32 units = is_point ? (f32) g_state.point_size : (f32) g_state.line_width;
-        f32 hx = units / 6.0f / 640.0f;  /* half size in NDC (x2 for full, /2 for half) */
-        f32 hy = units / 6.0f / 480.0f;
-        f32 ndc[3][4];
-        int k;
-        for (i = 0; i + (is_point ? 0 : 1) < n; i += (is_point ? 1 : 2)) {
-            int ok = 1;
-            for (k = 0; k < (is_point ? 1 : 2); k++) {
-                Vertex* v = &g_state.verts[i + k];
-                f32 x = v->pos[0], y = v->pos[1], z = v->pos[2];
-                f32 cx = mvp[0][0]*x + mvp[0][1]*y + mvp[0][2]*z + mvp[0][3];
-                f32 cy = mvp[1][0]*x + mvp[1][1]*y + mvp[1][2]*z + mvp[1][3];
-                f32 cz = mvp[2][0]*x + mvp[2][1]*y + mvp[2][2]*z + mvp[2][3];
-                f32 cw = mvp[3][0]*x + mvp[3][1]*y + mvp[3][2]*z + mvp[3][3];
-                if (cw <= 0.0001f) { ok = 0; break; }
-                ndc[k][0] = cx / cw; ndc[k][1] = cy / cw; ndc[k][2] = cz / cw; ndc[k][3] = 1.0f;
-            }
-            if (!ok) continue;
-            if (is_point) {
-                static const f32 cs[4][2] = { {-1, 1}, {1, 1}, {1, -1}, {-1, -1} };
-                static const f32 uv[4][2] = { {0, 0}, {1, 0}, {1, 1}, {0, 1} };
-                for (k = 0; k < 4; k++) {
-                    Vertex* o = &tmp[out++];
-                    *o = g_state.verts[i];
-                    o->pos[0] = ndc[0][0] + cs[k][0] * hx;
-                    o->pos[1] = ndc[0][1] + cs[k][1] * hy;
-                    o->pos[2] = ndc[0][2];
-                    o->tex0[0] = uv[k][0]; o->tex0[1] = uv[k][1];
-                    o->tex1[0] = uv[k][0]; o->tex1[1] = uv[k][1];
-                }
-            } else {
-                f32 dx = (ndc[1][0] - ndc[0][0]) * 640.0f, dy = (ndc[1][1] - ndc[0][1]) * 480.0f;
-                f32 len = sqrtf(dx * dx + dy * dy);
-                f32 px = 0, py = 0;
-                if (len > 1e-6f) { px = -dy / len; py = dx / len; }
-                {
-                    Vertex* o;
-                    o = &tmp[out++]; *o = g_state.verts[i];     o->pos[0] = ndc[0][0] + px * hx; o->pos[1] = ndc[0][1] + py * hy; o->pos[2] = ndc[0][2];
-                    o = &tmp[out++]; *o = g_state.verts[i + 1]; o->pos[0] = ndc[1][0] + px * hx; o->pos[1] = ndc[1][1] + py * hy; o->pos[2] = ndc[1][2];
-                    o = &tmp[out++]; *o = g_state.verts[i + 1]; o->pos[0] = ndc[1][0] - px * hx; o->pos[1] = ndc[1][1] - py * hy; o->pos[2] = ndc[1][2];
-                    o = &tmp[out++]; *o = g_state.verts[i];     o->pos[0] = ndc[0][0] - px * hx; o->pos[1] = ndc[0][1] - py * hy; o->pos[2] = ndc[0][2];
-                }
-            }
-        }
-        if (out > 0) {
-            static const f32 ident[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
-            memcpy(g_state.verts, tmp, sizeof(Vertex) * (size_t) out);
-            g_state.vert_count = out;
-            g_state.prim_type = GX_QUADS;
-            if (g_mvp_loc >= 0) UPMTX4(g_mvp_loc, 1, GL_FALSE, ident);
-        } else {
-            g_state.vert_count = 0;
-        }
-    }
-    
-    /* PC diag: where do vertices land in NDC under this mvp? (MELEE_MTR) */
-#if BUILD_TARGET_PC
-    if (g_state.mtx3d_active) {
-        static int _ndc_on = -1, _ndc_n = 0;
-        if (_ndc_on < 0) _ndc_on = (ENV_FLAG("MELEE_MTR"));
-        if (_ndc_on && g_state.p1_valid && g_state.vert_count > 0) {
-            if (_ndc_n < 120) {
-                _ndc_n++;
-            f32 p0 = g_state.verts[0].pos[0], p1_ = g_state.verts[0].pos[1], p2 = g_state.verts[0].pos[2];
-            f32 cx = mvp[0][0]*p0 + mvp[0][1]*p1_ + mvp[0][2]*p2 + mvp[0][3];
-            f32 cy = mvp[1][0]*p0 + mvp[1][1]*p1_ + mvp[1][2]*p2 + mvp[1][3];
-            f32 cz = mvp[2][0]*p0 + mvp[2][1]*p1_ + mvp[2][2]*p2 + mvp[2][3];
-            f32 cw = mvp[3][0]*p0 + mvp[3][1]*p1_ + mvp[3][2]*p2 + mvp[3][3];
-            fprintf(stderr, "NDCCHECK v0=(%.2f,%.2f,%.2f) ndc=(%.3f,%.3f,%.3f) w=%.3f p1v=%d curmtx=%u\n",
-                    (double)p0,(double)p1_,(double)p2,
-                    (double)(cw? cx/cw:0),(double)(cw? cy/cw:0),(double)(cw? cz/cw:0),(double)cw,
-                    (int)g_state.p1_valid, (unsigned)g_state.current_mtx_id);
-            /* model-space bbox of this draw's vertices */
-            f32 mnx=1e30,mxx=-1e30,mny=1e30,mxy=-1e30,mnz=1e30,mxz=-1e30;
-            for (int vi=0; vi<g_state.vert_count; vi++) {
-                f32 vx=g_state.verts[vi].pos[0], vy=g_state.verts[vi].pos[1], vz=g_state.verts[vi].pos[2];
-                if(vx<mnx)mnx=vx; if(vx>mxx)mxx=vx; if(vy<mny)mny=vy; if(vy>mxy)mxy=vy; if(vz<mnz)mnz=vz; if(vz>mxz)mxz=vz;
-            }
-            fprintf(stderr, "  BBOX n=%d x[%.1f,%.1f] y[%.1f,%.1f] z[%.1f,%.1f]\n",
-                    g_state.vert_count,(double)mnx,(double)mxx,(double)mny,(double)mxy,(double)mnz,(double)mxz);
-            }
-        }
-    }
-#endif
-
-    /* UV scale — identity by default (games send normalized [0,1] UVs).
-     * The overlay code can override this when rendering pixel-space geometry. */
-    if (g_uv_scale_loc >= 0) {
-        GLfloat uv_scale[2] = {1.0f, 1.0f};
-        UP2FV(g_uv_scale_loc, 1, uv_scale);
-    }
-    
-    /* Upload texture matrix transforms */
-    /* GX_TEXMTX0..9 live at matrix-memory rows 30..57 in steps of 3;
-     * GX_IDENTITY is 60 and means "leave the coords alone". A slot that was
-     * never filled by GXLoadTexMtxImm is all zeros and would collapse every
-     * UV to the origin, so require it to have been loaded. */
-    {
-        u32 c;
-        for (c = 0; c < PC_TEXN; c++) {
-            int en = pc_texmtx_active(c);
-            if (g_texmtx_enable_loc >= 0) UP1I(g_texmtx_enable_loc + (GLint) c, en);
-            if (en && g_texmtx_loc >= 0) {
-                f32 mtx[4][4] = {{0}};
-                memcpy(mtx, g_state.mtx_array[g_state.tex_gen_mat_id[c]], sizeof(f32) * 12);
-                mtx[3][3] = 1.0f;
-                UPMTX4(g_texmtx_loc + (GLint) c, 1, GL_TRUE, &mtx[0][0]);
-            }
-        }
-    }
-
-    /* Post-transform texture matrices */
-    {
-        u32 c;
-        for (c = 0; c < PC_TEXN; c++) {
-            u32 id = g_state.tex_gen_pt_id[c];
-            int en = 0;
-            if (g_pttexmtx_enable_loc < 0) continue;
-            if (g_state.tex_gen_enabled[c] && id >= 64 && id <= 124 && ((id - 64) % 3) == 0 &&
-                g_state.pt_mtx_loaded[(id - 64) / 3]) {
-                en = 1;
-            }
-            UP1I(g_pttexmtx_enable_loc + (GLint) c, en);
-            if (en && g_pttexmtx_loc >= 0) {
-                f32 mtx[4][4] = {{0}};
-                memcpy(mtx, g_state.pt_mtx_array[(id - 64) / 3], sizeof(f32) * 12);
-                mtx[3][3] = 1.0f;
-                /* GX matrices are row-major; transpose on upload so the
-                 * GLSL mat4 * vec4 product is the row-vector product the
-                 * hardware performs (GL_FALSE handed the shader M^T). */
-                UPMTX4(g_pttexmtx_loc + (GLint) c, 1, GL_TRUE, &mtx[0][0]);
-            }
-        }
-    }
-
-    } /* stage_a */
-    pc_sec_end(1);
-    if (stage_b) {
-    /* Upload alpha compare uniforms */
-    apply_alpha_compare_uniforms();
-    
-    g_frame_draw_idx++;
-    /* MELEE_SKIPDRAW=N drops one draw, to see what it was covering.
-     * MELEE_DRAWID cannot answer that: it disables blending, so it reports
-     * the topmost draw over a pixel rather than the ones that blend to make
-     * the visible colour. */
-    {
-        static int skip = -2;
-        if (skip == -2) {
-            const char* e = getenv("MELEE_SKIPDRAW");
-            skip = e ? atoi(e) : -1;
-        }
-        if (skip >= 0 && (int) g_frame_draw_idx == skip) {
-            g_state.vert_count = 0;
-            return;
-        }
-    }
-    if (g_dbg_mode_loc >= 0) {
-        int on = ENV_FLAG("MELEE_DRAWID");
-        /* MELEE_OVERDRAW=1 answers "how many times is each pixel painted".
-         * Every draw becomes a constant +1/255 with additive blending and
-         * no depth test, so the frame that comes back is a layer count --
-         * screenshot it, and the mean pixel value x255 is the average
-         * overdraw while the image shows where it concentrates.
-         *
-         * Asked because the tablet renders the menu at 4.6 fps, 207 ms of
-         * GPU for 174 draws, where a 1593-draw match costs 27.8 ms: ~150x
-         * the GPU cost per draw. Either each of those draws covers most of
-         * the screen, which is a cost, or they cover more than the
-         * console's did, which is a bug. */
-        if (ENV_FLAG("MELEE_OVERDRAW")) {
-            on = 10;
-            gls_disable(GL_DEPTH_TEST);
-            gls_depth_mask(GL_FALSE);
-            gls_enable(GL_BLEND);
-            gls_blend_func(GL_ONE, GL_ONE);
-            gls_blend_eq(GL_FUNC_ADD);
-        }
-        { static int lit = -1; if (lit < 0) { const char* e = getenv("MELEE_LITDBG"); lit = e ? atoi(e) : 0; }
-          if (lit) on = (lit == 1) ? 2 : 3; }
-        /* MELEE_PAINTDRAW=N: draw N is painted solid magenta with blending,
-         * alpha test and depth test off -- "does this geometry reach the
-         * framebuffer at all", separate from why it is invisible. */
-        { static int pd = -2, pm = 1; if (pd == -2) { const char* e = getenv("MELEE_PAINTDRAW"); pd = e ? atoi(e) : -1;
-                                             const char* m = getenv("MELEE_PAINTMODE"); pm = m ? atoi(m) : 1; }
-          /* MELEE_PAINTMODE: 1 = magenta, no blend/depth/cull; 2 = magenta,
-           * depth test kept; 3 = the real TEV colour with alpha forced to 1,
-           * no blend/depth/cull. */
-          if (pd >= 0 && (int) g_frame_draw_idx == pd) {
-              on = (pm == 3) ? 5 : (pm == 4) ? 6 : (pm == 5) ? 7 : (pm == 6) ? 8 : (pm == 7) ? 9 : 4;
-              gls_disable(GL_BLEND);
-              if (pm != 8) gls_disable(GL_CULL_FACE);       /* 8 = magenta, cull and depth kept */
-              if (pm != 2 && pm != 8) gls_disable(GL_DEPTH_TEST);
-          }
-          else if (pd >= 0) { on = 0; } }
-        UP1I(g_dbg_mode_loc, on);
-        /* on == 10 keeps its additive blend: that is what does the counting. */
-        if (on && on != 10 && g_dbg_drawid_loc >= 0) {
-            UP1I(g_dbg_drawid_loc, (GLint) g_frame_draw_idx);
-            /* Blending would mix two draws' indices into a colour that
-             * decodes to a third draw that never ran. */
-            gls_disable(GL_BLEND);
-        }
-    }
-
-    /* Upload TEV pipeline uniforms (includes KColors) */
-    apply_tev_uniforms();
-    pc_sec_end(2);
-    
-    /* Upload fog uniforms */
-    if (g_fog_enabled_loc >= 0) UP1I(g_fog_enabled_loc, g_state.fog_enabled ? 1 : 0);
-    if (g_fog_type_loc >= 0) UP1I(g_fog_type_loc, g_state.fog_type);
-    if (g_fog_startz_loc >= 0) UP1F(g_fog_startz_loc, g_state.fog_startz);
-    if (g_fog_endz_loc >= 0) UP1F(g_fog_endz_loc, g_state.fog_endz);
-    if (g_fog_nearz_loc >= 0) UP1F(g_fog_nearz_loc, g_state.fog_nearz);
-    if (g_fog_farz_loc >= 0) UP1F(g_fog_farz_loc, g_state.fog_farz);
-    if (g_fog_color_loc >= 0) {
-        UP4F(g_fog_color_loc,
-            g_state.fog_color.r / 255.0f,
-            g_state.fog_color.g / 255.0f,
-            g_state.fog_color.b / 255.0f,
-            g_state.fog_color.a / 255.0f);
-    }
-    
-    /* Upload active texture info to fragment shader: one enable per unit,
-     * and the sampler uniforms pinned to their units. */
-    for (u32 i = 0; i < PC_TEXN; i++) {
-        u32 slot = g_active_tex_slots[i];
-        GLuint tex_id = g_state.tex_cache_valid[slot] ? g_state.tex_cache[slot] : 0;
-        int en = tex_id != 0;
-        if (en) {
-            pc_tex_bind(i, tex_id);
-        }
-        if (g_tex_enable_loc >= 0) UP1I(g_tex_enable_loc + (GLint) i, en);
-    }
-    if (g_tex0_loc >= 0) UP1I(g_tex0_loc, 0);
-    if (g_tex1_loc >= 0) UP1I(g_tex1_loc, 1);
-    if (g_tex2_loc >= 0) UP1I(g_tex2_loc, 2);
-    if (g_tex3_loc >= 0) UP1I(g_tex3_loc, 3);
-    } /* stage_b */
     
     /* Determine GL primitive type */
     GLenum gl_prim;
@@ -8370,6 +8498,10 @@ void GXSetTevOrder(u32 stage, u32 coord, u32 tex, u32 chan)
 static void tev_track_stage(u32 stage)
 {
     if (stage + 1 > g_state.num_tev_stages) {
+        /* Raising the stage count is a state change like any other: the
+         * setters that found their own value unchanged still call this,
+         * and the count feeds a specialisation constant. */
+        gx_flush_pending();
         g_state.num_tev_stages = stage + 1;
     }
 }
@@ -9696,6 +9828,69 @@ static void apply_alpha_compare_uniforms(void)
 }
 
 /* Upload TEV pipeline uniforms to the shader */
+/* Texture coordinate generation: the mode/source/normalise arrays are
+ * specialisation constants; the 3x4 matrix is read from the GX matrix
+ * memory the loaders fill. Staged with the matrix group, not the TEV
+ * group: a projected shadow moves its matrix every frame through
+ * GXLoadTexMtxImm, which moves only the matrix generation, and the TEV
+ * state around it is the same object after object -- once the setters
+ * stopped flushing on unchanged values, the shadow's matrix was never
+ * re-uploaded and the fighters' shadows went missing (golden match_move,
+ * frames 195/315). */
+/* The model matrix the lighting uses: it follows the position matrix
+ * loaders, which move only the matrix generation, so it is staged with
+ * that group (the self-check found it stale at frame 10). */
+static void apply_model_uniform(void)
+{
+    if (g_model_loc >= 0) {
+        GLfloat mm[16];
+        const f32* src = g_state.mtx3d_active ? &g_light_model[0][0]
+                                              : g_state.model_matrix;
+        /* row-major source -> column-major GL: mm[col*4 + row] = src[row*4 + col] */
+        for (int r = 0; r < 4; r++)
+            for (int c = 0; c < 4; c++)
+                mm[c * 4 + r] = src[r * 4 + c];
+        UPMTX4(g_model_loc, 1, GL_FALSE, mm);
+    }
+}
+static void apply_texgen_uniforms(void)
+{
+    /* Upload texture coordinate generation state */
+    /* Raw GX values: mode GX_TG_MTX3x4 = 0, GX_TG_MTX2x4 = 1 (-1 when no
+     * texgen was set for the coord); source GX_TG_POS = 0, GX_TG_NRM = 1,
+     * GX_TG_TEX0 = 4... The shader used to expect 1/2 for the modes and
+     * 1/2 for POS/NRM, so no texgen ever ran. */
+    {
+        u32 c;
+        static int oldmtx = -1;
+        if (oldmtx < 0) oldmtx = getenv("MELEE_TEXGEN_OLDMTX") != NULL;
+        for (c = 0; c < PC_TEXN; c++) {
+            int en = g_state.tex_gen_enabled[c] ? 1 : 0;
+            if (g_texgen_mode_loc >= 0) UP1I(g_texgen_mode_loc + (GLint) c, en ? (int) g_state.tex_gen_mode[c] : -1);
+            if (g_texgen_src_loc >= 0) UP1I(g_texgen_src_loc + (GLint) c, (int) g_state.tex_gen_src[c]);
+            if (g_texgen_nrm_loc >= 0) UP1I(g_texgen_nrm_loc + (GLint) c, (int) g_state.tex_gen_normalize[c]);
+            if (g_texgen_mtx_loc >= 0 && en) {
+                u32 mtx_id = g_state.tex_gen_mat_id[c];
+                if (mtx_id < 68) {
+                    GLfloat m[16] = {0};
+                    /* The shader applies this to the object-space attribute, as
+                     * the hardware does. A pretransformed batch already carries
+                     * its position matrix in the vertices, so a PN row (id < 30)
+                     * is identity there; GX_IDENTITY (60) is identity everywhere. */
+                    if (!oldmtx && (mtx_id == 60 || (g_batch_pretransformed && mtx_id < 30))) {
+                        m[0] = m[5] = m[10] = 1.0f;
+                    } else {
+                        for (int i = 0; i < 3; i++)
+                            for (int j = 0; j < 4; j++)
+                                m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
+                    }
+                    m[3*4 + 3] = 1.0f;
+                    UPMTX4(g_texgen_mtx_loc + (GLint) c, 1, GL_TRUE, m);
+                }
+            }
+        }
+    }
+}
 static void apply_tev_uniforms(void)
 {
     if (!g_shader_program) return;
@@ -10040,16 +10235,6 @@ static void apply_tev_uniforms(void)
             g_state.camera_pos[1],
             g_state.camera_pos[2]);
     }
-    if (g_model_loc >= 0) {
-        GLfloat mm[16];
-        const f32* src = g_state.mtx3d_active ? &g_light_model[0][0]
-                                              : g_state.model_matrix;
-        /* row-major source -> column-major GL: mm[col*4 + row] = src[row*4 + col] */
-        for (int r = 0; r < 4; r++)
-            for (int c = 0; c < 4; c++)
-                mm[c * 4 + r] = src[r * 4 + c];
-        UPMTX4(g_model_loc, 1, GL_FALSE, mm);
-    }
     if (g_light_pos_loc >= 0) {
         GLfloat lp[8][3];
         GLint ld[8];
@@ -10178,41 +10363,6 @@ static void apply_tev_uniforms(void)
     }
     // Bump map uses u_tex0 (TEXMAP0) - checked via u_tex0_enable in shader
     
-    /* Upload texture coordinate generation state */
-    /* Raw GX values: mode GX_TG_MTX3x4 = 0, GX_TG_MTX2x4 = 1 (-1 when no
-     * texgen was set for the coord); source GX_TG_POS = 0, GX_TG_NRM = 1,
-     * GX_TG_TEX0 = 4... The shader used to expect 1/2 for the modes and
-     * 1/2 for POS/NRM, so no texgen ever ran. */
-    {
-        u32 c;
-        static int oldmtx = -1;
-        if (oldmtx < 0) oldmtx = getenv("MELEE_TEXGEN_OLDMTX") != NULL;
-        for (c = 0; c < PC_TEXN; c++) {
-            int en = g_state.tex_gen_enabled[c] ? 1 : 0;
-            if (g_texgen_mode_loc >= 0) UP1I(g_texgen_mode_loc + (GLint) c, en ? (int) g_state.tex_gen_mode[c] : -1);
-            if (g_texgen_src_loc >= 0) UP1I(g_texgen_src_loc + (GLint) c, (int) g_state.tex_gen_src[c]);
-            if (g_texgen_nrm_loc >= 0) UP1I(g_texgen_nrm_loc + (GLint) c, (int) g_state.tex_gen_normalize[c]);
-            if (g_texgen_mtx_loc >= 0 && en) {
-                u32 mtx_id = g_state.tex_gen_mat_id[c];
-                if (mtx_id < 68) {
-                    GLfloat m[16] = {0};
-                    /* The shader applies this to the object-space attribute, as
-                     * the hardware does. A pretransformed batch already carries
-                     * its position matrix in the vertices, so a PN row (id < 30)
-                     * is identity there; GX_IDENTITY (60) is identity everywhere. */
-                    if (!oldmtx && (mtx_id == 60 || (g_batch_pretransformed && mtx_id < 30))) {
-                        m[0] = m[5] = m[10] = 1.0f;
-                    } else {
-                        for (int i = 0; i < 3; i++)
-                            for (int j = 0; j < 4; j++)
-                                m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
-                    }
-                    m[3*4 + 3] = 1.0f;
-                    UPMTX4(g_texgen_mtx_loc + (GLint) c, 1, GL_TRUE, m);
-                }
-            }
-        }
-    }
 
 }
 
@@ -10352,7 +10502,11 @@ void GXSetTevAlphaOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_re
 }
 void GXSetNumChans(u32 n)
 {
-    if (g_state.num_chans == n) return;
+    /* No early-out here: the flush this makes covers a hole in the
+     * generation bookkeeping that is still open -- MELEE_STAGECHECK finds
+     * u_chan_color and u_tevreg stale (state moved, no bump) about twenty
+     * draws a frame, and without this flush the fighters' shadows on the
+     * stage go missing (golden match_move, frame 315). */
     gx_flush_pending();
     GX_TRACE("GXSetNumChans(%u)", n);
     /* Sets the number of enabled color channels (GX_COLOR0, GX_COLOR1). */
