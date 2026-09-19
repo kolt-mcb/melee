@@ -1,42 +1,36 @@
-#include "ft/ft_081B.h"
+#include "ft_081B.h"
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
 
-#include "inlines.h"
-#include "stdbool.h"
+#include <Runtime/platform.h>
+
+#include <sysdolphin/baselib/forward.h>
 
 #include <placeholder.h>
-#include <platform.h>
+#include <stdbool.h>
 
-#include "baselib/forward.h"
-
-#include "ft/fighter.h"
-
-#include "ft/forward.h"
-
-#include "ft/ft_0819.h"
-#include "ft/ft_0892.h"
-#include "ft/ftchangeparam.h"
-#include "ft/ftcliffcommon.h"
-#include "ft/ftcommon.h"
-#include "ft/ftwalljump.h"
-#include "ft/types.h"
-
-#include "ftCommon/forward.h"
-
-#include "ftCommon/ftCo_Fall.h"
-#include "ftCommon/ftCo_Landing.h"
-#include "ftCommon/ftCo_MissFoot.h"
-#include "ftCommon/ftCo_Ottotto.h"
-#include "ftCommon/ftCo_StopCeil.h"
-#include "ftCommon/ftCo_StopWall.h"
-#include "lb/types.h"
-#include "mp/mpcoll.h"
-#include "mp/mplib.h"
-
+#include "fighter.h"
+#include "forward.h"
+#include "ft_0819.h"
+#include "ft_0892.h"
+#include "ftchangeparam.h"
+#include "ftcliffcommon.h"
+#include "ftcommon.h"
+#include "ftwalljump.h"
+#include "kinds/ftCommon/forward.h"
+#include "kinds/ftCommon/ftCo_Fall.h"
+#include "kinds/ftCommon/ftCo_Landing.h"
+#include "kinds/ftCommon/ftCo_MissFoot.h"
+#include "kinds/ftCommon/ftCo_Ottotto.h"
+#include "kinds/ftCommon/ftCo_StopCeil.h"
+#include "kinds/ftCommon/ftCo_StopWall.h"
+#include "types.h"
 #include <dolphin/mtx.h>
-#include <baselib/gobj.h>
+#include <melee/lb/types.h>
+#include <melee/mp/mpcoll.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/gobj.h>
 
 void ft_80081B38(Fighter_GObj* gobj)
 {
@@ -619,7 +613,9 @@ Fighter_GObj* ft_80082E3C(Fighter_GObj* gobj)
     HSD_GObj* cur;
     u8 _[8];
 
-    for (cur = HSD_GObj_Entities->fighters; cur != NULL; cur = cur->next) {
+    for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER]; cur != NULL;
+         cur = cur->next)
+    {
         if (cur != gobj) {
             Fighter* cur_fp = GET_FIGHTER(cur);
             if (cur_fp->x221D_b7) {
@@ -645,6 +641,11 @@ Fighter_GObj* ft_80082E3C(Fighter_GObj* gobj)
         }
     }
     return NULL;
+}
+
+static inline int ftGetFacingDirInt2(Fighter_GObj* gobj)
+{
+    return ftGetFacingDirInt(GET_FIGHTER(gobj));
 }
 
 void ft_80082F28(Fighter_GObj* gobj)
@@ -1092,7 +1093,7 @@ static inline bool ft_80084280_inline(Fighter_GObj* gobj)
     bool temp;
     coll->last_pos = coll->cur_pos;
     coll->cur_pos = fp->cur_pos;
-    coll->lstick_x = fp->input.lstick.x;
+    coll->lstick_x = fp->input.lstick[0].x;
     mpCollSetFacingDir(coll, ftGetFacingDirInt(fp));
     temp = mpColl_8004B4B0(coll);
     fp->cur_pos = coll->cur_pos;
@@ -1133,7 +1134,7 @@ static inline bool ft_800843FC_inline(Fighter_GObj* gobj)
     coll = &fp->coll_data;
     fp->coll_data.last_pos = fp->coll_data.cur_pos;
     fp->coll_data.cur_pos = fp->cur_pos;
-    fp->coll_data.lstick_x = fp->input.lstick.x;
+    fp->coll_data.lstick_x = fp->input.lstick[0].x;
     mpCollSetFacingDir(coll, ftGetFacingDirInt(fp));
     temp = mpColl_8004B5C4(coll);
     fp->cur_pos = coll->cur_pos;
@@ -1260,7 +1261,7 @@ bool ft_80084A18(Fighter_GObj* gobj)
 
 float ft_GetGroundFrictionMultiplier(Fighter* fp)
 {
-    if (fp->kind == FTKIND_POPO || fp->kind == FTKIND_NANA) {
+    if (fp->kind == Ft_Kind_Popo || fp->kind == Ft_Kind_Nana) {
         return 1.0F;
     }
     return mpColl_8004CA6C(&fp->coll_data);
@@ -1397,5 +1398,5 @@ void ft_80084DB0(Fighter_GObj* gobj)
     } else {
         ftCommon_Fall(fp, co_attrs->gravity, co_attrs->terminal_velocity);
     }
-    ftCommon_8007D268(fp);
+    ftCommon_CalcSelfAccel_Drift(fp);
 }

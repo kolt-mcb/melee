@@ -8,13 +8,17 @@
 #include "gm_1601.h"
 #include "gm_1A36.h"
 #include "gm_1A3F.h"
-#include "gm_1A45.h"
 #include "gm_unsplit.h"
-
-#include "dolphin/pad.h"
-#include "it/inlines.h"
-#include "mn/inlines.h"
-
+#include "gmscene.h"
+#include <dolphin/pad.h>
+#include <melee/it/inlines.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/mn/inlines.h>
+#include <melee/sc/types.h>
+#include <melee/ty/toy.h>
 #include <sysdolphin/baselib/archive.h>
 #include <sysdolphin/baselib/cobj.h>
 #include <sysdolphin/baselib/controller.h>
@@ -26,12 +30,11 @@
 #include <sysdolphin/baselib/jobj.h>
 #include <sysdolphin/baselib/mobj.h>
 #include <sysdolphin/baselib/sislib.h>
-#include <melee/lb/lb_00B0.h>
-#include <melee/lb/lbarchive.h>
-#include <melee/lb/lbaudio_ax.h>
-#include <melee/lb/lbspdisplay.h>
-#include <melee/sc/types.h>
-#include <melee/ty/toy.h>
+
+struct unk_jobj_node {
+    HSD_JObj* x0;
+    s32 x4;
+};
 
 static HSD_Archive* lbl_804D6698;
 static SceneDesc* lbl_804D669C;
@@ -39,53 +42,48 @@ static SceneDesc* lbl_804D66A0;
 static SceneDesc* lbl_804D66A4;
 static SceneDesc* lbl_804D66A8;
 static HSD_Joint* lbl_804D66AC;
-static struct {
-    HSD_JObj* x0;
-    s32 x4;
-} lbl_804D66B0;
-static HSD_JObj* lbl_804D66B8[2];
-static struct {
-    HSD_JObj* x0;
-    s32 x4;
-} lbl_804D66C0;
-static struct {
-    HSD_JObj* x0;
-    s32 x4;
-} lbl_804D66C8;
-static struct {
-    HSD_JObj* x0;
-    s32 x4;
-} lbl_804D66D0;
-static HSD_JObj* lbl_804D66D8[2];
-static struct {
-    HSD_JObj* x0;
-    s32 x4;
-} lbl_804D66E0;
-static HSD_JObj* lbl_804D66E8[2];
+static struct unk_jobj_node lbl_804D66B0;
+static struct unk_jobj_node lbl_804D66B8;
+static struct unk_jobj_node lbl_804D66C0;
+static struct unk_jobj_node lbl_804D66C8;
+static struct unk_jobj_node lbl_804D66D0;
+static struct unk_jobj_node lbl_804D66D8;
+static struct unk_jobj_node lbl_804D66E0;
+static struct unk_jobj_node lbl_804D66E8;
 static HSD_Archive* lbl_804D66F0;
 static HSD_JObj* lbl_804D66F4;
-static u32 lbl_804D66F8[2];
+static u32 lbl_804D66F8;
 
 static struct {
     u8 x0;
     u8 pad_01[0x3];
-    s32 x4;
-    int x8;
-    s32 xC;
-    u32 x10;
-    u8 x14;
-    u8 x15;
-    u8 x16;
-    u8 pad_17;
-    int x18;
-    u16 x1C;
-    u16 x1E;
-    u8 x20;
-    u8 pad_21;
-    u16 x22;
-    HSD_Text* x24;
-    HSD_GObj* x28;
-    HSD_JObj* x2C[10];
+    union {
+        struct {
+            s32 x4;
+            int x8;
+            s32 xC;
+            u32 x10;
+            u8 x14;
+            u8 x15;
+            u8 x16;
+            u8 pad_17;
+            int x18;
+            u16 x1C;
+            u16 x1E;
+            u8 x20;
+            u8 pad_21;
+            u16 x22;
+            HSD_Text* x24;
+            union {
+                struct {
+                    HSD_GObj* gobj;
+                    HSD_JObj* jobjs[10];
+                } typed;
+                HSD_JObj* jobj_slots[11];
+            } x28;
+        };
+        HSD_JObj* jobj_slots[20];
+    };
     HSD_JObj* x54;
     HSD_JObj* x58;
     HSD_JObj* x5C;
@@ -105,7 +103,7 @@ static void fn_8019EFC4(HSD_PadStatus* pad)
     HSD_JObj* child_next;
     HSD_JObj* jobj;
 
-    jobj = lbl_80479A98.x28->hsd_obj;
+    jobj = lbl_80479A98.x28.typed.gobj->hsd_obj;
     if (lbl_80479A98.x60 != 0) {
         if (jobj == NULL) {
             jobj = NULL;
@@ -140,10 +138,18 @@ static void fn_8019EFC4(HSD_PadStatus* pad)
         {
             s32 i;
             for (i = 10; i > 0; i--) {
+                /* PC port: upstream indexes this run of slots as raw bytes,
+                 * `((HSD_JObj**) ((u8*) &lbl_80479A98 + 0x28))[i]`. 0x28 is
+                 * the console's offset of the x28 union, and every pointer
+                 * ahead of it is twice as wide here, so that address is not
+                 * the union at all. jobj_slots[i] is the same slot by name:
+                 * slot 0 is the GObj, 1..10 are typed.jobjs[0..9]. */
                 if (i > lbl_80479A98.x70) {
-                    HSD_JObjSetFlags(lbl_80479A98.x2C[i - 1], JOBJ_HIDDEN);
+                    HSD_JObjSetFlags(lbl_80479A98.x28.jobj_slots[i],
+                                     JOBJ_HIDDEN);
                 } else {
-                    HSD_JObjClearFlags(lbl_80479A98.x2C[i - 1], JOBJ_HIDDEN);
+                    HSD_JObjClearFlags(lbl_80479A98.x28.jobj_slots[i],
+                                       JOBJ_HIDDEN);
                 }
             }
         }
@@ -303,8 +309,8 @@ static void fn_8019F6EC(HSD_GObj* gobj)
         }
     }
     HSD_JObjAnimAll(jobj);
-    HSD_JObjAnimAll(lbl_804D66B8[0]);
-    HSD_JObjAnimAll(lbl_804D66E8[0]);
+    HSD_JObjAnimAll(lbl_804D66B8.x0);
+    HSD_JObjAnimAll(lbl_804D66E8.x0);
 }
 
 static void fn_8019F810(void)
@@ -366,6 +372,86 @@ static inline s32 fn_8019F9C4_GetCharIdx(CharacterKind arg0)
     }
 }
 
+static inline void fn_8019F9C4_LoadSymbols(u32 arg0)
+{
+    u8 game_mode = gm_GetCurrentGameMode();
+    char* model_name = gm_80160564(arg0, game_mode);
+    char* scene_name = gm_801604DC(arg0, game_mode);
+
+    lbArchive_LoadSymbols(scene_name, &lbl_804D66AC, model_name, 0);
+    lbArchive_LoadSymbols("GmGoAnim.dat", &lbl_804D66A4,
+                          "ScGamRegGover_scene_data", 0);
+    lbArchive_LoadSymbols("GmRgStnd.dat", &lbl_804D66A8, "standScene", 0);
+}
+
+static inline void fn_8019F9C4_inline1(HSD_JObj* next, HSD_JObj** child)
+{
+    if (next == NULL) {
+        *child = NULL;
+    } else {
+        *child = next->child;
+    }
+    lbl_80479A98.x54 = *child;
+
+    if (lbl_80479A98.x54 == NULL) {
+        *child = NULL;
+    } else {
+        *child = lbl_80479A98.x54->next;
+    }
+    lbl_80479A98.x58 = *child;
+
+    if (lbl_80479A98.x58 == NULL) {
+        *child = NULL;
+    } else {
+        *child = lbl_80479A98.x58->next;
+    }
+}
+
+static inline void fn_8019F9C4_inline2(HSD_JObj* next_jobj, HSD_JObj* model)
+{
+    HSD_JObj* node;
+
+    if (next_jobj == NULL) {
+        node = NULL;
+    } else {
+        node = next_jobj->child;
+    }
+    lb_8000C290(model, node);
+}
+
+static inline void fn_8019F9C4_inline3(HSD_JObj* model, HSD_GObj* object,
+                                       CharacterKind arg0)
+{
+    HSD_JObj* child;
+    s32 char_idx;
+    f32 f;
+    f32 scale;
+
+    lbl_804D66B8.x0 = model;
+    HSD_GObjObject_80390A70(object, HSD_GObj_JObjKind, model);
+    GObj_SetupGXLink(object, HSD_GObj_JObjCallback, 0xB, 0);
+    char_idx = fn_8019F9C4_GetCharIdx(arg0);
+
+    if (model == NULL) {
+        child = NULL;
+    } else {
+        child = model->child;
+    }
+
+    HSD_JObjSetTranslateX(child, Toy_803060BC(char_idx, 0));
+    HSD_JObjSetTranslateY(child, Toy_803060BC(char_idx, 1));
+    HSD_JObjSetTranslateZ(child, Toy_803060BC(char_idx, 2));
+    HSD_JObjSetRotationY(child, 0.017453292f * Toy_803060BC(char_idx, 5));
+    f = Toy_803060BC(char_idx, 4);
+    scale = Toy_803060BC(char_idx, 3) / f;
+    HSD_JObjSetScaleX(child, scale);
+    HSD_JObjSetScaleY(child, scale);
+    HSD_JObjSetScaleZ(child, scale);
+    HSD_JObjSetScaleX(model, 2.0f);
+    HSD_JObjSetScaleY(model, 2.0f);
+    HSD_JObjSetScaleZ(model, 2.0f);
+}
+
 void fn_8019F9C4(u32 arg0)
 {
     HSD_CObj* cobj;
@@ -381,9 +467,6 @@ void fn_8019F9C4(u32 arg0)
 #if BUILD_TARGET_PC
     HSD_Archive* coin_arc = NULL;
 #endif
-    f32 f;
-    f32 scale;
-    PAD_STACK(16);
 
     char_idx = fn_8019F9C4_GetCharIdx(arg0);
     arg0 = (char_idx == -1) ? 8 : arg0;
@@ -420,11 +503,11 @@ void fn_8019F9C4(u32 arg0)
 #endif
     Toy_803124BC();
     Toy_803102D0();
+#if BUILD_TARGET_PC
     {
         u8 game_mode = gm_GetCurrentGameMode();
         char* model_name = gm_80160564(arg0, game_mode);
         char* scene_name = gm_801604DC(arg0, game_mode);
-#if BUILD_TARGET_PC
         /* Both names come from Toy_8030813C, which is a stub while ty/ is
          * unbuilt; skip the load rather than pass it a bogus filename.
          * lbl_804D66AC stays NULL, and the HSD_JObjLoadJoint below already
@@ -439,10 +522,7 @@ void fn_8019F9C4(u32 arg0)
         } else {
             lbArchive_LoadSymbols(scene_name, &lbl_804D66AC, model_name, 0);
         }
-#else
-        lbArchive_LoadSymbols(scene_name, &lbl_804D66AC, model_name, 0);
-#endif
-#if BUILD_TARGET_PC
+
         /* PC port: pc_convert_section dispatches on the symbol-name suffix
          * and has no _scene_data / standScene case, so both of these come
          * back as raw archive bytes with big-endian file offsets where the
@@ -473,12 +553,17 @@ void fn_8019F9C4(u32 arg0)
                           "Game Over screen skipped");
             return;
         }
-#else
-        lbArchive_LoadSymbols("GmGoAnim.dat", &lbl_804D66A4,
-                              "ScGamRegGover_scene_data", 0);
-        lbArchive_LoadSymbols("GmRgStnd.dat", &lbl_804D66A8, "standScene", 0);
-#endif
     }
+#else
+    fn_8019F9C4_LoadSymbols(arg0);
+#endif
+#ifdef MUST_MATCH
+    // Preserve the retail literal order across the later inlined JObj helpers.
+    (void) 0.1f;
+    (void) "SdIntro.dat";
+    (void) "SIS_IntroData";
+    (void) " ";
+#endif
     cobj = HSD_CObjLoadDesc(lbl_804D669C->cameras->desc);
     cam_gobj = GObj_Create(0x13, 0x14, 0);
     HSD_GObjObject_80390A70(cam_gobj, HSD_GObj_CameraKind, cobj);
@@ -508,7 +593,7 @@ void fn_8019F9C4(u32 arg0)
     lbl_804D66E0.x4 = 0;
     lbl_804D66D0.x4 = 0x24E;
     lb_80011E24(jobj, &lbl_804D66B0.x0, 0x38, -1);
-    lb_80011E24(jobj, &lbl_804D66D8[0], 1, -1);
+    lb_80011E24(jobj, &lbl_804D66D8.x0, 1, -1);
     lb_80011E24(jobj, &lbl_804D66D0.x0, 2, -1);
     lb_80011E24(jobj, &lbl_804D66C8.x0, 0x35, -1);
     lb_80011E24(jobj, &lbl_804D66C0.x0, 0x37, -1);
@@ -523,21 +608,17 @@ void fn_8019F9C4(u32 arg0)
     HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xB, 0);
     gm_8016895C(jobj, lbl_804D66A0->models[0], 0);
-    lbl_80479A98.x28 = gobj;
+    lbl_80479A98.x28.typed.gobj = gobj;
 
     if (jobj == NULL) {
         child = NULL;
     } else {
         child = jobj->child;
     }
-    if (child == NULL) {
-        node = NULL;
-    } else {
-        node = child->child;
-    }
+    node = child == NULL ? NULL : child->child;
 
-    for (i = 0; i < 10; i++) {
-        lbl_80479A98.x2C[i] = node;
+    for (i = 10; i < 20; i++) {
+        lbl_80479A98.jobj_slots[i] = node;
         if (node->next != NULL) {
             node = node->next;
         }
@@ -556,25 +637,7 @@ void fn_8019F9C4(u32 arg0)
         next = child->next;
     }
 
-    if (next == NULL) {
-        child = NULL;
-    } else {
-        child = next->child;
-    }
-    lbl_80479A98.x54 = child;
-
-    if (lbl_80479A98.x54 == NULL) {
-        child = NULL;
-    } else {
-        child = lbl_80479A98.x54->next;
-    }
-    lbl_80479A98.x58 = child;
-
-    if (lbl_80479A98.x58 == NULL) {
-        child = NULL;
-    } else {
-        child = lbl_80479A98.x58->next;
-    }
+    fn_8019F9C4_inline1(next, &child);
     lbl_80479A98.x5C = child;
 
     {
@@ -614,7 +677,7 @@ void fn_8019F9C4(u32 arg0)
 
     gobj = GObj_Create(0xE, 0xF, 0);
     jobj = HSD_JObjLoadJoint(lbl_804D66A8->models[0]->joint);
-    lbl_804D66E8[0] = jobj;
+    lbl_804D66E8.x0 = jobj;
     HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xB, 0);
     HSD_JObjSetScaleX(jobj, 2.0f);
@@ -648,48 +711,30 @@ void fn_8019F9C4(u32 arg0)
     } else {
         next = child->child;
     }
-    if (next == NULL) {
-        node = NULL;
-    } else {
-        node = next->child;
+    fn_8019F9C4_inline2(next, jobj);
+    {
+        HSD_GObj* character_gobj =
+#ifdef MUST_MATCH
+            // Preserve the retail return-value copy.
+            character_gobj =
+#endif
+                GObj_Create(0xE, 0xF, 0);
+        gobj = character_gobj;
     }
-    lb_8000C290(jobj, node);
-
-    gobj = GObj_Create(0xE, 0xF, 0);
     jobj = HSD_JObjLoadJoint(lbl_804D66AC);
-    lbl_804D66B8[0] = jobj;
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
-    GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xB, 0);
+    fn_8019F9C4_inline3(jobj, gobj, arg0);
 
-    char_idx = fn_8019F9C4_GetCharIdx(arg0);
-
-    if (jobj == NULL) {
-        child = NULL;
-    } else {
-        child = jobj->child;
-    }
-
-    HSD_JObjSetTranslateX(child, Toy_803060BC(char_idx, 0));
-    HSD_JObjSetTranslateY(child, Toy_803060BC(char_idx, 1));
-    HSD_JObjSetTranslateZ(child, Toy_803060BC(char_idx, 2));
-    HSD_JObjSetRotationY(child, 0.017453292f * Toy_803060BC(char_idx, 5));
-    f = Toy_803060BC(char_idx, 4);
-    scale = Toy_803060BC(char_idx, 3) / f;
-    HSD_JObjSetScaleX(child, scale);
-    HSD_JObjSetScaleY(child, scale);
-    HSD_JObjSetScaleZ(child, scale);
-    HSD_JObjSetScaleX(jobj, 2.0f);
-    HSD_JObjSetScaleY(jobj, 2.0f);
-    HSD_JObjSetScaleZ(jobj, 2.0f);
-
-    lb_8000C1C0(jobj, lbl_804D66E8[0]);
-    lb_8000C290(jobj, lbl_804D66E8[0]);
+    lb_8000C1C0(jobj, lbl_804D66E8.x0);
+    lb_8000C290(jobj, lbl_804D66E8.x0);
 
     HSD_SisLib_803A611C(0, cam_gobj, 9, 0x12, 0, 0xB, 0, 0x13);
     HSD_SisLib_803A62A0(0, "SdIntro.dat", "SIS_IntroData");
     lbl_80479A98.x24 = HSD_SisLib_803A6754(0, 0);
-    lbl_80479A98.x24->font_size.x = 0.1f;
-    lbl_80479A98.x24->font_size.y = 0.1f;
+    {
+        HSD_Text* text = lbl_80479A98.x24;
+        text->font_size.x = 0.1f;
+        text->font_size.y = 0.1f;
+    }
     lbl_80479A98.x24->default_alignment = 2;
     HSD_SisLib_803A6B98(lbl_80479A98.x24, 240.0f, 176.0f, " ");
     if (lbl_80479A98.x20 == 0) {
@@ -739,17 +784,17 @@ void gm_Scene_GOver_OnExit(void* arg0_)
 static void fn_801A0B60(HSD_GObj* gobj)
 {
     HSD_JObj* jobj = GET_JOBJ(gobj);
-    HSD_JObjReqAnimAll(jobj, lbl_804D66F8[0]);
+    HSD_JObjReqAnimAll(jobj, lbl_804D66F8);
     HSD_JObjAnimAll(jobj);
-    if (lbl_804D66F8[0] == 0xBD) {
+    if (lbl_804D66F8 == 0xBD) {
         if (((u32) gm_GetButtonsTriggered(PAD_MAX_CONTROLLERS) &
              PAD_BUTTON_START) ||
             ((u32) gm_GetButtonsTriggered(PAD_MAX_CONTROLLERS) & PAD_BUTTON_A))
         {
-            lbl_804D66F8[0] += 1;
+            lbl_804D66F8 += 1;
         }
     } else {
-        lbl_804D66F8[0] += 1;
+        lbl_804D66F8 += 1;
     }
     if ((int) HSD_AObjGetCurrFrame(lbl_804D66F4->aobj) >=
         (int) HSD_AObjGetEndFrame(lbl_804D66F4->aobj))
@@ -769,7 +814,7 @@ void gm_Scene_ComingSoon_OnEnter(void* unused)
     HSD_LObj* lobj;
     PAD_STACK(4);
 
-    lbl_804D66F8[0] = 0;
+    lbl_804D66F8 = 0;
     lbl_804D66F0 =
         lbArchive_80016DBC("IfComSn.dat", &sp10, "ScComSoon_scene_data", 0);
 

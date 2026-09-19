@@ -6,20 +6,17 @@
 #include "grzakogenerator.h"
 #include "inlines.h"
 #include "types.h"
-
-#include "cm/camera.h"
-#include "ef/efsync.h"
-#include "it/inlines.h"
-#include "it/types.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
+#include <melee/cm/camera.h>
+#include <melee/ef/efsync.h>
+#include <melee/it/inlines.h>
+#include <melee/it/types.h>
+#include <melee/lb/lb_00B0.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
 
 /* 220F10 */ static void grTIceClimber_80220F10(bool);
-/* 220F14 */ static void grTIceClimber_80220F14(void);
+/* 220F14 */ static void grTIceClimber_OnInit(void);
 /* 220F84 */ static void grTiceclimber_UnkStage0_OnLoad(void);
 /* 220F88 */ static void grTiceclimber_UnkStage0_OnStart(void);
 /* 220FAC */ static bool grTIceClimber_80220FAC(void);
@@ -71,7 +68,7 @@ StageData grTIc_StageData = {
     Gr_Kind_TIceclimber,
     stage_callbacks,
     "/GrTIc.dat",
-    grTIceClimber_80220F14,
+    grTIceClimber_OnInit,
     grTIceClimber_80220F10,
     grTiceclimber_UnkStage0_OnLoad,
     grTiceclimber_UnkStage0_OnStart,
@@ -85,7 +82,7 @@ StageData grTIc_StageData = {
 
 void grTIceClimber_80220F10(bool unused) {}
 
-void grTIceClimber_80220F14(void)
+static void grTIceClimber_OnInit(void)
 {
     Ground_InitTargetStage(setupStageCallbacks);
 }
@@ -120,7 +117,7 @@ Ground_GObj* setupStageCallbacks(int id)
 
 void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = (Ground*) HSD_GObjGetUserData(gobj);
+    Ground* gp = GET_GROUND(gobj);
     grAnime_801C8138(gobj, gp->map_id, 0);
 }
 
@@ -135,7 +132,7 @@ void stageGObj0_Callback3(Ground_GObj* gobj) {}
 
 void stageGObj2_OnInit(Ground_GObj* gobj)
 {
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
     grAnime_801C7FF8(gobj, 69, 2, 1, 0.0F, 1.0F);
     grTIceClimber_80221288(gobj);
 }
@@ -147,15 +144,14 @@ bool stageGObj2_Callback1(Ground_GObj* gobj)
 
 void stageGObj2_GObjProc(Ground_GObj* gobj)
 {
-    lb_800115F4();
-    Ground_801C2FE0(gobj);
+    Ground_UpdateWindAndMapColl(gobj);
 }
 
 void stageGObj2_Callback3(Ground_GObj* gobj) {}
 
 void stageGObj1_OnInit(Ground_GObj* gobj)
 {
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
 }
 
 bool stageGObj1_Callback1(Ground_GObj* gobj)
@@ -165,7 +161,7 @@ bool stageGObj1_Callback1(Ground_GObj* gobj)
 
 void stageGObj1_GObjProc(Ground_GObj* gobj)
 {
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
 }
 
 void stageGObj1_Callback3(Ground_GObj* gobj) {}
@@ -179,7 +175,7 @@ void grTIceClimber_80221208(Item_GObj* gobj, Ground* u1, Vec3* u2,
     HSD_JObjSetFlagsAll(it->xDD4_itemVar.mato.x4, JOBJ_HIDDEN);
     lb_8000B1CC(it->xDD4_itemVar.mato.x4, NULL, &pos);
     efSync_Spawn(0x445, gobj, &pos);
-    Camera_80030E44(2, 0);
+    Camera_RequestQuake(QuakeKind_Small, NULL);
     Ground_801C53EC(310);
     grMaterial_801C8CDC(gobj);
 }

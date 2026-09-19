@@ -1,4 +1,7 @@
-#include <baselib/forward.h>
+#ifndef SYSDOLPHIN_BASELIB_DEVCOM_STATIC_H
+#define SYSDOLPHIN_BASELIB_DEVCOM_STATIC_H
+
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/ar.h>
 #include <dolphin/dvd.h>
@@ -7,13 +10,13 @@ struct HSD_DevCom {
     struct HSD_DevCom* next;
     int dcReq;
     int file;
-    intptr_t src;
-    intptr_t dest;
+    uintptr_t src;
+    uintptr_t dest;
     size_t size;
     u16 type;
     u16 cancelflag;
     HSD_DevComCallback callback;
-    void* args;
+    uintptr_t args;
 };
 
 #define DEVCOMDEST_SBUF 2
@@ -37,3 +40,5 @@ static struct HSD_DevCom* aramDC;
 static u8 devComRelayBufFlag[2];
 
 static int HSD_DevCom_804D6050 = 4;
+
+#endif

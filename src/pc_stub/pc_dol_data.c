@@ -69,6 +69,12 @@ HSD_CObjDesc lbl_803D7910 = {
  * decompiled functions in gmresultplayer.c:
  *   0x80179D3C/D60/D84/DA8 -> fn_80179D3C..DA8 (fn_80179990 with slot 0..3)
  *   0x80179DCC/E34/E9C/F04 -> fn_80179DCC..F04 (per-slot camera setup) */
+/* Superseded: upstream's September split decompiles this block for real, as
+ * `ResultsPlayerConfig const lbl_803B7B68` in gmresultplayer.c, with the same
+ * eight callbacks. Two definitions of the symbol would not link, and the
+ * decompiled one is the better source, so the DOL-derived copy is kept here
+ * only for reference. */
+#if 0
 ResultsPlayerConfig lbl_803B7B68 = {
     /* pad_00 */ { 0 },
     /* x24 eye      */ { 0.0f, 100.0f, 62.0f },
@@ -88,6 +94,7 @@ ResultsPlayerConfig lbl_803B7B68 = {
     /* x94 */ 0.4f,
     /* x98 */ 0.30699998f,
 };
+#endif
 /* The results screen's per-character camera table (gmresultplayer.c:
  * `extern CameraKindData lbl_803D6A08;`, read by fn_8017A318).
  *

@@ -5,6 +5,9 @@
 #include "port/pc_ptr.h"
 #endif
 
+#include <math.h>
+#include <string.h>
+
 #include "aobj.h"
 #include "class.h"
 #include "debug.h"
@@ -16,9 +19,6 @@
 #include "mtx.h"
 #include "object.h"
 #include "util.h"
-
-#include <math.h>
-#include <string.h>
 #include <dolphin/mtx.h>
 #include <dolphin/os.h>
 
@@ -281,8 +281,8 @@ int HSD_RObjGetGlobalPosition(HSD_RObj* robj, int type, Vec3* p)
             hi = dash ? atoi(dash + 1) : lo;
         }
         if (lo >= 0 && n != 0) {
-            extern u32 gm_8016AEDC(void);
-            int f2 = (int) gm_8016AEDC();
+            extern u32 gm_GetFrameCount(void);
+            int f2 = (int) gm_GetFrameCount();
             if (f2 >= lo && f2 <= hi) {
                 fprintf(stderr, "[ROBJPOS] gframe=%d type=%d n=%d p=(%08x,%08x)",
                         f2, type, n, *(u32*) &p->x, *(u32*) &p->y);
@@ -648,7 +648,7 @@ void HSD_RObjResolveRefs(HSD_RObj* robj, HSD_RObjDesc* desc)
         switch (robj->flags & ROBJ_TYPE_MASK) {
         case REFTYPE_JOBJ:
             HSD_JObjUnrefThis(robj->u.jobj);
-            robj->u.jobj = HSD_IDGetData((u32) desc->u.joint, NULL);
+            robj->u.jobj = HSD_IDGetData((HSD_IDKey) desc->u.joint, NULL);
             HSD_ASSERT(883, robj->u.jobj);
             HSD_JObjRefThis(robj->u.jobj);
             break;
@@ -1006,7 +1006,7 @@ void HSD_RvalueResolveRefs(HSD_Rvalue* rvalue, HSD_RvalueList* list)
 {
     if (rvalue != NULL && list != NULL) {
         HSD_JObjUnrefThis(rvalue->jobj);
-        rvalue->jobj = HSD_IDGetData((u32) list->joint, NULL);
+        rvalue->jobj = HSD_IDGetData((HSD_IDKey) list->joint, NULL);
         HSD_ASSERT(1333, rvalue->jobj);
         HSD_JObjRefThis(rvalue->jobj);
     }

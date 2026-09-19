@@ -1,12 +1,10 @@
 #include "ftCo_800C739C.h"
 
-#include "ft_0852.h"
+#include "fighter.h"
 #include "ftCo_800C7070.h"
-
-#include "ft/fighter.h"
-#include "ft/types.h"
-
-#include "ftCommon/forward.h"
+#include "ftdata.h"
+#include "kinds/ftCommon/forward.h"
+#include "types.h"
 
 static inline void inlineB0(Fighter_GObj* gobj)
 {
@@ -27,7 +25,7 @@ void ftCo_800C739C(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftCommon_MotionState ms;
-    if (fp->kind == FTKIND_KIRBY) {
+    if (fp->kind == Ft_Kind_Kirby) {
         ms = ftCo_MS_WalkFast;
     } else {
         inlineB2(gobj);

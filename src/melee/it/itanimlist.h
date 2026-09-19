@@ -1,10 +1,10 @@
 #ifndef GALE01_ITANIMLIST
 #define GALE01_ITANIMLIST
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "it/forward.h"
-#include "lb/forward.h"
+#include <melee/it/forward.h>
+#include <melee/lb/forward.h>
 
 /* 278F2C */ void it_80278F2C(Item_GObj*, CommandInfo*);
 /* 2790C0 */ void it_802790C0(Item_GObj*, CommandInfo*);
@@ -22,7 +22,10 @@
 /* 27990C */ void it_8027990C(Item_GObj*, CommandInfo*);
 /* 279958 */ void it_80279958(Item_GObj*, CommandInfo*);
 /* 2799A8 */ void it_802799A8(Item_GObj*, CommandInfo*);
+
+/// Advance Item Script
 /* 2799E4 */ void it_802799E4(Item_GObj*);
+
 /* 279AF0 */ void it_80279AF0(Item_GObj*, CommandInfo*);
 /* 279B10 */ void it_80279B10(Item_GObj*, CommandInfo*);
 /* 279B30 */ void fn_80279B30(Item_GObj*, CommandInfo*, int arg2);

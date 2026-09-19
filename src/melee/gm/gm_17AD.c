@@ -1,11 +1,10 @@
 #include "gm_17AD.h"
 
-#include "gm/inlines.h"
-
 #include <melee/pl/forward.h>
 
-#include <melee/gm/gmresult.h>
-#include <melee/gm/types.h>
+#include "gmresult.h"
+#include "inlines.h"
+#include "types.h"
 #include <melee/lb/lblanguage.h>
 
 /// @todo Figure out how to force the other functions not to inline this
@@ -89,7 +88,7 @@ s32 fn_8017AE70(s32 arg0)
     if (arg0 == 0) {
         return -1;
     }
-    if (me->player_standings[0].slot_type != Gm_PKind_NA) {
+    if (me->player_standings[0].pkind != Gm_PKind_NA) {
         return fn_8017AD04(me->player_standings[arg0].kills[0], 999999);
     }
     return -1;
@@ -104,7 +103,7 @@ s32 fn_8017AED8(s32 arg0)
     if (arg0 == 1) {
         return -1;
     }
-    if (me->player_standings[1].slot_type != Gm_PKind_NA) {
+    if (me->player_standings[1].pkind != Gm_PKind_NA) {
         return fn_8017AD04(me->player_standings[arg0].kills[1], 999999);
     }
     return -1;
@@ -119,7 +118,7 @@ s32 fn_8017AF40(s32 arg0)
     if (arg0 == 2) {
         return -1;
     }
-    if (me->player_standings[2].slot_type != Gm_PKind_NA) {
+    if (me->player_standings[2].pkind != Gm_PKind_NA) {
         return fn_8017AD04(me->player_standings[arg0].kills[2], 999999);
     }
     return -1;
@@ -134,7 +133,7 @@ s32 fn_8017AFA8(s32 arg0)
     if (arg0 == 3) {
         return -1;
     }
-    if (me->player_standings[3].slot_type != Gm_PKind_NA) {
+    if (me->player_standings[3].pkind != Gm_PKind_NA) {
         return fn_8017AD04(me->player_standings[arg0].kills[3], 999999);
     }
     return -1;
@@ -160,7 +159,7 @@ s32 fn_8017B07C(s32 arg0)
     me = fn_80174274();
     if (arg0 == 0) {
         return -1;
-    } else if (me->player_standings[0].slot_type != Gm_PKind_NA) {
+    } else if (me->player_standings[0].pkind != Gm_PKind_NA) {
         var_r3 = fn_8017AD04(me->player_standings[0].kills[arg0], 999999);
         return var_r3;
     }
@@ -176,7 +175,7 @@ s32 fn_8017B0E4(s32 arg0)
     if (arg0 == 1) {
         return -1;
     }
-    if (me->player_standings[1].slot_type != Gm_PKind_NA) {
+    if (me->player_standings[1].pkind != Gm_PKind_NA) {
         return fn_8017AD04(me->player_standings[1].kills[arg0], 999999);
     }
     return -1;
@@ -191,7 +190,7 @@ s32 fn_8017B14C(s32 arg0)
     if (arg0 == 2) {
         return -1;
     }
-    if (me->player_standings[2].slot_type != Gm_PKind_NA) {
+    if (me->player_standings[2].pkind != Gm_PKind_NA) {
         return fn_8017AD04(me->player_standings[2].kills[arg0], 999999);
     }
     return -1;
@@ -205,7 +204,7 @@ s32 fn_8017B1B4(s32 arg0)
     me = fn_80174274();
     if (arg0 == 3) {
         return -1;
-    } else if (me->player_standings[3].slot_type != Gm_PKind_NA) {
+    } else if (me->player_standings[3].pkind != Gm_PKind_NA) {
         return fn_8017AD04(me->player_standings[3].kills[arg0], 999999);
     }
     return -1;

@@ -1,16 +1,14 @@
 #include "gm_1A33.h"
 
 #include "gm_1A36.h"
-#include "gm_1A45.h"
 #include "gmcamera.h"
+#include "gmscene.h"
 #include "types.h"
-
-#include "lb/lbsnap.h"
-#include "mn/inlines.h"
-#include "mn/mnmain.h"
-
 #include <dolphin/pad.h>
-#include <baselib/controller.h>
+#include <melee/lb/lbsnap.h>
+#include <melee/mn/inlines.h>
+#include <melee/mn/mnmain.h>
+#include <sysdolphin/baselib/controller.h>
 #include <sysdolphin/baselib/sislib.h>
 
 static f32 gmCamera_803DA758[12] = {

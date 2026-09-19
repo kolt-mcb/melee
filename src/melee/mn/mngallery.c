@@ -1,23 +1,22 @@
 #include "mngallery.h"
 
-#include "baselib/debug.h"
-#include "baselib/memory.h"
-#include "mn/inlines.h"
-
-#include <baselib/controller.h>
-#include <baselib/displayfunc.h>
-#include <baselib/dobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/gobjuserdata.h>
-#include <baselib/sobjlib.h>
+#include "inlines.h"
 #include <melee/gm/gmhowto.h>
 #include <melee/gm/gmmain_lib.h>
 #include <melee/lb/lbarchive.h>
 #include <melee/lb/lbmthp.h>
 #include <melee/sc/types.h>
+#include <sysdolphin/baselib/controller.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/displayfunc.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/sobjlib.h>
 
 static StaticModelDesc mnGallery_804A0BA0;
 static StaticModelDesc mnGallery_804A0BB0;
@@ -183,7 +182,7 @@ static void mnGallery_80258D50(struct mnGallery_804D6C88_userdata* data)
         data->unk1 = 0;
 
         if (data->gobj8 != NULL) {
-            HSD_GObjPLink_80390228(data->gobj8);
+            HSD_GObjFree(data->gobj8);
             data->gobj8 = NULL;
         }
     }
@@ -225,7 +224,7 @@ static void mnGallery_80258DBC(HSD_GObj* gobj,
             data->unk0 = 0;
             data->unk1 = 0;
             if (data->gobj8 != NULL) {
-                HSD_GObjPLink_80390228(data->gobj8);
+                HSD_GObjFree(data->gobj8);
                 data->gobj8 = NULL;
             }
         }
@@ -237,11 +236,10 @@ static inline void fn_80258ED0_helper(void)
     struct mnGallery_804D6C88_userdata* data =
         mnGallery_804D6C88->user_data; /// @todo GET_804D6C88 blows the stack
     if (data->gobj4 != NULL) {
-        HSD_GObjPLink_80390228(data->gobj4);
+        HSD_GObjFree(data->gobj4);
     }
     if (data->gobj8 != NULL) {
-        HSD_GObjPLink_80390228(
-            *(HSD_GObj* volatile*) &data->gobj8); /// @todo hacky
+        HSD_GObjFree(*(HSD_GObj* volatile*) &data->gobj8); /// @todo hacky
     }
     data->gobj4 = NULL;
     data->gobj8 = NULL;
@@ -308,9 +306,9 @@ static inline void fn_802590C4_inline(HSD_GObj* gobj)
     s32 i;
     struct mnGallery_804D6C88_userdata* tmp;
     tmp = HSD_GObjGetUserData(gobj); /// @todo GET_804D6C88 breaks these
-    HSD_GObjPLink_80390228(gobj);
+    HSD_GObjFree(gobj);
     for (i = 0; i < 2; i++) {
-        HSD_GObjPLink_80390228((tmp->gobjs)[i]);
+        HSD_GObjFree((tmp->gobjs)[i]);
         tmp->gobjs[i] = NULL;
     };
 }

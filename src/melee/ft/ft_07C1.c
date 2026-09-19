@@ -1,27 +1,24 @@
-#include "ft/ft_07C1.h"
+#include "ft_07C1.h"
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
 
+#include <Runtime/platform.h>
+
+#include <melee/it/forward.h>
+#include <melee/lb/forward.h>
+
 #include <placeholder.h>
-#include <platform.h>
 
-#include "ft/fighter.h"
-#include "ft/ftcoll.h"
-#include "ft/inlines.h"
-#include "ft/types.h"
-#include "ftCommon/ftCo_HammerWait.h"
-
-#include "it/forward.h"
-
-#include "it/it_26B1.h"
-
-#include "lb/forward.h"
-
-#include "lb/lb_00B0.h"
-#include "lb/lbcollision.h"
-
-#include <baselib/gobj.h>
+#include "fighter.h"
+#include "ftcoll.h"
+#include "inlines.h"
+#include "kinds/ftCommon/ftCo_HammerWait.h"
+#include "types.h"
+#include <melee/it/it_26B1.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbcollision.h>
+#include <sysdolphin/baselib/gobj.h>
 
 /* The attacker/defender momentum share is one fmadds per axis on the
  * console (8007C388 and siblings): diff*ratio, or delta*ratio, onto x98. */
@@ -51,7 +48,7 @@ void ft_8007C17C(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     HitCapsule* hit = &fp->x1064_thrownHitbox;
-    struct ftData_x34* x34 = fp->ft_data->x34;
+    ftData_x34* x34 = fp->ft_data->x34;
     fp->x1064_thrownHitbox.x4 = 0;
     fp->x1064_thrownHitbox.state = HitCapsule_Enabled;
     lbColl_80008440(hit);
@@ -161,7 +158,7 @@ void ft_8007C4BC(Fighter_GObj* gobj)
     if (ftColl_8007B868(gobj) == 2) {
         return;
     }
-    if (fp->x221F_b4) {
+    if (fp->is_sub_fighter) {
         return;
     }
 
@@ -181,7 +178,7 @@ void ft_8007C4BC(Fighter_GObj* gobj)
             Fighter* fp1;
             HitCapsule* throw_hitbox = &fp->x1064_thrownHitbox;
 
-            for (cur = HSD_GObj_Entities->fighters; cur != NULL;
+            for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER]; cur != NULL;
                  cur = cur->next)
             {
                 if (gobj == cur) {
@@ -193,7 +190,7 @@ void ft_8007C4BC(Fighter_GObj* gobj)
                     fp1 = GET_FIGHTER(cur);
 
                     if (fp1->x2219_b1 || !fp1->x2227_b2 ||
-                        ftColl_8007B868(cur) == 2 || fp1->x221F_b4 ||
+                        ftColl_8007B868(cur) == 2 || fp1->is_sub_fighter ||
                         (fp1->x221C_b6 && fp1->dmg.x1868_source == gobj))
                     {
                         continue;

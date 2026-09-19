@@ -1,22 +1,22 @@
 #include <stdlib.h>
 #include "gmopening.h"
 
-#include "gm_unsplit.h"
-#include "gmtitle.h"
-
 #include <stdio.h>
-#include <baselib/controller.h>
-#include <sysdolphin/baselib/gobjgxlink.h>
-#include <sysdolphin/baselib/gobjobject.h>
-#include <sysdolphin/baselib/gobjplink.h>
-#include <sysdolphin/baselib/hsd_3915.h>
-#include <sysdolphin/baselib/sobjlib.h>
-#include <melee/gm/gmmain_lib.h>
+
+#include "gm_unsplit.h"
+#include "gmmain_lib.h"
+#include "gmtitle.h"
 #include <melee/lb/lbaudio_ax.h>
 #include <melee/lb/lblanguage.h>
 #include <melee/lb/lbmthp.h>
 #include <melee/mn/inlines.h>
 #include <melee/mn/types.h>
+#include <sysdolphin/baselib/controller.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/hsd_3924.h>
+#include <sysdolphin/baselib/sobjlib.h>
 
 /* 3B7D68 */ static const Vec3 gm_803B7D68 = { 0.0f, 0.0f, 1.0f };
 /* 3B7D74 */ static const Vec3 gm_803B7D74 = { 0.0f, 0.0f, 0.0f };
@@ -263,7 +263,7 @@ void gm_Scene_Opening_OnFrame(void)
         gm_804D67D4 = temp_r3_2;
     }
     if ((gm_804D67D4 != NULL) && (gm_804D67EC >= 0x202)) {
-        HSD_GObjPLink_80390228(gm_804D67D4);
+        HSD_GObjFree(gm_804D67D4);
         gm_804D67D4 = NULL;
     }
     if ((gm_804D67D8 == NULL) && (gm_804D67EC >= 0x3B6) &&
@@ -272,7 +272,7 @@ void gm_Scene_Opening_OnFrame(void)
         gm_804D67D8 = gmTitle_801A12C4();
     }
     if ((gm_804D67D8 != NULL) && (gm_804D67EC >= 0x3CE)) {
-        HSD_GObjPLink_80390228(gm_804D67D8);
+        HSD_GObjFree(gm_804D67D8);
         gm_804D67D8 = NULL;
     }
     if (!gm_804D67D0 && (gm_804D67EC >= 0x140A)) {

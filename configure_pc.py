@@ -98,10 +98,10 @@ DISPLAY_MODULES = [
     "synth.c",
 ]
 AX_SDK_SOURCES = [
-    str(ROOT / "extern" / "dolphin" / "src" / "dolphin" / "ax" / f)
+    str(ROOT / "libs" / "dolphin" / "src" / "dolphin" / "ax" / f)
     for f in ("AXSPB.c", "AXProf.c")  # AXVPB.c / AXAlloc.c via port/ax_*_glue.c
 ] + [
-    str(ROOT / "extern" / "dolphin" / "src" / "dolphin" / "axfx" / f)
+    str(ROOT / "libs" / "dolphin" / "src" / "dolphin" / "axfx" / f)
     # chorus / reverb_hi / reverb_std are MWCC inline PowerPC assembly;
     # port/pc_ax.c stubs them (those aux buses stay silent) until ported.
     for f in ("axfx.c", "delay.c")
@@ -118,7 +118,7 @@ DECOMP_SOURCES = [s for s in DECOMP_SOURCES if Path(s).name not in EXCLUDE_DECOM
 GR_SOURCES = collect(MELEE / "gr")
 PL_SOURCES = collect(MELEE / "pl")
 FT_SOURCES = collect(MELEE / "ft")
-FT_SOURCES += collect(MELEE / "ft" / "chara")
+FT_SOURCES += collect(MELEE / "ft" / "kinds")
 # PC port: every character directory, not just Mario. Leaving the other 32 out
 # meant their data symbols -- costume tables, parts tables, DAT filenames --
 # fell through to the weak stubs in undef_stubs.c, so
@@ -126,11 +126,15 @@ FT_SOURCES += collect(MELEE / "ft" / "chara")
 # filename string belongs. That is why every non-Mario fighter died in
 # ftParts_SetupParts with an empty parts table, having never opened its own
 # PlXX.dat.
-for _chara_dir in sorted((MELEE / "ft" / "chara").iterdir()):
-    if _chara_dir.is_dir():
-        FT_SOURCES += collect(_chara_dir)
+for _kind_dir in sorted((MELEE / "ft" / "kinds").iterdir()):
+    if _kind_dir.is_dir():
+        FT_SOURCES += collect(_kind_dir)
 GM_SOURCES = collect(MELEE / "gm")
-GM_SOURCES = [s for s in GM_SOURCES if Path(s).name not in {"gm_1736.c", "gmmain.c", }]  # exclude duplicates and entry point
+# gm_1736.c used to duplicate the challenger-data accessors that gm_16F1.c
+# also carried, so it was excluded here. Upstream's September split moved them
+# out of gm_16F1.c for good, so gm_1736.c is now the only definition of
+# gm_GetChallengerData/gm_InitChallengerData and must be built.
+GM_SOURCES = [s for s in GM_SOURCES if Path(s).name not in {"gmmain.c", }]  # exclude entry point
 EF_SOURCES = collect(MELEE / "ef")
 IT_SOURCES = collect(MELEE / "it")
 # PC port: the per-item sources live in it/items and collect() does not
@@ -176,9 +180,9 @@ ALL_SOURCES = PORT_SOURCES + PC_STUB_SOURCES + MATH_SHIM + MSL_TRIG + AX_SDK_SOU
 
 INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,
-    SRC / "melee" / "ft" / "chara", SRC / "MSL" / "PPC_EABI",
+    SRC / "melee" / "ft" / "kinds", SRC / "MSL" / "PPC_EABI",
     SRC / "port", SRC / "Runtime", SRC / "MetroTRK",
-    ROOT / "extern" / "dolphin" / "include",
+    ROOT / "libs" / "dolphin" / "include",
 ]
 
 inc = " ".join("-I" + str(p) for p in INCLUDE_DIRS)

@@ -5,31 +5,42 @@
 
 #include "gr/grdatfiles.h"
 #include "port/pc_ptr.h"
-#endif
+#include "port/pc_scene.h"
 
-#if BUILD_TARGET_PC
 /* A door only gets a name tag for i < num_players (mnCharSel_802640A0), so an
  * unused port legitimately has none. The per-frame door code touches all four
  * regardless and dereferences tag->data->text without checking, which is a
  * null read here. "No tag" means "nothing to show". */
 #define CSS_TAG_OK(i)                                                         \
-    (pc_ptr_sane(CSS_TAGS[i].data) && pc_ptr_sane(CSS_TAGS[i].data->text))
-
+    (pc_ptr_sane(mnCharSel_803F0E8C[i].data) &&                               \
+     pc_ptr_sane(mnCharSel_803F0E8C[i].data->text))
 #endif
 
-#if BUILD_TARGET_PC
-#include "port/pc_scene.h"
-#endif
-
-#include "inlines.h"
-#include "types.h"
-
-#include "baselib/forward.h"
-#include "ft/forward.h"
-
-#include "lb/lb_013B.h"
+#include <melee/ft/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <math.h>
+
+#include "inlines.h"
+#include "mnmain.h"
+#include "mnmainrule.h"
+#include "mnname.h"
+#include "mnnamenew.h"
+#include "types.h"
+#include <melee/gm/gm_1601.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/gm/gmmain_lib.h>
+#include <melee/gm/types.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_013B.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbcardgame.h>
+#include <melee/lb/lbcardnew.h>
+#include <melee/lb/lbdvd.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/lb/types.h>
 #include <sysdolphin/baselib/aobj.h>
 #include <sysdolphin/baselib/cobj.h>
 #include <sysdolphin/baselib/controller.h>
@@ -46,25 +57,6 @@
 #include <sysdolphin/baselib/mobj.h>
 #include <sysdolphin/baselib/random.h>
 #include <sysdolphin/baselib/sislib.h>
-#include <melee/gm/gm_1601.h>
-#include <melee/gm/gm_unsplit.h>
-#include <melee/gm/gmmain_lib.h>
-#include <melee/gm/types.h>
-#include <melee/lb/lb_00B0.h>
-#include <melee/lb/lbarchive.h>
-#include <melee/lb/lbaudio_ax.h>
-#include <melee/lb/lbcardgame.h>
-#include <melee/lb/lbcardnew.h>
-#include <melee/lb/lbdvd.h>
-#include <melee/lb/lblanguage.h>
-#include <melee/lb/lbspdisplay.h>
-#include <melee/lb/types.h>
-#include <melee/mn/mncharsel.h>
-#include <melee/mn/mnmain.h>
-#include <melee/mn/mnmainrule.h>
-#include <melee/mn/mnname.h>
-#include <melee/mn/mnnamenew.h>
-#include <melee/mn/types.h>
 
 static u8 mnCharSel_804D50C8[4] = { 1, 2, 4, 8 };
 static u8 mnCharSel_804D50CC[4] = { 1, 0, 0, 2 };
@@ -72,22 +64,28 @@ static u8 mnCharSel_804D50D0[8] = { 2, 0, 1, 0, 5, 3, 4, 0 };
 static u8 mnCharSel_804D50D8[8] = { 2, 0, 8, 1, 7, 7, 7, 7 };
 static u8 mnCharSel_804D50E0[3] = { 0, 1, 3 };
 
-typedef struct CSSSceneModels {
+typedef struct MnSelectChrModels {
+    /* 0x0 */ StaticModelDesc background;
+    /* 0x10 */ StaticModelDesc hand;
+    /* 0x20 */ StaticModelDesc token;
+    /* 0x30 */ StaticModelDesc menu;
+    /* 0x40 */ StaticModelDesc press_start;
+    /* 0x50 */ StaticModelDesc debug_camera;
+    /* 0x60 */ StaticModelDesc regend_menu;
+    /* 0x70 */ StaticModelDesc regend_options;
+    /* 0x80 */ StaticModelDesc door;
+} MnSelectChrModels;
+
+typedef struct MnSelectChrDataTable {
     /* 0x00 */ HSD_CObjDesc* cam;
     /* 0x04 */ HSD_LightDesc* light0;
     /* 0x08 */ HSD_LightDesc* light1;
     /* 0x0C */ HSD_FogDesc* fog;
-} CSSSceneModels;
-
-typedef struct CSSAnimSet {
-    /* 0x00 */ HSD_Joint* joint;
-    /* 0x04 */ HSD_AnimJoint* anim;
-    /* 0x08 */ HSD_MatAnimJoint* matanim;
-    /* 0x0C */ HSD_ShapeAnimJoint* shapeanim;
-} CSSAnimSet;
+    /* 0x10 */ MnSelectChrModels models;
+} MnSelectChrDataTable;
 
 static CSSData* mnCharSel_804D6CB0;
-static void* mnCharSel_804D6CB4;
+static MnSelectChrDataTable* css_data_table;
 static HSD_GObj* mnCharSel_804D6CB8;
 static HSD_GObj* mnCharSel_804D6CBC;
 static HSD_JObj* mnCharSel_804D6CC0;
@@ -96,7 +94,7 @@ static HSD_JObj* mnCharSel_804D6CC8;
 static HSD_JObj* mnCharSel_804D6CCC;
 static HSD_Archive* mnCharSel_804D6CD0;
 static HSD_Archive* mnCharSel_804D6CD4;
-static void* mnCharSel_804D6CD8;
+static MnSelectChrModels* css_models;
 static HSD_Text* mnCharSel_804D6CDC;
 static HSD_Text* mnCharSel_804D6CE0;
 static HSD_Text* mnCharSel_804D6CE4;
@@ -180,109 +178,109 @@ static CSSIcon icons[25 + 1] = {
     // -------- Icons Top Row --------
 
     { // Dr. Mario -                      0x803F0B24
-      ICONHUD_DRMARIO, CKIND_DRMARIO, ICONSTATE_UNLOCKED, 0x00,
+      ICONHUD_DRMARIO, CKind_DrMario, ICONSTATE_UNLOCKED, 0x00,
       ICONJOINT_DRMARIO, ICONJOINT_DRMARIO, 0x000000C5, ICONBNDS_COL0_L,
       ICONBNDS_COL1_L, ICONROWHT_TOP_TOP, ICONROWHT_MID_TOP },
     { // Mario -                          0x803F0B40
-      ICONHUD_MARIO, CKIND_MARIO, ICONSTATE_TEMP, 0x00, ICONJOINT_MARIO,
+      ICONHUD_MARIO, CKind_Mario, ICONSTATE_TEMP, 0x00, ICONJOINT_MARIO,
       ICONJOINT_MARIO, 0x000000CD, ICONBNDS_COL1_L, ICONBNDS_COL2_L,
       ICONROWHT_TOP_TOP, ICONROWHT_MID_TOP },
     { // Luigi -                          0x803F0B5C
-      ICONHUD_LUIGI, CKIND_LUIGI, ICONSTATE_TEMP, 0x00, ICONJOINT_LUIGI,
+      ICONHUD_LUIGI, CKind_Luigi, ICONSTATE_TEMP, 0x00, ICONJOINT_LUIGI,
       ICONJOINT_LUIGI, 0x000000CC, ICONBNDS_COL2_L, ICONBNDS_COL3_L,
       ICONROWHT_TOP_TOP, ICONROWHT_MID_TOP },
     { // Bowser -                         0x803F0B78
-      ICONHUD_KOOPA, CKIND_KOOPA, ICONSTATE_TEMP, 0x00, ICONJOINT_KOOPA,
+      ICONHUD_KOOPA, CKind_Koopa, ICONSTATE_TEMP, 0x00, ICONJOINT_KOOPA,
       ICONJOINT_KOOPA, 0x000000CA, ICONBNDS_COL3_L, ICONBNDS_COL4_L,
       ICONROWHT_TOP_TOP, ICONROWHT_MID_TOP },
     { // Peach -                          0x803F0B94
-      ICONHUD_PEACH, CKIND_PEACH, ICONSTATE_TEMP, 0x00, ICONJOINT_PEACH,
+      ICONHUD_PEACH, CKind_Peach, ICONSTATE_TEMP, 0x00, ICONJOINT_PEACH,
       ICONJOINT_PEACH, 0x000000D1, ICONBNDS_COL4_L, ICONBNDS_COL5_L,
       ICONROWHT_TOP_TOP, ICONROWHT_MID_TOP },
     { // Yoshi -                          0x803F0BB0
-      ICONHUD_YOSHI, CKIND_YOSHI, ICONSTATE_TEMP, 0x00, ICONJOINT_YOSHI,
+      ICONHUD_YOSHI, CKind_Yoshi, ICONSTATE_TEMP, 0x00, ICONJOINT_YOSHI,
       ICONJOINT_YOSHI, 0x000000D7, ICONBNDS_COL5_L, ICONBNDS_COL6_L,
       ICONROWHT_TOP_TOP, ICONROWHT_MID_TOP },
     { // DK -                             0x803F0BCC
-      ICONHUD_DONKEY, CKIND_DONKEY, ICONSTATE_TEMP, 0x00, ICONJOINT_DONKEY,
+      ICONHUD_DONKEY, CKind_Donkey, ICONSTATE_TEMP, 0x00, ICONJOINT_DONKEY,
       ICONJOINT_DONKEY, 0x000000C4, ICONBNDS_COL6_L, ICONBNDS_COL7_L,
       ICONROWHT_TOP_TOP, ICONROWHT_MID_TOP },
     { // Captain Falcon -                 0x803F0BE8
-      ICONHUD_CAPTAIN, CKIND_CAPTAIN, ICONSTATE_TEMP, 0x00, ICONJOINT_CAPTAIN,
+      ICONHUD_CAPTAIN, CKind_Captain, ICONSTATE_TEMP, 0x00, ICONJOINT_CAPTAIN,
       ICONJOINT_CAPTAIN, 0x000000C2, ICONBNDS_COL7_L, ICONBNDS_COL8_L,
       ICONROWHT_TOP_TOP, ICONROWHT_MID_TOP },
     { // Ganondorf -                      0x803F0C04
-      ICONHUD_GANON, CKIND_GANON, ICONSTATE_UNLOCKED, 0x00, ICONJOINT_GANON,
+      ICONHUD_GANON, CKind_Ganon, ICONSTATE_UNLOCKED, 0x00, ICONJOINT_GANON,
       ICONJOINT_GANON, 0x000000D9, ICONBNDS_COL8_L, ICONBNDS_COL8_R,
       ICONROWHT_TOP_TOP, ICONROWHT_MID_TOP },
 
     // -------- Icons Middle Row --------
 
     { // Falco -                          0x803F0C20
-      ICONHUD_FALCO, CKIND_FALCO, ICONSTATE_UNLOCKED, 0x00, ICONJOINT_FALCO,
+      ICONHUD_FALCO, CKind_Falco, ICONSTATE_UNLOCKED, 0x00, ICONJOINT_FALCO,
       ICONJOINT_FALCO, 0x000000C6, ICONBNDS_COL0_L, ICONBNDS_COL1_L,
       ICONROWHT_MID_TOP, ICONROWHT_BTM_TOP },
     { // Fox -                            0x803F0C3C
-      ICONHUD_FOX, CKIND_FOX, ICONSTATE_TEMP, 0x00, ICONJOINT_FOX,
+      ICONHUD_FOX, CKind_Fox, ICONSTATE_TEMP, 0x00, ICONJOINT_FOX,
       ICONJOINT_FOX, 0x000000C7, ICONBNDS_COL1_L, ICONBNDS_COL2_L,
       ICONROWHT_MID_TOP, ICONROWHT_BTM_TOP },
     { // Ness -                           0x803F0C58
-      ICONHUD_NESS, CKIND_NESS, ICONSTATE_TEMP, 0x00, ICONJOINT_NESS,
+      ICONHUD_NESS, CKind_Ness, ICONSTATE_TEMP, 0x00, ICONJOINT_NESS,
       ICONJOINT_NESS, 0x000000D0, ICONBNDS_COL2_L, ICONBNDS_COL3_L,
       ICONROWHT_MID_TOP, ICONROWHT_BTM_TOP },
     { // ICs -                            0x803F0C74
-      ICONHUD_POPONANA, CKIND_POPONANA, ICONSTATE_TEMP, 0x00,
+      ICONHUD_POPONANA, CKind_PopoNana, ICONSTATE_TEMP, 0x00,
       ICONJOINT_POPONANA, ICONJOINT_POPONANA, 0x000000C8, ICONBNDS_COL3_L,
       ICONBNDS_COL4_L, ICONROWHT_MID_TOP, ICONROWHT_BTM_TOP },
     { // Kirby -                          0x803F0C90
-      ICONHUD_KIRBY, CKIND_KIRBY, ICONSTATE_TEMP, 0x00, ICONJOINT_KIRBY,
+      ICONHUD_KIRBY, CKind_Kirby, ICONSTATE_TEMP, 0x00, ICONJOINT_KIRBY,
       ICONJOINT_KIRBY, 0x000000C9, ICONBNDS_COL4_L, ICONBNDS_COL5_L,
       ICONROWHT_MID_TOP, ICONROWHT_BTM_TOP },
     { // Samus -                          0x803F0CAC
-      ICONHUD_SAMUS, CKIND_SAMUS, ICONSTATE_TEMP, 0x00, ICONJOINT_SAMUS,
+      ICONHUD_SAMUS, CKind_Samus, ICONSTATE_TEMP, 0x00, ICONJOINT_SAMUS,
       ICONJOINT_SAMUS, 0x000000D5, ICONBNDS_COL5_L, ICONBNDS_COL6_L,
       ICONROWHT_MID_TOP, ICONROWHT_BTM_TOP },
     { // Zelda -                          0x803F0CC8
-      ICONHUD_ZELDA, CKIND_ZELDA, ICONSTATE_TEMP, 0x00, ICONJOINT_ZELDA,
+      ICONHUD_ZELDA, CKind_Zelda, ICONSTATE_TEMP, 0x00, ICONJOINT_ZELDA,
       ICONJOINT_ZELDA, 0x000000D6, ICONBNDS_COL6_L, ICONBNDS_COL7_L,
       ICONROWHT_MID_TOP, ICONROWHT_BTM_TOP },
     { // Link -                           0x803F0CE4
-      ICONHUD_LINK, CKIND_LINK, ICONSTATE_TEMP, 0x00, ICONJOINT_LINK,
+      ICONHUD_LINK, CKind_Link, ICONSTATE_TEMP, 0x00, ICONJOINT_LINK,
       ICONJOINT_LINK, 0x000000CB, ICONBNDS_COL7_L, ICONBNDS_COL8_L,
       ICONROWHT_MID_TOP, ICONROWHT_BTM_TOP },
     { // Young Link -                     0x803F0D00
-      ICONHUD_CLINK, CKIND_CLINK, ICONSTATE_UNLOCKED, 0x00, ICONJOINT_CLINK,
+      ICONHUD_CLINK, CKind_CLink, ICONSTATE_UNLOCKED, 0x00, ICONJOINT_CLINK,
       ICONJOINT_CLINK, 0x000000C3, ICONBNDS_COL8_L, ICONBNDS_COL8_R,
       ICONROWHT_MID_TOP, ICONROWHT_BTM_TOP },
 
     // -------- Icons Bottom Row --------
 
     { // Pichu -                          0x803F0D1C
-      ICONHUD_PICHU, CKIND_PICHU, ICONSTATE_UNLOCKED, 0x00, ICONJOINT_PICHU,
+      ICONHUD_PICHU, CKind_Pichu, ICONSTATE_UNLOCKED, 0x00, ICONJOINT_PICHU,
       ICONJOINT_PICHU, 0x000000D2, -23.4, ICONBNDS_COL2_L, ICONROWHT_BTM_TOP,
       ICONROWHT_BTM_BTM },
     { // Pikachu -                        0x803F0D38
-      ICONHUD_PIKACHU, CKIND_PIKACHU, ICONSTATE_TEMP, 0x00, ICONJOINT_PIKACHU,
+      ICONHUD_PIKACHU, CKind_Pikachu, ICONSTATE_TEMP, 0x00, ICONJOINT_PIKACHU,
       ICONJOINT_PIKACHU, 0x000000D3, ICONBNDS_COL2_L, ICONBNDS_COL3_L,
       ICONROWHT_BTM_TOP, ICONROWHT_BTM_BTM },
     { // Jigglypuff -                     0x803F0D54
-      ICONHUD_PURIN, CKIND_PURIN, ICONSTATE_TEMP, 0x00, ICONJOINT_PURIN,
+      ICONHUD_PURIN, CKind_Purin, ICONSTATE_TEMP, 0x00, ICONJOINT_PURIN,
       ICONJOINT_PURIN, 0x000000D4, ICONBNDS_COL3_L, ICONBNDS_COL4_L,
       ICONROWHT_BTM_TOP, ICONROWHT_BTM_BTM },
     { // Mewtwo -                         0x803F0D70
-      ICONHUD_MEWTWO, CKIND_MEWTWO, ICONSTATE_TEMP, 0x00, ICONJOINT_MEWTWO,
+      ICONHUD_MEWTWO, CKind_Mewtwo, ICONSTATE_TEMP, 0x00, ICONJOINT_MEWTWO,
       ICONJOINT_MEWTWO, 0x000000CF, ICONBNDS_COL4_L, ICONBNDS_COL5_L,
       ICONROWHT_BTM_TOP, ICONROWHT_BTM_BTM },
     { // Mr. Game & Watch -               0x803F0D8C
-      ICONHUD_GAMEWATCH, CKIND_GAMEWATCH, ICONSTATE_TEMP, 0x00,
+      ICONHUD_GAMEWATCH, CKind_GameWatch, ICONSTATE_TEMP, 0x00,
       ICONJOINT_GAMEWATCH, ICONJOINT_GAMEWATCH, 0x000000D8, ICONBNDS_COL5_L,
       ICONBNDS_COL6_L, ICONROWHT_BTM_TOP, ICONROWHT_BTM_BTM },
     { // Marth -                          0x803F0DA8
-      ICONHUD_MARS, CKIND_MARS, ICONSTATE_TEMP, 0x00, ICONJOINT_MARS,
+      ICONHUD_MARS, CKind_Mars, ICONSTATE_TEMP, 0x00, ICONJOINT_MARS,
       ICONJOINT_MARS, 0x000000CE, ICONBNDS_COL6_L, ICONBNDS_COL7_L,
       ICONROWHT_BTM_TOP, ICONROWHT_BTM_BTM },
     { // Roy -                            0x803F0DC4
-      ICONHUD_EMBLEM, CKIND_EMBLEM, ICONSTATE_UNLOCKED, 0x00, ICONJOINT_EMBLEM,
+      ICONHUD_EMBLEM, CKind_Emblem, ICONSTATE_UNLOCKED, 0x00, ICONJOINT_EMBLEM,
       ICONJOINT_EMBLEM, 0x000000DA, ICONBNDS_COL7_L, 23.6, ICONROWHT_BTM_TOP,
       ICONROWHT_BTM_BTM }
 };
@@ -331,45 +329,6 @@ static struct CSSDoorsData2 data2 = {
         { NULL, 23.7, 0x69 },
     },
 };
-
-typedef struct CSSAllData {
-    u8 gnw_name[0x1C];
-    CSSModeInfo mode_info[24];
-    CSSIcon icons[26];
-    CSSDoorsData doors_data;    // 0x3B4
-    CSSTag tags[4];             // 0x444
-    struct CSSDoorsMisc misc;   // 0x474
-    struct CSSDoorsData2 data2; // 0x4A4
-} CSSAllData;
-
-#define CSS_ALL ((CSSAllData*) &mnCharSel_803F0A48)
-
-#if BUILD_TARGET_PC
-/* PC port: CSS_ALL puns &mnCharSel_803F0A48 -- which is a CSSIconsData, not a
- * CSSAllData -- so that doors_data at +0x3B4 and data2 at +0x4A4 land exactly
- * on the statics mnCharSel_803F0DFC and data2. That works on GameCube and
- * nowhere else: every struct in between holds pointers, so here the punned
- * members are simply different memory from the statics the rest of this file
- * reads by name.
- *
- * The two halves of the screen therefore disagreed: mnCharSel_802640A0
- * allocated each door's name tag through the punned view while every reader
- * looked at the real static, which stayed null -- so the per-frame door code
- * dereferenced a null tag on the first frame, every time.
- *
- * Name the real objects rather than computing their addresses. */
-#define CSS_DOORS_DATA mnCharSel_803F0DFC
-#define CSS_TAGS       mnCharSel_803F0E8C
-#define CSS_MISC       mnCharSel_803F0EBC
-#define CSS_DATA2      data2
-#define CSS_ICONS      icons
-#else
-#define CSS_DOORS_DATA (CSS_ALL->doors_data)
-#define CSS_TAGS       (CSS_ALL->tags)
-#define CSS_MISC       (CSS_ALL->misc)
-#define CSS_DATA2      (CSS_ALL->data2)
-#define CSS_ICONS      (CSS_ALL->icons)
-#endif
 
 TextKerning* mnCharSel_8025BC20(TextKerning* arg0, u32 arg1)
 {
@@ -1294,7 +1253,7 @@ void mnCharSel_8025DB34(u8 arg0)
     /* PC port: a door's name-tag object only exists once the screen's tag
      * setup has run, and that is skipped when its archive data does not
      * convert. No tag, no name to write into it. */
-    if (CSS_TAG_OK(arg0) && CSS_TAGS[arg0].data->use_tag == 0 &&
+    if (CSS_TAG_OK(arg0) && mnCharSel_803F0E8C[arg0].data->use_tag == 0 &&
         (int) sel_icon < 0x19)
 #else
     if (mnCharSel_803F0E8C[arg0].data->use_tag == 0 && (int) sel_icon < 0x19)
@@ -1773,7 +1732,7 @@ void fn_8025F0E0(HSD_GObj* gobj)
     int i;
     u8 timer;
     s32 val;
-    int anim;
+    int css_models;
     float fval;
 
     if ((mnCharSel_804D6CEC % 10) != 0) {
@@ -1836,13 +1795,13 @@ void fn_8025F0E0(HSD_GObj* gobj)
                         if (doors->p_kind == 1) {
                             rules = gmMainLib_GetGameRules();
                             if (rules->handicap == 1) {
-                                anim = 0x5A;
+                                css_models = 0x5A;
                             } else {
-                                anim = 0x1E;
+                                css_models = 0x1E;
                             }
                             {
                                 u8 slidername_joint = doors->slidername_joint;
-                                fval = (f32) anim;
+                                fval = (f32) css_models;
                                 lb_80011E24(mnCharSel_804D6CC0, &sp44,
                                             slidername_joint, -1);
                             }
@@ -1859,13 +1818,13 @@ void fn_8025F0E0(HSD_GObj* gobj)
                         } else {
                             rules = gmMainLib_GetGameRules();
                             if (rules->handicap == 1) {
-                                anim = 0x50;
+                                css_models = 0x50;
                             } else {
-                                anim = 0x14;
+                                css_models = 0x14;
                             }
                             {
                                 u8 slidername_joint = doors->slidername_joint;
-                                fval = (f32) anim;
+                                fval = (f32) css_models;
                                 lb_80011E24(mnCharSel_804D6CC0, &sp40,
                                             slidername_joint, -1);
                             }
@@ -2128,7 +2087,6 @@ void mnCharSel_8025FB50(u8 door, s32 arg1)
 {
     s32 icon_idx;
     s32 icon_offset;
-    CSSAllData* all_data = (CSSAllData*) &mnCharSel_803F0A48;
     HSD_JObj* icon_jobj;
 
     do {
@@ -2154,8 +2112,8 @@ void mnCharSel_8025FB50(u8 door, s32 arg1)
     }
 
     mnCharSel_804A0BD0[door]->x5 = 0;
-    mnCharSel_804A0BD0[door]->x8 = 3.4f + CSS_ICONS[icon_idx].bound_l;
-    mnCharSel_804A0BD0[door]->xC = -3.0f + CSS_ICONS[icon_idx].bound_u;
+    mnCharSel_804A0BD0[door]->x8 = 3.4f + icons[icon_idx].bound_l;
+    mnCharSel_804A0BD0[door]->xC = -3.0f + icons[icon_idx].bound_u;
     if (arg1 != 0) {
         mnCharSel_804A0BD0[door]->x10 = mnCharSel_804A0BD0[door]->x8;
         mnCharSel_804A0BD0[door]->x14 = mnCharSel_804A0BD0[door]->xC;
@@ -2165,27 +2123,24 @@ void mnCharSel_8025FB50(u8 door, s32 arg1)
 
     if (mnCharSel_804D6CF5 == 1) {
         lb_80011E24(mnCharSel_804D6CC0, &icon_jobj,
-                    CSS_ICONS[icon_idx].joint_id_1p, -1);
+                    icons[icon_idx].joint_id_1p, -1);
     } else {
         lb_80011E24(mnCharSel_804D6CC0, &icon_jobj,
-                    CSS_ICONS[icon_idx].joint_id_vs, -1);
+                    icons[icon_idx].joint_id_vs, -1);
     }
     HSD_ForeachAnim(icon_jobj, JOBJ_TYPE, TOBJ_MASK, HSD_AObjReqAnim,
                     AOBJ_ARG_AF, 10.0);
 
-    CSS_ICONS[icon_idx].anim_timer = 0xC;
+    icons[icon_idx].anim_timer = 0xC;
 
     {
         u8 sel = mnCharSel_803F0DFC.doors[door].sel_icon;
         u8* char_kinds = &icons[0].char_kind;
-        lbAudioAx_80023870(CSS_ICONS[sel].sfx, 0x7F, 0x40, sel + 0x8A);
+        lbAudioAx_80023870(icons[sel].sfx, 0x7F, 0x40, sel + 0x8A);
         gm_80168C5C((u32) char_kinds[sel * sizeof(CSSIcon)]);
     }
 }
 
-#ifdef MUST_MATCH
-#pragma auto_inline off
-#endif
 s32 mnCharSel_8025FDEC(u8 door)
 {
     CSSData* css;
@@ -2193,7 +2148,6 @@ s32 mnCharSel_8025FDEC(u8 door)
     int player;
     s8 c_kind;
     int icon_idx;
-    CSSAllData* all_data = (CSSAllData*) &mnCharSel_803F0A48;
 
     if (mnCharSel_804D6CF5 == 1) {
         if (door != 0) {
@@ -2208,15 +2162,14 @@ s32 mnCharSel_8025FDEC(u8 door)
     css = mnCharSel_804D6CB0;
     c_kind = css->vs.start.players[player].ckind;
 
-    if (c_kind < CKIND_PLAYABLE_COUNT) {
-        if (c_kind !=
-            CSS_ICONS[mnCharSel_803F0DFC.doors[door].sel_icon].char_kind)
+    if (c_kind < CKind_Playable_Count) {
+        if (c_kind != icons[mnCharSel_803F0DFC.doors[door].sel_icon].char_kind)
         {
             mnCharSel_803F0DFC.doors[door].costume = 0;
         }
 
         {
-            CSSIcon* icon = CSS_ICONS;
+            CSSIcon* icon = icons;
             for (icon_idx = 0; icon_idx < 0x19; icon_idx++) {
                 if (css->vs.start.players[player].ckind ==
                     icon[icon_idx].char_kind)
@@ -2226,10 +2179,8 @@ s32 mnCharSel_8025FDEC(u8 door)
             }
         }
 
-        mnCharSel_804A0BD0[door]->x8 =
-            3.4f + CSS_ICONS[icon_idx].bound_l;
-        mnCharSel_804A0BD0[door]->xC =
-            -3.0f + CSS_ICONS[icon_idx].bound_u;
+        mnCharSel_804A0BD0[door]->x8 = 3.4f + icons[icon_idx].bound_l;
+        mnCharSel_804A0BD0[door]->xC = -3.0f + icons[icon_idx].bound_u;
 
         mnCharSel_803F0DFC.doors[door].sel_icon_prev = icon_idx;
         mnCharSel_803F0DFC.doors[door].sel_icon = icon_idx;
@@ -2241,16 +2192,16 @@ s32 mnCharSel_8025FDEC(u8 door)
         mnCharSel_804A0BD0[door]->x5 = 0;
 
         if (mnCharSel_804D6CF5 == 1) {
-            lb_80011E24(mnCharSel_804D6CC0, &sp10,
-                        CSS_ICONS[icon_idx].joint_id_1p, -1);
+            lb_80011E24(mnCharSel_804D6CC0, &sp10, icons[icon_idx].joint_id_1p,
+                        -1);
         } else {
-            lb_80011E24(mnCharSel_804D6CC0, &sp10,
-                        CSS_ICONS[icon_idx].joint_id_vs, -1);
+            lb_80011E24(mnCharSel_804D6CC0, &sp10, icons[icon_idx].joint_id_vs,
+                        -1);
         }
         HSD_ForeachAnim(sp10, JOBJ_TYPE, TOBJ_MASK, HSD_AObjReqAnim,
                         AOBJ_ARG_AF, 10.0);
 
-        CSS_ICONS[icon_idx].anim_timer = 0xC;
+        icons[icon_idx].anim_timer = 0xC;
 
         {
             int door_idx = door;
@@ -2267,18 +2218,15 @@ s32 mnCharSel_8025FDEC(u8 door)
         }
 
         if (mnCharSel_804D6CF6 != 3 && mnCharSel_804D6CF6 != 4) {
-            u8 sel = mnCharSel_803F0DFC.doors[door].sel_icon;
-            lbAudioAx_80023870(CSS_ICONS[sel].sfx, 0x7F, 0x40,
-                               sel + 0x8A);
-            gm_80168C5C((u32) CSS_ICONS[sel].char_kind);
+            int sel = mnCharSel_803F0DFC.doors[door].sel_icon;
+            lbAudioAx_80023870(icons[sel].sfx, 0x7F, 0x40, sel + 0x8A);
+            gm_80168C5C(icons[sel].char_kind);
         }
         return 0;
     }
     return 1;
 }
-#ifdef MUST_MATCH
-#pragma auto_inline on
-#endif
+
 void mnCharSel_CostumeChange(int door, u32 input)
 {
     u8 prev_costume = mnCharSel_803F0DFC.doors[door].costume;
@@ -2294,7 +2242,7 @@ void mnCharSel_CostumeChange(int door, u32 input)
         do {
             mnCharSel_803F0DFC.doors[door].costume =
                 (mnCharSel_803F0DFC.doors[door].costume + 1) %
-                gm_80169238(
+                gm_GetNumCostumesForCKind(
                     icons[mnCharSel_803F0DFC.doors[door].sel_icon].char_kind);
         } while (isDuplicateCostume(door));
     } else if (input & HSD_PAD_Y) {
@@ -2303,8 +2251,9 @@ void mnCharSel_CostumeChange(int door, u32 input)
                 mnCharSel_803F0DFC.doors[door].costume--;
             } else {
                 mnCharSel_803F0DFC.doors[door].costume =
-                    gm_80169238(icons[mnCharSel_803F0DFC.doors[door].sel_icon]
-                                    .char_kind) -
+                    gm_GetNumCostumesForCKind(
+                        icons[mnCharSel_803F0DFC.doors[door].sel_icon]
+                            .char_kind) -
                     1;
             }
         } while (isDuplicateCostume(door));
@@ -2320,8 +2269,6 @@ static inline void updateCursorDisplay(HSD_JObj* jobj,
                                        HSD_JObj** state_jobj,
                                        HSD_JObj** color_jobj)
 {
-    CSSAllData* all_data = CSS_ALL;
-
     if (cursor->x5 != 1) {
         f32 y = cursor->x10;
         if (y < 0.2f || y > 22.0f) {
@@ -2351,8 +2298,7 @@ static inline void updateCursorDisplay(HSD_JObj* jobj,
             color_idx = cursor->x4;
         } else {
             color_idx =
-                mnCharSel_804D50E0[CSS_DOORS_DATA.doors[cursor->x4]
-                                       .team];
+                mnCharSel_804D50E0[mnCharSel_803F0DFC.doors[cursor->x4].team];
         }
 
         {
@@ -2497,7 +2443,6 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
     u32 next_port;
     HSD_JObj* jobj = GET_JOBJ(gobj);
     struct CSSCursorData* cursor = gobj->user_data;
-    CSSAllData* all_data = CSS_ALL;
     u32 trigger;
     int n_doors;
     u32 buttons;
@@ -2553,20 +2498,19 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                             }
                         } else if (door <= 7U) {
                             cpu_door = door - 4;
-                            CSS_DOORS_DATA.doors[cpu_door]
+                            mnCharSel_803F0DFC.doors[cpu_door]
                                 .is_hold_cpu_slider = 0;
                         }
                     } else {
-                        if (CSS_DOORS_DATA.doors[cursor->x4].sel_icon >=
+                        if (mnCharSel_803F0DFC.doors[cursor->x4].sel_icon >=
                                 0x19U &&
-                            CSS_DOORS_DATA.doors[cursor->x4].p_kind !=
-                                3 &&
+                            mnCharSel_803F0DFC.doors[cursor->x4].p_kind != 3 &&
                             mnCharSel_8025FDEC(cursor->x4) != 0)
                         {
                             mnCharSel_8025FB50(cursor->x4, 1);
                         }
                     }
-                    if (CSS_DOORS_DATA.doors[cursor->x4].p_kind == 0) {
+                    if (mnCharSel_803F0DFC.doors[cursor->x4].p_kind == 0) {
 #if BUILD_TARGET_PC
                         if (getenv("MELEE_CSSLOG") != NULL) {
                             fprintf(stderr,
@@ -2574,18 +2518,18 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                                     (int) cursor->x4);
                         }
 #endif
-                        CSS_DOORS_DATA.doors[cursor->x4].p_kind = 1;
+                        mnCharSel_803F0DFC.doors[cursor->x4].p_kind = 1;
                         mnCharSel_804D6CB0->vs.start.players[cursor->x4]
                             .slot_type = 1;
                         mnCharSel_804D6CB0->vs.start.players[cursor->x4]
                             .nametag = 0x78;
-                        CSS_TAGS[cursor->x4].data->use_tag = 0;
+                        mnCharSel_803F0E8C[cursor->x4].data->use_tag = 0;
                     }
                     mnCharSel_8025DB34(cursor->x4);
-                    if (CSS_TAGS[cursor->x4].data->state != 0) {
-                        CSS_TAGS[cursor->x4].data->state = 4;
+                    if (mnCharSel_803F0E8C[cursor->x4].data->state != 0) {
+                        mnCharSel_803F0E8C[cursor->x4].data->state = 4;
                     }
-                    CSS_DOORS_DATA.doors[cursor->x4]
+                    mnCharSel_803F0DFC.doors[cursor->x4]
                         .is_hold_handicap_slider = 0;
                 }
                 cursor->x5 = 3;
@@ -2630,27 +2574,27 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
         }
 #endif
 
-        CSS_TAGS[cursor->x4].data->scroll_amt = 0.0f;
+        mnCharSel_803F0E8C[cursor->x4].data->scroll_amt = 0.0f;
 
         {
-            current_tag = CSS_TAGS[cursor->x4].data;
+            current_tag = mnCharSel_803F0E8C[cursor->x4].data;
             if (current_tag->state != 0) {
                 if (mnCharSel_804D6CF5 == 1) {
                     lb_80011E24(mnCharSel_804D6CC0, &sp98,
-                                CSS_MISC.name_list_joint, -1);
+                                mnCharSel_803F0EBC.name_list_joint, -1);
                 } else {
                     lb_80011E24(mnCharSel_804D6CC0, &sp98,
-                                CSS_TAGS[cursor->x4].list_joint, -1);
+                                mnCharSel_803F0E8C[cursor->x4].list_joint, -1);
                 }
                 lb_8000B1CC(sp98, NULL, &sp88);
 
                 if ((0.8f + sp88.y) < cursor->x10) {
-                    CSS_TAGS[cursor->x4].data->scroll_amt =
+                    mnCharSel_803F0E8C[cursor->x4].data->scroll_amt =
                         (f32) (cursor->x10 - (0.8f + sp88.y));
                     cursor->x10 = (f32) (0.8f + sp88.y);
                 }
                 if ((-14.8f + sp88.y) > cursor->x10) {
-                    CSS_TAGS[cursor->x4].data->scroll_amt =
+                    mnCharSel_803F0E8C[cursor->x4].data->scroll_amt =
                         (f32) (cursor->x10 - (-14.8f + sp88.y));
                     cursor->x10 = (f32) (-14.8f + sp88.y);
                 }
@@ -2678,7 +2622,7 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
 
         {
             u8 port = cursor->x4;
-            CSSTagData* tag = CSS_TAGS[port].data;
+            CSSTagData* tag = mnCharSel_803F0E8C[port].data;
             if (tag->state == 0) {
                 if (cursor->x5 == 1) {
                     door = cursor->x6;
@@ -2690,14 +2634,13 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                         if (cursor->x10 < 0.2f) {
                             if ((s32) port != (s32) door ||
                                 ((s32) port == (s32) door &&
-                                 CSS_DOORS_DATA.doors[door].p_kind == 3))
+                                 mnCharSel_803F0DFC.doors[door].p_kind == 3))
                             {
                                 mnCharSel_8025FDEC(door);
                                 lbAudioAx_800237A8(0xB8, 0x7F, 0x40);
                             } else {
                                 mnCharSel_804A0BD0[door]->x5 = 0;
-                                CSS_DOORS_DATA.doors[door].sel_icon =
-                                    0x19;
+                                mnCharSel_803F0DFC.doors[door].sel_icon = 0x19;
                                 {
                                     s32 player_idx;
                                     if (mnCharSel_804D6CF5 == 1) {
@@ -2711,7 +2654,7 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                                     }
                                     mnCharSel_804D6CB0->vs.start
                                         .players[player_idx]
-                                        .ckind = CHKIND_NONE;
+                                        .ckind = ChKind_None;
                                 }
                             }
                             mnCharSel_8025DB34(door);
@@ -2737,12 +2680,14 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                                         mnCharSel_8025FB50(door, 0);
                                         while (true) {
                                             mnCharSel_803F0DFC.doors[door]
-                                                .costume =
-                                                HSD_Randi((s32) gm_80169238(
-                                                    icons[mnCharSel_803F0DFC
-                                                              .doors[door]
-                                                              .sel_icon]
-                                                        .char_kind));
+                                                .costume = HSD_Randi(
+                                                (s32)
+                                                    gm_GetNumCostumesForCKind(
+                                                        icons
+                                                            [mnCharSel_803F0DFC
+                                                                 .doors[door]
+                                                                 .sel_icon]
+                                                                .char_kind));
                                             if (!isDuplicateCostume(door)) {
                                                 break;
                                             }
@@ -2766,7 +2711,7 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                                         m2->xC > icons[i].bound_d &&
                                         icons[i].state >= 1)
                                     {
-                                        CSS_DOORS_DATA.doors[door]
+                                        mnCharSel_803F0DFC.doors[door]
                                             .sel_icon = (u8) i;
                                         mnCharSel_8025DB34(door);
                                         if (trigger & HSD_PAD_A) {
@@ -2785,7 +2730,7 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                                             mnCharSel_804D6CB0->vs.start
                                                 .players[player_idx]
                                                 .ckind =
-                                                (s8) icons[CSS_DOORS_DATA
+                                                (s8) icons[mnCharSel_803F0DFC
                                                                .doors[door]
                                                                .sel_icon]
                                                     .char_kind;
@@ -2809,20 +2754,18 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                                                 mnCharSel_804A0BC0
                                                     [mnCharSel_804D6CF5 - 1]
                                                         ->gobj);
-                                            CSS_DOORS_DATA.doors[door]
+                                            mnCharSel_803F0DFC.doors[door]
                                                 .selected_since_load = 1;
                                             cursor->x5 = 2;
                                             {
-                                                u8 sel =
-                                                    CSS_DOORS_DATA
-                                                        .doors[door & 0xFF]
-                                                        .sel_icon;
+                                                int sel = mnCharSel_803F0DFC
+                                                              .doors[(u8) door]
+                                                              .sel_icon;
                                                 lbAudioAx_80023870(
-                                                    CSS_ICONS[sel].sfx,
-                                                    0x7F, 0x40, sel + 0x8A);
+                                                    icons[sel].sfx, 0x7F, 0x40,
+                                                    sel + 0x8A);
                                                 gm_80168C5C(
-                                                    (u32) CSS_ICONS[sel]
-                                                        .char_kind);
+                                                    icons[sel].char_kind);
                                             }
                                             lbAudioAx_800237A8(0xB8, 0x7F,
                                                                0x40);
@@ -2834,13 +2777,14 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
 
                                 mnCharSel_8025D5AC((s32) door, 0, 1);
                                 {
-                                    CSSTagData* td = CSS_TAGS[door].data;
+                                    CSSTagData* td =
+                                        mnCharSel_803F0E8C[door].data;
                                     if (td->use_tag == 0) {
                                         td->text->hidden = 1;
                                     }
                                 }
-                                CSS_DOORS_DATA.doors[door]
-                                    .sel_icon_prev = 0x19;
+                                mnCharSel_803F0DFC.doors[door].sel_icon_prev =
+                                    0x19;
                                 if (trigger & HSD_PAD_A) {
                                     lbAudioAx_80024030(3);
                                 } else {
@@ -2864,7 +2808,7 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                     case 7: {
                         s32 slider_door = door - 4;
                         updateGrabbedSlider(
-                            cursor, &CSS_DOORS_DATA.doors[slider_door],
+                            cursor, &mnCharSel_803F0DFC.doors[slider_door],
                             slider_door, trigger, &sp98, &sp88, false);
                     } break;
                     case 8:
@@ -2873,7 +2817,7 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                     case 0xB: {
                         s32 hc_door = door - 8;
                         updateGrabbedSlider(
-                            cursor, &CSS_DOORS_DATA.doors[hc_door],
+                            cursor, &mnCharSel_803F0DFC.doors[hc_door],
                             hc_door, trigger, &sp98, &sp88, true);
                     } break;
                     }
@@ -2933,24 +2877,24 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                     cpu_level_widget:
                         if (mnCharSel_804D6CB0->match_type <= 0xDU) {
                             f32 cy2 = cursor->x10;
-                            if (cy2 < CSS_MISC.cpubtn_top &&
-                                cy2 > CSS_MISC.cpubtn_btm)
+                            if (cy2 < mnCharSel_803F0EBC.cpubtn_top &&
+                                cy2 > mnCharSel_803F0EBC.cpubtn_btm)
                             {
                                 f32 cx2 = cursor->xC;
-                                if (cx2 > CSS_MISC.cpudown_left &&
-                                    cx2 < CSS_MISC.cpudown_right)
+                                if (cx2 > mnCharSel_803F0EBC.cpudown_left &&
+                                    cx2 < mnCharSel_803F0EBC.cpudown_right)
                                 {
                                     cursor->x8 = 1;
                                     if (trigger & HSD_PAD_A) {
                                         u8* level;
                                         u8 current_level;
                                         if ((current_level =
-                                                 *(level = &CSS_MISC
+                                                 *(level = &mnCharSel_803F0EBC
                                                                 .cpu_level)) !=
                                             0)
                                         {
                                             *level = (u8) (current_level - 1);
-                                            CSS_MISC.scroll_flag = 1;
+                                            mnCharSel_803F0EBC.scroll_flag = 1;
                                             mnCharSel_804D6CB0->vs.start
                                                 .players
                                                     [(s8) (u8)
@@ -2963,20 +2907,22 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                                     } else {
                                         goto door_clicks;
                                     }
-                                } else if (cx2 > CSS_MISC.cpuup_left &&
-                                           cx2 < CSS_MISC.cpuup_right)
+                                } else if (cx2 >
+                                               mnCharSel_803F0EBC.cpuup_left &&
+                                           cx2 <
+                                               mnCharSel_803F0EBC.cpuup_right)
                                 {
                                     cursor->x8 = 1;
                                     if (trigger & HSD_PAD_A) {
                                         u8* level;
                                         u8 current_level;
                                         if ((current_level =
-                                                 *(level = &CSS_MISC
+                                                 *(level = &mnCharSel_803F0EBC
                                                                 .cpu_level)) <
                                             4U)
                                         {
                                             *level = (u8) (current_level + 1);
-                                            CSS_MISC.scroll_flag = 1;
+                                            mnCharSel_803F0EBC.scroll_flag = 1;
                                             mnCharSel_804D6CB0->vs.start
                                                 .players
                                                     [(s8) (u8)
@@ -3087,7 +3033,7 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                     u8 cport2 = cursor->x4;
                     if (mnCharSel_804A0BD0[cport2]->x5 == 0 &&
                         mnCharSel_804D6CB0->vs.start.rules.is_teams == 0 &&
-                        CSS_DOORS_DATA.doors[cport2].p_kind != 3)
+                        mnCharSel_803F0DFC.doors[cport2].p_kind != 3)
                     {
                         mnCharSel_CostumeChange((s32) cport2, trigger);
                     }
@@ -3299,18 +3245,19 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                         {
                             if ((cursor->x4 != 3 ||
                                  mnCharSel_804D6CB0->match_type != 1) &&
-                                CSS_DOORS_DATA.doors[cursor->x4]
-                                        .p_kind == 0)
+                                mnCharSel_803F0DFC.doors[cursor->x4].p_kind ==
+                                    0)
                             {
                                 if (mnCharSel_804D6CF5 == 1) {
-                                    lb_80011E24(mnCharSel_804D6CC0, &sp98,
-                                                CSS_MISC.tag_box_joint,
-                                                -1);
+                                    lb_80011E24(
+                                        mnCharSel_804D6CC0, &sp98,
+                                        mnCharSel_803F0EBC.tag_box_joint, -1);
                                 } else {
                                     lb_80011E24(
                                         mnCharSel_804D6CC0, &sp98,
-                                        CSS_TAGS[*(volatile u8*) &cursor->x4]
-                                            .name_jointl,
+                                        mnCharSel_803F0E8C
+                                            [*(volatile u8*) &cursor->x4]
+                                                .name_jointl,
                                         -1);
                                 }
                                 lb_8000B1CC(sp98, NULL, (&sp88));
@@ -3324,21 +3271,22 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                                             if (mnCharSel_804D6CF5 == 1) {
                                                 lb_80011E24(
                                                     mnCharSel_804D6CC0, &sp74,
-                                                    CSS_MISC
+                                                    mnCharSel_803F0EBC
                                                         .name_list_joint,
                                                     -1);
                                             } else {
                                                 lb_80011E24(
                                                     mnCharSel_804D6CC0, &sp74,
-                                                    CSS_TAGS[cursor->x4]
-                                                        .list_joint,
+                                                    mnCharSel_803F0E8C
+                                                        [cursor->x4]
+                                                            .list_joint,
                                                     -1);
                                             }
                                             lb_8000B1CC(sp74, NULL, (&sp88));
                                             cursor->xC = sp88.x;
                                             cursor->x10 =
                                                 (f32) (sp88.y - 5.0f);
-                                            CSS_TAGS[cursor->x4]
+                                            mnCharSel_803F0E8C[cursor->x4]
                                                 .data->state = 1;
                                         }
                                     }
@@ -3432,10 +3380,10 @@ void mnCharSel_CursorThink(HSD_GObj* gobj)
                             if (cport6 != 3 ||
                                 mnCharSel_804D6CB0->match_type != 1)
                             {
-                                if (CSS_DOORS_DATA.doors[cport6]
-                                        .p_kind == 3)
+                                if (mnCharSel_803F0DFC.doors[cport6].p_kind ==
+                                    3)
                                 {
-                                    CSS_DOORS_DATA.doors[cport6].p_kind =
+                                    mnCharSel_803F0DFC.doors[cport6].p_kind =
                                         0;
                                     mnCharSel_804D6CB0->vs.start
                                         .players[cursor->x4]
@@ -3751,6 +3699,7 @@ void fn_80262F44(HSD_GObj* gobj)
 {
     HSD_JObj* jobj = GET_JOBJ(gobj);
     int i;
+    int valid_count = 0;
     PAD_STACK(0x8);
 
     if (mnCharSel_804D6CB0->match_type == VS_CAMERA) {
@@ -3775,7 +3724,7 @@ void fn_80262F44(HSD_GObj* gobj)
         }
         HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
     } else {
-        s32 valid_count = 0;
+        valid_count = 0;
 
         for (i = 0; i < (s32) mnCharSel_804D6CF5; i++) {
             if (mnCharSel_803F0DFC.doors[i].p_kind != 3) {
@@ -4313,20 +4262,17 @@ static const GXColor mnCharSel_804DC58C = { 160, 160, 0, 255 };
 static const GXColor mnCharSel_804DC590 = { 180, 80, 0, 255 };
 static const GXColor mnCharSel_804DC594 = { 220, 0, 0, 255 };
 
-#define MODELS ((CSSSceneModels*) mnCharSel_804D6CB4)
-
 #if BUILD_TARGET_PC
-/* CSSSceneModels is four pointers, and mnCharSel_804D6CB4 points straight at
- * the archive's "MnSelectChrDataTable". On GameCube those are four 4-byte
- * slots at 0/4/8/0xC; here the struct is 32 bytes with fields at 0/8/0x10/
- * 0x18, so reading it in place splices the camera and first light offsets
- * into one 64-bit number and puts everything after them in the wrong place.
- * HSD_CObjLoadDesc then dereferenced that and took the character select down
- * on entry.
+/* MnSelectChrDataTable opens with four pointers, and css_data_table points
+ * straight at the archive's copy of it. On GameCube those are four 4-byte
+ * slots at 0/4/8/0xC; here the fields are at 0/8/0x10/0x18, so reading the
+ * struct in place splices the camera and first light offsets into one 64-bit
+ * number and puts everything after them in the wrong place. HSD_CObjLoadDesc
+ * then dereferenced that and took the character select down on entry.
  *
- * The base pointer has to stay raw regardless -- mnCharSel_804D6CD8 is
- * derived from it as `+ 0x10`, which is the GameCube size of this table --
- * so read each slot at its GameCube offset and convert it there. */
+ * The base pointer has to stay raw regardless -- the models block is derived
+ * from it as `+ 0x10`, which is the GameCube size of those four slots -- so
+ * read each slot at its GameCube offset and convert it there. */
 static u32 pc_css_be32(const void* p)
 {
     const u8* b = (const u8*) p;
@@ -4334,7 +4280,7 @@ static u32 pc_css_be32(const void* p)
            (u32) b[3];
 }
 
-#define CSS_SLOT(i) ((const void*) ((const u8*) mnCharSel_804D6CB4 + (i) * 4))
+#define CSS_SLOT(i) ((const void*) ((const u8*) css_data_table + (i) * 4))
 #define CSS_CAM()    pc_conv_CObjDescAt(CSS_SLOT(0), css_scene_database())
 #define CSS_LIGHT0() pc_conv_LightDescAt(CSS_SLOT(1), css_scene_database())
 #define CSS_LIGHT1() pc_conv_LightDescAt(CSS_SLOT(2), css_scene_database())
@@ -4352,37 +4298,38 @@ static HSD_FogDesc* css_conv_fog(void)
 {
     u8* base = css_scene_database();
     u32 off;
-    if (base == NULL || mnCharSel_804D6CB4 == NULL) return NULL;
+    if (base == NULL || css_data_table == NULL) return NULL;
     off = pc_css_be32(CSS_SLOT(3));
     if (off == 0 || off >= 0x80000000U) return NULL;
     return grDatFiles_ConvertFogDescGCNtoX64(base + off, base);
 }
-#else
-#define CSS_CAM()    (MODELS->cam)
-#define CSS_LIGHT0() (MODELS->light0)
-#define CSS_LIGHT1() (MODELS->light1)
-#define CSS_FOG()    (MODELS->fog)
-#endif
-#if BUILD_TARGET_PC
-/* Same shape of problem as CSSSceneModels above, one level worse because it
- * is an array. CSSAnimSet is four pointers: 0x10 bytes per entry in the
- * archive, 0x20 here, so indexing the raw table walks at the wrong stride
- * *and* reads each field at the wrong offset. Convert the nine entries the
- * character select uses into a real array once, and point ANIM at that. */
+
+/* Same shape of problem for the nine StaticModelDescs of MnSelectChrModels
+ * that follow those four slots, one level worse because it is an array: each
+ * entry is 0x10 bytes in the archive and 0x20 here, so indexing the raw block
+ * walks at the wrong stride *and* reads every field at the wrong offset.
+ * Convert the block once into a host-layout MnSelectChrModels and point
+ * css_models at that, so each `css_models->...` read below is a real one. */
 #define CSS_ANIM_SETS 9
-static CSSAnimSet mnCharSel_pc_anim[CSS_ANIM_SETS];
+static MnSelectChrModels mnCharSel_pc_anim;
 static int mnCharSel_pc_anim_ready;
 
-static void css_convert_anim_sets(void)
+static MnSelectChrModels* css_convert_anim_sets(void)
 {
-    const u8* raw = mnCharSel_804D6CD8;
+    /* The models block sits at the GameCube offset 0x10, not at
+     * offsetof(MnSelectChrDataTable, models). */
+    const u8* raw = (const u8*) css_data_table + 0x10;
+    StaticModelDesc* out = (StaticModelDesc*) &mnCharSel_pc_anim;
     u8* base = css_scene_database();
     int i;
 
+    if (mnCharSel_pc_anim_ready) {
+        return &mnCharSel_pc_anim;
+    }
     mnCharSel_pc_anim_ready = 1;
-    memset(mnCharSel_pc_anim, 0, sizeof(mnCharSel_pc_anim));
-    if (raw == NULL || base == NULL) {
-        return;
+    memset(&mnCharSel_pc_anim, 0, sizeof(mnCharSel_pc_anim));
+    if (css_data_table == NULL || base == NULL) {
+        return &mnCharSel_pc_anim;
     }
     for (i = 0; i < CSS_ANIM_SETS; i++) {
         const u8* e = raw + (size_t) i * 0x10;
@@ -4393,42 +4340,41 @@ static void css_convert_anim_sets(void)
         off = pc_css_be32(e + 0x00);
         if (off != 0) {
             grDatFiles_ResetJointMap();
-            mnCharSel_pc_anim[i].joint =
+            out[i].joint =
                 grDatFiles_ConvertJointTreeGCNtoX64(base + off, base, 0, NULL);
             grDatFiles_ResolvePObjJoints();
         }
         off = pc_css_be32(e + 0x04);
         if (off != 0) {
-            mnCharSel_pc_anim[i].anim =
+            out[i].animjoint =
                 grDatFiles_ConvertAnimJointTreeGCNtoX64(base + off, base, 0);
         }
         off = pc_css_be32(e + 0x08);
         if (off != 0) {
-            mnCharSel_pc_anim[i].matanim =
+            out[i].matanim_joint =
                 grDatFiles_ConvertMatAnimJointTreeGCNtoX64(base + off, base, 0);
         }
         off = pc_css_be32(e + 0x0C);
         if (off != 0) {
-            mnCharSel_pc_anim[i].shapeanim =
+            out[i].shapeanim_joint =
                 grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(base + off, base,
                                                             0);
         }
         if (getenv("MELEE_CSSLOG") != NULL) {
             fprintf(stderr,
                     "[CSS] anim[%d] joint=%p anim=%p matanim=%p shape=%p\n", i,
-                    (void*) mnCharSel_pc_anim[i].joint,
-                    (void*) mnCharSel_pc_anim[i].anim,
-                    (void*) mnCharSel_pc_anim[i].matanim,
-                    (void*) mnCharSel_pc_anim[i].shapeanim);
+                    (void*) out[i].joint, (void*) out[i].animjoint,
+                    (void*) out[i].matanim_joint,
+                    (void*) out[i].shapeanim_joint);
         }
     }
+    return &mnCharSel_pc_anim;
 }
-
-#define ANIM (mnCharSel_pc_anim_ready ? mnCharSel_pc_anim \
-                                      : (css_convert_anim_sets(), \
-                                         mnCharSel_pc_anim))
 #else
-#define ANIM ((CSSAnimSet*) mnCharSel_804D6CD8)
+#define CSS_CAM()    (css_data_table->cam)
+#define CSS_LIGHT0() (css_data_table->light0)
+#define CSS_LIGHT1() (css_data_table->light1)
+#define CSS_FOG()    (css_data_table->fog)
 #endif
 
 s32 mnCharSel_802640A0(void)
@@ -4550,8 +4496,10 @@ s32 mnCharSel_802640A0(void)
     GObj_SetupGXLink(gobj, fn_8026407C, 0, 0x80);
 
     gobj = GObj_Create(4, 5, 0x80);
-    jobj = HSD_JObjLoadJoint(ANIM[0].joint);
-    HSD_JObjAddAnimAll(jobj, ANIM[0].anim, ANIM[0].matanim, ANIM[0].shapeanim);
+    jobj = HSD_JObjLoadJoint(css_models->background.joint);
+    HSD_JObjAddAnimAll(jobj, css_models->background.animjoint,
+                       css_models->background.matanim_joint,
+                       css_models->background.shapeanim_joint);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 1, 0x80);
     HSD_GObj_SetupProc(gobj, fn_80263354, 4);
@@ -4560,13 +4508,16 @@ s32 mnCharSel_802640A0(void)
 
     mnCharSel_804D6CBC = GObj_Create(4, 5, 0x80);
     if (mnCharSel_804D6CF5 == 1) {
-        mnCharSel_804D6CC0 = HSD_JObjLoadJoint(ANIM[6].joint);
-        HSD_JObjAddAnimAll(mnCharSel_804D6CC0, ANIM[6].anim, ANIM[6].matanim,
-                           ANIM[6].shapeanim);
+        mnCharSel_804D6CC0 = HSD_JObjLoadJoint(css_models->regend_menu.joint);
+        HSD_JObjAddAnimAll(mnCharSel_804D6CC0,
+                           css_models->regend_menu.animjoint,
+                           css_models->regend_menu.matanim_joint,
+                           css_models->regend_menu.shapeanim_joint);
     } else {
-        mnCharSel_804D6CC0 = HSD_JObjLoadJoint(ANIM[3].joint);
-        HSD_JObjAddAnimAll(mnCharSel_804D6CC0, ANIM[3].anim, ANIM[3].matanim,
-                           ANIM[3].shapeanim);
+        mnCharSel_804D6CC0 = HSD_JObjLoadJoint(css_models->menu.joint);
+        HSD_JObjAddAnimAll(mnCharSel_804D6CC0, css_models->menu.animjoint,
+                           css_models->menu.matanim_joint,
+                           css_models->menu.shapeanim_joint);
     }
     {
         u8 obj_kind = HSD_GObj_JObjKind;
@@ -4580,7 +4531,7 @@ s32 mnCharSel_802640A0(void)
     HSD_ForeachAnim(mnCharSel_804D6CC0, JOBJ_TYPE, ALL_TYPE_MASK,
                     HSD_AObjStopAnim, AOBJ_ARG_AOV, 0, 0);
 
-    if (gm_IsCKindUnlocked(CKIND_LUIGI) == 0) {
+    if (gm_IsCKindUnlocked(CKind_Luigi) == 0) {
         row_a = 2;
         row_b = 0x13;
     } else {
@@ -4650,13 +4601,16 @@ s32 mnCharSel_802640A0(void)
         u8 mt = mnCharSel_804D6CB0->match_type;
         if (mt >= 0xFU && mt <= 0x16U) {
             gobj = GObj_Create(4, 5, 0x80);
-            mnCharSel_804D6CC8 = HSD_JObjLoadJoint(ANIM[7].joint);
+            mnCharSel_804D6CC8 =
+                HSD_JObjLoadJoint(css_models->regend_options.joint);
             HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind,
                                     mnCharSel_804D6CC8);
             GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 1, 0x80);
             HSD_GObj_SetupProc(gobj, fn_8025FB2C, 4);
-            HSD_JObjAddAnimAll(mnCharSel_804D6CC8, ANIM[7].anim,
-                               ANIM[7].matanim, ANIM[7].shapeanim);
+            HSD_JObjAddAnimAll(mnCharSel_804D6CC8,
+                               css_models->regend_options.animjoint,
+                               css_models->regend_options.matanim_joint,
+                               css_models->regend_options.shapeanim_joint);
             HSD_JObjReqAnimAll(mnCharSel_804D6CC8, 0.0f);
             HSD_ForeachAnim(mnCharSel_804D6CC8, JOBJ_TYPE, ALL_TYPE_MASK,
                             HSD_AObjStopAnim, AOBJ_ARG_AOV, 0, 0);
@@ -4666,17 +4620,18 @@ s32 mnCharSel_802640A0(void)
     if (mnCharSel_804D6CB0->match_type == 0x17) {
         u8 ck;
         gobj = GObj_Create(4, 5, 0x80);
-        mnCharSel_804D6CC4 = HSD_JObjLoadJoint(ANIM[8].joint);
+        mnCharSel_804D6CC4 = HSD_JObjLoadJoint(css_models->door.joint);
         HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, mnCharSel_804D6CC4);
         GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 1, 0x80);
         HSD_GObj_SetupProc(gobj, fn_8025FB2C, 4);
-        HSD_JObjAddAnimAll(mnCharSel_804D6CC4, ANIM[8].anim, ANIM[8].matanim,
-                           ANIM[8].shapeanim);
+        HSD_JObjAddAnimAll(mnCharSel_804D6CC4, css_models->door.animjoint,
+                           css_models->door.matanim_joint,
+                           css_models->door.shapeanim_joint);
         HSD_JObjReqAnimAll(mnCharSel_804D6CC4, 0.0f);
         HSD_ForeachAnim(mnCharSel_804D6CC4, JOBJ_TYPE, ALL_TYPE_MASK,
                         HSD_AObjStopAnim, AOBJ_ARG_AOV, 0, 0);
         ck = mnCharSel_804D6CB0->vs.start.players[mnCharSel_804D6CF1].ckind;
-        if ((s8) ck >= CKIND_PLAYABLE_COUNT || gm_IsCKindUnlocked(ck) == 0) {
+        if ((s8) ck >= CKind_Playable_Count || gm_IsCKindUnlocked(ck) == 0) {
             u8* char_kinds;
             s32 icon_off;
             do {
@@ -4687,18 +4642,21 @@ s32 mnCharSel_802640A0(void)
             mnCharSel_804D6CB0->vs.start.players[mnCharSel_804D6CF1].ckind =
                 char_kinds[icon_off];
             mnCharSel_804D6CB0->vs.start.players[mnCharSel_804D6CF1].color =
-                HSD_Randi((s32) gm_80169238(char_kinds[icon_off]));
+                HSD_Randi(
+                    (s32) gm_GetNumCostumesForCKind(char_kinds[icon_off]));
         }
     }
 
     if (mnCharSel_804D6CB0->match_type == 1) {
         gobj = GObj_Create(4, 5, 0x80);
-        mnCharSel_804D6CCC = HSD_JObjLoadJoint(ANIM[5].joint);
+        mnCharSel_804D6CCC = HSD_JObjLoadJoint(css_models->debug_camera.joint);
         HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, mnCharSel_804D6CCC);
         GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x80);
         HSD_GObj_SetupProc(gobj, fn_8025FAC0, 4);
-        HSD_JObjAddAnimAll(mnCharSel_804D6CCC, ANIM[5].anim, ANIM[5].matanim,
-                           ANIM[5].shapeanim);
+        HSD_JObjAddAnimAll(mnCharSel_804D6CCC,
+                           css_models->debug_camera.animjoint,
+                           css_models->debug_camera.matanim_joint,
+                           css_models->debug_camera.shapeanim_joint);
         HSD_JObjReqAnimAll(mnCharSel_804D6CCC, 0.0f);
     }
 
@@ -4706,14 +4664,15 @@ s32 mnCharSel_802640A0(void)
         HSD_GObj* cursor_gobj;
         struct CSSCursorData* cursor;
         cursor_gobj = GObj_Create(4, 5, 0x80);
-        jobj = HSD_JObjLoadJoint(ANIM[1].joint);
+        jobj = HSD_JObjLoadJoint(css_models->hand.joint);
         cursor = HSD_MemAlloc(sizeof(*cursor));
         HSD_GObjObject_80390A70(cursor_gobj, HSD_GObj_JObjKind, jobj);
         GObj_SetupGXLink(cursor_gobj, HSD_GObj_JObjCallback, 3, 0x80);
         HSD_GObj_SetupProc(cursor_gobj, mnCharSel_CursorThink, 1);
         GObj_InitUserData(cursor_gobj, 4, HSD_Free, cursor);
-        HSD_JObjAddAnimAll(jobj, ANIM[1].anim, ANIM[1].matanim,
-                           ANIM[1].shapeanim);
+        HSD_JObjAddAnimAll(jobj, css_models->hand.animjoint,
+                           css_models->hand.matanim_joint,
+                           css_models->hand.shapeanim_joint);
         HSD_JObjReqAnimAll(jobj, 0.0f);
         HSD_JObjAnimAll(jobj);
         HSD_ForeachAnim(jobj, JOBJ_TYPE, ALL_TYPE_MASK, HSD_AObjStopAnim,
@@ -4733,7 +4692,7 @@ s32 mnCharSel_802640A0(void)
     for (i = 0, slot = 0; i < num_players; i++, slot++) {
         {
             HSD_GObj* model_gobj = GObj_Create(4, 5, 0x80);
-            jobj = HSD_JObjLoadJoint(ANIM[2].joint);
+            jobj = HSD_JObjLoadJoint(css_models->token.joint);
             {
                 int player;
                 struct CSSCharModel* model = HSD_MemAlloc(sizeof(*model));
@@ -4741,8 +4700,9 @@ s32 mnCharSel_802640A0(void)
                 GObj_InitUserData(model_gobj, 4, HSD_Free, model);
                 GObj_SetupGXLink(model_gobj, HSD_GObj_JObjCallback, 2, 0x80);
                 HSD_GObj_SetupProc(model_gobj, fn_80262648, 2);
-                HSD_JObjAddAnimAll(jobj, ANIM[2].anim, ANIM[2].matanim,
-                                   ANIM[2].shapeanim);
+                HSD_JObjAddAnimAll(jobj, css_models->token.animjoint,
+                                   css_models->token.matanim_joint,
+                                   css_models->token.shapeanim_joint);
                 HSD_JObjReqAnimAll(jobj, 0.0f);
                 {
                     HSD_JObj* anim_jobj = jobj;
@@ -4777,7 +4737,7 @@ s32 mnCharSel_802640A0(void)
                 if (found >= 0x19) {
                     u8* slot_type;
                     mnCharSel_804D6CB0->vs.start.players[player].ckind =
-                        CKIND_PLAYABLE_COUNT;
+                        CKind_Playable_Count;
                     slot_type = &mnCharSel_804D6CB0->vs.start.players[player]
                                      .slot_type;
                     if (*slot_type == 1) {
@@ -5448,11 +5408,13 @@ s32 mnCharSel_802640A0(void)
     (void) ((u8*) text)[num_players];
     (void) icons[num_players];
     gobj = GObj_Create(4, 5, 0x80);
-    jobj = HSD_JObjLoadJoint(ANIM[4].joint);
+    jobj = HSD_JObjLoadJoint(css_models->press_start.joint);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x80);
     HSD_GObj_SetupProc(gobj, fn_80262F44, 3);
-    HSD_JObjAddAnimAll(jobj, ANIM[4].anim, ANIM[4].matanim, ANIM[4].shapeanim);
+    HSD_JObjAddAnimAll(jobj, css_models->press_start.animjoint,
+                       css_models->press_start.matanim_joint,
+                       css_models->press_start.shapeanim_joint);
     HSD_JObjReqAnimAll(jobj, 0.0f);
     HSD_ForeachAnim(jobj, JOBJ_TYPE, ALL_TYPE_MASK, HSD_AObjStopAnim,
                     AOBJ_ARG_AOV, 0, 0);
@@ -5544,15 +5506,12 @@ s32 mnCharSel_802640A0(void)
     return lbAudioAx_80023F28(gmMainLib_8015ECB0());
 }
 
-#undef MODELS
-#undef ANIM
-
 void mnCharSel_Scene_OnEnter(void* arg0)
 {
     PAD_STACK(8);
 
-    lb_8001C550();
-    lb_8001D164(0);
+    lbCardNew_AllocWorkArea();
+    lbCardGame_LoadArchive(0);
     mnCharSel_804D6CB0 = (CSSData*) arg0;
 
     mnCharSel_804D6CF0 = mnCharSel_804D6CB0->unk_0x0 - 1;
@@ -5584,11 +5543,16 @@ void mnCharSel_Scene_OnEnter(void* arg0)
         mnCharSel_804D6CD0 = lbArchive_LoadArchive("MnSlChr.usd");
         mnCharSel_804D6CD4 = lbArchive_LoadArchive("MnExtAll.usd");
     }
-    mnCharSel_804D6CB4 = HSD_ArchiveGetPublicAddress(mnCharSel_804D6CD0,
-                                                     "MnSelectChrDataTable");
-    mnCharSel_804D6CD8 = (u8*) mnCharSel_804D6CB4 + 0x10;
+    css_data_table = HSD_ArchiveGetPublicAddress(mnCharSel_804D6CD0,
+                                                 "MnSelectChrDataTable");
 #if BUILD_TARGET_PC
+    /* &css_data_table->models is the *host* offset 0x20; the archive's block
+     * is at the GameCube offset 0x10, and its entries are the GameCube size
+     * too. Point css_models at the converted copy instead. */
     mnCharSel_pc_anim_ready = 0;
+    css_models = css_convert_anim_sets();
+#else
+    css_models = &css_data_table->models;
 #endif
     if (lbLang_IsSavedLanguageJP() != 0) {
         HSD_SisLib_803A62A0(0, "SdSlChr.dat", "SIS_SelCharData");
@@ -5647,7 +5611,8 @@ void mnCharSel_Scene_OnFrame(void)
         static int f = 0;
         if (++f % 30 == 1 && mnCharSel_804D6CB0 != NULL) {
             fprintf(stderr, "[CSS] frame %d doors p_kind=%d %d %d %d slot=%d %d %d %d\n", f,
-                    CSS_DOORS_DATA.doors[0].p_kind, CSS_DOORS_DATA.doors[1].p_kind, CSS_DOORS_DATA.doors[2].p_kind, CSS_DOORS_DATA.doors[3].p_kind,
+                    mnCharSel_803F0DFC.doors[0].p_kind, mnCharSel_803F0DFC.doors[1].p_kind,
+                    mnCharSel_803F0DFC.doors[2].p_kind, mnCharSel_803F0DFC.doors[3].p_kind,
                     mnCharSel_804D6CB0->vs.start.players[0].slot_type, mnCharSel_804D6CB0->vs.start.players[1].slot_type,
                     mnCharSel_804D6CB0->vs.start.players[2].slot_type, mnCharSel_804D6CB0->vs.start.players[3].slot_type);
         }
@@ -5677,7 +5642,7 @@ void mnCharSel_Scene_OnFrame(void)
                     mnCharSel_804D6CB0->vs.start.players[mnCharSel_804D6CF0]
                         .color;
             } else {
-                cache->entries[0].char_id = CHKIND_NONE;
+                cache->entries[0].char_id = ChKind_None;
             }
             slot_type =
                 mnCharSel_804D6CB0->vs.start.players[mnCharSel_804D6CF1]
@@ -5692,7 +5657,7 @@ void mnCharSel_Scene_OnFrame(void)
                                                   .players[mnCharSel_804D6CF1]
                                                   .color;
                 } else {
-                    cache->entries[1].char_id = CHKIND_NONE;
+                    cache->entries[1].char_id = ChKind_None;
                 }
             }
         } else {
@@ -5712,7 +5677,7 @@ void mnCharSel_Scene_OnFrame(void)
                     cache->entries[i].color =
                         mnCharSel_804D6CB0->vs.start.players[i].color;
                 } else {
-                    cache->entries[i].char_id = CHKIND_NONE;
+                    cache->entries[i].char_id = ChKind_None;
                 }
             }
         }

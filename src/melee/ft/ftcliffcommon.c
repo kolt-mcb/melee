@@ -1,24 +1,23 @@
-#include "ft/ftcliffcommon.h"
+#include "ftcliffcommon.h"
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "ef/efasync.h"
-#include "ft/fighter.h"
-#include "ft/ft_081B.h"
-#include "ft/ft_0877.h"
-#include "ft/ft_0881.h"
-#include "ft/ftanim.h"
-#include "ft/ftcamera.h"
-#include "ft/ftcommon.h"
-#include "ft/types.h"
-#include "ftCommon/ftCo_CliffWait.h"
-#include "ftCommon/ftCo_Fall.h"
-#include "ftCommon/ftCo_StopCeil.h"
-#include "ftCommon/types.h"
-#include "mp/mplib.h"
-#include "pl/plbonuslib.h"
-
+#include "fighter.h"
+#include "ft_081B.h"
+#include "ft_0877.h"
+#include "ft_0881.h"
+#include "ftanim.h"
+#include "ftcamera.h"
+#include "ftcommon.h"
+#include "kinds/ftCommon/ftCo_CliffWait.h"
+#include "kinds/ftCommon/ftCo_Fall.h"
+#include "kinds/ftCommon/ftCo_StopCeil.h"
+#include "kinds/ftCommon/types.h"
+#include "types.h"
 #include <dolphin/mtx.h>
+#include <melee/ef/efasync.h>
+#include <melee/mp/mplib.h>
+#include <melee/pl/plbonuslib.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -36,21 +35,22 @@ bool ftCliffCommon_80081298(Fighter_GObj* gobj)
     u8 _[8];
 
     Fighter* fp = gobj->user_data;
-    if (fp->input.lstick.y <= -p_ftCommonData->x480) {
+    if (fp->input.lstick[0].y <= -p_ftCommonData->x480) {
         return false;
     }
     if (fp->coll_data.env_flags & Collide_LedgeGrabMask &&
-        ((fp->x2228_b2 & 1) == 0))
+        ((fp->is_sandbag & 1) == 0))
     {
         other_gobj = ft_80082E3C(gobj);
         if (other_gobj == NULL) {
-            pl_80040048(fp->player_id, fp->x221F_b4);
+            pl_80040048(fp->player_id, fp->is_sub_fighter);
             ftCliffCommon_80081370(gobj);
             return true;
         }
         other_fp = other_gobj->user_data;
-        pl_8003FFDC(other_fp->player_id, other_fp->x221F_b4, fp->player_id,
-                    fp->x221F_b4, other_fp->mv.co.cliff.ledge_id);
+        pl_8003FFDC(other_fp->player_id, other_fp->is_sub_fighter,
+                    fp->player_id, fp->is_sub_fighter,
+                    other_fp->mv.co.cliff.ledge_id);
         fp->x213C = other_fp->mv.co.cliff.ledge_id;
         return false;
     }

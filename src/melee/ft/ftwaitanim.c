@@ -1,14 +1,12 @@
 #include "ftwaitanim.h"
 
+#include "ftanim.h"
+#include "ftdata.h"
 #include "ftdynamics.h"
-
-#include "baselib/random.h"
-#include "ft/ftanim.h"
-#include "ft/ftdata.h"
-#include "ft/inlines.h"
-#include "it/it_26B1.h"
-
-#include <baselib/debug.h>
+#include "inlines.h"
+#include <melee/it/it_26B1.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/random.h>
 
 bool ftCo_8008A698(Fighter* fp)
 {
@@ -66,8 +64,8 @@ void ftCo_8008A7A8(Fighter_GObj* gobj, WaitStruct* arg1)
     Fighter* fp = GET_FIGHTER(gobj);
     if (!ftAnim_IsFramesRemaining(gobj)) {
         if (arg1 == NULL ||
-            (fp->item_gobj != NULL && fp->kind != FTKIND_MEWTWO &&
-             fp->kind != FTKIND_FOX))
+            (fp->item_gobj != NULL && fp->kind != Ft_Kind_Mewtwo &&
+             fp->kind != Ft_Kind_Fox))
         {
             enum_t temp;
             temp = fp->anim_id;

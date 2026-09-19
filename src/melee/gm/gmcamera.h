@@ -1,11 +1,9 @@
 #ifndef GALE01_1A2224
 #define GALE01_1A2224
 
-#include <placeholder.h>
+#include <sysdolphin/baselib/forward.h>
 
-#include "baselib/forward.h"
-
-#include "dolphin/types.h"
+#include <dolphin/types.h>
 
 typedef struct _gmCameraUnkStruct4 {
     /*0x00*/ bool x0;
@@ -22,7 +20,7 @@ typedef struct _gmCameraUnkStruct {
     /*0x10*/ s32 x10;
     /*0x14*/ s32 x14;
     /*0x18*/ s32 x18;
-    /*0x1C*/ void* x1C;
+    /*0x1C*/ void* snap_image;
     /*0x20*/ int x20;
     /*0x24*/ gmCameraUnkStruct4 x24[2];
     /*0x44*/ s32 x44;
@@ -42,9 +40,9 @@ typedef struct _gmCameraUnkFuncTable {
 /* 1A2224 */ u8* gmCamera_801A2224(u8* arg0, u32 arg1);
 /* 1A2334 */ HSD_Text* gmCamera_801A2334(s32, f32, f32, f32, f32);
 /* 1A253C */ void gmCamera_801A253C(s32*, s32*);
-/* 1A25C8 */ UNK_RET gmCamera_801A25C8(UNK_PARAMS);
+/* 1A25C8 */ void gmCamera_801A25C8(void);
 /* 1A2640 */ s32 gmCamera_801A2640(void);
-/* 1A2650 */ UNK_RET gmCamera_801A2650(UNK_PARAMS);
+/* 1A2650 */ void gmCamera_801A2650(void);
 /* 1A26C0 */ void gmCamera_801A26C0(void);
 /* 1A2798 */ void gmCamera_801A2798(void);
 /* 1A2800 */ void gmCamera_801A2800(void);
@@ -57,9 +55,9 @@ typedef struct _gmCameraUnkFuncTable {
 /* 1A2FBC */ void gmCamera_801A2FBC(void);
 /* 1A2FFC */ void gmCamera_801A2FFC(void);
 /* 1A3048 */ void gmCamera_801A3048(s32);
-/* 1A3098 */ UNK_RET gmCamera_801A3098(UNK_PARAMS);
-/* 1A30E4 */ UNK_RET gmCamera_801A30E4(UNK_PARAMS);
-/* 1A31D8 */ UNK_RET fn_801A31D8(HSD_GObj*);
-/* 1A31FC */ UNK_RET gmCamera_801A31FC(UNK_PARAMS);
+/* 1A3098 */ void gmCamera_801A3098(void);
+/* 1A30E4 */ void gmCamera_801A30E4(void);
+/* 1A31D8 */ void fn_801A31D8(HSD_GObj*);
+/* 1A31FC */ void gmCamera_801A31FC(void);
 
 #endif

@@ -5,20 +5,19 @@
 #include <stdlib.h>
 #endif
 
+#include <math.h>
+
 #include "efalt.h"
 #include "efasync.h"
 #include "efdata.h"
 #include "eflib.h"
 #include "types.h"
-
-#include "baselib/gobj.h"
-#include "baselib/jobj.h"
-#include "baselib/psstructs.h"
-#include "baselib/random.h"
-#include "ft/inlines.h"
-
-#include <math.h>
-#include <baselib/generator.h>
+#include <melee/ft/inlines.h>
+#include <sysdolphin/baselib/generator.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/psstructs.h>
+#include <sysdolphin/baselib/random.h>
 
 extern EF_DAT_Entry efAsync_DatEntries[51];
 
@@ -56,9 +55,9 @@ void* efSync_Spawn(s32 gfx_id, HSD_GObj* gobj, ...)
     /* MELEE_EFREQ=1: every effect spawn request by id, on the match clock, so
      * it lines up with the console breakpoint on the same function. */
     if (getenv("MELEE_EFREQ") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[EFSPAWN] gframe=%u id=%x\n",
-                (unsigned) gm_8016AEDC(), (unsigned) gfx_id);
+                (unsigned) gm_GetFrameCount(), (unsigned) gfx_id);
     }
 #endif
     va_list vlist;
@@ -673,8 +672,7 @@ void* efSync_Spawn(s32 gfx_id, HSD_GObj* gobj, ...)
     while (efLib_AnimCount != 0) {
         cnt_2 = efLib_AnimCount - 1;
         efLib_AnimCount = cnt_2;
-        HSD_JObjAnimAll(
-            ((EF_ParamEntry*) (((u32*) efLib_AnimQueue) + cnt_2))->gobj);
+        HSD_JObjAnimAll(((HSD_JObj**) efLib_AnimQueue)[cnt_2]);
     }
 
     va_end(vlist);

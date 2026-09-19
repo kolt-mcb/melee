@@ -1,9 +1,9 @@
 #ifndef _objalloc_h_
 #define _objalloc_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/debug.h"
+#include <sysdolphin/baselib/debug.h>
 
 typedef struct _objheap {
     uintptr_t top;

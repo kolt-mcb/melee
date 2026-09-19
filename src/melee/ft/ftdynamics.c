@@ -3,22 +3,21 @@
 #include "port/pc_ptr.h"
 #endif
 
+#include <Runtime/platform.h>
+
 #include <placeholder.h>
-#include <platform.h>
-
-#include "ft/forward.h"
-
-#include "ft/ft_0877.h"
-#include "ft/ftcoll.h"
-#include "ft/inlines.h"
-#include "ft/types.h"
-#include "gr/ground.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-
 #include <stddef.h>
-#include <baselib/debug.h>
-#include <baselib/jobj.h>
+
+#include "forward.h"
+#include "ftcoll.h"
+#include "inlines.h"
+#include "kinds/ftKirby/ftkirby.h"
+#include "types.h"
+#include <melee/gr/ground.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/jobj.h>
 
 /* 09CB40 */ static void ftCo_8009CB40(Fighter* fp, ssize_t bone_idx, bool,
                                        FigaTree*);
@@ -152,7 +151,7 @@ static inline void ftCo_SetupKirbyHatBone(Fighter* fp, KirbyHatStruct* hat,
 
 void ftCo_8009D074(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_KOOPA];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Koopa];
 #if BUILD_TARGET_PC
     if (hat == NULL || hat->hat_dynamics[2] == NULL) {
         fp->dynamics_num = 0; /* a copy hat whose chains did not convert */
@@ -172,7 +171,7 @@ void ftCo_8009D074(Fighter* fp)
 
 void ftCo_8009D18C(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_ZELDA];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Zelda];
 #if BUILD_TARGET_PC
     if (hat == NULL || hat->hat_dynamics[2] == NULL) {
         fp->dynamics_num = 0; /* a copy hat whose chains did not convert */
@@ -192,7 +191,7 @@ void ftCo_8009D18C(Fighter* fp)
 
 void ftCo_8009D2A4(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_NANA];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Nana];
 #if BUILD_TARGET_PC
     if (hat == NULL || hat->hat_dynamics[2] == NULL) {
         fp->dynamics_num = 0; /* a copy hat whose chains did not convert */
@@ -212,7 +211,7 @@ void ftCo_8009D2A4(Fighter* fp)
 
 void ftCo_8009D3BC(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_FALCO];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Falco];
 #if BUILD_TARGET_PC
     if (hat == NULL || hat->hat_dynamics[2] == NULL) {
         fp->dynamics_num = 0; /* a copy hat whose chains did not convert */
@@ -232,7 +231,7 @@ void ftCo_8009D3BC(Fighter* fp)
 
 void ftCo_8009D4D4(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_KIRBY];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Kirby];
 #if BUILD_TARGET_PC
     if (hat == NULL || hat->hat_dynamics[1] == NULL) {
         fp->dynamics_num = 0; /* a copy hat whose chains did not convert */
@@ -252,7 +251,7 @@ void ftCo_8009D4D4(Fighter* fp)
 
 void ftCo_8009D5EC(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_MARS];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Mars];
     fp->dynamics_num = hat->hat_dynamics[0]->dynamicsNum;
     HSD_ASSERTREPORT(298, fp->dynamics_num < Ft_Dynamics_NumMax,
                      "fighter dynamics num over!\n");
@@ -266,7 +265,7 @@ void ftCo_8009D5EC(Fighter* fp)
 
 void ftCo_8009D704(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_LINK];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Link];
     fp->dynamics_num = hat->hat_dynamics[2]->dynamicsNum;
     HSD_ASSERTREPORT(331, fp->dynamics_num < Ft_Dynamics_NumMax,
                      "fighter dynamics num over!\n");
@@ -280,7 +279,7 @@ void ftCo_8009D704(Fighter* fp)
 
 void ftCo_8009D81C(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_YOSHI];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Yoshi];
     PAD_STACK(2 * 4);
     fp->dynamics_num = hat->hat_dynamics[3]->dynamicsNum;
     HSD_ASSERTREPORT(364, fp->dynamics_num < Ft_Dynamics_NumMax,
@@ -304,7 +303,7 @@ void ftCo_8009D81C(Fighter* fp)
 
 void ftCo_8009D920(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_LUIGI];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Luigi];
     fp->dynamics_num = hat->hat_dynamics[1]->dynamicsNum;
     HSD_ASSERTREPORT(388, fp->dynamics_num < Ft_Dynamics_NumMax,
                      "fighter dynamics num over!\n");
@@ -318,7 +317,7 @@ void ftCo_8009D920(Fighter* fp)
 
 void ftCo_8009DA38(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_GANON];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Ganon];
     fp->dynamics_num = hat->hat_dynamics[1]->dynamicsNum;
     HSD_ASSERTREPORT(421, fp->dynamics_num < Ft_Dynamics_NumMax,
                      "fighter dynamics num over!\n");
@@ -332,7 +331,7 @@ void ftCo_8009DA38(Fighter* fp)
 
 void ftCo_8009DB50(Fighter* fp)
 {
-    KirbyHatStruct* hat = ft_80459B88.hats[FTKIND_PURIN];
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Purin];
     PAD_STACK(2 * 4);
     fp->dynamics_num = hat->hat_dynamics[4]->dynamicsNum;
     HSD_ASSERTREPORT(455, fp->dynamics_num < Ft_Dynamics_NumMax,
@@ -371,11 +370,12 @@ void ftCo_8009DC54(Fighter* fp)
     HSD_ASSERTREPORT(490, fp->dynamics_num < Ft_Dynamics_NumMax,
                      "fighter dynamics num over!\n");
     {
-        ssize_t bone_idx = idx * 2 + 1;
-        ssize_t dyn_idx = 0;
-        i = 0;
-        do {
-            HSD_JObj* cur = fp->u.kb.hat.jobj;
+        ssize_t bone_idx;
+        ssize_t dyn_idx;
+        for (bone_idx = idx * 2 + 1, dyn_idx = 0, i = 0; i < 2;
+             i++, bone_idx++, dyn_idx++)
+        {
+            HSD_JObj* cur = fp->u.pr.x223C;
             ftDynamics* dynamics = data->x2C;
             ArticleDynamicBones* bones = dynamics->ftDynamicBones;
             ssize_t j;
@@ -401,10 +401,7 @@ void ftCo_8009DC54(Fighter* fp)
                     &data->x2C->ftDynamicBones->array[bone_idx].dyn_desc,
                     desc);
             }
-            i++;
-            bone_idx++;
-            dyn_idx++;
-        } while (i < 2);
+        }
     }
 }
 
@@ -431,12 +428,12 @@ void ftCo_8009DD94(Fighter_GObj* gobj, bool arg1)
             ret_B0 = false;
         } else {
             kind = fp->kind;
-            if (kind == FTKIND_MEWTWO && fp->motion_id >= 0xDF &&
+            if (kind == Ft_Kind_Mewtwo && fp->motion_id >= 0xDF &&
                 fp->motion_id <= 0xE8)
             {
                 ret_B0 = true;
-            } else if (fp->ground_or_air == GA_Air || kind == FTKIND_KOOPA ||
-                       kind == FTKIND_GKOOPS)
+            } else if (fp->ground_or_air == GA_Air || kind == Ft_Kind_Koopa ||
+                       kind == Ft_Kind_GKoops)
             {
                 ret_B0 = false;
             } else {
@@ -445,14 +442,14 @@ void ftCo_8009DD94(Fighter_GObj* gobj, bool arg1)
         }
         ftColl_8007AF60(gobj);
         ftCo_8009E614(fp);
-        if (fp->kind == FTKIND_PEACH) {
+        if (fp->kind == Ft_Kind_Peach) {
             for (i = 0; i < dynamics_num - 1; i++, dyn++) {
                 lb_8001044C(&dyn->dyn_desc, &fp->x1670, fp->x166C,
                             fp->cur_pos.y, arg1, dyn->bone_id, 3, ret_B0);
             }
             lb_8001044C(&dyn->dyn_desc, &fp->x1670, fp->x166C, fp->cur_pos.y,
                         arg1, dyn->bone_id, 0, ret_B0);
-        } else if (fp->kind == FTKIND_MEWTWO) {
+        } else if (fp->kind == Ft_Kind_Mewtwo) {
             for (i = 0; i < dynamics_num; i++, dyn++) {
                 lb_8001044C(&dyn->dyn_desc, &fp->x1670, fp->x166C,
                             fp->cur_pos.y, arg1, dyn->bone_id, 8, ret_B0);
@@ -500,10 +497,10 @@ void ftCo_8009E140(Fighter* fp, bool arg1)
 {
     ssize_t i;
     PAD_STACK(2 * 4);
-    if (fp->kind == FTKIND_KIRBY) {
+    if (fp->kind == Ft_Kind_Kirby) {
         return;
     }
-    if (fp->kind == FTKIND_PURIN) {
+    if (fp->kind == Ft_Kind_Purin) {
         ftCo_8009CB40(fp, 0, arg1, NULL);
         return;
     }
@@ -627,7 +624,7 @@ void ftCo_8009E4A8(Fighter* fp)
 
 void ftCo_8009E614(Fighter* fp)
 {
-    if ((fp->kind == FTKIND_MARS || fp->kind == FTKIND_EMBLEM) &&
+    if ((fp->kind == Ft_Kind_Mars || fp->kind == Ft_Kind_Emblem) &&
         !fp->x2227_b6)
     {
         int x = lb_80011ABC();
@@ -681,8 +678,8 @@ void ftCo_8009E7B4(Fighter* fp, u8 (*arg1)[2])
         s32 var_r3;
         u32 cached_b6;
         if ((cached_b6 = fp->x2227_b6)) {
-            if (fp->kind != FTKIND_KIRBY) {
-                if (fp->kind == FTKIND_PURIN) {
+            if (fp->kind != Ft_Kind_Kirby) {
+                if (fp->kind == Ft_Kind_Purin) {
                     ftCo_8009CB40(fp, 0, 0, NULL);
                     return;
                 }
@@ -691,7 +688,7 @@ void ftCo_8009E7B4(Fighter* fp, u8 (*arg1)[2])
                 }
             }
         } else {
-            if (fp->kind != FTKIND_MARS && fp->kind != FTKIND_EMBLEM) {
+            if (fp->kind != Ft_Kind_Mars && fp->kind != Ft_Kind_Emblem) {
                 var_r3 = 0;
             } else if (!cached_b6) {
                 if (lb_80011ABC() > 0) {
@@ -701,8 +698,8 @@ void ftCo_8009E7B4(Fighter* fp, u8 (*arg1)[2])
                 }
             }
             if (var_r3) {
-                if (fp->kind != FTKIND_KIRBY) {
-                    if (fp->kind == FTKIND_PURIN) {
+                if (fp->kind != Ft_Kind_Kirby) {
+                    if (fp->kind == Ft_Kind_Purin) {
                         ftCo_8009CB40(fp, 0, 1, NULL);
                         return;
                     }
@@ -756,8 +753,8 @@ void ftCo_8009E7B4(Fighter* fp, u8 (*arg1)[2])
                     return;
                 } else {
                     if (fp->x594_b3) {
-                        if (fp->kind != FTKIND_KIRBY) {
-                            if (fp->kind == FTKIND_PURIN) {
+                        if (fp->kind != Ft_Kind_Kirby) {
+                            if (fp->kind == Ft_Kind_Purin) {
                                 ftCo_8009CB40(fp, 0, 0, NULL);
                                 return;
                             }
@@ -766,8 +763,8 @@ void ftCo_8009E7B4(Fighter* fp, u8 (*arg1)[2])
                             }
                         }
                     } else {
-                        if (fp->kind != FTKIND_KIRBY) {
-                            if (fp->kind == FTKIND_PURIN) {
+                        if (fp->kind != Ft_Kind_Kirby) {
+                            if (fp->kind == Ft_Kind_Purin) {
                                 ftCo_8009CB40(fp, 0, 1, NULL);
                                 return;
                             }
@@ -779,8 +776,8 @@ void ftCo_8009E7B4(Fighter* fp, u8 (*arg1)[2])
                 }
             }
         }
-    } else if (fp->x2227_b6 && fp->kind != FTKIND_KIRBY) {
-        if (fp->kind == FTKIND_PURIN) {
+    } else if (fp->x2227_b6 && fp->kind != Ft_Kind_Kirby) {
+        if (fp->kind == Ft_Kind_Purin) {
             ftCo_8009CB40(fp, 0, 0, NULL);
             return;
         }

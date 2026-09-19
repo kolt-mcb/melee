@@ -6,10 +6,11 @@
 #else
 #define MSL_MATH_H
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
 #ifdef MWERKS_GEKKO
 #include <math_ppc.h>
+
 #include <MetroTRK/intrinsics.h>
 #endif
 
@@ -92,7 +93,7 @@ void __sinit_trigf_c(void);
 
 static inline float fmodf(float a, float b)
 {
-    long long quotient;
+    s64 quotient;
 
     if (fabsf(b) > fabsf(a)) {
         return a;

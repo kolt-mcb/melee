@@ -2,9 +2,9 @@
 
 #include <placeholder.h>
 
+#include "hsd_3933.h"
 #include <dolphin/mcc.h>
 #include <dolphin/os.h>
-#include <sysdolphin/baselib/hsd_3933.h>
 
 struct ParticleConsoleState {
     /* 00 */ u8 x0_b0 : 1;
@@ -123,7 +123,7 @@ u8 fn_80392CD8(char* caller)
     return err;
 }
 
-s32 hsd_804CE728[0x106];
+s32 hsd_804CE728[256];
 
 void fn_80392E2C(s32 event_type)
 {
@@ -135,8 +135,6 @@ void fn_80392E2C(s32 event_type)
         hsd_804D7898 += 1;
     }
 }
-
-extern s32 hsd_804CF740[42];
 
 int hsd_804D78A0;
 extern s32 hsd_804D78A8;
@@ -153,7 +151,6 @@ static void usb_exit_init(void)
     }
 }
 
-// @TODO: Currently 92.84% match - needs minor register allocation fix
 int hsd_80392E80(void)
 {
     enum MCC_CONNECT status;

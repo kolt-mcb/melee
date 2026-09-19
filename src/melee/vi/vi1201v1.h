@@ -1,8 +1,8 @@
 #ifndef GALE01_31F990
 #define GALE01_31F990
 
-#include "ft/forward.h"
-#include <baselib/forward.h>
+#include <melee/ft/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 /* 31F980 */ void un_8031F980(int arg0, int arg1);
 /* 31F990 */ void un_8031F990(HSD_GObj*);

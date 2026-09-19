@@ -1,17 +1,15 @@
 #ifndef _shadow_h_
 #define _shadow_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/cobj.h"
-
-#include "baselib/forward.h"
-
-#include "baselib/list.h"
-#include "baselib/objalloc.h"
-#include "baselib/tobj.h"
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/list.h>
+#include <sysdolphin/baselib/objalloc.h>
+#include <sysdolphin/baselib/tobj.h>
 
 struct HSD_Shadow {
     HSD_SList* objects; // 0x0

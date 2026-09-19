@@ -76,6 +76,17 @@ float __fabsf(float);
 #ifndef UNUSED
 #define UNUSED __attribute__((unused))
 #endif
+/* September upstream folded ATTRIBUTE_NORETURN and ATTRIBUTE_NONSTRING into
+ * Runtime/platform.h's `#ifndef UNUSED` block. This file is force-included
+ * first and defines UNUSED, so that whole block is skipped and neither macro
+ * would ever be defined -- leaving `ATTRIBUTE_NORETURN void _ExitProcess(void)`
+ * to read as a declaration with no type. Define them here as well. */
+#ifndef ATTRIBUTE_NORETURN
+#define ATTRIBUTE_NORETURN __attribute__((noreturn))
+#endif
+#ifndef ATTRIBUTE_NONSTRING
+#define ATTRIBUTE_NONSTRING __attribute__((nonstring))
+#endif
 #ifndef ASM
 #define ASM
 #endif

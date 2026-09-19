@@ -1,13 +1,12 @@
+#include "fighter.h"
+#include "ft_081B.h"
+#include "ft_0877.h"
 #include "ft_0CDD.h"
-
-#include <sysdolphin/baselib/gobj.h>
+#include "ftcommon.h"
+#include "types.h"
 #include <melee/ef/efsync.h>
-#include <melee/ft/fighter.h>
-#include <melee/ft/ft_081B.h>
-#include <melee/ft/ft_0877.h>
-#include <melee/ft/ftcommon.h>
-#include <melee/ft/types.h>
-#include <melee/it/items/itlgun.h>
+#include <melee/it/kinds/itlgun.h>
+#include <sysdolphin/baselib/gobj.h>
 
 void ftCo_800CE1D4(HSD_GObj*); /* extern */
 
@@ -100,10 +99,6 @@ void ftCo_800CE14C(HSD_GObj* fighter_gobj)
 
 /// LGun accessory4 callback function (ran after fire input already processed)
 /// @todo Cannot use #ftCheckThrowB0 under the surrounding `dont_inline`.
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void ftCo_800CE1D4(HSD_GObj* fighter_gobj)
 {
     f32 f0;
@@ -142,9 +137,6 @@ void ftCo_800CE1D4(HSD_GObj* fighter_gobj)
         }
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void ftCo_LGunShoot_Anim(Fighter_GObj* fighter_gobj)
 {

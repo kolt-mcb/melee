@@ -1,8 +1,6 @@
 #ifndef MELEE_MN_MAINRULE_H
 #define MELEE_MN_MAINRULE_H
 
-#include <placeholder.h>
-
 #include <sysdolphin/baselib/forward.h>
 
 struct mn_802307F8_t {
@@ -22,8 +20,7 @@ struct mn_802307F8_t {
         struct {
             /* 0x00C */ HSD_JObj* xC0[10];
             struct {
-                /* 0x00 */ HSD_JObj* x0;
-                /* 0x04 */ u8 x4_pad[0x24 - 0x04];
+                /* 0x00 */ HSD_JObj* joints[9];
             } x34[7];
         };
     };
@@ -44,11 +41,11 @@ struct mn_80231634_t {
 /* 2307F8 */ void mn_802307F8(struct mn_802307F8_t*, s32, s32);
 /* 2308F0 */ void mn_802308F0(HSD_GObj*, int, int);
 /* 2309F0 */ void fn_802309F0(HSD_GObj*);
-/* 230D18 */ s32 mn_80230D18(struct mn_802307F8_t*, HSD_JObj*, s8);
+/* 230D18 */ s32 mn_80230D18(struct mn_802307F8_t*, HSD_JObj*, int);
 /* 230E38 */ HSD_GObj* mn_80230E38(int);
 /* 231634 */ int mn_80231634(struct mn_80231634_t*);
 /* 23164C */ void mn_8023164C(void);
-/* 231714 */ UNK_RET mn_80231714(UNK_PARAMS);
+/* 231714 */ void mn_80231714(void);
 /* 2317E4 */ void mn_802317E4(HSD_Archive*, int);
 /* 231804 */ void mn_80231804(HSD_Archive*, int);
 /* 231F80 */ bool mn_80231F80(u8);

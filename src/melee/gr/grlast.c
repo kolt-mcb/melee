@@ -1,29 +1,29 @@
 #include "grlast.h"
 
-#include "baselib/psstructs.h"
-#include "lb/lb_00F9.h"
-
 #include <math.h>
 #if BUILD_TARGET_PC
 #include "port/pc_grconv.h"
 #endif
+
+#include "granime.h"
+#include "grdisplay.h"
+#include "grlib.h"
+#include "grmaterial.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "stage.h"
+#include <melee/cm/camera.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/lbvector.h>
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/gobjgxlink.h>
 #include <sysdolphin/baselib/gobjproc.h>
 #include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/psstructs.h>
 #include <sysdolphin/baselib/random.h>
-#include <melee/cm/camera.h>
-#include <melee/gm/gm_unsplit.h>
-#include <melee/gr/granime.h>
-#include <melee/gr/grdisplay.h>
-#include <melee/gr/grlib.h>
-#include <melee/gr/grmaterial.h>
-#include <melee/gr/ground.h>
-#include <melee/gr/grzakogenerator.h>
-#include <melee/gr/inlines.h>
-#include <melee/gr/stage.h>
-#include <melee/lb/lb_00B0.h>
-#include <melee/lb/lbvector.h>
 
 /* Final Destination: the random rotation rates are fmadds/fmsubs on the
  * console (8021AC78 and siblings). */
@@ -40,7 +40,7 @@
 /* 21A7C8 */ static void grLast_OnStart(void);
 /* 21A7EC */ static bool grLast_8021A7EC(void);
 /* 21A7F4 */ static Ground_GObj* grLast_8021A7F4(int);
-/* 21A8E0 */ static void grLast_8021A8E0(Ground_GObj*);
+/* 21A8E0 */ static void stageGObj0_OnInit(Ground_GObj*);
 /* 21A90C */ static bool grLast_8021A90C(Ground_GObj*);
 /* 21A914 */ static void grLast_8021A914(Ground_GObj*);
 /* 21A918 */ static void grLast_8021A918(Ground_GObj*);
@@ -48,7 +48,7 @@
 /* 21A960 */ static bool grLast_8021A960(Ground_GObj*);
 /* 21A968 */ static void grLast_8021A968(Ground_GObj*);
 /* 21A96C */ static void grLast_8021A96C(Ground_GObj*);
-/* 21A970 */ static void grLast_8021A970(Ground_GObj*);
+/* 21A970 */ static void stageGObj2_OnInit(Ground_GObj*);
 /* 21A99C */ static bool grLast_8021A99C(Ground_GObj*);
 /* 21A9A4 */ static void grLast_8021A9A4(Ground_GObj*);
 /* 21A9A8 */ static void grLast_8021A9A8(Ground_GObj*);
@@ -102,15 +102,16 @@ Vec3 const grLast_803B8480 = { 1.0f, 1.0f, 1.0f };
 Vec3 const grLast_803B848C = { 0.0f, 1.0f, 0.0f };
 Vec3 const grLast_803B8498 = { 0.0f, 0.0f, 1.0f };
 
-/// @todo yakumono struct
-#if BUILD_TARGET_PC
 /* Four colour-overlay scripts. The console's block holds relocated pointers;
- * the port's layout converter hands back file offsets, resolved once below
- * into raw pointers that pc_script_prepare byteswaps on first use. */
-static intptr_t* yakumono_param;
-#else
-static int* yakumono_param;
-#endif
+ * the port's layout converter hands back file offsets, resolved once in
+ * grLast_OnInit into raw pointers that pc_script_prepare byteswaps on first
+ * use. */
+static struct grLast_YakumonoParam {
+    void* x0;
+    void* x4;
+    void* x8;
+    void* xC;
+}* yakumono_param;
 
 static void grLast_OnDemoInit(enum_t arg0)
 {
@@ -158,7 +159,7 @@ static void grLast_OnDemoInit(enum_t arg0)
 static StageCallbacks grLast_StageCallbacks[] = {
     {
         // 0 generic anime gobj
-        grLast_8021A8E0,
+        stageGObj0_OnInit,
         grLast_8021A90C,
         grLast_8021A914,
         grLast_8021A918,
@@ -172,7 +173,7 @@ static StageCallbacks grLast_StageCallbacks[] = {
     },
     {
         // 2 generic anime gobj
-        grLast_8021A970,
+        stageGObj2_OnInit,
         grLast_8021A99C,
         grLast_8021A9A4,
         grLast_8021A9A8,
@@ -251,14 +252,14 @@ static void grLast_OnInit(void)
     yakumono_param = Ground_GetYakumonoParam();
 #if BUILD_TARGET_PC
     {
-        static intptr_t resolved[4];
+        static struct grLast_YakumonoParam resolved;
         const u32* off = (const u32*) yakumono_param;
+        void** out = (void**) &resolved;
         int i;
         for (i = 0; i < 4; i++) {
-            resolved[i] =
-                off != NULL ? (intptr_t) pc_grconv_stage_script(off[i]) : 0;
+            out[i] = off != NULL ? (void*) pc_grconv_stage_script(off[i]) : NULL;
         }
-        yakumono_param = resolved;
+        yakumono_param = &resolved;
     }
 #endif
     stage_info.unk8C.b4 = 1;
@@ -313,10 +314,9 @@ static Ground_GObj* grLast_8021A7F4(int id)
     return gobj;
 }
 
-static void grLast_8021A8E0(Ground_GObj* gobj)
+static void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 static bool grLast_8021A90C(Ground_GObj* gobj)
@@ -344,10 +344,9 @@ static void grLast_8021A968(Ground_GObj* gobj) {}
 
 static void grLast_8021A96C(Ground_GObj* gobj) {}
 
-static void grLast_8021A970(Ground_GObj* gobj)
+static void stageGObj2_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 static bool grLast_8021A99C(Ground_GObj* gobj)
@@ -370,7 +369,7 @@ static void grLast_8021A9C4(Ground_GObj* gobj)
     Ground* gp = gobj->user_data;
     u32 i;
 
-    Ground_801C2ED0(gobj->hsd_obj, gp->map_id);
+    Ground_InitMapColl(gobj->hsd_obj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
     gp->u.map.xC4_b0 = true;
     for (i = 0; i < ARRAY_SIZE(gp->u.map.lv_gobj); i++) {
@@ -402,7 +401,7 @@ static void grLast_8021AAB0(Ground_GObj* gobj)
             }
         }
     }
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
     lb_800115F4();
 }
 
@@ -670,10 +669,10 @@ static void grLast_8021B2E8(Ground_GObj* gobj)
         if (temp_gp->u.last.xDC < 0) {
             temp_gp->u.last.xDC = 0;
         }
-        Camera_80030E44(1, 0);
+        Camera_RequestQuake(QuakeKind_Loop, NULL);
         break;
     case 11:
-        Camera_80030E44(1, 0);
+        Camera_RequestQuake(QuakeKind_Loop, NULL);
         break;
     case 15:
         if (gp->u.map.xC4_b27) {
@@ -929,7 +928,7 @@ static void grLast_8021B920(Ground_GObj* gobj_, int arg1)
     case 13:
         grLast_8021C40C(gobj, grNLa_804DBBD8, 120.0F);
         for (i = 0; i < 5; i++) {
-            grMaterial_801C9604(gp->u.map.lv_gobj[i], yakumono_param[0], 0);
+            grMaterial_801C9604(gp->u.map.lv_gobj[i], yakumono_param->x0, 0);
             grMaterial_801C9698(gp->u.map.lv_gobj[i]);
         }
         gp->u.map.xC4_b26 = true;
@@ -944,7 +943,7 @@ static void grLast_8021B920(Ground_GObj* gobj_, int arg1)
         HSD_ASSERT(0x4D2, gp->u.map.lv_gobj[5]);
         HSD_GObjGXLink_803909D8(gp->u.map.lv_gobj[5], gobj);
         do_anime(gp->u.map.lv_gobj[5], 5, 0);
-        grMaterial_801C9604(gp->u.map.lv_gobj[5], yakumono_param[1], 0);
+        grMaterial_801C9604(gp->u.map.lv_gobj[5], yakumono_param->x4, 0);
         grMaterial_801C9698(gp->u.map.lv_gobj[5]);
         Ground_801C1E00(0);
         gp->u.map.xC4_b26 = true;
@@ -955,7 +954,7 @@ static void grLast_8021B920(Ground_GObj* gobj_, int arg1)
         break;
     case 16:
         grLast_8021C40C(gobj, grNLa_804DBBE0, 60.0F);
-        grMaterial_801C9604(gp->u.map.lv_gobj[5], yakumono_param[2], 0);
+        grMaterial_801C9604(gp->u.map.lv_gobj[5], yakumono_param->x8, 0);
         grMaterial_801C9698(gp->u.map.lv_gobj[5]);
         gp->u.map.xC4_b26 = true;
         break;
@@ -969,7 +968,7 @@ static void grLast_8021B920(Ground_GObj* gobj_, int arg1)
                                  grNLa_803E8010[i][3], 0.0F, 1.0F);
             }
             do_anime(gp->u.map.lv_gobj[i], i, 0);
-            grMaterial_801C9604(gp->u.map.lv_gobj[i], yakumono_param[3], 0);
+            grMaterial_801C9604(gp->u.map.lv_gobj[i], yakumono_param->xC, 0);
             grMaterial_801C9698(gp->u.map.lv_gobj[i]);
         }
 

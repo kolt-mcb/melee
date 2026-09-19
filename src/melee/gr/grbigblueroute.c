@@ -1,35 +1,33 @@
 #include "grbigblueroute.h"
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/debug.h"
-#include "baselib/memory.h"
-#include "cm/camera.h"
-#include "ft/ftlib.h"
-#include "gm/gm_16AE.h"
-#include "gr/grdatfiles.h"
-#include "gr/grdisplay.h"
-#include "gr/grfzerocar.h"
-#include "gr/grmaterial.h"
-#include "gr/ground.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/types.h"
-#include "if/ifhazard.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lbshadow.h"
-#include "lb/lbvector.h"
-#include "mp/mpcoll.h"
-#include "mp/mplib.h"
-
+#include "grdatfiles.h"
+#include "grdisplay.h"
+#include "grfzerocar.h"
+#include "grmaterial.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "types.h"
 #include <dolphin/os.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
-#include <baselib/spline.h>
+#include <melee/cm/camera.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gm/gmvs.h>
+#include <melee/gm/types.h>
+#include <melee/if/ifhazard.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/lbshadow.h>
+#include <melee/lb/lbvector.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/random.h>
+#include <sysdolphin/baselib/spline.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -388,8 +386,6 @@ bool grBigBlueRoute_8020BF30(Ground_GObj* arg)
     return false;
 }
 
-/// @todo Currently 98.29% match - register allocation only (extra mr through
-/// r0 for first loop jobj load and idx computation)
 void grBigBlueRoute_8020BF38(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
@@ -574,11 +570,14 @@ s32 grBigBlueRoute_8020C530(Ground_GObj* arg0)
     HSD_ASSERT(0X2E5, 0);
 }
 
-/// @todo The initial Ground load is coalesced directly into r31 instead of
-/// passing through r6.
 #define GRBB_ROUTE_ENTRY_AT(car_info, offset)                                 \
     ((RouteEntry*) &((union grBigBlueRoute_RouteStorage*) (car_info))         \
          ->bytes[offset])
+static inline s32 grBigBlueRoute_Randi(s32 range)
+{
+    return HSD_Randi(range);
+}
+
 static inline void grBigBlueRoute_SpawnRoute(s32 route_idx, Ground* gp,
                                              Ground_GObj* gobj)
 {
@@ -600,19 +599,26 @@ static inline void grBigBlueRoute_SpawnRoute(s32 route_idx, Ground* gp,
 
         if (max_val > min_val) {
             s32 range = max_val - min_val;
-            new_timer = min_val + ((range != 0) ? HSD_Randi(range) : 0);
+            new_timer =
+                min_val + ((range != 0) ? grBigBlueRoute_Randi(range) : 0);
         } else if (max_val < min_val) {
             s32 range = min_val - max_val;
-            new_timer = max_val + ((range != 0) ? HSD_Randi(range) : 0);
+            new_timer =
+                max_val + ((range != 0) ? grBigBlueRoute_Randi(range) : 0);
         } else {
             new_timer = max_val;
         }
         gp->u.car.x10A = (s16) new_timer;
     }
 
+#ifdef MUST_MATCH
+    /// @remark Matching tactic: this keeps @c gobj live through route setup
+    /// for MWCC register allocation.
+    if (gobj != NULL) {
+    }
+#endif
     if (route_idx != -1) {
-        s32 route = route_idx;
-        s32 offset = route * sizeof(RouteEntry);
+        s32 offset = route_idx * sizeof(RouteEntry);
         RouteEntry* re = GRBB_ROUTE_ENTRY_AT(gp->u.car.car_info, offset);
 
         GRBB_ROUTE_ENTRY_AT(gp->u.car.car_info, offset)->flags.b0 = 1;
@@ -663,7 +669,7 @@ static inline void grBigBlueRoute_SpawnRoute(s32 route_idx, Ground* gp,
 
                 if (jobj != NULL) {
                     s32 i = 0;
-                    while (i < route && jobj != NULL) {
+                    while (i < route_idx && jobj != NULL) {
                         i++;
                         if (jobj == NULL) {
                             jobj = NULL;
@@ -687,8 +693,8 @@ static inline void grBigBlueRoute_SpawnRoute(s32 route_idx, Ground* gp,
                         re = GRBB_ROUTE_ENTRY_AT(gp->u.car.car_info, offset);
                         re->x28 = (void*) item;
                         if (item != NULL) {
-                            RouteEntry* route_entries = gp->u.car.car_info;
-                            re = GRBB_ROUTE_ENTRY_AT(route_entries, offset);
+                            re = GRBB_ROUTE_ENTRY_AT(gp->u.car.car_info,
+                                                     offset);
                             grMaterial_801C8E28((HSD_GObj*) re->x28);
                         }
                     }
@@ -705,7 +711,6 @@ static inline void grBigBlueRoute_SpawnRoute(s32 route_idx, Ground* gp,
 void grBigBlueRoute_8020C85C(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
-    Ground* spawn_gp = gobj->user_data;
 
     if (!((f32) gp->u.car.x108 < 1.0f + yakumono_param->x40)) {
         return;
@@ -715,7 +720,7 @@ void grBigBlueRoute_8020C85C(Ground_GObj* gobj)
         return;
     }
 
-    grBigBlueRoute_SpawnRoute(gp->u.car.x108, spawn_gp, gobj);
+    grBigBlueRoute_SpawnRoute(gp->u.car.x108, gp, gobj);
 }
 
 static const Vec3 grBb_Route_803B83E0 = { 0.0f, 1.0f, 0.0f };
@@ -1022,7 +1027,7 @@ void grBigBlueRoute_8020CD20(Ground_GObj* gobj)
                         ((UnkFlagStruct*) &gp->u.bigblue.x0)->b0 = 1;
                     }
                 } else {
-                    Camera_80030E44(1, NULL);
+                    Camera_RequestQuake(QuakeKind_Loop, NULL);
                     if (!RE_ENTRY->flags.b6) {
                         RE_ENTRY->flags.b6 = 1;
                         if (HSD_Randi(100) < 40) {
@@ -1063,8 +1068,6 @@ int grBigBlueRoute_8020DA9C(struct grBigBlueRoute_8020DA9C_t* desc)
     return desc->x8;
 }
 
-/// @todo Currently 97.73% match - needs register allocation fix (r27/r30 swap
-/// for arr/jobj)
 void grBigBlueRoute_8020DAB4(HSD_JObj** jobjs, f32 scale, int count)
 {
     HSD_JObj** arr;

@@ -1,7 +1,19 @@
 #ifndef MELEE_LB_FORWARD_H
 #define MELEE_LB_FORWARD_H
 
-#include <platform.h>
+#include <Runtime/platform.h>
+
+#define HSD_GOBJ_CLASS_SISLIB_UNK 9
+#define HSD_GOBJ_CLASS_FOG 10
+
+#define HSD_GOBJ_CLASS_LIGHT 11
+#define HSD_GOBJ_PLINK_LIGHT 3
+
+#define HSD_GOBJ_CLASS_SOUND 23
+#define HSD_GOBJ_CLASS_MEMCARD 24
+
+#define HSD_GOBJ_PLINK_MEMCARD (HSD_GOBJ_PLINK_MAX - 2)
+#define HSD_GOBJ_PLINK_AUDIO_AX (HSD_GOBJ_PLINK_MAX - 1)
 
 struct lb_80011A50_t;
 

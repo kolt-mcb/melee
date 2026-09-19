@@ -1,11 +1,9 @@
 #include "db.h"
-
-#include "gm/gm_unsplit.h"
-#include "if/textdraw.h"
-#include "if/textlib.h"
-#include "pl/player.h"
-#include "pl/plbonus.h"
-
+#include <melee/gm/gm_unsplit.h>
+#include <melee/if/textdraw.h>
+#include <melee/if/textlib.h>
+#include <melee/pl/player.h>
+#include <melee/pl/plbonus.h>
 #include <sysdolphin/baselib/memory.h>
 
 /* 228D18 */ static void fn_80228D18(void);
@@ -76,10 +74,10 @@ static void fn_80228E54(int arg0, int arg1, int arg2)
     DevText_Erase(text);
     DevText_SetCursorXY(text, 0, 0);
     if (arg1 == 0) {
-        DevText_Printf(text, "1P %7d 2P %7d\n", gm_8016C658(0),
-                       gm_8016C658(1));
-        DevText_Printf(text, "3P %7d 4P %7d\n", gm_8016C658(2),
-                       gm_8016C658(3));
+        DevText_Printf(text, "1P %7d 2P %7d\n", gm_GetMatchEndPlayerScore(0),
+                       gm_GetMatchEndPlayerScore(1));
+        DevText_Printf(text, "3P %7d 4P %7d\n", gm_GetMatchEndPlayerScore(2),
+                       gm_GetMatchEndPlayerScore(3));
         DevText_Printf(text, "%dP screen %d", arg0 + 1, arg1);
         y_pos = 3;
     }

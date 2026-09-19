@@ -4,9 +4,12 @@
 #endif
 #include "gmapproach.h"
 
-#include "gm_1A45.h"
 #include "gm_unsplit.h"
-
+#include "gmscene.h"
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
 #include <sysdolphin/baselib/cobj.h>
 #include <sysdolphin/baselib/controller.h>
 #include <sysdolphin/baselib/dobj.h>
@@ -15,10 +18,6 @@
 #include <sysdolphin/baselib/gobjobject.h>
 #include <sysdolphin/baselib/gobjproc.h>
 #include <sysdolphin/baselib/jobj.h>
-#include <melee/lb/lbarchive.h>
-#include <melee/lb/lbaudio_ax.h>
-#include <melee/lb/lbspdisplay.h>
-#include <melee/sc/types.h>
 
 static struct {
     HSD_Archive* x0;
@@ -29,7 +28,7 @@ static struct {
     u8 xE;
 } gm_80480D98;
 
-UNK_T gm_804D6860[2];
+UNK_T gmVsMelee_ApproachData[2];
 
 static void fn_801AD920(HSD_GObj* gobj)
 {

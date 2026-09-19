@@ -1,63 +1,54 @@
 #include "gmtoulib.h"
 
+#include <melee/ft/forward.h>
+#include <melee/pl/forward.h>
+#include <sysdolphin/baselib/forward.h>
+
+#include <placeholder.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "forward.h"
 #include "gm_1601.h"
 #include "gm_unsplit.h"
 #include "gmmain_lib.h"
-
 #include "gmtoulib.static.h"
-
 #include "types.h"
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/mn/mnmain.h>
+#include <melee/mn/mnname.h>
+#include <melee/mn/mnstagesel.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/controller.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/hsd_3915.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/mobj.h>
+#include <sysdolphin/baselib/random.h>
+#include <sysdolphin/baselib/sislib.h>
+#include <sysdolphin/baselib/wobj.h>
 
-#include <placeholder.h>
-
-#include "baselib/debug.h"
-#include "baselib/fog.h"
-#include "baselib/gobjgxlink.h"
-#include "baselib/gobjobject.h"
-
-#include "ft/forward.h"
-#include "gm/forward.h"
-
-#include "lb/lblanguage.h"
-#include "lb/lbspdisplay.h"
-#include "mn/mnmain.h"
-#include "mn/mnname.h"
-#include "mn/mnstagesel.h"
-
-#include "pl/forward.h"
-
-#include "pl/player.h"
-#include "sc/types.h"
-
-#include <baselib/forward.h>
-
-#include <m2c_macros.h>
-#include <stdio.h>
-#include <string.h>
-#include <baselib/cobj.h>
-#include <baselib/controller.h>
-#include <baselib/dobj.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/hsd_3915.h>
-#include <baselib/jobj.h>
-#include <baselib/mobj.h>
-#include <baselib/random.h>
-#include <baselib/sislib.h>
-#include <baselib/wobj.h>
-
-u8 lbl_804D6638[0x4];
 int lbl_804D663C;
+u8 lbl_804D6638[0x4];
 
 extern SceneDesc* lbl_804D666C;
-extern SceneDesc* lbl_804D6670;
 extern SceneDesc* lbl_804D6674;
 extern u8 lbl_804D6680[8];
 extern char* const lbl_804DA6B4;
 extern char* const lbl_804DA6B8;
 extern char* const lbl_804DA6BC;
 extern char* const lbl_804DA6C0;
+extern char* const lbl_804DA6C4;
 extern char* const lbl_804DA6C8;
 extern char* const lbl_804DA6CC;
 extern char* const lbl_804DA6D0;
@@ -70,7 +61,7 @@ const struct lbl_803B7C80_t {
     30, -20, 15, -12, 10, -8, 6, -4, 2, 1,
 };
 
-/* 3B7CA8 */ static const HSD_CameraDescPerspective lbl_803B7CA8 = {
+/* 3B7CA8 */ static const HSD_CameraDescPerspective cobj_desc = {
     NULL,
     0,
     PROJ_PERSPECTIVE,
@@ -95,6 +86,11 @@ typedef struct BracketSrcPtr {
     BracketSrcEntry* ptr;
 } BracketSrcPtr;
 
+typedef union lbl_803D9D20_u {
+    struct lbl_803D9D20_t fields;
+    u8 bytes[sizeof(struct lbl_803D9D20_t)];
+} lbl_803D9D20_u;
+
 static inline void gmTournament_SetBracketByes(BracketEntry* entries,
                                                s32 entrant_count)
 {
@@ -116,14 +112,19 @@ void fn_8018A514(int count, float val)
     s32 region;
     BracketEntry* entries;
     BracketSrcEntry* src;
-    BracketSrcPtr* srcs;
+    BracketSrcEntry** srcs;
     int i;
     s32 n;
 
+    entries = lbl_80473AB8;
+    /// @todo Dead read; a third early lbl_80473AB8-rooted expression is needed
+    /// so the compiler binds the .bss anchor to a register before
+    /// lbl_803D9D20.
+    (void) lbl_80473AB8;
     region = count < 9 ? 0 : count >= 14 ? 2 : 1;
 
-    srcs = (BracketSrcPtr*) ((BracketData*) lbl_80473AB8)->srcs;
-    src = srcs[region].ptr;
+    srcs = (BracketSrcEntry**) &lbl_804771B8;
+    src = srcs[region];
 
     if (count < 9) {
         for (i = 0; i < count; i++) {
@@ -139,43 +140,42 @@ void fn_8018A514(int count, float val)
         }
     }
 
-    n = lbl_803D9D20.x20[count];
+    n = ((lbl_803D9D20_u*) &lbl_803D9D20)->bytes[i = count + 0x20];
 
-    entries = lbl_80473AB8;
     for (i = 0; i < n; i++) {
-        entries[i].x0 = src->x0;
-        entries[i].x1 = src->x1;
-        entries[i].x2 = src->x2;
-        entries[i].x3 = src->x3;
-        entries[i].x4 = src->x4;
-        entries[i].x5 = src->x5;
-        entries[i].x6 = src->x6;
-        entries[i].x1C = val;
-        entries[i].xC = src->x8;
-        entries[i].x14 = src->xC;
-        entries[i].x10 = src->x10;
-        entries[i].x18 = src->x14;
-        entries[i].x20.r = src->x18;
-        entries[i].x20.g = src->x1A;
-        entries[i].x20.b = src->x1C;
-        entries[i].x20.a = src->x1E;
-        entries[i].x24 = src->x19;
-        entries[i].x25 = src->x1B;
-        entries[i].x26 = src->x1D;
-        entries[i].x27 = src->x1F;
-        entries[i].x28 = src->x20;
-        entries[i].slots[0].x52 = 9;
-        entries[i].slots[0].x32 = 0;
-        entries[i].slots[1].x52 = 9;
-        entries[i].slots[1].x32 = 0;
-        entries[i].slots[2].x52 = 9;
-        entries[i].slots[2].x32 = 0;
-        entries[i].slots[3].x52 = 9;
-        entries[i].slots[3].x32 = 0;
-        entries[i].slots[0].x30 = src->x21;
-        entries[i].slots[1].x30 = src->x22;
-        entries[i].slots[2].x30 = src->x23;
-        entries[i].slots[3].x30 = src->x24;
+        lbl_80473AB8[i].x0 = src->x0;
+        lbl_80473AB8[i].x1 = src->x1;
+        lbl_80473AB8[i].x2 = src->x2;
+        lbl_80473AB8[i].x3 = src->x3;
+        lbl_80473AB8[i].x4 = src->x4;
+        lbl_80473AB8[i].x5 = src->x5;
+        lbl_80473AB8[i].x6 = src->x6;
+        lbl_80473AB8[i].x1C = val;
+        lbl_80473AB8[i].xC = src->x8;
+        lbl_80473AB8[i].x14 = src->xC;
+        lbl_80473AB8[i].x10 = src->x10;
+        lbl_80473AB8[i].x18 = src->x14;
+        lbl_80473AB8[i].x20.r = src->x18;
+        lbl_80473AB8[i].x20.g = src->x1A;
+        lbl_80473AB8[i].x20.b = src->x1C;
+        lbl_80473AB8[i].x20.a = src->x1E;
+        lbl_80473AB8[i].x24 = src->x19;
+        lbl_80473AB8[i].x25 = src->x1B;
+        lbl_80473AB8[i].x26 = src->x1D;
+        lbl_80473AB8[i].x27 = src->x1F;
+        lbl_80473AB8[i].x28 = src->x20;
+        lbl_80473AB8[i].slots[0].x52 = 9;
+        lbl_80473AB8[i].slots[0].x32 = 0;
+        lbl_80473AB8[i].slots[1].x52 = 9;
+        lbl_80473AB8[i].slots[1].x32 = 0;
+        lbl_80473AB8[i].slots[2].x52 = 9;
+        lbl_80473AB8[i].slots[2].x32 = 0;
+        lbl_80473AB8[i].slots[3].x52 = 9;
+        lbl_80473AB8[i].slots[3].x32 = 0;
+        lbl_80473AB8[i].slots[0].x30 = src->x21;
+        lbl_80473AB8[i].slots[1].x30 = src->x22;
+        lbl_80473AB8[i].slots[2].x30 = src->x23;
+        lbl_80473AB8[i].slots[3].x30 = src->x24;
         src++;
     }
 
@@ -204,41 +204,90 @@ void fn_8018A970(int arg0)
     }
 }
 
+static inline void gmTournament_SetTripleRightCoords(BracketEntry* entry,
+                                                     s32* p3C, s32* p44,
+                                                     s32* p34, s32* p40,
+                                                     s32* p48, s32* p38)
+{
+    s32 val1;
+    s32 val;
+    s32* pX10;
+    s32* pX18;
+
+    val1 = entry->xC + entry->x14;
+    pX10 = &entry->x10;
+    pX18 = &entry->x18;
+    *p3C = val1;
+    *p44 = val1;
+    *p34 = val1;
+    val = *pX10 + *pX18;
+    *p40 = val;
+    *p48 = val;
+    *p38 = val;
+    *p40 = *pX10 + *pX18 - *pX18 / 3;
+}
+
+static inline void gmTournament_SetRegularCoords(s32 entry_idx, s32 slot_idx,
+                                                 u8 x3, BracketData* bracket,
+                                                 s32* p3C, s32* p44, s32* p34,
+                                                 s32* p40, s32* p48, s32* p38)
+{
+    s32 val1;
+    s32 val2;
+
+    val1 = lbl_80473AB8[entry_idx].xC +
+           slot_idx * (lbl_80473AB8[entry_idx].x14 / (s32) x3);
+    *p3C = val1;
+    *p44 = val1;
+    *p34 = val1;
+    val2 = lbl_80473AB8[entry_idx].x10 + lbl_80473AB8[entry_idx].x18 -
+           lbl_80473AB8[entry_idx].x18 * bracket->entries[entry_idx].x2;
+    *p40 = val2;
+    *p48 = val2;
+    *p38 = val2;
+    *p40 = lbl_80473AB8[entry_idx].x10 +
+           lbl_80473AB8[entry_idx].x18 * bracket->entries[entry_idx].x2;
+}
+
 void fn_8018AA74(HSD_JObj* jobj, s32 entry_idx, s32 slot_idx)
 {
+    u8* px3;
+    s32 val1;
+    s32* p48;
     s32* p34;
     s32* p3C;
-    s32* p44;
-    s32* p38;
-    s32* p40;
-    s32* p48;
     BracketEntry* entry;
+    s32* p44;
     s32* pX18;
-    s32* pX10;
+    s32* p38;
     s32 xC;
-    s32 x14;
+    s32* p40;
     s32 x10;
     s32 x18;
     s32 val;
-    s32 val1;
+    s32* pX10;
     s32 val2;
     s32 tmp;
-    u8 x2;
+    u8 x3;
     u8 tm_x2E;
 
     TmData* tm = gm_GetTournamentData();
+    BracketData* bracket = (BracketData*) lbl_80473AB8;
 
-    p34 = &lbl_80473AB8[entry_idx].slots[slot_idx].x34;
-    p3C = &lbl_80473AB8[entry_idx].slots[slot_idx].x3C;
-    p44 = &lbl_80473AB8[entry_idx].slots[slot_idx].x44;
-    p38 = &lbl_80473AB8[entry_idx].slots[slot_idx].x38;
-    p40 = &lbl_80473AB8[entry_idx].slots[slot_idx].x40;
-    p48 = &lbl_80473AB8[entry_idx].slots[slot_idx].x48;
+    p34 = &bracket->entries[entry_idx].slots[slot_idx].x34;
+    p3C = &bracket->entries[entry_idx].slots[slot_idx].x3C;
+    p44 = &bracket->entries[entry_idx].slots[slot_idx].x44;
+    p38 = &bracket->entries[entry_idx].slots[slot_idx].x38;
+    p40 = &bracket->entries[entry_idx].slots[slot_idx].x40;
+    {
+        s32* slot_x48 = &bracket->entries[entry_idx].slots[slot_idx].x48;
+        p48 = slot_x48;
+    }
     entry = &lbl_80473AB8[entry_idx];
 
     if (entry->x1 != 0) {
-        u8* px3 = &entry->x3;
-        u8 x3 = *px3;
+        px3 = &entry->x3;
+        x3 = *px3;
         (void) px3;
         if (x3 == 0 && entry->x4 != 0) {
             switch (entry->x4) {
@@ -246,6 +295,7 @@ void fn_8018AA74(HSD_JObj* jobj, s32 entry_idx, s32 slot_idx)
                 xC = entry->xC;
                 pX18 = &entry->x18;
                 pX10 = &entry->x10;
+                (void) pX18;
                 *p3C = xC;
                 *p44 = xC;
                 *p34 = xC;
@@ -283,8 +333,7 @@ void fn_8018AA74(HSD_JObj* jobj, s32 entry_idx, s32 slot_idx)
                 }
                 case 1: {
                     xC = entry->xC;
-                    x14 = entry->x14;
-                    val1 = xC + x14;
+                    val1 = xC + entry->x14;
                     pX10 = &entry->x10;
                     pX18 = &entry->x18;
                     *p3C = val1;
@@ -302,9 +351,8 @@ void fn_8018AA74(HSD_JObj* jobj, s32 entry_idx, s32 slot_idx)
                     break;
                 }
                 default: {
-                    x14 = lbl_80473AB8[entry_idx].x14;
                     xC = lbl_80473AB8[entry_idx].xC;
-                    val1 = xC + x14 / 2;
+                    val1 = xC + lbl_80473AB8[entry_idx].x14 / 2;
                     *p3C = val1;
                     *p44 = val1;
                     *p34 = val1;
@@ -341,23 +389,8 @@ void fn_8018AA74(HSD_JObj* jobj, s32 entry_idx, s32 slot_idx)
                     break;
                 }
                 case 1: {
-                    xC = entry->xC;
-                    x14 = entry->x14;
-                    val1 = xC + x14;
-                    pX10 = &entry->x10;
-                    pX18 = &entry->x18;
-                    *p3C = val1;
-                    *p44 = val1;
-                    *p34 = val1;
-                    {
-                        x10 = *pX10;
-                        x18 = *pX18;
-                        val = x10 + x18;
-                        *p40 = val;
-                        *p48 = val;
-                        *p38 = val;
-                    }
-                    *p40 = *pX10 + *pX18 - *pX18 / 3;
+                    gmTournament_SetTripleRightCoords(entry, p3C, p44, p34,
+                                                      p40, p48, p38);
                     break;
                 }
                 case 2: {
@@ -376,8 +409,7 @@ void fn_8018AA74(HSD_JObj* jobj, s32 entry_idx, s32 slot_idx)
                 }
                 default: {
                     xC = lbl_80473AB8[entry_idx].xC;
-                    x14 = lbl_80473AB8[entry_idx].x14;
-                    val1 = xC + x14;
+                    val1 = xC + lbl_80473AB8[entry_idx].x14;
                     *p3C = val1;
                     *p44 = val1;
                     *p34 = val1;
@@ -395,25 +427,8 @@ void fn_8018AA74(HSD_JObj* jobj, s32 entry_idx, s32 slot_idx)
                 break;
             }
         } else {
-            x14 = lbl_80473AB8[entry_idx].x14;
-            xC = lbl_80473AB8[entry_idx].xC;
-            val1 = xC + slot_idx * (x14 / (s32) x3);
-            pX18 = &lbl_80473AB8[entry_idx].x18;
-            *p3C = val1;
-            *p44 = val1;
-            *p34 = val1;
-            {
-                x18 = lbl_80473AB8[entry_idx].x18;
-                x2 = lbl_80473AB8[entry_idx].x2;
-                x10 = lbl_80473AB8[entry_idx].x10;
-                val2 = x10 + x18 - x18 * x2;
-                *p40 = val2;
-                *p48 = val2;
-                *p38 = val2;
-            }
-            *p40 = lbl_80473AB8[entry_idx].x10 +
-                   *pX18 * lbl_80473AB8[entry_idx].x2;
-
+            gmTournament_SetRegularCoords(entry_idx, slot_idx, x3, bracket,
+                                          p3C, p44, p34, p40, p48, p38);
             if (*px3 == 1) {
                 tm_x2E = tm->x2E;
                 if (tm_x2E == 6) {
@@ -476,27 +491,83 @@ static inline HSD_JObj* fn_8018B090_inline0(BracketEntry* bracket_entries,
         .x2C->hsd_obj;
 }
 
-static inline HSD_JObj* fn_8018B090_inline1(BracketEntry* bracket_entries,
-                                            s32 bracket_entry_index)
-{
-    return bracket_entries[bracket_entry_index]
-        .slots[lbl_804D6634]
-        .x2C->hsd_obj;
-}
-
 static inline BracketEntry* fn_8018B090_inline2(BracketEntry* bracket_entries,
                                                 s32 bracket_entry_index)
 {
     return &bracket_entries[bracket_entry_index];
 }
 
+static inline void fn_8018B090_inline3(BracketEntry* entry)
+{
+    fn_80190520((f32) (entry->xC + (entry->x14 / 2)),
+                -(f32) (entry->x10 + (entry->x18 / 2)), -150.0f);
+}
+
+static inline s32 fn_8018B090_inline4(BracketEntry* entry)
+{
+    s32 i;
+    for (i = 0; i < 4; i++) {
+        if (entry->slots[i].x4C == 0) {
+            break;
+        }
+    }
+    return i;
+}
+
+static inline void fn_8018B090_inline5(BracketEntry* entries,
+                                       BracketEntry* src, s32 slot_idx)
+{
+    u8* next_entry;
+    u8* next_slot;
+    src->x1 = 0;
+    next_entry = &src->x5;
+    next_slot = &src->x6;
+    entries[*next_entry].slots[*next_slot].x30 = 1;
+    entries[*next_entry].slots[*next_slot].x50 = src->slots[slot_idx].x50;
+    entries[*next_entry].slots[*next_slot].x51 = src->slots[slot_idx].x51;
+    entries[*next_entry].slots[*next_slot].x52 = src->slots[slot_idx].x52;
+    entries[*next_entry].slots[*next_slot].x4D = src->slots[slot_idx].x4D;
+    entries[*next_entry].slots[*next_slot].x4E = src->slots[slot_idx].x4E;
+    entries[*next_entry].slots[*next_slot].x4F = src->slots[slot_idx].x4F;
+    src->slots[slot_idx].x30 = 0;
+    src->slots[slot_idx].x4E = 3;
+}
+
+static inline void fn_8018B090_inline6(BracketEntry* entry, s32 slot_idx)
+{
+    HSD_JObj* jobj = entry->slots[slot_idx].x2C->hsd_obj;
+    HSD_JObjSetTranslateX(jobj, (f32) entry->slots[slot_idx].x44);
+}
+
+static inline void fn_8018B090_inline7(BracketEntry* entry, s32 slot_idx)
+{
+    HSD_JObj* jobj = entry->slots[slot_idx].x2C->hsd_obj;
+    HSD_JObjSetTranslateY(jobj, -(f32) entry->slots[slot_idx].x48);
+}
+
+static inline void fn_8018B090_inline8(struct lbl_803D9DAC_t* camera)
+{
+    f32* y;
+    f32* z;
+    mn_8022F410(&camera->current.x, &camera->target.x, camera->step.x);
+    y = &camera->current.y;
+    mn_8022F410(y, &camera->target.y, camera->step.y);
+    z = &camera->current.z;
+    mn_8022F410(z, &camera->target.z, camera->step.z);
+    fn_80190520(camera->current.x, *y, *z);
+}
+
 void fn_8018B090(HSD_GObj* arg0)
 {
     BracketEntry* entries = lbl_80473AB8;
     TmData* tm = gm_GetTournamentData();
-    s32 var_r24 = 0;
-    s32 idx = fn_8018F74C();
+    HSD_JObj* jobj2;
+    s32 k;
     s32 i;
+    s32 idx;
+    s32 var_r24;
+    var_r24 = 0;
+    idx = fn_8018F74C();
 
     switch (tm->cur_option) {
     case 20:
@@ -507,7 +578,6 @@ void fn_8018B090(HSD_GObj* arg0)
             for (i = 0; i < 4; i++) {
                 if (entries[idx].slots[i].x30 != 0) {
                     HSD_JObj* jobj;
-                    HSD_JObj* jobj2;
                     jobj = fn_8018B090_inline0(entries, i, idx);
                     jobj2 = jobj;
                     if (entries[idx].x2 != 0) {
@@ -617,14 +687,14 @@ void fn_8018B090(HSD_GObj* arg0)
             fn_80190520(lbl_803D9DAC.current.x, lbl_803D9DAC.current.y,
                         lbl_803D9DAC.current.z);
             if (entries[idx].x4 != 1) {
-                for (i = 0; i < 4; i++) {
-                    if (entries[idx].slots[i].x30 != 0) {
-                        mn_8022F470((int*) &entries[idx].slots[i].x48,
-                                    (int*) &entries[idx].slots[i].x40, amount);
+                for (k = 0; k < 4; k++) {
+                    if (entries[idx].slots[k].x30 != 0) {
+                        mn_8022F470((int*) &entries[idx].slots[k].x48,
+                                    (int*) &entries[idx].slots[k].x40, amount);
                         {
-                            f32 y = -(f32) entries[idx].slots[i].x48;
-                            HSD_JObjSetTranslateY(
-                                entries[idx].slots[i].x2C->hsd_obj, y);
+                            f32 y = -(f32) entries[idx].slots[k].x48;
+                            jobj2 = entries[idx].slots[k].x2C->hsd_obj;
+                            HSD_JObjSetTranslateY(jobj2, y);
                         }
                     }
                 }
@@ -644,46 +714,46 @@ void fn_8018B090(HSD_GObj* arg0)
             sp = lbl_803B7C80;
             arr = sp.v;
             lbl_804D6630 += 1;
-            for (i = 0; i < 4; i++) {
-                if (entries[idx].slots[i].x30 != 0) {
-                    HSD_JObj* jobj = entries[idx].slots[i].x2C->hsd_obj;
+            for (k = 0; k < 4; k++) {
+                if (entries[idx].slots[k].x30 != 0) {
+                    HSD_JObj* jobj = entries[idx].slots[k].x2C->hsd_obj;
                     if (entries[idx].x2 != 0) {
                         HSD_JObjSetTranslateY(
-                            jobj, -((f32) entries[idx].slots[i].x40 -
+                            jobj, -((f32) entries[idx].slots[k].x40 -
                                     (0.1f * (f32) arr[lbl_804D6630 % 10])));
                     } else {
                         switch (entries[idx].x4) {
                         case 1:
-                            if (i == 0) {
+                            if (k == 0) {
                                 HSD_JObjSetTranslateY(
                                     jobj,
                                     -((0.1f * (f32) arr[lbl_804D6630 % 10]) +
-                                      (f32) entries[idx].slots[i].x40));
+                                      (f32) entries[idx].slots[k].x40));
                             } else {
                                 HSD_JObjSetTranslateY(
                                     jobj,
-                                    -((f32) entries[idx].slots[i].x40 -
+                                    -((f32) entries[idx].slots[k].x40 -
                                       (0.1f * (f32) arr[lbl_804D6630 % 10])));
                             }
                             break;
                         case 2:
                         case 3:
-                            if (i <= 1) {
+                            if (k <= 1) {
                                 HSD_JObjSetTranslateY(
                                     jobj,
                                     -((0.1f * (f32) arr[lbl_804D6630 % 10]) +
-                                      (f32) entries[idx].slots[i].x40));
+                                      (f32) entries[idx].slots[k].x40));
                             } else {
                                 HSD_JObjSetTranslateY(
                                     jobj,
-                                    -((f32) entries[idx].slots[i].x40 -
+                                    -((f32) entries[idx].slots[k].x40 -
                                       (0.1f * (f32) arr[lbl_804D6630 % 10])));
                             }
                             break;
                         default:
                             HSD_JObjSetTranslateY(
                                 jobj, -((0.1f * (f32) arr[lbl_804D6630 % 10]) +
-                                        (f32) entries[idx].slots[i].x40));
+                                        (f32) entries[idx].slots[k].x40));
                             break;
                         }
                     }
@@ -701,8 +771,7 @@ void fn_8018B090(HSD_GObj* arg0)
     case 32: {
         s32 h = entries[idx].x18;
         if (h != 0) {
-            fn_80190520((f32) (entries[idx].xC + (entries[idx].x14 / 2)),
-                        -(f32) (entries[idx].x10 + (h / 2)), -150.0f);
+            fn_8018B090_inline3(&entries[idx]);
             for (i = 0; i < 4; i++) {
                 if (entries[idx].slots[i].x4C == 0) {
                     entries[idx].slots[i].x3C =
@@ -758,10 +827,9 @@ void fn_8018B090(HSD_GObj* arg0)
                 }
             }
             if (var_r24 == 4) {
-                s32 slot_idx = lbl_804D6634;
-                entries[idx].slots[slot_idx].x3C =
+                lbl_80473AB8[idx].slots[lbl_804D6634].x3C =
                     lbl_803D9E1C[tm->entrants][0];
-                entries[idx].slots[slot_idx].x40 =
+                lbl_80473AB8[idx].slots[lbl_804D6634].x40 =
                     lbl_803D9E1C[tm->entrants][1];
                 tm->cur_option = 0x22;
             }
@@ -774,9 +842,7 @@ void fn_8018B090(HSD_GObj* arg0)
             if (tm->x33 == 5) {
                 mn_8022F470((int*) &entries[idx].slots[lbl_804D6634].x44,
                             (int*) &entries[idx].slots[lbl_804D6634].x3C, 2);
-                HSD_JObjSetTranslateX(
-                    fn_8018B090_inline1(entries, idx),
-                    (f32) entries[idx].slots[lbl_804D6634].x44);
+                fn_8018B090_inline6(&entries[idx], lbl_804D6634);
                 if (entries[idx].slots[lbl_804D6634].x44 ==
                     entries[idx].slots[lbl_804D6634].x3C)
                 {
@@ -796,9 +862,7 @@ void fn_8018B090(HSD_GObj* arg0)
             if (tm->x33 == 5) {
                 mn_8022F470((int*) &entries[idx].slots[lbl_804D6634].x48,
                             (int*) &entries[idx].slots[lbl_804D6634].x40, 2);
-                HSD_JObjSetTranslateY(
-                    fn_8018B090_inline1(entries, idx),
-                    -(f32) entries[idx].slots[lbl_804D6634].x48);
+                fn_8018B090_inline7(&entries[idx], lbl_804D6634);
                 if (entries[idx].slots[lbl_804D6634].x48 ==
                     entries[idx].slots[lbl_804D6634].x40)
                 {
@@ -814,12 +878,12 @@ void fn_8018B090(HSD_GObj* arg0)
         }
         return;
     case 36: {
-        s32 h = entries[idx].x18;
+        BracketEntry* entry = &entries[idx];
+        s32 h = entry->x18;
         if (h != 0) {
             f32 d;
-            lbl_803D9DAC.current.x =
-                (f32) (entries[idx].xC + (entries[idx].x14 / 2));
-            lbl_803D9DAC.current.y = -(f32) ((h / 2) + entries[idx].x10);
+            lbl_803D9DAC.current.x = (f32) (entry->xC + (entry->x14 / 2));
+            lbl_803D9DAC.current.y = -(f32) (entry->x10 + (h / 2));
             lbl_803D9DAC.current.z = -150.0f;
             lbl_803D9DAC.target.x = 320.0f;
             lbl_803D9DAC.target.y = -240.0f;
@@ -849,14 +913,7 @@ void fn_8018B090(HSD_GObj* arg0)
         }
         if (lbl_804D6630 < 0x78) {
             lbl_804D6630 += 1;
-            mn_8022F410(&lbl_803D9DAC.current.x, &lbl_803D9DAC.target.x,
-                        lbl_803D9DAC.step.x);
-            mn_8022F410(&lbl_803D9DAC.current.y, &lbl_803D9DAC.target.y,
-                        lbl_803D9DAC.step.y);
-            mn_8022F410(&lbl_803D9DAC.current.z, &lbl_803D9DAC.target.z,
-                        lbl_803D9DAC.step.z);
-            fn_80190520(lbl_803D9DAC.current.x, lbl_803D9DAC.current.y,
-                        lbl_803D9DAC.current.z);
+            fn_8018B090_inline8(&lbl_803D9DAC);
             return;
         }
         lbl_804D6630 = 0;
@@ -872,34 +929,15 @@ void fn_8018B090(HSD_GObj* arg0)
             return;
         }
         {
-            s32 r = 0;
+            s32 slot_idx = fn_8018B090_inline4(&entries[idx]);
             BracketEntry* src;
-            u8* next_entry;
-            u8* next_slot;
-            for (i = 0; i < 4; i++) {
-                if (entries[idx].slots[i].x4C == 0) {
-                    break;
-                }
-                r = i + 1;
-            }
             src = fn_8018B090_inline2(entries, fn_8018F74C());
-            src->x1 = 0;
-            next_entry = &src->x5;
-            next_slot = &src->x6;
-            entries[*next_entry].slots[*next_slot].x30 = 1;
-            entries[*next_entry].slots[*next_slot].x50 = src->slots[r].x50;
-            entries[*next_entry].slots[*next_slot].x51 = src->slots[r].x51;
-            entries[*next_entry].slots[*next_slot].x52 = src->slots[r].x52;
-            entries[*next_entry].slots[*next_slot].x4D = src->slots[r].x4D;
-            entries[*next_entry].slots[*next_slot].x4E = src->slots[r].x4E;
-            entries[*next_entry].slots[*next_slot].x4F = src->slots[r].x4F;
-            src->slots[r].x30 = 0;
-            src->slots[r].x4E = 3;
+            fn_8018B090_inline5(entries, src, slot_idx);
             tm->cur_option = 0x27;
         }
         break;
     }
-    PAD_STACK(0x28);
+    PAD_STACK(0x18);
 }
 
 /* 3D9EE8 */ static char lbl_803D9EE8[] = {
@@ -1585,8 +1623,6 @@ void fn_8018DF68(BracketEntry* arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4,
     }
 }
 
-/// @todo Currently 98.8% match - permuter couldn't improve beyond score 140
-
 void fn_8018E46C(HSD_GObj* gobj, int unused)
 {
     BracketEntry* data;
@@ -1636,26 +1672,21 @@ static inline void gmTournament_InitBracket(s32 entrant_count, f32 anim_frame,
 /// Initializes the tournament bracket camera and optionally resets bracket
 /// data. Removes all existing GObjs from two entity lists, inits lbl_80473AB8
 /// entries, creates camera GObj with CObjDesc loaded from lbl_803B7CA8 rodata.
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void fn_8018E618(int arg0, f32 farg0, int arg1)
 {
     HSD_CameraDescPerspective cam;
     HSD_GObj* gobj;
-    HSD_GObj* tmp;
+    HSD_GObj* cur;
     s32 i;
     PAD_STACK(16);
 
-    cam = lbl_803B7CA8;
+    cam = cobj_desc;
 
-    /* the entity list is an array of HSD_GObj* heads: byte 0x6C is head 27, 0x50 is head 20 (the console indexed 4-byte pointers) */
-    while ((tmp = ((HSD_GObj**) HSD_GObj_Entities)[27]) != NULL) {
-        HSD_GObjPLink_80390228(tmp);
+    while ((cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_27]) != NULL) {
+        HSD_GObjFree(cur);
     }
-    while ((tmp = ((HSD_GObj**) HSD_GObj_Entities)[20]) != NULL) {
-        HSD_GObjPLink_80390228(tmp);
+    while ((cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_20]) != NULL) {
+        HSD_GObjFree(cur);
     }
 
     for (i = 0; i < 0x40; i++) {
@@ -1668,7 +1699,7 @@ void fn_8018E618(int arg0, f32 farg0, int arg1)
         }
     }
 
-    gobj = GObj_Create(9, 0x14, 1);
+    gobj = GObj_Create(9, 20, 1);
     {
         typedef struct CObjData {
             f32 pos[9];
@@ -1689,9 +1720,6 @@ void fn_8018E618(int arg0, f32 farg0, int arg1)
 
     gmTournament_InitBracket(arg0, farg0, arg1);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void fn_8018E85C(DynamicModelDesc* model, s32 flag)
 {
@@ -1780,33 +1808,17 @@ void fn_8018E85C(DynamicModelDesc* model, s32 flag)
     }
 }
 
-char* const lbl_804DA6C4 = lbl_803D9EE8;
-
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void fn_8018EC48(void)
 {
     mn_8022F138(0x19, 0x1C);
     mn_8022F138(0x12, 0x15);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void fn_8018EC7C(void)
 {
     mn_8022F0F0(0x1B);
     mn_8022F0F0(0x14);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void fn_8018ECA8(s32 char_id, s32 name_type, s32 jobj_idx1, f32 pos_x,
                  f32 pos_y, s32 jobj_idx2)
@@ -1875,6 +1887,15 @@ void fn_8018ECA8(s32 char_id, s32 name_type, s32 jobj_idx1, f32 pos_x,
                             GetNameText((u8) char_id));
     }
 }
+
+char* const lbl_804DA6B4 = lbl_803D9EE8;
+char* const lbl_804DA6B8 = lbl_803D9EF4;
+char* const lbl_804DA6BC = lbl_803D9F00;
+char* const lbl_804DA6C0 = lbl_803D9F00;
+char* const lbl_804DA6C4 = lbl_803D9EE8;
+char* const lbl_804DA6C8 = lbl_803D9EF4;
+char* const lbl_804DA6CC = lbl_803D9F00;
+char* const lbl_804DA6D0 = lbl_803D9F00;
 
 /// Formats a tournament slot display name into a destination buffer.
 void fn_8018F00C(char* dest, s32 slot_id)
@@ -1990,10 +2011,6 @@ s32 gm_8018F1B0(MatchEnd* me)
     return 0;
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 int fn_8018F310(int arg0)
 {
     int i;
@@ -2004,26 +2021,12 @@ int fn_8018F310(int arg0)
     }
     return -1;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 int fn_8018F3BC(s32 arg0)
 {
     return lbl_803D9D20.x59[arg0];
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 int fn_8018F3D0(int arg0)
 {
     if (arg0 == 0xE || (arg0 >= 0x10 && arg0 <= 0x13) || arg0 == 0xA) {
@@ -2034,9 +2037,6 @@ int fn_8018F3D0(int arg0)
     }
     return 2;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 /* 3D9F0C */ struct lbl_803D9F0C_t lbl_803D9F0C = { -1, -1, -1 };
 
@@ -2054,13 +2054,9 @@ int fn_8018F410(void)
     return char_id;
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 int fn_8018F4A0(void)
 {
-    int temp_r3 = mnStageSel_8025BBD4();
+    int temp_r3 = mnSelStageRandom();
     if (!gm_80164430(temp_r3)) {
         printf("This is impossible stage num from mnSelStageRandom() -> stage "
                "%d \n",
@@ -2069,15 +2065,8 @@ int fn_8018F4A0(void)
     }
     return temp_r3;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 /// Counts available tournament slots and returns the last found index.
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 s32 fn_8018F508(s32* out_index)
 {
     s32 count;
@@ -2105,14 +2094,7 @@ s32 fn_8018F508(s32* out_index)
 
     return count;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 char* fn_8018F5F0(void)
 {
     if (lbLang_IsSavedLanguageUS()) {
@@ -2121,39 +2103,20 @@ char* fn_8018F5F0(void)
         return "SdTou.dat";
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 /// ???
 /// tournament uses the user data as just an int
 /// it controls various menu jobj states ie animation state, visibility, etc
-#ifdef MUST_MATCH
-#pragma dont_inline on
-#endif
 u32 fn_8018F62C(HSD_GObj* gobj)
 {
     return (u32) gobj->user_data;
 }
-#ifdef MUST_MATCH
-#pragma dont_inline off
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 TmData* gm_GetTournamentData(void)
 {
     return &gm_804771C4;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma dont_inline on
-#endif
 u32 fn_8018F640(int arg0)
 {
     if (arg0 >= 4) {
@@ -2169,14 +2132,7 @@ u32 fn_8018F674(int arg0)
     }
     return gm_801A36C0(arg0);
 }
-#ifdef MUST_MATCH
-#pragma dont_inline off
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 u32 fn_8018F6A8(int arg0)
 {
     if (arg0 >= 4) {
@@ -2184,14 +2140,7 @@ u32 fn_8018F6A8(int arg0)
     }
     return gm_GetButtonsPressed((u8) arg0);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 int fn_8018F6DC(int arg0)
 {
     if (arg0 >= 0x13) {
@@ -2202,14 +2151,7 @@ int fn_8018F6DC(int arg0)
     }
     return arg0;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 CharacterKind fn_8018F6FC(CSSIconHud arg0)
 {
     if (arg0 >= 0x13) {
@@ -2220,26 +2162,12 @@ CharacterKind fn_8018F6FC(CSSIconHud arg0)
     }
     return (CharacterKind) arg0;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 float fn_8018F71C(int arg0, int arg1)
 {
     return arg0 + arg1 * 0x1E;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 int fn_8018F74C(void)
 {
     int i;
@@ -2252,14 +2180,7 @@ int fn_8018F74C(void)
 
     return i;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 int fn_8018F808(void)
 {
     int i;
@@ -2271,9 +2192,6 @@ int fn_8018F808(void)
     }
     return noerrcount;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 static inline s32 fn_8018F888_inline0(void)
 {
@@ -2288,17 +2206,13 @@ static inline s32 fn_8018F888_inline0(void)
     return i;
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void fn_8018F888(void)
 {
     s32 i = fn_8018F888_inline0();
 
     lbl_80473AB8[i].x20.g = 0;
 
-    if (gm_804771C4.x37[0].x8 != 5) {
+    if (gm_804771C4.x33 != 5) {
         return;
     }
 
@@ -2306,16 +2220,13 @@ void fn_8018F888(void)
 
     lbl_80473AB8[i + 1].x20.g = 0;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 static inline int fn_8018FA24_inline0(int char_kind)
 {
-    if (char_kind < CKIND_SEAK) {
+    if (char_kind < CKind_Seak) {
         return char_kind;
     }
-    if (char_kind == CKIND_GKOOPS) {
+    if (char_kind == CKind_GKoops) {
         return 5;
     }
     return char_kind + 1;
@@ -2333,7 +2244,7 @@ void fn_8018FA24(void)
 
     PAD_STACK(8);
 
-    tmdata = (u8*) &gm_804771C4 + 0xc;
+    tmdata = (u8*) &gm_804771C4;
 
     entry = lbl_80473AB8;
     for (i = 0; i < 64; entry++, i++) {
@@ -2369,17 +2280,10 @@ void fn_8018FA24(void)
     tmdata[0x30] = player_count;
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void fn_8018FBD8(void* arg0, s32 arg1)
 {
     ((HSD_GObj*) arg0)->user_data = (void*) arg1;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void fn_8018FBE0(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5,
                  s32 arg6)
@@ -2404,10 +2308,6 @@ void fn_8018FBE0(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5,
     }
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void fn_8018FDC4(HSD_JObj* jobj, float x, float y, float z)
 {
     if ((int) x != 666) {
@@ -2420,14 +2320,7 @@ void fn_8018FDC4(HSD_JObj* jobj, float x, float y, float z)
         HSD_JObjSetTranslateZ(jobj, z);
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void fn_8018FF9C(HSD_JObj* jobj, float x, float y, float z)
 {
     if ((int) x != 666) {
@@ -2440,14 +2333,7 @@ void fn_8018FF9C(HSD_JObj* jobj, float x, float y, float z)
         HSD_JObjSetScaleZ(jobj, z);
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 HSD_GObj* fn_80190174(HSD_CObjDesc* cobjdesc)
 {
     HSD_GObj* gobj = GObj_Create(0x13, 0x12, 0);
@@ -2457,14 +2343,7 @@ HSD_GObj* fn_80190174(HSD_CObjDesc* cobjdesc)
     gobj->gxlink_prios = 7;
     return gobj;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 HSD_GObj* fn_801901F8(HSD_CObjDesc* cobjdesc)
 {
     HSD_GObj* gobj = GObj_Create(0x13, 0x15, 2);
@@ -2474,14 +2353,7 @@ HSD_GObj* fn_801901F8(HSD_CObjDesc* cobjdesc)
     gobj->gxlink_prios = 0xA;
     return gobj;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void fn_8019027C(UNK_T lights)
 {
     HSD_GObj* gobj = GObj_Create(0xB, 0x1A, 0);
@@ -2489,15 +2361,8 @@ void fn_8019027C(UNK_T lights)
     HSD_GObjObject_80390A70(gobj, HSD_GObj_LightKind, lobj);
     GObj_SetupGXLink(gobj, HSD_GObj_LObjCallback, 1, 0);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 /// Initializes SIS library text rendering for tournament mode.
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void fn_801902F0(int sis_param)
 {
     s32 value;
@@ -2511,14 +2376,7 @@ void fn_801902F0(int sis_param)
     lbl_804D663C =
         HSD_SisLib_803A611C(0, (HSD_GObj*) value, 9, 0x12, 0, 3, 0, 0x13);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 HSD_GObj* fn_8019035C(bool arg0, DynamicModelDesc* model, int arg2, int arg3,
                       int arg4, bool arg5, void (*arg6)(HSD_GObj*), f32 arg8)
 {
@@ -2539,26 +2397,13 @@ HSD_GObj* fn_8019035C(bool arg0, DynamicModelDesc* model, int arg2, int arg3,
     }
     return gobj;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma dont_inline on
-#endif
 void fn_8019044C(HSD_JObj* jobj, float arg1)
 {
     HSD_JObjReqAnimAll(jobj, arg1);
     HSD_JObjAnimAll(jobj);
 }
-#ifdef MUST_MATCH
-#pragma dont_inline off
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void fn_80190480(float arg8)
 {
     if ((int) arg8 == 0) {
@@ -2567,9 +2412,6 @@ void fn_80190480(float arg8)
     }
     HSD_CObjSetFov(lbl_803D9DD0.cobj, arg8);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void fn_801904D0(void)
 {
@@ -2577,11 +2419,6 @@ void fn_801904D0(void)
     HSD_CObjSetInterest(tmp->cobj, &lbl_803D9E08.pos);
     HSD_CObjSetEyePosition(tmp->cobj, &lbl_803D9DF4.pos);
 }
-
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 
 void fn_80190520(f32 x, f32 y, f32 z)
 {
@@ -2602,17 +2439,14 @@ void fn_80190520(f32 x, f32 y, f32 z)
         HSD_CObjSetEyePosition(tmp->cobj, &sp14);
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 static inline int gm_801905F0_inline0(int c_kind)
 {
-    if (c_kind < CKIND_SEAK) {
+    if (c_kind < CKind_Seak) {
         return c_kind;
     }
-    if (c_kind == CKIND_GKOOPS) {
-        return CKIND_KOOPA;
+    if (c_kind == CKind_GKoops) {
+        return CKind_Koopa;
     }
     return c_kind + 1;
 }
@@ -2632,13 +2466,13 @@ void gm_801905F0(StartMeleeData* arg0)
     fn_801640B0(&arg0->rules.x20);
     arg0->rules.match_kind = rules->mode;
     if (rules->mode != 1) {
-        arg0->rules.x0_6 = true;
+        arg0->rules.timer_enabled = true;
     } else if (rules->stock_time_limit != 0) {
-        arg0->rules.x0_6 = true;
+        arg0->rules.timer_enabled = true;
     } else {
-        arg0->rules.x0_6 = false;
+        arg0->rules.timer_enabled = false;
     }
-    if (arg0->rules.x0_6) {
+    if (arg0->rules.timer_enabled) {
         if (rules->mode != 1) {
             if (rules->time_limit == 0) {
                 arg0->rules.time_limit = 99 * 60;
@@ -2659,10 +2493,10 @@ void gm_801905F0(StartMeleeData* arg0)
     arg0->rules.timer_counts_up = false;
     arg0->rules.x4_2 = false;
     arg0->rules.x4_4 = false;
-    arg0->rules.xB = gmMainLib_8015CC58()->item_freq;
+    arg0->rules.item_freq = gmMainLib_GetGamePrefs()->item_freq;
     arg0->rules.x2_2 = false;
     arg0->rules.x18 = 0;
-    arg0->rules.x34 = 1.0f;
+    arg0->rules.game_speed = 1.0f;
     arg0->rules.x30 = fn_801653E8(rules->damage_ratio);
     arg0->rules.x3_4 = false;
     arg0->rules.x3_5 = false;
@@ -2670,13 +2504,13 @@ void gm_801905F0(StartMeleeData* arg0)
     arg0->rules.x3_3 = false;
     switch (gmMainLib_8015ED30()) {
     case 1:
-        arg0->rules.xC = 0;
+        arg0->rules.sd_penalty = 0;
         break;
     case 0:
-        arg0->rules.xC = -1;
+        arg0->rules.sd_penalty = -1;
         break;
     case 2:
-        arg0->rules.xC = -2;
+        arg0->rules.sd_penalty = -2;
         break;
     }
     if (rules->pause != 0) {
@@ -2689,16 +2523,16 @@ void gm_801905F0(StartMeleeData* arg0)
     } else {
         arg0->rules.x3_0 = false;
     }
-    gm_80167A14(arg0->players);
+    gm_SetupAllPlayerDefaults(arg0->players);
 
     for (i = 0; i < 4; i++) {
         if (i < tm->x30) {
-            arg0->players[i].x20 = 1.0f;
+            arg0->players[i].model_scale = 1.0f;
             arg0->players[i].nametag = (u8) MIN(tm->x4B8[i].x6, 0x78);
             if (tm->x4B8[i].x2 != 0) {
                 arg0->players[i].ckind = gm_801905F0_inline0(fn_8018F410());
-                arg0->players[i].color =
-                    HSD_Randi(gm_80169238(arg0->players[i].ckind));
+                arg0->players[i].color = HSD_Randi(
+                    gm_GetNumCostumesForCKind(arg0->players[i].ckind));
             } else {
                 arg0->players[i].ckind = gm_801905F0_inline0(tm->x4B8[i].x1);
                 arg0->players[i].color = tm->x4B8[i].x3;
@@ -2712,14 +2546,15 @@ void gm_801905F0(StartMeleeData* arg0)
             if (tm->x4B8[i].x0 == 1) {
                 arg0->players[i].rumble_enabled = false;
             }
-            arg0->players[i].xE = 4;
+            arg0->players[i].cpu_kind = 4;
             arg0->players[i].cpu_level = tm->x4B8[i].x4;
-            arg0->players[i].x12 = 0;
+            arg0->players[i].damage1 = 0;
             if (gmMainLib_GetGameRules()->handicap != 0) {
-                arg0->players[i].x18 = fn_8016419C(tm->x4B8[i].x5);
-                arg0->players[i].x1C = fn_801641B4(tm->x4B8[i].x5);
+                arg0->players[i].attack_ratio = fn_8016419C(tm->x4B8[i].x5);
+                arg0->players[i].defense_ratio = fn_801641B4(tm->x4B8[i].x5);
             } else {
-                arg0->players[i].x18 = arg0->players[i].x1C = 1.0F;
+                arg0->players[i].attack_ratio =
+                    arg0->players[i].defense_ratio = 1.0F;
             }
         } else {
             arg0->players[i].slot_type = Gm_PKind_NA;
@@ -2735,11 +2570,3 @@ void gm_801905F0(StartMeleeData* arg0)
 
     fn_8019EF08(&sp18);
 }
-
-char* const lbl_804DA6B4 = NULL;
-char* const lbl_804DA6B8 = NULL;
-char* const lbl_804DA6BC = NULL;
-char* const lbl_804DA6C0 = NULL;
-char* const lbl_804DA6C8 = NULL;
-char* const lbl_804DA6CC = NULL;
-char* const lbl_804DA6D0 = NULL;

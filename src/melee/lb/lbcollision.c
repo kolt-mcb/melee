@@ -2,27 +2,24 @@
 #include <stdlib.h>
 #include "lbcollision.h"
 
+#include <Runtime/platform.h>
+
+#include <math.h>
+#include <placeholder.h>
+
+#include "forward.h"
 #include "lb_00B0.h"
 #include "lbaudio_ax.h"
 #include "lbvector.h"
-
-#include <placeholder.h>
-#include <platform.h>
-
-#include "ft/types.h"
-
-#include "lb/forward.h"
-
-#include "lb/types.h"
-
-#include <math.h>
+#include "types.h"
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
-#include <baselib/cobj.h>
-#include <baselib/jobj.h>
-#include <baselib/mtx.h>
-#include <baselib/state.h>
-#include <baselib/tev.h>
+#include <melee/ft/types.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/mtx.h>
+#include <sysdolphin/baselib/state.h>
+#include <sysdolphin/baselib/tev.h>
 
 #if BUILD_TARGET_PC
 /* The console fuses a*b+c into one rounding; x86 rounds twice. Every site
@@ -75,8 +72,8 @@ int pc_hb_window(void)
         return 0;
     }
     {
-        extern u32 gm_8016AEDC(void);
-        int f = (int) gm_8016AEDC();
+        extern u32 gm_GetFrameCount(void);
+        int f = (int) gm_GetFrameCount();
         return f >= lo && f <= hi;
     }
 }
@@ -84,9 +81,9 @@ int pc_hb_window(void)
 void pc_hb_note(int site, const void* capsule)
 {
     if (pc_hb_window()) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[HBUPD] gframe=%u site=%d capsule=%p\n",
-                (unsigned) gm_8016AEDC(), site, capsule);
+                (unsigned) gm_GetFrameCount(), site, capsule);
     }
 }
 #define PC_HB_NOTE(site, c) pc_hb_note((site), (c))
@@ -125,23 +122,6 @@ static GXColor lbColl_804D36E8 = { 0xFF, 0xFF, 0xFF, 0x80 };
 static GXColor lbColl_804D36EC = { 0x80, 0x80, 0x80, 0x80 };
 static GXColor lbColl_804D36F0 = { 0xFF, 0xFF, 0x00, 0x80 };
 
-/// .sdata2
-float const lbColl_804D79F0 = 1e-5;
-float const lbColl_804D79F4 = -1e-5;
-float const lbColl_804D79F8 = 0;
-f64 const lbColl_804D7A00 = 1;
-float const lbColl_804D7A08 = 1;
-f64 const lbColl_804D7A10 = 0;
-f64 const lbColl_804D7A18 = 0.5;
-f64 const lbColl_804D7A20 = 3.0;
-float const lbColl_804D7A28 = 2;
-float const lbColl_804D7A2C = 4;
-float const lbColl_804D7A30 = M_PI;
-float const lbColl_804D7A34 = 20;
-float const lbColl_804D7A38 = 3;
-float const lbColl_804D7A3C = 0.5;
-float const lbColl_804D7A40 = 5;
-
 /// .data
 int lbColl_803B9880[] = {
     0x00083D60, 0x00083D60, 0x00083D60, 0x0000005B, 0x0000005A, 0x00000059,
@@ -165,7 +145,7 @@ struct unk {
     &lbColl_804D36B8, &lbColl_804D36BC, &lbColl_804D36C0,
 };
 
-u8 lbColl_803B9940[0x1A0] = {
+u8 lbColl_SpherePositions[0x1A0] = {
     0x29, 0xCF, 0x2D, 0x41, 0x11, 0x51, 0x20, 0x00, 0x2D, 0x41, 0x1F, 0xFF,
     0x29, 0xCF, 0xE7, 0x83, 0x29, 0xCF, 0x00, 0x00, 0xC4, 0xE0, 0x18, 0x7D,
     0x11, 0x51, 0x3B, 0x20, 0x11, 0x51, 0x11, 0x51, 0xD2, 0xBF, 0x29, 0xCF,
@@ -200,9 +180,9 @@ u8 lbColl_803B9940[0x1A0] = {
     0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x18, 0x7D, 0xC4, 0xE0, 0x00, 0x00,
     0x16, 0xA0, 0xC4, 0xE0, 0xF6, 0xA1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
-u8 lbColl_803B9AE0[0x1A0] = {
+u8 lbColl_SphereNormals[0x1A0] = {
     0x29, 0xC7, 0x2D, 0x49, 0x11, 0x4E, 0x1F, 0xF9, 0x2D, 0x49, 0x1F, 0xF9,
     0x29, 0xCD, 0xE7, 0x7B, 0x29, 0xCD, 0x00, 0x00, 0xC4, 0xDC, 0x18, 0x75,
     0x11, 0x4B, 0x3B, 0x24, 0x11, 0x4B, 0x11, 0x4E, 0xD2, 0xB7, 0x29, 0xC7,
@@ -237,9 +217,9 @@ u8 lbColl_803B9AE0[0x1A0] = {
     0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x18, 0x75, 0xC4, 0xDC, 0x00, 0x00,
     0x16, 0x99, 0xC4, 0xDC, 0xF6, 0xA4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
-u8 lbColl_803B9C80[0x120] = {
+u8 lbColl_SphereDisplayList[0x120] = {
     0x98, 0x00, 0x75, 0x0B, 0x0B, 0x04, 0x04, 0x0C, 0x0C, 0x01, 0x01, 0x07,
     0x07, 0x0E, 0x0E, 0x19, 0x19, 0x10, 0x10, 0x1A, 0x1A, 0x02, 0x02, 0x05,
     0x05, 0x14, 0x14, 0x09, 0x09, 0x14, 0x14, 0x17, 0x17, 0x15, 0x15, 0x17,
@@ -263,9 +243,9 @@ u8 lbColl_803B9C80[0x120] = {
     0x15, 0x15, 0x14, 0x14, 0x12, 0x12, 0x02, 0x02, 0x11, 0x11, 0x10, 0x10,
     0x0F, 0x0F, 0x0E, 0x0E, 0x00, 0x00, 0x01, 0x01, 0x13, 0x13, 0x04, 0x04,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
-u8 lbl_803B9DA0[0x80] = {
+u8 lbColl_CylinderPositions[0x80] = {
     0xE0, 0x00, 0x00, 0x00, 0x3F, 0xFF, 0xE0, 0x01, 0xE7, 0x83, 0x3B, 0x20,
     0xE0, 0x00, 0x00, 0x00, 0xC0, 0x01, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x01,
     0x20, 0x00, 0x00, 0x00, 0xC0, 0x01, 0xE0, 0x01, 0xC4, 0xE0, 0xE7, 0x83,
@@ -276,9 +256,9 @@ u8 lbl_803B9DA0[0x80] = {
     0x00, 0x00, 0x18, 0x7D, 0x3B, 0x20, 0xE0, 0x01, 0xC0, 0x01, 0x00, 0x00,
     0x00, 0x00, 0xE7, 0x83, 0xC4, 0xE0, 0x00, 0x00, 0xD2, 0xBF, 0xD2, 0xBF,
     0x20, 0x00, 0xD2, 0xBF, 0xD2, 0xBF, 0x20, 0x00, 0xE7, 0x83, 0xC4, 0xE0,
-    0xE0, 0x00, 0x2D, 0x41, 0xD2, 0xBF, 0x00, 0x00
+    0xE0, 0x00, 0x2D, 0x41, 0xD2, 0xBF, 0x00, 0x00,
 };
-u8 lbl_803B9E20[0xA0] = {
+u8 lbColl_UnknownData[0xA0] = {
     0x2D, 0x41, 0xD2, 0xBF, 0x1F, 0xFF, 0x2D, 0x41, 0xD2, 0xBF, 0x00, 0x00,
     0xC4, 0xE0, 0xE7, 0x83, 0x00, 0x00, 0xC0, 0x01, 0x00, 0x00, 0x20, 0x00,
     0xC0, 0x01, 0x00, 0x00, 0x20, 0x00, 0xC4, 0xE0, 0xE7, 0x83, 0x00, 0x00,
@@ -292,9 +272,9 @@ u8 lbl_803B9E20[0xA0] = {
     0xD2, 0xBF, 0x2D, 0x41, 0x00, 0x00, 0xD2, 0xBF, 0x2D, 0x41, 0x00, 0x00,
     0xC4, 0xE0, 0x18, 0x7D, 0xE0, 0x00, 0x3B, 0x20, 0x18, 0x7D, 0xE0, 0x00,
     0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x3B, 0x20, 0x18, 0x7D
+    0x3B, 0x20, 0x18, 0x7D,
 };
-u8 lbColl_803B9EC0[0x60] = {
+u8 lbColl_CylinderNormals[0x60] = {
     0x00, 0x00, 0x00, 0x00, 0xFF, 0xC0, 0x00, 0x00, 0x00, 0x18, 0xFF, 0xC5,
     0x00, 0x00, 0x00, 0x18, 0x00, 0x3B, 0x00, 0x00, 0xFF, 0xD3, 0xFF, 0xD3,
     0x00, 0x00, 0xFF, 0xE8, 0xFF, 0xC5, 0x00, 0x00, 0x00, 0x2D, 0xFF, 0xD3,
@@ -302,9 +282,9 @@ u8 lbColl_803B9EC0[0x60] = {
     0x00, 0x00, 0x00, 0x2D, 0x00, 0x2D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40,
     0x00, 0x00, 0xFF, 0xE8, 0x00, 0x3B, 0x00, 0x00, 0x00, 0x3B, 0xFF, 0xE8,
     0x00, 0x00, 0xFF, 0xD3, 0x00, 0x2D, 0x00, 0x00, 0xFF, 0xC5, 0x00, 0x18,
-    0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3B, 0x00, 0x18
+    0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3B, 0x00, 0x18,
 };
-u8 lbColl_803B9F20[0xA0] = {
+u8 lbColl_CylinderDisplayList[0xA0] = {
     0x98, 0x00, 0x45, 0x2C, 0x0F, 0x2D, 0x0E, 0x2F, 0x0F, 0x2D, 0x0E, 0x2E,
     0x0E, 0x24, 0x0B, 0x25, 0x0B, 0x14, 0x05, 0x15, 0x05, 0x08, 0x01, 0x09,
     0x01, 0x02, 0x00, 0x03, 0x00, 0x06, 0x04, 0x10, 0x04, 0x07, 0x03, 0x11,
@@ -318,7 +298,7 @@ u8 lbColl_803B9F20[0xA0] = {
     0x0D, 0x2A, 0x0C, 0x22, 0x0C, 0x1E, 0x0A, 0x21, 0x0A, 0x1F, 0x09, 0x20,
     0x09, 0x0E, 0x02, 0x0B, 0x02, 0x1B, 0x08, 0x1D, 0x08, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00
+    0x00, 0x00, 0x00, 0x00,
 };
 
 /// .text
@@ -343,15 +323,6 @@ int lbColl_80005BB0(HitCapsule* arg0, int arg1)
     return lbAudioAx_80024184(
         *(lbColl_803B9880 + (temp_r0 * 3) + (arg0->sfx_severity)), 127, 64,
         -1);
-}
-
-static inline bool nearzero(float x)
-{
-    if (x < 1e-5F && x > -1e-5F) {
-        return true;
-    } else {
-        return false;
-    }
 }
 
 bool lbColl_80005C44(const Vec3* arg0, const Vec3* arg1, const Vec3* arg2,
@@ -427,7 +398,7 @@ bool lbColl_80005C44(const Vec3* arg0, const Vec3* arg1, const Vec3* arg2,
         float d1_dot_d2 = LBC_DOT(d1.x, d1.y, d1.z, d2_x, d2_y, d2_z);
         float scale;
 
-        if (nearzero(d1_dot_d1)) {
+        if (approximatelyZero(d1_dot_d1)) {
             scale = 0.0f;
         } else {
             scale = -d1_dot_d2 / d1_dot_d1;
@@ -485,10 +456,10 @@ float lbColl_80005EBC(const Vec3* arg0, const Vec3* arg1, const Vec3* arg2,
     d1_dot_d2 = LBC_DOT(d1.x, d1.y, d1.z, d2.x, d2.y, d2.z);
 
     scale = -d1_dot_d2 / d1_dot_d1;
-    if (scale > lbColl_804D7A00) {
-        scale = lbColl_804D7A08;
-    } else if (scale < lbColl_804D7A10) {
-        scale = lbColl_804D79F8;
+    if (scale > 1.0) {
+        scale = 1.0F;
+    } else if (scale < 0.0) {
+        scale = 0.0F;
     }
 
     /* 80005F80-80005FA8: the lerp is one fmadds per axis, the subtraction
@@ -527,10 +498,10 @@ float lbColl_80005FC0(Vec3* arg0, Vec3* arg1, Vec3* arg2, float* arg3)
     d1_dot_d2 = LBC_FMA(d1.x, d2.x, d1.y * d2.y);
 
     scale = -d1_dot_d2 / d1_dot_d1;
-    if (scale > lbColl_804D7A00) {
-        scale = lbColl_804D7A08;
-    } else if (scale < lbColl_804D7A10) {
-        scale = lbColl_804D79F8;
+    if (scale > 1.0) {
+        scale = 1.0F;
+    } else if (scale < 0.0) {
+        scale = 0.0F;
     }
 
     /* 80006064-80006088: one fmadds per axis, then fsubs; the squared
@@ -544,8 +515,8 @@ float lbColl_80005FC0(Vec3* arg0, Vec3* arg1, Vec3* arg2, float* arg3)
 
 static inline bool end(Vec3* a, Vec3* b, float unk_sum)
 {
-    float y = a->y - b->y;
     float x = a->x - b->x;
+    float y = a->y - b->y;
     float z = a->z - b->z;
 
     /* 80006788-80006794: y plain, x and z fused, against the plain
@@ -720,20 +691,20 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
                             float scale = -d1_dot_offset_delta / d1_len_sq;
                             arg4_scl = scale;
 
-                            if (scale > lbColl_804D7A00) {
-                                arg4_scl = lbColl_804D7A08;
-                            } else if (arg4_scl < lbColl_804D7A10) {
-                                arg4_scl = lbColl_804D79F8;
+                            if (scale > 1.0) {
+                                arg4_scl = 1.0F;
+                            } else if (arg4_scl < 0.0) {
+                                arg4_scl = 0.0F;
                             }
                         }
                     }
                 } else {
                     if (approximatelyZero(denom)) {
-                        float mid_y = (lbColl_804D7A18 * d2_y + arg5_offset.y);
-                        float mid_x = (lbColl_804D7A18 * d2_x + arg5_offset.x);
+                        float mid_y = (0.5 * d2_y + arg5_offset.y);
+                        float mid_x = (0.5 * d2_x + arg5_offset.x);
                         float arg4_mid_y = arg4_offset.y - mid_y;
                         float arg1_mid_y = arg1->y - mid_y;
-                        float mid_z = lbColl_804D7A18 * d2_z + arg5_offset.z;
+                        float mid_z = 0.5 * d2_z + arg5_offset.z;
                         float arg4_mid_x = arg4_offset.x - mid_x;
                         float arg1_mid_x = arg1_x - mid_x;
                         float arg4_offset_z = arg4_offset.z - mid_z;
@@ -769,10 +740,10 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
                                               c3.x - a2.x, c3.y - a2.y, c3.z - a2.z);
                                 scale = -dot / LBC_DOT(arg3_arg2_x, arg3_arg2_y, arg3_arg2_z,
                                                        arg3_arg2_x, arg3_arg2_y, arg3_arg2_z);
-                                if (scale > lbColl_804D7A00) {
-                                    scale = lbColl_804D7A08;
-                                } else if (scale < lbColl_804D7A10) {
-                                    scale = lbColl_804D79F8;
+                                if (scale > 1.0) {
+                                    scale = 1.0F;
+                                } else if (scale < 0.0) {
+                                    scale = 0.0F;
                                 }
                                 arg5_scl = scale;
                             }
@@ -804,11 +775,11 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
                                                         arg3_arg2_x, arg3_arg2_y, arg3_arg2_z);
                                             scale = -dot / d2_from_arg2_len_sq;
 
-                                            if (scale > lbColl_804D7A00) {
-                                                scale = lbColl_804D7A08;
-                                            } else if (scale < lbColl_804D7A10)
+                                            if (scale > 1.0) {
+                                                scale = 1.0F;
+                                            } else if (scale < 0.0)
                                             {
-                                                scale = lbColl_804D79F8;
+                                                scale = 0.0F;
                                             }
 
                                             arg5_scl = scale;
@@ -827,34 +798,34 @@ bool lbColl_80006094(Vec3* arg0, Vec3* arg1, Vec3* arg2, Vec3* arg3,
                                    -(d1_dot_d2 * d1_dot_offset_delta)) /
                                    denom;
                         arg4_scl = temp_f1_3;
-                        if (temp_f1_3 > lbColl_804D7A00 ||
-                            arg4_scl < lbColl_804D7A10 ||
-                            arg5_scl > lbColl_804D7A00 ||
-                            arg5_scl < lbColl_804D7A10)
+                        if (temp_f1_3 > 1.0 ||
+                            arg4_scl < 0.0 ||
+                            arg5_scl > 1.0 ||
+                            arg5_scl < 0.0)
                         {
                             float var_f18;
                             float var_f19;
                             float var_f1;
                             float spA4;
 
-                            if (arg4_scl < lbColl_804D7A10) {
-                                var_f19 = lbColl_804D79F8;
+                            if (arg4_scl < 0.0) {
+                                var_f19 = 0.0F;
                                 var_f18 =
                                     lbColl_80005EBC(arg2, arg3, arg0, &spA4);
                             } else {
-                                var_f19 = lbColl_804D7A08;
+                                var_f19 = 1.0F;
                                 var_f18 =
                                     lbColl_80005EBC(arg2, arg3, arg1, &spA4);
                             }
 
                             {
                                 float spA0;
-                                if (arg5_scl < lbColl_804D7A10) {
-                                    arg5_scl = lbColl_804D79F8;
+                                if (arg5_scl < 0.0) {
+                                    arg5_scl = 0.0F;
                                     var_f1 = lbColl_80005EBC(arg0, arg1, arg2,
                                                              &spA0);
                                 } else {
-                                    arg5_scl = lbColl_804D7A08;
+                                    arg5_scl = 1.0F;
                                     var_f1 = lbColl_80005EBC(arg0, arg1, arg3,
                                                              &spA0);
                                 }
@@ -898,8 +869,13 @@ static inline float lbColl_GetY(Vec3* v)
     return v->y;
 }
 
+static inline float lbColl_DifferenceY(Vec3* a, Vec3* b)
+{
+    return a->y - b->y;
+}
+
 bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
-                     float p, float q, float r)
+                     float p, float q)
 {
     float diff_dc_x;
     float diff_ac_x;
@@ -1039,17 +1015,17 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
                                     scl_f = 0.0f;
                                     temp_f1_2 = -dot2_diff_ba_ac / sqdist2_ba;
                                     scl_e = temp_f1_2;
-                                    if (temp_f1_2 > lbColl_804D7A00) {
-                                        scl_e = lbColl_804D7A08;
-                                    } else if (scl_e < lbColl_804D7A10) {
-                                        scl_e = lbColl_804D79F8;
+                                    if (temp_f1_2 > 1.0) {
+                                        scl_e = 1.0F;
+                                    } else if (scl_e < 0.0) {
+                                        scl_e = 0.0F;
                                     }
                                 }
                             } else if (approximatelyZero(determinant)) {
                                 float temp_f7_2 =
-                                    lbColl_804D7A18 * diff_dc_y + c1.y;
+                                    0.5 * diff_dc_y + c1.y;
                                 float temp_f5_2 =
-                                    lbColl_804D7A18 * diff_dc_x + c1.x;
+                                    0.5 * diff_dc_x + c1.x;
                                 float temp_f6_2 = a1.y - temp_f7_2;
                                 float temp_f7_3 = b_y - temp_f7_2;
                                 {
@@ -1083,12 +1059,12 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
                                                                             diff_dc_x, temp_f8_2, diff_dc_z);
                                             }
                                         }
-                                        if (temp_scl_f > lbColl_804D7A00) {
-                                            temp_scl_f = lbColl_804D7A08;
+                                        if (temp_scl_f > 1.0) {
+                                            temp_scl_f = 1.0F;
                                         } else if (temp_scl_f <
-                                                   lbColl_804D7A10)
+                                                   0.0)
                                         {
-                                            temp_scl_f = lbColl_804D79F8;
+                                            temp_scl_f = 0.0F;
                                         }
                                         scl_f = temp_scl_f;
                                     } else {
@@ -1119,16 +1095,16 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
                                                             -dot / LBC_DOT(diff_dc_x1, diff_dc_y1, diff_dc_z1,
                                                                            diff_dc_x1, diff_dc_y1, diff_dc_z1);
                                                         if (var_f2_2 >
-                                                            lbColl_804D7A00)
+                                                            1.0)
                                                         {
                                                             var_f2_2 =
-                                                                lbColl_804D7A08;
+                                                                1.0F;
                                                         } else if (
                                                             var_f2_2 <
-                                                            lbColl_804D7A10)
+                                                            0.0)
                                                         {
                                                             var_f2_2 =
-                                                                lbColl_804D79F8;
+                                                                0.0F;
                                                         }
                                                         scl_f = var_f2_2;
                                                     }
@@ -1147,33 +1123,33 @@ bool lbColl_800067F8(Vec3* a, Vec3* b, Vec3* c, Vec3* d, Vec3* e, Vec3* f,
                                          -(dot2_diff_ba_dc * dot2_diff_ba_ac)) /
                                         determinant;
                                 scl_e = temp_f1_3;
-                                if ((temp_f1_3 > lbColl_804D7A00) ||
-                                    (scl_e < lbColl_804D7A10) ||
-                                    (scl_f > lbColl_804D7A00) ||
-                                    (scl_f < lbColl_804D7A10))
+                                if ((temp_f1_3 > 1.0) ||
+                                    (scl_e < 0.0) ||
+                                    (scl_f > 1.0) ||
+                                    (scl_f < 0.0))
                                 {
                                     float out0;
                                     float result0;
                                     float temp_scl_e;
                                     {
-                                        if (scl_e < lbColl_804D7A10) {
-                                            temp_scl_e = lbColl_804D79F8;
+                                        if (scl_e < 0.0) {
+                                            temp_scl_e = 0.0F;
                                             result0 = lbColl_80005FC0(c, d, a,
                                                                       &out0);
                                         } else {
-                                            temp_scl_e = lbColl_804D7A08;
+                                            temp_scl_e = 1.0F;
                                             result0 = lbColl_80005FC0(c, d, b,
                                                                       &out0);
                                         }
                                     }
                                     {
                                         float result1;
-                                        if (scl_f < lbColl_804D7A10) {
-                                            scl_f = lbColl_804D79F8;
+                                        if (scl_f < 0.0) {
+                                            scl_f = 0.0F;
                                             result1 = lbColl_80005FC0(a, b, c,
                                                                       &out1);
                                         } else {
-                                            scl_f = lbColl_804D7A08;
+                                            scl_f = 1.0F;
                                             result1 = lbColl_80005FC0(a, b, d,
                                                                       &out1);
                                         }
@@ -1433,7 +1409,7 @@ block_39:
      * several `hit_param = 1.0` / `hurt_param = 1.0` branches below. The
      * variable name is a borrow from the unused-after-broadphase-rejection
      * slot. */
-    hit_start_min_z = lbColl_804D7A08;
+    hit_start_min_z = 1.0F;
     hurt_len_sq = LBC_FMA(hurt_delta_x, hurt_delta_x, hurt_len_sq);
     segment_dot = LBC_FMA(hit_delta.z, hurt_delta_z, segment_dot);
     hurt_len_sq = LBC_FMA(hurt_delta_z, hurt_delta_z, hurt_len_sq);
@@ -1447,33 +1423,33 @@ block_39:
     hit_start_dot = LBC_FMA(hit_delta.z, start_delta_z, hit_start_dot);
     hurt_start_dot = LBC_FMA(hurt_delta_z, start_delta_z, hurt_start_dot);
     closest_denom = LBC_FMA(hit_len_sq, hurt_len_sq, -(segment_dot * segment_dot));
-    if ((hurt_len_sq < lbColl_804D79F0) && (hurt_len_sq > lbColl_804D79F4)) {
+    if ((hurt_len_sq < 1e-5f) && (hurt_len_sq > -1e-5f)) {
         is_hurt_segment_degenerate = 1;
     } else {
         is_hurt_segment_degenerate = 0;
     }
     if (is_hurt_segment_degenerate != 0) {
-        if ((hit_len_sq < lbColl_804D79F0) && (hit_len_sq > lbColl_804D79F4)) {
+        if ((hit_len_sq < 1e-5f) && (hit_len_sq > -1e-5f)) {
             is_hit_segment_degenerate = 1;
         } else {
             is_hit_segment_degenerate = 0;
         }
         if (is_hit_segment_degenerate != 0) {
-            hit_param = lbColl_804D79F8;
+            hit_param = 0.0F;
             hurt_param = hit_param;
         } else {
-            hurt_param = lbColl_804D79F8;
+            hurt_param = 0.0F;
             projected_hit_param = -hit_start_dot / hit_len_sq;
             hit_param = projected_hit_param;
-            if (projected_hit_param > lbColl_804D7A00) {
+            if (projected_hit_param > 1.0) {
                 hit_param = hit_start_min_z;
-            } else if (hit_param < lbColl_804D7A10) {
+            } else if (hit_param < 0.0) {
                 hit_param = hurt_param;
             }
         }
     } else {
-        if ((closest_denom < lbColl_804D79F0) &&
-            (closest_denom > lbColl_804D79F4))
+        if ((closest_denom < 1e-5f) &&
+            (closest_denom > -1e-5f))
         {
             is_parallel = 1;
         } else {
@@ -1482,12 +1458,12 @@ block_39:
         if (is_parallel != 0) {
             // For parallel axes, project the hit endpoint nearer the hurt
             // midpoint.
-            hurt_mid_y = (float) ((lbColl_804D7A18 * (f64) hurt_delta_y) +
+            hurt_mid_y = (float) ((0.5 * (f64) hurt_delta_y) +
                                   (f64) hurt_start_copy.y);
-            hurt_mid_x = (float) ((lbColl_804D7A18 * (f64) hurt_delta_x) +
+            hurt_mid_x = (float) ((0.5 * (f64) hurt_delta_x) +
                                   (f64) hurt_start_copy.x);
             hit_start_mid_y = hit_start_copy.y - hurt_mid_y;
-            hurt_mid_z = (float) ((lbColl_804D7A18 * (f64) hurt_delta_z) +
+            hurt_mid_z = (float) ((0.5 * (f64) hurt_delta_z) +
                                   (f64) hurt_start_copy.z);
             hit_end_mid_y = hit_end->y - hurt_mid_y;
             hit_start_mid_x = hit_start_copy.x - hurt_mid_x;
@@ -1505,7 +1481,7 @@ block_39:
                 Vec3 c3;
                 u8 gap_pad[4];
                 c3 = *hurt_start;
-                hit_param = lbColl_804D79F8;
+                hit_param = 0.0F;
                 d1.x = hurt_end_x - hurt_start->x;
                 d1.y = hurt_end_y - hurt_start->y;
                 d1.z = hurt_end_z - hurt_start->z;
@@ -1520,9 +1496,9 @@ block_39:
                         -dot /
                         LBC_DOT(d1.x, d1.y, d1.z, d1.x, d1.y, d1.z);
                 }
-                if (hurt_param_from_hit_start > lbColl_804D7A00) {
+                if (hurt_param_from_hit_start > 1.0) {
                     hurt_param_from_hit_start = hit_start_min_z;
-                } else if (hurt_param_from_hit_start < lbColl_804D7A10) {
+                } else if (hurt_param_from_hit_start < 0.0) {
                     hurt_param_from_hit_start = hit_param;
                 }
                 hurt_param = hurt_param_from_hit_start;
@@ -1545,10 +1521,10 @@ block_39:
                         -dot /
                         LBC_DOT(d1.x, d1.y, d1.z, d1.x, d1.y, d1.z);
                 }
-                if (hurt_param_from_hit_end > lbColl_804D7A00) {
+                if (hurt_param_from_hit_end > 1.0) {
                     hurt_param_from_hit_end = hit_param;
-                } else if (hurt_param_from_hit_end < lbColl_804D7A10) {
-                    hurt_param_from_hit_end = lbColl_804D79F8;
+                } else if (hurt_param_from_hit_end < 0.0) {
+                    hurt_param_from_hit_end = 0.0F;
                 }
                 hurt_param = hurt_param_from_hit_end;
             }
@@ -1561,10 +1537,10 @@ block_39:
             hurt_param = LBC_FMA(hit_len_sq, hurt_start_dot,
                                  -(segment_dot * hit_start_dot)) /
                          closest_denom;
-            if ((hit_param_candidate > lbColl_804D7A00) ||
-                (hit_param < lbColl_804D7A10) ||
-                (hurt_param > lbColl_804D7A00) ||
-                (hurt_param < lbColl_804D7A10))
+            if ((hit_param_candidate > 1.0) ||
+                (hit_param < 0.0) ||
+                (hurt_param > 1.0) ||
+                (hurt_param < 0.0))
             {
                 float hit_endpoint_dist_sq;
                 float hit_endpoint_param;
@@ -1573,8 +1549,8 @@ block_39:
 
                 // If the unconstrained solution leaves either segment, compare
                 // the nearest endpoint projection from each axis.
-                if (hit_param < lbColl_804D7A10) {
-                    hit_endpoint_param = lbColl_804D79F8;
+                if (hit_param < 0.0) {
+                    hit_endpoint_param = 0.0F;
                     hit_endpoint_dist_sq =
                         lbColl_80005EBC(hurt_start, hurt_end, hit_start,
                                         &candidate_hurt_param);
@@ -1583,8 +1559,8 @@ block_39:
                     hit_endpoint_dist_sq = lbColl_80005EBC(
                         hurt_start, hurt_end, hit_end, &candidate_hurt_param);
                 }
-                if (hurt_param < lbColl_804D7A10) {
-                    hurt_endpoint_param = lbColl_804D79F8;
+                if (hurt_param < 0.0) {
+                    hurt_endpoint_param = 0.0F;
                     hurt_endpoint_dist_sq = lbColl_80005EBC(
                         hit_start, hit_end, hurt_start, &candidate_hit_param);
                 } else {
@@ -1615,23 +1591,23 @@ block_39:
     /* 80007568-80007578: y plain, x and z fused. */
     closest_dist_sq = LBC_DOT(closest_delta_x, closest_delta_y, closest_delta_z,
                               closest_delta_x, closest_delta_y, closest_delta_z);
-    if (closest_dist_sq > lbColl_804D79F8) {
+    if (closest_dist_sq > 0.0F) {
         volatile float sp38;
 
         closest_rsqrt_estimate = __frsqrte(closest_dist_sq);
         closest_rsqrt_step1 =
-            lbColl_804D7A18 * closest_rsqrt_estimate *
-            LBC_NMSUB((f64) closest_dist_sq, closest_rsqrt_estimate * closest_rsqrt_estimate, lbColl_804D7A20);
-        closest_rsqrt_step2 = lbColl_804D7A18 * closest_rsqrt_step1 *
-                              LBC_NMSUB((f64) closest_dist_sq, closest_rsqrt_step1 * closest_rsqrt_step1, lbColl_804D7A20);
+            0.5 * closest_rsqrt_estimate *
+            LBC_NMSUB((f64) closest_dist_sq, closest_rsqrt_estimate * closest_rsqrt_estimate, 3.0);
+        closest_rsqrt_step2 = 0.5 * closest_rsqrt_step1 *
+                              LBC_NMSUB((f64) closest_dist_sq, closest_rsqrt_step1 * closest_rsqrt_step1, 3.0);
         sp38 = (float) ((f64) closest_dist_sq *
-                        (lbColl_804D7A18 * closest_rsqrt_step2 *
-                         LBC_NMSUB((f64) closest_dist_sq, closest_rsqrt_step2 * closest_rsqrt_step2, lbColl_804D7A20)));
+                        (0.5 * closest_rsqrt_step2 *
+                         LBC_NMSUB((f64) closest_dist_sq, closest_rsqrt_step2 * closest_rsqrt_step2, 3.0)));
         closest_dist = sp38;
     } else {
         closest_dist = closest_dist_sq;
     }
-    if ((closest_dist < lbColl_804D79F0) && (closest_dist > lbColl_804D79F4)) {
+    if ((closest_dist < 1e-5f) && (closest_dist > -1e-5f)) {
         is_zero_distance = 1;
     } else {
         is_zero_distance = 0;
@@ -1652,18 +1628,18 @@ block_39:
     local_dist_sq =
         LBC_DOT(local_delta_x, local_delta_y, local_delta_z,
                 local_delta_x, local_delta_y, local_delta_z); /* 80007680-80007690 */
-    if (local_dist_sq > lbColl_804D79F8) {
+    if (local_dist_sq > 0.0F) {
         volatile float sp34;
 
         local_rsqrt_estimate = __frsqrte(local_dist_sq);
-        local_rsqrt_step1 = lbColl_804D7A18 * local_rsqrt_estimate *
-                            LBC_NMSUB((f64) local_dist_sq, local_rsqrt_estimate * local_rsqrt_estimate, lbColl_804D7A20);
+        local_rsqrt_step1 = 0.5 * local_rsqrt_estimate *
+                            LBC_NMSUB((f64) local_dist_sq, local_rsqrt_estimate * local_rsqrt_estimate, 3.0);
         local_rsqrt_step2 =
-            lbColl_804D7A18 * local_rsqrt_step1 *
-            LBC_NMSUB((f64) local_dist_sq, local_rsqrt_step1 * local_rsqrt_step1, lbColl_804D7A20);
+            0.5 * local_rsqrt_step1 *
+            LBC_NMSUB((f64) local_dist_sq, local_rsqrt_step1 * local_rsqrt_step1, 3.0);
         sp34 = (float) ((f64) local_dist_sq *
-                        (lbColl_804D7A18 * local_rsqrt_step2 *
-                         LBC_NMSUB((f64) local_dist_sq, local_rsqrt_step2 * local_rsqrt_step2, lbColl_804D7A20)));
+                        (0.5 * local_rsqrt_step2 *
+                         LBC_NMSUB((f64) local_dist_sq, local_rsqrt_step2 * local_rsqrt_step2, 3.0)));
         local_dist = sp34;
     } else {
         local_dist = local_dist_sq;
@@ -1770,7 +1746,7 @@ void lbColl_800077A0(Vec3* a, MtxPtr arg1, Vec3* b, Vec3* c, Vec3* d, Vec3* e,
         dot_diff_cb = diff_cb.x * diff_cb.x + diff_cb.y * diff_cb.y +
                       diff_cb.z * diff_cb.z;
 
-        if (nearzero(dot_diff_cb)) {
+        if (approximatelyZero(dot_diff_cb)) {
             scl = 0.0f;
         } else {
             /* 80007970-800079AC: each 2*cb is a plain fmuls, then y plain, x
@@ -1835,12 +1811,11 @@ bool lbColl_80007AFC(HitCapsule* a, HitCapsule* b, float x, float y)
                            &b->hurt_coll_pos, &a->hurt_coll_pos, b_val, a_val);
 }
 
-bool lbColl_80007B78(Mtx a, struct Fighter_x1614_t* b, float x, float y)
+bool lbColl_80007B78(struct Fighter_x1614_t* a, struct Fighter_x1614_t* b,
+                     float x, float y)
 {
-    /// @todo Eliminate casts.
-    return lbColl_800067F8(&b->x14, &b->x8, (Vec3*) &a[1][1], (Vec3*) &a[0][2],
-                           &b->x20, (Vec3*) &a[1][4], b->x0 * y, a[0][0] * x,
-                           x);
+    return lbColl_800067F8(&b->x14, &b->x8, &a->x14, &a->x8, &b->x20, &a->x20,
+                           b->x0 * y, a->x0 * x);
 }
 
 bool lbColl_80007BCC(HitCapsule* arg0, HitResult* shield_hit, void* arg2,
@@ -1848,8 +1823,8 @@ bool lbColl_80007BCC(HitCapsule* arg0, HitResult* shield_hit, void* arg2,
 {
     Vec3 sp74;
     Vec3 sp68;
-    MtxPtr var_r9;
-    float var_f1;
+    MtxPtr hurt_mtx;
+    float hit_radius;
     Mtx sp38;
 
     if (!shield_hit->skip_update_pos) {
@@ -1862,35 +1837,35 @@ bool lbColl_80007BCC(HitCapsule* arg0, HitResult* shield_hit, void* arg2,
     }
     if (arg3 != 0) {
         arg0->hurt_coll_pos = shield_hit->pos;
-        arg0->coll_distance = lbColl_804D79F8;
+        arg0->coll_distance = 0.0F;
         return 1;
     }
     if (arg2 != NULL) {
         PSMTXConcat(arg2, HSD_JObjGetMtxPtr(shield_hit->bone), sp38);
     }
     if (arg2 != NULL) {
-        var_r9 = sp38;
+        hurt_mtx = sp38;
     } else {
-        var_r9 = HSD_JObjGetMtxPtr(shield_hit->bone);
+        hurt_mtx = HSD_JObjGetMtxPtr(shield_hit->bone);
     }
     if (arg0->x43_b1) {
-        var_f1 = arg0->scale;
+        hit_radius = arg0->scale;
     } else {
-        var_f1 = arg0->scale * arg4;
+        hit_radius = arg0->scale * arg4;
     }
 
-    return lbColl_80006E58(&arg0->x58,            // hit_start
-                           &arg0->x4C,            // hit_end
-                           &shield_hit->pos,      // hurt_start
-                           &shield_hit->pos,      // hurt_end
-                           &sp74,                 // hit_closest
-                           &sp68,                 // hurt_closest
-                           var_r9,                // hurt_mtx
-                           &arg0->hurt_coll_pos,  // out_contact_pos
-                           &arg0->coll_distance,  // out_overlap
-                           var_f1,                // hit_radius
-                           shield_hit->size,      // hurt_radius
-                           lbColl_804D7A34 * arg5 // broadphase_scale
+    return lbColl_80006E58(&arg0->x58,           // hit_start
+                           &arg0->x4C,           // hit_end
+                           &shield_hit->pos,     // hurt_start
+                           &shield_hit->pos,     // hurt_end
+                           &sp74,                // hit_closest
+                           &sp68,                // hurt_closest
+                           hurt_mtx,             // hurt_mtx
+                           &arg0->hurt_coll_pos, // out_contact_pos
+                           &arg0->coll_distance, // out_overlap
+                           hit_radius,           // hit_radius
+                           shield_hit->size,     // hurt_radius
+                           20.0F * arg5          // broadphase_scale
     );
 }
 
@@ -1923,8 +1898,8 @@ bool lbColl_80007ECC(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2,
     Vec3 sp70;
     Vec3 sp64;
     Mtx sp34;
-    float var_f1;
-    MtxPtr var_r9;
+    float hit_radius;
+    MtxPtr hurt_mtx;
 
     if (arg1->state == HurtCapsule_Enabled) {
         if (!arg1->skip_update_pos) {
@@ -1942,19 +1917,19 @@ bool lbColl_80007ECC(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2,
             PSMTXConcat(arg2, HSD_JObjGetMtxPtr(arg1->bone), sp34);
         }
         if (arg2 != NULL) {
-            var_r9 = sp34;
+            hurt_mtx = sp34;
         } else {
-            var_r9 = HSD_JObjGetMtxPtr(arg1->bone);
+            hurt_mtx = HSD_JObjGetMtxPtr(arg1->bone);
         }
         if (arg0->x43_b1) {
-            var_f1 = arg0->scale;
+            hit_radius = arg0->scale;
         } else {
-            var_f1 = arg0->scale * hit_scl_y;
+            hit_radius = arg0->scale * hit_scl_y;
         }
-        return lbColl_80006E58(
-            &arg0->x58, &arg0->x4C, &arg1->a_pos, &arg1->b_pos, &sp70, &sp64,
-            var_r9, &arg0->hurt_coll_pos, &arg0->coll_distance, var_f1,
-            arg1->scale, lbColl_804D7A38 * hurt_scl_y);
+        return lbColl_80006E58(&arg0->x58, &arg0->x4C, &arg1->a_pos,
+                               &arg1->b_pos, &sp70, &sp64, hurt_mtx,
+                               &arg0->hurt_coll_pos, &arg0->coll_distance,
+                               hit_radius, arg1->scale, 3.0F * hurt_scl_y);
     }
     return 0;
 }
@@ -1966,7 +1941,7 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
     Vec3 sp68;
     Mtx sp38;
     MtxPtr var_r9;
-    float var_f1;
+    float hit_radius;
 
 #if BUILD_TARGET_PC
     /* MELEE_HITTEST=<gframe>: every hitbox-vs-hurtbox pair *offered* on that
@@ -1974,12 +1949,12 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
      * visible as one that compares differently. */
     {
         static int want = -2;
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         if (want == -2) {
             const char* e = getenv("MELEE_HITTEST");
             want = (e != NULL) ? atoi(e) : -1;
         }
-        if (want >= 0 && (int) gm_8016AEDC() == want) {
+        if (want >= 0 && (int) gm_GetFrameCount() == want) {
             fprintf(stderr,
                     "[HITOFFER] hit(%08x,%08x)-(%08x,%08x) hurt(%08x,%08x)"
                     " scl=%08x st=%d skip=%d bone=%p bi=%d arg3=%d\n",
@@ -2020,9 +1995,9 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
             var_r9 = HSD_JObjGetMtxPtr(arg1->bone);
         }
         if (arg0->x43_b1) {
-            var_f1 = arg0->scale;
+            hit_radius = arg0->scale;
         } else {
-            var_f1 = arg0->scale * arg4;
+            hit_radius = arg0->scale * arg4;
         }
 
 #if BUILD_TARGET_PC
@@ -2033,16 +2008,16 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
          * tells them apart. */
         {
             static int want = -2;
-            extern u32 gm_8016AEDC(void);
+            extern u32 gm_GetFrameCount(void);
             if (want == -2) {
                 const char* e = getenv("MELEE_HITTEST");
                 want = (e != NULL) ? atoi(e) : -1;
             }
-            if (want >= 0 && (int) gm_8016AEDC() == want) {
+            if (want >= 0 && (int) gm_GetFrameCount() == want) {
                 bool res = lbColl_80006E58(
                     &arg0->x58, &arg0->x4C, &arg1->a_pos, &arg1->b_pos, &sp74,
                     &sp68, var_r9, &arg0->hurt_coll_pos, &arg0->coll_distance,
-                    var_f1, arg1->scale, lbColl_804D7A38 * arg5);
+                    hit_radius, arg1->scale, 3.0F * arg5);
                 fprintf(stderr,
                         "[HITTEST] hit(%08x,%08x,%08x)-(%08x,%08x,%08x) r=%08x"
                         " hurt(%08x,%08x,%08x)-(%08x,%08x,%08x) r=%08x"
@@ -2050,7 +2025,7 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
                         *(u32*) &arg0->x58.x, *(u32*) &arg0->x58.y,
                         *(u32*) &arg0->x58.z, *(u32*) &arg0->x4C.x,
                         *(u32*) &arg0->x4C.y, *(u32*) &arg0->x4C.z,
-                        *(u32*) &var_f1, *(u32*) &arg1->a_pos.x,
+                        *(u32*) &hit_radius, *(u32*) &arg1->a_pos.x,
                         *(u32*) &arg1->a_pos.y, *(u32*) &arg1->a_pos.z,
                         *(u32*) &arg1->b_pos.x, *(u32*) &arg1->b_pos.y,
                         *(u32*) &arg1->b_pos.z, *(u32*) &arg1->scale,
@@ -2062,7 +2037,7 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
         return lbColl_80006E58(&arg0->x58, &arg0->x4C, &arg1->a_pos,
                                &arg1->b_pos, &sp74, &sp68, var_r9,
                                &arg0->hurt_coll_pos, &arg0->coll_distance,
-                               var_f1, arg1->scale, lbColl_804D7A38 * arg5);
+                               hit_radius, arg1->scale, 3.0F * arg5);
     }
     return 0;
 }
@@ -2263,8 +2238,6 @@ bool lbColl_80008820(HitCapsule* capsule, int type, void* victim)
     return true;
 }
 
-GXColor const lbColl_804D7A50 = { 0 };
-
 void lbColl_800089B8(HitCapsule* hit, UNK_T arg1)
 {
     size_t i;
@@ -2317,6 +2290,8 @@ void lbColl_80008D30(HitCapsule* arg0, lbColl_80008D30_arg1* arg1)
     arg0->sfx_kind = arg1->sfx_kind;
     arg0->unk_count = arg1->damage;
 }
+
+GXColor const lbColl_804D7A50 = { 0 };
 
 void lbColl_80008DA4(GXColor* arg0, GXColor* arg1)
 {
@@ -2464,8 +2439,10 @@ void lbColl_80008FC8(Vec3 arg0, Vec3 arg1, GXColor* arg2, GXColor* arg3,
     PSMTXConcat(sp44, sp74, sp74);
     GXSetCullMode(GX_CULL_BACK);
     GXClearVtxDesc();
-    GXSetArray(GX_VA_POS, lbColl_803B9940, 6);
-    GXSetArray(GX_VA_NRM, lbColl_803B9AE0, 6);
+    GXSETARRAY(GX_VA_POS, lbColl_SpherePositions,
+               sizeof(lbColl_SpherePositions), 6, true);
+    GXSETARRAY(GX_VA_NRM, lbColl_SphereNormals, sizeof(lbColl_SphereNormals),
+               6, true);
     GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_TEX_ST, GX_RGBA4, 0xE);
     GXSetVtxDesc(GX_VA_NRM, GX_INDEX8);
@@ -2475,10 +2452,12 @@ void lbColl_80008FC8(Vec3 arg0, Vec3 arg1, GXColor* arg2, GXColor* arg3,
     HSD_MtxInverse(spD4, spD4);
     PSMTXTranspose(spD4, spD4);
     GXLoadNrmMtxImm(spD4, 0);
-    GXCallDisplayList(lbColl_803B9C80, 0x120);
+    GXCallDisplayList(lbColl_SphereDisplayList, 0x120);
     GXClearVtxDesc();
-    GXSetArray(GX_VA_POS, lbColl_803B9940, 6);
-    GXSetArray(GX_VA_NRM, lbColl_803B9AE0, 6);
+    GXSETARRAY(GX_VA_POS, lbColl_SpherePositions,
+               sizeof(lbColl_SpherePositions), 6, true);
+    GXSETARRAY(GX_VA_NRM, lbColl_SphereNormals, sizeof(lbColl_SphereNormals),
+               6, true);
     GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_TEX_ST, GX_RGBA4, 0xE);
     GXSetVtxDesc(GX_VA_NRM, GX_INDEX8);
@@ -2488,11 +2467,13 @@ void lbColl_80008FC8(Vec3 arg0, Vec3 arg1, GXColor* arg2, GXColor* arg3,
     HSD_MtxInverse(spA4, spA4);
     PSMTXTranspose(spA4, spA4);
     GXLoadNrmMtxImm(spA4, 0);
-    GXCallDisplayList(lbColl_803B9C80, 0x120);
+    GXCallDisplayList(lbColl_SphereDisplayList, 0x120);
     if (!isSmall(var_f31)) {
         GXClearVtxDesc();
-        GXSetArray(GX_VA_POS, lbl_803B9DA0, 6);
-        GXSetArray(GX_VA_NRM, lbColl_803B9EC0, 6);
+        GXSETARRAY(GX_VA_POS, lbColl_CylinderPositions,
+                   sizeof(lbColl_CylinderPositions), 6, true);
+        GXSETARRAY(GX_VA_NRM, lbColl_CylinderNormals,
+                   sizeof(lbColl_CylinderNormals), 6, true);
         GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
         GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_TEX_ST, GX_RGBA4, 0xE);
         GXSetVtxDesc(GX_VA_NRM, GX_INDEX8);
@@ -2502,7 +2483,7 @@ void lbColl_80008FC8(Vec3 arg0, Vec3 arg1, GXColor* arg2, GXColor* arg3,
         HSD_MtxInverse(sp74, sp74);
         PSMTXTranspose(sp74, sp74);
         GXLoadNrmMtxImm(sp74, 0);
-        GXCallDisplayList(lbColl_803B9F20, 0xA0);
+        GXCallDisplayList(lbColl_CylinderDisplayList, 0xA0);
     }
     HSD_StateInvalidate(-1);
     HSD_StateInitTev();
@@ -2593,8 +2574,10 @@ void lbColl_800096B4(MtxPtr arg0, Vec3 arg1, Vec3 arg2, GXColor* arg3,
     PSMTXConcat(arg0, sp78, sp78);
     GXSetCullMode(GX_CULL_BACK);
     GXClearVtxDesc();
-    GXSetArray(GX_VA_POS, lbColl_803B9940, 6);
-    GXSetArray(GX_VA_NRM, lbColl_803B9AE0, 6);
+    GXSETARRAY(GX_VA_POS, lbColl_SpherePositions,
+               sizeof(lbColl_SpherePositions), 6, true);
+    GXSETARRAY(GX_VA_NRM, lbColl_SphereNormals, sizeof(lbColl_SphereNormals),
+               6, true);
     GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_TEX_ST, GX_RGBA4, 0xE);
     GXSetVtxDesc(GX_VA_NRM, GX_INDEX8);
@@ -2604,10 +2587,12 @@ void lbColl_800096B4(MtxPtr arg0, Vec3 arg1, Vec3 arg2, GXColor* arg3,
     HSD_MtxInverse(spD8, spD8);
     PSMTXTranspose(spD8, spD8);
     GXLoadNrmMtxImm(spD8, 0);
-    GXCallDisplayList(lbColl_803B9C80, 0x120);
+    GXCallDisplayList(lbColl_SphereDisplayList, 0x120);
     GXClearVtxDesc();
-    GXSetArray(GX_VA_POS, lbColl_803B9940, 6);
-    GXSetArray(GX_VA_NRM, lbColl_803B9AE0, 6);
+    GXSETARRAY(GX_VA_POS, lbColl_SpherePositions,
+               sizeof(lbColl_SpherePositions), 6, true);
+    GXSETARRAY(GX_VA_NRM, lbColl_SphereNormals, sizeof(lbColl_SphereNormals),
+               6, true);
     GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_TEX_ST, GX_RGBA4, 0xE);
     GXSetVtxDesc(GX_VA_NRM, GX_INDEX8);
@@ -2617,11 +2602,13 @@ void lbColl_800096B4(MtxPtr arg0, Vec3 arg1, Vec3 arg2, GXColor* arg3,
     HSD_MtxInverse(spA8, spA8);
     PSMTXTranspose(spA8, spA8);
     GXLoadNrmMtxImm(spA8, 0);
-    GXCallDisplayList(lbColl_803B9C80, 0x120);
+    GXCallDisplayList(lbColl_SphereDisplayList, 0x120);
     if (!isSmall(var_f31)) {
         GXClearVtxDesc();
-        GXSetArray(GX_VA_POS, lbl_803B9DA0, 6);
-        GXSetArray(GX_VA_NRM, lbColl_803B9EC0, 6);
+        GXSETARRAY(GX_VA_POS, lbColl_CylinderPositions,
+                   sizeof(lbColl_CylinderPositions), 6, true);
+        GXSETARRAY(GX_VA_NRM, lbColl_CylinderNormals,
+                   sizeof(lbColl_CylinderNormals), 6, true);
         GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
         GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_TEX_ST, GX_RGBA4, 0xE);
         GXSetVtxDesc(GX_VA_NRM, GX_INDEX8);
@@ -2631,7 +2618,7 @@ void lbColl_800096B4(MtxPtr arg0, Vec3 arg1, Vec3 arg2, GXColor* arg3,
         HSD_MtxInverse(sp78, sp78);
         PSMTXTranspose(sp78, sp78);
         GXLoadNrmMtxImm(sp78, 0);
-        GXCallDisplayList(lbColl_803B9F20, 0xA0);
+        GXCallDisplayList(lbColl_CylinderDisplayList, 0xA0);
     }
     HSD_StateInvalidate(-1);
     HSD_StateInitTev();
@@ -2759,6 +2746,40 @@ bool lbColl_8000A044(HitCapsule* hit, u32 arg1, float arg8)
     return 0;
 }
 
+bool lbColl_8000A10C(struct lbColl_8000A10C_arg0_t* arg0, u32 arg1, f32 arg2)
+{
+    GXColor* c = &lbColl_804D36F8;
+    u32 var_r0;
+    if (c->a == 0xFF) {
+        var_r0 = 0;
+    } else {
+        var_r0 = 2;
+    }
+    if (var_r0 == arg1) {
+        lbColl_80008FC8(arg0->x14, arg0->x8, c, &lbColl_804D36FC,
+                        arg0->x0 * arg2);
+        return true;
+    }
+    return false;
+}
+
+bool lbColl_8000A1A8(struct Fighter_x1614_t* arg0, int arg1, f32 scale_y)
+{
+    u32 var_r0;
+
+    if (lbColl_804D36F0.a == 0xFF) {
+        var_r0 = 0;
+    } else {
+        var_r0 = 2;
+    }
+    if (var_r0 == arg1) {
+        lbColl_80008FC8(arg0->x14, arg0->x8, &lbColl_804D36F0,
+                        &lbColl_804D36F4, arg0->x0 * scale_y);
+        return true;
+    }
+    return false;
+}
+
 bool lbColl_8000A244(HurtCapsule* hurt, u32 arg1, Mtx arg2, float arg3)
 {
     Mtx sp9C;
@@ -2802,40 +2823,6 @@ bool lbColl_8000A244(HurtCapsule* hurt, u32 arg1, Mtx arg2, float arg3)
         }
         lbColl_DrawHitResult(var_r28, &sp90, &sp84, temp_r3, temp_r31_2,
                              temp_f31);
-        return true;
-    }
-    return false;
-}
-
-bool lbColl_8000A10C(struct lbColl_8000A10C_arg0_t* arg0, u32 arg1, f32 arg2)
-{
-    GXColor* c = &lbColl_804D36F8;
-    u32 var_r0;
-    if (c->a == 0xFF) {
-        var_r0 = 0;
-    } else {
-        var_r0 = 2;
-    }
-    if (var_r0 == arg1) {
-        lbColl_80008FC8(arg0->x14, arg0->x8, c, &lbColl_804D36FC,
-                        arg0->x0 * arg2);
-        return true;
-    }
-    return false;
-}
-
-bool lbColl_8000A1A8(struct Fighter_x1614_t* arg0, int arg1, f32 scale_y)
-{
-    u32 var_r0;
-
-    if (lbColl_804D36F0.a == 0xFF) {
-        var_r0 = 0;
-    } else {
-        var_r0 = 2;
-    }
-    if (var_r0 == arg1) {
-        lbColl_80008FC8(arg0->x14, arg0->x8, &lbColl_804D36F0,
-                        &lbColl_804D36F4, arg0->x0 * scale_y);
         return true;
     }
     return false;

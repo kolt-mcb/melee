@@ -4,15 +4,25 @@
 #include "port/pc_ptr.h"
 #endif
 
+#include <melee/cm/forward.h>
+#include <melee/if/forward.h>
+
 #include "gm_unsplit.h"
-#include "../gr/grdatfiles.h"
-
-#include "gm/gmevent.h"
-#include "gm/gmmain_lib.h"
-#include "gm/gmopening.h"
-#include "mn/inlines.h"
-
-#include <baselib/sislib.h>
+#include "gmevent.h"
+#include "gmmain_lib.h"
+#include "gmopening.h"
+#include "types.h"
+#include <melee/db/db.h>
+#include <melee/gr/grdatfiles.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbmthp.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/lb/lbtime.h>
+#include <melee/mn/inlines.h>
+#include <melee/mn/mnmain.h>
+#include <melee/sc/types.h>
 #include <sysdolphin/baselib/cobj.h>
 #include <sysdolphin/baselib/displayfunc.h>
 #include <sysdolphin/baselib/fog.h>
@@ -25,16 +35,7 @@
 #include <sysdolphin/baselib/aobj.h>
 #include <sysdolphin/baselib/fobj.h>
 #include <sysdolphin/baselib/random.h>
-#include <melee/db/db.h>
-#include <melee/gm/types.h>
-#include <melee/lb/lbarchive.h>
-#include <melee/lb/lbaudio_ax.h>
-#include <melee/lb/lblanguage.h>
-#include <melee/lb/lbmthp.h>
-#include <melee/lb/lbspdisplay.h>
-#include <melee/lb/lbtime.h>
-#include <melee/mn/mnmain.h>
-#include <melee/sc/types.h>
+#include <sysdolphin/baselib/sislib.h>
 
 static StaticModelDesc model_desc_0;
 static StaticModelDesc model_desc_1;
@@ -313,7 +314,7 @@ static void pc_MatAnimCatchUp(HSD_JObj* jobj, int* budget)
 /// @todo similar to ::gm_801AA688
 static bool isEmblemUnlocked(void)
 {
-    if (gm_IsCKindUnlocked(CKIND_MARS) || gm_IsCKindUnlocked(CKIND_EMBLEM)) {
+    if (gm_IsCKindUnlocked(CKind_Mars) || gm_IsCKindUnlocked(CKind_Emblem)) {
         return true;
     }
     return false;

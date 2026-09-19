@@ -1,27 +1,27 @@
-#include "ft/ftdrawcommon.h"
+#include "ftdrawcommon.h"
+
+#include <Runtime/platform.h>
 
 #include <placeholder.h>
-#include <platform.h>
 
-#include "cm/camera.h"
-#include "ft/ft_0C88.h"
-#include "ft/ftafterimage.h"
-#include "ft/ftcommon.h"
-#include "ft/ftdata.h"
-#include "ft/ftlib.h"
-#include "ft/ftparts.h"
-#include "ft/inlines.h"
-#include "ftCommon/ftCo_09F4.h"
-#include "ftCommon/ftCo_0A01.h"
-#include "lb/lb_00F9.h"
-#include "lb/lb_0146.h"
-#include "lb/lbcollision.h"
-#include "lb/lbgx.h"
-
+#include "ft_0C88.h"
+#include "ftafterimage.h"
+#include "ftcommon.h"
+#include "ftdata.h"
+#include "ftlib.h"
+#include "ftparts.h"
+#include "inlines.h"
+#include "kinds/ftCommon/ftCo_09F4.h"
+#include "kinds/ftCommon/ftCo_0A01.h"
 #include <dolphin/mtx.h>
-#include <baselib/cobj.h>
-#include <baselib/gobj.h>
-#include <baselib/state.h>
+#include <melee/cm/camera.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/lb_0146.h>
+#include <melee/lb/lbcollision.h>
+#include <melee/lb/lbgx.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/state.h>
 
 static U8Vec4 ftDrawCommon_804D3A88 = { 0xFF, 0xFF, 0xFF, 0x80 };
 static U8Vec4 ftDrawCommon_804D3A8C = { 0x80, 0x80, 0xFF, 0x80 };
@@ -293,18 +293,18 @@ void ftDrawCommon_800805C8(HSD_GObj* gobj, s32 arg1, bool arg2)
     ftCo_800C2600(gobj, arg1);
 }
 
-void ftDrawCommon_80080C28(HSD_GObj* gobj, int arg1)
+void ftDrawCommon_80080C28(HSD_GObj* gobj, int flag_index)
 {
     Mtx sp70;
     Mtx sp18;
-    MtxPtr temp_r28;
+    f32* unused;
     f32 temp_f31;
     f32 temp_f0;
     Fighter* fighter;
-    MtxPtr phi_r28;
-    HSD_JObj* temp_r27;
-    Vec3 sp54;
-    Vec3 v;
+    MtxPtr vmtx;
+    HSD_JObj* jobj;
+    Vec3 v1;
+    Vec3 v2;
     PAD_STACK(4);
 
     fighter = GET_FIGHTER(gobj);
@@ -322,33 +322,25 @@ void ftDrawCommon_80080C28(HSD_GObj* gobj, int arg1)
             fighter->x2223_b3 = 0;
             fighter->x2227_b7 = 0;
             fighter->x2228_b0 = 1;
-            phi_r28 =
-                ftDrawCommon_8008051C_inline(gobj, &sp54, &v, sp18, sp70);
+            vmtx = ftDrawCommon_8008051C_inline(gobj, &v1, &v2, sp18, sp70);
 
-            temp_r27 = GET_JOBJ(gobj);
-            HSD_JObjDispAll(temp_r27, phi_r28, HSD_GObj_80390EB8(arg1), 0);
+            jobj = GET_JOBJ(gobj);
+            HSD_JObjDispAll(jobj, vmtx, HSD_GObj_80390EB8(flag_index), 0);
             if (ftData_UnkMtxFunc0[fighter->kind] != NULL) {
-                ftData_UnkMtxFunc0[fighter->kind](gobj, arg1, phi_r28);
+                ftData_UnkMtxFunc0[fighter->kind](gobj, flag_index, vmtx);
             }
             ftCo_800C8AF0(fighter);
             ftCo_8009F7F8(fighter);
         }
         if (fighter->x20A0_accessory != NULL) {
             HSD_JObjDispAll(fighter->x20A0_accessory, NULL,
-                            HSD_GObj_80390EB8(arg1), 0);
+                            HSD_GObj_80390EB8(flag_index), 0);
         }
     }
 }
 
-typedef struct _Unk2 {
-    u8 x0_filler[0xC];
-    Mtx xC;
-    u8 x18_filler[0x38 - 0xC];
-    Mtx x38;
-    u8 x48_filler[0x68 - 0x3C];
-} Unk2;
-
-static inline void ftDrawCommon_80080E18_inline0(HSD_GObj* gobj, int arg1)
+static inline void ftDrawCommon_80080E18_inline0(HSD_GObj* gobj,
+                                                 int flag_index)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     MtxPtr matrix;
@@ -367,13 +359,14 @@ static inline void ftDrawCommon_80080E18_inline0(HSD_GObj* gobj, int arg1)
         fp->x2223_b3 = 0;
 
         jobj = GET_JOBJ(gobj);
-        ret = HSD_GObj_80390EB8(arg1);
+        ret = HSD_GObj_80390EB8(flag_index);
         matrix = ftDrawCommon_8008051C(gobj, sp54);
         HSD_JObjDispAll(jobj, matrix, ret, 0);
     }
 }
 
-static inline void ftDrawCommon_80080E18_inline1(HSD_GObj* gobj, int arg1)
+static inline void ftDrawCommon_80080E18_inline1(HSD_GObj* gobj,
+                                                 int flag_index)
 {
     Fighter* fp;
     MtxPtr matrix;
@@ -394,7 +387,7 @@ static inline void ftDrawCommon_80080E18_inline1(HSD_GObj* gobj, int arg1)
         fp->x2223_b3 = 1;
 
         jobj = gobj->hsd_obj;
-        ret = HSD_GObj_80390EB8(arg1);
+        ret = HSD_GObj_80390EB8(flag_index);
         matrix = ftDrawCommon_8008051C(gobj, sp24);
         HSD_JObjDispAll(jobj, matrix, ret, 0);
     }
@@ -464,7 +457,7 @@ void ftDrawCommon_80080E18(HSD_GObj* gobj, int arg1)
 
 void ftDrawCommon_80081118(void)
 {
-    HSD_GObj* gobj = HSD_GObj_Entities->fighters;
+    HSD_GObj* gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER];
     while (gobj != NULL) {
         gobj->render_cb = &ftDrawCommon_80080E18;
         gobj = gobj->next;
@@ -473,7 +466,7 @@ void ftDrawCommon_80081118(void)
 
 void ftDrawCommon_80081140(void)
 {
-    HSD_GObj* gobj = HSD_GObj_Entities->fighters;
+    HSD_GObj* gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER];
     while (gobj != NULL) {
         gobj->render_cb = ftDrawCommon_80080C28;
         gobj = gobj->next;
@@ -483,7 +476,9 @@ void ftDrawCommon_80081140(void)
 void ftDrawCommon_80081168(void)
 {
     Fighter_GObj* cur;
-    for (cur = HSD_GObj_Entities->fighters; cur != NULL; cur = cur->next) {
+    for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER]; cur != NULL;
+         cur = cur->next)
+    {
         Fighter* fighter = GET_FIGHTER(cur);
         PAD_STACK(4 * 2);
         if (fighter->x5AC.xC[1] != NULL) {
@@ -498,7 +493,9 @@ void ftDrawCommon_80081168(void)
 void ftDrawCommon_80081200(void)
 {
     Fighter_GObj* cur;
-    for (cur = HSD_GObj_Entities->fighters; cur != NULL; cur = cur->next) {
+    for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER]; cur != NULL;
+         cur = cur->next)
+    {
         Fighter* fighter = GET_FIGHTER(cur);
         PAD_STACK(4 * 2);
         if (fighter->x5AC.xC[1] != NULL) {

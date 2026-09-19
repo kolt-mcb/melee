@@ -1,19 +1,17 @@
 #ifndef _jobj_h_
 #define _jobj_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/class.h"
-#include "baselib/debug.h"
-
-#include "baselib/forward.h"
-
-#include "baselib/list.h"
-#include "baselib/object.h"
-#include "baselib/pobj.h"
-#include "baselib/spline.h"
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
+#include <sysdolphin/baselib/class.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/list.h>
+#include <sysdolphin/baselib/object.h>
+#include <sysdolphin/baselib/pobj.h>
+#include <sysdolphin/baselib/spline.h>
 
 #if defined(BUILD_TARGET_PC)
 /* PC port: __assert reports and returns here, so every
@@ -162,7 +160,7 @@ typedef struct HSD_JObj {
     /* +78 */ MtxPtr envelopemtx;
     /* +7C */ HSD_AObj* aobj;
     /* +80 */ HSD_RObj* robj;
-    /* +84 */ u32 id;
+    /* +84 */ HSD_IDKey id;
 } HSD_JObj;
 ASSERT_SIZE(struct HSD_JObj, 0x88);
 

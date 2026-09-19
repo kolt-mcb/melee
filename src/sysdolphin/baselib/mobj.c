@@ -2,14 +2,14 @@
 #include <stdlib.h>
 #include "mobj.h"
 
+#include <string.h>
+
 #include "aobj.h"
 #include "class.h"
 #include "debug.h"
 #include "state.h"
 #include "tev.h"
 #include "texp.h"
-
-#include <string.h>
 #include <dolphin/gx/GXEnum.h>
 
 #if BUILD_TARGET_PC

@@ -1,34 +1,32 @@
 #include "soundtest.h"
 
-#include "db/db.h"
-#include "db/dbsound.h"
+#include <melee/gm/forward.h>
 
-#include "gm/forward.h"
-
-#include "gm/gm_unsplit.h"
-#include "gm/gmmain_lib.h"
-#include "if/textlib.h"
-#include "if/types.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbcardgame.h"
-#include "lb/lbcardnew.h"
-#include "lb/lblanguage.h"
-#include "lb/lbsnap.h"
-#include "mn/inlines.h"
-#include "ty/toy.h"
-
-#include <baselib/cobj.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/lobj.h>
-#include <baselib/memory.h>
-#include <baselib/sobjlib.h>
-#include <baselib/tobj.h>
+#include "textlib.h"
+#include "types.h"
+#include <melee/db/db.h>
+#include <melee/db/dbsound.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/gm/gmmain_lib.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbcardgame.h>
+#include <melee/lb/lbcardnew.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbsnap.h>
+#include <melee/mn/inlines.h>
+#include <melee/ty/toy.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/sobjlib.h>
+#include <sysdolphin/baselib/tobj.h>
 
 /* 2FF88C */ static bool un_802FF88C(enum soundtest_callback_arg0);
 /* 2FF934 */ static bool un_802FF934(enum soundtest_callback_arg0);
@@ -1003,36 +1001,36 @@ void un_802FFF2C(StartMeleeData* arg0)
         timer = s->x130.xCC[1] + s->x130.xCC[0] * 0x3C;
         if (timer != 0) {
             r->time_limit = timer;
-            r->x0_6 = 1;
+            r->timer_enabled = 1;
         } else {
-            r->x0_6 = 0;
+            r->timer_enabled = 0;
         }
         break;
     case 1:
         r->match_kind = 1;
-        r->x0_6 = 0;
+        r->timer_enabled = 0;
         break;
     case 2:
         r->match_kind = 2;
         timer = s->x130.xCC[1] + s->x130.xCC[0] * 0x3C;
         if (timer != 0) {
             r->time_limit = timer;
-            r->x0_6 = 1;
+            r->timer_enabled = 1;
         } else {
-            r->x0_6 = 0;
+            r->timer_enabled = 0;
         }
         break;
     default:
         r->match_kind = 0;
-        r->x0_6 = 0;
+        r->timer_enabled = 0;
         break;
     }
     r->stkind = s->x130.x8;
     r->x20 = -1;
-    r->xB = s->x130.xCC[3] - 1;
-    r->xC = -1;
+    r->item_freq = s->x130.xCC[3] - 1;
+    r->sd_penalty = -1;
     r->x30 = s->x130.xEC;
-    gm_80167A14(arg0->players);
+    gm_SetupAllPlayerDefaults(arg0->players);
     sp = &s->x130;
     for (i = 0; i < 4; i++) {
         arg0->players[i].ckind = sp->x10[i];
@@ -1041,14 +1039,14 @@ void un_802FFF2C(StartMeleeData* arg0)
         arg0->players[i].sub_color = sp->x48[i];
         arg0->players[i].team = sp->x58[i];
         arg0->players[i].rumble_enabled = sp->xDC[i];
-        arg0->players[i].x12 = sp->x68[i];
-        arg0->players[i].x18 = sp->x78[i];
-        arg0->players[i].x1C = sp->x88[i];
-        arg0->players[i].xE = sp->xA8[i];
+        arg0->players[i].damage1 = sp->x68[i];
+        arg0->players[i].attack_ratio = sp->x78[i];
+        arg0->players[i].defense_ratio = sp->x88[i];
+        arg0->players[i].cpu_kind = sp->xA8[i];
         arg0->players[i].cpu_level = sp->xB8[i];
         arg0->players[i].stocks = s->x130.xCC[2];
         arg0->players[i].xC_b1 = 0;
-        arg0->players[i].x20 = sp->x98[i];
+        arg0->players[i].model_scale = sp->x98[i];
     }
 }
 
@@ -1718,11 +1716,11 @@ bool fn_803011EC(enum soundtest_callback_arg0 arg0)
         gm_801BEFC0(un_804D6DFC);
         {
             s8 c_kind = (s8) un_804D6DF8;
-            gm_GetAllStarData()->x0.ckind = c_kind;
+            gm_GetAllStarData()->x0.x0.ckind = c_kind;
         }
         {
             u8 color = (u8) un_804D6DFC;
-            gm_GetAllStarData()->x0.color = color;
+            gm_GetAllStarData()->x0.x0.color = color;
         }
         gm_ChangeGameModeAfterCurrentScene(GM_CLASSIC_GOVER);
         gm_801A4B60();
@@ -1906,8 +1904,8 @@ bool un_80301634(enum soundtest_callback_arg0 arg0)
     void* r3;
 
     OSReport(un_804D5978);
-    lb_8001C550();
-    lb_8001D164(0);
+    lbCardNew_AllocWorkArea();
+    lbCardGame_LoadArchive(0);
     r31 = HSD_MemAlloc(lbSnap_8001E210());
     r3 = HSD_MemAlloc(lbSnap_8001E204());
     lbSnap_8001E218(r3, r31);
@@ -1955,7 +1953,7 @@ bool un_8030178C(enum soundtest_callback_arg0 arg0)
         s32 result = lb_8001C8BC();
         OSReport(un_803FD230, result);
         if (result == 0) {
-            lb_8001CBAC(0);
+            lbCardGame_SetCardStatus(0);
         }
     }
     return 0;
@@ -1967,7 +1965,7 @@ bool un_80301800(enum soundtest_callback_arg0 arg0)
         return 0;
     }
     OSReport(un_804D5980);
-    lb_8001CE00();
+    lbCardGame_SaveChanges();
     return 0;
 }
 
@@ -1981,7 +1979,7 @@ bool un_80301840(enum soundtest_callback_arg0 arg0)
         s32 result = lb_8001CBBC();
         gmMainLib_8015FA34(result);
         if (result == 0 || result == 2) {
-            lb_8001CBAC(0);
+            lbCardGame_SetCardStatus(0);
         }
         OSReport(un_803FD230, result);
     }
@@ -1998,7 +1996,7 @@ bool un_803018BC(enum soundtest_callback_arg0 arg0)
         s32 result = lb_8001CC4C();
         OSReport(un_803FD230, result);
     }
-    lb_8001CBAC(4);
+    lbCardGame_SetCardStatus(4);
     return 0;
 }
 
@@ -2023,7 +2021,7 @@ bool un_80301964(enum soundtest_callback_arg0 arg0)
     if (lbSnap_8001E058(0, un_804D6E0C) == 0xB) {
         s32 result;
         do {
-            result = lb_8001B6F8();
+            result = lbCardNew_CompleteNextTask();
         } while (result == 0xB);
 
         if (result == 0 && lbSnap_8001DE8C(un_804D6E04) != 0) {
@@ -2031,7 +2029,7 @@ bool un_80301964(enum soundtest_callback_arg0 arg0)
             HSD_SObj* sobj;
 
             if (un_804D6E08 != NULL) {
-                HSD_GObjPLink_80390228(un_804D6E08);
+                HSD_GObjFree(un_804D6E08);
             }
 
             gobj = GObj_Create(0xE, 0xF, 0);
@@ -2060,7 +2058,7 @@ bool un_80301A64(enum soundtest_callback_arg0 arg0)
     result = lbSnap_8001D5FC(0, un_804D6E10);
     if (result == 0xB) {
         do {
-            result = lb_8001B6F8();
+            result = lbCardNew_CompleteNextTask();
         } while (result == 0xB);
 
         if (result == 0) {
@@ -2082,7 +2080,7 @@ bool un_80301AD4(enum soundtest_callback_arg0 arg0)
     result = lbSnap_8001D7B0(0, un_804D6E14, un_804D6E10);
     if (result == 0xB) {
         do {
-            result = lb_8001B6F8();
+            result = lbCardNew_CompleteNextTask();
         } while (result == 0xB);
 
         if (result == 0) {

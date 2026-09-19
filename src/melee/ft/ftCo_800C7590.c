@@ -1,22 +1,19 @@
 #include "ftCo_800C7590.h"
 
+#include "fighter.h"
 #include "ft_081B.h"
+#include "ftCo_800C7434.h"
 #include "ftCo_800C78B0.h"
 #include "ftcommon.h"
-
-#include "cm/camera.h"
-#include "ft/fighter.h"
-#include "ft/ftCo_800C7434.h"
-#include "ft/types.h"
-
-#include "ftCommon/forward.h"
-
-#include "ftCommon/ftCo_Damage.h"
-#include "ftCommon/ftCo_DamageFall.h"
-#include "ftCommon/ftCo_Lift.h"
-#include "ftCommon/ftCo_Throw.h"
-#include "it/items/itleadead.h"
-#include "pl/player.h"
+#include "inlines.h"
+#include "kinds/ftCommon/forward.h"
+#include "kinds/ftCommon/ftCo_Damage.h"
+#include "kinds/ftCommon/ftCo_DamageFall.h"
+#include "kinds/ftCommon/inlines.h"
+#include "types.h"
+#include <melee/cm/camera.h>
+#include <melee/it/kinds/itleadead.h>
+#include <melee/pl/player.h>
 
 /* The grab-timer handicap terms are fmadds on the console. */
 #if BUILD_TARGET_PC
@@ -43,15 +40,12 @@ void ftCo_800C7590(Fighter_GObj* gobj)
     f32 temp_f31;
     Fighter* fp = gobj->user_data;
 
-    ftCommon_8007DB58(gobj);
-    ftCo_8009750C(gobj);
-    ftCo_800DD168(gobj);
+    ftCo_ReleaseItemAndVictim(gobj);
     ftCo_8008DCE0(gobj, -1, 0.0f);
     ftCommon_8007D7FC(fp);
     Fighter_ChangeMotionState(gobj, ftCo_MS_CaptureLeadead, 0x1080, 0.0f, 1.0f,
                               0.0f, NULL);
-    fp->take_dmg_cb = fn_800C74CC;
-    fp->death2_cb = fn_800C7568;
+    Fighter_SetDamageCallbacks(fp, fn_800C74CC, fn_800C7568);
     fp->mv.co.captureleadead.x0 = (Item_GObj*) fp->dmg.x1868_source;
     ftCommon_8007E2FC(gobj);
     cd = p_ftCommonData;
@@ -67,7 +61,7 @@ void ftCo_800C7590(Fighter_GObj* gobj)
     fp->x2220_b3 = true;
     it_802EAAEC(fp->mv.co.captureleadead.x0, gobj, 0, 0.0f);
     ftCommon_8007EBAC(fp, 0xC, 0);
-    Camera_80030E44(2, &fp->cur_pos);
+    Camera_RequestQuake(QuakeKind_Small, &fp->cur_pos);
 }
 
 void ftCo_CaptureLeadead_Anim(Fighter_GObj* gobj)

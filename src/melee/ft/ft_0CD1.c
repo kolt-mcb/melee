@@ -1,18 +1,15 @@
 #include "ft_0CD1.h"
 
 #include "fighter.h"
+#include "forward.h"
+#include "ft_081B.h"
+#include "ft_084E.h"
+#include "ft_0892.h"
+#include "ftanim.h"
+#include "ftcommon.h"
 #include "ftswing.h"
-
-#include "ft/chara/ftCommon/ftCo_Fall.h"
-
-#include "ft/forward.h"
-
-#include "ft/ft_081B.h"
-#include "ft/ft_084E.h"
-#include "ft/ft_0892.h"
-#include "ft/ftanim.h"
-#include "ft/ftcommon.h"
-#include "ft/inlines.h"
+#include "inlines.h"
+#include "kinds/ftCommon/ftCo_Fall.h"
 
 void ftCo_800CD140(Fighter_GObj* gobj, int arg1, int arg2, int arg3,
                    float arg4)
@@ -37,7 +34,7 @@ void ftCo_800CD1BC(Fighter_GObj* gobj)
 void ftCo_800CD204(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if ((fp->input.held_inputs & HSD_PAD_A) == 0) {
+    if ((fp->input.held_buttons[0] & HSD_PAD_A) == 0) {
         fp->mv.co.swing.x0 = 0;
     }
     if (ftCheckThrowB3(fp) && fp->mv.co.swing.x0 != 0) {

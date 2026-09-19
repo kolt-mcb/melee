@@ -1,33 +1,22 @@
 #ifndef MELEE_GR_TYPES_H
 #define MELEE_GR_TYPES_H
+#include <Runtime/platform.h>
 
-/* Compat: old code used ->gv, upstream renamed to ->u */
-#define gv u
-
-#ifndef deg_to_rad
-#define deg_to_rad 0.0174532925199432957f
-#endif
-#ifndef ABS
-#define ABS(x) ((x) < 0 ? -(x) : (x))
-#endif
-
-#include <placeholder.h>
-#include <platform.h>
-
-#include "dolphin/gx/GXStruct.h"
-
-#include "mp/forward.h"
 #include <melee/cm/forward.h>
 #include <melee/gr/forward.h>
 #include <melee/it/forward.h>
 #include <melee/lb/forward.h>
+#include <melee/mp/forward.h>
 #include <melee/sc/forward.h>
 #include <sysdolphin/baselib/forward.h>
 
+#include <placeholder.h>
+
 #include <dolphin/gx.h>
+#include <dolphin/gx/GXStruct.h>
 #include <dolphin/mtx.h>
-#include <baselib/spline.h>
 #include <melee/lb/types.h>
+#include <sysdolphin/baselib/spline.h>
 
 typedef struct StageBlastZone {
     f32 left;   // 0x74
@@ -560,7 +549,8 @@ struct grVenom_GroundVars {
         uintptr_t xC4;
 #else
         u32 xC4; ///< @todo Not a #u32, either
-                 /// #grSmashTaunt_GroundVars or #HSD_GObj
+
+        /// #grSmashTaunt_GroundVars or #HSD_GObj
 #endif
         struct {
             u8 b0 : 1;
@@ -822,7 +812,8 @@ struct grIceMt_GObj10_GroundVars {
 typedef struct grInishie1_Block {
     s16 status;
     s16 x2;
-    s32 x4; ///< probably a counter
+    s16 x4;
+    s16 x6;
     f32 x8; ///< probably a y transform
     f32 xC; ///< probably a delta for x8
     /// grInishie1_801FB3F0 raises and lowers a struck block with this as the
@@ -839,7 +830,7 @@ typedef struct grInishie1_Block {
 /// @todo probably mistakes in this and Vars2
 /// @todo this is #Map_GroundVars
 typedef struct grInishie1_GroundVars {
-    char pad_C4[2];
+    u16 xC4;
     s16 xC6;
     s16 xC8;
     s16 xCA;
@@ -1322,7 +1313,7 @@ struct grGreens_BlockVars {
     Item_GObj* x10;
     HSD_JObj* x14;
     int x18;
-    int x1C;
+    HSD_GObj* x1C;
 };
 ASSERT_SIZE(struct grGreens_BlockVars, 0x20);
 
@@ -2055,16 +2046,7 @@ struct Ground {
     HSD_GObj* x18; // 0x18
     HSD_GObjEvent x1C_callback;
     int x20[8];
-    Vec3 self_vel;
-    Vec3 cur_pos;
-    int x58;
-    int x5C;
-    int x60;
-    int x64;
-    int x68;
-    GXColor x6C;
-    int x70;
-    char pad_74[0xC0 - 0x74];
+    ColorOverlay color_overlay; // 0x40
     f32 xC0;
 
     /**
@@ -2135,7 +2117,14 @@ struct Ground {
         struct grInishie2_GroundVars inishie2;
         struct grInishie2_GroundVars2 inishie22;
         struct grInishie2_GroundVars3 inishie23;
+
+        /**
+         * Japanese for "barrel," from #grKongo_801D828C and
+         * #grOldKongo_802105C8 asserts.
+         * @alias{oldkongo}
+         */
         struct grOldKongo_GroundVars taru;
+
         struct grOldPupupu_GroundVars oldpupupu;
         struct grOldPupupu_GroundVars2 oldpupupu2;
         struct grOldYoshi_Cloud_GroundVars oldyoshicloud;

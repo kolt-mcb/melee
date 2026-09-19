@@ -138,6 +138,9 @@ typedef bool (*Predicate)(void);  /* predicate callback */
 #ifndef S32_MAX
 #define S32_MAX 0x7FFFFFFF
 #endif
+#ifndef U64_MAX
+#define U64_MAX 0xFFFFFFFFFFFFFFFF
+#endif
 
 /* Common macros (from Runtime/platform.h) */
 #ifndef RETURN_IF
@@ -161,6 +164,19 @@ typedef unsigned int usize_t;
 #define SQ(x) ((x) * (x))
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+/* Add b to a, saturating at max (from Runtime/platform.h). */
+#ifndef SAT_ADD
+#define SAT_ADD(a, b, max) (((a) + (b) > (max)) ? (max) : (a) + (b))
+#endif
+/* Like ASSERT_SIZE: a console offset cannot hold where a pointer is eight
+ * bytes, so this is empty here, exactly as Runtime/platform.h leaves it
+ * outside a MUST_MATCH build. */
+#ifndef ASSERT_OFFSET
+#define ASSERT_OFFSET(expr, member, offset)
+#endif
+#ifndef ATTRIBUTE_NONSTRING
+#define ATTRIBUTE_NONSTRING __attribute__((nonstring))
+#endif
 
 /* Section/attribute macros (no-op on PC) */
 #define SDATA

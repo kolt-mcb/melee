@@ -1,29 +1,26 @@
 #include "groldpupupu.h"
 
-#include "placeholder.h"
+#include <sysdolphin/baselib/forward.h>
 
-#include "baselib/forward.h"
-
-#include "cm/camera.h"
+#include <placeholder.h>
 
 #include "forward.h"
-
-#include "ft/ftdevice.h"
-#include "ft/ftlib.h"
-#include "gr/granime.h"
-#include "gr/grmaterial.h"
-#include "gr/ground.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lbaudio_ax.h"
-
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
+#include "granime.h"
+#include "grmaterial.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include <melee/cm/camera.h>
+#include <melee/ft/ftdevice.h>
+#include <melee/ft/ftlib.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/random.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -64,9 +61,11 @@ typedef struct grOldPupupuSpawnDesc {
     s16 x2;
 } grOldPupupuSpawnDesc;
 
+static void stageGObj0_OnInit(Ground_GObj* gobj);
+
 StageCallbacks grOp_StageCallbacks[] = {
     {
-        grOldPupupu_8021099C,
+        stageGObj0_OnInit,
         grOldPupupu_802109C8,
         grOldPupupu_802109D0,
         grOldPupupu_802109D4,
@@ -217,10 +216,9 @@ static grOldPupupuSpawnDesc grOp_803E67B0[10] = {
 static int grOp_803E67D8[3] = { 0, 1, 2 };
 static Vec3 grOp_803E67E4[2] = { { -1.0F, 0.0F, 0.0F }, { 1.0F, 0.0F, 0.0F } };
 
-void grOldPupupu_8021099C(Ground_GObj* gobj)
+static void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool grOldPupupu_802109C8(Ground_GObj* gobj)
@@ -295,7 +293,7 @@ void grOldPupupu_80210B58(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
 
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
     gp->x11_flags.b012 = 1;
 }
 
@@ -720,7 +718,7 @@ void grOldPupupu_802113E0(Ground_GObj* gobj)
                 }
                 if (gp->u.oldpupupu.xD0 > 0x2D && gp->u.oldpupupu.xD0 < 0x140)
                 {
-                    Camera_80030E44(1, NULL);
+                    Camera_RequestQuake(QuakeKind_Loop, NULL);
                     gp->u.oldpupupu.xDC = gp->u.oldpupupu.xD8 + 1;
                     if ((gp->u.oldpupupu.xD0 % 10) == 0) {
                         gp = gobj->user_data;
@@ -775,7 +773,7 @@ void grOldPupupu_80211C9C(Ground_GObj* arg) {}
 
 DynamicsDesc* grOldPupupu_80211CA0(enum_t gobj)
 {
-    return false;
+    return NULL;
 }
 
 bool grOldPupupu_80211CA8(Vec3* a, int arg, HSD_JObj* joint)

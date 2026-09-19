@@ -1,9 +1,9 @@
 #ifndef MELEE_IF_IFALL_H
 #define MELEE_IF_IFALL_H
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include <baselib/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
 

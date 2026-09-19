@@ -1,35 +1,34 @@
 #include "ifmagnify.h"
 
-#include "baselib/gobjuserdata.h"
-#include "cm/camera.h"
-#include "ft/ftdrawcommon.h"
-#include "ft/ftlib.h"
-#include "gm/gm_1601.h"
-#include "gm/gm_16AE.h"
-#include "gm/types.h"
-#include "gr/ground.h"
-#include "gr/stage.h"
-#include "if/if_2FD9.h"
-#include "if/ifall.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbarchive.h"
-#include "lb/lbspdisplay.h"
-#include "pl/player.h"
-#include "sc/types.h"
-
 #include <math.h>
-#include <baselib/cobj.h>
-#include <baselib/displayfunc.h>
-#include <baselib/dobj.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/jobj.h>
-#include <baselib/memory.h>
-#include <baselib/mobj.h>
-#include <baselib/tobj.h>
-#include <baselib/wobj.h>
+
+#include "if_2FD9.h"
+#include "ifall.h"
+#include <melee/cm/camera.h>
+#include <melee/ft/ftdrawcommon.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gm/gm_1601.h>
+#include <melee/gm/gmvs.h>
+#include <melee/gr/ground.h>
+#include <melee/gr/stage.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/displayfunc.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/mobj.h>
+#include <sysdolphin/baselib/tobj.h>
+#include <sysdolphin/baselib/wobj.h>
 
 #if BUILD_TARGET_PC
 #include <stdio.h>
@@ -83,8 +82,8 @@ static u8 ifMagnify_803F984C[16][4] = {
 
 static inline bool ifMagnify_IsHUDVisible(void)
 {
-    if ((gm_16AE_GetUnkData_0()->hud_enabled == 0) || ifAll_IsHUDHidden() ||
-        Camera_80030130())
+    if ((gmVs_GetSceneController()->state.hud_enabled == 0) ||
+        ifAll_IsHUDHidden() || Camera_80030130())
     {
         return false;
     }
@@ -227,8 +226,7 @@ void ifMagnify_802FB8C0(HSD_GObj* gobj, int code)
             translate.x = 0.09125f * edge_pos.x;
             translate.y = 0.1f * edge_pos.y;
             translate.z = 0.0f;
-            HSD_JObjSetTranslate((HSD_JObj*) player->gobj->hsd_obj,
-                                 &translate);
+            HSD_JObjSetTranslate(player->gobj->hsd_obj, &translate);
 
             HSD_GObj_JObjCallback(gobj, code);
             if ((player->state.edge == 4) || (player->state.edge == 2)) {
@@ -482,7 +480,7 @@ void ifMagnify_802FC3C0(s32 slot)
     }
 #endif
     if (player->gobj != NULL) {
-        HSD_GObjPLink_80390228(player->gobj);
+        HSD_GObjFree(player->gobj);
     }
 
     gobj = GObj_Create(HSD_GOBJ_CLASS_UI, 15, 0);
@@ -583,14 +581,14 @@ void ifMagnify_802FC750(void)
      * offsetof(ifMagnify, player) and 0x10 the stride of ifMagnifyPlayer on
      * GameCube, where gobj and jobj are four bytes each. Both move here, so
      * this walked past the array reading whatever lay at those offsets and
-     * handed it to HSD_GObjPLink_80390228 as a live object.
+     * handed it to HSD_GObjFree as a live object.
      *
      * It is the HUD teardown at the end of a match, so it fired the moment a
      * match was won: GObj_RemoveUserData dereferenced 0xcc68cb8da0907 and the
      * game died on the results screen. It is player[i].gobj. */
     for (i = 0; i < 6; i++) {
         if (base->player[i].gobj != NULL) {
-            HSD_GObjPLink_80390228(base->player[i].gobj);
+            HSD_GObjFree(base->player[i].gobj);
             base->player[i].gobj = NULL;
         }
     }
@@ -598,9 +596,9 @@ void ifMagnify_802FC750(void)
     /// @todo Member accesses in the body fold into the condition's address.
     for (i = 0; i < 6; i++) {
         if (base->player[i].gobj != NULL) {
-            HSD_GObjPLink_80390228(
-                *(HSD_GObj**) ((u32) base + i * (s32) sizeof(ifMagnifyPlayer) +
-                               (s32) offsetof(ifMagnify, player)));
+            HSD_GObjFree(*(HSD_GObj**) ((u32) base +
+                                        i * (s32) sizeof(ifMagnifyPlayer) +
+                                        (s32) offsetof(ifMagnify, player)));
             *(HSD_GObj**) ((u32) base + i * (s32) sizeof(ifMagnifyPlayer) +
                            (s32) offsetof(ifMagnify, player)) = NULL;
         }
@@ -669,11 +667,9 @@ void ifMagnify_802FC870(void)
         ifMagnify_804A1DE0.model_desc = &ifMagnify_pc_model;
     }
 #endif
-    i = 0;
-    do {
+    for (i = 0; i < 6; i++) {
         ifMagnify_802FC3C0(i);
-        i++;
-    } while (i < 6);
+    }
     ifMagnify_802FC618();
 }
 

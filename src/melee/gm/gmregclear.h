@@ -1,14 +1,17 @@
 #ifndef MELEE_gmregclear_H
 #define MELEE_gmregclear_H
 
-#include <placeholder.h>
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "ft/forward.h"
+#include <melee/ft/forward.h>
 #include <melee/gm/forward.h>
 #include <melee/gr/forward.h>
 #include <melee/mn/forward.h>
 #include <sysdolphin/baselib/forward.h>
+
+#include <placeholder.h>
+
+#include <melee/gm/types.h>
 
 /* 17C0C8 */ void fn_8017C0C8(void);
 /* 17C1A4 */ void fn_8017C1A4(HSD_GObj*);
@@ -18,12 +21,12 @@
 /* 17C838 */ void gm_8017C838(void);
 /* 17C984 */ void gm_8017C984(UNK_T);
 /* 17C9A8 */ void gm_8017C9A8(DebugGameOverData*, Unk1PData*, u8);
-/* 17CA38 */ UNK_RET gm_8017CA38(DebugGameOverData*, Unk1PData*,
-                                 struct gmm_x0_528_t*, u8);
-/* 17CBAC */ UNK_RET gm_8017CBAC(UnkAdventureData*, struct gmm_x0_528_t*, u8);
+/* 17CA38 */ void gm_8017CA38(DebugGameOverData*, Unk1PData*,
+                              struct gmm_x0_528_t*, u8);
+/* 17CBAC */ void gm_8017CBAC(UnkAdventureData*, struct gmm_x0_528_t*, u8);
 /* 17CD94 */ u8 gm_8017CD94(UnkAdventureData*, int, int, int);
-/* 17CE34 */ void gm_8017CE34(StartMeleeData*, UnkAdventureData*, s8*, u8, u8,
-                              u8, s32, StKind, s32 count, s32);
+/* 17CE34 */ void gm_8017CE34(StartMeleeData*, Unk1PData*, s8*, u8, u8, u8,
+                              s32, StKind, s32 count, s32);
 /* 17D7AC */ bool gm_8017D7AC(MatchExitInfo*, Unk1PData*, u8);
 /* 17D9C0 */ s32 fn_8017D9C0(const u8* used_ckinds, const u8* preset_ckinds);
 /* 17DB58 */ void gm_8017DB58(struct Unk1PData_x24* arg0);
@@ -66,6 +69,7 @@
 /* 17E76C */ u8 gm_8017E76C(u8 difficulty, u8 stage_slot, u8 arg2);
 /* 17E7A0 */ void gm_8017E7A0(u8);
 /* 17E7E0 */ bool gm_8017E7E0(void);
+/* 17F294 */ int fn_8017F294(void);
 /* 17E7FC */ void gm_8017E7FC(u8);
 /* 17E8A4 */ void fn_8017E8A4(intptr_t);
 /* 17EB30 */ UnkAllstarData* gm_GetAllStarData(void);
@@ -94,7 +98,7 @@
 /* 17FE54 */ void fn_8017FE54(HSD_GObj* gobj);
 /* 17FF1C */ void fn_8017FF1C(HSD_GObj* gobj);
 /* 1803FC */ s32 fn_801803FC(void* arg0);
-/* 180630 */ void fn_80180630(int, int, int, bool, lbl_8046B6A0_24C_t*);
+/* 180630 */ void fn_80180630(int, int, int, bool, MatchEnd*);
 /* 180AC0 */ int fn_80180AC0(void);
 /* 180AE4 */ s32 gm_80180AE4(void);
 /* 180AF4 */ Fighter_GObj* gm_80180AF4(void);
@@ -115,14 +119,14 @@
 /* 181BFC */ int fn_80181BFC(int*);
 /* 181C80 */ void fn_80181C80(s32 arg0);
 /* 181E18 */ void fn_80181E18(HSD_GObj* gobj);
-/* 182174 */ UNK_RET gm_80182174(UNK_PARAMS);
+/* 182174 */ void gm_80182174(void);
 /* 182510 */ bool gm_IsMultimanSmashMode(void);
 /* 182554 */ void gm_80182554(int, int);
 /* 182578 */ void gm_80182578(void);
-/* 182B5C */ UNK_RET fn_80182B5C(UNK_PARAMS);
+/* 182B5C */ void fn_80182B5C(void);
 /* 182DF0 */ UnkMultimanData* gm_80182DF0(int c_kind, int);
 /* 182F40 */ void fn_80182F40(HSD_GObj*);
-/* 183218 */ UNK_RET gm_80183218(UNK_PARAMS);
+/* 183218 */ void gm_80183218(void);
 /* 18325C */ void fn_8018325C(HSD_GObj*, int);
 /* 184138 */ void fn_80184138(HSD_GObj*, int);
 

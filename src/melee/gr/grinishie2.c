@@ -1,39 +1,40 @@
-#include "gr/grinishie2.h"
+#include "grinishie2.h"
 
-#include "placeholder.h"
+#include <Runtime/platform.h>
 
-#include <platform.h>
+#include <sysdolphin/baselib/forward.h>
 
-#include "baselib/forward.h"
+#include <placeholder.h>
 
-#include "cm/camera.h"
-#include "gm/gm_unsplit.h"
-#include "gr/granime.h"
-#include "gr/grdisplay.h"
-#include "gr/ground.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/stage.h"
-#include "gr/types.h"
-#include "it/items/itkyasarin.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lbaudio_ax.h"
-#include "mp/mplib.h"
-#include "sysdolphin/baselib/gobjgxlink.h"
-#include "sysdolphin/baselib/gobjproc.h"
-#include "sysdolphin/baselib/random.h"
-
-#include <baselib/jobj.h>
+#include "granime.h"
+#include "grdisplay.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "stage.h"
+#include "types.h"
+#include <melee/cm/camera.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/it/kinds/itkyasarin.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/random.h>
 
 GrJoint grI2_803E4A60[] = {
     { 0, 1, 1 },  { 12, 3, 1 },  { 13, 4, 1 },  { 14, 15, 0 }, { 3, 5, 0 },
     { 4, 6, 0 },  { 5, 7, 0 },   { 6, 8, 0 },   { 7, 9, 0 },   { 8, 10, 0 },
     { 9, 11, 0 }, { 10, 12, 0 }, { 11, 13, 0 }, { 2, 14, 0 },
 };
+static void stageGObj0_OnInit(Ground_GObj* gobj);
+
 StageCallbacks grI2_StageCallbacks[] = {
     {
-        grInishie2_801FCDC8,
+        stageGObj0_OnInit,
         grInishie2_801FCDF4,
         grInishie2_801FCDFC,
         grInishie2_801FCE00,
@@ -259,10 +260,9 @@ HSD_GObj* grInishie2_801FCCDC(int gobj_id)
     return gobj;
 }
 
-void grInishie2_801FCDC8(Ground_GObj* gobj)
+static void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool grInishie2_801FCDF4(Ground_GObj* gobj)
@@ -391,7 +391,7 @@ void grInishie2_801FD198(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
 
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
 
     gp->u.inishie2.xC4_flags.b0 = 0;
 
@@ -423,7 +423,7 @@ void grInishie2_801FD224(Ground_GObj* gobj)
         }
     }
 
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
 
     gp = GET_GROUND(gobj);
     if (grAnime_801C83D0(gobj, 0, 1)) { ///< @todo union irregularity
@@ -531,7 +531,7 @@ void grInishie2_801FD4F0(Ground_GObj* gobj)
     vec.z = yakumono_param->unk14[spawn_side].z;
     HSD_JObjSetTranslate(temp_r29, &vec);
     gp->u.inishie22.xC4 = it_802ECD3C(gobj, &vec, sign_inline(spawn_side));
-    Ground_801C2ED0(temp_r30, gp->map_id);
+    Ground_InitMapColl(temp_r30, gp->map_id);
 }
 
 bool grInishie2_801FD64C(Ground_GObj* gobj)
@@ -553,7 +553,7 @@ void grInishie2_801FD654(Ground_GObj* gobj)
         vec.y += yakumono_param->unk2C;
         HSD_JObjSetTranslate(jobj, &vec);
     }
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
 }
 
 void grInishie2_801FD740(Ground_GObj* gobj) {}
@@ -724,7 +724,7 @@ void grInishie2_801FDE8C(Ground_GObj* gobj)
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
     grInishie2_801FD824(gobj);
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
 }
 
 bool grInishie2_801FDED0(Ground_GObj* gobj)
@@ -763,7 +763,7 @@ static inline void grInishie2_801FDED8_inline(HSD_GObj* gobj)
 
 void grInishie2_801FDED8(Ground_GObj* gobj)
 {
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
     grInishie2_801FD9EC(gobj);
 
     grInishie2_801FDED8_inline(gobj);
@@ -781,7 +781,7 @@ void grInishie2_801FDFE4(Ground_GObj* gobj) {}
 
 DynamicsDesc* grInishie2_801FDFE8(enum_t arg)
 {
-    return 0;
+    return NULL;
 }
 
 bool grInishie2_801FDFF0(Vec3* arg, int arg0, HSD_JObj* jobj)

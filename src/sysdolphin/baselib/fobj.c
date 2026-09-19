@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include "fobj.h"
 
+#include <string.h>
+
 #include "debug.h"
 #include "spline.h"
-
-#include <string.h>
 
 HSD_ObjAllocData fobj_alloc_data;
 
@@ -351,8 +351,8 @@ void FObjUpdateAnim(HSD_FObj* fobj, void* obj, HSD_ObjUpdateFunc obj_update)
             fobjat = e != NULL ? atoi(e) : -1;
         }
         if (fobjat >= 0) {
-            extern u32 gm_8016AEDC(void);
-            if ((int) gm_8016AEDC() == fobjat) {
+            extern u32 gm_GetFrameCount(void);
+            if ((int) gm_GetFrameCount() == fobjat) {
                 fprintf(stderr,
                         "[FOBJ] obj=%p fobj=%p type=%u intrp=%u time=%08x "
                         "fterm=%u p0=%08x p1=%08x d0=%08x d1=%08x "
@@ -471,7 +471,7 @@ void HSD_FObjInterpretAnim(HSD_FObj* fobj, void* obj,
             }
             case 4: {
                 if (fobj->fterm <= fobj->time) {
-                    u8 _[8] = { 0 };
+                    u8 _[8];
                     state =
 #ifdef MUST_MATCH
                         state =

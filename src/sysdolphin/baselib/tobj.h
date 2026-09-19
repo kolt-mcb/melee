@@ -1,17 +1,15 @@
 #ifndef _hsd_tobj_h_
 #define _hsd_tobj_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/class.h"
-
-#include "baselib/forward.h" // IWYU pragma: export
-
-#include "baselib/object.h"
+#include <sysdolphin/baselib/forward.h> // IWYU pragma: export
 
 #include <dolphin/gx.h>
 #include <dolphin/gx/GXEnum.h>
 #include <dolphin/mtx.h>
+#include <sysdolphin/baselib/class.h>
+#include <sysdolphin/baselib/object.h>
 
 struct HSD_TObj;
 

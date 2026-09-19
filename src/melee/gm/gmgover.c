@@ -1,13 +1,11 @@
+#include <melee/ft/forward.h>
+
+#include "gm_1601.h"
+#include "gm_16F1.h"
 #include "gm_unsplit.h"
 #include "gmevent.h"
-
-#include "ft/forward.h"
-
-#include "melee/gm/gm_1601.h"
-#include "melee/gm/gm_16F1.h"
-#include "melee/gm/gm_unsplit.h"
-#include "melee/gm/types.h"
-#include "melee/lb/lbmthp.h"
+#include "types.h"
+#include <melee/lb/lbmthp.h>
 
 /* 1BEE9C */ static void gm_801BEE9C(GameModeState*);
 /* 1BEF84 */ static void gm_801BEF84(GameModeState*);
@@ -103,19 +101,19 @@ void gm_801BEE9C(GameModeState* arg0)
 
     game_mode = arg0->info.exit_data;
     ckind = gm_80173224(gm_801BF030(), 1);
-    if (gm_801BEFB0() == CKIND_GAMEWATCH && !gm_80164430(0x1B)) {
+    if (gm_801BEFB0() == CKind_GameWatch && !gm_80164430(0x1B)) {
         gm_80164504(0x1B);
     }
     gm_8017390C(gm_801BF030(), 1);
     gm_80173EEC();
     gm_80172898(0x40);
-    if (ckind == CHKIND_NONE) {
+    if (ckind == ChKind_None) {
         if (!gm_80173754(1, gm_801BEFD0())) {
             gm_SetPendingGameMode(*game_mode);
         }
     } else {
-        gm_801736E8(gm_801BEFB0(), gm_801BEFD0(), gm_801BF010(), gm_801BEFF0(),
-                    ckind, *game_mode);
+        gm_InitChallengerData(gm_801BEFB0(), gm_801BEFD0(), gm_801BF010(),
+                              gm_801BEFF0(), ckind, *game_mode);
         gm_SetPendingGameMode(GM_CHALLENGER_APPROACH);
     }
     gm_SetNewGameModePending();
@@ -143,45 +141,45 @@ void gm_801BEFC0(int arg0)
 
 int gm_801BEFD0(void)
 {
-    return M2C_FIELD(&gm_8049C178, u8*, 1);
+    return gm_8049C178[1];
 }
 
 void gm_801BEFE0(s8 arg0)
 {
-    M2C_FIELD(&gm_8049C178, s8*, 0xA) = arg0;
+    gm_8049C178[0xA] = arg0;
 }
 
 int gm_801BEFF0(void)
 {
-    return M2C_FIELD(&gm_8049C178, u8*, 0xA);
+    return gm_8049C178[0xA];
 }
 
 void gm_801BF000(s8 arg0)
 {
-    M2C_FIELD(&gm_8049C178, s8*, 9) = arg0;
+    gm_8049C178[9] = arg0;
 }
 
 int gm_801BF010(void)
 {
-    return M2C_FIELD(&gm_8049C178, u8*, 9);
+    return gm_8049C178[9];
 }
 
 void gm_801BF020(s8 arg0)
 {
-    M2C_FIELD(&gm_8049C178, s8*, 8) = arg0;
+    gm_8049C178[8] = arg0;
 }
 
 int gm_801BF030(void)
 {
-    return M2C_FIELD(&gm_8049C178, u8*, 8);
+    return gm_8049C178[8];
 }
 
 void gm_801BF040(s8 arg0)
 {
-    M2C_FIELD(&gm_8049C178, s8*, 2) = arg0;
+    gm_8049C178[2] = arg0;
 }
 
 int gm_801BF050(void)
 {
-    return M2C_FIELD(&gm_8049C178, u8*, 2);
+    return gm_8049C178[2];
 }

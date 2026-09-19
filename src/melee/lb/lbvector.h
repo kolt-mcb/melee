@@ -1,9 +1,10 @@
 #ifndef GALE01_00D2EC
 #define GALE01_00D2EC
 
-#include <baselib/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <math.h>
+
 #include <dolphin/mtx.h>
 
 /* MWCC turned every `a * b + c` in lbvector.c into a single fmadds -- one

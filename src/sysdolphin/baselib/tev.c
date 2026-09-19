@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include "tev.h"
 
-#include "debug.h"
-
 #include <string.h>
+
+#include "debug.h"
 #include <dolphin/gx.h>
 
 static struct {
@@ -220,7 +220,7 @@ void HSD_StateSetNumTevStages(void)
 
 void HSD_SetupTevStage(HSD_TevDesc* desc)
 {
-    u8 _[8] = { 0 };
+    u8 _[8];
     GXSetTevOrder(desc->stage, desc->coord, desc->map, desc->color);
     if (desc->flags == 0) {
         GXSetTevOp(desc->stage, (GXTevMode) desc->u.tevconf.clr_op);

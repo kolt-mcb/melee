@@ -1,6 +1,8 @@
 #ifndef MELEE_CM_FORWARD_H
 #define MELEE_CM_FORWARD_H
 
+#define HSD_GOBJ_CLASS_CAMERA 19
+
 typedef enum CameraType {
     CAMERA_STANDARD = 0,      ///< mode used during normal gameplay
     CAMERA_PAUSE = 1,         ///< mode used during pause menu
@@ -53,5 +55,14 @@ typedef enum CmSubjectState {
                                    ///< bounds, inactive otherwise. (eg. Items,
                                    ///< Arwing, etc)
 } CmSubjectState;
+
+typedef enum CmQuakeKind {
+    /* 0x0 */ QuakeKind_None,
+    /* 0x1 */ QuakeKind_Loop,
+    /* 0x2 */ QuakeKind_Small,
+    /* 0x3 */ QuakeKind_Medium,
+    /* 0x4 */ QuakeKind_Large,
+    /* 0x5 */ QuakeKind_Count
+} CmQuakeKind;
 
 #endif

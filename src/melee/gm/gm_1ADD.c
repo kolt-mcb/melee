@@ -1,7 +1,10 @@
 #include "gm_1ADD.h"
 
 #include "gm_unsplit.h"
-
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/sc/types.h>
 #include <sysdolphin/baselib/cobj.h>
 #include <sysdolphin/baselib/controller.h>
 #include <sysdolphin/baselib/dobj.h>
@@ -13,25 +16,23 @@
 #include <sysdolphin/baselib/jobj.h>
 #include <sysdolphin/baselib/memory.h>
 #include <sysdolphin/baselib/sislib.h>
-#include <melee/lb/lb_00B0.h>
-#include <melee/lb/lbarchive.h>
-#include <melee/lb/lblanguage.h>
-#include <melee/sc/types.h>
+
+struct unkd4d0_8 {
+    struct unkd4d0_8* next;
+    struct unkd4d0_8* unk4;
+    int unk8;
+    int unkC;
+    float unk10;
+    float unk14;
+    u8 pad18[0x8];
+    HSD_GObj* unk20;
+    HSD_Text* unk24;
+};
 
 static struct unkd4d0 {
     struct unkd4d0* next;
     struct unkd4d0* unk4;
-    struct unkd4d0_8 {
-        struct unkd4d0_8* next;
-        struct unkd4d0_8* unk4;
-        int unk8;
-        int unkC;
-        float unk10;
-        float unk14;
-        u8 pad18[0x8];
-        HSD_GObj* unk20;
-        HSD_Text* unk24;
-    }* unk8;
+    struct unkd4d0_8* unk8;
     int unkC;
     int unk10;
     float unk14;
@@ -274,7 +275,7 @@ void gm_801AE848(int arg0)
                 temp_r29 = var_r30;
                 var_r30 = var_r30->next;
                 if (temp_r29->unk20 != NULL) {
-                    HSD_GObjPLink_80390228(temp_r29->unk20);
+                    HSD_GObjFree(temp_r29->unk20);
                 }
                 if (temp_r29->unk24 != NULL) {
                     HSD_SisLib_803A5CC4(temp_r29->unk24);
@@ -290,7 +291,7 @@ void gm_801AE848(int arg0)
             temp_r30 = var_r31;
             var_r31 = var_r31->next;
             if (temp_r30->unk1C != NULL) {
-                HSD_GObjPLink_80390228(temp_r30->unk1C);
+                HSD_GObjFree(temp_r30->unk1C);
             }
             if (temp_r30->unk20 != NULL) {
                 HSD_SisLib_803A5CC4(temp_r30->unk20);

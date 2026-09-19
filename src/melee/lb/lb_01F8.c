@@ -1,7 +1,7 @@
+#include <string.h>
+
 #include "lbfile.h"
 #include "lbmthp.h"
-
-#include <string.h>
 #include <dolphin/thp/thp.h>
 #include <sysdolphin/baselib/memory.h>
 #include <sysdolphin/baselib/sobjlib.h>
@@ -83,7 +83,7 @@ void lbMthp8001FAA0(const char* filename, int width, int height)
     s32 uv_size;
     void* context;
     void* decode_buf;
-    s32 decoded;
+    THPFileInfo* decoded;
 
     lbl_804335B8.x6C = (u16) width;
     lbl_804335B8.x6E = (u16) height;

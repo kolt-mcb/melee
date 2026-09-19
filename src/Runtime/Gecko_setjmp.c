@@ -1,8 +1,8 @@
 #include "Gecko_setjmp.h"
 
-#include <platform.h>
+#include "platform.h"
 
-ASM int __setjmp(register __jmp_buf* env){
+ASM int __setjmp(register jmp_buf* env){
 #ifdef MWERKS_GEKKO // clang-format off
     nofralloc
     mflr	r5
@@ -37,7 +37,7 @@ ASM int __setjmp(register __jmp_buf* env){
 #endif // clang-format on
 }
 
-ASM void longjmp(register __jmp_buf* env, register int val)
+ASM void __longjmp(register jmp_buf* env, register int val)
 {
 #ifdef MWERKS_GEKKO // clang-format off
     nofralloc

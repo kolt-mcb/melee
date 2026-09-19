@@ -1,39 +1,32 @@
+#include <melee/ft/forward.h>
+#include <melee/pl/forward.h>
+
+#include "gm_1601.h"
+#include "gm_16F1.h"
 #include "gm_unsplit.h"
 #include "gmevent.h"
-
 #if BUILD_TARGET_PC
 #include <dolphin/os.h>
 #include <stdio.h>
 #include <stdlib.h>
 #endif
 
-#include "ft/forward.h"
-
-#include "gm/gmtitlemode.h"
-#include "gm/types.h"
-#include "melee/db/db.h"
-#include "melee/gm/gm_1601.h"
-#include "melee/gm/gm_16F1.h"
-#include "melee/gm/gm_unsplit.h"
-#include "melee/gm/gmmain_lib.h"
-#include "melee/gm/types.h"
-#include "melee/lb/lbaudio_ax.h"
-#include "melee/lb/lbdvd.h"
-#include "melee/lb/lbmthp.h"
-#include "melee/lb/types.h"
-#include "melee/mn/types.h"
-
-#include "melee/pl/forward.h"
-
-#include "melee/vi/vi0102.h"
-#include "melee/vi/vi0401.h"
-#include "melee/vi/vi0501.h"
-#include "melee/vi/vi0502.h"
-#include "melee/vi/vi1101.h"
-#include "melee/vi/vi1201v1.h"
-#include "melee/vi/vi1201v2.h"
-#include "vi/vi0102.h"
-
+#include "gmmain_lib.h"
+#include "gmtitlemode.h"
+#include "types.h"
+#include <melee/db/db.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbdvd.h>
+#include <melee/lb/lbmthp.h>
+#include <melee/lb/types.h>
+#include <melee/mn/types.h>
+#include <melee/vi/vi0102.h>
+#include <melee/vi/vi0401.h>
+#include <melee/vi/vi0501.h>
+#include <melee/vi/vi0502.h>
+#include <melee/vi/vi1101.h>
+#include <melee/vi/vi1201v1.h>
+#include <melee/vi/vi1201v2.h>
 #include <sysdolphin/baselib/random.h>
 
 struct gm_random_history {
@@ -374,15 +367,13 @@ void gm_SetupTitleDemo(void)
     u8 cur_id;
 
     count = 0;
-    c = 0;
-    do {
+    for (c = 0; c < CKind_Playable_Count; c++) {
         if (gm_IsCKindUnlocked(c) != 0) {
             character_pool[count] = c;
             count += 1;
         }
-        c += 1;
-    } while (c < CKIND_PLAYABLE_COUNT);
-    character_pool[count] = CKIND_PLAYABLE_COUNT;
+    }
+    character_pool[count] = CKind_Playable_Count;
     for (i = 0; i < count; i++) {
         for (j = i + 1; j < count; j++) {
             if (gm_GetCharacterUsageDirect(character_pool[i]) >
@@ -409,8 +400,8 @@ void gm_SetupTitleDemo(void)
             dup = 0;
             for (pick = 0; pick < c; pick++) {
                 if (j == gm_801BF648(pick) ||
-                    (j == CKIND_ZELDA && gm_801BF648(pick) == CKIND_SEAK) ||
-                    (j == CKIND_SEAK && gm_801BF648(pick) == CKIND_ZELDA))
+                    (j == CKind_Zelda && gm_801BF648(pick) == CKind_Seak) ||
+                    (j == CKind_Seak && gm_801BF648(pick) == CKind_Zelda))
                 {
                     dup = 1;
                 }
@@ -514,7 +505,7 @@ void gm_PreloadTitleDemo(void)
     temp_ret = 4;
     for (j = 0; j < 4; j++) {
         c_kind = gm_801BF648(j);
-        if (c_kind != CHKIND_NONE) {
+        if (c_kind != ChKind_None) {
             temp_ret |= lbAudioAx_80026E84(c_kind);
         }
     }
@@ -541,7 +532,7 @@ void onEnterVs(GameModeState* arg0)
     VsModeData* temp_r30;
     int i;
 
-    temp_r30 = &gmMainLib_804D3EE0->unk_1710;
+    temp_r30 = &gmMainLib_804D3EE0->modes.table[GmVsMode_Opening];
     md = gm_GetGameModeStateEnterData(arg0);
 #if BUILD_TARGET_PC
     if (getenv("MELEE_MODELOG") != NULL) {
@@ -560,17 +551,17 @@ void onEnterVs(GameModeState* arg0)
     gm_SetupRulesDefaults(&md->rules);
 
     md->rules.match_kind = gm_801BF6B8();
-    md->rules.x0_6 = false;
+    md->rules.timer_enabled = false;
     md->rules.time_limit = 0;
     md->rules.x1_0 = false;
     md->rules.x1_2 = true;
     md->rules.x1_3 = true;
     md->rules.disable_pausing = true;
     md->rules.x7 = 0;
-    md->rules.x44 = gm_80183218;
-    md->rules.x34 = gm_804DAC88;
+    md->rules.on_match_start = gm_80183218;
+    md->rules.game_speed = gm_804DAC88;
     md->rules.stkind = (u16) gm_801BF694();
-    gm_80167A14(md->players);
+    gm_SetupAllPlayerDefaults(md->players);
 
     for (i = 0; i < 4; i++) {
         CharacterKind kind = gm_801BF648(i);
@@ -578,7 +569,7 @@ void onEnterVs(GameModeState* arg0)
         md->players[i].color = gm_801BF670(i);
         md->players[i].slot_type = Gm_PKind_Cpu;
         md->players[i].cpu_level = 9;
-        md->players[i].xE = 4;
+        md->players[i].cpu_kind = 4;
         md->players[i].xC_b1 = false;
         if (md->rules.match_kind == 1) {
             md->players[i].stocks = 99;
@@ -622,6 +613,7 @@ void gm_801BF684(s32 arg0)
     gm_8049E548.unk_C = arg0;
 }
 
+/// @returns ::GrKind
 u8 gm_801BF694(void)
 {
     return gm_8049E548.unk_C;

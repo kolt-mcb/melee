@@ -1,23 +1,21 @@
 #include "crowdsfx.h"
 
-#include "ft/ftlib.h"
-#include "lb/lbaudio_ax.h"
+#include <melee/mp/forward.h>
 
-#include "mp/forward.h"
+#include <melee/ft/ftlib.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/mp/mplib.h>
+#include <melee/pl/player.h>
+#include <melee/pl/plbonuslib.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
 
-#include "mp/mplib.h"
-#include "pl/player.h"
-#include "pl/plbonuslib.h"
-
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
-
-/* 4A2F08 */ CrowdSFX_UnkStruct un_804A2F08;
-/* 4D7050 */ CrowdSFX_UnkStruct* un_804D7050;
+/* 4A2F08 */ CrowdSFX_UnkStruct crowdsfx;
+/* 4D7050 */ CrowdSFX_UnkStruct* crowdsfx_ptr;
 
 void fn_803219AC(HSD_GObj* gobj)
 {
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     if (data->x4 < 0x10000) {
         data->x4 = data->x4 + 1;
     }
@@ -28,7 +26,7 @@ void fn_803219AC(HSD_GObj* gobj)
 void un_80321A00(HSD_GObj* gobj)
 {
     s32 zero;
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     CrowdConfig* vdata = gCrowdConfig;
 
     if (data->x18 >= vdata->max_gasp_count) {
@@ -68,14 +66,14 @@ void un_80321AF4(HSD_GObj* gobj)
 {
     mpCollisionBox* box = mpLib_80458868;
     HSD_GObj* cur;
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     s32 old_x24 = data->x24;
     s32 flag = 0;
     Vec3 pos;
-    char pad[12];
+    PAD_STACK(12);
 
     data->x24 = 0;
-    cur = HSD_GObj_Entities->fighters;
+    cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER];
 
     while (cur != NULL) {
         if (ftLib_8008732C(cur) == 0) {
@@ -107,13 +105,13 @@ void un_80321AF4(HSD_GObj* gobj)
 
 void un_80321BF8(int arg0)
 {
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     data->x2C = lbAudioAx_800240B4(arg0);
 }
 
 void un_80321C28(void)
 {
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     if (lbAudioAx_80023710(data->x2C) != 0) {
         lbAudioAx_800236B8(data->x2C);
     }
@@ -124,7 +122,7 @@ static void un_80321C70_inline(void)
 {
     CrowdSFX_UnkStruct* data;
 
-    data = un_804D7050;
+    data = crowdsfx_ptr;
 
     if (data->x18 >= gCrowdConfig->max_gasp_count ||
         data->x18 < gCrowdConfig->x24)
@@ -142,7 +140,7 @@ void un_80321C70(void)
 {
     CrowdSFX_UnkStruct* data;
 
-    data = un_804D7050;
+    data = crowdsfx_ptr;
 
     if (data->x18 >= gCrowdConfig->max_gasp_count ||
         data->x18 < gCrowdConfig->x24)
@@ -154,7 +152,7 @@ void un_80321C70(void)
 
 void un_80321CA4(s32 arg)
 {
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     un_80321CE8();
     data->x28 = lbAudioAx_8002411C(arg);
 }
@@ -164,7 +162,7 @@ void un_80321CA4(s32 arg)
 
 void un_80321CE8(void)
 {
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     if (lbAudioAx_80023710(data->x28) != 0) {
         lbAudioAx_800236B8(data->x28);
     }
@@ -173,7 +171,7 @@ void un_80321CE8(void)
 
 static void un_80321CE8_caller(u32 arg0)
 {
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     if (lbAudioAx_80023710(data->x28) != 0) {
         lbAudioAx_800236B8(data->x28);
     }
@@ -186,7 +184,7 @@ void un_80321D30(u32 arg0, f32 arg1)
     s32 cat;
     CrowdSFX_UnkStruct* data;
 
-    data = un_804D7050;
+    data = crowdsfx_ptr;
     cat = un_80322298(arg1);
     if (cat >= 2) {
         if (un_80321EBC(arg0, arg1) != 0) {
@@ -224,7 +222,7 @@ bool un_80321EBC(u32 arg0, f32 arg1)
     HSD_GObj* gobj;
     u32 arg0_copy = arg0;
 
-    data = un_804D7050;
+    data = crowdsfx_ptr;
     gobj = ftLib_8008741C(arg0_copy);
     if (gobj == NULL) {
         goto skip;
@@ -252,7 +250,7 @@ bool un_80321EBC(u32 arg0, f32 arg1)
     }
 
     {
-        CrowdSFX_UnkStruct* data2 = un_804D7050;
+        CrowdSFX_UnkStruct* data2 = crowdsfx_ptr;
         s32 sfx;
         if (lbAudioAx_80023710(data2->x2C) != 0) {
             lbAudioAx_800236B8(data2->x2C);
@@ -263,7 +261,7 @@ bool un_80321EBC(u32 arg0, f32 arg1)
         } else {
             sfx = 0x141;
         }
-        data2 = un_804D7050;
+        data2 = crowdsfx_ptr;
         data2->x2C = lbAudioAx_800240B4(sfx);
     }
 
@@ -278,9 +276,9 @@ bool un_80321EBC(u32 arg0, f32 arg1)
 
 bool un_8032201C(u32 arg0, s32 cat)
 {
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     HSD_GObj* gobj;
-    char pad[16];
+    PAD_STACK(16);
 
     switch (cat) {
     case 3:
@@ -322,13 +320,13 @@ bool un_8032201C(u32 arg0, s32 cat)
 void un_80322178(int arg)
 {
     CrowdSFX_UnkStruct* data;
-    char pad[8];
+    PAD_STACK(8);
 
     switch (arg) {
     case 0:
         break;
     case 3:
-        data = un_804D7050;
+        data = crowdsfx_ptr;
         if (lbAudioAx_80023710(data->x28) != 0) {
             lbAudioAx_800236B8(data->x28);
         }
@@ -336,7 +334,7 @@ void un_80322178(int arg)
         data->x28 = lbAudioAx_8002411C(0x13d);
         break;
     case 2:
-        data = un_804D7050;
+        data = crowdsfx_ptr;
         if (lbAudioAx_80023710(data->x28) != 0) {
             lbAudioAx_800236B8(data->x28);
         }
@@ -344,7 +342,7 @@ void un_80322178(int arg)
         data->x28 = lbAudioAx_8002411C(0x13e);
         break;
     case 1:
-        data = un_804D7050;
+        data = crowdsfx_ptr;
         if (lbAudioAx_80023710(data->x28) != 0) {
             lbAudioAx_800236B8(data->x28);
         }
@@ -358,15 +356,11 @@ bool un_80322258(float arg)
 {
     f32 val2c = gCrowdConfig->horiz_margin;
 
-    if (arg < val2c + mpLib_80458868[1].left) {
-        goto ret_true;
+    if (arg < val2c + mpLib_80458868[1].left ||
+        arg > mpLib_80458868[1].right - val2c)
+    {
+        return 1;
     }
-    if (!(arg > mpLib_80458868[1].right - val2c)) {
-        goto ret_false;
-    }
-ret_true:
-    return 1;
-ret_false:
     return 0;
 }
 
@@ -399,7 +393,7 @@ f32 un_803222EC(f32 arg1, f32 arg2)
 
 void un_80322314(void)
 {
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     CrowdConfig* vdata = gCrowdConfig;
     if (data->x18 >= vdata->max_gasp_count) {
         return;
@@ -411,7 +405,7 @@ void un_80322314(void)
 void un_8032233C(u32 arg0, u32 arg1)
 {
     s32 cat;
-    CrowdSFX_UnkStruct* data = un_804D7050;
+    CrowdSFX_UnkStruct* data = crowdsfx_ptr;
     HSD_GObj* gobj;
     f32 kb_mag;
     PAD_STACK(8);
@@ -433,36 +427,27 @@ void un_8032233C(u32 arg0, u32 arg1)
         return;
     }
 
-    if (gobj != NULL) {
-        if (ftLib_80087454(gobj) >= 3.0f) {
-            un_80321D30(arg0, kb_mag);
-            goto end;
+    if (gobj != NULL && ftLib_80087454(gobj) >= 3.0f) {
+        un_80321D30(arg0, kb_mag);
+    } else if (data->x0 == arg0 && (f32) data->x4 < gCrowdConfig->x18) {
+        un_80321D30(arg0, kb_mag > data->x8 ? kb_mag : data->x8);
+    } else {
+        switch (cat) {
+        case 3:
+            un_80321CA4(0x144);
+            break;
+        case 2:
+            un_80321CA4(0x145);
+            break;
+        case 1:
+            un_80321CA4(0x146);
+            break;
+        }
+
+        if (cat == 3 || (cat == 2 && data->xC == arg1)) {
+            un_80321C70();
         }
     }
-
-    if (data->x0 == arg0) {
-        if ((f32) data->x4 < gCrowdConfig->x18) {
-            un_80321D30(arg0, kb_mag > data->x8 ? kb_mag : data->x8);
-            goto end;
-        }
-    }
-
-    switch (cat) {
-    case 3:
-        un_80321CA4(0x144);
-        break;
-    case 2:
-        un_80321CA4(0x145);
-        break;
-    case 1:
-        un_80321CA4(0x146);
-        break;
-    }
-
-    if (cat == 3 || (cat == 2 && data->xC == arg1)) {
-        un_80321C70();
-    }
-end:
     data->x4 = 0;
     data->x0 = arg0;
     data->x8 = kb_mag;
@@ -492,20 +477,12 @@ bool un_803224DC(s32 spawn_id, f32 pos_x, f32 kb_mag)
 
         cat = tmp_cat;
 
-        if (pos_x < val2c + val18) {
-            goto oob;
+        if (pos_x < val2c + val18 || pos_x > mpLib_80458868[1].right - val2c) {
+            out_of_bounds = 1;
+        } else {
+            out_of_bounds = 0;
         }
-        val1c = mpLib_80458868[1].right;
-        if (!(pos_x > val1c - val2c)) {
-            goto inb;
-        }
-    oob:
-        out_of_bounds = 1;
-        goto check;
-    inb:
-        out_of_bounds = 0;
     }
-check:
     if (out_of_bounds != 0) {
         un_8032201C(spawn_id, cat);
     } else {
@@ -518,14 +495,10 @@ int un_80322598(int arg0, float arg1)
     f32 val14 = mpLib_80458868[1].bottom;
     s32 cat;
     CrowdConfig* vdata;
-    if (arg1 >= val14) {
-        goto ret_zero;
-    }
-    vdata = gCrowdConfig;
-    if (arg1 < vdata->recovery_y_low + val14) {
-    ret_zero:
+    if (arg1 >= val14 || arg1 < gCrowdConfig->recovery_y_low + val14) {
         return 0;
     }
+    vdata = gCrowdConfig;
     if (arg1 > vdata->recovery_y_high + val14) {
         cat = 3;
     } else if (arg1 > vdata->recovery_y_mid + val14) {

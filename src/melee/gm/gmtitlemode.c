@@ -5,13 +5,12 @@
 #include <stdlib.h>
 #endif
 
-#include "db/db.h"
-#include "gm/gm_1A3F.h"
-#include "gm/gm_unsplit.h"
-#include "gm/types.h"
-#include "lb/lbdvd.h"
-
-#include <baselib/controller.h>
+#include "gm_1A3F.h"
+#include "gm_unsplit.h"
+#include "types.h"
+#include <melee/db/db.h>
+#include <melee/lb/lbdvd.h>
+#include <sysdolphin/baselib/controller.h>
 
 struct exitData {
     int buttons;

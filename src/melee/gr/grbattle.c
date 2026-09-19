@@ -7,18 +7,16 @@
 #include "inlines.h"
 #include "stage.h"
 #include "types.h"
-
-#include "gm/gm_16AE.h"
-#include "lb/lb_00F9.h"
-
 #include <dolphin/gx/GXEnum.h>
 #include <dolphin/mtx.h>
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
+#include <melee/gm/gmvs.h>
+#include <melee/lb/lb_00F9.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/random.h>
 
 #if BUILD_TARGET_PC
 #include <port/pc_grconv.h>
@@ -30,19 +28,11 @@
  * @copydoc ::grBattle_YakumonoParam::bg_curr_color_overlay
  */
 struct grBattle_YakumonoParam {
-#if BUILD_TARGET_PC
-    /* Both are colour-overlay script pointers. On GameCube a pointer is four
-     * bytes and an int holds one; here it is eight, and grMaterialArg is
-     * intptr_t to match, so these widen too. Truncating to int would work
-     * only for as long as the archive happens to land below 2 GB, which is
-     * not a thing to rely on. grlast.c widens the same block for the same
-     * reason. */
-    intptr_t bg_curr_color_overlay;
-    intptr_t bg_prev_color_overlay;
-#else
-    int bg_curr_color_overlay;
-    int bg_prev_color_overlay;
-#endif
+    /* Both are colour-overlay script pointers; upstream now types them as
+     * such, which is also what the host needs -- an int would truncate an
+     * eight-byte pointer. grlast.c carries the same block. */
+    void* bg_curr_color_overlay;
+    void* bg_prev_color_overlay;
 };
 
 /* 219C98 */ static void grBattle_OnDemoInit(int);
@@ -174,9 +164,9 @@ void grBattle_OnInit(void)
         const u32* off = (const u32*) yakumono_param;
         if (off != NULL) {
             resolved.bg_curr_color_overlay =
-                (intptr_t) pc_grconv_stage_script(off[0]);
+                (void*) pc_grconv_stage_script(off[0]);
             resolved.bg_prev_color_overlay =
-                (intptr_t) pc_grconv_stage_script(off[1]);
+                (void*) pc_grconv_stage_script(off[1]);
             yakumono_param = &resolved;
         }
     }
@@ -275,7 +265,7 @@ void grBattle_GObj0_Callback3(Ground_GObj* arg0) {}
 
 void grBattle_GObj6_Callback0(Ground_GObj* gobj)
 {
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
 }
 
 bool grBattle_GObj6_Callback1(Ground_GObj* arg0)
@@ -285,7 +275,7 @@ bool grBattle_GObj6_Callback1(Ground_GObj* arg0)
 
 void grBattle_GObj6_Callback2(Ground_GObj* gobj)
 {
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
     lb_800115F4();
 }
 
@@ -294,7 +284,7 @@ void grBattle_GObj6_Callback3(Ground_GObj* arg0) {}
 void grBattle_GObj5_Callback0(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
     gp->x11_flags.b012 = 2;
 }
 

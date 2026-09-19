@@ -1,34 +1,38 @@
 #include "mnmain.h"
 
 #if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "port/pc_ptr.h"
 #endif
 
-#include "dolphin/pad.h"
-
-#include "gm/forward.h"
-
-#include "gm/gmevent.h"
-
-#include "mn/forward.h"
-
-#include "mn/types.h"
+#include <melee/gm/forward.h>
 
 #include <math.h>
-#include <baselib/gobjuserdata.h>
-#include <baselib/memory.h>
-#include <sysdolphin/baselib/controller.h>
-#include <sysdolphin/baselib/displayfunc.h>
-#include <sysdolphin/baselib/dobj.h>
-#include <sysdolphin/baselib/fog.h>
-#include <sysdolphin/baselib/gobjgxlink.h>
-#include <sysdolphin/baselib/gobjobject.h>
-#include <sysdolphin/baselib/gobjplink.h>
-#include <sysdolphin/baselib/gobjproc.h>
-#include <sysdolphin/baselib/jobj.h>
-#include <sysdolphin/baselib/lobj.h>
-#include <sysdolphin/baselib/mobj.h>
+
+#include "forward.h"
+#include "inlines.h"
+#include "mncount.h"
+#include "mndatadel.h"
+#include "mndeflicker.h"
+#include "mndiagram.h"
+#include "mnevent.h"
+#include "mngallery.h"
+#include "mnhyaku.h"
+#include "mninfo.h"
+#include "mninfobonus.h"
+#include "mnlanguage.h"
+#include "mnmainrule.h"
+#include "mnname.h"
+#include "mnsnap.h"
+#include "mnsound.h"
+#include "mnsoundtest.h"
+#include "mnvibration.h"
+#include "types.h"
+#include <dolphin/pad.h>
 #include <melee/gm/gm_unsplit.h>
+#include <melee/gm/gmevent.h>
 #include <melee/gm/gmmain_lib.h>
 #include <melee/gm/types.h>
 #include <melee/lb/lb_00B0.h>
@@ -39,24 +43,20 @@
 #include <melee/lb/lbcardnew.h>
 #include <melee/lb/lblanguage.h>
 #include <melee/lb/lbmthp.h>
-#include <melee/mn/inlines.h>
-#include <melee/mn/mncount.h>
-#include <melee/mn/mndatadel.h>
-#include <melee/mn/mndeflicker.h>
-#include <melee/mn/mndiagram.h>
-#include <melee/mn/mnevent.h>
-#include <melee/mn/mngallery.h>
-#include <melee/mn/mnhyaku.h>
-#include <melee/mn/mninfo.h>
-#include <melee/mn/mninfobonus.h>
-#include <melee/mn/mnlanguage.h>
-#include <melee/mn/mnmainrule.h>
-#include <melee/mn/mnname.h>
-#include <melee/mn/mnsnap.h>
-#include <melee/mn/mnsound.h>
-#include <melee/mn/mnsoundtest.h>
-#include <melee/mn/mnvibration.h>
 #include <melee/sc/types.h>
+#include <sysdolphin/baselib/controller.h>
+#include <sysdolphin/baselib/displayfunc.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/mobj.h>
 
 /* 22C068 */ static void mn_8022C068(HSD_LObj*, int, int);
 
@@ -716,7 +716,7 @@ void mn_80229894(s32 arg0, u16 arg1, s32 arg2)
     mn_804A04F0.cur_menu = arg0;
     mn_804A04F0.hovered_selection = arg1;
     HSD_GObj_80390CD4(mn_8022B3A0(arg2));
-    HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+    HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
     temp_r0 = mn_803EB6B0[arg0].think;
     if (temp_r0 != NULL) {
         temp_r3 = HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r0, 0);
@@ -1197,7 +1197,7 @@ void fn_8022AF10(HSD_GObj* gp)
         switch (data->state) {
         case MENU_STATE_EXIT_FROM:
         case MENU_STATE_ENTER_FROM:
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             return;
         }
     }
@@ -1221,13 +1221,13 @@ void fn_8022AFEC(HSD_GObj* gp)
     MainMenuSelection hovered_selection;
     u8 state;
     u8 option_count;
-    u8 pad[0x20];
 #if BUILD_TARGET_PC
-    /* Filled for every option of the menu; some menus have more than
-     * four. On the console the overrun lands in dead stack. */
+    /* Filled for every option of the menu; some menus have more options than
+     * this array has slots. On the console the overrun lands in dead stack,
+     * here it corrupts the frame, so keep a few spare. */
     HSD_JObj* sp20[16];
 #else
-    HSD_JObj* sp20[4];
+    HSD_JObj* sp20[12];
 #endif
     PAD_STACK(18);
 
@@ -1271,7 +1271,7 @@ void fn_8022AFEC(HSD_GObj* gp)
             var_r26 = 1;
             selection_changed = true;
         } else {
-            HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+            HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
             think = HSD_GObj_SetupProc(gp, fn_8022AF10, 0);
             think->flags_3 = HSD_GObj_804D783C;
         }
@@ -1302,7 +1302,7 @@ void fn_8022AFEC(HSD_GObj* gp)
                 break;
             case MENU_STATE_EXIT_FROM:
             case MENU_STATE_ENTER_FROM:
-                HSD_GObjPLink_80390228(gp);
+                HSD_GObjFree(gp);
                 return;
             }
         }
@@ -1688,23 +1688,17 @@ HSD_GObj* mn_8022BE34(void)
     return gobj;
 }
 
-static inline HSD_GObj* mn_8022BE34_OnEnter(void)
+static inline HSD_GObj* mn_8022BE34_OnEnter(Vec3* pos)
 {
-    Vec3 pos;
     HSD_GObj* gobj = GObj_Create(2, 3, 0x80);
     HSD_CObj* cobj;
 
     mn_804D6BAC = gobj;
     cobj = HSD_CObjLoadDesc(MenMain_cam);
-#if BUILD_TARGET_PC
-    /* The GCN original wrote the eye position into unused stack padding
-     * 0x14 bytes past `pos`; the result is discarded either way. That frame
-     * padding does not exist here, so the 12-byte write landed on the saved
-     * frame pointer and the menu's OnEnter returned into garbage. */
-    HSD_CObjGetEyePosition(cobj, &pos);
-#else
-    HSD_CObjGetEyePosition(cobj, (Vec3*) ((u8*) &pos + 0x14));
-#endif
+    /* `pos` is the caller's Vec3 now. The GCN original aimed this 12-byte
+     * write at unused stack padding, which does not exist here -- it landed
+     * on the saved frame pointer and OnEnter returned into garbage. */
+    HSD_CObjGetEyePosition(cobj, pos);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(gobj, fn_8022BDB4, 0);
     gobj->gxlink_prios = 0x7F;
@@ -2044,7 +2038,7 @@ void mn_8022C4F4(HSD_GObj* gp)
         mn_804A04F0.cur_menu = MENU_KIND_VS;
         mn_804A04F0.hovered_selection = SEL_VS_SPECIAL;
         HSD_GObj_80390CD4(mn_8022B3A0(3));
-        HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+        HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
         if ((temp_r28 = mn_803EB6B0[MENU_KIND_VS].think)) {
             gobj = GObj_Create(0, 1, 0x80);
             temp_r3_2 = HSD_GObj_SetupProc(gobj, temp_r28, 0);
@@ -2105,7 +2099,7 @@ void mn_8022C7CC(HSD_GObj* gp)
         case SEL_STADIUM_MULTIMAN:
             sfxForward();
             mnHyaku_8024CD64(0);
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             return;
         }
     } else if (buttons & MenuInput_Back) {
@@ -2116,7 +2110,7 @@ void mn_8022C7CC(HSD_GObj* gp)
         mn_804A04F0.cur_menu = MENU_KIND_1P;
         mn_804A04F0.hovered_selection = SEL_1P_STADIUM;
         HSD_GObj_80390CD4(mn_8022B3A0(3));
-        HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+        HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
         if ((temp_r28 = mn_803EB6B0[1].think)) {
             HSD_GObj* gobj = GObj_Create(0, 1, 0x80);
             think = HSD_GObj_SetupProc(gobj, temp_r28, 0);
@@ -2148,17 +2142,17 @@ void mn_8022CA54(HSD_GObj* gp)
         case SEL_RECORDS_VS:
             sfxForward();
             mnDiagram_Init(1, 1);
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             return;
         case SEL_RECORDS_BONUS:
             sfxForward();
             mnInfoBonus_80252F8C();
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             return;
         case SEL_RECORDS_MISC:
             sfxForward();
             mnCount_Create();
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             return;
         }
     } else if (buttons & MenuInput_Back) {
@@ -2169,7 +2163,7 @@ void mn_8022CA54(HSD_GObj* gp)
         mn_804A04F0.cur_menu = MENU_KIND_DATA;
         mn_804A04F0.hovered_selection = (DataMenuSelection) SEL_DATA_RECORDS;
         HSD_GObj_80390CD4(mn_8022B3A0(3));
-        HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+        HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
         if ((temp_r30 = mn_803EB6B0[MENU_KIND_DATA].think)) {
             think = HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r30, 0);
             think->flags_3 = HSD_GObj_804D783C;
@@ -2241,7 +2235,7 @@ void mn_8022CC28(HSD_GObj* gp)
         mn_804A04F0.cur_menu = MENU_KIND_1P;
         mn_804A04F0.hovered_selection = (OnePlayerMenuSelection) SEL_1P_REG;
         HSD_GObj_80390CD4(mn_8022B3A0(3));
-        HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+        HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
         if ((temp_r28 = mn_803EB6B0[MENU_KIND_1P].think)) {
             think = HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r28, 0);
             think->flags_3 = HSD_GObj_804D783C;
@@ -2293,18 +2287,18 @@ void mn_8022CE6C(HSD_GObj* gp)
         case SEL_DATA_SNAP:
             sfxForward();
             mnSnap_80257F24();
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         case SEL_DATA_ARCHIVES:
             sfxForward();
             mnGallery_80259868();
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         case SEL_DATA_SOUND:
             lbAudioAx_80023694();
             lbAudioAx_800236DC();
             mnSoundTest_8024BEE0(1);
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         case SEL_DATA_RECORDS:
             sfxForward();
@@ -2313,7 +2307,7 @@ void mn_8022CE6C(HSD_GObj* gp)
             mn_804A04F0.cur_menu = MENU_KIND_RECORDS;
             mn_804A04F0.hovered_selection = 0;
             HSD_GObj_80390CD4(mn_8022B3A0(1));
-            HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+            HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
             if ((temp_r29 = mn_803EB6B0[28].think)) {
                 think =
                     HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r29, 0);
@@ -2323,7 +2317,7 @@ void mn_8022CE6C(HSD_GObj* gp)
         case SEL_DATA_SPECIAL:
             sfxForward();
             mnInfo_80252758();
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         }
     } else if (buttons & MenuInput_Back) {
@@ -2334,7 +2328,7 @@ void mn_8022CE6C(HSD_GObj* gp)
         mn_804A04F0.cur_menu = MENU_KIND_MAIN;
         mn_804A04F0.hovered_selection = (MainMenuSelection) SEL_MAIN_DATA;
         HSD_GObj_80390CD4(mn_8022B3A0(3));
-        HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+        HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
         if ((temp_r29_2 = mn_803EB6B0[MENU_KIND_MAIN].think)) {
             think2 =
                 HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r29_2, 0);
@@ -2387,27 +2381,27 @@ void mn_8022D104(HSD_GObj* gp)
         case SEL_SETTINGS_RUMBLE:
             sfxForward();
             mnVibration_Init(1);
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         case SEL_SETTINGS_SOUND:
             sfxForward();
             mnSound_8024A09C(1);
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         case SEL_SETTINGS_DISPLAY:
             sfxForward();
             mnDeflicker_8024A6C4(1);
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         case SEL_SETTINGS_LANG:
             sfxForward();
             mnLanguage_8024C5C0((HSD_GObj*) 1);
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         case SEL_SETTINGS_ERASE:
             sfxForward();
             mnDataDel_80250170();
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         }
     } else if (buttons & MenuInput_Back) {
@@ -2418,7 +2412,7 @@ void mn_8022D104(HSD_GObj* gp)
         mn_804A04F0.cur_menu = MENU_KIND_MAIN;
         mn_804A04F0.hovered_selection = (MainMenuSelection) SEL_MAIN_SETTINGS;
         HSD_GObj_80390CD4(mn_8022B3A0(3));
-        HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+        HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
         if ((temp_r28 = mn_803EB6B0[MENU_KIND_MAIN].think)) {
             temp_r3_2 =
                 HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r28, 0);
@@ -2491,7 +2485,7 @@ void mn_8022D34C(HSD_GObj* gp)
         mn_804A04F0.cur_menu = MENU_KIND_MAIN;
         mn_804A04F0.hovered_selection = (MainMenuSelection) SEL_MAIN_TOY;
         HSD_GObj_80390CD4(mn_8022B3A0(3));
-        HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+        HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
         if ((temp_r28 = mn_803EB6B0[MENU_KIND_MAIN].think)) {
             think = HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r28, 0);
             think->flags_3 = HSD_GObj_804D783C;
@@ -2560,7 +2554,7 @@ void mn_8022D594(HSD_GObj* gp)
             mn_804A04F0.hovered_selection =
                 (SpecialVsMenuSelection) SEL_SPECIAL_VS_CAMERA;
             HSD_GObj_80390CD4(mn_8022B3A0(1));
-            HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+            HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
             if ((temp_r28 = mn_803EB6B0[MENU_KIND_SPECIAL].think)) {
                 think =
                     HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r28, 0);
@@ -2570,12 +2564,12 @@ void mn_8022D594(HSD_GObj* gp)
         case SEL_VS_RULES:
             sfxForward();
             mn_80231714();
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         case SEL_VS_NAME:
             sfxForward();
             mnName_8023AC40();
-            HSD_GObjPLink_80390228(gp);
+            HSD_GObjFree(gp);
             break;
         }
     } else if (buttons & MenuInput_Back) {
@@ -2586,7 +2580,7 @@ void mn_8022D594(HSD_GObj* gp)
         mn_804A04F0.cur_menu = MENU_KIND_MAIN;
         mn_804A04F0.hovered_selection = (MainMenuSelection) SEL_MAIN_VS;
         HSD_GObj_80390CD4(mn_8022B3A0(3));
-        HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+        HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
         if ((temp_r28_2 = mn_803EB6B0[MENU_KIND_MAIN].think)) {
             think2 =
                 HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r28_2, 0);
@@ -2637,7 +2631,7 @@ void mn_8022D7F4(HSD_GObj* gp)
             mn_804A04F0.hovered_selection =
                 (RegMatchMenuSelection) SEL_REG_CLASSIC;
             HSD_GObj_80390CD4(mn_8022B3A0(1));
-            HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+            HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
             if ((temp_r27 = mn_803EB6B0[MENU_KIND_REG].think)) {
                 temp_r3_2 =
                     HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r27, 0);
@@ -2652,7 +2646,7 @@ void mn_8022D7F4(HSD_GObj* gp)
             mn_804A04F0.hovered_selection =
                 (StadiumMenuSelection) SEL_STADIUM_TARGET;
             HSD_GObj_80390CD4(mn_8022B3A0(1));
-            HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+            HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
             if ((temp_r27 = mn_803EB6B0[MENU_KIND_STADIUM].think)) {
                 temp_r3_3 =
                     HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r27, 0);
@@ -2661,8 +2655,8 @@ void mn_8022D7F4(HSD_GObj* gp)
             break;
         case SEL_1P_EVENT:
             sfxForward();
-            mnEvent_8024E838(0, 1);
-            HSD_GObjPLink_80390228(gp);
+            mnEvent_8024E838(0, true);
+            HSD_GObjFree(gp);
             break;
         case SEL_1P_TRAINING:
             sfxForward();
@@ -2679,7 +2673,7 @@ void mn_8022D7F4(HSD_GObj* gp)
         mn_804A04F0.cur_menu = MENU_KIND_MAIN;
         mn_804A04F0.hovered_selection = (MainMenuSelection) SEL_MAIN_1P;
         HSD_GObj_80390CD4(mn_8022B3A0(3));
-        HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+        HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
         if ((temp_r27 = mn_803EB6B0[MENU_KIND_MAIN].think)) {
             temp_r3_4 =
                 HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80), temp_r27, 0);
@@ -2761,7 +2755,7 @@ void mn_8022DB10(HSD_GObj* gp)
         mf->cur_menu = menu_kind;
         *selection_ptr = hovered_selection;
         HSD_GObj_80390CD4(mn_8022B3A0(1));
-        HSD_GObjPLink_80390228(HSD_GObj_804D781C);
+        HSD_GObjFree(HSD_GObj_CurrentInvokedProcGObj);
         /// @todo casting u64 here makes it match, but i dont know why
         if ((temp_r28 = mn_803EB6B0[(u64) menu_kind].think)) {
             temp_r3_2 =
@@ -2792,7 +2786,7 @@ void mnMain_Scene_OnFrame(void)
         sfxBack();
         mn_8022F268();
         gm_801603B0();
-        lb_8001B760(0xB);
+        lbCardNew_CompleteAllTasks(LbCardResult_Busy);
         lbMthp_8001F800();
         mn_8022EBDC();
         HSD_SisLib_803A5E70();
@@ -2821,6 +2815,7 @@ static inline void mn_8022DDA8_inline(const u16* sp2B4)
 
 void mnMain_Scene_OnEnter(void* user_data)
 {
+    Vec3 pos;
     u16* hovered_selection;
     HSD_GObj* temp_r3_8;
     u8 menu_kind;
@@ -3002,13 +2997,13 @@ void mnMain_Scene_OnEnter(void* user_data)
 
     mn_8022DDA8_inline(hovered_selection);
     mn_8022BCF8();
-    mn_8022BEDC(mn_8022BE34_OnEnter());
+    mn_8022BEDC(mn_8022BE34_OnEnter(&pos));
     mn_80229B2C();
     mn_80229DC0();
 
     switch (data->menu_kind) {
     case MENU_KIND_EVENT:
-        mnEvent_8024E838(gm_801BEB80(), 0);
+        mnEvent_8024E838(gm_801BEB80(), false);
         break;
     case MENU_KIND_MULTI_VS:
         mnHyaku_8024CD64(data->hovered_selection);
@@ -3023,7 +3018,7 @@ void mnMain_Scene_OnEnter(void* user_data)
         break;
     }
     lbAudioAx_80023F28(gmMainLib_8015ECB0());
-    lb_8001CE00();
+    lbCardGame_SaveChanges();
 }
 
 char null_terminator[1] = "\0";
@@ -3036,9 +3031,9 @@ bool mn_IsFighterUnlocked(SelectableCharacterKind selkind)
 void mn_8022E978(u8 item_idx, u8 enable)
 {
     if (enable) {
-        gmMainLib_8015CC58()->item_mask |= 1 << item_idx;
+        gmMainLib_GetGamePrefs()->item_mask |= 1 << item_idx;
     } else {
-        gmMainLib_8015CC58()->item_mask &= ~(1 << item_idx);
+        gmMainLib_GetGamePrefs()->item_mask &= ~(1 << item_idx);
     }
 }
 

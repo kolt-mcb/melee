@@ -1,8 +1,26 @@
 #ifndef MELEE_MN_MNDIAGRAM2_H
 #define MELEE_MN_MNDIAGRAM2_H
 
-#include <baselib/gobj.h>
 #include <melee/mn/types.h>
+#include <sysdolphin/baselib/gobj.h>
+
+/* Union for 64-bit sorting operations */
+typedef union {
+    struct {
+        u8 idx; ///< SelectableCharacterKind or a nametag slot id
+        char pad1[7];
+        s32 x8;
+        s32 xC;
+    };
+    struct {
+        f64 d0;
+        f64 d8;
+    };
+    struct {
+        char pad2[8];
+        u64 value;
+    };
+} mnDiagram2_SortEntry;
 
 /* 243A3C */ bool mnDiagram2_IsTimeStat(u8 stat_type);
 /* 243A5C */ bool mnDiagram2_IsDistanceStat(u8 stat_type);
@@ -12,7 +30,7 @@
 /* 243BBC */ void mnDiagram2_UpdateHeader(HSD_GObj* gobj, u8 is_name_mode,
                                           u8 entity_idx);
 /* 243D40 */ void mnDiagram2_HandleInput(HSD_GObj* gobj);
-/* 244330 */ int mnDiagram2_GetStatValue(int is_name_mode, u8 stat_type,
+/* 244330 */ int mnDiagram2_GetStatValue(u8 is_name_mode, u8 stat_type,
                                          u8 entity_idx);
 /* 24469C */ void mnDiagram2_CreateStatRow(HSD_GObj* gobj, u8 is_name_mode,
                                            u8 stat_type, u8 row_idx,
@@ -28,8 +46,11 @@
 /* 2453B0 */ void mnDiagram2_Init(void);
 /* 24541C */ u8 mnDiagram2_GetRankedFighter(u8 stat_type, u8 rank);
 /* 245684 */ u8 mnDiagram2_GetRankedName(u8 stat_type, u8 rank);
-/* 24589C */ void mnDiagram2_GetAggregatedFighterRank(u8* out, u8 type,
-                                                      u8 idx);
+/* 24589C */ void
+mnDiagram2_GetAggregatedFighterRank(mnDiagram2_SortEntry* out, u8 type,
+                                    u8 idx);
 /* 245AE4 */ void mnDiagram2_ClearDetailView(HSD_GObj* gobj);
+
+/* 4D4FD0 */ extern u8 mnDiagram2_804D4FD0[3];
 
 #endif

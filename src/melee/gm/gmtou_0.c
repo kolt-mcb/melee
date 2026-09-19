@@ -5,42 +5,37 @@
 #include "port/pc_scene.h"
 #endif
 
-#include "gm_1601.h"
-#include "gm_1A3F.h"
-#include "gm_1A45.h"
-#include "gm_unsplit.h"
-#include "gmmain_lib.h"
-#include "gmtoulib.h"
-#include "types.h"
-
 #include <placeholder.h>
 
-#include "baselib/fog.h"
-#include "baselib/gobjgxlink.h"
-#include "baselib/gobjobject.h"
-
-#include "gm/forward.h"
-
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "mn/inlines.h"
-#include "mn/mnmain.h"
-#include "mn/mnmainrule.h"
-#include "mn/mnname.h"
-#include "mn/mnnamenew.h"
-#include "sc/types.h"
-
+#include "forward.h"
+#include "gm_1601.h"
+#include "gm_1A3F.h"
+#include "gm_unsplit.h"
+#include "gmmain_lib.h"
+#include "gmscene.h"
+#include "gmtoulib.h"
+#include "types.h"
 #include <dolphin/pad.h>
-#include <baselib/dobj.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/mobj.h>
-#include <baselib/random.h>
-#include <baselib/sislib.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/mn/inlines.h>
+#include <melee/mn/mnmain.h>
+#include <melee/mn/mnmainrule.h>
+#include <melee/mn/mnname.h>
+#include <melee/mn/mnnamenew.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/mobj.h>
+#include <sysdolphin/baselib/random.h>
+#include <sysdolphin/baselib/sislib.h>
 
-/* 4799B8 */ extern struct Lbl804799B8_t lbl_804799B8;
-
+/* 4799B8 */ static struct Lbl804799B8_t lbl_804799B8;
 /* 4D6640 */ static HSD_Archive* lbl_804D6640;
 /* 4D6644 */ static HSD_Archive* lbl_804D6644;
 /* 4D6648 */ static HSD_Archive* lbl_804D6648;
@@ -269,10 +264,6 @@ void fn_80190ABC(int mode)
     }
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void gm_80190EA4(void)
 {
     int i;
@@ -309,9 +300,6 @@ void gm_80190EA4(void)
         }
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 /// Initializes the time menu state when entering the time selection screen.
 void gm_80190FE4(int arg0)
@@ -358,33 +346,33 @@ void fn_801910E0(HSD_GObj* gobj)
 
 void fn_80191154(HSD_GObj* gobj)
 {
-    u8* base_ptr;
+    struct Lbl804799B8_t* state;
+    u8* counter;
     TmData* tm;
     HSD_JObj* jobj;
-    u8* xE_ptr;
-    u8 val;
+    u8* frame;
 
-    base_ptr = &lbl_804799B8.x0;
+    state = &lbl_804799B8;
     tm = gm_GetTournamentData();
     jobj = gobj->hsd_obj;
 
     if (tm->cur_option < 9) {
-        if ((*(xE_ptr = base_ptr + 0xE)) > 0x27U) {
-            *xE_ptr = 0xA;
+        if (*(frame = &state->xE) > 0x27U) {
+            *frame = 0xA;
         }
     } else {
-        if ((*(xE_ptr = base_ptr + 0xE)) == 0x31) {
+        if (*(frame = &state->xE) == 0x31) {
             fn_80190ABC(6);
             fn_80190ABC(5);
             tm->cur_option = 0xA;
         }
-        if (*xE_ptr > 0x4EU) {
-            *xE_ptr = 0x32;
+        if (*frame > 0x4EU) {
+            *frame = 0x32;
         }
     }
-    val = *(base_ptr += 0xE);
-    fn_8019044C(jobj, (f32) val);
-    *base_ptr = *base_ptr + 1;
+    counter = &state->xE;
+    fn_8019044C(jobj, *counter);
+    (*counter)++;
 }
 
 static inline u8 fn_80191240_dec_flash_timer(void)
@@ -651,15 +639,13 @@ void fn_8019175C(HSD_GObj* gobj)
         if (*counter >= 0x14U) {
             *counter = 0;
         }
-        i = 0;
-        do {
+        for (i = 0; i <= 2; i++) {
             if (i != tm->cur_option - 6) {
                 fn_8019044C(jobjs[i], 0.0F);
             } else {
                 fn_8019044C(jobjs[i], (f32) *counter);
             }
-            i += 1;
-        } while (i <= 2);
+        }
         *counter = *counter + 1;
         return;
     }
@@ -754,11 +740,11 @@ void fn_80191A54(HSD_GObj* gobj)
 /// Updates button highlight animation based on current menu option.
 void fn_80191B5C(void* gobj)
 {
-    u8* timers;
+    struct Lbl804799B8_t* timers;
     TmData* tm;
     HSD_JObj* jobj;
 
-    timers = (u8*) &lbl_804799B8;
+    timers = &lbl_804799B8;
     tm = gm_GetTournamentData();
     jobj = (HSD_JObj*) ((HSD_GObj*) gobj)->hsd_obj;
 
@@ -768,13 +754,13 @@ void fn_80191B5C(void* gobj)
         HSD_JObjClearFlagsAll(jobj, JOBJ_HIDDEN);
         switch (tm->cur_option) {
         case 10:
-            fn_8019044C(jobj, (f32) timers[0xA]);
+            fn_8019044C(jobj, (f32) timers->xA);
             break;
         case 11:
             fn_8019044C(jobj, 5.0F);
             break;
         case 12:
-            fn_8019044C(jobj, (f32) (s32) (timers[0xA] + 0x14));
+            fn_8019044C(jobj, (f32) (s32) (timers->xA + 0x14));
             break;
         case 13:
         case 14:
@@ -782,7 +768,7 @@ void fn_80191B5C(void* gobj)
             fn_8019044C(jobj, 25.0F);
             break;
         case 16:
-            fn_8019044C(jobj, (f32) (s32) (timers[0xA] + 0x28));
+            fn_8019044C(jobj, (f32) (s32) (timers->xA + 0x28));
             break;
         }
     }
@@ -1107,10 +1093,6 @@ void fn_8019249C(HSD_GObj* gobj)
     }
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void fn_80192690(HSD_GObj* gobj)
 {
     TmData* tmdata = gm_GetTournamentData();
@@ -1128,9 +1110,6 @@ void fn_80192690(HSD_GObj* gobj)
     fn_8018FDC4(jobj, 666.0f, 666.0f, 0.3f);
     fn_8019044C(jobj, tmdata->cur_option - 0x11);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 static inline HSD_JObj* fn_80192758_get_jobj(HSD_GObj* gobj,
                                              struct Lbl804799B8_t* data)
@@ -1244,8 +1223,8 @@ void fn_80192938(void)
         }
 
         tm->x37[i].x3 = fn_8018F410();
-        tm->x37[i].x7 = HSD_Randi(
-            (s32) gm_80169238(fn_8018F6FC((enum CSSIconHud) tm->x37[i].x3)));
+        tm->x37[i].x7 = HSD_Randi((s32) gm_GetNumCostumesForCKind(
+            fn_8018F6FC((enum CSSIconHud) tm->x37[i].x3)));
 
         if (i < (s32) tm->x2E) {
             ((u8*) &tm->x37[i])[-1] = 1;
@@ -1390,10 +1369,6 @@ void fn_80192E6C(void)
     fn_8019035C(1, lbl_804D6650->models[1], 0, 0x1A, 2, 1, fn_80192690, 0.0f);
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void fn_80193230(void)
 {
     HSD_GObj* gobj;
@@ -1409,9 +1384,6 @@ void fn_80193230(void)
     HSD_GObjObject_80390A70(gobj, HSD_GObj_FogKind, fog);
     GObj_SetupGXLink(gobj, HSD_GObj_FogCallback, 0, 0);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 /// @todo Fix ::GXColor casts
 void fn_80193308(void)
@@ -1471,8 +1443,6 @@ void fn_80193308(void)
 
     count = 0;
     idx = 1;
-    if ((!tm) && (!tm)) {
-    }
     color_word = (s32*) &color;
     do {
         created_text = HSD_SisLib_803A6754(0, (s32) lbl_804D663C);
@@ -1502,7 +1472,6 @@ void fn_80193308(void)
         (*ptr)->default_alignment = 1;
         if (count) {
             *((s32*) (text_color = &(*ptr)->text_color)) = *color_word;
-            ;
         }
         count += 1;
         idx = 4;
@@ -1510,10 +1479,6 @@ void fn_80193308(void)
     PAD_STACK(0x28);
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void fn_801935B8(void)
 {
     TmData* tm;
@@ -1559,9 +1524,6 @@ void fn_801935B8(void)
         lbl_803D9D20.x72[i] = gm_IsCKindUnlocked((u8) fn_8018F6FC(i));
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 /// Step the selected setting down, wrapping to its maximum.
 static inline void tmSettings_StepDown(s32* menu, TmSettingTable* table,
@@ -1849,10 +1811,7 @@ void fn_80193FCC(s32* arg0, u32 arg1, u32 arg2)
         } else {
             tmSettings_StepDown(arg0, table, state, mt);
         }
-        if (*mt != 0) {
-            goto post_clamp;
-        }
-        {
+        if (*mt == 0) {
             u8 x30 = ((TmData*) arg0)->x30;
             switch (x30) {
             case 2:
@@ -1887,14 +1846,14 @@ void fn_80193FCC(s32* arg0, u32 arg1, u32 arg2)
                     arg0[idx + 1] = arg0[idx + 1] + 1;
                     sfxMove();
                     state->x8 = 5;
-                    goto after_right;
-                }
-                arg0[idx + 1] = (s32) table->min[idx][!!*mt];
-                idx = arg0[0];
-                val = arg0[idx + 1];
-                if (val != clamp_val) {
-                    sfxMove();
-                    state->x8 = 5;
+                } else {
+                    arg0[idx + 1] = (s32) table->min[idx][!!*mt];
+                    idx = arg0[0];
+                    val = arg0[idx + 1];
+                    if (val != clamp_val) {
+                        sfxMove();
+                        state->x8 = 5;
+                    }
                 }
             } else {
                 arg0[idx + 1] = (s32) table->min[idx][!!*mt];
@@ -1915,21 +1874,17 @@ void fn_80193FCC(s32* arg0, u32 arg1, u32 arg2)
                 if (*mt != 0) {
                     if (val == arg0[2] - 1) {
                         *ptr = (s32) table->min[idx][!!*mt];
-                        goto after_right;
+                    } else {
+                        *ptr = val + 1;
                     }
+                } else {
                     *ptr = val + 1;
-                    goto after_right;
                 }
-                *ptr = val + 1;
             } else {
                 *ptr = (s32) table->min[idx][!!*mt];
             }
         }
-    after_right:
-        if (*mt != 0) {
-            goto post_clamp;
-        }
-        {
+        if (*mt == 0) {
             u8 x30 = ((TmData*) arg0)->x30;
             switch (x30) {
             case 2:
@@ -1956,7 +1911,6 @@ void fn_80193FCC(s32* arg0, u32 arg1, u32 arg2)
         }
     }
 
-post_clamp:
     if (*mt != 0) {
         if (arg0[3] > arg0[2] - 1) {
             arg0[3] = arg0[2] - 1;
@@ -2042,22 +1996,14 @@ void fn_80194658(s32* arg0, u32 arg1, u32 arg2)
     val = fn_80194658_get_value(ptr);
     ptr = arg0 + idx + 1;
 
-    if (0 == dir) {
-        if (lbl_804D665C < 2) {
-            if (arg1 & 0x40001) {
-                *ptr = (val != 0) ? 0 : 1;
-                goto end;
-            }
-            if (arg1 & 0x80002) {
-                changed = 1;
-                *ptr = (val != 0) ? 0 : 1;
-                goto end;
-            }
-            goto end;
+    if (0 == dir && lbl_804D665C < 2) {
+        if (arg1 & 0x40001) {
+            *ptr = (val != 0) ? 0 : 1;
+        } else if (arg1 & 0x80002) {
+            changed = 1;
+            *ptr = (val != 0) ? 0 : 1;
         }
-    }
-
-    if (arg1 & 0x40001) {
+    } else if (arg1 & 0x40001) {
         if (val > (s32) table->min[idx][!!dir]) {
             *ptr = *ptr - 1;
         } else if (dir == 0) {
@@ -2080,7 +2026,6 @@ void fn_80194658(s32* arg0, u32 arg1, u32 arg2)
             *ptr = 1;
         }
     }
-end:
     if (gm_804771C4.match_type == 0) {
         if (arg0[4] > (s32) lbl_803D9D20.x0[arg0[3]]) {
             arg0[arg0[0] + 1] = 0;
@@ -2626,7 +2571,7 @@ void fn_801953C8(s32* state_ptr, u32 buttons, u32 trigger)
         *state_ptr -= 1;
     } else if (trigger & PAD_BUTTON_X) {
         if ((s32) tm->x37[lbl_804799B8.x2 + lbl_804799B8.x3].x7 <
-            (s32) gm_80169238((u8) fn_8018F6FC(
+            (s32) gm_GetNumCostumesForCKind((u8) fn_8018F6FC(
                 tm->x37[lbl_804799B8.x2 + lbl_804799B8.x3].x3)) -
                 1)
         {

@@ -1,41 +1,38 @@
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "db/db.h"
-#include "gm/gm_unsplit.h"
-#include "gm/gmmain_lib.h"
-#include "gm/types.h"
-#include "lb/lb_0195.h"
-#include "lb/lbarq.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbcardgame.h"
-#include "lb/lbcardnew.h"
-#include "lb/lbdvd.h"
-#include "lb/lbheap.h"
-#include "lb/lblanguage.h"
-#include "lb/lbmemory.h"
-#include "lb/lbmthp.h"
-#include "lb/lbsnap.h"
-#include "lb/lbtime.h"
+#include <sysdolphin/baselib/forward.h>
 
-#include <baselib/forward.h>
-
+#include "gm_unsplit.h"
+#include "gmmain_lib.h"
+#include "types.h"
 #include <dolphin/card.h>
 #include <dolphin/dvd.h>
 #include <dolphin/gx.h>
 #include <dolphin/os.h>
 #include <dolphin/pad.h>
 #include <dolphin/vi.h>
-#include <baselib/controller.h>
-#include <baselib/debug.h>
-#include <baselib/hsd_392C.h>
-#include <baselib/hsd_3933.h>
-#include <baselib/initialize.h>
-#include <baselib/sislib.h>
-#include <baselib/video.h>
-
-extern PadLibData HSD_PadLibData;
-extern s32* seed_ptr;
+#include <melee/db/db.h>
+#include <melee/lb/lb_0195.h>
+#include <melee/lb/lbarq.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbcardgame.h>
+#include <melee/lb/lbcardnew.h>
+#include <melee/lb/lbdvd.h>
+#include <melee/lb/lbheap.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbmemory.h>
+#include <melee/lb/lbmthp.h>
+#include <melee/lb/lbsnap.h>
+#include <melee/lb/lbtime.h>
+#include <sysdolphin/baselib/controller.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/hsd_392C.h>
+#include <sysdolphin/baselib/hsd_3933.h>
+#include <sysdolphin/baselib/initialize.h>
+#include <sysdolphin/baselib/random.h>
+#include <sysdolphin/baselib/sislib.h>
+#include <sysdolphin/baselib/video.h>
 
 static u32 arena_size;
 static bool gmMain_804D6594;
@@ -156,7 +153,7 @@ int main(void)
     HSD_GXSetFifoObj(GXInit(HSD_AllocateFifo(0x40000), 0x40000));
     HSD_InitComponent();
     GXSetMisc(1, 8);
-    *seed_ptr = OSGetTick();
+    *HSD_RandSeedPtr = OSGetTick();
     lbAudioAx_8002838C();
     lb_80019AAC(&gmMain_8015FD24);
     HSD_VISetUserPostRetraceCallback(&gmMain_8015FDA0);
@@ -166,8 +163,8 @@ int main(void)
     lbHeap_80015F3C();
     lbDvd_80018F68();
     lbArq_80014D2C();
-    lb_8001C5BC();
-    lb_8001D21C();
+    lbCardNew_Init();
+    lbCardGame_Init();
     lbSnap_8001E290();
     gmMainLib_8015FCC0();
     lbMthp_8001F87C();

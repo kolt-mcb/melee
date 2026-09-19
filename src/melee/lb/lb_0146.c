@@ -1,5 +1,4 @@
-#include "lb/types.h"
-
+#include "types.h"
 #include <dolphin/gx/GXCull.h>
 #include <dolphin/gx/GXGeometry.h>
 #include <dolphin/gx/GXLighting.h>
@@ -7,13 +6,13 @@
 #include <dolphin/gx/GXTev.h>
 #include <dolphin/gx/GXTransform.h>
 #include <dolphin/gx/GXVert.h>
-#include <baselib/cobj.h>
-#include <baselib/displayfunc.h>
-#include <baselib/dobj.h>
-#include <baselib/gobjobject.h>
-#include <baselib/lobj.h>
-#include <baselib/psstructs.h>
-#include <baselib/tobj.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/displayfunc.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/psstructs.h>
+#include <sysdolphin/baselib/tobj.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC

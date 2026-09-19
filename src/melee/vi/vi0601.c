@@ -1,32 +1,29 @@
-#include "vi/vi0601.h"
+#include "vi0601.h"
 
-#include "cm/camera.h"
-#include "ef/efasync.h"
-#include "ef/eflib.h"
-#include "gm/gm_unsplit.h"
-#include "gr/grcorneria.h"
-#include "gr/ground.h"
-#include "gr/stage.h"
-#include "it/item.h"
-#include "lb/lb_00F9.h"
-#include "lb/lb_013B.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbspdisplay.h"
-#include "mp/mpcoll.h"
-#include "pl/player.h"
-#include "sc/types.h"
-#include "vi/vi.h"
-
-#include <baselib/aobj.h>
-#include <baselib/cobj.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/lobj.h>
-#include <baselib/wobj.h>
+#include "vi.h"
+#include <melee/cm/camera.h>
+#include <melee/ef/efasync.h>
+#include <melee/ef/eflib.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/gr/grcorneria.h>
+#include <melee/gr/inlines.h>
+#include <melee/gr/stage.h>
+#include <melee/it/item.h>
+#include <melee/lb/lb_013B.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/wobj.h>
 
 static SceneDesc* un_804D6FB0;
 static GXColor erase_colors_vi0601;
@@ -102,7 +99,8 @@ void un_8031E9B8(void)
             if ((gobj = grCorneria_801E1BF0())->hsd_obj == NULL) {
                 child = NULL;
             } else {
-                child = ((HSD_JObj*) gobj->hsd_obj)->child;
+                jobj = gobj->hsd_obj;
+                child = jobj->child;
             }
             HSD_GObj_SetupProc(gobj, fn_8031E800, 2);
             gm_8016895C(child, un_804D6FB0->models[i], 0);
@@ -152,8 +150,7 @@ void vi0601_Scene_OnEnter(UNUSED void* enter_data)
     lbArchive_LoadSymbols("Vi0601.dat", &un_804D6FB0, "visual0601Scene", NULL);
 
     gobj = GObj_Create(0x13, 0x14, 0);
-    cobj =
-        lb_80013B14((HSD_CameraDescPerspective*) un_804D6FB0->cameras->desc);
+    cobj = lb_80013B14(&un_804D6FB0->cameras->desc->perspective);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(gobj, vi0601_GObj_OnRender, 2);
     HSD_CObjAddAnim(cobj, un_804D6FB0->cameras->anims[0]);
@@ -161,17 +158,13 @@ void vi0601_Scene_OnEnter(UNUSED void* enter_data)
     HSD_CObjAnim(cobj);
     HSD_GObj_SetupProc(gobj, vi0601_RunFrame, 0);
 
-    Camera_80028B9C(6);
-    lb_8000FCDC();
-    mpColl_80041C78();
-    Ground_801C0378(0x40);
-    Stage_802251E8(St_Kind_Corneria, 0);
+    Stage_InitScene(St_Kind_Corneria, 0);
     Item_80266FA8();
     Item_80266FCC();
     Stage_8022524C();
     Stage_8022532C(St_Kind_Corneria, 0);
 
-    erase_colors_vi0601 = Camera_80030758();
+    erase_colors_vi0601 = Camera_GetBackgroundColor();
     un_8031E9B8();
 
     gobj2 = GObj_Create(0xB, 3, 0);

@@ -7,14 +7,12 @@
 #include "grzakogenerator.h"
 #include "inlines.h"
 #include "types.h"
-
-#include "it/it_26B1.h"
-#include "it/items/itheiho.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-
-#include <baselib/gobjproc.h>
-#include <baselib/random.h>
+#include <melee/it/it_26B1.h>
+#include <melee/it/kinds/itheiho.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/random.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -141,11 +139,6 @@ void grStory_801E322C(Ground_GObj* gobj) {}
 
 void grStory_801E3230(Ground_GObj* gobj) {}
 
-static inline int randi(int max)
-{
-    return max ? HSD_Randi(max) : 0;
-}
-
 static inline void reset_shyguy_timer(Ground* gp)
 {
     // Reset the timer
@@ -178,7 +171,8 @@ static inline void set_shyguy_spawn_count(Ground* gp, int rarity)
 void grStory_801E3234(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
-    Ground_801C2ED0(gobj->hsd_obj, gp->map_id);
+    PAD_STACK(8);
+    Ground_InitMapColl(gobj->hsd_obj, gp->map_id);
     grAnime_801C7FF8(gobj, 0, 7, 0, 0.0F, 1.0F);
     grAnime_801C7FF8(gobj, 5, 7, 1, 0.0F, 1.0F);
 
@@ -194,7 +188,7 @@ bool grStory_801E332C(Ground_GObj* gobj)
 void grStory_801E3334(Ground_GObj* gobj)
 {
     grStory_801E3418(gobj);
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
     lb_800115F4();
 }
 
@@ -209,7 +203,7 @@ void grStory_801E3370(Ground_GObj* gobj)
     HSD_JObj* jobj = gobj->hsd_obj;
     PAD_STACK(4);
 
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
     gp->u.randall.timer = 0;
     gp->u.randall.jobj = Ground_801C3FA4(gobj, 1);
@@ -223,7 +217,7 @@ bool grStory_801E33D8(Ground_GObj* gobj)
 void grStory_801E33E0(Ground_GObj* gobj)
 {
     // Update Randall's moving collision box
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
     // Check to spawn Randall puff effect
     grStory_801E366C(gobj);
 }
@@ -264,6 +258,7 @@ void grStory_801E3418(Ground_GObj* gobj)
     // Pick a random spawn pattern,
     // which must be different from the previous one
     do {
+        PAD_STACK(12);
         spawn_pattern = randi(ARRAY_SIZE(yakumono_param->vpos));
     } while (gp->u.shyguys.pattern == spawn_pattern);
     gp->u.shyguys.pattern = spawn_pattern;

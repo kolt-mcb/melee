@@ -46,7 +46,7 @@
 #include <melee/it/item.h>
 #include <melee/it/itspawn.h>
 #include <melee/it/types.h>
-#include <melee/gm/gm_16AE.h>
+#include <melee/gm/gmvs.h>
 #include <melee/gm/gm_1A3F.h>
 #include <melee/it/types.h>
 #include <melee/lb/lb_00B0.h>
@@ -60,9 +60,9 @@
 /* MELEE_BLENDAT's one-joint write watch; see pc_jobj_note below. */
 HSD_JObj* pc_watch_jobj;
 
-/* sysdolphin/baselib/random.c. Not in random.h, which exports only the
- * functions; the trace wants the state itself. */
-extern u32 seed;
+/* sysdolphin/baselib/random.c keeps the seed itself static and exports only
+ * the pointer the draws read through; the trace wants the state itself. */
+#include <baselib/random.h>
 
 /* Kept identical to MELEE_TRACE_HEADER in the local Dolphin's Core.cpp. */
 #define PC_TRACE_HEADER                                                       \
@@ -98,7 +98,7 @@ extern u32 seed;
  * the console's MELEE_AIDUMP in Core.cpp. */
 static int ai_dump_words;
 static int ai_dump_n;
-static u32 ai_hash(const struct Fighter_x1A88_t* a)
+static u32 ai_hash(const struct CpuFighter* a)
 {
     u32 h = 2166136261u;
     u32 i;
@@ -106,11 +106,11 @@ static u32 ai_hash(const struct Fighter_x1A88_t* a)
         if (ai_dump_words) fprintf(stderr, "[AIDUMP] #%d %08X\n", ai_dump_n++, w_); \
         h = (h ^ w_) * 16777619u; } while (0)
 #define AI_HF(f) do { union { f32 f_; u32 u_; } b_; b_.f_ = (f); AI_H(b_.u_); } while (0)
-    AI_H(a->x0);
-    AI_H(((u32) (u8) a->lstickX << 24) | ((u32) (u8) a->lstickY << 16) |
-         ((u32) (u8) a->cstickX << 8) | (u32) (u8) a->cstickY);
+    AI_H(a->buttons);
+    AI_H(((u32) (u8) a->lstick.x << 24) | ((u32) (u8) a->lstick.y << 16) |
+         ((u32) (u8) a->cstick.x << 8) | (u32) (u8) a->cstick.y);
     AI_H(((u32) a->ltrigger << 24) | ((u32) a->rtrigger << 16));
-    AI_H(a->xC); AI_H(a->level);
+    AI_H(a->kind); AI_H(a->level);
     AI_H(a->x14); AI_H(a->x18); AI_H(a->x1C); AI_H(a->x20); AI_H(a->x24);
     AI_H(a->x28); AI_H(a->x2C); AI_H(a->x30); AI_H(a->x34);
     AI_HF(a->x38); AI_HF(a->x3C); AI_HF(a->x40);
@@ -164,11 +164,11 @@ static u32 ai_hash(const struct Fighter_x1A88_t* a)
 
 void pc_trace_seed_fighter_create(void)
 {
-    extern u32 gm_8016AEDC(void);
+    extern u32 gm_GetFrameCount(void);
     extern u8 gm_GetCurrentSceneIndex(void);
     const char* want = getenv("MELEE_SEED");
     const char* cpu = getenv("MELEE_FORCE_CPU");
-    if (gm_8016AEDC() != 0 || ((int) gm_GetCurrentSceneIndex() != 2 &&
+    if (gm_GetFrameCount() != 0 || ((int) gm_GetCurrentSceneIndex() != 2 &&
                                (int) gm_GetCurrentSceneIndex() != 3))
     {
         return;
@@ -195,7 +195,7 @@ void pc_trace_seed_fighter_create(void)
         }
     }
     if (want != NULL && getenv("MELEE_SEED_EACH_LOAD") != NULL) {
-        seed = (u32) strtoul(want, NULL, 16);
+        *HSD_RandSeedPtr = (u32) strtoul(want, NULL, 16);
     }
 }
 
@@ -401,11 +401,11 @@ static void pc_trace_items(void)
 {
     HSD_GObj* gobj;
     int n = 0;
-    if (getenv("MELEE_ITEMS") == NULL || HSD_GObj_Entities == NULL) {
+    if (getenv("MELEE_ITEMS") == NULL || HSD_GObjPLinkHead == NULL) {
         return;
     }
-    fprintf(stderr, "[ITEMS-PORT] gframe=%u", (unsigned) gm_8016AEDC());
-    for (gobj = ((HSD_GObj**) HSD_GObj_Entities)[9]; gobj != NULL && n < 32;
+    fprintf(stderr, "[ITEMS-PORT] gframe=%u", (unsigned) gm_GetFrameCount());
+    for (gobj = ((HSD_GObj**) HSD_GObjPLinkHead)[9]; gobj != NULL && n < 32;
          gobj = gobj->next, n++)
     {
         Item* ip = (Item*) gobj->user_data;
@@ -421,7 +421,7 @@ static void pc_trace_items(void)
                     (int) ip->kind, ip->pos.x, ip->pos.y, ip->pos.z,
                     (int) ip->msid, ip->x40_vel.x, ip->x40_vel.y,
                     (unsigned) ip->xD50_landNum,
-                    (unsigned) ip->xDCF_flag.u8,
+                    (unsigned) ip->xDCF_flag.byte,
                     (unsigned) ip->x378_itemColl.env_flags,
                     (unsigned) ip->x378_itemColl.prev_env_flags,
                     ip->x378_itemColl.floor.index,
@@ -465,7 +465,7 @@ static void pc_trace_ptclist(void)
         return;
     }
     lists = pc_particle_lists();
-    fprintf(stderr, "[PTCLIST] gframe=%u", (unsigned) gm_8016AEDC());
+    fprintf(stderr, "[PTCLIST] gframe=%u", (unsigned) gm_GetFrameCount());
     for (q = 0; q < 16; q++) {
         HSD_Particle* pq = (HSD_Particle*) lists[q];
         int n = 0;
@@ -492,10 +492,10 @@ static void pc_trace_itjoint(void)
         const char* e = getenv("MELEE_ITJOINT");
         want = (e != NULL) ? atoi(e) : -1;
     }
-    if (want < 0 || HSD_GObj_Entities == NULL) {
+    if (want < 0 || HSD_GObjPLinkHead == NULL) {
         return;
     }
-    for (gobj = ((HSD_GObj**) HSD_GObj_Entities)[9]; gobj != NULL;
+    for (gobj = ((HSD_GObj**) HSD_GObjPLinkHead)[9]; gobj != NULL;
          gobj = gobj->next)
     {
         Item* ip = (Item*) gobj->user_data;
@@ -509,7 +509,7 @@ static void pc_trace_itjoint(void)
             fprintf(stderr,
                     "[ITJOINT] gframe=%u kind=%d %d tr=(%08x,%08x,%08x) "
                     "rot=(%08x,%08x,%08x) m=(%08x,%08x) fl=%08x aobj=%p\n",
-                    (unsigned) gm_8016AEDC(), (int) ip->kind, k,
+                    (unsigned) gm_GetFrameCount(), (int) ip->kind, k,
                     *(const u32*) &j->translate.x,
                     *(const u32*) &j->translate.y,
                     *(const u32*) &j->translate.z,
@@ -532,10 +532,10 @@ static void pc_trace_itang(void)
         const char* e = getenv("MELEE_ITANG");
         want = (e != NULL) ? atoi(e) : -1;
     }
-    if (want < 0 || HSD_GObj_Entities == NULL) {
+    if (want < 0 || HSD_GObjPLinkHead == NULL) {
         return;
     }
-    for (gobj = ((HSD_GObj**) HSD_GObj_Entities)[9]; gobj != NULL;
+    for (gobj = ((HSD_GObj**) HSD_GObjPLinkHead)[9]; gobj != NULL;
          gobj = gobj->next)
     {
         Item* ip = (Item*) gobj->user_data;
@@ -550,7 +550,7 @@ static void pc_trace_itang(void)
                    ? (unsigned) ip->xC4_article_data->x10_modelDesc->xC_bit_field
                    : 0xFFFFFFFFu;
         fprintf(stderr, "[ITANG-PORT] gframe=%u kind=%d ang=%08x bits=%08x x17=%d",
-                (unsigned) gm_8016AEDC(), (int) ip->kind,
+                (unsigned) gm_GetFrameCount(), (int) ip->kind,
                 *(const unsigned*) &ip->x378_itemColl.ecb_source.angle, bits,
                 (int) ip->xDC8_word.flags.x17);
         j = (HSD_JObj*) gobj->hsd_obj;
@@ -589,19 +589,19 @@ static void pc_trace_ailog(void)
         n += snprintf(line + n, sizeof(line) - n,
                       " p%d x7C=%d x80=%d lvl=%d tgt=%d lsx=%d lsy=%d xC=%d x18=%d x1C=%d x20=%d "
                       "x84=%d x88=%d x8C=%d x90=%d xA4=%d b6=%d", slot,
-                      (int) fp->x1A88.x7C, (int) fp->x1A88.x80,
-                      (int) fp->x1A88.level,
-                      fp->x1A88.x44 != NULL ? 1 : 0,
-                      (int) fp->x1A88.lstickX, (int) fp->x1A88.lstickY,
-                      (int) fp->x1A88.xC, (int) fp->x1A88.x18,
-                      (int) fp->x1A88.x1C, (int) fp->x1A88.x20,
-                      (int) fp->x1A88.x84, (int) fp->x1A88.x88,
-                      (int) fp->x1A88.x8C, (int) fp->x1A88.x90,
-                      (int) fp->x1A88.xA4, (int) fp->x1A88.xF8_b6);
+                      (int) fp->cpu.x7C, (int) fp->cpu.x80,
+                      (int) fp->cpu.level,
+                      fp->cpu.x44 != NULL ? 1 : 0,
+                      (int) fp->cpu.lstick.x, (int) fp->cpu.lstick.y,
+                      (int) fp->cpu.kind, (int) fp->cpu.x18,
+                      (int) fp->cpu.x1C, (int) fp->cpu.x20,
+                      (int) fp->cpu.x84, (int) fp->cpu.x88,
+                      (int) fp->cpu.x8C, (int) fp->cpu.x90,
+                      (int) fp->cpu.xA4, (int) fp->cpu.xF8_b6);
     }
     if (n > 0) {
         fprintf(stderr, "[AI-PORT] gframe=%u%s\n",
-                (unsigned) gm_8016AEDC(), line);
+                (unsigned) gm_GetFrameCount(), line);
     }
     /* MELEE_FTVEL=<slot> dumps the ground-velocity chain as raw bit patterns:
      * gr_vel and the two walk attributes it is derived from. gr_vel_new is
@@ -635,11 +635,11 @@ static void pc_trace_ailog(void)
                     fprintf(stderr,
                             "[FTKB-PORT] gframe=%u p%d kbx=%08x kby=%08x "
                             "lsx=%08x lsy=%08x kbapp=%08x pct=%08x\n",
-                            (unsigned) gm_8016AEDC(), vslot,
+                            (unsigned) gm_GetFrameCount(), vslot,
                             *(const unsigned*) &vfp->x8c_kb_vel.x,
                             *(const unsigned*) &vfp->x8c_kb_vel.y,
-                            *(const unsigned*) &vfp->input.lstick.x,
-                            *(const unsigned*) &vfp->input.lstick.y,
+                            *(const unsigned*) &vfp->input.lstick[0].x,
+                            *(const unsigned*) &vfp->input.lstick[0].y,
                             *(const unsigned*) &vfp->dmg.x18d8.kb_applied1,
                             *(const unsigned*) &vfp->dmg.x1830_percent);
                     /* Mirror of the console's [BLPART-REF]: the two joints
@@ -673,7 +673,7 @@ static void pc_trace_ailog(void)
                                     : NULL;
                             int q;
                             fprintf(stderr, "[NODES-PORT] gframe=%u p%d tree=%p",
-                                    (unsigned) gm_8016AEDC(), vslot,
+                                    (unsigned) gm_GetFrameCount(), vslot,
                                     (void*) vfp->x590);
                             for (q = 0; nd != NULL && q < 0x60; q++) {
                                 if (nd[q] == -1) {
@@ -696,7 +696,7 @@ static void pc_trace_ailog(void)
                             int q;
                             fprintf(stderr,
                                     "[NODES2-PORT] gframe=%u p%d tree=%p",
-                                    (unsigned) gm_8016AEDC(), vslot,
+                                    (unsigned) gm_GetFrameCount(), vslot,
                                     (void*) vfp->x598);
                             for (q = 0; nd2 != NULL && q < 0x60; q++) {
                                 if (nd2[q] == -1) {
@@ -724,7 +724,7 @@ static void pc_trace_ailog(void)
                                         "[TRACK-PORT] gframe=%u p%d k=%d "
                                         "len=%u sf=%d type=%u fracv=%02x "
                                         "fracs=%02x ad=%p head=",
-                                        (unsigned) gm_8016AEDC(), vslot, k,
+                                        (unsigned) gm_GetFrameCount(), vslot, k,
                                         (unsigned) *(const u16*) e,
                                         (int) *(const s16*) (e + 2),
                                         (unsigned) e[4], (unsigned) e[5],
@@ -746,7 +746,7 @@ static void pc_trace_ailog(void)
                             int q;
                             int n = ftPartsTable[vfp->kind]->parts_num;
                             fprintf(stderr, "[PFLAGS-PORT] gframe=%u p%d n=%d",
-                                    (unsigned) gm_8016AEDC(), vslot, n);
+                                    (unsigned) gm_GetFrameCount(), vslot, n);
                             for (q = 0; q < n && q < 0x60; q++) {
                                 /* The console's copy is a big-endian u16 with
                                  * the bitfields allocated MSB-first, and this
@@ -771,7 +771,7 @@ static void pc_trace_ailog(void)
                                 "j1=%08x,%08x,%08x f=%08x "
                                 "j2=%08x,%08x,%08x f=%08x x594=%08x "
                                 "g4=%08x g8=%08x a1=%08x,%08x,%08x\n",
-                                (unsigned) gm_8016AEDC(), vslot,
+                                (unsigned) gm_GetFrameCount(), vslot,
                                 b1 ? *(const unsigned*) &b1->rotate.x : 0,
                                 b1 ? *(const unsigned*) &b1->rotate.y : 0,
                                 b1 ? *(const unsigned*) &b1->rotate.z : 0,
@@ -793,7 +793,7 @@ static void pc_trace_ailog(void)
                                     : 0);
                     }
                     fprintf(stderr, "[FTECB-PORT] gframe=%u p%d",
-                            (unsigned) gm_8016AEDC(), vslot);
+                            (unsigned) gm_GetFrameCount(), vslot);
                     for (q = 0; q < 6; q++) {
                         Vec3 jp;
                         lb_8000B1CC(vfp->coll_data.ecb_source.x10C_joint[q],
@@ -833,7 +833,7 @@ static void pc_trace_ailog(void)
                         HSD_JObj* j = vfp->coll_data.ecb_source.x10C_joint[0];
                         int depth = 0;
                         fprintf(stderr, "[FTCHAIN-PORT] gframe=%u p%d",
-                                (unsigned) gm_8016AEDC(), vslot);
+                                (unsigned) gm_GetFrameCount(), vslot);
                         while (j != NULL && depth < 12) {
                             /* The joint's own address, so a rotation that
                              * differs can be traced back to the animation
@@ -871,7 +871,7 @@ static void pc_trace_ailog(void)
                 fprintf(stderr,
                         "[FTVEL-PORT] gframe=%u p%d grvel=%08x initvel=%08x "
                         "maxvel=%08x norm=%08x,%08x,%08x floor=%d\n",
-                        (unsigned) gm_8016AEDC(), vslot, a.u, b.u, c.u,
+                        (unsigned) gm_GetFrameCount(), vslot, a.u, b.u, c.u,
                         *(const unsigned*) &vfp->coll_data.floor.normal.x,
                         *(const unsigned*) &vfp->coll_data.floor.normal.y,
                         *(const unsigned*) &vfp->coll_data.floor.normal.z,
@@ -894,14 +894,14 @@ static void pc_trace_ailog(void)
             if (bfp != NULL) {
                 int q;
                 fprintf(stderr, "[AIBUF-PORT] gframe=%u p%d dur=%u off=%d",
-                        (unsigned) gm_8016AEDC(), bslot,
-                        (unsigned) bfp->x1A88.command_duration,
-                        bfp->x1A88.csP != NULL
-                            ? (int) (bfp->x1A88.csP - bfp->x1A88.buffer)
+                        (unsigned) gm_GetFrameCount(), bslot,
+                        (unsigned) bfp->cpu.command_duration,
+                        bfp->cpu.csP != NULL
+                            ? (int) (bfp->cpu.csP - bfp->cpu.buffer)
                             : -1);
                 for (q = 0; q < 24; q++) {
                     fprintf(stderr, " %02x",
-                            (unsigned) (u8) bfp->x1A88.buffer[q]);
+                            (unsigned) (u8) bfp->cpu.buffer[q]);
                 }
                 fprintf(stderr, "\n");
             }
@@ -937,7 +937,7 @@ static void pc_trace_animscript(void)
     w = (const u32*) fp->x24[fp->anim_id].xC;
     fprintf(stderr, "[ANIMSCRIPT-PORT] gframe=%u p%d motion=%d anim=%d "
                     "tbl=%p script=%p",
-            (unsigned) gm_8016AEDC(), slot, (int) fp->motion_id,
+            (unsigned) gm_GetFrameCount(), slot, (int) fp->motion_id,
             (int) fp->anim_id, (void*) fp->x24, (const void*) w);
     for (k = 0; w != NULL && k < 10; k++) {
         fprintf(stderr, " %08x", w[k]);
@@ -954,12 +954,12 @@ static void pc_trace_grlink(void)
 {
     HSD_GObj* gobj;
     int n = 0;
-    if (getenv("MELEE_GRLINK") == NULL || HSD_GObj_Entities == NULL) {
+    if (getenv("MELEE_GRLINK") == NULL || HSD_GObjPLinkHead == NULL) {
         return;
     }
     fprintf(stderr, "[GRLINK-PORT] gframe=%u scene=%d",
-            (unsigned) gm_8016AEDC(), (int) gm_GetCurrentSceneIndex());
-    for (gobj = ((HSD_GObj**) HSD_GObj_Entities)[5]; gobj != NULL && n < 16;
+            (unsigned) gm_GetFrameCount(), (int) gm_GetCurrentSceneIndex());
+    for (gobj = ((HSD_GObj**) HSD_GObjPLinkHead)[5]; gobj != NULL && n < 16;
          gobj = gobj->next, n++)
     {
         Ground* gp = (Ground*) gobj->user_data;
@@ -1007,7 +1007,7 @@ static void pc_trace_animid(void)
         fprintf(stderr,
                 "[ANIMID-PORT] gframe=%u p%d anim=%d motion=%d f=%.1f part=%d "
                 "cur=%.1f end=%.1f rew=%.1f rate=%.2f fl=%08x\n",
-                (unsigned) gm_8016AEDC(), slot, (int) fp->anim_id,
+                (unsigned) gm_GetFrameCount(), slot, (int) fp->anim_id,
                 (int) fp->motion_id, (double) fp->cur_anim_frame, i,
                 (double) a->curr_frame, (double) a->end_frame,
                 (double) a->rewind_frame, (double) a->framerate,
@@ -1016,7 +1016,7 @@ static void pc_trace_animid(void)
     }
     fprintf(stderr,
             "[ANIMID-PORT] gframe=%u p%d anim=%d motion=%d f=%.1f part=none\n",
-            (unsigned) gm_8016AEDC(), slot, (int) fp->anim_id,
+            (unsigned) gm_GetFrameCount(), slot, (int) fp->anim_id,
             (int) fp->motion_id, (double) fp->cur_anim_frame);
 }
 
@@ -1075,12 +1075,12 @@ static void pc_trace_bones(void)
         }
         want_to = want_f;
     }
-    if ((unsigned) gm_8016AEDC() < want_f ||
-        (unsigned) gm_8016AEDC() > want_to)
+    if ((unsigned) gm_GetFrameCount() < want_f ||
+        (unsigned) gm_GetFrameCount() > want_to)
     {
         return;
     }
-    want_f = (unsigned) gm_8016AEDC();
+    want_f = (unsigned) gm_GetFrameCount();
     sp = Player_GetPtrForSlot(want_p);
     g = sp->player_entity[0];
     fp = (g != NULL) ? (Fighter*) g->user_data : NULL;
@@ -1105,9 +1105,9 @@ static void pc_trace_bones(void)
                 (void*) fp->x488.x8_ptr1, (int) fp->x488.xC_loop,
                 (void*) fp->x488.x10_ptr2, (int) fp->x488.x14,
                 (void*) fp->x488.x18_alloc,
-                *(u32*) &fp->input.lstick.x, *(u32*) &fp->input.lstick.y,
-                (unsigned) fp->input.held_inputs,
-                (unsigned) fp->input.x668, (unsigned) fp->input.x66C);
+                *(u32*) &fp->input.lstick[0].x, *(u32*) &fp->input.lstick[0].y,
+                (unsigned) fp->input.held_buttons[0],
+                (unsigned) fp->input.pressed_buttons, (unsigned) fp->input.released_buttons);
         for (b = 0; b < pn && b < 80; b++) {
             fprintf(stderr, " %02x", (unsigned) fp->parts[b].hi);
         }
@@ -1241,7 +1241,7 @@ static void pc_trace_ftdump(void)
         }
         to = 0xFFFFFFFFu;
     }
-    gf = (unsigned) gm_8016AEDC();
+    gf = (unsigned) gm_GetFrameCount();
     if (gf < from || gf > to || n > 64) {
         return;
     }
@@ -1279,7 +1279,7 @@ static void pc_trace_camdump(void)
     {
         return;
     }
-    gf = (unsigned) gm_8016AEDC();
+    gf = (unsigned) gm_GetFrameCount();
     if (gf < from || gf > to) {
         return;
     }
@@ -1325,7 +1325,7 @@ static void pc_trace_pctdump(void)
     {
         return;
     }
-    gf = (unsigned) gm_8016AEDC();
+    gf = (unsigned) gm_GetFrameCount();
     if (gf < from || gf > to) {
         return;
     }
@@ -1368,7 +1368,7 @@ static void pc_trace_hurtdump(void)
     {
         return;
     }
-    gf = (unsigned) gm_8016AEDC();
+    gf = (unsigned) gm_GetFrameCount();
     if (gf < hfrom || gf > hto) {
         return;
     }
@@ -1419,7 +1419,7 @@ static void pc_trace_ecbdump(void)
         }
         to = from;
     }
-    gf = (unsigned) gm_8016AEDC();
+    gf = (unsigned) gm_GetFrameCount();
     if (gf < from || gf > to) {
         return;
     }
@@ -1474,9 +1474,9 @@ static void pc_trace_ecbdump(void)
         }
     }
     fprintf(stderr, "[REACH-PORT] p%d gframe=%u %08x %08x %08x %08x n=%d\n",
-            slot, gf, *(const u32*) &fp->x1A88.x55C,
-            *(const u32*) &fp->x1A88.x560, *(const u32*) &fp->x1A88.x564,
-            *(const u32*) &fp->x1A88.x568, (int) fp->hurt_capsules_len);
+            slot, gf, *(const u32*) &fp->cpu.x55C,
+            *(const u32*) &fp->cpu.x560, *(const u32*) &fp->cpu.x564,
+            *(const u32*) &fp->cpu.x568, (int) fp->hurt_capsules_len);
 }
 
 /* MELEE_SPAWN_ITEM=<kind>[,<frame>] spawns one item of that kind on that
@@ -1500,7 +1500,7 @@ int pc_lineup_chars(int out[4])
     int i, n = 0;
     for (i = 0; i < 4 && i < PC_TRACE_PLAYERS; i++) {
         StaticPlayer* sp = Player_GetPtrForSlot(i);
-        int ck = sp != NULL ? (int) sp->player_character : -1;
+        int ck = sp != NULL ? (int) sp->ckind : -1;
         /* player_state is not set until the fighters spawn; slot_type is
          * written with the match description, so it is what says whether a
          * slot is in this match. An empty slot keeps the character kind of
@@ -1536,7 +1536,7 @@ static void pc_trace_spawn_item(int frame)
     if (done || want_kind < 0 || frame < want_frame) {
         return;
     }
-    if (HSD_GObj_Entities == NULL) {
+    if (HSD_GObjPLinkHead == NULL) {
         static int said;
         if (!said) { said = 1; fprintf(stderr, "[SPAWN] frame %d: entity table not up yet, waiting\n", frame); }
         return;
@@ -1617,8 +1617,8 @@ void pc_trace_frame(int frame)
      * selected the wrong one -- without this column the two look identical
      * from here, as a pile of position differences on the first frame. */
     n += snprintf(line + n, sizeof(line) - n, "%d %u %u %u %08X %d", frame,
-                  (unsigned) gm_8016AEDC(), (unsigned) gm_GetCurrentGameMode(),
-                  (unsigned) gm_GetCurrentSceneIndex(), (unsigned) seed,
+                  (unsigned) gm_GetFrameCount(), (unsigned) gm_GetCurrentGameMode(),
+                  (unsigned) gm_GetCurrentSceneIndex(), (unsigned) *HSD_RandSeedPtr,
                   (int) stage_info.grkind);
 
     for (i = 0; i < PC_TRACE_PLAYERS; i++) {
@@ -1627,7 +1627,7 @@ void pc_trace_frame(int frame)
         Fighter* fp = (gobj != NULL) ? (Fighter*) gobj->user_data : NULL;
 
         n += snprintf(line + n, sizeof(line) - n, " %d %d %d %d",
-                      (int) sp->player_state, (int) sp->player_character,
+                      (int) sp->player_state, (int) sp->ckind,
                       (int) sp->staminas.byName.damage_percent,
                       (int) sp->stocks);
 
@@ -1667,15 +1667,15 @@ void pc_trace_frame(int frame)
                 const char* e = getenv("MELEE_AIDUMP");
                 dump_at = e ? atoi(e) : -1;
             }
-            ai_dump_words = dump_at >= 0 && (int) gm_8016AEDC() == dump_at;
+            ai_dump_words = dump_at >= 0 && (int) gm_GetFrameCount() == dump_at;
             if (ai_dump_words) {
                 fprintf(stderr, "[AIDUMP] gframe=%u slot=%d\n",
-                        (unsigned) gm_8016AEDC(), i);
+                        (unsigned) gm_GetFrameCount(), i);
                 ai_dump_n = 0;
             }
         }
         n += snprintf(line + n, sizeof(line) - n, " %08X",
-                      (unsigned) ai_hash(&fp->x1A88));
+                      (unsigned) ai_hash(&fp->cpu));
         ai_dump_words = 0;
     }
 
@@ -1727,7 +1727,7 @@ void pc_trace_frame(int frame)
             (int) gm_GetCurrentGameMode() == atoi(at_mode))
         {
             seeded_mode = 1;
-            seed = (u32) strtoul(want, NULL, 16);
+            *HSD_RandSeedPtr = (u32) strtoul(want, NULL, 16);
         }
         /* MELEE_SEED_EACH_SCENE=1 sets it again on the first frame of every
          * scene. Seeding once is not enough for a run compared from
@@ -1749,7 +1749,7 @@ void pc_trace_frame(int frame)
             if (m != last_mode || sc != last_scene) {
                 last_mode = m;
                 last_scene = sc;
-                seed = (u32) strtoul(want, NULL, 16);
+                *HSD_RandSeedPtr = (u32) strtoul(want, NULL, 16);
             }
         }
         /* MELEE_SEED_EACH_LOAD=1 sets it again on EVERY frame of the match's
@@ -1772,11 +1772,11 @@ void pc_trace_frame(int frame)
          * animations while every other column still agrees.
          * The Dolphin build reads the same variable. */
         if (want != NULL && getenv("MELEE_SEED_EACH_LOAD") != NULL &&
-            gm_8016AEDC() == 0 &&
+            gm_GetFrameCount() == 0 &&
             ((int) gm_GetCurrentSceneIndex() == 2 ||
              (int) gm_GetCurrentSceneIndex() == 3))
         {
-            seed = (u32) strtoul(want, NULL, 16);
+            *HSD_RandSeedPtr = (u32) strtoul(want, NULL, 16);
         }
         /* MELEE_FORCE_CPU=<lvl0>,<lvl1> turns the first two player slots into
          * CPUs of that level, on every frame of the match's own load, exactly
@@ -1817,8 +1817,8 @@ void pc_trace_frame(int frame)
                      * load lengths. */
                     sp->cpu_level = (u8) lvl[slot];
                     sp->cpu_type = 4;
-                    if (gm_8016AEDC() >= 2) {
-                        sp->slot_type = Gm_PKind_Cpu;
+                    if (gm_GetFrameCount() >= 2) {
+                        sp->pkind = Gm_PKind_Cpu;
                     }
                     /* The AI copies the level once, in ftCo_800A101C, and
                      * here that runs before this hook has written the slot
@@ -1827,7 +1827,7 @@ void pc_trace_frame(int frame)
                      * gives its own hook several frames first, gets the real
                      * level. Correct the live AI struct too, up to the point
                      * the match starts. */
-                    if (gm_8016AEDC() <= 2) {
+                    if (gm_GetFrameCount() <= 2) {
                         /* Both entities, not just the first.
                          * player_entity[1] is the follower -- Nana -- and she
                          * is a fighter with an AI struct of her own, created
@@ -1842,7 +1842,7 @@ void pc_trace_frame(int frame)
                         Fighter* fp = (g != NULL) ? (Fighter*) g->user_data
                                                   : NULL;
                         if (fp != NULL) {
-                            fp->x1A88.level = lvl[slot];
+                            fp->cpu.level = lvl[slot];
                             /* The AI's decision timer is seeded from the one
                              * random draw ftCo_800A101C makes as the fighter
                              * is created. Both sides start it from zero, and
@@ -1858,9 +1858,9 @@ void pc_trace_frame(int frame)
                              * lands in the same place on both sides; dropping
                              * these two writes on this side alone is what is
                              * wrong, not the writes. */
-                            if (gm_8016AEDC() == 2) {
-                                fp->x1A88.x7C = 0;
-                                fp->x1A88.x80 = 0;
+                            if (gm_GetFrameCount() == 2) {
+                                fp->cpu.x7C = 0;
+                                fp->cpu.x80 = 0;
                                 /* And the ranged-attack cooldown, which
                                  * ftCo_800B9704 computes from one random draw
                                  * as the fighter is created -- inside the
@@ -1895,7 +1895,7 @@ void pc_trace_frame(int frame)
                                  * writes above, and the local Dolphin build
                                  * makes the same write under the same
                                  * variable. */
-                                fp->x1A88.x34 =
+                                fp->cpu.x34 =
                                     (10 - lvl[slot]) * 22 + 10;
                             }
                         }
@@ -1904,9 +1904,9 @@ void pc_trace_frame(int frame)
                 }
             }
         }
-        if (want != NULL && !seeded && gm_8016AEDC() == 1) {
+        if (want != NULL && !seeded && gm_GetFrameCount() == 1) {
             seeded = 1;
-            seed = (u32) strtoul(want, NULL, 16);
+            *HSD_RandSeedPtr = (u32) strtoul(want, NULL, 16);
         }
     }
 
@@ -1935,7 +1935,7 @@ void pc_seed_at_fighter_create(void)
     static int done = 0;
     const char* want = getenv("MELEE_SEED");
 
-    if (gm_8016AEDC() != 0) {
+    if (gm_GetFrameCount() != 0) {
         done = 0;              /* a respawn mid-match; arm for the next load */
         return;
     }
@@ -1943,7 +1943,7 @@ void pc_seed_at_fighter_create(void)
         return;
     }
     done = 1;
-    seed = (u32) strtoul(want, NULL, 16);
+    *HSD_RandSeedPtr = (u32) strtoul(want, NULL, 16);
 }
 
 
@@ -1965,7 +1965,7 @@ void pc_jobj_note(const char* who, void* j)
         return;
     }
     {
-        int f = (int) gm_8016AEDC();
+        int f = (int) gm_GetFrameCount();
         int in_range = pc_jobj_watch_lo >= 0 && f >= pc_jobj_watch_lo &&
                        f <= pc_jobj_watch_hi;
         if (!in_range && (at < 0 || f != at)) {

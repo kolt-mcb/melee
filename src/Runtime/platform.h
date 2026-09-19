@@ -1,8 +1,19 @@
 #ifndef RUNTIME_PLATFORM_H
 #define RUNTIME_PLATFORM_H
 
-#include <stdbool.h>       // IWYU pragma: export
-#include <stddef.h>        // IWYU pragma: export
+#if BUILD_TARGET_PC
+/* Upstream moved the whole tree from <platform.h> to <Runtime/platform.h>
+ * this batch. On the host the old spelling resolved to src/port/platform.h,
+ * which is where the port's SDL, GL and pthread includes live and where
+ * __OSBusClock is defined before <dolphin/os.h> ever sees it. The new
+ * spelling reaches this file instead, so this file has to reach that one or
+ * seven hundred translation units quietly lose the port layer. */
+#include "port/platform.h"
+#endif
+
+#include <stdbool.h> // IWYU pragma: export
+#include <stddef.h>  // IWYU pragma: export
+
 #include <dolphin/types.h> // IWYU pragma: export
 
 /// @typedef bool
@@ -54,8 +65,12 @@ typedef bool (*Predicate)(void);
 #ifndef UNUSED
 #if defined(__clang__) || defined(__GNUC__)
 #define UNUSED __attribute__((unused))
+#define ATTRIBUTE_NORETURN __attribute__((noreturn))
+#define ATTRIBUTE_NONSTRING __attribute__((nonstring))
 #else
 #define UNUSED
+#define ATTRIBUTE_NORETURN
+#define ATTRIBUTE_NONSTRING
 #endif
 #endif
 
@@ -66,46 +81,6 @@ typedef bool (*Predicate)(void);
 #define ATTRIBUTE_ALIGN(num)
 #else
 #error unknown compiler
-#endif
-#endif
-
-#ifndef SECTION_INIT
-#if defined(__MWERKS__) && !defined(M2CTX)
-#define SECTION_INIT __declspec(section ".init")
-#else
-#define SECTION_INIT
-#endif
-#endif
-
-#ifndef SECTION_CTORS
-#if defined(__MWERKS__) && !defined(M2CTX)
-#define SECTION_CTORS __declspec(section ".ctors")
-#else
-#define SECTION_CTORS
-#endif
-#endif
-
-#ifndef SECTION_DTORS
-#if defined(__MWERKS__) && !defined(M2CTX)
-#define SECTION_DTORS __declspec(section ".dtors")
-#else
-#define SECTION_DTORS
-#endif
-#endif
-
-#ifndef ATTRIBUTE_NORETURN
-#if defined(__clang__) || defined(__GNUC__)
-#define ATTRIBUTE_NORETURN __attribute__((noreturn))
-#else
-#define ATTRIBUTE_NORETURN
-#endif
-#endif
-
-#ifndef ATTRIBUTE_RESTRICT
-#if defined(__MWERKS__) && !defined(M2CTX)
-#define ATTRIBUTE_RESTRICT __restrict
-#else
-#define ATTRIBUTE_RESTRICT
 #endif
 #endif
 
@@ -133,6 +108,7 @@ typedef bool (*Predicate)(void);
 #define U8_MAX 0xFF
 #define U16_MAX 0xFFFF
 #define U32_MAX 0xFFFFFFFF
+#define U64_MAX 0xFFFFFFFFFFFFFFFF
 #define S8_MAX 0x7F
 #define S16_MAX 0x7FFF
 #define S32_MAX 0x7FFFFFFF
@@ -168,6 +144,8 @@ typedef unsigned int usize_t;
 #define SQ(x) ((x) * (x))
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+/// Add @p b to @p a, saturating at @p max.
+#define SAT_ADD(a, b, max) (((a) + (b) > (max)) ? (max) : (a) + (b))
 
 #ifdef __cplusplus
 #ifndef _Static_assert
@@ -190,8 +168,11 @@ typedef unsigned int usize_t;
 
 #if defined(MUST_MATCH) || defined(LINT)
 #define ASSERT_SIZE(expr, size) STATIC_ASSERT(sizeof(expr) == size)
+#define ASSERT_OFFSET(type, member, offset)                                   \
+    STATIC_ASSERT(offsetof(type, member) == offset)
 #else
 #define ASSERT_SIZE(expr, size)
+#define ASSERT_OFFSET(expr, member, offset)
 #endif
 
 #define RETURN_IF(cond)                                                       \
@@ -205,10 +186,18 @@ typedef unsigned int usize_t;
 #define SDATA __declspec(section ".sdata")
 #define DATA __declspec(section ".data")
 #define WEAK __declspec(weak)
+#define SECTION_INIT __declspec(section ".init")
+#define SECTION_CTORS __declspec(section ".ctors")
+#define SECTION_DTORS __declspec(section ".dtors")
+#define ATTRIBUTE_RESTRICT __restrict
 #else
 #define SDATA
 #define DATA
 #define WEAK
+#define SECTION_INIT
+#define SECTION_CTORS
+#define SECTION_DTORS
+#define ATTRIBUTE_RESTRICT
 #endif
 
 #define M_TAU 6.283185307179586

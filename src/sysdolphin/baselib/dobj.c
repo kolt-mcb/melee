@@ -10,7 +10,6 @@
 #include "debug.h"
 #include "mobj.h"
 #include "pobj.h"
-
 #include <dolphin/os.h>
 
 static void DObjInfoInit(void);
@@ -19,8 +18,6 @@ HSD_DObjInfo hsdDObj = { DObjInfoInit };
 static HSD_ClassInfo* default_class = NULL;
 
 static HSD_DObj* current_dobj = NULL;
-
-static char HSD_DObj_804D5C78[7] = "dobj.c\0";
 
 void HSD_DObjSetCurrent(HSD_DObj* dobj)
 {
@@ -223,14 +220,11 @@ static int DObjLoad(HSD_DObj* dobj, HSD_DObjDesc* desc)
         default:
             OSReport("mobj has unexpected blending flags (0x%x).",
                      dobj->mobj->rendermode);
-            HSD_Panic(HSD_DObj_804D5C78, 312, "\0");
+            HSD_Panic(__FILE__, 312, "\0");
         }
     }
     return 0;
 }
-
-static char HSD_DObj_804D5C84[5] = "dobj\0";
-
 
 HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
 {
@@ -290,7 +284,7 @@ HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
     } else {
         dobj = HSD_DOBJ(hsdNew(info));
         if (dobj == NULL) {
-            __assert(HSD_DObj_804D5C78, 378, HSD_DObj_804D5C84);
+            __assert(__FILE__, 378, "dobj");
         }
         DObjLoad(dobj, desc);
     }
@@ -320,8 +314,7 @@ void HSD_DObjSetDefaultClass(HSD_ClassInfo* info)
         if (!hsdIsDescendantOf(info, &hsdDObj)) {
             // The line number here is totally made up, this function is
             // removed in practice but the string isn't
-            __assert(HSD_DObj_804D5C78, __LINE__,
-                     "hsdIsDescendantOf(info, &hsdDObj)");
+            __assert(__FILE__, __LINE__, "hsdIsDescendantOf(info, &hsdDObj)");
         }
     }
     default_class = info;
@@ -329,10 +322,9 @@ void HSD_DObjSetDefaultClass(HSD_ClassInfo* info)
 
 HSD_DObj* HSD_DObjAlloc(void)
 {
-    HSD_DObj* dobj =
-        (HSD_DObj*) hsdNew(default_class ? default_class : &hsdDObj.parent);
+    HSD_DObj* dobj = hsdNew(default_class ? default_class : &hsdDObj.parent);
     if (dobj == NULL) {
-        __assert(HSD_DObj_804D5C78, 525, HSD_DObj_804D5C84);
+        __assert(__FILE__, 525, "dobj");
     }
     return dobj;
 }
@@ -382,15 +374,13 @@ void forceStringAllocation(
               // to end up in data by the compiler despite not being used
 {
     if (dobj->pobj == NULL) {
-        __assert(HSD_DObj_804D5C78, 700,
-                 "can not find specified pobj in link.\n");
+        __assert(__FILE__, 700, "can not find specified pobj in link.\n");
     }
     if (dobj->pobj == NULL) {
-        __assert(HSD_DObj_804D5C78, 702,
-                 "can not find specified pobj in link.");
+        __assert(__FILE__, 702, "can not find specified pobj in link.");
     }
     if (dobj->mobj != mobj) {
-        __assert(HSD_DObj_804D5C78, 704, "dobj->mobj == mobj");
+        __assert(__FILE__, 704, "dobj->mobj == mobj");
     }
 }
 

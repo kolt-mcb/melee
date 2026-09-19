@@ -1,31 +1,27 @@
 #include "groldkongo.h"
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/debug.h"
-#include "cm/camera.h"
-#include "ef/efsync.h"
+#include <melee/lb/forward.h>
 
 #include "forward.h"
-
-#include "ft/ftdevice.h"
-#include "ft/ftlib.h"
-#include "ftCommon/ftCo_BarrelWait.h"
-#include "gr/granime.h"
-#include "gr/grmaterial.h"
-#include "gr/ground.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/types.h"
-
-#include "lb/forward.h"
-
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-
-#include <baselib/gobj.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
+#include "granime.h"
+#include "grmaterial.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "types.h"
+#include <melee/cm/camera.h>
+#include <melee/ef/efsync.h>
+#include <melee/ft/ftdevice.h>
+#include <melee/ft/ftlib.h>
+#include <melee/ft/kinds/ftCommon/ftCo_BarrelWait.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/random.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -35,6 +31,7 @@
 #define OK_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
+/// @note Field names originate from SSBU param files.
 struct grOldKongo_YakumonoParam {
     s16 rframe_bird_wait_a;
     s16 rframe_bird_wait_b;
@@ -68,7 +65,7 @@ struct grOldKongo_YakumonoParam {
     s32 rrfix_barrel_attack;
     s32 rradd_barrel_attack;
     s32 x68;
-    s32 x6C;
+    void* x6C;
 };
 
 /* 20F468 */ static void grOldKongo_8020F468(bool);
@@ -207,8 +204,7 @@ Ground_GObj* setupStageCallbacks(int gobj_id)
 
 void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool stageGObj0_Callback1(Ground_GObj* gobj)
@@ -224,7 +220,7 @@ void stageGObj3_OnInit(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
 
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
     gp->x10_flags.b5 = 1;
 }
 
@@ -235,7 +231,7 @@ bool stageGObj3_Callback1(Ground_GObj* gobj)
 
 void stageGObj3_GObjProc(Ground_GObj* gobj)
 {
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
     lb_800115F4();
 }
 
@@ -648,7 +644,7 @@ f32 grOldKongo_80210650(void)
 
 DynamicsDesc* grOldKongo_80210780(enum_t gobj)
 {
-    return false;
+    return NULL;
 }
 
 bool grOldKongo_80210788(Vec3* a, int arg, HSD_JObj* joint)

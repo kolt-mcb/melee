@@ -1,16 +1,15 @@
 #include "gm_16A2.h"
 
-#include "gm_unsplit.h"
-
-#include "gr/ground.h"
-#include "gr/stage.h"
-#include "if/ifnametag.h"
-#include "if/ifstatus.h"
-#include "lb/lb_00B0.h"
-
 #include <stddef.h>
-#include <sysdolphin/baselib/random.h>
+
+#include "gm_unsplit.h"
+#include <melee/gr/ground.h>
+#include <melee/gr/stage.h>
+#include <melee/if/ifnametag.h>
+#include <melee/if/ifstatus.h>
+#include <melee/lb/lb_00B0.h>
 #include <melee/pl/player.h>
+#include <sysdolphin/baselib/random.h>
 
 /* 46B488 */ static struct lbl_8046B488_t lbl_8046B488;
 /* 46B668 */ static struct lbl_8046B668_t lbl_8046B668;
@@ -63,8 +62,8 @@ bool gm_801693BC(int arg0)
         return true;
     }
     ckind = Player_GetPlayerCharacter(arg0);
-    ckind -= CKIND_BOY;
-    if (ckind <= CKIND_GIRL - CKIND_BOY) {
+    ckind -= CKind_Boy;
+    if (ckind <= CKind_Girl - CKind_Boy) {
         return true;
     }
     return false;
@@ -145,7 +144,7 @@ void fn_801695BC(u8 arg0, u8 arg1, u8 arg2, const u8* arg3, s8* arg4)
     u8 ncolors;
     s8 colors[6];
 
-    ncolors = gm_80169238(arg0);
+    ncolors = gm_GetNumCostumesForCKind(arg0);
     if ((s8) arg0 != 0x21) {
         ncolors_s32 = ncolors;
         for (i = 0; i < ncolors; i++) {
@@ -189,7 +188,7 @@ void fn_801695BC(u8 arg0, u8 arg1, u8 arg2, const u8* arg3, s8* arg4)
 void fn_801697FC(s8 character, s8 costume, s8 new_character, s8 new_costume,
                  s8* buf)
 {
-    u8 ncolors = gm_80169238(character);
+    u8 ncolors = gm_GetNumCostumesForCKind(character);
     int i;
 
     if (character == 0x21) {
@@ -254,7 +253,7 @@ void fn_80169900(u8 arg0, struct lbl_8046B488_t* arg1, s8* arg2, s8* arg3)
             } else {
                 var_r27 = 5;
                 if (HSD_Randi(2) != 0) {
-                    if (arg1->x1 != CHKIND_NONE &&
+                    if (arg1->x1 != ChKind_None &&
                         gm_IsCKindUnlocked(arg1->x1))
                     {
                         arg2[var_r28] = arg1->x1;
@@ -262,7 +261,7 @@ void fn_80169900(u8 arg0, struct lbl_8046B488_t* arg1, s8* arg2, s8* arg3)
                         arg2[var_r28] = arg1->x0;
                     }
                 } else {
-                    if (arg1->x2 != CHKIND_NONE &&
+                    if (arg1->x2 != ChKind_None &&
                         gm_IsCKindUnlocked(arg1->x2))
                     {
                         arg2[var_r28] = arg1->x2;
@@ -278,16 +277,11 @@ void fn_80169900(u8 arg0, struct lbl_8046B488_t* arg1, s8* arg2, s8* arg3)
     }
 }
 
-s32 fn_80169A84(u8 arg0, s8* arg1, s8* arg2)
+void fn_80169A84(u8 arg0, s8* arg1, s8* arg2)
 {
     s8* p;
-    s32 count;
     s8* list;
     int i;
-    s8* src;
-    s8* dst;
-    u8 tmp;
-    s8 result;
     switch (arg0) {
     case 1:
         i = 0;
@@ -304,24 +298,27 @@ s32 fn_80169A84(u8 arg0, s8* arg1, s8* arg2)
             }
             i += 1;
             p += 1;
-        } while (i < CKIND_PLAYABLE_COUNT);
+        } while (i < CKind_Playable_Count);
 
         i = 0;
         p = list;
         do {
             s8* q;
+            u8 tmp;
             q = &lbl_8046B488.x0 + HSD_Randi(0x1B);
             tmp = q[0x1C0];
             i += 1;
             q[0x1C0] = (u8) *p;
             *p = tmp;
             p += 1;
-        } while (i < CKIND_PLAYABLE_COUNT);
+        } while (i < CKind_Playable_Count);
 
         {
             s32 j;
+            s32 count;
             count = 0;
-            for (j = 0; j < 0x1A; j++) {
+            j = 0;
+            for (; j < 0x1A; j++) {
                 if (*list != -1) {
                     count += 1;
                     if (count > 0x10) {
@@ -335,6 +332,7 @@ s32 fn_80169A84(u8 arg0, s8* arg1, s8* arg2)
         {
             s8* q;
             s32 idx = 0;
+            s8 result;
             p = arg1;
             arg1 = arg2;
             while (*arg1 != -2) {
@@ -349,92 +347,104 @@ s32 fn_80169A84(u8 arg0, s8* arg1, s8* arg2)
             }
         }
         break;
-    case 0:
-        dst = arg1;
-        src = arg2;
-        while (*src != -2) {
-            *dst = -1;
-            src += 1;
-            dst += 1;
+    case 0: {
+        int i;
+        for (i = 0; arg2[i] != -2; i++) {
+            arg1[i] = -1;
         }
         break;
     }
+    }
+}
+
+static inline struct lbl_8046B488_t* fn_80169C54_inline(void)
+{
+    return fn_8016AE60();
 }
 
 void fn_80169C54(s8 arg0, s8 arg1)
 {
+    s8* character;
+    s32* costume_it0;
+    s32* costume_it1;
+    s32 fighter0;
+    s32 fighter1;
+    s32 slot;
+    s32 extra_fighter0;
+    s32 extra_fighter1;
+    s32 costume_idx0;
+    s32 costume_idx1;
+    s32 ckind;
     struct lbl_8046B488_t* st;
-    s32 buf[7];
-    s8* pc;
-    s32 n;
+    s32 costumes[7];
+    s8* scan;
+    s32 ncostumes;
     s32 i;
     s32 count;
-    s32 k;
-    s32 j;
-    s8* cp;
-    s32 p;
-    s32 ch;
+    s32 costume_idx;
 
-    n = 0;
-    st = fn_8016AE60();
-    pc = &st->x0;
+    ncostumes = 0;
+    st = fn_80169C54_inline();
+    scan = &st->x0;
     for (i = 0; i < 7; i++) {
-        buf[i] = -1;
+        costumes[i] = -1;
     }
     for (i = 0; i < 3; i++) {
-        if ((s32) *pc == 4) {
+        if ((s32) *scan == 4) {
             if (st->xB == 0) {
-                count = gm_80169238(4U);
-                for (k = 0; k < count; k++) {
-                    buf[k] = k;
-                    n++;
+                count = gm_GetNumCostumesForCKind(4U);
+                for (costume_idx = 0; costume_idx < count; costume_idx++) {
+                    costumes[costume_idx] = costume_idx;
+                    ncostumes++;
                 }
             } else {
-                n = 1;
-                buf[0] = st->xC;
+                ncostumes = 1;
+                costumes[0] = st->xC;
             }
             break;
         }
-        pc++;
+        scan++;
     }
 
     if (arg0 == 4) {
-        buf[n] = arg1;
-        n++;
+        costumes[ncostumes] = arg1;
+        ncostumes++;
     }
-    if (n > 0) {
-        j = 0;
-        cp = &st->x0;
-        do {
-            ch = *cp;
-            if (0x21 != ch && ch != 4) {
-                p = Player_800325C8((CharacterKind) ch, 0);
-                if ((p != -1) && (p != 4)) {
-                    for (k = 0; k < n; k++) {
-                        Player_80031DA8(p, buf[k]);
+    if (ncostumes > 0) {
+        for (slot = 0, character = &st->x0; slot < 3; slot++, character++) {
+            ckind = *character;
+            if (0x21 != ckind && ckind != 4) {
+                fighter0 = Player_800325C8((CharacterKind) ckind, 0);
+                if ((fighter0 != -1) && (fighter0 != 4)) {
+                    for (costume_it0 = &costumes[costume_idx0 = 0];
+                         costume_idx0 < ncostumes;
+                         costume_it0++, costume_idx0++)
+                    {
+                        Player_80031DA8(fighter0, *costume_it0);
                     }
                 }
-                p = Player_800325C8((CharacterKind) ch, 1);
-                if ((p != -1) && (p != 4)) {
-                    for (k = 0; k < n; k++) {
-                        Player_80031DA8(p, buf[k]);
+                fighter1 = Player_800325C8((CharacterKind) ckind, 1);
+                if ((fighter1 != -1) && (fighter1 != 4)) {
+                    for (costume_it1 = &costumes[costume_idx1 = 0];
+                         costume_idx1 < ncostumes;
+                         costume_it1++, costume_idx1++)
+                    {
+                        Player_80031DA8(fighter1, *costume_it1);
                     }
                 }
             }
-            j++;
-            cp++;
-        } while (j < 3);
+        }
         if (arg0 != 4) {
-            p = Player_800325C8((CharacterKind) arg0, 0);
-            if ((p != -1) && (p != 4)) {
-                for (k = 0; k < n; k++) {
-                    Player_80031DA8(p, buf[k]);
+            extra_fighter0 = Player_800325C8((CharacterKind) arg0, 0);
+            if ((extra_fighter0 != -1) && (extra_fighter0 != 4)) {
+                for (costume_idx = 0; costume_idx < ncostumes; costume_idx++) {
+                    Player_80031DA8(extra_fighter0, costumes[costume_idx]);
                 }
             }
-            p = Player_800325C8((CharacterKind) arg0, 1);
-            if ((p != -1) && (p != 4)) {
-                for (k = 0; k < n; k++) {
-                    Player_80031DA8(p, buf[k]);
+            extra_fighter1 = Player_800325C8((CharacterKind) arg0, 1);
+            if ((extra_fighter1 != -1) && (extra_fighter1 != 4)) {
+                for (costume_idx = 0; costume_idx < ncostumes; costume_idx++) {
+                    Player_80031DA8(extra_fighter1, costumes[costume_idx]);
                 }
             }
         }
@@ -507,7 +517,7 @@ void fn_8016A09C(void)
     PAD_STACK(4);
     var_r29 = 0;
 
-    gm_16AE_GetUnkData_1();
+    gmVs_GetSceneState();
     lbl_8046B488.unk_10_b1 = 1;
     lbl_8046B488.unk_10_b0 = 0;
 
@@ -534,14 +544,14 @@ void gm_8016A164(void)
 {
     int i;
     struct lbl_8046B488_t* gp = gm_1601_GetUnkData();
-    lbl_8046B6A0_t* match_info = gm_16AE_GetUnkData_1();
+    VsSceneState* scene_state = gmVs_GetSceneState();
     PAD_STACK(4);
     if (gp == 0) {
-        if (match_info == 0) {
+        if (scene_state == 0) {
         }
     }
 
-    match_info->is_singleplayer = false;
+    scene_state->is_singleplayer = false;
     gp->x8 = 0;
     gp->x7 = 0;
     gp->unk_10_b1 = false;
@@ -586,9 +596,9 @@ gm_8016A22C_header(struct lbl_8046B488_t* gp)
     return (struct gm_8016A22C_header*) gp;
 }
 
-s32 gm_8016A22C(s8 k0, s8 k1, s8 k2, u8 a3, u8 a4, int a5, int mode, int a7,
-                u8 color, u8 p87, u8 p8b, int x6, int x7, int x9, int xA,
-                int flag2, int flag1, f32 f1, f32 f2)
+void gm_8016A22C(s8 k0, s8 k1, s8 k2, u8 a3, u8 a4, u8 a5, int mode, int a7,
+                 u8 color, u8 p87, u8 p8b, int x6, int x7, int x9, int xA,
+                 int flag2, int flag1, f32 f1, f32 f2)
 {
     int i;
     struct lbl_8046B488_t* gp = &lbl_8046B488;
@@ -603,7 +613,7 @@ s32 gm_8016A22C(s8 k0, s8 k1, s8 k2, u8 a3, u8 a4, int a5, int mode, int a7,
 
     lbl_8046B488.x3 = a3;
     lbl_8046B488.x4 = a4;
-    lbl_8046B488.x5 = (u8) a5;
+    lbl_8046B488.x5 = a5;
 
     lbl_8046B488.x1AC = p87;
     lbl_8046B488.x1AD = 0x21;
@@ -657,7 +667,7 @@ s32 gm_8016A22C(s8 k0, s8 k1, s8 k2, u8 a3, u8 a4, int a5, int mode, int a7,
     }
     }
 
-    return fn_80169A84(gp->xE, gp->x124, gp->x20);
+    fn_80169A84(gp->xE, gp->x124, gp->x20);
 }
 
 void gm_8016A404(s32 arg0)
@@ -693,7 +703,7 @@ void fn_8016A46C(void)
 
 void fn_8016A488(int arg0)
 {
-    if (gm_16AE_GetUnkData_1()->hud_enabled == true) {
+    if (gmVs_GetSceneState()->hud_enabled == true) {
         Player_80031848(arg0);
     }
 }
@@ -838,7 +848,7 @@ void fn_8016A4C8(void)
                 } else {
                     Player_SetMoreFlagsBit5(spawn_slot, 0);
                 }
-                if (Player_GetPlayerCharacter(spawn_slot) == CKIND_KIRBY &&
+                if (Player_GetPlayerCharacter(spawn_slot) == CKind_Kirby &&
                     gp->xE != 0)
                 {
                     int tmp = gp->x124[gm_80169384()];
@@ -891,7 +901,7 @@ void gm_8016A92C(StartMeleeRules* arg0)
 
 bool gm_8016A944(void)
 {
-    if (gm_GetRules()->x58 != NULL) {
+    if (gm_GetStartMeleeRules()->x58 != NULL) {
         return true;
     }
     return false;
@@ -899,7 +909,7 @@ bool gm_8016A944(void)
 
 UNK_T gm_8016A97C(void)
 {
-    return &M2C_FIELD(&lbl_8046B668, UNK_T*, 0x1C);
+    return lbl_8046B668.arr2;
 }
 
 struct lbl_8046B668_t* gm_8016A98C(void)
@@ -952,7 +962,7 @@ bool gm_8016AC44(s8 ckind, s8 costume_id)
     s32 idx;
     s32 i;
 
-    if ((gm_GetRules()->x58 != NULL ? 1 : 0) == 1) {
+    if ((gm_GetStartMeleeRules()->x58 != NULL ? 1 : 0) == 1) {
         struct lbl_8046B668_t* ptr = &lbl_8046B668;
         idx = -1;
         for (i = 0; i < 27; i++) {

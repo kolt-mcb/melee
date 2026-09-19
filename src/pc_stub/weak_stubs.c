@@ -917,7 +917,6 @@ __attribute__((weak)) void un_80322314(void) { }
 __attribute__((weak)) void un_8032233C(int a0, int a1) {}
 __attribute__((weak)) int un_803224DC(int a0, float a1, float a2) { return 0; } /* decl: bool */
 __attribute__((weak)) int un_80322598(int a0, float a1) { return 0; } /* decl: int */
-__attribute__((weak)) struct lbl_8046B6A0_t* gm_8016AE38(void) { return NULL; }
 /* Auto-generated weak stubs (batch 3) */
 
 #include <platform.h>
@@ -947,7 +946,6 @@ __attribute__((weak)) void Camera_8002F7AC(int a0) {}
 __attribute__((weak)) void Camera_8002F9E4(int a0, int a1) {}
 __attribute__((weak)) void Camera_8002FC7C(int a0, int a1) {}
 __attribute__((weak)) void Camera_800304E0(int a0) {}
-__attribute__((weak)) void Camera_80030688(void) { }
 __attribute__((weak)) void Camera_80030730(float a0) {}
 __attribute__((weak)) int Camera_80030B50(void) { return 0; }
 __attribute__((weak)) int Camera_80030B7C(void) { return 0; }
@@ -2484,7 +2482,6 @@ __attribute__((weak)) void gmTitle_801A19AC(void) { }
 __attribute__((weak)) int gmTitle_801A1A3C(void) { return 0; }
 __attribute__((weak)) int gmTitle_801A1AC0(void) { return 0; }
 __attribute__((weak)) void* gm_GetAllGameSceneHandlers(void) { return NULL; }
-__attribute__((weak)) void* gm_GetChallengerData(void) { return NULL; }
 
 
 // --- misc undefined fns (if/ module + dolphin rumble not linked) ---

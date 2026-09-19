@@ -3682,10 +3682,10 @@ static void pc_shc_index_append(const Prog* pr)
          * can find every key its lineup used and load them before READY.
          * A key first used outside a match is a menu key and loads at
          * start-up. */
-        extern unsigned int gm_8016AEDC(void);
+        extern unsigned int gm_GetFrameCount(void);
         extern int pc_lineup_chars(int out[4]);
         for (i = 0; i < g_spec_n; i++) fprintf(f, "%s%d", i ? " " : "", (int) pr->key[i]);
-        if (gm_8016AEDC() != 0 || g_shc_cur_stkind >= 0) {
+        if (gm_GetFrameCount() != 0 || g_shc_cur_stkind >= 0) {
             int ck[4], n = pc_lineup_chars(ck), k;
             fprintf(f, " # c=");
             for (k = 0; k < n; k++) fprintf(f, "%s%d", k ? "," : "", ck[k]);
@@ -4243,12 +4243,12 @@ static Prog* pc_prog_select(void)
         return g_cur_prog;
     }
     {
-        extern unsigned int gm_8016AEDC(void);
+        extern unsigned int gm_GetFrameCount(void);
         int fresh = 0;
         /* The match frame counter is still zero during READY -- the moment
          * the compiles happen -- so "in a match" is "prepared and not yet
          * over": set at the stage conversion, cleared at match over. */
-        int in_match = g_shc_cur_stkind >= 0 || gm_8016AEDC() != 0;
+        int in_match = g_shc_cur_stkind >= 0 || gm_GetFrameCount() != 0;
         /* MELEE_SHC_SYNC=1: compile every miss where it is met, match or
          * not -- for the seed sweep, which needs the keys a match uses and
          * on a desktop never sees a frame slow enough to open the valve. */

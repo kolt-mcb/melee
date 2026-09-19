@@ -1,31 +1,26 @@
 #include "vi1101.h"
 
 #include "vi.h"
-
-#include "cm/camera.h"
-#include "dolphin/gx/GXStruct.h"
-#include "ef/efasync.h"
-#include "ef/eflib.h"
-#include "ft/ftdemo.h"
-#include "gm/gm_1601.h"
-#include "gm/gm_1A45.h"
-#include "gr/grlib.h"
-#include "gr/ground.h"
-#include "gr/stage.h"
-#include "it/item.h"
-#include "lb/lb_00F9.h"
-#include "lb/lb_013B.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbshadow.h"
-#include "lb/lbspdisplay.h"
-#include "mp/mpcoll.h"
-#include "pl/player.h"
-#include "sc/types.h"
-
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjproc.h>
+#include <dolphin/gx/GXStruct.h>
+#include <melee/ef/efasync.h>
+#include <melee/ef/eflib.h>
+#include <melee/ft/ftdemo.h>
+#include <melee/gm/gm_1601.h>
+#include <melee/gm/gmscene.h>
+#include <melee/gr/grlib.h>
+#include <melee/gr/inlines.h>
+#include <melee/gr/stage.h>
+#include <melee/it/item.h>
+#include <melee/lb/lb_013B.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbshadow.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
 u8 un_804D6FD8[8];
 GXColor un_804D5B08 = { 0, 0, 0, 0xff };
 
@@ -62,13 +57,9 @@ void un_8031F294(s32 arg0, s32 arg1)
 {
     HSD_JObj* jobj;
     VecMtxPtr pmtx;
-    char pad[16];
+    PAD_STACK(16);
 
-    Camera_80028B9C(6);
-    lb_8000FCDC();
-    mpColl_80041C78();
-    Ground_801C0378(0x40);
-    Stage_802251E8(St_Kind_Battle, 0);
+    Stage_InitScene(St_Kind_Battle, 0);
     Item_80266FA8();
     Item_80266FCC();
     Stage_8022524C();
@@ -84,8 +75,8 @@ void un_8031F294(s32 arg0, s32 arg1)
     Player_80032768(0, un_80400200.spawns);
     Player_80036F34(0, 8);
     pmtx = grLib_801C9A10();
-    Player_80036E20(CKIND_MARIO, un_804D6FCC, 5);
-    Player_SetPlayerCharacter(1, CKIND_MARIO);
+    Player_80036E20(CKind_Mario, un_804D6FCC, 5);
+    Player_SetPlayerCharacter(1, CKind_Mario);
     Player_SetCostumeId(1, 0);
     Player_SetPlayerId(1, 0);
     Player_SetSlottype(1, Gm_PKind_Demo);
@@ -99,9 +90,9 @@ void un_8031F294(s32 arg0, s32 arg1)
     HSD_JObjAnimAll(jobj);
     pmtx[1] = un_80400200.spawns[1];
     HSD_JObjReqAnimAll(jobj, un_804DE0DC);
-    if (gm_IsCKindUnlocked(CKIND_LUIGI) != 0) {
-        Player_80036E20(CKIND_LUIGI, un_804D6FCC, 5);
-        Player_SetPlayerCharacter(2, CKIND_LUIGI);
+    if (gm_IsCKindUnlocked(CKind_Luigi) != 0) {
+        Player_80036E20(CKind_Luigi, un_804D6FCC, 5);
+        Player_SetPlayerCharacter(2, CKind_Luigi);
         Player_SetCostumeId(2, 0);
         Player_SetPlayerId(2, 0);
         Player_SetSlottype(2, Gm_PKind_Demo);
@@ -129,7 +120,7 @@ void fn_8031F548(HSD_GObj* gobj)
 
 static void fn_8031F56C(HSD_GObj* gobj, int unused)
 {
-    char pad[8];
+    PAD_STACK(8);
 
     lbShadow_8000F38C(0);
     vi_RunCamera(gobj, (u8*) &un_804D5B08, 0x281);
@@ -142,7 +133,7 @@ void fn_8031F600(HSD_GObj* gobj)
     HSD_CObjAnim(cobj);
 
     if (170.0f == cobj->aobj->curr_frame) {
-        if (gm_IsCKindUnlocked(CKIND_LUIGI) != 0) {
+        if (gm_IsCKindUnlocked(CKind_Luigi) != 0) {
             vi_8031C9B4(0xD, 0);
             lbAudioAx_800237A8(0x209, 0x7F, 0x40);
         }
@@ -154,7 +145,7 @@ void fn_8031F600(HSD_GObj* gobj)
     }
 
     if (241.0f == cobj->aobj->curr_frame) {
-        if (gm_IsCKindUnlocked(CKIND_LUIGI) != 0) {
+        if (gm_IsCKindUnlocked(CKind_Luigi) != 0) {
             lbAudioAx_800237A8(0x20A, 0x7F, 0x40);
         }
     }
@@ -171,63 +162,59 @@ void fn_8031F600(HSD_GObj* gobj)
 
 void vi1101_Scene_OnEnter(void* arg)
 {
-    HSD_Joint* new_var2;
-    SceneDesc* var_r28;
-    HSD_CObj* temp_r3;
-    HSD_GObj* temp_r28;
-    HSD_GObj* temp_r31;
-    HSD_JObj* temp_r3_2;
-    HSD_GObj* temp_r26;
-    u8 new_var3;
-    s32 var_r31;
-    u8 temp_r29;
-    u8* input = arg;
-    char* data = (char*) &un_80400200;
-    HSD_JObj* new_var;
+    SceneDesc* scene;
+    HSD_CObj* cobj;
+    HSD_GObj* light_gobj;
+    HSD_GObj* camera_gobj;
+    HSD_JObj* jobj;
+    HSD_GObj* model_gobj;
+    s32 i;
+    u8 index = 0;
+    const u8* input = arg;
+    const Vi1101Data* data = &un_80400200;
     lbAudioAx_800236DC();
     efLib_Init();
-    temp_r29 = 0;
-    efAsync_LoadSync(temp_r29);
+    efAsync_LoadSync(index);
     lbAudioAx_80023F28(0x55);
     lbAudioAx_80024E50(1);
 
-    temp_r29 = input[0];
-    un_804D6FCC = lbArchive_LoadSymbols(data + 0x24, &un_804D6FC0, data + 0x30,
-                                        &un_804D6FC4, data + 0x40, NULL);
-    un_804D6FC8 = lbArchive_LoadSymbols(viGetCharAnimByIndex(temp_r29), NULL);
+    index = input[0];
+    un_804D6FCC = lbArchive_LoadSymbols(data->vi1101_dat, &un_804D6FC0,
+                                        data->visual1101_scene, &un_804D6FC4,
+                                        data->visual1101_cam2_scene, NULL);
+    un_804D6FC8 = lbArchive_LoadSymbols(viGetCharAnimByIndex(index), NULL);
 
-    temp_r28 = GObj_Create(0xB, 3, 0);
-    HSD_GObjObject_80390A70(temp_r28, HSD_GObj_LightKind & 0xFFFF,
+    light_gobj = GObj_Create(0xB, 3, 0);
+    HSD_GObjObject_80390A70(light_gobj, HSD_GObj_LightKind & 0xFFFF,
                             lb_80011AC4(un_804D6FC0->lights));
-    GObj_SetupGXLink(temp_r28, HSD_GObj_LObjCallback, 0, 0);
+    GObj_SetupGXLink(light_gobj, HSD_GObj_LObjCallback, 0, 0);
 
-    if (gm_IsCKindUnlocked(CKIND_LUIGI) != 0) {
-        var_r28 = un_804D6FC0;
-    } else {
-        var_r28 = un_804D6FC4;
-    }
+    scene = gm_IsCKindUnlocked(CKind_Luigi) ? un_804D6FC0 : un_804D6FC4;
 
-    temp_r31 = GObj_Create(0x13, 0x14, 0);
-    temp_r3 = lb_80013B14((HSD_CameraDescPerspective*) var_r28->cameras->desc);
-    HSD_GObjObject_80390A70(temp_r31, HSD_GObj_CameraKind, temp_r3);
-    GObj_SetupGXLinkMax(temp_r31, fn_8031F56C, 5);
-    HSD_CObjAddAnim(temp_r3, var_r28->cameras->anims[0]);
-    HSD_CObjReqAnim(temp_r3, un_804DE0DC);
-    HSD_CObjAnim(temp_r3);
-    HSD_GObj_SetupProc(temp_r31, fn_8031F600, 0);
+    camera_gobj = GObj_Create(0x13, 0x14, 0);
+    cobj = lb_80013B14(&scene->cameras->desc->perspective);
+    HSD_GObjObject_80390A70(camera_gobj, HSD_GObj_CameraKind, cobj);
+    GObj_SetupGXLinkMax(camera_gobj, fn_8031F56C, 5);
+    HSD_CObjAddAnim(cobj, scene->cameras->anims[0]);
+    HSD_CObjReqAnim(cobj, un_804DE0DC);
+    HSD_CObjAnim(cobj);
+    HSD_GObj_SetupProc(camera_gobj, fn_8031F600, 0);
 
-    for (var_r31 = 0; un_804D6FC0->models[var_r31] != NULL; var_r31++) {
-        temp_r26 = GObj_Create(0xE, 0xF, 0);
-        temp_r3_2 =
-            HSD_JObjLoadJoint(new_var2 = un_804D6FC0->models[var_r31]->joint);
-        HSD_GObjObject_80390A70(temp_r26, new_var3 = HSD_GObj_JObjKind,
-                                temp_r3_2);
-        GObj_SetupGXLink(temp_r26, HSD_GObj_JObjCallback, 9, 0);
-        gm_8016895C(temp_r3_2, un_804D6FC0->models[var_r31], 0);
-        HSD_JObjReqAnimAll(temp_r3_2, un_804DE0DC);
-        new_var = temp_r3_2;
-        HSD_JObjAnimAll(new_var);
-        HSD_GObj_SetupProc(temp_r26, fn_8031F548, 0x17);
+    for (i = 0; un_804D6FC0->models[i] != NULL; i++) {
+        HSD_Joint* joint;
+        u8 jobj_kind;
+        HSD_JObj* jobj_copy;
+
+        model_gobj = GObj_Create(0xE, 0xF, 0);
+        jobj = HSD_JObjLoadJoint(joint = un_804D6FC0->models[i]->joint);
+        jobj_kind = HSD_GObj_JObjKind;
+        HSD_GObjObject_80390A70(model_gobj, jobj_kind, jobj);
+        GObj_SetupGXLink(model_gobj, HSD_GObj_JObjCallback, 9, 0);
+        gm_8016895C(jobj, un_804D6FC0->models[i], 0);
+        HSD_JObjReqAnimAll(jobj, un_804DE0DC);
+        jobj_copy = jobj;
+        HSD_JObjAnimAll(jobj_copy);
+        HSD_GObj_SetupProc(model_gobj, fn_8031F548, 0x17);
     }
 
     un_8031F294(input[0], input[1]);
