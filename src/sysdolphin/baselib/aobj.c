@@ -1,5 +1,9 @@
 #include "aobj.h"
 
+#include <math.h>
+#include <stdarg.h>
+#include <string.h>
+
 #include "cobj.h"
 #include "debug.h"
 #include "dobj.h"
@@ -13,10 +17,6 @@
 #include "robj.h"
 #include "tobj.h"
 #include "wobj.h"
-
-#include <math.h>
-#include <stdarg.h>
-#include <string.h>
 
 HSD_ObjAllocData aobj_alloc_data;
 
@@ -53,10 +53,10 @@ void HSD_AObjSetFlags(HSD_AObj* aobj, u32 flags)
             on = getenv("MELEE_LOOPDBG") != NULL;
         }
         if (on && (flags & AOBJ_LOOP)) {
-            extern u32 gm_8016AEDC(void);
+            extern u32 gm_GetFrameCount(void);
             n++;
             fprintf(stderr, "[LOOPSET] gframe=%u #%ld aobj=%p was=%08x\n",
-                    (unsigned) gm_8016AEDC(), n, (void*) aobj,
+                    (unsigned) gm_GetFrameCount(), n, (void*) aobj,
                     aobj ? (unsigned) aobj->flags : 0u);
         }
     }
@@ -220,7 +220,7 @@ HSD_AObj* HSD_AObjLoadDesc(HSD_AObjDesc* aobjdesc)
     u8 _[4];
 
     HSD_FObj* fobj;
-    u32 id;
+    HSD_IDKey id;
     HSD_Obj* phi_r30;
 
     if (aobjdesc != NULL) {
@@ -277,7 +277,7 @@ void HSD_AObjRemove(HSD_AObj* aobj)
 
 HSD_AObj* HSD_AObjAlloc(void)
 {
-    HSD_AObj* new = (HSD_AObj*) HSD_ObjAlloc(HSD_AObjGetAllocData());
+    HSD_AObj* new = HSD_ObjAlloc(HSD_AObjGetAllocData());
     HSD_ASSERT(489, new);
 
     memset(new, 0, sizeof(HSD_AObj));
@@ -292,7 +292,7 @@ void HSD_AObjFree(HSD_AObj* aobj)
         return;
     }
 
-    HSD_ObjFree(HSD_AObjGetAllocData(), (HSD_ObjAllocLink*) aobj);
+    HSD_ObjFree(HSD_AObjGetAllocData(), aobj);
 }
 
 static void callbackForeachFunc(HSD_AObj* aobj, void* obj, HSD_Type type,

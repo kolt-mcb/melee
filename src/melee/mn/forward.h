@@ -23,6 +23,7 @@ typedef struct CSSTagData CSSTagData;
 typedef struct Diagram Diagram;
 typedef struct Diagram2 Diagram2;
 typedef struct Diagram3 Diagram3;
+typedef struct MnDiagram2RowLayout MnDiagram2RowLayout;
 typedef struct Menu Menu;
 typedef struct MenuKindData MenuKindData;
 typedef struct MnInfoData MnInfoData;

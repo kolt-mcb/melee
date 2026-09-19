@@ -4,71 +4,36 @@
 #endif
 #include "it_2725.h"
 
+#include <math.h>
+
+#include "inlines.h"
+#include "it_26B1.h"
 #include "it_279C.h"
 #include "it_3F14.h"
 #include "itanimlist.h"
+#include "itcoll.h"
 #include "iteffect.h"
+#include "item.h"
 #include "ithitbox.h"
 #include "itmaplib.h"
-
-#include "baselib/jobj.h"
-#include "baselib/random.h"
-#include "db/db.h"
-#include "ef/efsync.h"
-#include "ft/ftlib.h"
-#include "it/inlines.h"
-#include "it/it_26B1.h"
-#include "it/itcoll.h"
-#include "it/item.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbcollision.h"
-#include "lb/lbvector.h"
-#include "mp/mpcoll.h"
-
-#include <math.h>
-#include <baselib/gobjobject.h>
+#include <melee/db/db.h>
+#include <melee/ef/efsync.h>
+#include <melee/ft/ftlib.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbcollision.h>
+#include <melee/lb/lbvector.h>
+#include <melee/mp/mpcoll.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/random.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
-#include <math.h>
 #define IC2_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define IC2_FMA(a, b, c) ((a) * (b) + (c))
 #endif
-
-extern f32 it_804DC73C;
-
-#define it_2725_JObjSetTranslate(jobj, vec)                                   \
-    {                                                                         \
-        ((jobj) ? ((void) 0) : __assert("jobj.h", 916, "jobj"));              \
-        ((vec) ? ((void) 0) : __assert("jobj.h", 917, "translate"));          \
-        ((HSD_JObj*) (jobj))->translate = *(vec);                             \
-        if (!(((HSD_JObj*) (jobj))->flags & JOBJ_MTX_INDEP_SRT)) {            \
-            HSD_JObjSetMtxDirty(jobj);                                        \
-        }                                                                     \
-    }
-
-#define it_2725_JObjGetTranslation(jobj, vec)                                 \
-    {                                                                         \
-        ((jobj) ? ((void) 0) : __assert("jobj.h", 979, "jobj"));              \
-        ((vec) ? ((void) 0) : __assert("jobj.h", 980, "translate"));          \
-        *(vec) = ((HSD_JObj*) (jobj))->translate;                             \
-    }
-
-static inline void it_2725_JObjSetTranslateInline(HSD_JObj* jobj, Vec3* vec)
-{
-    if (jobj == NULL) {
-        __assert("jobj.h", 916, "jobj");
-    }
-    if (vec == NULL) {
-        __assert("jobj.h", 917, "translate");
-    }
-    jobj->translate = *vec;
-    if (!(jobj->flags & JOBJ_MTX_INDEP_SRT)) {
-        HSD_JObjSetMtxDirty(jobj);
-    }
-}
 
 static inline void it_8027129C_by_4(Item_GObj* item_gobj)
 {
@@ -166,7 +131,8 @@ Fighter* it_80272818(Item* item)
         ->fighter;
 }
 
-/// Returns Item_GObj of the specified kind if part of HSD_GObj_Entities->items
+/// Returns Item_GObj of the specified kind if part of
+/// HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]
 Item_GObj* it_80272828(ItemKind kind)
 {
     Item_GObj* item_gobj_return;
@@ -174,7 +140,7 @@ Item_GObj* it_80272828(ItemKind kind)
     Item_GObj* item_gobj_check;
     void* new_var;
     item_gobj_return = NULL;
-    item_gobj_check = (Item_GObj*) HSD_GObj_Entities->items;
+    item_gobj_check = (Item_GObj*) HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM];
     while (item_gobj_check != NULL) {
         new_var2 = (Item*) (new_var = item_gobj_check->user_data);
         if (new_var2->kind == kind) {
@@ -194,11 +160,8 @@ void it_80272860(Item_GObj* item_gobj, f32 arg1, f32 arg2)
     s32 var_r3;
 
     item = item_gobj->user_data;
-    // if these aren't ternaries it allocates registers differently .-.
     var_r0 = arg1 < 0.0f ? -1 : 1;
-
     var_f3 = item->x40_vel.y;
-
     var_r3 = var_f3 < 0.0f ? -1 : 1;
 
     if (var_r3 != var_r0) {
@@ -344,10 +307,6 @@ HSD_JObj* it_80272C90(Item_GObj* item_gobj)
                        ->xC4_article_data->x10_modelDesc->x8_bone_attach_id);
 }
 
-#ifdef MUST_MATCH
-#pragma auto_inline off
-#endif
-
 HSD_JObj* it_80272CC0(Item_GObj* item_gobj, enum_t idx)
 {
     Item* item = GET_ITEM(item_gobj);
@@ -364,10 +323,6 @@ HSD_JObj* it_80272CC0(Item_GObj* item_gobj, enum_t idx)
     return jobj;
 }
 
-#ifdef MUST_MATCH
-#pragma auto_inline on
-#endif
-
 bool it_80272D1C(Item_GObj* item_gobj)
 {
     if ((item_gobj != NULL) && (item_gobj->classifier == HSD_GOBJ_CLASS_ITEM))
@@ -376,11 +331,6 @@ bool it_80272D1C(Item_GObj* item_gobj)
     }
     return false;
 }
-
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 
 s32 it_80272D40(Item_GObj* item_gobj)
 {
@@ -400,10 +350,6 @@ s32 it_80272D40(Item_GObj* item_gobj)
     }
     return 2;
 }
-
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void itColl_BounceOffVictim(Item_GObj* gobj)
 {
@@ -555,7 +501,7 @@ void it_80273318(Item_GObj* item_gobj, HSD_Joint* joint)
     HSD_GObjObject_80390B0C(item_gobj);
     Item_802680CC(item_gobj);
     Item_8026849C(item_gobj);
-    it_2725_JObjSetTranslateInline(item_gobj->hsd_obj, &item->pos);
+    HSD_JObjSetTranslate(item_gobj->hsd_obj, &item->pos);
 }
 
 void it_80273408(Item_GObj* item_gobj)
@@ -715,11 +661,11 @@ void it_80273748(Item_GObj* item_gobj, Vec3* pos, Vec3* vel)
      * attribute that scales it. An item that leaves a fighter's hand with zero
      * velocity has one of the two zero, and the item list cannot tell which. */
     if (getenv("MELEE_THROWDBG") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         fprintf(stderr,
                 "[THROW] gframe=%u kind=%d vel=(%08x,%08x,%08x) mul=%08x "
                 "attr=%p\n",
-                (unsigned) gm_8016AEDC(), (int) item->kind,
+                (unsigned) gm_GetFrameCount(), (int) item->kind,
                 *(u32*) &vel->x, *(u32*) &vel->y, *(u32*) &vel->z,
                 *(u32*) &item->xCC_item_attr->x4_throw_speed_mul,
                 (void*) item->xCC_item_attr);
@@ -760,7 +706,7 @@ void it_80273748(Item_GObj* item_gobj, Vec3* pos, Vec3* vel)
         (item->hold_kind == 8))
     {
         jobj2 = it_80272C90(item_gobj);
-        it_2725_JObjGetTranslation(jobj2, &sp3C);
+        HSD_JObjGetTranslation(jobj2, &sp3C);
         sp3C.x = -sp3C.x;
         sp3C.y = -sp3C.y;
         sp3C.z = -sp3C.z;
@@ -777,7 +723,19 @@ void it_80273748(Item_GObj* item_gobj, Vec3* pos, Vec3* vel)
     item->pos.x = pos->x + sp3C.x;
     item->pos.y = pos->y + sp3C.y;
     item->pos.z = 0.0f;
-    it_2725_JObjSetTranslate(jobj, &item->pos);
+    HSD_JObjSetTranslate(jobj, &item->pos);
+}
+
+static inline void getOwnerJointPosition(Item* item, HSD_GObj* owner_gobj,
+                                         Vec3* offset, Vec3* world_pos)
+{
+    if (offset != NULL) {
+        lb_8000B1CC(ftLib_80086630((Fighter_GObj*) owner_gobj, item->xDC4),
+                    offset, world_pos);
+    } else {
+        lb_8000B1CC(ftLib_80086630((Fighter_GObj*) owner_gobj, item->xDC4),
+                    NULL, world_pos);
+    }
 }
 
 void it_80273B50(Item_GObj* item_gobj, Vec3* vel)
@@ -825,11 +783,11 @@ void it_80273B50(Item_GObj* item_gobj, Vec3* vel)
      * attribute that scales it. An item that leaves a fighter's hand with zero
      * velocity has one of the two zero, and the item list cannot tell which. */
     if (getenv("MELEE_THROWDBG") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         fprintf(stderr,
                 "[THROW] gframe=%u kind=%d vel=(%08x,%08x,%08x) mul=%08x "
                 "attr=%p\n",
-                (unsigned) gm_8016AEDC(), (int) item->kind,
+                (unsigned) gm_GetFrameCount(), (int) item->kind,
                 *(u32*) &vel->x, *(u32*) &vel->y, *(u32*) &vel->z,
                 *(u32*) &item->xCC_item_attr->x4_throw_speed_mul,
                 (void*) item->xCC_item_attr);
@@ -870,7 +828,7 @@ void it_80273B50(Item_GObj* item_gobj, Vec3* vel)
         (item->hold_kind == 8))
     {
         jobj = it_80272C90(item_gobj);
-        it_2725_JObjGetTranslation(jobj, &sp40);
+        HSD_JObjGetTranslation(jobj, &sp40);
         sp40.x = -sp40.x;
         sp40.y = -sp40.y;
         sp40.z = -sp40.z;
@@ -880,26 +838,12 @@ void it_80273B50(Item_GObj* item_gobj, Vec3* vel)
     {
         Item* item3 = GET_ITEM(item_gobj);
         HSD_JObj* item_jobj3 = GET_JOBJ(item_gobj);
-#ifdef MUST_MATCH
-        if (&sp40 != NULL)
-#endif
-        {
-            lb_8000B1CC(
-                ftLib_80086630((Fighter_GObj*) owner_gobj, item3->xDC4), &sp40,
-                &sp34);
-        }
-#ifdef MUST_MATCH
-        else {
-            lb_8000B1CC(
-                ftLib_80086630((Fighter_GObj*) owner_gobj, item3->xDC4), NULL,
-                &sp34);
-        }
-#endif
+        getOwnerJointPosition(item3, owner_gobj, &sp40, &sp34);
         pos = &item3->pos;
         item3->pos.x = sp34.x;
         item3->pos.y = sp34.y;
         item3->pos.z = 0.0f;
-        it_2725_JObjSetTranslate(item_jobj3, pos);
+        HSD_JObjSetTranslate(item_jobj3, pos);
     }
 }
 
@@ -938,7 +882,7 @@ void it_80273F34(Item_GObj* item_gobj, HSD_GObj* arg_gobj2)
     mpCollSetFacingDir(&item->x378_itemColl, int_dir);
     Item_8026B074(item);
     it_802762BC(item);
-    it_2725_JObjSetTranslate(item_jobj, &item->pos);
+    HSD_JObjSetTranslate(item_jobj, &item->pos);
 
     it_8027B4A4(arg_gobj2, item_gobj);
     it_8027B378(arg_gobj2, item_gobj, it_802758D4(item_gobj));

@@ -4,6 +4,9 @@
 #include "port/pc_ptr.h"
 #endif
 
+#include <math.h>
+#include <placeholder.h>
+
 #include "aobj.h"
 #include "class.h"
 #include "debug.h"
@@ -13,10 +16,6 @@
 #include "util.h"
 #include "video.h"
 #include "wobj.h"
-
-#include <placeholder.h>
-
-#include <math.h>
 #include <dolphin/gx.h>
 #include <dolphin/gx/GXTransform.h>
 #include <dolphin/mtx.h>
@@ -353,7 +352,7 @@ static bool setupNormalCamera(HSD_CObj* cobj)
     bottom = cobj->scissor.bottom * y_scale;
     width = right - left;
     height = bottom - top;
-    GXSetScissor((u32) left, (u32) top, (u32) width, (u32) height);
+    GXSetScissor(left, top, width, height);
 
     projection_type = makeProjectionMtx(cobj, p);
     GXSetProjection(p, projection_type);
@@ -363,12 +362,8 @@ static bool setupNormalCamera(HSD_CObj* cobj)
 
 static bool setupTopHalfCamera(HSD_CObj* cobj)
 {
-    int unused[3];
     GXProjectionType projection_type;
-    /// @todo Should be an `Mtx44` like the other three: `makeProjectionMtx`
-    /// writes 4 rows. Changing it here does not match, so the extra row
-    /// currently lands in `unused` above.
-    Mtx p;
+    Mtx44 p;
 
     f32 h_scale;
     f32 t;
@@ -399,7 +394,7 @@ static bool setupTopHalfCamera(HSD_CObj* cobj)
     bottom = bottom < rmode->efbHeight ? bottom : rmode->efbHeight;
     width = right - left;
     height = bottom - top;
-    GXSetScissor((u32) left, (u32) top, (u32) width, (u32) height);
+    GXSetScissor(left, top, width, height);
     top = cobj->viewport.ymin;
     bottom = cobj->viewport.ymax;
     left = cobj->viewport.xmin;
@@ -477,7 +472,7 @@ static bool setupBottomHalfCamera(HSD_CObj* cobj)
     bottom = cobj->scissor.bottom - screen_top;
     width = right - left;
     height = bottom - top;
-    GXSetScissor((u32) left, (u32) top, (u32) width, (u32) height);
+    GXSetScissor(left, top, width, height);
 
     top = cobj->viewport.ymin;                   // lfs f4,0x14(r30)
     left = cobj->viewport.xmin;                  // lfs f1,0xc(r30)
@@ -817,12 +812,10 @@ static inline f32 vec_get_x(Vec3* v)
     return v->x;
 }
 
-#ifdef MUST_MATCH
-static inline f64 cobj_fabsf_p(f32* v)
+static inline f64 vec_get_abs_y(Vec3* v)
 {
-    return fabsf(*v);
+    return fabsf(v->y);
 }
-#endif
 
 static int roll2upvec(HSD_CObj* cobj, Vec3* up, float roll)
 {
@@ -836,11 +829,7 @@ static int roll2upvec(HSD_CObj* cobj, Vec3* up, float roll)
     if (res != 0) {
         return res;
     }
-#ifdef MUST_MATCH
-    if (1.0 - cobj_fabsf_p(&eye.y) < 0.0001) {
-#else
-    if (1.0 - fabsf(eye.y) < 0.0001) {
-#endif
+    if (1.0 - vec_get_abs_y(&eye) < 0.0001) {
         v0.x = sqrtf(eye.y * eye.y + eye.z * eye.z);
         v0.y = eye.y * (-vec_get_x(&eye) / v0.x);
         v0.z = eye.z * (-eye.x / v0.x);
@@ -1435,8 +1424,8 @@ void HSD_CObjSetDefaultClass(HSD_ClassInfo* info)
 
 HSD_CObj* HSD_CObjAlloc(void)
 {
-    HSD_CObj* cobj = (HSD_CObj*) hsdNew(
-        default_class ? default_class : &hsdCObj.parent.parent);
+    HSD_CObj* cobj = HSD_COBJ(
+        hsdNew(default_class ? default_class : &hsdCObj.parent.parent));
     HSD_ASSERT(1954, cobj);
     return cobj;
 }
@@ -1542,7 +1531,7 @@ static int CObjInit(HSD_Class* o)
     if (status < 0) {
         return status;
     }
-    cobj = (HSD_CObj*) o;
+    cobj = HSD_COBJ(o);
     if (cobj != NULL) {
         HSD_CObjSetMtxDirty(cobj);
     }
@@ -1555,23 +1544,13 @@ void CObjRelease(HSD_Class* o)
 {
     HSD_WObj* eyepos;
     HSD_WObj* interest;
-    HSD_CObj* cobj = (HSD_CObj*) o;
+    HSD_CObj* cobj = HSD_COBJ(o);
 
     HSD_AObjRemove(cobj->aobj);
     eyepos = HSD_CObjGetEyePositionWObj(cobj);
-    if (eyepos != NULL) {
-        if (ref_DEC(eyepos) && eyepos != NULL) {
-            HSD_CLASS_METHOD(eyepos)->release((HSD_Class*) eyepos);
-            HSD_CLASS_METHOD(eyepos)->destroy((HSD_Class*) eyepos);
-        }
-    }
+    HSD_WObjUnref(eyepos);
     interest = HSD_CObjGetInterestWObj(cobj);
-    if (interest != NULL) {
-        if (ref_DEC(interest) && interest != NULL) {
-            HSD_CLASS_METHOD(interest)->release((HSD_Class*) interest);
-            HSD_CLASS_METHOD(interest)->destroy((HSD_Class*) interest);
-        }
-    }
+    HSD_WObjUnref(interest);
     if (cobj->proj_mtx != NULL) {
         HSD_MtxFree(cobj->proj_mtx);
     }

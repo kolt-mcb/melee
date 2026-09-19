@@ -1,42 +1,37 @@
 #include "vi0501.h"
 
-#include "cm/camera.h"
-#include "dolphin/mtx.h"
-#include "ef/efasync.h"
-#include "ef/eflib.h"
-
 #include "forward.h"
-
-#include "ft/ftdemo.h"
-#include "gm/gm_1601.h"
-#include "gm/gm_1A45.h"
-#include "gr/grlib.h"
-#include "gr/ground.h"
-#include "gr/stage.h"
-#include "it/item.h"
-#include "lb/lb_00F9.h"
-#include "lb/lb_013B.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbshadow.h"
-#include "lb/lbspdisplay.h"
-#include "mn/mnmain.h"
-#include "mp/mpcoll.h"
-#include "pl/player.h"
-#include "sc/types.h"
-#include "vi/types.h"
-#include "vi/vi.h"
-
+#include "types.h"
+#include "vi.h"
 #include <dolphin/gx.h>
-#include <baselib/aobj.h>
-#include <baselib/cobj.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/wobj.h>
+#include <dolphin/mtx.h>
+#include <melee/ef/efasync.h>
+#include <melee/ef/eflib.h>
+#include <melee/ft/ftdemo.h>
+#include <melee/gm/gm_1601.h>
+#include <melee/gm/gmscene.h>
+#include <melee/gr/grlib.h>
+#include <melee/gr/ground.h>
+#include <melee/gr/inlines.h>
+#include <melee/gr/stage.h>
+#include <melee/it/item.h>
+#include <melee/lb/lb_013B.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbshadow.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/mn/mnmain.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/wobj.h>
 
 static SceneDesc* un_804D6F70;
 static HSD_Archive* un_804D6F74;
@@ -80,11 +75,7 @@ void un_8031D9F8(CharacterKind char_kind, int costume, int spawn_mode,
 
     PAD_STACK(8);
 
-    Camera_80028B9C(6);
-    lb_8000FCDC();
-    mpColl_80041C78();
-    Ground_801C0378(0x40);
-    Stage_802251E8(St_Kind_Greens, NULL);
+    Stage_InitScene(St_Kind_Greens, NULL);
     Item_80266FA8();
     Item_80266FCC();
     un_804D6F80 = Ground_801C0498();
@@ -105,11 +96,11 @@ void un_8031D9F8(CharacterKind char_kind, int costume, int spawn_mode,
     counts = (u8*) spawn_count;
     pos = grLib_801C9A10();
     for (i = 1; i < 4; i++) {
-        Player_80036E20(CKIND_KIRBY, un_804D6F74, 6);
+        Player_80036E20(CKind_Kirby, un_804D6F74, 6);
         count = counts[i - 1];
         Player_80031DA8(count, spawn_mode);
         Player_SetFlagsBit1(i);
-        Player_SetPlayerCharacter(i, CKIND_KIRBY);
+        Player_SetPlayerCharacter(i, CKind_Kirby);
         Player_SetCostumeId(i, spawn_mode);
         Player_SetPlayerId(i, 0);
         Player_SetSlottype(i, Gm_PKind_Demo);
@@ -191,7 +182,7 @@ void vi0501_Scene_OnEnter(void* arg)
     HSD_JObj* jobj;
     ViCharaDesc* desc;
 
-    desc = (ViCharaDesc*) arg;
+    desc = arg;
     lbAudioAx_800236DC();
     efLib_Init();
     efAsync_LoadSync(0);
@@ -210,8 +201,7 @@ void vi0501_Scene_OnEnter(void* arg)
     HSD_GObjObject_80390A70(light_gobj, HSD_GObj_LightKind, lobj);
     GObj_SetupGXLink(light_gobj, HSD_GObj_LObjCallback, 0, 0);
     camera_gobj = GObj_Create(0x13, 0x14, 0);
-    cobj =
-        lb_80013B14((HSD_CameraDescPerspective*) un_804D6F70->cameras->desc);
+    cobj = lb_80013B14(&un_804D6F70->cameras->desc->perspective);
     HSD_GObjObject_80390A70(camera_gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(camera_gobj, vi_8031DC80, 5);
     HSD_CObjAddAnim(cobj, un_804D6F70->cameras->anims[0]);

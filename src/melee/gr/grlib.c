@@ -1,28 +1,27 @@
 #include "grlib.h"
 
+#include <sysdolphin/baselib/forward.h>
+
 #include "grbigblue.h"
 #include "gricemt.h"
 #include "ground.h"
 #include "grrcruise.h"
-
-#include "baselib/forward.h"
-
-#include "baselib/psappsrt.h"
-#include "baselib/psstructs.h"
-#include "cm/camera.h"
-#include "ft/inlines.h"
-#include "ft/types.h"
-#include "gr/types.h"
-#include "it/inlines.h"
-#include "it/it_26B1.h"
-#include "lb/lb_00F9.h"
-#include "lb/types.h" // IWYU pragma: keep
-#include "sc/types.h"
-
-#include <baselib/generator.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
+#include "types.h"
+#include <melee/cm/camera.h>
+#include <melee/ft/inlines.h>
+#include <melee/ft/types.h>
+#include <melee/it/inlines.h>
+#include <melee/it/it_26B1.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/types.h> // IWYU pragma: keep
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/generator.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/psappsrt.h>
+#include <sysdolphin/baselib/psstructs.h>
 
 /* The ECB box test: 0.5*extent + offset and 0.5*(a+b) + pos are
  * fmadds on the console (801C9F40..). */
@@ -117,22 +116,6 @@ void grLib_801C98A0(HSD_JObj* jobj)
     }
 }
 
-static inline HSD_JObj* jobj_child(HSD_JObj* node)
-{
-    if (node == NULL) {
-        return NULL;
-    }
-    return node->child;
-}
-
-static inline HSD_JObj* jobj_next(HSD_JObj* node)
-{
-    if (node == NULL) {
-        return NULL;
-    }
-    return node->next;
-}
-
 void grLib_801C9908(HSD_JObj* jobj)
 {
     HSD_Generator* cur;
@@ -154,7 +137,9 @@ void grLib_801C9908(HSD_JObj* jobj)
         return;
     }
 
-    for (jobj = jobj_child(jobj); jobj != NULL; jobj = jobj_next(jobj)) {
+    for (jobj = HSD_JObjGetChild(jobj); jobj != NULL;
+         jobj = HSD_JObjGetNext(jobj))
+    {
         grLib_801C9908(jobj);
     }
 }
@@ -219,8 +204,8 @@ static void grLib_801C9BC8(HSD_GObj* gobj)
 {
     HSD_JObj* jobj = gobj->hsd_obj;
     HSD_JObjAnimAll(jobj);
-    Camera_8002A278(HSD_JObjGetTranslationX(jobj),
-                    HSD_JObjGetTranslationY(jobj));
+    Camera_SetQuakeOffset(HSD_JObjGetTranslationX(jobj),
+                          HSD_JObjGetTranslationY(jobj));
 }
 
 static void grLib_801C9C40(HSD_GObj* gobj)
@@ -229,29 +214,29 @@ static void grLib_801C9C40(HSD_GObj* gobj)
     HSD_AObj* aobj = jobj->aobj;
 
     HSD_JObjAnimAll(jobj);
-    Camera_8002A278(HSD_JObjGetTranslationX(jobj),
-                    HSD_JObjGetTranslationY(jobj));
+    Camera_SetQuakeOffset(HSD_JObjGetTranslationX(jobj),
+                          HSD_JObjGetTranslationY(jobj));
 
     if (aobj == NULL || aobj->flags & 0x40000000) {
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
     }
 }
 
-HSD_GObj* grLib_801C9CEC(s32 idx1)
+HSD_GObj* grLib_801C9CEC(CmQuakeKind kind)
 {
     u8 tmp;
     HSD_GObj* gobj;
     HSD_JObj* jobj;
-    s32 idx0;
+    s32 quake_idx;
 
-    if (idx1 == 1) {
-        idx0 = 0;
-    } else if (idx1 == 2) {
-        idx0 = 1;
-    } else if (idx1 == 3) {
-        idx0 = 2;
-    } else if (idx1 == 4) {
-        idx0 = 3;
+    if (kind == QuakeKind_Loop) {
+        quake_idx = 0;
+    } else if (kind == QuakeKind_Small) {
+        quake_idx = 1;
+    } else if (kind == QuakeKind_Medium) {
+        quake_idx = 2;
+    } else if (kind == QuakeKind_Large) {
+        quake_idx = 3;
     } else {
         return NULL;
     }
@@ -259,21 +244,21 @@ HSD_GObj* grLib_801C9CEC(s32 idx1)
     if (stage_info.quake_model_set == NULL) {
         return NULL;
     }
-    tmp = idx1;
+    tmp = kind;
     gobj = GObj_Create(HSD_GOBJ_CLASS_STAGE, 18, tmp);
     jobj = HSD_JObjLoadJoint(stage_info.quake_model_set->joint);
 
     HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
-    if (idx1 == 1) {
+    if (kind == QuakeKind_Loop) {
         HSD_GObj_SetupProc(gobj, grLib_801C9BC8, 1);
     } else {
         HSD_GObj_SetupProc(gobj, grLib_801C9C40, 1);
     }
 
-    HSD_JObjAddAnimAll(jobj, stage_info.quake_model_set->anims[idx0], NULL,
-                       NULL);
+    HSD_JObjAddAnimAll(jobj, stage_info.quake_model_set->anims[quake_idx],
+                       NULL, NULL);
     HSD_JObjReqAnimAll(jobj, 0);
-    if (idx1 == 1) {
+    if (kind == QuakeKind_Loop) {
         HSD_ForeachAnim(jobj, 6, 0x20, HSD_AObjSetFlags, AOBJ_ARG_AU,
                         AOBJ_LOOP);
     }
@@ -357,7 +342,7 @@ int grLib_801C9EE8(Vec3* point, float offset)
     Item_GObj* cur_item;
     Item_GObj* items;
 
-    fighters = HSD_GObj_Entities->fighters;
+    fighters = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER];
     for (cur_fighter = fighters; cur_fighter != NULL;
          cur_fighter = cur_fighter->next)
     {
@@ -367,7 +352,7 @@ int grLib_801C9EE8(Vec3* point, float offset)
         }
     }
 
-    items = HSD_GObj_Entities->items;
+    items = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM];
     for (cur_item = items; cur_item != NULL; cur_item = cur_item->next) {
         if (itGetKind(cur_item) != It_PKind_Random) {
             ip = GET_ITEM(cur_item);

@@ -1,7 +1,7 @@
 #ifndef SYSDOLPHIN_BASELIB_DEBUG_H
 #define SYSDOLPHIN_BASELIB_DEBUG_H
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
 #include <dolphin/os.h> // IWYU pragma: keep
 
@@ -16,15 +16,15 @@ typedef void (*PanicCallback)(OSContext*, ...);
  * the end of the emitted block and into whatever the linker had placed next.
  * That is what turned "texture no exist!" into a segfault inside an unrelated
  * function's diagnostic, and it applies to every assert in the build. */
-void __assert(char*, u32, char*);
+void __assert(const char*, u32, const char*);
 
 void HSD_LogInit(void);
-void HSD_Panic(char*, u32, char*);
+void HSD_Panic(const char*, u32, const char*);
 #else
-ATTRIBUTE_NORETURN void __assert(char*, u32, char*);
+ATTRIBUTE_NORETURN void __assert(const char*, u32, const char*);
 
 void HSD_LogInit(void);
-ATTRIBUTE_NORETURN void HSD_Panic(char*, u32, char*);
+ATTRIBUTE_NORETURN void HSD_Panic(const char*, u32, const char*);
 #endif
 
 /// @todo Take @c file as another arg, ignore it if not `MUST_MATCH`.
@@ -40,7 +40,7 @@ ATTRIBUTE_NORETURN void HSD_Panic(char*, u32, char*);
 #define HSD_ASSERT(line, cond)                                                \
     ((cond) ? ((void) 0) : __assert(__FILE__, __LINE__, #cond))
 #define HSD_ASSERTMSG(line, cond, msg)                                        \
-    ((cond) ? ((void) 0) : __assert(__FILE__, __LINE__, #cond))
+    ((cond) ? ((void) 0) : __assert(__FILE__, __LINE__, msg))
 #define HSD_ASSERTREPORT(line, cond, ...)                                     \
     ((cond) ? (void) 0                                                        \
             : (OSReport(__VA_ARGS__), __assert(__FILE__, __LINE__, #cond)))

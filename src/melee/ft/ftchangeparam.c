@@ -4,11 +4,11 @@
 #include <string.h>
 #endif
 
-#include "placeholder.h"
+#include <placeholder.h>
 
-#include <baselib/debug.h>
-#include <melee/ft/fighter.h>
-#include <melee/ft/inlines.h>
+#include "fighter.h"
+#include "inlines.h"
+#include <sysdolphin/baselib/debug.h>
 
 /* The console fuses a*b+c into one rounding; x86 rounds twice. */
 #if BUILD_TARGET_PC

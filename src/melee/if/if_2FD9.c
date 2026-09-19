@@ -1,22 +1,22 @@
 #include "if_2FD9.h"
 
-#include "gm/gm_unsplit.h"
-#include "if/ifall.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "pl/player.h"
-#include "sc/types.h"
-
-#include <baselib/cobj.h>
-#include <baselib/dobj.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/lobj.h>
+#include "forward.h"
+#include "ifall.h"
+#include <melee/gm/gm_unsplit.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
 
 #if BUILD_TARGET_PC
 #include "port/pc_scene.h"
@@ -35,7 +35,7 @@
     unsigned char x32;
     UNK_T pad_34;
 } un_804A1F10;
-/* 4A1F48 */ struct un_804A1F48_t un_804A1F48;
+/* 4A1F48 */ struct un_804A1F48_t if_Scene_Prize_EnterData;
 
 /// .sdata2
 /* 4DDBA8 */ static char const un_804DDBA8[4] = { 0, 1, 2, 3 };
@@ -236,7 +236,7 @@ void un_802FE390(void)
     PAD_STACK(8);
     for (i = 0; i < 4; i++) {
         if (un_804A1F10.x4[i] != 0) {
-            HSD_GObjPLink_80390228(un_804A1F10.x4[i]);
+            HSD_GObjFree(un_804A1F10.x4[i]);
             un_804A1F10.x4[i] = 0;
         }
     }

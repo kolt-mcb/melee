@@ -5,10 +5,14 @@
 #include <stdlib.h>
 #include "pobj.h"
 
+#include <math.h> // IWYU pragma: keep
+#include <string.h>
+
 #include "aobj.h"
 #include "class.h"
 #include "debug.h"
 #include "displayfunc.h"
+#include "forward.h"
 #include "id.h"
 #include "jobj.h"
 #include "memory.h"
@@ -17,11 +21,6 @@
 #include "state.h"
 #include "tobj.h"
 #include "util.h"
-
-#include "forward.h"
-
-#include <math.h> // IWYU pragma: keep
-#include <string.h>
 #if BUILD_TARGET_PC
 #include <float.h>
 #endif
@@ -225,13 +224,13 @@ static HSD_SList* loadEnvelopeDesc(HSD_EnvelopeDesc** edesc_p)
         while (edesc->joint) {
             *env_p = HSD_EnvelopeAlloc();
             (*env_p)->weight = edesc->weight;
-            env_p = &((*env_p)->next);
+            env_p = &(*env_p)->next;
             edesc++;
         }
 
         (*list_p) = HSD_SListAlloc();
         (*list_p)->data = envelope;
-        list_p = &((*list_p)->next);
+        list_p = &(*list_p)->next;
         edesc_p++;
     }
     return list;
@@ -275,8 +274,7 @@ static HSD_ShapeSet* loadShapeSetDesc(HSD_ShapeSetDesc* sdesc)
     shape_set->normal_desc = sdesc->normal_desc;
     shape_set->normal_idx_list = sdesc->normal_idx_list;
     if (shape_set->flags & SHAPESET_ADDITIVE) {
-        shape_set->blend.bp =
-            (f32*) HSD_MemAlloc(shape_set->nb_shape * sizeof(f32));
+        shape_set->blend.bp = HSD_MemAlloc(shape_set->nb_shape * sizeof(f32));
         for (i = 0; i < shape_set->nb_shape; i++) {
             shape_set->blend.bp[i] = 0.0f;
         }
@@ -402,7 +400,7 @@ void HSD_PObjSetDefaultClass(HSD_PObjInfo* info)
 
 HSD_PObj* HSD_PObjAlloc(void)
 {
-    HSD_PObj* pobj = hsdNew((HSD_ClassInfo*) (HSD_PObjGetDefaultClass()));
+    HSD_PObj* pobj = hsdNew(&HSD_PObjGetDefaultClass()->parent);
     HSD_ASSERT(703, pobj);
     return pobj;
 }
@@ -426,7 +424,7 @@ static void resolveEnvelope(HSD_SList* list, HSD_EnvelopeDesc** edesc_p)
 
         while (env && edesc->joint) {
             HSD_JObjUnrefThis(env->jobj);
-            env->jobj = HSD_IDGetData((u32) edesc->joint, NULL);
+            env->jobj = HSD_IDGetData((HSD_IDKey) edesc->joint, NULL);
             HSD_ASSERT(736, env->jobj);
             HSD_JObjRefThis(env->jobj);
             env = env->next;
@@ -460,7 +458,7 @@ void HSD_PObjResolveRefs(HSD_PObj* pobj, HSD_PObjDesc* pdesc)
         HSD_JObjUnrefThis(pobj->u.jobj);
         pobj->u.jobj = NULL;
         if (pdesc->u.joint != NULL) {
-            pobj->u.jobj = HSD_IDGetData((u32) pdesc->u.joint, NULL);
+            pobj->u.jobj = HSD_IDGetData((HSD_IDKey) pdesc->u.joint, NULL);
 #if BUILD_TARGET_PC
             { static int _r=-1; if(_r<0)_r=(getenv("MELEE_MTR")!=NULL); if(_r){static int _n=0; if(_n++<120){
                 f32* jm = (f32*)((u8*)pobj->u.jobj + 0x44);

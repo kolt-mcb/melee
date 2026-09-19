@@ -1,14 +1,14 @@
 
-#include "ft/ftattacks4combo.h"
+#include "ftattacks4combo.h"
 
-#include "ft/chara/ftCommon/ftCo_AttackS4.h"
-#include "ft/chara/ftCommon/ftCo_Wait.h"
-#include "ft/fighter.h"
+#include "fighter.h"
+#include "kinds/ftCommon/ftCo_AttackS4.h"
+#include "kinds/ftCommon/ftCo_Wait.h"
 
 bool ftCo_800CECE8(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if (fp->cmd_vars[0] != 0 && (fp->input.x668 & HSD_PAD_A)) {
+    if (fp->cmd_vars[0] != 0 && (fp->input.pressed_buttons & HSD_PAD_A)) {
         ftCo_800CED30(gobj);
         return true;
     }
@@ -23,14 +23,14 @@ void ftCo_800CED30(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     FighterKind kind = fp->kind;
 
-    if (kind == FTKIND_CLINK) {
+    if (kind == Ft_Kind_CLink) {
         goto first;
     } else {
-        if (kind < FTKIND_CLINK) {
-            if (kind != FTKIND_LINK) {
+        if (kind < Ft_Kind_CLink) {
+            if (kind != Ft_Kind_Link) {
                 goto second;
             first:
-                if (kind != FTKIND_LINK) {
+                if (kind != Ft_Kind_Link) {
                     goto third;
                 }
             }

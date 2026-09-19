@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include "jobj.h"
 
+#include <math.h>
+#include <string.h>
+
 #include "aobj.h"
 #include "class.h"
 #include "cobj.h"
@@ -19,9 +22,6 @@
 #include "pobj.h"
 #include "robj.h"
 #include "spline.h"
-
-#include <math.h>
-#include <string.h>
 #include <dolphin/mtx.h>
 
 #if BUILD_TARGET_PC
@@ -194,11 +194,11 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
     {
         extern void* pc_jobj_watch_ptr;
         if (pc_jobj_watch_ptr == (void*) jobj) {
-            extern u32 gm_8016AEDC(void);
+            extern u32 gm_GetFrameCount(void);
             fprintf(stderr,
                     "[JOBJMK] gframe=%u j=%p ret=%p t=(%08x,%08x) "
                     "r=(%08x,%08x,%08x) par=%p parm=(%08x,%08x)\n",
-                    (unsigned) gm_8016AEDC(), (void*) jobj,
+                    (unsigned) gm_GetFrameCount(), (void*) jobj,
                     __builtin_return_address(0), *(u32*) &jobj->translate.x,
                     *(u32*) &jobj->translate.y, *(u32*) &jobj->rotate.x,
                     *(u32*) &jobj->rotate.y, *(u32*) &jobj->rotate.z,
@@ -551,8 +551,8 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
 {
 #if BUILD_TARGET_PC
     if (pc_dbg_on(&pc_orderlog_on, "MELEE_ORDERLOG")) {
-        extern u32 gm_8016AEDC(void);
-        u32 fr = gm_8016AEDC();
+        extern u32 gm_GetFrameCount(void);
+        u32 fr = gm_GetFrameCount();
         if (fr <= 1)
             fprintf(stderr, "[ORD] f%u anim jobj=%p type=%u\n", fr, obj, (unsigned) type);
     }
@@ -987,8 +987,8 @@ s32 JObjLoad(HSD_JObj* jobj, HSD_Joint* joint, HSD_JObj* parent)
         jobj->envelopemtx = HSD_MtxAlloc();
         memcpy(jobj->envelopemtx, joint->mtx, sizeof(Mtx));
     }
-    HSD_IDInsertToTable(NULL, (u32) joint, jobj);
-    jobj->id = (u32) joint;
+    HSD_IDInsertToTable(NULL, (HSD_IDKey) joint, jobj);
+    jobj->id = (HSD_IDKey) joint;
 #if BUILD_TARGET_PC
     /* Animation descs reach joints by their GameCube address (AObjDesc
      * obj_id -> HSD_IDGetDataFromTable in AObjUpdateAnim, the spline a
@@ -1058,7 +1058,8 @@ void HSD_JObjResolveRefs(HSD_JObj* jobj, HSD_Joint* joint)
     #endif /* BUILD_TARGET_PC */
     if (!!(jobj->flags & JOBJ_INSTANCE)) {
         HSD_JObjUnref(jobj->child);
-        jobj->child = HSD_IDGetDataFromTable(NULL, (u32) joint->child, NULL);
+        jobj->child =
+            HSD_IDGetDataFromTable(NULL, (HSD_IDKey) joint->child, NULL);
         HSD_ASSERT(1108, jobj->child);
         HSD_JObjRef(jobj->child);
     }
@@ -1800,8 +1801,8 @@ void HSD_JObjSetupMatrixSub(HSD_JObj* jobj)
 {
 #if BUILD_TARGET_PC
     if (pc_dbg_on(&pc_orderlog_on, "MELEE_ORDERLOG")) {
-        extern u32 gm_8016AEDC(void);
-        u32 fr = gm_8016AEDC();
+        extern u32 gm_GetFrameCount(void);
+        u32 fr = gm_GetFrameCount();
         if (fr <= 1)
             fprintf(stderr, "[ORD] f%u setup jobj=%p from=%p\n", fr, (void*) jobj,
                     __builtin_return_address(0));
@@ -1964,7 +1965,7 @@ void JObjRelease(HSD_Class* o)
     #endif /* BUILD_TARGET_PC */
 
     if (HSD_IDGetDataFromTable(NULL, jobj->id, NULL) == jobj) {
-        u32 id = jobj->id;
+        HSD_IDKey id = jobj->id;
         HSD_IDRemoveByIDFromTable(NULL, id);
     }
     if (jobj->scl != NULL) {

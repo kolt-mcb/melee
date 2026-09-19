@@ -3,6 +3,9 @@
 #include "port/pc_execinfo.h"
 #endif
 
+#include <placeholder.h>
+#include <string.h>
+
 #include "aobj.h"
 #include "cobj.h"
 #include "debug.h"
@@ -10,10 +13,6 @@
 #include "memory.h"
 #include "mtx.h"
 #include "tev.h"
-
-#include <placeholder.h>
-
-#include <string.h>
 #include <dolphin/gx.h>
 #if BUILD_TARGET_PC
 #include <stdio.h>
@@ -106,8 +105,8 @@ void HSD_TObjAddAnim(HSD_TObj* tobj, HSD_TexAnim* texanim)
             }
 
             if (ta->n_tluttbl) {
-                tobj->tluttbl = (HSD_Tlut**) HSD_MemAlloc(
-                    (s32) sizeof(HSD_Tlut*) * (ta->n_tluttbl + 1));
+                tobj->tluttbl = HSD_MemAlloc((s32) sizeof(HSD_Tlut*) *
+                                             (ta->n_tluttbl + 1));
                 for (i = 0; i < ta->n_tluttbl; i++) {
                     tobj->tluttbl[i] = HSD_TlutLoadDesc(ta->tluttbl[i]);
                 }
@@ -483,18 +482,8 @@ static void MakeTextureMtx(HSD_TObj* tobj)
     Vec3 trans;
     Quaternion rot;
 
-    bool no_assert = false;
-
     PAD_STACK(8);
-
-    if (tobj->repeat_s && tobj->repeat_t) {
-        no_assert = true;
-    }
-
-    /// @todo Convert to @c HSD_ASSERT once a byte-matching form is found.
-    if (!no_assert) {
-        __assert(__FILE__, 589, "tobj->repeat_s && tobj->repeat_t");
-    }
+    HSD_ASSERT(589, tobj->repeat_s && tobj->repeat_t);
 
     scale.x = fabsf(tobj->scale.x) < FLT_EPSILON
                   ? 0.0F
@@ -513,7 +502,7 @@ static void MakeTextureMtx(HSD_TObj* tobj)
                                    : 0.0F));
     trans.z = tobj->translate.z;
 
-    PSMTXTrans(tobj->mtx, trans.x, trans.y, trans.z);
+    MTXTrans(tobj->mtx, trans.x, trans.y, trans.z);
     HSD_MkRotationMtx(m, (Vec3*) &rot);
     MTXConcat(m, tobj->mtx, tobj->mtx);
     MTXScale(m, scale.x, scale.y, scale.z);
@@ -569,10 +558,10 @@ static void TObjSetupMtx(HSD_TObj* tobj)
             HSD_ASSERT(0x2A8, cobj);
             vmtx = HSD_CObjGetViewingMtxPtrDirect(cobj);
             HSD_LObjGetLightVector(lobj, &ldir);
-            PSMTXMultVecSR(vmtx, &ldir, &ldir);
+            MTXMultVecSR(vmtx, &ldir, &ldir);
             ldir.z += -1.0F;
 
-            PSVECNormalize(&ldir, &half);
+            VECNormalize(&ldir, &half);
 
             half.x *= -0.5;
             half.y *= -0.5;
@@ -601,7 +590,7 @@ static void TObjSetupMtx(HSD_TObj* tobj)
         HSD_CObj* cobj = HSD_CObjGetCurrent();
         Mtx mtx;
 
-        PSMTXConcat(tobj->mtx, HSD_CObjGetInvViewingMtxPtrDirect(cobj), mtx);
+        MTXConcat(tobj->mtx, HSD_CObjGetInvViewingMtxPtrDirect(cobj), mtx);
         GXLoadTexMtxImm(mtx, tobj->mtxid, GX_MTX3x4);
     } break;
 
@@ -1671,7 +1660,7 @@ HSD_TObjInfo* HSD_TObjGetDefaultClass(void)
 
 HSD_TObj* HSD_TObjAlloc(void)
 {
-    HSD_TObj* new = hsdNew((HSD_ClassInfo*) HSD_TObjGetDefaultClass());
+    HSD_TObj* new = hsdNew(&HSD_TObjGetDefaultClass()->parent);
     HSD_ASSERT(2040, new);
     return new;
 }

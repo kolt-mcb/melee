@@ -1,22 +1,21 @@
 #include "grzebesroute.h"
 
+#include <placeholder.h>
+
 #include "ground.h"
 #include "grzakogenerator.h"
 #include "inlines.h"
-#include "placeholder.h"
-
-#include "cm/camera.h"
-#include "ft/ftlib.h"
-#include "gr/types.h"
-#include "lb/lb_00F9.h"
-#include "mp/mplib.h"
-
+#include "types.h"
 #include <dolphin/mtx.h>
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
-#include <baselib/lobj.h>
-#include <baselib/random.h>
+#include <melee/cm/camera.h>
+#include <melee/ft/ftlib.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/random.h>
 
 struct grZebesRoute_YakumonoParam {
     int camera_timer;
@@ -24,6 +23,8 @@ struct grZebesRoute_YakumonoParam {
 };
 
 /* 20B260 */ static Ground_GObj* grZebesRoute_8020B260(int);
+static void stageGObj0_OnInit(Ground_GObj* gobj);
+static void stageGObj2_OnInit(Ground_GObj* gobj);
 /* 20B4D8 */ static void fn_8020B4D8(void* user_data, int joint_id,
                                      CollData* coll, int coll_x50,
                                      mpLib_GroundEnum ground_kind,
@@ -38,7 +39,7 @@ static struct grZebesRoute_LightData const grZe_Route_803B83A0 = {
 
 StageCallbacks grZe_Route_StageCallbacks[] = {
     {
-        grZebesRoute_8020B348,
+        stageGObj0_OnInit,
         grZebesRoute_8020B374,
         grZebesRoute_8020B37C,
         grZebesRoute_8020B380,
@@ -52,7 +53,7 @@ StageCallbacks grZe_Route_StageCallbacks[] = {
         (1 << 30) | (1 << 31),
     },
     {
-        grZebesRoute_8020B384,
+        stageGObj2_OnInit,
         grZebesRoute_8020B3B0,
         grZebesRoute_8020B3B8,
         grZebesRoute_8020B3BC,
@@ -133,10 +134,9 @@ Ground_GObj* grZebesRoute_8020B260(int gobj_id)
     return gobj;
 }
 
-void grZebesRoute_8020B348(Ground_GObj* gobj)
+static void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool grZebesRoute_8020B374(Ground_GObj* arg)
@@ -148,10 +148,9 @@ void grZebesRoute_8020B37C(Ground_GObj* arg) {}
 
 void grZebesRoute_8020B380(Ground_GObj* arg) {}
 
-void grZebesRoute_8020B384(Ground_GObj* gobj)
+static void stageGObj2_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool grZebesRoute_8020B3B0(Ground_GObj* arg)
@@ -199,7 +198,7 @@ void grZebesRoute_8020B42C(Ground_GObj* gobj)
     if (timer > 0) {
         gp->u.zebes2.xC4 = timer - 1;
     } else {
-        Camera_80030E44(1, NULL);
+        Camera_RequestQuake(QuakeKind_Loop, NULL);
     }
 
     lb_800115F4();
@@ -302,7 +301,7 @@ void grZebesRoute_8020B548(void)
 
 DynamicsDesc* grZebesRoute_8020B854(enum_t arg)
 {
-    return false;
+    return NULL;
 }
 
 bool grZebesRoute_8020B85C(Vec3* arg, int arg0, HSD_JObj* jobj)

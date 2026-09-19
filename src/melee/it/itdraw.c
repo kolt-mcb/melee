@@ -1,42 +1,42 @@
+#include "itdraw.h"
+
 #include <stdio.h>
+
 #include "port/pc_ptr.h"
-#include "it/itdraw.h"
 
 #include "inlines.h"
-
-#include "cm/camera.h"
-#include "ft/ftlib.h"
-#include "it/it_2725.h"
-#include "lb/lb_0146.h"
-#include "lb/lbcollision.h"
-#include "lb/lbgx.h"
-
-#include <baselib/tev.h>
+#include "it_2725.h"
+#include <melee/cm/camera.h>
+#include <melee/ft/ftlib.h>
+#include <melee/lb/lb_0146.h>
+#include <melee/lb/lbcollision.h>
+#include <melee/lb/lbgx.h>
+#include <sysdolphin/baselib/tev.h>
 
 U8Vec4 it_804D5168 = { 0xFF, 0x40, 0x80, 0x80 };
 
 void it_8026EB18(HSD_GObj* gobj, s32 arg1, Vec3* arg2)
 {
     Mtx m2;
-    MtxPtr var_r30;
+    MtxPtr mptr;
     if (arg2 != NULL) {
         HSD_CObj* cobj = HSD_CObjGetCurrent();
-        MtxPtr temp_r30 = (MtxPtr) &cobj->view_mtx;
+        MtxPtr vmtx = (MtxPtr) &cobj->view_mtx;
         { ///< @todo This appears in several places in the codebase,
             // it's probably an inline
             Mtx m;
-            PAD_STACK(1 * 4);
-            PSMTXIdentity((MtxPtr) &m);
+            PAD_STACK(4);
+            MTXIdentity((MtxPtr) &m);
             m[0][3] = arg2->x;
             m[1][3] = arg2->y;
             m[2][3] = arg2->z;
-            PSMTXConcat(temp_r30, (MtxPtr) &m, (MtxPtr) &m2);
-            var_r30 = (MtxPtr) &m2;
+            MTXConcat(vmtx, (MtxPtr) &m, (MtxPtr) &m2);
+            mptr = (MtxPtr) &m2;
         }
     } else {
-        var_r30 = NULL;
+        mptr = NULL;
     }
-    HSD_JObjDispAll(GET_JOBJ(gobj), var_r30, HSD_GObj_80390EB8(arg1), 0U);
+    HSD_JObjDispAll(GET_JOBJ(gobj), mptr, HSD_GObj_80390EB8(arg1), 0);
 }
 
 void it_8026EBC8(HSD_GObj* gobj, u16 arg1, u8* arg2)

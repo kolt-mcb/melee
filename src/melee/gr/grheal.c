@@ -1,29 +1,27 @@
-#include "gr/grheal.h"
+#include "grheal.h"
 
-#include "placeholder.h"
+#include <Runtime/platform.h>
 
-#include <platform.h>
+#include <placeholder.h>
 
-#include "baselib/gobj.h"
-#include "baselib/gobjproc.h"
-#include "baselib/jobj.h"
-#include "dolphin/types.h"
-#include "gm/gm_1884.h"
-
-#include "gr/forward.h"
-
-#include "gr/granime.h"
-#include "gr/ground.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/stage.h"
-#include "it/it_26B1.h"
-#include "it/items/itcoin.h"
-#include "it/types.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "mp/mplib.h"
-#include "ty/toy.h"
+#include "forward.h"
+#include "granime.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "stage.h"
+#include <dolphin/types.h>
+#include <melee/gm/gm_18A1.h>
+#include <melee/it/it_26B1.h>
+#include <melee/it/kinds/itcoin.h>
+#include <melee/it/types.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/mp/mplib.h>
+#include <melee/ty/toy.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
 
 typedef struct grHeal_UnkData {
     s32 x0;
@@ -323,9 +321,7 @@ void onJointCollision(void* user_data, int joint_id, CollData* coll,
                       float delta_y)
 {
     Ground* gp = user_data;
-    if ((((*(u8*) ((u8*) coll + 0x34) >> 3U) & 0xF) == 1) &&
-        ((ground_kind - 1) <= 1U))
-    {
+    if ((s32) coll->x34_flags.b1234 == 1 && (ground_kind - 1) <= 1U) {
         gp->u.unk.xC4 = 1;
     }
 }
@@ -403,7 +399,7 @@ void stageGObj4_GObjProc(Ground_GObj* gobj) {}
 
 void stageGObj4_Callback3(Ground_GObj* gobj) {}
 
-/// @todo Eliminate gotos, use enum members
+/// @todo Use enum members
 int grHeal_8021F70C(enum_t character_id)
 {
     int frame = 0;
@@ -411,25 +407,17 @@ int grHeal_8021F70C(enum_t character_id)
     if (character_id == 19) {
         character_id = 18;
     }
-    goto loop_start;
-
-loop_compare:
-    if (character_id != frame_to_character_id[frame]) {
-        frame++;
-    loop_check:
-        if (frame_to_character_id[frame] != -1) {
-            goto loop_compare;
+    while (frame_to_character_id[frame] != -1) {
+        if (character_id == frame_to_character_id[frame]) {
+            break;
         }
+        frame++;
     }
-
     if (frame_to_character_id[frame] == -1) {
         OSReport("*** Not found Next Player!(%d)\n", character_id);
         frame = 0;
     }
     return frame;
-
-loop_start:
-    goto loop_check;
 }
 
 void grHeal_8021F79C(s32 arg0, s32 idx, s32 arg2)
@@ -452,7 +440,7 @@ void grHeal_8021F79C(s32 arg0, s32 idx, s32 arg2)
 
 DynamicsDesc* grHeal_8021F830(enum_t arg0)
 {
-    return false;
+    return NULL;
 }
 
 bool grHeal_8021F838(Vec3* arg0, int arg1, HSD_JObj* jobj)

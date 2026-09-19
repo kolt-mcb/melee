@@ -1,11 +1,11 @@
 #ifndef GALE01_1F2D0C
 #define GALE01_1F2D0C
 
-#include "dolphin/mtx.h"
+#include <melee/gr/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
-#include "gr/forward.h"
-#include "lb/forward.h"
-#include <baselib/forward.h>
+#include <dolphin/mtx.h>
 
 /* 1F2D0C */ void grFourside_801F2D0C(bool);
 /* 1F2D10 */ void grFourside_801F2D10(void);
@@ -13,11 +13,9 @@
 /* 1F2DA4 */ void grFourside_801F2DA4(void);
 /* 1F2DC8 */ bool grFourside_801F2DC8(void);
 /* 1F2DD0 */ HSD_GObj* grFourside_801F2DD0(int);
-/* 1F2EBC */ void grFourside_801F2EBC(Ground_GObj*);
 /* 1F2EE8 */ bool grFourside_801F2EE8(Ground_GObj*);
 /* 1F2EF0 */ void grFourside_801F2EF0(Ground_GObj*);
 /* 1F2EF4 */ void grFourside_801F2EF4(Ground_GObj*);
-/* 1F2EF8 */ void grFourside_801F2EF8(Ground_GObj*);
 /* 1F2F24 */ bool grFourside_801F2F24(Ground_GObj*);
 /* 1F2F2C */ void grFourside_801F2F2C(Ground_GObj*);
 /* 1F2F30 */ void grFourside_801F2F30(Ground_GObj*);

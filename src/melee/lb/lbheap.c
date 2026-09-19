@@ -1,19 +1,18 @@
-#include <stdio.h>
+#include <stddef.h> // offsetof
+
 #include "lbheap.static.h"
+#include "lbmemory.h"
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/initialize.h>
+#include <sysdolphin/baselib/memory.h>
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
-#endif
-
-#include "placeholder.h"
-
-#include <stddef.h> // offsetof
-#include <stdlib.h>
+/* Upstream trims these as IWYU noise; the host build has no umbrella header
+ * that drags in OSDisableInterrupts(), getenv() or fprintf(). */
 #include <dolphin/os/OSInterrupt.h>
-#include <baselib/archive.h>
-#include <baselib/debug.h>
-#include <baselib/initialize.h>
-#include <baselib/memory.h>
-#include <melee/lb/lbmemory.h>
+#include <stdio.h>
+#include <stdlib.h>
+#endif /* BUILD_TARGET_PC */
 
 struct lbHeap_HeapDesc {
     u32 idx;

@@ -164,7 +164,7 @@ int slp_compat(int fix)
  * ftCo_Turn_IASA's *first* `if (!has_turned) facing_dir = -facing_dir;`, so it
  * runs with the flip applied and reads the new facing. Every operand below is
  * the one the shipped PowerPC words load, including the last two that had to
- * be reversed: fp->x1A88.x444 is the follower's CPU command block, and the
+ * be reversed: fp->cpu.x444 is the follower's CPU command block, and the
  * byte written to its lstickX is the sign bit of the leader's facing float
  * plus 127 -- 127 facing right, 128 facing left.
  *
@@ -219,7 +219,7 @@ static void slp_ucf_dashback(Fighter* fp)
                         "facing*lx=%+.3f thr=%+.3f tilt=%d raw %d<-%d\n",
                 (int) fp->x618_player_id, (int) fp->x221F_b4,
                 (double) fp->cur_anim_frame,
-                (double) (fp->facing_dir * fp->input.lstick.x),
+                (double) (fp->facing_dir * fp->input.lstick[0].x),
                 (double) p_ftCommonData->x3C,
                 (int) fp->x670_timer_lstick_tilt_x,
                 a ? (int) a->stickX : 999, b ? (int) b->stickX : 999);
@@ -235,7 +235,7 @@ static void slp_ucf_dashback(Fighter* fp)
     if (fp->cur_anim_frame != 2.0f) {
         return;
     }
-    if (fp->facing_dir * fp->input.lstick.x < p_ftCommonData->x3C) {
+    if (fp->facing_dir * fp->input.lstick[0].x < p_ftCommonData->x3C) {
         return;
     }
     if (fp->x670_timer_lstick_tilt_x > 1) {
@@ -276,7 +276,7 @@ static void slp_ucf_dashback(Fighter* fp)
         Fighter_GObj* follower = Player_GetEntityAtIndex(fp->player_id, 1);
         if (follower != NULL) {
             Fighter* ffp = GET_FIGHTER(follower);
-            struct Fighter_x1A88_xFC_t* cmd = ffp->x1A88.x444;
+            struct Fighter_x1A88_xFC_t* cmd = ffp->cpu.x444;
             if (cmd != NULL) {
                 u32 bits;
                 memcpy(&bits, &fp->facing_dir, sizeof(bits));

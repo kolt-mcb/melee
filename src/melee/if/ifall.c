@@ -1,27 +1,26 @@
 #include "ifall.h"
 
-#include "if/if_2F6E.h"
-#include "if/if_2F72.h"
-#include "if/if_2FD9.h"
-#include "if/ifcoget.h"
-#include "if/ifhazard.h"
-#include "if/ifmagnify.h"
-#include "if/ifnametag.h"
-#include "if/ifstatus.h"
-#include "if/ifstock.h"
-#include "if/iftime.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbarchive.h"
-#include "lb/lbspdisplay.h"
-#include "sc/types.h"
-
-#include <baselib/cobj.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/jobj.h>
-#include <baselib/lobj.h>
+#include "if_2F6E.h"
+#include "if_2F72.h"
+#include "if_2FD9.h"
+#include "ifcoget.h"
+#include "ifhazard.h"
+#include "ifmagnify.h"
+#include "ifnametag.h"
+#include "ifstatus.h"
+#include "ifstock.h"
+#include "iftime.h"
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
 
 #if BUILD_TARGET_PC
 #include "port/pc_scene.h"
@@ -196,7 +195,7 @@ static void ifAll_802F370C(SceneDesc* arg0)
         lb_80011E24(jobj, &spC, i + 11, -1);
         lb_8000B1CC(spC, NULL, &ifAll_804A0FD8.x84[i]);
     }
-    HSD_GObjPLink_80390228(gobj);
+    HSD_GObjFree(gobj);
 }
 
 void ifAll_802F390C(void)
@@ -228,7 +227,7 @@ void ifAll_802F390C(void)
     {
         HSD_CObjDesc* desc = sp14->cameras[0].desc;
         HSD_GObj* gobj = GObj_Create(0x13, 0x14, 0);
-        HSD_CObj* cobj = lb_80013B14((HSD_CameraDescPerspective*) desc);
+        HSD_CObj* cobj = lb_80013B14(&desc->perspective);
         HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
         GObj_SetupGXLinkMax(gobj, fn_802F36B8, 8);
         gobj->gxlink_prios = 0xD00;
@@ -273,11 +272,11 @@ void ifAll_802F3A64(void)
 
     data = &ifAll_804A0FD8;
     if (data->gobj != NULL) {
-        HSD_GObjPLink_80390228(data->gobj);
+        HSD_GObjFree(data->gobj);
     }
 
     if (data->gobj_2 != NULL) {
-        HSD_GObjPLink_80390228(data->gobj_2);
+        HSD_GObjFree(data->gobj_2);
     }
 
     un_802FD468();

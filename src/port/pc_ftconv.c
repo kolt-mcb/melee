@@ -39,8 +39,8 @@
 #include <melee/ft/types.h>
 #include <melee/ft/forward.h>
 #include <melee/ft/dobjlist.h>
-#include <melee/ft/chara/ftCommon/types.h>
-#include <melee/ft/chara/ftSamus/types.h>
+#include <melee/ft/kinds/ftCommon/types.h>
+#include <melee/ft/kinds/ftSamus/types.h>
 #include <sysdolphin/baselib/archive.h>
 
 #include "pc_ptr.h"
@@ -809,7 +809,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         out->x0 = pc_conv_DatAttrs(base + off);
     }
 
-    motion_count = (kind >= 0 && kind < FTKIND_MAX)
+    motion_count = (kind >= 0 && kind < Ft_Kind_Max)
                        ? (int) ftData_Table_Unk0[kind].count
                        : 0;
 
@@ -894,7 +894,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
     off = pc_be32(*(const u32*) (raw + 0x08));
     if (off < len) {
         int costumes = 0;
-        if (kind >= 0 && kind < FTKIND_MAX) {
+        if (kind >= 0 && kind < Ft_Kind_Max) {
             costumes = (int) CostumeListsForeachCharacter[kind].numCostumes;
         }
         if (costumes <= 0) {
@@ -1308,8 +1308,8 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         if (rec != NULL) {
             memset(rec, 0, sizeof(*rec));
             if (arr_off != 0 && arr_off + 3 * 4 <= len) {
-                static HSD_Joint* pc_guard_joints[FTKIND_MAX + 1][3];
-                int slot = (kind >= 0 && kind <= FTKIND_MAX) ? kind : 0;
+                static HSD_Joint* pc_guard_joints[Ft_Kind_Max + 1][3];
+                int slot = (kind >= 0 && kind <= Ft_Kind_Max) ? kind : 0;
                 HSD_Joint** jp = pc_guard_joints[slot];
                 u32 jo = pc_be32(((const u32*) (base + arr_off))[2]);
                 jp[0] = jp[1] = NULL;

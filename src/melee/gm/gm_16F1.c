@@ -1,47 +1,28 @@
-#if BUILD_TARGET_PC
-#include "port/log.h"
-#endif
 #include "gm_16F1.h"
-#include <stdlib.h>
-#include <stdio.h>
+
 #if BUILD_TARGET_PC
 #include "port/log.h"
+#include <stdio.h>
+#include <stdlib.h>
 #endif
 
+#include <melee/pl/forward.h>
+
+#include "gm_1601.h"
 #include "gm_16F1.static.h"
-
 #include "gm_unsplit.h"
-
-#include "if/textlib.h"
-
-#include <baselib/sislib.h>
-#include <melee/gm/gm_16AE.h>
-#include <melee/gm/gmmain_lib.h>
+#include "gmmain_lib.h"
+#include "gmvs.h"
+#include <melee/if/textlib.h>
 #include <melee/lb/lb_00B0.h>
 #include <melee/lb/lblanguage.h>
 #include <melee/lb/lbtime.h>
+#include <melee/mn/types.h>
 #include <melee/pl/player.h>
 #include <melee/pl/plbonus.h>
 #include <melee/pl/plbonuslib.h>
 #include <melee/ty/toy.h>
-
-/* PC fix: lbl_8046DBD8 is a 10-byte data global (c_kind/color/stocks/gamemode
- * transition state). The weak-stub system defined it as a 5-byte FUNC in .text,
- * so any store to it (e.g. in gm_80173754 during scene transition) wrote to
- * read-only .text and SIGSEGV'd. Define the real data object here; the strong
- * definition overrides the weak function at link time. */
-lbl_8046DBD8_t lbl_8046DBD8;
-
-/* PC fix: the decomp split the challenger-data accessors across gm_16F1.c
- * (built) and gm_1736.c (NOT in the build). gm_1736.c's gm_GetChallengerData
- * returned a local static, but the only linked definition was a weak stub
- * returning NULL — so the character-select scene (gm_801BFA6C) NULL-deref'd
- * reading ->x4. Define it here to return the real global lbl_8046DBD8 that
- * gm_801736E8/gm_80173754 (both in this file) write to. */
-lbl_8046DBD8_t* gm_GetChallengerData(void)
-{
-    return &lbl_8046DBD8;
-}
+#include <sysdolphin/baselib/sislib.h>
 
 struct lbl_804D65A8_t {
     /* 0x00 */ u8 x0;
@@ -59,54 +40,9 @@ struct lbl_803D6300_t {
     bool (*x4)(void);
 };
 
-struct lbl_803D6300_t lbl_803D6300[] = {
-    { 0x0016, 0xFFFF, fn_801735F0 },
-    { 0x0017, 0x0001, fn_80173644 },
-    { 0x0018, 0xFFFF, fn_80173510 },
-    { 0x0019, 0xFFFF, NULL },
-    { 0x001A, 0xFFFF, NULL },
-    { 0x001B, 0xFFFF, fn_8017367C },
-    { 0x001C, 0xFFFF, gm_80164ABC },
-    { 0x001D, 0xFFFF, gm_80164600 },
-    { 0x001E, 0x0040, fn_80162CCC },
-    { 0x001F, 0x0040, gm_80162EC8 },
-    { 0x0020, 0x0040, fn_801630C4 },
-    { 0x0021, 0x0040, gm_80162D1C },
-    { 0x0022, 0x0040, gm_80162F18 },
-    { 0x0023, 0x0040, gm_80163114 },
-    { 0x0024, 0x0010, fn_801722BC },
-    { 0x0025, 0x0010, fn_801722F4 },
-    { 0x0026, 0x0080, gmMainLib_8015D508 },
-    { 0x0027, 0x0020, fn_80163D24 },
-    { 0x0028, 0x0020, fn_80163D74 },
-    { 0x0029, 0x0040, fn_8017232C },
-    { 0x002A, 0x0040, fn_80172428 },
-    { 0x002B, 0x0040, fn_80172380 },
-    { 0x002C, 0x0040, fn_80172478 },
-    { 0x002D, 0x0040, fn_801723D4 },
-    { 0x002E, 0x0040, fn_801724C8 },
-    { 0x002F, 0x0001, fn_801724D0 },
-    { 0x0030, 0x0001, fn_80172504 },
-    { 0x0031, 0x0001, fn_80172538 },
-    { 0x0032, 0x0001, fn_8017256C },
-    { 0x0033, 0x0001, fn_801725A8 },
-    { 0x0034, 0x0001, fn_801725E4 },
-    { 0x0035, 0x0001, fn_80172624 },
-    { 0x0036, 0x0001, fn_80172664 },
-    { 0x0037, 0xFFFF, fn_80172698 },
-    { 0x0038, 0xFFFF, fn_801726CC },
-    { 0x0039, 0xFFFF, fn_80172700 },
-    { 0x003A, 0xFFFF, fn_80172734 },
-    { 0x003B, 0xFFFF, fn_80172768 },
-    { 0x003C, 0xFFFF, un_80304470 },
-    { 0x003D, 0xFFFF, un_80304510 },
-    { 0x0041, 0x0010, gmMainLib_8015CF94 },
-    { 0x0042, 0x0000, NULL },
-};
-
 int fn_8016F180(int kind)
 {
-    struct lbl_803D5A4C_t* curr = lbl_803D5A4C;
+    struct lbl_803D5A4C_t* curr = lbl_803D5A4C.entries;
     while (curr->kind != kind) {
         if (curr->kind == 0x29A) {
             return 0;
@@ -119,7 +55,7 @@ int fn_8016F180(int kind)
 Gm_DecType gmDecisionGetType(int kind)
 {
     struct lbl_803D5A4C_t* curr;
-    for (curr = lbl_803D5A4C; curr->kind != kind; curr++) {
+    for (curr = lbl_803D5A4C.entries; curr->kind != kind; curr++) {
         if (curr->kind == 0x29A) {
             return Gm_DecType_Flag;
         }
@@ -129,12 +65,12 @@ Gm_DecType gmDecisionGetType(int kind)
 
 s32 fn_8016F1F0(int idx)
 {
-    return lbl_803D5A4C[idx].kind;
+    return lbl_803D5A4C.entries[idx].kind;
 }
 
 int gm_8016F208(int kind)
 {
-    struct lbl_803D5A4C_t* curr = lbl_803D5A4C;
+    struct lbl_803D5A4C_t* curr = lbl_803D5A4C.entries;
     while (curr->kind != kind) {
         if (curr->kind == 0x29A) {
             return 0;
@@ -154,7 +90,7 @@ int fn_8016F280(int arg0)
 
 int gm_8016F2F8(int kind, u8 arg1)
 {
-    struct lbl_803D5A4C_t* curr = lbl_803D5A4C;
+    struct lbl_803D5A4C_t* curr = lbl_803D5A4C.entries;
     while (curr->kind != kind) {
         if (curr->kind == 0x29A) {
             return -1;
@@ -164,27 +100,46 @@ int gm_8016F2F8(int kind, u8 arg1)
     return lbl_803D5648[curr->x2 - 2];
 }
 
-void fn_8016F344(struct lbl_8046B6A0_24C_t* arg0)
+void fn_8016F344(MatchEnd* match_end)
 {
-    struct lbl_8046B6A0_24C_58_t* curr = arg0->x58;
+    struct MatchPlayerData* curr = match_end->player_standings;
     int i;
     for (i = 0; i < 4; i++) {
-        if (curr->x0 != 3) {
+        if (curr->pkind != 3) {
             pl_80039450(i);
         }
         curr++;
     }
 }
 
+/// Same table lookup as #gm_8016F208, but with a u16 result.
+/// fn_8016F39C passes the looked-up id straight to HSD_SisLib_803A6368 and
+/// the original code keeps it in a u16: the u16 -> int promotion is emitted
+/// during argument setup (clrlwi after the arg0[count] load). Reusing the
+/// int-returning gm_8016F208 (or changing its return type) instead moves or
+/// drops that zero-extension and regresses gm_8016F208/fn_8016F280.
+static inline u16 fn_8016F39C_GetSisTextId(int kind)
+{
+    struct lbl_803D5A4C_t* curr = lbl_803D5A4C.entries;
+    while (curr->kind != kind) {
+        if (curr->kind == 0x29A) {
+            return 0;
+        }
+        curr++;
+    }
+    if (curr->x2 == 0xDE && lbLang_IsSettingUS()) {
+        return 0x102;
+    }
+    return curr->x2;
+}
+
 int fn_8016F39C(HSD_Text** arg0, void* arg1, u8 arg2, u16 arg3, u8 arg4,
                 u8 arg5)
 {
-    struct lbl_803D5A4C_t* curr;
     int idx;
     int count = 0;
     int matched;
     u8 flags;
-    u16 item_id;
 
     if (arg3 >= 0x101U) {
         return -1;
@@ -193,7 +148,7 @@ int fn_8016F39C(HSD_Text** arg0, void* arg1, u8 arg2, u16 arg3, u8 arg4,
     idx = arg3;
     while ((u32) idx < 0x101U) {
         matched = 0;
-        if (lbl_803D5A4C[idx].kind < 0xD7) {
+        if (lbl_803D5A4C.entries[idx].kind < 0xD7) {
             flags = fn_8016F180(idx);
             if (arg4 & flags) {
                 if (pl_80039418(arg5, idx) != 0) {
@@ -210,22 +165,7 @@ int fn_8016F39C(HSD_Text** arg0, void* arg1, u8 arg2, u16 arg3, u8 arg4,
         }
 
         if (matched != 0) {
-            curr = lbl_803D5A4C;
-            item_id = 0;
-            while (curr->kind != idx) {
-                if (curr->kind == 0x29A) {
-                    break;
-                }
-                curr++;
-            }
-            if (curr->kind == idx) {
-                if ((u16) curr->x2 == 0xDE && lbLang_IsSettingUS() != 0) {
-                    item_id = 0x102;
-                } else {
-                    item_id = curr->x2;
-                }
-            }
-            HSD_SisLib_803A6368(arg0[count], item_id);
+            HSD_SisLib_803A6368(arg0[count], fn_8016F39C_GetSisTextId(idx));
             count++;
             if (count == (int) arg2) {
                 break;
@@ -246,7 +186,7 @@ int fn_8016F548(void* arg0, u16 arg1, u8 mask, u8 player_id)
     }
 
     for (i = arg1; (u32) i < 0x101U; i++) {
-        if (lbl_803D5A4C[i].kind < 0xD7) {
+        if (lbl_803D5A4C.entries[i].kind < 0xD7) {
             if (mask & (u8) fn_8016F180(i)) {
                 if (pl_80039418(player_id, i) != 0) {
                     return i;
@@ -262,7 +202,7 @@ int fn_8016F548(void* arg0, u16 arg1, u8 mask, u8 player_id)
     }
 
     for (i = 0x100; i >= 0; i--) {
-        if (lbl_803D5A4C[i].kind < 0xD7) {
+        if (lbl_803D5A4C.entries[i].kind < 0xD7) {
             if (mask & (u8) fn_8016F180(i)) {
                 if (pl_80039418(player_id, i) != 0) {
                     return i;
@@ -295,7 +235,7 @@ int fn_8016F740(void* arg0, u16 arg1, u8 mask, u8 player_id)
 
     i = temp;
     for (; (u32) i < 0x101U; i++) {
-        if (lbl_803D5A4C[i].kind < 0xD7) {
+        if (lbl_803D5A4C.entries[i].kind < 0xD7) {
             flags = fn_8016F180(i);
             if (mask & flags) {
                 if (pl_80039418(player_id, i) != 0) {
@@ -328,7 +268,7 @@ int fn_8016F870(void* arg0, u16 arg1, u8 mask, u8 player_id)
     }
 
     for (i = arg1 - 1; i >= 0; i--) {
-        kind = lbl_803D5A4C[i].kind;
+        kind = lbl_803D5A4C.entries[i].kind;
 
         if (kind < 0xD7) {
             flags = fn_8016F180(i);
@@ -361,7 +301,7 @@ int fn_8016F9A8(void* arg0, u16 arg1, u8 mask, u8 player_id)
     }
 
     for (i = arg1; (u32) i < 0x101; i++) {
-        if (lbl_803D5A4C[i].kind < 0xD7) {
+        if (lbl_803D5A4C.entries[i].kind < 0xD7) {
             flags = fn_8016F180(i);
             if (mask & flags) {
                 if (pl_80039418(player_id, i) != 0) {
@@ -382,11 +322,10 @@ int fn_8016F9A8(void* arg0, u16 arg1, u8 mask, u8 player_id)
     PAD_STACK(8);
 }
 
-int fn_8016FAD4(struct lbl_8046B6A0_24C_t* rules, int kind, int flags,
-                u8 player)
+int fn_8016FAD4(MatchEnd* rules, int kind, int flags, u8 player)
 {
-    struct lbl_803D5A4C_t* entry = lbl_803D5A4C;
-    struct lbl_8046B6A0_24C_58_t* x58 = rules->x58;
+    struct lbl_803D5A4C_t* entry = lbl_803D5A4C.entries;
+    struct MatchPlayerData* x58 = rules->player_standings;
     u8 rankings[7] = { 0 };
     s32 scores[6];
     int i;
@@ -399,17 +338,18 @@ int fn_8016FAD4(struct lbl_8046B6A0_24C_t* rules, int kind, int flags,
     }
 
     for (i = 0; i < 6; i++) {
-        if (x58[i].x0 != 3) {
-            u16 sd = x58[i].xA;
-            scores[i] = x58[i].x20 - (x58[i].x24 - sd) + rules->xC * sd;
+        if (x58[i].pkind != 3) {
+            u16 sd = x58[i].self_destructs;
+            scores[i] =
+                x58[i].x20 - (x58[i].x24 - sd) + rules->sd_penalty * sd;
         }
     }
 
     for (i = 0; i < 6; i++) {
-        if (x58[i].x0 != 3) {
+        if (x58[i].pkind != 3) {
             int j;
             for (j = 0; j < 6; j++) {
-                if (x58[j].x0 != 3 && i != j && scores[i] < scores[j]) {
+                if (x58[j].pkind != 3 && i != j && scores[i] < scores[j]) {
                     rankings[i]++;
                 }
             }
@@ -425,12 +365,13 @@ int fn_8016FAD4(struct lbl_8046B6A0_24C_t* rules, int kind, int flags,
             return lbl_803D5648[entry->x2 - 2] * 2;
         }
         {
-            int j;
-            for (j = 0; j < 4; j++) {
-                if (x58[j].x0 == 3) {
-                    break;
+            int active_count = 0;
+            for (i = 0; i < 4; i++) {
+                if (x58[i].pkind != 3) {
+                    active_count++;
                 }
             }
+            (void) active_count;
         }
         if (pr == rankings[6]) {
             return lbl_803D5648[entry->x2 - 2] / 2;
@@ -446,9 +387,9 @@ int fn_8016FAD4(struct lbl_8046B6A0_24C_t* rules, int kind, int flags,
             return lbl_803D5648[entry->x2 - 2] * x58[player].x20;
         } else if (kind == 0xE4) {
             return lbl_803D5648[entry->x2 - 2] *
-                   (x58[player].x24 - x58[player].xA);
+                   (x58[player].x24 - x58[player].self_destructs);
         } else if (kind == 0xE5) {
-            return lbl_803D5648[entry->x2 - 2] * x58[player].xA;
+            return lbl_803D5648[entry->x2 - 2] * x58[player].self_destructs;
         } else {
             return lbl_803D5648[entry->x2 - 2] * pl_80039418(player, kind);
         }
@@ -457,18 +398,13 @@ int fn_8016FAD4(struct lbl_8046B6A0_24C_t* rules, int kind, int flags,
     return lbl_803D5648[entry->x2 - 2];
 }
 
-void fn_80171AD4(void)
-{
-    memzero(&lbl_8046DBC8, sizeof(lbl_8046DBC8));
-}
-
-int fn_8016FFD4(struct lbl_8046B6A0_24C_t* arg0, int arg1, u8 arg2)
+int fn_8016FFD4(MatchEnd* arg0, int arg1, u8 arg2)
 {
     int i;
     int count = 0;
 
     for (i = 0; (u32) i < 0x101U; i++) {
-        if (lbl_803D5A4C[i].kind < 0xD7) {
+        if (lbl_803D5A4C.entries[i].kind < 0xD7) {
             if ((arg1 & 0xFF) & (u8) fn_8016F180(i) &&
                 pl_80039418(arg2, i) != 0)
             {
@@ -488,8 +424,8 @@ int fn_8016FFD4(struct lbl_8046B6A0_24C_t* arg0, int arg1, u8 arg2)
 
 int fn_80170110(void* arg0, int idx, int mask, u8 player_id)
 {
-    struct lbl_803D5A4C_t* curr = lbl_803D5A4C;
-    int kind = lbl_803D5A4C[idx].kind;
+    struct lbl_803D5A4C_t* curr = lbl_803D5A4C.entries;
+    int kind = lbl_803D5A4C.entries[idx].kind;
     u8 flags;
 
     flags = (fn_8016F180(kind));
@@ -504,100 +440,57 @@ int fn_80170110(void* arg0, int idx, int mask, u8 player_id)
 
 void gm_801701A0(void)
 {
-    lbl_804D65A0[0] = 1;
+    lbl_804D65A0.x0 = 1;
 }
 
 void fn_801701AC(void)
 {
-    lbl_804D65A0[0] = 0;
+    lbl_804D65A0.x0 = 0;
 }
 
 int fn_801701B8(void)
 {
-    return lbl_804D65A0[0];
+    return lbl_804D65A0.x0;
 }
 
-/// One bubble pass over @p base, used by the two @c u32 sorts in
-/// #fn_801701C0.
-///
-/// The two sorts there are the only ones whose loop guard the original emits
-/// as
-/// @c cmplwi + @c ble rather than @c cmpwi + @c ble, which is why @p n is
-/// unsigned; and the pointer has to live inside an inline expansion, because a
-/// caller-level local is coloured after the compare temp and takes r4 instead
-/// of r3. The other five sorts in this function are written inline with plain
-/// @c vals[i] indexing, which puts their pointer in the same @c \@ band by way
-/// of strength reduction.
-static inline void gm_16F1_SortDescPass(u32* base, u32 n)
+int fn_801701C0(MatchEnd* rules, int arg1, int arg2)
 {
-    int i;
-    u32* p = base;
-    for (i = 0; i < n; i++) {
-        if (p[0] > p[1]) {
-            u32 tmp = p[1];
-            p[1] = p[0];
-            p[0] = tmp;
-        }
-        p++;
-    }
-}
-
-static inline void gm_16F1_SortAscPass(u32* base, u32 n)
-{
-    int i;
-    u32* p = base;
-    for (i = 0; i < n; i++) {
-        if (p[0] < p[1]) {
-            u32 tmp = p[1];
-            p[1] = p[0];
-            p[0] = tmp;
-        }
-        p++;
-    }
-}
-
-int fn_801701C0(void* arg0, int arg1, int arg2)
-{
-    struct lbl_8046B6A0_24C_t* rules = arg0;
+    u8* tmp;
     const struct lbl_803B7A60_t* zeroes = &lbl_803B7A60;
-    u8* flags = rules->pad3F0;
-    struct lbl_8046B6A0_24C_58_t* x58 = rules->x58;
-    s32 scores[6];
-    u8 rankings[7];
+    u8* flags = (u8*) &rules->player_standings[6];
+    struct MatchPlayerData* x58 = rules->player_standings;
+    s32 player_net;
+    s32 scores[4];
+    u8 rankings[7] = { 0 };
 
-    {
-        u8 is_teams = (u8) lbl_804D65A0[0];
-        *(s32*) &rankings[0] = lbl_804DA2F0;
-        *(u16*) &rankings[4] = lbl_804DA2F4;
-        rankings[6] = lbl_804DA2F6;
-        if (is_teams != 0) {
-            return 0;
-        }
+    if (lbl_804D65A0.x0 != 0) {
+        return 0;
     }
     if (rules == NULL || x58 == NULL) {
         return 0;
     }
 
-    if (rules->x5 == 3) {
+    if (rules->match_kind == 3) {
         fn_80171B64((struct lbl_804D65A8_t*) rankings);
     } else {
         int k;
 
         for (k = 0; k < 6; k++) {
-            if (x58[k].x0 != 3) {
-                u16 xA = x58[k].xA;
-                scores[k] = (x58[k].x20 - (x58[k].x24 - xA)) + rules->xC * xA;
+            if (x58[k].pkind != 3) {
+                u16 xA = x58[k].self_destructs;
+                scores[k] =
+                    (x58[k].x20 - (x58[k].x24 - xA)) + rules->sd_penalty * xA;
             }
         }
 
         {
             int idx;
             for (idx = 0; idx < 6; idx++) {
-                if (x58[idx].x0 != 3) {
+                if (x58[idx].pkind != 3) {
                     int j;
 
                     for (j = 0; j < 6; j++) {
-                        if (x58[j].x0 != 3 && idx != j &&
+                        if (x58[j].pkind != 3 && idx != j &&
                             scores[idx] < scores[j])
                         {
                             rankings[idx]++;
@@ -612,8 +505,6 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
         }
     }
 
-    PAD_STACK(8);
-
     switch (arg2) {
     case 0xD7:
         if ((unsigned) fn_801701C0(rules, arg1, 0xD9) != 0) {
@@ -622,7 +513,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
         {
             int i;
             for (i = 0; i < 4; i++) {
-                if (x58[i].x0 != 3 && i != arg1 && rankings[i] == 0) {
+                if (x58[i].pkind != 3 && i != arg1 && rankings[i] == 0) {
                     return 0;
                 }
             }
@@ -639,7 +530,8 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
         {
             int i;
             for (i = 0; i < 4; i++) {
-                if (x58[i].x0 != 3 && i != arg1 && rankings[i] == rankings[6])
+                if (x58[i].pkind != Gm_PKind_NA && i != arg1 &&
+                    rankings[i] == rankings[6])
                 {
                     return 0;
                 }
@@ -651,13 +543,14 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
         return 0;
 
     case 0xD9: {
-        int k = 0;
-        do {
-            if (x58[k].x0 != 3 && k != arg1 && fn_80171B00(k) != 0) {
+        int k;
+        for (k = 0; k < 4; k++) {
+            if (x58[k].pkind != Gm_PKind_NA && k != arg1 &&
+                fn_80171B00(k) != 0)
+            {
                 return 0;
             }
-            k++;
-        } while (k < 4);
+        }
         if (fn_80171B00(arg1) != 0) {
             return 1;
         }
@@ -665,13 +558,14 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
     }
 
     case 0xDA: {
-        int k = 0;
-        do {
-            if (x58[k].x0 != 3 && k != arg1 && fn_80171B2C(k) != 0) {
+        int k;
+        for (k = 0; k < 4; k++) {
+            if (x58[k].pkind != Gm_PKind_NA && k != arg1 &&
+                fn_80171B2C(k) != 0)
+            {
                 return 0;
             }
-            k++;
-        } while (k < 4);
+        }
         if (fn_80171B2C(arg1) != 0) {
             return 1;
         }
@@ -679,7 +573,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
     }
 
     case 0xDB: {
-        s32 vals[4];
+        s32 vals[6];
         int i, j;
         if (x58[arg1].x20 >= 3) {
             {
@@ -689,7 +583,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
                 *(copy_t*) vals = *(copy_t*) zeroes->x0;
             }
             for (i = 0; i < 4; i++) {
-                if (x58[i].x0 != 3) {
+                if (x58[i].pkind != 3) {
                     vals[i] = x58[i].x20;
                 }
             }
@@ -714,7 +608,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
             {
                 int i;
                 for (i = 0; i < 4; i++) {
-                    if (x58[i].x0 != 3 && i != arg1 &&
+                    if (x58[i].pkind != 3 && i != arg1 &&
                         x58[i].x20 >= x58[arg1].x20)
                     {
                         return 0;
@@ -739,7 +633,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
                 *(copy_t*) vals = *(copy_t*) zeroes->x10;
             }
             for (i = 0; i < 4; i++) {
-                if (x58[i].x0 != 3) {
+                if (x58[i].pkind != 3) {
                     vals[i] = x58[i].x40;
                 }
             }
@@ -764,7 +658,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
             {
                 int i;
                 for (i = 0; i < 4; i++) {
-                    if (x58[i].x0 != 3 && i != arg1 &&
+                    if (x58[i].pkind != 3 && i != arg1 &&
                         x58[i].x40 >= x58[arg1].x40)
                     {
                         return 0;
@@ -781,7 +675,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
     case 0xDF: {
         s32 vals[4];
         int i, j;
-        s32 player_net = x58[arg1].x24 - x58[arg1].xA;
+        player_net = x58[arg1].x24 - x58[arg1].self_destructs;
         if ((u32) player_net >= 3) {
             {
                 typedef struct {
@@ -790,8 +684,8 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
                 *(copy_t*) vals = *(copy_t*) zeroes->x20;
             }
             for (i = 0; i < 4; i++) {
-                if (x58[i].x0 != 3) {
-                    vals[i] = x58[i].x24 - x58[i].xA;
+                if (x58[i].pkind != 3) {
+                    vals[i] = x58[i].x24 - x58[i].self_destructs;
                 }
             }
             for (j = 3; j >= 1; j--) {
@@ -803,7 +697,8 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
                     }
                 }
             }
-            if ((u32) vals[0] == (u32) (x58[arg1].x24 - x58[arg1].xA) &&
+            if ((u32) vals[0] ==
+                    (u32) (x58[arg1].x24 - x58[arg1].self_destructs) &&
                 vals[0] >= vals[1] * 2)
             {
                 return 1;
@@ -817,15 +712,15 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
             {
                 int i;
                 for (i = 0; i < 4; i++) {
-                    if (x58[i].x0 != 3 && i != arg1 &&
-                        (u32) (x58[i].x24 - x58[i].xA) >=
-                            (u32) (x58[arg1].x24 - x58[arg1].xA))
+                    if (x58[i].pkind != 3 && i != arg1 &&
+                        (u32) (x58[i].x24 - x58[i].self_destructs) >=
+                            (u32) (x58[arg1].x24 - x58[arg1].self_destructs))
                     {
                         return 0;
                     }
                 }
             }
-            if ((x58[arg1].x24 - x58[arg1].xA) != 0) {
+            if ((x58[arg1].x24 - x58[arg1].self_destructs) != 0) {
                 return 1;
             }
         }
@@ -835,7 +730,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
     case 0xE1: {
         s32 vals[4];
         int i, j;
-        if (x58[arg1].xA >= 3) {
+        if (x58[arg1].self_destructs >= 3) {
             {
                 typedef struct {
                     s32 a, b, c, d;
@@ -843,8 +738,8 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
                 *(copy_t*) vals = *(copy_t*) zeroes->x30;
             }
             for (i = 0; i < 4; i++) {
-                if (x58[i].x0 != 3) {
-                    vals[i] = x58[i].xA;
+                if (x58[i].pkind != 3) {
+                    vals[i] = x58[i].self_destructs;
                 }
             }
             for (j = 3; j >= 1; j--) {
@@ -856,7 +751,8 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
                     }
                 }
             }
-            if (vals[0] == x58[arg1].xA && vals[0] >= vals[1] * 2) {
+            if (vals[0] == x58[arg1].self_destructs && vals[0] >= vals[1] * 2)
+            {
                 return 1;
             }
         }
@@ -868,14 +764,14 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
             {
                 int i;
                 for (i = 0; i < 4; i++) {
-                    if (x58[i].x0 != 3 && i != arg1 &&
-                        x58[i].xA >= x58[arg1].xA)
+                    if (x58[i].pkind != 3 && i != arg1 &&
+                        x58[i].self_destructs >= x58[arg1].self_destructs)
                     {
                         return 0;
                     }
                 }
             }
-            if (x58[arg1].xA != 0) {
+            if (x58[arg1].self_destructs != 0) {
                 return 1;
             }
         }
@@ -889,14 +785,14 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
         return 0;
 
     case 0xE4: {
-        if ((x58[arg1].x24 - x58[arg1].xA) != 0) {
+        if ((x58[arg1].x24 - x58[arg1].self_destructs) != 0) {
             return 1;
         }
         return 0;
     }
 
     case 0xE5:
-        if (x58[arg1].xA != 0) {
+        if (x58[arg1].self_destructs != 0) {
             return 1;
         }
         return 0;
@@ -1029,7 +925,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
             *(copy_t*) vals = *(copy_t*) zeroes->x40;
         }
         for (i = 0; i < 4; i++) {
-            if (x58[i].x0 != 3) {
+            if (x58[i].pkind != 3) {
                 vals[i] = pl_800407C8(i);
             }
         }
@@ -1060,7 +956,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
         f32 min_dmg = 0.0f;
         int i;
         for (i = 0; i < 4; i++) {
-            if (x58[i].x0 != 3 && min_dmg > pl_80040870(i)) {
+            if (x58[i].pkind != 3 && min_dmg > pl_80040870(i)) {
                 min_dmg = pl_80040870(i);
             }
         }
@@ -1074,22 +970,26 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
         {
             int i;
             for (i = 0; i < 4; i++) {
-                if (x58[i].x0 != 3 && i != arg1 && (x58[i].x3 & 1)) {
+                if (x58[i].pkind != Gm_PKind_NA && i != arg1 &&
+                    (x58[i].x3 & 1))
+                {
                     return 0;
                 }
             }
         }
-        if (rules->x5 == 3) {
+        if (rules->match_kind == 3) {
             {
                 int i;
                 for (i = 0; i < 4; i++) {
-                    if (x58[i].x0 != 3 && i != arg1 && rankings[i] == 0) {
+                    if (x58[i].pkind != Gm_PKind_NA && i != arg1 &&
+                        rankings[i] == 0)
+                    {
                         return 0;
                     }
                 }
             }
-            if (!(((u8*) x58)[arg1 * sizeof(*x58) + 3] & 1) &&
-                rankings[arg1] == 0 && x58[arg1].x20 == 0)
+            if (!(x58[arg1].x3_b7 & 1) && rankings[arg1] == 0 &&
+                x58[arg1].x20 == 0)
             {
                 return 1;
             }
@@ -1104,20 +1004,20 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
                 {
                     int i;
                     for (i = 0; i < 4; i++) {
-                        if (x58[i].x0 != 3 && i != arg1 && x58[i].x5 == 0) {
+                        if (x58[i].pkind != Gm_PKind_NA && i != arg1 &&
+                            x58[i].is_big_loser == 0)
+                        {
                             return 0;
                         }
                     }
                 }
-                if (!(((u8*) x58)[arg1 * sizeof(*x58) + 3] & 1) &&
-                    x58[arg1].x5 == 0 && x58[arg1].x20 == 0)
+                if (!(x58[arg1].x3_b7 & 1) && x58[arg1].is_big_loser == 0 &&
+                    x58[arg1].x20 == 0)
                 {
                     return 1;
                 }
             } else {
-                if (!(((u8*) x58)[arg1 * sizeof(*x58) + 3] & 1) &&
-                    x58[arg1].x20 == 0)
-                {
+                if (!(x58[arg1].x3_b7 & 1) && x58[arg1].x20 == 0) {
                     return 1;
                 }
             }
@@ -1134,6 +1034,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
         return 0;
 
     case 0xFE: {
+        u32 tmp, k;
         u32 vals[4];
         int i, j;
         unsigned int threshold;
@@ -1156,12 +1057,18 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
                     *(copy_t*) vals = *(copy_t*) zeroes->x50;
                 }
                 for (i = 0; i < 4; i++) {
-                    if (x58[i].x0 != 3 && pl_800408B8(i) != 0) {
+                    if (x58[i].pkind != 3 && pl_800408B8(i) != 0) {
                         vals[i] = pl_800408B8(i);
                     }
                 }
                 for (j = 3; j >= 1; j--) {
-                    gm_16F1_SortDescPass(vals, j);
+                    for (k = 0; k < j; k++) {
+                        if (vals[k] > vals[k + 1]) {
+                            tmp = vals[k + 1];
+                            vals[k + 1] = vals[k];
+                            vals[k] = tmp;
+                        }
+                    }
                 }
                 if (vals[0] == pl_800408B8(arg1) && vals[0] <= vals[1] / 2) {
                     return 1;
@@ -1174,6 +1081,7 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
     }
 
     case 0xFF: {
+        u32 tmp, k;
         u32 vals[4];
         int i, j;
         unsigned int threshold;
@@ -1193,12 +1101,18 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
                     *(copy_t*) vals = *(copy_t*) zeroes->x60;
                 }
                 for (i = 0; i < 4; i++) {
-                    if (x58[i].x0 != 3) {
+                    if (x58[i].pkind != 3) {
                         vals[i] = pl_80040894(i);
                     }
                 }
                 for (j = 3; j >= 1; j--) {
-                    gm_16F1_SortAscPass(vals, j);
+                    for (k = 0; k < j; k++) {
+                        if (vals[k] < vals[k + 1]) {
+                            tmp = vals[k + 1];
+                            vals[k + 1] = vals[k];
+                            vals[k] = tmp;
+                        }
+                    }
                 }
                 if (vals[0] == pl_80040894(arg1) && vals[0] >= vals[1] * 2) {
                     return 1;
@@ -1218,13 +1132,18 @@ int fn_801701C0(void* arg0, int arg1, int arg2)
 int fn_80171A88(void)
 {
     int result = 0;
-    if (gm_8016B41C()) {
+    if (gm_IsCurrently1PMode_inline()) {
         result = fn_8017E0E4();
         if (result == -1) {
             result = 1;
         }
     }
     return result;
+}
+
+void fn_80171AD4(void)
+{
+    memzero(&lbl_8046DBC8, sizeof(lbl_8046DBC8));
 }
 
 bool fn_80171B00(int arg0)
@@ -1251,7 +1170,7 @@ void fn_80171B64(struct lbl_804D65A8_t* arg0)
     arg0->x3 = lbl_804D65A8[3];
     arg0->x4 = lbl_804D65A8[4];
     arg0->x5 = lbl_804D65A8[5];
-    arg0->x6 = (u8) lbl_804D65B0[0];
+    arg0->x6 = (u8) lbl_804D65B0;
 }
 
 int fn_80171BA4(void* arg0)
@@ -1260,7 +1179,7 @@ int fn_80171BA4(void* arg0)
     int j;
     int ko_count;
     int falls;
-    u32 suicides;
+    u32 self_destructs;
     int team;
     int result;
     u8* rules;
@@ -1269,18 +1188,16 @@ int fn_80171BA4(void* arg0)
     rules = arg0;
     memzero(scores, sizeof(scores));
     memzero(lbl_804D65A8, sizeof(lbl_804D65A8));
-    lbl_804D65B0[0] = Gm_PKind_Human;
+    lbl_804D65B0 = Gm_PKind_Human;
 
-    player = 0;
-    do {
+    for (player = 0; player < 6; player++) {
         if (Player_GetPlayerSlotType(player) != Gm_PKind_NA) {
             ko_count = 0;
             falls = Player_GetFalls(player);
-            suicides = Player_GetSuicideCount(player);
+            self_destructs = Player_GetSelfDestructs(player);
             if (rules[6] == 1) {
                 team = Player_GetTeam(player);
-                j = 0;
-                do {
+                for (j = 0; j < 6; j++) {
                     if (Player_GetPlayerSlotType(j) != Gm_PKind_NA) {
                         if (team != Player_GetTeam(j)) {
                             if (player != j) {
@@ -1288,83 +1205,76 @@ int fn_80171BA4(void* arg0)
                                     Player_GetKOsByPlayerIndex(player, j);
                             }
                         } else {
-                            suicides += Player_GetKOsByPlayerIndex(player, j);
+                            self_destructs +=
+                                Player_GetKOsByPlayerIndex(player, j);
                             falls += Player_GetKOsByPlayerIndex(player, j);
                         }
                     }
-                    j++;
-                } while (j < 6);
+                }
             } else {
-                j = 0;
-                do {
+                for (j = 0; j < 6; j++) {
                     if (Player_GetPlayerSlotType(j) != Gm_PKind_NA) {
                         if (player != j) {
                             ko_count += Player_GetKOsByPlayerIndex(player, j);
                         } else {
-                            suicides += Player_GetKOsByPlayerIndex(player, j);
+                            self_destructs +=
+                                Player_GetKOsByPlayerIndex(player, j);
                             falls += Player_GetKOsByPlayerIndex(player, j);
                         }
                     }
-                    j++;
-                } while (j < 6);
+                }
             }
-            scores[player] = (ko_count - (falls -= (int) suicides)) +
-                             ((int) suicides * (s8) rules[0xC]);
+            scores[player] = (ko_count - (falls -= (int) self_destructs)) +
+                             ((int) self_destructs * (s8) rules[0xC]);
         }
-        player++;
-    } while (player < 6);
+    }
 
-    player = 0;
-    do {
+    for (player = 0; player < 6; player++) {
         result = Player_GetPlayerSlotType(player);
         if (result != Gm_PKind_NA) {
-            j = 0;
-            do {
+            for (j = 0; j < 6; j++) {
                 if (Player_GetPlayerSlotType(j) != Gm_PKind_NA &&
                     player != j && scores[player] < scores[j])
                 {
                     lbl_804D65A8[player] += 1;
                 }
-                j++;
-            } while (j < 6);
-            result = lbl_804D65A8[player];
-            if (lbl_804D65B0[0] < result) {
-                lbl_804D65B0[0] = result;
+            }
+            if (lbl_804D65B0 < (result = lbl_804D65A8[player])) {
+                lbl_804D65B0 = result;
             }
         }
-        player++;
-    } while (player < 6);
+    }
     return result;
 }
 
 void fn_80171DC4(void)
 {
     int i;
-    struct lbl_8046B6A0_24C_t* rules = gm_8016B774();
+    MatchEnd* rules = gm_8016B774();
 
     fn_80171BA4(rules);
 
-    if ((lbl_8046DBC8.x0 == 0) && (0 < lbl_804D65B0[0])) {
+    if ((lbl_8046DBC8.x0 == 0) && (0 < lbl_804D65B0)) {
         lbl_8046DBC8.x0 = 1;
         lbl_8046DBC8.x1 = 1;
         for (i = 0; i < 6; i++) {
-            if (rules->x58[i].x0 != 3) {
+            if (rules->player_standings[i].pkind != 3) {
                 if (lbl_804D65A8[i] == 0) {
                     lbl_8046DBC8.x2[i].x0 = 1;
-                } else if ((s32) lbl_804D65A8[i] == lbl_804D65B0[0]) {
+                } else if ((s32) lbl_804D65A8[i] == lbl_804D65B0) {
                     lbl_8046DBC8.x2[i].x1 = 1;
                 }
             }
         }
     } else {
         for (i = 0; i < 6; i++) {
-            if (rules->x58[i].x0 != 3) {
+            if (rules->player_standings[i].pkind != 3) {
                 if (lbl_8046DBC8.x2[i].x0 == 1 && lbl_804D65A8[i] != 0) {
                     lbl_8046DBC8.x2[i].x0 = 0;
                 }
                 if (lbl_8046DBC8.x2[i].x1 == 1 &&
                     (lbl_804D65A8[i] == 0 ||
-                     (s32) lbl_804D65A8[i] != lbl_804D65B0[0]))
+                     (s32) lbl_804D65A8[i] != lbl_804D65B0))
                 {
                     lbl_8046DBC8.x2[i].x1 = 0;
                 }
@@ -1378,7 +1288,7 @@ bool gm_801720B4(void)
     if (gm_8016B3D8()) {
         return fn_8017E160();
     }
-    return gm_GetRules()->is_teams == true;
+    return gm_GetStartMeleeRules()->is_teams == true;
 }
 
 bool gm_801720F8(void)
@@ -1386,7 +1296,7 @@ bool gm_801720F8(void)
     if (gm_8016B3D8()) {
         return true;
     }
-    return gm_GetRules()->match_kind == 1;
+    return gm_GetStartMeleeRules()->match_kind == 1;
 }
 
 int gm_80172140(void)
@@ -1400,8 +1310,7 @@ int gm_80172140(void)
 
 void gm_80172174(void)
 {
-    /// @todo create struct of size 0x4D8 returned by gmMainLib_8015CCE4
-    memzero(gmMainLib_8015CCE4(), 0x4D8);
+    memzero(gmMainLib_8015CCE4(), sizeof(struct gmm_x0_44_t));
 }
 
 bool gm_8017219C(u32 arg0)
@@ -1673,6 +1582,51 @@ bool fn_80172768(void)
     return false;
 }
 
+struct lbl_803D6300_t lbl_803D6300[] ATTRIBUTE_ALIGN(8) = {
+    { 0x0016, 0xFFFF, fn_801735F0 },
+    { 0x0017, 0x0001, fn_80173644 },
+    { 0x0018, 0xFFFF, fn_80173510 },
+    { 0x0019, 0xFFFF, NULL },
+    { 0x001A, 0xFFFF, NULL },
+    { 0x001B, 0xFFFF, fn_8017367C },
+    { 0x001C, 0xFFFF, gm_80164ABC },
+    { 0x001D, 0xFFFF, gm_80164600 },
+    { 0x001E, 0x0040, fn_80162CCC },
+    { 0x001F, 0x0040, gm_80162EC8 },
+    { 0x0020, 0x0040, fn_801630C4 },
+    { 0x0021, 0x0040, gm_80162D1C },
+    { 0x0022, 0x0040, gm_80162F18 },
+    { 0x0023, 0x0040, gm_80163114 },
+    { 0x0024, 0x0010, fn_801722BC },
+    { 0x0025, 0x0010, fn_801722F4 },
+    { 0x0026, 0x0080, gmMainLib_8015D508 },
+    { 0x0027, 0x0020, fn_80163D24 },
+    { 0x0028, 0x0020, fn_80163D74 },
+    { 0x0029, 0x0040, fn_8017232C },
+    { 0x002A, 0x0040, fn_80172428 },
+    { 0x002B, 0x0040, fn_80172380 },
+    { 0x002C, 0x0040, fn_80172478 },
+    { 0x002D, 0x0040, fn_801723D4 },
+    { 0x002E, 0x0040, fn_801724C8 },
+    { 0x002F, 0x0001, fn_801724D0 },
+    { 0x0030, 0x0001, fn_80172504 },
+    { 0x0031, 0x0001, fn_80172538 },
+    { 0x0032, 0x0001, fn_8017256C },
+    { 0x0033, 0x0001, fn_801725A8 },
+    { 0x0034, 0x0001, fn_801725E4 },
+    { 0x0035, 0x0001, fn_80172624 },
+    { 0x0036, 0x0001, fn_80172664 },
+    { 0x0037, 0xFFFF, fn_80172698 },
+    { 0x0038, 0xFFFF, fn_801726CC },
+    { 0x0039, 0xFFFF, fn_80172700 },
+    { 0x003A, 0xFFFF, fn_80172734 },
+    { 0x003B, 0xFFFF, fn_80172768 },
+    { 0x003C, 0xFFFF, un_80304470 },
+    { 0x003D, 0xFFFF, un_80304510 },
+    { 0x0041, 0x0010, gmMainLib_8015CF94 },
+    { 0x0042, 0x0000, NULL },
+};
+
 bool fn_8017279C(int arg0, u16 arg1)
 {
     struct lbl_803D6300_t* cur = lbl_803D6300;
@@ -1789,7 +1743,7 @@ void gm_801729EC(void)
     }
 
     for (i = 0; i < 11; i++) {
-        if (gm_80164840(fn_801606A8(i)) == 0) {
+        if (gm_IsCKindUnlocked(gm_GetCKindByUnlockIndex(i)) == 0) {
             gmMainLib_8015D924(fn_80160710(i));
         }
     }
@@ -1876,10 +1830,10 @@ static const struct lbl_803B7AD0_t {
     { 9, 5, 2, 0x0C8 }, { 10, 5, 2, 0x258 },
 };
 
-static inline const struct lbl_803B7AD0_t* inline2(u8 arg0)
+static inline const struct lbl_803B7AD0_t* inline2(u8 cpu_ckind)
 {
     int i;
-    u8 temp_r3 = gm_80160638(arg0);
+    u8 temp_r3 = gm_CKindToUnlockIndex(cpu_ckind);
     const struct lbl_803B7AD0_t* tmp = lbl_803B7AD0;
     for (i = 0; i < 0xB; i++) {
         if (temp_r3 == tmp[i].x0) {
@@ -1889,12 +1843,14 @@ static inline const struct lbl_803B7AD0_t* inline2(u8 arg0)
     return NULL;
 }
 
-u8 gm_80172CC0(u8 arg0, u8 arg1)
+/// @returns CPU level (0-9)
+u8 gm_DecideChallengerCpuLevel(u8 cpu_ckind, UNUSED u8 human_nametag)
 {
     int var_r0;
-    const struct lbl_803B7AD0_t* var_r31 = inline2(arg0);
+    const struct lbl_803B7AD0_t* var_r31 = inline2(cpu_ckind);
 
-    var_r0 = var_r31->x1 - var_r31->x2 * gmMainLib_8015DB6C(gm_80160638(arg0));
+    var_r0 = var_r31->x1 - var_r31->x2 * gmMainLib_8015DB6C(
+                                             gm_CKindToUnlockIndex(cpu_ckind));
     if (var_r0 < 0) {
         var_r0 = 0;
     } else if (var_r0 > 9) {
@@ -1906,10 +1862,10 @@ u8 gm_80172CC0(u8 arg0, u8 arg1)
 u8 gm_80172D78(void)
 {
     u32* temp_r31 = &gmMainLib_8015ED98()->x4;
-    if (!gm_80164840(CKIND_MEWTWO) && *temp_r31 >= 0x11940) {
-        return CKIND_MEWTWO;
+    if (!gm_IsCKindUnlocked(CKind_Mewtwo) && *temp_r31 >= 0x11940) {
+        return CKind_Mewtwo;
     }
-    return CHKIND_NONE;
+    return ChKind_None;
 }
 
 static inline const struct lbl_803B7AD0_t* inline1(u32 arg0)
@@ -1917,9 +1873,9 @@ static inline const struct lbl_803B7AD0_t* inline1(u32 arg0)
     const struct lbl_803B7AD0_t* var_r29 = NULL;
     u16 var_r30 = -1;
     int i;
-    for (i = 0; i < 0xB; i++) {
+    for (i = 0; i < NUM_UNLOCKABLE_CHARACTERS; i++) {
         if (lbl_803B7AD0[i].x4 <= arg0 &&
-            !gm_80164840(fn_801606A8(lbl_803B7AD0[i].x0)))
+            !gm_IsCKindUnlocked(gm_GetCKindByUnlockIndex(lbl_803B7AD0[i].x0)))
         {
             if (lbl_803B7AD0[i].x4 < var_r30) {
                 var_r30 = lbl_803B7AD0[i].x4;
@@ -1935,9 +1891,9 @@ u8 gm_80172DD4(u32 arg0)
     const struct lbl_803B7AD0_t* var_r29 = inline1(arg0);
     PAD_STACK(8);
     if (var_r29 != NULL) {
-        return fn_801606A8(var_r29->x0);
+        return gm_GetCKindByUnlockIndex(var_r29->x0);
     }
-    return CHKIND_NONE;
+    return ChKind_None;
 }
 
 u8 gm_80172E74(void)
@@ -1945,15 +1901,17 @@ u8 gm_80172E74(void)
     int i;
     int count = 0;
 
-    for (i = 0; i < 0x19; i++) {
-        if (fn_801605EC(i) == 0xB && gmMainLib_8015CFCC(i)) {
+    for (i = 0; i < SELKIND_COUNT; i++) {
+        if (gm_SelKindToUnlockIndex(i) == NUM_UNLOCKABLE_CHARACTERS &&
+            gmMainLib_8015CFCC(i))
+        {
             count += 1;
         }
     }
-    if (count >= 0xE && !gm_80164840(CKIND_MARS)) {
-        return CKIND_MARS;
+    if (count >= 0xE && !gm_IsCKindUnlocked(CKind_Mars)) {
+        return CKind_Mars;
     }
-    return CHKIND_NONE;
+    return ChKind_None;
 }
 
 u16 gm_80172F00(u32 arg0)
@@ -2032,61 +1990,65 @@ u8 fn_80173098(int arg0)
 {
     Unk1PData* temp_r3;
     UnkAdventureData* temp_r31;
-    int var_r31;
+    int unlocked_chars_count;
 
     temp_r3 = fn_8017DEC8(arg0);
     if (temp_r3->xC.xD == 0) {
-        if (temp_r3->ckind == CKIND_MARS && !gm_80164840(CKIND_EMBLEM)) {
-            return CKIND_EMBLEM;
+        if (temp_r3->x0.ckind == CKind_Mars &&
+            !gm_IsCKindUnlocked(CKind_Emblem))
+        {
+            return CKind_Emblem;
         }
-        if (temp_r3->ckind == CKIND_MARIO && !gm_80164840(CKIND_DRMARIO)) {
-            return CKIND_DRMARIO;
+        if (temp_r3->x0.ckind == CKind_Mario &&
+            !gm_IsCKindUnlocked(CKind_DrMario))
+        {
+            return CKind_DrMario;
         }
     }
-    var_r31 = fn_80173098_CountUnlocked();
-    (void) var_r31;
-    if (var_r31 >= 10 && !gm_80164840(CKIND_CLINK)) {
-        return CKIND_CLINK;
+    unlocked_chars_count = fn_80173098_CountUnlocked();
+    (void) unlocked_chars_count;
+    if (unlocked_chars_count >= 10 && !gm_IsCKindUnlocked(CKind_CLink)) {
+        return CKind_CLink;
     }
-    if (fn_80172FAC() && !gm_80164840(CKIND_GAMEWATCH)) {
-        return CKIND_GAMEWATCH;
+    if (fn_80172FAC() && !gm_IsCKindUnlocked(CKind_GameWatch)) {
+        return CKind_GameWatch;
     }
     if (arg0 == 0) {
-        temp_r31 = gm_8017E424();
-        if (!gm_80164840(CKIND_LUIGI) && temp_r31->x74 != 0 &&
+        temp_r31 = gm_GetAdventureData();
+        if (!gm_IsCKindUnlocked(CKind_Luigi) && temp_r31->x74 != 0 &&
             temp_r31->x75 != 0)
         {
-            return CKIND_LUIGI;
+            return CKind_Luigi;
         }
     }
-    if (!gm_80164840(CKIND_PURIN)) {
-        return CKIND_PURIN;
+    if (!gm_IsCKindUnlocked(CKind_Purin)) {
+        return CKind_Purin;
     }
-    return CHKIND_NONE;
+    return ChKind_None;
 }
 
 u8 gm_80173224(int arg0, int arg1)
 {
-    u8 var_r4 = CHKIND_NONE;
+    u8 ckind = ChKind_None;
     if (arg1 != 0) {
-        var_r4 = fn_80173098(arg0);
+        ckind = fn_80173098(arg0);
     }
-    if (var_r4 == CHKIND_NONE) {
-        var_r4 = gm_80172E74();
+    if (ckind == ChKind_None) {
+        ckind = gm_80172E74();
     }
-    return var_r4;
+    return ckind;
 }
 
 /// check for event character unlocks?
 u8 gm_801732D8(u8 arg0)
 {
-    if (!gm_80164840(CKIND_GANON) && gm_801BEBC0(arg0) == 0x1C) {
-        return CKIND_GANON;
+    if (!gm_IsCKindUnlocked(CKind_Ganon) && gm_801BEBC0(arg0) == 0x1C) {
+        return CKind_Ganon;
     }
-    if (!gm_80164840(CKIND_PICHU) && gm_801BEBC0(arg0) == 0xE) {
-        return CKIND_PICHU;
+    if (!gm_IsCKindUnlocked(CKind_Pichu) && gm_801BEBC0(arg0) == 0xE) {
+        return CKind_Pichu;
     }
-    return CHKIND_NONE;
+    return ChKind_None;
 }
 
 u16 gm_8017335C(void)
@@ -2107,10 +2069,10 @@ u16 gm_8017335C(void)
 
 u8 gm_801733D8(void)
 {
-    if (!gm_80164840(CKIND_GAMEWATCH) && fn_80172FAC()) {
-        return CKIND_GAMEWATCH;
+    if (!gm_IsCKindUnlocked(CKind_GameWatch) && fn_80172FAC()) {
+        return CKind_GameWatch;
     }
-    return CHKIND_NONE;
+    return ChKind_None;
 }
 
 u16 gm_8017341C(void)
@@ -2123,10 +2085,10 @@ u16 gm_8017341C(void)
 
 u8 gm_80173460(s8 arg0)
 {
-    if (!gm_80164840(CKIND_FALCO)) {
-        return CKIND_FALCO;
+    if (!gm_IsCKindUnlocked(CKind_Falco)) {
+        return CKind_Falco;
     }
-    return CHKIND_NONE;
+    return ChKind_None;
 }
 
 u16 gm_80173498(void)
@@ -2189,418 +2151,4 @@ bool fn_8017367C(void)
         gmMainLib_8015EDC8()->x6 = true;
     }
     return gmMainLib_8015EDC8()->x6;
-}
-
-lbl_8046DBD8_t* gm_801736DC(void)
-{
-    return &lbl_8046DBD8;
-}
-
-void gm_801736E8(u8 arg0, u8 arg1, u8 arg2, u8 arg3, u8 arg4, u8 arg5)
-{
-    lbl_8046DBD8_t* tmp = &lbl_8046DBD8;
-    memzero(tmp, sizeof(lbl_8046DBD8));
-    tmp->x0 = arg0;
-    tmp->x1 = arg1;
-    tmp->x2 = arg2;
-    tmp->x3 = arg3;
-    tmp->x4 = arg4;
-    tmp->x5 = arg5;
-}
-
-#pragma push
-#pragma dont_inline on
-bool gm_80173754(u8 arg0, u8 arg1)
-{
-    if (gm_801721EC()) {
-        memzero(&lbl_8046DBD8, sizeof(lbl_8046DBD8));
-        lbl_8046DBD8.x0 = CHKIND_NONE;
-        lbl_8046DBD8.x2 = arg1;
-        lbl_8046DBD8.x5 = arg0;
-        gm_801A42E8(GM_CHALLENGER_APPROACH);
-        gm_801A42D4();
-        return true;
-    }
-    return false;
-}
-#pragma pop
-
-u8 gm_801737D8(void)
-{
-    return lbl_8046DBD8.x6;
-}
-
-void gm_801737E8_OnLoad(void)
-{
-    lbl_8046DBD8.x6 = gm_801A4320();
-    if (lbl_8046DBD8.x0 == CHKIND_NONE) {
-        gm_SetScene(2);
-    } else {
-        gm_SetScene(0);
-    }
-}
-
-void fn_80173834(u8 ckind, u8 major, int arg2)
-{
-    bool temp_r31;
-    bool temp_r30 = gm_80160474(ckind, major);
-
-    if (arg2) {
-        gmMainLib_8015DA68(temp_r30);
-    }
-    fn_80172C78(temp_r30);
-    if (ckind == CKIND_ZELDA) {
-        temp_r31 = gm_80160474(CKIND_SEAK, major);
-        if (arg2) {
-            gmMainLib_8015DA68(temp_r31);
-        }
-        fn_80172C78(temp_r31);
-    }
-    if (ckind == CKIND_SEAK) {
-        temp_r31 = gm_80160474(CKIND_ZELDA, major);
-        if (arg2) {
-            gmMainLib_8015DA68(temp_r31);
-        }
-        fn_80172C78(temp_r31);
-    }
-}
-
-#pragma push
-#pragma dont_inline on
-void gm_8017390C(int arg0, int arg1)
-{
-    Unk1PData* temp_r3_2;
-    Unk1PData* temp_r3_3;
-    UnkAdventureData* temp_r3;
-
-    switch (arg0) { /* irregular */
-    case 0:
-        temp_r3 = gm_8017E424();
-        if (temp_r3->x76 != 0) {
-            fn_80172C78(0xE7);
-        }
-        if (arg1 != 0) {
-            fn_80173834(temp_r3->x0.ckind, 4, 1);
-            if (temp_r3->x0.xC.xD == 0 && temp_r3->x77 != 0) {
-                fn_80172C78(0x51);
-            }
-            if (temp_r3->x0.xC.xD == 0 && temp_r3->x0.cpu_level >= 3) {
-                fn_80172C78(0x53);
-            }
-            if (temp_r3->x0.xC.x20 < 0x101D0) {
-                fn_80172C78(0xE3);
-            }
-        }
-        break;
-    case 1:
-        if (arg1 != 0) {
-            temp_r3_2 = fn_8017DEC8(1);
-            fn_80173834(temp_r3_2->ckind, 3, 1);
-            if (temp_r3_2->xC.xD == 0 && temp_r3_2->cpu_level >= 3) {
-                fn_80172C78(0x52);
-            }
-            if (temp_r3_2->xC.x20 < 0x4650) {
-                fn_80172C78(0x11A);
-            }
-        }
-        break;
-    case 2:
-        if (arg1 != 0) {
-            temp_r3_3 = fn_8017DEC8(2);
-            fn_80173834(temp_r3_3->ckind, 5, 1);
-            fn_80172C78(0xBE);
-            if (temp_r3_3->xC.xD == 0) {
-                fn_80172C78(0xCC);
-            }
-            if (temp_r3_3->cpu_level >= 3) {
-                fn_80172C78(0x86);
-            }
-        }
-        break;
-    }
-}
-#pragma pop
-
-void gm_80173AA4(void)
-{
-    int i;
-    u32 var_r30 = 0;
-
-    if (gmMainLib_8015D640()) {
-        fn_80172C78(0xBC);
-        for (i = 0; i < 0x19; i++) {
-            var_r30 += *gmMainLib_8015D450(i);
-        }
-        if (var_r30 < 0x15F90) {
-            fn_80172C78(0x9B);
-        }
-        if (var_r30 < 0xAFC8) {
-            fn_80172C78(0x122);
-        }
-    }
-}
-
-void gm_80173B30(u32 arg0)
-{
-    u32 var_r31 = 0;
-    int i;
-
-    if (arg0 >= 0x7530) {
-        fn_80172C78(0xBD);
-    }
-    if (arg0 >= 0xAFC8) {
-        fn_80172C78(0xCB);
-    }
-    for (i = 0; i < 0x19; i++) {
-        var_r31 = lbTime_8000AEE4(var_r31, *gmMainLib_8015D084(i));
-    }
-    if (var_r31 >= 0x7A120) {
-        fn_80172C78(0x8D);
-    }
-}
-
-void gm_80173BC4(s8 arg0)
-{
-    u8 temp_r31;
-    int i;
-    int var_r29;
-    int temp_r28;
-
-    var_r29 = 0;
-    temp_r28 = gmMainLib_8015EDBC()->x114[gm_80164024(arg0)];
-    for (i = 0; i < 0x19; i++) {
-        var_r29 += gmMainLib_8015EDBC()->x114[i];
-    }
-    if (temp_r28 >= 0xA) {
-        fn_80172C78(0x6D);
-    }
-    if (temp_r28 >= 0x14) {
-        fn_80172C78(0x5B);
-    }
-    if (var_r29 >= 0x7D) {
-        fn_80172C78(0x6E);
-    }
-}
-
-void gm_80173C70(s8 c_kind, u32 arg1, u32 arg2, int arg3)
-{
-    if (arg3 != 0) {
-        if (gm_801A4310() == GM_15MIN_VS) {
-            fn_80172C78(0x50);
-        }
-        if (gm_801A4310() == GM_100MAN_VS && arg2 <= 0x3840) {
-            fn_80172C78(0x4E);
-        }
-        if (gm_801A4310() == GM_15MIN_VS) {
-            fn_80172C78(0x50);
-        }
-    }
-    if (gm_801A4310() == GM_ENDLESS_VS && arg1 >= 100) {
-        fn_80172C78(0x4F);
-    }
-    if (gm_801A4310() == GM_CRUEL_VS && arg1 >= 5) {
-        fn_80172C78(0x10E);
-    }
-}
-
-static struct lbl_803D6450_t {
-    u8 x0;
-    u8 x1;
-    u16 x2;
-} lbl_803D6450[] = {
-    { 0x02, 0x00, 0x0067 }, { 0x02, 0x01, 0x0067 }, { 0x0D, 0x02, 0x00C0 },
-    { 0x19, 0x02, 0x0092 }, { 0x2C, 0x02, 0x00BB }, { 0x2E, 0x02, 0x00DD },
-    { 0x32, 0x02, 0x00BF },
-};
-
-static inline int inline0(int arg0)
-{
-    struct lbl_803D6450_t* r30 = lbl_803D6450;
-    int i;
-    for (i = 0; i < ARRAY_SIZE(lbl_803D6450); i++) {
-        if (r30[i].x1 == 2 || r30[i].x1 == lbLang_GetLanguageSetting()) {
-            if (gm_801BEBC0(r30[i].x0) == gm_801BEBC0(arg0)) {
-                return r30[i].x2;
-            }
-        }
-    }
-    return -1;
-}
-
-void gm_80173D3C(int arg0)
-{
-    int var_r0 = inline0(arg0);
-    if (var_r0 != -1) {
-        fn_80172C78(var_r0);
-    }
-}
-
-static struct lbl_803D646C_t {
-    u16 x0;
-    u16 x2;
-} lbl_803D646C[] = {
-    { 0x032, 0xB5 }, { 0x064, 0xB9 }, { 0x096, 0xAE }, { 0x0C8, 0x8C },
-    { 0x00A, 0x55 }, { 0x064, 0x56 }, { 0x3E8, 0x54 },
-};
-
-void gm_80173DE4(MatchEnd* arg0)
-{
-    u32 temp_r30;
-    u32 var_r29_2;
-    int i;
-
-    temp_r30 = gmMainLib_8015EDBC()->x0;
-
-    for (i = 0; i < ARRAY_SIZE(lbl_803D646C); i++) {
-        if (temp_r30 >= lbl_803D646C[i].x0) {
-            fn_80172C78(lbl_803D646C[i].x2);
-        }
-    }
-    if (gmMainLib_8015EDBC()->x4 >= 100) {
-        fn_80172C78(0x76);
-    }
-    if (gmMainLib_8015EDBC()->xC >= 1000) {
-        fn_80172C78(0xE2);
-    }
-    var_r29_2 = 0;
-
-    for (i = 0; i < 6; i++) {
-        if (arg0->player_standings[i].slot_type == 0) {
-            var_r29_2 =
-                lbTime_8000AEC8(var_r29_2, arg0->player_standings[i].x50);
-        }
-    }
-    if (lbTime_8000AEC8(var_r29_2, gmMainLib_8015EDBC()->x10) >= 0xF4240) {
-        fn_80172C78(0xB0);
-    }
-}
-
-static inline bool gm_80173EEC_inline(u8 arg0, int arg1)
-{
-    return gm_80160474(arg0, arg1);
-}
-
-void gm_80173EEC(void)
-{
-    int i;
-    u8 ckind;
-    u16* temp_r29;
-
-    for (i = 0; i < 0x19; i++) {
-        temp_r29 = &gmMainLib_8015EDBC()->x18[(u32) i];
-        if (*temp_r29 >= 100) {
-            ckind = gm_8016400C(i);
-            fn_80172C78(gm_80173EEC_inline(ckind, GM_CLASSIC));
-            if (ckind == CKIND_ZELDA) {
-                fn_80172C78(gm_80173EEC_inline(CKIND_SEAK, GM_CLASSIC));
-            }
-            if (ckind == CKIND_SEAK) {
-                fn_80172C78(gm_80173EEC_inline(CKIND_ZELDA, GM_CLASSIC));
-            }
-        }
-        if (*temp_r29 >= 200) {
-            ckind = gm_8016400C(i);
-            fn_80172C78(gm_80173EEC_inline(ckind, GM_ADVENTURE));
-            if (ckind == CKIND_ZELDA) {
-                fn_80172C78(gm_80173EEC_inline(CKIND_SEAK, GM_ADVENTURE));
-            }
-            if (ckind == CKIND_SEAK) {
-                fn_80172C78(gm_80173EEC_inline(CKIND_ZELDA, GM_ADVENTURE));
-            }
-        }
-        if (*temp_r29 >= 300) {
-            ckind = gm_8016400C(i);
-            fn_80172C78(gm_80173EEC_inline(ckind, GM_ALLSTAR));
-            if (ckind == CKIND_ZELDA) {
-                fn_80172C78(gm_80173EEC_inline(CKIND_SEAK, GM_ALLSTAR));
-            }
-            if (ckind == CKIND_SEAK) {
-                fn_80172C78(gm_80173EEC_inline(CKIND_ZELDA, GM_ALLSTAR));
-            }
-        }
-    }
-
-    if (fn_80164B48() != 0) {
-        fn_80172C78(0xA0);
-    }
-    if (gm_80164ABC()) {
-        fn_80172C78(0x9F);
-    }
-    if (gmMainLib_8015EE90() != 0) {
-        fn_80172C78(0xDC);
-    }
-    if (gmMainLib_8015EDBC()->x14 >= 0x2710) {
-        fn_80172C78(0x10C);
-    }
-    if (gmMainLib_8015D94C(0x1A) != 0) {
-        fn_80172C78(0x96);
-    }
-    if (un_803045A0() != 0) {
-        fn_80172C78(0x116);
-    }
-    if (un_80304690() != 0) {
-        fn_80172C78(0xAF);
-    }
-    if (un_80304780() != 0) {
-        fn_80172C78(0x100);
-    }
-
-    {
-        int j;
-        bool result = true;
-
-        for (j = 0; j < 0x100; j++) {
-            if (j == 0x29) {
-                continue;
-            }
-            if (j == 0x42 || j == 0x43) {
-                continue;
-            }
-            if (j == 0xB9) {
-                continue;
-            }
-            if (j == 0xC9 || j == 0xCA) {
-                continue;
-            }
-            if (j == 9) {
-                continue;
-            }
-            if (!gmMainLib_8015DADC(j)) {
-                result = false;
-                break;
-            }
-        }
-        if (result) {
-            fn_80172C78(0x123);
-        }
-    }
-}
-
-void gm_80174180(void)
-{
-    if (fn_80162CCC() != 0 && gm_80162EC8() != 0) {
-        Toy_80305918(4, 0, 0);
-    }
-    if (gm_GetVsPlayMatchTotal() >= 0xC8) {
-        Toy_80305918(5, 0, 0);
-    }
-    if (gm_80164ABC() != 0) {
-        Toy_80305918(6, 0, 0);
-    }
-}
-
-void gm_801741FC(void)
-{
-    int i;
-    for (i = 0; i < 0x12C; i++) {
-        gmMainLib_8015DA40(i);
-    }
-}
-
-void gm_80174238(void)
-{
-    int i;
-    for (i = 0; i < 0x12C; i++) {
-        gmMainLib_8015DA68(i);
-    }
 }

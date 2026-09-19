@@ -1,13 +1,12 @@
 #ifndef GALE01_23749C
 #define GALE01_23749C
 
-#include <placeholder.h>
-
-#include <baselib/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <stdbool.h>
-#include <baselib/gobj.h>
-#include <baselib/jobj.h>
+
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/jobj.h>
 
 typedef struct MnName_GObj {
     /* +00 */ HSD_GObj gobj;
@@ -21,7 +20,6 @@ typedef struct MnName_GObj {
 /* 237594 */ int GetNameCount(void);
 /* 2375EC */ bool IsNameListFull(void);
 /* 237654 */ s32 CompareNameStrings(char* str, char* slot);
-/* 2377A4 */ void fn_802377A4(void);
 /* 2377A8 */ bool IsNameUnique(char* name);
 /* 237834 */ void DeleteName(u8);
 /* 2379BC */ bool IsNameValid(int slot);
@@ -29,7 +27,7 @@ typedef struct MnName_GObj {
 /* 237A68 */ void mnName_SortNames(HSD_GObj*);
 /* 237D94 */ u8 mnName_80237D94(s32, u8);
 /* 237F78 */ void mnName_ConfirmNameDeleteInput(HSD_GObj*);
-/* 23817C */ UNK_RET mnName_MainInput(HSD_GObj*);
+/* 23817C */ void mnName_MainInput(HSD_GObj*);
 /* 238540 */ void fn_80238540(HSD_GObj* gobj);
 /* 2385A0 */ void mnName_802385A0(HSD_GObj* gobj);
 /* 2385D4 */ s32 mnName_GetPageCount(void);

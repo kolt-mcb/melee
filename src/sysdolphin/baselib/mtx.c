@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include "mtx.h"
 
-#include "debug.h"
-
 #include <math.h>
+
+#include "debug.h"
 
 /* Retail builds the four combined terms of a rotation matrix with fmsubs and
  * fmadds -- see 8037A388 and 8037A38C in HSD_MtxSRT -- which round once for a

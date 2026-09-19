@@ -1,13 +1,13 @@
 #ifndef _MN_HYAKU_
 #define _MN_HYAKU_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include <baselib/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
-#include <baselib/gobj.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
 
 void mnHyaku_8024C68C(HSD_GObj*);
 void mnHyaku_8024CB94(u8);

@@ -1,31 +1,73 @@
 #ifndef MELEE_CM_TYPES_H
 #define MELEE_CM_TYPES_H
 
-#include "cm/forward.h" // IWYU pragma: export
-#include <baselib/forward.h>
+#include <melee/cm/forward.h> // IWYU pragma: export
+#include <sysdolphin/baselib/forward.h>
 
+#include <dolphin/gx/GXStruct.h>
 #include <dolphin/mtx.h>
 
 typedef struct CmSubjectExtents {
-    Vec2 h;
+    Vec2 h; ///< Horizontal extents: @c .x left, @c .y right.
+
+    /// Vertical extents: @c .x up, @c .y down, @c .z forward (used by
+    /// shadows).
     Vec3 v;
 } CmSubjectExtents;
 
+/**
+ * A point of interest ("camera box") that the match camera tries to keep in
+ * frame.
+ * @note Name from the <tt>"couldn't get CmSubject struct."</tt> @c OSReport
+ * in #Camera_80029044 at @c 80029070.
+ */
 struct CmSubject {
     /* +00 */ CmSubject* next;
     /* +04 */ CmSubject* prev;
     /* +08 */ CmSubjectState state;
+
+    /// Set while the owning fighter is in a Cliff motion state. Never read.
     /* +0C:0 */ u8 on_ledge : 1;
+
+    /**
+     * Excludes the subject from framing regardless of #CmSubject::state. Set
+     * only by Home-Run Contest, cleared only by #Camera_80028F5C.
+     */
     /* +0C:1 */ u8 force_inactive : 1;
+
+    /**
+     * Set while the subject is framed. #CmSubjectState_Auto uses it as an edge
+     * detector: cleared when the subject leaves the bounds, arming
+     * #CmSubject::state_timer.
+     */
     /* +0C:2 */ u8 was_framed : 1;
+
+    /**
+     * #CmSubjectState_Auto lockout. Armed to @c 600 when the subject leaves
+     * the bounds; while non-zero it counts down once per framing check and the
+     * subject is not framed.
+     */
     /* +0E */ s16 state_timer;
+
+    /// Anchor point of the subject's framing box. Only x/y are read.
     /* +10 */ Vec3 pos;
+
+    /// Position of the owning fighter's camera bone (#ftLib_800866DC).
     /* +1C */ Vec3 bone_pos;
-    /* +28 */ float facing_dir;
+
+    /* +28 */ float facing_dir; ///< Facing direction of the subject (±1).
+
+    /**
+     * Current framing extents, eased toward #CmSubject::target_ext by 0.5 per
+     * frame in #Camera_800293E0.
+     */
     /* +2C */ CmSubjectExtents ext;
+
+    /// Target framing extents, set by the subject's owner.
     /* +40 */ CmSubjectExtents target_ext;
-    /* +54 */ Vec3 x54;
-    /* +60 */ Vec3 x60;
+
+    /* +54 */ Vec3 x54; ///< Zeroed but unused.
+    /* +60 */ Vec3 x60; ///< Zeroed but unused.
 };
 
 struct CameraTransformState {
@@ -63,8 +105,8 @@ struct Camera_x2D0 {
 };
 
 struct CameraQuake {
-    /* 0x0 */ Vec3 x0;
-    /* 0xC */ int type;
+    /* 0x0 */ Vec3 epicenter;
+    /* 0xC */ CmQuakeKind kind;
 };
 
 struct CameraDebugMode {
@@ -84,10 +126,7 @@ struct CameraDebugMode {
 struct Camera {
     /* 0x000 */ HSD_GObj* gobj;
     /* 0x004 */ CameraType mode;
-    /* 0x008 */ u8 background_r;
-    /* 0x009 */ u8 background_g;
-    /* 0x00A */ u8 background_b;
-    /* 0x00B */ s8 xB;
+    /* 0x008 */ GXColor background_color;
     /* 0x00C */ f32 nearz;
     /* 0x010 */ f32 farz;
     /* 0x014 */ CameraTransformState transform;
@@ -95,13 +134,12 @@ struct Camera {
         transform_copy; // this runs the same tween logic, but isnt used for
                         // anything?
     /* 0x084 */ Vec2 translation;
-    /* 0x08C */ s32 _8C[5]; /* maybe part of translation[4]? */
-    /* 0x0A0 */ HSD_GObj* xA0;
-    /* 0x0A4 */ f32 xA4;
-    /* 0x0A8 */ f32 xA8;
-    /* 0x0AC */ f32 xAC; /* inferred */
-    /* 0x0B0 */ struct CameraQuake _B0[2][8];
-    /* 0x1B0 */ struct CameraQuake _1B0[2][8];
+    /* 0x08C */ s32 quake_frames_left[QuakeKind_Count];
+    /* 0x0A0 */ HSD_GObj* quake_gobj;
+    /* 0x0A4 */ Vec2
+        quake_offset; ///< offset from the quake model, before scaling
+    /* 0x0AC */ f32 quake_scale;
+    /* 0x0B0 */ struct CameraQuake quakes[2][16];
     /* 0x2B0 */ float x2B0;
     /* 0x2B4 */ float x2B4;
     /* 0x2B8 */ s16 x2B8;
@@ -132,7 +170,7 @@ struct Camera {
     /* 0x341:7 */ u8 x341_b7 : 1;
     /* 0x342 */ char x342_pad[2];
     /* 0x344 */ union {
-        s32 s32;
+        s32 slot;
         Vec3 vec;
         s32 (*cb)(Vec3*);
     } x344;
@@ -151,13 +189,13 @@ struct Camera {
     /* 0x368 */ Vec3 x368;
     /* 0x374 */ f32 x374;
     /* 0x378 */ union {
-        f32 f32;
-        s32 s32;
+        f32 f32_v;
+        s32 s32_v;
     } x378;
     // /* 0x378 */ f32 x378;
     /* 0x37C */ union {
-        s32 s32;
-        f32 f32;
+        s32 s32_v;
+        f32 f32_v;
     } x37C;
     /* 0x380 */ u8 x380[0x18];
     /* 0x398:0 */ u8 x398_b0 : 1;

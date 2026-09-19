@@ -1,23 +1,20 @@
 #include "ftcmdscript.h"
 
 #include <math.h>
-#include <sysdolphin/baselib/debug.h>
-#include <melee/ft/fighter.h>
-#include <melee/ft/types.h>
+
+#include "fighter.h"
+#include "types.h"
 #include <melee/lb/lb_00CE.h>
+#include <sysdolphin/baselib/debug.h>
 #if BUILD_TARGET_PC
 #include <stdio.h>
-#if BUILD_TARGET_PC
 #include <stdlib.h>
-#if BUILD_TARGET_PC
 #include <string.h>
-#endif
-#endif
 #endif
 
 void ftCo_800B3E04(Fighter* fp)
 {
-    struct Fighter_x1A88_t* data;
+    struct CpuFighter* data;
     s8* cur;
     int temp_r27;
     int magnitude;
@@ -31,7 +28,7 @@ void ftCo_800B3E04(Fighter* fp)
     int var_r24_2;
     int var_r3_2;
 
-    data = &fp->x1A88;
+    data = &fp->cpu;
     if (data->csP == NULL) {
         return;
     }
@@ -63,130 +60,130 @@ void ftCo_800B3E04(Fighter* fp)
          * traced field moving. The console gives the same from
          * MELEE_CODE_BP at 800B3E04 (entry only; the opcodes need this). */
         if (getenv("MELEE_CPUCMD") != NULL) {
-            extern u32 gm_8016AEDC(void);
+            extern u32 gm_GetFrameCount(void);
             fprintf(stderr, "[CPUCMD] gframe=%u p%d op=0x%02x\n",
-                    (unsigned) gm_8016AEDC(), (int) fp->player_id,
+                    (unsigned) gm_GetFrameCount(), (int) fp->player_id,
                     (unsigned) (u8) *cur);
         }
 #endif
         switch ((u8) *cur++) {
         case CpuCmd_PressA:
-            data->x0 |= HSD_PAD_A;
+            data->buttons |= HSD_PAD_A;
             break;
         case CpuCmd_ReleaseA:
-            data->x0 &= ~HSD_PAD_A;
+            data->buttons &= ~HSD_PAD_A;
             break;
         case CpuCmd_PressB:
-            data->x0 |= HSD_PAD_B;
+            data->buttons |= HSD_PAD_B;
             break;
         case CpuCmd_ReleaseB:
-            data->x0 &= ~HSD_PAD_B;
+            data->buttons &= ~HSD_PAD_B;
             break;
         case CpuCmd_PressX:
-            data->x0 |= HSD_PAD_X;
+            data->buttons |= HSD_PAD_X;
             break;
         case CpuCmd_ReleaseX:
-            data->x0 &= ~HSD_PAD_X;
+            data->buttons &= ~HSD_PAD_X;
             break;
         case CpuCmd_PressY:
-            data->x0 |= HSD_PAD_Y;
+            data->buttons |= HSD_PAD_Y;
             break;
         case CpuCmd_ReleaseY:
-            data->x0 &= ~HSD_PAD_Y;
+            data->buttons &= ~HSD_PAD_Y;
             break;
         case CpuCmd_PressStart:
-            data->x0 |= HSD_PAD_START;
+            data->buttons |= HSD_PAD_START;
             break;
         case CpuCmd_ReleaseStart:
-            data->x0 &= ~HSD_PAD_START;
+            data->buttons &= ~HSD_PAD_START;
             break;
         case CpuCmd_PressR:
             data->rtrigger = 0xFF;
-            data->x0 |= HSD_PAD_R;
+            data->buttons |= HSD_PAD_R;
             break;
         case CpuCmd_ReleaseR:
             data->rtrigger = 0;
-            data->x0 &= ~HSD_PAD_R;
+            data->buttons &= ~HSD_PAD_R;
             break;
         case CpuCmd_PressL:
-            data->x0 |= HSD_PAD_L;
+            data->buttons |= HSD_PAD_L;
             break;
         case CpuCmd_ReleaseL:
-            data->x0 &= ~HSD_PAD_L;
+            data->buttons &= ~HSD_PAD_L;
             break;
         case CpuCmd_PressZ:
-            data->x0 |= HSD_PAD_Z;
+            data->buttons |= HSD_PAD_Z;
             break;
         case CpuCmd_ReleaseZ:
-            data->x0 &= ~HSD_PAD_Z;
+            data->buttons &= ~HSD_PAD_Z;
             break;
         case CpuCmd_PressUp:
-            data->x0 |= HSD_PAD_DPADUP;
+            data->buttons |= HSD_PAD_DPADUP;
             break;
         case CpuCmd_ReleaseUp:
-            data->x0 &= ~HSD_PAD_DPADUP;
+            data->buttons &= ~HSD_PAD_DPADUP;
             break;
         case CpuCmd_PressDown:
-            data->x0 |= HSD_PAD_DPADDOWN;
+            data->buttons |= HSD_PAD_DPADDOWN;
             break;
         case CpuCmd_ReleaseDown:
-            data->x0 &= ~HSD_PAD_DPADDOWN;
+            data->buttons &= ~HSD_PAD_DPADDOWN;
             break;
         case CpuCmd_PressRight:
-            data->x0 |= HSD_PAD_DPADRIGHT;
+            data->buttons |= HSD_PAD_DPADRIGHT;
             break;
         case CpuCmd_ReleaseRight:
-            data->x0 &= ~HSD_PAD_DPADRIGHT;
+            data->buttons &= ~HSD_PAD_DPADRIGHT;
             break;
         case CpuCmd_PressLeft:
-            data->x0 |= HSD_PAD_DPADLEFT;
+            data->buttons |= HSD_PAD_DPADLEFT;
             break;
         case CpuCmd_ReleaseLeft:
-            data->x0 &= ~HSD_PAD_DPADLEFT;
+            data->buttons &= ~HSD_PAD_DPADLEFT;
             break;
         case CpuCmd_PressAFor:
-            data->x0 |= HSD_PAD_A;
+            data->buttons |= HSD_PAD_A;
             data->command_duration = (u8) *cur++;
             break;
         case CpuCmd_ReleaseAFor:
-            data->x0 &= ~HSD_PAD_A;
+            data->buttons &= ~HSD_PAD_A;
             data->command_duration = (u8) *cur++;
             break;
         case CpuCmd_PressBFor:
-            data->x0 |= HSD_PAD_B;
+            data->buttons |= HSD_PAD_B;
             data->command_duration = (u8) *cur++;
             break;
         case CpuCmd_ReleaseBFor:
-            data->x0 &= ~HSD_PAD_B;
+            data->buttons &= ~HSD_PAD_B;
             data->command_duration = (u8) *cur++;
             break;
         case CpuCmd_PressXFor:
-            data->x0 |= HSD_PAD_X;
+            data->buttons |= HSD_PAD_X;
             data->command_duration = (u8) *cur++;
             break;
         case CpuCmd_ReleaseXFor:
-            data->x0 &= ~HSD_PAD_X;
+            data->buttons &= ~HSD_PAD_X;
             data->command_duration = (u8) *cur++;
             break;
         case CpuCmd_PressYFor:
-            data->x0 |= HSD_PAD_Y;
+            data->buttons |= HSD_PAD_Y;
             data->command_duration = (u8) *cur++;
             break;
         case CpuCmd_ReleaseYFor:
-            data->x0 &= ~HSD_PAD_Y;
+            data->buttons &= ~HSD_PAD_Y;
             data->command_duration = (u8) *cur++;
             break;
         case CpuCmd_SetLstickX:
-            data->lstickX = *cur++;
+            data->lstick.x = *cur++;
             break;
         case CpuCmd_SetLstickY:
-            data->lstickY = *cur++;
+            data->lstick.y = *cur++;
             break;
         case CpuCmd_SetCstickX:
-            data->cstickX = *cur++;
+            data->cstick.x = *cur++;
             break;
         case CpuCmd_SetCstickY:
-            data->cstickY = *cur++;
+            data->cstick.y = *cur++;
             break;
         case CpuCmd_SetRtrigger:
             data->rtrigger = *cur++;
@@ -195,7 +192,7 @@ void ftCo_800B3E04(Fighter* fp)
             data->ltrigger = *cur++;
             break;
         case CpuCmd_ReleaseAll:
-            data->x0 = 0;
+            data->buttons = 0;
             break;
         case CpuCmd_WaitFor:
             data->command_duration = (u8) *cur++;
@@ -205,14 +202,14 @@ void ftCo_800B3E04(Fighter* fp)
             cur++;
             angle = lb_8000D008(data->x54.y - fp->cur_pos.y,
                                 data->x54.x - fp->cur_pos.x);
-            data->lstickX = magnitude * cosf(angle);
-            data->lstickY = magnitude * sinf(angle);
+            data->lstick.x = magnitude * cosf(angle);
+            data->lstick.y = magnitude * sinf(angle);
             break;
         case CpuCmd_LstickXTowardDestination:
             if (data->x54.x > fp->cur_pos.x) {
-                data->lstickX = *cur;
+                data->lstick.x = *cur;
             } else {
-                data->lstickX = -*cur;
+                data->lstick.x = -*cur;
             }
             cur++;
             break;
@@ -224,8 +221,8 @@ void ftCo_800B3E04(Fighter* fp)
             if (target != NULL) {
                 angle = lb_8000D008(target->cur_pos.y - fp->cur_pos.y,
                                     target->cur_pos.x - fp->cur_pos.x);
-                data->lstickX = magnitude * cosf(angle);
-                data->lstickY = magnitude * sinf(angle);
+                data->lstick.x = magnitude * cosf(angle);
+                data->lstick.y = magnitude * sinf(angle);
             }
             break;
         }
@@ -237,16 +234,16 @@ void ftCo_800B3E04(Fighter* fp)
                     stick_x = -stick_x;
                 }
                 if (target != NULL) {
-                    data->lstickX = stick_x;
+                    data->lstick.x = stick_x;
                 }
             }
             break;
         }
         case CpuCmd_LstickXForward:
             if (fp->facing_dir >= 0.0) {
-                data->lstickX = *cur;
+                data->lstick.x = *cur;
             } else {
-                data->lstickX = -*cur;
+                data->lstick.x = -*cur;
             }
             cur++;
             break;
@@ -268,15 +265,15 @@ void ftCo_800B3E04(Fighter* fp)
             cur++;
             angle = lb_8000D008(data->x54.y - fp->cur_pos.y,
                                 data->x54.x - fp->cur_pos.x);
-            var_r24 = data->lstickX + (s8) (temp_r25 * cosf(angle));
+            var_r24 = data->lstick.x + (s8) (temp_r25 * cosf(angle));
             clamp_x = (s8) (temp_r27_3 * cosf(angle));
             if (var_r24 > clamp_x) {
                 var_r24 = clamp_x;
             } else if (var_r24 < -clamp_x) {
                 var_r24 = -clamp_x;
             }
-            data->lstickX = var_r24;
-            var_r24_2 = data->lstickY + (s8) (temp_r25 * sinf(angle));
+            data->lstick.x = var_r24;
+            var_r24_2 = data->lstick.y + (s8) (temp_r25 * sinf(angle));
             clamp_y = (s8) (temp_r27_3 * sinf(angle));
             if (var_r24_2 > clamp_y) {
                 var_r24_2 = clamp_y;
@@ -284,7 +281,7 @@ void ftCo_800B3E04(Fighter* fp)
             if (var_r24_2 < -clamp_y) {
                 var_r24_2 = -clamp_y;
             }
-            data->lstickY = var_r24_2;
+            data->lstick.y = var_r24_2;
             break;
         }
         case CpuCmd_LstickXTowardDestinationClamped: {
@@ -296,16 +293,16 @@ void ftCo_800B3E04(Fighter* fp)
             clamp_x = *cur;
             cur++;
             if (data->x54.x > fp->cur_pos.x) {
-                stick_x = data->lstickX + dx;
+                stick_x = data->lstick.x + dx;
             } else {
-                stick_x = data->lstickX - dx;
+                stick_x = data->lstick.x - dx;
             }
             if (stick_x > clamp_x) {
                 stick_x = clamp_x;
             } else if (stick_x < -clamp_x) {
                 stick_x = -clamp_x;
             }
-            data->lstickX = stick_x;
+            data->lstick.x = stick_x;
             break;
         }
         case CpuCmd_LstickForwardClamped: {
@@ -316,16 +313,16 @@ void ftCo_800B3E04(Fighter* fp)
             clamp_x = *cur;
             cur++;
             if (fp->facing_dir > 0.0) {
-                var_r3_2 = data->lstickX + dx;
+                var_r3_2 = data->lstick.x + dx;
             } else {
-                var_r3_2 = data->lstickX - dx;
+                var_r3_2 = data->lstick.x - dx;
             }
             if (var_r3_2 > clamp_x) {
                 var_r3_2 = clamp_x;
             } else if (var_r3_2 < -clamp_x) {
                 var_r3_2 = -clamp_x;
             }
-            data->lstickX = var_r3_2;
+            data->lstick.x = var_r3_2;
             break;
         }
         case CpuCmd_Done:
@@ -340,14 +337,14 @@ void ftCo_800B3E04(Fighter* fp)
 /// Resets the write position to the start of the script buffer area
 void ftCo_800B462C(Fighter* fp)
 {
-    struct Fighter_x1A88_t* data = &fp->x1A88;
+    struct CpuFighter* data = &fp->cpu;
     data->write_pos = data->buffer;
 }
 
 /// Writes a command to the current location in the script buffer area
 void ftCo_800B463C(Fighter* fp, u8 cmd)
 {
-    struct Fighter_x1A88_t* data = &fp->x1A88;
+    struct CpuFighter* data = &fp->cpu;
     if (data->write_pos >= data->buffer + sizeof(data->buffer)) {
         HSD_ASSERTREPORT(501, 0, "command script buffer over flow!\n");
     }
@@ -373,8 +370,8 @@ void ftCo_800B46B8(Fighter* fp, u8 cmd, u8 arg)
             hi = dash ? atoi(dash + 1) : lo;
         }
         if (lo >= 0) {
-            extern u32 gm_8016AEDC(void);
-            int f = (int) gm_8016AEDC();
+            extern u32 gm_GetFrameCount(void);
+            int f = (int) gm_GetFrameCount();
             if (f >= lo && f <= hi) {
                 fprintf(stderr, "[CPUCMD-AT] gframe=%d p%d cmd=%u arg=%u from=%p\n",
                         f, (int) fp->player_id, (unsigned) cmd, (unsigned) arg,
@@ -422,7 +419,7 @@ void ftCo_800B4880(Fighter* fp, int script_idx)
 
 void ftCo_800B49F4(Fighter* fp)
 {
-    struct Fighter_x1A88_t* data = &fp->x1A88;
+    struct CpuFighter* data = &fp->cpu;
 
     ftCo_800B463C(fp, CpuCmd_Done);
 
@@ -432,12 +429,12 @@ void ftCo_800B49F4(Fighter* fp)
 
 void ftCo_800B4A78(Fighter* fp)
 {
-    struct Fighter_x1A88_t* data = &fp->x1A88;
-    data->x0 = 0;
-    data->lstickX = 0;
-    data->lstickY = 0;
-    data->cstickX = 0;
-    data->cstickY = 0;
+    struct CpuFighter* data = &fp->cpu;
+    data->buttons = 0;
+    data->lstick.x = 0;
+    data->lstick.y = 0;
+    data->cstick.x = 0;
+    data->cstick.y = 0;
     data->rtrigger = 0;
     data->ltrigger = 0;
     data->csP = NULL;

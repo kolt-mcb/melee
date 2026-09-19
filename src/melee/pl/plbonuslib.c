@@ -1,22 +1,22 @@
 #include "plbonuslib.h"
 
+#include <Runtime/platform.h>
+
+#include <math.h>
+#include <placeholder.h>
+
 #include "inlines.h"
 #include "pl_040D.h"
-#include "placeholder.h"
 #include "player.h"
 #include "plbonus.h"
 #include "plbonusinline.h"
-
-#include <platform.h>
-
-#include <math.h>
-#include <ft/ft_0877.h>
-#include <ft/ft_0892.h>
-#include <ft/ftlib.h>
-#include <gm/gm_16F1.h>
-#include <gr/stage.h>
-#include <if/ifmagnify.h>
-#include <it/it_26B1.h>
+#include <melee/ft/ft_0877.h>
+#include <melee/ft/ft_0892.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gm/gm_16F1.h>
+#include <melee/gr/stage.h>
+#include <melee/if/ifmagnify.h>
+#include <melee/it/it_26B1.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -33,7 +33,7 @@
 #ifdef MUST_MATCH
 static inline float my_sqrtf(float x)
 {
-    u8 _[4] = { 0 };
+    u32 _ = 0;
     volatile float y;
     const double half = 0.5;
     const double three = 3.0;
@@ -433,8 +433,9 @@ void pl_8003E150(int slot, int arg1)
     stale_moves->x0_staleMoveTable.xCD8 += 1;
 }
 
-void pl_8003E17C(int player_id, int arg1,
-                 Item_GObj* item_gobj) // arg1 is fp->x221F_b4 from item owner
+void pl_8003E17C(
+    int player_id, int arg1,
+    Item_GObj* item_gobj) // arg1 is fp->is_sub_fighter from item owner
 {
     pl_StaleMoveTableExt_t* temp_r31 =
         Player_GetStaleMoveTableIndexPtr2(player_id);
@@ -639,9 +640,7 @@ void pl_8003E854(int arg0, int arg1, Item_GObj* arg2)
     Player_GetStaleMoveTableIndexPtr2(arg0)->x0_staleMoveTable.xCA8 = 0;
 }
 
-void pl_8003E978(int slot, bool fp_x221F_b4, Item_GObj* item_gobj, float y0,
-                 float arg4, float arg5, float arg6, float x1, float y1,
-                 float frame_speed_mul)
+void pl_8003E978(int slot, bool fp_x221F_b4, Item_GObj* item_gobj)
 {
     /// @todo Not actually sure what the second argument should be
     fn_8003E998(slot, fp_x221F_b4);
@@ -951,7 +950,7 @@ void fn_8003F294(int slot, int index)
     if (pl_8003906C(slot, -1, (unsigned int*) &table->xDCC, pl_804D6470->xB8,
                     new_var = pl_804D6470->xBC, table->xCF4, &table->xDC4))
     {
-        u32 v = gm_8016AEDC();
+        u32 v = gm_GetFrameCount();
         u32 xb8 = pl_804D6470->xB8;
         if (xb8 == v) {
             if (table->xD5C <= xb8) {
@@ -1125,10 +1124,11 @@ void pl_8003FAA8(int slot, int index, Vec3* pos, Vec3* prevPos)
     if (pl_Verify_gm_8016AEDC() && index == 0) {
         temp_r31 = ftLib_80087120(Player_GetEntityAtIndex(slot, index));
         temp_f30 =
-            PB_FMA(temp_r30->x0_staleMoveTable.xC9C, (f32) (gm_8016AEDC() - 1), temp_r31);
+            PB_FMA(temp_r30->x0_staleMoveTable.xC9C,
+                   (f32) (gm_GetFrameCount() - 1), temp_r31);
 
         temp_r30->x0_staleMoveTable.xC9C =
-            pl_CalculateAverage(temp_f30, gm_8016AEDC());
+            pl_CalculateAverage(temp_f30, gm_GetFrameCount());
     }
 }
 
@@ -1461,7 +1461,7 @@ void pl_80040688(int arg0, int arg1, int arg2)
     u8 temp_r0_2;
     int temp_r0;
 
-    if (gm_8016AEDC() <= pl_804D6470->xEC) {
+    if (gm_GetFrameCount() <= pl_804D6470->xEC) {
         pl_80038788(arg0, 0x5F, 1);
     }
 

@@ -1,25 +1,24 @@
-#include <stdlib.h>
-#include "lb/lbfile.h"
+#include "lbfile.h"
 
 #include <placeholder.h>
+#include <string.h>
 
-#include "lb/lb_0195.h"
-#include "lb/lbdvd.h"
-#include "lb/lbheap.h"
-#include "lb/lblanguage.h"
+#include "lb_0195.h"
+#include "lbdvd.h"
+#include "lbheap.h"
+#include "lblanguage.h"
 #if BUILD_TARGET_PC
 #include "port/log.h"
 /* Upstream trimmed these as IWYU noise; the host build has no umbrella header
  * that drags in OSReport()/OSDisableInterrupts(), so keep them here. */
 #include <dolphin/os/OSError.h>
 #include <dolphin/os/OSInterrupt.h>
-#endif /* BUILD_TARGET_PC */
-
-#include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#endif /* BUILD_TARGET_PC */
 #include <dolphin/dvd.h>
-#include <baselib/debug.h>
-#include <baselib/devcom.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/devcom.h>
 
 static bool cancel;
 #if BUILD_TARGET_PC
@@ -27,7 +26,8 @@ void* g_last_file_buf = NULL;  /* PC port: store original pointer before truncat
 size_t g_last_file_buf_size = 0;
 #endif /* BUILD_TARGET_PC */
 
-static void lbFile_8001615C(int dcreq, int args, void* buf, bool cancelflag)
+static void lbFile_8001615C(int dcreq, uintptr_t args, void* buf,
+                            bool cancelflag)
 {
     HSD_ASSERT(71, !cancelflag);
     cancel = true;
@@ -194,7 +194,7 @@ size_t lbFileGetSize(const char* basename)
 #define ROUND_UP_32(x) (((x) + 31) & ~31)
 
 void lbFile_800164A4(int file, uintptr_t dst, size_t* size, int pri,
-                     HSD_DevComCallback callback, void* args)
+                     HSD_DevComCallback callback, uintptr_t args)
 {
     int type;
     /* This used to write through `*(u32*) size` on PC, because the callers
@@ -210,7 +210,7 @@ void lbFile_800164A4(int file, uintptr_t dst, size_t* size, int pri,
 }
 
 void lbFile_80016580(const char* basename, void* dst, size_t* size,
-                     HSD_DevComCallback callback, void* args)
+                     HSD_DevComCallback callback, uintptr_t args)
 {
     char* filename = lbFileGetFullName(basename);
     int entry_num = DVDConvertPathToEntrynum(filename);
@@ -228,7 +228,7 @@ void lbFile_80016580(const char* basename, void* dst, size_t* size,
         PORT_LOG_WARN("lbFile_80016580: file not found: '%s' (caller: %p)\n",
                       filename, __builtin_return_address(0));
         if (callback != NULL) {
-            callback(-1, (int)(uintptr_t)args, NULL, false);
+            callback(-1, args, NULL, false);
         }
         return;
     }
@@ -245,7 +245,7 @@ void lbFile_8001668C(const char* basename, void* dst, size_t* size)
     g_last_file_buf = dst;
     g_last_file_buf_size = 0;
 #endif
-    lbFile_80016580(basename, dst, size, lbFile_8001615C, NULL);
+    lbFile_80016580(basename, dst, size, lbFile_8001615C, 0);
     waitForDisc();
 }
 
@@ -262,7 +262,7 @@ static void lbFile_80016760_inline(int heap_id, const char* basename,
     g_last_file_buf = *dst;
     g_last_file_buf_size = *size;
 #endif
-    lbFile_80016580(basename, *dst, size, lbFile_8001615C, NULL);
+    lbFile_80016580(basename, *dst, size, lbFile_8001615C, 0);
     waitForDisc();
 }
 

@@ -4,8 +4,14 @@
 #include "port/pc_ptr.h"
 #endif
 
+#include "lbvector.h"
+#include "types.h"
 #include <dolphin/gx/GXVert.h>
-#include <baselib/spline.h>
+#include <melee/cm/types.h>
+#include <melee/ft/ftdrawcommon.h>
+#include <melee/ft/ftlib.h>
+#include <melee/ft/types.h>
+#include <melee/gr/ground.h>
 #include <sysdolphin/baselib/debug.h>
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/initialize.h>
@@ -13,17 +19,11 @@
 #include <sysdolphin/baselib/perf.h>
 #include <sysdolphin/baselib/pobj.h>
 #include <sysdolphin/baselib/shadow.h>
+#include <sysdolphin/baselib/spline.h>
 #include <sysdolphin/baselib/state.h>
 #include <sysdolphin/baselib/tev.h>
 #include <sysdolphin/baselib/util.h>
 #include <sysdolphin/baselib/video.h>
-#include <melee/cm/types.h>
-#include <melee/ft/ftdrawcommon.h>
-#include <melee/ft/ftlib.h>
-#include <melee/ft/types.h>
-#include <melee/gr/ground.h>
-#include <melee/lb/lbvector.h>
-#include <melee/lb/types.h>
 
 /* The spline tangents are what Mute City's and Big Blue's cars steer by.
  * MWCC fuses each coefficient's inner sum and then accumulates the four
@@ -210,7 +210,7 @@ void lbShadow_8000EFEC(void)
 
     count = 0;
 
-    for (var_r30 = HSD_GObj_Entities->fighters; var_r30 != NULL;
+    for (var_r30 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER]; var_r30 != NULL;
          var_r30 = var_r30->next)
     {
         lbshadow = ftLib_800872B0(var_r30);
@@ -219,7 +219,9 @@ void lbShadow_8000EFEC(void)
         }
     }
 
-    for (cur = HSD_GObj_Entities->fighters; cur != NULL; cur = cur->next) {
+    for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER]; cur != NULL;
+         cur = cur->next)
+    {
         lbshadow = ftLib_800872B0(cur);
         if (lbshadow != NULL) {
             bool var_r5 = lbshadow->x0_b0 || lbshadow->x0_b1 ||
@@ -399,7 +401,7 @@ void lbShadow_8000F38C(s32 arg0)
 #ifdef MUST_MATCH
         gobj =
 #endif
-            gobj = HSD_GObj_Entities->fighters;
+            gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER];
         gobj != NULL; gobj = gobj->next)
     {
         LbShadow* lbs = ftLib_800872B0(gobj);
@@ -415,7 +417,7 @@ void lbShadow_8000F38C(s32 arg0)
             HSD_GObj* lgobj;
             for (lgobj = HSD_GObjGXLinkHead[4]; lgobj != NULL;) {
                 nextGx = lgobj->next_gx;
-                lobj = (HSD_LObj*) lgobj->hsd_obj;
+                lobj = lgobj->hsd_obj;
                 while (lobj != NULL) {
                     if (lobj->flags & 3) {
                         fallback = lobj;
@@ -510,7 +512,7 @@ void lbShadow_8000F38C(s32 arg0)
 
         ftDrawCommon_80081200();
 
-        for (gobj = HSD_GObj_Entities->fighters; gobj != NULL;
+        for (gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER]; gobj != NULL;
              gobj = gobj->next)
         {
             Fighter* fp = gobj->user_data;
@@ -549,7 +551,7 @@ void lbShadow_8000F38C(s32 arg0)
                         if (!fp2->invisible && !fp2->x221E_b5 &&
                             fp2->x5AC.xC[1] != NULL)
                         {
-                            HSD_JObj* jobj = (HSD_JObj*) gobj->hsd_obj;
+                            HSD_JObj* jobj = gobj->hsd_obj;
                             HSD_ShadowAddObject(fp2->x20A4.shadow, jobj);
                             lobj = (HSD_LObj*) 1;
                         }
@@ -602,8 +604,7 @@ void lbShadow_8000F38C(s32 arg0)
                                         0);
 
                     {
-                        i = 0;
-                        do {
+                        for (i = 0; i < 0x14; i++) {
                             f32 scale = cm->target_ext.v.z;
                             f32 top = 1.2f * scale;
                             f32 bot = 1.2f * -scale;
@@ -612,8 +613,7 @@ void lbShadow_8000F38C(s32 arg0)
                             if (HSD_ViewingRectCheck(&rect) != 0) {
                                 break;
                             }
-                            i++;
-                        } while (i < 0x14);
+                        }
 
                         if (i < 0x14) {
                             HSD_ShadowSetViewingRect(fp->x20A4.shadow,

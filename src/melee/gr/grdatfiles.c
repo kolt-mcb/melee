@@ -10,30 +10,28 @@
 
 #include "ground.h"
 #include "types.h"
-#include "sc/types.h"
-
-#include "lb/lb_00B0.h"
-#include "lb/lbarchive.h"
-#include "lb/lbfile.h"
-#include "lb/lbheap.h"
-
-#include <baselib/archive.h>
-#include <baselib/aobj.h>
-#include <baselib/cobj.h>
-#include <baselib/debug.h>
-#include <baselib/dobj.h>
-#include <baselib/fog.h>
-#include <baselib/lobj.h>
-#include <baselib/mobj.h>
-#include <baselib/pobj.h>
-#include <baselib/particle.h>
-#include <baselib/robj.h>
-#include <baselib/sobjlib.h>
-#include <baselib/tobj.h>
-#include <baselib/wobj.h>
-#include <baselib/psstructs.h>
 #include <dolphin/gx.h>
-#include <baselib/spline.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbfile.h>
+#include <melee/lb/lbheap.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/archive.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/mobj.h>
+#include <sysdolphin/baselib/particle.h>
+#include <sysdolphin/baselib/pobj.h>
+#include <sysdolphin/baselib/psstructs.h>
+#include <sysdolphin/baselib/robj.h>
+#include <sysdolphin/baselib/sobjlib.h>
+#include <sysdolphin/baselib/spline.h>
+#include <sysdolphin/baselib/tobj.h>
+#include <sysdolphin/baselib/wobj.h>
 
 /* 1C6228 */ static void grDatFiles_801C6228(UnkStageDat*);
 /* 1C62B4 */ static UnkArchiveStruct* grDatFiles_801C62B4(void);
@@ -1449,16 +1447,16 @@ MapCollData* grDatFiles_ConvertMapCollDataGCNtoX64(const u8* raw, u8* dataBase)
         out->vert_count = (int) be32_swap(*(const u32*) (raw + 0x04));
         lines_off  = be32_swap(*(const u32*) (raw + 0x08));
         out->line_count = (int) be32_swap(*(const u32*) (raw + 0x0C));
-        out->floor_start      = (s16) be16_swap(*(const u16*) (raw + 0x10));
-        out->floor_count      = (s16) be16_swap(*(const u16*) (raw + 0x12));
-        out->ceiling_start    = (s16) be16_swap(*(const u16*) (raw + 0x14));
-        out->ceiling_count    = (s16) be16_swap(*(const u16*) (raw + 0x16));
-        out->right_wall_start = (s16) be16_swap(*(const u16*) (raw + 0x18));
-        out->right_wall_count = (s16) be16_swap(*(const u16*) (raw + 0x1A));
-        out->left_wall_start  = (s16) be16_swap(*(const u16*) (raw + 0x1C));
-        out->left_wall_count  = (s16) be16_swap(*(const u16*) (raw + 0x1E));
-        out->dynamic_start    = (s16) be16_swap(*(const u16*) (raw + 0x20));
-        out->dynamic_count    = (s16) be16_swap(*(const u16*) (raw + 0x22));
+        out->ranges[MapLineGroup_Floor].start      = (s16) be16_swap(*(const u16*) (raw + 0x10));
+        out->ranges[MapLineGroup_Floor].count      = (s16) be16_swap(*(const u16*) (raw + 0x12));
+        out->ranges[MapLineGroup_Ceiling].start    = (s16) be16_swap(*(const u16*) (raw + 0x14));
+        out->ranges[MapLineGroup_Ceiling].count    = (s16) be16_swap(*(const u16*) (raw + 0x16));
+        out->ranges[MapLineGroup_RightWall].start = (s16) be16_swap(*(const u16*) (raw + 0x18));
+        out->ranges[MapLineGroup_RightWall].count = (s16) be16_swap(*(const u16*) (raw + 0x1A));
+        out->ranges[MapLineGroup_LeftWall].start  = (s16) be16_swap(*(const u16*) (raw + 0x1C));
+        out->ranges[MapLineGroup_LeftWall].count  = (s16) be16_swap(*(const u16*) (raw + 0x1E));
+        out->ranges[MapLineGroup_Dynamic].start    = (s16) be16_swap(*(const u16*) (raw + 0x20));
+        out->ranges[MapLineGroup_Dynamic].count    = (s16) be16_swap(*(const u16*) (raw + 0x22));
         joints_off = be32_swap(*(const u32*) (raw + 0x24));
         out->joint_count = (int) be32_swap(*(const u32*) (raw + 0x28));
         out->x2C = (int) be32_swap(*(const u32*) (raw + 0x2C));
@@ -1513,7 +1511,7 @@ MapCollData* grDatFiles_ConvertMapCollDataGCNtoX64(const u8* raw, u8* dataBase)
                 "[GRDAT] coll_data: verts=%d lines=%d joints=%d "
                 "floor=%d/%d\n",
                 out->vert_count, out->line_count, out->joint_count,
-                out->floor_start, out->floor_count);
+                out->ranges[MapLineGroup_Floor].start, out->ranges[MapLineGroup_Floor].count);
         for (q = 0; q < out->vert_count && q < 6; q++) {
             if (grdat_trace_on())
             {

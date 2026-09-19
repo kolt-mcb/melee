@@ -1,11 +1,9 @@
 #include "db.h"
 #include "dbsound.h"
-
-#include "ft/ftlib.h"
-#include "lb/lbarchive.h"
-
 #include <dolphin/card.h>
 #include <dolphin/vi.h>
+#include <melee/ft/ftlib.h>
+#include <melee/lb/lbarchive.h>
 #include <sysdolphin/baselib/controller.h>
 #include <sysdolphin/baselib/gobj.h>
 
@@ -127,7 +125,7 @@ void db_PrintEntityCounts(void)
 
     for (i = 0; i < 64; i++) {
         int count = 0;
-        HSD_GObj* var_r3 = ((HSD_GObj**) HSD_GObj_Entities)[i & 0xFF];
+        HSD_GObj* var_r3 = HSD_GObjPLinkHead[i & 0xFF];
         while (var_r3 != NULL) {
             var_r3 = var_r3->next;
             count += 1;

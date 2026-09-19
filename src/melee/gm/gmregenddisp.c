@@ -1,31 +1,30 @@
-#include "gm_1A7A.h"
-#include "gm_unsplit.h"
-
-#include "ft/forward.h"
-
-#include "gm/gmevent.h"
-#include "gm/gmregtyfall.h"
-#include "gm/inlines.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbspdisplay.h"
-#include "sc/types.h"
-#include "ty/toy.h"
-#include "ty/tydisplay.h"
-#include "ty/types.h"
+#include <melee/ft/forward.h>
 
 #include <math.h>
-#include <baselib/archive.h>
-#include <baselib/cobj.h>
-#include <baselib/debug.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/lobj.h>
-#include <baselib/random.h>
+
+#include "gm_1A7A.h"
+#include "gm_unsplit.h"
+#include "gmevent.h"
+#include "gmregtyfall.h"
+#include "inlines.h"
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
+#include <melee/ty/toy.h>
+#include <melee/ty/tydisplay.h>
+#include <melee/ty/types.h>
+#include <sysdolphin/baselib/archive.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/random.h>
 
 void fn_801A7FB4(HSD_GObj* gobj)
 {
@@ -226,7 +225,7 @@ void gm_801A8D54(s32* arg0)
         if ((u32) (i - 0x12) <= 1U) {
             gm_GetCurrentGameMode();
             if ((Toy_803048C0(gm_801A659C(i)) ? true : false) &&
-                gm_801BEFB0() != CKIND_ZELDA && gm_801BEFB0() != CKIND_SEAK)
+                gm_801BEFB0() != CKind_Zelda && gm_801BEFB0() != CKind_Seak)
             {
                 sp84[count] = i;
                 count++;

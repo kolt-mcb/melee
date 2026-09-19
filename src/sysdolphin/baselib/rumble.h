@@ -1,9 +1,9 @@
 #ifndef SYSDOLPHIN_BASELIB_RUMBLE_H
 #define SYSDOLPHIN_BASELIB_RUMBLE_H
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/forward.h"
+#include <sysdolphin/baselib/forward.h>
 
 struct HSD_RumbleData {
     u8 last_status;
@@ -13,9 +13,10 @@ struct HSD_RumbleData {
     HSD_PadRumbleListData* listdatap;
 };
 
+/// One command of a rumble script.
 struct RumbleCommand {
-    u16 op;
-    u16 frame;
+    u16 op : 3;
+    u16 frame : 13;
 };
 
 union HSD_Rumble {
@@ -38,9 +39,9 @@ struct HSD_PadRumbleListData {
     /*0x0C*/ u16 loop_count;
     /*0x0E*/ u16 wait;
     /*0x10*/ s32 frame;
-    /*0x14*/ /* HSD_Rumble* */ u16* stack;
-    /*0x18*/ /* HSD_Rumble* */ u16* listp;
-    /*0x1C*/ /* HSD_Rumble* */ u16* headp;
+    /*0x14*/ HSD_Rumble* stack;
+    /*0x18*/ HSD_Rumble* listp;
+    /*0x1C*/ HSD_Rumble* headp;
 };
 
 void HSD_PadRumbleRemoveId(u8, int);

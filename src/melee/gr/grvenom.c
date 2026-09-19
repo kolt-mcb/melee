@@ -3,32 +3,31 @@
 #include "port/pc_ptr.h"
 #endif
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "gr/grcorneria.h"
-#include "gr/grdisplay.h"
-#include "gr/grmaterial.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/stage.h"
-#include "gr/types.h"
-#include "if/ifcoget.h"
-#include "if/ifstatus.h"
-#include "it/items/itarwinglaser.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lbaudio_ax.h"
-#include "mp/mplib.h"
-#include "pl/player.h"
-
-#include <baselib/aobj.h>
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/lobj.h>
-#include <baselib/random.h>
-#include <baselib/sislib.h>
+#include "grcorneria.h"
+#include "grdisplay.h"
+#include "grmaterial.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "stage.h"
+#include "types.h"
+#include <melee/if/ifcoget.h>
+#include <melee/if/ifstatus.h>
+#include <melee/it/kinds/itarwinglaser.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/mp/mplib.h>
+#include <melee/pl/player.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/random.h>
+#include <sysdolphin/baselib/sislib.h>
 #if BUILD_TARGET_PC
 #include "port/pc_grconv.h"
 #endif
@@ -52,7 +51,7 @@ struct grVenom_YakumonoParam {
     f32 x2C;
     char x30[0x34 - 0x30];
     f32 x34;
-    s32 x38;
+    void* x38;
 };
 
 static grVe_Data grVe_803E5348 = {
@@ -67,9 +66,12 @@ static grVe_Data grVe_803E5348 = {
 
 static int grVe_803E5380[3] = { 0 };
 
+static void stageGObj0_OnInit(Ground_GObj* gobj);
+static void stageGObj9_GObjProc(Ground_GObj* arg);
+
 StageCallbacks grVe_StageCallbacks[16] = {
     {
-        grVenom_80203F98,
+        stageGObj0_OnInit,
         grVenom_80203FC4,
         grVenom_80203FCC,
         grVenom_80203FD0,
@@ -134,7 +136,7 @@ StageCallbacks grVe_StageCallbacks[16] = {
     {
         grVenom_80204DD4,
         grVenom_80204EF4,
-        grVenom_80204EFC,
+        stageGObj9_GObjProc,
         grVenom_80204F1C,
         0,
     },
@@ -533,7 +535,7 @@ void grVenom_80203DD0(void)
     HSD_GObj* gobj;
     HSD_LObj* lobj;
 
-    gobj = HSD_GObj_Entities->xC;
+    gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_LIGHT];
     while (gobj != NULL) {
         if (HSD_GObjGetClassifier(gobj) == 0xC) {
             lobj = GET_LOBJ(gobj);
@@ -613,10 +615,9 @@ static int grVe_803E5530[53] = {
     0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  3, 3, 3, 3, 6,
 };
 
-void grVenom_80203F98(Ground_GObj* gobj)
+static void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool grVenom_80203FC4(Ground_GObj* arg)
@@ -679,7 +680,7 @@ void grVenom_802040F0(Ground_GObj* gobj)
     Ground* new_var;
     Ground* gp = GET_GROUND(gobj);
 
-    Ground_801C2ED0(gobj->hsd_obj, gp->map_id);
+    Ground_InitMapColl(gobj->hsd_obj, gp->map_id);
     grAnime_801C7FF8(gobj, 0, 7, 0, 0.0F, 1.0F);
     grAnime_801C8098(gobj, 0, 7, 1, 0.0F, 1.0F);
     grAnime_801C7FF8(gobj, 0xB, 7, 2, 0.0F, 1.0F);
@@ -760,7 +761,7 @@ void grVenom_80204284(Ground_GObj* gobj)
 
     lb_800115F4();
     grVenom_8020362C();
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
 }
 
 void grVenom_80204424(Ground_GObj* arg) {}
@@ -1040,7 +1041,7 @@ void grVenom_80204DD4(Ground_GObj* gobj)
     HSD_JObj* jobj = gobj->hsd_obj;
     PAD_STACK(8);
 
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
     HSD_JObjSetScaleX(jobj, 1.0F);
     HSD_JObjSetScaleY(jobj, 1.0F);
 }
@@ -1050,9 +1051,9 @@ bool grVenom_80204EF4(Ground_GObj* arg)
     return false;
 }
 
-void grVenom_80204EFC(Ground_GObj* arg)
+static void stageGObj9_GObjProc(Ground_GObj* arg)
 {
-    Ground_801C2FE0(arg);
+    Ground_UpdateMapColl(arg);
 }
 
 void grVenom_80204F1C(Ground_GObj* arg) {}
@@ -1296,7 +1297,7 @@ void grVenom_802056B0(Ground_GObj* gobj)
     int* joints;
     int joint_id;
 
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
     gp->u.venom.xC8 = grVe_804D6A34;
     joint_idx = grVe_803E5380;
     joints = grVe_803E5680;
@@ -1309,7 +1310,7 @@ void grVenom_802056B0(Ground_GObj* gobj)
     joint_id = joints[joint_offset];
     mpJointListAdd(joint_id);
 
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
 }
 
 bool grVenom_80205750(Ground_GObj* arg)
@@ -1339,7 +1340,7 @@ void grVenom_80205758(Ground_GObj* gobj)
                 HSD_JObjSetScaleZ(jobj, s);
             }
         }
-        Ground_801C2FE0(gobj);
+        Ground_UpdateMapColl(gobj);
     } else {
         mpLib_80057BC0(grVe_803E5680[grVe_803E5380[gp->u.venom.xC8]]);
         Ground_801C4A08(gobj);
@@ -1700,7 +1701,7 @@ void grVenom_80205F30(Ground_GObj* gobj)
                      * and a file offset out of the layout converter here. */
                     grMaterial_801C9604(
                         gobj,
-                        (grMaterialArg) pc_grconv_stage_script(
+                        (void*) pc_grconv_stage_script(
                             (u32) yakumono_param->x38),
                         0);
 #else
@@ -1873,7 +1874,7 @@ s32 grVenom_80206D10(s32 arg0)
 
 DynamicsDesc* grVenom_80206D74(enum_t arg)
 {
-    return false;
+    return NULL;
 }
 
 bool grVenom_80206D7C(Vec3* pos, int arg1, HSD_JObj* arg2)

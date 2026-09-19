@@ -124,9 +124,9 @@ void AXFXChorusCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_CHORUS* c)
 #include <dolphin/os.h>
 volatile OSHeapHandle __OSCurrHeap = 0;
 unsigned int pc_ax_bus_clock = 972000000; /* see ax_vpb_glue.c */
-static unsigned long g_os_sound_mode = 1; /* OS_SOUND_MODE_STEREO */
-unsigned long OSGetSoundMode(void) { return g_os_sound_mode; }
-void OSSetSoundMode(unsigned long mode) { g_os_sound_mode = mode; }
+static u32 g_os_sound_mode = 1; /* OS_SOUND_MODE_STEREO */
+u32 OSGetSoundMode(void) { return g_os_sound_mode; }
+void OSSetSoundMode(u32 mode) { g_os_sound_mode = mode; }
 /* Requests complete synchronously, so there is never one to cancel. */
 int HSD_DevComCancelEx(int dcReq, u32 flags, void* cb, void* args)
 {

@@ -3,45 +3,40 @@
 #include "port/pc_itconv.h"
 #endif
 
-#include "it_2725.h"
-#include "itanimlist.h"
-
-#include "ft/ftlib.h"
-#include "ft/types.h"
-#include "gm/gm_unsplit.h"
-
-#include "it/forward.h"
-
-#include "it/inlines.h"
-#include "it/it_2725.h"
-#include "it/it_3F14.h"
-#include "it/itanimlist.h"
-#include "it/itCommonItems.h"
-#include "it/item.h"
-#include "it/items/itbat.h"
-#include "it/items/itbombhei.h"
-#include "it/items/itbox.h"
-#include "it/items/itfflower.h"
-#include "it/items/itflipper.h"
-#include "it/items/itheart.h"
-#include "it/items/itkusudama.h"
-#include "it/items/itlinkbomb.h"
-#include "it/items/itmarumine.h"
-#include "it/items/itmsbomb.h"
-#include "it/items/itrabbitc.h"
-#include "it/items/itsscope.h"
-#include "it/items/itsword.h"
-#include "it/items/ittomato.h"
-#include "it/ithitbox.h"
-#include "it/itspawn.h"
-#include "it/types.h"
-#include "lb/lb_00B0.h"
-
-#include <baselib/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <math.h>
-#include <baselib/gobj.h>
-#include <baselib/jobj.h>
+
+#include "forward.h"
+#include "inlines.h"
+#include "it_2725.h"
+#include "it_3F14.h"
+#include "itanimlist.h"
+#include "itCommonItems.h"
+#include "item.h"
+#include "ithitbox.h"
+#include "itspawn.h"
+#include "kinds/itbat.h"
+#include "kinds/itbombhei.h"
+#include "kinds/itbox.h"
+#include "kinds/itfflower.h"
+#include "kinds/itflipper.h"
+#include "kinds/itheart.h"
+#include "kinds/itkusudama.h"
+#include "kinds/itlinkbomb.h"
+#include "kinds/itmarumine.h"
+#include "kinds/itmsbomb.h"
+#include "kinds/itrabbitc.h"
+#include "kinds/itsscope.h"
+#include "kinds/itsword.h"
+#include "kinds/ittomato.h"
+#include "types.h"
+#include <melee/ft/ftlib.h>
+#include <melee/ft/types.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/lb/lb_00B0.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/jobj.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -206,7 +201,7 @@ int it_8026B3C0(ItemKind kind)
     HSD_GObj* unkItemGObj;
 
     int i = 0;
-    unkItemGObj = HSD_GObj_Entities->items;
+    unkItemGObj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM];
 
     while (unkItemGObj != NULL) {
         temp_item = unkItemGObj->user_data;
@@ -510,7 +505,9 @@ void it_8026B7F8(HSD_GObj* fighter_gobj)
     u8 _[8];
 
     HSD_GObj *cur, *owner;
-    for (cur = HSD_GObj_Entities->items; cur != NULL; cur = cur->next) {
+    for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]; cur != NULL;
+         cur = cur->next)
+    {
         Item* ip = GET_ITEM(cur);
         owner = ip->owner;
         RunCallbackUnk(ip->xB8_itemLogicTable->evt_unk, cur, fighter_gobj);
@@ -1102,7 +1099,9 @@ HSD_GObj* it_8026C258(Vec3* pos, f32 facing_dir)
 {
     f32 min_sq_dist = F32_MAX;
     HSD_GObj *cur, *result = NULL;
-    for (cur = HSD_GObj_Entities->items; cur != NULL; cur = cur->next) {
+    for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]; cur != NULL;
+         cur = cur->next)
+    {
         Item* ip = GET_ITEM(cur);
 
         // Might not actually be (exclusively) hold kind in the end???
@@ -1179,7 +1178,9 @@ void it_8026C368(HSD_GObj* gobj)
 void it_8026C3FC(void)
 {
     HSD_GObj* cur;
-    for (cur = HSD_GObj_Entities->items; cur != NULL; cur = cur->next) {
+    for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]; cur != NULL;
+         cur = cur->next)
+    {
         it_8026B724(cur);
     }
 }
@@ -1188,7 +1189,9 @@ void it_8026C3FC(void)
 void it_8026C42C(void)
 {
     HSD_GObj* cur;
-    for (cur = HSD_GObj_Entities->items; cur != NULL; cur = cur->next) {
+    for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]; cur != NULL;
+         cur = cur->next)
+    {
         Item* ip = GET_ITEM(cur);
 
         if (ip->xDC8_word.flags.x7) {

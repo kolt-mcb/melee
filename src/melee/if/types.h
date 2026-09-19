@@ -1,14 +1,14 @@
 #ifndef MELEE_IF_TYPES_H
 #define MELEE_IF_TYPES_H
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "if/forward.h" // IWYU pragma: export
-#include "sc/forward.h"
-#include <baselib/forward.h>
+#include <melee/if/forward.h> // IWYU pragma: export
+#include <melee/sc/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/gx.h>
-#include <baselib/tobj.h> /* HSD_ImageDesc must be complete: image_descs is a real array here */
+#include <sysdolphin/baselib/tobj.h> /* HSD_ImageDesc must be complete: image_descs is a real array here */
 
 struct IfDamageFlags {
 #if BUILD_TARGET_PC
@@ -62,15 +62,14 @@ struct IfDamageState {
 
 struct HudIndex {
     IfDamageState players[6];
-    /* +258 */ HSD_Joint* unk258;
-    /* +25C */ void* jobj_desc_parent;
-    /* +260 */ HSD_AnimJoint* janim_selection_joints;
-    /* +264 */ void* janim_selection_textures;
-    /* +268 */ void* unk268;
-    /* +26C */ void* unk26C;
-    /* +270 */ void* unk270;
-    /* +274 */ void* unk274;
-    // 8 elements of size 0x28, what is this?
+    /* +258 */ HSD_Joint* damage_num_joint;
+    /* +25C */ HSD_AnimJoint** damage_num_anims;
+    /* +260 */ HSD_MatAnimJoint** damage_num_matanims;
+    /* +264 */ HSD_ShapeAnimJoint** damage_num_shapeanims;
+    /* +268 */ HSD_Joint* damage_mark_joint;
+    /* +26C */ HSD_AnimJoint** damage_mark_anims;
+    /* +270 */ HSD_MatAnimJoint** damage_mark_matanims;
+    /* +274 */ HSD_ShapeAnimJoint** damage_mark_shapeanims;
 };
 
 struct Element_803F9628_Obj_14 {
@@ -235,5 +234,81 @@ struct un_80304138_objalloc_t {
     struct un_80304138_objalloc_t* next;
 };
 ASSERT_SIZE(struct un_80304138_objalloc_t, 0x20);
+
+struct IfStockUserData {
+    u8 player;
+    u8 mode;
+};
+
+struct ifStock_804A1378_per_player {
+    HSD_GObj* x0;
+    HSD_JObj* x4[8];
+    HSD_JObj* x24;
+    HSD_JObj* x28;
+    HSD_JObj* x2C;
+    HSD_JObj* x30;
+    HSD_JObj* x34;
+    HSD_JObj* x38;
+    HSD_JObj* x3C;
+    HSD_JObj* x40;
+    HSD_JObj* x44;
+    int coins;
+    int stocks;
+};
+
+struct IfStockStealAnim {
+    Vec3 start;
+    Vec3 mid;
+    Vec3 end;
+};
+
+/// @todo merge with IfStockUserData
+struct ifStock_804A1378_x204 {
+    u8 player;
+    u8 mode;
+    u8 flag;
+    u8 x3[2];
+    u8 anim[7];
+    struct IfStockStealAnim steal[2];
+};
+
+struct ifStock_804A1378 {
+    DynamicModelDesc** x0;
+    DynamicModelDesc* x4;
+    struct ifStock_804A1378_per_player player[6];
+    HSD_GObj* gobj;
+    HSD_JObj* jobj;
+    char pad1F0[0x1F4 - 0x1F0];
+    HSD_JObj* jobj_a;
+    HSD_JObj* jobj_b;
+    HSD_JObj* jobj_c;
+    HSD_JObj* jobj_d;
+    struct ifStock_804A1378_x204 x204[6];
+};
+
+struct ifStock_804A1774 {
+    char x0;
+    signed char x1[130];
+    signed char x83[133];
+    int x108;
+    HSD_GObj* x10C[131];
+};
+
+struct ifStock_804A1ACC {
+    char x0;
+    signed char x1[130];
+    signed char x83[133];
+    HSD_GObj* x108;
+    HSD_GObj* x10C[130];
+};
+
+struct IfStockData {
+    u8 x0[0xC];
+    struct IfStockStealAnim anim[2];
+};
+
+struct IfStockDataOffset {
+    u8 x0[0x204];
+};
 
 #endif

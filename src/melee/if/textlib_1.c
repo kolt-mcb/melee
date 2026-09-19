@@ -1,20 +1,19 @@
-#include "platform.h"
-#include "textlib.h"
-
-#include "baselib/controller.h"
-#include "if/textdraw.h"
-#include "if/types.h"
-#include "mn/inlines.h"
-#include "ty/toy.h"
+#include <Runtime/platform.h>
 
 #include <printf.h> // IWYU pragma: keep
-#include <baselib/cobj.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjproc.h>
-#include <baselib/lobj.h>
-#include <baselib/memory.h>
+
+#include "textdraw.h"
+#include "textlib.h"
+#include "types.h"
+#include <melee/mn/inlines.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/controller.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/memory.h>
 
 /* 4D6E4C */ unsigned char un_804D6E4C;
 /* 4D6E48 */ struct un_80304138_objalloc_t_x8* un_804D6E48;
@@ -671,110 +670,4 @@ void un_80304344(struct un_80304138_objalloc_t* arg0)
         arg0 = w;
     }
     un_804D6E44 = next;
-}
-
-bool un_80304470(void)
-{
-    int i;
-    int sum = 0;
-    int count;
-    for (i = 0; i < 8; i++) {
-        sum += Toy_80304B94(i);
-    }
-    count = 0;
-    for (i = 0; i < TY_TROPHY_COUNT; i++) {
-        if (i != 0xE6 && i != 0xC9 && Toy_803048C0(i)) {
-            count++;
-        }
-    }
-    if (sum <= count) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-bool un_80304510(void)
-{
-    int i;
-    int sum = 0;
-    int count;
-    for (i = 0; i < 9; i++) {
-        sum += Toy_80304B94(i);
-    }
-    count = 0;
-    for (i = 0; i < TY_TROPHY_COUNT; i++) {
-        if (Toy_803048C0(i)) {
-            count++;
-        }
-    }
-    if (sum == count) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-bool un_803045A0(void)
-{
-    s16 sp[] = {
-        0,  3,  6,  9,  12, 15, 18, 21, 24, 27, 30, 33, 36,
-        39, 42, 45, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75,
-    };
-    unsigned int i;
-    unsigned int count = 0;
-    for (i = 0; i < ARRAY_SIZE(sp); i++) {
-        if (Toy_803048C0(sp[i])) {
-            count++;
-        }
-    }
-    if (count == ARRAY_SIZE(sp)) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-/// @todo Duplicate code of #un_803045A0 with different data
-bool un_80304690(void)
-{
-    s16 sp[] = {
-        1,  4,  7,  10, 13, 16, 19, 22, 25, 28, 31, 34, 37,
-        40, 43, 46, 49, 52, 55, 58, 61, 64, 67, 70, 73, 76,
-    };
-
-    unsigned int i;
-    unsigned int count = 0;
-    for (i = 0; i < ARRAY_SIZE(sp); i++) {
-        if (Toy_803048C0(sp[i])) {
-            count++;
-        }
-    }
-    if (count == ARRAY_SIZE(sp)) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-/// @todo Duplicate code of #un_803045A0 with different data
-bool un_80304780(void)
-{
-    s16 sp[] = {
-        2,  5,  8,  11, 14, 17, 20, 23, 26, 29, 32, 35, 38,
-        41, 44, 47, 50, 53, 56, 59, 62, 65, 68, 71, 74, 77,
-    };
-
-    unsigned int i;
-    unsigned int count = 0;
-    for (i = 0; i < ARRAY_SIZE(sp); i++) {
-        if (Toy_803048C0(sp[i])) {
-            count++;
-        }
-    }
-    if (count == ARRAY_SIZE(sp)) {
-        return true;
-    } else {
-        return false;
-    }
 }

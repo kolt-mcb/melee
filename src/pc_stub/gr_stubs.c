@@ -183,7 +183,6 @@ __attribute__((weak)) int gm_801694A0(int a0) { return 0; }
 
 __attribute__((weak)) int gm_8016AE80(void) { return 0; }
 
-__attribute__((weak)) int gm_8016AEDC(void) { return 0; }
 
 __attribute__((weak)) int gm_8016AEEC(void) { return 0; }
 
@@ -214,7 +213,6 @@ __attribute__((weak)) int gm_8018841C(void) { return 0; }
 __attribute__((weak)) int gm_801A45E8(int a0) { return 0; }
 
 
-__attribute__((weak)) int gm_GetRules(void) { return 0; }
 
 __attribute__((weak)) int gm_IsCKindUnlocked(int a0) { return 0; }
 

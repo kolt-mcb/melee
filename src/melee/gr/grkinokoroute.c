@@ -1,34 +1,32 @@
 #include "grkinokoroute.h"
 
-#include "ground.h"
-
-#include <platform.h>
-
-#include "cm/camera.h"
-#include "ef/efsync.h"
-#include "ft/ftdevice.h"
-#include "ft/ftlib.h"
-#include "gm/gm_1601.h"
-#include "gr/grdisplay.h"
-#include "gr/grlib.h"
-#include "gr/grmaterial.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/stage.h"
-#include "it/it_26B1.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lbvector.h"
-#include "mp/mplib.h"
+#include <Runtime/platform.h>
 
 #include <math.h>
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/psstructs.h>
-#include <baselib/random.h>
+
+#include "grdisplay.h"
+#include "grlib.h"
+#include "grmaterial.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "stage.h"
+#include <melee/cm/camera.h>
+#include <melee/ef/efsync.h>
+#include <melee/ft/ftdevice.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gm/gm_1601.h>
+#include <melee/it/it_26B1.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbvector.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/psstructs.h>
+#include <sysdolphin/baselib/random.h>
 
 static struct {
     int x0;
@@ -325,7 +323,7 @@ void grKinokoRoute_80207B5C(Ground_GObj* gobj)
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* reb0_jobj;
 
-    Ground_801C2ED0(gobj->hsd_obj, gp->map_id);
+    Ground_InitMapColl(gobj->hsd_obj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
     gp->x8_callback = NULL;
     gp->xC_callback = NULL;
@@ -501,8 +499,7 @@ void grKinokoRoute_80207C88(Ground_GObj* gobj)
         gp->u.kinokoroute2.cam_timer -= 1;
     }
 
-    lb_800115F4();
-    Ground_801C2FE0(gobj);
+    Ground_UpdateWindAndMapColl(gobj);
     if (gp->u.kinokoroute2.flags_0) {
         mpLib_80058560();
         gp->u.kinokoroute2.flags_0 = false;
@@ -526,7 +523,9 @@ void grKinokoRoute_8020836C(Ground_GObj* gobj, int arg1)
         mpJointListAdd(0x3C);
         mpJointListAdd(0x33);
 
-        for (cur = HSD_GObj_Entities->items; cur != NULL; cur = cur->next) {
+        for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]; cur != NULL;
+             cur = cur->next)
+        {
             if (itGetKind(cur) == It_PKind_Random) {
                 grMaterial_801C8E08(cur);
             }
@@ -541,7 +540,9 @@ void grKinokoRoute_8020836C(Ground_GObj* gobj, int arg1)
         mpLib_80057BC0(0x3C);
         mpLib_80057BC0(0x33);
 
-        for (cur = HSD_GObj_Entities->items; cur != NULL; cur = cur->next) {
+        for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]; cur != NULL;
+             cur = cur->next)
+        {
             if (itGetKind(cur) == It_PKind_Random) {
                 grMaterial_801C8E28(cur);
             }
@@ -584,7 +585,7 @@ void grKinokoRoute_802084B4(HSD_GObj* gobj)
 
     lb_8000B1CC(gp->jobj, NULL, &sp_vec);
     efSync_Spawn(0x442, gobj, &sp_vec);
-    Camera_80030E44(2, NULL);
+    Camera_RequestQuake(QuakeKind_Small, NULL);
     Ground_801C5414(0x136, 0xBA);
     grMaterial_801C8CDC(gobj);
     PAD_STACK(20);
@@ -644,7 +645,7 @@ void grKinokoRoute_802086EC(Vec3* arg0, f32 arg8)
 
 DynamicsDesc* grKinokoRoute_80208754(enum_t arg)
 {
-    return false;
+    return NULL;
 }
 
 bool grKinokoRoute_8020875C(Vec3* a, int b, HSD_JObj* jobj)

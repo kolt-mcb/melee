@@ -18,17 +18,17 @@ u8 HSD_GObj_CameraKind;
 s8 HSD_GObj_LightKind;
 u8 HSD_GObj_JObjKind;
 s8 HSD_GObj_FogKind;
-HSD_GObjProc** HSD_GObj_804D7844;
-HSD_GObjProc** HSD_GObj_804D7840;
+HSD_GObjProc** HSD_GObj_ProcList;
+HSD_GObjProc** HSD_GObj_GObjProcHead;
 s32 HSD_GObj_804D783C;
-HSD_GObjProc* HSD_GObj_804D7838;
-s32 HSD_GObj_804D7834;
-HSD_GObjProc* HSD_GObj_804D7830;
-HSD_GObjList* HSD_GObj_Entities;
+HSD_GObjProc* HSD_GObj_CurrentInvokedProc;
+s32 HSD_GObj_CurrentInvokedSLink;
+HSD_GObjProc* HSD_GObj_NextInvokedProc;
+HSD_GObj** HSD_GObjPLinkHead;
 HSD_GObj** plinklow_gobjs;
 HSD_GObj** HSD_GObjGXLinkHead;
 HSD_GObj** HSD_GObj_804D7820;
-HSD_GObj* HSD_GObj_804D781C;
+HSD_GObj* HSD_GObj_CurrentInvokedProcGObj;
 HSD_GObj* HSD_GObj_804D7818;
 HSD_GObj* HSD_GObj_804D7814;
 GObjFunc* HSD_GObj_804D7810;
@@ -97,11 +97,11 @@ void HSD_GObj_80390CD4(HSD_GObj* gobj)
 static int pc_gobj_is_live(const HSD_GObj* g)
 {
     int link;
-    if (g == NULL || !pc_ptr_sane(g) || HSD_GObj_Entities == NULL) {
+    if (g == NULL || !pc_ptr_sane(g) || HSD_GObjPLinkHead == NULL) {
         return 0;
     }
     for (link = 0; link <= HSD_GObjLibInitData.p_link_max; link++) {
-        HSD_GObj* cur = ((HSD_GObj**) HSD_GObj_Entities)[link];
+        HSD_GObj* cur = ((HSD_GObj**) HSD_GObjPLinkHead)[link];
         int n = 0;
         while (cur != NULL && n < 4096) {
             if (cur == (const HSD_GObj*) g) {
@@ -134,7 +134,7 @@ int pc_proclist_check(const char* where)
         return 0;
     }
     for (k = 0; k <= HSD_GObjLibInitData.gproc_pri_max; k++) {
-        HSD_GObjProc* q = HSD_GObj_804D7840[k];
+        HSD_GObjProc* q = HSD_GObj_GObjProcHead[k];
         int n = 0;
         while (q != NULL && n < 4096) {
             if (!pc_ptr_sane(q)) {
@@ -152,7 +152,7 @@ int pc_proclist_check(const char* where)
 }
 #endif
 
-void HSD_GObj_80390CFC(void)
+void HSD_GObj_RunProcs(void)
 {
     s32 i;
     HSD_GObjProc* proc;
@@ -173,8 +173,8 @@ void HSD_GObj_80390CFC(void)
 #if BUILD_TARGET_PC
         HSD_GObjProc* pc_prev_proc = NULL;
 #endif
-        HSD_GObj_804D7834 = i;
-        proc = HSD_GObj_804D7840[i];
+        HSD_GObj_CurrentInvokedSLink = i;
+        proc = HSD_GObj_GObjProcHead[i];
         while (proc != NULL) {
 #if BUILD_TARGET_PC
             /* PC port: name a bad link before dereferencing it. The list is
@@ -186,13 +186,13 @@ void HSD_GObj_80390CFC(void)
                         "[GOBJGUARD] priority %d: proc=%p is not a pointer "
                         "(previous proc %p, head %p)\n",
                         i, (void*) proc, (void*) pc_prev_proc,
-                        (void*) HSD_GObj_804D7840[i]);
+                        (void*) HSD_GObj_GObjProcHead[i]);
                 port_guard_warn("gobj.c:proc_link");
                 break;
             }
             pc_prev_proc = proc;
 #endif
-            HSD_GObj_804D7830 = proc->next;
+            HSD_GObj_NextInvokedProc = proc->next;
             if (proc->flags_3 != HSD_GObj_804D783C) {
                 proc->flags_3 = HSD_GObj_804D783C;
                 gobj = proc->gobj;
@@ -214,15 +214,15 @@ void HSD_GObj_80390CFC(void)
                             (void*) proc->next, (void*) proc->prev,
                             (void*) proc->child, (void*) proc->on_invoke);
                     port_guard_warn("gobj.c:proc_no_gobj");
-                    proc = HSD_GObj_804D7830;
+                    proc = HSD_GObj_NextInvokedProc;
                     continue;
                 }
 #endif
                 if (!(var_r31 & (1LL << gobj->p_link)) && !(proc->flags_1) &&
                     !(proc->flags_2))
                 {
-                    HSD_GObj_804D781C = gobj;
-                    HSD_GObj_804D7838 = proc;
+                    HSD_GObj_CurrentInvokedProcGObj = gobj;
+                    HSD_GObj_CurrentInvokedProc = proc;
 #if BUILD_TARGET_PC
                     if (_rp_on) {
                         _rp_total++;
@@ -268,7 +268,7 @@ void HSD_GObj_80390CFC(void)
                             int k;
                             for (k = 0;
                                  k <= HSD_GObjLibInitData.gproc_pri_max; k++) {
-                                HSD_GObjProc* q = HSD_GObj_804D7840[k];
+                                HSD_GObjProc* q = HSD_GObj_GObjProcHead[k];
                                 int n = 0;
                                 while (q != NULL && n < 4096) {
                                     const char* why = NULL;
@@ -303,30 +303,31 @@ void HSD_GObj_80390CFC(void)
                         }
                     }
 #endif
-                    HSD_GObj_804D7830 = proc->next;
-                    if (HSD_GObj_804CE3E4.flags != 0) {
-                        HSD_GObj_804CE3E4.b0 = 1;
-                        if (HSD_GObj_804CE3E4.b1) {
-                            HSD_GObjPLink_80390228(proc->gobj);
+                    HSD_GObj_NextInvokedProc = proc->next;
+                    if (HSD_GObj_DelayedProcInfo.flags != 0) {
+                        HSD_GObj_DelayedProcInfo.in_delayed_proc = 1;
+                        if (HSD_GObj_DelayedProcInfo.delay_remove_gobj) {
+                            HSD_GObjFree(proc->gobj);
                         } else {
-                            if (HSD_GObj_804CE3E4.b3) {
-                                HSD_GObjPLink_8039032C(
-                                    HSD_GObj_804CE3E4.type, proc->gobj,
-                                    HSD_GObj_804CE3E4.p_link,
-                                    HSD_GObj_804CE3E4.p_prio,
-                                    HSD_GObj_804CE3E4.gobj);
+                            if (HSD_GObj_DelayedProcInfo.delay_change_gobj_pri)
+                            {
+                                HSD_GObjPLink_ChangeGObjPri_Unk(
+                                    HSD_GObj_DelayedProcInfo.type, proc->gobj,
+                                    HSD_GObj_DelayedProcInfo.p_link,
+                                    HSD_GObj_DelayedProcInfo.p_prio,
+                                    HSD_GObj_DelayedProcInfo.gobj);
                             }
-                            if (HSD_GObj_804CE3E4.b2) {
-                                HSD_GObjProc_8038FE24(proc);
+                            if (HSD_GObj_DelayedProcInfo.delay_remove_proc) {
+                                HSD_GObjProc_RemoveProc(proc);
                             }
                         }
-                        HSD_GObj_804CE3E4.flags = 0;
+                        HSD_GObj_DelayedProcInfo.flags = 0;
                     }
-                    HSD_GObj_804D781C = NULL;
-                    HSD_GObj_804D7838 = NULL;
+                    HSD_GObj_CurrentInvokedProcGObj = NULL;
+                    HSD_GObj_CurrentInvokedProc = NULL;
                 }
             }
-            proc = HSD_GObj_804D7830;
+            proc = HSD_GObj_NextInvokedProc;
         }
     }
 #if BUILD_TARGET_PC
@@ -601,7 +602,7 @@ u8 HSD_GObj_803912A8(HSD_GObjLibInitDataType* arg0, GObjFuncs* arg1)
     return var_r3;
 }
 
-struct _unk_gobj_struct HSD_GObj_804CE3E4;
+struct _unk_gobj_struct HSD_GObj_DelayedProcInfo;
 HSD_ObjAllocData gobjproc_alloc_data;
 HSD_ObjAllocData gobj_alloc_data;
 HSD_GObjLibInitDataType HSD_GObjLibInitData;

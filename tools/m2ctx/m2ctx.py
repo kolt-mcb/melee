@@ -34,20 +34,12 @@ MWCC_FLAGS = [
     "-inline",
     "auto",
     "-i",
-    "src/melee",
-    "-i",
-    "src/melee/ft/chara",
-    "-I-",
-    "-i",
     "src",
+    "-I-",
     "-i",
     "src/MSL",
     "-i",
-    "src/Runtime",
-    "-i",
-    "src/sysdolphin",
-    "-i",
-    "extern/dolphin/include",
+    "libs/dolphin/include",
     "-DM2CTX",
 ]
 
@@ -74,11 +66,7 @@ def pcpp_import(in_file: Path, quiet: bool) -> str:
             includes = [
                 "src",
                 "src/MSL",
-                "src/Runtime",
-                "src/sysdolphin",
-                "src/melee",
-                "src/melee/ft/chara",
-                "extern/dolphin/include",
+                "libs/dolphin/include",
             ]
             defines = [
                 "__MWERKS__",

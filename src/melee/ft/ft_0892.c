@@ -1,14 +1,13 @@
 #include "ft_0892.h"
 
-#include "ft/chara/ftFox/ftFx_AppealS.h"
-#include "ft/fighter.h"
-#include "ft/inlines.h"
-#include "it/it_26B1.h"
-#include "pl/plattack.h"
-#include "pl/pltrick.h"
-
-#include <baselib/gobj.h>
-#include <baselib/jobj.h>
+#include "fighter.h"
+#include "inlines.h"
+#include "kinds/ftFox/ftfoxappeals.h"
+#include <melee/it/it_26B1.h>
+#include <melee/pl/plattack.h>
+#include <melee/pl/pltrick.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/jobj.h>
 
 void lbBgFlash_80020E38(HSD_JObj*, Vec3*, f32, f32, f32);
 void lbBgFlash_80021410(IKState*);
@@ -134,7 +133,7 @@ void ft_800895E0(Fighter* fp, int arg1)
     if (val.x2073 == 0 || val.x2073 != fp->x2070.x2073) {
         fp->x2074.x2088 = plAttack_80037B08();
     }
-    if (fp->kind == FTKIND_LUIGI && val.x2073 == 0x71) {
+    if (fp->kind == Ft_Kind_Luigi && val.x2073 == 0x71) {
         sp18.x2070_int = 0x240063;
         val = sp18;
     }
@@ -192,11 +191,8 @@ void ft_80089768(Vec2* ptr)
 void ft_80089824(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    /// @todo Weird volatile noop
-#ifdef MUST_MATCH
-    volatile int temp = fp->x2070.x2070_int;
-    fp->x2070.x2070_int = temp;
-#endif
+    union Struct2070 val = fp->x2070;
+    fp->x2070.x2070_int = val.x2070_int;
     ft_80089460(fp);
     fp->x2074.x2088 = plAttack_80037B08();
     pl_80037C60(gobj, 0);
@@ -247,19 +243,19 @@ s32 ft_80089914(HSD_GObj* gobj, int msid)
         return false;
     }
 
-    if (fp->kind == FTKIND_FOX) {
+    if (fp->kind == Ft_Kind_Fox) {
         if ((u32) (msid - ftCo_MS_AttackS3LwS) <= 2) {
             return false;
         }
     }
 
-    if (fp->kind == FTKIND_FALCO) {
+    if (fp->kind == Ft_Kind_Falco) {
         if ((u32) (msid - ftCo_MS_AttackS3LwS) <= 2) {
             return false;
         }
     }
 
-    if (fp->kind == FTKIND_MEWTWO) {
+    if (fp->kind == Ft_Kind_Mewtwo) {
         if (msid == ftCo_MS_AttackS3S) {
             return false;
         }

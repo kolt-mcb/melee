@@ -10,25 +10,19 @@
 
 #include <placeholder.h>
 
-#include "dolphin/gx/GXStruct.h"
-#include "lb/lb_013B.h"
-#include "lb/lbbgflash.h"
-#include "lb/types.h"
+#include "lb_013B.h"
+#include "lbarchive.h"
+#include "lbbgflash.h"
+#include "types.h"
+#include <dolphin/gx/GXStruct.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/objalloc.h>
 
-#include <baselib/gobj.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/gobjuserdata.h>
-#include <baselib/objalloc.h>
-#include <melee/lb/lbarchive.h>
-
-HSD_ObjAllocData lbl_804336A0;
-
-void fn_800219E4(void* arg0)
-{
-    HSD_ObjFree(&lbl_804336A0, arg0);
-}
+HSD_ObjAllocData bgflash_alloc_data;
 
 /* The user data hung off the bg-flash GObj: a mode byte and the colour
  * overlay the flash animates. Reached through HSD_GObj::user_data rather than
@@ -40,47 +34,48 @@ typedef struct BgFlashUserData {
     ColorOverlay x4;
 } BgFlashUserData;
 
-HSD_GObj* lbl_804D63E0[2];
+HSD_GObj* flash_gobj;
 struct Fighter_804D653C_t* lbl_804D63DC;
-f32 lbl_804D63D8;
+f32 flash_scale;
 
-void lbBgFlash_80021A10(f32 arg8)
+void lbBgFlash_Free(void* arg0)
 {
-    lbl_804D63D8 = arg8;
+    HSD_ObjFree(&bgflash_alloc_data, arg0);
 }
 
-void lbBgFlash_80021A18(int arg0)
+void lbBgFlash_SetFlashScale(f32 arg8)
+{
+    flash_scale = arg8;
+}
+
+void lbBgFlash_Init(int arg0)
 {
     HSD_GObj* gobj;
-    u8* user_data;
+    BgFlashUserData* user_data;
 
     /* sizeof, not the console's 0x84: ColorOverlay carries pointers, so the
      * host record is larger and a fixed 0x84 under-allocates it. */
-    HSD_ObjAllocInit(&lbl_804336A0, sizeof(BgFlashUserData), 4);
+    HSD_ObjAllocInit(&bgflash_alloc_data, sizeof(BgFlashUserData), 4);
     gobj = GObj_Create(0xE, 0xE, 0);
     if (gobj != NULL) {
-        user_data = HSD_ObjAlloc(&lbl_804336A0);
+        user_data = HSD_ObjAlloc(&bgflash_alloc_data);
         if (user_data != NULL) {
-            GObj_InitUserData(gobj, 0xE, fn_800219E4, user_data);
-            lbl_804D63E0[0] = gobj;
-            lbl_804D63D8 = 1.0f;
-            *user_data = (u8) arg0;
+            GObj_InitUserData(gobj, 0xE, lbBgFlash_Free, user_data);
+            flash_gobj = gobj;
+            flash_scale = 1.0f;
+            user_data->x0 = (u8) arg0;
             lbArchive_LoadSymbols("LbBf.dat", &lbl_804D63DC,
                                   "lbBgFlashColAnimData", NULL);
             lbBgFlash_800208EC(6);
             fn_80021C1C();
-            HSD_GObj_SetupProc(gobj, (HSD_GObjEvent) fn_80021B04, 1);
+            HSD_GObj_SetupProc(gobj, (HSD_GObjEvent) lbBgFlash_Proc, 1);
             return;
         }
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
     }
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
-void fn_80021B04(HSD_GObj* gobj)
+void lbBgFlash_Proc(HSD_GObj* gobj)
 {
     BgFlashUserData* data = gobj->user_data;
     int was_active = data->x4.x7C_color_enable;
@@ -92,7 +87,7 @@ void fn_80021B04(HSD_GObj* gobj)
     fn_80021C80(gobj);
     if (data->x4.x7C_color_enable) {
         u8* bytes = (u8*) &color;
-        scale = lbl_804D63D8;
+        scale = flash_scale;
         bytes[0] = (u8) ((f32) data->x4.x2C_hex.r * scale);
         // This is bytes[1] to bytes[3]
         ((u8*) (&color))[1] = (u8) (((f32) data->x4.x2C_hex.g) * scale);
@@ -105,21 +100,19 @@ void fn_80021B04(HSD_GObj* gobj)
         fn_800208B0(0);
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 static void fn_80021C18(HSD_GObj* gobj, CommandInfo* cmd, int arg2) {}
 
 void fn_80021C1C(void)
 {
-    BgFlashUserData* user_data = lbl_804D63E0[0]->user_data;
+    HSD_GObj* gobj = flash_gobj;
+    BgFlashUserData* user_data = gobj->user_data;
     lb_80014498(&user_data->x4);
 }
 
 void lbBgFlash_80021C48(u32 arg0, u32 arg1)
 {
-    BgFlashUserData* data = lbl_804D63E0[0]->user_data;
+    BgFlashUserData* data = flash_gobj->user_data;
     lb_800144C8(&data->x4, lbl_804D63DC, arg0, arg1);
 }
 

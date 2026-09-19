@@ -1,10 +1,10 @@
 #ifndef GALE01_31830C
 #define GALE01_31830C
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/forward.h"
-#include "ty/forward.h"
+#include <melee/ty/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 /* 31B460 */ void tyDisplay_Scene_OnEnter(void*);
 /* 31B9A4 */ void tyDisplay_Scene_OnFrame(void);

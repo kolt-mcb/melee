@@ -1,16 +1,17 @@
 #ifndef GALE01_005BB0
 #define GALE01_005BB0
 
-#include <placeholder.h>
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "ft/forward.h"
-#include "lb/forward.h"
-#include <baselib/forward.h>
+#include <melee/ft/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
+
+#include <placeholder.h>
 
 #include <dolphin/gx/GXStruct.h>
 #include <dolphin/mtx.h>
-#include <baselib/jobj.h>
+#include <sysdolphin/baselib/jobj.h>
 
 struct lbColl_8000A10C_arg0_t;
 
@@ -25,11 +26,12 @@ struct Fighter_x1614_t;
 /* 006094 */ bool lbColl_80006094(Vec3*, Vec3*, Vec3*, Vec3*, Vec3*, Vec3*,
                                   float, float);
 /* 0067F8 */ bool lbColl_800067F8(Vec3*, Vec3*, Vec3*, Vec3*, Vec3*, Vec3*,
-                                  float, float, float);
+                                  float, float);
 /* 0077A0 */ void lbColl_800077A0(Vec3*, Mtx, Vec3*, Vec3*, Vec3*, Vec3*,
                                   float* angle, float, float);
 /* 007AFC */ bool lbColl_80007AFC(HitCapsule*, HitCapsule*, float, float);
-/* 007B78 */ bool lbColl_80007B78(Mtx, struct Fighter_x1614_t*, float, float);
+/* 007B78 */ bool lbColl_80007B78(struct Fighter_x1614_t*,
+                                  struct Fighter_x1614_t*, float, float);
 /* 007BCC */ bool lbColl_80007BCC(HitCapsule*, HitResult* shield_hit, UNK_T,
                                   s32, float, float, float);
 /* 007D68 */ void lbColl_JObjSetupMatrix(HSD_JObj*);

@@ -1,24 +1,19 @@
 #include "ft_0BEC.h"
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "ft/fighter.h"
-
-#include "ft/forward.h"
-
-#include "ft/ftparts.h"
-#include "ft/types.h"
-
-#include "ftCommon/forward.h"
-
-#include "ftFox/types.h"
-#include "ftMario/ftMr_SpecialN.h"
-#include "it/it_26B1.h"
-#include "it/items/itdrmariopill.h"
-#include "it/items/itfoxblaster.h"
-#include "it/items/itnessbat.h"
-
+#include "fighter.h"
+#include "forward.h"
+#include "ftparts.h"
+#include "kinds/ftCommon/forward.h"
+#include "kinds/ftFox/types.h"
+#include "kinds/ftMario/ftmariospecialn.h"
+#include "types.h"
 #include <dolphin/mtx.h>
+#include <melee/it/it_26B1.h>
+#include <melee/it/kinds/itdrmariopill.h>
+#include <melee/it/kinds/itfoxblaster.h>
+#include <melee/it/kinds/itnessbat.h>
 
 static inline void setupInitialState(Fighter* fp)
 {
@@ -37,7 +32,7 @@ void ftCo_800BECB0(Fighter_GObj* gobj)
                               0.f, NULL);
     setupInitialState(fp);
     switch (fp->kind) {
-    case FTKIND_FOX: {
+    case Ft_Kind_Fox: {
         ftFox_DatAttrs* da = fp->dat_attrs;
         fp->item_gobj =
             it_802AE994(gobj, ftParts_GetBoneIndex(fp, FtPart_RThumbNb),
@@ -86,11 +81,11 @@ void ftCo_800BED88(Fighter_GObj* gobj)
     setupInitialState(fp);
 
     switch (fp->kind) {
-    case FTKIND_FOX: {
+    case Ft_Kind_Fox: {
         FoxHelper(gobj, fp);
         break;
     }
-    case FTKIND_DRMARIO: {
+    case Ft_Kind_DrMario: {
         DocHelper(gobj, fp);
         break;
     }
@@ -108,7 +103,7 @@ void ftCo_800BEF04(Fighter_GObj* gobj)
                               1.f, 0.f, NULL);
     setupInitialState(fp);
     switch (fp->kind) {
-    case FTKIND_NESS: {
+    case Ft_Kind_Ness: {
         fp->item_gobj =
             it_802AD590(gobj, ftParts_GetBoneIndex(fp, FtPart_RThumbNb));
         it_8026BAE8(fp->item_gobj,

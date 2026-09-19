@@ -1,25 +1,24 @@
 #include "mninfo.h"
 
-#include "placeholder.h"
+#include <placeholder.h>
 
-#include "baselib/gobjuserdata.h"
-#include "gm/gm_1601.h"
-#include "gm/gmmain_lib.h"
-#include "gm/types.h"
-#include "if/ifprize.h"
-#include "lb/lbarchive.h"
-#include "lb/lblanguage.h"
-#include "lb/lbspdisplay.h"
-#include "mn/inlines.h"
-#include "mn/mnmain.h"
-#include "sc/types.h"
-
+#include "inlines.h"
+#include "mnmain.h"
+#include <melee/gm/gm_1601.h>
+#include <melee/gm/gmmain_lib.h>
+#include <melee/gm/types.h>
+#include <melee/if/ifprize.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
 #include <sysdolphin/baselib/debug.h>
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/gobjgxlink.h>
 #include <sysdolphin/baselib/gobjobject.h>
 #include <sysdolphin/baselib/gobjplink.h>
 #include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
 #include <sysdolphin/baselib/jobj.h>
 #include <sysdolphin/baselib/memory.h>
 #include <sysdolphin/baselib/sislib.h>
@@ -40,6 +39,14 @@ typedef struct MnInfoDataLayout {
 
 StaticModelDesc mnInfo_804A0958;
 u8 mnInfo_804A0968[0x48];
+#ifdef MUST_MATCH
+#pragma push
+#pragma force_active on
+#endif
+u32 gap_10_804D6C7C_sbss;
+#ifdef MUST_MATCH
+#pragma pop
+#endif
 HSD_GObj* mnInfo_804D6C78;
 extern GXColor mn_804D4B64;
 
@@ -164,6 +171,14 @@ static AnimLoopSettings mnInfo_803EFC08[0x12] = {
     { 7.3738955e28f, 1.5307577e19f, 1.7539375e19f },
     { 2.8395941e29f, 1.7935375e25f, 7.2243537e28f },
 };
+#ifdef MUST_MATCH
+#pragma push
+#pragma force_active on
+#endif
+DATA char gap_07_803EFCE0_data[8] = "";
+#ifdef MUST_MATCH
+#pragma pop
+#endif
 
 #ifdef MUST_MATCH
 #pragma push
@@ -262,7 +277,7 @@ static inline s32 mnInfo_CountUnlocked(void)
     return count;
 }
 
-PC_STATIC_INLINE void mnInfo_CreateEntries(u32 id)
+static inline void mnInfo_CreateEntries(u32 id)
 {
     u8* trophy;
     s32 i;
@@ -288,10 +303,9 @@ static inline void mnInfo_FreeEntries(void)
     MnInfoData* data2;
     MnInfoData* data3;
 
-    j = 0;
     data2 = mnInfo_804D6C78->user_data;
     data3 = data2;
-    do {
+    for (j = 0; j < 4; j++) {
         if (data2->left_column[j] != NULL) {
             HSD_SisLib_803A5CC4(data3->left_column[j]);
             data2->left_column[j] = NULL;
@@ -300,8 +314,7 @@ static inline void mnInfo_FreeEntries(void)
             HSD_SisLib_803A5CC4(data3->right_column[j]);
             data2->right_column[j] = NULL;
         }
-        j++;
-    } while (j < 4);
+    }
 }
 
 /* HSD_GObj_SetupProc hands the proc its gobj; mninfo.h declares the parameter
@@ -335,20 +348,22 @@ void fn_80251FE4(HSD_GObj* pc_proc_gobj)
             sfxMove();
             mnInfo_FreeEntries();
             {
+                u8* other;
                 u8* trophy;
                 s32 i;
                 mnInfo_GObj* gobj;
 
                 gobj = mnInfo_804D6C78;
-                trophy = &mnInfo_804A0968[data->scroll_idx];
+                other = trophy = &mnInfo_804A0968[data->scroll_idx];
                 for (i = 0; i < 4; i++) {
+                    (void) (other == trophy);
                     if (mnInfo_80251A08(*trophy) != 0) {
-                        u8 id = *trophy;
+                        u32 id = *trophy;
 
                         mnInfo_80251D58(gobj, i, id, *gmMainLib_8015D804(id));
                         mnInfo_80251F04(gobj, i, id);
                     }
-                    trophy++;
+                    ++trophy;
                 }
             }
         }
@@ -363,10 +378,6 @@ void fn_80251FE4(HSD_GObj* pc_proc_gobj)
     }
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#endif
 void mnInfo_802522B8(HSD_GObj* gobj)
 {
     s32 count;
@@ -393,13 +404,10 @@ void mnInfo_802522B8(HSD_GObj* gobj)
     }
     mn_8022ED6C(jobj, mnInfo_803EFC08);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void fn_802523B8(HSD_GObj* gobj)
 {
-    HSD_GObjPLink_80390228(gobj);
+    HSD_GObjFree(gobj);
 }
 
 static inline void fn_802523D8_inline(MnInfoData* data, HSD_GObj* gobj)
@@ -408,7 +416,7 @@ static inline void fn_802523D8_inline(MnInfoData* data, HSD_GObj* gobj)
     HSD_JObj* jobj;
     PAD_STACK(16);
     if (mn_804A04F0.cur_menu != MENU_KIND_DATA_SPECIAL) {
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_802523B8, 0);
         proc->flags_3 = HSD_GObj_804D783C;
         {
@@ -467,7 +475,7 @@ static inline void fn_80252548_inline(MnInfoData* data, HSD_GObj* gobj)
     s32 i;
     PAD_STACK(16);
     if (mn_804A04F0.cur_menu != MENU_KIND_DATA_SPECIAL) {
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_802523B8, 0);
         proc->flags_3 = HSD_GObj_804D783C;
         {
@@ -515,7 +523,7 @@ static inline void fn_80252548_inline(MnInfoData* data, HSD_GObj* gobj)
         }
         HSD_JObjReqAnimAll(jobj, 0.0f);
         mnInfo_802522B8(gobj);
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_802523D8, 0);
         proc->flags_3 = HSD_GObj_804D783C;
     }
@@ -561,10 +569,6 @@ s32 mnInfo_80252758(void)
     char* top_joint = layout->top_joint;
     HSD_AnimJoint** animjoint = &model->animjoint;
     PAD_STACK(8);
-
-    (void) "Can't get user_data.\n";
-    (void) __FILE__;
-    (void) "user_data";
 
     mn_804D6BC8.cooldown = 5;
     mn_804A04F0.prev_menu = mn_804A04F0.cur_menu;

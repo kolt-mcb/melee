@@ -6,19 +6,17 @@
 #include "port/pc_ptr.h"
 #endif
 
+#include <placeholder.h>
+
 #include "fighter.h"
+#include "forward.h"
 #include "ftdata.h"
 #include "ftmaterial.h"
-
 #include "ftparts.static.h"
-
 #include "inlines.h"
-#include "placeholder.h"
 #include "types.h"
-
-#include "ft/forward.h"
-
 #include <dolphin/mtx.h>
+#include <melee/lb/lbrefract.h>
 #include <sysdolphin/baselib/class.h>
 #include <sysdolphin/baselib/debug.h>
 #include <sysdolphin/baselib/displayfunc.h>
@@ -28,7 +26,6 @@
 #include <sysdolphin/baselib/perf.h>
 #include <sysdolphin/baselib/pobj.h>
 #include <sysdolphin/baselib/util.h>
-#include <melee/lb/lbrefract.h>
 
 HSD_JObjInfo ftJObj = { ftParts_JObjInfoInit };
 HSD_JObjInfo ftIntpJObj = { ftParts_IntpJObjInfoInit };
@@ -935,9 +932,9 @@ int ftPartsRemap(size_t to_table_idx, size_t from_table_idx, size_t joint_idx)
 
 u32 ftParts_8007506C(enum FighterKind ftkind, int part)
 {
-    struct Fighter_804D6540_x0_t* var_r3;
+    Fighter_804D6540_x0_t* var_r3;
     int i;
-    struct Fighter_804D6540_t* temp_r3;
+    Fighter_804D6540_t* temp_r3;
 
     temp_r3 = Fighter_804D6540[ftkind];
     if (temp_r3 != NULL && temp_r3->x4 != 0) {

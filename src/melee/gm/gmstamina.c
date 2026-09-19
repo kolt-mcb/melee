@@ -1,20 +1,17 @@
 #include "gmstamina.h"
 
-#include "gm_unsplit.h"
-
 #include <placeholder.h>
 
-#include "gm/gm_1A3F.h"
-
-#include <sysdolphin/baselib/gobjproc.h>
-#include <melee/gm/gm_unsplit.h>
-#include <melee/gm/gmmain_lib.h>
-#include <melee/gm/gmvsmelee.h>
-#include <melee/gm/types.h>
+#include "gm_1A3F.h"
+#include "gm_unsplit.h"
+#include "gmmain_lib.h"
+#include "gmvsmelee.h"
+#include "types.h"
 #include <melee/lb/lbaudio_ax.h>
 #include <melee/lb/lbdvd.h>
 #include <melee/mn/types.h>
 #include <melee/pl/player.h>
+#include <sysdolphin/baselib/gobjproc.h>
 
 GameModeState gm_Mode_StaminaVs_States[] = {
     {
@@ -64,7 +61,7 @@ static struct {
 
 void gm_801B91C8(GameModeState* state)
 {
-    VsModeData* vs = &gmMainLib_804D3EE0->vs_stamina;
+    VsModeData* vs = &gmMainLib_804D3EE0->modes.table[GmVsMode_Stamina];
     CSSData* css = gm_GetGameModeStateEnterData(state);
     css->match_type = 2;
     css->ko_counts = 0;
@@ -74,17 +71,19 @@ void gm_801B91C8(GameModeState* state)
 
 void gm_801B922C(GameModeState* scene)
 {
-    gmVsMelee_ExitCss(scene, &gmMainLib_804D3EE0->vs_stamina);
+    gmVsMelee_ExitCss(scene,
+                      &gmMainLib_804D3EE0->modes.table[GmVsMode_Stamina]);
 }
 
 void gm_801B9254(GameModeState* scene)
 {
-    gmVsMelee_EnterSss(scene, &gmMainLib_804D3EE0->vs_stamina);
+    gmVsMelee_EnterSss(scene,
+                       &gmMainLib_804D3EE0->modes.table[GmVsMode_Stamina]);
 }
 
 void gm_801B927C(GameModeState* state)
 {
-    VsModeData* vs = &gmMainLib_804D3EE0->vs_stamina;
+    VsModeData* vs = &gmMainLib_804D3EE0->modes.table[GmVsMode_Stamina];
     SSSData* sss = gm_GetGameModeStateExitData(state);
     if (sss->start_game != 0) {
         *vs = sss->vs;
@@ -99,7 +98,7 @@ void gm_801B927C(GameModeState* state)
 
 void gm_801B931C(GameModeState* state)
 {
-    VsModeData* vs = &gmMainLib_804D3EE0->vs_stamina;
+    VsModeData* vs = &gmMainLib_804D3EE0->modes.table[GmVsMode_Stamina];
     StartMeleeData* start = gm_GetGameModeStateEnterData(state);
     int i;
 
@@ -108,11 +107,11 @@ void gm_801B931C(GameModeState* state)
     start->rules = vs->start.rules;
 
     start->rules.x2_5 = false;
-    start->rules.x0_6 = false;
+    start->rules.timer_enabled = false;
     start->rules.match_kind = 1;
-    start->rules.x44 = fn_801B9850;
+    start->rules.on_match_start = fn_801B9850;
     start->rules.x3_0 = false;
-    gm_80167A14(start->players);
+    gm_SetupAllPlayerDefaults(start->players);
 
     for (i = 0; i < PAD_MAX_CONTROLLERS; i++) {
         start->players[i] = vs->start.players[i];
@@ -128,14 +127,14 @@ void gm_801B931C(GameModeState* state)
 
 void gm_801B9560(GameModeState* scene)
 {
-    VsModeData* vs = &gmMainLib_804D3EE0->vs_stamina;
+    VsModeData* vs = &gmMainLib_804D3EE0->modes.table[GmVsMode_Stamina];
     gm_80168710(&gmVsMelee_VsExitInfo.match_end, vs);
-    gm_801A5AF0(scene, 0, 0);
+    gmVsMelee_ExitVs(scene, 0, 0);
 }
 
 void gm_Mode_StaminaVs_OnInit(void)
 {
-    gm_80167B50(&gmMainLib_804D3EE0->vs_stamina);
+    gm_InitVsMode(&gmMainLib_804D3EE0->modes.table[GmVsMode_Stamina]);
 }
 
 void gm_Mode_StaminaVs_OnLoad(void)
@@ -159,7 +158,9 @@ int gm_801B9600(void)
             gm_804975F8.eliminated[i] = true;
         }
         if (!gm_804975F8.eliminated[i]) {
-            if (gmMainLib_804D3EE0->vs_stamina.start.rules.is_teams) {
+            if (gmMainLib_804D3EE0->modes.table[GmVsMode_Stamina]
+                    .start.rules.is_teams)
+            {
                 for (j = 0; j < i; j++) {
                     if (!gm_804975F8.eliminated[j] &&
                         Player_GetTeam(i) == Player_GetTeam(j))

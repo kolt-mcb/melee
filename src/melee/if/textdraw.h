@@ -1,8 +1,8 @@
 #ifndef _TEXTDRAW_H_
 #define _TEXTDRAW_H_
 
-#include "if/forward.h"
-#include <baselib/forward.h>
+#include <melee/if/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 /* 301E44 */ int DevText_StrLen(char* str);
 /* 301E78 */ void DevText_NumToStr(int, char*);

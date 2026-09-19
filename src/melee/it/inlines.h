@@ -1,27 +1,36 @@
 #ifndef MELEE_IT_INLINES_H
 #define MELEE_IT_INLINES_H
 
-#include "ef/eflib.h"
-#include "it/it_2725.h"
-#include "it/it_3F14.h"
-#include "it/item.h"
-#include "it/itmaplib.h"
-#include "it/types.h"
-#include "mp/mplib.h"
-
-#include <baselib/gobj.h>
+#include <melee/ef/eflib.h>
+#include <melee/it/it_2725.h>
+#include <melee/it/it_3F14.h>
+#include <melee/it/item.h>
+#include <melee/it/itmaplib.h>
+#include <melee/it/types.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/gobj.h>
 
 #define GET_ITEM(gobj) ((Item*) HSD_GObjGetUserData(gobj))
 
+/// @deprecated Use #GET_ITEM instead.
 static inline Item* GetItemData(HSD_GObj* gobj)
 {
     Item* item_data = gobj->user_data;
+
     return item_data;
 }
 
 static inline void itResetVelocity(Item* ip)
 {
     ip->x40_vel.x = ip->x40_vel.y = ip->x40_vel.z = 0.0F;
+}
+
+static inline void Item_ClearCmdVars(Item* ip)
+{
+    ip->xDB8_itcmd_var3 = 0;
+    ip->xDB4_itcmd_var2 = 0;
+    ip->xDB0_itcmd_var1 = 0;
+    ip->xDAC_itcmd_var0 = 0;
 }
 
 static inline void Item_SetEffectHitlagCallbacks(Item* ip)

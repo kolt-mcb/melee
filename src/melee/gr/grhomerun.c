@@ -1,38 +1,36 @@
 #include "grhomerun.h"
 
-#include "placeholder.h"
+#include <Runtime/platform.h>
 
-#include <platform.h>
+#include <sysdolphin/baselib/forward.h>
 
-#include "baselib/archive.h"
-#include "baselib/debug.h"
-#include "baselib/fog.h"
+#include <placeholder.h>
 
-#include "baselib/forward.h"
-
-#include "baselib/gobj.h"
-#include "baselib/gobjgxlink.h"
-#include "baselib/gobjobject.h"
-#include "baselib/jobj.h"
-#include "baselib/memory.h"
-#include "baselib/sislib.h"
-#include "baselib/wobj.h"
-#include "cm/camera.h"
-#include "ft/ftlib.h"
-#include "gm/gmregclear.h"
-#include "gr/grdatfiles.h"
-#include "gr/ground.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/stage.h"
-#include "it/it_26B1.h"
-#include "it/types.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lblanguage.h"
-#include "lb/lbspdisplay.h"
-#include "lb/types.h"
-#include "mp/mplib.h"
+#include "grdatfiles.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "stage.h"
+#include <melee/cm/camera.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gm/gmregclear.h>
+#include <melee/it/it_26B1.h>
+#include <melee/it/types.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/lb/types.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/archive.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/sislib.h>
+#include <sysdolphin/baselib/wobj.h>
 
 /* 21E994 */ static void fn_8021E994(void* user_data, int joint_id,
                                      CollData* coll, int coll_x50,
@@ -204,7 +202,7 @@ void grHomeRun_8021CB20(Ground_GObj* gobj)
     gp = GET_GROUND(gobj);
     jobj = GET_JOBJ(gobj);
     jobj2 = jobj;
-    Ground_801C2ED0(jobj2, gp->map_id);
+    Ground_InitMapColl(jobj2, gp->map_id);
 
     gp->u.homerun.parts =
         HSD_MemAlloc(sizeof(*gp->u.homerun.parts) * Gr_Homerun_Parts_Max);
@@ -455,8 +453,7 @@ void grHomeRun_8021D680(Ground_GObj* gobj)
 
     HSD_JObjSetTranslateX(jobj, x + 1.5F * (2150.99F * Ground_801C0498()));
 
-    lb_800115F4();
-    Ground_801C2FE0(gobj);
+    Ground_UpdateWindAndMapColl(gobj);
     mpLib_80056758(3, 0.0F, 0.0F, 20000.0F, 0.0F);
     mpJointUpdateBounding(0);
     PAD_STACK(8);
@@ -975,7 +972,7 @@ void grHomeRun_8021EDD4(void)
 
 DynamicsDesc* grHomeRun_8021EEB4(enum_t arg)
 {
-    return false;
+    return NULL;
 }
 
 bool grHomeRun_8021EEBC(Vec3* a, int b, HSD_JObj* jobj)

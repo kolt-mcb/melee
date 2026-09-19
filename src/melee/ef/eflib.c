@@ -12,31 +12,30 @@
  */
 #include "eflib.h"
 
+#include <math.h>
+#include <stdarg.h>
+
 #include "efasync.h"
 #include "efdata.h"
 #include "inlines.h"
 #include "types.h"
-
-#include "baselib/displayfunc.h"
-#include "baselib/gobjgxlink.h"
-#include "baselib/gobjobject.h"
-#include "baselib/gobjplink.h"
-#include "baselib/gobjproc.h"
-#include "baselib/gobjuserdata.h"
-#include "baselib/particle.h"
-#include "baselib/psappsrt.h"
-#include "baselib/psdisp.h"
-#include "baselib/psstructs.h"
-#include "baselib/state.h"
-#include "dolphin/mtx.h"
-#include "ft/inlines.h"
-#include "ftCommon/ftCo_Bury.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbspdisplay.h"
-
-#include <math.h>
-#include <stdarg.h>
-#include <baselib/generator.h>
+#include <dolphin/mtx.h>
+#include <melee/ft/inlines.h>
+#include <melee/ft/kinds/ftCommon/ftCo_Bury.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbspdisplay.h>
+#include <sysdolphin/baselib/displayfunc.h>
+#include <sysdolphin/baselib/generator.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/particle.h>
+#include <sysdolphin/baselib/psappsrt.h>
+#include <sysdolphin/baselib/psdisp.h>
+#include <sysdolphin/baselib/psstructs.h>
+#include <sysdolphin/baselib/state.h>
 // externs
 #if BUILD_TARGET_PC
 /* baselib/particle.h declares the command-list table as the console's
@@ -44,8 +43,8 @@
  * HSD_PSCmdList* -- which truncates a host pointer to 32 bits. particle.c's
  * readers call the same table psCmdListArray and the PC loader fills that
  * one, so read it through its real type instead. */
-extern HSD_PSCmdList** psCmdListArray[65];
-#define ptclref_804D0E5C psCmdListArray
+/* ptclref_804D0E5C now has this type in particle.h, so the alias the port
+ * kept here is gone. */
 #endif
 
 extern EF_DAT_Entry efAsync_DatEntries[51];
@@ -75,8 +74,9 @@ void efLib_render_callback(HSD_GObj*, int);
 /*                       INLINES                        */
 /* ---------------------------------------------------- */
 
-void inline eflib_create_generator_add_appsrt(HSD_Generator** generator,
-                                              s32 gfx_id, HSD_JObj* jobj)
+static inline void eflib_create_generator_add_appsrt(HSD_Generator** generator,
+                                                     s32 gfx_id,
+                                                     HSD_JObj* jobj)
 {
     *generator = hsd_8039EFAC(0, gfx_id / 1000, gfx_id, jobj);
     if (*generator != NULL) {
@@ -89,11 +89,10 @@ void inline eflib_create_generator_add_appsrt(HSD_Generator** generator,
         } else {
             hsd_8039D4DC(*generator);
             *generator = NULL;
-            goto eflib_create_generator_add_appsrt_exit;
+            return;
         }
         (*generator)->type &= 0xFFFFF9FF;
         (*generator)->type |= PSAPPSRT_UNK_B11;
-    eflib_create_generator_add_appsrt_exit:;
     }
 }
 
@@ -104,7 +103,7 @@ eflib_create_effect_and_attach(int gfx_id, HSD_GObj* gobj, HSD_JObj* jobj)
     if (effect != NULL) {
         HSD_JObj* effect_jobj;
         if ((effect_jobj = GET_JOBJ(effect->gobj)) == NULL) {
-            HSD_GObjPLink_80390228(effect->gobj);
+            HSD_GObjFree(effect->gobj);
             return NULL;
         } else {
             Vec3 translate;
@@ -133,37 +132,6 @@ eflib_generator_add_appsrt(HSD_Generator* generator, s32 status)
     }
     return generator;
 }
-
-/* ---------------------------------------------------- */
-/*                       MACROS                         */
-/* ---------------------------------------------------- */
-
-/*
- * --------------------------------------------------------------------
- * TODO: Figure out how to make this an inline that keeps match at 100%
- * --------------------------------------------------------------------
- */
-#define WALK_TO_ROOT(_jobj, _label)                                           \
-    {                                                                         \
-        HSD_JObj* _parent;                                                    \
-        goto _wr_##_label;                                                    \
-        do {                                                                  \
-            if ((_jobj) == NULL) {                                            \
-                _parent = NULL;                                               \
-            } else {                                                          \
-                _parent = (_jobj)->parent;                                    \
-            }                                                                 \
-            (_jobj) = _parent;                                                \
-            _wr_##_label : if ((_jobj) == NULL)                               \
-            {                                                                 \
-                _parent = NULL;                                               \
-            }                                                                 \
-            else                                                              \
-            {                                                                 \
-                _parent = (_jobj)->parent;                                    \
-            }                                                                 \
-        } while (_parent != NULL);                                            \
-    }
 
 void efLib_Init(void)
 {
@@ -217,7 +185,7 @@ void efLib_SetFlags(HSD_GObj* gobj, s32 expire_flags)
     EF_Effect* effect_1;
     EF_Effect* effect_2;
 
-    gobj_1 = HSD_GObj_Entities->x2C;
+    gobj_1 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_EFFECT_UNK0];
     while (gobj_1 != NULL) {
         effect_1 = GET_EFFECT(gobj_1);
         if ((effect_1 != NULL) && (effect_1->parent_gobj == gobj)) {
@@ -225,7 +193,7 @@ void efLib_SetFlags(HSD_GObj* gobj, s32 expire_flags)
         }
         gobj_1 = gobj_1->next;
     }
-    gobj_2 = HSD_GObj_Entities->x30;
+    gobj_2 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_EFFECT_UNK1];
     while (gobj_2 != NULL) {
         effect_2 = GET_EFFECT(gobj_2);
         if ((effect_2 != NULL) && (effect_2->parent_gobj == gobj)) {
@@ -254,7 +222,7 @@ void efLib_Destroy(HSD_GObj* gobj)
             jobj = gobj->hsd_obj;
             HSD_JObjWalkTree(jobj, hsd_8039D688, NULL);
         }
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
     }
 }
 
@@ -270,7 +238,7 @@ void efLib_DestroyAll(HSD_GObj* gobj)
             efLib_ParamTable[i].gobj = NULL;
         }
     }
-    gobj_1 = HSD_GObj_Entities->x2C;
+    gobj_1 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_EFFECT_UNK0];
     while (gobj_1 != NULL) {
         HSD_GObj* gobj_2;
         EF_Effect* effect_1;
@@ -282,11 +250,11 @@ void efLib_DestroyAll(HSD_GObj* gobj)
             if (effect_1->gobj->obj_kind == HSD_GObj_JObjKind) {
                 HSD_JObjWalkTree(effect_1->gobj->hsd_obj, hsd_8039D688, NULL);
             }
-            HSD_GObjPLink_80390228(effect_1->gobj);
+            HSD_GObjFree(effect_1->gobj);
         }
         gobj_1 = gobj_2;
     }
-    gobj_2 = HSD_GObj_Entities->x30;
+    gobj_2 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_EFFECT_UNK1];
     while (gobj_2 != NULL) {
         HSD_GObj* gobj_3;
         EF_Effect* effect_2;
@@ -298,7 +266,7 @@ void efLib_DestroyAll(HSD_GObj* gobj)
             if (gobj_3->obj_kind == HSD_GObj_JObjKind) {
                 HSD_JObjWalkTree(gobj_3->hsd_obj, hsd_8039D688, NULL);
             }
-            HSD_GObjPLink_80390228(effect_2->gobj);
+            HSD_GObjFree(effect_2->gobj);
         }
     }
     if (gobj->obj_kind == HSD_GObj_JObjKind) {
@@ -313,7 +281,7 @@ void efLib_PauseAll(HSD_GObj* gobj)
     EF_Effect* effect_1;
     EF_Effect* effect_2;
 
-    gobj_1 = HSD_GObj_Entities->x2C;
+    gobj_1 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_EFFECT_UNK0];
     while (gobj_1 != NULL) {
         effect_1 = GET_EFFECT(gobj_1);
         if ((effect_1 != NULL) && (effect_1->parent_gobj == gobj)) {
@@ -322,7 +290,7 @@ void efLib_PauseAll(HSD_GObj* gobj)
         }
         gobj_1 = gobj_1->next;
     }
-    gobj_2 = HSD_GObj_Entities->x30;
+    gobj_2 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_EFFECT_UNK1];
     while (gobj_2 != NULL) {
         effect_2 = GET_EFFECT(gobj_2);
         if ((effect_2 != NULL) && (effect_2->parent_gobj == gobj)) {
@@ -340,7 +308,7 @@ void efLib_ResumeAll(HSD_GObj* gobj)
     EF_Effect* effect_1;
     EF_Effect* effect_2;
 
-    gobj_1 = HSD_GObj_Entities->x2C;
+    gobj_1 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_EFFECT_UNK0];
     while (gobj_1 != NULL) {
         effect_1 = GET_EFFECT(gobj_1);
         if ((effect_1 != NULL) && (effect_1->parent_gobj == gobj)) {
@@ -348,7 +316,7 @@ void efLib_ResumeAll(HSD_GObj* gobj)
         }
         gobj_1 = gobj_1->next;
     }
-    gobj_2 = HSD_GObj_Entities->x30;
+    gobj_2 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_EFFECT_UNK1];
     while (gobj_2 != NULL) {
         effect_2 = GET_EFFECT(gobj_2);
         if ((effect_2 != NULL) && (effect_2->parent_gobj == gobj)) {
@@ -379,7 +347,7 @@ void efLib_RemoveLast(void)
     HSD_GObj* gobj;
     HSD_GObj* next;
 
-    gobj = HSD_GObj_Entities->x2C;
+    gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_EFFECT_UNK0];
     while (gobj != NULL) {
         next = gobj->next;
         efLib_Destroy(gobj);
@@ -392,7 +360,7 @@ void efLib_RemoveLast(void)
         gobj = next;
     }
 
-    gobj = HSD_GObj_Entities->x30;
+    gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_EFFECT_UNK1];
     while (gobj != NULL) {
         next = gobj->next;
         efLib_Destroy(gobj);
@@ -423,7 +391,7 @@ void efLib_Update(HSD_GObj* gobj)
         u16 param = effect->lifetime - 1;
         effect->lifetime = param;
         if (param == 0) {
-            HSD_GObjPLink_80390228(gobj);
+            HSD_GObjFree(gobj);
             return;
         }
     }
@@ -762,13 +730,13 @@ EF_Effect* efLib_Create(int gfx_id, HSD_GObj* parent_gobj)
                 fprintf(stderr, "[PORT WARN] efLib_Create: gfx %d desc %p unreadable; effect skipped\n",
                         gfx_id, (void*) desc);
             }
-            HSD_GObjPLink_80390228(effect->gobj);
+            HSD_GObjFree(effect->gobj);
             return NULL;
         }
 #endif
         jobj = HSD_JObjLoadJoint(desc->model_desc.joint);
         if (jobj == NULL) {
-            HSD_GObjPLink_80390228(effect->gobj);
+            HSD_GObjFree(effect->gobj);
             return NULL;
         }
 #if BUILD_TARGET_PC
@@ -820,7 +788,7 @@ EF_Effect* efLib_Create_Attach(u32 gfx_id, HSD_GObj* gobj, HSD_JObj* jobj)
     if (effect != NULL) {
         HSD_JObj* effect_jobj;
         if ((effect_jobj = GET_JOBJ(effect->gobj)) == NULL) {
-            HSD_GObjPLink_80390228(effect->gobj);
+            HSD_GObjFree(effect->gobj);
             return NULL;
         } else {
             Vec3 translate;
@@ -1156,10 +1124,10 @@ void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
 {
 #if BUILD_TARGET_PC
     if (getenv("MELEE_EFSPAWN") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         fprintf(stderr,
                 "[EFSPAWN] gframe=%u bank=%d gfx=0x%x flag=%d jobj=%p\n",
-                (unsigned) gm_8016AEDC(), bank, (unsigned) gfx_id, (int) flag,
+                (unsigned) gm_GetFrameCount(), bank, (unsigned) gfx_id, (int) flag,
                 (void*) jobj);
     }
 #endif
@@ -1167,7 +1135,7 @@ void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
     HSD_JObj* root = jobj;
     s32 chk = 0;
 
-    PAD_STACK(28); // once walk macro is inlined i am sure this will auto-fix
+    PAD_STACK(28);
 
     switch (gfx_id) {
     case 0x4A38:
@@ -1179,7 +1147,9 @@ void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
         // attach, inherit root rot.y
         eflib_create_generator_add_appsrt(&generator, gfx_id, jobj);
         if (generator != NULL) {
-            WALK_TO_ROOT(root, 170);
+            while (HSD_JObjGetParent(root) != NULL) {
+                root = HSD_JObjGetParent(root);
+            }
             generator->appsrt->rot.y = HSD_JObjGetRotationY(root);
         }
         return;
@@ -1198,7 +1168,9 @@ void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
         // attach, inherit root rot.y + scale
         eflib_create_generator_add_appsrt(&generator, gfx_id, jobj);
         if (generator != NULL) {
-            WALK_TO_ROOT(root, 2f0);
+            while (HSD_JObjGetParent(root) != NULL) {
+                root = HSD_JObjGetParent(root);
+            }
             generator->appsrt->rot.y = HSD_JObjGetRotationY(root);
             HSD_JObjGetScale(root, &generator->appsrt->scale);
         }
@@ -1216,7 +1188,9 @@ void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
         // attach, inherit root scale
         eflib_create_generator_add_appsrt(&generator, gfx_id, jobj);
         if (generator != NULL) {
-            WALK_TO_ROOT(root, 428);
+            while (HSD_JObjGetParent(root) != NULL) {
+                root = HSD_JObjGetParent(root);
+            }
             HSD_JObjGetScale(root, &generator->appsrt->scale);
         }
         return;
@@ -1230,7 +1204,9 @@ void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
         if ((generator = eflib_generator_add_appsrt(
                  hsd_8039F05C(0, (gfx_id / 1000), gfx_id), 1)) != NULL)
         {
-            WALK_TO_ROOT(root, 53c);
+            while (HSD_JObjGetParent(root) != NULL) {
+                root = HSD_JObjGetParent(root);
+            }
             generator->appsrt->rot.y = HSD_JObjGetRotationY(root);
             HSD_JObjGetTranslation(root, &generator->appsrt->translate);
         }
@@ -1244,7 +1220,9 @@ void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
                 psAppSRT = psAddGeneratorAppSRT_begin(generator, 1);
             }
             if (psAppSRT != NULL) {
-                WALK_TO_ROOT(root, 64c);
+                while (HSD_JObjGetParent(root) != NULL) {
+                    root = HSD_JObjGetParent(root);
+                }
                 psAppSRT->rot.z = HSD_JObjGetRotationZ(root);
                 HSD_JObjGetTranslation(root, &psAppSRT->translate);
                 HSD_JObjGetScale(root, &psAppSRT->scale);
@@ -1263,7 +1241,9 @@ void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
                 psAppSRT = psAddGeneratorAppSRT_begin(generator, 1);
             }
             if (psAppSRT != NULL) {
-                WALK_TO_ROOT(root, 77c);
+                while (HSD_JObjGetParent(root) != NULL) {
+                    root = HSD_JObjGetParent(root);
+                }
                 psAppSRT->rot.z = HSD_JObjGetRotationZ(root);
                 HSD_JObjGetTranslation(root, &psAppSRT->translate);
                 return;
@@ -1278,7 +1258,9 @@ void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
                  hsd_8039F05C(0, (gfx_id / 1000), gfx_id), 1)) != NULL)
         {
             lb_8000B1CC(jobj, NULL, &generator->appsrt->translate);
-            WALK_TO_ROOT(root, 864);
+            while (HSD_JObjGetParent(root) != NULL) {
+                root = HSD_JObjGetParent(root);
+            }
             HSD_JObjGetScale(root, &generator->appsrt->scale);
         }
         return;
@@ -1370,20 +1352,16 @@ void (*lbl_803BF810[0x03])(HSD_Particle* particle) = { efLib_Cb_ParticleRender,
 // parent joint.
 void efLib_Cb_PtclAppSRTHook(HSD_Generator* gen)
 {
-    if (gen->cmdList == ((HSD_PSCmdList*) ptclref_804D0E5C[0][0x96])->cmdList)
-    {
+    if (gen->cmdList == ptclref_804D0E5C[0][0x96]->cmdList) {
         hsd_8039D1E4(gen, lbl_803BF810);
     }
-    if (gen->cmdList == ((HSD_PSCmdList*) ptclref_804D0E5C[0][0x97])->cmdList)
-    {
+    if (gen->cmdList == ptclref_804D0E5C[0][0x97]->cmdList) {
         hsd_8039D1E4(gen, lbl_803BF810);
     }
-    if (gen->cmdList == ((HSD_PSCmdList*) ptclref_804D0E5C[0][0x98])->cmdList)
-    {
+    if (gen->cmdList == ptclref_804D0E5C[0][0x98]->cmdList) {
         hsd_8039D1E4(gen, lbl_803BF810);
     }
-    if (gen->cmdList == ((HSD_PSCmdList*) ptclref_804D0E5C[0][0x21B])->cmdList)
-    {
+    if (gen->cmdList == ptclref_804D0E5C[0][0x21B]->cmdList) {
         hsd_8039D1E4(gen, lbl_803BF810);
     }
 }

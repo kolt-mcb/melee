@@ -8,179 +8,301 @@
 #include "port/log.h"
 #endif
 
-#include "ft_0877.h"
-#include "ft_459A.h"
+#include <Runtime/platform.h>
 
-#include <platform.h>
-
-#include "ef/efasync.h"
-
-#include "forward.h"
-
-#include "ft/fighter.h"
-#include "ft/ft_0852.h"
-#include "ft/inlines.h"
-#include "ft/types.h"
-#include "ftCaptain/ftCa_Init.h"
-#include "ftCaptain/ftCa_SpecialHi.h"
-#include "ftCaptain/ftCa_SpecialLw.h"
-#include "ftCaptain/ftCa_SpecialN.h"
-#include "ftCaptain/ftCa_SpecialS.h"
-#include "ftCLink/ftCl_Init.h"
-#include "ftCrazyHand/ftCh_Init.h"
-#include "ftDonkey/ftDk_Init.h"
-#include "ftDonkey/ftDk_SpecialHi.h"
-#include "ftDonkey/ftDk_SpecialLw.h"
-#include "ftDonkey/ftDk_SpecialN.h"
-#include "ftDonkey/ftDk_SpecialS.h"
-#include "ftDrMario/ftDr_Init.h"
-#include "ftEmblem/ftFe_Init.h"
-#include "ftFalco/ftFc_Init.h"
-#include "ftFox/ftFx_Init.h"
-#include "ftFox/ftFx_SpecialHi.h"
-#include "ftFox/ftFx_SpecialLw.h"
-#include "ftFox/ftFx_SpecialN.h"
-#include "ftFox/ftFx_SpecialS.h"
-#include "ftGameWatch/ftGw_Init.h"
-#include "ftGameWatch/ftGw_SpecialHi.h"
-#include "ftGameWatch/ftGw_SpecialLw.h"
-#include "ftGameWatch/ftGw_SpecialN.h"
-#include "ftGameWatch/ftGw_SpecialS.h"
-#include "ftGanon/ftGn_Init.h"
-#include "ftGigaKoopa/ftGk_Init.h"
-#include "ftKirby/ftkirby.h"
-#include "ftKirby/ftkirbyspecialhi.h"
-#include "ftKoopa/ftKp_Init.h"
-#include "ftKoopa/ftKp_SpecialHi.h"
-#include "ftKoopa/ftKp_SpecialLw.h"
-#include "ftKoopa/ftKp_SpecialN.h"
-#include "ftKoopa/ftKp_SpecialS.h"
-#include "ftLink/ftLk_Init.h"
-#include "ftLink/ftLk_SpecialHi.h"
-#include "ftLink/ftLk_SpecialLw.h"
-#include "ftLink/ftLk_SpecialN.h"
-#include "ftLink/ftLk_SpecialS.h"
-#include "ftLuigi/ftLg_Init.h"
-#include "ftLuigi/ftLg_SpecialHi.h"
-#include "ftLuigi/ftLg_SpecialLw.h"
-#include "ftLuigi/ftLg_SpecialN.h"
-#include "ftLuigi/ftLg_SpecialS.h"
-#include "ftMario/ftMr_Init.h"
-#include "ftMario/ftMr_SpecialHi.h"
-#include "ftMario/ftMr_SpecialLw.h"
-#include "ftMario/ftMr_SpecialN.h"
-#include "ftMario/ftMr_SpecialS.h"
-#include "ftMario/ftMr_Strings.h"
-#include "ftMars/ftMs_Init.h"
-#include "ftMars/ftMs_SpecialHi.h"
-#include "ftMars/ftMs_SpecialLw.h"
-#include "ftMars/ftMs_SpecialN.h"
-#include "ftMars/ftMs_SpecialS.h"
-#include "ftMasterHand/ftMh_Init.h"
-#include "ftMewtwo/ftMt_Init.h"
-#include "ftMewtwo/ftMt_SpecialHi.h"
-#include "ftMewtwo/ftMt_SpecialLw.h"
-#include "ftMewtwo/ftMt_SpecialN.h"
-#include "ftMewtwo/ftMt_SpecialS.h"
-#include "ftNana/ftNn_Init.h"
-#include "ftNess/ftNs_Init.h"
-#include "ftNess/ftNs_SpecialHi.h"
-#include "ftNess/ftNs_SpecialLw.h"
-#include "ftNess/ftNs_SpecialN.h"
-#include "ftNess/ftNs_SpecialS.h"
-#include "ftPeach/ftPe_Init.h"
-#include "ftPeach/ftPe_SpecialHi.h"
-#include "ftPeach/ftPe_SpecialLw.h"
-#include "ftPeach/ftPe_SpecialN.h"
-#include "ftPeach/ftPe_SpecialS.h"
-#include "ftPichu/ftPc_Init.h"
-#include "ftPikachu/ftPk_Init.h"
-#include "ftPikachu/ftPk_SpecialHi.h"
-#include "ftPikachu/ftPk_SpecialLw.h"
-#include "ftPikachu/ftPk_SpecialN.h"
-#include "ftPikachu/ftPk_SpecialS.h"
-#include "ftPopo/ftPp_Init.h"
-#include "ftPopo/ftPp_SpecialHi.h"
-#include "ftPopo/ftPp_SpecialLw.h"
-#include "ftPopo/ftPp_SpecialN.h"
-#include "ftPopo/ftPp_SpecialS.h"
-#include "ftPurin/ftPr_Init.h"
-#include "ftPurin/ftPr_SpecialHi.h"
-#include "ftPurin/ftPr_SpecialLw.h"
-#include "ftPurin/ftPr_SpecialN.h"
-#include "ftPurin/ftPr_SpecialS.h"
-#include "ftSamus/ftSs_Init.h"
-#include "ftSamus/ftSs_SpecialHi.h"
-#include "ftSamus/ftSs_SpecialLw_1.h"
-#include "ftSamus/ftSs_SpecialN.h"
-#include "ftSamus/ftSs_SpecialS.h"
-#include "ftSandbag/ftSb_Init.h"
-#include "ftSeak/ftSk_Init.h"
-#include "ftSeak/ftSk_SpecialHi.h"
-#include "ftSeak/ftSk_SpecialLw.h"
-#include "ftSeak/ftSk_SpecialN.h"
-#include "ftSeak/ftSk_SpecialS.h"
-#include "ftYoshi/ftyoshi.h"
-#include "ftYoshi/ftYs_Guard.h"
-#include "ftYoshi/ftYs_SpecialHi.h"
-#include "ftYoshi/ftYs_SpecialN.h"
-#include "ftYoshi/ftYs_SpecialS.h"
-#include "ftZakoBoy/ftBo_Init.h"
-#include "ftZakoGirl/ftGl_Init.h"
-#include "ftZelda/ftZd_Init.h"
-#include "ftZelda/ftZd_SpecialHi.h"
-#include "ftZelda/ftZd_SpecialLw.h"
-#include "ftZelda/ftZd_SpecialN.h"
-#include "ftZelda/ftZd_SpecialS.h"
-#include "lb/lbarchive.h"
-#include "lb/lbarq.h"
-#include "lb/lbdvd.h"
-#include "lb/lbfile.h"
-#include "pl/player.h"
-
-#include <baselib/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <string.h>
-#include <baselib/debug.h>
-#include <baselib/objalloc.h>
 
-/* 3C0EC0 */ struct UnkCostumeList CostumeListsForeachCharacter[FTKIND_MAX] = {
-    { &lbl_804599F0, 5 },       // Mario
-    { &ft_80459B28, 4 },        // Fox
-    { &ft_80459A98, 6 },        // Captain
-    { &ft_80459CA0, 5 },        // Donkey
-    { &ft_80459C10, 6 },        // Kirby
-    { &ft_8045A090, 4 },        // Koopa
-    { &ftLk_Init_803C82EC, 5 }, // Link
-    { &ft_80459D18, 5 },        // Seak
-    { &ft_80459D90, 4 },        // Ness
-    { &ft_80459DF0, 5 },        // Peach
-    { &ft_80459E68, 4 },        // Popo
-    { &ft_80459EC8, 4 },        // Nana
-    { &ft_80459F28, 4 },        // Pikachu
-    { &ft_80459F88, 5 },        // Samus
-    { &ft_8045A000, 6 },        // Yoshi
-    { &ft_8045A1F8, 5 },        // Purin
-    { &ft_8045A2D0, 4 },        // Mewtwo
-    { &ft_8045A270, 4 },        // Luigi
-    { &ft_8045A0F0, 5 },        // Mars
-    { &ft_8045A168, 5 },        // Zelda
-    { &ft_8045A330, 5 },        // CLink
-    { &ft_8045A3A8, 5 },        // DrMario
-    { &ft_8045A420, 4 },        // Falco
-    { &ft_8045A480, 4 },        // Pichu
-    { &ft_8045A4E0, 4 },        // GameWatch
-    { &ft_8045A540, 5 },        // Ganon
-    { &ft_8045A5B8, 5 },        // Emblem
-    { &ft_8045A690, 1 },        // MasterH
-    { &ft_8045A6A8, 1 },        // CrezyH
-    { &ft_8045A630, 1 },        // Boy
-    { &ft_8045A648, 1 },        // Girl
-    { &ft_8045A660, 1 },        // GKoops
-    { &ft_8045A678, 1 }         // Sandbag
-};
+#include "fighter.h"
+#include "forward.h"
+#include "ft_0877.h"
+#include "inlines.h"
+#include "kinds/ftCaptain/ftcaptain.h"
+#include "kinds/ftCaptain/ftcaptainspecialhi.h"
+#include "kinds/ftCaptain/ftcaptainspeciallw.h"
+#include "kinds/ftCaptain/ftcaptainspecialn.h"
+#include "kinds/ftCaptain/ftcaptainspecials.h"
+#include "kinds/ftCLink/ftclink.h"
+#include "kinds/ftCrazyHand/ftcrazyhand.h"
+#include "kinds/ftDonkey/ftdonkey.h"
+#include "kinds/ftDonkey/ftdonkeyspecialhi.h"
+#include "kinds/ftDonkey/ftdonkeyspeciallw.h"
+#include "kinds/ftDonkey/ftdonkeyspecialn.h"
+#include "kinds/ftDonkey/ftdonkeyspecials.h"
+#include "kinds/ftDrMario/ftdrmario.h"
+#include "kinds/ftEmblem/ftemblem.h"
+#include "kinds/ftFalco/ftfalco.h"
+#include "kinds/ftFox/ftfox.h"
+#include "kinds/ftFox/ftfoxspecialhi.h"
+#include "kinds/ftFox/ftfoxspeciallw.h"
+#include "kinds/ftFox/ftfoxspecialn.h"
+#include "kinds/ftFox/ftfoxspecials.h"
+#include "kinds/ftGameWatch/ftgamewatch.h"
+#include "kinds/ftGameWatch/ftgamewatchspecialhi.h"
+#include "kinds/ftGameWatch/ftgamewatchspeciallw.h"
+#include "kinds/ftGameWatch/ftgamewatchspecialn.h"
+#include "kinds/ftGameWatch/ftgamewatchspecials.h"
+#include "kinds/ftGanon/ftganon.h"
+#include "kinds/ftGigaKoopa/ftgkoopa.h"
+#include "kinds/ftKirby/ftkirby.h"
+#include "kinds/ftKirby/ftkirbyspecialhi.h"
+#include "kinds/ftKoopa/ftkoopa.h"
+#include "kinds/ftKoopa/ftkoopaspecialhi.h"
+#include "kinds/ftKoopa/ftkoopaspeciallw.h"
+#include "kinds/ftKoopa/ftkoopaspecialn.h"
+#include "kinds/ftKoopa/ftkoopaspecials.h"
+#include "kinds/ftLink/ftlink.h"
+#include "kinds/ftLink/ftlinkspecialhi.h"
+#include "kinds/ftLink/ftlinkspeciallw.h"
+#include "kinds/ftLink/ftlinkspecialn.h"
+#include "kinds/ftLink/ftlinkspecials.h"
+#include "kinds/ftLuigi/ftluigi.h"
+#include "kinds/ftLuigi/ftluigispecialhi.h"
+#include "kinds/ftLuigi/ftluigispeciallw.h"
+#include "kinds/ftLuigi/ftluigispecialn.h"
+#include "kinds/ftLuigi/ftluigispecials.h"
+#include "kinds/ftMario/ftmario.h"
+#include "kinds/ftMario/ftmariospecialhi.h"
+#include "kinds/ftMario/ftmariospeciallw.h"
+#include "kinds/ftMario/ftmariospecialn.h"
+#include "kinds/ftMario/ftmariospecials.h"
+#include "kinds/ftMario/ftmariostrings.h"
+#include "kinds/ftMars/ftmars.h"
+#include "kinds/ftMars/ftmarsspecialhi.h"
+#include "kinds/ftMars/ftmarsspeciallw.h"
+#include "kinds/ftMars/ftmarsspecialn.h"
+#include "kinds/ftMars/ftmarsspecials.h"
+#include "kinds/ftMasterHand/ftmasterhand.h"
+#include "kinds/ftMewtwo/ftmewtwo.h"
+#include "kinds/ftMewtwo/ftmewtwospecialhi.h"
+#include "kinds/ftMewtwo/ftmewtwospeciallw.h"
+#include "kinds/ftMewtwo/ftmewtwospecialn.h"
+#include "kinds/ftMewtwo/ftmewtwospecials.h"
+#include "kinds/ftNana/ftnana.h"
+#include "kinds/ftNess/ftness.h"
+#include "kinds/ftNess/ftnessspecialhi.h"
+#include "kinds/ftNess/ftnessspeciallw.h"
+#include "kinds/ftNess/ftnessspecialn.h"
+#include "kinds/ftNess/ftnessspecials.h"
+#include "kinds/ftPeach/ftpeach.h"
+#include "kinds/ftPeach/ftpeachspecialhi.h"
+#include "kinds/ftPeach/ftpeachspeciallw.h"
+#include "kinds/ftPeach/ftpeachspecialn.h"
+#include "kinds/ftPeach/ftpeachspecials.h"
+#include "kinds/ftPichu/ftpichu.h"
+#include "kinds/ftPikachu/ftpikachu.h"
+#include "kinds/ftPikachu/ftpikachuspecialhi.h"
+#include "kinds/ftPikachu/ftpikachuspeciallw.h"
+#include "kinds/ftPikachu/ftpikachuspecialn.h"
+#include "kinds/ftPikachu/ftpikachuspecials.h"
+#include "kinds/ftPopo/ftpopo.h"
+#include "kinds/ftPopo/ftpopospecialhi.h"
+#include "kinds/ftPopo/ftpopospeciallw.h"
+#include "kinds/ftPopo/ftpopospecialn.h"
+#include "kinds/ftPopo/ftpopospecials.h"
+#include "kinds/ftPurin/ftpurin.h"
+#include "kinds/ftPurin/ftpurinspecialhi.h"
+#include "kinds/ftPurin/ftpurinspeciallw.h"
+#include "kinds/ftPurin/ftpurinspecialn.h"
+#include "kinds/ftPurin/ftpurinspecials.h"
+#include "kinds/ftSamus/ftsamus.h"
+#include "kinds/ftSamus/ftsamusspecialhi.h"
+#include "kinds/ftSamus/ftsamusspeciallw1.h"
+#include "kinds/ftSamus/ftsamusspecialn.h"
+#include "kinds/ftSamus/ftsamusspecials.h"
+#include "kinds/ftSandbag/ftsandbag.h"
+#include "kinds/ftSeak/ftseak.h"
+#include "kinds/ftSeak/ftseakspecialhi.h"
+#include "kinds/ftSeak/ftseakspeciallw.h"
+#include "kinds/ftSeak/ftseakspecialn.h"
+#include "kinds/ftSeak/ftseakspecials.h"
+#include "kinds/ftYoshi/ftyoshi.h"
+#include "kinds/ftYoshi/ftyoshiguard.h"
+#include "kinds/ftYoshi/ftyoshispecialhi.h"
+#include "kinds/ftYoshi/ftyoshispecialn.h"
+#include "kinds/ftYoshi/ftyoshispecials.h"
+#include "kinds/ftZakoBoy/ftboy.h"
+#include "kinds/ftZakoGirl/ftgirl.h"
+#include "kinds/ftZelda/ftzelda.h"
+#include "kinds/ftZelda/ftzeldaspecialhi.h"
+#include "kinds/ftZelda/ftzeldaspeciallw.h"
+#include "kinds/ftZelda/ftzeldaspecialn.h"
+#include "kinds/ftZelda/ftzeldaspecials.h"
+#include "types.h"
+#include <melee/ef/efasync.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbarq.h>
+#include <melee/lb/lbdvd.h>
+#include <melee/lb/lbfile.h>
+#include <melee/pl/player.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/objalloc.h>
 
-ftData_UnkCountStruct ftData_Table_Unk0[FTKIND_MAX] = {
+typedef struct ft_8045993C_t {
+    /* +0 */ u32 pad_x0;
+    /* +4 */ u8 pad_x4[0x2];
+    /* +6:0 */ u16 x6_b0 : 1;
+    /* +6:1-2 */ u16 x6_b1_b2 : 2;
+} ft_8045993C_t;
+
+/* 4598B8 */ ftData* gFtDataList[Ft_Kind_Max];
+/* 45993C */ ft_8045993C_t ft_8045993C[6];
+/* 45996C */ int ft_8045996C[Ft_Kind_Max];
+
+/// @todo All one struct maybe?
+#ifdef MUST_MATCH
+static void order_bss(void)
+{
+    (void) gFtDataList;
+    (void) ft_8045993C;
+    (void) ft_8045996C;
+}
+#endif
+
+void ft_8008521C(HSD_GObj* gobj)
+{
+    Fighter* fp = GET_FIGHTER(gobj);
+    HSD_JObj* jobj = GET_JOBJ(gobj);
+    Vec3 pos;
+
+    HSD_JObjGetTranslation(jobj, &pos);
+    fp->self_vel.x = pos.x - fp->cur_pos.x;
+    fp->self_vel.y = pos.y - fp->cur_pos.y;
+    fp->self_vel.z = pos.z - fp->cur_pos.z;
+}
+
+static inline void ft_800852B0_Reset_ft_8045993C(ftData** list, int i)
+{
+#if BUILD_TARGET_PC
+    /* `&list[Ft_Kind_Max]` walks one past gFtDataList into whatever the host
+     * linker put next; on the console that neighbour is ft_8045993C, which
+     * has a name here. Nothing keeps two statics adjacent on the host. */
+    (void) list;
+    ft_8045993C[i].pad_x0 = 0;
+    ft_8045993C[i].x6_b0 = 0;
+    ft_8045993C[i].x6_b1_b2 = 0;
+#else
+    /// @todo Bitfields seem off
+    ((ft_8045993C_t*) &list[Ft_Kind_Max])[i].pad_x0 = 0;
+    ((ft_8045993C_t*) &list[Ft_Kind_Max])[i].x6_b0 = 0;
+    ((ft_8045993C_t*) &list[Ft_Kind_Max])[i].x6_b1_b2 = 0;
+#endif
+}
+
+void ft_800852B0(void)
+{
+    ftData** list;
+#if BUILD_TARGET_PC
+    /* PC port: the GCN code reaches the two adjacent DOL tables via pointer
+     * math past CostumeListsForeachCharacter (fixed GCN addresses). On PC
+     * they are separate symbols -- use them directly. Also, several
+     * per-character costume_list arrays are still weak .text stubs (not
+     * data); writing through those faults. Skip pointers below etext. */
+    extern char etext;
+    int i;
+    int new_var = 0;
+
+    list = gFtDataList;
+    for (i = 0; i < Ft_Kind_Max; ++i) {
+        int costume_idx;
+        UnkCostumeStruct* costumes =
+            CostumeListsForeachCharacter[i].costume_list;
+        gFtDataList[i] = NULL;
+        if (costumes != NULL && (uintptr_t) costumes > (uintptr_t) &etext) {
+            for (costume_idx = new_var;
+                 costume_idx <
+                 (s32) CostumeListsForeachCharacter[i].numCostumes;
+                 ++costume_idx)
+            {
+                costumes[costume_idx].joint = NULL;
+                costumes[costume_idx].pad_x8 = NULL;
+            }
+        }
+        ftData_Table_Unk0[i].data = NULL;
+        ftData_UnkIntPairs[i].data = NULL;
+    }
+#else
+    ftData_UnkCountStruct* unk0 =
+        (ftData_UnkCountStruct*) &CostumeListsForeachCharacter[Ft_Kind_Max];
+    ftData_UnkCountStruct* pairs =
+        (ftData_UnkCountStruct*) ((u8*) CostumeListsForeachCharacter + 5940);
+    int i;
+    int new_var = 0;
+
+    for (i = 0; i < Ft_Kind_Max; ++i) {
+        int costume_idx = new_var;
+        list = gFtDataList;
+        list[i] = NULL;
+        for (costume_idx = new_var;
+             costume_idx < (s32) CostumeListsForeachCharacter[i].numCostumes;
+             ++costume_idx)
+        {
+            CostumeListsForeachCharacter[i].costume_list[costume_idx].joint =
+                NULL;
+            CostumeListsForeachCharacter[i].costume_list[costume_idx].pad_x8 =
+                0;
+        }
+        unk0[i].data = NULL;
+        pairs[i].data = NULL;
+    }
+#endif
+    ft_800852B0_Reset_ft_8045993C(list, new_var);
+    ft_800852B0_Reset_ft_8045993C(list, 1);
+    ft_800852B0_Reset_ft_8045993C(list, 2);
+    ft_800852B0_Reset_ft_8045993C(list, 3);
+    ft_800852B0_Reset_ft_8045993C(list, 4);
+    ft_800852B0_Reset_ft_8045993C(list, 5);
+}
+
+void ft_8008549C(void)
+{
+    int i;
+    for (i = 0; i < Ft_Kind_Max; i++) {
+        ft_8045996C[i] = 0;
+    }
+}
+
+/* 3C0EC0 */ struct UnkCostumeList
+    CostumeListsForeachCharacter[Ft_Kind_Max] = {
+        { ftMr_CostumeList, ARRAY_SIZE(ftMr_CostumeList) },
+        { ftFx_CostumeList, ARRAY_SIZE(ftFx_CostumeList) },
+        { ftCa_CostumeList, ARRAY_SIZE(ftCa_CostumeList) },
+        { ftDk_CostumeList, ARRAY_SIZE(ftDk_CostumeList) },
+        { ftKb_CostumeList, ARRAY_SIZE(ftKb_CostumeList) },
+        { ftKp_CostumeList, ARRAY_SIZE(ftKp_CostumeList) },
+        { ftLk_CostumeList, ARRAY_SIZE(ftLk_CostumeList) },
+        { ftSk_CostumeList, ARRAY_SIZE(ftSk_CostumeList) },
+        { ftNs_CostumeList, ARRAY_SIZE(ftNs_CostumeList) },
+        { ftPe_CostumeList, ARRAY_SIZE(ftPe_CostumeList) },
+        { ftPp_CostumeList, ARRAY_SIZE(ftPp_CostumeList) },
+        { ftNn_CostumeList, FTNANA_COSTUME_COUNT },
+        { ftPk_CostumeList, ARRAY_SIZE(ftPk_CostumeList) },
+        { ftSs_CostumeList, ARRAY_SIZE(ftSs_CostumeList) },
+        { ftYs_CostumeList, ARRAY_SIZE(ftYs_CostumeList) },
+        { ftPr_CostumeList, ARRAY_SIZE(ftPr_CostumeList) },
+        { ftMt_CostumeList, ARRAY_SIZE(ftMt_CostumeList) },
+        { ftLg_CostumeList, ARRAY_SIZE(ftLg_CostumeList) },
+        { ftMs_CostumeList, ARRAY_SIZE(ftMs_CostumeList) },
+        { ftZd_CostumeList, ARRAY_SIZE(ftZd_CostumeList) },
+        { ftCl_CostumeList, ARRAY_SIZE(ftCl_CostumeList) },
+        { ftDr_CostumeList, ARRAY_SIZE(ftDr_CostumeList) },
+        { ftFc_CostumeList, ARRAY_SIZE(ftFc_CostumeList) },
+        { ftPc_CostumeList, ARRAY_SIZE(ftPc_CostumeList) },
+        { ftGw_CostumeList, ARRAY_SIZE(ftGw_CostumeList) },
+        { ftGn_CostumeList, ARRAY_SIZE(ftGn_CostumeList) },
+        { ftFe_CostumeList, ARRAY_SIZE(ftFe_CostumeList) },
+        { ftMh_CostumeList, ARRAY_SIZE(ftMh_CostumeList) },
+        { ftCh_CostumeList, ARRAY_SIZE(ftCh_CostumeList) },
+        { ftBo_CostumeList, ARRAY_SIZE(ftBo_CostumeList) },
+        { ftGl_CostumeList, ARRAY_SIZE(ftGl_CostumeList) },
+        { ftGk_CostumeList, ARRAY_SIZE(ftGk_CostumeList) },
+        { ftSb_CostumeList, ARRAY_SIZE(ftSb_CostumeList) }
+    };
+
+ftData_UnkCountStruct ftData_Table_Unk0[Ft_Kind_Max] = {
     { 0, 303 }, { 0, 327 }, { 0, 318 }, { 0, 337 }, { 0, 479 }, { 0, 316 },
     { 0, 314 }, { 0, 317 }, { 0, 326 }, { 0, 318 }, { 0, 321 }, { 0, 321 },
     { 0, 320 }, { 0, 313 }, { 0, 314 }, { 0, 327 }, { 0, 314 }, { 0, 312 },
@@ -189,7 +311,7 @@ ftData_UnkCountStruct ftData_Table_Unk0[FTKIND_MAX] = {
     { 0, 295 }, { 0, 316 }, { 0, 296 },
 };
 
-Event ftData_Table_Unk1[FTKIND_MAX] = {
+Event ftData_Table_Unk1[Ft_Kind_Max] = {
     NULL,
     NULL,
     NULL,
@@ -225,7 +347,7 @@ Event ftData_Table_Unk1[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_OnLoad[FTKIND_MAX] = {
+HSD_GObjEvent ftData_OnLoad[Ft_Kind_Max] = {
     ftMr_Init_OnLoad, ftFx_Init_OnLoad, ftCa_Init_OnLoad, ftDk_Init_OnLoad,
     ftKb_Init_OnLoad, ftKp_Init_OnLoad, ftLk_Init_OnLoad, ftSk_Init_OnLoad,
     ftNs_Init_OnLoad, ftPe_Init_OnLoad, ftPp_Init_OnLoad, ftNn_Init_OnLoad,
@@ -237,7 +359,7 @@ HSD_GObjEvent ftData_OnLoad[FTKIND_MAX] = {
     ftSb_Init_OnLoad,
 };
 
-HSD_GObjEvent ftData_OnDeath[FTKIND_MAX] = {
+HSD_GObjEvent ftData_OnDeath[Ft_Kind_Max] = {
     ftMr_Init_OnDeath, ftFx_Init_OnDeath, ftCa_Init_OnDeath, ftDk_Init_OnDeath,
     ftKb_Init_OnDeath, ftKp_Init_OnDeath, ftLk_Init_OnDeath, ftSk_Init_OnDeath,
     ftNs_Init_OnDeath, ftPe_Init_OnDeath, ftPp_Init_OnDeath, ftNn_Init_OnDeath,
@@ -249,7 +371,7 @@ HSD_GObjEvent ftData_OnDeath[FTKIND_MAX] = {
     ftSb_Init_OnDeath,
 };
 
-HSD_GObjEvent ftData_OnUserDataRemove[FTKIND_MAX] = {
+HSD_GObjEvent ftData_OnUserDataRemove[Ft_Kind_Max] = {
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, ftPr_Init_OnUserDataRemove,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -257,7 +379,7 @@ HSD_GObjEvent ftData_OnUserDataRemove[FTKIND_MAX] = {
     NULL,
 };
 
-MotionState* ftData_CharacterStateTables[FTKIND_MAX] = {
+MotionState* ftData_CharacterStateTables[Ft_Kind_Max] = {
     ftMr_Init_MotionStateTable,
     ftFx_Init_MotionStateTable,
     ftCa_Init_MotionStateTable,
@@ -293,7 +415,7 @@ MotionState* ftData_CharacterStateTables[FTKIND_MAX] = {
     ftSb_Init_MotionStateTable,
 };
 
-MotionState* ftData_UnkMotionStates0[FTKIND_MAX] = {
+MotionState* ftData_UnkMotionStates0[Ft_Kind_Max] = {
     ftMr_Init_UnkMotionStates0,
     NULL,
     NULL,
@@ -329,7 +451,7 @@ MotionState* ftData_UnkMotionStates0[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_SpecialS[FTKIND_MAX] = {
+HSD_GObjEvent ftData_SpecialS[Ft_Kind_Max] = {
     ftMr_SpecialS_Enter,
     ftFx_SpecialSStart_Enter,
     ftCa_SpecialS_Enter,
@@ -365,7 +487,7 @@ HSD_GObjEvent ftData_SpecialS[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_SpecialAirHi[FTKIND_MAX] = {
+HSD_GObjEvent ftData_SpecialAirHi[Ft_Kind_Max] = {
     ftMr_SpecialAirHi_Enter,
     ftFx_SpecialAirHiStart_Enter,
     ftCa_SpecialAirHi_Enter,
@@ -401,7 +523,7 @@ HSD_GObjEvent ftData_SpecialAirHi[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_SpecialAirLw[FTKIND_MAX] = {
+HSD_GObjEvent ftData_SpecialAirLw[Ft_Kind_Max] = {
     ftMr_SpecialAirLw_Enter,
     ftFx_SpecialAirLw_Enter,
     ftCa_SpecialAirLw_Enter,
@@ -437,7 +559,7 @@ HSD_GObjEvent ftData_SpecialAirLw[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_SpecialAirS[FTKIND_MAX] = {
+HSD_GObjEvent ftData_SpecialAirS[Ft_Kind_Max] = {
     ftMr_SpecialAirS_Enter,
     ftFx_SpecialAirSStart_Enter,
     ftCa_SpecialAirS_Enter,
@@ -473,7 +595,7 @@ HSD_GObjEvent ftData_SpecialAirS[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_SpecialAirN[FTKIND_MAX] = {
+HSD_GObjEvent ftData_SpecialAirN[Ft_Kind_Max] = {
     ftMr_SpecialAirN_Enter,
     ftFx_SpecialAirN_Enter,
     ftCa_SpecialAirN_Enter,
@@ -509,7 +631,7 @@ HSD_GObjEvent ftData_SpecialAirN[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_SpecialN[FTKIND_MAX] = {
+HSD_GObjEvent ftData_SpecialN[Ft_Kind_Max] = {
     ftMr_SpecialN_Enter,
     ftFx_SpecialN_Enter,
     ftCa_SpecialN_Enter,
@@ -545,7 +667,7 @@ HSD_GObjEvent ftData_SpecialN[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_SpecialLw[FTKIND_MAX] = {
+HSD_GObjEvent ftData_SpecialLw[Ft_Kind_Max] = {
     ftMr_SpecialLw_Enter,
     ftFx_SpecialLw_Enter,
     ftCa_SpecialLw_Enter,
@@ -581,7 +703,7 @@ HSD_GObjEvent ftData_SpecialLw[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_SpecialHi[FTKIND_MAX] = {
+HSD_GObjEvent ftData_SpecialHi[Ft_Kind_Max] = {
     ftMr_SpecialHi_Enter,
     ftFx_SpecialHi_Enter,
     ftCa_SpecialHi_Enter,
@@ -617,7 +739,7 @@ HSD_GObjEvent ftData_SpecialHi[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_OnAbsorb[FTKIND_MAX] = {
+HSD_GObjEvent ftData_OnAbsorb[Ft_Kind_Max] = {
     NULL,
     NULL,
     NULL,
@@ -653,7 +775,7 @@ HSD_GObjEvent ftData_OnAbsorb[FTKIND_MAX] = {
     NULL,
 };
 
-Fighter_ItemEvent ftData_OnItemPickupExt[FTKIND_MAX] = {
+Fighter_ItemEvent ftData_OnItemPickupExt[Ft_Kind_Max] = {
     ftMr_Init_OnItemPickup,
     ftFx_Init_OnItemPickup,
     ftCa_Init_OnItemPickup,
@@ -689,7 +811,7 @@ Fighter_ItemEvent ftData_OnItemPickupExt[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_OnItemInvisible[FTKIND_MAX] = {
+HSD_GObjEvent ftData_OnItemInvisible[Ft_Kind_Max] = {
     ftMr_Init_OnItemInvisible,
     ftFx_Init_OnItemInvisible,
     ftCa_Init_OnItemInvisible,
@@ -725,7 +847,7 @@ HSD_GObjEvent ftData_OnItemInvisible[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_OnItemVisible[FTKIND_MAX] = {
+HSD_GObjEvent ftData_OnItemVisible[Ft_Kind_Max] = {
     ftMr_Init_OnItemVisible,
     ftFx_Init_OnItemVisible,
     ftCa_Init_OnItemVisible,
@@ -761,7 +883,7 @@ HSD_GObjEvent ftData_OnItemVisible[FTKIND_MAX] = {
     NULL,
 };
 
-Fighter_ItemEvent ftData_OnItemDropExt[FTKIND_MAX] = {
+Fighter_ItemEvent ftData_OnItemDropExt[Ft_Kind_Max] = {
     ftMr_Init_OnItemDrop,
     ftFx_Init_OnItemDrop,
     ftCa_Init_OnItemDrop,
@@ -797,7 +919,7 @@ Fighter_ItemEvent ftData_OnItemDropExt[FTKIND_MAX] = {
     NULL,
 };
 
-Fighter_ItemEvent ftData_OnItemPickup[FTKIND_MAX] = {
+Fighter_ItemEvent ftData_OnItemPickup[Ft_Kind_Max] = {
     ftMr_Init_OnItemPickup,
     ftFx_Init_OnItemPickup,
     ftCa_Init_OnItemPickup,
@@ -833,7 +955,7 @@ Fighter_ItemEvent ftData_OnItemPickup[FTKIND_MAX] = {
     NULL,
 };
 
-Fighter_ItemEvent ftData_OnItemDrop[FTKIND_MAX] = {
+Fighter_ItemEvent ftData_OnItemDrop[Ft_Kind_Max] = {
     ftMr_Init_OnItemDrop,
     ftFx_Init_OnItemDrop,
     ftCa_Init_OnItemDrop,
@@ -869,7 +991,7 @@ Fighter_ItemEvent ftData_OnItemDrop[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_UnkMotionStates1[FTKIND_MAX] = {
+HSD_GObjEvent ftData_UnkMotionStates1[Ft_Kind_Max] = {
     NULL,
     NULL,
     NULL,
@@ -905,7 +1027,7 @@ HSD_GObjEvent ftData_UnkMotionStates1[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_UnkMotionStates2[FTKIND_MAX] = {
+HSD_GObjEvent ftData_UnkMotionStates2[Ft_Kind_Max] = {
     NULL,
     NULL,
     NULL,
@@ -941,7 +1063,7 @@ HSD_GObjEvent ftData_UnkMotionStates2[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_OnKnockbackEnter[FTKIND_MAX] = {
+HSD_GObjEvent ftData_OnKnockbackEnter[Ft_Kind_Max] = {
     ftMr_Init_OnKnockbackEnter,
     ftFx_Init_OnKnockbackEnter,
     NULL,
@@ -977,7 +1099,7 @@ HSD_GObjEvent ftData_OnKnockbackEnter[FTKIND_MAX] = {
     ftSb_Init_OnKnockbackEnter,
 };
 
-HSD_GObjEvent ftData_OnKnockbackExit[FTKIND_MAX] = {
+HSD_GObjEvent ftData_OnKnockbackExit[Ft_Kind_Max] = {
     ftMr_Init_OnKnockbackExit,
     ftFx_Init_OnKnockbackExit,
     NULL,
@@ -1013,7 +1135,7 @@ HSD_GObjEvent ftData_OnKnockbackExit[FTKIND_MAX] = {
     ftSb_Init_OnKnockbackExit,
 };
 
-HSD_GObjEvent ftData_UnkMotionStates3[FTKIND_MAX] = {
+HSD_GObjEvent ftData_UnkMotionStates3[Ft_Kind_Max] = {
     NULL,
     NULL,
     NULL,
@@ -1049,7 +1171,7 @@ HSD_GObjEvent ftData_UnkMotionStates3[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftData_UnkMotionStates4[FTKIND_MAX] = {
+HSD_GObjEvent ftData_UnkMotionStates4[Ft_Kind_Max] = {
     NULL,
     NULL,
     NULL,
@@ -1085,7 +1207,7 @@ HSD_GObjEvent ftData_UnkMotionStates4[FTKIND_MAX] = {
     NULL,
 };
 
-HSD_GObjEvent ftKindCalcIndiviParamTable[FTKIND_MAX] = {
+HSD_GObjEvent ftKindCalcIndiviParamTable[Ft_Kind_Max] = {
     ftMr_Init_LoadSpecialAttrs, ftFx_Init_LoadSpecialAttrs,
     ftCa_Init_LoadSpecialAttrs, ftDk_Init_LoadSpecialAttrs,
     ftKb_Init_LoadSpecialAttrs, ftKp_Init_LoadSpecialAttrs,
@@ -1111,7 +1233,7 @@ struct StringPair {
     char* b;
 };
 
-struct StringPair ftData_803C1F40[FTKIND_MAX] = {
+struct StringPair ftData_803C1F40[Ft_Kind_Max] = {
     { ftMr_Init_DatFilename, ftMr_Init_DataName },
     { ftFx_Init_DatFilename, ftFx_Init_DataName },
     { ftCa_Init_DatFilename, ftCa_Init_DataName },
@@ -1147,7 +1269,7 @@ struct StringPair ftData_803C1F40[FTKIND_MAX] = {
     { ftSb_Init_DatFilename, ftSb_Init_DataName },
 };
 
-Event ftData_UnkMotionStates5[FTKIND_MAX] = {
+Event ftData_UnkMotionStates5[Ft_Kind_Max] = {
     NULL, NULL, NULL, NULL, ftKb_Init_UnkMotionStates5,
     NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL, NULL,
@@ -1157,7 +1279,7 @@ Event ftData_UnkMotionStates5[FTKIND_MAX] = {
     NULL, NULL, NULL,
 };
 
-Fighter_UnkMtxEvent ftData_UnkMtxFunc0[FTKIND_MAX] = {
+Fighter_UnkMtxEvent ftData_UnkMtxFunc0[Ft_Kind_Max] = {
     NULL,
     NULL,
     NULL,
@@ -1271,7 +1393,7 @@ ftData_UnkModelStruct ftData_UnkIntBoolFunc0 = {
 struct {
     HSD_GObjEvent x0;
     void (*x4)(Fighter_GObj*, int, float frame);
-} ftData_UnkCallbackPairs0[FTKIND_MAX] = {
+} ftData_UnkCallbackPairs0[Ft_Kind_Max] = {
     { NULL, NULL },
     { NULL, NULL },
     { NULL, NULL },
@@ -1280,7 +1402,7 @@ struct {
 };
 
 /// Costume and Joint Strings
-Fighter_CostumeStrings* ftData_803C2360[FTKIND_MAX] = {
+Fighter_CostumeStrings* ftData_803C2360[Ft_Kind_Max] = {
     ftMr_Init_CostumeStrings, ftFx_Init_CostumeStrings,
     ftCa_Init_CostumeStrings, ftDk_Init_CostumeStrings,
     ftKb_Init_CostumeStrings, ftKp_Init_CostumeStrings,
@@ -1301,7 +1423,7 @@ Fighter_CostumeStrings* ftData_803C2360[FTKIND_MAX] = {
 
 };
 
-char* ftData_803C23E4[FTKIND_MAX] = {
+char* ftData_803C23E4[Ft_Kind_Max] = {
     ftMr_Init_AnimDatFilename, ftFx_Init_AnimDatFilename,
     ftCa_Init_AnimDatFilename, ftDk_Init_AnimDatFilename,
     ftKb_Init_AnimDatFilename, ftKp_Init_AnimDatFilename,
@@ -1322,7 +1444,7 @@ char* ftData_803C23E4[FTKIND_MAX] = {
 };
 
 /// Demo Lookup Strings
-Fighter_DemoStrings* ftData_803C2468[FTKIND_MAX] = {
+Fighter_DemoStrings* ftData_803C2468[Ft_Kind_Max] = {
     &ftMr_Init_DemoMotionFilenames,
     &ftFx_Init_DemoMotionFilenames,
     &ftCa_Init_DemoMotionFilenames,
@@ -1358,7 +1480,7 @@ Fighter_DemoStrings* ftData_803C2468[FTKIND_MAX] = {
     NULL,
 };
 
-Fighter_MotionFileStringGetter ftData_803C24EC[FTKIND_MAX] = {
+Fighter_MotionFileStringGetter ftData_803C24EC[Ft_Kind_Max] = {
     ftMr_Init_GetMotionFileString,
     NULL,
     NULL,
@@ -1394,7 +1516,7 @@ Fighter_MotionFileStringGetter ftData_803C24EC[FTKIND_MAX] = {
     NULL,
 };
 
-Fighter_UnkPtrEvent ftData_UnkDemoCallbacks0[FTKIND_MAX] = {
+Fighter_UnkPtrEvent ftData_UnkDemoCallbacks0[Ft_Kind_Max] = {
     ftMr_Init_UnkDemoCallbacks0,
     NULL,
     NULL,
@@ -1430,7 +1552,7 @@ Fighter_UnkPtrEvent ftData_UnkDemoCallbacks0[FTKIND_MAX] = {
     NULL,
 };
 
-ftData_UnkCountStruct ftData_UnkIntPairs[FTKIND_MAX] = {
+ftData_UnkCountStruct ftData_UnkIntPairs[Ft_Kind_Max] = {
     { 0, 16 }, { 0, 14 }, { 0, 14 }, { 0, 14 }, { 0, 18 }, { 0, 14 },
     { 0, 14 }, { 0, 14 }, { 0, 14 }, { 0, 14 }, { 0, 14 }, { 0, 14 },
     { 0, 14 }, { 0, 14 }, { 0, 14 }, { 0, 14 }, { 0, 14 }, { 0, 16 },
@@ -1439,7 +1561,7 @@ ftData_UnkCountStruct ftData_UnkIntPairs[FTKIND_MAX] = {
     { 0, 14 }, { 0, 15 }, { 0, 14 },
 };
 
-u8 ftData_UnkBytePerCharacter[FTKIND_MAX] = {
+u8 ftData_UnkBytePerCharacter[Ft_Kind_Max] = {
     1,  3,  4,  8, 5, 12, 6, 17, 10, 15, 14, 14, 7,  2,  9,  11, 13,
     18, 16, 17, 6, 1, 3,  7, -1, 19, 49, -1, -1, -1, -1, 12, -1,
 };
@@ -1551,12 +1673,12 @@ void ftData_8008572C(FighterKind kind)
 void ftData_8008578C(int arg0, u8 color)
 {
     if (color != 0xFF &&
-        color >= CostumeListsForeachCharacter[FTKIND_KIRBY].numCostumes)
+        color >= CostumeListsForeachCharacter[Ft_Kind_Kirby].numCostumes)
     {
         color = 0;
     }
     ftKb_SpecialN_800EEC34(
-        arg0, color, CostumeListsForeachCharacter[FTKIND_KIRBY].numCostumes);
+        arg0, color, CostumeListsForeachCharacter[Ft_Kind_Kirby].numCostumes);
 }
 
 void ftData_800857E0(FighterKind kind)
@@ -1705,7 +1827,9 @@ void ftData_800859A8(Fighter* fp)
     if (temp_r6 == -1) {
         return;
     }
-    for (gobj = HSD_GObj_Entities->fighters; gobj != NULL; gobj = gobj->next) {
+    for (gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER]; gobj != NULL;
+         gobj = gobj->next)
+    {
         Fighter* cur_fp = GET_FIGHTER(gobj);
         if (fp != cur_fp && temp_r6 == cur_fp->x61C) {
             return;
@@ -2071,11 +2195,11 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
 
 struct ftData_80085FD4_ret* ftData_80085FD4(Fighter* fp, int msid)
 {
-    if (fp->kind == FTKIND_NANA &&
+    if (fp->kind == Ft_Kind_Nana &&
         Player_GetPlayerSlotType(fp->player_id) != Gm_PKind_Demo &&
         fp->x24[msid].x14 == 0)
     {
-        return (struct ftData_80085FD4_ret*) &gFtDataList[FTKIND_POPO]
+        return (struct ftData_80085FD4_ret*) &gFtDataList[Ft_Kind_Popo]
             ->xC[msid];
     }
     return (struct ftData_80085FD4_ret*) &fp->x24[msid];
@@ -2083,7 +2207,7 @@ struct ftData_80085FD4_ret* ftData_80085FD4(Fighter* fp, int msid)
 
 Fighter* ftData_80086060(Fighter* fp)
 {
-    if (fp->kind == FTKIND_NANA &&
+    if (fp->kind == Ft_Kind_Nana &&
         Player_GetPlayerSlotType(fp->player_id) != Gm_PKind_Demo)
     {
         Fighter_GObj* gobj = Player_GetEntityAtIndex(fp->player_id, 0);

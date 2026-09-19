@@ -1,21 +1,19 @@
 #include "groldyoshi.h"
 
+#include <Runtime/platform.h>
+
+#include "grlib.h"
+#include "grmaterial.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
 #include "types.h"
-
-#include <platform.h>
-
-#include "baselib/random.h"
-#include "gr/grlib.h"
-#include "gr/grmaterial.h"
-#include "gr/ground.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "mp/mplib.h"
-
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/random.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -30,8 +28,10 @@
                                      mpLib_GroundEnum ground_kind,
                                      float delta_y);
 
+static void stageGObj0_OnInit(Ground_GObj* gobj);
+
 StageCallbacks grOy_StageCallbacks[] = {
-    { grOldYoshi_8020E93C, grOldYoshi_8020E968, grOldYoshi_8020E970,
+    { stageGObj0_OnInit, grOldYoshi_8020E968, grOldYoshi_8020E970,
       grOldYoshi_8020E974, 0 },
     { grOldYoshi_8020E978, grOldYoshi_8020E9E0, grOldYoshi_8020E9E8,
       grOldYoshi_8020E9EC, 0 },
@@ -120,10 +120,9 @@ HSD_GObj* grOldYoshi_8020E854(int gobj_id)
     return gobj;
 }
 
-void grOldYoshi_8020E93C(Ground_GObj* gobj)
+static void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool grOldYoshi_8020E968(Ground_GObj* arg)
@@ -159,7 +158,7 @@ void grOldYoshi_8020E9F0(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
 
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
     gp->x11_flags.b012 = 1;
     gp->x10_flags.b5 = 1;
 }
@@ -171,7 +170,7 @@ bool grOldYoshi_8020EA5C(Ground_GObj* arg)
 
 void grOldYoshi_8020EA64(Ground_GObj* arg0)
 {
-    Ground_801C2FE0(arg0);
+    Ground_UpdateMapColl(arg0);
     lb_800115F4();
 }
 
@@ -181,7 +180,7 @@ void grOldYoshi_8020EA8C(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
 
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
     gp->x11_flags.b012 = 1;
 }
 
@@ -201,7 +200,7 @@ void grOldYoshi_8020EAFC(Ground_GObj* gobj)
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
     int i;
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
     for (i = 0; i < 3; i++) {
         gp->u.oldyoshicloud.cloud[i].xC4_0123 = 0;
@@ -310,7 +309,7 @@ void grOldYoshi_8020EC10(Ground_GObj* arg)
                                   gp->u.oldyoshicloud.cloud[i].xD0);
         gp->u.oldyoshicloud.cloud[i].xC4_4 = 0;
     }
-    Ground_801C2FE0(arg);
+    Ground_UpdateMapColl(arg);
     return;
 }
 

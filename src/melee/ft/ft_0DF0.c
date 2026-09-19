@@ -1,19 +1,17 @@
 #include "ft_0DF0.h"
 
-#include "placeholder.h"
-#include "platform.h"
-#include "stdbool.h"
+#include <Runtime/platform.h>
 
-#include "ft/fighter.h"
+#include <placeholder.h>
+#include <stdbool.h>
 
-#include "ft/forward.h"
-
-#include "ft/ftcolanim.h"
-#include "ft/ftcommon.h"
-#include "ft/inlines.h"
-#include "ft/types.h"
-
-#include <melee/ft/ft_0877.h>
+#include "fighter.h"
+#include "forward.h"
+#include "ft_0877.h"
+#include "ftcolanim.h"
+#include "ftcommon.h"
+#include "inlines.h"
+#include "types.h"
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -114,7 +112,7 @@ void ftCo_800DF0D0(Fighter_GObj* gobj)
 
     switch (fp->smash_attrs.state) {
     case SmashState_PreCharge:
-        if (fp->input.held_inputs & HSD_PAD_A) {
+        if (fp->input.held_buttons[0] & HSD_PAD_A) {
             attr->state = SmashState_Charging;
             attr->x2124_frameSpeedMul = fp->frame_speed_mul;
             attr->x212C = 0;
@@ -130,7 +128,7 @@ void ftCo_800DF0D0(Fighter_GObj* gobj)
         }
         break;
     case SmashState_Charging:
-        if (!(fp->input.held_inputs & HSD_PAD_A)) {
+        if (!(fp->input.held_buttons[0] & HSD_PAD_A)) {
             attr->state = SmashState_Release;
             ftAnim_SetAnimRate(gobj, attr->x2124_frameSpeedMul);
             ftCo_800C0200(fp, attr->x2128);

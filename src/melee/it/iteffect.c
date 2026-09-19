@@ -4,21 +4,18 @@
 #include "port/pc_itconv.h"
 #endif
 
+#include <math.h>
+
+#include "forward.h"
 #include "it_2725.h"
 #include "it_3F14.h"
-
-#include "ef/efasync.h"
-#include "ef/efsync.h"
-
-#include "it/forward.h"
-
-#include "it/types.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbarchive.h"
-#include "lb/lblanguage.h"
-
-#include <math.h>
-#include <baselib/random.h>
+#include "types.h"
+#include <melee/ef/efasync.h>
+#include <melee/ef/efsync.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lblanguage.h>
+#include <sysdolphin/baselib/random.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -120,10 +117,10 @@ void it_80278800(Item_GObj* item_gobj, s32 ef_id, s32 arg2, Vec3* arg3,
             on = getenv("MELEE_EFDBG") != NULL;
         }
         if (on) {
-            extern u32 gm_8016AEDC(void);
+            extern u32 gm_GetFrameCount(void);
             fprintf(stderr,
                     "[EFDBG] gframe=%u kind=%d ef=%03x anim=%d msid=%d\n",
-                    (unsigned) gm_8016AEDC(), (int) item->kind, (unsigned) ef_id,
+                    (unsigned) gm_GetFrameCount(), (int) item->kind, (unsigned) ef_id,
                     (int) item->anim_id, (int) item->msid);
         }
     }

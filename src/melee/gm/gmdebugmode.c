@@ -1,19 +1,16 @@
-#include "dolphin/types.h"
-#include "gm/gm_1A3F.h"
-#include "gm/types.h"
-#include "if/soundtest.h"
+#include <melee/mn/forward.h>
 
-#include "mn/forward.h"
-
-#include "mn/inlines.h"
-
+#include "gm_1A3F.h"
+#include "gm_unsplit.h"
+#include "gmresultplayer.h"
+#include "types.h"
+#include <dolphin/types.h>
+#include <melee/if/soundtest.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/mn/inlines.h>
+#include <melee/mn/types.h>
 #include <sysdolphin/baselib/controller.h>
 #include <sysdolphin/baselib/random.h>
-#include <melee/gm/gm_unsplit.h>
-#include <melee/gm/gmresultplayer.h>
-#include <melee/gm/types.h>
-#include <melee/lb/lbaudio_ax.h>
-#include <melee/mn/types.h>
 
 struct DebugResultsData {
     u8 x0_0 : 1;
@@ -438,7 +435,7 @@ void onEnterResults1(GameModeState* arg0)
                 un_803FA258[0x59] - 1);
 
     for (i = 0; i < 4; i++) {
-        if (match_end->player_standings[i].slot_type != 3 &&
+        if (match_end->player_standings[i].pkind != 3 &&
             match_end->player_standings[i].is_big_loser == 0)
         {
             sfx_result |=

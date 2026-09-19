@@ -1,9 +1,9 @@
 #ifndef GALE01_216E74
 #define GALE01_216E74
 
-#include "gr/forward.h"
-#include "lb/forward.h"
-#include <baselib/forward.h>
+#include <melee/gr/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
 
@@ -13,7 +13,6 @@
 /* 216F3C */ void grFlatzone_UnkStage0_OnStart(void);
 /* 216F40 */ bool grFlatzone_80216F40(void);
 /* 216F48 */ HSD_GObj* grFlatzone_80216F48(s32);
-/* 217030 */ void grFlatzone_80217030(Ground_GObj*);
 /* 21705C */ bool grFlatzone_8021705C(Ground_GObj*);
 /* 217064 */ void grFlatzone_80217064(Ground_GObj*);
 /* 217068 */ void grFlatzone_80217068(Ground_GObj*);

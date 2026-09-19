@@ -9,16 +9,15 @@
 
 #include "lb_020A.h"
 
+#include <math.h>
 #include <placeholder.h>
 
-#include "ft/types.h"
-
-#include <math.h>
+#include "lbvector.h"
 #include <dolphin/mtx.h>
-#include <baselib/jobj.h>
-#include <baselib/mtx.h>
-#include <baselib/quatlib.h>
-#include <melee/lb/lbvector.h>
+#include <melee/ft/types.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/mtx.h>
+#include <sysdolphin/baselib/quatlib.h>
 
 /* The console fuses the plane projections, the axis dot products and the
  * rsqrt Newton steps below (fmadds/fnmadds/fnmsub, one rounding); read off
@@ -55,7 +54,7 @@ void fn_80020AEC(HSD_JObj* jobj, Mtx out)
     volatile f32 scale_mag;
     u8 _[4];
 
-    HSD_MtxInverseConcat(HSD_JObjGetMtxPtr(jobj_parent(jobj)),
+    HSD_MtxInverseConcat(HSD_JObjGetMtxPtr(HSD_JObjGetParent(jobj)),
                          HSD_JObjGetMtxPtr(jobj), out);
 
     for (i = 0; i < 3; i++) {
@@ -104,10 +103,10 @@ void fn_80020AEC(HSD_JObj* jobj, Mtx out)
         out[2][i] = col.z;
     }
 
-    cur = jobj_parent(jobj);
+    cur = HSD_JObjGetParent(jobj);
     while (cur != NULL) {
-        if (jobj_parent(cur) != NULL) {
-            HSD_MtxInverseConcat(HSD_JObjGetMtxPtr(jobj_parent(cur)),
+        if (HSD_JObjGetParent(cur) != NULL) {
+            HSD_MtxInverseConcat(HSD_JObjGetMtxPtr(HSD_JObjGetParent(cur)),
                                  HSD_JObjGetMtxPtr(cur), tmp);
         } else {
             PSMTXCopy(HSD_JObjGetMtxPtr(cur), tmp);
@@ -134,7 +133,7 @@ void fn_80020AEC(HSD_JObj* jobj, Mtx out)
         }
 
         PSMTXConcat(tmp, out, out);
-        cur = jobj_parent(cur);
+        cur = HSD_JObjGetParent(cur);
     }
 }
 #ifdef MUST_MATCH
@@ -221,8 +220,8 @@ void fn_8002113C(HSD_JObj* jobj, Vec3* axis, f32 angle)
     HSD_JObjSetupMatrix(jobj);
     fn_80020AEC(jobj, mtx);
     PSMTXTranspose(mtx, mtx);
-    PSMTXMultVec(mtx, (Vec*) axis, (Vec*) &localAxis);
-    PSMTXRotAxisRad(rotMtx, (Vec*) &localAxis, -angle);
+    PSMTXMultVec(mtx, axis, &localAxis);
+    PSMTXRotAxisRad(rotMtx, &localAxis, -angle);
 
     if (!(jobj->flags & JOBJ_USE_QUATERNION)) {
         HSD_JObjGetRotation(jobj, (Quaternion*) &rot);

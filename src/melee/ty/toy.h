@@ -1,13 +1,12 @@
 #ifndef GALE01_305058
 #define GALE01_305058
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "sc/forward.h"
+#include <melee/sc/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
-#include "ty/types.h"
-
-#include <baselib/forward.h>
+#include <melee/ty/types.h>
 
 /* 304870 */ int Toy_GetTrophyTotal(void);
 /* 3048C0 */ s32 Toy_803048C0(int);
@@ -46,8 +45,11 @@
 /* 306EEC */ HSD_LObj* Toy_LoadLObjList(LightList**, s32*);
 /* 307470 */ void Toy_80307470(s32);
 /* 307E84 */ void Toy_80307E84(HSD_GObj* gobj);
-/* 30813C */ char* Toy_8030813C(int trophy_id);
-/* 308250 */ void Toy_80308250(u8* arg0, s16 arg1, s32 arg2);
+
+/// @todo :: fill out the struct that this uses/returns
+/* 30813C */ ToyModelFile* Toy_8030813C(int trophy_id);
+
+/* 308250 */ void Toy_80308250(ToyListEntry* arg0, s16 arg1, s32 arg2);
 /* 3082F8 */ s32 Toy_803082F8(s16 idx);
 /* 308328 */ s32 Toy_80308328(s32 idx);
 /* 308354 */ s32 Toy_80308354(s16 idx);

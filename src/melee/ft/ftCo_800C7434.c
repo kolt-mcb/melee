@@ -1,16 +1,13 @@
 #include "ftCo_800C7434.h"
 
-#include "ft_0852.h"
+#include "fighter.h"
 #include "ftCo_800C7070.h"
 #include "ftCo_800C7590.h"
-
-#include "ft/fighter.h"
-#include "ft/types.h"
-
-#include "ftCommon/forward.h"
-
-#include "it/items/itgreatfoxlaser.h"
-#include "it/items/itleadead.h"
+#include "ftdata.h"
+#include "kinds/ftCommon/forward.h"
+#include "types.h"
+#include <melee/it/kinds/itgreatfoxlaser.h>
+#include <melee/it/kinds/itleadead.h>
 
 static inline void inlineB0(Fighter_GObj* gobj)
 {
@@ -31,7 +28,7 @@ void ftCo_800C7434(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftCommon_MotionState ms;
-    if (fp->kind == FTKIND_GKOOPS) {
+    if (fp->kind == Ft_Kind_GKoops) {
         ms = 0xE;
     } else {
         inlineB2(gobj);
