@@ -910,9 +910,9 @@ void fn_80160DE8(HSD_JObj* arg0, u8 arg1, s32 arg2, u8 arg3, f32 farg0,
             use_alt_name = true;
         }
         if (use_alt_name) {
-            temp = lbl_803B7784[tmp_ckind];
+            temp = lbl_803B75F8[tmp_ckind + 0x63];
         } else {
-            temp = lbl_803B767C[tmp_ckind];
+            temp = lbl_803B75F8[tmp_ckind + 0x21];
         }
         size = temp;
     } else {
@@ -922,7 +922,7 @@ void fn_80160DE8(HSD_JObj* arg0, u8 arg1, s32 arg2, u8 arg3, f32 farg0,
             use_alt_name = true;
         }
         if (use_alt_name) {
-            temp = lbl_803B7700[tmp_ckind];
+            temp = lbl_803B75F8[tmp_ckind + 0x42];
         } else {
             temp = lbl_803B75F8[tmp_ckind];
         }
@@ -2926,8 +2926,18 @@ s32 fn_8016588C(lbl_8046B6A0_24C_t* arg0, s32 arg1)
         }
     } else {
         u16 a = arg0->x58[arg1].xA;
-        return fn_8016588C_clamp(arg0->x58[arg1].x20 -
-                                 (arg0->x58[arg1].x24 - a) + a * arg0->xC);
+        v = arg0->x58[arg1].x20 - (arg0->x58[arg1].x24 - a) +
+            a * (s8) arg0->xC;
+        lim = (1 << 24) - 1;
+        result = v;
+        if (lim < 0) {
+            lim = -lim;
+        }
+        if (v > lim) {
+            result = lim;
+        } else if (v < -lim) {
+            result = -lim;
+        }
     }
 
     return result;
@@ -3123,9 +3133,9 @@ void gm_80166378(lbl_8046B6A0_24C_t* arg0_raw)
 
     PAD_STACK(60);
 
-    memzero(arg0->player_standings, sizeof(arg0->player_standings));
-    memzero(arg0->team_standings, sizeof(arg0->team_standings));
-    memzero(arg0->_x448, sizeof(arg0->_x448));
+    memzero(arg0->player_standings, 0x3F0);
+    memzero(arg0->team_standings, 0x3C);
+    memzero(arg0->_x448, 4);
     arg0->frame_count = gm_8016AEDC();
     arg0->x7 = fn_8016B728();
     for (i = 0; i < 6; i++) {
@@ -3275,7 +3285,7 @@ s32 gm_80166A98(MatchEnd* arg0, u8 arg1, s8 arg2, u8 arg3, s8 arg4, u8 arg5,
     s32 score3;
     u32 i;
 
-    memzero(arg0, sizeof(*arg0));
+    memzero(arg0, 0x227C);
 
     arg0->result = OUTCOME_TIMEOUT;
     arg0->x5 = 0;
@@ -4003,7 +4013,7 @@ void gm_80168710(MatchEnd* arg0, VsModeData* arg1)
     s32 j;
 
     best = -1;
-    memzero(buf, sizeof(buf));
+    memzero(buf, 4);
     for (j = 0; j < 4; j++) {
         if (arg0->player_standings[j].slot_type == 0) {
             if ((s32) arg0->player_standings[j].is_big_loser > best) {
@@ -4148,7 +4158,15 @@ float gm_80168BF8(int arg0)
 {
     CharacterKind ckind = Player_GetPlayerCharacter(arg0);
     u32 costume = Player_GetCostumeId(arg0);
+#if BUILD_TARGET_PC
+    /* The original falls off the end and returns whatever gm_80168B34 left
+     * in f1 -- which is its result. GCC leaves xmm0 undefined instead, so
+     * the stock-icon texture frame this feeds was garbage and every player
+     * wore Mario's icon. */
     return gm_80168B34(ckind, Player_80036394(arg0), costume);
+#else
+    gm_80168B34(ckind, Player_80036394(arg0), costume);
+#endif
 }
 
 void gm_80168C5C(u32 arg0)
