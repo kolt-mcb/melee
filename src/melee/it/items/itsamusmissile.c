@@ -59,7 +59,7 @@ Item_GObj* it_802B62D0(Item_GObj* gobj, Vec3* pos, int arg2, f32 facing_dir)
         if (new_gobj != NULL) {
             Item* ip = GET_ITEM(new_gobj);
 
-            ip->xDD4_itemVar.samusmissile.is_smash_missile = is_smash_missile;
+            ip->xDD4_itemVar.samusmissile.is_smash_missile = arg2;
             ip->xDD4_itemVar.samusmissile.owner = ip->owner;
 
             if (ip->xDD4_itemVar.samusmissile.owner != NULL) {
@@ -67,7 +67,7 @@ Item_GObj* it_802B62D0(Item_GObj* gobj, Vec3* pos, int arg2, f32 facing_dir)
                     ip->xDD4_itemVar.samusmissile.owner);
             }
 
-            if (!ip->xDD4_itemVar.samusmissile.is_smash_missile) {
+            if (ip->xDD4_itemVar.samusmissile.is_smash_missile == 0) {
                 it_802B66A8(new_gobj);
             } else {
                 it_802B6A60(new_gobj);
@@ -94,7 +94,7 @@ void it_802B63F8(HSD_GObj* gobj)
     }
 
     if (ip->xD44_lifeTimer == attrs->x4 - attrs->x8 &&
-        !ip->xDD4_itemVar.samusmissile.is_smash_missile)
+        ip->xDD4_itemVar.samusmissile.is_smash_missile == 0)
     {
         efLib_DestroyAll(gobj);
     }
@@ -104,7 +104,7 @@ void it_802B63F8(HSD_GObj* gobj)
     }
 
     if (ip->xD44_lifeTimer <= 0.0f) {
-        if (!ip->xDD4_itemVar.samusmissile.is_smash_missile) {
+        if (ip->xDD4_itemVar.samusmissile.is_smash_missile == 0) {
             it_802B701C(gobj);
         } else {
             it_802B70A0(gobj);
@@ -345,7 +345,7 @@ bool it_2725_Logic52_DmgDealt(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
 
-    if (!ip->xDD4_itemVar.samusmissile.is_smash_missile) {
+    if (ip->xDD4_itemVar.samusmissile.is_smash_missile == NULL) {
         if (ip->msid != 2) {
             it_802B701C(gobj);
         }
@@ -359,7 +359,7 @@ bool it_2725_Logic52_Clanked(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
 
-    if (!ip->xDD4_itemVar.samusmissile.is_smash_missile) {
+    if (ip->xDD4_itemVar.samusmissile.is_smash_missile == NULL) {
         if (ip->msid != 2) {
             it_802B701C(gobj);
         }
@@ -373,7 +373,7 @@ bool it_2725_Logic52_HitShield(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
 
-    if (!ip->xDD4_itemVar.samusmissile.is_smash_missile) {
+    if (ip->xDD4_itemVar.samusmissile.is_smash_missile == NULL) {
         if (ip->msid != 2) {
             it_802B701C(gobj);
         }
@@ -387,7 +387,7 @@ bool it_2725_Logic52_ShieldBounced(Item_GObj* arg0)
 {
     Item* ip = GET_ITEM(arg0);
     HSD_JObj* jobj = GET_JOBJ(arg0);
-    if (ip->xDD4_itemVar.samusmissile.is_smash_missile) {
+    if (ip->xDD4_itemVar.samusmissile.is_smash_missile != 0) {
         itColl_BounceOffShield(arg0);
         {
             f32 temp_f1 = atan2f(ip->x40_vel.x, ip->x40_vel.y);

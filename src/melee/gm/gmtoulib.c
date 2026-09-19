@@ -1,14 +1,5 @@
 #include "gmtoulib.h"
 
-#include <melee/ft/forward.h>
-#include <melee/pl/forward.h>
-#include <sysdolphin/baselib/forward.h>
-
-#include <placeholder.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "forward.h"
 #include "gm_1601.h"
 #include "gm_unsplit.h"
 #include "gmmain_lib.h"
@@ -1632,11 +1623,12 @@ void fn_8018E618(int arg0, f32 farg0, int arg1)
 
     cam = lbl_803B7CA8;
 
-    while ((tmp = HSD_GObjPLinkHead[27]) != NULL) {
-        HSD_GObjFree(tmp);
+    /* the entity list is an array of HSD_GObj* heads: byte 0x6C is head 27, 0x50 is head 20 (the console indexed 4-byte pointers) */
+    while ((tmp = ((HSD_GObj**) HSD_GObj_Entities)[27]) != NULL) {
+        HSD_GObjPLink_80390228(tmp);
     }
-    while ((tmp = HSD_GObjPLinkHead[20]) != NULL) {
-        HSD_GObjFree(tmp);
+    while ((tmp = ((HSD_GObj**) HSD_GObj_Entities)[20]) != NULL) {
+        HSD_GObjPLink_80390228(tmp);
     }
 
     for (i = 0; i < 0x40; i++) {
