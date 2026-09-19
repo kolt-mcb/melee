@@ -7953,6 +7953,19 @@ void GXBegin(u32 type, u32 vtxfmt, u16 nverts)
      * GX_TRIANGLESTRIP=0x98, ...), so callers passing e.g. 0x98 is correct,
      * and the draw path switches on those same values. No normalization. */
     GX_TRACE("GXBegin(0x%X, %u, %u)", type, vtxfmt, nverts);
+    /* A lit mesh whose vertex format carries no normal inherits the
+     * last normal written by some earlier, unrelated draw: `last_nrm`
+     * persists across draws (deliberately, for flat UI geometry that never
+     * sets one), but a *lit* mesh with no normal attribute then gets an
+     * arbitrary direction and shades to whatever that happens to give --
+     * uniformly dark when it faces away from the light. Start such a batch
+     * from the same viewer-facing default the bridge initialises to, which
+     * is what the UI geometry expects anyway. */
+    if (!g_state.nrm_enabled) {
+        g_state.last_nrm[0] = 0.0f;
+        g_state.last_nrm[1] = 0.0f;
+        g_state.last_nrm[2] = 1.0f;
+    }
     /* Every GXBegin is a new primitive command on the hardware, and any
      * state written since the previous one (texture, TEV colour, matrix)
      * applies only from here on. Merging the pending vertices into this
