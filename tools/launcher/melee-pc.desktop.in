@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Melee PC
+Comment=Native PC build of the Super Smash Bros. Melee decompilation
+Exec=@REPO@/tools/launcher/melee-pc.sh
+Path=@REPO@
+Icon=@REPO@/tools/launcher/melee-pc.png
+Terminal=false
+Categories=Game;
+StartupNotify=false
