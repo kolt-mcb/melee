@@ -3201,6 +3201,10 @@ static void pc_stage_check(GLint vloc, int n, const void* data, unsigned bytes)
             if ((int) g_state.frame_count >= from) {
                 const float* a = (const float*) g_last[vloc];
                 const float* b = (const float*) data;
+                unsigned diff_at = 0, k;
+                for (k = 0; k * 4 < bytes; k++) {
+                    if (a[k] != b[k]) { diff_at = k; break; }
+                }
                 fprintf(stderr, "[STAGECHECK] frame %u %s[%d] stale (%s) gen %u len %u/%u n %d: staged %.3f %.3f %.3f %.3f | state %.3f %.3f %.3f %.3f\n", g_state.frame_count,
                         ent->name, (int) (vloc - ent->base), ent->spec ? "spec" : "uniform",
                         g_last_gen[vloc], g_last_len[vloc], bytes, n, a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3]);
@@ -4986,15 +4990,24 @@ void pc_bump_report(void)
         g_bump_counts[i] = 0;
     }
 }
+/* The generation must move AFTER the pending geometry is drawn, not
+ * before. These are called from a setter that is about to change GX
+ * state: the draw below belongs to the OLD state, and if the counter is
+ * raised first that draw consumes the new generation, marking the state
+ * as staged. The value the caller writes a moment later then has no
+ * generation of its own, so the next draw thinks nothing changed and
+ * keeps the previous uniform. MELEE_STAGECHECK caught this as u_tevreg
+ * going stale about twenty draws a frame, always attributed to
+ * GXSetTevColor. */
 static void gx_flush_pending_named(const char* who)
 {
     g_last_bump = who;
-    g_gen_mtx++;
-    g_gen_uni++;
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
     pc_batch_flush();
+    g_gen_mtx++;
+    g_gen_uni++;
 }
 #define gx_flush_pending() gx_flush_pending_named(__func__)
 static void gx_flush_pending_unused(void)
@@ -5013,11 +5026,11 @@ static void gx_flush_pending_unused(void)
  * fog and texture uniforms alone. */
 static void gx_flush_pending_gl(void)
 {
-    g_gen_mtx++;
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
     pc_batch_flush();
+    g_gen_mtx++;
 }
 /* The position and normal matrix loaders and the current-matrix select.
  * A batch of CPU-skinned primitives drew with an identity matrix uniform
@@ -5038,11 +5051,11 @@ static void gx_flush_pending_desc(void)
 }
 static void gx_flush_pending_mtx(void)
 {
-    g_gen_mtx++;
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
     if (!(pc_xdl_on() && g_batch_pre_state && g_batch_n > 0)) pc_batch_flush();
+    g_gen_mtx++;
 }
 /* For the few setters that change uniform state without flushing. */
 #define gx_state_touched() (g_last_bump = __func__, g_gen_uni++)
