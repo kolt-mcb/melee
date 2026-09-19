@@ -159,7 +159,6 @@
 /* 1C5AEC */ void Ground_801C5AEC(Vec3* v, Vec3*, Vec3*, Vec3*);
 /* 49E6C8 */ extern StageInfo stage_info;
 
-
 #if BUILD_TARGET_PC
 /* Raw (unconverted) stage yakumono block; see ground.c. */
 const void* pc_ground_yakumono_raw(void);

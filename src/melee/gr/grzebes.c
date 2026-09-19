@@ -2549,37 +2549,6 @@ static u32 pc_ze_acid_be32(const unsigned char* p)
 
 static DynamicsDesc* pc_ze_acid_dynamics(u32 off)
 {
-    u8* d = dst;
-    const u8* s = src;
-    size_t i;
-    for (i = 0; i + 4 <= n; i += 4) {
-        d[i + 0] = s[i + 3];
-        d[i + 1] = s[i + 2];
-        d[i + 2] = s[i + 1];
-        d[i + 3] = s[i + 0];
-    }
-}
-
-/* The word at yakumono_param + 0x2C is a relocated pointer -- confirmed
- * against GrZe.dat's relocation table, where 0x5fb6c is a reloc site holding
- * 0x5fb1c -- so on GameCube it is an address and grZebes_801DCBFC just copies
- * it into *arg (lwz r0,0x2c(r3); stw r0,0(r31) at 0x801dcc60).
- *
- * What it points at is NOT a DynamicsDesc, despite the decomp's type: the
- * 0x24 bytes at 0x5fb1c carry no relocations and read 1, 14, 90, 35, 0, 110,
- * 1, 1, 8 -- an attack parameter block (damage 14, angle 90, growth 35, base
- * knockback 110). An earlier attempt here read field 0 as a data offset and
- * field 1 as a count and followed the former, which produced a garbage inner
- * array and crashed the bury path in lbColl_80005BB0.
- *
- * So: swap the block a word at a time and hand back a pointer to it. The
- * offset is resolved against the *raw* archive block, because
- * Ground_801C49F8 returns a converted copy that pc_itconv_locate cannot
- * place. */
-#define PC_ZE_ACID_PARAM_SIZE 0x24u
-
-static DynamicsDesc* pc_ze_acid_dynamics(const void* param, u32 off)
-{
     static u32 cached[PC_ZE_ACID_PARAM_SIZE / 4];
     static const unsigned char* cached_base;
     static u32 cached_off;
@@ -2590,7 +2559,6 @@ static DynamicsDesc* pc_ze_acid_dynamics(const void* param, u32 off)
     const void* raw;
     u32 i;
 
-    (void) param;
     raw = pc_ground_yakumono_raw();
     if (off == 0 || raw == NULL || !pc_itconv_locate(raw, &base, &len) ||
         (unsigned long) off + PC_ZE_ACID_PARAM_SIZE > len)
@@ -2601,7 +2569,7 @@ static DynamicsDesc* pc_ze_acid_dynamics(const void* param, u32 off)
         return (DynamicsDesc*) cached;
     }
     for (i = 0; i < PC_ZE_ACID_PARAM_SIZE / 4; i++) {
-        cached[i] = pc_ze_be32(base + off + i * 4);
+        cached[i] = pc_ze_acid_be32(base + off + i * 4);
     }
     cached_base = base;
     cached_off = off;
