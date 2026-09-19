@@ -123,6 +123,7 @@ typedef enum GrKind {
     /* 0x44 */ Gr_Kind_Figure1,
     /* 0x45 */ Gr_Kind_Figure2,
     /* 0x46 */ Gr_Kind_Figure3,
+    /* 0x46 */ Gr_Kind_Count = Gr_Kind_Figure3,
 } GrKind;
 
 /** @remarks
@@ -170,8 +171,9 @@ typedef enum StKind {
     /* 0x1E */ St_Kind_OldKongo,
     /* 0x1F */ St_Kind_Battle,
     /* 0x20 */ St_Kind_Last,
-    /* 0x49 */ St_Kind_BigBlueRoute = 0x49,
-    /* 0x55 */ St_Kind_Heal = 0x55,
+    /* 0x49 */ St_Kind_BigBlueRoute = 73,
+    /* 0x55 */ St_Kind_Unk84 = 84,
+    /* 0x55 */ St_Kind_Heal,
 } StKind;
 
 typedef enum StadiumGrType {

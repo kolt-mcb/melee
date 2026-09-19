@@ -1,12 +1,14 @@
 #include "ftFx_SpecialLw.h"
 
-#include "math.h"
-
 #include <platform.h>
 
 #include "ef/efsync.h"
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ftanim.h"
 #include "ft/ftcoll.h"
 #include "ft/ftcommon.h"
@@ -22,6 +24,7 @@
 #include "lb/lb_00B0.h"
 #include "lb/lb_00F9.h"
 
+#include <math.h>
 #include <dolphin/mtx.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
@@ -221,7 +224,8 @@ void ftFx_SpecialAirLwStart_Phys(HSD_GObj* gobj)
     if (fp->mv.fx.SpecialLw.gravityDelay != 0) {
         fp->mv.fx.SpecialLw.gravityDelay--;
     } else {
-        ftCommon_Fall(fp, da->xAC_FOX_REFLECTOR_FALL_ACCEL, ca->terminal_vel);
+        ftCommon_Fall(fp, da->xAC_FOX_REFLECTOR_FALL_ACCEL,
+                      ca->terminal_velocity);
     }
 
     ftCommon_8007CF58(fp);
@@ -367,7 +371,8 @@ static inline void ftFox_SpecialLw_InlinePhys(HSD_GObj* gobj)
     if (fp->mv.fx.SpecialLw.gravityDelay != 0) {
         fp->mv.fx.SpecialLw.gravityDelay--;
     } else {
-        ftCommon_Fall(fp, da->xAC_FOX_REFLECTOR_FALL_ACCEL, ca->terminal_vel);
+        ftCommon_Fall(fp, da->xAC_FOX_REFLECTOR_FALL_ACCEL,
+                      ca->terminal_velocity);
     }
 
     ftCommon_8007CF58(fp);
@@ -446,8 +451,10 @@ static void ftFx_SpecialAirLwLoop_Enter(HSD_GObj* gobj)
     ftFx_SpecialLw_CreateReflectHit(gobj);
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 /// Fox & Falco's Reflector Turn function
 static void ftFx_SpecialLw_Turn(HSD_GObj* gobj)
 {
@@ -467,7 +474,9 @@ static void ftFx_SpecialLw_Turn(HSD_GObj* gobj)
                   FX_FMA(-deg_to_rad, 180 / da->x9C_FOX_REFLECTOR_TURN_FRAMES,
                          ftPartGetRotZ(fp, 0))); /* fnmsubs */
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 /// Fox & Falco's Reflector Turn function
 static inline void ftFox_SpecialLw_Turn_Inline(HSD_GObj* gobj)
@@ -564,7 +573,8 @@ void ftFx_SpecialAirLwTurn_Phys(HSD_GObj* gobj)
     if (fp->mv.fx.SpecialLw.gravityDelay != 0) {
         fp->mv.fx.SpecialLw.gravityDelay--;
     } else {
-        ftCommon_Fall(fp, da->xAC_FOX_REFLECTOR_FALL_ACCEL, ca->terminal_vel);
+        ftCommon_Fall(fp, da->xAC_FOX_REFLECTOR_FALL_ACCEL,
+                      ca->terminal_velocity);
     }
 
     ftCommon_8007CF58(fp);
@@ -591,7 +601,7 @@ void ftFx_SpecialAirLwTurn_Coll(HSD_GObj* gobj)
     }
 }
 
-inline void ftFox_SpecialLw_SetReflectVars(HSD_GObj* gobj)
+static inline void ftFox_SpecialLw_SetReflectVars(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     fp->reflecting = true;
@@ -623,7 +633,7 @@ void ftFx_SpecialAirLwTurn_GroundToAir(HSD_GObj* gobj)
     ftFox_SpecialLw_SetReflectVars(gobj);
 }
 
-inline void ftFox_SpecialLwTurn_SetVarAll(HSD_GObj* gobj)
+static inline void ftFox_SpecialLwTurn_SetVarAll(HSD_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
     ftFox_DatAttrs* da = getFtSpecialAttrs(fp);
@@ -658,7 +668,7 @@ bool ftFx_SpecialLwTurn_Check(HSD_GObj* gobj)
     return false;
 }
 
-inline void ftFox_SpecialLwHit_CreateReflectInline(HSD_GObj* gobj)
+static inline void ftFox_SpecialLwHit_CreateReflectInline(HSD_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
     ftFox_DatAttrs* da = getFtSpecialAttrs(fp);
@@ -716,7 +726,9 @@ void ftFx_SpecialLwHit_Anim(HSD_GObj* gobj)
     }
 }
 
+#ifdef MUST_MATCH
 #pragma dont_inline on
+#endif
 /// Fox & Falco's aerial Reflector Hit Animation callback
 void ftFx_SpecialAirLwHit_Anim(HSD_GObj* gobj)
 {
@@ -737,7 +749,9 @@ void ftFx_SpecialAirLwHit_Anim(HSD_GObj* gobj)
         fp->accessory4_cb = ftFx_SpecialLw_CreateLoopGFX;
     }
 }
+#ifdef MUST_MATCH
 #pragma dont_inline off
+#endif
 
 /// 0x800E9844 - Fox & Falco's grounded Reflector Hit IASA callback
 void ftFx_SpecialLwHit_IASA(HSD_GObj* gobj)
@@ -772,7 +786,8 @@ void ftFx_SpecialAirLwHit_Phys(HSD_GObj* gobj)
     if (fp->mv.fx.SpecialLw.gravityDelay != 0) {
         fp->mv.fx.SpecialLw.gravityDelay--;
     } else {
-        ftCommon_Fall(fp, da->xAC_FOX_REFLECTOR_FALL_ACCEL, ca->terminal_vel);
+        ftCommon_Fall(fp, da->xAC_FOX_REFLECTOR_FALL_ACCEL,
+                      ca->terminal_velocity);
     }
 
     ftCommon_8007CF58(fp);
@@ -911,7 +926,8 @@ void ftFx_SpecialAirLwEnd_Phys(HSD_GObj* gobj)
     if (fp->mv.fx.SpecialLw.gravityDelay != 0) {
         fp->mv.fx.SpecialLw.gravityDelay--;
     } else {
-        ftCommon_Fall(fp, da->xAC_FOX_REFLECTOR_FALL_ACCEL, ca->terminal_vel);
+        ftCommon_Fall(fp, da->xAC_FOX_REFLECTOR_FALL_ACCEL,
+                      ca->terminal_velocity);
     }
     ftCommon_8007CF58(fp);
 }

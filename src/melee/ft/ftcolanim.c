@@ -9,7 +9,9 @@
 #include "lb/lb_013B.h"
 #include "pl/player.h"
 
+#ifdef MUST_MATCH
 #pragma force_active on
+#endif
 
 /* 0BFE74 */ static void ftCo_800BFE74(Fighter_GObj* gobj, CommandInfo* cmd);
 /* 0BFEB4 */ static void ftCo_800BFEB4(Fighter_GObj* gobj, CommandInfo* cmd);
@@ -39,7 +41,7 @@ void ftCo_800BFD04(Fighter_GObj* gobj)
     fp->x221E_b1 = true;
     fp->x221E_b2 = true;
     fp->x2219_b1 = true;
-    fp->x890_cameraBox->x8 = true;
+    fp->x890_cameraBox->state = CmSubjectState_Inactive;
     fp->x221F_b3 = true;
     fp->x221F_b1 = true;
 }
@@ -108,9 +110,9 @@ void ftCo_800BFFAC(Fighter* fp)
     lb_80014498(&fp->x488);
 }
 
-bool ftCo_800BFFD0(Fighter* fp, int arg1, int arg2)
+bool ftCo_800BFFD0(Fighter* fp, enum_t arg1, bool arg2)
 {
-    long tmp;
+    s32 tmp;
 #if BUILD_TARGET_PC
     /* MELEE_COLANIM=1 names every colour-overlay animation start: which
      * fighter, which table index, and where it was asked from. The console
@@ -152,9 +154,11 @@ void ftCo_800C0074(Fighter* fp)
     lb_80014498(&fp->x408);
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma auto_inline off
 #pragma global_optimizer off
+#endif
 void ft_800C0098(Fighter* fp)
 {
     lb_80014498(&fp->x508);
@@ -173,11 +177,15 @@ void ft_800C0098(Fighter* fp)
         }
     }
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma auto_inline off
 #pragma global_optimizer off
+#endif
 void ftCo_800C0134(Fighter* fp)
 {
     lb_80014498(&fp->x488);
@@ -199,10 +207,14 @@ void ftCo_800C0134(Fighter* fp)
         }
     }
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 void ftCo_800C0200(Fighter* fp, int arg1)
 {
     if (arg1 >= 0x7B) {
@@ -296,4 +308,6 @@ void ftCo_800C0408(Fighter_GObj* gobj)
     }
     fp->x2221_b3 = true;
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif

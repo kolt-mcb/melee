@@ -3,13 +3,16 @@
 #include <platform.h>
 
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcoll.h"
 #include "ft/ftcommon.h"
 #include "ft/types.h"
-#include "ftCommon/ftCo_Attack100.h"
 #include "ftCommon/ftCo_Fall.h"
 #include "ftCommon/ftCo_SquatWait.h"
 #include "ftCommon/inlines.h"
@@ -115,12 +118,12 @@ void ftSs_SpecialAirLw_Enter(HSD_GObj* gobj)
     ftSamus_SpecialLw_StartAction_inner(gobj);
 }
 
-inline static void setSamusBits(Fighter* fp, int val)
+static inline void setSamusBits(Fighter* fp, int val)
 {
     fp->mv.ss.unk6.x0 = val;
 }
 
-inline static void checkStateVar1(HSD_GObj* gobj)
+static inline void checkStateVar1(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
 
@@ -179,7 +182,7 @@ void ftSs_SpecialLwBomb_Phys(HSD_GObj* gobj)
     ftCo_DatAttrs* ft_attr = &fp->co_attrs;
 
     if (fp->cmd_vars[0]) {
-        ftCommon_8007CADC(fp, 0.0f, ft_attr->walk_init_vel * samus_attr->x64,
+        ftCommon_8007CADC(fp, 0.0f, ft_attr->walk_accel_mul * samus_attr->x64,
                           ft_attr->walk_max_vel * samus_attr->x5C);
         ftCommon_ApplyGroundMovement(gobj);
     } else {

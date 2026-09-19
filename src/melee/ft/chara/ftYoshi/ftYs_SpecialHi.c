@@ -9,6 +9,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftcommon.h"
 #include "ft/inlines.h"
@@ -18,7 +19,7 @@
 
 #include "ftYoshi/forward.h"
 
-#include "ftYoshi/ftYs_Init.h"
+#include "ftYoshi/ftyoshi.h"
 #include "ftYoshi/types.h"
 #include "it/items/ityoshieggthrow.h"
 #include "it/items/ityoshitongue.h"

@@ -8,7 +8,7 @@
 #include "baselib/gobjproc.h"
 #include "baselib/jobj.h"
 #include "dolphin/types.h"
-#include "gm/gm_1832.h"
+#include "gm/gm_1884.h"
 
 #include "gr/forward.h"
 
@@ -72,15 +72,13 @@ static Vec3 const grHeal_803B84A8 = { 0.0F, 40.0F, 0.0F };
 
 #define CHAR_ID_COUNT 26
 
-static s16 grHeal_803E83B8[CHAR_ID_COUNT] = {
-    29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
-    42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54,
-};
+static s16 grHeal_803E83B8[] = { 29, 30, 31, 32, 33, 34, 35, 36, 37,
+                                 38, 39, 40, 41, 42, 43, 44, 45, 46,
+                                 47, 48, 49, 50, 51, 52, 53, 54 };
 
-static enum_t frame_to_character_id[CHAR_ID_COUNT] = {
-    0, 21, 1,  22, 20, 2,  25, 3,  14, 4,  5,  7,  6,
-    8, 9,  10, 11, 24, 12, 13, 15, 16, 17, 18, 23, -1,
-};
+static enum_t frame_to_character_id[] = { 0,  21, 1,  22, 20, 2,  25, 3,  14,
+                                          4,  5,  7,  6,  8,  9,  10, 11, 24,
+                                          12, 13, 15, 16, 17, 18, 23, -1 };
 
 static StageCallbacks stage_callbacks[] = {
     {
@@ -297,7 +295,7 @@ s32 fn_8021F424(void)
     Ground_GObj* ground;
     Ground* gp;
 
-    ground = Ground_801C2BA4(1);
+    ground = Ground_GetMapGObj(1);
     if (ground != NULL) {
         gp = ground->user_data;
         if ((gp != NULL) && (gp->u.unk.xC4 != 0)) {
@@ -441,7 +439,7 @@ void grHeal_8021F79C(s32 arg0, s32 idx, s32 arg2)
     BobOmbRain bobomb_rain;
     PAD_STACK(4);
 
-    gp = Ground_801C2BA4(0);
+    gp = Ground_GetMapGObj(0);
     jobj = Ground_801C3FA4(gp, idx);
     bobomb_rain.x0 = gp;
     bobomb_rain.x4 = NULL;

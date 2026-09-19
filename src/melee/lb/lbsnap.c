@@ -4,17 +4,17 @@
 
 #include "lbsnap.static.h"
 
+#include "it/itspawn.h"
+
 #define _p(x) (lbSnap_80433380.x)
 #include <placeholder.h>
 
 #include "ft/ft_0877.h"
 #include "gm/gm_unsplit.h"
-#include "it/it_266F.h"
 
 #include <stdio.h>
 #include <dolphin/card.h>
 #include <dolphin/os.h>
-#include <dolphin/os/OSTime.h>
 #include <baselib/debug.h>
 #include <baselib/hsd_3B34.h>
 
@@ -178,9 +178,10 @@ int lbSnap_8001D7B0(int chan, int index, int jndex)
 
 static inline u16 RGB565_TO_RGB5A3(u16 pixel)
 {
-    u16 result = pixel & RGB5A3_MASK_B;
-    result |= (pixel >> 1) & (RGB5A3_MASK_R | RGB5A3_MASK_G);
-    return result | RGB5A3_MASK_A;
+    u16 result = (pixel >> 1) & (RGB5A3_MASK_R | RGB5A3_MASK_G);
+    result = result | (pixel & RGB5A3_MASK_B);
+    result = result | RGB5A3_MASK_A;
+    return result;
 }
 
 static inline int lbSnap_GetTiledRemainder(int value)
@@ -190,8 +191,7 @@ static inline int lbSnap_GetTiledRemainder(int value)
 
 static inline int lbSnap_GetTiledRGBOffset(int x, int y, int tile_stride)
 {
-    int tile_x = x / 4;
-    int tile_base = tile_x * tile_stride;
+    int tile_base = (x / 4) * tile_stride;
     return ((tile_base + (y / 4)) << 5) + (lbSnap_GetTiledRemainder(x) * 8) +
            (lbSnap_GetTiledRemainder(y) * 2);
 }
@@ -211,25 +211,28 @@ static inline int lbSnap_GetTiledColumn(int x)
     return (x / 4) * 24;
 }
 
-void lbSnap_8001DA5C(u8* arg0)
+void lbSnap_8001DA5C(const u8* arg0)
 {
     u8* dst = lbSnap_GetMemSnapIconData();
     int dst_x;
     int ctr;
 
     for (dst_x = 0; dst_x < 32; dst_x++) {
-        int src_x = (dst_x * 204 / 32) + 138;
         u8* dst_col = dst + ((dst_x % 4) * 8);
         int tile_column = lbSnap_GetTiledColumn(dst_x);
         int dst_y = 0;
         int src_y_accum = 0;
         u16 pixel;
         for (ctr = 0; ctr < 32; ctr++) {
+            int src_x = (dst_x * 204 / 32) + 138;
             pixel = *(u16*) &arg0[lbSnap_GetTiledRGBOffset(
                 src_x, src_y_accum / 64 + 96, 160)];
             *(u16*) &dst_col[lbSnap_GetTiledYOff(tile_column, dst_y + 16)] =
                 RGB565_TO_RGB5A3(pixel);
-            src_y_accum += 448;
+            {
+                int next_src_y_accum = src_y_accum + 448;
+                src_y_accum = next_src_y_accum;
+            }
 
             pixel = *(u16*) &arg0[lbSnap_GetTiledRGBOffset(
                 src_x, src_y_accum / 64 + 96, 160)];
@@ -299,18 +302,22 @@ static inline int lbSnap_GetSaveDataOffset(struct Unk80433380_0* snap)
     return snap->xC + ((int) &snap->x38 - (int) snap);
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma global_optimizer off
+#endif
 int lbSnap_8001DF20(void)
 {
     struct Unk80433380_0* snap = _p(x0);
     struct Unk803BACC8* tmp;
-    lbSnap_803BACC8.x14 = lbSnap_GetSaveDataOffset(snap);
+    lbSnap_803BACC8.entries[0].file_size = lbSnap_GetSaveDataOffset(snap);
     tmp = &lbSnap_803BACC8;
-    lbSnap_803BACC8.x1C = snap;
-    return lb_8001C4A8(&tmp->x14, &lbSnap_803BACC8);
+    lbSnap_803BACC8.entries[0].data = (u8*) snap;
+    return lb_8001C4A8(tmp->entries, &lbSnap_803BACC8);
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 int lbSnap_8001DF6C(int chan)
 {
@@ -327,9 +334,9 @@ int lbSnap_8001DF6C(int chan)
         int chan_arg = chan;
         _p(slot)[chan].card_result = 8;
         lbSnap_8001D4A4(chan_arg, text);
-        desc->x14 = lbSnap_GetSaveDataOffset(_p(x0));
-        desc->x1C = _p(x0);
-        ret = lb_8001BB48(chan, text, &desc->x14, desc, _p(x4_string),
+        desc->entries[0].file_size = lbSnap_GetSaveDataOffset(_p(x0));
+        desc->entries[0].data = (u8*) _p(x0);
+        ret = lb_8001BB48(chan, text, desc->entries, desc, _p(x4_string),
                           _p(x44_LbMcSnap_MemSnapIconData)[0].offset,
                           _p(x44_LbMcSnap_MemSnapIconData)[1].size, 0);
     }
@@ -349,8 +356,8 @@ int lbSnap_8001E058(int chan, int index)
     ret = ptr->card_result;
     if (ret == 0) {
         lbSnap_FormatTime(chan, index, text);
-        lbSnap_803BACC8.x1C = _p(x0);
-        ret = lb_8001BF04(chan, text, &lbSnap_803BACC8.x14, _p(x4_string),
+        lbSnap_803BACC8.entries[0].data = (u8*) _p(x0);
+        ret = lb_8001BF04(chan, text, lbSnap_803BACC8.entries, _p(x4_string),
                           _p(x44_LbMcSnap_MemSnapIconData)[0].offset,
                           _p(x44_LbMcSnap_MemSnapIconData)[1].size, 0);
     }

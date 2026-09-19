@@ -6,7 +6,11 @@
 #include <platform.h>
 
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0877.h"
 #include "ft/ft_0881.h"
 #include "ft/ft_0892.h"
@@ -153,8 +157,6 @@ static inline void inlineA0(Fighter_GObj* gobj, Fighter* other_fp)
         fp->take_dmg_cb = NULL;
     }
 }
-
-static inline void inlineA1(Item_GObj* item_gobj, Fighter* fp) {}
 
 void ftPp_SpecialN_8011F500(Fighter_GObj* gobj)
 {

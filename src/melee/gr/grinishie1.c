@@ -84,7 +84,7 @@
 /* 1FCBB0 */ static DynamicsDesc* grInishie1_801FCBB0(enum_t);
 /* 1FCBB8 */ static bool grInishie1_801FCBB8(Vec3*, int arg, HSD_JObj* jobj);
 
-/// @todo Emitted only to lay out the .sdata2 literal pool in retail order.
+#ifdef MUST_MATCH
 static void sdata2_order(void)
 {
     (void) 1.0f;
@@ -103,6 +103,7 @@ static void sdata2_order(void)
     (void) -30.0f;
     (void) S32_TO_F32;
 }
+#endif
 
 /// these inlines are probably shared in other places
 static inline s32 test_random(s32 val)
@@ -123,15 +124,6 @@ static inline s32 randi_between(s32 min, s32 max)
 static inline f32 fabsf_inline(f32 x)
 {
     return (x < 0.0f) ? -x : x;
-}
-
-static inline f32 fclamp0(f32 x)
-{
-    f32 ret = x;
-    if (x < 0.0f) {
-        ret = 0.0f;
-    }
-    return ret;
 }
 
 struct grInishie1_YakumonoParam {
@@ -231,10 +223,12 @@ StageData grI1_StageData = {
     ARRAY_SIZE(grI1_803E48C8),
 };
 
+#ifdef MUST_MATCH
 static void order_data(void)
 {
     (void) "%s:%d: couldn t get gobj(id=%d)\n";
 }
+#endif
 
 void grInishie1_801FA908(bool arg) {}
 
@@ -615,6 +609,21 @@ enum {
 typedef grInishie1_Block grInishie1_801FB3F0_Block;
 typedef Ground grInishie1_801FB3F0_Vars;
 
+static inline void set_all_hatena(HSD_GObj* gobj,
+                                  grInishie1_801FB3F0_Vars* vars)
+{
+    u32 i = 0;
+
+    vars->u.inishie1.xC8 = 0;
+    vars->u.inishie1.xC6 = 0;
+
+    for (; i < 0x13; ++i) {
+        vars->u.inishie1.block[i].status = 3;
+        grInishie1_801FBAA0(gobj, i);
+        vars->u.inishie1.block[i].x20 = 0;
+    }
+}
+
 static inline void
 grInishie1_801FB3F0_update_blocks(HSD_GObj* gobj,
                                   grInishie1_801FB3F0_Vars* vars, Vec3* pos)
@@ -712,7 +721,6 @@ grInishie1_801FB3F0_update_blocks(HSD_GObj* gobj,
 void grInishie1_801FB3F0(HSD_GObj* gobj)
 {
     grInishie1_801FB3F0_Vars* vars = gobj->user_data;
-    u32 i;
     Vec3 pos;
     PAD_STACK(48);
 
@@ -725,16 +733,9 @@ void grInishie1_801FB3F0(HSD_GObj* gobj)
                            (vars->u.inishie1.xC8 == 1 && vars->u.inishie1.xC6 > 0 &&
                             vars->u.inishie1.xC6 < yakumono_param->unk14)))
     {
-        vars->u.inishie1.xC8 = 0;
-        vars->u.inishie1.xC6 = 0;
-
         // this is likely the rare case mentioned on smashwiki
         // where every block will become a hatena block
-        for (i = 0; i < 0x13; ++i) {
-            vars->u.inishie1.block[i].status = 3;
-            grInishie1_801FBAA0(gobj, i);
-            vars->u.inishie1.block[i].x20 = 0;
-        }
+        set_all_hatena(gobj, vars);
     } else {
         HATENA_APPEAR_CHECKLOOP(vars->u.inishie1.xC6, vars->u.inishie1.xCA, 1, 0x2D0U);
         HATENA_APPEAR_CHECKLOOP(vars->u.inishie1.xC8, vars->u.inishie1.xCC, 2, 0x2EBU);
@@ -837,7 +838,7 @@ void grInishie1_801FBCEC(HSD_GObj* gobj, u32 index)
     Camera_80030E44(2, &effect_pos);
 }
 
-inline Item* GET_ITEM2(Item_GObj* arg0)
+static inline Item* GET_ITEM2(Item_GObj* arg0)
 {
     return arg0->user_data;
 }
@@ -862,7 +863,7 @@ void fn_801FBF6C(Item_GObj* item_gobj, Ground* gp, Vec3* pos, HSD_GObj* arg3,
         return;
     }
 
-    map_gobj = Ground_801C2BA4(3);
+    map_gobj = Ground_GetMapGObj(3);
     HSD_ASSERT(1061, map_gobj);
 
     new_var = map_gobj;
@@ -1014,7 +1015,7 @@ void fn_801FBEB8(void* user_data, int joint_id, CollData* coll, int coll_x50,
 {
     s32 id = get_block_id(joint_id);
     if (fabsf_inline(delta_y) > 0.7) {
-        HSD_GObj* gobj = Ground_801C2BA4(3);
+        HSD_GObj* gobj = Ground_GetMapGObj(3);
         grInishie1_801FB0AC(gobj, id);
         grInishie1_801FBCEC(gobj, id);
     }

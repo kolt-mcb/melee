@@ -16,6 +16,17 @@ ft_8045993C_t ft_8045993C[6];
 int ft_8045996C[FTKIND_MAX];
 UnkCostumeStruct lbl_804599F0[5];
 
+/// @todo bss order hack
+#ifdef MUST_MATCH
+static void order_bss(void)
+{
+    (void) gFtDataList;
+    (void) ft_8045993C;
+    (void) ft_8045996C;
+    (void) lbl_804599F0;
+}
+#endif
+
 void ft_8008521C(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -28,16 +39,27 @@ void ft_8008521C(HSD_GObj* gobj)
     fp->self_vel.z = pos.z - fp->cur_pos.z;
 }
 
-inline void ft_800852B0_Reset_ft_8045993C(int i)
+static inline void ft_800852B0_Reset_ft_8045993C(ftData** list, int i)
 {
-    // Bitfields seem off but it is what it is
+#if BUILD_TARGET_PC
+    /* `&list[FTKIND_MAX]` walks one past gFtDataList into whatever the host
+     * linker put next; on the console that neighbour is ft_8045993C, which
+     * has a name here. Nothing keeps two statics adjacent on the host. */
+    (void) list;
     ft_8045993C[i].pad_x0 = 0;
     ft_8045993C[i].x6_b0 = 0;
     ft_8045993C[i].x6_b1_b2 = 0;
+#else
+    // Bitfields seem off but it is what it is
+    ((ft_8045993C_t*) &list[FTKIND_MAX])[i].pad_x0 = 0;
+    ((ft_8045993C_t*) &list[FTKIND_MAX])[i].x6_b0 = 0;
+    ((ft_8045993C_t*) &list[FTKIND_MAX])[i].x6_b1_b2 = 0;
+#endif
 }
 
 void ft_800852B0(void)
 {
+    ftData** list;
 #if BUILD_TARGET_PC
     /* PC port: the GCN code reaches the two adjacent DOL tables via pointer
      * math past CostumeListsForeachCharacter (fixed GCN addresses). On PC
@@ -48,17 +70,20 @@ void ft_800852B0(void)
     int i;
     int new_var = 0;
 
+    list = gFtDataList;
     for (i = 0; i < FTKIND_MAX; ++i) {
         int costume_idx;
-        UnkCostumeStruct* list = CostumeListsForeachCharacter[i].costume_list;
+        UnkCostumeStruct* costumes =
+            CostumeListsForeachCharacter[i].costume_list;
         gFtDataList[i] = NULL;
-        if (list != NULL && (uintptr_t)list > (uintptr_t)&etext) {
+        if (costumes != NULL && (uintptr_t) costumes > (uintptr_t) &etext) {
             for (costume_idx = new_var;
-                 costume_idx < (s32) CostumeListsForeachCharacter[i].numCostumes;
+                 costume_idx <
+                 (s32) CostumeListsForeachCharacter[i].numCostumes;
                  ++costume_idx)
             {
-                list[costume_idx].joint = NULL;
-                list[costume_idx].pad_x8 = NULL;
+                costumes[costume_idx].joint = NULL;
+                costumes[costume_idx].pad_x8 = NULL;
             }
         }
         ftData_Table_Unk0[i].data = NULL;
@@ -74,7 +99,8 @@ void ft_800852B0(void)
 
     for (i = 0; i < FTKIND_MAX; ++i) {
         int costume_idx = new_var;
-        gFtDataList[i] = NULL;
+        list = gFtDataList;
+        list[i] = NULL;
         for (costume_idx = new_var;
              costume_idx < (s32) CostumeListsForeachCharacter[i].numCostumes;
              ++costume_idx)
@@ -88,12 +114,12 @@ void ft_800852B0(void)
         pairs[i].data = NULL;
     }
 #endif
-    ft_800852B0_Reset_ft_8045993C(new_var);
-    ft_800852B0_Reset_ft_8045993C(1);
-    ft_800852B0_Reset_ft_8045993C(2);
-    ft_800852B0_Reset_ft_8045993C(3);
-    ft_800852B0_Reset_ft_8045993C(4);
-    ft_800852B0_Reset_ft_8045993C(5);
+    ft_800852B0_Reset_ft_8045993C(list, new_var);
+    ft_800852B0_Reset_ft_8045993C(list, 1);
+    ft_800852B0_Reset_ft_8045993C(list, 2);
+    ft_800852B0_Reset_ft_8045993C(list, 3);
+    ft_800852B0_Reset_ft_8045993C(list, 4);
+    ft_800852B0_Reset_ft_8045993C(list, 5);
 }
 
 void ft_8008549C(void)

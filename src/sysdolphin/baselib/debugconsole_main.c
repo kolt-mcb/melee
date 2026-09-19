@@ -1,5 +1,6 @@
 #include "debugconsole_main.h"
 
+#include <string.h>
 #include <dolphin/pad.h>
 #include <dolphin/vi.h>
 #include <sysdolphin/baselib/cobj.h>
@@ -7,10 +8,13 @@
 #include <sysdolphin/baselib/gobjgxlink.h>
 #include <sysdolphin/baselib/gobjobject.h>
 #include <sysdolphin/baselib/hsd_3915.h>
-#include <sysdolphin/baselib/hsd_3933.h>
 #include <sysdolphin/baselib/hsd_393C.h>
 #include <sysdolphin/baselib/video.h>
+#include <sysdolphin/baselib/wobj.h>
+
+#ifdef MWERKS_GEKKO
 #include <MetroTRK/ppc_reg.h>
+#endif
 
 typedef struct _ExcptNode {
     /* 0x1 */ struct _ExcptNode* next;
@@ -48,7 +52,7 @@ struct ParticleScreenState {
     /* 0x40 */ s32 x40;
     /* 0x44 */ s32 x44;
     /* 0x48 */ s32 x48;
-    /* 0x4C */ void* x4C;
+    /* 0x4C */ u8* x4C;
     /* 0x50 */ void* x50;
     /* 0x54 */ u8 _pad4[0x68];
     /* 0xBC */ u32 xBC;
@@ -60,9 +64,8 @@ struct ParticleScreenState {
     /* 0xD4 */ OSContext* xD4;
 };
 
-extern u8 lbl_804088B8[];
-/* 4D78C8 */ extern int hsd_804D78C8;
-/* 4D78CC */ extern u32 hsd_804D78CC;
+/* 4D78C8 */ int hsd_804D78C8;
+/* 4D78CC */ u32 hsd_804D78CC;
 
 /* 4CF810 */ static struct ParticleScreenState hsd_804CF810;
 
@@ -129,468 +132,482 @@ static struct lbl_8040AB00_t lbl_8040AB40 = {
     0x10808000, hsd_80392194, 0x10808000, hsd_80392194,
 };
 
-struct SPREntry lbl_8040ADD8[] = { {
-                                       0x00000009,
-                                       "CTR",
-                                       "Count Register",
-                                       NULL,
-                                   },
-                                   {
-                                       0x000003F5,
-                                       "DABR",
-                                       "Data Address Breakpoint",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000013,
-                                       "DAR",
-                                       "Data Address Register",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000219,
-                                       "DBAT0L",
-                                       "Data Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x00000218,
-                                       "DBAT0U",
-                                       "Data Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x0000021B,
-                                       "DBAT1L",
-                                       "Data Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x0000021A,
-                                       "DBAT1U",
-                                       "Data Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x0000021D,
-                                       "DBAT2L",
-                                       "Data Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x0000021C,
-                                       "DBAT2U",
-                                       "Data Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x0000021F,
-                                       "DBAT3L",
-                                       "Data Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x0000021E,
-                                       "DBAT3U",
-                                       "Data Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x00000016,
-                                       "DEC",
-                                       "Descrimenter",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000012,
-                                       "DSISR",
-                                       "Data Access/Alignment Exception",
-                                       fn_803970D8,
-                                   },
-                                   {
-                                       0x0000011A,
-                                       "EAR",
-                                       "External Access",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000211,
-                                       "IBAT0L",
-                                       "Inst Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x00000210,
-                                       "IBAT0U",
-                                       "Inst Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x00000213,
-                                       "IBAT1L",
-                                       "Inst Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x00000212,
-                                       "IBAT1U",
-                                       "Inst Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x00000215,
-                                       "IBAT2L",
-                                       "Inst Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x00000214,
-                                       "IBAT2U",
-                                       "Inst Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x00000217,
-                                       "IBAT3L",
-                                       "Inst Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x00000216,
-                                       "IBAT3U",
-                                       "Inst Block Address Translation",
-                                       hsd_80396E40,
-                                   },
-                                   {
-                                       0x00000008,
-                                       "LR",
-                                       "Link Register",
-                                       NULL,
-                                   },
-                                   {
-                                       0x0000011F,
-                                       "PVR",
-                                       "Processor Version",
-                                       NULL,
-                                   },
-                                   {
-                                       0x000003BF,
-                                       "SDA",
-                                       "Sample Data Address",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000019,
-                                       "SDR1",
-                                       "Page Table Format",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000110,
-                                       "SPRG0",
-                                       "For Operation System",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000111,
-                                       "SPRG1",
-                                       "For Operation System",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000112,
-                                       "SPRG2",
-                                       "For Operation System",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000113,
-                                       "SPRG3",
-                                       "For Operation System",
-                                       NULL,
-                                   },
-                                   {
-                                       0x0000001A,
-                                       "SRR0",
-                                       "Machine Status Save/Restore",
-                                       fn_803970DC,
-                                   },
-                                   {
-                                       0x0000001B,
-                                       "SRR1",
-                                       "Machine Status Save/Restore",
-                                       fn_803970DC,
-                                   },
-                                   {
-                                       0x000003AF,
-                                       "USDA",
-                                       "Sample Data Address",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000001,
-                                       "XER",
-                                       "?",
-                                       fn_803970E0,
-                                   },
-                                   {
-                                       0x00000000,
-                                       NULL,
-                                       NULL,
-                                       NULL,
-                                   },
-                                   {
-                                       0x0000039B,
-                                       "DMA_L",
-                                       "Direct Memory Access",
-                                       fn_803970E4,
-                                   },
-                                   {
-                                       0x0000039A,
-                                       "DMA_U",
-                                       "Direct Memory Access",
-                                       fn_803970E4,
-                                   },
-                                   {
-                                       0x00000390,
-                                       "GQR0",
-                                       "Graphics Quantization",
-                                       fn_803970E8,
-                                   },
-                                   {
-                                       0x00000391,
-                                       "GQR1",
-                                       "Graphics Quantization",
-                                       fn_803970E8,
-                                   },
-                                   {
-                                       0x00000392,
-                                       "GQR2",
-                                       "Graphics Quantization",
-                                       fn_803970E8,
-                                   },
-                                   {
-                                       0x00000393,
-                                       "GQR3",
-                                       "Graphics Quantization",
-                                       fn_803970E8,
-                                   },
-                                   {
-                                       0x00000394,
-                                       "GQR4",
-                                       "Graphics Quantization",
-                                       fn_803970E8,
-                                   },
-                                   {
-                                       0x00000395,
-                                       "GQR5",
-                                       "Graphics Quantization",
-                                       fn_803970E8,
-                                   },
-                                   {
-                                       0x00000396,
-                                       "GQR6",
-                                       "Graphics Quantization",
-                                       fn_803970E8,
-                                   },
-                                   {
-                                       0x00000397,
-                                       "GQR7",
-                                       "Graphics Quantization",
-                                       fn_803970E8,
-                                   },
-                                   {
-                                       0x000003F0,
-                                       "HID0",
-                                       "Hardware Implementation Depend",
-                                       fn_803970EC,
-                                   },
-                                   {
-                                       0x000003F1,
-                                       "HID1",
-                                       "Hardware Implementation Depend",
-                                       fn_803970EC,
-                                   },
-                                   {
-                                       0x00000398,
-                                       "HID2",
-                                       "Hardware Implementation Depend",
-                                       fn_803970EC,
-                                   },
-                                   {
-                                       0x000003F2,
-                                       "IABR",
-                                       "Instruction Breakpoint",
-                                       fn_803970F0,
-                                   },
-                                   {
-                                       0x000003FB,
-                                       "ICTC",
-                                       "Instruction Cache Throttle Control",
-                                       fn_803970F4,
-                                   },
-                                   {
-                                       0x000003F9,
-                                       "L2CR",
-                                       "L2 Cache Control",
-                                       fn_803970F8,
-                                   },
-                                   {
-                                       0x000003B8,
-                                       "MMCR0",
-                                       "Perf. Moniter Mode Control",
-                                       fn_803970FC,
-                                   },
-                                   {
-                                       0x000003BC,
-                                       "MMCR1",
-                                       "Perf. Monitor Mode Control",
-                                       fn_803970FC,
-                                   },
-                                   {
-                                       0x000003B9,
-                                       "PMC1",
-                                       "Performance Monitor Counter",
-                                       fn_80397100,
-                                   },
-                                   {
-                                       0x000003BA,
-                                       "PMC2",
-                                       "Performance Monitor Counter",
-                                       fn_80397100,
-                                   },
-                                   {
-                                       0x000003BD,
-                                       "PMC3",
-                                       "Performance Monitor Counter",
-                                       fn_80397100,
-                                   },
-                                   {
-                                       0x000003BE,
-                                       "PMC4",
-                                       "Performance Monitor Counter",
-                                       fn_80397100,
-                                   },
-                                   {
-                                       0x000003BB,
-                                       "SIA",
-                                       "Sample Instruction Address",
-                                       NULL,
-                                   },
-                                   {
-                                       0x000003FC,
-                                       "THRM1",
-                                       "Thermal Managiment",
-                                       fn_80397104,
-                                   },
-                                   {
-                                       0x000003FD,
-                                       "THRM2",
-                                       "Thermal Managiment",
-                                       fn_80397104,
-                                   },
-                                   {
-                                       0x000003FE,
-                                       "THRM3",
-                                       "Thermal Managiment",
-                                       fn_80397104,
-                                   },
-                                   {
-                                       0x000003A8,
-                                       "UMMCR0",
-                                       "Perf. Moniter Mode Control",
-                                       fn_803970FC,
-                                   },
-                                   {
-                                       0x000003AC,
-                                       "UMMCR1",
-                                       "Perf. Moniter Mode Control",
-                                       fn_803970FC,
-                                   },
-                                   {
-                                       0x000003A9,
-                                       "UPMC1",
-                                       "Performance Monitor Counter",
-                                       fn_80397100,
-                                   },
-                                   {
-                                       0x000003AA,
-                                       "UPMC2",
-                                       "Performance Monitor Counter",
-                                       fn_80397100,
-                                   },
-                                   {
-                                       0x000003AD,
-                                       "UPMC3",
-                                       "Performance Monitor Counter",
-                                       fn_80397100,
-                                   },
-                                   {
-                                       0x000003AE,
-                                       "UPMC4",
-                                       "Performance Monitor Counter",
-                                       fn_80397100,
-                                   },
-                                   {
-                                       0x000003AB,
-                                       "USIA",
-                                       "Sample Instruction Address",
-                                       NULL,
-                                   },
-                                   {
-                                       0x00000399,
-                                       "WPAR",
-                                       "Write Pipe Address",
-                                       fn_80397108,
-                                   } };
+struct SPREntry lbl_8040ADD8[] = {
+    {
+        0x00000009,
+        "CTR",
+        "Count Register",
+        NULL,
+    },
+    {
+        0x000003F5,
+        "DABR",
+        "Data Address Breakpoint",
+        NULL,
+    },
+    {
+        0x00000013,
+        "DAR",
+        "Data Address Register",
+        NULL,
+    },
+    {
+        0x00000219,
+        "DBAT0L",
+        "Data Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x00000218,
+        "DBAT0U",
+        "Data Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x0000021B,
+        "DBAT1L",
+        "Data Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x0000021A,
+        "DBAT1U",
+        "Data Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x0000021D,
+        "DBAT2L",
+        "Data Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x0000021C,
+        "DBAT2U",
+        "Data Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x0000021F,
+        "DBAT3L",
+        "Data Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x0000021E,
+        "DBAT3U",
+        "Data Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x00000016,
+        "DEC",
+        "Descrimenter",
+        NULL,
+    },
+    {
+        0x00000012,
+        "DSISR",
+        "Data Access/Alignment Exception",
+        fn_803970D8,
+    },
+    {
+        0x0000011A,
+        "EAR",
+        "External Access",
+        NULL,
+    },
+    {
+        0x00000211,
+        "IBAT0L",
+        "Inst Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x00000210,
+        "IBAT0U",
+        "Inst Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x00000213,
+        "IBAT1L",
+        "Inst Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x00000212,
+        "IBAT1U",
+        "Inst Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x00000215,
+        "IBAT2L",
+        "Inst Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x00000214,
+        "IBAT2U",
+        "Inst Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x00000217,
+        "IBAT3L",
+        "Inst Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x00000216,
+        "IBAT3U",
+        "Inst Block Address Translation",
+        hsd_80396E40,
+    },
+    {
+        0x00000008,
+        "LR",
+        "Link Register",
+        NULL,
+    },
+    {
+        0x0000011F,
+        "PVR",
+        "Processor Version",
+        NULL,
+    },
+    {
+        0x000003BF,
+        "SDA",
+        "Sample Data Address",
+        NULL,
+    },
+    {
+        0x00000019,
+        "SDR1",
+        "Page Table Format",
+        NULL,
+    },
+    {
+        0x00000110,
+        "SPRG0",
+        "For Operation System",
+        NULL,
+    },
+    {
+        0x00000111,
+        "SPRG1",
+        "For Operation System",
+        NULL,
+    },
+    {
+        0x00000112,
+        "SPRG2",
+        "For Operation System",
+        NULL,
+    },
+    {
+        0x00000113,
+        "SPRG3",
+        "For Operation System",
+        NULL,
+    },
+    {
+        0x0000001A,
+        "SRR0",
+        "Machine Status Save/Restore",
+        fn_803970DC,
+    },
+    {
+        0x0000001B,
+        "SRR1",
+        "Machine Status Save/Restore",
+        fn_803970DC,
+    },
+    {
+        0x000003AF,
+        "USDA",
+        "Sample Data Address",
+        NULL,
+    },
+    {
+        0x00000001,
+        "XER",
+        "?",
+        fn_803970E0,
+    },
+    {
+        0x00000000,
+        NULL,
+        NULL,
+        NULL,
+    },
+    {
+        0x0000039B,
+        "DMA_L",
+        "Direct Memory Access",
+        fn_803970E4,
+    },
+    {
+        0x0000039A,
+        "DMA_U",
+        "Direct Memory Access",
+        fn_803970E4,
+    },
+    {
+        0x00000390,
+        "GQR0",
+        "Graphics Quantization",
+        fn_803970E8,
+    },
+    {
+        0x00000391,
+        "GQR1",
+        "Graphics Quantization",
+        fn_803970E8,
+    },
+    {
+        0x00000392,
+        "GQR2",
+        "Graphics Quantization",
+        fn_803970E8,
+    },
+    {
+        0x00000393,
+        "GQR3",
+        "Graphics Quantization",
+        fn_803970E8,
+    },
+    {
+        0x00000394,
+        "GQR4",
+        "Graphics Quantization",
+        fn_803970E8,
+    },
+    {
+        0x00000395,
+        "GQR5",
+        "Graphics Quantization",
+        fn_803970E8,
+    },
+    {
+        0x00000396,
+        "GQR6",
+        "Graphics Quantization",
+        fn_803970E8,
+    },
+    {
+        0x00000397,
+        "GQR7",
+        "Graphics Quantization",
+        fn_803970E8,
+    },
+    {
+        0x000003F0,
+        "HID0",
+        "Hardware Implementation Depend",
+        fn_803970EC,
+    },
+    {
+        0x000003F1,
+        "HID1",
+        "Hardware Implementation Depend",
+        fn_803970EC,
+    },
+    {
+        0x00000398,
+        "HID2",
+        "Hardware Implementation Depend",
+        fn_803970EC,
+    },
+    {
+        0x000003F2,
+        "IABR",
+        "Instruction Breakpoint",
+        fn_803970F0,
+    },
+    {
+        0x000003FB,
+        "ICTC",
+        "Instruction Cache Throttle Control",
+        fn_803970F4,
+    },
+    {
+        0x000003F9,
+        "L2CR",
+        "L2 Cache Control",
+        fn_803970F8,
+    },
+    {
+        0x000003B8,
+        "MMCR0",
+        "Perf. Moniter Mode Control",
+        fn_803970FC,
+    },
+    {
+        0x000003BC,
+        "MMCR1",
+        "Perf. Monitor Mode Control",
+        fn_803970FC,
+    },
+    {
+        0x000003B9,
+        "PMC1",
+        "Performance Monitor Counter",
+        fn_80397100,
+    },
+    {
+        0x000003BA,
+        "PMC2",
+        "Performance Monitor Counter",
+        fn_80397100,
+    },
+    {
+        0x000003BD,
+        "PMC3",
+        "Performance Monitor Counter",
+        fn_80397100,
+    },
+    {
+        0x000003BE,
+        "PMC4",
+        "Performance Monitor Counter",
+        fn_80397100,
+    },
+    {
+        0x000003BB,
+        "SIA",
+        "Sample Instruction Address",
+        NULL,
+    },
+    {
+        0x000003FC,
+        "THRM1",
+        "Thermal Managiment",
+        fn_80397104,
+    },
+    {
+        0x000003FD,
+        "THRM2",
+        "Thermal Managiment",
+        fn_80397104,
+    },
+    {
+        0x000003FE,
+        "THRM3",
+        "Thermal Managiment",
+        fn_80397104,
+    },
+    {
+        0x000003A8,
+        "UMMCR0",
+        "Perf. Moniter Mode Control",
+        fn_803970FC,
+    },
+    {
+        0x000003AC,
+        "UMMCR1",
+        "Perf. Moniter Mode Control",
+        fn_803970FC,
+    },
+    {
+        0x000003A9,
+        "UPMC1",
+        "Performance Monitor Counter",
+        fn_80397100,
+    },
+    {
+        0x000003AA,
+        "UPMC2",
+        "Performance Monitor Counter",
+        fn_80397100,
+    },
+    {
+        0x000003AD,
+        "UPMC3",
+        "Performance Monitor Counter",
+        fn_80397100,
+    },
+    {
+        0x000003AE,
+        "UPMC4",
+        "Performance Monitor Counter",
+        fn_80397100,
+    },
+    {
+        0x000003AB,
+        "USIA",
+        "Sample Instruction Address",
+        NULL,
+    },
+    {
+        0x00000399,
+        "WPAR",
+        "Write Pipe Address",
+        fn_80397108,
+    },
+};
 
+#ifdef MUST_MATCH
 static void gprmsg(void)
 {
     OSReport("- GPR -----------------------------------------------\n");
     OSReport("R%02d=%08X(%11d) R%02d=%08X(%11d)\n");
 }
+#endif
 
 void hsd_80394314(void)
 {
     struct ParticleScreenState* sp = &hsd_804CF810;
 
     memset(sp, 0, sizeof(*sp));
-    hsd_803941E8(&((struct ParticleScreenState*) sp)->x24,
-                 &((struct ParticleScreenState*) sp)->x2C);
+    hsd_803941E8(&sp->x24, &sp->x2C);
 
     {
         s32 mode;
-        if (((struct ParticleScreenState*) sp)->x28 != 0) {
+        if (sp->x28 != 0) {
             mode = 2;
         } else {
             mode = 1;
         }
-        ((struct ParticleScreenState*) sp)->x38 = mode;
+        sp->x38 = mode;
     }
 
-    ((struct ParticleScreenState*) sp)->x34 = 0;
-    ((struct ParticleScreenState*) sp)->x30 = &HSD_VIData;
-    ((struct ParticleScreenState*) sp)->x3C =
-        ((u16*) ((struct ParticleScreenState*) sp)->x30)[2];
-    ((struct ParticleScreenState*) sp)->x40 =
-        ((u16*) ((struct ParticleScreenState*) sp)->x30)[4];
-    ((struct ParticleScreenState*) sp)->x44 =
+    sp->x34 = 0;
+    sp->x30 = &HSD_VIData;
+    sp->x3C = ((u16*) sp->x30)[2];
+    sp->x40 = ((u16*) sp->x30)[4];
+
+    /// @todo Redundant cast improves match
+#ifdef MUST_MATCH
+    (sp)->x44 =
         (((u16) ((struct ParticleScreenState*) sp)->x3C + 15) * 2) & 0x1FFE0;
-    ((struct ParticleScreenState*) sp)->x48 =
-        ((struct ParticleScreenState*) sp)->x44 *
-        ((struct ParticleScreenState*) sp)->x40;
-    ((struct ParticleScreenState*) sp)->x4 = 0;
-    ((struct ParticleScreenState*) sp)->x8 =
-        ((struct ParticleScreenState*) sp)->x40;
-    ((struct ParticleScreenState*) sp)->x18 = 0;
-    ((struct ParticleScreenState*) sp)->x14 = 0;
-    ((struct ParticleScreenState*) sp)->x20 =
-        (u32) (((struct ParticleScreenState*) sp)->x3C - 0x28) / 11;
-    ((struct ParticleScreenState*) sp)->x1C =
-        (u32) (((struct ParticleScreenState*) sp)->x40 - 0x50) / 14;
-    ((struct ParticleScreenState*) sp)->x4C = lbl_804088B8;
-    ((struct ParticleScreenState*) sp)->x50 = 0;
-    ((struct ParticleScreenState*) sp)->xC4 = 0;
+#else
+    sp->x44 = (((u16) sp->x3C + 15) * 2) & 0x1FFE0;
+#endif
+
+    sp->x48 = sp->x44 * sp->x40;
+    sp->x4 = 0;
+    /// @todo Redundant cast improves match
+#ifdef MUST_MATCH
+    (sp)->x8 = ((struct ParticleScreenState*) sp)->x40;
+#else
+    sp->x8 = sp->x40;
+#endif
+    sp->x18 = 0;
+    sp->x14 = 0;
+    /// @todo Redundant casts improve match
+#ifdef MUST_MATCH
+    (sp)->x20 = (u32) (((struct ParticleScreenState*) sp)->x3C - 0x28) / 11;
+    (sp)->x1C = (u32) (((struct ParticleScreenState*) sp)->x40 - 0x50) / 14;
+#else
+    sp->x20 = (u32) (sp->x3C - 0x28) / 11;
+    sp->x1C = (u32) (sp->x40 - 0x50) / 14;
+#endif
+    sp->x4C = (u8*) HSD_DebugFontAtlas;
+    sp->x50 = 0;
+    sp->xC4 = 0;
 }
 
 // @TODO: Currently 94.99% match - obj file has extra addi for lis/addi
@@ -599,11 +616,11 @@ void hsd_80394434(void* text)
 {
     struct ParticleScreenState* sp = &hsd_804CF810;
     s32* x4_ptr = (s32*) sp + 1;
-    s32 x = sp->x4;
+    s32 x = *x4_ptr;
     s32 y = sp->x8;
     s32 mode = sp->x0_b7;
     s32 interlace = sp->x0_b6;
-    u8* font = (u8*) sp->x4C;
+    u8* font = sp->x4C;
     s8* ptr = text;
 
     while (*ptr != 0) {
@@ -631,16 +648,14 @@ void hsd_80394434(void* text)
     }
 }
 
-// @TODO: Currently 91.32% match - needs register allocation fix
 void hsd_80394544(s32 col, s32 row, u32 num_cols, u32 num_rows, s32 x, s32 y,
                   s32 xfb_buf, s32 xfb_w, s32 xfb_h, s32 xfb_stride,
                   s32 font_data, void* color_data)
 {
-    s32 cur_x;
-    s32 interlace;
     u32 r;
     u32 c;
     s32 mode;
+    s32 interlace;
     u8 ch;
 
     mode = hsd_804CF810.x0_b7;
@@ -648,31 +663,32 @@ void hsd_80394544(s32 col, s32 row, u32 num_cols, u32 num_rows, s32 x, s32 y,
     r = 0;
 
     while (r < num_rows) {
-        hsd_80393E68(col, row);
+        hsd_80393E68(col, row + r);
         y -= 14;
 
-        for (cur_x = x + (c = 0) * 11; c < num_cols; c++) {
+        for (c = 0; c < num_cols; c++) {
             ch = hsd_80394068();
             if (ch == 0) {
                 break;
             }
             if (mode != 0) {
-                hsd_803922FC((void*) (font_data + (ch & 0x7F) * 0x38), cur_x,
-                             y, interlace, xfb_buf, xfb_w, xfb_stride, xfb_h,
-                             color_data);
+                hsd_803922FC(&((DebugFontGlyph*) font_data)[ch & 0x7F],
+                             x + c * 11, y, interlace, xfb_buf, xfb_w, xfb_h,
+                             xfb_stride, color_data);
             } else {
-                hsd_803921B8((void*) (font_data + (ch & 0x7F) * 0x38), cur_x,
-                             y, xfb_buf, xfb_w, xfb_stride, xfb_h, color_data);
+                hsd_803921B8(&((DebugFontGlyph*) font_data)[ch & 0x7F],
+                             x + c * 11, y, xfb_buf, xfb_w, xfb_h, xfb_stride,
+                             color_data);
             }
-            cur_x += 11;
         }
-        row++;
         r++;
     }
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma global_optimizer off
+#endif
 void hsd_80394668(void)
 {
     struct ParticleScreenState* sp = &hsd_804CF810;
@@ -748,14 +764,17 @@ void hsd_80394668(void)
         }
     }
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void hsd_80394950(OSContext* ctx)
 {
     OSContext tmp;
+    int i;
+    int j;
     OSContext* saved;
     BOOL irq;
-    int i;
     u8* p;
 
     if (!(ctx->state & OS_CONTEXT_STATE_FPSAVED)) {
@@ -777,23 +796,24 @@ void hsd_80394950(OSContext* ctx)
 
     OSReport("- PSF -----------------------------------------------\n");
 
-    i = 0;
+    j = 0;
     p = (u8*) ctx;
     do {
         u32 val0 = ((u32*) p)[0x24];
         u32 val1 = ((u32*) p)[0x25];
-        OSReport("R%02d=%08X:%08X (%e, %e)\n", i, val0, val1, ((f32*) p)[0x24],
+        OSReport("R%02d=%08X:%08X (%e, %e)\n", j, val0, val1, ((f32*) p)[0x24],
                  ((f32*) p)[0x25]);
-        i++;
+        j++;
         p += 8;
-    } while (i < 32);
+    } while (j < 32);
 
     OSClearContext(&tmp);
     OSSetCurrentContext(saved);
     OSRestoreInterrupts(irq);
 }
 
-/// unused function to force data ordering for these report strings
+/// @todo unused function to force data ordering for these report strings
+#ifdef MUST_MATCH
 static void unused(OSContext* ctx)
 {
     OSReport("- MISC ----------------------------------------------\n");
@@ -803,6 +823,7 @@ static void unused(OSContext* ctx)
     OSReport("FPSCR=%08X\n", ctx->fpscr);
     OSReport("GQR%d=%08X GQR%d=%08X\n", 0, ctx->gqr[0], 1, ctx->gqr[1]);
 }
+#endif
 
 void Exception_ReportStackTrace(OSContext* ctx, int max_depth)
 {
@@ -837,7 +858,9 @@ void Exception_ReportCodeline(u16 error, int dsisr, int dar, OSContext* ctx)
 
     OSReport("- UNHANDLED EXCEPTION -------------------------------\n");
     OSReport("DSISR=%08X DAR=%08X\n", dsisr, dar);
-    error = (u16) error;
+#ifdef MUST_MATCH
+    error = error;
+#endif
     OSReport("ERROR %d: ", error);
 
     switch (error) {
@@ -1014,41 +1037,111 @@ static void hsd_80394E8C(struct lbl_8040B904_t* node_ptr)
 
 // @TODO: Currently 94.46% match - BSS relocation and register allocation
 // differences remain
+static inline const char* hsd_80394F48_get_first_entry(EventData* data)
+{
+    return data->entries[0];
+}
+
+static inline size_t hsd_80394F48_entry_length(s32 index, EventData* data)
+{
+    return strlen(data->entries[index]);
+}
+
+static inline void hsd_80394F48_set_base_color(void** color)
+{
+    *color = &lbl_8040AB00;
+}
+
+static inline s32 hsd_80394F48_get_x4(const s32* x4)
+{
+    return *x4;
+}
+
+static inline s32 hsd_80394F48_get_x40(const s32* px40)
+{
+    return *px40;
+}
+
+static inline s32 hsd_80394F48_get_x8(const s32* px8)
+{
+    return *px8;
+}
+
+static inline struct lbl_8040AB00_t*
+hsd_80394F48_get_highlight_color(struct lbl_8040AB00_t* base_color)
+{
+    return base_color + 1;
+}
+
+static inline void hsd_80394F48_set_col_start(const s32* pxC8, s32* col_start)
+{
+    *col_start = *pxC8;
+}
+
+static inline s32 hsd_80394F48_get_x_base(s32 col_start)
+{
+    return col_start * 11 + 0x14;
+}
+
+static inline void** hsd_80394F48_get_x50_ptr(struct ParticleScreenState* sp)
+{
+    return &sp->x50;
+}
+
+static inline s32* hsd_80394F48_get_x8_ptr(struct ParticleScreenState* sp)
+{
+    return &sp->x8;
+}
+
+static inline s32* hsd_80394F48_get_xCC_ptr(struct ParticleScreenState* sp)
+{
+    return &sp->xCC;
+}
+
+static inline void hsd_80394F48_init(void* data, s32* num_entries,
+                                     void*** px50, s32** pxC8, s32** pxCC)
+{
+    struct ParticleScreenState* sp = &hsd_804CF810;
+    EventData* dp = data;
+    PAD_STACK(64);
+
+    *num_entries = strlen(hsd_80394F48_get_first_entry(dp));
+    *px50 = hsd_80394F48_get_x50_ptr(sp);
+    *pxC8 = &sp->xC8;
+    *pxCC = hsd_80394F48_get_xCC_ptr(sp);
+}
+
 void hsd_80394F48(void* data)
 {
-    u8* base_color = (u8*) &lbl_8040AB00;
+    struct lbl_8040AB00_t* base_color = &lbl_8040AB00;
     struct ParticleScreenState* sp = &hsd_804CF810;
     EventData* dp = data;
     s32 num_entries;
     void** px50;
-    s32* pxC8;
+    s32 cur_row;
     s32* pxCC;
     s32* px4;
     s32* px40;
     s32* px8;
     s32 col_start;
-    s32 row_start;
-    void* hi_color;
+    struct lbl_8040AB00_t* hi_color;
     s32 x_base;
-    s32 cur_row;
+    s32* pxC8;
     s32 i;
     s32 b6;
 
-    PAD_STACK(64);
+    hsd_80394F48_init(data, &num_entries, &px50, &pxC8, &pxCC);
 
-    num_entries = strlen(dp->entries[0]);
-    px50 = &sp->x50;
-    pxC8 = &sp->xC8;
-    pxCC = &sp->xCC;
     px4 = &sp->x4;
     px40 = &sp->x40;
-    px8 = &sp->x8;
-    *px50 = base_color;
-    col_start = *pxC8;
-    row_start = *pxCC;
-
-    *px4 = col_start * 11 + 0x14;
-    *px8 = (*px40 - 0x28) - (row_start + 1) * 14;
+    px8 = hsd_80394F48_get_x8_ptr(sp);
+    hsd_80394F48_set_base_color(px50);
+    hsd_80394F48_set_col_start(pxC8, &col_start);
+    {
+        cur_row = *pxCC;
+        *px4 = col_start * 11 + 0x14;
+        *px8 = (*px40 - 0x28) - (cur_row + 1) * 14;
+    }
 
     b6 = sp->x0_b6;
     if (sp->x0_b7 != 0) {
@@ -1084,9 +1177,9 @@ void hsd_80394F48(void* data)
     }
 
     *px4 += 11;
-    x_base = col_start * 11 + 0x14;
-    hi_color = base_color + 0x20;
-    cur_row = row_start - 1;
+    x_base = hsd_80394F48_get_x_base(col_start);
+    hi_color = hsd_80394F48_get_highlight_color(base_color);
+    cur_row -= 1;
 
     for (i = 0; dp->entries[i] != 0; i++) {
         *px4 = x_base;
@@ -1104,14 +1197,14 @@ void hsd_80394F48(void* data)
         if (i == dp->index) {
             *px50 = hi_color;
         } else {
-            *px50 = base_color;
+            hsd_80394F48_set_base_color(px50);
         }
 
         *px4 += 11;
         hsd_80394434(dp->entries[i]);
 
-        *px4 += strlen(dp->entries[i]) * 11;
-        *px50 = base_color;
+        *px4 += hsd_80394F48_entry_length(i, dp) * 11;
+        hsd_80394F48_set_base_color(px50);
 
         b6 = sp->x0_b6;
         if (sp->x0_b7 != 0) {
@@ -1123,7 +1216,7 @@ void hsd_80394F48(void* data)
         }
     }
 
-    *px50 = base_color;
+    hsd_80394F48_set_base_color(px50);
     *px4 = x_base;
     *px8 = (*px40 - 0x28) - (cur_row + 1) * 14;
 
@@ -1132,14 +1225,16 @@ void hsd_80394F48(void* data)
         hsd_803922FC(((ParticleFontData*) sp->x4C)->x968, *px4, *px8, b6,
                      (&sp->x24)[sp->x34], sp->x3C, *px40, sp->x44, *px50);
     } else {
-        hsd_803921B8(((ParticleFontData*) sp->x4C)->x968, *px4, *px8,
-                     (&sp->x24)[sp->x34], sp->x3C, *px40, sp->x44, *px50);
+        s32 x = hsd_80394F48_get_x4(px4);
+        hsd_803921B8(((ParticleFontData*) sp->x4C)->x968, x,
+                     hsd_80394F48_get_x8(px8), (&sp->x24)[sp->x34], sp->x3C,
+                     *px40, sp->x44, *px50);
     }
 
     {
-        s32 j = 0;
+        x_base = 0;
         *px4 += 11;
-        while (j < num_entries) {
+        while (x_base < num_entries) {
             b6 = sp->x0_b6;
             if (sp->x0_b7 != 0) {
                 hsd_803922FC(((ParticleFontData*) sp->x4C)->x9D8, *px4, *px8,
@@ -1150,7 +1245,7 @@ void hsd_80394F48(void* data)
                              (&sp->x24)[sp->x34], sp->x3C, *px40, sp->x44,
                              *px50);
             }
-            j++;
+            x_base++;
             *px4 += 11;
         }
     }
@@ -1161,7 +1256,8 @@ void hsd_80394F48(void* data)
                      (&sp->x24)[sp->x34], sp->x3C, *px40, sp->x44, *px50);
     } else {
         hsd_803921B8(((ParticleFontData*) sp->x4C)->x968, *px4, *px8,
-                     (&sp->x24)[sp->x34], sp->x3C, *px40, sp->x44, *px50);
+                     (&sp->x24)[sp->x34], sp->x3C, hsd_80394F48_get_x40(px40),
+                     sp->x44, *px50);
     }
 
     *px4 += 11;
@@ -1218,8 +1314,7 @@ extern u8 lbl_8040B8AC[];
 
 void hsd_80395644(void)
 {
-    struct ParticleScreenState* sp =
-        (struct ParticleScreenState*) &hsd_804CF810;
+    struct ParticleScreenState* sp = (&hsd_804CF810);
     void* saved;
     void** p = &sp->x50;
     s32 val_x20;
@@ -1281,8 +1376,8 @@ s32 hsd_803956D8(void* disp_ptr)
         {
             s32* pp = &sp->x14;
             *pp += sp->x1C;
-            if (!(u8) hsd_80394128(0, *pp)) {
-                if (!(u8) hsd_80394128(0, *pp + 1)) {
+            if (!hsd_80394128(0, *pp)) {
+                if (!hsd_80394128(0, *pp + 1)) {
                     *pp = 0;
                     hsd_80394E8C(&lbl_8040B904);
                 }
@@ -1293,7 +1388,11 @@ s32 hsd_803956D8(void* disp_ptr)
     return 0;
 }
 
-// @TODO: BSS relocation and register allocation differences remain
+static inline void* hsd_803957C0_get_x50(void)
+{
+    return hsd_804CF810.x50;
+}
+
 void hsd_803957C0(void* input)
 {
     s32 col;
@@ -1307,7 +1406,7 @@ void hsd_803957C0(void* input)
     row = hsd_804CF810.x10 + hsd_804CF810.x14;
 
     while (col >= 0) {
-        ch = (u8) hsd_80394128(col, row);
+        ch = hsd_80394128(col, row);
         if (ch != 0) {
             break;
         }
@@ -1321,22 +1420,25 @@ void hsd_803957C0(void* input)
         ch = ' ';
     }
 
-    saved = hsd_804CF810.x50;
+    saved = hsd_803957C0_get_x50();
     hsd_804CF810.x50 = &lbl_8040AB20;
-    hsd_804CF810.x8 = (hsd_804CF810.x40 - 40) - (hsd_804CF810.x10 + 1) * 14;
-    hsd_804CF810.x4 = col * 11 + 20;
+    {
+        s32 val_x10 = hsd_804CF810.x10;
+        hsd_804CF810.x4 = col * 11 + 20;
+        hsd_804CF810.x8 = (hsd_804CF810.x40 - 40) - (val_x10 + 1) * 14;
+    }
 
     {
         struct ParticleScreenState* draw_sp = &hsd_804CF810;
         b6 = draw_sp->x0_b6;
 
         if (draw_sp->x0_b7) {
-            hsd_803922FC((void*) ((u8*) draw_sp->x4C + (ch & 0x7F) * 0x38),
+            hsd_803922FC((void*) (draw_sp->x4C + (ch & 0x7F) * 0x38),
                          hsd_804CF810.x4, hsd_804CF810.x8, b6,
                          (&hsd_804CF810.x24)[draw_sp->x34], draw_sp->x3C,
                          hsd_804CF810.x40, hsd_804CF810.x44, hsd_804CF810.x50);
         } else {
-            hsd_803921B8((void*) ((u8*) draw_sp->x4C + (ch & 0x7F) * 0x38),
+            hsd_803921B8((void*) (draw_sp->x4C + (ch & 0x7F) * 0x38),
                          hsd_804CF810.x4, hsd_804CF810.x8,
                          (&hsd_804CF810.x24)[draw_sp->x34], draw_sp->x3C,
                          hsd_804CF810.x40, hsd_804CF810.x44, hsd_804CF810.x50);
@@ -1353,8 +1455,10 @@ void hsd_803957C0(void* input)
     hsd_804CF810.x50 = saved;
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 s32 hsd_80395970(void)
 {
     struct ParticleScreenState* sp = &hsd_804CF810;
@@ -1392,7 +1496,9 @@ s32 hsd_80395970(void)
     return result;
 }
 
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 extern struct lbl_8040BA5C_t {
     void* x0;
@@ -1456,8 +1562,8 @@ bool hsd_80395A78(void)
             } else {
                 break;
             }
-            while (!(u8) hsd_80394128(hsd_804CF810.x0C + hsd_804CF810.x18,
-                                      hsd_804CF810.x10 + hsd_804CF810.x14))
+            while (!hsd_80394128(hsd_804CF810.x0C + hsd_804CF810.x18,
+                                 hsd_804CF810.x10 + hsd_804CF810.x14))
             {
                 if (hsd_804CF810.x0C > 0) {
                     hsd_804CF810.x0C -= 1;
@@ -1477,7 +1583,7 @@ bool hsd_80395A78(void)
                 new_scroll += 1;
             }
             sum = new_col + new_scroll;
-            if ((u8) hsd_80394128(sum, hsd_804CF810.x10 + hsd_804CF810.x14)) {
+            if (hsd_80394128(sum, hsd_804CF810.x10 + hsd_804CF810.x14)) {
                 hsd_804CF810.x0C = new_col;
                 hsd_804CF810.x18 = new_scroll;
                 return true;
@@ -1572,6 +1678,40 @@ static inline void ps_clear_nodes(struct ParticleScreenState* sp)
     sp->x0_b5 = 1;
 }
 
+static inline void hsd_80395D88_dump_gpr(OSContext* ctx)
+{
+    int i;
+
+    OSReport("- GPR -----------------------------------------------\n");
+    i = 0;
+    do {
+        OSReport("R%02d=%08X(%11d) R%02d=%08X(%11d)\n", i, ctx->gpr[i],
+                 ctx->gpr[i], i + 0x10, ctx->gpr[i + 0x10],
+                 ctx->gpr[i + 0x10]);
+        i++;
+    } while (i < 0x10);
+}
+
+static inline void hsd_80395D88_dump_misc(OSContext* ctx)
+{
+    int i;
+
+    OSReport("- MISC ----------------------------------------------\n");
+    OSReport("SRR0=%08X SRR1=%08X\n", ((u32*) ctx)[0x198 / 4],
+             ((u32*) ctx)[0x19C / 4]);
+    OSReport("CR  =%08X LR  =%08X\n", ((u32*) ctx)[0x80 / 4],
+             ((u32*) ctx)[0x84 / 4]);
+    OSReport("CTR =%08X XER =%08X\n", ((u32*) ctx)[0x88 / 4],
+             ((u32*) ctx)[0x8C / 4]);
+    OSReport("FPSCR=%08X\n", ((u32*) ctx)[0x194 / 4]);
+    i = 0;
+    do {
+        OSReport("GQR%d=%08X GQR%d=%08X\n", i, ((u32*) ctx)[i], i + 4,
+                 ((u32*) ctx)[0x1B4 / 4 + i]);
+        i++;
+    } while (i < 4);
+}
+
 bool hsd_80395D88(void* data)
 {
     switch (hsd_80395550(data)) {
@@ -1601,40 +1741,14 @@ bool hsd_80395D88(void* data)
             ps_remove_node(&hsd_804CF810, data);
             return false;
         case 6: {
-            int i;
-            OSContext* ctx;
             OSContext** ctx_ptr;
             int saved;
 
             if (*(ctx_ptr = &hsd_804CF810.xD4) != NULL) {
                 saved = hsd_80393D2C(1);
-                ctx = *ctx_ptr;
-                OSReport(
-                    "- GPR -----------------------------------------------\n");
-                i = 0;
-                do {
-                    OSReport("R%02d=%08X(%11d) R%02d=%08X(%11d)\n", i,
-                             ctx->gpr[i], ctx->gpr[i], i + 0x10,
-                             ctx->gpr[i + 0x10], ctx->gpr[i + 0x10]);
-                    i++;
-                } while (i < 0x10);
+                hsd_80395D88_dump_gpr(*ctx_ptr);
                 hsd_80394950(*ctx_ptr);
-                ctx = *ctx_ptr;
-                OSReport(
-                    "- MISC ----------------------------------------------\n");
-                OSReport("SRR0=%08X SRR1=%08X\n", ((u32*) ctx)[0x198 / 4],
-                         ((u32*) ctx)[0x19C / 4]);
-                OSReport("CR  =%08X LR  =%08X\n", ((u32*) ctx)[0x80 / 4],
-                         ((u32*) ctx)[0x84 / 4]);
-                OSReport("CTR =%08X XER =%08X\n", ((u32*) ctx)[0x88 / 4],
-                         ((u32*) ctx)[0x8C / 4]);
-                OSReport("FPSCR=%08X\n", ((u32*) ctx)[0x194 / 4]);
-                i = 0;
-                do {
-                    OSReport("GQR%d=%08X GQR%d=%08X\n", i, ((u32*) ctx)[i],
-                             i + 4, ((u32*) ctx)[0x1B4 / 4 + i]);
-                    i++;
-                } while (i < 4);
+                hsd_80395D88_dump_misc(*ctx_ptr);
                 hsd_80393D2C(saved);
             }
             ps_remove_node(&hsd_804CF810, data);
@@ -1695,20 +1809,13 @@ static char* lbl_804D62CC = "+- MEMORY DUMP ------------------------------+";
 static char* lbl_804D62D0 = "|%08X=%08X:%08X:%08X:%08X|";
 static char* lbl_804D62D4 = "+--------------------------------------------+";
 
-extern struct lbl_8040BAF0_t lbl_8040BAF0;
-
-static inline s32 hsd_80396188_calc_col(void)
-{
-    return ((hsd_804CF810.x20 - 0x2E) / 2) * 11 + 20;
-}
-
 // @TODO: Currently 96.11% match - needs register allocation fix
 static inline void hsd_80396188_draw_rows(char* buf, s32 col, u32** addr,
                                           s32* i)
 {
-    s32* x8 = &hsd_804CF810.x8;
     s32* x4 = &hsd_804CF810.x4;
     s32* x40 = &hsd_804CF810.x40;
+    s32* x8 = &hsd_804CF810.x8;
 
     hsd_80394434(lbl_804D62CC);
     *i = 0;
@@ -1730,23 +1837,28 @@ static inline void hsd_80396188_draw_rows(char* buf, s32 col, u32** addr,
     *x4 = col;
 }
 
+static inline void* hsd_80396188_get_x50(void)
+{
+    return hsd_804CF810.x50;
+}
+
 void hsd_80396188(void)
 {
-    void* saved;
     s32 col;
     s32 i;
     u32* addr;
     char buf[64];
     void* tmp;
-    PAD_STACK(20);
+    void* saved;
+    PAD_STACK(12);
 
     addr = (u32*) lbl_8040BAF0.x10;
-    saved = hsd_804CF810.x50;
-    col = ((hsd_804CF810.x20 - 0x2E) / 2) * 11 + 20;
+    saved = hsd_80396188_get_x50();
+    i = hsd_804CF810.x20 - 0x2E;
     hsd_804CF810.x50 = &lbl_8040AB00;
-    hsd_804CF810.x4 = col;
+    hsd_804CF810.x4 = (i / 2) * 11 + 20;
     hsd_804CF810.x8 = hsd_804CF810.x40 - 0x7C;
-    hsd_80396188_draw_rows(buf, col, &addr, &i);
+    hsd_80396188_draw_rows(buf, (i / 2) * 11 + 20, &addr, &i);
     hsd_804CF810.x8 = hsd_804CF810.x40 - 0x36;
     hsd_80394434(lbl_804D62D4);
     hsd_804CF810.x50 = saved;
@@ -1816,7 +1928,7 @@ s32 hsd_803962A8(void* data)
         case 0x400:
             hsd_80393D2C(1);
             addr = (u8*) lbl_8040BAF0.x10;
-            if ((u8) hsd_80394128(0, 0)) {
+            if (hsd_80394128(0, 0)) {
                 OSReport(lbl_804D62D8);
             }
             i = 0;
@@ -1845,7 +1957,10 @@ s32 hsd_803962A8(void* data)
         case 0x100:
             lbl_8040BC3C.x10 = (s32) lbl_8040BAF0.x10;
             lbl_8040BC3C.x18 = &lbl_8040BAF0;
-            if (&lbl_8040BC3C != NULL) {
+#ifdef MUST_MATCH
+            if (&lbl_8040BC3C != NULL)
+#endif
+            {
                 fn_80394DF4(&lbl_8040BC3C);
                 ((ExcptNode*) &lbl_8040BC3C)->next =
                     (ExcptNode*) hsd_804CF810.xD0;
@@ -1861,7 +1976,10 @@ s32 hsd_803962A8(void* data)
             ps_remove_node(&hsd_804CF810, data);
             return 1;
         case 0x1000:
-            if (&lbl_8040BBE8 != NULL) {
+#ifdef MUST_MATCH
+            if (&lbl_8040BBE8 != NULL)
+#endif
+            {
                 fn_80394DF4((void*) &lbl_8040BBE8);
                 ((ExcptNode*) &lbl_8040BBE8)->next =
                     (ExcptNode*) hsd_804CF810.xD0;
@@ -1950,18 +2068,31 @@ struct lbl_8040BA5C_t lbl_8040BBE8 = {
 static char* lbl_804D62F4 = "+--------------------------+";
 static char* lbl_804D62F8 = "| INPUT ADDRESS : 8%07X |";
 
+static inline void hsd_80396884_draw_char(s8 ch, s32 b6)
+{
+    hsd_803922FC(hsd_804CF810.x4C + (ch & 0x7F) * 0x38, hsd_804CF810.x4,
+                 hsd_804CF810.x8, b6, (&hsd_804CF810.x24)[hsd_804CF810.x34],
+                 hsd_804CF810.x3C, hsd_804CF810.x40, hsd_804CF810.x44,
+                 hsd_804CF810.x50);
+}
+
+static inline void* hsd_80396884_get_x50(void)
+{
+    return hsd_804CF810.x50;
+}
+
 void hsd_80396884(void)
 {
-    char buf[32];
-    s32 b6;
-    s32 x_base;
-    u8 ch;
     void* saved;
+    s32 x_base;
+    s32 b6;
+    u8 ch;
+    char buf[32];
     PAD_STACK(28);
 
     x_base = (hsd_804CF810.x20 - 30) / 2;
     sprintf(buf, lbl_804D62F8, lbl_8040BC3C.x10 & 0x0FFFFFFF);
-    saved = hsd_804CF810.x50;
+    saved = hsd_80396884_get_x50();
     hsd_804CF810.x50 = &lbl_8040AB00;
     hsd_804CF810.x4 = x_base * 11 + 20;
     hsd_804CF810.x8 = hsd_804CF810.x40 - 82;
@@ -1972,19 +2103,15 @@ void hsd_80396884(void)
     hsd_804CF810.x4 = x_base * 11 + 20;
     hsd_804CF810.x8 = hsd_804CF810.x40 - 54;
     hsd_80394434(lbl_804D62F4);
-    hsd_804CF810.x4 = (lbl_8040BC3C.x14 + 19 + x_base) * 11 + 20;
+    hsd_804CF810.x4 = (lbl_8040BC3C.x14 + (19 + x_base)) * 11 + 20;
     hsd_804CF810.x8 = hsd_804CF810.x40 - 68;
     hsd_804CF810.x50 = &lbl_8040AB20;
     b6 = hsd_804CF810.x0_b6;
     ch = *(&buf[19] + lbl_8040BC3C.x14);
     if (hsd_804CF810.x0_b7) {
-        void* bitmap = (void*) ((u8*) hsd_804CF810.x4C + (ch & 0x7F) * 0x38);
-        s32 x = hsd_804CF810.x4;
-        s32 dst = (&hsd_804CF810.x24)[hsd_804CF810.x34];
-        hsd_803922FC(bitmap, x, hsd_804CF810.x8, b6, dst, hsd_804CF810.x3C,
-                     hsd_804CF810.x40, hsd_804CF810.x44, hsd_804CF810.x50);
+        hsd_80396884_draw_char(ch, b6);
     } else {
-        void* bitmap = (void*) ((u8*) hsd_804CF810.x4C + (ch & 0x7F) * 0x38);
+        u8* bitmap = hsd_804CF810.x4C + (ch & 0x7F) * 0x38;
         s32 x = hsd_804CF810.x4;
         s32 dst = (&hsd_804CF810.x24)[hsd_804CF810.x34];
         hsd_803921B8(bitmap, x, hsd_804CF810.x8, dst, hsd_804CF810.x3C,
@@ -1992,8 +2119,6 @@ void hsd_80396884(void)
     }
     hsd_804CF810.x50 = saved;
 }
-
-extern struct lbl_8040BC3C_t lbl_8040BC3C;
 
 extern struct lbl_8040BA5C_t lbl_8040BD74;
 
@@ -2038,7 +2163,10 @@ s32 hsd_80396A20(void* data)
             ps_remove_node(&hsd_804CF810, node);
             return 1;
         case 0x1000: {
-            if (&lbl_8040BD74 != NULL) {
+#ifdef MUST_MATCH
+            if (&lbl_8040BD74 != NULL)
+#endif
+            {
                 fn_80394DF4(&lbl_8040BD74);
                 lbl_8040BD74.x0 = hsd_804CF810.xD0;
                 hsd_804CF810.xD0 = &lbl_8040BD74;
@@ -2128,15 +2256,17 @@ static char* lbl_804D630C = "+-------------------------------+";
 
 // @TODO: Currently 86.10% match - .bss.0 relocation affects register
 // allocation
+static inline void* hsd_80396E40_get_x50(void)
+{
+    return hsd_804CF810.x50;
+}
+
 void hsd_80396E40(int keycode)
 {
     struct ParticleScreenState* sp = &hsd_804CF810;
     char buf[64];
-    void* saved;
     s32 row;
     s32 i;
-    s32 spr_u;
-    s32 spr_l;
     s32 bat_u;
     s32 bat_l;
     char* perm;
@@ -2149,25 +2279,35 @@ void hsd_80396E40(int keycode)
     s32 bit;
     char* ptr;
     s32 j;
-    char ch;
+    s32 ch;
+    void* saved;
+    PAD_STACK(8);
 
-    saved = hsd_804CF810.x50;
+    saved = hsd_80396E40_get_x50();
     row = sp->x1C - 1;
     hsd_804CF810.x50 = &lbl_8040AB00;
     hsd_804CF810.x4 = 0x106;
-    hsd_804CF810.x8 = (hsd_804CF810.x40 - 0x28) - (row + 1) * 14;
-    row--;
-    if (keycode < 0x220 && keycode >= 0x218) {
+    i = row--;
+    hsd_804CF810.x8 = (hsd_804CF810.x40 - 0x28) - (i + 1) * 14;
+    switch (keycode) {
+    case 0x218:
+    case 0x219:
+    case 0x21A:
+    case 0x21B:
+    case 0x21C:
+    case 0x21D:
+    case 0x21E:
+    case 0x21F:
         hsd_80394434(lbl_804D62FC);
-    } else {
+        break;
+    default:
         hsd_80394434(lbl_804D6300);
+        break;
     }
     i = 0;
-    spr_u = 0x219;
-    spr_l = 0x218;
     do {
-        bat_u = baselib_mfspr(spr_u);
-        bat_l = baselib_mfspr(spr_l);
+        bat_u = baselib_mfspr(0x219 + i * 2);
+        bat_l = baselib_mfspr(0x218 + i * 2);
         switch (bat_u & 2) {
         case 0:
             perm = "N/A";
@@ -2219,24 +2359,20 @@ void hsd_80396E40(int keycode)
             } else {
                 ch = '0';
             }
-            ptr[7] = ch;
+            ptr[7] = (char) ch;
             ptr++;
         }
         hsd_804CF810.x4 = 0x106;
-        hsd_804CF810.x8 = (hsd_804CF810.x40 - 0x28) - (row + 1) * 14;
-        row--;
+        hsd_804CF810.x8 = (hsd_804CF810.x40 - 0x28) - (row-- + 1) * 14;
         hsd_80394434(buf);
         sprintf(buf, lbl_804D6308, bat_l & 0xFFFC0000, bat_u & 0xFFFC0000);
         hsd_804CF810.x4 = 0x106;
-        hsd_804CF810.x8 = (hsd_804CF810.x40 - 0x28) - (row + 1) * 14;
-        row--;
+        hsd_804CF810.x8 = (hsd_804CF810.x40 - 0x28) - (row-- + 1) * 14;
         hsd_80394434(buf);
         i++;
-        spr_u += 2;
-        spr_l += 2;
     } while (i < 4);
     hsd_804CF810.x4 = 0x106;
-    hsd_804CF810.x8 = (hsd_804CF810.x40 - 0x28) - (row + 1) * 14;
+    hsd_804CF810.x8 = (hsd_804CF810.x40 - 0x28) - (row-- + 1) * 14;
     hsd_80394434(lbl_804D630C);
     hsd_804CF810.x50 = saved;
 }
@@ -2460,7 +2596,6 @@ void hsd_80397520(void* node_ptr)
     }
 }
 
-// @TODO: Currently 99.78% match - register allocation differences remain
 void hsd_803975D4(void)
 {
     struct ParticleInputState {
@@ -2475,7 +2610,6 @@ void hsd_803975D4(void)
     u32 reset_mask;
     s32 port;
     u16 buttons;
-    u16 changed;
     u32 new_press;
 
     reset_mask = 0;
@@ -2512,11 +2646,16 @@ void hsd_803975D4(void)
     }
     ((struct ParticleInputState*) sp)->port = port;
     pads = ((struct ParticleInputState*) sp)->pads;
+    /* keeps pads a real local instead of a CSE temp; see reg alloc */
+    (void) pads;
     buttons = pads[((struct ParticleInputState*) sp)->port].button;
-    changed =
-        pads[((struct ParticleInputState*) sp)->port + 4].button ^ buttons;
+    new_press =
+        (u16) (buttons &
+               ((&((PADStatus*)
+                       sp->_pad4)[4])[((struct ParticleInputState*) sp)->port]
+                    .button ^
+                buttons));
     sp->xC0 = buttons;
-    new_press = (u16) (buttons & changed);
     if (new_press != 0) {
         ((struct ParticleInputState*) sp)->repeat = 0;
     } else if (pads[((struct ParticleInputState*) sp)->port].button != 0) {
@@ -2707,8 +2846,11 @@ void* fn_80397814(void* arg)
         *head = NULL;
     }
 
-    /* Link exception node */
-    if (&lbl_8040B8C4 != NULL) {
+/* Link exception node */
+#ifdef MUST_MATCH
+    if (&lbl_8040B8C4 != NULL)
+#endif
+    {
         ((ExcptNode*) &lbl_8040B8C4)->next = NULL;
         hsd_804CF810.xD0 = &lbl_8040B8C4;
         if (((ExcptNode*) &lbl_8040B8C4)->callback != NULL) {
@@ -2732,8 +2874,8 @@ void* fn_80397814(void* arg)
         hsd_80394544(hsd_804CF810.x18, hsd_804CF810.x14, hsd_804CF810.x20,
                      hsd_804CF810.x1C, 20, hsd_804CF810.x40 - 40,
                      (&hsd_804CF810.x24)[hsd_804CF810.x34], hsd_804CF810.x3C,
-                     hsd_804CF810.x40, hsd_804CF810.x44, (s32) lbl_804088B8,
-                     NULL);
+                     hsd_804CF810.x40, hsd_804CF810.x44,
+                     (s32) HSD_DebugFontAtlas, NULL);
 
         hsd_804CF810.xC8 = 0;
         hsd_804CF810.xCC = hsd_804CF810.x1C - 1;
@@ -2745,7 +2887,7 @@ void* fn_80397814(void* arg)
         }
         if (node != NULL) {
             if (node->child != NULL) {
-                hsd_80397520(node->child);
+                hsd_80397520(ps_node_child(node));
             }
             if (node->callback != NULL) {
                 node->callback(node);
@@ -2765,7 +2907,7 @@ void* fn_80397814(void* arg)
             next_retrace2 = VIGetRetraceCount();
         } while (next_retrace2 == retrace2);
         retrace2 = next_retrace2;
-        lbl_ptr = lbl_804088B8;
+        lbl_ptr = HSD_DebugFontAtlas;
 
         /* Main rendering loop */
         while (*keybuf != 0) {
@@ -3095,7 +3237,27 @@ void fn_803982E4(HSD_GObj* gobj, int unused)
     hsd_8039254C();
 }
 
-static HSD_CObjDesc lbl_8040BF70 = { 0 };
+HSD_WObjDesc lbl_8040BF48 = { NULL, { 0.0f, 0.0f, 1.0f }, NULL };
+HSD_WObjDesc lbl_8040BF5C = { NULL, { 0.0f, 0.0f, 0.0f }, NULL };
+
+/// @todo Ortho camera; typed as the frustum arm of the HSD_CObjDesc union.
+static HSD_CameraDescFrustum lbl_8040BF70 = {
+    NULL,
+    0,
+    3,
+    { 0, 640, 0, 480 },
+    { 0, 640, 0, 480 },
+    &lbl_8040BF48,
+    &lbl_8040BF5C,
+    0.0f,
+    NULL,
+    0.0f,
+    32768.0f,
+    -445.0f,
+    35.0f,
+    -20.0f,
+    620.0f,
+};
 
 HSD_GObj* hsd_80398310(u16 class_id, u8 p_link, u8 obj_kind, u32 gx_link)
 {
@@ -3106,8 +3268,8 @@ HSD_GObj* hsd_80398310(u16 class_id, u8 p_link, u8 obj_kind, u32 gx_link)
     if (gobj == NULL) {
         return NULL;
     }
-    cobj = HSD_CObjLoadDesc(&lbl_8040BF70);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
+    cobj = HSD_CObjLoadDesc((HSD_CObjDesc*) &lbl_8040BF70);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(gobj, fn_803982E4, gx_link);
     hsd_80392528((Event) fn_80392A3C);
     fn_80392A08(4, 1, 0);

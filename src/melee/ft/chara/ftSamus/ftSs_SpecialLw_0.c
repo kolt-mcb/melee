@@ -5,15 +5,16 @@
 #include "types.h"
 
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcoll.h"
 #include "ft/ftcommon.h"
 #include "ft/types.h"
-
-#include "ftCommon/forward.h"
-
 #include "ftCommon/ftCo_Attack1.h"
 #include "ftCommon/ftCo_Attack100.h"
 #include "ftCommon/ftCo_AttackHi3.h"
@@ -28,7 +29,6 @@
 #include "ftCommon/ftCo_SquatWait.h"
 #include "lb/lbcollision.h"
 
-#include <trigf.h>
 #include <dolphin/mtx.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
@@ -111,7 +111,7 @@ float ftSs_Init_80128AC8(HSD_GObj* gobj, float farg1, float farg2)
     return SL0_FMA(-da->x4, value, 1.5707963705062866f);
 }
 
-inline void ftSamus_80128B1C_inner(HSD_GObj* gobj, float angle)
+static inline void ftSamus_80128B1C_inner(HSD_GObj* gobj, float angle)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     struct ftCo_DatAttrs* ftAttr = &fp->co_attrs;
@@ -216,7 +216,7 @@ void ftSs_SpecialLw_Phys(HSD_GObj* gobj)
 
     if (fp->cmd_vars[0]) {
         float samus_attr_xC = samus_attr->xC;
-        ftCommon_8007CADC(fp, 0.0f, ftAttr->walk_init_vel * samus_attr_xC,
+        ftCommon_8007CADC(fp, 0.0f, ftAttr->walk_accel_mul * samus_attr_xC,
                           ftAttr->walk_max_vel * samus_attr_xC);
         ftCommon_ApplyGroundMovement(gobj);
     } else {
@@ -287,7 +287,7 @@ void ftSs_SpecialLw_801290A4(HSD_GObj* gobj)
                               fp->frame_speed_mul, 0.0f, 0);
 }
 
-int ftSs_SpecialLw_80129100(HSD_GObj* gobj, s32* arg1, s32* arg2)
+int ftSs_SpecialLw_80129100(HSD_GObj* gobj, int* arg1, int* arg2)
 {
     if (gobj != NULL) {
         Fighter* fp = GET_FIGHTER(gobj);

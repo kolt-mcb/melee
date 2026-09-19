@@ -7,6 +7,12 @@
 #include "gm_unsplit.h"
 #include "../gr/grdatfiles.h"
 
+#include "gm/gmevent.h"
+#include "gm/gmmain_lib.h"
+#include "gm/gmopening.h"
+#include "mn/inlines.h"
+
+#include <baselib/sislib.h>
 #include <sysdolphin/baselib/cobj.h>
 #include <sysdolphin/baselib/displayfunc.h>
 #include <sysdolphin/baselib/fog.h>
@@ -20,7 +26,6 @@
 #include <sysdolphin/baselib/fobj.h>
 #include <sysdolphin/baselib/random.h>
 #include <melee/db/db.h>
-#include <melee/gm/gmmain_lib.h>
 #include <melee/gm/types.h>
 #include <melee/lb/lbarchive.h>
 #include <melee/lb/lbaudio_ax.h>
@@ -28,44 +33,43 @@
 #include <melee/lb/lbmthp.h>
 #include <melee/lb/lbspdisplay.h>
 #include <melee/lb/lbtime.h>
-#include <melee/mn/inlines.h>
 #include <melee/mn/mnmain.h>
 #include <melee/sc/types.h>
 
-static StaticModelDesc gmTitle_80479B28;
-static StaticModelDesc gmTitle_80479B38;
-static char gmTitle_80479B48[0x80]; // debug text
-AnimLoopSettings gmTitle_803DA4F0 = { 0, 1600.0F, 400.0F };
-AnimLoopSettings gmTitle_803DA4FC = { 0, 1330.0F, 130.0F };
-Vec3 gmTitle_803DA508 = { 0, -3, 0 };
+static StaticModelDesc model_desc_0;
+static StaticModelDesc model_desc_1;
+static char debug_text_buffer[0x80];
+static AnimLoopSettings loop_settings_0 = { 0, 1600.0F, 400.0F };
+static AnimLoopSettings loop_settings_1 = { 0, 1330.0F, 130.0F };
+static Vec3 jobj_translate = { 0, -3, 0 };
 
-static HSD_CameraDescPerspective* gmTitle_804D6708;
-static LightList** gmTitle_804D670C;
-static HSD_FogDesc* gmTitle_804D6710;
-static int gmTitle_804D6714;
-static u32 gmTitle_804D6718;
-static u8 gmTitle_804D671C;
-
-extern u32 gm_804D67EC;
+static HSD_CameraDescPerspective* cobj_desc;
+static LightList** list_list;
+static HSD_FogDesc* fog_desc;
+static int countdown_timer;
+static u32 frame_count;
+static GXBool bg_initialized;
 
 HSD_GObj* gmTitle_801A12C4(void)
 {
-    HSD_JObj* sp8;
-    HSD_GObj* gobj = GObj_Create(0xE, 0xF, 0);
-    HSD_JObj* jobj = HSD_JObjLoadJoint(gmTitle_80479B28.joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObj* gobj = GObj_Create(HSD_GOBJ_CLASS_UI, 15, 0);
+    HSD_JObj* jobj = HSD_JObjLoadJoint(model_desc_0.joint);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 9, 0);
-    HSD_JObjAddAnimAll(jobj, gmTitle_80479B28.animjoint,
-                       gmTitle_80479B28.matanim_joint,
-                       gmTitle_80479B28.shapeanim_joint);
-    HSD_JObjReqAnimAll(jobj, gmTitle_803DA4F0.loop_frame);
+    HSD_JObjAddAnimAll(jobj, model_desc_0.animjoint,
+                       model_desc_0.matanim_joint,
+                       model_desc_0.shapeanim_joint);
+    HSD_JObjReqAnimAll(jobj, loop_settings_0.loop_frame);
     HSD_JObjAnimAll(jobj);
 
-    HSD_JObjSetTranslate(jobj, &gmTitle_803DA508);
-    lb_80011E24(jobj, &sp8, 3, -1);
-    HSD_JObjSetFlagsAll(sp8, JOBJ_HIDDEN);
-    lb_80011E24(jobj, &sp8, 1, -1);
-    HSD_JObjSetFlagsAll(sp8, JOBJ_HIDDEN);
+    HSD_JObjSetTranslate(jobj, &jobj_translate);
+    {
+        HSD_JObj* result;
+        lb_80011E24(jobj, &result, 3, -1);
+        HSD_JObjSetFlagsAll(result, JOBJ_HIDDEN);
+        lb_80011E24(jobj, &result, 1, -1);
+        HSD_JObjSetFlagsAll(result, JOBJ_HIDDEN);
+    }
     return gobj;
 }
 
@@ -98,7 +102,7 @@ static void gmTitle_801A146C(HSD_GObj* gobj)
                 (double)tun_t[0], (double)tun_t[1], (double)tun_t[2]);
     }
 #endif
-    mn_8022ED6C(GET_JOBJ(gobj), &gmTitle_803DA4FC);
+    mn_8022ED6C(GET_JOBJ(gobj), &loop_settings_1);
 }
 
 static inline bool isActiveTitle(void)
@@ -142,9 +146,8 @@ static void pc_MatAnimCatchUp(HSD_JObj* jobj, int* budget);
 
 static void fn_801A1498_inline(void)
 {
-    bool var_r0;
-    HSD_GObj* gobj = GObj_Create(0xE, 0xF, 0);
-    HSD_JObj* jobj = HSD_JObjLoadJoint(gmTitle_80479B38.joint);
+    HSD_GObj* gobj = GObj_Create(HSD_GOBJ_CLASS_UI, 15, 0);
+    HSD_JObj* jobj = HSD_JObjLoadJoint(model_desc_1.joint);
 #if BUILD_TARGET_PC
     if (getenv("MELEE_ANIMLOG")) {
         fprintf(stderr, "TTLBG-CREATE gobj=%p jobj=%p\n", (void*)gobj, (void*)jobj);
@@ -152,19 +155,19 @@ static void fn_801A1498_inline(void)
         fprintf(stderr, "=== JTREE (TTLBG background) ===\n");
         pc_jtree_dump(jobj, 0, &budget);
         /* shape-compare the anim joint tree (lockstep matching requires identical shape) */
-        fprintf(stderr, "=== AJTREE (TTLBG anim) root=%p ===\n", (void*)gmTitle_80479B38.animjoint);
+        fprintf(stderr, "=== AJTREE (TTLBG anim) root=%p ===\n", (void*)model_desc_1.animjoint);
         int depth = 0, count = 0;
-        if (gmTitle_80479B38.animjoint) {
-            depth = pc_ajtree_dump(gmTitle_80479B38.animjoint, 0, &count);
+        if (model_desc_1.animjoint) {
+            depth = pc_ajtree_dump(model_desc_1.animjoint, 0, &count);
         }
         fprintf(stderr, "AJTREE nodes=%d maxdepth=%d\n", count, depth);
     }
 #endif
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 3, 0);
-    HSD_JObjAddAnimAll(jobj, gmTitle_80479B38.animjoint,
-                       gmTitle_80479B38.matanim_joint,
-                       gmTitle_80479B38.shapeanim_joint);
+    HSD_JObjAddAnimAll(jobj, model_desc_1.animjoint,
+                       model_desc_1.matanim_joint,
+                       model_desc_1.shapeanim_joint);
     HSD_GObj_SetupProc(gobj, gmTitle_801A146C, 0);
 #if BUILD_TARGET_PC
     /* PC fast-forward fix: TtlBg's matanim fobjs (diffuse 0..21, alpha up to
@@ -176,8 +179,8 @@ static void fn_801A1498_inline(void)
         pc_MatAnimCatchUp(jobj, &_bu);
     }
 #endif /* BUILD_TARGET_PC */
-    if (isActiveTitle() != 0) {
-        HSD_JObjReqAnimAll(jobj, gmTitle_803DA4FC.start_frame);
+    if (isActiveTitle()) {
+        HSD_JObjReqAnimAll(jobj, loop_settings_1.start_frame);
     } else {
         HSD_JObjReqAnimAll(jobj, 130.0F);
     }
@@ -225,9 +228,9 @@ static int pc_jtree_dump(HSD_JObj* j, int depth, int* budget)
 }
 #endif
 
-static void fn_801A1498(HSD_GObj* arg0)
+static void fn_801A1498(HSD_GObj* gobj)
 {
-    HSD_JObj* jobj = GET_JOBJ(arg0);
+    HSD_JObj* jobj = GET_JOBJ(gobj);
 #if BUILD_TARGET_PC
     static int _t_on = -1, _t_n = 0, _tree_done = 0;
     if (_t_on < 0) _t_on = (getenv("MELEE_ANIMLOG") != NULL);
@@ -249,24 +252,24 @@ static void fn_801A1498(HSD_GObj* arg0)
                 ch ? (double)ch->translate.x : 0, ch ? (double)ch->translate.y : 0, ch ? (double)ch->translate.z : 0);
     }
 #endif
-    if (gm_804D67EC > 0x1518) {
-        mn_8022ED6C(jobj, &gmTitle_803DA4F0);
+    if (gm_804D67EC > 5400) {
+        mn_8022ED6C(jobj, &loop_settings_0);
     } else {
-        HSD_JObjReqAnimAll(jobj, gm_804D67EC - 0x140A);
+        HSD_JObjReqAnimAll(jobj, gm_804D67EC - 5130);
         HSD_JObjAnimAll(jobj);
     }
-    if (gmTitle_804D671C == 0) {
+    if (bg_initialized == GX_FALSE) {
         if (mn_8022F298(jobj) >= 270.0F) {
             fn_801A1498_inline();
             lbMthp_8001F614(0);
-            gmTitle_804D671C = 1;
+            bg_initialized = GX_TRUE;
         }
     }
 }
 
 static void gmTitle_801A1630(HSD_GObj* gobj)
 {
-    mn_8022ED6C(GET_JOBJ(gobj), &gmTitle_803DA4F0);
+    mn_8022ED6C(GET_JOBJ(gobj), &loop_settings_0);
 #if BUILD_TARGET_PC
     {
         static int _lg_n = 0;
@@ -307,40 +310,36 @@ static void pc_MatAnimCatchUp(HSD_JObj* jobj, int* budget)
 }
 #endif /* BUILD_TARGET_PC */
 
+/// @todo similar to ::gm_801AA688
+static bool isEmblemUnlocked(void)
+{
+    if (gm_IsCKindUnlocked(CKIND_MARS) || gm_IsCKindUnlocked(CKIND_EMBLEM)) {
+        return true;
+    }
+    return false;
+}
+
 HSD_GObj* gmTitle_801A165C(void)
 {
-    int var_r0;
-    HSD_JObj* sp10;
-    datetime sp8;
-
-    HSD_GObj* gobj = GObj_Create(0xE, 0xF, 0);
-    HSD_JObj* jobj = HSD_JObjLoadJoint(gmTitle_80479B28.joint);
-    int second;
-    u8 kind = HSD_GObj_804D7849;
+    HSD_GObj* gobj = GObj_Create(HSD_GOBJ_CLASS_UI, 15, 0);
+    HSD_JObj* jobj = HSD_JObjLoadJoint(model_desc_0.joint);
+    u8 kind = HSD_GObj_JObjKind;
 
     HSD_GObjObject_80390A70(gobj, kind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 9, 0);
-    HSD_JObjAddAnimAll(jobj, gmTitle_80479B28.animjoint,
-                       gmTitle_80479B28.matanim_joint,
-                       gmTitle_80479B28.shapeanim_joint);
+    HSD_JObjAddAnimAll(jobj, model_desc_0.animjoint,
+                       model_desc_0.matanim_joint,
+                       model_desc_0.shapeanim_joint);
 #if BUILD_TARGET_PC
     if (getenv("MELEE_ANIMLOG")) {
         int budget = 200;
-        fprintf(stderr, "=== JTREE (TTLMOJI logo, gmTitle_80479B28) ===\n");
+        fprintf(stderr, "=== JTREE (TTLMOJI logo, model_desc_0) ===\n");
         pc_jtree_dump(jobj, 0, &budget);
     }
 #endif
 
-    if (gm_GetCurrentGameMode() == GM_TITLE ||
-        (gm_GetCurrentGameMode() == GM_OPENING_MV &&
-         gm_GetCurrentSceneIndex() == GS_VS))
-    {
-        var_r0 = false;
-    } else {
-        var_r0 = true;
-    }
-    if (var_r0) {
-        gmTitle_804D671C = 0;
+    if (isActiveTitle()) {
+        bg_initialized = GX_FALSE;
 #if BUILD_TARGET_PC
         /* PC fast-forward fix: with MELEE_MTHP_START the title-sequence frame
          * (gm_804D67EC) is jumped ahead, so this logo is *created* already
@@ -356,7 +355,7 @@ HSD_GObj* gmTitle_801A165C(void)
             HSD_JObjReqAnimAll(jobj, (f32)(gm_804D67EC - 0x140A));
         } else
 #endif
-        HSD_JObjReqAnimAll(jobj, gmTitle_803DA4F0.start_frame);
+        HSD_JObjReqAnimAll(jobj, loop_settings_0.start_frame);
         HSD_GObj_SetupProc(gobj, fn_801A1498, 0);
 #if BUILD_TARGET_PC
         fprintf(stderr, "TITLEPROC registered fn_801A1498=%p gobj=%p jobj=%p EC=%u frame=%.1f\n",
@@ -368,33 +367,33 @@ HSD_GObj* gmTitle_801A165C(void)
         HSD_GObj_SetupProc(gobj, gmTitle_801A1630, 0);
     }
     HSD_JObjAnimAll(jobj);
-    if (gm_IsCKindUnlocked(CKIND_MARS) || gm_IsCKindUnlocked(CKIND_EMBLEM)) {
-        var_r0 = true;
-    } else {
-        var_r0 = false;
-    }
-    if (!var_r0) {
+    if (!isEmblemUnlocked()) {
+        HSD_JObj* result;
 #if BUILD_TARGET_PC
-        /* PC port: lb_80011E24 leaves sp10 untouched when the child joint
+        /* PC port: lb_80011E24 leaves `result` untouched when the child joint
          * is not found; SetFlagsAll on the uninitialized value crashed
          * intermittently at boot. */
-        sp10 = NULL;
-        lb_80011E24(jobj, &sp10, 7, -1);
-        if (pc_ptr_sane(sp10)) {
-            HSD_JObjSetFlagsAll(sp10, JOBJ_HIDDEN);
+        result = NULL;
+        lb_80011E24(jobj, &result, 7, -1);
+        if (pc_ptr_sane(result)) {
+            HSD_JObjSetFlagsAll(result, JOBJ_HIDDEN);
         }
 #else
-        lb_80011E24(jobj, &sp10, 7, -1);
-        HSD_JObjSetFlagsAll(sp10, JOBJ_HIDDEN);
+        lb_80011E24(jobj, &result, 7, -1);
+        HSD_JObjSetFlagsAll(result, JOBJ_HIDDEN);
 #endif
     }
-    gm_801692E8(lbTime_8000AFBC(), &sp8);
-    second = sp8.second;
-    while (second != 0) {
-        HSD_Rand();
-        second--;
+    {
+        datetime time;
+        int second;
+        gm_801692E8(lbTime_GetTimeInSeconds(), &time);
+        second = time.second;
+        while (second != 0) {
+            HSD_Rand();
+            second--;
+        }
     }
-    gm_801BF128();
+    gm_SetupTitleDemo();
     return gobj;
 }
 
@@ -409,9 +408,9 @@ static void gmTitle_801A1814(HSD_GObj* gobj, int unused)
 
 void gmTitle_801A185C(void)
 {
-    HSD_GObj* gobj = GObj_Create(0x13, 0x14, 0);
-    HSD_CObj* cobj = lb_80013B14(gmTitle_804D6708);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
+    HSD_GObj* gobj = GObj_Create(HSD_GOBJ_CLASS_CAMERA, 20, 0);
+    HSD_CObj* cobj = lb_80013B14(cobj_desc);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(gobj, gmTitle_801A1814, 0xC);
     gobj->gxlink_prios = 0x209;
 }
@@ -420,11 +419,11 @@ static void gmTitle_801A18D4(HSD_GObj* gobj, int unused)
 {
     GXColor erase_color;
 #if BUILD_TARGET_PC
-    if (!pc_ptr_sane(gmTitle_804D6710)) {
+    if (!pc_ptr_sane(fog_desc)) {
         return; /* PC port: title color table not loaded yet */
     }
 #endif
-    erase_color = gmTitle_804D6710->color;
+    erase_color = fog_desc->color;
     if (HSD_CObjSetCurrent(GET_COBJ(gobj))) {
         HSD_SetEraseColor(erase_color.r, erase_color.g, erase_color.b,
                           erase_color.a);
@@ -435,18 +434,18 @@ static void gmTitle_801A18D4(HSD_GObj* gobj, int unused)
 
 void gmTitle_801A1944(void)
 {
-    HSD_GObj* gobj = GObj_Create(0x13, 0x14, 0);
-    HSD_CObj* cobj = lb_80013B14(gmTitle_804D6708);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
+    HSD_GObj* gobj = GObj_Create(HSD_GOBJ_CLASS_CAMERA, 20, 0);
+    HSD_CObj* cobj = lb_80013B14(cobj_desc);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(gobj, gmTitle_801A18D4, 0);
 }
 
 void gmTitle_801A19AC(void)
 {
-    HSD_GObj* gobj = GObj_Create(0xB, 0x3, 0x80);
-    HSD_LObj* lobj = lb_80011AC4(gmTitle_804D670C);
+    HSD_GObj* gobj = GObj_Create(HSD_GOBJ_CLASS_LIGHT, 3, 128);
+    HSD_LObj* lobj = lb_80011AC4(list_list);
     PAD_STACK(4);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784A, lobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_LightKind, lobj);
     GObj_SetupGXLink(gobj, HSD_GObj_LObjCallback, 0, 0);
 }
 
@@ -457,15 +456,13 @@ static void gmTitle_801A1A18(HSD_GObj* gobj)
 
 HSD_GObj* gmTitle_801A1A3C(void)
 {
-    HSD_GObj* gobj = GObj_Create(0xA, 0x3, 0);
-    HSD_Fog* fog = HSD_FogLoadDesc(gmTitle_804D6710);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7848, fog);
+    HSD_GObj* gobj = GObj_Create(HSD_GOBJ_CLASS_FOG, 3, 0);
+    HSD_Fog* fog = HSD_FogLoadDesc(fog_desc);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_FogKind, fog);
     GObj_SetupGXLink(gobj, HSD_GObj_FogCallback, 0, 0);
     HSD_GObj_SetupProc(gobj, gmTitle_801A1A18, 0);
     return gobj;
 }
-
-extern UNK_T gm_804D67F0;
 
 HSD_Archive* gmTitle_801A1AC0(void)
 {
@@ -489,26 +486,26 @@ HSD_Archive* gmTitle_801A1AC0(void)
         /* TtlMoji (title text) joint tree */
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_joint");
         grDatFiles_ResetJointMap();
-        gmTitle_80479B28.joint = grDatFiles_ConvertJointTreeGCNtoX64(raw, dataBase, 0, NULL);
+        model_desc_0.joint = grDatFiles_ConvertJointTreeGCNtoX64(raw, dataBase, 0, NULL);
         grDatFiles_ResolvePObjJoints();
 
         /* TtlMoji animation trees */
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_animjoint");
-        gmTitle_80479B28.animjoint = grDatFiles_ConvertAnimJointTreeGCNtoX64(raw, dataBase, 0);
+        model_desc_0.animjoint = grDatFiles_ConvertAnimJointTreeGCNtoX64(raw, dataBase, 0);
 
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_matanim_joint");
-        gmTitle_80479B28.matanim_joint = grDatFiles_ConvertMatAnimJointTreeGCNtoX64(raw, dataBase, 0);
+        model_desc_0.matanim_joint = grDatFiles_ConvertMatAnimJointTreeGCNtoX64(raw, dataBase, 0);
 
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlMoji_Top_shapeanim_joint");
-        gmTitle_80479B28.shapeanim_joint = grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(raw, dataBase, 0);
+        model_desc_0.shapeanim_joint = grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(raw, dataBase, 0);
 
         /* Camera — convert GCN-packed desc (eyepos/interest WObjs, up vector). */
-        gmTitle_804D6708 = grDatFiles_ConvertCameraDescGCNtoX64(
+        cobj_desc = grDatFiles_ConvertCameraDescGCNtoX64(
             (const u8*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_cam_int1_camera"),
             dataBase);
 #if BUILD_TARGET_PC
         if (getenv("MELEE_MTR")) {
-            HSD_CameraDescPerspective* d = gmTitle_804D6708;
+            HSD_CameraDescPerspective* d = cobj_desc;
             if (d) {
                 fprintf(stderr, "CAMDUMP raw=%p flags=0x%04x ptype=%u near=%.4f far=%.4f fov=%.4f aspect=%.4f\n",
                     (void*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_cam_int1_camera"),
@@ -524,27 +521,27 @@ HSD_Archive* gmTitle_801A1AC0(void)
         }
 #endif
         /* Lights — convert GCN LightList array. */
-        gmTitle_804D670C = grDatFiles_ConvertLightListGCNtoX64(
+        list_list = grDatFiles_ConvertLightListGCNtoX64(
             (const u8*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_scene_lights"),
             dataBase);
         /* Fog — convert GCN-packed desc. */
-        gmTitle_804D6710 = grDatFiles_ConvertFogDescGCNtoX64(
+        fog_desc = grDatFiles_ConvertFogDescGCNtoX64(
             (const u8*)HSD_ArchiveGetPublicAddress(archive, "ScTitle_fog"),
             dataBase);
 
         /* TtlBg (title background) joint tree */
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_joint");
-        gmTitle_80479B38.joint = grDatFiles_ConvertJointTreeGCNtoX64(raw, dataBase, 0, NULL);
+        model_desc_1.joint = grDatFiles_ConvertJointTreeGCNtoX64(raw, dataBase, 0, NULL);
 
         /* TtlBg animation trees */
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_animjoint");
-        gmTitle_80479B38.animjoint = grDatFiles_ConvertAnimJointTreeGCNtoX64(raw, dataBase, 0);
+        model_desc_1.animjoint = grDatFiles_ConvertAnimJointTreeGCNtoX64(raw, dataBase, 0);
 
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_matanim_joint");
-        gmTitle_80479B38.matanim_joint = grDatFiles_ConvertMatAnimJointTreeGCNtoX64(raw, dataBase, 0);
+        model_desc_1.matanim_joint = grDatFiles_ConvertMatAnimJointTreeGCNtoX64(raw, dataBase, 0);
 
         raw = (const u8*)HSD_ArchiveGetPublicAddress(archive, "TtlBg_Top_shapeanim_joint");
-        gmTitle_80479B38.shapeanim_joint = grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(raw, dataBase, 0);
+        model_desc_1.shapeanim_joint = grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(raw, dataBase, 0);
 
         /* TitleMark sobjdesc — convert GCN-packed desc (image + tlut). */
         gm_804D67F0 = grDatFiles_ConvertSObjDescGCNtoX64(
@@ -563,8 +560,8 @@ HSD_Archive* gmTitle_801A1AC0(void)
     if (getenv("MELEE_ANIMLOG")) {
         struct matwalk_t { const char* name; const HSD_MatAnimJoint* root; };
         struct matwalk_t trees[2] = {
-            { "TtlBg", gmTitle_80479B38.matanim_joint },
-            { "TtlMoji", gmTitle_80479B28.matanim_joint },
+            { "TtlBg", model_desc_1.matanim_joint },
+            { "TtlMoji", model_desc_0.matanim_joint },
         };
         for (int ti = 0; ti < 2; ti++) {
             fprintf(stderr, "=== %s matanim_joint walk ===\n", trees[ti].name);
@@ -603,43 +600,42 @@ HSD_Archive* gmTitle_801A1AC0(void)
     return archive;
 #else
     return lbArchive_LoadSymbols(
-        lbLang_IsSettingUS() ? usd : dat, &gmTitle_80479B28.joint,
-        "TtlMoji_Top_joint", &gmTitle_80479B28.animjoint,
-        "TtlMoji_Top_animjoint", &gmTitle_80479B28.matanim_joint,
-        "TtlMoji_Top_matanim_joint", &gmTitle_80479B28.shapeanim_joint,
-        "TtlMoji_Top_shapeanim_joint",
+        lbLang_IsSettingUS() ? usd : dat, &model_desc_0.joint,
+        "TtlMoji_Top_joint", &model_desc_0.animjoint, "TtlMoji_Top_animjoint",
+        &model_desc_0.matanim_joint, "TtlMoji_Top_matanim_joint",
+        &model_desc_0.shapeanim_joint, "TtlMoji_Top_shapeanim_joint",
 
-        &gmTitle_804D6708, "ScTitle_cam_int1_camera", &gmTitle_804D670C,
-        "ScTitle_scene_lights", &gmTitle_804D6710, "ScTitle_fog",
+        &cobj_desc, "ScTitle_cam_int1_camera", &list_list,
+        "ScTitle_scene_lights", &fog_desc, "ScTitle_fog",
 
-        &gmTitle_80479B38.joint, "TtlBg_Top_joint",
-        &gmTitle_80479B38.animjoint, "TtlBg_Top_animjoint",
-        &gmTitle_80479B38.matanim_joint, "TtlBg_Top_matanim_joint",
-        &gmTitle_80479B38.shapeanim_joint, "TtlBg_Top_shapeanim_joint",
+        &model_desc_1.joint, "TtlBg_Top_joint", &model_desc_1.animjoint,
+        "TtlBg_Top_animjoint", &model_desc_1.matanim_joint,
+        "TtlBg_Top_matanim_joint", &model_desc_1.shapeanim_joint,
+        "TtlBg_Top_shapeanim_joint",
 
         &gm_804D67F0, "TitleMark_sobjdesc", NULL);
 #endif /* BUILD_TARGET_PC */
 }
 
-void gmTitle_801A1C18_OnFrame(void)
+void gm_Scene_Title_OnFrame(void)
 {
-    int input = gm_GetButtonsTriggered(PAD_ALL_CONTROLLERS);
+    int input = gm_GetButtonsTriggered(PAD_MAX_CONTROLLERS);
     int* tmp;
-    if (gmTitle_804D6714 != 0) {
-        gmTitle_804D6714--;
+    if (countdown_timer != 0) {
+        countdown_timer--;
         return;
     }
-    gmTitle_804D6718++;
+    frame_count++;
 #if BUILD_TARGET_PC
     /* With MELEE_BOOT_MODE set, don't sit on the title for 600 frames. */
-    if (getenv("MELEE_BOOT_MODE") != NULL && gmTitle_804D6718 > 4) {
+    if (getenv("MELEE_BOOT_MODE") != NULL && frame_count > 4) {
         int* t2 = gm_GetCurrentSceneExitData();
         if (t2 != NULL) *t2 = 0;
         gm_801A4B60();
         return;
     }
 #endif
-    if (gmTitle_804D6718 > 600) {
+    if (frame_count > 600) {
         tmp = gm_GetCurrentSceneExitData();
         *tmp = 0;
         gm_801A4B60();
@@ -653,7 +649,7 @@ void gmTitle_801A1C18_OnFrame(void)
         tmp = gm_GetCurrentSceneExitData();
         *tmp = input;
         gm_801A4B60();
-    } else if (DbLevel >= 3) {
+    } else if (DbLevel >= DbLKind_DebugRom) {
         if (input & HSD_PAD_Y) {
             sfxForward();
             tmp = gm_GetCurrentSceneExitData();
@@ -703,20 +699,20 @@ static char* gmTitle_801A1D38(const char* src, char* dst)
     return dst;
 }
 
-void gmTitle_801A1E20_OnEnter(void* unused)
+void gm_Scene_Title_OnEnter(void* unused)
 {
     HSD_Text* text;
     int scale;
     HSD_Archive* archive;
 
     lbAudioAx_800236DC();
-    gmTitle_804D6714 = 0x14;
-    gmTitle_804D6718 = 0;
+    countdown_timer = 20;
+    frame_count = 0;
 
     archive = gmTitle_801A1AC0();
     (void) archive;
 
-    lbAudioAx_80026F2C(0x12);
+    lbAudioAx_80026F2C((1 << 1) | (1 << 4));
     lbAudioAx_8002702C(2, 4);
     lbAudioAx_80027168();
 
@@ -727,17 +723,17 @@ void gmTitle_801A1E20_OnEnter(void* unused)
     gmTitle_801A165C();
 
     lbAudioAx_80027648();
-    gm_801BF3F8();
+    gm_PreloadTitleDemo();
 
     fn_801A1498_inline();
 
     // Debug shows the build timestamp on the title screen
-    if (DbLevel >= 1) {
+    if (DbLevel >= DbLKind_NoDebugRom) {
         HSD_SisLib_803A611C(0, NULL, 9, 0xD, 0, 0xE, 0, 0x13);
         text = HSD_SisLib_803A6754(0, 0);
-        gmTitle_801A1D38(db_build_timestamp, gmTitle_80479B48);
+        gmTitle_801A1D38(db_build_timestamp, debug_text_buffer);
         scale =
-            HSD_SisLib_803A6B98(text, 30.0F, 30.0F, "%s", gmTitle_80479B48);
+            HSD_SisLib_803A6B98(text, 30.0F, 30.0F, "%s", debug_text_buffer);
         text->default_kerning = 1;
         HSD_SisLib_803A7548(text, scale, 0.7f, 0.55f);
     }

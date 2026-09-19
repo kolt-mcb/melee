@@ -1,4 +1,3 @@
-#include "ftkirby.h"
 #include "inlines.h"
 #include "types.h"
 
@@ -12,10 +11,10 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0877.h"
 #include "ft/ft_0892.h"
 #include "ft/ftcolanim.h"
-#include "ft/ftcommon.h"
 #include "ft/inlines.h"
 #include "ft/types.h"
 #include "ftCommon/ftCo_Fall.h"
@@ -29,9 +28,7 @@
 #include "it/items/itseakneedlethrown.h"
 
 #include <stddef.h>
-#include <baselib/gobj.h>
 #include <baselib/random.h>
-#include <MSL/math.h>
 
 /* Kirby's needles: scale*offset onto the position (and 2*table + y
  * inside it) are fmadds on the console (801060C4, 80106E30..). */

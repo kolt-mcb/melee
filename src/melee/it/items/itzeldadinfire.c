@@ -18,7 +18,7 @@
 #include "it/items/itzeldadinfireexplode.h"
 #include "it/itgroundcoll.h"
 
-#include <MSL/math.h>
+#include <math.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC

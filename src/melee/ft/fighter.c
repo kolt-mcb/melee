@@ -54,9 +54,6 @@
 #include "cm/camera.h"
 #include "db/db.h"
 #include "ef/efasync.h"
-
-#include "ftCommon/forward.h"
-
 #include "ftCommon/ftCo_09F4.h"
 #include "ftCommon/ftCo_0A01.h"
 #include "ftCommon/ftCo_0C35.h"
@@ -100,8 +97,7 @@
 #include "pl/pltrick.h"
 #include "sfx/crowdsfx.h"
 
-#include <math_ppc.h>
-#include <trigf.h>
+#include <math.h>
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 #include <baselib/controller.h>
@@ -124,9 +120,6 @@
 #endif
 #endif
 
-extern struct UnkCostumeList CostumeListsForeachCharacter[FTKIND_MAX];
-
-extern MotionState ftData_MotionStateList[ftCo_MS_Count];
 extern MotionState* ftData_CharacterStateTables[FTKIND_MAX];
 
 /// ==== fighter.c variables ====
@@ -159,8 +152,8 @@ struct Fighter_804D6518_t* Fighter_804D6518 = NULL;
 struct Fighter_804D651C_t* Fighter_804D651C = NULL;
 struct Fighter_804D6520_t* Fighter_804D6520 = NULL;
 struct Fighter_804D6524_t* Fighter_804D6524 = NULL;
-struct Fighter_804D6528_t* Fighter_804D6528 = NULL;
-UNK_T Fighter_804D652C = NULL;
+struct Fighter_ShakeTable_t* Fighter_SmashChargeShakeTable = NULL;
+struct Fighter_ShakeTable_t* Fighter_GrabMashShake = NULL;
 Vec2** Fighter_804D6530 = NULL;
 UNK_T Fighter_804D6534 = NULL;
 struct Fighter_804D653C_t* Fighter_804D6538 = NULL;
@@ -188,41 +181,23 @@ void Fighter_800679B0(void)
     ftCo_800C8F6C(); ///< @todo &fighter_alloc_data+2, +3, +4 are not defined
                      ///< in the fighter.s
     // data section, how does this work?
-#if BUILD_TARGET_PC
-    /* PC port: both of these pool sizes are GameCube *byte* counts for arrays
-     * whose element width doubled on x86_64, so each pool held roughly half
-     * the entries it must:
-     *
-     *   parts[]      0x8C0 / 16 = 140 FighterBone on GCN, but sizeof grew to
-     *                24 here (the embedded HSD_JObj* went 4 -> 8), so only 93
-     *                fit.
-     *   dobj_list[]  0x1F0 /  4 = 124 HSD_DObj* on GCN, only 62 here.
-     *
-     * Mario has 61 parts and squeaked under both limits, which is why he was
-     * the only character this never broke. Every character with a larger
-     * skeleton ran ftParts_80074B6C/80074D7C off the end of dobj_list.data
-     * and faulted inside HSD_DObjSetFlags/ClearFlags. Size by entry count
-     * instead of by byte count. */
+    /* Both of these pools are sized by entry count, never by the console's
+     * byte count: parts[] was 0x8C0/16 = 140 FighterBone on GCN but sizeof
+     * grew to 24 here (the embedded HSD_JObj* went 4 -> 8), so only 93 fit,
+     * and dobj_list[] was 0x1F0/4 = 124 HSD_DObj* but only 62. Mario has 61
+     * parts and squeaked under both, which is why he was the only character
+     * this never broke; everyone with a larger skeleton ran
+     * ftParts_80074B6C/80074D7C off the end of dobj_list.data and faulted
+     * inside HSD_DObjSetFlags/ClearFlags. fighter_x2040_alloc_data is the
+     * same trap: 0x80 bytes is ftParts_80075650's 0x20 entries times the
+     * console's four-byte pointer. */
     HSD_ObjAllocInit(&fighter_parts_alloc_data,
-                     /*size*/ 140 * sizeof(FighterBone), /*align*/ 4);
+                     /*size*/ MAX_FT_PARTS * sizeof(struct FighterBone),
+                     /*align*/ 4);
     HSD_ObjAllocInit(&fighter_dobj_list_alloc_data,
-                     /*size*/ FT_DOBJ_LIST_MAX * sizeof(HSD_DObj*), /*align*/ 4);
-#else
-    HSD_ObjAllocInit(&fighter_parts_alloc_data, /*size*/ 0x8c0, /*align*/ 4);
-    HSD_ObjAllocInit(&fighter_dobj_list_alloc_data, /*size*/ 0x1f0,
-                     /*align*/ 4);
-#endif
-#if BUILD_TARGET_PC
-    /* Same byte-count-versus-entry-count trap as fighter_dobj_list_alloc_data
-     * above: 0x80 bytes is ftParts_80075650's 0x20 entries times the console's
-     * four-byte pointer, and a fighter whose sub-model has more than sixteen
-     * DObjs wrote past the slot here. */
+                     /*size*/ (0x1f0 / 4) * sizeof(HSD_DObj*), /*align*/ 4);
     HSD_ObjAllocInit(&fighter_x2040_alloc_data,
-                     /*size*/ FT_SUBMODEL_DOBJ_MAX * sizeof(HSD_DObj*),
-                     /*align*/ 4);
-#else
-    HSD_ObjAllocInit(&fighter_x2040_alloc_data, /*size*/ 0x80, /*align*/ 4);
-#endif
+                     /*size*/ (0x80 / 4) * sizeof(HSD_DObj*), /*align*/ 4);
 
     g_spawnNumCounter = 1;
 
@@ -750,8 +725,8 @@ void Fighter_LoadCommonData(void)
         if (Fighter_804D6538 == NULL) Fighter_804D6538 = (void*)pc_ptr_arena;
         Fighter_804D6534 = (void*)pc_ptr_arena;
         Fighter_804D6530 = (void*)pc_ptr_arena;
-        Fighter_804D652C = (void*)pc_ptr_arena;
-        Fighter_804D6528 = (void*)pc_ptr_arena;
+        /* 804D6528 and 804D652C are gone: upstream resolved what lived
+         * there, so there is no stand-in left to point at the arena. */
         Fighter_804D6524 = (void*)pc_ptr_arena;
         Fighter_804D6520 = (void*)pc_ptr_arena;
         Fighter_804D651C = (void*)pc_ptr_arena;
@@ -785,8 +760,8 @@ void Fighter_LoadCommonData(void)
     Fighter_804D6538 = pData[7];
     Fighter_804D6534 = pData[8];
     Fighter_804D6530 = pData[9];
-    Fighter_804D652C = pData[10];
-    Fighter_804D6528 = pData[11];
+    Fighter_GrabMashShake = pData[10];
+    Fighter_SmashChargeShakeTable = pData[11];
     Fighter_804D6524 = pData[12];
     Fighter_804D6520 = pData[13];
     Fighter_804D651C = pData[14];
@@ -1193,7 +1168,7 @@ void Fighter_UnkUpdateCostumeJoint_800686E4(Fighter_GObj* gobj)
     ftPartsPObjClearDefaultClass();
     ftParts_80073758(jobj);
 
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
 }
 
 void Fighter_UnkUpdateVecFromBones_8006876C(Fighter* fp)
@@ -1252,7 +1227,7 @@ void Fighter_ResetInputData_80068854(Fighter_GObj* gobj)
     fp->input.x668 = 0;
     fp->input.held_inputs = 0;
 
-    fp->x672_input_timer_counter = 0xFE;
+    fp->trigger_analog_timer = 0xFE;
     fp->x671_timer_lstick_tilt_y = 0xFE;
     fp->x670_timer_lstick_tilt_x = 0xFE;
 
@@ -1310,7 +1285,7 @@ static void Fighter_UnkInitLoad_80068914_Inner1(Fighter_GObj* gobj)
             fp->x673 = fp->x674 = fp->x675 =
 
                 fp->x670_timer_lstick_tilt_x = fp->x671_timer_lstick_tilt_y =
-                    fp->x672_input_timer_counter = 0xFE;
+                    fp->trigger_analog_timer = 0xFE;
 
     fp->x67C = fp->x67D = fp->x67E = fp->x681 = fp->x682 = fp->x67F =
         fp->x680 = fp->x683 = fp->x684 = fp->x685 = fp->x686 = fp->x687 =
@@ -1974,8 +1949,7 @@ void Fighter_ChangeMotionState(Fighter_GObj* gobj, FtMotionId msid,
                 } else {
                     ftData_80085CD8(fp, fp, fp->anim_id);
                 }
-                fp->x3E4_fighterCmdScript.u =
-                    (union CmdUnion*) unk_struct_x18->xC;
+                fp->x3E4_fighterCmdScript.u = unk_struct_x18->xC;
                 fp->x3E4_fighterCmdScript.loop_count = 0;
 
                 if (anim_start) {
@@ -1983,8 +1957,8 @@ void Fighter_ChangeMotionState(Fighter_GObj* gobj, FtMotionId msid,
                         ftAnim_8006EBE8(gobj, anim_start - anim_speed,
                                         anim_speed,
                                         (anim_blend == -1.0f) ? 0.0f
-                                        : (anim_blend) ? anim_blend
-                                                       : (*unk_byte_ptr)[0]);
+                                        : anim_blend ? anim_blend
+                                                     : (*unk_byte_ptr)[0]);
                     }
                     ftAnim_8006E9B4(gobj);
                     if (fp->x594_b0 != 0U) {
@@ -2004,8 +1978,8 @@ void Fighter_ChangeMotionState(Fighter_GObj* gobj, FtMotionId msid,
                     if (fp->x590 != 0U) {
                         ftAnim_8006EBE8(gobj, anim_start, anim_speed,
                                         (anim_blend == -1.0f) ? 0.0f
-                                        : (anim_blend) ? anim_blend
-                                                       : (*unk_byte_ptr)[0]);
+                                        : anim_blend ? anim_blend
+                                                     : (*unk_byte_ptr)[0]);
                     }
                     fp->x3E4_fighterCmdScript.timer = 0.0f;
                 }
@@ -2078,8 +2052,7 @@ void Fighter_ChangeMotionState(Fighter_GObj* gobj, FtMotionId msid,
         if (animflags_bool) {
             if (!fp->x594_b0 && !fp->x594_b0) {
                 !fp;
-                ftCommon_ClampGrVel(fp,
-                                    fp->co_attrs.dash_run_terminal_velocity);
+                ftCommon_ClampGrVel(fp, fp->co_attrs.dash_max_velocity);
             }
         }
 
@@ -2559,8 +2532,9 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                     "deadzone x0=%.4f x4=%.4f x10=%.4f\n", sn,
                     (int) fp->player_id, (int) fp->x221F_b3,
                     (int) fp->x2224_b2, (int) ftCo_800A2040(fp),
-                    (double) p_ftCommonData->x0, (double) p_ftCommonData->x4,
-                    (double) p_ftCommonData->x10);
+                    (double) p_ftCommonData->horizontal_stick_deadzone,
+                    (double) p_ftCommonData->vertical_stick_deadzone,
+                    (double) p_ftCommonData->analog_shoulder_deadzone);
         }
     }
 #endif
@@ -2587,7 +2561,7 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
             if (ftCo_800A2040(fp)) {
                 SET_STICKS(fp->input.lstick.x, fp->input.lstick.y,
                            ftCo_800A17E4(fp), ftCo_800A1874(fp));
-                if (DbLevel < 3 && !ft_cstick_blocked()) {
+                if (DbLevel < DbLKind_DebugRom && !ft_cstick_blocked()) {
                     SET_STICKS(fp->input.cstick.x, fp->input.cstick.y,
                                ftCo_800A1994(fp), ftCo_800A1A24(fp));
                 } else {
@@ -2604,7 +2578,7 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                 SET_STICKS(fp->input.lstick.x, fp->input.lstick.y,
                            HSD_PadGameStatus[fp->x618_player_id].nml_stickX,
                            HSD_PadGameStatus[fp->x618_player_id].nml_stickY);
-                if (DbLevel < 3 && !ft_cstick_blocked()) {
+                if (DbLevel < DbLKind_DebugRom && ft_cstick_blocked() == 0) {
                     SET_STICKS(
                         fp->input.cstick.x, fp->input.cstick.y,
                         HSD_PadGameStatus[fp->x618_player_id].nml_subStickX,
@@ -2620,23 +2594,31 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                 fp->input.x650 = (tempf0 > tempf1) ? tempf0 : tempf1;
             }
 
-            if (ABS(fp->input.lstick.x) <= p_ftCommonData->x0) {
+            if (ABS(fp->input.lstick.x) <=
+                p_ftCommonData->horizontal_stick_deadzone)
+            {
                 fp->input.lstick.x = 0.0f;
             }
 
-            if (ABS(fp->input.lstick.y) <= p_ftCommonData->x4) {
+            if (ABS(fp->input.lstick.y) <=
+                p_ftCommonData->vertical_stick_deadzone)
+            {
                 fp->input.lstick.y = 0.0f;
             }
 
-            if (ABS(fp->input.cstick.x) <= p_ftCommonData->x0) {
+            if (ABS(fp->input.cstick.x) <=
+                p_ftCommonData->horizontal_stick_deadzone)
+            {
                 fp->input.cstick.x = 0.0f;
             }
 
-            if (ABS(fp->input.cstick.y) <= p_ftCommonData->x4) {
+            if (ABS(fp->input.cstick.y) <=
+                p_ftCommonData->vertical_stick_deadzone)
+            {
                 fp->input.cstick.y = 0.0f;
             }
 
-            if (fp->input.x650 <= p_ftCommonData->x10) {
+            if (fp->input.x650 <= p_ftCommonData->analog_shoulder_deadzone) {
                 fp->input.x650 = 0.0f;
             }
 #if BUILD_TARGET_PC
@@ -2677,7 +2659,7 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                 if (!gm_801A45E8(0)) {
                     if (fp->input.held_inputs & HSD_PAD_Z) {
                         fp->input.held_inputs |= HSD_PAD_LR | HSD_PAD_A;
-                        fp->input.x650 = p_ftCommonData->x14;
+                        fp->input.x650 = p_ftCommonData->z_press_analog_value;
                     }
                 }
             }
@@ -2698,9 +2680,11 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                 fp->x676_x = 0xFE;
             }
 
-            if (fp->input.lstick.x >= p_ftCommonData->x8_someStickThreshold) {
+            if (fp->input.lstick.x >=
+                p_ftCommonData->horizontal_stick_smash_deadzone)
+            {
                 if (fp->input.lstick1.x >=
-                    p_ftCommonData->x8_someStickThreshold)
+                    p_ftCommonData->horizontal_stick_smash_deadzone)
                 {
                     // Fighter_ClampThreeValues
                     fp->x670_timer_lstick_tilt_x++;
@@ -2722,10 +2706,10 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                     fp->x2228_b7 = 1;
                 }
             } else if (fp->input.lstick.x <=
-                       -p_ftCommonData->x8_someStickThreshold)
+                       -p_ftCommonData->horizontal_stick_smash_deadzone)
             {
                 if (fp->input.lstick1.x <=
-                    -p_ftCommonData->x8_someStickThreshold)
+                    -p_ftCommonData->horizontal_stick_smash_deadzone)
                 {
                     // Fighter_ClampThreeValues
                     fp->x670_timer_lstick_tilt_x++;
@@ -2758,8 +2742,12 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                 fp->x677_y = 0xFE;
             }
 
-            if (fp->input.lstick.y >= p_ftCommonData->xC) {
-                if (fp->input.lstick1.y >= p_ftCommonData->xC) {
+            if (fp->input.lstick.y >=
+                p_ftCommonData->vertical_stick_smash_deadzone)
+            {
+                if (fp->input.lstick1.y >=
+                    p_ftCommonData->vertical_stick_smash_deadzone)
+                {
                     // Fighter_ClampThreeValues
                     fp->x671_timer_lstick_tilt_y++;
                     if (fp->x671_timer_lstick_tilt_y > 0xFE) {
@@ -2779,8 +2767,12 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                     fp->x671_timer_lstick_tilt_y = 0;
                     fp->x2229_b0 = 0;
                 }
-            } else if (fp->input.lstick.y <= -p_ftCommonData->xC) {
-                if (fp->input.lstick1.y <= -p_ftCommonData->xC) {
+            } else if (fp->input.lstick.y <=
+                       -p_ftCommonData->vertical_stick_smash_deadzone)
+            {
+                if (fp->input.lstick1.y <=
+                    -p_ftCommonData->vertical_stick_smash_deadzone)
+                {
                     // Fighter_ClampThreeValues
                     fp->x671_timer_lstick_tilt_y++;
                     if (fp->x671_timer_lstick_tilt_y > 0xFE) {
@@ -2808,7 +2800,7 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
 
             if (lb_8000D148(fp->input.lstick1.x, fp->input.lstick1.y,
                             fp->input.lstick.x, fp->input.lstick.y, 0.0f, 0.0f,
-                            p_ftCommonData->x8_someStickThreshold))
+                            p_ftCommonData->horizontal_stick_smash_deadzone))
             {
                 fp->x67A_y = 0;
                 fp->x679_x = 0;
@@ -2820,12 +2812,12 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                 fp->x678 = 0xFE;
             }
 
-            if (fp->input.x650 >= p_ftCommonData->x18) {
-                if (fp->input.x654 >= p_ftCommonData->x18) {
+            if (fp->input.x650 >= p_ftCommonData->shield_press_threshold) {
+                if (fp->input.x654 >= p_ftCommonData->shield_press_threshold) {
                     // Fighter_ClampThreeValues
-                    fp->x672_input_timer_counter++;
-                    if (fp->x672_input_timer_counter > 0xFE) {
-                        fp->x672_input_timer_counter = 0xFE;
+                    fp->trigger_analog_timer++;
+                    if (fp->trigger_analog_timer > 0xFE) {
+                        fp->trigger_analog_timer = 0xFE;
                     }
                     fp->x675++;
                     if (fp->x675 > 0xFE) {
@@ -2839,12 +2831,12 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                     fp->x67B = 0;
                     fp->x678 = 0;
                     fp->x675 = 0;
-                    fp->x672_input_timer_counter = 0;
+                    fp->trigger_analog_timer = 0;
                 }
             } else {
                 fp->x67B = 0xFE;
                 fp->x675 = 0xFE;
-                fp->x672_input_timer_counter = 0xFE;
+                fp->trigger_analog_timer = 0xFE;
             }
 
             if (fp->input.x668 & HSD_PAD_A) {
@@ -2962,8 +2954,8 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                     "termvel=%.2f x24=%p\n",
                     (int) f->x221F_b3, (int) f->x2219_b5,
                     (void*) f->phys_cb, (void*) f->anim_cb,
-                    (double) f->co_attrs.grav,
-                    (double) f->co_attrs.terminal_vel, (void*) f->x24);
+                    (double) f->co_attrs.gravity,
+                    (double) f->co_attrs.terminal_velocity, (void*) f->x24);
             fprintf(stderr,
                     "[TICK]     dmg=%.0f%% fp=%p lstick=(%.2f,%.2f) held=0x%x "
                     "pressed=0x%x | pid=%d pad0=(%.2f,%.2f) padN=(%.2f,%.2f) "
@@ -3070,8 +3062,8 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                        usually 1. last factor was 1 when I looked*/
                     /*effective friction - ground multiplier is
                        usually 1. last factor was 1 when I looked*/
-                    ft_GetGroundFrictionMultiplier(fp) * pAttr->gr_friction *
-                        p_ftCommonData->x200);
+                    ft_GetGroundFrictionMultiplier(fp) *
+                        pAttr->ground_friction * p_ftCommonData->x200);
 
                 // set knockback velocity to ground_kb_vel * surfaceTangent
                 p_kb_vel->x = pNormal->y * fp->xF0_ground_kb_vel;
@@ -3125,7 +3117,8 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                     fp,
                     /* effectiveFriction - the last constant variable differs
                        from the one for the knockback friction above*/
-                    ft_GetGroundFrictionMultiplier(fp) * pAttr->gr_friction *
+                    ft_GetGroundFrictionMultiplier(fp) *
+                        pAttr->ground_friction *
                         p_ftCommonData->x3EC_shieldGroundFrictionMultiplier);
 
                 /* effectiveFriction - the last constant variable differs from
@@ -3203,7 +3196,7 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                 VEC_CLEAR(fp->xD4_unk_vel);
             }
             // fp->xB0_position += *pAtkShieldKB
-            PSVECAdd(&fp->cur_pos, (Vec3*) pAtkShieldKB, &fp->cur_pos);
+            PSVECAdd(&fp->cur_pos, pAtkShieldKB, &fp->cur_pos);
         } else {
             // fp@r31.position@0xB0.xyz += selfVel + pAtkShieldKB
             PSVECAdd(&fp->cur_pos, &selfVel, &fp->cur_pos);
@@ -3211,7 +3204,7 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
             fp->cur_pos.y += p_kb_vel->y;
             fp->cur_pos.z += 0;
 
-            PSVECAdd(&fp->cur_pos, (Vec3*) pAtkShieldKB, &fp->cur_pos);
+            PSVECAdd(&fp->cur_pos, pAtkShieldKB, &fp->cur_pos);
         }
         // accumulate wind hazards into the windOffset vector
         ftColl_GetWindOffsetVec(gobj,
@@ -3276,9 +3269,9 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
 
     ftColl_8007AF28(gobj);
 
-    if (DbLevel >= 3 && (fpclassify(fp->cur_pos.x) == FP_NAN ||
-                         fpclassify(fp->cur_pos.y) == FP_NAN ||
-                         fpclassify(fp->cur_pos.z) == FP_NAN))
+    if (DbLevel >= DbLKind_DebugRom && (fpclassify(fp->cur_pos.x) == FP_NAN ||
+                                        fpclassify(fp->cur_pos.y) == FP_NAN ||
+                                        fpclassify(fp->cur_pos.z) == FP_NAN))
     {
         HSD_ASSERTREPORT(/*line*/ 2517, 0,
                          "fighter procUpdate pos error.\tpos.x=%f\tpos.y=%f\n",
@@ -3347,7 +3340,7 @@ void Fighter_procMap(Fighter_GObj* gobj)
             pl_80041280(fp->player_id, fp->x221F_b4);
         }
 
-        if (DbLevel >= 3) {
+        if (DbLevel >= DbLKind_DebugRom) {
             if (fpclassify(fp->cur_pos.x) == FP_NAN ||
                 fpclassify(fp->cur_pos.y) == FP_NAN ||
                 fpclassify(fp->cur_pos.z) == FP_NAN)
@@ -3528,7 +3521,7 @@ void Fighter_8006CDA4(Fighter* fp, s32 arg1)
         hold_item_bool = true;
     }
 
-    temp_bool = !((fp->x2220_b3 || fp->x2220_b4 || ftCo_8008E984(fp)));
+    temp_bool = !(fp->x2220_b3 || fp->x2220_b4 || ftCo_8008E984(fp));
     vec = vec3_803B7494;
 
     if (fp->motion_id != 0x145 && (unsigned) fp->motion_id - 0x122 > 1 &&
@@ -3537,8 +3530,8 @@ void Fighter_8006CDA4(Fighter* fp, s32 arg1)
         if ( ///// giant if condition
             hold_item_bool && temp_bool &&
             ((HSD_Randi(p_ftCommonData->x418) < arg1) ||
-             ((((it_8026B30C(fp->item_gobj) == 3) &&
-                it_8026B594(fp->item_gobj))) &&
+             (((it_8026B30C(fp->item_gobj) == 3) &&
+               it_8026B594(fp->item_gobj)) &&
               !HSD_Randi(p_ftCommonData->x41C))))
         {
             if (fp->x1978) {
@@ -3588,7 +3581,7 @@ void Fighter_8006CFE0(Fighter_GObj* gobj)
     }
 }
 
-inline void setBit(Fighter_GObj* gobj)
+static inline void setBit(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     fp->x2219_b7 = 1;
@@ -3943,7 +3936,7 @@ void Fighter_Unload_8006DABC(void* user_data)
 {
     /// @remarks This doesn't use #GET_FIGHTER, but since it appears to pass it
     ///          directly it's probably just written directly.
-    Fighter* fp = (Fighter*) (user_data);
+    Fighter* fp = (Fighter*) user_data;
     int kind = fp->kind;
 
     if (ftData_OnUserDataRemove[kind]) {

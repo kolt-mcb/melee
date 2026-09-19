@@ -233,7 +233,7 @@ void pc_render_stage_test(void)
         s_floor_jobj = jobj;
         s_floor_gobj = GObj_Create(HSD_GOBJ_CLASS_STAGE, 5, 0);
         if (!s_floor_gobj) { fprintf(stderr, "[STAGE] GObj_Create failed\n"); return; }
-        HSD_GObjObject_80390A70(s_floor_gobj, HSD_GObj_804D7849, jobj);
+        HSD_GObjObject_80390A70(s_floor_gobj, HSD_GObj_JObjKind, jobj);
 
         /* Convert the camera desc (fixes GCN WObj/Vec pointers) and make a CObj. */
         if (sd->unk8[use].x10 != NULL) {
@@ -327,7 +327,7 @@ void pc_render_stage_test(void)
                                 s_fighter_jobj = fjobj;
                                 s_fighter_gobj = GObj_Create(HSD_GOBJ_CLASS_STAGE, 5, 0);
                                 if (s_fighter_gobj)
-                                    HSD_GObjObject_80390A70(s_fighter_gobj, HSD_GObj_804D7849, fjobj);
+                                    HSD_GObjObject_80390A70(s_fighter_gobj, HSD_GObj_JObjKind, fjobj);
                             } else fprintf(stderr, "[FTEST] HSD_JObjLoadJoint failed\n");
                         } else fprintf(stderr, "[FTEST] joint conversion failed\n");
                     }

@@ -10,6 +10,8 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
+#include "ft/ft_0852.h"
 #include "ft/ft_0877.h"
 #include "ft/ft_0892.h"
 #include "ft/ftcommon.h"
@@ -32,16 +34,11 @@
 
 #include <stddef.h>
 #include <baselib/gobj.h>
-#include <baselib/random.h>
-#include <MSL/math.h>
 
 /* 1095DC */ static void fn_801095DC(HSD_GObj*);
 /* 109680 */ static void fn_80109680(HSD_GObj*);
 /* 109714 */ static void fn_80109714(HSD_GObj*);
 /* 1097B8 */ static void fn_801097B8(HSD_GObj*);
-/* 10AA64 */ static void fn_8010AA64(HSD_GObj* gobj);
-/* 10C288 */ static void fn_8010C288(HSD_GObj* gobj);
-/* 10C344 */ void fn_8010C344(HSD_GObj* arg0);
 
 void ftKb_SpecialNYs_80109260(Fighter_GObj* gobj, Vec3* vec)
 {
@@ -129,12 +126,10 @@ float ftKb_SpecialNYs_80109380(void)
     return cd->specialn_ys_unk3 / cd->specialn_ys_damage_multiplier;
 }
 
-#pragma dont_inline on
 ftDynamics* ftKb_SpecialNYs_801093A0(Fighter_GObj* gobj)
 {
     return ft_80459B88.hats[FTKIND_SAMUS]->hat_dynamics[0];
 }
-#pragma dont_inline reset
 
 void ftKb_SpecialNYs_801093B4(Fighter_GObj* gobj)
 {

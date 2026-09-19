@@ -8,11 +8,10 @@
 #include "if/textdraw.h"
 #include "if/textlib.h"
 #include "it/inlines.h"
-#include "it/it_266F.h"
 #include "it/it_26B1.h"
-#include "it/it_2725.h"
 #include "it/it_3F14.h"
 #include "it/item.h"
+#include "it/itspawn.h"
 #include "it/types.h"
 #include "pl/player.h"
 
@@ -34,7 +33,7 @@ void fn_SetupItemAndPokemonMenu(void)
 
 void fn_80225A54(int player)
 {
-    if (DbLevel == 4) {
+    if (DbLevel == DbLKind_Develop) {
         if (db_ButtonsDown(player) & HSD_PAD_B) {
             if (db_ButtonsPressed(player) & HSD_PAD_DPADRIGHT) {
                 Item_804A0C64.x4 = Item_804A0C64.x0;
@@ -186,8 +185,10 @@ void db_80225D64(Item_GObj* item, Fighter_GObj* owner)
 }
 
 /// @todo avoid auto-inlining into fn_CheckItemAndPokemonMenu
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 void fn_ToggleItemCollisionBubbles(void)
 {
     HSD_GObj* item_gobj;
@@ -205,7 +206,9 @@ void fn_ToggleItemCollisionBubbles(void)
         item_gobj = item_gobj->next;
     }
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void db_80225DD8(Item_GObj* item, Fighter_GObj* owner)
 {

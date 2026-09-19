@@ -14,6 +14,7 @@
 
 #include "if/textlib.h"
 
+#include <baselib/sislib.h>
 #include <melee/gm/gm_16AE.h>
 #include <melee/gm/gmmain_lib.h>
 #include <melee/lb/lb_00B0.h>
@@ -22,7 +23,6 @@
 #include <melee/pl/player.h>
 #include <melee/pl/plbonus.h>
 #include <melee/pl/plbonuslib.h>
-#include <melee/pl/types.h>
 #include <melee/ty/toy.h>
 
 /* PC fix: lbl_8046DBD8 is a 10-byte data global (c_kind/color/stocks/gamemode
@@ -193,7 +193,7 @@ int fn_8016F39C(HSD_Text** arg0, void* arg1, u8 arg2, u16 arg3, u8 arg4,
     idx = arg3;
     while ((u32) idx < 0x101U) {
         matched = 0;
-        if ((s16) lbl_803D5A4C[idx].kind < 0xD7) {
+        if (lbl_803D5A4C[idx].kind < 0xD7) {
             flags = fn_8016F180(idx);
             if (arg4 & flags) {
                 if (pl_80039418(arg5, idx) != 0) {
@@ -246,14 +246,14 @@ int fn_8016F548(void* arg0, u16 arg1, u8 mask, u8 player_id)
     }
 
     for (i = arg1; (u32) i < 0x101U; i++) {
-        if ((s16) lbl_803D5A4C[i].kind < 0xD7) {
-            if ((u8) mask & (u8) fn_8016F180(i)) {
+        if (lbl_803D5A4C[i].kind < 0xD7) {
+            if (mask & (u8) fn_8016F180(i)) {
                 if (pl_80039418(player_id, i) != 0) {
                     return i;
                 }
             }
         } else {
-            if ((u8) mask & (u8) fn_8016F180(i)) {
+            if (mask & (u8) fn_8016F180(i)) {
                 if ((unsigned) fn_801701C0(arg0, player_id, i) != 0) {
                     return i;
                 }
@@ -262,14 +262,14 @@ int fn_8016F548(void* arg0, u16 arg1, u8 mask, u8 player_id)
     }
 
     for (i = 0x100; i >= 0; i--) {
-        if ((s16) lbl_803D5A4C[i].kind < 0xD7) {
-            if ((u8) mask & (u8) fn_8016F180(i)) {
+        if (lbl_803D5A4C[i].kind < 0xD7) {
+            if (mask & (u8) fn_8016F180(i)) {
                 if (pl_80039418(player_id, i) != 0) {
                     return i;
                 }
             }
         } else {
-            if ((u8) mask & (u8) fn_8016F180(i)) {
+            if (mask & (u8) fn_8016F180(i)) {
                 if ((unsigned) fn_801701C0(arg0, player_id, i) != 0) {
                     return i;
                 }
@@ -295,16 +295,16 @@ int fn_8016F740(void* arg0, u16 arg1, u8 mask, u8 player_id)
 
     i = temp;
     for (; (u32) i < 0x101U; i++) {
-        if ((s16) lbl_803D5A4C[i].kind < 0xD7) {
+        if (lbl_803D5A4C[i].kind < 0xD7) {
             flags = fn_8016F180(i);
-            if ((u8) mask & flags) {
+            if (mask & flags) {
                 if (pl_80039418(player_id, i) != 0) {
                     return i;
                 }
             }
         } else {
             flags = fn_8016F180(i);
-            if ((u8) mask & flags) {
+            if (mask & flags) {
                 if ((unsigned) fn_801701C0(arg0, player_id, i) != 0) {
                     return i;
                 }
@@ -332,14 +332,14 @@ int fn_8016F870(void* arg0, u16 arg1, u8 mask, u8 player_id)
 
         if (kind < 0xD7) {
             flags = fn_8016F180(i);
-            if ((u8) mask & flags) {
+            if (mask & flags) {
                 if (pl_80039418(player_id, i) != 0) {
                     return i;
                 }
             }
         } else {
             flags = fn_8016F180(i);
-            if ((u8) mask & flags) {
+            if (mask & flags) {
                 if ((unsigned) fn_801701C0(arg0, player_id, i) != 0) {
                     return i;
                 }
@@ -361,16 +361,16 @@ int fn_8016F9A8(void* arg0, u16 arg1, u8 mask, u8 player_id)
     }
 
     for (i = arg1; (u32) i < 0x101; i++) {
-        if ((s16) lbl_803D5A4C[i].kind < 0xD7) {
+        if (lbl_803D5A4C[i].kind < 0xD7) {
             flags = fn_8016F180(i);
-            if ((u8) mask & flags) {
+            if (mask & flags) {
                 if (pl_80039418(player_id, i) != 0) {
                     count++;
                 }
             }
         } else {
             flags = fn_8016F180(i);
-            if ((u8) mask & flags) {
+            if (mask & flags) {
                 if ((unsigned) fn_801701C0(arg0, player_id, i) != 0) {
                     count++;
                 }
@@ -420,9 +420,17 @@ int fn_8016FAD4(struct lbl_8046B6A0_24C_t* rules, int kind, int flags,
     }
 
     if ((entry->x6 & 2) && (flags & 2)) {
-        u8 pr = rankings[(u8) player];
+        u8 pr = rankings[player];
         if (pr == 0) {
             return lbl_803D5648[entry->x2 - 2] * 2;
+        }
+        {
+            int j;
+            for (j = 0; j < 4; j++) {
+                if (x58[j].x0 == 3) {
+                    break;
+                }
+            }
         }
         if (pr == rankings[6]) {
             return lbl_803D5648[entry->x2 - 2] / 2;
@@ -430,21 +438,19 @@ int fn_8016FAD4(struct lbl_8046B6A0_24C_t* rules, int kind, int flags,
     }
 
     if ((entry->x6 & 1) && (flags & 4)) {
-        return (lbl_803D5648[entry->x2 - 2] / 10) *
-               pl_80039418((u8) player, kind);
+        return (lbl_803D5648[entry->x2 - 2] / 10) * pl_80039418(player, kind);
     }
 
     if (entry->x5 == 1) {
         if (kind == 0xE3) {
-            return lbl_803D5648[entry->x2 - 2] * x58[(u8) player].x20;
+            return lbl_803D5648[entry->x2 - 2] * x58[player].x20;
         } else if (kind == 0xE4) {
             return lbl_803D5648[entry->x2 - 2] *
-                   (x58[(u8) player].x24 - x58[(u8) player].xA);
+                   (x58[player].x24 - x58[player].xA);
         } else if (kind == 0xE5) {
-            return lbl_803D5648[entry->x2 - 2] * x58[(u8) player].xA;
+            return lbl_803D5648[entry->x2 - 2] * x58[player].xA;
         } else {
-            return lbl_803D5648[entry->x2 - 2] *
-                   pl_80039418((u8) player, kind);
+            return lbl_803D5648[entry->x2 - 2] * pl_80039418(player, kind);
         }
     }
 
@@ -462,15 +468,15 @@ int fn_8016FFD4(struct lbl_8046B6A0_24C_t* arg0, int arg1, u8 arg2)
     int count = 0;
 
     for (i = 0; (u32) i < 0x101U; i++) {
-        if ((s16) lbl_803D5A4C[i].kind < 0xD7) {
-            if ((u8) arg1 & (u8) fn_8016F180(i) &&
-                pl_80039418((u8) arg2, i) != 0)
+        if (lbl_803D5A4C[i].kind < 0xD7) {
+            if ((arg1 & 0xFF) & (u8) fn_8016F180(i) &&
+                pl_80039418(arg2, i) != 0)
             {
                 count += fn_8016FAD4(arg0, i, arg1, arg2);
             }
         } else {
-            if ((u8) arg1 & (u8) fn_8016F180(i)) {
-                if ((unsigned) fn_801701C0(arg0, (u8) arg2, i) != 0) {
+            if ((arg1 & 0xFF) & (u8) fn_8016F180(i)) {
+                if ((unsigned) fn_801701C0(arg0, arg2, i) != 0) {
                     count += fn_8016FAD4(arg0, i, arg1, arg2);
                 }
             }
@@ -511,9 +517,48 @@ int fn_801701B8(void)
     return lbl_804D65A0[0];
 }
 
-int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
+/// One bubble pass over @p base, used by the two @c u32 sorts in
+/// #fn_801701C0.
+///
+/// The two sorts there are the only ones whose loop guard the original emits
+/// as
+/// @c cmplwi + @c ble rather than @c cmpwi + @c ble, which is why @p n is
+/// unsigned; and the pointer has to live inside an inline expansion, because a
+/// caller-level local is coloured after the compare temp and takes r4 instead
+/// of r3. The other five sorts in this function are written inline with plain
+/// @c vals[i] indexing, which puts their pointer in the same @c \@ band by way
+/// of strength reduction.
+static inline void gm_16F1_SortDescPass(u32* base, u32 n)
 {
-    u8* tmp;
+    int i;
+    u32* p = base;
+    for (i = 0; i < n; i++) {
+        if (p[0] > p[1]) {
+            u32 tmp = p[1];
+            p[1] = p[0];
+            p[0] = tmp;
+        }
+        p++;
+    }
+}
+
+static inline void gm_16F1_SortAscPass(u32* base, u32 n)
+{
+    int i;
+    u32* p = base;
+    for (i = 0; i < n; i++) {
+        if (p[0] < p[1]) {
+            u32 tmp = p[1];
+            p[1] = p[0];
+            p[0] = tmp;
+        }
+        p++;
+    }
+}
+
+int fn_801701C0(void* arg0, int arg1, int arg2)
+{
+    struct lbl_8046B6A0_24C_t* rules = arg0;
     const struct lbl_803B7A60_t* zeroes = &lbl_803B7A60;
     u8* flags = rules->pad3F0;
     struct lbl_8046B6A0_24C_58_t* x58 = rules->x58;
@@ -549,11 +594,11 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
             int idx;
             for (idx = 0; idx < 6; idx++) {
                 if (x58[idx].x0 != 3) {
-                    s32 my_score = scores[idx];
                     int j;
 
                     for (j = 0; j < 6; j++) {
-                        if (x58[j].x0 != 3 && idx != j && my_score < scores[j])
+                        if (x58[j].x0 != 3 && idx != j &&
+                            scores[idx] < scores[j])
                         {
                             rankings[idx]++;
                         }
@@ -567,7 +612,7 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
         }
     }
 
-    PAD_STACK(4);
+    PAD_STACK(8);
 
     switch (arg2) {
     case 0xD7:
@@ -575,13 +620,11 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
             return 0;
         }
         {
-            struct lbl_8046B6A0_24C_58_t* p = x58;
             int i;
             for (i = 0; i < 4; i++) {
-                if (p->x0 != 3 && i != arg1 && rankings[i] == 0) {
+                if (x58[i].x0 != 3 && i != arg1 && rankings[i] == 0) {
                     return 0;
                 }
-                p++;
             }
         }
         if (rankings[arg1] == 0) {
@@ -594,13 +637,12 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
             return 0;
         }
         {
-            struct lbl_8046B6A0_24C_58_t* p = x58;
             int i;
             for (i = 0; i < 4; i++) {
-                if (p->x0 != 3 && i != arg1 && rankings[i] == rankings[6]) {
+                if (x58[i].x0 != 3 && i != arg1 && rankings[i] == rankings[6])
+                {
                     return 0;
                 }
-                p++;
             }
         }
         if (rankings[arg1] == rankings[6]) {
@@ -638,39 +680,29 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
 
     case 0xDB: {
         s32 vals[4];
-        s32* base;
         int i, j;
         if (x58[arg1].x20 >= 3) {
-            base = vals;
             {
                 typedef struct {
                     s32 a, b, c, d;
                 } copy_t;
-                *(copy_t*) base = *(copy_t*) zeroes->x0;
+                *(copy_t*) vals = *(copy_t*) zeroes->x0;
             }
-            {
-                struct lbl_8046B6A0_24C_58_t* p = x58;
-                s32* vp = base;
-                for (i = 0; i < 4; i++) {
-                    if (p->x0 != 3) {
-                        *vp = p->x20;
-                    }
-                    p++;
-                    vp++;
+            for (i = 0; i < 4; i++) {
+                if (x58[i].x0 != 3) {
+                    vals[i] = x58[i].x20;
                 }
             }
             for (j = 3; j >= 1; j--) {
-                s32* p = base;
-                for (i = j; i > 0; i--) {
-                    if (p[0] < p[1]) {
-                        s32 tmp = p[0];
-                        p[0] = p[1];
-                        p[1] = tmp;
+                for (i = 0; i < j; i++) {
+                    if (vals[i] < vals[i + 1]) {
+                        s32 tmp = vals[i + 1];
+                        vals[i + 1] = vals[i];
+                        vals[i] = tmp;
                     }
-                    p++;
                 }
             }
-            if (base[0] == x58[arg1].x20 && base[0] >= base[1] * 2) {
+            if (vals[0] == x58[arg1].x20 && vals[0] >= vals[1] * 2) {
                 return 1;
             }
         }
@@ -680,15 +712,13 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
     case 0xDC: {
         if ((unsigned) fn_801701C0(rules, arg1, 0xDB) == 0) {
             {
-                struct lbl_8046B6A0_24C_58_t* p = x58;
                 int i;
                 for (i = 0; i < 4; i++) {
-                    if (p->x0 != 3 && i != arg1 &&
-                        (u32) p->x20 >= (u32) x58[arg1].x20)
+                    if (x58[i].x0 != 3 && i != arg1 &&
+                        x58[i].x20 >= x58[arg1].x20)
                     {
                         return 0;
                     }
-                    p++;
                 }
             }
             if (x58[arg1].x20 != 0) {
@@ -700,39 +730,29 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
 
     case 0xDD: {
         s32 vals[4];
-        s32* base;
         int i, j;
         if (x58[arg1].x40 >= 3) {
-            base = vals;
             {
                 typedef struct {
                     s32 a, b, c, d;
                 } copy_t;
-                *(copy_t*) base = *(copy_t*) zeroes->x10;
+                *(copy_t*) vals = *(copy_t*) zeroes->x10;
             }
-            {
-                struct lbl_8046B6A0_24C_58_t* p = x58;
-                s32* vp = base;
-                for (i = 0; i < 4; i++) {
-                    if (p->x0 != 3) {
-                        *vp = p->x40;
-                    }
-                    p++;
-                    vp++;
+            for (i = 0; i < 4; i++) {
+                if (x58[i].x0 != 3) {
+                    vals[i] = x58[i].x40;
                 }
             }
             for (j = 3; j >= 1; j--) {
-                s32* p = base;
-                for (i = j; i > 0; i--) {
-                    if (p[0] < p[1]) {
-                        s32 tmp = p[0];
-                        p[0] = p[1];
-                        p[1] = tmp;
+                for (i = 0; i < j; i++) {
+                    if (vals[i] < vals[i + 1]) {
+                        s32 tmp = vals[i + 1];
+                        vals[i + 1] = vals[i];
+                        vals[i] = tmp;
                     }
-                    p++;
                 }
             }
-            if (base[0] == x58[arg1].x40 && base[0] >= base[1] * 2) {
+            if (vals[0] == x58[arg1].x40 && vals[0] >= vals[1] * 2) {
                 return 1;
             }
         }
@@ -742,15 +762,13 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
     case 0xDE: {
         if ((unsigned) fn_801701C0(rules, arg1, 0xDD) == 0) {
             {
-                struct lbl_8046B6A0_24C_58_t* p = x58;
                 int i;
                 for (i = 0; i < 4; i++) {
-                    if (p->x0 != 3 && i != arg1 &&
-                        (u32) p->x40 >= (u32) x58[arg1].x40)
+                    if (x58[i].x0 != 3 && i != arg1 &&
+                        x58[i].x40 >= x58[arg1].x40)
                     {
                         return 0;
                     }
-                    p++;
                 }
             }
             if (x58[arg1].x40 != 0) {
@@ -762,41 +780,31 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
 
     case 0xDF: {
         s32 vals[4];
-        s32* base;
         int i, j;
         s32 player_net = x58[arg1].x24 - x58[arg1].xA;
         if ((u32) player_net >= 3) {
-            base = vals;
             {
                 typedef struct {
                     s32 a, b, c, d;
                 } copy_t;
-                *(copy_t*) base = *(copy_t*) zeroes->x20;
+                *(copy_t*) vals = *(copy_t*) zeroes->x20;
             }
-            {
-                struct lbl_8046B6A0_24C_58_t* p = x58;
-                s32* vp = base;
-                for (i = 0; i < 4; i++) {
-                    if (p->x0 != 3) {
-                        *vp = p->x24 - p->xA;
-                    }
-                    p++;
-                    vp++;
+            for (i = 0; i < 4; i++) {
+                if (x58[i].x0 != 3) {
+                    vals[i] = x58[i].x24 - x58[i].xA;
                 }
             }
             for (j = 3; j >= 1; j--) {
-                s32* p = base;
-                for (i = j; i > 0; i--) {
-                    if (p[0] < p[1]) {
-                        s32 tmp = p[0];
-                        p[0] = p[1];
-                        p[1] = tmp;
+                for (i = 0; i < j; i++) {
+                    if (vals[i] < vals[i + 1]) {
+                        s32 tmp = vals[i + 1];
+                        vals[i + 1] = vals[i];
+                        vals[i] = tmp;
                     }
-                    p++;
                 }
             }
-            if ((u32) base[0] == (u32) (x58[arg1].x24 - x58[arg1].xA) &&
-                base[0] >= base[1] * 2)
+            if ((u32) vals[0] == (u32) (x58[arg1].x24 - x58[arg1].xA) &&
+                vals[0] >= vals[1] * 2)
             {
                 return 1;
             }
@@ -807,16 +815,14 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
     case 0xE0: {
         if ((unsigned) fn_801701C0(rules, arg1, 0xDF) == 0) {
             {
-                struct lbl_8046B6A0_24C_58_t* p = x58;
                 int i;
                 for (i = 0; i < 4; i++) {
-                    if (p->x0 != 3 && i != arg1 &&
-                        (u32) (p->x24 - p->xA) >=
+                    if (x58[i].x0 != 3 && i != arg1 &&
+                        (u32) (x58[i].x24 - x58[i].xA) >=
                             (u32) (x58[arg1].x24 - x58[arg1].xA))
                     {
                         return 0;
                     }
-                    p++;
                 }
             }
             if ((x58[arg1].x24 - x58[arg1].xA) != 0) {
@@ -828,39 +834,29 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
 
     case 0xE1: {
         s32 vals[4];
-        s32* base;
         int i, j;
         if (x58[arg1].xA >= 3) {
-            base = vals;
             {
                 typedef struct {
                     s32 a, b, c, d;
                 } copy_t;
-                *(copy_t*) base = *(copy_t*) zeroes->x30;
+                *(copy_t*) vals = *(copy_t*) zeroes->x30;
             }
-            {
-                struct lbl_8046B6A0_24C_58_t* p = x58;
-                s32* vp = base;
-                for (i = 0; i < 4; i++) {
-                    if (p->x0 != 3) {
-                        *vp = p->xA;
-                    }
-                    p++;
-                    vp++;
+            for (i = 0; i < 4; i++) {
+                if (x58[i].x0 != 3) {
+                    vals[i] = x58[i].xA;
                 }
             }
             for (j = 3; j >= 1; j--) {
-                s32* p = base;
-                for (i = j; i > 0; i--) {
-                    if (p[0] < p[1]) {
-                        s32 tmp = p[0];
-                        p[0] = p[1];
-                        p[1] = tmp;
+                for (i = 0; i < j; i++) {
+                    if (vals[i] < vals[i + 1]) {
+                        s32 tmp = vals[i + 1];
+                        vals[i + 1] = vals[i];
+                        vals[i] = tmp;
                     }
-                    p++;
                 }
             }
-            if (base[0] == x58[arg1].xA && base[0] >= base[1] * 2) {
+            if (vals[0] == x58[arg1].xA && vals[0] >= vals[1] * 2) {
                 return 1;
             }
         }
@@ -870,13 +866,13 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
     case 0xE2: {
         if ((unsigned) fn_801701C0(rules, arg1, 0xE1) == 0) {
             {
-                struct lbl_8046B6A0_24C_58_t* p = x58;
                 int i;
                 for (i = 0; i < 4; i++) {
-                    if (p->x0 != 3 && i != arg1 && p->xA >= x58[arg1].xA) {
+                    if (x58[i].x0 != 3 && i != arg1 &&
+                        x58[i].xA >= x58[arg1].xA)
+                    {
                         return 0;
                     }
-                    p++;
                 }
             }
             if (x58[arg1].xA != 0) {
@@ -1025,31 +1021,28 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
 
     case 0xF9: {
         f32 vals[4];
-        f32* base = vals;
         int i, j;
         {
             typedef struct {
                 s32 a, b, c, d;
             } copy_t;
-            *(copy_t*) base = *(copy_t*) zeroes->x40;
+            *(copy_t*) vals = *(copy_t*) zeroes->x40;
         }
         for (i = 0; i < 4; i++) {
             if (x58[i].x0 != 3) {
-                base[i] = pl_800407C8(i);
+                vals[i] = pl_800407C8(i);
             }
         }
         for (j = 3; j >= 1; j--) {
-            f32* p = base;
-            for (i = j; i > 0; i--) {
-                if (p[0] < p[1]) {
-                    f32 tmp = p[0];
-                    p[0] = p[1];
-                    p[1] = tmp;
+            for (i = 0; i < j; i++) {
+                if (vals[i] < vals[i + 1]) {
+                    f32 tmp = vals[i + 1];
+                    vals[i + 1] = vals[i];
+                    vals[i] = tmp;
                 }
-                p++;
             }
         }
-        if (base[0] == pl_800407C8(arg1) && base[0] > 2.0f * base[1]) {
+        if (vals[0] == pl_800407C8(arg1) && vals[0] > 2.0f * vals[1]) {
             return 1;
         }
         return 0;
@@ -1079,28 +1072,25 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
 
     case 0xFC: {
         {
-            struct lbl_8046B6A0_24C_58_t* p = x58;
             int i;
             for (i = 0; i < 4; i++) {
-                if (p->x0 != 3 && i != arg1 && (p->x3 & 1)) {
+                if (x58[i].x0 != 3 && i != arg1 && (x58[i].x3 & 1)) {
                     return 0;
                 }
-                p++;
             }
         }
         if (rules->x5 == 3) {
             {
-                struct lbl_8046B6A0_24C_58_t* p = x58;
                 int i;
                 for (i = 0; i < 4; i++) {
-                    if (p->x0 != 3 && i != arg1 && rankings[i] == 0) {
+                    if (x58[i].x0 != 3 && i != arg1 && rankings[i] == 0) {
                         return 0;
                     }
-                    p++;
                 }
             }
-            tmp = &x58[arg1].x3;
-            if (!(*tmp & 1) && rankings[arg1] == 0 && x58[arg1].x20 == 0) {
+            if (!(((u8*) x58)[arg1 * sizeof(*x58) + 3] & 1) &&
+                rankings[arg1] == 0 && x58[arg1].x20 == 0)
+            {
                 return 1;
             }
         } else {
@@ -1112,22 +1102,22 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
             }
             if (mode == 0) {
                 {
-                    struct lbl_8046B6A0_24C_58_t* p = x58;
                     int i;
                     for (i = 0; i < 4; i++) {
-                        if (p->x0 != 3 && i != arg1 && p->x5 == 0) {
+                        if (x58[i].x0 != 3 && i != arg1 && x58[i].x5 == 0) {
                             return 0;
                         }
-                        p++;
                     }
                 }
-                tmp = &x58[arg1].x3;
-                if (!(*tmp & 1) && x58[arg1].x5 == 0 && x58[arg1].x20 == 0) {
+                if (!(((u8*) x58)[arg1 * sizeof(*x58) + 3] & 1) &&
+                    x58[arg1].x5 == 0 && x58[arg1].x20 == 0)
+                {
                     return 1;
                 }
             } else {
-                tmp = &x58[arg1].x3;
-                if (!(*tmp & 1) && x58[arg1].x20 == 0) {
+                if (!(((u8*) x58)[arg1 * sizeof(*x58) + 3] & 1) &&
+                    x58[arg1].x20 == 0)
+                {
                     return 1;
                 }
             }
@@ -1147,11 +1137,11 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
         u32 vals[4];
         int i, j;
         unsigned int threshold;
-        if ((unsigned) pl_800408B8(arg1) == 0) {
+        if (pl_800408B8(arg1) == 0) {
             return 0;
         }
         threshold = pl_80038914()->x13C;
-        if ((unsigned) pl_800408B8(arg1) < threshold) {
+        if (pl_800408B8(arg1) < threshold) {
             int mode;
             if (fn_80171A88() == 0) {
                 mode = 0;
@@ -1171,15 +1161,7 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
                     }
                 }
                 for (j = 3; j >= 1; j--) {
-                    u32* p = vals;
-                    for (i = j; (u32) i > 0; i--) {
-                        if (p[0] > p[1]) {
-                            u32 tmp = p[0];
-                            p[0] = p[1];
-                            p[1] = tmp;
-                        }
-                        p++;
-                    }
+                    gm_16F1_SortDescPass(vals, j);
                 }
                 if (vals[0] == pl_800408B8(arg1) && vals[0] <= vals[1] / 2) {
                     return 1;
@@ -1216,15 +1198,7 @@ int fn_801701C0(struct lbl_8046B6A0_24C_t* rules, int arg1, int arg2)
                     }
                 }
                 for (j = 3; j >= 1; j--) {
-                    u32* p = vals;
-                    for (i = j; (u32) i > 0; i--) {
-                        if (p[0] < p[1]) {
-                            u32 tmp = p[0];
-                            p[0] = p[1];
-                            p[1] = tmp;
-                        }
-                        p++;
-                    }
+                    gm_16F1_SortAscPass(vals, j);
                 }
                 if (vals[0] == pl_80040894(arg1) && vals[0] >= vals[1] * 2) {
                     return 1;
@@ -1412,7 +1386,7 @@ bool gm_801720F8(void)
     if (gm_8016B3D8()) {
         return true;
     }
-    return gm_GetRules()->x0_0 == 1;
+    return gm_GetRules()->match_kind == 1;
 }
 
 int gm_80172140(void)
@@ -1468,7 +1442,7 @@ static inline bool gm_801721EC_3(u32 j)
 static inline bool gm_801721EC_4(void)
 {
     s32 j;
-    for (j = 0; j < 0x125; j++) {
+    for (j = 0; j < TY_TROPHY_COUNT; j++) {
         if (gm_801721EC_3(j)) {
             return true;
         }
@@ -1631,11 +1605,6 @@ bool fn_801725A8(void)
     return false;
 }
 
-enum {
-    LANG_JP = 0,
-    LANG_US = 1,
-};
-
 bool fn_801725E4(void)
 {
     if (lbLang_GetLanguageSetting() == LANG_JP &&
@@ -1742,8 +1711,10 @@ void fn_8017280C(void)
     gmMainLib_8015EEB4();
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 int gm_80172898(u16 arg0)
 {
     s32 var_r3;
@@ -1769,7 +1740,9 @@ int gm_80172898(u16 arg0)
     fn_8017280C();
     return count;
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void gm_8017297C(void)
 {
@@ -1777,7 +1750,7 @@ void gm_8017297C(void)
     for (i = 0; i < 0x42; i++) {
         if (gmMainLib_8015D94C(i) == 0) {
             u32* temp_r31 = gmMainLib_8015D804(i);
-            *temp_r31 = lbTime_8000AFBC();
+            *temp_r31 = lbTime_GetTimeInSeconds();
             gmMainLib_8015D8FC(i);
             gmMainLib_8015D8B0(i);
         }
@@ -1875,8 +1848,10 @@ void gm_80172C44(u32 arg0)
     gmMainLib_8015D984(arg0);
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 bool fn_80172C78(int arg0)
 {
     if (gmMainLib_8015D984(arg0) != 0) {
@@ -1885,7 +1860,9 @@ bool fn_80172C78(int arg0)
     }
     return false;
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 static const struct lbl_803B7AD0_t {
     u8 x0;
@@ -2101,7 +2078,7 @@ u8 gm_80173224(int arg0, int arg1)
 }
 
 /// check for event character unlocks?
-CharacterKind gm_801732D8(u8 arg0)
+u8 gm_801732D8(u8 arg0)
 {
     if (!gm_80164840(CKIND_GANON) && gm_801BEBC0(arg0) == 0x1C) {
         return CKIND_GANON;
@@ -2112,7 +2089,7 @@ CharacterKind gm_801732D8(u8 arg0)
     return CHKIND_NONE;
 }
 
-int gm_8017335C(void)
+u16 gm_8017335C(void)
 {
     int var_r31 = 1;
     int i;

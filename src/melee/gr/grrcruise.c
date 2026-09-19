@@ -6,6 +6,7 @@
 #endif
 
 #include "grzakogenerator.h"
+#include "inlines.h"
 #include "placeholder.h"
 
 #include <platform.h>
@@ -42,7 +43,7 @@
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 #include <MSL/math_ppc.h>
-#include <MSL/trigf.h>
+#include <trigf.h>
 
 /* Rainbow Cruise: the ship's projected offsets (fnmsubs), the sail
  * distance (dy*dy plain, dx fused), the rotation wrap and damping,
@@ -111,6 +112,23 @@ void grRCruise_80201B60(HSD_JObj* jobj, bool arg1);
 void grRCruise_8020071C(Ground_GObj* gobj);
 void grRCruise_80200B48(Ground_GObj* gobj);
 void grRCruise_80200C04(Ground_GObj* gobj);
+
+#ifdef MUST_MATCH
+static void sdata2_order(void)
+{
+    (void) 0.4f;
+    (void) 0.0f;
+    (void) 1.0471976f;
+    (void) -10000.0f;
+    (void) 10000.0f;
+    (void) 0.017453292f;
+    (void) 10.0f;
+    (void) -1.0f;
+    (void) -350.0f;
+    (void) 1.0f;
+    (void) 1000.0f;
+}
+#endif
 
 S16Vec3 grRc_803E4DA8[] = {
     { 0, 1, 1 },   { 1, 1, 1 },   { 2, 1, 1 },   { 3, 1, 1 },   { 4, 1, 1 },
@@ -344,7 +362,6 @@ void grRCruise_801FF444(Ground_GObj* gobj)
 
 void grRCruise_801FF5B4(Ground_GObj* gobj)
 {
-    Vec3 pos;
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
 
@@ -379,11 +396,14 @@ void grRCruise_801FF5B4(Ground_GObj* gobj)
     grRCruise_80200B48(gobj);
     Ground_801C2FE0(gobj);
     mpLib_80058560();
-    pos = grRc_803B8288;
-    gp->gv.rcruise.x4 = lb_80011A50(&pos, -1, 0.4f, 0.0f, 1.0471976f,
-                                     -10000.0f, 10000.0f, 10000.0f, -10000.0f);
-    gp->gv.rcruise.x8 = 0.017453292f;
-    gp->gv.rcruise.xC = 1;
+    {
+        Vec3 pos = { 1.0f, 0.0f, 0.0f };
+        gp->u.rcruise.x4 =
+            lb_80011A50(&pos, -1, 0.4f, 0.0f, MTXDegToRad(60), -10000.0f,
+                        +10000.0f, +10000.0f, -10000.0f);
+        gp->u.rcruise.x8 = MTXDegToRad(1);
+        gp->u.rcruise.xC = 1;
+    }
 }
 
 bool grRCruise_801FF6CC(Ground_GObj* arg)
@@ -636,31 +656,31 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
             temp_f31 = -350.0f * Ground_801C0498();
             HSD_JObjAddTranslationZ(temp_r29_2, temp_f31);
         }
-        gobj = Ground_801C2BA4(2);
+        gobj = Ground_GetMapGObj(2);
         if (gobj != NULL) {
             if ((jobj = gobj->hsd_obj) != NULL) {
                 HSD_JObjSetTranslate(jobj, &sp64);
             }
         }
-        gobj = Ground_801C2BA4(1);
+        gobj = Ground_GetMapGObj(1);
         if (gobj != NULL) {
             if ((jobj = gobj->hsd_obj) != NULL) {
                 HSD_JObjSetTranslate(jobj, &sp64);
             }
         }
-        gobj = Ground_801C2BA4(5);
+        gobj = Ground_GetMapGObj(5);
         if (gobj != NULL) {
             if ((jobj = gobj->hsd_obj) != NULL) {
                 HSD_JObjSetTranslate(jobj, &sp64);
             }
         }
-        gobj = Ground_801C2BA4(6);
+        gobj = Ground_GetMapGObj(6);
         if (gobj != NULL) {
             if ((jobj = gobj->hsd_obj) != NULL) {
                 HSD_JObjSetTranslate(jobj, &sp64);
             }
         }
-        gobj = Ground_801C2BA4(4);
+        gobj = Ground_GetMapGObj(4);
         if (gobj != NULL) {
             if ((jobj = gobj->hsd_obj) != NULL) {
                 HSD_JObjSetTranslate(jobj, &sp64);
@@ -872,11 +892,10 @@ void grRCruise_8020071C(Ground_GObj* gobj)
 {
     Ground* gp = gobj->user_data;
     HSD_JObj* jobj = Ground_801C3FA4(gobj, 8);
-    HSD_JObj* jobj5 = Ground_801C3FA4(Ground_801C2BA4(5), 8);
-    f32 abs_rot =
-        gp->gv.rcruise.x18 < 0.0f ? -gp->gv.rcruise.x18 : gp->gv.rcruise.x18;
-    f32 wrapped = RC_FMA(-360.0f, (f32) (s32) (abs_rot / 360.0f), abs_rot); /* fnmsubs */
-    PAD_STACK(8);
+    HSD_JObj* jobj5 = Ground_801C3FA4(Ground_GetMapGObj(5), 8);
+    f32 abs_rot = ABS(gp->u.rcruise.x18);
+    /* fnmsubs on the console */
+    f32 wrapped = RC_FMA(-360.0f, (f32) (s32) (abs_rot / 360.0f), abs_rot);
 
     switch (gp->gv.rcruise.x2C) {
     case 0:
@@ -1210,6 +1229,44 @@ void grRCruise_80201288(HSD_JObj* jobj, void (*callback)(HSD_DObj*, u32),
     }
 }
 
+static inline void set_hidden_a(int i)
+{
+    int joint = (&grRc_803E5014)[i].x0;
+    HSD_GObj* gobj5 = Ground_GetMapGObj(5);
+    if (gobj5 != NULL) {
+        HSD_GObj* gobj1 = Ground_GetMapGObj(1);
+        if (gobj1 != NULL) {
+            HSD_JObj* jobj = Ground_801C3FA4(gobj5, joint);
+            if (jobj != NULL) {
+                HSD_JObjClearFlagsAll(jobj, JOBJ_HIDDEN);
+            }
+            jobj = Ground_801C3FA4(gobj1, joint);
+            if (jobj != NULL) {
+                grRCruise_80201288(jobj, HSD_DObjSetFlags, DOBJ_HIDDEN);
+            }
+        }
+    }
+}
+
+static inline void set_hidden_b(int i)
+{
+    int joint = (&grRc_803E5014)[i].x0;
+    HSD_GObj* gobj5 = Ground_GetMapGObj(5);
+    if (gobj5 != NULL) {
+        HSD_GObj* gobj1 = Ground_GetMapGObj(1);
+        if (gobj1 != NULL) {
+            HSD_JObj* jobj = Ground_801C3FA4(gobj5, joint);
+            if (jobj != NULL) {
+                HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
+            }
+            jobj = Ground_801C3FA4(gobj1, joint);
+            if (jobj != NULL) {
+                grRCruise_80201288(jobj, HSD_DObjClearFlags, DOBJ_HIDDEN);
+            }
+        }
+    }
+}
+
 void grRCruise_80201410(Ground_GObj* gobj)
 {
     Ground* gp = gobj->user_data;
@@ -1234,9 +1291,9 @@ void grRCruise_80201410(Ground_GObj* gobj)
 
             gp->u.map.vanish[i].x0 = 2;
             joint = desc_table[i].x0;
-            gobj5 = Ground_801C2BA4(5);
+            gobj5 = Ground_GetMapGObj(5);
             if (gobj5 != NULL) {
-                gobj1 = Ground_801C2BA4(1);
+                gobj1 = Ground_GetMapGObj(1);
                 if (gobj1 != NULL) {
                     HSD_JObj* jobj = Ground_801C3FA4(gobj5, joint);
                     if (jobj != NULL) {
@@ -1294,9 +1351,9 @@ void grRCruise_80201588(Ground_GObj* gobj)
 
                 gp->gv.rcruise.vanish[i].x0 = 2;
                 joint = desc->x0;
-                gobj5 = Ground_801C2BA4(5);
+                gobj5 = Ground_GetMapGObj(5);
                 if (gobj5 != NULL) {
-                    gobj1 = Ground_801C2BA4(1);
+                    gobj1 = Ground_GetMapGObj(1);
                     if (gobj1 != NULL) {
                         jobj = Ground_801C3FA4(gobj5, joint);
                         if (jobj != NULL) {
@@ -1321,9 +1378,9 @@ void grRCruise_80201588(Ground_GObj* gobj)
                 gp->gv.rcruise.vanish[i].x0 = 3;
                 grAnime_801C7FF8(gobj, desc->x0, 2, 3, 0.0f, 1.0f);
                 joint = desc->x0;
-                gobj5 = Ground_801C2BA4(5);
+                gobj5 = Ground_GetMapGObj(5);
                 if (gobj5 != NULL) {
-                    gobj1 = Ground_801C2BA4(1);
+                    gobj1 = Ground_GetMapGObj(1);
                     if (gobj1 != NULL) {
                         jobj = Ground_801C3FA4(gobj5, joint);
                         if (jobj != NULL) {
@@ -1361,7 +1418,7 @@ void grRCruise_80201588(Ground_GObj* gobj)
 
 void grRCruise_80201918(Vec3* vec)
 {
-    HSD_GObj* gobj = Ground_801C2BA4(3);
+    HSD_GObj* gobj = Ground_GetMapGObj(3);
     if (gobj != NULL) {
         Ground* gp = gobj->user_data;
         if (gp != NULL) {

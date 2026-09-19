@@ -97,10 +97,12 @@ void vi0102_CameraCallback(HSD_GObj* gobj, int unused)
 }
 
 /// Used to force float ordering of file
+#ifdef MUST_MATCH
 static f32 unused(void)
 {
     return 0.0f;
 }
+#endif
 
 static void vi0102_RunFrame(HSD_GObj* gobj)
 {
@@ -118,7 +120,7 @@ static void vi0102_RunFrame(HSD_GObj* gobj)
     }
 }
 
-void vi0102_Initialize_OnEnter(void* arg)
+void vi0102_Scene_OnEnter(void* arg)
 {
     int i;
     HSD_CObj* cobj;
@@ -147,7 +149,7 @@ void vi0102_Initialize_OnEnter(void* arg)
     cam_gobj = GObj_Create(0x13, 0x14, 0);
     cobj =
         lb_80013B14((HSD_CameraDescPerspective*) un_804D6F30->cameras[0].desc);
-    HSD_GObjObject_80390A70(cam_gobj, HSD_GObj_804D784B, cobj);
+    HSD_GObjObject_80390A70(cam_gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(cam_gobj, vi0102_CameraCallback, 0x8);
     HSD_CObjAddAnim(cobj, un_804D6F30->cameras[0].anims[0]);
     HSD_CObjReqAnim(cobj, 0.0F);
@@ -158,7 +160,7 @@ void vi0102_Initialize_OnEnter(void* arg)
         joint_gobj = GObj_Create(0xE, 0xF, 0);
         jobj = HSD_JObjLoadJoint(un_804D6F30->models[i]->joint);
         tmp = jobj;
-        HSD_GObjObject_80390A70(joint_gobj, HSD_GObj_804D7849, tmp);
+        HSD_GObjObject_80390A70(joint_gobj, HSD_GObj_JObjKind, tmp);
         GObj_SetupGXLink(joint_gobj, HSD_GObj_JObjCallback, 0xB, 0);
         gm_8016895C(jobj, un_804D6F30->models[i],
                     (un_804D6F30->models[i] != NULL) * 0);
@@ -171,19 +173,19 @@ void vi0102_Initialize_OnEnter(void* arg)
 
     fog_gobj = GObj_Create(0xA, 0x3, 0);
     fog = HSD_FogLoadDesc(un_804D6F30->fogs[0].desc);
-    HSD_GObjObject_80390A70(fog_gobj, HSD_GObj_804D7848, fog);
+    HSD_GObjObject_80390A70(fog_gobj, HSD_GObj_FogKind, fog);
     GObj_SetupGXLink(fog_gobj, HSD_GObj_FogCallback, 0, 0);
     erase_colors_vi0102 = fog->color;
 
     light_gobj = GObj_Create(0xB, 0x3, 0);
     lobj = lb_80011AC4(un_804D6F30->lights);
-    HSD_GObjObject_80390A70(light_gobj, HSD_GObj_804D784A, lobj);
+    HSD_GObjObject_80390A70(light_gobj, HSD_GObj_LightKind, lobj);
     GObj_SetupGXLink(light_gobj, HSD_GObj_LObjCallback, 0, 0);
 
     lbAudioAx_80024E50(0);
 }
 
-void vi0102_8031D000_OnFrame(void)
+void vi0102_Scene_OnFrame(void)
 {
     vi_8031CAAC();
 }

@@ -4,7 +4,6 @@
 #include "port/log.h"
 #endif
 
-#include <math.h>
 #include <sysdolphin/baselib/controller.h>
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/gobjgxlink.h>
@@ -12,7 +11,6 @@
 #include <sysdolphin/baselib/gobjproc.h>
 #include <sysdolphin/baselib/jobj.h>
 #include <melee/gm/gm_unsplit.h>
-#include <melee/gm/types.h>
 #include <melee/lb/lbarchive.h>
 #include <melee/lb/lbspdisplay.h>
 #include <melee/sc/types.h>
@@ -45,8 +43,8 @@ void fn_801A0E34(HSD_GObj* arg0)
     if (lbl_80479B10.slot != 99) {
         x = 10.0F * HSD_PadMasterStatus[(u8) lbl_80479B10.slot].nml_stickX;
         y = 10.0F * HSD_PadMasterStatus[(u8) lbl_80479B10.slot].nml_stickY;
-        HSD_JObjSetRotationY(lbl_80479B10.analog_stick, +(deg_to_rad * x));
-        HSD_JObjSetRotationX(lbl_80479B10.analog_stick, -(deg_to_rad * y));
+        HSD_JObjSetRotationY(lbl_80479B10.analog_stick, +MTXDegToRad(x));
+        HSD_JObjSetRotationX(lbl_80479B10.analog_stick, -MTXDegToRad(y));
     }
 }
 
@@ -117,7 +115,7 @@ void fn_801A1134(void)
     lb_80011E24(jobj, &lbl_80479B10.z, 10, -1);
     lb_80011E24(jobj, &lbl_80479B10.analog_stick_outline, 11, -1);
     lbl_80479B10.analog_stick = HSD_JObjGetChild(lbl_80479B10.analog_stick);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xBU, 0U);
     gm_8016895C(jobj, scene->models[0], 0);
     HSD_JObjReqAnimAll(jobj, 1.0f);

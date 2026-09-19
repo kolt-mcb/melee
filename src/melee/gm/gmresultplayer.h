@@ -33,6 +33,7 @@ typedef struct {
     /* 0x90 */ f32 x90;
     /* 0x94 */ f32 x94;
     /* 0x98 */ f32 x98;
+    /* 0x9C */ f32 x9C;
 } ResultsPlayerConfig;
 
 extern ResultsPlayerConfig lbl_803B7B68;
@@ -72,7 +73,7 @@ extern CameraKindData lbl_803D6A08;
 /* 179350 */ void fn_80179350(HSD_GObj*);
 /* 1795D4 */ int fn_801795D4(void);
 /* 1796F0 */ int fn_801796F0(int);
-/* 179854 */ int fn_80179854(void);
+/* 179854 */ void fn_80179854(void);
 /* 179990 */ void fn_80179990(HSD_GObj*, int, int);
 /* 179D3C */ void fn_80179D3C(HSD_GObj*, int);
 /* 179D60 */ void fn_80179D60(HSD_GObj*, int);
@@ -82,17 +83,13 @@ extern CameraKindData lbl_803D6A08;
 /* 179E34 */ void fn_80179E34(HSD_GObj*, int);
 /* 179E9C */ void fn_80179E9C(HSD_GObj*, int);
 /* 179F04 */ void fn_80179F04(HSD_GObj*, int);
-#if BUILD_TARGET_PC
 /* 179F6C */ void fn_80179F6C(int idx, HSD_GObj* value);
-#else
-/* 179F6C */ UNK_RET fn_80179F6C(int idx, int value);
-#endif
 /* 179F84 */ void fn_80179F84(HSD_JObj*);
 /* 17A004 */ UNK_RET fn_8017A004(UNK_PARAMS);
 /* 17A078 */ void fn_8017A078(s32);
 /* 17A318 */ HSD_GObj* fn_8017A318(s32);
 /* 17A67C */ Fighter_GObj* fn_8017A67C(CharacterKind c_kind, int, int);
 /* 17A9B4 */ void fn_8017A9B4(int);
-/* 17AA78 */ void fn_8017AA78(u8*);
+/* 17AA78 */ void fn_8017AA78(const u8*);
 
 #endif

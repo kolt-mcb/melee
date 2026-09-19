@@ -76,6 +76,15 @@ DISPLAY_MODULES = [
     "sobjlib.c",
     "displayfunc.c",
     "sislib.c",   # SIS text system: the HUD's name tags and intro text
+    # The August upstream merge split sislib.c into hsd_3A64.c, hsd_3A76.c
+    # and sislib_font.c. None of the three is built here: the port's own
+    # sislib.c still holds every function they define, and holds them with
+    # the host fixes (the boot.dol glyph atlas, the pointer-width reads in
+    # the formatter, MELEE_SISLOG) that the split files do not have.
+    # Compiling both sides would be a duplicate definition of nineteen
+    # symbols. sislib_font.c could not be built in any case: it is one
+    # #include of sislib_font.inc, which dtk generates from the DOL during
+    # the GCN build and which this tree does not contain.
     # HSD particle system: what the ef/ effects module (hit sparks,
     # explosions, electricity) is built on.
     "particle.c", "psdisp.c", "psdisptev.c", "psappsrt.c",
@@ -144,9 +153,12 @@ SFX_SOURCES = collect(MELEE / "sfx")
 # (trophy display) and textlib/textdraw (the DevText debug overlay) pull in the
 # unbuilt ty/ trophy system and undecompiled .data globals, so they stay out.
 IF_SOURCES = collect(MELEE / "if")
+# textlib_1.c is upstream's August split of textlib.c and inherits the same
+# dependencies (ty/toy.h, textdraw.h), so it stays out with its parent.
 IF_SOURCES = [s for s in IF_SOURCES
               if Path(s).name not in {"soundtest.c", "ifprize.c",
-                                      "textlib.c", "textdraw.c"}]
+                                      "textlib.c", "textlib_1.c",
+                                      "textdraw.c"}]
 MATH_SHIM = [str(SRC / "math_shim.c")]
 # MSL's own sinf/cosf. Without them the game's trig resolves to glibc, which
 # is correctly rounded where the console's is a polynomial.

@@ -11,14 +11,13 @@
 #include "it/forward.h"
 
 #include "it/inlines.h"
-#include "it/it_266F.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/item.h"
 #include "it/items/itnesspkflashexplode.h"
+#include "it/itgroundcoll.h"
 
 #include <math.h>
-#include <trigf.h>
 #include <baselib/jobj.h>
 
 /* PK Flash: the launch angle, the stick steering and the charge lerps
@@ -146,6 +145,8 @@ void it_2725_Logic102_Destroyed(Item_GObj* gobj)
                 ftKb_SpecialNNs_800FECBC(
                     ip->xDD4_itemVar.pkflush.xDE0_PKFlash_Owner);
                 break;
+            default:
+                break;
             }
         }
         ip->xDD4_itemVar.pkflush.xDE0_PKFlash_Owner = NULL;
@@ -221,6 +222,8 @@ bool itNesspkflash_UnkMotion0_Anim(Item_GObj* gobj)
                 holding = ftKb_SpecialNNs_800FEC78(
                     ip->xDD4_itemVar.pkflush.xDE0_PKFlash_Owner);
                 break;
+            default:
+                break;
             }
             if (holding != true) {
                 Item_80268E5C(gobj, 1, ITEM_ANIM_UPDATE);
@@ -267,6 +270,8 @@ bool itNesspkflash_UnkMotion1_Anim(Item_GObj* gobj)
                                 ip->facing_dir,
                                 ip->xDD4_itemVar.pkflush.xDD8_PKFlash);
                     break;
+                default:
+                    break;
                 }
                 return true;
             }
@@ -305,6 +310,8 @@ void itNesspkflash_UnkMotion0_Phys(Item_GObj* gobj)
             case It_Kind_Kirby_NessPKFlush:
                 holding = ftKb_SpecialNNs_800FEC78(
                     ip->xDD4_itemVar.pkflush.xDE0_PKFlash_Owner);
+                break;
+            default:
                 break;
             }
             if (holding == true) {

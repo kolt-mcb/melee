@@ -381,15 +381,11 @@ __attribute__((weak)) void HSD_JObjInit(void* jobj) {}
 
 /* ---- mnName data (real fn now in mnname.c) ---- */
 /*
- * mnName_8023749C is now the real decomp (src/melee/mn/mnname.c). It reads
- * the name tables below, which we still provide as tiny dummies here.
+ * The name tables and their terminator used to be dummies here, because
+ * mnname.c and mnnamenew.c read tables the decomp only declared. The August
+ * upstream merge defines all three for real, so the dummies would be a
+ * second definition of each.
  */
-static const char* _mnName_terminator = "";  /* dummy terminator string */
-char mnName_StringTerminator = '\0';
-/* Real mnName_8023749C reads array[j][0]; each entry must be a valid string.
- * Use "" (whose [0]=='\0'==terminator) so the lookup safely returns NULL. */
-char* mnNameNew_803EE720[] = { "" };
-char* mnNameNew_803EE724[] = { "" };
 
 /* GameMode struct — forward-declare from types.h (defined in gmscdata.c) */
 /* We can't #include types.h here without pulling in too many dependencies,

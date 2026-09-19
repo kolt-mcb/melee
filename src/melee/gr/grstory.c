@@ -141,7 +141,7 @@ void grStory_801E322C(Ground_GObj* gobj) {}
 
 void grStory_801E3230(Ground_GObj* gobj) {}
 
-inline int randi(int max)
+static inline int randi(int max)
 {
     return max ? HSD_Randi(max) : 0;
 }
@@ -232,7 +232,7 @@ void grStory_801E3414(Ground_GObj* gobj) {}
 
 /// floating point random number centered at 0
 /// with an amplitude of 1
-inline f32 frand_amp1(void)
+static inline f32 frand_amp1(void)
 {
     return 2.0F * (HSD_Randf() - 0.5F);
 }
@@ -332,7 +332,7 @@ bool grStory_801E36D8(Vec3* a, int _, HSD_JObj* jobj)
     }
 }
 
-#ifndef BUGFIX
+#ifdef MUST_MATCH
 static u32 _[] = {
     0xC3920000, 0x42D20000, 0xC3920000, 0x42960000, 0xC3920000, 0x42480000,
     0x43980000, 0x42DC0000, 0x43980000, 0x42B40000, 0,          0,

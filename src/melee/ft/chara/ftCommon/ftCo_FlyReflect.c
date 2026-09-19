@@ -7,10 +7,13 @@
 #include "placeholder.h"
 
 #include "cm/camera.h"
+#include "ef/efasync.h"
+#include "ft/fighter.h"
 #include "ft/ft_081B.h"
-#include "ftCommon/inlines.h"
+#include "ft/ftcoll.h"
+#include "ft/ftcommon.h"
+#include "ft/inlines.h"
 #include "ftKirby/ftkirby.h"
-#include "lb/lbrefract.h"
 #include "lb/lbvector.h"
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
@@ -21,7 +24,9 @@
 #define FR_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
+#ifdef MUST_MATCH
 #pragma force_active on
+#endif
 
 bool ftCo_800C15F4(Fighter_GObj* gobj)
 {
@@ -63,8 +68,10 @@ bool ftCo_800C15F4(Fighter_GObj* gobj)
     return false;
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 bool ftCo_800C1718(Fighter_GObj* gobj)
 {
     Vec3 vec;
@@ -89,9 +96,11 @@ bool ftCo_800C1718(Fighter_GObj* gobj)
     }
     return false;
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
-inline bool ftCo_800C1718_inline(Fighter_GObj* gobj)
+static inline bool ftCo_800C1718_inline(Fighter_GObj* gobj)
 {
     u32 pad = 0;
     Fighter* fp = GET_FIGHTER(gobj);
@@ -159,23 +168,6 @@ bool ftCo_800C17CC(Fighter_GObj* gobj)
     return 0;
 }
 
-inline float fake_sqrtf(float x)
-{
-    u32 pad = 0;
-    u32 pad2 = 0;
-    volatile float y;
-
-    if (x > 0.0f) {
-        double guess = __frsqrte((double) x); // returns an approximation to
-        guess = .5 * guess * (3.0 - guess * guess * x); // now have 12 sig bits
-        guess = .5 * guess * (3.0 - guess * guess * x); // now have 24 sig bits
-        guess = .5 * guess * (3.0 - guess * guess * x); // now have 32 sig bits
-        y = (float) (x * guess);
-        return y;
-    }
-    return x;
-}
-
 void ftCo_800C18A8(Fighter_GObj* gobj, ftCommon_MotionState msid, Vec3* normal,
                    Vec3* offset)
 {
@@ -186,6 +178,11 @@ void ftCo_800C18A8(Fighter_GObj* gobj, ftCommon_MotionState msid, Vec3* normal,
     Fighter* fp;
 
     fp = GET_FIGHTER(gobj);
+
+    /// @todo fix stack padding
+    GET_FIGHTER(0);
+    GET_FIGHTER(0);
+
     vec0.x = fp->cur_pos.x + offset->x;
     vec0.y = fp->cur_pos.y + offset->y;
     vec0.z = fp->cur_pos.z + offset->z;
@@ -224,7 +221,7 @@ void ftCo_800C18A8(Fighter_GObj* gobj, ftCommon_MotionState msid, Vec3* normal,
     {
         float vel_x = fp->self_vel.x + fp->x8c_kb_vel.x;
         float vel_y = fp->self_vel.y + fp->x8c_kb_vel.y;
-        float mag = fake_sqrtf(FR_FMA(vel_x, vel_x, vel_y * vel_y));
+        float mag = sqrtf(FR_FMA(vel_x, vel_x, vel_y * vel_y));
         ftCo_80097630(fp, ftCo_DownBound_SfxIds, mag * fp->co_attrs.weight);
     }
 }

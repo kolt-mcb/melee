@@ -9,14 +9,14 @@
 #include "ft/chara/ftLink/ftLk_SpecialN.h"
 #include "ft/ftlib.h"
 #include "it/inlines.h"
-#include "it/it_266F.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/itcoll.h"
+#include "it/itdraw.h"
 #include "it/iteffect.h"
 #include "it/item.h"
+#include "it/itgroundcoll.h"
 #include "it/ithitbox.h"
-#include "lb/lbrefract.h"
 #include "mp/mpcoll.h"
 #include "mp/mplib.h"
 
@@ -32,6 +32,7 @@
 #define LA_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
+#ifdef MUST_MATCH
 static void sdata2_order(void)
 {
     (void) 0.0199999996f;
@@ -44,6 +45,7 @@ static void sdata2_order(void)
     (void) 3.1415926535897931;
     (void) -3.1415926535897931;
 }
+#endif
 
 ItemStateTable it_803F6A28[5] = {
     { -1, itLinkarrow_UnkMotion0_Anim, itLinkarrow_UnkMotion0_Phys,
@@ -132,7 +134,7 @@ s32 itLinkArrow_802A81C4(Item_GObj* gobj)
     case 6:
         rand = HSD_Randf();
         lookup_table = &it_803F6A84[ip->xDD4_itemVar.linkarrow.x9C];
-        temp = deg_to_rad * LA_FMA(lookup_table[8], rand, lookup_table[0]);
+        temp = MTXDegToRad(LA_FMA(lookup_table[8], rand, lookup_table[0]));
         z = ip->xDD4_itemVar.linkarrow.x94 + temp;
         break;
     case 1:
@@ -140,7 +142,7 @@ s32 itLinkArrow_802A81C4(Item_GObj* gobj)
     case 5:
         rand = HSD_Randf();
         lookup_table = &it_803F6A84[ip->xDD4_itemVar.linkarrow.x9C];
-        temp = deg_to_rad * LA_FMA(lookup_table[8], rand, lookup_table[0]);
+        temp = MTXDegToRad(LA_FMA(lookup_table[8], rand, lookup_table[0]));
         z = ip->xDD4_itemVar.linkarrow.x94 - temp;
         break;
     default:
@@ -224,12 +226,12 @@ HSD_GObj* it_802A83E0(f32 facing_dir, Fighter_GObj* arg1, Vec3* arg2,
         /// @todo Use Item_AttachToParent when it inlines here without growing
         /// the stack frame.
         Item_8026AB54(gobj, arg1, arg3);
-        db_80225DD8(gobj, (Fighter_GObj*) arg1);
+        db_80225DD8(gobj, arg1);
     }
     return gobj;
 }
 
-inline HSD_JObj* itLinkArrow_802A850C_inline(HSD_Joint* joint)
+static inline HSD_JObj* itLinkArrow_802A850C_inline(HSD_Joint* joint)
 {
     HSD_JObj* jobj;
     if (joint != NULL) {
@@ -238,7 +240,8 @@ inline HSD_JObj* itLinkArrow_802A850C_inline(HSD_Joint* joint)
     return jobj;
 }
 
-inline void itLinkArrow_802A850C_inline_2(Item_GObj* gobj, Quaternion* quat)
+static inline void itLinkArrow_802A850C_inline_2(Item_GObj* gobj,
+                                                 Quaternion* quat)
 {
     int i;
     Item* item;
@@ -342,6 +345,8 @@ void itLinkArrow_Logic98_Destroyed(Item_GObj* gobj)
                         ftKb_SpecialNLk800FB418(
                             item->xDD4_itemVar.linkarrow.xE0);
                         break;
+                    default:
+                        break;
                     }
                 }
             }
@@ -401,6 +406,8 @@ bool itLinkarrow_UnkMotion0_Anim(HSD_GObj* gobj)
                     item->xDD4_itemVar.linkarrow.xE0 = NULL;
                     return true;
                 }
+                break;
+            default:
                 break;
             }
         }
@@ -644,6 +651,8 @@ void it_802A9458(HSD_GObj* gobj)
         scale.z = 5.0f;
         efSync_Spawn(0x448, gobj, jobj, &scale);
         break;
+    default:
+        break;
     }
 }
 
@@ -682,7 +691,7 @@ bool itLinkarrow_UnkMotion4_Anim(Item_GObj* gobj)
     case 6:
         rand = HSD_Randf();
         temp_r3 = (f32*) &it_803F6A28 + ip->xDD4_itemVar.linkarrow.x9C;
-        var_f32 = deg_to_rad * LA_FMA(temp_r3[31], rand, temp_r3[23]);
+        var_f32 = MTXDegToRad(LA_FMA(temp_r3[31], rand, temp_r3[23]));
         var_f31 = ip->xDD4_itemVar.linkarrow.x94 + var_f32;
         break;
     case 1:
@@ -690,7 +699,7 @@ bool itLinkarrow_UnkMotion4_Anim(Item_GObj* gobj)
     case 5:
         rand = HSD_Randf();
         temp_r3 = (f32*) &it_803F6A28 + ip->xDD4_itemVar.linkarrow.x9C;
-        var_f32 = deg_to_rad * LA_FMA(temp_r3[31], rand, temp_r3[23]);
+        var_f32 = MTXDegToRad(LA_FMA(temp_r3[31], rand, temp_r3[23]));
         var_f31 = ip->xDD4_itemVar.linkarrow.x94 - var_f32;
         break;
     default:

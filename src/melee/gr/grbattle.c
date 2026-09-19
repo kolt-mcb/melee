@@ -45,7 +45,7 @@ struct grBattle_YakumonoParam {
 #endif
 };
 
-/* 219C98 */ static void grBattle_OnDemoInit(bool);
+/* 219C98 */ static void grBattle_OnDemoInit(int);
 /* 219CA4 */ static void grBattle_OnInit(void);
 /* 219D54 */ static void grBattle_OnLoad(void);
 /* 219D58 */ static void grBattle_OnStart(void);
@@ -153,7 +153,7 @@ StageData grNBa_StageData = {
     0,
 };
 
-void grBattle_OnDemoInit(bool arg0)
+void grBattle_OnDemoInit(int arg0)
 {
     isDemoFight = true;
 }
@@ -365,7 +365,7 @@ void grBattle_GObj4_Callback2(Ground_GObj* gobj) {}
 
 void grBattle_GObj4_Callback3(Ground_GObj* gobj) {}
 
-inline void reset_bg_timer(Ground* gp)
+static inline void reset_bg_timer(Ground* gp)
 {
     gp->u.battle_bg.timer = HSD_Randi(1200) + 2400;
 }
@@ -419,7 +419,7 @@ void grBattle_BG_Callback2(Ground_GObj* gobj)
             if (gp->u.battle_bg.curr == -1) {
                 int i;
                 for (i = 0; i < BATTLE_BG_MAX; i++) {
-                    if (Ground_801C2BA4(indices[i])) {
+                    if (Ground_GetMapGObj(indices[i])) {
                         gp->u.battle_bg.curr = indices[i];
                         break;
                     }
@@ -433,7 +433,7 @@ void grBattle_BG_Callback2(Ground_GObj* gobj)
                 bg_idx = indices[HSD_Randi(BATTLE_BG_MAX)];
             } while ((gp->u.battle_bg.curr = bg_idx) == gp->u.battle_bg.prev);
 
-            bg_gobj = Ground_801C2BA4(gp->u.battle_bg.prev);
+            bg_gobj = Ground_GetMapGObj(gp->u.battle_bg.prev);
             HSD_ASSERT(535, bg_gobj);
             grMaterial_801C9604(bg_gobj, yakumono_param->bg_prev_color_overlay,
                                 0);
@@ -448,7 +448,7 @@ void grBattle_BG_Callback2(Ground_GObj* gobj)
         break;
 
     case BG_Done:
-        bg_gobj = Ground_801C2BA4(gp->u.battle_bg.prev);
+        bg_gobj = Ground_GetMapGObj(gp->u.battle_bg.prev);
         HSD_ASSERT(546, bg_gobj);
         if (grLib_801C96E8(bg_gobj)) {
             Ground_801C4A08(bg_gobj);

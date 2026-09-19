@@ -3,10 +3,13 @@
 #include "types.h"
 
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
-#include "ft/ftcommon.h"
 #include "ft/ftparts.h"
 #include "ft/types.h"
 #include "ftCommon/ftCo_Fall.h"
@@ -127,7 +130,7 @@ static inline void ftGameWatch_SpecialN_ChefLoop(HSD_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     ftGameWatchAttributes* gawAttrs = getFtSpecialAttrsD(fp);
 
-    if ((u32) fp->cmd_vars[2] != 0U) {
+    if (fp->cmd_vars[2] != 0U) {
         fp->cmd_vars[2] = 0U;
         if (((float) fp->mv.gw.SpecialN.maxSausage <
              gawAttrs->x1C_GAMEWATCH_CHEF_MAX) &&
@@ -156,7 +159,7 @@ static inline void ftGameWatch_SpecialAirN_ChefLoop(HSD_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     ftGameWatchAttributes* gawAttrs = getFtSpecialAttrsD(fp);
 
-    if ((u32) fp->cmd_vars[2] != 0U) {
+    if (fp->cmd_vars[2] != 0U) {
         fp->cmd_vars[2] = 0U;
         if (((s32) fp->mv.gw.SpecialN.isChefLoopDisable == false) &&
             ((float) fp->mv.gw.SpecialN.maxSausage <
@@ -294,7 +297,11 @@ void ftGw_SpecialN_Loop(HSD_GObj* gobj, float anim_frame)
 
     ftAnim_8006EBA4(gobj);
 
-    fp = fp = GET_FIGHTER(gobj);
+    fp =
+#ifdef MUST_MATCH
+        fp =
+#endif
+            GET_FIGHTER(gobj);
 
     fp->cmd_vars[1] = 0;
     fp->cmd_vars[2] = 0;
@@ -315,7 +322,11 @@ void ftGw_SpecialAirN_Loop(HSD_GObj* gobj, float anim_frame)
                               anim_frame - 1.0f, 1.0f, 0.0f, NULL);
     ftAnim_8006EBA4(gobj);
 
-    fp = fp = GET_FIGHTER(gobj);
+    fp =
+#ifdef MUST_MATCH
+        fp =
+#endif
+            GET_FIGHTER(gobj);
 
     fp->cmd_vars[1] = 0;
     fp->cmd_vars[2] = 0;

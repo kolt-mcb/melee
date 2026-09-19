@@ -40,7 +40,7 @@ struct mnGallery_804D6C88_userdata {
     s32 frame;
     HSD_GObj* gobjs[2];
 };
-STATIC_ASSERT(sizeof(struct mnGallery_804D6C88_userdata) == 0x24);
+ASSERT_SIZE(struct mnGallery_804D6C88_userdata, 0x24);
 
 #define GET_mnGallery_child_userdata(gobj)                                    \
     ((struct mnGallery_child_userdata*) HSD_GObjGetUserData(gobj))
@@ -48,7 +48,7 @@ struct mnGallery_child_userdata {
     HSD_GObj* parent_gobj;
     s32 index;
 };
-STATIC_ASSERT(sizeof(struct mnGallery_child_userdata) == 8);
+ASSERT_SIZE(struct mnGallery_child_userdata, 8);
 
 static void float_order_helper(HSD_SObj* sobj)
 {
@@ -117,7 +117,7 @@ void mnGallery_80258A08(HSD_GObj* gobj, u16 width, u16 height, u32 priority)
     HSD_CObjSetNear(cobj, near_val);
     HSD_CObjSetFar(cobj, far);
     HSD_CObjSetOrtho(cobj, top, bottom, left, right);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(gobj, mnGallery_8025896C, priority);
 }
 
@@ -168,8 +168,10 @@ static void mnGallery_80258BC4(struct mnGallery_804D6C88_userdata* data)
     data->unk0 = 1;
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 static void mnGallery_80258D50(struct mnGallery_804D6C88_userdata* data)
 {
     if (data->unk0 != 0) {
@@ -186,7 +188,9 @@ static void mnGallery_80258D50(struct mnGallery_804D6C88_userdata* data)
         }
     }
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 static void mnGallery_80258DBC(HSD_GObj* gobj,
                                struct mnGallery_804D6C88_userdata* data)
@@ -389,8 +393,10 @@ void mnGallery_802591BC(HSD_GObj* gobj)
     HSD_TObjAnim(HSD_JObjGetChild(jobj)->u.dobj->next->mobj->tobj);
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 static void mnGallery_80259604(struct mnGallery_804D6C88_userdata* data)
 {
     data->unk0 = 0;
@@ -406,7 +412,9 @@ static void mnGallery_80259604(struct mnGallery_804D6C88_userdata* data)
     data->gobjs[0] = NULL;
     data->gobjs[1] = NULL;
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void mnGallery_8025963C(void)
 {
@@ -422,7 +430,7 @@ void mnGallery_8025963C(void)
     gobj = GObj_Create(6, 7, 0x80);
     mnGallery_804D6C88 = gobj;
     jobj = HSD_JObjLoadJoint(model->joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x80);
     HSD_JObjAddAnimAll(jobj, model->animjoint, model->matanim_joint,
                        model->shapeanim_joint);
@@ -442,7 +450,7 @@ void mnGallery_8025963C(void)
         child_gobj = GObj_Create(6, 7, 0x80);
         user_data->gobjs[i] = child_gobj;
         jobj = HSD_JObjLoadJoint(model->joint);
-        HSD_GObjObject_80390A70(child_gobj, HSD_GObj_804D7849, jobj);
+        HSD_GObjObject_80390A70(child_gobj, HSD_GObj_JObjKind, jobj);
         GObj_SetupGXLink(child_gobj, HSD_GObj_JObjCallback, 4, 0x80);
         HSD_JObjAddAnimAll(jobj, model->animjoint, model->matanim_joint,
                            model->shapeanim_joint);

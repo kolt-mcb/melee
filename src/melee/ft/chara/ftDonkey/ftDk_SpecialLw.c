@@ -5,13 +5,16 @@
 #include <platform.h>
 
 #include "ef/efasync.h"
-#include "ef/eflib.h"
 #include "ef/efsync.h"
 
 #include "forward.h"
 
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0881.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
@@ -103,8 +106,6 @@ static void ftDonkey_8010DE88_inner(HSD_GObj* gobj)
     }
     Fighter_SetEffectHitlagCallbacks(fp);
 }
-
-static void callback(HSD_GObj* gobj);
 
 static void doAnim(HSD_GObj* gobj)
 {

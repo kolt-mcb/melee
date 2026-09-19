@@ -14,10 +14,10 @@
 #include "object.h"
 
 
-u8 HSD_GObj_804D784B;
-s8 HSD_GObj_804D784A;
-u8 HSD_GObj_804D7849;
-s8 HSD_GObj_804D7848;
+u8 HSD_GObj_CameraKind;
+s8 HSD_GObj_LightKind;
+u8 HSD_GObj_JObjKind;
+s8 HSD_GObj_FogKind;
 HSD_GObjProc** HSD_GObj_804D7844;
 HSD_GObjProc** HSD_GObj_804D7840;
 s32 HSD_GObj_804D783C;
@@ -48,7 +48,7 @@ static GObjFuncs HSD_GObj_80408610 = {
     HSD_GObj_80408600,
 };
 
-inline void GObj_SetFlag1_inline(HSD_GObjProc* proc, u8 value)
+static inline void GObj_SetFlag1_inline(HSD_GObjProc* proc, u8 value)
 {
     while (proc != NULL) {
         proc->flags_1 = value;
@@ -56,7 +56,7 @@ inline void GObj_SetFlag1_inline(HSD_GObjProc* proc, u8 value)
     }
 }
 
-inline void GObj_SetFlag2_inline(HSD_GObjProc* proc, u8 value)
+static inline void GObj_SetFlag2_inline(HSD_GObjProc* proc, u8 value)
 {
     while (proc != NULL) {
         proc->flags_2 = value;
@@ -343,7 +343,7 @@ u32 HSD_GObj_80390EB8(s32 i)
     return HSD_GObj_804085F0[i];
 }
 
-inline void render_gobj(HSD_GObj* cur, int i)
+static inline void render_gobj(HSD_GObj* cur, int i)
 {
     HSD_GObj* saved = HSD_GObj_804D7814;
     HSD_GObj_804D7814 = cur;
@@ -363,6 +363,7 @@ inline void render_gobj(HSD_GObj* cur, int i)
 void HSD_GObj_80390ED0(HSD_GObj* gobj, u32 mask)
 {
     s32 i = 0;
+
     while (mask) {
         if (mask & 1) {
             u64 prios = gobj->gxlink_prios;
@@ -491,8 +492,10 @@ void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
     /// @todo don't inline #HSD_GObj_80390EB8
     ///       is there a file boundary between #HSD_GObj_80390EB8 and
     ///       #HSD_GObj_JObjCallback?
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 #if BUILD_TARGET_PC
     /* PC port: use the current camera's view matrix when a camera is
      * active; fall back to identity (no camera, e.g. pre-title). */
@@ -528,7 +531,9 @@ void HSD_GObj_JObjCallback(HSD_GObj* gobj, int arg1)
     HSD_JObjDispAll(jobj, NULL, HSD_GObj_80390EB8(arg1), 0);
 #endif /* BUILD_TARGET_PC */
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void HSD_GObj_FogCallback(HSD_GObj* gobj, int unused)
 {
@@ -576,10 +581,10 @@ void HSD_GObj_803911C0(HSD_Obj* obj)
 void HSD_GObj_80391260(HSD_GObjLibInitDataType* arg0)
 {
     u8 count = HSD_GObj_803912A8(arg0, &HSD_GObj_80408610);
-    HSD_GObj_804D784B = count++;
-    HSD_GObj_804D784A = count++;
-    HSD_GObj_804D7849 = count++;
-    HSD_GObj_804D7848 = count;
+    HSD_GObj_CameraKind = count++;
+    HSD_GObj_LightKind = count++;
+    HSD_GObj_JObjKind = count++;
+    HSD_GObj_FogKind = count;
 }
 
 u8 HSD_GObj_803912A8(HSD_GObjLibInitDataType* arg0, GObjFuncs* arg1)

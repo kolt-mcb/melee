@@ -5,8 +5,6 @@
 
 #include <placeholder.h>
 
-#include "baselib/forward.h"
-
 #include "ef/eflib.h"
 #include "ef/efsync.h"
 #include "ft/chara/ftCommon/ftCo_Escape.h"
@@ -16,6 +14,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftcolanim.h"
 #include "ft/ftcoll.h"
@@ -29,18 +28,13 @@
 #include "ftKirby/forward.h"
 
 #include <stddef.h>
-#include <trigf.h>
-#include <baselib/gobj.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
-#include <MSL/math.h>
 
-/// @todo This is some kind of inline within #ftKb_DkSpecialN_Anim that's
-///       shared by #ftKb_DkSpecialAirN_Anim
-static double sdata2_order0(void)
+#ifdef MUST_MATCH
+static void sdata2_order0(void)
 {
-    return S32_TO_F32;
+    (void) S32_TO_F32;
 }
+#endif
 
 void ftKb_SpecialNDk_800FF8EC(Fighter_GObj* gobj)
 {

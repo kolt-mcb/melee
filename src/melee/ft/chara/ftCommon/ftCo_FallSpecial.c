@@ -23,7 +23,6 @@
 #include "mp/mplib.h"
 #include "sfx/crowdsfx.h"
 
-#include <math.h>
 #include <dolphin/mtx.h>
 
 void ftCo_800968C8(Fighter_GObj* gobj)
@@ -102,7 +101,7 @@ void ftCo_FallSpecial_Phys(Fighter_GObj* gobj)
         if (fp->fall_fast) {
             ftCommon_FallFast(fp);
         } else {
-            ftCommon_Fall(fp, ca->grav, ca->terminal_vel);
+            ftCommon_Fall(fp, ca->gravity, ca->terminal_velocity);
         }
         {
             lstick_x = fp->input.lstick.x;
@@ -116,7 +115,7 @@ void ftCo_FallSpecial_Phys(Fighter_GObj* gobj)
         if (fp->fall_fast) {
             ftCommon_FallFast(fp);
         } else {
-            ftCommon_Fall(fp, ca->grav, ca->fast_fall_velocity);
+            ftCommon_Fall(fp, ca->gravity, ca->fast_fall_velocity);
         }
         {
             lstick_x = fp->input.lstick.x;

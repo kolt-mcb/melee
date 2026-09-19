@@ -5,7 +5,6 @@
 #include "aobj.h"
 #include "class.h"
 #include "debug.h"
-#include "fobj.h"
 #include "jobj.h"
 #include "object.h"
 #include "robj.h"

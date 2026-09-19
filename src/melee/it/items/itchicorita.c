@@ -3,12 +3,12 @@
 #include "it/forward.h"
 
 #include "it/inlines.h"
-#include "it/it_266F.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/it_279C.h"
 #include "it/itCommonItems.h"
 #include "it/item.h"
+#include "it/itgroundcoll.h"
 #include "it/itmaplib.h"
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */

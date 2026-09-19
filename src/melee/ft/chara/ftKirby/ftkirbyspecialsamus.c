@@ -5,7 +5,11 @@
 #include "ft/chara/ftCommon/ftCo_Escape.h"
 #include "ft/chara/ftCommon/ftCo_FallSpecial.h"
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0877.h"
 #include "ft/ft_0881.h"
 #include "ft/ft_0892.h"
@@ -17,16 +21,9 @@
 #include "it/items/itsamuschargeshot.h"
 #include "lb/lb_00B0.h"
 
-#include <MSL/math.h>
+#include <math.h>
 
-/* PC port: the header declares this with s32. On GCN `long` and s32 are both
- * 32-bit so the two agree; under LP64 `long` is 64-bit and they conflict. Use
- * the header's type on PC and leave the GCN signature alone. */
-#if BUILD_TARGET_PC
-s32 ftKb_SpecialNSs_800FCC14(Fighter_GObj* gobj, s32* out1, s32* out2)
-#else
-long ftKb_SpecialNSs_800FCC14(Fighter_GObj* gobj, long* out1, long* out2)
-#endif
+int ftKb_SpecialNSs_800FCC14(Fighter_GObj* gobj, int* out1, int* out2)
 {
     Fighter* fp;
     ftKb_DatAttrs* da;

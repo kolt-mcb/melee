@@ -568,7 +568,7 @@ static ftCo_DatAttrs* pc_conv_DatAttrs(const u8* raw)
         fprintf(stderr,
                 "[FTCONV] attrs gravity=%.4f terminal=%.2f weight=%.1f "
                 "walk_max=%.2f model_scale=%.2f\n",
-                (double) out->grav, (double) out->terminal_vel,
+                (double) out->gravity, (double) out->terminal_velocity,
                 (double) out->weight, (double) out->walk_max_vel,
                 (double) out->model_scaling);
     }
