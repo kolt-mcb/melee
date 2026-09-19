@@ -203,6 +203,11 @@ static ftDynamics* pc_conv_dynamics_at(const u8* base, unsigned long len, u32 of
     if (dnum <= 0 || dnum > Ft_Dynamics_NumMax || boff == 0 ||
         boff + (u32) dnum * 0x18u > len)
     {
+        if (pc_ftconv_trace()) {
+            fprintf(stderr, "[FTCONV] dynamics at 0x%x rejected: dnum=%d "
+                            "(max %d) boff=0x%x len=0x%lx\n",
+                    off, dnum, (int) Ft_Dynamics_NumMax, boff, len);
+        }
         return NULL;
     }
     dy = pc_lowmem_alloc(sizeof(*dy));
