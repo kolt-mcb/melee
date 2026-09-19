@@ -126,7 +126,6 @@ static inline u8 nextState(GameModeState* states)
  * cannot even unwind it -- which is how a Classic run died on the tablet with
  * nothing but a constant program counter to go on. Check before calling and
  * say which callback it was. */
-extern int pc_code_ptr_ok(const void* p);
 static int pc_cb_ok(const void* fn, const char* which, int id)
 {
     if (fn == NULL || pc_code_ptr_ok(fn)) {

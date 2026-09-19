@@ -1,4 +1,7 @@
 #include "gmclassic.h"
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 #if BUILD_TARGET_PC
 #include "port/log.h"
@@ -478,6 +481,11 @@ static gmClassic_803DDEC8Data gmClassic_803DDEC8 = {
     { 0 },
 };
 
+/* The round table's length, for the reads that walk it looking for a 0xD
+ * sentinel. */
+#define PC_ROUND_MAX \
+    ((int) (sizeof(gmClassic_803DDEC8.x00) / sizeof(gmClassic_803DDEC8.x00[0])))
+
 static inline void gmClassic_InitMatchupOrder(const gmClassicMatchup* matchups,
                                               u8* order)
 {
@@ -552,7 +560,7 @@ loop:
             goto next;
         }
 
-        for (temp_idx = 0; arg2[temp_idx].x0 != 0xD; temp_idx++) {
+        for (temp_idx = 0; temp_idx < PC_ROUND_MAX && arg2[temp_idx].x0 != 0xD; temp_idx++) {
             for (k = 0; k < 3; k++) {
                 if (arg2[temp_idx].xC != NULL &&
                     cur_char == arg2[temp_idx].xC->x02[k])
@@ -562,7 +570,7 @@ loop:
             }
         }
 
-        for (temp_idx = 0; arg2[temp_idx].x0 != 0xD; temp_idx++) {
+        for (temp_idx = 0; temp_idx < PC_ROUND_MAX && arg2[temp_idx].x0 != 0xD; temp_idx++) {
             if (arg2[temp_idx].xC != NULL) {
                 if (Stage_8022519C(arg2[temp_idx].xC->x00) ==
                     Stage_8022519C(entry->x00))
@@ -596,6 +604,28 @@ static gmClassicMatchupData gm_804D4320 = { { 0x052, { 0x21, 0x21, 0x21 }, 0 },
 static gmClassicMatchupData gm_804D4328 = { { 0x053, { 0x21, 0x21, 0x21 }, 0 },
                                             { 0, 0 } };
 
+
+#if BUILD_TARGET_PC
+/* These walks stop on a 0xD sentinel and write a matchup pointer into every
+ * entry they pass. The array they walk is the twelve-entry round table, and
+ * on the disc the matchup tables follow it in the same object, so a missing
+ * sentinel merely wanders into data that is still the game's. Here it runs
+ * past the end of the object and writes heap pointers into whatever follows
+ * -- which is how a Classic run on the tablet ended up calling 0x67089b5c,
+ * an address inside the game heap rather than any code. Stop at the end of
+ * the table. */
+static const gm_803DDEC8Struct* pc_round_end(const gm_803DDEC8Struct* from)
+{
+    const gm_803DDEC8Struct* first = &gmClassic_803DDEC8.x00[0];
+    const gm_803DDEC8Struct* last =
+        first + sizeof(gmClassic_803DDEC8.x00) / sizeof(gmClassic_803DDEC8.x00[0]);
+    if (from < first || from >= last) {
+        return from + 1; /* not the round table; let one entry through */
+    }
+    return last;
+}
+#endif
+
 static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
 {
     gmClassic_80490880Data* o = &gmClassic_80490880;
@@ -613,7 +643,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
     gmClassic_803DDEC8Data* scene_matchups = &scene_data->matchups;
 #endif
 
-    for (ptr = arg0; ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         if (ptr->x1 & 8) {
             gmClassicMatchup* result =
                 gmClassic_801B2BA4(scene_matchups->x2B0, o->x80, arg0);
@@ -626,7 +656,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 
-    for (ptr = arg0; ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         u8 flags = ptr->x1;
         if ((flags & 2) && !(flags & 0x20)) {
             gmClassicMatchup* result =
@@ -640,7 +670,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 
-    for (ptr = arg0; ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         u8 flags = ptr->x1;
         if ((flags & 0x10) && !(flags & 0x20)) {
             gmClassicMatchup* result =
@@ -654,7 +684,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 
-    for (ptr = arg0; ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         u8 flags = ptr->x1;
         if (flags == 0 || flags == 4) {
             gmClassicMatchup* result =
@@ -668,7 +698,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 
-    for (ptr = arg0; ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         if (ptr->x1 == 0x80) {
             u8 x2val = ptr->x2;
             switch ((s32) x2val) {
@@ -685,7 +715,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 
-    for (ptr = arg0; ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         if (ptr->x1 & 0x20) {
             ptr->xC = scene_matchups->x0C0;
             return ptr;
@@ -878,6 +908,23 @@ void gmClassic_801B3500(GameModeState* arg0)
     }
     sd->x13[0] = ad->x0.color;
 
+#if BUILD_TARGET_PC
+    /* The five arguments below are called through by gm_8017DB88. A Classic
+     * run on the tablet died calling one of them, at an address inside the
+     * game heap rather than any code, so say what they are. */
+    {
+        const void* cbs[5] = { (const void*) ad->x58, (const void*) ad->x5C,
+                               (const void*) ad->x60, (const void*) ad->x6C,
+                               (const void*) ad->x70 };
+        int ci;
+        for (ci = 0; ci < 5; ci++) {
+            if (cbs[ci] != NULL && !pc_code_ptr_ok(cbs[ci])) {
+                fprintf(stderr, "[PORT WARN] all-star callback %d is %p, "
+                                "which is not code\n", ci, cbs[ci]);
+            }
+        }
+    }
+#endif
     gm_8017DB88(ad->x0.xC.x24, entry->x1, ad->x0.cpu_level,
                 (u8) gm_8017BE84(arg0->id), entry->xC->x02_u8, sd->x0D[0],
                 (u8 (*)(s32, s32, u8))(Event) ad->x58,

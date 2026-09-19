@@ -250,7 +250,19 @@ static void order_data(void)
 
 static UnkAdventureData lbl_80472C30;
 /// @todo The split gives this object 0x78 bytes, but UnkAllstarData is 0xA0.
+#if BUILD_TARGET_PC
+/* Both users cast this to UnkAllstarData, and that struct is larger than
+ * 0x78 even on the disc (the comment above says 0xA0); on the host it is
+ * larger again, because its ten callback slots are eight bytes each rather
+ * than four. Reading and writing it through the cast therefore ran off the
+ * end of the array into whatever the linker put next -- which is how three
+ * of those callbacks came to hold heap addresses, and how a Classic run on
+ * the tablet ended up calling one of them. Give it the type it is used as. */
+static UnkAllstarData lbl_80472CB0_obj;
+#define lbl_80472CB0 (&lbl_80472CB0_obj)
+#else
 static u8 lbl_80472CB0[0x78];
+#endif
 static struct lbl_80472D28_t lbl_80472D28;
 static struct lbl_80472E48_t lbl_80472E48;
 static int lbl_80472EC8[4];
@@ -1770,7 +1782,11 @@ void fn_8017E8A4(intptr_t arg0_int)
 
 UnkAllstarData* gm_GetAllStarData(void)
 {
+    #if BUILD_TARGET_PC
+    return lbl_80472CB0;
+#else
     return (UnkAllstarData*) lbl_80472CB0;
+#endif
 }
 
 u8 gm_8017EB3C(u8 difficulty, u8 stage_slot)
@@ -1856,7 +1872,11 @@ void fn_8017EE40(intptr_t arg0_int)
     int i;
 
     rules = gm_GetRules();
+    #if BUILD_TARGET_PC
+    allstar = lbl_80472CB0;
+#else
     allstar = (UnkAllstarData*) lbl_80472CB0;
+#endif
 
     if (fn_8017E318() > 0) {
         ((u8_bits*) &arg0->_x448[2])->b3 = 1;
