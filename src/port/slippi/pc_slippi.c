@@ -24,9 +24,9 @@
 
 #include <melee/ft/fighter.h>
 #include <melee/ft/types.h>
-#include <melee/ft/chara/ftCommon/ftCo_LandingAir.h>
-#include <melee/gm/gm_1A45.h>
-#include <melee/gm/gm_16AE.h>
+#include <melee/ft/kinds/ftCommon/ftCo_LandingAir.h>
+#include <melee/gm/gmscene.h>
+#include <melee/gm/gmvs.h>
 #include <melee/gm/types.h>
 #include <melee/it/types.h>
 #include <melee/mn/types.h>
@@ -498,12 +498,12 @@ void slp_PreFrame(Fighter* fp)
     put_f32(p + 0x0D, fp->cur_pos.x);              /* fp+0xB0 */
     put_f32(p + 0x11, fp->cur_pos.y);              /* fp+0xB4 */
     put_f32(p + 0x15, fp->facing_dir);             /* fp+0x2C */
-    put_f32(p + 0x19, fp->input.lstick.x);         /* fp+0x620 */
-    put_f32(p + 0x1D, fp->input.lstick.y);         /* fp+0x624 */
-    put_f32(p + 0x21, fp->input.cstick.x);         /* fp+0x638 */
-    put_f32(p + 0x25, fp->input.cstick.y);         /* fp+0x63C */
-    put_f32(p + 0x29, fp->input.x650);             /* fp+0x650, analog trigger */
-    put_u32(p + 0x2D, (u32) fp->input.held_inputs); /* fp+0x65C */
+    put_f32(p + 0x19, fp->input.lstick[0].x);         /* fp+0x620 */
+    put_f32(p + 0x1D, fp->input.lstick[0].y);         /* fp+0x624 */
+    put_f32(p + 0x21, fp->input.cstick[0].x);         /* fp+0x638 */
+    put_f32(p + 0x25, fp->input.cstick[0].y);         /* fp+0x63C */
+    put_f32(p + 0x29, fp->input.triggers[0]);             /* fp+0x650, analog trigger */
+    put_u32(p + 0x2D, (u32) fp->input.held_buttons[0]); /* fp+0x65C */
 
     /* Physical inputs, straight off the controller rather than out of the
      * fighter. */
@@ -635,10 +635,10 @@ static void slp_write_items(void)
     HSD_GObj* gobj;
     int n = 0;
 
-    if (HSD_GObj_Entities == NULL) {
+    if (HSD_GObjPLinkHead == NULL) {
         return;
     }
-    for (gobj = ((HSD_GObj**) HSD_GObj_Entities)[9];
+    for (gobj = ((HSD_GObj**) HSD_GObjPLinkHead)[9];
          gobj != NULL && n < SLP_MAX_ITEMS; gobj = gobj->next) {
         Item* ip = (Item*) gobj->user_data;
         unsigned char* p;
@@ -718,7 +718,7 @@ void slp_SceneThinkEnd(void)
     /* The match struct's +0x8: 0 while the match runs, then the end method --
      * 1 = TIME!, 2 = GAME!, 7 = No Contest. It is sticky, so the event is
      * written once. */
-    end_id = (unsigned) gm_16AE_GetUnkData_0()->match_result;
+    end_id = (unsigned) gmVs_GetSceneController()->state.match_result;
     if (end_id != 0 && !slp_end_sent) {
         slp_close_frame();
         slp_write_game_end(end_id);

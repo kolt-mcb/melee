@@ -1,15 +1,14 @@
-#include "ft/forward.h"
-#include "lb/forward.h"
-
-#include "lb/lbarchive.h"
-#include "lb/lbcommand.h"
-#include "lb/types.h"
+#include <melee/ft/forward.h>
 #if BUILD_TARGET_PC
 #include "port/pc_script.h"
 #endif
 
+#include "forward.h"
+#include "lbarchive.h"
+#include "lbcommand.h"
+#include "types.h"
 #include <dolphin/pad.h>
-#include <baselib/rumble.h>
+#include <sysdolphin/baselib/rumble.h>
 
 typedef bool (*lb_803BA248_fn)(ColorOverlay*);
 /* 013BB8 */ static bool lb_80013BB8(ColorOverlay* arg);
@@ -181,10 +180,10 @@ bool lb_80014258(Fighter_GObj* gobj, void* arg1, FtCmd2 cmd)
          * This interpreter runs a second script per fighter, carries GFX
          * spawns of its own, and nothing traced shows where it is. */
         if (getenv("MELEE_COLOPS") != NULL) {
-            extern u32 gm_8016AEDC(void);
+            extern u32 gm_GetFrameCount(void);
             fprintf(stderr,
                     "[COLOPS] gframe=%u pc=%p op=%u loop=%d cnt=%d\n",
-                    (unsigned) gm_8016AEDC(), (void*) co->x8_ptr1,
+                    (unsigned) gm_GetFrameCount(), (void*) co->x8_ptr1,
                     (unsigned) opcode, (int) co->xC_loop, (int) co->x14);
         }
 #endif

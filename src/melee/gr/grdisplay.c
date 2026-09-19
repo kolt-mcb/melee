@@ -3,23 +3,20 @@
 #include "port/pc_ptr.h"
 #endif
 
+#include <melee/lb/forward.h>
+
+#include "ground.h"
 #include "inlines.h"
-
-#include "cm/camera.h"
-#include "ft/ftlib.h"
-#include "gr/ground.h"
-
-#include "lb/forward.h"
-
-#include "lb/lbshadow.h"
-
-#include <baselib/cobj.h>
-#include <baselib/displayfunc.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/jobj.h>
-#include <baselib/mtx.h>
-#include <baselib/state.h>
+#include <melee/cm/camera.h>
+#include <melee/ft/ftlib.h>
+#include <melee/lb/lbshadow.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/displayfunc.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/mtx.h>
+#include <sysdolphin/baselib/state.h>
 
 /* 1C5B90 */ static void grDisplay_801C5B90(HSD_JObj* jobj, Mtx vmtx, u32 arg2,
                                             u32 rendermode);
@@ -50,8 +47,8 @@ void grDisplay_801C5B90(HSD_JObj* jobj, Mtx vmtx, u32 flags, u32 rendermode)
             }
         } else {
             if (jobj->flags & (flags << 18)) {
-                for (cur = HSD_GObj_Entities->fighters; cur != NULL;
-                     cur = cur->next)
+                for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER];
+                     cur != NULL; cur = cur->next)
                 {
                     LbShadow* shadow = ftLib_800872B0(cur);
                     ftLib_80086644(cur, &fighter_pos);
@@ -160,8 +157,8 @@ void grDisplay_801C5DB0(HSD_GObj* gobj, int code)
                 HSD_JObj* jobj = GET_JOBJ(gobj);
                 grDisplay_801C5B90(jobj, NULL, HSD_GObj_80390EB8(code), 0);
             } else {
-                for (fighter = HSD_GObj_Entities->fighters; fighter != NULL;
-                     fighter = fighter->next)
+                for (fighter = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER];
+                     fighter != NULL; fighter = fighter->next)
                 {
                     LbShadow* shadow = ftLib_800872B0(fighter);
                     shadow->x0_b4 = 0;

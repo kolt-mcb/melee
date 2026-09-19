@@ -1,11 +1,13 @@
 #ifndef MELEE_MN_TYPES_H
 #define MELEE_MN_TYPES_H
 
-#include "platform.h"
+#include <Runtime/platform.h>
 
-#include "gm/forward.h"
-#include "mn/forward.h" // IWYU pragma: export
-#include <baselib/forward.h>
+#include <melee/gm/forward.h>
+#include <melee/mn/forward.h> // IWYU pragma: export
+#include <sysdolphin/baselib/forward.h>
+
+#include <dolphin/mtx.h>
 
 #ifdef M2C
 struct mnInfo_GObj {
@@ -93,27 +95,27 @@ typedef struct HSD_GObj Menu_GObj;
 #endif
 
 struct PlayerInitData {
-    /*0x00*/ s8 ckind;     ///< ::CharacterKind
-    /*0x01*/ u8 slot_type; ///< ::Gm_PKind
-    /*0x02*/ s8 stocks;    // stocks
-    /*0x03*/ u8 color;     // color
-    /*0x04*/ u8 slot;      // port
-    /*0x05*/ s8 x5;        // spawnpos32
-    /*0x06*/ s8 spawn_dir; // spawn direction
-    /*0x07*/ u8 sub_color; // subcolor
-    /*0x08*/ s8 handicap;  // handicap
-    /*0x09*/ u8 team;      // team
-    /*0x0A*/ u8 nametag;   // nametag
-    /*0x0B*/ u8 xB;
-    /*0x0C*/ u8 rumble_enabled : 1; ///< rumble enabled
+    s8 ckind;     ///< ::CharacterKind
+    u8 slot_type; ///< ::Gm_PKind
+    s8 stocks;
+    u8 color;
+    u8 slot;
+    s8 spawn_pos;
+    s8 spawn_dir;
+    u8 sub_color;
+    s8 handicap;
+    u8 team;
+    u8 nametag;
+    u8 xB; ///< ::enum_t
+    u8 rumble_enabled : 1;
     u8 xC_b1 : 1;
-    u8 xC_b2 : 1; ///< metal
+    u8 vs_metal : 1;
     u8 xC_b3 : 1;
-    u8 xC_b4 : 1; ///< invisible
+    u8 vs_invisible : 1;
     u8 xC_b5 : 1;
     u8 xC_b6 : 1;
     u8 xC_b7 : 1;
-    /*0x0D*/ u8 xD_b0 : 1;
+    u8 xD_b0 : 1;
     u8 xD_b1 : 1;
     u8 xD_b2 : 1;
     u8 xD_b3 : 1;
@@ -121,14 +123,14 @@ struct PlayerInitData {
     u8 xD_b5 : 1;
     u8 xD_b6 : 1;
     u8 xD_b7 : 1;
-    /*0x0E*/ u8 xE;        ///< CPU type
-    /*0x0F*/ u8 cpu_level; // CPU level
-    /*0x10*/ u16 x10;
-    /*0x12*/ u16 x12;
-    /*0x14*/ u16 hp;    ///< hit points, for stamina mode
-    /*0x18*/ float x18; ///< offense ratio
-    /*0x1C*/ float x1C; ///< defense ratio
-    /*0x20*/ float x20;
+    u8 cpu_kind;  ///< CPU type
+    u8 cpu_level; ///< CPU level
+    u16 damage;   ///< some damage value
+    u16 damage1;  ///< some damage value
+    u16 hp;       ///< hit points, for stamina mode
+    float attack_ratio;
+    float defense_ratio;
+    float model_scale;
 };
 
 struct lbl_8046B668_t {
@@ -152,8 +154,8 @@ ASSERT_SIZE(lbl_8046B378_t, 0x110);
 
 struct StartMeleeRules {
     u32 match_kind : 3; ///< ::MatchKind
-    u32 x0_3 : 3;
-    u32 x0_6 : 1;
+    u32 x0_3 : 3;       ///< unknown enum
+    u32 timer_enabled : 1;
     u32 timer_counts_up : 1; ///< ::bool
 
     u32 x1_0 : 1;
@@ -188,7 +190,7 @@ struct StartMeleeRules {
     u32 x3_7 : 1;
 
     u32 x4_0 : 1;  ///< pause camera enabled?
-    u32 is_vs : 1; ///< Set only by ::gm_801A583C
+    u32 is_vs : 1; ///< Set only by ::gmVsMelee_EnterVs
     u32 x4_2 : 1;
     u32 x4_3 : 1;
     u32 x4_4 : 1;
@@ -210,8 +212,8 @@ struct StartMeleeRules {
     u8 is_teams;
     u8 x9;
     u8 xA;
-    s8 xB; // item frequency
-    s8 xC; // SD penalty
+    s8 item_freq;
+    s8 sd_penalty;
     u8 xD;
     u16 stkind;
 
@@ -223,8 +225,8 @@ struct StartMeleeRules {
     u64 x20; // item mask
     int x28;
     float x2C;
-    float x30; ///< damage ratio
-    float x34; ///< game speed
+    float x30;        ///< damage ratio
+    float game_speed; ///< game speed
     void (*on_unpause_override)(
         int); ///< on unpause callback. When set, this method is called with
               ///< the pauser playerId when a player unpauses the match. If not
@@ -240,10 +242,11 @@ struct StartMeleeRules {
                ///< player/which player has pressed pause while unpaused.
                ///< Otherwise falls back to #gm_DefaultVSGetPauser;
                ///< #StartMeleeRules::x4_0 must also be true.
-    void (*x44)(void); // on VS match start callback
-    void (*x48)(void); // ingame pre-frame callback
-    void (*x4C)(void); // ingame post-frame callback
-    void (*x50)(u8);   // on VS match end callback.  Passed a MatchOutcome
+    Event on_match_start;             ///< on VS match start callback
+    Event on_frame_start;             ///< ingame pre-frame callback
+    Event on_frame_end;               ///< ingame post-frame callback
+    void (*on_match_end)(u8 outcome); ///< on VS match end callback.
+                                      ///< @param outcome ::MatchOutcome
     struct {
         u8 pad_x0[0x10];
         u8 x10_b0 : 1;
@@ -349,6 +352,22 @@ typedef enum CSSIconJointId {
     ICONJOINT_MARS = 0x22
 } CSSIconJointId;
 
+/**
+ * @brief Identifier for a single selectable character as seen in high-scores
+ * or on the CSS.
+ *
+ * #SelectableCharacterKind mirrors the first @c 0x19 entries of
+ * #CharacterKind (i.e. up to and including #CKind_Ganon),
+ * but with #CKind_Seak (Sheik) removed and collapsed into
+ * #CKind_Zelda under the single #SELKIND_ZELDA_SEAK value.
+ * Index @c 0x12 (#SELKIND_ZELDA_SEAK) therefore
+ * represents both Zelda and Sheik as a single selectable character.
+ *
+ * @see #gm_SelKindToCKind
+ * @see #gm_CKindToSelKind
+ * @see #selkind_to_ckind_map
+ * @see #ckind_to_selkind_map
+ */
 typedef enum SelectableCharacterKind {
     /* 00 */ SELKIND_CAPTAIN,    // Captain Falcon (Captain)
     /* 01 */ SELKIND_DONKEY,     // Donkey Kong (Donkey)
@@ -554,6 +573,15 @@ struct MenuKindData {
     u16* description_indices; ///< array of sis idx's for each selection
     u8 selection_count;       ///< number of options/cursors in the menu
     void (*think)(HSD_GObj*);
+};
+
+struct MnDiagram2RowLayout {
+    /* 0x00 */ Vec3 header_pos;
+    /* 0x0C */ Vec3 label_pos;
+    /* 0x18 */ Vec3 value_pos;
+    /* 0x24 */ Vec3 icon_pos;
+    /* 0x30 */ u16 label_ids[24];
+    /* 0x60 */ u16 unit_glyph_ids[24];
 };
 
 /// User data for VS Records page 2 (character details screen)

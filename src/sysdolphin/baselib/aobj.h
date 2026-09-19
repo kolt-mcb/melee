@@ -1,15 +1,14 @@
 #ifndef _aobj_h_
 #define _aobj_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/debug.h"
-#include "baselib/fobj.h"
+#include <sysdolphin/baselib/forward.h> // IWYU pragma: export
 
-#include "baselib/forward.h" // IWYU pragma: export
-
-#include "baselib/objalloc.h"
-#include "baselib/object.h"
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/fobj.h>
+#include <sysdolphin/baselib/objalloc.h>
+#include <sysdolphin/baselib/object.h>
 
 #define AOBJ_REWINDED (1 << 26)
 #define AOBJ_FIRST_PLAY (1 << 27)
@@ -52,7 +51,7 @@ struct HSD_AObjDesc {
     u32 flags;
     f32 end_frame;
     HSD_FObjDesc* fobjdesc;
-    u32 obj_id;
+    HSD_IDKey obj_id;
 };
 
 struct HSD_AnimJoint {

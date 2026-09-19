@@ -4,34 +4,31 @@
 #endif
 #include "lb_00F9.h"
 
-#include "platform.h"
-#include "stddef.h"
+#include <Runtime/platform.h>
 
-#include <placeholder.h>
-
-#include "baselib/forward.h"
-
-#include "baselib/psstructs.h"
-#include "baselib/tobj.h"
-
-#include "lb/forward.h"
-
-#include "lb/lbcollision.h"
-#include "lb/lbspdisplay.h"
-#include "lb/lbvector.h"
-#include "lb/types.h"
+#include <sysdolphin/baselib/forward.h>
 
 #include <math.h>
+#include <placeholder.h>
+#include <stddef.h>
+
+#include "forward.h"
+#include "lbcollision.h"
+#include "lbspdisplay.h"
+#include "lbvector.h"
+#include "types.h"
 #include <dolphin/mtx.h>
-#include <baselib/cobj.h>
-#include <baselib/displayfunc.h>
-#include <baselib/dobj.h>
-#include <baselib/gobjobject.h>
-#include <baselib/jobj.h>
-#include <baselib/lobj.h>
-#include <baselib/memory.h>
-#include <baselib/quatlib.h>
 #include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/displayfunc.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/psstructs.h>
+#include <sysdolphin/baselib/quatlib.h>
+#include <sysdolphin/baselib/tobj.h>
 
 /* Retail fuses each of these multiply-and-add pairs -- 80010AE4, 80010CF8,
  * 80010EC4 and their neighbours -- into fmadds, and the two squared-length
@@ -936,8 +933,8 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                 dynlog = e != NULL ? atoi(e) : -1;
             }
             if (dynlog >= 0) {
-                extern u32 gm_8016AEDC(void);
-                if ((int) gm_8016AEDC() == dynlog) {
+                extern u32 gm_GetFrameCount(void);
+                if ((int) gm_GetFrameCount() == dynlog) {
                     fprintf(stderr,
                             "[DYN] jobj=%p rot=%08x,%08x,%08x axis=%d "
                             "angle=%08x\n",

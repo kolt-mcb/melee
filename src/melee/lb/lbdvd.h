@@ -1,8 +1,8 @@
 #ifndef GALE01_0174BC
 #define GALE01_0174BC
 
-#include "lb/forward.h"
-#include <baselib/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 typedef void (*lbDvd_Callback)(int, int index, int, int);
 
@@ -20,7 +20,7 @@ typedef void (*lbDvd_Callback)(int, int index, int, int);
 /* 017960 */ void lbDvd_80017960(void);
 /* 017AB0 */ void lbDvd_CachePreloadedFile(s32 index);
 /* 017CC4 */ void lbDvd_80017CC4(void);
-/* 017E64 */ void lbDvd_80017E64(int, int, void*, bool);
+/* 017E64 */ void lbDvd_80017E64(int, uintptr_t, void*, bool);
 /* 017EBC */ void* lbDvd_GetPreloadedArchive(ssize_t entry_num);
 /* 01819C */ HSD_Archive* lbDvd_8001819C(const char* basename);
 /* 01822C */ PreloadedGameModeState* lbDvd_GetPreloadCacheScene(void);

@@ -1,12 +1,11 @@
 #ifndef MELEE_GM_SCDATA_H
 #define MELEE_GM_SCDATA_H
 
-#include "melee/gm/types.h"
+#include <melee/gm/types.h>
 
 /* 1A50A0 */ GameScene* gm_GetAllGameScenes(void);
 /* 1A50AC */ GameMode* gm_GetAllGameModes(void);
 /* 3DDC58 */ extern GameModeState gm_Mode_Classic_States[];
-/* 3DE930 */ extern GameModeState gm_Mode_AllStar_States[];
 /* 3DECB8 */ extern GameModeState gm_Mode_TargetTest_States[];
 /* 3DED00 */ extern GameModeState gm_Mode_10ManVs_States[];
 /* 3DED48 */ extern GameModeState gm_Mode_100ManVs_States[];

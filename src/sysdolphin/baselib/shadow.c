@@ -4,6 +4,9 @@ void pc_gx_offscreen_cancel(void);
 #endif
 #include "shadow.h"
 
+#include <math.h>
+#include <string.h>
+
 #include "class.h"
 #include "cobj.h"
 #include "debug.h"
@@ -19,9 +22,6 @@ void pc_gx_offscreen_cancel(void);
 #include "tev.h"
 #include "tobj.h"
 #include "util.h"
-
-#include <math.h>
-#include <string.h>
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 

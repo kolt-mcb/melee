@@ -1,9 +1,9 @@
 #ifndef MELEE_IT_ITPKFLASH_H
 #define MELEE_IT_ITPKFLASH_H
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include <baselib/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 typedef struct itPKFlush_ItemVars {
     s32 xDD4_PKFlash;

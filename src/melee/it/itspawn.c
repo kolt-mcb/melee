@@ -1,25 +1,24 @@
-#include "it/itspawn.h"
+#include "itspawn.h"
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
 
-#include "placeholder.h"
+#include <placeholder.h>
 
-#include "db/db.h"
-#include "ef/efsync.h"
-#include "gm/gm_unsplit.h"
-#include "gr/ground.h"
-#include "gr/stage.h"
-#include "it/it_26B1.h"
-#include "it/it_2725.h"
-#include "it/it_3F14.h"
-#include "it/item.h"
-#include "mp/mpcoll.h"
-
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
-#include <baselib/memory.h>
-#include <baselib/random.h>
+#include "it_26B1.h"
+#include "it_2725.h"
+#include "it_3F14.h"
+#include "item.h"
+#include <melee/db/db.h>
+#include <melee/ef/efsync.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/gr/ground.h>
+#include <melee/gr/stage.h>
+#include <melee/mp/mpcoll.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/random.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -212,10 +211,6 @@ void fn_8026C88C(HSD_GObj* gobj)
     it_8026C88C_inline(alloc);
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void it_8026CA4C(ItemPickTable* alloc, s32* arg1, u64 arg2, s32 arg3, f32 arg4)
 {
     u64 mask = arg2;
@@ -233,9 +228,6 @@ void it_8026CA4C(ItemPickTable* alloc, s32* arg1, u64 arg2, s32 arg3, f32 arg4)
     }
     alloc->x8 = sum;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 bool it_8026CB3C(Vec3* vec)
 {
@@ -302,18 +294,10 @@ void it_8026CB9C(s32* counts, u64 mask, f32 weight)
 
 void it_8026CD50(s32* counts, u64 mask, f32 weight)
 {
+#ifdef MUST_MATCH
     /// @todo #it_804A0E50 immediately follows #it_804A0E30; the original
     ///       addressed it relative to the spawner.
     RandomItemSpawner* spawner = &it_804A0E30;
-#if BUILD_TARGET_PC
-    /* PC port: the original reached the *next global* by pointer arithmetic
-     * (`(ItemPickTable*)(spawner + 1)`), which only works with GCN's struct
-     * sizes and link order. On x86_64 that lands 40 bytes short of
-     * it_804A0E50 and writes into whatever precedes it (ASan:
-     * global-buffer-overflow). Name the global instead. */
-    ItemPickTable* const pick = &it_804A0E50;
-#else
-    ItemPickTable* const pick = (ItemPickTable*) (spawner + 1);
 #endif
     s32* p;
     s32 cnt;
@@ -339,10 +323,19 @@ void it_8026CD50(s32* counts, u64 mask, f32 weight)
         it_kind++;
         mask >>= 1;
     }
-    pick->size = cnt;
-    *(item_kinds = &pick->x4) =
+#ifdef MUST_MATCH
+    ((ItemPickTable*) (spawner + 1))->size = cnt;
+    *(item_kinds = &((ItemPickTable*) (spawner + 1))->x4) =
         HSD_MemAlloc(cnt * 4);
-    *(weights = &pick->xC) = HSD_MemAlloc(cnt * 4);
+    *(weights = &((ItemPickTable*) (spawner + 1))->xC) = HSD_MemAlloc(cnt * 4);
+#else
+    /* Non-matching builds (the PC port included) may lay these globals out in
+     * a different order: `(ItemPickTable*) (spawner + 1)` lands 40 bytes short
+     * of it_804A0E50 on x86_64. Name the global instead. */
+    it_804A0E50.size = cnt;
+    *(item_kinds = &it_804A0E50.x4) = HSD_MemAlloc(cnt * 4);
+    *(weights = &it_804A0E50.xC) = HSD_MemAlloc(cnt * 4);
+#endif
 
     idx = (cnt2 = 0);
     mask = backup;

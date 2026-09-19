@@ -1,27 +1,26 @@
 #include "grpushon.h"
 
+#include <Runtime/platform.h>
+
+#include <math.h>
+#include <placeholder.h>
+
 #include "granime.h"
 #include "ground.h"
 #include "grzakogenerator.h"
 #include "inlines.h"
 #include "stage.h"
 #include "types.h"
-
-#include <placeholder.h>
-#include <platform.h>
-
-#include "cm/camera.h"
-#include "ft/ftdevice.h"
-#include "ft/ftlib.h"
-#include "lb/lb_00F9.h"
-#include "lb/lbvector.h"
-#include "lb/types.h"
-#include "mp/mplib.h"
-
-#include <math.h>
-#include <baselib/gobjproc.h>
-#include <baselib/random.h>
+#include <melee/cm/camera.h>
+#include <melee/ft/ftdevice.h>
+#include <melee/ft/ftlib.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/lbvector.h>
+#include <melee/lb/types.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/gobjproc.h>
 #include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/random.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC

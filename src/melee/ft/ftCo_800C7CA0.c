@@ -1,25 +1,21 @@
 #include "ftCo_800C7CA0.h"
 
-#include "ftcommon.h"
-
 #include <placeholder.h>
 
-#include "cm/camera.h"
-#include "ef/efasync.h"
-#include "ft/fighter.h"
-#include "ft/ft_081B.h"
-#include "ft/ftanim.h"
-#include "ft/ftcoll.h"
-#include "ft/types.h"
-
-#include "ftCommon/forward.h"
-
-#include "ftCommon/ftCo_DamageFall.h"
-#include "ftCommon/ftCo_DownBound.h"
-#include "ftKirby/ftkirby.h"
-
-#include <baselib/dobj.h>
-#include <baselib/jobj.h>
+#include "fighter.h"
+#include "ft_081B.h"
+#include "ftanim.h"
+#include "ftcoll.h"
+#include "ftcommon.h"
+#include "kinds/ftCommon/forward.h"
+#include "kinds/ftCommon/ftCo_DamageFall.h"
+#include "kinds/ftCommon/ftCo_DownBound.h"
+#include "kinds/ftKirby/ftkirby.h"
+#include "types.h"
+#include <melee/cm/camera.h>
+#include <melee/ef/efasync.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/jobj.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -84,7 +80,7 @@ void fn_800C7DC4(HSD_GObj* gobj, s32 motion_state, Vec3* normal, Vec3* offset)
     angle = atan2f(-normal->x, normal->y);
     efAsync_Spawn(gobj, &GET_FIGHTER(gobj)->x60C, 5, 0x406, NULL, &spawn_pos,
                   &angle);
-    Camera_80030E44(2, &spawn_pos);
+    Camera_RequestQuake(QuakeKind_Small, &spawn_pos);
     mag = fp->xF0_ground_kb_vel;
     vel = *normal;
     vel.x *= mag;

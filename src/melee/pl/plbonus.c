@@ -4,20 +4,18 @@
 #include "pl_040D.h"
 #include "plattack.h"
 #include "player.h"
+#include "plbonusinline.h"
 #include "plbonuslib.h"
 #include "plstale.h"
 #include "pltrick.h"
 #include "types.h"
-
-#include "it/it_26B1.h"
-#include "pl/plbonusinline.h"
-
-#include <sysdolphin/baselib/debug.h>
 #include <melee/cm/camera.h>
 #include <melee/ft/ft_0877.h>
 #include <melee/ft/ft_0892.h>
 #include <melee/ft/ftlib.h>
 #include <melee/gm/gm_unsplit.h>
+#include <melee/it/it_26B1.h>
+#include <sysdolphin/baselib/debug.h>
 
 /// Sets a bonus flag boolean to true
 static void setFlag(int player, int kind)
@@ -316,7 +314,7 @@ int pl_8003906C(int player, int kind, unsigned int* arg2, unsigned int arg3,
     unsigned int var_r3;
 
     if (pl_Verify_gm_8016AEDC()) {
-        if (gm_8016AEDC() <= arg3) {
+        if (gm_GetFrameCount() <= arg3) {
             if (arg5 >= arg4) {
                 if (kind != -1) {
                     setPointValue(player, kind, 1U);
@@ -325,7 +323,7 @@ int pl_8003906C(int player, int kind, unsigned int* arg2, unsigned int arg3,
                 }
             }
 
-            if (arg3 == gm_8016AEDC()) {
+            if (arg3 == gm_GetFrameCount()) {
                 *arg6 = (int) arg5;
                 return 1;
             }
@@ -334,9 +332,9 @@ int pl_8003906C(int player, int kind, unsigned int* arg2, unsigned int arg3,
          * undecompiled here, so it can be zero -- and `% 0` traps on x86_64
          * where PowerPC's divw simply produced a garbage quotient. Treat a
          * zero period as "never fires", which is what a disabled bonus is. */
-        } else if (arg3 != 0 && (gm_8016AEDC() % arg3) == 0) {
+        } else if (arg3 != 0 && (gm_GetFrameCount() % arg3) == 0) {
 #else
-        } else if ((gm_8016AEDC() % arg3) == 0) {
+        } else if ((gm_GetFrameCount() % arg3) == 0) {
 #endif
             if (kind != -1) {
                 var_r3 = pl_80039418(player, kind);
@@ -365,13 +363,13 @@ bool pl_80039238(int player, int kind, int* arg2, unsigned int arg3, f32* arg4,
     bool var_r0;
     int var_r3;
 
-    if (gm_8016AEDC() != 0 && gm_8016AEDC() != -2) {
+    if (gm_GetFrameCount() != 0 && gm_GetFrameCount() != -2) {
         var_r0 = true;
     } else {
         var_r0 = false;
     }
     if (var_r0) {
-        if (gm_8016AEDC() <= arg3) {
+        if (gm_GetFrameCount() <= arg3) {
             if (arg7 >= arg6) {
                 if (kind != -1) {
                     setPointValue(player, kind, 1);
@@ -379,15 +377,15 @@ bool pl_80039238(int player, int kind, int* arg2, unsigned int arg3, f32* arg4,
                     *arg2 = 1;
                 }
             }
-            if (arg3 == gm_8016AEDC()) {
+            if (arg3 == gm_GetFrameCount()) {
                 *arg4 = arg7;
                 return true;
             }
 #if BUILD_TARGET_PC
         /* Same zero-period guard as above. */
-        } else if (arg3 != 0 && gm_8016AEDC() % arg3 == 0) {
+        } else if (arg3 != 0 && gm_GetFrameCount() % arg3 == 0) {
 #else
-        } else if (gm_8016AEDC() % arg3 == 0) {
+        } else if (gm_GetFrameCount() % arg3 == 0) {
 #endif
             if (kind != -1) {
                 var_r3 = pl_80039418(player, kind);
@@ -858,13 +856,13 @@ void fn_8003B044(int player)
             }
         }
     }
-    if (gm_8016AEDC() >= pl_804D6470->x108) {
+    if (gm_GetFrameCount() >= pl_804D6470->x108) {
         float tmp = 0.5F * Camera_80030E10();
         if (temp_r31->xD8C >= pl_804D6470->x104 * tmp) {
             setFlag(player, 0x69);
         }
     }
-    if (gm_8016AEDC() >= pl_804D6470->x110 &&
+    if (gm_GetFrameCount() >= pl_804D6470->x110 &&
         temp_r31->xD8C < pl_804D6470->x10C)
     {
         setFlag(player, 0x6A);
@@ -947,18 +945,18 @@ void fn_8003BD60(int player)
 {
     pl_StaleMoveTableExt_t* temp_r31 =
         Player_GetStaleMoveTableIndexPtr2(player);
-    if (gm_8016AEDC() != 0) {
-        if (pl_CalculateAverage(temp_r31->xD14, gm_8016AEDC()) >=
+    if (gm_GetFrameCount() != 0) {
+        if (pl_CalculateAverage(temp_r31->xD14, gm_GetFrameCount()) >=
             pl_804D6470->x60)
         {
             setFlag(player, 0x34);
         }
-        if (pl_CalculateAverage(temp_r31->xD1C, gm_8016AEDC()) >=
+        if (pl_CalculateAverage(temp_r31->xD1C, gm_GetFrameCount()) >=
             pl_804D6470->x68)
         {
             setFlag(player, 0x36);
         }
-        if (pl_CalculateAverage(temp_r31->xD20, gm_8016AEDC()) >=
+        if (pl_CalculateAverage(temp_r31->xD20, gm_GetFrameCount()) >=
             pl_804D6470->x6C)
         {
             setFlag(player, 0x37);
@@ -970,12 +968,12 @@ void fn_8003BD60(int player)
             setFlag(player, 0x30);
         }
         if (gm_801720B4() == 0 &&
-            pl_CalculateAverage(temp_r31->xD2C, gm_8016AEDC()) >=
+            pl_CalculateAverage(temp_r31->xD2C, gm_GetFrameCount()) >=
                 pl_804D6470->x78)
         {
             setFlag(player, 0x3C);
         }
-        if (pl_CalculateAverage(temp_r31->xD30, gm_8016AEDC()) >=
+        if (pl_CalculateAverage(temp_r31->xD30, gm_GetFrameCount()) >=
             pl_804D6470->xE8)
         {
             setFlag(player, 0x5D);

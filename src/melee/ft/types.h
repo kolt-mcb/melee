@@ -1,48 +1,43 @@
 #ifndef MELEE_FT_TYPES_H
 #define MELEE_FT_TYPES_H
+#include <Runtime/platform.h>
+
+#include <melee/ft/forward.h> // IWYU pragma: export
+#include <melee/it/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <placeholder.h>
-#include <platform.h>
-
-#include "cm/types.h"
-
-#include "ft/forward.h" // IWYU pragma: export
-
-#include "ft/ftwaitanim.h"
-#include "ftCaptain/types.h"
-#include "ftCommon/types.h"
-#include "ftDonkey/types.h"
-#include "ftFox/types.h"
-#include "ftGameWatch/types.h"
-#include "ftKirby/types.h"
-#include "ftKoopa/types.h"
-#include "ftLink/types.h"
-#include "ftLuigi/types.h"
-#include "ftMario/types.h"
-#include "ftMars/types.h"
-#include "ftMasterHand/types.h"
-#include "ftMewtwo/types.h"
-#include "ftNess/types.h"
-#include "ftPeach/types.h"
-#include "ftPikachu/types.h"
-#include "ftPopo/types.h"
-#include "ftPurin/types.h"
-#include "ftSamus/types.h"
-#include "ftSandbag/types.h"
-#include "ftSeak/types.h"
-#include "ftYoshi/types.h"
-#include "ftZakoBoy/types.h"
-#include "ftZelda/types.h"
-#include "gm/types.h"
-
-#include "it/forward.h"
-
-#include "lb/types.h"
-
-#include <baselib/forward.h>
 
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
+#include <melee/cm/types.h>
+#include <melee/ft/ftwaitanim.h>
+#include <melee/ft/kinds/ftCaptain/types.h>
+#include <melee/ft/kinds/ftCommon/types.h>
+#include <melee/ft/kinds/ftDonkey/types.h>
+#include <melee/ft/kinds/ftFox/types.h>
+#include <melee/ft/kinds/ftGameWatch/types.h>
+#include <melee/ft/kinds/ftKirby/types.h>
+#include <melee/ft/kinds/ftKoopa/types.h>
+#include <melee/ft/kinds/ftLink/types.h>
+#include <melee/ft/kinds/ftLuigi/types.h>
+#include <melee/ft/kinds/ftMario/types.h>
+#include <melee/ft/kinds/ftMars/types.h>
+#include <melee/ft/kinds/ftMasterHand/types.h>
+#include <melee/ft/kinds/ftMewtwo/types.h>
+#include <melee/ft/kinds/ftNess/types.h>
+#include <melee/ft/kinds/ftPeach/types.h>
+#include <melee/ft/kinds/ftPikachu/types.h>
+#include <melee/ft/kinds/ftPopo/types.h>
+#include <melee/ft/kinds/ftPurin/types.h>
+#include <melee/ft/kinds/ftSamus/types.h>
+#include <melee/ft/kinds/ftSandbag/types.h>
+#include <melee/ft/kinds/ftSeak/types.h>
+#include <melee/ft/kinds/ftYoshi/types.h>
+#include <melee/ft/kinds/ftZakoBoy/types.h>
+#include <melee/ft/kinds/ftZelda/types.h>
+#include <melee/gm/types.h>
+#include <melee/lb/types.h>
 
 #define FTPART_INVALID 0xFF
 
@@ -53,7 +48,31 @@ struct FighterPartsTable {
     u32 parts_num;
 };
 
-/// Points to data in PlCo.dat
+typedef struct FallCommon {
+    /* +520 */ int x520;
+    /* +524 */ int x524;
+    /* +528 */ int x528;
+    /* +52C */ int x52C;
+    /* +530 */ int x530;
+    /* +534 */ int x534;
+    /* +538 */ Vec3 x538;
+    /* +544 */ Vec3 x544;
+    /* +550 */ float x550;
+    /* +554 */ float x554;
+    /* +558 */ float x558;
+    /* +55C */ float x55C;
+    /* +560 */ float x560_radians;
+    /* +564 */ float x564;
+
+    /**
+     * @brief Points to data in `PlCo.dat`.
+     * @details When the game reads the stick, it reads it using an integer
+     * value with a max value of 80, this means the sticks only have 161 values
+     * (80 per side + zero) possible analog values The same thing happens to
+     * the triggers, but it gets quantified to 140 instead.
+     */
+} FallCommon;
+
 /// @todo Determine size and add remaining members.
 /* ftCommonData is a pointer-free block of 4-byte scalars read straight out
  * of PlCo.dat (0x818 bytes). The unidentified members were typed UNK_T,
@@ -67,39 +86,116 @@ struct FighterPartsTable {
 #define ftCD_UNK UNK_T
 #endif
 struct ftCommonData {
+    /// @datvalue{GALE01, PlCo.dat, 0.28}
     /*   +0 */ float horizontal_stick_deadzone;
+
+    /// @datvalue{GALE01, PlCo.dat, 0.28}
     /*   +4 */ float vertical_stick_deadzone;
+
+    /// @datvalue{GALE01, PlCo.dat, 0.25}
+    /**
+     * @name Stick Smash Deadzones
+     * Surprisingly these are 0.25 in vanilla, which is lower than the
+     * absolute stick deadzone above, which is always applied, which is 0.28.
+     * @{
+     * @}
+     */
+
+    /// Surprisingly these smash deadzones are 0.25 in vanilla, which is lower
+
+    /// than the absolute stick deadzone above (0.28), which is always applied.
     /*   +8 */ float horizontal_stick_smash_deadzone;
+
+    /// @datvalue{GALE01, PlCo.dat, 0.25}
     /*   +C */ float vertical_stick_smash_deadzone;
+
+    /// @datvalue{GALE01, PlCo.dat, 0.3}
     /*  +10 */ float analog_shoulder_deadzone;
+
+    /// @datvalue{GALE01, PlCo.dat, 0.35}
     /*  +14 */ float z_press_analog_value;
+
+    /// @datvalue{GALE01, PlCo.dat, 0.25}
     /*  +18 */ float shield_press_threshold;
+
     /*  +1C */ int x1C;
     /*  +20 */ float x20_radians;
+
+    /**
+     * Yet another threshold that's lower than the global deadzone, so in
+     * practical terms it goes unused.
+     *
+     * @datvalue{GALE01, PlCo.dat, 0.18}
+     */
     /*  +24 */ float walk_stick_threshold;
+
     /*  +28 */ float walk_middle_animation_stick_threshold;
     /*  +2C */ float walk_fast_stick_threshold;
+
+    /**
+     * @brief Ease out for the walk.
+     * Also affects the maximum possible acceleration, i.e. if this is 0.5
+     * then the maximum possible acceleration when walking will be 0.5 *
+     * `walk_acceleration`.
+     */
     /*  +30 */ float walk_accel_taper_gain;
+
     /*  +34 */ float x34;
     /*  +38 */ float x38_someLStickXThreshold;
     /*  +3C */ float dash_smash_stick_threshold;
+
+    /**
+     * @brief Frames since the stick left the deadzone where a dash or a smash
+     * can be input.
+     */
     /*  +40 */ int dash_smash_window;
+
     /*  +44 */ float x44;
     /*  +48 */ float x48;
     /*  +4C */ float x4C;
     /*  +50 */ float x50;
     /*  +54 */ float x54;
     /*  +58 */ float x58_someLStickXThreshold;
-    /*  +5C */ float run_accel_taper_gain;
+    /*  +5C */ float run_accel_taper_gain; ///< @brief Ease out for the run.
+
+    /// @datvalue{GALE01, PlCo.dat, 1.0}
+
+    /**
+     * @brief Extra frictino multiplier applied to run/dash/turn, since
+     * it's 1.0 it                                        has no effect.
+     */
     /*  +60 */ float run_dash_turn_friction_multiplier;
+
     /*  +64 */ float x64;
     /*  +68 */ float x68;
+
+    /**
+     * @brief The game adds extra friction when the player's speed is above
+     * walk speed only in wait and turn state.
+     * @datvalue{GALE01, PlCo.dat, 2.0}
+     */
     /*  +6C */ float friction_when_above_walk_speed;
+
+    /// @datvalue{GALE01, PlCo.dat, 0.6625}
     /*  +70 */ float tap_jump_threshold;
+
+    /**
+     * @brief Frames since the stick left the deadzone where a tap jump can be
+     * input.
+     * @datvalue{GALE01, PlCo.dat, 4}
+     */
     /*  +74 */ int tap_jump_window;
+
     /*  +78 */ float x78;
     /*  +7C */ float tap_jump_release_threshold;
+
+    /**
+     * @brief For some strange reason, some ground states have a smaller
+     * threshold.
+     * @datvalue{GALE01, PlCo.dat, 0.5625}
+     */
     /*  +80 */ float relaxed_tap_jump_threshold;
+
     /*  +84 */ float x84;
     /*  +88 */ float x88;
     /*  +8C */ int x8C;
@@ -156,7 +252,7 @@ struct ftCommonData {
     /* +158 */ float x158;
     /* +15C */ float x15C;
     /* +160 */ float x160;
-    /* +164 */ float x164;
+    /* +164 */ float max_grounded_kb_on_landing;
     /* +168 */ float x168;
     /* +16C */ float x16C;
     /* +170 */ float x170;
@@ -186,7 +282,7 @@ struct ftCommonData {
     /* +1D0 */ float x1D0;
     /* +1D4 */ float x1D4;
     /* +1D8 */ float x1D8;
-    /* +1DC */ ftCD_UNK x1DC;
+    /* +1DC */ int x1DC;
     /* +1E0 */ float x1E0;
     /* +1E4 */ float x1E4;
     /* +1E8 */ float x1E8_radians;
@@ -194,7 +290,8 @@ struct ftCommonData {
     /* +1F0 */ float x1F0;
     /* +1F4 */ float x1F4;
     /* +1F8 */ float x1F8;
-    /* +1FC */ float x1FC;
+    /* +1FC */ float
+        aerial_friction_oob; // friction when velocity exceeds maximum
     /* +200 */ float x200;
     /* +204 */ float x204_knockbackFrameDecay;
     /* +208 */ float x208;
@@ -210,7 +307,7 @@ struct ftCommonData {
     /* +230 */ float x230;
     /* +234 */ float x234_radians;
     /* +238 */ float x238_radians;
-    /* +23C */ ftCD_UNK x23C;
+    /* +23C */ int x23C;
     /* +240 */ float x240;
     /* +244 */ float x244;
     /* +248 */ float x248;
@@ -224,7 +321,7 @@ struct ftCommonData {
     /* +268 */ float x268;
     /* +26C */ float x26C;
     /* +270 */ float x270;
-    /* +274 */ ftCD_UNK x274;
+    /* +274 */ int x274;
     /* +278 */ float x278;
     /* +27C */ float x27C;
     /* +280 */ float x280_unkShieldHealth;
@@ -235,7 +332,13 @@ struct ftCommonData {
     /* +294 */ float x294;
     /* +298 */ float x298;
     /* +29C */ float x29C;
+
+    /**
+     * @brief Frames after trigger becomes non 0 where a full press results in
+     * a powershield.
+     */
     /* +2A0 */ int powershield_input_window;
+
     /* +2A4 */ float x2A4;
     /* +2A8 */ float x2A8;
     /* +2AC */ float x2AC;
@@ -311,8 +414,8 @@ struct ftCommonData {
     /* +3E8 */ float x3E8_shieldKnockbackFrameDecay;
     /* +3EC */ float x3EC_shieldGroundFrictionMultiplier;
     /* +3F0 */ float x3F0;
-    /* +3F4 */ ftCD_UNK x3F4;
-    /* +3F8 */ ftCD_UNK x3F8;
+    /* +3F4 */ int x3F4;
+    /* +3F8 */ int x3F8;
     /* +3FC */ int x3FC;
     /* +400 */ float x400;
     /* +404 */ float x404;
@@ -343,7 +446,10 @@ struct ftCommonData {
     /* +468 */ float x468;
     /* +46C */ float x46C;
     /* +470 */ float x470;
+
+    /// @datvalue{GALE01, PlCo.dat, 0.75}
     /* +474 */ float teeter_walk_threshold;
+
     /* +478 */ float x478;
     /* +47C */ float x47C;
     /* +480 */ float x480;
@@ -375,32 +481,15 @@ struct ftCommonData {
     /* +4F4 */ float x4F4;
     /* +4F8 */ u32 x4F8;
     /* +4FC */ u32 x4FC;
-    /* +500 */ ftCD_UNK x500;
+    /* +500 */ int x500;
     /* +504 */ int x504;
-    /* +508 */ ftCD_UNK x508;
-    /* +50C */ ftCD_UNK x50C;
+    /* +508 */ int x508;
+    /* +50C */ int x50C;
     /* +510 */ float x510;
     /* +514 */ float x514;
-    /* +518 */ ftCD_UNK x518;
+    /* +518 */ int x518;
     /* +51C */ float x51C_radians;
-    /* +520 */ int x520;
-    /* +524 */ ftCD_UNK x524;
-    /* +528 */ ftCD_UNK x528;
-    /* +52C */ ftCD_UNK x52C;
-    /* +530 */ ftCD_UNK x530;
-    /* +534 */ ftCD_UNK x534;
-    /* +538 */ ftCD_UNK x538;
-    /* +53C */ float x53C;
-    /* +540 */ float x540;
-    /* +544 */ ftCD_UNK x544;
-    /* +548 */ float x548;
-    /* +54C */ float x54C;
-    /* +550 */ float x550;
-    /* +554 */ float x554;
-    /* +558 */ float x558;
-    /* +55C */ float x55C;
-    /* +560 */ float x560_radians;
-    /* +564 */ float x564;
+    /* +520 */ FallCommon fall_common;
     /* +568 */ float x568;
     /* +56C */ float x56C;
     /* +570 */ float x570;
@@ -422,13 +511,13 @@ struct ftCommonData {
     /* +5B0 */ float x5B0;
     /* +5B4 */ int x5B4;
     /* +5B8 */ float x5B8;
-    /* +5BC */ ftCD_UNK x5BC;
+    /* +5BC */ int x5BC;
     /* +5C0 */ float x5C0;
-    /* +5C4 */ ftCD_UNK x5C4;
+    /* +5C4 */ int x5C4;
     /* +5C8 */ int x5C8;
     /* +5CC */ float x5CC;
-    /* +5D0 */ ftCD_UNK x5D0;
-    /* +5D4 */ ftCD_UNK x5D4;
+    /* +5D0 */ int rebirth_countdown;
+    /* +5D4 */ int rebirth_wait;
     /* +5D8 */ int x5D8;
     /* +5DC */ u32 bury_timer_unk1;
     /* +5E0 */ u32 bury_timer_unk2;
@@ -465,8 +554,8 @@ struct ftCommonData {
     /* +65C */ float x65C;
     /* +660 */ float x660;
     /* +664 */ float x664;
-    /* +668 */ float x668;
-    /* +66C */ float x66C;
+    /* +668 */ float pressed_inputs;
+    /* +66C */ float released_inputs;
     /* +670 */ float x670;
     /* +674 */ float x674;
     /* +678 */ float x678;
@@ -513,8 +602,13 @@ struct ftCommonData {
     /* +728 */ float x728;
     /* +72C */ float x72C;
     /* +730 */ float x730;
+
+    /// @brief Leadead capture timer decrement.
     /* +734 */ float leadead_grab_timer_step;
+
+    /// @brief Leadead grab break threshold.
     /* +738 */ float leadead_grab_break_threshold;
+
     /* +73C */ int x73C;
     /* +740 */ float x740;
     /* +744 */ float x744;
@@ -583,28 +677,18 @@ struct FtSFX {
     int x10;
     int x14;
     int x18;
-#if BUILD_TARGET_PC
-    /* These two are FtSFXArr* -- every call site casts them (ft_0D31.c:792,
-     * ftCo_Damage.c:491/498). Leaving them `int` on x86_64 truncates the
-     * converted pointer, and the damage-reaction path then read a hit-sound
+    /* Both of these are FtSFXArr*: every call site used to cast them
+     * (ft_0D31.c, ftCo_Damage.c). As `int` they truncate the converted
+     * pointer on x86_64, and the damage-reaction path then read a hit-sound
      * array through a 32-bit archive offset. */
     FtSFXArr* x1C;
     FtSFXArr* x20;
-#else
-    int x1C;
-    FtSFXArr* x20;
-#endif
     int x24;
     int x28;
     int x2C;
     int x30;
     int x34;
 };
-
-typedef struct {
-    u32 unk0;
-    f32 unk4;
-} ftData_x34;
 
 typedef struct ftData_x44_t {
     s16 unk0;
@@ -629,28 +713,22 @@ struct FtPartsDesc {
     /*  +4 */ void* (*vis_table)[4];
 };
 
-struct ftData_x20 {
+typedef struct ftData_x20 {
     /* +0 */ HSD_Joint** x0;
     /* +4 */ f32 x8;
-};
+} ftData_x20;
 
-struct ftData {
-    /*  +0 */ struct ftCo_DatAttrs* x0;
-    /*  +4 */ void* ext_attr;
-    /*  +8 */ struct ftData_x8 {
-        /*  +0 */ FtPartsDesc x0;
-        /*  +8 */ ftData_x8_x8 x8;
-        /* +10 */ u8 x10; ///< Fighter_Part
-        /* +11 */ u8 x11;
-        /* +12 */ u8 x12;
-        /* +13 */ u8 x13;
-        /* +14 */ u8 x14;
-    }* x8;
-    /*  +C */ struct Fighter_WaitAnimData* xC;
-    /* +10 */ u8 (*x10)[2];
-    /* +14 */ struct Fighter_WaitAnimData* x14;
-    /* +18 */ u8 (*x18)[2];
-    /* +1C */
+typedef struct ftData_x34 {
+    /* +0 */ Fighter_Part x0;
+    /* +4 */ float scale;
+} ftData_x34;
+
+typedef struct ftData_x38 {
+    int x0;
+    Vec3 x4;
+    float x10;
+} ftData_x38;
+
 #if BUILD_TARGET_PC
 /* fp->x8B0[5] bounds the outer array; the anims array is capped only as a
  * sanity limit, since lazy conversion never touches an unused entry. */
@@ -660,63 +738,29 @@ struct ftData {
 #else
 #define FT_PARTANIM(rec, k) ((rec)->x8[k])
 #endif
-    struct ftData_x1C {
-        u16 x0; ///< Fighter_Part
-        u16 x2;
-        u8* x4; ///< an array of Fighter part indices
-        HSD_AnimJoint** x8;
+
+typedef struct ftData_x1C {
+    u16 x0; ///< Fighter_Part
+    u16 x2;
+    u8* x4; ///< an array of Fighter part indices
+    HSD_AnimJoint** x8;
 #if BUILD_TARGET_PC
-        /* x8 is an array of file offsets whose length nothing in the file
-         * records, so it is converted one entry at a time, the first time
-         * the game asks for that entry -- an index the game never uses is
-         * never converted, and cannot fault on data that is not a tree.
-         * FT_PARTANIM() is the accessor; these are what it needs. */
-        const u8* pc_base;
-        unsigned long pc_len;
-        u32 pc_x8_off;
-        u32 pc_x8_max;
+    /* x8 is an array of file offsets whose length nothing in the file
+     * records, so it is converted one entry at a time, the first time
+     * the game asks for that entry -- an index the game never uses is
+     * never converted, and cannot fault on data that is not a tree.
+     * FT_PARTANIM() is the accessor; these are what it needs. */
+    const u8* pc_base;
+    unsigned long pc_len;
+    u32 pc_x8_off;
+    u32 pc_x8_max;
 #endif
-    }** x1C;
-    /* +20 */ struct ftData_x20* x20;
-    /* +24 */ UNK_T x24;
-    /* +28 */ WaitStruct* x28;
-    /* +2C */ struct ftDynamics* x2C;
-    /* +30 */ struct ftData_x30 {
-        /* +0 */ int count;
-        /* +4 */ ftHurtboxInit* inits;
-    }* x30;
-    /* +34 */ struct ftData_x34 {
-        /* +0 */ Fighter_Part x0;
-        /* +4 */ float scale;
-    }* x34;
-    /* +38 */ struct ftData_x38 {
-        int x0;
-        Vec3 x4;
-        float x10;
-    }* x38;
-    /* +3C */ struct UnkFloat6_Camera* x3C;
-    /* +40 */ struct itPickup* x40;
-    /* +44 */ ftData_x44_t* x44;
-    /* +48 */ UNK_T* x48_items; ///< @todo might be similar to KirbyHat? see
-                                ///< ftPr_Init_8013C360
-    /* +4C */ FtSFX* x4C_sfx;
-    /* +50 */ Vec2* x50;
-#if BUILD_TARGET_PC
-    /* +54 */ /* Declared `int` because that is its width in the file, but it
-               * holds a pointer: ftCo_8009F834 does
-               * `((int*) fp->ft_data->x54)[fp->x2220_b0]` -- the rotating bone
-               * list a GFX command with bone 0x8D indexes. On the GameCube the
-               * archive's relocation turns the stored offset into a pointer in
-               * place and the cast is free. Here a host pointer does not fit in
-               * an int, so the field has to be pointer-typed and rebased by
-               * the converter. */
-    int* x54;
-#else
-    /* +54 */ int x54;
-#endif
-    /* +58 */ struct ftData_x58_t* x58;
-    /* +5C */ HSD_Joint* x5C;
-};
+} ftData_x1C;
+
+typedef struct ftData_x30 {
+    /* +0 */ int count;
+    /* +4 */ ftHurtboxInit* inits;
+} ftData_x30;
 
 typedef struct _ThrowFlags {
     union {
@@ -742,8 +786,15 @@ struct ftCo_DatAttrs_xBC_t {
 };
 
 typedef struct ftCo_DatAttrs {
+    /**
+     * @brief Multiplciative walk acceleration, based on how much the control
+     * stick is pushed.
+     */
     /* +000 fp+110 */ float walk_accel_mul;
+
+    /// @brief Base walk acceleration, always applied when walking.
     /* +004 fp+114 */ float walk_accel_base;
+
     /* +008 fp+118 */ float walk_max_vel;
     /* +00C fp+11C */ float slow_walk_max;
     /* +010 fp+120 */ float mid_walk_point;
@@ -782,13 +833,25 @@ typedef struct ftCo_DatAttrs {
     /* +094 fp+1A4 */ float shield_break_initial_velocity;
     /* +098 fp+1A8 */ int rapid_jab_window;
     /* +09C fp+1AC */ float clank_animation_length;
+
+    /// @brief `0` = normal spark, `1` = none.
     /* +0A0 fp+1B0 */ int hit_spark_variant;
+
+    /// @brief Not used anywhere in the codebase.
     /* +0A4 fp+1B4 */ int unused_0;
+
     /* +0A8 fp+1B8 */ float ledge_jump_horizontal_velocity;
     /* +0AC fp+1BC */ float ledge_jump_vertical_velocity;
     /* +0B0 fp+1C0 */ float item_throw_velocity_multiplier;
     /* +0B4 fp+1C4 */ float heavy_throw_velocity_multiplier;
+
+    /**
+     * @brief What percentage of the existing velocity is kept when performing
+     * a side special. `1.0` = keep all momentum, `0.0` = stop dead in its
+     * tracks.
+     */
     /* +0B8 fp+1C8 */ float specials_ground_speed_retention;
+
     /* +0BC fp+1CC */ ftCo_DatAttrs_xBC_t xBC;
     /* +0DC fp+1EC */ float xDC;
     /* +0E0 fp+1F0 */ float kirby_b_star_damage;
@@ -809,7 +872,13 @@ typedef struct ftCo_DatAttrs {
     /* +12C fp+23C */ float x12C;
     /* +130 fp+240 */ Vec3 x130;
     /* +13C fp+24C */ float x13C;
+
+    /**
+     * @brief When hit by a screw attack item, the speed is hard set to
+     * (0, this, 0).
+     */
     /* +140 fp+250 */ float screw_attack_launch_velocity;
+
     /* +144 fp+254 */ float x144;
     /* +148 fp+258 */ float wall_jump_min_approach_speed;
     /* +14C fp+25C */ float damageice_ice_size;
@@ -825,6 +894,56 @@ typedef struct ftCo_DatAttrs {
     /* +17C fp+28C */ float x17C;
     /* +180 fp+290 */ u8 weight_independent_throws_mask;
 } ftCo_DatAttrs;
+
+typedef struct Fighter_WaitAnimData {
+    char* x0;
+    s32 x4;
+    s32 x8;
+    CmdUnion* xC;
+    s32 x10_animCurrFlags;
+    u32 x14;
+} Fighter_WaitAnimData;
+
+struct ftData {
+    /*  +0 */ ftCo_DatAttrs* x0;
+    /*  +4 */ void* ext_attr;
+    /*  +8 */ struct ftData_x8 {
+        /*  +0 */ FtPartsDesc x0;
+        /*  +8 */ ftData_x8_x8 x8;
+        /* +10 */ u8 x10; ///< Fighter_Part
+        /* +11 */ u8 x11;
+        /* +12 */ u8 x12;
+        /* +13 */ u8 x13;
+        /* +14 */ u8 x14;
+    }* x8;
+    /*  +C */ Fighter_WaitAnimData* xC;
+    /* +10 */ u8 (*x10)[2];
+    /* +14 */ Fighter_WaitAnimData* x14;
+    /* +18 */ u8 (*x18)[2];
+    /* +1C */ ftData_x1C** x1C;
+    /* +20 */ ftData_x20* x20;
+    /* +24 */ UNK_T x24;
+    /* +28 */ WaitStruct* x28;
+    /* +2C */ struct ftDynamics* x2C;
+    /* +30 */ ftData_x30* x30;
+    /* +34 */ ftData_x34* x34;
+    /* +38 */ ftData_x38* x38;
+    /* +3C */ struct UnkFloat6_Camera* x3C;
+    /* +40 */ struct itPickup* x40;
+    /* +44 */ ftData_x44_t* x44;
+    /* +48 */ UNK_T* x48_items; ///< @todo might be similar to KirbyHat? see
+                                ///< ftPr_Init_8013C360
+    /* +4C */ FtSFX* x4C_sfx;
+    /* +50 */ Vec2* x50;
+    /* +54 */ /* Four bytes wide in the file, but it holds a pointer:
+               * ftCo_8009F834 reads `fp->ft_data->x54[fp->x2220_b0]` -- the
+               * rotating bone list a GFX command with bone 0x8D indexes. On
+               * the GameCube the archive's relocation turns the stored offset
+               * into a pointer in place; here the converter rebases it. */
+    int* x54;
+    /* +58 */ struct ftData_x58_t* x58;
+    /* +5C */ HSD_Joint* x5C;
+};
 
 struct FighterBone {
     /* +0 */ HSD_JObj* joint;
@@ -972,15 +1091,6 @@ struct MotionState {
     HSD_GObjEvent cam_cb;
 };
 
-struct Fighter_WaitAnimData {
-    char* x0;
-    s32 x4;
-    s32 x8;
-    union CmdUnion* xC;
-    s32 x10_animCurrFlags;
-    u32 x14;
-};
-
 struct Fighter_CostumeStrings {
     char* dat_filename;
     char* joint_name;
@@ -1099,10 +1209,8 @@ struct Fighter_x1A88_xFC_t {
     /*  +0 */ HSD_Pad x0;
     /*  +4 */ u8 x4;
     /*  +5 */ u8 x5;
-    /*  +6 */ u8 lstickX;
-    /*  +7 */ u8 lstickY;
-    /*  +8 */ u8 cstickX;
-    /*  +9 */ u8 cstickY;
+    /*  +6 */ S8Vec2 lstick;
+    /*  +8 */ S8Vec2 cstick;
     /*  +A */ u8 xA;
     /*  +B */ u8 xB;
     /*  +C */ Vec3 cur_pos;
@@ -1110,15 +1218,13 @@ struct Fighter_x1A88_xFC_t {
 };
 ASSERT_SIZE(struct Fighter_x1A88_xFC_t, 0x1C);
 
-struct Fighter_x1A88_t {
-    /*   +0 */ HSD_Pad x0;
-    /*   +4 */ s8 lstickX;
-    /*   +5 */ s8 lstickY;
-    /*   +6 */ s8 cstickX;
-    /*   +7 */ s8 cstickY;
+struct CpuFighter {
+    /*   +0 */ HSD_Pad buttons;
+    /*   +4 */ S8Vec2 lstick;
+    /*   +6 */ S8Vec2 cstick;
     /*   +8 */ u8 ltrigger;
     /*   +9 */ u8 rtrigger; ///< R trigger analog value, 0 to 255
-    /*   +C */ enum_t xC;
+    /*   +C */ CpuKind kind;
     /*  +10 */ int level; ///< CPU level, 0-9
     /*  +14 */ int x14;
     /*  +18 */ int x18;
@@ -1207,7 +1313,7 @@ struct Fighter_x1A88_t {
     /* +574 */ float half_width;
     /* +578 */ float half_height;
 };
-ASSERT_SIZE(struct Fighter_x1A88_t, 0x57C);
+ASSERT_SIZE(struct CpuFighter, 0x57C);
 
 struct Fighter_x59C_t {
     u8 x0[0x8000];
@@ -1247,6 +1353,56 @@ struct ft_800898B4_t {
     /*  +11 */ u8 x11_b4 : 1;
 };
 
+typedef struct Fighter_x1614_t {
+    f32 x0;
+    HSD_JObj* x4;
+    Vec3 x8;
+    Vec3 x14;
+    Vec3 x20;
+} Fighter_x1614_t;
+
+typedef struct Fighter_x8B0_t {
+    int x0;
+    float x4;
+    float x8;
+    float xC;
+    s8 x10;
+    s8 x11;
+} Fighter_x8B0_t;
+
+typedef struct Fighter_x20B0_t {
+    Vec3 x0;
+    Vec3 xC;
+} Fighter_x20B0_t;
+
+typedef struct Fighter_x2D0_t {
+    /// @warning i didnt confirm these comments, they come from altimors
+    /// ghidra db
+    int x0;       ///< turn frames
+    float x4;     ///< turn threshold
+    float x8;     ///< x impulse
+    float xC;     ///< accel mult
+    float x10;    ///< speed mult
+    float x14[5]; ///< y impulse
+    int x28;      ///< state count
+    enum_t x2C;   ///< start state
+    enum_t x30;   ///< start state helmet
+} Fighter_x2D0_t;
+
+typedef struct Fighter_x1670_t {
+    /* +00 */ Vec3 v1;
+    /* +0C */ float v2;
+    /* +10 */ HSD_JObj* jobj;
+    /* +14 */ float x14;
+    /* +18 */ Vec3 x18;
+    /* +24 */ int x24;
+} Fighter_x1670_t; ///< @todo figure out proper size
+
+typedef struct FtInputTimers {
+    /* +00 */ U8Vec2 lstick;
+    /* +02 */ u8 trigger;
+} FtInputTimers;
+
 struct Fighter {
     /*    fp+0 */ HSD_GObj* gobj;
     /*    fp+4 */ FighterKind kind;
@@ -1264,7 +1420,7 @@ struct Fighter {
     /*   fp+34 */ Vec3 x34_scale;
     /*   fp+40 */ float x40;
     /*   fp+44 */ Mtx x44_mtx;
-    /*   fp+74 */ Vec3 x74_anim_vel;
+    /*   fp+74 */ Vec3 x74_self_accel;
     /*   fp+80 */ Vec3 self_vel;
     /*   fp+8C */ Vec3 x8c_kb_vel;
     /*   fp+98 */ Vec3 x98_atk_shield_kb;
@@ -1291,19 +1447,7 @@ struct Fighter {
     /*  fp+294 */ itPickup x294_itPickup;
     /*  fp+2C4 */ Vec2 x2C4;
     /*  fp+2CC */ ftDonkeyAttributes* x2CC;
-    /*  fp+2D0 */ struct Fighter_x2D0_t {
-        /// @warning i didnt confirm these comments, they come from altimors
-        /// ghidra db
-        int x0;       ///< turn frames
-        float x4;     ///< turn threshold
-        float x8;     ///< x impulse
-        float xC;     ///< accel mult
-        float x10;    ///< speed mult
-        float x14[5]; ///< y impulse
-        int x28;      ///< state count
-        enum_t x2C;   ///< start state
-        enum_t x30;   ///< start state helmet
-    }* x2D0;          ///< multi jump stats
+    /*  fp+2D0 */ Fighter_x2D0_t* x2D0; ///< multi jump stats
     /*  fp+2D4 */ void* dat_attrs;
     /*  fp+2D8 */ void* dat_attrs_backup;
     /*  fp+2DC */ float x2DC;
@@ -1414,37 +1558,22 @@ struct Fighter {
     /*  fp+61D */ u8 x61D;
     /*  fp+61E */ u8 filler_x61E[0x620 - 0x61E];
     /*  fp+620 */ struct {
-        /*  fp+620 */ Vec2 lstick;
-        /*  fp+628 */ Vec2 lstick1;
-        /*  fp+630 */ float x630;
-        /*  fp+634 */ float x634;
-        /*  fp+638 */ Vec2 cstick;
-        /*  fp+640 */ Vec2 cstick1;
-        /*  fp+648 */ float x648;
-        /*  fp+64C */ float x64C;
-        /*  fp+650 */ float x650;
-        /*  fp+654 */ float x654;
-        /*  fp+658 */ float x658;
-        /*  fp+65C */ HSD_Pad held_inputs;
-        /*  fp+660 */ HSD_Pad x660; ///< previous held inputs
-        /*  fp+664 */ HSD_Pad x664;
-        /*  fp+668 */ HSD_Pad x668; ///< pressed inputs
-        /*  fp+66C */ HSD_Pad x66C; ///< released inputs
+        /*  fp+620 */ Vec2 lstick[3];          ///< lstick buffer
+        /*  fp+638 */ Vec2 cstick[3];          ///< cstick buffer
+        /*  fp+650 */ float triggers[3];       ///< analog trigger buffer
+        /*  fp+65C */ HSD_Pad held_buttons[3]; ///< buttons buffer
+        /*  fp+668 */ HSD_Pad pressed_buttons; ///< buttons pressed this frame
+        /*  fp+66C */ HSD_Pad
+            released_buttons; ///< buttons released this frame
     } input;
-    /*  fp+670 */ u8 x670_timer_lstick_tilt_x;
-    /*  fp+671 */ u8 x671_timer_lstick_tilt_y;
-    // How much time has passed since the analog trigger became non 0
-    // used at the very least for powershield detection
-    /*  fp+672 */ u8 trigger_analog_timer;
-    /*  fp+673 */ u8 x673;
-    /*  fp+674 */ u8 x674;
-    /*  fp+674 */ u8 x675;
-    /*  fp+676 */ u8 x676_x;
-    /*  fp+677 */ u8 x677_y;
-    /*  fp+678 */ u8 x678;
-    /*  fp+679 */ u8 x679_x;
-    /*  fp+67A */ u8 x67A_y;
-    /*  fp+67B */ u8 x67B;
+    /**
+     * Frames since each analog input last crossed its threshold: the stick
+     * smash deadzones, #shield_press_threshold for the trigger.
+     */
+    /*  fp+670 */ FtInputTimers active_timer;    ///< consumers stamp 254
+    /*  fp+673 */ FtInputTimers active_sticky;   ///< no consumer resets it
+    /*  fp+676 */ FtInputTimers active_duration; ///< survives the input ending
+    /*  fp+679 */ FtInputTimers activity_timer;  ///< input-count stat only
     /*  fp+67C */ u8 x67C;
     /*  fp+67D */ u8 x67D;
     /*  fp+67E */ u8 x67E;
@@ -1480,14 +1609,7 @@ struct Fighter {
     /*  fp+8A4 */ float x8A4_animBlendFrames;
     /*  fp+8A8 */ float x8A8_anim_frame;
     /*  fp+8AC */ HSD_JObj* x8AC_animSkeleton;
-    /*  fp+8B0 */ struct Fighter_x8B0_t {
-        int x0;
-        float x4;
-        float x8;
-        float xC;
-        s8 x10;
-        s8 x11;
-    } x8B0[5];
+    /*  fp+8B0 */ Fighter_x8B0_t x8B0[5];
     /*  fp+914 */ HitCapsule x914[4];
     /*  fp+DF4 */ HitCapsule xDF4[2];
     /* fp+1064 */ HitCapsule x1064_thrownHitbox;
@@ -1496,22 +1618,9 @@ struct Fighter {
     /* fp+119E */ u8 hurt_capsules_len;
     /* fp+119F */ u8 x119F;
     /* fp+11A0 */ FighterHurtCapsule hurt_capsules[15];
-    /* fp+1614 */ struct Fighter_x1614_t {
-        f32 x0;
-        HSD_JObj* x4;
-        Vec3 x8;
-        Vec3 x14;
-        Vec3 x20;
-    } x1614[2];
+    /* fp+1614 */ Fighter_x1614_t x1614[2];
     /* fp+166C */ u8 x166C; ///< number of valid entries in x1670 array
-    /* fp+1670 */ struct Fighter_x1670_t {
-        /* +00 */ Vec3 v1;
-        /* +0C */ float v2;
-        /* +10 */ HSD_JObj* jobj;
-        /* +14 */ float x14;
-        /* +18 */ Vec3 x18;
-        /* +24 */ int x24;
-    } x1670[1]; ///< @todo figure out proper size
+    /* fp+1670 */ Fighter_x1670_t x1670[1]; ///< @todo figure out proper size
     /* fp+1674 */ u8 filler_x1674[0x1828 - 0x1670 - 0x28];
     /* fp+1828 */ enum_t x1828;
     /* fp+182C */ struct dmg {
@@ -1601,7 +1710,7 @@ struct Fighter {
     /* fp+1988 */ enum_t x1988;
     /* fp+198C */ s32 x198C;
     /* fp+1990 */ s32 x1990;
-    /* fp+1994 */ bool x1994;
+    /* fp+1994 */ int x1994;
     /* fp+1998 */ float shield_health;
     /* fp+199C */ float lightshield_amount;
     /* fp+19A0 */ s32 x19A0_shieldDamageTaken;
@@ -1645,7 +1754,7 @@ struct Fighter {
     /* fp+1A6C */ float x1A6C;
     /* fp+1A70 */ Vec3 x1A70;
     /* fp+1A7C */ Vec3 x1A7C;
-    /* fp+x1A88 */ struct Fighter_x1A88_t x1A88;
+    /* fp+x1A88 */ struct CpuFighter cpu;
     /* fp+2004 */ int x2004;
     /* fp+2008 */ s32 x2008;
     /* fp+200C */ s32 x200C;
@@ -1681,10 +1790,7 @@ struct Fighter {
     /* fp+20A0 */ HSD_JObj* x20A0_accessory;
     /* fp+20A4 */ LbShadow x20A4;
     /* fp+20AC */ HSD_GObj* unk_gobj;
-    /* fp+20B0 */ struct Fighter_x20B0_t {
-        Vec3 x0;
-        Vec3 xC;
-    } x20B0[3];
+    /* fp+20B0 */ Fighter_x20B0_t x20B0[3];
     /* fp+20F8 */ float x20F8;
     /* fp+20FC */ float x20FC;
     /* fp+2100 */ s8 x2100;
@@ -1828,7 +1934,7 @@ struct Fighter {
     /* fp+221F:1 */ u8 x221F_b1 : 1;
     /* fp+221F:2 */ u8 x221F_b2 : 1;
     /* fp+221F:3 */ u8 x221F_b3 : 1;
-    /* fp+221F:4 */ u8 x221F_b4 : 1;
+    /* fp+221F:4 */ u8 is_sub_fighter : 1;
     /* fp+221F:5 */ u8 x221F_b5 : 1;
     /* fp+221F:6 */ u8 x221F_b6 : 1;
     /* fp+221F:7 */ u8 x221F_b7 : 1;
@@ -1905,7 +2011,7 @@ struct Fighter {
 
     /* fp+2228:0 */ u8 x2228_b0 : 1;
     /* fp+2228:1 */ u8 x2228_b1 : 1;
-    /* fp+2228:2 */ u8 x2228_b2 : 1;
+    /* fp+2228:2 */ u8 is_sandbag : 1;
     /* fp+2228:3 */ u8 x2228_b3 : 2;
     /* fp+2228:5 */ u8 x2228_b5 : 1;
     /* fp+2228:6 */ u8 used_tether : 1;
@@ -1958,7 +2064,6 @@ struct Fighter {
     /* fp+232C */ u32 bury_timer_2;
     /* fp+2330 */ IntVec2 x2330;
     /* fp+2338 */ IntVec2 x2338;
-    /// @at{2340} @sz{AC}
     /* fp+2340 */ union Fighter_MotionVars {
         /* fp+2340 */ u8 _[0x23EC - 0x2340];
         /* fp+2340 */ union ftCaptain_MotionVars ca, gn;
@@ -2018,8 +2123,8 @@ struct UnkFloat6_Camera {
 };
 
 typedef struct ftData_UnkModelStruct {
-    Fighter_ModelEvent model_events[FTKIND_MAX];
-    HSD_JObj* (*getter[FTKIND_MAX])(HSD_GObj*);
+    Fighter_ModelEvent model_events[Ft_Kind_Max];
+    HSD_JObj* (*getter[Ft_Kind_Max])(HSD_GObj*);
 } ftData_UnkModelStruct;
 
 struct ftData_80085FD4_ret {
@@ -2100,7 +2205,7 @@ typedef struct Kirby_Unk {
 
 struct ft_80459B88_t {
     /* +0 */ Kirby_Unk* x0;
-    /* +4 */ KirbyHatStruct* hats[FTKIND_MAX];
+    /* +4 */ KirbyHatStruct* hats[Ft_Kind_Max];
 };
 ASSERT_SIZE(struct ft_80459B88_t, 0x88);
 

@@ -1,9 +1,10 @@
 #include "objalloc.h"
 
+#include <string.h>
+
 #include "initialize.h"
 #include "memory.h"
 
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <dolphin/os/OSAlloc.h>

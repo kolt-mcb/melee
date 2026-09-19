@@ -1,10 +1,14 @@
 #ifndef MELEE_GR_FORWARD_H
 #define MELEE_GR_FORWARD_H
 
-#include "lb/forward.h"
-#include <baselib/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
+
+#define HSD_GOBJ_CLASS_STAGE 3
+#define HSD_GOBJ_CLASS_GROUND 13
+#define HSD_GOBJ_PLINK_GROUND 5
 
 struct grCorneria_GroundVars;
 typedef struct grDynamicAttr_UnkStruct grDynamicAttr_UnkStruct;
@@ -123,7 +127,7 @@ typedef enum GrKind {
     /* 0x44 */ Gr_Kind_Figure1,
     /* 0x45 */ Gr_Kind_Figure2,
     /* 0x46 */ Gr_Kind_Figure3,
-    /* 0x46 */ Gr_Kind_Count = Gr_Kind_Figure3,
+    /* 0x46 */ Gr_Kind_Count = 221,
 } GrKind;
 
 /** @remarks
@@ -174,6 +178,7 @@ typedef enum StKind {
     /* 0x49 */ St_Kind_BigBlueRoute = 73,
     /* 0x55 */ St_Kind_Unk84 = 84,
     /* 0x55 */ St_Kind_Heal,
+    /* 0x148 */ St_Kind_Unk328 = 328,
 } StKind;
 
 typedef enum StadiumGrType {

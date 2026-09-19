@@ -1,32 +1,31 @@
-#include "mn/mndatadel.h"
+#include "mndatadel.h"
 
-#include "mn/mndatadel.static.h"
+#include <placeholder.h>
 
-#include "placeholder.h"
-
-#include "baselib/gobj.h"
-#include "baselib/gobjgxlink.h"
-#include "baselib/gobjobject.h"
-#include "baselib/gobjplink.h"
-#include "baselib/gobjproc.h"
-#include "baselib/gobjuserdata.h"
-#include "baselib/jobj.h"
-#include "baselib/memory.h"
-#include "gm/gm_1601.h"
-#include "gm/gm_16F1.h"
-#include "gm/gm_1A36.h"
-#include "gm/gmmain_lib.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbcardgame.h"
-#include "lb/lblanguage.h"
-#include "lb/lbspdisplay.h"
-#include "mn/inlines.h"
-#include "mn/mnmain.h"
-#include "mn/mnmainrule.h"
-#include "sc/types.h"
-#include "sysdolphin/baselib/debug.h"
-#include "ty/toy.h"
+#include "inlines.h"
+#include "mndatadel.static.h"
+#include "mnmain.h"
+#include "mnmainrule.h"
+#include <melee/gm/gm_1601.h>
+#include <melee/gm/gm_16F1.h>
+#include <melee/gm/gm_1A36.h>
+#include <melee/gm/gmmain_lib.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbcardgame.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
+#include <melee/ty/toy.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/memory.h>
 
 HSD_Text* mnDataDel_804D6C6C;
 HSD_GObj* mnDataDel_804D6C68;
@@ -89,7 +88,7 @@ void mnDataDel_8024E940(void)
     var_r30 = (i = 0);
     for (i = 0; i < 0x1D; i++) {
         if ((gm_80164430(gm_801641CC(i)) != 0) &&
-            ((gm_80164250((u16) i) & (0xFFFF & 0xFF)) != 0))
+            ((gm_IsStageUnlocked((u16) i) & (0xFFFF & 0xFF)) != 0))
         {
             var_r30 = 1;
             break;
@@ -99,7 +98,7 @@ void mnDataDel_8024E940(void)
         gm_801641E4(0U, 1U);
     }
     gm_801729EC();
-    lb_8001CE00();
+    lbCardGame_SaveChanges();
 }
 
 static inline void mnDataDel_8024EA6C_inline(HSD_JObj** jobj, f32 frame,
@@ -154,7 +153,7 @@ void mnDataDel_8024EA6C(void)
     gm_801603B0();
     gmMainLib_8015F588((u8) gmMainLib_8015F4E8());
     gm_801729EC();
-    lb_8001CE00();
+    lbCardGame_SaveChanges();
 }
 
 void mnDataDel_8024EBC8(HSD_JObj* root, u8 unused, u8 a, u8 b)
@@ -256,7 +255,7 @@ static inline void mnDataDel_AnimateWarning(HSD_JObj* root, HSD_GObj* gobj,
     } else {
         HSD_SisLib_803A5CC4(mnDataDel_804D6C6C);
         mnDataDel_804D6C6C = NULL;
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
     }
 }
 
@@ -351,14 +350,14 @@ void fn_8024F1D4(HSD_GObj* gobj)
         }
         mn_804D6BC8.cooldown = 5;
         data->visible = 0;
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_8024F840, 0);
         proc->flags_3 = HSD_GObj_804D783C;
     } else if (input & MenuInput_Back) {
         sfxBack();
         mn_804D6BC8.cooldown = 5;
         data->visible = 0;
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_8024F840, 0);
         proc->flags_3 = HSD_GObj_804D783C;
     } else if ((input & 8) || (input & 4)) {
@@ -408,7 +407,7 @@ void fn_8024F318(HSD_GObj* gobj)
         mn_804D6BC8.cooldown = 5;
         cursor = user_data->x0;
         if (cursor == 5) {
-            HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+            HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
             if (user_data->x2 != 0) {
                 user_data->x1 = 2U;
                 user_data->x2 = 0U;
@@ -461,7 +460,7 @@ void fn_8024F318(HSD_GObj* gobj)
                 gm_8016505C();
                 gmMainLib_8015F464();
                 gm_801729EC();
-                lb_8001CE00();
+                lbCardGame_SaveChanges();
                 gmMainLib_8015DB80();
                 break;
             }
@@ -484,7 +483,7 @@ void fn_8024F318(HSD_GObj* gobj)
                 case_user_data->x3[2] = 1;
                 gmMainLib_8015EEC8();
                 gm_801729EC();
-                lb_8001CE00();
+                lbCardGame_SaveChanges();
                 break;
             }
             case 3: {
@@ -504,7 +503,7 @@ void fn_8024F318(HSD_GObj* gobj)
                 gmMainLib_8015F150();
                 gmMainLib_8015F260();
                 gm_801729EC();
-                lb_8001CE00();
+                lbCardGame_SaveChanges();
                 break;
             }
             case 4: {
@@ -525,7 +524,7 @@ void fn_8024F318(HSD_GObj* gobj)
                 gmMainLib_8015F4BC();
                 gm_80174238();
                 gm_801729EC();
-                lb_8001CE00();
+                lbCardGame_SaveChanges();
                 break;
             }
             }
@@ -534,7 +533,7 @@ void fn_8024F318(HSD_GObj* gobj)
             sfxBack();
         }
         user_data->x1 = 0U;
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(temp_gobj, fn_8024F840, 0U);
         proc->flags_3 = HSD_GObj_804D783C;
         return;
@@ -543,7 +542,7 @@ void fn_8024F318(HSD_GObj* gobj)
         sfxBack();
         mn_804D6BC8.cooldown = 5;
         user_data->x1 = 0U;
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(temp_gobj, fn_8024F840, 0U);
         proc->flags_3 = HSD_GObj_804D783C;
         return;
@@ -645,7 +644,7 @@ void fn_8024F840(HSD_GObj* gobj)
     if ((buttons & 0x10) && ((u8*) &user_data->x3)[user_data->x0] == 0) {
         user_data->x1 = 1;
         user_data->x2 = zero;
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_8024F318, 0U);
         proc->flags_3 = HSD_GObj_804D783C;
         mnDataDel_8024EEC0();
@@ -695,7 +694,7 @@ void fn_8024FBA4(HSD_GObj* gobj)
             &data->xC, (enum _HSD_TypeMask) 0x480);
     }
     if (frame >= data->xC.end_frame) {
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
     }
 }
 
@@ -715,7 +714,7 @@ void fn_8024FC48(HSD_GObj* gobj)
 
     if (mn_804A04F0.cur_menu != 0x18) {
         HSD_GObjProc* proc;
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_8024FBA4, 0);
         proc->flags_3 = HSD_GObj_804D783C;
         HSD_SisLib_803A5CC4(*(HSD_Text**) (user_data + 0xC));
@@ -756,7 +755,7 @@ void fn_8024FD40(HSD_GObj* gobj)
     user_data = gobj->user_data;
     data = &mnDataDel_803EF870;
     if ((u8) mn_804A04F0.cur_menu != 0x18) {
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_8024FBA4, 0);
         proc->flags_3 = HSD_GObj_804D783C;
         HSD_SisLib_803A5CC4(*(HSD_Text**) (user_data + 0xC));
@@ -770,7 +769,7 @@ void fn_8024FD40(HSD_GObj* gobj)
             mnDataDel_GetAnimSettings(data), (enum _HSD_TypeMask) 0x480);
     }
     if (frame == data->x0.end_frame) {
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_8024FC48, 0);
         proc->flags_3 = HSD_GObj_804D783C;
     }

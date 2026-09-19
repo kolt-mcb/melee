@@ -1,19 +1,17 @@
 #include "gmtoumode.h"
 
+#include <melee/lb/forward.h>
+
+#include "gm_1A3F.h"
 #include "gm_1B03.h"
-
-#include "gm/gm_1A3F.h"
-
-#include "lb/forward.h"
-
-#include "melee/gm/gm_unsplit.h"
-#include "melee/gm/gmtoulib.h"
-#include "melee/gm/gmvsmelee.h"
-#include "melee/gm/types.h"
-#include "melee/lb/lbcardgame.h"
-#include "melee/lb/lbcardnew.h"
-#include "melee/lb/types.h"
-#include "melee/mn/types.h"
+#include "gm_unsplit.h"
+#include "gmtoulib.h"
+#include "gmvsmelee.h"
+#include "types.h"
+#include <melee/lb/lbcardgame.h>
+#include <melee/lb/lbcardnew.h>
+#include <melee/lb/types.h>
+#include <melee/mn/types.h>
 
 /* 1B1724 */ static void gm_801B1724(GameModeState*);
 /* 1B174C */ static void gm_801B174C(GameModeState*);
@@ -120,8 +118,8 @@ GameModeState gm_Mode_Tournament_States[] = {
 
 void gm_801B1724(GameModeState* arg0)
 {
-    lb_8001C550();
-    lb_8001D164(0);
+    lbCardNew_AllocWorkArea();
+    lbCardGame_LoadArchive(0);
 }
 
 void gm_801B174C(GameModeState* arg0)
@@ -167,7 +165,7 @@ void gm_801B1834(GameModeState* state)
     MatchExitInfo* mei = gm_GetGameModeStateExitData(state);
     if (gmVsMelee_WasAnyPlayerHuman(&mei->match_end)) {
         gm_SetupHumanResultsScreen(mei->match_end.match_kind,
-                                   mei->match_end.result);
+                                   mei->match_end.outcome);
         gm_SetupResultsScreenPlayTime(mei->match_end.frame_count / GM_FPS,
                                       gm_80162800(&mei->match_end));
     }
@@ -180,10 +178,6 @@ void gm_801B1834(GameModeState* state)
     }
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void gm_801B18D4(GameModeState* arg0)
 {
     StartMeleeData* smd;
@@ -199,9 +193,6 @@ void gm_801B18D4(GameModeState* arg0)
     /// @todo :: figure out how to call this not inlined
     gm_SetupSuddenDeath(smd, &((MatchExitInfo*) (src + 1))->match_end);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void gm_801B1A2C(GameModeState* arg0)
 {

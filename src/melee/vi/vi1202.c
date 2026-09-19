@@ -1,28 +1,26 @@
-#include "vi/vi1202.h"
+#include "vi1202.h"
+
+#include <sysdolphin/baselib/forward.h>
 
 #include "vi.h"
-
-#include "baselib/forward.h"
-
-#include "ef/efasync.h"
-#include "ef/eflib.h"
-#include "gm/gm_1601.h"
-#include "gm/gm_unsplit.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_013B.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbspdisplay.h"
-#include "sc/types.h"
-#include "ty/toy.h"
-
-#include <baselib/aobj.h>
-#include <baselib/cobj.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
+#include <melee/ef/efasync.h>
+#include <melee/ef/eflib.h>
+#include <melee/gm/gm_1601.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_013B.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
+#include <melee/ty/toy.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
 
 static SceneDesc* un_804D7040;
 static SceneDesc* un_804D7044;
@@ -126,8 +124,7 @@ void vi1202_Scene_OnEnter(void* arg)
     GObj_SetupGXLink(gobj, HSD_GObj_LObjCallback, 0, 0);
 
     cam_gobj = GObj_Create(0x13, 0x14, 0);
-    cobj =
-        lb_80013B14((HSD_CameraDescPerspective*) un_804D7040->cameras->desc);
+    cobj = lb_80013B14(&un_804D7040->cameras->desc->perspective);
     HSD_GObjObject_80390A70(cam_gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(cam_gobj, HSD_GObj_803910D8, 0x8);
     cam_gobj->gxlink_prios = 0x8A9;

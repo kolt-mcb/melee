@@ -1,28 +1,24 @@
 #include "ftbosslib.h"
 
-#include "ft_0877.h"
-#include "ftlib.h"
-
-#include "cm/camera.h"
-#include "ft/inlines.h"
-#include "ft/types.h"
-
-#include "ftCommon/forward.h"
-
-#include "ftMasterHand/types.h"
-#include "it/it_26B1.h"
-#include "lb/lbvector.h"
-#include "mp/mplib.h"
-
-#include "pl/forward.h"
-
-#include "pl/player.h"
+#include <melee/pl/forward.h>
 
 #include <math.h>
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
+
+#include "ft_0877.h"
+#include "ftlib.h"
+#include "inlines.h"
+#include "kinds/ftCommon/forward.h"
+#include "kinds/ftMasterHand/types.h"
+#include "types.h"
+#include <melee/cm/camera.h>
+#include <melee/it/it_26B1.h>
+#include <melee/lb/lbvector.h>
+#include <melee/mp/mplib.h>
+#include <melee/pl/player.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/random.h>
 
 /// @todo Float reorder hack
 #ifdef MUST_MATCH
@@ -43,9 +39,9 @@ void ftBossLib_8015BD24(s32 arg0, float* arg1, float arg2, s32 arg3, s32 arg4,
     *arg1 = ((arg3 / arg0) + HSD_Randi(arg4 - arg5) + arg5) / arg2;
 }
 
-void ftBossLib_8015BDB4(HSD_GObj* arg0)
+void ftBossLib_ReportGObjSlotType(HSD_GObj* gobj)
 {
-    Fighter* fp = arg0->user_data;
+    Fighter* fp = gobj->user_data;
     Gm_PKind kind = Player_GetPlayerSlotType(fp->player_id);
     HSD_ASSERTREPORT(103,
                      kind == Gm_PKind_Human || kind == Gm_PKind_Boss ||
@@ -129,9 +125,9 @@ void ftBossLib_8015C09C(HSD_GObj* gobj, float facing_dir)
     HSD_JObjSetRotation(jobj, &quat);
 }
 
-void ftBossLib_8015C190(HSD_GObj* arg0)
+void ftBossLib_8015C190(HSD_GObj* gobj)
 {
-    Fighter* fp = GET_FIGHTER(arg0);
+    Fighter* fp = GET_FIGHTER(gobj);
     Vec3 vec;
 
     mpFloorGetRight(0, &vec);
@@ -159,10 +155,9 @@ HSD_GObj* ftBossLib_8015C244(HSD_GObj* arg0, Vec3* arg1)
     return ftLib_8008627C(arg1, arg0);
 }
 
-bool ftBossLib_8015C270(void)
+bool ftBossLib_IsMasterHandEntry(void)
 {
-    /// @todo Get msid
-    if (ftBossLib_8015C44C(FTKIND_MASTERH) == 0x157) {
+    if (ftBossLib_GetMotionId(Ft_Kind_MasterH) == ftMh_MS_Entry) {
         return 1;
     }
 
@@ -172,7 +167,7 @@ bool ftBossLib_8015C270(void)
 bool ftBossLib_8015C2A8(void)
 {
     /// @todo Get msid
-    if (ftBossLib_8015C44C(FTKIND_CREZYH) == 0x183) {
+    if (ftBossLib_GetMotionId(Ft_Kind_CrezyH) == 0x183) {
         return true;
     }
 
@@ -182,7 +177,7 @@ bool ftBossLib_8015C2A8(void)
 bool ftBossLib_8015C2E0(void)
 {
     /// @todo Get ASIDs
-    enum_t msid = ftBossLib_8015C44C(FTKIND_MASTERH);
+    enum_t msid = ftBossLib_GetMotionId(Ft_Kind_MasterH);
     if (msid == 0x158 || msid == 0x159) {
         return true;
     }
@@ -193,7 +188,7 @@ bool ftBossLib_8015C2E0(void)
 bool ftBossLib_8015C31C(void)
 {
     /// @todo Get ASIDs
-    enum_t msid = ftBossLib_8015C44C(FTKIND_CREZYH);
+    enum_t msid = ftBossLib_GetMotionId(Ft_Kind_CrezyH);
     if (msid == 0x181 || msid == 0x182) {
         return true;
     }
@@ -203,7 +198,7 @@ bool ftBossLib_8015C31C(void)
 
 bool ftBossLib_8015C358(void)
 {
-    HSD_GObj* gobj = ftBossLib_8015C3E8(FTKIND_MASTERH);
+    HSD_GObj* gobj = ftBossLib_GetFighterGObj(Ft_Kind_MasterH);
     if (gobj && GET_FIGHTER(gobj)->x221F_b3) {
         return true;
     }
@@ -213,7 +208,7 @@ bool ftBossLib_8015C358(void)
 
 bool ftBossLib_8015C3A0(void)
 {
-    HSD_GObj* gobj = ftBossLib_8015C3E8(FTKIND_CREZYH);
+    HSD_GObj* gobj = ftBossLib_GetFighterGObj(Ft_Kind_CrezyH);
     if (gobj && GET_FIGHTER(gobj)->x221F_b3) {
         return true;
     }
@@ -221,14 +216,14 @@ bool ftBossLib_8015C3A0(void)
     return false;
 }
 
-/// get_fighter_gobj(FighterKind)
-HSD_GObj* ftBossLib_8015C3E8(FighterKind kind)
+HSD_GObj* ftBossLib_GetFighterGObj(FighterKind kind)
 {
     HSD_GObj* cur;
 
     u8 _[8];
 
-    for (cur = HSD_GObj_Entities->fighters; cur; cur = cur->next) {
+    for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER]; cur; cur = cur->next)
+    {
         if (kind == ftLib_GetKind(cur)) {
             return cur;
         }
@@ -237,14 +232,13 @@ HSD_GObj* ftBossLib_8015C3E8(FighterKind kind)
     return NULL;
 }
 
-enum_t ftBossLib_8015C44C(FighterKind kind)
+enum_t ftBossLib_GetMotionId(FighterKind kind)
 {
-    HSD_GObj* gobj = ftBossLib_8015C3E8(kind);
+    HSD_GObj* gobj = ftBossLib_GetFighterGObj(kind);
 
     u8 _[16];
 
     if (gobj != NULL) {
-        // DataOffset_MotionStateLoad
         return ftLib_GetMotionId(gobj);
     } else {
         return ftCo_MS_DeadDown;
@@ -253,7 +247,7 @@ enum_t ftBossLib_8015C44C(FighterKind kind)
 
 enum_t ftBossLib_8015C4C4(void)
 {
-    HSD_GObj* gobj = ftBossLib_8015C3E8(FTKIND_CREZYH);
+    HSD_GObj* gobj = ftBossLib_GetFighterGObj(Ft_Kind_CrezyH);
 
     u8 _[24];
 
@@ -266,7 +260,7 @@ enum_t ftBossLib_8015C4C4(void)
 
 s32 ftBossLib_8015C530(int cpu_level)
 {
-    HSD_GObj* gobj = ftBossLib_8015C3E8(FTKIND_MASTERH);
+    HSD_GObj* gobj = ftBossLib_GetFighterGObj(Ft_Kind_MasterH);
 
     u8 _[16];
 
@@ -317,7 +311,7 @@ ftMasterHand_SpecialAttrs* ftBossLib_8015C6BC(void)
     u8 _[16];
 
     {
-        HSD_GObj* gobj = ftBossLib_8015C3E8(FTKIND_MASTERH);
+        HSD_GObj* gobj = ftBossLib_GetFighterGObj(Ft_Kind_MasterH);
         if (gobj == NULL) {
             return NULL;
         }
@@ -404,7 +398,7 @@ s32 ftBossLib_8015C9CC(void)
 
 static void func_8015CA6C_inline(s32 arg0)
 {
-    HSD_GObj* ch_gobj = ftBossLib_8015C3E8(FTKIND_CREZYH);
+    HSD_GObj* ch_gobj = ftBossLib_GetFighterGObj(Ft_Kind_CrezyH);
     if (ch_gobj) {
         ftLib_80086A4C(ch_gobj, arg0);
     }
@@ -417,7 +411,7 @@ void ftBossLib_8015CA6C(s32 arg0)
     Player_80036790(0, arg0);
 
     {
-        HSD_GObj* mh_gobj = ftBossLib_8015C3E8(FTKIND_MASTERH);
+        HSD_GObj* mh_gobj = ftBossLib_GetFighterGObj(Ft_Kind_MasterH);
         if (mh_gobj) {
             ftLib_80086A4C(mh_gobj, arg0);
         }

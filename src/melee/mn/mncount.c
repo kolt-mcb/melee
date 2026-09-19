@@ -1,8 +1,19 @@
-#include "placeholder.h"
+#include "mncount.h"
 
-#include "ty/toy.h"
+#include <placeholder.h>
 
-#include <baselib/gobj.h>
+#include "inlines.h"
+#include "mndiagram.h"
+#include "mnmain.h"
+#include "mnname.h"
+#include "types.h"
+#include <melee/gm/gm_1601.h>
+#include <melee/gm/gmmain_lib.h>
+#include <melee/gm/types.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
+#include <melee/ty/toy.h>
 #include <sysdolphin/baselib/debug.h>
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/gobjgxlink.h>
@@ -13,18 +24,6 @@
 #include <sysdolphin/baselib/jobj.h>
 #include <sysdolphin/baselib/memory.h>
 #include <sysdolphin/baselib/sislib.h>
-#include <melee/gm/gm_1601.h>
-#include <melee/gm/gmmain_lib.h>
-#include <melee/gm/types.h>
-#include <melee/lb/lbarchive.h>
-#include <melee/lb/lbspdisplay.h>
-#include <melee/mn/inlines.h>
-#include <melee/mn/mncount.h>
-#include <melee/mn/mndiagram.h>
-#include <melee/mn/mnmain.h>
-#include <melee/mn/mnname.h>
-#include <melee/mn/types.h>
-#include <melee/sc/types.h>
 
 // DATA / MELEE RECORDS / MISC RECORDS
 #define NUM_STAGES 29
@@ -90,7 +89,7 @@ static inline bool mnCount_8025035C_inline(void)
 {
     s32 i;
     for (i = 0; i < SELKIND_COUNT; i++) {
-        if (GetPersistentFighterData(i)->play_time != 0) {
+        if (GetPersistentFighterData(i)->stats.play_time != 0) {
             return false;
         }
     }
@@ -99,7 +98,7 @@ static inline bool mnCount_8025035C_inline(void)
 
 u32 mnCount_GetMatchTime(SelectableCharacterKind selkind)
 {
-    return GetPersistentFighterData(selkind)->play_time;
+    return GetPersistentFighterData(selkind)->stats.play_time;
 }
 
 u32 mnCount_GetKOKingpin(SelectableCharacterKind selkind)
@@ -114,7 +113,7 @@ u32 mnCount_GetNoDefenseNelly(SelectableCharacterKind selkind)
 
 u32 mnCount_GetDisasterMaster(SelectableCharacterKind selkind)
 {
-    return GetPersistentFighterData(selkind)->sd_count;
+    return GetPersistentFighterData(selkind)->stats.sd_count;
 }
 
 int mnCount_8025035C(s32 skip_count,
@@ -203,22 +202,22 @@ int mnCount_8025035C(s32 skip_count,
 
 u32 mnCount_GetSmashChamp(SelectableCharacterKind selkind)
 {
-    return GetPersistentFighterData(selkind)->victories;
+    return GetPersistentFighterData(selkind)->stats.victories;
 }
 
 u32 mnCount_GetSmashSap(SelectableCharacterKind selkind)
 {
-    return GetPersistentFighterData(selkind)->losses;
+    return GetPersistentFighterData(selkind)->stats.losses;
 }
 
 u32 mnCount_GetSlugMeister(SelectableCharacterKind selkind)
 {
-    return GetPersistentFighterData(selkind)->damage_dealt;
+    return GetPersistentFighterData(selkind)->stats.damage_dealt;
 }
 
 u32 mnCount_GetPunchingBag(SelectableCharacterKind selkind)
 {
-    return GetPersistentFighterData(selkind)->damage_taken;
+    return GetPersistentFighterData(selkind)->stats.damage_taken;
 }
 
 #define GET_KOS(i) mnCount_GetKOKingpin(entries[i].selkind)
@@ -635,7 +634,7 @@ static void mnCount_UpdateArrowIndicators_noinline(HSD_GObj* gobj)
 
 void fn_802514B8(HSD_GObj* gobj)
 {
-    HSD_GObjPLink_80390228(gobj);
+    HSD_GObjFree(gobj);
 }
 
 static inline void fn_802514D8_inline(MnCountData* userdata, HSD_GObj* gobj)
@@ -644,7 +643,7 @@ static inline void fn_802514D8_inline(MnCountData* userdata, HSD_GObj* gobj)
     HSD_JObj* jobj;
     PAD_STACK(16);
     if (mn_804A04F0.cur_menu != MENU_KIND_RECORDS_MISC) {
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_802514B8, 0);
         proc->flags_3 = HSD_GObj_804D783C;
         {
@@ -750,7 +749,7 @@ void fn_80251640(HSD_GObj* gobj)
     PAD_STACK(24);
 
     if (mn_804A04F0.cur_menu != MENU_KIND_RECORDS_MISC) {
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_802514B8, 0);
         i = 0;
         proc->flags_3 = HSD_GObj_804D783C;
@@ -765,7 +764,7 @@ void fn_80251640(HSD_GObj* gobj)
 
     fn_80251640_InitModel(gobj, userdata, 0);
     mnCount_UpdateArrowIndicators_noinline(gobj);
-    HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+    HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
     proc = HSD_GObj_SetupProc(gobj, fn_802514D8, 0);
     proc->flags_3 = HSD_GObj_804D783C;
 }

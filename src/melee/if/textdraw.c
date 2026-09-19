@@ -1,21 +1,20 @@
 #include "textdraw.h"
 
-#include "platform.h"
+#include <Runtime/platform.h>
 
-#include "if/types.h"
-
+#include "types.h"
 #include <dolphin/mtx.h>
-#include <baselib/cobj.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/hsd_3915.h>
-#include <baselib/lobj.h>
-#include <baselib/video.h>
-#include <baselib/wobj.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/hsd_3915.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/video.h>
+#include <sysdolphin/baselib/wobj.h>
 
 /// .data
 /* 3FDC20 */ static HSD_WObjDesc devtext_eyepos = {
@@ -291,7 +290,7 @@ void DevText_CreateCObj(int classifier, int p_link, int gobj_priority,
             GObj_SetupGXLinkMax(gobj, HSD_GObj_803910D8, gx_priority);
             gobj->gxlink_prios = 1LL << gx_link;
         } else {
-            HSD_GObjPLink_80390228(gobj);
+            HSD_GObjFree(gobj);
         }
     }
 }
@@ -354,7 +353,7 @@ void DevText_AddToList(DevText** list, DevText* text)
     }
 }
 
-void DevText_Show(HSD_GObj* gobj, DevText* text)
+void DevText_Show(UNUSED HSD_GObj* gobj, DevText* text)
 {
     DevText_AddToList(&devtext_drawlist, text);
 }

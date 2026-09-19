@@ -1,25 +1,26 @@
 #include "lbvector.h"
 
+#include <Runtime/platform.h>
+#if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
-
-#include <placeholder.h>
+/* Left over from when <platform.h> (the port's router) reached this file and
+ * could macro-define these; harmless if nothing does. */
+#undef sin
+#undef cos
+#undef fmod
+#endif
 
 #ifndef M_TAU
 #define M_TAU 6.283185307179586
 #endif
 
-#include <dolphin/types.h>
-#include <stdbool.h>
-#include <platform.h>
-#undef sin
-#undef cos
-#undef fmod
-
 #include <math.h>
+#include <placeholder.h>
+
 #include <dolphin/gx/GXTransform.h>
 #include <dolphin/mtx.h>
-#include <baselib/cobj.h>
-#include <baselib/debug.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/debug.h>
 
 /* LV_FMA and LV_DOT -- the console's single-rounding spellings used all over
  * this file -- are defined in lbvector.h, next to the inlined lbVector_Len

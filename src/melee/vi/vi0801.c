@@ -1,32 +1,28 @@
 #include "vi0801.h"
 
 #include "vi.h"
-
-#include "cm/camera.h"
-#include "ef/efasync.h"
-#include "ef/eflib.h"
-#include "gm/gm_unsplit.h"
-#include "gr/grbigblueroute.h"
-#include "gr/ground.h"
-#include "gr/stage.h"
-#include "it/item.h"
-#include "lb/lb_00F9.h"
-#include "lb/lb_013B.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbspdisplay.h"
-#include "mp/mpcoll.h"
-#include "pl/player.h"
-#include "sc/types.h"
-
-#include <baselib/aobj.h>
-#include <baselib/cobj.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjproc.h>
-#include <baselib/lobj.h>
+#include <melee/cm/camera.h>
+#include <melee/ef/efasync.h>
+#include <melee/ef/eflib.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/gr/grbigblueroute.h>
+#include <melee/gr/inlines.h>
+#include <melee/gr/stage.h>
+#include <melee/it/item.h>
+#include <melee/lb/lb_013B.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/lobj.h>
 
 static SceneDesc* un_804D6FB8;
 static GXColor un_804D6FBC;
@@ -42,8 +38,8 @@ s32 un_80400128[23][2] = { { 1, 2 }, { 1, 3 }, { 1, 4 },  { 1, 5 },  { 1, 6 },
 static void vi0801_8031ED70(HSD_GObj* gobj, int unused)
 {
     GXColor* colors;
-    s32 zero;
-    s32 prio;
+
+    PAD_STACK(8);
 
     if (HSD_CObjSetCurrent(gobj->hsd_obj) != 0) {
         colors = &un_804D6FBC;
@@ -134,8 +130,7 @@ void vi0801_Scene_OnEnter(void* unused)
     lbArchive_LoadSymbols("Vi0801.dat", &un_804D6FB8, "visual0801Scene", NULL);
 
     gobj = GObj_Create(0x13, 0x14, 0);
-    cobj =
-        lb_80013B14((HSD_CameraDescPerspective*) un_804D6FB8->cameras->desc);
+    cobj = lb_80013B14(&un_804D6FB8->cameras->desc->perspective);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(gobj, vi0801_8031ED70, 8);
     HSD_CObjAddAnim(cobj, un_804D6FB8->cameras->anims[0]);
@@ -145,11 +140,7 @@ void vi0801_Scene_OnEnter(void* unused)
 
     vi0801_8031EE84();
 
-    Camera_80028B9C(6);
-    lb_8000FCDC();
-    mpColl_80041C78();
-    Ground_801C0378(0x40);
-    Stage_802251E8(St_Kind_BigBlueRoute, 0);
+    Stage_InitScene(St_Kind_BigBlueRoute, 0);
     Item_80266FA8();
     Item_80266FCC();
     Stage_8022524C();

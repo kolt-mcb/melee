@@ -1,31 +1,28 @@
 #include "mnsoundtest.h"
 
-#include "inlines.h"
-#include "types.h"
+#include <Runtime/platform.h>
 
-#include <platform.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include "forward.h"
-
-#include "gm/gm_unsplit.h"
-#include "gm/gmmain_lib.h"
-#include "lb/lbarchive.h"
-#include "lb/lbspdisplay.h"
-
-#include <baselib/forward.h>
-
+#include "inlines.h"
+#include "types.h"
 #include <dolphin/os.h>
-#include <baselib/controller.h>
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/gobjuserdata.h>
-#include <baselib/jobj.h>
-#include <baselib/memory.h>
-#include <baselib/sislib.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/gm/gmmain_lib.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbspdisplay.h>
+#include <sysdolphin/baselib/controller.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/sislib.h>
 
 static mnSoundTest_GObj* mnSoundTest_804D6C40;
 static u8 mnSoundTest_804D6C44;
@@ -405,7 +402,7 @@ void fn_8024AED0(mnSoundTest_GObj* arg0)
         lbAudioAx_80023694();
         user_data->unk0 = 1U;
         mnSoundTest_8024AA70(mnSoundTest_804D6C40, user_data->unk0);
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         temp_r3_2 = HSD_GObj_SetupProc(arg0, fn_8024B2B0, 0U);
         temp_r3_2->flags_3 = HSD_GObj_804D783C;
         return;
@@ -623,7 +620,7 @@ void fn_8024B2B0(mnSoundTest_GObj* arg0)
         if (inputs & MenuInput_AButton) {
             user_data->unk0 = 2U;
             mnSoundTest_8024AA70(mnSoundTest_804D6C40, user_data->unk0);
-            HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+            HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
             proc = HSD_GObj_SetupProc(arg0, fn_8024AED0, 0U);
             proc->flags_3 = HSD_GObj_804D783C;
             return;
@@ -664,7 +661,7 @@ void fn_8024B7E4(mnSoundTest_GObj* arg0)
     mn_8022EFD8(sp1C, &vec_1);
     mn_8022EFD8(sp18, &vec_1);
     if (temp_f31 == vec_1.end_frame) {
-        HSD_GObjPLink_80390228(arg0);
+        HSD_GObjFree(arg0);
     }
 }
 
@@ -686,7 +683,7 @@ void fn_8024B8B4(mnSoundTest_GObj* arg0, f32 farg0)
     user_data = arg0->user_data;
     jobj = arg0->hsd_obj;
     if ((u8) mn_804A04F0.cur_menu != 0x1B) {
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(arg0, fn_8024B7E4, 0U);
         proc->flags_3 = HSD_GObj_804D783C;
         user_data = arg0->user_data;
@@ -753,7 +750,7 @@ void fn_8024BAF0(mnSoundTest_GObj* arg0)
     (lb_80011E24(jobj, &sp1C, 0xB, -1), lb_80011E24(jobj, &sp18, 2, -1),
      lb_80011E24(jobj, &sp14, 1, -1));
     if ((u8) mn_804A04F0.cur_menu != 0x1B) {
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(arg0, fn_8024B7E4, 0U);
         proc->flags_3 = HSD_GObj_804D783C;
         user_data = arg0->user_data;
@@ -778,7 +775,7 @@ void fn_8024BAF0(mnSoundTest_GObj* arg0)
         mn_8022EE84(sp18, &vec_0, MOBJ_MASK);
         mn_8022EFD8(sp14, &vec_0);
         if (temp_f31 == vec_0.end_frame) {
-            HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+            HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
             proc2 = HSD_GObj_SetupProc(
                 arg0, (void (*)(mnSoundTest_GObj*))(Event) fn_8024B8B4, 0U);
             proc2->flags_3 = HSD_GObj_804D783C;

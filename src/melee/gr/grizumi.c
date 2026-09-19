@@ -12,37 +12,35 @@
 #include "grzakogenerator.h"
 #include "inlines.h"
 #include "types.h"
-
-#include "cm/camera.h"
-#include "ft/ftdrawcommon.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lbdvd.h"
-#include "lb/lbspdisplay.h"
-#include "mp/mplib.h"
-
 #include <dolphin/gx/GXTexture.h>
 #include <dolphin/mtx.h>
-#include <baselib/aobj.h>
-#include <baselib/archive.h>
-#include <baselib/cobj.h>
-#include <baselib/debug.h>
-#include <baselib/displayfunc.h>
-#include <baselib/dobj.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjproc.h>
-#include <baselib/gobjuserdata.h>
-#include <baselib/jobj.h>
-#include <baselib/lobj.h>
-#include <baselib/memory.h>
-#include <baselib/object.h>
-#include <baselib/random.h>
-#include <baselib/state.h>
-#include <baselib/tobj.h>
-#include <baselib/wobj.h>
+#include <melee/cm/camera.h>
+#include <melee/ft/ftdrawcommon.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/lbdvd.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/archive.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/displayfunc.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/object.h>
+#include <sysdolphin/baselib/random.h>
+#include <sysdolphin/baselib/state.h>
+#include <sysdolphin/baselib/tobj.h>
+#include <sysdolphin/baselib/wobj.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -230,12 +228,15 @@ void grIzumi_OnLoad(void)
     HSD_LObj* lobj;
 
 #if BUILD_TARGET_PC
-    if (!HSD_GObj_Entities) {
+    /* The plink head table (upstream's HSD_GObjPLinkHead; HSD_GObj_Entities
+     * before the rename) is still NULL until HSD_GObjLibInit has run, and the
+     * stage's OnLoad can reach here first on the host. */
+    if (HSD_GObjPLinkHead == NULL) {
         return;
     }
 
 #endif /* BUILD_TARGET_PC */
-    gobj = HSD_GObj_Entities->xC;
+    gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_LIGHT];
     while (gobj != NULL) {
         if (HSD_GObjGetClassifier(gobj) == 0xC) {
             lobj = GET_LOBJ(gobj);
@@ -365,7 +366,7 @@ void grIzumi_801CBE64(Ground_GObj* gobj)
     HSD_TObj* tobj;
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
     gp->x11_flags.b012 = 1;
     gp->x10_flags.b5 = 1;
@@ -410,10 +411,10 @@ void grIzumi_801CBE64(Ground_GObj* gobj)
 #endif
     jobj = Ground_801C3FA4(gobj, 4);
     { // this looks like inlines, but there's a lot of small differences
-        u8 _[4] = { 0 };
+        u8 _[4];
         Vec3 x38;
         {
-            u8 _[8] = { 0 };
+            u8 _[8];
         }
         lb_8000B1CC(jobj, NULL, &x38);
         {
@@ -753,7 +754,7 @@ void grIzumi_801CCB18(HSD_GObj* gobj)
 void grIzumi_801CCB90(HSD_GObj* gobj, int renderpass)
 {
     /// @remarks i guess PointSize is an inline? seems odd
-    u8 _[8] = { 0 };
+    u8 _[8];
     HSD_StateSetPointSize(18, 0);
     grDisplay_801C5DB0(gobj, renderpass);
 }
@@ -878,7 +879,7 @@ void grIzumi_801CCEA0(HSD_GObj* gobj, int renderpass)
 {
     Mtx mtx;
     Vec3 vec;
-    u8 _[8] = { 0 };
+    u8 _[8];
     HSD_CObj* src;
     HSD_CObj* dst;
     IzumiReflection* refl = (IzumiReflection*) HSD_GObjGetUserData(gobj);

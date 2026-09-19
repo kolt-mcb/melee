@@ -1,14 +1,12 @@
 #ifndef MELEE_EF_TYPES_H
 #define MELEE_EF_TYPES_H
 
-#include "dolphin/mtx.h"
-#include "dolphin/types.h"
+#include <melee/ef/forward.h> // IWYU pragma: export
+#include <sysdolphin/baselib/forward.h>
 
-#include "ef/forward.h" // IWYU pragma: export
-
-#include "sc/types.h"
-
-#include <baselib/forward.h>
+#include <dolphin/mtx.h>
+#include <dolphin/types.h>
+#include <melee/sc/types.h>
 
 // How efAsync_Spawn resolves position and forwards args to efSync_Spawn.
 // ATTACH = passes jobj directly (effect tracks the joint).
@@ -36,7 +34,7 @@ typedef enum EF_SpawnKind {
         7, // (jobj, &vec)           -> efSync(gfx_id, gobj, jobj, &vec)
     EF_SPAWN_CAMERA_SHAKE =
         8, // (jobj, &ofs)           -> worldpos(jobj, &ofs)             ->
-           // Camera_80030E44(gfx_id, &pos)
+           // Camera_RequestQuake(gfx_id, &pos)
 } EF_SpawnKind;
 
 // 0 = async load (default)

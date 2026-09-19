@@ -1,20 +1,18 @@
-#include "gr/grtest.h"
+#include "grtest.h"
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/forward.h"
-#include "gr/forward.h"
+#include <sysdolphin/baselib/forward.h>
 
-#include "gr/granime.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/types.h"
-
-#include <baselib/gobj.h>
-#include <baselib/jobj.h>
+#include "forward.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "types.h"
 #include <sysdolphin/baselib/controller.h>
 #include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
 
 GrJoint grTe_803E56B8[] = {
     { 0, 2, 1 },   { 1, 2, 2 },   { 2, 2, 3 },   { 3, 2, 4 }, { 4, 2, 5 },
@@ -22,10 +20,17 @@ GrJoint grTe_803E56B8[] = {
     { 10, 2, 11 }, { 12, 2, 16 }, { 13, 2, 17 },
 };
 
+static void stageGObj0_OnInit(Ground_GObj* gobj);
+static void stageGObj2_OnInit(Ground_GObj* gobj);
+static void stageGObj2_X8Callback(HSD_GObj* gobj);
+static void stageGObj1_OnInit(Ground_GObj* gobj);
+
 StageCallbacks grTe_StageCallbacks[] = {
-    { grTest_80207130, grTest_8020715C, grTest_80207164, grTest_80207168, 0 },
-    { grTest_802073D0, grTest_802073FC, grTest_80207404, grTest_80207408, 0 },
-    { grTest_8020716C, grTest_802071BC, grTest_802071C4, grTest_802073AC,
+    { stageGObj0_OnInit, grTest_8020715C, grTest_80207164, grTest_80207168,
+      0 },
+    { stageGObj1_OnInit, grTest_802073FC, grTest_80207404, grTest_80207408,
+      0 },
+    { stageGObj2_OnInit, grTest_802071BC, grTest_802071C4, grTest_802073AC,
       0xC0000000 },
     { 0, 0, 0, 0, 0 }
 };
@@ -60,7 +65,7 @@ void grTest_80206E30(void)
     stage_info.unk8C.b5 = 1;
     grTest_80207044(0);
     gobj = grTest_80207044(2);
-    GET_GROUND(gobj)->x8_callback = grTest_802073B0;
+    GET_GROUND(gobj)->x8_callback = stageGObj2_X8Callback;
     gobj = grTest_80207044(1);
     jobj = GET_JOBJ(gobj);
     HSD_JObjSetScaleX(jobj, 80.0);
@@ -98,10 +103,9 @@ HSD_GObj* grTest_80207044(int gobj_id)
     return gobj;
 }
 
-void grTest_80207130(Ground_GObj* gobj)
+static void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool grTest_8020715C(Ground_GObj* gobj)
@@ -113,9 +117,9 @@ void grTest_80207164(Ground_GObj* gobj) {}
 
 void grTest_80207168(Ground_GObj* gobj) {}
 
-void grTest_8020716C(Ground_GObj* gobj)
+static void stageGObj2_OnInit(Ground_GObj* gobj)
 {
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
 }
 
 bool grTest_802071BC(Ground_GObj* gobj)
@@ -173,15 +177,14 @@ void grTest_802071C4(Ground_GObj* gobj)
 
 void grTest_802073AC(Ground_GObj* gobj) {}
 
-void grTest_802073B0(HSD_GObj* gobj)
+static void stageGObj2_X8Callback(HSD_GObj* gobj)
 {
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
 }
 
-void grTest_802073D0(Ground_GObj* gobj)
+static void stageGObj1_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool grTest_802073FC(Ground_GObj* gobj)
@@ -195,7 +198,7 @@ void grTest_80207408(Ground_GObj* gobj) {}
 
 struct DynamicsDesc* grTest_8020740C(enum_t unused)
 {
-    return false;
+    return NULL;
 }
 
 bool grTest_80207414(Vec3* a, int id, HSD_JObj* jobj)

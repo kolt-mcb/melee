@@ -1,13 +1,13 @@
 #include "ftcolanim.h"
 
-#include "ft/chara/ftCommon/ftCo_HammerWait.h"
-#include "ft/fighter.h"
-#include "ft/ft_0D4D.h"
-#include "ft/ftaction.h"
-#include "ft/ftdata.h"
-#include "gm/gm_1601.h"
-#include "lb/lb_013B.h"
-#include "pl/player.h"
+#include "fighter.h"
+#include "ft_0D4D.h"
+#include "ftaction.h"
+#include "ftdata.h"
+#include "kinds/ftCommon/ftCo_HammerWait.h"
+#include <melee/gm/gm_1601.h>
+#include <melee/lb/lb_013B.h>
+#include <melee/pl/player.h>
 
 #ifdef MUST_MATCH
 #pragma force_active on
@@ -56,7 +56,7 @@ void ftCo_800BFD9C(Fighter_GObj* gobj)
             ftCo_800D4F24(pl_gobj, 1);
         }
     }
-    gm_80167320(fp->player_id, fp->x221F_b4);
+    gm_80167320(fp->player_id, fp->is_sub_fighter);
 }
 
 void ftCo_Sleep_Anim(Fighter_GObj* gobj) {}
@@ -119,7 +119,7 @@ bool ftCo_800BFFD0(Fighter* fp, enum_t arg1, bool arg2)
      * gives the same from MELEE_CODE_BP at 800BFFD0 (r4/r5 are the index and
      * the priority, and the link register names the caller). */
     if (getenv("MELEE_COLANIM") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         struct Fighter_804D653C_t* dbg =
             (arg1 >= 0x7B) ? (Fighter_804D6538 ? &Fighter_804D6538[arg1 - 0x7B]
                                                : NULL)
@@ -128,7 +128,7 @@ bool ftCo_800BFFD0(Fighter* fp, enum_t arg1, bool arg2)
         fprintf(stderr,
                 "[COLANIM] gframe=%u p%d idx=%d pri=%d ret=%p "
                 "script=%p unk4=%u unk5=%u\n",
-                (unsigned) gm_8016AEDC(), (int) fp->player_id, arg1, arg2,
+                (unsigned) gm_GetFrameCount(), (int) fp->player_id, arg1, arg2,
                 __builtin_return_address(0),
                 dbg ? dbg->unk : NULL, dbg ? (unsigned) dbg->unk4 : 0u,
                 dbg ? (unsigned) dbg->unk5 : 0u);
@@ -154,22 +154,17 @@ void ftCo_800C0074(Fighter* fp)
     lb_80014498(&fp->x408);
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#pragma global_optimizer off
-#endif
 void ft_800C0098(Fighter* fp)
 {
     lb_80014498(&fp->x508);
     if (fp->x2226_b4) {
-        s32 arg1 = 0x80;
-        if (arg1 >= 0x7B) {
+        s32 arg1;
+        if ((arg1 = 0x80) >= 0x7B) {
             s32 temp = arg1 - 0x7B;
             lb_800144C8(&fp->x508, Fighter_804D6538, temp, 0);
         } else {
-            Fighter_804D653C_t* entry = &Fighter_804D653C[arg1];
-            if (entry->unk5 != 0) {
+            Fighter_804D653C_t* entry;
+            if ((entry = &Fighter_804D653C[arg1])->unk5 != 0) {
                 lb_800144C8(&fp->x488, Fighter_804D653C, arg1, 0);
             } else {
                 lb_800144C8(&fp->x408, Fighter_804D653C, arg1, 0);
@@ -177,15 +172,7 @@ void ft_800C0098(Fighter* fp)
         }
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma auto_inline off
-#pragma global_optimizer off
-#endif
 void ftCo_800C0134(Fighter* fp)
 {
     lb_80014498(&fp->x488);
@@ -193,13 +180,13 @@ void ftCo_800C0134(Fighter* fp)
         ftData_UnkMotionStates4[fp->kind](fp->gobj);
     }
     if (ftCo_800C53E4(fp) != 0) {
-        s32 arg1 = 0x6A;
-        if (arg1 >= 0x7B) {
+        s32 arg1;
+        if ((arg1 = 0x6A) >= 0x7B) {
             s32 temp = arg1 - 0x7B;
             lb_800144C8(&fp->x508, Fighter_804D6538, temp, 0);
         } else {
-            Fighter_804D653C_t* entry = &Fighter_804D653C[arg1];
-            if (entry->unk5 != 0) {
+            Fighter_804D653C_t* entry;
+            if ((entry = &Fighter_804D653C[arg1])->unk5 != 0) {
                 lb_800144C8(&fp->x488, Fighter_804D653C, arg1, 0);
             } else {
                 lb_800144C8(&fp->x408, Fighter_804D653C, arg1, 0);
@@ -207,9 +194,6 @@ void ftCo_800C0134(Fighter* fp)
         }
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 #ifdef MUST_MATCH
 #pragma push

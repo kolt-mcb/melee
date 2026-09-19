@@ -1,42 +1,37 @@
-#include "vi/vi1201v1.h"
+#include "vi1201v1.h"
+
+#include <sysdolphin/baselib/forward.h>
 
 #include "vi.h"
-
-#include "baselib/forward.h"
-
-#include "cm/camera.h"
-#include "ef/efasync.h"
-#include "ef/eflib.h"
-#include "ef/efsync.h"
-#include "ft/ftdemo.h"
-#include "gm/gm_1601.h"
-#include "gm/gm_unsplit.h"
-#include "gr/ground.h"
-#include "gr/stage.h"
-#include "it/item.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lb_013B.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbshadow.h"
-#include "lb/lbspdisplay.h"
-#include "mn/mnmain.h"
-#include "mp/mpcoll.h"
-#include "pl/player.h"
-#include "sc/types.h"
-#include "ty/toy.h"
-
-#include <baselib/aobj.h>
-#include <baselib/cobj.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/lobj.h>
+#include <melee/ef/efasync.h>
+#include <melee/ef/eflib.h>
+#include <melee/ef/efsync.h>
+#include <melee/ft/ftdemo.h>
+#include <melee/gm/gm_1601.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/gr/inlines.h>
+#include <melee/gr/stage.h>
+#include <melee/it/item.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_013B.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbshadow.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/mn/mnmain.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <melee/ty/toy.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
 
 /* 4D6FE0 */ static SceneDesc* un_804D6FE0;
 /* 4D6FE4 */ static SceneDesc* un_804D6FE4;
@@ -124,7 +119,7 @@ void fn_8031FAA8(HSD_GObj* gobj)
 }
 void fn_8031FB90(HSD_GObj* gobj)
 {
-    char pad[8];
+    PAD_STACK(8);
     if (un_804D7000 != NULL) {
         lbShadow_8000F38C(0);
     }
@@ -150,7 +145,7 @@ void fn_8031FC30(HSD_GObj* gobj)
 void fn_8031FCBC(HSD_GObj* gobj)
 {
     if ((f32) un_804D6FF8 >= 100.0F) {
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
     } else {
         un_804D6FF8 = un_804D6FF8 + 1;
     }
@@ -175,10 +170,7 @@ static inline void un_8031FD18_SetupScene(void)
         lb_80011E24(jobj, &un_804D6FF0, 3, -1);
     }
 
-    Camera_80028B9C(6);
-    lb_8000FCDC();
-    mpColl_80041C78();
-    Ground_801C0378(0x40);
+    Ground_InitScene();
 }
 
 static inline void un_8031FD18_SetupCamera(void)
@@ -187,8 +179,7 @@ static inline void un_8031FD18_SetupCamera(void)
     HSD_CObj* cobj;
 
     camera_gobj = GObj_Create(0x13, 0x14, 0);
-    cobj =
-        lb_80013B14((HSD_CameraDescPerspective*) un_804D6FE0->cameras->desc);
+    cobj = lb_80013B14(&un_804D6FE0->cameras->desc->perspective);
     HSD_GObjObject_80390A70(camera_gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(camera_gobj,
                         (void (*)(HSD_GObj*, int))(Event) fn_8031FB90, 8);
@@ -283,7 +274,7 @@ void vi1201v1_Scene_OnEnter(void* arg)
     HSD_GObj* fog_gobj;
     HSD_LObj* lobj;
     HSD_GObj* light_gobj;
-    char pad[8];
+    PAD_STACK(8);
 
     un_804D6FFC = input[0];
     un_804D6FFD = input[1];

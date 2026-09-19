@@ -1,8 +1,9 @@
 #include "ft_084E.h"
 
 #include <math.h>
-#include <melee/ft/fighter.h>
-#include <melee/ft/ftcommon.h>
+
+#include "fighter.h"
+#include "ftcommon.h"
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -27,14 +28,15 @@ void ft_80084E1C(Fighter_GObj* gobj, float threshold, float drift_max,
         ftCommon_Fall(fp, co_attrs->gravity, co_attrs->terminal_velocity);
     }
 
-    if (ABS(fp->input.lstick.x) >= threshold) {
-        drift = fp->input.lstick.x * drift_max;
-        target_vel = fp->input.lstick.x * target_max;
+    if (ABS(fp->input.lstick[0].x) >= threshold) {
+        drift = fp->input.lstick[0].x * drift_max;
+        target_vel = fp->input.lstick[0].x * target_max;
     } else {
         target_vel = 0.0F;
         drift = 0.0F;
     }
-    ftCommon_8007D140(fp, drift, target_vel, co_attrs->aerial_friction);
+    ftCommon_CalcSelfAccel_AccelToVelClamped(fp, drift, target_vel,
+                                             co_attrs->aerial_friction);
 }
 
 void ft_80084EEC(Fighter_GObj* gobj)
@@ -43,7 +45,7 @@ void ft_80084EEC(Fighter_GObj* gobj)
     ftCo_DatAttrs* co_attrs = getFtAttrs(fp);
 
     ftCommon_Fall(fp, co_attrs->gravity, co_attrs->terminal_velocity);
-    ftCommon_ApplyFrictionAir(fp, co_attrs->aerial_friction);
+    ftCommon_CalcSelfAccel_Deaccel(fp, co_attrs->aerial_friction);
 }
 
 void ft_80084F3C(Fighter_GObj* gobj)
@@ -55,8 +57,8 @@ void ft_80084F3C(Fighter_GObj* gobj)
     if (ABS(fp->gr_vel) > co->walk_max_vel) {
         friction *= p_ftCommonData->friction_when_above_walk_speed;
     }
-    ftCommon_ApplyFrictionGround(fp, friction);
-    ftCommon_ApplyGroundMovement(gobj);
+    ftCommon_CalcGroundAccel_Deaccel(fp, friction);
+    ftCommon_SetSelfMovementFromGroundedMovement(gobj);
 }
 
 void ft_80084FA8(Fighter_GObj* gobj)
@@ -89,9 +91,9 @@ void ft_80085030(Fighter_GObj* gobj, float gr_friction, float facing_dir)
     if (fp->x594_b0) {
         fp->xE4_ground_accel_1 = FA_FMA(fp->x6A4_transNOffset.z, facing_dir, -fp->gr_vel); /* fmsubs */
     } else {
-        ftCommon_ApplyFrictionGround(fp, gr_friction);
+        ftCommon_CalcGroundAccel_Deaccel(fp, gr_friction);
     }
-    ftCommon_ApplyGroundMovement(gobj);
+    ftCommon_SetSelfMovementFromGroundedMovement(gobj);
 }
 
 void ft_80085088(Fighter_GObj* gobj)
@@ -118,9 +120,9 @@ void ft_800850E0(Fighter_GObj* gobj, float arg8, float arg9)
     if (fp->x594_b0) {
         fp->gr_vel = fp->x6A4_transNOffset.z * arg9;
     } else {
-        ftCommon_ApplyFrictionGround(fp, arg8);
+        ftCommon_CalcGroundAccel_Deaccel(fp, arg8);
     }
-    ftCommon_ApplyGroundMovement(gobj);
+    ftCommon_SetSelfMovementFromGroundedMovement(gobj);
 }
 
 void ft_80085134(Fighter_GObj* gobj)

@@ -1,7 +1,7 @@
 #include "gmresult.h"
 
-#include "gm/types.h"
-#include "lb/lb_013B.h"
+#include "types.h"
+#include <melee/lb/lb_013B.h>
 
 #if BUILD_TARGET_PC
 #include "port/log.h"
@@ -68,31 +68,31 @@ union {
     char text[8];
 } lbl_804D3FA8 = { { 0x817C8146, 0x817C0000 } };
 
-extern HSD_Archive* lbl_804D65B8;
+HSD_Archive* lbl_804D65B8;
 
+#include "gm_1601.h"
+#include "gm_1798.h"
 #include "gm_unsplit.h"
 #include "gmresultplayer.h"
-
-#include "baselib/dobj.h"
-#include "baselib/gobj.h"
-#include "baselib/gobjgxlink.h"
-#include "baselib/gobjobject.h"
-#include "baselib/gobjproc.h"
-#include "baselib/jobj.h"
-#include "dolphin/gx/GXStruct.h"
-#include "dolphin/types.h"
-#include "gm/gm_1601.h"
-#include "if/ifcoget.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lblanguage.h"
-#include "lb/lbspdisplay.h"
-#include "lb/lbvector.h"
-#include "mn/inlines.h"
-#include "mn/mnmain.h"
-#include "pl/player.h"
-#include "sc/types.h"
+#include <dolphin/gx/GXStruct.h>
+#include <dolphin/types.h>
+#include <melee/if/ifcoget.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/lb/lbvector.h>
+#include <melee/mn/inlines.h>
+#include <melee/mn/mnmain.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
 
 MatchEnd* fn_80174274(void)
 {
@@ -115,7 +115,7 @@ s32 fn_80174284(u8 slot)
     PAD_STACK(8);
 
     count = 0;
-    if (lbl_8046DBE8.x94->player_standings[slot].slot_type == Gm_PKind_Human) {
+    if (lbl_8046DBE8.x94->player_standings[slot].pkind == Gm_PKind_Human) {
         do_call = true;
     } else {
         do_call = false;
@@ -181,18 +181,13 @@ bool fn_801743C4(s32 slot, StatsEntry* entry)
             return false;
         }
     }
-    if (entry->get == NULL) {
-        goto null_get;
-    }
-    if (entry->get(slot) == 0) {
+    if (entry->get != NULL) {
+        if (entry->get(slot) == 0) {
+            return false;
+        }
+    } else {
         return false;
     }
-    goto return_true;
-
-null_get:
-    return false;
-
-return_true:
     return true;
 }
 
@@ -243,8 +238,7 @@ void fn_80174468(s32 slot, HSD_Text* text1, HSD_Text* text2, HSD_Text* text3,
     } else {
         /// Mode 2: special handling for pairs
         if ((entry_idx & 1) == 1 && entry_idx < list->count) {
-            struct lbl_8046B6A0_24C_44C_t* tmp =
-                (struct lbl_8046B6A0_24C_44C_t*) lbl_8046DBE8.x94->x44C;
+            struct UnkResultPlayerData* tmp = lbl_8046DBE8.x94->x44C;
             loop_n = entry_idx / 2;
             loop_i = 0;
             loop_n++;
@@ -273,8 +267,7 @@ void fn_80174468(s32 slot, HSD_Text* text1, HSD_Text* text2, HSD_Text* text3,
         } else if ((entry_idx & 1) == 0) {
             s32 pair_idx = (entry_idx / 2) - 1;
             if (0 <= pair_idx) {
-                struct lbl_8046B6A0_24C_44C_t* tmp =
-                    (struct lbl_8046B6A0_24C_44C_t*) lbl_8046DBE8.x94->x44C;
+                struct UnkResultPlayerData* tmp = lbl_8046DBE8.x94->x44C;
                 s32 i = gmResultFindNth(tmp[(u8) slot].x0, pair_idx + 1);
                 stat_value = tmp[(u8) slot].x104[i];
                 if (stat_value < 0) {
@@ -325,11 +318,9 @@ void* fn_801748EC(void* list_, s32 mode, s32 idx)
     ResultsStatsInfo* list = list_;
 
     if (mode != 2) {
-        goto loop_start;
-        do {
+        while (list->x0 != mode) {
             list++;
-        loop_start:;
-        } while (list->x0 != mode);
+        }
         return list;
     }
     return &lbl_8046E190[idx];
@@ -663,8 +654,7 @@ GXColor fn_8017507C(s32 slot)
     GXColor color;
 
     if (lbl_8046DBE8.x94->is_teams == 1) {
-        if (lbl_8046DBE8.x94->player_standings[slot].slot_type == Gm_PKind_NA)
-        {
+        if (lbl_8046DBE8.x94->player_standings[slot].pkind == Gm_PKind_NA) {
             color = gm_80160968(4);
         } else {
             switch (lbl_8046DBE8.x94->player_standings[slot].team) {
@@ -749,7 +739,7 @@ void fn_80175240(s32 slot)
         ko_count->pos_z = pos_z;
         lbl_8046DBE8.player_data[slot].ko_count->default_alignment = 1;
         lbl_8046DBE8.player_data[slot].ko_count->default_kerning = 1;
-        if (me->player_standings[slot].slot_type != Gm_PKind_NA) {
+        if (me->player_standings[slot].pkind != Gm_PKind_NA) {
             first_value = fn_8017AE0C(slot);
             if (first_value > 0x3E7) {
                 first_value = 0x3E7;
@@ -837,7 +827,7 @@ void fn_8017556C(s32 slot)
     if (me && me) {
     }
     sp10 = fn_8017507C(slot);
-    if (me->player_standings[slot].slot_type != Gm_PKind_NA) {
+    if (me->player_standings[slot].pkind != Gm_PKind_NA) {
         var_r6 = fn_8017AD28(me->player_standings[slot].score);
         if (var_r6 < 0) {
             if (var_r6 < 0) {
@@ -870,62 +860,60 @@ void fn_8017556C(s32 slot)
                         new_var);
 }
 
+static inline bool matchWasSkipped(MatchEnd* me)
+{
+    if (me->outcome == OUTCOME_NO_CONTEST || me->outcome == OUTCOME_RETRY) {
+        return true;
+    }
+    return false;
+}
+
 void fn_801756E0(s32 slot)
 {
     MatchEnd* me;
-    s32 var_r28;
-    s32 var_r6;
-    GXColor* new_var;
-    s32 skip;
-    GXColor sp10; /* compiler-managed */
-    GXColor spC;
+    s32 line_num;
+    s32 score;
+    GXColor* color_p;
+    GXColor color; /* compiler-managed */
+    GXColor color_copy;
 
     me = lbl_8046DBE8.x94;
     if (me && me) {
     }
-    sp10 = fn_8017507C(slot);
-    if (me->player_standings[slot].slot_type == Gm_PKind_NA) {
-        goto grey_out;
-    }
-    if (me->result == OUTCOME_NO_CONTEST || me->result == OUTCOME_RETRY) {
-        skip = 1;
-    } else {
-        skip = 0;
-    }
-    if (skip != 0) {
-        goto grey_out;
-    }
-    var_r6 = fn_8017AD48(me->player_standings[slot].score);
-    if (var_r6 < 0) {
-        if (var_r6 < 0) {
-            var_r6 = -var_r6;
+    color = fn_8017507C(slot);
+    if (me->player_standings[slot].pkind != Gm_PKind_NA &&
+        !matchWasSkipped(me))
+    {
+        score = fn_8017AD48(me->player_standings[slot].score);
+        if (score < 0) {
+            if (score < 0) {
+                score = -score;
+            }
+            line_num = HSD_SisLib_803A6B98(
+                lbl_8046DBE8.player_data[slot].ko_time, 0.0F, -30.0F, "%s%d",
+                &lbl_804D3FA0, score);
+        } else if (0 < score) {
+            line_num = HSD_SisLib_803A6B98(
+                lbl_8046DBE8.player_data[slot].ko_time, 0.0F, -30.0F, "%s%d",
+                &lbl_804D3FA4, score);
+        } else {
+            line_num =
+                HSD_SisLib_803A6B98(lbl_8046DBE8.player_data[slot].ko_time,
+                                    0.0F, -30.0F, "%d", score);
         }
-        var_r28 =
-            HSD_SisLib_803A6B98(lbl_8046DBE8.player_data[slot].ko_time, 0.0F,
-                                -30.0F, "%s%d", &lbl_804D3FA0, var_r6);
-    } else if (0 < var_r6) {
-        var_r28 =
-            HSD_SisLib_803A6B98(lbl_8046DBE8.player_data[slot].ko_time, 0.0F,
-                                -30.0F, "%s%d", &lbl_804D3FA4, var_r6);
     } else {
-        var_r28 = HSD_SisLib_803A6B98(lbl_8046DBE8.player_data[slot].ko_time,
-                                      0.0F, -30.0F, "%d", var_r6);
+        color.r = 0xA0;
+        color.g = 0xA0;
+        color.b = 0xA0;
+        line_num = HSD_SisLib_803A6B98(lbl_8046DBE8.player_data[slot].ko_time,
+                                       0.0F, -30.0F, "%s", &lbl_804D3FA0);
     }
-    goto end_common;
-
-grey_out:
-    sp10.r = 0xA0;
-    sp10.g = 0xA0;
-    sp10.b = 0xA0;
-    var_r28 = HSD_SisLib_803A6B98(lbl_8046DBE8.player_data[slot].ko_time, 0.0F,
-                                  -30.0F, "%s", &lbl_804D3FA0);
-end_common:
-    HSD_SisLib_803A7548(lbl_8046DBE8.player_data[slot].ko_time, var_r28, 0.08F,
-                        0.08F);
-    spC = sp10;
-    new_var = &spC;
-    HSD_SisLib_803A74F0(lbl_8046DBE8.player_data[slot].ko_time, var_r28,
-                        new_var);
+    HSD_SisLib_803A7548(lbl_8046DBE8.player_data[slot].ko_time, line_num,
+                        0.08F, 0.08F);
+    color_copy = color;
+    color_p = &color_copy;
+    HSD_SisLib_803A74F0(lbl_8046DBE8.player_data[slot].ko_time, line_num,
+                        color_p);
 }
 
 void fn_80175880(s32 slot)
@@ -941,7 +929,7 @@ void fn_80175880(s32 slot)
 
     me = lbl_8046DBE8.x94;
     color = fn_8017507C(slot);
-    if (me->player_standings[slot].slot_type != Gm_PKind_NA) {
+    if (me->player_standings[slot].pkind != Gm_PKind_NA) {
         if (lbl_8046DBE8.x6 == slot ||
             (me->is_teams == 1 &&
              me->team_standings[me->player_standings[slot].team]
@@ -949,7 +937,7 @@ void fn_80175880(s32 slot)
              (me->player_standings[slot].stocks > 0 ||
               (me->player_standings[slot].x28 == me->frame_count &&
                me->player_standings[lbl_8046DBE8.x6].stocks == 0))) ||
-            (gm_WasMatchCanceled(me->result) &&
+            (gm_WasMatchCanceled(me->outcome) &&
              (me->player_standings[slot].stocks > 0 ||
               me->player_standings[slot].score ==
                   me->player_standings[lbl_8046DBE8.x6].score)))
@@ -1028,7 +1016,7 @@ void fn_80175A94(s32 slot, Vec3* position)
         PAD_STACK(4);
         me = fn_80175A94_get_match_end();
         sp14 = fn_8017507C(player);
-        if (me->player_standings[player].slot_type != 3) {
+        if (me->player_standings[player].pkind != 3) {
             slot = HSD_SisLib_803A6B98(new_var->player_data[player].ko_time,
                                        0.0F, -30.0F, "%d",
                                        fn_8017AD78(fn_8017ADA8(player)));
@@ -1158,10 +1146,11 @@ void fn_80175DC8(HSD_GObj* gobj)
     HSD_Text* title_text;
     s32 j;
 
-    PAD_STACK(24);
+    PAD_STACK(20);
 
     data = &lbl_8046DBE8;
     me = data->x94;
+    data_iter = data;
     {
         DynamicModelDesc* model = data->pnlsce->models[0];
         jobj = HSD_JObjLoadJoint(model->joint);
@@ -1181,8 +1170,8 @@ void fn_80175DC8(HSD_GObj* gobj)
     lb_80011E24(jobj, &sp100, 0x69, -1);
     data->x28 = sp100;
 
-    i = 0;
-    jobj_iter = &data->x34[i];
+    jobj_iter = (HSD_JObj**) (data_iter == data ? data_iter : data) + (i = 0);
+    jobj_iter += offsetof(ResultsData, x34) / sizeof(*jobj_iter);
     for (; i < 6; i++, jobj_iter++) {
         lb_80011E24(jobj, jobj_iter, i + 0x62, -1);
     }
@@ -1544,7 +1533,7 @@ void fn_80176A6C(void)
 
 void fn_80176BCC(HSD_GObj* gobj)
 {
-    HSD_JObjAnimAll((HSD_JObj*) gobj->hsd_obj);
+    HSD_JObjAnimAll(GET_JOBJ(gobj));
 }
 
 static inline int fn_80176BF0_inline(u8 arg1)
@@ -1588,7 +1577,7 @@ HSD_JObj* fn_80176BF0(HSD_JObj* arg0, u8 arg1, int arg2)
 
 void fn_80176D18(HSD_GObj* gobj)
 {
-    HSD_JObjAnimAll((HSD_JObj*) gobj->hsd_obj);
+    HSD_JObjAnimAll(GET_JOBJ(gobj));
 }
 
 void fn_80176D3C(Vec3* positions)
@@ -1613,10 +1602,11 @@ void fn_80176D3C(Vec3* positions)
     models[1] = data->flmsce->models[2];
     models[2] = data->flmsce->models[1];
 
-    i = 0;
-    do {
-        if (me_iter->player_standings[0].slot_type == Gm_PKind_NA) {
-            goto loop_end;
+    for (i = 0; i < 4;
+         i++, me_iter = (MatchEnd*) ((MatchPlayerData*) me_iter + 1), pos++)
+    {
+        if (me_iter->player_standings[0].pkind == Gm_PKind_NA) {
+            continue;
         }
 
         if (me->is_teams == 0) {
@@ -1630,10 +1620,10 @@ void fn_80176D3C(Vec3* positions)
             winner = 3;
         }
 
-        if (me->result == OUTCOME_NO_CONTEST) {
+        if (me->outcome == OUTCOME_NO_CONTEST) {
             winner = 1;
         } else if (winner == 0) {
-            goto loop_end;
+            continue;
         }
 
         {
@@ -1653,12 +1643,7 @@ void fn_80176D3C(Vec3* positions)
             HSD_GObj_SetupProc(gobj, fn_80176D18, 1);
             fn_80179F6C(i, gobj);
         }
-
-    loop_end:
-        i++;
-        me_iter = (MatchEnd*) ((MatchPlayerData*) me_iter + 1);
-        pos++;
-    } while (i < 4);
+    }
 }
 
 void fn_80176F60(void)
@@ -1684,11 +1669,11 @@ void fn_80176F60(void)
     lb_8000C0E8(jobj, 0, temp_r27);
     HSD_JObjReqAnimAll(jobj, 0.0F);
     data->x20 = fn_80176BF0(jobj, temp_r30->player_standings[data->x6].ckind,
-                            gm_WasMatchCanceled(temp_r30->result));
+                            gm_WasMatchCanceled(temp_r30->outcome));
     aobj = data->x20->u.dobj->mobj->aobj;
     tmp = gm_80160854(data->x6, Player_GetTeam(data->x6),
                       temp_r30->is_teams == 1,
-                      temp_r30->player_standings[data->x4].slot_type);
+                      temp_r30->player_standings[data->x4].pkind);
     new_var = aobj;
     HSD_AObjSetCurrentFrame(new_var, 1.0F + tmp);
     HSD_AObjSetRate(aobj, 0.0F);
@@ -1729,12 +1714,12 @@ void fn_801771C0(ResultsData* data)
 
     if (me->is_teams == 1) {
         for (i = 0; i < 4; i++) {
-            if (me->player_standings[i].slot_type != Gm_PKind_NA &&
+            if (me->player_standings[i].pkind != Gm_PKind_NA &&
                 me->player_standings[i].team == data->x5)
             {
                 result = i;
                 for (j = 0; j < 4; j++) {
-                    if (me->player_standings[j].slot_type != Gm_PKind_NA &&
+                    if (me->player_standings[j].pkind != Gm_PKind_NA &&
                         me->player_standings[j].team == data->x5 && i != j &&
                         me->player_standings[i].is_small_loser >
                             me->player_standings[j].is_small_loser)
@@ -1825,7 +1810,7 @@ void gm_Scene_Results_OnEnter(void* arg0_)
     lbl_8046DBE8.x0_5 = arg0->x0_1;
 
     match_end = lbl_8046DBE8.x94;
-    if (gm_WasMatchCanceled(lbl_8046DBE8.x94->result)) {
+    if (gm_WasMatchCanceled(lbl_8046DBE8.x94->outcome)) {
         lbl_8046DBE8.num_pages = 2;
     } else {
         lbl_8046DBE8.num_pages = 3;
@@ -1850,9 +1835,9 @@ void gm_Scene_Results_OnEnter(void* arg0_)
         }
     }
     fn_801771C0(&lbl_8046DBE8);
-    if (match_end->player_standings[data->x6].slot_type == Gm_PKind_Human) {
-        if (!gm_WasMatchCanceled(match_end->result) &&
-            match_end->player_standings[data->x6].x3_6)
+    if (match_end->player_standings[data->x6].pkind == Gm_PKind_Human) {
+        if (!gm_WasMatchCanceled(match_end->outcome) &&
+            match_end->player_standings[data->x6].x3_b6)
         {
             lb_80014574(data->x6, 3, 0x20, 0);
         }
@@ -1879,7 +1864,7 @@ void gm_Scene_Results_OnEnter(void* arg0_)
     fn_80176F60();
     fn_8017AA78(&arg0->x1);
     fn_8017A004();
-    if (!gm_WasMatchCanceled(match_end->result)) {
+    if (!gm_WasMatchCanceled(match_end->outcome)) {
         lbAudioAx_80023F28(
             fn_80160400(match_end->player_standings[data->x6].ckind));
     }
@@ -1887,11 +1872,11 @@ void gm_Scene_Results_OnEnter(void* arg0_)
     me_iter = match_end;
     data_iter = data;
     for (i = 0; i < 4; i++) {
-        if (me_iter->player_standings[0].slot_type != Gm_PKind_NA) {
+        if (me_iter->player_standings[0].pkind != Gm_PKind_NA) {
             fn_8017A9B4(i);
             data_iter->player_data[0].fighter_gobj =
                 fn_8017A67C(me_iter->player_standings[0].ckind,
-                            me_iter->player_standings[0].x3, i);
+                            me_iter->player_standings[0].x3_b0, i);
             data_iter->player_data[0].camera = fn_8017A318(i);
         }
         me_iter = (MatchEnd*) ((MatchPlayerData*) me_iter + 1);

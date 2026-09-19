@@ -1,9 +1,9 @@
 #ifndef GALE01_800C7CA0
 #define GALE01_800C7CA0
 
-#include "ft/forward.h"
+#include <melee/ft/forward.h>
 
-#include <baselib/dobj.h>
+#include <sysdolphin/baselib/dobj.h>
 
 extern HSD_MObj* ft_804D6580;
 

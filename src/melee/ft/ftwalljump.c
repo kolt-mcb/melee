@@ -1,17 +1,13 @@
 #include "ftwalljump.h"
 
+#include <Runtime/platform.h>
+
 #include "fighter.h"
-
-#include <platform.h>
-
-#include "ft/types.h"
-
-#include "ftCommon/forward.h"
-
-#include "ftCommon/ftCo_PassiveWall.h"
-#include "mp/mplib.h"
-
+#include "kinds/ftCommon/forward.h"
+#include "kinds/ftCommon/ftCo_PassiveWall.h"
+#include "types.h"
 #include <dolphin/mtx.h>
+#include <melee/mp/mplib.h>
 
 static int const max_input_frames = 254;
 
@@ -100,13 +96,13 @@ bool ftWallJump_8008169C(HSD_GObj* gobj)
                 ((
                      // left wall & control stick right?
                      fp0->x2110_walljumpWallSide == -1 &&
-                     fp0->input.lstick.x >= p_ftCommonData->x76C) ||
+                     fp0->input.lstick[0].x >= p_ftCommonData->x76C) ||
                  (
                      // right wall & control stick left?
                      fp0->x2110_walljumpWallSide == +1 &&
-                     fp0->input.lstick.x <= -p_ftCommonData->x76C)) &&
+                     fp0->input.lstick[0].x <= -p_ftCommonData->x76C)) &&
                 // control stick didn't stay too long in the tilt area?
-                fp0->x670_timer_lstick_tilt_x < p_ftCommonData->x770)
+                fp0->active_timer.lstick.x < p_ftCommonData->x770)
             {
                 // do a walljump!
                 ftCo_800C1E64(gobj, ftCo_MS_PassiveWallJump,

@@ -1,13 +1,26 @@
 #include "mnstagesel.h"
 
+#if BUILD_TARGET_PC
+/* getenv/fprintf for the MELEE_* diagnostics below; the PC include block
+ * further down comes after the first of them. */
+#include <stdio.h>
+#include <stdlib.h>
+#endif
+
+#include <placeholder.h>
+
 #include "inlines.h"
-
+#include "mnmain.h"
 #include "mnstagesel.static.h"
-
-#include "placeholder.h"
-
-#include "lb/lb_013B.h"
-
+#include <melee/gm/gm_unsplit.h>
+#include <melee/gm/gmmain_lib.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_013B.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbdvd.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/types.h>
 #include <sysdolphin/baselib/controller.h>
 #include <sysdolphin/baselib/fog.h>
 #include <sysdolphin/baselib/gobj.h>
@@ -20,15 +33,6 @@
 #include <sysdolphin/baselib/lobj.h>
 #include <sysdolphin/baselib/memory.h>
 #include <sysdolphin/baselib/random.h>
-#include <melee/gm/gm_unsplit.h>
-#include <melee/gm/gmmain_lib.h>
-#include <melee/lb/lb_00B0.h>
-#include <melee/lb/lbarchive.h>
-#include <melee/lb/lbaudio_ax.h>
-#include <melee/lb/lbdvd.h>
-#include <melee/lb/lblanguage.h>
-#include <melee/lb/types.h>
-#include <melee/mn/mnmain.h>
 
 /// @todo .sdata2 order hack
 #ifdef MUST_MATCH
@@ -183,7 +187,7 @@ void fn_80259D84(HSD_GObj* gobj)
         break;
     case 2:
         if (++temp_r31->x4 > 0xAU) {
-            HSD_GObjPLink_80390228(gobj);
+            HSD_GObjFree(gobj);
             temp_r31->x2++;
         }
         break;
@@ -351,7 +355,7 @@ void fn_8025A310(HSD_GObj* gobj)
                 fprintf(stderr,
                         "[SSS] PANEL %d kind=%d x8=%d at (%.3f,%.3f) "
                         "half=(%.2f,%.2f)\n",
-                        i, (int) mnStageSel_803F06D0[i].xB,
+                        i, (int) mnStageSel_803F06D0[i].stkind,
                         (int) mnStageSel_803F06D0[i].x8, (double) pp.x,
                         (double) pp.y, (double) mnStageSel_803F06D0[i].xC,
                         (double) mnStageSel_803F06D0[i].x10);
@@ -381,7 +385,7 @@ void fn_8025A310(HSD_GObj* gobj)
                                 "[SSS] cursor=(%.2f,%.2f) -> panel %d kind=%d "
                                 "at (%.2f,%.2f) half=(%.2f,%.2f) x8=%d\n",
                                 (double) sp1C.x, (double) sp1C.y, i,
-                                (int) mnStageSel_803F06D0[i].xB,
+                                (int) mnStageSel_803F06D0[i].stkind,
                                 (double) sp10.x, (double) sp10.y,
                                 (double) temp_f1,
                                 (double) mnStageSel_803F06D0[i].x10,
@@ -778,7 +782,7 @@ void mnStageSel_Scene_OnEnter(void* arg0)
 #endif
         for (i = 0; i < 0x1D; i++) {
             mnStageSel_803F06D0[i].x8 =
-                gm_80164430(mnStageSel_803F06D0[i].xB) ? 2 : 1;
+                gm_80164430(mnStageSel_803F06D0[i].stkind) ? 2 : 1;
         }
 
         for (i = 0; i <= 0xA; i++) {
@@ -1022,7 +1026,7 @@ void mnStageSel_Scene_OnFrame(void)
     if (sss_data->no_lras == 0 && mn_8022F218()) {
         sfxBack();
         lb_800145F4();
-        HSD_GObjPLink_80390228(mnStageSel_804D6C9C);
+        HSD_GObjFree(mnStageSel_804D6C9C);
         mn_8022F268();
         gm_ChangeGameModeAfterCurrentScene(GM_MENU);
         gm_801A4B60();
@@ -1077,12 +1081,12 @@ void mnStageSel_Scene_OnFrame(void)
     }
     if (mnStageSel_804D6CAF == 2) {
         sss_data->vs.start.rules.stkind =
-            mnStageSel_803F06D0[mnStageSel_804D6CAE].xB;
+            mnStageSel_803F06D0[mnStageSel_804D6CAE].stkind;
 #if BUILD_TARGET_PC
         if (getenv("MELEE_SSSLOG") != NULL) {
             fprintf(stderr, "[SSS] commit panel %d -> stage kind %d\n",
                     (int) mnStageSel_804D6CAE,
-                    (int) mnStageSel_803F06D0[mnStageSel_804D6CAE].xB);
+                    (int) mnStageSel_803F06D0[mnStageSel_804D6CAE].stkind);
         }
 #endif
         gm_801A4B60();
@@ -1106,12 +1110,12 @@ void mnStageSel_Scene_OnExit(UNUSED void* exit_data)
     }
 }
 
-int mnStageSel_8025BBD4(void)
+int mnSelStageRandom(void)
 {
-    return mnStageSel_803F06D0[mnStageSel_802599EC()].xB;
+    return mnStageSel_803F06D0[mnStageSel_802599EC()].stkind;
 }
 
 int mnStageSel_8025BC08(int idx)
 {
-    return mnStageSel_803F06D0[idx].xB;
+    return mnStageSel_803F06D0[idx].stkind;
 }

@@ -1,19 +1,22 @@
 #ifndef GALE01_041C78
 #define GALE01_041C78
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "ft/forward.h"
-#include "ftCommon/forward.h"
-#include "mp/forward.h"
-#include <baselib/forward.h>
+#include <melee/ft/forward.h>
+#include <melee/ft/kinds/ftCommon/forward.h>
+#include <melee/mp/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
 
 /* 041C78 */ void mpColl_80041C78(void);
 /* 041C8C */ void mpCollPrev(CollData* cd);
 /* 041DD0 */ void mpCollCheckBounding(CollData* cd, u32 flags);
+
+/// "Coll_InitECB"
 /* 041EE4 */ void mpColl_80041EE4(CollData*);
+
 /* 042078 */ void mpColl_SetECBSource_JObj(CollData* cd, HSD_GObj* gobj,
                                            HSD_JObj*, HSD_JObj*, HSD_JObj*,
                                            HSD_JObj*, HSD_JObj*, HSD_JObj*,

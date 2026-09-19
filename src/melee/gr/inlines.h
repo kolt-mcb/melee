@@ -5,23 +5,27 @@
 #define M_TAU 6.283185307179586f
 #endif
 
-#include "gr/granime.h"
-#include "gr/grcorneria.h"
-#include "gr/grdisplay.h"
-#include "gr/ground.h"
-#include "gr/types.h"
-#include "if/ifcoget.h"
-#include "if/ifstatus.h"
-#include "lb/lb_00B0.h"
-
-#include <baselib/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <math.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
+
+#include <melee/cm/camera.h>
+#include <melee/gr/granime.h>
+#include <melee/gr/grcorneria.h>
+#include <melee/gr/grdisplay.h>
+#include <melee/gr/ground.h>
+#include <melee/gr/stage.h>
+#include <melee/gr/types.h>
+#include <melee/if/ifcoget.h>
+#include <melee/if/ifstatus.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/mp/mpcoll.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/random.h>
 
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
@@ -29,12 +33,30 @@
 
 #define GET_GROUND(gobj) ((Ground*) HSD_GObjGetUserData(gobj))
 
-static inline void Ground_JObjInline1(Ground_GObj* gobj)
+/// Resets the map's model to its base pose and starts its animation set 0
+/// from frame 0.
+static inline void Ground_StartMapAnim(Ground_GObj* gobj)
+{
+    Ground* gp = GET_GROUND(gobj);
+    grAnime_801C8138(gobj, gp->map_id, 0);
+}
+
+/// Binds the map's collision joints to its model, then starts animation set
+/// 0 from frame 0.
+static inline void Ground_InitMapCollAndAnim(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
+}
+
+/// Advances the dynamics wind/force list, then re-syncs the map's collision
+/// joints to its animated model.
+static inline void Ground_UpdateWindAndMapColl(Ground_GObj* gobj)
+{
+    lb_800115F4();
+    Ground_UpdateMapColl(gobj);
 }
 
 /// @todo Call sites have a lot of duplicate code
@@ -86,6 +108,20 @@ static inline void Ground_SetupStageCallbacks(Ground_GObj* gobj,
         HSD_GObj_SetupProc(gobj, callbacks->gobj_proc, 4);
     }
 #endif
+}
+
+static inline void Ground_InitScene(void)
+{
+    Camera_Init(6);
+    lb_8000FCDC();
+    mpColl_80041C78();
+    Ground_801C0378(0x40);
+}
+
+static inline void Stage_InitScene(StKind stkind, s32* arg1)
+{
+    Ground_InitScene();
+    Stage_802251E8(stkind, arg1);
 }
 
 static inline void Ground_InitTargetStage(HSD_GObj* (*create_gobj)(int) )

@@ -1,9 +1,9 @@
 #ifndef MELEE_GM_ALLSTAR_H
 #define MELEE_GM_ALLSTAR_H
 
-#include <melee/gm/forward.h>
+#include <melee/gm/types.h>
 
-/* 1B5324 */ void gm_801B5324(UnkAllstarData*, u8);
+/* 1B5324 */ void gm_801B5324(UnkAllstarData*, s32);
 /* 1B5624 */ void gm_801B5624(GameModeState*);
 /* 1B59AC */ void gm_801B59AC(GameModeState*);
 /* 1B5AA8 */ void fn_801B5AA8(int);
@@ -16,5 +16,7 @@
 /* 1B607C */ void gm_801B607C(GameModeState*);
 /* 1B60A4 */ void gm_Mode_AllStar_OnLoad(void);
 /* 1B62D8 */ void gm_Mode_AllStar_OnInit(void);
+
+/* 3DE930 */ extern GameModeState gm_Mode_AllStar_States[];
 
 #endif

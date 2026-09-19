@@ -6,39 +6,37 @@
 #include "gmmovieend.h"
 
 #include "gm_unsplit.h"
+#include "gmmain_lib.h"
 #include "gmopening.h"
-
-#include "dolphin/pad.h"
-#include "gm/gmmain_lib.h"
-#include "gm/types.h"
-#include "if/ifcoget.h"
-#include "if/textlib.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbmthp.h"
-
+#include "types.h"
+#include <dolphin/pad.h>
+#include <melee/if/ifcoget.h>
+#include <melee/if/textlib.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbmthp.h>
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/gobjgxlink.h>
 #include <sysdolphin/baselib/gobjobject.h>
 #include <sysdolphin/baselib/sobjlib.h>
 
-void gm_ModeState_ExitApproachVs(GameModeState* arg0)
+void gm_ModeState_ApproachVs_OnExit(GameModeState* arg0)
 {
     u8 temp_ret;
     u8 temp_r0;
     MatchExitInfo* temp_r30;
-    lbl_8046DBD8_t* temp_r31;
+    ChallengerData* temp_r31;
 
     temp_r30 = gm_GetGameModeStateExitData(arg0);
     temp_r31 = gm_GetChallengerData();
     gm_80162968(temp_r30->match_end.frame_count / 60);
     gm_8016247C(temp_r30->match_end.player_standings[0].xE);
-    temp_r0 = temp_r30->match_end.result;
+    temp_r0 = temp_r30->match_end.outcome;
     if (temp_r0 != OUTCOME_NO_CONTEST && temp_r0 != OUTCOME_RETRY &&
         temp_r30->match_end.player_standings[0].stocks != 0)
     {
-        gm_UnlockCKind(temp_r31->x4);
+        gm_UnlockCKind(temp_r31->cpu_ckind);
     } else {
-        temp_ret = gm_CKindToUnlockIndex(temp_r31->x4);
+        temp_ret = gm_CKindToUnlockIndex(temp_r31->cpu_ckind);
         gmMainLib_8015DB2C(temp_ret);
     }
     gm_80173EEC();
@@ -48,7 +46,7 @@ void gm_ModeState_ExitApproachVs(GameModeState* arg0)
     }
 }
 
-void gm_801A6308(GameModeState* arg0)
+void gm_ModeState_Prize_OnExit(GameModeState* arg0)
 {
     gm_SetNextGameModeStateId(0);
 }

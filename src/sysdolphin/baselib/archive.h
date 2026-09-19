@@ -1,10 +1,10 @@
 #ifndef _archive_h_
 #define _archive_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 #include <stddef.h>
 
-#include "baselib/forward.h" // IWYU pragma: export
+#include <sysdolphin/baselib/forward.h> // IWYU pragma: export
 
 #define HSD_ARCHIVE_DONT_FREE 1
 

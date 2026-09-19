@@ -1,11 +1,9 @@
 #ifndef GALE01_20B864
 #define GALE01_20B864
 
-#include <placeholder.h>
-
-#include "gr/forward.h"
-#include "lb/forward.h"
-#include "sc/forward.h"
+#include <melee/gr/forward.h>
+#include <melee/lb/forward.h>
+#include <melee/sc/forward.h>
 
 #include <dolphin/mtx.h>
 
@@ -43,7 +41,7 @@
 /* 20DAB4 */ void grBigBlueRoute_8020DAB4(HSD_JObj**, float, int);
 /* 20DD64 */ f32 grBigBlueRoute_8020DD64(Vec3*);
 /* 20DE48 */ DynamicModelDesc* grBigBlueRoute_8020DE48(void);
-/* 20DEAC */ UNK_RET fn_8020DEAC(UNK_PARAMS);
+/* 20DEAC */ void fn_8020DEAC(void);
 /* 20DED4 */ void grBigBlueRoute_8020DED4(Vec3*);
 /* 20DF78 */ DynamicsDesc* grBigBlueRoute_8020DF78(enum_t);
 /* 20DF80 */ bool grBigBlueRoute_8020DF80(Vec3*, int arg, HSD_JObj* jobj);

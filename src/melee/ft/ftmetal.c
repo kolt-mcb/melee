@@ -1,15 +1,15 @@
 #include "ftmetal.h"
 
-#include <sysdolphin/baselib/id.h>
-#include <melee/ft/fighter.h>
-#include <melee/ft/ft_081B.h>
-#include <melee/ft/ftanim.h>
-#include <melee/ft/ftchangeparam.h>
-#include <melee/ft/ftcommon.h>
-#include <melee/ft/ftmaterial.h>
-#include <melee/ft/ftparts.h>
-#include <melee/ft/types.h>
+#include "fighter.h"
+#include "ft_081B.h"
+#include "ftanim.h"
+#include "ftchangeparam.h"
+#include "ftcommon.h"
+#include "ftmaterial.h"
+#include "ftparts.h"
+#include "types.h"
 #include <melee/lb/lb_00B0.h>
+#include <sysdolphin/baselib/id.h>
 
 void ft_800C8170(Fighter* fp)
 {
@@ -172,7 +172,8 @@ void ft_800C85B8(Fighter_GObj* gobj)
         if (ftParts_8007506C(fp->kind, joint_idx) != 0) {
             joint_idx++;
         } else {
-            HSD_IDInsertToTable(NULL, (u32) sp20, fp->parts[joint_idx].joint);
+            HSD_IDInsertToTable(NULL, (HSD_IDKey) sp20,
+                                fp->parts[joint_idx].joint);
             joint_idx++;
             ftAnim_GetNextJointInTree(&sp20, &sp1C);
         }

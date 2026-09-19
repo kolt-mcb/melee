@@ -6,10 +6,10 @@
 #ifndef GALE01_020AEC
 #define GALE01_020AEC
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "ft/forward.h"
-#include <baselib/forward.h>
+#include <melee/ft/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
 

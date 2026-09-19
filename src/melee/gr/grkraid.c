@@ -1,17 +1,13 @@
 #include "grkraid.h"
 
-#include "cm/camera.h"
-#include "ft/ftlib.h"
-
-#include "gr/forward.h"
-
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-
-#include <baselib/controller.h>
-#include <baselib/random.h>
+#include "forward.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include <melee/cm/camera.h>
+#include <melee/ft/ftlib.h>
+#include <melee/lb/lb_00B0.h>
+#include <sysdolphin/baselib/controller.h>
+#include <sysdolphin/baselib/random.h>
 
 struct grKraid_YakumonoParam {
     u32 map_time_min;
@@ -27,8 +23,10 @@ struct grKraid_YakumonoParam {
 GrJoint grKr_803E4C78[] = { { 0, 3, 12 }, { 1, 3, 12 }, { 2, 3, 12 },
                             { 3, 3, 12 }, { 4, 3, 12 }, { 5, 3, 12 } };
 
+static void stageGObj0_OnInit(Ground_GObj* gobj);
+
 StageCallbacks grKr_StageCallbacks[5] = {
-    { grKraid_801FE1B0, grKraid_801FE1DC, grKraid_801FE1E4, grKraid_801FE1E8,
+    { stageGObj0_OnInit, grKraid_801FE1DC, grKraid_801FE1E4, grKraid_801FE1E8,
       0 },
     { grKraid_801FE1EC, grKraid_801FE2C8, grKraid_801FE2D0, grKraid_801FE35C,
       0 },
@@ -110,10 +108,9 @@ HSD_GObj* grKraid_801FE0C4(int gobj_id)
     return gobj;
 }
 
-void grKraid_801FE1B0(Ground_GObj* gobj)
+static void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool grKraid_801FE1DC(Ground_GObj* gobj)
@@ -192,7 +189,7 @@ void grKraid_801FE3B4(Ground_GObj* gobj)
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
 
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
     gp->u.kraid.x0 = 0;
     gp->u.kraid.x4 = 0.0f;
     gp->u.kraid.x8 = 0.0f;
@@ -248,7 +245,7 @@ void grKraid_801FE440(Ground_GObj* gobj)
         } else {
             fVar3 = fVar3 * (3.14159265f / 180);
             HSD_JObjAddRotationZ(jobj, fVar3);
-            Camera_80030E44(1, &pos);
+            Camera_RequestQuake(QuakeKind_Loop, &pos);
         }
         break;
     }
@@ -256,8 +253,7 @@ void grKraid_801FE440(Ground_GObj* gobj)
         grAnime_801C7FF8(gobj, 18, 7, 0, 0.0f, 1.0f);
         gp->u.kraid.x1 = 0;
     }
-    lb_800115F4();
-    Ground_801C2FE0(gobj);
+    Ground_UpdateWindAndMapColl(gobj);
     grKraid_801FF150(gobj);
 }
 
@@ -292,7 +288,7 @@ void grKraid_801FE6D8(HSD_JObj* hand, float param2)
         map->u.kraid.x8 = map->u.kraid.x8 * map->u.kraid.x4;
         map->u.kraid.xC = map->u.kraid.x8 / yakumono_param->map_time_acl;
         Ground_801C53EC(420005);
-        Camera_80030E44(3, &handpos);
+        Camera_RequestQuake(QuakeKind_Medium, &handpos);
     }
 }
 
@@ -573,7 +569,7 @@ void grKraid_801FF150(Ground_GObj* gobj) {}
 
 DynamicsDesc* grKraid_OnTouchLine(enum_t unused)
 {
-    return false;
+    return NULL;
 }
 
 bool grKraid_OnCheckShadowRender(Vec3* a, int _, HSD_JObj* joint)

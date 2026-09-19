@@ -1,31 +1,30 @@
-#include "placeholder.h"
-#include "platform.h"
-
-#include "baselib/debug.h"
-#include "baselib/gobj.h"
-#include "baselib/gobjgxlink.h"
-#include "baselib/gobjobject.h"
-#include "baselib/gobjplink.h"
-#include "baselib/gobjproc.h"
-#include "baselib/gobjuserdata.h"
-#include "baselib/jobj.h"
-#include "baselib/memory.h"
-#include "baselib/sislib.h"
-#include "gm/gm_1A3F.h"
-#include "gm/gmmain_lib.h"
-#include "gm/types.h"
-#include "lb/lbspdisplay.h"
-
-#include "mn/forward.h"
-
-#include "mn/inlines.h"
-#include "mn/mnmain.h"
-#include "mn/mnmainrule.h"
-#include "mn/mnstagesw.h"
-#include "mn/types.h"
-#include "sc/types.h"
+#include <Runtime/platform.h>
 
 #include <sysdolphin/baselib/forward.h>
+
+#include <placeholder.h>
+
+#include "forward.h"
+#include "inlines.h"
+#include "mnmain.h"
+#include "mnmainrule.h"
+#include "mnstagesw.h"
+#include "types.h"
+#include <melee/gm/gm_1A3F.h>
+#include <melee/gm/gmmain_lib.h>
+#include <melee/gm/types.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/sislib.h>
 
 extern StaticModelDesc MenMainConRl_Top;
 extern StaticModelDesc MenMainCursorRl_Top;
@@ -35,8 +34,8 @@ extern StaticModelDesc MenMainCursorTr03_Top;
 extern StaticModelDesc MenMainCursorTr04_Top;
 extern StaticModelDesc MenMainNmRl_Top;
 extern MenuKindData mn_803EB6B0[];
-HSD_GObj* mn_804D6BE0;
 f32 mn_804D6BE4;
+HSD_GObj* mn_804D6BE0;
 
 typedef struct _MenuRulesPlusData {
     MenuKind8 menu_kind;
@@ -122,17 +121,6 @@ typedef union {
 /// is disabled. Retail mn_802324E4 loads this TU-owned .sdata variable
 /// (see symbols.txt) instead of materializing an .sdata2 constant.
 f32 mnRulePlus_TimeLimitOffFrame = 1.0f;
-volatile const f64 mn_804DBE38 = 4503599627370496.0;
-const JObjIndices mn_804DBE40 = { 0x02030506 };
-volatile const f32 mn_804DBE44[1] = { 0.0f };
-const JObjIndices mn_804DBE48 = { 0x02030506 };
-const f32 mn_804DBE4C = -9.5f;
-const f32 mn_804DBE50 = 8.0f;
-const f32 mn_804DBE54 = 17.0f;
-const f32 mn_804DBE58 = 364.68332f;
-const f32 mn_804DBE5C = 76.77544f;
-const f32 mn_804DBE60 = 0.0521f;
-volatile const f64 mn_804DBE68 = 4503601774854144.0;
 
 static inline void SisLib_ClearText(HSD_Text** text)
 {
@@ -200,7 +188,7 @@ void fn_8023201C(HSD_GObj* gobj)
             mnRulePlus_SaveRules();
             mn_804D6BC8.cooldown = 5;
             mnStageSw_80237410();
-            HSD_GObjPLink_80390228(gobj);
+            HSD_GObjFree(gobj);
         }
     } else if (buttons & 0x100) {
         /// Start button: accept all rules and proceed
@@ -221,7 +209,7 @@ void fn_8023201C(HSD_GObj* gobj)
         mnRulePlus_SaveRules();
         mn_804D6BC8.cooldown = 5;
         mn_8023164C();
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
         return;
     } else if (buttons & 1) {
         /// D-Pad Up: move selection up (with wrap)
@@ -295,7 +283,9 @@ AnimLoopSettings* mn_80232458(u8 option, u8 value, u8 direction)
     return &mn_803ED294[count - value];
 }
 
-static inline void mnRulePlus_AnimTimeDigits(u8 value, HSD_JObj** jobjs)
+/* Automatic inlining preserves the constant-pool order around the digit index
+ * tables below. */
+static void mnRulePlus_AnimTimeDigits(u8 value, HSD_JObj** jobjs)
 {
     HSD_JObj* jobj;
     jobj = jobjs[2];
@@ -306,7 +296,9 @@ static inline void mnRulePlus_AnimTimeDigits(u8 value, HSD_JObj** jobjs)
     HSD_JObjAnimAll(jobj);
 }
 
-static inline void mnRulePlus_AnimZeros(HSD_JObj** jobjs)
+const JObjIndices mn_804DBE40 = { 0x02030506 };
+
+static void mnRulePlus_AnimZeros(HSD_JObj** jobjs)
 {
     HSD_JObj* jobj1;
     HSD_JObj* jobj2;
@@ -355,36 +347,9 @@ void mn_802324E4(u8 time_limit, MenuRulesPlusData* data)
     mnRulePlus_AnimZeros(jobjs);
 }
 
-static inline void mn_80232660_inline(HSD_JObj* jobj)
-{
-    AnimLoopSettings* settings;
-    AnimLoopSettings* p294;
-    AnimLoopSettings* p270;
-    f32 frame;
-    s32 i;
-
-    frame = mn_8022F298(jobj);
-
-    p294 = mn_803ED294;
-    p270 = mn_803ED270;
-
-    for (i = 0; i < 3; i++) {
-        settings = p294;
-        if (p294->start_frame <= frame && frame <= p294->end_frame) {
-            break;
-        }
-        settings = p270;
-        if (p270->start_frame <= frame && frame <= p270->end_frame) {
-            break;
-        }
-        p294++;
-        p270++;
-    }
-    mn_8022ED6C(jobj, settings);
-}
-
 void mn_80232660(HSD_GObj* gobj, HSD_JObj* jobj, u8 option)
 {
+    f32 frame;
     PAD_STACK(8);
 
     switch (option) {
@@ -392,7 +357,26 @@ void mn_80232660(HSD_GObj* gobj, HSD_JObj* jobj, u8 option)
     case 2:
     case 3:
     case 4:
-        mn_80232660_inline(jobj);
+        frame = mn_8022F298(jobj);
+        {
+            AnimLoopSettings* settings;
+            s32 i;
+            for (i = 0; i < 3; i++) {
+                settings = &mn_803ED294[i];
+                if (settings->start_frame <= frame &&
+                    frame <= settings->end_frame)
+                {
+                    break;
+                }
+                settings = &mn_803ED270[i];
+                if (settings->start_frame <= frame &&
+                    frame <= settings->end_frame)
+                {
+                    break;
+                }
+            }
+            mn_8022ED6C(jobj, settings);
+        }
     case 0:
         return;
     case 5:
@@ -400,41 +384,29 @@ void mn_80232660(HSD_GObj* gobj, HSD_JObj* jobj, u8 option)
     }
 }
 
-#ifdef MUST_MATCH
-#pragma dont_inline on
-#endif
-void mn_802327A4(HSD_GObj* gobj, u32 arg1, u32 arg2)
+static inline void mn_802327A4_InitOptionRoots(HSD_JObj** option_roots,
+                                               mn_803ED1D0_t* rule_data,
+                                               MenuRulesPlusData* data,
+                                               u8 num_options, s32* i)
 {
-    UNUSED u8 pad[8];
-    HSD_JObj* option_roots[6];
-    HSD_JObj* jobj_parts[17];
-    u16 jobj_map[17];
-    mn_803ED1D0_t* rule_data = &mn_803ED1D0;
-    u8 num_options = mn_803EB6B0[15].selection_count;
-    MenuRulesPlusData* data = gobj->user_data;
     HSD_JObj** option_root;
-    s32 i;
+    u8 j8;
+    register s32 j;
     s32 visible;
-    u16 selected;
-    PAD_STACK(4);
-
-    for (i = 0; 17 > i; i++) {
-        jobj_map[i] = (u16) i;
-    }
 
     option_root = option_roots;
-    for (i = 0; i < (s32) num_options; option_root++, i++) {
+    for (*i = 0; *i < (s32) num_options; option_root++, (*i)++) {
         s32 valid;
 
-        if (gm_GetCurrentGameMode() == GM_TOURNAMENT && (u8) i == 1) {
+        if (gm_GetCurrentGameMode() == GM_TOURNAMENT && (u8) *i == 1) {
             valid = 0;
-        } else if ((u8) i == 3) {
+        } else if ((u8) *i == 3) {
             if (gmMainLib_8015EE0C() != 0) {
                 valid = 1;
             } else {
                 valid = 0;
             }
-        } else if ((u8) i == 5) {
+        } else if ((u8) *i == 5) {
             if (gmMainLib_8015EE44() != 0) {
                 valid = 1;
             } else {
@@ -444,28 +416,94 @@ void mn_802327A4(HSD_GObj* gobj, u32 arg1, u32 arg2)
             valid = 1;
         }
         if (valid) {
-            s32 j;
+            HSD_JObj* child;
+            HSD_JObj* root;
 
-            visible = valid - 1;
+            visible = 0;
             j = visible;
-            for (; j < (s32) (u8) i; j++) {
-                u8 j8 = j;
+            for (; j < (s32) (u8) *i; j++) {
+                j8 = j;
                 if (mn_80231F80(j8) != 0) {
                     visible++;
                 }
             }
-            {
-                HSD_JObj* child;
-                HSD_JObj* root = data->xC[rule_data->x0[(u8) visible]];
-                if (root == NULL) {
-                    child = NULL;
+            root = data->xC[rule_data->x0[(u8) visible]];
+            if (root == NULL) {
+                child = NULL;
+            } else {
+                child = root->child;
+            }
+            *option_root = child;
+        }
+    }
+}
+
+static inline void mn_802327A4_UpdateOption(MenuRulesPlusData* data,
+                                            HSD_GObj* gobj, u32 arg2, u32 arg1,
+                                            u16* selected)
+{
+    if ((s32) arg2 != 0) {
+        u16 hovered;
+        MenuRulesPlusData* data2 = gobj->user_data;
+        hovered = mn_804A04F0.hovered_selection;
+        {
+            u8 hovered_u8 = hovered;
+            u8 confirmed = mn_804A04F0.confirmed_selection;
+            HSD_JObj* tree = data->x34[hovered][0];
+            switch ((s32) hovered_u8) {
+            case 0:
+                mn_802324E4(confirmed, data2);
+                break;
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+                if (mn_804A04F0.buttons & 4) {
+                    HSD_JObjReqAnimAll(
+                        tree,
+                        mn_80232458(hovered_u8, confirmed, 0)->start_frame);
                 } else {
-                    child = root->child;
+                    HSD_JObjReqAnimAll(
+                        tree,
+                        mn_80232458(hovered_u8, confirmed, 1)->start_frame);
                 }
-                *option_root = child;
+                HSD_JObjAnimAll(tree);
+                break;
+            case 5:
+            default:
+                break;
             }
         }
     }
+
+    if ((s32) arg1 != 0) {
+        *selected = mn_804A04F0.hovered_selection;
+    } else {
+        *selected = (u16) data->hovered_selection;
+    }
+}
+
+void mn_802327A4(HSD_GObj* gobj, u32 arg1, u32 arg2)
+{
+    UNUSED u8 pad[4];
+    HSD_JObj* option_roots[6];
+    HSD_JObj* jobj_parts[17];
+    u16 jobj_map[17];
+    mn_803ED1D0_t* rule_data = &mn_803ED1D0;
+    u8 num_options = mn_803EB6B0[15].selection_count;
+    MenuRulesPlusData* data = gobj->user_data;
+    HSD_JObj* part;
+    s32 i;
+    s32 visible;
+    u16 selected;
+    PAD_STACK(8);
+
+    for (i = 0; 17 > i; i++) {
+        jobj_map[i] = (u16) i;
+    }
+
+    mn_802327A4_InitOptionRoots(option_roots, rule_data, data, num_options,
+                                &i);
 
     if ((s32) arg1 != 0) {
         u8 new_sel;
@@ -473,15 +511,13 @@ void mn_802327A4(HSD_GObj* gobj, u32 arg1, u32 arg2)
         lb_8001204C(option_roots[selected], jobj_parts, jobj_map, 17);
         HSD_JObjSetFlagsAll(jobj_parts[16], JOBJ_HIDDEN);
         HSD_JObjSetFlagsAll(jobj_parts[13], JOBJ_HIDDEN);
-        {
-            HSD_JObj* part = jobj_parts[2];
-            if (selected == 5) {
-                HSD_JObjReqAnimAll(part, rule_data->x7C[0].start_frame);
-            } else {
-                HSD_JObjReqAnimAll(part, rule_data->x64[0].start_frame);
-            }
-            HSD_JObjAnimAll(part);
+        part = jobj_parts[2];
+        if (selected == 5) {
+            HSD_JObjReqAnimAll(part, rule_data->x7C[0].start_frame);
+        } else {
+            HSD_JObjReqAnimAll(part, rule_data->x64[0].start_frame);
         }
+        HSD_JObjAnimAll(part);
         {
             HSD_JObj* part = jobj_parts[7];
             HSD_JObjReqAnim(part, rule_data->text_start_frames[selected * 2]);
@@ -523,45 +559,7 @@ void mn_802327A4(HSD_GObj* gobj, u32 arg1, u32 arg2)
         }
     }
 
-    if ((s32) arg2 != 0) {
-        u16 hovered;
-        MenuRulesPlusData* data2 = gobj->user_data;
-        hovered = mn_804A04F0.hovered_selection;
-        {
-            u8 hovered_u8 = hovered;
-            u8 confirmed = mn_804A04F0.confirmed_selection;
-            HSD_JObj* tree = data->x34[hovered][0];
-            switch ((s32) hovered_u8) {
-            case 0:
-                mn_802324E4(confirmed, data2);
-                break;
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-                if (mn_804A04F0.buttons & 4) {
-                    HSD_JObjReqAnimAll(
-                        tree,
-                        mn_80232458(hovered_u8, confirmed, 0)->start_frame);
-                } else {
-                    HSD_JObjReqAnimAll(
-                        tree,
-                        mn_80232458(hovered_u8, confirmed, 1)->start_frame);
-                }
-                HSD_JObjAnimAll(tree);
-                break;
-            case 5:
-            default:
-                break;
-            }
-        }
-    }
-
-    if ((s32) arg1 != 0) {
-        selected = mn_804A04F0.hovered_selection;
-    } else {
-        selected = (u16) data->hovered_selection;
-    }
+    mn_802327A4_UpdateOption(data, gobj, arg2, arg1, &selected);
 
     for (i = 0; i < (s32) num_options; i++) {
         if (gm_GetCurrentGameMode() == GM_TOURNAMENT && (u8) i == 1) {
@@ -603,9 +601,8 @@ void mn_802327A4(HSD_GObj* gobj, u32 arg1, u32 arg2)
         }
     }
 }
-#ifdef MUST_MATCH
-#pragma dont_inline off
-#endif
+
+const JObjIndices mn_804DBE48 = { 0x02030506 };
 
 void mn_80232D4C(HSD_GObj* gobj, u32 arg1, u32 arg2)
 {
@@ -636,10 +633,10 @@ void mn_80232D4C(HSD_GObj* gobj, u32 arg1, u32 arg2)
             confirmed = mn_804A04F0.confirmed_selection;
             SisLib_ClearText(&data->description);
             desc_idx = mnRulePlus_GetDescIdx(selection, confirmed);
-            text = HSD_SisLib_803A5ACC(0, 1, mn_804DBE4C, mn_804DBE50,
-                                       mn_804DBE54, mn_804DBE58, mn_804DBE5C);
+            text = HSD_SisLib_803A5ACC(0, 1, -9.5f, 8.0f, 17.0f, 364.68332f,
+                                       76.77544f);
             data->description = text;
-            text->font_size.y = text->font_size.x = mn_804DBE60;
+            text->font_size.y = text->font_size.x = 0.0521f;
             HSD_SisLib_803A6368(text, (s32) desc_idx);
             return;
         }
@@ -655,10 +652,10 @@ void mn_80232D4C(HSD_GObj* gobj, u32 arg1, u32 arg2)
             } else {
                 desc_idx = mn_803ED2E8.desc[selection][confirmed];
             }
-            text = HSD_SisLib_803A5ACC(0, 1, mn_804DBE4C, mn_804DBE50,
-                                       mn_804DBE54, mn_804DBE58, mn_804DBE5C);
+            text = HSD_SisLib_803A5ACC(0, 1, -9.5f, 8.0f, 17.0f, 364.68332f,
+                                       76.77544f);
             data->description = text;
-            text->font_size.y = text->font_size.x = mn_804DBE60;
+            text->font_size.y = text->font_size.x = 0.0521f;
             HSD_SisLib_803A6368(text, (s32) desc_idx);
         }
         break;
@@ -740,7 +737,7 @@ void fn_80232F44(HSD_GObj* gobj)
                 break;
             case 2:
             case 4:
-                HSD_GObjPLink_80390228(gobj);
+                HSD_GObjFree(gobj);
                 return;
             }
         }
@@ -781,11 +778,36 @@ void fn_80232F44(HSD_GObj* gobj)
     }
 }
 
+static inline void mnRulePlus_CountAllVisible(u8 limit, s32* result)
+{
+    s32 count = 0;
+    s32 iter = count;
+
+    for (; iter < (s32) limit; iter++) {
+        if (mn_80231F80((u8) iter) != 0) {
+            count++;
+        }
+    }
+    *result = count;
+}
+
+static inline s32 mnRulePlus_CountVisibleBefore(u8 limit)
+{
+    s32 count = 0;
+    s32 iter;
+
+    for (iter = 0; iter < (s32) limit; iter++) {
+        if (mn_80231F80((u8) iter) != 0) {
+            count++;
+        }
+    }
+    return count;
+}
+
 HSD_GObj* mn_80233218(MenuState state)
 {
-    u8 operand_pad[8];
-    HSD_JObj* jobj_parts[17];
-    u16 jobj_map[17];
+    u16* sub_count_ptr;
+    GameRules* rules;
     HSD_GObj* gobj;
     MenuRulesPlusData* user_data;
     u8 num_options;
@@ -800,12 +822,12 @@ HSD_GObj* mn_80233218(MenuState state)
     HSD_JObj* cursor_jobj;
     HSD_JObj* value_jobj;
     StaticModelDesc* desc;
+    mn_803ED1D0_t* rule_data;
     HSD_JObj* root_jobj;
-    f32* frame_ptr;
-    u16* volatile sub_count_ptr;
-    GameRules* rules;
-    PAD_STACK(8);
+    HSD_JObj* jobj_parts[17];
+    u16 jobj_map[17];
 
+    rule_data = &mn_803ED1D0;
     selected = (u8) mn_804A04F0.hovered_selection;
     num_options = mn_803EB6B0[15].selection_count;
 
@@ -826,7 +848,10 @@ HSD_GObj* mn_80233218(MenuState state)
     HSD_JObjAnimAll(root_jobj);
 
     user_data = HSD_MemAlloc(sizeof(MenuRulesPlusData));
-    HSD_ASSERTREPORT(0x3DFU, user_data, "Can't get user_data.\n");
+    if (user_data == NULL) {
+        OSReport(mn_803ED308);
+        __assert(mn_803ED320, 0x3DFU, mn_803ED330);
+    }
 
     GObj_InitUserData(gobj, 0, HSD_Free, user_data);
     user_data->menu_kind = mn_804A04F0.cur_menu;
@@ -849,8 +874,6 @@ HSD_GObj* mn_80233218(MenuState state)
     mn_804A04F0.confirmed_selection =
         user_data->rule_values.values[user_data->hovered_selection];
 
-    frame_ptr = mn_803ED1D0.text_start_frames;
-
     if ((u8) state != 0) {
         HSD_JObj* anim_jobj = user_data->xC[2];
         switch ((s32) user_data->state) {
@@ -869,22 +892,10 @@ HSD_GObj* mn_80233218(MenuState state)
 
     sub_count_ptr = mn_803ED1D0.x10;
     for (i = 0; i < (s32) num_options; i++) {
-        vis_before = 0;
-        for (j = vis_before; j < (s32) (u8) i; j++) {
-            if (mn_80231F80((u8) j) != 0) {
-                vis_before++;
-            }
-        }
-
-        vis_total = 0;
+        vis_before = mnRulePlus_CountVisibleBefore((u8) i);
         option_jobj = user_data->xC[mn_803ED1D0.x0[(u8) vis_before]];
-        for (j = vis_total; j < 6; j++) {
-            if (mn_80231F80((u8) j) != 0) {
-                vis_total++;
-            }
-        }
-
-        HSD_JObjReqAnim(option_jobj, (f32) vis_total);
+        mnRulePlus_CountAllVisible(6, &vis_total);
+        HSD_JObjReqAnim(option_jobj, vis_total);
         HSD_JObjAnim(option_jobj);
 
         if ((gm_GetCurrentGameMode() == GM_TOURNAMENT) && ((u8) i == 1)) {
@@ -917,7 +928,12 @@ HSD_GObj* mn_80233218(MenuState state)
 
             {
                 HSD_JObj* text_jobj = jobj_parts[7];
-                HSD_JObjReqAnim(text_jobj, frame_ptr[selected == i]);
+                /* Retail indexes text_start_frames as a [6][2] table; the
+                 * cast keeps the row pointer as a loop induction variable
+                 * (a [6][2] struct member compiles differently). */
+                HSD_JObjReqAnim(text_jobj,
+                                ((f32(*)[2]) mn_803ED1D0
+                                     .text_start_frames)[i][selected == i]);
                 HSD_JObjAnim(text_jobj);
             }
 
@@ -937,10 +953,11 @@ HSD_GObj* mn_80233218(MenuState state)
             }
 
             if (i == 5) {
-                als = &mn_803ED1D0.x7C[i == selected];
-                (void) als;
+                AnimLoopSettings* tmp = rule_data->x7C;
+                als = &tmp[i == selected];
             } else {
-                als = &mn_803ED1D0.x64[i == selected];
+                AnimLoopSettings* tmp = rule_data->x64;
+                als = &tmp[i == selected];
             }
             HSD_JObjReqAnimAll(jobj_parts[2], als->start_frame);
             HSD_JObjAnimAll(jobj_parts[2]);
@@ -978,7 +995,8 @@ HSD_GObj* mn_80233218(MenuState state)
                 switch (i) {
                 case 0: {
                     JObjIndices digit_indices = mn_804DBE48;
-                    u8* index_ptr = digit_indices.idx;
+                    u8* index_ptr;
+                    index_ptr = digit_indices.idx;
                     for (j = 0; j < 4; j++, index_ptr++) {
                         HSD_JObj* num_jobj =
                             HSD_JObjLoadJoint(MenMainNmRl_Top.joint);
@@ -1019,7 +1037,6 @@ HSD_GObj* mn_80233218(MenuState state)
                 HSD_JObjAddChild(option_jobj, value_jobj);
             }
         }
-        frame_ptr += 2;
     }
 
     {
@@ -1028,10 +1045,10 @@ HSD_GObj* mn_80233218(MenuState state)
         confirmed = mn_804A04F0.confirmed_selection;
         SisLib_ClearText(&user_data->description);
         desc_idx = mnRulePlus_GetDescIdx(selected, confirmed);
-        text = HSD_SisLib_803A5ACC(0, 1, mn_804DBE4C, mn_804DBE50, mn_804DBE54,
-                                   mn_804DBE58, mn_804DBE5C);
+        text = HSD_SisLib_803A5ACC(0, 1, -9.5f, 8.0f, 17.0f, 364.68332f,
+                                   76.77544f);
         user_data->description = text;
-        text->font_size.y = text->font_size.x = mn_804DBE60;
+        text->font_size.y = text->font_size.x = 0.0521f;
         HSD_SisLib_803A6368(text, (s32) desc_idx);
     }
 

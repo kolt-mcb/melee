@@ -1,37 +1,33 @@
 #include "ft_0BF0.h"
 
-#include "ft/fighter.h"
-
-#include "ft/forward.h"
-
-#include "ft/ftparts.h"
-#include "ft/types.h"
-
-#include "ftCommon/forward.h"
-
-#include "ftFox/types.h"
-#include "ftMario/ftMr_SpecialN.h"
-#include "it/items/itdrmariopill.h"
-#include "it/items/itfoxblaster.h"
-#include "it/items/itnessbat.h"
+#include "fighter.h"
+#include "forward.h"
+#include "ftparts.h"
+#include "kinds/ftCommon/forward.h"
+#include "kinds/ftFox/types.h"
+#include "kinds/ftMario/ftmariospecialn.h"
+#include "types.h"
+#include <melee/it/kinds/itdrmariopill.h>
+#include <melee/it/kinds/itfoxblaster.h>
+#include <melee/it/kinds/itnessbat.h>
 
 void ftCo_800BF034(Fighter_GObj* gobj)
 {
-    u8 _[8] = { 0 };
+    u8 _[8];
     Fighter* fp = GET_FIGHTER(gobj);
     Fighter_ChangeMotionState(gobj, ftCo_MS_DeadUpFallHitCameraIce, Ft_MF_None,
                               0, 1, 0, NULL);
     fp->x2219_b2 = true;
     fp->x2219_b1 = true;
     switch (fp->kind) {
-    case FTKIND_FOX: {
+    case Ft_Kind_Fox: {
         ftFox_DatAttrs* da = fp->dat_attrs;
         fp->item_gobj =
             it_802AE994(gobj, ftParts_GetBoneIndex(fp, FtPart_RThumbNb),
                         da->x20_FOX_BLASTER_GUN_ITKIND);
         return;
     }
-    case FTKIND_NESS: {
+    case Ft_Kind_Ness: {
         fp->item_gobj =
             it_802AD590(gobj, ftParts_GetBoneIndex(fp, FtPart_RThumbNb));
         return;
@@ -49,19 +45,19 @@ void ftCo_800BF108(Fighter_GObj* gobj)
     fp->x2219_b2 = true;
     fp->x2219_b1 = true;
     switch (fp->kind) {
-    case FTKIND_FOX: {
+    case Ft_Kind_Fox: {
         ftFox_DatAttrs* da = fp->dat_attrs;
         fp->item_gobj =
             it_802AE994(gobj, ftParts_GetBoneIndex(fp, FtPart_RThumbNb),
                         da->x20_FOX_BLASTER_GUN_ITKIND);
         return;
     }
-    case FTKIND_NESS: {
+    case Ft_Kind_Ness: {
         fp->item_gobj =
             it_802AD590(gobj, ftParts_GetBoneIndex(fp, FtPart_RThumbNb));
         return;
     }
-    case FTKIND_DRMARIO: {
+    case Ft_Kind_DrMario: {
         fp->item_gobj = itDrMarioPill_802C09C4(
             gobj, &fp->cur_pos, ftMr_SpecialN_VitaminRandom(gobj),
             It_Kind_DrMario_Vitamin, 2,

@@ -496,13 +496,13 @@ void render_present(void)
              * whose CPU work is the frame, must get none. The match frame
              * counter is zero everywhere but a match. Six milliseconds fits
              * a few binary loads or clears the bar for one compile. */
-            extern unsigned int gm_8016AEDC(void);
+            extern unsigned int gm_GetFrameCount(void);
             extern int gm_GetCurrentGameMode(void);
             extern void pc_shc_pump(long long budget_ns);
             extern void pc_shc_match_over(void);
             extern int pc_shc_in_match(void);
             static unsigned int s_prev_gframe;
-            unsigned int gf = gm_8016AEDC();
+            unsigned int gf = gm_GetFrameCount();
             int mode = gm_GetCurrentGameMode();
             /* A match is over when its frame counter returns to zero -- or,
              * for the modes whose counter never moves (Classic), when the

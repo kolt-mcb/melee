@@ -1,39 +1,34 @@
-#include "vi/vi1201v2.h"
+#include "vi1201v2.h"
+
+#include <sysdolphin/baselib/forward.h>
 
 #include "vi.h"
-
-#include "baselib/forward.h"
-
-#include "cm/camera.h"
-#include "ef/efasync.h"
-#include "ef/eflib.h"
-#include "ft/ftdemo.h"
-#include "gm/gm_1601.h"
-#include "gm/gm_unsplit.h"
-#include "gr/ground.h"
-#include "gr/stage.h"
-#include "it/item.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lb_013B.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbshadow.h"
-#include "lb/lbspdisplay.h"
-#include "mn/mnmain.h"
-#include "mp/mpcoll.h"
-#include "pl/player.h"
-#include "sc/types.h"
-#include "ty/toy.h"
-
-#include <baselib/aobj.h>
-#include <baselib/cobj.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
+#include <melee/ef/efasync.h>
+#include <melee/ef/eflib.h>
+#include <melee/ft/ftdemo.h>
+#include <melee/gm/gm_1601.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/gr/inlines.h>
+#include <melee/gr/stage.h>
+#include <melee/it/item.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_013B.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbshadow.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/mn/mnmain.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <melee/ty/toy.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
 
 /// @todo .sdata2 order hack
 #ifdef MUST_MATCH
@@ -77,13 +72,9 @@ void un_803204E4(HSD_GObj* gobj)
 
 void un_80320508(CharacterKind char_kind, int costume)
 {
-    char pad[16];
+    PAD_STACK(16);
 
-    Camera_80028B9C(6);
-    lb_8000FCDC();
-    mpColl_80041C78();
-    Ground_801C0378(0x40);
-    Stage_802251E8(St_Kind_Last, 0);
+    Stage_InitScene(St_Kind_Last, 0);
     Item_80266FA8();
     Item_80266FCC();
     Stage_8022524C();
@@ -105,7 +96,7 @@ void un_803205F4(void)
 {
     HSD_GObj* gobj;
     HSD_JObj* jobj;
-    char pad[16];
+    PAD_STACK(16);
 
     gobj = GObj_Create(0xE, 0xF, 0);
     jobj = HSD_JObjLoadJoint(un_804D7010->models[1]->joint);
@@ -115,8 +106,8 @@ void un_803205F4(void)
     HSD_JObjReqAnimAll(jobj, 251.0f);
     HSD_GObj_SetupProc(gobj, mn_8022EAE0, 0);
 
-    Player_80036E20(CKIND_GKOOPS, un_804D701C, 8);
-    Player_SetPlayerCharacter(1, CKIND_GKOOPS);
+    Player_80036E20(CKind_GKoops, un_804D701C, 8);
+    Player_SetPlayerCharacter(1, CKind_GKoops);
     Player_SetCostumeId(1, 0);
     Player_SetPlayerId(1, 0);
     Player_SetSlottype(1, 2);
@@ -134,15 +125,15 @@ void un_803205F4(void)
 void un_8032074C(HSD_GObj* gobj)
 {
     HSD_JObj* jobj = GET_JOBJ(gobj);
-    char pad[24];
+    PAD_STACK(24);
     HSD_JObjAnimAll(jobj);
     if (mn_8022F298(jobj) == 251.0F) {
         if (un_804D7030 != NULL) {
-            HSD_GObjPLink_80390228(un_804D7030);
+            HSD_GObjFree(un_804D7030);
             un_804D7030 = NULL;
         }
         if (un_804D7034 != NULL) {
-            HSD_GObjPLink_80390228(un_804D7034);
+            HSD_GObjFree(un_804D7034);
             un_804D7034 = NULL;
         }
         un_803205F4();
@@ -184,7 +175,7 @@ void un_803207C4(void)
 
 void un_803208F0(HSD_GObj* gobj)
 {
-    char pad[8];
+    PAD_STACK(8);
     lbShadow_8000F38C(0);
     vi_RunCamera(gobj, (u8*) &un_804D7028, 0x881);
 }
@@ -234,8 +225,7 @@ static inline void un_80320A40_SetupCamera(void)
     HSD_CObj* cobj;
 
     gobj = GObj_Create(0x13, 0x14, 0);
-    cobj =
-        lb_80013B14((HSD_CameraDescPerspective*) un_804D7010->cameras->desc);
+    cobj = lb_80013B14(&un_804D7010->cameras->desc->perspective);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(gobj, (void (*)(HSD_GObj*, int))(Event) un_803208F0,
                         8);

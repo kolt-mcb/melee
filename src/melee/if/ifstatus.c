@@ -1,31 +1,30 @@
 #include "ifstatus.h"
 
+#include <placeholder.h>
+
+#include "if_2F72.h"
 #include "ifall.h"
-#include "placeholder.h"
-
-#include "gm/gm_unsplit.h"
-#include "if/if_2F72.h"
-#include "if/ifcoget.h"
-#include "if/ifstock.h"
-#include "if/types.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbarchive.h"
-#include "mn/mnmain.h"
-#include "pl/player.h"
-#include "sc/types.h"
-
-#include <baselib/aobj.h>
-#include <baselib/dobj.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/mobj.h>
-#include <baselib/mtx.h>
-#include <baselib/random.h>
-#include <baselib/tobj.h>
+#include "ifcoget.h"
+#include "ifstock.h"
+#include "types.h"
+#include <melee/gm/gm_unsplit.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/mn/mnmain.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/mobj.h>
+#include <sysdolphin/baselib/mtx.h>
+#include <sysdolphin/baselib/random.h>
+#include <sysdolphin/baselib/tobj.h>
 
 #if BUILD_TARGET_PC
 #include <stddef.h>
@@ -106,6 +105,33 @@ char mrk_models_name[] = "DmgMrk_scene_models";
 
 HudIndex ifStatus_HudInfo;
 
+/// @todo .sdata2 order hack
+#ifdef MUST_MATCH
+static void sdata2_order(void)
+{
+    (void) 1.0F;
+    (void) 0.0F;
+    (void) 2.0F;
+    (void) U32_TO_F32;
+    (void) S32_TO_F32;
+    (void) 300.0F;
+    (void) 100.0F;
+    (void) 0.5069F;
+    (void) 0.6083F;
+    (void) 0.3041F;
+    (void) 1.2165F;
+    (void) 0.811F;
+    (void) 0.1014F;
+    (void) 1.5207F;
+    (void) -100.0F;
+    (void) 0.2028F;
+    (void) 0.5F;
+    (void) 0.65F;
+    (void) 0.1F;
+    (void) 0.25F;
+}
+#endif
+
 HudIndex* ifStatus_GetHUDInfo(void)
 {
     return &ifStatus_HudInfo;
@@ -157,9 +183,9 @@ void ifStatus_PercentOnDeathAnimationThink(UnkX* value, s32 arg1, s32 arg2)
 
 #if BUILD_TARGET_PC
     if (getenv("MELEE_IFFLAGS") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[IFDEATH] gframe=%u raw=%02x b40=%d sz=%d\n",
-                (unsigned) gm_8016AEDC(),
+                (unsigned) gm_GetFrameCount(),
                 (unsigned) *((const u8*) &value->x10_flags),
                 (int) value->x10_flags.b40, (int) sizeof(FlagsX));
     }
@@ -188,8 +214,7 @@ void ifStatus_PercentOnDeathAnimationThink(UnkX* value, s32 arg1, s32 arg2)
             continue;
         }
 #endif
-        if (fabsf_bitwise(jobj_r30->translate.x) <
-            100.0f) { // 100.0f @ lbl_804DDA6C
+        if (fabsf_bitwise(jobj_r30->translate.x) < 100.0f) {
             float f = (&value->x34_vec.x)[i];
             jobj_r30 = (HSD_JObj*) jobj_get(jobj_r30, value, i);
             ASSERT_NOT_NULL(jobj_r30, 1102);
@@ -265,6 +290,133 @@ void ifStatus_802F4B84(IfDamageState* state, s32 is_stamina)
     PAD_STACK(8);
 }
 
+static inline void ifStatus_InitDamageDigits(IfDamageState* state,
+                                             HSD_MatAnimJoint*** anim_base)
+{
+    HSD_JObj* hundreds_jobj;
+    HSD_JObj* tens_jobj;
+    HSD_JObj* ones_jobj;
+    u8 digit;
+
+    ones_jobj = state->jobjs[Ones];
+    digit = state->damage_percent % 10;
+    HSD_TObjAddAnimAll(ones_jobj->u.dobj->mobj->tobj,
+                       (*anim_base)[0]->child->matanim->texanim);
+    HSD_TObjReqAnimAll(ones_jobj->u.dobj->mobj->tobj, 2.0F * digit);
+    HSD_AObjSetRate(ones_jobj->u.dobj->mobj->tobj->aobj, 0.0F);
+
+    tens_jobj = state->jobjs[Tens];
+    digit = (state->damage_percent % 100) / 10;
+    HSD_TObjAddAnimAll(tens_jobj->u.dobj->mobj->tobj,
+                       (*anim_base)[0]->child->matanim->texanim);
+    HSD_TObjReqAnimAll(tens_jobj->u.dobj->mobj->tobj, 2.0F * digit);
+    HSD_AObjSetRate(tens_jobj->u.dobj->mobj->tobj->aobj, 0.0F);
+
+    hundreds_jobj = state->jobjs[Hundreds];
+    digit = (state->damage_percent % 1000) / 100;
+    HSD_TObjAddAnimAll(hundreds_jobj->u.dobj->mobj->tobj,
+                       (*anim_base)[0]->child->matanim->texanim);
+    HSD_TObjReqAnimAll(hundreds_jobj->u.dobj->mobj->tobj, 2.0F * digit);
+    HSD_AObjSetRate(hundreds_jobj->u.dobj->mobj->tobj->aobj, 0.0F);
+}
+
+static inline f32 ifStatus_GetStoredTranslationX(IfDamageState* state,
+                                                 s32 index)
+{
+    return state->translation_x[index];
+}
+
+static inline void ifStatus_UpdateDamageDisplay(IfDamageState* state,
+                                                HSD_JObj* jobj, GXColor* color,
+                                                GXColor* stamina_color,
+                                                GXColor* normal_color)
+{
+    HSD_MObj* mobj;
+    HSD_JObj* digit_jobj;
+    s16 clamped_damage;
+    f32 factor;
+    s32 i;
+
+    if ((state->damage_percent % 1000) / 100 == 0) {
+        HSD_JObjSetFlagsAll(state->jobjs[Hundreds], JOBJ_HIDDEN);
+    } else {
+        HSD_JObjClearFlagsAll(state->jobjs[Hundreds], JOBJ_HIDDEN);
+    }
+
+    if (state->old_damage != state->damage_percent) {
+        if (Player_GetMoreFlagsBit2((s8) state->player_slot)) {
+            if ((clamped_damage = state->damage_percent) > 100) {
+                clamped_damage = 100;
+            } else if (clamped_damage < 0) {
+                clamped_damage = 0;
+            }
+            factor = 1.0F - ((f32) clamped_damage / 100.0F);
+            stamina_color->r = (s8) (factor * (f32) (ifStatus_804D57AC[0] -
+                                                     ifStatus_804D57A8[0]) +
+                                     (f32) ifStatus_804D57A8[0]);
+            stamina_color->g = (s8) (factor * (f32) (ifStatus_804D57AC[1] -
+                                                     ifStatus_804D57A8[1]) +
+                                     (f32) ifStatus_804D57A8[1]);
+            stamina_color->b = (s8) (factor * (f32) (ifStatus_804D57AC[2] -
+                                                     ifStatus_804D57A8[2]) +
+                                     (f32) ifStatus_804D57A8[2]);
+            stamina_color->a = 255;
+            *color = *stamina_color;
+        } else {
+            clamped_damage = state->damage_percent;
+            if (clamped_damage > 300) {
+                clamped_damage = 300;
+            } else if (clamped_damage < 0) {
+                clamped_damage = 0;
+            }
+            factor = (f32) clamped_damage / 300.0F;
+            normal_color->r = (s8) (factor * (f32) (ifStatus_804D57AC[0] -
+                                                    ifStatus_804D57A8[0]) +
+                                    (f32) ifStatus_804D57A8[0]);
+            normal_color->g = (s8) (factor * (f32) (ifStatus_804D57AC[1] -
+                                                    ifStatus_804D57A8[1]) +
+                                    (f32) ifStatus_804D57A8[1]);
+            normal_color->b = (s8) (factor * (f32) (ifStatus_804D57AC[2] -
+                                                    ifStatus_804D57A8[2]) +
+                                    (f32) ifStatus_804D57A8[2]);
+            normal_color->a = 255;
+            *color = *normal_color;
+        }
+
+        mobj = state->jobjs[Hundreds]->u.dobj->mobj;
+        mobj->mat->diffuse.r = color->r;
+        mobj->mat->diffuse.g = color->g;
+        mobj->mat->diffuse.b = color->b;
+
+        mobj = state->jobjs[Tens]->u.dobj->mobj;
+        mobj->mat->diffuse.r = color->r;
+        mobj->mat->diffuse.g = color->g;
+        mobj->mat->diffuse.b = color->b;
+
+        mobj = state->jobjs[Ones]->u.dobj->mobj;
+        mobj->mat->diffuse.r = color->r;
+        mobj->mat->diffuse.g = color->g;
+        mobj->mat->diffuse.b = color->b;
+
+        mobj = state->jobjs[Percent]->u.dobj->mobj;
+        mobj->mat->diffuse.r = color->r;
+        mobj->mat->diffuse.g = color->g;
+        mobj->mat->diffuse.b = color->b;
+    }
+
+    if (lb_8000B09C(jobj)) {
+        for (i = 0; i < 4; i++) {
+            digit_jobj = state->jobjs[i];
+            ASSERT_NOT_NULL(digit_jobj, 993);
+            state->translation_x[i] = digit_jobj->translate.x;
+
+            digit_jobj = state->jobjs[i];
+            ASSERT_NOT_NULL(digit_jobj, 1006);
+            state->translation_y[i] = digit_jobj->translate.y;
+        }
+    }
+}
+
 void ifStatus_802F4EDC(HSD_GObj* gobj)
 {
     HudIndex* hud;
@@ -273,21 +425,21 @@ void ifStatus_802F4EDC(HSD_GObj* gobj)
     HSD_JObj* digit_jobj;
     s32 is_stamina;
     GXColor color;
+    UNUSED u8 pad_a[28];
+    GXColor stamina_color;
+    UNUSED u8 pad_b[4];
+    GXColor normal_color;
+    UNUSED u8 pad_c[24];
     HSD_TObj* tobj;
-    HSD_MObj* mobj;
-    HSD_MatAnimJoint** anim_base;
+    HSD_MatAnimJoint*** anim_base;
     s32 i;
     u8 digit;
-    f32 digit_offset;
     f32 ones_offset;
     f32 tens_offset;
     f32 hundreds_offset;
     f32 pos;
-    s16 clamped_damage;
-    f32 factor;
     IfDamageState* ptr;
 
-    PAD_STACK(64);
     hud = ifStatus_GetHUDInfo();
 
     {
@@ -335,9 +487,9 @@ void ifStatus_802F4EDC(HSD_GObj* gobj)
      * reachable with MELEE_CODE_BP at ifStatus_DamageThink, whose r3 is the
      * state and whose byte at +0x10 is this. */
     if (getenv("MELEE_IFFLAGS") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[IFFLAGS] gframe=%u slot=%d raw=%02x pct=%d\n",
-                (unsigned) gm_8016AEDC(), (int) state->player_slot,
+                (unsigned) gm_GetFrameCount(), (int) state->player_slot,
                 (unsigned) *((const u8*) &state->flags),
                 (int) state->damage_percent);
     }
@@ -358,10 +510,9 @@ void ifStatus_802F4EDC(HSD_GObj* gobj)
 
         HSD_JObjRemoveAnim(jobj);
 
-        anim_base = (HSD_MatAnimJoint**) &hud->janim_selection_joints;
-        lb_8000C07C(jobj, 1, (HSD_AnimJoint**) hud->jobj_desc_parent,
-                    (HSD_MatAnimJoint**) anim_base[0],
-                    (HSD_ShapeAnimJoint**) anim_base[1]);
+        anim_base = &hud->damage_num_matanims;
+        lb_8000C07C(jobj, 1, hud->damage_num_anims, *anim_base,
+                    hud->damage_num_shapeanims);
         HSD_JObjReqAnimAll(jobj, 0.0F);
 
         digit_jobj = state->jobjs[Percent];
@@ -369,8 +520,7 @@ void ifStatus_802F4EDC(HSD_GObj* gobj)
             tobj = digit_jobj->u.dobj->mobj->tobj;
             HSD_TObjAddAnimAll(
                 tobj,
-                (HSD_TexAnim*) ((HSD_AnimJoint*) anim_base[0])
-                    ->child->child->next->next->next->aobjdesc->fobjdesc);
+                (*anim_base)[0]->child->next->next->next->matanim->texanim);
             if (Player_GetMoreFlagsBit2((s8) state->player_slot)) {
                 HSD_TObjReqAnimAll(tobj, 1.0F);
             } else {
@@ -381,51 +531,26 @@ void ifStatus_802F4EDC(HSD_GObj* gobj)
         }
 
         mn_8022F3D8(jobj, 1, 0x400);
-
-        digit_jobj = state->jobjs[Ones];
-        digit = state->damage_percent % 10;
-        HSD_TObjAddAnimAll(digit_jobj->u.dobj->mobj->tobj,
-                           (HSD_TexAnim*) ((HSD_AnimJoint*) anim_base[0])
-                               ->child->child->aobjdesc->fobjdesc);
-        HSD_TObjReqAnimAll(digit_jobj->u.dobj->mobj->tobj, 2.0F * digit);
-        HSD_AObjSetRate(digit_jobj->u.dobj->mobj->tobj->aobj, 0.0F);
-
-        digit_jobj = state->jobjs[Tens];
-        digit = (state->damage_percent % 100) / 10;
-        HSD_TObjAddAnimAll(digit_jobj->u.dobj->mobj->tobj,
-                           (HSD_TexAnim*) ((HSD_AnimJoint*) anim_base[0])
-                               ->child->child->aobjdesc->fobjdesc);
-        HSD_TObjReqAnimAll(digit_jobj->u.dobj->mobj->tobj, 2.0F * digit);
-        HSD_AObjSetRate(digit_jobj->u.dobj->mobj->tobj->aobj, 0.0F);
-
-        digit_jobj = state->jobjs[Hundreds];
-        digit = (state->damage_percent % 1000) / 100;
-        HSD_TObjAddAnimAll(digit_jobj->u.dobj->mobj->tobj,
-                           (HSD_TexAnim*) ((HSD_AnimJoint*) anim_base[0])
-                               ->child->child->aobjdesc->fobjdesc);
-        HSD_TObjReqAnimAll(digit_jobj->u.dobj->mobj->tobj, 2.0F * digit);
-        HSD_AObjSetRate(digit_jobj->u.dobj->mobj->tobj->aobj, 0.0F);
+        ifStatus_InitDamageDigits(state, anim_base);
     }
 
     HSD_JObjAnimAll(jobj);
 
     {
-        HSD_AnimJoint** anim_joints = &hud->janim_selection_joints;
+        HSD_MatAnimJoint*** anim_joints = &hud->damage_num_matanims;
         HSD_JObj* post_digit_jobj;
 
         post_digit_jobj = state->jobjs[Ones];
         digit = state->damage_percent % 10;
-        HSD_TObjAddAnimAll(
-            post_digit_jobj->u.dobj->mobj->tobj,
-            (HSD_TexAnim*) anim_joints[0]->child->child->aobjdesc->fobjdesc);
+        HSD_TObjAddAnimAll(post_digit_jobj->u.dobj->mobj->tobj,
+                           (*anim_joints)[0]->child->matanim->texanim);
         HSD_TObjReqAnimAll(post_digit_jobj->u.dobj->mobj->tobj, 2.0F * digit);
         HSD_AObjSetRate(post_digit_jobj->u.dobj->mobj->tobj->aobj, 0.0F);
 
         post_digit_jobj = state->jobjs[Tens];
         digit = (state->damage_percent % 100) / 10;
-        HSD_TObjAddAnimAll(
-            post_digit_jobj->u.dobj->mobj->tobj,
-            (HSD_TexAnim*) anim_joints[0]->child->child->aobjdesc->fobjdesc);
+        HSD_TObjAddAnimAll(post_digit_jobj->u.dobj->mobj->tobj,
+                           (*anim_joints)[0]->child->matanim->texanim);
         HSD_TObjReqAnimAll(post_digit_jobj->u.dobj->mobj->tobj, 2.0F * digit);
         HSD_AObjSetRate(post_digit_jobj->u.dobj->mobj->tobj->aobj, 0.0F);
 
@@ -439,141 +564,59 @@ void ifStatus_802F4EDC(HSD_GObj* gobj)
 
         post_digit_jobj = state->jobjs[Hundreds];
         digit = (state->damage_percent % 1000) / 100;
-        HSD_TObjAddAnimAll(
-            post_digit_jobj->u.dobj->mobj->tobj,
-            (HSD_TexAnim*) anim_joints[0]->child->child->aobjdesc->fobjdesc);
+        HSD_TObjAddAnimAll(post_digit_jobj->u.dobj->mobj->tobj,
+                           (*anim_joints)[0]->child->matanim->texanim);
         HSD_TObjReqAnimAll(post_digit_jobj->u.dobj->mobj->tobj, 2.0F * digit);
         HSD_AObjSetRate(post_digit_jobj->u.dobj->mobj->tobj->aobj, 0.0F);
     }
 
-    if ((state->damage_percent % 1000) / 100 == 0) {
-        HSD_JObjSetFlagsAll(state->jobjs[Hundreds], JOBJ_HIDDEN);
-    } else {
-        HSD_JObjClearFlagsAll(state->jobjs[Hundreds], JOBJ_HIDDEN);
-    }
+    ifStatus_UpdateDamageDisplay(state, jobj, &color, &stamina_color,
+                                 &normal_color);
 
-    /* Update colors when damage changes */
-    if (state->old_damage != state->damage_percent) {
-        if (Player_GetMoreFlagsBit2((s8) state->player_slot)) {
-            GXColor stamina_color;
+    {
+        struct {
+            f32 value;
+        } digit_offset;
 
-            /* Stamina mode: 0-100% range */
-            clamped_damage = state->damage_percent;
-            if (clamped_damage > 100) {
-                clamped_damage = 100;
-            } else if (clamped_damage < 0) {
-                clamped_damage = 0;
-            }
-            factor = 1.0F - ((f32) clamped_damage / 100.0F);
-            stamina_color.r = (s8) (factor * (f32) (ifStatus_804D57AC[0] -
-                                                    ifStatus_804D57A8[0]) +
-                                    (f32) ifStatus_804D57A8[0]);
-            stamina_color.g = (s8) (factor * (f32) (ifStatus_804D57AC[1] -
-                                                    ifStatus_804D57A8[1]) +
-                                    (f32) ifStatus_804D57A8[1]);
-            stamina_color.b = (s8) (factor * (f32) (ifStatus_804D57AC[2] -
-                                                    ifStatus_804D57A8[2]) +
-                                    (f32) ifStatus_804D57A8[2]);
-            stamina_color.a = 255;
-            color = stamina_color;
-        } else {
-            GXColor normal_color;
+        /* Calculate digit spacing offsets based on which digit is "1" */
+        ones_offset = (state->damage_percent % 10 == 1) ? 0.5069F : 0.0F;
+        tens_offset =
+            ((state->damage_percent % 100) / 10 == 1) ? 0.5069F : 0.0F;
 
-            /* Normal mode: 0-300% range */
-            clamped_damage = state->damage_percent;
-            if (clamped_damage > 300) {
-                clamped_damage = 300;
-            } else if (clamped_damage < 0) {
-                clamped_damage = 0;
-            }
-            factor = (f32) clamped_damage / 300.0F;
-            normal_color.r = (s8) (factor * (f32) (ifStatus_804D57AC[0] -
-                                                   ifStatus_804D57A8[0]) +
-                                   (f32) ifStatus_804D57A8[0]);
-            normal_color.g = (s8) (factor * (f32) (ifStatus_804D57AC[1] -
-                                                   ifStatus_804D57A8[1]) +
-                                   (f32) ifStatus_804D57A8[1]);
-            normal_color.b = (s8) (factor * (f32) (ifStatus_804D57AC[2] -
-                                                   ifStatus_804D57A8[2]) +
-                                   (f32) ifStatus_804D57A8[2]);
-            normal_color.a = 255;
-            color = normal_color;
+        /* Position percent sign */
+        digit_jobj = state->jobjs[Percent];
+        pos = state->translation_x[Percent] - ones_offset;
+        if (digit_jobj == NULL) {
+            __assert("jobj.h", 932, "jobj");
         }
+        digit_jobj->translate.x = pos;
+        jobj_flagCheckSetMtxDirtySub(digit_jobj);
 
-        /* Apply color to all digit materials */
-        mobj = state->jobjs[Hundreds]->u.dobj->mobj;
-        mobj->mat->diffuse.r = color.r;
-        mobj->mat->diffuse.g = color.g;
-        mobj->mat->diffuse.b = color.b;
-
-        mobj = state->jobjs[Tens]->u.dobj->mobj;
-        mobj->mat->diffuse.r = color.r;
-        mobj->mat->diffuse.g = color.g;
-        mobj->mat->diffuse.b = color.b;
-
-        mobj = state->jobjs[Ones]->u.dobj->mobj;
-        mobj->mat->diffuse.r = color.r;
-        mobj->mat->diffuse.g = color.g;
-        mobj->mat->diffuse.b = color.b;
-
-        mobj = state->jobjs[Percent]->u.dobj->mobj;
-        mobj->mat->diffuse.r = color.r;
-        mobj->mat->diffuse.g = color.g;
-        mobj->mat->diffuse.b = color.b;
-    }
-
-    /* Update JObj positions when animating */
-    if (lb_8000B09C(jobj)) {
-        for (i = 0; i < 4; i++) {
-            digit_jobj = state->jobjs[i];
-            if (digit_jobj == NULL) {
-                __assert("jobj.h", 993, "jobj");
-            }
-            state->translation_x[i] = digit_jobj->translate.x;
-
-            digit_jobj = state->jobjs[i];
-            if (digit_jobj == NULL) {
-                __assert("jobj.h", 1006, "jobj");
-            }
-            state->translation_y[i] = digit_jobj->translate.y;
+        /* Position tens digit */
+        digit_offset.value = ones_offset;
+        digit_offset.value += tens_offset;
+        digit_jobj = state->jobjs[Tens];
+        pos = state->translation_x[Tens] + digit_offset.value;
+        (void) pos;
+        if (digit_jobj == NULL) {
+            __assert("jobj.h", 932, "jobj");
         }
-    }
+        digit_jobj->translate.x = pos;
+        jobj_flagCheckSetMtxDirtySub(digit_jobj);
 
-    /* Calculate digit spacing offsets based on which digit is "1" */
-    ones_offset = (state->damage_percent % 10 == 1) ? 0.5069F : 0.0F;
-    tens_offset = ((state->damage_percent % 100) / 10 == 1) ? 0.5069F : 0.0F;
-
-    /* Position percent sign */
-    digit_jobj = state->jobjs[Percent];
-    pos = state->translation_x[Percent] - ones_offset;
-    if (digit_jobj == NULL) {
-        __assert("jobj.h", 932, "jobj");
+        /* Position hundreds digit */
+        hundreds_offset =
+            ((state->damage_percent % 1000) / 100 == 1) ? 0.5069F : 0.0F;
+        digit_jobj = state->jobjs[Hundreds];
+        digit_offset.value += tens_offset + hundreds_offset;
+        pos = ifStatus_GetStoredTranslationX(state, Hundreds) -
+              -digit_offset.value;
+        if (digit_jobj == NULL) {
+            __assert("jobj.h", 932, "jobj");
+        }
+        digit_jobj->translate.x = pos;
+        jobj_flagCheckSetMtxDirtySub(digit_jobj);
     }
-    digit_jobj->translate.x = pos;
-    jobj_flagCheckSetMtxDirtySub(digit_jobj);
-
-    /* Position tens digit */
-    digit_offset = ones_offset + tens_offset;
-    digit_jobj = state->jobjs[Tens];
-    pos = state->translation_x[Tens] + digit_offset;
-    (void) pos;
-    if (digit_jobj == NULL) {
-        __assert("jobj.h", 932, "jobj");
-    }
-    digit_jobj->translate.x = pos;
-    jobj_flagCheckSetMtxDirtySub(digit_jobj);
-
-    /* Position hundreds digit */
-    hundreds_offset =
-        ((state->damage_percent % 1000) / 100 == 1) ? 0.5069F : 0.0F;
-    digit_jobj = state->jobjs[Hundreds];
-    pos = state->translation_x[Hundreds] +
-          (hundreds_offset + tens_offset + digit_offset);
-    if (digit_jobj == NULL) {
-        __assert("jobj.h", 932, "jobj");
-    }
-    digit_jobj->translate.x = pos;
-    jobj_flagCheckSetMtxDirtySub(digit_jobj);
 
     /* Handle shake animation */
     if (state->flags.force_digit_shake) {
@@ -643,10 +686,7 @@ void ifStatus_802F5B48(HSD_GObj* gobj)
             p->flags.unk10 = 0;
         }
         if (p->old_damage == 0) {
-            if (gm_16AE_GetUnkData_1()
-                    ->FighterMatchInfo[(s8) p->player_slot]
-                    .x4_b5)
-            {
+            if (gmVs_GetSceneState()->fighters[(s8) p->player_slot].x4_b5) {
                 ifStatus_802F6948((s8) p->player_slot);
             }
         }
@@ -714,20 +754,30 @@ void ifStatus_802F5E50(HSD_GObj* gobj, s32 arg1)
     }
 }
 
+static inline HSD_JObj* ifStatus_GetDamageJObj(HSD_JObj* jobj, s32 i)
+{
+    HSD_JObj* node = jobj;
+    return ifStatus_802F6194(node, i);
+}
+
+static inline HSD_JObj* ifStatus_LoadDamageJObj(HudIndex* hud)
+{
+    return HSD_JObjLoadJoint(hud->damage_num_joint);
+}
+
 HSD_GObj* ifStatus_802F5EC0(IfDamageState* state, s32 player_idx)
 {
     HSD_GObj* gobj;
-    HSD_MatAnimJoint** anim_base;
+    HSD_MatAnimJoint*** anim_base;
     HSD_JObj* jobj;
     Vec3* vec;
-    s32 i;
     HSD_TObj* tobj;
-    HSD_GObj* node;
+    s32 i;
     HudIndex* hud = ifStatus_GetHUDInfo();
 
     if (state->HUD_parent_entity == NULL) {
         gobj = GObj_Create(0xE, 0xF, 0);
-        jobj = HSD_JObjLoadJoint(hud->unk258);
+        jobj = ifStatus_LoadDamageJObj(hud);
         HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
         GObj_SetupGXLink(gobj, (void (*)(HSD_GObj*, int)) ifStatus_802F5DE0,
                          0xB, 0);
@@ -739,17 +789,15 @@ HSD_GObj* ifStatus_802F5EC0(IfDamageState* state, s32 player_idx)
     }
     state->flags.animation_status_id = 0;
     HSD_JObjRemoveAnim(jobj);
-    anim_base = (HSD_MatAnimJoint**) &hud->janim_selection_joints;
-    lb_8000C07C(jobj, 0, (HSD_AnimJoint**) hud->jobj_desc_parent,
-                (HSD_MatAnimJoint**) anim_base[0],
-                (HSD_ShapeAnimJoint**) anim_base[1]);
+    anim_base = &hud->damage_num_matanims;
+    lb_8000C07C(jobj, 0, hud->damage_num_anims, *anim_base,
+                hud->damage_num_shapeanims);
     HSD_JObjReqAnimAll(jobj, 0.0f);
     HSD_JObjAnimAll(jobj);
     vec = ifAll_GetPlayerHUDPosition((u8) player_idx);
     HSD_JObjSetTranslate(jobj, vec);
-    node = (HSD_GObj*) jobj;
     for (i = 0; i < 4; i++) {
-        state->jobjs[i] = (HSD_JObj*) ifStatus_802F6194(node, i);
+        state->jobjs[i] = ifStatus_GetDamageJObj(jobj, i);
         state->translation_x[i] = HSD_JObjGetTranslationX(state->jobjs[i]);
         state->translation_y[i] = HSD_JObjGetTranslationY(state->jobjs[i]);
     }
@@ -770,8 +818,7 @@ HSD_GObj* ifStatus_802F5EC0(IfDamageState* state, s32 player_idx)
     if (state->jobjs[3] != NULL) {
         tobj = state->jobjs[3]->u.dobj->mobj->tobj;
         HSD_TObjAddAnimAll(
-            tobj, (HSD_TexAnim*) ((HSD_AnimJoint*) anim_base[0])
-                      ->child->child->next->next->next->aobjdesc->fobjdesc);
+            tobj, (*anim_base)[0]->child->next->next->next->matanim->texanim);
         if (Player_GetMoreFlagsBit2((s8) state->player_slot) != 0) {
             HSD_TObjReqAnimAll(tobj, 1.0f);
         } else {
@@ -783,15 +830,15 @@ HSD_GObj* ifStatus_802F5EC0(IfDamageState* state, s32 player_idx)
     ifStatus_802F5B48(state->HUD_parent_entity);
     state->old_damage = !state->damage_percent;
     ifStatus_802F4EDC(state->HUD_parent_entity);
-    PAD_STACK(0x18);
+    PAD_STACK(0x10);
     return state->HUD_parent_entity;
 }
 
-HSD_GObj* ifStatus_802F6194(HSD_GObj* node, s32 n)
+HSD_JObj* ifStatus_802F6194(HSD_JObj* node, s32 n)
 {
-    HSD_GObj* gx_head;
-    HSD_GObj* gx_next;
-    HSD_GObj* gx_cur;
+    HSD_JObj* gx_head;
+    HSD_JObj* gx_next;
+    HSD_JObj* gx_cur;
     s32 i;
     if ((node == NULL) || (n < 0)) {
         return NULL;
@@ -815,32 +862,21 @@ HSD_GObj* ifStatus_802F6194(HSD_GObj* node, s32 n)
     if (node == NULL) {
         gx_head = NULL;
     } else {
-        gx_head = node->next_gx;
+        gx_head = node->child;
     }
     gx_cur = gx_head;
-    i = 0;
-    goto check_done;
-
-advance_node:
-    if (gx_cur == NULL) {
-        gx_next = NULL;
-    } else {
-        gx_next = gx_cur->next;
-    }
-    gx_cur = gx_next;
-    i += 1;
-
-check_done:
-    if (i >= n) {
-        return gx_cur;
-    }
-    if (gx_cur != NULL) {
-        goto advance_node;
+    for (i = 0; i < n && gx_cur != NULL; i++) {
+        if (gx_cur == NULL) {
+            gx_next = NULL;
+        } else {
+            gx_next = gx_cur->next;
+        }
+        gx_cur = gx_next;
     }
     return gx_cur;
 }
 
-PC_STATIC_INLINE void ifStatus_CreateMarkGObj(HSD_GObj** gobj)
+static inline void ifStatus_CreateMarkGObj(HSD_GObj** gobj)
 {
     *gobj = GObj_Create(0xE, 0xF, 0);
 }
@@ -859,10 +895,7 @@ HSD_GObj* ifStatus_802F61FC(IfDamageState* state, s32 player_idx)
     Vec3* vec;
     HSD_MObj* mobj;
     HudIndex* hud = ifStatus_GetHUDInfo();
-    u8 slot;
     GXColor color;
-    u8 hud_color;
-    u8 team;
     u8 idx = player_idx;
     PAD_STACK(0x10);
 
@@ -876,7 +909,7 @@ HSD_GObj* ifStatus_802F61FC(IfDamageState* state, s32 player_idx)
             HSD_ASSERTREPORT(0x30A, 0,
                              "Error : gobj dont't get (ifAddMark)\n");
         }
-        jobj = HSD_JObjLoadJoint((HSD_Joint*) hud->unk268);
+        jobj = HSD_JObjLoadJoint(hud->damage_mark_joint);
         if (jobj == NULL) {
             HSD_ASSERTREPORT(0x30E, 0,
                              "Error : jobj dont't get (ifAddMark)\n");
@@ -903,11 +936,10 @@ HSD_GObj* ifStatus_802F61FC(IfDamageState* state, s32 player_idx)
     }
 #endif
     tobj = jobj->child->u.dobj->mobj->tobj;
-    lb_8000C07C(jobj, 0, (HSD_AnimJoint**) hud->unk26C,
-                (HSD_MatAnimJoint**) hud->unk270,
-                (HSD_ShapeAnimJoint**) hud->unk274);
-    if (chara == CKIND_MASTERH || (u32) (chara - CKIND_GKOOPS) <= 1) {
-        chara = CKIND_BOY;
+    lb_8000C07C(jobj, 0, hud->damage_mark_anims, hud->damage_mark_matanims,
+                hud->damage_mark_shapeanims);
+    if (chara == CKind_MasterH || (u32) (chara - CKind_GKoops) <= 1) {
+        chara = CKind_Boy;
     }
     HSD_TObjReqAnimAll(tobj, 0.5f + gm_80168B34(chara, 0, 0));
     HSD_AObjSetRate(tobj->aobj, 0.1f);
@@ -915,11 +947,9 @@ HSD_GObj* ifStatus_802F61FC(IfDamageState* state, s32 player_idx)
     vec = ifAll_GetPlayerHUDPosition(idx);
     HSD_JObjSetTranslate(jobj, vec);
     HSD_JObjAddTranslationX(jobj, 0.25f);
-    slot = Player_GetPlayerSlotType(idx);
-    hud_color = gm_8016B168();
-    team = Player_GetTeam(idx);
-    color = gm_80160968(
-        gm_80160854(Player_GetPlayerId(idx), team, hud_color, slot));
+    color =
+        gm_80160968(gm_80160854(Player_GetPlayerId(idx), Player_GetTeam(idx),
+                                gm_8016B168(), Player_GetPlayerSlotType(idx)));
     mobj = HSD_JObjGetChild(jobj)->u.dobj->mobj;
     mobj->mat->diffuse.r = color.r;
     mobj->mat->diffuse.g = color.g;
@@ -934,7 +964,8 @@ void ifStatus_802F6508(s32 arg0)
     u32 mode;
 
     if (Player_GetPlayerSlotType(arg0) != Gm_PKind_NA &&
-        (s32) ifStatus_804D6D60 > arg0 && (rules = gm_GetRules(), rules->x2_6))
+        (s32) ifStatus_804D6D60 > arg0 &&
+        (rules = gm_GetStartMeleeRules(), rules->x2_6))
     {
         hud_player = &ifStatus_GetHUDInfo()->players[(u8) arg0];
         hud_player->damage_percent = -1;
@@ -1010,32 +1041,26 @@ void ifStatus_802F66A4(void)
     num = &cnum;
     mrk = &cmrk;
 #endif
-    hud->unk258 = (*num)->joint;
-    hud->jobj_desc_parent = (*num)->anims;
-    hud->janim_selection_joints = (HSD_AnimJoint*) (*num)->matanims;
-    hud->janim_selection_textures = (*num)->shapeanims;
-    hud->unk268 = (*mrk)->joint;
-    hud->unk26C = (*mrk)->anims;
-    hud->unk270 = (*mrk)->matanims;
-    hud->unk274 = (*mrk)->shapeanims;
+    hud->damage_num_joint = (*num)->joint;
+    hud->damage_num_anims = (*num)->anims;
+    hud->damage_num_matanims = (*num)->matanims;
+    hud->damage_num_shapeanims = (*num)->shapeanims;
+    hud->damage_mark_joint = (*mrk)->joint;
+    hud->damage_mark_anims = (*mrk)->anims;
+    hud->damage_mark_matanims = (*mrk)->matanims;
+    hud->damage_mark_shapeanims = (*mrk)->shapeanims;
 #ifdef MUST_MATCH
     {
         s32 reset;
         if (reset != 0) {
 #endif
             ifStatus_804D6D60 = 0;
-#if BUILD_TARGET_PC
             /* The `reset` read above is a decomp gap and reading it is
              * undefined, so the port always takes the branch -- this is the
-             * setup path and everything below +0x258 is exactly the per-player
-             * state that should start cleared. The models loaded just above
-             * live at +0x258 and beyond, so they survive either way, but the
-             * boundary is a GameCube offset and every pointer before it is
-             * wider here: use the real field offset. */
-            memzero(hud, offsetof(HudIndex, unk258));
-#else
-            memzero(hud, 0x258);
-#endif
+             * setup path and players[] is exactly the per-player state that
+             * should start cleared. sizeof is the host size, so the models
+             * that follow it survive. */
+            memzero(hud, sizeof(hud->players));
 #ifdef MUST_MATCH
         }
     }
@@ -1048,11 +1073,11 @@ void ifStatus_802F6788(u8 player_idx)
     s8 p_idx = player_idx;
     player_hud = &ifStatus_GetHUDInfo()->players[p_idx & 0xFF];
     if (player_hud->HUD_parent_entity != NULL) {
-        HSD_GObjPLink_80390228(player_hud->HUD_parent_entity);
+        HSD_GObjFree(player_hud->HUD_parent_entity);
         player_hud->HUD_parent_entity = NULL;
     }
     if (player_hud->next != NULL) {
-        HSD_GObjPLink_80390228(player_hud->next);
+        HSD_GObjFree(player_hud->next);
         player_hud->next = NULL;
     }
     ifStock_802FB650(player_idx & 0xFF);
@@ -1063,20 +1088,18 @@ void ifStatus_802F6804(void)
     s32 i;
     IfDamageState* v;
 
-    i = 0;
-    do {
+    for (i = 0; i < 6; i++) {
         v = &ifStatus_GetHUDInfo()->players[i & 0xFF];
         if (v->HUD_parent_entity != NULL) {
-            HSD_GObjPLink_80390228(v->HUD_parent_entity);
+            HSD_GObjFree(v->HUD_parent_entity);
             v->HUD_parent_entity = NULL;
         }
         if (v->next != NULL) {
-            HSD_GObjPLink_80390228(v->next);
+            HSD_GObjFree(v->next);
             v->next = NULL;
         }
         ifStock_802FB650((s8) i & 0xFF);
-        i++;
-    } while (i < 6);
+    }
 }
 
 /// Hide Percentage Digits
@@ -1105,7 +1128,7 @@ void ifStatus_802F6948(s32 player_idx)
     struct StartMeleeRules* small_thing;
     IfDamageFlags* hud_player_flags;
 
-    small_thing = gm_GetRules();
+    small_thing = gm_GetStartMeleeRules();
     hud_player = &ifStatus_GetHUDInfo()->players[player_idx];
     hud_player_flags = &hud_player->flags;
     if (hud_player_flags->explode_animation != 1) {
@@ -1121,13 +1144,13 @@ static inline void ifStatus_TriggerStockLoss(s32 player_idx,
                                              void (*callback)(s32))
 {
     IfDamageState* hud_player;
-    lbl_8046B6A0_t* big_thing;
+    VsSceneController* big_thing;
     struct StartMeleeRules* small_thing;
     IfDamageFlags* hud_player_flags;
 
-    big_thing = gm_16AE_GetUnkData_0();
-    big_thing->unk_D = player_idx;
-    small_thing = gm_GetRules();
+    big_thing = gmVs_GetSceneController();
+    big_thing->state.unk_D = player_idx;
+    small_thing = gm_GetStartMeleeRules();
     hud_player = &ifStatus_GetHUDInfo()->players[player_idx];
     hud_player_flags = &hud_player->flags;
     if (hud_player_flags->explode_animation != 1) {
@@ -1137,7 +1160,7 @@ static inline void ifStatus_TriggerStockLoss(s32 player_idx,
             hud_player->unk9 = 1;
         }
     }
-    if ((big_thing->x24C8.is_stock != 0) &&
+    if ((big_thing->start.is_stock != 0) &&
         ((Player_GetPlayerSlotType(player_idx) == Gm_PKind_Human) ||
          (Player_GetPlayerSlotType(player_idx) == Gm_PKind_Cpu)) &&
         (Player_GetStocks(player_idx) == 0))
@@ -1145,7 +1168,7 @@ static inline void ifStatus_TriggerStockLoss(s32 player_idx,
         gm_8016B8D4(player_idx, Player_GetPlayerSlotType(player_idx));
     }
 
-    if (big_thing->x24C8.match_kind != 1 && big_thing->x24C8.x2_5 != 0 &&
+    if (big_thing->start.match_kind != 1 && big_thing->start.x2_5 != 0 &&
         callback != NULL)
     {
         callback(player_idx);
@@ -1154,10 +1177,10 @@ static inline void ifStatus_TriggerStockLoss(s32 player_idx,
 
 void ifStatus_802F69C0(s32 player_idx, s32 arg1)
 {
-    lbl_8046B6A0_t* big_thing;
+    VsSceneController* big_thing;
 
-    big_thing = gm_16AE_GetUnkData_0();
-    if (big_thing->x24C8.match_kind != 1 && big_thing->x24C8.x2_5 != 0) {
+    big_thing = gmVs_GetSceneController();
+    if (big_thing->start.match_kind != 1 && big_thing->start.x2_5 != 0) {
         if_802F7C30(arg1);
     }
 

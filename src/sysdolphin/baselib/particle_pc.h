@@ -70,12 +70,20 @@ struct ParticleConsoleState {
 static struct ParticleScreenState hsd_804CF810;
 static struct ParticleConsoleState hsd_804CF7E8;
 
-HSD_PSFormGroup** psFormGroupArray[65]; /* shared with psdisp.c */
-void* hsd_804D0908[146]; /* shared with psdisp.c */
-HSD_PSTexGroup** psTexGroupArray[65]; /* shared with psdisp.c */
-HSD_PSCmdList** psCmdListArray[65]; /* shared with ef/ (the console's 804D0E5C) */
-int psNumCmdList[65]; /* shared with psdisp.c */
-u32* ptclref_804D0E5C[65]; /* shared with psdisp.c */
+/* Upstream corrected a long-standing mislabelling of these four tables this
+ * batch: the count is psCmdListArray (4D0D58), the command-list table is
+ * ptclref_804D0E5C (4D0E5C), the reference table is the new hsd_804D0948
+ * (4D0948), and the form-group table is psNumCmdList (4D0C54). The names
+ * here follow, so that particle.c, psdisp.c and ef/ all mean the same table
+ * by the same name. psFormGroupArray keeps its own slot (4D0A4C), which the
+ * GameCube bank loader writes. */
+HSD_PSFormGroup** psNumCmdList[65];     /* shared with psdisp.c */
+HSD_PSFormGroup** psFormGroupArray[65]; /* 4D0A4C, the bank loader's slot */
+void* hsd_804D0908[146];                /* shared with psdisp.c */
+HSD_PSTexGroup** psTexGroupArray[65];   /* shared with psdisp.c */
+HSD_PSCmdList** ptclref_804D0E5C[65];   /* shared with ef/ */
+int psCmdListArray[65];                 /* shared with psdisp.c */
+u32* hsd_804D0948[65];                  /* shared with psdisp.c */
 
 static HSD_SList* hsd_804D7850;
 static f32 hsd_804D7858, hsd_804D785C, hsd_804D7860, hsd_804D7864;

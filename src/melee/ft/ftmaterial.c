@@ -1,25 +1,22 @@
 #include "ftmaterial.h"
 
-#include "ft/fighter.h"
-
-#include "ft/forward.h"
-
-#include "ft/ft_0C8C.h"
-#include "ft/ftCo_800C7CA0.h"
-#include "ft/ftdevice.h"
-#include "ft/types.h"
-#include "ftCommon/ftCo_09F4.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbrefract.h"
-
-#include <baselib/class.h>
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/jobj.h>
-#include <baselib/mobj.h>
-#include <baselib/state.h>
-#include <baselib/tev.h>
-#include <baselib/tobj.h>
+#include "fighter.h"
+#include "forward.h"
+#include "ft_0C8C.h"
+#include "ftCo_800C7CA0.h"
+#include "ftdevice.h"
+#include "kinds/ftCommon/ftCo_09F4.h"
+#include "types.h"
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbrefract.h>
+#include <sysdolphin/baselib/class.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/mobj.h>
+#include <sysdolphin/baselib/state.h>
+#include <sysdolphin/baselib/tev.h>
+#include <sysdolphin/baselib/tobj.h>
 
 HSD_MObjInfo ftMObj = { ftMaterial_800BF260 };
 
@@ -47,23 +44,23 @@ struct ft_MObjInfo {
 static HSD_TevDesc ftMaterial_803C69D0 = {
     NULL,
     TEVCONF_MODE,
-    0,
-    HSD_TE_UNDEF,
-    HSD_TE_UNDEF,
-    HSD_TE_UNDEF,
+    GX_TEVSTAGE0,
+    GX_TEXCOORD_NULL,
+    GX_TEXCOORD_NULL,
+    GX_COLOR_NULL,
     { {
-        0, 0, 15, 15,    15, 0, 0, true, 0, 0, 7, 7,
-        7, 0, 0,  false, 0,  0, 0, 0,    0, 0, 0,
+        GX_TEV_ADD,   GX_CC_CPREV,    GX_CC_ZERO,     GX_CC_ZERO,
+        GX_CC_ZERO,   GX_CS_SCALE_1,  GX_TB_ZERO,     GX_ENABLE,
+        GX_TEVPREV,   GX_TEV_ADD,     GX_CA_ZERO,     GX_CA_ZERO,
+        GX_CA_ZERO,   GX_CA_APREV,    GX_CS_SCALE_1,  GX_TB_ZERO,
+        GX_DISABLE,   GX_TEVPREV,     GX_TC_LINEAR,   GX_TEV_SWAP0,
+        GX_TEV_SWAP0, GX_TEV_KCSEL_1, GX_TEV_KASEL_1,
     } },
 };
 
 static HSD_TECnst ftMaterial_803C6A44 = {
     HSD_TE_CNST, NULL, NULL, HSD_TE_RGB, HSD_TE_U8, 0xFF, 0xFF, 0, 0,
 };
-
-#ifdef MUST_MATCH
-#pragma force_active on
-#endif
 
 void ftMaterial_800BF260(void)
 {
@@ -224,10 +221,10 @@ void ftMaterial_800BF6BC(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp)
     GXColor sp168;
     u8 _padA[84];
     HSD_TECnst sp_cnst1;
-    u8 _padB[80];
-    GXColor unused;
+    u8 _padB[84];
     HSD_TECnst sp_cnst2;
     HSD_TevDesc sp_tevdesc;
+    GXColor color;
 
     s32 chk1;
     s32 var_r0;
@@ -259,7 +256,6 @@ void ftMaterial_800BF6BC(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp)
                 GXColor* color_hex = &overlay->x2C_hex;
                 s32 temp_r8;
                 s32 temp_r7;
-                s32 temp_r4;
 
                 temp_alpha =
                     ((0xFF - fp_color->a) * (0xFF - color_hex->a)) / 255;
@@ -270,8 +266,7 @@ void ftMaterial_800BF6BC(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp)
                     temp_r8 = fp_color->r;
                     temp_r8 += (color_hex->a * (color_hex->r - temp_r8)) / 255;
                     temp_r7 = temp_r8 * 0xFF;
-                    temp_r4 = temp_r7 / inv_alpha;
-                    sp168.r = (u8) temp_r4;
+                    sp168.r = (u8) (temp_r7 / inv_alpha);
                     if (sp168.r != 0) {
                         sp168.a = temp_r7 / sp168.r;
                     } else {
@@ -341,16 +336,10 @@ void ftMaterial_800BF6BC(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp)
                 sp_cnst1.next = NULL;
             }
             sp_cnst1.reg = (u8) reg2;
-            {
-                // @todo Fix this stack pointer arithmetic
-                GXColor* color = (GXColor*) ((u8*) &sp_tevdesc - 4);
-                u8 alpha = sp168.a;
-
-                color->r = alpha;
-                color->g = alpha;
-                color->b = alpha;
-                sp_cnst1.val = color;
-            }
+            color.r = sp168.a;
+            color.g = sp168.a;
+            color.b = sp168.a;
+            sp_cnst1.val = &color;
             HSD_TExpSetReg((HSD_TExp*) &sp_cnst1);
             sp_tevdesc = FT_TEVDESC_TMPL;
             sp_tevdesc.stage = HSD_StateAssignTev();

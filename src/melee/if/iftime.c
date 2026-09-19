@@ -1,21 +1,21 @@
-#include "if/iftime.h"
+#include "iftime.h"
 
 #include <placeholder.h>
 
-#include "dolphin/os.h"
-#include "gm/gm_unsplit.h"
-#include "if/ifall.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbarchive.h"
-#include "sc/types.h"
-
-#include <baselib/dobj.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
+#include "forward.h"
+#include "ifall.h"
+#include <dolphin/os.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
 
 #if BUILD_TARGET_PC
 #include "port/pc_scene.h"
@@ -79,7 +79,7 @@ static inline void ifTime_SetDigit(HSD_JObj* jobj, unsigned int frame)
 
 void ifTime_SetTime(HSD_JObj* jobj, int seconds, int centiseconds)
 {
-    StartMeleeRules* rules = gm_GetRules();
+    StartMeleeRules* rules = gm_GetStartMeleeRules();
     int hours;
 
     // minutes
@@ -197,7 +197,7 @@ void ifTime_FreeCountdown(void)
 {
     struct ifTime_data* x = &ifTime_data;
     if (x->countdown_timer != NULL) {
-        HSD_GObjPLink_80390228(x->countdown_timer);
+        HSD_GObjFree(x->countdown_timer);
         x->countdown_timer = NULL;
     }
 }
@@ -211,7 +211,7 @@ void ifTime_UpdateTimers(HSD_GObj* arg0)
     u8 tmp;
     PAD_STACK(8);
 
-    gm_GetRules();
+    gm_GetStartMeleeRules();
     seconds = gm_8016AEEC();
     centiseconds = gm_8016AF0C();
     ifTime_SetTime(jobj, seconds, centiseconds);
@@ -232,7 +232,7 @@ void ifTime_UpdateTimers(HSD_GObj* arg0)
         HSD_JObjSetTranslate(jobj2, ifAll_GetTimerPosition());
         HSD_GObj_SetupProc(x->countdown_timer, ifTime_UpdateCountdown, 17);
         if (x->match_timer) {
-            HSD_GObjPLink_80390228(x->match_timer);
+            HSD_GObjFree(x->match_timer);
             x->match_timer = NULL;
         }
     }
@@ -241,13 +241,13 @@ void ifTime_UpdateTimers(HSD_GObj* arg0)
 
 void ifTime_CreateTimers(void)
 {
-    StartMeleeRules* rules = gm_GetRules();
+    StartMeleeRules* rules = gm_GetStartMeleeRules();
     HSD_GObj* gobj;
     HSD_JObj* jobj;
     HSD_JObj* digit;
     int i;
     void *anims, *matanims, *shapeanims;
-    if (!rules->x1_0 && !rules->x0_6) {
+    if (!rules->x1_0 && !rules->timer_enabled) {
         ifTime_data.match_timer = NULL;
         return;
     }
@@ -296,11 +296,11 @@ void ifTime_FreeTimers(void)
 {
     struct ifTime_data* x = &ifTime_data;
     if (x->match_timer != NULL) {
-        HSD_GObjPLink_80390228(x->match_timer);
+        HSD_GObjFree(x->match_timer);
         x->match_timer = NULL;
     }
     if (x->countdown_timer != NULL) {
-        HSD_GObjPLink_80390228(x->countdown_timer);
+        HSD_GObjFree(x->countdown_timer);
         x->countdown_timer = NULL;
     }
 }

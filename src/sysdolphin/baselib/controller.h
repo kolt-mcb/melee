@@ -1,12 +1,12 @@
 #ifndef _controller_h_
 #define _controller_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/forward.h"
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/pad.h>
-#include <baselib/rumble.h>
+#include <sysdolphin/baselib/rumble.h>
 
 typedef u32 HSD_Pad;
 
@@ -132,5 +132,6 @@ void HSD_PadRenewGameStatus(void);
 void HSD_PadRenewStatus(void);
 void HSD_PadReset(void);
 void HSD_PadInit(u8, HSD_PadData*, u16, HSD_PadRumbleListData*);
+extern PadLibData HSD_PadLibData;
 
 #endif

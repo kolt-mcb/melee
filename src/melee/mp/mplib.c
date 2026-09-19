@@ -1,3 +1,8 @@
+/**
+ * @file
+ * @copydoc melee/mp/mplib.h
+ */
+
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
@@ -30,48 +35,45 @@
 #define MP_FMAF(a, b, c) ((a) * (b) + (c))
 #endif
 
-#include "mpisland.h"
-#include "placeholder.h"
-#include "platform.h"
-#include "stdbool.h"
-#include "types.h"
+#include <Runtime/platform.h>
 
-#include "baselib/debug.h"
-
-#include "baselib/forward.h"
-
-#include "baselib/memory.h"
-#include "db/db.h"
-#include "dolphin/gx/GXGeometry.h"
-#include "dolphin/gx/GXStruct.h"
-#include "dolphin/gx/GXVert.h"
-#include "dolphin/types.h"
-#include "ft/ftlib.h"
-#include "gr/grdynamicattr.h"
-#include "gr/ground.h"
-#include "it/inlines.h"
-#include "it/it_26B1.h"
-#include "it/itCharItems.h"
-
-#include "lb/forward.h"
-#include "mp/forward.h"
-
-#include "mp/mpcoll.h"
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <math.h>
+#include <placeholder.h>
+#include <stdbool.h>
 #include <stddef.h>
+
+#include "forward.h"
+#include "mpcoll.h"
+#include "mpisland.h"
+#include "types.h"
+#include <dolphin/gx/GXGeometry.h>
+#include <dolphin/gx/GXStruct.h>
+#include <dolphin/gx/GXVert.h>
 #include <dolphin/mtx.h>
-#include <baselib/jobj.h>
-#include <sysdolphin/baselib/cobj.h>
-#include <sysdolphin/baselib/gobj.h>
-#include <sysdolphin/baselib/gobjproc.h>
-#include <sysdolphin/baselib/lobj.h>
-#include <sysdolphin/baselib/tev.h>
-#include <sysdolphin/baselib/texp.h>
+#include <dolphin/types.h>
 #include <melee/cm/camera.h>
 #include <melee/cm/types.h>
+#include <melee/db/db.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gr/grdynamicattr.h>
+#include <melee/gr/ground.h>
 #include <melee/gr/stage.h>
+#include <melee/it/inlines.h>
+#include <melee/it/it_26B1.h>
+#include <melee/it/itCharItems.h>
 #include <melee/lb/types.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/tev.h>
+#include <sysdolphin/baselib/texp.h>
 
 /* PC port: mpLib_804D64B4 is the collision world, and it is legitimately
  * NULL before any is loaded -- so the bounds test in this macro dereferenced
@@ -1120,8 +1122,8 @@ void mpLibLoad(MapCollData* coll_data)
 #endif
     mpPruneEmptyLines(coll_data);
 
-    floor_count = coll_data->floor_count;
-    floor_start = coll_data->floor_start;
+    floor_count = coll_data->ranges[MapLineGroup_Floor].count;
+    floor_start = coll_data->ranges[MapLineGroup_Floor].start;
     for (; floor_count > 0; floor_count--) {
         groundCollLine[floor_start].flags =
             coll_data->lines[floor_start].hi_flags | LINE_FLAG_ENABLED;
@@ -1129,8 +1131,8 @@ void mpLibLoad(MapCollData* coll_data)
         floor_start++;
     }
 
-    ceiling_count = coll_data->ceiling_count;
-    ceiling_start = coll_data->ceiling_start;
+    ceiling_count = coll_data->ranges[MapLineGroup_Ceiling].count;
+    ceiling_start = coll_data->ranges[MapLineGroup_Ceiling].start;
     for (; ceiling_count > 0; ceiling_count--) {
         groundCollLine[ceiling_start].flags =
             coll_data->lines[ceiling_start].hi_flags | LINE_FLAG_ENABLED;
@@ -1138,8 +1140,8 @@ void mpLibLoad(MapCollData* coll_data)
         ceiling_start++;
     }
 
-    right_wall_count = coll_data->right_wall_count;
-    right_wall_start = coll_data->right_wall_start;
+    right_wall_count = coll_data->ranges[MapLineGroup_RightWall].count;
+    right_wall_start = coll_data->ranges[MapLineGroup_RightWall].start;
     for (; right_wall_count > 0; right_wall_count--) {
         groundCollLine[right_wall_start].flags =
             coll_data->lines[right_wall_start].hi_flags | LINE_FLAG_ENABLED;
@@ -1148,8 +1150,8 @@ void mpLibLoad(MapCollData* coll_data)
         right_wall_start++;
     }
 
-    left_wall_count = coll_data->left_wall_count;
-    left_wall_start = coll_data->left_wall_start;
+    left_wall_count = coll_data->ranges[MapLineGroup_LeftWall].count;
+    left_wall_start = coll_data->ranges[MapLineGroup_LeftWall].start;
     for (; left_wall_count > 0; left_wall_count--) {
         groundCollLine[left_wall_start].flags =
             coll_data->lines[left_wall_start].hi_flags | LINE_FLAG_ENABLED;
@@ -1158,8 +1160,8 @@ void mpLibLoad(MapCollData* coll_data)
         left_wall_start++;
     }
 
-    dynamic_count = coll_data->dynamic_count;
-    dynamic_start = coll_data->dynamic_start;
+    dynamic_count = coll_data->ranges[MapLineGroup_Dynamic].count;
+    dynamic_start = coll_data->ranges[MapLineGroup_Dynamic].start;
     for (; dynamic_count > 0; dynamic_count--) {
         groundCollLine[dynamic_start].flags =
             coll_data->lines[dynamic_start].hi_flags | LINE_FLAG_ENABLED;
@@ -1209,20 +1211,25 @@ void mpLibLoad(MapCollData* coll_data)
         fprintf(stderr, "[MPDUMP] verts=%d lines=%d joints=%d floors=%d..+%d "
                 "ceil=%d..+%d rwall=%d..+%d lwall=%d..+%d dyn=%d..+%d scale=%.3f\n",
                 coll_data->vert_count, coll_data->line_count,
-                coll_data->joint_count, coll_data->floor_start,
-                coll_data->floor_count, coll_data->ceiling_start,
-                coll_data->ceiling_count, coll_data->right_wall_start,
-                coll_data->right_wall_count, coll_data->left_wall_start,
-                coll_data->left_wall_count, coll_data->dynamic_start,
-                coll_data->dynamic_count, (double) f31);
+                coll_data->joint_count,
+                coll_data->ranges[MapLineGroup_Floor].start,
+                coll_data->ranges[MapLineGroup_Floor].count,
+                coll_data->ranges[MapLineGroup_Ceiling].start,
+                coll_data->ranges[MapLineGroup_Ceiling].count,
+                coll_data->ranges[MapLineGroup_RightWall].start,
+                coll_data->ranges[MapLineGroup_RightWall].count,
+                coll_data->ranges[MapLineGroup_LeftWall].start,
+                coll_data->ranges[MapLineGroup_LeftWall].count,
+                coll_data->ranges[MapLineGroup_Dynamic].start,
+                coll_data->ranges[MapLineGroup_Dynamic].count, (double) f31);
         for (jn = 0; jn < coll_data->joint_count; jn++) {
             MapJoint* mj = &coll_data->joints[jn];
             fprintf(stderr, "[MPDUMP] joint %d: floor=%d+%d ceil=%d+%d rw=%d+%d "
                     "lw=%d+%d dyn=%d+%d vtx=%d+%d bounds=[%.1f,%.1f..%.1f,%.1f]\n",
-                    jn, mj->floor_start, mj->floor_count, mj->ceiling_start,
-                    mj->ceiling_count, mj->right_wall_start,
-                    mj->right_wall_count, mj->left_wall_start,
-                    mj->left_wall_count, mj->dynamic_start, mj->dynamic_count,
+                    jn, mj->ranges[MapLineGroup_Floor].start, mj->ranges[MapLineGroup_Floor].count, mj->ranges[MapLineGroup_Ceiling].start,
+                    mj->ranges[MapLineGroup_Ceiling].count, mj->ranges[MapLineGroup_RightWall].start,
+                    mj->ranges[MapLineGroup_RightWall].count, mj->ranges[MapLineGroup_LeftWall].start,
+                    mj->ranges[MapLineGroup_LeftWall].count, mj->ranges[MapLineGroup_Dynamic].start, mj->ranges[MapLineGroup_Dynamic].count,
                     mj->vtx_start, mj->vtx_count, (double) mj->left_bound,
                     (double) mj->bottom_bound, (double) mj->right_bound,
                     (double) mj->top_bound);
@@ -1890,9 +1897,9 @@ bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
 
         j_inner = joint->inner;
         i_r28 = 0;
-        var_r25 = j_inner->floor_count;
-        var_r24 = j_inner->dynamic_count;
-        line_r26 = &groundCollLine[j_inner->floor_start];
+        var_r25 = j_inner->ranges[MapLineGroup_Floor].count;
+        var_r24 = j_inner->ranges[MapLineGroup_Dynamic].count;
+        line_r26 = &groundCollLine[j_inner->ranges[MapLineGroup_Floor].start];
         for (; i_r28 < var_r25; i_r28 += 1, line_r26 += 1) {
             float px_sp54;
             float py_sp50;
@@ -1918,26 +1925,12 @@ bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
                 continue;
             }
 
-#if BUILD_TARGET_PC
-            /* The original derives the line index from a raw byte difference
-             * divided by 8 -- sizeof(CollLine) on GameCube, where it is
-             * { MapLine*; u32; }. Here the pointer widens and the struct is
-             * 16 bytes, so that division produced twice the real index and
-             * mpLib_8004ED5C read past the end of groundCollLine[]; line->x0
-             * was then garbage. Typed pointer subtraction is the index on
-             * both targets. (It also drops two (s32) casts that truncate a
-             * 64-bit pointer.) */
-            line_offset = (s32) (line_r26 - groundCollLine);
-            if (line_id_skip == line_offset) {
-                continue;
-            }
-#else
-            if (line_id_skip ==
-                (line_offset = (s32) line_r26 - (s32) groundCollLine) / 8)
+            if (line_id_skip == (line_offset = (intptr_t) line_r26 -
+                                               (intptr_t) groundCollLine) /
+                                    (ssize_t) sizeof(CollLine))
             {
                 continue;
             }
-#endif
 
             if (!(line_r26->flags & CollLine_Floor) ||
                 !(line_r26->flags & LINE_FLAG_ENABLED) ||
@@ -1946,17 +1939,17 @@ bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
                 continue;
             }
 
-#if BUILD_TARGET_PC
-            mpLib_8004ED5C(line_offset, &x0_sp48, &y0_sp44, &x1_sp40,
-                           &y1_sp3C);
-#else
-            mpLib_8004ED5C(line_offset / 8, &x0_sp48, &y0_sp44, &x1_sp40,
-                           &y1_sp3C);
-#endif
+            mpLib_8004ED5C(line_offset / (ssize_t) sizeof(CollLine), &x0_sp48,
+                           &y0_sp44, &x1_sp40, &y1_sp3C);
             y0_sp44 += y_offset;
             y1_sp3C += y_offset;
 #if BUILD_TARGET_PC
-            if (getenv("MELEE_FLOORTRACE") != NULL && line_offset == 24) {
+            /* line_offset is a byte offset, not a line id: divide before
+             * comparing (upstream now spells the stride sizeof(CollLine),
+             * which is 16 here and 8 on the console). */
+            if (getenv("MELEE_FLOORTRACE") != NULL &&
+                line_offset / (ssize_t) sizeof(CollLine) == 24)
+            {
                 static int n2 = 0;
                 if (n2 < 200) { n2++;
                     fprintf(stderr, "[FLOOR] line 24 seg=(%.2f,%.2f)-(%.2f,%.2f) path=(%.2f,%.2f)-(%.2f,%.2f) flags=%x\n",
@@ -2026,7 +2019,9 @@ bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
             var_r25 = var_r24;
             i_r28 = 0;
             var_r24 = 0;
-            line_r26 = &groundCollLine[joint->inner->dynamic_start];
+            line_r26 =
+                &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                    .start];
             goto block_8;
         }
     }
@@ -2071,9 +2066,9 @@ bool mpCheckFloorRemap(float ax, float ay, float bx, float by, float y_offset,
             continue;
         }
 
-        count = joint->inner->floor_count;
-        count2 = joint->inner->dynamic_count;
-        line = &groundCollLine[joint->inner->floor_start];
+        count = joint->inner->ranges[MapLineGroup_Floor].count;
+        count2 = joint->inner->ranges[MapLineGroup_Dynamic].count;
+        line = &groundCollLine[joint->inner->ranges[MapLineGroup_Floor].start];
         for (i = 0; i < count; i++, line++) {
         block_8:
             if (cb != NULL && !cb(gobj, line - groundCollLine)) {
@@ -2198,7 +2193,8 @@ bool mpCheckFloorRemap(float ax, float ay, float bx, float by, float y_offset,
             count = count2;
             i = 0;
             count2 = 0;
-            line = &groundCollLine[joint->inner->dynamic_start];
+            line = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                       .start];
             goto block_8;
         }
     }
@@ -2243,9 +2239,10 @@ bool mpCheckCeiling(float ax, float ay, float bx, float by, Vec3* vec_out,
 
         j_inner = joint->inner;
         i_r28 = 0;
-        var_r25 = j_inner->ceiling_count;
-        var_r24 = j_inner->dynamic_count;
-        line_r26 = &groundCollLine[j_inner->ceiling_start];
+        var_r25 = j_inner->ranges[MapLineGroup_Ceiling].count;
+        var_r24 = j_inner->ranges[MapLineGroup_Dynamic].count;
+        line_r26 =
+            &groundCollLine[j_inner->ranges[MapLineGroup_Ceiling].start];
         for (; i_r28 < var_r25; i_r28 += 1, line_r26 += 1) {
             float int_x;
             float int_y;
@@ -2335,7 +2332,9 @@ bool mpCheckCeiling(float ax, float ay, float bx, float by, Vec3* vec_out,
             var_r25 = var_r24;
             i_r28 = 0;
             var_r24 = 0;
-            line_r26 = &groundCollLine[joint->inner->dynamic_start];
+            line_r26 =
+                &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                    .start];
             goto block_8;
         }
     }
@@ -2378,9 +2377,10 @@ bool mpCheckCeilingRemap(float ax, float ay, float bx, float by, Vec3* vec_out,
             continue;
         }
 
-        r25 = joint->inner->ceiling_count;
-        r24 = joint->inner->dynamic_count;
-        r26 = &groundCollLine[joint->inner->ceiling_start];
+        r25 = joint->inner->ranges[MapLineGroup_Ceiling].count;
+        r24 = joint->inner->ranges[MapLineGroup_Dynamic].count;
+        r26 =
+            &groundCollLine[joint->inner->ranges[MapLineGroup_Ceiling].start];
         for (r28 = 0; r28 < r25; r28++, r26++) {
         block_8:
             if (r26->flags & CollLine_Ceiling &&
@@ -2503,7 +2503,8 @@ bool mpCheckCeilingRemap(float ax, float ay, float bx, float by, Vec3* vec_out,
             r25 = r24;
             r28 = 0;
             r24 = 0;
-            r26 = &groundCollLine[joint->inner->dynamic_start];
+            r26 = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                      .start];
             goto block_8;
         }
     }
@@ -2607,9 +2608,9 @@ bool mpCheckLeftWall(float ax, float ay, float bx, float by, Vec3* vec_out,
 
         j_inner = joint->inner;
 
-        count = j_inner->left_wall_count;
-        dynamic_count = j_inner->dynamic_count;
-        line = &groundCollLine[j_inner->left_wall_start];
+        count = j_inner->ranges[MapLineGroup_LeftWall].count;
+        dynamic_count = j_inner->ranges[MapLineGroup_Dynamic].count;
+        line = &groundCollLine[j_inner->ranges[MapLineGroup_LeftWall].start];
 
         for (i = 0; i < count; i++, line++) {
         block_8:
@@ -2695,7 +2696,8 @@ bool mpCheckLeftWall(float ax, float ay, float bx, float by, Vec3* vec_out,
             count = dynamic_count;
             i = 0;
             dynamic_count = 0;
-            line = &groundCollLine[joint->inner->dynamic_start];
+            line = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                       .start];
             goto block_8;
         }
     }
@@ -2745,9 +2747,9 @@ bool mpCheckLeftWallRemap(float ax, float ay, float bx, float by,
         }
 
         j_inner = joint->inner;
-        count = j_inner->left_wall_count;
-        dynamic_count = j_inner->dynamic_count;
-        line = &groundCollLine[j_inner->left_wall_start];
+        count = j_inner->ranges[MapLineGroup_LeftWall].count;
+        dynamic_count = j_inner->ranges[MapLineGroup_Dynamic].count;
+        line = &groundCollLine[j_inner->ranges[MapLineGroup_LeftWall].start];
         for (i = 0; i < count; i++, line++) {
         block_8:
             if (line->flags & CollLine_LeftWall &&
@@ -2874,7 +2876,8 @@ bool mpCheckLeftWallRemap(float ax, float ay, float bx, float by,
             count = dynamic_count;
             i = 0;
             dynamic_count = 0;
-            line = &groundCollLine[joint->inner->dynamic_start];
+            line = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                       .start];
             goto block_8;
         }
     }
@@ -2923,9 +2926,9 @@ bool mpCheckRightWall(float ax, float ay, float bx, float by, Vec3* vec_out,
 
         j_inner = joint->inner;
 
-        count = j_inner->right_wall_count;
-        dynamic_count = j_inner->dynamic_count;
-        line = &groundCollLine[j_inner->right_wall_start];
+        count = j_inner->ranges[MapLineGroup_RightWall].count;
+        dynamic_count = j_inner->ranges[MapLineGroup_Dynamic].count;
+        line = &groundCollLine[j_inner->ranges[MapLineGroup_RightWall].start];
 
         for (i = 0; i < count; i++, line++) {
         block_8:
@@ -3010,7 +3013,8 @@ bool mpCheckRightWall(float ax, float ay, float bx, float by, Vec3* vec_out,
             count = dynamic_count;
             i = 0;
             dynamic_count = 0;
-            line = &groundCollLine[joint->inner->dynamic_start];
+            line = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                       .start];
             goto block_8;
         }
     }
@@ -3061,9 +3065,9 @@ bool mpCheckRightWallRemap(float ax, float ay, float bx, float by,
         }
 
         j_inner = joint->inner;
-        count = j_inner->right_wall_count;
-        dynamic_count = j_inner->dynamic_count;
-        line = &groundCollLine[j_inner->right_wall_start];
+        count = j_inner->ranges[MapLineGroup_RightWall].count;
+        dynamic_count = j_inner->ranges[MapLineGroup_Dynamic].count;
+        line = &groundCollLine[j_inner->ranges[MapLineGroup_RightWall].start];
         for (i = 0; i < count; i++, line++) {
         block_8:
             if (line->flags & CollLine_RightWall &&
@@ -3190,7 +3194,8 @@ bool mpCheckRightWallRemap(float ax, float ay, float bx, float by,
             count = dynamic_count;
             i = 0;
             dynamic_count = 0;
-            line = &groundCollLine[joint->inner->dynamic_start];
+            line = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                       .start];
             goto block_8;
         }
     }
@@ -3240,9 +3245,9 @@ bool mpLib_800511A4_RightWall(float ax, float ay, float bx, float by, float cx,
 
         j_inner = joint->inner;
 
-        count = j_inner->right_wall_count;
-        dynamic_count = j_inner->dynamic_count;
-        line = &groundCollLine[j_inner->right_wall_start];
+        count = j_inner->ranges[MapLineGroup_RightWall].count;
+        dynamic_count = j_inner->ranges[MapLineGroup_Dynamic].count;
+        line = &groundCollLine[j_inner->ranges[MapLineGroup_RightWall].start];
         for (i = 0; i < count; i++, line++) {
         block_8:
             if (line->flags & CollLine_RightWall &&
@@ -3336,7 +3341,8 @@ bool mpLib_800511A4_RightWall(float ax, float ay, float bx, float by, float cx,
             count = dynamic_count;
             i = 0;
             dynamic_count = 0;
-            line = &groundCollLine[joint->inner->dynamic_start];
+            line = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                       .start];
             goto block_8;
         }
     }
@@ -3387,9 +3393,9 @@ bool mpLib_800515A0_LeftWall(float a0x, float a0y, float a1x, float a1y,
 
         j_inner = joint->inner;
 
-        count = j_inner->left_wall_count;
-        dynamic_count = j_inner->dynamic_count;
-        line = &groundCollLine[j_inner->left_wall_start];
+        count = j_inner->ranges[MapLineGroup_LeftWall].count;
+        dynamic_count = j_inner->ranges[MapLineGroup_Dynamic].count;
+        line = &groundCollLine[j_inner->ranges[MapLineGroup_LeftWall].start];
         for (i = 0; i < count; i++, line++) {
         block_8:
             if (line->flags & CollLine_LeftWall &&
@@ -3485,7 +3491,8 @@ bool mpLib_800515A0_LeftWall(float a0x, float a0y, float a1x, float a1y,
             count = dynamic_count;
             i = 0;
             dynamic_count = 0;
-            line = &groundCollLine[joint->inner->dynamic_start];
+            line = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                       .start];
             goto block_8;
         }
     }
@@ -3524,9 +3531,10 @@ int mpLib_8005199C_Floor(Vec3* vec, int joint_id_skip, int joint_id_only)
         {
             MapJoint* j_inner = joint->inner;
             int i;
-            CollLine* line = &groundCollLine[j_inner->floor_start];
-            int count = j_inner->floor_count;
-            int dynamic_count = j_inner->dynamic_count;
+            CollLine* line =
+                &groundCollLine[j_inner->ranges[MapLineGroup_Floor].start];
+            int count = j_inner->ranges[MapLineGroup_Floor].count;
+            int dynamic_count = j_inner->ranges[MapLineGroup_Dynamic].count;
             for (i = 0; i < count; i++, line++) {
             block8:
                 if (line->flags & CollLine_Floor &&
@@ -3554,10 +3562,10 @@ int mpLib_8005199C_Floor(Vec3* vec, int joint_id_skip, int joint_id_only)
                              * 80051B1C would show. */
                             {
                                 static int lo = -1, hi = -1;
-                                extern u32 gm_8016AEDC(void);
+                                extern u32 gm_GetFrameCount(void);
                                 if (lo < 0) { const char* e = getenv("MELEE_MPTRACE"); lo = hi = 0;
                                     if (e) sscanf(e, "%d-%d", &lo, &hi); }
-                                if (hi > 0) { u32 fr = gm_8016AEDC();
+                                if (hi > 0) { u32 fr = gm_GetFrameCount();
                                     if ((int) fr >= lo && (int) fr <= hi)
                                         fprintf(stderr, "[MPTRACE] f%u floor: joint %d line %d x=%08x y=%08x x0=%08x y0=%08x x1=%08x y1=%08x fma=%08x\n",
                                                 fr, (int) (joint - groundCollJoint), (int) (line - groundCollLine),
@@ -3577,7 +3585,8 @@ int mpLib_8005199C_Floor(Vec3* vec, int joint_id_skip, int joint_id_only)
             if (dynamic_count != 0) {
                 count = dynamic_count;
                 i = 0;
-                line = &groundCollLine[j_inner->dynamic_start];
+                line = &groundCollLine[j_inner->ranges[MapLineGroup_Dynamic]
+                                           .start];
                 dynamic_count = 0;
                 goto block8;
             }
@@ -3630,9 +3639,12 @@ int mpLib_80051BA8_Floor(Vec3* out_vec, int line_id_skip, int joint_id_skip,
 
         if (joint_id_only == -1 || joint_id_only == joint - groundCollJoint) {
             int i;
-            CollLine* line = &groundCollLine[joint->inner->floor_start];
-            int count = joint->inner->floor_count;
-            int dynamic_cout = joint->inner->dynamic_count;
+            CollLine* line =
+                &groundCollLine[joint->inner->ranges[MapLineGroup_Floor]
+                                    .start];
+            int count = joint->inner->ranges[MapLineGroup_Floor].count;
+            int dynamic_cout =
+                joint->inner->ranges[MapLineGroup_Dynamic].count;
             for (i = 0; i < count; i++, line++) {
             reset:
                 new_id = line - groundCollLine;
@@ -3711,7 +3723,9 @@ int mpLib_80051BA8_Floor(Vec3* out_vec, int line_id_skip, int joint_id_skip,
             if (dynamic_cout != 0) {
                 count = dynamic_cout;
                 i = 0;
-                line = &groundCollLine[joint->inner->dynamic_start];
+                line =
+                    &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic]
+                                        .start];
                 dynamic_cout = 0;
                 goto reset;
             }
@@ -4492,7 +4506,7 @@ void mpFloorGetRight(int line_id, Vec3* pos_out)
 again: {
     MapLine* line;
     int next;
-    line = MP_LINE_AT(w.id * sizeof(CollLine))->x0;
+    line = groundCollLine[(u32) w.id].x0;
     line_offset = w.id * sizeof(CollLine);
     next = line->next_id1;
     w.id = mpLineGetNextCheckInline(line, next);
@@ -4528,7 +4542,7 @@ void mpFloorGetLeft(int line_id, Vec3* pos_out)
 again: {
     MapLine* line;
     int next;
-    line = MP_LINE_AT(w.id * sizeof(CollLine))->x0;
+    line = groundCollLine[(u32) w.id].x0;
     line_offset = w.id * sizeof(CollLine);
     next = line->prev_id1;
     w.id = mpLineGetPrevCheckInline(line, next);
@@ -4567,7 +4581,7 @@ void mpCeilingGetRight(int line_id, Vec3* pos_out)
 again: {
     MapLine* line;
     int next;
-    line = MP_LINE_AT(w.id * sizeof(CollLine))->x0;
+    line = groundCollLine[(u32) w.id].x0;
     line_offset = w.id * sizeof(CollLine);
     next = line->prev_id1;
     w.id = mpLineGetPrevCheckInline(line, next);
@@ -4606,7 +4620,7 @@ void mpCeilingGetLeft(int line_id, Vec3* pos_out)
 again: {
     MapLine* line;
     int next;
-    line = MP_LINE_AT(w.id * sizeof(CollLine))->x0;
+    line = groundCollLine[(u32) w.id].x0;
     line_offset = w.id * sizeof(CollLine);
     next = line->next_id1;
     w.id = mpLineGetNextCheckInline(line, next);
@@ -4645,7 +4659,7 @@ void mpLeftWallGetTop(int line_id, Vec3* pos_out)
 again: {
     MapLine* line;
     int next;
-    line = MP_LINE_AT(w.id * sizeof(CollLine))->x0;
+    line = groundCollLine[(u32) w.id].x0;
     line_offset = w.id * sizeof(CollLine);
     next = line->next_id1;
     w.id = mpLineGetNextCheckInline(line, next);
@@ -4684,7 +4698,7 @@ void mpLeftWallGetBottom(int line_id, Vec3* pos_out)
 again: {
     MapLine* line;
     int next;
-    line = MP_LINE_AT(w.id * sizeof(CollLine))->x0;
+    line = groundCollLine[(u32) w.id].x0;
     line_offset = w.id * sizeof(CollLine);
     next = line->prev_id1;
     w.id = mpLineGetPrevCheckInline(line, next);
@@ -4723,7 +4737,7 @@ void mpRightWallGetTop(int line_id, Vec3* pos_out)
 again: {
     MapLine* line;
     int next;
-    line = MP_LINE_AT(w.id * sizeof(CollLine))->x0;
+    line = groundCollLine[(u32) w.id].x0;
     line_offset = w.id * sizeof(CollLine);
     next = line->prev_id1;
     w.id = mpLineGetPrevCheckInline(line, next);
@@ -4762,7 +4776,7 @@ void mpRightWallGetBottom(int line_id, Vec3* pos_out)
 again: {
     MapLine* line;
     int next;
-    line = MP_LINE_AT(w.id * sizeof(CollLine))->x0;
+    line = groundCollLine[(u32) w.id].x0;
     line_offset = w.id * sizeof(CollLine);
     next = line->next_id1;
     w.id = mpLineGetNextCheckInline(line, next);
@@ -4970,60 +4984,33 @@ bool mpLinesConnected(int start_id, int target_id)
     return false;
 }
 
-static inline HSD_JObj* jobj_child(HSD_JObj* jobj)
-{
-    if (jobj == NULL) {
-        return NULL;
-    }
-
-    return jobj->child;
-}
-
-static inline HSD_JObj* jobj_next(HSD_JObj* jobj)
-{
-    if (jobj == NULL) {
-        return NULL;
-    }
-
-    return jobj->next;
-}
-
-static inline HSD_JObj* jobj_parent(HSD_JObj* jobj)
-{
-    if (jobj == NULL) {
-        return NULL;
-    }
-
-    return jobj->parent;
-}
-
 /// what even is this lol
 void mpLib_800552B0(int joint_id, HSD_JObj* jobj, int z)
 {
     s32 i;
     HSD_JObj* r7;
 
-    for (r7 = jobj_child(jobj), i = 0; r7 != NULL && i != z; i++) {
+    for (r7 = HSD_JObjGetChild(jobj), i = 0; r7 != NULL && i != z; i++) {
         if (!(r7->flags & CollJoint_TooFar)) {
-            if (jobj_child(r7) != NULL) {
-                r7 = jobj_child(r7);
+            if (HSD_JObjGetChild(r7) != NULL) {
+                r7 = HSD_JObjGetChild(r7);
                 continue;
             }
         }
 
-        if (jobj_next(r7) != NULL) {
-            r7 = jobj_next(r7);
+        if (HSD_JObjGetNext(r7) != NULL) {
+            r7 = HSD_JObjGetNext(r7);
             continue;
         }
 
         while (true) {
-            if (jobj_parent(r7) == NULL) {
+            if (HSD_JObjGetParent(r7) == NULL) {
                 r7 = NULL;
             } else {
-                if (jobj_next(jobj_parent(r7)) != NULL) {
-                    r7 = jobj_next(jobj_parent(r7));
+                if (HSD_JObjGetNext(HSD_JObjGetParent(r7)) != NULL) {
+                    r7 = HSD_JObjGetNext(HSD_JObjGetParent(r7));
                 } else {
-                    r7 = jobj_parent(r7);
+                    r7 = HSD_JObjGetParent(r7);
                     continue;
                 }
             }
@@ -5074,36 +5061,36 @@ void mpJointHide(int joint_id)
     joint = &groundCollJoint[joint_id];
     joint->flags |= CollJoint_Hidden;
 
-    count = joint->inner->floor_count;
-    line = &groundCollLine[joint->inner->floor_start];
+    count = joint->inner->ranges[MapLineGroup_Floor].count;
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_Floor].start];
     while (count-- > 0) {
         line->flags |= LINE_FLAG_HIDDEN;
         line++;
     }
 
-    count = joint->inner->ceiling_count;
-    line = &groundCollLine[joint->inner->ceiling_start];
+    count = joint->inner->ranges[MapLineGroup_Ceiling].count;
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_Ceiling].start];
     while (count-- > 0) {
         line->flags |= LINE_FLAG_HIDDEN;
         line++;
     }
 
-    count = joint->inner->left_wall_count;
-    line = &groundCollLine[joint->inner->left_wall_start];
+    count = joint->inner->ranges[MapLineGroup_LeftWall].count;
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_LeftWall].start];
     while (count-- > 0) {
         line->flags |= LINE_FLAG_HIDDEN;
         line++;
     }
 
-    count = joint->inner->right_wall_count;
-    line = &groundCollLine[joint->inner->right_wall_start];
+    count = joint->inner->ranges[MapLineGroup_RightWall].count;
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_RightWall].start];
     while (count-- > 0) {
         line->flags |= LINE_FLAG_HIDDEN;
         line++;
     }
 
-    count = joint->inner->dynamic_count;
-    line = &groundCollLine[joint->inner->dynamic_start];
+    count = joint->inner->ranges[MapLineGroup_Dynamic].count;
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic].start];
     while (count-- > 0) {
         line->flags |= LINE_FLAG_HIDDEN;
         line++;
@@ -5124,36 +5111,36 @@ void mpJointUnhide(int joint_id)
     joint = &groundCollJoint[joint_id];
     joint->flags &= ~CollJoint_Hidden;
 
-    count = joint->inner->floor_count;
-    line = &groundCollLine[joint->inner->floor_start];
+    count = joint->inner->ranges[MapLineGroup_Floor].count;
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_Floor].start];
     while (count-- > 0) {
         line->flags &= ~LINE_FLAG_HIDDEN;
         line++;
     }
 
-    count = joint->inner->ceiling_count;
-    line = &groundCollLine[joint->inner->ceiling_start];
+    count = joint->inner->ranges[MapLineGroup_Ceiling].count;
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_Ceiling].start];
     while (count-- > 0) {
         line->flags &= ~LINE_FLAG_HIDDEN;
         line++;
     }
 
-    count = joint->inner->left_wall_count;
-    line = &groundCollLine[joint->inner->left_wall_start];
+    count = joint->inner->ranges[MapLineGroup_LeftWall].count;
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_LeftWall].start];
     while (count-- > 0) {
         line->flags &= ~LINE_FLAG_HIDDEN;
         line++;
     }
 
-    count = joint->inner->right_wall_count;
-    line = &groundCollLine[joint->inner->right_wall_start];
+    count = joint->inner->ranges[MapLineGroup_RightWall].count;
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_RightWall].start];
     while (count-- > 0) {
         line->flags &= ~LINE_FLAG_HIDDEN;
         line++;
     }
 
-    count = joint->inner->dynamic_count;
-    line = &groundCollLine[joint->inner->dynamic_start];
+    count = joint->inner->ranges[MapLineGroup_Dynamic].count;
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic].start];
     while (count-- > 0) {
         line->flags &= ~LINE_FLAG_HIDDEN;
         line++;
@@ -5176,10 +5163,10 @@ void mpJointUpdateDynamics(int joint_id)
     CollJoint* joint = &groundCollJoint[joint_id];
     CollLine* line;
     int i;
-    s16 count = joint->inner->dynamic_count;
+    s16 count = joint->inner->ranges[MapLineGroup_Dynamic].count;
     u32 kind;
 
-    line = &groundCollLine[joint->inner->dynamic_start];
+    line = &groundCollLine[joint->inner->ranges[MapLineGroup_Dynamic].start];
 
     for (i = 0; i < count; i++, line++) {
         MapLine* temp = line->x0;
@@ -5947,40 +5934,40 @@ void mpJointListAdd(int joint_id)
     joint->next = NULL;
 
     j_inner = joint->inner;
-    count_r7 = j_inner->floor_count;
-    line_r6 = &groundCollLine[j_inner->floor_start];
+    count_r7 = j_inner->ranges[MapLineGroup_Floor].count;
+    line_r6 = &groundCollLine[j_inner->ranges[MapLineGroup_Floor].start];
     while (count_r7-- > 0) {
         line_r6->flags |= LINE_FLAG_ENABLED;
         line_r6++;
     }
 
     j_inner = joint->inner;
-    count_r7 = j_inner->ceiling_count;
-    line_r6 = &groundCollLine[j_inner->ceiling_start];
+    count_r7 = j_inner->ranges[MapLineGroup_Ceiling].count;
+    line_r6 = &groundCollLine[j_inner->ranges[MapLineGroup_Ceiling].start];
     while (count_r7-- > 0) {
         line_r6->flags |= LINE_FLAG_ENABLED;
         line_r6++;
     }
 
     j_inner = joint->inner;
-    count_r7 = j_inner->left_wall_count;
-    line_r6 = &groundCollLine[j_inner->left_wall_start];
+    count_r7 = j_inner->ranges[MapLineGroup_LeftWall].count;
+    line_r6 = &groundCollLine[j_inner->ranges[MapLineGroup_LeftWall].start];
     while (count_r7-- > 0) {
         line_r6->flags |= LINE_FLAG_ENABLED;
         line_r6++;
     }
 
     j_inner = joint->inner;
-    count_r7 = j_inner->right_wall_count;
-    line_r6 = &groundCollLine[j_inner->right_wall_start];
+    count_r7 = j_inner->ranges[MapLineGroup_RightWall].count;
+    line_r6 = &groundCollLine[j_inner->ranges[MapLineGroup_RightWall].start];
     while (count_r7-- > 0) {
         line_r6->flags |= LINE_FLAG_ENABLED;
         line_r6++;
     }
 
     j_inner = joint->inner;
-    count_r7 = j_inner->dynamic_count;
-    line_r6 = &groundCollLine[j_inner->dynamic_start];
+    count_r7 = j_inner->ranges[MapLineGroup_Dynamic].count;
+    line_r6 = &groundCollLine[j_inner->ranges[MapLineGroup_Dynamic].start];
     while (count_r7-- > 0) {
         line_r6->flags |= LINE_FLAG_ENABLED;
         line_r6++;
@@ -6038,40 +6025,40 @@ void mpLib_80057BC0(int joint_id)
     mpJointListUnlink(joint);
 
     j_inner = joint->inner;
-    count = j_inner->floor_count;
-    line_r6 = &groundCollLine[j_inner->floor_start];
+    count = j_inner->ranges[MapLineGroup_Floor].count;
+    line_r6 = &groundCollLine[j_inner->ranges[MapLineGroup_Floor].start];
     for (; count > 0; count--) {
         line_r6->flags &= ~LINE_FLAG_ENABLED;
         line_r6++;
     }
 
     j_inner = joint->inner;
-    count = j_inner->ceiling_count;
-    line_r6 = &groundCollLine[j_inner->ceiling_start];
+    count = j_inner->ranges[MapLineGroup_Ceiling].count;
+    line_r6 = &groundCollLine[j_inner->ranges[MapLineGroup_Ceiling].start];
     for (; count > 0; count--) {
         line_r6->flags &= ~LINE_FLAG_ENABLED;
         line_r6++;
     }
 
     j_inner = joint->inner;
-    count = j_inner->left_wall_count;
-    line_r6 = &groundCollLine[j_inner->left_wall_start];
+    count = j_inner->ranges[MapLineGroup_LeftWall].count;
+    line_r6 = &groundCollLine[j_inner->ranges[MapLineGroup_LeftWall].start];
     for (; count > 0; count--) {
         line_r6->flags &= ~LINE_FLAG_ENABLED;
         line_r6++;
     }
 
     j_inner = joint->inner;
-    count = j_inner->right_wall_count;
-    line_r6 = &groundCollLine[j_inner->right_wall_start];
+    count = j_inner->ranges[MapLineGroup_RightWall].count;
+    line_r6 = &groundCollLine[j_inner->ranges[MapLineGroup_RightWall].start];
     for (; count > 0; count--) {
         line_r6->flags &= ~LINE_FLAG_ENABLED;
         line_r6++;
     }
 
     j_inner = joint->inner;
-    count = j_inner->dynamic_count;
-    line_r6 = &groundCollLine[j_inner->dynamic_start];
+    count = j_inner->ranges[MapLineGroup_Dynamic].count;
+    line_r6 = &groundCollLine[j_inner->ranges[MapLineGroup_Dynamic].start];
     for (; count > 0; count--) {
         line_r6->flags &= ~LINE_FLAG_ENABLED;
         line_r6++;
@@ -6206,10 +6193,6 @@ static inline void mpLib_GetJointVtxRange(CollJoint* joint, int* start,
 
 void mpLib_800581DC(int joint_id0, int joint_id1)
 {
-    struct pair {
-        s16 start;
-        s16 count;
-    };
     CollJoint* j0_r9;
     CollJoint* j1_r10;
     CollLine* line_base;
@@ -6224,14 +6207,14 @@ void mpLib_800581DC(int joint_id0, int joint_id1)
     j0_r9 = &groundCollJoint[joint_id0];
     j1_r10 = &groundCollJoint[joint_id1];
     line_base = groundCollLine;
-    for (i = 0; i < 5; i++) {
-        struct pair* pair; /* r4 */
-        int count;         /* r0 */
-        int temp;          /* r0 */
+    for (i = 0; i < MapLineGroup_Count; i++) {
+        struct MapLineRange* pair; /* r4 */
+        int count;                 /* r0 */
+        int temp;                  /* r0 */
         {
             int j;
             int idx;
-            pair = (struct pair*) j0_r9->inner + i;
+            pair = j0_r9->inner->ranges + i;
             count = pair->count;
             (void) line_base[idx = pair->start];
             ln.p = &line_base[idx];
@@ -6255,7 +6238,7 @@ void mpLib_800581DC(int joint_id0, int joint_id1)
         {
             int j;
             int idx;
-            pair = (struct pair*) j1_r10->inner + i;
+            pair = j1_r10->inner->ranges + i;
             count = pair->count;
             (void) line_base[idx = pair->start];
             ln.p = &line_base[idx];
@@ -6301,14 +6284,13 @@ void mpLib_800581DC(int joint_id0, int joint_id1)
             }
 
             // find every line with the first vert
-            for (var_r25 = 0; var_r25 < 5; var_r25++) {
+            for (var_r25 = 0; var_r25 < MapLineGroup_Count; var_r25++) {
                 int lstart_r24;
                 int i_r23;
                 int lcount_r22;
-                lcount_r22 = ((struct pair*) j0_r9->inner)[var_r25].count;
+                lcount_r22 = j0_r9->inner->ranges[var_r25].count;
                 (void) line_base[lstart_r24 =
-                                     ((struct pair*) j0_r9->inner)[var_r25]
-                                         .start];
+                                     j0_r9->inner->ranges[var_r25].start];
                 for (i_r23 = 0; i_r23 < lcount_r22; i_r23++, lstart_r24++) {
                     if (vstart0 == line_base[lstart_r24].x0->v0_idx) {
                         int j;
@@ -6316,14 +6298,12 @@ void mpLib_800581DC(int joint_id0, int joint_id1)
                         s16 lcount_r17;
                         // if the first vert is that line's v0
                         // find every line with the second vert as v1
-                        for (j = 0; j < 5; j++) {
+                        for (j = 0; j < MapLineGroup_Count; j++) {
                             int k;
-                            lcount_r17 =
-                                ((struct pair*) j1_r10->inner)[j].count;
+                            lcount_r17 = j1_r10->inner->ranges[j].count;
                             (void)
                                 line_base[lstart_r20 =
-                                              ((struct pair*) j1_r10->inner)[j]
-                                                  .start];
+                                              j1_r10->inner->ranges[j].start];
                             for (k = 0; k < lcount_r17; k++, lstart_r20++) {
                                 if (vid_r26 ==
                                     line_base[lstart_r20].x0->v1_idx)
@@ -6341,14 +6321,12 @@ void mpLib_800581DC(int joint_id0, int joint_id1)
                         s16 lcount_r17;
                         // else if the first vert is that line's v1
                         // find every line with the second vert as v0
-                        for (j = 0; j < 5; j++) {
+                        for (j = 0; j < MapLineGroup_Count; j++) {
                             int k;
-                            lcount_r17 =
-                                ((struct pair*) j1_r10->inner)[j].count;
+                            lcount_r17 = j1_r10->inner->ranges[j].count;
                             (void)
                                 line_base[lstart_r20 =
-                                              ((struct pair*) j1_r10->inner)[j]
-                                                  .start];
+                                              j1_r10->inner->ranges[j].start];
                             for (k = 0; k < lcount_r17; k++, lstart_r20++) {
                                 if (vid_r26 ==
                                     line_base[lstart_r20].x0->v0_idx)
@@ -6449,10 +6427,12 @@ void mpLib_80058614_Floor(void)
 
         {
             j_inner = joint_r7->inner;
-            count_r29 = j_inner->dynamic_count;
-            (void) groundCollVtx[count_r30 = j_inner->floor_count];
+            count_r29 = j_inner->ranges[MapLineGroup_Dynamic].count;
+            (void)
+                groundCollVtx[count_r30 =
+                                  j_inner->ranges[MapLineGroup_Floor].count];
             linebase = groundCollLine;
-            line_r31 = &linebase[j_inner->floor_start];
+            line_r31 = &linebase[j_inner->ranges[MapLineGroup_Floor].start];
 
             for (j = 0; j < count_r30; j++, line_r31++) {
                 float x0;
@@ -6503,7 +6483,9 @@ void mpLib_80058614_Floor(void)
                 count_r30 = count_r29;
                 j = 0;
                 count_r29 = 0;
-                line_r31 = &linebase[joint_r7->inner->dynamic_start];
+                line_r31 =
+                    &linebase[joint_r7->inner->ranges[MapLineGroup_Dynamic]
+                                  .start];
                 goto block_8;
             }
         }
@@ -6841,7 +6823,7 @@ void mpLib_DrawSnapping(void)
     bool var_r31;
 
     var_r31 = false;
-    ft_r27 = HSD_GObj_Entities->fighters;
+    ft_r27 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER];
     if (ft_r27 != NULL) {
         Mtx spDC;
         PAD_STACK(0x30);
@@ -6908,7 +6890,7 @@ void mpLib_DrawSnapping(void)
         }
     }
 
-    if ((item_r28 = HSD_GObj_Entities->items) != NULL) {
+    if ((item_r28 = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]) != NULL) {
         if (!var_r31) {
             Mtx sp7C;
             PAD_STACK(0x34);
@@ -7033,8 +7015,8 @@ void mpLib_80059554(void)
     coll_data_r31 = mpLib_804D64B4;
 
     total_r29 = 0;
-    count_r30 = coll_data_r31->floor_count;
-    line_r4 = &groundCollLine[coll_data_r31->floor_start];
+    count_r30 = coll_data_r31->ranges[MapLineGroup_Floor].count;
+    line_r4 = &groundCollLine[coll_data_r31->ranges[MapLineGroup_Floor].start];
 
     for (i = 0; i < count_r30; i++) {
         if (line_r4->flags & LINE_FLAG_ENABLED &&
@@ -7048,7 +7030,8 @@ void mpLib_80059554(void)
     if (total_r29 != 0) {
         mpLib_SetupDraw(mpLib_FloorColor);
         GXBegin(GX_QUADS, GX_VTXFMT0, (total_r29 * 4) & 0xFFFC);
-        line_r7 = &groundCollLine[coll_data_r31->floor_start];
+        line_r7 =
+            &groundCollLine[coll_data_r31->ranges[MapLineGroup_Floor].start];
 
         for (i = 0; i < count_r30; i++) {
             if (line_r7->flags & LINE_FLAG_ENABLED &&
@@ -7073,8 +7056,9 @@ void mpLib_80059554(void)
     }
 
     total_r29 = 0;
-    count_r30 = coll_data_r31->ceiling_count;
-    line_r4 = &groundCollLine[coll_data_r31->ceiling_start];
+    count_r30 = coll_data_r31->ranges[MapLineGroup_Ceiling].count;
+    line_r4 =
+        &groundCollLine[coll_data_r31->ranges[MapLineGroup_Ceiling].start];
 
     for (i = 0; i < count_r30; i++) {
         if (line_r4->flags & LINE_FLAG_ENABLED &&
@@ -7088,7 +7072,8 @@ void mpLib_80059554(void)
     if (total_r29 != 0) {
         mpLib_SetupDraw(mpLib_CeilingColor);
         GXBegin(GX_QUADS, GX_VTXFMT0, (total_r29 * 4) & 0xFFFC);
-        line_r7 = &groundCollLine[coll_data_r31->ceiling_start];
+        line_r7 =
+            &groundCollLine[coll_data_r31->ranges[MapLineGroup_Ceiling].start];
 
         for (i = 0; i < count_r30; i++) {
             if (line_r7->flags & LINE_FLAG_ENABLED &&
@@ -7113,8 +7098,9 @@ void mpLib_80059554(void)
     }
 
     total_r29 = 0;
-    count_r30 = coll_data_r31->right_wall_count;
-    line_r4 = &groundCollLine[coll_data_r31->right_wall_start];
+    count_r30 = coll_data_r31->ranges[MapLineGroup_RightWall].count;
+    line_r4 =
+        &groundCollLine[coll_data_r31->ranges[MapLineGroup_RightWall].start];
 
     for (i = 0; i < count_r30; i++) {
         if (line_r4->flags & LINE_FLAG_ENABLED &&
@@ -7128,7 +7114,8 @@ void mpLib_80059554(void)
     if (total_r29 != 0) {
         mpLib_SetupDraw(mpLib_RightWallColor);
         GXBegin(GX_QUADS, GX_VTXFMT0, (total_r29 * 4) & 0xFFFC);
-        line_r7 = &groundCollLine[coll_data_r31->right_wall_start];
+        line_r7 = &groundCollLine[coll_data_r31->ranges[MapLineGroup_RightWall]
+                                      .start];
 
         for (i = 0; i < count_r30; i++) {
             if (line_r7->flags & LINE_FLAG_ENABLED &&
@@ -7153,8 +7140,9 @@ void mpLib_80059554(void)
     }
 
     total_r29 = 0;
-    count_r30 = coll_data_r31->left_wall_count;
-    line_r4 = &groundCollLine[coll_data_r31->left_wall_start];
+    count_r30 = coll_data_r31->ranges[MapLineGroup_LeftWall].count;
+    line_r4 =
+        &groundCollLine[coll_data_r31->ranges[MapLineGroup_LeftWall].start];
 
     for (i = 0; i < count_r30; i++) {
         if (line_r4->flags & LINE_FLAG_ENABLED &&
@@ -7168,7 +7156,8 @@ void mpLib_80059554(void)
     if (total_r29 != 0) {
         mpLib_SetupDraw(mpLib_LeftWallColor);
         GXBegin(GX_QUADS, GX_VTXFMT0, (total_r29 * 4) & 0xFFFC);
-        line_r7 = &groundCollLine[coll_data_r31->left_wall_start];
+        line_r7 = &groundCollLine[coll_data_r31->ranges[MapLineGroup_LeftWall]
+                                      .start];
 
         for (i = 0; i < count_r30; i++) {
             if (line_r7->flags & LINE_FLAG_ENABLED &&
@@ -7192,13 +7181,14 @@ void mpLib_80059554(void)
         GXEnd();
     }
 
-    count_r30 = coll_data_r31->dynamic_count;
+    count_r30 = coll_data_r31->ranges[MapLineGroup_Dynamic].count;
     total_r29 = 0;
     spB4 = mpLib_DynamicFloorColor;
     spB0 = mpLib_DynamicCeilingColor;
     spAC = mpLib_DynamicRightWallColor;
     spA8 = mpLib_DynamicLeftWallColor;
-    line_r4 = &groundCollLine[coll_data_r31->dynamic_start];
+    line_r4 =
+        &groundCollLine[coll_data_r31->ranges[MapLineGroup_Dynamic].start];
 
     for (i = 0; i < count_r30; i++) {
         if (line_r4->flags & LINE_FLAG_ENABLED &&
@@ -7213,7 +7203,8 @@ void mpLib_80059554(void)
     if (total_r29 != 0) {
         mpLib_SetupDraw(spB4);
         GXBegin(GX_QUADS, GX_VTXFMT0, (total_r29 * 4) & 0xFFFC);
-        line_r7 = &groundCollLine[coll_data_r31->dynamic_start];
+        line_r7 =
+            &groundCollLine[coll_data_r31->ranges[MapLineGroup_Dynamic].start];
 
         for (i = 0; i < count_r30; i++) {
             if (line_r7->flags & LINE_FLAG_ENABLED &&
@@ -7237,7 +7228,8 @@ void mpLib_80059554(void)
         }
         GXEnd();
     }
-    line_r4 = &groundCollLine[coll_data_r31->dynamic_start];
+    line_r4 =
+        &groundCollLine[coll_data_r31->ranges[MapLineGroup_Dynamic].start];
     total_r29 = 0;
 
     for (i = 0; i < count_r30; i++) {
@@ -7253,7 +7245,8 @@ void mpLib_80059554(void)
     if (total_r29 != 0) {
         mpLib_SetupDraw(spB0);
         GXBegin(GX_QUADS, GX_VTXFMT0, (total_r29 * 4) & 0xFFFC);
-        line_r7 = &groundCollLine[coll_data_r31->dynamic_start];
+        line_r7 =
+            &groundCollLine[coll_data_r31->ranges[MapLineGroup_Dynamic].start];
 
         for (i = 0; i < count_r30; i++) {
             if (line_r7->flags & LINE_FLAG_ENABLED &&
@@ -7277,7 +7270,8 @@ void mpLib_80059554(void)
         }
         GXEnd();
     }
-    line_r4 = &groundCollLine[coll_data_r31->dynamic_start];
+    line_r4 =
+        &groundCollLine[coll_data_r31->ranges[MapLineGroup_Dynamic].start];
     total_r29 = 0;
 
     for (i = 0; i < count_r30; i++) {
@@ -7292,7 +7286,8 @@ void mpLib_80059554(void)
     if (total_r29 != 0) {
         mpLib_SetupDraw(spAC);
         GXBegin(GX_QUADS, GX_VTXFMT0, (total_r29 * 4) & 0xFFFC);
-        line_r7 = &groundCollLine[coll_data_r31->dynamic_start];
+        line_r7 =
+            &groundCollLine[coll_data_r31->ranges[MapLineGroup_Dynamic].start];
 
         for (i = 0; i < count_r30; i++) {
             if (line_r7->flags & LINE_FLAG_ENABLED &&
@@ -7316,7 +7311,8 @@ void mpLib_80059554(void)
         }
         GXEnd();
     }
-    line_r4 = &groundCollLine[coll_data_r31->dynamic_start];
+    line_r4 =
+        &groundCollLine[coll_data_r31->ranges[MapLineGroup_Dynamic].start];
     total_r29 = 0;
 
     for (i = 0; i < count_r30; i++) {
@@ -7331,7 +7327,8 @@ void mpLib_80059554(void)
     if (total_r29 != 0) {
         mpLib_SetupDraw(spA8);
         GXBegin(GX_QUADS, GX_VTXFMT0, (total_r29 * 4) & 0xFFFC);
-        line_r7 = &groundCollLine[coll_data_r31->dynamic_start];
+        line_r7 =
+            &groundCollLine[coll_data_r31->ranges[MapLineGroup_Dynamic].start];
 
         for (i = 0; i < count_r30; i++) {
             if (line_r7->flags & LINE_FLAG_ENABLED &&
@@ -7527,23 +7524,20 @@ void mpLib_8005A2DC(void)
 Vec2 mpLib_803BF718[2] = { { -1.0F, -400.0F }, { 1.0F, -400.0F } };
 MapLine mpLib_803BF728 = { 0, 1, -1, -1, -1, -1, 1, 0 };
 MapJoint mpLib_803BF738 = {
-    0, 1, 0, 0, 0, 0, 0, 0, 0, 0, -9.0F, -408.0F, 9.0F, -392.0F, 0, 2,
+    { { 0, 1 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } },
+    -9.0F,
+    -408.0F,
+    9.0F,
+    -392.0F,
+    0,
+    2,
 };
 MapCollData mpLib_803BF760 = {
     /*  +0 */ mpLib_803BF718,
     /*  +4 */ 2,
     /*  +8 */ &mpLib_803BF728,
     /*  +C */ 0x00000001,
-    /* +10 */ 0,
-    /* +12 */ 1,
-    /* +14 */ 0,
-    /* +16 */ 0,
-    /* +18 */ 0,
-    /* +1A */ 0,
-    /* +1C */ 0,
-    /* +1E */ 0,
-    /* +20 */ 0,
-    /* +22 */ 0,
+    /* +10 */ { { 0, 1 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } },
     /* +24 */ &mpLib_803BF738,
     /* +28 */ 0x00000001,
     /* +2C */ 0x00000000,

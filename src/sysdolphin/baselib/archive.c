@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+
 #include <dolphin/os.h>
 
 #if BUILD_TARGET_PC

@@ -1,44 +1,41 @@
+#include "itcoll.h"
+
 #if BUILD_TARGET_PC
 #include <stdio.h>
 #endif
-#include "it/itcoll.h"
+
+#include <Runtime/platform.h>
+
+#include <melee/ef/forward.h>
+
+#include <placeholder.h>
 
 #include "inlines.h"
+#include "it_26B1.h"
 #include "it_2725.h"
 #include "it_279C.h"
-#include "placeholder.h"
+#include "it_3F14.h"
+#include "item.h"
 #include "types.h"
-
-#include <platform.h>
-
-#include "ef/efsync.h"
-
-#include "ef/forward.h"
-
-#include "ft/fighter.h"
-#include "ft/ft_0881.h"
-#include "ft/ftchangeparam.h"
-#include "ft/ftcoll.h"
-#include "ft/ftcommon.h"
-#include "ft/ftlib.h"
-#include "ft/inlines.h"
-#include "ftCommon/ftCo_DownAttack.h"
-#include "gm/gm_unsplit.h"
-#include "it/it_26B1.h"
-#include "it/it_2725.h"
-#include "it/it_279C.h"
-#include "it/it_3F14.h"
-#include "it/item.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbcollision.h"
-#include "lb/lbvector.h"
-
-#include <baselib/cobj.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
+#include <melee/ef/efsync.h>
+#include <melee/ft/fighter.h>
+#include <melee/ft/ft_0881.h>
+#include <melee/ft/ftchangeparam.h>
+#include <melee/ft/ftcoll.h>
+#include <melee/ft/ftcommon.h>
+#include <melee/ft/ftlib.h>
+#include <melee/ft/inlines.h>
+#include <melee/ft/kinds/ftCommon/ftCo_DownAttack.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbcollision.h>
+#include <melee/lb/lbvector.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/random.h>
 
 /* The item knockback formula fuses the same way as ftcoll's KNOCKBACK:
  * from the inside out, [10]*[8] (or [8]*(xC9C+xCA0)) fused onto the
@@ -170,7 +167,7 @@ void it_8026FAC4(Item* arg_item0, HitCapsule* arg_hit, s32 arg2, void* arg3,
     PAD_STACK(4);
 
     if (arg_item0->xAC4_ignoreItemID != 0) {
-        item_gobj = HSD_GObj_Entities->items;
+        item_gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM];
         while (item_gobj != NULL) {
             item = GET_ITEM(item_gobj);
             if (item->xAC4_ignoreItemID == arg_item0->xAC4_ignoreItemID) {
@@ -200,7 +197,7 @@ void it_8026FC00(Item* arg_item, HitCapsule* arg_hit, s32 arg2, Fighter* arg3)
     PAD_STACK(8);
 
     if (arg_item->xAC4_ignoreItemID != 0) {
-        HSD_GObj* item_gobj = HSD_GObj_Entities->items;
+        HSD_GObj* item_gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM];
         if (item_gobj->next) {
         }
         while (item_gobj != NULL) {
@@ -224,7 +221,7 @@ void it_8026FCF8(Item* arg_item, HitCapsule* arg_hit)
     PAD_STACK(8);
 
     if (arg_item->xAC4_ignoreItemID != 0U) {
-        item_gobj = HSD_GObj_Entities->items;
+        item_gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM];
         while (item_gobj != NULL) {
             item = GET_ITEM(item_gobj);
             if (item->xAC4_ignoreItemID == arg_item->xAC4_ignoreItemID) {
@@ -369,7 +366,7 @@ void it_802701BC(Item_GObj* gobj)
 
     ip->grab_victim = 0;
     ip->xD10 = 3.4028235e38f;
-    fighter_gobj = HSD_GObj_Entities->fighters;
+    fighter_gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER];
     while (fighter_gobj != NULL) {
         Fighter* fp = GET_FIGHTER(fighter_gobj);
         if ((!ftLib_80086FD4(fighter_gobj, ip->owner) || ip->xDCD_flag.b5) &&
@@ -440,8 +437,8 @@ void it_802703E8(Item_GObj* arg_item_gobj)
     if (arg_item->xAC8_hurtboxNum == 0) {
         return;
     }
-    for (fighter_gobj = HSD_GObj_Entities->fighters; fighter_gobj != NULL;
-         fighter_gobj = fighter_gobj->next)
+    for (fighter_gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER];
+         fighter_gobj != NULL; fighter_gobj = fighter_gobj->next)
     {
         if (((arg_item->owner == fighter_gobj) && !arg_item->xDCE_flag.b0)) {
             continue;
@@ -574,7 +571,7 @@ void it_802706D0(Item_GObj* arg_item_gobj)
 
     chk = false;
     arg_item = GET_ITEM(arg_item_gobj);
-    for (item_gobj = HSD_GObj_Entities->items; item_gobj != NULL;
+    for (item_gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]; item_gobj != NULL;
          item_gobj = item_gobj->next)
     {
         item = item_gobj->user_data;
@@ -1253,7 +1250,7 @@ void it_80271D2C(Item_GObj* arg_item_gobj)
     PAD_STACK(4);
 
     HSD_JObjGetTranslation(arg_item_jobj, &sp34);
-    item_gobj = HSD_GObj_Entities->items;
+    item_gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM];
 
     while (item_gobj != NULL) {
         item_jobj = GET_JOBJ(item_gobj);
@@ -1309,7 +1306,7 @@ void it_80271F78(Item_GObj* gobj)
     PAD_STACK(4);
 
     HSD_JObjGetTranslation(jobj, &sp34);
-    item_gobj = HSD_GObj_Entities->items;
+    item_gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM];
 
     while (item_gobj != NULL) {
         item_jobj = GET_JOBJ(item_gobj);
@@ -1394,7 +1391,7 @@ void it_80272298(Item_GObj* item_gobj)
 
 void it_802722B0(Item_GObj* item_gobj)
 {
-    if (item_gobj == HSD_GObj_Entities->items) {
+    if (item_gobj == HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]) {
         ftCo_80098634(&Item_804A0CCC);
         Item_804A0CCC.x154.b0 = 0;
     }

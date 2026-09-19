@@ -1,31 +1,35 @@
 #include "mnname.h"
 
+#include <placeholder.h>
+
 #include "inlines.h"
 #include "mnmain.h"
 #include "mnmainrule.h"
-
 #include "mnname.static.h"
-
 #include "mnnamenew.h"
-#include "placeholder.h"
-
-#include "dolphin/gx/GXStruct.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lblanguage.h"
-#include "lb/lbspdisplay.h"
-
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/gobjuserdata.h>
-#include <baselib/jobj.h>
-#include <baselib/memory.h>
+#include <dolphin/gx/GXStruct.h>
 #include <melee/gm/gmmain_lib.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/memory.h>
+
+/// Shared model descriptors loaded by both name-entry menus.
+StaticModelDesc mnNameNew_804A06F0;
+StaticModelDesc mnNameNew_804A0700;
+StaticModelDesc mnNameNew_804A0710;
+StaticModelDesc mnNameNew_804A0720[2];
 
 f32 mnName_804D4BD0[2] = { 39.0f, 59.0f };
 f32 mnName_804D4BD8[2] = { 39.0f, 19.0f };
@@ -38,6 +42,7 @@ char mnName_StringTerminator[1] = "";
 static void order_sdata(void)
 {
     (void) "　";
+    (void) 4503599627370496.0;
 }
 #endif
 
@@ -88,7 +93,7 @@ char* GetNameText(int slot)
     return GetPersistentNameData((u8) slot)->namedata;
 }
 
-static int GetNameCount_noinline(void)
+static inline int GetNameCount_noinline(void)
 {
     return GetNameCount();
 }
@@ -130,6 +135,11 @@ static inline s8 readNameTerminator(const volatile char* terminator)
     return *terminator;
 }
 
+static inline bool signedCharactersEqual(s8 lhs, u8 rhs)
+{
+    return lhs == (s8) rhs;
+}
+
 static inline bool checkStringRest(const char* ptr, s8 terminator)
 {
     char c = "　"[0]; // SJIS full-width space
@@ -142,16 +152,27 @@ static inline bool checkStringRest(const char* ptr, s8 terminator)
     return true;
 }
 
+static inline u8 unsignedCharacter(s32 character)
+{
+    return (u8) character;
+}
+
 s32 CompareNameStrings(char* str1, char* str2)
 {
+    union {
+        char* signed_characters;
+        u8* unsigned_characters;
+    } string1;
+    u8* unsigned_str1;
     s8 terminator = (s8) *mnName_StringTerminator;
-    char* p1 = str1;
-    char* p2 = str2;
     s32 i = 0;
+
+    string1.signed_characters = str1;
+    unsigned_str1 = string1.unsigned_characters;
     while (true) {
         s8 ch1 = (s8) str1[i];
 
-        if (terminator == ch1) {
+        if (signedCharactersEqual(terminator, (u8) ch1)) {
             if (checkStringRest(&str2[i & 0xFFFFFFFFFFFFFFFF],
                                 readNameTerminator(mnName_StringTerminator)))
             {
@@ -163,27 +184,25 @@ s32 CompareNameStrings(char* str1, char* str2)
         {
             s8 ch2 = (s8) str2[i];
 
-            if (*mnName_StringTerminator == ch2) {
+            if (signedCharactersEqual(*mnName_StringTerminator,
+                                      unsignedCharacter(ch2)))
+            {
                 if (checkStringRest(&str1[i], terminator)) {
                     return 0;
                 }
                 return 1;
             }
 
-            if ((u8) *p1 > (u8) ch2) {
+            if (unsigned_str1[i] > unsignedCharacter(ch2)) {
                 return 1;
             }
-            if ((u8) *p1 < (u8) ch2) {
+            if (unsigned_str1[i] < unsignedCharacter(ch2)) {
                 return 2;
             }
         }
         i++;
-        p2++;
-        p1++;
     }
 }
-
-void fn_802377A4(void) {}
 
 bool IsNameUnique(char* name)
 {
@@ -371,7 +390,7 @@ void mnName_SortNames(HSD_GObj* arg0)
     }
 }
 
-HSD_GObj* mnName_804D6BF8;
+HSD_GObj* mnName_804D6BF8 = NULL;
 
 u8 mnName_80237D94(s32 arg0, u8 arg1)
 {
@@ -396,9 +415,7 @@ u8 mnName_80237D94(s32 arg0, u8 arg1)
             if ((s32) (arg1 / 6) == 3) {
                 if (mnName_GetColumnCount() > 4) {
                     sfxMove();
-                    if ((s32) (mnName_GetColumnCount() - 1) >
-                        (s32) gobj->gx_link)
-                    {
+                    if ((mnName_GetColumnCount() - 1) > (s32) gobj->gx_link) {
                         gobj->gx_link = gobj->gx_link + 1;
                     } else {
                         gobj->gx_link = 0;
@@ -487,7 +504,7 @@ void mnName_ConfirmNameDeleteInput(HSD_GObj* arg0)
             }
             GetPersistentNameData(nameIdxInt)->rumble_enabled = true;
             InitializePersistentNameData(nameIdx);
-            if ((s32) gobj2->gx_link > (s32) (mnName_GetColumnCount() - 1)) {
+            if ((s32) gobj2->gx_link > (mnName_GetColumnCount() - 1)) {
                 gobj2->gx_link = 0;
             }
             DeleteName(nameIdx);
@@ -652,7 +669,7 @@ void mnName_MainInput(HSD_GObj* arg0)
                             (u8) (mnName_GetColumnCount() - 1);
                     }
                 } else {
-                    if ((s32) (mnName_GetColumnCount() - 1) >
+                    if ((mnName_GetColumnCount() - 1) >
                         (s32) gobj2->gobj.gx_link)
                     {
                         gobj2->gobj.gx_link = (u8) (gobj2->gobj.gx_link + 1);
@@ -725,6 +742,11 @@ s32 mnName_GetColumnCount(void)
     return count / 6 + extra;
 }
 
+static inline void mnName_80238754_noinline(HSD_GObj* gobj)
+{
+    mnName_80238754(gobj);
+}
+
 void mnName_80238754(HSD_GObj* gobj)
 {
     s32 extra;
@@ -752,16 +774,15 @@ void mnName_80238754(HSD_GObj* gobj)
     }
 }
 
-static void mnName_80238754_noinline(HSD_GObj* gobj)
-{
-    mnName_80238754(gobj);
-}
-
-static HSD_JObj* mnName_802388D4_noinline(HSD_GObj* gobj, u8 index)
+static inline HSD_JObj* mnName_802388D4_noinline(HSD_GObj* gobj, u8 index)
 {
     return mnName_802388D4(gobj, index);
 }
 
+#ifdef __MWERKS__
+#pragma push
+#pragma dont_inline on
+#endif
 HSD_JObj* mnName_802388D4(HSD_GObj* gobj, u8 index)
 {
     u8* p = (u8*) gobj;
@@ -792,7 +813,11 @@ HSD_JObj* mnName_802388D4(HSD_GObj* gobj, u8 index)
     return (HSD_JObj*) gobj;
 }
 
-static f32 mnName_80238964_noinline(u8 index, u8 target, u8 flag)
+#ifdef __MWERKS__
+#pragma pop
+#endif
+
+static inline f32 mnName_80238964_noinline(u8 index, u8 target, u8 flag)
 {
     return mnName_80238964(index, target, flag);
 }
@@ -967,7 +992,7 @@ void mnName_80238C34(HSD_GObj* arg0, u8 arg1, u8 arg2)
 
         if (mnName_FindAnimLoop(tableBase, result) == base + 5) {
             if (result >= mnName_80238C34_inline(&base[5])) {
-                HSD_GObjPLink_80390228(arg0);
+                HSD_GObjFree(arg0);
             }
         }
     }
@@ -1050,7 +1075,7 @@ void fn_80239574(HSD_GObj* arg0)
                     goto do_anim;
                 case 2:
                 case 4:
-                    HSD_GObjPLink_80390228(arg0);
+                    HSD_GObjFree(arg0);
                     return;
                 default:
                     goto do_anim;
@@ -1135,50 +1160,58 @@ void mnName_80239878(u8 arg0, HSD_GObj* gobj)
     }
 }
 
-static inline f32 mnName_80239A24_GetTextColumnWidth(HSD_GObj* gobj,
-                                                     HSD_JObj* text_jobj0)
+static inline f32 mnName_TextWidth(f32 start, HSD_JObj* end)
 {
-    HSD_JObj* text_jobj6 = mnName_802388D4_noinline(gobj, 6U);
-    f32 width = HSD_JObjGetTranslationX(text_jobj0);
-    return HSD_JObjGetTranslationX(text_jobj6) - width;
+    return HSD_JObjGetTranslationX(end) - start;
+}
+
+static inline s32 mnName_GetDisplayIndex(s32 cell)
+{
+    u16 index = mnName_NameDisplayOrder[cell];
+    return index;
 }
 
 void mnName_80239A24(HSD_GObj* gobj)
 {
     f32 text_row_height;
-    Vec3 text_position;
+    s32 row;
     HSD_JObj* jobj;
     HSD_JObj* ref_jobj;
     HSD_JObj* ref_jobj2;
-    s32 row;
+    Vec3 text_position;
     HSD_JObj* text_jobj0;
     HSD_JObj* text_jobj1;
-    HSD_Text* text;
     f32 col_width;
     f32 row_height;
     f32 text_col_width;
-    GXColor text_color;
+    GXColor* color_dst;
     s32 j;
     s32 i;
+    HSD_Text* text;
     MnNameArchive* archive = &mnName_804A06C0;
-    MenuFlow* flow = &mn_804A04F0;
     MnName_GObj* data = (MnName_GObj*) gobj;
     HSD_JObj* ref_jobj3;
+    GXColor text_color;
     s32 count;
     s32 extra;
     s32 total_rows;
-    u8 name_idx;
+    s32 is_valid;
+    char* namedata;
+    s32 is_valid2;
+    GXColor* color;
+    HSD_JObj* child;
+    s32 name_idx;
     PAD_STACK(8);
 
-    i = 0;
-    do {
+    for (i = 0; i < 0x18; i++) {
         jobj = HSD_JObjLoadJoint(archive->joint);
         HSD_JObjAddAnimAll(jobj, archive->anim_joint, archive->matanim_joint,
                            archive->shapeanim_joint);
-        HSD_JObjReqAnimAll(jobj, (f32) ((u8) i == flow->hovered_selection));
+        HSD_JObjReqAnimAll(jobj,
+                           (f32) ((u8) i == mn_804A04F0.hovered_selection));
         HSD_JObjAnimAll(jobj);
-        col_width = HSD_JObjGetTranslationX(
-            (HSD_JObj*) data->gobj.user_data_remove_func);
+        ref_jobj = (HSD_JObj*) data->gobj.user_data_remove_func;
+        col_width = (HSD_JObjGetTranslationX(ref_jobj), ref_jobj->translate.x);
         col_width = HSD_JObjGetTranslationX((HSD_JObj*) data->gobj.x34_unk) -
                     col_width;
         row_height = HSD_JObjGetTranslationY(
@@ -1188,16 +1221,15 @@ void mnName_80239A24(HSD_GObj* gobj)
         mnName_80239F5C(jobj, col_width * (f32) ((u8) i / 6));
         mnName_80239EBC(jobj, row_height * (f32) ((u8) i % 6));
         {
-            HSD_JObj* child = jobj;
+            child = jobj;
             HSD_JObjAddChild((HSD_JObj*) data->gobj.user_data_remove_func,
                              child);
         }
-        i++;
-    } while (i < 0x18);
+    }
 
     text = HSD_SisLib_803A6754(0, 0);
     data->text = text;
-    text_jobj0 = mnName_802388D4_noinline(gobj, 0U);
+    text_jobj0 = mnName_802388D4(gobj, 0U);
     lb_8000B1CC(text_jobj0, mnName_803ED618, &text_position);
     {
         f32 pos_y = -text_position.y;
@@ -1211,13 +1243,15 @@ void mnName_80239A24(HSD_GObj* gobj)
     text->font_size.y = 0.03f;
     text->text_color = *(&mnName_804D4BE4);
 
-    text_col_width = mnName_80239A24_GetTextColumnWidth(gobj, text_jobj0);
+    ref_jobj2 = mnName_802388D4_noinline(gobj, 6U);
+    text_col_width =
+        (HSD_JObjGetTranslationX(text_jobj0), text_jobj0->translate.x);
+    text_col_width = mnName_TextWidth(text_col_width, ref_jobj2);
     text_jobj1 = mnName_802388D4_noinline(gobj, 1U);
     text_row_height = HSD_JObjGetTranslationY(text_jobj0);
     text_row_height = -(HSD_JObjGetTranslationY(text_jobj1) - text_row_height);
 
-    j = 0;
-    do {
+    for (j = 0; j < 0x18; j++) {
         MnName_GObj* global_data = (MnName_GObj*) mnName_804D6BF8->user_data;
         row = global_data->gobj.gx_link + ((u8) j / 6);
         count = GetNameCount_noinline();
@@ -1230,21 +1264,18 @@ void mnName_80239A24(HSD_GObj* gobj)
         if ((total_rows > 4) && (row >= total_rows)) {
             row -= total_rows;
         }
-        name_idx = mnName_NameDisplayOrder[((u8) j % 6) + (row * 6)];
+        name_idx = mnName_GetDisplayIndex(((u8) j % 6) + (row * 6));
         {
-            s32 is_valid;
             if ((s8) (u8) *mnName_StringTerminator ==
-                (s8) GetPersistentNameData((s32) name_idx)->namedata[0])
+                (s8) GetPersistentNameData(name_idx)->namedata[0])
             {
                 is_valid = 0;
             } else {
                 is_valid = 1;
             }
             if (is_valid != 0) {
-                char* namedata;
-                s32 is_valid2;
                 if ((s8) (u8) *mnName_StringTerminator ==
-                    (s8) GetPersistentNameData((s32) name_idx)->namedata[0])
+                    (s8) GetPersistentNameData(name_idx)->namedata[0])
                 {
                     is_valid2 = 0;
                 } else {
@@ -1253,8 +1284,7 @@ void mnName_80239A24(HSD_GObj* gobj)
                 if (is_valid2 == 0) {
                     namedata = NULL;
                 } else {
-                    namedata =
-                        (char*) GetPersistentNameData((s32) name_idx) + 0x198;
+                    namedata = (char*) GetPersistentNameData(name_idx) + 0x198;
                 }
                 {
                     f32 font_x = text->font_size.x;
@@ -1265,7 +1295,6 @@ void mnName_80239A24(HSD_GObj* gobj)
                                         namedata);
                 }
                 {
-                    GXColor* color;
                     if (j == (s32) mn_804A04F0.hovered_selection) {
                         color = &mnName_804D4BE0;
                     } else {
@@ -1273,7 +1302,7 @@ void mnName_80239A24(HSD_GObj* gobj)
                     }
                     text_color = *color;
                     {
-                        GXColor* color_dst = &text_color;
+                        color_dst = &text_color;
                         HSD_SisLib_803A74F0(text, j, color_dst);
                     }
                 }
@@ -1281,8 +1310,7 @@ void mnName_80239A24(HSD_GObj* gobj)
                 HSD_SisLib_803A6B98(text, 0.0f, 0.0f, mnName_StringTerminator);
             }
         }
-        j++;
-    } while (j < 0x18);
+    }
 }
 
 void mnName_80239EBC(HSD_JObj* jobj, f32 y)
@@ -1335,7 +1363,7 @@ void mnName_8023A058(HSD_GObj* gobj)
     mnName_80239A24(gobj);
 }
 
-HSD_Text* mnName_804D6BFC;
+HSD_Text* mnName_804D6BFC = NULL;
 void fn_8023A0BC(HSD_GObj* gobj)
 {
     f32* end_frame;
@@ -1363,7 +1391,7 @@ void fn_8023A0BC(HSD_GObj* gobj)
     if ((sel = mn_804A04F0.x10) != 2) {
         HSD_SisLib_803A5CC4(mnName_804D6BFC);
         mnName_804D6BFC = NULL;
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
         return;
     }
 
@@ -1645,8 +1673,8 @@ void mnName_8023A9B4(u8 arg0)
     mnName_80239A24((HSD_GObj*) gobj2);
 }
 
-u8** AutoNamesList;
-char** NotAllowedNamesList;
+char** NotAllowedNamesList = NULL;
+u8** AutoNamesList = NULL;
 
 static inline void mnName_InitNameDisplayOrder(void)
 {
@@ -1667,13 +1695,6 @@ s32 mnName_8023AC40(void)
     HSD_Archive* archive = mn_804D6BB8;
     HSD_GObjProc* proc;
 
-    /// @remarks The retail caller fills all seven name-entry archive slots
-    /// through one .bss anchor: the three archives owned by this translation
-    /// unit followed by the four "EtNw" slots that now belong to mnnamenew.c
-    /// (mnNameNew_804A06F0..mnNameNew_804A0720, loaded again by
-    /// mnNameNew_8023D8AC-era code from the same section names). The
-    /// past-the-end archive indices below reproduce that contiguous layout;
-    /// see symbols.txt 0x804A0648..0x804A0750.
     lbArchive_LoadSections(
         archive, &mnName_804A06E0.joint, "MenMainConNmTp_Top_joint",
         &mnName_804A06E0.anim_joint, "MenMainConNmTp_Top_animjoint",
@@ -1687,26 +1708,26 @@ s32 mnName_8023AC40(void)
         "MenMainWarCmn_Top_joint", &mnName_804A06D0.anim_joint,
         "MenMainWarCmn_Top_animjoint", &mnName_804A06D0.matanim_joint,
         "MenMainWarCmn_Top_matanim_joint", &mnName_804A06D0.shapeanim_joint,
-        "MenMainWarCmn_Top_shapeanim_joint", &(&mnName_804A06E0)[1].joint,
-        "MenMainConEtNw_Top_joint", &(&mnName_804A06E0)[1].anim_joint,
-        "MenMainConEtNw_Top_animjoint", &(&mnName_804A06E0)[1].matanim_joint,
+        "MenMainWarCmn_Top_shapeanim_joint", &mnNameNew_804A06F0.joint,
+        "MenMainConEtNw_Top_joint", &mnNameNew_804A06F0.animjoint,
+        "MenMainConEtNw_Top_animjoint", &mnNameNew_804A06F0.matanim_joint,
         "MenMainConEtNw_Top_matanim_joint",
-        &(&mnName_804A06E0)[1].shapeanim_joint,
-        "MenMainConEtNw_Top_shapeanim_joint", &(&mnName_804A06E0)[2].joint,
-        "MenMainBaseEtNw_Top_joint", &(&mnName_804A06E0)[2].anim_joint,
-        "MenMainBaseEtNw_Top_animjoint", &(&mnName_804A06E0)[2].matanim_joint,
+        &mnNameNew_804A06F0.shapeanim_joint,
+        "MenMainConEtNw_Top_shapeanim_joint", &mnNameNew_804A0700.joint,
+        "MenMainBaseEtNw_Top_joint", &mnNameNew_804A0700.animjoint,
+        "MenMainBaseEtNw_Top_animjoint", &mnNameNew_804A0700.matanim_joint,
         "MenMainBaseEtNw_Top_matanim_joint",
-        &(&mnName_804A06E0)[2].shapeanim_joint,
-        "MenMainBaseEtNw_Top_shapeanim_joint", &(&mnName_804A06E0)[3].joint,
-        "MenMainSubEtNw_Top_joint", &(&mnName_804A06E0)[3].anim_joint,
-        "MenMainSubEtNw_Top_animjoint", &(&mnName_804A06E0)[3].matanim_joint,
+        &mnNameNew_804A0700.shapeanim_joint,
+        "MenMainBaseEtNw_Top_shapeanim_joint", &mnNameNew_804A0710.joint,
+        "MenMainSubEtNw_Top_joint", &mnNameNew_804A0710.animjoint,
+        "MenMainSubEtNw_Top_animjoint", &mnNameNew_804A0710.matanim_joint,
         "MenMainSubEtNw_Top_matanim_joint",
-        &(&mnName_804A06E0)[3].shapeanim_joint,
-        "MenMainSubEtNw_Top_shapeanim_joint", &(&mnName_804A06E0)[4].joint,
-        "MenMainSbaseEtNw_Top_joint", &(&mnName_804A06E0)[4].anim_joint,
-        "MenMainSbaseEtNw_Top_animjoint", &(&mnName_804A06E0)[4].matanim_joint,
+        &mnNameNew_804A0710.shapeanim_joint,
+        "MenMainSubEtNw_Top_shapeanim_joint", &mnNameNew_804A0720[0].joint,
+        "MenMainSbaseEtNw_Top_joint", &mnNameNew_804A0720[0].animjoint,
+        "MenMainSbaseEtNw_Top_animjoint", &mnNameNew_804A0720[0].matanim_joint,
         "MenMainSbaseEtNw_Top_matanim_joint",
-        &(&mnName_804A06E0)[4].shapeanim_joint,
+        &mnNameNew_804A0720[0].shapeanim_joint,
         "MenMainSbaseEtNw_Top_shapeanim_joint", 0);
 
     if (lbLang_IsSavedLanguageUS()) {

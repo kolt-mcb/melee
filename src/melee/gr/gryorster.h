@@ -1,9 +1,9 @@
 #ifndef GALE01_201FA0
 #define GALE01_201FA0
 
-#include "gr/forward.h"
-#include "lb/forward.h"
-#include <baselib/forward.h>
+#include <melee/gr/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
 
@@ -13,7 +13,6 @@
 /* 202010 */ void grYorster_80202010(void);
 /* 202034 */ bool grYorster_80202034(void);
 /* 20203C */ HSD_GObj* grYorster_8020203C(int);
-/* 202124 */ void grYorster_80202124(Ground_GObj*);
 /* 202150 */ bool grYorster_80202150(Ground_GObj*);
 /* 202158 */ void grYorster_80202158(Ground_GObj*);
 /* 20215C */ void grYorster_8020215C(Ground_GObj*);

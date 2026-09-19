@@ -1,13 +1,12 @@
 #ifndef __GALE01_02305C
 #define __GALE01_02305C
 
-#include "lbaudio_ax.h" // IWYU pragma: export
-
-#include <platform.h>
-
-#include "baselib/objalloc.h"
+#include <Runtime/platform.h>
 
 #include <melee/ft/forward.h>
+
+#include <melee/lb/lbaudio_ax.h> // IWYU pragma: export
+#include <sysdolphin/baselib/objalloc.h>
 
 /// Sound object userdata (0x48 bytes, allocated by HSD_ObjAlloc)
 typedef struct {
@@ -103,7 +102,7 @@ static char cur_hps_file[0x40] = "/audio/";
 static struct {
     u8 x0;
     u64 x8;
-} lbl_803BB3C0[CHKIND_MAX] = {
+} lbl_803BB3C0[ChKind_Max] = {
     { 0x06, 0x000000040 }, { 0x08, 0x000000100 }, { 0x0B, 0x000000800 },
     { 0x1D, 0x020000000 }, { 0x0E, 0x000004000 }, { 0x0F, 0x000008000 },
     { 0x10, 0x000010000 }, { 0x11, 0x000020000 }, { 0x12, 0x000040000 },

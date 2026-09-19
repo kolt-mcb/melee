@@ -1,30 +1,28 @@
 #include "grzakogenerator.h"
 
+#include <sysdolphin/baselib/forward.h>
+
+#include <placeholder.h>
+
+#include "grlib.h"
+#include "ground.h"
 #include "grzakogenerator.static.h"
-
-#include "placeholder.h"
-
-#include "baselib/forward.h"
-
-#include "gr/grlib.h"
-#include "gr/ground.h"
-#include "gr/stage.h"
-#include "gr/types.h"
-#include "it/inlines.h"
-#include "it/it_26B1.h"
-#include "it/item.h"
-#include "it/items/itleadead.h"
-#include "it/items/itlikelike.h"
-#include "it/items/itnokonoko.h"
-#include "it/items/itpatapata.h"
-#include "it/itzako.h"
-#include "it/types.h"
-#include "lb/lb_00B0.h"
-
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
-#include <baselib/memory.h>
-#include <baselib/psstructs.h>
+#include "stage.h"
+#include "types.h"
+#include <melee/it/inlines.h>
+#include <melee/it/it_26B1.h>
+#include <melee/it/item.h>
+#include <melee/it/itzako.h>
+#include <melee/it/kinds/itleadead.h>
+#include <melee/it/kinds/itlikelike.h>
+#include <melee/it/kinds/itnokonoko.h>
+#include <melee/it/kinds/itpatapata.h>
+#include <melee/it/types.h>
+#include <melee/lb/lb_00B0.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/psstructs.h>
 #include <sysdolphin/baselib/random.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
@@ -363,7 +361,7 @@ void grZakoGenerator_801CAF08(void)
     PAD_STACK(8);
 
     lbl_8049F030.xA_b0 = false;
-    cur = HSD_GObj_Entities->items;
+    cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM];
 
     while (cur != NULL) {
         next = cur->next;

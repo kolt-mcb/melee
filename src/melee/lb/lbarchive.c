@@ -1,31 +1,25 @@
 #include "lbarchive.h"
 
 #if BUILD_TARGET_PC
-#include <stdint.h>
-#include <string.h>
 #include "gr/grdatfiles.h"
 #include "lb/types.h"
-#include "port/pc_ptr.h"
-#include "port/pc_scene.h"
-#endif
-#if BUILD_TARGET_PC
-#include "port/pc_ptr.h"
-#endif
-#if BUILD_TARGET_PC
 #include "port/log.h"
 #include "port/pc_itconv.h"
+#include "port/pc_ptr.h"
+#include "port/pc_scene.h"
+#include <stdint.h>
+#include <stdio.h>
 #endif
 
-#include "lbfile.h"
-#include "lbheap.h"
-
-#include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+
+#include "lbdvd.h"
+#include "lbfile.h"
+#include "lbheap.h"
 #include <dolphin/os.h>
-#include <baselib/archive.h>
-#include <baselib/debug.h>
-#include <melee/lb/lbdvd.h>
+#include <sysdolphin/baselib/archive.h>
+#include <sysdolphin/baselib/debug.h>
 
 #ifdef MUST_MATCH
 #pragma push

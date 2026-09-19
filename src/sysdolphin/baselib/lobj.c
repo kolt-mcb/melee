@@ -4,19 +4,16 @@
 #endif
 #include "lobj.h"
 
+#include <placeholder.h>
+
 #include "aobj.h"
 #include "class.h"
 #include "cobj.h"
+#include "forward.h"
 #include "list.h"
 #include "object.h"
 #include "wobj.h"
-
-#include <placeholder.h>
-
-#include "dolphin/gx/GXEnum.h"
-
-#include "forward.h"
-
+#include <dolphin/gx/GXEnum.h>
 #include <dolphin/mtx.h>
 #include <dolphin/os.h>
 
@@ -295,10 +292,6 @@ void HSD_LObjGetLightVector(HSD_LObj* lobj, Vec3* dir)
     PSVECSubtract(&interest, &position, dir);
     PSVECNormalize(dir, dir);
 }
-
-f32 const lbl_804DE450 = 0.5F;
-f32 const lbl_804DE454 = 0.0F;
-f32 const lbl_804DE458 = 1.0F;
 
 void HSD_LObjSetup(HSD_LObj* lobj, GXColor color, f32 shininess)
 {
@@ -986,7 +979,7 @@ HSD_LObjInfo* HSD_LObjGetDefaultClass(void)
 
 HSD_LObj* HSD_LObjAlloc(void)
 {
-    HSD_LObj* new = hsdNew((HSD_ClassInfo*) HSD_LObjGetDefaultClass());
+    HSD_LObj* new = hsdNew(&HSD_LObjGetDefaultClass()->parent.parent);
     HSD_ASSERT(1478, new);
     return new;
 }

@@ -1,13 +1,14 @@
 #ifndef GALE01_1C96E8
 #define GALE01_1C96E8
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "lb/forward.h"
-#include <baselib/forward.h>
+#include <melee/cm/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
-#include <baselib/mtx.h>
+#include <sysdolphin/baselib/mtx.h>
 
 /* 1C96E8 */ bool grLib_801C96E8(HSD_GObj*);
 /* 1C96F8 */ HSD_Generator* grLib_801C96F8(s32, s32, Vec3*);
@@ -24,10 +25,10 @@
 /* 1C9B20 */ void grLib_801C9B20(HSD_JObj*, DynamicsDesc*, DynamicsDesc*);
 /* 1C9B6C */ void grLib_801C9B6C(void*);
 /* 1C9B8C */ void grLib_801C9B8C(void*);
-/* 1C9CEC */ HSD_GObj* grLib_801C9CEC(s32);
+/* 1C9CEC */ HSD_GObj* grLib_801C9CEC(CmQuakeKind);
 /* 1C9E40 */ int grLib_801C9E40(void);
 /* 1C9E50 */ void grLib_801C9E50(s16);
 /* 1C9E60 */ bool grLib_801C9E60(Vec3*);
-/* 1C9EE8 */ int grLib_801C9EE8(Vec3*, float);
+/* 1C9EE8 */ bool grLib_801C9EE8(Vec3*, float);
 
 #endif

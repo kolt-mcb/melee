@@ -1,28 +1,30 @@
 #ifndef MELEE_IT_TYPES_H
 #define MELEE_IT_TYPES_H
 
+#include <Runtime/platform.h>
+
+#include <melee/cm/forward.h>
+#include <melee/it/forward.h> // IWYU pragma: export
+#include <melee/it/kinds/forward.h>
+#include <sysdolphin/baselib/forward.h>
+
 #include <placeholder.h>
-#include <platform.h>
-
-#include "cm/forward.h"
-
-#include "ft/types.h"
-
-#include "it/forward.h" // IWYU pragma: export
-
-#include "it/itCharItems.h"
-#include "it/itCommonItems.h"
-
-#include "it/items/forward.h"
-
-#include "it/itPKFlash.h"
-#include "it/itPKThunder.h"
-#include "lb/types.h"
-
-#include <baselib/forward.h>
 
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
+#include <melee/ft/types.h>
+#include <melee/it/itCharItems.h>
+#include <melee/it/itCommonItems.h>
+#include <melee/it/itPKFlash.h>
+#include <melee/it/itPKThunder.h>
+#include <melee/lb/types.h>
+
+/// Recent Pokemon selections and the shared Mew/Celebi spawn limit.
+struct PokemonSelectionState {
+    /* 0x0 */ ItemKind last_kind;
+    /* 0x4 */ ItemKind previous_kind;
+    /* 0x8 */ bool rare_spawned;
+};
 
 struct CameraBoxFlags {
     struct {
@@ -70,7 +72,6 @@ struct flag32 {
 };
 
 struct DynamicBoneTable {
-    /// @at{0} @sz{190}
     HSD_JObj* bones[100];
 };
 ASSERT_SIZE(struct DynamicBoneTable, 0x190);
@@ -114,7 +115,6 @@ struct ItemAttr {
     f32 x5c;       // 0x5c
     f32 x60_scale; // 0x60, does not affect hitboxes
 
-    /// @at{64} @sz{4}
     /// @brief GFX to play on destroy.
     enum_t destroy_gfx;
 
@@ -123,7 +123,6 @@ struct ItemAttr {
     s32 x70; // 0x70
     s32 x74; // 0x74
 
-    /// @at{78} @sz{4}
     /// @brief SFX that plays when this item is destroyed
     enum_t destroy_sfx;
 
@@ -139,14 +138,11 @@ typedef struct ItCollDynDesc {
     f32 size;
 } ItCollDynDesc;
 
-/// @sz{8}
 struct ItemDynamics {
     /// @todo Combine with ftDynamics? Can see in it_8027163C that this struct
     /// does not work perfectly
-    /// @at{0} @sz{4}
     int count;
 
-    /// @at{4} @sz{4}
     BoneDynamicsDesc* dyn_descs;
 
 #if BUILD_TARGET_PC
@@ -163,18 +159,13 @@ struct ItemDynamics {
 #endif
 };
 
-/// @sz{10}
 struct ItemStateDesc {
-    /// @at{0} @sz{4}
     HSD_AnimJoint* x0_anim_joint;
 
-    /// @at{0} @sz{4}
     HSD_MatAnimJoint* x4_matanim_joint;
 
-    /// @at{0} @sz{4}
     HSD_ShapeAnimJoint* x8_parameters;
 
-    /// @at{0} @sz{4}
     UNK_T xC_script;
 };
 
@@ -182,18 +173,13 @@ struct ItemStateArray {
     struct ItemStateDesc x0_itemStateDesc[8];
 };
 
-/// @sz{10}
 struct ItemModelDesc {
-    /// @at{0} @sz{4}
     HSD_Joint* x0_joint;
 
-    /// @at{4} @sz{4}
     u32 x4_bone_count;
 
-    /// @at{8} @sz{4}
     s32 x8_bone_attach_id;
 
-    /// @at{C} @sz{4}
     u8 xC_bit_field;
 };
 
@@ -236,67 +222,71 @@ struct ItemModStruct {
     GXColor x0_unk;
 };
 
+typedef struct ItemHitbox {
+    HitCapsule hit; // x5D4, x710, x84C, x988
+    u8 x138 : 1;    // x70C, x848, x984, xAC0
+    u8 x138_b1_7 : 7;
+    u8 x139[3];
+} ItemHitbox;
+
+struct xB6C_t {
+    Vec3 xB6C;
+    // u32 xB6C; // struct DynamicsData* for DynamicsDesc->data?
+    // u32 xB70; // int for DynamicsDesc->count?
+    // u32 xB74; // pos.x?
+    f32 xB78;       // pos.y? scale?
+    HSD_JObj* xB7C; // HSD_JObj* for bone?
+    u32 xB80;
+    Vec3 xB84;
+    // u32 xB88;
+    // u32 xB8C;
+    u32 xB90; // enum_t for BoneDynamicsDesc->bone_id?
+};
+
 struct Item {
     void* x0;
 
-    /// @at{4} @sz{4}
     HSD_GObj* entity;
 
     s32 x8;
 
-    /// @at{C} @sz{4}
     enum_t spawn_kind;
 
-    /// @at{10} @sz{4}
     ItemKind kind;
 
-    /// @at{14} @sz{4}
     enum_t hold_kind;
 
     s32 x18;
     s32 x1C;
 
-    /// @at{20} @sz1
     u8 x20_team_id;
 
     u8 x21;
     u8 x22;
     u8 x23;
 
-    /// @at{24} @sz{4}
     enum_t msid;
 
-    /// @at{28} @sz{4}
     enum_t anim_id;
 
-    /// @at{2C} @sz{4}
     f32 facing_dir;
 
-    /// @at{30} @sz{4}
     f32 init_facing_dir;
 
-    /// @at{34} @sz{4}
     f32 spin_spd;
 
-    /// @at{38} @sz{4}
     f32 scl;
 
-    /// @at{3C} @sz{4}
     f32 x3C;
 
-    /// @at{40} @sz{C}
     Vec3 x40_vel;
 
-    /// @at{4C} @sz{C}
     Vec3 pos;
 
-    /// @at{58} @sz{C}
     Vec3 x58_vec_unk;
 
-    /// @at{64} @sz{C}
     Vec3 x64_vec_unk2;
 
-    /// @at{70} @sz{C}
     Vec3 x70_nudge;
 
     Vec3 x7C;
@@ -316,7 +306,6 @@ struct Item {
     /*  ip+378 */ CollData x378_itemColl;
     s32 ecb_lock;
 
-    /// @at{518} @sz{4}
     /// @brief Item's current owner
     HSD_GObj* owner;
 
@@ -338,12 +327,7 @@ struct Item {
     u8 x5CB;
     f32 x5CC_currentAnimFrame;
     f32 x5D0_animFrameSpeed;
-    struct ItemHitbox {
-        HitCapsule hit; // x5D4, x710, x84C, x988
-        u8 x138 : 1;    // x70C, x848, x984, xAC0
-        u8 x138_b1_7 : 7;
-        u8 x139[3];
-    } x5D4_hitboxes[4];
+    ItemHitbox x5D4_hitboxes[4];
     u32 xAC4_ignoreItemID;           // Cannot hit items with this index?
     u8 xAC8_hurtboxNum;              // Number of hurtboxes this item has
     HurtCapsule xACC_itemHurtbox[2]; // xACC, xB10
@@ -352,19 +336,7 @@ struct Item {
     u8 xB69;
     u8 xB6A;
     u8 xB6B;
-    struct xB6C_t {
-        Vec3 xB6C;
-        // u32 xB6C; // struct DynamicsData* for DynamicsDesc->data?
-        // u32 xB70; // int for DynamicsDesc->count?
-        // u32 xB74; // pos.x?
-        f32 xB78;       // pos.y? scale?
-        HSD_JObj* xB7C; // HSD_JObj* for bone?
-        u32 xB80;
-        Vec3 xB84;
-        // u32 xB88;
-        // u32 xB8C;
-        u32 xB90; // enum_t for BoneDynamicsDesc->bone_id?
-    } xB6C_vars[2];
+    struct xB6C_t xB6C_vars[2];
     // u32 xB94;
     // u32 xB98;
     // u32 xB9C;
@@ -433,17 +405,14 @@ struct Item {
 
     HSD_GObj* xCF4_fighterGObjUnk;
 
-    /// @at{CF8} @sz{4}
     /// @brief The entity that was detected by this item's inert hitbox.
     HSD_GObj* toucher;
 
     HSD_GObj* xCFC;
 
-    /// @at{D00} @sz{4}
     /// @brief The entity that got grabbed by this item.
     HSD_GObj* grab_victim;
 
-    /// @at{D04} @sz{4}
     /// @brief The entity that collided with this item's hitbox?
     HSD_GObj* atk_victim;
 
@@ -452,29 +421,22 @@ struct Item {
     u8 xD0A;
     u8 xD0B;
 
-    /// @at{D0C} @sz{4}
     enum_t xD0C;
 
     f32 xD10;
 
-    /// @at{D14} @sz{4}
     HSD_GObjPredicate animated;
 
-    /// @at{D18} @sz{4}
     HSD_GObjEvent physics_updated;
 
-    /// @at{D1C} @sz{4}
     HSD_GObjPredicate collided;
 
-    /// @at{D20} @sz{4}
     /// @todo What does this mean?
     HSD_GObjEvent on_accessory;
 
-    /// @at{D24} @sz{4}
     /// @brief Runs when an entity is detected by this item's inert hibox.
     HSD_GObjPredicate touched;
 
-    /// @at{D28} @sz{4}
     /// @brief Runs after applying hitlag in damage.
     /// @todo What function is @c 8026a62c?
     HSD_GObjEvent entered_hitlag;
@@ -482,16 +444,14 @@ struct Item {
     // 0xd2c, runs after exiting hitlag in hitlag, update proc 8026a200
     HSD_GObjEvent exited_hitlag;
 
-    /// @at{D28} @sz{4}
     /// @brief Runs when the item is jumped on.
     /// @todo What function is @c 80269bac?
     HSD_GObjPredicate jumped_on;
 
-    /// @at{D34} @sz{4}
     /// @brief When grabbing a fighter, run this function on self.
     HSD_GObjEvent grab_dealt;
 
-    /** @at{D38} @sz{4}
+    /**
      * @brief When grabbing a fighter, run this function on them.
      *
      * @p gobj0 - The victim of the grab. \n
@@ -511,13 +471,10 @@ struct Item {
     u32 xD58;
     u32 xD5C;
 
-    /// @at{D60} @sz{4}
     enum_t destroy_type;
 
-    /// @at{D64} @sz{4}
     enum_t sfx_unk1;
 
-    /// @at{D68} @sz{4}
     enum_t sfx_unk2;
 
     s32 xD6C;
@@ -525,7 +482,6 @@ struct Item {
     s32 xD74;
     s32 xD78;
 
-    /// @at{D7C} @sz{4}
     /// @brief SFX that plays when this item is destroyed
     enum_t destroy_sfx;
 
@@ -716,7 +672,11 @@ struct SpawnItem {
     /*  +0 */ HSD_GObj* x0_parent_gobj;
     /*  +4 */ HSD_GObj* x4_parent_gobj2;
     /*  +8 */ ItemKind kind;
+
+    /// @brief Defines the behavior of the item, such as thrown and pickup.
+    /// @todo 0 = capsule.
     /*  +C */ enum_t hold_kind;
+
     /* +10 */ s32 x10;
     /* +14 */ Vec3 pos;
     /* +20 */ Vec3 prev_pos;
@@ -777,7 +737,7 @@ struct ItemCommonData {
     f32 xD4;
     u32 xD8;
     s32 xDC;
-    f32 unk_degrees; ///< @at{E0}
+    f32 unk_degrees;
     u8 filler_1a[0xE8 - 0xE4];
     f32 xE8;
     u8 filler_1a_2[0xF0 - 0xEC];

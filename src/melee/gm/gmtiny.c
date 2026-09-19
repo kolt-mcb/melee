@@ -5,8 +5,7 @@
 #include "gmmovieend.h"
 #include "gmvsmelee.h"
 #include "types.h"
-
-#include "if/if_2FD9.h"
+#include <melee/if/if_2FD9.h>
 
 GameModeState gm_Mode_TinyVs_States[] = {
     {
@@ -73,20 +72,20 @@ GameModeState gm_Mode_TinyVs_States[] = {
         0x80,
         2,
         0,
-        gm_801BFA6C,
+        gm_ModeState_Approach_OnEnter,
         NULL,
         {
             GS_APPROACH,
-            &gm_804D6860,
-            &gm_804D6860,
+            &gmVsMelee_ApproachData,
+            &gmVsMelee_ApproachData,
         },
     },
     {
         0x81,
         2,
         0,
-        gm_ModeState_EnterApproachVs,
-        gm_ModeState_ExitApproachVs,
+        gm_ModeState_ApproachVs_OnEnter,
+        gm_ModeState_ApproachVs_OnExit,
         {
             GS_VS,
             &gmVsMelee_StartData,
@@ -97,11 +96,11 @@ GameModeState gm_Mode_TinyVs_States[] = {
         0xC0,
         2,
         0,
-        gm_801BFCFC,
-        gm_801A6308,
+        gm_ModeState_Prize_OnEnter,
+        gm_ModeState_Prize_OnExit,
         {
             GS_PRIZE_INTERFACE,
-            &un_804A1F48,
+            &if_Scene_Prize_EnterData,
             NULL,
         },
     },
@@ -110,46 +109,48 @@ GameModeState gm_Mode_TinyVs_States[] = {
 
 void gm_801B8DA8(GameModeState* scene)
 {
-    gmVsMelee_EnterCss(scene, &gmMainLib_804D3EE0->unk_E50, 5);
+    gmVsMelee_EnterCss(scene, &gmMainLib_804D3EE0->modes.table[GmVsMode_Tiny],
+                       5);
 }
 
 void gm_801B8DD4(GameModeState* scene)
 {
-    gmVsMelee_ExitCss(scene, &gmMainLib_804D3EE0->unk_E50);
+    gmVsMelee_ExitCss(scene, &gmMainLib_804D3EE0->modes.table[GmVsMode_Tiny]);
 }
 
 void gm_801B8DFC(GameModeState* scene)
 {
-    gmVsMelee_EnterSss(scene, &gmMainLib_804D3EE0->unk_E50);
+    gmVsMelee_EnterSss(scene, &gmMainLib_804D3EE0->modes.table[GmVsMode_Tiny]);
 }
 
 void gm_801B8E24(GameModeState* scene)
 {
-    gmVsMelee_ExitSss(scene, &gmMainLib_804D3EE0->unk_E50, 0);
+    gmVsMelee_ExitSss(scene, &gmMainLib_804D3EE0->modes.table[GmVsMode_Tiny],
+                      0);
 }
 
 void fn_801B8E50(PlayerInitData* arg0, PlayerInitData* unused)
 {
-    arg0->x20 = 0.35f;
-    arg0->x1C = 0.5f;
-    arg0->x18 = 1.0f;
+    arg0->model_scale = 0.35f;
+    arg0->defense_ratio = 0.5f;
+    arg0->attack_ratio = 1.0f;
     arg0->xB = 1;
 }
 
 void gm_801B8E74(GameModeState* scene)
 {
-    VsModeData* data = &gmMainLib_804D3EE0->unk_E50;
-    gm_801A583C(scene, data, NULL, fn_801B8E50);
+    VsModeData* data = &gmMainLib_804D3EE0->modes.table[GmVsMode_Tiny];
+    gmVsMelee_EnterVs(scene, data, NULL, fn_801B8E50);
 }
 
 void gm_801B8EA8(GameModeState* scene)
 {
-    gm_801A5AF0(scene, 4U, 3U);
+    gmVsMelee_ExitVs(scene, 4U, 3U);
 }
 
 void gm_801B8ED0(GameModeState* scene)
 {
-    VsModeData* data = &gmMainLib_804D3EE0->unk_E50;
+    VsModeData* data = &gmMainLib_804D3EE0->modes.table[GmVsMode_Tiny];
     gmVsMelee_EnterSuddenDeath(scene, data, NULL, fn_801B8E50);
 }
 
@@ -165,12 +166,13 @@ void gm_801B8F24(GameModeState* scene)
 
 void gm_801B8F44(GameModeState* scene)
 {
-    gmVsMelee_ExitResults(scene, &gmMainLib_804D3EE0->unk_E50, 0);
+    gmVsMelee_ExitResults(scene,
+                          &gmMainLib_804D3EE0->modes.table[GmVsMode_Tiny], 0);
 }
 
 void gm_Mode_TinyVs_OnInit(void)
 {
-    gm_80167B50(&gmMainLib_804D3EE0->unk_E50);
+    gm_InitVsMode(&gmMainLib_804D3EE0->modes.table[GmVsMode_Tiny]);
 }
 
 void gm_Mode_TinyVs_OnLoad(void)

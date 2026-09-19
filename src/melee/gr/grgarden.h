@@ -1,10 +1,10 @@
 #ifndef GALE01_202B6C
 #define GALE01_202B6C
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "gr/forward.h"
-#include "it/forward.h"
+#include <melee/gr/forward.h>
+#include <melee/it/forward.h>
 
 /* 202B6C */ void grGarden_80202B6C(bool);
 /* 202B70 */ void grGarden_80202B70(void);
@@ -12,7 +12,6 @@
 /* 202C4C */ void grGarden_80202C4C(void);
 /* 202C70 */ bool grGarden_80202C70(void);
 /* 202C78 */ Ground_GObj* grGarden_80202C78(int gobj_id);
-/* 202D60 */ void grGarden_80202D60(Ground_GObj*);
 /* 202D8C */ bool grGarden_80202D8C(Ground_GObj*);
 /* 202D94 */ void grGarden_80202D94(Ground_GObj*);
 /* 202D98 */ void grGarden_80202D98(Ground_GObj*);

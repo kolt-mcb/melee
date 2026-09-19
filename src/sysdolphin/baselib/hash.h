@@ -1,11 +1,11 @@
 #ifndef _hash_h_
 #define _hash_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/class.h"
+#include <sysdolphin/baselib/forward.h>
 
-#include "baselib/forward.h"
+#include <sysdolphin/baselib/class.h>
 
 #define hash(s) (s % 0x65)
 
@@ -32,6 +32,6 @@ struct HSD_Hash {
 };
 
 HSD_HashEntry* HashSearchEntry(HSD_Hash*, int, void*, HSD_HashEntry**);
-HSD_HashClassInfo* HSD_HashSearch(HSD_Hash*, void*, int*);
+void* HSD_HashSearch(HSD_Hash*, void*, int*);
 
 #endif

@@ -1,24 +1,25 @@
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "lb/lbarchive.h"
-#include "lb/lbspdisplay.h"
-#include "mn/inlines.h"
-#include "mn/mnmain.h"
-#include "mn/types.h"
-#include "sc/types.h"
+#include <melee/it/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
-#include <baselib/forward.h>
-
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/gobjuserdata.h>
-#include <baselib/jobj.h>
-#include <baselib/memory.h>
-#include <baselib/sislib.h>
+#include "inlines.h"
+#include "mnmain.h"
+#include "types.h"
+#include <melee/gm/gmmain_lib.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/sislib.h>
 
 void mnDeflicker_8024A168(HSD_GObj* gobj);
 void mnDeflicker_8024A2E8(HSD_GObj* gobj);
@@ -27,10 +28,7 @@ void mnDeflicker_8024A3E8(HSD_GObj* gobj);
 void mnDeflicker_8024A4BC(HSD_GObj* arg0);
 void mnDeflicker_8024A6C4(HSD_GObj* arg0);
 
-void gmMainLib_8015F4F4(u8);
-void gmMainLib_8015F588(u8);
-u8 gmMainLib_8015F4E8(void);
-void lb_8001CE00(void);
+void lbCardGame_SaveChanges(void);
 
 unsigned char mnDeflicker_804D6C3C;
 HSD_GObj* mnDeflicker_804D6C38;
@@ -55,11 +53,11 @@ void mnDeflicker_8024A168(HSD_GObj* gobj)
         sfxBack();
         gmMainLib_8015F4F4(
             ((Menu*) mnDeflicker_804D6C38->user_data)->cursor); // inline
-        lb_8001CE00();
+        lbCardGame_SaveChanges();
         mn_804A04F0.entering_menu = 0;
         mn_80229894(4, 2, 3);
     } else if (mnDeflicker_804D6C3C && (events & MenuInput_AButton)) {
-        unsigned char x;
+        u32 x;
         PAD_STACK(4);
         sfxMove();
         menu->cursor = (menu->cursor == 0);
@@ -79,7 +77,7 @@ void mnDeflicker_8024A2E8(HSD_GObj* gobj)
     int x[2];
     float f = mn_8022EC18(GET_JOBJ(gobj), &mnDeflicker_803EEFE4, 0x400);
     if (f == mnDeflicker_803EEFE4.end_frame) {
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
     }
 }
 
@@ -89,7 +87,7 @@ void mnDeflicker_8024A344(HSD_GObj* gobj)
     HSD_JObj* jobj = GET_JOBJ(gobj);
     if (mn_804A04F0.cur_menu != 0x15) {
         HSD_GObjProc* p;
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         p = HSD_GObj_SetupProc(gobj, &mnDeflicker_8024A2E8, 0);
         p->flags_3 = HSD_GObj_804D783C;
         HSD_SisLib_803A5CC4(menu->text);
@@ -106,14 +104,14 @@ void mnDeflicker_8024A3E8(HSD_GObj* gobj)
     HSD_JObj* jobj = GET_JOBJ(gobj);
     HSD_GObjProc* p;
     if (mn_804A04F0.cur_menu != 0x15) {
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         p = HSD_GObj_SetupProc(gobj, &mnDeflicker_8024A2E8, 0);
         p->flags_3 = HSD_GObj_804D783C;
         HSD_SisLib_803A5CC4(menu->text);
     } else {
         float f = mn_8022EC18(jobj, &mnDeflicker_803EEFD8, 0x400);
         if (f == mnDeflicker_803EEFD8.end_frame) {
-            HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+            HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
             p = HSD_GObj_SetupProc(gobj, &mnDeflicker_8024A344, 0);
             p->flags_3 = HSD_GObj_804D783C;
             mnDeflicker_804D6C3C = 1;

@@ -8,9 +8,12 @@
  * is the small-angle branch of every sine and cosine, and it was dead. */
 #include <platform.h>
 float fabsf__Ff(float);
-#endif
-
+/* The host header, not MSL's: upstream's quoted include picks up
+ * src/MSL/math.h, which is exactly the file this build excludes. */
 #include <math.h>
+#else
+#include "math.h"
+#endif
 
 #define __epsilon 3.45266983e-4f
 

@@ -1,32 +1,29 @@
 #include "grpura.h"
 
+#include <Runtime/platform.h>
+
+#include <melee/cm/forward.h>
+
 #include "grdisplay.h"
 #include "ground.h"
 #include "grzakogenerator.h"
 #include "inlines.h"
 #include "stage.h"
 #include "types.h"
-
-#include <platform.h>
-
-#include "cm/camera.h"
-
-#include "cm/forward.h"
-
-#include "cm/types.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lbspdisplay.h"
-#include "mp/mplib.h"
-
 #include <dolphin/mtx.h>
-#include <baselib/debug.h>
-#include <baselib/dobj.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
-#include <baselib/tobj.h>
+#include <melee/cm/camera.h>
+#include <melee/cm/types.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/random.h>
+#include <sysdolphin/baselib/tobj.h>
 
 struct GrPuModelDesc {
     /* 0x0 */ s32 x0;
@@ -74,16 +71,16 @@ struct GrPuVtxMapEntry {
 /* 212314 */ static bool stageGObj2_Callback1(Ground_GObj*);
 /* 21231C */ static void stageGObj2_GObjProc(Ground_GObj*);
 /* 2125EC */ static void stageGObj2_Callback3(Ground_GObj*);
-/* 2125F0 */ static UNK_RET grPura_802125F0(HSD_GObj*);
+/* 2125F0 */ static void grPura_802125F0(HSD_GObj*);
 /* 212CD4 */ static void grPura_80212CD4(HSD_GObj*);
 /* 212EF4 */ static void grPura_80212EF4(HSD_GObj*);
 /* 212FC0 */ static void grPura_80212FC0(HSD_GObj*);
 /* 213030 */ static void grPura_80213030(Ground_GObj* arg0);
 /* 2130C0 */ static DynamicsDesc* grPura_802130C0(enum_t);
 /* 2130C8 */ static bool grPura_802130C8(Vec3* a, int, HSD_JObj*);
-/* 2130D0 */ static UNK_RET fn_802130D0(HSD_GObj*, int);
+/* 2130D0 */ static void fn_802130D0(HSD_GObj*, int);
 /* 213128 */ static void grPura_80213128(HSD_DObj*);
-/* 213224 */ static UNK_RET grPura_80213224(HSD_DObj*);
+/* 213224 */ static void grPura_80213224(HSD_DObj*);
 /* 213250 */ static void grPura_80213250(HSD_JObj*);
 
 static StageCallbacks stage_callbacks[] = {
@@ -422,7 +419,7 @@ void stageGObj27_Callback3(Ground_GObj* arg0) {}
 
 void stageGObj4_OnInit(Ground_GObj* arg0)
 {
-    Ground_JObjInline1(arg0);
+    Ground_InitMapCollAndAnim(arg0);
     grPura_80212CD4(arg0);
     grPura_802125F0(arg0);
     grPura_80212FC0(arg0);
@@ -436,7 +433,7 @@ bool stageGObj4_Callback1(Ground_GObj* arg0)
 void stageGObj4_GObjProc(Ground_GObj* arg0)
 {
     grPura_80212EF4(arg0);
-    Ground_801C2FE0(arg0);
+    Ground_UpdateMapColl(arg0);
     grPura_80213030(arg0);
     mpLib_80055E24(0x18);
     lb_800115F4();
@@ -906,7 +903,7 @@ void grPura_80213030(Ground_GObj* arg0)
 
 DynamicsDesc* grPura_802130C0(enum_t arg0)
 {
-    return false;
+    return NULL;
 }
 
 bool grPura_802130C8(Vec3* a, int num, HSD_JObj* joint)

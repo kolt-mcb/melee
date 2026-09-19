@@ -1,4 +1,4 @@
-#include "mp/mpcoll.h"
+#include "mpcoll.h"
 #if BUILD_TARGET_PC
 #include <math.h>
 /* Every `a * b + c` MWCC fused in this file. mpcoll is where the ECB is
@@ -9,34 +9,30 @@
 #include "gm/gm_1601.h"
 #include <string.h>
 #include <stdlib.h>
-extern int gm_8016AEDC(void);
+extern u32 gm_GetFrameCount(void);
 #else
 #define MPC_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
-#include "platform.h"
-#include "stdbool.h"
+#include <Runtime/platform.h>
 
-#include <placeholder.h>
-
-#include "db/db.h"
-#include "ft/ftlib.h"
-
-#include "ftCommon/forward.h"
-
-#include "gr/grdynamicattr.h"
-#include "it/it_26B1.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbvector.h"
-#include "lb/types.h"
-
-#include "mp/forward.h"
-
-#include "mp/mplib.h"
+#include <melee/ft/kinds/ftCommon/forward.h>
 
 #include <math.h>
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
+#include <placeholder.h>
+#include <stdbool.h>
+
+#include "forward.h"
+#include "mplib.h"
+#include <melee/db/db.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gr/grdynamicattr.h>
+#include <melee/it/it_26B1.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbvector.h>
+#include <melee/lb/types.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
 
 #if BUILD_TARGET_PC
 /* One frame of movement is never more than a few hundred units, so a few
@@ -2595,8 +2591,7 @@ bool mpColl_80046904(CollData* coll, u32 flags)
         if (!on_edge && c->cur_pos.y < c->prev_pos.y) {
             if (c->facing_dir == 1 || c->facing_dir == 0) {
                 if (mpColl_80044164(
-                        c,
-                        &c->ledge_id_left)) { // Physics_CheckForLeftLedge
+                        c, &c->ledge_id_left)) { // Physics_CheckForLeftLedge
                     on_edge = true;
                     c->env_flags |= Collide_LeftLedgeGrab;
                 } else {
@@ -2608,8 +2603,7 @@ bool mpColl_80046904(CollData* coll, u32 flags)
             }
             if (c->facing_dir == -1 || c->facing_dir == 0) {
                 if (mpColl_800443C4(
-                        c,
-                        &c->ledge_id_right)) { // Physics_CheckForRightLedge
+                        c, &c->ledge_id_right)) { // Physics_CheckForRightLedge
                     on_edge = true;
                     c->env_flags |= Collide_RightLedgeGrab;
                 } else {
@@ -3363,7 +3357,7 @@ bool mpColl_800491C8_RightWall(CollData* coll)
             hi = dash ? atoi(dash + 1) : lo;
         }
         if (lo >= 0) {
-            int f = (int) gm_8016AEDC();
+            int f = (int) gm_GetFrameCount();
             if (f >= lo && f <= hi) {
                 fprintf(stderr,
                         "[WALL] gframe=%d right n=%d max_x=%08x x=%08x\n", f,
@@ -3689,7 +3683,7 @@ bool mpColl_80049EAC_LeftWall(CollData* coll)
             hi = dash ? atoi(dash + 1) : lo;
         }
         if (lo >= 0) {
-            int f = (int) gm_8016AEDC();
+            int f = (int) gm_GetFrameCount();
             if (f >= lo && f <= hi) {
                 fprintf(stderr,
                         "[WALL] gframe=%d left n=%d max_x=%08x x=%08x id=%d\n",
@@ -3782,7 +3776,7 @@ bool mpColl_8004A45C_Floor(CollData* coll, int line_id)
             fprintf(stderr,
                     "[COLLSNAP] gframe=%u edge=(%08x,%08x) ecbbot=(%08x,%08x) "
                     "-> %08x\n",
-                    (unsigned) gm_8016AEDC(), *(u32*) &edge.x, *(u32*) &edge.y,
+                    (unsigned) gm_GetFrameCount(), *(u32*) &edge.x, *(u32*) &edge.y,
                     *(u32*) &coll->ecb.bottom.x, *(u32*) &coll->ecb.bottom.y,
                     *(u32*) &(f32) { edge.x - coll->ecb.bottom.x });
         }
@@ -3914,7 +3908,7 @@ bool mpColl_8004A908_Floor(CollData* coll, int line_id)
         static int lo = -1, hi = -1;
         extern int mpColl_804D64AC;
         if (lo < 0) { const char* e = getenv("MELEE_MPTRACE"); lo = hi = 0; if (e) sscanf(e, "%d-%d", &lo, &hi); }
-        if (hi > 0) { u32 fr = gm_8016AEDC();
+        if (hi > 0) { u32 fr = gm_GetFrameCount();
             if ((int) fr >= lo && (int) fr <= hi)
                 fprintf(stderr, "[MPTRACE] f%u A908 pass%d x38=%d cnt=%d hit=%d floor_id=%d line_id=%d\n",
                         fr, __LINE__ > 0 ? 1 : 0, (int) coll->x38, (int) mpColl_804D64AC, (int) hit_floor, floor_id, line_id); }
@@ -3925,7 +3919,7 @@ bool mpColl_8004A908_Floor(CollData* coll, int line_id)
     {
 #if BUILD_TARGET_PC
         { static int lo=-1, hi=-1; if (lo<0){const char* e=getenv("MELEE_MPTRACE"); lo=hi=0; if(e) sscanf(e,"%d-%d",&lo,&hi);}
-          if (hi>0){u32 fr=gm_8016AEDC(); if((int)fr>=lo&&(int)fr<=hi) fprintf(stderr,"[MPTRACE] f%u A908 store%d floor=%d\n",fr,__COUNTER__+1,floor_id);} }
+          if (hi>0){u32 fr=gm_GetFrameCount(); if((int)fr>=lo&&(int)fr<=hi) fprintf(stderr,"[MPTRACE] f%u A908 store%d floor=%d\n",fr,__COUNTER__+1,floor_id);} }
 #endif
         coll->floor.index = floor_id;
         coll->floor.flags = flags;
@@ -3951,7 +3945,7 @@ bool mpColl_8004A908_Floor(CollData* coll, int line_id)
         static int lo = -1, hi = -1;
         extern int mpColl_804D64AC;
         if (lo < 0) { const char* e = getenv("MELEE_MPTRACE"); lo = hi = 0; if (e) sscanf(e, "%d-%d", &lo, &hi); }
-        if (hi > 0) { u32 fr = gm_8016AEDC();
+        if (hi > 0) { u32 fr = gm_GetFrameCount();
             if ((int) fr >= lo && (int) fr <= hi)
                 fprintf(stderr, "[MPTRACE] f%u A908 pass%d x38=%d cnt=%d hit=%d floor_id=%d line_id=%d\n",
                         fr, __LINE__ > 0 ? 2 : 0, (int) coll->x38, (int) mpColl_804D64AC, (int) hit_floor, floor_id, line_id); }
@@ -3962,7 +3956,7 @@ bool mpColl_8004A908_Floor(CollData* coll, int line_id)
     {
 #if BUILD_TARGET_PC
         { static int lo=-1, hi=-1; if (lo<0){const char* e=getenv("MELEE_MPTRACE"); lo=hi=0; if(e) sscanf(e,"%d-%d",&lo,&hi);}
-          if (hi>0){u32 fr=gm_8016AEDC(); if((int)fr>=lo&&(int)fr<=hi) fprintf(stderr,"[MPTRACE] f%u A908 store%d floor=%d\n",fr,__COUNTER__+1,floor_id);} }
+          if (hi>0){u32 fr=gm_GetFrameCount(); if((int)fr>=lo&&(int)fr<=hi) fprintf(stderr,"[MPTRACE] f%u A908 store%d floor=%d\n",fr,__COUNTER__+1,floor_id);} }
 #endif
         coll->floor.index = floor_id;
         coll->floor.flags = flags;

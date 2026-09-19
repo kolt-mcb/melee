@@ -8,34 +8,29 @@
 #include <string.h>
 #endif
 
+#include <melee/ft/forward.h>
+#include <melee/pl/forward.h>
+
+#include "gm_1601.h"
+#include "gm_16F1.h"
 #include "gm_unsplit.h"
-
-#include "ft/forward.h"
-
-#include "melee/cm/camera.h"
-#include "melee/ft/ftbosslib.h"
-#include "melee/ft/ftlib.h"
-#include "melee/gm/gm_1601.h"
-#include "melee/gm/gm_16F1.h"
-#include "melee/gm/gm_unsplit.h"
-#include "melee/gm/gmmain_lib.h"
-#include "melee/gm/types.h"
-#include "melee/gr/ground.h"
-#include "melee/if/ifstock.h"
-#include "melee/it/items/itevyoshiegg.h"
-#include "melee/lb/lb_0219.h"
-#include "melee/lb/lbarchive.h"
-#include "melee/lb/lbaudio_ax.h"
-#include "melee/lb/lbbgflash.h"
-#include "melee/lb/lbdvd.h"
-#include "melee/lb/types.h"
-#include "melee/mn/types.h"
-
-#include "melee/pl/forward.h"
-
-#include "melee/pl/player.h"
-#include "melee/pl/plbonuslib.h"
-
+#include "gmmain_lib.h"
+#include "types.h"
+#include <melee/cm/camera.h>
+#include <melee/ft/ftbosslib.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gr/ground.h>
+#include <melee/if/ifstock.h>
+#include <melee/it/kinds/itevyoshiegg.h>
+#include <melee/lb/lb_0219.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbbgflash.h>
+#include <melee/lb/lbdvd.h>
+#include <melee/lb/types.h>
+#include <melee/mn/types.h>
+#include <melee/pl/player.h>
+#include <melee/pl/plbonuslib.h>
 #include <sysdolphin/baselib/gobjplink.h>
 #include <sysdolphin/baselib/gobjproc.h>
 #include <sysdolphin/baselib/random.h>
@@ -48,6 +43,7 @@ struct UnkSmallLoadData {
     u8 pad[8];
 };
 
+/// @todo ::PlayerInitData
 typedef struct gm_801BAB40_src {
     /* 0x00 */ s8 c_kind;
     /* 0x01 */ u8 slot_type;
@@ -85,17 +81,17 @@ struct gm_evinit {
     /* 0x01 */ u32 x1_3 : 1;
     /* 0x01 */ u32 x1_4 : 1;
     /* 0x01 */ u32 x1_5 : 3;
-    /* 0x02 */ u8 unk2;
-    /* 0x03 */ s8 unk3;
-    /* 0x04 */ s8 unk4;
+    /* 0x02 */ u8 is_teams;
+    /* 0x03 */ s8 item_freq;
+    /* 0x04 */ s8 sd_penalty;
     /* 0x05 */ u8 unk5;
-    /* 0x06 */ u16 unk6;
-    /* 0x08 */ u32 unk8;
+    /* 0x06 */ u16 stkind;
+    /* 0x08 */ u32 time_limit;
     /* 0x0C */ u8 padC[4];
     /* 0x10 */ u64 x10;
     /* 0x18 */ s32 x18;
     /* 0x1C */ f32 x1C;
-    /* 0x20 */ f32 unk20;
+    /* 0x20 */ f32 game_speed;
     /* 0x24 */ f32 unk24;
 };
 
@@ -104,7 +100,7 @@ struct gm_evstage_table {
     /* 0x00 */ u8 count;
     /* 0x01 */ u8 pad1;
     /* 0x02 */ u16 stage[7];
-    /* 0x10 */ struct gm_801BAB40_src* entries[5];
+    /* 0x10 */ struct gm_801BAB40_src* entries[GM_MAX_PLAYERS];
 };
 
 struct gm_evbonus {
@@ -125,17 +121,19 @@ struct gm_evbonus {
     /* 0x17 */ u8 x17;
 };
 
+/* 0x04 */ struct gm_804D6900_x4_t {
+    int x0;
+    intptr_t x4;
+};
+
 struct gm_804D6900_t {
     /* 0x00 */ u8 kind;
     /* 0x01 */ u8 flags; ///< top 3 bits: player count
     /* 0x02 */ u8 pad2[2];
-    /* 0x04 */ struct gm_804D6900_x4_t {
-        int x0;
-        intptr_t x4;
-    }* x4;
-    /* 0x08 */ struct gm_evinit* x8;
-    /* 0x0C */ struct gm_evbonus* xC;
-    /* 0x10 */ struct gm_evstage_table* x10;
+    /* 0x04 */ struct gm_804D6900_x4_t* x4;
+    /* 0x08 */ struct gm_evinit* evinit;
+    /* 0x0C */ struct gm_evbonus* evbonus;
+    /* 0x10 */ struct gm_evstage_table* evstage_table;
     /* 0x14 */ struct gm_801BAB40_src* player_init[5];
 };
 
@@ -149,8 +147,8 @@ struct gm_804D6900_t {
 /* 1BBB64 */ static void gm_801BBB64(void);
 /* 1BBFE8 */ static void fn_801BBFE8(void);
 /* 1BC00C */ static void gm_801BC00C(void);
-/* 1BC488 */ static int gm_801BC488(UNK_PARAMS);
-/* 1BC4F4 */ static UNK_RET gm_801BC4F4(HSD_GObj*);
+/* 1BC488 */ static int gm_801BC488(void);
+/* 1BC4F4 */ static void gm_801BC4F4(HSD_GObj*);
 /* 1BC670 */ static void gm_801BC670(HSD_GObj*);
 /* 1BC754 */ static void gm_801BC754(HSD_GObj*);
 /* 1BC9E8 */ static void gm_801BC9E8(HSD_GObj*);
@@ -322,12 +320,12 @@ static void pc_gmevent_convert(void)
             struct StartMeleeRules rb;
 
             memset(init, 0, sizeof(*init));
-            init->unk2 = r[2];
-            init->unk3 = (s8) r[3];
-            init->unk4 = (s8) r[4];
+            init->is_teams = r[2];
+            init->item_freq = (s8) r[3];
+            init->sd_penalty = (s8) r[4];
             init->unk5 = r[5];
-            init->unk6 = pc_ev_be16(r + 6);
-            init->unk8 = pc_ev_be32(r + 8);
+            init->stkind = pc_ev_be16(r + 6);
+            init->time_limit = pc_ev_be32(r + 8);
             /* +0x10..+0x17 is one 64-bit item mask. */
             init->x10 = ((u64) pc_ev_be32(r + 0x10) << 32) |
                         pc_ev_be32(r + 0x14);
@@ -337,7 +335,7 @@ static void pc_gmevent_convert(void)
                 v = pc_ev_be32(r + 0x1C);
                 memcpy(&init->x1C, &v, 4);
                 v = pc_ev_be32(r + 0x20);
-                memcpy(&init->unk20, &v, 4);
+                memcpy(&init->game_speed, &v, 4);
                 v = pc_ev_be32(r + 0x24);
                 memcpy(&init->unk24, &v, 4);
             }
@@ -347,7 +345,7 @@ static void pc_gmevent_convert(void)
             memset(&rb, 0, sizeof(rb));
             rb.match_kind = (r[0] >> 5) & 7;
             rb.x0_3 = (r[0] >> 2) & 7;
-            rb.x0_6 = (r[0] >> 1) & 1;
+            rb.timer_enabled = (r[0] >> 1) & 1;
             rb.timer_counts_up = r[0] & 1;
             rb.x1_0 = (r[1] >> 7) & 1;
             rb.x1_1 = (r[1] >> 6) & 1;
@@ -358,7 +356,7 @@ static void pc_gmevent_convert(void)
             rb.timer_shows_hours = (r[1] >> 1) & 1;
             rb.friendly_fire = r[1] & 1;
             memcpy(init, &rb, 2);
-            lvl->x8 = init;
+            lvl->evinit = init;
         }
 
         off = pc_ev_be32(lr + 0xC);
@@ -375,7 +373,7 @@ static void pc_gmevent_convert(void)
                 v = pc_ev_be32(r + 0x10);
                 memcpy(&b->x10, &v, 4);
             }
-            lvl->xC = b;
+            lvl->evbonus = b;
         }
 
         off = pc_ev_be32(lr + 0x10);
@@ -398,7 +396,7 @@ static void pc_gmevent_convert(void)
                     x->entries[j] = NULL;
                 }
             }
-            lvl->x10 = x;
+            lvl->evstage_table = x;
         }
 
         for (j = 0; j < 5; j++) {
@@ -417,7 +415,7 @@ static void pc_gmevent_convert(void)
                 "[GMEV] converted %d levels (lvl0 kind=%d init x1C=%.2f "
                 "pinit0 x1C=%.2f)\n",
                 n, pc_ev_lvls[0].kind,
-                pc_ev_lvls[0].x8 ? (double) pc_ev_lvls[0].x8->x1C : -1.0,
+                pc_ev_lvls[0].evinit ? (double) pc_ev_lvls[0].evinit->x1C : -1.0,
                 pc_ev_lvls[0].player_init[0]
                     ? (double) pc_ev_lvls[0].player_init[0]->x1C
                     : -1.0);
@@ -443,7 +441,7 @@ void gm_801BA938(struct EventData* arg0, int lo, int hi, bool arg3)
 
     for (i = lo; i < hi; i++) {
         char_id = arg0->x4C[i];
-        if (char_id != CHKIND_NONE) {
+        if (char_id != ChKind_None) {
             cache->entries[i].char_id = char_id;
             cache->entries[i].color = arg0->x50[i];
             if (arg0->x45 != 0 && i > 0 && arg0->x4C[i] == 4) {
@@ -458,7 +456,7 @@ void gm_801BA938(struct EventData* arg0, int lo, int hi, bool arg3)
     lbDvd_80018254();
     mask = 0;
     for (i = lo; i < hi; i++) {
-        if (arg0->x4C[i] != CHKIND_NONE) {
+        if (arg0->x4C[i] != ChKind_None) {
             mask |= lbAudioAx_80026E84(arg0->x4C[i]);
         }
     }
@@ -470,11 +468,11 @@ void gm_801BA938(struct EventData* arg0, int lo, int hi, bool arg3)
 
 void onEnterCss(GameModeState* arg0)
 {
-    struct EventData* temp_r31 = &gmMainLib_804D3EE0->unk_530;
+    struct EventData* temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
     CSSData* css = gm_GetGameModeStateEnterData(arg0);
     PAD_STACK(8);
 
-    gm_801B06B0(css, 0xE, temp_r31->x2, 0, temp_r31->x3, temp_r31->x4, 0,
+    gm_801B06B0(css, 0xE, temp_r31->x2, 0, temp_r31->x3, temp_r31->nametag, 0,
                 temp_r31->x6);
     if (temp_r31->x44 == 1) {
         gm_801BA938(temp_r31, 1, 4, true);
@@ -486,14 +484,14 @@ void onExitCss(GameModeState* arg0)
     CSSData* temp_r3;
     struct EventData* temp_r31;
 
-    temp_r31 = &gmMainLib_804D3EE0->unk_530;
+    temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
     temp_r3 = gm_GetGameModeStateExitData(arg0);
     if (temp_r3->pending_scene_change == 2) {
         gm_ChangeGameModeAfterCurrentScene(GM_MENU);
         return;
     }
-    gm_801B0730(temp_r3, &temp_r31->x2, NULL, &temp_r31->x3, &temp_r31->x4,
-                NULL);
+    gm_801B0730(temp_r3, &temp_r31->x2, NULL, &temp_r31->x3,
+                &temp_r31->nametag, NULL);
     temp_r31->x8 = -1;
     temp_r31->x9 = -1;
     temp_r31->xA = -1;
@@ -507,7 +505,7 @@ void gm_801BAB40(PlayerInitData* arg0, gm_801BAB40_src* src)
     arg0->stocks = src->stocks;
     arg0->color = src->color;
     arg0->slot = 0;
-    arg0->x5 = src->x5;
+    arg0->spawn_pos = src->x5;
     arg0->sub_color = src->sub_color;
     arg0->handicap = 9;
     arg0->team = src->team;
@@ -515,29 +513,29 @@ void gm_801BAB40(PlayerInitData* arg0, gm_801BAB40_src* src)
     arg0->xB = src->xB;
     arg0->rumble_enabled = 0;
     arg0->xC_b1 = (src->flags & 0x80) >> 7;
-    arg0->xC_b2 = (src->flags & 0x40) >> 6;
+    arg0->vs_metal = (src->flags & 0x40) >> 6;
     arg0->xC_b3 = (src->flags & 0x20) >> 5;
-    arg0->xC_b4 = (src->flags & 0x10) >> 4;
+    arg0->vs_invisible = (src->flags & 0x10) >> 4;
     arg0->xC_b6 = (src->flags & 0x08) >> 3;
     arg0->xC_b7 = (src->flags & 0x04) >> 2;
     arg0->xD_b1 = 0;
     arg0->xD_b2 = 0;
     arg0->xD_b4 = 0;
-    arg0->xE = src->xE;
+    arg0->cpu_kind = src->xE;
     arg0->cpu_level = src->cpu_level;
-    arg0->x10 = 0;
-    arg0->x12 = src->x12;
+    arg0->damage = 0;
+    arg0->damage1 = src->x12;
     arg0->hp = src->hp;
-    arg0->x18 = src->x18;
-    arg0->x1C = src->x1C;
-    arg0->x20 = src->x20;
+    arg0->attack_ratio = src->x18;
+    arg0->defense_ratio = src->x1C;
+    arg0->model_scale = src->x20;
 }
 
 s32 gm_801BAC9C(GameModeState* arg0, s32 arg1)
 {
     UNUSED u8 _[8];
-    u8 chars[CHKIND_MAX];
-    struct EventData* ev = &gmMainLib_804D3EE0->unk_530;
+    u8 chars[ChKind_Max];
+    struct EventData* ev = &gmMainLib_804D3EE0->vs.unk_530;
     StartMeleeData* data = gm_GetGameModeStateEnterData(arg0);
     s32 i;
     s32 found;
@@ -547,10 +545,10 @@ s32 gm_801BAC9C(GameModeState* arg0, s32 arg1)
         (struct gm_event_char_list*) (*gm_804D6900)[ev->unk_535]->x4;
     PAD_STACK(8);
 
-    for (i = 0; i < CHKIND_MAX; i++) {
+    for (i = 0; i < ChKind_Max; i++) {
         u8* ptr = &src->c_kind[i];
         u8 c = *ptr;
-        if ((s32) c == CHKIND_MAX) {
+        if ((s32) c == ChKind_Max) {
             break;
         }
         found = 0;
@@ -570,7 +568,7 @@ s32 gm_801BAC9C(GameModeState* arg0, s32 arg1)
 /// Accessor for the event data block inside gmMainLib_804D3EE0.
 static inline struct EventData* gm_GetEventData(void)
 {
-    return &gmMainLib_804D3EE0->unk_530;
+    return &gmMainLib_804D3EE0->vs.unk_530;
 }
 
 static inline u8 gm_GetNextColor(u8 color)
@@ -602,20 +600,20 @@ void onEnterVs(GameModeState* arg0)
 #endif
     levels = gm_804D6900[0];
     gm_SetupRulesDefaults(&md->rules);
-    md->rules.match_kind = levels[level]->x8->x0_0;
-    md->rules.x0_3 = levels[level]->x8->x0_3;
-    md->rules.x0_6 = levels[level]->x8->x0_6;
-    md->rules.timer_counts_up = levels[level]->x8->x0_7;
+    md->rules.match_kind = levels[level]->evinit->x0_0;
+    md->rules.x0_3 = levels[level]->evinit->x0_3;
+    md->rules.timer_enabled = levels[level]->evinit->x0_6;
+    md->rules.timer_counts_up = levels[level]->evinit->x0_7;
     md->rules.x1_0 = 1;
     md->rules.x1_1 = 0;
     md->rules.x1_2 = 0;
     md->rules.x1_3 = 0;
     md->rules.timer_shows_hours = 0;
-    md->rules.friendly_fire = levels[level]->x8->x1_1;
+    md->rules.friendly_fire = levels[level]->evinit->x1_1;
     md->rules.x2_2 = 0;
     md->rules.single_button = 0;
     md->rules.disable_pausing = 0;
-    md->rules.x2_5 = levels[level]->x8->x1_2;
+    md->rules.x2_5 = levels[level]->evinit->x1_2;
     md->rules.x3_1 = 1;
     md->rules.x3_2 = 1;
     md->rules.x3_3 = 1;
@@ -629,37 +627,37 @@ void onEnterVs(GameModeState* arg0)
     md->rules.x4_7 = 0;
     md->rules.x5_0 = 1;
     md->rules.x5_1 = 0;
-    md->rules.x5_2 = levels[level]->x8->x1_3;
-    md->rules.x5_3 = levels[level]->x8->x1_4;
+    md->rules.x5_2 = levels[level]->evinit->x1_3;
+    md->rules.x5_3 = levels[level]->evinit->x1_4;
     md->rules.x7 = 0;
-    md->rules.is_teams = levels[level]->x8->unk2;
+    md->rules.is_teams = levels[level]->evinit->is_teams;
     md->rules.x9 = 0;
     md->rules.xA = 0;
-    md->rules.xB = levels[level]->x8->unk3;
-    md->rules.xC = levels[level]->x8->unk4;
+    md->rules.item_freq = levels[level]->evinit->item_freq;
+    md->rules.sd_penalty = levels[level]->evinit->sd_penalty;
     md->rules.xD = 0x6E;
-    md->rules.stkind = levels[level]->x8->unk6;
-    md->rules.time_limit = levels[level]->x8->unk8;
+    md->rules.stkind = levels[level]->evinit->stkind;
+    md->rules.time_limit = levels[level]->evinit->time_limit;
     md->rules.x14 = 0;
     md->rules.x18 = 0;
-    md->rules.x20 = levels[level]->x8->x10;
-    md->rules.x28 = levels[level]->x8->x18;
-    md->rules.x30 = levels[level]->x8->x1C;
-    md->rules.x34 = levels[level]->x8->unk20;
-    md->rules.x44 = fn_801BBFE8;
+    md->rules.x20 = levels[level]->evinit->x10;
+    md->rules.x28 = levels[level]->evinit->x18;
+    md->rules.x30 = levels[level]->evinit->x1C;
+    md->rules.game_speed = levels[level]->evinit->game_speed;
+    md->rules.on_match_start = fn_801BBFE8;
     if (md->rules.timer_counts_up & 1) {
         ev->xB_0 = 1;
     }
-    if (levels[level]->x8->x1_0) {
+    if (levels[level]->evinit->x1_0) {
         ev->xB_6 = 1;
     }
-    if (levels[level]->x8->unk24 != 1.0f) {
-        ev->x1C = levels[level]->x8->unk24;
+    if (levels[level]->evinit->unk24 != 1.0f) {
+        ev->x1C = levels[level]->evinit->unk24;
     }
     if (levels[level]->kind == 2) {
         u16 stage;
         ev->xB_4 = 1;
-        stage = levels[level]->x10->stage[ev->x20];
+        stage = levels[level]->evstage_table->stage[ev->x20];
         md->rules.stkind = stage;
         ev->x48 = stage;
         if (ev->x20 > 0) {
@@ -686,10 +684,10 @@ void onEnterVs(GameModeState* arg0)
             u8 c;
             gm_801B05F4(md->players, ev->x6);
             ev->x7 = md->players[0].team;
-            if (md->players[0].ckind == CHKIND_NONE) {
+            if (md->players[0].ckind == ChKind_None) {
                 md->players[0].ckind = ev->x2;
                 md->players[0].color = ev->x3;
-                md->players[0].nametag = ev->x4;
+                md->players[0].nametag = ev->nametag;
             }
             c = md->players[0].ckind;
             ev->x0 = c;
@@ -705,7 +703,7 @@ void onEnterVs(GameModeState* arg0)
                 md->players[player_idx].team = md->players[0].team;
                 md->players[player_idx].xD_b1 = 1;
             }
-            if (levels[level]->player_init[player_idx]->c_kind == CHKIND_NONE)
+            if (levels[level]->player_init[player_idx]->c_kind == ChKind_None)
             {
                 s8* t = &ev->x8 + player_idx - 1;
                 s8 v = *t;
@@ -724,8 +722,8 @@ void onEnterVs(GameModeState* arg0)
                     md->players[player_idx].color = gm_GetNextColor(c);
                 }
             }
-            if (md->players[0].ckind == CKIND_SEAK &&
-                md->players[player_idx].ckind == CKIND_ZELDA)
+            if (md->players[0].ckind == CKind_Seak &&
+                md->players[player_idx].ckind == CKind_Zelda)
             {
                 u8 c = md->players[player_idx].color;
                 if (c == md->players[0].color) {
@@ -743,7 +741,7 @@ void onEnterVs(GameModeState* arg0)
         if (ev->x20 > 0) {
             s8 c;
             md->players[0].stocks = (s8) ev->x24;
-            md->players[0].x10 = ev->x28;
+            md->players[0].damage = ev->x28;
             md->players[0].xC_b1 = 0;
             c = ev->x38;
             if (c != 0x21) {
@@ -752,15 +750,16 @@ void onEnterVs(GameModeState* arg0)
                 ev->x4C[0] = c;
             }
         }
-        gm_801BAB40(&md->players[1], levels[level]->x10->entries[ev->x20]);
+        gm_801BAB40(&md->players[1],
+                    levels[level]->evstage_table->entries[ev->x20]);
         if (md->players[1].ckind == md->players[0].ckind) {
             u8 c = md->players[1].color;
             if (c == md->players[0].color) {
                 md->players[1].color = gm_GetNextColor(c);
             }
         }
-        if (md->players[0].ckind == CKIND_SEAK &&
-            md->players[1].ckind == CKIND_ZELDA)
+        if (md->players[0].ckind == CKind_Seak &&
+            md->players[1].ckind == CKind_Zelda)
         {
             u8 c = md->players[1].color;
             if (c == md->players[0].color) {
@@ -794,7 +793,7 @@ void onEnterVs(GameModeState* arg0)
         s8 k;
         u8 color2;
         ev->xB_3 = 1;
-        bonus = levels[level]->xC;
+        bonus = levels[level]->evbonus;
         if (bonus->x5 == 1) {
             x5_flag = 1;
             if ((s8) ev->x0 == bonus->c_kind) {
@@ -806,7 +805,7 @@ void onEnterVs(GameModeState* arg0)
         } else {
             x5_flag = 0;
         }
-        bonus = levels[level]->xC;
+        bonus = levels[level]->evbonus;
         k = bonus->c_kind;
         if (k == 4) {
             color2 = bonus->x17;
@@ -816,16 +815,16 @@ void onEnterVs(GameModeState* arg0)
         gm_8016A22C(k, 0x21, 0x21, ev->x50[1], 0, 0, x5_flag, 0, color2,
                     ev->x0, ev->x1, bonus->x1, bonus->x2, bonus->x3, bonus->x4,
                     0, 1, bonus->x8, bonus->xC);
-        gm_8016A414(levels[level]->xC->x10);
+        gm_8016A414(levels[level]->evbonus->x10);
         gm_8016A21C(&md->rules);
-        if ((levels[level]->xC->flags >> 7) & 1) {
+        if ((levels[level]->evbonus->flags >> 7) & 1) {
             gm_8016A434();
         }
         if (event_info[level]->x4 != NULL) {
             gm_8016A404((s32) event_info[level]->x4);
         }
-        if (levels[level]->xC->x15 != 0) {
-            gm_8016A424(levels[level]->xC->x15);
+        if (levels[level]->evbonus->x15 != 0) {
+            gm_8016A424(levels[level]->evbonus->x15);
         }
     }
     cache = &lbDvd_GetPreloadCacheScene()->game_cache;
@@ -862,15 +861,14 @@ void onEnterVs(GameModeState* arg0)
 
 void onExitVs(GameModeState* arg0)
 {
-    struct EventData* ev = &gmMainLib_804D3EE0->unk_530;
+    struct EventData* ev = &gmMainLib_804D3EE0->vs.unk_530;
     MatchExitInfo* exit = gm_GetGameModeStateExitData(arg0);
     u8 stage = ev->unk_535;
-    u8 b;
     u8 kind;
     s32 t;
 
     gm_8016A164();
-    if (exit->match_end.result == OUTCOME_RETRY) {
+    if (exit->match_end.outcome == OUTCOME_RETRY) {
         s32 do_save = 0;
         if (ev->x20 != 0) {
             do_save = 1;
@@ -900,14 +898,13 @@ void onExitVs(GameModeState* arg0)
         gm_SetNextGameModeStateId(1);
         return;
     }
-    if (exit->match_end.result == OUTCOME_NO_CONTEST) {
+    if (exit->match_end.outcome == OUTCOME_NO_CONTEST) {
         gm_ChangeGameModeAfterCurrentScene(GM_MENU);
         return;
     }
     ev->x3C += gm_80168940(&vs_exit_data[0].match_end);
     ev->x40 += (s32) exit->match_end.frame_count;
-    b = ((u8*) ev)[0xB];
-    if (((b >> 3) & 1) && ((b >> 5) & 1)) {
+    if (ev->xB_4 && ev->xB_2) {
         ev->x24 = vs_exit_data[0].match_end.player_standings[0].stocks;
         ev->x28 = vs_exit_data[0].match_end.player_standings[0].percent;
         ev->xB_2 = 0;
@@ -941,7 +938,7 @@ void onExitVs(GameModeState* arg0)
     if (ev->xB_1) {
         kind = gm_801732D8(ev->unk_535);
     } else {
-        kind = CHKIND_MAX;
+        kind = ChKind_Max;
     }
     if (ev->unk_535 == gm_801BEBC0(0x32) &&
         exit->match_end.player_standings[0].stocks == 3)
@@ -959,8 +956,9 @@ void onExitVs(GameModeState* arg0)
     }
     gm_80173EEC();
     gm_80172898(0x10);
-    if (kind != CHKIND_MAX) {
-        gm_801736E8(ev->x0, ev->x1, ev->x6, ev->x4, kind, GM_MENU);
+    if (kind != ChKind_Max) {
+        gm_InitChallengerData(ev->x0, ev->x1, ev->x6, ev->nametag, kind,
+                              GM_MENU);
         gm_ChangeGameModeAfterCurrentScene(GM_CHALLENGER_APPROACH);
         return;
     }
@@ -974,12 +972,12 @@ void gm_Mode_Event_OnInit(void)
     struct EventData* temp_r6;
     int i;
 
-    temp_r6 = &gmMainLib_804D3EE0->unk_530;
-    gmMainLib_804D3EE0->unk_530.x0 = 0;
+    temp_r6 = &gmMainLib_804D3EE0->vs.unk_530;
+    gmMainLib_804D3EE0->vs.unk_530.x0 = 0;
     temp_r6->x1 = 0;
     temp_r6->x2 = 0x21;
     temp_r6->x3 = 0;
-    temp_r6->x4 = 0x78;
+    temp_r6->nametag = 0x78;
     temp_r6->unk_535 = 0;
     temp_r6->x6 = 0;
     temp_r6->x7 = 0;
@@ -1021,7 +1019,7 @@ static inline void gm_801BBB64_inline(struct EventData* ev)
 {
     struct gm_804D6900_t** tbl = gm_804D6900[0];
     u8 idx = ev->unk_535;
-    if ((*tbl[idx]->player_init)->c_kind != CHKIND_NONE) {
+    if ((*tbl[idx]->player_init)->c_kind != ChKind_None) {
         ev->x44 = 0;
     } else {
         ev->x44 = 1;
@@ -1031,7 +1029,7 @@ static inline void gm_801BBB64_inline(struct EventData* ev)
 void gm_801BBB64(void)
 {
     struct gm_804D6900_t** pp;
-    struct EventData* ev = &gmMainLib_804D3EE0->unk_530;
+    struct EventData* ev = &gmMainLib_804D3EE0->vs.unk_530;
     struct gm_804D6900_t** tbl = gm_804D6900[0];
     u8 idx = ev->unk_535;
     gm_801BAB40_src* player_init;
@@ -1042,7 +1040,7 @@ void gm_801BBB64(void)
     gm_801BBB64_inline(ev);
 
     pp = &tbl[idx];
-    ev->x48 = (*pp)->x8->unk6;
+    ev->x48 = (*pp)->evinit->stkind;
 
     for (i = 0; i < 4; i++) {
         player_init = (*pp)->player_init[i];
@@ -1050,19 +1048,19 @@ void gm_801BBB64(void)
             ev->x4C[i] = player_init->c_kind;
             ev->x50[i] = (*pp)->player_init[i]->color;
         } else {
-            ev->x4C[i] = CHKIND_NONE;
+            ev->x4C[i] = ChKind_None;
             ev->x50[i] = 0;
         }
     }
 
     if ((*pp)->kind == 1) {
-        ev->x4C[1] = (*pp)->xC->c_kind;
-        if ((*pp)->xC->x5 == 1) {
-            ev->x50[1] = (*pp)->xC->color;
+        ev->x4C[1] = (*pp)->evbonus->c_kind;
+        if ((*pp)->evbonus->x5 == 1) {
+            ev->x50[1] = (*pp)->evbonus->color;
         } else {
             ev->x50[1] = 0xFF;
         }
-        if ((s32) (*pp)->xC->x17 == 1) {
+        if ((s32) (*pp)->evbonus->x17 == 1) {
             ev->x45 = 1;
         } else {
             ev->x45 = 0;
@@ -1082,37 +1080,37 @@ void gm_801BBB64(void)
         } else {
             ev->x44 = 4;
         }
-        event_entry = (*pp)->x10->entries[ev->x20];
+        event_entry = (*pp)->evstage_table->entries[ev->x20];
         ev->x4C[1] = event_entry->c_kind;
-        event_entry = (*pp)->x10->entries[ev->x20];
+        event_entry = (*pp)->evstage_table->entries[ev->x20];
         ev->x50[1] = event_entry->color;
         return;
     case 35:
         if (ev->x20 == 0) {
             ev->x44 = 2;
-            event_entry = (*pp)->x10->entries[0];
+            event_entry = (*pp)->evstage_table->entries[0];
             ev->x4C[1] = event_entry->c_kind;
-            event_entry = (*pp)->x10->entries[0];
+            event_entry = (*pp)->evstage_table->entries[0];
             ev->x50[1] = event_entry->color;
-            event_entry = (*pp)->x10->entries[2];
+            event_entry = (*pp)->evstage_table->entries[2];
             ev->x4C[2] = event_entry->c_kind;
-            event_entry = (*pp)->x10->entries[2];
+            event_entry = (*pp)->evstage_table->entries[2];
             ev->x50[2] = event_entry->color;
-            event_entry = (*pp)->x10->entries[3];
+            event_entry = (*pp)->evstage_table->entries[3];
             ev->x4C[3] = event_entry->c_kind;
-            event_entry = (*pp)->x10->entries[3];
+            event_entry = (*pp)->evstage_table->entries[3];
             ev->x50[3] = event_entry->color;
             return;
         }
         if (ev->x20 == 1) {
             ev->x44 = 4;
-            event_entry = (*pp)->x10->entries[1];
+            event_entry = (*pp)->evstage_table->entries[1];
             ev->x4C[1] = event_entry->c_kind;
-            event_entry = (*pp)->x10->entries[1];
+            event_entry = (*pp)->evstage_table->entries[1];
             ev->x50[1] = event_entry->color;
-            event_entry = (*pp)->x10->entries[4];
+            event_entry = (*pp)->evstage_table->entries[4];
             ev->x4C[2] = event_entry->c_kind;
-            event_entry = (*pp)->x10->entries[4];
+            event_entry = (*pp)->evstage_table->entries[4];
             ev->x50[2] = event_entry->color;
             return;
         }
@@ -1135,7 +1133,7 @@ void gm_Mode_Event_OnLoad(void)
     u8 temp_r3;
     PAD_STACK(8);
 
-    temp_r30 = &gmMainLib_804D3EE0->unk_530;
+    temp_r30 = &gmMainLib_804D3EE0->vs.unk_530;
     gm_801BA8FC();
 
     temp_r29 = gm_804D6900[0];
@@ -1183,7 +1181,7 @@ static inline void gm_801BC00C_inline(gm_801BAB40_src* event_entry)
 {
     u8 ckind = event_entry->c_kind;
     u8 costume = event_entry->color;
-    struct EventData* ev2 = &gmMainLib_804D3EE0->unk_530;
+    struct EventData* ev2 = &gmMainLib_804D3EE0->vs.unk_530;
 
     if ((s8) ev2->x0 == (s8) ckind && ev2->x1 == costume) {
         if (costume <= 2) {
@@ -1215,7 +1213,7 @@ void gm_801BC00C(void)
     gm_801BAB40_src* event_entry;
     u8 ckind;
     u8 costume;
-    lbl_8046B6A0_t* mi;
+    VsSceneState* mi;
     s32 i;
     s8 chr;
     PAD_STACK(0x38);
@@ -1249,16 +1247,16 @@ void gm_801BC00C(void)
     switch (idx) {
     case 35:
         if (ev->x20 == 0) {
-            event_entry = event_levels[idx]->x10->entries[2];
+            event_entry = event_levels[idx]->evstage_table->entries[2];
             ftLib_80087508(
                 Player_800325C8((CharacterKind) event_entry->c_kind, 0),
                 event_entry->color);
-            event_entry = event_levels[idx]->x10->entries[3];
+            event_entry = event_levels[idx]->evstage_table->entries[3];
             ftLib_80087508(
                 Player_800325C8((CharacterKind) event_entry->c_kind, 0),
                 event_entry->color);
         } else {
-            event_entry = event_levels[idx]->x10->entries[4];
+            event_entry = event_levels[idx]->evstage_table->entries[4];
             ftLib_80087508(
                 Player_800325C8(gm_801BC00C_GetCharacterKind(event_entry), 0),
                 event_entry->color);
@@ -1282,7 +1280,7 @@ void gm_801BC00C(void)
     case 39:
     case 48:
         if (ev->x20 > 0) {
-            mi = gm_16AE_GetUnkData_1();
+            mi = gmVs_GetSceneState();
             mi->timer_seconds = ev->x2C;
             mi->unk_2C = ev->x30;
         }
@@ -1295,33 +1293,33 @@ void gm_801BC00C(void)
     case 29:
     case 39:
     case 48:
-        for (i = ev->x20; i < event_levels[idx]->x10->count; i++) {
-            event_entry = event_levels[idx]->x10->entries[i];
+        for (i = ev->x20; i < event_levels[idx]->evstage_table->count; i++) {
+            event_entry = event_levels[idx]->evstage_table->entries[i];
             gm_801BC00C_inline(event_entry);
         }
         break;
     case 35:
         if (ev->x20 == 0) {
-            event_entry = event_levels[idx]->x10->entries[0];
+            event_entry = event_levels[idx]->evstage_table->entries[0];
             gm_801BC00C_inline(event_entry);
-            event_entry = event_levels[idx]->x10->entries[2];
+            event_entry = event_levels[idx]->evstage_table->entries[2];
             gm_801BC00C_inline(event_entry);
-            event_entry = event_levels[idx]->x10->entries[3];
+            event_entry = event_levels[idx]->evstage_table->entries[3];
             gm_801BC00C_inline(event_entry);
         }
         if (ev->x20 <= 1) {
-            event_entry = event_levels[idx]->x10->entries[1];
+            event_entry = event_levels[idx]->evstage_table->entries[1];
             gm_801BC00C_inline(event_entry);
-            event_entry = event_levels[idx]->x10->entries[4];
+            event_entry = event_levels[idx]->evstage_table->entries[4];
             gm_801BC00C_inline(event_entry);
         }
         break;
     }
 
     if (idx == 0x24) {
-        lbBgFlash_80021A10(0.2f);
+        lbBgFlash_SetFlashScale(0.2f);
     }
-    Camera_80030E34(ev->x1C);
+    Camera_SetQuakeScale(ev->x1C);
     HSD_GObj_SetupProc(GObj_Create(0xF, 0x11, 0), event_info[idx]->x0, 0x15);
 }
 
@@ -1406,15 +1404,15 @@ gm_803DF94C_t* gm_803DF94C[] = {
 
 int gm_801BC488(void)
 {
-    lbl_8046B6A0_24C_t* tmp = gm_8016B774();
-    lbl_8046B6A0_24C_t spC;
+    MatchEnd* tmp = gm_8016B774();
+    MatchEnd spC;
     PAD_STACK(4);
 
     spC = *tmp;
 
     gm_80166378(&spC);
-    if (spC.xE == 1) {
-        return spC.x16;
+    if (spC.n_team_winners == 1) {
+        return spC.team_winners[0];
     }
     return 4;
 }
@@ -1431,13 +1429,13 @@ void gm_801BC4F4(HSD_GObj* gobj)
     u32 var_r4;
     PAD_STACK(8);
 
-    temp_r30 = gmMainLib_804D3EE0->unk_530.unk_535;
-    temp_r28 = &gmMainLib_804D3EE0->unk_530;
+    temp_r30 = gmMainLib_804D3EE0->vs.unk_530.unk_535;
+    temp_r28 = &gmMainLib_804D3EE0->vs.unk_530;
     temp_r28->xB_1 = true;
     temp_r29 = gmMainLib_8015CF5C(temp_r30);
     var_r25 = false;
     if (temp_r28->xB_6) {
-        var_r4 = gm_8016AEDC();
+        var_r4 = gm_GetFrameCount();
         var_r4 += temp_r28->x34;
         if (temp_r30 == 0x31) {
             var_r4 = temp_r28->x34;
@@ -1479,12 +1477,12 @@ void gm_801BC4F4(HSD_GObj* gobj)
         gm_8016B364(0x145);
     }
     gm_8016B328();
-    HSD_GObjPLink_80390228(gobj);
+    HSD_GObjFree(gobj);
 }
 
 void gm_801BC670(HSD_GObj* arg0)
 {
-    struct EventData* temp_r31 = &gmMainLib_804D3EE0->unk_530;
+    struct EventData* temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
     struct gm_804D6900_x4_t* temp_r30 = gm_804D6900[0][0]->x4;
     PAD_STACK(0x10);
 
@@ -1515,12 +1513,12 @@ void gm_801BC670(HSD_GObj* arg0)
         temp_r31->x30 = 0;
     }
 #endif
-    if (Player_80036394(0) == FTKIND_SEAK) {
+    if (Player_80036394(0) == Ft_Kind_Seak) {
         temp_r31->x38 = 0x13;
     } else {
         temp_r31->x38 = 0x21;
     }
-    temp_r31->x34 += gm_8016AEDC();
+    temp_r31->x34 += gm_GetFrameCount();
     Player_80036844(0, 1);
     lbAudioAx_80028B90();
     gm_SetGameSpeed(1.0F);
@@ -1528,10 +1526,22 @@ void gm_801BC670(HSD_GObj* arg0)
     gm_8016B328();
 }
 
+static inline void failEvent(HSD_GObj* gobj)
+{
+    gmMainLib_804D3EE0->vs.unk_530.xB_1 = false;
+    lbAudioAx_80028B90();
+    gm_SetGameSpeed(1.0F);
+    gm_8016B33C(6);
+    gm_8016B364(0x148);
+    gm_8016B378(0x28);
+    gm_8016B328();
+    HSD_GObjFree(gobj);
+}
+
 void gm_801BC754(HSD_GObj* gobj)
 {
-    lbl_8046B6A0_t* temp_r3;
-    lbl_8046B6A0_t* temp_r3_2;
+    VsSceneController* temp_r3;
+    VsSceneController* temp_r3_2;
     bool var_r0;
     bool var_r0_2;
     int count;
@@ -1543,11 +1553,11 @@ void gm_801BC754(HSD_GObj* gobj)
 
     PAD_STACK(0x48);
 
-    temp_r29 = &gmMainLib_804D3EE0->unk_530;
-    switch (gm_16AE_GetUnkData_0()->x24C8.match_kind) {
+    temp_r29 = &gmMainLib_804D3EE0->vs.unk_530;
+    switch (gmVs_GetSceneController()->start.match_kind) {
     case 1:
         count = 0;
-        temp_r28 = &gmMainLib_804D3EE0->unk_530;
+        temp_r28 = &gmMainLib_804D3EE0->vs.unk_530;
         for (i = 1; i < 6; i++) {
             if (Player_GetPlayerSlotType(i) != Gm_PKind_NA &&
                 Player_GetStocks(i) != 0)
@@ -1563,21 +1573,14 @@ void gm_801BC754(HSD_GObj* gobj)
             return;
         }
         if (Player_GetP1Stock() <= 0) {
-            gmMainLib_804D3EE0->unk_530.xB_1 = false;
-            lbAudioAx_80028B90();
-            gm_SetGameSpeed(1.0F);
-            gm_8016B33C(6);
-            gm_8016B364(0x148);
-            gm_8016B378(0x28);
-            gm_8016B328();
-            HSD_GObjPLink_80390228(gobj);
+            failEvent(gobj);
             return;
         }
-        temp_r28_2 = &gmMainLib_804D3EE0->unk_530;
-        temp_r3 = gm_16AE_GetUnkData_0();
+        temp_r28_2 = &gmMainLib_804D3EE0->vs.unk_530;
+        temp_r3 = gmVs_GetSceneController();
         if (temp_r28_2->xB_0) {
             var_r0 = false;
-        } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+        } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                    gm_8016AEFC() == 0x3B)
         {
             var_r0 = true;
@@ -1585,23 +1588,16 @@ void gm_801BC754(HSD_GObj* gobj)
             var_r0 = false;
         }
         if (var_r0) {
-            gmMainLib_804D3EE0->unk_530.xB_1 = false;
-            lbAudioAx_80028B90();
-            gm_SetGameSpeed(1.0F);
-            gm_8016B33C(6);
-            gm_8016B364(0x148);
-            gm_8016B378(0x28);
-            gm_8016B328();
-            HSD_GObjPLink_80390228(gobj);
+            failEvent(gobj);
         }
         break;
     case 0:
     case 2:
-        temp_r28_3 = &gmMainLib_804D3EE0->unk_530;
-        temp_r3_2 = gm_16AE_GetUnkData_0();
+        temp_r28_3 = &gmMainLib_804D3EE0->vs.unk_530;
+        temp_r3_2 = gmVs_GetSceneController();
         if (temp_r28_3->xB_0) {
             var_r0_2 = false;
-        } else if (temp_r3_2->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+        } else if (temp_r3_2->start.timer_enabled && gm_8016AEEC() == 0 &&
                    gm_8016AEFC() == 0x3B)
         {
             var_r0_2 = true;
@@ -1613,14 +1609,7 @@ void gm_801BC754(HSD_GObj* gobj)
                 gm_801BC4F4(gobj);
                 return;
             }
-            gmMainLib_804D3EE0->unk_530.xB_1 = false;
-            lbAudioAx_80028B90();
-            gm_SetGameSpeed(1.0F);
-            gm_8016B33C(6);
-            gm_8016B364(0x148);
-            gm_8016B378(0x28);
-            gm_8016B328();
-            HSD_GObjPLink_80390228(gobj);
+            failEvent(gobj);
         }
         break;
     }
@@ -1628,11 +1617,11 @@ void gm_801BC754(HSD_GObj* gobj)
 
 void gm_801BC9E8(HSD_GObj* gobj)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     bool var_r0;
     struct EventData* temp_r30_2;
     struct gm_804D6900_x4_t* temp_r30 =
-        (*gm_804D6900)[gmMainLib_804D3EE0->unk_530.unk_535]->x4;
+        (*gm_804D6900)[gmMainLib_804D3EE0->vs.unk_530.unk_535]->x4;
     u32 coins = Player_GetCoins(0);
     PAD_STACK(0x28);
 
@@ -1640,11 +1629,11 @@ void gm_801BC9E8(HSD_GObj* gobj)
         gm_801BC4F4(gobj);
         return;
     }
-    temp_r30_2 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r30_2 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r30_2->xB_0) {
         var_r0 = false;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = true;
@@ -1652,39 +1641,31 @@ void gm_801BC9E8(HSD_GObj* gobj)
         var_r0 = false;
     }
     if (var_r0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
     }
 }
 
 void gm_801BCAF0(HSD_GObj* gobj)
 {
     HSD_GObj* temp_r3;
-    lbl_8046B6A0_t* temp_r3_2;
+    VsSceneController* temp_r3_2;
     s32 var_r0;
     s32 var_r0_2;
     struct EventData* temp_r30;
-    s32 var_r30;
-    s32 var_r29;
+    s32 i;
+    s32 count;
     PAD_STACK(0x28);
 
-    var_r30 = 1;
-    var_r29 = 0;
-    do {
-        if ((Player_GetStocks(var_r30) <= 0) &&
-            (temp_r3 = Player_GetEntity(var_r30), ((temp_r3 == NULL) == 0)))
+    count = 0;
+    for (i = 1; i < 3; i += 1) {
+        if ((Player_GetStocks(i) <= 0) &&
+            (temp_r3 = Player_GetEntity(i), ((temp_r3 == NULL) == 0)))
         {
-            if (ftLib_GetKind(temp_r3) == FTKIND_SEAK) {
+            if (ftLib_GetKind(temp_r3) == Ft_Kind_Seak) {
                 var_r0 = 1;
             } else {
-                Player_SetStocks(var_r30, 1);
-                gm_8016F00C(var_r30);
+                Player_SetStocks(i, 1);
+                gm_8016F00C(i);
                 goto block_6;
             }
         } else {
@@ -1692,30 +1673,22 @@ void gm_801BCAF0(HSD_GObj* gobj)
             var_r0 = 0;
         }
         if (var_r0 != 0) {
-            var_r29 += 1;
+            count += 1;
         }
-        var_r30 += 1;
-    } while (var_r30 < 3);
-    if (var_r29 == 2) {
+    }
+    if (count == 2) {
         gm_801BC4F4(gobj);
         return;
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
-    temp_r30 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3_2 = gm_16AE_GetUnkData_0();
+    temp_r30 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3_2 = gmVs_GetSceneController();
     if (temp_r30->xB_0) {
         var_r0_2 = 0;
-    } else if (temp_r3_2->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3_2->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0_2 = 1;
@@ -1723,45 +1696,38 @@ void gm_801BCAF0(HSD_GObj* gobj)
         var_r0_2 = 0;
     }
     if (var_r0_2 != 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
     }
 }
 
 void gm_801BCC9C(HSD_GObj* arg0)
 {
     struct gm_804D6900_t** temp_r29 = gm_804D6900[0];
-    struct EventData* ev = &gmMainLib_804D3EE0->unk_530;
-    u8 idx = gmMainLib_804D3EE0->unk_530.unk_535;
+    struct EventData* ev = &gmMainLib_804D3EE0->vs.unk_530;
+    u8 idx = gmMainLib_804D3EE0->vs.unk_530.unk_535;
     struct gm_804D6900_x4_t* x4 = (*temp_r29)->x4;
     struct EventData* ev2;
     struct gm_804D6900_t** entry;
     struct gm_evstage_table* inner;
     gm_801BAB40_src* cd;
     u8 costume;
-    lbl_8046B6A0_t* mi;
+    VsSceneController* mi;
     s32 var_r0;
     PAD_STACK(0x38);
 
-    if (gmMainLib_804D3EE0->unk_530.xB_2) {
+    if (gmMainLib_804D3EE0->vs.unk_530.xB_2) {
         ev->x10 -= 1;
         if (ev->x10 < 0) {
             lbBgFlash_8002063C(x4->x4);
-            HSD_GObjPLink_80390228(arg0);
+            HSD_GObjFree(arg0);
         }
         return;
     }
     if (Player_GetStocks(1) <= 0) {
         entry = &temp_r29[idx];
-        inner = (*entry)->x10;
+        inner = (*entry)->evstage_table;
         cd = inner->entries[ev->x20];
-        ev2 = &gmMainLib_804D3EE0->unk_530;
+        ev2 = &gmMainLib_804D3EE0->vs.unk_530;
         costume = cd->color;
         if ((s8) ev2->x0 == cd->c_kind && ev2->x1 == costume) {
             if (costume <= 2) {
@@ -1771,41 +1737,27 @@ void gm_801BCC9C(HSD_GObj* arg0)
             }
         }
         gm_8016AC44(cd->c_kind, (s8) costume);
-        if (ev->x20 >= (s32) ((*entry)->x10->count - 1)) {
+        if (ev->x20 >= (s32) ((*entry)->evstage_table->count - 1)) {
             gm_801BC4F4(arg0);
             return;
         }
         if (Player_GetP1Stock() <= 0) {
-            gmMainLib_804D3EE0->unk_530.xB_1 = false;
-            lbAudioAx_80028B90();
-            gm_SetGameSpeed(1.0f);
-            gm_8016B33C(6);
-            gm_8016B364(0x148);
-            gm_8016B378(0x28);
-            gm_8016B328();
-            HSD_GObjPLink_80390228(arg0);
+            failEvent(arg0);
             return;
         }
         gm_801BC670(arg0);
         return;
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0f);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(arg0);
+        failEvent(arg0);
         return;
     }
     {
         struct EventData* ev3 = gm_GetEventData();
-        mi = gm_16AE_GetUnkData_0();
+        mi = gmVs_GetSceneController();
         if (ev3->xB_0) {
             var_r0 = 0;
-        } else if (((*(u8*) &mi->x24C8 >> 1U) & 1) && gm_8016AEEC() == 0 &&
+        } else if (mi->start.timer_enabled && gm_8016AEEC() == 0 &&
                    gm_8016AEFC() == 0x3B)
         {
             var_r0 = 1;
@@ -1814,14 +1766,7 @@ void gm_801BCC9C(HSD_GObj* arg0)
         }
     }
     if (var_r0 != 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0f);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(arg0);
+        failEvent(arg0);
     }
 }
 
@@ -1832,27 +1777,20 @@ void gm_801BCF20(HSD_GObj* gobj)
 
 void gm_801BCF40(HSD_GObj* gobj)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     bool var_r0;
     struct EventData* temp_r31;
     PAD_STACK(0x20);
 
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
-    temp_r31 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r31->xB_0) {
         var_r0 = false;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = true;
@@ -1867,14 +1805,14 @@ void gm_801BCF40(HSD_GObj* gobj)
 void gm_801BD028(HSD_GObj* arg0)
 {
     Vec3 pos;
-    lbl_8046B6A0_t* rules;
+    VsSceneController* rules;
     s32 cond;
-    struct EventData* ev = &gmMainLib_804D3EE0->unk_530;
+    struct EventData* ev = &gmMainLib_804D3EE0->vs.unk_530;
     struct gm_804D6900_t** levels = gm_804D6900[0];
-    u8 level = gmMainLib_804D3EE0->unk_530.unk_535;
+    u8 level = gmMainLib_804D3EE0->vs.unk_530.unk_535;
     PAD_STACK(0x1C);
 
-    if (gmMainLib_804D3EE0->unk_530.x10 == 0) {
+    if (gmMainLib_804D3EE0->vs.unk_530.x10 == 0) {
         Vec3* src = (Vec3*) levels[level]->x4;
         pos.x = src->x;
         pos.y = src->y;
@@ -1883,21 +1821,14 @@ void gm_801BD028(HSD_GObj* arg0)
         ev->x10 += 1;
     }
     if (ev->x18 != 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = 0;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0f);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(arg0);
+        failEvent(arg0);
         return;
     }
-    ev = &gmMainLib_804D3EE0->unk_530;
-    rules = gm_16AE_GetUnkData_0();
+    ev = &gmMainLib_804D3EE0->vs.unk_530;
+    rules = gmVs_GetSceneController();
     if (ev->xB_0) {
         cond = 0;
-    } else if (rules->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (rules->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         cond = 1;
@@ -1911,7 +1842,7 @@ void gm_801BD028(HSD_GObj* arg0)
 
 void gm_801BD164(HSD_GObj* gobj)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     s32 temp_r30;
     s32 var_r0;
     struct EventData* temp_r30_2;
@@ -1922,32 +1853,18 @@ void gm_801BD164(HSD_GObj* gobj)
         if (Player_GetKOsByPlayerIndex(0, 2) > temp_r30) {
             gm_801BC4F4(gobj);
         } else {
-            gmMainLib_804D3EE0->unk_530.xB_1 = false;
-            lbAudioAx_80028B90();
-            gm_SetGameSpeed(1.0F);
-            gm_8016B33C(6);
-            gm_8016B364(0x148);
-            gm_8016B378(0x28);
-            gm_8016B328();
-            HSD_GObjPLink_80390228(gobj);
+            failEvent(gobj);
         }
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
-    temp_r30_2 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r30_2 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r30_2->xB_0) {
         var_r0 = 0;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = 1;
@@ -1955,51 +1872,30 @@ void gm_801BD164(HSD_GObj* gobj)
         var_r0 = 0;
     }
     if (var_r0 != 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
     }
 }
 
 void gm_801BD30C(HSD_GObj* gobj)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     s32 var_r0;
     struct EventData* temp_r31;
     PAD_STACK(0x20);
 
     if (Player_GetStocks(1) <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
-    temp_r31 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r31->xB_0) {
         var_r0 = 0;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = 1;
@@ -2018,7 +1914,7 @@ void gm_801BD44C(HSD_GObj* gobj)
 
 void gm_801BD46C(HSD_GObj* gobj)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     s32 var_r0;
     struct EventData* temp_r31;
     s32 var_r30;
@@ -2043,33 +1939,19 @@ void gm_801BD46C(HSD_GObj* gobj)
     }
     for (i = 1; i < 3; i++) {
         if (Player_GetStocks(i) <= 0) {
-            gmMainLib_804D3EE0->unk_530.xB_1 = false;
-            lbAudioAx_80028B90();
-            gm_SetGameSpeed(1.0F);
-            gm_8016B33C(6);
-            gm_8016B364(0x148);
-            gm_8016B378(0x28);
-            gm_8016B328();
-            HSD_GObjPLink_80390228(gobj);
+            failEvent(gobj);
             return;
         }
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
-    temp_r31 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r31->xB_0) {
         var_r0 = 0;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = 1;
@@ -2077,20 +1959,13 @@ void gm_801BD46C(HSD_GObj* gobj)
         var_r0 = 0;
     }
     if (var_r0 != 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
     }
 }
 
 void gm_801BD658(HSD_GObj* gobj)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     bool var_r0;
     s32 var_r30;
     int i;
@@ -2099,7 +1974,7 @@ void gm_801BD658(HSD_GObj* gobj)
     PAD_STACK(0x28);
 
     var_r30 = 0;
-    temp_r28 = &gmMainLib_804D3EE0->unk_530;
+    temp_r28 = &gmMainLib_804D3EE0->vs.unk_530;
     for (i = 1; i < 6; i++) {
         if (Player_GetPlayerSlotType(i) != Gm_PKind_NA &&
             Player_GetStocks(i) != 0)
@@ -2116,21 +1991,14 @@ void gm_801BD658(HSD_GObj* gobj)
         return;
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
-    temp_r28_2 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r28_2 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r28_2->xB_0) {
         var_r0 = false;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = true;
@@ -2138,20 +2006,13 @@ void gm_801BD658(HSD_GObj* gobj)
         var_r0 = false;
     }
     if (var_r0 != 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
     }
 }
 
 void gm_801BD7FC(HSD_GObj* gobj)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     bool var_r0;
     struct EventData* temp_r31;
     PAD_STACK(0x20);
@@ -2161,21 +2022,14 @@ void gm_801BD7FC(HSD_GObj* gobj)
         return;
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
-    temp_r31 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r31->xB_0) {
         var_r0 = false;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = true;
@@ -2183,20 +2037,13 @@ void gm_801BD7FC(HSD_GObj* gobj)
         var_r0 = false;
     }
     if (var_r0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
     }
 }
 
 void gm_801BD93C(HSD_GObj* gobj)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     bool var_r0;
     struct EventData* temp_r31;
     PAD_STACK(0x38);
@@ -2206,32 +2053,18 @@ void gm_801BD93C(HSD_GObj* gobj)
         return;
     }
     if (Player_GetStocks(1) <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
-    temp_r31 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r31->xB_0) {
         var_r0 = false;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = true;
@@ -2239,14 +2072,7 @@ void gm_801BD93C(HSD_GObj* gobj)
         var_r0 = false;
     }
     if (var_r0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
     }
 }
 
@@ -2257,18 +2083,18 @@ void gm_801BDAD4(HSD_GObj* gobj)
 
 void gm_801BDAF4(HSD_GObj* arg0)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     s32 temp_r30_2;
     s32 temp_r31;
     bool var_r0;
     struct EventData* temp_r30;
     PAD_STACK(0x10);
 
-    temp_r30 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r30 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r30->xB_0) {
         var_r0 = false;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = true;
@@ -2282,20 +2108,13 @@ void gm_801BDAF4(HSD_GObj* arg0)
             gm_801BC4F4(arg0);
             return;
         }
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(arg0);
+        failEvent(arg0);
     }
 }
 
 void gm_801BDC08(HSD_GObj* arg0)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     bool var_r0;
     struct EventData* temp_r31;
     PAD_STACK(0x20);
@@ -2305,21 +2124,14 @@ void gm_801BDC08(HSD_GObj* arg0)
         return;
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(arg0);
+        failEvent(arg0);
         return;
     }
-    temp_r31 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r31->xB_0) {
         var_r0 = false;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = true;
@@ -2327,20 +2139,13 @@ void gm_801BDC08(HSD_GObj* arg0)
         var_r0 = false;
     }
     if (var_r0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(arg0);
+        failEvent(arg0);
     }
 }
 
 void gm_801BDD44(HSD_GObj* arg0)
 {
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
     bool var_r0;
     struct EventData* temp_r31;
     PAD_STACK(0x20);
@@ -2350,21 +2155,14 @@ void gm_801BDD44(HSD_GObj* arg0)
         return;
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(arg0);
+        failEvent(arg0);
         return;
     }
-    temp_r31 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3 = gmVs_GetSceneController();
     if (temp_r31->xB_0) {
         var_r0 = false;
-    } else if (temp_r3->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = true;
@@ -2372,14 +2170,7 @@ void gm_801BDD44(HSD_GObj* arg0)
         var_r0 = false;
     }
     if (var_r0 != 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(arg0);
+        failEvent(arg0);
     }
 }
 
@@ -2399,20 +2190,25 @@ void gm_801BDE94(HSD_GObj* arg0)
             mask = lbAudioAx_80026E84((enum CharacterKind)(s8) (u8) tbl[level]
                                           ->player_init[0]
                                           ->c_kind);
-            mask |= lbAudioAx_80026E84(
-                (enum CharacterKind) tbl[level]->x10->entries[0]->c_kind);
-            mask |= lbAudioAx_80026E84(
-                (enum CharacterKind) tbl[level]->x10->entries[2]->c_kind);
-            mask |= lbAudioAx_80026E84(
-                (enum CharacterKind) tbl[level]->x10->entries[3]->c_kind);
+            mask |= lbAudioAx_80026E84((enum CharacterKind) tbl[level]
+                                           ->evstage_table->entries[0]
+                                           ->c_kind);
+            mask |= lbAudioAx_80026E84((enum CharacterKind) tbl[level]
+                                           ->evstage_table->entries[2]
+                                           ->c_kind);
+            mask |= lbAudioAx_80026E84((enum CharacterKind) tbl[level]
+                                           ->evstage_table->entries[3]
+                                           ->c_kind);
         } else {
             mask = lbAudioAx_80026E84((enum CharacterKind)(s8) (u8) tbl[level]
                                           ->player_init[0]
                                           ->c_kind);
-            mask |= lbAudioAx_80026E84(
-                (enum CharacterKind) tbl[level]->x10->entries[1]->c_kind);
-            mask |= lbAudioAx_80026E84(
-                (enum CharacterKind) tbl[level]->x10->entries[4]->c_kind);
+            mask |= lbAudioAx_80026E84((enum CharacterKind) tbl[level]
+                                           ->evstage_table->entries[1]
+                                           ->c_kind);
+            mask |= lbAudioAx_80026E84((enum CharacterKind) tbl[level]
+                                           ->evstage_table->entries[4]
+                                           ->c_kind);
         }
         lbAudioAx_80026F2C(0x14);
         lbAudioAx_8002702C(4, mask);
@@ -2424,7 +2220,7 @@ void gm_801BDE94(HSD_GObj* arg0)
         ev->x10 -= 1;
         if (ev->x10 < 0) {
             lbBgFlash_8002063C(x4->x4);
-            HSD_GObjPLink_80390228(arg0);
+            HSD_GObjFree(arg0);
         }
         return;
     } else if (ev->x20 == 0) {
@@ -2432,21 +2228,21 @@ void gm_801BDE94(HSD_GObj* arg0)
         case 0:
             if (Player_GetStocks(1) <= 0) {
                 ev->x18 = 1;
-                gm_801BAB40(&sp50, tbl[level]->x10->entries[2]);
+                gm_801BAB40(&sp50, tbl[level]->evstage_table->entries[2]);
                 gm_8016EDDC(2, &sp50);
             }
             break;
         case 1:
             if (Player_GetStocks(2) <= 0) {
                 ev->x18 = 2;
-                gm_801BAB40(&sp50, tbl[level]->x10->entries[3]);
+                gm_801BAB40(&sp50, tbl[level]->evstage_table->entries[3]);
                 gm_8016EDDC(3, &sp50);
             }
             break;
         case 2:
             if (Player_GetStocks(3) <= 0) {
-                gm_801BAB40_src* sp = tbl[level]->x10->entries[3];
-                struct EventData* ev2 = &gmMainLib_804D3EE0->unk_530;
+                gm_801BAB40_src* sp = tbl[level]->evstage_table->entries[3];
+                struct EventData* ev2 = &gmMainLib_804D3EE0->vs.unk_530;
                 u8 color = sp->color;
                 if ((s8) ev2->x0 == sp->c_kind && ev2->x1 == color) {
                     if (color <= 2) {
@@ -2457,14 +2253,7 @@ void gm_801BDE94(HSD_GObj* arg0)
                 }
                 gm_8016AC44(sp->c_kind, color);
                 if (Player_GetP1Stock() <= 0) {
-                    gmMainLib_804D3EE0->unk_530.xB_1 = false;
-                    lbAudioAx_80028B90();
-                    gm_SetGameSpeed(1.0f);
-                    gm_8016B33C(6);
-                    gm_8016B364(0x148);
-                    gm_8016B378(0x28);
-                    gm_8016B328();
-                    HSD_GObjPLink_80390228(arg0);
+                    failEvent(arg0);
                     return;
                 }
                 gm_801BC670(arg0);
@@ -2477,14 +2266,14 @@ void gm_801BDE94(HSD_GObj* arg0)
         case 0:
             if (Player_GetStocks(1) <= 0) {
                 ev->x18 = 1;
-                gm_801BAB40(&sp50, tbl[level]->x10->entries[4]);
+                gm_801BAB40(&sp50, tbl[level]->evstage_table->entries[4]);
                 gm_8016EDDC(2, &sp50);
             }
             break;
         case 1:
             if (Player_GetStocks(2) <= 0) {
-                gm_801BAB40_src* sp = tbl[level]->x10->entries[4];
-                struct EventData* ev2 = &gmMainLib_804D3EE0->unk_530;
+                gm_801BAB40_src* sp = tbl[level]->evstage_table->entries[4];
+                struct EventData* ev2 = &gmMainLib_804D3EE0->vs.unk_530;
                 u8 color = sp->color;
                 if ((s8) ev2->x0 == sp->c_kind && ev2->x1 == color) {
                     if (color <= 2) {
@@ -2502,23 +2291,16 @@ void gm_801BDE94(HSD_GObj* arg0)
     }
 
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0f);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(arg0);
+        failEvent(arg0);
         return;
     }
     {
         struct EventData* ev2 = gm_GetEventData();
-        lbl_8046B6A0_t* info = gm_16AE_GetUnkData_0();
+        VsSceneController* info = gmVs_GetSceneController();
         int do_end;
         if (ev2->xB_0) {
             do_end = 0;
-        } else if (info->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+        } else if (info->start.timer_enabled && gm_8016AEEC() == 0 &&
                    gm_8016AEFC() == 0x3B)
         {
             do_end = 1;
@@ -2526,14 +2308,7 @@ void gm_801BDE94(HSD_GObj* arg0)
             do_end = 0;
         }
         if (do_end != 0) {
-            gmMainLib_804D3EE0->unk_530.xB_1 = false;
-            lbAudioAx_80028B90();
-            gm_SetGameSpeed(1.0f);
-            gm_8016B33C(6);
-            gm_8016B364(0x148);
-            gm_8016B378(0x28);
-            gm_8016B328();
-            HSD_GObjPLink_80390228(arg0);
+            failEvent(arg0);
         }
     }
 }
@@ -2546,7 +2321,7 @@ void gm_801BE37C(HSD_GObj* gobj)
 void gm_801BE39C(HSD_GObj* gobj)
 {
     PlayerInitData sp40;
-    lbl_8046B6A0_t* temp_r3_2;
+    VsSceneController* temp_r3_2;
     struct EventData* temp_r31;
     struct gm_804D6900_x4_t* temp_r30;
     struct gm_804D6900_t** temp_r28;
@@ -2558,8 +2333,8 @@ void gm_801BE39C(HSD_GObj* gobj)
     PAD_STACK(0x34);
 
     temp_r28 = gm_804D6900[0];
-    temp_r0 = gmMainLib_804D3EE0->unk_530.unk_535;
-    temp_r31 = &gmMainLib_804D3EE0->unk_530;
+    temp_r0 = gmMainLib_804D3EE0->vs.unk_530.unk_535;
+    temp_r31 = &gmMainLib_804D3EE0->vs.unk_530;
     temp_r30 = temp_r28[temp_r0]->x4;
     if (!temp_r31->xB_5) {
         temp_r31->xB_5 = true;
@@ -2578,25 +2353,11 @@ void gm_801BE39C(HSD_GObj* gobj)
         return;
     }
     if (Player_GetStocks(1) <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0f);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0f);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
     if (temp_r31->x10 == 0 && gm_8016AEEC() >= temp_r30->x0) {
@@ -2605,11 +2366,11 @@ void gm_801BE39C(HSD_GObj* gobj)
         sp40.color = temp_r31->x50[2];
         gm_8016EDDC(2, &sp40);
     }
-    temp_r27_5 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3_2 = gm_16AE_GetUnkData_0();
+    temp_r27_5 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3_2 = gmVs_GetSceneController();
     if (temp_r27_5->xB_0) {
         var_r0 = false;
-    } else if (temp_r3_2->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3_2->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = true;
@@ -2617,14 +2378,7 @@ void gm_801BE39C(HSD_GObj* gobj)
         var_r0 = false;
     }
     if (var_r0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0f);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
     }
 }
 
@@ -2642,8 +2396,8 @@ void gm_801BE638(HSD_GObj* gobj)
     int temp_r28_3;
     int temp_r28_2;
     int temp_r28;
-    lbl_8046B6A0_t* temp_r3;
-    lbl_8046B6A0_t* temp_r3_4;
+    VsSceneController* temp_r3;
+    VsSceneController* temp_r3_4;
     int temp_r0_2;
     int temp_r3_2;
     int temp_r3_3;
@@ -2651,7 +2405,7 @@ void gm_801BE638(HSD_GObj* gobj)
 
     PAD_STACK(0x20);
 
-    temp_r30 = &gmMainLib_804D3EE0->unk_530;
+    temp_r30 = &gmMainLib_804D3EE0->vs.unk_530;
     temp_r31 = ftBossLib_8015C74C();
     temp_r28 = ftBossLib_8015C7EC();
     temp_r29 = ftBossLib_8015C92C();
@@ -2674,25 +2428,25 @@ void gm_801BE638(HSD_GObj* gobj)
     if (Player_GetRemainingHP(1) <= 0 && Player_GetRemainingHP(2) <= 0) {
         temp_r28_2 = temp_r31 + temp_r29;
         if (temp_r30->x10 == 0) {
-            lbl_8046B6A0_t* tmp = gm_16AE_GetUnkData_0();
-            tmp->hud_enabled = 0;
+            VsSceneController* tmp = gmVs_GetSceneController();
+            tmp->state.hud_enabled = 0;
             if (temp_r30->x18 == 1) {
                 temp_r30->x18 = 2;
             } else {
                 temp_r30->x18 = 1;
             }
             ftBossLib_8015CB9C(temp_r30->x18);
-            gm_801A4634(6);
+            gm_SetDbPauseFlag(6);
             Player_80031790(0);
             Player_80036844(0, 1);
-            temp_r30->x34 = gm_8016AEDC();
-            temp_r3 = gm_16AE_GetUnkData_0();
-            temp_r3->x24C8.x0_6 = false;
+            temp_r30->x34 = gm_GetFrameCount();
+            temp_r3 = gmVs_GetSceneController();
+            temp_r3->start.timer_enabled = false;
         }
         if (temp_r30->x10 == temp_r31) {
             lbAudioAx_8002438C(0x4E200);
             ftBossLib_8015CC14();
-            gm_801A4674(6);
+            gm_ClearDbPauseFlag(6);
             gm_SetGameSpeed(0.5F);
             lbBgFlash_80020688(temp_r29);
         }
@@ -2707,7 +2461,7 @@ void gm_801BE638(HSD_GObj* gobj)
         if ((temp_r30->x10 % 30) == 0) {
             gm_80167858((s32) temp_r30->x6, Player_GetNametagSlotID(0), 2,
                         0x1E);
-            Camera_80030E44(3, NULL);
+            Camera_RequestQuake(QuakeKind_Medium, NULL);
         }
         temp_r3_2 = temp_r30->x10;
         if (temp_r3_2 <= temp_r28_2) {
@@ -2723,12 +2477,12 @@ void gm_801BE638(HSD_GObj* gobj)
         temp_r28_3 = temp_r31 + temp_r28;
         if ((s32) temp_r30->x10 == 0) {
             ftBossLib_8015CB9C(temp_r30->x18);
-            gm_801A4634(6);
+            gm_SetDbPauseFlag(6);
         }
         if ((s32) temp_r30->x10 == temp_r31) {
             lbAudioAx_8002438C(0x4E200);
             ftBossLib_8015CC14();
-            gm_801A4674(6);
+            gm_ClearDbPauseFlag(6);
             gm_SetGameSpeed(0.5F);
         }
         if ((s32) temp_r30->x10 == temp_r28_3) {
@@ -2740,21 +2494,14 @@ void gm_801BE638(HSD_GObj* gobj)
         }
     }
     if (Player_GetP1Stock() <= 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
         return;
     }
-    temp_r28_4 = &gmMainLib_804D3EE0->unk_530;
-    temp_r3_4 = gm_16AE_GetUnkData_0();
+    temp_r28_4 = &gmMainLib_804D3EE0->vs.unk_530;
+    temp_r3_4 = gmVs_GetSceneController();
     if (temp_r28_4->xB_0) {
         var_r0 = 0;
-    } else if (temp_r3_4->x24C8.x0_6 && gm_8016AEEC() == 0 &&
+    } else if (temp_r3_4->start.timer_enabled && gm_8016AEEC() == 0 &&
                gm_8016AEFC() == 0x3B)
     {
         var_r0 = 1;
@@ -2762,21 +2509,15 @@ void gm_801BE638(HSD_GObj* gobj)
         var_r0 = 0;
     }
     if (var_r0 != 0) {
-        gmMainLib_804D3EE0->unk_530.xB_1 = false;
-        lbAudioAx_80028B90();
-        gm_SetGameSpeed(1.0F);
-        gm_8016B33C(6);
-        gm_8016B364(0x148);
-        gm_8016B378(0x28);
-        gm_8016B328();
-        HSD_GObjPLink_80390228(gobj);
+        failEvent(gobj);
     }
 }
 
 void gm_801BEA10(int arg0)
 {
     Player_SetPlayerAndEntityCpuType(
-        arg0, (*gm_804D6900)[gmMainLib_804D3EE0->unk_530.unk_535]->xC->x16);
+        arg0,
+        (*gm_804D6900)[gmMainLib_804D3EE0->vs.unk_530.unk_535]->evbonus->x16);
 }
 
 void gm_801BEA4C(int arg0)
@@ -2805,22 +2546,22 @@ void gm_801BEB2C(int arg0)
 
 void gm_801BEB68(int arg0)
 {
-    gmMainLib_804D3EE0->unk_530.x18 = arg0;
+    gmMainLib_804D3EE0->vs.unk_530.x18 = arg0;
 }
 
 void gm_801BEB74(u8 arg0)
 {
-    gmMainLib_804D3EE0->unk_530.unk_535 = arg0;
+    gmMainLib_804D3EE0->vs.unk_530.unk_535 = arg0;
 }
 
 u8 gm_801BEB80(void)
 {
-    return gmMainLib_804D3EE0->unk_530.unk_535;
+    return gmMainLib_804D3EE0->vs.unk_530.unk_535;
 }
 
 bool gm_801BEB8C(u8 arg0)
 {
-    return (*gm_804D6900)[arg0]->x8->x1_0;
+    return (*gm_804D6900)[arg0]->evinit->x1_0;
 }
 
 u8 gm_801BEBA8(u8 arg0)
@@ -2846,7 +2587,6 @@ u8 gm_801BEBF8(u8 arg0)
     u8 i;
     struct gm_804D6900_t** array = gm_804D6900[0];
     struct gm_804D6900_t* entry;
-    u8* ptr;
 
     for (i = 0; i < 0x33; i++) {
         if (arg0 == table[i]) {
@@ -2856,17 +2596,16 @@ u8 gm_801BEBF8(u8 arg0)
 
     entry = array[i];
     if (entry == NULL) {
-        return CHKIND_NONE;
+        return ChKind_None;
     }
 
-    ptr = *(u8**) ((u8*) entry + 0x14);
-    return *ptr;
+    return entry->player_init[0]->c_kind;
 }
 
 UNK_T gm_801BEC54(void)
 {
     struct gm_804D6900_t* temp_r3;
-    temp_r3 = (*gm_804D6900)[gmMainLib_804D3EE0->unk_530.unk_535];
+    temp_r3 = (*gm_804D6900)[gmMainLib_804D3EE0->vs.unk_530.unk_535];
     if (temp_r3 == NULL) {
         return NULL;
     }

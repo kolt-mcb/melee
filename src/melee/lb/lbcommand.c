@@ -1,8 +1,8 @@
-#include "lb/lbcommand.h"
+#include "lbcommand.h"
 
-#include "lb/inlines.h"
-#include "lb/lb_0219.h"
-#include "lb/types.h"
+#include "inlines.h"
+#include "lb_0219.h"
+#include "types.h"
 
 #if BUILD_TARGET_PC
 #include "port/pc_script.h"

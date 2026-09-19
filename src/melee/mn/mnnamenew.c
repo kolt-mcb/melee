@@ -1,38 +1,35 @@
 #include "mnnamenew.h"
 
-#include "baselib/debug.h"
-#include "dolphin/gx/GXStruct.h"
-#include "gm/gm_1A3F.h"
-#include "gm/gmmain_lib.h"
-#include "gm/gmtoulib.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbcardgame.h"
-#include "lb/lblanguage.h"
-#include "lb/lbspdisplay.h"
-#include "mn/inlines.h"
-#include "mn/mncharsel.h"
-#include "mn/mnmain.h"
-#include "mn/mnname.h"
-#include "mn/types.h"
-#include "sc/types.h"
-#include "sysdolphin/baselib/gobj.h"
-#include "sysdolphin/baselib/gobjgxlink.h"
-#include "sysdolphin/baselib/gobjobject.h"
-#include "sysdolphin/baselib/gobjplink.h"
-#include "sysdolphin/baselib/gobjproc.h"
-#include "sysdolphin/baselib/gobjuserdata.h"
-#include "sysdolphin/baselib/jobj.h"
-#include "sysdolphin/baselib/memory.h"
-#include "sysdolphin/baselib/random.h"
-#include "sysdolphin/baselib/sislib.h"
+#include "inlines.h"
+#include "mncharsel.h"
+#include "mnmain.h"
+#include "mnname.h"
+#include "types.h"
+#include <dolphin/gx/GXStruct.h>
+#include <melee/gm/gm_1A3F.h>
+#include <melee/gm/gmmain_lib.h>
+#include <melee/gm/gmtoulib.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbcardgame.h>
+#include <melee/lb/lblanguage.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/random.h>
+#include <sysdolphin/baselib/sislib.h>
 
 typedef char* GlyphRow[4];
 
-/// Glyph strings in the keyboard tables are read through
-/// mnNameNew_NullCharacter, which this translation unit declares
-/// volatile, so the tables store pointers to volatile characters.
 typedef volatile char GlyphChar;
 
 /* 4D6C0C */ u8 mnNameNew_PortInUse;
@@ -65,17 +62,13 @@ typedef struct MnNameNewDataLayout {
     GlyphRow upper_glyphs[50];
     Vec3 x8CC;
     Vec3 x8D8;
-    u8 assert_pad[0x20];
-    char assert_msg[0x18];
-    char assert_file[0xC];
-    char assert_cond[0xC];
 } MnNameNewDataLayout;
 
-extern void* mnNameNew_804A06F0[4];
-extern void* mnNameNew_804A0700[4];
-extern void* mnNameNew_804A0710[4];
-extern void* mnNameNew_804A0720[8];
-extern char mnNameNew_CurrentNameText[0x10];
+extern StaticModelDesc mnNameNew_804A06F0;
+extern StaticModelDesc mnNameNew_804A0700;
+extern StaticModelDesc mnNameNew_804A0710;
+extern StaticModelDesc mnNameNew_804A0720[2];
+char mnNameNew_CurrentNameText[0x10];
 extern u8 mnNameNew_804D4F7C[8];
 HSD_GObj* mnNameNew_804D6C08;
 
@@ -268,21 +261,21 @@ void mnNameNew_8023B0F8(HSD_GObj* arg0, u8 arg1)
 
 void mnNameNew_8023B224(u8 arg0)
 {
-    NameNewEntry* temp_r31;
-    u8 temp_r30;
+    NameNewEntry* data;
+    u8 name_index;
 
     PAD_STACK(8);
 
-    temp_r31 = mnNameNew_804D6C08->user_data;
-    temp_r30 = temp_r31->name_index;
+    data = mnNameNew_804D6C08->user_data;
+    name_index = data->name_index;
     if (arg0 != 0) {
-        lb_8001CE00();
+        lbCardGame_SaveChanges();
     }
     if (gm_GetCurrentGameMode() == GM_TOURNAMENT) {
         HSD_SisLib_803A5E70();
         mn_8022EBDC();
         if (arg0 != 0) {
-            gm_80190FE4((s32) temp_r30);
+            gm_80190FE4((s32) name_index);
             return;
         }
         gm_80190FE4(0x78);
@@ -291,7 +284,7 @@ void mnNameNew_8023B224(u8 arg0)
     if (gm_GetCurrentGameMode() == GM_MENU) {
         mn_804D6BC8.cooldown = 5;
         if (arg0 != 0 && GetNameCount() > 0x18) {
-            mnName_8023A9B4((u8) (temp_r31->name_index / 6));
+            mnName_8023A9B4((u8) (data->name_index / 6));
             return;
         }
         mnName_8023A9B4(0U);
@@ -306,24 +299,24 @@ void mnNameNew_8023B314(NameNewEntry* arg0, s32 arg1)
 {
     HSD_Text* text;
     u8 idx;
-    s32 var_r4;
+    s32 selection;
 
-    var_r4 = arg1;
-    if (var_r4 < 0x32) {
+    selection = arg1;
+    if (selection < 0x32) {
         switch (arg0->mode) {
         case 0:
-            var_r4 = 0x33;
+            selection = 0x33;
             break;
         case 1:
-            var_r4 = 0x34;
+            selection = 0x34;
             break;
         case 2:
-            var_r4 = 0x35;
+            selection = 0x35;
             break;
         }
     }
     text = arg0->desc_text;
-    idx = mnNameNew_804D4F7C[var_r4 - 0x32];
+    idx = mnNameNew_804D4F7C[selection - 0x32];
     if (text != NULL) {
         if (text->sis_buffer == ((SIS**) HSD_SisLib_804D1124[0])[idx]) {
             return;
@@ -357,14 +350,15 @@ static inline void mnNameNew_SetKeyColor(HSD_Text* text, s32 index,
     HSD_SisLib_803A74F0(text, index, color_ptr);
 }
 
-s32 mnNameNew_KeySetup(NameNewEntry* arg0, u8 arg1)
+HSD_Text* mnNameNew_KeySetup(NameNewEntry* arg0, u8 arg1)
 {
-    Vec3 sp50;
-    GXColor sp4C;
-    GXColor sp48;
-    GXColor sp44;
+    Vec3 text_pos;
+    GXColor key_color;
+    GXColor selected_key_color;
+    GXColor color;
     MnNameNewDataLayout* layout;
-    HSD_JObj* key_jobj;
+    s32 j;
+    HSD_Text* text;
     HSD_JObj* ref1;
     HSD_JObj* ref2;
     char** str_table;
@@ -378,14 +372,14 @@ s32 mnNameNew_KeySetup(NameNewEntry* arg0, u8 arg1)
     f32 font_x;
     f32 col_x;
     s32 i;
-    s32 j;
+    HSD_JObj* key_jobj;
     GXColor* color_ptr;
 
-    FORCE_PAD_STACK(16);
+    PAD_STACK(16);
 
     layout = (MnNameNewDataLayout*) mnNameNew_803EDA58;
-    sp4C = mnNameNew_804DBF44;
-    sp48 = mnNameNew_804DBF48;
+    key_color = mnNameNew_804DBF44;
+    selected_key_color = mnNameNew_804DBF48;
 
     switch ((s32) arg1) {
     case 0:
@@ -405,97 +399,93 @@ s32 mnNameNew_KeySetup(NameNewEntry* arg0, u8 arg1)
     if (arg0->key_text != NULL) {
         HSD_SisLib_803A5CC4(arg0->key_text);
     }
-    {
-        HSD_Text* text;
+    text = HSD_SisLib_803A6754(0, (s32) mn_804D6BB5);
+    arg0->key_text = text;
 
-        text = HSD_SisLib_803A6754(0, (s32) mn_804D6BB5);
-        arg0->key_text = text;
-
-        key_jobj = arg0->jobjs[16];
+    key_jobj = arg0->jobjs[16];
+    if (key_jobj == NULL) {
+        key_jobj = NULL;
+    } else {
+        key_jobj = key_jobj->child;
+    }
+    for (i = 0; i < 50; i++) {
+        if (i == 0x2D) {
+            break;
+        }
         if (key_jobj == NULL) {
             key_jobj = NULL;
         } else {
-            key_jobj = key_jobj->child;
+            key_jobj = key_jobj->next;
         }
-        for (i = 0; i < 50; i++) {
-            if (i == 0x2D) {
-                break;
-            }
-            if (key_jobj == NULL) {
-                key_jobj = NULL;
-            } else {
-                key_jobj = key_jobj->next;
-            }
+    }
+
+    lb_8000B1CC(key_jobj, &layout->x8CC, &text_pos);
+    pos_x = text_pos.x;
+    pos_y = -text_pos.y;
+    pos_z = text_pos.z;
+    text->pos_x = pos_x;
+    text->pos_y = pos_y;
+    text->pos_z = pos_z;
+    text->font_size.x = 0.03f;
+    text->font_size.y = 0.04f;
+    text->text_color = mnNameNew_804D4F6C;
+
+    ref1 = arg0->jobjs[16];
+    if (ref1 == NULL) {
+        ref1 = NULL;
+    } else {
+        ref1 = ref1->child;
+    }
+    for (i = 0; i < 50; i++) {
+        if (i == 0x28) {
+            break;
         }
-
-        lb_8000B1CC(key_jobj, &layout->x8CC, &sp50);
-        pos_x = sp50.x;
-        pos_y = -sp50.y;
-        pos_z = sp50.z;
-        text->pos_x = pos_x;
-        text->pos_y = pos_y;
-        text->pos_z = pos_z;
-        text->font_size.x = 0.03f;
-        text->font_size.y = 0.04f;
-        text->text_color = mnNameNew_804D4F6C;
-
-        ref1 = arg0->jobjs[16];
         if (ref1 == NULL) {
             ref1 = NULL;
         } else {
-            ref1 = ref1->child;
+            ref1 = ref1->next;
         }
-        for (i = 0; i < 50; i++) {
-            if (i == 0x28) {
-                break;
-            }
-            if (ref1 == NULL) {
-                ref1 = NULL;
-            } else {
-                ref1 = ref1->next;
-            }
+    }
+
+    base_x = HSD_JObjGetTranslationX(key_jobj);
+    x_range = HSD_JObjGetTranslationX(ref1) - base_x;
+
+    ref2 = arg0->jobjs[16];
+    if (ref2 == NULL) {
+        ref2 = NULL;
+    } else {
+        ref2 = ref2->child;
+    }
+    for (i = 0; i < 50; i++) {
+        if (i == 0x2E) {
+            break;
         }
-
-        base_x = HSD_JObjGetTranslationX(key_jobj);
-        x_range = HSD_JObjGetTranslationX(ref1) - base_x;
-
-        ref2 = arg0->jobjs[16];
         if (ref2 == NULL) {
             ref2 = NULL;
         } else {
-            ref2 = ref2->child;
+            ref2 = ref2->next;
         }
-        for (i = 0; i < 50; i++) {
-            if (i == 0x2E) {
-                break;
-            }
-            if (ref2 == NULL) {
-                ref2 = NULL;
-            } else {
-                ref2 = ref2->next;
-            }
-        }
-
-        base_y = HSD_JObjGetTranslationY(key_jobj);
-        y_range = -(HSD_JObjGetTranslationY(ref2) - base_y);
-
-        j = 0;
-        for (; j < 0x32; j++) {
-            font_x = text->font_size.x;
-            col_x = (f32) (9 - (j / 5)) * x_range;
-            HSD_SisLib_803A6B98(text, col_x / font_x,
-                                ((f32) (j % 5) * y_range) / text->font_size.y,
-                                str_table[j], font_x, col_x);
-            if (j == (s32) mn_804A04F0.hovered_selection) {
-                color_ptr = &sp48;
-            } else {
-                color_ptr = &sp4C;
-            }
-            mnNameNew_SetKeyColor(text, j, color_ptr, &sp44);
-        }
-
-        return (s32) text;
     }
+
+    base_y = HSD_JObjGetTranslationY(key_jobj);
+    y_range = -(HSD_JObjGetTranslationY(ref2) - base_y);
+
+    j = 0;
+    for (; j < 0x32; j++) {
+        font_x = text->font_size.x;
+        col_x = (f32) (9 - (j / 5)) * x_range;
+        HSD_SisLib_803A6B98(text, col_x / font_x,
+                            ((f32) (j % 5) * y_range) / text->font_size.y,
+                            str_table[j]);
+        if (j == (s32) mn_804A04F0.hovered_selection) {
+            color_ptr = &selected_key_color;
+        } else {
+            color_ptr = &key_color;
+        }
+        mnNameNew_SetKeyColor(text, j, color_ptr, &color);
+    }
+
+    return text;
 }
 
 s32 mnNameNew_8023BAA8(NameNewEntry* arg0, s32 arg1, u8 arg2)
@@ -572,7 +562,7 @@ s32 mnNameNew_8023BAA8(NameNewEntry* arg0, s32 arg1, u8 arg2)
     return (s32) arg2;
 }
 
-PC_STATIC_INLINE u8 GetAutoNameCharacter(u8** names, s32 char_idx)
+static inline u8 GetAutoNameCharacter(u8** names, s32 char_idx)
 {
     return (*names)[char_idx];
 }
@@ -585,14 +575,16 @@ static inline s32 PickAutoNameInline(HSD_GObj* arg0)
     s32 count;
     s32 pick;
     s32 dup;
-    u8** name_ptr;
-    char* text;
-    s32 char_idx;
-    u8 ch;
-    s8 null_ch;
+    s32 i;
     u8 tmp;
     s32 name_idx;
-    s32 i;
+    s8 ch;
+    u8** name_ptr;
+    char* text;
+    char* text_start;
+    s32 char_idx;
+    s8 null_ch;
+    s8 list_null_ch;
 
     data = arg0->user_data;
     cur_text = mnNameNew_CurrentNameText;
@@ -600,10 +592,10 @@ static inline s32 PickAutoNameInline(HSD_GObj* arg0)
     do {
         dup = 0;
         do {
-            null_ch = (s8) *mnNameNew_NullCharacter;
+            list_null_ch = (s8) *mnNameNew_NullCharacter;
             count = 0;
             names = AutoNamesList;
-            while (null_ch != (s8) * *names) {
+            while (list_null_ch != (s8) * *names) {
                 names++;
                 count++;
             }
@@ -626,14 +618,14 @@ static inline s32 PickAutoNameInline(HSD_GObj* arg0)
     name_idx = 0;
     char_idx = name_idx;
     cur_text[0] = *mnNameNew_NullCharacter;
-    text = cur_text;
+    text = text_start = cur_text;
     cur_text[3] = *mnNameNew_NullCharacter;
     cur_text[6] = *mnNameNew_NullCharacter;
     cur_text[9] = *mnNameNew_NullCharacter;
 
     name_ptr = &AutoNamesList[pick];
     while ((null_ch = (s8) *mnNameNew_NullCharacter) !=
-           (s8) (ch = GetAutoNameCharacter(name_ptr, char_idx)))
+           (ch = GetAutoNameCharacter(name_ptr, char_idx)))
     {
         text[0] = ch;
         text[1] = GetAutoNameCharacter(name_ptr, char_idx + 1);
@@ -643,19 +635,28 @@ static inline s32 PickAutoNameInline(HSD_GObj* arg0)
         text += 3;
     }
 
-    cur_text[name_idx * 3] = null_ch;
+    text_start[name_idx * 3] = null_ch;
 
-    tmp = data->auto_history[0];
-    data->auto_history[0] = (u8) pick;
-    for (i = 1; i < 5; i++) {
-        u8 next = data->auto_history[i];
-        data->auto_history[i] = tmp;
-        tmp = next;
+    {
+        u8* history = data->auto_history;
+
+        tmp = history[0];
+        history[0] = (u8) pick;
+        for (i = 1; i < 5; i++) {
+            u8* entry = &history[i];
+            u8 next = *entry;
+            *entry = tmp;
+            tmp = next;
+        }
     }
 
     return (s32) null_ch;
 }
 
+#ifdef MUST_MATCH
+#pragma push
+#pragma auto_inline off
+#endif
 s32 PickAutoName(HSD_GObj* arg0)
 {
     PAD_STACK(16);
@@ -723,6 +724,9 @@ s32 WriteCharactersForNameAtIndex(u8 arg0, s32 arg1)
     return ret;
 }
 
+#ifdef MUST_MATCH
+#pragma pop
+#endif
 static inline char** AddCharacterToName_getGlyphs(GlyphRow* arg0, u8 arg1)
 {
     return (char**) &arg0[arg1];
@@ -731,56 +735,53 @@ static inline char** AddCharacterToName_getGlyphs(GlyphRow* arg0, u8 arg1)
 char* AddCharacterToName(char* arg0, u8 arg1, u8 arg2, u8 arg3)
 {
     char ch;
-    char* var_r4;
+    char* dest;
     char** table;
     MnNameNewDataLayout* layout;
-    u32 temp;
 
     layout = (MnNameNewDataLayout*) mnNameNew_803EDA58;
-    if ((s32) arg3 != 2) {
-        if (((((s32) (temp = arg3)) < ((u16) 2)) & 0xFFFFFFFF) &&
-            (((s32) ((u32) arg3)) >= 0))
-        {
-            char null;
-            s32 idx;
+    switch (arg3) {
+    case 0:
+    case 1: {
+        char null;
+        s32 idx;
 
-            if ((u8) (arg1 - 0x30) <= 1U) {
-                if ((arg2 % 2) != 0) {
-                    table = AddCharacterToName_getGlyphs(layout->upper_glyphs,
-                                                         arg1);
-                } else {
-                    table = AddCharacterToName_getGlyphs(layout->lower_glyphs,
-                                                         arg1);
-                }
-            } else if ((arg3 == 0 && (arg2 % 2) == 0) ||
-                       (arg3 == 1 && (arg2 % 2) != 0))
-            {
-                table =
-                    AddCharacterToName_getGlyphs(layout->lower_glyphs, arg1);
-            } else {
+        if ((u8) (arg1 - 0x30) <= 1U) {
+            if ((arg2 % 2) != 0) {
                 table =
                     AddCharacterToName_getGlyphs(layout->upper_glyphs, arg1);
+            } else {
+                table =
+                    AddCharacterToName_getGlyphs(layout->lower_glyphs, arg1);
             }
-            var_r4 = arg0;
-
-            for (idx = layout->character_bytes[arg1][1] * 0;
-                 (null = (*mnNameNew_NullCharacter & 0xFFFF) & 0xFFFF) !=
-                 (ch = table[arg2 / 2][idx] & (0xFF & 0xFFu));
-                 idx++)
-            {
-                var_r4[idx] = ch;
-            }
-            arg0[idx] = null;
+        } else if ((arg3 == 0 && (arg2 % 2) == 0) ||
+                   (arg3 == 1 && (arg2 % 2) != 0))
+        {
+            table = AddCharacterToName_getGlyphs(layout->lower_glyphs, arg1);
+        } else {
+            table = AddCharacterToName_getGlyphs(layout->upper_glyphs, arg1);
         }
-        return arg0;
+        dest = arg0;
+
+        for (idx = 0; (null = *mnNameNew_NullCharacter & 0xFFFF) !=
+                      (ch = table[arg2 / 2][idx] & 0xFFU);
+             idx++)
+        {
+            dest[idx] = ch;
+        }
+        arg0[idx] = null;
+        break;
     }
-    arg0[0] = layout->character_bytes[arg1][0];
-    arg0[1] = layout->character_bytes[arg1][1];
-    arg0[2] = layout->character_bytes[arg1][2];
+    case 2:
+        arg0[0] = layout->character_bytes[arg1][0];
+        arg0[1] = layout->character_bytes[arg1][1];
+        arg0[2] = layout->character_bytes[arg1][2];
+        break;
+    }
     return arg0;
 }
 
-void mnNameNew_GlyphVariantInput(void)
+void mnNameNew_GlyphVariantInput(HSD_GObj* gobj)
 {
     NameNewEntry* data;
     u32 buttons;
@@ -792,14 +793,14 @@ void mnNameNew_GlyphVariantInput(void)
     s32 total;
     s8 null_ch;
 
-    PAD_STACK(16);
+    PAD_STACK(12);
 
     data = mnNameNew_804D6C08->user_data;
     buttons = mn_80229624((u32) mnNameNew_PortInUse);
     mn_804A04F0.buttons = buttons;
     count = 0;
     if (buttons & 0x200) {
-        HSD_GObjPLink_80390228(data->variant_gobj);
+        HSD_GObjFree(data->variant_gobj);
         data->variant_gobj = NULL;
         AddCharacterToName(&mnNameNew_CurrentNameText[data->cursor_pos * 3],
                            mn_804A04F0.hovered_selection,
@@ -824,12 +825,12 @@ void mnNameNew_GlyphVariantInput(void)
             }
             mnNameNew_KeySetup(data, data->mode);
             mnNameNew_8023B0F8(mnNameNew_804D6C08,
-                               (u8) mn_804A04F0.hovered_selection);
+                               mn_804A04F0.hovered_selection);
             mnNameNew_8023B314(data, (s32) mn_804A04F0.hovered_selection);
         }
     } else {
         if (buttons & 0x20) {
-            HSD_GObjPLink_80390228(data->variant_gobj);
+            HSD_GObjFree(data->variant_gobj);
             data->variant_gobj = NULL;
             mnNameNew_8023CE4C();
             return;
@@ -876,30 +877,64 @@ void mnNameNew_GlyphVariantInput(void)
     }
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
+static inline void copyName(char* name_text, char* name_buffer)
+{
+    char ch;
+    char* dest;
+    char* src;
+    char* dest_iter;
+    char* src_iter;
+    int len;
+    char null_char;
+    int i;
+
+    src = name_text;
+    dest = name_buffer;
+    len = 0;
+    for (i = 0; i < 4; i++) {
+        src_iter = src;
+        dest_iter = dest;
+        while ((s8) (null_char = *mnNameNew_NullCharacter) !=
+               (s8) (ch = *src_iter))
+        {
+            *dest_iter++ = ch;
+            dest++;
+            len++;
+            src_iter++;
+        }
+        src += 3;
+    }
+    name_buffer[len] = null_char;
+}
+
+static inline s32 mnNameNew_CountVariants(GlyphRow* glyphs, u8 selected_key)
+{
+    char** ptrs = glyphs[selected_key];
+    s32 count = 0;
+    s8 terminator = (s8) *mnNameNew_NullCharacter;
+
+    while (terminator != (s8) *ptrs[0]) {
+        ptrs++;
+        count++;
+    }
+    return count;
+}
+
 void mnNameNew_MainInput(HSD_GObj* arg0)
 {
-    u8 sp24[16];
-    s32 occupied_slots;
+    char space_lead;
+    char unused[12];
+    char name_buffer[16];
     NameNewEntry* data;
     MnNameNewDataLayout* layout;
     u32 buttons;
-    char* name_text;
-    s32 key_off;
-    u8* key_char;
+    u16* hovered;
+    char* key_char;
     s8 null_char;
-    char* src;
-    u8* dest;
-    s32 len;
-    u8 cursor;
     s32 n;
-
+    u8 cursor;
     PAD_STACK(12);
 
-    name_text = mnNameNew_CurrentNameText;
     {
         NameNewEntry* entry = mnNameNew_804D6C08->user_data;
         data = entry;
@@ -907,20 +942,20 @@ void mnNameNew_MainInput(HSD_GObj* arg0)
     layout = (MnNameNewDataLayout*) mnNameNew_803EDA58;
 
     if (data->variant_gobj != NULL) {
-        mnNameNew_GlyphVariantInput();
+        mnNameNew_GlyphVariantInput(arg0);
         return;
     }
 
     buttons = (mn_804A04F0.buttons = mn_80229624((u32) mnNameNew_PortInUse));
-    occupied_slots = 0;
+    n = 0;
 
     if (buttons & 0x200) {
-        u16 sel = mn_804A04F0.hovered_selection;
+        u16 sel = *(hovered = &mn_804A04F0.hovered_selection);
         if (sel < 0x32U) {
             if (data->mode != 2 && sel < 0x32U) {
-                key_off = (((u8) sel) << 4) & 0xFF0;
-                key_char = *(u8**) ((u8*) layout->lower_glyphs + key_off);
-                if ("　"[0] == (s8) key_char[0] &&
+                key_char = layout->lower_glyphs[(u8) sel][0];
+                space_lead = "　"[0];
+                if (space_lead == (s8) key_char[0] &&
                     (s8) "　"[1] == (s8) key_char[1])
                 {
                     n = 1;
@@ -930,46 +965,37 @@ void mnNameNew_MainInput(HSD_GObj* arg0)
                 if (n == 0) {
                     lbAudioAx_80024030(1);
                     mn_804A04F0.confirmed_selection = 0;
-                    n = 0;
+                    n = mnNameNew_CountVariants(layout->lower_glyphs,
+                                                (u8) *hovered);
                     {
-                        u16 sel2 = mn_804A04F0.hovered_selection;
-                        u8** ptrs = (u8**) ((u8*) layout->lower_glyphs +
-                                            ((((u8) sel2) << 4) & 0xFF0));
-                        null_char = (s8) *mnNameNew_NullCharacter;
-                        while ((s8) *ptrs[0] != null_char) {
-                            ptrs++;
-                            n++;
-                        }
-                    }
-                    {
-                        s32 variant_count = (n * 2) & 0xFE;
-                        data->variant_gobj =
-                            (HSD_GObj*) mnNameNew_GlyphVariantSetup(
-                                data, variant_count,
-                                mn_804A04F0.hovered_selection);
+                        u8 variant_count = (u8) (n * 2);
+                        data->variant_gobj = mnNameNew_GlyphVariantSetup(
+                            data, variant_count, *hovered & 0xFF);
                     }
                     return;
                 }
                 cursor = data->cursor_pos;
-                name_text[cursor * 3] = "　"[0];
-                name_text[cursor * 3 + 1] = "　"[1];
-                name_text[cursor * 3 + 2] = *mnNameNew_NullCharacter;
+                mnNameNew_CurrentNameText[cursor * 3] = "　"[0];
+                mnNameNew_CurrentNameText[cursor * 3 + 1] = "　"[1];
+                mnNameNew_CurrentNameText[cursor * 3 + 2] =
+                    *((GlyphChar*) mnNameNew_NullCharacter);
                 lbAudioAx_80024030(1);
                 if (data->cursor_pos < 3) {
                     data->cursor_pos = (u8) (data->cursor_pos + 1);
                 } else {
-                    mn_804A04F0.hovered_selection = 0x39;
+                    *hovered = 0x39;
                 }
                 mnNameNew_8023CE4C();
                 return;
             }
-            AddCharacterToName(&name_text[data->cursor_pos * 3],
-                               mn_804A04F0.hovered_selection, 0U, data->mode);
+            AddCharacterToName(
+                &mnNameNew_CurrentNameText[data->cursor_pos * 3], sel, 0U,
+                data->mode);
             lbAudioAx_80024030(1);
             if (data->cursor_pos < 3) {
                 data->cursor_pos = (u8) (data->cursor_pos + 1);
             } else {
-                mn_804A04F0.hovered_selection = 0x39;
+                *hovered = 0x39;
             }
             mnNameNew_8023CE4C();
             return;
@@ -985,8 +1011,7 @@ void mnNameNew_MainInput(HSD_GObj* arg0)
                     lbAudioAx_80024030(1);
                     data->mode = 0;
                     mnNameNew_KeySetup(data, 0);
-                    mnNameNew_8023B0F8(mnNameNew_804D6C08,
-                                       (u8) mn_804A04F0.hovered_selection);
+                    mnNameNew_8023B0F8(mnNameNew_804D6C08, (u8) *hovered);
                     return;
                 }
                 break;
@@ -996,8 +1021,7 @@ void mnNameNew_MainInput(HSD_GObj* arg0)
                     lbAudioAx_80024030(1);
                     data->mode = 1;
                     mnNameNew_KeySetup(data, 1);
-                    mnNameNew_8023B0F8(mnNameNew_804D6C08,
-                                       (u8) mn_804A04F0.hovered_selection);
+                    mnNameNew_8023B0F8(mnNameNew_804D6C08, (u8) *hovered);
                     return;
                 }
                 break;
@@ -1007,8 +1031,7 @@ void mnNameNew_MainInput(HSD_GObj* arg0)
                     lbAudioAx_80024030(1);
                     data->mode = 2;
                     mnNameNew_KeySetup(data, 2);
-                    mnNameNew_8023B0F8(mnNameNew_804D6C08,
-                                       (u8) mn_804A04F0.hovered_selection);
+                    mnNameNew_8023B0F8(mnNameNew_804D6C08, (u8) *hovered);
                     return;
                 }
                 break;
@@ -1018,19 +1041,23 @@ void mnNameNew_MainInput(HSD_GObj* arg0)
                 cursor = data->cursor_pos;
                 (void) cursor;
                 {
-                    char* slot = &name_text[cursor * 3];
-                    if ((s8) *mnNameNew_NullCharacter != (s8) slot[0]) {
-                        occupied_slots = 1;
+                    char* slot = &mnNameNew_CurrentNameText[cursor * 3];
+                    if ((s8) * ((GlyphChar*) mnNameNew_NullCharacter) ==
+                        (s8) slot[0])
+                    {
+                        n = 0;
+                    } else {
+                        n = 1;
                     }
-                    if (occupied_slots != 0) {
-                        slot[0] = *mnNameNew_NullCharacter;
+                    if (n != 0) {
+                        slot[0] = *((GlyphChar*) mnNameNew_NullCharacter);
                         mnNameNew_8023CE4C();
                         return;
                     }
                 }
                 if (cursor != 0) {
-                    name_text[(u8) (cursor - 1) * 3] =
-                        *mnNameNew_NullCharacter;
+                    mnNameNew_CurrentNameText[(u8) (cursor - 1) * 3] =
+                        *((GlyphChar*) mnNameNew_NullCharacter);
                     data->cursor_pos = (u8) (data->cursor_pos - 1);
                     mnNameNew_8023CE4C();
                     return;
@@ -1041,89 +1068,44 @@ void mnNameNew_MainInput(HSD_GObj* arg0)
             case 0x37:
                 lbAudioAx_80024030(1);
                 PickAutoName(mnNameNew_804D6C08);
-                null_char = (s8) *mnNameNew_NullCharacter;
+                null_char = (s8) * ((GlyphChar*) mnNameNew_NullCharacter);
                 {
-                    char* p = name_text;
+                    char* p = mnNameNew_CurrentNameText;
                     if (null_char != (s8) *p) {
-                        occupied_slots = 1;
-                        p += 3;
-                        if (null_char != (s8) *p) {
-                            occupied_slots = 2;
-                            p += 3;
-                            if (null_char != (s8) *p) {
-                                occupied_slots = 3;
-                                p += 3;
-                                if (null_char != (s8) *p) {
-                                    occupied_slots = 4;
+                        n = 1;
+                        if (null_char != (s8) * (p += 3)) {
+                            n = 2;
+                            if (null_char != (s8) * (p += 3)) {
+                                n = 3;
+                                if (null_char != (s8) * (p += 3)) {
+                                    n = 4;
                                 }
                             }
                         }
                     }
                 }
-                if (occupied_slots == 4) {
+                if (n == 4) {
                     data->cursor_pos = 3;
                 } else {
-                    data->cursor_pos = (u8) occupied_slots;
+                    data->cursor_pos = (u8) n;
                 }
                 mnNameNew_8023CE4C();
                 return;
 
             case 0x38:
             case 0x39:
-                dest = sp24;
-                len = 0;
+                copyName(mnNameNew_CurrentNameText, name_buffer);
 
+                if ((s8) mnNameNew_CurrentNameText[0] ==
+                    (s8) * ((GlyphChar*) mnNameNew_NullCharacter))
                 {
-                    char* src_iter;
-                    u8* dest_iter;
-
-                    src = name_text;
-                    src_iter = src;
-                    dest_iter = dest;
-                    for (; (s8) *mnNameNew_NullCharacter != (s8) *src_iter;
-                         dest_iter++, dest++, len++, src_iter++)
-                    {
-                        *dest_iter = *src_iter;
-                    }
-
-                    src += 3;
-                    src_iter = src;
-                    dest_iter = dest;
-                    for (; (s8) *mnNameNew_NullCharacter != (s8) *src_iter;
-                         dest_iter++, dest++, len++, src_iter++)
-                    {
-                        *dest_iter = *src_iter;
-                    }
-
-                    src += 3;
-                    src_iter = src;
-                    dest_iter = dest;
-                    for (; (s8) *mnNameNew_NullCharacter != (s8) *src_iter;
-                         dest_iter++, dest++, len++, src_iter++)
-                    {
-                        *dest_iter = *src_iter;
-                    }
-
-                    src += 3;
-                    src_iter = src;
-                    dest_iter = dest;
-                    for (; (s8) *mnNameNew_NullCharacter != (s8) *src_iter;
-                         dest_iter++, dest++, len++, src_iter++)
-                    {
-                        *dest_iter = *src_iter;
-                    }
-                }
-
-                sp24[len] = (u8) *mnNameNew_NullCharacter;
-
-                if ((s8) name_text[0] == (s8) *mnNameNew_NullCharacter) {
                     n = 1;
                 } else {
                     n = 0;
                 }
                 if (n == 0 && NameContainsOnlySpaces() == 0 &&
-                    IsNameUnique((char*) sp24) == 0 &&
-                    IsNameNotAllowed((char*) sp24) == 0)
+                    IsNameUnique(name_buffer) == 0 &&
+                    IsNameNotAllowed(name_buffer) == 0)
                 {
                     n = 1;
                 } else {
@@ -1144,155 +1126,112 @@ void mnNameNew_MainInput(HSD_GObj* arg0)
                 return;
             }
         }
-    } else {
-        if (buttons & 0x100) {
-            if (mn_804A04F0.hovered_selection == 0x38 ||
-                mn_804A04F0.hovered_selection == 0x39)
+    } else if (buttons & 0x100) {
+        if (mn_804A04F0.hovered_selection == 0x38 ||
+            mn_804A04F0.hovered_selection == 0x39)
+        {
+            copyName(mnNameNew_CurrentNameText, name_buffer);
+
+            if ((s8) mnNameNew_CurrentNameText[0] ==
+                (s8) * ((GlyphChar*) mnNameNew_NullCharacter))
             {
-                dest = sp24;
-                len = 0;
-
-                {
-                    char* src_iter;
-                    u8* dest_iter;
-
-                    src = name_text;
-                    src_iter = src;
-                    dest_iter = dest;
-                    for (; (s8) *mnNameNew_NullCharacter != (s8) *src_iter;
-                         dest_iter++, dest++, len++, src_iter++)
-                    {
-                        *dest_iter = *src_iter;
-                    }
-
-                    src += 3;
-                    src_iter = src;
-                    dest_iter = dest;
-                    for (; (s8) *mnNameNew_NullCharacter != (s8) *src_iter;
-                         dest_iter++, dest++, len++, src_iter++)
-                    {
-                        *dest_iter = *src_iter;
-                    }
-
-                    src += 3;
-                    src_iter = src;
-                    dest_iter = dest;
-                    for (; (s8) *mnNameNew_NullCharacter != (s8) *src_iter;
-                         dest_iter++, dest++, len++, src_iter++)
-                    {
-                        *dest_iter = *src_iter;
-                    }
-
-                    src += 3;
-                    src_iter = src;
-                    dest_iter = dest;
-                    for (; (s8) *mnNameNew_NullCharacter != (s8) *src_iter;
-                         dest_iter++, dest++, len++, src_iter++)
-                    {
-                        *dest_iter = *src_iter;
-                    }
-                }
-
-                sp24[len] = (u8) *mnNameNew_NullCharacter;
-
-                if ((s8) name_text[0] == (s8) *mnNameNew_NullCharacter) {
-                    n = 1;
-                } else {
-                    n = 0;
-                }
-                if (n == 0 && NameContainsOnlySpaces() == 0 &&
-                    IsNameUnique((char*) sp24) == 0 &&
-                    IsNameNotAllowed((char*) sp24) == 0)
-                {
-                    n = 1;
-                } else {
-                    n = 0;
-                }
-                if (n != 0) {
-                    lbAudioAx_80024030(1);
-                    CreateNameAtIndex((s32) data->name_index);
-                    WriteCharactersForNameAtIndex(data->name_index,
-                                                  (s32) mn_802295AC());
-                    mnNameNew_8023B224(1U);
-                    return;
-                }
-                lbAudioAx_80024030(3);
-                return;
-            }
-            mn_804A04F0.hovered_selection = 0x39;
-            return;
-        }
-        if (buttons & 0xC0) {
-            lbAudioAx_80024030(1);
-            if (buttons & 0x40) {
-                if (data->mode != 0) {
-                    data->mode = (u8) (data->mode - 1);
-                } else {
-                    data->mode = 2;
-                }
+                n = 1;
             } else {
-                if (data->mode < 2) {
-                    data->mode = (u8) (data->mode + 1);
-                } else {
-                    data->mode = 0;
-                }
+                n = 0;
             }
-            mnNameNew_KeySetup(data, data->mode);
-            mnNameNew_8023B0F8(mnNameNew_804D6C08,
-                               (u8) mn_804A04F0.hovered_selection);
-            mnNameNew_8023B314(data, (s32) mn_804A04F0.hovered_selection);
-            return;
-        }
-        if (buttons & 0x20) {
-            lbAudioAx_80024030(0);
-            null_char = (s8) *mnNameNew_NullCharacter;
-            if (null_char == (s8) name_text[0]) {
-                occupied_slots = 1;
-            }
-            if (occupied_slots != 0) {
-                mnNameNew_8023B224(0U);
-                return;
-            }
+            if (n == 0 && NameContainsOnlySpaces() == 0 &&
+                IsNameUnique(name_buffer) == 0 &&
+                IsNameNotAllowed(name_buffer) == 0)
             {
-                u8 cursor_pos = data->cursor_pos;
-                cursor = cursor_pos;
-            }
-            if (null_char != (s8) name_text[cursor * 3]) {
                 n = 1;
             } else {
                 n = 0;
             }
             if (n != 0) {
-                name_text[cursor * 3] = *mnNameNew_NullCharacter;
-                mnNameNew_8023CE4C();
-                return;
-            }
-            if (cursor != 0) {
-                name_text[(u8) (cursor - 1) * 3] = *mnNameNew_NullCharacter;
-                data->cursor_pos = (u8) (data->cursor_pos - 1);
-                mnNameNew_8023CE4C();
+                lbAudioAx_80024030(1);
+                CreateNameAtIndex((s32) data->name_index);
+                WriteCharactersForNameAtIndex(data->name_index,
+                                              (s32) mn_802295AC());
+                mnNameNew_8023B224(1U);
                 return;
             }
             lbAudioAx_80024030(3);
             return;
         }
+        mn_804A04F0.hovered_selection = 0x39;
+        return;
+    } else if (buttons & 0xC0) {
+        lbAudioAx_80024030(1);
+        if (buttons & 0x40) {
+            u8 mode = data->mode;
+
+            if (mode != 0) {
+                data->mode = (u8) (data->mode - 1);
+            } else {
+                data->mode = 2;
+            }
+        } else {
+            if (data->mode < 2) {
+                data->mode = (u8) (data->mode + 1);
+            } else {
+                data->mode = 0;
+            }
+        }
+        mnNameNew_KeySetup(data, data->mode);
+        mnNameNew_8023B0F8(mnNameNew_804D6C08,
+                           (u8) mn_804A04F0.hovered_selection);
+        mnNameNew_8023B314(data, (s32) mn_804A04F0.hovered_selection);
+        return;
+    } else if (buttons & 0x20) {
+        lbAudioAx_80024030(0);
+        if ((s8) mnNameNew_CurrentNameText[0] ==
+            (s8) * ((GlyphChar*) mnNameNew_NullCharacter))
         {
-            s32 buttons_arg = (s32) buttons;
-            u8 new_sel = mnNameNew_8023BAA8(
-                data, buttons_arg, (u8) mn_804A04F0.hovered_selection);
-            if ((s32) new_sel != (s32) mn_804A04F0.hovered_selection) {
-                lbAudioAx_80024030(2);
-                mn_804A04F0.hovered_selection = (u16) new_sel;
-                if (new_sel < 0x32) {
-                    data->last_key_sel = new_sel;
-                }
+            n = 1;
+        }
+        if (n != 0) {
+            mnNameNew_8023B224(0U);
+            return;
+        }
+        {
+            u8 cursor_pos = data->cursor_pos;
+            cursor = cursor_pos;
+        }
+        if ((s8) * ((GlyphChar*) mnNameNew_NullCharacter) ==
+            (s8) mnNameNew_CurrentNameText[cursor * 3])
+        {
+            n = 0;
+        } else {
+            n = 1;
+        }
+        if (n != 0) {
+            mnNameNew_CurrentNameText[cursor * 3] =
+                *((GlyphChar*) mnNameNew_NullCharacter);
+            mnNameNew_8023CE4C();
+            return;
+        }
+        if (cursor != 0) {
+            mnNameNew_CurrentNameText[(u8) (cursor - 1) * 3] =
+                *((GlyphChar*) mnNameNew_NullCharacter);
+            data->cursor_pos = (u8) (data->cursor_pos - 1);
+            mnNameNew_8023CE4C();
+            return;
+        }
+        lbAudioAx_80024030(3);
+        return;
+    } else {
+        u8 new_sel;
+        hovered = &mn_804A04F0.hovered_selection;
+        new_sel = mnNameNew_8023BAA8(data, (s32) buttons, (u8) *hovered);
+        if ((s32) new_sel != (s32) *hovered) {
+            lbAudioAx_80024030(2);
+            *hovered = (u16) new_sel;
+            if (new_sel < 0x32) {
+                data->last_key_sel = new_sel;
             }
         }
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 static inline NameNewEntry* mnNameNew_GetEntryData(void)
 {
@@ -1301,7 +1240,7 @@ static inline NameNewEntry* mnNameNew_GetEntryData(void)
 
 void mnNameNew_8023CE4C(void)
 {
-    Vec3 sp24;
+    Vec3 text_pos;
     GXColor name_char_color;
     GXColor* name_char_color_ptr[1];
     NameNewEntry* data;
@@ -1324,11 +1263,11 @@ void mnNameNew_8023CE4C(void)
         HSD_SisLib_803A5CC4(data->name_disp_text);
     }
     text = HSD_SisLib_803A6754(0, mn_804D6BB5);
-    lb_8000B1CC(jobj_a, &mnNameNew_803EE330, &sp24);
-    y_minus = -sp24.y;
-    z = sp24.z;
+    lb_8000B1CC(jobj_a, &mnNameNew_803EE330, &text_pos);
+    y_minus = -text_pos.y;
+    z = text_pos.z;
     name_char_color_ptr[0] = &name_char_color;
-    text->pos_x = sp24.x;
+    text->pos_x = text_pos.x;
     i = 0;
     text->pos_y = y_minus;
     text->pos_z = z;
@@ -1360,8 +1299,8 @@ void fn_8023CFC8(HSD_GObj* arg0)
     GlyphVariantEntry* data;
     u32 pad1;
     u32 pad2;
-    GXColor sp30;
-    GXColor sp2C;
+    GXColor key_color;
+    GXColor selected_key_color;
 
     PAD_STACK(0x20);
 
@@ -1385,8 +1324,8 @@ void fn_8023CFC8(HSD_GObj* arg0)
         root = jobj;
         HSD_JObjReqAnimAll(root, 0.0f);
         HSD_JObjAnimAll(root);
-        sp30 = mnNameNew_804D4F74;
-        HSD_SisLib_803A74F0(data->text, (s32) data->selection, &sp30);
+        key_color = mnNameNew_804D4F74;
+        HSD_SisLib_803A74F0(data->text, (s32) data->selection, &key_color);
         root = data->jobjs[4];
         new_var = mn_804A04F0.confirmed_selection;
         if (root == NULL) {
@@ -1404,9 +1343,9 @@ void fn_8023CFC8(HSD_GObj* arg0)
         one = 1.0f;
         HSD_JObjReqAnimAll(jobj, one);
         HSD_JObjAnimAll(jobj);
-        sp2C = mnNameNew_804D4F70;
+        selected_key_color = mnNameNew_804D4F70;
         HSD_SisLib_803A74F0(data->text, (s32) mn_804A04F0.confirmed_selection,
-                            &sp2C);
+                            &selected_key_color);
         data->selection = mn_804A04F0.confirmed_selection;
     }
 }
@@ -1418,10 +1357,9 @@ void fn_8023D0F8(void* arg0)
     HSD_Free(arg0);
 }
 
-s32 mnNameNew_8023D130(GlyphVariantEntry* arg0, u16 arg1, u8 arg2, s32 arg3)
+HSD_Text* mnNameNew_8023D130(GlyphVariantEntry* arg0, u16 arg1, u8 arg2,
+                             s32 arg3)
 {
-    GXColor* glyph_color_ptr;
-    char* str;
     f32 pos_z;
     f32 y_range;
     s32 i;
@@ -1464,8 +1402,9 @@ s32 mnNameNew_8023D130(GlyphVariantEntry* arg0, u16 arg1, u8 arg2, s32 arg3)
         AddCharacterToName_getGlyphs(layout->upper_glyphs, (u8) arg3);
     table_lower =
         AddCharacterToName_getGlyphs(layout->lower_glyphs, (u8) arg3);
-    (void) table_lower;
-    for (i = 0; i < (s32) (u8) arg1; i++) {
+    arg1 = (u8) arg1;
+    for (i = 0; i < (s32) arg1; i++) {
+        char* str;
         if ((u8) (arg3 - 0x30) <= 1U) {
             if ((i % 2) != 0) {
                 str = table_upper[i / 2];
@@ -1488,112 +1427,133 @@ s32 mnNameNew_8023D130(GlyphVariantEntry* arg0, u16 arg1, u8 arg2, s32 arg3)
         } else {
             color_ptr = &mnNameNew_804D4F74;
         }
-        glyph_color = *color_ptr;
-        glyph_color_ptr = &glyph_color;
-        HSD_SisLib_803A74F0(text, i, glyph_color_ptr);
+        mnNameNew_SetKeyColor(text, i, color_ptr, &glyph_color);
     }
     arg0->text = text;
-    return (s32) text;
+    return text;
 }
 
 static const Vec3 mnNameNew_803B8528 = { -0.5f, 0.7f, 0.0f };
 
-static inline void
-mnNameNew_GlyphVariantSetup_InitJobjs(GlyphVariantEntry* user_data,
-                                      HSD_JObj* jobj)
+#ifdef MUST_MATCH
+#pragma push
+#pragma inline_depth(2)
+#endif
+static inline void GlyphVariantCount(u16 count, s32* out)
 {
-    s32 i;
-
-    for (i = 0; i < 7; i++) {
-        lb_80011E24(jobj, &user_data->jobjs[i], i, -1);
-    }
+    count &= 0xFF;
+    *out = count;
 }
 
-s32 mnNameNew_GlyphVariantSetup(NameNewEntry* arg0, u16 arg1, u8 arg2)
+static inline void AnimateGlyphVariant(HSD_JObj* variant,
+                                       GlyphVariantEntry* user_data, s32 i)
 {
-    f32 base_y;
-    MnNameNewDataLayout* layout;
+    HSD_JObjReqAnimAll(variant, (f32) (user_data->selection == i));
+    HSD_JObjAnimAll(variant);
+}
+
+static inline void CreateGlyphVariant(StaticModelDesc* variant_desc,
+                                      GlyphVariantEntry* user_data, s32 i,
+                                      HSD_JObj** out)
+{
+    HSD_JObj* variant;
+    variant = HSD_JObjLoadJoint(variant_desc->joint);
+    HSD_JObjAddAnimAll(variant, variant_desc->animjoint,
+                       variant_desc->matanim_joint,
+                       variant_desc->shapeanim_joint);
+    AnimateGlyphVariant(variant, user_data, i);
+    *out = variant;
+}
+
+HSD_GObj* mnNameNew_GlyphVariantSetup(NameNewEntry* arg0, u16 arg1, s32 arg2)
+{
+    HSD_JObj* jobj;
     HSD_JObj* variant;
     HSD_JObj* key_jobj;
     HSD_JObj* ref_jobj;
     s32 i;
-    HSD_JObj* ref3;
-    GlyphVariantEntry* user_data;
-    Vec3 sp38;
-    Vec3 sp2C;
+    s32 variant_count;
+    HSD_JObj* ref2;
+    Vec3 position;
+    Vec3 offset;
     f32 dx;
     f32 dy;
-    f32 base_x;
-    void** setup_desc;
-    HSD_JObj* ref2;
-    HSD_JObj* jobj;
+    StaticModelDesc* setup_desc;
+    HSD_JObj* ref3;
     HSD_GObj* gobj;
-    void** variant_desc;
+    StaticModelDesc* variant_desc;
 
-    layout = (MnNameNewDataLayout*) mnNameNew_803EDA58;
-    setup_desc = mnNameNew_804A0710;
+    setup_desc = &mnNameNew_804A0710;
     gobj = GObj_Create(6U, 7U, 0x80U);
-    jobj = HSD_JObjLoadJoint(setup_desc[0]);
+    jobj = HSD_JObjLoadJoint(setup_desc->joint);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 6U, 0x80U);
     HSD_GObj_SetupProc(gobj, fn_8023CFC8, 0U);
-    HSD_JObjAddAnimAll(jobj, setup_desc[1], setup_desc[2], setup_desc[3]);
+    HSD_JObjAddAnimAll(jobj, setup_desc->animjoint, setup_desc->matanim_joint,
+                       setup_desc->shapeanim_joint);
     HSD_JObjReqAnimAll(jobj, ((f32) (u8) arg1) / 2.0f);
     HSD_JObjAnimAll(jobj);
 
-    user_data = HSD_MemAlloc(sizeof(GlyphVariantEntry));
-    HSD_ASSERTREPORT(0x5B4, user_data, "Can't get user_data.\n");
-    GObj_InitUserData(gobj, 0U, fn_8023D0F8, user_data);
+    {
+        GlyphVariantEntry* user_data = HSD_MemAlloc(sizeof(*user_data));
+        HSD_ASSERTREPORT(0x5B4, user_data, "Can't get user_data.\n");
+        GObj_InitUserData(gobj, 0U, fn_8023D0F8, user_data);
 
-    user_data->selection = mn_804A04F0.confirmed_selection;
-    mnNameNew_GlyphVariantSetup_InitJobjs(user_data, jobj);
+        user_data->selection = mn_804A04F0.confirmed_selection;
+        for (i = 0; i < 7; i++) {
+            lb_80011E24(jobj, &user_data->jobjs[i], i, -1);
+        }
 
-    sp2C = mnNameNew_803B8528;
+        offset = mnNameNew_803B8528;
 
-    if (arg2 >= 0x32U && arg2 < 0x3AU) {
-        key_jobj = (arg0->jobjs[layout->key_jobj_ids[arg2 - 0x32]]);
-    } else {
-        key_jobj = HSD_JObjGetChild(arg0->jobjs[16]);
-        for (i = 0; i < 50; i++) {
-            if (i == (s32) arg2) {
-                break;
-            }
-            if (key_jobj == NULL) {
-                key_jobj = NULL;
-            } else {
-                key_jobj = key_jobj->next;
+        if ((u8) arg2 >= 0x32U && (u8) arg2 < 0x3AU) {
+            key_jobj =
+                arg0->jobjs[mnNameNew_KeyMap.key_jobj_ids[(u8) arg2 - 0x32]];
+        } else {
+            key_jobj = HSD_JObjGetChild(arg0->jobjs[16]);
+            for (i = 0; i < 50; i++) {
+                if (i == (s32) (u8) arg2) {
+                    break;
+                }
+                if (key_jobj == NULL) {
+                    key_jobj = NULL;
+                } else {
+                    key_jobj = key_jobj->next;
+                }
             }
         }
+
+        lb_8000B1CC(key_jobj, &offset, &position);
+        HSD_JObjSetTranslate(jobj, &position);
+
+        ref_jobj = user_data->jobjs[4];
+        ref2 = user_data->jobjs[5];
+        ref3 = user_data->jobjs[6];
+
+        dx = HSD_JObjGetTranslationX(ref2) - HSD_JObjGetTranslationX(ref_jobj);
+        dy = HSD_JObjGetTranslationY(ref3) - HSD_JObjGetTranslationY(ref_jobj);
+
+        variant_desc = mnNameNew_804A0720;
+        GlyphVariantCount(arg1, &variant_count);
+        i = 0;
+        for (; i < variant_count; i++) {
+            {
+                HSD_JObj* created;
+                CreateGlyphVariant(variant_desc, user_data, i, &created);
+                variant = created;
+            }
+            HSD_JObjSetTranslateX(variant, dx * (f32) (i / 2));
+            HSD_JObjSetTranslateY(variant, dy * (f32) (i % 2));
+            HSD_JObjAddChild(ref_jobj, variant);
+        }
+
+        mnNameNew_8023D130(user_data, arg1, arg0->mode, arg2);
+        return gobj;
     }
-
-    lb_8000B1CC(key_jobj, &sp2C, &sp38);
-    HSD_JObjSetTranslate(jobj, &sp38);
-
-    ref_jobj = user_data->jobjs[4];
-    ref2 = user_data->jobjs[5];
-    ref3 = user_data->jobjs[6];
-
-    base_x = HSD_JObjGetTranslationX(ref_jobj);
-    dx = HSD_JObjGetTranslationX(ref2) - base_x;
-    base_y = HSD_JObjGetTranslationY(ref_jobj);
-    dy = HSD_JObjGetTranslationY(ref3) - base_y;
-
-    variant_desc = mnNameNew_804A0720;
-    i = 0;
-    for (; i < (s32) (u8) arg1; i++) {
-        variant = HSD_JObjLoadJoint(variant_desc[0]);
-        HSD_JObjAddAnimAll(variant, variant_desc[1], variant_desc[2],
-                           variant_desc[3]);
-        HSD_JObjReqAnimAll(variant, (f32) (user_data->selection == i));
-        HSD_JObjAnimAll(variant);
-        HSD_JObjSetTranslateX(variant, dx * (f32) (i / 2));
-        HSD_JObjSetTranslateY(variant, dy * (f32) (i % 2));
-        HSD_JObjAddChild(ref_jobj, variant);
-    }
-
-    mnNameNew_8023D130(user_data, arg1, arg0->mode, arg2);
-    return (s32) gobj;
 }
+#ifdef MUST_MATCH
+#pragma pop
+#endif
 
 s32 mnNameNew_8023DA08(NameNewEntry* arg0)
 {
@@ -1627,7 +1587,7 @@ s32 mnNameNew_8023DA08(NameNewEntry* arg0)
 
 void fn_8023DAEC(HSD_GObj* arg0)
 {
-    s32 var_r30;
+    s32 all_anims_done;
     NameNewEntry* data;
     MnNameNewDataLayout* layout;
     f32* end_frame;
@@ -1647,27 +1607,23 @@ void fn_8023DAEC(HSD_GObj* arg0)
         HSD_SisLib_803A5CC4(data->desc_text);
         data->desc_text = NULL;
     }
-    var_r30 = 1;
+    all_anims_done = 1;
     if (mn_8022EFD8(data->jobjs[4], &layout->anim[1]) <
         *(end_frame = &layout->anim[1].end_frame))
     {
-        var_r30 = 0;
+        all_anims_done = 0;
     }
     if (mn_8022EFD8(data->jobjs[2], &layout->anim[1]) < *end_frame) {
-        var_r30 = 0;
+        all_anims_done = 0;
     }
     if (mn_8022EFD8(data->jobjs[6], &layout->anim[1]) < *end_frame) {
-        var_r30 = 0;
+        all_anims_done = 0;
     }
-    if (var_r30 != 0 || mn_804A04F0.x10 == 1) {
-        HSD_GObjPLink_80390228(arg0);
+    if (all_anims_done != 0 || mn_804A04F0.x10 == 1) {
+        HSD_GObjFree(arg0);
     }
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void fn_8023DBE8(HSD_GObj* arg0)
 {
     MenuFlow* flow;
@@ -1696,7 +1652,7 @@ void fn_8023DBE8(HSD_GObj* arg0)
         HSD_JObjSetFlagsAll(data->jobjs[16], JOBJ_HIDDEN);
         HSD_JObjSetFlagsAll(data->jobjs[12], JOBJ_HIDDEN);
         HSD_JObjSetFlagsAll(data->jobjs[13], JOBJ_HIDDEN);
-        HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+        HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_8023DAEC, 0U);
         proc->flags_3 = HSD_GObj_804D783C;
         return;
@@ -1779,9 +1735,6 @@ void fn_8023DBE8(HSD_GObj* arg0)
         HSD_JObjAnimAll(jobj);
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void mnNameNew_8023E0D8(NameNewEntry* arg0)
 {
@@ -1876,9 +1829,10 @@ static inline void mnNameNew_InitKeyJobjs(NameNewEntry* user_data,
     f32 y_range;
 
     for (k = 0; k < 0x32; k++) {
-        key_jobj = HSD_JObjLoadJoint(mnNameNew_804A0700[0]);
-        HSD_JObjAddAnimAll(key_jobj, mnNameNew_804A0700[1],
-                           mnNameNew_804A0700[2], mnNameNew_804A0700[3]);
+        key_jobj = HSD_JObjLoadJoint(mnNameNew_804A0700.joint);
+        HSD_JObjAddAnimAll(key_jobj, mnNameNew_804A0700.animjoint,
+                           mnNameNew_804A0700.matanim_joint,
+                           mnNameNew_804A0700.shapeanim_joint);
         HSD_JObjReqAnimAll(key_jobj, (f32) ((u8) k == user_data->x1));
         HSD_JObjAnimAll(key_jobj);
         x_range = HSD_JObjGetTranslationX(user_data->jobjs[17]) -
@@ -1898,18 +1852,19 @@ void mnNameNew_8023E32C(s32 arg0)
     HSD_JObj* root_jobj;
     NameNewEntry* user_data;
     s32 i;
-    void** setup_desc;
+    StaticModelDesc* setup_desc;
 
     PAD_STACK(8);
 
-    setup_desc = mnNameNew_804A06F0;
+    setup_desc = &mnNameNew_804A06F0;
     gobj = GObj_Create(6U, 7U, 0x80U);
     mnNameNew_804D6C08 = gobj;
-    root_jobj = HSD_JObjLoadJoint(setup_desc[0]);
+    root_jobj = HSD_JObjLoadJoint(setup_desc->joint);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, root_jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4U, 0x80U);
     HSD_GObj_SetupProc(gobj, (HSD_GObjEvent) fn_8023DBE8, 0U);
-    HSD_JObjAddAnimAll(root_jobj, setup_desc[1], setup_desc[2], setup_desc[3]);
+    HSD_JObjAddAnimAll(root_jobj, setup_desc->animjoint,
+                       setup_desc->matanim_joint, setup_desc->shapeanim_joint);
     HSD_JObjReqAnimAll(root_jobj, 0.0f);
     HSD_JObjAnimAll(root_jobj);
     user_data = HSD_MemAlloc(sizeof(*user_data));
@@ -1924,8 +1879,7 @@ void mnNameNew_8023E32C(s32 arg0)
         HSD_JObj* child;
         mnNameNew_InitKeyJobjs(user_data, &child);
     }
-    user_data->key_text =
-        (HSD_Text*) mnNameNew_KeySetup(user_data, user_data->mode);
+    user_data->key_text = mnNameNew_KeySetup(user_data, user_data->mode);
     mnNameNew_8023B314(user_data, (s32) user_data->x1);
     mnNameNew_8023B0F8(gobj, user_data->x1);
 }
@@ -1997,28 +1951,33 @@ void mnNameNew_EnterFromMnCharSel(HSD_Archive* arg0, s32 arg1)
         &MenMainPanel_Top.shapeanim_joint, "MenMainPanel_Top_shapeanim_joint",
 
         // Row 1
-        &mnNameNew_804A06F0[0], "MenMainConEtNw_Top_joint",
-        &mnNameNew_804A06F0[1], "MenMainConEtNw_Top_animjoint",
-        &mnNameNew_804A06F0[2], "MenMainConEtNw_Top_matanim_joint",
-        &mnNameNew_804A06F0[3], "MenMainConEtNw_Top_shapeanim_joint",
+        &mnNameNew_804A06F0.joint, "MenMainConEtNw_Top_joint",
+        &mnNameNew_804A06F0.animjoint, "MenMainConEtNw_Top_animjoint",
+        &mnNameNew_804A06F0.matanim_joint, "MenMainConEtNw_Top_matanim_joint",
+        &mnNameNew_804A06F0.shapeanim_joint,
+        "MenMainConEtNw_Top_shapeanim_joint",
 
         // Row 2
-        &mnNameNew_804A0700[0], "MenMainBaseEtNw_Top_joint",
-        &mnNameNew_804A0700[1], "MenMainBaseEtNw_Top_animjoint",
-        &mnNameNew_804A0700[2], "MenMainBaseEtNw_Top_matanim_joint",
-        &mnNameNew_804A0700[3], "MenMainBaseEtNw_Top_shapeanim_joint",
+        &mnNameNew_804A0700.joint, "MenMainBaseEtNw_Top_joint",
+        &mnNameNew_804A0700.animjoint, "MenMainBaseEtNw_Top_animjoint",
+        &mnNameNew_804A0700.matanim_joint, "MenMainBaseEtNw_Top_matanim_joint",
+        &mnNameNew_804A0700.shapeanim_joint,
+        "MenMainBaseEtNw_Top_shapeanim_joint",
 
         // Row 3
-        &mnNameNew_804A0710[0], "MenMainSubEtNw_Top_joint",
-        &mnNameNew_804A0710[1], "MenMainSubEtNw_Top_animjoint",
-        &mnNameNew_804A0710[2], "MenMainSubEtNw_Top_matanim_joint",
-        &mnNameNew_804A0710[3], "MenMainSubEtNw_Top_shapeanim_joint",
+        &mnNameNew_804A0710.joint, "MenMainSubEtNw_Top_joint",
+        &mnNameNew_804A0710.animjoint, "MenMainSubEtNw_Top_animjoint",
+        &mnNameNew_804A0710.matanim_joint, "MenMainSubEtNw_Top_matanim_joint",
+        &mnNameNew_804A0710.shapeanim_joint,
+        "MenMainSubEtNw_Top_shapeanim_joint",
 
         // Row 4
-        &mnNameNew_804A0720[0], "MenMainSbaseEtNw_Top_joint",
-        &mnNameNew_804A0720[1], "MenMainSbaseEtNw_Top_animjoint",
-        &mnNameNew_804A0720[2], "MenMainSbaseEtNw_Top_matanim_joint",
-        &mnNameNew_804A0720[3], "MenMainSbaseEtNw_Top_shapeanim_joint",
+        &mnNameNew_804A0720[0].joint, "MenMainSbaseEtNw_Top_joint",
+        &mnNameNew_804A0720[0].animjoint, "MenMainSbaseEtNw_Top_animjoint",
+        &mnNameNew_804A0720[0].matanim_joint,
+        "MenMainSbaseEtNw_Top_matanim_joint",
+        &mnNameNew_804A0720[0].shapeanim_joint,
+        "MenMainSbaseEtNw_Top_shapeanim_joint",
 
         NULL);
 
@@ -2059,13 +2018,7 @@ void mnNameNew_8023EA08(UNK_T arg0)
     mnNameNew_EnterFromMnCharSel((HSD_Archive*) arg0, 4);
 }
 
-char mnNameNew_CurrentNameText[0x10];
-void* mnNameNew_804A0720[8];
-void* mnNameNew_804A0710[4];
-void* mnNameNew_804A0700[4];
-void* mnNameNew_804A06F0[4];
+static u8 mnNameNew_804D4F98[8] ATTRIBUTE_ALIGN(8) = { 0 };
 
-static u8 mnNameNew_804D4F98[8] = { 0 };
-
-char* mnNameNew_803EE720[] = { (char*) mnNameNew_804D4F98 };
+char* mnNameNew_803EE720[] ATTRIBUTE_ALIGN(8) = { (char*) mnNameNew_804D4F98 };
 char* mnNameNew_803EE724[] = { (char*) mnNameNew_804D4F98 };

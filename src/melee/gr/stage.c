@@ -1,18 +1,18 @@
-#include "gr/stage.h"
+#include "stage.h"
 
-#include "gm/gm_unsplit.h"
-#include "gr/ground.h"
-#include "gr/types.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbvector.h"
-#include "mp/mplib.h"
+#include "ground.h"
+#include "types.h"
+#include <melee/gm/gm_unsplit.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbvector.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/random.h>
 #if BUILD_TARGET_PC
 #include "port/log.h"
 #endif
 
 #include <stdio.h>
-#include <baselib/debug.h>
-#include <baselib/random.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC

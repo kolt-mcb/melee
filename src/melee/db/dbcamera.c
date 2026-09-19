@@ -1,15 +1,15 @@
-#include "baselib/controller.h"
-#include "cm/camera.h"
-#include "db/db.h"
-#include "ft/inlines.h"
-#include "gm/gm_unsplit.h"
-#include "gr/ground.h"
-#include "if/textdraw.h"
-#include "if/textlib.h"
-#include "lb/lbshadow.h"
-#include "lb/lbvector.h"
-
 #include <math.h>
+
+#include "db.h"
+#include <melee/cm/camera.h>
+#include <melee/ft/inlines.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/gr/ground.h>
+#include <melee/if/textdraw.h>
+#include <melee/if/textlib.h>
+#include <melee/lb/lbshadow.h>
+#include <melee/lb/lbvector.h>
+#include <sysdolphin/baselib/controller.h>
 
 /* 2270C4 */ static void fn_802270C4(int arg0);
 /* 22713C */ static void fn_8022713C(int arg0);
@@ -149,7 +149,9 @@ static void fn_802270C4(int arg0)
     Fighter* ft;
     int stack;
 
-    for (gobj = HSD_GObj_Entities->fighters; gobj != NULL; gobj = gobj->next) {
+    for (gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_FIGHTER]; gobj != NULL;
+         gobj = gobj->next)
+    {
         ft = GET_FIGHTER(gobj);
         if (ft != NULL && ft->x20A4.shadow != NULL) {
             ft->x20A4.x0_b5 = !arg0;
@@ -163,7 +165,9 @@ static void fn_8022713C(int arg0)
     HSD_GObj* gobj;
     Ground* ground;
 
-    for (gobj = HSD_GObj_Entities->x14; gobj != NULL; gobj = gobj->next) {
+    for (gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_GROUND]; gobj != NULL;
+         gobj = gobj->next)
+    {
         ground = gobj->user_data;
         if (ground != NULL) {
             ground->x10_flags.b7 = arg0;

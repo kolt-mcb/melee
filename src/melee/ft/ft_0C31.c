@@ -1,28 +1,22 @@
 #include "ft_0C31.h"
 
-#include "ft_081B.h"
-#include "ftcommon.h"
-
 #include <placeholder.h>
 
-#include "ef/efasync.h"
-#include "ft/fighter.h"
-
-#include "ft/forward.h"
-
-#include "ft/ftcolanim.h"
-#include "ft/ftcoll.h"
-#include "ft/types.h"
-
-#include "ftCommon/forward.h"
-
-#include "ftCommon/types.h"
-#include "lb/lbaudio_ax.h"
-#include "pl/player.h"
-
+#include "fighter.h"
+#include "forward.h"
+#include "ft_081B.h"
+#include "ftcolanim.h"
+#include "ftcoll.h"
+#include "ftcommon.h"
+#include "kinds/ftCommon/forward.h"
+#include "kinds/ftCommon/types.h"
+#include "types.h"
 #include <dolphin/mtx.h>
-#include <baselib/dobj.h>
-#include <baselib/jobj.h>
+#include <melee/ef/efasync.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/pl/player.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/jobj.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -111,7 +105,7 @@ void ftCo_800C6408(Fighter_GObj* gobj)
     Fighter_ChangeMotionState(gobj, ftCo_MS_EntryStart, 0, 0.0F, 1.0F, 0.0F,
                               NULL);
     temp_r31->x2219_b1 = true;
-    if (!temp_r31->x221F_b4) {
+    if (!temp_r31->is_sub_fighter) {
         ftCommon_SetAccessory(temp_r31, Fighter_804D6514);
         temp_f0 = temp_r31->x34_scale.y * temp_r31->co_attrs.trophy_scale;
         sp48.z = temp_f0;
@@ -180,7 +174,7 @@ void ftCo_EntryStart_Phys(Fighter_GObj* gobj)
 
     HSD_JObjSetScale(gobj->hsd_obj, &temp_r31->mv.co.entry.x14);
 
-    if (!temp_r31->x221F_b4) {
+    if (!temp_r31->is_sub_fighter) {
         temp_f1 = temp_r31->mv.co.entry.x24;
         sp20.x = temp_f1;
         sp20.y = temp_f1 * temp_f31;
@@ -199,7 +193,7 @@ void ftCo_EntryStart_Coll(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     PAD_STACK(8);
-    if (!fp->x221F_b4) {
+    if (!fp->is_sub_fighter) {
         fp->mv.co.entry.x2C.bottom = -fp->mv.co.entry.x28;
     } else {
         HSD_GObj* gobj = Player_GetEntityAtIndex(fp->player_id, 0);
@@ -223,7 +217,7 @@ void fn_800C69F4(Fighter_GObj* gobj)
     Fighter* temp_r3_2;
 
     temp_r31 = GET_FIGHTER(gobj);
-    if (!temp_r31->x221F_b4) {
+    if (!temp_r31->is_sub_fighter) {
         temp_r3 = Player_GetEntityAtIndex((s32) temp_r31->player_id, 1);
         if (temp_r3 != NULL) {
             temp_r3_2 = GET_FIGHTER(temp_r3);
@@ -262,7 +256,7 @@ void ftCo_800C6B6C(Fighter_GObj* gobj)
 
     HSD_JObjSetScale(GET_JOBJ(gobj), &temp_r31->mv.co.entry.x8);
 
-    if (!temp_r31->x221F_b4) {
+    if (!temp_r31->is_sub_fighter) {
         temp_r31->cur_pos.y =
             temp_r31->mv.co.entry.x4 + temp_r31->mv.co.entry.x20;
     } else {
@@ -299,7 +293,7 @@ void ftCo_EntryEnd_Phys(Fighter_GObj* gobj)
     u32 temp_r4;
 
     fp = GET_FIGHTER(gobj);
-    if (!fp->x221F_b4) {
+    if (!fp->is_sub_fighter) {
         temp_f31 = (f32) fp->mv.co.entry.timer / (f32) p_ftCommonData->x6BC;
         temp_f3 = fp->mv.co.entry.x24;
         sp1C.x = temp_f3;
@@ -319,7 +313,7 @@ void ftCo_EntryEnd_Coll(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     PAD_STACK(4);
-    if (!fp->x221F_b4) {
+    if (!fp->is_sub_fighter) {
         fp->mv.co.entry.x2C.bottom = -fp->mv.co.entry.x28;
     } else {
         HSD_GObj* gobj2 = Player_GetEntityAtIndex(fp->player_id, 0);
@@ -342,7 +336,7 @@ void fn_800C6F34(Fighter_GObj* gobj)
     Vec3 sp20;
 
     fp = GET_FIGHTER(gobj);
-    if (!fp->x221F_b4) {
+    if (!fp->is_sub_fighter) {
         temp_r3 = Player_GetEntityAtIndex(fp->player_id, 1);
         if (temp_r3 != NULL) {
             temp_r3_2 = GET_FIGHTER(temp_r3);

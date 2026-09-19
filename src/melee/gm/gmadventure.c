@@ -1,13 +1,13 @@
 #include "gmadventure.h"
 
+#include "forward.h"
 #include "gm_unsplit.h"
-
-#include <sysdolphin/baselib/random.h>
-#include <melee/gm/gmmain_lib.h>
-#include <melee/gm/gmregcommon.h>
+#include "gmmain_lib.h"
+#include "gmregcommon.h"
 #include <melee/gr/ground.h>
 #include <melee/lb/lb_00B0.h>
 #include <melee/lb/lbaudio_ax.h>
+#include <sysdolphin/baselib/random.h>
 
 extern UNK_T gmClassic_80470708[];
 extern DebugGameOverData gmClassic_80470850;
@@ -37,21 +37,83 @@ static IntroData gm_804D68E0;
 /// in multiples of 8. Skipping to the next block goes on to the next stage.
 #define NEXT_SCENEBLOCK_AFTER(x) (((x) + 8) & ~(8 - 1))
 
-/// @todo fill this out with the rest of the scenes
+/// Scene IDs for ::gm_Mode_Adventure_States and ::gm_803DE650. Each stage
+/// of Adventure Mode owns one block of eight IDs; #gm_8017BE84 turns an ID
+/// back into its stage number.
 enum {
-    ADVENTURE_INTRO = 0x0,
-    ADVENTURE_MUSHROOM_KINGDOM,
-    ADVENTURE_LUIGI_CUTSCENE,
-    ADVENTURE_MARIO_PEACH_FIGHT,
+    /* Stage 1: Mushroom Kingdom */
+    /* 0x00 */ ADVENTURE_INTRO = 0x00,
+    /* 0x01 */ ADVENTURE_MUSHROOM_KINGDOM, ///< Yoshi team
+    /* 0x02 */ ADVENTURE_LUIGI_CUTSCENE,
+    /* 0x03 */ ADVENTURE_MARIO_PEACH_FIGHT, ///< Princess Peach's Castle
 
-    ADVENTURE_KIRBY_INTRO = 0x20,
-    ADVENTURE_KIRBY_FIGHT,
-    ADVENTURE_TEAMKIRBY_INTRO,
-    ADVENTURE_TEAMKIRBY_FIGHT,
-    ADVENTURE_GIANTKIRBY_INTRO,
-    ADVENTURE_GIANTKIRBY_FIGHT,
+    /* Stage 2: Kongo Jungle */
+    /* 0x08 */ ADVENTURE_KONGO_INTRO = 0x08,
+    /* 0x09 */ ADVENTURE_TINYDK_FIGHT,  ///< two half-size Donkey Kongs
+    /* 0x0A */ ADVENTURE_GIANTDK_FIGHT, ///< Jungle Japes
 
-    ADVENTURE_BACK_TO_CSS = 0x70,
+    /* Stage 3: Underground Maze */
+    /* 0x10 */ ADVENTURE_MAZE_INTRO = 0x10,
+    /* 0x11 */ ADVENTURE_UNDERGROUND_MAZE, ///< Link
+    /* 0x12 */ ADVENTURE_ZELDA_FIGHT,      ///< Hyrule Temple
+
+    /* Stage 4: Brinstar */
+    /* 0x18 */ ADVENTURE_BRINSTAR_INTRO = 0x18,
+    /* 0x19 */ ADVENTURE_SAMUS_FIGHT,
+    /* 0x1A */ ADVENTURE_BRINSTAR_CUTSCENE,
+    /* 0x1B */ ADVENTURE_ESCAPE_FROM_BRINSTAR,
+    /* 0x1C */ ADVENTURE_EXPLOSION_CUTSCENE,
+
+    /* Stage 5: Green Greens */
+    /* 0x20 */ ADVENTURE_KIRBY_INTRO = 0x20,
+    /* 0x21 */ ADVENTURE_KIRBY_FIGHT,
+    /* 0x22 */ ADVENTURE_TEAMKIRBY_INTRO,
+    /* 0x23 */ ADVENTURE_TEAMKIRBY_FIGHT,
+    /* 0x24 */ ADVENTURE_GIANTKIRBY_INTRO,
+    /* 0x25 */ ADVENTURE_GIANTKIRBY_FIGHT,
+
+    /* Stage 6: Corneria */
+    /* 0x28 */ ADVENTURE_CORNERIA_INTRO = 0x28,
+    /* 0x29 */ ADVENTURE_FOX_FIGHT,
+    /* 0x2A */ ADVENTURE_STARFOX_CUTSCENE,
+    /* 0x2B */ ADVENTURE_FOX_FALCO_FIGHT, ///< Fox again, or Falco if unlocked
+
+    /* Stage 7: Pokemon Stadium */
+    /* 0x30 */ ADVENTURE_POKEMON_INTRO = 0x30,
+    /* 0x31 */ ADVENTURE_POKEMON_FIGHT, ///< Pikachu, Pichu and Jigglypuff team
+
+    /* Stage 8: F-Zero Grand Prix */
+    /* 0x38 */ ADVENTURE_FZERO_CUTSCENE = 0x38,
+    /* 0x39 */ ADVENTURE_FZERO_INTRO,
+    /* 0x3A */ ADVENTURE_FZERO_GRAND_PRIX,
+    /* 0x3B */ ADVENTURE_CAPTAIN_FALCON_FIGHT, ///< Mute City
+
+    /* Stage 9: Onett */
+    /* 0x40 */ ADVENTURE_ONETT_INTRO = 0x40,
+    /* 0x41 */ ADVENTURE_NESS_FIGHT, ///< three Nesses
+
+    /* Stage 10: Icicle Mountain */
+    /* 0x48 */ ADVENTURE_ICICLE_INTRO = 0x48,
+    /* 0x49 */ ADVENTURE_ICICLE_MOUNTAIN, ///< Ice Climbers
+
+    /* Stage 11: Battlefield */
+    /* 0x50 */ ADVENTURE_BATTLEFIELD_INTRO = 0x50,
+    /* 0x51 */ ADVENTURE_WIREFRAME_FIGHT, ///< Fighting Wire Frame team
+    /* 0x52 */ ADVENTURE_METAL_CUTSCENE,
+    /* 0x53 */ ADVENTURE_METAL_MARIO_FIGHT, ///< plus Metal Luigi if unlocked
+
+    /* Stage 12: Final Destination */
+    /* 0x58 */ ADVENTURE_FINAL_DESTINATION_INTRO = 0x58,
+    /* 0x59 */ ADVENTURE_BOWSER_FIGHT,
+    /* 0x5A */ ADVENTURE_BOWSERTOY_CUTSCENE,
+    /* 0x5B */ ADVENTURE_GIGATRANSFORM_CUTSCENE,
+    /* 0x5C */ ADVENTURE_GIGABOWSER_FIGHT,
+    /* 0x5D */ ADVENTURE_GIGADEFEATED_CUTSCENE,
+
+    /* 0x68 */ ADVENTURE_COMING_SOON = 0x68,
+    /* 0x69 */ ADVENTURE_GAME_OVER,
+
+    /* 0x70 */ ADVENTURE_BACK_TO_CSS = 0x70,
 };
 
 GameModeState gm_Mode_Adventure_States[] = {
@@ -104,7 +166,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        8,
+        ADVENTURE_KONGO_INTRO,
         2,
         0,
         gm_801B3F40,
@@ -116,7 +178,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        9,
+        ADVENTURE_TINYDK_FIGHT,
         2,
         0,
         gm_801B4768,
@@ -128,7 +190,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0xA,
+        ADVENTURE_GIANTDK_FIGHT,
         2,
         0,
         gm_801B4064,
@@ -140,7 +202,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x10,
+        ADVENTURE_MAZE_INTRO,
         2,
         0,
         gm_801B3F40,
@@ -152,7 +214,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x11,
+        ADVENTURE_UNDERGROUND_MAZE,
         2,
         0,
         gm_801B4064,
@@ -164,7 +226,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x12,
+        ADVENTURE_ZELDA_FIGHT,
         2,
         0,
         gm_801B4064,
@@ -176,7 +238,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x18,
+        ADVENTURE_BRINSTAR_INTRO,
         2,
         0,
         gm_801B3F40,
@@ -188,7 +250,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x19,
+        ADVENTURE_SAMUS_FIGHT,
         2,
         0,
         gm_801B4064,
@@ -200,7 +262,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x1A,
+        ADVENTURE_BRINSTAR_CUTSCENE,
         2,
         0,
         gm_801B4430,
@@ -212,7 +274,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x1B,
+        ADVENTURE_ESCAPE_FROM_BRINSTAR,
         2,
         0,
         gm_801B47FC,
@@ -224,7 +286,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x1C,
+        ADVENTURE_EXPLOSION_CUTSCENE,
         2,
         0,
         NULL,
@@ -308,7 +370,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x28,
+        ADVENTURE_CORNERIA_INTRO,
         2,
         0,
         gm_801B3F40,
@@ -320,7 +382,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x29,
+        ADVENTURE_FOX_FIGHT,
         2,
         0,
         gm_801B4064,
@@ -332,7 +394,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x2A,
+        ADVENTURE_STARFOX_CUTSCENE,
         2,
         0,
         gm_801B4D34,
@@ -344,7 +406,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x2B,
+        ADVENTURE_FOX_FALCO_FIGHT,
         2,
         0,
         gm_801B4DAC,
@@ -356,7 +418,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x30,
+        ADVENTURE_POKEMON_INTRO,
         2,
         0,
         gm_801B3F40,
@@ -368,7 +430,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x31,
+        ADVENTURE_POKEMON_FIGHT,
         2,
         0,
         gm_801B4064,
@@ -380,7 +442,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x38,
+        ADVENTURE_FZERO_CUTSCENE,
         2,
         0,
         NULL,
@@ -392,7 +454,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x39,
+        ADVENTURE_FZERO_INTRO,
         2,
         0,
         gm_801B3F40,
@@ -404,7 +466,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x3A,
+        ADVENTURE_FZERO_GRAND_PRIX,
         2,
         0,
         gm_801B4064,
@@ -416,7 +478,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x3B,
+        ADVENTURE_CAPTAIN_FALCON_FIGHT,
         2,
         0,
         gm_801B4064,
@@ -428,7 +490,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x40,
+        ADVENTURE_ONETT_INTRO,
         2,
         0,
         gm_801B3F40,
@@ -440,7 +502,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x41,
+        ADVENTURE_NESS_FIGHT,
         2,
         0,
         gm_801B4E58,
@@ -452,7 +514,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x48,
+        ADVENTURE_ICICLE_INTRO,
         2,
         0,
         gm_801B3F40,
@@ -464,7 +526,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x49,
+        ADVENTURE_ICICLE_MOUNTAIN,
         2,
         0,
         gm_801B4064,
@@ -476,7 +538,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x50,
+        ADVENTURE_BATTLEFIELD_INTRO,
         2,
         0,
         gm_801B3F40,
@@ -488,7 +550,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x51,
+        ADVENTURE_WIREFRAME_FIGHT,
         2,
         0,
         gm_801B4064,
@@ -500,7 +562,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x52,
+        ADVENTURE_METAL_CUTSCENE,
         2,
         0,
         gm_801B4430,
@@ -512,7 +574,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x53,
+        ADVENTURE_METAL_MARIO_FIGHT,
         2,
         0,
         gm_801B4EB8,
@@ -524,7 +586,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x58,
+        ADVENTURE_FINAL_DESTINATION_INTRO,
         2,
         0,
         gm_801B3F40,
@@ -536,7 +598,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x59,
+        ADVENTURE_BOWSER_FIGHT,
         2,
         0,
         gm_801B4F44,
@@ -548,7 +610,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x5A,
+        ADVENTURE_BOWSERTOY_CUTSCENE,
         2,
         0,
         gm_801B4430,
@@ -560,7 +622,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x5B,
+        ADVENTURE_GIGATRANSFORM_CUTSCENE,
         2,
         0,
         gm_801B4430,
@@ -572,7 +634,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x5C,
+        ADVENTURE_GIGABOWSER_FIGHT,
         2,
         0,
         gm_801B4064,
@@ -584,7 +646,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x5D,
+        ADVENTURE_GIGADEFEATED_CUTSCENE,
         2,
         0,
         gm_801B4430,
@@ -596,7 +658,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x68,
+        ADVENTURE_COMING_SOON,
         2,
         0,
         NULL,
@@ -608,7 +670,7 @@ GameModeState gm_Mode_Adventure_States[] = {
         },
     },
     {
-        0x69,
+        ADVENTURE_GAME_OVER,
         2,
         0,
         gm_801B4254,
@@ -636,391 +698,391 @@ GameModeState gm_Mode_Adventure_States[] = {
 
 struct gm_803DE650_t gm_803DE650[] = {
     {
-        0x00,
+        ADVENTURE_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x003B,
         0x04,
         0x00,
-        CKIND_YOSHI,
-        CKIND_YOSHI,
-        CKIND_YOSHI,
+        CKind_Yoshi,
+        CKind_Yoshi,
+        CKind_Yoshi,
     },
     {
-        0x01,
+        ADVENTURE_MUSHROOM_KINGDOM,
         0x09,
         0x01A4,
         0x0000,
         0x003B,
         0x04,
         0x00,
-        CKIND_YOSHI,
-        CKIND_YOSHI,
-        CKIND_YOSHI,
+        CKind_Yoshi,
+        CKind_Yoshi,
+        CKind_Yoshi,
     },
     {
-        0x02,
+        ADVENTURE_LUIGI_CUTSCENE,
         0x00,
         0x0000,
         0x0000,
         0x003B,
         0x04,
         0x00,
-        CHKIND_NONE,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        ChKind_None,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x03,
+        ADVENTURE_MARIO_PEACH_FIGHT,
         0x00,
         0x00F0,
         0x0000,
         0x003C,
         0x03,
         0x00,
-        CKIND_MARIO,
-        CKIND_PEACH,
-        CHKIND_NONE,
+        CKind_Mario,
+        CKind_Peach,
+        ChKind_None,
     },
     {
-        0x08,
+        ADVENTURE_KONGO_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x003D,
         0x04,
         0x00,
-        CKIND_DONKEY,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Donkey,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x09,
+        ADVENTURE_TINYDK_FIGHT,
         0x00,
         0x00F0,
         0x0000,
         0x003D,
         0x03,
         0x00,
-        CKIND_DONKEY,
-        CKIND_DONKEY,
-        CHKIND_NONE,
+        CKind_Donkey,
+        CKind_Donkey,
+        ChKind_None,
     },
     {
-        0x0A,
+        ADVENTURE_GIANTDK_FIGHT,
         0x02,
         0x00F0,
         0x0000,
         0x003E,
         0x02,
         0x00,
-        CKIND_DONKEY,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Donkey,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x10,
+        ADVENTURE_MAZE_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x003F,
         0x04,
         0x00,
-        CKIND_LINK,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Link,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x11,
+        ADVENTURE_UNDERGROUND_MAZE,
         0x09,
         0x01A4,
         0x0000,
         0x003F,
         0x04,
         0x00,
-        CKIND_LINK,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Link,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x12,
+        ADVENTURE_ZELDA_FIGHT,
         0x00,
         0x00F0,
         0x0000,
         0x0040,
         0x02,
         0x00,
-        CKIND_ZELDA,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Zelda,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x18,
+        ADVENTURE_BRINSTAR_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x0041,
         0x04,
         0x00,
-        CKIND_SAMUS,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Samus,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x19,
+        ADVENTURE_SAMUS_FIGHT,
         0x00,
         0x00F0,
         0x0000,
         0x0041,
         0x02,
         0x00,
-        CKIND_SAMUS,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Samus,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x1A,
+        ADVENTURE_BRINSTAR_CUTSCENE,
         0x00,
         0x0000,
         0x0000,
         0x0042,
         0x04,
         0x00,
-        CHKIND_NONE,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        ChKind_None,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x1B,
+        ADVENTURE_ESCAPE_FROM_BRINSTAR,
         0x41,
         0x0028,
         0x0000,
         0x0042,
         0x04,
         0xFF,
-        CHKIND_NONE,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        ChKind_None,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x1C,
+        ADVENTURE_EXPLOSION_CUTSCENE,
         0x00,
         0x0000,
         0x0000,
         0x0042,
         0x04,
         0x00,
-        CHKIND_NONE,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        ChKind_None,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x20,
+        ADVENTURE_KIRBY_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x0043,
         0x04,
         0x00,
-        CKIND_KIRBY,
-        CKIND_KIRBY,
-        CKIND_KIRBY,
+        CKind_Kirby,
+        CKind_Kirby,
+        CKind_Kirby,
     },
     {
-        0x21,
+        ADVENTURE_KIRBY_FIGHT,
         0x00,
         0x00F0,
         0x0000,
         0x0043,
         0x02,
         0x00,
-        CKIND_KIRBY,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Kirby,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x22,
+        ADVENTURE_TEAMKIRBY_INTRO,
         0x00,
         0x0000,
         0x000F,
         0x0044,
         0x04,
         0x00,
-        CKIND_KIRBY,
-        CKIND_KIRBY,
-        CKIND_KIRBY,
+        CKind_Kirby,
+        CKind_Kirby,
+        CKind_Kirby,
     },
     {
-        0x23,
+        ADVENTURE_TEAMKIRBY_FIGHT,
         0x08,
         0x00F0,
         0x000F,
         0x0044,
         0x04,
         0x00,
-        CKIND_KIRBY,
-        CKIND_KIRBY,
-        CKIND_KIRBY,
+        CKind_Kirby,
+        CKind_Kirby,
+        CKind_Kirby,
     },
     {
-        0x24,
+        ADVENTURE_GIANTKIRBY_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x0045,
         0x04,
         0x00,
-        CHKIND_NONE,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        ChKind_None,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x25,
+        ADVENTURE_GIANTKIRBY_FIGHT,
         0x02,
         0x00F0,
         0x0000,
         0x0045,
         0x02,
         0x00,
-        CKIND_KIRBY,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Kirby,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x28,
+        ADVENTURE_CORNERIA_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x0046,
         0x04,
         0x00,
-        CKIND_FOX,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Fox,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x29,
+        ADVENTURE_FOX_FIGHT,
         0x00,
         0x00F0,
         0x0000,
         0x0046,
         0x02,
         0x00,
-        CKIND_FOX,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Fox,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x2A,
+        ADVENTURE_STARFOX_CUTSCENE,
         0x00,
         0x0000,
         0x0000,
         0x0047,
         0x04,
         0x00,
-        CKIND_FOX,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Fox,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x2B,
+        ADVENTURE_FOX_FALCO_FIGHT,
         0x00,
         0x00F0,
         0x0000,
         0x0047,
         0x02,
         0x00,
-        CKIND_FOX,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Fox,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x30,
+        ADVENTURE_POKEMON_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x0048,
         0x04,
         0x00,
-        CKIND_PIKACHU,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Pikachu,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x31,
+        ADVENTURE_POKEMON_FIGHT,
         0x08,
         0x00F0,
         0x000C,
         0x0048,
         0x04,
         0x00,
-        CKIND_PIKACHU,
-        CKIND_PICHU,
-        CKIND_PURIN,
+        CKind_Pikachu,
+        CKind_Pichu,
+        CKind_Purin,
     },
     {
-        0x38,
+        ADVENTURE_FZERO_CUTSCENE,
         0x00,
         0x0000,
         0x0000,
         0x0049,
         0x04,
         0x00,
-        CHKIND_NONE,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        ChKind_None,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x39,
+        ADVENTURE_FZERO_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x0049,
         0x04,
         0x00,
-        CKIND_CAPTAIN,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Captain,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x3A,
+        ADVENTURE_FZERO_GRAND_PRIX,
         0x41,
         0x00F0,
         0x0000,
         0x0049,
         0x04,
         0x00,
-        CHKIND_NONE,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        ChKind_None,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x3B,
+        ADVENTURE_CAPTAIN_FALCON_FIGHT,
         0x00,
         0x00F0,
         0x0000,
         0x004A,
         0x02,
         0x00,
-        CKIND_CAPTAIN,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Captain,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x40,
+        ADVENTURE_ONETT_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x004B,
         0x04,
         0x00,
-        CKIND_NESS,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Ness,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x41,
+        ADVENTURE_NESS_FIGHT,
         0x00,
         0x00F0,
         0x0000,
@@ -1035,148 +1097,148 @@ struct gm_803DE650_t gm_803DE650[] = {
         0x00,
     },
     {
-        0x48,
+        ADVENTURE_ICICLE_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x004C,
         0x04,
         0x00,
-        CKIND_POPONANA,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_PopoNana,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x49,
+        ADVENTURE_ICICLE_MOUNTAIN,
         0x09,
         0x00F0,
         0x0000,
         0x004C,
         0x04,
         0x00,
-        CKIND_POPONANA,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_PopoNana,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x50,
+        ADVENTURE_BATTLEFIELD_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x004E,
         0x04,
         0x00,
-        CKIND_BOY,
-        CKIND_GIRL,
-        CHKIND_NONE,
+        CKind_Boy,
+        CKind_Girl,
+        ChKind_None,
     },
     {
-        0x51,
+        ADVENTURE_WIREFRAME_FIGHT,
         0x08,
         0x00F0,
         0x000F,
         0x004E,
         0x06,
         0x00,
-        CKIND_BOY,
-        CKIND_GIRL,
-        CHKIND_NONE,
+        CKind_Boy,
+        CKind_Girl,
+        ChKind_None,
     },
     {
-        0x52,
+        ADVENTURE_METAL_CUTSCENE,
         0x00,
         0x0000,
         0x0000,
         0x004F,
         0x04,
         0x00,
-        CKIND_MARIO,
-        CKIND_LUIGI,
-        CHKIND_NONE,
+        CKind_Mario,
+        CKind_Luigi,
+        ChKind_None,
     },
     {
-        0x53,
+        ADVENTURE_METAL_MARIO_FIGHT,
         0x04,
         0x00F0,
         0x0000,
         0x004F,
         0x03,
         0x00,
-        CKIND_MARIO,
-        CKIND_LUIGI,
-        CHKIND_NONE,
+        CKind_Mario,
+        CKind_Luigi,
+        ChKind_None,
     },
     {
-        0x58,
+        ADVENTURE_FINAL_DESTINATION_INTRO,
         0x00,
         0x0000,
         0x0000,
         0x0050,
         0x04,
         0x00,
-        CKIND_KOOPA,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Koopa,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x59,
+        ADVENTURE_BOWSER_FIGHT,
         0x02,
         0x00F0,
         0x0000,
         0x0050,
         0x02,
         0x00,
-        CKIND_KOOPA,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Koopa,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x5A,
+        ADVENTURE_BOWSERTOY_CUTSCENE,
         0x00,
         0x0000,
         0x0000,
         0x0050,
         0x04,
         0x00,
-        CKIND_KOOPA,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_Koopa,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x5B,
+        ADVENTURE_GIGATRANSFORM_CUTSCENE,
         0x00,
         0x0000,
         0x0000,
         0x0051,
         0x04,
         0x00,
-        CKIND_GKOOPS,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_GKoops,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x5C,
+        ADVENTURE_GIGABOWSER_FIGHT,
         0x20,
         0x00F0,
         0x0000,
         0x0051,
         0x02,
         0x00,
-        CKIND_GKOOPS,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_GKoops,
+        ChKind_None,
+        ChKind_None,
     },
     {
-        0x5D,
+        ADVENTURE_GIGADEFEATED_CUTSCENE,
         0x00,
         0x00F0,
         0x0000,
         0x0051,
         0x02,
         0x00,
-        CKIND_GKOOPS,
-        CHKIND_NONE,
-        CHKIND_NONE,
+        CKind_GKoops,
+        ChKind_None,
+        ChKind_None,
     },
     { 0xFF },
 };
@@ -1212,21 +1274,21 @@ void gm_801B3F40(GameModeState* arg0)
     temp_r30 = gm_GetGameModeStateEnterData(arg0);
     temp_r31 = gm_8017E4C4(arg0->id);
     temp_r3 = gm_GetAdventureData();
-    temp_r3->x0.x7 = arg0->id;
+    temp_r3->x0.x0.mode = arg0->id;
     temp_r30->x1 = gm_8017BE84(arg0->id);
     temp_r30->x2 = temp_r31->x6;
-    temp_r30->x0 = temp_r3->x0.slot;
-    temp_ret |= lbAudioAx_80026E84(temp_r3->x0.ckind);
+    temp_r30->x0 = temp_r3->x0.x0.slot;
+    temp_ret |= lbAudioAx_80026E84(temp_r3->x0.x0.ckind);
     for (i = 0; i < 3; i++) {
         s8 ckind = temp_r3->x0.xC.x24[i].ckind;
-        if (ckind != CHKIND_NONE) {
+        if (ckind != ChKind_None) {
             temp_ret |= lbAudioAx_80026E84(ckind);
         }
     }
     for (i = 0; i < 3; i++) {
-        if (temp_r31->xA[i] != CHKIND_NONE) {
+        if (temp_r31->xA[i] != ChKind_None) {
             temp_ret |= lbAudioAx_80026E84(temp_r31->xA[i]);
-            if (temp_r31->xA[i] == CKIND_KIRBY) {
+            if (temp_r31->xA[i] == CKind_Kirby) {
                 temp_ret |= 0x200004000;
             }
         }
@@ -1264,11 +1326,11 @@ void gm_801B4064(GameModeState* arg0)
     temp_r27->x0.xA = temp_r31->x9;
     tmp = gm_80490910[getIndex(arg0->id)];
 
-    gm_8017CE34(temp_r28, temp_r27, temp_r31->xA, temp_r31->x4, var_r30,
+    gm_8017CE34(temp_r28, &temp_r27->x0, temp_r31->xA, temp_r31->x4, var_r30,
                 var_r29, temp_r31->x2, temp_r31->x6, gm_8017E48C(arg0), tmp);
     gm_LoadRumbleEnabled(temp_r28);
     if (temp_r31->x1 & 8) {
-        temp_r28->rules.x44 = gm_8017C838;
+        temp_r28->rules.on_match_start = gm_8017C838;
     }
 }
 
@@ -1277,7 +1339,7 @@ void gm_801B4170(GameModeState* arg0)
     MatchExitInfo* temp_r28 = gm_GetGameModeStateExitData(arg0);
     UnkAdventureData* temp_r31 = gm_GetAdventureData();
     setValUnk(arg0->id, temp_r28->x8);
-    if (gm_8017D7AC(temp_r28, &temp_r31->x0, 0x69) &&
+    if (gm_8017D7AC(temp_r28, &temp_r31->x0, ADVENTURE_GAME_OVER) &&
         gm_8017E4C4(arg0->id)[1].x0 == 0xFF)
     {
         gm_8017CBAC(temp_r31, gmMainLib_8015CDD4(), 0x16);
@@ -1301,8 +1363,8 @@ void gm_801B42E8(GameModeState* scene)
     CSSData* css = gm_GetGameModeStateEnterData(scene);
     struct gmm_x0_528_t* temp_r31 = gmMainLib_8015CDD4();
     gm_801B06B0(css, 0xC, temp_r31->c_kind, temp_r31->stocks, temp_r31->color,
-                temp_r31->x4, temp_r31->cpu_level,
-                gm_GetAdventureData()->x0.slot);
+                temp_r31->nametag, temp_r31->cpu_level,
+                gm_GetAdventureData()->x0.x0.slot);
 }
 
 void gm_801B4350(GameModeState* scene)
@@ -1316,12 +1378,12 @@ void gm_801B4350(GameModeState* scene)
         return;
     }
     gm_801B0730(css, &temp_r29->c_kind, &temp_r29->stocks, &temp_r29->color,
-                &temp_r29->x4, &temp_r29->cpu_level);
-    temp_r31->x0.ckind = temp_r29->c_kind;
-    temp_r31->x0.color = temp_r29->color;
-    temp_r31->x0.cpu_level = temp_r29->cpu_level;
-    temp_r31->x0.stocks = temp_r29->stocks;
-    temp_r31->x0.x4 = temp_r29->x4;
+                &temp_r29->nametag, &temp_r29->cpu_level);
+    temp_r31->x0.x0.ckind = temp_r29->c_kind;
+    temp_r31->x0.x0.color = temp_r29->color;
+    temp_r31->x0.x0.cpu_level = temp_r29->cpu_level;
+    temp_r31->x0.x0.stocks = temp_r29->stocks;
+    temp_r31->x0.x0.nametag = temp_r29->nametag;
     gm_SetNextGameModeStateId(temp_r29->x5 << 3);
     gm_80168F88();
 }
@@ -1339,10 +1401,10 @@ void gm_801B4430(GameModeState* scene)
     UnkAdventureData* temp_r3 = gm_GetAdventureData();
     u8 var_r0;
 
-    if (temp_r3->x0.ckind == CKIND_ZELDA && temp_r3->x0.xC.x12 != 0) {
-        var_r0 = CKIND_SEAK;
+    if (temp_r3->x0.x0.ckind == CKind_Zelda && temp_r3->x0.xC.x12 != 0) {
+        var_r0 = CKind_Seak;
     } else {
-        var_r0 = temp_r3->x0.ckind;
+        var_r0 = temp_r3->x0.x0.ckind;
     }
     temp_r30->x0 = var_r0;
     temp_r30->x1 = temp_r31->color;
@@ -1355,7 +1417,7 @@ void gm_801B44A0(GameModeState* scene)
 
     setValUnk(scene->id, temp_r30->x8);
 
-    if (gm_8017D7AC(temp_r30, &temp_r29->x0, 0x69)) {
+    if (gm_8017D7AC(temp_r30, &temp_r29->x0, ADVENTURE_GAME_OVER)) {
         /**
          * Luigi challenger approaching condition:
          * Reach the flagpole with 2 in the seconds place
@@ -1374,10 +1436,10 @@ void gm_801B45A4(GameModeState* scene)
     CutsceneData* temp_r31 = gm_GetGameModeStateEnterData(scene);
     UnkAdventureData* temp_r7 = gm_GetAdventureData();
     u8 colors[3] = { 0 };
-    s8 ckinds[3] = { CKIND_MARIO, CKIND_LUIGI, CHKIND_NONE };
+    s8 ckinds[3] = { CKind_Mario, CKind_Luigi, ChKind_None };
 
-    gmRegSetupEnemyColorTable(temp_r7->x0.ckind, temp_r7->x0.color, ckinds,
-                              colors);
+    gmRegSetupEnemyColorTable(temp_r7->x0.x0.ckind, temp_r7->x0.x0.color,
+                              ckinds, colors);
     temp_r31->x1 = colors[0];
     temp_r31->x3 = colors[1];
 }
@@ -1390,7 +1452,7 @@ void gm_801B461C(GameModeState* scene)
     if (gm_GetPreviousSceneIndex() == ADVENTURE_LUIGI_CUTSCENE) {
         StartMeleeData* data = gm_GetGameModeStateEnterData(scene);
         UnkAdventureData* adventure = gm_GetAdventureData();
-        data->players[1].ckind = CKIND_LUIGI;
+        data->players[1].ckind = CKind_Luigi;
         data->players[1].color = gm_804D68D8.x3;
         adventure->x74 = 1;
     }
@@ -1403,7 +1465,7 @@ void gm_801B4684(GameModeState* scene)
 
     setValUnk(scene->id, temp_r29->x8);
 
-    if (gm_8017D7AC(temp_r29, &temp_r31->x0, 0x69)) {
+    if (gm_8017D7AC(temp_r29, &temp_r31->x0, ADVENTURE_GAME_OVER)) {
         /// Unlock conditions for Luigi (match completed in under 1 minute)
         if (temp_r29->match_end.frame_count / 60 <= 60) {
             temp_r31->x75 = 1;
@@ -1420,7 +1482,7 @@ void gm_801B4768(GameModeState* scene)
     gm_801B4064(scene);
     for (i = 0; i < 3; i++) {
         if (data->players[i + 1].slot_type == Gm_PKind_Cpu) {
-            data->players[i + 1].x20 *= 0.5F;
+            data->players[i + 1].model_scale *= 0.5F;
         }
     }
 }
@@ -1433,14 +1495,15 @@ void gm_801B47FC(GameModeState* scene)
     temp_r30 = gm_GetGameModeStateEnterData(scene);
     temp_r31 = gm_GetAdventureData();
     gm_801B4064(scene);
-    temp_r30->rules.x50 = gm_8017E7A0;
-    temp_r31->x0.x7 = 0x20;
+    temp_r30->rules.on_match_end = gm_8017E7A0;
+    /// Continuing after a game over here resumes at Green Greens.
+    temp_r31->x0.x0.mode = ADVENTURE_KIRBY_INTRO;
 }
 
 static inline void gm_801B4860_inline0(GameModeState* scene)
 {
     MatchExitInfo* exit_info = gm_GetGameModeStateExitData(scene);
-    if (exit_info->match_end.result != OUTCOME_TIMEOUT) {
+    if (exit_info->match_end.outcome != OUTCOME_TIMEOUT) {
         UnkAdventureData* tmp = gm_GetAdventureData();
         tmp->x76 = 1;
     } else {
@@ -1455,7 +1518,7 @@ static inline void gm_801B4860_inline1(GameModeState* scene)
 
     setValUnk(scene->id, exit_info->x8);
 
-    if (gm_8017D7AC(exit_info, &adv_data->x0, 0x69) &&
+    if (gm_8017D7AC(exit_info, &adv_data->x0, ADVENTURE_GAME_OVER) &&
         gm_8017E4C4(scene->id)[1].x0 == 0xFF)
     {
         gm_8017CBAC(adv_data, gmMainLib_8015CDD4(), 0x16);
@@ -1474,11 +1537,11 @@ static void gm_8016A22C_inline(GameModeState* arg0, UnkAdventureData* temp_r29)
     struct gm_803DE650_t* temp_r25_2 = gm_8017E4C4(arg0->id);
     gm_8016A22C(temp_r25_2->xA[0], temp_r25_2->xA[1], temp_r25_2->xA[2],
                 temp_r25_2->xD, temp_r25_2->xE, temp_r25_2->xF, 1, 0, 1,
-                temp_r29->x0.ckind, temp_r29->x0.color,
-                temp_r29->x4C(count, temp_r29->x0.cpu_level, 0),
+                temp_r29->x0.x0.ckind, temp_r29->x0.x0.color,
+                temp_r29->x0.x4C(count, temp_r29->x0.x0.cpu_level, 0),
                 temp_r25_2->x4, gm_8017BE8C(temp_r25_2->xA), 1, 0, 1,
-                temp_r29->x64(count, temp_r29->x0.cpu_level),
-                temp_r29->x68(count, temp_r29->x0.cpu_level));
+                temp_r29->x0.x64(count, temp_r29->x0.x0.cpu_level),
+                temp_r29->x0.x68(count, temp_r29->x0.x0.cpu_level));
     temp_r29->x0.xC.x11 = 1;
 }
 
@@ -1501,9 +1564,9 @@ void gm_801B4974(GameModeState* arg0)
     temp_r25 = gm_GetGameModeStateEnterData(arg0);
     temp_r24 = gmMainLib_8015CDD4();
     temp_r3 = gm_GetAdventureData();
-    var_r4 = temp_r3->x0.ckind;
-    if (var_r4 == CKIND_ZELDA && temp_r3->x0.xC.x12 != 0) {
-        var_r4 = CKIND_SEAK;
+    var_r4 = temp_r3->x0.x0.ckind;
+    if (var_r4 == CKind_Zelda && temp_r3->x0.xC.x12 != 0) {
+        var_r4 = CKind_Seak;
     }
     temp_r25->x0 = var_r4;
     temp_r25->x1 = temp_r24->color;
@@ -1543,7 +1606,7 @@ void gm_801B4C5C(GameModeState* scene)
     setValUnk(scene->id, temp_r30->x8);
 
     /// If the player took longer than 30 seconds, skip the Giant Kirby battle.
-    if (gm_8017D7AC(temp_r30, &temp_r29->x0, 0x69) &&
+    if (gm_8017D7AC(temp_r30, &temp_r29->x0, ADVENTURE_GAME_OVER) &&
         temp_r30->match_end.frame_count / 60 > 30)
     {
         gm_SetNextGameModeStateId(
@@ -1560,8 +1623,8 @@ void gm_801B4D34(GameModeState* scene)
      * If Falco is unlocked,
      * the player will fight him instead about 1/3 of the time.
      */
-    if (gm_IsCKindUnlocked(CKIND_FALCO) && HSD_Randi(100) <= 33) {
-        temp_r30->x7C = CKIND_FALCO;
+    if (gm_IsCKindUnlocked(CKind_Falco) && HSD_Randi(100) <= 33) {
+        temp_r30->x7C = CKind_Falco;
     } else {
         temp_r30->x7C = temp_r31->xA[0];
     }
@@ -1572,13 +1635,13 @@ void gm_801B4DAC(GameModeState* scene)
     UnkAdventureData* temp_r30 = gm_GetAdventureData();
     StartMeleeData* data = gm_GetGameModeStateEnterData(scene);
     gm_801B4064(scene);
-    if (temp_r30->x7C == CKIND_FALCO) {
-        s8 ckinds[3] = { CKIND_FALCO, CHKIND_NONE, CHKIND_NONE };
+    if (temp_r30->x7C == CKind_Falco) {
+        s8 ckinds[3] = { CKind_Falco, ChKind_None, ChKind_None };
         u8 colors[3] = { 0 };
         colors[0] = data->players[1].color;
-        gmRegSetupEnemyColorTable(temp_r30->x0.ckind, temp_r30->x0.color,
+        gmRegSetupEnemyColorTable(temp_r30->x0.x0.ckind, temp_r30->x0.x0.color,
                                   ckinds, colors);
-        data->players[1].ckind = CKIND_FALCO;
+        data->players[1].ckind = CKind_Falco;
         data->players[1].color = colors[0];
     }
 }
@@ -1590,7 +1653,7 @@ void gm_801B4E58(GameModeState* scene)
     data = gm_GetGameModeStateEnterData(scene);
     gm_801B4064(scene);
     data->rules.x20 = 1 << 7; ///< enabling an item, which one?
-    data->rules.xB = 4;
+    data->rules.item_freq = 4;
 }
 
 void gm_801B4EB8(GameModeState* scene)
@@ -1600,9 +1663,9 @@ void gm_801B4EB8(GameModeState* scene)
     gm_801B4064(scene);
 
     /// If Luigi isn't unlocked, don't spawn him for this match.
-    if (!gm_IsCKindUnlocked(CKIND_LUIGI)) {
+    if (!gm_IsCKindUnlocked(CKind_Luigi)) {
         for (i = 0; i < 3; i++) {
-            if (data->players[i + 1].ckind == CKIND_LUIGI) {
+            if (data->players[i + 1].ckind == CKind_Luigi) {
                 data->players[i + 1].slot_type = Gm_PKind_NA;
             }
         }
@@ -1616,10 +1679,10 @@ void gm_801B4F44(GameModeState* scene)
     gm_801B4064(scene);
     for (i = 0; i < 3; i++) {
         if (data->players[i + 1].slot_type == Gm_PKind_Cpu) {
-            data->players[i + 1].x20 = 1.4F;
+            data->players[i + 1].model_scale = 1.4F;
         }
     }
-    data->rules.x50 = gm_8017E7FC;
+    data->rules.on_match_end = gm_8017E7FC;
 }
 
 void gm_801B4FCC(GameModeState* scene)
@@ -1627,7 +1690,7 @@ void gm_801B4FCC(GameModeState* scene)
     MatchExitInfo* temp_r30 = gm_GetGameModeStateExitData(scene);
     UnkAdventureData* temp_r29 = gm_GetAdventureData();
     setValUnk(scene->id, temp_r30->x8);
-    gm_8017D7AC(temp_r30, &temp_r29->x0, 0x69);
+    gm_8017D7AC(temp_r30, &temp_r29->x0, ADVENTURE_GAME_OVER);
 }
 
 void gm_801B5078(GameModeState* scene)
@@ -1644,13 +1707,15 @@ void gm_801B50C4(GameModeState* scene)
     UnkAdventureData* temp_r30 = gm_GetAdventureData();
 
     UnkAdventureData* temp_r3 = gm_GetAdventureData();
-    if (temp_r3->x0.stocks == temp_r31->match_end.player_standings[0].stocks) {
+    if (temp_r3->x0.x0.stocks ==
+        temp_r31->match_end.player_standings[0].stocks)
+    {
         temp_r3->x78 = 1;
     }
 
     setValUnk(scene->id, temp_r31->x8);
 
-    gm_8017D7AC(temp_r31, &temp_r30->x0, 0x69);
+    gm_8017D7AC(temp_r31, &temp_r30->x0, ADVENTURE_GAME_OVER);
 }
 
 void gm_801B518C(GameModeState* scene)
@@ -1664,11 +1729,11 @@ void gm_Mode_Adventure_OnInit(void)
     struct gmm_x0_528_t* temp_r3;
 
     temp_r3 = gmMainLib_8015CDD4();
-    temp_r3->c_kind = CHKIND_NONE;
+    temp_r3->c_kind = ChKind_None;
     temp_r3->color = 0;
     temp_r3->stocks = 3;
     temp_r3->cpu_level = 0;
-    temp_r3->x4 = 0x78;
+    temp_r3->nametag = GM_NAMETAG_COUNT;
     temp_r3->x5 = 0;
 }
 
@@ -1689,18 +1754,18 @@ void gm_Mode_Adventure_OnLoad(void)
     }
 
     gm_8017DB58(data->x0.xC.x24);
-    data->x0.slot = gm_801677F0();
-    data->x48 = gm_8017E500;
-    data->x4C = gm_8017E5C8;
-    data->x50 = gm_8017E630;
-    data->x54 = gm_8017E5FC;
-    data->x64 = gm_8017E528;
-    data->x68 = gm_8017E578;
-    data->x58 = gm_8017E704;
-    data->x5C = gm_8017E76C;
-    data->x60 = gm_8017E738;
-    data->x6C = gm_8017E664;
-    data->x70 = gm_8017E6B4;
+    data->x0.x0.slot = gm_801677F0();
+    data->x0.x48 = gm_8017E500;
+    data->x0.x4C = gm_8017E5C8;
+    data->x0.x50 = gm_8017E630;
+    data->x0.x54 = gm_8017E5FC;
+    data->x0.x64 = gm_8017E528;
+    data->x0.x68 = gm_8017E578;
+    data->x0.x58 = gm_8017E704;
+    data->x0.x5C = gm_8017E76C;
+    data->x0.x60 = gm_8017E738;
+    data->x0.x6C = gm_8017E664;
+    data->x0.x70 = gm_8017E6B4;
     gm_SetGameModeStateId(ADVENTURE_BACK_TO_CSS);
     gm_80172174();
     Ground_801C5A28();

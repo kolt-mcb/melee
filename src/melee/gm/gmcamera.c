@@ -1,34 +1,34 @@
 #include "gmcamera.h"
 
+#include <Runtime/platform.h>
+
+#include <sysdolphin/baselib/forward.h>
+
 #include <placeholder.h>
-#include <platform.h>
 
-#include "baselib/archive.h"
-#include "baselib/controller.h"
-
-#include "baselib/forward.h"
-
-#include "baselib/gobj.h"
-#include "baselib/gobjgxlink.h"
-#include "baselib/gobjobject.h"
-#include "baselib/gobjproc.h"
-#include "baselib/jobj.h"
-#include "baselib/sislib.h"
-#include "cm/cmsnap.h"
-#include "dolphin/pad.h"
-#include "gm/gm_1601.h"
-#include "gm/gm_16AE.h"
-#include "gm/gm_1A45.h"
-#include "gm/gmpause.h"
-#include "gm/types.h"
-#include "if/ifall.h"
-#include "lb/lbarchive.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbcardnew.h"
-#include "lb/lbsnap.h"
-#include "lb/lbspdisplay.h"
-#include "mn/inlines.h"
-#include "sc/types.h"
+#include "gm_1601.h"
+#include "gmpause.h"
+#include "gmscene.h"
+#include "gmvs.h"
+#include "types.h"
+#include <dolphin/pad.h>
+#include <melee/cm/cmsnap.h>
+#include <melee/if/ifall.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbcardnew.h>
+#include <melee/lb/lbsnap.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/mn/inlines.h>
+#include <melee/sc/types.h>
+#include <sysdolphin/baselib/archive.h>
+#include <sysdolphin/baselib/controller.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/sislib.h>
 
 typedef struct _SisLibUnkStruct2 {
     /*0x00*/ u8 x0_padding[0x8 - 0x0];
@@ -260,21 +260,21 @@ static inline void gmCamera_FreeTextsWithZero(HSD_Text* zero)
 
 void gmCamera_801A26C0(void)
 {
-    lbl_8046B6A0_t* hud;
+    VsSceneController* hud;
     PAD_STACK(4);
 
-    hud = gm_16AE_GetUnkData_0();
-    if (gm_801A45E8(3)) {
-        gm_801A4674(3);
-        if (gm_801A45E8(1)) {
-            gm_801A0FEC(hud->pauser, 1);
+    hud = gmVs_GetSceneController();
+    if (gm_GetDbPauseFlag(3)) {
+        gm_ClearDbPauseFlag(3);
+        if (gm_GetDbPauseFlag(1)) {
+            gm_801A0FEC(hud->state.pauser, 1);
         } else {
             lbAudioAx_80024E84(0);
             ifAll_802F33CC();
             HSD_PadRumbleUnpauseAll();
         }
-        hud->hud_enabled = 1;
-        hud->unk_3 = 0;
+        hud->state.hud_enabled = 1;
+        hud->state.unk_3 = 0;
     }
     gmCamera_801A26C0_FreeTexts(&gmCamera_VsCamUiState);
 }
@@ -296,22 +296,22 @@ void gmCamera_801A2798(void)
 void gmCamera_801A2800(void)
 {
     HSD_JObj* jobj;
-    lbl_8046B6A0_t* temp_r3;
+    VsSceneController* temp_r3;
 
-    temp_r3 = gm_16AE_GetUnkData_0();
+    temp_r3 = gmVs_GetSceneController();
     gmCamera_VsCamUiState.x10 = 0;
     lb_80011E24(gmCamera_VsCamUiState.x8, &jobj, 2, -1);
     HSD_JObjReqAnimAll(jobj, 0.0f);
-    gm_801A4634(3);
-    if (gm_801A45E8(1) != 0) {
-        gm_801A10FC(temp_r3->pauser);
+    gm_SetDbPauseFlag(3);
+    if (gm_GetDbPauseFlag(1) != 0) {
+        gm_801A10FC(temp_r3->state.pauser);
     } else {
         lbAudioAx_80024E84(1);
         ifAll_802F3394();
         HSD_PadRumblePauseAll();
     }
-    temp_r3->hud_enabled = 0;
-    temp_r3->unk_3 = 1;
+    temp_r3->state.hud_enabled = 0;
+    temp_r3->state.unk_3 = 1;
     cmSnap_800315C8();
 }
 
@@ -319,9 +319,9 @@ void gmCamera_801A28AC(void)
 {
     if (++gmCamera_VsCamUiState.x10 > 2) {
         void* snap_buf = cmSnap_80031618();
-        gmCamera_VsCamUiState.x1C = snap_buf;
+        gmCamera_VsCamUiState.snap_image = snap_buf;
         if (snap_buf) {
-            if (lbSnap_8001DC0C(gmCamera_VsCamUiState.x1C) != 0) {
+            if (lbSnap_8001DC0C(gmCamera_VsCamUiState.snap_image) != 0) {
                 gmCamera_VsCamUiState.x20 = lbSnap_8001DF20();
                 gmCamera_801A3048(2);
             } else {
@@ -528,7 +528,7 @@ void gmCamera_801A2FBC(void)
 
 void gmCamera_801A2FFC(void)
 {
-    s32 i = lb_8001B6F8();
+    s32 i = lbCardNew_CompleteNextTask();
     if (i != 0xB) {
         if (i == 0) {
             gmCamera_801A3048(0);
@@ -561,7 +561,7 @@ void gmCamera_801A30E4(void)
     HSD_JObj** px8;
     s32 i;
     if ((gmCamera_VsCamStateTable[*pxc].flags.x0 != 0) && (gcus->x14 != 0) &&
-        (gm_801A45E8(1) == 0))
+        (gm_GetDbPauseFlag(1) == 0))
     {
         HSD_JObjClearFlagsAll(gcus->x4, JOBJ_HIDDEN);
     } else {

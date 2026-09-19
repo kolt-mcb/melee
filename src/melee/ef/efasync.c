@@ -1,23 +1,26 @@
 #include "efasync.h"
 
+#include <math.h>
+#include <stdarg.h>
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
+
 #include "efdata.h"
 #include "eflib.h"
 #include "efsync.h"
 #include "types.h"
-
-#include "baselib/gobj.h"
-#include "baselib/gobjproc.h"
-#include "baselib/particle.h"
-#include "baselib/psstructs.h"
-#include "baselib/random.h"
-#include "cm/camera.h"
-#include "lb/lb_00B0.h"
-#include "lb/lbarchive.h"
-#include "lb/lbdvd.h"
-
-#include <math.h>
-#include <stdarg.h>
-#include <baselib/generator.h>
+#include <melee/cm/camera.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbarchive.h>
+#include <melee/lb/lbdvd.h>
+#include <sysdolphin/baselib/generator.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/particle.h>
+#include <sysdolphin/baselib/psstructs.h>
+#include <sysdolphin/baselib/random.h>
 
 HSD_ObjAllocData efAsync_AllocData;
 
@@ -77,9 +80,9 @@ void* efAsync_Dispatch(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
      * and nothing in the particle or generator lists shows which request went
      * missing. */
     if (getenv("MELEE_EFREQ") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[EFREQ] gframe=%u id=%x gobj=%p\n",
-                (unsigned) gm_8016AEDC(), (unsigned) gfx_id, (void*) gobj);
+                (unsigned) gm_GetFrameCount(), (unsigned) gfx_id, (void*) gobj);
     }
 #endif
     Vec3 translate;
@@ -1139,8 +1142,7 @@ void* efAsync_Dispatch(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
     while (efLib_AnimCount != 0) {
         count = efLib_AnimCount - 1;
         efLib_AnimCount = count;
-        HSD_JObjAnimAll(
-            ((EF_ParamEntry*) (((u32*) efLib_AnimQueue) + count))->gobj);
+        HSD_JObjAnimAll(((HSD_JObj**) efLib_AnimQueue)[count]);
     }
 #if 1
 #else
@@ -1434,7 +1436,7 @@ void efAsync_QueueProcessDeferred(HSD_GObj* gobj,
         break;
     case EF_SPAWN_CAMERA_SHAKE:
         lb_8000B1CC(jobj, &queued_effect->params, &sp10);
-        Camera_80030E44(gfx_id, &sp10);
+        Camera_RequestQuake(gfx_id, &sp10);
         break;
     default:
         HSD_ASSERTREPORT(0x7CU, 0, "[EfASync] unknown type %d\n", spawn_kind,
@@ -1485,9 +1487,9 @@ void efAsync_Spawn(HSD_GObj* gobj, void* queue_head, u32 spawn_kind,
     va_start(vlist, jobj);
 #if BUILD_TARGET_PC
     if (getenv("MELEE_EFQ") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[EFQ] gframe=%u kind=%u gfx=0x%x\n",
-                (unsigned) gm_8016AEDC(), (unsigned) spawn_kind,
+                (unsigned) gm_GetFrameCount(), (unsigned) spawn_kind,
                 (unsigned) gfx_id);
     }
 #endif
@@ -1538,17 +1540,19 @@ void efAsync_Spawn(HSD_GObj* gobj, void* queue_head, u32 spawn_kind,
     va_end(vlist);
 #if BUILD_TARGET_PC
     if (getenv("MELEE_EFREQ") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         fprintf(stderr,
                 "[EFQUEUE] gframe=%u id=%x kind=%u defer=%d ret=%p\n",
-                (unsigned) gm_8016AEDC(), (unsigned) queued->gfx_id,
+                (unsigned) gm_GetFrameCount(), (unsigned) queued->gfx_id,
                 (unsigned) spawn_kind,
-                (int) ((HSD_GObj_804D7838 != NULL) &&
-                       (HSD_GObj_804D7838->s_link < 9U)),
+                (int) ((HSD_GObj_CurrentInvokedProc != NULL) &&
+                       (HSD_GObj_CurrentInvokedProc->s_link < 9U)),
                 __builtin_return_address(0));
     }
 #endif
-    if ((HSD_GObj_804D7838 != NULL) && (HSD_GObj_804D7838->s_link < 9U)) {
+    if ((HSD_GObj_CurrentInvokedProc != NULL) &&
+        (HSD_GObj_CurrentInvokedProc->s_link < 9U))
+    {
         queued->next = ((EF_QueuedEffect*) queue_head)->next;
         ((EF_QueuedEffect*) queue_head)->next = queued;
         return;

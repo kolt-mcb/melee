@@ -1,14 +1,14 @@
 #ifndef GALE01_1C87D0
 #define GALE01_1C87D0
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "gr/forward.h"
-#include "lb/forward.h"
-#include <baselib/forward.h>
+#include <melee/gr/forward.h>
 #include <melee/it/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
-#include <baselib/gobj.h>
+#include <sysdolphin/baselib/gobj.h>
 
 /* 1C8D44 */ Item_GObj*
 grMaterial_801C8D44(int arg0, int arg1, Ground* arg2, Vec3* arg3, int arg4,
@@ -40,14 +40,6 @@ grMaterial_801C8CFC(int, int, Ground*, HSD_JObj*,
 /* 1C9490 */ void grMaterial_801C9490(Item_GObj* gobj, CommandInfo* cmd);
 /* 1C94D8 */ void grMaterial_801C94D8(void*);
 /* 1C95C4 */ void grMaterial_801C95C4(HSD_GObj*);
-/* The second argument is a colour-overlay script pointer that the original
- * passes through an int. Pointer-sized here, so a stage's script survives
- * the trip. */
-#if BUILD_TARGET_PC
-typedef intptr_t grMaterialArg;
-#else
-typedef int grMaterialArg;
-#endif
 /* A colour-overlay script as it comes out of a stage's parameter block.
  *
  * On the console these fields hold pointers, relocated when the archive was
@@ -63,12 +55,12 @@ typedef int grMaterialArg;
  */
 #if BUILD_TARGET_PC
 const u8* pc_grconv_stage_script(u32 off);
-#define GR_COLOR_SCRIPT(v) ((grMaterialArg) pc_grconv_stage_script((u32) (v)))
+#define GR_COLOR_SCRIPT(v) ((void*) pc_grconv_stage_script((u32) (v)))
 #else
 #define GR_COLOR_SCRIPT(v) (v)
 #endif
 
-/* 1C9604 */ void grMaterial_801C9604(HSD_GObj* bg, grMaterialArg, bool);
+/* 1C9604 */ void grMaterial_801C9604(HSD_GObj* bg, void*, bool);
 /* 1C9664 */ void fn_801C9664(Item_GObj* gobj, CommandInfo* cmd, int arg2);
 /* 1C9698 */ void grMaterial_801C9698(HSD_GObj*);
 

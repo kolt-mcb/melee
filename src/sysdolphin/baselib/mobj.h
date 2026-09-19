@@ -1,16 +1,14 @@
 #ifndef _mobj_h_
 #define _mobj_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/class.h"
-
-#include "baselib/forward.h" // IWYU pragma: export
-
-#include "baselib/texp.h"
-#include "baselib/tobj.h"
+#include <sysdolphin/baselib/forward.h> // IWYU pragma: export
 
 #include <dolphin/gx.h>
+#include <sysdolphin/baselib/class.h>
+#include <sysdolphin/baselib/texp.h>
+#include <sysdolphin/baselib/tobj.h>
 
 #define MOBJ_ANIM 0x4
 #define TOBJ_ANIM 0x10

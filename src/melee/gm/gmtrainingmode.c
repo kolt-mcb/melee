@@ -1,23 +1,22 @@
 #include "gmtrainingmode.h"
 
+#include <melee/lb/forward.h>
+
+#include "gm_1884.h"
+#include "gm_1A3F.h"
 #include "gm_1B03.h"
-
-#include "gm/gm_1884.h"
-#include "gm/gm_1A3F.h"
-
-#include "lb/forward.h"
-
-#include "melee/gm/gm_unsplit.h"
-#include "melee/gm/gmmain_lib.h"
-#include "melee/gm/types.h"
-#include "melee/lb/lbaudio_ax.h"
-#include "melee/lb/lbcardgame.h"
-#include "melee/lb/lbcardnew.h"
-#include "melee/lb/lbdvd.h"
-#include "melee/lb/lbtime.h"
-#include "melee/lb/types.h"
-#include "melee/mn/types.h"
-#include "mn/inlines.h"
+#include "gm_unsplit.h"
+#include "gmmain_lib.h"
+#include "types.h"
+#include <dolphin/pad.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbcardgame.h>
+#include <melee/lb/lbcardnew.h>
+#include <melee/lb/lbdvd.h>
+#include <melee/lb/lbtime.h>
+#include <melee/lb/types.h>
+#include <melee/mn/inlines.h>
+#include <melee/mn/types.h>
 
 /* 1B1B74 */ static void gm_801B1B74(GameModeState*);
 /* 1B1C24 */ static void gm_801B1C24(GameModeState*);
@@ -73,22 +72,18 @@ GameModeState gm_Mode_Training_States[] = {
     { -1 },
 };
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void gm_801B1B74(GameModeState* arg0)
 {
     VsModeData* vs_data;
     CSSData* css;
     PAD_STACK(8);
 
-    vs_data = &gmMainLib_804D3EE0->unk_D10;
+    vs_data = &gmMainLib_804D3EE0->modes.table[GmVsMode_Training];
     css = gm_GetGameModeStateEnterData(arg0);
     if (gm_804D68C1 != 0) {
-        lb_8001C550();
-        lb_8001D164(0);
-        lb_8001CE00();
+        lbCardNew_AllocWorkArea();
+        lbCardGame_LoadArchive(0);
+        lbCardGame_SaveChanges();
     }
     gm_801B06B0(css, 0x17U, vs_data->start.players[0].ckind, 1,
                 vs_data->start.players[0].color,
@@ -99,9 +94,6 @@ void gm_801B1B74(GameModeState* arg0)
     lbDvd_SetupVsPreloadCache();
     gm_804D68C1 = lbTime_8000AF74((u32) gm_804D68C1, 1);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 static void gm_801B07E8_layer(CSSData* css_data, s8* c_kind, s8* stocks,
                               s8* color, s8* arg4, u8* level)
@@ -111,7 +103,7 @@ static void gm_801B07E8_layer(CSSData* css_data, s8* c_kind, s8* stocks,
 
 void gm_801B1C24(GameModeState* arg0)
 {
-    VsModeData* vs = &gmMainLib_804D3EE0->unk_D10;
+    VsModeData* vs = &gmMainLib_804D3EE0->modes.table[GmVsMode_Training];
     CSSData* css = gm_GetGameModeStateExitData(arg0);
     s32 i;
     struct GameCache* cache;
@@ -122,7 +114,7 @@ void gm_801B1C24(GameModeState* arg0)
         gm_ChangeGameModeAfterCurrentScene(GM_MENU);
         return;
     }
-    gm_80167A14(vs->start.players);
+    gm_SetupAllPlayerDefaults(vs->start.players);
     gm_801B0730(css, &vs->start.players[0].ckind, NULL,
                 &vs->start.players[0].color, &vs->start.players[0].nametag,
                 NULL);
@@ -130,15 +122,16 @@ void gm_801B1C24(GameModeState* arg0)
                       (s8*) &vs->start.players[1].color,
                       (s8*) &vs->start.players[1].nametag, NULL);
     j = (i = 2);
-    vs->start.players[1].xE = 0;
+    vs->start.players[1].cpu_kind = 0;
     for (; i < 4; i++, j++) {
         vs->start.players[i] = vs->start.players[1];
-        vs->start.players[i].color = (vs->start.players[i - 1].color + 1) %
-                                     gm_80169238(vs->start.players[j].ckind);
+        vs->start.players[i].color =
+            (vs->start.players[i - 1].color + 1) %
+            gm_GetNumCostumesForCKind(vs->start.players[j].ckind);
         if (vs->start.players[i].color == vs->start.players[0].color) {
             vs->start.players[i].color =
                 (vs->start.players[i].color + 1) %
-                gm_80169238(vs->start.players[j].ckind);
+                gm_GetNumCostumesForCKind(vs->start.players[j].ckind);
         }
         vs->start.players[i].slot_type = 3;
     }
@@ -190,14 +183,14 @@ void gm_801B1EEC(GameModeState* arg0)
     SSSData* sss;
     s16 stkind;
 
-    vs_data = &gmMainLib_804D3EE0->unk_D10;
+    vs_data = &gmMainLib_804D3EE0->modes.table[GmVsMode_Training];
     sss = gm_GetGameModeStateExitData(arg0);
     if (sss->start_game == 0) {
         gm_SetNextGameModeStateId(0);
         return;
     }
     stkind = sss->vs.start.rules.stkind;
-    gm_80473814.x6 = stkind;
+    gm_80473814.stage_id = stkind;
     vs_data->start.rules.stkind = stkind;
     lbAudioAx_80026F2C(0x18);
     lbAudioAx_8002702C(8, lbAudioAx_80026EBC(vs_data->start.rules.stkind));
@@ -206,17 +199,13 @@ void gm_801B1EEC(GameModeState* arg0)
 
 void fn_801B1F6C(int unused) {}
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void gm_801B1F70(GameModeState* arg0)
 {
     VsModeData* vs;
     StartMeleeData* data;
     int i;
 
-    vs = &gmMainLib_804D3EE0->unk_D10;
+    vs = &gmMainLib_804D3EE0->modes.table[GmVsMode_Training];
     data = gm_GetGameModeStateEnterData(arg0);
     gm_SetupRulesDefaults(&data->rules);
 
@@ -226,7 +215,7 @@ void gm_801B1F70(GameModeState* arg0)
     data->rules.x3_6 = true;
     data->rules.x2_5 = false;
     data->rules.x2_1 = true;
-    gm_80167A14(data->players);
+    gm_SetupAllPlayerDefaults(data->players);
 
     for (i = 0; i < 4; i++) {
         data->players[i] = vs->start.players[i];
@@ -234,14 +223,14 @@ void gm_801B1F70(GameModeState* arg0)
         data->players[i].xD_b2 = true;
     }
 
-    gm_801B0620(&data->players[0], vs->start.players[0].ckind,
-                vs->start.players[0].color, 1, gm_804D68C0);
+    gm_SetupHumanPlayer(&data->players[0], vs->start.players[0].ckind,
+                        vs->start.players[0].color, 1, gm_804D68C0);
 
     for (i = 1; i < 4; i++) {
         PlayerInitData* var_r30 = &data->players[i];
-        gm_801B0664(&data->players[i], vs->start.players[i].ckind,
-                    vs->start.players[i].color, 1,
-                    vs->start.players[i].slot - 1);
+        gm_SetupCpuPlayer(&data->players[i], vs->start.players[i].ckind,
+                          vs->start.players[i].color, 1,
+                          vs->start.players[i].slot - 1);
         if (i - 1 != 0) {
             data->players[i].slot_type = Gm_PKind_NA;
         }
@@ -250,9 +239,6 @@ void gm_801B1F70(GameModeState* arg0)
     gm_LoadRumbleEnabled(data);
     gm_80189CDC(data);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void gm_801B2204(GameModeState* arg0)
 {
@@ -274,18 +260,18 @@ void gm_801B2204(GameModeState* arg0)
 
 void gm_Mode_Training_OnInit(void)
 {
-    VsModeData* temp_r31 = &gmMainLib_804D3EE0->unk_D10;
+    VsModeData* temp_r31 = &gmMainLib_804D3EE0->modes.table[GmVsMode_Training];
     int i;
 
-    gm_80167B50(temp_r31);
+    gm_InitVsMode(temp_r31);
 
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < PAD_MAX_CONTROLLERS; i++) {
         temp_r31->start.players[i].color = i;
-        temp_r31->start.players[i].xE = 0;
+        temp_r31->start.players[i].cpu_kind = 0;
         if (i != 0) {
-            temp_r31->start.players[1].ckind = CHKIND_NONE;
+            temp_r31->start.players[1].ckind = ChKind_None;
         }
-        gm_80473814.players[i] = temp_r31->start.players[i];
+        gm_80473814.saved_players[i] = temp_r31->start.players[i];
     }
 }
 

@@ -3,19 +3,17 @@
 #ifndef MELEE_IT_ITCHARITEMS_H
 #define MELEE_IT_ITCHARITEMS_H
 
-#include "platform.h"
+#include <Runtime/platform.h>
 
-#include "baselib/forward.h"
-
-#include "gm/types.h"
-
-#include "it/forward.h"
-#include "lb/forward.h"
-
-#include "lb/types.h"
+#include <melee/it/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
-#include <baselib/jobj.h>
+#include <melee/ft/types.h>
+#include <melee/gm/types.h>
+#include <melee/lb/types.h>
+#include <sysdolphin/baselib/jobj.h>
 
 typedef struct itCLinkMilk_ItemVars {
     /* +0 ip+DD4 */ Fighter_GObj* x0;
@@ -562,7 +560,7 @@ typedef struct itPeachTurnipAttributes {
     struct {
         s32 x0_odds;
         s32 x4_damage;
-    } x8 UNK_SIZE_ARRAY;
+    } x8[8];
 } itPeachTurnipAttributes;
 
 typedef struct itPeachTurnip_ItemVars {
@@ -836,7 +834,7 @@ typedef struct itUnk4_ItemVars {
     /*  +0 ip+DD4 */ u8 pad[0x18];
     /*  +18 ip+DEC */ u8 xDEC_b0 : 1;
     /*  +18 ip+DEC */ u8 xDEC_b1 : 1;
-    /*  +1C ip+DF0 */ Mtx xDF0;
+    /*  +1C ip+DF0 */ Fighter_x1614_t xDF0;
 } itUnk4_ItemVars;
 
 typedef struct itGamewatchchef_ItemVars {

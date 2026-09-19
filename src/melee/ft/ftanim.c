@@ -9,24 +9,24 @@ extern HSD_AnimJoint* pc_ftconv_partanim(struct ftData_x1C* rec, int k);
 #include "port/pc_ptr.h"
 #endif
 
-#include "placeholder.h"
+#include <placeholder.h>
 
+#include "fighter.h"
+#include "ftaction.h"
+#include "ftcommon.h"
+#include "ftdata.h"
+#include "ftparts.h"
+#include "inlines.h"
+#include "kinds/ftCommon/ftCo_Attack100.h"
+#include "types.h"
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lbanim.h>
+#include <melee/lb/lbvector.h>
 #include <sysdolphin/baselib/aobj.h>
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/jobj.h>
 #include <sysdolphin/baselib/mtx.h>
 #include <sysdolphin/baselib/object.h>
-#include <melee/ft/chara/ftCommon/ftCo_Attack100.h>
-#include <melee/ft/fighter.h>
-#include <melee/ft/ftaction.h>
-#include <melee/ft/ftcommon.h>
-#include <melee/ft/ftdata.h>
-#include <melee/ft/ftparts.h>
-#include <melee/ft/inlines.h>
-#include <melee/ft/types.h>
-#include <melee/lb/lb_00B0.h>
-#include <melee/lb/lbanim.h>
-#include <melee/lb/lbvector.h>
 
 static HSD_AnimJoint* ftAnim_804590D8[30];
 static HSD_MatAnimJoint* ftAnim_804590D8_unk[30];
@@ -436,13 +436,13 @@ void ftAnim_8006EBE8(HSD_GObj* gobj, float anim_start, float anim_rate,
             bl6 = e != NULL ? atoi(e) : -1;
         }
         if (bl6 >= 0) {
-            extern u32 gm_8016AEDC(void);
+            extern u32 gm_GetFrameCount(void);
             extern u32 pc_frame_number;
-            if ((int) gm_8016AEDC() == bl6) {
+            if ((int) gm_GetFrameCount() == bl6) {
                 fprintf(stderr,
                         "[CHANGE] gframe=%u pcf=%u p%d start=%08x rate=%08x "
                         "blendlen=%08x from=%p\n",
-                        (unsigned) gm_8016AEDC(),
+                        (unsigned) gm_GetFrameCount(),
                         (unsigned) pc_frame_number, (int) fp->player_id,
                         *(const unsigned*) &anim_start,
                         *(const unsigned*) &anim_rate,
@@ -782,8 +782,8 @@ void ftAnim_8006F4C8(Fighter* fp, bool do_blending, FigaTree* tree)
                 bl4 = e != NULL ? atoi(e) : -1;
             }
             if (bl4 >= 0) {
-                extern u32 gm_8016AEDC(void);
-                if ((int) gm_8016AEDC() == bl4) {
+                extern u32 gm_GetFrameCount(void);
+                if ((int) gm_GetFrameCount() == bl4) {
                     fprintf(stderr, "[WALK] attach p%d i=%d n=%d skip=%d\n",
                             (int) fp->player_id, i, (int) *cur_node,
                             fp->parts[i].flags_b0 || fp->parts[i].flags_b5);
@@ -1052,8 +1052,8 @@ void ftAnim_8006FB88(Fighter* fp, Fighter_Part part, HSD_Joint* joint)
                 bl5 = e != NULL ? atoi(e) : -1;
             }
             if (bl5 >= 0) {
-                extern u32 gm_8016AEDC(void);
-                if ((int) gm_8016AEDC() == bl5) {
+                extern u32 gm_GetFrameCount(void);
+                if ((int) gm_GetFrameCount() == bl5) {
                     fprintf(stderr, "[WALK] seed p%d i=%d\n",
                             (int) fp->player_id, i);
                 }
@@ -1127,8 +1127,8 @@ void ftAnim_8006FCE4(Fighter* fp, bool do_blending)
                 blat2 = e != NULL ? atoi(e) : -1;
             }
             if (blat2 >= 0) {
-                extern u32 gm_8016AEDC(void);
-                if ((int) gm_8016AEDC() == blat2) {
+                extern u32 gm_GetFrameCount(void);
+                if ((int) gm_GetFrameCount() == blat2) {
                     fprintf(stderr,
                             "[REMAP] p%d kind=%d from=%d i=%d part=%d "
                             "b1=%d b0=%d b5=%d b3=%d blend=%d n=%d\n",
@@ -1175,13 +1175,13 @@ void ftAnim_8006FE08(Fighter* fp, bool do_blending)
             blat3 = e != NULL ? atoi(e) : -1;
         }
         if (blat3 >= 0) {
-            extern u32 gm_8016AEDC(void);
+            extern u32 gm_GetFrameCount(void);
             extern u32 pc_frame_number;
-            if ((int) gm_8016AEDC() == blat3) {
+            if ((int) gm_GetFrameCount() == blat3) {
                 fprintf(stderr,
                         "[ATTACH] gframe=%u pcf=%u p%d kind=%d x597=%d "
                         "blend=%d x8A4=%08x tree=%p\n",
-                        (unsigned) gm_8016AEDC(),
+                        (unsigned) gm_GetFrameCount(),
                         (unsigned) pc_frame_number, (int) fp->player_id,
                         (int) fp->kind, (int) fp->x597_bits,
                         (int) do_blending,
@@ -1226,8 +1226,8 @@ void ftAnim_8006FE9C(Fighter* fp, Fighter_Part start, float t, float t_inv)
         {
 #if BUILD_TARGET_PC
             if (blat >= 0) {
-                extern u32 gm_8016AEDC(void);
-                if ((int) gm_8016AEDC() == blat) {
+                extern u32 gm_GetFrameCount(void);
+                if ((int) gm_GetFrameCount() == blat) {
                     fprintf(stderr,
                             "[BLPART] p%d i=%d joint=%p j2=%p b4=%d\n",
                             (int) fp->player_id, i,
@@ -1365,7 +1365,7 @@ void ftAnim_80070308(Fighter_GObj* fighter_gobj)
 extern struct {
     HSD_GObjEvent x0;
     void (*x4)(Fighter_GObj*, int, float frame);
-} ftData_UnkCallbackPairs0[FTKIND_MAX];
+} ftData_UnkCallbackPairs0[Ft_Kind_Max];
 
 static inline void tobjAnim(HSD_TObj** temp_r30, f32 frame)
 {
@@ -1695,7 +1695,6 @@ void ftAnim_80070E74(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     int i;
     for (i = 0; i < (int) ARRAY_SIZE(fp->x8B0); i++) {
-        /// @todo inline #ftAnim_80070C48 here?
         struct Fighter_x8B0_t* r7 = &fp->x8B0[i];
         if (r7->x10 != -1) {
             ftAnim_ApplyPartAnim(gobj, i, r7->x10, 0.0F);

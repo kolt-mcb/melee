@@ -1,13 +1,13 @@
 #include "bytecode.h"
 
-#include <platform.h>
-
-#include "baselib/debug.h"
-#include "baselib/list.h"
-#include "baselib/random.h"
-#include "baselib/util.h"
+#include <Runtime/platform.h>
 
 #include <math.h>
+
+#include "debug.h"
+#include "list.h"
+#include "random.h"
+#include "util.h"
 #include <dolphin/os.h>
 
 typedef union {
@@ -84,10 +84,10 @@ float HSD_ByteCodeEval(u8* bytecode, const f32* args, s32 nb_args)
                 stack = HSD_SListAllocAndPrepend(stack, (void*) operand);
                 break;
             case 0xFF:
-                HSD_Panic("bytecode.c", 323, "not yet implemented.\n");
+                HSD_Panic(__FILE__, 323, "not yet implemented.\n");
                 /* fallthrough */
             default:
-                HSD_Panic("bytecode.c", 326, "unexpected byte code.\n");
+                HSD_Panic(__FILE__, 326, "unexpected byte code.\n");
                 break;
             }
             continue;

@@ -1,15 +1,14 @@
 #include "itmaplib.h"
 
+#include "inlines.h"
+#include "it_26B1.h"
 #include "it_2725.h"
 #include "it_3F14.h"
 #include "iteffect.h"
 #include "ithitbox.h"
-
-#include "it/inlines.h"
-#include "it/it_26B1.h"
-#include "lb/lbvector.h"
-#include "mp/mpcoll.h"
-#include "mp/mplib.h"
+#include <melee/lb/lbvector.h>
+#include <melee/mp/mpcoll.h>
+#include <melee/mp/mplib.h>
 
 /* The console fuses the item/wall dot products: y product plain, x and
  * z fmadds onto it (802777B8/C0; product_xy at 80277928 and siblings). */
@@ -774,11 +773,11 @@ bool it_80277040(Item_GObj* item_gobj)
             want = (e != NULL) ? atoi(e) : -1;
         }
         if (want >= 0 && (int) item1->kind == want) {
-            extern u32 gm_8016AEDC(void);
+            extern u32 gm_GetFrameCount(void);
             fprintf(stderr,
                     "[BOUNCE] gframe=%u kind=%d env=%x ang=%08x thr=%08x "
                     "n=(%08x,%08x,%08x) x50=%08x\n",
-                    (unsigned) gm_8016AEDC(), (int) item1->kind,
+                    (unsigned) gm_GetFrameCount(), (int) item1->kind,
                     (unsigned) coll->env_flags, *(unsigned*) &angle1,
                     *(unsigned*) &it_804D6D28->xC0, *(unsigned*) &sp5C.x,
                     *(unsigned*) &sp5C.y, *(unsigned*) &sp5C.z,

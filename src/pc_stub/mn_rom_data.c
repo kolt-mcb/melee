@@ -7,7 +7,7 @@
 #include <baselib/gobj.h>
 #include <baselib/mtx.h>
 #include <dolphin/gx/GXStruct.h>
-#include <melee/mn/mndiagram2.static.h>
+#include <melee/mn/mndiagram2.h>
 
 /* Declared `extern struct mnSnap_804A0B90_t* mnSnap_804A0B90[4]` in
  * mnsnap.h and defined nowhere, so it fell through to the weak *function*

@@ -1,25 +1,18 @@
 #ifndef _pobj_h_
 #define _pobj_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/aobj.h"
-#include "baselib/class.h"
-
-#include "baselib/forward.h" // IWYU pragma: export
-
-#include "baselib/list.h"
+#include <sysdolphin/baselib/forward.h> // IWYU pragma: export
 
 #include <dolphin/gx/GXEnum.h>
 #include <dolphin/mtx.h>
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/class.h>
+#include <sysdolphin/baselib/list.h>
 
 #define HSD_MTX_RIGID 1
 #define HSD_MTX_ENVELOPE 2
-
-struct _unk_struct_pobj {
-    u32 data[8];
-    HSD_AObj* aobj;
-};
 
 struct HSD_PObj {
     HSD_Class parent;
@@ -33,7 +26,6 @@ struct HSD_PObj {
         HSD_JObj* jobj;
         HSD_ShapeSet* shape_set;
         HSD_SList* envelope_list;
-        struct _unk_struct_pobj* unk;
     } u;
 };
 

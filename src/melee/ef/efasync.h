@@ -1,8 +1,8 @@
 #ifndef MELEE_EF_EFASYNC_H
 #define MELEE_EF_EFASYNC_H
 
-#include "ef/forward.h"
-#include <baselib/forward.h>
+#include <melee/ef/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <stdarg.h>
 

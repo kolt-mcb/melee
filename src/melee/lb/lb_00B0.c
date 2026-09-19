@@ -5,18 +5,17 @@ extern void pc_jobj_note(const char*, void*);
 #include <stdio.h>
 #include <stdlib.h>
 #endif
-#include "lb/lb_00B0.h"
-
-#include "sc/types.h" // IWYU pragma: keep
+#include "lb_00B0.h"
 
 #include <dolphin/mtx.h>
-#include <baselib/aobj.h>
-#include <baselib/dobj.h> // IWYU pragma: keep
-#include <baselib/jobj.h>
-#include <baselib/lobj.h>
-#include <baselib/pobj.h>
-#include <baselib/quatlib.h>
-#include <baselib/robj.h>
+#include <melee/sc/types.h> // IWYU pragma: keep
+#include <sysdolphin/baselib/aobj.h>
+#include <sysdolphin/baselib/dobj.h> // IWYU pragma: keep
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/pobj.h>
+#include <sysdolphin/baselib/quatlib.h>
+#include <sysdolphin/baselib/robj.h>
 
 /* 00B9D8 */ static void lb_8000B9D8(HSD_JObj*, float**, s32);
 /* 00BC04 */ static HSD_JObj* lbFindJObjWithAObj(HSD_JObj*);
@@ -102,14 +101,6 @@ bool lb_8000B134(HSD_JObj* jobj)
     return false;
 }
 
-static inline HSD_JObj* jobj_parent(HSD_JObj* jobj)
-{
-    if (jobj == NULL) {
-        return NULL;
-    }
-    return jobj->parent;
-}
-
 void lb_8000B1CC(HSD_JObj* arg0, Vec3* pos0, Vec3* pos1)
 {
     Quaternion r;
@@ -129,7 +120,7 @@ void lb_8000B1CC(HSD_JObj* arg0, Vec3* pos0, Vec3* pos1)
         *pos1 = *pos0;
         return;
     }
-    if (jobj_parent(arg0) != NULL) {
+    if (HSD_JObjGetParent(arg0) != NULL) {
         HSD_JObjSetupMatrix(arg0);
         if (pos0 == NULL || (!pos0->x && !pos0->y && !pos0->z)) {
             pos1->x = arg0->mtx[0][3];
@@ -568,8 +559,8 @@ void lb_8000C490(HSD_JObj* jobj1, HSD_JObj* jobj2, HSD_JObj* arg2, float arg8,
             blat = e != NULL ? atoi(e) : -1;
         }
         if (blat >= 0) {
-            extern u32 gm_8016AEDC(void);
-            if ((int) gm_8016AEDC() == blat) {
+            extern u32 gm_GetFrameCount(void);
+            if ((int) gm_GetFrameCount() == blat) {
                 fprintf(stderr,
                         "[BLEND] out=%p from=%p q1=%d q2=%d "
                         "r1=%08x,%08x,%08x r2=%08x,%08x,%08x t=%08x\n",
@@ -835,14 +826,6 @@ s32 lb_8000CDA8(s32 i)
     return lb_803BA020[i];
 }
 
-static inline HSD_LObj* lobj_next(HSD_LObj* lobj)
-{
-    if (lobj == NULL) {
-        return NULL;
-    }
-    return lobj->next;
-}
-
 HSD_LObj* lb_8000CDC0(HSD_LObj* cur)
 {
     while (cur != NULL) {
@@ -851,7 +834,7 @@ HSD_LObj* lb_8000CDC0(HSD_LObj* cur)
         {
             return cur;
         }
-        cur = lobj_next(cur);
+        cur = HSD_LObjGetNext(cur);
     }
 }
 

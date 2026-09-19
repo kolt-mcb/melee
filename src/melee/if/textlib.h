@@ -1,15 +1,13 @@
 #ifndef GALE01_302834
 #define GALE01_302834
 
-#include <placeholder.h>
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/forward.h"
-#include "if/forward.h"
-
-#include "if/types.h"
+#include <melee/if/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/gx.h>
+#include <melee/if/types.h>
 
 /* 302834 */ DevText* DevText_Create(char, int, int, int, int, char*);
 /* 3029B4 */ void DevText_EraseFirstLine(DevText* text);
@@ -44,7 +42,7 @@
 /* 303FD4 */ void un_80303FD4(HSD_GObj*, struct un_80304138_objalloc_t*,
                               struct un_80304138_objalloc_t_x8*, int, int,
                               int);
-/* 304138 */ UNK_RET un_80304138(UNK_PARAMS);
+/* 304138 */ void un_80304138(void);
 /* 304168 */ HSD_GObj* un_80304168(void* arg0, int arg1, int arg2, int arg3);
 /* 304210 */ struct un_80304138_objalloc_t*
 un_80304210(struct un_80304138_objalloc_t* arg0, void* arg1, int arg2,

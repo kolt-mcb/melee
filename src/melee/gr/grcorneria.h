@@ -1,14 +1,14 @@
 #ifndef GALE01_1DCCFC
 #define GALE01_1DCCFC
 
-#include "types.h"
+#include <Runtime/platform.h>
 
-#include <platform.h>
+#include <melee/gr/forward.h>
+#include <melee/it/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
-#include "gr/forward.h"
-#include "it/forward.h"
-#include "lb/forward.h"
-#include <baselib/forward.h>
+#include <melee/gr/types.h>
 
 /* 1DCCFC */ void grCorneria_801DCCFC(void);
 /* 1DCE1C */ void grCorneria_801DCE1C(void);
@@ -42,7 +42,6 @@
 /* 1DF8D0 */ void grCorneria_801DF8D0(Ground_GObj*);
 /* 1DFBC4 */ bool grCorneria_801DFBC4(Ground_GObj*);
 /* 1DFBCC */ void grCorneria_801DFBCC(Ground_GObj*);
-/* 1DFBF0 */ void grCorneria_801DFBF0(Ground_GObj*);
 /* 1DFC1C */ bool grCorneria_801DFC1C(Ground_GObj*);
 /* 1DFC2C */ void grCorneria_801DFC2C(Ground_GObj*);
 /* 1DFC90 */ bool grCorneria_801DFC90(Ground_GObj*);

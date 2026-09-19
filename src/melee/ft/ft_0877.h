@@ -1,11 +1,8 @@
 #ifndef GALE01_0877F8
 #define GALE01_0877F8
+#include <melee/ft/forward.h>
 
-#include "ft/forward.h"
-
-#include "ft/types.h"
-
-#include <baselib/forward.h>
+#include <melee/ft/types.h>
 
 /* 0877F8 */ bool ft_800877F8(Fighter_GObj*, s32);
 /* 087818 */ bool ft_80087818(Fighter_GObj*, s32);
@@ -30,7 +27,7 @@
 /* 087BAC */ void ft_80087BAC(Fighter_GObj*, s32);
 /* 087BC0 */ void ft_80087BC0(Fighter_GObj*, int);
 /* 087BEC */ void ft_80087BEC(Fighter_GObj*, int);
-/* 087C1C */ s32 ft_80087C1C(void);
+/* 087C1C */ s32 ft_GetFtKindMask(void);
 /* 087C58 */ s32 ft_80087C58(Fighter_GObj* gobj);
 /* 087C64 */ void ft_80087C64(Fighter_GObj*, s32);
 /* 087C70 */ s32 ft_80087C70(Fighter*, s32);
@@ -40,12 +37,13 @@
 /* 0880AC */ void ft_800880AC(Fighter*);
 /* 0880D8 */ void ft_800880D8(Fighter*);
 /* 088110 */ void ft_80088110(Fighter*);
+
+/// SFX_PlayCharacterSFX
 /* 088148 */ void ft_PlaySFX(Fighter*, enum_t, u8, u8);
+
 /* 3C57D0 */ extern char ftMr_Init_DatFilename[];
 /* 3C57DC */ extern char ftMr_Init_DataName[];
 /* 3C595C */ extern char ftMr_Init_AnimDatFilename[];
 /* 3C5A28 */ extern Fighter_CostumeStrings ftMr_Init_CostumeStrings[];
-/* 459B88 */ extern struct ft_80459B88_t ft_80459B88;
-/* 45A1E0 */ extern HSD_Joint* ft_8045A1E0[6];
 
 #endif

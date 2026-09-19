@@ -581,7 +581,6 @@ __attribute__((weak)) float Stage_GetCamInfoX24(void) { PC_STUB_HIT("Stage_GetCa
 __attribute__((weak)) float Stage_GetCamPanAngleRadians(void) { PC_STUB_HIT("Stage_GetCamPanAngleRadians"); return 0; }
 __attribute__((weak)) void HSD_CObjSetNear(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetNear");}
 __attribute__((weak)) void HSD_CObjSetFar(int a0, float a1) { PC_STUB_HIT("HSD_CObjSetFar");}
-__attribute__((weak)) void HSD_GObjPLink_80390228(int a0) { PC_STUB_HIT("HSD_GObjPLink_80390228");}
 __attribute__((weak)) void HSD_GObjPLink_80390264(void) { PC_STUB_HIT("HSD_GObjPLink_80390264");}
 __attribute__((weak)) void HSD_GObjPLink_80390284(void) { PC_STUB_HIT("HSD_GObjPLink_80390284");}
 __attribute__((weak)) void HSD_GObjPLink_803902B8(void) { PC_STUB_HIT("HSD_GObjPLink_803902B8");}
@@ -1140,7 +1139,6 @@ __attribute__((weak)) void HSD_GObj_80390C5C(int a0) { PC_STUB_HIT("HSD_GObj_803
 __attribute__((weak)) void HSD_GObj_80390C84(int a0) { PC_STUB_HIT("HSD_GObj_80390C84");}
 __attribute__((weak)) void HSD_GObj_80390CAC(int a0) { PC_STUB_HIT("HSD_GObj_80390CAC");}
 __attribute__((weak)) void HSD_GObj_80390CD4(int a0) { PC_STUB_HIT("HSD_GObj_80390CD4");}
-__attribute__((weak)) void HSD_GObj_80390CFC(void) { PC_STUB_HIT("HSD_GObj_80390CFC");}
 __attribute__((weak)) int HSD_GObj_80390EB8(int a0) { PC_STUB_HIT("HSD_GObj_80390EB8"); return 0; }
 /* HSD_GObj_80390ED0/HSD_GObj_80390FC0 already defined above as strong functions */
 __attribute__((weak)) void HSD_GObj_803910D8(int a0, int a1) { PC_STUB_HIT("HSD_GObj_803910D8");}
@@ -2780,8 +2778,8 @@ void game_main_loop(void)
         static int gobj_initialized = 0;
         if (!gobj_initialized) {
             gobj_initialized = 1;
-            extern void HSD_GObj_803912E0(void*);
-            extern void HSD_GObj_80391304(void*);
+            extern void HSD_GObjSetInitDefaults(void*);
+            extern void HSD_GObjInit(void*);
             typedef struct {
                 u8 p_link_max;
                 u8 gx_link_max;
@@ -2791,9 +2789,9 @@ void game_main_loop(void)
             } GObjInitData;
             GObjInitData initdata;
             memset(&initdata, 0, sizeof(initdata));
-            HSD_GObj_803912E0(&initdata);
+            HSD_GObjSetInitDefaults(&initdata);
             initdata.gproc_pri_max = 0x18;
-            HSD_GObj_80391304(&initdata);
+            HSD_GObjInit(&initdata);
             PORT_LOG_INFO("[GObj] GObj system initialized");
         }
     }
@@ -2980,7 +2978,6 @@ __attribute__((weak)) int gm_80164024(int a0) { PC_STUB_HIT("gm_80164024"); retu
  * returned garbage, so the title's character picker (gm_801BF128) built an
  * empty character_pool and read uninitialized stack entries -> SIGSEGV. */
 __attribute__((weak)) int gm_80164840(int ckind) { PC_STUB_HIT("gm_80164840"); return (ckind >= 0 && ckind <= 0x19) ? 1 : 0; }
-__attribute__((weak)) int gm_8016AE38(void) { PC_STUB_HIT("gm_8016AE38"); return 0; }
 __attribute__((weak)) int gm_8016AE44(void) { PC_STUB_HIT("gm_8016AE44"); return 0; }
 __attribute__((weak)) int gm_8017E424(void) { PC_STUB_HIT("gm_8017E424"); return 0; }
 __attribute__((weak)) int gm_801A36A0(int a0) { PC_STUB_HIT("gm_801A36A0"); return 0; }
@@ -3079,7 +3076,7 @@ __attribute__((weak)) int hsd_803B286C(int a0, int a1, int a2, int a3, int a4, i
 __attribute__((weak)) int hsd_803B2928(int a0, int a1, int a2, int a3, int a4) { return 0; } /* decl: int */
 __attribute__((weak)) int hsd_803B29D8(int a0, int a1, int a2, int a3) { return 0; } /* decl: int */
 __attribute__((weak)) int hsd_803B2A4C(int a0, int a1, int a2, int a3) { return 0; } /* decl: int */
-__attribute__((weak)) int hsd_803B2ADC(int a0, int a1) { return 0; } /* decl: int */
+__attribute__((weak)) int hsd_SetCardIconInfo(int a0, int a1) { return 0; } /* decl: int */
 __attribute__((weak)) int hsd_803B51C8(int a0, int a1, int a2, int a3, int a4) { return 0; } /* decl: s32 */
 __attribute__((weak)) void hsd_803B5C2C(int a0) { PC_STUB_HIT("hsd_803B5C2C");}
 __attribute__((weak)) int hsd_803B6BE4(int a0, int a1, int a2) { return 0; } /* decl: s32 */
@@ -3315,7 +3312,6 @@ __attribute__((weak)) int lb_8001B6F8(void) { PC_STUB_HIT("lb_8001B6F8"); return
 __attribute__((weak)) int lb_8001B760(int a0) { PC_STUB_HIT("lb_8001B760"); return 0; }
 
 /* Void stub: lb_8001B99C */
-__attribute__((weak)) int lb_8001B99C(int a0, int a1, int a2) { PC_STUB_HIT("lb_8001B99C"); return 0; }
 
 /* Void stub: lb_8001BB48 */
 __attribute__((weak)) int lb_8001BB48(int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7) { PC_STUB_HIT("lb_8001BB48"); return 0; }
@@ -3678,8 +3674,6 @@ __attribute__((weak)) int mpCheckFloor(float a0, float a1, float a2, float a3, f
 __attribute__((weak)) int Player_GetPlayerCharacter(int a0) { PC_STUB_HIT("Player_GetPlayerCharacter"); return 0; }
 __attribute__((weak)) int Player_GetPlayerSlotType(int a0) { PC_STUB_HIT("Player_GetPlayerSlotType"); return 0; }
 __attribute__((weak)) long un_80304470(void) { return 0; } /* decl: bool */
-__attribute__((weak, aligned(16))) unsigned char lbl_804336A0[256]; /* data (GCN 0x804336A0), was void-fn stub */
-__attribute__((weak, aligned(16))) unsigned char lbl_803BB0E0[256]; /* data (GCN 0x803BB0E0), was void-fn stub */
 __attribute__((weak, aligned(16))) unsigned char lbl_803BB028[256]; /* data (GCN 0x803BB028), was void-fn stub */
 /* Data, not a function: HSD_ObjAllocData used by lbBgFlash_80021A18 via
  * HSD_ObjAllocInit (writes faulted in .text). 128 zeroed bytes cover it. */

@@ -1,11 +1,9 @@
 #ifndef GALE01_21C750
 #define GALE01_21C750
 
-#include <placeholder.h>
-
-#include "gr/forward.h"
-#include "lb/forward.h"
-#include <baselib/forward.h>
+#include <melee/gr/forward.h>
+#include <melee/lb/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
 
@@ -61,7 +59,7 @@
 /* 21E4FC */ void grHomeRun_8021E4FC(Ground_GObj*);
 /* 21E500 */ HSD_GObj* grHomeRun_8021E500(int);
 /* 21EA30 */ void grHomeRun_8021EA30(const f32*);
-/* 21EAF8 */ UNK_RET grHomeRun_8021EAF8(UNK_PARAMS);
+/* 21EAF8 */ void grHomeRun_8021EAF8(void);
 /* 21EB10 */ void fn_8021EB10(HSD_GObj* gobj, int code);
 /* 21EC58 */ HSD_Text* grHomeRun_8021EC58(int);
 /* 21ED74 */ void grHomeRun_8021ED74(void);

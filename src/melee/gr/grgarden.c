@@ -1,28 +1,27 @@
 #include "grgarden.h"
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/psstructs.h"
-#include "ft/ftdevice.h"
-#include "ft/ftlib.h"
-#include "gm/gm_16AE.h"
-#include "gr/granime.h"
-#include "gr/grlib.h"
-#include "gr/grmaterial.h"
-#include "gr/ground.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/stage.h"
-#include "gr/types.h"
-#include "it/item.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-
-#include <baselib/gobj.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
+#include "granime.h"
+#include "grlib.h"
+#include "grmaterial.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "stage.h"
+#include "types.h"
+#include <melee/ft/ftdevice.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gm/gmvs.h>
+#include <melee/it/item.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/psstructs.h>
+#include <sysdolphin/baselib/random.h>
 
 struct grGarden_YakumonoParam {
     float x0;
@@ -35,8 +34,10 @@ struct grGarden_YakumonoParam {
     float x1C;
 };
 
+static void stageGObj0_OnInit(Ground_GObj* gobj);
+
 StageCallbacks grGd_StageCallbacks[] = {
-    { grGarden_80202D60, grGarden_80202D8C, grGarden_80202D94,
+    { stageGObj0_OnInit, grGarden_80202D8C, grGarden_80202D94,
       grGarden_80202D98, 0 },
     { grGarden_80203004, grGarden_80203090, grGarden_80203098,
       grGarden_802031A0, 0 }, // cranky kong
@@ -122,10 +123,9 @@ HSD_GObj* grGarden_80202C78(int gobj_id)
     return gobj;
 }
 
-void grGarden_80202D60(Ground_GObj* gobj)
+static void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 bool grGarden_80202D8C(Ground_GObj* arg)

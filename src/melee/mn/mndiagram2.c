@@ -1,37 +1,34 @@
 #include "mndiagram2.h"
 
-#include "mndiagram2.static.h"
-
-#include "baselib/debug.h"
-
-#include "baselib/forward.h"
-
-#include "mn/inlines.h"
-#include "mn/types.h"
+#include <sysdolphin/baselib/forward.h>
 
 #include <stdbool.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/gobjuserdata.h>
-#include <baselib/jobj.h>
-#include <baselib/memory.h>
-#include <baselib/sislib.h>
+
+#include "inlines.h"
+#include "mndiagram.h"
+#include "mndiagram3.h"
+#include "mnmain.h"
+#include "types.h"
 #include <melee/gm/gm_1601.h>
 #include <melee/gm/gmmain_lib.h>
 #include <melee/lb/lb_00B0.h>
 #include <melee/lb/lbaudio_ax.h>
 #include <melee/lb/lbspdisplay.h>
-#include <melee/mn/mndiagram.h>
-#include <melee/mn/mndiagram3.h>
-#include <melee/mn/mnmain.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/sislib.h>
 
-GXColor mnDiagram2_804D4FB8 = { 0, 0, 0, 0xFF };
-GXColor mnDiagram2_804D4FBC = { 0xFF, 0xC8, 0, 0xFF };
+static GXColor mnDiagram2_804D4FB8 = { 0, 0, 0, 0xFF };
+static GXColor mnDiagram2_804D4FBC = { 0xFF, 0xC8, 0, 0xFF };
 
-MnDiagram2RowLayout mnDiagram2_803EEAD0 = {
+static MnDiagram2RowLayout mnDiagram2_803EEAD0 = {
     { -2.5f, 0.3f, 0.0f },
     { -2.2f, 0.5f, 0.0f },
     { -1.0f, 0.5f, 0.0f },
@@ -46,12 +43,12 @@ MnDiagram2RowLayout mnDiagram2_803EEAD0 = {
     },
 };
 
-AnimLoopSettings mnDiagram2_803EEB60[2] = {
+static AnimLoopSettings mnDiagram2_803EEB60[2] = {
     { 10.0f, 19.0f, -0.1f },
     { 0.0f, 199.0f, 0.0f },
 };
 
-HSD_GObj* mnDiagram2_804D6C18;
+static HSD_GObj* mnDiagram2_804D6C18;
 
 /* GetPersistentNameData and GetPersistentFighterData are in gm/gmmain_lib.h */
 
@@ -64,35 +61,8 @@ int GetNameCount(void);
 #define mnDiagram_GetNameByIndex_s(x) ((int) mnDiagram_GetNameByIndex(x))
 #define mnDiagram_GetFighterByIndex_s(x) ((int) mnDiagram_GetFighterByIndex(x))
 #define mnDiagram_GetFighterByIndex_BBC(x) mnDiagram_GetFighterByIndex_s(x)
-#define mnDiagram_GetPrevNameIndex_s(x) ((int) mnDiagram_GetPrevNameIndex(x))
-#define mnDiagram_GetNextNameIndex_s(x) ((int) mnDiagram_GetNextNameIndex(x))
-#define mnDiagram_GetPrevFighterIndex_s(x)                                    \
-    ((int) mnDiagram_GetPrevFighterIndex(x))
-#define mnDiagram_GetNextFighterIndex_s(x)                                    \
-    ((int) mnDiagram_GetNextFighterIndex(x))
-
-/* Union for 64-bit sorting operations */
-typedef union {
-    struct {
-        u8 idx; ///< SelectableCharacterKind or a nametag slot id
-        char pad1[7];
-        s32 x8;
-        s32 xC;
-    };
-    struct {
-        f64 d0;
-        f64 d8;
-    };
-    struct {
-        char pad2[8];
-        u64 value;
-    };
-} mnDiagram2_SortEntry;
 
 /* Diagram2 struct is defined in mn/types.h */
-
-/* mnDiagram_ArchiveData, mnDiagram2_804D6C18, mnDiagram_804A0834 defined in
- * mndiagram2.static.h */
 
 /// @brief Checks if stat type uses time format (H:MM:SS).
 /// @param stat_type The stat type index (VSRecordsStatType)
@@ -262,13 +232,17 @@ void mnDiagram2_UpdateHeader(HSD_GObj* gobj, u8 is_name_mode, u8 entity_idx)
     }
 }
 
+static inline Diagram2* getCurrentDiagramData(void)
+{
+    return mnDiagram2_804D6C18->user_data;
+}
+
 /// @brief Clears and repopulates stat rows based on current selection.
 /// @details Reads is_name_mode to determine which entity index to use.
 static inline void mnDiagram2_RefreshStatRows(void)
 {
     HSD_GObj* d = mnDiagram2_804D6C18;
-    Diagram2* data = d->user_data;
-    Diagram2* new_var;
+    Diagram2* data = getCurrentDiagramData();
     u8 entity_idx;
 
     mnDiagram2_ClearStatRows(d);
@@ -277,9 +251,36 @@ static inline void mnDiagram2_RefreshStatRows(void)
     } else {
         entity_idx = data->selected_fighter_idx;
     }
-    new_var = data;
     mnDiagram2_PopulateStatRows(d, (u8) data->scroll_offset,
-                                new_var->is_name_mode, entity_idx);
+                                data->is_name_mode, entity_idx);
+}
+
+static inline void saveDiagramSelection(void)
+{
+    Diagram2* data = mnDiagram2_804D6C18->user_data;
+    gmMainLib_GetGameRules()->x12 = data->selected_fighter_idx;
+    gmMainLib_GetGameRules()->x13 = data->selected_name_idx;
+    gmMainLib_GetGameRules()->xD = data->is_name_mode;
+}
+
+static inline void updateDiagramMode(u8 is_name_mode)
+{
+    HSD_GObj* gobj = mnDiagram2_804D6C18;
+    Diagram2* data = gobj->user_data;
+    u8 entity_idx;
+    if (is_name_mode != 0) {
+        HSD_JObjSetFlagsAll(data->fighter_mode_header, JOBJ_HIDDEN);
+        HSD_JObjClearFlagsAll(data->name_mode_header, JOBJ_HIDDEN);
+    } else {
+        HSD_JObjClearFlagsAll(data->fighter_mode_header, JOBJ_HIDDEN);
+        HSD_JObjSetFlagsAll(data->name_mode_header, JOBJ_HIDDEN);
+    }
+    if (is_name_mode != 0) {
+        entity_idx = data->selected_name_idx;
+    } else {
+        entity_idx = data->selected_fighter_idx;
+    }
+    mnDiagram2_UpdateHeader(gobj, is_name_mode, entity_idx);
 }
 
 /// @brief Handles input for the VS Records character details page.
@@ -294,48 +295,27 @@ void mnDiagram2_HandleInput(HSD_GObj* gobj)
 {
     Diagram2* data;
     int result;
-    HSD_GObj* d2;
-    u8 x46;
-    u8 x47;
-    u8 x48;
     u8 entity_idx;
     int selection;
-    Diagram2* data2;
-    GameRules* rules;
     PAD_STACK(40);
 
-    {
-        Diagram2* initial_data = mnDiagram2_804D6C18->user_data;
-        data = initial_data;
-    }
+    data = getCurrentDiagramData();
     result = mn_804A04F0.buttons = mn_80229624(4);
 
     if (result & 0x20) {
         sfxBack();
         mn_804A04F0.entering_menu = 0;
-        data2 = (d2 = mnDiagram2_804D6C18)->user_data;
-        x46 = data2->selected_fighter_idx;
-        rules = gmMainLib_GetGameRules();
-        rules->x12 = x46;
-        x47 = data2->selected_name_idx;
-        gmMainLib_GetGameRules()->x13 = x47;
-        gmMainLib_GetGameRules()->xD = (x48 = data2->is_name_mode ^ 0);
+        saveDiagramSelection();
         mn_80229894(0x1C, 0, 3);
         mnDiagram2_ClearStatRows(mnDiagram2_804D6C18);
         return;
     }
 
-    selection = 0;
     if (result & 0xC0) {
         sfxForward();
-        data2 = mnDiagram2_804D6C18->user_data;
-        x46 = data2->selected_fighter_idx;
-        gmMainLib_GetGameRules()->x12 = x46;
-        x47 = data2->selected_name_idx;
-        gmMainLib_GetGameRules()->x13 = x47;
-        gmMainLib_GetGameRules()->xD = (x48 = data2->is_name_mode ^ 0);
+        saveDiagramSelection();
         mnDiagram2_ClearStatRows(mnDiagram2_804D6C18);
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
         if (result & 0x40) {
             mnDiagram_Init(0, 0);
             return;
@@ -350,10 +330,7 @@ void mnDiagram2_HandleInput(HSD_GObj* gobj)
             return;
         }
         sfxForward();
-        if (data->is_name_mode == 0) {
-            selection = 1;
-        }
-        data->is_name_mode = selection;
+        data->is_name_mode = data->is_name_mode == 0 ? 1 : 0;
         if (data->is_name_mode == 0 && (s32) (data->scroll_offset + 10) > 0x15)
         {
             data->scroll_offset = 0;
@@ -366,21 +343,7 @@ void mnDiagram2_HandleInput(HSD_GObj* gobj)
         }
         mnDiagram2_UpdateHeader(mnDiagram2_804D6C18, data->is_name_mode,
                                 entity_idx);
-        x48 = data->is_name_mode;
-        data2 = (d2 = mnDiagram2_804D6C18)->user_data;
-        if (x48 != 0) {
-            HSD_JObjSetFlagsAll(data2->fighter_mode_header, JOBJ_HIDDEN);
-            HSD_JObjClearFlagsAll(data2->name_mode_header, JOBJ_HIDDEN);
-        } else {
-            HSD_JObjClearFlagsAll(data2->fighter_mode_header, JOBJ_HIDDEN);
-            HSD_JObjSetFlagsAll(data2->name_mode_header, JOBJ_HIDDEN);
-        }
-        if (x48 != 0) {
-            entity_idx = data2->selected_name_idx;
-        } else {
-            entity_idx = data2->selected_fighter_idx;
-        }
-        mnDiagram2_UpdateHeader(d2, x48, entity_idx);
+        updateDiagramMode(data->is_name_mode);
         return;
     }
 
@@ -399,8 +362,7 @@ void mnDiagram2_HandleInput(HSD_GObj* gobj)
                 mnDiagram2_RefreshStatRows();
             }
         } else if (result & 4) {
-            selection =
-                (u8) mnDiagram_GetPrevNameIndex_s(data->selected_name_idx);
+            selection = mnDiagram_GetPrevNameIndex(data->selected_name_idx);
             if ((s32) data->selected_name_idx != selection) {
                 sfxMove();
                 data->selected_name_idx = selection;
@@ -410,8 +372,7 @@ void mnDiagram2_HandleInput(HSD_GObj* gobj)
                                         data->selected_name_idx);
             }
         } else if (result & 8) {
-            selection =
-                (u8) mnDiagram_GetNextNameIndex_s(data->selected_name_idx);
+            selection = mnDiagram_GetNextNameIndex(data->selected_name_idx);
             if ((s32) data->selected_name_idx != selection) {
                 sfxMove();
                 data->selected_name_idx = selection;
@@ -436,8 +397,8 @@ void mnDiagram2_HandleInput(HSD_GObj* gobj)
                 mnDiagram2_RefreshStatRows();
             }
         } else if (result & 4) {
-            selection = (u8) mnDiagram_GetPrevFighterIndex_s(
-                data->selected_fighter_idx);
+            selection =
+                mnDiagram_GetPrevFighterIndex(data->selected_fighter_idx);
             if ((s32) data->selected_fighter_idx != selection) {
                 sfxMove();
                 data->selected_fighter_idx = selection;
@@ -447,8 +408,8 @@ void mnDiagram2_HandleInput(HSD_GObj* gobj)
                                         data->selected_fighter_idx);
             }
         } else if (result & 8) {
-            selection = (u8) mnDiagram_GetNextFighterIndex_s(
-                data->selected_fighter_idx);
+            selection =
+                mnDiagram_GetNextFighterIndex(data->selected_fighter_idx);
             if ((s32) data->selected_fighter_idx != selection) {
                 sfxMove();
                 data->selected_fighter_idx = selection;
@@ -466,7 +427,7 @@ void mnDiagram2_HandleInput(HSD_GObj* gobj)
 /// @param stat_type Stat category (0x00-0x17), passed as HSD_GObj* due to ABI
 /// @param entity_idx Fighter or Name index
 /// @return The stat value for the given category and entity
-int mnDiagram2_GetStatValue(int is_name_mode, u8 stat_type, u8 entity_idx)
+int mnDiagram2_GetStatValue(u8 is_name_mode, u8 stat_type, u8 entity_idx)
 {
     u8 typeVal;
     u8 idxVal;
@@ -477,22 +438,22 @@ int mnDiagram2_GetStatValue(int is_name_mode, u8 stat_type, u8 entity_idx)
 
     switch (typeVal) {
     case VSSTAT_TOTAL_KOS:
-        if ((u8) is_name_mode) {
+        if (is_name_mode) {
             return mnDiagram_GetNameTotalKOs(idxVal);
         }
         return mnDiagram_GetFighterTotalKOs(idxVal);
 
     case VSSTAT_TOTAL_FALLS:
-        if ((u8) is_name_mode) {
+        if (is_name_mode) {
             return mnDiagram_GetNameTotalFalls(idxVal);
         }
         return mnDiagram_GetFighterTotalFalls(idxVal);
 
     case VSSTAT_SD_COUNT:
-        if ((u8) is_name_mode) {
-            val16 = GetPersistentNameData(idxVal)->sd_count;
+        if (is_name_mode) {
+            val16 = GetPersistentNameData(idxVal)->stats.sd_count;
         } else {
-            val16 = GetPersistentFighterData(idxVal)->sd_count;
+            val16 = GetPersistentFighterData(idxVal)->stats.sd_count;
         }
         return val16;
 
@@ -500,60 +461,60 @@ int mnDiagram2_GetStatValue(int is_name_mode, u8 stat_type, u8 entity_idx)
         return mnDiagram_GetHitPercentage(is_name_mode, idxVal);
 
     case VSSTAT_DAMAGE_DEALT:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->damage_dealt;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.damage_dealt;
         }
-        return GetPersistentFighterData(idxVal)->damage_dealt;
+        return GetPersistentFighterData(idxVal)->stats.damage_dealt;
 
     case VSSTAT_DAMAGE_TAKEN:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->damage_taken;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.damage_taken;
         }
-        return GetPersistentFighterData(idxVal)->damage_taken;
+        return GetPersistentFighterData(idxVal)->stats.damage_taken;
 
     case VSSTAT_DAMAGE_RECOVERED:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->damage_recovered;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.damage_recovered;
         }
-        return GetPersistentFighterData(idxVal)->damage_recovered;
+        return GetPersistentFighterData(idxVal)->stats.damage_recovered;
 
     case VSSTAT_PEAK_DAMAGE:
-        if ((u8) is_name_mode) {
-            val16 = GetPersistentNameData(idxVal)->peak_damage;
+        if (is_name_mode) {
+            val16 = GetPersistentNameData(idxVal)->stats.peak_damage;
         } else {
-            val16 = GetPersistentFighterData(idxVal)->peak_damage;
+            val16 = GetPersistentFighterData(idxVal)->stats.peak_damage;
         }
         return val16;
 
     case VSSTAT_MATCH_COUNT:
-        if ((u8) is_name_mode) {
-            val16 = GetPersistentNameData(idxVal)->match_count;
+        if (is_name_mode) {
+            val16 = GetPersistentNameData(idxVal)->stats.match_count;
         } else {
-            val16 = GetPersistentFighterData(idxVal)->match_count;
+            val16 = GetPersistentFighterData(idxVal)->stats.match_count;
         }
         return val16;
 
     case VSSTAT_VICTORIES:
-        if ((u8) is_name_mode) {
-            val16 = GetPersistentNameData(idxVal)->victories;
+        if (is_name_mode) {
+            val16 = GetPersistentNameData(idxVal)->stats.victories;
         } else {
-            val16 = GetPersistentFighterData(idxVal)->victories;
+            val16 = GetPersistentFighterData(idxVal)->stats.victories;
         }
         return val16;
 
     case VSSTAT_LOSSES:
-        if ((u8) is_name_mode) {
-            val16 = GetPersistentNameData(idxVal)->losses;
+        if (is_name_mode) {
+            val16 = GetPersistentNameData(idxVal)->stats.losses;
         } else {
-            val16 = GetPersistentFighterData(idxVal)->losses;
+            val16 = GetPersistentFighterData(idxVal)->stats.losses;
         }
         return val16;
 
     case VSSTAT_PLAY_TIME:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->play_time;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.play_time;
         }
-        return GetPersistentFighterData(idxVal)->play_time;
+        return GetPersistentFighterData(idxVal)->stats.play_time;
 
     case VSSTAT_PLAY_PERCENTAGE:
         return mnDiagram_GetPlayPercentage(is_name_mode, idxVal);
@@ -562,46 +523,46 @@ int mnDiagram2_GetStatValue(int is_name_mode, u8 stat_type, u8 entity_idx)
         return mnDiagram_GetAveragePlayerCount(is_name_mode, idxVal);
 
     case VSSTAT_WALK_DISTANCE:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->walk_distance;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.walk_distance;
         }
-        return GetPersistentFighterData(idxVal)->walk_distance;
+        return GetPersistentFighterData(idxVal)->stats.walk_distance;
 
     case VSSTAT_RUN_DISTANCE:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->run_distance;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.run_distance;
         }
-        return GetPersistentFighterData(idxVal)->run_distance;
+        return GetPersistentFighterData(idxVal)->stats.run_distance;
 
     case VSSTAT_FALL_DISTANCE:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->fall_distance;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.fall_distance;
         }
-        return GetPersistentFighterData(idxVal)->fall_distance;
+        return GetPersistentFighterData(idxVal)->stats.fall_distance;
 
     case VSSTAT_PEAK_HEIGHT:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->peak_height;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.peak_height;
         }
-        return GetPersistentFighterData(idxVal)->peak_height;
+        return GetPersistentFighterData(idxVal)->stats.peak_height;
 
     case VSSTAT_COINS_COLLECTED:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->coins_collected;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.coins_collected;
         }
-        return GetPersistentFighterData(idxVal)->coins_collected;
+        return GetPersistentFighterData(idxVal)->stats.coins_collected;
 
     case VSSTAT_COINS_SWIPED:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->coins_swiped;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.coins_swiped;
         }
-        return GetPersistentFighterData(idxVal)->coins_swiped;
+        return GetPersistentFighterData(idxVal)->stats.coins_swiped;
 
     case VSSTAT_COINS_LOST:
-        if ((u8) is_name_mode) {
-            return GetPersistentNameData(idxVal)->coins_lost;
+        if (is_name_mode) {
+            return GetPersistentNameData(idxVal)->stats.coins_lost;
         }
-        return GetPersistentFighterData(idxVal)->coins_lost;
+        return GetPersistentFighterData(idxVal)->stats.coins_lost;
 
     case VSSTAT_MOST_PLAYED:
         return mnDiagram_GetRankedFighterForName(
@@ -617,7 +578,6 @@ int mnDiagram2_GetStatValue(int is_name_mode, u8 stat_type, u8 entity_idx)
     default:
         break;
     }
-    return is_name_mode;
 }
 
 /// @brief Creates a single stat row entry in the VS Records display.
@@ -629,15 +589,21 @@ int mnDiagram2_GetStatValue(int is_name_mode, u8 stat_type, u8 entity_idx)
 void mnDiagram2_CreateStatRow(HSD_GObj* gobj, u8 is_name_mode, u8 stat_type,
                               u8 row_idx, u8 entity_idx)
 {
-    Vec3 sp20;
-    Diagram2* data;
+    u32 row;
+    f32 px;
+    f32 py;
+    f32 pz;
+    HSD_Text* text2;
     HSD_JObj* jobj;
+    int unit_glyph_id;
+    Diagram2* data;
     MnDiagram2RowLayout* base;
     HSD_Text* text;
-    HSD_Text* text2;
     f32 f31;
-    int mode = is_name_mode;
+    u8 str[8];
     f32 f30;
+    Vec3 position;
+    u8 entity = entity_idx;
 
     data = gobj->user_data;
     base = &mnDiagram2_803EEAD0;
@@ -645,14 +611,17 @@ void mnDiagram2_CreateStatRow(HSD_GObj* gobj, u8 is_name_mode, u8 stat_type,
     f31 = HSD_JObjGetTranslationY(data->row0_ref);
     f30 = HSD_JObjGetTranslationY(data->row1_ref) - f31;
 
-    lb_8000B1CC(data->row0_ref, &base->label_pos, &sp20);
+    lb_8000B1CC(data->row0_ref, &base->label_pos, &position);
 
     {
-        u32 r22 = row_idx;
-        f32 ny = -sp20.y;
-        f32 row_y_offset = -f30 * (f32) r22;
-        text = HSD_SisLib_803A5ACC(0, 1, sp20.x, ny + row_y_offset, sp20.z,
-                                   320.0f, 240.0f);
+        f32 ny;
+        f32 row_y_offset;
+
+        row = row_idx;
+        ny = -position.y;
+        row_y_offset = -f30 * (f32) row;
+        text = HSD_SisLib_803A5ACC(0, 1, position.x, ny + row_y_offset,
+                                   position.z, 320.0f, 240.0f);
 
         {
             data->row_labels[row_idx] = text;
@@ -661,42 +630,38 @@ void mnDiagram2_CreateStatRow(HSD_GObj* gobj, u8 is_name_mode, u8 stat_type,
                 HSD_SisLib_803A6368(text, base->label_ids[stat_type]);
 
                 {
-                    int r21 = base->unit_glyph_ids[stat_type];
-                    if (r21 != 0xFFFF) {
-                        int var_r3;
-                        lb_8000B1CC(data->row0_ref, &base->label_pos, &sp20);
-                        text2 = HSD_SisLib_803A5ACC(0, 1, 12.0f + sp20.x,
-                                                    -sp20.y + row_y_offset,
-                                                    sp20.z, 1.0f, 1.0f);
+                    unit_glyph_id = base->unit_glyph_ids[stat_type];
+                    if (unit_glyph_id != 0xFFFF) {
+                        lb_8000B1CC(data->row0_ref, &base->label_pos,
+                                    &position);
+                        text2 = HSD_SisLib_803A5ACC(0, 1, 12.0f + position.x,
+                                                    -position.y + row_y_offset,
+                                                    position.z, 1.0f, 1.0f);
 
                         data->row_icons[row_idx] = text2;
                         text2->default_alignment = 1;
                         text2->text_color = mnDiagram2_804D4FBC;
 
-                        var_r3 = mnDiagram2_IsDistanceStat(stat_type);
-
-                        if (var_r3 != 0 &&
+                        if (mnDiagram2_IsDistanceStat(stat_type) &&
                             mnDiagram_IsDistanceOverflow(
-                                mnDiagram2_GetStatValue(mode, stat_type,
-                                                        entity_idx)))
+                                mnDiagram2_GetStatValue(is_name_mode,
+                                                        stat_type, entity)))
                         {
                             HSD_SisLib_803A6368(text2, 0x7F);
                         } else {
-                            HSD_SisLib_803A6368(text2, r21);
+                            HSD_SisLib_803A6368(text2, unit_glyph_id);
                         }
                     }
                 }
 
                 {
-                    int var_r0 = mnDiagram2_IsIconOnlyStat(stat_type);
-
-                    if (var_r0 != 0 &&
-                        (u32) mnDiagram2_GetStatValue(
-                            mode, stat_type, entity_idx) < SELKIND_COUNT)
+                    if (mnDiagram2_IsIconOnlyStat(stat_type) &&
+                        (u32) mnDiagram2_GetStatValue(is_name_mode, stat_type,
+                                                      entity) < SELKIND_COUNT)
                     {
-                        HSD_JObj* jobj = mnDiagram_CreateFighterIcon(
-                            mnDiagram2_GetStatValue(mode, stat_type,
-                                                    entity_idx),
+                        jobj = mnDiagram_CreateFighterIcon(
+                            mnDiagram2_GetStatValue(is_name_mode, stat_type,
+                                                    entity),
                             0);
                         HSD_JObjSetTranslateX(jobj, base->icon_pos.x);
                         HSD_JObjSetTranslateY(jobj, (f30 * (f32) row_idx) +
@@ -709,24 +674,26 @@ void mnDiagram2_CreateStatRow(HSD_GObj* gobj, u8 is_name_mode, u8 stat_type,
                 }
 
                 {
-                    u8 str[8];
-                    HSD_Text* text3 = HSD_SisLib_803A6754(0, 1);
-                    data->row_values[row_idx] = text3;
-                    text3->font_size.x = 0.03f;
-                    text3->font_size.y = 0.035f;
-                    lb_8000B1CC(data->icon_parent, &base->value_pos, &sp20);
+                    text2 = HSD_SisLib_803A6754(0, 1);
+                    data->row_values[row_idx] = text2;
+                    text2->font_size.x = 0.03f;
+                    text2->font_size.y = 0.035f;
+                    lb_8000B1CC(data->icon_parent, &base->value_pos,
+                                &position);
                     {
-                        f32 py = -sp20.y + row_y_offset;
-                        text3->pos_x = sp20.x;
-                        text3->pos_y = py;
-                        text3->pos_z = sp20.z;
+                        px = position.x;
+                        py = -position.y + row_y_offset;
+                        pz = position.z;
+                        text2->pos_x = px;
+                        text2->pos_y = py;
+                        text2->pos_z = pz;
                     }
-                    text3->text_color = mnDiagram2_804D4FBC;
-                    text3->default_alignment = 2;
+                    text2->text_color = mnDiagram2_804D4FBC;
+                    text2->default_alignment = 2;
 
                     if (mnDiagram2_IsTimeStat(stat_type)) {
-                        int val = mnDiagram2_GetStatValue(mode, stat_type,
-                                                          entity_idx);
+                        int val = mnDiagram2_GetStatValue(is_name_mode,
+                                                          stat_type, entity);
                         {
                             u32 unsigned_val = (u32) val;
                             if (unsigned_val > 0x927BF) {
@@ -735,39 +702,31 @@ void mnDiagram2_CreateStatRow(HSD_GObj* gobj, u8 is_name_mode, u8 stat_type,
                         }
                         mnDiagram_FormatTime((char*) str, val);
                     } else {
-                        int var_r0_3 = mnDiagram2_IsDistanceStat(stat_type);
-
-                        if (var_r0_3 != 0) {
-                            u32 val = mnDiagram2_GetStatValue(mode, stat_type,
-                                                              entity_idx);
+                        if (mnDiagram2_IsDistanceStat(stat_type)) {
+                            u32 val = mnDiagram2_GetStatValue(
+                                is_name_mode, stat_type, entity);
                             val = mnDiagram_ConvertDistanceForDisplay(val);
                             if (val > 0x98967F) {
                                 val = 0x98967F;
                             }
                             mnDiagram_IntToStr((char*) str, val);
                         } else {
-                            int var_r0_4 =
-                                mnDiagram2_IsPercentageStat(stat_type);
-
-                            if (var_r0_4 != 0) {
+                            if (mnDiagram2_IsPercentageStat(stat_type)) {
                                 int val = mnDiagram2_GetStatValue(
-                                    mode, stat_type, entity_idx);
+                                    is_name_mode, stat_type, entity);
                                 if ((u32) val > 0xF423F) {
                                     val = 0xF423F;
                                 }
                                 mnDiagram_FormatDecimalNumber((char*) str, val,
                                                               2);
                             } else {
-                                int var_r0_5 =
-                                    mnDiagram2_IsIconOnlyStat(stat_type);
-
-                                if (var_r0_5 != 0) {
+                                if (mnDiagram2_IsIconOnlyStat(stat_type)) {
                                     str[0] = mnDiagram2_804D4FD0[0];
                                     str[1] = mnDiagram2_804D4FD0[1];
                                     str[2] = mnDiagram2_804D4FD0[2];
                                 } else {
                                     int val = mnDiagram2_GetStatValue(
-                                        mode, stat_type, entity_idx);
+                                        is_name_mode, stat_type, entity);
                                     if ((u32) val > 0x98967F) {
                                         val = 0x98967F;
                                     }
@@ -778,7 +737,7 @@ void mnDiagram2_CreateStatRow(HSD_GObj* gobj, u8 is_name_mode, u8 stat_type,
                         }
                     }
 
-                    HSD_SisLib_803A6B98(text3, 0.0f, 0.0f, (char*) str);
+                    HSD_SisLib_803A6B98(text2, 0.0f, 0.0f, (char*) str);
                 }
             }
         }
@@ -813,9 +772,7 @@ void mnDiagram2_PopulateStatRows(HSD_GObj* gobj, u8 scroll_offset,
         limit = 0x15;
     }
 
-    i = 0;
-    idx = scroll_offset;
-    do {
+    for (i = 0, idx = scroll_offset; i < 10; i++, idx++) {
         int val;
         if (idx >= limit) {
             val = idx - limit;
@@ -823,16 +780,8 @@ void mnDiagram2_PopulateStatRows(HSD_GObj* gobj, u8 scroll_offset,
             val = idx;
         }
         mnDiagram2_CreateStatRow(gobj, is_name_mode, val, i, (u8) var_r28);
-        i++;
-        idx++;
-    } while (i < 10);
+    }
 }
-
-/* Local struct for mnDiagram2_OnAnimComplete */
-typedef struct {
-    /* 0x00 */ char pad0[0x0C];
-    /* 0x0C */ HSD_JObj* jobj;
-} mnDiagram2_AnimCompleteData;
 
 typedef struct MnDiagram2DataLayout {
     u8 stat_name_ids[0x90];
@@ -842,17 +791,15 @@ typedef struct MnDiagram2DataLayout {
 /// @brief Animation completion callback - destroys GObj when animation ends.
 void mnDiagram2_OnAnimComplete(HSD_GObj* gobj)
 {
-    mnDiagram2_AnimCompleteData* data;
+    Diagram2* data;
     HSD_JObj* jobj;
     AnimLoopSettings* table;
-    int pad;
 
-    data = gobj->user_data;
-    jobj = data->jobj;
+    data = HSD_GObjGetUserData(gobj);
+    jobj = data->xC;
     table = mnDiagram2_803EEB60;
-    pad = 0;
     if (mn_8022ED6C(jobj, table) >= table->end_frame) {
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
     }
 }
 /// @brief Updates navigation arrow visibility based on scroll/selection state.
@@ -946,11 +893,11 @@ void mnDiagram2_Think(HSD_GObj* gobj)
     mode = src[0];
     if (mode != 0x1E || src[0x10] != 1) {
         if (mode == 0x1E) {
-            HSD_GObjPLink_80390228(gobj);
+            HSD_GObjFree(gobj);
         } else {
             HSD_GObjProc* proc;
 
-            HSD_GObjProc_8038FE24(HSD_GObj_804D7838);
+            HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
             proc = HSD_GObj_SetupProc(gobj, mnDiagram2_OnAnimComplete, 0);
             proc->flags_3 = HSD_GObj_804D783C;
             HSD_JObjSetFlagsAll(((HSD_JObj**) data)[4], JOBJ_HIDDEN);
@@ -1008,7 +955,7 @@ void mnDiagram2_Create(int arg0)
     Diagram2* new_var;
     int j;
     int threshold;
-    mnDiagram_ArchiveData* archive = &mnDiagram_804A0834;
+    StaticModelDesc* archive = &MenMainConB2_Top;
     int scroll;
     int i;
     u32 is_name;
@@ -1019,10 +966,11 @@ void mnDiagram2_Create(int arg0)
 
     gobj = GObj_Create(6, 7, 0x80);
     mnDiagram2_804D6C18 = gobj;
-    jobj = HSD_JObjLoadJoint(archive->x0);
+    jobj = HSD_JObjLoadJoint(archive->joint);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 6, 0x80);
-    HSD_JObjAddAnimAll(jobj, archive->x4, archive->x8, archive->xC);
+    HSD_JObjAddAnimAll(jobj, archive->animjoint, archive->matanim_joint,
+                       archive->shapeanim_joint);
     HSD_JObjReqAnimAll(jobj, 0.0f);
 
     user_data = (Diagram2*) HSD_MemAlloc(sizeof(Diagram2));
@@ -1059,8 +1007,7 @@ void mnDiagram2_Create(int arg0)
         threshold = 0x15;
     }
 
-    j = 0;
-    do {
+    for (j = 0; j < 10; j++) {
         if (scroll >= threshold) {
             offset = scroll - threshold;
         } else {
@@ -1068,8 +1015,7 @@ void mnDiagram2_Create(int arg0)
         }
         mnDiagram2_CreateStatRow(gobj, is_name, offset, j, entity_val);
         scroll++;
-        j++;
-    } while (j < 10);
+    }
 
     {
         u32 mode = user_data->is_name_mode;
@@ -1235,10 +1181,10 @@ u8 mnDiagram2_GetRankedName(u8 stat_type, u8 rank)
 
 /// @brief Computes aggregated fighter ranking across all saved names for icon
 /// stats.
-/// @param out Output buffer (cast to SortEntry*) for result
 /// @param type Stat type (0x15=Most Played, 0x16=2nd Most, 0x17=Least Played)
 /// @param idx Rank index to retrieve
-void mnDiagram2_GetAggregatedFighterRank(u8* out, u8 type, u8 idx)
+void mnDiagram2_GetAggregatedFighterRank(mnDiagram2_SortEntry* out, u8 type,
+                                         u8 idx)
 {
     mnDiagram2_SortEntry entries[SELKIND_COUNT];
     mnDiagram2_SortEntry temp;
@@ -1316,10 +1262,10 @@ void mnDiagram2_GetAggregatedFighterRank(u8* out, u8 type, u8 idx)
 
     // Write result to output buffer
     if (entries[idx].value != 0) {
-        *(mnDiagram2_SortEntry*) out = entries[idx];
+        *out = entries[idx];
     } else {
         entries[idx].idx = SELKIND_COUNT;
-        *(mnDiagram2_SortEntry*) out = entries[idx];
+        *out = entries[idx];
     }
 }
 

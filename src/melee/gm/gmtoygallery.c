@@ -1,12 +1,12 @@
 #include "gmtoygallery.h"
 
 #include "gm_unsplit.h"
-
-#include "melee/gm/gm_unsplit.h"
-#include "melee/gm/types.h"
+#include "types.h"
 
 /* 1BEC80 */ static void onExit(GameModeState*);
 /* 4D6908 */ static UNK_T exit_data[2];
+/* 4D6910 */ static UNK_T toy_lottery_exit_data[2];
+/* 4D6918 */ UNK_T toy_collection_exit_data[2];
 
 GameModeState gm_Mode_ToyGallery_States[] = {
     {

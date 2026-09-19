@@ -1,24 +1,23 @@
+#include <string.h>
+#if BUILD_TARGET_PC
 #include <stdio.h>
 #include <stdlib.h>
+#endif
+
 #include "lb_0195.h"
 #include "lbarchive.h"
-
 #include "lbdvd.static.h"
-
 #include "lbfile.h"
 #include "lbheap.h"
 #include "types.h"
-
-#include "gm/gmcameramode.h"
-
-#include <string.h>
 #include <dolphin/dvd.h>
-#include <baselib/debug.h>
 #include <melee/db/db.h>
 #include <melee/ef/efasync.h>
+#include <melee/gm/gmcameramode.h>
 #include <melee/gr/grdatfiles.h>
 #include <melee/gr/stage.h>
 #include <melee/pl/player.h>
+#include <sysdolphin/baselib/debug.h>
 
 /* 0189EC */ static void lbDvd_800189EC(int);
 
@@ -212,24 +211,24 @@ void lbDvd_80017960(void)
     }
 
     for (i = 0; i < 8; i++) {
-        if (game_cache->entries[i].char_id != CHKIND_NONE) {
+        if (game_cache->entries[i].char_id != ChKind_None) {
             Player_80031CB0(game_cache->entries[i].char_id,
                             game_cache->entries[i].color);
         }
-        if (game_cache->entries[i].char_id == CKIND_KIRBY) {
+        if (game_cache->entries[i].char_id == CKind_Kirby) {
             if (game_cache->entries[i].x5 == 0) {
                 CharacterKind kind;
-                for (kind = 0; kind < CHKIND_MAX; kind++) {
+                for (kind = 0; kind < ChKind_Max; kind++) {
                     Player_80031D2C(kind, game_cache->entries[i].color);
                 }
             } else {
                 for (j = 0; j < 8; j++) {
-                    if (game_cache->entries[j].char_id != CHKIND_NONE) {
-                        if (game_cache->entries[j].char_id == CKIND_KIRBY &&
+                    if (game_cache->entries[j].char_id != ChKind_None) {
+                        if (game_cache->entries[j].char_id == CKind_Kirby &&
                             game_cache->entries[j].x5 == 0)
                         {
                             CharacterKind kind;
-                            for (kind = 0; kind < CHKIND_MAX; kind++) {
+                            for (kind = 0; kind < ChKind_Max; kind++) {
                                 Player_80031D2C(kind,
                                                 game_cache->entries[i].color);
                             }
@@ -308,8 +307,7 @@ void lbDvd_CachePreloadedFile(s32 index)
             preloadEntry->load_score = 9999;
             lbFile_800164A4(preloadEntry->entry_num,
                             (uintptr_t) preloadEntry->raw_data->addr,
-                            &preloadEntry->size, 2, lbDvd_80017E64,
-                            (void*) index);
+                            &preloadEntry->size, 2, lbDvd_80017E64, index);
         }
     }
 }
@@ -351,7 +349,7 @@ void lbDvd_80017CC4(void)
     }
 }
 
-void lbDvd_80017E64(int key, int index, void* value, bool cancelflag)
+void lbDvd_80017E64(int key, uintptr_t index, void* value, bool cancelflag)
 {
     PreloadEntry* preloadEntry = &preloadCache.entries[index];
     if (cancelflag != 0) {
@@ -397,19 +395,18 @@ void* lbDvd_GetPreloadedArchive(ssize_t entry_num)
 
         switch (type) {
         case 2:
-            lbArchive_InitializeDAT((HSD_Archive*) entry->archive->addr,
+            lbArchive_InitializeDAT(entry->archive->addr,
                                     (u8*) entry->raw_data->addr, entry->size);
             break;
 
         case 3:
-            efAsync_OnLoad((HSD_Archive*) entry->archive->addr,
-                           (u8*) entry->raw_data->addr, entry->size,
-                           entry->effect_index);
+            efAsync_OnLoad(entry->archive->addr, (u8*) entry->raw_data->addr,
+                           entry->size, entry->effect_index);
             break;
 
         case 4:
-            grDatFiles_801C5FC0((HSD_Archive*) entry->archive->addr,
-                                entry->raw_data->addr, entry->size);
+            grDatFiles_801C5FC0(entry->archive->addr, entry->raw_data->addr,
+                                entry->size);
             break;
 
         default:
@@ -420,9 +417,9 @@ void* lbDvd_GetPreloadedArchive(ssize_t entry_num)
         entry->load_state = 2;
     }
     if (entry->archive) {
-        return (HSD_Archive*) entry->archive->addr;
+        return entry->archive->addr;
     }
-    return (void*) entry->raw_data->addr;
+    return entry->raw_data->addr;
 }
 
 struct lbDvd_803B72C0_t {

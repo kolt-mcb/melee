@@ -1,17 +1,15 @@
 #ifndef SYSDOLPHIN_BASELIB_PSSTRUCTS_H
 #define SYSDOLPHIN_BASELIB_PSSTRUCTS_H
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/archive.h"
-
-#include "baselib/forward.h" // IWYU pragma: export
-
-#include "baselib/jobj.h"
+#include <sysdolphin/baselib/forward.h> // IWYU pragma: export
 
 #include <dolphin/gx.h>
 #include <dolphin/gx/GXEnum.h>
 #include <dolphin/mtx.h>
+#include <sysdolphin/baselib/archive.h>
+#include <sysdolphin/baselib/jobj.h>
 
 struct HSD_Fog;
 
@@ -300,9 +298,9 @@ static inline void psSetCurrentMtx(GXPosNrmMtx idx);
 static inline HSD_Particle* psDispSubPoint(HSD_Particle* pp);
 static inline HSD_Particle* psDispSubPointTrail(HSD_Particle* pp);
 static inline void psDispSubMakePolygon(HSD_Particle* pp, u8* texform, f32 x,
-                                        f32 y, f32 z, f32 ppvx, f32 ppvy,
-                                        f32 ppvz, f32 x0, f32 y0, f32 z0,
-                                        f32 x1, f32 y1, f32 z1);
+                                        f32 y, f32 z, f32 x0, f32 y0, f32 z0,
+                                        f32 x1, f32 y1, f32 z1, GXColor* color,
+                                        f32* prev_x, f32* prev_y, f32* prev_z);
 
 static inline void psDispSub(HSD_Particle* pp, u8* texform);
 

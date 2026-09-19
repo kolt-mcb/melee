@@ -2,15 +2,14 @@
 
 #include <placeholder.h>
 
-#include "ft/ftCo_800C703C.h"
-#include "ft/inlines.h"
-#include "ft/types.h"
-#include "it/inlines.h"
-#include "it/it_26B1.h"
-#include "lb/lb_0146.h"
-#include "lb/types.h"
-
-#include <baselib/gobj.h>
+#include "ftCo_800C703C.h"
+#include "inlines.h"
+#include "types.h"
+#include <melee/it/inlines.h>
+#include <melee/it/it_26B1.h>
+#include <melee/lb/lb_0146.h>
+#include <melee/lb/types.h>
+#include <sysdolphin/baselib/gobj.h>
 
 void ft_80081938(HSD_GObj* gobj)
 {
@@ -51,7 +50,7 @@ static inline void inlineA0(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     Item_GObj* cur;
-    for (cur = HSD_GObj_Entities->items; cur != NULL;
+    for (cur = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_ITEM]; cur != NULL;
          cur = HSD_GObjGetNext(cur))
     {
         if (it_8026BC68(cur)) {

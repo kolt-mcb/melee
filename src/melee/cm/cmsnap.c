@@ -1,13 +1,11 @@
-#include "cm/cmsnap.h"
+#include "cmsnap.h"
 
-#include "cm/forward.h"
-
-#include "lb/lbspdisplay.h"
-
-#include <baselib/debug.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/tobj.h>
+#include "forward.h"
+#include <melee/lb/lbspdisplay.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/tobj.h>
 
 typedef struct {
     CmSnapStatus status;
@@ -44,7 +42,7 @@ void cmSnap_80031640(HSD_GObj* arg0, int code)
     case CmSnapStatus_Unk2:
     case CmSnapStatus_Unk3:
     case CmSnapStatus_Unk4:
-        _p(status) += 1;
+        _p(status) = (int) _p(status) + 1;
         break;
     default:
         break;

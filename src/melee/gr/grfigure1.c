@@ -1,21 +1,18 @@
-#include "gr/grfigure1.h"
+#include "grfigure1.h"
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "gr/granime.h"
-#include "gr/ground.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/types.h"
+#include <melee/lb/forward.h>
 
-#include "lb/forward.h"
-
-#include "lb/lb_00F9.h"
-
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "types.h"
 #include <dolphin/mtx.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
+#include <melee/lb/lb_00F9.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
 
 /* 20DFDC */ static void grFigure1_OnDemoInit(int);
 /* 20DFE0 */ static void grFigure1_OnInit(void);
@@ -23,7 +20,7 @@
 /* 20E054 */ static void grFigure1_OnStart(void);
 /* 20E078 */ static bool grFigure1_8020E078(void);
 /* 20E080 */ static HSD_GObj* grFigure1_8020E080(int);
-/* 20E168 */ static void grFigure1_8020E168(Ground_GObj*);
+/* 20E168 */ static void stageGObj0_OnInit(Ground_GObj*);
 /* 20E194 */ static bool grFigure1_8020E194(Ground_GObj*);
 /* 20E19C */ static void grFigure1_8020E19C(Ground_GObj*);
 /* 20E1A0 */ static void grFigure1_8020E1A0(Ground_GObj*);
@@ -31,7 +28,7 @@
 /* 20E1D0 */ static bool grFigure1_8020E1D0(Ground_GObj*);
 /* 20E1D8 */ static void grFigure1_8020E1D8(Ground_GObj*);
 /* 20E1FC */ static void grFigure1_8020E1FC(Ground_GObj*);
-/* 20E200 */ static void grFigure1_8020E200(Ground_GObj*);
+/* 20E200 */ static void stageGObj2_OnInit(Ground_GObj*);
 /* 20E250 */ static bool grFigure1_8020E250(Ground_GObj*);
 /* 20E258 */ static void grFigure1_8020E258(Ground_GObj*);
 /* 20E25C */ static void grFigure1_8020E25C(Ground_GObj*);
@@ -39,11 +36,11 @@
 /* 20E268 */ static bool grFigure1_OnCheckShadowRender(Vec3*, int, HSD_JObj*);
 
 static StageCallbacks grEF1_StageCallbacks[3] = {
-    { grFigure1_8020E168, grFigure1_8020E194, grFigure1_8020E19C,
+    { stageGObj0_OnInit, grFigure1_8020E194, grFigure1_8020E19C,
       grFigure1_8020E1A0, 0 },
     { grFigure1_8020E1A4, grFigure1_8020E1D0, grFigure1_8020E1D8,
       grFigure1_8020E1FC, (1 << 30) | (1 << 31) },
-    { grFigure1_8020E200, grFigure1_8020E250, grFigure1_8020E258,
+    { stageGObj2_OnInit, grFigure1_8020E250, grFigure1_8020E258,
       grFigure1_8020E25C, 0 }
 };
 
@@ -107,10 +104,9 @@ static HSD_GObj* grFigure1_8020E080(int gobj_id)
     return gobj;
 }
 
-static void grFigure1_8020E168(Ground_GObj* gobj)
+static void stageGObj0_OnInit(Ground_GObj* gobj)
 {
-    Ground* gp = GET_GROUND(gobj);
-    grAnime_801C8138(gobj, gp->map_id, 0);
+    Ground_StartMapAnim(gobj);
 }
 
 static bool grFigure1_8020E194(Ground_GObj* arg0)
@@ -127,7 +123,7 @@ static void grFigure1_8020E1A4(Ground_GObj* gobj)
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
 
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
 }
 
 static bool grFigure1_8020E1D0(Ground_GObj* arg0)
@@ -137,15 +133,15 @@ static bool grFigure1_8020E1D0(Ground_GObj* arg0)
 
 static void grFigure1_8020E1D8(Ground_GObj* gobj)
 {
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
     lb_800115F4();
 }
 
 static void grFigure1_8020E1FC(Ground_GObj* arg0) {}
 
-static void grFigure1_8020E200(Ground_GObj* gobj)
+static void stageGObj2_OnInit(Ground_GObj* gobj)
 {
-    Ground_JObjInline1(gobj);
+    Ground_InitMapCollAndAnim(gobj);
 }
 
 static bool grFigure1_8020E250(Ground_GObj* arg0)

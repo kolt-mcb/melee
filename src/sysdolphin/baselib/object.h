@@ -1,12 +1,12 @@
 #ifndef _object_h_
 #define _object_h_
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "baselib/class.h"
-#include "baselib/debug.h"
+#include <sysdolphin/baselib/forward.h>
 
-#include "baselib/forward.h"
+#include <sysdolphin/baselib/class.h>
+#include <sysdolphin/baselib/debug.h>
 
 #define HSD_OBJ_NOREF ((u16) - 1)
 

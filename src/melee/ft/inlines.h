@@ -1,30 +1,25 @@
 #ifndef MELEE_FT_INLINES_H
 #define MELEE_FT_INLINES_H
 
-#include <platform.h>
+#include <Runtime/platform.h>
 #include <string.h>
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
 
-#include "ef/eflib.h"
-
-#include "ft/forward.h"
-
-#include "ft/ftanim.h"
-#include "ft/types.h"
-#include "gm/gm_16AE.h"
-#include "it/it_26B1.h"
-#include "lb/lbvector.h"
-#include "gr/types.h"  /* deg_to_rad */
-
-#include "mp/forward.h"
+#include <melee/ft/forward.h>
+#include <melee/mp/forward.h>
 
 #include <dolphin/mtx.h>
-#include <baselib/archive.h>
-#include <baselib/dobj.h>
-#include <baselib/gobj.h>
-#include <baselib/lobj.h>
+#include <melee/ef/eflib.h>
+#include <melee/ft/ftanim.h>
+#include <melee/ft/types.h>
+#include <melee/it/it_26B1.h>
+#include <melee/lb/lbvector.h>
+#include <sysdolphin/baselib/archive.h>
+#include <sysdolphin/baselib/dobj.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/lobj.h>
 
 #if BUILD_TARGET_PC
 /* PC port: ext_attr points straight at the character's attribute blob inside
@@ -213,7 +208,7 @@ static inline bool ftGetGroundAir(Fighter* fp)
 
 static inline int getStickDirX(Fighter* fp)
 {
-    if (fp->input.lstick.x < 0.0f) {
+    if (fp->input.lstick[0].x < 0.0f) {
         return -1;
     } else {
         return +1;
@@ -233,10 +228,10 @@ static inline void getAccelAndTarget(Fighter* fp, float* accel,
                                      float* target_vel)
 {
     ftCo_DatAttrs* co_attrs = &fp->co_attrs;
-    *accel = fp->input.lstick.x * fp->co_attrs.dash_accel_mul;
-    *accel += fp->input.lstick.x > 0 ? +co_attrs->dash_accel_base
-                                     : -co_attrs->dash_accel_base;
-    *target_vel = fp->input.lstick.x * co_attrs->dash_max_velocity;
+    *accel = fp->input.lstick[0].x * fp->co_attrs.dash_accel_mul;
+    *accel += fp->input.lstick[0].x > 0 ? +co_attrs->dash_accel_base
+                                        : -co_attrs->dash_accel_base;
+    *target_vel = fp->input.lstick[0].x * co_attrs->dash_max_velocity;
 }
 
 /// used for all fighters except Kirby and Purin
@@ -307,6 +302,30 @@ static inline void Fighter_OnKnockbackExit(Fighter_GObj* gobj, s32 arg1)
 static inline void Fighter_UnsetCmdVar0(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
+    fp->cmd_vars[0] = 0;
+}
+
+static inline void Fighter_SetDamageCallback(Fighter_GObj* gobj,
+                                             HSD_GObjEvent cb)
+{
+    Fighter* fp = GET_FIGHTER(gobj);
+    fp->take_dmg_cb = cb;
+    fp->death2_cb = cb;
+}
+
+static inline void Fighter_SetDamageCallbacks(Fighter* fp,
+                                              HSD_GObjEvent take_dmg_cb,
+                                              HSD_GObjEvent death2_cb)
+{
+    fp->take_dmg_cb = take_dmg_cb;
+    fp->death2_cb = death2_cb;
+}
+
+static inline void Fighter_ClearCmdVars(Fighter* fp)
+{
+    fp->cmd_vars[3] = 0;
+    fp->cmd_vars[2] = 0;
+    fp->cmd_vars[1] = 0;
     fp->cmd_vars[0] = 0;
 }
 
@@ -383,32 +402,6 @@ static inline int ftGetFacingDirInt(Fighter* fp)
         return -1;
     } else {
         return +1;
-    }
-}
-
-static inline int ftGetFacingDirInt2(Fighter_GObj* gobj)
-{
-    return ftGetFacingDirInt(GET_FIGHTER(gobj));
-}
-
-/// @todo Fix naming.
-#define gmScriptEventCast(p_event, type) ((type*) p_event)
-#define gmScriptEventUpdatePtr(event, type)                                   \
-    (event = (void*) ((uintptr_t) event + 4))
-
-static inline CommandInfo* getCmdScript(Fighter* fp)
-{
-    return &fp->x3E4_fighterCmdScript;
-}
-
-static inline bool canUseCstick(Fighter* fp)
-{
-    /// Returns true if single-button mode is off,
-    /// and the held item allows using the C-stick.
-    if (!gm_8016B0FC() || it_8026B30C(fp->item_gobj) == 0) {
-        return true;
-    } else {
-        return false;
     }
 }
 

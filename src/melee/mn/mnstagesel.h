@@ -1,9 +1,9 @@
 #ifndef GALE01_2599EC
 #define GALE01_2599EC
 
-#include <placeholder.h>
-
 #include <sysdolphin/baselib/forward.h>
+
+#include <placeholder.h>
 
 /* 2599EC */ int mnStageSel_802599EC(void);
 /* 259C28 */ void mnStageSel_80259C28(void);
@@ -17,7 +17,7 @@
 /* 25A998 */ void mnStageSel_Scene_OnEnter(UNK_T);
 /* 25B850 */ void mnStageSel_Scene_OnFrame(void);
 /* 25BB5C */ void mnStageSel_Scene_OnExit(UNK_T);
-/* 25BBD4 */ int mnStageSel_8025BBD4(void);
+/* 25BBD4 */ int mnSelStageRandom(void);
 /* 25BC08 */ int mnStageSel_8025BC08(int);
 
 #endif

@@ -1,18 +1,16 @@
 #ifndef GALE01_028B9C
 #define GALE01_028B9C
 
-#include <platform.h>
+#include <Runtime/platform.h>
 
-#include "cm/forward.h"
+#include <melee/cm/forward.h>
+#include <sysdolphin/baselib/forward.h>
 
-#include "dolphin/gx/GXStruct.h"
-
-#include <baselib/forward.h>
-
+#include <dolphin/gx/GXStruct.h>
 #include <dolphin/mtx.h>
-#include <baselib/cobj.h>
+#include <sysdolphin/baselib/cobj.h>
 
-/* 028B9C */ void Camera_80028B9C(int);
+/* 028B9C */ void Camera_Init(int);
 /* 028F5C */ void Camera_80028F5C(CmSubject*, CmSubjectState);
 /* 029020 */ CmSubject* Camera_80029020(void);
 /* 029044 */ CmSubject* Camera_80029044(int);
@@ -24,9 +22,9 @@
 /* 029BC4 */ void Camera_80029BC4(CameraBounds*, CameraTransformState*);
 /* 029C88 */ void Camera_80029C88(CameraBounds*, CameraTransformState*, f32);
 /* 029CF8 */ void Camera_80029CF8(CameraBounds*, CameraTransformState*);
-/* 02A0C0 */ void Camera_8002A0C0(CameraBounds*, CameraTransformState*);
-/* 02A278 */ void Camera_8002A278(float x, float y);
-/* 02A28C */ void Camera_8002A28C(CameraBounds*);
+/* 02A0C0 */ void Camera_ApplyQuake(CameraBounds*, CameraTransformState*);
+/* 02A278 */ void Camera_SetQuakeOffset(float x, float y);
+/* 02A28C */ void Camera_UpdateQuakes(CameraBounds*);
 /* 02A4AC */ void Camera_8002A4AC(HSD_GObj*);
 /* 02A768 */ void Camera_8002A768(CameraTransformState*, s32);
 /* 02AF68 */ void Camera_8002AF68(HSD_CObj*, CameraTransformState*);
@@ -67,8 +65,33 @@
 /* 02F3AC */ void Camera_8002F3AC(void);
 /* 02F474 */ void Camera_SetModeToStandard(void);
 /* 02F488 */ s32 Camera_SetBounds(Vec4*);
+
+/**
+ * @brief Switches the camera to pause-camera mode.
+ *
+ * Configures pause-camera bounds, eye offset, and zoom from stage data for the
+ * given pauser. Called when a match is paused (e.g. via
+ * #gm_EnablePlayerPauseCamera or #Camera_8002F760).
+ *
+ * @param[in] pauserSlot Player slot to center the pause camera on, or a
+ * special slot id. Valid player slots are 0-5; slots @c 0xA and @c 0xB
+ * are also accepted (@c 0xB is used when no valid slot is available).
+ * Out-of-range values default to @c 0.
+ *
+ * @param[in] pauserId   Controller port / player id of the pauser. Valid ids
+ * are 0-3; ids 4-5 are also accepted. Out-of-range values default to @c 4.
+ * @param[in] arg2       Initial zoom preset: @c 0 uses the stage's default
+ * pause distance; @c 1 uses the current minimum zoom.
+ */
 /* 02F4D4 */ void Camera_SetUpPauseCamera(s8, s8, s32);
+
+/**
+ * @brief Switches the camera to pause-camera mode with default stage zoom.
+ *
+ * Wrapper around #Camera_SetUpPauseCamera with @p arg2 set to @c 0.
+ */
 /* 02F73C */ void Camera_SetUpPauseCameraWithDefaultZoom(s8, s8);
+
 /* 02F760 */ void Camera_8002F760(s8, s8);
 /* 02F784 */ void Camera_8002F784(s8, s8);
 /* 02F7AC */ void Camera_8002F7AC(s8);
@@ -87,10 +110,15 @@
 /* 030178 */ bool Camera_80030178(void);
 /* 03019C */ Vec3* Camera_8003019C(void);
 /* 0304E0 */ void Camera_800304E0(HSD_GObj*, int);
-/* 030688 */ void Camera_80030688(void);
+/* 030688 */ void Camera_Create(void);
 /* 030730 */ void Camera_80030730(f32);
-/* 030740 */ void Camera_SetBackgroundColor(u8, u8, u8);
-/* 030758 */ GXColor Camera_80030758(void);
+
+/// @param r The red component.
+/// @param g The green component.
+/// @param b The blue component.
+/* 030740 */ void Camera_SetBackgroundColor(u8 r, u8 g, u8 b);
+
+/* 030758 */ GXColor Camera_GetBackgroundColor(void);
 /* 030788 */ void Camera_GetTransformPosition(Vec*);
 /* 0307AC */ void Camera_GetTransformInterest(Vec*);
 /* 0307D0 */ bool Camera_800307D0(f32*, f32*, f32*);
@@ -116,9 +144,9 @@
 /* 030DE4 */ void Camera_80030DE4(f32, f32);
 /* 030DF8 */ void Camera_80030DF8(void);
 /* 030E10 */ float Camera_80030E10(void);
-/* 030E34 */ void Camera_80030E34(f32);
-/* 030E44 */ void Camera_80030E44(enum_t, Vec*);
-/* 031044 */ void Camera_80031044(s32);
+/* 030E34 */ void Camera_SetQuakeScale(f32);
+/* 030E44 */ void Camera_RequestQuake(CmQuakeKind, Vec*);
+/* 031044 */ void Camera_StopQuake(CmQuakeKind);
 /* 031060 */ enum_t Camera_80031060(void);
 /* 031074 */ void Camera_80031074(u8);
 /* 03108C */ enum_t Camera_8003108C(void);

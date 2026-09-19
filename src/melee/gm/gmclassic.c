@@ -1,27 +1,26 @@
 #include "gmclassic.h"
-#if BUILD_TARGET_PC
-#include "port/pc_ptr.h"
-#endif
 
 #if BUILD_TARGET_PC
 #include "port/log.h"
+#include <stdlib.h>
 #endif
 
 #include "gm_unsplit.h"
-
-#include <sysdolphin/baselib/random.h>
-#include <melee/gm/gmmain_lib.h>
-#include <melee/gm/gmregcommon.h>
+#include "gmmain_lib.h"
+#include "gmregcommon.h"
 #include <melee/gr/ground.h>
 #include <melee/gr/stage.h>
 #include <melee/lb/lbaudio_ax.h>
 #include <melee/lb/lbdvd.h>
+#include <sysdolphin/baselib/random.h>
 
 extern UNK_T gmClassic_80470708[];
 extern DebugGameOverData gmClassic_80470850;
 extern UNK_T gmClassic_8047086C;
 extern UNK_T gmClassic_80472AF8;
+#if !BUILD_TARGET_PC
 u8 gm_804908A0[112];
+#endif
 UNK_T gmClassic_804D68D0;
 
 typedef struct gmClassicMatchup {
@@ -39,6 +38,11 @@ typedef struct gmClassicMatchupData {
     /* 0x06 */ u8 pad_06[2];
 } gmClassicMatchupData;
 ASSERT_SIZE(gmClassicMatchupData, 8);
+
+typedef struct gmClassicOrderIndex {
+    u8 idx;
+} gmClassicOrderIndex;
+ASSERT_SIZE(gmClassicOrderIndex, 1);
 
 typedef struct gmClassicIntroData {
     /* 0x00 */ s32 x00;
@@ -58,15 +62,36 @@ typedef struct gmClassicIntroData {
 } gmClassicIntroData;
 ASSERT_SIZE(gmClassicIntroData, 0x20);
 
-typedef struct gmClassic_80490880Data {
-    /* 0x00 */ gmClassicIntroData x00;
-    /* 0x20 */ u8 x20[0x0C];
-    /* 0x2C */ u8 x2C[0x28];
-    /* 0x54 */ u8 x54[0x20];
-    /* 0x74 */ u8 x74[0x0C];
-    /* 0x80 */ u8 x80[0x10];
-} gmClassic_80490880Data;
-ASSERT_SIZE(gmClassic_80490880Data, 0x90);
+typedef union gmClassic_804908A0Data {
+    /* 0x00 */ u8 bytes[0x70];
+    struct {
+        /* 0x00 */ u8 x00[0x0C];
+        /* 0x0C */ u8 x0C[0x28];
+        /* 0x34 */ u8 x34[0x20];
+        /* 0x54 */ u8 x54[0x0C];
+        /* 0x60 */ u8 x60[0x10];
+    } order;
+} gmClassic_804908A0Data;
+ASSERT_SIZE(gmClassic_804908A0Data, 0x70);
+
+typedef struct gmClassicRuntimeData {
+    /* 0x00 */ gmClassicIntroData intro;
+    /* 0x20 */ gmClassic_804908A0Data state;
+} gmClassicRuntimeData;
+ASSERT_SIZE(gmClassicRuntimeData, 0x90);
+
+#if BUILD_TARGET_PC
+/* PC port: the code below reads this as one 0x90-byte object -- it puns
+ * `&gmClassicIntroDataBuffer` to gmClassicRuntimeData, whose `state` half is
+ * the *next* global, gm_804908A0. The two sit next to each other in the
+ * console's .data; here they are separate objects, so every
+ * `o->state.order.*` access ran off the end of the 0x20-byte intro buffer
+ * (and `&gm_804908A0[0x60]` addressed something else again). Give the pair
+ * the single home the code assumes and let both names address it. */
+gmClassicRuntimeData gmClassicRuntimeBuffer;
+#define gmClassicIntroDataBuffer (gmClassicRuntimeBuffer.intro)
+#define gm_804908A0 (gmClassicRuntimeBuffer.state.bytes)
+#endif
 
 typedef struct gmClassic_803DDEC8Data {
     /* 0x000 */ gm_803DDEC8Struct x00[12];
@@ -87,7 +112,9 @@ typedef struct gmClassicSceneData {
 } gmClassicSceneData;
 ASSERT_SIZE(gmClassicSceneData, 0x560);
 
-static gmClassic_80490880Data gmClassic_80490880;
+#if !BUILD_TARGET_PC
+gmClassicIntroData gmClassicIntroDataBuffer;
+#endif
 
 GameModeState gm_Mode_Classic_States[] = {
     {
@@ -98,7 +125,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -122,7 +149,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -146,7 +173,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -170,7 +197,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -194,7 +221,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -218,7 +245,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -242,7 +269,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -266,7 +293,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -290,7 +317,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -314,7 +341,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -338,7 +365,7 @@ GameModeState gm_Mode_Classic_States[] = {
         NULL,
         {
             GS_INTRO_EASY,
-            &gmClassic_80490880,
+            &gmClassicIntroDataBuffer,
             &gmClassic_804D68D0,
         },
     },
@@ -481,13 +508,44 @@ static gmClassic_803DDEC8Data gmClassic_803DDEC8 = {
     { 0 },
 };
 
-/* The round table's length, for the reads that walk it looking for a 0xD
- * sentinel. */
+#if BUILD_TARGET_PC
+/* The round table has twelve entries and the round number indexed it with no
+ * check. On the disc the matchup tables follow it inside the same object, so
+ * an out-of-range round reads a matchup as a round descriptor and carries on;
+ * the values it yields decide a scene id and a preload slot. */
 #define PC_ROUND_MAX \
     ((int) (sizeof(gmClassic_803DDEC8.x00) / sizeof(gmClassic_803DDEC8.x00[0])))
+static gm_803DDEC8Struct* pc_classic_round(int round)
+{
+    if (round < 0 || round >= PC_ROUND_MAX) {
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "[PORT WARN] classic round %d is outside the "
+                            "%d-entry table; clamping\n", round, PC_ROUND_MAX);
+        }
+        round = round < 0 ? 0 : PC_ROUND_MAX - 1;
+    }
+    return &gmClassic_803DDEC8.x00[round];
+}
+/* The walks below stop on a 0xD sentinel and write into every entry they
+ * pass; bound them by the table instead. */
+static const gm_803DDEC8Struct* pc_round_end(const gm_803DDEC8Struct* from)
+{
+    const gm_803DDEC8Struct* first = &gmClassic_803DDEC8.x00[0];
+    const gm_803DDEC8Struct* last = first + PC_ROUND_MAX;
+    if (from < first || from >= last) {
+        return from + 1;
+    }
+    return last;
+}
+#endif
+
 
 static inline void gmClassic_InitMatchupOrder(const gmClassicMatchup* matchups,
-                                              u8* order)
+                                              gmClassicOrderIndex* order,
+                                              gmClassicOrderIndex* runtime,
+                                              s32 order_offset)
 {
     s32 count;
     s32 i;
@@ -504,15 +562,16 @@ static inline void gmClassic_InitMatchupOrder(const gmClassicMatchup* matchups,
     }
 
     for (i = 0; i < count; i++) {
-        order[i] = i;
+        order[i].idx = i;
     }
 
     for (i = 0; i < count; i++) {
-        u8* swap = &order[HSD_Randi(count)];
-        u8* cur = &order[i];
-        u8 tmp = *cur;
-        *cur = *swap;
-        *swap = tmp;
+        s32 swap_idx = HSD_Randi(count);
+        gmClassicOrderIndex* swap = &runtime[swap_idx];
+        gmClassicOrderIndex* cur = &order[i];
+        u8 tmp = cur->idx;
+        cur->idx = swap[order_offset].idx;
+        swap[order_offset].idx = tmp;
     }
 }
 
@@ -539,56 +598,50 @@ static gmClassicMatchup* gmClassic_801B2BA4(gmClassicMatchup* arg0,
 
     result = NULL;
     target_char = gmMainLib_8015CDC8()->c_kind;
-    outer = 0;
 
-    goto check;
-loop:
-    entry = &arg0[arg1[outer]];
-    for (j = 0; j < 3; j++) {
-        int cur_char = entry->x02[j];
+    for (outer = 0; outer < gmClassic_GetMatchupCount(arg0); outer++) {
+        entry = &arg0[arg1[outer]];
+        for (j = 0; j < 3; j++) {
+            int cur_char = entry->x02[j];
 
-        if (cur_char == CHKIND_NONE) {
-            continue;
-        }
-        if (gm_80164430(entry->x00) == 0) {
-            goto next;
-        }
-        if (gm_IsCKindUnlocked(cur_char) == 0) {
-            goto next;
-        }
-        if (cur_char == target_char) {
-            goto next;
-        }
+            if (cur_char == ChKind_None) {
+                continue;
+            }
+            if (gm_80164430(entry->x00) == 0) {
+                goto next;
+            }
+            if (gm_IsCKindUnlocked(cur_char) == 0) {
+                goto next;
+            }
+            if (cur_char == target_char) {
+                goto next;
+            }
 
-        for (temp_idx = 0; temp_idx < PC_ROUND_MAX && arg2[temp_idx].x0 != 0xD; temp_idx++) {
-            for (k = 0; k < 3; k++) {
-                if (arg2[temp_idx].xC != NULL &&
-                    cur_char == arg2[temp_idx].xC->x02[k])
-                {
-                    goto next;
+            for (temp_idx = 0; temp_idx < PC_ROUND_MAX && arg2[temp_idx].x0 != 0xD; temp_idx++) {
+                for (k = 0; k < 3; k++) {
+                    if (arg2[temp_idx].xC != NULL &&
+                        cur_char == arg2[temp_idx].xC->x02[k])
+                    {
+                        goto next;
+                    }
+                }
+            }
+
+            for (temp_idx = 0; temp_idx < PC_ROUND_MAX && arg2[temp_idx].x0 != 0xD; temp_idx++) {
+                if (arg2[temp_idx].xC != NULL) {
+                    if (Stage_8022519C(arg2[temp_idx].xC->x00) ==
+                        Stage_8022519C(entry->x00))
+                    {
+                        result = entry;
+                        goto next;
+                    }
                 }
             }
         }
-
-        for (temp_idx = 0; temp_idx < PC_ROUND_MAX && arg2[temp_idx].x0 != 0xD; temp_idx++) {
-            if (arg2[temp_idx].xC != NULL) {
-                if (Stage_8022519C(arg2[temp_idx].xC->x00) ==
-                    Stage_8022519C(entry->x00))
-                {
-                    result = entry;
-                    goto next;
-                }
-            }
+        if (entry != NULL) {
+            return entry;
         }
-    }
-    if (entry != NULL) {
-        return entry;
-    }
-next:
-    outer++;
-check:
-    if (outer < gmClassic_GetMatchupCount(arg0)) {
-        goto loop;
+    next:;
     }
 
     if (result != NULL) {
@@ -604,31 +657,10 @@ static gmClassicMatchupData gm_804D4320 = { { 0x052, { 0x21, 0x21, 0x21 }, 0 },
 static gmClassicMatchupData gm_804D4328 = { { 0x053, { 0x21, 0x21, 0x21 }, 0 },
                                             { 0, 0 } };
 
-
-#if BUILD_TARGET_PC
-/* These walks stop on a 0xD sentinel and write a matchup pointer into every
- * entry they pass. The array they walk is the twelve-entry round table, and
- * on the disc the matchup tables follow it in the same object, so a missing
- * sentinel merely wanders into data that is still the game's. Here it runs
- * past the end of the object and writes heap pointers into whatever follows
- * -- which is how a Classic run on the tablet ended up calling 0x67089b5c,
- * an address inside the game heap rather than any code. Stop at the end of
- * the table. */
-static const gm_803DDEC8Struct* pc_round_end(const gm_803DDEC8Struct* from)
-{
-    const gm_803DDEC8Struct* first = &gmClassic_803DDEC8.x00[0];
-    const gm_803DDEC8Struct* last =
-        first + sizeof(gmClassic_803DDEC8.x00) / sizeof(gmClassic_803DDEC8.x00[0]);
-    if (from < first || from >= last) {
-        return from + 1; /* not the round table; let one entry through */
-    }
-    return last;
-}
-#endif
-
 static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
 {
-    gmClassic_80490880Data* o = &gmClassic_80490880;
+    gmClassicRuntimeData* o =
+        (gmClassicRuntimeData*) &gmClassicIntroDataBuffer;
     gm_803DDEC8Struct* ptr;
 #if BUILD_TARGET_PC
     /* The original reaches the matchup tables by casting the state array and
@@ -645,8 +677,8 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
 
     for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         if (ptr->x1 & 8) {
-            gmClassicMatchup* result =
-                gmClassic_801B2BA4(scene_matchups->x2B0, o->x80, arg0);
+            gmClassicMatchup* result = gmClassic_801B2BA4(
+                scene_matchups->x2B0, o->state.order.x60, arg0);
             if (result != NULL) {
                 ptr->xC = result;
             } else {
@@ -659,8 +691,8 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
     for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         u8 flags = ptr->x1;
         if ((flags & 2) && !(flags & 0x20)) {
-            gmClassicMatchup* result =
-                gmClassic_801B2BA4(scene_matchups->x26C, o->x74, arg0);
+            gmClassicMatchup* result = gmClassic_801B2BA4(
+                scene_matchups->x26C, o->state.order.x54, arg0);
             if (result != NULL) {
                 ptr->xC = result;
             } else {
@@ -673,8 +705,8 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
     for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         u8 flags = ptr->x1;
         if ((flags & 0x10) && !(flags & 0x20)) {
-            gmClassicMatchup* result =
-                gmClassic_801B2BA4(scene_matchups->x1B8, o->x54, arg0);
+            gmClassicMatchup* result = gmClassic_801B2BA4(
+                scene_matchups->x1B8, o->state.order.x34, arg0);
             if (result != NULL) {
                 ptr->xC = result;
             } else {
@@ -687,8 +719,8 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
     for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         u8 flags = ptr->x1;
         if (flags == 0 || flags == 4) {
-            gmClassicMatchup* result =
-                gmClassic_801B2BA4(scene_matchups->x0CC, o->x2C, arg0);
+            gmClassicMatchup* result = gmClassic_801B2BA4(
+                scene_matchups->x0CC, o->state.order.x0C, arg0);
             if (result != NULL) {
                 ptr->xC = result;
             } else {
@@ -739,29 +771,34 @@ void gm_Mode_Classic_OnLoad(void)
         (gmClassicSceneData*) gm_Mode_Classic_States;
     gmClassic_803DDEC8Data* scene_matchups = &scene_data->matchups;
 #endif
-    gmClassic_80490880Data* o = &gmClassic_80490880;
+    gmClassicRuntimeData* o =
+        (gmClassicRuntimeData*) &gmClassicIntroDataBuffer;
     gm_803DDEC8Struct* entry;
-    PAD_STACK(56);
+    PAD_STACK(40);
 
     for (entry = scene_matchups->x00; entry->x0 != 0x0D; entry++) {
         entry->xC = NULL;
     }
 
     gmClassic_InitMatchupOrder(scene_matchups->x2B0,
-                               gmClassic_80490880.x80);
+                               (gmClassicOrderIndex*) &gm_804908A0[0x60],
+                               (gmClassicOrderIndex*) o, 0x80);
     gmClassic_InitMatchupOrder(scene_matchups->x26C,
-                               gmClassic_80490880.x74);
+                               (gmClassicOrderIndex*) &gm_804908A0[0x54],
+                               (gmClassicOrderIndex*) o, 0x74);
     gmClassic_InitMatchupOrder(scene_matchups->x1B8,
-                               gmClassic_80490880.x54);
+                               (gmClassicOrderIndex*) &gm_804908A0[0x34],
+                               (gmClassicOrderIndex*) o, 0x54);
     gmClassic_InitMatchupOrder(scene_matchups->x0CC,
-                               gmClassic_80490880.x2C);
+                               (gmClassicOrderIndex*) &gm_804908A0[0x0C],
+                               (gmClassicOrderIndex*) o, 0x2C);
 
     data = gm_GetAllStarData();
     gmMainLib_8015CDC8();
     gm_8017C984(data);
 
     {
-        u8* p = o->x20;
+        u8* p = o->state.order.x00;
         int i;
         for (i = 12; i > 0; i--) {
             *p++ = 0;
@@ -769,18 +806,18 @@ void gm_Mode_Classic_OnLoad(void)
     }
 
     gm_8017DB58(data->x0.xC.x24);
-    data->x0.slot = gm_801677F0();
-    data->x48 = gm_8017EB3C;
-    data->x4C = gm_8017EB64;
-    data->x50 = gm_8017EBCC;
-    data->x54 = gm_8017EB98;
-    data->x64 = gm_8017ED3C;
-    data->x68 = gm_8017ED8C;
-    data->x58 = gm_8017ECA0;
-    data->x5C = gm_8017ED08;
-    data->x60 = gm_8017ECD4;
-    data->x6C = gm_8017EC00;
-    data->x70 = gm_8017EC50;
+    data->x0.x0.slot = gm_801677F0();
+    data->x0.x48 = gm_8017EB3C;
+    data->x0.x4C = gm_8017EB64;
+    data->x0.x50 = gm_8017EBCC;
+    data->x0.x54 = gm_8017EB98;
+    data->x0.x64 = gm_8017ED3C;
+    data->x0.x68 = gm_8017ED8C;
+    data->x0.x58 = gm_8017ECA0;
+    data->x0.x5C = gm_8017ED08;
+    data->x0.x60 = gm_8017ECD4;
+    data->x0.x6C = gm_8017EC00;
+    data->x0.x70 = gm_8017EC50;
 
     gm_SetGameModeStateId(0x70U);
     gm_80172174();
@@ -790,11 +827,11 @@ void gm_Mode_Classic_OnLoad(void)
 void gm_Mode_Classic_OnInit(void)
 {
     struct gmm_x0_528_t* temp_r3 = gmMainLib_8015CDC8();
-    temp_r3->c_kind = CHKIND_NONE;
+    temp_r3->c_kind = ChKind_None;
     temp_r3->color = 0;
     temp_r3->stocks = 3;
     temp_r3->cpu_level = 0;
-    temp_r3->x4 = 0x78;
+    temp_r3->nametag = 0x78;
     temp_r3->x5 = 0;
 }
 
@@ -802,34 +839,10 @@ static inline StKind gmClassic_GetStKind(gm_803DDEC8Struct* entry,
                                          UnkAllstarData* ad)
 {
     if (entry->x1 == 0x80 && entry->x2 == 1) {
-        return (u16) gm_801647F8(ad->x0.ckind);
+        return (u16) gm_801647F8(ad->x0.x0.ckind);
     }
     return entry->xC->x00;
 }
-
-
-#if BUILD_TARGET_PC
-/* The round table has twelve entries and the round number indexes it with no
- * check. On the disc the data that follows is the matchup tables of the same
- * object, so an out-of-range round reads a matchup as a round descriptor and
- * carries on; here that is just as wrong and the values it yields decide a
- * scene id and a preload slot. Clamp, and say so once. */
-static gm_803DDEC8Struct* pc_classic_round(int round)
-{
-    enum { N = (int) (sizeof(gmClassic_803DDEC8.x00) /
-                      sizeof(gmClassic_803DDEC8.x00[0])) };
-    if (round < 0 || round >= N) {
-        static int said;
-        if (!said) {
-            said = 1;
-            fprintf(stderr, "[PORT WARN] classic round %d is outside the "
-                            "%d-entry table; clamping\n", round, N);
-        }
-        round = round < 0 ? 0 : N - 1;
-    }
-    return &gmClassic_803DDEC8.x00[round];
-}
-#endif
 
 void gmClassic_801B3500(GameModeState* arg0)
 {
@@ -850,9 +863,9 @@ void gmClassic_801B3500(GameModeState* arg0)
     new_var = entry;
     ad = gm_GetAllStarData();
     enemy_count = 0;
-    ad->x0.x7 = arg0->id;
+    ad->x0.x0.mode = arg0->id;
     sd->x0A = entry->x0 + 1;
-    sd->x08 = ad->x0.slot;
+    sd->x08 = ad->x0.x0.slot;
 
     if (entry->x1 & 0x80) {
         sd->x00 = 3;
@@ -886,8 +899,8 @@ void gmClassic_801B3500(GameModeState* arg0)
         sd->x10[i] = entry->xC->x02[i];
         sd->x16[i] = gm_8017CD94((UnkAdventureData*) ad, entry->xC->x02[i],
                                  entry->x0, i);
-        gmRegSetupEnemyColorTable(ad->x0.ckind, ad->x0.color, entry->xC->x02,
-                                  sd->x16);
+        gmRegSetupEnemyColorTable(ad->x0.x0.ckind, ad->x0.x0.color,
+                                  entry->xC->x02, sd->x16);
         if (entry->x1 & 4) {
             sd->x1C[i] = 1;
         } else {
@@ -900,38 +913,21 @@ void gmClassic_801B3500(GameModeState* arg0)
     sd->x0C = enemy_count;
 
     ally_count = 1;
-    ckind = ad->x0.ckind;
-    if (ckind == CKIND_ZELDA && ad->x0.xC.x12 != 0) {
-        sd->x0D[0] = CKIND_SEAK;
+    ckind = ad->x0.x0.ckind;
+    if (ckind == CKind_Zelda && ad->x0.xC.x12 != 0) {
+        sd->x0D[0] = CKind_Seak;
     } else {
         sd->x0D[0] = ckind;
     }
-    sd->x13[0] = ad->x0.color;
+    sd->x13[0] = ad->x0.x0.color;
 
-#if BUILD_TARGET_PC
-    /* The five arguments below are called through by gm_8017DB88. A Classic
-     * run on the tablet died calling one of them, at an address inside the
-     * game heap rather than any code, so say what they are. */
-    {
-        const void* cbs[5] = { (const void*) ad->x58, (const void*) ad->x5C,
-                               (const void*) ad->x60, (const void*) ad->x6C,
-                               (const void*) ad->x70 };
-        int ci;
-        for (ci = 0; ci < 5; ci++) {
-            if (cbs[ci] != NULL && !pc_code_ptr_ok(cbs[ci])) {
-                fprintf(stderr, "[PORT WARN] all-star callback %d is %p, "
-                                "which is not code\n", ci, cbs[ci]);
-            }
-        }
-    }
-#endif
-    gm_8017DB88(ad->x0.xC.x24, entry->x1, ad->x0.cpu_level,
+    gm_8017DB88(ad->x0.xC.x24, entry->x1, ad->x0.x0.cpu_level,
                 (u8) gm_8017BE84(arg0->id), entry->xC->x02_u8, sd->x0D[0],
-                (u8 (*)(s32, s32, u8))(Event) ad->x58,
-                (u8 (*)(s32, s32, u8))(Event) ad->x5C,
-                (u8 (*)(s32, s32, u8))(Event) ad->x60,
-                (f32 (*)(s32, s32))(Event) ad->x6C,
-                (f32 (*)(s32, s32))(Event) ad->x70);
+                (u8 (*)(s32, s32, u8))(Event) ad->x0.x58,
+                (u8 (*)(s32, s32, u8))(Event) ad->x0.x5C,
+                (u8 (*)(s32, s32, u8))(Event) ad->x0.x60,
+                (f32 (*)(s32, s32))(Event) ad->x0.x6C,
+                (f32 (*)(s32, s32))(Event) ad->x0.x70);
 
     for (i = 1; i < 3; i++) {
         sd->x0D[i] = gm_8017DB6C((gm_8017DB6C_arg0_t*) ad->x0.xC.x24, i - 1);
@@ -941,13 +937,13 @@ void gmClassic_801B3500(GameModeState* arg0)
         }
     }
     sd->x0B = ally_count;
-    sd->x09 = ad->x0.x4;
+    sd->x09 = ad->x0.x0.nametag;
 
     gc = &lbDvd_GetPreloadCacheScene()->game_cache;
     lbDvd_80018C6C();
     count = 0;
     gc->entries[count].char_id = sd->x0D[0];
-    gc->entries[count].color = ad->x0.color;
+    gc->entries[count].color = ad->x0.x0.color;
     count++;
     lbDvd_80018254();
     lbDvd_80018C2C(0xC7);
@@ -970,7 +966,7 @@ void gmClassic_801B3500(GameModeState* arg0)
         s8 achar = ad->x0.xC.x24[i].ckind;
         if (achar != 0x21) {
             gc->entries[count].char_id = achar;
-            gc->entries[count].color = ad->x0.xC.x24[i].x1;
+            gc->entries[count].color = ad->x0.xC.x24[i].color;
             count++;
         }
     }
@@ -978,7 +974,7 @@ void gmClassic_801B3500(GameModeState* arg0)
     lbDvd_80018254();
 
     if (entry->x1 == 0x80 && entry->x2 == 1) {
-        gc->stkind = (u16) gm_801647F8(ad->x0.ckind);
+        gc->stkind = (u16) gm_801647F8(ad->x0.x0.ckind);
     } else if (entry->x1 == 4) {
         gc->stkind = 0xAF;
     } else {
@@ -987,7 +983,7 @@ void gmClassic_801B3500(GameModeState* arg0)
 
     lbDvd_80018254();
 
-    audio = lbAudioAx_80026E84(ad->x0.ckind);
+    audio = lbAudioAx_80026E84(ad->x0.x0.ckind);
 
     for (i = 0; i < 3; i++) {
         s8 achar = ad->x0.xC.x24[i].ckind;
@@ -1033,7 +1029,7 @@ void gmClassic_801B3A34(GameModeState* arg0)
     new_var = temp_r30;
     var_r27 = temp_r31->xC->x00;
     if (temp_r31->x1 == 0x80 && temp_r31->x2 == 1) {
-        var_r27 = gm_801647F8(temp_r29->x0.ckind) & 0xFFFF;
+        var_r27 = gm_801647F8(temp_r29->x0.x0.ckind) & 0xFFFF;
     }
     flags = temp_r31->x1;
     if (flags == 4) {
@@ -1046,8 +1042,8 @@ void gmClassic_801B3A34(GameModeState* arg0)
     temp_r28 = gm_804908A0[idx_val];
     sp8 = (u16) gm_8017BE84(arg0->id);
     spC = temp_r28;
-    gm_8017CE34(new_var, (UnkAdventureData*) temp_r29, temp_r31->xC->x02,
-                temp_r31->x6, 1, 0, temp_r31->x4, var_r27, sp8, spC);
+    gm_8017CE34(new_var, &temp_r29->x0, temp_r31->xC->x02, temp_r31->x6, 1, 0,
+                temp_r31->x4, var_r27, sp8, spC);
     gm_LoadRumbleEnabled(new_var);
 }
 
@@ -1085,14 +1081,14 @@ void gmClassic_801B3B40(GameModeState* arg0)
     }
 
     if (entry->x1 == 0x80 && entry->x2 == 1) {
-        char_id = gm_CKindToSelKind((u8) asd->x0.ckind);
+        char_id = gm_CKindToSelKind((u8) asd->x0.x0.ckind);
         time_ptr = gmMainLib_8015D438(char_id);
         best_ptr = gmMainLib_8015D450(char_id);
         Ground_801C1DE4(&sp18, &sp14);
 
         if (sp18 == 0) {
             mask = 1 << char_id;
-            if (asd->x0.ckind && asd->x0.ckind) {
+            if (asd->x0.x0.ckind && asd->x0.x0.ckind) {
             }
             if (!(mask & gmMainLib_8015EDBC()->x8)) {
                 *best_ptr = (s32) mei->match_end.frame_count;
@@ -1143,8 +1139,8 @@ void gmClassic_801B3DD8(GameModeState* scene)
     CSSData* css = gm_GetGameModeStateEnterData(scene);
     struct gmm_x0_528_t* temp_r31 = gmMainLib_8015CDC8();
     gm_801B06B0(css, 0xB, temp_r31->c_kind, temp_r31->stocks, temp_r31->color,
-                temp_r31->x4, temp_r31->cpu_level,
-                gm_GetAllStarData()->x0.slot);
+                temp_r31->nametag, temp_r31->cpu_level,
+                gm_GetAllStarData()->x0.x0.slot);
     lbDvd_SetupVsPreloadCache();
 }
 
@@ -1161,10 +1157,10 @@ void gmClassic_801B3E44(GameModeState* scene)
         return;
     }
     gm_801B0730(temp_r30, &temp_r29->c_kind, &temp_r29->stocks,
-                &temp_r29->color, &temp_r29->x4, &temp_r29->cpu_level);
-    temp_r31->x0.ckind = temp_r29->c_kind;
-    temp_r31->x0.color = temp_r29->color;
-    temp_r31->x0.cpu_level = temp_r29->cpu_level;
+                &temp_r29->color, &temp_r29->nametag, &temp_r29->cpu_level);
+    temp_r31->x0.x0.ckind = temp_r29->c_kind;
+    temp_r31->x0.x0.color = temp_r29->color;
+    temp_r31->x0.x0.cpu_level = temp_r29->cpu_level;
 #if BUILD_TARGET_PC
     /* PC port, test knob: MELEE_1P_DIFFICULTY=<0..4> sets the Classic
      * difficulty. Booting straight to GM_CLASSIC skips the difficulty-select
@@ -1180,15 +1176,19 @@ void gmClassic_801B3E44(GameModeState* scene)
         const char* dv = getenv("MELEE_1P_DIFFICULTY");
         if (dv != NULL) {
             int d = atoi(dv);
-            if (d < 0) d = 0;
-            if (d > 4) d = 4;
-            temp_r31->x0.cpu_level = (u8) d;
+            if (d < 0) {
+                d = 0;
+            }
+            if (d > 4) {
+                d = 4;
+            }
+            temp_r31->x0.x0.cpu_level = (u8) d;
             PORT_LOG_WARN("[CLASSIC] MELEE_1P_DIFFICULTY: difficulty=%d", d);
         }
     }
 #endif
-    temp_r31->x0.stocks = temp_r29->stocks;
-    temp_r31->x0.x4 = temp_r29->x4;
+    temp_r31->x0.x0.stocks = temp_r29->stocks;
+    temp_r31->x0.x0.nametag = temp_r29->nametag;
     gmClassic_801B2D54(r4);
     gm_SetNextGameModeStateId(temp_r29->x5 << 3);
     gm_80168F88();

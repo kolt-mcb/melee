@@ -1,4 +1,4 @@
-#include "baselib/wobj.h"
+#include "wobj.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -9,7 +9,6 @@
 #include "object.h"
 #include "robj.h"
 #include "spline.h"
-
 #include <dolphin/mtx.h>
 
 static void WObjInfoInit(void);
@@ -244,8 +243,8 @@ void HSD_WObjGetPosition(HSD_WObj* wobj, Vec3* vec)
 
 HSD_WObj* HSD_WObjAlloc(void)
 {
-    HSD_WObj* wobj = (HSD_WObj*) hsdNew(
-        default_class ? default_class : &hsdWObj.parent.parent);
+    HSD_WObj* wobj =
+        hsdNew(default_class ? default_class : &hsdWObj.parent.parent);
     HSD_ASSERT(591, wobj);
     return wobj;
 }

@@ -4,14 +4,14 @@
 #endif
 #include "ft_0881.h"
 
-#include <sysdolphin/baselib/random.h>
+#include "fighter.h"
+#include "ft_0877.h"
+#include "inlines.h"
 #include <melee/db/db.h>
-#include <melee/ft/fighter.h>
-#include <melee/ft/ft_0877.h>
-#include <melee/ft/inlines.h>
 #include <melee/lb/lbaudio_ax.h>
 #include <melee/pl/player.h>
 #include <melee/pl/plstale.h>
+#include <sysdolphin/baselib/random.h>
 
 void ft_800881D8(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
 {
@@ -23,15 +23,15 @@ void ft_800881D8(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
                 ft_800887CC(fp);
                 fp->x2144 = lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
                                                fp->player_id * 2 + 0x1E +
-                                                   fp->x221F_b4);
+                                                   fp->is_sub_fighter);
                 return;
             }
             ft_80088770(fp);
         }
     } else {
         switch (fp->kind) {
-        case FTKIND_GAMEWATCH:
-        case FTKIND_SAMUS:
+        case Ft_Kind_GameWatch:
+        case Ft_Kind_Samus:
             if (sfx_id != 0x83D60) {
                 if (sfx_id != 0x83D61) {
                     sfx_id = ft_80087D0C(fp, sfx_id);
@@ -39,7 +39,7 @@ void ft_800881D8(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
                     ft_800887CC(fp);
                     fp->x2144 = lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
                                                    fp->player_id * 2 + 0x1E +
-                                                       fp->x221F_b4);
+                                                       fp->is_sub_fighter);
                     return;
                 }
                 ft_80088770(fp);
@@ -63,15 +63,15 @@ void ft_80088328(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
                 ft_800887CC(fp);
                 fp->x2148 = lbAudioAx_80023870(temp_r30, sfx_vol, sfx_pan,
                                                (fp->player_id * 2) + 42 +
-                                                   fp->x221F_b4);
+                                                   fp->is_sub_fighter);
                 return;
             }
             ft_800887CC(fp);
         }
     } else {
         switch (fp->kind) {
-        case FTKIND_GAMEWATCH:
-        case FTKIND_SAMUS:
+        case Ft_Kind_GameWatch:
+        case Ft_Kind_Samus:
             if (sfx_id != 0x83D60) {
                 if (sfx_id != 0x83D61) {
                     temp_r30 = ft_80087D0C(fp, sfx_id);
@@ -79,7 +79,7 @@ void ft_80088328(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
                     ft_800887CC(fp);
                     fp->x2148 = lbAudioAx_80023870(temp_r30, sfx_vol, sfx_pan,
                                                    (fp->player_id * 2) + 42 +
-                                                       fp->x221F_b4);
+                                                       fp->is_sub_fighter);
                     return;
                 }
                 ft_800887CC(fp);
@@ -96,9 +96,9 @@ void ft_80088478(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
     if (sfx_id != 0x83D60) {
         if (sfx_id != 0x83D61) {
             sfx_id = ft_80087D0C(fp, sfx_id);
-            fp->x214C =
-                lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
-                                   0x36 + fp->player_id * 2 + fp->x221F_b4);
+            fp->x214C = lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
+                                           0x36 + fp->player_id * 2 +
+                                               fp->is_sub_fighter);
             return;
         }
         ft_80088828(fp);
@@ -110,9 +110,9 @@ void ft_80088510(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
     if (sfx_id != 0x83D60) {
         if (sfx_id != 0x83D61) {
             sfx_id = ft_80087D0C(fp, sfx_id);
-            fp->x2150 =
-                lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
-                                   0x42 + fp->player_id * 2 + fp->x221F_b4);
+            fp->x2150 = lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
+                                           0x42 + fp->player_id * 2 +
+                                               fp->is_sub_fighter);
             return;
         }
         ft_80088884(fp);
@@ -124,9 +124,9 @@ void ft_800885A8(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
     if (sfx_id != 0x83D60) {
         if (sfx_id != 0x83D61) {
             sfx_id = ft_80087D0C(fp, sfx_id);
-            fp->x2154 =
-                lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
-                                   0x4E + fp->player_id * 2 + fp->x221F_b4);
+            fp->x2154 = lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
+                                           0x4E + fp->player_id * 2 +
+                                               fp->is_sub_fighter);
             return;
         }
         ft_800888E0(fp);
@@ -138,9 +138,9 @@ void ft_80088640(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
     if (sfx_id != 0x83D60) {
         if (sfx_id != 0x83D61) {
             sfx_id = ft_80087D0C(fp, sfx_id);
-            fp->x2158 =
-                lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
-                                   0x5A + fp->player_id * 2 + fp->x221F_b4);
+            fp->x2158 = lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
+                                           0x5A + fp->player_id * 2 +
+                                               fp->is_sub_fighter);
             return;
         }
         ft_8008893C(fp);
@@ -150,7 +150,7 @@ void ft_80088640(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
 static inline int inline0(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
 {
     return lbAudioAx_80023870(sfx_id, sfx_vol, sfx_pan,
-                              0x72 + fp->player_id * 2 + fp->x221F_b4);
+                              0x72 + fp->player_id * 2 + fp->is_sub_fighter);
 }
 
 void ftCo_800886D8(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
@@ -168,49 +168,49 @@ void ftCo_800886D8(Fighter* fp, int sfx_id, u8 sfx_vol, u8 sfx_pan)
 void ft_80088770(Fighter* fp)
 {
     lbAudioAx_80023870(0x83D61, 0, 0x40,
-                       0x1E + fp->player_id * 2 + fp->x221F_b4);
+                       0x1E + fp->player_id * 2 + fp->is_sub_fighter);
     fp->x2144 = -1;
 }
 
 void ft_800887CC(Fighter* fp)
 {
     lbAudioAx_80023870(0x83D61, 0, 0x40,
-                       0x2A + fp->player_id * 2 + fp->x221F_b4);
+                       0x2A + fp->player_id * 2 + fp->is_sub_fighter);
     fp->x2148 = -1;
 }
 
 void ft_80088828(Fighter* fp)
 {
     lbAudioAx_80023870(0x83D61, 0, 0x40,
-                       0x36 + fp->player_id * 2 + fp->x221F_b4);
+                       0x36 + fp->player_id * 2 + fp->is_sub_fighter);
     fp->x214C = -1;
 }
 
 void ft_80088884(Fighter* fp)
 {
     lbAudioAx_80023870(0x83D61, 0, 0x40,
-                       0x42 + fp->player_id * 2 + fp->x221F_b4);
+                       0x42 + fp->player_id * 2 + fp->is_sub_fighter);
     fp->x2150 = -1;
 }
 
 void ft_800888E0(Fighter* fp)
 {
     lbAudioAx_80023870(0x83D61, 0, 0x40,
-                       0x4E + fp->player_id * 2 + fp->x221F_b4);
+                       0x4E + fp->player_id * 2 + fp->is_sub_fighter);
     fp->x2154 = -1;
 }
 
 void ft_8008893C(Fighter* fp)
 {
     lbAudioAx_80023870(0x83D61, 0, 0x40,
-                       0x5A + fp->player_id * 2 + fp->x221F_b4);
+                       0x5A + fp->player_id * 2 + fp->is_sub_fighter);
     fp->x2158 = -1;
 }
 
 void ft_80088998(Fighter* fp)
 {
     lbAudioAx_80023870(0x83D61, 0, 0x40,
-                       0x72 + fp->player_id * 2 + fp->x221F_b4);
+                       0x72 + fp->player_id * 2 + fp->is_sub_fighter);
     fp->x215C = -1;
 }
 
@@ -383,11 +383,11 @@ f32 ft_80089228(Fighter* fp, int attack_id, int arg2, f32 arg3)
      * move that never enters the queue never stales, and full damage where
      * the console does 91% of it is a whole point of percent. */
     if (getenv("MELEE_STALE") != NULL) {
-        extern u32 gm_8016AEDC(void);
+        extern u32 gm_GetFrameCount(void);
         int q;
         fprintf(stderr, "[STALE] gframe=%u p%d id=%d inst=%d dmg=%.4f "
                         "mul=%.4f idx=%d q=[",
-                (unsigned) gm_8016AEDC(), (int) fp->player_id, attack_id,
+                (unsigned) gm_GetFrameCount(), (int) fp->player_id, attack_id,
                 arg2, (double) arg3, (double) temp_f1,
                 (int) tmp->current_index);
         for (q = 0; q < 10; q++) {

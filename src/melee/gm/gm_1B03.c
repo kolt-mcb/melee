@@ -1,13 +1,11 @@
 #include "gm_1B03.h"
 
-#include "dolphin/types.h"
-#include "gm/types.h"
-
-#include "mn/forward.h"
+#include <melee/mn/forward.h>
 #include <melee/pl/forward.h>
 
-#include <melee/gm/gm_unsplit.h>
-#include <melee/gm/types.h>
+#include "gm_unsplit.h"
+#include "types.h"
+#include <dolphin/types.h>
 #include <melee/mn/types.h>
 
 /**
@@ -55,7 +53,7 @@ static inline void player_standings_inline(StartMeleeData* arg0,
         }
         arg0->players[i].ckind = var_r6;
         arg0->players[i].stocks = 1;
-        arg0->players[i].x12 = 0x12C;
+        arg0->players[i].damage1 = 300;
     } else {
         arg0->players[i].slot_type = Gm_PKind_NA;
     }
@@ -64,7 +62,7 @@ static inline void player_standings_inline(StartMeleeData* arg0,
 static inline int gm_801B0474_inline(MatchEnd* arg1, int i)
 {
     if (arg1->match_kind == 1) {
-        if (arg1->result == OUTCOME_TIMEOUT) {
+        if (arg1->outcome == OUTCOME_TIMEOUT) {
             return arg1->player_standings[i].stocks;
         } else {
             u8 var_r7 = arg1->player_standings[i].stocks;
@@ -84,7 +82,7 @@ void gm_SetupSuddenDeath(StartMeleeData* start, MatchEnd* end)
     int i;
 
     start->rules.match_kind = MatchKind_Stock;
-    start->rules.x0_6 = false;
+    start->rules.timer_enabled = false;
     start->rules.x2_5 = false;
 
     for (i = 0; i < GM_MAX_PLAYERS; i++) {
@@ -105,40 +103,42 @@ void gm_SetupSuddenDeath(StartMeleeData* start, MatchEnd* end)
     }
 }
 
-void gm_801B05F4(PlayerInitData* arg0, int arg1)
+void gm_801B05F4(PlayerInitData* player, int slot)
 {
-    arg0->slot = arg1 + 1;
-    if (arg1 == 2) {
-        arg1 = 3;
-    } else if (arg1 == 3) {
-        arg1 = 2;
+    player->slot = slot + 1;
+    if (slot == 2) {
+        slot = 3;
+    } else if (slot == 3) {
+        slot = 2;
     }
-    arg0->team = arg1;
+    player->team = slot;
 }
 
-void gm_801B0620(PlayerInitData* arg0, u8 c_kind, u8 arg2, u8 arg3, u8 arg4)
+void gm_SetupHumanPlayer(PlayerInitData* player, u8 ckind, u8 color, u8 stocks,
+                         u8 slot)
 {
-    arg0->slot_type = Gm_PKind_Human;
-    arg0->ckind = c_kind;
-    arg0->color = arg2;
-    arg0->stocks = arg3;
-    gm_801B05F4(arg0, arg4);
+    player->slot_type = Gm_PKind_Human;
+    player->ckind = ckind;
+    player->color = color;
+    player->stocks = stocks;
+    gm_801B05F4(player, slot);
 }
 
-void gm_801B0664(PlayerInitData* arg0, u8 c_kind, u8 arg2, u8 arg3, u8 arg4)
+void gm_SetupCpuPlayer(PlayerInitData* arg0, u8 ckind, u8 color, u8 stocks,
+                       u8 slot)
 {
     arg0->slot_type = Gm_PKind_Cpu;
-    arg0->ckind = c_kind;
-    arg0->color = arg2;
-    arg0->stocks = arg3;
-    gm_801B05F4(arg0, arg4);
+    arg0->ckind = ckind;
+    arg0->color = color;
+    arg0->stocks = stocks;
+    gm_801B05F4(arg0, slot);
     arg0->team = 4;
 }
 
 void gm_801B06B0(CSSData* css_data, u8 type, s8 c_kind, s8 stocks, s8 color,
                  u8 arg5, u8 level, u8 slot)
 {
-    gm_80167B50(&css_data->vs);
+    gm_InitVsMode(&css_data->vs);
     css_data->match_type = type;
     css_data->unk_0x0 = slot + 1;
     css_data->vs.start.players[slot].ckind = c_kind;
@@ -150,10 +150,6 @@ void gm_801B06B0(CSSData* css_data, u8 type, s8 c_kind, s8 stocks, s8 color,
     css_data->vs.start.players[0].stocks = stocks;
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void gm_801B0730(CSSData* css_data, s8* c_kind, u8* stocks, u8* color,
                  u8* nametag, u8* level)
 {
@@ -176,9 +172,6 @@ void gm_801B0730(CSSData* css_data, s8* c_kind, u8* stocks, u8* color,
         *nametag = css_data->vs.start.players[slot].nametag;
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void gm_801B07B4(CSSData* css_data, s8 c_kind, s8 stocks, s8 color, u8 arg4,
                  u8 level, u8 arg6)

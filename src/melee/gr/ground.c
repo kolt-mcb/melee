@@ -9,6 +9,10 @@
 #endif
 #endif
 
+#include <Runtime/platform.h>
+
+#include <math.h>
+
 #include "grbattle.h"
 #include "grbigblue.h"
 #include "grbigblueroute.h"
@@ -80,67 +84,61 @@
 #include "grzebes.h"
 #include "grzebesroute.h"
 #include "inlines.h"
-#include "platform.h"
 #include "stage.h"
-
-#include "cm/camera.h"
-#include "ft/ftdevice.h"
-#include "ft/ftlib.h"
-#include "gm/gm_unsplit.h"
-#include "it/it_26B1.h"
-#include "it/it_3F14.h"
-#include "it/items/itcoin.h"
-#include "it/itzako.h"
-#include "it/types.h"
-#include "lb/lb_00B0.h"
-#include "lb/lb_00F9.h"
-#include "lb/lbaudio_ax.h"
-#include "lb/lbdvd.h"
-#include "lb/lbshadow.h"
-#include "lb/lbspdisplay.h"
-#include "lb/lbvector.h"
-#include "mp/mpcoll.h"
-#include "mp/mplib.h"
-#include "mp/types.h"
-#include "pl/player.h"
-#include "sc/types.h"
-#include "ty/toy.h"
-#include "ty/tydisplay.h"
-
-#include <math.h>
-#include <math_ppc.h>
-#include <stdio.h>
-#include <trigf.h>
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
-#include <baselib/cobj.h>
-#include <baselib/debug.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
+#include <math_ppc.h>
+#include <melee/cm/camera.h>
+#include <melee/ft/ftdevice.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/it/it_26B1.h>
+#include <melee/it/it_3F14.h>
+#include <melee/it/itzako.h>
+#include <melee/it/kinds/itcoin.h>
+#include <melee/it/types.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/lb/lb_00F9.h>
+#include <melee/lb/lbaudio_ax.h>
+#include <melee/lb/lbdvd.h>
+#include <melee/lb/lbshadow.h>
+#include <melee/lb/lbspdisplay.h>
+#include <melee/lb/lbvector.h>
+#include <melee/mp/mpcoll.h>
+#include <melee/mp/mplib.h>
+#include <melee/mp/types.h>
+#include <melee/pl/player.h>
+#include <melee/sc/types.h>
+#include <melee/ty/toy.h>
+#include <melee/ty/tydisplay.h>
+#include <stdio.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/gobjuserdata.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/memory.h>
+#include <sysdolphin/baselib/particle.h>
+#include <sysdolphin/baselib/psstructs.h>
+#include <sysdolphin/baselib/random.h>
+#include <sysdolphin/baselib/spline.h>
+#include <sysdolphin/baselib/wobj.h>
+#include <trigf.h>
 
 #if BUILD_TARGET_PC
 /* PC port: byte-swap 32-bit value (big-endian to little-endian) */
 static inline u32 be32(u32 x)
 {
-    return ((x & 0xFF000000) >> 24) |
-           ((x & 0x00FF0000) >> 8) |
-           ((x & 0x0000FF00) << 8) |
-           ((x & 0x000000FF) << 24);
+    return ((x & 0xFF000000) >> 24) | ((x & 0x00FF0000) >> 8) |
+           ((x & 0x0000FF00) << 8) | ((x & 0x000000FF) << 24);
 }
 #endif /* BUILD_TARGET_PC */
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/gobjuserdata.h>
-#include <baselib/jobj.h>
-#include <baselib/lobj.h>
-#include <baselib/memory.h>
-#include <baselib/particle.h>
-#include <baselib/psstructs.h>
-#include <baselib/random.h>
-#include <baselib/spline.h>
-#include <baselib/wobj.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -1041,9 +1039,9 @@ static bool Ground_801C0A70(Vec3* pos)
     }
 }
 
-BobOmbRain const Ground_803B7DEC = { 0, 0, 0, 0, 0, 6 };
+static BobOmbRain const Ground_803B7DEC = { 0, 0, 0, 0, 0, 6 };
 
-HSD_Joint const Ground_803B7E0C = {
+static HSD_Joint const Ground_803B7E0C = {
     NULL,        0,           NULL,        NULL, NULL,
     { 0, 0, 0 }, { 1, 1, 1 }, { 0, 0, 0 }, NULL, NULL,
 };
@@ -1140,7 +1138,7 @@ void Ground_801C0C2C(HSD_GObj* arg0)
         }
     }
     if (gm_8016B238()) {
-        int current_frame = gm_8016AEDC();
+        int current_frame = gm_GetFrameCount();
         if (current_frame > 0x4B0 && current_frame - stage_info.x9C > 0x1E) {
             stage_info.x9C = current_frame;
             if (Ground_801C0A70(&sp2C)) {
@@ -1345,9 +1343,14 @@ Ground_GObj* Ground_GetStageGObj(int map_id)
         OSReport("%s:%d: couldn t get gobj!\n", __FILE__, 0x522);
         return NULL;
     }
+    /**
+     * @bug #alloc_user_data_ground returns the block uncleared and nothing
+     * below zeroes it, so any field a stage's callbacks read before its
+     * @c on_init writes it sees stale heap contents.
+     */
     gp = alloc_user_data_ground();
     if (gp == NULL) {
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
         return NULL;
     }
     GObj_InitUserData(gobj, 3, mem_free, gp);
@@ -1390,7 +1393,7 @@ Ground_GObj* Ground_GetStageGObj(int map_id)
                     "[GROUND] map %d: the stage archive has no header; no "
                     "ground object\n", (int) map_id);
         }
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
         return NULL;
     }
 #endif
@@ -1406,7 +1409,7 @@ Ground_GObj* Ground_GetStageGObj(int map_id)
                         "[GROUND] map %d: no archive header for its own file; "
                         "no ground object\n", (int) map_id);
             }
-            HSD_GObjPLink_80390228(gobj);
+            HSD_GObjFree(gobj);
             return NULL;
         }
 #endif
@@ -1421,7 +1424,7 @@ Ground_GObj* Ground_GetStageGObj(int map_id)
         new_var = get_jobj_inline(phi_f0);
         HSD_JObjAddNext(temp_r23, new_var);
         if (new_var == NULL) {
-            HSD_GObjPLink_80390228(gobj);
+            HSD_GObjFree(gobj);
             OSReport("%s:%d: couldn t get jobj\n", __FILE__, 0x55D);
             return NULL;
         }
@@ -1459,7 +1462,7 @@ Ground_GObj* Ground_GetStageGObj(int map_id)
         temp_r3_11 = get_jobj_inline(phi_f0);
         HSD_JObjAddNext(new_var, temp_r3_11);
         if (temp_r3_11 == NULL) {
-            HSD_GObjPLink_80390228(gobj);
+            HSD_GObjFree(gobj);
             OSReport("%s:%d: couldn t get jobj\n", __FILE__, 0x598);
             return NULL;
         }
@@ -1487,7 +1490,7 @@ HSD_GObj* Ground_801C1A20(HSD_Joint* arg0, s32 arg1)
     }
     gp = alloc_user_data_ground();
     if (gp == NULL) {
-        HSD_GObjPLink_80390228(temp_r30);
+        HSD_GObjFree(temp_r30);
         return NULL;
     }
     GObj_InitUserData(temp_r30, 3, mem_free, gp);
@@ -1511,7 +1514,7 @@ HSD_GObj* Ground_801C1A20(HSD_Joint* arg0, s32 arg1)
     temp_r3_4 = get_jobj_inline(Ground_801C0498());
     HSD_JObjAddNext(temp_r29, temp_r3_4);
     if (temp_r3_4 == NULL) {
-        HSD_GObjPLink_80390228(temp_r30);
+        HSD_GObjFree(temp_r30);
         OSReport("%s:%d: couldn t get jobj\n", __FILE__, 0x5E8);
         return NULL;
     }
@@ -2014,7 +2017,7 @@ static bool Ground_801C24F8(StKind stkind, u32 arg1, s32* arg2)
                     }
                     break;
                 case 3:
-                    if (gm_IsCKindUnlocked(CKIND_MARS) &&
+                    if (gm_IsCKindUnlocked(CKind_Mars) &&
                         (phi_r30->x16 > HSD_Randi(RANDI_MAX) || temp_r25))
                     {
                         arg1 |= 2;
@@ -2023,7 +2026,7 @@ static bool Ground_801C24F8(StKind stkind, u32 arg1, s32* arg2)
                     }
                     break;
                 case 4:
-                    if (gm_IsCKindUnlocked(CKIND_CLINK) &&
+                    if (gm_IsCKindUnlocked(CKind_CLink) &&
                         (phi_r30->x16 > HSD_Randi(RANDI_MAX) || temp_r25))
                     {
                         arg1 |= 2;
@@ -2120,22 +2123,20 @@ bool Ground_801C28AC(StKind stkind, u32 arg1, s32* arg2)
     return Ground_801C24F8(stkind, arg1, arg2);
 }
 
-static char msg0[] =
-    "%s:%d: not found stage param in DAT(grkind=%d stkind=%d,num=%d)\n";
-static char msg1[] =
-    "             check StageParam.csv or StageItem.csv, stdata.c\n";
-static char msg2[] = " stageid=%d\n";
-
-static inline void reportStageParams(s32 count)
+static void panicMissingStageParam(StKind stkind, s32 count)
 {
-    s32 i;
-
-    OSReport(msg1);
+    OSReport("%s:%d: not found stage param in DAT(grkind=%d "
+             "stkind=%d,num=%d)\n",
+             __FILE__, 2310, stage_info.grkind, stkind, count);
+    OSReport("             check StageParam.csv or StageItem.csv, stdata.c\n");
     {
+        ssize_t i;
         StageParam* p = stage_info.param->stage_params;
         for (i = 0; i < count; i++, p++) {
-            OSReport(msg2, p->stkind);
+            OSReport(" stageid=%d\n", p->stkind);
         }
+    }
+    while (true) {
     }
 }
 
@@ -2168,25 +2169,22 @@ void Ground_801C28CC(s32* arg0, StKind stkind)
     return;
 #else
     StageParam* param = stage_info.param->stage_params;
-    s32 count = stage_info.param->stage_param_count;
-    s32 i;
+    ssize_t count = stage_info.param->stage_param_count;
+    ssize_t i;
 
     for (i = 0; i < count; i++) {
         if (param->stkind == stkind) {
             s32 j;
-            for (j = 0; 0x23 > j; j++) {
-                arg0[j] = ((s16*) stage_info.param)[0x35 + j] *
-                          ((s16*) param)[0xD + j];
+            for (j = 0; 35 > j; j++) {
+                arg0[j] =
+                    ((s16*) stage_info.param)[53 + j] * ((s16*) param)[13 + j];
             }
             return;
         }
         param++;
     }
 
-    OSReport(msg0, __FILE__, 0x906, stage_info.grkind, stkind, count);
-    reportStageParams(count);
-    while (1) {
-    }
+    panicMissingStageParam(stkind, count);
 #endif /* BUILD_TARGET_PC */
 }
 
@@ -2375,7 +2373,7 @@ bool Ground_801C2D24(enum_t arg0, Vec3* arg1)
     return false;
 }
 
-bool Ground_801C2ED0(HSD_JObj* jobj, s32 arg1)
+bool Ground_InitMapColl(HSD_JObj* jobj, s32 arg1)
 {
     u8 _[4];
     bool result = false;
@@ -2428,7 +2426,7 @@ bool Ground_801C2ED0(HSD_JObj* jobj, s32 arg1)
 
 static s16 Ground_804D6954;
 
-bool Ground_801C2FE0(Ground_GObj* arg0)
+bool Ground_UpdateMapColl(Ground_GObj* arg0)
 {
     StageData* stagedata;
     UnkArchiveStruct* archive;
@@ -2655,39 +2653,41 @@ s32 Ground_801C33C0(s32 arg0, s32 arg1)
     return result;
 }
 
-u32 unknown[] = {
-    0x00000002, 0,          0x42C80000, 0x43270000, 0,          0x00000002,
-    0x00000001, 0x42C80000, 0x43270000, 0,          0x00000002, 0x00000002,
-    0x42C80000, 0x43270000, 0,          0x00000002, 0x00000003, 0x42C80000,
-    0x43270000, 0,          0x00000002, 0x00000004, 0x42C80000, 0x43480000,
-    0,          0x00000002, 0x00000094, 0,          0x433B0000, 0,
-    0x0000000E, 0,          0xC28E0000, 0x436E0000, 0,          0x0000000E,
-    0x00000001, 0xC28E0000, 0x436E0000, 0,          0x0000000E, 0x00000002,
-    0xC28E0000, 0x436E0000, 0,          0x0000000E, 0x00000003, 0xC28E0000,
-    0x436E0000, 0,          0x0000000E, 0x00000094, 0,          0x43750000,
-    0,          0x00000015, 0x00000004, 0x41100000, 0x426C0000, 0,
-    0x00000015, 0,          0xC1100000, 0x42860000, 0,          0x00000015,
-    0x00000001, 0x42580000, 0x40000000, 0,          0x00000015, 0x00000002,
-    0xC2960000, 0x40800000, 0,          0x00000015, 0x00000003, 0x42AE0000,
-    0xC1500000, 0,          0x0000001F, 0,          0xC4750000, 0x42540000,
-    0,          0x0000001F, 0x00000004, 0xC4750000, 0x42F00000, 0,
-    0x0000001F, 0x00000099, 0x44C96000, 0x43480000, 0,          0x00000020,
-    0,          0x43700000, 0xC3928000, 0,          0x00000020, 0x00000099,
-    0x41200000, 0x40000000, 0,          0x00000020, 0x00000004, 0x43700000,
-    0,          0,          0x00000021, 0x00000099, 0,          0x446EC000,
-    0,          0x00000022, 0,          0xC47A0000, 0x42B00000, 0,
-    0x00000022, 0x00000004, 0xC47A0000, 0x42C80000, 0,          0x00000027,
-    0,          0x43C30000, 0x44610000, 0,          0x00000027, 0x00000094,
-    0x43C30000, 0x44610000, 0,          0x00000027, 0x00000004, 0x43C30000,
-    0x44610000, 0,          0x00000013, 0,          0xC2480000, 0x42700000,
-    0,          0x00000013, 0x00000004, 0x41F00000, 0x42C80000, 0,
-    0x00000006, 0,          0x41F00000, 0x42700000, 0,          0x00000006,
-    0x00000004, 0xC2200000, 0x42700000, 0,          0xFFFFFFFF, 0,
-    0,          0x40A00000, 0,          0xFFFFFFFF, 0x00000001, 0,
-    0x40A00000, 0,          0xFFFFFFFF, 0x00000002, 0,          0x40A00000,
-    0,          0xFFFFFFFF, 0x00000003, 0,          0x40A00000, 0,
-    0xFFFFFFFF, 0x00000094, 0,          0,          0,          0xFFFFFFFF,
-    0xFFFFFFFF, 0,          0,          0,
+/// @todo Flags maybe? Is this used by base pointer anywhere?
+/// Not stripped by mwcc.
+UNUSED static u32 unk_words[] = {
+    0x00000002, 0x00000000, 0x42C80000, 0x43270000, 0x00000000, 0x00000002,
+    0x00000001, 0x42C80000, 0x43270000, 0x00000000, 0x00000002, 0x00000002,
+    0x42C80000, 0x43270000, 0x00000000, 0x00000002, 0x00000003, 0x42C80000,
+    0x43270000, 0x00000000, 0x00000002, 0x00000004, 0x42C80000, 0x43480000,
+    0x00000000, 0x00000002, 0x00000094, 0x00000000, 0x433B0000, 0x00000000,
+    0x0000000E, 0x00000000, 0xC28E0000, 0x436E0000, 0x00000000, 0x0000000E,
+    0x00000001, 0xC28E0000, 0x436E0000, 0x00000000, 0x0000000E, 0x00000002,
+    0xC28E0000, 0x436E0000, 0x00000000, 0x0000000E, 0x00000003, 0xC28E0000,
+    0x436E0000, 0x00000000, 0x0000000E, 0x00000094, 0x00000000, 0x43750000,
+    0x00000000, 0x00000015, 0x00000004, 0x41100000, 0x426C0000, 0x00000000,
+    0x00000015, 0x00000000, 0xC1100000, 0x42860000, 0x00000000, 0x00000015,
+    0x00000001, 0x42580000, 0x40000000, 0x00000000, 0x00000015, 0x00000002,
+    0xC2960000, 0x40800000, 0x00000000, 0x00000015, 0x00000003, 0x42AE0000,
+    0xC1500000, 0x00000000, 0x0000001F, 0x00000000, 0xC4750000, 0x42540000,
+    0x00000000, 0x0000001F, 0x00000004, 0xC4750000, 0x42F00000, 0x00000000,
+    0x0000001F, 0x00000099, 0x44C96000, 0x43480000, 0x00000000, 0x00000020,
+    0x00000000, 0x43700000, 0xC3928000, 0x00000000, 0x00000020, 0x00000099,
+    0x41200000, 0x40000000, 0x00000000, 0x00000020, 0x00000004, 0x43700000,
+    0x00000000, 0x00000000, 0x00000021, 0x00000099, 0x00000000, 0x446EC000,
+    0x00000000, 0x00000022, 0x00000000, 0xC47A0000, 0x42B00000, 0x00000000,
+    0x00000022, 0x00000004, 0xC47A0000, 0x42C80000, 0x00000000, 0x00000027,
+    0x00000000, 0x43C30000, 0x44610000, 0x00000000, 0x00000027, 0x00000094,
+    0x43C30000, 0x44610000, 0x00000000, 0x00000027, 0x00000004, 0x43C30000,
+    0x44610000, 0x00000000, 0x00000013, 0x00000000, 0xC2480000, 0x42700000,
+    0x00000000, 0x00000013, 0x00000004, 0x41F00000, 0x42C80000, 0x00000000,
+    0x00000006, 0x00000000, 0x41F00000, 0x42700000, 0x00000000, 0x00000006,
+    0x00000004, 0xC2200000, 0x42700000, 0x00000000, 0xFFFFFFFF, 0x00000000,
+    0x00000000, 0x40A00000, 0x00000000, 0xFFFFFFFF, 0x00000001, 0x00000000,
+    0x40A00000, 0x00000000, 0xFFFFFFFF, 0x00000002, 0x00000000, 0x40A00000,
+    0x00000000, 0xFFFFFFFF, 0x00000003, 0x00000000, 0x40A00000, 0x00000000,
+    0xFFFFFFFF, 0x00000094, 0x00000000, 0x00000000, 0x00000000, 0xFFFFFFFF,
+    0xFFFFFFFF, 0x00000000, 0x00000000, 0x00000000,
 };
 
 void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
@@ -2877,20 +2877,18 @@ void Ground_801C36F4(int map_id, HSD_JObj* root, UNK_T joint)
     }
     i = 0;
     entry = stage_dat->unk0;
-entry_loop:
-    if (i < entry_count) {
-        if (entry->joint == joint) {
-            goto entry_found;
+    while (true) {
+        if (i < entry_count) {
+            if (entry->joint == joint) {
+                break;
+            }
+        } else {
+            return;
         }
-        goto entry_next;
+        entry++;
+        i++;
     }
-    return;
-entry_next:
-    entry++;
-    i++;
-    goto entry_loop;
 
-entry_found:
     for (i = 0; i < 0x57 * 3; i++) {
         jobj = stage_info.x280[i];
         (void) jobj;
@@ -3510,7 +3508,7 @@ static void Ground_801C4640(HSD_GObj* gobj, int unused)
     NULL,
 };
 
-/* 4D4508 */ float Ground_804D4508 = 16.0f;
+/* 4D4508 */ static float Ground_804D4508 = 16.0f;
 
 /* 3E0680 */ static HSD_LightDesc Ground_803E0680 = {
     NULL,
@@ -3717,7 +3715,9 @@ light_selected:
 HSD_GObj* Ground_801C498C(void)
 {
     HSD_GObj* gobj;
-    for (gobj = HSD_GObj_Entities->xC; gobj != NULL; gobj = gobj->next) {
+    for (gobj = HSD_GObjPLinkHead[HSD_GOBJ_PLINK_LIGHT]; gobj != NULL;
+         gobj = gobj->next)
+    {
         if (gobj->classifier == HSD_GOBJ_CLASS_GROUND) {
             break;
         }
@@ -3842,7 +3842,7 @@ void Ground_801C4A08(HSD_GObj* gobj)
         Ground_801C55AC(gp);
         if (gp->x18 != NULL) {
             removeStageGObj(gp->x18);
-            HSD_GObjPLink_80390228(gp->x18);
+            HSD_GObjFree(gp->x18);
         }
         if (gobj->hsd_obj != NULL && Ground_804D6950[map_id] == 0) {
             Ground_804D6950[map_id] = 1;
@@ -3854,7 +3854,7 @@ void Ground_801C4A08(HSD_GObj* gobj)
                             archive->unk4->unk8[map_id].unk0);
         }
     }
-    HSD_GObjPLink_80390228(gobj);
+    HSD_GObjFree(gobj);
 }
 
 void Ground_801C4B50(HSD_Spline* spline, Vec3* arg1, Vec3* result, f32 arg8)
@@ -4263,28 +4263,24 @@ s32 Ground_801C5840(void)
     return stage_info.x6E4[i];
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma global_optimizer off
-#endif
-/// @todo Why is @c global_optimizer necessary?
+static inline void initSinglePlayerDisplay(StageInfo* stageinfo)
+{
+    int display_id = tyDisplay_8031C2EC();
+    tyDisplay_8031C454(display_id);
+    stageinfo->x6E4[0] = display_id;
+}
+
 void Ground_801C5878(void)
 {
     PAD_STACK(8);
     tyDisplay_8031C2CC();
     if (gm_IsCurrently1PMode() != 0) {
-        StageInfo* stageinfo = &stage_info;
-        int display_id;
-        display_id = tyDisplay_8031C2EC();
-        tyDisplay_8031C454(display_id);
-        stageinfo->x6E4[0] = display_id;
+        StageInfo* stageinfo;
+        initSinglePlayerDisplay(stageinfo = &stage_info);
     } else {
         stage_info.x6E4[0] = -1;
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 Item_GObj* Ground_801C58E0(s32 arg0, s32 arg1)
 {
@@ -4295,14 +4291,6 @@ Item_GObj* Ground_801C58E0(s32 arg0, s32 arg1)
     result = it_802F2094(0, &sp10, tmp, 0);
     Toy_80304A58(tmp);
     return result;
-}
-
-static inline s32 randi(s32 max)
-{
-    if (max != 0) {
-        return HSD_Randi(max);
-    }
-    return 0;
 }
 
 int Ground_801C5940(void)
@@ -4392,4 +4380,5 @@ void Ground_801C5AEC(Vec3* v, Vec3* arg1, Vec3* arg2, Vec3* arg3)
     }
 }
 
+/// @todo Is this used by base pointer anywhere? Not stripped by mwcc.
 static int unused_ints[] = { 1, 1, 0, 0, 0, 180, 0, 0, 0 };

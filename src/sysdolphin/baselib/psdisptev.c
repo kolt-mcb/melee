@@ -1,6 +1,7 @@
 #include <baselib/psstructs.h>
 #include "psdisptev.h"
 
+#include "psstructs.h"
 #include <dolphin/gx.h>
 
 static u32 prevTev[2];
@@ -32,16 +33,9 @@ void psSetupTevInvalidState(void)
     prevTev[0] = -1;
 }
 
-void psSetupTev(u32* arg0)
+void psSetupTev(HSD_Particle* pp)
 {
-#if BUILD_TARGET_PC
-    /* arg0 is the HSD_Particle; [1] is its kind on the console (next is
-     * 4 bytes there, 8 here). */
-    u32* pc_kind = &((HSD_Particle*) arg0)->kind;
-#define arg0 pc_kind_base
-#define pc_kind_base ((u32*) ((u8*) pc_kind - 4))
-#endif
-    u32 temp_r5 = arg0[1] & 0x80100480;
+    u32 temp_r5 = pp->kind & 0x80100480;
     if (temp_r5 == prevTev[0]) {
         return;
     }
@@ -49,7 +43,7 @@ void psSetupTev(u32* arg0)
     prevTev[0] = temp_r5;
     switch (prevTev[0]) {
     case 0x80000080:
-        arg0[1] &= 0xFFFFFF7F;
+        pp->kind &= 0xFFFFFF7F;
         prevTev[0] &= 0xFFFFFF7F;
     case 0x80000000:
         GXSetNumTevStages(2);
@@ -67,7 +61,7 @@ void psSetupTev(u32* arg0)
         break;
 
     case 0x80:
-        arg0[1] &= 0xFFFFFF7F;
+        pp->kind &= 0xFFFFFF7F;
         prevTev[0] &= 0xFFFFFF7F;
     case 0x0:
         GXSetNumTevStages(1);
@@ -177,7 +171,7 @@ void psSetupTev(u32* arg0)
         break;
 
     case 0x100080:
-        arg0[1] &= 0xFFFFFF7F;
+        pp->kind &= 0xFFFFFF7F;
         prevTev[0] &= 0xFFFFFF7F;
     case 0x100000:
         GXSetNumTevStages(1);
@@ -191,7 +185,7 @@ void psSetupTev(u32* arg0)
         break;
 
     case 0x80100080:
-        arg0[1] &= 0xFFFFFF7F;
+        pp->kind &= 0xFFFFFF7F;
         prevTev[0] &= 0xFFFFFF7F;
     case 0x80100000:
         GXSetNumTevStages(2);
@@ -209,7 +203,3 @@ void psSetupTev(u32* arg0)
         break;
     }
 }
-#if BUILD_TARGET_PC
-#undef arg0
-#undef pc_kind_base
-#endif

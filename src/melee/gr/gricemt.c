@@ -1,38 +1,35 @@
 #include "gricemt.h"
 
+#include <Runtime/platform.h>
+
+#include <sysdolphin/baselib/forward.h>
+
 #include <placeholder.h>
-#include <platform.h>
 
-#include "baselib/debug.h"
-
-#include "baselib/forward.h"
-
-#include "baselib/gobjproc.h"
-#include "baselib/random.h"
-#include "cm/camera.h"
-#include "ef/efsync.h"
-#include "ft/ftlib.h"
-#include "gm/gm_1601.h"
-
-#include "gr/forward.h"
-
-#include "gr/grdatfiles.h"
-#include "gr/grlib.h"
-#include "gr/grmaterial.h"
-#include "gr/ground.h"
-#include "gr/grzakogenerator.h"
-#include "gr/inlines.h"
-#include "gr/stage.h"
-#include "gr/types.h"
-#include "it/inlines.h"
-#include "it/it_26B1.h"
-#include "it/types.h"
-#include "lb/lb_00B0.h"
-#include "mp/mplib.h"
-
+#include "forward.h"
+#include "grdatfiles.h"
+#include "grlib.h"
+#include "grmaterial.h"
+#include "ground.h"
+#include "grzakogenerator.h"
+#include "inlines.h"
+#include "stage.h"
+#include "types.h"
 #include <dolphin/types.h>
-#include <baselib/gobj.h>
-#include <baselib/jobj.h>
+#include <melee/cm/camera.h>
+#include <melee/ef/efsync.h>
+#include <melee/ft/ftlib.h>
+#include <melee/gm/gm_1601.h>
+#include <melee/it/inlines.h>
+#include <melee/it/it_26B1.h>
+#include <melee/it/types.h>
+#include <melee/lb/lb_00B0.h>
+#include <melee/mp/mplib.h>
+#include <sysdolphin/baselib/debug.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <sysdolphin/baselib/random.h>
 
 /* 1F8C64 */ static void fn_801F8C64(Item_GObj* gobj, Ground* u1, Vec3* u2,
                                      HSD_GObj* u3, f32 u4);
@@ -661,22 +658,22 @@ void grIceMt_801F7080(void)
         Ground_801C4A08(grIm_804D69F0);
     }
     if ((gobj = Ground_GetMapGObj(1))) {
-        Ground_801C2FE0(gobj);
+        Ground_UpdateMapColl(gobj);
     }
     if ((gobj = Ground_GetMapGObj(2))) {
-        Ground_801C2FE0(gobj);
+        Ground_UpdateMapColl(gobj);
     }
     if ((gobj = Ground_GetMapGObj(3))) {
-        Ground_801C2FE0(gobj);
+        Ground_UpdateMapColl(gobj);
     }
     if ((gobj = Ground_GetMapGObj(4))) {
-        Ground_801C2FE0(gobj);
+        Ground_UpdateMapColl(gobj);
     }
     if ((gobj = Ground_GetMapGObj(5))) {
-        Ground_801C2FE0(gobj);
+        Ground_UpdateMapColl(gobj);
     }
     if ((gobj = Ground_GetMapGObj(6))) {
-        Ground_801C2FE0(gobj);
+        Ground_UpdateMapColl(gobj);
     }
     if (Stage_80225194() == 76) {
         grZakoGenerator_801CAE04(&yakumono_param->xBC);
@@ -731,47 +728,27 @@ Ground_GObj* setupStageCallbacks(int gobj_id)
 void stageGObj0_OnInit(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
+    HSD_JObj* jobj;
     grAnime_801C8138(gobj, gp->map_id, 0);
-
-    { /// @todo Unrolled loop?
-        HSD_JObj* jobj;
-        Vec3 v[4];
-        {
-            int const i = 0;
-            int const ix = (ARRAY_SIZE(v) - 1) - i;
-            jobj = Ground_801C3FA4(gobj, i + 18);
-            if (jobj != NULL) {
-                v[ix] = grIm_803B8220[i + 1];
-                HSD_JObjSetTranslate(jobj, &v[ix]);
-            }
-        }
-        {
-            int const i = 1;
-            int const ix = (ARRAY_SIZE(v) - 1) - i;
-            jobj = Ground_801C3FA4(gobj, i + 18);
-            if (jobj != NULL) {
-                v[ix] = grIm_803B8220[i + 1];
-                HSD_JObjSetTranslate(jobj, &v[ix]);
-            }
-        }
-        {
-            int const i = 2;
-            int const ix = (ARRAY_SIZE(v) - 1) - i;
-            jobj = Ground_801C3FA4(gobj, i + 18);
-            if (jobj != NULL) {
-                v[ix] = grIm_803B8220[i + 1];
-                HSD_JObjSetTranslate(jobj, &v[ix]);
-            }
-        }
-        {
-            int const i = 3;
-            int const ix = (ARRAY_SIZE(v) - 1) - i;
-            jobj = Ground_801C3FA4(gobj, i + 18);
-            if (jobj != NULL) {
-                v[ix] = grIm_803B8220[i + 1];
-                HSD_JObjSetTranslate(jobj, &v[ix]);
-            }
-        }
+    jobj = Ground_801C3FA4(gobj, 18);
+    if (jobj != NULL) {
+        Vec3 pos = grIm_803B8220[1];
+        HSD_JObjSetTranslate(jobj, &pos);
+    }
+    jobj = Ground_801C3FA4(gobj, 19);
+    if (jobj != NULL) {
+        Vec3 pos = grIm_803B8220[2];
+        HSD_JObjSetTranslate(jobj, &pos);
+    }
+    jobj = Ground_801C3FA4(gobj, 20);
+    if (jobj != NULL) {
+        Vec3 pos = grIm_803B8220[3];
+        HSD_JObjSetTranslate(jobj, &pos);
+    }
+    jobj = Ground_801C3FA4(gobj, 21);
+    if (jobj != NULL) {
+        Vec3 pos = grIm_803B8220[4];
+        HSD_JObjSetTranslate(jobj, &pos);
     }
     Ground_801C39C0();
     Ground_801C3BB4();
@@ -1026,7 +1003,7 @@ void stageGObj1_OnInit(Ground_GObj* gobj)
     Ground* gp = GET_GROUND(gobj);
     GrIm588 sp14;
     PAD_STACK(0x4);
-    Ground_801C2ED0(gobj->hsd_obj, gp->map_id);
+    Ground_InitMapColl(gobj->hsd_obj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
     grAnime_801C77FC(gobj, 0, 7);
     gp->u.icemt1.x4 = Ground_801C3FA4(gobj, 3);
@@ -1055,7 +1032,7 @@ void stageGObj1_GObjProc(Ground_GObj* arg0)
 {
     PAD_STACK(8);
     grIceMt_801F98A8(arg0);
-    Ground_801C2FE0(arg0);
+    Ground_UpdateMapColl(arg0);
 }
 
 void stageGObj1_Callback3(Ground_GObj* gobj)
@@ -1078,7 +1055,7 @@ void stageGObj2_OnInit(Ground_GObj* arg0)
     HSD_JObj* jobj2;
     GrIm588 sp14;
     PAD_STACK(0x4);
-    Ground_801C2ED0(arg0->hsd_obj, gp->map_id);
+    Ground_InitMapColl(arg0->hsd_obj, gp->map_id);
     grAnime_801C8138(arg0, gp->map_id, 0);
     grAnime_801C77FC(arg0, 0, 7);
     jobj = Ground_801C3FA4(arg0, 4);
@@ -1116,7 +1093,7 @@ void stageGObj2_GObjProc(Ground_GObj* param1)
     grIceMt_801F929C(param1, &gp->u.icemt1.x34[2]);
     grIceMt_801F929C(param1, &gp->u.icemt.x108[3]);
     grIceMt_801F98A8(param1);
-    Ground_801C2FE0(param1);
+    Ground_UpdateMapColl(param1);
 }
 
 void stageGObj2_Callback3(Ground_GObj* gobj)
@@ -1140,7 +1117,7 @@ void stageGObj3_OnInit(Ground_GObj* arg0)
         GrIm588 x4;
     } sp14;
     PAD_STACK(4);
-    Ground_801C2ED0(arg0->hsd_obj, gp->map_id);
+    Ground_InitMapColl(arg0->hsd_obj, gp->map_id);
     grAnime_801C8138(arg0, gp->map_id, 0);
     grAnime_801C77FC(arg0, 0, 7);
     gp->u.icemt1.x4 = Ground_801C3FA4(arg0, 5);
@@ -1169,7 +1146,7 @@ bool stageGObj3_Callback1(Ground_GObj* param1)
 void stageGObj3_GObjProc(Ground_GObj* arg0)
 {
     grIceMt_801F98A8(arg0);
-    Ground_801C2FE0(arg0);
+    Ground_UpdateMapColl(arg0);
 }
 
 void stageGObj3_Callback3(Ground_GObj* gobj)
@@ -1199,7 +1176,7 @@ void stageGObj4_OnInit(Ground_GObj* arg0)
     } sp14;
     PAD_STACK(0x4);
     Ground_801C0498();
-    Ground_801C2ED0(jobj, gp->map_id);
+    Ground_InitMapColl(jobj, gp->map_id);
     grAnime_801C8138(arg0, gp->map_id, 0);
     grAnime_801C77FC(arg0, 0, 7);
     jobj2 = Ground_801C3FA4(arg0, 7);
@@ -1235,7 +1212,7 @@ void stageGObj4_GObjProc(Ground_GObj* gobj)
     Ground* gp = gobj->user_data;
     grIceMt_801F929C(gobj, &gp->u.icemt1.x34[4]);
     grIceMt_801F98A8(gobj);
-    Ground_801C2FE0(gobj);
+    Ground_UpdateMapColl(gobj);
 }
 void stageGObj4_Callback3(Ground_GObj* gobj)
 {
@@ -1257,7 +1234,7 @@ void stageGObj5_OnInit(Ground_GObj* arg0)
     Ground* gp = GET_GROUND(arg0);
     GrIm825C sp14;
     PAD_STACK(0x4);
-    Ground_801C2ED0(arg0->hsd_obj, gp->map_id);
+    Ground_InitMapColl(arg0->hsd_obj, gp->map_id);
     grAnime_801C8138(arg0, gp->map_id, 0);
     grAnime_801C77FC(arg0, 0, 7);
     gp->u.icemt1.x4 = Ground_801C3FA4(arg0, 6);
@@ -1286,7 +1263,7 @@ bool stageGObj5_Callback1(Ground_GObj* param1)
 void stageGObj5_GObjProc(Ground_GObj* param1)
 {
     grIceMt_801F98A8(param1);
-    Ground_801C2FE0(param1);
+    Ground_UpdateMapColl(param1);
     return;
 }
 
@@ -1312,7 +1289,7 @@ void stageGObj6_OnInit(Ground_GObj* arg0)
         GrIm588 x4;
     } sp14;
     PAD_STACK(4);
-    Ground_801C2ED0(arg0->hsd_obj, gp->map_id);
+    Ground_InitMapColl(arg0->hsd_obj, gp->map_id);
     grAnime_801C8138(arg0, gp->map_id, 0);
     grAnime_801C77FC(arg0, 0, 7);
     gp->u.icemt1.x4 = Ground_801C3FA4(arg0, 5);
@@ -1341,7 +1318,7 @@ bool stageGObj6_Callback1(Ground_GObj* arg0)
 void stageGObj6_GObjProc(Ground_GObj* param1)
 {
     grIceMt_801F98A8(param1);
-    Ground_801C2FE0(param1);
+    Ground_UpdateMapColl(param1);
     return;
 }
 
@@ -1409,7 +1386,7 @@ void fn_801F8C64(Item_GObj* gobj, Ground* u1, Vec3* u2, HSD_GObj* u3, f32 u4)
     it_8026B294(gobj, &pos);
     efSync_Spawn(0x445, gobj, &pos);
     Ground_801C53EC(310);
-    Camera_80030E44(2, &pos);
+    Camera_RequestQuake(QuakeKind_Small, &pos);
 }
 
 /// @brief Creates material items and attaches them to Entity05 platform JObjs.
@@ -1923,7 +1900,7 @@ bool grIceMt_801F9ACC(struct grIceMt_GObj9_GObj10_UnderUpperIdPair* ids_,
             HSD_ASSERT(2815, jobj);
             HSD_JObjSetTranslateY(jobj, cur - y1);
             Ground_801C32AC(ids->upper);
-            Ground_801C2FE0(mgobj);
+            Ground_UpdateMapColl(mgobj);
             Ground_801C3214(ids->upper);
         }
         mgobj = Ground_GetMapGObj(ids->under);
@@ -1969,7 +1946,7 @@ bool grIceMt_801F9ACC(struct grIceMt_GObj9_GObj10_UnderUpperIdPair* ids_,
             HSD_ASSERT(2847, jobj);
             HSD_JObjSetTranslateY(jobj, y1 + (cur + y0));
             Ground_801C32AC(ids->under);
-            Ground_801C2FE0(mgobj);
+            Ground_UpdateMapColl(mgobj);
             Ground_801C3214(ids->under);
         }
         mgobj = Ground_GetMapGObj(ids->upper);
@@ -2028,7 +2005,7 @@ void grIceMt_801FA0BC(struct grIceMt_GObj9_GObj10_UnderUpperIdPair* ids)
         HSD_JObjSetTranslateY(jobj,
                               IC_FMA(-20.0f, Ground_801C0498(), frame));
         Ground_801C3214(ids->under);
-        Ground_801C2FE0(mgobj);
+        Ground_UpdateMapColl(mgobj);
         Ground_801C32AC(ids->under);
     }
 
@@ -2039,7 +2016,7 @@ void grIceMt_801FA0BC(struct grIceMt_GObj9_GObj10_UnderUpperIdPair* ids)
         HSD_ASSERT(2898, jobj);
         HSD_JObjSetTranslateY(jobj, -20.0f * Ground_801C0498());
         Ground_801C3214(ids->upper);
-        Ground_801C2FE0(mgobj);
+        Ground_UpdateMapColl(mgobj);
         Ground_801C32AC(ids->upper);
 
         gp = mgobj->user_data;

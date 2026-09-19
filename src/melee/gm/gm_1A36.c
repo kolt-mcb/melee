@@ -1,13 +1,14 @@
 #include "gm_1A36.h"
 
+#if BUILD_TARGET_PC
 #include <stdio.h>
 #include <stdlib.h>
+#endif
 
-#include "gm/gm_1A36.static.h"
-
-#include <baselib/controller.h>
-#include <melee/gm/gmscdata.h>
-#include <melee/gm/types.h>
+#include "gm_1A36.static.h"
+#include "gmscdata.h"
+#include "types.h"
+#include <sysdolphin/baselib/controller.h>
 
 #if BUILD_TARGET_PC
 /* PC port: GC pad state shared with the input bridge (undef_stubs.c). */

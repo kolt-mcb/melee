@@ -1,22 +1,20 @@
+#include "ifall.h"
 #include "ifcoget.h"
-
-#include "gm/gm_unsplit.h"
-#include "if/ifall.h"
-#include "if/textdraw.h"
-#include "if/textlib.h"
-#include "lb/lb_00B0.h"
-
+#include "textdraw.h"
+#include "textlib.h"
 #include <dolphin/mtx.h>
-#include <baselib/cobj.h>
-#include <baselib/fog.h>
-#include <baselib/gobj.h>
-#include <baselib/gobjgxlink.h>
-#include <baselib/gobjobject.h>
-#include <baselib/gobjplink.h>
-#include <baselib/gobjproc.h>
-#include <baselib/lobj.h>
-#include <baselib/sislib.h>
-#include <baselib/wobj.h>
+#include <melee/gm/gm_unsplit.h>
+#include <melee/lb/lb_00B0.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/fog.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjgxlink.h>
+#include <sysdolphin/baselib/gobjobject.h>
+#include <sysdolphin/baselib/gobjplink.h>
+#include <sysdolphin/baselib/gobjproc.h>
+#include <sysdolphin/baselib/lobj.h>
+#include <sysdolphin/baselib/sislib.h>
+#include <sysdolphin/baselib/wobj.h>
 
 /* 3F9E38 */ static HSD_WObjDesc eyepos = {
     NULL,
@@ -30,22 +28,7 @@ static HSD_WObjDesc interest = {
     NULL,
 };
 
-/// @todo ::HSD_CameraDescFrustum without `left` or `right`
-/* 3F9E60 */ static struct fake_HSD_CObjDesc {
-    char* class_name;
-    u16 flags;
-    u16 projection_type;
-    HSD_RectS16 viewport;
-    Scissor scissor;
-    HSD_WObjDesc* eyepos;
-    HSD_WObjDesc* interest;
-    f32 roll;
-    Vec3* up_vector;
-    f32 nnear;
-    f32 ffar;
-    f32 top;
-    f32 bottom;
-} un_803F9E60 = {
+/* 3F9E60 */ static HSD_CameraDescPerspective un_803F9E60 = {
     NULL,
     0,
     (1 << 0),
@@ -127,7 +110,7 @@ void fn_802FF218(HSD_GObj* arg0)
             int s;
             int tmp;
             gm_8016B774();
-            s = gm_8016C658(y);
+            s = gm_GetMatchEndPlayerScore(y);
             if (s > 9999) {
                 s = 9999;
             }
@@ -156,7 +139,7 @@ void un_802FF364(int slot)
     if ((thing && thing) && thing) {
     }
     if (gobj) {
-        HSD_GObjPLink_80390228(gobj);
+        HSD_GObjFree(gobj);
     }
     if (thing->x4) {
         HSD_SisLib_803A5CC4(thing->x4);
@@ -165,7 +148,7 @@ void un_802FF364(int slot)
     thing->x4->default_alignment = 1;
     thing->x4->default_kerning = 1;
     gm_8016B774();
-    s = gm_8016C658(slot);
+    s = gm_GetMatchEndPlayerScore(slot);
     if (s > 9999) {
         s = 9999;
     }
@@ -193,7 +176,7 @@ void un_802FF4FC(void)
         struct un_804A1F58_x8_t* thing;
         thing = (0, &base->x8[i]);
         if (thing->x0) {
-            HSD_GObjPLink_80390228(thing->x0);
+            HSD_GObjFree(thing->x0);
         }
         if (thing->x4) {
             HSD_SisLib_803A5CC4(thing->x4);

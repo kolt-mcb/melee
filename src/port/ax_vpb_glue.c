@@ -8,7 +8,7 @@ extern unsigned int pc_ax_bus_clock;
 #define PC_AX_SYNC_FIX 1
 #define AXSetVoiceLoop pc_sdk_AXSetVoiceLoop
 #define AXSetVoiceState pc_sdk_AXSetVoiceState
-#include "../../extern/dolphin/src/dolphin/ax/AXVPB.c"
+#include "../../libs/dolphin/src/dolphin/ax/AXVPB.c"
 #undef AXSetVoiceLoop
 #undef AXSetVoiceState
 #include "pc_execinfo.h"

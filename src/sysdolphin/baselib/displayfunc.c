@@ -8,18 +8,18 @@
 #endif
 #include "displayfunc.h"
 
-#include "baselib/cobj.h"
-#include "baselib/dobj.h"
-#include "baselib/lobj.h"
-#include "baselib/mobj.h"
-#include "baselib/mtx.h"
-#include "baselib/objalloc.h"
-#include "baselib/pobj.h"
-#include "baselib/state.h"
-#include "baselib/tev.h"
-#include "baselib/util.h"
-
 #include <string.h>
+
+#include "cobj.h"
+#include "dobj.h"
+#include "lobj.h"
+#include "mobj.h"
+#include "mtx.h"
+#include "objalloc.h"
+#include "pobj.h"
+#include "state.h"
+#include "tev.h"
+#include "util.h"
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 
