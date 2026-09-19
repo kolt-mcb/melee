@@ -12781,6 +12781,40 @@ u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod)
 
 u64 pc_diag_hash_bytes, pc_diag_hash_ns;
 
+/* A paletted texture is its index data *and* its palette. The cache keys on
+ * the image pointer, the dimensions, the format and a hash of the index
+ * bytes -- none of which change when only the TLUT does, so two CI textures
+ * that share index data and differ only in colour take the same slot and
+ * the first decode wins for both. Fold the active palette in. */
+static u32 pc_tlut_fingerprint(u8 fmt)
+{
+    u32 h = 2166136261u;
+    const TLUTSlot* t;
+    u32 n, i;
+    if (fmt != 0x08 && fmt != 0x09 && fmt != 0x0A) {
+        return 0; /* not paletted */
+    }
+    if (g_state.g_current_tlut >= 16) {
+        return 0;
+    }
+    t = &g_state.g_tlut[g_state.g_current_tlut];
+    if (!t->valid) {
+        return 0;
+    }
+    n = t->entry_count;
+    if (n > 256) n = 256;
+    h ^= (u32) g_state.g_current_tlut; h *= 16777619u;
+    h ^= (u32) t->fmt;                 h *= 16777619u;
+    h ^= n;                            h *= 16777619u;
+    for (i = 0; i < n; i++) {
+        u32 k;
+        for (k = 0; k < 4; k++) {
+            h ^= t->rgba[i][k];
+            h *= 16777619u;
+        }
+    }
+    return h;
+}
 static u32 tex_content_hash(const void* img, u16 w, u16 h, u8 fmt)
 {
     u32 n = GXGetTexBufferSize(w, h, fmt, 0, 0);
@@ -13118,6 +13152,8 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
         }
         {
             u32 hh = tex_content_hash(img, w, h, fmt);
+            u32 pal = pc_tlut_fingerprint(fmt);
+            if (pal != 0) { hh ^= pal; hh *= 16777619u; }
             pc_diag_hashes++;
             if (hit && hh == g_tex_slot_hash[slot]) {
                 /* Same bytes since the last generation: still valid. */
