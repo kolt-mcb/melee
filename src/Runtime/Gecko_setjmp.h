@@ -36,8 +36,14 @@ void longjmp(register __jmp_buf* env, register int val);
 
 #else /* BUILD_TARGET_PC */
 
-/* On PC, use system setjmp.h which already defines __jmp_buf, __setjmp, longjmp */
+/* On PC, use the system setjmp.h. glibc happens to define __jmp_buf itself,
+ * which is what the decompiled declarations name; Bionic does not, so the
+ * Android build needs the typedef spelled out. Nothing in the port calls
+ * these -- the type exists so the declarations compile. */
 #include <setjmp.h>
+#if defined(__BIONIC__) || defined(__ANDROID__)
+typedef jmp_buf __jmp_buf;
+#endif
 
 #endif /* !BUILD_TARGET_PC */
 
