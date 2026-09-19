@@ -654,7 +654,39 @@ unsigned char* pc_aram_host(unsigned long aram_off)
 {
     void* pc_lowmem_carve(unsigned long size);
     if (pc_aram_base == 0) pc_aram_base = (unsigned char*)pc_lowmem_carve(PC_ARAM_SIZE);
-    return pc_aram_base ? pc_aram_base + (aram_off % PC_ARAM_SIZE) : 0;
+    if (pc_aram_base == 0) return 0;
+    /* Wrapping out-of-range offsets with a modulo turned a caller's mistake
+     * into a silent read of unrelated ARAM -- usually zeros, which look like
+     * a file that simply had not loaded. Anything past the end of ARAM is not
+     * an ARAM offset; say so once and return nothing. */
+    if (aram_off >= PC_ARAM_SIZE) {
+        static int warned = 0;
+        if (warned < 8) {
+            warned++;
+            fprintf(stderr, "[ARAM] offset 0x%lx is past the end of ARAM "
+                            "(0x%lx); not translating\n",
+                    aram_off, (unsigned long) PC_ARAM_SIZE);
+        }
+        return 0;
+    }
+    return pc_aram_base + aram_off;
+}
+
+/* Is this 32-bit slot an ARAM offset or a host address?
+ *
+ * The console packs both kinds of value into one word and tells them apart
+ * with a single compare: ARAM offsets are below 0x80000000, MRAM addresses
+ * above. The port keeps every game allocation in a reserved pool below
+ * 0x80000000 so pointers still fit in the game's 32-bit fields -- which puts
+ * host addresses on the ARAM side of that compare. The ranges themselves do
+ * not overlap (ARAM is the first 16 MB of a zero-based space; the pool starts
+ * at 0x10000000 or above), so ask which range the value is in. */
+int pc_aram_is_offset(unsigned long v)
+{
+    int pc_lowmem_contains(const void* p);
+    if (v == 0) return 0;
+    if (pc_lowmem_contains((const void*) (uintptr_t) v)) return 0;
+    return v < PC_ARAM_SIZE;
 }
 __attribute__((weak)) unsigned long ARAlloc(unsigned long length)
 {

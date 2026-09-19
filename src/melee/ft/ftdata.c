@@ -1877,15 +1877,23 @@ void ftData_80085CD8(Fighter* fp, Fighter* arg1, int msid)
                 } else {
                     temp_r4_2 = temp_r3->x14;
 #if BUILD_TARGET_PC
-                    /* PC port: values below 0x80000000 are ARAM offsets, and
-                     * the animation file genuinely lives in ARAM (lbHeap heap
-                     * 1). ARAM is emulated by a carved host region, so
-                     * translate the offset and copy rather than going through
-                     * the ARQ DMA queue. Bounded to the 0x8000 staging
-                     * buffer. */
-                    if (temp_r4_2 < 0x80000000) {
+                    /* PC port: an ARAM offset goes through the emulated
+                     * ARAM; a host address in the low pool is read directly.
+                     * The console's own test -- below 0x80000000 -- calls
+                     * both an ARAM offset here, because the port keeps its
+                     * allocations below that line so they fit the game's
+                     * 32-bit fields. Reading a host address as an ARAM offset
+                     * translated it far past the end of ARAM, and the copy
+                     * silently produced zeros: HSD_ArchiveParse then reported
+                     * a byte-order mismatch and the animation never loaded.
+                     * See pc_aram_is_offset. */
+                    {
                         extern unsigned char* pc_aram_host(unsigned long off);
-                        unsigned char* srcp = pc_aram_host((unsigned long) temp_r4_2);
+                        extern int pc_aram_is_offset(unsigned long v);
+                        const unsigned char* srcp =
+                            pc_aram_is_offset((unsigned long) temp_r4_2)
+                                ? pc_aram_host((unsigned long) temp_r4_2)
+                                : (const unsigned char*) (uintptr_t) temp_r4_2;
                         u32 n = (u32) temp_r3->x8;
                         if (n > 0x8000u) {
                             n = 0x8000u;
@@ -1893,14 +1901,15 @@ void ftData_80085CD8(Fighter* fp, Fighter* arg1, int msid)
                         if (srcp != NULL) {
                             memcpy(fp->x59C, srcp, n);
                         }
-                    } else
-#endif
+                    }
+#else
                     if (temp_r4_2 < 0x80000000) {
                         lbArq_80014BD0(temp_r4_2, fp->x59C,
                                        OSRoundUp32B(temp_r3->x8), 0, 0);
                     } else {
                         memcpy(fp->x59C, (void*) temp_r4_2, temp_r3->x8);
                     }
+#endif
                     temp_ret_2 =
                         HSD_ArchiveParse(&sp14, fp->x59C->x0, temp_r3->x8);
                     if (temp_ret_2 == -1) {
@@ -1981,19 +1990,21 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
                 } else {
                     temp_r4_2 = temp_r3->x14;
 #if BUILD_TARGET_PC
-                    /* PC port: same translation as the x590 loader above --
-                     * sub-0x80000000 values are offsets into the emulated
-                     * ARAM, and the ARQ DMA queue never runs here. Without
-                     * this, every lookup through this path parsed garbage
-                     * and returned NULL, so Fighter_Create_Inline2 filled
-                     * x2DC/x2E0/x2E4/x2E8/x2EC with 0: special-fall
-                     * landings then played at (0.1+0)/lag speed -- 1/300 --
-                     * pinning the fighter in a crouch for minutes after any
-                     * air special (the "crouch and can't move" report). */
-                    if (temp_r4_2 < 0x80000000) {
+                    /* Same classification as the x590 loader above. Without
+                     * the ARAM translation at all, every lookup through this
+                     * path parsed garbage and returned NULL, so
+                     * Fighter_Create_Inline2 filled x2DC/x2E0/x2E4/x2E8/x2EC
+                     * with 0: special-fall landings then played at
+                     * (0.1+0)/lag speed -- 1/300 -- pinning the fighter in a
+                     * crouch for minutes after any air special (the "crouch
+                     * and can't move" report). */
+                    {
                         extern unsigned char* pc_aram_host(unsigned long off);
-                        unsigned char* srcp =
-                            pc_aram_host((unsigned long) temp_r4_2);
+                        extern int pc_aram_is_offset(unsigned long v);
+                        const unsigned char* srcp =
+                            pc_aram_is_offset((unsigned long) temp_r4_2)
+                                ? pc_aram_host((unsigned long) temp_r4_2)
+                                : (const unsigned char*) (uintptr_t) temp_r4_2;
                         u32 n = (u32) temp_r3->x8;
                         if (n > 0x8000u) {
                             n = 0x8000u;
@@ -2001,14 +2012,15 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
                         if (srcp != NULL) {
                             memcpy(arg0->x5A0, srcp, n);
                         }
-                    } else
-#endif
+                    }
+#else
                     if (temp_r4_2 < 0x80000000) {
                         lbArq_80014BD0(temp_r4_2, arg0->x5A0,
                                        OSRoundUp32B(temp_r3->x8), 0, 0);
                     } else {
                         memcpy(arg0->x5A0, (void*) temp_r4_2, temp_r3->x8);
                     }
+#endif
                     temp_ret_2 =
                         HSD_ArchiveParse(&sp10, arg0->x5A0->x0, temp_r3->x8);
                     if (temp_ret_2 == -1) {
