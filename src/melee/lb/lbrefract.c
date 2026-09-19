@@ -694,6 +694,17 @@ void lbRefract_80022998(HSD_MObj* mobj, u32 rendermode, s32 arg2)
     u64 write_z;
     GXCompare compare;
 
+#if BUILD_TARGET_PC
+    /* Every other entry point here checks refractionUserCount before touching
+     * the state that lbRefract_800222A4 builds; this one trusts that a
+     * material asking to refract means the setup ran. On the host the setup
+     * returns early (the descriptor is still raw big-endian DAT), so the
+     * table is NULL and a Classic run took a fighter with a refracting
+     * material and dereferenced it. */
+    if (lbl_804336D0.tobj_list == NULL) {
+        return;
+    }
+#endif
     HSD_TObjSetup(lbl_804336D0.tobj_list[arg2]);
 
     GXSetNumTexGens(2);
