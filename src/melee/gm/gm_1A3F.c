@@ -119,6 +119,32 @@ static inline u8 nextState(GameModeState* states)
     return firstState(states, next_id);
 }
 
+
+#if BUILD_TARGET_PC
+/* The mode and scene tables hold function pointers, and a bad one is a jump
+ * into data rather than a fault at a readable address, so the crash handler
+ * cannot even unwind it -- which is how a Classic run died on the tablet with
+ * nothing but a constant program counter to go on. Check before calling and
+ * say which callback it was. */
+extern int pc_code_ptr_ok(const void* p);
+static int pc_cb_ok(const void* fn, const char* which, int id)
+{
+    if (fn == NULL || pc_code_ptr_ok(fn)) {
+        return fn != NULL;
+    }
+    {
+        static int said;
+        if (said < 8) {
+            said++;
+            fprintf(stderr, "[PORT WARN] %s callback for state %d is %p, "
+                            "which is not code; skipping\n",
+                    which, id, fn);
+        }
+    }
+    return 0;
+}
+#endif
+
 static inline GameModeState* findState(GameModeState* state)
 {
     int i, j;
@@ -146,9 +172,15 @@ void gm_801A4014(GameMode* mode)
     sm->routing.curr_state_id = state->id;
 
     preloadState(state);
+#if BUILD_TARGET_PC
+    if (pc_cb_ok((const void*) state->on_enter, "state on_enter", (int) state->id)) {
+        state->on_enter(state);
+    }
+#else
     if (state->on_enter != NULL) {
         state->on_enter(state);
     }
+#endif
     info = &state->info;
     scene =
         (GameScene*) ((uintptr_t) gm_FindGameSceneHandler(info->scene_kind) |
@@ -177,8 +209,14 @@ void gm_801A4014(GameMode* mode)
 #endif
     gm_801A4BD4();
     gm_801A4B88(info);
+#if BUILD_TARGET_PC
+    if (pc_cb_ok((const void*) scene->on_enter, "scene on_enter",
+                 (int) info->scene_kind)) {
+        scene->on_enter(info->enter_data);
+#else
     if (scene->on_enter != NULL) {
         scene->on_enter(info->enter_data);
+#endif
     }
     gm_801A4D34(scene->on_frame, info);
 #if BUILD_TARGET_PC
@@ -191,8 +229,15 @@ void gm_801A4014(GameMode* mode)
         return;
     }
 #endif
+#if BUILD_TARGET_PC
+    if (!gmMainLib_8046B0F0.resetting &&
+        pc_cb_ok((const void*) scene->on_exit, "scene on_exit",
+                 (int) info->scene_kind)) {
+        scene->on_exit(info->exit_data);
+#else
     if (!gmMainLib_8046B0F0.resetting && scene->on_exit != NULL) {
         scene->on_exit(info->exit_data);
+#endif
     }
     if (!gmMainLib_8046B0F0.resetting) {
 #if BUILD_TARGET_PC
