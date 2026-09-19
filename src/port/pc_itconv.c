@@ -56,7 +56,12 @@ static void swap_words(void* dst, const u8* src, unsigned long nbytes)
 /* ------------------------------------------------------------------ */
 /* Archive registry                                                     */
 
-#define ARCH_MAX 64
+/* Live archives at once, measured: a Classic run peaks between 64 and 95, so
+ * the old 64 was reached and the table then evicted archives that were still
+ * in use. Nothing unregisters an archive when the game frees it -- a new
+ * archive overlapping a dead one's range prunes it (see below) -- so the
+ * table has to be big enough to hold every live archive instead. */
+#define ARCH_MAX 256
 struct arch {
     const u8* base;
     unsigned long len;
@@ -113,7 +118,18 @@ void pc_itconv_note_archive(HSD_Archive* arc)
         }
     }
     if (g_arch_n >= ARCH_MAX) {
-        /* Evict the oldest. */
+        /* Evicting here drops an archive that is probably still live, and
+         * every article pointing into it then converts to NULL: in a Classic
+         * run at the old cap of 64 that was 19 articles, and the items they
+         * belong to refuse to spawn. If this ever fires again, raise the cap
+         * rather than letting it evict. */
+        static unsigned evicted;
+        evicted++;
+        if (evicted <= 4 || (evicted % 50) == 0) {
+            fprintf(stderr, "[PORT WARN] pc_itconv_note_archive: registry full "
+                            "(%d); evicting a live archive (%u so far)\n",
+                    ARCH_MAX, evicted);
+        }
         free(g_arch[0].bounds);
         free(g_arch[0].relocs);
         memmove(&g_arch[0], &g_arch[1], sizeof(g_arch[0]) * (ARCH_MAX - 1));
@@ -1012,9 +1028,27 @@ Article* pc_itconv_article(const void* raw)
     }
     a = find_arch(raw);
     if (a == NULL) {
+        /* Which kind of miss is this: a pointer into an archive that was
+         * dropped, or one that was never registered at all? Report the
+         * nearest live range so the two can be told apart. */
+        const u8* p = (const u8*) raw;
+        long best = 0;
+        int bi = -1;
+        for (i = 0; i < g_arch_n; i++) {
+            long d = p < g_arch[i].base
+                         ? (long) (g_arch[i].base - p)
+                         : (long) (p - (g_arch[i].base + g_arch[i].len));
+            if (bi < 0 || d < best) {
+                best = d;
+                bi = i;
+            }
+        }
         fprintf(stderr,
-                "[PORT WARN] pc_itconv_article: %p is in no known archive\n",
-                raw);
+                "[PORT WARN] pc_itconv_article: %p is in no known archive "
+                "(%d live; nearest range %p+0x%lx, %ld bytes away)\n",
+                raw, g_arch_n,
+                bi >= 0 ? (const void*) g_arch[bi].base : NULL,
+                bi >= 0 ? g_arch[bi].len : 0UL, bi >= 0 ? best : 0L);
         return NULL;
     }
     g_last_was_fresh = 0;
