@@ -752,7 +752,14 @@ HSD_GObj* grMuteCity_801EFD0C(int gobj_id)
         }
 
     } else {
+#if BUILD_TARGET_PC
+        /* Same shape as groldkongo: the format string is read 0x360 bytes
+         * past a 20-byte table. */
+        OSReport("grmutecity.c:%d: no stage callbacks for map %d\n", 292,
+                 gobj_id);
+#else
         OSReport((char*) grMc_803E30B0 + 0x360, grMc_803E3434, 292, gobj_id);
+#endif
     }
 
     return gobj;
@@ -1948,7 +1955,18 @@ void grMuteCity_801F1A34(HSD_GObj* arg0, Ground_GObj* arg1)
                 if (!car->x22_flags.b0 && car->x24 == 0) {
                     Item_GObj* item_gobj = grMaterial_801C8CFC(
                         0, 2, car_gp, jobj, grMuteCity_801F1A0C,
+#if BUILD_TARGET_PC
+                        /* The console picks this car's speed callback from
+                         * a table of thirty function pointers that sits
+                         * 0xBBC bytes past the end of a 20-byte array --
+                         * grMc_803E3C6C on the disc, which this tree does
+                         * not have. Reading it here yields whatever follows
+                         * in memory and calling it would jump into it, so
+                         * the car spawns without its per-lane callback. */
+                        NULL,
+#else
                         ((grMc_SpeedFn*) (grMc_803E30B0 + 0xBBC))[car_idx],
+#endif
                         NULL);
                     if (item_gobj != NULL) {
                         grMaterial_801C8DE0(item_gobj, 0.0f, 0.0f, -12.0f,

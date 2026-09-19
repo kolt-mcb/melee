@@ -237,8 +237,18 @@ HSD_GObj* grOldKongo_8020F52C(int arg0)
             HSD_GObj_SetupProc(gobj, callbacks->gobj_proc, 4);
         }
     } else {
+#if BUILD_TARGET_PC
+        /* The console reads the format string and the file name out of the
+         * DOL's string pool by counting bytes from this 12-byte table --
+         * 0x9C and 0xC0 past its end. Here that is whatever the linker put
+         * next, handed to a printf-style function. Say the same thing with
+         * a literal. */
+        OSReport("groldkongo.c:%d: no stage callbacks for map %d\n", 0xD5,
+                 arg0);
+#else
         OSReport((char*) grOk_803E6580 + 0x9C, (char*) grOk_803E6580 + 0xC0,
                  0xD5, arg0);
+#endif
     }
 
     return gobj;
