@@ -2,6 +2,7 @@
 
 #if BUILD_TARGET_PC
 #include "port/pc_dol.h"
+#include "port/log.h"
 #endif
 
 #include "gm_unsplit.h"
