@@ -2654,8 +2654,8 @@ void OSReport(const char *fmt, ...);
 
 void test_hang(void)
 {
-    extern size_t lbFile_800163D8(const char*);
-    lbFile_800163D8("MnSlChr.dat");
+    extern size_t lbFileGetSize(const char*);
+    lbFileGetSize("MnSlChr.dat");
     ssize_t ret = write(2, "[HANG] done\n", 12);
     (void)ret;
 }
@@ -3540,11 +3540,11 @@ __attribute__((weak)) void gm_801B685C(void) { PC_STUB_HIT("gm_801B685C");}
  * Temporary stubs for decomp symbols needed during port bootstrap
  * ============================================================ */
 
-/* lbFile_800163D8: Load file from DVD/archive. Return file size in bytes. */
-__attribute__((weak)) size_t lbFile_800163D8(const char* basename)
-{
-    return 0;  /* File not found (stub) */
-}
+/* lbFile_800163D8 used to be stubbed here, returning 0 for "file not found".
+ * Upstream renamed it lbFileGetSize, and because a weak stub answers any name
+ * nothing else defines, the callers that still used the old name linked
+ * against this and every archive they loaded came back zero bytes long. The
+ * stub is gone so that the next rename is a link error instead. */
 
 /* gm_803DACA4: GameMode array. Stub array of dummy GameModes. */
 __attribute__((weak)) extern struct GameMode {
@@ -4650,3 +4650,41 @@ __attribute__((weak)) void* tyDisplay_8031C5E4(int arg0)
     (void) arg0;
     return 0;
 }
+
+/* The August upstream merge renamed the scene entry points these stubs
+ * stand in for (vi0102_Initialize_OnEnter became vi0102_Scene_OnEnter, and
+ * so on through the victory, trophy and prize scenes). gmscdata's scene
+ * table names the new ones, and the vi/ and ty/ scene sources are still
+ * outside the PC build, so the stubs follow the rename. */
+__attribute__((weak)) void gm_Mode_ChallengerApproach_OnLoad(void) { PC_STUB_HIT("gm_Mode_ChallengerApproach_OnLoad");}
+__attribute__((weak)) void ifPrize_Scene_OnEnter(void) { PC_STUB_HIT("ifPrize_Scene_OnEnter");}
+__attribute__((weak)) void ifPrize_Scene_OnExit(void) { PC_STUB_HIT("ifPrize_Scene_OnExit");}
+__attribute__((weak)) void Toy_Mode_OnInit(void) { PC_STUB_HIT("Toy_Mode_OnInit");}
+__attribute__((weak)) void Toy_Scene_OnEnter(void) { PC_STUB_HIT("Toy_Scene_OnEnter");}
+__attribute__((weak)) void Toy_Scene_OnFrame(void) { PC_STUB_HIT("Toy_Scene_OnFrame");}
+__attribute__((weak)) void tyDisplay_Scene_OnEnter(void) { PC_STUB_HIT("tyDisplay_Scene_OnEnter");}
+__attribute__((weak)) void tyDisplay_Scene_OnFrame(void) { PC_STUB_HIT("tyDisplay_Scene_OnFrame");}
+__attribute__((weak)) void tyFigupon_Scene_OnEnter(void) { PC_STUB_HIT("tyFigupon_Scene_OnEnter");}
+__attribute__((weak)) void tyFigupon_Scene_OnFrame(void) { PC_STUB_HIT("tyFigupon_Scene_OnFrame");}
+__attribute__((weak)) void vi0102_Scene_OnEnter(void) { PC_STUB_HIT("vi0102_Scene_OnEnter");}
+__attribute__((weak)) void vi0102_Scene_OnFrame(void) { PC_STUB_HIT("vi0102_Scene_OnFrame");}
+__attribute__((weak)) void vi0401_Scene_OnEnter(void) { PC_STUB_HIT("vi0401_Scene_OnEnter");}
+__attribute__((weak)) void vi0401_Scene_OnFrame(void) { PC_STUB_HIT("vi0401_Scene_OnFrame");}
+__attribute__((weak)) void vi0402_Scene_OnEnter(void) { PC_STUB_HIT("vi0402_Scene_OnEnter");}
+__attribute__((weak)) void vi0402_Scene_OnFrame(void) { PC_STUB_HIT("vi0402_Scene_OnFrame");}
+__attribute__((weak)) void vi0501_Scene_OnEnter(void) { PC_STUB_HIT("vi0501_Scene_OnEnter");}
+__attribute__((weak)) void vi0501_Scene_OnFrame(void) { PC_STUB_HIT("vi0501_Scene_OnFrame");}
+__attribute__((weak)) void vi0502_Scene_OnEnter(void) { PC_STUB_HIT("vi0502_Scene_OnEnter");}
+__attribute__((weak)) void vi0502_Scene_OnFrame(void) { PC_STUB_HIT("vi0502_Scene_OnFrame");}
+__attribute__((weak)) void vi0601_Scene_OnEnter(void) { PC_STUB_HIT("vi0601_Scene_OnEnter");}
+__attribute__((weak)) void vi0601_Scene_OnFrame(void) { PC_STUB_HIT("vi0601_Scene_OnFrame");}
+__attribute__((weak)) void vi0801_Scene_OnEnter(void) { PC_STUB_HIT("vi0801_Scene_OnEnter");}
+__attribute__((weak)) void vi0801_Scene_OnFrame(void) { PC_STUB_HIT("vi0801_Scene_OnFrame");}
+__attribute__((weak)) void vi1101_Scene_OnEnter(void) { PC_STUB_HIT("vi1101_Scene_OnEnter");}
+__attribute__((weak)) void vi1101_Scene_OnFrame(void) { PC_STUB_HIT("vi1101_Scene_OnFrame");}
+__attribute__((weak)) void vi1201v1_Scene_OnEnter(void) { PC_STUB_HIT("vi1201v1_Scene_OnEnter");}
+__attribute__((weak)) void vi1201v1_Scene_OnFrame(void) { PC_STUB_HIT("vi1201v1_Scene_OnFrame");}
+__attribute__((weak)) void vi1201v2_Scene_OnEnter(void) { PC_STUB_HIT("vi1201v2_Scene_OnEnter");}
+__attribute__((weak)) void vi1201v2_Scene_OnFrame(void) { PC_STUB_HIT("vi1201v2_Scene_OnFrame");}
+__attribute__((weak)) void vi1202_Scene_OnEnter(void) { PC_STUB_HIT("vi1202_Scene_OnEnter");}
+__attribute__((weak)) void vi1202_Scene_OnFrame(void) { PC_STUB_HIT("vi1202_Scene_OnFrame");}

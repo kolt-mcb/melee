@@ -11,6 +11,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0881.h"
 #include "ft/ft_0892.h"
 #include "ft/ft_0C88.h"
@@ -33,7 +34,6 @@
 #include "pl/plbonuslib.h"
 
 #include <dolphin/mtx.h>
-#include <dolphin/os/OSError.h>
 #include <baselib/debug.h>
 #include <baselib/gobj.h>
 
@@ -90,7 +90,7 @@ bool ftpickupitem_80094150(Fighter_GObj* gobj, Item_GObj* item_gobj)
     return false;
 }
 
-inline itPickup* ftpickupitem_800942A0_inline(Fighter* fp)
+static inline itPickup* ftpickupitem_800942A0_inline(Fighter* fp)
 {
     return &fp->x294_itPickup;
 }
@@ -208,6 +208,8 @@ bool ftpickupitem_8009447C(Fighter_GObj* gobj, Item_GObj* item_gobj)
         case It_Kind_Coin:
             Item_8026A8EC(item_gobj);
             goto block_35;
+        default:
+            break;
         }
     }
 block_35:
@@ -252,9 +254,9 @@ bool ftpickupitem_80094790(Fighter_GObj* gobj)
         Item_GObj* unk_gobj = ftpickupitem_800942A0(gobj, 3);
         if (unk_gobj != NULL) {
             if (!itIsHeavy(unk_gobj)) {
-                ftpickupitem_80094694(gobj, ftCo_MS_LightGet, 0);
+                ftpickupitem_80094694(gobj, ftCo_MS_LightGet, false);
             } else {
-                ftpickupitem_80094694(gobj, ftCo_MS_HeavyGet, 0);
+                ftpickupitem_80094694(gobj, ftCo_MS_HeavyGet, false);
             }
             return true;
         }
@@ -262,7 +264,7 @@ bool ftpickupitem_80094790(Fighter_GObj* gobj)
     return false;
 }
 
-void ftpickupitem_80094818(Fighter_GObj* gobj, int arg1)
+void ftpickupitem_80094818(Fighter_GObj* gobj, bool arg1)
 {
     Fighter* fp = gobj->user_data;
     PAD_STACK(8);
@@ -399,6 +401,8 @@ void ftpickupitem_80094B6C(Fighter_GObj* gobj, Item_GObj* item_gobj)
         case It_Kind_Coin:
             Item_8026A8EC(item_gobj);
             return;
+        default:
+            break;
         }
     }
 }

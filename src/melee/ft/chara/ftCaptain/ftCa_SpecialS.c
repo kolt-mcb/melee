@@ -8,13 +8,16 @@
 #include "ef/eflib.h"
 #include "ef/efsync.h"
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcommon.h"
 #include "ft/ftlib.h"
 #include "ft/types.h"
-#include "ftCommon/ftCo_Attack100.h"
 #include "ftCommon/ftCo_Fall.h"
 #include "ftCommon/ftCo_FallSpecial.h"
 #include "ftCommon/ftCo_Landing.h"
@@ -44,7 +47,7 @@ static void setCallbacks(HSD_GObj* gobj)
 static void resetCmdVarsGround(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    u32* vars = (u32*) &fp->cmd_vars[0];
+    u32* vars = (&fp->cmd_vars[0]);
     vars[0] = vars[1] = vars[2] = vars[3] = 0;
     ftCommon_8007D7FC(fp);
 }
@@ -71,6 +74,8 @@ void ftCa_SpecialS_Enter(HSD_GObj* gobj)
     case FTKIND_GANON:
         efSync_Spawn(1293, gobj, fp->parts[FtPart_L2ndNb].joint);
         fp->u.ca.during_specials_start = true;
+        break;
+    default:
         break;
     }
     fp->u.ca.during_specials = false;
@@ -104,6 +109,8 @@ static inline void setupAirStart(HSD_GObj* gobj)
         fp->u.ca.during_specials_start = true;
         break;
     }
+    default:
+        break;
     }
     fp->u.ca.during_specials = false;
     Fighter_SetEffectHitlagCallbacks(fp);
@@ -225,6 +232,8 @@ void ftCa_SpecialS_Anim(HSD_GObj* gobj)
                          &fp->facing_dir);
             fp->u.ca.during_specials = true;
             break;
+        default:
+            break;
         }
         Fighter_SetEffectHitlagCallbacks(fp);
     }
@@ -267,6 +276,8 @@ void ftCa_SpecialAirS_Anim(HSD_GObj* gobj)
             fp->u.ca.during_specials = true;
             break;
         }
+        default:
+            break;
         }
         Fighter_SetEffectHitlagCallbacks(fp);
     }

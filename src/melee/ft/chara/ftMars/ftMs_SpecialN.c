@@ -1,7 +1,5 @@
 #include "ftMs_SpecialN.h"
 
-#include "math.h"
-
 #include <placeholder.h>
 #include <platform.h>
 
@@ -10,6 +8,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcolanim.h"
@@ -155,7 +154,7 @@ static inline void doLoopAnim(HSD_GObj* gobj, HSD_GObjEvent cb)
                 lb_8000B1CC(
                     fp->parts[ftParts_GetBoneIndex(fp, FtPart_HipN)].joint,
                     NULL, &pos);
-                lb_800119DC(&pos, 10, 0.5, 0.05, 60 * deg_to_rad);
+                lb_800119DC(&pos, 10, 0.5, 0.05, MTXDegToRad(60));
             }
             ++fp->mv.ms.specialn.cur_frame;
             if (fp->mv.ms.specialn.cur_frame > da->x0 * 30) {
@@ -277,7 +276,7 @@ static inline void inlineA0(Fighter_GObj* gobj, HSD_GObjEvent cb)
         Vec3 position;
         lb_8000B1CC(fp->parts[ftParts_GetBoneIndex(fp, FtPart_HipN)].joint, 0,
                     &position);
-        lb_800119DC(&position, 120, 0.9f, 0.02f, 60 * deg_to_rad);
+        lb_800119DC(&position, 120, 0.9f, 0.02f, MTXDegToRad(60));
     }
     if (!ftAnim_IsFramesRemaining(gobj)) {
         cb(gobj);

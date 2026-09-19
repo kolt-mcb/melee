@@ -6,7 +6,11 @@
 
 #include "ef/efsync.h"
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcommon.h"
@@ -462,7 +466,7 @@ void ftZd_SpecialAirSStart_Phys(HSD_GObj* gobj)
         fp->mv.zd.specials.x8 = temp_r3 - 1;
     } else {
         fighterAttr = &fp->co_attrs;
-        ftCommon_Fall(fp, charAttr->x2C, fighterAttr->terminal_vel);
+        ftCommon_Fall(fp, charAttr->x2C, fighterAttr->terminal_velocity);
     }
 
     aerialFriction = fp->co_attrs.aerial_friction;
@@ -489,7 +493,7 @@ void ftZd_SpecialAirSLoop_Phys(HSD_GObj* gobj)
         fp->mv.zd.specials.x8 = temp_r3 - 1;
     } else {
         fighterAttr = &fp->co_attrs;
-        ftCommon_Fall(fp, charAttr->x2C, fighterAttr->terminal_vel);
+        ftCommon_Fall(fp, charAttr->x2C, fighterAttr->terminal_velocity);
     }
 
     aerialFriction = fp->co_attrs.aerial_friction;
@@ -516,7 +520,7 @@ void ftZd_SpecialAirSEnd_Phys(HSD_GObj* gobj)
         fp->mv.zd.specials.x8 = temp_r3 - 1;
     } else {
         fighterAttr = &fp->co_attrs;
-        ftCommon_Fall(fp, charAttr->x2C, fighterAttr->terminal_vel);
+        ftCommon_Fall(fp, charAttr->x2C, fighterAttr->terminal_velocity);
     }
 
     aerialFriction = fp->co_attrs.aerial_friction;

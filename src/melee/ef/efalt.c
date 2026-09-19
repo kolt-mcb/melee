@@ -4,10 +4,13 @@
 #include "eflib.h"
 #include "types.h"
 
+#include <placeholder.h>
+
 #include "baselib/gobj.h"
 #include "baselib/jobj.h"
-#include "baselib/particle.h"
-#include "MSL/math.h"
+
+#include <math.h>
+#include <baselib/generator.h>
 
 #if BUILD_TARGET_PC
 /* __va_arg is an MWCC builtin. On PC it was an implicitly declared int

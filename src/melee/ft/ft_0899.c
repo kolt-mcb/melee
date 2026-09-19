@@ -3,19 +3,16 @@
 #endif
 #include "ft_0899.h"
 
-#include "math.h"
-
 #include "db/dbsound.h"
 #include "ft/fighter.h"
 #include "ft/ftparts.h"
 #include "ft/inlines.h"
 #include "lb/lb_00B0.h"
-#include "lb/lbbgflash.h"
+#include "lb/lb_020A.h"
 #include "lb/lbvector.h"
 #include "mp/mplib.h"
 
-#include <math_ppc.h>
-#include <trigf.h>
+#include <math.h>
 #include <baselib/gobj.h>
 #include <baselib/jobj.h>
 

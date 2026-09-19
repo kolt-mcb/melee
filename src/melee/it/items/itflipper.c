@@ -182,7 +182,7 @@ static inline f32 itFlipper_SpinSpeedFromFighter(Item_GObj* gobj,
     ftLib_800866DC(fighter, pos);
     ftLib_80086BEC(fighter, vel);
     return attrs->x18_spinMultiplier *
-           sqrtf__Ff(vel->x * vel->x + vel->y * vel->y);
+           sqrtf(vel->x * vel->x + vel->y * vel->y);
 }
 
 static inline void itFlipper_SpinFromFighter_inline(Item_GObj* gobj, Vec3* vel,
@@ -198,7 +198,7 @@ static inline void itFlipper_SpinFromFighter_inline(Item_GObj* gobj, Vec3* vel,
         }
         ip->xCF4_fighterGObjUnk = NULL;
     }
-    itFlipper_AddSpinImpulse(gobj, pos, deg_to_rad * speed);
+    itFlipper_AddSpinImpulse(gobj, pos, MTXDegToRad(speed));
 }
 
 void itFlipper_SpinFromFighter(Item_GObj* gobj)
@@ -218,7 +218,7 @@ void itFlipper_SpinFromFighter(Item_GObj* gobj)
         }
         ip->xCF4_fighterGObjUnk = NULL;
     }
-    itFlipper_AddSpinImpulse(gobj, &pos, deg_to_rad * speed);
+    itFlipper_AddSpinImpulse(gobj, &pos, MTXDegToRad(speed));
 }
 
 static inline void itFlipper_Repel_inline(Item_GObj* gobj, s32 kind, Vec3* pos,
@@ -513,7 +513,10 @@ bool itFlipper_DmgDealt(Item_GObj* gobj)
     return false;
 }
 
+#ifdef MUST_MATCH
+#pragma push
 #pragma dont_inline on
+#endif
 bool itFlipper_Clanked(Item_GObj* gobj)
 {
     Item* ip = gobj->user_data;
@@ -563,8 +566,10 @@ bool itFlipper_HitShield(Item_GObj* gobj)
     }
     return false;
 }
+#ifdef MUST_MATCH
+#pragma pop
+#endif
 
-#pragma dont_inline reset
 bool itFlipper_Reflected(Item_GObj* gobj)
 {
     return it_80273030(gobj);
@@ -588,7 +593,7 @@ static inline void itFlipper_SpinFromFighterRecv(Item_GObj* gobj, Vec3* vel,
         }
         ip->xCEC_fighterGObj = NULL;
     }
-    itFlipper_AddSpinImpulse(gobj, pos, deg_to_rad * speed);
+    itFlipper_AddSpinImpulse(gobj, pos, MTXDegToRad(speed));
 }
 
 bool itFlipper_DmgReceived(Item_GObj* gobj)

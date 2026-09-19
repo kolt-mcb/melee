@@ -6,7 +6,6 @@
 #endif
 
 #include "gm_unsplit.h"
-#include "math.h"
 
 #include "cm/camera.h"
 #include "dolphin/pad.h"
@@ -86,16 +85,20 @@ static struct {
 } gm_804D4278 = { 0xAA, 0xAA, 0xFF, 0xFF };
 
 /// @todo .sdata2 order hack
+#ifdef MUST_MATCH
 static void order_sdata2(void)
 {
     (void) 60.0f;
     (void) 0.0f;
-    (void) deg_to_rad;
+    (void) MTXDegToRad(1);
     (void) 1.0f;
 }
+#endif
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 bool gm_801A659C(int arg0)
 {
     switch (gm_GetCurrentGameMode()) {
@@ -116,7 +119,9 @@ void gm_801A6630(int arg0)
     *tmp = arg0;
     gm_801A4B60();
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void fn_801A6664(HSD_GObj* arg0)
 {
@@ -254,10 +259,12 @@ void fn_801A6A48(HSD_GObj* gobj, int arg1)
 }
 
 /// @todo .data order hack
+#ifdef MUST_MATCH
 static void order_data(void)
 {
     (void) "!(jobj->flags & JOBJ_USE_QUATERNION)";
 }
+#endif
 
 void fn_801A6ACC(HSD_GObj* gobj, int unused)
 {
@@ -312,7 +319,7 @@ void gm_801A6C54(void)
     gobj = GObj_Create(0x13, 0x14, 0);
     cobj =
         lb_80013B14((HSD_CameraDescPerspective*) gm_804D6748->cameras[0].desc);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(gobj, fn_801A6ACC, 8);
     gobj->gxlink_prios = 0x61;
     HSD_CObjAddAnim(cobj, gm_804D6748->cameras[0].anims[0]);
@@ -346,7 +353,7 @@ void gm_801A6DC0(void)
     gobj = GObj_Create(0x13, 0x14, 0);
     cobj =
         lb_80013B14((HSD_CameraDescPerspective*) gm_804D6748->cameras[0].desc);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(gobj, fn_801A6D78, 0xB);
     gobj->gxlink_prios = 0x801;
     HSD_CObjAddAnim(cobj, gm_804D6748->cameras[0].anims[0]);
@@ -454,16 +461,20 @@ void gm_801A6EE4(void)
     }
 }
 
-void gm_801A7070_OnEnter(void* unused)
+static inline void initImages(void)
+{
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        gm_804809D0[i].image_ptr = NULL;
+        lb_800121FC(&gm_804809D0[i], 0x1EA, 0x1E0, 5, 0);
+    }
+}
+
+static inline void setupTrophy(HSD_JObj* trophy_root)
 {
     s32 trophy;
-    int i;
-    HSD_JObj* player_jobj;
-    HSD_JObj* trophy_jobj;
-    HSD_JObj* main_jobj;
-    HSD_JObj* trophy_root;
-
-    f32 main_scale;
+    HSD_JObj* jobj;
     f32 translate_x;
     f32 translate_y;
     f32 translate_z;
@@ -472,10 +483,41 @@ void gm_801A7070_OnEnter(void* unused)
     f32 trophy_scale;
     f32 root_scale;
 
-    HSD_JObj* constraint_target;
+    trophy = gm_801A659C(gm_801BEFB0());
+    jobj = HSD_JObjGetChild(trophy_root);
+    translate_x = -Toy_803060BC(trophy, 0);
+    HSD_JObjSetTranslateXWithMtxDirty(jobj, translate_x);
+    translate_y = -Toy_803060BC(trophy, 1);
+    HSD_JObjSetTranslateYWithMtxDirty(jobj, translate_y);
+    translate_z = -Toy_803060BC(trophy, 2);
+    HSD_JObjSetTranslateZWithMtxDirty(jobj, translate_z);
+
+    rotation_y = -(0.017453292f * Toy_803060BC(trophy, 5));
+    HSD_JObjSetRotationYWithMtxDirty(jobj, rotation_y);
+    inverse_scale = 1.0f / Toy_803060BC(trophy, 3);
+    trophy_scale = Toy_803060BC(trophy, 4);
+    trophy_scale = trophy_scale * inverse_scale;
+    HSD_JObjSetScaleXWithMtxDirty(jobj, trophy_scale);
+    HSD_JObjSetScaleYWithMtxDirty(jobj, trophy_scale);
+    HSD_JObjSetScaleZWithMtxDirty(jobj, trophy_scale);
+    root_scale = gm_803DB2EC[gm_801BEFB0()];
+    HSD_JObjSetScaleX(trophy_root, root_scale);
+    HSD_JObjSetScaleY(trophy_root, root_scale);
+    HSD_JObjSetScaleZ(trophy_root, root_scale);
+}
+
+void gm_Scene_ToyFall_OnEnter(void* unused)
+{
+    HSD_JObj* player_jobj;
+    HSD_JObj* jobj;
+    HSD_JObj* main_jobj;
+    HSD_JObj* trophy_root;
+
+    f32 main_scale;
+
     HSD_GObj* gobj;
     HSD_LObj* lobj;
-    PAD_STACK(108);
+    PAD_STACK(68);
 
     gm_804D6740 = 0x1E;
     gm_804D6750 = 0x320;
@@ -500,27 +542,32 @@ void gm_801A7070_OnEnter(void* unused)
     /// create lights
     gobj = GObj_Create(0xB, 3, 0);
     lobj = lb_80011AC4(gm_804D6748->lights);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784A, lobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_LightKind, lobj);
     GObj_SetupGXLink(gobj, HSD_GObj_LObjCallback, 0, 0);
     /// the rest of the gobj spawns creates/handles multiple cameras or deal
     /// with sobjs
     gm_801A6C54();
     gm_801A6DC0();
-    gobj = GObj_Create(0x13, 0x14, 0);
-    HSD_SObjLib_803A55DC(gobj, 0x280, 0x1E0, 0xC);
-    HSD_GObjGXLink_8039084C(gobj);
-    GObj_SetupGXLinkMax(gobj, fn_801A6A48, 0xC);
-    gobj->gxlink_prios = 0x40000;
-    gobj = GObj_Create(0x13, 0x14, 0);
-    HSD_SObjLib_803A55DC(gobj, 0x280, 0x1E0, 9);
-    HSD_GObjGXLink_8039084C(gobj);
-    GObj_SetupGXLinkMax(gobj, HSD_SObjLib_803A54EC, 9);
-    gobj->gxlink_prios = 0x200;
+    {
+        HSD_GObj* gobj;
 
-    for (i = 0; i < 2; i++) {
-        gm_804809D0[i].image_ptr = NULL;
-        lb_800121FC(&gm_804809D0[i], 0x1EA, 0x1E0, 5, 0);
+        gobj = GObj_Create(0x13, 0x14, 0);
+        HSD_SObjLib_803A55DC(gobj, 0x280, 0x1E0, 0xC);
+        HSD_GObjGXLink_8039084C(gobj);
+        GObj_SetupGXLinkMax(gobj, fn_801A6A48, 0xC);
+        gobj->gxlink_prios = 0x40000;
     }
+    {
+        HSD_GObj* gobj;
+
+        gobj = GObj_Create(0x13, 0x14, 0);
+        HSD_SObjLib_803A55DC(gobj, 0x280, 0x1E0, 9);
+        HSD_GObjGXLink_8039084C(gobj);
+        GObj_SetupGXLinkMax(gobj, HSD_SObjLib_803A54EC, 9);
+        gobj->gxlink_prios = 0x200;
+    }
+
+    initImages();
 
     gobj = GObj_Create(0xE, 0xD, 0);
     gm_804D677C = gobj;
@@ -540,7 +587,7 @@ void gm_801A7070_OnEnter(void* unused)
     // create jobj
     gm_804D6768 = gobj = GObj_Create(0xE, 0xF, 0);
     main_jobj = HSD_JObjLoadJoint(gm_804D6798);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, main_jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, main_jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xB, 0);
     main_scale = gm_803DB2EC[gm_801BEFB0()];
     HSD_JObjSetScaleX(main_jobj, main_scale);
@@ -559,42 +606,21 @@ void gm_801A7070_OnEnter(void* unused)
     gobj = GObj_Create(0xE, 0xF, 0);
     gm_804D6778 = gobj;
     trophy_root = HSD_JObjLoadJoint(gm_804D67AC->models[0]->joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, trophy_root);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, trophy_root);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xB, 0);
 
-    trophy = gm_801A659C(gm_801BEFB0());
-    trophy_jobj = HSD_JObjGetChild(trophy_root);
-    translate_x = -Toy_803060BC(trophy, 0);
-    HSD_JObjSetTranslateXWithMtxDirty(trophy_jobj, translate_x);
-    translate_y = -Toy_803060BC(trophy, 1);
-    HSD_JObjSetTranslateYWithMtxDirty(trophy_jobj, translate_y);
-    translate_z = -Toy_803060BC(trophy, 2);
-    HSD_JObjSetTranslateZWithMtxDirty(trophy_jobj, translate_z);
-
-    rotation_y = -(0.017453292f * Toy_803060BC(trophy, 5));
-    HSD_JObjSetRotationYWithMtxDirty(trophy_jobj, rotation_y);
-    inverse_scale = 1.0f / Toy_803060BC(trophy, 3);
-    trophy_scale = Toy_803060BC(trophy, 4);
-    trophy_scale = trophy_scale * inverse_scale;
-    HSD_JObjSetScaleXWithMtxDirty(trophy_jobj, trophy_scale);
-    HSD_JObjSetScaleYWithMtxDirty(trophy_jobj, trophy_scale);
-    HSD_JObjSetScaleZWithMtxDirty(trophy_jobj, trophy_scale);
-    root_scale = gm_803DB2EC[gm_801BEFB0()];
-    HSD_JObjSetScaleX(trophy_root, root_scale);
-    HSD_JObjSetScaleY(trophy_root, root_scale);
-    HSD_JObjSetScaleZ(trophy_root, root_scale);
+    setupTrophy(trophy_root);
 
     HSD_GObj_SetupProc(gobj, fn_801A6844, 0x17);
-    constraint_target = gm_804D6768->hsd_obj;
-    constraint_target =
-        HSD_JObjGetNext(HSD_JObjGetChild(HSD_JObjGetChild(HSD_JObjGetChild(
-            HSD_JObjGetChild(HSD_JObjGetChild(constraint_target))))));
-    lb_8000C1C0(gobj->hsd_obj, constraint_target);
-    lb_8000C290(gobj->hsd_obj, constraint_target);
+    jobj = gm_804D6768->hsd_obj;
+    jobj = HSD_JObjGetNext(HSD_JObjGetChild(HSD_JObjGetChild(
+        HSD_JObjGetChild(HSD_JObjGetChild(HSD_JObjGetChild(jobj))))));
+    lb_8000C1C0(gobj->hsd_obj, jobj);
+    lb_8000C290(gobj->hsd_obj, jobj);
     lbAudioAx_800237A8(0x7EF40, 0x7FU, 0x40U);
 }
 
-void gm_801A79D4_OnFrame(void)
+void gm_Scene_ToyFall_OnFrame(void)
 {
     if (gm_804D6740 != 0) {
         gm_804D6740--;

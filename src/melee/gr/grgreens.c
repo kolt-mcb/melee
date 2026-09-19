@@ -79,12 +79,13 @@ struct grGreens_YakumonoParam {
                                      mpLib_GroundEnum ground_kind,
                                      float delta_y);
 
-/// @todo Emitted only to lay out the .sdata2 literal pool in retail order.
+#ifdef MUST_MATCH
 static void sdata2_order(void)
 {
     (void) 1.0f;
     (void) 0.0f;
 }
+#endif
 
 #define Gr_Greens_Block_Status_None 0
 /// "Colum" (sic): the retail assert strings at 0x803E7908/0x803E7924 spell
@@ -93,9 +94,9 @@ static void sdata2_order(void)
 #define Gr_Greens_Block_Colum 3
 #define Gr_Greens_Block_Max 30
 
+static struct grGreens_YakumonoParam* yakumono_param;
 static u8 grGr_804D6AAC;
 static u8 grGr_804D6AAD;
-static struct grGreens_YakumonoParam* yakumono_param;
 
 static StageCallbacks grGr_callbacks[] = {
     {
@@ -165,10 +166,12 @@ StageData grGr_StageData = {
     0,
 };
 
+#ifdef MUST_MATCH
 static void order_data(void)
 {
     (void) "%s:%d: couldn t get gobj(id=%d)\n";
 }
+#endif
 
 static u8 grGr_8049F9E0[0x20];
 
@@ -195,12 +198,6 @@ static inline struct grGreens_BlockVars* getBlock(Ground* gp, int i, int j);
 static inline struct grGreens_BlockVars* getBlock(Ground* gp, int i, int j)
 {
     return &gp->u.greens.x8_blocks[i][j];
-}
-
-static inline Vec* getVec(Ground* gp, int i, int j);
-static inline Vec* getVec(Ground* gp, int i, int j)
-{
-    return &((Vec(*)[6]) gp->u.greens.x4)[i][j];
 }
 
 void grGreens_80213458(bool arg)
@@ -455,7 +452,7 @@ static inline int get_whispy_dir(Ground_GObj* gobj, Vec3* pos)
 
 void grGreens_80213C10(Ground_GObj* gobj)
 {
-    Ground_GObj* bg_gobj = Ground_801C2BA4(4);
+    Ground_GObj* bg_gobj = Ground_GetMapGObj(4);
     Ground* gp = GET_GROUND(gobj);
     Ground* bg_gp = GET_GROUND(bg_gobj);
     UNUSED u8 pad0[0x18];
@@ -1095,27 +1092,24 @@ void fn_802159B4(Item_GObj* item_gobj, Ground* gp)
     return;
 }
 
-static inline Item_GObj* getBlockItemGObj(Ground* gp, int i, int j)
-{
-    return gp->u.greens.x8_blocks[j][i].x10;
-}
-
 void grGreens_802159B8(Ground* gp, int i, int j, int value)
 {
-    HSD_GObj* gobj = getBlockItemGObj(gp, i, j);
     UNUSED u8 pad[8];
     Vec vec;
+    Item_GObj* gobj;
     float f;
     PAD_STACK(0x10);
-
-    if (gobj != NULL && !gp->u.greens.x8_blocks[j][i].x1_7) {
+    if ((gobj = gp->u.greens.x8_blocks[j][i].x10) &&
+        !gp->u.greens.x8_blocks[j][i].x1_7)
+    {
         gp->u.greens.x8_blocks[j][i].x1_7 = 1;
         grMaterial_801C8E28(gobj);
         gp->u.greens.x8_blocks[j][i].x1C = value;
 
         if (gp->u.greens.x8_blocks[j][i].x1_1) {
-            HSD_JObjSetFlagsAll(gp->u.greens.x8_blocks[j][i].xC->hsd_obj,
-                                JOBJ_HIDDEN);
+            HSD_JObj* jobj = gp->u.greens.x8_blocks[j][i].xC->hsd_obj;
+
+            HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
             grMaterial_801C8D98(gobj, 1);
             it_80275414(gobj);
             gp->u.greens.x8_blocks[j][i].x1_2 = 1;
@@ -1244,10 +1238,11 @@ void grGreens_80215ED8(Ground_GObj* gobj, int col, int row)
             {
                 float spacing;
 
+                spacing = (gp->u.greens.x4 + row * 6)[col].y -
+                          (gp->u.greens.x4 + row * 6 - 6)[col].y;
                 if (gp->u.greens.x8_blocks[row][col].x8 -
                         gp->u.greens.x8_blocks[row - 1][col].x8 <
-                    (spacing = (gp->u.greens.x4 + col)[row * 6].y -
-                               (gp->u.greens.x4 + col)[(row - 1) * 6].y))
+                    spacing)
                 {
                     gp->u.greens.x8_blocks[row][col].status = 2;
                     gp->u.greens.x8_blocks[row][col].x8 =
@@ -1257,10 +1252,10 @@ void grGreens_80215ED8(Ground_GObj* gobj, int col, int row)
         }
 
         if (gp->u.greens.x8_blocks[row][col].x8 <
-            (gp->u.greens.x4 + col)[row * 6].y)
+            (gp->u.greens.x4 + row * 6)[col].y)
         {
             gp->u.greens.x8_blocks[row][col].x8 =
-                (gp->u.greens.x4 + col)[row * 6].y;
+                (gp->u.greens.x4 + row * 6)[col].y;
             gp->u.greens.x8_blocks[row][col].status = 3;
             gp->u.greens.x8_blocks[row][col].x1_5 = 1;
             for (next_row = row + 1; next_row < 5; next_row++) {
@@ -1268,10 +1263,10 @@ void grGreens_80215ED8(Ground_GObj* gobj, int col, int row)
                     break;
                 }
                 gp->u.greens.x8_blocks[next_row][col].x8 =
-                    (gp->u.greens.x4 + col)[next_row * 6].y;
+                    (gp->u.greens.x4 + next_row * 6)[col].y;
                 gp->u.greens.x8_blocks[next_row][col].status = 3;
                 gp->u.greens.x8_blocks[next_row][col].x1_5 = 1;
-                pos.x = (gp->u.greens.x4 + col)[next_row * 6].x;
+                pos.x = (gp->u.greens.x4 + next_row * 6)[col].x;
                 pos.y = gp->u.greens.x8_blocks[next_row][col].x8;
                 pos.z = 0.0f;
                 HSD_JObjSetTranslate(
@@ -1288,10 +1283,10 @@ void grGreens_80215ED8(Ground_GObj* gobj, int col, int row)
                 if (gp->u.greens.x8_blocks[next_row][col].status != 2) {
                     break;
                 }
-                pos.x = (gp->u.greens.x4 + col)[next_row * 6].x;
-                pos.y = (gp->u.greens.x4 + col)[next_row * 6].y -
-                        (gp->u.greens.x4 + col)[(next_row - 1) * 6].y +
-                        gp->u.greens.x8_blocks[next_row - 1][col].x8;
+                pos.x = (gp->u.greens.x4 + next_row * 6)[col].x;
+                scale = (gp->u.greens.x4 + next_row * 6)[col].y -
+                        (gp->u.greens.x4 + next_row * 6 - 6)[col].y;
+                pos.y = scale + gp->u.greens.x8_blocks[next_row - 1][col].x8;
                 pos.z = 0.0f;
                 gp->u.greens.x8_blocks[next_row][col].x8 = pos.y;
                 HSD_JObjSetTranslate(
@@ -1311,7 +1306,7 @@ void grGreens_80215ED8(Ground_GObj* gobj, int col, int row)
         return;
     }
 
-    pos.x = (gp->u.greens.x4 + col)[row * 6].x;
+    pos.x = (gp->u.greens.x4 + row * 6)[col].x;
     pos.y = gp->u.greens.x8_blocks[row][col].x8;
     pos.z = 0.0f;
     HSD_JObjSetTranslate(gp->u.greens.x8_blocks[row][col].xC->hsd_obj, &pos);
@@ -1493,30 +1488,17 @@ void grGreens_802166C4(Ground_GObj* gobj)
 
     for (cleanup_row = 0; cleanup_row < 5; cleanup_row++) {
         for (cleanup_col = 0; cleanup_col < 6; cleanup_col++) {
-            if (((struct grGreens_BlockVars(*)[6])
-                     gp->u.greens.x8_blocks)[cleanup_row][cleanup_col]
-                    .x1_3)
-            {
-                ((struct grGreens_BlockVars(*)[6])
-                     gp->u.greens.x8_blocks)[cleanup_row][cleanup_col]
-                    .x1_3 = 0;
-                ((struct grGreens_BlockVars(*)[6])
-                     gp->u.greens.x8_blocks)[cleanup_row][cleanup_col]
-                    .x1_6 = 1;
-                ((struct grGreens_BlockVars(*)[6])
-                     gp->u.greens.x8_blocks)[cleanup_row][cleanup_col]
-                    .status = Gr_Greens_Block_Status_None;
-                Ground_801C4A08(((struct grGreens_BlockVars(*)[6]) gp->u.greens
-                                     .x8_blocks)[cleanup_row][cleanup_col]
-                                    .xC);
+            if ((gp->u.greens.x8_blocks)[cleanup_row][cleanup_col].x1_3) {
+                (gp->u.greens.x8_blocks)[cleanup_row][cleanup_col].x1_3 = 0;
+                (gp->u.greens.x8_blocks)[cleanup_row][cleanup_col].x1_6 = 1;
+                (gp->u.greens.x8_blocks)[cleanup_row][cleanup_col].status =
+                    Gr_Greens_Block_Status_None;
+                Ground_801C4A08(
+                    (gp->u.greens.x8_blocks)[cleanup_row][cleanup_col].xC);
                 grMaterial_801C8CDC(
-                    ((struct grGreens_BlockVars(*)[6])
-                         gp->u.greens.x8_blocks)[cleanup_row][cleanup_col]
-                        .x10);
+                    (gp->u.greens.x8_blocks)[cleanup_row][cleanup_col].x10);
                 HSD_JObjSetFlags(
-                    ((struct grGreens_BlockVars(*)[6])
-                         gp->u.greens.x8_blocks)[cleanup_row][cleanup_col]
-                        .x14,
+                    (gp->u.greens.x8_blocks)[cleanup_row][cleanup_col].x14,
                     JOBJ_HIDDEN);
                 grGreens_80215D54(gobj, cleanup_col, cleanup_row);
                 cleanup_row = -1;
@@ -1524,11 +1506,6 @@ void grGreens_802166C4(Ground_GObj* gobj)
             }
         }
     }
-}
-
-static inline int getBlockX18(Ground* gp, int i, int j)
-{
-    return getBlock(gp, i, j)->x18;
 }
 
 void grGreens_80216C20(Ground_GObj* gobj)
@@ -1542,62 +1519,30 @@ void grGreens_80216C20(Ground_GObj* gobj)
 
     for (i = 0; i < 5; i++) {
         for (j = 0; j < 6; j++) {
-            if (((struct grGreens_BlockVars(*)[6])
-                     gp->u.greens.x8_blocks)[i][j]
-                    .x1_5)
-            {
+            if ((gp->u.greens.x8_blocks)[i][j].x1_5) {
                 Ground* gp2 = GET_GROUND(gobj);
-                local.x18 = ((struct grGreens_BlockVars(*)[6])
-                                 gp2->u.greens.x8_blocks)[i][j]
-                                .x18;
+                local.x18 = (gp2->u.greens.x8_blocks)[i][j].x18;
 
-                if (i > 0 && ((struct grGreens_BlockVars(*)[6])
-                                  gp2->u.greens.x8_blocks)[i - 1][j]
-                                     .status == 3)
-                {
+                if (i > 0 && (gp2->u.greens.x8_blocks)[i - 1][j].status == 3) {
                     mpLib_800581DC(local.x18,
-                                   ((struct grGreens_BlockVars(*)[6])
-                                        gp2->u.greens.x8_blocks)[i - 1][j]
-                                       .x18);
+                                   (gp2->u.greens.x8_blocks)[i - 1][j].x18);
                 }
-                if (j > 0 && ((struct grGreens_BlockVars(*)[6])
-                                  gp2->u.greens.x8_blocks)[i][j - 1]
-                                     .status == 3)
-                {
+                if (j > 0 && (gp2->u.greens.x8_blocks)[i][j - 1].status == 3) {
                     mpLib_800581DC(local.x18,
-                                   ((struct grGreens_BlockVars(*)[6])
-                                        gp2->u.greens.x8_blocks)[i][j - 1]
-                                       .x18);
+                                   (gp2->u.greens.x8_blocks)[i][j - 1].x18);
                 }
-                if (i < 4 && ((struct grGreens_BlockVars(*)[6])
-                                  gp2->u.greens.x8_blocks)[i + 1][j]
-                                     .status == 3)
-                {
+                if (i < 4 && (gp2->u.greens.x8_blocks)[i + 1][j].status == 3) {
                     mpLib_800581DC(local.x18,
-                                   ((struct grGreens_BlockVars(*)[6])
-                                        gp2->u.greens.x8_blocks)[i + 1][j]
-                                       .x18);
+                                   (gp2->u.greens.x8_blocks)[i + 1][j].x18);
                 }
-                if (j < 5 && ((struct grGreens_BlockVars(*)[6])
-                                  gp2->u.greens.x8_blocks)[i][j + 1]
-                                     .status == 3)
-                {
+                if (j < 5 && (gp2->u.greens.x8_blocks)[i][j + 1].status == 3) {
                     mpLib_800581DC(local.x18,
-                                   ((struct grGreens_BlockVars(*)[6])
-                                        gp2->u.greens.x8_blocks)[i][j + 1]
-                                       .x18);
+                                   (gp2->u.greens.x8_blocks)[i][j + 1].x18);
                 }
-                ((struct grGreens_BlockVars(*)[6])
-                     gp->u.greens.x8_blocks)[i][j]
-                    .x1_5 = 0;
-            } else if (((struct grGreens_BlockVars(*)[6])
-                            gp->u.greens.x8_blocks)[i][j]
-                           .x1_6)
-            {
+                (gp->u.greens.x8_blocks)[i][j].x1_5 = 0;
+            } else if ((gp->u.greens.x8_blocks)[i][j].x1_6) {
                 grGreens_802150C4(gobj, j, i);
-                ((struct grGreens_BlockVars(*)[6])
-                     gp->u.greens.x8_blocks)[i][j]
-                    .x1_6 = 0;
+                (gp->u.greens.x8_blocks)[i][j].x1_6 = 0;
             }
         }
     }

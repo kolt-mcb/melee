@@ -1,10 +1,7 @@
 #include "gmsinglebutton.h"
 
-#include "gm_1B03.static.h"
-
 #include "gm_unsplit.h"
 #include "gmmain_lib.h"
-#include "gmvsdata.h"
 #include "gmvsmelee.h"
 #include "types.h"
 
@@ -12,13 +9,11 @@
 #include "mn/types.h"
 
 /* extern functions referenced in Scenes */
-extern void gm_801BFA6C(GameScene*);
-extern void gm_801BFABC(GameScene*);
-extern void gm_801BFCFC(GameScene*);
-extern void gm_801A6254(GameScene*);
-extern void gm_801A6308(GameScene*);
 
-GameScene gm_803DF2B8_Scenes[] = {
+extern void gm_ModeState_ExitApproachVs(GameModeState*);
+extern void gm_801A6308(GameModeState*);
+
+GameModeState gm_Mode_SingleButtonVs_States[] = {
     {
         0,
         3,
@@ -27,8 +22,8 @@ GameScene gm_803DF2B8_Scenes[] = {
         gm_801BA138,
         {
             GS_CSS,
-            &gm_804807B0,
-            &gm_804807B0,
+            &gmVsMelee_CssData,
+            &gmVsMelee_CssData,
         },
     },
     {
@@ -39,8 +34,8 @@ GameScene gm_803DF2B8_Scenes[] = {
         gm_801BA188,
         {
             GS_SSS,
-            &gm_80480668,
-            &gm_80480668,
+            &gmVsMelee_SssData,
+            &gmVsMelee_SssData,
         },
     },
     {
@@ -51,8 +46,8 @@ GameScene gm_803DF2B8_Scenes[] = {
         gm_801BA1FC,
         {
             GS_VS,
-            &gm_80480530,
-            &gm_80479D98,
+            &gmVsMelee_StartData,
+            &gmVsMelee_VsExitInfo,
         },
     },
     {
@@ -63,8 +58,8 @@ GameScene gm_803DF2B8_Scenes[] = {
         gm_801BA258,
         {
             GS_SUDDEN_DEATH,
-            &gm_80480530,
-            &gm_8047E2A4,
+            &gmVsMelee_StartData,
+            &gmVsMelee_SuddenDeathExitInfo,
         },
     },
     {
@@ -75,7 +70,7 @@ GameScene gm_803DF2B8_Scenes[] = {
         gm_801BA298,
         {
             GS_RESULTS,
-            &gm_8047C020,
+            &gmVsMelee_ResultsEnterData,
             NULL,
         },
     },
@@ -95,12 +90,12 @@ GameScene gm_803DF2B8_Scenes[] = {
         0x81,
         2,
         0,
-        gm_801BFABC,
-        gm_801A6254,
+        gm_ModeState_EnterApproachVs,
+        gm_ModeState_ExitApproachVs,
         {
             GS_VS,
-            &gm_80480530,
-            &gm_80479D98,
+            &gmVsMelee_StartData,
+            &gmVsMelee_VsExitInfo,
         },
     },
     {
@@ -118,74 +113,74 @@ GameScene gm_803DF2B8_Scenes[] = {
     { -1 },
 };
 
-void gm_801BA10C(GameScene* scene)
+void gm_801BA10C(GameModeState* scene)
 {
     VsModeData* data = &gmMainLib_804D3EE0->unk_BD0;
-    gm_801A5618(scene, data, 8);
+    gmVsMelee_EnterCss(scene, data, 8);
 }
 
-void gm_801BA138(GameScene* scene)
+void gm_801BA138(GameModeState* scene)
 {
     VsModeData* data = &gmMainLib_804D3EE0->unk_BD0;
-    gm_801A5680(scene, data);
+    gmVsMelee_ExitCss(scene, data);
 }
 
-void gm_801BA160(GameScene* scene)
+void gm_801BA160(GameModeState* scene)
 {
     VsModeData* data = &gmMainLib_804D3EE0->unk_BD0;
-    gm_801A5754(scene, data);
+    gmVsMelee_EnterSss(scene, data);
 }
 
-void gm_801BA188(GameScene* scene)
+void gm_801BA188(GameModeState* scene)
 {
     VsModeData* data = &gmMainLib_804D3EE0->unk_BD0;
-    gm_801A57A8(scene, data, 0);
+    gmVsMelee_ExitSss(scene, data, 0);
 }
 
 void fn_801BA1B4(StartMeleeData* data, StartMeleeData* unused)
 {
-    data->rules.x2_3 = true;
+    data->rules.single_button = true;
 }
 
-void gm_801BA1C8(GameScene* scene)
+void gm_801BA1C8(GameModeState* scene)
 {
     VsModeData* data = &gmMainLib_804D3EE0->unk_BD0;
     gm_801A583C(scene, data, fn_801BA1B4, NULL);
 }
 
-void gm_801BA1FC(GameScene* scene)
+void gm_801BA1FC(GameModeState* scene)
 {
     gm_801A5AF0(scene, 4, 3);
 }
 
-void gm_801BA224(GameScene* scene)
+void gm_801BA224(GameModeState* scene)
 {
     VsModeData* data = &gmMainLib_804D3EE0->unk_BD0;
-    gm_801A5C3C(scene, data, fn_801BA1B4, NULL);
+    gmVsMelee_EnterSuddenDeath(scene, data, fn_801BA1B4, NULL);
 }
 
-void gm_801BA258(GameScene* scene)
+void gm_801BA258(GameModeState* scene)
 {
-    gm_801A5EC8(scene);
+    gmVsMelee_ExitSuddenDeath(scene);
 }
 
-void gm_801BA278(GameScene* scene)
+void gm_801BA278(GameModeState* scene)
 {
-    gm_801A5F00(scene);
+    gmVsMelee_EnterResults(scene);
 }
 
-void gm_801BA298(GameScene* scene)
+void gm_801BA298(GameModeState* scene)
 {
     VsModeData* data = &gmMainLib_804D3EE0->unk_BD0;
-    gm_801A5F64(scene, data, 0);
+    gmVsMelee_ExitResults(scene, data, 0);
 }
 
-void gm_801BA2C4_OnInit(void)
+void gm_Mode_SingleButtonVs_OnInit(void)
 {
     gm_80167B50(&gmMainLib_804D3EE0->unk_BD0);
 }
 
-void gm_801BA2EC_OnLoad(void)
+void gm_Mode_SingleButtonVs_OnLoad(void)
 {
-    gm_801A55C4();
+    gmVsMelee_ResetKOCounts();
 }

@@ -16,7 +16,6 @@
 #include "lb/lblanguage.h"
 #include "lb/lbspdisplay.h"
 
-#include <dolphin/os.h>
 #include <baselib/debug.h>
 #include <baselib/gobj.h>
 #include <baselib/gobjgxlink.h>
@@ -28,17 +27,19 @@
 #include <baselib/memory.h>
 #include <melee/gm/gmmain_lib.h>
 
-extern char mnName_StringTerminator;
-extern char mnName_804D4BF0;
+f32 mnName_804D4BD0[2] = { 39.0f, 59.0f };
+f32 mnName_804D4BD8[2] = { 39.0f, 19.0f };
+GXColor mnName_804D4BE0 = { 0, 0, 0, 0xFF };
+GXColor mnName_804D4BE4 = { 0xA6, 0x81, 0x3D, 0xFF };
+u8 mnName_804D4BE8[4] = { 0x93, 0x94, 0x95, 0 };
+char mnName_StringTerminator[1] = "";
 
-extern f32 mnName_804D4BD0[2];
-extern f32 mnName_804D4BD8[2];
-extern GXColor mnName_804D4BE0;
-extern GXColor mnName_804D4BE4;
-extern u8 mnName_804D4BE8[3];
-
-extern char* mnNameNew_803EE720[];
-extern char* mnNameNew_803EE724[];
+#ifdef MUST_MATCH
+static void order_sdata(void)
+{
+    (void) "　";
+}
+#endif
 
 extern char mnName_804D4C04[8];
 
@@ -66,13 +67,13 @@ char* mnName_8023749C(int slot)
 
     new_var = (u8) slot;
     for (j = 0;
-         (j != new_var) && (mnName_StringTerminator != ((s8) array[j][0]));
+         (j != new_var) && (*mnName_StringTerminator != ((s8) array[j][0]));
          j++)
     {
     }
 
     str = array[j];
-    terminator = (s8) mnName_StringTerminator;
+    terminator = (s8) *mnName_StringTerminator;
     if (terminator == str[0]) {
         str = NULL;
     }
@@ -124,13 +125,16 @@ bool IsNameListFull(void)
     return true;
 }
 
-static inline bool checkStringRest(const char* ptr)
+static inline s8 readNameTerminator(const volatile char* terminator)
 {
-    char* term = &mnName_StringTerminator;
-    char* cmp = &mnName_804D4BF0;
-    char c = cmp[0];
-    while (*term != *ptr) {
-        if (c != *ptr || cmp[1] != ptr[1]) {
+    return *terminator;
+}
+
+static inline bool checkStringRest(const char* ptr, s8 terminator)
+{
+    char c = "　"[0]; // SJIS full-width space
+    while (terminator != *ptr) {
+        if (c != *ptr || "　"[1] != ptr[1]) {
             return false;
         }
         ptr += 2;
@@ -140,24 +144,27 @@ static inline bool checkStringRest(const char* ptr)
 
 s32 CompareNameStrings(char* str1, char* str2)
 {
-    char* p1;
-    char* p2;
-    s32 i;
-    for (i = 0, p2 = str2, p1 = str1;; i++, p1++, p2++) {
-        char* ch1 = &str1[i];
+    s8 terminator = (s8) *mnName_StringTerminator;
+    char* p1 = str1;
+    char* p2 = str2;
+    s32 i = 0;
+    while (true) {
+        s8 ch1 = (s8) str1[i];
 
-        if (mnName_StringTerminator == *ch1) {
-            if (checkStringRest(&str2[i & 0xFFFFFFFFFFFFFFFF])) {
+        if (terminator == ch1) {
+            if (checkStringRest(&str2[i & 0xFFFFFFFFFFFFFFFF],
+                                readNameTerminator(mnName_StringTerminator)))
+            {
                 return 0;
             }
             return 2;
         }
 
         {
-            char ch2 = str2[i];
+            s8 ch2 = (s8) str2[i];
 
-            if (mnName_StringTerminator == ch2) {
-                if (checkStringRest(&str1[i])) {
+            if (*mnName_StringTerminator == ch2) {
+                if (checkStringRest(&str1[i], terminator)) {
                     return 0;
                 }
                 return 1;
@@ -170,6 +177,9 @@ s32 CompareNameStrings(char* str1, char* str2)
                 return 2;
             }
         }
+        i++;
+        p2++;
+        p1++;
     }
 }
 
@@ -240,7 +250,7 @@ void DeleteName(u8 arg0)
 
 bool IsNameValid(int slot)
 {
-    if (mnName_StringTerminator ==
+    if (*mnName_StringTerminator ==
         (s8) GetPersistentNameData((u8) slot)->namedata[0])
     {
         return false;
@@ -251,12 +261,12 @@ bool IsNameValid(int slot)
 void CreateNameAtIndex(s32 slot)
 {
     s32 idx = slot & 0xFF;
-    GetPersistentNameData(idx)->namedata[0] = mnName_StringTerminator;
-    GetPersistentNameData(idx)->rumble_toggle = true;
+    GetPersistentNameData(idx)->namedata[0] = *mnName_StringTerminator;
+    GetPersistentNameData(idx)->rumble_enabled = true;
     InitializePersistentNameData(slot);
 }
 
-s32 mnName_SortNames(HSD_GObj* arg0)
+void mnName_SortNames(HSD_GObj* arg0)
 {
     s32 result;
     u8 idx2;
@@ -264,14 +274,13 @@ s32 mnName_SortNames(HSD_GObj* arg0)
     s32 i;
     u8 idx1;
 
-    arg0 = arg0->user_data;
     PAD_STACK(8);
 
-    if (arg0->p_priority == 0) {
+    if (((HSD_GObj*) arg0->user_data)->p_priority == 0) {
         for (i = 0; 0x78 > i; i++) {
             mnName_NameDisplayOrder[i] = (u8) i;
         }
-        return i;
+        return;
     }
 
     {
@@ -289,7 +298,7 @@ s32 mnName_SortNames(HSD_GObj* arg0)
                 {
                     bool e1, e2;
 
-                    if ((s8) mnName_StringTerminator ==
+                    if ((s8) *mnName_StringTerminator ==
                         (s8) GetPersistentNameData((s32) idx1)->namedata[0])
                     {
                         e1 = 0;
@@ -297,7 +306,7 @@ s32 mnName_SortNames(HSD_GObj* arg0)
                         e1 = 1;
                     }
                     if (e1 != 0) {
-                        if ((s8) mnName_StringTerminator ==
+                        if ((s8) *mnName_StringTerminator ==
                             (s8) GetPersistentNameData((s32) idx2)
                                 ->namedata[0])
                         {
@@ -312,7 +321,7 @@ s32 mnName_SortNames(HSD_GObj* arg0)
                         }
                     } else {
                     block_15:
-                        if ((s8) mnName_StringTerminator ==
+                        if ((s8) *mnName_StringTerminator ==
                             (s8) GetPersistentNameData((s32) idx1)
                                 ->namedata[0])
                         {
@@ -321,7 +330,7 @@ s32 mnName_SortNames(HSD_GObj* arg0)
                             e1 = 1;
                         }
                         if (e1 == 0) {
-                            if ((s8) mnName_StringTerminator ==
+                            if ((s8) *mnName_StringTerminator ==
                                 (s8) GetPersistentNameData((s32) idx2)
                                     ->namedata[0])
                             {
@@ -336,7 +345,7 @@ s32 mnName_SortNames(HSD_GObj* arg0)
                             }
                         } else {
                         block_24:
-                            if ((s8) mnName_StringTerminator ==
+                            if ((s8) *mnName_StringTerminator ==
                                 (s8) GetPersistentNameData((s32) idx1)
                                     ->namedata[0])
                             {
@@ -360,10 +369,9 @@ s32 mnName_SortNames(HSD_GObj* arg0)
             }
         }
     }
-    return result;
 }
 
-extern HSD_GObj* mnName_804D6BF8;
+HSD_GObj* mnName_804D6BF8;
 
 u8 mnName_80237D94(s32 arg0, u8 arg1)
 {
@@ -472,12 +480,12 @@ void mnName_ConfirmNameDeleteInput(HSD_GObj* arg0)
             nameIdx = mnName_NameDisplayOrder[idx];
             sfxForward();
             {
-                u8 term = mnName_StringTerminator;
+                u8 term = *mnName_StringTerminator;
                 nameIdxInt = (u8) nameIdx;
                 mn_804D6BC8.cooldown = 5;
                 GetPersistentNameData(nameIdxInt)->namedata[0] = term;
             }
-            GetPersistentNameData(nameIdxInt)->rumble_toggle = 1;
+            GetPersistentNameData(nameIdxInt)->rumble_enabled = true;
             InitializePersistentNameData(nameIdx);
             if ((s32) gobj2->gx_link > (s32) (mnName_GetColumnCount() - 1)) {
                 gobj2->gx_link = 0;
@@ -531,7 +539,7 @@ static inline u8 mnName_CountValid(void)
     u8 count = 0;
 
     for (i = 0; i < 0x78; i++) {
-        if ((s8) mnName_StringTerminator ==
+        if ((s8) *mnName_StringTerminator ==
             (s8) GetPersistentNameData((s32) (u8) i)->namedata[0])
         {
             isValid = 0;
@@ -611,7 +619,7 @@ void mnName_MainInput(HSD_GObj* arg0)
             if (mn_804A04F0.hovered_selection < 0x18U) {
                 s32 isValid;
                 u8 nameIdx = mnName_GetHoveredName();
-                if ((s8) mnName_StringTerminator ==
+                if ((s8) *mnName_StringTerminator ==
                     (s8) GetPersistentNameData((s32) nameIdx)->namedata[0])
                 {
                     isValid = 0;
@@ -909,9 +917,9 @@ mnName_FindAnimLoop(AnimLoopSettings* const* tableBase, f32 frame)
     HSD_ASSERTREPORT(0x3DC, NULL, "But AnimFrame!!!\n");
 }
 
-static inline f32 mnName_80238C34_inline(HSD_JObj* jobj)
+static inline f32 mnName_80238C34_inline(AnimLoopSettings* anim)
 {
-    return mn_8022F298(jobj);
+    return anim->end_frame;
 }
 
 static inline void mnName_UpdateSelection(u8 do_update, MnName_GObj* data)
@@ -929,40 +937,36 @@ static inline void mnName_UpdateSelection(u8 do_update, MnName_GObj* data)
 void mnName_80238C34(HSD_GObj* arg0, u8 arg1, u8 arg2)
 {
     AnimLoopSettings* const* tableBase = mnName_803B8510;
+    AnimLoopSettings* base = (0, mnName_803ED538);
     MnName_GObj* data = (MnName_GObj*) arg0->user_data;
-    AnimLoopSettings* found;
+    HSD_JObj* jobj2;
+    HSD_JObj* jobj3;
 
     mnName_UpdateSelection(arg1, data);
 
     {
         HSD_JObj* jobj = mnName_802388D4_noinline((HSD_GObj*) data, 0x18U);
-        found = mnName_FindAnimLoop(tableBase, mn_8022F298(jobj));
-        mn_8022ED6C(jobj, found);
+        mn_8022ED6C(jobj,
+                    mnName_FindAnimLoop(mnName_803B8510, mn_8022F298(jobj)));
     }
 
-    {
-        HSD_JObj* jobj = mnName_802388D4_noinline((HSD_GObj*) data, 0x19U);
-        found = mnName_FindAnimLoop(tableBase, mn_8022F298(jobj));
-        mn_8022ED6C(jobj, found);
-    }
+    jobj2 = mnName_802388D4_noinline((HSD_GObj*) data, 0x19U);
+    mn_8022ED6C(jobj2,
+                mnName_FindAnimLoop(mnName_803B8510, mn_8022F298(jobj2)));
 
-    {
-        HSD_JObj* jobj = mnName_802388D4_noinline((HSD_GObj*) data, 0x1AU);
-        found = mnName_FindAnimLoop(tableBase, mn_8022F298(jobj));
-        mn_8022ED6C(jobj, found);
-    }
+    jobj3 = mnName_802388D4_noinline((HSD_GObj*) data, 0x1AU);
+    mn_8022ED6C(jobj3,
+                mnName_FindAnimLoop(mnName_803B8510, mn_8022F298(jobj3)));
 
     {
         HSD_JObj* jobj = (HSD_JObj*) data->gobj.prev_gx;
-        AnimLoopSettings* base = mnName_803ED538;
         f32 result;
 
-        found = mnName_FindAnimLoop(tableBase, mnName_80238C34_inline(jobj));
-        result = mn_8022ED6C(jobj, found);
+        result = mn_8022ED6C(
+            jobj, mnName_FindAnimLoop(mnName_803B8510, mn_8022F298(jobj)));
 
-        found = mnName_FindAnimLoop(tableBase, result);
-        if (found == base + 5) {
-            if (result >= base[5].end_frame) {
+        if (mnName_FindAnimLoop(tableBase, result) == base + 5) {
+            if (result >= mnName_80238C34_inline(&base[5])) {
                 HSD_GObjPLink_80390228(arg0);
             }
         }
@@ -1131,22 +1135,29 @@ void mnName_80239878(u8 arg0, HSD_GObj* gobj)
     }
 }
 
+static inline f32 mnName_80239A24_GetTextColumnWidth(HSD_GObj* gobj,
+                                                     HSD_JObj* text_jobj0)
+{
+    HSD_JObj* text_jobj6 = mnName_802388D4_noinline(gobj, 6U);
+    f32 width = HSD_JObjGetTranslationX(text_jobj0);
+    return HSD_JObjGetTranslationX(text_jobj6) - width;
+}
+
 void mnName_80239A24(HSD_GObj* gobj)
 {
-    GXColor text_color;
+    f32 text_row_height;
     Vec3 text_position;
     HSD_JObj* jobj;
     HSD_JObj* ref_jobj;
     HSD_JObj* ref_jobj2;
     s32 row;
     HSD_JObj* text_jobj0;
-    HSD_JObj* text_jobj6;
     HSD_JObj* text_jobj1;
     HSD_Text* text;
     f32 col_width;
     f32 row_height;
     f32 text_col_width;
-    f32 text_row_height;
+    GXColor text_color;
     s32 j;
     s32 i;
     MnNameArchive* archive = &mnName_804A06C0;
@@ -1157,7 +1168,7 @@ void mnName_80239A24(HSD_GObj* gobj)
     s32 extra;
     s32 total_rows;
     u8 name_idx;
-    PAD_STACK(24);
+    PAD_STACK(8);
 
     i = 0;
     do {
@@ -1188,16 +1199,19 @@ void mnName_80239A24(HSD_GObj* gobj)
     data->text = text;
     text_jobj0 = mnName_802388D4_noinline(gobj, 0U);
     lb_8000B1CC(text_jobj0, mnName_803ED618, &text_position);
-    text->pos_x = text_position.x;
-    text->pos_z = text_position.z;
-    text->pos_y = -text_position.y;
+    {
+        f32 pos_y = -text_position.y;
+        f32 pos_z = text_position.z;
+        f32 pos_x = text_position.x;
+        text->pos_x = pos_x;
+        text->pos_y = pos_y;
+        text->pos_z = pos_z;
+    }
     text->font_size.x = 0.03f;
     text->font_size.y = 0.03f;
     text->text_color = *(&mnName_804D4BE4);
 
-    text_jobj6 = mnName_802388D4_noinline(gobj, 6U);
-    text_col_width = HSD_JObjGetTranslationX(text_jobj0);
-    text_col_width = HSD_JObjGetTranslationX(text_jobj6) - text_col_width;
+    text_col_width = mnName_80239A24_GetTextColumnWidth(gobj, text_jobj0);
     text_jobj1 = mnName_802388D4_noinline(gobj, 1U);
     text_row_height = HSD_JObjGetTranslationY(text_jobj0);
     text_row_height = -(HSD_JObjGetTranslationY(text_jobj1) - text_row_height);
@@ -1219,7 +1233,7 @@ void mnName_80239A24(HSD_GObj* gobj)
         name_idx = mnName_NameDisplayOrder[((u8) j % 6) + (row * 6)];
         {
             s32 is_valid;
-            if ((s8) (u8) mnName_StringTerminator ==
+            if ((s8) (u8) *mnName_StringTerminator ==
                 (s8) GetPersistentNameData((s32) name_idx)->namedata[0])
             {
                 is_valid = 0;
@@ -1229,7 +1243,7 @@ void mnName_80239A24(HSD_GObj* gobj)
             if (is_valid != 0) {
                 char* namedata;
                 s32 is_valid2;
-                if ((s8) (u8) mnName_StringTerminator ==
+                if ((s8) (u8) *mnName_StringTerminator ==
                     (s8) GetPersistentNameData((s32) name_idx)->namedata[0])
                 {
                     is_valid2 = 0;
@@ -1264,8 +1278,7 @@ void mnName_80239A24(HSD_GObj* gobj)
                     }
                 }
             } else {
-                HSD_SisLib_803A6B98(text, 0.0f, 0.0f,
-                                    &mnName_StringTerminator);
+                HSD_SisLib_803A6B98(text, 0.0f, 0.0f, mnName_StringTerminator);
             }
         }
         j++;
@@ -1303,27 +1316,26 @@ void mnName_80239FFC(HSD_GObj* gobj)
 
 void mnName_8023A058(HSD_GObj* gobj)
 {
-    u8* p = (u8*) gobj;
-    HSD_JObj* jobj;
+    MnName_GObj* mn = (MnName_GObj*) gobj;
+    HSD_JObj* jobj = (HSD_JObj*) mn->gobj.user_data_remove_func;
     HSD_JObj* child;
 
-    jobj = *(HSD_JObj**) (p + 0x30);
     if (jobj == NULL) {
         child = NULL;
     } else {
-        child = *(HSD_JObj**) ((u8*) jobj + 0x10);
+        child = jobj->child;
     }
     HSD_JObjRemoveAll(child);
 
-    if (*(void**) (p + 0x3C) != NULL) {
-        HSD_SisLib_803A5CC4(*(void**) (p + 0x3C));
-        *(void**) (p + 0x3C) = NULL;
+    if (mn->text != NULL) {
+        HSD_SisLib_803A5CC4(mn->text);
+        mn->text = NULL;
     }
 
     mnName_80239A24(gobj);
 }
 
-extern HSD_Text* mnName_804D6BFC;
+HSD_Text* mnName_804D6BFC;
 void fn_8023A0BC(HSD_GObj* gobj)
 {
     f32* end_frame;
@@ -1423,7 +1435,7 @@ void mnName_8023A290(void)
 
     gobj = GObj_Create(6U, 7U, 0x80U);
     jobj = HSD_JObjLoadJoint(archive->joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 6U, 0x80U);
     HSD_GObj_SetupProc(gobj, fn_8023A0BC, 0U);
     HSD_JObjAddAnimAll(jobj, archive->anim_joint, archive->matanim_joint,
@@ -1485,29 +1497,29 @@ static inline void mnName_SetupScrollbarAndText(s32 count, HSD_JObj* scrollbar,
 
 HSD_GObj* mnName_8023A59C(u8 arg0)
 {
+    HSD_GObj* gobj;
     s32 count;
     HSD_JObj* jobj5;
-    HSD_JObj* root_jobj;
-    HSD_JObj* jobj7;
+    HSD_JObj* root_jobj[1];
+    HSD_JObj* jobj7[1];
     MnNameArchive* archive = &mnName_804A06E0;
     HSD_JObj* slider;
     HSD_JObj* scrollbar_container;
     HSD_JObj* jobj4;
     MnName_GObj* user_data;
-    HSD_GObj* gobj;
     s32 i;
-    PAD_STACK(16);
+    PAD_STACK(8);
 
     gobj = GObj_Create(6U, 7U, 0x80U);
     mnName_804D6BF8 = gobj;
-    root_jobj = HSD_JObjLoadJoint(archive->joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, root_jobj);
+    root_jobj[0] = HSD_JObjLoadJoint(archive->joint);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, root_jobj[0]);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4U, 0x80U);
     HSD_GObj_SetupProc(gobj, fn_80239574, 0U);
-    HSD_JObjAddAnimAll(root_jobj, archive->anim_joint, archive->matanim_joint,
-                       archive->shapeanim_joint);
-    HSD_JObjReqAnimAll(root_jobj, 0.0f);
-    HSD_JObjAnimAll(root_jobj);
+    HSD_JObjAddAnimAll(root_jobj[0], archive->anim_joint,
+                       archive->matanim_joint, archive->shapeanim_joint);
+    HSD_JObjReqAnimAll(root_jobj[0], 0.0f);
+    HSD_JObjAnimAll(root_jobj[0]);
     user_data = (MnName_GObj*) HSD_MemAlloc(0x44);
     HSD_ASSERTREPORT(0x67CU, user_data, "Can't get user_data.\n");
     GObj_InitUserData(gobj, 0U, HSD_Free, user_data);
@@ -1520,8 +1532,8 @@ HSD_GObj* mnName_8023A59C(u8 arg0)
     user_data->text = NULL;
     user_data->text2 = NULL;
     for (i = 0; i < 0xD; i++) {
-        lb_80011E24(root_jobj, (HSD_JObj**) ((u8*) user_data + (i << 2) + 8),
-                    i, -1);
+        lb_80011E24(root_jobj[0],
+                    (HSD_JObj**) ((u8*) user_data + (i << 2) + 8), i, -1);
     }
     if (mn_804A04F0.x10 == 1) {
         struct mn_80231634_t* p =
@@ -1548,10 +1560,10 @@ HSD_GObj* mnName_8023A59C(u8 arg0)
         mnName_80239A24((HSD_GObj*) user_data);
         mnName_80238754_noinline((HSD_GObj*) user_data);
     }
-    jobj7 = ((HSD_JObj**) user_data)[9];
-    HSD_JObjReqAnimAll(jobj7,
+    jobj7[0] = ((HSD_JObj**) user_data)[9];
+    HSD_JObjReqAnimAll(jobj7[0],
                        mnName_804D4BD0[mn_804A04F0.hovered_selection == 0x18]);
-    HSD_JObjAnimAll(jobj7);
+    HSD_JObjAnimAll(jobj7[0]);
     jobj4 = (HSD_JObj*) user_data->gobj.proc;
     HSD_JObjReqAnimAll(jobj4,
                        mnName_804D4BD8[mn_804A04F0.hovered_selection == 0x19]);
@@ -1633,8 +1645,8 @@ void mnName_8023A9B4(u8 arg0)
     mnName_80239A24((HSD_GObj*) gobj2);
 }
 
-extern char** AutoNamesList;
-extern char** NotAllowedNamesList;
+u8** AutoNamesList;
+char** NotAllowedNamesList;
 
 static inline void mnName_InitNameDisplayOrder(void)
 {

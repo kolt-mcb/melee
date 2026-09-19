@@ -18,7 +18,6 @@
 #include "dolphin/pad.h"
 #include "gm/gm_1601.h"
 #include "gm/gm_16AE.h"
-#include "gm/gm_1A36.h"
 #include "gm/gm_1A45.h"
 #include "gm/gmpause.h"
 #include "gm/types.h"
@@ -29,7 +28,6 @@
 #include "lb/lbsnap.h"
 #include "lb/lbspdisplay.h"
 #include "mn/inlines.h"
-#include "mn/mnmain.h"
 #include "sc/types.h"
 
 typedef struct _SisLibUnkStruct2 {
@@ -411,7 +409,7 @@ void gmCamera_801A2BB0(void)
     }
 }
 
-f32 gmCamera_801A2BF0_get_translate_x(s32* px18)
+f32 gmCamera_801A2BF0_get_translate_x(const s32* px18)
 {
     if (*px18 != 0) {
         return 5.0f;
@@ -591,7 +589,7 @@ static inline void gmCamera_801A31FC_inline(DynamicModelDesc* mdl)
     HSD_GObj* gobj;
     gobj = GObj_Create(0xE, 0x10, 0);
     jobj = gmCamera_VsCamUiState.x8 = HSD_JObjLoadJoint(mdl->joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xB, 0);
     gm_8016895C(jobj, mdl, 0);
     HSD_JObjReqAnimAll(jobj, 0.0f);
@@ -617,7 +615,7 @@ void gmCamera_801A31FC(void)
         HSD_GObj* gobj_a = GObj_Create(0xE, 0x10, 0);
         HSD_JObj* jobj_a = gmCamera_VsCamUiState.x4 =
             HSD_JObjLoadJoint(*joint_a);
-        HSD_GObjObject_80390A70(gobj_a, HSD_GObj_804D7849, jobj_a);
+        HSD_GObjObject_80390A70(gobj_a, HSD_GObj_JObjKind, jobj_a);
         GObj_SetupGXLink(gobj_a, HSD_GObj_JObjCallback, 0xB, 0);
     }
     gmCamera_801A31FC_inline(HSD_ArchiveGetPublicAddress(

@@ -2,7 +2,6 @@
 
 #include "ftCo_Damage.h"
 
-#include <placeholder.h>
 #include <platform.h>
 
 #include "ft/fighter.h"
@@ -11,7 +10,6 @@
 #include "ft/types.h"
 
 #include <math.h>
-#include <trigf.h>
 #include <dolphin/mtx.h>
 #include <baselib/jobj.h>
 

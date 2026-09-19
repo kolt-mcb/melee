@@ -14,6 +14,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0877.h"
 #include "ft/ft_0881.h"
 #include "ft/ft_0892.h"
@@ -30,10 +31,9 @@
 #include "it/items/itmewtwoshadowball.h"
 #include "lb/lb_00B0.h"
 
+#include <math.h>
 #include <stddef.h>
 #include <baselib/gobj.h>
-#include <baselib/random.h>
-#include <MSL/math.h>
 
 /* 3B7570 */ static Vec3 const ftKb_Init_803B7570 = { 0.0f, 4.0f, 0.0f };
 /* 3B757C */ static Vec3 const ftKb_Init_803B757C = { 0.0f, 4.0f, 0.0f };
@@ -167,14 +167,7 @@ void ftKb_SpecialNMt_80107130(Fighter_GObj* gobj)
     Fighter* fp;
     Fighter* fp2;
     ftKb_DatAttrs* da;
-#if BUILD_TARGET_PC
-    /* PC port: `NULL & 0xFFFFFFFFu` is a decomp artefact that MWCC folds to 0.
-     * GCC rejects `&` between void* and unsigned. The comparison means
-     * "gobj is null" either way. */
-    if (gobj == NULL) {
-#else
-    if (gobj == (NULL & 0xFFFFFFFFu)) {
-#endif
+    if (gobj == (0L & 0xFFFFFFFFu)) {
         return;
     }
     fp = GET_FIGHTER(gobj);
@@ -202,7 +195,7 @@ check:
     efLib_DestroyAll(gobj);
 }
 
-inline void ftKb_SpecialNMt_SetRecoil(Fighter_GObj* gobj)
+static inline void ftKb_SpecialNMt_SetRecoil(Fighter_GObj* gobj)
 {
     Fighter* fp = fp = GET_FIGHTER(gobj);
     ftKb_DatAttrs* da = da = fp->dat_attrs;
@@ -614,7 +607,7 @@ void ftKb_MtSpecialAirNLoopFull_Anim(Fighter_GObj* gobj)
     ft->u.kb.x9C = da->specialn_mt_charge_time;
 }
 
-inline Item_GObj* ftKb_MtSpecialAirNCancel_Anim_inline(Item_GObj* arg0)
+static inline Item_GObj* ftKb_MtSpecialAirNCancel_Anim_inline(Item_GObj* arg0)
 {
     return arg0;
 }

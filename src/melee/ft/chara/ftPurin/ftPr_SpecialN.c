@@ -26,11 +26,9 @@
 #include "ftPurin/types.h"
 
 #include <math.h>
-#include <trigf.h>
 #include <baselib/archive.h>
 #include <baselib/gobj.h>
 #include <baselib/jobj.h>
-#include <baselib/objalloc.h>
 #include <melee/cm/camera.h>
 #include <melee/ef/efsync.h>
 #include <melee/mp/mplib.h>
@@ -52,6 +50,7 @@
 #endif
 #endif
 
+#ifdef MUST_MATCH
 static void sdata2_order(void)
 {
     (void) 1.5707963267948966;
@@ -69,10 +68,11 @@ static void sdata2_order(void)
     (void) 3.1415926535897931;
     (void) -0.0500000007f;
 }
+#endif
 
 static inline void ftPr_JObjSetRotationY(HSD_JObj* jobj, f32 y, f32* base)
 {
-    ((jobj) ? ((void) 0) : __assert("jobj.h", 660, "jobj"));
+    (jobj ? ((void) 0) : __assert("jobj.h", 660, "jobj"));
     ((!(jobj->flags & JOBJ_USE_QUATERNION))
          ? ((void) 0)
          : __assert("jobj.h", 661, (char*) &base[8]));
@@ -326,7 +326,7 @@ void ftPr_SpecialS_8013DD54(HSD_GObj* gobj, bool arg1)
     if (fp->mv.pr.specialn.x34.y == 0.0f) {
         playRollSFX(gobj);
     } else {
-        if (fp->mv.pr.specialn.x34.x == ((arg1) ? -1.0f : 1.0f)) {
+        if (fp->mv.pr.specialn.x34.x == (arg1 ? -1.0f : 1.0f)) {
             if (fp->mv.pr.specialn.x14 < fp->mv.pr.specialn.x34.y) {
                 playRollSFX(gobj);
             }
@@ -461,7 +461,7 @@ void ftPr_SpecialNRelease_Anim(HSD_GObj* gobj)
     ftPr_SpecialS_8013D8E4(gobj);
     {
         f32 old_angle = fp->mv.pr.specialn.x14;
-        f32 delta = deg_to_rad * fp->mv.pr.specialn.x2C *
+        f32 delta = MTXDegToRad(fp->mv.pr.specialn.x2C) *
                     (f32) (0.2 * da->x98 * fp->mv.pr.specialn.x34.x);
         fp->mv.pr.specialn.x14 = old_angle + delta;
         normalizeAndSetRollAngle(gobj);
@@ -599,9 +599,9 @@ void ftPr_SpecialAirNChargeFull_Anim(HSD_GObj* gobj)
     ftPartSetRotY(fp, FtPart_TopN, M_PI_2);
 }
 
-static inline void ftPr_SpecialAirNChargeRelease_Anim_inline(HSD_GObj* gobj,
-                                                             Vec3* scale,
-                                                             f32* scale_base)
+static inline void
+ftPr_SpecialAirNChargeRelease_Anim_inline(HSD_GObj* gobj, Vec3* scale,
+                                          const f32* scale_base)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
@@ -991,7 +991,7 @@ void ftPr_SpecialNTurn_Phys(HSD_GObj* gobj)
 void ftPr_SpecialNEnd_Phys(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftCommon_ApplyFrictionGround(fp, fp->co_attrs.gr_friction);
+    ftCommon_ApplyFrictionGround(fp, fp->co_attrs.ground_friction);
     ftCommon_ApplyGroundMovement(gobj);
 }
 

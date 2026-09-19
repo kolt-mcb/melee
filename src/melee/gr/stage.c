@@ -22,8 +22,6 @@
 #define STG_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
-extern struct StageInfo stage_info;
-
 /// One #stage_id_map entry: the #GrKind for a #StKind.
 struct StageIdMapEntry {
     GrKind grkind;

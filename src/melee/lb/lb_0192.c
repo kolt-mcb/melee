@@ -8,9 +8,8 @@
 
 #include <stdio.h>
 #include <dolphin/dvd.h>
-#include <dolphin/vi.h>
-#include <baselib/controller.h>
 #include <baselib/initialize.h>
+#include <baselib/rumble.h>
 #include <baselib/sislib.h>
 #include <baselib/video.h>
 
@@ -86,8 +85,10 @@ static struct strings us_msg[6] = {
 
 /* 4D63D0 */ static HSD_Text* lb_804D63D0;
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 static enum_t lb_80019230(void)
 {
     switch (DVDGetDriveStatus()) {
@@ -107,7 +108,9 @@ static enum_t lb_80019230(void)
         return -1;
     }
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void lb_800192A8(void (*cb)(void))
 {

@@ -1,9 +1,7 @@
 #include "ftCh_GrabUnk1_B174.h"
 
-#include "math.h"
 #include "types.h"
 
-#include <placeholder.h>
 #include <platform.h>
 
 #include "baselib/forward.h"
@@ -20,8 +18,8 @@
 #include "lb/lb_00B0.h"
 #include "pl/player.h"
 
+#include <math.h>
 #include <dolphin/mtx.h>
-#include <MetroTRK/intrinsics.h>
 
 bool fn_8015B4EC(Vec3* vec);
 
@@ -157,9 +155,9 @@ void fn_8015B2C0(HSD_GObj* gobj)
         }
         return;
     }
+    default:
+        break;
     }
-    // NOTE: maybe add an #ifdef BUGFIX for case 10, like
-    // ftMh_MS_343_801511FC?
 }
 
 bool fn_8015B4EC(Vec3* vec)

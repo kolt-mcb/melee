@@ -1,14 +1,16 @@
 #include "ftNs_SpecialLw.h"
 
 #include "ftNs_Init.h"
-#include "math.h"
 
 #include <platform.h>
 
 #include "ef/efasync.h"
-#include "ef/eflib.h"
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0881.h"
 #include "ft/ftanim.h"
 #include "ft/ftcoll.h"
@@ -17,7 +19,6 @@
 #include "ft/types.h"
 #include "ftCommon/inlines.h"
 #include "ftNess/types.h"
-#include "pl/pl_040D.h"
 #include "pl/player.h"
 #include "pl/plbonuslib.h"
 
@@ -58,7 +59,7 @@ void ftNs_SpecialLwStart_Enter(HSD_GObj* gobj) // Ness's grounded PSI Magnet
         (s32) ness_attr->x74_PSI_MAGNET_RELEASE_LAG;
     temp_fp->mv.ns.speciallw.isRelease = 0;
     temp_fp->mv.ns.speciallw.gravityDelay =
-        (s32) ness_attr->x84_PSI_MAGNET_FRAMES_BEFORE_GRAVITY;
+        ness_attr->x84_PSI_MAGNET_FRAMES_BEFORE_GRAVITY;
     temp_fp->mv.ns.speciallw.x10 = 0;
     Fighter_ChangeMotionState(gobj, ftNs_MS_SpecialLwStart, 0, 0, 1, 0, NULL);
     ftAnim_8006EBA4(gobj);
@@ -80,7 +81,7 @@ void ftNs_SpecialAirLwStart_Enter(
         (s32) ness_attr->x74_PSI_MAGNET_RELEASE_LAG;
     temp_fp->mv.ns.speciallw.isRelease = 0;
     temp_fp->mv.ns.speciallw.gravityDelay =
-        (s32) ness_attr->x84_PSI_MAGNET_FRAMES_BEFORE_GRAVITY;
+        ness_attr->x84_PSI_MAGNET_FRAMES_BEFORE_GRAVITY;
     temp_fp->mv.ns.speciallw.x10 = 0;
     temp_fp->self_vel.y = 0.0f;
     temp_fp->self_vel.x /= ness_attr->x88_PSI_MAGNET_MOMENTUM_PRESERVATION;
@@ -189,7 +190,7 @@ void ftNs_SpecialAirLwStart_Phys(HSD_GObj* gobj)
         fp->mv.ns.speciallw.gravityDelay = gravity_timer - 1;
     } else {
         ftCommon_Fall(fp, ness_attr->x8C_PSI_MAGNET_FALL_ACCEL,
-                      da->terminal_vel);
+                      da->terminal_velocity);
     }
 
     ftCommon_8007CF58(fp);
@@ -258,7 +259,7 @@ void ftNs_SpecialLwHold_Anim(
     if (fp->mv.ns.speciallw.releaseLag > 0) {
         fp->mv.ns.speciallw.releaseLag--;
     }
-    if (((s32) fp->mv.ns.speciallw.releaseLag <= 0) &&
+    if ((fp->mv.ns.speciallw.releaseLag <= 0) &&
         ((s32) fp->mv.ns.speciallw.isRelease != 0))
     {
         if ((s32) fp->ground_or_air == GA_Ground) {
@@ -271,7 +272,7 @@ void ftNs_SpecialLwHold_Anim(
 
     temp_r31->mv.ns.speciallw.x10--;
 
-    if ((s32) temp_r31->mv.ns.speciallw.x10 <= 0) {
+    if (temp_r31->mv.ns.speciallw.x10 <= 0) {
         ft_80088478(temp_r31, 210081, 127, 64);
         temp_r31->mv.ns.speciallw.x10 = 40;
     }
@@ -296,7 +297,7 @@ void ftNs_SpecialAirLwHold_Anim(
         fp->mv.ns.speciallw.releaseLag =
             (s32) (fp->mv.ns.speciallw.releaseLag - 1);
     }
-    if (((s32) fp->mv.ns.speciallw.releaseLag <= 0) &&
+    if ((fp->mv.ns.speciallw.releaseLag <= 0) &&
         ((s32) fp->mv.ns.speciallw.isRelease != 0))
     {
         if ((s32) fp->ground_or_air == GA_Ground) {
@@ -309,7 +310,7 @@ void ftNs_SpecialAirLwHold_Anim(
 
     temp_r31->mv.ns.speciallw.x10 = (s32) (temp_r31->mv.ns.speciallw.x10 - 1);
 
-    if ((s32) temp_r31->mv.ns.speciallw.x10 <= 0) {
+    if (temp_r31->mv.ns.speciallw.x10 <= 0) {
         ft_80088478(temp_r31, 210081, 127, 64);
         temp_r31->mv.ns.speciallw.x10 = 40;
     }
@@ -354,7 +355,7 @@ void ftNs_SpecialAirLwHold_Phys(HSD_GObj* gobj)
             fp->mv.ns.speciallw.gravityDelay = gravity_timer - 1;
         } else {
             ftCommon_Fall(fp, ness_attr->x8C_PSI_MAGNET_FALL_ACCEL,
-                          da->terminal_vel);
+                          da->terminal_velocity);
         }
 
         ftCommon_8007CF58(fp);
@@ -466,7 +467,7 @@ static inline void getAttrStuff(HSD_GObj* arg0)
     ftNessAttributes* temp_r31 = temp_r30->dat_attrs;
     temp_r30->mv.ns.speciallw.turnFrames += -1;
 
-    if (((u32) temp_r30->cmd_vars[0] == 0U) &&
+    if ((temp_r30->cmd_vars[0] == 0U) &&
         ((returnStateVar(temp_r30->mv.ns.speciallw.turnFrames)) <=
          temp_r31->x78_PSI_MAGNET_UNK1))
     {
@@ -574,7 +575,7 @@ void ftNs_SpecialAirLwTurn_Phys(
         fp->mv.ns.speciallw.gravityDelay = magnetTimer - 1;
     } else {
         ftCommon_Fall(fp, ness_attr->x8C_PSI_MAGNET_FALL_ACCEL,
-                      da->terminal_vel);
+                      da->terminal_velocity);
     }
 
     ftCommon_8007CF58(fp);
@@ -671,11 +672,11 @@ bool ftNs_SpecialLwHold_GroundOrAir(
     return true;
 }
 
-inline void MagnetStateVarCalc(HSD_GObj* gobj)
+static inline void MagnetStateVarCalc(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     fp->mv.ns.speciallw.x10 = fp->mv.ns.speciallw.x10 - 1;
-    if ((s32) fp->mv.ns.speciallw.x10 <= 0) {
+    if (fp->mv.ns.speciallw.x10 <= 0) {
         ft_80088478(fp, 210081, 127, 64);
         fp->mv.ns.speciallw.x10 = 40;
     }
@@ -709,7 +710,7 @@ void ftNs_SpecialLwHit_Anim(
     }
     if (!ftAnim_IsFramesRemaining(arg0)) {
         temp_r3_2 = arg0->user_data;
-        if (((s32) temp_r3_2->mv.ns.speciallw.releaseLag <= 0) &&
+        if ((temp_r3_2->mv.ns.speciallw.releaseLag <= 0) &&
             ((s32) temp_r3_2->mv.ns.speciallw.isRelease != 0))
         {
             if ((s32) temp_r3_2->ground_or_air == GA_Ground) {
@@ -833,7 +834,7 @@ void ftNs_SpecialAirLwHit_Phys(
         fp->mv.ns.speciallw.gravityDelay = temp_r3 - 1;
     } else {
         ftCommon_Fall(fp, attrs->x8C_PSI_MAGNET_FALL_ACCEL,
-                      attributes->terminal_vel);
+                      attributes->terminal_velocity);
     }
 
     ftCommon_8007CF58(fp);
@@ -930,7 +931,7 @@ void ftNs_AbsorbThink_DecideAction(
         pl_80040B8C(fp->player_id, fp->x221F_b4, heal_amount);
     }
 
-    fp->facing_dir = (float) fp->AbsorbAttr.x1A40_absorbHitDirection;
+    fp->facing_dir = fp->AbsorbAttr.x1A40_absorbHitDirection;
     msid = fp->motion_id;
 
     if ((msid != ftNs_MS_SpecialLwHit && msid != ftNs_MS_SpecialAirLwHit) ||
@@ -1012,7 +1013,7 @@ void ftNs_SpecialAirLwEnd_Phys(
         fp->mv.ns.speciallw.gravityDelay = gravity_timer - 1;
     } else {
         ftCommon_Fall(fp, attrs->x8C_PSI_MAGNET_FALL_ACCEL,
-                      attributes->terminal_vel);
+                      attributes->terminal_velocity);
     }
 
     ftCommon_8007CF58(fp);

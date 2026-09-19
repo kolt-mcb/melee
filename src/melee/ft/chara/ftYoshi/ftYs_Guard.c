@@ -1,7 +1,6 @@
 #include "ftYs_Guard.h"
 
-#include "ftYs_Init.h"
-#include "ftYs_SpecialN.h"
+#include "ftyoshi.h"
 
 #include <placeholder.h>
 
@@ -27,6 +26,8 @@
 #include "ftYoshi/types.h"
 
 #include <baselib/forward.h>
+
+#include <baselib/jobj.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -385,7 +386,7 @@ void ftYs_Shield_8012C850(HSD_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     Fighter_ChangeMotionState(gobj, ftYs_MS_GuardOn_1, 16, fp->cur_anim_frame,
                               1, 0, NULL);
-    fp->x672_input_timer_counter = 254;
+    fp->trigger_analog_timer = 254;
     fp->x221A_b7 = false;
     fp->x221B_b0 = false;
     fp->x221C_b3 = true;
@@ -422,7 +423,7 @@ void ftYs_Shield_8012C914(Fighter_GObj* gobj)
     Fighter_ChangeMotionState(gobj, ftYs_MS_GuardOn_1, 0, 0.0F, 1.0F, 0.0F,
                               NULL);
     ftAnim_8006EBA4(gobj);
-    fp->x672_input_timer_counter = 254;
+    fp->trigger_analog_timer = 254;
     fp->x221C_b3 = true;
     fp->x221C_b1 = true;
     fp->x221C_b2 = true;

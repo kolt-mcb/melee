@@ -2,7 +2,6 @@
 
 #include "types.h"
 
-#include <placeholder.h>
 #include <platform.h>
 
 #include "baselib/forward.h"
@@ -49,13 +48,6 @@
 #include "it/it_26B1.h"
 
 #include <dolphin/mtx.h>
-#include <MetroTRK/intrinsics.h>
-
-/// @todo Figure out how to use #GET_JOBJ instead.
-static inline HSD_JObj* get_jobj(HSD_GObj* gobj)
-{
-    return gobj->hsd_obj;
-}
 
 MotionState ftCh_Init_MotionStateTable[ftCh_MS_SelfCount] = {
     {

@@ -619,7 +619,7 @@ static void pc_trace_ailog(void)
             if (vfp != NULL) {
                 union { float f; unsigned u; } a, b, c;
                 a.f = vfp->gr_vel;
-                b.f = vfp->co_attrs.walk_init_vel;
+                b.f = vfp->co_attrs.walk_accel_mul;
                 c.f = vfp->co_attrs.walk_max_vel;
                 {
                     /* The six joints the ECB is built from: mpColl's

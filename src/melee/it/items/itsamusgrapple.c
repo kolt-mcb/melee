@@ -261,7 +261,7 @@ void it_802B743C(HSD_GObj* gobj, Item* ip, s32 type)
     } else {
         jobj = HSD_JObjLoadJoint(attrs->x6C);
     }
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, it_802A24A0, 6, 0);
     if (type == 0) {
         if (attrs->x7C != NULL) {
@@ -323,7 +323,7 @@ static inline void samus_grapple_setup_tail(Item* ip, HSD_GObj* link_gobj)
     itSamusGrappleAttributes* attrs2 =
         ip->xC4_article_data->x4_specialAttributes;
     HSD_JObj* tail_jobj = HSD_JObjLoadJoint(attrs2->x70);
-    HSD_GObjObject_80390A70(link_gobj, HSD_GObj_804D7849, tail_jobj);
+    HSD_GObjObject_80390A70(link_gobj, HSD_GObj_JObjKind, tail_jobj);
     GObj_SetupGXLink(link_gobj, it_802A24A0, 6, 0);
     HSD_JObjAddAnimAll(tail_jobj->child,
                        (attrs2->x98 != NULL) ? *attrs2->x98 : NULL,
@@ -945,8 +945,8 @@ void fn_802B8D38(Item_GObj* gobj)
     saved_pos = fp2->cur_pos;
     it_802BA5DC(ip->xDD4_itemVar.samusgrapple.x4,
                 ip->xDD4_itemVar.samusgrapple.x0, &pos, attrs);
-    fp2->cur_pos.x = pos.x + (old_x);
-    fp2->cur_pos.y = pos.y + (old_y);
+    fp2->cur_pos.x = pos.x + old_x;
+    fp2->cur_pos.y = pos.y + old_y;
     {
         f32 tmp;
         tmp = fp2->self_vel.x + (fp2->cur_pos.x - saved_pos.x);

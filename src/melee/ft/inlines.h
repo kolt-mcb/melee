@@ -20,12 +20,10 @@
 
 #include "mp/forward.h"
 
-#include <math.h>
 #include <dolphin/mtx.h>
 #include <baselib/archive.h>
 #include <baselib/dobj.h>
 #include <baselib/gobj.h>
-#include <baselib/jobj.h>
 #include <baselib/lobj.h>
 
 #if BUILD_TARGET_PC
@@ -235,10 +233,10 @@ static inline void getAccelAndTarget(Fighter* fp, float* accel,
                                      float* target_vel)
 {
     ftCo_DatAttrs* co_attrs = &fp->co_attrs;
-    *accel = fp->input.lstick.x * fp->co_attrs.dash_run_acceleration_a;
-    *accel += fp->input.lstick.x > 0 ? +co_attrs->dash_run_acceleration_b
-                                     : -co_attrs->dash_run_acceleration_b;
-    *target_vel = fp->input.lstick.x * co_attrs->dash_run_terminal_velocity;
+    *accel = fp->input.lstick.x * fp->co_attrs.dash_accel_mul;
+    *accel += fp->input.lstick.x > 0 ? +co_attrs->dash_accel_base
+                                     : -co_attrs->dash_accel_base;
+    *target_vel = fp->input.lstick.x * co_attrs->dash_max_velocity;
 }
 
 /// used for all fighters except Kirby and Purin
@@ -259,6 +257,8 @@ static inline void Fighter_OnItemPickup(Fighter_GObj* gobj, bool catchItemFlag,
             break;
         case 4:
             ftAnim_80070FB4(gobj, bool2, 3);
+            break;
+        default:
             break;
         }
         if (catchItemFlag) {
@@ -323,19 +323,19 @@ static inline void ftCommon_HandleTeleportCollisions(Fighter_GObj* gobj,
 {
     if ((coll->env_flags & Collide_CeilingMask) &&
         lbVector_AngleXY(&coll->ceiling.normal, &fp->self_vel) >
-            deg_to_rad * (90.0f + *angle_clamp))
+            MTXDegToRad(90.0f + *angle_clamp))
     {
         on_collide(gobj);
     }
     if ((coll->env_flags & Collide_LeftWallMask) &&
         lbVector_AngleXY(&coll->left_facing_wall.normal, &fp->self_vel) >
-            deg_to_rad * (90.0f + *angle_clamp))
+            MTXDegToRad(90.0f + *angle_clamp))
     {
         on_collide(gobj);
     }
     if ((coll->env_flags & Collide_RightWallMask) &&
         lbVector_AngleXY(&coll->right_facing_wall.normal, &fp->self_vel) >
-            deg_to_rad * (90.0f + *angle_clamp))
+            MTXDegToRad(90.0f + *angle_clamp))
     {
         on_collide(gobj);
     }
@@ -396,7 +396,7 @@ static inline int ftGetFacingDirInt2(Fighter_GObj* gobj)
 #define gmScriptEventUpdatePtr(event, type)                                   \
     (event = (void*) ((uintptr_t) event + 4))
 
-inline CommandInfo* getCmdScript(Fighter* fp)
+static inline CommandInfo* getCmdScript(Fighter* fp)
 {
     return &fp->x3E4_fighterCmdScript;
 }

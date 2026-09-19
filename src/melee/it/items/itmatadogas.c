@@ -2,19 +2,16 @@
 
 #include "inlines.h"
 
-#include "ef/eflib.h"
 #include "ef/efsync.h"
-#include "ft/ft_0C31.h"
 #include "it/inlines.h"
-#include "it/it_266F.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/it_279C.h"
 #include "it/item.h"
-#include "it/itmaplib.h"
+#include "it/itgroundcoll.h"
 
+#include <math.h>
 #include <baselib/random.h>
-#include <MSL/math.h>
 
 ItemStateTable it_803F7B58[] = {
     { 0, it_802CB118, it_802CB14C, it_802CB150 },
@@ -131,7 +128,7 @@ void itMatadogas_UnkMotion2_Phys(Item_GObj* gobj)
         jobj = gobj->hsd_obj;
         Item_80268E5C(gobj, 1, ITEM_ANIM_UPDATE);
         Item_SetEffectHitlagCallbacks(item2);
-        ((jobj) ? ((void) 0) : __assert("jobj.h", 660, "jobj"));
+        (jobj ? ((void) 0) : __assert("jobj.h", 660, "jobj"));
         ((!(jobj->flags & JOBJ_USE_QUATERNION))
              ? ((void) 0)
              : __assert("jobj.h", 661,
@@ -161,8 +158,8 @@ void it_802CB4F0(Item_GObj* gobj, s32 kind, f32 radius)
     it_8026BB88(gobj, &spawn.pos);
     spawn.facing_dir = ip->facing_dir;
     spawn.x3C_damage = 0;
-    spawn.vel.x = radius * cosf(deg_to_rad * rand);
-    spawn.vel.y = radius * sinf(deg_to_rad * rand);
+    spawn.vel.x = radius * cosf(MTXDegToRad(rand));
+    spawn.vel.y = radius * sinf(MTXDegToRad(rand));
     spawn.vel.z = 0.0f;
     spawn.kind = kind;
     spawn.x0_parent_gobj = ip->owner;
@@ -253,6 +250,8 @@ void it_802CB844(Item_GObj* gobj)
         break;
     case It_Kind_Matadogas_Gas2:
         scale = attrs->x8;
+        break;
+    default:
         break;
     }
 

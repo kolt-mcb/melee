@@ -1,6 +1,10 @@
 #include "ftKp_SpecialN.h"
 
 #include "baselib/random.h"
+
+#include "ft/forward.h"
+
+#include "ft/ft_084E.h"
 #include "ftCommon/ftCo_Fall.h"
 #include "ftCommon/inlines.h"
 
@@ -39,7 +43,7 @@ enum_t ftKp_Init_803CF2A0[] = {
 };
 
 static inline int ftKp_SpecialLw_80134ACC_inline(Fighter_GObj* gobj,
-                                                 enum_t* dirs)
+                                                 const enum_t* dirs)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     int new_facing;

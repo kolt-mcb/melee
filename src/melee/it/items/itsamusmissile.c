@@ -12,7 +12,6 @@
 #include "it/itgroundcoll.h"
 #include "lb/lbvector.h"
 
-#include <trigf.h>
 #include <baselib/mtx.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
@@ -32,13 +31,8 @@ ItemStateTable it_803F7340[] = {
     { 3, itSamusmissile_UnkMotion3_Anim, NULL, NULL },
 };
 
-/* PC port: header and definition disagree on bool vs int. MWCC accepts
- * the mismatch, GCC does not. Follow the header; GCN build unchanged. */
-#if BUILD_TARGET_PC
-Item_GObj* it_802B62D0(Item_GObj* gobj, Vec3* pos, bool arg2, f32 facing_dir)
-#else
-Item_GObj* it_802B62D0(Item_GObj* gobj, Vec3* pos, int arg2, f32 facing_dir)
-#endif
+Item_GObj* it_802B62D0(Item_GObj* gobj, Vec3* pos, bool is_smash_missile,
+                       f32 facing_dir)
 {
     SpawnItem spawn;
     spawn.kind = It_Kind_Samus_Missile;
@@ -59,7 +53,7 @@ Item_GObj* it_802B62D0(Item_GObj* gobj, Vec3* pos, int arg2, f32 facing_dir)
         if (new_gobj != NULL) {
             Item* ip = GET_ITEM(new_gobj);
 
-            ip->xDD4_itemVar.samusmissile.is_smash_missile = arg2;
+            ip->xDD4_itemVar.samusmissile.is_smash_missile = is_smash_missile;
             ip->xDD4_itemVar.samusmissile.owner = ip->owner;
 
             if (ip->xDD4_itemVar.samusmissile.owner != NULL) {
@@ -67,7 +61,7 @@ Item_GObj* it_802B62D0(Item_GObj* gobj, Vec3* pos, int arg2, f32 facing_dir)
                     ip->xDD4_itemVar.samusmissile.owner);
             }
 
-            if (ip->xDD4_itemVar.samusmissile.is_smash_missile == 0) {
+            if (!ip->xDD4_itemVar.samusmissile.is_smash_missile) {
                 it_802B66A8(new_gobj);
             } else {
                 it_802B6A60(new_gobj);
@@ -94,7 +88,7 @@ void it_802B63F8(HSD_GObj* gobj)
     }
 
     if (ip->xD44_lifeTimer == attrs->x4 - attrs->x8 &&
-        ip->xDD4_itemVar.samusmissile.is_smash_missile == 0)
+        !ip->xDD4_itemVar.samusmissile.is_smash_missile)
     {
         efLib_DestroyAll(gobj);
     }
@@ -104,7 +98,7 @@ void it_802B63F8(HSD_GObj* gobj)
     }
 
     if (ip->xD44_lifeTimer <= 0.0f) {
-        if (ip->xDD4_itemVar.samusmissile.is_smash_missile == 0) {
+        if (!ip->xDD4_itemVar.samusmissile.is_smash_missile) {
             it_802B701C(gobj);
         } else {
             it_802B70A0(gobj);
@@ -217,7 +211,7 @@ void* it_802B66A8(Item_GObj* gobj)
     return efSync_Spawn(0x485, gobj, itGetJObjGrandchild(gobj));
 }
 
-inline void isSamusmissile_MotionAnim(Item_GObj* gobj)
+static inline void isSamusmissile_MotionAnim(Item_GObj* gobj)
 {
     it_802B63F8(gobj);
     {
@@ -345,7 +339,7 @@ bool it_2725_Logic52_DmgDealt(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
 
-    if (ip->xDD4_itemVar.samusmissile.is_smash_missile == NULL) {
+    if (!ip->xDD4_itemVar.samusmissile.is_smash_missile) {
         if (ip->msid != 2) {
             it_802B701C(gobj);
         }
@@ -359,7 +353,7 @@ bool it_2725_Logic52_Clanked(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
 
-    if (ip->xDD4_itemVar.samusmissile.is_smash_missile == NULL) {
+    if (!ip->xDD4_itemVar.samusmissile.is_smash_missile) {
         if (ip->msid != 2) {
             it_802B701C(gobj);
         }
@@ -373,7 +367,7 @@ bool it_2725_Logic52_HitShield(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
 
-    if (ip->xDD4_itemVar.samusmissile.is_smash_missile == NULL) {
+    if (!ip->xDD4_itemVar.samusmissile.is_smash_missile) {
         if (ip->msid != 2) {
             it_802B701C(gobj);
         }
@@ -387,7 +381,7 @@ bool it_2725_Logic52_ShieldBounced(Item_GObj* arg0)
 {
     Item* ip = GET_ITEM(arg0);
     HSD_JObj* jobj = GET_JOBJ(arg0);
-    if (ip->xDD4_itemVar.samusmissile.is_smash_missile != 0) {
+    if (ip->xDD4_itemVar.samusmissile.is_smash_missile) {
         itColl_BounceOffShield(arg0);
         {
             f32 temp_f1 = atan2f(ip->x40_vel.x, ip->x40_vel.y);
@@ -396,7 +390,7 @@ bool it_2725_Logic52_ShieldBounced(Item_GObj* arg0)
             if (ip->facing_dir == +1.0f) {
                 var_f31 = temp_f1 - M_PI_2_F;
             } else {
-                var_f31 = 270 * deg_to_rad - temp_f1;
+                var_f31 = MTXDegToRad(270) - temp_f1;
             }
             child = HSD_JObjGetChild(jobj);
             HSD_JObjSetRotationX(child, var_f31);

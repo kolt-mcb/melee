@@ -31,10 +31,12 @@
 #include <melee/mn/mnmain.h>
 
 /// @todo .sdata2 order hack
+#ifdef MUST_MATCH
 static void order_sdata2(void)
 {
     (void) S32_TO_F32;
 }
+#endif
 
 /// Random stage selection
 /// Returns an internal stage ID - 2 (since first 2 internal stage IDs are
@@ -135,7 +137,7 @@ skip_randomize:
 
     gobj = GObj_Create(HSD_GOBJ_CLASS_FIGHTER, 5, 0x80);
     jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->xB0);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x87);
     HSD_GObj_SetupProc(gobj, mn_8022EAE0, 0);
     HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->xB4,
@@ -206,7 +208,7 @@ void mnStageSel_80259ED8(int id)
 
     gobj = GObj_Create(HSD_GOBJ_CLASS_FIGHTER, 5, 0x80);
     jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->x30.joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x84);
     HSD_GObj_SetupProc(gobj, mn_8022EAE0, 1);
     HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->x30.animjoint,
@@ -443,10 +445,6 @@ void fn_8025A974(HSD_GObj* gobj, int unused)
     HSD_FogSet(gobj->hsd_obj);
 }
 
-/// OnLoad
-/// #mnStageSel_8025A998_OnEnter
-
-extern HSD_CObjDesc* MenMain_cam;
 static const Vec3 mnStageSel_803B8550 = { 0, -13, 0 };
 
 static inline void make_stage_icon(HSD_JObj** out)
@@ -455,7 +453,7 @@ static inline void make_stage_icon(HSD_JObj** out)
     HSD_JObj* jobj;
     gobj = GObj_Create(4, 5, 0x80);
     jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->x40.joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x83);
     HSD_GObj_SetupProc(gobj, mn_8022EAE0, 3);
     HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->x40.animjoint,
@@ -468,7 +466,7 @@ static inline void attach_menu_model(HSD_GObj* gobj)
 {
     HSD_JObj* jobj;
     jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->xA0.joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x80);
     HSD_GObj_SetupProc(gobj, mn_8022EAE0, 0);
     HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->xA0.animjoint,
@@ -482,7 +480,7 @@ static inline void make_bg_model(HSD_JObj** out)
     HSD_JObj* jobj;
     gobj = GObj_Create(4, 5, 0x80);
     jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->x50.joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x82);
     HSD_GObj_SetupProc(gobj, mn_8022EAE0, 0);
     HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->x50.animjoint,
@@ -497,7 +495,7 @@ static inline void make_icon_root(HSD_JObj** icons)
     HSD_JObj* jobj;
     gobj = GObj_Create(4, 5, 0x80);
     jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->x90.joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x82);
     HSD_GObj_SetupProc(gobj, mn_8022EAE0, 4);
     HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->x90.animjoint,
@@ -612,7 +610,7 @@ static struct mnStageSel_804D6C98_t* sss_conv_table(const u8* raw, u8* data)
 }
 #endif
 
-void mnStageSel_8025A998_OnEnter(void* arg0)
+void mnStageSel_Scene_OnEnter(void* arg0)
 {
     HSD_JObj* spDC[0x13];
     u8 _[0xDC - 0xD8];
@@ -629,7 +627,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
 
     PAD_STACK(0xDC - 0x50);
 
-    mnStageSel_804D6C90 = (SSSData*) arg0;
+    sss_data = (SSSData*) arg0;
 #if BUILD_TARGET_PC
     /* MELEE_FORCE_STAGE=<StKind> picks the stage without entering the stage
      * select. The game already supports this for the modes that choose for
@@ -649,16 +647,16 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
     {
         const char* fs = getenv("MELEE_FORCE_STAGE");
         if (fs != NULL) {
-            mnStageSel_804D6C90->force_stage_id = (s8) atoi(fs);
+            sss_data->force_stage_id = (s8) atoi(fs);
         }
         if (getenv("MELEE_SSSLOG") != NULL) {
             fprintf(stderr, "[SSS] OnEnter force_stage_id=%d\n",
-                    (int) mnStageSel_804D6C90->force_stage_id);
+                    (int) sss_data->force_stage_id);
         }
     }
 #endif
 
-    if (mnStageSel_804D6C90->force_stage_id < 0) {
+    if (sss_data->force_stage_id < 0) {
         if (lbLang_IsSavedLanguageUS() != 0) {
             mnStageSel_804D6C94 = lbArchive_LoadArchive("MnSlMap.usd");
         } else {
@@ -688,13 +686,13 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
         mnStageSel_804D6CAC = 0;
         mnStageSel_804D6CAD = 0;
         mnStageSel_804D6CAE = 0x1E;
-        mnStageSel_804D50A0 = mnStageSel_804D6C90->unk_stage - 1;
+        mnStageSel_804D50A0 = sss_data->unk_stage - 1;
         mnStageSel_804D6CA4 = 0x14;
 
         {
             HSD_GObj* gobj = mnStageSel_804D6C9C = GObj_Create(2, 3, 0x80);
             HSD_CObj* cobj = HSD_CObjLoadDesc(MenMain_cam);
-            HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, cobj);
+            HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
             GObj_SetupGXLinkMax(gobj, HSD_GObj_803910D8, 0);
             gobj->gxlink_prios = 0x11;
             HSD_GObj_SetupProc(gobj, mn_8022BA1C, 5);
@@ -717,7 +715,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
             lobj2 = HSD_LObjLoadDesc(temp_r3->unk8);
 #endif
             HSD_LObjSetNext(lobj1, lobj2);
-            HSD_GObjObject_80390A70(gobj, (u8) HSD_GObj_804D784A, lobj1);
+            HSD_GObjObject_80390A70(gobj, (u8) HSD_GObj_LightKind, lobj1);
             GObj_SetupGXLink(gobj, HSD_GObj_LObjCallback, 0, 0x80);
         }
 
@@ -733,7 +731,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
 #else
             HSD_Fog* fog = HSD_FogLoadDesc(temp_r3->unkC);
 #endif
-            HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7848, fog);
+            HSD_GObjObject_80390A70(gobj, HSD_GObj_FogKind, fog);
             GObj_SetupGXLink(gobj, fn_8025A974, 0, 0x80);
         }
 
@@ -831,7 +829,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
             s32 temp_r22_7;
             HSD_JObj* temp_r23_3;
             jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->x20.joint);
-            HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+            HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
             GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x83);
             HSD_GObj_SetupProc(gobj, mn_8022EAE0, 3);
             HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->x20.animjoint,
@@ -859,7 +857,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
             HSD_GObj* gobj = GObj_Create(4, 5, 0x80);
             HSD_JObj* temp_r22_8;
             jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->x10.joint);
-            HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+            HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
             GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x83);
             HSD_GObj_SetupProc(gobj, mn_8022EAE0, 3);
             HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->x10.animjoint,
@@ -878,7 +876,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
             s32 temp_r22_9;
             HSD_JObj* temp_r23_6;
             jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->x0.joint);
-            HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+            HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
             GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x83);
             HSD_GObj_SetupProc(gobj, mn_8022EAE0, 3);
             animjoint = mnStageSel_804D6C98->x0.animjoint;
@@ -908,7 +906,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
             HSD_GObj* gobj;
             gobj = GObj_Create(4, 5, 0x80);
             jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->x80.joint);
-            HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+            HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
             GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x86);
             HSD_GObj_SetupProc(gobj, mn_8022EAE0, 2);
             HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->x80.animjoint,
@@ -933,7 +931,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
             HSD_GObj* gobj;
             gobj = GObj_Create(HSD_GOBJ_CLASS_FIGHTER, 5, 0x80);
             jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->x30.joint);
-            HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+            HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
             GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x84);
             HSD_GObj_SetupProc(gobj, mn_8022EAE0, 1);
             HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->x30.animjoint,
@@ -955,7 +953,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
             HSD_JObj* jobj;
             HSD_GObj* gobj = GObj_Create(4, 5, 0x80);
             jobj = HSD_JObjLoadJoint(mnStageSel_804D6C98->x60.joint);
-            HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+            HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
             GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x81);
             HSD_GObj_SetupProc(gobj, mn_8022EAE0, 1);
             HSD_JObjAddAnimAll(jobj, mnStageSel_804D6C98->x60.animjoint,
@@ -989,7 +987,7 @@ void mnStageSel_8025A998_OnEnter(void* arg0)
             HSD_JObj* temp_r3_15 =
                 HSD_JObjLoadJoint(mnStageSel_804D6C98->x70.joint);
             s32* temp_r3_16;
-            HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, temp_r3_15);
+            HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, temp_r3_15);
             GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x85);
             HSD_GObj_SetupProc(gobj, mn_8022EAE0, 1);
             HSD_JObjAddAnimAll(temp_r3_15, mnStageSel_804D6C98->x70.animjoint,
@@ -1013,16 +1011,15 @@ static inline HSD_PadStatus* get_pad(u8 i)
 }
 
 /// OnFrame
-void mnStageSel_8025B850_OnFrame(void)
+void mnStageSel_Scene_OnFrame(void)
 {
-    if (mnStageSel_804D6C90->force_stage_id >= 0) {
+    if (sss_data->force_stage_id >= 0) {
         mnStageSel_804D6CAF = 2;
-        mnStageSel_804D6C90->data.data.rules.xE =
-            mnStageSel_804D6C90->force_stage_id;
+        sss_data->vs.start.rules.stkind = sss_data->force_stage_id;
         gm_801A4B60();
         return;
     }
-    if (mnStageSel_804D6C90->no_lras == 0 && mn_8022F218()) {
+    if (sss_data->no_lras == 0 && mn_8022F218()) {
         sfxBack();
         lb_800145F4();
         HSD_GObjPLink_80390228(mnStageSel_804D6C9C);
@@ -1072,14 +1069,14 @@ void mnStageSel_8025B850_OnFrame(void)
         mnStageSel_804D6CA4 -= 1;
         return;
     }
-    if (mnStageSel_804D6C90->x1 == 0 && (mnStageSel_804D6CA0 & 0x200) &&
+    if (sss_data->x1 == 0 && (mnStageSel_804D6CA0 & 0x200) &&
         mnStageSel_804D6CAF == 0)
     {
         sfxBack();
         gm_801A4B60();
     }
     if (mnStageSel_804D6CAF == 2) {
-        mnStageSel_804D6C90->data.data.rules.xE =
+        sss_data->vs.start.rules.stkind =
             mnStageSel_803F06D0[mnStageSel_804D6CAE].xB;
 #if BUILD_TARGET_PC
         if (getenv("MELEE_SSSLOG") != NULL) {
@@ -1092,20 +1089,20 @@ void mnStageSel_8025B850_OnFrame(void)
     }
 }
 
-void mnStageSel_8025BB5C_OnLeave(UNK_T unused)
+void mnStageSel_Scene_OnExit(UNUSED void* exit_data)
 {
-    SSSData* tmp;
-
     if (mnStageSel_804D6C94 != NULL) {
         lbArchive_80016EFC(mnStageSel_804D6C94);
         mnStageSel_804D6C94 = NULL;
     }
-    tmp = mnStageSel_804D6C90;
-    tmp->start_game = mnStageSel_804D6CAF == 2 ? true : false;
-    if (tmp->start_game) {
-        PreloadCacheScene* cache = lbDvd_GetPreloadCacheScene();
-        cache->game_cache.stkind = tmp->data.data.rules.xE;
-        lbDvd_80018254();
+    {
+        SSSData* sss = sss_data;
+        sss->start_game = mnStageSel_804D6CAF == 2 ? true : false;
+        if (sss->start_game) {
+            PreloadedGameModeState* cache = lbDvd_GetPreloadCacheScene();
+            cache->game_cache.stkind = sss->vs.start.rules.stkind;
+            lbDvd_80018254();
+        }
     }
 }
 

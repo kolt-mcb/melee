@@ -11,6 +11,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftcommon.h"
 #include "ft/ftparts.h"
@@ -26,9 +27,6 @@
 
 #include <stddef.h>
 #include <baselib/gobj.h>
-#include <baselib/jobj.h>
-#include <baselib/random.h>
-#include <MSL/math.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -366,7 +364,8 @@ void ftKb_NsSpecialAirNStart_Phys(Fighter_GObj* gobj)
     if (fp->mv.kb.specialn_ns.falling_acceleration_delay != 0) {
         fp->mv.kb.specialn_ns.falling_acceleration_delay--;
     } else {
-        ftCommon_Fall(fp, da->specialn_ns_gravity, fp->co_attrs.terminal_vel);
+        ftCommon_Fall(fp, da->specialn_ns_gravity,
+                      fp->co_attrs.terminal_velocity);
     }
     airFriction = fp->co_attrs.aerial_friction;
     ftCommon_ApplyFrictionAir(fp, airFriction);

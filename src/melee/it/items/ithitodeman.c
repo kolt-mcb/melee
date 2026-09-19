@@ -2,7 +2,6 @@
 
 #include "inlines.h"
 
-#include "ef/eflib.h"
 #include "ef/efsync.h"
 #include "ft/ftlib.h"
 #include "it/inlines.h"
@@ -10,7 +9,6 @@
 #include "it/it_2725.h"
 #include "it/it_279C.h"
 #include "it/item.h"
-#include "it/itmaplib.h"
 #include "lb/lbaudio_ax.h"
 #include "lb/lbvector.h"
 
@@ -46,10 +44,12 @@ ItemStateTable it_803F8128[] = {
     },
 };
 
-static void ordering_func(void)
+#ifdef MUST_MATCH
+static void order_data(void)
 {
-    HSD_JObjSetRotationY(NULL, 10);
+    (void) "!(jobj->flags & JOBJ_USE_QUATERNION)";
 }
+#endif
 
 ItemStateTable it_803F8180[] = { {
     0x00000000,
@@ -58,15 +58,14 @@ ItemStateTable it_803F8180[] = { {
     it_802D5048,
 } };
 
-/* PC port: `extern inline` here gives this decomp-local sqrtf shim external
- * linkage under GCC's C99 semantics, so two files defining it collide at link
- * time (and both collide with libm). Give the PC copy internal linkage. */
+/* PC port: upstream dropped this decomp-local sqrtf in favour of <math.h>'s,
+ * which on the console is MSL's frsqrte Newton iteration but on the host is
+ * libm's exactly-rounded sqrt. Keep a host-only copy of the console's version
+ * so the arithmetic here still agrees; `extern inline` would give it external
+ * linkage under GCC's C99 semantics and collide with libm, so it is static. */
 #if BUILD_TARGET_PC
 #define sqrtf pc_local_sqrtf
 static inline float sqrtf(float x)
-#else
-extern inline float sqrtf(float x)
-#endif
 {
     volatile float y;
     if (x > 0.0f) {
@@ -79,6 +78,7 @@ extern inline float sqrtf(float x)
     }
     return x;
 }
+#endif
 
 void it_2725_Logic24_Spawned(Item_GObj* gobj)
 {
@@ -209,7 +209,7 @@ bool it_802D4564(Item_GObj* gobj)
     return false;
 }
 
-inline Article* it_802D472C_inline(Item* ip)
+static inline Article* it_802D472C_inline(Item* ip)
 {
     return ip->xC4_article_data;
 }

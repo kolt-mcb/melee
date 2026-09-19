@@ -23,8 +23,6 @@
 #include "lb/lbvector.h"
 #include "mp/mpcoll.h"
 
-#include <math.h>
-
 /* DEG_TO_RAD is a double constant, so the rotation nudges are double
  * fmadds on the console (8028713C/718C), rounded to single once. */
 #if BUILD_TARGET_PC
@@ -159,8 +157,10 @@ void it_80286248(Item_GObj* gobj, s32 arg1, s32 arg2, s32 arg3, s32 arg4)
     }
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 bool it_80286340(Item_GObj* gobj, s32 arg1, s32 arg2, s32 arg3, s32 arg4)
 {
     s32 sum1 = arg1 + arg2;
@@ -177,7 +177,9 @@ bool it_80286340(Item_GObj* gobj, s32 arg1, s32 arg2, s32 arg3, s32 arg4)
     }
     return false;
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 /// Check if box bounced off a surface nearly upright. If the bounce angle
 /// relative to vertical is below threshold, clear velocity vectors and

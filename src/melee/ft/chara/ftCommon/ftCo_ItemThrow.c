@@ -15,6 +15,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0DF1.h"
 #include "ft/ftanim.h"
 #include "ft/ftcommon.h"
@@ -25,9 +26,6 @@
 
 #include "ftCommon/ftCo_Fall.h"
 #include "ftCommon/types.h"
-
-#include "it/forward.h"
-
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/item.h"
@@ -37,7 +35,6 @@
 #include <baselib/forward.h>
 
 #include <math.h>
-#include <trigf.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -47,23 +44,13 @@
 #define IT2_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
-/* 094D70 */ bool ftCo_800951D0(Fighter_GObj* gobj);
-#if BUILD_TARGET_PC
-/* 094E7C */
-/* Declared without `static` here on purpose. ftCo_Attack100.c calls this
- * across the TU boundary, but the static declaration gives the definition
- * below internal linkage, and since nothing in this file calls it the compiler
- * drops it entirely -- so that cross-TU call bound to the do-nothing weak stub
- * in src/pc_stub/undef_stubs.c instead. Found with MELEE_STUBLOG=1, which
- * names every stub a run actually reaches. */
-bool ftCo_800952DC(Fighter_GObj* gobj);
-#else
-/* 094E7C */ static bool ftCo_800952DC(Fighter_GObj* gobj);
-#endif
-/* 0952C8 */ static UNK_RET lbl_80095728(UNK_PARAMS);
-/* 0952D8 */ static UNK_RET lbl_80095738(UNK_PARAMS);
+/* ftCo_800952DC must keep external linkage -- ftCo_Attack100.c calls it across
+ * the TU boundary. While it was declared `static` here the compiler dropped
+ * the definition (nothing in this file calls it) and that cross-TU call bound
+ * to the do-nothing weak stub in src/pc_stub/undef_stubs.c instead. Found with
+ * MELEE_STUBLOG=1, which names every pc_stub a run actually reaches. Upstream
+ * now declares it in ftCo_ItemThrow.h, which is what keeps it exported. */
 /* 09549C */ static void ftCo_800958FC(Fighter_GObj* gobj, int);
-/* 095540 */ static UNK_RET ftCo_800959A0(UNK_PARAMS);
 /* 0955D0 */ static void ftCo_80095A30(Fighter_GObj* gobj);
 /* 0958FC */ static void ftCo_80095D5C(Fighter* fp, Vec3* arg1);
 /* 095A9C */ static void ftCo_80095EFC(Fighter_GObj* gobj);
@@ -73,13 +60,18 @@ bool ftCo_800952DC(Fighter_GObj* gobj);
 /* static */ double const ftCo_804D85A0 = 4503601774854144;
 /* static */ float const ftCo_804D85A8 = 1;
 /* static */ float const ftCo_804D85AC = 0.01;
-/* static */ float const ftCo_804D85B0 = deg_to_rad;
+/* static */ float const ftCo_804D85B0 = MTXDegToRad(1);
 
 typedef struct ftCo_ItemThrowAttrs {
     float velocity_mul;
     float angle;
     float x8;
 } ftCo_ItemThrowAttrs;
+
+typedef struct ftCo_ItemThrowCmd {
+    /* +0:0  */ u32 pad : 20;
+    /* +0:20 */ s32 angle : 12;
+} ftCo_ItemThrowCmd;
 
 bool ftCo_80094E54(Fighter* fp)
 {
@@ -91,7 +83,7 @@ bool ftCo_80094E54(Fighter* fp)
     return false;
 }
 
-int ftCo_80094EA4(HSD_GObj* gobj)
+bool ftCo_80094EA4(HSD_GObj* gobj)
 {
     float stick_angle;
     float var_f28;
@@ -125,8 +117,8 @@ int ftCo_80094EA4(HSD_GObj* gobj)
     } else {
         return false;
     }
-    if (ABS(stick_x) >= p_ftCommonData->x3C &&
-        var_f28 < p_ftCommonData->x40 + p_ftCommonData->x44)
+    if (ABS(stick_x) >= p_ftCommonData->dash_smash_stick_threshold &&
+        var_f28 < p_ftCommonData->dash_smash_window + p_ftCommonData->x44)
     {
         msid = stick_x * fp->facing_dir >= 0.0f ? ftCo_MS_HeavyThrowF4
                                                 : ftCo_MS_HeavyThrowB4;
@@ -176,7 +168,7 @@ int ftCo_80094EA4(HSD_GObj* gobj)
     return false;
 }
 
-int ftCo_8009515C(Fighter_GObj* gobj)
+bool ftCo_8009515C(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
     if (fp->item_gobj != NULL && fp->input.x668 & HSD_PAD_A) {
@@ -319,7 +311,7 @@ static void ftCo_80095700(Fighter_GObj* gobj, enum_t arg1)
     }
 }
 
-void ftCo_80095744(Fighter_GObj* gobj, int* arg1)
+void ftCo_80095744(Fighter_GObj* gobj, bool* arg1)
 {
     Vec3 vec;
     Fighter* fp = gobj->user_data;
@@ -333,15 +325,15 @@ void ftCo_80095744(Fighter_GObj* gobj, int* arg1)
             ftCo_Fall_Enter(gobj);
         }
         if (arg1 != NULL) {
-            *arg1 = 1;
+            *arg1 = true;
         }
     } else if (arg1 != NULL) {
-        *arg1 = 0;
+        *arg1 = false;
     }
     Item_8026ABD8(fp->item_gobj, &vec, 1);
 }
 
-inline float getAnimSpeed(Fighter_GObj* gobj, int msid)
+static inline float getAnimSpeed(Fighter_GObj* gobj, int msid)
 {
     Fighter* fp;
     float speed = 1;
@@ -428,8 +420,8 @@ void ftCo_80095A30(HSD_GObj* gobj)
     if (var_f1 < 0.0f) {
         var_f1 = -var_f1;
     }
-    if (var_f1 >= p_ftCommonData->x3C &&
-        fp->x673 < p_ftCommonData->x40 + p_ftCommonData->x44)
+    if (var_f1 >= p_ftCommonData->dash_smash_stick_threshold &&
+        fp->x673 < p_ftCommonData->dash_smash_window + p_ftCommonData->x44)
     {
         if (fp->input.lstick.x * fp->facing_dir >= 0.0f) {
             var_r0 = 0x6C;
@@ -501,38 +493,34 @@ void ftCo_80095D5C(Fighter* fp, Vec3* arg1)
 {
     float vel;
     float angle;
+    float vel_mul;
     u8* array_element;
+    ftCo_DatAttrs* co_attrs = getFtAttrs(fp);
     u32 cmd_var0 = fp->cmd_vars[0];
 
     vel = 1;
     if (cmd_var0 != 0) {
         vel = 0.01f * ((cmd_var0 >> 12) & 0x3FF);
     }
-#if BUILD_TARGET_PC
-    /* The original indexes Fighter_804D6550 as a *pointer array* --
-     * &Fighter_804D6550[motion_id * 3] -- which is four bytes a step on the
-     * console, so the byte offset is motion_id * 12. Writing the (u8*) cast
-     * first makes it motion_id * 1, which lands three quarters of the way
-     * back into the wrong record. The check is the other reader:
-     * ftCo_80095EFC indexes the same table as {velocity_mul, angle, x8}
-     * records from ftCo_MS_LightThrowF, and motion*12 - 0x468 is exactly
-     * (motion - ftCo_MS_LightThrowF) * 12.
-     *
-     * With Fighter_804D6550 on the zero arena this read 0 either way; once
-     * the table is real, the wrong stride is the difference between a thrown
-     * item leaving the hand at 2.4 units a frame and not moving at all. */
-    array_element = (u8*) Fighter_804D6550 + (fp->motion_id * 3) * 4;
-#else
-    array_element = (u8*) Fighter_804D6550 + (fp->motion_id * 3);
-#endif
-    vel *= fp->co_attrs.item_throw_velocity_multiplier *
-           *(float*) (array_element - 0x468);
+    /* The table is {velocity_mul, angle, x8} records, so the step is 12
+     * bytes: `array_element + motion_id * 12`, never `(u8*) tbl + motion_id *
+     * 3`, which lands three quarters of the way back into the wrong record.
+     * ftCo_80095EFC is the other reader and indexes the same records from
+     * ftCo_MS_LightThrowF; motion*12 - 0x468 is (motion - LightThrowF) * 12.
+     * On the zero arena either stride read 0; once the table is real it is
+     * the difference between a thrown item leaving the hand at 2.4 units a
+     * frame and not moving at all. */
+    array_element = (u8*) Fighter_804D6550;
+    vel_mul = co_attrs->item_throw_velocity_multiplier;
+    co_attrs = (ftCo_DatAttrs*) (array_element + fp->motion_id * 12);
+    array_element = (u8*) co_attrs;
+    vel *= vel_mul * *(float*) (array_element - 0x468);
     if (cmd_var0 != 0) {
-        int int_angle = (s32) (cmd_var0 << 20) >> 20;
+        int int_angle = ((ftCo_ItemThrowCmd*) fp->cmd_vars)->angle;
         if (int_angle == 361) {
             angle = *(float*) (array_element - 0x464);
         } else {
-            angle = deg_to_rad * int_angle;
+            angle = MTXDegToRad(int_angle);
         }
         fp->cmd_vars[0] = 0;
     } else {
@@ -570,14 +558,18 @@ void ftCo_ItemThrow_Anim(Fighter_GObj* gobj)
     }
 }
 
+static inline float getItemThrowFsm(Fighter* fp)
+{
+    return -fp->cmd_timer / fp->frame_speed_mul;
+}
+
 void ftCo_80095EFC(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
+    float interpolation;
     Vec3 vec0;
     Vec3 vec1;
     Vec3 vec2;
-
-    PAD_STACK(0x8);
 
     if (fp->item_gobj != NULL) {
         lb_8000B1CC(it_80272C90(fp->item_gobj), NULL, &vec0);
@@ -592,24 +584,34 @@ void ftCo_80095EFC(Fighter_GObj* gobj)
                     fp->cmd_vars[1] = 0;
                 }
                 {
-                    float fsm = -fp->cmd_timer / fp->frame_speed_mul;
-                    float cd_xB4 = co_attrs->xB4;
-                    float base_throw_speed =
-                        cd_xB4 * ((ftCo_ItemThrowAttrs*)
-                                      Fighter_804D6550)[fp->motion_id -
-                                                        ftCo_MS_LightThrowF]
-                                     .x8;
-                    float throw_speed = throw_scale * base_throw_speed;
+                    float fsm = getItemThrowFsm(fp);
+                    ftCo_ItemThrowAttrs* throw_speed_arr;
+                    float velocity_multiplier;
+                    float table_speed;
+                    float base_throw_speed;
+                    float throw_speed;
+                    interpolation = fp->mv.co.itemthrow4.x8.x;
+                    throw_speed_arr = (ftCo_ItemThrowAttrs*) Fighter_804D6550;
+                    velocity_multiplier =
+                        co_attrs->heavy_throw_velocity_multiplier;
+                    table_speed =
+                        throw_speed_arr[fp->motion_id - ftCo_MS_LightThrowF]
+                            .x8;
+                    base_throw_speed = velocity_multiplier * table_speed;
+                    throw_scale *= base_throw_speed;
+                    throw_speed = throw_scale;
+                    interpolation = IT2_FMA(fsm, interpolation - vec0.x, vec0.x);
+                    vec2.x = interpolation;
+                    interpolation = IT2_FMA(
+                        fsm, fp->mv.co.itemthrow4.x8.y - vec0.y, vec0.y);
+                    vec2.y = interpolation;
+                    vec2.z = 0;
+                    pl_8003E978(fp->player_id, fp->x221F_b4, fp->item_gobj,
+                                interpolation, base_throw_speed,
+                                velocity_multiplier, throw_speed, vec0.x,
+                                vec0.y, fsm);
                     {
-                        vec2.x = IT2_FMA(fsm, fp->mv.co.itemthrow4.x8.x - vec0.x, vec0.x);
-                        {
-                            vec2.y = IT2_FMA(fsm, fp->mv.co.itemthrow4.x8.y - vec0.y, vec0.y);
-                            vec2.z = 0;
-                            pl_8003E978(fp->player_id, fp->x221F_b4,
-                                        fp->item_gobj, vec2.y,
-                                        base_throw_speed, cd_xB4, throw_speed,
-                                        vec0.x, vec0.y, fsm);
-                        }
+                        FtMoveId msid = fp->motion_id;
 #if BUILD_TARGET_PC
                         /* MELEE_THROWPOS=1: where a thrown item is released
                          * from. vec0 is the item's attach bone, x8 the throw
@@ -652,29 +654,25 @@ void ftCo_80095EFC(Fighter_GObj* gobj)
                             }
                         }
 #endif
-                        {
-                            FtMoveId msid = fp->motion_id;
-                            if (msid == (FtMoveId) ftCo_MS_LightThrowDrop) {
-                                Item_8026AC74(fp->item_gobj, &vec2, &vec1,
-                                              throw_speed);
-                            } else if (msid >= (FtMoveId) ftCo_MS_LightThrowF4)
-                            {
-                                if (itIsHeavy(fp->item_gobj) == 1) {
-                                    ftCommon_8007EBAC(fp, 29, 0);
-                                } else {
-                                    ftCommon_8007EBAC(fp, 27, 0);
-                                }
-                                Item_8026AD20(fp->item_gobj, &vec2, &vec1,
-                                              throw_speed);
+                        if (msid == (FtMoveId) ftCo_MS_LightThrowDrop) {
+                            Item_8026AC74(fp->item_gobj, &vec2, &vec1,
+                                          throw_speed);
+                        } else if (msid >= (FtMoveId) ftCo_MS_LightThrowF4) {
+                            if (itIsHeavy(fp->item_gobj) == 1) {
+                                ftCommon_8007EBAC(fp, 29, 0);
                             } else {
-                                if (itIsHeavy(fp->item_gobj) == 1) {
-                                    ftCommon_8007EBAC(fp, 28, 0);
-                                } else {
-                                    ftCommon_8007EBAC(fp, 26, 0);
-                                }
-                                Item_8026AD20(fp->item_gobj, &vec2, &vec1,
-                                              throw_speed);
+                                ftCommon_8007EBAC(fp, 27, 0);
                             }
+                            Item_8026AD20(fp->item_gobj, &vec2, &vec1,
+                                          throw_speed, true);
+                        } else {
+                            if (itIsHeavy(fp->item_gobj) == 1) {
+                                ftCommon_8007EBAC(fp, 28, 0);
+                            } else {
+                                ftCommon_8007EBAC(fp, 26, 0);
+                            }
+                            Item_8026AD20(fp->item_gobj, &vec2, &vec1,
+                                          throw_speed, false);
                         }
                     }
                 }
@@ -692,8 +690,10 @@ void ftCo_ItemThrow_Phys(Fighter_GObj* gobj)
     ft_80084F3C(gobj);
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma global_optimizer off
+#endif
 void ftCo_LightThrowDash_Phys(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -702,14 +702,16 @@ void ftCo_LightThrowDash_Phys(Fighter_GObj* gobj)
         if (cd != NULL) {
             // Needed for matching register allocation.
         }
-        ft_80085030(gobj, (cd->x404 * fp->co_attrs.gr_friction) * cd->x40C,
+        ft_80085030(gobj, (cd->x404 * fp->co_attrs.ground_friction) * cd->x40C,
                     fp->facing_dir);
     } else {
-        ft_80085030(gobj, p_ftCommonData->x404 * fp->co_attrs.gr_friction,
+        ft_80085030(gobj, p_ftCommonData->x404 * fp->co_attrs.ground_friction,
                     fp->facing_dir);
     }
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void ftCo_LightThrowAir_Phys(Fighter_GObj* gobj)
 {

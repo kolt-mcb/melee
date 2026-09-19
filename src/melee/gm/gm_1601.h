@@ -1,6 +1,8 @@
 #ifndef GALE01_1601C4
 #define GALE01_1601C4
 
+#include <placeholder.h>
+
 #include "ft/forward.h"
 #include "gm/forward.h"
 #include "mn/forward.h"
@@ -8,6 +10,8 @@
 #include "mn/types.h"
 
 #include "sc/forward.h"
+
+#include <dolphin/gx.h>
 
 #define NUM_UNLOCKABLE_CHARACTERS 11
 #define NUM_UNLOCKABLE_STAGES 11
@@ -30,7 +34,7 @@
 /* 1607F4 */ u8 fn_801607F4(int);
 /* 160840 */ u8 fn_80160840(u8);
 /* 160854 */ u32 gm_80160854(u8, u8, u8, u8);
-/* 160968 */ GXColor gm_80160968(u8);
+/* 160968 */ GXColor gm_80160968(u32);
 /* 160980 */ const char* gm_80160980(u8 ckind);
 /* 1609E0 */ const char* fn_801609E0(u8 ckind);
 /* 160A60 */ const char* gm_80160A60(int);
@@ -48,16 +52,16 @@
 /* 1623FC */ UNK_RET gm_801623FC(int);
 /* 16247C */ s32 gm_8016247C(s32);
 /* 162574 */ void gm_80162574(u8, u8);
-/* 16260C */ void gm_8016260C(u8, u8);
+/* 16260C */ void gm_SetupHumanResultsScreen(u8, u8);
 /* 16279C */ u32 gm_GetVsPlayMatchTotal(void);
 /* 162800 */ u32 gm_80162800(struct MatchEnd*);
-/* 1628C4 */ void gm_801628C4(u32, u32);
-/* 162968 */ long gm_80162968(u32 seconds);
-/* 1629B4 */ long gm_801629B4(s32 amount);
-/* 162A00 */ long gm_GetPlayTime(void);
-/* 162A4C */ long gm_80162A4C(s32 amount);
+/* 1628C4 */ void gm_SetupResultsScreenPlayTime(u32, u32);
+/* 162968 */ s32 gm_80162968(u32 seconds);
+/* 1629B4 */ s32 gm_801629B4(s32 amount);
+/* 162A00 */ s32 gm_GetPlayTime(void);
+/* 162A4C */ s32 gm_80162A4C(s32 amount);
 /* 162A98 */ struct gmm_x1868_1A8_t* gm_80162A98(s32);
-/* 162B4C */ void gm_80162B4C(s32 amount);
+/* 162B4C */ void gm_RecordSelfDestructs(s32 amount);
 /* 162B98 */ void gm_IncrementPowerCount(void);
 /* 162BD8 */ int gm_80162BD8(u8);
 /* 162BFC */ bool fn_80162BFC(s8 ckind, int);
@@ -151,10 +155,9 @@
 /* 1661E0 */ s32 fn_801661E0(MatchEnd*);
 /* 166378 */ void gm_80166378(struct lbl_8046B6A0_24C_t*);
 /* 166A98 */ s32 gm_80166A98(MatchEnd*, u8, s8, u8, s8, u8, s8, u8, u8, u8);
-/* 166CBC */ s32 gmCamera_801A2640(void);
 /* 166CBC */ u8 fn_80166CBC(MatchEnd*, ssize_t index);
 /* 166CCC */ void gm_80166CCC(MatchEnd*, MatchEnd*);
-/* 167140 */ bool gm_80167140(MatchEnd*);
+/* 167140 */ bool gm_MatchHasMultipleWinners(MatchEnd*);
 /* 167194 */ int fn_80167194(MatchEnd*);
 /* 16719C */ void fn_8016719C(s32, s32);
 /* 167320 */ void gm_80167320(int slot, bool);
@@ -165,12 +168,12 @@
 /* 1677C0 */ void gm_801677C0(struct gm_801677C0_s* arg0);
 /* 1677E8 */ void gm_801677E8(s8 arg0);
 /* 1677F0 */ u8 gm_801677F0(void);
-/* 1677F8 */ bool gm_801677F8(int port, int);
+/* 1677F8 */ bool gm_RumbleEnabledForPlayer(int port, int nametag);
 /* 167858 */ void gm_80167858(int port, int, int, int);
 /* 1678F8 */ void gm_801678F8(int port, int, int);
-/* 16795C */ void gm_8016795C(struct PlayerInitData*);
+/* 16795C */ void gm_SetupPlayerDefaults(struct PlayerInitData*);
 /* 167A14 */ void gm_80167A14(struct PlayerInitData*);
-/* 167A64 */ void gm_80167A64(struct StartMeleeRules*);
+/* 167A64 */ void gm_SetupRulesDefaults(struct StartMeleeRules*);
 /* 167B50 */ void gm_80167B50(struct VsModeData*);
 /* 167BC8 */ void gm_80167BC8(struct VsModeData*);
 /* 167FC4 */ void gm_80167FC4(struct SSSData*);
@@ -189,56 +192,12 @@
 /* 168F2C */ void fn_80168F2C(s8);
 /* 168F7C */ UNK_RET fn_80168F7C(UNK_PARAMS);
 /* 168F88 */ void gm_80168F88(void);
-/* 168FC4 */ void gm_80168FC4(void);
-/* 169000 */ s32 fn_80169000(void* arg0, void* arg1);
+/* 168FC4 */ void gm_LoadAnnouncer(void);
+/* 169000 */ void fn_80169000(MatchEnd* arg0, u8* arg1);
 /* 169238 */ u8 gm_80169238(u8);
 /* 169264 */ u8 gm_80169264(u8);
 /* 169290 */ u8 gm_80169290(u8);
 /* 1692BC */ u8 gm_801692BC(u8);
 /* 1692E8 */ void gm_801692E8(u32 secs, datetime* datetime);
-/* 169364 */ struct lbl_8046B488_t* gm_1601_GetUnkData(void);
-/* 169370 */ u8 gm_80169370(s32);
-/* 169384 */ int gm_80169384(void);
-/* 169394 */ s32 gm_80169394(void);
-/* 1693BC */ bool gm_801693BC(int);
-/* 169434 */ void fn_80169434(GmRouteCallback fn);
-/* 169444 */ bool fn_80169444(bool);
-/* 1694A0 */ int gm_801694A0(HSD_GObj*);
-/* 169520 */ void* gm_80169520(void);
-/* 169530 */ void* gm_80169530(void);
-/* 169540 */ void* gm_80169540(void);
-/* 169550 */ void fn_80169550(int slot);
-/* 169574 */ void fn_80169574(ssize_t size, s8* buf);
-/* 1695BC */ void fn_801695BC(u8, u8, u8, u8*, u8*);
-/* 1697FC */ void fn_801697FC(signed char, signed char, signed char,
-                              signed char, signed char*);
-/* 16989C */ void fn_8016989C(unsigned char*, u8, u8, u8*, u8*);
-/* 169900 */ void fn_80169900(unsigned char, struct lbl_8046B488_t*,
-                              signed char*, signed char*);
-/* 169A84 */ long fn_80169A84(u8, s8*, s8*);
-/* 169C54 */ void fn_80169C54(s8, s8);
-/* 169F50 */ UNK_RET fn_80169F50(s8, s8);
-/* 16A09C */ UNK_RET fn_8016A09C(UNK_PARAMS);
-/* 16A164 */ UNK_RET gm_8016A164(UNK_PARAMS);
-/* 16A1F8 */ bool gm_8016A1F8(void);
-/* 16A21C */ void gm_8016A21C(StartMeleeRules*);
-/* 16A22C */ s32 gm_8016A22C(s8 ckind0, s8 ckind1, s8 ckind2, u8, u8, int,
-                              int, int, u8 color, u8, u8, int opp_count, int,
-                              int, int, int, int, f32, f32);
-/* 16A404 */ void gm_8016A404(s32 arg0);
-/* 16A414 */ void gm_8016A414(f32 arg8);
-/* 16A424 */ void gm_8016A424(s8 arg0);
-/* 16A434 */ void gm_8016A434(void);
-/* 16A450 */ void fn_8016A450(void);
-/* 16A46C */ void fn_8016A46C(void);
-/* 16A488 */ void fn_8016A488(s32);
-/* 16A4C8 */ void fn_8016A4C8(void);
-/* 16A92C */ void gm_8016A92C(StartMeleeRules*);
-/* 16A944 */ bool gm_8016A944(UNK_PARAMS);
-/* 16A97C */ void* gm_8016A97C(void);
-/* 16A98C */ struct lbl_8046B668_t* gm_8016A98C(void);
-/* 16A998 */ int gm_8016A998(s8, s8);
-/* 16A9E8 */ int gm_8016A9E8(u8 arg0, s8 arg1);
-/* 16AC44 */ bool gm_8016AC44(s8 ckind, s8 costume_id);
 
 #endif

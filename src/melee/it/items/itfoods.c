@@ -1,11 +1,12 @@
 #include "it/items/itfoods.h"
 
 #include "it/inlines.h"
-#include "it/it_266F.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/item.h"
 #include "it/items/types.h"
+#include "it/itgroundcoll.h"
+#include "it/itspawn.h"
 #include "sysdolphin/baselib/random.h"
 
 #include <baselib/gobj.h>
@@ -82,7 +83,7 @@ HSD_GObj* it_8028FAF4(Item_GObj* arg0, Vec3* arg1)
     return gobj;
 }
 
-inline u32 getRandMax(Article* article)
+static inline u32 getRandMax(Article* article)
 {
     itFoodsAttributes* attr = article->x4_specialAttributes;
     return attr->x0;

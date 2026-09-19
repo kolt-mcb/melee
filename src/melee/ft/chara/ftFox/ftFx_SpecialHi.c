@@ -1,13 +1,14 @@
 #include "ftFx_SpecialHi.h"
 
-#include "math.h"
-
 #include <platform.h>
 
-#include "ef/eflib.h"
 #include "ef/efsync.h"
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcliffcommon.h"
@@ -19,9 +20,9 @@
 #include "ftCommon/ftCo_Pass.h"
 #include "ftCommon/inlines.h"
 #include "ftFox/types.h"
-#include "lb/lbrefract.h"
 #include "lb/lbvector.h"
 
+#include <math.h>
 #include <dolphin/mtx.h>
 
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
@@ -168,7 +169,8 @@ void ftFx_SpecialHiHoldAir_Phys(HSD_GObj* gobj)
     if (fp->mv.fx.SpecialHi.gravityDelay != 0) {
         fp->mv.fx.SpecialHi.gravityDelay -= 1;
     } else {
-        ftCommon_Fall(fp, da->x60_FOX_FIREFOX_FALL_ACCEL, ca->terminal_vel);
+        ftCommon_Fall(fp, da->x60_FOX_FIREFOX_FALL_ACCEL,
+                      ca->terminal_velocity);
     }
 
     ftCommon_ApplyFrictionAir(fp, da->x5C_FOX_FIREFOX_AIR_MOMENTUM_PRESERVE_X);
@@ -746,7 +748,7 @@ void ftFx_SpecialHiBound_Coll(HSD_GObj* gobj)
     }
 }
 
-inline void ftFox_SpecialHiBound_SetVars(HSD_GObj* gobj)
+static inline void ftFox_SpecialHiBound_SetVars(HSD_GObj* gobj)
 {
     vf32 f; // I have a feeling this is a Vec3 struct however
     Fighter* fp = fp = gobj->user_data;

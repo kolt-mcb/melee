@@ -55,6 +55,34 @@ float __fabsf(float);
 #define ABS(x) ((x) < 0 ? -(x) : (x))
 #endif
 
+/* Three macros the August upstream merge moved into Runtime/platform.h,
+ * which this build never reads: src/port/platform.h answers
+ * `#include <platform.h>` instead, and src/placeholder.h -- where UNUSED and
+ * ASM used to live -- no longer defines them. They are defined here rather
+ * than in port/platform.h because this file is force-included ahead of
+ * everything: placeholder.h spells PAD_STACK with UNUSED and no longer
+ * includes <platform.h>, so include order would otherwise decide whether a
+ * translation unit compiles.
+ *
+ *  - UNUSED marks a padding local the compiler would warn about.
+ *  - ASM marks MWCC's inline-assembly definitions. Runtime/runtime.h now
+ *    declares the MSL integer and float helpers as `ASM u64 f(double)`;
+ *    undefined, GCC read ASM as a type name, threw out every declaration in
+ *    the header, and left __cvt_dbl_usll implicitly declared -- which passes
+ *    its double argument in a general register.
+ *  - ASSERT_SIZE asserts a struct's console size. Those sizes cannot hold
+ *    where a pointer is eight bytes, so it is empty here, exactly as
+ *    Runtime/platform.h leaves it outside a MUST_MATCH build. */
+#ifndef UNUSED
+#define UNUSED __attribute__((unused))
+#endif
+#ifndef ASM
+#define ASM
+#endif
+#ifndef ASSERT_SIZE
+#define ASSERT_SIZE(expr, size)
+#endif
+
 /* A handful of .c-local helpers are declared plain `inline` (C99: no
  * out-of-line body). GCC inlined every call; Clang leaves some out of line
  * and the link fails with an undefined symbol. On PC they are static. */

@@ -19,7 +19,6 @@
 #include "lb/types.h" // IWYU pragma: keep
 #include "sc/types.h"
 
-#include <math.h>
 #include <baselib/generator.h>
 #include <baselib/gobjobject.h>
 #include <baselib/gobjplink.h>
@@ -36,8 +35,6 @@
 
 /* 1C9BC8 */ static void grLib_801C9BC8(HSD_GObj*);
 /* 1C9C40 */ static void grLib_801C9C40(HSD_GObj*);
-
-extern HSD_Generator* hsd_804D78FC;
 
 static VecMtx grLib_8049EF58;
 static Vec3 grLib_unusedvec1;
@@ -120,7 +117,7 @@ void grLib_801C98A0(HSD_JObj* jobj)
     }
 }
 
-inline HSD_JObj* jobj_child(HSD_JObj* node)
+static inline HSD_JObj* jobj_child(HSD_JObj* node)
 {
     if (node == NULL) {
         return NULL;
@@ -128,7 +125,7 @@ inline HSD_JObj* jobj_child(HSD_JObj* node)
     return node->child;
 }
 
-inline HSD_JObj* jobj_next(HSD_JObj* node)
+static inline HSD_JObj* jobj_next(HSD_JObj* node)
 {
     if (node == NULL) {
         return NULL;
@@ -198,10 +195,6 @@ void grLib_801C9A70(enum_t arg0, Vec3* v)
         break;
     default:
         HSD_ASSERT(290, 0);
-#ifdef BUGFIX
-        // Asserts 0 but the compiler doesn't know that.
-        return;
-#endif
     }
     *v = grLib_8049EF58[i];
 }
@@ -270,7 +263,7 @@ HSD_GObj* grLib_801C9CEC(s32 idx1)
     gobj = GObj_Create(HSD_GOBJ_CLASS_STAGE, 18, tmp);
     jobj = HSD_JObjLoadJoint(stage_info.quake_model_set->joint);
 
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     if (idx1 == 1) {
         HSD_GObj_SetupProc(gobj, grLib_801C9BC8, 1);
     } else {

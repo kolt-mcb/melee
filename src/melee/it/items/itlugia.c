@@ -6,12 +6,11 @@
 #include "ef/eflib.h"
 #include "gr/stage.h"
 #include "it/inlines.h"
-#include "it/it_266F.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/it_279C.h"
 #include "it/item.h"
-#include "it/itmaplib.h"
+#include "it/itgroundcoll.h"
 #include "lb/lb_00B0.h"
 #include "lb/lbvector.h"
 
@@ -60,7 +59,7 @@ static inline float my_sqrtf(float x)
     return x;
 }
 
-inline float my_sqrtf_accurate(float x)
+static inline float my_sqrtf_accurate(float x)
 {
     volatile float y;
     if (x > 0.0f) {
@@ -470,14 +469,19 @@ void it_802D208C(Item_GObj* gobj)
         }
 
         target = ip->xDD4_itemVar.lugia.x8C;
-        angle = deg_to_rad * new_angle;
+        angle = MTXDegToRad(new_angle);
         target.x = LG_FMA(attrs->x3C, cosf(angle), target.x);
         target.y = LG_FMA(attrs->x3C, sinf(angle), target.y);
 
         // permuterslop
         dx = dz = ip->xDD4_itemVar.lugia.x64.x - target.x;
         dy = ip->xDD4_itemVar.lugia.x64.y - target.y;
-        dz = (dz = ip->xDD4_itemVar.lugia.x64.z) - target.z;
+        dz = (
+#ifdef MUST_MATCH
+                 dz =
+#endif
+                     ip->xDD4_itemVar.lugia.x64.z) -
+             target.z;
         {
             f32 dx2 = dx * dx;
             f32 dy2 = dy * dy;

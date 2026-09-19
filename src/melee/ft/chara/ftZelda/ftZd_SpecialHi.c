@@ -4,7 +4,11 @@
 
 #include "ef/efsync.h"
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcliffcommon.h"
@@ -23,9 +27,7 @@
 #include "lb/lbvector.h"
 
 #include <math.h>
-#include <trigf.h>
 #include <dolphin/mtx.h>
-#include <MetroTRK/intrinsics.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
