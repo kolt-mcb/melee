@@ -75,6 +75,55 @@ over Slippi netplay in 2020, Smash World Tour in 2022, and the 2023 community
 tournament guidelines. **Avoid netplay branding**, and avoid anything that
 looks like a competing service.
 
+## The 2026 wave of native ports (checked 2026-09-18)
+
+Between 24 August and 14 September 2026 a cluster of public native Melee ports
+appeared, all built on the same decompilation this one is. Every one of them
+ships source only and requires the player to supply their own disc.
+
+| Repository | Created | Stars | Self-applied licence | Fork of the decomp |
+|-|-|-|-|-|
+| `999sian/melee-pc` | 14 Sep | 321 | non-standard | no |
+| `Hero88go/melee-unlocked` | 12 Sep | 55 | GPL-2.0 | no |
+| `chrissotraidis/meleepad` (iOS) | 24 Aug | 35 | GPL-3.0 | no |
+| `t3dotgg/melee4mac` | 8 Sep | 33 | none | yes |
+| `jonrosner/melee-native` (Apple Silicon) | 8 Sep | 17 | none | yes |
+| `TheAndersMadsen/dashdance` (Mac/iOS/Vision Pro) | 13 Sep | 5 | GPL-2.0 | no |
+| `astelmach20/meleexr` (Quest/OpenXR) | 8 Sep | 2 | MIT | no |
+| `McDandle/melee-macos-recomp` | 8 Sep | 1 | GPL-3.0 | no |
+| `frankischilling/melee-web` (browser) | 7 Sep | 0 | GPL-3.0 | no |
+| `ikz87/melee-unlocked` | 14 Sep | 0 | GPL-2.0 | yes |
+
+Three things worth drawing from it.
+
+**Bring-your-own-disc is now the settled norm**, not a cautious minority
+position. Every repository above states it in its own description.
+
+**Most of them are not forks.** Six of the ten are standalone repositories, so
+they cannot be relying on the Terms of Service forking basis this project
+leans on. Several also apply a licence of their own — GPL-2.0, GPL-3.0, MIT —
+to code whose upstream grants none, which is precisely the move
+[LEGAL.md](../../LEGAL.md) declines to make. That difference is deliberate
+here and is worth keeping.
+
+**Two repositories from the same list are already gone.**
+`alexscott2718-gif/melee-port` and `alexscott2718-gif/melee-xp` return 404.
+Neither appears in GitHub's DMCA archive, so the likeliest explanation is that
+the owner removed them; it is not evidence of enforcement, and it is not
+evidence of safety either.
+
+A fresh check of `github/dmca` on 2026-09-18 found no Nintendo notice against
+any Melee decompilation or port. The only Melee entry is
+`2026-08-17-training-mod.md`, and it is not Nintendo: a community author
+reported someone re-uploading the author's own paid training tool.
+
+One structural fact from the same archive does bear on a fork, though. In the
+notice of 3 September 2026, GitHub processed a takedown "against the entire
+network of 377 repositories, inclusive of the parent repository", because the
+reported network exceeded a hundred repositories and the submitter alleged the
+forks infringed to the same extent. Publishing inside a fork network means
+sharing that fate if the network is ever reported as a whole.
+
 ## Consequences for this repository
 
 1. **Source only, no release binaries.** GitHub's Terms of Service grant other
