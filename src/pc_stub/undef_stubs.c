@@ -1352,6 +1352,11 @@ struct pc_pad_event {
     /* Which controller. Defaults to 0; "1200:P2:a" drives the second, which
      * the character select needs -- one pad cannot pick two fighters. */
     int pad;
+    /* Repeat period in frames, 0 for a one-shot. "1200+180:a" presses A from
+     * frame 1200 and again every 180 frames after it. A run long enough to
+     * play a campaign needs thousands of presses to clear result screens,
+     * and spelling each one out overflows the table. */
+    long period;
 };
 
 static struct pc_pad_event g_pad_script[PC_PAD_SCRIPT_MAX];
@@ -1420,6 +1425,8 @@ static void pc_pad_script_parse(void)
         if (sscanf(tok, "%ld:P%d:%31s", &frame, &which, name) == 3) {
             /* "1538:P2:a" -- one-based, as the console-side routes spell it */
             which -= 1;
+        } else if (sscanf(tok, "%ld+%*ld:%31s", &frame, name) == 2) {
+            /* "1200+180:a" -- start frame, repeat period, token */
         } else if (sscanf(tok, "%ld:%31s", &frame, name) != 2) {
             fprintf(stderr, "[PADSCRIPT] bad entry '%s'\n", tok);
             continue;
@@ -1434,6 +1441,17 @@ static void pc_pad_script_parse(void)
             hold = atoi(star + 1);
         }
         memset(&ev, 0, sizeof(ev));
+        {
+            /* The frame field may carry "+<period>" for a repeat. */
+            const char* plus = strchr(tok, '+');
+            const char* colon = strchr(tok, ':');
+            if (plus != NULL && colon != NULL && plus < colon) {
+                ev.period = atol(plus + 1);
+                if (ev.period < 1) {
+                    ev.period = 0;
+                }
+            }
+        }
         if (!pc_pad_token(name, &ev)) {
             continue;
         }
@@ -1506,7 +1524,14 @@ static void pc_pad_run_script(GCPadStatus* pad, int which)
         if (ev->pad != which) {
             continue;
         }
-        if (frame < ev->frame || frame >= ev->frame + hold) {
+        if (frame < ev->frame) {
+            continue;
+        }
+        if (ev->period > 0) {
+            if ((frame - ev->frame) % ev->period >= hold) {
+                continue;
+            }
+        } else if (frame >= ev->frame + hold) {
             continue;
         }
         if (ev->button == 0) {
