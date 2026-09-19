@@ -1,0 +1,30 @@
+MIT License
+
+Copyright (c) 2026 Kolt McBride and the PC port contributors
+
+SCOPE: This license covers only the PC port's own source and tooling --
+src/port/, src/pc_stub/, tools/pc/, tools/launcher/, tests/pc/, configure_pc.py,
+and the documentation written for them. It does NOT cover the decompiled game
+code under src/melee/ and src/sysdolphin/, the SDK reconstructions under
+extern/dolphin/, src/MSL/, src/MetroTRK/ and src/Runtime/, or the
+third-party tools vendored under tools/, each of which carries its own terms.
+See LEGAL.md for the full provenance breakdown. This repository contains no
+game data of any kind.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

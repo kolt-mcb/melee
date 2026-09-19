@@ -1,21 +1,17 @@
-Super Smash Bros Melee \
-[![Build Status]][actions]
-[![Code Progress]][progress]
-[![Data Progress]][progress]
-[![Linked Progress]][progress]
-[![Discord Badge]][discord]
-=============
+# Decompilation reference
 
-[<img src="https://decomp.dev/doldecomp/melee.svg?w=512&h=256" width="512" height="256">][Progress]
+This is the upstream [doldecomp/melee](https://github.com/doldecomp/melee)
+README, kept for the reference tables further down -- the two-letter module
+prefixes (`ft`, `gr`, `it`, ...), the per-character abbreviations (`Mr` =
+Mario, `Pr` = Jigglypuff), and the `sysdolphin` class names. Those are the
+decoder ring for reading this codebase and they are not written down anywhere
+else.
 
-[Build Status]: https://github.com/doldecomp/melee/actions/workflows/build.yml/badge.svg
-[actions]: https://github.com/doldecomp/melee/actions/workflows/build.yml
-[Code Progress]: https://decomp.dev/doldecomp/melee.svg?mode=shield&measure=code&label=Code&category=all
-[Data Progress]: https://decomp.dev/doldecomp/melee.svg?mode=shield&measure=complete_data&label=Data&category=all
-[Linked Progress]: https://decomp.dev/doldecomp/melee.svg?mode=shield&measure=complete_code&label=Linked%20Code&category=all
-[Discord Badge]: https://img.shields.io/discord/933849697485983765?color=%237289DA&logo=discord&logoColor=%23FFFFFF
-[discord]: https://discord.gg/hKx3FJJgrV
-[progress]: https://decomp.dev/doldecomp/melee
+Its build and contribution instructions describe the **GameCube** target, not
+this port. For the PC build see [pc/setup.md](pc/setup.md); the original text
+is left below unedited apart from the badges.
+
+---
 
 This repo contains a WIP decompilation of Super Smash Bros Melee (US).
 
@@ -66,7 +62,7 @@ sudo xattr -rd com.apple.quarantine '/Applications/Wine Crossover.app'
   ```
 - Using [Dolphin Emulator](https://dolphin-emu.org/), find your ISO and click `Properties`. Go to the `Filesystem` tab, right-click `Disc - GALE01` and select `Extract System Data`. Choose `orig/GALE01` of this repository.
   - To save space, only `main.dol` (and `.gitkeep`) are necessary. Other files can be deleted.
-  ![](assets/dolphin-extract.png)
+  ![](../.github/assets/dolphin-extract.png)
 - Configure:
   ```
   python configure.py
@@ -116,12 +112,12 @@ Download the latest release from [encounter/objdiff](https://github.com/encounte
 
 Select an object from the left sidebar to begin diffing. Changes to the project will rebuild automatically: changes to source files, headers, `configure.py`, `splits.txt` or `symbols.txt`.
 
-![](assets/objdiff.png)
+![](../.github/assets/objdiff.png)
 
 > [!TIP]
 > It's recommended that you enable the `Relax relocation diffs` option under `Diff Options`.
 
-![](assets/relax.png)
+![](../.github/assets/relax.png)
 
 # Contributing
 
