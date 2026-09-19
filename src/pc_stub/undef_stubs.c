@@ -1346,8 +1346,11 @@ struct pc_pad_event {
      * token may carry one: "300:right*40". */
     int hold;
     long frame;
-    u32 button; /* 0 for a stick event */
+    u32 button; /* 0 for a stick or C-stick event */
     int sx, sy;
+    /* A C-stick event moves the substick instead of the main stick, which
+     * is what a scripted smash attack needs. */
+    int csub;
     /* Which controller. Defaults to 0; "1200:P2:a" drives the second, which
      * the character select needs -- one pad cannot pick two fighters. */
     int pad;
@@ -1363,6 +1366,7 @@ static int pc_pad_token(const char* t, struct pc_pad_event* ev)
         const char* name;
         u32 button;
         int sx, sy;
+        int csub;
     } map[] = {
         { "neutral", 0, 0, 0 },      { "up", 0, 0, 80 },
         { "down", 0, 0, -80 },       { "left", 0, -80, 0 },
@@ -1375,6 +1379,10 @@ static int pc_pad_token(const char* t, struct pc_pad_event* ev)
         { "ddown", GC_BTN_DPAD_D, 0, 0 },
         { "dleft", GC_BTN_DPAD_L, 0, 0 },
         { "dright", GC_BTN_DPAD_R, 0, 0 },
+        /* C-stick: the right stick, which performs smash attacks. */
+        { "cneutral", 0, 0, 0, 1 },  { "cup", 0, 0, 80, 1 },
+        { "cdown", 0, 0, -80, 1 },   { "cleft", 0, -80, 0, 1 },
+        { "cright", 0, 80, 0, 1 },
     };
     size_t i;
     for (i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
@@ -1382,6 +1390,7 @@ static int pc_pad_token(const char* t, struct pc_pad_event* ev)
             ev->button = map[i].button;
             ev->sx = map[i].sx;
             ev->sy = map[i].sy;
+            ev->csub = map[i].csub;
             return 1;
         }
     }
@@ -1448,6 +1457,7 @@ static void pc_pad_run_script(GCPadStatus* pad, int which)
     /* Per controller: two pads sharing one `held` reported every edge twice
      * and every release on whichever ran second. */
     static int stick_x[4], stick_y[4];
+    static int csub_x[4], csub_y[4];
     static u32 held[4];
     long frame;
     u32 pressed = 0;
@@ -1489,6 +1499,8 @@ static void pc_pad_run_script(GCPadStatus* pad, int which)
     frame = g_pad_script_frame - 1;
     stick_x[which] = 0;
     stick_y[which] = 0;
+    csub_x[which] = 0;
+    csub_y[which] = 0;
     for (i = 0; i < g_pad_script_n; i++) {
         const struct pc_pad_event* ev = &g_pad_script[i];
         int hold = ev->hold > 0 ? ev->hold : PC_PAD_SCRIPT_HOLD;
@@ -1507,8 +1519,13 @@ static void pc_pad_run_script(GCPadStatus* pad, int which)
              * lasted -- one press moved one, two or three items depending on
              * how many frames elapsed and how loaded the machine was. Give
              * directions the same release window buttons already had. */
-            stick_x[which] = ev->sx;
-            stick_y[which] = ev->sy;
+            if (ev->csub) {
+                csub_x[which] = ev->sx;
+                csub_y[which] = ev->sy;
+            } else {
+                stick_x[which] = ev->sx;
+                stick_y[which] = ev->sy;
+            }
         } else {
             pressed |= ev->button;
         }
@@ -1516,6 +1533,10 @@ static void pc_pad_run_script(GCPadStatus* pad, int which)
 
     pad->stickX = (s8) stick_x[which];
     pad->stickY = (s8) stick_y[which];
+    if (csub_x[which] != 0 || csub_y[which] != 0) {
+        pad->subStickX = (s8) csub_x[which];
+        pad->subStickY = (s8) csub_y[which];
+    }
     pad->button |= pressed;
     pad->trigger |= pressed & ~held[which];
     held[which] = pressed;
