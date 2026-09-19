@@ -1,6 +1,5 @@
 #include "ftCh_CaptureWaitCrazyHand.h"
 
-#include <placeholder.h>
 #include <platform.h>
 
 #include "baselib/forward.h"
@@ -10,9 +9,6 @@
 #include "ft/ftcommon.h"
 #include "ft/inlines.h"
 #include "ft/types.h"
-
-#include <dolphin/mtx.h>
-#include <MetroTRK/intrinsics.h>
 
 void ftCh_GrabUnk1_8015B778(HSD_GObj* gobj)
 {

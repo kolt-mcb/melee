@@ -2,8 +2,6 @@
 
 #include "ftcommon.h"
 
-#include <placeholder.h>
-
 #include "ft/fighter.h"
 #include "ft/ftanim.h"
 #include "ft/ftcoll.h"
@@ -30,10 +28,12 @@
 
 /* 0C7890 */ void fn_800C7890(Fighter_GObj* gobj);
 
-static void orderTest(Vec3* ptr)
+#ifdef MUST_MATCH
+static void order_sdata2(Vec3* ptr)
 {
-    ptr->y = (s32) ptr->x;
+    (void) S32_TO_F32;
 }
+#endif
 
 void ftCo_800C78B0(HSD_GObj* gobj, HSD_GObj* owner)
 {
@@ -81,7 +81,6 @@ void ftCo_CaptureLikelike_Anim(Fighter_GObj* gobj)
 
     if (*(int*) &fp->mv.co.mushroom.x4 == 0) {
         if (fp->grab_timer <= 0.0f) {
-            void it_802DB9F4(Item_GObj*);
             it_802DB9F4(fp->mv.co.capturelikelike.x0);
             *(int*) &fp->mv.co.mushroom.x4 = 1;
         }

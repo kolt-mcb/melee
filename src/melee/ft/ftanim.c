@@ -18,7 +18,6 @@ extern HSD_AnimJoint* pc_ftconv_partanim(struct ftData_x1C* rec, int k);
 #include <sysdolphin/baselib/object.h>
 #include <melee/ft/chara/ftCommon/ftCo_Attack100.h>
 #include <melee/ft/fighter.h>
-#include <melee/ft/ft_0852.h>
 #include <melee/ft/ftaction.h>
 #include <melee/ft/ftcommon.h>
 #include <melee/ft/ftdata.h>
@@ -623,9 +622,6 @@ float ftAnim_8006F3DC(Fighter_GObj* fighter_gobj)
                 }
             }
         }
-#ifdef BUGFIX
-        return 0.0F;
-#endif
     } else {
         return lbGetJObjCurrFrame(fp->x8AC_animSkeleton);
     }
@@ -885,6 +881,17 @@ void ftAnim_8006F7C8(Fighter* ft, Fighter_Part part, int arg2, FigaTree* tree)
     int r22;
     PAD_STACK(8);
 
+#if BUILD_TARGET_PC
+    /* The same guards its siblings already carry. This one had none, and it
+     * is the path that crashed in lbAnim_8001E6D8 on the tablet: without the
+     * conversion check an unconverted tree's big-endian offsets are read as
+     * host pointers, and without the bounds the two scans below walk off the
+     * end of fp->parts looking for a flag that the parts descriptor never
+     * set. */
+    if (!pc_ptr_sane(ft->parts) || !pc_figatree_converted(tree, __func__)) {
+        return;
+    }
+#endif
     nodes = tree->nodes;
     tracks = tree->tracks;
     r29 = ft->x594_bits;
@@ -908,6 +915,11 @@ void ftAnim_8006F7C8(Fighter* ft, Fighter_Part part, int arg2, FigaTree* tree)
             r3 += 1;
             i += 1;
             r22 += 1;
+#if BUILD_TARGET_PC
+            if (r22 >= 0x8C) {
+                return;
+            }
+#endif
         }
 
         r21 = i;
@@ -926,6 +938,11 @@ void ftAnim_8006F7C8(Fighter* ft, Fighter_Part part, int arg2, FigaTree* tree)
             r21 += 1;
             i += 1;
             r22 += 1;
+#if BUILD_TARGET_PC
+            if (r21 >= 0x8C || r22 >= 0x8C) {
+                return;
+            }
+#endif
         }
 
         if (ft->parts[r22].xC <= r27 && i != part) {
@@ -946,6 +963,11 @@ void ftAnim_8006F7C8(Fighter* ft, Fighter_Part part, int arg2, FigaTree* tree)
         i += 1;
         r22 += 1;
         nodes += 1;
+#if BUILD_TARGET_PC
+        if (r22 >= 0x8C) {
+            return;
+        }
+#endif
     }
 }
 

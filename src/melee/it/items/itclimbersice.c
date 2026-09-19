@@ -1,5 +1,7 @@
 #include "itclimbersice.h"
 
+#include <placeholder.h>
+
 #include "baselib/jobj.h"
 #include "db/db.h"
 #include "ef/efasync.h"
@@ -9,30 +11,45 @@
 #include "it/inlines.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
-#include "it/it_3F14.h"
 #include "it/itcoll.h"
 #include "it/item.h"
 #include "it/itgroundcoll.h"
 #include "it/itmaplib.h"
 
-#include <MSL/math.h>
-
 ItemStateTable it_803F7668[] = {
-    { -1, itClimbersice_UnkMotion0_Anim, itClimbersice_UnkMotion0_Phys,
-      itClimbersice_UnkMotion0_Coll },
-    { -1, itClimbersice_UnkMotion1_Anim, itClimbersice_UnkMotion1_Phys,
-      itClimbersice_UnkMotion1_Coll },
-    { 0, itClimbersice_UnkMotion2_Anim, itClimbersice_UnkMotion2_Phys,
-      itClimbersice_UnkMotion2_Coll },
-    { 0, itClimbersice_UnkMotion3_Anim, itClimbersice_UnkMotion3_Phys,
-      itClimbersice_UnkMotion3_Coll },
+    {
+        -1,
+        itClimbersice_UnkMotion0_Anim,
+        itClimbersice_UnkMotion0_Phys,
+        itClimbersice_UnkMotion0_Coll,
+    },
+    {
+        -1,
+        itClimbersice_UnkMotion1_Anim,
+        itClimbersice_UnkMotion1_Phys,
+        itClimbersice_UnkMotion1_Coll,
+    },
+    {
+        0,
+        itClimbersice_UnkMotion2_Anim,
+        itClimbersice_UnkMotion2_Phys,
+        itClimbersice_UnkMotion2_Coll,
+    },
+    {
+        0,
+        itClimbersice_UnkMotion3_Anim,
+        itClimbersice_UnkMotion3_Phys,
+        itClimbersice_UnkMotion3_Coll,
+    },
 };
 
-static void fakefunc(f32 f, u32 u, Vec3 vec)
+#ifdef MUST_MATCH
+static void order_sdata2(void)
 {
-    vec.x = 0;
-    vec.x = f * u;
+    (void) 0.0f;
+    (void) U32_TO_F32;
 }
+#endif
 
 static inline void itClimbersIce_sub_x4(Item_GObj* gobj)
 {

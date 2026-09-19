@@ -1,11 +1,13 @@
 #include "synth.h"
 
 #include "synth.static.h"
+#include <placeholder.h>
 #if BUILD_TARGET_PC
 #include "port/pc_execinfo.h"
 #endif
 
-#include <math_ppc.h>
+#include <math.h> // IWYU pragma: keep
+#include <string.h>
 #include <dolphin/ai.h>
 #include <dolphin/ar.h>
 #include <dolphin/os.h>
@@ -13,7 +15,7 @@
 #include <sysdolphin/baselib/devcom.h>
 
 /* 389334 */ static int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan,
-                                           int priority, u8 itd_flag,
+                                           int priority, int itd_flag,
                                            float pitch1, float pitch2,
                                            float mix_main, float mix_auxA,
                                            float mix_auxB);
@@ -69,11 +71,8 @@ void HSD_AudioFree(void* ptr)
     OSFreeToHeap(HSD_Synth_804D6018, ptr);
 }
 
-void* HSD_Synth_804D7730;
-u32* HSD_Synth_804D7734;
-s32 HSD_Synth_804D7764;
-u32 HSD_Synth_804D7770;
-u32 HSD_Synth_804D7774;
+static int HSD_Synth_804D6028[2] = { 0 };
+static float HSD_Synth_804D6030 = 1.0f;
 
 struct SfxLoadStreamNode {
 #if BUILD_TARGET_PC
@@ -91,6 +90,11 @@ struct SfxLoadStreamNode {
     /* 0x10 */ s32 x10;
     /* 0x14 */ s32 x14;
 };
+
+static inline s32 SfxLoadStreamDataSize(s32 size)
+{
+    return size + 8;
+}
 
 #if BUILD_TARGET_PC
 /* The completion callback's type is the one HSD_SynthSFXLoad declares:
@@ -189,16 +193,17 @@ static void pc_synth_addr_add(u8* at, s32 delta)
 }
 #endif
 
-void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
-                                    int cancelflag)
+static void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
+                                           bool cancelflag)
 {
     BOOL intr;
     s32 i;
 
     if (HSD_Synth_804D7738 == 0) {
-        u32 header_size = hsd_SynthSFXLoadBuf[0];
+        s32 j;
+        s32 header_size = hsd_SynthSFXLoadBuf[0];
         u32 data_bytes = header_size - 0x10;
-        s32 src_idx = (data_bytes >> 2) - 1;
+        size_t alloc_size;
 #if BUILD_TARGET_PC
         /* The file header is 0x10 bytes; the 0x20-byte header read also
          * took the first 16 bytes of the sound table, which the prologue
@@ -263,26 +268,24 @@ void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
         }
 #endif
         u32 total;
-        u32 shift;
         u32 dnw;
         int bankID;
         AXVPB** pp;
         s32 count;
         s32 base;
 
-        total = hsd_SynthSFXLoadBuf[2] * 8 + header_size;
-        total = (total + 0x37) & ~0x1F;
-        shift = (total - data_bytes) >> 2;
-        for (i = src_idx; i >= 0; i--) {
-            ((u32*) HSD_Synth_804D7730)[i + shift] =
-                ((u32*) HSD_Synth_804D7730)[i];
+        alloc_size =
+            hsd_SynthSFXLoadBuf[2] * 8 + sizeof(struct SfxLoadStreamNode);
+        total = OSRoundUp32B(alloc_size + header_size);
+        for (j = (data_bytes >> 2) - 1; j >= 0; j--) {
+            ((u32*) HSD_Synth_804D7730)[j + ((total - data_bytes) >> 2)] =
+                ((u32*) HSD_Synth_804D7730)[j];
         }
         dnw = total - header_size;
-        *(u32*) ((u8*) HSD_Synth_804D7730 + (dnw & ~3)) =
-            hsd_SynthSFXLoadBuf[4];
-        ((u32*) HSD_Synth_804D7730)[(dnw >> 2) + 1] = hsd_SynthSFXLoadBuf[5];
-        ((u32*) HSD_Synth_804D7730)[(dnw >> 2) + 2] = hsd_SynthSFXLoadBuf[6];
-        ((u32*) HSD_Synth_804D7730)[(dnw >> 2) + 3] = hsd_SynthSFXLoadBuf[7];
+        for (i = 0; i != 4; i++) {
+            ((u32*) HSD_Synth_804D7730)[(dnw >> 2) + i] =
+                hsd_SynthSFXLoadBuf[4U + i];
+        }
         HSD_Synth_804D7734 = (u32*) ((u8*) HSD_Synth_804D7730 + (dnw & ~3));
 #if BUILD_TARGET_PC
         if (getenv("MELEE_AXTRACE") != NULL) {
@@ -331,42 +334,39 @@ void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
         base = hsd_SynthSFXLoadBuf[3];
         ((struct SfxLoadStreamNode*) HSD_Synth_804D7730)->x8 = base;
         ((struct SfxLoadStreamNode*) HSD_Synth_804D7730)->xC = count;
-        HSD_Synth_804D7730 = (u8*) HSD_Synth_804D7730 + 0x18;
+        HSD_Synth_804D7730 =
+            (struct SfxLoadStreamNode*) ((u8*) HSD_Synth_804D7730 + 0x18);
         for (i = 0; i < count; i++) {
             s32 n;
             s32 nbytes;
-            s32 nshift;
             s32 k;
-            s32 offset;
             s32 id;
-            struct SfxLoadStreamNode* nn;
             void** bucket;
+            struct SfxLoadStreamNode* nn;
 
             n = *HSD_Synth_804D7734;
-            nshift = n << 6;
-            nbytes = nshift + 8;
+            nbytes = SfxLoadStreamDataSize(n << 6);
 #if BUILD_TARGET_PC
             /* In-place expansion: source and destination overlap. */
             memmove((u8*) HSD_Synth_804D7730 + 8, HSD_Synth_804D7734, nbytes);
 #else
             memcpy((u8*) HSD_Synth_804D7730 + 8, HSD_Synth_804D7734, nbytes);
 #endif
-            offset = 0;
             for (k = 0; k < n; k++) {
-                u8* e = (u8*) HSD_Synth_804D7730 + offset;
+                u8* e = (u8*) HSD_Synth_804D7730 + k * 0x40;
                 if (e + 0x10 != NULL) {
                     *(u32*) (e + 0x14) += hsd_SynthSFXBank[bankID] * 2;
                 } else {
                     *(u32*) (e + 0x14) = HSD_Synth_804D7784;
                 }
-                *(u32*) ((u8*) HSD_Synth_804D7730 + offset + 0x18) +=
+                *(u32*) ((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x18) +=
                     hsd_SynthSFXBank[bankID] * 2;
-                *(u32*) ((u8*) HSD_Synth_804D7730 + offset + 0x1C) +=
+                *(u32*) ((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x1C) +=
                     hsd_SynthSFXBank[bankID] * 2;
 #if BUILD_TARGET_PC
-                pc_synth_split_addrs((u8*) HSD_Synth_804D7730 + offset + 0x10);
+                pc_synth_split_addrs((u8*) HSD_Synth_804D7730 + k * 0x40 +
+                                     0x10);
 #endif
-                offset += 0x40;
             }
             nn = (struct SfxLoadStreamNode*) HSD_Synth_804D7730;
             id = base + i;
@@ -378,9 +378,9 @@ void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
             nn->x0 = (struct SfxLoadStreamNode*) *bucket;
 #endif
             *bucket = nn;
-            HSD_Synth_804D7734 += ((u32) nbytes & ~3) >> 2;
-            HSD_Synth_804D7730 =
-                (u8*) HSD_Synth_804D7730 + ((nshift + 0x10) & ~3);
+            HSD_Synth_804D7734 += (u32) nbytes >> 2;
+            HSD_Synth_804D7730 = (struct SfxLoadStreamNode*) ((u8*) HSD_Synth_804D7730 +
+                                                             (((n << 6) + 0x10) & ~3));
         }
         if (HSD_Synth_804C2A60[0].x8 != 0) {
 #if BUILD_TARGET_PC
@@ -408,7 +408,7 @@ void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
         hsd_SynthSFXBank[bankID] += hsd_SynthSFXLoadBuf[1];
     } else {
         if (HSD_Synth_804D7730 != NULL) {
-            OSFreeToHeap(HSD_Synth_804D6018, HSD_Synth_804D7730);
+            HSD_AudioFree(HSD_Synth_804D7730);
         }
         HSD_Synth_804D7738 = 0;
     }
@@ -422,11 +422,9 @@ void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
 }
 
 static void HSD_SynthSFXHeaderLoadCallback(int result, int length, void* addr,
-                                           int cancelflag)
+                                           bool cancelflag)
 {
-    AXVPB** unused;
     s32 header_size;
-    void* p;
     size_t alloc_size;
 
     if (HSD_Synth_804D7738 == 0) {
@@ -457,12 +455,11 @@ static void HSD_SynthSFXHeaderLoadCallback(int result, int length, void* addr,
                          "Can't load SFX file; bank(id=%d) buffer overflow.\n",
                          HSD_Synth_804C2A60[0].bankID);
 
-        alloc_size = hsd_SynthSFXLoadBuf[2] * 8 + 0x18;
+        alloc_size =
+            hsd_SynthSFXLoadBuf[2] * 8 + sizeof(struct SfxLoadStreamNode);
         header_size = hsd_SynthSFXLoadBuf[0];
-        p = OSAllocFromHeap(HSD_Synth_804D6018,
-                            OSRoundUp32B(alloc_size + header_size));
-        HSD_ASSERTREPORT(0x29U, p, "audio heap overflow.\n");
-        HSD_Synth_804D7730 = p;
+        HSD_Synth_804D7730 =
+            HSD_AudioMalloc(OSRoundUp32B(alloc_size + header_size));
         HSD_Synth_804D6028[1] = HSD_DevComRequest(
             HSD_Synth_804C2A60[0].entrynum, 0x20,
 #if BUILD_TARGET_PC
@@ -479,7 +476,7 @@ static void HSD_SynthSFXHeaderLoadCallback(int result, int length, void* addr,
         return;
     }
     HSD_Synth_804D7730 = NULL;
-    HSD_SynthSFXSampleLoadCallback(NULL, 0, NULL, 0);
+    HSD_SynthSFXSampleLoadCallback(0, 0, NULL, 0);
 }
 
 void HSD_SynthSFXLoadNewProc(void)
@@ -493,7 +490,7 @@ void HSD_SynthSFXLoadNewProc(void)
     }
 }
 
-int HSD_SynthSFXLoad(const char* filename, int bankID, int (*flags)(int, int),
+int HSD_SynthSFXLoad(const char* filename, int bankID, void (*cb)(int, int),
                      int mode)
 {
     int entrynum;
@@ -510,7 +507,7 @@ int HSD_SynthSFXLoad(const char* filename, int bankID, int (*flags)(int, int),
     enabled = OSDisableInterrupts();
     HSD_Synth_804C2A60[HSD_Synth_804D772C].entrynum = entrynum;
     HSD_Synth_804C2A60[HSD_Synth_804D772C].bankID = bankID;
-    HSD_Synth_804C2A60[HSD_Synth_804D772C].x8 = flags;
+    HSD_Synth_804C2A60[HSD_Synth_804D772C].x8 = cb;
     HSD_Synth_804C2A60[HSD_Synth_804D772C].xC = mode;
     HSD_Synth_804D772C += 1;
 
@@ -587,7 +584,13 @@ void HSD_SynthSFXAllocateBank(int size)
     hsd_SynthSFXBankNum += 1;
 }
 
-u8 data_pad[0x2C] = { 0 };
+#ifdef MUST_MATCH
+static void order_data_0(void)
+{
+    (void) "bank stack underflow\n";
+    (void) "hsd_SynthSFXBankNum";
+}
+#endif
 
 static inline void HSD_SynthSFXUnloadBank_inline(AXVPB* vpb)
 {
@@ -683,7 +686,7 @@ void HSD_Synth_80388E08(int sfx_id)
             if ((int) cur->prev == sfx_id) {
                 HSD_SynthSFXUnloadBank_inline(cur);
                 *pcur = cur->next;
-                OSFreeToHeap(HSD_Synth_804D6018, cur);
+                HSD_AudioFree(cur);
                 return;
             }
             pcur = &cur->next;
@@ -699,7 +702,14 @@ static void HSD_SynthSFXGroupDataReaddressCallback(void* result, int length,
     sfxGroupDataReaddressCounter--;
 }
 
-u8 data_pad_2[0x84] = { 0 };
+#ifdef MUST_MATCH
+static void order_data_1(void)
+{
+    (void) "Can't relocate SFX group; bank = %d; sfxgroup = %d\n";
+    (void) "hsd_SynthSFXBank[bankID] + group->arsize <= "
+           "hsd_SynthSFXBankHead[bankID + 1]";
+}
+#endif
 
 void HSD_SynthSFXGroupDataReaddress(AXVPB* arg0, void* callback)
 {
@@ -892,42 +902,49 @@ void dropcallback(void* dropped)
     OSRestoreInterrupts(enabled);
 }
 
+struct foo {
+#if BUILD_TARGET_PC
+    /* The record is GCN-layout: its link is the 32-bit handle stored by
+     * pc_p32_from, and a host pointer here would push x10/x20/x48 four bytes
+     * along -- every AX address in the entry would be read from the wrong
+     * offset. */
+    u32 next;
+#else
+    void* next;
+#endif
+    int unk4; // sound ID
+    int unk8; // voice count
+    int unkC; // audio parameter
+    AXPBADDR x10;
+    AXPBADPCM x20;
+    AXPBADPCMLOOP x48;
+};
+
+/** @remarks The per-voice blocks of an SFX entry are 0x40 apart, which is
+ *  less than the AX structures they carry.
+ */
+#define SFX_VOICE(i) ((struct foo*) ((u8*) sfx_entry + (i) * 0x40))
+
 static AXPBMIX lbl_80407FB4 = { 0 };
 
 static AXPBSRC HSD_Synth_80407FD8 = { 1, 0, 0, { 0, 0, 0, 0 } };
 
-/// @todo Currently 96.8% match - remaining r30/r31 base allocation and
-/// r29 loop-counter computation differ.
 int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan, int priority,
-                       u8 itd_flag, float pitch1, float pitch2, float mix_main,
-                       float mix_auxA, float mix_auxB)
+                       int itd_flag, float pitch1, float pitch2,
+                       float mix_main, float mix_auxA, float mix_auxB)
 {
     AXVPB* voices[2] = { NULL, NULL };
+    UNUSED u8 stack_pad[8];
     AXPBVE ve;
     float vol_norm;
     float vol2_norm;
     int voice_idx;
     u32 node_idx;
-    int loop_idx;
-    struct foo {
-#if BUILD_TARGET_PC
-        u32 next;
-#else
-        void* next;
-#endif
-        int unk4; // sound ID
-        int unk8; // voice count
-        int unkC; // audio parameter
-        AXPBADDR x10;
-        AXPBADPCM x20;
-        AXPBADPCMLOOP x48;
-    }* sfx_entry;
+    struct foo* sfx_entry;
     struct HSD_SynthSFXNode* sfx_node;
     int saved_interrupts;
-    AXVPB** voice_ptr;
-    struct foo* sample_data;
 
-    PAD_STACK(0x1C);
+    PAD_STACK(0x14);
 
     saved_interrupts = OSDisableInterrupts();
     sfx_entry = HSD_Synth_804C29E0[sfx_id & 0x1F];
@@ -961,7 +978,7 @@ int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan, int priority,
 
             sfx_node = &hsd_SynthSFXNodes[node_idx];
             sfx_node->x27 = 1;
-            sfx_node->x0 = sfx_id;
+            sfx_node->sfx_id = sfx_id;
             sfx_node->flags = 0;
             sfx_node->voice_count = sfx_entry->unk8;
             sfx_node->xB = itd_flag;
@@ -992,36 +1009,28 @@ int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan, int priority,
             ve.currentDelta = 0;
             sfx_node->x24 = ve.currentVolume;
 
-            sample_data = sfx_entry;
-            voice_ptr = voices;
-            loop_idx = 0;
-            while (loop_idx < sfx_entry->unk8) {
-                AXSetVoicePriority(*voice_ptr, priority);
-                {
-                    AXPBVE* ve_ptr = &ve;
-                    AXSetVoiceVe(*voice_ptr, ve_ptr);
-                }
+            voice_idx = 0;
+            while (voice_idx < sfx_entry->unk8) {
+                AXSetVoicePriority(voices[voice_idx], priority);
+                AXSetVoiceVe(voices[voice_idx], &ve);
                 /// @todo Type pun writes ratioHi+ratioLo as u32; no union in
                 /// AXPBSRC. Needed for match - AXPBSRC lacks a u32 ratio
                 /// field.
                 PC_SET_RATIO(HSD_Synth_80407FD8, (65536.0F *
                      (sfx_node->x18[1] * (sfx_node->x14 * sfx_node->x18[0]))));
-                AXSetVoiceSrc(*voice_ptr, &HSD_Synth_80407FD8);
-                AXSetVoiceAddr(*voice_ptr, &sample_data->x10);
-                AXSetVoiceAdpcm(*voice_ptr, &sample_data->x20);
-                AXSetVoiceAdpcmLoop(*voice_ptr, &sample_data->x48);
-                AXSetVoiceState(*voice_ptr, 1U);
+                AXSetVoiceSrc(voices[voice_idx], &HSD_Synth_80407FD8);
+                AXSetVoiceAddr(voices[voice_idx], &SFX_VOICE(voice_idx)->x10);
+                AXSetVoiceAdpcm(voices[voice_idx], &SFX_VOICE(voice_idx)->x20);
+                AXSetVoiceAdpcmLoop(voices[voice_idx],
+                                    &SFX_VOICE(voice_idx)->x48);
+                AXSetVoiceState(voices[voice_idx], 1U);
 #if BUILD_TARGET_PC
                 if (getenv("MELEE_AXTRACE")) {
                     fprintf(stderr, "[SYN] sfx %d voice %d RUN\n", sfx_id,
-                            (int) (*voice_ptr)->index);
+                            (int) voices[voice_idx]->index);
                 }
 #endif
-                voice_ptr += 1;
-                sample_data =
-                    (void*) ((u8*) sample_data +
-                             0x40); ///< @todo what is going on here...
-                loop_idx += 1;
+                voice_idx += 1;
             }
             HSD_Synth_804D7750 += 0x40;
             if (HSD_Synth_804D7750 < 0) {
@@ -1066,10 +1075,12 @@ static inline struct HSD_SynthSFXNode* getNode(int sfx_id)
     }
 }
 
+/* Returns the node id, not a bool: axdriver stores it in v->vID and compares
+ * it against -1, and a bool return truncated every id to 1. */
 int HSD_SynthSFXPlayWithGroup(int sfx_id, u8 vol, u8 vol2, u8 pan,
-                               int priority, u8 itd_flag, int group,
-                               f32 pitch1, f32 pitch2, f32 mix_main,
-                               f32 mix_auxA, f32 mix_auxB)
+                              int priority, int itd_flag, int group,
+                              f32 pitch1, f32 pitch2, f32 mix_main,
+                              f32 mix_auxA, f32 mix_auxB)
 {
     int result; /* the node id HSD_Synth_80389334 hands back, not a bool */
     int nodeID;
@@ -1617,7 +1628,6 @@ void HSD_SynthResetStreamCounters(int result, int length, void* buf, bool b)
     HSD_Synth_804D7778 = 0;
 }
 
-extern s32 HSD_Synth_804D7764;
 
 #if BUILD_TARGET_PC
 /* A stream block header (0x20 bytes): u32 size, u32 end offset, u32 next
@@ -1659,17 +1669,42 @@ void HSD_Synth_8038AD74(int result, int src, void* buf, int cancelflag)
                       HSD_SynthResetStreamCounters, 0);
 }
 
-extern s32 HSD_Synth_804D7764;
-extern u32 HSD_Synth_804D7770;
-extern u32 HSD_Synth_804D7774;
+static inline void HSD_Synth_8038ADD0_inline(u32 pos)
+{
+    BOOL intr;
+    s32 src;
+
+    if ((s32) ((HSD_Synth_804D776C + 1) % 3) != pos) {
+        intr = OSDisableInterrupts();
+        if (HSD_Synth_804D7778 != 0 ||
+            HSD_Synth_804D7768 != HSD_Synth_804D776C)
+        {
+            OSRestoreInterrupts(intr);
+            return;
+        }
+        if (getNode(HSD_Synth_804D7760) != NULL) {
+            src = lbl_804C4540[HSD_Synth_804D776C].x8;
+            if (src == -1) {
+                HSD_Synth_804D776C = (HSD_Synth_804D776C + 1) % 3;
+            } else {
+                HSD_Synth_804D7768 = (HSD_Synth_804D776C + 1) % 3;
+                HSD_Synth_804D7778 = 1;
+                HSD_DevComRequest(
+                    HSD_Synth_804D7764, src,
+                    (uintptr_t) &lbl_804C4540[HSD_Synth_804D7768], 0x20, 0x21,
+                    0, HSD_Synth_8038AD74,
+                    (void*) (src + 0x20));
+            }
+        }
+        OSRestoreInterrupts(intr);
+    }
+}
 
 void HSD_Synth_8038ADD0(void)
 {
     struct HSD_SynthSFXNode* node = getNode(HSD_Synth_804D7760);
     u32 pos;
     s32 i;
-    BOOL intr;
-    s32 src;
 
     if (node == NULL) {
         return;
@@ -1684,8 +1719,7 @@ void HSD_Synth_8038ADD0(void)
                  HSD_Synth_804D7780 * 2) >>
           0x11;
 #else
-    pos = (u32) (*(u32*) ((u8*) node->voice[0] + 0x1B2) -
-                 HSD_Synth_804D7780 * 2) >>
+    pos = (*(u32*) ((u8*) node->voice[0] + 0x1B2) - HSD_Synth_804D7780 * 2) >>
           0x11;
 #endif
     if (pos != HSD_Synth_804D7774) {
@@ -1728,30 +1762,7 @@ void HSD_Synth_8038ADD0(void)
             }
         }
     }
-    if ((s32) ((HSD_Synth_804D776C + 1) % 3) != pos) {
-        intr = OSDisableInterrupts();
-        if (HSD_Synth_804D7778 != 0 ||
-            HSD_Synth_804D7768 != HSD_Synth_804D776C)
-        {
-            OSRestoreInterrupts(intr);
-            return;
-        }
-        if (getNode(HSD_Synth_804D7760) != NULL) {
-            src = lbl_804C4540[HSD_Synth_804D776C].x8;
-            if (src == -1) {
-                HSD_Synth_804D776C = (HSD_Synth_804D776C + 1) % 3;
-            } else {
-                HSD_Synth_804D7768 = (HSD_Synth_804D776C + 1) % 3;
-                HSD_Synth_804D7778 = 1;
-                HSD_DevComRequest(
-                    HSD_Synth_804D7764, src,
-                    (uintptr_t) &lbl_804C4540[HSD_Synth_804D7768], 0x20, 0x21,
-                    0, HSD_Synth_8038AD74,
-                    (void*) (src + 0x20));
-            }
-        }
-        OSRestoreInterrupts(intr);
-    }
+    HSD_Synth_8038ADD0_inline(pos);
 }
 
 /* DevCom callback signature; the arguments are unused here but the
@@ -1793,16 +1804,16 @@ void HSD_Synth_8038B120(int result, int length, void* buf, int cancelflag)
             AXSetVoiceSrc(node->voice[i], &HSD_Synth_80407FD8);
             AXSetVoiceCurrentAddr(
                 node->voice[i],
-                (HSD_Synth_804D7780 + ((u32) HSD_Synth_804D7768 << 16)) * 2 +
+                (HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16)) * 2 +
                     i * lbl_804C4540[HSD_Synth_804D7768].x0 + 2);
             AXSetVoiceEndAddr(
                 node->voice[i],
-                (HSD_Synth_804D7780 + ((u32) HSD_Synth_804D7768 << 16)) * 2 +
+                (HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16)) * 2 +
                     i * lbl_804C4540[HSD_Synth_804D7768].x0 +
                     lbl_804C4540[HSD_Synth_804D7768].x4);
             AXSetVoiceLoopAddr(
                 node->voice[i],
-                (HSD_Synth_804D7780 + ((u32) HSD_Synth_804D7768 << 16)) * 2 +
+                (HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16)) * 2 +
                     i * lbl_804C4540[HSD_Synth_804D7768].x0 + 2);
             AXSetVoiceState(node->voice[i], 1);
 #if BUILD_TARGET_PC
@@ -1839,13 +1850,10 @@ void HSD_SynthPStreamFirstHakoHeaderCallback(int result, int length, void* buf, 
     pc_synth_swap_hako(HSD_Synth_804D7768);
 #endif
     HSD_DevComRequest(HSD_Synth_804D7764, 0xA0,
-                      HSD_Synth_804D7780 + ((u32) HSD_Synth_804D7768 << 16),
+                      HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16),
                       lbl_804C4540[HSD_Synth_804D7768].x0, 0x23, 0,
                       HSD_Synth_8038B120, 0);
 }
-
-extern u32 HSD_Synth_804D7770;
-extern u32 HSD_Synth_804D7774;
 
 void HSD_SynthPStreamHeaderCallback(int arg0, int arg1, void* arg2,
                                     bool cancelflag)
@@ -1983,7 +1991,7 @@ int HSD_Synth_8038B5AC(int entrynum, u8 vol, u8 vol2, int channel)
     }
     voice_node->x27 = 2;
     voice_node->x0 = HSD_Synth_804D7760 = HSD_Synth_804D7750 + idx;
-    voice_node->next = NULL;
+    voice_node->sfx_id = 0;
     voice_node->flags = 8;
     voice_node->voice_count = 1;
     voice_node->xB = (u8) channel;
@@ -2080,3 +2088,7 @@ void HSD_SynthInit(int dsp_size, int voices, int stream_size, int bank_size)
     HSD_Synth_804D7780 = ARAlloc(0x30000);
     HSD_Synth_804D7754 = OSGetSoundMode();
 }
+
+/// @remarks Nothing in the DOL references this; it is recovered from the tail
+/// of this TU's `.data`.
+static u8 HSD_Synth_804080FC[0x44] = { 0 };

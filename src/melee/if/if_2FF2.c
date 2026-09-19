@@ -14,7 +14,6 @@
 #include <baselib/gobjobject.h>
 #include <baselib/gobjplink.h>
 #include <baselib/gobjproc.h>
-#include <baselib/jobj.h>
 #include <baselib/lobj.h>
 #include <baselib/sislib.h>
 #include <baselib/wobj.h>
@@ -61,7 +60,7 @@ static HSD_WObjDesc interest = {
     30.0f,
     1.18f,
 };
-STATIC_ASSERT(sizeof(un_803F9E60) == 0x38);
+ASSERT_SIZE(un_803F9E60, 0x38);
 
 /// @todo Clean up @c pos values; x and y seem like portions of 20
 /* 3F9E98 */ static HSD_WObjDesc light_position = {
@@ -238,7 +237,7 @@ void un_802FF6A0(void)
     HSD_GObj* gobj = GObj_Create(HSD_GOBJ_CLASS_LIGHT, 3, 0);
     HSD_LObj* new_var;
     new_var = HSD_LObjLoadDesc(&light1);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784A, new_var);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_LightKind, new_var);
     GObj_SetupGXLink(gobj, HSD_GObj_LObjCallback, 0, 0);
 }
 
@@ -248,7 +247,7 @@ void un_802FF710(void)
     HSD_GObj* gobj = GObj_Create(0x13, 20, 0);
     if (gobj) {
         new_var = HSD_CObjLoadDesc((HSD_CObjDesc*) &un_803F9E60);
-        HSD_GObjObject_80390A70(gobj, HSD_GObj_804D784B, new_var);
+        HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, new_var);
         GObj_SetupGXLinkMax(gobj, HSD_GObj_803910D8, 11);
         gobj->gxlink_prios = 0x20000;
     }

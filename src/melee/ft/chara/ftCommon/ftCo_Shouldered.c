@@ -11,9 +11,7 @@
 #include "ft/ftcommon.h"
 #include "ft/ftparts.h"
 #include "ft/types.h"
-#include "ftCaptain/types.h"
 #include "ftCommon/ftCo_Attack100.h"
-#include "ftCommon/ftCo_CaptureCut.h"
 #include "ftCommon/ftCo_Throw.h"
 #include "ftCommon/types.h"
 
@@ -31,7 +29,9 @@
 #define SD_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
+#ifdef MUST_MATCH
 #pragma force_active on
+#endif
 
 /* 09C744 */ static void ftCo_8009C744(Fighter_GObj* gobj);
 

@@ -10,8 +10,6 @@
 #include "ft/types.h"
 
 #include <math.h>
-#include <trigf.h>
-#include <baselib/gobj.h>
 #include <melee/ft/ftcmdscript.h>
 
 /* The effect spawn jitter is one fmadds per axis on the console

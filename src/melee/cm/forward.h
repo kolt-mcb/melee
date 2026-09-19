@@ -1,8 +1,6 @@
 #ifndef MELEE_CM_FORWARD_H
 #define MELEE_CM_FORWARD_H
 
-#include <placeholder.h>
-
 typedef enum CameraType {
     CAMERA_STANDARD = 0,      ///< mode used during normal gameplay
     CAMERA_PAUSE = 1,         ///< mode used during pause menu
@@ -47,5 +45,13 @@ typedef enum CmSnapStatus {
     /* 0x4 */ CmSnapStatus_Unk4,
     /* 0x5 */ CmSnapStatus_Unk5,
 } CmSnapStatus;
+
+typedef enum CmSubjectState {
+    /* 0x0 */ CmSubjectState_Active,   ///< always framed by a camera
+    /* 0x1 */ CmSubjectState_Inactive, ///< never framed by a camera
+    /* 0x2 */ CmSubjectState_Auto,     ///< framed only when inside the camera
+                                   ///< bounds, inactive otherwise. (eg. Items,
+                                   ///< Arwing, etc)
+} CmSubjectState;
 
 #endif

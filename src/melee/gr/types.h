@@ -26,6 +26,7 @@
 
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
+#include <baselib/spline.h>
 #include <melee/lb/types.h>
 
 typedef struct StageBlastZone {
@@ -97,7 +98,7 @@ struct StageInfo {
     HSD_JObj* x280[261];
     void* x694[4];
     void* x6A4;
-    /* +6A8 */ struct {
+    /* +6A8 */ struct GroundItemData {
         s32 unk0;
         Article* unk4;
     }** itemdata;
@@ -107,7 +108,7 @@ struct StageInfo {
     /* +6B8 */ void* map_ptcl;
     /* +6BC */ void* map_texg;
     /* +6C0 */ void* yakumono_param;
-    /* +6C4 */ void* map_plit;
+    /* +6C4 */ LightList** map_plit;
     /* +6C8 */ void* x6C8;
     /* +6CC */ DynamicModelDesc* quake_model_set;
     s16 x6D0;
@@ -135,7 +136,7 @@ struct StageInfo {
     s32 x740;
     u8 x744_pad[0x748 - 0x744];
 };
-STATIC_ASSERT(sizeof(struct StageInfo) == 0x748);
+ASSERT_SIZE(struct StageInfo, 0x748);
 
 typedef struct StageCallbacks {
     /*  +0 */ HSD_GObjEvent on_init;
@@ -245,10 +246,10 @@ struct GroundVars_izumi2 {
 };
 
 struct GroundVars_izumi3 {
-    short xC4;
-    short xC6;
-    short xC8;
-    short xCA;
+    s16 xC4;
+    s16 xC6;
+    s16 xC8;
+    s16 xCA;
     HSD_JObj* xCC;
     float xD0;
     float xD4;
@@ -400,8 +401,7 @@ typedef struct grZakoGenerator_Entry {
 } grZakoGenerator_Entry;
 
 typedef struct grZakoGenerator_Data {
-    /* +0 */ grZakoGenerator_Entry entries[80];
-    /* +3C0 */ grZakoGenerator_Entry sentinel;
+    /* +0 */ grZakoGenerator_Entry entries[81];
 } grZakoGenerator_Data;
 
 struct grCorneria_GroundVars {
@@ -543,6 +543,13 @@ struct grSmashTaunt_GroundVars {
     /* +20 */ HSD_Text* text;
     /* +24 */ f32 xE8;
     /* +28 */ f32 xEC;
+};
+
+struct grVenom_Platform_GroundVars {
+    /* +00 gp+C4 */ Ground_GObj* target_gobj;
+    /* +04 gp+C8 */ s32 smash_taunt_timer;
+    /* +08 gp+CC */ HSD_JObj* upper_jobj;
+    /* +0C gp+D0 */ HSD_JObj* lower_jobj;
 };
 
 struct grVenom_GroundVars {
@@ -721,49 +728,95 @@ struct grGarden_GroundVars2 { // Klaptrap
 };
 
 struct grIceMt_GroundVars {
-    /* +00 gp+C4 */ s16 xC4;
-    /* +02 gp+C6 */ s16 xC6;
-    /* +04 gp+C8 */ s16 xC8;
-    /* +06 gp+CA */ s16 xCA;
-    /* +08 gp+CC */ s16 xCC;
-    /* +0A gp+CE */ s16 xCE;
-    /* +0C gp+D0 */ s16 xD0;
-    /* +0E gp+D2 */ s16 pad_0;
-    /* +10 gp+D4 */ f32 xD4;
-    /* +14 gp+D8 */ s16 xD8;
-    /* +16 gp+DA */ s16 xDA;
-    /* +18 gp+DC */ s16 xDC;
-    /* +1A gp+DE */ s16 xDE;
-    /* +1C gp+E0 */ s16 xE0;
-    /* +1C gp+E0 */ s16 pad_1;
-    /* +20 gp+E4 */ f32 xE4;
-    /* +24 gp+E8 */ u32 xE8;
-    /* +28 gp+EC */ u32 xEC;
-    /* +2C gp+F0 */ u32 pad_2;
-    /* +30 gp+F4 */ s16 xF4[6];
-    /* xF4 was s16[2] followed by u32 pad_3[2]. The offset comments give it
-     * away: gp+F4 to gp+100 is twelve bytes, and grIceMt_801F9668 indexes
-     * xF4[0..5] under HSD_Randi(6). Same total size, so the layout is
-     * unchanged -- but GCC could see the overrun and warned about it. */
-    /* +3C gp+100 */ s16 x100[4];
+    /*  +0 gp+C4 */ s16 x0;
+    /*  +2 gp+C6 */ s16 x2;
+    /*  +4 gp+C8 */ s16 x4;
+    /*  +6 gp+CA */ s16 x6;
+    /*  +8 gp+CC */ s16 x8;
+    /*  +A gp+CE */ s16 xA;
+    /*  +C gp+D0 */ s16 xC;
+    /*  +E gp+D2 */ s16 xE;
+    /* +10 gp+D4 */ f32 x10;
+    /* +14 gp+D8 */ s16 x14;
+    /* +16 gp+DA */ s16 x16;
+    /* +18 gp+DC */ s16 x18;
+    /* +1A gp+DE */ s16 x1A;
+    /* +1C gp+E0 */ s16 x1C;
+    /* +1E gp+E2 */ s16 x1E;
+    /* +20 gp+E4 */ f32 x20;
+    /* +24 gp+E8 */ u32 x24;
+    /* +28 gp+EC */ u32 x28;
+    /* +2C gp+F0 */ u32 x2C;
+    /* +30 gp+F4 */ s16 x30[2];
+    /* +34 gp+F8 */ u32 x34[2];
+    /* +44 gp+10E */ s16 x100[4];
     /* +44 gp+108 */ s16 x108[8];
 };
 
-struct grIceMt_GroundVars2 {
-    /* +00 gp+C4 */ f32 xC4;
-    /* +04 gp+C8 */ HSD_JObj* xC8;
-    /* +08 gp+CC */ HSD_JObj* xCC;
-    /* +0C gp+D0 */ HSD_JObj* xD0;
-    /* +10 gp+D4 */ HSD_JObj* xD4;
-    /* +14 gp+D8 */ HSD_JObj* xD8;
-    /* +18 gp+DC */ HSD_JObj* xDC;
-    /* +1C gp+E0 */ HSD_JObj* xE0;
-    /* +20 gp+E4 */ HSD_JObj* xE4;
-    /* +24 gp+E8 */ HSD_JObj* xE8;
-    /* +28 gp+EC */ HSD_JObj* xEC;
-    /* +2C gp+F0 */ HSD_JObj* xF0;
-    /* +30 gp+F4 */ HSD_JObj* xF4;
-    /* +30 gp+F4 */ HSD_GObj* xF8[20];
+/// @todo ::Map_GroundVars?
+struct grIceMt_GObj1_GroundVars {
+    /*  +0:0 gp+C4:0 */ u8 x0_b0 : 1;
+    /*  +0:1 gp+C4:1 */ u8 x0_b1 : 1;
+    /*  +4   gp+C8   */ HSD_JObj* x4;
+    /*  +8   gp+CC   */ HSD_JObj* x8;
+    /*  +C   gp+D0   */ HSD_JObj* xC;
+    /* +10   gp+D4   */ HSD_JObj* x10;
+    /* +14   gp+D8   */ HSD_JObj* x14;
+    /* +18   gp+DC   */ HSD_JObj* x18;
+    /* +1C   gp+E0   */ HSD_JObj* x1C;
+    /* +20   gp+E4   */ HSD_JObj* x20;
+    /* +24   gp+E8   */ HSD_JObj* x24;
+    /* +28   gp+EC   */ HSD_JObj* x28;
+    /* +2C   gp+F0   */ HSD_JObj* x2C;
+    /* +30   gp+F4   */ HSD_JObj* x30;
+    /* +34   gp+F8   */ HSD_GObj* x34[20];
+};
+
+struct grIceMt_BG_GroundVars {
+    /*  +0 gp+C4 */ float x0;
+};
+
+struct grIceMt_FA364_State {
+    /*  +0 */ s16 phase;
+    /*  +2 */ s16 delay;
+    /*  +4 */ s16 lerp_count;
+    /*  +6 */ s16 burst_count;
+    /*  +8 */ s16 idx;
+    /*  +A */ s16 pad;
+    /*  +C */ f32 cur;
+};
+
+struct grIceMt_GObj9_GObj10_UnderUpperIdPair {
+    /* +0 */ s16 under;
+    /* +2 */ s16 upper;
+};
+
+struct grIceMt_GObj9_GObj10_x0 {
+    /*  +0 gp+C4 */ struct grIceMt_GObj9_GObj10_UnderUpperIdPair ids;
+    /*  +4 gp+C8 */ struct grIceMt_FA364_State state;
+};
+
+struct grIceMt_GObj9_GroundVars {
+    /*  +0 gp+C4 */ struct grIceMt_GObj9_GObj10_x0 x0;
+    /* +14 gp+D8 */ s16 x14;
+    /* +16 gp+DA */ s16 x16;
+    /* +18 gp+DC */ s16 x18[12];
+    /* +30 gp+F4 */ s16 x30[10];
+    /* 0x01C */ char pad_1C[0xFC];
+};
+
+struct grIceMt_GObj10_GroundVars {
+    /*  +0   gp+C4 */ struct grIceMt_GObj9_GObj10_x0 x0;
+    /* +14:0 gp+D8:0 */ u8 x14_b0 : 1;
+    /* +14:1 gp+D8:1 */ u8 x14_b1 : 1;
+    /* +14:2 gp+D8:2 */ u8 x14_b2 : 1;
+    /* +14:3 gp+D8:3 */ u8 x14_b3 : 1;
+    /* +14:4 gp+D8:4 */ u8 x14_b4 : 1;
+    /* +16 gp+DA */ s16 x16;
+    /* +18 gp+DC */ s16 x18;
+    /* +1A gp+DE */ s16 x1A;
+    /* +1C gp+E0 */ s16 x1C;
+    /* +20 gp+E4 */ float x20;
 };
 
 typedef struct grInishie1_Block {
@@ -930,7 +983,7 @@ struct grInishie2_GroundVars3 {
 struct grStadium_GroundVars {
     /* +0 gp+C4:0 */ u8 xC4_b0 : 1;
     /* +0 gp+C4:1 */ u8 xC4_b1 : 1;
-    /* +0 gp+C8:0 */ u32 xC8;
+    /* +0 gp+C8:0 */ size_t xC8; ///< file size
     /* +4 gp+CC   */ HSD_MObj* xCC;
     /* +4 gp+D0   */ UnkArchiveStruct* xD0;
     /* +4 gp+D4   */ float xD4;
@@ -1154,14 +1207,12 @@ struct Map_VanishDesc {
     /* +2 */ s16 x2;
     /* +4 */ bool x4;
 };
-STATIC_ASSERT(sizeof(struct Map_VanishDesc) == 0x8);
 
 struct Map_VanishEntry {
     /* +0 */ s16 x0;
     /* +2 */ s16 x2;
     /* +4 */ HSD_JObj* jobj;
 };
-STATIC_ASSERT(sizeof(struct Map_VanishEntry) == sizeof(struct Map_VanishDesc));
 
 struct grRCruise_GroundVars {
     struct {
@@ -1273,7 +1324,7 @@ struct grGreens_BlockVars {
     int x18;
     int x1C;
 };
-STATIC_ASSERT(sizeof(struct grGreens_BlockVars) == 0x20);
+ASSERT_SIZE(struct grGreens_BlockVars, 0x20);
 
 struct grGreens_GroundVars {
     /*  +0 gp+C4 */ union {
@@ -1440,7 +1491,17 @@ struct grBigBlue_GroundData {
     /* gp+128 gp+17C gp+1D0 */ Vec3 x44;
     /* gp+134 gp+188 gp+1DC */ s32 x50;
 };
-STATIC_ASSERT(sizeof(struct grBigBlue_GroundData) == 0x54);
+ASSERT_SIZE(struct grBigBlue_GroundData, 0x54);
+
+/// Platform manager state (gobj ID 32).
+struct grBigBlue_ManagerVars {
+    /* gp+C4 */ u32 flags;
+    /* gp+C8 */ void* event_data[3];
+    /* gp+D4 */ HSD_JObj* platform_jobjs[3];
+    /* gp+E0 */ void* event_extra;
+    /* gp+E4 */ struct grBigBlue_GroundData data[3];
+};
+ASSERT_SIZE(struct grBigBlue_ManagerVars, 0x11C);
 
 struct grBigBlue_PlatformVars {
     /* gp+C4 */ u32 xC4;
@@ -1454,11 +1515,24 @@ struct grBigBlue_PlatformVars {
     /* gp+EC */ f32 xEC;
 };
 
+/// Moving road gobj state (gobj ID 34).
+struct grBigBlue_RoadVars {
+    /* gp+C4 */ u32 flags;
+    /* gp+C8 */ Vec3 position;
+    /* gp+D4 */ Vec3 previous_position;
+    /* gp+E0 */ Vec3 drift;
+    /* gp+EC */ f32 lateral_drift;
+    /* gp+F0 */ s16 direction;
+    /* gp+F2 */ u8 pad_F2[6];
+    /* gp+F8 */ f32 rotation;
+};
+ASSERT_SIZE(struct grBigBlue_RoadVars, 0x38);
+
 /// Used by multiple Big Blue Ground subtypes (track, road, car gobjs).
 /// Different gobjs interpret the same offsets differently.
 ///
 /// Track gobj (ID 32): uses xC8 as HSD_JObj*[30], xCC as u8[30] flags.
-/// Road gobj (ID 34): uses xCC as f32 velocity, xD0/xD8 for position.
+/// Road gobj (ID 34): see #grBigBlue_RoadVars.
 /// Car gobj (ID 33): per-lane data at 0x40-byte stride from gp+D4,
 ///   with fields: state(+0), target(+4), delta(+8), pos Vec3(+C),
 ///   lateral(+20), direction(+2C), gravity(+30), height(+34),
@@ -1466,19 +1540,50 @@ struct grBigBlue_PlatformVars {
 ///   angular_vel(+48).
 
 /// Per-lane data for the Big Blue car gobj (ID 33), 0x40-byte stride from
-/// gp+D4. Only the fields read by the game logic are named here.
+/// gp+D4.
 struct grBigBlue_CarLane {
-    /* +00 gp+D4 */ u8 state : 6;
-    /* +00 gp+D4 */ u8 state_lo : 2;
-    /* +01 gp+D5 */ u8 x1;
+    union {
+        /* +00 gp+D4 */ u16 status;
+        struct {
+            /* +00 gp+D4 */ u8 state : 6;
+            /* +00 gp+D4 */ u8 direction : 1;
+            /* +00 gp+D4 */ u8 state_hi : 1;
+            /* +01 gp+D5 */ u8 x1;
+        };
+        struct {
+            /* +00 gp+D4 */ u16 pad_slot_0 : 7;
+            /* +00 gp+D4 */ u16 collision_slot : 5;
+            /* +00 gp+D4 */ u16 pad_slot_1 : 4;
+        };
+    };
     /* +02 gp+D6 */ s8 x2;
     /* +03 gp+D7 */ u8 x3;
-    /* +04 gp+D8 */ s32 x4;
-    /* +08 gp+DC */ s32 x8;
+    /* +04 gp+D8 */ f32 target;
+    /* +08 gp+DC */ f32 delta;
     /* +0C gp+E0 */ Vec3 pos;
-    /* +18 gp+EC */ u8 pad_18[0x40 - 0x18];
+    /* +18 gp+EC */ f32 alpha;
+    /* +1C gp+F0 */ s32 threshold;
+    /* +20 gp+F4 */ f32 gravity;
+    /* +24 gp+F8 */ f32 height;
+    /* +28 gp+FC */ f32 velocity;
+    /* +2C gp+100 */ f32 accel;
+    /* +30 gp+104 */ f32 rotation;
+    /* +34 gp+108 */ f32 amplitude;
+    /* +38 gp+10C */ f32 angular_velocity;
+    /* +3C gp+110 */ f32 x110;
 };
-STATIC_ASSERT(sizeof(struct grBigBlue_CarLane) == 0x40);
+ASSERT_SIZE(struct grBigBlue_CarLane, 0x40);
+
+/// Car manager state (gobj ID 33).
+struct grBigBlue_CarVars {
+    /* gp+C4 */ u32 flags;
+    /* gp+C8 */ HSD_JObj** collision_jobjs;
+    /* gp+CC */ u8* ranks;
+    /* gp+D0 */ s16 spawn_timer;
+    /* gp+D2 */ u8 pad_D2[2];
+    /* gp+D4 */ struct grBigBlue_CarLane lanes[4];
+};
+ASSERT_SIZE(struct grBigBlue_CarVars, 0x110);
 
 struct grBigBlue_GroundVars {
     union {
@@ -1537,11 +1642,10 @@ struct grBigBlue_GroundVars {
 #endif
             /* +20 gp+E4 */ struct grBigBlue_GroundData data[3];
         };
+        struct grBigBlue_ManagerVars manager;
         struct grBigBlue_PlatformVars platform;
-        struct {
-            /* +00 gp+C4 */ u8 pad_C4[0x10];
-            /* +10 gp+D4 */ struct grBigBlue_CarLane lanes[4];
-        } car;
+        struct grBigBlue_RoadVars road;
+        struct grBigBlue_CarVars car;
     };
 #if BUILD_TARGET_PC
     /* On the console these four live inside the union above, at gp+0xC8
@@ -1780,25 +1884,16 @@ struct grShrineroute_GroundVars {
     } platforms[3];
 };
 
+/* xC4 was a { ptr, arr[6] } union here while the symbol array was read by
+ * walking past it; upstream gave that array a home of its own
+ * (Map_GroundVars::symbol), so this view holds a single object again. */
 struct grShrineroute_GroundVars2 {
-#if BUILD_TARGET_PC
-    /*  +0 gp+C4 */ union {
-        HSD_GObj* ptr;
-        HSD_GObj* arr[6];
-    } xC4;
-    /* +18 gp+E4 */ HSD_LObj* xC8[20];
-    /* +68 gp+134 */ u32 x118[20];
-    /* +B8 gp+184 */ u32 x168;
-    /* +BC gp+188 */ HSD_LObj* x16C;
-    /* +C0 gp+18C */ HSD_LObj* x170;
-#else
     /*  +0 gp+C4 */ HSD_GObj* xC4;
     /*  +4 gp+C8 */ HSD_LObj* xC8[20];
     /* +54 gp+118 */ u32 x118[20];
     /* +A4 gp+168 */ u32 x168;
     /* +A8 gp+16C */ HSD_LObj* x16C;
     /* +AC gp+170 */ HSD_LObj* x170;
-#endif /* BUILD_TARGET_PC */
 };
 
 struct grShrineroute_GroundVars3 {
@@ -2030,7 +2125,10 @@ struct Ground {
         struct grGarden_GroundVars garden;
         struct grGarden_GroundVars2 garden2;
         struct grIceMt_GroundVars icemt;
-        struct grIceMt_GroundVars2 icemt2;
+        struct grIceMt_GObj1_GroundVars icemt1;
+        struct grIceMt_BG_GroundVars icemt_bg;
+        struct grIceMt_GObj9_GroundVars icemt9;
+        struct grIceMt_GObj10_GroundVars icemt10;
         struct grInishie1_GroundVars inishie1;
         struct grInishie1_GroundVars2 inishie12;
         struct grInishie1_GroundVars3 inishie13;
@@ -2070,6 +2168,7 @@ struct Ground {
         struct GroundVars_unk unk;
         struct grHomeRun_GroundVars homerun;
         struct grHomeRun_GroundVars2 homerun2;
+        struct grVenom_Platform_GroundVars venom_platform;
         struct grVenom_GroundVars venom;
         struct grVenom_GroundVars2 venom2;
         struct grYorster_GroundVars yorster;
@@ -2089,15 +2188,16 @@ struct Ground {
         struct grPushOn_GroundVars pushon;
         struct ScrollVars scroll;
         struct grBigBlueRoute_GroundVars car;
+        /// Legacy spellings retained for stringified assertion text.
         struct {
-            /*  +0 gp+C4 */ UNK_T xC4;
+            /*  +0 gp+C4 */ u32 xC4;
             /*  +4 gp+C8 */ HSD_JObj** coll_jobj;
-            /*  +8 gp+CC */ UNK_T rank;
+            /*  +8 gp+CC */ u8* rank;
         } carnull;
     } u;
 };
-STATIC_ASSERT(sizeof(union GroundVars) == 0x140);
-STATIC_ASSERT(sizeof(struct Ground) == 0x204);
+ASSERT_SIZE(union GroundVars, 0x140);
+ASSERT_SIZE(struct Ground, 0x204);
 
 /**
  * One row of #GroundParam::stage_params, describing a single #StKind. An
@@ -2115,7 +2215,9 @@ struct StageParam {
     s16 x14;
     s16 x16;
     s16 x18;
-    u8 pad[0x64 - 0x1A];
+    /// Read as `((s16*) param)[0xD + j]` by Ground_801C28CC; an s16 array
+    /// rather than padding. Same 74 bytes either way.
+    s16 x1A[(0x64 - 0x1A) / 2];
 };
 
 /**
@@ -2125,7 +2227,7 @@ struct StageParam {
  * @todo Most fields are still unidentified.
  */
 struct GroundParam {
-    f32 x0;
+    float y;
     s16 x4;
     u8 x6_pad[2];
     s16 x8;
@@ -2144,7 +2246,9 @@ struct GroundParam {
     bool x4C_fixed_cam;
     f32 x50, x54, x58, x5C, x60, x64;
     s16 x68;
-    u8 x6C_pad[0xB0 - 0x6A];
+    /// Read as `((s16*) param)[0x35 + j]` by Ground_801C28CC, i.e. this is an
+    /// array of s16, not padding. Same 70 bytes either way.
+    s16 x6A[(0xB0 - 0x6A) / 2];
     /**
      * One row per #StKind this ground serves, looked up by
      * #StageParam::stkind.
@@ -2174,13 +2278,18 @@ struct UnkStageDat_x8_t {
     /*  +C */ HSD_ShapeAnimJoint** unkC;
     /* +10 */ HSD_CameraDescPerspective* x10;
     /* +14 */ UNK_T x14;
-    /* +18 */ UNK_T x18;
+    /* +18 */ LightList** x18;
     /* +1C */ HSD_FogDesc* x1C;
     /* +20 */ GrJoint* unk20;
     /* +24 */ s32 unk24; // size of unk20 array
     /* +28 */ UNK_T x28;
     /* +2C */ s16* x2C;
     /* +30 */ int x30;
+};
+
+struct GroundShadowEntry {
+    HSD_LightAnim* unk0;
+    u8 flag : 1;
 };
 
 struct UnkStageDat {
@@ -2197,13 +2306,13 @@ struct UnkStageDat {
     void* unk18;
     s32 unk1C;
 
-    void* unk20;
+    struct GroundShadowEntry* unk20;
     s32 unk24;
 
     UnkStageDatInternal** unk28;
     s32 unk2C; // size
 };
-STATIC_ASSERT(sizeof(struct UnkStageDat_x8_t) == 0x34);
+ASSERT_SIZE(struct UnkStageDat_x8_t, 0x34);
 
 #if BUILD_TARGET_PC
 /* GCN-packed structs for reading archive data with 32-bit offsets.

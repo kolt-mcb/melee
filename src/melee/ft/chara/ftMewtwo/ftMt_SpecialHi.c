@@ -7,7 +7,11 @@
 #include "forward.h"
 
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0877.h"
 #include "ft/ft_0892.h"
 #include "ft/ft_0C8C.h"
@@ -25,11 +29,8 @@
 #include "lb/lb_00B0.h"
 #include "lb/lbvector.h"
 
-#include <math_ppc.h>
-#include <trigf.h>
+#include <math.h>
 #include <dolphin/mtx.h>
-#include <MSL/math.h>
-
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
 #include <math.h>
@@ -307,8 +308,6 @@ static bool ftMewtwo_SpecialHi_CheckTimer(HSD_GObj* gobj)
     return true;
 }
 
-static bool ftMewtwo_SpecialHi_CheckTimer(HSD_GObj* gobj);
-
 /// Mewtwo's aerial Teleport Zoom Collision callback
 void ftMt_SpecialAirHiLost_Coll(HSD_GObj* gobj)
 {
@@ -409,7 +408,11 @@ void ftMt_SpecialHi_Enter(HSD_GObj* gobj)
     stick_y *= stick_y;
 
     /// @todo Probably a missing @c inline function.
-    mewtwoAttrs = mewtwoAttrs = getFtSpecialAttrsD(fp);
+    mewtwoAttrs =
+#ifdef MUST_MATCH
+        mewtwoAttrs =
+#endif
+            getFtSpecialAttrsD(fp);
 
     sqrt_stick = sqrtf(stick_x + stick_y);
 
@@ -476,7 +479,11 @@ void ftMt_SpecialAirHi_Enter(HSD_GObj* gobj)
     stick_x *= stick_x;
     stick_y *= stick_y;
 
-    mewtwoAttrs = mewtwoAttrs = getFtSpecialAttrsD(fp);
+    mewtwoAttrs =
+#ifdef MUST_MATCH
+        mewtwoAttrs =
+#endif
+            getFtSpecialAttrsD(fp);
 
     sqrt_stick = sqrtf(stick_x + stick_y);
 

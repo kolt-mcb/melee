@@ -1,7 +1,5 @@
 #include "ftZd_SpecialLw.h"
 
-#include "math.h"
-
 #include <platform.h>
 
 #include "ef/efsync.h"
@@ -9,7 +7,11 @@
 #include "forward.h"
 
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcommon.h"
@@ -87,7 +89,7 @@ static void ftZelda_SpecialLw_StartAction_Helper(HSD_GObj* gobj)
     fp->gr_vel = fp->gr_vel / attributes->x70;
 
     lb_8000B1CC(fp->parts[FtPart_TopN].joint, NULL, &sp20);
-    lb_800119DC(&sp20, 120, 0.4, 0.003, 60 * deg_to_rad);
+    lb_800119DC(&sp20, 120, 0.4, 0.003, MTXDegToRad(60));
 
     fp->accessory4_cb = &ftZd_SpecialLw_8013ADB4;
 }

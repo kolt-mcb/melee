@@ -276,13 +276,7 @@ void Player_SetMoreFlagsBit1(s32 slot, u8 bit1);
 s32 Player_GetUnk4D(s32 slot);
 void Player_SetUnk4D(s32 slot, s8 unk4D);
 u8 Player_GetFlagsAEBit1(s32 slot);
-
-#ifdef BUGFIX
-void Player_SetFlagsAEBit1(int slot, u8 bit1);
-#else
 u8 Player_SetFlagsAEBit1(int slot, u8 bit1);
-#endif
-
 int Player_GetUnk4C(s32 slot);
 void Player_SetUnk4C(s32 slot, u8 unk4C);
 bool Player_80036058(s32 slot);
@@ -302,14 +296,11 @@ void Player_800366DC(s32 slot, s32 arg1);
 void Player_80036790(s32 slot, f32 arg1);
 void Player_80036844(s32 slot, s32 arg1);
 bool Player_800368F8(int slot);
-#if BUILD_TARGET_PC
-/* arg1 is a Vec3* -- the definition casts it straight back, and the decomp
- * marks it "@todo Eliminate cast". As an s32 it truncates a 64-bit stack
- * address here, which is what crashed the magnifier's render callback. */
-void Player_80036978(s32 slot, Vec3* arg1);
-#else
-void Player_80036978(s32 slot, s32 arg1);
-#endif
+/* Was declared `s32 arg1` with the definition casting it straight back to a
+ * Vec3*: as an s32 it truncated a 64-bit stack address here, which crashed
+ * the magnifier's render callback. Upstream has since given it the pointer
+ * type, so the cast and the port's override of it are both gone. */
+void Player_80036978(s32 slot, Vec3* pos);
 void Player_InitOrResetPlayer(s32 slot);
 void Player_80036CF0(s32 slot);
 void Player_80036D24(s32 slot);

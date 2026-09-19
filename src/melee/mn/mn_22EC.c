@@ -214,7 +214,7 @@ void mn_8022F1A8(u16 arg0, u16 arg1)
 
 bool mn_8022F218(void)
 {
-    if (gm_GetButtonsTriggered(PAD_ALL_CONTROLLERS) & PAD_LR_START) {
+    if (gm_GetButtonsTriggered(PAD_MAX_CONTROLLERS) & PAD_LR_START) {
         return true;
     }
     return false;
@@ -327,8 +327,10 @@ int mn_8022F470(int* x, const int* target, int dx)
     }
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 void mn_8022F4CC(void)
 {
     if (gm_GetCurrentGameMode() == GM_TOURNAMENT) {
@@ -345,4 +347,6 @@ void mn_8022F4CC(void)
     mn_8022EBDC();
     mnCharSel_802640A0();
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif

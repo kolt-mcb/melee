@@ -4,7 +4,6 @@
 #endif
 #include "lb_00F9.h"
 
-#include "math.h"
 #include "platform.h"
 #include "stddef.h"
 
@@ -22,13 +21,11 @@
 #include "lb/lbvector.h"
 #include "lb/types.h"
 
-#include <math_ppc.h>
-#include <trigf.h>
+#include <math.h>
 #include <dolphin/mtx.h>
 #include <baselib/cobj.h>
 #include <baselib/displayfunc.h>
 #include <baselib/dobj.h>
-#include <baselib/gobj.h>
 #include <baselib/gobjobject.h>
 #include <baselib/jobj.h>
 #include <baselib/lobj.h>
@@ -62,20 +59,6 @@ struct lb_Collider {
     /* 0x24 */ char pad_24[0x04];
 };
 
-struct CameraBlurData {
-    /* 0x00 */ f32 x0;
-    /* 0x04 */ f32 x4;
-    /* 0x08 */ f32 x8;
-    /* 0x0C */ f32 xC;
-    /* 0x10 */ u8 x10;
-    /* 0x11 */ u8 x11;
-    /* 0x12 */ u8 x12;
-    /* 0x13 */ char pad_13[0x18 - 0x13];
-    /* 0x18 */ HSD_GObjEvent x18;
-    /* 0x1C */ HSD_ImageDesc* x1C;
-    /* 0x20 */ f32 x20;
-};
-
 const struct {
     Vec3 v0;
     Vec3 v1;
@@ -88,6 +71,8 @@ const struct {
     0.0f,
 };
 
+/* 0103D8 */ static bool lb_800103D8(Vec3* vec, float x0, float x1, float x2,
+                                     float x3, float offset);
 /* 4D63A0 */ static struct lb_804D63A0_t* lb_804D63A0;
 /* 4D63A4 */ static struct DynamicsData* cur_data;
 /* 4D63A8 */ static struct lb_804D63A8_t* lb_804D63A8;
@@ -96,6 +81,7 @@ const struct {
 /* 4D63B4 */ static enum_t lb_804D63B4;
 /* 4D63B8 */ static u8 lb_804D63B8;
 
+#ifdef MUST_MATCH
 static void order_data(void)
 {
     (void) "active deffect:";
@@ -104,6 +90,7 @@ static void order_data(void)
     (void) "[NULL]\n\n\n";
     (void) "translate";
 }
+#endif
 
 static inline bool checkJObjFlags(HSD_JObj* jobj)
 {
@@ -381,8 +368,10 @@ float lb_800103B8(Vec3* a, Vec3* b)
     return lb_800101C8(a, b);
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 bool lb_800103D8(Vec3* vec, float x0, float x1, float x2, float x3,
                  float offset)
 {
@@ -402,7 +391,9 @@ bool lb_800103D8(Vec3* vec, float x0, float x1, float x2, float x3,
     }
     return false;
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 static inline bool approximatelyZeroVec3(Vec3 vec)
 {
@@ -430,8 +421,6 @@ static inline float groundHeight(struct DynamicsData* data, Vec3* floor_point)
 {
     return absf(data->desc.lb_unk0.unk_2C.y - floor_point->y);
 }
-
-/// @todo Only the placement of one @c li differs.
 
 void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                  float pos_y, bool use_floor_fn, Fighter_Part part,
@@ -461,9 +450,9 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
     HSD_JObj* jobj;
     struct lb_Collider* collider;
     s32 on_ground;
-    s32 loop_index = 0;
+    s32 loop_index;
 
-    if ((u8) lb_804D63B8 != 0) {
+    if (lb_804D63B8 != 0) {
         return;
     }
     if (desc == NULL) {
@@ -474,11 +463,16 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
     if (cur == NULL) {
         return;
     }
+    /* Keeps loop_index live from function entry. */
+#ifdef MUST_MATCH
+    (void) parent_mtx[loop_index];
+#endif
     if (part > 0xFF) {
         return;
     }
 
     on_ground = 0;
+    loop_index = 0;
     {
         s32 i;
         for (i = 0; i < (s32) part; i++) {

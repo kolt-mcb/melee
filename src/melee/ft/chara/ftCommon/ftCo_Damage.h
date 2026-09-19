@@ -1,7 +1,7 @@
 #ifndef GALE01_08D7F0
 #define GALE01_08D7F0
 
-#include "ftCommon/forward.h"
+#include "ft/forward.h"
 
 /* 08D7F0 */ float ftCo_Damage_CalcAngle(Fighter* fp, float kb_applied);
 /* 08D8D8 */ float ftCo_ScaleBy154(float);
@@ -35,6 +35,6 @@
 /* 090324 */ void ftCo_DamageFlyRoll_IASA(Fighter_GObj* gobj);
 /* 09035C */ void ftCo_DamageFlyRoll_Phys(Fighter_GObj* gobj);
 /* 0904C0 */ void ftCo_DamageFlyRoll_Coll(Fighter_GObj* gobj);
-/* 3C5520 */ extern int ftCo_803C5520[2][12];
+/* 3C5520 */ extern int ftCo_803C5520[2][4][3];
 
 #endif

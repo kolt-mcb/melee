@@ -1,5 +1,7 @@
 #include "sislib.h"
 
+#include "sislib.static.h"
+
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #if BUILD_TARGET_PC
@@ -15,18 +17,15 @@
 #include "gobjplink.h"
 #include "gobjuserdata.h"
 #include "memory.h"
-#include "state.h"
-#include "tev.h"
 #include "wobj.h"
 
 #include "dolphin/gx.h"
 #include "dolphin/mtx.h"
 
-#include <printf.h>
-#include <stdarg.h>
+#include <printf.h> // IWYU pragma: keep
 #include <stdio.h>
 #include <dolphin/os.h>
-#include <melee/lb/lbarchive.h>
+#include <dolphin/types.h>
 
 /* SIS string data is a byte stream straight out of the archive: 16-bit
  * fields (glyph codes, positions, scales, delays) are big-endian and can sit
@@ -56,31 +55,25 @@ static HSD_WObjDesc HSD_SisLib_8040C4A4 = {
 static u32 HSD_SisLib_804D7968;
 
 static HSD_CameraDescPerspective HSD_SisLib_8040C4B8 = {
+    NULL,
     0,
-    0,
-    1,
-    0,
-    0x280,
-    0,
-    0x1E0,
-    0,
-    0x280,
-    0,
-    0x1E0,
+    PROJ_PERSPECTIVE,
+    { 0, 640, 0, 480 },
+    { 0, 640, 0, 480 },
     &HSD_SisLib_8040C490,
     &HSD_SisLib_8040C4A4,
-    0,
-    0,
-    0,
-    65535,
-    30,
-    1.3333,
+    0.0f,
+    NULL,
+    0.0f,
+    0xFFFF,
+    30.0f,
+    1.3333f,
 };
 
-SisBlock* free_head;
-SisBlock* used_head;
-HSD_Text* HSD_SisLib_804D7978;
 sislib_UnkAlloc3* HSD_SisLib_804D797C;
+HSD_Text* HSD_SisLib_804D7978;
+SisBlock* used_head;
+SisBlock* free_head;
 
 /// extern ? *HSD_SisLib_804D796C;
 /// extern u8 *HSD_SisLib_804D7978;
@@ -171,11 +164,6 @@ static u8* pc_sis_default_font(void)
 static HSD_Archive* HSD_SisLib_804D1110[5];
 SIS* HSD_SisLib_804D1124[5];
 
-static inline u8* HSD_SisLib_BytePtr(void* ptr)
-{
-    return ptr;
-}
-
 void* HSD_SisLib_Alloc(s32 size)
 {
     SisBlock* best;
@@ -191,7 +179,7 @@ void* HSD_SisLib_Alloc(s32 size)
     alloc_cur = used_head;
     if (size == 0) {
         OSReport("ZERO byte alloc\n");
-        OSPanic("sislib.c", 0x3C, "");
+        OSPanic(__FILE__, 60, "");
     }
     remainder = size % 4;
     if (remainder != 0) {
@@ -259,7 +247,7 @@ void* HSD_SisLib_Alloc(s32 size)
 #endif
     if (best == NULL) {
         OSReport("Memory Empty\n");
-        OSPanic("sislib.c", 0x56, "");
+        OSPanic(__FILE__, 0x56, "");
     }
 
     free_cur = free_head;
@@ -274,7 +262,7 @@ void* HSD_SisLib_Alloc(s32 size)
         remaining_size = (free_cur->size - size) - (sizeof(SisBlock));
         if (remaining_size < 0) {
             OSReport("Memory Empty\n");
-            OSPanic("sislib.c", 0x5F, "");
+            OSPanic(__FILE__, 0x5F, "");
         }
 
         free_head = (SisBlock*) (data_ptr + size);
@@ -387,6 +375,97 @@ void HSD_SisLib_803A5A2C(void* ptr)
     }
 }
 
+HSD_Text* HSD_SisLib_803A5ACC(int font_idx, s32 context_id, f32 pos_x,
+                              f32 pos_y, f32 pos_z, f32 box_w, f32 box_h)
+{
+    HSD_Text* list_cur;
+    HSD_Text* list_tail;
+    sislib_UnkAlloc3* cam_entry;
+    HSD_GObj* gobj;
+    int cam_idx;
+    HSD_Text* text;
+
+    cam_idx = context_id; /// this is the context id that comes from
+                          /// HSD_SisLib_803A611C, it essentially tells us
+                          /// which camera to use
+    list_tail = NULL;
+    cam_entry = NULL;
+    gobj = NULL;
+    list_cur = HSD_SisLib_804D7978;
+    if (cam_idx >= 0) {
+        cam_entry = HSD_SisLib_804D797C;
+        while (1) {
+            if (cam_entry->xA == font_idx && --cam_idx < 0) {
+                break;
+            }
+
+            if (cam_entry == NULL) {
+                OSReport("unknow camera\n");
+                return NULL;
+            }
+            cam_entry = cam_entry->x0;
+        }
+        gobj = GObj_Create(cam_entry->x8, cam_entry->xC, cam_entry->xD);
+        GObj_SetupGXLink(gobj, HSD_SisLib_803A84BC, cam_entry->xE,
+                         cam_entry->xF);
+    }
+    while (list_cur != NULL) {
+        list_tail = list_cur;
+        list_cur = list_cur->next;
+    }
+    text = HSD_SisLib_Alloc(sizeof(HSD_Text));
+    if (HSD_SisLib_804D7978 == NULL) {
+        HSD_SisLib_804D7978 = text;
+    }
+    if (list_tail != NULL) {
+        list_tail->next = text;
+    }
+    if (gobj != NULL) {
+        GObj_InitUserData(gobj, cam_entry->x8, HSD_SisLib_803A5A2C, text);
+    }
+    text->next = NULL;
+    text->entity = gobj;
+    text->pos_x = pos_x;
+    text->pos_y = pos_y;
+    text->pos_z = pos_z;
+    text->box_size_x = box_w;
+    text->box_size_y = box_h;
+    text->x14.w = 0.0F;
+    text->x14.z = 0.0F;
+    text->x14.y = 0.0F;
+    text->x14.x = 0.0F;
+    text->font_size.y = 1.0F;
+    text->font_size.x = 1.0F;
+    text->alloc_data = NULL;
+    text->string_buffer = 0;
+    text->sis_buffer = 0;
+    text->bg_color.a = 0;
+    text->bg_color.b = 0;
+    text->bg_color.g = 0;
+    text->bg_color.r = 0;
+    text->text_color.a = 0xFF;
+    text->text_color.b = 0xFF;
+    text->text_color.g = 0xFF;
+    text->text_color.r = 0xFF;
+    text->x34.y = 1.0F;
+    text->x34.x = 1.0F;
+    text->x3C.y = 0.0F;
+    text->x3C.x = 0.0F;
+    text->x46 = 0;
+    text->x44 = 0;
+    text->default_alignment = 0;
+    text->default_fitting = 0;
+    text->default_kerning = 0;
+    text->x6E = 0;
+    text->x6C = 0;
+    text->x4E = 0;
+    text->hidden = 0;
+    text->x4C = 0;
+    text->render_callback = 0;
+    text->font_idx = font_idx;
+    return text;
+}
+
 void HSD_SisLib_803A5CC4(HSD_Text* text)
 {
     HSD_Text* curr = HSD_SisLib_804D7978;
@@ -464,104 +543,6 @@ void HSD_SisLib_803A5DA0(s32 font_idx)
     }
 }
 
-HSD_Text* HSD_SisLib_803A5ACC(int font_idx, s32 context_id, f32 pos_x,
-                              f32 pos_y, f32 pos_z, f32 box_w, f32 box_h)
-{
-    HSD_Text* list_cur;
-    HSD_Text* list_tail;
-    sislib_UnkAlloc3* cam_entry;
-    HSD_GObj* gobj;
-    int cam_idx;
-    HSD_Text* text;
-
-    cam_idx = context_id; /// this is the context id that comes from
-                          /// HSD_SisLib_803A611C, it essentially tells us
-                          /// which camera to use
-    list_tail = NULL;
-    cam_entry = NULL;
-    gobj = NULL;
-    list_cur = HSD_SisLib_804D7978;
-    if (cam_idx >= 0) {
-        cam_entry = HSD_SisLib_804D797C;
-        while (1) {
-            if (cam_entry->xA == font_idx && --cam_idx < 0) {
-                break;
-            }
-
-            if (cam_entry == NULL) {
-                OSReport("unknow camera\n");
-                return NULL;
-            }
-            cam_entry = cam_entry->x0;
-        }
-        gobj = GObj_Create(cam_entry->x8, cam_entry->xC, cam_entry->xD);
-        GObj_SetupGXLink(gobj, HSD_SisLib_803A84BC, cam_entry->xE,
-                         cam_entry->xF);
-    }
-    while (list_cur != NULL) {
-        list_tail = list_cur;
-        list_cur = list_cur->next;
-    }
-#if BUILD_TARGET_PC
-    /* 0xA0 is sizeof(HSD_Text) on GameCube. It is larger here -- several of
-     * its members are pointers -- so every write past 0xA0 landed on the next
-     * block's SisBlock header and corrupted the free list. */
-    text = HSD_SisLib_Alloc(sizeof(HSD_Text));
-#else
-    text = HSD_SisLib_Alloc(0xA0);
-#endif
-    if (HSD_SisLib_804D7978 == NULL) {
-        HSD_SisLib_804D7978 = text;
-    }
-    if (list_tail != NULL) {
-        list_tail->next = text;
-    }
-    if (gobj != NULL) {
-        GObj_InitUserData(gobj, cam_entry->x8, HSD_SisLib_803A5A2C, text);
-    }
-    text->next = NULL;
-    text->entity = gobj;
-    text->pos_x = pos_x;
-    text->pos_y = pos_y;
-    text->pos_z = pos_z;
-    text->box_size_x = box_w;
-    text->box_size_y = box_h;
-    text->x14.w = 0.0F;
-    text->x14.z = 0.0F;
-    text->x14.y = 0.0F;
-    text->x14.x = 0.0F;
-    text->font_size.y = 1.0F;
-    text->font_size.x = 1.0F;
-    text->alloc_data = NULL;
-    text->string_buffer = 0;
-    text->sis_buffer = 0;
-    text->bg_color.a = 0;
-    text->bg_color.b = 0;
-    text->bg_color.g = 0;
-    text->bg_color.r = 0;
-    text->text_color.a = 0xFF;
-    text->text_color.b = 0xFF;
-    text->text_color.g = 0xFF;
-    text->text_color.r = 0xFF;
-    text->x34.y = 1.0F;
-    text->x34.x = 1.0F;
-    text->x3C.y = 0.0F;
-    text->x3C.x = 0.0F;
-    text->x46 = 0;
-    text->x44 = 0;
-    text->default_alignment = 0;
-    text->default_fitting = 0;
-    text->default_kerning = 0;
-    text->x6E = 0;
-    text->x6C = 0;
-    text->x4E = 0;
-    text->hidden = 0;
-    text->x4C = 0;
-    text->render_callback = 0;
-    text->font_idx = font_idx;
-    return text;
-}
-
 static SisBlock* HSD_SisLib_804D796C;
 
 void HSD_SisLib_803A5E70(void)
@@ -586,13 +567,7 @@ void HSD_SisLib_803A5E70(void)
     used_head = NULL;
     free_head->next = NULL;
     free_head->data = (HSD_Text*) (free_head + 1);
-    #if BUILD_TARGET_PC
-    /* 0xC is sizeof(SisBlock) on GameCube; two of its three fields are
-     * pointers, so the header is bigger here. */
     free_head->size = HSD_SisLib_804D7968 - sizeof(SisBlock);
-#else
-    free_head->size = HSD_SisLib_804D7968 - 0xC;
-#endif
 }
 
 void HSD_SisLib_803A5F50(s32 font_idx)
@@ -633,13 +608,7 @@ void HSD_SisLib_803A6048(u32 size)
     HSD_SisLib_804D796C = free_head = HSD_MemAlloc(HSD_SisLib_804D7968);
     free_head->next = NULL;
     free_head->data = (HSD_Text*) (free_head + 1);
-    #if BUILD_TARGET_PC
-    /* 0xC is sizeof(SisBlock) on GameCube; two of its three fields are
-     * pointers, so the header is bigger here. */
     free_head->size = HSD_SisLib_804D7968 - sizeof(SisBlock);
-#else
-    free_head->size = HSD_SisLib_804D7968 - 0xC;
-#endif
     HSD_SisLib_804D7978 = NULL;
     HSD_SisLib_804D797C = NULL;
 
@@ -662,7 +631,7 @@ void fn_803A60EC(void* gobj)
     }
 }
 
-s32 HSD_SisLib_803A611C(int font_idx, HSD_GObj* parent_gobj, u16 class_id,
+int HSD_SisLib_803A611C(int font_idx, HSD_GObj* parent_gobj, u16 class_id,
                         u8 p_link, u8 p_prio, u8 gx_link, u8 gx_prio,
                         u32 render_prio)
 {
@@ -681,11 +650,7 @@ s32 HSD_SisLib_803A611C(int font_idx, HSD_GObj* parent_gobj, u16 class_id,
         }
         list_cur = list_cur->x0;
     }
-#if BUILD_TARGET_PC
-    entry = HSD_SisLib_Alloc(sizeof(sislib_UnkAlloc3)); /* 0x10 on GameCube */
-#else
-    entry = HSD_SisLib_Alloc(0x10);
-#endif
+    entry = HSD_SisLib_Alloc(sizeof(sislib_UnkAlloc3));
     if (HSD_SisLib_804D797C == NULL) {
         HSD_SisLib_804D797C = entry;
     }
@@ -709,7 +674,7 @@ s32 HSD_SisLib_803A611C(int font_idx, HSD_GObj* parent_gobj, u16 class_id,
             if (cobj != NULL) {
                 HSD_CObjSetOrtho(cobj, 0.0F, -480.0F, 0.0F, 640.0F);
                 {
-                    u8 tmp = HSD_GObj_804D784B;
+                    u8 tmp = HSD_GObj_CameraKind;
                     HSD_GObjObject_80390A70(entry->x4, tmp, cobj);
                 }
                 GObj_SetupGXLinkMax(entry->x4, HSD_GObj_803910D8, render_prio);
@@ -775,7 +740,7 @@ void HSD_SisLib_803A62A0(s32 font_idx, char* archive_name, char* symbol_name)
     HSD_SisLib_804D1110[font_idx] = tmp;
     if (tmp == NULL) {
         OSReport("Cannot open archive %s.\n", archive_name);
-        OSPanic("sislib.c", 0x24A, "");
+        OSPanic(__FILE__, 0x24A, "");
     }
     {
         SIS* sis = HSD_ArchiveGetPublicAddress(HSD_SisLib_804D1110[font_idx],
@@ -797,7 +762,7 @@ void HSD_SisLib_803A62A0(s32 font_idx, char* archive_name, char* symbol_name)
         HSD_SisLib_804D1124[font_idx] = sis;
         if (sis == NULL) {
             OSReport("Cannot find symbol %s.\n", symbol_name);
-            OSPanic("sislib.c", 0x24F, "");
+            OSPanic(__FILE__, 0x24F, "");
         }
     }
 }
@@ -1612,7 +1577,7 @@ block_done:
     }
 }
 
-void HSD_SisLib_803A7684(HSD_Text* text, u8* cursor, u8 flags)
+void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
 {
     u16 old_x6E;
     s32 new_x6E;

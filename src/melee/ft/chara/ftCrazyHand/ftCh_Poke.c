@@ -1,6 +1,5 @@
 #include "ftCh_Poke.h"
 
-#include <placeholder.h>
 #include <platform.h>
 
 #include "baselib/forward.h"
@@ -18,7 +17,6 @@
 #include "pl/player.h"
 
 #include <dolphin/mtx.h>
-#include <MetroTRK/intrinsics.h>
 
 void fn_80158534(HSD_GObj* gobj);
 void ftCh_Init_8015868C(HSD_GObj* gobj);

@@ -2,13 +2,13 @@
 
 #include <placeholder.h>
 
-#include "ef/eflib.h"
 #include "ef/efsync.h"
 #include "ft/fighter.h"
 
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0877.h"
 #include "ft/ft_0892.h"
 #include "ft/ftcliffcommon.h"
@@ -28,7 +28,6 @@
 #include "lb/lbvector.h"
 
 #include <math.h>
-#include <trigf.h>
 #include <baselib/gobj.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
@@ -130,18 +129,6 @@ void ftSk_SpecialAirHi_Enter(HSD_GObj* gobj)
                               NULL);
     ftAnim_8006EBA4(gobj);
 }
-
-/// #fn_80112ED8
-
-/// #ftSk_SpecialHi_80112F48
-
-/// #ftSk_SpecialHi_80112FA8
-
-/// #fn_80113038
-
-/// #ftSk_SpecialHi_Enter
-
-/// #ftSk_SpecialAirHi_Enter
 
 void ftSk_SpecialHiStart_0_Anim(HSD_GObj* gobj)
 {
@@ -274,7 +261,7 @@ void ftSk_SpecialHiStart_1_Coll(HSD_GObj* gobj)
 
         if (temp_r3 & Collide_LeftWallMask || temp_r3 & Collide_RightWallMask)
         {
-            ftCommon_8007D60C((Fighter*) fp);
+            ftCommon_8007D60C(fp);
             ftSk_SpecialHi_80113F68(gobj);
             return;
         }
@@ -327,7 +314,7 @@ void ftSk_SpecialAirHiStart_1_Coll(HSD_GObj* gobj)
         (void) 0.0f;
         (void) 1.0f;
         (void) S32_TO_F32;
-        (void) deg_to_rad;
+        (void) MTXDegToRad(1);
         ftCommon_HandleTeleportCollisions(gobj, fp, collData, &attr->x50,
                                           ftSk_SpecialHi_80113F68);
     }

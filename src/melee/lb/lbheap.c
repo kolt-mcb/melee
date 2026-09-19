@@ -6,6 +6,7 @@
 
 #include "placeholder.h"
 
+#include <stddef.h> // offsetof
 #include <stdlib.h>
 #include <dolphin/os/OSInterrupt.h>
 #include <baselib/archive.h>
@@ -32,7 +33,14 @@ struct lbHeap_HeapDesc lbHeap_803BA380[5] = {
 };
 
 #define lbHeap_GetHeapOffsetView(offset)                                      \
-    ((struct lbHeap_HeapOffsetView*) ((uintptr_t) (&lbHeap_80431FA0) + (offset)))
+    ((struct lbHeap_HeapOffsetView*) ((uintptr_t) (&lbHeap_80431FA0) +        \
+                                      (offset)))
+
+/// Offset within lbHeap_80431FA0 of the view overlaying heap_array[idx].
+/// 0x38 for idx 2 on PowerPC.
+#define lbHeap_HeapViewOffset(idx)                                            \
+    (offsetof(struct lbHeap_HeapState, heap_array[idx]) -                     \
+     offsetof(struct lbHeap_HeapOffsetView, heap))
 
 static inline void lbHeap_ResetHeap(struct Heap* heap)
 {
@@ -105,10 +113,10 @@ void lbHeap_80015900(void)
     struct lbHeap_HeapOffsetView* create_view;
     s32 heap_offset;
     s32 create_i;
-    u32 arena_lo;
-    u32 aram_lo;
-    u32 aram_hi;
-    u32 arena_hi;
+    uintptr_t arena_lo;
+    uintptr_t aram_lo;
+    uintptr_t aram_hi;
+    uintptr_t arena_hi;
     struct Heap* main_heap;
     s32 destroy_i;
     struct Heap* aram_heap;
@@ -132,8 +140,9 @@ void lbHeap_80015900(void)
 
     /// @remarks 0 and 1 are reserved for HSD and ARAM
     destroy_i = 2;
-    destroy_cursor = (uintptr_t) &lbHeap_80431FA0.heap_array[destroy_i] - 0x10;
-    heap_offset = 0x38;
+    destroy_cursor = (uintptr_t) &lbHeap_80431FA0.heap_array[destroy_i] -
+                     offsetof(struct lbHeap_HeapOffsetView, heap);
+    heap_offset = lbHeap_HeapViewOffset(2);
     for (; destroy_i < 6; destroy_i++, destroy_cursor += sizeof(struct Heap),
                           heap_offset += sizeof(struct Heap))
     {
@@ -175,8 +184,8 @@ void lbHeap_80015900(void)
         }
     }
 #endif
-    arena_lo = (u32) lbHeap_80431FA0.arena_lo;
-    arena_hi = (u32) lbHeap_80431FA0.arena_hi;
+    arena_lo = (uintptr_t) lbHeap_80431FA0.arena_lo;
+    arena_hi = (uintptr_t) lbHeap_80431FA0.arena_hi;
     aram_lo = lbHeap_80431FA0.aram_lo;
     aram_hi = lbHeap_80431FA0.aram_hi;
 
@@ -223,7 +232,7 @@ void lbHeap_80015900(void)
     aram_heap->status = LbHeapStatus_Create;
     aram_heap->type = 3;
 
-    for (create_i = 2, heap_offset = 0x38; create_i < 6;
+    for (create_i = 2, heap_offset = lbHeap_HeapViewOffset(2); create_i < 6;
          create_i++, heap_offset += sizeof(struct Heap))
     {
         if (lbHeap_80431FA0.heap_array[create_i].transient == 0) {
@@ -233,36 +242,38 @@ void lbHeap_80015900(void)
     }
 }
 
-int lbHeap_80015BB8(int arg0)
+LbHeapStatus lbHeap_80015BB8(int arg0)
 {
     return lbHeap_80431FA0.heap_array[arg0].status;
 }
 
-void* lbHeap_80015BD0(int arg0, int arg1)
+void* lbHeap_80015BD0(int heap_id, size_t size)
 {
     Handle* result;
     int enabled = OSDisableInterrupts();
-    struct Heap* p = &lbHeap_80431FA0.heap_array[arg0];
+    struct Heap* p = &lbHeap_80431FA0.heap_array[heap_id];
 
     if (p->status == LbHeapStatus_Create) {
         if (p->type == 0) {
             int cur_heap = HSD_GetHeap();
             HSD_SetHeap(p->id);
-            result = HSD_MemAlloc(arg1);
+            result = HSD_MemAlloc(size);
             HSD_SetHeap(cur_heap);
         } else {
-            result = lbMemory_80014FC8(p->handle, arg1);
+            result = lbMemory_80014FC8(p->handle, size);
 #if BUILD_TARGET_PC
             /* PC port: heap exhaustion returns NULL now — fall back to
              * malloc so loads keep working (freed via lbMemFreeToHeap will
              * just log; acceptable leak until heap sizing is ported). */
             if (result == NULL) {
-                OSReport("[HEAP] lbHeap_80015BD0: heap %d exhausted; low-pool(%d) fallback\n", arg0, arg1);
+                OSReport("[HEAP] lbHeap_80015BD0: heap %d exhausted; "
+                         "low-pool(%d) fallback\n",
+                         heap_id, (int) size);
                 OSRestoreInterrupts(enabled);
                 {
                     /* Must stay sub-4GB: callers store these in u32 fields. */
                     extern void* pc_lowmem_malloc(size_t size);
-                    return pc_lowmem_malloc((size_t) arg1);
+                    return pc_lowmem_malloc(size);
                 }
             }
 #endif
@@ -271,7 +282,7 @@ void* lbHeap_80015BD0(int arg0, int arg1)
                 fprintf(stderr,
                         "[HEAPTRACE] lbHeap_80015BD0(heap=%d, size=%d): "
                         "status=%d type=%d handle=%p -> %p",
-                        arg0, arg1, (int) p->status, (int) p->type,
+                        heap_id, (int) size, (int) p->status, (int) p->type,
                         (void*) p->handle, (void*) result);
                 if (p->type == 3 && result != NULL) {
                     fprintf(stderr, " x4_lo=%p", (void*) result->x4_lo);
@@ -288,7 +299,7 @@ void* lbHeap_80015BD0(int arg0, int arg1)
         /* PC port fallback: use malloc when heap isn't created */
         {
             extern void* pc_lowmem_malloc(size_t size);
-            result = pc_lowmem_malloc((size_t) arg1);
+            result = pc_lowmem_malloc(size);
         }
 #else
         result = NULL;
@@ -305,8 +316,9 @@ void* lbHeap_80015BD0(int arg0, int arg1)
         if (warned < 8) {
             warned++;
             fprintf(stderr,
-                    "[HEAP] WARNING: allocation above 4GB: %p (heap %d, %d bytes)\n",
-                    (void*) result, arg0, arg1);
+                    "[HEAP] WARNING: allocation above 4GB: %p (heap %d, %d "
+                    "bytes)\n",
+                    (void*) result, heap_id, (int) size);
         }
     }
 #endif
@@ -330,7 +342,7 @@ void lbHeap_80015CA8(int arg0, void* arg1)
     OSRestoreInterrupts(enabled);
 }
 
-int lbHeap_80015D6C(u32 heap0, UNK_T cb, u32 heap1)
+int lbHeap_80015D6C(u32 heap0, void (*cb)(u32), u32 heap1)
 {
     int enabled = OSDisableInterrupts();
     struct Heap* p = &lbHeap_80431FA0.heap_array[heap0];
@@ -384,7 +396,8 @@ void lbHeap_80015DF8(void)
         OSReport(" / %5d KB\n", p->size / 1024, p->size);
     }
 
-    bytes = (u32) lbHeap_80431FA0.arena_hi - (u32) lbHeap_80431FA0.arena_lo;
+    bytes = (uintptr_t) lbHeap_80431FA0.arena_hi -
+            (uintptr_t) lbHeap_80431FA0.arena_lo;
     OSReport("MainRAM Total : %5d KB( %8d)\n", bytes / 1024, bytes);
     bytes = lbHeap_80431FA0.aram_hi - lbHeap_80431FA0.aram_lo;
     OSReport("   ARAM Total : %5d KB( %8d)\n", bytes / 1024, bytes);
@@ -420,14 +433,14 @@ void lbHeap_80015F3C(void)
             case 3:
                 break;
             case 1:
-                curr_heap->start = (s32) lbHeap_80431FA0.arena_lo;
+                curr_heap->start = (uintptr_t) lbHeap_80431FA0.arena_lo;
                 break;
             case 2:
                 curr_heap->start =
-                    (u32) lbHeap_80431FA0.arena_hi - curr_heap->size;
+                    (uintptr_t) lbHeap_80431FA0.arena_hi - curr_heap->size;
                 break;
             case 4:
-                curr_heap->start = (s32) lbHeap_80431FA0.aram_lo;
+                curr_heap->start = lbHeap_80431FA0.aram_lo;
                 break;
             }
         } else {

@@ -8,20 +8,16 @@
 #include "port/pc_script.h"
 #endif
 
-#include <math_ppc.h>
-#include <trigf.h>
 #include <dolphin/pad.h>
 #include <baselib/rumble.h>
 
 typedef bool (*lb_803BA248_fn)(ColorOverlay*);
+/* 013BB8 */ static bool lb_80013BB8(ColorOverlay* arg);
+/* 013BE4 */ static bool lb_80013BE4(ColorOverlay* arg);
+/* 013FF0 */ static bool lb_80013FF0(ColorOverlay* arg);
+/* 014234 */ static bool lb_80014234(ColorOverlay* arg);
 
-/* 013C18 */ static bool lb_80013C18(ColorOverlay*);
-/* 013D68 */ static bool lb_80013D68(ColorOverlay*);
-/* 013E3C */ static bool lb_80013E3C(ColorOverlay*);
-/* 013F78 */ static bool lb_80013F78(ColorOverlay*);
-/* 014014 */ static bool lb_80014014(ColorOverlay*);
-/* 0140F8 */ static bool lb_800140F8(ColorOverlay*);
-/* 4D63C0 */ static struct Fighter_804D653C_t* lb_804D63C0;
+static struct Fighter_804D653C_t* lb_804D63C0;
 
 bool lb_80013BB0(ColorOverlay* arg)
 {
@@ -42,7 +38,7 @@ bool lb_80013BE4(ColorOverlay* arg0)
     return false;
 }
 
-bool lb_80013C18(ColorOverlay* arg0)
+static bool lb_80013C18(ColorOverlay* arg0)
 {
     arg0->x7C_light_enable = arg0->x8_ptr1->light_rot2.light_enable;
     arg0->x74_light_rot_x = arg0->x8_ptr1->light_rot2.x;
@@ -65,7 +61,7 @@ bool lb_80013C18(ColorOverlay* arg0)
     return false;
 }
 
-bool lb_80013D68(ColorOverlay* arg0)
+static bool lb_80013D68(ColorOverlay* arg0)
 {
     ++arg0->x8_ptr1;
     arg0->x50_light_color.r = arg0->x8_ptr1->light_color.r;
@@ -84,7 +80,7 @@ bool lb_80013D68(ColorOverlay* arg0)
     return false;
 }
 
-bool lb_80013E3C(ColorOverlay* arg0)
+static bool lb_80013E3C(ColorOverlay* arg0)
 {
     float f = arg0->x8_ptr1++->unk.timer;
     arg0->x64_lightblend_red =
@@ -99,7 +95,7 @@ bool lb_80013E3C(ColorOverlay* arg0)
     return false;
 }
 
-bool lb_80013F78(ColorOverlay* arg0)
+static bool lb_80013F78(ColorOverlay* arg0)
 {
     arg0->x74_light_rot_x = arg0->x8_ptr1->light_rot1.x;
     arg0->x78_light_rot_yz = arg0->x8_ptr1->light_rot1.yz;
@@ -107,14 +103,14 @@ bool lb_80013F78(ColorOverlay* arg0)
     return false;
 }
 
-bool lb_80013FF0(ColorOverlay* arg0)
+static bool lb_80013FF0(ColorOverlay* arg0)
 {
     arg0->x7C_flag2 = false;
     ++arg0->x8_ptr1;
     return false;
 }
 
-bool lb_80014014(ColorOverlay* arg0)
+static bool lb_80014014(ColorOverlay* arg0)
 {
     arg0->x7C_color_enable = true;
     ++arg0->x8_ptr1;
@@ -134,7 +130,7 @@ bool lb_80014014(ColorOverlay* arg0)
     return false;
 }
 
-bool lb_800140F8(ColorOverlay* arg0)
+static bool lb_800140F8(ColorOverlay* arg0)
 {
     float f = arg0->x8_ptr1++->unk.timer;
     arg0->x40_colorblend_red =

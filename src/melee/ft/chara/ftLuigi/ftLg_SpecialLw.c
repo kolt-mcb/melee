@@ -4,7 +4,6 @@
 
 #include <platform.h>
 
-#include "ef/eflib.h"
 #include "ef/efsync.h"
 
 #include "forward.h"
@@ -21,7 +20,6 @@
 
 #include "ftCommon/ftCo_Fall.h"
 #include "ftCommon/ftCo_FallSpecial.h"
-#include "lb/lbrefract.h"
 
 #include <dolphin/mtx.h>
 
@@ -45,8 +43,8 @@ static inline void ftLuigi_SpecialLw_SetVars(HSD_GObj* gobj)
     ftLuigiAttributes* luigiAttrs = fp->dat_attrs;
     fp->cmd_vars[0] = 0;
     fp->cmd_vars[1] = 0;
-    fp->mv.lg.SpecialLw.groundVelX = (float) 0.0f;
-    fp->mv.lg.SpecialLw.unk = (s32) luigiAttrs->x88_LUIGI_CYCLONE_UNK + 1;
+    fp->mv.lg.SpecialLw.groundVelX = 0.0f;
+    fp->mv.lg.SpecialLw.unk = luigiAttrs->x88_LUIGI_CYCLONE_UNK + 1;
     fp->mv.lg.SpecialLw.isUnkColl = false;
 }
 
@@ -84,8 +82,8 @@ void ftLg_SpecialLw_Enter(HSD_GObj* gobj)
     Fighter_ChangeMotionState(gobj, ftLg_MS_SpecialAirLw, 0, 0.0f, 1.0f, 0.0f,
                               NULL);
     ftAnim_8006EBA4(gobj);
-    fp2->self_vel.y = (float) (luigiAttrs->x70_LUIGI_CYCLONE_TAP_MOMENTUM -
-                               luigiAttrs->x8C_LUIGI_CYCLONE_TAP_Y_VEL_MAX);
+    fp2->self_vel.y = (luigiAttrs->x70_LUIGI_CYCLONE_TAP_MOMENTUM -
+                       luigiAttrs->x8C_LUIGI_CYCLONE_TAP_Y_VEL_MAX);
     ftCommon_ClampSelfVelX(fp, luigiAttrs->x78_LUIGI_CYCLONE_MOMENTUM_X_AIR);
     ftLuigi_SpecialLw_SetVars(gobj);
     ftLuigi_SpecialLw_SetCall(gobj);
@@ -119,7 +117,7 @@ void ftLg_SpecialAirLw_Enter(HSD_GObj* gobj)
         cycloneVar = luigiAttrs->x8C_LUIGI_CYCLONE_TAP_Y_VEL_MAX;
     }
     fp2->self_vel.y =
-        (float) (luigiAttrs->x70_LUIGI_CYCLONE_TAP_MOMENTUM - cycloneVar);
+        (luigiAttrs->x70_LUIGI_CYCLONE_TAP_MOMENTUM - cycloneVar);
     ftCommon_ClampSelfVelX(fp, luigiAttrs->x78_LUIGI_CYCLONE_MOMENTUM_X_AIR);
     ftLuigi_SpecialLw_SetVars(gobj);
     ftLuigi_SpecialLw_SetCall(gobj);
@@ -270,7 +268,7 @@ static ftCollisionBox ftLg_SpecialLw_CollisionBox = {
 static inline void ftLuigi_SpecialLw_UnkAngle(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if (((u32) fp->cmd_vars[3] != 0U) &&
+    if ((fp->cmd_vars[3] != 0U) &&
         ((s32) fp->mv.lg.SpecialLw.isUnkColl != false))
     {
         ftPartSetRotX(fp, 0,

@@ -2,7 +2,6 @@
 
 #include <platform.h>
 
-#include "ef/eflib.h"
 #include "ft/chara/ftCommon/ftCo_Fall.h"
 #include "ft/chara/ftCommon/ftCo_FallSpecial.h"
 #include "ft/fighter.h"
@@ -20,8 +19,8 @@
 #include "ftPopo/types.h"
 #include "pl/player.h"
 
+#include <math.h>
 #include <dolphin/mtx.h>
-#include <MSL/math.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC

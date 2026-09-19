@@ -26,7 +26,6 @@ extern void* pc_ftconv_vislookup(void* raw, unsigned model_num);
 #include "it/it_26B1.h"
 #include "it/types.h"
 
-#include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 
 MotionState ftGw_Init_MotionStateTable[ftGw_MS_SelfCount] = {

@@ -129,8 +129,10 @@ static void fn_801A396C(int idx)
     }
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 void gm_EvaluateAllControllerInputs(void)
 {
     struct gm_controller_map* controller = controller_map.x0;
@@ -170,7 +172,9 @@ void gm_EvaluateAllControllerInputs(void)
         controller[PAD_MAX_CONTROLLERS].repeat2 |= controller[i].repeat2;
     }
 }
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void gm_801A3E88(void)
 {
@@ -190,9 +194,9 @@ void gm_801A3E88(void)
 void gm_801A3EF4(void)
 {
     GameMode* scene;
-    for (scene = gm_GetAllGameModes(); scene->idx != GM_COUNT; scene++) {
-        if (scene->Init != NULL) {
-            scene->Init();
+    for (scene = gm_GetAllGameModes(); scene->kind != GM_COUNT; scene++) {
+        if (scene->on_init != NULL) {
+            scene->on_init();
         }
     }
 }

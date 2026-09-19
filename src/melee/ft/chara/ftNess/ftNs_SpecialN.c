@@ -3,7 +3,11 @@
 #include <platform.h>
 
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcommon.h"
@@ -101,23 +105,14 @@ void ftNs_SpecialN_ItemPKFlushSetNULL(HSD_GObj* gobj)
     }
 }
 
-/// @todo Float order hack.
-static float return_void(void)
+#ifdef MUST_MATCH
+static float order_sdata2(void)
 {
-    return 0.0f;
+    (void) 0.0f;
+    (void) 3.0f;
+    (void) 1.0f;
 }
-
-/// @todo Float order hack.
-static float return_void2(void)
-{
-    return 3.0f;
-}
-
-/// @todo Float order hack.
-static float return_void3(void)
-{
-    return 1.0f;
-}
+#endif
 
 /// Ness's grounded PK Flash Start Motion State handler
 void ftNs_SpecialNStart_Enter(HSD_GObj* gobj)
@@ -284,7 +279,7 @@ void ftNs_SpecialNRelease_Anim(HSD_GObj* gobj)
 }
 
 /// Inline to set all variables and match ASM register data
-inline void SetPKFlashAttr(HSD_GObj* gobj)
+static inline void SetPKFlashAttr(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftNessAttributes* sa = fp->dat_attrs;
@@ -536,7 +531,7 @@ void ftNs_SpecialAirNRelease_IASA(HSD_GObj* gobj)
 void ftNs_SpecialAirNEnd_IASA(HSD_GObj* gobj) {}
 
 /// Inline to set remaining frames of gravity delay
-inline void GravityDelay(HSD_GObj* gobj)
+static inline void GravityDelay(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
 
@@ -576,7 +571,7 @@ void ftNs_SpecialAirNStart_Phys(HSD_GObj* gobj)
         fp->mv.ns.specialn.falling_acceleration_delay--;
     } else {
         ftCommon_Fall(fp, sa->x14_PKFLASH_FALL_ACCEL,
-                      fp->co_attrs.terminal_vel);
+                      fp->co_attrs.terminal_velocity);
     }
 
     {
@@ -597,7 +592,7 @@ void ftNs_SpecialAirNRelease_Phys(HSD_GObj* gobj)
         fp->mv.ns.specialn.falling_acceleration_delay--;
     } else {
         ftCommon_Fall(fp, sa->x14_PKFLASH_FALL_ACCEL,
-                      fp->co_attrs.terminal_vel);
+                      fp->co_attrs.terminal_velocity);
     }
 
     {
@@ -618,7 +613,7 @@ void ftNs_SpecialAirNEnd_Phys(HSD_GObj* gobj)
         fp->mv.ns.specialn.falling_acceleration_delay--;
     } else {
         ftCommon_Fall(fp, sa->x14_PKFLASH_FALL_ACCEL,
-                      fp->co_attrs.terminal_vel);
+                      fp->co_attrs.terminal_velocity);
     }
 
     {

@@ -17,7 +17,6 @@
 #include "pl/player.h"
 
 #include <dolphin/mtx.h>
-#include <MetroTRK/intrinsics.h>
 
 static void fn_801577B4(HSD_GObj* gobj);
 
@@ -84,8 +83,6 @@ void ftCh_Slap_Phys(HSD_GObj* gobj)
     ft_80085134(gobj);
     fp->self_vel.x += da->x40;
 }
-
-/// #fn_801577B4
 
 static void fn_801577B4(HSD_GObj* gobj)
 {

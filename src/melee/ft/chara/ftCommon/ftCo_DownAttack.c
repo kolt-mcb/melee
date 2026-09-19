@@ -10,6 +10,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ft_0DF1.h"
 #include "ft/ftanim.h"
@@ -32,7 +33,7 @@ static inline bool inlineA0(Fighter* fp)
     return false;
 }
 
-int ftCo_800984D4(Fighter_GObj* gobj)
+bool ftCo_800984D4(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
     if (inlineA0(fp) || ftCo_800DF644(fp)) {

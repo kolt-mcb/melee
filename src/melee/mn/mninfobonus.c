@@ -197,7 +197,7 @@ void fn_80252C50(HSD_GObj* gobj)
         o->x4C = NULL;
         return;
     } ///< @todo inline button getter
-    if (DbLevel >= 3 && HSD_PadCopyStatus->button & HSD_PAD_L &&
+    if (DbLevel >= DbLKind_DebugRom && HSD_PadCopyStatus->button & HSD_PAD_L &&
         HSD_PadCopyStatus->button & HSD_PAD_R &&
         HSD_PadCopyStatus->button & HSD_PAD_A)
     {
@@ -299,7 +299,7 @@ mnInfoBonus_80252F8C_inline0(struct mnInfoBonus_804A09B0_t* o)
     o->x4C = gobj;
     jobj = HSD_JObjLoadJoint(model_desc->joint);
 
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4, 0x80);
     HSD_JObjAddAnimAll(jobj, model_desc->animjoint, model_desc->matanim_joint,
                        model_desc->shapeanim_joint);

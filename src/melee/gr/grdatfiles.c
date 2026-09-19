@@ -35,6 +35,9 @@
 #include <dolphin/gx.h>
 #include <baselib/spline.h>
 
+/* 1C6228 */ static void grDatFiles_801C6228(UnkStageDat*);
+/* 1C62B4 */ static UnkArchiveStruct* grDatFiles_801C62B4(void);
+
 /// @todo Merge declaration and definition
 /* static */ extern GroundParam grDatFiles_803E0848;
 
@@ -57,7 +60,7 @@ static int grdat_trace_on(void)
     return on;
 }
 
-void grDatFiles_801C5FC0(HSD_Archive* archive, void* data, u32 length)
+void grDatFiles_801C5FC0(HSD_Archive* archive, void* data, size_t length)
 {
 
     HSD_Archive* map_ptcl;
@@ -69,23 +72,6 @@ void grDatFiles_801C5FC0(HSD_Archive* archive, void* data, u32 length)
     if (map_ptcl != NULL && map_texg != NULL) {
         psInitDataBankLocate(map_ptcl, map_texg, NULL);
     }
-}
-
-/// @todo .data order hack
-static void order_data(void)
-{
-    (void) "map_head";
-    (void) "map_head";
-    (void) "coll_data";
-    (void) "grGroundParam";
-    (void) "itemdata";
-    (void) "ALDYakuAll";
-    (void) "map_ptcl";
-    (void) "map_texg";
-    (void) "yakumono_param";
-    (void) "map_plit";
-    (void) "quake_model_set";
-    (void) __FILE__;
 }
 
 #if BUILD_TARGET_PC
@@ -2990,7 +2976,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
             size_t length = 0; /* PC: lbFile_8001668C writes only the low u32 */
             void* mapHead;
             sp14 = lbHeap_80015BD0(0, sizeof(HSD_Archive));
-            data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(r4)));
+            data = lbHeap_80015BD0(0, OSRoundUp32B(lbFileGetSize(r4)));
             lbFile_8001668C(r4, data, &length);
             lbArchive_InitializeDAT(sp14, data, length);
             mapHead = HSD_ArchiveGetPublicAddress(sp14, "map_head");
@@ -3014,7 +3000,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
             size_t length = 0; /* PC: lbFile_8001668C writes only the low u32 */
             void* mapHead;
             sp14 = lbHeap_80015BD0(0, sizeof(HSD_Archive));
-            data = lbHeap_80015BD0(0, OSRoundUp32B(lbFile_800163D8(r4)));
+            data = lbHeap_80015BD0(0, OSRoundUp32B(lbFileGetSize(r4)));
             lbFile_8001668C(r4, data, &length);
             lbArchive_InitializeDAT(sp14, data, length);
             mapHead = HSD_ArchiveGetPublicAddress(sp14, "map_head");
@@ -3095,9 +3081,9 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
                 if (getenv("MELEE_GRDAT_TRACE")) {
                     GroundParam* q = stage_info.param;
                     fprintf(stderr,
-                            "[GRDAT] GroundParam: x0=%.2f fixed_cam=%d "
+                            "[GRDAT] GroundParam: y=%.2f fixed_cam=%d "
                             "x50=%.1f x54=%.1f x58=%.1f x5C=%.1f x60=%.1f\n",
-                            (double) q->x0, (int) q->x4C_fixed_cam,
+                            (double) q->y, (int) q->x4C_fixed_cam,
                             (double) q->x50, (double) q->x54, (double) q->x58,
                             (double) q->x5C, (double) q->x60);
                 }
@@ -3190,7 +3176,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
     }
 }
 
-static void grDatFiles_801C6228(UnkStageDat* arg0)
+void grDatFiles_801C6228(UnkStageDat* arg0)
 {
     if (arg0 == NULL) return;
     if (arg0->unk28 != NULL && arg0->unk2C != 0) {
@@ -3217,10 +3203,10 @@ UnkArchiveStruct* pc_grdatfiles_slot(int i)
 
 void grDatFiles_801C6288(void)
 {
-    memzero(&grDatFiles_8049EE10, 0x30);
+    memzero(&grDatFiles_8049EE10, sizeof(grDatFiles_8049EE10));
 }
 
-static UnkArchiveStruct* grDatFiles_801C62B4(void)
+UnkArchiveStruct* grDatFiles_801C62B4(void)
 {
     s32 i;
     for (i = 0; i < 4; i++) {
@@ -3229,11 +3215,6 @@ static UnkArchiveStruct* grDatFiles_801C62B4(void)
         }
     }
     HSD_ASSERT(229, 0);
-
-#ifdef BUGFIX
-    // Asserts 0 but the compiler doesn't know that.
-    return NULL;
-#endif
 }
 
 UnkArchiveStruct* grDatFiles_GetArchive(void)
@@ -3263,7 +3244,7 @@ UnkArchiveStruct* grDatFiles_801C6478(void* data, s32 length)
 {
     UnkArchiveStruct* arc;
 
-    HSD_Archive* archive = lbHeap_80015BD0(0, 0x44);
+    HSD_Archive* archive = lbHeap_80015BD0(0, sizeof(HSD_Archive));
     lbArchive_InitializeDAT(archive, data, length);
     arc = grDatFiles_801C62B4();
     HSD_ASSERT(290, arc);

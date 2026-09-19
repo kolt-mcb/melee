@@ -11,6 +11,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcliffcommon.h"
@@ -27,11 +28,8 @@
 #include "it/items/itkirbycutterbeam.h"
 #include "lb/lb_00B0.h"
 
+#include <math.h>
 #include <stddef.h>
-#include <trigf.h>
-#include <baselib/gobj.h>
-#include <baselib/random.h>
-#include <MSL/math.h>
 
 static MotionFlags const ftKb_MF_SpecialHi_Coll =
     Ft_MF_KeepGfx | Ft_MF_SkipMatAnim | Ft_MF_SkipColAnim | Ft_MF_SkipItemVis |
@@ -338,7 +336,7 @@ void ftKb_SpecialAirHi3_Phys(Fighter_GObj* gobj)
 
     /// FAKE MATCH: comma operator required for regalloc
     ftCommon_8007D3A8(fp, 0.0f,
-                      ((0, fp->co_attrs.air_drift_stick_mul)) *
+                      (0, fp->co_attrs.air_drift_stick_mul) *
                           (dat_attr->specialhi_horizontal_momentum),
                       fp->co_attrs.air_drift_max);
 }

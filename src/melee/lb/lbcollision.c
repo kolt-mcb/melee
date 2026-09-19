@@ -16,7 +16,6 @@
 #include "lb/types.h"
 
 #include <math.h>
-#include <math_ppc.h>
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 #include <baselib/cobj.h>
@@ -24,7 +23,6 @@
 #include <baselib/mtx.h>
 #include <baselib/state.h>
 #include <baselib/tev.h>
-#include <MetroTRK/intrinsics.h>
 
 #if BUILD_TARGET_PC
 /* The console fuses a*b+c into one rounding; x86 rounds twice. Every site
@@ -105,10 +103,27 @@ lbColl_80006E58(Vec3* hit_start, Vec3* hit_end, Vec3* hurt_start,
                 float hit_radius, float hurt_radius, float broadphase_scale);
 
 /// .sdata
-static GXColor lbColl_804D36C4 = { 0, 0xFF, 0xFF, 0x80 };
-static GXColor lbColl_804D36C8 = { 0, 0x80, 0x80, 0x80 };
-static GXColor lbColl_804D36D4 = { 0, 0x80, 0xFF, 0x80 };
-static GXColor lbColl_804D36D8 = { 0, 0x40, 0x80, 0x80 };
+static GXColor lbColl_804D36A0 = { 0xFF, 0x00, 0x00, 0x80 };
+static GXColor lbColl_804D36A4 = { 0xFF, 0x00, 0xFF, 0x80 };
+static GXColor lbColl_804D36A8 = { 0x80, 0x00, 0x00, 0x80 };
+static GXColor lbColl_804D36AC = { 0xFF, 0xFF, 0x00, 0x80 };
+static GXColor lbColl_804D36B0 = { 0x80, 0x80, 0x00, 0x80 };
+static GXColor lbColl_804D36B4 = { 0x00, 0xFF, 0x00, 0x80 };
+static GXColor lbColl_804D36B8 = { 0x00, 0x80, 0x00, 0x80 };
+static GXColor lbColl_804D36BC = { 0x00, 0x00, 0xFF, 0x80 };
+static GXColor lbColl_804D36C0 = { 0x00, 0x00, 0x80, 0x80 };
+static GXColor lbColl_804D36C4 = { 0x00, 0xFF, 0xFF, 0x80 };
+static GXColor lbColl_804D36C8 = { 0x00, 0x80, 0x80, 0x80 };
+static GXColor lbColl_804D36CC = { 0x00, 0xFF, 0x80, 0x80 };
+static GXColor lbColl_804D36D0 = { 0x00, 0x80, 0x40, 0x80 };
+static GXColor lbColl_804D36D4 = { 0x00, 0x80, 0xFF, 0x80 };
+static GXColor lbColl_804D36D8 = { 0x00, 0x40, 0x80, 0x80 };
+static GXColor lbColl_804D36DC = { 0xFF, 0xFF, 0xFF, 0x80 };
+static GXColor lbColl_804D36E0 = { 0xFF, 0x80, 0x00, 0x80 };
+static GXColor lbColl_804D36E4 = { 0x80, 0x40, 0x00, 0x80 };
+static GXColor lbColl_804D36E8 = { 0xFF, 0xFF, 0xFF, 0x80 };
+static GXColor lbColl_804D36EC = { 0x80, 0x80, 0x80, 0x80 };
+static GXColor lbColl_804D36F0 = { 0xFF, 0xFF, 0x00, 0x80 };
 
 /// .sdata2
 float const lbColl_804D79F0 = 1e-5;
@@ -138,48 +153,9 @@ int lbColl_803B9880[] = {
     0x00035BAF, 0x00035BB2, 0x00035BB5, 0x00083D60, 0x00083D60, 0x0000020D,
 };
 
-#if BUILD_TARGET_PC
-/* lbColl_804D36AC: read out of the original's data at 0x804D36AC (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36AC = { 0xFF, 0xFF, 0x00, 0x80 };
-#else
-extern GXColor lbColl_804D36AC;
-#endif
-#if BUILD_TARGET_PC
-/* lbColl_804D36B0: read out of the original's data at 0x804D36B0 (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36B0 = { 0x80, 0x80, 0x00, 0x80 };
-#else
-extern GXColor lbColl_804D36B0;
-#endif
-#if BUILD_TARGET_PC
-/* lbColl_804D36B4: read out of the original's data at 0x804D36B4 (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36B4 = { 0x00, 0xFF, 0x00, 0x80 };
-#else
-extern GXColor lbColl_804D36B4;
-#endif
-#if BUILD_TARGET_PC
-/* lbColl_804D36B8: read out of the original's data at 0x804D36B8 (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36B8 = { 0x00, 0x80, 0x00, 0x80 };
-#else
-extern GXColor lbColl_804D36B8;
-#endif
-#if BUILD_TARGET_PC
-/* lbColl_804D36BC: read out of the original's data at 0x804D36BC (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36BC = { 0x00, 0x00, 0xFF, 0x80 };
-#else
-extern GXColor lbColl_804D36BC;
-#endif
-#if BUILD_TARGET_PC
-/* lbColl_804D36C0: read out of the original's data at 0x804D36C0 (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36C0 = { 0x00, 0x00, 0x80, 0x80 };
-#else
-extern GXColor lbColl_804D36C0;
-#endif
+static GXColor lbColl_804D36F4 = { 0x80, 0x80, 0x00, 0x80 };
+static GXColor lbColl_804D36F8 = { 0xFF, 0x00, 0x00, 0x80 };
+static GXColor lbColl_804D36FC = { 0x80, 0x00, 0x00, 0x80 };
 
 struct unk {
     GXColor* pad;
@@ -360,29 +336,13 @@ int lbColl_80005BB0(HitCapsule* arg0, int arg1)
         temp_r6 = arg0->sfx_severity;
         if (temp_r6 == 2) {
             return lbAudioAx_80024184(
-                *(lbColl_803B9880 + (temp_r0 * 3) + (temp_r6)), 127, 64, arg1);
+                *(lbColl_803B9880 + (temp_r0 * 3) + temp_r6), 127, 64, arg1);
         }
     }
 
     return lbAudioAx_80024184(
         *(lbColl_803B9880 + (temp_r0 * 3) + (arg0->sfx_severity)), 127, 64,
         -1);
-}
-
-static inline void vector_sub(Vec3* a, Vec3* b, Vec3* result)
-{
-    result->x = a->x - b->x;
-    result->y = a->y - b->y;
-    result->z = a->z - b->z;
-}
-
-static inline bool between(float x, float lo, float hi)
-{
-    if (x < hi && x > lo) {
-        return true;
-    } else {
-        return false;
-    }
 }
 
 static inline bool nearzero(float x)
@@ -582,7 +542,7 @@ float lbColl_80005FC0(Vec3* arg0, Vec3* arg1, Vec3* arg2, float* arg3)
     return LBC_FMA(x, x, y * y);
 }
 
-inline bool end(Vec3* a, Vec3* b, float unk_sum)
+static inline bool end(Vec3* a, Vec3* b, float unk_sum)
 {
     float y = a->y - b->y;
     float x = a->x - b->x;
@@ -1285,10 +1245,10 @@ bool lbColl_80006E58(Vec3* hit_start, Vec3* hit_end, Vec3* hurt_start,
     float hit_start_mid_x;
     float local_delta_x;
     float hurt_mid_z;
-    u8 operand_pad[4];
     Vec3 hit_start_copy;
     Vec3 hurt_start_copy;
     Vec3 hit_delta;
+    u8 operand_pad[4];
     float start_delta_z;
     float hit_start_dot;
     float scaled_hurt_radius;
@@ -1329,6 +1289,7 @@ bool lbColl_80006E58(Vec3* hit_start, Vec3* hit_end, Vec3* hurt_start,
     float hurt_len_sq;
     float hit_end_max_z;
     float candidate_hurt_param;
+    float candidate_hit_param;
     float hit_end_x;
     float hit_len_sq;
     float hit_end_mid_x;
@@ -1358,7 +1319,7 @@ bool lbColl_80006E58(Vec3* hit_start, Vec3* hit_end, Vec3* hurt_start,
     s32 is_zero_distance;
     float hurt_delta_z;
     float hurt_delta_y;
-    PAD_STACK(64);
+    PAD_STACK(52);
 
     // Fast reject when the expanded hit segment AABB misses both hurt
     // endpoints.
@@ -1478,8 +1439,7 @@ block_39:
     hurt_len_sq = LBC_FMA(hurt_delta_z, hurt_delta_z, hurt_len_sq);
     hit_start_mid_z = hit_delta.z * hit_delta.z;
     start_delta_z = hit_start_copy.z - hurt_start_copy.z;
-    hit_len_sq = hit_start_mid_x + hit_start_mid_y;
-    hit_len_sq = hit_start_mid_z + hit_len_sq;
+    hit_len_sq = hit_start_mid_z + (hit_start_mid_x + hit_start_mid_y);
     hit_start_dot = hit_delta.y * start_delta_y;
     hit_start_dot = LBC_FMA(hit_delta.x, start_delta_x, hit_start_dot);
     hurt_start_dot = LBC_FMA(hurt_delta_x, start_delta_x,
@@ -1543,6 +1503,7 @@ block_39:
                 Vec3 a2;
                 Vec3 d1;
                 Vec3 c3;
+                u8 gap_pad[4];
                 c3 = *hurt_start;
                 hit_param = lbColl_804D79F8;
                 d1.x = hurt_end_x - hurt_start->x;
@@ -1566,6 +1527,7 @@ block_39:
                 }
                 hurt_param = hurt_param_from_hit_start;
             } else {
+                float dot;
                 Vec3 b0;
                 Vec3 d1;
                 Vec3 c2;
@@ -1575,8 +1537,6 @@ block_39:
                 d1.y = hurt_end_y - hurt_start->y;
                 d1.z = hurt_end_z - hurt_start->z;
                 {
-                    float dot;
-
                     b0 = *hit_end;
                     /* 8000739C-800073E0. */
                     dot = LBC_DOT(d1.x, d1.y, d1.z,
@@ -1606,7 +1566,6 @@ block_39:
                 (hurt_param > lbColl_804D7A00) ||
                 (hurt_param < lbColl_804D7A10))
             {
-                float candidate_hit_param;
                 float hit_endpoint_dist_sq;
                 float hit_endpoint_param;
                 float hurt_endpoint_param;
@@ -1729,7 +1688,7 @@ block_39:
     return 1;
 }
 
-inline float sqrDistance(Vec3* a, Vec3* b)
+static inline float sqrDistance(Vec3* a, Vec3* b)
 {
     float x = a->x - b->x;
     float y = a->y - b->y;
@@ -2108,53 +2067,6 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
     return 0;
 }
 
-inline void checkPos(HurtCapsule* hurt, Mtx mtx, float arg5)
-{
-    if (!hurt->skip_update_pos) {
-        PC_HB_NOTE(3, hurt);
-        lb_8000B1CC(hurt->bone, &hurt->a_offset, &hurt->a_pos);
-        lb_8000B1CC(hurt->bone, &hurt->b_offset, &hurt->b_pos);
-
-        if (mtx != NULL) {
-            hurt->b_pos.z = arg5;
-            hurt->a_pos.z = arg5;
-        }
-
-        hurt->skip_update_pos = true;
-    }
-}
-
-inline void mtxConcat(HurtCapsule* hurt, Mtx mtx)
-{
-    Mtx sp34;
-    if (mtx != NULL) {
-        PSMTXConcat(mtx, HSD_JObjGetMtxPtr(hurt->bone), &sp34[0]);
-    }
-}
-
-inline MtxPtr pickMtx(HurtCapsule* hurt, Mtx mtx)
-{
-    MtxPtr var_r9;
-    Mtx sp34;
-    if (mtx != NULL) {
-        var_r9 = sp34;
-    } else {
-        var_r9 = HSD_JObjGetMtxPtr(hurt->bone);
-    }
-    return var_r9;
-}
-
-inline float getHit1C(HitCapsule* hit, float arg3)
-{
-    float var_f1;
-    if (hit->x43_b1) {
-        var_f1 = hit->scale;
-    } else {
-        var_f1 = hit->scale * arg3;
-    }
-    return var_f1;
-}
-
 bool lbColl_80008248(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, f32 arg3,
                      f32 arg4, f32 arg5)
 {
@@ -2353,21 +2265,6 @@ bool lbColl_80008820(HitCapsule* capsule, int type, void* victim)
 
 GXColor const lbColl_804D7A50 = { 0 };
 
-#if BUILD_TARGET_PC
-/* lbColl_804D36CC: read out of the original's data at 0x804D36CC (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36CC = { 0x00, 0xFF, 0x80, 0x80 };
-#else
-extern GXColor lbColl_804D36CC;
-#endif
-#if BUILD_TARGET_PC
-/* lbColl_804D36D0: read out of the original's data at 0x804D36D0 (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36D0 = { 0x00, 0x80, 0x40, 0x80 };
-#else
-extern GXColor lbColl_804D36D0;
-#endif
-
 void lbColl_800089B8(HitCapsule* hit, UNK_T arg1)
 {
     size_t i;
@@ -2452,7 +2349,8 @@ void lbColl_80008DA4(GXColor* arg0, GXColor* arg1)
     GXSetTevColor(GX_TEVREG0, *arg0);
     GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_RASC, GX_CC_C0,
                     GX_CC_ZERO);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ONE, GX_CA_A0, GX_CA_ZERO);
+    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_KONST, GX_CA_A0,
+                    GX_CA_ZERO);
     GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1,
                     GX_TEVPREV);
     GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1,
@@ -2785,35 +2683,6 @@ void lbColl_80009DD4(Vec3* v0, Vec3* v1, GXColor* clr)
     HSD_StateInitTev();
 }
 
-#if BUILD_TARGET_PC
-/* lbColl_804D36A0: read out of the original's data at 0x804D36A0 (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36A0 = { 0xFF, 0x00, 0x00, 0x80 };
-#else
-extern GXColor lbColl_804D36A0;
-#endif
-#if BUILD_TARGET_PC
-/* lbColl_804D36A4: read out of the original's data at 0x804D36A4 (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36A4 = { 0xFF, 0x00, 0xFF, 0x80 };
-#else
-extern GXColor lbColl_804D36A4;
-#endif
-#if BUILD_TARGET_PC
-/* lbColl_804D36A8: read out of the original's data at 0x804D36A8 (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36A8 = { 0x80, 0x00, 0x00, 0x80 };
-#else
-extern GXColor lbColl_804D36A8;
-#endif
-#if BUILD_TARGET_PC
-/* lbColl_804D36DC: read out of the original's data at 0x804D36DC (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36DC = { 0xFF, 0xFF, 0xFF, 0x80 };
-#else
-extern GXColor lbColl_804D36DC;
-#endif
-
 bool lbColl_80009F54(HitCapsule* hit, u32 arg1, float arg8)
 {
     GXColor* var_r5;
@@ -2851,21 +2720,6 @@ bool lbColl_80009F54(HitCapsule* hit, u32 arg1, float arg8)
     }
     return 0;
 }
-
-#if BUILD_TARGET_PC
-/* lbColl_804D36E8: read out of the original's data at 0x804D36E8 (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36E8 = { 0xFF, 0xFF, 0xFF, 0x80 };
-#else
-extern GXColor lbColl_804D36E8;
-#endif
-#if BUILD_TARGET_PC
-/* lbColl_804D36EC: read out of the original's data at 0x804D36EC (4 bytes); it was a
- * zeroed data stub on this build. */
-GXColor lbColl_804D36EC = { 0x80, 0x80, 0x80, 0x80 };
-#else
-extern GXColor lbColl_804D36EC;
-#endif
 
 static inline void lbColl_DrawHitResult(MtxPtr mtx, Vec3* a, Vec3* b,
                                         GXColor* c0, GXColor* c1, f32 size)
@@ -2953,9 +2807,6 @@ bool lbColl_8000A244(HurtCapsule* hurt, u32 arg1, Mtx arg2, float arg3)
     return false;
 }
 
-static GXColor lbColl_804D36F8 = { 0xFF, 0, 0, 0x80 };
-static GXColor lbColl_804D36FC = { 0x80, 0, 0, 0x80 };
-
 bool lbColl_8000A10C(struct lbColl_8000A10C_arg0_t* arg0, u32 arg1, f32 arg2)
 {
     GXColor* c = &lbColl_804D36F8;
@@ -2973,9 +2824,6 @@ bool lbColl_8000A10C(struct lbColl_8000A10C_arg0_t* arg0, u32 arg1, f32 arg2)
     return false;
 }
 
-static GXColor lbColl_804D36F0 = { 0xFF, 0xFF, 0, 0x80 };
-static GXColor lbColl_804D36F4 = { 0x80, 0x80, 0, 0x80 };
-
 bool lbColl_8000A1A8(struct Fighter_x1614_t* arg0, int arg1, f32 scale_y)
 {
     u32 var_r0;
@@ -2992,9 +2840,6 @@ bool lbColl_8000A1A8(struct Fighter_x1614_t* arg0, int arg1, f32 scale_y)
     }
     return false;
 }
-
-GXColor lbColl_804D36E0 = { 0 };
-GXColor lbColl_804D36E4 = { 0x80, 0x40, 0x00, 0x80 };
 
 bool lbColl_8000A460(Fighter_x1670_t* hurt, u32 arg1)
 {

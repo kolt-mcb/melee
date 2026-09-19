@@ -1,7 +1,6 @@
 #ifndef MELEE_IF_TYPES_H
 #define MELEE_IF_TYPES_H
 
-#include <placeholder.h>
 #include <platform.h>
 
 #include "if/forward.h" // IWYU pragma: export
@@ -9,9 +8,7 @@
 #include <baselib/forward.h>
 
 #include <dolphin/gx.h>
-#if BUILD_TARGET_PC
 #include <baselib/tobj.h> /* HSD_ImageDesc must be complete: image_descs is a real array here */
-#endif
 
 struct IfDamageFlags {
 #if BUILD_TARGET_PC
@@ -137,7 +134,7 @@ typedef struct ifMagnifyPlayer {
     struct {
         u8 is_offscreen : 1;
         u8 ignore_offscreen : 1;
-        u8 unk : 6;
+        u8 edge : 6;
     } state;
 } ifMagnifyPlayer;
 
@@ -148,17 +145,13 @@ struct ifMagnify {
     int xC;
     int x10;
     ifMagnifyPlayer player[6];
-#if BUILD_TARGET_PC
-    /* 5 * 0x18 is five GameCube HSD_ImageDescs. The struct is bigger here
-     * (image_ptr widens), and ifmagnify.c reached this array through two
-     * overlay casts with hardcoded offsets -- which on x86_64 landed inside
-     * player[] and scribbled its gobj pointers. Name the array properly and
-     * let the compiler place it. */
+    /* 5 * 0x18 would be five GameCube HSD_ImageDescs. The struct is bigger
+     * here (image_ptr widens), and ifmagnify.c used to reach this array
+     * through two overlay casts with hardcoded offsets -- which on x86_64
+     * landed inside player[] and scribbled its gobj pointers. Upstream has
+     * since named the array too, so let the compiler place it. */
     HSD_ImageDesc image_descs[5];
-#else
-    u8 image_descs[5 * 0x18];
     u8 pad[0xF0 - 0xEC];
-#endif
 };
 
 #define DEVTEXT_FLAG_HIDETEXT (0x80)
@@ -186,7 +179,7 @@ struct DevText {
     /* +2C */ struct DevText* prev;
     /* +30 */ struct DevText* next;
 };
-STATIC_ASSERT(sizeof(struct DevText) == 0x34);
+ASSERT_SIZE(struct DevText, 0x34);
 
 struct un_804D6EF4_t {
     /* +0x00 */ u32 x00;
@@ -195,9 +188,9 @@ struct un_804D6EF4_t {
     /* +0x0C */ u32 x0C;
     /* +0x10 */ HSD_JObj* jobjs[16];
     /* +0x50 */ HSD_Archive* archive;
-    /* +0x54 */ short x54;
-    /* +0x56 */ short x56;
-    /* +0x58 */ short x58;
+    /* +0x54 */ s16 x54;
+    /* +0x56 */ s16 x56;
+    /* +0x58 */ s16 x58;
     /* +0x5A */ char pad_5A[2];
     /* +0x5C */ s8 x5C;
     /* +0x5D */ s8 x5D;
@@ -208,10 +201,19 @@ struct un_80301C64_t {
     void* x0;
     s32 x4;
 };
+ASSERT_SIZE(struct un_80301C64_t, 0x8);
+
+enum soundtest_callback_arg0 {
+    soundtest_callback_0,
+    soundtest_callback_1,
+    soundtest_callback_6 = 6,
+};
+
+typedef bool (*soundtest_callback)(enum soundtest_callback_arg0 arg0);
 
 struct un_80304138_objalloc_t_x8 {
     int x0;
-    int (*x4)(int);
+    soundtest_callback x4;
     char* x8;
     char** xC;
     void* x10;
@@ -219,19 +221,19 @@ struct un_80304138_objalloc_t_x8 {
     float x18;
     float x1C;
 };
-STATIC_ASSERT(sizeof(struct un_80304138_objalloc_t_x8) == 0x20);
+ASSERT_SIZE(struct un_80304138_objalloc_t_x8, 0x20);
 
 struct un_80304138_objalloc_t {
     unsigned char x0;
     unsigned char x1;
     DevText* x4;
     struct un_80304138_objalloc_t_x8* x8;
-    int (*xC)(int);
+    soundtest_callback xC;
     HSD_GObj* x10;
     HSD_GObjProc* x14;
     struct un_80304138_objalloc_t* prev;
     struct un_80304138_objalloc_t* next;
 };
-STATIC_ASSERT(sizeof(struct un_80304138_objalloc_t) == 0x20);
+ASSERT_SIZE(struct un_80304138_objalloc_t, 0x20);
 
 #endif

@@ -2,7 +2,6 @@
 
 #include "types.h"
 
-#include <placeholder.h>
 #include <platform.h>
 
 #include "baselib/forward.h"
@@ -21,9 +20,8 @@
 #include "pl/player.h"
 
 #include <dolphin/mtx.h>
-#include <MetroTRK/intrinsics.h>
 
-inline void func_8015ADD0_inline(HSD_GObj* gobj)
+static inline void func_8015ADD0_inline(HSD_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
     ftCrazyHand_DatAttrs* da = FT_EXT_ATTR(fp);

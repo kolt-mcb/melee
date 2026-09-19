@@ -2,10 +2,10 @@
 
 #include "db/db.h"
 #include "it/inlines.h"
-#include "it/it_266F.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/item.h"
+#include "it/itgroundcoll.h"
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -39,11 +39,9 @@ ItemStateTable it_803F6B60[1] = { 0, itNesspkfirepillar_UnkMotion0_Anim,
                                   itNesspkfirepillar_UnkMotion0_Phys,
                                   itNesspkfirepillar_UnkMotion0_Coll };
 
-inline void itNesspkfirepillar_INLINE_SpawnItem_Init(SpawnItem* spawnitem,
-                                                     Vec3* offset,
-                                                     f32 facing_dir,
-                                                     HSD_GObj* parent1_gobj,
-                                                     HSD_GObj* parent2_gobj)
+static inline void itNesspkfirepillar_INLINE_SpawnItem_Init(
+    SpawnItem* spawnitem, Vec3* offset, f32 facing_dir, HSD_GObj* parent1_gobj,
+    HSD_GObj* parent2_gobj)
 {
     spawnitem->kind = It_Kind_Ness_PKFire_Flame;
     spawnitem->prev_pos = *offset;

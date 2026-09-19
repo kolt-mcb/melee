@@ -1,7 +1,5 @@
 #include "ftCo_SpecialS.h"
 
-#include "math.h"
-
 #include <platform.h>
 
 #include "ft/fighter.h"
@@ -9,8 +7,6 @@
 #include "ft/ftcommon.h"
 #include "ft/ftdata.h"
 #include "ft/types.h"
-
-#include <baselib/forward.h>
 
 #include <dolphin/mtx.h>
 
@@ -55,7 +51,8 @@ static void doEnter(Fighter_GObj* gobj)
 {
     u8 _[8] = { 0 };
     Fighter* fp = gobj->user_data;
-    fp->gr_vel = SPS_FMA(-(fp->gr_vel * (1 - fp->co_attrs.xB8)),
-                         ft_GetGroundFrictionMultiplier(fp), fp->gr_vel);
+    fp->gr_vel = SPS_FMA(
+        -(fp->gr_vel * (1 - fp->co_attrs.specials_ground_speed_retention)),
+        ft_GetGroundFrictionMultiplier(fp), fp->gr_vel);
     ftData_SpecialS[fp->kind](gobj);
 }

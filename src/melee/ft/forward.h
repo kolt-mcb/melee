@@ -23,6 +23,7 @@ typedef struct Fighter_x1670_t Fighter_x1670_t;
 typedef struct FighterBone FighterBone;
 typedef struct FighterPartsTable FighterPartsTable;
 typedef struct ft_800898B4_t ft_800898B4_t;
+typedef struct ftCo_803C6594_t ftCo_803C6594_t;
 typedef struct ftCo_DatAttrs_xBC_t ftCo_DatAttrs_xBC_t;
 typedef struct ftCommonData ftCommonData;
 typedef struct ftData ftData;
@@ -70,6 +71,7 @@ struct Fighter_GObj {
     /* +34 */ void* x34_unk;
 };
 #else
+#include <baselib/gobj.h>
 typedef struct HSD_GObj Fighter_GObj;
 #endif
 

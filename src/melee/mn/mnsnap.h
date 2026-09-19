@@ -1,12 +1,9 @@
 #ifndef MELEE_MN_SNAP_H
 #define MELEE_MN_SNAP_H
 
-#include <placeholder.h>
 #include <platform.h>
 
 #include <baselib/forward.h>
-
-#include <dolphin/gx.h>
 
 /* 253184 */ void mnSnap_80253184(void);
 /* 253640 */ void mnSnap_80253640(s32 page);
@@ -22,6 +19,8 @@
 /* 254014 */ void mnSnap_80254014(void);
 /* 25409C */ void mnSnap_8025409C(s32 dlg_type);
 /* 254298 */ void mnSnap_80254298(void);
+/* HSD_GObj_SetupProc hands each proc its gobj; the port spells the parameter
+ * out so the function-pointer types agree without a cast. */
 /* 2545C4 */ void fn_802545C4(HSD_GObj* gobj);
 /* 257D7C */ void fn_80257D7C(HSD_GObj* gobj);
 /* 257F24 */ void mnSnap_80257F24(void);

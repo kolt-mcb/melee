@@ -18,7 +18,7 @@
                                         s16 entry_num);
 /* 0122C8 */ void lb_800122C8(HSD_ImageDesc* image_desc, u16 origx, u16 origy,
                               bool clear);
-/* 0122F0 */ void lb_800122F0(HSD_ImageDesc*, GXTexObj*, f32);
+/* 0122F0 */ void lb_800122F0(HSD_ImageDesc*, GXTexObj*, float);
 /* 01271C */ void lb_8001271C(GXTexObj*, float, float, float, float, float,
                               float);
 /* 01285C */ void lb_8001285C(HSD_ImageDesc*, GXTexObj*);
@@ -28,20 +28,14 @@
 /* 0138AC */ void fn_800138AC(void* ptr);
 /* 0138CC */ void lb_800138CC(HSD_GObj* gobj, HSD_GObjEvent arg1);
 /* 0138D8 */ void lb_800138D8(HSD_GObj* gobj, s8 arg1);
-#ifdef BUILD_TARGET_PC
-/* PC port: the original returns the GObj it creates -- the caller in
- * gmregclear.c stores it (`bl 0x800138ec; stw r3,44(r31)` at 0x80180a2c) and
- * later feeds it back to lb_800138D8/lb_800138CC. Typed void here, that
- * result was dropped, so the 1-P stage-clear screen used a NULL GObj and
- * Classic crashed on the way to round 2. arg0 is a real pointer too; passing
- * it as s32 truncated it. */
-/* 0138EC */ HSD_GObj* lb_800138EC(HSD_ImageDesc* image,
-                                   GObj_RenderFunc render_func, u32 arg2,
-                                   s8 arg3, f32 x, f32 y, f32 w, f32 h);
-#else
-/* 0138EC */ void lb_800138EC(s32 arg0, GObj_RenderFunc render_func, u32 arg2,
-                              s8 arg3, f32 x, f32 y, f32 w, f32 h);
-#endif
+/* The original returns the GObj it creates -- the caller in gmregclear.c
+ * stores it (`bl 0x800138ec; stw r3,44(r31)` at 0x80180a2c) and later feeds it
+ * back to lb_800138D8/lb_800138CC. Typed void, that result was dropped, so the
+ * 1-P stage-clear screen used a NULL GObj and Classic crashed on the way to
+ * round 2; arg0 is a real pointer too, and passing it as s32 truncated it.
+ * Upstream now declares both correctly for every target. */
+/* 0138EC */ HSD_GObj* lb_800138EC(HSD_ImageDesc*, GObj_RenderFunc, int, s8,
+                                   float, float, float, float);
 /* 013B14 */ HSD_CObj* lb_80013B14(HSD_CameraDescPerspective*);
 
 #endif

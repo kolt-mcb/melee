@@ -1,7 +1,5 @@
 #include "ftPk_SpecialLw.h"
 
-#include "math.h"
-
 #include <platform.h>
 
 #include "cm/camera.h"
@@ -11,7 +9,11 @@
 #include "forward.h"
 
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcommon.h"
@@ -282,7 +284,7 @@ void ftPk_SpecialAirLwLoop0_Anim(HSD_GObj* gobj)
         Fighter_ChangeMotionState(gobj, 365, 0, 0.0f, 1.0f, 0.0f, 0);
         fighter_copy->cmd_vars[0] = 0;
         fighter_copy->take_dmg_cb = NULL;
-        fighter_copy->self_vel.y = (float) pika_attr->xB4;
+        fighter_copy->self_vel.y = pika_attr->xB4;
         fp = GET_FIGHTER(gobj);
         efAsync_Spawn(gobj, &fp->x60C, 0, 1216,
                       fighter_copy->parts[FtPart_TopN].joint);
@@ -351,7 +353,7 @@ void ftPk_SpecialAirLwLoop1_Phys(HSD_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     ftPikachuAttributes* pika_attr = fp->dat_attrs;
     float pika_B8 = pika_attr->xB8;
-    float terminal_velocity = fp->co_attrs.terminal_vel;
+    float terminal_velocity = fp->co_attrs.terminal_velocity;
     ftCommon_Fall(fp, pika_B8, terminal_velocity);
     ftCommon_8007CF58(fp);
 }

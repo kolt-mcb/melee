@@ -7,7 +7,6 @@
 #endif
 
 #include "it_26B1.h"
-#include "math.h"
 
 #include "cm/camera.h"
 #include "db/db.h"
@@ -39,6 +38,7 @@
 #include "mp/mpcoll.h"
 #include "mp/mplib.h"
 
+#include <math.h>
 #include <dolphin/mtx.h>
 #include <baselib/class.h>
 #include <baselib/debug.h>
@@ -800,8 +800,6 @@ static void Item_80267AA8(HSD_GObj* gobj, SpawnItem* spawnItem)
     }
 }
 
-extern void PSMTXIdentity(Mtx); /* extern */
-
 /// Setup Item JObj
 void Item_802680CC(HSD_GObj* gobj)
 {
@@ -809,16 +807,14 @@ void Item_802680CC(HSD_GObj* gobj)
 
     if (item_data->xC8_joint != NULL) {
         HSD_JObj* jobj = HSD_JObjLoadJoint(item_data->xC8_joint);
-        HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+        HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     } else {
         HSD_JObj* jobj = HSD_JObjAlloc();
         PSMTXIdentity(jobj->mtx);
         jobj->scl = NULL;
-        HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, jobj);
+        HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     }
 }
-
-extern HSD_DObj* HSD_JObjGetDObj(HSD_JObj*);
 
 static void Item_8026814C(HSD_GObj* gobj)
 {
@@ -967,8 +963,6 @@ static void Item_80268560(HSD_GObj* gobj)
     }
 }
 
-extern void ftLib_8008702C(s32);
-
 static void foobar(HSD_GObj* gobj)
 {
     Item* it = (Item*) HSD_GObjGetUserData(gobj);
@@ -1015,10 +1009,10 @@ static void foobar3(HSD_GObj* gobj)
         }
         cam_box = it->x520_cameraBox;
         if (cam_box != NULL) {
-            cam_box->x40.x = it_804D6D28->x14C;
-            cam_box->x40.y = it_804D6D28->x150;
-            cam_box->x48.x = it_804D6D28->x154;
-            cam_box->x48.y = it_804D6D28->x158;
+            cam_box->target_ext.h.x = it_804D6D28->x14C;
+            cam_box->target_ext.h.y = it_804D6D28->x150;
+            cam_box->target_ext.v.x = it_804D6D28->x154;
+            cam_box->target_ext.v.y = it_804D6D28->x158;
         }
     }
 }
@@ -1654,8 +1648,8 @@ static void Item_80269A9C(HSD_GObj* gobj)
     if (item_data->xDCD_flag.b01 != 0) {
         CmSubject* CmSubject = item_data->x520_cameraBox;
         if (CmSubject != NULL) {
-            CmSubject->x10 = item_data->pos;
-            CmSubject->x1C = item_data->pos;
+            CmSubject->pos = item_data->pos;
+            CmSubject->bone_pos = item_data->pos;
         }
     }
     it_80271A58(gobj);
@@ -2250,8 +2244,10 @@ void Item_8026AC74(HSD_GObj* gobj, Vec3* arg1, Vec3* arg2, f32 arg3)
     }
 }
 
-void Item_8026AD20(HSD_GObj* gobj, Vec3* arg1, Vec3* arg2, f32 arg3)
+void Item_8026AD20(HSD_GObj* gobj, Vec3* arg1, Vec3* arg2, f32 arg3, bool arg4)
 {
+    // What is arg4 used for? Was looking at ftCo_ItemThrow and it seems to
+    // correspond to some kind of flag
     Item* item_data = GetItemData(gobj);
     it_802731E0(gobj);
     item_data->xC44 = arg3;

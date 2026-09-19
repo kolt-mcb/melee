@@ -1,6 +1,5 @@
 #include "itarwinglaser.h"
 
-#include <placeholder.h>
 #include <platform.h>
 
 #include "ef/efsync.h"
@@ -9,17 +8,16 @@
 #include "gr/ground.h"
 #include "gr/stage.h"
 #include "it/inlines.h"
-#include "it/it_266F.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/item.h"
+#include "it/itgroundcoll.h"
 #include "lb/lb_00B0.h"
 #include "lb/lbvector.h"
 #include "mp/mplib.h"
 
-#include <trigf.h>
+#include <math.h>
 #include <baselib/jobj.h>
-#include <MSL/math.h>
 
 typedef struct ArwingLaserAttr {
     /* +0 */ ItemAttr* x0;
@@ -378,7 +376,7 @@ static void itArwinglaser_UnkMotion2_Phys(Item_GObj* gobj)
     switch (ip->xDD4_itemVar.arwinglaser.xE38) {
     case 0:
     case 2:
-        if ((s16) ip->xDD4_itemVar.arwinglaser.xE30 == 1) {
+        if (ip->xDD4_itemVar.arwinglaser.xE30 == 1) {
             ip->x40_vel.x = attrs->x0->x4_throw_speed_mul * ip->facing_dir;
             ip->x40_vel.z = 0.0f;
             ip->x40_vel.y = 0.0f;
@@ -443,6 +441,8 @@ static void itArwinglaser_UnkMotion3_Phys(Item_GObj* gobj)
         ip->pos.y += corneria_offset.y;
         // fallthrough
     case Gr_Kind_Venom:
+        break;
+    default:
         break;
     }
 }

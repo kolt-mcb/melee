@@ -13,7 +13,7 @@ static inline u32 swap32(u32 x)
 }
 #endif
 
-inline void Locate(HSD_Archive* archive)
+static inline void Locate(HSD_Archive* archive)
 {
 #if BUILD_TARGET_PC
     /* PC port: skip in-place relocation. Pointers in the archive data
@@ -68,54 +68,45 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
         offset = archive->header.data_size + sizeof(HSD_ArchiveHeader);
     }
     if (archive->header.nb_reloc != 0) { // Relocation Size
-#if BUILD_TARGET_PC
         archive->reloc_info =
             (HSD_ArchiveRelocationInfo*) ((uintptr_t) src + offset);
+#if BUILD_TARGET_PC
         /* PC port: byte-swap relocation offsets */
         for (u32 j = 0; j < archive->header.nb_reloc; j++) {
             archive->reloc_info[j].offset = swap32(archive->reloc_info[j].offset);
         }
-#else
-        archive->reloc_info =
-            (HSD_ArchiveRelocationInfo*) ((s32) src + offset);
 #endif
         offset = offset +
                  archive->header.nb_reloc * sizeof(HSD_ArchiveRelocationInfo);
     }
     if (archive->header.nb_public != 0) { // Root Size
+        archive->public_info =
+            (HSD_ArchivePublicInfo*) ((uintptr_t) src + offset);
 #if BUILD_TARGET_PC
-        archive->public_info = (HSD_ArchivePublicInfo*) ((uintptr_t) src + offset);
         /* PC port: byte-swap public info offsets and symbol indices */
         for (u32 j = 0; j < archive->header.nb_public; j++) {
             archive->public_info[j].offset = swap32(archive->public_info[j].offset);
             archive->public_info[j].symbol = swap32(archive->public_info[j].symbol);
         }
-#else
-        archive->public_info = (HSD_ArchivePublicInfo*) ((s32) src + offset);
 #endif
         offset =
             offset + archive->header.nb_public * sizeof(HSD_ArchivePublicInfo);
     }
     if (archive->header.nb_extern != 0) { // XRef Size
+        archive->extern_info =
+            (HSD_ArchiveExternInfo*) ((uintptr_t) src + offset);
 #if BUILD_TARGET_PC
-        archive->extern_info = (HSD_ArchiveExternInfo*) ((uintptr_t) src + offset);
         /* PC port: byte-swap extern info offsets and symbol indices */
         for (u32 j = 0; j < archive->header.nb_extern; j++) {
             archive->extern_info[j].offset = swap32(archive->extern_info[j].offset);
             archive->extern_info[j].symbol = swap32(archive->extern_info[j].symbol);
         }
-#else
-        archive->extern_info = (HSD_ArchiveExternInfo*) ((s32) src + offset);
 #endif
         offset =
             offset + archive->header.nb_extern * sizeof(HSD_ArchiveExternInfo);
     }
     if (offset < archive->header.file_size) { // File Size
-#if BUILD_TARGET_PC
         archive->symbols = (char*) ((uintptr_t) src + offset);
-#else
-        archive->symbols = (char*) ((s32) src + offset);
-#endif
     }
 
     archive->top_ptr = (void*) src;

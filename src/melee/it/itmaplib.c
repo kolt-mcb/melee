@@ -4,7 +4,6 @@
 #include "it_3F14.h"
 #include "iteffect.h"
 #include "ithitbox.h"
-#include "math.h"
 
 #include "it/inlines.h"
 #include "it/it_26B1.h"
@@ -23,6 +22,7 @@
 #define IM_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
+#ifdef MUST_MATCH
 static void sdata2_order(void)
 {
     (void) 0.5f;
@@ -37,6 +37,7 @@ static void sdata2_order(void)
     (void) 0.850000024f;
     (void) 0.00999999978f;
 }
+#endif
 
 const Vec3 it_803B8570 = { 0.0f, 0.0f, 0.0f };
 const Vec3 it_803B857C = { 0.0f, 0.0f, 0.0f };
@@ -569,8 +570,10 @@ void it_80276934(Item_GObj* item_gobj, enum_t arg1)
     }
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 
 void it_80276CB8(Item_GObj* item_gobj)
 {
@@ -581,7 +584,9 @@ void it_80276CB8(Item_GObj* item_gobj)
     }
 }
 
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void it_80276CEC(Item_GObj* item_gobj)
 {
@@ -676,8 +681,10 @@ bool it_80276D9C(Item_GObj* item_gobj, enum_t arg1)
     return ret_val;
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 
 void it_80276FC4(Item_GObj* item_gobj, s32 arg1)
 {
@@ -691,10 +698,14 @@ void it_80276FC4(Item_GObj* item_gobj, s32 arg1)
     }
 }
 
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 
 bool it_80277040(Item_GObj* item_gobj)
 {
@@ -846,7 +857,9 @@ bool it_80277040(Item_GObj* item_gobj)
     return ret_val;
 }
 
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 static inline float sqrtf_accurate_store(float x, volatile float* y)
 {
@@ -908,7 +921,7 @@ bool it_80277544(Item_GObj* item_gobj)
     item = GET_ITEM(item_gobj);
     if (item->xD5C != 0U && it_80277040(item_gobj) != 0 &&
         ((PSVECAdd(&item->x40_vel, &item->x70_nudge, &sp10),
-          ((SQ(sp10.x) + SQ(sp10.y))) >= it_804D6D28->xCC) ||
+          (SQ(sp10.x) + SQ(sp10.y)) >= it_804D6D28->xCC) ||
          (item->xD5C == 2U)))
     {
         item->xDC8_word.flags.x1F = 1;

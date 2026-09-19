@@ -10,13 +10,11 @@
 #include "iteffect.h"
 #include "ithitbox.h"
 #include "itmaplib.h"
-#include "math.h"
 
 #include "baselib/jobj.h"
 #include "baselib/random.h"
 #include "db/db.h"
 #include "ef/efsync.h"
-#include "ft/ft_0C31.h"
 #include "ft/ftlib.h"
 #include "it/inlines.h"
 #include "it/it_26B1.h"
@@ -28,6 +26,7 @@
 #include "lb/lbvector.h"
 #include "mp/mpcoll.h"
 
+#include <math.h>
 #include <baselib/gobjobject.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
@@ -345,7 +344,9 @@ HSD_JObj* it_80272C90(Item_GObj* item_gobj)
                        ->xC4_article_data->x10_modelDesc->x8_bone_attach_id);
 }
 
+#ifdef MUST_MATCH
 #pragma auto_inline off
+#endif
 
 HSD_JObj* it_80272CC0(Item_GObj* item_gobj, enum_t idx)
 {
@@ -363,7 +364,9 @@ HSD_JObj* it_80272CC0(Item_GObj* item_gobj, enum_t idx)
     return jobj;
 }
 
+#ifdef MUST_MATCH
 #pragma auto_inline on
+#endif
 
 bool it_80272D1C(Item_GObj* item_gobj)
 {
@@ -374,8 +377,10 @@ bool it_80272D1C(Item_GObj* item_gobj)
     return false;
 }
 
+#ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
+#endif
 
 s32 it_80272D40(Item_GObj* item_gobj)
 {
@@ -396,7 +401,9 @@ s32 it_80272D40(Item_GObj* item_gobj)
     return 2;
 }
 
+#ifdef MUST_MATCH
 #pragma pop
+#endif
 
 void itColl_BounceOffVictim(Item_GObj* gobj)
 {
@@ -657,8 +664,7 @@ void it_80273670(Item_GObj* item_gobj, int arg1, f32 arg8)
         }
         desc = item->xD0_itemStateDesc;
         HSD_JObjAddAnimAll(item_jobj1, desc->x0_anim_joint,
-                           desc->x4_matanim_joint,
-                           (HSD_ShapeAnimJoint*) desc->x8_parameters);
+                           desc->x4_matanim_joint, desc->x8_parameters);
         lb_8000BA0C(item_jobj1, item->x5D0_animFrameSpeed);
         HSD_JObjReqAnimAll(item_jobj1, arg8);
     }
@@ -874,15 +880,21 @@ void it_80273B50(Item_GObj* item_gobj, Vec3* vel)
     {
         Item* item3 = GET_ITEM(item_gobj);
         HSD_JObj* item_jobj3 = GET_JOBJ(item_gobj);
-        if (&sp40 != NULL) {
+#ifdef MUST_MATCH
+        if (&sp40 != NULL)
+#endif
+        {
             lb_8000B1CC(
                 ftLib_80086630((Fighter_GObj*) owner_gobj, item3->xDC4), &sp40,
                 &sp34);
-        } else {
+        }
+#ifdef MUST_MATCH
+        else {
             lb_8000B1CC(
                 ftLib_80086630((Fighter_GObj*) owner_gobj, item3->xDC4), NULL,
                 &sp34);
         }
+#endif
         pos = &item3->pos;
         item3->pos.x = sp34.x;
         item3->pos.y = sp34.y;
@@ -1065,9 +1077,9 @@ void it_80274574(Item_GObj* item_gobj)
     it_80274594(item_gobj);
 }
 
-inline void HSD_JObjSetScale_2(HSD_JObj* jobj, Vec3* scale)
+static inline void HSD_JObjSetScale_2(HSD_JObj* jobj, Vec3* scale)
 {
-    ((jobj) ? ((void) 0) : __assert("jobj.h", 760, "jobj"));
+    (jobj ? ((void) 0) : __assert("jobj.h", 760, "jobj"));
     jobj->scale = *scale;
     if (!(jobj->flags & (1 << 25))) {
         (HSD_JObjSetMtxDirty)(jobj);
@@ -1395,7 +1407,7 @@ void it_80274F28(Item* item, s8 arg1, HSD_GObjEvent arg2,
     item->grabbed_for_victim = arg3;
 }
 
-inline HSD_JObj* get_bone_by_id(Item_GObj* item_gobj, int bone_id)
+static inline HSD_JObj* get_bone_by_id(Item_GObj* item_gobj, int bone_id)
 {
     Item* item = GET_ITEM(item_gobj);
     HSD_JObj* jobj = GET_JOBJ(item_gobj);

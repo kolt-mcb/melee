@@ -1,8 +1,6 @@
 #ifndef RUNTIME_GECKO_SETJMP_H
 #define RUNTIME_GECKO_SETJMP_H
 
-#include <platform.h>
-
 #ifndef BUILD_TARGET_PC
 
 typedef struct __jmp_buf {

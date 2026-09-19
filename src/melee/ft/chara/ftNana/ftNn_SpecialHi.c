@@ -9,6 +9,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcommon.h"
@@ -23,8 +24,8 @@
 #include "lb/lb_00B0.h"
 #include "pl/player.h"
 
+#include <math.h>
 #include <dolphin/mtx.h>
-#include <MSL/math.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC

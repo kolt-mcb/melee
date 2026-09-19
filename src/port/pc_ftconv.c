@@ -203,6 +203,11 @@ static ftDynamics* pc_conv_dynamics_at(const u8* base, unsigned long len, u32 of
     if (dnum <= 0 || dnum > Ft_Dynamics_NumMax || boff == 0 ||
         boff + (u32) dnum * 0x18u > len)
     {
+        if (pc_ftconv_trace()) {
+            fprintf(stderr, "[FTCONV] dynamics at 0x%x rejected: dnum=%d "
+                            "(max %d) boff=0x%x len=0x%lx\n",
+                    off, dnum, (int) Ft_Dynamics_NumMax, boff, len);
+        }
         return NULL;
     }
     dy = pc_lowmem_alloc(sizeof(*dy));
@@ -568,7 +573,7 @@ static ftCo_DatAttrs* pc_conv_DatAttrs(const u8* raw)
         fprintf(stderr,
                 "[FTCONV] attrs gravity=%.4f terminal=%.2f weight=%.1f "
                 "walk_max=%.2f model_scale=%.2f\n",
-                (double) out->grav, (double) out->terminal_vel,
+                (double) out->gravity, (double) out->terminal_velocity,
                 (double) out->weight, (double) out->walk_max_vel,
                 (double) out->model_scaling);
     }
@@ -1460,9 +1465,16 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
 /* count, terminated by -1; tracks is consumed that many at a time.       */
 
 /* Conversions happen on every motion change, so the result is recycled   */
-/* per owning fighter rather than allocated afresh and leaked. Six slots  */
-/* covers every player plus the Ice Climbers' partners. */
-#define PC_FIGATREE_SLOTS 8
+/* per owning field rather than allocated afresh and leaked.
+ *
+ * The slots are per *field*, not per fighter: a Fighter converts x590 and
+ * x598 separately, so eight slots were as few as two fighters' worth in the
+ * worst case. Measured, a four-player match uses four, so the cap was not
+ * actually being reached -- but when it is, the fallback evicts slot 0 while
+ * its owner is still animating out of that buffer, which silently replaces
+ * one fighter's animation with another's. Sixty-four leaves room for every
+ * live owner, and the eviction path says so if it is ever reached. */
+#define PC_FIGATREE_SLOTS 64
 
 struct pc_figatree_slot {
     const void* owner;
@@ -1480,7 +1492,19 @@ static void* pc_figatree_buf(const void* owner, unsigned long need)
         if (free_slot < 0 && pc_figatree_slots[i].owner == NULL) free_slot = i;
     }
     if (i == PC_FIGATREE_SLOTS) {
-        i = free_slot >= 0 ? free_slot : 0; /* evict slot 0 rather than fail */
+        if (free_slot < 0) {
+            /* Every slot belongs to a live owner. Evicting one corrupts that
+             * owner's animation rather than merely losing this one, so say so
+             * -- the cap is the thing to raise. */
+            static int said;
+            if (!said) {
+                said = 1;
+                fprintf(stderr, "[PORT WARN] pc_figatree_buf: all %d slots in "
+                                "use; evicting a live one\n",
+                        PC_FIGATREE_SLOTS);
+            }
+        }
+        i = free_slot >= 0 ? free_slot : 0;
         pc_figatree_slots[i].owner = owner;
     }
     if (pc_figatree_slots[i].cap < need) {

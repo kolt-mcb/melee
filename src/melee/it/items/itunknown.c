@@ -3,19 +3,16 @@
 #include "inlines.h"
 
 #include "cm/camera.h"
-#include "ef/eflib.h"
 #include "gr/stage.h"
 #include "it/inlines.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/it_279C.h"
 #include "it/item.h"
-#include "it/itmaplib.h"
 #include "lb/lbvector.h"
 
-#include <trigf.h>
+#include <math.h>
 #include <baselib/random.h>
-#include <MSL/math.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC

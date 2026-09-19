@@ -3,7 +3,6 @@
 #include "ftCo_AirCatch.h"
 #include "ftCo_ItemThrow.h"
 #include "ftCo_LandingAir.h"
-#include "math.h"
 
 #include <platform.h>
 
@@ -20,7 +19,6 @@
 
 #include "ftCommon/forward.h"
 
-#include "ftCommon/ftCo_AppealS.h"
 #include "ftCommon/ftCo_Attack100.h"
 #include "ftCommon/ftCo_Fall.h"
 #include "ftCommon/ftCo_JumpAerial.h"

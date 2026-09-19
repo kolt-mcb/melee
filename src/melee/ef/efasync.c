@@ -3,7 +3,6 @@
 #include "efdata.h"
 #include "eflib.h"
 #include "efsync.h"
-#include "math.h"
 #include "types.h"
 
 #include "baselib/gobj.h"
@@ -16,11 +15,15 @@
 #include "lb/lbarchive.h"
 #include "lb/lbdvd.h"
 
+#include <math.h>
+#include <stdarg.h>
+#include <baselib/generator.h>
+
 HSD_ObjAllocData efAsync_AllocData;
 
-static inline void efAsync_SetEffectRotationY(EF_Effect* effect, f32 rotation)
+static inline HSD_JObj* efAsync_GetEffectJObj(EF_Effect* effect)
 {
-    HSD_JObjSetRotationY(GET_JOBJ(effect->gobj), rotation);
+    return GET_JOBJ(effect->gobj);
 }
 
 static inline void efAsync_SetEffectRotationZFromPtr(EF_Effect* effect,
@@ -38,6 +41,8 @@ static inline void efAsync_SetEffectScaleXYZ(EF_Effect* effect, f32 scale)
 {
     HSD_JObj* jobj;
 
+    jobj = effect->gobj->hsd_obj;
+    (void) jobj->scale.x;
     jobj = GET_JOBJ(effect->gobj);
     HSD_JObjSetScaleX(jobj, scale);
     jobj = GET_JOBJ(effect->gobj);
@@ -64,14 +69,6 @@ static inline void efAsync_SetEffectFacingDir(EF_Effect* effect,
     HSD_JObjSetRotationY(GET_JOBJ(effect->gobj), rotation);
 }
 
-/**
- * @remarks MWCC allocates the frame bottom-up: outgoing arguments,
- * compiler-generated temporaries, slots billed per inlined call site, user
- * locals by declaration order, then register saves. The target keeps one
- * @c Vec3 (case @c 0x41B) in the compiler-temporary pool, which no
- * user-declared local can occupy.
- * @todo Only differs by register allocation and one stack slot.
- */
 void* efAsync_Dispatch(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
 {
 #if BUILD_TARGET_PC
@@ -473,7 +470,7 @@ void* efAsync_Dispatch(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
         efLib_LoadKind = EF_LOADKIND_SYNC;
         ret_obj = efLib_Create_Attach(0xD, gobj, va_arg(vlist, HSD_JObj*));
         if (ret_obj != NULL) {
-            jobj_1 = GET_JOBJ(((EF_Effect*) ret_obj)->gobj);
+            jobj_1 = efAsync_GetEffectJObj(ret_obj);
             u32_1 = va_arg(vlist, u32);
             if ((u32) (u32_1 + 0xFFA00000) == 0x6060U) {
                 color = 0x808080;
@@ -526,16 +523,15 @@ void* efAsync_Dispatch(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
     case 0x41B: {
         HSD_Generator* result;
         HSD_JObj* jobj;
-        Vec3 result_scale;
 
         efLib_LoadKind = EF_LOADKIND_SYNC;
         result = efLib_CreateGenerator_AddAppSRT(0x31);
         if (result != NULL) {
             jobj = va_arg(vlist, HSD_JObj*);
             lb_8000B1CC(jobj, NULL, &result->appsrt->translate);
-            HSD_JObjGetScale(jobj, &result_scale);
+            HSD_JObjGetScale(jobj, &scale);
             result->appsrt->scale.x = result->appsrt->scale.y =
-                result->appsrt->scale.z = result_scale.y;
+                result->appsrt->scale.z = scale.y;
         }
         break;
     }
@@ -736,13 +732,15 @@ void* efAsync_Dispatch(s32 gfx_id, HSD_GObj* gobj, va_list vlist)
         break;
     }
     case 0x438:
+        PAD_STACK(4);
         ret_obj = efLib_Create_Attach(0x22, gobj, va_arg(vlist, HSD_JObj*));
         if (ret_obj != NULL) {
             jobj_3 = GET_JOBJ(gobj);
             (void) jobj_3;
-            f32_1 = HSD_JObjGetRotationY(jobj_3);
+            HSD_JObjGetRotationY(jobj_3);
+            f32_2 = jobj_3->rotate.y;
             jobj_2 = GET_JOBJ(((EF_Effect*) ret_obj)->gobj);
-            HSD_JObjSetRotationY(jobj_2, f32_1);
+            HSD_JObjSetRotationY(jobj_2, f32_2);
             ((EF_Effect*) ret_obj)->update = efLib_Cb_SetScale_FromParamX;
             ((EF_Effect*) ret_obj)->params.x = *va_arg(vlist, f32*);
         }
@@ -1498,6 +1496,12 @@ void efAsync_Spawn(HSD_GObj* gobj, void* queue_head, u32 spawn_kind,
     queued->gfx_id = gfx_id;
     queued->jobj = jobj;
     switch (spawn_kind) {
+    /* No parameters to copy. ftCo_8009F834 queues gfx 0x402/0x403 with kind
+     * 0, which used to fall through to the report below: compiled out on the
+     * console, so only this port ever saw "[EfASync] unknown type 0". */
+    case EF_SPAWN_ATTACH:
+    case EF_SPAWN_POS:
+        break;
     case EF_SPAWN_POS_OFFSET:
         queued->params = *va_arg(vlist, Vec3*);
         break;
@@ -1527,23 +1531,11 @@ void efAsync_Spawn(HSD_GObj* gobj, void* queue_head, u32 spawn_kind,
     case EF_SPAWN_CAMERA_SHAKE:
         queued->params = *va_arg(vlist, Vec3*);
         break;
-#if BUILD_TARGET_PC
-    case EF_SPAWN_ATTACH:
-    case EF_SPAWN_POS:
-        /* No parameters to copy. ftCo_8009F834 queues gfx 0x402/0x403 with
-         * kind 0; on the console this assert is compiled out, on PC it only
-         * spammed the log ("[EfASync] unknown type 0"). */
-        break;
-#endif
     default:
         HSD_ASSERTREPORT(0xF6U, 0, "[EfASync] unknown type %d\n", spawn_kind);
         break;
     }
-#if BUILD_TARGET_PC
     va_end(vlist);
-#else
-    va_end(sp80);
-#endif
 #if BUILD_TARGET_PC
     if (getenv("MELEE_EFREQ") != NULL) {
         extern u32 gm_8016AEDC(void);
@@ -1566,15 +1558,14 @@ void efAsync_Spawn(HSD_GObj* gobj, void* queue_head, u32 spawn_kind,
 
 void efAsync_QueueInit(void)
 {
-#if BUILD_TARGET_PC
-    /* EF_QueuedEffect_ObjAlloc is the console's 0x24-byte slot. The PC node
-     * is 48 bytes, so every queued effect overran its slot by 12 bytes and
-     * the last one in each chunk wrote into the neighbouring efLib pool --
-     * zeroing a freed EF_Effect's free-list link, which HSD_ObjAlloc then
-     * crashed on a few frames later (hit sparks in a long CPU match). */
-    HSD_ObjAllocInit(&efAsync_AllocData, sizeof(EF_QueuedEffect), 8U);
-#else
-    HSD_ObjAllocInit(&efAsync_AllocData,
-                     sizeof(struct EF_QueuedEffect_ObjAlloc), 4U);
-#endif
+    /* The slot used to be spelled as the console's 0x24-byte
+     * EF_QueuedEffect_ObjAlloc. The PC node is 48 bytes, so every queued
+     * effect overran its slot by 12 bytes and the last one in each chunk
+     * wrote into the neighbouring efLib pool -- zeroing a freed EF_Effect's
+     * free-list link, which HSD_ObjAlloc then crashed on a few frames later
+     * (hit sparks in a long CPU match). Upstream's spelling below is the
+     * same fix expressed once for both targets: the real node size, and an
+     * alignment that is 4 where a pointer is 4 and 8 where it is 8. */
+    HSD_ObjAllocInit(&efAsync_AllocData, sizeof(EF_QueuedEffect),
+                     sizeof(EF_QueuedEffect*));
 }

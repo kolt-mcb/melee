@@ -4,8 +4,6 @@
 #include "particle.h" // IWYU pragma: export
 #include "platform.h"
 
-#include "baselib/psstructs.h"
-
 // .data
 
 /* 4D78D0 */ static u32 hsd_804D78D0;
@@ -16,7 +14,7 @@
 /* 4D78D8 */ static u16 hsd_804D78D8;
 #endif
 /* 4D78DA */ static u16 hsd_804D78DA;
-static u16 numPeakParticles;
+/* 4D78DC */ static u16 numPeakParticles;
 #if BUILD_TARGET_PC
 /* 4D78DE */ u16 hsd_804D78DE; /* shared with psdisp.c */
 #else

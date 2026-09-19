@@ -9,34 +9,28 @@
 #include "ft/chara/ftCommon/ftCo_Barrel.h"
 #include "ft/ftlib.h"
 #include "it/inlines.h"
-#include "it/it_266F.h"
 #include "it/it_26B1.h"
 #include "it/it_2725.h"
 #include "it/it_3F14.h"
-#include "it/itanimlist.h"
 #include "it/iteffect.h"
 #include "it/item.h"
+#include "it/itgroundcoll.h"
 #include "it/ithitbox.h"
 #include "it/itmaplib.h"
 #include "lb/lb_00B0.h"
 #include "lb/lbvector.h"
-#include "MSL/math.h"
 
+#include <math.h>
 #include <baselib/jobj.h>
 #include <baselib/random.h>
 
 /* Barrel cannon: the launch offset (8*cos + x), the aim steps and the
  * facing-scaled turn are fmadds on the console. */
 #if BUILD_TARGET_PC
-#include <math.h>
 #define TC_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define TC_FMA(a, b, c) ((a) * (b) + (c))
 #endif
-
-/// @todo Remove
-static f32 fake1(void);
-static f32 fake2(void);
 
 const lbColl_80008D30_arg1 it_803B8610 = {
     1, 1, 361, 0, 0, 180, 0, 1, 0,
@@ -67,7 +61,7 @@ ItemStateTable it_803F63C0[] = {
       itTarucann_UnkMotion9_Coll },
 };
 
-inline void inline_itTarucann_SetRotationZ(HSD_GObj* gobj)
+static inline void inline_itTarucann_SetRotationZ(HSD_GObj* gobj)
 {
     HSD_JObj* jobj;
     Item* ip;
@@ -150,15 +144,13 @@ void it_3F14_Logic5_Destroyed(Item_GObj* gobj)
     }
 }
 
-static f32 fake1(void)
+#ifdef MUST_MATCH
+static void order_sdata2(void)
 {
-    return -1.0f;
+    (void) -1.0f;
+    (void) 1.3089969f;
 }
-
-static f32 fake2(void)
-{
-    return 1.3089969f;
-}
+#endif
 
 void it_3F14_Logic5_Spawned(Item_GObj* gobj)
 {
@@ -593,7 +585,7 @@ bool itTarucann_UnkMotion7_Anim(Item_GObj* gobj)
     return it_802961E8(gobj);
 }
 
-inline void inline_itTarucann_UnkMotion7_Phys(Item_GObj* gobj)
+static inline void inline_itTarucann_UnkMotion7_Phys(Item_GObj* gobj)
 {
     Item* ip2 = GET_ITEM(gobj);
     ip2->x40_vel.x = ip2->xDD4_itemVar.tarucann.x10;
@@ -648,7 +640,7 @@ void it_802975F4(Item_GObj* gobj)
     Item_8026AE84(ip, 0x12A, 0x7F, 0x40);
 }
 
-inline void itTarucann_UnkMotion9_Anim_inline(HSD_GObj* gobj)
+static inline void itTarucann_UnkMotion9_Anim_inline(HSD_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     if (ip->xDD4_itemVar.tarucann.x20 == 0) {

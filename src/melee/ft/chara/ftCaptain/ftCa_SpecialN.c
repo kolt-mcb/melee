@@ -1,13 +1,16 @@
 #include "ftCa_SpecialN.h"
 
-#include "math.h"
 #include "types.h"
 
 #include <platform.h>
 
 #include "ef/efsync.h"
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcommon.h"
@@ -17,10 +20,20 @@
 #include "ftCommon/inlines.h"
 #include "lb/lb_00F9.h"
 
+#include <math.h>
 #include <dolphin/mtx.h>
 
+#ifdef MUST_MATCH
+static void order_sdata2(void)
+{
+    (void) 2.0f;
+    (void) 0.0f;
+    (void) 4.0f;
+}
+#endif
+
 /// Create Aesthetic Wind Effect for Warlock Punch
-static void ftCaptain_SpecialN_CreateWindEffect(HSD_GObj* gobj)
+static inline void ftCaptain_SpecialN_CreateWindEffect(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     int cur_frame = fp->cur_anim_frame;
@@ -38,6 +51,8 @@ static void ftCaptain_SpecialN_CreateWindEffect(HSD_GObj* gobj)
             }
         }
         return;
+    default:
+        break;
     }
 }
 
@@ -64,7 +79,7 @@ static float ftCaptain_SpecialN_GetAngleVel(Fighter* fp)
         }
         {
             /// @todo Eliminate @c f.
-            float f = deg_to_rad;
+            float f = MTXDegToRad(1);
             return f * (stick_y * da->specialn_angle_diff / (max - min));
         }
     }
@@ -148,6 +163,8 @@ static inline void doPhys(HSD_GObj* gobj)
             case FTKIND_GANON:
                 efSync_Spawn(1291, gobj, fp->parts[FtPart_TopN].joint,
                              fp->parts[78].joint);
+                break;
+            default:
                 break;
             }
             fp->x2219_b0 = true;

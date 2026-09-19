@@ -2,8 +2,8 @@
 
 #include "debug.h"
 
-#include <__mem.h>
-#include <dolphin/os/OSTime.h>
+#include <string.h>
+#include <dolphin/os.h>
 
 s64 start_time;
 
@@ -28,7 +28,7 @@ void HSD_PerfSetCPUTime(void)
     HSD_PerfCurrentStat.cpu_time = 0.0f;
 #else
     HSD_PerfCurrentStat.cpu_time =
-        (OSGetTime() - start_time) / (f32) (*(u32*) 0x800000F8 / 4 / 60);
+        (OSGetTime() - start_time) / (f32) (OSSecondsToTicks(1) / 60);
 #endif
 }
 
@@ -39,7 +39,7 @@ void HSD_PerfSetDrawTime(void)
     HSD_PerfCurrentStat.draw_time = 0.0f;
 #else
     HSD_PerfCurrentStat.draw_time =
-        (OSGetTime() - start_time) / (f32) (*(u32*) 0x800000F8 / 4 / 60);
+        (OSGetTime() - start_time) / (f32) (OSSecondsToTicks(1) / 60);
 #endif
 }
 
@@ -50,7 +50,7 @@ void HSD_PerfSetTotalTime(void)
     HSD_PerfCurrentStat.total_time = 0.0f;
 #else
     HSD_PerfCurrentStat.total_time =
-        (OSGetTime() - start_time) / (f32) (*(u32*) 0x800000F8 / 4 / 60);
+        (OSGetTime() - start_time) / (f32) (OSSecondsToTicks(1) / 60);
 #endif
 }
 

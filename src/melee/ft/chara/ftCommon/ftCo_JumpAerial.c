@@ -1,7 +1,5 @@
 #include "ftCo_JumpAerial.h"
 
-#include "math.h"
-
 #include <placeholder.h>
 
 #include "ft/fighter.h"
@@ -9,6 +7,7 @@
 #include "ft/forward.h"
 
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0877.h"
 #include "ft/ft_0881.h"
 #include "ft/ft_0C8C.h"
@@ -31,6 +30,8 @@
 #include "ftCommon/ftCo_ItemThrow.h"
 #include "ftCommon/ftCo_SpecialAir.h"
 #include "ftPeach/ftPe_Float.h"
+
+#include <baselib/jobj.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -60,8 +61,7 @@ void ft_800CB6EC(Fighter* fp, s32 arg1)
             }
         }
 #else
-        HSD_JObjAddRotationY(fp->parts->joint,
-                             -(deg_to_rad * (180.0F / arg1)));
+        HSD_JObjAddRotationY(fp->parts->joint, -MTXDegToRad(180.0F / arg1));
 #endif
         if (fp->mv.co.jumpaerial.x0 == (arg1 / 2)) {
             fp->facing_dir = -fp->facing_dir;
@@ -73,7 +73,7 @@ bool ft_did_jump(Fighter* fp, bool arg1)
 {
     if (fp->x1968_jumpsUsed < fp->co_attrs.max_jumps &&
         ((fp->input.lstick.y >= p_ftCommonData->tap_jump_threshold &&
-          fp->x671_timer_lstick_tilt_y < p_ftCommonData->x74) ||
+          fp->x671_timer_lstick_tilt_y < p_ftCommonData->tap_jump_window) ||
          fp->input.x668 & HSD_PAD_XY) &&
         !(arg1 && (fp->x68A < p_ftCommonData->x1C)))
     {

@@ -4,12 +4,14 @@
 
 #include <platform.h>
 
-#include "ef/eflib.h"
-
 #include "forward.h"
 
 #include "ft/fighter.h"
+
+#include "ft/forward.h"
+
 #include "ft/ft_081B.h"
+#include "ft/ft_084E.h"
 #include "ft/ft_0892.h"
 #include "ft/ftanim.h"
 #include "ft/ftcommon.h"
@@ -77,7 +79,7 @@ void ftDk_SpecialAirS_Phys(HSD_GObj* gobj)
     ftDonkeyAttributes* donkey_attr = getFtSpecialAttrs(fp);
     if (fp->cmd_vars[0]) {
         ftCommon_Fall(fp, donkey_attr->SpecialS.x44_AERIAL_GRAVITY,
-                      ca->terminal_vel);
+                      ca->terminal_velocity);
     }
     ftCommon_ApplyFrictionAir(
         fp, donkey_attr->SpecialS.x40_MOMENTUM_TRANSITION_MODIFIER);

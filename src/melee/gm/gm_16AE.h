@@ -89,7 +89,6 @@ bool gm_8016AE80(void);
 
 /// @todo should take Fighter_GObj*? See ftCo_800A53DC
 /* 16C6C0 */ /* static */ s32 gm_8016C6C0(Item_GObj*);
-/* 16C6C0 */ s32 gm_8016C6C0(Item_GObj*);
 /* 16C75C */ /* static */ int gm_8016C75C(HSD_GObj*);
 /* 16C7D0 */ void fn_8016C7D0(HSD_GObj*);
 /* 16C7F0 */ void fn_8016C7F0(void);
@@ -98,10 +97,10 @@ bool gm_8016AE80(void);
 /* 16CD98 */ void fn_8016CD98(lbl_8046B6A0_t*);
 /* 16CF4C */ void fn_8016CF4C(int, MatchOutcome);
 /* 16CFE0 */ void fn_8016CFE0(void);
-/* 16D32C */ void gm_8016D32C_OnFrame(void);
+/* 16D32C */ void gm_Scene_Training_OnFrame(void);
 /* 16D538 */ bool fn_8016D538(void);
 /* 16D634 */ void fn_8016D634(void);
-/* 16D800 */ void gm_8016D800(void);
+/* 16D800 */ void gm_Scene_Vs_OnFrame(void);
 /* 16D8AC */ void fn_8016D8AC(int, struct PlayerInitData*);
 /* 16DCC0 */ void fn_8016DCC0(struct StartMeleeData*);
 /* 16DEEC */ void fn_8016DEEC(void);
@@ -109,16 +108,17 @@ bool gm_8016AE80(void);
 /* 16E2BC */ void fn_8016E2BC(void);
 /* 16E5C0 */ bool fn_8016E5C0(struct StartMeleeData*);
 /* 16E730 */ void fn_8016E730(struct StartMeleeData*);
-/* 16E934 */ void gm_8016E934_OnEnter(void*);
-/* 16E9C8 */ void gm_8016E9C8(void*);
-/* 16EBC0 */ void gm_8016EBC0_OnEnter(void*);
-/* 16EC28 */ void gm_8016EC28_OnEnter(void*);
+/* 16E934 */ void gm_Scene_Vs_OnEnter(void*);
+/* 16E9C8 */ void gm_Scene_Vs_OnExit(void*);
+/* 16EBC0 */ void gm_Scene_SuddenDeath_OnEnter(void*);
+/* 16EC28 */ void gm_Scene_Training_OnEnter(void*);
 /* 16ECE8 */ float gm_8016ECE8(void);
 /* 16EDDC */ bool gm_8016EDDC(int, struct PlayerInitData*);
 /* 16EF98 */ bool fn_8016EF98(int);
 /* 16F00C */ void gm_8016F00C(int);
 /* 16F030 */ void fn_8016F030(struct StartMeleeData*);
-/* 16F088 */ void gm_8016F088(struct StartMeleeData*); /// Checks rumble?
+/* 16F088 */ void
+gm_LoadRumbleEnabled(struct StartMeleeData*); /// Checks rumble?
 /* 16F120 */ int gm_8016F120(int);
 /* 16F140 */ void fn_8016F140(int);
 /* 16F160 */ int fn_8016F160(int, int);

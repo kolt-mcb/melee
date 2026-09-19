@@ -18,11 +18,10 @@
 #include "lb/types.h"
 #include "mp/mplib.h"
 
-#include <math_ppc.h>
+#include <math.h>
 #include <baselib/gobjproc.h>
 #include <baselib/random.h>
 #include <sysdolphin/baselib/lobj.h>
-#include <MSL/math.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
@@ -71,10 +70,12 @@ static struct grPushon_YakumonoParam* yakumono_param;
                                      float delta_y);
 
 /// @todo .sdata order hack
+#ifdef MUST_MATCH
 static void order_sdata(void)
 {
     (void) "0";
 }
+#endif
 
 Vec3 const grPushOn_803B8440 = { 0 };
 Vec3 const grPushOn_803B844C = { 0 };
@@ -140,7 +141,7 @@ void grPushOn_80218330(void)
     Vec3 vec;
 
     grPushOn_802183E4(2);
-    gobj = Ground_801C57A4();
+    gobj = Ground_GetP1Fighter();
     if (gobj != NULL) {
         ftLib_80086644(gobj, &vec);
         Ground_801C38BC(vec.x, vec.y);
@@ -242,7 +243,7 @@ bool grPushOn_80218670(Ground_GObj* arg)
 
 bool fn_80218678(void)
 {
-    HSD_GObj* gobj = Ground_801C2BA4(1);
+    HSD_GObj* gobj = Ground_GetMapGObj(1);
     if (gobj != NULL) {
         Ground* gp = gobj->user_data;
         if (gp != NULL) {
@@ -263,7 +264,7 @@ void grPushOn_802186C8(Ground_GObj* gobj)
     vec = grPushOn_803B8440;
     Ground_801C3D44(fn_80218678, 25.0f, 20.0f);
     {
-        HSD_GObj* gobj2 = Ground_801C57A4();
+        HSD_GObj* gobj2 = Ground_GetP1Fighter();
         if (gobj2 != NULL) {
             ftLib_80086644(gobj2, &vec);
             Ground_801C0498();
@@ -338,7 +339,7 @@ void grPushOn_80218888(Ground_GObj* gobj)
     GET_GROUND(0);
 
     gp = GET_GROUND(gobj);
-    player = Ground_801C57A4();
+    player = Ground_GetP1Fighter();
     if (player != NULL) {
         ftLib_80086644(player, &player_pos);
     } else {
@@ -349,7 +350,7 @@ void grPushOn_80218888(Ground_GObj* gobj)
 
     if (gp->u.pushon.gobj != 0) {
         i = 0;
-        while (i < (s32) gp->u.pushon.count) {
+        while (i < gp->u.pushon.count) {
             HSD_LObj* lobj = gp->u.pushon.lobjs[i];
             s32 type = lobj->flags & 3;
 

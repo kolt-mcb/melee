@@ -31,6 +31,7 @@
 HSD_Text* mnDataDel_804D6C6C;
 HSD_GObj* mnDataDel_804D6C68;
 
+#ifdef MUST_MATCH
 static void sdata2_order(void)
 {
     (void) S32_TO_F32;
@@ -46,6 +47,7 @@ static void sdata2_order(void)
     (void) 5.0f;
     (void) 0.0500000007f;
 }
+#endif
 
 static inline f32 mnDataDel_8024E940_inline(HSD_JObj* arg0)
 {
@@ -291,7 +293,7 @@ void mnDataDel_8024EEC0(void)
     data = mnDataDel_GetWarnData();
     wrn_modal = GObj_Create(6U, 7U, 0x80U);
     root = HSD_JObjLoadJoint(assets->joint);
-    HSD_GObjObject_80390A70(wrn_modal, HSD_GObj_804D7849, root);
+    HSD_GObjObject_80390A70(wrn_modal, HSD_GObj_JObjKind, root);
     GObj_SetupGXLink(wrn_modal, HSD_GObj_JObjCallback, 6U, 0x80U);
     HSD_GObj_SetupProc(wrn_modal, fn_8024ECCC, 0U);
     HSD_JObjAddAnimAll(root, assets->animjoint, assets->matanim_joint,
@@ -797,7 +799,7 @@ void mnDataDel_8024FE4C(u8 arg0)
     gobj = GObj_Create(6U, 7U, 0x80U);
     mnDataDel_804D6C68 = gobj;
     root = HSD_JObjLoadJoint(assets->joint);
-    HSD_GObjObject_80390A70(gobj, HSD_GObj_804D7849, root);
+    HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, root);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 4U, 0x80U);
     HSD_JObjAddAnimAll(root, assets->animjoint, assets->matanim_joint,
                        assets->shapeanim_joint);

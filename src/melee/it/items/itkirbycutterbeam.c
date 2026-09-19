@@ -11,7 +11,6 @@
 #include "lb/lbvector.h"
 
 #include <math.h>
-#include <trigf.h>
 
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC

@@ -1,7 +1,5 @@
 #include "lb/types.h"
 
-#include <math_ppc.h>
-#include <trigf.h>
 #include <dolphin/gx/GXCull.h>
 #include <dolphin/gx/GXGeometry.h>
 #include <dolphin/gx/GXLighting.h>
@@ -12,9 +10,7 @@
 #include <baselib/cobj.h>
 #include <baselib/displayfunc.h>
 #include <baselib/dobj.h>
-#include <baselib/gobj.h>
 #include <baselib/gobjobject.h>
-#include <baselib/jobj.h>
 #include <baselib/lobj.h>
 #include <baselib/psstructs.h>
 #include <baselib/tobj.h>

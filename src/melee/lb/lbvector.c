@@ -1,56 +1,31 @@
+#include "lbvector.h"
+
 #include "port/pc_ptr.h"
-#include "lb/lbvector.h"
+
+#include <placeholder.h>
 
 #ifndef M_TAU
 #define M_TAU 6.283185307179586
 #endif
 
-
 #include <dolphin/types.h>
 #include <stdbool.h>
-#include <math.h>
-
 #include <platform.h>
 #undef sin
 #undef cos
 #undef fmod
 
-#include "lb/lbrefract.h"
-
 #include <math.h>
-#include <math_ppc.h>
 #include <dolphin/gx/GXTransform.h>
 #include <dolphin/mtx.h>
 #include <baselib/cobj.h>
 #include <baselib/debug.h>
 
-/* MWCC turned every `a * b + c` in this file into a single fmadds -- one
- * rounding, not two -- and the port's compiler does not.  Each place below is
- * paired with the instruction it comes from, because the operand pairing is
- * not recoverable from the C: `fmadds x, y, t` and `fmadds y, x, t` are the
- * same value but `a*b + c*d` can be fused either way and the two answers
- * differ.  This matters here because lbVector_CreateEulerMatrix and
- * lbVector_Rotate are on the path from a fighter's joint angles to its ECB,
- * so a last-bit difference here is a position difference a few hundred frames
- * later. */
-#if BUILD_TARGET_PC
-#define LV_FMA(a, b, c) fmaf((a), (b), (c))
-#else
-#define LV_FMA(a, b, c) ((a) * (b) + (c))
-#endif
-/* Every dot product and squared length in this file, as the console
- * computes it: y plain, then x fused in, then z (fmuls y,y / fmadds x,x /
- * fmadds z,z). Not the left-to-right x + y + z the C reads as. */
-#define LV_DOT(ax, ay, az, bx, by, bz) \
-    LV_FMA((az), (bz), LV_FMA((ax), (bx), (ay) * (by)))
+/* LV_FMA and LV_DOT -- the console's single-rounding spellings used all over
+ * this file -- are defined in lbvector.h, next to the inlined lbVector_Len
+ * that needs them. */
 
-static float lbVector_Len(Vec3* vec)
-{
-    /* Inlined everywhere on the console; the squared length is LV_DOT. */
-    return sqrtf(LV_DOT(vec->x, vec->y, vec->z, vec->x, vec->y, vec->z));
-}
-
-static float lbVector_Len_xy(Vec3* vec)
+static inline float lbVector_Len_xy_accurate(Vec3* vec)
 {
     return sqrtf_accurate(vec->x * vec->x + vec->y * vec->y);
 }
@@ -147,7 +122,8 @@ float lbVector_Angle(Vec3* a, Vec3* b)
 /// 8000D790 - returns the angle between a and b
 float lbVector_AngleXY(Vec3* a, Vec3* b)
 {
-    float lena_lenb = lbVector_Len_xy(a) * lbVector_Len_xy(b);
+    float lena_lenb =
+        lbVector_Len_xy_accurate(a) * lbVector_Len_xy_accurate(b);
 
     if (lena_lenb) {
         float cosine = LV_FMA(a->x, b->x, a->y * b->y) / lena_lenb;
@@ -167,7 +143,25 @@ float lbVector_AngleXY(Vec3* a, Vec3* b)
 /// Procedure, which is described in the following paper:
 /// https://math.berkeley.edu/~arash/54/notes/6_4.pdf
 
-static float _lb_sin(float angle)
+/* MWCC does not call sin()/cos() at any of the three sites below: 8000DB00,
+ * 8000D8F4 and 8000E530 each inline this fifth-order minimax polynomial. The
+ * argument is reduced into [-pi, pi] by adding or subtracting 2*pi once -- in
+ * double, then rounded to float -- and then
+ *     sin(x) ~ 0.98786199f*x - 0.15527099f*x^3 + 0.0056429999f*x^5
+ * with cos(x) the same polynomial evaluated at x + pi/2 (also reduced).
+ *
+ * It is not an accurate sine. At 15 degrees it is 1.2% low, so calling the C
+ * library's sin() here does not reproduce the console: the camera builds its
+ * frustum corners out of two of these rotations, and with a true sine the
+ * corners came out 1.7% further from the centre. On the one frame a corner
+ * crossed the stage's camera bound the clamp then pushed the camera by 2.26
+ * units where the console pushed it by 1.27, and the camera never came back
+ * -- which is what decided the off-screen damage tick a few frames later.
+ *
+ * Every product is single-rounded and the last two are fused, in the order
+ * 8000DB40-8000DB78 does them; the polynomial is close enough to zero at
+ * these angles that the pairing is visible in the result. */
+static float lbvector_sin(float angle)
 {
     if (angle > M_PI) {
         angle -= M_TAU;
@@ -195,7 +189,7 @@ static float _lb_sin(float angle)
 #endif
 }
 
-static float _lb_cos(float angle)
+static float lbvector_cos(float angle)
 {
     angle += M_PI / 2;
     if (angle > M_PI) {
@@ -228,59 +222,6 @@ static float _lb_cos(float angle)
 /// Rotates v by angle about the given axis. The axis must have unit length,
 /// the angle is in radians. Rotation is oriented such that rotating (1,0,0)
 /// about the (0,0,1) axis results in (0,1,0).
-#if BUILD_TARGET_PC
-/* MWCC does not call sin()/cos() here: 8000DB00 inlines a fifth-order minimax
- * polynomial for both. The argument is reduced into [-pi, pi] by adding or
- * subtracting 2*pi once -- in double, then rounded to float with frsp -- and
- * then
- *     sin(x) ~ 0.98786199f*x - 0.15527099f*x^3 + 0.0056429999f*x^5
- * with cos(x) the same polynomial evaluated at x + pi/2 (also reduced).
- *
- * It is not an accurate sine. At 15 degrees it is 1.2% low, so calling the C
- * library's sin() here does not reproduce the console: the camera builds its
- * frustum corners out of two of these rotations, and with a true sine the
- * corners came out 1.7% further from the centre. On the one frame a corner
- * crossed the stage's camera bound the clamp then pushed the camera by 2.26
- * units where the console pushed it by 1.27, and the camera never came back
- * -- which is what decided the off-screen damage tick a few frames later.
- *
- * Every product is single-rounded and the last two are fused, in the order
- * 8000DB40-8000DB78 does them; the polynomial is close enough to zero at
- * these angles that the pairing is visible in the result. */
-static f32 lb_rot_reduce(f32 angle)
-{
-    if ((f64) angle > 3.141592653589793) {
-        return (f32) ((f64) angle - 6.283185307179586);
-    }
-    if ((f64) angle < -3.141592653589793) {
-        return (f32) ((f64) angle + 6.283185307179586);
-    }
-    return angle;
-}
-
-static f32 lb_rot_sin(f32 x)
-{
-    f32 c5 = 0.005642999894917011f;
-    f32 c3 = 0.1552709937095642f;
-    f32 c1 = 0.9878619909286499f;
-    f32 a = c5 * x;   /* 8000DB40 */
-    f32 b = c3 * x;   /* 8000DB48 */
-    a = a * x;        /* 8000DB54 */
-    b = b * x;        /* 8000DB5C */
-    a = x * a;        /* 8000DB64 */
-    b = x * b;        /* 8000DB68 */
-    a = x * a;        /* 8000DB70 */
-    /* 8000DB74 fmsubs, 8000DB78 fmadds */
-    return LV_FMA(x, a, LV_FMA(c1, x, -b));
-}
-
-/* lbVector_RotateAboutUnitAxis (8000D8F4) and lbVector_CreateEulerMatrix
- * (8000E530) inline the very same polynomial -- neither makes a single call,
- * and both load the same three coefficients, twice and six times. */
-#define LB_SIN(a) lb_rot_sin(lb_rot_reduce(a))
-#define LB_COS(a)                                                             \
-    lb_rot_sin(lb_rot_reduce((f32) ((f64) (a) + 1.5707963267948966)))
-#endif
 
 void lbVector_RotateAboutUnitAxis(Vec3* v, Vec3* axis, float angle)
 {
@@ -290,13 +231,8 @@ void lbVector_RotateAboutUnitAxis(Vec3* v, Vec3* axis, float angle)
     // z-axis by angle, and finally the first two rotations are reversed.
 
     float len_axis_yz = sqrtf(axis->y * axis->y + axis->z * axis->z);
-#if BUILD_TARGET_PC
-    float s = LB_SIN(angle);
-    float c = LB_COS(angle);
-#else
-    float s = sin(angle);
-    float c = cos(angle);
-#endif
+    float s = lbvector_sin(angle);
+    float c = lbvector_cos(angle);
     float unit_axis_yz_y;
     float unit_axis_yz_z;
     float x, y, z;
@@ -356,13 +292,8 @@ void lbVector_RotateAboutUnitAxis(Vec3* v, Vec3* axis, float angle)
 
 void lbVector_Rotate(Vec3* v, int axis, float angle)
 {
-#if BUILD_TARGET_PC
-    float s = LB_SIN(angle);
-    float c = LB_COS(angle);
-#else
-    float s = sin(angle);
-    float c = cos(angle);
-#endif
+    float s = lbvector_sin(angle);
+    float c = lbvector_cos(angle);
     float x;
     float y;
     float z;
@@ -389,10 +320,12 @@ void lbVector_Rotate(Vec3* v, int axis, float angle)
     v->z = z;
 }
 
-float dummy(void)
+#ifdef MUST_MATCH
+static void order_sdata2(void)
 {
-    return 2.0f;
-} // needed here to force order of floats in .sdata2 section
+    (void) 2.0f;
+}
+#endif
 
 /// 8000DC6C - compute a -= 2*<a,b>*b. When b has unit length, this mirrors a
 /// at the plane that is perpendicular to b and contains the origin.
@@ -619,21 +552,12 @@ Vec3* lbVector_WorldToScreen(HSD_CObj* cobj, const Vec3* pos3d,
 /// there is no translational component.
 void lbVector_CreateEulerMatrix(Mtx m, Quaternion* angles)
 {
-#if BUILD_TARGET_PC
-    float sx = LB_SIN(angles->x);
-    float cx = LB_COS(angles->x);
-    float sy = LB_SIN(angles->y);
-    float cy = LB_COS(angles->y);
-    float sz = LB_SIN(angles->z);
-    float cz = LB_COS(angles->z);
-#else
-    float sx = sin(angles->x);
-    float cx = cos(angles->x);
-    float sy = sin(angles->y);
-    float cy = cos(angles->y);
-    float sz = sin(angles->z);
-    float cz = cos(angles->z);
-#endif
+    float sx = lbvector_sin(angles->x);
+    float cx = lbvector_cos(angles->x);
+    float sy = lbvector_sin(angles->y);
+    float cy = lbvector_cos(angles->y);
+    float sz = lbvector_sin(angles->z);
+    float cz = lbvector_cos(angles->z);
 
     float sxsy = sx * sy;
     float cxsy = cx * sy;

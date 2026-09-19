@@ -7,9 +7,7 @@
 
 #include "debug.h"
 
-#include <placeholder.h>
-
-#include <__mem.h>
+#include <string.h>
 #include <sysdolphin/baselib/class.h>
 #include <sysdolphin/baselib/tev.h>
 #include <sysdolphin/baselib/texpdag.h>
@@ -20,23 +18,15 @@ HSD_TExpType HSD_TExpGetType(HSD_TExp* texp)
     if (texp == NULL) {
         return HSD_TE_ZERO;
     }
-#if BUILD_TARGET_PC
-    /* PC port: use full 64-bit comparisons for special pointer values.
-     * GCC zero-extends 32-bit constants, breaking (uintptr_t)-1U comparisons. */
-    if (texp == (HSD_TExp*) (uintptr_t) -1) {
+    /* HSD_TEXP_TEX / HSD_TEXP_RAS are whole-pointer constants, so these are
+     * full-width comparisons on the host too -- the port's own spelling was
+     * working around (uintptr_t) texp == -1U zero-extending. */
+    if (texp == HSD_TEXP_TEX) {
         return HSD_TE_TEX;
     }
-    if (texp == (HSD_TExp*) (uintptr_t) -2) {
+    if (texp == HSD_TEXP_RAS) {
         return HSD_TE_RAS;
     }
-#else
-    if ((uintptr_t) texp == -1U) {
-        return HSD_TE_TEX;
-    }
-    if ((uintptr_t) texp == -2U) {
-        return HSD_TE_RAS;
-    }
-#endif /* BUILD_TARGET_PC */
     #if BUILD_TARGET_PC
     /* PC port: guard against garbage pointers.
      * Valid x86_64 heap pointers are in mmap region (> 0x10000000) or
@@ -77,6 +67,8 @@ void HSD_TExpFree(HSD_TExp* texp)
     case HSD_TE_CNST:
         hsdFreeMemPiece(texp, sizeof(HSD_TECnst));
         break;
+    default:
+        break;
     }
 }
 
@@ -95,6 +87,8 @@ void HSD_TExpRef(HSD_TExp* texp, u8 sel)
         break;
     case HSD_TE_CNST:
         texp->cnst.ref += 1;
+        break;
+    default:
         break;
     }
 }
@@ -168,6 +162,8 @@ HSD_TExp* HSD_TExpFreeList(HSD_TExp* texp_list, HSD_TExpType type, s32 all)
                         HSD_TExpUnref(ptr, 1);
                         HSD_TExpUnref(ptr, 5);
                     }
+                    break;
+                default:
                     break;
                 }
             }
@@ -488,6 +484,8 @@ static void HSD_TExpColorInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
             case HSD_TE_CNST:
                 tev->c_in[idx].exp->cnst.ref += 1;
                 break;
+            default:
+                break;
             }
         } break;
         case HSD_TE_CNST: {
@@ -504,6 +502,8 @@ static void HSD_TExpColorInSub(HSD_TETev* tev, HSD_TEInput sel, HSD_TExp* exp,
                 break;
             case HSD_TE_CNST:
                 tev->c_in[idx].exp->cnst.ref += 1;
+                break;
+            default:
                 break;
             }
         } break;
@@ -1189,17 +1189,6 @@ static void TExp2TevDesc(HSD_TExp* texp, HSD_TExpTevDesc* desc,
 static GXTevKColorID id1[4] = { GX_KCOLOR0, GX_KCOLOR1, GX_KCOLOR2,
                                 GX_KCOLOR3 };
 static GXTevRegID id2[3] = { GX_TEVREG0, GX_TEVREG1, GX_TEVREG2 };
-
-static inline int clamp_color(int c)
-{
-    if (c > 0xFF) {
-        return 0xFF;
-    }
-    if (c < 0) {
-        return 0;
-    }
-    return c;
-}
 
 void HSD_TExpSetReg(HSD_TExp* texp)
 {
