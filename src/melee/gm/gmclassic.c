@@ -777,6 +777,30 @@ static inline StKind gmClassic_GetStKind(gm_803DDEC8Struct* entry,
     return entry->xC->x00;
 }
 
+
+#if BUILD_TARGET_PC
+/* The round table has twelve entries and the round number indexes it with no
+ * check. On the disc the data that follows is the matchup tables of the same
+ * object, so an out-of-range round reads a matchup as a round descriptor and
+ * carries on; here that is just as wrong and the values it yields decide a
+ * scene id and a preload slot. Clamp, and say so once. */
+static gm_803DDEC8Struct* pc_classic_round(int round)
+{
+    enum { N = (int) (sizeof(gmClassic_803DDEC8.x00) /
+                      sizeof(gmClassic_803DDEC8.x00[0])) };
+    if (round < 0 || round >= N) {
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "[PORT WARN] classic round %d is outside the "
+                            "%d-entry table; clamping\n", round, N);
+        }
+        round = round < 0 ? 0 : N - 1;
+    }
+    return &gmClassic_803DDEC8.x00[round];
+}
+#endif
+
 void gmClassic_801B3500(GameModeState* arg0)
 {
     gmClassicIntroData* sd;
@@ -792,7 +816,7 @@ void gmClassic_801B3500(GameModeState* arg0)
     gm_803DDEC8Struct* new_var;
 
     sd = gm_GetGameModeStateEnterData(arg0);
-    entry = &gmClassic_803DDEC8.x00[(u8) gm_8017BE84(arg0->id)];
+    entry = pc_classic_round((u8) gm_8017BE84(arg0->id));
     new_var = entry;
     ad = gm_GetAllStarData();
     enemy_count = 0;
@@ -957,7 +981,7 @@ void gmClassic_801B3A34(GameModeState* arg0)
     PAD_STACK(8);
 
     temp_r30 = gm_GetGameModeStateEnterData(arg0);
-    temp_r31 = &gmClassic_803DDEC8.x00[(u8) gm_8017BE84(arg0->id)];
+    temp_r31 = pc_classic_round((u8) gm_8017BE84(arg0->id));
     temp_r29 = gm_GetAllStarData();
     new_var = temp_r30;
     var_r27 = temp_r31->xC->x00;
@@ -999,7 +1023,7 @@ void gmClassic_801B3B40(GameModeState* arg0)
 
     mei = (MatchExitInfo*) gm_GetGameModeStateExitData(arg0);
     asd = gm_GetAllStarData();
-    entry = &gmClassic_803DDEC8.x00[(u8) gm_8017BE84(arg0->id)];
+    entry = pc_classic_round((u8) gm_8017BE84(arg0->id));
     exit_result = mei->x8;
     id = arg0->id;
     idx = ((u16) gm_8017BE84(id)) - 1;
