@@ -41,6 +41,10 @@
 #define PC_CTX_PC(uc) ((uc)->uc_mcontext.pc)
 #define PC_CTX_SP(uc) ((uc)->uc_mcontext.sp)
 #define PC_CTX_FP(uc) ((uc)->uc_mcontext.regs[29])
+/* x30 is the link register: on a call through a bad pointer it still holds
+ * the return address, which names the caller even when the unwinder cannot
+ * walk a stack whose PC is not code. */
+#define PC_CTX_LR(uc) ((uc)->uc_mcontext.regs[30])
 #elif defined(__EMSCRIPTEN__)
 /* wasm has no signals and no machine registers in linear memory, so the
  * crash handler below never runs: install_crash_handler() skips sigaction
@@ -106,6 +110,15 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
         n = snprintf(buf, sizeof(buf), "[CRASH] sp=%#lx fp=%#lx module %s base=%#lx\n",
                      rsp, rbp, mod_name, mod_base);
         write(2, buf, n);
+#if defined(PC_CTX_LR)
+        {
+            unsigned long lr = (unsigned long) PC_CTX_LR(uc);
+            n = snprintf(buf, sizeof(buf), "[CRASH] lr=%#lx (%s+%#lx)\n", lr,
+                         mod_name,
+                         mod_base != 0 && lr >= mod_base ? lr - mod_base : lr);
+            write(2, buf, n);
+        }
+#endif
         unsigned long lo = mod_base != 0 ? mod_base : 0x400000UL;
         unsigned long hi = mod_end != 0 ? mod_end : 0x800000UL;
         unsigned long* sp = (unsigned long*)(rsp & ~7UL);
