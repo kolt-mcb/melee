@@ -217,16 +217,16 @@ static void slp_ucf_dashback(Fighter* fp)
         const PADStatus* b = pc_pad_raw_history((int) fp->x618_player_id, 2);
         fprintf(stderr, "[SLP-COMPAT] turn p%d follower=%d animf=%.2f "
                         "facing*lx=%+.3f thr=%+.3f tilt=%d raw %d<-%d\n",
-                (int) fp->x618_player_id, (int) fp->x221F_b4,
+                (int) fp->x618_player_id, (int) fp->is_sub_fighter,
                 (double) fp->cur_anim_frame,
                 (double) (fp->facing_dir * fp->input.lstick[0].x),
-                (double) p_ftCommonData->x3C,
-                (int) fp->x670_timer_lstick_tilt_x,
+                (double) p_ftCommonData->dash_smash_stick_threshold,
+                (int) fp->active_timer.lstick.x,
                 a ? (int) a->stickX : 999, b ? (int) b->stickX : 999);
     }
 
     /* 0x221F bit 0x08: a follower does not decide this for itself. */
-    if (fp->x221F_b4) {
+    if (fp->is_sub_fighter) {
         return;
     }
     /* The original compares the raw bits of cur_anim_frame against 0x40000000
@@ -235,10 +235,11 @@ static void slp_ucf_dashback(Fighter* fp)
     if (fp->cur_anim_frame != 2.0f) {
         return;
     }
-    if (fp->facing_dir * fp->input.lstick[0].x < p_ftCommonData->x3C) {
+    if (fp->facing_dir * fp->input.lstick[0].x <
+        p_ftCommonData->dash_smash_stick_threshold) {
         return;
     }
-    if (fp->x670_timer_lstick_tilt_x > 1) {
+    if (fp->active_timer.lstick.x > 1) {
         return;
     }
 
@@ -283,7 +284,7 @@ static void slp_ucf_dashback(Fighter* fp)
                 cmd->facing_dir = fp->facing_dir;
                 /* 127 facing right, 128 facing left: the sign bit of the
                  * facing float, added to 127. */
-                cmd->lstickX = (u8) ((bits >> 31) + 127u);
+                cmd->lstick.x = (u8) ((bits >> 31) + 127u);
             }
         }
     }
@@ -315,7 +316,7 @@ void slp_compat_clamp_costumes(void)
             continue;
         }
         kind = Player_GetPlayerCharacter(slot);
-        max = gm_80169238(kind);
+        max = gm_GetNumCostumesForCKind(kind);
         colour = Player_GetCostumeId(slot);
         if (colour >= max) {
             fprintf(stderr, "[SLP-COMPAT] slot %d costume %d out of range for "

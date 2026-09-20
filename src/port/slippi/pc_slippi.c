@@ -30,16 +30,20 @@
 #include <melee/gm/types.h>
 #include <melee/it/types.h>
 #include <melee/mn/types.h>
+#include <melee/pl/player.h>
 #include <dolphin/pad.h>
 #include <sysdolphin/baselib/controller.h>
 
 /* pc_stub/globals_stub.c: the console's five-frame raw-input queue. */
 const PADStatus* pc_pad_raw_history(int slot, int back);
 #include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/random.h>
 
-/* sysdolphin/baselib/random.c. The pre-frame and frame-start events both
- * carry it, and it is the one value that makes a replay reproducible. */
-extern u32 seed;
+/* The RNG seed the pre-frame and frame-start events both carry -- the one
+ * value that makes a replay reproducible. The game reaches its own seed
+ * through this pointer (HSD_SetRandSeedPtr can move it), so read what the
+ * game is actually using rather than a global of our own. */
+#define SLP_SEED (*HSD_RandSeedPtr)
 
 #define SLP_VERSION_MAJOR 3
 #define SLP_VERSION_MINOR 17
@@ -143,7 +147,10 @@ static int slp_trace(void)
     return t;
 }
 
-static int slp_is_follower(const Fighter* fp) { return fp->x221F_b4 ? 1 : 0; }
+static int slp_is_follower(const Fighter* fp)
+{
+    return fp->is_sub_fighter ? 1 : 0;
+}
 
 /* ---- the events ---- */
 
@@ -190,15 +197,18 @@ static void slp_write_game_info_block(unsigned char* b, const StartMeleeData* d)
      * of the storage unit down and this host allocates them from the bottom
      * up, so the console's byte cannot be copied: each bit is placed at the
      * position SPEC.md gives it. */
-    put_u8(b + 0x00, ((unsigned) r->x0_0 << 5) | ((unsigned) r->x0_3 << 2) |
-                         ((unsigned) r->x0_6 << 1) | (unsigned) r->x0_7);
+    put_u8(b + 0x00, ((unsigned) r->match_kind << 5) |
+                         ((unsigned) r->x0_3 << 2) |
+                         ((unsigned) r->timer_enabled << 1) |
+                         (unsigned) r->timer_counts_up);
     put_u8(b + 0x01, ((unsigned) r->x1_0 << 7) | ((unsigned) r->x1_1 << 6) |
                          ((unsigned) r->x1_2 << 5) | ((unsigned) r->x1_3 << 4) |
                          ((unsigned) r->x1_4 << 3) | ((unsigned) r->x1_5 << 2) |
                          ((unsigned) r->timer_shows_hours << 1) |
-                         (unsigned) r->x1_7);
-    put_u8(b + 0x02, ((unsigned) r->x2_0 << 7) | ((unsigned) r->x2_1 << 6) |
-                         ((unsigned) r->x2_2 << 5) | ((unsigned) r->x2_3 << 4) |
+                         (unsigned) r->friendly_fire);
+    put_u8(b + 0x02, ((unsigned) r->is_stock << 7) | ((unsigned) r->x2_1 << 6) |
+                         ((unsigned) r->x2_2 << 5) |
+                         ((unsigned) r->single_button << 4) |
                          ((unsigned) r->disable_pausing << 3) |
                          ((unsigned) r->x2_5 << 2) |
                          ((unsigned) r->x2_6 << 1) | (unsigned) r->x2_7);
@@ -206,7 +216,7 @@ static void slp_write_game_info_block(unsigned char* b, const StartMeleeData* d)
                          ((unsigned) r->x3_2 << 5) | ((unsigned) r->x3_3 << 4) |
                          ((unsigned) r->x3_4 << 3) | ((unsigned) r->x3_5 << 2) |
                          ((unsigned) r->x3_6 << 1) | (unsigned) r->x3_7);
-    put_u8(b + 0x04, ((unsigned) r->x4_0 << 7) | ((unsigned) r->x4_1 << 6) |
+    put_u8(b + 0x04, ((unsigned) r->x4_0 << 7) | ((unsigned) r->is_vs << 6) |
                          ((unsigned) r->x4_2 << 5) | ((unsigned) r->x4_3 << 4) |
                          ((unsigned) r->x4_4 << 3) | ((unsigned) r->x4_5 << 2) |
                          ((unsigned) r->x4_6 << 1) | (unsigned) r->x4_7);
@@ -220,11 +230,11 @@ static void slp_write_game_info_block(unsigned char* b, const StartMeleeData* d)
     put_u8(b + 0x08, r->is_teams);
     put_u8(b + 0x09, r->x9);
     put_u8(b + 0x0A, r->xA);
-    put_u8(b + 0x0B, (unsigned char) r->xB); /* item spawn frequency */
-    put_u8(b + 0x0C, (unsigned char) r->xC); /* self-destruct score value */
+    put_u8(b + 0x0B, (unsigned char) r->item_freq);  /* item frequency */
+    put_u8(b + 0x0C, (unsigned char) r->sd_penalty); /* self-destruct value */
     put_u8(b + 0x0D, r->xD);
-    put_u16(b + 0x0E, r->xE);         /* stage */
-    put_u32(b + 0x10, r->x10);        /* game timer, seconds */
+    put_u16(b + 0x0E, r->stkind);     /* stage */
+    put_u32(b + 0x10, r->time_limit); /* game timer, seconds */
     put_u8(b + 0x14, r->x14);
     put_u32(b + 0x18, r->x18);
 
@@ -234,7 +244,7 @@ static void slp_write_game_info_block(unsigned char* b, const StartMeleeData* d)
     put_s32(b + 0x28, r->x28);
     put_f32(b + 0x2C, r->x2C);
     put_f32(b + 0x30, r->x30); /* damage ratio */
-    put_f32(b + 0x34, r->x34); /* game speed */
+    put_f32(b + 0x34, r->game_speed); /* game speed */
 
     /* 0x38-0x5F is the callback block on the console. Slippi zeroes 0x40..0x5C
      * for the same reason it is zeroed here -- a host pointer means nothing to
@@ -243,23 +253,23 @@ static void slp_write_game_info_block(unsigned char* b, const StartMeleeData* d)
     for (i = 0; i < 6; i++) {
         const PlayerInitData* p = &d->players[i];
         unsigned char* e = b + 0x60 + 0x24 * i;
-        put_u8(e + 0x00, (unsigned char) p->c_kind);
+        put_u8(e + 0x00, (unsigned char) p->ckind);
         put_u8(e + 0x01, p->slot_type);
         put_u8(e + 0x02, (unsigned char) p->stocks);
         put_u8(e + 0x03, p->color);
         put_u8(e + 0x04, p->slot);
-        put_u8(e + 0x05, (unsigned char) p->x5);
+        put_u8(e + 0x05, (unsigned char) p->spawn_pos);
         put_u8(e + 0x06, (unsigned char) p->spawn_dir);
         put_u8(e + 0x07, p->sub_color); /* team shade */
         put_u8(e + 0x08, (unsigned char) p->handicap);
         put_u8(e + 0x09, p->team);
-        put_u8(e + 0x0A, p->xA);
+        put_u8(e + 0x0A, p->nametag);
         put_u8(e + 0x0B, p->xB);
-        put_u8(e + 0x0C, ((unsigned) p->xC_b0 << 7) |
+        put_u8(e + 0x0C, ((unsigned) p->rumble_enabled << 7) |
                              ((unsigned) p->xC_b1 << 6) |
-                             ((unsigned) p->xC_b2 << 5) |
+                             ((unsigned) p->vs_metal << 5) |
                              ((unsigned) p->xC_b3 << 4) |
-                             ((unsigned) p->xC_b4 << 3) |
+                             ((unsigned) p->vs_invisible << 3) |
                              ((unsigned) p->xC_b5 << 2) |
                              ((unsigned) p->xC_b6 << 1) | (unsigned) p->xC_b7);
         put_u8(e + 0x0D, ((unsigned) p->xD_b0 << 7) |
@@ -269,14 +279,14 @@ static void slp_write_game_info_block(unsigned char* b, const StartMeleeData* d)
                              ((unsigned) p->xD_b4 << 3) |
                              ((unsigned) p->xD_b5 << 2) |
                              ((unsigned) p->xD_b6 << 1) | (unsigned) p->xD_b7);
-        put_u8(e + 0x0E, p->xE);
+        put_u8(e + 0x0E, p->cpu_kind);
         put_u8(e + 0x0F, p->cpu_level);
-        put_u16(e + 0x10, p->x10); /* damage start */
-        put_u16(e + 0x12, p->x12); /* damage spawn */
+        put_u16(e + 0x10, p->damage); /* damage start */
+        put_u16(e + 0x12, p->damage1); /* damage spawn */
         put_u16(e + 0x14, p->hp);
-        put_f32(e + 0x18, p->x18); /* offense ratio */
-        put_f32(e + 0x1C, p->x1C); /* defense ratio */
-        put_f32(e + 0x20, p->x20); /* model scale */
+        put_f32(e + 0x18, p->attack_ratio); /* offense ratio */
+        put_f32(e + 0x1C, p->defense_ratio); /* defense ratio */
+        put_f32(e + 0x20, p->model_scale); /* model scale */
     }
 }
 
@@ -326,7 +336,7 @@ void slp_GameStart(StartMeleeData* data)
     put_u8(b + 0x03, SLP_VERSION_BUILD);
     put_u8(b + 0x04, 0);
     slp_write_game_info_block(b + 0x05, data);
-    put_u32(b + 0x13D, seed);
+    put_u32(b + 0x13D, SLP_SEED);
 
     /* 0x141/0x145: the UCF dashback and shield-drop options, per port. This
      * port runs the game unmodified, so both are 0 (off) rather than 1 (UCF).
@@ -367,7 +377,8 @@ void slp_GameStart(StartMeleeData* data)
     slp_stage_discard();
 
     if (slp_trace()) {
-        fprintf(stderr, "[SLP] game start, stage %d\n", (int) data->rules.xE);
+        fprintf(stderr, "[SLP] game start, stage %d\n",
+                (int) data->rules.stkind);
     }
 }
 
@@ -457,7 +468,7 @@ void slp_FrameStart(void)
     if (p != NULL) {
         put_u8(p + 0x00, CMD_FRAME_START);
         put_s32(p + 0x01, slp_frame);
-        put_u32(p + 0x05, seed);
+        put_u32(p + 0x05, SLP_SEED);
         /* The scene controller's frame counter, which keeps counting while
          * the game is paused -- which is what makes it useful to a reader
          * looking for pauses. */
@@ -493,7 +504,7 @@ void slp_PreFrame(Fighter* fp)
     put_s32(p + 0x01, slp_frame);
     put_u8(p + 0x05, slot);
     put_u8(p + 0x06, (unsigned) slp_is_follower(fp));
-    put_u32(p + 0x07, seed);
+    put_u32(p + 0x07, SLP_SEED);
     put_u16(p + 0x0B, (unsigned) fp->motion_id);   /* fp+0x10 */
     put_f32(p + 0x0D, fp->cur_pos.x);              /* fp+0xB0 */
     put_f32(p + 0x11, fp->cur_pos.y);              /* fp+0xB4 */
@@ -584,7 +595,7 @@ void slp_PostFrame(Fighter* fp)
                          ((unsigned) fp->x221C_b5 << 2) |
                          ((unsigned) fp->x221C_b2 << 5)); /* powershield */
     put_u8(p + 0x2A, ((unsigned) fp->x221F_b6 << 1) |   /* cloaking device */
-                         ((unsigned) fp->x221F_b4 << 3) | /* is follower */
+                         ((unsigned) fp->is_sub_fighter << 3) | /* follower */
                          ((unsigned) fp->x221F_b3 << 4) | /* inactive */
                          ((unsigned) fp->x221F_b1 << 6) | /* dead */
                          ((unsigned) fp->x221F_b0 << 7)); /* offscreen */
