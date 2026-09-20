@@ -2414,6 +2414,22 @@ float Player_800360D8(s32 slot)
     if ((unsigned) (slot) >= (unsigned) Gm_Player_NumMax) slot = 0;
 #endif
     player = &player_slots[slot];
+#if BUILD_TARGET_PC
+    /* A slot can hold no fighter: the results screen asks every slot for its
+     * name-tag height, and a boss match leaves the slots past the fighters
+     * empty. ftLib_80086F80 reads the GObj's user data straight away, which
+     * on the host is at 0x48, and that is the address a Master Hand match
+     * faulted on the moment it ended. */
+    if (player->player_entity[player->transformed[0]] == NULL) {
+        static int said;
+        if (said < 4) {
+            said++;
+            PORT_LOG_WARN("Player_800360D8: slot %d has no fighter; "
+                          "name-tag height 0\n", (int) slot);
+        }
+        return 0.0f;
+    }
+#endif
     return ftLib_80086F80(player->player_entity[player->transformed[0]]);
 }
 

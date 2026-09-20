@@ -1061,6 +1061,16 @@ void ftLib_80087610(u8 arg0)
  * error rather than a value that happens to survive. */
 bool ftLib_800876B4(HSD_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* The results screen asks this about every slot, and by then the match's
+     * fighters have been freed, so Player_GetEntity hands back NULL. Reading
+     * the fighter out of it faults at 0x48, which is where the user data
+     * sits once pointers are eight bytes wide. No fighter means no animation
+     * frames left. */
+    if (gobj == NULL) {
+        return false;
+    }
+#endif
     return ftAnim_IsFramesRemaining(gobj);
 }
 

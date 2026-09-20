@@ -162,7 +162,15 @@ void fn_80179990(HSD_GObj* arg0, int arg1, int arg2)
     }
 
     if (lookup != 0) {
+#if BUILD_TARGET_PC
+        /* Same reason as ftLib_800876B4 below: this slot's display object is
+         * not always there by the time the results screen draws. */
+        HSD_JObj* root = disp->gobjs[arg2] == NULL
+                             ? NULL
+                             : (HSD_JObj*) disp->gobjs[arg2]->hsd_obj;
+#else
         HSD_JObj* root = (HSD_JObj*) disp->gobjs[arg2]->hsd_obj;
+#endif
         child_jobj = root == NULL ? NULL : root->child;
     }
 

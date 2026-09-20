@@ -616,6 +616,15 @@ void ftMh_Init_OnLoad(HSD_GObj* gobj)
     {
         UNK_T* items = ftdata->x48_items;
         PUSH_ATTRS(fp, ftMasterHand_SpecialAttrs);
+        #if BUILD_TARGET_PC
+        /* PUSH_ATTRS byte-swaps the attribute blob into the fighter's own copy;
+         * ftData_attr above still points at the raw big-endian bytes in the
+         * archive. Everything below reads timings and positions out of it -- the
+         * attack countdown among them, which came out as two billion frames and
+         * left the hand hovering, never attacking and never reacting. Point at
+         * the converted copy. */
+        ftData_attr = FT_EXT_ATTR(fp);
+        #endif
         ftBossLib_ReportGObjSlotType(gobj);
         it_8026B3F8(items[0], It_Kind_MasterHand_Laser);
         it_8026B3F8(items[1], It_Kind_MasterHand_Bullet);
@@ -646,6 +655,14 @@ void ftMh_Init_OnLoad(HSD_GObj* gobj)
         ftBossLib_8015BD24(fp->cpu.level, &fp->u.mh.x223C, fp->u.mh.x2238,
                            ftData_attr->x18, ftData_attr->x20,
                            ftData_attr->x1C);
+#if BUILD_TARGET_PC
+        /* The attack countdown, in frames. Two billion here means the
+         * attributes are still big-endian and the hand will never act. */
+        if (getenv("MELEE_HANDLOG") != NULL) {
+            fprintf(stderr, "[HAND] attack countdown %.1f frames\n",
+                    (double) fp->u.mh.x223C);
+        }
+#endif
     }
 }
 
