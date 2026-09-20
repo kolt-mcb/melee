@@ -4550,7 +4550,13 @@ void* pc_lowmem_malloc(size_t size)
  *   MELEE_LOWMEM_POISON=1   fill freed blocks with 0xEF and quarantine them,
  *                           so a stale read shows 0xEFEF.. instead of the
  *                           next tenant's data
- *   MELEE_LOWMEM_FREELOG=1  log each free with its caller */
+ *   MELEE_LOWMEM_FREELOG=1  log each free with its caller
+ *   MELEE_LOWMEM_WIPE=<hex> fill freed blocks with that byte and recycle
+ *                           them as usual. POISON also quarantines, which
+ *                           moves every later allocation; this changes only
+ *                           what a stale read finds, so two runs that differ
+ *                           under WIPE=00 and WIPE=EF have read memory
+ *                           nobody wrote, and two runs that agree have not. */
 static void pc_lowmem_free_from(void* p, const void* caller)
 {
     struct pc_lm_hdr* h;
@@ -4560,6 +4566,20 @@ static void pc_lowmem_free_from(void* p, const void* caller)
         if (getenv("MELEE_LOWMEM_NOFREE")) mode |= 1;
         if (getenv("MELEE_LOWMEM_POISON")) mode |= 2;
         if (getenv("MELEE_LOWMEM_FREELOG")) mode |= 4;
+    }
+    {
+        static int wipe = -2;
+        if (wipe == -2) {
+            const char* e = getenv("MELEE_LOWMEM_WIPE");
+            wipe = e != NULL ? (int) strtol(e, NULL, 16) : -1;
+        }
+        if (wipe >= 0 && p != NULL && pc_lowmem_contains(p)) {
+            struct pc_lm_hdr* wh = (struct pc_lm_hdr*) p - 1;
+            if (wh->magic == PC_LM_MAGIC) {
+                memset(p, wipe & 0xFF,
+                       ((size_t) 1 << wh->cls) - sizeof(*wh));
+            }
+        }
     }
     if (p == NULL) return;
     if (!pc_lowmem_contains(p)) { free(p); return; }

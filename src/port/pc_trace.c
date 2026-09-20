@@ -1614,6 +1614,123 @@ u32 pc_state_hash(void)
     return h;
 }
 
+/* Every joint matrix of every fighter, hashed. The state hash above is the
+ * simulation's summary -- position, velocity, percent, action -- and two
+ * machines can agree on all of it while their skeletons are a bit apart,
+ * because a pose is the product of a long chain of matrix work that nothing
+ * in the summary prints. Effects are attached to joints and take their
+ * position and rate from them, so a pose that differs by an ulp shows up
+ * later as a particle emitted on a different frame. MELEE_JOINTHASH=1 prints
+ * one line per frame. */
+static void jobj_hash_rec(HSD_JObj* j, u32* h)
+{
+    union { f32 f; u32 u; } b;
+    int i, k;
+
+    /* No pc_ptr_sane guard on the walk: on arm64 a pointer can carry a tag
+     * byte the guard rejects, so guarding here made the two machines hash
+     * different sets of joints and every comparison disagreed for a reason
+     * that was in the instrument rather than in the game. */
+    for (; j != NULL; j = j->next) {
+        for (i = 0; i < 3; i++) {
+            for (k = 0; k < 4; k++) {
+                b.f = j->mtx[i][k];
+                *h = (*h ^ b.u) * 16777619u;
+            }
+        }
+        jobj_hash_rec(j->child, h);
+    }
+}
+
+/* MELEE_JOINTDUMP=<match frame> prints every joint's matrix on that frame,
+ * in tree order with an index, so the first joint that differs between two
+ * machines can be named rather than guessed at. */
+static FILE* g_jointdump_out;
+
+static void jobj_dump_rec(HSD_JObj* j, int* idx, int slot)
+{
+    union { f32 f; u32 u; } b;
+    int i, k;
+
+    for (; j != NULL; j = j->next) {
+        {
+            char line[256];
+            int n = snprintf(line, sizeof(line), "[JOINTDUMP] p%d j%d", slot,
+                             *idx);
+            for (i = 0; i < 3; i++) {
+                for (k = 0; k < 4; k++) {
+                    b.f = j->mtx[i][k];
+                    n += snprintf(line + n, sizeof(line) - n, " %08X", b.u);
+                }
+            }
+            fprintf(g_jointdump_out != NULL ? g_jointdump_out : stderr,
+                    "%s\n", line);
+        }
+        (*idx)++;
+        jobj_dump_rec(j->child, idx, slot);
+    }
+}
+
+static void pc_trace_jointdump(void)
+{
+    static int at = -2;
+    int i;
+
+    if (at == -2) {
+        const char* e = getenv("MELEE_JOINTDUMP");
+        const char* f = getenv("MELEE_JOINTDUMP_FILE");
+        at = e != NULL ? atoi(e) : -1;
+        /* A file rather than stderr: on Android stderr is logcat, which
+         * drops lines when a frame prints a hundred of them, and a dump with
+         * holes in it reads as a difference that is not there. */
+        if (at >= 0 && f != NULL && *f != '\0') {
+            g_jointdump_out = fopen(f, "w");
+        }
+    }
+    if (at < 0 || (int) gm_GetFrameCount() != at) {
+        return;
+    }
+    for (i = 0; i < 4; i++) {
+        StaticPlayer* sp = Player_GetPtrForSlot(i);
+        HSD_GObj* gobj = (sp != NULL) ? sp->player_entity[0] : NULL;
+        Fighter* fp = (gobj != NULL) ? (Fighter*) gobj->user_data : NULL;
+        int idx = 0;
+        if (fp == NULL || !pc_ptr_sane(fp->parts)) {
+            continue;
+        }
+        jobj_dump_rec(fp->parts[0].joint, &idx, i);
+    }
+    if (g_jointdump_out != NULL) {
+        fflush(g_jointdump_out);
+    }
+}
+
+static void pc_trace_jointhash(void)
+{
+    static int want = -1;
+    u32 h = 2166136261u;
+    int i;
+
+    if (want < 0) {
+        const char* e = getenv("MELEE_JOINTHASH");
+        want = (e != NULL && *e != '\0');
+    }
+    if (!want) {
+        return;
+    }
+    for (i = 0; i < 4; i++) {
+        StaticPlayer* sp = Player_GetPtrForSlot(i);
+        HSD_GObj* gobj = (sp != NULL) ? sp->player_entity[0] : NULL;
+        Fighter* fp = (gobj != NULL) ? (Fighter*) gobj->user_data : NULL;
+        if (fp == NULL || !pc_ptr_sane(fp->parts)) {
+            continue;
+        }
+        jobj_hash_rec(fp->parts[0].joint, &h);
+    }
+    fprintf(stderr, "[JOINTHASH] %u %08X\n",
+            (unsigned) gm_GetFrameCount(), h);
+}
+
 static void pc_trace_hashlog(void)
 {
     static int want = -1;
@@ -1630,6 +1747,28 @@ static void pc_trace_hashlog(void)
     }
     if (!want) {
         return;
+    }
+    /* MELEE_HASHLOG_ALL=1 logs every rendered frame, keyed by the port's own
+     * frame counter, instead of one line per match frame. The match frame is
+     * the right key for comparing two machines playing together, but it says
+     * nothing about the boot and the stage load -- and when two machines
+     * arrive at match frame 1 already holding different effects, the boot is
+     * exactly where the answer is. */
+    {
+        static int all = -1;
+        extern u32 pc_frame_number;
+        if (all < 0) {
+            const char* e = getenv("MELEE_HASHLOG_ALL");
+            all = (e != NULL && *e != '\0');
+        }
+        if (all) {
+            fprintf(out != NULL ? out : stderr, "[HASH] %u %08X\n",
+                    (unsigned) pc_frame_number, pc_state_hash());
+            if (out != NULL) {
+                fflush(out);
+            }
+            return;
+        }
     }
     g = (int) gm_GetFrameCount();
     if (g <= last) {
@@ -1667,6 +1806,8 @@ void pc_trace_frame(int frame)
     }
 
     pc_trace_hashlog();
+    pc_trace_jointhash();
+    pc_trace_jointdump();
     pc_trace_items();
     pc_trace_itang();
     pc_trace_itjoint();
