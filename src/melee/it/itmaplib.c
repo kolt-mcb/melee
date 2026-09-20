@@ -1,4 +1,7 @@
 #include "itmaplib.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include "inlines.h"
 #include "it_26B1.h"
@@ -240,7 +243,25 @@ void it_80275E98(Item_GObj* item_gobj, SpawnItem* spawn)
         int_dir = 1;
     }
     mpCollSetFacingDir(&item2->x378_itemColl, int_dir);
+#if BUILD_TARGET_PC
+    /* The attribute table can be absent where the item itself is present --
+     * the stage's own spawns are the usual case -- and every read through it
+     * faults. Item_80267AA8 already refuses to spawn one of those; this is
+     * the same table reached from the map side, and it is what a Classic run
+     * hit on the tablet at its third bonus stage. */
+    if (attr != NULL) {
+        coll->x50 = attr->x1C_damage_mul;
+    } else {
+        static int said;
+        if (!said) {
+            said = 1;
+            PORT_LOG_WARN("it_80275E98: this item has no attribute table; "
+                          "leaving its damage multiplier alone\n");
+        }
+    }
+#else
     coll->x50 = attr->x1C_damage_mul;
+#endif
     if (spawn->x44_flag.b0 == 1) {
         if (spawn->x48_ground_or_air == GA_Air) {
             it_80276100(item_gobj, &spawn->pos);
