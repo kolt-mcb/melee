@@ -4,6 +4,7 @@
 typedef struct DynamicModelDesc DynamicModelDesc;
 typedef struct LightList LightList;
 typedef struct SceneDesc SceneDesc;
+typedef struct SceneCameraDesc SceneCameraDesc;
 typedef struct StaticModelDesc StaticModelDesc;
 
 #endif

@@ -1499,6 +1499,22 @@ HSD_CObj* HSD_CObjLoadDesc(HSD_CObjDesc* desc)
     HSD_CObj* cobj;
 
     if (desc != NULL) {
+#if BUILD_TARGET_PC
+        /* A camera descriptor that was never converted is still a DAT file
+         * offset -- a small integer, not a pointer -- and reading its class
+         * name faults next to zero. Say which caller handed it over rather
+         * than dying in the loader. */
+        if (!pc_ptr_sane(desc)) {
+            static int said;
+            if (said < 4) {
+                said++;
+                fprintf(stderr, "[PORT WARN] HSD_CObjLoadDesc: %p is not a "
+                                "converted descriptor (caller %p)\n",
+                        (void*) desc, __builtin_return_address(0));
+            }
+            return NULL;
+        }
+#endif
         if (desc->class_name == NULL ||
             (info = hsdSearchClassInfo(desc->class_name)) == NULL)
         {

@@ -23,6 +23,9 @@
  * Returns NULL if the descriptor is unusable; results are memoised per raw
  * pointer, so callers may convert the same scene more than once. */
 SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase);
+/* The single-player scenes load a camera pair beside their scene data, under
+ * its own archive symbol, so pc_conv_SceneDesc never reaches it. */
+SceneCameraDesc* pc_conv_SceneCameraDesc(const void* raw, u8* dataBase);
 
 /* Some archive symbols are a bare DynamicModelDesc pointer rather than a whole
  * scene -- the HUD's digit and marker models arrive that way. `slot` is the

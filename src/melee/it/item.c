@@ -681,6 +681,23 @@ static void Item_80267AA8(HSD_GObj* gobj, SpawnItem* spawnItem)
     item_data->xCD0 = 0.0f;
     it_80275158(gobj, it_804D6D28->x30_lifetime);
     item_data->xDD0_flag.b3 = false;
+#if BUILD_TARGET_PC
+    /* The same shape as the article guard above, one level along: the
+     * attribute table can be absent where the article is present. Every line
+     * below reads through it, so the first one faulted at 0x30 -- which is
+     * how Adventure's first stage died spawning one of its own enemies. */
+    if (item_data->xCC_item_attr == NULL) {
+        static u8 said_attr[256];
+        u32 ka = (u32) item_data->kind;
+        if (ka < sizeof(said_attr) && said_attr[ka] == 0) {
+            said_attr[ka] = 1;
+            PORT_LOG_WARN("Item_80267AA8: item kind %u has no attribute "
+                          "table; not spawning",
+                          ka);
+        }
+        return;
+    }
+#endif
     item_data->spin_spd = item_data->xCC_item_attr->xC_spin_speed;
     item_data->xDC8_word.flags.x19 = item_data->xCC_item_attr->x1_3;
     item_data->xDC8_word.flags.x17 = item_data->xCC_item_attr->x1_1;

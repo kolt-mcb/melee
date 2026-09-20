@@ -685,6 +685,27 @@ static HSD_CameraAnim** conv_camera_anims(u32 off, u8* dataBase)
     return out;
 }
 
+/* A standalone { desc, anims } pair, as the single-player scenes load beside
+ * their scene data ("ScItrNormal_camera" and friends). Same two fields as one
+ * entry of SceneDesc::cameras, but reached through its own archive symbol, so
+ * the scene converter never sees it. */
+SceneCameraDesc* pc_conv_SceneCameraDesc(const void* raw, u8* dataBase)
+{
+    const u8* r = (const u8*) raw;
+    SceneCameraDesc* out;
+
+    if (r == NULL || dataBase == NULL) {
+        return NULL;
+    }
+    out = scene_alloc(sizeof(*out));
+    if (out == NULL) {
+        return NULL;
+    }
+    out->desc = conv_cobj(be32(r + 0x00), dataBase);
+    out->anims = conv_camera_anims(be32(r + 0x04), dataBase);
+    return out;
+}
+
 SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
 {
     const u8* r = raw;

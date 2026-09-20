@@ -1,4 +1,8 @@
 #include "gm_1879.h"
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#include "port/log.h"
+#endif
 
 #include "gm_1A36.h"
 #include "gm_1A3F.h"
@@ -87,7 +91,15 @@ void fn_80187910(HSD_GObj* arg0)
     (void) 0.0f;
     data = &lbl_804736C0;
     cobj = arg0->hsd_obj;
-    if (gm_GetButtonsTriggered(data->x38) & PAD_BUTTON_A) {
+    if (gm_GetButtonsTriggered(data->x38) & PAD_BUTTON_A
+#if BUILD_TARGET_PC
+        /* Skipping ahead reads the eye position's animation to find where it
+         * is; with no animation attached there is nothing to skip, and the
+         * read faults. */
+        && cobj != NULL && cobj->eyepos != NULL && cobj->eyepos->aobj != NULL
+        && data->x4 != NULL && data->x4->anims != NULL
+#endif
+    ) {
         data->x37.frame_counter = (s32) cobj->eyepos->aobj->curr_frame / 300;
         if (++data->x37.frame_counter >= 8U) {
             data->x37.frame_counter = 0;
@@ -300,6 +312,23 @@ static inline void gm_80187F48_OnEnter_inline(gm_80187F48_EnterData* arg0)
         lbl_804D6620 = lbArchive_80016DBC(
             "IrNml", &data->x0, gm_1832_NormalSceneDataName, &data->x4,
             gm_1832_NormalArchiveNames[si], NULL);
+#if BUILD_TARGET_PC
+        /* lbArchive_80016DBC hands back raw archive data -- big-endian, with
+         * four-byte offsets where the host wants pointers -- and says so.
+         * Adventure never converted either symbol, so the first thing that
+         * read the camera descriptor took an offset for a pointer and
+         * faulted next to zero. Every other mode's scene enter converts;
+         * this one now does too. */
+        if (lbl_804D6620 != NULL) {
+            data->x0 = pc_conv_SceneDesc(data->x0, lbl_804D6620->data);
+            data->x4 = pc_conv_SceneCameraDesc(data->x4, lbl_804D6620->data);
+        }
+        if (data->x0 == NULL || data->x4 == NULL) {
+            PORT_LOG_WARN("gm_80187F48_OnEnter: adventure scene data would "
+                          "not convert; skipping the scene\n");
+            return;
+        }
+#endif
 
         lbAudioAx_80026F2C(gm_1832_NormalBgmIds[si]);
         lbAudioAx_8002702C(gm_1832_NormalBgmIds[si],

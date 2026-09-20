@@ -20,10 +20,10 @@ struct DynamicModelDesc {
     HSD_ShapeAnimJoint** shapeanims;
 };
 
-typedef struct SceneCameraDesc {
+struct SceneCameraDesc {
     HSD_CObjDesc* desc;
     HSD_CameraAnim** anims;
-} SceneCameraDesc;
+};
 typedef struct LightList {
     HSD_LightDesc* desc;
     HSD_LightAnim** anims;
