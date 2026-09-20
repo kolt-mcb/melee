@@ -69,7 +69,11 @@ int SDL_main(int argc, char* argv[]);
 static void crash_handler(int sig, siginfo_t* info, void* ctx)
 {
     /* Write to stderr directly, bypassing stdio buffering */
-    write(2, "\n[CRASH] Signal ", 15);
+    if (sig == SIGUSR1) {
+        write(2, "\n[WHERE] Signal ", 15);
+    } else {
+        write(2, "\n[CRASH] Signal ", 15);
+    }
     char buf[256];
     int n;
     ucontext_t* uc = (ucontext_t*)ctx;
@@ -174,6 +178,9 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
     /* Note: SIGABRT (e.g. glibc free() corruption) is NOT swallowed --
      * exiting 0 here used to hide memory corruption as a clean shutdown.
      * Exit with the conventional 128+signal so failures are visible. */
+    if (sig == SIGUSR1) {
+        return; /* a question, not a fault: carry on */
+    }
     _exit(128 + sig);
 }
 
@@ -279,6 +286,12 @@ static void install_crash_handler(void)
     sigaction(SIGSEGV, &sa, NULL);
     sigaction(SIGABRT, &sa, NULL);
     sigaction(SIGBUS, &sa, NULL);
+    /* A hang is harder to diagnose than a crash: nothing faults, so nothing
+     * prints, and ptrace is off on this machine and needs root on the
+     * tablet. SIGUSR1 asks the game where it is -- the crash handler already
+     * knows how to walk the stack and name the module, so reuse it. It does
+     * not exit; the signal is a question, not a fault. */
+    sigaction(SIGUSR1, &sa, NULL);
     prof_init();
 #endif
 }

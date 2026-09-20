@@ -1,4 +1,7 @@
 #include "grfigureget.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include <Runtime/platform.h>
 
@@ -175,10 +178,39 @@ void grFigureGet_802196F0(Ground_GObj* gobj)
     }
     gp->u.figureget.x10[i1] = Ground_801C5840();
     if (tyDisplay_8031C354(gp->u.figureget.x10[i1], &sp14, 1, 2) == 0) {
+#if BUILD_TARGET_PC
+        /* Roll a trophy until it differs from the one already on the stand.
+         * The loop is cosmetic -- it exists so the same trophy does not
+         * appear twice -- but it is unbounded, and if the picker keeps
+         * returning the same id it never ends. That is a freeze with the CPU
+         * pinned and nothing in the log, which is how a Classic run died
+         * entering this bonus stage six rounds in. Give up after a few tries
+         * and show the duplicate. */
+        {
+            int tries;
+            for (tries = 0; tries < 64; tries++) {
+                temp_r3 = Toy_80305058(2, 0x63, 1, 75.0f);
+                sp14 = temp_r3;
+                if (gp->u.figureget.x10[i1] != temp_r3) {
+                    break;
+                }
+            }
+            if (tries == 64) {
+                static int said;
+                if (!said) {
+                    said = 1;
+                    PORT_LOG_WARN("grFigureGet: the trophy picker kept "
+                                  "returning %d; showing it twice\n",
+                                  (int) temp_r3);
+                }
+            }
+        }
+#else
         do {
             temp_r3 = Toy_80305058(2, 0x63, 1, 75.0f);
             sp14 = temp_r3;
         } while (gp->u.figureget.x10[i1] == temp_r3);
+#endif
     }
     i1 = i1 + 1;
     if (i1 >= 3) {

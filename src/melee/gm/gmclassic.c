@@ -682,8 +682,26 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
             if (result != NULL) {
                 ptr->xC = result;
             } else {
+#if BUILD_TARGET_PC
+                /* The console locks up here on purpose when a matchup cannot
+                 * be picked -- an infinite loop is how the game says its own
+                 * tables disagree. On a tablet that is indistinguishable from
+                 * the game freezing: no crash, no log, the CPU pinned, and
+                 * debuggerd needs root to get a stack. A Classic run died
+                 * this way entering a bonus stage, six rounds in. Say what
+                 * happened and leave the entry as it was. */
+                {
+                    static int said;
+                    if (said < 4) {
+                        said++;
+                        PORT_LOG_WARN("gmClassic: no matchup available for "
+                                      "this round; leaving it unset\n");
+                    }
+                }
+#else
                 for (;;) {
                 }
+#endif
             }
         }
     }
@@ -696,8 +714,26 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
             if (result != NULL) {
                 ptr->xC = result;
             } else {
+#if BUILD_TARGET_PC
+                /* The console locks up here on purpose when a matchup cannot
+                 * be picked -- an infinite loop is how the game says its own
+                 * tables disagree. On a tablet that is indistinguishable from
+                 * the game freezing: no crash, no log, the CPU pinned, and
+                 * debuggerd needs root to get a stack. A Classic run died
+                 * this way entering a bonus stage, six rounds in. Say what
+                 * happened and leave the entry as it was. */
+                {
+                    static int said;
+                    if (said < 4) {
+                        said++;
+                        PORT_LOG_WARN("gmClassic: no matchup available for "
+                                      "this round; leaving it unset\n");
+                    }
+                }
+#else
                 for (;;) {
                 }
+#endif
             }
         }
     }
@@ -710,8 +746,26 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
             if (result != NULL) {
                 ptr->xC = result;
             } else {
+#if BUILD_TARGET_PC
+                /* The console locks up here on purpose when a matchup cannot
+                 * be picked -- an infinite loop is how the game says its own
+                 * tables disagree. On a tablet that is indistinguishable from
+                 * the game freezing: no crash, no log, the CPU pinned, and
+                 * debuggerd needs root to get a stack. A Classic run died
+                 * this way entering a bonus stage, six rounds in. Say what
+                 * happened and leave the entry as it was. */
+                {
+                    static int said;
+                    if (said < 4) {
+                        said++;
+                        PORT_LOG_WARN("gmClassic: no matchup available for "
+                                      "this round; leaving it unset\n");
+                    }
+                }
+#else
                 for (;;) {
                 }
+#endif
             }
         }
     }
@@ -724,8 +778,26 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
             if (result != NULL) {
                 ptr->xC = result;
             } else {
+#if BUILD_TARGET_PC
+                /* The console locks up here on purpose when a matchup cannot
+                 * be picked -- an infinite loop is how the game says its own
+                 * tables disagree. On a tablet that is indistinguishable from
+                 * the game freezing: no crash, no log, the CPU pinned, and
+                 * debuggerd needs root to get a stack. A Classic run died
+                 * this way entering a bonus stage, six rounds in. Say what
+                 * happened and leave the entry as it was. */
+                {
+                    static int said;
+                    if (said < 4) {
+                        said++;
+                        PORT_LOG_WARN("gmClassic: no matchup available for "
+                                      "this round; leaving it unset\n");
+                    }
+                }
+#else
                 for (;;) {
                 }
+#endif
             }
         }
     }

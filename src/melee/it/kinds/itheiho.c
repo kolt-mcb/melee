@@ -1,4 +1,7 @@
 #include "itheiho.h"
+#if BUILD_TARGET_PC
+#include "port/log.h"
+#endif
 
 #include "inlines.h"
 #include "itfoods.h"
@@ -269,8 +272,28 @@ bool itHeiho_UnkMotion3_Coll(Item_GObj* gobj)
 bool it_802D8EC8(Item_GObj* gobj)
 {
     Item* ip = gobj->user_data;
-    s32** attr = ip->xC4_article_data->x4_specialAttributes;
+    s32** attr;
     PAD_STACK(32);
+#if BUILD_TARGET_PC
+    /* The special attributes are read two levels deep on the next line. A
+     * stage's own enemies do not always have them converted, and this one is
+     * reached from Classic's bonus stages; without the check it faults at
+     * zero. Treat a missing table as "not yet at the threshold". */
+    if (ip->xC4_article_data == NULL ||
+        ip->xC4_article_data->x4_specialAttributes == NULL ||
+        *(s32**) ip->xC4_article_data->x4_specialAttributes == NULL)
+    {
+        static int said;
+        if (!said) {
+            said = 1;
+            PORT_LOG_WARN("it_802D8EC8: this article has no special "
+                          "attributes; skipping its threshold check\n");
+        }
+        ip->xDCC_flag.b3 = 1;
+        return false;
+    }
+#endif
+    attr = ip->xC4_article_data->x4_specialAttributes;
     if (ip->xDD4_itemVar.heiho.x54 != NULL) {
         it_8028F8E4(ip->xDD4_itemVar.heiho.x54);
         it_8028FC5C(ip->xDD4_itemVar.heiho.x54);
