@@ -1659,6 +1659,20 @@ void ftData_8008572C(FighterKind kind)
             if (gFtDataList[kind] != NULL && arc != NULL &&
                 pc_ptr_sane(arc->data))
             {
+                /* Register the archive the moment it is known, not only from
+                 * whichever conversion happens to run first. The lookup that
+                 * turns a raw joint pointer into "which archive is this in"
+                 * matches on address containment, so an archive nobody
+                 * registered falls to whatever stale entry still spans that
+                 * memory -- and the tablet converted Marth's joint tree
+                 * against Captain Falcon's base, which produced 62 joints
+                 * instead of 89 and a fighter posed by the wrong skeleton.
+                 * Registering here also evicts the stale entry, because
+                 * pc_ftconv_note_archive drops anything overlapping. */
+                extern void pc_ftconv_note_archive(const u8*, unsigned long);
+                pc_ftconv_note_archive(
+                    (const u8*) arc->data,
+                    (unsigned long) arc->header.file_size);
                 gFtDataList[kind] = pc_conv_ftData(
                     (const u8*) gFtDataList[kind], (const u8*) arc->data,
                     (unsigned long) arc->header.file_size, (int) kind);

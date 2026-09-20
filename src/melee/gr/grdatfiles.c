@@ -1261,6 +1261,11 @@ static void** grdat_conv_anim_set_array(u32 arrOff, u8* dataBase,
  * all joints in the stage have been converted. */
 #define GRDAT_MAX_JOINTMAP 16384
 #define GRDAT_MAX_POBJPENDING 16384
+#if BUILD_TARGET_PC
+/* How many joints the converter actually built, so a short tree can be told
+ * from a tree that was never asked for. */
+int pc_joints_converted;
+#endif
 static struct { u32 offset; HSD_Joint* x64; } g_grdat_jointmap[GRDAT_MAX_JOINTMAP];
 static int g_grdat_jointmap_n = 0;
 
@@ -1658,8 +1663,24 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
     /* Allocate x86_64 HSD_Joint */
     x64Joint = lbHeap_80015BD0(0, sizeof(HSD_Joint));
     if (x64Joint == NULL) {
+#if BUILD_TARGET_PC
+        /* Silence here costs a limb: the walk stops, the tree comes out
+         * short, and the fighter is posed by a skeleton missing its lower
+         * half -- which is how a tablet and a desktop came to play visibly
+         * different matches from the same inputs. */
+        static int said;
+        if (said < 4) {
+            said++;
+            fprintf(stderr, "[GRDAT] no room to convert a joint (offset "
+                            "0x%x); the tree stops here\n",
+                    (unsigned) (gcnJointPtr - dataBase));
+        }
+#endif
         return NULL;
     }
+#if BUILD_TARGET_PC
+    pc_joints_converted++;
+#endif
 
     /* PC port: register this joint's archive offset so POBJ_SKIN PObjDescs can
      * be linked to their skeleton in the second pass. */

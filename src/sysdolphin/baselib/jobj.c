@@ -867,6 +867,14 @@ void HSD_JObjSetDefaultClass(HSD_ClassInfo* info)
     default_class = info;
 }
 
+#if BUILD_TARGET_PC
+/* MELEE_JOINTLOAD=1: how a joint tree came out, per top-level load --
+ * created, rejected by the readability guard, and how many allocations
+ * failed. A tree that is short on one machine and not another is one of
+ * those three, and the three have nothing to do with each other. */
+int pc_joint_made, pc_joint_rejected, pc_joint_allocfail;
+#endif
+
 static inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
 {
     HSD_JObj* jobj;
@@ -881,6 +889,20 @@ static inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
      * be, faulting on class_name at address 0x1000. Ask whether the memory is
      * actually mapped instead; pc_mem_readable answers that properly now. */
     if (!pc_mem_readable(joint, sizeof(*joint))) {
+        /* Say which pointer, and whose child it was: a joint tree that comes
+         * out short on one machine and not another is a conversion problem, and
+         * the value itself says whether it is an unrelocated offset, a
+         * truncated pointer or genuine garbage. */
+        static int said;
+        if (said < 8) {
+            said++;
+            fprintf(stderr,
+                    "[JOINTGUARD] rejected joint %p (parent %p) from %p/%p\n",
+                    (void*) joint, (void*) parent,
+                    __builtin_return_address(0),
+                    __builtin_return_address(1));
+        }
+        pc_joint_rejected++;
         port_guard_warn("jobj.c:JObjLoadJointSub");
         return NULL;
     }
@@ -889,9 +911,21 @@ static inline HSD_JObj* JObjLoadJointSub(HSD_Joint* joint, HSD_JObj* parent)
         !(info = hsdSearchClassInfo(joint->class_name)))
     {
         jobj = HSD_JObjAlloc();
+#if BUILD_TARGET_PC
+        if (jobj == NULL) {
+            pc_joint_allocfail++;
+        } else {
+            pc_joint_made++;
+        }
+#endif
     } else {
         jobj = hsdNew(info);
 #if BUILD_TARGET_PC
+        if (jobj == NULL) {
+            pc_joint_allocfail++;
+        } else {
+            pc_joint_made++;
+        }
         /* PC port: removed HSD_ASSERT - hsdNew may return NULL on corrupted class info. */
 #else
         HSD_ASSERT(972, jobj);
@@ -1014,13 +1048,41 @@ HSD_JObj* HSD_JObjLoadJoint(HSD_Joint* arg0)
     /* PC port: after conversion, arg0 is a heap pointer or NULL */
     if (arg0 == NULL || (uintptr_t)arg0 < 0x1000ULL) return NULL;
 
-    HSD_JObj* jobj = JObjLoadJointSub(arg0, 0);
+    HSD_JObj* jobj;
+    {
+        static int report = -1;
+        if (report < 0) {
+            report = getenv("MELEE_JOINTLOAD") != NULL;
+        }
+        pc_joint_made = pc_joint_rejected = pc_joint_allocfail = 0;
+        jobj = JObjLoadJointSub(arg0, 0);
+        if (report) {
+            fprintf(stderr, "[JOINTLOAD] root %p -> %d joints (%d rejected, "
+                            "%d alloc failures)\n",
+                    (void*) arg0, pc_joint_made, pc_joint_rejected,
+                    pc_joint_allocfail);
+        }
+    }
     if (PC_PTR_VALID(jobj)) {
         HSD_JObjResolveRefsAll(jobj, arg0);
     }
     return jobj;
 #else
-    HSD_JObj* jobj = JObjLoadJointSub(arg0, 0);
+    HSD_JObj* jobj;
+    {
+        static int report = -1;
+        if (report < 0) {
+            report = getenv("MELEE_JOINTLOAD") != NULL;
+        }
+        pc_joint_made = pc_joint_rejected = pc_joint_allocfail = 0;
+        jobj = JObjLoadJointSub(arg0, 0);
+        if (report) {
+            fprintf(stderr, "[JOINTLOAD] root %p -> %d joints (%d rejected, "
+                            "%d alloc failures)\n",
+                    (void*) arg0, pc_joint_made, pc_joint_rejected,
+                    pc_joint_allocfail);
+        }
+    }
     HSD_JObjResolveRefsAll(jobj, arg0);
     return jobj;
 #endif /* BUILD_TARGET_PC */

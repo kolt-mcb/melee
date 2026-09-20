@@ -175,6 +175,40 @@ static inline int pc_mem_readable(const void* p, unsigned long n)
  * approved for it. Misses are not cached -- a failing probe is an error path
  * that runs once per broken texture, and a range that is unreadable now
  * could become readable after a later mmap. */
+/* How the probe asks the kernel whether a range is readable.
+ *
+ * It used to be msync(MS_ASYNC), which answers on glibc/Linux and does not
+ * on Android: bionic's msync rejected perfectly good anonymous memory, so
+ * JObjLoadJointSub decided real joints were unmapped and dropped their
+ * subtrees. Every fighter on the tablet came out with 63 bones -- Marth has
+ * 90 -- which moved the pose, and an effect attached to a missing joint is
+ * how two machines playing the same match stopped agreeing.
+ *
+ * write() to /dev/null asks the same question in a way both C libraries
+ * answer the same: the kernel validates the buffer and returns EFAULT for a
+ * range it cannot read, and /dev/null throws the bytes away. If the
+ * descriptor cannot be opened at all, fall back to msync rather than
+ * declaring everything unreadable -- which is the failure this replaced. */
+static inline int pc_mem_probe(uintptr_t aligned, size_t len)
+{
+    static int fd = -2;
+    if (fd == -2) {
+        fd = open("/dev/null", O_WRONLY
+#ifdef O_CLOEXEC
+                                  | O_CLOEXEC
+#endif
+        );
+    }
+    if (fd >= 0) {
+        ssize_t w = write(fd, (const void*) aligned, len);
+        if (w < 0) {
+            return 0;
+        }
+        return 1;
+    }
+    return msync((void*) aligned, len, MS_ASYNC) == 0;
+}
+
 #define PC_MEM_OK_SLOTS 256u
 static uintptr_t pc_mem_ok_page[PC_MEM_OK_SLOTS];
 static uintptr_t pc_mem_ok_end[PC_MEM_OK_SLOTS];
@@ -197,7 +231,7 @@ static inline int pc_mem_readable(const void* p, unsigned long n)
     if (pc_mem_ok_page[slot] == aligned && end <= pc_mem_ok_end[slot]) {
         return 1;
     }
-    if (msync((void*) aligned, (size_t) (end - aligned), MS_ASYNC) != 0) {
+    if (!pc_mem_probe(aligned, (size_t) (end - aligned))) {
         return 0;
     }
     if (pc_mem_ok_page[slot] == aligned) {

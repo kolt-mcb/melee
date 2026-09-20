@@ -92,7 +92,7 @@ static int pc_ftconv_trace(void)
 /* Results are memoised: the same raw tree is asked for once per         */
 /* fighter spawn, and converting it again would leak a fresh tree each   */
 /* time. */
-#define PC_FTCONV_ARCHIVES 40
+#define PC_FTCONV_ARCHIVES 128
 static struct {
     const u8* base;
     unsigned long len;
@@ -103,6 +103,17 @@ void pc_ftconv_note_archive(const u8* base, unsigned long len)
 {
     int i;
     if (base == NULL || len == 0) return;
+    {
+        /* Which archives this machine knows about, in the order it learned
+         * them: an archive that is never registered has its pointers fall to
+         * whatever stale entry still spans that memory. */
+        static int said;
+        if (said < 24 && getenv("MELEE_ARCHLOG") != NULL) {
+            said++;
+            fprintf(stderr, "[ARCHLOG] archive %p len %lu\n",
+                    (const void*) base, len);
+        }
+    }
     for (i = 0; i < pc_ftconv_arch_n; i++) {
         if (pc_ftconv_arch[i].base == base) {
             if (len > pc_ftconv_arch[i].len) pc_ftconv_arch[i].len = len;
@@ -127,6 +138,21 @@ void pc_ftconv_note_archive(const u8* base, unsigned long len)
         pc_ftconv_arch[pc_ftconv_arch_n].base = base;
         pc_ftconv_arch[pc_ftconv_arch_n].len = len;
         pc_ftconv_arch_n++;
+    } else {
+        /* Dropping a registration is not a small loss: the lookup below
+         * matches an address against every known archive, so an unregistered
+         * archive's pointers fall to whatever *stale* entry still spans that
+         * memory -- and then a fighter's joint tree is converted against
+         * another character's base. That is what happened on the tablet:
+         * Marth's tree was read through Captain Falcon's archive and came
+         * out with 62 joints instead of 89. */
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "[FTCONV] archive table full at %d entries; "
+                            "%p (%lu bytes) is not registered\n",
+                    PC_FTCONV_ARCHIVES, (const void*) base, len);
+        }
     }
 }
 
@@ -148,9 +174,26 @@ void* pc_ftconv_joint(void* raw)
     for (i = 0; i < cache_n; i++) {
         if (cache[i].raw == raw) return cache[i].conv;
     }
-    for (i = 0; i < pc_ftconv_arch_n; i++) {
-        const u8* b = pc_ftconv_arch[i].base;
-        if (p > b && (unsigned long) (p - b) < pc_ftconv_arch[i].len) {
+    /* The tightest containing archive, not the first one found: a stale
+     * entry left by a freed archive can still span this address, and it is
+     * always the larger of the two. Picking the smallest containing range
+     * makes the lookup pick the archive this pointer actually lives in. */
+    {
+        int best = -1;
+        for (i = 0; i < pc_ftconv_arch_n; i++) {
+            const u8* b = pc_ftconv_arch[i].base;
+            if (p > b && (unsigned long) (p - b) < pc_ftconv_arch[i].len) {
+                if (best < 0 ||
+                    pc_ftconv_arch[i].len < pc_ftconv_arch[best].len) {
+                    best = i;
+                }
+            }
+        }
+        i = best;
+    }
+    if (i >= 0) {
+        {
+            const u8* b = pc_ftconv_arch[i].base;
             void* conv;
             /* The joint map keys on offsets relative to *each archive's* base,
              * and grdat_jointmap_find returns the first match -- so entries
@@ -161,7 +204,20 @@ void* pc_ftconv_joint(void* raw)
              * showed it (map=193 = 132 stage joints + 61 fighter joints,
              * against map=61 on the ftdata.c path). */
             grDatFiles_ResetJointMap();
-            conv = grDatFiles_ConvertJointTreeGCNtoX64(p, (u8*) b, 0, NULL);
+            {
+                extern int pc_joints_converted;
+                pc_joints_converted = 0;
+                conv = grDatFiles_ConvertJointTreeGCNtoX64(p, (u8*) b, 0,
+                                                           NULL);
+                if (pc_ftconv_trace()) {
+                    fprintf(stderr,
+                            "[FTCONV] joint tree %p -> %d joints (archive %p "
+                            "len %lu, joint at +0x%lx)\n",
+                            raw, pc_joints_converted, (const void*) b,
+                            (unsigned long) pc_ftconv_arch[i].len,
+                            (unsigned long) (p - b));
+                }
+            }
             grDatFiles_ResolvePObjJoints();
             if (cache_n < PC_FTCONV_JOINT_CACHE) {
                 cache[cache_n].raw = raw;
