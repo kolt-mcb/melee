@@ -58,6 +58,10 @@
 #include "port/slippi/pc_slippi_compat.h"
 #endif
 
+#if BUILD_NETPLAY
+#include "port/netplay/pc_netplay.h"
+#endif
+
 static u32 lbl_803D5620[] = {
     0x7C859,
     0x7C85A,
@@ -1610,6 +1614,9 @@ void gm_Scene_Vs_OnFrame(void)
          * changes. */
         slp_Close();
 #endif
+#if BUILD_NETPLAY
+        pc_net_match_end();
+#endif
         gm_801A4B60();
         break;
     }
@@ -2133,6 +2140,12 @@ void fn_8016E730(StartMeleeData* arg0)
      * are the Game Info Block a .slp file opens with. Slippi injects at
      * 8016e74c, inside this function, and copies the same block. */
     slp_GameStart(arg0);
+#endif
+#if BUILD_NETPLAY
+    /* Same moment, for the same reason: this is where both machines in a
+     * netplay match agree that a match has begun, reset their input rings
+     * and take the host's RNG seed. */
+    pc_net_match_begin();
 #endif
 }
 

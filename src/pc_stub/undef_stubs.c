@@ -21,6 +21,9 @@
 #include "port/log.h"
 #include "port/input.h"
 #include <dolphin/dvd.h>
+#if BUILD_NETPLAY
+#include "port/netplay/pc_netplay.h"
+#endif
 
 /* Forward declaration — HSD_Archive is opaque to stubs */
 typedef struct HSD_Archive HSD_Archive;
@@ -1986,6 +1989,15 @@ void HSD_PadRenewRawStatus(bool unused)
             PC_PAD_SUBSTICK_UP, PC_PAD_SUBSTICK_DOWN, PC_PAD_SUBSTICK_LEFT,
             PC_PAD_SUBSTICK_RIGHT);
     }
+
+#if BUILD_NETPLAY
+    /* The one place per frame where every pad is final and nothing has read
+     * one yet. In a netplay match this hands the local player's input to the
+     * peer and replaces both pads with the inputs the two sides agreed on for
+     * this frame; outside a match it does nothing. It belongs here rather
+     * than in pc_pad_publish, which runs three times per frame. */
+    pc_net_pads(g_gc_pads);
+#endif
 }
 
 void pc_pad_publish(void);

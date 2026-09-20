@@ -51,6 +51,11 @@
     <!-- Allow access to the vibrator -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Netplay (PC_NETPLAY builds): the port talks UDP to another copy of
+         itself on the local network. Without this the socket call fails and
+         the game simply plays alone. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- if you want to capture audio, uncomment this. -->
     <!-- <uses-permission android:name="android.permission.RECORD_AUDIO" /> -->
 

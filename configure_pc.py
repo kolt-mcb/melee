@@ -34,6 +34,13 @@ PORT_SOURCES = [s for s in PORT_SOURCES if Path(s).name != "test.c"]
 SLIPPI = os.environ.get("PC_SLIPPI") == "1"
 if SLIPPI:
     PORT_SOURCES += collect(PORT_SRC / "slippi")
+# PC_NETPLAY=1 compiles in netplay: src/port/netplay/ lets two copies of this
+# port play the same match over UDP (docs/netplay.md). Opt-in for the same
+# reason Slippi is: with the flag off the directory is not compiled and every
+# hook site is preprocessed away, so the parity binary is unchanged.
+NETPLAY = os.environ.get("PC_NETPLAY") == "1"
+if NETPLAY:
+    PORT_SOURCES += collect(PORT_SRC / "netplay")
 PC_STUB_SOURCES = collect(PC_STUB_SRC)
 PC_STUB_SOURCES = list(dict.fromkeys(PC_STUB_SOURCES))  # deduplicate
 EXCLUDE_DECOMP = {"MSL/math.h"}  # GCC type conflicts
@@ -365,7 +372,7 @@ else:
 # reproducing the console's roundings exactly -- explicitly, with fma(), at
 # the sites the console fuses, and nowhere else. -fexcess-precision=standard
 # for the same reason: no intermediate precision the console does not have.
-CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -std=gnu11 -ffp-contract=off -fexcess-precision=standard -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "") + (" -DBUILD_SLIPPI=1" if SLIPPI else "")
+CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -std=gnu11 -ffp-contract=off -fexcess-precision=standard -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "") + (" -DBUILD_SLIPPI=1" if SLIPPI else "") + (" -DBUILD_NETPLAY=1" if NETPLAY else "")
 if ANDROID:
     # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
     LDFLAGS = "-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"
@@ -480,6 +487,7 @@ Path(NINJA_FILE).write_text(n)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 (OUT_DIR / "obj").mkdir(parents=True, exist_ok=True)
 
-print("Generated " + NINJA_FILE + ("  [Slippi]" if SLIPPI else ""))
+print("Generated " + NINJA_FILE + ("  [Slippi]" if SLIPPI else "")
+      + ("  [Netplay]" if NETPLAY else ""))
 print(f"Sources: {len(PORT_SOURCES)} port + {len(PC_STUB_SOURCES)} stub + {len(DECOMP_SOURCES)} decomp + {len(GR_SOURCES)} gr + {len(G_OBJ_SOURCES)} baselib-gobj + {len(G_DISPLAY_SOURCES)} baselib-display = {len(ALL_SOURCES)} total")
 print(f"Output: {OUT_PATH}")
