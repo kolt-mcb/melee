@@ -649,7 +649,8 @@ void gm_8017CE34(StartMeleeData* arg0, Unk1PData* arg1, s8* arg2, u8 arg3,
         player_ckind = ChKind_Popo;
     } else {
         player_ckind = (u8) arg1->x0.ckind;
-    }
+    
+}
 
     gm_SetupHumanPlayer(arg0->players, player_ckind, arg1->x0.color,
                         player_stocks, arg1->x0.slot);
@@ -872,6 +873,24 @@ void gm_8017CE34(StartMeleeData* arg0, Unk1PData* arg1, s8* arg2, u8 arg3,
     if (arg7 == 0x49) {
         arg1->xC.xC = 8;
     }
+#if BUILD_TARGET_PC
+    /* MELEE_LINEUP=1: what each slot holds once the round is set up. A round
+     * that ends in seconds with no fight is an empty opponent slot, and that
+     * is invisible from outside the game. */
+    if (getenv("MELEE_LINEUP") != NULL) {
+        int pi;
+        fprintf(stderr, "[LINEUP]");
+        for (pi = 0; pi < 6; pi++) {
+            fprintf(stderr, " p%d{k=%d t=%d lvl=%d kind=%d stk=%d}", pi,
+                    (int) arg0->players[pi].ckind,
+                    (int) arg0->players[pi].slot_type,
+                    (int) arg0->players[pi].cpu_level,
+                    (int) arg0->players[pi].cpu_kind,
+                    (int) arg0->players[pi].stocks);
+        }
+        fprintf(stderr, "\n");
+    }
+#endif
 }
 
 bool gm_8017D7AC(MatchExitInfo* arg0, Unk1PData* arg1, u8 arg2)
