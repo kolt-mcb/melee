@@ -462,41 +462,12 @@ static u32 hash_f32(u32 h, f32 v)
     return (h ^ b.u) * 16777619u;
 }
 
-static u32 state_hash(void)
-{
-    u32 h = 2166136261u;
-    int i;
+/* The same number the trace tool computes (src/port/pc_trace.c): one
+ * definition, so a netplay checksum and a MELEE_HASHLOG comparison can never
+ * disagree about what they are measuring. */
+u32 pc_state_hash(void);
 
-    h = (h ^ *HSD_RandSeedPtr) * 16777619u;
-    for (i = 0; i < 4; i++) {
-        StaticPlayer* sp = Player_GetPtrForSlot(i);
-        HSD_GObj* gobj;
-        Fighter* fp;
-
-        if (sp == NULL) {
-            continue;
-        }
-        h = (h ^ (u32) sp->player_state) * 16777619u;
-        h = (h ^ (u32) sp->ckind) * 16777619u;
-        h = (h ^ (u32) sp->stocks) * 16777619u;
-        h = (h ^ (u32) sp->staminas.byName.damage_percent) * 16777619u;
-
-        gobj = sp->player_entity[0];
-        fp = (gobj != NULL) ? (Fighter*) gobj->user_data : NULL;
-        if (fp == NULL) {
-            continue;
-        }
-        h = (h ^ (u32) fp->motion_id) * 16777619u;
-        h = hash_f32(h, fp->cur_anim_frame);
-        h = hash_f32(h, fp->cur_pos.x);
-        h = hash_f32(h, fp->cur_pos.y);
-        h = hash_f32(h, fp->facing_dir);
-        h = hash_f32(h, fp->self_vel.x);
-        h = hash_f32(h, fp->self_vel.y);
-        h = (h ^ (u32) fp->ground_or_air) * 16777619u;
-    }
-    return h;
-}
+static u32 state_hash(void) { return pc_state_hash(); }
 
 static void hash_remember(s32 frame, u32 h)
 {

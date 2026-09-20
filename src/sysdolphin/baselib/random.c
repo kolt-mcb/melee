@@ -74,8 +74,22 @@ void pc_rng_note(void* ret)
     if (++n <= armed) {
         return;
     }
-    if (n < armed + 200) {
-        fprintf(stderr, "[RNG] %p\n", ret);
+    {
+        /* MELEE_RNGLOG_MAX raises the cap. The line carries the draw's index
+         * and the match frame as well as the site, so two machines' streams
+         * can be compared by index -- which needs no agreement about which
+         * frame a draw belongs to, and that is exactly what is in doubt when
+         * two machines stop matching. */
+        static long cap = -1;
+        if (cap < 0) {
+            const char* e = getenv("MELEE_RNGLOG_MAX");
+            cap = e ? atol(e) : 200;
+        }
+        if (n < armed + cap) {
+            extern u32 gm_GetFrameCount(void);
+            fprintf(stderr, "[RNG] #%ld f=%u %p\n", n, gm_GetFrameCount(),
+                    ret);
+        }
     }
 }
 #define PC_RNG_NOTE() pc_rng_note(__builtin_return_address(0))

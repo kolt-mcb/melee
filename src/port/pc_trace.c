@@ -1567,6 +1567,82 @@ static void pc_trace_spawn_item(int frame)
             g != NULL ? "spawned" : "refused");
 }
 
+/* One number for the whole simulation, for comparing two machines that are
+ * supposed to be playing the same match: the fields the trace above prints as
+ * columns, plus the RNG seed, which is usually the first thing to move. The
+ * netplay checksum (src/port/netplay/) calls this too, so the two can never
+ * drift apart into measuring different things.
+ *
+ * MELEE_HASHLOG=<path> writes one line per match frame; MELEE_HASHLOG=1 puts
+ * it on stderr, which on Android is logcat. */
+u32 pc_state_hash(void)
+{
+    u32 h = 2166136261u;
+    int i;
+
+    h = (h ^ *HSD_RandSeedPtr) * 16777619u;
+    for (i = 0; i < 4; i++) {
+        StaticPlayer* sp = Player_GetPtrForSlot(i);
+        HSD_GObj* gobj;
+        Fighter* fp;
+        union { f32 f; u32 u; } b;
+
+        if (sp == NULL) {
+            continue;
+        }
+        h = (h ^ (u32) sp->player_state) * 16777619u;
+        h = (h ^ (u32) sp->ckind) * 16777619u;
+        h = (h ^ (u32) sp->stocks) * 16777619u;
+        h = (h ^ (u32) sp->staminas.byName.damage_percent) * 16777619u;
+
+        gobj = sp->player_entity[0];
+        fp = (gobj != NULL) ? (Fighter*) gobj->user_data : NULL;
+        if (fp == NULL) {
+            continue;
+        }
+        h = (h ^ (u32) fp->motion_id) * 16777619u;
+#define PC_HASH_F(v) do { b.f = (v); h = (h ^ b.u) * 16777619u; } while (0)
+        PC_HASH_F(fp->cur_anim_frame);
+        PC_HASH_F(fp->cur_pos.x);
+        PC_HASH_F(fp->cur_pos.y);
+        PC_HASH_F(fp->facing_dir);
+        PC_HASH_F(fp->self_vel.x);
+        PC_HASH_F(fp->self_vel.y);
+#undef PC_HASH_F
+        h = (h ^ (u32) fp->ground_or_air) * 16777619u;
+    }
+    return h;
+}
+
+static void pc_trace_hashlog(void)
+{
+    static int want = -1;
+    static FILE* out;
+    static int last = -1;
+    int g;
+
+    if (want < 0) {
+        const char* p = getenv("MELEE_HASHLOG");
+        want = (p != NULL && *p != '\0');
+        if (want && strcmp(p, "1") != 0 && strcmp(p, "-") != 0) {
+            out = fopen(p, "w");
+        }
+    }
+    if (!want) {
+        return;
+    }
+    g = (int) gm_GetFrameCount();
+    if (g <= last) {
+        return;
+    }
+    last = g;
+    fprintf(out != NULL ? out : stderr, "[HASH] %d %08X\n", g,
+            pc_state_hash());
+    if (out != NULL) {
+        fflush(out);
+    }
+}
+
 void pc_trace_frame(int frame)
 {
     pc_trace_spawn_item(frame);
@@ -1590,6 +1666,7 @@ void pc_trace_frame(int frame)
         sync_open();
     }
 
+    pc_trace_hashlog();
     pc_trace_items();
     pc_trace_itang();
     pc_trace_itjoint();
