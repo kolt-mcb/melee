@@ -1,4 +1,7 @@
 #include "lbfile.h"
+#if BUILD_TARGET_PC
+#include <time.h>
+#endif
 
 #include <placeholder.h>
 #include <string.h>
@@ -50,8 +53,40 @@ static bool discIsDone(void)
 
 static void waitForDisc(void)
 {
+#if BUILD_TARGET_PC
+    /* The console spins here until the DMA completes, and on the console it
+     * always does. Here the completion is a callback from the DevCom bridge,
+     * and if one is ever lost the game stops dead inside a frame with the
+     * CPU pinned -- no crash, no log, and on a phone or tablet no way to get
+     * a stack out of it. That is what a Classic run on the tablet did after
+     * six rounds, spinning while the item archive was re-opened.
+     *
+     * Give it a wall-clock bound. Two seconds is far longer than any real
+     * load takes and far shorter than a player will wait; going on with the
+     * buffer unfilled is what the not-found path already does. */
+    {
+        struct timespec t0, t1;
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+        while (!discIsDone()) {
+            clock_gettime(CLOCK_MONOTONIC, &t1);
+            if ((double) (t1.tv_sec - t0.tv_sec) +
+                    1e-9 * (double) (t1.tv_nsec - t0.tv_nsec) >
+                2.0)
+            {
+                static int said;
+                if (said < 4) {
+                    said++;
+                    PORT_LOG_WARN("waitForDisc: no completion after two "
+                                  "seconds; going on without it\n");
+                }
+                return;
+            }
+        }
+    }
+#else
     do {
     } while (!discIsDone());
+#endif
 }
 
 void lbFile_800161C4(int file, uintptr_t src, uintptr_t dst, size_t size,
