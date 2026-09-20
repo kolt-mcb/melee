@@ -4886,8 +4886,46 @@ HSD_Particle* psGenerateParticle0(HSD_Particle** head, int linkNo, int bank,
         memset(pp, 0, sizeof(*pp));
     }
     if (pp == NULL) {
+#if BUILD_TARGET_PC
+        /* A particle the game asked for and did not get. On one machine that
+         * is a missing spark; between two machines playing the same match it
+         * is a divergence, because the particle scripts draw from the same
+         * generator the game does. Worth saying out loud rather than
+         * returning NULL in silence. */
+        {
+            static int said;
+            extern u32 gm_GetFrameCount(void);
+            if (said < 8) {
+                said++;
+                fprintf(stderr, "[PS] particle pool exhausted at match frame "
+                                "%u (%u live, peak %u)\n",
+                        (unsigned) gm_GetFrameCount(),
+                        (unsigned) hsd_804D78E2, (unsigned) numPeakParticles);
+            }
+        }
+#endif
         return NULL;
     }
+
+#if BUILD_TARGET_PC
+    /* MELEE_PSLOG=1: one line per particle born, with the frame and enough
+     * identity to pair it up against the same match on another machine. */
+    {
+        static int pslog = -1;
+        extern u32 gm_GetFrameCount(void);
+        if (pslog < 0) {
+            pslog = getenv("MELEE_PSLOG") != NULL;
+        }
+        if (pslog) {
+            fprintf(stderr, "[PSLOG] f=%u born link=%d bank=%d kind=%08X "
+                            "tg=%u life=%d live=%u from=%p/%p\n",
+                    (unsigned) gm_GetFrameCount(), linkNo, bank,
+                    (unsigned) kind, (unsigned) texGroup, life,
+                    (unsigned) hsd_804D78E2 + 1,
+                    __builtin_return_address(0), __builtin_return_address(1));
+        }
+    }
+#endif
 
     hsd_804D78E2 += 1;
     if (hsd_804D78E2 > numPeakParticles) {

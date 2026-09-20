@@ -159,7 +159,18 @@ static const float atanf_lookup[] = {
     0.0,
 };
 
-#ifdef __MWERKS__
+/* The PC build needs this too, and used to go without: with the function
+ * behind __MWERKS__ alone, every call to atanf in the game bound to the
+ * host's libm instead -- and the hosts disagree. Measured over 20,000
+ * inputs, glibc (x86-64) and bionic (arm64) return the same bits for sinf,
+ * cosf, powf, expf, logf, fmodf and sqrtf, and different bits for atanf.
+ * atan2f, asinf and acosf above are all built on atanf, so that one gap put
+ * every angle in the simulation at the mercy of which C library the machine
+ * happened to have: two copies of this port playing the same match over the
+ * network parted company at match frame 850, by way of a particle emission
+ * angle. The body below is the console's own, and the fma path inside it was
+ * already written for this build. */
+#if defined(__MWERKS__) || BUILD_TARGET_PC
 float atanf(float x)
 {
     float const silver_ratio = 2.4142136573791504f;

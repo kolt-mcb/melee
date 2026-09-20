@@ -426,6 +426,14 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    /* MELEE_MATHCHECK=1: hash the simulation's arithmetic and print it, so
+     * two machines that are meant to play the same match can be compared
+     * before they try. */
+    {
+        extern void pc_mathcheck(void);
+        pc_mathcheck();
+    }
+
     /* Main loop — game logic runs here */
     PORT_LOG_INFO("[MAIN] About to enter game_main_loop()");
 
