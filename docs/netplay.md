@@ -197,6 +197,38 @@ on Final Destination, both costumes at colour 0 and no timer, where this
 port's default is a Mario ditto. `MELEE_BOOT_MATCH=6,8,-1,0,0` and
 `MELEE_BOOT_TIME=0` say so.
 
+### The end-to-end test
+
+```sh
+tools/dolphin_vs_test.py
+```
+
+Runs the whole route from nothing — host up, port joined, game started, a
+shared input, both traces captured — and then *checks* it, rather than showing
+two screenshots and inviting a judgement. Thirteen checks, each able to fail
+on its own:
+
+```
+PASS host came up and hosted
+PASS port joined the session                        as player 2
+PASS host gave it a controller port                 controller ports: 1 2(ours) 0 0
+PASS the host started the game
+PASS both sides met at the rendezvous               rendezvous -2 reached at port frame 1
+PASS frames were exchanged                          2400 polls
+PASS the emulator wrote a trace                     402635 bytes
+PASS the port wrote a trace                         821658 bytes
+PASS the same sequence of action states on both
+PASS the two are aligned to the frame
+PASS enough match frames to compare                 1140 frames
+PASS no unexpected field disagrees
+PASS the RNG agrees through the first match frames  first differing frame 8
+```
+
+The fields that do not agree yet are named in the test with their reasons, and
+the check is that the set of disagreeing fields is *exactly* that list — so a
+new difference fails it, and one of the known ones starting to agree fails it
+too rather than passing unnoticed.
+
 ### Does the game state match?
 
 Yes, and it is measured rather than eyeballed. Both sides write the same
