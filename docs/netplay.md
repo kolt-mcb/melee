@@ -264,9 +264,41 @@ census differs in both directions from then on (1606 frames of 6665, up and
 down in roughly equal numbers, which is what a self-sustaining divergence
 looks like rather than a systematic over-draw).
 
-That single extra particle at match frame 8 of a Link-vs-Mario Final
-Destination match is what stands between this and a bit-identical shared
-match. It is a port bug, not a netplay one.
+Where the extra particle comes from is answerable too, because both builds
+carry a generator probe: `MELEE_GENLIST` here, the same in the reference
+build behind `MELEE_RNG_WATCH`, in the same format. Run both and diff the
+populations:
+
+```
+gframe=7  ref  [bank=30 id=257 kind=08400000 genLife=3868 life=4 count=3f03d900 random=41200000]
+          port [bank=30 id=257 kind=08400000 genLife=3869 life=4 count=3f20f100 random=41200000]
+```
+
+One generator on each side, same bank, same id, same kind, same `random` —
+and `genLife` one apart on every frame, with a different `count`. `count` is
+the emission accumulator: when it crosses 1 the generator spills a particle
+and subtracts 1. So the two are in different *phases* of the same generator,
+and on match frame 8 one phase spills a ninth particle where the other spills
+eight.
+
+The phase difference is there from the generator's first tick — it is created
+during the stage load, at `genLife` 4000, and the first line either side
+prints already disagrees. Which closes the chain:
+
+> the two stage loads are different lengths (639 frames in the emulator
+> against 133 here) → the generator ticks a different number of times and
+> accumulates a different emission phase → match frame 8 spills nine
+> particles here and eight there → six extra draws → the seeds part → and
+> everything seed-driven follows, Final Destination's background colour
+> included.
+
+So the last thing between this and a bit-identical shared match is not a
+netplay problem and not an RNG problem: it is that this port loads a stage in
+a fifth of the frames the emulator does, and anything that ticks per load
+frame ends up somewhere else. `pc_trace.c` has been saying so for a while
+("the console's load takes 185 frames and this one takes 123"). Seeding
+through the load makes each of those frames *start* from the same number; it
+cannot make there be the same number of them.
 
 ### The background
 

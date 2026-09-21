@@ -121,8 +121,14 @@ def main():
     if "--restart" in args or not running:
         subprocess.run(["pkill", "-x", "dolphin-emu"], check=False)
         time.sleep(3)
+        # MELEE_DOLPHIN_LOG=<path> keeps the host's stderr instead of
+        # discarding it -- that is where its melee probes print ([GENLIST],
+        # [PSSPAWN]), and diffing those against the port's is the only way to
+        # see which side made an object the other did not.
+        log = os.environ.get("MELEE_DOLPHIN_LOG")
+        sink = open(log, "w") if log else subprocess.DEVNULL
         subprocess.Popen(["setsid", DOLPHIN, "-u", USERDIR],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         stdout=sink, stderr=subprocess.STDOUT if log else sink,
                          stdin=subprocess.DEVNULL)
         print("launched Dolphin", flush=True)
 
