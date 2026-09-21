@@ -746,6 +746,18 @@ bool ftLib_80086F4C(HSD_GObj* gobj)
 float ftLib_80086F80(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+    /* The name tag asks every slot how high to float, once per frame, and a
+     * slot can hold a live GObj whose fighter has already gone -- between a
+     * death and the respawn, and on the frames either side of a transform.
+     * On the console the read came back as whatever was there; here it is a
+     * NULL dereference at +0xFC, which killed a Peach's Castle match at
+     * frame 25. No fighter, no offset: the tag sits where the coordinates
+     * put it. */
+    if (fp == NULL) {
+        return 0.0f;
+    }
+#endif
     if (fp->invisible) {
         return fp->ft_data->x0->name_tag_height;
     }

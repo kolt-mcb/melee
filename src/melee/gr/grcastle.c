@@ -1649,8 +1649,26 @@ static inline void grCastle_PickSatellite(Ground* gp, s32* wp)
     }
     gp->u.castle12.xD0 = slot;
 
+#if BUILD_TARGET_PC
+    /* The three satellite slots are written as the satellites are created,
+     * and this picker can run on a frame when the chosen slot holds nothing
+     * yet -- the sibling check below (xC4[0] || xC4[1] || xC4[2], then the
+     * chosen one against NULL) exists for the same reason. On the console a
+     * stale slot read as some address and the frame carried on; here it was
+     * a fault on a pointer whose top half was 0xFFFFFFFF, and it killed a
+     * Peach's Castle match within half a second of the CPUs starting. With
+     * no satellite to attach, there is nothing to pick this frame. */
+    {
+        HSD_GObj* sat = (HSD_GObj*) gp->u.castle12.xC4[gp->u.castle12.xD0];
+        if (!pc_ptr_sane(sat) || !pc_ptr_sane(sat->user_data)) {
+            return;
+        }
+        sat_gp = (Ground*) sat->user_data;
+    }
+#else
     sat_gp = (Ground*) ((HSD_GObj*) gp->u.castle12.xC4[gp->u.castle12.xD0])
                  ->user_data;
+#endif
 
     {
         s32 idx;
@@ -1682,6 +1700,31 @@ void grCastle_801CF868(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
     s32* wp;
+
+#if BUILD_TARGET_PC
+    /* Every test below asks whether a satellite slot is NULL, which is the
+     * right question on a console where an unwritten slot reads as zero or
+     * as an address that can at least be read. Here a stale slot holds
+     * whatever was in that memory -- 0xFFFFFFFF00000FD0 in the run that
+     * found this -- which is not NULL, so it passed the guard and faulted on
+     * the next dereference. Answer the question the code is really asking:
+     * a slot that is not a usable pointer holds no satellite. The same for
+     * the index, which selects among the three and is read from the same
+     * uninitialised bytes. */
+    {
+        int i;
+        for (i = 0; i < 3; i++) {
+            HSD_GObj* sat = (HSD_GObj*) gp->u.castle12.xC4[i];
+            if (sat != NULL &&
+                (!pc_ptr_sane(sat) || !pc_ptr_sane(sat->user_data))) {
+                gp->u.castle12.xC4[i] = NULL;
+            }
+        }
+        if (gp->u.castle12.xD0 < -1 || gp->u.castle12.xD0 > 2) {
+            gp->u.castle12.xD0 = -1;
+        }
+    }
+#endif
 
     if ((gp->u.castle12.xC4[0] != 0 || gp->u.castle12.xC4[1] != 0 ||
          gp->u.castle12.xC4[2] != 0) &&
