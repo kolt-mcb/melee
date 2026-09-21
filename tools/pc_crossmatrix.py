@@ -35,14 +35,35 @@ def env_for(c0, c1, stage, frames, hashlog):
         "MELEE_HASHLOG": hashlog,
     }
 
-def run_desktop(c0, c1, stage, frames, out):
-    e = dict(os.environ)
-    e.update(env_for(c0, c1, stage, frames, out))
-    e["MELEE_LOWMEM_BASE"] = "10000000"
-    subprocess.run([PORT, "-w", "320", "240"], env=e, cwd=ROOT,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                   timeout=300)
-    return read_hashes(out)
+MIN_FRAMES = 200   # fewer than this and the run was cut short, not compared
+
+
+def run_desktop(c0, c1, stage, frames, out, tries=6):
+    """The desktop is the flaky side here: this machine is often short of
+    memory, and a run that cannot get its arena bails out after a frame or
+    two. A short run is not a mismatch, so it is retried rather than
+    recorded as one."""
+    h = {}
+    for attempt in range(tries):
+        e = dict(os.environ)
+        e.update(env_for(c0, c1, stage, frames, out))
+        e["MELEE_LOWMEM_BASE"] = "10000000"
+        try:
+            r = subprocess.run([PORT, "-w", "320", "240"], env=e, cwd=ROOT,
+                               stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, timeout=300)
+            err = r.stderr.decode("utf-8", "replace")
+        except subprocess.TimeoutExpired:
+            err = ""
+        h = read_hashes(out)
+        # A run that could not reserve its full pool is a run this machine
+        # was too busy for, and it dies a few frames in with the arena
+        # assert. That is not a result -- wait for the memory and try again.
+        starved = "Low-memory pool reserved" in err and "(1024 MB)" not in err
+        if len(h) >= MIN_FRAMES and not starved:
+            return h
+        time.sleep(10 if starved else 3)
+    return h
 
 def run_tablet(c0, c1, stage, frames, out):
     envtxt = "\n".join("%s=%s" % kv for kv in
@@ -80,6 +101,10 @@ def compare(a, b):
     common = [f for f in common if f > 0]
     if not common:
         return "no-frames", None, 0
+    if len(common) < MIN_FRAMES:
+        # One side stopped early; nothing can be concluded from the frames
+        # they did share.
+        return "short", None, len(common)
     for f in common:
         if a[f] != b[f]:
             return "differs", f, len(common)
@@ -108,12 +133,15 @@ def main():
         results = json.load(open(a.results))
     for (c0, c1, stage) in cases:
         key = "%d,%d,%d" % (c0, c1, stage)
-        if key in results and results[key]["verdict"] == "match":
+        if key in results and results[key]["verdict"] in ("match", "differs"):
             continue
         d = run_desktop(c0, c1, stage, a.frames,
                         "%s/desk_%s.txt" % (a.out, key.replace(",", "_")))
         t = run_tablet(c0, c1, stage, a.frames,
                        "%s/tab_%s.txt" % (a.out, key.replace(",", "_")))
+        if len(d) >= MIN_FRAMES > len(t):
+            t = run_tablet(c0, c1, stage, a.frames,
+                           "%s/tab_%s.txt" % (a.out, key.replace(",", "_")))
         verdict, frame, n = compare(d, t)
         results[key] = {"verdict": verdict, "first_diff": frame, "frames": n,
                         "desktop_frames": len(d), "tablet_frames": len(t)}
