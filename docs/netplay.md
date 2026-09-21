@@ -235,14 +235,38 @@ and player 1 differs in nothing at all. Three things do differ:
 
 ### The background
 
-Final Destination's backdrop does not match: the emulator shows the purple
+Final Destination's backdrop does not match: the emulator shows a purple
 nebula where the port shows bare green wireframe. This is **not** a renderer
-gap. Run the port on its own with the same lineup and it draws the nebula
-correctly — the layer is there and it works. The two are in different phases
-of FD's background cycle, which the stage picks through the RNG, so it is the
-seed difference above wearing a different hat. It is the most visible symptom
-of the last unpinned thing rather than a separate bug, and it will close when
-the seed does.
+gap — run the port on its own with the same lineup and it draws the nebula
+correctly. The stage's background colour is *literally random*, by the game's
+own design (`grlast.c`, the case-15 event):
+
+```c
+do {
+    sp30.r = HSD_Randi(2) * 0x1E;      /* each channel is 0 or 30 */
+    sp30.g = HSD_Randi(2) * 0x1E;
+    sp30.b = HSD_Randi(2) * 0x1E;
+} while ((sp30.r == 0x1E && sp30.g == 0x1E && sp30.b == 0x1E) ||
+         (sp30.r == sp2C.r && sp30.g == sp2C.g && sp30.g == sp2C.g));
+tmp = HSD_Randi(0x3C) + 0x3C;          /* fade over 60..119 frames */
+grLast_8021C40C(gobj, sp30, tmp);
+```
+
+Seven colours (white is rejected), cross-faded toward over a random 60 to 119
+frames by `grLast_8021C500`, which ends in `Camera_SetBackgroundColor` — the
+clear colour behind the stage. Same geometry both sides; a different number
+behind it. Green makes the nebula texture read as near-black and leaves only
+the bright wireframe lines, which is exactly what the screenshots show.
+
+So the background is the plainest possible symptom of the seed difference, and
+it also *widens* it: that is a rejection loop, so how many values it draws
+depends on the values it draws, and the two sides come out of it having
+consumed different amounts of the generator. `pc_trace.c` documents the same
+shape on the title screen, where a loop picks four distinct characters.
+
+(The rejection test compares `sp30.g` against `sp2C.g` twice and never looks
+at `.b` — the game's own bug, decompiled as found. It means a re-roll that
+differs only in blue is not rejected.)
 
 ### Calibrating the lead
 
