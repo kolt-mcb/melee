@@ -222,3 +222,4 @@ extern/slippi/
 tools/slippi/node_modules/
 tools/slippi/package-lock.json
 tools/slippi/__pycache__/
+build.ninja.*

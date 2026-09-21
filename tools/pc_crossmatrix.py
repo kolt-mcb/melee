@@ -38,7 +38,7 @@ def env_for(c0, c1, stage, frames, hashlog):
 MIN_FRAMES = 200   # fewer than this and the run was cut short, not compared
 
 
-def run_desktop(c0, c1, stage, frames, out, tries=6):
+def run_desktop(c0, c1, stage, frames, out, tries=3):
     """The desktop is the flaky side here: this machine is often short of
     memory, and a run that cannot get its arena bails out after a frame or
     two. A short run is not a mismatch, so it is retried rather than
@@ -56,13 +56,16 @@ def run_desktop(c0, c1, stage, frames, out, tries=6):
         except subprocess.TimeoutExpired:
             err = ""
         h = read_hashes(out)
-        # A run that could not reserve its full pool is a run this machine
-        # was too busy for, and it dies a few frames in with the arena
-        # assert. That is not a result -- wait for the memory and try again.
-        starved = "Low-memory pool reserved" in err and "(1024 MB)" not in err
-        if len(h) >= MIN_FRAMES and not starved:
+        # Enough frames is the only test that matters. An earlier version also
+        # rejected a run whose pool came up short of 1 GB, on the theory that
+        # a starved run dies early -- but when the machine simply has less
+        # memory to give, that turns every case into six retries and a wait,
+        # and the sweep slowed from a case a minute to a case every half
+        # hour. A run that produced its frames produced its frames.
+        if len(h) >= MIN_FRAMES:
             return h
-        time.sleep(10 if starved else 3)
+        starved = "Low-memory pool reserved" in err and "(1024 MB)" not in err
+        time.sleep(8 if starved else 2)
     return h
 
 def run_tablet(c0, c1, stage, frames, out):
@@ -74,7 +77,7 @@ def run_tablet(c0, c1, stage, frames, out):
     sh("adb shell rm -f %s/hash.txt" % FILES)
     sh("adb push %s/_case.env %s/melee.env" % (S, FILES))
     sh("adb shell am start -n %s/org.libsdl.app.MeleeActivity" % PKG)
-    deadline = time.time() + 180
+    deadline = time.time() + 90
     time.sleep(6)
     while time.time() < deadline:
         if not sh("adb shell pidof %s" % PKG).stdout.strip():
@@ -140,6 +143,8 @@ def main():
         t = run_tablet(c0, c1, stage, a.frames,
                        "%s/tab_%s.txt" % (a.out, key.replace(",", "_")))
         if len(d) >= MIN_FRAMES > len(t):
+            # One retry only: a second failure is a real answer about this
+            # case, not a machine having a bad minute.
             t = run_tablet(c0, c1, stage, a.frames,
                            "%s/tab_%s.txt" % (a.out, key.replace(",", "_")))
         verdict, frame, n = compare(d, t)

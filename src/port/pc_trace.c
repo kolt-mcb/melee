@@ -1622,7 +1622,7 @@ u32 pc_state_hash(void)
  * position and rate from them, so a pose that differs by an ulp shows up
  * later as a particle emitted on a different frame. MELEE_JOINTHASH=1 prints
  * one line per frame. */
-static void jobj_hash_rec(HSD_JObj* j, u32* h)
+static void jobj_hash_rec(HSD_JObj* j, u32* h, int depth)
 {
     union { f32 f; u32 u; } b;
     int i, k;
@@ -1638,7 +1638,14 @@ static void jobj_hash_rec(HSD_JObj* j, u32* h)
                 *h = (*h ^ b.u) * 16777619u;
             }
         }
-        jobj_hash_rec(j->child, h);
+        jobj_hash_rec(j->child, h, depth + 1);
+        /* The fighter's own root is handed to us; its siblings are other
+         * people's trees, and following them walked into whatever happened
+         * to sit next to it -- which is how one machine came to report 73
+         * joints and the other 63 for the same two fighters. */
+        if (depth == 0) {
+            break;
+        }
     }
 }
 
@@ -1647,7 +1654,7 @@ static void jobj_hash_rec(HSD_JObj* j, u32* h)
  * machines can be named rather than guessed at. */
 static FILE* g_jointdump_out;
 
-static void jobj_dump_rec(HSD_JObj* j, int* idx, int slot)
+static void jobj_dump_rec(HSD_JObj* j, int* idx, int slot, int depth)
 {
     union { f32 f; u32 u; } b;
     int i, k;
@@ -1655,8 +1662,14 @@ static void jobj_dump_rec(HSD_JObj* j, int* idx, int slot)
     for (; j != NULL; j = j->next) {
         {
             char line[256];
-            int n = snprintf(line, sizeof(line), "[JOINTDUMP] p%d j%d", slot,
-                             *idx);
+            /* The shape as well as the numbers: when two machines walk a
+             * different number of joints, which joint stopped having a child
+             * matters more than what its matrix held. */
+            int n = snprintf(line, sizeof(line),
+                             "[JOINTDUMP] f=%u p%d j%d d%d flags=%08X c=%d "
+                             "n=%d", (unsigned) gm_GetFrameCount(), slot,
+                             *idx, depth, (unsigned) j->flags,
+                             j->child != NULL, j->next != NULL);
             for (i = 0; i < 3; i++) {
                 for (k = 0; k < 4; k++) {
                     b.f = j->mtx[i][k];
@@ -1667,7 +1680,10 @@ static void jobj_dump_rec(HSD_JObj* j, int* idx, int slot)
                     "%s\n", line);
         }
         (*idx)++;
-        jobj_dump_rec(j->child, idx, slot);
+        jobj_dump_rec(j->child, idx, slot, depth + 1);
+        if (depth == 0) {
+            break;
+        }
     }
 }
 
@@ -1698,7 +1714,7 @@ static void pc_trace_jointdump(void)
         if (fp == NULL || !pc_ptr_sane(fp->parts)) {
             continue;
         }
-        jobj_dump_rec(fp->parts[0].joint, &idx, i);
+        jobj_dump_rec(fp->parts[0].joint, &idx, i, 0);
     }
     if (g_jointdump_out != NULL) {
         fflush(g_jointdump_out);
@@ -1725,7 +1741,7 @@ static void pc_trace_jointhash(void)
         if (fp == NULL || !pc_ptr_sane(fp->parts)) {
             continue;
         }
-        jobj_hash_rec(fp->parts[0].joint, &h);
+        jobj_hash_rec(fp->parts[0].joint, &h, 0);
     }
     fprintf(stderr, "[JOINTHASH] %u %08X\n",
             (unsigned) gm_GetFrameCount(), h);
