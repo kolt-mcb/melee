@@ -30,6 +30,8 @@
 #if BUILD_NETPLAY
 
 #include <enet/enet.h>
+#include <melee/gm/gm_1A3F.h>
+#include <melee/gm/gmmain.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +40,7 @@
 /* Message ids, from Source/Core/Core/NetPlayProto.h. */
 #define DOL_MSG_PLAYER_JOIN 0x10u
 #define DOL_MSG_PLAYER_LEAVE 0x11u
+#define DOL_MSG_HOST_INPUT_AUTHORITY 0xA6u
 #define DOL_MSG_CHAT 0x30u
 #define DOL_MSG_REPORT_FRAME_TIME 0x40u
 #define DOL_MSG_PAD_DATA 0x60u
@@ -54,9 +57,29 @@
 
 #define DOL_STATUS_OK 1u   /* PlayerGameStatus::Ok */
 
-/* The build this was developed against: Slippi 3.6.4's scm_rev_git_str. */
-#define DOL_DEFAULT_REV "e7711b104b339a99385f2bb12b472d46140a7bc7"
-#define DOL_DEFAULT_VER "Slippi-3.6.4 Lin"
+/* The GameCube's clock counts from 2000-01-01; the RTC Dolphin puts in
+ * START_GAME is a Unix timestamp, and MELEE_FAKE_RTC is GameCube seconds. */
+#define DOL_GC_EPOCH_UNIX 946684800u
+
+/* Two hosts are supported, and which one matters more than it looks.
+ *
+ * "stock" is mainline Dolphin -- the emulator this port is already proven
+ * bit-identical to for a whole match (docs/port-parity-plan.md), which is the
+ * only kind of peer a shared match can work against. The build here is the
+ * reference build the lockstep harness uses.
+ *
+ * "slippi" is Slippi's Ishiiruka. It talks an older shape of the same
+ * protocol and it is useful for testing the transport, but it cannot hold a
+ * shared match: it injects the Slippi codeset into the running game (the
+ * giveaway is an "Online Play" entry on the 1-P Mode menu), so its Melee is
+ * not the Melee this port compiles.
+ *
+ * MELEE_NET_REV overrides the revision for any other build; it is that
+ * build's scm_rev_git_str, a 40-character git hash in its .rodata. */
+#define DOL_STOCK_REV "8427b8c0f1c034c1a40c1333a97a1ffc1e776ad9"
+#define DOL_STOCK_VER "8427b8c Lin"
+#define DOL_SLIPPI_REV "e7711b104b339a99385f2bb12b472d46140a7bc7"
+#define DOL_SLIPPI_VER "Slippi-3.6.4 Lin"
 
 /* Dolphin's GCPadStatus centres both sticks on 0x80; the console's PADStatus
  * that this port carries has already had the origin taken off, so the two
@@ -120,6 +143,19 @@ static long dol_frames;
 static long dol_stalls;
 static double dol_stall_ms;
 static double dol_wait_budget_ms = 30000.0;
+static unsigned dol_rtc;       /* the session's shared clock, Unix seconds */
+static int dol_have_rtc;
+static int dol_stock = 1;      /* mainline Dolphin rather than Ishiiruka */
+static int dol_rendezvous = 24;  /* the game mode both sides wait at */
+static int dol_lead = 187;       /* frames Dolphin needs to reach it */
+static int dol_lag = 3;          /* the port acts on a press this much sooner */
+static int dol_met;              /* the rendezvous has been reached */
+static long dol_led;             /* lead pads pushed so far */
+#define DOL_LAG_MAX 16
+static DolPad dol_delay[DOL_PORTS][DOL_LAG_MAX];
+static int dol_delay_at;
+static long dol_recv[DOL_PORTS];
+static int dol_unmapped = 0;   /* the value a free controller port holds */
 
 static double now_ms(void)
 {
@@ -197,7 +233,8 @@ static void pad_to_game(GCPadStatus* g, const DolPad* d)
 
 static void send_pad(int port, const DolPad* d)
 {
-    unsigned char p[12];
+    unsigned char p[13];
+    size_t n = dol_stock ? sizeof p : sizeof p - 1;
     p[0] = (unsigned char) DOL_MSG_PAD_DATA;
     p[1] = (unsigned char) port;
     p[2] = (unsigned char) (d->button >> 8);
@@ -210,7 +247,8 @@ static void send_pad(int port, const DolPad* d)
     p[9] = d->subStickY;
     p[10] = d->triggerL;
     p[11] = d->triggerR;
-    dol_send(p, sizeof p);
+    p[12] = 1;   /* isConnected; mainline only */
+    dol_send(p, n);
 }
 
 /* ---- the session -------------------------------------------------------- */
@@ -225,6 +263,10 @@ static void dol_config(void)
     if (!dol_on) {
         return;
     }
+    s = getenv("MELEE_NET_DOLPHIN");
+    dol_stock = !(s != NULL && strcmp(s, "slippi") == 0);
+    /* Mainline leaves a free controller port at 0 and Ishiiruka at -1. */
+    dol_unmapped = dol_stock ? 0 : -1;
     s = getenv("MELEE_NET_LOCAL_PAD");
     dol_local_pad = (s != NULL) ? (atoi(s) & 3) : 0;
     dol_trace = getenv("MELEE_NET_TRACE") != NULL;
@@ -232,6 +274,32 @@ static void dol_config(void)
     if (s != NULL) {
         dol_wait_budget_ms = (double) atol(s);
     }
+    /* The rendezvous. The two programs do not take the same number of frames
+     * to boot -- the console plays screens this port skips, the memory-card
+     * check among them -- so "both started at START_GAME" does not put them
+     * on the same frame of the same game. tests/pc/cases/sync_title.case
+     * settles the same problem for the comparison runs the same way: let
+     * both run free to a screen they both reach (the intro, mode 24), and
+     * only step together from there.
+     *
+     * Dolphin cannot advance a frame without a pad from this client, so the
+     * lead is how this side walks it to that screen: push exactly the number
+     * of frames the console takes to get there (sync_title's route_zero) and
+     * it then waits for us. */
+    s = getenv("MELEE_NET_RENDEZVOUS");
+    if (s != NULL) {
+        dol_rendezvous = atoi(s);
+    }
+    s = getenv("MELEE_NET_LEAD");
+    if (s != NULL) {
+        dol_lead = atoi(s);
+    }
+    s = getenv("MELEE_NET_LAG");
+    if (s != NULL) {
+        dol_lag = atoi(s);
+    }
+    if (dol_lag < 0) dol_lag = 0;
+    if (dol_lag > 16) dol_lag = 16;
 }
 
 static void handle(const unsigned char* d, size_t len)
@@ -254,13 +322,29 @@ static void handle(const unsigned char* d, size_t len)
 
     switch (id) {
     case DOL_MSG_CHANGE_GAME: {
-        /* The host asks whether we have the game. We are the game. */
+        /* The host asks whether we have the game. We are the game.
+         * Mainline wants a SyncIdentifierComparison (u8, SameGame = 0);
+         * Ishiiruka wants a PlayerGameStatus (u32, Ok = 1). */
         unsigned char r[5];
+        size_t n;
         r[0] = (unsigned char) DOL_MSG_GAME_STATUS;
-        put_u32(r + 1, DOL_STATUS_OK);
-        dol_send(r, sizeof r);
+        if (dol_stock) {
+            r[1] = 0;
+            n = 2;
+        } else {
+            put_u32(r + 1, DOL_STATUS_OK);
+            n = 5;
+        }
+        dol_send(r, n);
         break;
     }
+    case DOL_MSG_HOST_INPUT_AUTHORITY:
+        if (len >= 2 && d[1] != 0) {
+            fprintf(stderr, "[NETDOL] the host has input authority (golf "
+                            "mode) on; this client does not speak it -- turn "
+                            "it off in the lobby\n");
+        }
+        break;
     case DOL_MSG_PAD_MAPPING:
         if (len >= 1 + DOL_PORTS) {
             int i;
@@ -285,6 +369,23 @@ static void handle(const unsigned char* d, size_t len)
         if (len >= 5) {
             unsigned char r[5];
             dol_game_id = get_u32(d + 1);
+            /* The packet carries the clock the host handed every client so
+             * that every emulated console in the session agrees. Melee seeds
+             * itself from that clock -- the title screen alone draws one
+             * random number per second of it -- so a client that ignores it
+             * is playing a different game from its first frame.
+             *
+             * Ishiiruka puts it last, which can be read without knowing the
+             * shape of the settings in front of it. Mainline puts the SRAM
+             * after it, and the settings before it are a different shape in
+             * every version, so there it is not read at all: the clock is
+             * pinned from outside instead, with EnableCustomRTC on the host
+             * and MELEE_FAKE_RTC here (tools/pc_lockstep.py does the same
+             * for the comparison runs). */
+            if (!dol_stock && len >= 13) {
+                dol_rtc = get_u32(d + len - 8);
+                dol_have_rtc = 1;
+            }
             r[0] = (unsigned char) DOL_MSG_START_GAME;
             put_u32(r + 1, dol_game_id);
             dol_send(r, sizeof r);  /* the host drops pads from a player it
@@ -299,24 +400,31 @@ static void handle(const unsigned char* d, size_t len)
                         "frames (%ld stalls, %.0f ms waiting)\n",
                 dol_frames, dol_stalls, dol_stall_ms);
         break;
-    case DOL_MSG_PAD_DATA:
-        if (len >= 12) {
+    case DOL_MSG_PAD_DATA: {
+        /* Mainline packs every local pad of a frame into one message and
+         * ends each with isConnected; Ishiiruka sends one pad a message. */
+        size_t stride = dol_stock ? 12u : 11u;
+        size_t off = 1;
+        while (off + stride <= len) {
             DolPad p;
-            int port = (signed char) d[1];
-            p.button = ((unsigned) d[2] << 8) | d[3];
-            p.analogA = d[4];
-            p.analogB = d[5];
-            p.stickX = d[6];
-            p.stickY = d[7];
-            p.subStickX = d[8];
-            p.subStickY = d[9];
-            p.triggerL = d[10];
-            p.triggerR = d[11];
+            int port = (signed char) d[off];
+            p.button = ((unsigned) d[off + 1] << 8) | d[off + 2];
+            p.analogA = d[off + 3];
+            p.analogB = d[off + 4];
+            p.stickX = d[off + 5];
+            p.stickY = d[off + 6];
+            p.subStickX = d[off + 7];
+            p.subStickY = d[off + 8];
+            p.triggerL = d[off + 9];
+            p.triggerR = d[off + 10];
+            off += stride;
             if (port >= 0 && port < DOL_PORTS) {
                 q_push(&dol_q[port], &p);
+                dol_recv[port]++;
             }
         }
         break;
+    }
     case DOL_MSG_PING:
         if (len >= 5) {
             unsigned char r[5];
@@ -379,8 +487,8 @@ static int dol_connect(void)
     if (host == NULL || host[0] == '\0') {
         host = "127.0.0.1";
     }
-    if (rev == NULL) rev = DOL_DEFAULT_REV;
-    if (ver == NULL) ver = DOL_DEFAULT_VER;
+    if (rev == NULL) rev = dol_stock ? DOL_STOCK_REV : DOL_SLIPPI_REV;
+    if (ver == NULL) ver = dol_stock ? DOL_STOCK_VER : DOL_SLIPPI_VER;
     if (nick == NULL) nick = "melee-pc";
 
     if (enet_initialize() != 0) {
@@ -426,6 +534,72 @@ static int dol_connect(void)
     return dol_pid >= 0;
 }
 
+/* Before the game reads anything -- the clock above all -- join the session
+ * and wait for the host to start. Two things have to be true before this
+ * port's first frame is the same frame as Dolphin's:
+ *
+ *   - the clock. Set here, from the session's RTC, so that everything the
+ *     game derives from it (the title screen's per-second HSD_Rand draws
+ *     among them) is drawn from the same number on both sides.
+ *   - the starting line. Dolphin's emulated console begins at START_GAME;
+ *     so does this. After that the two stay together without a barrier,
+ *     because Dolphin's netplay has no frame numbers and no need of them:
+ *     a client sends one pad per port per frame and the emulated game cannot
+ *     advance a frame without one, so the Nth pad this port sends is the Nth
+ *     frame Dolphin plays.
+ *
+ * Called from main() before any subsystem starts. Returns as soon as the
+ * host starts the game, or immediately when this route is not selected. */
+void pc_netdol_boot_sync(void)
+{
+    double began;
+
+    if (!dol_started) {
+        dol_config();
+    }
+    if (!dol_on) {
+        return;
+    }
+    if (!dol_connect()) {
+        dol_on = 0;
+        return;
+    }
+    fprintf(stderr, "[NETDOL] in the lobby; waiting for the host to start\n");
+    began = now_ms();
+    while (!dol_in_game) {
+        pump(16);
+        if (dol_peer == NULL) {
+            dol_on = 0;
+            return;
+        }
+        if (now_ms() - began > 900000.0) {
+            fprintf(stderr, "[NETDOL] the host never started a game\n");
+            dol_on = 0;
+            return;
+        }
+    }
+
+    /* MELEE_FAKE_RTC set by hand wins: a run being compared against a
+     * recorded trace has its own clock and this must not move it. */
+    if (dol_have_rtc && getenv("MELEE_FAKE_RTC") == NULL) {
+        char buf[32];
+        long gc = (long) dol_rtc - (long) DOL_GC_EPOCH_UNIX;
+        snprintf(buf, sizeof buf, "%ld", gc);
+        setenv("MELEE_FAKE_RTC", buf, 1);
+        fprintf(stderr, "[NETDOL] session clock %u (GameCube seconds %ld)\n",
+                dol_rtc, gc);
+    } else if (getenv("MELEE_FAKE_RTC") == NULL) {
+        fprintf(stderr, "[NETDOL] no MELEE_FAKE_RTC and no clock on the wire: "
+                        "this port's RNG will not be Dolphin's. Set "
+                        "EnableCustomRTC on the host and pass the same value "
+                        "here (Unix seconds minus %u).\n",
+                (unsigned) DOL_GC_EPOCH_UNIX);
+    } else {
+        fprintf(stderr, "[NETDOL] console clock pinned at MELEE_FAKE_RTC=%s\n",
+                getenv("MELEE_FAKE_RTC"));
+    }
+}
+
 int pc_netdol_enabled(void)
 {
     if (!dol_started) {
@@ -453,30 +627,100 @@ void pc_netdol_pads(GCPadStatus* pads)
         }
     }
 
-    /* Before START_GAME there is no session clock to keep, so hold here
-     * rather than boot past the host's first frame. */
-    began = now_ms();
-    if (!dol_in_game && dol_trace) {
-        fprintf(stderr, "[NETDOL] holding the first pad poll for the host "
-                        "to start the game\n");
-    }
-    while (!dol_in_game) {
-        pump(8);
-        if (dol_peer == NULL) {
-            return;
-        }
-        if (now_ms() - began > 600000.0) {
-            fprintf(stderr, "[NETDOL] the host never started a game\n");
-            dol_on = 0;
-            return;
-        }
+    /* pc_netdol_boot_sync already waited for START_GAME before the game
+     * booted; if the host stopped it since, there is nothing to send. */
+    if (!dol_in_game) {
+        pump(0);
+        return;
     }
 
     pump(0);
 
+    /* Phase one: walk Dolphin to the rendezvous while this side boots.
+     *
+     * The lead pads go out in one burst -- Dolphin chews through them at
+     * whatever speed it can and then blocks, because it cannot advance a
+     * frame without the next one. Meanwhile this port boots at its own pace
+     * and its own pads stay local: nothing is popped, and whatever Dolphin
+     * sends back is dropped, because the two are not yet on the same clock.
+     * Only when this side reaches the rendezvous screen do they become one
+     * game. */
+    if (dol_rendezvous == -1) {
+        /* MELEE_NET_RENDEZVOUS=-1: no rendezvous at all. Both programs poll
+         * the pad once a game frame and Dolphin cannot advance without one
+         * from here, so poll N on this side is frame N on that side by
+         * construction -- which is the whole alignment, as long as the two
+         * really do play the same frames. They do once Dolphin has the same
+         * memory card this port behaves as if it had; without it Dolphin
+         * stops on "There is no Memory Card in Slot A." and this port does
+         * not, and everything after that is a different game. */
+        dol_met = 1;
+    }
+    if (!dol_met) {
+        int i;
+        DolPad neutral;
+        memset(&neutral, 0, sizeof neutral);
+        neutral.stickX = neutral.stickY = DOL_STICK_CENTER;
+        neutral.subStickX = neutral.subStickY = DOL_STICK_CENTER;
+        while (dol_led < dol_lead) {
+            for (i = 0; i < DOL_PORTS; i++) {
+                if (dol_map[i] == dol_pid) {
+                    send_pad(i, &neutral);
+                }
+            }
+            dol_led++;
+        }
+        for (i = 0; i < DOL_PORTS; i++) {
+            DolPad drop;
+            while (q_pop(&dol_q[i], &drop)) {
+            }
+        }
+        /* MELEE_NET_RENDEZVOUS=-2 waits for the match itself rather than
+         * for a game mode, and that is the one that matters: the debug-VS
+         * scene's stage load is a different length on the two sides (the
+         * port's is far shorter -- tests/pc/cases/match.case carries the gap
+         * as ref_lead: -1530 for the menu route), so lining the two up on
+         * the first frame of the mode leaves the matches themselves tens of
+         * frames apart. The first frame of the match is the same moment on
+         * both by definition. */
+        if (dol_rendezvous == -2) {
+            if ((s32) gm_GetFrameCount() < 1) {
+                return;
+            }
+        } else if ((int) gm_GetCurrentGameMode() != dol_rendezvous) {
+            return;
+        }
+        {
+            int a, b;
+            DolPad n2;
+            memset(&n2, 0, sizeof n2);
+            n2.stickX = n2.stickY = DOL_STICK_CENTER;
+            n2.subStickX = n2.subStickY = DOL_STICK_CENTER;
+            for (a = 0; a < DOL_PORTS; a++) {
+                for (b = 0; b < DOL_LAG_MAX; b++) {
+                    dol_delay[a][b] = n2;
+                }
+            }
+        }
+        dol_met = 1;
+        fprintf(stderr, "[NETDOL] rendezvous %d reached at port frame %u; "
+                        "playing from here (%ld lead frames pushed)\n",
+                dol_rendezvous, (unsigned) gm_GetFrameCount(), dol_led);
+    }
+
     /* Top our own ports up to the buffer depth, sending each pad as it is
      * pushed -- this is Dolphin's SendNetPad, and the depth is the delay. */
     pad_from_game(&mine, &pads[dol_local_pad]);
+    if (dol_trace) {
+        static unsigned last_btn;
+        if (mine.button != last_btn) {
+            last_btn = mine.button;
+            fprintf(stderr, "[NETDOL] poll %ld: sending buttons %04X "
+                            "(pad word %08X)\n",
+                    dol_frames, mine.button,
+                    (unsigned) pads[dol_local_pad].button);
+        }
+    }
     for (i = 0; i < DOL_PORTS; i++) {
         if (dol_map[i] != dol_pid) {
             continue;
@@ -491,7 +735,7 @@ void pc_netdol_pads(GCPadStatus* pads)
     for (i = 0; i < DOL_PORTS; i++) {
         DolPad got;
         double waited;
-        if (dol_map[i] < 0) {
+        if (dol_map[i] == dol_unmapped) {
             continue;
         }
         began = now_ms();
@@ -511,12 +755,48 @@ void pc_netdol_pads(GCPadStatus* pads)
             dol_stalls++;
             dol_stall_ms += waited;
         }
+        /* The port acts on a press about three frames sooner than the
+         * console does (tests/pc/cases/sync_title.case measured 3, 2, 2 at
+         * three transitions and carries it as port_input_lag), so the same
+         * press on the same frame would move this screen first. Holding
+         * every pad back by that much on the way in is the same compensation
+         * the comparison runs make by delaying the port's script. */
+        if (dol_lag > 0) {
+            DolPad out = dol_delay[i][dol_delay_at];
+            dol_delay[i][dol_delay_at] = got;
+            got = out;
+        }
         pad_to_game(&pads[i], &got);
     }
+    if (dol_lag > 0) {
+        dol_delay_at = (dol_delay_at + 1) % dol_lag;
+    }
     dol_frames++;
+    /* Where this side is, counted in the same unit the session counts in:
+     * pad polls. Dolphin's own arrival frames come from tools/mode_probe.py,
+     * and the two lists side by side are what says whether the alignment is
+     * right. */
+    if (dol_trace) {
+        static int last_mode = -1, last_scene = -1;
+        int m = (int) gm_GetCurrentGameMode();
+        int sc = (int) gm_GetCurrentSceneIndex();
+        if (m != last_mode || sc != last_scene) {
+            last_mode = m;
+            last_scene = sc;
+            fprintf(stderr, "[NETDOL] poll %ld: mode %d scene %d\n",
+                    dol_frames, m, sc);
+        }
+    }
     if (dol_trace && (dol_frames == 1 || (dol_frames % 600) == 0)) {
-        fprintf(stderr, "[NETDOL] %ld frames, %ld stalls, %.0f ms waiting\n",
-                dol_frames, dol_stalls, dol_stall_ms);
+        /* The port's own frame counter beside the poll count: if a pad poll
+         * is not exactly one game frame, the session's clock and this side's
+         * clock are different clocks and nothing downstream can line up. */
+        extern unsigned pc_frame_number;
+        fprintf(stderr, "[NETDOL] %ld polls (port frame %u), %ld stalls, "
+                        "%.0f ms waiting; pads in %ld/%ld/%ld/%ld\n",
+                dol_frames, (unsigned) pc_frame_number, dol_stalls,
+                dol_stall_ms, dol_recv[0], dol_recv[1], dol_recv[2],
+                dol_recv[3]);
     }
 }
 

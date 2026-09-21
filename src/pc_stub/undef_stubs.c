@@ -388,9 +388,29 @@ __attribute__((weak)) void AIInit(int a0) { PC_STUB_HIT("AIInit");}
 __attribute__((weak)) int ARInit(int a0, int a1) { PC_STUB_HIT("ARInit"); return 0; }
 __attribute__((weak)) int ARFree(int a0) { PC_STUB_HIT("ARFree"); return 0; }
 __attribute__((weak)) void ARQInit(void) { PC_STUB_HIT("ARQInit");}
+/* MELEE_MEMCARD=none makes the card stubs answer the way a console with an
+ * empty Slot A does, instead of the way they answer by default -- which is
+ * CARD_RESULT_READY to everything, so the game believes in a card it can
+ * never read and walks past the whole memory-card flow without a word.
+ *
+ * That silence is a difference from the console, and it is the difference
+ * that shows up first when this port and Dolphin are made to play the same
+ * game from power-on: Dolphin, with no card, stops on "There is no Memory
+ * Card in Slot A." while the port sails on into the attract demo. With this
+ * set, both stop. */
+static int pc_card_absent(void)
+{
+    static int v = -1;
+    if (v < 0) {
+        const char* e = getenv("MELEE_MEMCARD");
+        v = (e != NULL && strcmp(e, "none") == 0);
+    }
+    return v;
+}
+
 __attribute__((weak)) void CARDInit(void) { PC_STUB_HIT("CARDInit");}
 __attribute__((weak)) int CARDClose(int a0) { PC_STUB_HIT("CARDClose"); return 0; }
-__attribute__((weak)) int CARDOpen(int a0, int a1, int a2) { PC_STUB_HIT("CARDOpen"); return 0; }
+__attribute__((weak)) int CARDOpen(int a0, int a1, int a2) { PC_STUB_HIT("CARDOpen"); return pc_card_absent() ? -3 : 0; }
 __attribute__((weak)) int CARDProbe(int a0) { PC_STUB_HIT("CARDProbe"); return 0; }
 
 /* DVD stubs with synthetic data support */
@@ -754,9 +774,10 @@ __attribute__((weak)) int CARDCheckAsync(int a0, int a1) { PC_STUB_HIT("CARDChec
 __attribute__((weak)) int CARDDeleteAsync(int a0, int a1, int a2) { PC_STUB_HIT("CARDDeleteAsync"); return 0; }
 __attribute__((weak)) int CARDFormatAsync(int a0, int a1) { PC_STUB_HIT("CARDFormatAsync"); return 0; }
 __attribute__((weak)) int CARDFreeBlocks(int a0, int a1, int a2) { PC_STUB_HIT("CARDFreeBlocks"); return 0; }
-__attribute__((weak)) int CARDGetStatus(int a0, int a1, int a2) { PC_STUB_HIT("CARDGetStatus"); return 0; }
-__attribute__((weak)) int CARDMountAsync(int a0, int a1, int a2, int a3) { PC_STUB_HIT("CARDMountAsync"); return 0; }
-__attribute__((weak)) int CARDProbeEx(int a0, int a1, int a2) { PC_STUB_HIT("CARDProbeEx"); return 0; }
+__attribute__((weak)) int CARDGetStatus(int a0, int a1, int a2) { PC_STUB_HIT("CARDGetStatus"); return pc_card_absent() ? -3 : 0; }
+__attribute__((weak)) int CARDMountAsync(int a0, int a1, int a2, int a3) { PC_STUB_HIT("CARDMountAsync"); return pc_card_absent() ? -3 : 0; }
+/* CARD_RESULT_NOCARD, not the BOOL that CARDProbe returns. */
+__attribute__((weak)) int CARDProbeEx(int a0, int a1, int a2) { PC_STUB_HIT("CARDProbeEx"); return pc_card_absent() ? -3 : 0; }
 __attribute__((weak)) int CARDRenameAsync(int a0, int a1, int a2, int a3) { PC_STUB_HIT("CARDRenameAsync"); return 0; }
 __attribute__((weak)) int CARDUnmount(int a0) { PC_STUB_HIT("CARDUnmount"); return 0; }
 __attribute__((weak)) void C_MTXLookAt(int a0, int a1, int a2, int a3) { PC_STUB_HIT("C_MTXLookAt");}

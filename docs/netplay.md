@@ -84,8 +84,29 @@ different thing: the port joins a session a **Dolphin** is hosting, as an
 ordinary client, and Dolphin never learns that its opponent is not another
 Dolphin.
 
-On the Dolphin side: Tools → Start NetPlay → Host, pick Melee, Host. That
-opens a UDP listener on port 2626.
+The short version is one command, which sets up the host's user directory,
+drives its menus, launches the port and presses Start:
+
+```sh
+tools/dolphin_vs.py --script "600:left*900"
+```
+
+`--script` is a `MELEE_PAD_SCRIPT` for the port, and it drives *both* sides,
+because that is what netplay is.
+
+The rest of this section is what that command does and why.
+
+Two Dolphins are supported and the difference matters. **Mainline** — the
+build `tools/pc_lockstep.py` compares against, the one this port is already
+proven bit-identical to — is the only one a shared match can work against.
+**Slippi's Ishiiruka** speaks the same protocol one version older and is
+useful for testing the transport, but it injects the Slippi codeset into the
+running game (the giveaway is an "Online Play" entry on the 1-P Mode menu), so
+its Melee is not the Melee this port compiles. `MELEE_NET_DOLPHIN=slippi`
+selects its dialect.
+
+By hand, on the Dolphin side: Tools → Start NetPlay → Host, pick Melee, Host.
+That opens a UDP listener on port 2626.
 
 On the port's side:
 
@@ -132,33 +153,66 @@ Dolphin's netplay carries none. Every client keeps a FIFO per controller port,
 tops its own ports up to the session's buffer depth each frame — sending each
 pad as it pushes it — and pops exactly one entry from every port. The buffer
 depth *is* the delay. So the only thing the two sides have to agree on is that
-a frame is one pop per port.
+a frame is one pop per port, and they do: measured, the port's pad-poll count
+and its own frame counter are equal, and the pads received from the host match
+the polls sent one for one.
 
-That is also the constraint, and it is where this route currently stops. The
-transport works: the port joins, is given a controller port, and exchanges one
-pad per port per frame at a steady 60 — Dolphin reports 60 FPS and a ping of 0
-while the port's own counter climbs 600 frames every ten seconds. What the two
-are *not* doing is playing the same game. Both start at `START_GAME`, but they
-do not arrive at the same place:
+That also makes the port the host's clock. Dolphin cannot advance a frame
+without a pad from every mapped port, so it plays exactly as many frames as
+this side sends — which is what the lead below uses.
 
-* Melee seeds itself from the console clock. Dolphin's `START_GAME` carries
-  the session's shared RTC in its last eight bytes (`time_low`, `time_high`)
-  precisely so every client's emulated clock agrees; the port reads the packet
-  but does nothing with that field yet, so its RNG is its own.
-* The port's boot is not Dolphin's boot frame for frame. Dolphin runs the DOL
-  from power-on; the port reaches the same screens by its own route, with its
-  own DVD and movie timing. Sharing inputs does not make two different
-  sequences the same sequence.
+### Lining the two up
 
-Observed: after `START_GAME` both sides run locked together at 60 Hz, and the
-Dolphin window sits on a menu while the port window plays the attract demo.
-The clocks agree; the states do not.
+"Both started when the host pressed Start" does not put them on the same frame.
+Neither program's boot is the other's: the console plays screens this port
+skips — the memory-card check first of all — and the debug-VS stage load is a
+much shorter thing here than in the emulator (`tests/pc/cases/match.case`
+carries that gap as `ref_lead: -1530` for the menu route). Three separate
+arrangements close it, and `tools/dolphin_vs.py` makes all three:
 
-`MELEE_BOOT_*` makes it worse, not better — it skips frames Dolphin is still
-playing — so run this route with no boot shortcuts, but do not expect a shared
-match from it yet. Closing that gap is the same problem
-`melee-pc-lockstep-title` solved for the comparison harness (a shared seed and
-a frame barrier from power-on), applied to a peer this port does not control.
+* **The clock.** Melee seeds itself from the console clock; the title screen
+  alone draws one random number per second of it. The host gets
+  `EnableCustomRTC`, the port the same value as `MELEE_FAKE_RTC` — exactly
+  what `tools/pc_lockstep.py` does for the comparison runs. (Ishiiruka puts
+  the session RTC at the end of `START_GAME` and the client reads it from
+  there; mainline puts the SRAM after it and the settings in front of it are a
+  different shape in every version, so there it is pinned from outside
+  instead.)
+* **The save.** Without a memory card Dolphin stops dead on "There is no
+  Memory Card in Slot A." and this port walks past it, and nothing after that
+  is the same game. The host gets Melee's save file in its GCI folder.
+* **The starting line.** Both are sent straight to the debug VS scene —
+  Dolphin by the boot-to-mode Gecko patch `tools/dolphin_ref.sh` already uses,
+  the port by `MELEE_BOOT_MODE` — and the client then waits at
+  `MELEE_NET_RENDEZVOUS` for the port to arrive, having walked Dolphin there
+  with exactly `MELEE_NET_LEAD` frames. `MELEE_NET_RENDEZVOUS=-2` is the
+  useful one: it waits for the *match's* first frame rather than the scene's,
+  because the scene's length differs and the match's first frame is the same
+  moment on both by definition. `tools/mode_probe.py -1` measures the lead by
+  asking Dolphin, over the lockstep socket its build already speaks, which
+  host frame its match starts on (127 for this build).
+
+The lineup has to match too: the console's debug-VS default is Link vs Mario
+on Final Destination, both costumes at colour 0 and no timer, where this
+port's default is a Mario ditto. `MELEE_BOOT_MATCH=6,8,-1,0,0` and
+`MELEE_BOOT_TIME=0` say so.
+
+### What this gets, and what it does not
+
+With all of that: both programs sit in the same VS match, same characters,
+same stage, same stocks, both at 0%, and a pad script on the port's side moves
+the same fighter on both screens in the same way. That is a shared match, and
+it is what `tools/dolphin_vs.py` runs.
+
+It is not yet demonstrated to be frame-exact. Under a long held input the two
+drift apart by roughly a character's width — the port's fighter is further
+along than the emulator's — and that has not been chased down. The next step
+is a measurement rather than another screenshot: the netplay code already
+computes `pc_state_hash()`, and Dolphin's build already emits the same trace
+the lockstep harness compares, so the two can be diffed frame by frame instead
+of eyeballed. `MELEE_NET_LAG` is the knob for the part of it that is the
+port's known input lead (`port_input_lag: 3` in `sync_title.case`); it is left
+at 0 until there is a measurement to set it from.
 
 ### Sticks
 

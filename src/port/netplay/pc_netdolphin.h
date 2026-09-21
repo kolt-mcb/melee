@@ -17,6 +17,12 @@
 /* MELEE_NET_PROTO=dolphin. Read once, from the environment. */
 int pc_netdol_enabled(void);
 
+/* Called from main() before any subsystem starts: joins the session, waits
+ * for the host to start the game, and puts this port's console clock on the
+ * session's. Both are needed before the port's first frame can be the same
+ * frame as Dolphin's. Returns at once when this route is not selected. */
+void pc_netdol_boot_sync(void);
+
 /* Called from pc_net_pads in place of the port's own protocol: sends this
  * machine's pad for every controller port the host assigned it, and fills
  * every pad from the session's buffers. Blocks until the session has an

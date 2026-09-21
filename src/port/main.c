@@ -357,6 +357,17 @@ int main(int argc, char* argv[])
 #endif
     }
 
+    /* MELEE_NET_PROTO=dolphin: join the Dolphin host and wait for it to start
+     * the game BEFORE anything else runs. The session's clock has to be in
+     * place before the game reads it, and Dolphin's emulated console begins
+     * at START_GAME -- so this port has to begin there too. */
+#if BUILD_NETPLAY
+    {
+        extern void pc_netdol_boot_sync(void);
+        pc_netdol_boot_sync();
+    }
+#endif
+
     /* PC port: install crash handler for debugging */
     install_crash_handler();
     {

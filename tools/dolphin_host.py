@@ -1,33 +1,46 @@
 #!/usr/bin/env python3
-"""Bring a Dolphin NetPlay host up without anyone clicking.
+"""Bring a mainline-Dolphin NetPlay host up without anyone clicking.
 
-Dolphin has no command line for this: hosting is Tools -> Start NetPlay ->
+Dolphin has no command line for hosting: it is Tools -> Start NetPlay ->
 Host -> pick the game -> Host, and the port cannot join until that listener
-exists. So the buttons get pressed through XTEST, with every step checked
-against the window that is supposed to have appeared rather than fired blind
-at a remembered coordinate.
+exists. So the buttons get pressed through XTEST, each step checked against
+the window it was supposed to produce rather than fired blind at a
+remembered coordinate.
 
-  dolphin_host.py [--start] [--restart]
+This is the mainline build -- tools/pc_lockstep.py's reference Dolphin, the
+one this port is already proven bit-identical to. Slippi's Ishiiruka speaks
+the same protocol a version older and is useful for testing the transport,
+but it injects the Slippi codeset into the running game (the giveaway is an
+"Online Play" entry on the 1-P Mode menu), so its Melee is not the Melee this
+port compiles and no shared match is possible against it.
 
---start also presses Start in the lobby once a client has joined.
+Usually called by tools/dolphin_vs.py, which also writes the user directory
+this expects.
+
+  dolphin_host.py --stock [--restart] [--start] [--wait=N] [--userdir DIR]
 """
-import re, subprocess, sys, time
+import os, re, subprocess, sys, time
 from Xlib import display, X
 from Xlib.ext import xtest
 
 DISP = display.Display()
-ROOT = DISP.screen().root
-# AppRun, not usr/bin/dolphin-emu: the inner binary skips the hook that
-# sets GDK_BACKEND=x11, and under a Wayland session wxGTK then hands
-# Dolphin a non-native GdkWindow -- XDisplayFromHandle returns NULL and
-# the XRandR probe in CFrame's constructor segfaults before any window
-# appears.
-DOLPHIN = "/home/grunt/melee/extern/slippi/dolphin/squashfs-root/AppRun"
-USERDIR = "/tmp/claude-1000/-home-grunt-melee/ea3f13d0-f40f-4211-919a-35f2e2c9cb32/scratchpad/dolphin-netplay-user"
+DOLPHIN = os.environ.get("MELEE_DOLPHIN_GUI",
+                         "/home/grunt/Dolphin-emu/build/Binaries/dolphin-emu")
+USERDIR = os.environ.get("MELEE_DOLPHIN_USERDIR",
+                         os.path.join(os.path.dirname(os.path.dirname(
+                             os.path.abspath(__file__))), "build/dolphin-vs"))
+
+# Client-relative hit points, measured off screenshots of each window.
+TOOLS_MENU = (271, 11)        # the main window's menu bar
+START_NETPLAY = (100, 119)    # fifth item of the Tools popup
+HOST_TAB = (120, 90)          # NetPlay Setup
+GAME_ROW = (200, 188)
+HOST_BUTTON_FROM_BR = (62, 71)   # the dialog resizes with the tab it is on
+LOBBY_START_UP = 24           # Start sits this far above the lobby's bottom edge
+STATS_NO = (362, 283)         # "Allow Usage Statistics Reporting"
 
 
 def windows():
-    """(id, title, x, y, w, h) for every top-level window."""
     out = subprocess.run(["xwininfo", "-root", "-children"],
                          capture_output=True, text=True).stdout
     found = []
@@ -41,7 +54,22 @@ def windows():
     return found
 
 
-def wait_for(pred, what, timeout=60):
+def wait_for(pred, what, timeout=90):
+    """A window matching pred that really is a framed Dolphin window.
+
+    A dead instance leaves its client window reparented to the root with the
+    same title, so matching on the title alone picks up the corpse; requiring
+    a dolphin-emu child inside is what tells them apart."""
+    end = time.time() + timeout
+    while time.time() < end:
+        for w in windows():
+            if pred(w) and client_of(w[0]) is not None:
+                return w
+        time.sleep(0.5)
+    raise SystemExit("gave up waiting for " + what)
+
+
+def wait_any(pred, what, timeout=90):
     end = time.time() + timeout
     while time.time() < end:
         for w in windows():
@@ -51,74 +79,94 @@ def wait_for(pred, what, timeout=60):
     raise SystemExit("gave up waiting for " + what)
 
 
-def child_of(wid):
-    """The application's own window inside a mutter frame, and its origin."""
-    out = subprocess.run(["xwininfo", "-id", hex(wid), "-children"],
+def size_of(win_id):
+    out = subprocess.run(["xwininfo", "-id", hex(win_id)],
+                         capture_output=True, text=True).stdout
+    return (int(re.search(r"Width: (\d+)", out).group(1)),
+            int(re.search(r"Height: (\d+)", out).group(1)))
+
+
+def client_of(frame_id):
+    """Dolphin's own window inside the mutter frame, and its screen origin."""
+    out = subprocess.run(["xwininfo", "-id", hex(frame_id), "-children"],
                          capture_output=True, text=True).stdout
     for line in out.splitlines():
-        # The class is "dolphin-emu" when the inner binary is run directly
-        # and "AppRun.wrapped" through the AppImage's launcher.
-        m = re.search(r'(0x[0-9a-f]+) "([^"]*)": \("(?:dolphin-emu|AppRun\.wrapped)".*?'
+        m = re.search(r'(0x[0-9a-f]+) "([^"]*)": \("dolphin-emu".*?'
                       r'(\d+)x(\d+)\+(-?\d+)\+(-?\d+)\s+\+(-?\d+)\+(-?\d+)', line)
         if m:
             return int(m.group(1), 16), int(m.group(7)), int(m.group(8))
-    raise SystemExit("no dolphin child inside " + hex(wid))
+    return None
 
 
 def click(x, y, note=""):
     xtest.fake_input(DISP, X.MotionNotify, x=x, y=y); DISP.sync()
-    time.sleep(0.2)
+    time.sleep(0.25)
     xtest.fake_input(DISP, X.ButtonPress, 1); DISP.sync(); time.sleep(0.1)
-    xtest.fake_input(DISP, X.ButtonRelease, 1); DISP.sync(); time.sleep(0.4)
+    xtest.fake_input(DISP, X.ButtonRelease, 1); DISP.sync(); time.sleep(0.5)
     if note:
         print("  clicked", note, "at", (x, y), flush=True)
 
 
-def launch():
-    subprocess.Popen([DOLPHIN, "-u", USERDIR],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    print("launched Dolphin", flush=True)
+def at(origin, pt):
+    return origin[0] + pt[0], origin[1] + pt[1]
 
 
 def main():
+    global USERDIR
     args = sys.argv[1:]
-    if "--restart" in args or not any(
-            w[1].startswith("Faster Melee") for w in windows()):
-        for w in windows():
-            if "Dolphin" in w[1] or "Faster Melee" in w[1]:
-                subprocess.run(["pkill", "-f", "dolphin-emu -u"], check=False)
-                time.sleep(2)
-                break
-        launch()
+    for i, a in enumerate(args):
+        if a == "--userdir" and i + 1 < len(args):
+            USERDIR = args[i + 1]
+    running = any(w[1].startswith("Dolphin Debug") for w in windows())
+    if "--restart" in args or not running:
+        subprocess.run(["pkill", "-x", "dolphin-emu"], check=False)
+        time.sleep(3)
+        subprocess.Popen(["setsid", DOLPHIN, "-u", USERDIR],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         stdin=subprocess.DEVNULL)
+        print("launched Dolphin", flush=True)
 
-    main_frame = wait_for(lambda w: w[1].startswith("Faster Melee"),
-                          "the Dolphin main window")
-    _, cx, cy = child_of(main_frame[0])
-    time.sleep(2)
-    print("main window client at", (cx, cy), flush=True)
+    main_frame = wait_for(lambda w: w[1].startswith("Dolphin Debug")
+                          and "|" not in w[1], "the Dolphin main window")
+    _, mx, my = client_of(main_frame[0])
+    time.sleep(3)
+
+    # First run of a fresh user directory asks about analytics and blocks.
+    for w in windows():
+        if w[1] == "Allow Usage Statistics Reporting":
+            _, sx, sy = client_of(w[0])
+            click(*at((sx, sy), STATS_NO), note="No (analytics)")
+            time.sleep(1)
+            break
 
     before = {w[0] for w in windows()}
-    click(cx + 276, cy + 13, "the Tools menu")
-    popup = wait_for(lambda w: w[0] not in before and w[4] > 150 and w[5] > 150,
+    click(*at((mx, my), TOOLS_MENU), note="the Tools menu")
+    popup = wait_any(lambda w: w[0] not in before and w[4] > 150 and w[5] > 300,
                      "the Tools menu", timeout=10)
-    click(popup[2] + 100, popup[3] + 124, "Start NetPlay")
+    click(*at((popup[2], popup[3]), START_NETPLAY), note="Start NetPlay")
 
-    setup = wait_for(lambda w: w[1] == "Dolphin NetPlay Setup",
-                     "the NetPlay setup dialog")
-    _, sx, sy = child_of(setup[0])
-    click(sx + 128, sy + 124, "the Host tab")
-    click(sx + 390, sy + 200, "Super Smash Bros. Melee")
-    click(sx + 733, sy + 413, "Host")
+    setup = wait_for(lambda w: w[1] == "NetPlay Setup", "the NetPlay setup")
+    sw, sx, sy = client_of(setup[0])
+    click(*at((sx, sy), HOST_TAB), note="the Host tab")
+    time.sleep(0.8)
+    cw, ch = size_of(sw)     # the dialog resizes when the tab changes
+    click(*at((sx, sy), GAME_ROW), note="Super Smash Bros. Melee")
+    click(sx + cw - HOST_BUTTON_FROM_BR[0], sy + ch - HOST_BUTTON_FROM_BR[1],
+          note="Host")
 
-    lobby = wait_for(lambda w: w[1] == "Dolphin NetPlay", "the lobby")
-    _, lx, ly = child_of(lobby[0])
-    print("hosting; lobby client at", (lx, ly), flush=True)
+    lobby = wait_for(lambda w: w[1] == "NetPlay", "the lobby")
+    lw, lx, ly = client_of(lobby[0])
+    lheight = size_of(lw)[1]
+    print("hosting; lobby client at (%d, %d) height %d"
+          % (lx, ly, lheight), flush=True)
+    print("start button at (%d, %d)"
+          % (lx + 50, ly + lheight - LOBBY_START_UP), flush=True)
 
     if "--start" in args:
-        # Give a client time to join and be assigned a port.
-        time.sleep(float(next((a.split("=")[1] for a in args
-                               if a.startswith("--wait=")), 15)))
-        click(lx + 46, ly + 575, "Start")
+        wait = float(next((a.split("=")[1] for a in args
+                           if a.startswith("--wait=")), 15))
+        time.sleep(wait)
+        click(lx + 50, ly + lheight - LOBBY_START_UP, note="Start")
     print("READY", flush=True)
 
 
