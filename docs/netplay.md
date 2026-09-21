@@ -268,6 +268,41 @@ shape on the title screen, where a loop picks four distinct characters.
 at `.b` — the game's own bug, decompiled as found. It means a re-roll that
 differs only in blue is not rejected.)
 
+### How Dolphin and Slippi handle this
+
+Worth knowing, because the two are in opposite positions and this port is in
+Slippi's, not Dolphin's.
+
+**Mainline Dolphin netplay does not have the problem.** Every peer runs the
+same binary emulating the same machine from the same power-on state, so the
+game's RNG is identical by construction and nothing ever touches it. What it
+synchronises is everything *outside* the game that could make the emulations
+differ: the RTC (`g_netplay_initial_rtc`), the SRAM (`m_net_settings.sram`),
+save data (`SyncSaveData`), the emulation settings (`strict_settings_sync`)
+and the cheat codes (`SyncCodes`). It then assumes determinism and *checks*
+it: every client reports its CPU timebase for each frame
+(`MessageID::TimeBase`), the server compares them, and on a mismatch it works
+out which player is the odd one out and broadcasts `DesyncDetected`. Detection,
+not prevention — because prevention is free when both sides are the same
+emulator.
+
+**Slippi Online does have the problem, and negotiates the seed.** Its peers
+are separate consoles or emulators that reached the match independently, so
+it cannot assume anything about their RNG. Each side draws
+`rngOffset = generator() % 0xFFFF`, puts it in its `MATCH_SELECTIONS` message,
+and a deterministic tie-break picks one:
+`rngOffset = isDecider ? lps.rngOffset : rps[0].rngOffset`. That single agreed
+number goes to the game over EXI and the codeset seeds the match from it. On
+top of that, rollback keeps it honest: the RNG lives inside the savestate
+regions Slippi copies, so rewinding a frame rewinds the generator with it.
+
+This port is a third implementation, so it is in Slippi's position — and its
+own protocol already does the Slippi thing (the host picks `net_seed`, the
+handshake carries it, both sides write it at match frame 1). Against Dolphin
+the same idea is available because the reference build reads `MELEE_SEED`
+too; what is not yet solved is writing it at the *same moment* on both sides,
+which is what the `EACH_SCENE`/`EACH_LOAD` variants are reaching for.
+
 ### Calibrating the lead
 
 `MELEE_NET_LEAD` is the one number that has to be measured, and getting it
