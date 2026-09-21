@@ -72,6 +72,22 @@
 #define NET_MAGIC 0x4D4E5031u /* "MNP1" */
 #define NET_PROTO 1u
 
+/* MELEE_NET_PROTO=slippi swaps the input messages for the ones Slippi
+ * Online's clients send each other (docs/slippi-netplay.md, read out of
+ * Ishiiruka rather than guessed): one message-id byte, then big-endian
+ * fields, then eight bytes per pad -- the console's report, newest frame
+ * first, repeated for every frame the peer has not acknowledged.
+ *
+ * The transport underneath is still this port's own UDP socket, not ENet,
+ * so this does not yet talk to Dolphin. What it does is settle the part
+ * that has to be exactly right either way: the packet's shape, the ack that
+ * bounds the queue, and the empty pads that stand in for the delay frames
+ * at the start of a match. */
+#define SLP_MSG_PAD 0x80u
+#define SLP_MSG_PAD_ACK 0x81u
+#define SLP_PAD_BYTES 8   /* SLIPPI_PAD_DATA_SIZE */
+#define SLP_MAX_PADS 64   /* keeps a packet inside one datagram */
+
 enum {
     MSG_HELLO = 1, /* client -> host: I am here, this is my match config */
     MSG_SETUP = 2, /* host -> client: your slot, the delay, the seed */
@@ -203,6 +219,8 @@ static int net_local_pad;
 static int net_peer_slot;
 static int net_delay = 3;
 static int net_trace;
+static int net_slippi_proto;  /* MELEE_NET_PROTO=slippi */
+static s32 net_peer_acked = -1;   /* newest local frame the peer confirmed */
 static unsigned net_seed;
 static unsigned net_cfg;     /* hash of the match configuration */
 static struct sockaddr_in net_peer;
@@ -293,6 +311,10 @@ static void net_config(void)
         net_timeout_ms = atol(s);
     }
     net_trace = getenv("MELEE_NET_TRACE") != NULL;
+    {
+        const char* proto = getenv("MELEE_NET_PROTO");
+        net_slippi_proto = (proto != NULL && strcmp(proto, "slippi") == 0);
+    }
     net_is_host = (strcmp(role, "host") == 0);
     net_slot = net_is_host ? 0 : 1;
     s = getenv("MELEE_NET_SLOT");
@@ -440,6 +462,104 @@ static void send_inputs(s32 upto)
     net_send(buf, (size_t) (NET_HDR + 5 + n * NET_PAD_BYTES));
 }
 
+/* Slippi's eight bytes: the console's pad report, minus the four bytes it
+ * does not transmit. The button word is sixteen bits there; the synthetic
+ * stick-direction bits this port adds live above them and are re-derived on
+ * arrival from the stick values, which is where they came from anyway. */
+static void slp_pad_put(unsigned char* p, const NetPad* n)
+{
+    put_u16(p + 0, n->button & 0xFFFFu);
+    p[2] = (unsigned char) n->stickX;
+    p[3] = (unsigned char) n->stickY;
+    p[4] = (unsigned char) n->subStickX;
+    p[5] = (unsigned char) n->subStickY;
+    p[6] = n->analogL;
+    p[7] = n->analogR;
+}
+
+static void slp_pad_get(const unsigned char* p, NetPad* n)
+{
+    uint32_t pc_pad_synthetic_dirs(int sx, int sy, int cx, int cy);
+    n->stickX = (s8) p[2];
+    n->stickY = (s8) p[3];
+    n->subStickX = (s8) p[4];
+    n->subStickY = (s8) p[5];
+    n->analogL = p[6];
+    n->analogR = p[7];
+    n->button = (((unsigned) p[0] << 8) | (unsigned) p[1]) |
+                pc_pad_synthetic_dirs(n->stickX, n->stickY, n->subStickX,
+                                      n->subStickY);
+}
+
+/* Every frame from the newest down to the one after the peer's last ack,
+ * newest first, exactly as SlippiNetplayClient::SendSlippiPad builds it. */
+static void slp_send_inputs(s32 newest)
+{
+    unsigned char buf[8 + 5 + SLP_MAX_PADS * SLP_PAD_BYTES];
+    int n = 0;
+    s32 f;
+
+    if (newest < 0) {
+        return;
+    }
+    put_u8(buf + 0, SLP_MSG_PAD);
+    put_u32(buf + 1, (unsigned) newest);
+    put_u8(buf + 5, (unsigned) net_slot);
+    put_u32(buf + 6, (unsigned) net_hashed);   /* checksum frame */
+    put_u32(buf + 10, net_hashed > 0 ? net_hash_val[net_hashed &
+                                                    (NET_HASH_RING - 1)] : 0);
+    for (f = newest; f > net_peer_acked && n < SLP_MAX_PADS; f--) {
+        NetPad pad;
+        if (!ring_get(&net_in[net_slot], f, &pad)) {
+            memset(&pad, 0, sizeof(pad));
+        }
+        slp_pad_put(buf + 14 + n * SLP_PAD_BYTES, &pad);
+        n++;
+    }
+    net_send(buf, (size_t) (14 + n * SLP_PAD_BYTES));
+}
+
+static void slp_send_ack(s32 frame)
+{
+    unsigned char buf[6];
+    put_u8(buf + 0, SLP_MSG_PAD_ACK);
+    put_u32(buf + 1, (unsigned) frame);
+    put_u8(buf + 5, (unsigned) net_slot);
+    net_send(buf, sizeof(buf));
+}
+
+/* Returns non-zero when the datagram was a Slippi message and has been
+ * handled. */
+static int slp_receive(const unsigned char* buf, ssize_t len)
+{
+    if (len < 1) {
+        return 0;
+    }
+    if (buf[0] == SLP_MSG_PAD && len >= 14) {
+        s32 newest = (s32) get_u32(buf + 1);
+        int slot = (int) get_u8(buf + 5) & 1;
+        int count = (int) ((len - 14) / SLP_PAD_BYTES);
+        int i;
+        for (i = 0; i < count; i++) {
+            NetPad pad;
+            slp_pad_get(buf + 14 + i * SLP_PAD_BYTES, &pad);
+            ring_put(&net_in[slot], newest - i, &pad);
+        }
+        if (count > 0) {
+            slp_send_ack(newest);
+        }
+        return 1;
+    }
+    if (buf[0] == SLP_MSG_PAD_ACK && len >= 6) {
+        s32 frame = (s32) get_u32(buf + 1);
+        if (frame > net_peer_acked) {
+            net_peer_acked = frame;
+        }
+        return 1;
+    }
+    return 0;
+}
+
 static void send_hash(s32 frame, u32 hash)
 {
     unsigned char buf[NET_HDR + 8];
@@ -519,6 +639,9 @@ static void net_pump(void)
                      &flen);
         if (n < NET_HDR) {
             return;
+        }
+        if (net_slippi_proto && slp_receive(buf, n)) {
+            continue;
         }
         if (get_u32(buf) != NET_MAGIC) {
             continue;
@@ -676,6 +799,7 @@ void pc_net_match_begin(void)
     net_match = 1;
     net_last_sent = -1;
     net_hashed = -1;
+    net_peer_acked = -1;
     net_desynced = 0;
     net_stalls = 0;
     net_stall_ms = 0.0;
@@ -825,7 +949,11 @@ void pc_net_pads(GCPadStatus* pads)
     ring_put(&net_in[net_slot], frame + net_delay, &mine);
     if (frame + net_delay != net_last_sent) {
         net_last_sent = frame + net_delay;
-        send_inputs(net_last_sent);
+        if (net_slippi_proto) {
+            slp_send_inputs(net_last_sent);
+        } else {
+            send_inputs(net_last_sent);
+        }
     }
 
     /* Wait for the peer's input for this frame. The first frames of a match
@@ -852,7 +980,11 @@ void pc_net_pads(GCPadStatus* pads)
             t = now_ms();
             if (t - last_resend >= 16.0) {
                 last_resend = t;
-                send_inputs(net_last_sent);
+                if (net_slippi_proto) {
+                    slp_send_inputs(net_last_sent);
+                } else {
+                    send_inputs(net_last_sent);
+                }
             }
             got = ring_get(&net_in[net_peer_slot], frame, &theirs);
             if (got) {

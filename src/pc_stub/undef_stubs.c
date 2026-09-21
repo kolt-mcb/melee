@@ -2000,6 +2000,19 @@ void HSD_PadRenewRawStatus(bool unused)
 #endif
 }
 
+/* The synthetic stick-direction bits, for code that has a pad's stick values
+ * but not its button word -- the netplay layer decoding a peer's input in
+ * Slippi's format, which carries the console's sixteen button bits and
+ * nothing above them. They are a pure function of the sticks, so deriving
+ * them on arrival gives exactly what the local side would have produced. */
+uint32_t pc_pad_synthetic_dirs(int sx, int sy, int cx, int cy)
+{
+    return pc_pad_stick_dirs(sx, sy, PC_PAD_STICK_UP, PC_PAD_STICK_DOWN,
+                             PC_PAD_STICK_LEFT, PC_PAD_STICK_RIGHT) |
+           pc_pad_stick_dirs(cx, cy, PC_PAD_SUBSTICK_UP, PC_PAD_SUBSTICK_DOWN,
+                             PC_PAD_SUBSTICK_LEFT, PC_PAD_SUBSTICK_RIGHT);
+}
+
 void pc_pad_publish(void);
 
 /* Update normalized values from raw stick positions */

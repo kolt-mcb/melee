@@ -9,7 +9,11 @@ MELEE = SRC / "melee"
 PORT_SRC = SRC / "port"
 PC_STUB_SRC = SRC / "pc_stub"
 BUILD = ROOT / "build"
-OUT_DIR = BUILD / "pc"
+# PC_BUILD_NAME=<dir> puts this configuration's objects and binary somewhere
+# else under build/, so a second build can be worked on while a long run is
+# using the first. Without it a rebuild swaps the binary under a sweep that
+# is halfway through the character-by-stage matrix.
+OUT_DIR = BUILD / os.environ.get("PC_BUILD_NAME", "pc")
 
 def collect(dir):
     if not dir.exists():
@@ -482,7 +486,8 @@ else:
 NINJA_FILE = ("build.ninja.android" + _ABI_SUFFIX if ANDROID
               else "build.ninja.wasm" if WASM
               else "build.ninja.pc-asan" if ASAN
-              else "build.ninja.pc-pie" if PIE else "build.ninja.pc")
+              else "build.ninja.pc-pie" if PIE
+              else "build.ninja." + os.environ.get("PC_BUILD_NAME", "pc"))
 Path(NINJA_FILE).write_text(n)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 (OUT_DIR / "obj").mkdir(parents=True, exist_ok=True)
