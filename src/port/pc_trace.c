@@ -2005,9 +2005,17 @@ void pc_trace_frame(int frame)
          * shows up much later as the two fighters picking different idle
          * animations while every other column still agrees.
          * The Dolphin build reads the same variable. */
+        /* Scene 1 is the debug-VS match, which has exactly the same shape as
+         * scene 2 and needs the same treatment -- and it is the scene the
+         * Dolphin netplay route uses on both sides (docs/netplay.md). Leaving
+         * it out meant the reseed never fired there: measured, the two
+         * arrived at match frame 1 having drawn 8064 and 8658 values from the
+         * last pin, because the emulator's load is 639 frames to this port's
+         * 133 and each side draws through all of its own. */
         if (want != NULL && getenv("MELEE_SEED_EACH_LOAD") != NULL &&
             gm_GetFrameCount() == 0 &&
-            ((int) gm_GetCurrentSceneIndex() == 2 ||
+            ((int) gm_GetCurrentSceneIndex() == 1 ||
+             (int) gm_GetCurrentSceneIndex() == 2 ||
              (int) gm_GetCurrentSceneIndex() == 3))
         {
             *HSD_RandSeedPtr = (u32) strtoul(want, NULL, 16);

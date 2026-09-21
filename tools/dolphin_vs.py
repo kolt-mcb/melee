@@ -176,6 +176,32 @@ def write_userdir(path):
                 subprocess.run(["cp", os.path.join(GCI, gci), dst], check=False)
 
 
+def dolphin_revision():
+    """The host build's scm_rev_git_str, from its own generated header.
+
+    The server's first check is that the client's revision equals its own, and
+    a mismatch disconnects with no message. Hardcoding it means it is wrong
+    the first time anyone rebuilds Dolphin -- which happened here, and cost a
+    confusing "the host refused the join" -- so it is read from the build tree
+    instead, and only falls back to the client's compiled-in default.
+    """
+    here = os.path.dirname(os.path.abspath(DOLPHIN))          # build/Binaries
+    hdr = os.path.join(os.path.dirname(here), "Source", "Core", "Common",
+                       "scmrev.h")
+    rev = desc = None
+    try:
+        for line in open(hdr):
+            m = re.match(r'#define SCM_REV_STR "([0-9a-f]{40})"', line)
+            if m:
+                rev = m.group(1)
+            m = re.match(r'#define SCM_DESC_STR "(\S+)"', line)
+            if m:
+                desc = m.group(1)
+    except OSError:
+        return None, None
+    return rev, (desc + " Lin") if desc else None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--script", default="",
@@ -208,7 +234,13 @@ def main():
             sys.exit("the host did not come up:\n" + host.stderr)
         btn = re.search(r"start button at \((\d+), (\d+)\)", host.stdout)
 
+    rev, ver = dolphin_revision()
     env = dict(os.environ)
+    if rev:
+        env.setdefault("MELEE_NET_REV", rev)
+        print("host revision %s (%s)" % (rev[:7], ver), flush=True)
+    if ver:
+        env.setdefault("MELEE_NET_VER", ver)
     env.update({
         "MELEE_NET_PROTO": "dolphin",
         "MELEE_NET_HOST": env.get("MELEE_NET_HOST", "127.0.0.1"),

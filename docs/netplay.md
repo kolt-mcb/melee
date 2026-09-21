@@ -215,13 +215,9 @@ action state, damage, stocks, animation *motion*, facing, Y position, both
 velocities, floor, environment flags and ECB are **identical on every frame**,
 and player 1 differs in nothing at all. Three things do differ:
 
-* **The RNG seed.** The two reach the match by different routes and burn
-  different numbers of draws getting there — and the emulator's stage load is
-  far longer than the port's, with the generators ticking on every frame of
-  it. `MELEE_SEED` with `MELEE_SEED_EACH_SCENE` and `MELEE_SEED_EACH_LOAD`
-  (both sides read all three; `dolphin_vs.py` sets them) takes the
-  disagreement from 2105 frames in 2114 down to 648 in 1364. It does not
-  close it.
+* **The RNG seed**, from match frame 8. Frames 1 to 7 now agree exactly —
+  same seed, and the same number of values drawn on each of them (0, 31, 55,
+  13, 43, 1). See below.
 * **Player 2's `p_animf`.** Downstream of the seed, not a separate fault:
   Melee picks idle-animation variants with `HSD_Rand`, which is why the two
   restart the Wait animation at different frames and why whichever side
@@ -232,6 +228,45 @@ and player 1 differs in nothing at all. Three things do differ:
   about 150 frames and by about 0.02 of a unit (-87.504 against -87.521) —
   float-level, not behavioural. Both fighters end up in the same place doing
   the same thing. This one is not seed-driven: it is the same every run.
+
+### The seed, and how far it now gets
+
+`MELEE_SEED` with `MELEE_SEED_EACH_SCENE` and `MELEE_SEED_EACH_LOAD` — both
+sides read all three, and `dolphin_vs.py` sets them — now carries the two
+into the match together. The reseed had not been firing at all on this route:
+its guard admitted the VS match scene (2) and the results scene (3) but not
+the **debug-VS scene (1)**, which is the one both sides boot into here.
+Measured before the fix, the two reached match frame 1 having drawn 8064 and
+8658 values since the last pin, because the emulator's load is 639 frames to
+this port's 133 and each side draws through all of its own. Both `pc_trace.c`
+and the reference build's `Core.cpp` now admit scene 1.
+
+With that, **match frames 1 through 7 are identical** — same seed, and the
+same number of draws on each frame. It breaks on frame 8, and by an amount
+that says exactly what it is.
+
+`tools/rng_counts.py` recovers how many values each side drew on each frame by
+stepping the LCG (`seed = seed * 214013 + 2531011`) from one frame's seed into
+the next, so no extra run is needed. In a match the counts come out as **6n+1**:
+the particle script VM's colour opcode draws four values and `hsd_8039DAD4`
+two more, once per particle per frame, over one per-frame draw. A count is
+therefore a particle census.
+
+```
+frame 7:  ref 1,  port 1     (no particles on either side)
+frame 8:  ref 49, port 55    (8 particles against 9)
+```
+
+One extra particle, on the frame after a frame with none — so one particle too
+many was *created*, not one that outlived its time. Everything after that is
+downstream: once the seeds differ the particles behave differently, so the
+census differs in both directions from then on (1606 frames of 6665, up and
+down in roughly equal numbers, which is what a self-sustaining divergence
+looks like rather than a systematic over-draw).
+
+That single extra particle at match frame 8 of a Link-vs-Mario Final
+Destination match is what stands between this and a bit-identical shared
+match. It is a port bug, not a netplay one.
 
 ### The background
 
