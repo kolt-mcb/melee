@@ -43,8 +43,17 @@ if SLIPPI:
 # reason Slippi is: with the flag off the directory is not compiled and every
 # hook site is preprocessed away, so the parity binary is unchanged.
 NETPLAY = os.environ.get("PC_NETPLAY") == "1"
+# ENet rides along with netplay: MELEE_NET_PROTO=dolphin joins a Dolphin
+# NetPlay host, and that protocol is ENet underneath. It is vendored
+# (src/port/netplay/enet, MIT, 1.3.17) rather than linked from the system
+# because the Android build has no system copy, and it is compiled with its
+# own flags -- the port's prelude and byte-order options have no business in
+# a network library.
+ENET_SOURCES = []
 if NETPLAY:
     PORT_SOURCES += collect(PORT_SRC / "netplay")
+    ENET_SOURCES = [s for s in collect(PORT_SRC / "netplay" / "enet")
+                    if Path(s).name != "win32.c"]
 PC_STUB_SOURCES = collect(PC_STUB_SRC)
 PC_STUB_SOURCES = list(dict.fromkeys(PC_STUB_SOURCES))  # deduplicate
 EXCLUDE_DECOMP = {"MSL/math.h"}  # GCC type conflicts
@@ -376,7 +385,7 @@ else:
 # reproducing the console's roundings exactly -- explicitly, with fma(), at
 # the sites the console fuses, and nowhere else. -fexcess-precision=standard
 # for the same reason: no intermediate precision the console does not have.
-CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -fno-builtin-atanf -fno-builtin-atan2f -fno-builtin-asinf -fno-builtin-acosf -std=gnu11 -ffp-contract=off -fexcess-precision=standard -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "") + (" -DBUILD_SLIPPI=1" if SLIPPI else "") + (" -DBUILD_NETPLAY=1" if NETPLAY else "")
+CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -fno-builtin-atanf -fno-builtin-atan2f -fno-builtin-asinf -fno-builtin-acosf -std=gnu11 -ffp-contract=off -fexcess-precision=standard -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "") + (" -DBUILD_SLIPPI=1" if SLIPPI else "") + (" -DBUILD_NETPLAY=1 -I" + str(PORT_SRC / "netplay" / "enet" / "include") if NETPLAY else "")
 if ANDROID:
     # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
     LDFLAGS = "-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"
@@ -448,7 +457,18 @@ else:
     # libjpeg decodes the motion-JPEG frames in MTH movies (src/port/pc_mth.c).
     LIBS = "-lSDL2 -lGL -ljpeg -lpthread -ldl -lm -lc -lstdc++"
     OUT_PATH = str(OUT_DIR / "melee-pc")
-out_objs = " ".join(str(OUT_DIR/"obj"/(Path(s).stem+".o")) for s in ALL_SOURCES)
+ENET_CFLAGS = (ARCH_FLAGS + " " + OPT + " -g -std=gnu99 -w -D_GNU_SOURCE"
+               + " -I" + str(PORT_SRC / "netplay" / "enet" / "include")
+               + " -DHAS_FCNTL=1 -DHAS_POLL=1 -DHAS_SOCKLEN_T=1"
+               + " -DHAS_MSGHDR_FLAGS=1 -DHAS_GETADDRINFO=1"
+               + " -DHAS_GETNAMEINFO=1 -DHAS_INET_PTON=1 -DHAS_INET_NTOP=1")
+# enet's file names collide with the game's (list.c), so its objects are
+# prefixed rather than sharing the one flat obj directory by stem.
+def _obj(s):
+    if s in ENET_SOURCES:
+        return str(OUT_DIR/"obj"/("enet_" + Path(s).stem + ".o"))
+    return str(OUT_DIR/"obj"/(Path(s).stem+".o"))
+out_objs = " ".join(_obj(s) for s in ALL_SOURCES + ENET_SOURCES)
 
 n = ""
 n += "# PC Port Build\n"
@@ -470,9 +490,12 @@ n += "stub_srcs = " + " ".join(PC_STUB_SOURCES) + "\n"
 n += "decomp_srcs = " + " ".join(DECOMP_SOURCES) + "\n\n"
 
 for s in ALL_SOURCES:
-    o = str(OUT_DIR/"obj"/(Path(s).stem+".o"))
-    n += "build " + o + ": cc " + s + "\n"
+    n += "build " + _obj(s) + ": cc " + s + "\n"
     n += "  cflags = $cflags\n\n"
+
+for s in ENET_SOURCES:
+    n += "build " + _obj(s) + ": cc " + s + "\n"
+    n += "  cflags = " + ENET_CFLAGS + "\n\n"
 
 if WASM and os.environ.get("WASM_LINK") != "1":
     # Phase 0: no link edge. Building the objects is the whole deliverable.

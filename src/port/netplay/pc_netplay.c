@@ -40,6 +40,7 @@
  */
 
 #include "port/netplay/pc_netplay.h"
+#include "port/netplay/pc_netdolphin.h"
 
 #if BUILD_NETPLAY
 
@@ -840,6 +841,14 @@ void pc_net_pads(GCPadStatus* pads)
     s32 frame;
     NetPad mine, theirs;
     double waited;
+
+    /* A Dolphin host owns the whole session -- its protocol, its clock, and
+     * no notion of a match frame at all -- so that route takes the pads over
+     * entirely instead of sharing the barrier below. */
+    if (pc_netdol_enabled()) {
+        pc_netdol_pads(pads);
+        return;
+    }
 
     if (!net_started) {
         net_config();

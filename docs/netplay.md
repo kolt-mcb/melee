@@ -76,3 +76,102 @@ consuming randomness at different rates and had different numbers of sparks
 alive. The first working version desynced at match frame 10 every time. With the
 seed pinned through the load on both sides, a full 60-second match runs with
 every checksum equal.
+
+## Playing against Dolphin (`MELEE_NET_PROTO=dolphin`)
+
+The protocol above is two copies of this port. `MELEE_NET_PROTO=dolphin` is a
+different thing: the port joins a session a **Dolphin** is hosting, as an
+ordinary client, and Dolphin never learns that its opponent is not another
+Dolphin.
+
+On the Dolphin side: Tools → Start NetPlay → Host, pick Melee, Host. That
+opens a UDP listener on port 2626.
+
+On the port's side:
+
+```sh
+MELEE_NET_PROTO=dolphin \
+MELEE_NET_HOST=192.168.1.61 MELEE_NET_PORT=2626 \
+MELEE_NET_NICK=melee-pc \
+MELEE_NET_REV=<the host build's scm_rev_git_str> \
+  build/netdol/melee-pc
+```
+
+`MELEE_NET` is not needed and is ignored: the Dolphin route takes the pads
+over entirely.
+
+### The revision string
+
+The server's first check is that the client's `scm_rev_git_str` equals its
+own, and it disconnects on a mismatch without saying why. It is a 40-character
+git hash, not a version number, and it is in the Dolphin binary:
+
+```sh
+objdump -d --start-address=$(nm dolphin-emu | awk '/_GLOBAL__sub_I__Z11scm_rev_str/{print "0x"$1}') \
+        dolphin-emu | grep -A2 scm_rev_git_str
+```
+
+— or read `Source/Core/Common/scmrev.h` in the build tree. The default here is
+Slippi 3.6.4's (`e7711b10…`); `MELEE_NET_REV` overrides it and `MELEE_NET_VER`
+overrides the display version (`Slippi-3.6.4 Lin`).
+
+### What the wire looks like
+
+ENet carrying SFML packets: a message-id byte, then fields big-endian, strings
+as a 32-bit length and the bytes. The join is three strings — revision,
+version, nickname — and the reply is one byte: `0` and a player id, or `1`
+server full, `2` a game is already running, `3` version mismatch. After that
+the client owes the session four things: a `GAME_STATUS` of `Ok` when asked
+with `CHANGE_GAME`, a `PONG` for every `PING`, an echo of `START_GAME`'s game
+id (the host silently drops pad data from a player it does not believe is in
+the current game), and one `PAD_DATA` per owned controller port per frame.
+
+### There are no frame numbers
+
+Dolphin's netplay carries none. Every client keeps a FIFO per controller port,
+tops its own ports up to the session's buffer depth each frame — sending each
+pad as it pushes it — and pops exactly one entry from every port. The buffer
+depth *is* the delay. So the only thing the two sides have to agree on is that
+a frame is one pop per port.
+
+That is also the constraint, and it is where this route currently stops. The
+transport works: the port joins, is given a controller port, and exchanges one
+pad per port per frame at a steady 60 — Dolphin reports 60 FPS and a ping of 0
+while the port's own counter climbs 600 frames every ten seconds. What the two
+are *not* doing is playing the same game. Both start at `START_GAME`, but they
+do not arrive at the same place:
+
+* Melee seeds itself from the console clock. Dolphin's `START_GAME` carries
+  the session's shared RTC in its last eight bytes (`time_low`, `time_high`)
+  precisely so every client's emulated clock agrees; the port reads the packet
+  but does nothing with that field yet, so its RNG is its own.
+* The port's boot is not Dolphin's boot frame for frame. Dolphin runs the DOL
+  from power-on; the port reaches the same screens by its own route, with its
+  own DVD and movie timing. Sharing inputs does not make two different
+  sequences the same sequence.
+
+Observed: after `START_GAME` both sides run locked together at 60 Hz, and the
+Dolphin window sits on a menu while the port window plays the attract demo.
+The clocks agree; the states do not.
+
+`MELEE_BOOT_*` makes it worse, not better — it skips frames Dolphin is still
+playing — so run this route with no boot shortcuts, but do not expect a shared
+match from it yet. Closing that gap is the same problem
+`melee-pc-lockstep-title` solved for the comparison harness (a shared seed and
+a frame barrier from power-on), applied to a peer this port does not control.
+
+### Sticks
+
+Dolphin's `GCPadStatus` centres both sticks on `0x80`; the console's
+`PADStatus` that this port carries has already had the origin subtracted, so
+the two differ by exactly that. The synthetic stick-direction bits the input
+bridge adds to the button word are *not* on the wire — they are derived, and
+both sides derive them the same way — so they are stripped on the way out and
+re-derived from the sticks on the way in.
+
+### ENet
+
+Vendored at `src/port/netplay/enet` (1.3.17, MIT) rather than linked from the
+system: the Android build has no system copy. It is compiled with its own
+flags — the port's prelude and byte-order options have no business in a
+network library.
