@@ -233,6 +233,16 @@ static void pad_to_game(GCPadStatus* g, const DolPad* d)
 
 static void send_pad(int port, const DolPad* d)
 {
+    if (dol_trace && (d->button != 0 || d->stickX != DOL_STICK_CENTER ||
+                      d->stickY != DOL_STICK_CENTER)) {
+        static long noted;
+        if (noted++ < 40) {
+            fprintf(stderr, "[NETDOL] poll %ld: -> port %d btn %04X "
+                            "stick %d,%d\n",
+                    dol_frames, port, d->button, (int) d->stickX,
+                    (int) d->stickY);
+        }
+    }
     unsigned char p[13];
     size_t n = dol_stock ? sizeof p : sizeof p - 1;
     p[0] = (unsigned char) DOL_MSG_PAD_DATA;

@@ -197,22 +197,53 @@ on Final Destination, both costumes at colour 0 and no timer, where this
 port's default is a Mario ditto. `MELEE_BOOT_MATCH=6,8,-1,0,0` and
 `MELEE_BOOT_TIME=0` say so.
 
-### What this gets, and what it does not
+### Does the game state match?
 
-With all of that: both programs sit in the same VS match, same characters,
-same stage, same stocks, both at 0%, and a pad script on the port's side moves
-the same fighter on both screens in the same way. That is a shared match, and
-it is what `tools/dolphin_vs.py` runs.
+Yes, and it is measured rather than eyeballed. Both sides write the same
+per-frame trace — `MELEE_TRACE` here, `MELEE_REF_TRACE` in the reference
+Dolphin — and `tools/trace_diff.py` compares them keyed on the **match** frame,
+which is the only key that means the same moment on both:
 
-It is not yet demonstrated to be frame-exact. Under a long held input the two
-drift apart by roughly a character's width — the port's fighter is further
-along than the emulator's — and that has not been chased down. The next step
-is a measurement rather than another screenshot: the netplay code already
-computes `pc_state_hash()`, and Dolphin's build already emits the same trace
-the lockstep harness compares, so the two can be diffed frame by frame instead
-of eyeballed. `MELEE_NET_LAG` is the knob for the part of it that is the
-port's known input lead (`port_input_lag: 3` in `sync_title.case`); it is left
-at 0 until there is a measurement to set it from.
+```sh
+MELEE_REF_TRACE=ref.trace MELEE_TRACE_AT_PC=8037E23C MELEE_TRACE=port.trace \
+  tools/dolphin_vs.py --script "800:left*200"
+tools/trace_diff.py ref.trace port.trace
+```
+
+Over **3555 match frames** of a walk-into-the-other-fighter, both fighters'
+action state, damage, stocks, animation *motion*, facing, Y position, both
+velocities, floor, environment flags and ECB are **identical on every frame**,
+and player 1 differs in nothing at all. Three things do differ:
+
+* **The RNG seed**, from frame 1. The two reach the match by different routes
+  and burn different numbers of draws getting there. This is the same
+  exemption `sync_title.case` carries as `ignore: seed`, and closing it means
+  pinning the emulator's seed too.
+* **Player 2's `p_animf`**, from match frame 191 — 1293 frames of 3555. The
+  idle animation's frame counter restarts on the port where the console's
+  keeps climbing. That is a port bug this measurement found, not a netplay
+  one; it is there in a single-player run too.
+* **Player 2's `p_x`, `p_vx` and `p_ecbby` while walking**, from frame 773, on
+  about 150 frames of 3555 and by about 0.02 of a unit (-87.504 against
+  -87.521) — float-level, not behavioural. Both fighters end up in the same
+  place doing the same thing.
+
+### Calibrating the lead
+
+`MELEE_NET_LEAD` is the one number that has to be measured, and getting it
+wrong is not subtle: with it too small the input meant for the match lands
+during the emulator's stage load and is thrown away, which looks exactly like
+"Dolphin ignores the controller".
+
+`tools/trace_diff.py ref.trace port.trace --offset` prints how far apart the
+two are, by comparing the sequence of action-state changes rather than their
+frame numbers: the same run produces the same sequence on both sides, so if
+the sequence matches and the frames do not, the two are offset rather than
+diverging. Add **twice** the printed offset to the lead and repeat; it
+converges in two steps. Twice, because while Dolphin is still loading it does
+not spend a pad per match frame — measured, a lead frame added there is worth
+half a match frame of alignment: 640 gave an offset of 638, 1278 gave 319,
+1916 gives 0.
 
 ### Sticks
 

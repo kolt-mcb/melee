@@ -39,6 +39,10 @@ and the emulated game cannot advance a frame without one, so poll N on this
 side is frame N on that side.
 
   tools/dolphin_vs.py [--script "400:left*200;700:up*8"] [--no-host]
+
+Verified at LEAD=1916 over 3555 match frames of a walk: both fighters' action
+state, damage, stocks, position, velocity, facing, floor, environment and ECB
+identical on every frame, bar three things named in docs/netplay.md.
 """
 import argparse, os, re, subprocess, sys, time
 
@@ -61,7 +65,24 @@ BOOT_MODE = 14        # the game's own debug-VS scene
 # -2 is "wait for the match" on the port; 127 is where Dolphin's match starts,
 # from tools/mode_probe.py -1.
 RENDEZVOUS = -2
-LEAD = 127
+# How many frames Dolphin needs, from START_GAME, to reach the first frame of
+# the match. Not measurable from a standalone boot (127 there) and not from a
+# run with the wrong lead either: the lead pads are pushed in one burst and
+# Dolphin blocks when they run out, so if the burst ends mid-load the load
+# simply finishes later and the number moves. It is calibrated instead, and
+# the calibration is exact and converges in one step:
+#
+#   1. run with both traces on:
+#        MELEE_REF_TRACE=ref.trace MELEE_TRACE_AT_PC=8037E23C \
+#        MELEE_TRACE=port.trace tools/dolphin_vs.py --script "800:left*200"
+#   2. tools/trace_diff.py ref.trace port.trace --offset
+#      prints how many match frames the emulator is ahead
+#   3. add TWICE that to LEAD, and repeat until it prints 0.
+#
+# Twice, because while Dolphin is still loading it does not spend a pad per
+# match frame: measured, a lead frame added there is worth half a match frame
+# of alignment. 640 -> offset 638; 1278 -> offset 319; 1916 -> offset 0.
+LEAD = 1916
 
 DOLPHIN_INI = """[General]
 ISOPaths = 1
@@ -89,6 +110,7 @@ ListenPort = 2626
 EnableQoS = False
 [Interface]
 ConfirmStop = False
+{debug}
 [Analytics]
 PermissionAsked = True
 Enabled = False
@@ -118,8 +140,14 @@ $Boot to mode {mode} (patch)
 def write_userdir(path):
     os.makedirs(os.path.join(path, "Config"), exist_ok=True)
     os.makedirs(os.path.join(path, "GameSettings"), exist_ok=True)
+    # MELEE_REF_TRACE samples at a breakpoint just after the sim
+    # (MELEE_TRACE_AT_PC), and Jit64 only emits the breakpoint check when
+    # debugging is on -- without this the breakpoint arms and is never hit.
+    debug = ("DebugModeEnabled = True"
+             if os.environ.get("MELEE_REF_TRACE") else "")
     with open(os.path.join(path, "Config", "Dolphin.ini"), "w") as f:
-        f.write(DOLPHIN_INI.format(iso_dir=ISO_DIR, rtc=GC_EPOCH_UNIX + GC_RTC))
+        f.write(DOLPHIN_INI.format(iso_dir=ISO_DIR, rtc=GC_EPOCH_UNIX + GC_RTC,
+                                   debug=debug))
     mm = "%02X%02X" % (BOOT_MODE, BOOT_MODE)
     for name in ("GALE01.ini", "GALE01r2.ini"):
         with open(os.path.join(path, "GameSettings", name), "w") as f:
@@ -174,9 +202,14 @@ def main():
         # the console's own debug-VS lineup, costumes included
         "MELEE_BOOT_MATCH": env.get("MELEE_BOOT_MATCH", "6,8,-1,0,0"),
         "MELEE_BOOT_TIME": env.get("MELEE_BOOT_TIME", "0"),
+        # The console's debug-VS rules carry a stock count of 0; the port's
+        # default is 4, and a stock count that differs shows up on every frame
+        # of a comparison as a difference in every player.
+        "MELEE_BOOT_STOCKS": env.get("MELEE_BOOT_STOCKS", "0"),
     })
     if a.script:
         env["MELEE_PAD_SCRIPT"] = a.script
+    env.pop("MELEE_REF_TRACE", None)   # that one is Dolphin's, not the port's
     port = subprocess.Popen(["setsid", PORT], env=env)
     print("port running as pid %d" % port.pid, flush=True)
 
