@@ -64,6 +64,14 @@ BOOT_MODE = 14        # the game's own debug-VS scene
 # of the scene: the debug-VS stage load is a different length on each side.
 # -2 is "wait for the match" on the port; 127 is where Dolphin's match starts,
 # from tools/mode_probe.py -1.
+# Both sides write this seed on the first frame of the match -- the port from
+# pc_trace.c, the reference Dolphin from the same variable in its own build.
+# Without it the two arrive at the match with different RNG state (the console
+# burns draws on screens the port never shows), which does not matter while
+# nobody asks for a random number and decides everything the moment something
+# does: Final Destination's background picks its phase from the RNG, so the
+# emulator showed a nebula where the port showed bare wireframe.
+SEED = "61A75448"
 RENDEZVOUS = -2
 # How many frames Dolphin needs, from START_GAME, to reach the first frame of
 # the match. Not measurable from a standalone boot (127 there) and not from a
@@ -143,8 +151,12 @@ def write_userdir(path):
     # MELEE_REF_TRACE samples at a breakpoint just after the sim
     # (MELEE_TRACE_AT_PC), and Jit64 only emits the breakpoint check when
     # debugging is on -- without this the breakpoint arms and is never hit.
+    # MELEE_REF_TRACE samples at a breakpoint and MELEE_SEED_EACH_LOAD's
+    # per-fighter reseed is one too; Jit64 only emits the check when
+    # debugging is on, so without this they arm and are never reached.
     debug = ("DebugModeEnabled = True"
-             if os.environ.get("MELEE_REF_TRACE") else "")
+             if os.environ.get("MELEE_REF_TRACE")
+             or os.environ.get("MELEE_SEED") else "")
     with open(os.path.join(path, "Config", "Dolphin.ini"), "w") as f:
         f.write(DOLPHIN_INI.format(iso_dir=ISO_DIR, rtc=GC_EPOCH_UNIX + GC_RTC,
                                    debug=debug))
@@ -174,6 +186,15 @@ def main():
     ap.add_argument("--seconds", type=int, default=60)
     a = ap.parse_args()
 
+    # The host inherits these. Seeding once is not enough: the emulator's
+    # stage load is far longer than the port's and the generators tick on
+    # every frame of it, so the two reach match frame 1 having drawn different
+    # numbers of values even though neither did anything wrong. EACH_LOAD
+    # rewrites the seed at the top of every load frame, which is what puts
+    # them back together (src/port/pc_trace.c says why at length).
+    os.environ.setdefault("MELEE_SEED", SEED)
+    os.environ.setdefault("MELEE_SEED_EACH_SCENE", "1")
+    os.environ.setdefault("MELEE_SEED_EACH_LOAD", "1")
     if not a.no_host:
         subprocess.run(["pkill", "-x", "melee-pc"], check=False)
         subprocess.run(["pkill", "-x", os.path.basename(DOLPHIN)], check=False)
@@ -198,6 +219,9 @@ def main():
         "MELEE_NET_LEAD": env.get("MELEE_NET_LEAD", str(LEAD)),
         "MELEE_NET_LAG": env.get("MELEE_NET_LAG", "0"),
         "MELEE_FAKE_RTC": str(GC_RTC),
+        "MELEE_SEED": env.get("MELEE_SEED", SEED),
+        "MELEE_SEED_EACH_SCENE": env.get("MELEE_SEED_EACH_SCENE", "1"),
+        "MELEE_SEED_EACH_LOAD": env.get("MELEE_SEED_EACH_LOAD", "1"),
         "MELEE_BOOT_MODE": str(BOOT_MODE),
         # the console's own debug-VS lineup, costumes included
         "MELEE_BOOT_MATCH": env.get("MELEE_BOOT_MATCH", "6,8,-1,0,0"),

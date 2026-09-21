@@ -215,18 +215,34 @@ action state, damage, stocks, animation *motion*, facing, Y position, both
 velocities, floor, environment flags and ECB are **identical on every frame**,
 and player 1 differs in nothing at all. Three things do differ:
 
-* **The RNG seed**, from frame 1. The two reach the match by different routes
-  and burn different numbers of draws getting there. This is the same
-  exemption `sync_title.case` carries as `ignore: seed`, and closing it means
-  pinning the emulator's seed too.
-* **Player 2's `p_animf`**, from match frame 191 — 1293 frames of 3555. The
-  idle animation's frame counter restarts on the port where the console's
-  keeps climbing. That is a port bug this measurement found, not a netplay
-  one; it is there in a single-player run too.
+* **The RNG seed.** The two reach the match by different routes and burn
+  different numbers of draws getting there — and the emulator's stage load is
+  far longer than the port's, with the generators ticking on every frame of
+  it. `MELEE_SEED` with `MELEE_SEED_EACH_SCENE` and `MELEE_SEED_EACH_LOAD`
+  (both sides read all three; `dolphin_vs.py` sets them) takes the
+  disagreement from 2105 frames in 2114 down to 648 in 1364. It does not
+  close it.
+* **Player 2's `p_animf`.** Downstream of the seed, not a separate fault:
+  Melee picks idle-animation variants with `HSD_Rand`, which is why the two
+  restart the Wait animation at different frames and why whichever side
+  restarts first changes from run to run. Pinning the seed took it from 1293
+  frames in 3555 to **90 in 1364**, and moved its first appearance from match
+  frame 191 to 1132.
 * **Player 2's `p_x`, `p_vx` and `p_ecbby` while walking**, from frame 773, on
-  about 150 frames of 3555 and by about 0.02 of a unit (-87.504 against
-  -87.521) — float-level, not behavioural. Both fighters end up in the same
-  place doing the same thing.
+  about 150 frames and by about 0.02 of a unit (-87.504 against -87.521) —
+  float-level, not behavioural. Both fighters end up in the same place doing
+  the same thing. This one is not seed-driven: it is the same every run.
+
+### The background
+
+Final Destination's backdrop does not match: the emulator shows the purple
+nebula where the port shows bare green wireframe. This is **not** a renderer
+gap. Run the port on its own with the same lineup and it draws the nebula
+correctly — the layer is there and it works. The two are in different phases
+of FD's background cycle, which the stage picks through the RNG, so it is the
+seed difference above wearing a different hat. It is the most visible symptom
+of the last unpinned thing rather than a separate bug, and it will close when
+the seed does.
 
 ### Calibrating the lead
 
