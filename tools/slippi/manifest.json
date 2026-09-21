@@ -34,11 +34,13 @@
       "name": "Ishiiruka",
       "url": "https://github.com/project-slippi/Ishiiruka.git",
       "commit": "e9d048ac6f2d77f96fcd1c0b04bc1533a7ff81e1",
-      "why": "Slippi Dolphin: EXI device, matchmaking, rollback savestates",
+      "why": "Slippi/* and EXI_DeviceSlippi: the emulator side of online play; NetPlayProto.h carries the NP_MSG_SLIPPI_* message ids the wire format is built from (docs/slippi-netplay.md)",
       "sparse": [
         "Source/Core/Core/Slippi",
         "Source/Core/Core/HW/EXI_DeviceSlippi.cpp",
-        "Source/Core/Core/HW/EXI_DeviceSlippi.h"
+        "Source/Core/Core/HW/EXI_DeviceSlippi.h",
+        "Source/Core/Core/NetPlayProto.h",
+        "Source/Core/Core/NetPlayClient.h"
       ]
     }
   ]
