@@ -232,6 +232,23 @@ So the test fails today, on both configurations, and should. `p_aihash` is the
 one field still excused — the console leaves those bytes uninitialised by
 design — and `--strict` compares it too.
 
+### Where it stands
+
+With `MELEE_SEED_GENS=1` a normal match now holds for its whole length:
+
+```
+tools/dolphin_vs_test.py --frames 7200
+PASS the two simulate the same match   identical over 7333 match frames, ignoring p_aihash
+6 checks, 6 passed, 0 failed
+```
+
+7333 match frames is over two minutes of play — a full VS match — with every
+compared field equal on every frame: both fighters' action state, damage,
+stocks, animation, facing, position, velocity, floor, environment, ECB, and
+the RNG seed itself.
+
+A **CPU** match still does not, and parts at match frame 3. See below.
+
 ### With CPUs it desyncs immediately
 
 `tools/dolphin_vs_test.py --cpu 9` runs the same route with both slots as
@@ -249,6 +266,17 @@ Frame 3 for the seed, frame 7 for position, frame 109 for damage. Not a drift:
 the two are playing different matches from the first second, and a screenshot
 a minute in showing 87%/61% against 43%/70% is the accumulated consequence,
 not the event.
+
+The cause is narrowed to one draw. On the frame they part the port makes 21
+draws and the emulator 19, and the extra two are one per fighter in
+`ftCo_800B732C` (`ftcpuattack.c:1429`) — a site the emulator does not reach
+once in 37033 draws. The draw sits behind `x7C % 60`, the AI decision timer,
+which was the obvious suspect and is not it: `MELEE_FORCE_CPU` zeroes that
+timer on both sides at match frame 2 and the emulator reads it back as zero,
+so both should reach the draw. One of the guards above it —
+`cpu.xF9_b3`, `ftCo_800A2BD4`, `ftCo_800A28D0`, `ftCo_800A3200` — goes the
+other way on the console. That is a port bug in the CPU AI, and finding which
+guard needs console-side probes on those four functions.
 
 That is the honest scale of what is left. With idle or scripted fighters the
 load-phase difference (below) stays latent until match frame 8 and costs a
