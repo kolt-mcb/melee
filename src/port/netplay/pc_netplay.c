@@ -42,6 +42,8 @@
 #include "port/netplay/pc_netplay.h"
 #include "port/netplay/pc_netdolphin.h"
 
+#include <enet/enet.h>
+
 #if BUILD_NETPLAY
 
 #include <arpa/inet.h>
@@ -86,6 +88,8 @@
  * at the start of a match. */
 #define SLP_MSG_PAD 0x80u
 #define SLP_MSG_PAD_ACK 0x81u
+#define SLP_MSG_MATCH_SELECTIONS 0x82u
+#define SLP_MSG_CONN_SELECTED 0x83u
 #define SLP_PAD_BYTES 8   /* SLIPPI_PAD_DATA_SIZE */
 #define SLP_MAX_PADS 64   /* keeps a packet inside one datagram */
 
@@ -288,6 +292,8 @@ static unsigned config_hash(void)
     return h;
 }
 
+static int slp_enet_open(void);
+
 static void net_config(void)
 {
     const char* role = getenv("MELEE_NET");
@@ -332,6 +338,17 @@ static void net_config(void)
         s = getenv("MELEE_SEED");
     }
     net_seed = (s != NULL) ? (unsigned) strtoul(s, NULL, 16) : 0x3F2A1B0Cu;
+
+    if (net_slippi_proto) {
+        /* Slippi's transport replaces the UDP socket entirely; the handshake
+         * below is the port's own and is not spoken on this route. */
+        if (slp_enet_open()) {
+            /* Connected is not ready: the barrier below waits for the
+             * selections handshake, which is what makes it the same match. */
+            net_state = NET_CONNECT;
+        }
+        return;
+    }
 
     net_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (net_fd < 0) {
@@ -388,8 +405,157 @@ static void net_config(void)
 
 /* ---- sending ------------------------------------------------------------ */
 
+/* ---- Slippi's own transport ---------------------------------------------
+ *
+ * MELEE_NET_PROTO=slippi is not this port's protocol wearing Slippi's message
+ * ids: it is ENet, on Slippi's channels, with Slippi's handshake. Pads go
+ * unsequenced on channel 1 because a late pad is worthless and must not hold
+ * up anything behind it; everything else is reliable on channel 0. That is
+ * what SlippiNetplay.cpp does and the reasons are its own.
+ *
+ * The handshake is MATCH_SELECTIONS: each side says which character, colour
+ * and stage it wants and offers an rngOffset, and one side's offer wins by a
+ * rule both can evaluate without talking further. That number is the match's
+ * seed on both machines. It is the piece Dolphin's netplay has no equivalent
+ * of -- there, both peers are the same emulator booted the same way, so the
+ * seed agrees for free; here it has to be agreed, and Slippi agreeing it
+ * explicitly is why two machines that reached a match by different routes can
+ * play the same one.
+ */
+static ENetHost* slp_host;
+static ENetPeer* slp_peer;
+static int slp_enet_ready;
+static int slp_sel_sent;
+static int slp_sel_got;
+static unsigned slp_my_rng;
+static unsigned slp_peer_rng;
+static int slp_peer_char = -1, slp_peer_stage = -1;
+
+static void slp_send_selections(void);
+static int slp_receive(const unsigned char* buf, ssize_t len);
+
+static int slp_enet_open(void)
+{
+    ENetAddress addr;
+    const char* host = getenv("MELEE_NET_HOST");
+    const char* s = getenv("MELEE_NET_PORT");
+    int port = (s != NULL) ? atoi(s) : 51441;   /* Slippi's own default */
+
+    if (enet_initialize() != 0) {
+        fprintf(stderr, "[SLP] ENet would not initialise\n");
+        return 0;
+    }
+    addr.host = ENET_HOST_ANY;
+    addr.port = (enet_uint16) port;
+    /* Both ends listen; the guest also dials out. Slippi's peers do the same,
+     * because either may be behind something that only lets a connection out. */
+    slp_host = enet_host_create(&addr, 4, 3, 0, 0);
+    if (slp_host == NULL) {
+        /* The port is taken -- the usual case when both sides are on one
+         * machine -- so take any port and dial out. */
+        slp_host = enet_host_create(NULL, 4, 3, 0, 0);
+    }
+    if (slp_host == NULL) {
+        fprintf(stderr, "[SLP] no ENet host\n");
+        return 0;
+    }
+    if (!net_is_host) {
+        ENetAddress to;
+        enet_address_set_host(&to, (host != NULL && *host) ? host : "127.0.0.1");
+        to.port = (enet_uint16) port;
+        slp_peer = enet_host_connect(slp_host, &to, 3, 0);
+        fprintf(stderr, "[SLP] dialling %s:%d\n",
+                (host != NULL && *host) ? host : "127.0.0.1", port);
+    } else {
+        fprintf(stderr, "[SLP] listening on %d\n", port);
+    }
+    /* The offer this side brings to the handshake. Any number will do as long
+     * as the two sides do not both pick the same one by accident, which is
+     * what the seed and the slot are mixed in for. */
+    slp_my_rng = ((net_seed >> 8) + (unsigned) net_slot * 0x5BD1u) & 0xFFFFu;
+    return 1;
+}
+
+static void slp_enet_pump(void)
+{
+    ENetEvent ev;
+    if (slp_host == NULL) {
+        return;
+    }
+    while (enet_host_service(slp_host, &ev, 0) > 0) {
+        switch (ev.type) {
+        case ENET_EVENT_TYPE_CONNECT:
+            slp_peer = ev.peer;
+            slp_enet_ready = 1;
+            fprintf(stderr, "[SLP] peer connected\n");
+            slp_send_selections();
+            break;
+        case ENET_EVENT_TYPE_RECEIVE:
+            slp_receive(ev.packet->data, (ssize_t) ev.packet->dataLength);
+            enet_packet_destroy(ev.packet);
+            break;
+        case ENET_EVENT_TYPE_DISCONNECT:
+            fprintf(stderr, "[SLP] peer gone\n");
+            slp_peer = NULL;
+            slp_enet_ready = 0;
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+static void slp_enet_send(const unsigned char* buf, size_t len)
+{
+    int pad = (len > 0 && (buf[0] == SLP_MSG_PAD || buf[0] == SLP_MSG_PAD_ACK));
+    if (slp_peer == NULL) {
+        return;
+    }
+    enet_peer_send(slp_peer, pad ? 1 : 0,
+                   enet_packet_create(buf, len,
+                                      pad ? ENET_PACKET_FLAG_UNSEQUENCED
+                                          : ENET_PACKET_FLAG_RELIABLE));
+    enet_host_flush(slp_host);
+}
+
+/* MATCH_SELECTIONS, in the order SlippiNetplay.cpp writes it:
+ * characterId, characterColor, isCharacterSelected, playerIdx, stageId,
+ * isStageSelected, rngOffset, teamId, alt_stage_mode. */
+static void slp_send_selections(void)
+{
+    unsigned char b[16];
+    int ck = 0, stage = 0;
+    {
+        const char* spec = getenv("MELEE_BOOT_MATCH");
+        int c0 = 0, c1 = 0, st = -1;
+        if (spec != NULL) {
+            sscanf(spec, "%d,%d,%d", &c0, &c1, &st);
+        }
+        ck = net_slot == 0 ? c0 : c1;
+        stage = st;
+    }
+    b[0] = (unsigned char) SLP_MSG_MATCH_SELECTIONS;
+    b[1] = (unsigned char) ck;          /* characterId */
+    b[2] = 0;                           /* characterColor */
+    b[3] = 1;                           /* isCharacterSelected */
+    b[4] = (unsigned char) net_slot;    /* playerIdx */
+    put_u16(b + 5, (unsigned) (stage < 0 ? 0 : stage));
+    b[7] = (unsigned char) (stage >= 0);
+    put_u32(b + 8, slp_my_rng);
+    b[12] = 0;                          /* teamId */
+    b[13] = 0;                          /* alt_stage_mode */
+    slp_sel_sent = 1;
+    slp_enet_send(b, 14);
+    fprintf(stderr, "[SLP] selections out: char %d stage %d rng %04X\n",
+            ck, stage, slp_my_rng);
+}
+
 static void net_send(const unsigned char* buf, size_t len)
 {
+    if (net_slippi_proto) {
+        slp_enet_send(buf, len);
+        return;
+    }
     if (net_fd < 0 || !net_have_peer) {
         return;
     }
@@ -551,6 +717,28 @@ static int slp_receive(const unsigned char* buf, ssize_t len)
         }
         return 1;
     }
+    if (buf[0] == SLP_MSG_MATCH_SELECTIONS && len >= 14) {
+        unsigned peer_rng = get_u32(buf + 8);
+        slp_peer_char = buf[1];
+        slp_peer_stage = (buf[7] != 0) ? (int) ((buf[5] << 8) | buf[6]) : -1;
+        slp_peer_rng = peer_rng;
+        slp_sel_got = 1;
+        /* One side's offer has to win, and both have to reach the same answer
+         * without another round trip. Slippi calls that side the decider and
+         * takes its number; the host is the decider here. */
+        net_seed = net_is_host ? slp_my_rng : slp_peer_rng;
+        /* Only now are the two playing the same match, so only now is this
+         * side ready. Starting the match before the offers are exchanged
+         * pins whatever seed this side guessed, and the host did exactly
+         * that: it began on its default while the guest began on the agreed
+         * value. */
+        net_state = NET_RUN;
+        fprintf(stderr, "[SLP] selections in: char %d stage %d rng %04X; "
+                        "agreed seed %08X (%s decides)\n",
+                slp_peer_char, slp_peer_stage, peer_rng, net_seed,
+                net_is_host ? "we" : "they");
+        return 1;
+    }
     if (buf[0] == SLP_MSG_PAD_ACK && len >= 6) {
         s32 frame = (s32) get_u32(buf + 1);
         if (frame > net_peer_acked) {
@@ -631,6 +819,10 @@ static void net_pump(void)
     socklen_t flen;
     ssize_t n;
 
+    if (net_slippi_proto) {
+        slp_enet_pump();
+        return;
+    }
     if (net_fd < 0) {
         return;
     }
@@ -929,9 +1121,13 @@ void pc_net_pads(GCPadStatus* pads)
             double t;
             pfd.fd = net_fd;
             pfd.events = POLLIN;
-            poll(&pfd, 1, 4);
+            if (!net_slippi_proto) {
+                poll(&pfd, 1, 4);
+            }
             net_pump();
-            net_hello_if_due();
+            if (!net_slippi_proto) {
+                net_hello_if_due();
+            }
             t = now_ms();
             if (t - last_note > 2000.0) {
                 last_note = t;
