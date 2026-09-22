@@ -745,8 +745,13 @@ void pc_netdol_pads(GCPadStatus* pads)
              * what makes it advance, so sending past the lead walks it past
              * the start of its match and there is no way back. Paced against
              * its own frames so its queue never backs up. */
+            /* Paced against the emulator's FRAMES, not against the pad
+             * entries it sends. It sends several entries in one message when
+             * it tops its buffer up -- measured, about 1.7 entries per frame
+             * -- so pacing against entries over-feeds it by that factor and
+             * rebuilds exactly the backlog the pacing exists to prevent. */
             while (dol_host_frames < dol_lead &&
-                   dol_sent_lead < dol_recv[dol_host_port()] + dol_buffer) {
+                   dol_sent_lead < dol_host_frames + dol_buffer) {
                 for (i = 0; i < DOL_PORTS; i++) {
                     if (dol_map[i] == dol_pid) {
                         send_pad(i, &neutral);
