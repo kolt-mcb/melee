@@ -431,6 +431,24 @@ static void handle(const unsigned char* d, size_t len)
             if (port >= 0 && port < DOL_PORTS) {
                 q_push(&dol_q[port], &p);
                 dol_recv[port]++;
+                /* A pad from the host that is not neutral. The host's own
+                 * controller is a keyboard nobody is touching, so anything
+                 * here is a stray event -- and a stray event on one side
+                 * only is a desync with no other explanation. */
+                if (dol_trace &&
+                    (p.button != 0 || p.stickX != DOL_STICK_CENTER ||
+                     p.stickY != DOL_STICK_CENTER ||
+                     p.triggerL != 0 || p.triggerR != 0)) {
+                    static long noted;
+                    if (noted++ < 20) {
+                        fprintf(stderr,
+                                "[NETDOL] <- port %d btn %04X stick %d,%d "
+                                "trig %d,%d (recv #%ld)\n",
+                                port, p.button, (int) p.stickX,
+                                (int) p.stickY, (int) p.triggerL,
+                                (int) p.triggerR, dol_recv[port]);
+                    }
+                }
             }
         }
         break;

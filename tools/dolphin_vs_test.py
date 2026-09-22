@@ -117,7 +117,16 @@ def main():
     check("both sides met at the rendezvous", bool(m),
           m.group(0) if m else "no rendezvous line")
 
-    if verdict is None:
+    if verdict is None and reached > 0:
+        # The deadline came before the target. Nothing disagreed in what was
+        # compared, so say how far it got rather than throwing the run away --
+        # on a loaded machine the emulator simply runs fewer frames per second
+        # and the depth is the machine's, not the port's.
+        check("the two simulate the same match", False,
+              "short: identical over %d match frames, wanted %d"
+              % (reached, a.frames))
+        print("\nSHORT identical over %d match frames" % reached, flush=True)
+    elif verdict is None:
         check("the two simulate the same match", False,
               "no verdict: the session produced no comparable frames")
     elif verdict.startswith("MISMATCH"):

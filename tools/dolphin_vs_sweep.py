@@ -49,12 +49,18 @@ def run(c0, c1, frames, timeout, cpu):
 
     r = subprocess.run(argv, env=env, capture_output=True, text=True)
     out = r.stdout
-    m = re.search(r"identical over (\d+) match frames", out)
+    # SHORT first: its line contains the pass line's wording, so testing for
+    # a pass before a short run reports every short run as a pass with the
+    # short frame count. It did exactly that once.
+    m = re.search(r"SHORT identical over (\d+) match frames", out)
     if m:
-        return "match", int(m.group(1)), out
+        return "short", int(m.group(1)), out
     m = re.search(r"diverged at match frame (\d+)", out)
     if m:
         return "differs", int(m.group(1)), out
+    m = re.search(r"identical over (\d+) match frames", out)
+    if m:
+        return "match", int(m.group(1)), out
     return "no-run", 0, out
 
 
@@ -90,11 +96,19 @@ def main():
         time.sleep(2)
 
     ok = [r for r in rows if r[1] == "match"]
-    print("\n%d of %d held for %d frames" % (len(ok), len(rows), a.frames),
-          flush=True)
+    short = [r for r in rows if r[1] == "short"]
+    bad = [r for r in rows if r[1] == "differs"]
+    print("\n%d of %d held for %d frames; %d ran short (machine load, not a "
+          "difference); %d differ"
+          % (len(ok), len(rows), a.frames, len(short), len(bad)), flush=True)
     for name, verdict, n in rows:
-        if verdict != "match":
-            print("  %-22s %s at %d" % (name, verdict, n), flush=True)
+        if verdict == "differs":
+            print("  %-22s differs at %d" % (name, n), flush=True)
+        elif verdict == "short":
+            print("  %-22s identical for %d, wanted %d"
+                  % (name, n, a.frames), flush=True)
+        elif verdict != "match":
+            print("  %-22s %s" % (name, verdict), flush=True)
 
 
 main()
