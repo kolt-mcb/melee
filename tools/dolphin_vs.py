@@ -94,7 +94,10 @@ RENDEZVOUS = -2
 # it plays before its match starts. tools/mode_probe.py -1 measures it (127
 # for this build), and the client paces one pad out per pad in, so the number
 # no longer has to absorb a queue backlog.
-LEAD = 127
+# Measured, not guessed: dolphin_vs_test.py reports the emulator's match frame
+# at the moment the two are joined, and the lead is whatever puts that at 0.
+# 3000 -> 1043, 1958 -> 427, 1238 -> 59, 1125 -> 13, 1101 -> 0.
+LEAD = 1101
 
 DOLPHIN_INI = """[General]
 ISOPaths = 1

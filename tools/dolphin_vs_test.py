@@ -76,12 +76,28 @@ def main():
                            preexec_fn=os.setsid)
 
     verdict, reached = None, 0
+    at_line = None   # the emulator's match frame when the rendezvous fired
     deadline = time.time() + a.timeout
     try:
         while time.time() < deadline:
-            time.sleep(4)
+            # Poll fast until the two are joined, because the emulator keeps
+            # running at one frame per port poll from that moment and a slow
+            # first look reports it hundreds of frames past the line.
+            time.sleep(0.4 if at_line is None else 4)
             if not (os.path.exists(ref) and os.path.exists(port)):
                 continue
+            # The lead is only right when the emulator is at the start of its
+            # match at the moment the two are joined. Read where it actually
+            # is, once, instead of inferring it from frame counts afterwards:
+            # LEAD_correct = LEAD_used - (this - 1).
+            if at_line is None:
+                text_so_far = open(log, errors="replace").read()
+                if "both at the line" in text_so_far:
+                    try:
+                        last = open(ref, errors="replace").read().rstrip().rsplit("\n", 1)[-1]
+                        at_line = int(last.split()[1])
+                    except Exception:
+                        at_line = -1
             r = subprocess.run(
                 [sys.executable, os.path.join(HERE, "trace_diff.py"),
                  ref, port, "--first"] + (["--ignore", ignore] if ignore else []),
@@ -163,6 +179,9 @@ def main():
     else:
         check("the two simulate the same match", True, verdict)
 
+    if at_line is not None:
+        print("emulator was at match frame %d when the two were joined "
+              "(want 1)" % at_line, flush=True)
     bad = [n for n, ok, _ in results if not ok]
     print("\n%d checks, %d passed, %d failed"
           % (len(results), len(results) - len(bad), len(bad)), flush=True)

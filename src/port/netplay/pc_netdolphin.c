@@ -830,6 +830,18 @@ void pc_netdol_pads(GCPadStatus* pads)
             GCPadStatus rec = pads[dol_local_pad];
             if (pc_pad_inputs_row(dol_sent_idx, &rec)) {
                 pad_from_game(&mine, &rec);
+                if (dol_trace && (mine.button != 0 ||
+                                  mine.stickX != DOL_STICK_CENTER ||
+                                  mine.stickY != DOL_STICK_CENTER)) {
+                    static long noted;
+                    if (noted++ < 6) {
+                        fprintf(stderr, "[NETDOL] row %ld out at poll %ld, "
+                                        "match frame %u, queue %d\n",
+                                dol_sent_idx, dol_frames,
+                                (unsigned) gm_GetFrameCount(),
+                                q_size(&dol_q[i]));
+                    }
+                }
             }
             dol_sent_idx++;
             q_push(&dol_q[i], &mine);
@@ -899,10 +911,11 @@ void pc_netdol_pads(GCPadStatus* pads)
          * clock are different clocks and nothing downstream can line up. */
         extern unsigned pc_frame_number;
         fprintf(stderr, "[NETDOL] %ld polls (port frame %u), %ld stalls, "
-                        "%.0f ms waiting; pads in %ld/%ld/%ld/%ld\n",
+                        "%.0f ms waiting; emulator frames %ld; pads in "
+                        "%ld/%ld/%ld/%ld\n",
                 dol_frames, (unsigned) pc_frame_number, dol_stalls,
-                dol_stall_ms, dol_recv[0], dol_recv[1], dol_recv[2],
-                dol_recv[3]);
+                dol_stall_ms, dol_host_frames, dol_recv[0], dol_recv[1],
+                dol_recv[2], dol_recv[3]);
     }
 }
 
