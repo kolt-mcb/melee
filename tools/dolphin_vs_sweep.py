@@ -4,11 +4,17 @@
 The debug-VS scene picks its own lineup (Link vs Mario), so both sides have to
 be told which characters to use, and they are told differently: the port by
 MELEE_BOOT_MATCH, which goes into the match settings before the scene builds
-the fighters, and the emulator by MELEE_FORCE_CHARS, which writes the two slots' ckind
-(StaticPlayer +0x04) while the match is still loading and only then. Not
-MELEE_POKE: that writes every frame, and rewriting the kind during the entry
-sequence shifts it -- the two then reach match frame 1 with their idle
-animations a frame or two apart.
+the fighters, and the emulator by patching the two immediates onEnterDebugVs loads for its
+hardcoded lineup:
+
+    801b1428  li r4, 6    -> CKind_Link,  stored to players[0].ckind
+    801b1430  li r0, 8    -> CKind_Mario, stored to players[1].ckind
+
+Patching the source rather than overwriting the slots afterwards is what makes
+a swept case comparable for more than a moment. Writing the slots works too,
+but only after the scene has already built its fighters, so they are rebuilt:
+the entry sequence restarts and the rebuild draws, which put the two 1 to 2
+frames apart on p_animf and parted the seeds at match frame 41 every time.
 
 Each case reports the first match frame on which anything differs, or the
 number of frames it held. A character that holds for the whole run is a
@@ -20,7 +26,9 @@ identically to the console's for that long.
 import argparse, os, re, subprocess, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SLOT0, STRIDE, CKIND = 0x80453080, 0xE90, 0x04
+# The two `li` instructions in onEnterDebugVs (0x801B13B8), found by dumping
+# the function with MELEE_DUMPCODE rather than by extracting the DOL.
+LI_P0, LI_P1 = 0x801B1428, 0x801B1430
 
 NAMES = ["Captain", "Donkey", "Fox", "GameWatch", "Kirby", "Koopa", "Link",
          "Luigi", "Mario", "Mars", "Mewtwo", "Ness", "Peach", "Pikachu",
@@ -31,17 +39,14 @@ NAMES = ["Captain", "Donkey", "Fox", "GameWatch", "Kirby", "Koopa", "Link",
 def run(c0, c1, frames, timeout, cpu):
     env = dict(os.environ)
     env["MELEE_BOOT_MATCH"] = "%d,%d,-1,0,0" % (c0, c1)
-    env["MELEE_FORCE_CHARS"] = "%d,%d" % (c0, c1)
+    env["MELEE_POKE"] = "%X:4:%X,%X:4:%X" % (LI_P0, 0x38800000 | c0,
+                                             LI_P1, 0x38000000 | c1)
     env["MELEE_SEED_GENS"] = "1"
     argv = [sys.executable, os.path.join(HERE, "dolphin_vs_test.py"),
             "--frames", str(frames), "--timeout", str(timeout)]
     if cpu:
         argv += ["--cpu", str(cpu)]
-    # A forced lineup restarts the fighter's entry sequence on the emulator
-    # (the scene hardcodes Link vs Mario and is overwritten after the fact),
-    # so the two reach match frame 1 with their idle animations a frame or
-    # two apart. Everything else is compared.
-    argv += ["--ignore", "p_animf"]
+
     r = subprocess.run(argv, env=env, capture_output=True, text=True)
     out = r.stdout
     m = re.search(r"identical over (\d+) match frames", out)

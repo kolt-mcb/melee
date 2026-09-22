@@ -223,6 +223,15 @@ void onEnterDebugVs(GameModeState* state)
         }
         start->players[0].ckind = (s8) ck0;
         start->players[1].ckind = (s8) ck1;
+        /* Slots 2 and 3 are Gm_PKind_NA and never play, but the console sets
+         * their kind from the same register it uses for slot 0 -- the
+         * hardcoded lineup above is one `li r4, 6` feeding players[0], [2]
+         * and [3] -- so they follow slot 0 here too. It only shows up when
+         * the emulator's lineup is patched for a comparison: the trace
+         * carries all four slots, and two idle slots holding different
+         * characters is a difference like any other. */
+        start->players[2].ckind = (s8) ck0;
+        start->players[3].ckind = (s8) ck0;
         start->players[0].color = (u8) col0;
         start->players[1].color = (u8) col1;
         start->players[0].slot_type = Gm_PKind_Human;
