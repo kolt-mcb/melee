@@ -51,6 +51,39 @@ def motion_marks(t):
 
 ref, rhead, rper = load(sys.argv[1])
 port, phead, pper = load(sys.argv[2])
+if "--first" in sys.argv:
+    # Stop at the first frame anything differs, and say what. An aggregate
+    # count answers "how much of this run disagreed", which is the wrong
+    # question while the run is wrong at all: the only frame that can be
+    # reasoned about is the first one, because every frame after it is
+    # downstream of a simulation that had already parted.
+    ignore = set()
+    for i, arg in enumerate(sys.argv):
+        if arg == "--ignore" and i + 1 < len(sys.argv):
+            ignore = set(sys.argv[i + 1].split(","))
+    shared = [f for f in rper if f in pper and f not in ignore]
+    top = [f for f in ("mode", "scene", "seed", "stage") if f not in ignore]
+    frames = sorted(set(ref) & set(port))
+    frames = [g for g in frames if g >= 1]
+    for g in frames:
+        a, b = ref[g], port[g]
+        bad = [(f, a.get(f), b.get(f)) for f in top if a.get(f) != b.get(f)]
+        for i in range(4):
+            for f in shared:
+                if a["players"][i][f] != b["players"][i][f]:
+                    bad.append(("p%d.%s" % (i + 1, f),
+                                a["players"][i][f], b["players"][i][f]))
+        if bad:
+            print("MISMATCH at match frame %d (%d frames agreed)"
+                  % (g, g - 1))
+            for f, av, bv in bad:
+                print("  %-14s ref %-12s port %s" % (f, av, bv))
+            sys.exit(1)
+    print("identical over %d match frames%s"
+          % (len(frames), (", ignoring " + ",".join(sorted(ignore)))
+             if ignore else ""))
+    sys.exit(0)
+
 if "--offset" in sys.argv:
     # The same run on both sides produces the same sequence of action states;
     # if it produces it at different frames, the two are not diverging, they

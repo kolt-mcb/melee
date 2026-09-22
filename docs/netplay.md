@@ -200,34 +200,37 @@ port's default is a Mario ditto. `MELEE_BOOT_MATCH=6,8,-1,0,0` and
 ### The end-to-end test
 
 ```sh
-tools/dolphin_vs_test.py
+tools/dolphin_vs_test.py            # 7 match frames agree, then it fails
+tools/dolphin_vs_test.py --cpu 9    # 2 match frames agree, then it fails
 ```
 
-Runs the whole route from nothing — host up, port joined, game started, a
-shared input, both traces captured — and then *checks* it, rather than showing
-two screenshots and inviting a judgement. Thirteen checks, each able to fail
-on its own:
+It runs the route from nothing and watches both traces as they are written.
+The moment a match frame disagrees it stops the session and fails, naming the
+frame and the fields:
 
 ```
 PASS host came up and hosted
-PASS port joined the session                        as player 2
-PASS host gave it a controller port                 controller ports: 1 2(ours) 0 0
+PASS port joined the session                      as player 2
+PASS host gave it a controller port
 PASS the host started the game
-PASS both sides met at the rendezvous               rendezvous -2 reached at port frame 1
-PASS frames were exchanged                          2400 polls
-PASS the emulator wrote a trace                     402635 bytes
-PASS the port wrote a trace                         821658 bytes
-PASS the same sequence of action states on both
-PASS the two are aligned to the frame
-PASS enough match frames to compare                 1140 frames
-PASS no unexpected field disagrees
-PASS the RNG agrees through the first match frames  first differing frame 8
+PASS both sides met at the rendezvous             rendezvous -2 reached at port frame 1
+FAIL the two simulate the same match              diverged at match frame 8
+
+MISMATCH at match frame 8 (7 frames agreed)
+  seed           ref B197964D     port DBA5AEA3
 ```
 
-The fields that do not agree yet are named in the test with their reasons, and
-the check is that the set of disagreeing fields is *exactly* that list — so a
-new difference fails it, and one of the known ones starting to agree fails it
-too rather than passing unnoticed.
+Stopping at the first mismatch is the point, and it is why the earlier form of
+this test was misleading. It ran the whole session and reported which fields
+disagreed and on how many frames — and with a list of known-not-yet-equal
+fields to excuse, that came out green while the two were playing different
+matches. Every frame after the first bad one is downstream of a simulation
+that had already parted, so counting them measures nothing; the only frame
+that can be reasoned about is the first.
+
+So the test fails today, on both configurations, and should. `p_aihash` is the
+one field still excused — the console leaves those bytes uninitialised by
+design — and `--strict` compares it too.
 
 ### With CPUs it desyncs immediately
 
