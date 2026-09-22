@@ -249,6 +249,42 @@ the RNG seed itself.
 
 A **CPU** match still does not, and parts at match frame 3. See below.
 
+### The roster
+
+```sh
+tools/dolphin_vs_sweep.py --chars 0,1,2,...  --frames 40
+```
+
+All 26 playable characters, dittos, 40 match frames each:
+
+| result | characters |
+|---|---|
+| identical on every compared field | 24 |
+| parts at match frame 36 | Mario |
+| parts at match frame 1 | Ice Climbers |
+
+**Ice Climbers** is the sharp one, and it is a spawn-point bug rather than
+anything to do with netplay: `p_x` is ±55.0 here against the console's ±60.0
+on the first frame of the match, before anything has moved. Every other
+character spawns on the console's number exactly. That belongs to the
+frame-1 class in `melee-pc-match-start`.
+
+**Mario** parts five frames before the bound everyone else reaches, which is
+its own thing and unexamined.
+
+The 40-frame depth is a property of the sweep, not of the characters. The
+debug-VS scene hardcodes its lineup (`gmvsmode.c`:
+`start->players[0].ckind = CKind_Link`), so telling the emulator to use
+another character means writing the slots after the scene has already built
+its fighters, and the rebuild both restarts the entry sequence — the two reach
+match frame 1 with their idle animations 1 to 2 frames apart, hence `p_animf`
+excluded for swept cases — and draws, which parts the seeds at frame 41.
+Doing it properly means a Gecko patch on the hardcoded lineup, the same
+technique the boot-to-mode patch already uses, so the scene builds the right
+fighters first time and nothing is rebuilt. Until then a swept character is
+compared for 40 frames and the unforced Link-vs-Mario lineup is the one that
+holds for a whole match.
+
 ### With CPUs it desyncs immediately
 
 `tools/dolphin_vs_test.py --cpu 9` runs the same route with both slots as
