@@ -2018,7 +2018,15 @@ void fn_8016E2BC(void)
                  * only populated if UnkStageDat::unk0 was converted. When it
                  * is not, getSpawnPoint leaves sp18 as uninitialized stack. */
                 if (getenv("MELEE_STAGE_DIAG") != NULL) {
-                    fprintf(stderr, "[SPAWN] slot=%d pos=(%.1f,%.1f,%.1f)\n", i,
+                    /* The index as well as the point: getSpawnPoint falls
+                     * back to the slot number only when spawn_point is -1,
+                     * and a slot that carries some other index lands
+                     * somewhere else entirely. */
+                    fprintf(stderr,
+                            "[SPAWN] slot=%d ckind=%d spawn_point=%d "
+                            "pos=(%.1f,%.1f,%.1f)\n",
+                            i, (int) Player_GetPlayerCharacter(i),
+                            (int) controller.state.fighters[i].spawn_point,
                             (double) sp18.x, (double) sp18.y, (double) sp18.z);
                 }
 #endif

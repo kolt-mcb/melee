@@ -2047,6 +2047,44 @@ void pc_trace_frame(int frame)
          * right than the other, and both sides do it at the same moment. The
          * local Dolphin build reads the same variable and makes the same
          * writes. */
+        /* MELEE_ENTDUMP=1 prints both of a slot's entities at match frame 1.
+         * The per-player trace columns only carry player_entity[0], which is
+         * enough until a character has two fighters in one slot -- and the
+         * Ice Climbers spawn 5 units inboard of the console's number, which
+         * is either the leader placed wrongly or the follower answering to
+         * the leader's name. */
+        if (getenv("MELEE_ENTDUMP") != NULL && gm_GetFrameCount() == 1) {
+            static int dumped;
+            if (!dumped) {
+                int sl, ei;
+                dumped = 1;
+                for (sl = 0; sl < 2; sl++) {
+                    StaticPlayer* sp = Player_GetPtrForSlot(sl);
+                    Vec3 pose;
+                    if (sp == NULL) continue;
+                    /* The stored pose is where the spawn put the player,
+                     * before anything the fighters did to each other. If it
+                     * reads the console's number and the fighter does not,
+                     * the spawn is right and something moved them. */
+                    Player_LoadPlayerCoords(sl, &pose);
+                    fprintf(stderr, "[ENTDUMP] slot=%d pose x=%.3f y=%.3f\n",
+                            sl, (double) pose.x, (double) pose.y);
+                    for (ei = 0; ei < 2; ei++) {
+                        HSD_GObj* g = sp->player_entity[ei];
+                        Fighter* fp = (g != NULL) ? (Fighter*) g->user_data
+                                                  : NULL;
+                        fprintf(stderr,
+                                "[ENTDUMP] slot=%d ent=%d transformed=%d "
+                                "fp=%p x=%.3f y=%.3f kind=%d\n",
+                                sl, ei, (int) sp->transformed[ei],
+                                (void*) fp,
+                                fp ? (double) fp->cur_pos.x : 0.0,
+                                fp ? (double) fp->cur_pos.y : 0.0,
+                                fp ? (int) fp->kind : -1);
+                    }
+                }
+            }
+        }
         if (getenv("MELEE_SEED_GENS") != NULL && gm_GetFrameCount() == 1) {
             static int done;
             if (!done) {
