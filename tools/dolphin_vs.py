@@ -276,11 +276,17 @@ def main():
     port = subprocess.Popen(["setsid", PORT], env=env)
     print("port running as pid %d" % port.pid, flush=True)
 
-    if not a.no_host and btn:
+    if not a.no_host:
         time.sleep(10)
-        subprocess.run([sys.executable, os.path.join(HERE, "xdo.py"), "click",
-                        btn.group(1), btn.group(2)], check=False)
-        print("pressed Start", flush=True)
+        # Find the lobby again and raise it before clicking rather than
+        # trusting the coordinates the host script printed. Mutter cascades
+        # each restart, so over a sweep the windows walk across the screen and
+        # a remembered point eventually lands on whatever is now on top --
+        # which presents as "the host never started the game" and nothing
+        # else.
+        press = subprocess.run([sys.executable, os.path.join(HERE, "press_start.py")],
+                               capture_output=True, text=True)
+        sys.stdout.write(press.stdout)
     time.sleep(a.seconds)
 
 
