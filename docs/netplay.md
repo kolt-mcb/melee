@@ -229,6 +229,40 @@ the check is that the set of disagreeing fields is *exactly* that list — so a
 new difference fails it, and one of the known ones starting to agree fails it
 too rather than passing unnoticed.
 
+### With CPUs it desyncs immediately
+
+`tools/dolphin_vs_test.py --cpu 9` runs the same route with both slots as
+level-9 CPUs. The transport checks all pass — join, controller assignment,
+rendezvous, 2400 frames exchanged — and every state check fails:
+
+```
+XFAIL the same sequence of action states on both
+XFAIL the two are aligned to the frame
+XFAIL no unexpected field disagrees                  p1.p_x, p1.p_motion, p1.p_pct, ...
+XFAIL the RNG agrees through the first match frames  first differing frame 3
+```
+
+Frame 3 for the seed, frame 7 for position, frame 109 for damage. Not a drift:
+the two are playing different matches from the first second, and a screenshot
+a minute in showing 87%/61% against 43%/70% is the accumulated consequence,
+not the event.
+
+That is the honest scale of what is left. With idle or scripted fighters the
+load-phase difference (below) stays latent until match frame 8 and costs a
+particle. The AI draws from the generator every frame, so the same difference
+is behavioural at once. Everything verified in the rest of this document was
+verified with fighters that barely touch the RNG; none of it says the route
+can hold a CPU match, and it cannot.
+
+Two things make that measurable rather than mysterious, and both had the same
+bug. `MELEE_FORCE_CPU` and `MELEE_SEED_EACH_LOAD` are applied by both builds
+on the same match frames on purpose — and both guarded on the scene index,
+admitting the VS match scene and the results scene but not scene 1, the
+debug-VS scene this route uses. So on this route neither fired. Use
+`MELEE_FORCE_CPU`, never `MELEE_BOOT_CPU`, for a comparison: the latter makes
+the slots CPUs during the load, which changes the entry sequence, and the two
+loads are different lengths.
+
 ### Does the game state match?
 
 Yes, and it is measured rather than eyeballed. Both sides write the same

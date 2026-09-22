@@ -168,7 +168,12 @@ void pc_trace_seed_fighter_create(void)
     extern u8 gm_GetCurrentSceneIndex(void);
     const char* want = getenv("MELEE_SEED");
     const char* cpu = getenv("MELEE_FORCE_CPU");
-    if (gm_GetFrameCount() != 0 || ((int) gm_GetCurrentSceneIndex() != 2 &&
+    /* Scene 1 is the debug-VS match, the one the Dolphin-netplay route boots
+     * both sides into; without it here the AI was built at level 1 on this
+     * side while the emulator's was built at the asked-for level, which is
+     * not a comparison of anything. Same omission the reseed had. */
+    if (gm_GetFrameCount() != 0 || ((int) gm_GetCurrentSceneIndex() != 1 &&
+                               (int) gm_GetCurrentSceneIndex() != 2 &&
                                (int) gm_GetCurrentSceneIndex() != 3))
     {
         return;

@@ -29,11 +29,17 @@ KNOWN = {
 }
 
 results = []
+XFAIL = False   # set for --cpu: state parity is known not to hold there
 
 
-def check(name, ok, detail=""):
+def check(name, ok, detail="", state=False):
+    if state and XFAIL:
+        print("%-5s %-46s %s" % ("XFAIL" if not ok else "XPASS", name, detail),
+              flush=True)
+        results.append((name, True, detail))
+        return ok
     results.append((name, bool(ok), detail))
-    print("%-4s %-46s %s" % ("PASS" if ok else "FAIL", name, detail),
+    print("%-5s %-46s %s" % ("PASS" if ok else "FAIL", name, detail),
           flush=True)
     return ok
 
@@ -41,6 +47,11 @@ def check(name, ok, detail=""):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seconds", type=int, default=45)
+    ap.add_argument("--cpu", metavar="LVL", type=int, default=0,
+                    help="both slots as CPUs of this level. The transport "
+                         "checks still apply; the state checks are reported "
+                         "as expected failures, because they do fail -- see "
+                         "docs/netplay.md.")
     a = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
     ref = os.path.join(OUT, "ref.trace")
@@ -53,6 +64,14 @@ def main():
     env = dict(os.environ,
                MELEE_REF_TRACE=ref, MELEE_TRACE=port,
                MELEE_TRACE_AT_PC="8037E23C")
+    if a.cpu:
+        # MELEE_FORCE_CPU and not MELEE_BOOT_CPU: the latter makes the slots
+        # CPUs during the load, which changes the entry sequence, and the two
+        # loads are different lengths. Both builds apply MELEE_FORCE_CPU on
+        # the same match frames on purpose.
+        env["MELEE_FORCE_CPU"] = "%d,%d" % (a.cpu, a.cpu)
+        global XFAIL
+        XFAIL = True
     print("running the session (%d s of match)..." % a.seconds, flush=True)
     with open(log, "w") as fh:
         rc = subprocess.call([sys.executable, os.path.join(HERE, "dolphin_vs.py"),
@@ -91,9 +110,10 @@ def main():
                          capture_output=True, text=True).stdout
     print(off.strip(), flush=True)
     check("the same sequence of action states on both",
-          "same sequence on both sides: yes" in off)
+          "same sequence on both sides: yes" in off, state=True)
     check("the two are aligned to the frame",
-          re.search(r"port is behind by: 0 match frames", off) is not None)
+          re.search(r"port is behind by: 0 match frames", off) is not None,
+          state=True)
 
     diff = subprocess.run([sys.executable, os.path.join(HERE, "trace_diff.py"),
                            ref, port], capture_output=True, text=True).stdout
@@ -105,7 +125,7 @@ def main():
     unexpected = sorted(differing - set(KNOWN))
     fixed = sorted(set(KNOWN) - differing)
     check("no unexpected field disagrees", not unexpected,
-          ", ".join(unexpected) if unexpected else "")
+          ", ".join(unexpected) if unexpected else "", state=True)
     if fixed:
         print("     note: these are listed as known but now agree: %s"
               % ", ".join(fixed), flush=True)
@@ -115,7 +135,8 @@ def main():
     first = re.search(r"match frame\s+(\d+): ref drew", counts)
     check("the RNG agrees through the first match frames",
           first and int(first.group(1)) >= 8,
-          "first differing frame %s" % (first.group(1) if first else "none"))
+          "first differing frame %s" % (first.group(1) if first else "none"),
+          state=True)
     return summarise()
 
 
@@ -125,6 +146,11 @@ def summarise():
           % (len(results), len(results) - len(bad), len(bad)), flush=True)
     if bad:
         print("failed: " + ", ".join(bad), flush=True)
+    if XFAIL:
+        print("\nXFAIL: with CPUs the two do not simulate the same match. The AI "
+              "draws\n       from the generator every frame, so the load-phase "
+              "difference that\n       idle fighters only expose at frame 8 "
+              "becomes behavioural at once.", flush=True)
     print("known-not-yet-equal fields, unchanged by this run:", flush=True)
     for k, why in sorted(KNOWN.items()):
         print("  %-14s %s" % (k, why), flush=True)
