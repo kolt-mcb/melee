@@ -1344,6 +1344,125 @@ void* g_heap_base = NULL;
 size_t g_heap_size = 0;
 
 
+
+/* MELEE_PAD_INPUTS=<file>[:<pad>] replays a recorded controller, one line per
+ * match frame:
+ *
+ *     # frame buttons stickX stickY cStickX cStickY trigL trigR
+ *     640 0020 -73 12 0 0 0 255
+ *
+ * tools/slippi/slp_inputs.py writes it out of a .slp, which makes a CPU match
+ * a source of dense, realistic input that nobody has to sit and produce: the
+ * AI presses something on about two frames in five, and the replay says
+ * exactly what and when. A pad script can say "press A at frame 300"; this
+ * can say what a real match looked like, which is what a netplay comparison
+ * needs -- with nobody touching the controls every frame is neutral, and a
+ * whole class of bug is invisible.
+ *
+ * Keyed on the match frame, so it lines up with the .slp's own numbering for
+ * every frame of the match itself. */
+struct pc_pad_input_row {
+    int frame;
+    unsigned buttons;
+    int sx, sy, cx, cy, lt, rt;
+};
+static struct pc_pad_input_row* g_pad_inputs;
+static int g_pad_inputs_n;
+static int g_pad_inputs_pad = -2;   /* -2 = not read yet, -1 = off */
+
+static void pc_pad_inputs_load(void)
+{
+    const char* spec = getenv("MELEE_PAD_INPUTS");
+    char path[512];
+    const char* colon;
+    FILE* f;
+    int cap = 0;
+    char line[256];
+
+    g_pad_inputs_pad = -1;
+    if (spec == NULL || *spec == '\0') {
+        return;
+    }
+    colon = strrchr(spec, ':');
+    if (colon != NULL && colon[1] >= '0' && colon[1] <= '3' && colon[2] == '\0') {
+        size_t n = (size_t) (colon - spec);
+        if (n >= sizeof path) n = sizeof path - 1;
+        memcpy(path, spec, n);
+        path[n] = '\0';
+        g_pad_inputs_pad = colon[1] - '0';
+    } else {
+        snprintf(path, sizeof path, "%s", spec);
+        g_pad_inputs_pad = 0;
+    }
+    f = fopen(path, "r");
+    if (f == NULL) {
+        fprintf(stderr, "[PADIN] cannot open %s\n", path);
+        g_pad_inputs_pad = -1;
+        return;
+    }
+    while (fgets(line, sizeof line, f) != NULL) {
+        struct pc_pad_input_row r;
+        unsigned b;
+        if (line[0] == '#') {
+            continue;
+        }
+        if (sscanf(line, "%d %x %d %d %d %d %d %d", &r.frame, &b,
+                   &r.sx, &r.sy, &r.cx, &r.cy, &r.lt, &r.rt) != 8) {
+            continue;
+        }
+        r.buttons = b;
+        if (g_pad_inputs_n == cap) {
+            cap = cap ? cap * 2 : 1024;
+            g_pad_inputs = realloc(g_pad_inputs, (size_t) cap * sizeof r);
+            if (g_pad_inputs == NULL) {
+                g_pad_inputs_n = 0;
+                g_pad_inputs_pad = -1;
+                fclose(f);
+                return;
+            }
+        }
+        g_pad_inputs[g_pad_inputs_n++] = r;
+    }
+    fclose(f);
+    fprintf(stderr, "[PADIN] %d frames from %s onto pad %d\n",
+            g_pad_inputs_n, path, g_pad_inputs_pad);
+}
+
+static void pc_pad_inputs_apply(GCPadStatus* p, int pad)
+{
+    extern u32 gm_GetFrameCount(void);
+    int lo = 0, hi, f;
+
+    if (g_pad_inputs_pad == -2) {
+        pc_pad_inputs_load();
+    }
+    if (g_pad_inputs_pad < 0 || pad != g_pad_inputs_pad ||
+        g_pad_inputs_n == 0) {
+        return;
+    }
+    f = (int) gm_GetFrameCount();
+    hi = g_pad_inputs_n - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (g_pad_inputs[mid].frame == f) {
+            const struct pc_pad_input_row* r = &g_pad_inputs[mid];
+            p->button = r->buttons;
+            p->stickX = (int8_t) r->sx;
+            p->stickY = (int8_t) r->sy;
+            p->subStickX = (int8_t) r->cx;
+            p->subStickY = (int8_t) r->cy;
+            p->analogL = (uint8_t) r->lt;
+            p->analogR = (uint8_t) r->rt;
+            return;
+        }
+        if (g_pad_inputs[mid].frame < f) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+}
+
 /* MELEE_PAD_SCRIPT drives player 1 from a frame-keyed script so menu and CSS
  * navigation can be exercised in a headless run. MELEE_PAD_FORCE pins the
  * stick for a whole run, which is enough for walking a fighter around but
@@ -1982,6 +2101,11 @@ void HSD_PadRenewRawStatus(bool unused)
         /* Outside the pad == 0 block: the script can drive any controller,
          * and the character select needs a second one. */
         pc_pad_run_script(&g_gc_pads[pad], pad);
+        /* A recorded controller, if one was given. After the script so that
+         * the two are not both writing, before the clamp and the direction
+         * bits so a replayed stick goes through exactly what a live one
+         * does. */
+        pc_pad_inputs_apply(&g_gc_pads[pad], pad);
 
         /* The console clamps every source the same way, after the raw read
          * and before anything derives from it. */

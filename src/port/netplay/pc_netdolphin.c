@@ -703,6 +703,36 @@ void pc_netdol_pads(GCPadStatus* pads)
             while (q_pop(&dol_q[i], &drop)) {
             }
         }
+        /* And then give every port this side does not own the same lag the
+         * emulator gives it.
+         *
+         * Dolphin's netplay identifies a pad by its position in a queue, not
+         * by a frame number. Its own game consumes the pad it polled
+         * `buffer` frames ago, because PollLocalPad keeps that many queued.
+         * It sends each pad the moment it polls it, so a queue drained to
+         * empty here would have this side applying the host's input
+         * `buffer` frames before the host's own game does.
+         *
+         * With nobody touching the controls every entry is neutral and the
+         * difference is invisible, which is why it survived a whole match of
+         * comparison. The first real button press makes it a desync: the
+         * emulator shielded on match frame 639 and this side did not,
+         * because it had already shielded five frames earlier. */
+        {
+            DolPad neutral2;
+            memset(&neutral2, 0, sizeof neutral2);
+            neutral2.stickX = neutral2.stickY = DOL_STICK_CENTER;
+            neutral2.subStickX = neutral2.subStickY = DOL_STICK_CENTER;
+            for (i = 0; i < DOL_PORTS; i++) {
+                int k;
+                if (dol_map[i] == dol_unmapped || dol_map[i] == dol_pid) {
+                    continue;   /* unused, or ours: we already lag our own */
+                }
+                for (k = 0; k < dol_buffer; k++) {
+                    q_push(&dol_q[i], &neutral2);
+                }
+            }
+        }
         /* MELEE_NET_RENDEZVOUS=-2 waits for the match itself rather than
          * for a game mode, and that is the one that matters: the debug-VS
          * scene's stage load is a different length on the two sides (the

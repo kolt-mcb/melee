@@ -106,6 +106,19 @@ def main():
         fh.close()
 
     text = open(log, errors="replace").read()
+
+    # Somebody at the keyboard is a real condition on this machine, and an
+    # unscripted keypress lands in whichever window has focus. It reaches both
+    # sides, but not by the same path and not necessarily on the same match
+    # frame, so it shows up as a divergence -- and a divergence caused by a
+    # person is not a result. The port logs every non-neutral pad in both
+    # directions; if any appear in a run nobody scripted, the run is
+    # contaminated and says so instead of reporting a frame number.
+    stray_in = len(re.findall(r"\[NETDOL\] <- port", text))
+    stray_out = len(re.findall(r"\[NETDOL\] poll \d+: sending buttons "
+                               r"(?!0000)", text))
+    contaminated = (stray_in or stray_out)
+
     check("host came up and hosted", "READY" in text)
     m = re.search(r"\[NETDOL\] joined as player (\d+)", text)
     check("port joined the session", bool(m),
@@ -117,7 +130,20 @@ def main():
     check("both sides met at the rendezvous", bool(m),
           m.group(0) if m else "no rendezvous line")
 
-    if verdict is None and reached > 0:
+    if contaminated:
+        check("nobody touched the controls", False,
+              "%d pads in from the host, %d non-neutral out -- rerun without "
+              "input" % (stray_in, stray_out))
+    else:
+        check("nobody touched the controls", True)
+
+    if contaminated and verdict and verdict.startswith("MISMATCH"):
+        first = re.search(r"match frame (\d+)", verdict)
+        check("the two simulate the same match", False,
+              "CONTAMINATED: input arrived during the run; the divergence at "
+              "match frame %s is not a result"
+              % (first.group(1) if first else "?"))
+    elif verdict is None and reached > 0:
         # The deadline came before the target. Nothing disagreed in what was
         # compared, so say how far it got rather than throwing the run away --
         # on a loaded machine the emulator simply runs fewer frames per second
