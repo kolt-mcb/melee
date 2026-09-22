@@ -43,6 +43,8 @@ def main():
     ap.add_argument("--strict", action="store_true",
                     help="compare every field, p_aihash included")
     ap.add_argument("--timeout", type=int, default=240)
+    ap.add_argument("--ignore", default="",
+                    help="extra fields to exclude, comma-separated")
     a = ap.parse_args()
 
     os.makedirs(OUT, exist_ok=True)
@@ -62,6 +64,8 @@ def main():
         # the same match frames on purpose.
         env["MELEE_FORCE_CPU"] = "%d,%d" % (a.cpu, a.cpu)
     ignore = "" if a.strict else DEFAULT_IGNORE
+    if a.ignore:
+        ignore = (ignore + "," + a.ignore).strip(",")
 
     print("running the route%s, watching for the first mismatch..."
           % (" with level-%d CPUs" % a.cpu if a.cpu else ""), flush=True)
