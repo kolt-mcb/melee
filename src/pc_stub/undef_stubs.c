@@ -1428,13 +1428,50 @@ static void pc_pad_inputs_load(void)
             g_pad_inputs_n, path, g_pad_inputs_pad);
 }
 
+/* Row by position rather than by frame, for a caller that has a better clock
+ * than the match frame.
+ *
+ * Dolphin's netplay identifies a pad by where it sits in a queue, so an input
+ * injected by match frame lands on whatever frame the peer's queue depth puts
+ * it on -- measured, 391 frames from where this side applied it. Injected by
+ * position in the pad stream, the Nth pad carries the Nth row on both sides
+ * by construction. MELEE_PAD_INPUTS_STREAM=1 hands the feed to whoever is
+ * sending the stream and turns the frame-keyed path below off. */
+int pc_pad_inputs_row(long index, GCPadStatus* p)
+{
+    if (g_pad_inputs_pad == -2) {
+        pc_pad_inputs_load();
+    }
+    if (g_pad_inputs_pad < 0 || index < 0 || index >= (long) g_pad_inputs_n) {
+        return 0;
+    }
+    {
+        const struct pc_pad_input_row* r = &g_pad_inputs[index];
+        p->button = r->buttons;
+        p->stickX = (int8_t) r->sx;
+        p->stickY = (int8_t) r->sy;
+        p->subStickX = (int8_t) r->cx;
+        p->subStickY = (int8_t) r->cy;
+        p->analogL = (uint8_t) r->lt;
+        p->analogR = (uint8_t) r->rt;
+    }
+    return 1;
+}
+
 static void pc_pad_inputs_apply(GCPadStatus* p, int pad)
 {
     extern u32 gm_GetFrameCount(void);
     int lo = 0, hi, f;
+    static int by_stream = -1;
 
     if (g_pad_inputs_pad == -2) {
         pc_pad_inputs_load();
+    }
+    if (by_stream < 0) {
+        by_stream = getenv("MELEE_PAD_INPUTS_STREAM") != NULL;
+    }
+    if (by_stream) {
+        return;   /* the netplay layer is injecting these by stream position */
     }
     if (g_pad_inputs_pad < 0 || pad != g_pad_inputs_pad ||
         g_pad_inputs_n == 0) {

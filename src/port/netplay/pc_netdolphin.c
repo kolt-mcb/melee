@@ -155,7 +155,25 @@ static long dol_led;             /* lead pads pushed so far */
 static DolPad dol_delay[DOL_PORTS][DOL_LAG_MAX];
 static int dol_delay_at;
 static long dol_recv[DOL_PORTS];
+static long dol_sent_idx;      /* pads sent for our port: the shared clock */
+static long dol_sent_lead;     /* pads sent while walking the emulator up */
+static long dol_host_frames;   /* PAD_DATA messages in: the emulator's frames */
+
 static int dol_unmapped = 0;   /* the value a free controller port holds */
+
+/* The controller port the host plays on -- the first mapped port that is not
+ * ours. Its pads arrive once per frame the emulator runs, which is the only
+ * view this side has of the emulator's progress. */
+static int dol_host_port(void)
+{
+    int i;
+    for (i = 0; i < DOL_PORTS; i++) {
+        if (dol_map[i] != dol_unmapped && dol_map[i] != dol_pid) {
+            return i;
+        }
+    }
+    return 0;
+}
 
 static double now_ms(void)
 {
@@ -200,6 +218,10 @@ static void dol_send(const unsigned char* p, size_t n)
  * they are not on Dolphin's wire, so they are re-derived from the sticks
  * that did come over it. */
 extern unsigned pc_pad_synthetic_dirs(int sx, int sy, int cx, int cy);
+
+/* A recorded controller, indexed by position in the pad stream rather than by
+ * match frame (src/pc_stub/undef_stubs.c). */
+extern int pc_pad_inputs_row(long index, GCPadStatus* p);
 
 static void pad_from_game(DolPad* d, const GCPadStatus* g)
 {
@@ -411,6 +433,13 @@ static void handle(const unsigned char* d, size_t len)
                 dol_frames, dol_stalls, dol_stall_ms);
         break;
     case DOL_MSG_PAD_DATA: {
+        /* One message per emulator frame, however many pad entries it packs
+         * into it. Counting entries does not measure the emulator's progress:
+         * its PollLocalPad tops its buffer up to the target depth and sends
+         * every pad it pushes, so a frame can carry six. Measured, 900
+         * entries arrived while it ran 147 frames. The message count is the
+         * only view of its clock this side gets. */
+        dol_host_frames++;
         /* Mainline packs every local pad of a frame into one message and
          * ends each with isConnected; Ishiiruka sends one pad a message. */
         size_t stride = dol_stock ? 12u : 11u;
@@ -690,80 +719,88 @@ void pc_netdol_pads(GCPadStatus* pads)
         memset(&neutral, 0, sizeof neutral);
         neutral.stickX = neutral.stickY = DOL_STICK_CENTER;
         neutral.subStickX = neutral.subStickY = DOL_STICK_CENTER;
-        while (dol_led < dol_lead) {
-            for (i = 0; i < DOL_PORTS; i++) {
-                if (dol_map[i] == dol_pid) {
-                    send_pad(i, &neutral);
-                }
-            }
-            dol_led++;
-        }
-        for (i = 0; i < DOL_PORTS; i++) {
-            DolPad drop;
-            while (q_pop(&dol_q[i], &drop)) {
-            }
-        }
-        /* And then give every port this side does not own the same lag the
-         * emulator gives it.
+
+        /* Walk the emulator to the start of its match, paced against its own
+         * progress rather than blasted.
          *
-         * Dolphin's netplay identifies a pad by its position in a queue, not
-         * by a frame number. Its own game consumes the pad it polled
-         * `buffer` frames ago, because PollLocalPad keeps that many queued.
-         * It sends each pad the moment it polls it, so a queue drained to
-         * empty here would have this side applying the host's input
-         * `buffer` frames before the host's own game does.
+         * The first version of this pushed the whole lead in one burst, and
+         * that was wrong in a way nothing could see: the emulator does not
+         * consume a pad per pad, it consumes one per frame its game actually
+         * runs, so a burst just sits in its queue. Measured at the rendezvous
+         * with a 1916-frame burst -- 1916 pads sent, 193 received, so about
+         * 1700 of ours queued in front of anything either side would do next.
+         * With every pad neutral the two still compared identical frame for
+         * frame, because a queue offset is invisible until somebody presses
+         * something; the first recorded input landed 391 frames apart.
          *
-         * With nobody touching the controls every entry is neutral and the
-         * difference is invisible, which is why it survived a whole match of
-         * comparison. The first real button press makes it a desync: the
-         * emulator shielded on match frame 639 and this side did not,
-         * because it had already shielded five frames earlier. */
-        {
-            DolPad neutral2;
-            memset(&neutral2, 0, sizeof neutral2);
-            neutral2.stickX = neutral2.stickY = DOL_STICK_CENTER;
-            neutral2.subStickX = neutral2.subStickY = DOL_STICK_CENTER;
-            for (i = 0; i < DOL_PORTS; i++) {
-                int k;
-                if (dol_map[i] == dol_unmapped || dol_map[i] == dol_pid) {
-                    continue;   /* unused, or ours: we already lag our own */
+         * Pacing is the fix and it needs no calibration to stay balanced:
+         * one pad out for each pad in, so the emulator's queue holds `buffer`
+         * and no more. MELEE_NET_LEAD is now counted in the emulator's own
+         * frames -- how many it plays before its match starts -- and it is
+         * observable, because a pad arrives from it once per frame it runs. */
+        /* Feed the emulator, paced, and drop what comes back: the two are
+         * not on one clock yet. */
+        for (;;) {
+            /* Feed it only until it reaches the line, then stop: a pad is
+             * what makes it advance, so sending past the lead walks it past
+             * the start of its match and there is no way back. Paced against
+             * its own frames so its queue never backs up. */
+            while (dol_host_frames < dol_lead &&
+                   dol_sent_lead < dol_recv[dol_host_port()] + dol_buffer) {
+                for (i = 0; i < DOL_PORTS; i++) {
+                    if (dol_map[i] == dol_pid) {
+                        send_pad(i, &neutral);
+                    }
                 }
-                for (k = 0; k < dol_buffer; k++) {
-                    q_push(&dol_q[i], &neutral2);
+                dol_sent_lead++;
+            }
+            for (i = 0; i < DOL_PORTS; i++) {
+                DolPad drop;
+                while (q_pop(&dol_q[i], &drop)) {
                 }
             }
-        }
-        /* MELEE_NET_RENDEZVOUS=-2 waits for the match itself rather than
-         * for a game mode, and that is the one that matters: the debug-VS
-         * scene's stage load is a different length on the two sides (the
-         * port's is far shorter -- tests/pc/cases/match.case carries the gap
-         * as ref_lead: -1530 for the menu route), so lining the two up on
-         * the first frame of the mode leaves the matches themselves tens of
-         * frames apart. The first frame of the match is the same moment on
-         * both by definition. */
-        if (dol_rendezvous == -2) {
             if ((s32) gm_GetFrameCount() < 1) {
+                return;   /* this side is still loading: let it run */
+            }
+            if (dol_host_frames >= dol_lead) {
+                break;    /* both at the line */
+            }
+            /* This side is ready and the emulator is not, so hold here rather
+             * than returning: a return lets this port play on at its own
+             * pace, and it was reaching match frame 309 while the emulator
+             * was still loading. The barrier is the whole point of the
+             * rendezvous. */
+            pump(4);
+            if (dol_peer == NULL || !dol_in_game) {
                 return;
             }
-        } else if ((int) gm_GetCurrentGameMode() != dol_rendezvous) {
-            return;
         }
         {
             int a, b;
-            DolPad n2;
-            memset(&n2, 0, sizeof n2);
-            n2.stickX = n2.stickY = DOL_STICK_CENTER;
-            n2.subStickX = n2.subStickY = DOL_STICK_CENTER;
             for (a = 0; a < DOL_PORTS; a++) {
                 for (b = 0; b < DOL_LAG_MAX; b++) {
-                    dol_delay[a][b] = n2;
+                    dol_delay[a][b] = neutral;
                 }
             }
         }
+        /* And give every port this side does not own the lag the emulator
+         * gives it: its game consumes the pad it polled `buffer` frames ago,
+         * so a queue drained to empty would have this side applying the
+         * host's input `buffer` frames early. */
+        for (i = 0; i < DOL_PORTS; i++) {
+            int k;
+            if (dol_map[i] == dol_unmapped || dol_map[i] == dol_pid) {
+                continue;
+            }
+            for (k = 0; k < dol_buffer; k++) {
+                q_push(&dol_q[i], &neutral);
+            }
+        }
         dol_met = 1;
-        fprintf(stderr, "[NETDOL] rendezvous %d reached at port frame %u; "
-                        "playing from here (%ld lead frames pushed)\n",
-                dol_rendezvous, (unsigned) gm_GetFrameCount(), dol_led);
+        fprintf(stderr, "[NETDOL] both at the line: port frame %u, emulator "
+                        "%ld frames in (%ld pads), %ld pads sent\n",
+                (unsigned) gm_GetFrameCount(), dol_host_frames,
+                dol_recv[dol_host_port()], dol_sent_lead);
     }
 
     /* Top our own ports up to the buffer depth, sending each pad as it is
@@ -784,6 +821,17 @@ void pc_netdol_pads(GCPadStatus* pads)
             continue;
         }
         while (q_size(&dol_q[i]) <= dol_buffer) {
+            /* MELEE_PAD_INPUTS with MELEE_PAD_INPUTS_STREAM: the Nth pad this
+             * side sends carries the Nth recorded row, so the emulator and
+             * this port apply it at the same position in their queues --
+             * which is the only clock this protocol has. Fetched inside the
+             * loop because a top-up can send several pads in one poll, and
+             * each of them is its own entry in the stream. */
+            GCPadStatus rec = pads[dol_local_pad];
+            if (pc_pad_inputs_row(dol_sent_idx, &rec)) {
+                pad_from_game(&mine, &rec);
+            }
+            dol_sent_idx++;
             q_push(&dol_q[i], &mine);
             send_pad(i, &mine);
         }

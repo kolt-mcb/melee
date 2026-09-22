@@ -90,7 +90,11 @@ RENDEZVOUS = -2
 # Twice, because while Dolphin is still loading it does not spend a pad per
 # match frame: measured, a lead frame added there is worth half a match frame
 # of alignment. 640 -> offset 638; 1278 -> offset 319; 1916 -> offset 0.
-LEAD = 1916
+# Counted in the emulator's own frames now, not in pads sent: how many frames
+# it plays before its match starts. tools/mode_probe.py -1 measures it (127
+# for this build), and the client paces one pad out per pad in, so the number
+# no longer has to absorb a queue backlog.
+LEAD = 127
 
 DOLPHIN_INI = """[General]
 ISOPaths = 1
