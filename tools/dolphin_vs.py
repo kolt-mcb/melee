@@ -157,9 +157,16 @@ def write_userdir(path):
     debug = ("DebugModeEnabled = True"
              if os.environ.get("MELEE_REF_TRACE")
              or os.environ.get("MELEE_SEED") else "")
+    # The seed watchpoint logs through the MEMMAP channel, and that channel
+    # has to be on and writing somewhere for its lines to exist at all.
+    logger = ("[Logs]\nMEMMAP = True\n[Options]\nWriteToConsole = True\n"
+              "Verbosity = 5\n" if os.environ.get("MELEE_RNG_WATCH") else "")
     with open(os.path.join(path, "Config", "Dolphin.ini"), "w") as f:
         f.write(DOLPHIN_INI.format(iso_dir=ISO_DIR, rtc=GC_EPOCH_UNIX + GC_RTC,
                                    debug=debug))
+    if logger:
+        with open(os.path.join(path, "Config", "Logger.ini"), "w") as f:
+            f.write(logger)
     mm = "%02X%02X" % (BOOT_MODE, BOOT_MODE)
     for name in ("GALE01.ini", "GALE01r2.ini"):
         with open(os.path.join(path, "GameSettings", name), "w") as f:

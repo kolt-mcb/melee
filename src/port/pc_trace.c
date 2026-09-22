@@ -28,6 +28,9 @@
 
 #include "port/pc_trace.h"
 
+#include <sysdolphin/baselib/generator.h>
+#include <sysdolphin/baselib/psstructs.h>
+
 #if defined(BUILD_TARGET_PC)
 
 #include <errno.h>
@@ -2024,6 +2027,37 @@ void pc_trace_frame(int frame)
              (int) gm_GetCurrentSceneIndex() == 3))
         {
             *HSD_RandSeedPtr = (u32) strtoul(want, NULL, 16);
+        }
+        /* MELEE_SEED_GENS=1 zeroes every live particle generator's emission
+         * accumulator on the first frame of the match, on both sides.
+         *
+         * It is the same kind of thing as MELEE_SEED_EACH_LOAD and for the
+         * same reason. A generator's count advances by random * HSD_Randf()
+         * once a frame and spills a particle when it crosses 1, so it is a
+         * phase carried out of the load -- and the load is where the two
+         * sides cannot be made to agree, because they run a different number
+         * of frames of it and draw at different points within each. Measured
+         * with the seed pinned every load frame and nothing else done: the
+         * generators reach match frame 1 with the same age (genLife 3875 on
+         * both) and a different count, and the first thing that goes wrong in
+         * the match is one of them spilling a ninth particle where the other
+         * spills eight.
+         *
+         * Zeroing is an alignment, not a correction: neither value is more
+         * right than the other, and both sides do it at the same moment. The
+         * local Dolphin build reads the same variable and makes the same
+         * writes. */
+        if (getenv("MELEE_SEED_GENS") != NULL && gm_GetFrameCount() == 1) {
+            static int done;
+            if (!done) {
+                HSD_Generator* g;
+                int n = 0;
+                done = 1;
+                for (g = hsd_804D78FC; g != NULL && n < 64; g = g->next, n++) {
+                    g->count = 0.0F;
+                }
+                fprintf(stderr, "[SEEDGENS] zeroed %d generator counts\n", n);
+            }
         }
         /* MELEE_FORCE_CPU=<lvl0>,<lvl1> turns the first two player slots into
          * CPUs of that level, on every frame of the match's own load, exactly
