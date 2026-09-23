@@ -430,6 +430,7 @@ static int slp_sel_got;
 static unsigned slp_my_rng;
 static unsigned slp_peer_rng;
 static int slp_peer_char = -1, slp_peer_stage = -1;
+static long slp_tx, slp_rx, slp_rx_pads;
 
 static void slp_send_selections(void);
 static int slp_receive(const unsigned char* buf, ssize_t len);
@@ -491,6 +492,7 @@ static void slp_enet_pump(void)
             slp_send_selections();
             break;
         case ENET_EVENT_TYPE_RECEIVE:
+            slp_rx++;
             slp_receive(ev.packet->data, (ssize_t) ev.packet->dataLength);
             enet_packet_destroy(ev.packet);
             break;
@@ -511,10 +513,23 @@ static void slp_enet_send(const unsigned char* buf, size_t len)
     if (slp_peer == NULL) {
         return;
     }
-    enet_peer_send(slp_peer, pad ? 1 : 0,
-                   enet_packet_create(buf, len,
-                                      pad ? ENET_PACKET_FLAG_UNSEQUENCED
-                                          : ENET_PACKET_FLAG_RELIABLE));
+    slp_tx++;
+    /* MELEE_SLP_PAD_UNSEQ=1 sends pads the way Slippi does, unsequenced on
+     * channel 1. It is off by default until the exchange is known to work:
+     * with it on, the selections got through on channel 0 and almost no pad
+     * did -- 172 sent against 3 received -- and an exchange that never
+     * delivers is indistinguishable from a peer that never speaks. */
+    {
+        static int unseq = -1;
+        if (unseq < 0) {
+            unseq = getenv("MELEE_SLP_PAD_UNSEQ") != NULL;
+        }
+        enet_peer_send(slp_peer, pad ? 1 : 0,
+                       enet_packet_create(buf, len,
+                                          (pad && unseq)
+                                              ? ENET_PACKET_FLAG_UNSEQUENCED
+                                              : ENET_PACKET_FLAG_RELIABLE));
+    }
     enet_host_flush(slp_host);
 }
 
@@ -703,6 +718,7 @@ static int slp_receive(const unsigned char* buf, ssize_t len)
         return 0;
     }
     if (buf[0] == SLP_MSG_PAD && len >= 14) {
+        slp_rx_pads++;
         s32 newest = (s32) get_u32(buf + 1);
         int slot = (int) get_u8(buf + 5) & 1;
         int count = (int) ((len - 14) / SLP_PAD_BYTES);
@@ -1073,6 +1089,31 @@ void pc_net_pads(GCPadStatus* pads)
      * particle scripts draw from the same generator the game does, and by
      * frame 10 the two were no longer playing the same match. */
     frame = net_match ? (s32) gm_GetFrameCount() : -1;
+
+    /* Slippi's seed is negotiated, so nothing of the match may run before the
+     * negotiation is done -- not even the load. The pin below writes net_seed
+     * from the match's first frame, and the load is where the generators and
+     * the entry sequence draw: a host that loaded on its own guess and a
+     * guest that loaded on the agreed value arrive at match frame 1 with
+     * their fighters in different places, which is exactly what happened
+     * (x 53.3 against 49.9, and the seeds already apart).
+     *
+     * So hold here, before the pin and before the load's own early return,
+     * until both offers have been exchanged. */
+    if (net_slippi_proto && net_match && !slp_sel_got) {
+        double began = now_ms();
+        while (!slp_sel_got) {
+            net_pump();
+            if (now_ms() - began > NET_CONNECT_WAIT_MS) {
+                fprintf(stderr, "[SLP] no selections from the peer after "
+                                "%.0f s; playing alone\n",
+                        (now_ms() - began) / 1000.0);
+                net_state = NET_SOLO;
+                break;
+            }
+        }
+    }
+
     if (frame <= 1) {
         *HSD_RandSeedPtr = net_seed;
     }
@@ -1113,10 +1154,14 @@ void pc_net_pads(GCPadStatus* pads)
      * The wait for a peer to appear is long -- a tablet takes half a minute
      * to boot and load -- where the wait for a connected peer's input is
      * short. They are different kinds of silence. */
-    if (net_state != NET_RUN) {
+    /* NET_SOLO is a decision, not a waiting room: once this side has given up
+     * on the peer it must play on, and the barrier used to sit here for ever
+     * because it only ever exits on NET_RUN. That turned a dropped peer into
+     * a hang. */
+    if (net_state != NET_RUN && net_state != NET_SOLO) {
         double began = now_ms();
         double last_note = began;
-        while (net_state != NET_RUN) {
+        while (net_state != NET_RUN && net_state != NET_SOLO) {
             struct pollfd pfd;
             double t;
             pfd.fd = net_fd;
@@ -1132,7 +1177,10 @@ void pc_net_pads(GCPadStatus* pads)
             if (t - last_note > 2000.0) {
                 last_note = t;
                 fprintf(stderr, "[NET] holding frame 1 for the peer to "
-                                "arrive (%.0f s)\n", (t - began) / 1000.0);
+                                "arrive (%.0f s) [state %d, sel %d/%d, "
+                                "peer %p]\n", (t - began) / 1000.0,
+                        (int) net_state, slp_sel_sent, slp_sel_got,
+                        (void*) slp_peer);
                 fflush(stderr);
             }
             if (t - began > NET_CONNECT_WAIT_MS) {
@@ -1264,8 +1312,15 @@ void pc_net_pads(GCPadStatus* pads)
     if (net_report_at > 0.0 && now_ms() >= net_report_at) {
         net_report_at = now_ms() + 5000.0;
         fprintf(stderr, "[NET] frame %d: %u stalls, %.0f ms waiting "
-                        "(worst %.1f ms)\n",
-                (int) frame, net_stalls, net_stall_ms, net_stall_worst);
+                        "(worst %.1f ms)%s\n",
+                (int) frame, net_stalls, net_stall_ms, net_stall_worst,
+                "");
+        if (net_slippi_proto) {
+            fprintf(stderr, "[SLP] tx %ld, rx %ld (%ld pad messages), "
+                            "peer acked %d, last sent %d\n",
+                    slp_tx, slp_rx, slp_rx_pads, (int) net_peer_acked,
+                    (int) net_last_sent);
+        }
         fflush(stderr);
     }
 }
