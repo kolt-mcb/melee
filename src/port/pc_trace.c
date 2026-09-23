@@ -488,6 +488,33 @@ static void pc_trace_ptclist(void)
     fprintf(stderr, "\n");
 }
 
+/* MELEE_GENLIST_AT: the live particle-generator list, read from the trace
+ * point. particle.c has its own MELEE_GENLIST, but that one prints from inside
+ * hsd_8039EE24 before the walk, where the console's harness reads the list
+ * after the whole simulation -- pre-decrement against post-decrement, which
+ * showed every generator's genLife one apart and every busy frame as a
+ * difference that was not there. Same list, same moment, so the two can
+ * actually be diffed. */
+static void pc_trace_genlist(void)
+{
+    extern HSD_Generator* hsd_804D78FC;
+    HSD_Generator* g;
+    int n = 0;
+    if (getenv("MELEE_GENLIST_AT") == NULL) {
+        return;
+    }
+    fprintf(stderr, "[GENLIST] gframe=%u", (unsigned) gm_GetFrameCount());
+    for (g = hsd_804D78FC; g != NULL && n < 256; g = g->next, n++) {
+        fprintf(stderr,
+                " [bank=%d id=%d kind=%08x genLife=%d life=%d count=%08x "
+                "random=%08x]",
+                (int) g->bank, (int) g->idnum, (unsigned) g->kind,
+                (int) g->genLife, (int) g->life, *(const unsigned*) &g->count,
+                *(const unsigned*) &g->random);
+    }
+    fprintf(stderr, "\n");
+}
+
 /* MELEE_ITJOINT=<kind>: one item kind's joint tree, local transforms and all,
  * once per frame. A held item's grip joint is what the throw releases from, so
  * a joint that is animated on the console and static here moves the release
@@ -1852,6 +1879,7 @@ void pc_trace_frame(int frame)
     pc_trace_itang();
     pc_trace_itjoint();
     pc_trace_ptclist();
+    pc_trace_genlist();
     pc_trace_hurtdump();
     pc_trace_pctdump();
     pc_trace_camdump();
