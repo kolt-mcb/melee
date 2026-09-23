@@ -208,6 +208,7 @@ void onEnterDebugVs(GameModeState* state)
      * distinguishable on screen. */
     {
         int ck0 = CKind_Mario, ck1 = CKind_Mario, stkind = -1;
+        int pc_boot_players = 2;
         /* Costume colours default to 0 and 1 so a Mario ditto is readable on
          * screen. The Dolphin reference harness needs them settable: matching
          * the game's own debug-VS lineup (Link vs Mario, both colour 0) means
@@ -236,6 +237,45 @@ void onEnterDebugVs(GameModeState* state)
         start->players[1].color = (u8) col1;
         start->players[0].slot_type = Gm_PKind_Human;
         start->players[1].slot_type = Gm_PKind_Human;
+        /* MELEE_BOOT_PLAYERS="<ckind>[:<colour>],..." fills as many slots as
+         * it lists and leaves the rest out, which is the only way to get a
+         * three- or four-way match out of the debug boot: MELEE_BOOT_MATCH
+         * names two characters because the scene it patches only ever had
+         * two. Listed slots start Human; MELEE_BOOT_CPU turns them into CPUs
+         * as usual. */
+        {
+            const char* pl = getenv("MELEE_BOOT_PLAYERS");
+            if (pl != NULL) {
+                int n = 0;
+                const char* q = pl;
+                while (n < Gm_Player_NumMax && *q != '\0') {
+                    int ck = -1, col = 0;
+                    char* end;
+                    ck = (int) strtol(q, &end, 10);
+                    if (end == q) {
+                        break;
+                    }
+                    q = end;
+                    if (*q == ':') {
+                        col = (int) strtol(q + 1, &end, 10);
+                        q = end;
+                    } else {
+                        col = n & 1;
+                    }
+                    start->players[n].ckind = (s8) ck;
+                    start->players[n].color = (u8) col;
+                    start->players[n].slot_type = Gm_PKind_Human;
+                    n++;
+                    if (*q == ',') {
+                        q++;
+                    }
+                }
+                for (i = n; i < Gm_Player_NumMax; i++) {
+                    start->players[i].slot_type = Gm_PKind_NA;
+                }
+                pc_boot_players = n;
+            }
+        }
         /* MELEE_BOOT_CPU makes a slot a CPU of the given level (1-9), so the
          * AI can be exercised from the debug boot.
          *
@@ -249,23 +289,31 @@ void onEnterDebugVs(GameModeState* state)
         {
             const char* c = getenv("MELEE_BOOT_CPU");
             if (c != NULL) {
-                int lvl0 = 0, lvl1 = 0;
-                if (sscanf(c, "%d,%d", &lvl0, &lvl1) < 2) {
-                    lvl1 = lvl0; /* one number: slot 1 only */
-                    lvl0 = 0;
+                int lvl[Gm_Player_NumMax];
+                int n = sscanf(c, "%d,%d,%d,%d", &lvl[0], &lvl[1], &lvl[2],
+                               &lvl[3]);
+                if (n == 1) {
+                    lvl[1] = lvl[0]; /* one number: slot 1 only */
+                    lvl[0] = 0;
+                    n = 2;
                 }
-                if (lvl0 > 0) {
-                    start->players[0].slot_type = Gm_PKind_Cpu;
-                    start->players[0].cpu_level = (u8) lvl0;
+                for (i = n; i < Gm_Player_NumMax; i++) {
+                    lvl[i] = 0;
                 }
-                if (lvl1 > 0) {
-                    start->players[1].slot_type = Gm_PKind_Cpu;
-                    start->players[1].cpu_level = (u8) lvl1;
+                for (i = 0; i < Gm_Player_NumMax; i++) {
+                    if (lvl[i] > 0 &&
+                        start->players[i].slot_type != Gm_PKind_NA)
+                    {
+                        start->players[i].slot_type = Gm_PKind_Cpu;
+                        start->players[i].cpu_level = (u8) lvl[i];
+                    }
                 }
             }
         }
-        start->players[2].slot_type = Gm_PKind_NA;
-        start->players[3].slot_type = Gm_PKind_NA;
+        if (pc_boot_players <= 2) {
+            start->players[2].slot_type = Gm_PKind_NA;
+            start->players[3].slot_type = Gm_PKind_NA;
+        }
         /* Default VS rules are a 2:00 time match (gm_80167BC8: mode 0 with
          * a time limit sets x0_6 and time_limit = minutes * 60). The debug-VS
          * scene has neither, so no timer was ever created and the HUD could

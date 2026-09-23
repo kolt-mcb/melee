@@ -48,21 +48,61 @@ GAMEINI_DIR="$HOME/.config/dolphin-emu/GameSettings"
 if [ -n "${MELEE_REF_MODE:-}" ]; then
     mm=$(printf '%02X%02X' "$MELEE_REF_MODE" "$MELEE_REF_MODE")
     mkdir -p "$GAMEINI_DIR"
+    # MELEE_REF_PATCHES="<addr>=<word>,..." adds instruction patches to the
+    # same [OnFrame] block. The debug-VS scene hardcodes things the port takes
+    # from the environment -- the stage, and which slots play -- so a case
+    # that wants either has to rewrite the instruction that sets it. They go
+    # here rather than in MELEE_POKE because MELEE_POKE writes every frame,
+    # and these must be in place before the scene runs, not after.
+    # MELEE_REF_GECKO="<word> <word>,..." adds raw Gecko code lines, for the
+    # cases an [OnFrame] word-poke cannot express -- a C2 hook that has to run
+    # an instruction of its own before the original. The boot-to-mode routing
+    # is one: the mode is a register at the store, not a constant in the
+    # instruction stream, so there is nothing to overwrite in place.
+    # The two word-pokes this code shipped with are wrong for a v1.02 ISO:
+    # 0x801BFA20 holds `lbz r3,4(r31)` and 0x801A4300 holds `stb r3,1(r4)`,
+    # not the `lis`/`stw` pair they assume, so writing over them corrupts two
+    # unrelated functions and routes nothing. They are off unless
+    # MELEE_REF_BOOTPATCH=1 asks for them.
+    bootpatch=""
+    if [ -n "${MELEE_REF_BOOTPATCH:-}" ]; then
+        bootpatch="
+041BFA20 3C60$mm
+041A4300 90640000"
+    fi
+    gecko=""
+    if [ -n "${MELEE_REF_GECKO:-}" ]; then
+        old_ifs="$IFS"; IFS=','
+        for gl in $MELEE_REF_GECKO; do
+            gecko="$gecko
+$gl"
+        done
+        IFS="$old_ifs"
+    fi
+    onframe_boot=""
+    if [ -n "${MELEE_REF_BOOTPATCH:-}" ]; then
+        onframe_boot="0x801BFA20:dword:0x3C60$mm
+0x801A4300:dword:0x90640000"
+    fi
+    extra=""
+    if [ -n "${MELEE_REF_PATCHES:-}" ]; then
+        for pw in $(echo "$MELEE_REF_PATCHES" | tr ',' ' '); do
+            extra="$extra
+0x${pw%%=*}:dword:0x${pw#*=}"
+        done
+    fi
     for GAMEINI in "$GAMEINI_DIR/GALE01.ini" "$GAMEINI_DIR/GALE01r2.ini"; do
         [ -f "$GAMEINI" ] && [ ! -f "$GAMEINI.orig" ] && cp "$GAMEINI" "$GAMEINI.orig"
         cat > "$GAMEINI" <<INI
 [Core]
 EnableCheats = True
 [Gecko]
-\$Boot to mode $MELEE_REF_MODE
-041BFA20 3C60$mm
-041A4300 90640000
+\$Boot to mode $MELEE_REF_MODE$bootpatch$gecko
 [Gecko_Enabled]
 \$Boot to mode $MELEE_REF_MODE
 [OnFrame]
 \$Boot to mode $MELEE_REF_MODE (patch)
-0x801BFA20:dword:0x3C60$mm
-0x801A4300:dword:0x90640000
+$onframe_boot$extra
 [OnFrame_Enabled]
 \$Boot to mode $MELEE_REF_MODE (patch)
 INI
