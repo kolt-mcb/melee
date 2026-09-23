@@ -10,10 +10,30 @@ typedef void (*jmp_t)(void);
 typedef jmp_t jtbl_t[];
 
 #ifndef MWERKS_GEKKO
+#if BUILD_TARGET_PC
+/* The port implements all four for real -- __frsqrte is the 750CL's five-bit
+ * reciprocal-square-root estimate (src/pc_stub/dolphin_stubs.c) and sqrtf,
+ * sqrtf__Ff and sqrtf_accurate are in src/math_shim.c -- and pc_prelude.h
+ * declares them ahead of every include. The macros below must not shadow
+ * them here.
+ *
+ * `#define __frsqrte(x) sqrt(x)` in particular is not an approximation of
+ * the intrinsic, it is a different function: frsqrte estimates 1/sqrt(x) and
+ * sqrt returns sqrt(x). Every caller feeds the estimate into three
+ * Newton-Raphson steps, which from that seed diverge instead of converging --
+ * sqrtf_store(47.9) came out as -inf. It reached the simulation through the
+ * twenty-odd files that include this header: lbvector.c, lbcollision.c,
+ * camera.c, ftCo_0A01.c and lb_020A.c among them, which is the leg IK, the
+ * hurtbox extents the CPU reads its range from, and vector normalisation.
+ * `__fabs` is the double fabs, not fabsf; rounding it to float loses bits
+ * the console keeps. */
+#define __fabs(f) fabs(f)
+#else
 #define __frsqrte(x) sqrt(x)
 #define sqrtf__Ff(x) sqrtf(x)
 #define sqrtf_accurate(x) sqrtf(x)
 #define __fabs(f) fabsf(f)
+#endif
 #endif
 
 #ifndef UNK_T
