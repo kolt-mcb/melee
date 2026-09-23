@@ -463,6 +463,21 @@ void ftParts_SetupParts(Fighter_GObj* fighter_obj)
         HSD_ASSERTREPORT(546, 0, "fighter parts num not match! player %d\n",
                          fp->player_id);
     }
+#if BUILD_TARGET_PC
+    {
+        const char* e = getenv("MELEE_PARTSLOG");
+        if (e != NULL) {
+            u32 k, live = 0;
+            for (k = 0; k < MAX_FT_PARTS; k++) {
+                if (fp->parts[k].joint != NULL) live++;
+            }
+            fprintf(stderr, "[PARTS] kind=%d walked=%u parts_num=%u live=%u\n",
+                    (int) fp->kind, (unsigned) part,
+                    (unsigned) ftPartsTable[fp->kind]->parts_num,
+                    (unsigned) live);
+        }
+    }
+#endif
 }
 
 void ftParts_8007462C(Fighter_GObj* gobj)
