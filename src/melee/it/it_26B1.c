@@ -1,6 +1,8 @@
 #include "it_26B1.h"
 #if BUILD_TARGET_PC
 #include "port/pc_itconv.h"
+#include <stdio.h>
+#include <stdlib.h>
 #endif
 
 #include <sysdolphin/baselib/forward.h>
@@ -235,8 +237,17 @@ void it_8026B3F8(Article* article, s32 kind)
 void it_8026B40C(Article* article, s32 kind)
 {
 #if BUILD_TARGET_PC
-    /* PC port: stage Articles arrive raw from the stage archive too. */
-    article = pc_itconv_article(article);
+    /* PC port: stage Articles arrive raw from the stage archive too, and
+     * they need the same per-kind attribute fixups the fighters' do -- the
+     * Arwing laser's attribute block opens with an ItemAttr pointer. */
+    article = pc_itconv_article_kind(article, kind);
+    if (getenv("MELEE_ITCONV_LOG") != NULL) {
+        fprintf(stderr,
+                "[ITCONV] stage article kind %d -> %p spec=%p states=%p\n",
+                (int) kind, (void*) article,
+                article != NULL ? article->x4_specialAttributes : NULL,
+                article != NULL ? (void*) article->xC_itemStates : NULL);
+    }
 #endif
     it_804A0F60[kind - It_Kind_Old_Kuri] = article;
 }

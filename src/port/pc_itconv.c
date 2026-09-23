@@ -11,6 +11,7 @@
 #include <melee/it/it_3F14.h>
 #include <melee/it/itCharItems.h>
 #include <melee/it/itYoyo.h>
+#include <melee/it/kinds/itarwinglaser.h>
 #include <melee/it/itCommonItems.h>
 #include <melee/it/types.h>
 #include <melee/lb/types.h>
@@ -957,6 +958,34 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
             conv_scalars(&te->ecb, e + 0x1C, 0x10);
         }
         art->x4_specialAttributes = a4;
+        break;
+    }
+    case It_Kind_Arwing_Laser: {
+        /* The Arwing's laser: the block is {ItemAttr*, f32, f32}
+         * and the first word is a file offset, not a pointer. The flat
+         * swapped copy also has the wrong stride once that pointer is eight
+         * bytes wide, so the two floats after it read the neighbour's bytes.
+         * Left alone, itArwinglaser_UnkMotion2_Phys took the laser's launch
+         * speed through a null attribute record and the port died the first
+         * time an Arwing fired -- about ten seconds into any Corneria
+         * match. The Great Fox's laser next door is four plain floats, so
+         * the flat swap already serves it; only this one has the pointer. */
+        ArwingLaserAttr* al = zalloc(sizeof(*al));
+        if (al == NULL) {
+            return;
+        }
+        al->x0 = conv_attr(a, be32(r + 0x0));
+        conv_scalars(&al->x4, r + 0x4, 4);
+        conv_scalars(&al->x8, r + 0x8, 4);
+        art->x4_specialAttributes = al;
+        if (getenv("MELEE_ITCONV_LOG") != NULL) {
+            fprintf(stderr,
+                    "[ITCONV] Arwing laser %d: attr off=%#x -> %p, "
+                    "throw=%g x4=%g x8=%g\n",
+                    kind, (unsigned) be32(r), (void*) al->x0,
+                    al->x0 != NULL ? (double) al->x0->x4_throw_speed_mul : 0.0,
+                    (double) al->x4, (double) al->x8);
+        }
         break;
     }
     case It_Kind_Seak_Chain: {

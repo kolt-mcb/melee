@@ -5,6 +5,14 @@
 
 #include <melee/it/kinds/types.h>
 
+/* The Arwing/Great Fox laser's attribute block opens with a pointer to the
+ * item's common attributes; pc_itconv.c needs the host layout to build it. */
+typedef struct ArwingLaserAttr {
+    /* +0 */ ItemAttr* x0;
+    /* +4 */ f32 x4;
+    /* +8 */ f32 x8;
+} ArwingLaserAttr;
+
 extern ItemStateTable it_803F8DE8[];
 s32 it_802E70BC(Item_GObj*);
 Item_GObj* it_802E72E0(Item_GObj*, HSD_JObj*, s32, f32, f32);
