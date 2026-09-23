@@ -78,13 +78,33 @@ f32 PSVECSquareMag(Vec* v)
 f32 PSVECMag(Vec* v)
 {
     if (!ps_ptr_valid(v)) return 0.0f;
-    return (f32)sqrt((double)(v->z * v->z + (v->x * v->x + v->y * v->y)));
+    /* 80342DFC, read instruction by instruction. This is not sqrt(): the
+     * squared length is a ps_madd and a ps_sum0, so it is
+     * `(z*z + x*x) + y*y` with the first pair fused -- not the
+     * `z*z + (x*x + y*y)` the C reads as -- and the root is one
+     * Newton-Raphson step on the frsqrte estimate in single precision, not a
+     * correctly-rounded double sqrt rounded down. Both differences land in
+     * the last bits, and fn_80020AEC calls this three times for every joint
+     * the leg IK rebuilds. */
+    f32 n = fmaf(v->z, v->z, v->x * v->x) + v->y * v->y;
+    /* 80342E14-2C: frsqrte, then fmuls/fmuls/fnmsubs/fmuls -- the
+     * `3.0 - n*e*e` is one rounding, and the 0.5*e is formed separately. */
+    f32 e = (f32) __frsqrte((f64) n);
+    f32 r = fmaf(-(e * e), n, 3.0f) * (0.5f * e);
+    /* 80342E2C is an fsel: a negative or NaN refinement (n == 0 gives one)
+     * falls back to n, so a zero vector answers zero rather than NaN. */
+    if (!(r >= 0.0f)) {
+        r = n;
+    }
+    return n * r;
 }
 
 void PSVECNormalize(Vec* vec1, Vec* dst)
 {
     if (!ps_ptr_valid(vec1) || !ps_ptr_valid(dst)) return;
-    f32 mag = vec1->z * vec1->z + (vec1->x * vec1->x + vec1->y * vec1->y);
+    /* 80342DC4-D0: ps_mul, ps_madd, ps_sum0 -- `(z*z + x*x) + y*y`, the first
+     * pair fused. Not the grouping the C reads as. */
+    f32 mag = fmaf(vec1->z, vec1->z, vec1->x * vec1->x) + vec1->y * vec1->y;
     if (mag == 0.0f) {
         return;  /* zero-magnitude vector: leave dst unchanged */
     }
@@ -96,7 +116,8 @@ void PSVECNormalize(Vec* vec1, Vec* dst)
      * exact reciprocal put every normal ~1 ULP from the console's -- and with
      * it every velocity projected along a floor. */
     f32 est = (f32) __frsqrte((double) mag);
-    est = 0.5f * est * (3.0f - est * est * mag);
+    /* 80342DDC/E0: fnmsubs then fmuls, so `3.0 - (e*e)*n` is one rounding. */
+    est = fmaf(-(est * est), mag, 3.0f) * (0.5f * est);
     f32 inv = est;
     dst->x = vec1->x * inv;
     dst->y = vec1->y * inv;
