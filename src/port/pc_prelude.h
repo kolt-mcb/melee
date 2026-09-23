@@ -119,3 +119,45 @@ float __fabsf(float);
             : (x) <= -2147483648.0                                            \
                 ? (s32) 0x80000000                                            \
                 : (s32) (x)))
+
+/* The 750's single-precision multiplier is 25 bits wide, not 53 and not 24.
+ * Every fmuls/fmadds/fnmsubs rounds its *multiplier* operand -- frC, the third
+ * register in the A-form -- to 25 significant bits before multiplying, and
+ * only then rounds the result to single. Dolphin models it as Force25Bit and
+ * this is the same function.
+ *
+ * It makes no difference to an operand that is already a single, which is why
+ * nothing in the port has needed it: 24 bits survive a 25-bit round untouched.
+ * It matters for exactly one kind of value -- the output of frsqrte, whose
+ * mantissa is a table entry shifted left by 26 and so carries 26 significant
+ * bits. Squaring that estimate with fmuls, as PSVECMag and PSVECNormalize do,
+ * is a multiply of the full estimate by the estimate rounded to 25 bits.
+ * Rounding both to f32 first throws a bit away that the console keeps; not
+ * rounding either keeps a bit the console throws away. */
+static inline double pc_force25(double d)
+{
+    union {
+        double d;
+        unsigned long long u;
+    } v;
+    unsigned long long frac;
+    v.d = d;
+    frac = v.u & 0x000FFFFFFFFFFFFFULL;
+    if ((v.u & 0x7FF0000000000000ULL) == 0 && frac != 0) {
+        /* A subnormal is normalised before it is rounded, which moves the
+         * rounding bit. */
+        long long keep = (long long) 0xFFFFFFFFF8000000LL;
+        unsigned long long round = 0x8000000ULL;
+        unsigned shift = 0;
+        while (shift < 52 && !(frac & (1ULL << (51 - shift)))) {
+            shift++;
+        }
+        keep >>= shift;
+        round >>= shift;
+        v.u = (v.u & (unsigned long long) keep) + (v.u & round);
+    } else {
+        v.u = (v.u & 0xFFFFFFFFF8000000ULL) + (v.u & 0x8000000ULL);
+    }
+    return v.d;
+}
+#define PC_FORCE25(x) pc_force25(x)

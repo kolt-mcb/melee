@@ -97,9 +97,15 @@ f32 PSVECMag(Vec* v)
      * mantissa, twenty-six significant bits, so rounding it to f32 first
      * throws away three bits that the console keeps. acosf does round it,
      * because there the compiler emitted an frsp (80022D48); these two
-     * functions do not. */
+     * functions do not.
+     *
+     * The square is not e*e either. fmuls rounds its multiplier operand to
+     * twenty-five bits (PC_FORCE25, Dolphin's Force25Bit), which is one bit
+     * narrower than the estimate -- so the console multiplies the full
+     * estimate by a 25-bit copy of it. Rounding both to f32 loses two bits
+     * and rounding neither keeps one too many. */
     f64 e = __frsqrte((f64) n);
-    f32 ee = (f32) (e * e);
+    f32 ee = (f32) (e * PC_FORCE25(e));
     f32 he = (f32) (e * 0.5);
     f32 r = fmaf(-ee, n, 3.0f) * he;
     /* 80342E2C is an fsel: a negative or NaN refinement (n == 0 gives one)
@@ -129,7 +135,7 @@ void PSVECNormalize(Vec* vec1, Vec* dst)
     /* And the estimate stays in double here too: 80342DD4 is frsqrte and
      * 80342DD8 is fmuls with no frsp between them. See PSVECMag above. */
     f64 e = __frsqrte((double) mag);
-    f32 ee = (f32) (e * e);
+    f32 ee = (f32) (e * PC_FORCE25(e));
     f32 he = (f32) (e * 0.5);
     /* 80342DDC/E0: fnmsubs then fmuls, so `3.0 - (e*e)*n` is one rounding. */
     f32 inv = fmaf(-ee, mag, 3.0f) * he;
