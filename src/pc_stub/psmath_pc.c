@@ -25,6 +25,7 @@ extern double __fres(double);
 
 #include <dolphin/mtx.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdint.h>
 
 /* PC port: some callers (e.g. the light setup in lobj.c) pass matrix/vector
@@ -206,18 +207,29 @@ void PSMTXRotAxisRad(Mtx m, Vec* axis, f32 rad)
     f32 c = cosf(rad);
     f32 t = 1.0f - c;
     f32 x = n.x, y = n.y, z = n.z;
-    f32 xSq = x * x, ySq = y * y, zSq = z * z;
-    m[0][0] = c + t * xSq;
-    m[0][1] = y * (t * x) - s * z;
-    m[0][2] = z * (t * x) + s * y;
+    /* Every term is one fused multiply-add on the console. Read off
+     * PSMTXRotAxisRad at 80342530: the off-diagonals come out as
+     * `fnmsubs f6,f1,f30,f3` and `fmadds f7,f1,f30,f3` -- f30 is the sine,
+     * f3 the t*a*b product, f1 the remaining axis component -- so the
+     * `+/- s*component` is added to the product without rounding the product
+     * first. Written as two separate operations the result is a ULP away,
+     * and these matrices are the fighter's joint rotations: the leg IK runs
+     * its two joints through this twice a frame, and one ULP there moved
+     * Samus's leg hurt capsules (bones 13 and 14) enough to change x560 and
+     * x564 -- the reach the CPU AI reads -- which is where the port and the
+     * console first disagree in a level 9 match. */
+    f32 txy = y * (t * x), txz = z * (t * x), tyz = z * (t * y);
+    m[0][0] = fmaf(t * x, x, c);
+    m[0][1] = fmaf(-z, s, txy);
+    m[0][2] = fmaf(y, s, txz);
     m[0][3] = 0;
-    m[1][0] = y * (t * x) + s * z;
-    m[1][1] = c + t * ySq;
-    m[1][2] = z * (t * y) - s * x;
+    m[1][0] = fmaf(z, s, txy);
+    m[1][1] = fmaf(t * y, y, c);
+    m[1][2] = fmaf(-x, s, tyz);
     m[1][3] = 0;
-    m[2][0] = z * (t * x) - s * y;
-    m[2][1] = z * (t * y) + s * x;
-    m[2][2] = c + t * zSq;
+    m[2][0] = fmaf(-y, s, txz);
+    m[2][1] = fmaf(x, s, tyz);
+    m[2][2] = fmaf(t * z, z, c);
     m[2][3] = 0;
 }
 
