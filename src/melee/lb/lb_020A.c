@@ -274,12 +274,13 @@ void lbBgFlash_80021410(IKState* data)
             const char* e = getenv("MELEE_IKDUMP");
             want = (e == NULL) ? -2 : (strcmp(e, "all") == 0 ? -1 : atoi(e));
         }
-        /* want=-1 via MELEE_IKDUMP=all prints the first few calls whatever
-         * frame they land on: the solver does not run at match frame 7 at
-         * all -- the legs are posed by a solve that happened earlier, during
-         * the load -- so asking for one frame prints nothing. */
-        static int n_;
-        if (want >= 0 ? (int) gm_GetFrameCount() == want : (want == -1 && n_++ < 8)) {
+        /* want=-1 via MELEE_IKDUMP=all prints every call. It used to stop
+         * after eight, and those eight all landed on frame 0 -- which I read
+         * as "the solver never runs during the match". It was the cap: the
+         * console's logging breakpoint at 80021410 fires four times on every
+         * frame (two legs, two fighters), and so does this. Never let a
+         * counting probe carry its own limit. */
+        if (want >= 0 ? (int) gm_GetFrameCount() == want : want == -1) {
             const u32* w = (const u32*) &data->pos0;
             fprintf(stderr,
                     "[IKIN-PORT] gframe=%d pos0=(%08x,%08x,%08x) "

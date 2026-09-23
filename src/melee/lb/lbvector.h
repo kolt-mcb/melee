@@ -27,9 +27,17 @@
 #define LV_DOT(ax, ay, az, bx, by, bz)                                        \
     LV_FMA((az), (bz), LV_FMA((ax), (bx), (ay) * (by)))
 
+/* Not LV_DOT. lbVector_Normalize, 8000D2EC, is three fmuls and two fadds --
+ * fmuls x,x / fmuls y,y / fmuls z,z / fadds (x+y) / fadds (z + that) -- with
+ * no fused instruction anywhere in it, so the squared length here is the plain
+ * left-to-right sum the C reads as. The fused spelling was one ULP high on
+ * the leg IK's normalise, and pos3.z is that normal scaled and added back to
+ * pos1.z, which cancels 3.06 down to 0.456 and turns the one ULP into eight.
+ * LV_DOT stays fused where it belongs: lbVector_CreateEulerMatrix and
+ * lbVector_Rotate really do emit fmadds. */
 static inline float lbVector_Len(Vec3* vec)
 {
-    return sqrtf(LV_DOT(vec->x, vec->y, vec->z, vec->x, vec->y, vec->z));
+    return sqrtf(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
 }
 
 static inline float lbVector_Len_xy(Vec3* vec)
