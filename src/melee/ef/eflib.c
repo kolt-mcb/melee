@@ -637,6 +637,30 @@ static void pc_ef_dump_jobj(HSD_JObj* j, int depth)
 
 EF_Effect* efLib_Create(int gfx_id, HSD_GObj* parent_gobj)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_GENNEW's window: every effect object made through the library's
+     * main entry, with the code that asked. The sub-effects a running effect's
+     * animation key spawns are a level below this; what differs between the
+     * two sides is one of these, made a frame early. */
+    {
+        static int clo = -2, chi;
+        if (clo == -2) {
+            const char* e = getenv("MELEE_EFCREATE");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            clo = e ? atoi(e) : -1;
+            chi = dash ? atoi(dash + 1) : clo;
+        }
+        if (clo >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            int cf = (int) gm_GetFrameCount();
+            if (cf >= clo && cf <= chi) {
+                fprintf(stderr, "[EFCREATE] gframe=%d gfx=%d ret=%p\n", cf,
+                        (int) gfx_id, __builtin_return_address(0));
+            }
+        }
+    }
+#endif
+
     EF_Effect* effect;
     EF_EffectDesc* desc;
     u8 p_link;
@@ -1122,6 +1146,31 @@ HSD_Generator* efLib_CreateGenerator_AppSRT_SetFacingDirScale(s32 gfx_id,
 
 void efLib_SpawnParticleEffect(int bank, s32 gfx_id, HSD_JObj* jobj, bool flag)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_GENNEW=<lo>-<hi>: the game-side request for an effect. The
+     * particle system below this point behaves identically on the two sides;
+     * what differs is that this is called on two consecutive frames here and
+     * on one there. The console's equivalent is a logging breakpoint on
+     * efLib_SpawnParticleEffect, 8005D174, whose lr is this return address. */
+    {
+        static int elo = -2, ehi;
+        if (elo == -2) {
+            const char* e = getenv("MELEE_GENNEW");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            elo = e ? atoi(e) : -1;
+            ehi = dash ? atoi(dash + 1) : elo;
+        }
+        if (elo >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            int ef = (int) gm_GetFrameCount();
+            if (ef >= elo && ef <= ehi) {
+                fprintf(stderr, "[EFSPAWN] gframe=%d bank=%d gfx=%d ret=%p\n",
+                        ef, bank, (int) gfx_id, __builtin_return_address(0));
+            }
+        }
+    }
+#endif
+
 #if BUILD_TARGET_PC
     if (getenv("MELEE_EFSPAWN") != NULL) {
         extern u32 gm_GetFrameCount(void);

@@ -71,7 +71,7 @@ HSD_JObj* pc_watch_jobj;
 #define PC_TRACE_HEADER                                                       \
     "#fields frame gframe mode scene seed stage"                                         \
     " p_state p_char p_pct p_stk p_motion p_animf p_x p_y p_face p_vx p_vy "  \
-    "p_goa p_floor p_env p_ecbbx p_ecbby p_aihash"
+    "p_goa p_floor p_env p_ecbbx p_ecbby p_kbap p_hitdly p_aihash"
 
 #define PC_TRACE_PLAYERS 4
 
@@ -1922,7 +1922,7 @@ void pc_trace_frame(int frame)
              * fighter appearing or vanishing one frame early is itself a
              * divergence rather than a gap in the file. */
             n += snprintf(line + n, sizeof(line) - n,
-                          " - - - - - - - - - - - - -");
+                          " - - - - - - - - - - - - - - -");
             continue;
         }
 
@@ -1947,6 +1947,16 @@ void pc_trace_frame(int frame)
                        fp->coll_data.ecb.bottom.x);
         n += trace_f32(line + n, sizeof(line) - n,
                        fp->coll_data.ecb.bottom.y);
+        /* The two fields that decide the deferred hit effect. fp+1850 is the
+         * knockback-applied flag and fp+189C a float countdown; when the
+         * countdown reaches zero with the flag clear, Fighter_ProcessHit calls
+         * ftColl_8007BE3C, which spawns the hit spark. The port did that on a
+         * frame the console never did, and neither field was compared -- the
+         * first thing the trace saw was thirty-nine extra RNG draws, nine
+         * hundred frames after everything else still agreed. */
+        n += trace_f32(line + n, sizeof(line) - n, fp->dmg.kb_applied);
+        n += trace_f32(line + n, sizeof(line) - n,
+                       fp->dmg.x189C_unk_num_frames);
         {
             static int dump_at = -2;
             if (dump_at == -2) {
@@ -2352,3 +2362,61 @@ void pc_jobj_note(const char* who, void* j)
 }
 
 #endif /* BUILD_TARGET_PC */
+
+/* MELEE_FWATCH=<hex address>: the float at that address, read before and after
+ * every object callback (gobj.c calls this either side of on_invoke). When it
+ * changes, the callback that changed it is named. A field that the C assigns in
+ * exactly one place can still change -- some other write landed on it -- and
+ * then there is nothing in the source to grep for. */
+void pc_fwatch(const char* what, void* who, void* gobj)
+{
+    static int slot = -2;
+    static int from;
+    static int live;
+    static unsigned last;
+    const unsigned* addr;
+    unsigned now;
+    StaticPlayer* sp;
+    HSD_GObj* pg;
+    Fighter* fp;
+
+    if (slot == -2) {
+        const char* e = getenv("MELEE_FWATCH");
+        const char* f = getenv("MELEE_FWATCH_FROM");
+        slot = e ? atoi(e) : -1;
+        from = f ? atoi(f) : 0;
+    }
+    if (slot < 0 || (int) gm_GetFrameCount() < from) {
+        return;
+    }
+    /* Resolved from the player slot every call, not from a fixed address: the
+     * heap pool is not mapped at the same place twice, so an address read out
+     * of one run's log is a fault in the next. */
+    sp = Player_GetPtrForSlot(slot);
+    if (sp == NULL) {
+        return;
+    }
+    pg = sp->player_entity[0];
+    if (pg == NULL || !pc_ptr_sane(pg)) {
+        return;
+    }
+    fp = (Fighter*) pg->user_data;
+    if (fp == NULL || !pc_ptr_sane(fp)) {
+        return;
+    }
+    addr = (const unsigned*) &fp->dmg.x189C_unk_num_frames;
+    now = *addr;
+    if (!live) {
+        live = 1;
+        last = now;
+        fprintf(stderr, "[FWATCH] armed on p%d at %p, gframe %u, value %08x\n",
+                slot, (const void*) addr, (unsigned) gm_GetFrameCount(), last);
+        return;
+    }
+    if (now != last) {
+        fprintf(stderr,
+                "[FWATCH] gframe=%u %s callback %p (gobj %p): %08x -> %08x\n",
+                (unsigned) gm_GetFrameCount(), what, who, gobj, last, now);
+        last = now;
+    }
+}

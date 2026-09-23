@@ -251,8 +251,30 @@ void HSD_GObj_RunProcs(void)
                         port_guard_warn("gobj.c:proc_invoke");
                     } else
 #endif
+#if BUILD_TARGET_PC
+                    /* MELEE_FWATCH=<hex address>: read the float at that
+                     * address before and after every object callback and name
+                     * the callback that changes it. A field with exactly one
+                     * assignment in the C can still change, and when it does
+                     * there is nothing in the source to grep for -- some other
+                     * write landed on it. This says which object's callback did
+                     * it, which is as far as a watchpoint would get and does
+                     * not need one. */
+                    {
+                        extern void pc_fwatch(const char* what, void* who,
+                                              void* gobj);
+                        pc_fwatch("before", (void*) proc->on_invoke,
+                                  (void*) proc->gobj);
+                    }
+#endif
                     proc->on_invoke(proc->gobj);
 #if BUILD_TARGET_PC
+                    {
+                        extern void pc_fwatch(const char* what, void* who,
+                                              void* gobj);
+                        pc_fwatch("after", (void*) proc->on_invoke,
+                                  (void*) proc->gobj);
+                    }
                     /* MELEE_PROCCHECK=1: walk every priority list after each
                      * callback and name the first one that leaves a link that
                      * is not a pointer. A corrupted list only faults on the

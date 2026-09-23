@@ -3658,6 +3658,33 @@ void Fighter_8006D10C(Fighter_GObj* gobj)
     }
 }
 
+#if BUILD_TARGET_PC
+/* The three damage fields the deferred hit effect turns on must sit where the
+ * console puts them: fp+1850, fp+189C and fp+195C. A struct laid out even four
+ * bytes differently makes one of them alias a neighbour, and a write meant for
+ * the neighbour arms the hit effect. Checked once, at startup, because getting
+ * this wrong is silent. */
+__attribute__((constructor)) static void pc_check_dmg_offsets(void)
+{
+    if (getenv("MELEE_DMGOFF") != NULL) {
+        fprintf(stderr,
+                "[DMGOFF] from x1870: x1874=%#zx x1878=%#zx x187c=%#zx "
+                "x1880=%#zx x188c=%#zx x1890=%#zx x1894=%#zx x1898=%#zx "
+                "x189C=%#zx (console 4 8 c 10 1c 20 24 28 2c)\n",
+                offsetof(Fighter, dmg.x1874) - offsetof(Fighter, dmg.x1870),
+                offsetof(Fighter, dmg.x1878) - offsetof(Fighter, dmg.x1870),
+                offsetof(Fighter, dmg.x187c) - offsetof(Fighter, dmg.x1870),
+                offsetof(Fighter, dmg.x1880) - offsetof(Fighter, dmg.x1870),
+                offsetof(Fighter, dmg.x188c) - offsetof(Fighter, dmg.x1870),
+                offsetof(Fighter, dmg.x1890) - offsetof(Fighter, dmg.x1870),
+                offsetof(Fighter, dmg.x1894) - offsetof(Fighter, dmg.x1870),
+                offsetof(Fighter, dmg.x1898) - offsetof(Fighter, dmg.x1870),
+                offsetof(Fighter, dmg.x189C_unk_num_frames) -
+                    offsetof(Fighter, dmg.x1870));
+    }
+}
+#endif
+
 void Fighter_ProcessHit_8006D1EC(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -3698,6 +3725,34 @@ void Fighter_ProcessHit_8006D1EC(Fighter_GObj* gobj)
             }
         }
 
+#if BUILD_TARGET_PC
+        /* MELEE_HITDLY=<lo>-<hi>: the deferred-hit countdown as this frame
+         * finds it, before the decrement. The console's equivalent is a
+         * logging breakpoint at 8006D318, where f2 holds the same value. Both
+         * sides agree on this field at the trace point because the countdown is
+         * set and consumed inside one frame; the only place it can be compared
+         * is here. */
+        {
+            static int hlo = -2, hhi;
+            if (hlo == -2) {
+                const char* e = getenv("MELEE_HITDLY");
+                const char* dash = e ? strchr(e, '-') : NULL;
+                hlo = e ? atoi(e) : -1;
+                hhi = dash ? atoi(dash + 1) : hlo;
+            }
+            if (hlo >= 0) {
+                int hf = (int) gm_GetFrameCount();
+                if (hf >= hlo && hf <= hhi) {
+                    fprintf(stderr,
+                            "[HITDLY] gframe=%d p%d dly=%08x kbap=%08x at=%p\n", hf,
+                            (int) fp->player_id,
+                            *(const unsigned*) &fp->dmg.x189C_unk_num_frames,
+                            *(const unsigned*) &fp->dmg.kb_applied,
+                            (void*) &fp->dmg.x189C_unk_num_frames);
+                }
+            }
+        }
+#endif
         if (fp->dmg.x189C_unk_num_frames > 0.0f) {
             fp->dmg.x189C_unk_num_frames--;
             if (fp->dmg.x189C_unk_num_frames <= 0.0f && !fp->dmg.kb_applied) {
@@ -3838,6 +3893,31 @@ void Fighter_ProcessHit_8006D1EC(Fighter_GObj* gobj)
                 }
                 if (bool4) {
                     fp->dmg.x189C_unk_num_frames = fp->dmg.x195c_hitlag_frames;
+#if BUILD_TARGET_PC
+                    /* MELEE_HITDLY's window: the assignment that arms the
+                     * deferred hit effect. 8006D774 on the console, whose f0
+                     * is this same hitlag value (MELEE_CODE_BP=8006D774 with
+                     * MELEE_CODE_BP_FPRS=1). */
+                    {
+                        static int slo = -2, shi;
+                        if (slo == -2) {
+                            const char* e = getenv("MELEE_HITDLY");
+                            const char* dash = e ? strchr(e, '-') : NULL;
+                            slo = e ? atoi(e) : -1;
+                            shi = dash ? atoi(dash + 1) : slo;
+                        }
+                        if (slo >= 0) {
+                            int sf = (int) gm_GetFrameCount();
+                            if (sf >= slo && sf <= shi) {
+                                fprintf(stderr,
+                                        "[HITARM] gframe=%d p%d hitlag=%08x\n",
+                                        sf, (int) fp->player_id,
+                                        *(const unsigned*)
+                                            &fp->dmg.x195c_hitlag_frames);
+                            }
+                        }
+                    }
+#endif
                 }
                 if (!fp->x2219_b5) {
                     Fighter_UnkRecursiveFunc_8006D044(gobj);

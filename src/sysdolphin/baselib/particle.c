@@ -8273,6 +8273,31 @@ HSD_Generator* hsd_8039D9C8(void)
     gen->idnum = lbl_804D6368;
     gen->appsrt = NULL;
     gen->userfunc = NULL;
+#if BUILD_TARGET_PC
+    /* MELEE_GENNEW=<lo>-<hi>: name the caller of every generator created in
+     * that range of match frames. The console's equivalent is a logging
+     * breakpoint on this function (MELEE_CODE_BP=8039D9C8), whose lr is the
+     * same thing. The two sides create the same generators in the same order
+     * for a whole match and then one side creates a group a frame before the
+     * other; this says which code asked for it. */
+    {
+        static int lo = -2, hi;
+        if (lo == -2) {
+            const char* e = getenv("MELEE_GENNEW");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            lo = e ? atoi(e) : -1;
+            hi = dash ? atoi(dash + 1) : lo;
+        }
+        if (lo >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            int f = (int) gm_GetFrameCount();
+            if (f >= lo && f <= hi) {
+                fprintf(stderr, "[GENNEW] gframe=%d id=%d ret=%p\n", f,
+                        (int) gen->idnum, __builtin_return_address(0));
+            }
+        }
+    }
+#endif
     return gen;
 }
 
@@ -9114,6 +9139,29 @@ void hsd_8039EE24(u32 mask)
 
 HSD_Generator* hsd_8039EFAC(s32 linkNo, s32 bank, s32 gfx_id, HSD_JObj* jobj)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_GENNEW's window again, at the entry the game itself calls: the
+     * gfx ids the two sides disagree about (306, 307) come in through here,
+     * so this return address names the code that asked for the effect. */
+    {
+        static int alo = -2, ahi;
+        if (alo == -2) {
+            const char* e = getenv("MELEE_GENNEW");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            alo = e ? atoi(e) : -1;
+            ahi = dash ? atoi(dash + 1) : alo;
+        }
+        if (alo >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            int af = (int) gm_GetFrameCount();
+            if (af >= alo && af <= ahi) {
+                fprintf(stderr, "[EFASK] gframe=%d gfx=%d ret=%p\n", af,
+                        (int) gfx_id, __builtin_return_address(0));
+            }
+        }
+    }
+#endif
+
     HSD_Generator* gen;
 
     gen = hsd_8039F05C(linkNo, bank, gfx_id);
@@ -9134,6 +9182,31 @@ HSD_Generator* hsd_8039EFAC(s32 linkNo, s32 bank, s32 gfx_id, HSD_JObj* jobj)
 // register-allocation cascade (extra saved reg + frame shift)
 HSD_Generator* hsd_8039F05C(s32 linkNo, s32 bank, s32 idx)
 {
+#if BUILD_TARGET_PC
+    /* Same window as MELEE_GENNEW, one level up: hsd_8039D9C8's caller is
+     * always this function, so the return address that names the effect is
+     * this one's. Taken with __builtin_return_address(0) rather than by
+     * walking -- (1) and (2) are not reliable without frame pointers here and
+     * took the process down. */
+    {
+        static int glo = -2, ghi;
+        if (glo == -2) {
+            const char* e = getenv("MELEE_GENNEW");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            glo = e ? atoi(e) : -1;
+            ghi = dash ? atoi(dash + 1) : glo;
+        }
+        if (glo >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            int gf = (int) gm_GetFrameCount();
+            if (gf >= glo && gf <= ghi) {
+                fprintf(stderr, "[GENASK] gframe=%d gfx=%d ret=%p\n", gf,
+                        (int) idx, __builtin_return_address(0));
+            }
+        }
+    }
+#endif
+
     HSD_PSCmdList** cmdListArr;
     HSD_PSCmdList* cl;
     HSD_PSTexGroup* tg;

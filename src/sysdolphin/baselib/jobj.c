@@ -695,6 +695,39 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
             s32 iv = val->iv;
             s32 lo = iv & 0x3F;
             s32 hi = iv >> 6 & 0xFFFFFF;
+#if BUILD_TARGET_PC
+            /* MELEE_DPTCLAT=<lo>-<hi>: this key is what asks for an effect,
+             * and it is asked for on two consecutive frames here where the
+             * console asks once. Printing the driving AObj's frame says
+             * whether the animation stalled a frame or whether the key was
+             * emitted twice from different frames. */
+            {
+                static int dlo = -2, dhi;
+                if (dlo == -2) {
+                    const char* e = getenv("MELEE_DPTCLAT");
+                    const char* dash = e ? strchr(e, '-') : NULL;
+                    dlo = e ? atoi(e) : -1;
+                    dhi = dash ? atoi(dash + 1) : dlo;
+                }
+                if (dlo >= 0) {
+                    extern u32 gm_GetFrameCount(void);
+                    int df = (int) gm_GetFrameCount();
+                    if (df >= dlo && df <= dhi) {
+                        HSD_AObj* ao = jobj->aobj;
+                        fprintf(stderr,
+                                "[DPTCL] gframe=%d lo=%d hi=%d jobj=%p "
+                                "aobj=%p flags=%08x curr=%08x rate=%08x "
+                                "end=%08x\n",
+                                df, (int) lo, (int) hi, (void*) jobj,
+                                (void*) ao,
+                                ao ? (unsigned) ao->flags : 0u,
+                                ao ? *(const unsigned*) &ao->curr_frame : 0u,
+                                ao ? *(const unsigned*) &ao->framerate : 0u,
+                                ao ? *(const unsigned*) &ao->end_frame : 0u);
+                    }
+                }
+            }
+#endif
             if (dptcl_callback != NULL) {
                 dptcl_callback(0, lo, hi, jobj);
             }
