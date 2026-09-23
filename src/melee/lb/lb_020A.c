@@ -10,6 +10,9 @@
 #include "lb_020A.h"
 
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <placeholder.h>
 
 #include "lbvector.h"
@@ -258,6 +261,39 @@ static inline f32 sqrtf_store(f32 x, volatile f32* y)
 
 void lbBgFlash_80021410(IKState* data)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_IKDUMP=<match frame> prints the state this solve was handed, in
+     * the same form and at the same point as the console's breakpoint on
+     * 80021410 (Core.cpp). The solver's own code has been read against that
+     * instruction stream and matches; what has not been compared is what it
+     * is given. */
+    {
+        static int want = -2;
+        extern u32 gm_GetFrameCount(void);
+        if (want == -2) {
+            const char* e = getenv("MELEE_IKDUMP");
+            want = (e == NULL) ? -2 : (strcmp(e, "all") == 0 ? -1 : atoi(e));
+        }
+        /* want=-1 via MELEE_IKDUMP=all prints the first few calls whatever
+         * frame they land on: the solver does not run at match frame 7 at
+         * all -- the legs are posed by a solve that happened earlier, during
+         * the load -- so asking for one frame prints nothing. */
+        static int n_;
+        if (want >= 0 ? (int) gm_GetFrameCount() == want : (want == -1 && n_++ < 8)) {
+            const u32* w = (const u32*) &data->pos0;
+            fprintf(stderr,
+                    "[IKIN-PORT] gframe=%d pos0=(%08x,%08x,%08x) "
+                    "pos1=(%08x,%08x,%08x) pos2=(%08x,%08x,%08x) "
+                    "pos3=(%08x,%08x,%08x) pos4=(%08x,%08x,%08x) "
+                    "len=(%08x,%08x) ang=(%08x,%08x)\n",
+                    (int) gm_GetFrameCount(), w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7],
+                    w[8], w[9], w[10], w[11], w[12], w[13], w[14],
+                    *(const u32*) &data->len0, *(const u32*) &data->len1,
+                    *(const u32*) &data->angle_max,
+                    *(const u32*) &data->angle_limit);
+        }
+    }
+#endif
     u8 pad_hi[32];
     Vec3 axis;
     u8 pad_mid[16];
