@@ -4,6 +4,7 @@
 #include "ft_0899.h"
 
 #include <math.h>
+#include <stdlib.h>
 
 #include "fighter.h"
 #include "ftparts.h"
@@ -86,6 +87,46 @@ static bool fn_8008998C(Fighter* fp, IKState* ik, Vec3* normal)
  * switch). That file is not in the PC build, so the symbol fell through to
  * the zeroed weak data stub and the whole planting pass below was off. */
 int db_804D4AF8 = 1;
+
+/* MELEE_NO_LEGIK=1 turns the planting pass off on this side, to pair with
+ * MELEE_POKE=804d4af8:4:0 on the console's. Both sides then skip the same
+ * code, which is how a bone difference can be attributed to the IK rather
+ * than to the skeleton the IK is applied to. */
+void pc_legik_env(void)
+{
+    static int done;
+    if (!done) {
+        done = 1;
+        if (getenv("MELEE_NO_LEGIK") != NULL) {
+            db_804D4AF8 = 0;
+        }
+    }
+}
+
+/* MELEE_NO_IK_ANKLE=1 skips the ankle alignment that follows each solve, to
+ * pair with nopping the two `bl lbBgFlash_80020E38` at 80089d3c and 80089f5c
+ * on the console. Splitting the pass in two says which half carries the
+ * difference. */
+int pc_ik_ankle_off(void)
+{
+    static int v = -1;
+    if (v < 0) {
+        v = getenv("MELEE_NO_IK_ANKLE") != NULL;
+    }
+    return v;
+}
+
+/* MELEE_NO_IK_SOLVE=1 skips the two-bone solve but keeps the ankle
+ * alignment, pairing with nops over `bl lbBgFlash_80021410` at 80089d24 and
+ * 80089f44. The other half of the same split. */
+int pc_ik_solve_off(void)
+{
+    static int v = -1;
+    if (v < 0) {
+        v = getenv("MELEE_NO_IK_SOLVE") != NULL;
+    }
+    return v;
+}
 #endif
 
 void ft_80089B08(Fighter_GObj* gobj)
@@ -114,6 +155,7 @@ void ft_80089B08(Fighter_GObj* gobj)
          * runs while a fighter is standing, so it first became reachable the
          * moment stage collision started working -- before that nobody was
          * ever grounded. Feet stay unplanted; the fighter still stands. */
+        pc_legik_env();
         if (db_804D4AF8 != 0 && pc_ptr_sane(fp->ft_data) &&
             pc_ptr_sane(fp->ft_data->x58))
 #else
@@ -152,8 +194,10 @@ void ft_80089B08(Fighter_GObj* gobj)
                 rot_save1 = ik.jobj1->rotate;
                 rot_save2 = ik.jobj2->rotate;
                 if (fn_8008998C(fp, &ik, &spA4) != 0) {
-                    lbBgFlash_80021410(&ik);
+                    if (!pc_ik_solve_off())
+                        lbBgFlash_80021410(&ik);
                 }
+                if (!pc_ik_ankle_off())
                 lbBgFlash_80020E38(ik.jobj2, &spA4, 0.34906584f, 0.34906584f,
                                    -1.0f);
                 ik.jobj0->rotate = rot_save0;
@@ -187,8 +231,10 @@ void ft_80089B08(Fighter_GObj* gobj)
                 rot_save4 = ik.jobj1->rotate;
                 rot_save5 = ik.jobj2->rotate;
                 if (fn_8008998C(fp, &ik, &spA4) != 0) {
-                    lbBgFlash_80021410(&ik);
+                    if (!pc_ik_solve_off())
+                        lbBgFlash_80021410(&ik);
                 }
+                if (!pc_ik_ankle_off())
                 lbBgFlash_80020E38(ik.jobj2, &spA4, 0.34906584f, 0.34906584f,
                                    1.0f);
                 ik.jobj0->rotate = rot_save3;
