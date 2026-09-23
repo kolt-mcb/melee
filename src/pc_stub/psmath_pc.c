@@ -88,9 +88,20 @@ f32 PSVECMag(Vec* v)
      * the leg IK rebuilds. */
     f32 n = fmaf(v->z, v->z, v->x * v->x) + v->y * v->y;
     /* 80342E14-2C: frsqrte, then fmuls/fmuls/fnmsubs/fmuls -- the
-     * `3.0 - n*e*e` is one rounding, and the 0.5*e is formed separately. */
-    f32 e = (f32) __frsqrte((f64) n);
-    f32 r = fmaf(-(e * e), n, 3.0f) * (0.5f * e);
+     * `3.0 - n*e*e` is one rounding, and the 0.5*e is formed separately.
+     *
+     * The estimate stays in double. There is no frsp between the frsqrte at
+     * 80342E14 and the fmuls at 80342E18, and fmuls rounds its *result* to
+     * single while reading full doubles -- so the console squares the
+     * unrounded estimate. frsqrte's answer is (base + dec*k) << 26 in the
+     * mantissa, twenty-six significant bits, so rounding it to f32 first
+     * throws away three bits that the console keeps. acosf does round it,
+     * because there the compiler emitted an frsp (80022D48); these two
+     * functions do not. */
+    f64 e = __frsqrte((f64) n);
+    f32 ee = (f32) (e * e);
+    f32 he = (f32) (e * 0.5);
+    f32 r = fmaf(-ee, n, 3.0f) * he;
     /* 80342E2C is an fsel: a negative or NaN refinement (n == 0 gives one)
      * falls back to n, so a zero vector answers zero rather than NaN. */
     if (!(r >= 0.0f)) {
@@ -115,10 +126,13 @@ void PSVECNormalize(Vec* vec1, Vec* dst)
      * data goes through here (mplib.c normalises each line's normal), so an
      * exact reciprocal put every normal ~1 ULP from the console's -- and with
      * it every velocity projected along a floor. */
-    f32 est = (f32) __frsqrte((double) mag);
+    /* And the estimate stays in double here too: 80342DD4 is frsqrte and
+     * 80342DD8 is fmuls with no frsp between them. See PSVECMag above. */
+    f64 e = __frsqrte((double) mag);
+    f32 ee = (f32) (e * e);
+    f32 he = (f32) (e * 0.5);
     /* 80342DDC/E0: fnmsubs then fmuls, so `3.0 - (e*e)*n` is one rounding. */
-    est = fmaf(-(est * est), mag, 3.0f) * (0.5f * est);
-    f32 inv = est;
+    f32 inv = fmaf(-ee, mag, 3.0f) * he;
     dst->x = vec1->x * inv;
     dst->y = vec1->y * inv;
     dst->z = vec1->z * inv;

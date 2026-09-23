@@ -292,6 +292,31 @@ void lbBgFlash_80021410(IKState* data)
                     *(const u32*) &data->len0, *(const u32*) &data->len1,
                     *(const u32*) &data->angle_max,
                     *(const u32*) &data->angle_limit);
+            /* And the three joints' rotations as they stand on entry. The
+             * inputs above are byte-identical to the console's for every call
+             * of a whole match, yet the world matrices of these same joints
+             * differ in their last bits -- so what the solver writes is where
+             * the difference is made, and the rotation it wrote last time is
+             * visible here as the rotation it is handed this time. */
+            {
+                HSD_JObj* jo[3];
+                int q;
+                jo[0] = data->jobj0;
+                jo[1] = data->jobj1;
+                jo[2] = data->jobj2;
+                fprintf(stderr, "[IKROT-PORT] gframe=%d", (int) gm_GetFrameCount());
+                for (q = 0; q < 3; q++) {
+                    const u32* rw =
+                        (jo[q] != NULL) ? (const u32*) &jo[q]->rotate : NULL;
+                    if (rw != NULL) {
+                        fprintf(stderr, " j%d=(%08x,%08x,%08x,%08x)", q, rw[0],
+                                rw[1], rw[2], rw[3]);
+                    } else {
+                        fprintf(stderr, " j%d=none", q);
+                    }
+                }
+                fprintf(stderr, "\n");
+            }
         }
     }
 #endif

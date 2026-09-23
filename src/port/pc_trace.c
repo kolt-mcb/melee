@@ -1183,6 +1183,22 @@ static void pc_trace_bones(void)
                 for (k = 0; k < 12; k++) {
                     fprintf(stderr, " m%d=%08x", k, w[k]);
                 }
+                /* The parent's scl: the scale HSD_MtxSRT divides out under
+                 * JOBJ_CLASSICAL_SCALE. It passes the scale through
+                 * s * (1.0 / s), which is not exactly 1.0, so whether this
+                 * pointer is set decides the last bit of the matrix even for a
+                 * joint whose own scale is (1,1,1). Printed as set/not-set,
+                 * because the pointer values cannot be compared across the
+                 * two address spaces. */
+                {
+                    const Vec3* ps = j->parent ? j->parent->scl : NULL;
+                    fprintf(stderr, " pscl=%d", ps != NULL);
+                    if (ps != NULL) {
+                        fprintf(stderr, " psclv=(%08x,%08x,%08x)",
+                                *(const u32*) &ps->x, *(const u32*) &ps->y,
+                                *(const u32*) &ps->z);
+                    }
+                }
                 /* The AObj on the *displayed* joint: ftAnim_8006F3DC reads
                  * the fighter's animation frame straight off it, so a frame
                  * that stops advancing shows here and nowhere else. */
