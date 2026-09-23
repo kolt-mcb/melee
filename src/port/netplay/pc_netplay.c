@@ -474,6 +474,19 @@ static int slp_enet_open(void)
      * as the two sides do not both pick the same one by accident, which is
      * what the seed and the slot are mixed in for. */
     slp_my_rng = ((net_seed >> 8) + (unsigned) net_slot * 0x5BD1u) & 0xFFFFu;
+    /* The host is the decider, so the agreed seed is its own offer and it can
+     * adopt it now instead of waiting for the peer to answer. That matters:
+     * every frame from here to the match's first pins net_seed, and the host
+     * used to pin its unnegotiated default through boot and the load while
+     * the guest pinned the agreed value. Those frames spawn particles, the
+     * particle scripts draw from the same generator the fighters do, and a
+     * frame's draw count is therefore a particle census -- so the two sides
+     * came out of the entry sequence with the fighters in different states
+     * (Samus still falling on one side, landed on the other) even though the
+     * seed itself agreed from the moment the offers were exchanged. */
+    if (net_is_host) {
+        net_seed = slp_my_rng;
+    }
     return 1;
 }
 
