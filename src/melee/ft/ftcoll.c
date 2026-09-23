@@ -1412,10 +1412,18 @@ void ftColl_80078538(Fighter_GObj* gobj, Vec3* pos, u32 dmg, float ignored,
 #if BUILD_TARGET_PC
     if (getenv("MELEE_ASLOG") != NULL) {
         extern u32 pc_frame_number;
+        extern u32 gm_GetFrameCount(void);
         Fighter* vfp = GET_FIGHTER(gobj);
-        fprintf(stderr, "[HIT] f%u victim p%d at (%.1f,%.1f) severity %u scale %.1f\n",
-                pc_frame_number, (int) vfp->player_id, (double) pos->x, (double) pos->y,
-                (unsigned) dmg, (double) scale);
+        fprintf(stderr,
+                "[HIT] f%u gframe=%u victim p%d at (%.1f,%.1f) severity %u "
+                "scale %.1f raw pos=(%08x,%08x,%08x) ign=%08x scl=%08x "
+                "ret=%p\n",
+                pc_frame_number, (unsigned) gm_GetFrameCount(),
+                (int) vfp->player_id, (double) pos->x, (double) pos->y,
+                (unsigned) dmg, (double) scale, *(const unsigned*) &pos->x,
+                *(const unsigned*) &pos->y, *(const unsigned*) &pos->z,
+                *(const unsigned*) &ignored, *(const unsigned*) &scale,
+                __builtin_return_address(0));
     }
 #endif
     Fighter* fp = gobj->user_data;
@@ -2968,6 +2976,52 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
         angle = (float) angle_int;
     }
 
+#if BUILD_TARGET_PC
+    /* struct DmgResult is the console's byte layout, and it cannot be laid over
+     * either destination here. fp->dmg carries the same nine-field damage
+     * record twice -- once from facing_dir_1 and once from x1870 -- and on the
+     * host both have moved: x1870 is a DmgLogEntry*, eight bytes instead of
+     * four, so everything after it in the second record shifts by four and
+     * out->damage lands on x189C_unk_num_frames. That field is the deferred hit
+     * effect's countdown. Writing a damage figure into it armed the effect, and
+     * a frame later Fighter_ProcessHit spawned a hit spark the console never
+     * spawned -- thirty-nine extra HSD_Randf draws, and every random number
+     * after that belonged to the other side's stream. sync_pair2 diverged at
+     * match frame 1881 with nothing else wrong.
+     *
+     * The two records also differ in their host layout from each other (the
+     * pointer is at +0x24 in the first and at +0x00 in the second), so one
+     * corrected overlay cannot serve both. These write the named fields. */
+    {
+        struct dmg* dr = &fp->dmg;
+        const bool first = (dmg_ptr == (void*) &dr->facing_dir_1);
+        if (first) {
+            dr->facing_dir_1 = dir;
+            dr->x1848_kb_angle = (int) angle;
+            dr->x184c_damaged_hurtbox = (int) best_entry->hurt1->height;
+            dr->kb_applied = best_kb.v;
+            dr->x1854_collpos = best_entry->pos;
+            dr->x1860_element = element;
+            dr->x1868_source = best_entry->gobj;
+            /* the console writes the float's bits into this int */
+            *(float*) &dr->x186c = best_entry->x20;
+            dr->x1864 = sfx_severity;
+        } else {
+            /* x1870 holds the direction in this record: the console reuses the
+             * same four bytes it declares as a DmgLogEntry*. */
+            *(float*) &dr->x1870 = dir;
+            dr->x1874 = (int) angle;
+            dr->x1878 = (int) best_entry->hurt1->height;
+            dr->x187c = best_kb.v;
+            dr->x1880 = best_entry->pos;
+            dr->x188c = (int) element;
+            dr->x1894 = best_entry->gobj;
+            dr->x1898 = best_entry->x20;
+            dr->x1890 = sfx_severity;
+        }
+    }
+#endif
+#if !BUILD_TARGET_PC
     out->dir = dir;
     out->angle = (int) angle;
     out->hurt_height = (int) best_entry->hurt1->height;
@@ -2977,6 +3031,7 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
     out->source = best_entry->gobj;
     out->damage = best_entry->x20;
     out->sfx_severity = sfx_severity;
+#endif
 
     switch (best_entry->x0) {
     case 1: {
@@ -3026,7 +3081,11 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
         break;
     }
 
+#if BUILD_TARGET_PC
+    if (element == HitElement_Electric) {
+#else
     if (out->element == HitElement_Electric) {
+#endif
         fp->x1960_vibrateMult = p_ftCommonData->x1A4;
     }
 }

@@ -1646,7 +1646,13 @@ struct Fighter {
         /* fp+1880 */ Vec3 x1880;
         /* fp+188C */ int x188c;
         /* fp+1890 */ int x1890;
-        /* fp+1894 */ int x1894;
+        /* fp+1894 */ HSD_GObj* x1894; /* the console stores a GObj* in these
+                                       * four bytes and ftColl_8007BE3C casts
+                                       * it back; declared int, it truncated on
+                                       * the host and the cast back was a wild
+                                       * pointer. Four bytes on the GameCube
+                                       * either way, so the layout is
+                                       * unchanged. */
         /* fp+1898 */ float x1898;
         /* fp+189C */ float x189C_unk_num_frames;
         /* fp+18A0 */ float x18a0;
