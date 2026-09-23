@@ -29,15 +29,21 @@
 
 /* Not LV_DOT. lbVector_Normalize, 8000D2EC, is three fmuls and two fadds --
  * fmuls x,x / fmuls y,y / fmuls z,z / fadds (x+y) / fadds (z + that) -- with
- * no fused instruction anywhere in it, so the squared length here is the plain
- * left-to-right sum the C reads as. The fused spelling was one ULP high on
- * the leg IK's normalise, and pos3.z is that normal scaled and added back to
+ * no fused instruction anywhere in it, so the squared length here is a plain
+ * sum. The fused spelling was one ULP high on the leg IK's normalise, and pos3.z is that normal scaled and added back to
  * pos1.z, which cancels 3.06 down to 0.456 and turns the one ULP into eight.
  * LV_DOT stays fused where it belongs: lbVector_CreateEulerMatrix and
  * lbVector_Rotate really do emit fmadds. */
+/* LV_SQ is LV_DOT's shape with the fusing taken out: the same z + (x + y)
+ * grouping and the same operand order in each add. That matters for the
+ * GameCube build, where LV_FMA is already a plain `a * b + c`: written this way
+ * the two spellings preprocess to the same expression, so lbvector.c stays
+ * matching and only the PC build changes. */
+#define LV_SQ(x, y, z) ((z) * (z) + ((x) * (x) + (y) * (y)))
+
 static inline float lbVector_Len(Vec3* vec)
 {
-    return sqrtf(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
+    return sqrtf(LV_SQ(vec->x, vec->y, vec->z));
 }
 
 static inline float lbVector_Len_xy(Vec3* vec)
