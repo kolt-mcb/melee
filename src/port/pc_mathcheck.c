@@ -74,6 +74,51 @@ void pc_mathcheck(void)
         h_fma = hf(h_fma, fmaf(t, u, a));
         h_div = hf(h_div, t / (x == 0.0f ? 1.0f : x));
     }
+    /* The four classes above this line are the library's. These are the
+     * machine's, and they are the ones left once the library surface turns
+     * out to be the console's own MSL: a float-to-int conversion whose input
+     * is out of range or NaN (x86 answers 0x80000000, AArch64 saturates),
+     * arithmetic on denormals (which a flush-to-zero control register turns
+     * into zero on one machine and not the other), and double precision. A
+     * line that differs here names a class; a run where every line agrees
+     * says the arithmetic is not where the next desync comes from. */
+    {
+        u32 h_cvt = 2166136261u, h_den = 2166136261u, h_dbl = 2166136261u;
+        u32 h_cvtu = 2166136261u;
+        static const f32 edge[] = {
+            3.0e9f, -3.0e9f, 1.0e19f, -1.0e19f, 2147483648.0f,
+            -2147483904.0f, 0.0f / 0.0f, -(0.0f / 0.0f), 1.0f / 0.0f,
+            -1.0f / 0.0f, 4294967296.0f, -1.0f, 255.75f, -255.75f
+        };
+        static const f32 tiny[] = {
+            1.0e-40f, 5.0e-44f, 1.4e-45f, -1.0e-40f, 1.0e-38f, 3.0e-39f
+        };
+        unsigned k;
+        for (k = 0; k < sizeof(edge) / sizeof(edge[0]); k++) {
+            volatile f32 v = edge[k];
+            h_cvt = h_cvt * 16777619u ^ (u32) (s32) v;
+            h_cvtu = h_cvtu * 16777619u ^ (u32) (unsigned) v;
+        }
+        for (k = 0; k < sizeof(tiny) / sizeof(tiny[0]); k++) {
+            volatile f32 a = tiny[k];
+            volatile f32 b = tiny[(k + 1) % (sizeof(tiny) / sizeof(tiny[0]))];
+            h_den = hf(h_den, a + b);
+            h_den = hf(h_den, a * 2.0f);
+            h_den = hf(h_den, a / 3.0f);
+            h_den = hf(h_den, (f32) ((f64) a * 0.5));
+        }
+        for (i = 0; i < N; i++) {
+            f64 t = (f64) i * 0.0037 - 37.0;
+            f64 a = t < 0.0 ? -t : t;
+            union { f64 d; u32 u[2]; } b;
+            b.d = sqrt(a) + t * 0.1 - a / 7.0;
+            h_dbl = (h_dbl ^ b.u[0]) * 16777619u;
+            h_dbl = (h_dbl ^ b.u[1]) * 16777619u;
+        }
+        fprintf(stderr,
+                "[MATHCHECK] f2i %08X f2u %08X denormal %08X double %08X\n",
+                h_cvt, h_cvtu, h_den, h_dbl);
+    }
     fprintf(stderr,
             "[MATHCHECK] atan2f %08X atanf %08X asinf %08X acosf %08X\n"
             "[MATHCHECK] sinf %08X cosf %08X sqrtf %08X frsqrte %08X\n"

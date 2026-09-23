@@ -63,11 +63,25 @@ SECTION_CTORS void* const __sinit_trigf_c_reference = __sinit_trigf_c;
  */
 #include <math.h>
 
+#ifdef PC_FCTIWZ
+#define PC_TRIGF_F2I(v) PC_FCTIWZ(v)
+#else
+#define PC_TRIGF_F2I(v) (v)
+#endif
+
 static inline f32 trigf_reduce(f32 x, int* np)
 {
     f32 y;
     f32 z = (2.0f / (f32) M_PI) * x;
-    int n = (__HI(x) & 0x80000000) ? (int) (z - 0.5f) : (int) (z + 0.5f);
+    /* z is (2/pi)*x, so a large or non-finite angle puts this cast out of
+     * range -- and out of range is where the three machines part: the console
+     * saturates with NaN to 0x80000000, x86 answers 0x80000000 for
+     * everything, AArch64 saturates with NaN to zero. It fires in a real
+     * match, which makes sinf and cosf of such an angle the one place the
+     * desktop and the tablet could not agree once every other difference was
+     * accounted for. PC_FCTIWZ is the console's answer on both hosts. */
+    int n = (__HI(x) & 0x80000000) ? (int) PC_TRIGF_F2I(z - 0.5f)
+                                   : (int) PC_TRIGF_F2I(z + 0.5f);
     y = x - (f32) (n * 2);
     y = fmaf(__four_over_pi_m1[0], x, y);
     y = fmaf(__four_over_pi_m1[1], x, y);

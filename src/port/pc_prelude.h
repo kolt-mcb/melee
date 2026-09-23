@@ -100,3 +100,22 @@ float __fabsf(float);
 #define PC_STATIC_INLINE static inline
 
 #endif
+
+/* A float-to-int conversion whose value does not fit is the one piece of
+ * arithmetic the x86-64 and arm64 builds still disagree on, and both disagree
+ * with the console. In range all three are identical; out of range x86's
+ * cvttss2si answers 0x80000000 for everything, AArch64's fcvtzs saturates and
+ * sends NaN to zero, and the PowerPC's fctiwz saturates with NaN to
+ * 0x80000000. MELEE_MATHCHECK's f2i/f2u lines measure exactly this, and they
+ * are the only lines that differ between the desktop and the tablet.
+ *
+ * PC_FCTIWZ is the console's answer on every host. Use it wherever the value
+ * being converted can leave the range -- it is not a blanket replacement for
+ * the cast, because in range the plain cast is already right everywhere and
+ * says so more clearly. */
+#define PC_FCTIWZ(x)                                                          \
+    ((s32) ((x) != (x)            ? (s32) 0x80000000                          \
+            : (x) >= 2147483648.0 ? (s32) 0x7FFFFFFF                          \
+            : (x) <= -2147483648.0                                            \
+                ? (s32) 0x80000000                                            \
+                : (s32) (x)))

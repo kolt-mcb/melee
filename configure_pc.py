@@ -211,6 +211,14 @@ inc = " ".join("-I" + str(p) for p in INCLUDE_DIRS)
 # usable backtraces. Used by M0 to hunt the heap-corruption crash.
 ASAN = os.environ.get("PC_ASAN") == "1"
 SAN_FLAGS = " -fsanitize=address -fno-omit-frame-pointer" if ASAN else ""
+# PC_FCAST=1 traps the one arithmetic difference left between the x86 and
+# arm64 builds: a float-to-int conversion whose value does not fit. In range
+# the two machines agree exactly; out of range x86 answers 0x80000000 for
+# everything while AArch64 saturates and sends NaN to zero (and the console's
+# fctiwz saturates too, with NaN to 0x80000000) -- so every firing of this is
+# a place where the three cannot agree. Each one prints file and line.
+if os.environ.get("PC_FCAST") == "1":
+    SAN_FLAGS += " -fsanitize=float-cast-overflow -fno-omit-frame-pointer"
 # PC_TEXDUMP=1 compiles in the texture dump that tools/pc_tex_verify.py
 # consumes (MELEE_TEX_DUMP=<dir>). It is off by default because adding it
 # to the texture path surfaces the port's latent corruption shortly after
