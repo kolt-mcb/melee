@@ -40,7 +40,14 @@ import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ICONS_SRC = os.path.join(REPO, "src", "melee", "mn", "mncharsel.static.h")
+# The icon table lived in mncharsel.static.h until the August upstream merge
+# folded it into mncharsel.c. Look in both, newest layout first, so this keeps
+# parsing the game's own table rather than a copy that can drift from it.
+ICONS_SRC = next(
+    (p for p in (os.path.join(REPO, "src", "melee", "mn", "mncharsel.c"),
+                 os.path.join(REPO, "src", "melee", "mn", "mncharsel.static.h"))
+     if os.path.exists(p) and "static CSSIcon icons[" in open(p).read()),
+    os.path.join(REPO, "src", "melee", "mn", "mncharsel.c"))
 
 # The pad tokens the harness can send, as raw stick values. Both sides use
 # these: tools/pc_lockstep.py maps MAIN:x:y to them and the port's pad script
@@ -73,7 +80,11 @@ def load_grid(path=ICONS_SRC):
     grid = {}
     for name, fields in re.findall(r"\{\s*//\s*([^\n]*)\n(.*?)\}", body, re.S):
         toks = [t.strip() for t in fields.split(",") if t.strip()]
-        kinds = [t for t in toks if t.startswith("CKIND_")]
+        # The enum was respelled by the August upstream merge: CKIND_DRMARIO
+        # became CKind_DrMario. Accept either, and upper-case the tail so the
+        # grid keys stay the names the command line takes (SAMUS, NESS).
+        kinds = [t for t in toks
+                 if t.startswith("CKIND_") or t.startswith("CKind_")]
         rows = [t for t in toks if t.startswith("ICONROWHT_")]
         # Pichu and Roy give one bound as a bare float (-23.4, 18.6) where
         # every other entry names a column macro -- the bottom row is inset,
@@ -87,11 +98,11 @@ def load_grid(path=ICONS_SRC):
         bnds = [b for b in bnds if b is not None]
         if not kinds or len(bnds) != 2 or len(rows) != 2:
             grid.setdefault("_unparsed", []).append(
-                (name.strip(" -"), kinds[0][6:] if kinds else "?"))
+                (name.strip(" -"), kinds[0][6:].upper() if kinds else "?"))
             continue
         l, r = bnds[0], bnds[1]
         u, d = defs[rows[0]], defs[rows[1]]
-        grid[kinds[0][6:]] = ((l + r) / 2.0, (u + d) / 2.0)
+        grid[kinds[0][6:].upper()] = ((l + r) / 2.0, (u + d) / 2.0)
     return grid
 
 
