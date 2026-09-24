@@ -2090,18 +2090,29 @@ void Fighter_8006A1BC(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
 
     if (!fp->x221F_b3) {
+#if BUILD_TARGET_PC
+        /* MELEE_FWATCH bisect: the knockback velocity gains its last ULP
+         * somewhere in this pass when hitlag ends. */
+        extern void pc_fwatch(const char* what, void* who, void* gobj);
+#define FW(tag) pc_fwatch(tag, (void*) 0, (void*) gobj)
+#else
+#define FW(tag)
+#endif
+        FW("a1bc:enter");
         if (fp->dmg.x1954 > 0.0f) {
             fp->dmg.x1954 -= 1.0f;
             if (fp->dmg.x1954 <= 0.0f) {
                 fp->dmg.x1954 = 0.0f;
                 if (!fp->allow_sdi && !fp->x2219_b7) {
                     Fighter_8006D10C(gobj);
+                    FW("after 8006D10C (x1954 path)");
                 }
             }
         }
 
         if (fp->x221A_b1) {
             Fighter_8006CFE0(gobj);
+            FW("after Fighter_8006CFE0");
             fp->x221A_b1 = 0;
         }
 
@@ -2111,27 +2122,34 @@ void Fighter_8006A1BC(Fighter_GObj* gobj)
                 fp->dmg.x195c_hitlag_frames = 0.0f;
                 if (fp->x221A_b3) {
                     ftCo_80090718(fp);
+                    FW("after ftCo_80090718");
                     fp->x221A_b3 = 0;
                 }
                 if ((!fp->dmg.x1954) && !fp->x2219_b7) {
                     Fighter_8006D10C(gobj);
+                    FW("after 8006D10C (hitlag path)");
                 }
                 fp->allow_sdi = 0;
             }
         }
         ftCo_800C37A0(gobj);
+        FW("after ftCo_800C37A0");
 
         while (fp->x200C != 0) {
             Fighter_SuperMushroomApply(gobj);
             fp->x200C--;
         }
+        FW("after SuperMushroom");
 
         while (fp->x2010 != 0) {
             Fighter_PoisonMushroomApply(gobj);
             fp->x2010--;
         }
+        FW("after PoisonMushroom");
 
         ft_800819A8(gobj);
+        FW("after ft_800819A8");
+#undef FW
         fp->x2219_b6 = fp->x2219_b5;
     }
 }
@@ -3700,7 +3718,21 @@ void Fighter_8006D10C(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
 
     if (fp->post_hitlag_cb) {
+#if BUILD_TARGET_PC
+        {
+            extern void pc_fwatch(const char* what, void* who, void* gobj);
+            pc_fwatch("post_hitlag_cb", (void*) fp->post_hitlag_cb,
+                      (void*) gobj);
+        }
+#endif
         fp->post_hitlag_cb(gobj);
+#if BUILD_TARGET_PC
+        {
+            extern void pc_fwatch(const char* what, void* who, void* gobj);
+            pc_fwatch("after post_hitlag_cb", (void*) fp->post_hitlag_cb,
+                      (void*) gobj);
+        }
+#endif
     }
 
     fp->x2219_b5 = 0;
