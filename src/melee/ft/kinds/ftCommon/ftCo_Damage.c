@@ -646,7 +646,20 @@ void ftCo_Damage_OnExitHitlag(Fighter_GObj* gobj)
         fp->mv.co.damage.x4 = false;
         ftColl_8007B7A4(gobj, p_ftCommonData->x130);
     }
+#if BUILD_TARGET_PC
+    {
+        extern void pc_fwatch(const char* what, void* who, void* gobj);
+        pc_fwatch("OnExitHitlag: before ftCo_8008E5A4", (void*) 0,
+                  (void*) gobj);
+    }
+#endif
     ftCo_8008E5A4(fp);
+#if BUILD_TARGET_PC
+    {
+        extern void pc_fwatch(const char* what, void* who, void* gobj);
+        pc_fwatch("OnExitHitlag: after ftCo_8008E5A4", (void*) 0, (void*) gobj);
+    }
+#endif
     if (fp->input.held_buttons[0] & HSD_PAD_LR) {
         float kb_x = fp->x8c_kb_vel.x;
         float kb_y = fp->x8c_kb_vel.y;
@@ -654,9 +667,30 @@ void ftCo_Damage_OnExitHitlag(Fighter_GObj* gobj)
             float kb_angle = atan2f(kb_y, kb_x);
             /* 8008E860: atan2f's argument order says which square is
              * fused -- the x one. */
-            float scaled_kb_mag =
-                sqrtf(DMG_FMA(kb_x, kb_x, kb_y * kb_y)) *
-                p_ftCommonData->x1AC;
+            float sq_len = DMG_FMA(kb_x, kb_x, kb_y * kb_y);
+            float scaled_kb_mag = sqrtf(sq_len) * p_ftCommonData->x1AC;
+#if BUILD_TARGET_PC
+            /* MELEE_LRKB=1: the L/R-held rescale of the knockback, which is
+             * where the last ULP of sync_pair2 enters. The console's
+             * equivalents: 8008E868 has f4 = sq_len and f31 = the angle, and
+             * 8008E8C8 has f0 = x1AC and f4 = the root. */
+            if (getenv("MELEE_LRKB") != NULL) {
+                extern u32 gm_GetFrameCount(void);
+                float cv = cosf(kb_angle), sv = sinf(kb_angle);
+                float rt = sqrtf(sq_len);
+                fprintf(stderr,
+                        "[LRKB] gframe=%u p%d kbx=%08x kby=%08x sq=%08x "
+                        "root=%08x x1AC=%08x ang=%08x cos=%08x sin=%08x "
+                        "mag=%08x outx=%08x outy=%08x\n",
+                        (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                        *(u32*) &kb_x, *(u32*) &kb_y, *(u32*) &sq_len,
+                        *(u32*) &rt, *(u32*) &p_ftCommonData->x1AC,
+                        *(u32*) &kb_angle, *(u32*) &cv, *(u32*) &sv,
+                        *(u32*) &scaled_kb_mag,
+                        *(u32*) &(float) { scaled_kb_mag * cv },
+                        *(u32*) &(float) { scaled_kb_mag * sv });
+            }
+#endif
             fp->x8c_kb_vel.x = scaled_kb_mag * cosf(kb_angle);
             fp->x8c_kb_vel.y = scaled_kb_mag * sinf(kb_angle);
         }

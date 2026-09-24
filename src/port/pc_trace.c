@@ -2418,6 +2418,8 @@ void pc_fwatch(const char* what, void* who, void* gobj)
             addr = (const unsigned*) &fp->cur_pos.y;
         } else if (field != NULL && strcmp(field, "kby") == 0) {
             addr = (const unsigned*) &fp->x8c_kb_vel.y;
+        } else if (field != NULL && strcmp(field, "kbap") == 0) {
+            addr = (const unsigned*) &fp->dmg.kb_applied;
         } else {
             addr = (const unsigned*) &fp->dmg.x189C_unk_num_frames;
         }

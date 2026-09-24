@@ -112,8 +112,28 @@ void pc_gputime_end(void);
 static struct timespec s_ph[6];
 static double s_ph_ns[5];
 #define PH_NS(a, b) ((s_ph[b].tv_sec - s_ph[a].tv_sec) * 1e9 + (s_ph[b].tv_nsec - s_ph[a].tv_nsec))
+/* At file scope because the trace is emitted at the top of render_present,
+ * before the gx walk, and the old block-scope declaration sat after it. */
+static int g_render_frame = 0;
+
 void render_present(void)
 {
+    /* The state trace goes here, before anything in this function draws.
+     * invoke_gx_render_links below walks the gx lists and the render callbacks
+     * on them do game-state work -- a fighter in the top-blast-zone death
+     * animation has its position moved by one. On the console that walk is
+     * driven by the retrace, after HSD_PerfSetCPUTime, which is where the
+     * reference trace is taken; taking ours after our own walk put the two
+     * samples on opposite sides of it. It showed up as p0's position in
+     * sync_pair2 running one frame ahead of the console's for the 130 frames
+     * of a death animation, on a run that was otherwise bit-exact.
+     *
+     * The frame counter moves with it, so a trace line and a screenshot with
+     * the same number are still the same frame. */
+    g_render_frame++;
+    pc_render_frame_now = g_render_frame;
+    pc_trace_frame(g_render_frame);
+
     if (s_after_swap.tv_sec != 0) {
         struct timespec entry;
         clock_gettime(CLOCK_MONOTONIC, &entry);
@@ -205,7 +225,7 @@ void render_present(void)
      * By default the frame is cropped to the rect the GameCube framebuffer is
      * letterboxed into, so a diff against a 640x528 Dolphin frame measures
      * the picture and not the black bars around it. */
-    static int g_render_frame = 0;
+
     /* Readable from diagnostics in game code, which cannot see a file-local
      * counter but often needs to say "on which frame did this happen". */
     extern int pc_render_frame_now;
@@ -217,12 +237,7 @@ void render_present(void)
     static const char* g_shot_dir = ".";
     static int g_shot_full = 0;
 
-    g_render_frame++;
-    pc_render_frame_now = g_render_frame;
-    /* State trace for the divergence test (MELEE_TRACE). Same frame numbering
-     * as the screenshots below, so a trace line and a screenshot with the same
-     * number are the same frame on both sides of the comparison. */
-    pc_trace_frame(g_render_frame);
+
     {
         /* Re-arm the frame watchdog (MELEE_WATCHDOG); no-op unless set. */
         extern void pc_watchdog_pet(void);
