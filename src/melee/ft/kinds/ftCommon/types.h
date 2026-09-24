@@ -29,24 +29,38 @@ struct ftHurtboxInit {
     float scale;
 };
 
+/* The motion-state union's UNK_T members are unknown *words*: four bytes on
+ * the console. UNK_T is void*, which is eight here, and every field after one
+ * of them shifts -- into bytes another view of this union owns, and several
+ * motion states read a member of their view before writing it, so those
+ * leftovers are part of the simulation. common.x10 cost a bit-exact match until
+ * it was narrowed to four. Nothing assigns a pointer to any of them; if
+ * something ever does, this breaks the build rather than the simulation. */
+#if BUILD_TARGET_PC
+#define PC_MV_UNK u32
+/* Where this build parks a pointer that the console keeps inside the union. A
+ * pointer is eight bytes here and four there, so one declared at its console
+ * offset covers the following word too -- and that word belongs to other views,
+ * several of which read a member before writing it. 0x80 is past every view's
+ * console fields; mv is a union of this and the larger per-character structs,
+ * so nothing grows. */
+#define PC_MV_PARK 0x80
+#else
+#define PC_MV_UNK UNK_T
+#endif
+
 union ftCommon_MotionVars {
     struct {
         /* fp+2340 */ int x0;
         /* fp+2344 */ Vec3 x4;
-#if BUILD_TARGET_PC
-        /* UNK_T is void*: eight bytes here, four on the console. Every field
-         * after it shifted by four, so x1C sat at 0x20 -- and the DeadUpFall
-         * entry's `common.x1C = 0.0f` then missed the word that
-         * ftCo_DeadUpFall_Phys reads as unk_deadup.x5C.x before writing it. A
-         * grab's leftover survived into the death animation, the star was
-         * placed 0.61 units off, and the camera followed it.
-         *
-         * eflib.c reads this as `(s32) common.x10`, so four bytes is the whole
-         * of it. */
-        /* fp+2350 */ u32 x10;
-#else
-        /* fp+2350 */ UNK_T x10;
-#endif
+        /* fp+2350 */ PC_MV_UNK x10; /* narrowing this from UNK_T (void*) is
+                                     * what made the death animation match:
+                                     * everything after it was four bytes out,
+                                     * so the DeadUpFall entry's
+                                     * `common.x1C = 0.0f` zeroed the wrong
+                                     * word, and the right one is what
+                                     * ftCo_DeadUpFall_Phys reads as
+                                     * unk_deadup.x5C.x before writing it. */
         /* fp+2354 */ float x14;
         /* fp+2358 */ float x18;
         /* fp+235C */ float x1C;
@@ -143,8 +157,8 @@ union ftCommon_MotionVars {
         /* fp+2340 */ float x0;
         /* fp+2344 */ int x4;
         /* fp+2348 */ int x8;
-        /* fp+234C */ UNK_T xC;
-        /* fp+2350 */ UNK_T x10;
+        /* fp+234C */ PC_MV_UNK xC;
+        /* fp+2350 */ PC_MV_UNK x10;
         /* fp+2354 */ float x14;
         /* fp+2358 */ u8 x18;
         /* fp+2359 */ u8 x19;
@@ -170,19 +184,32 @@ union ftCommon_MotionVars {
         /* fp+235C */ int x1C;
         /* fp+2360 */ int x20;
         /* fp+2364 */ int x24;
-        /* fp+2368 */ UNK_T x28;
+        /* fp+2368 */ PC_MV_UNK x28;
         /* fp+236C */ float x2C;
     } guard;
     struct {
         /* fp+2340 */ bool x0; // itemget action is heavy type?
     } itemget;
     struct {
-        /* fp+2340 */ UNK_T x0;
+#if BUILD_TARGET_PC
+        /* victim is a pointer, so at 0x0C it would cover 0x10 and push
+         * self_vel_y and self_vel_x out of the console's slots as well. */
+        /* fp+2340 */ PC_MV_UNK x0;
+        /* fp+2344 */ int x4;
+        /* fp+2348 */ int x8;
+        /* fp+234C */ u8 pad_victim[4];
+        /* fp+2350 */ float self_vel_y;
+        /* fp+2354 */ float self_vel_x;
+        u8 pad_park[PC_MV_PARK - 0x18];
+        HSD_GObj* victim;
+#else
+        /* fp+2340 */ PC_MV_UNK x0;
         /* fp+2344 */ int x4;
         /* fp+2348 */ int x8;
         /* fp+234C */ HSD_GObj* victim;
         /* fp+2350 */ float self_vel_y;
         /* fp+2354 */ float self_vel_x;
+#endif
     } fighterthrow;
     struct {
         /* fp+2340 */ float facing_dir;
@@ -191,8 +218,8 @@ union ftCommon_MotionVars {
         /* fp+234C */ int xC;
         /* fp+2350 */ float x10;
         /* fp+2354 */ int x14;
-        /* fp+2358 */ UNK_T x18;
-        /* fp+235C */ UNK_T x1C;
+        /* fp+2358 */ PC_MV_UNK x18;
+        /* fp+235C */ PC_MV_UNK x1C;
         /* fp+2360 */ int x20;
     } itemthrow;
     struct {
@@ -272,6 +299,19 @@ union ftCommon_MotionVars {
         /* fp+2340 */ float x0;
     } downdamage;
     struct {
+#if BUILD_TARGET_PC
+        /* x0 is a pointer at offset zero: every field of this view moved. */
+        /* fp+2340 */ u8 pad_x0[4];
+        /* fp+2344 */ bool x4;
+        /* fp+2348 */ float x8;
+        /* fp+234C */ float xC;
+        /* fp+2350 */ float x10;
+        /* fp+2354 */ float x14;
+        /* fp+2358 */ Vec3 x18;
+        /* fp+2364 */ Vec3 scale;
+        u8 pad_park[PC_MV_PARK - 0x30];
+        Fighter_GObj* x0;
+#else
         /* fp+2340 */ Fighter_GObj* x0;
         /* fp+2344 */ bool x4;
         /* fp+2348 */ float x8;
@@ -280,10 +320,11 @@ union ftCommon_MotionVars {
         /* fp+2354 */ float x14;
         /* fp+2358 */ Vec3 x18;
         /* fp+2364 */ Vec3 scale;
+#endif
     } yoshiegg;
     struct {
         /* fp+2340 */ bool x0;
-        /* fp+2344 */ UNK_T x4;
+        /* fp+2344 */ PC_MV_UNK x4;
         /* fp+2348 */ float x8;
         /* fp+234C */ float xC;
         /* fp+2350 */ float x10;
@@ -293,14 +334,20 @@ union ftCommon_MotionVars {
         /* fp+2348 */ Vec2 x8;
         /* fp+2350 */ Vec2 x10;
         /* fp+2358 */ bool x18;
-        /* fp+235C */ UNK_T x1C;
-        /* fp+2360 */ UNK_T x20;
-        /* fp+2364 */ UNK_T x24;
-        /* fp+2368 */ UNK_T x28;
+        /* fp+235C */ PC_MV_UNK x1C;
+        /* fp+2360 */ PC_MV_UNK x20;
+        /* fp+2364 */ PC_MV_UNK x24;
+        /* fp+2368 */ PC_MV_UNK x28;
         /* fp+236C */ Vec3 scale;
     } capturekirby;
     struct {
+#if BUILD_TARGET_PC
+        /* thrower_gobj is a pointer at offset zero, so every field of this view
+         * moved by four. Parked past the union instead. */
+        /* fp+2340 */ u8 pad_thrower[4];
+#else
         /* fp+2340 */ Fighter_GObj* thrower_gobj;
+#endif
         /* fp+2344 */ float x4;
         /* fp+2348 */ float x8;
         /* fp+234C */ float xC;
@@ -321,6 +368,10 @@ union ftCommon_MotionVars {
         };
         /* fp+235C */ Vec3 scale;
         /* fp+2368 */ ftCollisionBox coll_box;
+#if BUILD_TARGET_PC
+        u8 pad_park[PC_MV_PARK - 0x28 - sizeof(ftCollisionBox)];
+        Fighter_GObj* thrower_gobj;
+#endif
     } thrownkirby;
     struct {
         /* fp+2340 */ int x0;
@@ -358,7 +409,7 @@ union ftCommon_MotionVars {
         /* fp+2348 */ float x8;
     } hammerkneebend;
     struct {
-        /* fp+2340 */ UNK_T x0;
+        /* fp+2340 */ PC_MV_UNK x0;
         /* fp+2344 */ float x4;
     } hammerlanding;
     struct {
@@ -381,7 +432,7 @@ union ftCommon_MotionVars {
          * Parked past the whole union instead (sizeof(mv.co) is 0x68), so the
          * write cannot reach another view's bytes. mv is a union of this and
          * the larger per-character structs, so nothing grows. */
-        u8 pad_x8[0x68 - 0x8];
+        u8 pad_x8[PC_MV_PARK - 0x8];
         HSD_JObj* x18;
 #else
         /* fp+2348 */ u8 pad_x8[0x18 - 0x8];
@@ -399,8 +450,16 @@ union ftCommon_MotionVars {
         /* fp+236C */ ftCollisionBox x2C;
     } entry;
     struct {
+#if BUILD_TARGET_PC
+        /* x0 is a pointer at offset zero, so x4 landed on its upper half. */
+        /* fp+2340 */ u8 pad_x0[4];
+        /* fp+2344 */ int x4;
+        u8 pad_park[PC_MV_PARK - 0x8];
+        Item_GObj* x0;
+#else
         /* fp+2340 */ Item_GObj* x0;
         /* fp+2344 */ int x4;
+#endif
     } capturelikelike;
     struct {
         /* fp+2340 */ HSD_GObjEvent x0;
@@ -447,7 +506,7 @@ union ftCommon_MotionVars {
     struct {
         /* fp+2340 */ bool unk_bool;
         /* fp+2344 */ float anim_timer;
-        /* fp+2348 */ UNK_T x8;
+        /* fp+2348 */ PC_MV_UNK x8;
         /* fp+234C */ u8 xC;
     } thrown;
     struct {
@@ -471,6 +530,21 @@ union ftCommon_MotionVars {
         /* fp+234C */ u8 xC;
     } capturewait;
 };
+
+#if BUILD_TARGET_PC
+/* Every pointer parked past the union has to actually land past it. Getting a
+ * pad wrong leaves the pointer sitting on another view's bytes, which is the
+ * bug this is here to prevent and which shows up nowhere until a fighter dies
+ * in the wrong place eight hundred frames later. */
+#define PC_MV_PARKED_OK(member)                                               \
+    _Static_assert(offsetof(union ftCommon_MotionVars, member) >= PC_MV_PARK, \
+                   #member " is not parked past the union")
+PC_MV_PARKED_OK(capturedamage.x18);
+PC_MV_PARKED_OK(fighterthrow.victim);
+PC_MV_PARKED_OK(yoshiegg.x0);
+PC_MV_PARKED_OK(capturelikelike.x0);
+PC_MV_PARKED_OK(thrownkirby.thrower_gobj);
+#endif
 
 /// @todo Fake, need to find real size of #HitCapsule
 struct SmallerHitCapsule {

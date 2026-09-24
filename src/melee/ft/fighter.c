@@ -3731,6 +3731,25 @@ __attribute__((constructor)) static void pc_check_dmg_offsets(void)
                     offsetof(Fighter, mv.co),
                 offsetof(Fighter, mv.co.common.x20) -
                     offsetof(Fighter, mv.co));
+#if BUILD_TARGET_PC
+        /* Every pointer this build parks past the union must actually land
+         * past it, or it is still sitting on another view's bytes. */
+        fprintf(stderr,
+                "[DMGOFF] parked: capturedamage.x18=%#zx fighterthrow.victim="
+                "%#zx yoshiegg.x0=%#zx capturelikelike.x0=%#zx "
+                "thrownkirby.thrower_gobj=%#zx (want >= %#x)\n",
+                offsetof(Fighter, mv.co.capturedamage.x18) -
+                    offsetof(Fighter, mv.co),
+                offsetof(Fighter, mv.co.fighterthrow.victim) -
+                    offsetof(Fighter, mv.co),
+                offsetof(Fighter, mv.co.yoshiegg.x0) -
+                    offsetof(Fighter, mv.co),
+                offsetof(Fighter, mv.co.capturelikelike.x0) -
+                    offsetof(Fighter, mv.co),
+                offsetof(Fighter, mv.co.thrownkirby.thrower_gobj) -
+                    offsetof(Fighter, mv.co),
+                PC_MV_PARK);
+#endif
         fprintf(stderr,
                 "[DMGOFF] from x1870: x1874=%#zx x1878=%#zx x187c=%#zx "
                 "x1880=%#zx x188c=%#zx x1890=%#zx x1894=%#zx x1898=%#zx "
