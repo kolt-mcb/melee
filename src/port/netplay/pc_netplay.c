@@ -118,6 +118,11 @@ static void put_u32(unsigned char* p, unsigned v)
     p[3] = (unsigned char) v;
 }
 static unsigned get_u8(const unsigned char* p) { return p[0]; }
+static unsigned get_u16(const unsigned char* p)
+{
+    return ((unsigned) p[0] << 8) | (unsigned) p[1];
+}
+
 static unsigned get_u32(const unsigned char* p)
 {
     return ((unsigned) p[0] << 24) | ((unsigned) p[1] << 16) |
@@ -208,6 +213,10 @@ static int ring_get(const InputRing* r, s32 f, NetPad* out)
 
 /* ---- state -------------------------------------------------------------- */
 
+/* Four is Melee's limit and Slippi's: one local player and up to three
+ * remote. */
+#define NET_SLOTS 4
+
 enum NetState { NET_OFF, NET_LISTEN, NET_CONNECT, NET_RUN, NET_SOLO };
 
 static int net_started;      /* env has been read */
@@ -221,15 +230,30 @@ static int net_slot;         /* the slot in the match this machine plays */
  * guest's controller would be read from a port nothing is plugged into.
  * Only a scripted run driving a particular port needs to change it. */
 static int net_local_pad;
-static int net_peer_slot;
 static int net_delay = 3;
 static int net_trace;
 static int net_slippi_proto;  /* MELEE_NET_PROTO=slippi */
-static s32 net_peer_acked = -1;   /* newest local frame the peer confirmed */
+/* How many players are in this match, and therefore how many slots the
+ * barrier waits for. Slippi's own netplay is not 1v1 -- its messages carry a
+ * playerIdx and it runs up to four -- and this port sent that index from the
+ * start while keeping a single peer behind it. MELEE_NET_PLAYERS says how many
+ * to expect; two is what every existing case uses and behaves exactly as
+ * before. */
+static int net_players = 2;
+/* Newest local frame each slot has confirmed. */
+static s32 net_peer_acked[NET_SLOTS];
 static unsigned net_seed;
 static unsigned net_cfg;     /* hash of the match configuration */
-static struct sockaddr_in net_peer;
-static int net_have_peer;
+/* The UDP path's peers, indexed by the slot they play. Slot net_slot is this
+ * machine and is never filled. */
+static struct sockaddr_in net_peer[NET_SLOTS];
+static int net_have_peer[NET_SLOTS];
+
+/* Is that slot someone else in this match? */
+static int net_is_remote(int slot)
+{
+    return slot >= 0 && slot < net_players && slot != net_slot;
+}
 static int net_match;        /* a match is running */
 static s32 net_last_sent = -1;
 static s32 net_hashed = -1;   /* the last match frame hashed and compared */
@@ -248,8 +272,8 @@ static u32 net_hash_val[NET_HASH_RING];
 /* And the peer's, because whichever side is behind receives a hash for a
  * frame it has not reached yet. Without this only the leading side ever
  * notices a desync, which is a confusing way to find out. */
-static s32 net_peer_hash_frame[NET_HASH_RING];
-static u32 net_peer_hash_val[NET_HASH_RING];
+static s32 net_peer_hash_frame[NET_SLOTS][NET_HASH_RING];
+static u32 net_peer_hash_val[NET_SLOTS][NET_HASH_RING];
 
 /* Reporting. A stall is a frame this side had to wait on the peer for. */
 static unsigned net_stalls;
@@ -323,12 +347,21 @@ static void net_config(void)
         net_slippi_proto = (proto != NULL && strcmp(proto, "slippi") == 0);
     }
     net_is_host = (strcmp(role, "host") == 0);
+    {
+        const char* np = getenv("MELEE_NET_PLAYERS");
+        if (np != NULL && *np) {
+            net_players = atoi(np);
+            if (net_players < 2) net_players = 2;
+            if (net_players > NET_SLOTS) net_players = NET_SLOTS;
+        }
+    }
     net_slot = net_is_host ? 0 : 1;
     s = getenv("MELEE_NET_SLOT");
     if (s != NULL) {
-        net_slot = atoi(s) & 1;
+        net_slot = atoi(s);
+        if (net_slot < 0) net_slot = 0;
+        if (net_slot >= NET_SLOTS) net_slot = NET_SLOTS - 1;
     }
-    net_peer_slot = net_slot ^ 1;
     s = getenv("MELEE_NET_LOCAL_PAD");
     net_local_pad = (s != NULL) ? (atoi(s) & 3) : 0;
     net_cfg = config_hash();
@@ -384,17 +417,20 @@ static void net_config(void)
             *colon = '\0';
             port = atoi(colon + 1);
         }
-        memset(&net_peer, 0, sizeof(net_peer));
-        net_peer.sin_family = AF_INET;
-        net_peer.sin_port = htons((unsigned short) port);
-        if (inet_pton(AF_INET, host, &net_peer.sin_addr) != 1) {
+        /* The host is always slot 0; this machine's own slot comes back in
+         * MSG_SETUP, because with more than two players only the host knows
+         * which are free. */
+        memset(&net_peer[0], 0, sizeof(net_peer[0]));
+        net_peer[0].sin_family = AF_INET;
+        net_peer[0].sin_port = htons((unsigned short) port);
+        if (inet_pton(AF_INET, host, &net_peer[0].sin_addr) != 1) {
             fprintf(stderr, "[NET] MELEE_NET=%s is not an address I can "
                             "reach; playing alone\n", role);
             close(net_fd);
             net_fd = -1;
             return;
         }
-        net_have_peer = 1;
+        net_have_peer[0] = 1;
         net_state = NET_CONNECT;
         fprintf(stderr, "[NET] connecting to %s:%d, slot %d, delay %d\n", host,
                 port, net_slot, net_delay);
@@ -433,7 +469,9 @@ static int slp_peer_char = -1, slp_peer_stage = -1;
 static long slp_tx, slp_rx, slp_rx_pads;
 
 static void slp_send_selections(void);
-static int slp_receive(const unsigned char* buf, ssize_t len);
+static s32 slowest_ack(void);
+static int slp_receive(const unsigned char* buf, ssize_t len,
+                       ENetPeer* from);
 
 static int slp_enet_open(void)
 {
@@ -460,15 +498,66 @@ static int slp_enet_open(void)
         fprintf(stderr, "[SLP] no ENet host\n");
         return 0;
     }
-    if (!net_is_host) {
-        ENetAddress to;
-        enet_address_set_host(&to, (host != NULL && *host) ? host : "127.0.0.1");
-        to.port = (enet_uint16) port;
-        slp_peer = enet_host_connect(slp_host, &to, 3, 0);
-        fprintf(stderr, "[SLP] dialling %s:%d\n",
-                (host != NULL && *host) ? host : "127.0.0.1", port);
-    } else {
-        fprintf(stderr, "[SLP] listening on %d\n", port);
+    /* MELEE_NET_PEERS is the mesh, listed by slot: the address of player 0,
+     * then player 1, and so on, this machine's own slot included (leave it
+     * empty or give its own address -- it is skipped either way). Slippi's
+     * client gets this list from matchmaking; a session arranged by hand is
+     * told it.
+     *
+     * Only lower-numbered slots are dialled. Each pair then has exactly one
+     * connection: slot 2 dials 0 and 1, slot 1 dials 0, slot 0 dials nobody
+     * and only listens. Dialling everyone gave two connections per pair --
+     * four "peer connected" events in a three-way match -- and the pads went
+     * out on one while the acks came back on the other.
+     *
+     * With two players MELEE_NET_HOST alone still works and means the host. */
+    {
+        const char* peers = getenv("MELEE_NET_PEERS");
+        int dialled = 0;
+        if (peers != NULL && *peers) {
+            char list[256];
+            char* save = NULL;
+            char* tok;
+            int slot = 0;
+            snprintf(list, sizeof(list), "%s", peers);
+            for (tok = strtok_r(list, ",", &save); tok != NULL;
+                 tok = strtok_r(NULL, ",", &save), slot++) {
+                ENetAddress to;
+                char hbuf[128];
+                char* colon;
+                int hport = port;
+                if (slot >= net_slot || *tok == '\0') {
+                    continue;   /* ourselves, or a peer that dials us */
+                }
+                snprintf(hbuf, sizeof(hbuf), "%s", tok);
+                colon = strchr(hbuf, ':');
+                if (colon != NULL) {
+                    *colon = '\0';
+                    hport = atoi(colon + 1);
+                }
+                if (enet_address_set_host(&to, hbuf) != 0) {
+                    fprintf(stderr, "[SLP] cannot resolve slot %d at \"%s\"\n",
+                            slot, hbuf);
+                    continue;
+                }
+                to.port = (enet_uint16) hport;
+                slp_peer = enet_host_connect(slp_host, &to, 3, 0);
+                dialled++;
+                fprintf(stderr, "[SLP] dialling slot %d at %s:%d\n", slot, hbuf,
+                        hport);
+            }
+        }
+        if (dialled == 0 && !net_is_host && (peers == NULL || !*peers)) {
+            ENetAddress to;
+            enet_address_set_host(&to,
+                                  (host != NULL && *host) ? host : "127.0.0.1");
+            to.port = (enet_uint16) port;
+            slp_peer = enet_host_connect(slp_host, &to, 3, 0);
+            fprintf(stderr, "[SLP] dialling %s:%d\n",
+                    (host != NULL && *host) ? host : "127.0.0.1", port);
+        }
+        fprintf(stderr, "[SLP] listening on %d, %d players, my slot %d\n", port,
+                net_players, net_slot);
     }
     /* The offer this side brings to the handshake. Any number will do as long
      * as the two sides do not both pick the same one by accident, which is
@@ -490,40 +579,105 @@ static int slp_enet_open(void)
     return 1;
 }
 
-static void slp_enet_pump(void)
+/* One ENet peer per slot, learned from the playerIdx in each peer's
+ * MATCH_SELECTIONS -- a connection does not say who it is, only the handshake
+ * does. slp_peer stays as "the most recent one" for the two-player case and
+ * for dialling out. */
+static ENetPeer* slp_slot_peer[NET_SLOTS];
+/* Every live connection, whether or not it has said who it is yet. A broadcast
+ * has to reach all of them: the selections that identify a peer are themselves
+ * broadcast, so before they arrive there is no slot to address and sending to
+ * "the peer" reached exactly one of the other two. */
+static ENetPeer* slp_conn[NET_SLOTS];
+/* Pads received per sending slot. With more than two players "how many pads
+ * arrived" is not enough: the question is always which player is silent. */
+static unsigned slp_rx_from[NET_SLOTS];
+/* The earliest frame each slot has ever announced. The first thing a side
+ * announces is the input for frame 1 + net_delay, so frames 1..net_delay are
+ * announced by nobody: the local slot already falls back to neutral for them,
+ * and a remote slot has to do the same or the barrier waits for a frame that
+ * is never coming. Only frames below the first one ever seen are filled in --
+ * a gap above it is a real gap and still waits. */
+static s32 net_first_seen[NET_SLOTS];
+/* The newest frame this side has finished. It is what the acks carry: a peer
+ * needs to know how far we have *got*, not which packet arrived last. The
+ * resend window runs back to the slowest peer's progress, so a frame somebody
+ * still needs stays in it. Acking the newest frame received instead let the
+ * window advance past a frame a peer had never seen -- with two players in
+ * step that never showed, with three it deadlocked in the opening frames:
+ * the host sat at 14 wanting their 14 while both guests sat at 10 wanting its
+ * 10, which had already left its window. */
+static s32 net_done = -1;
+
+static void slp_conn_add(ENetPeer* peer)
 {
-    ENetEvent ev;
-    if (slp_host == NULL) {
-        return;
+    int i;
+    for (i = 0; i < NET_SLOTS; i++) {
+        if (slp_conn[i] == peer) {
+            return;
+        }
     }
-    while (enet_host_service(slp_host, &ev, 0) > 0) {
-        switch (ev.type) {
-        case ENET_EVENT_TYPE_CONNECT:
-            slp_peer = ev.peer;
-            slp_enet_ready = 1;
-            fprintf(stderr, "[SLP] peer connected\n");
-            slp_send_selections();
-            break;
-        case ENET_EVENT_TYPE_RECEIVE:
-            slp_rx++;
-            slp_receive(ev.packet->data, (ssize_t) ev.packet->dataLength);
-            enet_packet_destroy(ev.packet);
-            break;
-        case ENET_EVENT_TYPE_DISCONNECT:
-            fprintf(stderr, "[SLP] peer gone\n");
-            slp_peer = NULL;
-            slp_enet_ready = 0;
-            break;
-        default:
-            break;
+    for (i = 0; i < NET_SLOTS; i++) {
+        if (slp_conn[i] == NULL) {
+            slp_conn[i] = peer;
+            return;
         }
     }
 }
 
-static void slp_enet_send(const unsigned char* buf, size_t len)
+static int slp_conn_count(void)
+{
+    int i, n = 0;
+    for (i = 0; i < NET_SLOTS; i++) {
+        if (slp_conn[i] != NULL) {
+            n++;
+        }
+    }
+    return n;
+}
+
+static void slp_conn_drop(ENetPeer* peer)
+{
+    int i;
+    for (i = 0; i < NET_SLOTS; i++) {
+        if (slp_conn[i] == peer) {
+            slp_conn[i] = NULL;
+        }
+        if (slp_slot_peer[i] == peer) {
+            slp_slot_peer[i] = NULL;
+        }
+    }
+}
+
+static void slp_enet_send_one(ENetPeer* to, const unsigned char* buf,
+                              size_t len);
+
+static void slp_note_peer(int slot, ENetPeer* peer)
+{
+    if (slot < 0 || slot >= NET_SLOTS || peer == NULL) {
+        return;
+    }
+    if (slp_slot_peer[slot] != peer) {
+        slp_slot_peer[slot] = peer;
+        fprintf(stderr, "[SLP] slot %d is %x:%u\n", slot,
+                (unsigned) peer->address.host, (unsigned) peer->address.port);
+    }
+}
+
+/* To one slot, for messages that differ per recipient. */
+static void slp_enet_send_to(int slot, const unsigned char* buf, size_t len)
+{
+    if (slot < 0 || slot >= NET_SLOTS) {
+        return;
+    }
+    slp_enet_send_one(slp_slot_peer[slot], buf, len);
+}
+
+static void slp_enet_send_one(ENetPeer* to, const unsigned char* buf,
+                              size_t len)
 {
     int pad = (len > 0 && (buf[0] == SLP_MSG_PAD || buf[0] == SLP_MSG_PAD_ACK));
-    if (slp_peer == NULL) {
+    if (to == NULL || slp_host == NULL) {
         return;
     }
     slp_tx++;
@@ -537,13 +691,70 @@ static void slp_enet_send(const unsigned char* buf, size_t len)
         if (unseq < 0) {
             unseq = getenv("MELEE_SLP_PAD_UNSEQ") != NULL;
         }
-        enet_peer_send(slp_peer, pad ? 1 : 0,
+        enet_peer_send(to, pad ? 1 : 0,
                        enet_packet_create(buf, len,
                                           (pad && unseq)
                                               ? ENET_PACKET_FLAG_UNSEQUENCED
                                               : ENET_PACKET_FLAG_RELIABLE));
     }
     enet_host_flush(slp_host);
+}
+
+/* To everyone. Slippi is a mesh, not a star: with four players each client
+ * sends its own pads to all three others rather than relaying through a host,
+ * so a broadcast here is one packet per peer. */
+static void slp_enet_pump(void)
+{
+    ENetEvent ev;
+    if (slp_host == NULL) {
+        return;
+    }
+    while (enet_host_service(slp_host, &ev, 0) > 0) {
+        switch (ev.type) {
+        case ENET_EVENT_TYPE_CONNECT:
+            slp_peer = ev.peer;
+            slp_enet_ready = 1;
+            slp_conn_add(ev.peer);
+            fprintf(stderr, "[SLP] peer connected (%d live)\n",
+                    slp_conn_count());
+            /* Introduce ourselves to this peer specifically as well as to
+             * everyone: a peer that joins after our first broadcast would
+             * otherwise never hear it. */
+            slp_send_selections();
+            break;
+        case ENET_EVENT_TYPE_RECEIVE:
+            slp_rx++;
+            slp_receive(ev.packet->data, (ssize_t) ev.packet->dataLength,
+                        ev.peer);
+            enet_packet_destroy(ev.packet);
+            break;
+        case ENET_EVENT_TYPE_DISCONNECT:
+            slp_conn_drop(ev.peer);
+            fprintf(stderr, "[SLP] peer gone (%d live)\n", slp_conn_count());
+            if (slp_peer == ev.peer) {
+                slp_peer = NULL;
+            }
+            slp_enet_ready = (slp_conn_count() > 0);
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+static void slp_enet_send(const unsigned char* buf, size_t len)
+{
+    int i, sent = 0;
+    for (i = 0; i < NET_SLOTS; i++) {
+        if (slp_conn[i] == NULL) {
+            continue;
+        }
+        slp_enet_send_one(slp_conn[i], buf, len);
+        sent++;
+    }
+    if (sent == 0) {
+        slp_enet_send_one(slp_peer, buf, len);
+    }
 }
 
 /* MATCH_SELECTIONS, in the order SlippiNetplay.cpp writes it:
@@ -555,11 +766,38 @@ static void slp_send_selections(void)
     int ck = 0, stage = 0;
     {
         const char* spec = getenv("MELEE_BOOT_MATCH");
+        const char* pl = getenv("MELEE_BOOT_PLAYERS");
         int c0 = 0, c1 = 0, st = -1;
         if (spec != NULL) {
             sscanf(spec, "%d,%d,%d", &c0, &c1, &st);
         }
         ck = net_slot == 0 ? c0 : c1;
+        /* With more than two players the pair in MELEE_BOOT_MATCH cannot say
+         * what slot 2 is playing; MELEE_BOOT_PLAYERS lists every slot, so read
+         * this one's out of it when it is set. */
+        if (pl != NULL && *pl) {
+            const char* q = pl;
+            int n = 0;
+            while (*q != '\0') {
+                char* end;
+                int v = (int) strtol(q, &end, 10);
+                if (end == q) {
+                    break;
+                }
+                if (n == net_slot) {
+                    ck = v;
+                    break;
+                }
+                q = end;
+                while (*q != '\0' && *q != ',') {
+                    q++;
+                }
+                if (*q == ',') {
+                    q++;
+                }
+                n++;
+            }
+        }
         stage = st;
     }
     b[0] = (unsigned char) SLP_MSG_MATCH_SELECTIONS;
@@ -584,11 +822,20 @@ static void net_send(const unsigned char* buf, size_t len)
         slp_enet_send(buf, len);
         return;
     }
-    if (net_fd < 0 || !net_have_peer) {
+    if (net_fd < 0) {
         return;
     }
-    (void) sendto(net_fd, buf, len, 0, (struct sockaddr*) &net_peer,
-                  sizeof(net_peer));
+    {
+        int slot;
+        for (slot = 0; slot < NET_SLOTS; slot++) {
+            if (!net_have_peer[slot]) {
+                continue;
+            }
+            (void) sendto(net_fd, buf, len, 0,
+                          (struct sockaddr*) &net_peer[slot],
+                          sizeof(net_peer[slot]));
+        }
+    }
 }
 
 static unsigned char* msg_start(unsigned char* buf, int type)
@@ -609,16 +856,31 @@ static void send_hello(void)
     net_send(buf, sizeof(buf));
 }
 
-static void send_setup(void)
+/* To one slot. MSG_SETUP has to be directed: it tells a guest which slot it
+ * plays, and with more than two players that is a different answer for each. */
+static void net_send_to(int slot, const unsigned char* buf, size_t len)
+{
+    if (net_slippi_proto) {
+        slp_enet_send_to(slot, buf, len);
+        return;
+    }
+    if (net_fd < 0 || slot < 0 || slot >= NET_SLOTS || !net_have_peer[slot]) {
+        return;
+    }
+    (void) sendto(net_fd, buf, len, 0, (struct sockaddr*) &net_peer[slot],
+                  sizeof(net_peer[slot]));
+}
+
+static void send_setup_to(int slot)
 {
     unsigned char buf[NET_HDR + 12];
     unsigned char* p = msg_start(buf, MSG_SETUP);
-    put_u8(p + 0, (unsigned) net_peer_slot);
+    put_u8(p + 0, (unsigned) slot);
     put_u8(p + 1, (unsigned) net_delay);
-    put_u16(p + 2, 0);
+    put_u16(p + 2, (unsigned) net_players);
     put_u32(p + 4, net_seed);
     put_u32(p + 8, net_cfg);
-    net_send(buf, sizeof(buf));
+    net_send_to(slot, buf, sizeof(buf));
 }
 
 static void send_ready(void)
@@ -703,7 +965,9 @@ static void slp_send_inputs(s32 newest)
     put_u32(buf + 6, (unsigned) net_hashed);   /* checksum frame */
     put_u32(buf + 10, net_hashed > 0 ? net_hash_val[net_hashed &
                                                     (NET_HASH_RING - 1)] : 0);
-    for (f = newest; f > net_peer_acked && n < SLP_MAX_PADS; f--) {
+    /* The oldest frame any player still has not confirmed: with more than two
+     * the window has to cover the slowest of them. */
+    for (f = newest; f > slowest_ack() && n < SLP_MAX_PADS; f--) {
         NetPad pad;
         if (!ring_get(&net_in[net_slot], f, &pad)) {
             memset(&pad, 0, sizeof(pad));
@@ -714,18 +978,21 @@ static void slp_send_inputs(s32 newest)
     net_send(buf, (size_t) (14 + n * SLP_PAD_BYTES));
 }
 
+/* The ack says how far this side has got, not what it last received. */
 static void slp_send_ack(s32 frame)
 {
     unsigned char buf[6];
+    (void) frame;
     put_u8(buf + 0, SLP_MSG_PAD_ACK);
-    put_u32(buf + 1, (unsigned) frame);
+    put_u32(buf + 1, (unsigned) net_done);
     put_u8(buf + 5, (unsigned) net_slot);
     net_send(buf, sizeof(buf));
 }
 
 /* Returns non-zero when the datagram was a Slippi message and has been
  * handled. */
-static int slp_receive(const unsigned char* buf, ssize_t len)
+static int slp_receive(const unsigned char* buf, ssize_t len,
+                       ENetPeer* from)
 {
     if (len < 1) {
         return 0;
@@ -733,12 +1000,16 @@ static int slp_receive(const unsigned char* buf, ssize_t len)
     if (buf[0] == SLP_MSG_PAD && len >= 14) {
         slp_rx_pads++;
         s32 newest = (s32) get_u32(buf + 1);
-        int slot = (int) get_u8(buf + 5) & 1;
+        int slot = (int) get_u8(buf + 5) & (NET_SLOTS - 1);
+        slp_rx_from[slot]++;
         int count = (int) ((len - 14) / SLP_PAD_BYTES);
         int i;
         for (i = 0; i < count; i++) {
             NetPad pad;
             slp_pad_get(buf + 14 + i * SLP_PAD_BYTES, &pad);
+            if (net_first_seen[slot] < 0 || newest - i < net_first_seen[slot]) {
+                net_first_seen[slot] = newest - i;
+            }
             ring_put(&net_in[slot], newest - i, &pad);
         }
         if (count > 0) {
@@ -748,6 +1019,11 @@ static int slp_receive(const unsigned char* buf, ssize_t len)
     }
     if (buf[0] == SLP_MSG_MATCH_SELECTIONS && len >= 14) {
         unsigned peer_rng = get_u32(buf + 8);
+        int sel_slot = (int) buf[4] & (NET_SLOTS - 1);
+        /* A connection does not say who it is; this is the message that does.
+         * Without it every peer would be "the peer" and three players would
+         * all write into slot 1. */
+        slp_note_peer(sel_slot, from);
         slp_peer_char = buf[1];
         slp_peer_stage = (buf[7] != 0) ? (int) ((buf[5] << 8) | buf[6]) : -1;
         slp_peer_rng = peer_rng;
@@ -755,13 +1031,36 @@ static int slp_receive(const unsigned char* buf, ssize_t len)
         /* One side's offer has to win, and both have to reach the same answer
          * without another round trip. Slippi calls that side the decider and
          * takes its number; the host is the decider here. */
-        net_seed = net_is_host ? slp_my_rng : slp_peer_rng;
-        /* Only now are the two playing the same match, so only now is this
-         * side ready. Starting the match before the offers are exchanged
-         * pins whatever seed this side guessed, and the host did exactly
-         * that: it began on its default while the guest began on the agreed
-         * value. */
-        net_state = NET_RUN;
+        /* Only the host decides. With two players "the peer" and "the host"
+         * were the same thing; with four, a guest must ignore another guest's
+         * offer or the three of them would pick different seeds. */
+        if (net_is_host) {
+            net_seed = slp_my_rng;
+        } else if (sel_slot == 0) {
+            net_seed = slp_peer_rng;
+        }
+        /* Only now are they playing the same match, so only now is this side
+         * ready. Starting before the offers are exchanged pins whatever seed
+         * this side guessed, and the host did exactly that: it began on its
+         * default while the guest began on the agreed value.
+         *
+         * With more than two players that means *every* other slot, not just
+         * one: starting as soon as the first of three answers leaves the third
+         * player's first frames running on an unagreed seed. */
+        {
+            int k, missing = 0;
+            for (k = 0; k < net_players; k++) {
+                if (net_is_remote(k) && slp_slot_peer[k] == NULL) {
+                    missing++;
+                }
+            }
+            if (missing == 0) {
+                net_state = NET_RUN;
+            } else {
+                fprintf(stderr, "[SLP] %d of %d players still to introduce "
+                                "themselves\n", missing, net_players - 1);
+            }
+        }
         fprintf(stderr, "[SLP] selections in: char %d stage %d rng %04X; "
                         "agreed seed %08X (%s decides)\n",
                 slp_peer_char, slp_peer_stage, peer_rng, net_seed,
@@ -770,8 +1069,18 @@ static int slp_receive(const unsigned char* buf, ssize_t len)
     }
     if (buf[0] == SLP_MSG_PAD_ACK && len >= 6) {
         s32 frame = (s32) get_u32(buf + 1);
-        if (frame > net_peer_acked) {
-            net_peer_acked = frame;
+        int from_slot = (len >= 6) ? ((int) buf[5] & (NET_SLOTS - 1)) : -1;
+        if (from_slot < 0) {
+            /* An ack from a build that does not name its slot: treat it as the
+             * slowest, which is always safe -- it only widens the window. */
+            int k;
+            for (k = 0; k < NET_SLOTS; k++) {
+                if (net_is_remote(k) && frame > net_peer_acked[k]) {
+                    net_peer_acked[k] = frame;
+                }
+            }
+        } else if (frame > net_peer_acked[from_slot]) {
+            net_peer_acked[from_slot] = frame;
         }
         return 1;
     }
@@ -785,6 +1094,42 @@ static void send_hash(s32 frame, u32 hash)
     put_u32(p + 0, (unsigned) frame);
     put_u32(p + 4, hash);
     net_send(buf, sizeof(buf));
+}
+
+/* The oldest frame any other player has still not acknowledged. Inputs are
+ * repeated from there, so with four players the window is the slowest link's. */
+static s32 slowest_ack(void)
+{
+    s32 oldest = 0x7FFFFFFF;
+    int slot;
+    for (slot = 0; slot < net_players; slot++) {
+        if (net_is_remote(slot) && net_peer_acked[slot] < oldest) {
+            oldest = net_peer_acked[slot];
+        }
+    }
+    return (oldest == 0x7FFFFFFF) ? -1 : oldest;
+}
+
+/* Has every other player announced an input for this frame -- or is this frame
+ * older than anything that slot will ever announce? */
+static int remote_ready(int slot, s32 frame)
+{
+    NetPad tmp;
+    if (ring_get(&net_in[slot], frame, &tmp)) {
+        return 1;
+    }
+    return net_first_seen[slot] >= 0 && frame < net_first_seen[slot];
+}
+
+static int all_remote_ready(s32 frame)
+{
+    int slot;
+    for (slot = 0; slot < net_players; slot++) {
+        if (net_is_remote(slot) && !remote_ready(slot, frame)) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 /* ---- the state checksum -------------------------------------------------
@@ -814,16 +1159,16 @@ static void hash_remember(s32 frame, u32 h)
     net_hash_val[i] = h;
 }
 
-static void hash_compare(s32 frame, u32 peer)
+static void hash_compare(int slot, s32 frame, u32 peer)
 {
     int i = frame & (NET_HASH_RING - 1);
-    if (net_desynced) {
+    if (net_desynced || slot < 0 || slot >= NET_SLOTS) {
         return;
     }
     if (net_hash_frame[i] != frame) {
         /* Not there yet: keep it until this side reaches the frame. */
-        net_peer_hash_frame[i] = frame;
-        net_peer_hash_val[i] = peer;
+        net_peer_hash_frame[slot][i] = frame;
+        net_peer_hash_val[slot][i] = peer;
         return;
     }
     if (net_hash_val[i] == peer) {
@@ -862,7 +1207,7 @@ static void net_pump(void)
         if (n < NET_HDR) {
             return;
         }
-        if (net_slippi_proto && slp_receive(buf, n)) {
+        if (net_slippi_proto && slp_receive(buf, n, NULL)) {
             continue;
         }
         if (get_u32(buf) != NET_MAGIC) {
@@ -871,12 +1216,40 @@ static void net_pump(void)
         switch ((int) get_u8(buf + 4)) {
         case MSG_HELLO: {
             unsigned cfg;
+            int hello_slot, i;
             if (!net_is_host || n < NET_HDR + 8) {
                 break;
             }
             cfg = get_u32(buf + NET_HDR + 4);
-            net_peer = from;
-            net_have_peer = 1;
+            /* Which slot is this? An address already admitted keeps its slot
+             * (a repeated HELLO is a retry, not a second player); otherwise
+             * take the lowest free one. Slot 0 is the host. */
+            hello_slot = -1;
+            for (i = 0; i < NET_SLOTS; i++) {
+                if (net_have_peer[i] &&
+                    net_peer[i].sin_addr.s_addr == from.sin_addr.s_addr &&
+                    net_peer[i].sin_port == from.sin_port) {
+                    hello_slot = i;
+                    break;
+                }
+            }
+            if (hello_slot < 0) {
+                for (i = 1; i < net_players; i++) {
+                    if (!net_have_peer[i]) {
+                        hello_slot = i;
+                        break;
+                    }
+                }
+            }
+            if (hello_slot < 0) {
+                fprintf(stderr, "[NET] a player tried to join a full match "
+                                "(%d slots); ignoring %s:%d\n",
+                        net_players, inet_ntoa(from.sin_addr),
+                        ntohs(from.sin_port));
+                break;
+            }
+            net_peer[hello_slot] = from;
+            net_have_peer[hello_slot] = 1;
             if (cfg != net_cfg) {
                 fprintf(stderr,
                         "[NET] the peer's match configuration (%08X) is not "
@@ -884,11 +1257,10 @@ static void net_pump(void)
                         "they must be identical or this will desync at once\n",
                         cfg, net_cfg);
             }
-            send_setup();
-            if (net_trace) {
-                fprintf(stderr, "[NET] hello from %s:%d\n",
-                        inet_ntoa(from.sin_addr), ntohs(from.sin_port));
-            }
+            send_setup_to(hello_slot);
+            fprintf(stderr, "[NET] hello from %s:%d -- slot %d of %d\n",
+                    inet_ntoa(from.sin_addr), ntohs(from.sin_port), hello_slot,
+                    net_players);
             break;
         }
         case MSG_SETUP: {
@@ -897,9 +1269,17 @@ static void net_pump(void)
             if (net_is_host || n < NET_HDR + 12) {
                 break;
             }
-            net_slot = (int) get_u8(p + 0) & 1;
-            net_peer_slot = net_slot ^ 1;
+            net_slot = (int) get_u8(p + 0);
+            if (net_slot < 0 || net_slot >= NET_SLOTS) {
+                net_slot = 1;
+            }
             net_delay = (int) get_u8(p + 1);
+            {
+                int np = (int) get_u16(p + 2);
+                if (np >= 2 && np <= NET_SLOTS) {
+                    net_players = np;
+                }
+            }
             net_seed = get_u32(p + 4);
             cfg = get_u32(p + 8);
             if (cfg != net_cfg) {
@@ -920,10 +1300,14 @@ static void net_pump(void)
         case MSG_READY:
             if (net_is_host && net_state != NET_RUN) {
                 net_state = NET_RUN;
-                fprintf(stderr, "[NET] peer connected from %s:%d; I play "
-                                "slot %d\n",
-                        inet_ntoa(net_peer.sin_addr), ntohs(net_peer.sin_port),
-                        net_slot);
+                {
+                    int k, have = 0;
+                    for (k = 0; k < net_players; k++) {
+                        if (net_have_peer[k]) have++;
+                    }
+                    fprintf(stderr, "[NET] %d of %d players in; I play slot "
+                                    "%d\n", have + 1, net_players, net_slot);
+                }
             }
             break;
         case MSG_INPUT: {
@@ -943,13 +1327,17 @@ static void net_pump(void)
             for (i = 0; i < count; i++) {
                 NetPad pad;
                 pad_get(p + 5 + i * NET_PAD_BYTES, &pad);
+                if (net_first_seen[slot] < 0 || base + i < net_first_seen[slot]) {
+                    net_first_seen[slot] = base + i;
+                }
                 ring_put(&net_in[slot], base + i, &pad);
             }
             break;
         }
         case MSG_HASH:
             if (n >= NET_HDR + 8) {
-                hash_compare((s32) get_u32(buf + NET_HDR),
+                hash_compare((int) get_u8(buf + 5) & (NET_SLOTS - 1),
+                             (s32) get_u32(buf + NET_HDR),
                              get_u32(buf + NET_HDR + 4));
             }
             break;
@@ -1020,8 +1408,15 @@ void pc_net_match_begin(void)
     memset(net_peer_hash_frame, 0xFF, sizeof(net_peer_hash_frame));
     net_match = 1;
     net_last_sent = -1;
+    net_done = -1;
     net_hashed = -1;
-    net_peer_acked = -1;
+    {
+        int k;
+        for (k = 0; k < NET_SLOTS; k++) {
+            net_peer_acked[k] = -1;
+            net_first_seen[k] = -1;
+        }
+    }
     net_desynced = 0;
     net_stalls = 0;
     net_stall_ms = 0.0;
@@ -1060,7 +1455,7 @@ void pc_net_match_end(void)
 void pc_net_pads(GCPadStatus* pads)
 {
     s32 frame;
-    NetPad mine, theirs;
+    NetPad mine;
     double waited;
 
     /* A Dolphin host owns the whole session -- its protocol, its clock, and
@@ -1231,7 +1626,9 @@ void pc_net_pads(GCPadStatus* pads)
         double began = now_ms();
         double last_note = began;
         double last_resend = began;
-        int got = ring_get(&net_in[net_peer_slot], frame, &theirs);
+        /* Every other player in the match, not "the peer": with four slots
+         * this frame is ready only once all of them have announced it. */
+        int got = all_remote_ready(frame);
         while (!got) {
             struct pollfd pfd;
             double t;
@@ -1248,26 +1645,43 @@ void pc_net_pads(GCPadStatus* pads)
                 last_resend = t;
                 if (net_slippi_proto) {
                     slp_send_inputs(net_last_sent);
+                    /* And say where we are: a peer that has run ahead needs
+                     * this to know how far back its window must reach. */
+                    slp_send_ack(net_done);
                 } else {
                     send_inputs(net_last_sent);
                 }
             }
-            got = ring_get(&net_in[net_peer_slot], frame, &theirs);
+            got = all_remote_ready(frame);
             if (got) {
                 break;
             }
             if (t - last_note > 2000.0) {
                 last_note = t;
-                fprintf(stderr, "[NET] waiting for the peer's input for "
-                                "frame %d (%.0f s)\n",
-                        (int) frame, (t - began) / 1000.0);
+                {
+                    char miss[64];
+                    int k, n2 = 0;
+                    miss[0] = '\0';
+                    for (k = 0; k < net_players; k++) {
+                        NetPad tmp;
+                        if (!net_is_remote(k) ||
+                            ring_get(&net_in[k], frame, &tmp)) {
+                            continue;
+                        }
+                        n2 += snprintf(miss + n2, sizeof(miss) - (size_t) n2,
+                                       " %d", k);
+                    }
+                    fprintf(stderr, "[NET] waiting for slot%s input for "
+                                    "frame %d (%.0f s)\n",
+                            miss, (int) frame, (t - began) / 1000.0);
+                }
                 fflush(stderr);
             }
             if (net_state != NET_RUN) {
                 break;
             }
             if (t - began > (double) net_timeout_ms) {
-                fprintf(stderr, "[NET] no input from the peer for %.0f s; "
+                fprintf(stderr, "[NET] no input from a player for %.0f s; "
                                 "carrying on alone from frame %d\n",
                         (t - began) / 1000.0, (int) frame);
                 fflush(stderr);
@@ -1298,8 +1712,26 @@ void pc_net_pads(GCPadStatus* pads)
          * for them, so both sides play them neutral. */
         memset(&mine, 0, sizeof(mine));
     }
+    net_done = frame;
     pad_to_gc(&pads[net_slot], &mine);
-    pad_to_gc(&pads[net_peer_slot], &theirs);
+    {
+        int slot;
+        for (slot = 0; slot < net_players; slot++) {
+            NetPad got_pad;
+            if (!net_is_remote(slot)) {
+                continue;
+            }
+            if (ring_get(&net_in[slot], frame, &got_pad)) {
+                pad_to_gc(&pads[slot], &got_pad);
+            } else {
+                /* Before that slot's first announcement: neutral, the same as
+                 * this side plays its own pre-announcement frames. */
+                NetPad neutral;
+                memset(&neutral, 0, sizeof(neutral));
+                pad_to_gc(&pads[slot], &neutral);
+            }
+        }
+    }
 
     /* A checksum every few frames, compared against the peer's. It is the
      * only way either side finds out that they have stopped playing the same
@@ -1314,8 +1746,13 @@ void pc_net_pads(GCPadStatus* pads)
         int i = frame & (NET_HASH_RING - 1);
         net_hashed = frame;
         hash_remember(frame, h);
-        if (net_peer_hash_frame[i] == frame) {
-            hash_compare(frame, net_peer_hash_val[i]);
+        {
+            int k;
+            for (k = 0; k < net_players; k++) {
+                if (net_is_remote(k) && net_peer_hash_frame[k][i] == frame) {
+                    hash_compare(k, frame, net_peer_hash_val[k][i]);
+                }
+            }
         }
         if ((frame % 10) == 0) {
             send_hash(frame, h);
@@ -1331,8 +1768,18 @@ void pc_net_pads(GCPadStatus* pads)
         if (net_slippi_proto) {
             fprintf(stderr, "[SLP] tx %ld, rx %ld (%ld pad messages), "
                             "peer acked %d, last sent %d\n",
-                    slp_tx, slp_rx, slp_rx_pads, (int) net_peer_acked,
+                    slp_tx, slp_rx, slp_rx_pads, (int) slowest_ack(),
                     (int) net_last_sent);
+            {
+                int k;
+                fprintf(stderr, "[SLP] pads in from");
+                for (k = 0; k < net_players; k++) {
+                    if (net_is_remote(k)) {
+                        fprintf(stderr, " slot%d=%u", k, slp_rx_from[k]);
+                    }
+                }
+                fprintf(stderr, "; conns %d\n", slp_conn_count());
+            }
         }
         fflush(stderr);
     }
