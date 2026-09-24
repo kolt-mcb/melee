@@ -368,8 +368,12 @@ void* pc_ftconv_kirby_hat(void* raw)
                  * siblings read these straight off the hat */
                 int q;
                 for (q = 0; q < 5; q++) {
-                    h->hat_dynamics[q] =
-                        pc_conv_dynamics_at(base, len, pc_be32(*(const u32*) (p + 0xC + 4 * q)));
+                    u32 off = pc_be32(*(const u32*) (p + 0xC + 4 * q));
+                    h->hat_dynamics[q] = pc_conv_dynamics_at(base, len, off);
+                    /* and the archive pointer, for the slots that are really
+                     * Articles -- see KirbyHatStruct */
+                    h->pc_raw_slots[q] =
+                        (off != 0 && off < len) ? (void*) (base + off) : NULL;
                 }
             }
             if (pc_ftconv_trace()) {

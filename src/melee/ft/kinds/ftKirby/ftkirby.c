@@ -3813,6 +3813,18 @@ void ftKb_SpecialAirN_Enter(Fighter_GObj* gobj)
     }
 }
 
+/* Each of these slots holds an Article, not the dynamic-bone chain the field
+ * is named for -- the five slots mean different things per copy kind. On the
+ * host the converter has already turned every slot into dynamics, so take the
+ * archive pointer it kept beside them and let it_8026B3F8 convert it as the
+ * Article it is. On GCN there is nothing to convert and this is the field
+ * itself. */
+#if BUILD_TARGET_PC
+#define HAT_ARTICLE(n) pc_raw_slots[n]
+#else
+#define HAT_ARTICLE(n) hat_dynamics[n]
+#endif
+
 void ftKb_SpecialN_800F16D0(Fighter_GObj* gobj, FighterKind kind)
 {
     struct ft_80459B88_t* g = &ft_80459B88;
@@ -3824,103 +3836,105 @@ void ftKb_SpecialN_800F16D0(Fighter_GObj* gobj, FighterKind kind)
         it_8026B3F8((Article*) g->x0->xC, It_Kind_Kirby_MarioFire);
         break;
     case Ft_Kind_Luigi:
-        it_8026B3F8((Article*) g->hats[16]->hat_dynamics[0],
+        it_8026B3F8((Article*) g->hats[16]->HAT_ARTICLE(0),
                     It_Kind_Kirby_LuigiFire);
         break;
     case Ft_Kind_Popo:
-        it_8026B3F8((Article*) g->hats[9]->hat_dynamics[0],
+        it_8026B3F8((Article*) g->hats[9]->HAT_ARTICLE(0),
                     It_Kind_Kirby_IceClimberIce);
         break;
     case Ft_Kind_Peach:
         hat = g->hats[8];
-        it_8026B3F8((Article*) hat->hat_dynamics[0], It_Kind_Kirby_PeachToad);
-        it_8026B3F8((Article*) hat->hat_dynamics[1],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(0), It_Kind_Kirby_PeachToad);
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(1),
                     It_Kind_Kirby_PeachToadSpore);
         break;
     case Ft_Kind_Fox:
         hat = g->hats[0];
-        it_8026B3F8((Article*) hat->hat_dynamics[0], It_Kind_Kirby_FoxLaser);
-        it_8026B3F8((Article*) hat->hat_dynamics[1], It_Kind_Kirby_FoxBlaster);
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(0), It_Kind_Kirby_FoxLaser);
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(1), It_Kind_Kirby_FoxBlaster);
         break;
     case Ft_Kind_Falco:
         hat = g->hats[21];
-        it_8026B3F8((Article*) hat->hat_dynamics[3], It_Kind_Kirby_FalcoLaser);
-        it_8026B3F8((Article*) hat->hat_dynamics[4],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(3), It_Kind_Kirby_FalcoLaser);
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(4),
                     It_Kind_Kirby_FalcoBlaster);
         break;
     case Ft_Kind_Link:
         hat = g->hats[5];
-        it_8026B3F8((Article*) hat->hat_dynamics[0], It_Kind_Kirby_LinkArrow);
-        it_8026B3F8((Article*) hat->hat_dynamics[1], It_Kind_Kirby_LinkBow);
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(0), It_Kind_Kirby_LinkArrow);
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(1), It_Kind_Kirby_LinkBow);
         break;
     case Ft_Kind_CLink:
         hat = g->hats[19];
-        it_8026B3F8((Article*) hat->hat_dynamics[0], It_Kind_Kirby_CLinkArrow);
-        it_8026B3F8((Article*) hat->hat_dynamics[1], It_Kind_Kirby_CLinkBow);
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(0), It_Kind_Kirby_CLinkArrow);
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(1), It_Kind_Kirby_CLinkBow);
         break;
     case Ft_Kind_Mewtwo:
-        it_8026B3F8((Article*) g->hats[15]->hat_dynamics[3],
+        it_8026B3F8((Article*) g->hats[15]->HAT_ARTICLE(3),
                     It_Kind_Kirby_MewtwoShadowBall);
         break;
     case Ft_Kind_Ness:
         hat = g->hats[7];
-        it_8026B3F8((Article*) hat->hat_dynamics[0],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(0),
                     It_Kind_Kirby_NessPKFlush);
-        it_8026B3F8((Article*) hat->hat_dynamics[1],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(1),
                     It_Kind_Kirby_NessPKFlush_Explode);
         break;
     case Ft_Kind_Pikachu:
         hat = g->hats[11];
-        it_8026B3F8((Article*) hat->hat_dynamics[0],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(0),
                     It_Kind_Kirby_PikachuTJolt_Ground);
-        it_8026B3F8((Article*) hat->hat_dynamics[1],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(1),
                     It_Kind_Kirby_PikachuTJolt_Air);
         break;
     case Ft_Kind_Pichu:
         hat = g->hats[22];
-        it_8026B3F8((Article*) hat->hat_dynamics[0],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(0),
                     It_Kind_Kirby_PichuTJolt_Ground);
-        it_8026B3F8((Article*) hat->hat_dynamics[1],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(1),
                     It_Kind_Kirby_PichuTJolt_Air);
         break;
     case Ft_Kind_Samus:
-        it_8026B3F8((Article*) g->hats[12]->hat_dynamics[0],
+        it_8026B3F8((Article*) g->hats[12]->HAT_ARTICLE(0),
                     It_Kind_Kirby_SamusCharge);
         break;
     case Ft_Kind_Koopa:
-        it_8026B3F8((Article*) g->hats[4]->hat_dynamics[0],
+        it_8026B3F8((Article*) g->hats[4]->HAT_ARTICLE(0),
                     It_Kind_Kirby_KoopaFlame);
         break;
     case Ft_Kind_GKoops:
-        it_8026B3F8((Article*) g->hats[30]->hat_dynamics[0],
+        it_8026B3F8((Article*) g->hats[30]->HAT_ARTICLE(0),
                     It_Kind_Kirby_KoopaFlame);
         break;
     case Ft_Kind_Seak:
         hat = g->hats[6];
-        it_8026B3F8((Article*) hat->hat_dynamics[0],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(0),
                     It_Kind_Kirby_SeakNeedleThrow);
-        it_8026B3F8((Article*) hat->hat_dynamics[1],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(1),
                     It_Kind_Kirby_SeakNeedleHeld);
         break;
     case Ft_Kind_DrMario:
-        it_8026B3F8((Article*) g->hats[20]->hat_dynamics[0],
+        it_8026B3F8((Article*) g->hats[20]->HAT_ARTICLE(0),
                     It_Kind_Kirby_DrMarioVitamin);
         break;
     case Ft_Kind_GameWatch:
         hat = g->hats[23];
-        it_8026B3F8((Article*) hat->hat_dynamics[5],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(5),
                     It_Kind_Kirby_GameWatchChef);
-        it_8026B3F8((Article*) hat->hat_dynamics[6],
+        it_8026B3F8((Article*) hat->HAT_ARTICLE(6),
                     It_Kind_Kirby_GameWatchChefPan);
         break;
     case Ft_Kind_Yoshi:
-        it_8026B3F8((Article*) g->hats[13]->hat_dynamics[5],
+        it_8026B3F8((Article*) g->hats[13]->HAT_ARTICLE(5),
                     It_Kind_Kirby_YoshiEggLay);
         break;
     default:
         break;
     }
 }
+
+#undef HAT_ARTICLE
 
 void ftKb_SpecialN_800F190C(Fighter_GObj* gobj, FighterKind kind)
 {

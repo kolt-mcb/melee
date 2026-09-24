@@ -2197,6 +2197,18 @@ struct KirbyHatStruct {
     /*  +0 */ HSD_Joint* hat_joint;
     /*  +4 */ FtPartsDesc desc;
     /*  +C */ ftDynamics* hat_dynamics[5];
+#if BUILD_TARGET_PC
+    /* The five slots are heterogeneous: which copy kind owns this hat decides
+     * whether a slot is a dynamic-bone chain (Bowser's shell spikes, Zelda's
+     * hair) or an Article (Fox's blaster, Link's bow). The converter can only
+     * turn a slot into one of the two, so it turns them into dynamics and
+     * keeps the archive pointer here as well -- ftKb_SpecialN_800F16D0 hands
+     * these to it_8026B3F8, which converts a raw Article properly. Without it
+     * the article kinds were registered with a dynamics object: Kirby copied
+     * Fox, the blaster's article data came back NULL, the spawn was refused,
+     * and the next frame dereferenced the NULL it left behind. */
+    void* pc_raw_slots[5];
+#endif
 };
 
 typedef struct Kirby_Unk {

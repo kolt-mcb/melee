@@ -57,7 +57,6 @@
  * the last twelve, which at any other stride comes apart into joint indices
  * in the thousands. */
 struct grRCruise_VanishDesc { s16 x0; s16 x2; bool x4; };
-struct grRCruise_VanishEntry { s16 x0; s16 x2; HSD_JObj* jobj; };
 
 /* Forward declarations */
 void grRCruise_801FF164(bool arg);
@@ -1305,6 +1304,16 @@ void grRCruise_80201410(Ground_GObj* gobj)
     }
 }
 
+/* The vanish array is allocated and filled through gp->u.map.vanish (above),
+ * and this read it back through gp->u.rcruise.vanish. On the console those name
+ * the same bytes -- both land at gp+0x134 -- so the mismatch was invisible. On
+ * the host the two views have different layouts: Map_GroundVars carries six
+ * 8-byte Ground_GObj* and six HSD_GObj* where the console had 4-byte fields,
+ * grRCruise_GroundVars a different set again, so the member sits at a different
+ * offset in each. Reading the pointer through the wrong view returned NULL and
+ * the stage load died on lb_8000B1CC(vanish->jobj, ...) -- Rainbow Cruise never
+ * reached a match at all. Same offset on GCN, so the generated code is
+ * unchanged; the local entry type is the identical twin of Map_VanishEntry. */
 void grRCruise_80201588(Ground_GObj* gobj)
 {
     Point3d pos;
@@ -1316,17 +1325,17 @@ void grRCruise_80201588(Ground_GObj* gobj)
     PAD_STACK(4);
     desc = &grRc_803E5014;
     for (i = 0; i < 20; i++, desc++) {
-        struct grRCruise_VanishEntry* vanish;
+        struct Map_VanishEntry* vanish;
 
         if (desc->x4 != 0) {
             continue;
         }
-        vanish = &gp->u.rcruise.vanish[i];
+        vanish = &gp->u.map.vanish[i];
         switch (vanish->x0) {
         case 0:
             lb_8000B1CC(vanish->jobj, NULL, &pos);
             if (Camera_8003118C(&pos, -20.0f) != 0) {
-                gp->u.rcruise.vanish[i].x0 = 1;
+                gp->u.map.vanish[i].x0 = 1;
                 grAnime_801C7FF8(gobj, desc->x0, 2, 2, 0.0f, 1.0f);
                 mpJointListAdd(desc->x2);
                 mpLib_80055E9C(desc->x2);
@@ -1340,7 +1349,7 @@ void grRCruise_80201588(Ground_GObj* gobj)
                 HSD_JObj* jobj;
                 s32 joint;
 
-                gp->u.rcruise.vanish[i].x0 = 2;
+                gp->u.map.vanish[i].x0 = 2;
                 joint = desc->x0;
                 gobj5 = Ground_GetMapGObj(5);
                 if (gobj5 != NULL) {
@@ -1366,7 +1375,7 @@ void grRCruise_80201588(Ground_GObj* gobj)
                 HSD_JObj* jobj;
                 s32 joint;
 
-                gp->u.rcruise.vanish[i].x0 = 3;
+                gp->u.map.vanish[i].x0 = 3;
                 grAnime_801C7FF8(gobj, desc->x0, 2, 3, 0.0f, 1.0f);
                 joint = desc->x0;
                 gobj5 = Ground_GetMapGObj(5);
@@ -1389,11 +1398,11 @@ void grRCruise_80201588(Ground_GObj* gobj)
             if (grAnime_801C83D0(gobj, desc->x0, 2) != 0) {
                 u32 j;
 
-                gp->u.rcruise.vanish[i].x0 = 0;
+                gp->u.map.vanish[i].x0 = 0;
                 grAnime_801C7FF8(gobj, desc->x0, 2, 1, 0.0f, 1.0f);
                 for (j = 0; j < 20; j++) {
                     if ((&grRc_803E5014)[j].x2 == desc->x2 &&
-                        gp->u.rcruise.vanish[j].x0 != 0)
+                        gp->u.map.vanish[j].x0 != 0)
                     {
                         break;
                     }

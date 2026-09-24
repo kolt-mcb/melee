@@ -1057,11 +1057,27 @@ static HSD_GObj* Item_8026862C(SpawnItem* spawnItem)
      * spawn here is what keeps a NULL out of all of them at once. */
     {
         Item* it = (Item*) HSD_GObjGetUserData(gobj);
+        /* xCC_item_attr too, and for the same reason one level further along:
+         * Item_80267AA8 already refuses to finish an item whose attribute
+         * table is missing, but it refuses by returning, and this check did
+         * not ask -- so the half-built item was spawned anyway and the first
+         * thing to read through the attributes faulted. That is how Kirby's
+         * copied Fox blaster died: the article and its model were both there,
+         * only the attributes were not, and the crash surfaced in
+         * ftColl_80077C60 reading item->xCC_item_attr->x0_78. */
         if (it->xC4_article_data == NULL ||
-            it->xC4_article_data->x10_modelDesc == NULL)
+            it->xC4_article_data->x10_modelDesc == NULL ||
+            it->xCC_item_attr == NULL)
         {
-            port_guard_warn("item.c:Item_8026862C no article data or model; "
-                            "spawn refused");
+            /* Name the kind: "no article data" on its own does not say
+             * whether the article was never loaded or the caller asked for a
+             * kind that does not exist, and those need different fixes. */
+            char site[96];
+            snprintf(site, sizeof(site),
+                     "item.c:Item_8026862C no article data, model or "
+                     "attributes for item kind %d; spawn refused",
+                     (int) it->kind);
+            port_guard_warn(site);
             HSD_GObjFree(gobj);
             return NULL;
         }

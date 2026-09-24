@@ -722,8 +722,36 @@ void Fighter_LoadCommonData(void)
         if (Fighter_804D6538 == NULL) Fighter_804D6538 = (void*)pc_ptr_arena;
         Fighter_804D6534 = (void*)pc_ptr_arena;
         Fighter_804D6530 = (void*)pc_ptr_arena;
-        /* 804D6528 and 804D652C are gone: upstream resolved what lived
-         * there, so there is no stand-in left to point at the arena. */
+        /* 804D6528 and 804D652C used to be anonymous stand-ins pointed at the
+         * arena with the rest. Upstream resolved them into named tables --
+         * Fighter_SmashChargeShakeTable and Fighter_GrabMashShake -- and the
+         * arena fill was never extended to cover them, so of all the PlCo
+         * globals these two alone stayed NULL. Both are dereferenced in
+         * ordinary play: ftCo_800DF0D0 reads ->x4 the frame a fighter starts
+         * charging a smash, ftCommon does the same when a grabbed fighter
+         * mashes out. A random-lineup sweep found it as a crash on Yoshi's
+         * Story, but the stage has nothing to do with it -- it is whoever
+         * charges a smash first.
+         *
+         * They cannot join the arena fill either. The arena is an array of
+         * pointers, so on the host ->x0 would read a valid pointer out of it
+         * while ->x4 read the low half of the *next* one: a nonzero value that
+         * differs per process, which is the same ASLR-dependent garbage this
+         * port has been digging out of unions all day. A real struct with a
+         * zeroed table is deterministic and means "no shake", which is the
+         * right answer when the table was never converted. */
+        {
+            static Vec2 pc_shake_zero[64];
+            static struct Fighter_ShakeTable_t pc_shake_tbl = {
+                pc_shake_zero, 0
+            };
+            if (Fighter_SmashChargeShakeTable == NULL) {
+                Fighter_SmashChargeShakeTable = &pc_shake_tbl;
+            }
+            if (Fighter_GrabMashShake == NULL) {
+                Fighter_GrabMashShake = &pc_shake_tbl;
+            }
+        }
         Fighter_804D6524 = (void*)pc_ptr_arena;
         Fighter_804D6520 = (void*)pc_ptr_arena;
         Fighter_804D651C = (void*)pc_ptr_arena;
