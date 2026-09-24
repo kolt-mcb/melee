@@ -462,6 +462,26 @@ void mpColl_LoadECB_JObj(CollData* coll, u32 flags)
         }
     }
 
+#if BUILD_TARGET_PC
+    /* MELEE_ECBDUMP=1: the six ECB joints' world positions and the extents they
+     * produce, exactly. The ECB is not in a replay, and two machines were found
+     * to disagree about its width by a few ulps 800 frames before anything else
+     * about the fighter differed -- so this is where that has to be compared,
+     * and it has to be compared bit for bit. */
+    if (getenv("MELEE_ECBDUMP") != NULL) {
+        extern u32 gm_GetFrameCount(void);
+        int j;
+        fprintf(stderr, "[ECBDUMP] f=%u pos=%a", (unsigned) gm_GetFrameCount(),
+                (double) coll->cur_pos.x);
+        for (j = 0; j < 6; j++) {
+            Vec3 jv;
+            lb_8000B1CC(coll->ecb_source.x10C_joint[j], NULL, &jv);
+            fprintf(stderr, " j%d=%a", j, (double) jv.x);
+        }
+        fprintf(stderr, " L=%a R=%a\n", (double) left_x, (double) right_x);
+        fflush(stderr);
+    }
+#endif
     coll->desired_ecb.top.x = 0.0F;
     coll->desired_ecb.top.y = top_y;
     coll->desired_ecb.bottom.x = 0.0F;
@@ -604,6 +624,23 @@ void mpColl_LoadECB_Fixed(CollData* coll)
         left_x = -right_x;
     }
 
+#if BUILD_TARGET_PC
+    /* The fixed-box path's turn of MELEE_ECBDUMP -- see the JObj path above.
+     * A fighter uses one or the other, and the one that mattered was this. */
+    if (getenv("MELEE_ECBDUMP") != NULL) {
+        extern u32 gm_GetFrameCount(void);
+        fprintf(stderr,
+                "[ECBFIX] f=%u pos=%a ang=%a u=%a d=%a fr=%a bk=%a "
+                "L=%a R=%a T=%a B=%a\n",
+                (unsigned) gm_GetFrameCount(), (double) coll->cur_pos.x,
+                (double) coll->ecb_source.angle, (double) coll->ecb_source.up,
+                (double) coll->ecb_source.down,
+                (double) coll->ecb_source.front,
+                (double) coll->ecb_source.back, (double) left_x,
+                (double) right_x, (double) top_y, (double) bottom_y);
+        fflush(stderr);
+    }
+#endif
     coll->desired_ecb.top.x = 0.0F;
     coll->desired_ecb.top.y = top_y;
     coll->desired_ecb.bottom.x = 0.0F;
