@@ -2924,6 +2924,21 @@ static inline void ftKb_SpecialN_800EF0E4_find_bone(Fighter* fp, s32* part_idx,
     *jobj = parts[*part_idx].joint;
 }
 
+/* The hat's dobj table is walked by byte offset, and the step was the console's
+ * four-byte pointer. fighter_x2040_alloc_data is already host-sized -- 0x20
+ * entries times sizeof(HSD_DObj*), with a comment in fighter.c about this exact
+ * trap for its two sibling allocators -- so the buffer was right and only the
+ * stride was wrong: entries landed at half their proper spacing and the slots
+ * between them stayed NULL. Reading one back (hat.x14.data[*arg2]) then handed
+ * NULL to HSD_DObjAddAnimAll, which is where Kirby copying Ice Climbers died.
+ * Mario has few enough parts to squeak under it, the same way he was the only
+ * character the sibling allocators never broke. */
+#if BUILD_TARGET_PC
+#define KB_DOBJ_PTR ((s32) sizeof(HSD_DObj*))
+#else
+#define KB_DOBJ_PTR 4
+#endif
+
 static inline void ftKb_SpecialN_800EF0E4_finish(Fighter* fp, s32 total_dobjs)
 {
     fp->u.kb.hat.x14.count = total_dobjs;
@@ -2955,7 +2970,7 @@ void ftKb_SpecialN_800EF0E4(Fighter_GObj* gobj, int arg1, u8* arg2)
                                     &current_joint, &joint_idx, &byte_base);
     joint_idx = 0;
     arg2_idx = 0;
-    byte_off = total_dobjs << 2;
+    byte_off = total_dobjs * KB_DOBJ_PTR;
     insert_part_idx = 0;
     while (current_joint != NULL) {
         group_count = 0;
@@ -2995,8 +3010,8 @@ void ftKb_SpecialN_800EF0E4(Fighter_GObj* gobj, int arg1, u8* arg2)
                     hsdChangeClass(mobj, &ftMObj);
                 }
                 dobj = (dobj != NULL) ? dobj->next : NULL;
-                dst_off += 4;
-                byte_off += 4;
+                dst_off += KB_DOBJ_PTR;
+                byte_off += KB_DOBJ_PTR;
                 total_dobjs += 1;
                 group_count += 1;
             }
@@ -3061,7 +3076,7 @@ void ftKb_SpecialN_800EF438(Fighter_GObj* gobj, KirbyHatStruct* hat)
                                         &insert_part_idx, &current_joint,
                                         &joint_idx, &byte_base);
         joint_idx = 0;
-        byte_off = total_dobjs << 2;
+        byte_off = total_dobjs * KB_DOBJ_PTR;
         insert_part_idx = 0;
         while (current_joint != NULL) {
             group_count = 0;
@@ -3103,8 +3118,8 @@ void ftKb_SpecialN_800EF438(Fighter_GObj* gobj, KirbyHatStruct* hat)
                         hsdChangeClass(mobj, &ftMObj);
                     }
                     dobj = (dobj != NULL) ? dobj->next : NULL;
-                    dst_off += 4;
-                    byte_off += 4;
+                    dst_off += KB_DOBJ_PTR;
+                    byte_off += KB_DOBJ_PTR;
                     total_dobjs += 1;
                     group_count += 1;
                 }
