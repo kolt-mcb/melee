@@ -843,7 +843,26 @@ void grZebes_801D925C(HSD_GObj* gobj)
 {
     HSD_JObj* jobj;
     Ground* gp = GET_GROUND(gobj);
-    s32 result = grZebes_801DA528(gobj, &gp->u.zebes4, 1, 2);
+    s32 result;
+#if BUILD_TARGET_PC
+    /* MELEE_ZEBDIAG=1: the acid state's three pointers as this proc sees them.
+     * grZebes_801D9100 fills them and this reads them back through the same
+     * view, so if they are not pointers here something else wrote these bytes
+     * -- and a jobj whose value was 0x40400000, the float 3.0, is what killed
+     * Brinstar. Printed before the read so the fault does not beat it. */
+    if (getenv("MELEE_ZEBDIAG") != NULL) {
+        static int n;
+        if (n++ < 40) {
+            fprintf(stderr,
+                    "[ZEBDIAG] map=%d state=%u/%u j1=%p j2=%p mat=%p\n",
+                    gp->map_id, (unsigned) gp->u.zebes4.xC4,
+                    (unsigned) gp->u.zebes4.xC5, gp->u.zebes4.xD8,
+                    gp->u.zebes4.xDC, gp->u.zebes4.xE0);
+            fflush(stderr);
+        }
+    }
+#endif
+    result = grZebes_801DA528(gobj, &gp->u.zebes4, 1, 2);
 
     if (gp->u.zebes4.xE8 != result) {
         gp->u.zebes4.xE8 = result;
