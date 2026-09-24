@@ -33,7 +33,20 @@ union ftCommon_MotionVars {
     struct {
         /* fp+2340 */ int x0;
         /* fp+2344 */ Vec3 x4;
+#if BUILD_TARGET_PC
+        /* UNK_T is void*: eight bytes here, four on the console. Every field
+         * after it shifted by four, so x1C sat at 0x20 -- and the DeadUpFall
+         * entry's `common.x1C = 0.0f` then missed the word that
+         * ftCo_DeadUpFall_Phys reads as unk_deadup.x5C.x before writing it. A
+         * grab's leftover survived into the death animation, the star was
+         * placed 0.61 units off, and the camera followed it.
+         *
+         * eflib.c reads this as `(s32) common.x10`, so four bytes is the whole
+         * of it. */
+        /* fp+2350 */ u32 x10;
+#else
         /* fp+2350 */ UNK_T x10;
+#endif
         /* fp+2354 */ float x14;
         /* fp+2358 */ float x18;
         /* fp+235C */ float x1C;
@@ -354,8 +367,26 @@ union ftCommon_MotionVars {
     struct {
         /* fp+2340 */ int x0;
         /* fp+2344 */ float x4;
+#if BUILD_TARGET_PC
+        /* x18 is a pointer, and on the host a pointer is eight bytes: written
+         * at union offset 0x18 it covers 0x1C too. 0x1C is
+         * unk_deadup.x5C.x -- which ftCo_DeadUpFall_Phys *reads before writing*
+         * on the first frame of the star-KO, so whatever the previous state
+         * left there is part of the simulation. Grabbing someone (CatchPull,
+         * CatchWait) wrote a heap pointer through here, and because this build's
+         * pool is below 4 GB the upper half was zero: the console's leftover
+         * 0.6192 became 0, and eight hundred frames later the dead fighter was
+         * placed 0.61 units off, which moved the camera, which moved everything.
+         *
+         * Parked past the whole union instead (sizeof(mv.co) is 0x68), so the
+         * write cannot reach another view's bytes. mv is a union of this and
+         * the larger per-character structs, so nothing grows. */
+        u8 pad_x8[0x68 - 0x8];
+        HSD_JObj* x18;
+#else
         /* fp+2348 */ u8 pad_x8[0x18 - 0x8];
         /* fp+2358 */ HSD_JObj* x18;
+#endif
     } capturedamage;
     struct {
         /* fp+2340 */ int timer; /* a countdown, not a flag -- see below */

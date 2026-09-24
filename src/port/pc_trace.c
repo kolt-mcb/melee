@@ -71,7 +71,7 @@ HSD_JObj* pc_watch_jobj;
 #define PC_TRACE_HEADER                                                       \
     "#fields frame gframe mode scene seed stage"                                         \
     " p_state p_char p_pct p_stk p_motion p_animf p_x p_y p_face p_vx p_vy "  \
-    "p_goa p_floor p_env p_ecbbx p_ecbby p_kbap p_hitdly p_aihash"
+    "p_goa p_floor p_env p_ecbbx p_ecbby p_kbap p_hitdly p_mv1c p_aihash"
 
 #define PC_TRACE_PLAYERS 4
 
@@ -1922,7 +1922,7 @@ void pc_trace_frame(int frame)
              * fighter appearing or vanishing one frame early is itself a
              * divergence rather than a gap in the file. */
             n += snprintf(line + n, sizeof(line) - n,
-                          " - - - - - - - - - - - - - - -");
+                          " - - - - - - - - - - - - - - - -");
             continue;
         }
 
@@ -1957,6 +1957,12 @@ void pc_trace_frame(int frame)
         n += trace_f32(line + n, sizeof(line) - n, fp->dmg.kb_applied);
         n += trace_f32(line + n, sizeof(line) - n,
                        fp->dmg.x189C_unk_num_frames);
+        /* mv.co + 0x1C (fp+235C). Every motion state shares that union and
+         * several read a member there without writing it first; the star-KO's
+         * x5C accumulator is one, and what the previous state left decides its
+         * answer. */
+        n += trace_f32(line + n, sizeof(line) - n,
+                       *(const f32*) ((const char*) &fp->mv.co + 0x1C));
         {
             static int dump_at = -2;
             if (dump_at == -2) {

@@ -3720,6 +3720,18 @@ __attribute__((constructor)) static void pc_check_dmg_offsets(void)
 {
     if (getenv("MELEE_DMGOFF") != NULL) {
         fprintf(stderr,
+                "[DMGOFF] sizeof(mv.co)=%#zx common.x14=%#zx x18=%#zx "
+                "x1C=%#zx x20=%#zx (console 14 18 1c 20)\n",
+                sizeof(((Fighter*) 0)->mv.co),
+                offsetof(Fighter, mv.co.common.x14) -
+                    offsetof(Fighter, mv.co),
+                offsetof(Fighter, mv.co.common.x18) -
+                    offsetof(Fighter, mv.co),
+                offsetof(Fighter, mv.co.common.x1C) -
+                    offsetof(Fighter, mv.co),
+                offsetof(Fighter, mv.co.common.x20) -
+                    offsetof(Fighter, mv.co));
+        fprintf(stderr,
                 "[DMGOFF] from x1870: x1874=%#zx x1878=%#zx x187c=%#zx "
                 "x1880=%#zx x188c=%#zx x1890=%#zx x1894=%#zx x1898=%#zx "
                 "x189C=%#zx (console 4 8 c 10 1c 20 24 28 2c)\n",
