@@ -600,10 +600,33 @@ void slp_PostFrame(Fighter* fp)
                          ((unsigned) fp->x221F_b1 << 6) | /* dead */
                          ((unsigned) fp->x221F_b0 << 7)); /* offscreen */
 
-    /* fp+0x2340: the character's motion-variable block, read as a raw word.
-     * While the hitstun flag above is set the game keeps the hitstun frames
-     * remaining there, which is what makes this field useful. */
-    put_u32(p + 0x2B, *(const u32*) &fp->mv);
+    /* fp+0x2340: the first word of the character's motion-variable block.
+     * Slippi reads it raw, and while the hitstun flag above is set the game
+     * keeps the hitstun frames remaining there, which is what makes the field
+     * useful.
+     *
+     * Reading it raw is not safe here. That block is a union whose host
+     * members hold 8-byte pointers where the console had 4-byte fields, so for
+     * any state that parks a pointer in its first member this wrote half a heap
+     * address -- which differs per process, so two machines simulating the
+     * identical match wrote different replays. A sweep of 30 random
+     * multiplayer matches caught exactly that twice, both times on a Pichu or
+     * Pikachu in Thunder (action states 360-362): this was the only field that
+     * differed, and only its top byte varied between processes (4b|67|73 over
+     * an identical 04c424 -- the low half of a pool address with the ASLR byte
+     * on top). Every input, position, velocity and damage figure agreed.
+     *
+     * So report it through the member that gives it its meaning, and leave it
+     * zero otherwise, which is what the field says when nothing is in
+     * hitstun. */
+    {
+        u32 misc_as = 0;
+        if (fp->x221C_b6) {
+            f32 hitstun = fp->mv.co.damage.x0;
+            memcpy(&misc_as, &hitstun, sizeof(misc_as));
+        }
+        put_u32(p + 0x2B, misc_as);
+    }
 
     put_u8(p + 0x2F, (unsigned) fp->ground_or_air); /* fp+0xE0, 0 = grounded */
     put_u16(p + 0x30, (unsigned) fp->coll_data.floor.index); /* fp+0x83C */
