@@ -63,44 +63,46 @@ void C_MTXLookAt(Mtx m, Vec3* camPos, Vec3* camUp, Vec3* target)
         camPos = &sp; target = &st; camUp = &su;
     }
 #endif
-    f32 lx = camPos->x - target->x;
-    f32 ly = camPos->y - target->y;
-    f32 lz = camPos->z - target->z;
-    f32 len = sqrtf(lx * lx + ly * ly + lz * lz);
+    /* 80342734, read instruction by instruction: the console builds the basis
+     * out of the paired-single library, not out of hand-written arithmetic.
+     *
+     *     look  = camPos - target;  PSVECNormalize(look,  look);
+     *     right = camUp  x look;    PSVECNormalize(right, right);
+     *     up    = look   x right;
+     *
+     * That matters twice over. PSVECNormalize does not divide by a square root:
+     * it takes frsqrte's estimate and refines it with a single Newton step, so
+     * `v / sqrtf(len)` is a different number. And PSVECCrossProduct fuses one
+     * product of each component. The port used to do both by hand and landed a
+     * few ULP away every frame -- and this matrix is the camera's, so the error
+     * reached every world position derived from it.
+     *
+     * The translation row is plain: three fmuls, then `z + (x + y)`, negated
+     * once (80342804, 80342850, and the third at the tail). */
+    Vec3 look, right, up;
 
-    if (len < EPSILON) {
-        /* Degenerate (camPos == target): fall back to identity. */
-        m[0][0] = 1; m[0][1] = 0; m[0][2] = 0; m[0][3] = 0;
-        m[1][0] = 0; m[1][1] = 1; m[1][2] = 0; m[1][3] = 0;
-        m[2][0] = 0; m[2][1] = 0; m[2][2] = 1; m[2][3] = 0;
-        return;
-    }
-    lx /= len; ly /= len; lz /= len;
+    look.x = camPos->x - target->x;
+    look.y = camPos->y - target->y;
+    look.z = camPos->z - target->z;
+    PSVECNormalize(&look, &look);
+    PSVECCrossProduct(camUp, &look, &right);
+    PSVECNormalize(&right, &right);
+    PSVECCrossProduct(&look, &right, &up);
 
-    /* right = normalize(cross(camUp, look)) */
-    f32 rx = camUp->y * lz - camUp->z * ly;
-    f32 ry = camUp->z * lx - camUp->x * lz;
-    f32 rz = camUp->x * ly - camUp->y * lx;
-    len = sqrtf(rx * rx + ry * ry + rz * rz);
-    if (len < EPSILON) {
-        m[0][0] = 1; m[0][1] = 0; m[0][2] = 0; m[0][3] = 0;
-        m[1][0] = 0; m[1][1] = 1; m[1][2] = 0; m[1][3] = 0;
-        m[2][0] = 0; m[2][1] = 0; m[2][2] = 1; m[2][3] = 0;
-        return;
-    }
-    rx /= len; ry /= len; rz /= len;
-
-    /* up = cross(look, right) */
-    f32 ux = ly * rz - lz * ry;
-    f32 uy = lz * rx - lx * rz;
-    f32 uz = lx * ry - ly * rx;
-
-    m[0][0] = rx; m[0][1] = ry; m[0][2] = rz;
-    m[0][3] = -((camPos->x * rx) + (camPos->y * ry) + (camPos->z * rz));
-    m[1][0] = ux; m[1][1] = uy; m[1][2] = uz;
-    m[1][3] = -((camPos->x * ux) + (camPos->y * uy) + (camPos->z * uz));
-    m[2][0] = lx; m[2][1] = ly; m[2][2] = lz;
-    m[2][3] = -((camPos->x * lx) + (camPos->y * ly) + (camPos->z * lz));
+    m[0][0] = right.x;
+    m[0][1] = right.y;
+    m[0][2] = right.z;
+    m[0][3] = -(right.z * camPos->z +
+                (right.x * camPos->x + right.y * camPos->y));
+    m[1][0] = up.x;
+    m[1][1] = up.y;
+    m[1][2] = up.z;
+    m[1][3] = -(up.z * camPos->z + (up.x * camPos->x + up.y * camPos->y));
+    m[2][0] = look.x;
+    m[2][1] = look.y;
+    m[2][2] = look.z;
+    m[2][3] =
+        -(look.z * camPos->z + (look.x * camPos->x + look.y * camPos->y));
     /* NOTE: row 3 (w-row) is intentionally NOT set here. Setting it to
      * [0,0,0,1] triggered a stack-overflow crash in the title render path.
      * The position matrix's w-row is sanitized in HSD_JObjMakePositionMtx

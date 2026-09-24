@@ -150,13 +150,21 @@ f32 PSVECDotProduct(Vec* a, Vec* b)
     return a->z * b->z + (a->x * b->x + a->y * b->y);
 }
 
+/* 80342E58. Each component is one ps_msub: the second product is rounded by a
+ * ps_mul and the first is fused onto it, so `a.y*b.z - a.z*b.y` is two
+ * roundings on the console and three the way the C below used to read. Two of
+ * the three come out negated (ps_neg at 80342E88), which fixes which product
+ * is the fused one in each.
+ *
+ * C_MTXLookAt builds the camera's basis out of this and PSVECNormalize, and
+ * every surface normal and ECB axis goes through it. */
 void PSVECCrossProduct(Vec* a, Vec* b, Vec* axb)
 {
-    if (!ps_ptr_valid(a) || !ps_ptr_valid(b) || !ps_ptr_valid(axb)) return;
     Vec t;
-    t.x = a->y * b->z - a->z * b->y;
-    t.y = a->z * b->x - a->x * b->z;
-    t.z = a->x * b->y - a->y * b->x;
+    if (!ps_ptr_valid(a) || !ps_ptr_valid(b) || !ps_ptr_valid(axb)) return;
+    t.x = fmaf(a->y, b->z, -(b->y * a->z));
+    t.y = -fmaf(a->x, b->z, -(b->x * a->z));
+    t.z = -fmaf(a->y, b->x, -(b->y * a->x));
     axb->x = t.x;
     axb->y = t.y;
     axb->z = t.z;
@@ -391,42 +399,81 @@ void PSMTXQuat(Mtx m, QuaternionPtr q)
     m[2][3] = 0;
 }
 
+/* 80342320, read instruction by instruction. The port used to compute a
+ * textbook inverse: a determinant expanded independently of the cofactors, a
+ * correctly-rounded `1.0f / det`, and plain multiplies throughout. The console
+ * does none of those three things.
+ *
+ *  - Each 2x2 cofactor is one ps_msub: `a*b - c*d` with the second product
+ *    rounded first and the subtract fused onto it.
+ *  - The determinant *reuses* the cofactors it just computed, expanded along
+ *    the first column as a chain of ps_madd, so it is consistent with them
+ *    rather than being a second independent calculation.
+ *  - 1/det is not a divide. 80342394 is `fres` -- the hardware's reciprocal
+ *    estimate -- refined by a single Newton step, `2e - det*e*e`, with the
+ *    square rounded and the step fused (ps_nmsub).
+ *  - The translation column is a fused chain negated once at the end
+ *    (ps_nmadd), not three products subtracted one at a time.
+ *
+ * HSD_CObjGetInvViewingMtxPtr calls this on the camera's viewing matrix, and
+ * ftDrawCommon's star-KO places the dead fighter at
+ * `inverse_view * a stored offset`, so a last bit here is a last bit in that
+ * fighter's position. jobj.c and psdisp.c go through it too. */
 u32 PSMTXInverse(Mtx src, Mtx inv)
 {
-    if (!ps_ptr_valid(src) || !ps_ptr_valid(inv)) return 0;
     Mtx tmp;
-    f32 (*m)[4];
-    f32 det;
-    if (src == inv) {
-        m = tmp;
-    } else {
-        m = inv;
-    }
-    det = ((((src[2][1] * (src[0][2] * src[1][0])) +
-             (src[2][2] * (src[0][0] * src[1][1])) +
-             (src[2][0] * (src[0][1] * src[1][2]))) -
-            (src[0][2] * (src[2][0] * src[1][1]))) -
-           (src[2][2] * (src[1][0] * src[0][1]))) -
-          (src[1][2] * (src[0][0] * src[2][1]));
-    if (det == 0) {
+    f32(*m)[4];
+    f32 a00, a01, a02, a03, a10, a11, a12, a13, a20, a21, a22, a23;
+    f32 c00, c01, c02, c10, c11, c12, c20, c21, c22;
+    f32 det, e, inv_det;
+    f32 m00, m01, m02, m10, m11, m12, m20, m21, m22;
+
+    if (!ps_ptr_valid(src) || !ps_ptr_valid(inv)) {
         return 0;
     }
-    det = 1.0f / det;
-    m[0][0] = det * ((src[1][1] * src[2][2]) - (src[2][1] * src[1][2]));
-    m[0][1] = det * -((src[0][1] * src[2][2]) - (src[2][1] * src[0][2]));
-    m[0][2] = det * ((src[0][1] * src[1][2]) - (src[1][1] * src[0][2]));
-    m[1][0] = det * -((src[1][0] * src[2][2]) - (src[2][0] * src[1][2]));
-    m[1][1] = det * ((src[0][0] * src[2][2]) - (src[2][0] * src[0][2]));
-    m[1][2] = det * -((src[0][0] * src[1][2]) - (src[1][0] * src[0][2]));
-    m[2][0] = det * ((src[1][0] * src[2][1]) - (src[2][0] * src[1][1]));
-    m[2][1] = det * -((src[0][0] * src[2][1]) - (src[2][0] * src[0][1]));
-    m[2][2] = det * ((src[0][0] * src[1][1]) - (src[1][0] * src[0][1]));
-    m[0][3] = (-m[0][0] * src[0][3]) - (m[0][1] * src[1][3]) -
-              (m[0][2] * src[2][3]);
-    m[1][3] = (-m[1][0] * src[0][3]) - (m[1][1] * src[1][3]) -
-              (m[1][2] * src[2][3]);
-    m[2][3] = (-m[2][0] * src[0][3]) - (m[2][1] * src[1][3]) -
-              (m[2][2] * src[2][3]);
+    m = (src == inv) ? tmp : inv;
+
+    a00 = src[0][0]; a01 = src[0][1]; a02 = src[0][2]; a03 = src[0][3];
+    a10 = src[1][0]; a11 = src[1][1]; a12 = src[1][2]; a13 = src[1][3];
+    a20 = src[2][0]; a21 = src[2][1]; a22 = src[2][2]; a23 = src[2][3];
+
+    /* 8034234C, 80342354, 8034235C, 8034236C, 80342374, 8034237C: six
+     * ps_msub, each carrying two cofactors in its two halves. */
+    c00 = fmaf(a11, a22, -(a21 * a12));
+    c10 = fmaf(a12, a20, -(a22 * a10));
+    c01 = fmaf(a21, a02, -(a01 * a22));
+    c11 = fmaf(a22, a00, -(a02 * a20));
+    c02 = fmaf(a01, a12, -(a11 * a02));
+    c12 = fmaf(a02, a10, -(a12 * a00));
+    c20 = fmaf(a10, a21, -(a11 * a20));
+    c21 = fmaf(a01, a20, -(a00 * a21));
+    c22 = fmaf(a00, a11, -(a01 * a10));
+
+    /* 80342370-80342380: ps_mul then two ps_madd, along the first column. */
+    det = fmaf(a20, c02, fmaf(a10, c01, a00 * c00));
+    if (det == 0.0f) {
+        return 0;
+    }
+
+    /* 80342394-803423A0: fres, then one Newton step. */
+    e = (f32) __fres((f64) det);
+    inv_det = fmaf(-det, e * e, e + e);
+
+    m00 = c00 * inv_det; m10 = c10 * inv_det;
+    m01 = c01 * inv_det; m11 = c11 * inv_det;
+    m02 = c02 * inv_det; m12 = c12 * inv_det;
+    m20 = c20 * inv_det; m21 = c21 * inv_det; m22 = c22 * inv_det;
+
+    m[0][0] = m00; m[0][1] = m01; m[0][2] = m02;
+    m[1][0] = m10; m[1][1] = m11; m[1][2] = m12;
+    m[2][0] = m20; m[2][1] = m21; m[2][2] = m22;
+
+    /* 803423D0-803423E4 and 803423EC-80342408: ps_mul, ps_madd, ps_nmadd --
+     * one negation at the end of a fused chain. */
+    m[0][3] = -fmaf(m02, a23, fmaf(m01, a13, m00 * a03));
+    m[1][3] = -fmaf(m12, a23, fmaf(m11, a13, m10 * a03));
+    m[2][3] = -fmaf(m22, a23, fmaf(m21, a13, m20 * a03));
+
     if (m == tmp) {
         PSMTXCopy(tmp, inv);
     }
