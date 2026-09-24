@@ -90,6 +90,12 @@
 #define SLP_MSG_PAD_ACK 0x81u
 #define SLP_MSG_MATCH_SELECTIONS 0x82u
 #define SLP_MSG_CONN_SELECTED 0x83u
+/* The state checksum. It used to travel as the port's own MSG_HASH over
+ * net_send, which in Slippi mode goes out over ENet -- where slp_receive knows
+ * only the four message types above and drops everything else without a word.
+ * So the desync detector transmitted every hash and compared none of them, and
+ * "no desync" on this path meant only that nothing had been checked. */
+#define SLP_MSG_HASH 0x84u
 #define SLP_PAD_BYTES 8   /* SLIPPI_PAD_DATA_SIZE */
 #define SLP_MAX_PADS 64   /* keeps a packet inside one datagram */
 
@@ -165,12 +171,21 @@ static void pad_get(const unsigned char* p, NetPad* n)
     n->analogR = p[9];
 }
 
+/* Four is Melee's limit and Slippi's: one local player and up to three
+ * remote. Every slot-indexed array in this file is this long, the input rings
+ * included -- they were two long while every index already ran to
+ * net_players - 1, so a third player's own ring_put wrote 16 KB past the end
+ * of the array. On arm64 the frame-91 entry of that phantom ring landed
+ * exactly on net_slot and net_match, which is why the tablet stopped
+ * lockstepping at frame 91 without a word: it had overwritten its own slot
+ * number and the flag that says a match is running. */
+#define NET_SLOTS 4
+
 /* A ring rather than a table: a match is 28,800 frames and only the last
  * handful are ever wanted. Each slot remembers which frame it holds, so a
  * wrap cannot be mistaken for an arrival. */
 #define NET_RING 1024
 #define NET_RING_MASK (NET_RING - 1)
-#define NET_PLAYERS 2
 /* Every packet repeats the last few frames. One lost datagram then costs
  * nothing at all, which is most of what a UDP game needs. */
 #define NET_WINDOW 12
@@ -180,7 +195,7 @@ typedef struct InputRing {
     NetPad pad[NET_RING];
 } InputRing;
 
-static InputRing net_in[NET_PLAYERS];
+static InputRing net_in[NET_SLOTS];
 
 static void ring_clear(InputRing* r)
 {
@@ -212,10 +227,6 @@ static int ring_get(const InputRing* r, s32 f, NetPad* out)
 }
 
 /* ---- state -------------------------------------------------------------- */
-
-/* Four is Melee's limit and Slippi's: one local player and up to three
- * remote. */
-#define NET_SLOTS 4
 
 enum NetState { NET_OFF, NET_LISTEN, NET_CONNECT, NET_RUN, NET_SOLO };
 
@@ -435,8 +446,12 @@ static void net_config(void)
         fprintf(stderr, "[NET] connecting to %s:%d, slot %d, delay %d\n", host,
                 port, net_slot, net_delay);
     }
-    ring_clear(&net_in[0]);
-    ring_clear(&net_in[1]);
+    {
+        int k;
+        for (k = 0; k < NET_SLOTS; k++) {
+            ring_clear(&net_in[k]);
+        }
+    }
 }
 
 /* ---- sending ------------------------------------------------------------ */
@@ -463,6 +478,43 @@ static ENetPeer* slp_peer;
 static int slp_enet_ready;
 static int slp_sel_sent;
 static int slp_sel_got;
+
+/* A machine that is not in the barrier is silent, and silence reads exactly
+ * like agreement: the others sit naming the frame they want while this one
+ * plays on alone and says nothing. Every early return out of pc_net_pads now
+ * passes through here, so a three-machine run where one side never locksteps
+ * says so on that side instead of only on the others. */
+static double net_quiet_note_at;
+/* net_match is written in exactly two places, so a match that stops running
+ * without a word cannot happen -- and on the tablet it did, because a phantom
+ * input ring was writing over this flag. Every write goes through here and
+ * names its caller, which is what turned "one of these two paths must be
+ * silent" into "neither path ran, so something else wrote this memory". It
+ * stays because that is the only way this class of fault announces itself. */
+static void net_match_set(int v, const char* who)
+{
+    if (net_match != v) {
+        fprintf(stderr, "[NET] match %s (%s)\n", v ? "on" : "off", who);
+        fflush(stderr);
+    }
+    net_match = v;
+}
+
+static void net_quiet(const char* why, s32 frame)
+{
+    double t = now_ms();
+    if (t < net_quiet_note_at) {
+        return;
+    }
+    net_quiet_note_at = t + 2000.0;
+    fprintf(stderr, "[NET] not in the barrier: %s "
+                    "(match frame %d, gm counter %d, state %d, slot %d of %d, "
+                    "sel %d/%d)\n",
+            why, (int) frame, (int) gm_GetFrameCount(), (int) net_state,
+            net_slot, net_players, slp_sel_sent, slp_sel_got);
+    fflush(stderr);
+}
+
 static unsigned slp_my_rng;
 static unsigned slp_peer_rng;
 static int slp_peer_char = -1, slp_peer_stage = -1;
@@ -470,6 +522,7 @@ static long slp_tx, slp_rx, slp_rx_pads;
 
 static void slp_send_selections(void);
 static s32 slowest_ack(void);
+static void hash_compare(int slot, s32 frame, u32 peer);
 static int slp_receive(const unsigned char* buf, ssize_t len,
                        ENetPeer* from);
 
@@ -1027,7 +1080,6 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
         slp_peer_char = buf[1];
         slp_peer_stage = (buf[7] != 0) ? (int) ((buf[5] << 8) | buf[6]) : -1;
         slp_peer_rng = peer_rng;
-        slp_sel_got = 1;
         /* One side's offer has to win, and both have to reach the same answer
          * without another round trip. Slippi calls that side the decider and
          * takes its number; the host is the decider here. */
@@ -1055,6 +1107,15 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
                 }
             }
             if (missing == 0) {
+                /* Not "an offer arrived" but "every offer arrived": this is
+                 * what the frame-1 hold waits on, and with three players the
+                 * two meant different things. A guest that heard another
+                 * guest first released the hold and pinned the seed it had
+                 * guessed, because the deciding slot's offer had not landed
+                 * yet -- two countdown frames on an unagreed number, which is
+                 * enough for the entry sequence to draw differently and put
+                 * that side's fighters somewhere else by frame 1. */
+                slp_sel_got = 1;
                 net_state = NET_RUN;
             } else {
                 fprintf(stderr, "[SLP] %d of %d players still to introduce "
@@ -1065,6 +1126,13 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
                         "agreed seed %08X (%s decides)\n",
                 slp_peer_char, slp_peer_stage, peer_rng, net_seed,
                 net_is_host ? "we" : "they");
+        return 1;
+    }
+    if (buf[0] == SLP_MSG_HASH && len >= 10) {
+        s32 frame = (s32) get_u32(buf + 1);
+        int slot = (int) get_u8(buf + 5) & (NET_SLOTS - 1);
+        (void) from;
+        hash_compare(slot, frame, get_u32(buf + 6));
         return 1;
     }
     if (buf[0] == SLP_MSG_PAD_ACK && len >= 6) {
@@ -1089,11 +1157,22 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
 
 static void send_hash(s32 frame, u32 hash)
 {
-    unsigned char buf[NET_HDR + 8];
-    unsigned char* p = msg_start(buf, MSG_HASH);
-    put_u32(p + 0, (unsigned) frame);
-    put_u32(p + 4, hash);
-    net_send(buf, sizeof(buf));
+    if (net_slippi_proto) {
+        unsigned char buf[10];
+        put_u8(buf + 0, SLP_MSG_HASH);
+        put_u32(buf + 1, (unsigned) frame);
+        put_u8(buf + 5, (unsigned) net_slot);
+        put_u32(buf + 6, hash);
+        slp_enet_send(buf, sizeof(buf));
+        return;
+    }
+    {
+        unsigned char buf[NET_HDR + 8];
+        unsigned char* p = msg_start(buf, MSG_HASH);
+        put_u32(p + 0, (unsigned) frame);
+        put_u32(p + 4, hash);
+        net_send(buf, sizeof(buf));
+    }
 }
 
 /* The oldest frame any other player has still not acknowledged. Inputs are
@@ -1402,11 +1481,15 @@ void pc_net_match_begin(void)
     if (net_state == NET_OFF) {
         return;
     }
-    ring_clear(&net_in[0]);
-    ring_clear(&net_in[1]);
+    {
+        int k;
+        for (k = 0; k < NET_SLOTS; k++) {
+            ring_clear(&net_in[k]);
+        }
+    }
     memset(net_hash_frame, 0xFF, sizeof(net_hash_frame));
     memset(net_peer_hash_frame, 0xFF, sizeof(net_peer_hash_frame));
-    net_match = 1;
+    net_match_set(1, "pc_net_match_begin");
     net_last_sent = -1;
     net_done = -1;
     net_hashed = -1;
@@ -1431,10 +1514,23 @@ void pc_net_match_begin(void)
     {
         extern u32 pc_frame_number;
         extern u16 hsd_804D78E2; /* live particles */
+        /* Naming the slots this machine will wait for, not just the count:
+         * a side whose remote list comes out empty locksteps with nobody and
+         * is otherwise indistinguishable from a side that is keeping up. */
+        char rem[32];
+        int k, n = 0;
+        rem[0] = '\0';
+        for (k = 0; k < net_players; k++) {
+            if (net_is_remote(k)) {
+                n += snprintf(rem + n, sizeof(rem) - (size_t) n, " %d", k);
+            }
+        }
         fprintf(stderr, "[NET] match starting, seed %08X, delay %d frames "
-                        "(process frame %u, %u particles alive)\n",
+                        "(process frame %u, %u particles alive); I am slot %d "
+                        "of %d, waiting on slot%s\n",
                 net_seed, net_delay, (unsigned) pc_frame_number,
-                (unsigned) hsd_804D78E2);
+                (unsigned) hsd_804D78E2, net_slot, net_players,
+                (rem[0] != '\0') ? rem : "s: none");
     }
     fflush(stderr);
 }
@@ -1444,7 +1540,7 @@ void pc_net_match_end(void)
     if (!net_match) {
         return;
     }
-    net_match = 0;
+    net_match_set(0, "pc_net_match_end");
     fprintf(stderr, "[NET] match over: %u stalled frames, %.0f ms waiting "
                     "(worst %.1f ms)%s\n",
             net_stalls, net_stall_ms, net_stall_worst,
@@ -1508,21 +1604,57 @@ void pc_net_pads(GCPadStatus* pads)
      *
      * So hold here, before the pin and before the load's own early return,
      * until both offers have been exchanged. */
-    if (net_slippi_proto && net_match && !slp_sel_got) {
+    /* And it has to hold from this machine's FIRST frame, not from the
+     * match's, because the match is not where the seed is first used. The
+     * stage's own setup draws (grlast.c), and so does every CPU player's think
+     * timer -- ftCo_800A101C seeds it with 10.0 * HSD_Randf() precisely to
+     * stagger the CPUs -- and all of that runs before pc_net_match_begin. A
+     * side that ran it on its own guess entered the countdown with its CPUs on
+     * a different phase from everyone else's, so their draws parted a few
+     * frames in and the fighters were somewhere else by frame 1. The pin was
+     * in place the whole time and reported nothing wrong: it was pinning each
+     * side to its own number. */
+    if (net_slippi_proto && !slp_sel_got) {
         double began = now_ms();
+        double last_note = began;
         while (!slp_sel_got) {
+            double t;
             net_pump();
-            if (now_ms() - began > NET_CONNECT_WAIT_MS) {
+            t = now_ms();
+            if (t - last_note > 2000.0) {
+                last_note = t;
+                fprintf(stderr, "[SLP] holding the boot until every player "
+                                "has offered a seed (%.0f s, %d of %d in)\n",
+                        (t - began) / 1000.0, slp_conn_count(),
+                        net_players - 1);
+                fflush(stderr);
+            }
+            if (t - began > NET_CONNECT_WAIT_MS) {
                 fprintf(stderr, "[SLP] no selections from the peer after "
                                 "%.0f s; playing alone\n",
-                        (now_ms() - began) / 1000.0);
+                        (t - began) / 1000.0);
                 net_state = NET_SOLO;
                 break;
             }
         }
     }
 
-    if (frame <= 1) {
+    /* Only once it is the agreed number. Pinning an unagreed guess is worse
+     * than not pinning at all: it looks deliberate, and it makes every side's
+     * randomness differ in exactly the way this is meant to prevent. */
+    if (frame <= 1 && (!net_slippi_proto || slp_sel_got)) {
+        /* Every frame of the load and the countdown, with the seed as it
+         * stood: the entry sequence draws from it, so a side that reaches
+         * these frames with a different number here plays a different
+         * countdown, and its fighters are somewhere else by frame 1. Two
+         * traces laid side by side name the first frame that parted. */
+        if (net_trace) {
+            extern u32 pc_frame_number;
+            fprintf(stderr, "[NETPIN] pcf=%u match=%d frame=%d was=%08X "
+                            "now=%08X\n",
+                    (unsigned) pc_frame_number, net_match, (int) frame,
+                    *HSD_RandSeedPtr, net_seed);
+        }
         *HSD_RandSeedPtr = net_seed;
     }
 
@@ -1533,6 +1665,7 @@ void pc_net_pads(GCPadStatus* pads)
         net_hello_if_due();
     }
     if (!net_match) {
+        net_quiet("no match is running here", frame);
         return;
     }
 
@@ -1549,6 +1682,7 @@ void pc_net_pads(GCPadStatus* pads)
                     (unsigned) pc_frame_number, (unsigned) hsd_804D78E2,
                     *HSD_RandSeedPtr);
         }
+        net_quiet("still on the stage load (match frame 0)", frame);
         return;
     }
 
@@ -1601,6 +1735,8 @@ void pc_net_pads(GCPadStatus* pads)
         }
         fprintf(stderr, "[NET] both sides at match frame 1; playing\n");
         fflush(stderr);
+    } else if (net_state == NET_SOLO) {
+        net_quiet("given up on the other players; playing alone", frame);
     }
 
     /* This frame's local input is announced as the input for a frame
@@ -1698,6 +1834,7 @@ void pc_net_pads(GCPadStatus* pads)
             }
         }
         if (!got) {
+            net_quiet("left the wait with nobody's input", frame);
             return; /* alone now: the local pad stands as it is */
         }
     }

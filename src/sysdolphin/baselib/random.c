@@ -87,8 +87,12 @@ void pc_rng_note(void* ret)
         }
         if (n < armed + cap) {
             extern u32 gm_GetFrameCount(void);
-            fprintf(stderr, "[RNG] #%ld f=%u %p\n", n, gm_GetFrameCount(),
-                    ret);
+            /* The seed as it stands before this draw, not just the site:
+             * two machines can draw at the same places in the same order and
+             * still be drawing different numbers, and comparing sites alone
+             * says they agree. */
+            fprintf(stderr, "[RNG] #%ld f=%u s=%08X %p\n", n,
+                    gm_GetFrameCount(), *HSD_RandSeedPtr, ret);
         }
     }
 }
