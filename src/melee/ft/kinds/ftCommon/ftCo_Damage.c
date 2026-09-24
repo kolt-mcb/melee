@@ -646,20 +646,7 @@ void ftCo_Damage_OnExitHitlag(Fighter_GObj* gobj)
         fp->mv.co.damage.x4 = false;
         ftColl_8007B7A4(gobj, p_ftCommonData->x130);
     }
-#if BUILD_TARGET_PC
-    {
-        extern void pc_fwatch(const char* what, void* who, void* gobj);
-        pc_fwatch("OnExitHitlag: before ftCo_8008E5A4", (void*) 0,
-                  (void*) gobj);
-    }
-#endif
     ftCo_8008E5A4(fp);
-#if BUILD_TARGET_PC
-    {
-        extern void pc_fwatch(const char* what, void* who, void* gobj);
-        pc_fwatch("OnExitHitlag: after ftCo_8008E5A4", (void*) 0, (void*) gobj);
-    }
-#endif
     if (fp->input.held_buttons[0] & HSD_PAD_LR) {
         float kb_x = fp->x8c_kb_vel.x;
         float kb_y = fp->x8c_kb_vel.y;
