@@ -852,6 +852,30 @@ void ftCo_800A101C(Fighter* arg0, int arg1, int arg2, int arg3)
     temp_r30->x568 = 2.0f;
     temp_r30->x444 = &temp_r30->xFC[5];
     temp_r30->x448 = temp_r30->xFC;
+#if BUILD_TARGET_PC
+    /* The loops below initialise x0, lstick, x4, x5, cur_pos and facing_dir --
+     * but not cstick, xA or xB. On the console the bytes those leave behind are
+     * whatever the allocation held, and the console's heap gives the same answer
+     * every boot, so the game is deterministic in spite of reading them. Here
+     * the pool's contents differ from run to run, and the read cursor starts
+     * five entries behind the write cursor, so for the match's first five frames
+     * x448 reads entries the writer has not reached yet -- uninitialised cstick
+     * among them, straight into the CPU's stick input.
+     *
+     * That was enough to desync two machines playing the same match: Nana lerps
+     * her own position 5% toward the recorded leader position every frame
+     * (ftCo_800B0AF4), so once her AI had taken one different decision the two
+     * copies of her drifted apart, and by the time it showed she was in a
+     * different place and the RNG had parted with her. Two SOLO runs of one
+     * binary with the same seed diverged the same way, which is what proved it
+     * was never a netplay bug.
+     *
+     * Zero the whole ring first so the leftovers are at least the same
+     * leftovers everywhere. Reproducing the console's exact garbage -- the way
+     * the DI stick bytes were eventually matched -- is a separate job; this
+     * makes the port agree with itself, which is what netplay needs. */
+    memset(temp_r30->xFC, 0, sizeof(temp_r30->xFC));
+#endif
     if (arg0->kind == Ft_Kind_Nana) {
         temp_r3_2 = ftCo_800A589C(arg0);
         for (i = 0; i < 30; i++) {
@@ -8802,12 +8826,32 @@ void ftCo_800B3900(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     PAD_STACK(8);
 
+#if BUILD_TARGET_PC
+    /* The CPU think is where a follower's position was seen to move, which it
+     * has no business doing: the AI decides inputs. MELEE_FWATCH reports per
+     * object callback, and all five of these live inside one, so probe between
+     * them to say which. */
+#define CPUPROBE(tag)                                                         \
+    do {                                                                      \
+        extern void pc_fwatch(const char*, void*, void*);                     \
+        pc_fwatch(tag, (void*) 0, (void*) gobj);                              \
+    } while (0)
+#else
+#define CPUPROBE(tag) ((void) 0)
+#endif
+    CPUPROBE("cpu:enter");
     ftCo_800B33B0(fp);
+    CPUPROBE("cpu:after_800B33B0");
     ftCo_800B2AFC(fp);
+    CPUPROBE("cpu:after_800B2AFC");
     ftCo_800B2790(fp);
+    CPUPROBE("cpu:after_800B2790");
     ftCo_800B3E04(fp);
+    CPUPROBE("cpu:after_800B3E04");
     ftCo_800B0AF4(fp);
+    CPUPROBE("cpu:after_800B0AF4");
     fp->cpu.x7C += 1;
+#undef CPUPROBE
 }
 
 bool ftCo_800B395C(Fighter_GObj* gobj, int arg1)

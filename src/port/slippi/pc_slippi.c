@@ -556,6 +556,66 @@ void slp_PostFrame(Fighter* fp)
     }
     follower = slp_is_follower(fp);
 
+#if BUILD_TARGET_PC
+    /* MELEE_FTDUMP=<slot>:<follower>:<lo>-<hi> prints the fields behind a
+     * position, once per match frame, for one fighter over a frame range. The
+     * replay carries the position but not what produced it, so when two
+     * machines disagree on a position while agreeing on the velocity and the
+     * inputs -- which is exactly how the Nana divergence looks -- the replay
+     * cannot say why. This can: run it on both sides and diff. */
+    {
+        static int parsed, want_slot, want_fol, lo, hi;
+        if (!parsed) {
+            const char* e = getenv("MELEE_FTDUMP");
+            parsed = 1;
+            lo = hi = -1;
+            if (e != NULL) {
+                if (sscanf(e, "%d:%d:%d-%d", &want_slot, &want_fol, &lo,
+                           &hi) != 4) {
+                    lo = hi = -1;
+                }
+            }
+        }
+        /* -1 for slot or follower means "any": the divergence moves between
+         * runs, so the trace has to cover everyone for the whole match and be
+         * diffed afterwards rather than aimed at a frame known from a previous
+         * run. */
+        if (lo >= 0 && (want_slot < 0 || (int) slot == want_slot) &&
+            (want_fol < 0 || follower == want_fol) &&
+            slp_frame >= lo && slp_frame <= hi)
+        {
+            fprintf(stderr,
+                    "[FTDUMP] f=%d p%u.%d ms=%u pos=%.7f,%.7f gr_vel=%.7f "
+                    "self=%.7f,%.7f ga=%d floor=%d ecb=%.7f,%.7f "
+                    "scale=%.7f anim=%.4f ring=%d/%a b3=%d w=%d posx=%a\n",
+                    (int) slp_frame, slot, follower,
+                    (unsigned) fp->motion_id,
+                    (double) fp->cur_pos.x, (double) fp->cur_pos.y,
+                    (double) fp->gr_vel, (double) fp->self_vel.x,
+                    (double) fp->self_vel.y, (int) fp->ground_or_air,
+                    (int) fp->coll_data.floor.index,
+                    (double) fp->coll_data.ecb.bottom.x,
+                    (double) fp->coll_data.ecb.bottom.y,
+                    (double) fp->x34_scale.y,
+                    (double) fp->cur_anim_frame,
+                    /* The CPU's read cursor into the leader-history ring and
+                     * the position it is reading. Neither is in the replay, so
+                     * when two machines disagree on a follower's position from
+                     * identical recorded state, this is the state that differs
+                     * and nothing else can show it. */
+                    (fp->cpu.x448 != NULL && fp->cpu.x448 >= fp->cpu.xFC)
+                        ? (int) (fp->cpu.x448 - fp->cpu.xFC) : -1,
+                    (fp->cpu.x448 != NULL && fp->cpu.x448 >= fp->cpu.xFC)
+                        ? (double) fp->cpu.x448->cur_pos.x : 0.0,
+                    (int) fp->x2225_b3,
+                    (fp->cpu.x444 != NULL && fp->cpu.x444 >= fp->cpu.xFC)
+                        ? (int) (fp->cpu.x444 - fp->cpu.xFC) : -1,
+                    (double) fp->cur_pos.x);
+            fflush(stderr);
+        }
+    }
+#endif
+
     p = slp_stage_claim(SLP_STAGE_POST, SZ_POST_FRAME);
     if (p == NULL) {
         return;

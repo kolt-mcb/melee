@@ -2377,6 +2377,7 @@ void pc_jobj_note(const char* who, void* j)
 void pc_fwatch(const char* what, void* who, void* gobj)
 {
     static int slot = -2;
+    static int entity;
     static int from;
     static int live;
     static unsigned last;
@@ -2391,6 +2392,17 @@ void pc_fwatch(const char* what, void* who, void* gobj)
         const char* f = getenv("MELEE_FWATCH_FROM");
         slot = e ? atoi(e) : -1;
         from = f ? atoi(f) : 0;
+        /* "<slot>.<entity>" watches a follower: Ice Climbers' Nana is
+         * player_entity[1] of her port, and she is the only fighter in the
+         * game whose position can move while entity[0] holds still, so a watch
+         * that can only see the leader cannot see her at all. */
+        entity = 0;
+        if (e != NULL) {
+            const char* dot = strchr(e, '.');
+            if (dot != NULL) {
+                entity = atoi(dot + 1);
+            }
+        }
     }
     if (slot < 0 || (int) gm_GetFrameCount() < from) {
         return;
@@ -2402,7 +2414,7 @@ void pc_fwatch(const char* what, void* who, void* gobj)
     if (sp == NULL) {
         return;
     }
-    pg = sp->player_entity[0];
+    pg = sp->player_entity[entity];
     if (pg == NULL || !pc_ptr_sane(pg)) {
         return;
     }
@@ -2443,8 +2455,10 @@ void pc_fwatch(const char* what, void* who, void* gobj)
     if (!live) {
         live = 1;
         last = now;
-        fprintf(stderr, "[FWATCH] armed on p%d at %p, gframe %u, value %08x\n",
-                slot, (const void*) addr, (unsigned) gm_GetFrameCount(), last);
+        fprintf(stderr,
+                "[FWATCH] armed on p%d.%d at %p, gframe %u, value %08x\n",
+                slot, entity, (const void*) addr,
+                (unsigned) gm_GetFrameCount(), last);
         return;
     }
     if (now != last) {
