@@ -388,6 +388,41 @@ void mpColl_LoadECB_JObj(CollData* coll, u32 flags)
 
     // Loop through all collision data joints,
     // expanding the ECB to contain them all
+#if BUILD_TARGET_PC
+    /* The ECB is built from six joints' world positions, and lb_8000B1CC reads
+     * each joint's cached matrix -- rebuilding it only if JOBJ_MTX_DIRTY is
+     * set. On the console whatever left those matrices clean did so at the same
+     * point every run, so reading a cached one is reproducible. Here it is not:
+     * two processes playing the identical match were found with the same
+     * transforms all the way up the chain and materially different cached
+     * matrices (mtx[0][0] -1.07 against -0.60 at match frame 133), because the
+     * matrices had last been rebuilt at different moments. The ECB came out a
+     * few ulps wider on one machine, and 800 frames later that was the
+     * difference between the collision pushing a fighter and not.
+     *
+     * Collision must not depend on when something else last happened to
+     * refresh a matrix. Mark the chain dirty so the read below rebuilds it from
+     * the transforms as they are now, which both machines agree on.
+     * MELEE_ECB_CACHED=1 restores the old behaviour for comparison. */
+    {
+        static int cached = -1;
+        if (cached < 0) {
+            cached = getenv("MELEE_ECB_CACHED") != NULL;
+        }
+        if (!cached) {
+            int j;
+            for (j = 0; j < 6; j++) {
+                HSD_JObj* jj = coll->ecb_source.x10C_joint[j];
+                while (jj != NULL) {
+                    if (!(jj->flags & JOBJ_USER_DEF_MTX)) {
+                        jj->flags |= JOBJ_MTX_DIRTY;
+                    }
+                    jj = jj->parent;
+                }
+            }
+        }
+    }
+#endif
     {
         float temp_x = coll->cur_pos.x;
         float temp_y = coll->cur_pos.y;
@@ -479,6 +514,46 @@ void mpColl_LoadECB_JObj(CollData* coll, u32 flags)
             fprintf(stderr, " j%d=%a", j, (double) jv.x);
         }
         fprintf(stderr, " L=%a R=%a\n", (double) left_x, (double) right_x);
+        /* MELEE_ECBJ=<n>: walk that ECB joint up to the root, printing each
+         * jobj's own transform and flags. A joint's world position is the
+         * product of the chain, so when one joint of six is in the wrong place
+         * this says whether it is the joint's own rotation that differs (the
+         * animation, the IK or the dynamics put it there) or a parent's. */
+        {
+            const char* w = getenv("MELEE_ECBJ");
+            if (w != NULL) {
+                int want = atoi(w);
+                HSD_JObj* jj = (want >= 0 && want < 6)
+                                   ? coll->ecb_source.x10C_joint[want]
+                                   : NULL;
+                int depth = 0;
+                while (jj != NULL && depth < 12) {
+                    fprintf(stderr,
+                            "[ECBJ] f=%u d=%d flags=%08x rot=%a,%a,%a,%a "
+                            "scl=%a,%a,%a tr=%a,%a,%a\n",
+                            (unsigned) gm_GetFrameCount(), depth,
+                            (unsigned) jj->flags, (double) jj->rotate.x,
+                            (double) jj->rotate.y, (double) jj->rotate.z,
+                            (double) jj->rotate.w, (double) jj->scale.x,
+                            (double) jj->scale.y, (double) jj->scale.z,
+                            (double) jj->translate.x,
+                            (double) jj->translate.y,
+                            (double) jj->translate.z);
+                    /* and the cached world matrix. lb_8000B1CC reads this, not
+                     * the transform above, so a matrix that was not recomputed
+                     * this frame gives a stale answer -- and whether it was
+                     * recomputed is exactly the kind of thing two processes can
+                     * disagree about while every transform agrees. */
+                    fprintf(stderr,
+                            "[ECBM] f=%u d=%d mtx=%a,%a,%a,%a\n",
+                            (unsigned) gm_GetFrameCount(), depth,
+                            (double) jj->mtx[0][3], (double) jj->mtx[1][3],
+                            (double) jj->mtx[2][3], (double) jj->mtx[0][0]);
+                    jj = jj->parent;
+                    depth++;
+                }
+            }
+        }
         fflush(stderr);
     }
 #endif
