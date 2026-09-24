@@ -2414,10 +2414,19 @@ void pc_fwatch(const char* what, void* who, void* gobj)
             resolved = 1;
             field = getenv("MELEE_FWATCH_FIELD");
         }
-        if (field != NULL && strcmp(field, "posy") == 0) {
+        if (field != NULL && strcmp(field, "posx") == 0) {
+            addr = (const unsigned*) &fp->cur_pos.x;
+        } else if (field != NULL && strcmp(field, "posy") == 0) {
             addr = (const unsigned*) &fp->cur_pos.y;
         } else if (field != NULL && strcmp(field, "kby") == 0) {
             addr = (const unsigned*) &fp->x8c_kb_vel.y;
+        } else if (field != NULL && strncmp(field, "mv:", 3) == 0) {
+            /* "mv:<hex>" watches a byte offset into mv.co. Every motion state
+             * shares that union and several read a member without writing it
+             * first, so what the previous state left there decides the
+             * answer -- the star-KO's x5C accumulator (mv:1C) is one. */
+            addr = (const unsigned*) ((const char*) &fp->mv.co +
+                                      strtoul(field + 3, NULL, 16));
         } else if (field != NULL && strcmp(field, "kbap") == 0) {
             addr = (const unsigned*) &fp->dmg.kb_applied;
         } else {

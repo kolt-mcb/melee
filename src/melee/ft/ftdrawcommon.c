@@ -401,6 +401,35 @@ static inline void ftDrawCommon_80080E18_inline2(HSD_GObj* gobj, Fighter* old)
 
     MtxPtr matrix = HSD_CObjGetInvViewingMtxPtr(Camera_800310B8());
     /// @todo this seems to be using the wrong common attributes
+#if BUILD_TARGET_PC
+    /* MELEE_STARKO=<lo>-<hi>: the inverse viewing matrix and the offset this
+     * places the dead fighter with. The console's is MELEE_MEMAT on
+     * PSMTXMultVec, whose r3 is this matrix and r4 this offset. */
+    {
+        static int slo = -2, shi;
+        if (slo == -2) {
+            const char* e = getenv("MELEE_STARKO");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            slo = e ? atoi(e) : -1;
+            shi = dash ? atoi(dash + 1) : slo;
+        }
+        if (slo >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            int sf = (int) gm_GetFrameCount();
+            if (sf >= slo && sf <= shi) {
+                const u32* w = (const u32*) matrix;
+                const u32* o =
+                    (const u32*) &old->mv.co.walk.fast_anim_frame;
+                int k;
+                fprintf(stderr, "[STARKO] gframe=%d inv=", sf);
+                for (k = 0; k < 12; k++) {
+                    fprintf(stderr, "%08x ", w[k]);
+                }
+                fprintf(stderr, "off=%08x %08x %08x\n", o[0], o[1], o[2]);
+            }
+        }
+    }
+#endif
     PSMTXMultVec(matrix, (Vec3*) &old->mv.co.walk.fast_anim_frame,
                  &fp->cur_pos);
     pos = &fp->cur_pos;
