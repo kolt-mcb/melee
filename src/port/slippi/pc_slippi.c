@@ -654,7 +654,7 @@ static void slp_write_items(void)
         Item* ip = (Item*) gobj->user_data;
         unsigned char* p;
         int owner = -1;
-        const unsigned char* vars;
+        unsigned char misc[4] = { 0, 0, 0, 0 };
 
         if (ip == NULL) {
             continue;
@@ -669,13 +669,46 @@ static void slp_write_items(void)
             owner = (int) ((Fighter*) ip->owner->user_data)->player_id;
         }
 
-        /* The four misc bytes are read out of the item's own variable block,
-         * which is a union of every item's state. Slippi reads them at fixed
-         * offsets into that block (0xDD4+3, +7, +0x17, +0x1B): the Samus
-         * missile type, Peach's turnip face, and the charge-shot launched flag
-         * and power. They are bytes in both builds -- no pointer sits in front
-         * of them inside the block -- so the offsets carry over. */
-        vars = (const unsigned char*) &ip->xDD4_itemVar;
+        /* Slippi carries four per-item bytes: Samus's missile type, Peach's
+         * turnip face, and the charge shot's launched flag and its power. It
+         * reads them at fixed offsets into the item's variable block
+         * (0xDD4 +3, +7, +0x17, +0x1B), and that works on the console for two
+         * reasons which both fail here. The fields are 4-byte and big-endian,
+         * so the value's byte is the LAST of the four; and every member of
+         * that union has the console's layout.
+         *
+         * On the host neither holds. Little-endian puts the value in the first
+         * byte of the four, so +3 and +7 read padding or a high byte. And the
+         * union is ~150 members deep, many holding an 8-byte pointer where the
+         * console had 4 bytes (and a 1-byte bool where it had 4), so for most
+         * item kinds those offsets land inside a heap address.
+         *
+         * That is measured, not feared: a random-lineup sweep found 13 of 24
+         * multiplayer matches whose replays disagreed between machines, always
+         * and only in these bytes, with values differing by a nibble or two
+         * between processes (95/79/111 for one item's whole lifetime). Every
+         * fighter record in all 24 agreed exactly. Rerunning one case with
+         * ASLR disabled made all 87 differences vanish, which is the proof:
+         * the simulation was identical and the recorder was writing pieces of
+         * a pointer into the file.
+         *
+         * So read the named field of the kind each byte actually belongs to,
+         * and leave it zero for every other kind -- which is what the byte
+         * means there in any case. */
+        switch (ip->kind) {
+        case It_Kind_Samus_Missile:
+            misc[0] = ip->xDD4_itemVar.samusmissile.is_smash_missile ? 1 : 0;
+            break;
+        case It_Kind_Peach_Turnip:
+            misc[1] = (unsigned char) ip->xDD4_itemVar.peachturnip.xDD8;
+            break;
+        case It_Kind_Samus_Charge:
+            misc[2] = (unsigned char) ip->xDD4_itemVar.samuschargeshot.xDE8;
+            misc[3] = (unsigned char) ip->xDD4_itemVar.samuschargeshot.xDEC;
+            break;
+        default:
+            break;
+        }
 
         put_u8(p + 0x00, CMD_ITEM);
         put_s32(p + 0x01, slp_frame);
@@ -689,10 +722,10 @@ static void slp_write_items(void)
         put_u16(p + 0x1C, (unsigned) ip->xC9C);      /* it+0xC9C */
         put_f32(p + 0x1E, ip->xD44_lifeTimer);       /* it+0xD44 */
         put_u32(p + 0x22, (u32) ip->x1C);            /* it+0x1C, spawn id */
-        put_u8(p + 0x26, vars[0x03]);
-        put_u8(p + 0x27, vars[0x07]);
-        put_u8(p + 0x28, vars[0x17]);
-        put_u8(p + 0x29, vars[0x1B]);
+        put_u8(p + 0x26, misc[0]);
+        put_u8(p + 0x27, misc[1]);
+        put_u8(p + 0x28, misc[2]);
+        put_u8(p + 0x29, misc[3]);
         put_u8(p + 0x2A, (unsigned char) owner);     /* it+0x518 -> +0xC */
         put_u16(p + 0x2B, ip->xDA8_short);           /* it+0xDA8 */
     }
