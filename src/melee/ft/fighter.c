@@ -3037,11 +3037,27 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
             --fp->capture_timer;
         }
 
+#if BUILD_TARGET_PC
+        /* Same reason as the probes in the CPU think: MELEE_FWATCH reports once
+         * per object callback, and the stages below all live inside this one, so
+         * a field that moves here cannot be pinned any finer without saying
+         * where we are. */
+#define FTUPROBE(tag)                                                         \
+        do {                                                                  \
+            extern void pc_fwatch(const char*, void*, void*);                 \
+            pc_fwatch(tag, (void*) 0, (void*) gobj);                          \
+        } while (0)
+#else
+#define FTUPROBE(tag) ((void) 0)
+#endif
+        FTUPROBE("upd:enter");
         ftCo_800C0A98(gobj);
+        FTUPROBE("upd:after_800C0A98");
 
         if (fp->phys_cb) {
             fp->phys_cb(gobj);
         }
+        FTUPROBE("upd:after_phys_cb");
 
         p_kb_vel = &fp->x8c_kb_vel;
         if ((kb_vel_x = p_kb_vel->x) != 0 || p_kb_vel->y != 0) {
@@ -3360,7 +3376,10 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
         fp->dmg.x18A4_knockbackMagnitude = 0.0f;
     }
 
+    FTUPROBE("upd:before_8007AF28");
     ftColl_8007AF28(gobj);
+    FTUPROBE("upd:exit");
+#undef FTUPROBE
 
     if (DbLevel >= DbLKind_DebugRom && (fpclassify(fp->cur_pos.x) == FP_NAN ||
                                         fpclassify(fp->cur_pos.y) == FP_NAN ||
