@@ -20,6 +20,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <string.h>
 
 #include <melee/ft/fighter.h>
@@ -580,6 +581,70 @@ void slp_PostFrame(Fighter* fp)
          * runs, so the trace has to cover everyone for the whole match and be
          * diffed afterwards rather than aimed at a frame known from a previous
          * run. */
+        /* MELEE_CDDUMP: the fighter's whole CollData as hex, for the same
+         * fighter and frames. The replay carries two of its fields (airborne,
+         * ground id) out of a couple of hundred bytes, and the Ice Climbers
+         * divergence turned out to live in the ones it does not carry. */
+        if (lo >= 0 && getenv("MELEE_CDDUMP") != NULL &&
+            (want_slot < 0 || (int) slot == want_slot) &&
+            (want_fol < 0 || follower == want_fol) &&
+            slp_frame >= lo && slp_frame <= hi)
+        {
+            const unsigned char* cd = (const unsigned char*) &fp->coll_data;
+        /* MELEE_CDMAP=1: the host offsets of CollData's members, once, so a
+         * byte offset out of the dump can be named. The struct's comments give
+         * console offsets, which are not these -- it holds pointers. */
+        if (getenv("MELEE_CDMAP") != NULL) {
+            static int said;
+            if (!said) {
+                said = 1;
+                fprintf(stderr, "[CDMAP] sizeof=%lu\n", (unsigned long) sizeof(CollData));
+                fprintf(stderr, "  +%04lx x0_gobj\\n", (unsigned long) offsetof(CollData, x0_gobj));
+                fprintf(stderr, "  +%04lx cur_pos\\n", (unsigned long) offsetof(CollData, cur_pos));
+                fprintf(stderr, "  +%04lx prev_pos\\n", (unsigned long) offsetof(CollData, prev_pos));
+                fprintf(stderr, "  +%04lx last_pos\\n", (unsigned long) offsetof(CollData, last_pos));
+                fprintf(stderr, "  +%04lx x28_vec\\n", (unsigned long) offsetof(CollData, x28_vec));
+                fprintf(stderr, "  +%04lx x34_flags\\n", (unsigned long) offsetof(CollData, x34_flags));
+                fprintf(stderr, "  +%04lx x35_flags\\n", (unsigned long) offsetof(CollData, x35_flags));
+                fprintf(stderr, "  +%04lx facing_dir\\n", (unsigned long) offsetof(CollData, facing_dir));
+                fprintf(stderr, "  +%04lx x38\\n", (unsigned long) offsetof(CollData, x38));
+                fprintf(stderr, "  +%04lx floor_skip\\n", (unsigned long) offsetof(CollData, floor_skip));
+                fprintf(stderr, "  +%04lx ledge_id_right\\n", (unsigned long) offsetof(CollData, ledge_id_right));
+                fprintf(stderr, "  +%04lx ledge_id_left\\n", (unsigned long) offsetof(CollData, ledge_id_left));
+                fprintf(stderr, "  +%04lx joint_id_skip\\n", (unsigned long) offsetof(CollData, joint_id_skip));
+                fprintf(stderr, "  +%04lx joint_id_only\\n", (unsigned long) offsetof(CollData, joint_id_only));
+                fprintf(stderr, "  +%04lx x50\\n", (unsigned long) offsetof(CollData, x50));
+                fprintf(stderr, "  +%04lx ledge_snap_x\\n", (unsigned long) offsetof(CollData, ledge_snap_x));
+                fprintf(stderr, "  +%04lx ledge_snap_y\\n", (unsigned long) offsetof(CollData, ledge_snap_y));
+                fprintf(stderr, "  +%04lx ledge_snap_height\\n", (unsigned long) offsetof(CollData, ledge_snap_height));
+                fprintf(stderr, "  +%04lx lstick_x\\n", (unsigned long) offsetof(CollData, lstick_x));
+                fprintf(stderr, "  +%04lx x64_ecb\\n", (unsigned long) offsetof(CollData, x64_ecb));
+                fprintf(stderr, "  +%04lx desired_ecb\\n", (unsigned long) offsetof(CollData, desired_ecb));
+                fprintf(stderr, "  +%04lx ecb\\n", (unsigned long) offsetof(CollData, ecb));
+                fprintf(stderr, "  +%04lx prev_ecb\\n", (unsigned long) offsetof(CollData, prev_ecb));
+                fprintf(stderr, "  +%04lx xE4_ecb\\n", (unsigned long) offsetof(CollData, xE4_ecb));
+                fprintf(stderr, "  +%04lx ecb_source\\n", (unsigned long) offsetof(CollData, ecb_source));
+                fprintf(stderr, "  +%04lx x130_flags\\n", (unsigned long) offsetof(CollData, x130_flags));
+                fprintf(stderr, "  +%04lx env_flags\\n", (unsigned long) offsetof(CollData, env_flags));
+                fprintf(stderr, "  +%04lx prev_env_flags\\n", (unsigned long) offsetof(CollData, prev_env_flags));
+                fprintf(stderr, "  +%04lx x13C\\n", (unsigned long) offsetof(CollData, x13C));
+                fprintf(stderr, "  +%04lx contact\\n", (unsigned long) offsetof(CollData, contact));
+                fprintf(stderr, "  +%04lx floor\\n", (unsigned long) offsetof(CollData, floor));
+                fprintf(stderr, "  +%04lx left_facing_wall\\n", (unsigned long) offsetof(CollData, left_facing_wall));
+                fprintf(stderr, "  +%04lx right_facing_wall\\n", (unsigned long) offsetof(CollData, right_facing_wall));
+                fprintf(stderr, "  +%04lx ceiling\\n", (unsigned long) offsetof(CollData, ceiling));
+                fflush(stderr);
+            }
+        }
+            size_t k, n = sizeof(fp->coll_data);
+            fprintf(stderr, "[CDDUMP] f=%d p%u.%d ", (int) slp_frame, slot,
+                    follower);
+            for (k = 0; k < n; k++) {
+                fprintf(stderr, "%02x", cd[k]);
+            }
+            fprintf(stderr, "\n");
+            fflush(stderr);
+        }
         if (lo >= 0 && (want_slot < 0 || (int) slot == want_slot) &&
             (want_fol < 0 || follower == want_fol) &&
             slp_frame >= lo && slp_frame <= hi)

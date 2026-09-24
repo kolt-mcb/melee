@@ -552,6 +552,19 @@ void grInishie2_801FD654(Ground_GObj* gobj)
         it_802ECD1C(gp->u.inishie22.xC4, &vec);
         vec.y += yakumono_param->unk2C;
         HSD_JObjSetTranslate(jobj, &vec);
+#if BUILD_TARGET_PC
+        /* MELEE_GRDUMP=1: the moving platform's position, once per frame. It is
+         * collision geometry -- Ground_UpdateMapColl below republishes it -- and
+         * a replay records nothing about it, so two machines can disagree here
+         * and the first sign of it is a fighter being pushed on one of them. */
+        if (getenv("MELEE_GRDUMP") != NULL) {
+            extern u32 gm_GetFrameCount(void);
+            fprintf(stderr, "[GRDUMP] f=%u plat=%a,%a,%a\n",
+                    (unsigned) gm_GetFrameCount(), (double) vec.x,
+                    (double) vec.y, (double) vec.z);
+            fflush(stderr);
+        }
+#endif
     }
     Ground_UpdateMapColl(gobj);
 }
