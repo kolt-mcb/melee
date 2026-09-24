@@ -610,6 +610,38 @@ void ftCo_800A0DA4(Fighter* fp)
         dy = hurt->capsule.a_pos.y - fp->cur_pos.y;
 
         scale = hurt->capsule.scale * fp->x34_scale.y;
+#if BUILD_TARGET_PC
+        /* MELEE_SCLDUMP=<lo>-<hi>: the three numbers 800A0E08 has in f1, f2
+         * and f3 at the same point -- the capsule's own scale, its a_pos.y and
+         * the scaled radius. x568, the top of the hurtbox spread, is
+         * max(dy + scale) and it came out one ULP low; the capsules and
+         * cur_pos.y are identical, so what is left is this product. */
+        {
+            static int qlo = -2, qhi;
+            if (qlo == -2) {
+                const char* e = getenv("MELEE_SCLDUMP");
+                const char* dash = e ? strchr(e, '-') : NULL;
+                qlo = e ? atoi(e) : -1;
+                qhi = dash ? atoi(dash + 1) : qlo;
+            }
+            if (qlo >= 0) {
+                extern u32 gm_GetFrameCount(void);
+                int qf = (int) gm_GetFrameCount();
+                if (qf >= qlo && qf <= qhi) {
+                    fprintf(stderr,
+                            "[SCLDUMP] gframe=%d p%d i=%d cscl=%08x apy=%08x "
+                            "bpy=%08x cury=%08x scl=%08x ysc=%08x\n",
+                            qf, (int) fp->player_id, (int) i,
+                            *(const unsigned*) &hurt->capsule.scale,
+                            *(const unsigned*) &hurt->capsule.a_pos.y,
+                            *(const unsigned*) &hurt->capsule.b_pos.y,
+                            *(const unsigned*) &fp->cur_pos.y,
+                            *(const unsigned*) &scale,
+                            *(const unsigned*) &fp->x34_scale.y);
+                }
+            }
+        }
+#endif
 
         if (var_f31 > dx - scale) {
             var_f31 = dx - scale;

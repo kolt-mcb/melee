@@ -3040,6 +3040,27 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                         p_kb_vel->x =
                             FT_FMA(-p_ftCommonData->x204_knockbackFrameDecay,
                                    cosf(kb_angle), p_kb_vel->x);
+#if BUILD_TARGET_PC
+                        /* MELEE_KBDBG also prints the three numbers 8006B9E4
+                         * has in f31, f1 and f2 -- the angle, its sine and the
+                         * decay constant. The fnmsubs itself matches; a single
+                         * ULP in the result has to come from one of these. */
+                        if (getenv("MELEE_KBDBG") != NULL) {
+                            extern u32 gm_GetFrameCount(void);
+                            float sv = sinf(kb_angle);
+                            float cv = cosf(kb_angle);
+                            fprintf(stderr,
+                                    "[KBTRIG] gframe=%u ang=%08x sin=%08x "
+                                    "cos=%08x decay=%08x y=%08x\n",
+                                    (unsigned) gm_GetFrameCount(),
+                                    *(const unsigned*) &kb_angle,
+                                    *(const unsigned*) &sv,
+                                    *(const unsigned*) &cv,
+                                    *(const unsigned*) &p_ftCommonData
+                                         ->x204_knockbackFrameDecay,
+                                    *(const unsigned*) &p_kb_vel->y);
+                        }
+#endif
                         p_kb_vel->y =
                             FT_FMA(-p_ftCommonData->x204_knockbackFrameDecay,
                                    sinf(kb_angle), p_kb_vel->y);
@@ -3212,6 +3233,37 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
             PSVECAdd(&fp->cur_pos, pAtkShieldKB, &fp->cur_pos);
         } else {
             // fp@r31.position@0xB0.xyz += selfVel + pAtkShieldKB
+#if BUILD_TARGET_PC
+            /* MELEE_POSDUMP=<lo>-<hi>: every term of the y chain and the
+             * running total. The whole run is bit-exact until one frame where
+             * cur_pos.y comes out a single ULP low, and the adds themselves are
+             * plain fadds on both sides (8006BBDC onwards), so the difference
+             * has to be in a term -- and only self_vel is compared by the
+             * trace. */
+            {
+                static int plo = -2, phi;
+                if (plo == -2) {
+                    const char* e = getenv("MELEE_POSDUMP");
+                    const char* dash = e ? strchr(e, '-') : NULL;
+                    plo = e ? atoi(e) : -1;
+                    phi = dash ? atoi(dash + 1) : plo;
+                }
+                if (plo >= 0) {
+                    int pf = (int) gm_GetFrameCount();
+                    if (pf >= plo && pf <= phi) {
+                        fprintf(stderr,
+                                "[POSDUMP] gframe=%d p%d y0=%08x sv=%08x "
+                                "kb=%08x shield=%08x x1948=%d\n",
+                                pf, (int) fp->player_id,
+                                *(const unsigned*) &fp->cur_pos.y,
+                                *(const unsigned*) &selfVel.y,
+                                *(const unsigned*) &p_kb_vel->y,
+                                *(const unsigned*) &pAtkShieldKB->y,
+                                (int) fp->dmg.x1948);
+                    }
+                }
+            }
+#endif
             PSVECAdd(&fp->cur_pos, &selfVel, &fp->cur_pos);
             fp->cur_pos.x += p_kb_vel->x;
             fp->cur_pos.y += p_kb_vel->y;

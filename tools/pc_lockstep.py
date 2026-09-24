@@ -606,6 +606,18 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
     pending = [(f - _zero, pad, cmd) for f, pad, cmd in route["steps"]]
     server = serve()
     tol = div.case_tol(case)
+    # MELEE_TOL_EXACT=1 drops every tolerance to zero, which turns the lockstep
+    # from "has the simulation drifted" into "is it bit-exact". The default 1e-3
+    # is there because positions accumulate and a last-bit velocity difference
+    # is not worth stopping a long run for -- but it also means a one-ULP
+    # position passes silently while the aihash, which is a hash and has no
+    # tolerance, reports a divergence a thousand frames later with no clue as to
+    # where it began. With this on, the first field to differ in its last bit is
+    # the one that gets named.
+    if os.environ.get("MELEE_TOL_EXACT"):
+        tol = {k: 0.0 for k in tol}
+        div.FLOAT_TOL = 0.0
+        print("   MELEE_TOL_EXACT: every float compared bit-for-bit")
     # The frame number is each side's own and the match counter is the join
     # key; neither is evidence about the game.
     ignore = set(case.get("ignore", [])) | {"gframe", "frame"}

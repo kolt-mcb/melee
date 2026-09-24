@@ -2404,7 +2404,24 @@ void pc_fwatch(const char* what, void* who, void* gobj)
     if (fp == NULL || !pc_ptr_sane(fp)) {
         return;
     }
-    addr = (const unsigned*) &fp->dmg.x189C_unk_num_frames;
+    /* MELEE_FWATCH_FIELD picks what to watch: the deferred-hit countdown by
+     * default, or the fighter's y, which is written several times inside a
+     * frame and can differ in the middle while agreeing at the trace point. */
+    {
+        static const char* field;
+        static int resolved;
+        if (!resolved) {
+            resolved = 1;
+            field = getenv("MELEE_FWATCH_FIELD");
+        }
+        if (field != NULL && strcmp(field, "posy") == 0) {
+            addr = (const unsigned*) &fp->cur_pos.y;
+        } else if (field != NULL && strcmp(field, "kby") == 0) {
+            addr = (const unsigned*) &fp->x8c_kb_vel.y;
+        } else {
+            addr = (const unsigned*) &fp->dmg.x189C_unk_num_frames;
+        }
+    }
     now = *addr;
     if (!live) {
         live = 1;
