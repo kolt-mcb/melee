@@ -2442,19 +2442,43 @@ float ftColl_80079AB0(Fighter* fp, HitCapsule* hit, u32 unk_count, float arg3,
         decay = ftd->xF8;
         x118 = ftd->x118;
 
+#if BUILD_TARGET_PC
+        /* 80079B48 is `fmadds f5, f11, f6, f5`: the fused product is
+         * x118 * x110, and x114 * (x118 * hit->x28) is the addend, already
+         * rounded by two fmuls at 80079B28 and 80079B38. Written the other way
+         * round -- which is what the plain expression below reads as, and what
+         * MWCC happens to schedule correctly -- the wrong product loses its
+         * rounding. One ULP here is one ULP in the knockback magnitude, and
+         * the whole trajectory after it. */
+        result = KNOCKBACK(defense, attack, arg3, 1.0F, ftd, hit, w,
+                           KB_FMA(x118, ftd->x110,
+                                  ftd->x114 * (x118 * hit->x28)));
+#else
         result = KNOCKBACK(defense, attack, arg3, 1.0F, ftd, hit, w,
                            KB_FMA(ftd->x114, x118 * hit->x28,
                                   x118 * ftd->x110));
+#endif
     } else {
         s32 count;
 
         count = ftColl_GetDamageCount(fp, ftd);
 
+#if BUILD_TARGET_PC
+        /* 80079C34, the same shape: `fmadds f5, f6, f12, f5` fuses
+         * x110 * (count + percentTemp) and takes the x114 product as the
+         * addend. */
+        result = KNOCKBACK(
+            defense, attack, arg3, 1.0F, ftd, hit, w,
+            KB_FMA(ftd->x110, (count + fp->dmg.x1838_percentTemp),
+                   ftd->x114 *
+                       (unk_count * (count + fp->dmg.x1838_percentTemp))));
+#else
         result = KNOCKBACK(
             defense, attack, arg3, 1.0F, ftd, hit, w,
             KB_FMA(ftd->x114,
                    unk_count * (count + fp->dmg.x1838_percentTemp),
                    ftd->x110 * (count + fp->dmg.x1838_percentTemp)));
+#endif
     }
 
     if (result >= ftd->x108) {
