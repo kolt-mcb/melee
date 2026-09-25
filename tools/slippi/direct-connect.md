@@ -194,26 +194,43 @@ seconds" spends itself before the mode list exists -- boot takes twenty-five --
 so the game never leaves the first screen and never asks for match state, and
 the whole chain stalls with no error anywhere.
 
-### What is left
+### What is left: the game is being told to start and is not starting
 
-The game has not started the match. From `HANDLE_CONNECTED` in
-HandleInputsOnCSS.asm, a non-zero `MSRB_IS_LOCAL_PLAYER_READY` jumps straight to
-`CHECK_SHOULD_START_MATCH`, which ANDs it with `MSRB_IS_REMOTE_PLAYER_READY` and
-starts the game. Dolphin fills both from `prepareOnlineMatchState`:
-`localPlayerReady` is `localSelections.isCharacterSelected`, which the auto-drive
-sets before that line runs, and `remotePlayersReady` comes from the peer's
-selections, which have arrived.
+Dolphin's side is now provably complete. Every poll reports:
 
-So both *should* read 1. The next step is one log line rather than another
-guess: print `localPlayerReady` and `remotePlayersReady` next to the connection
-report above. If both are 1 and the game still sits there, the MSRB offsets
-Dolphin writes are worth checking against `Online/Online.s`; if one is 0, it
-says which half to chase.
+    [Direct] match state polled, mmState 4, netplay 1
+    [Direct] match state: status 2, active 1, remotes 1 -> connected 1
+    [Direct] ready bytes: local 1, remote 1, idx 1/0
 
-Note also that the game's own idea of a chosen character (`-0x49A9(r13)`) is
-separate from Dolphin's `localSelections`, and the screen still says "Select
-your character" -- so the two views of "ready" are not the same thing, and that
-may matter.
+and the buffer those bytes land in is the right shape: `Online/Online.s` puts
+MSRB_CONNECTION_STATE at 0, IS_LOCAL_PLAYER_READY at 1, IS_REMOTE_PLAYER_READY
+at 2, then the two indices, and `prepareOnlineMatchState` pushes exactly that
+sequence with nothing in between. MM_STATE_CONNECTION_SUCCESS is 4 on both
+sides.
+
+By HandleInputsOnCSS.asm that is sufficient. `HANDLE_CONNECTED` does:
+
+        lbz r3, MSRB_IS_LOCAL_PLAYER_READY(REG_MSRB_ADDR)
+        cmpwi r3, 0
+        bne CHECK_SHOULD_START_MATCH
+
+and `CHECK_SHOULD_START_MATCH` ANDs the two ready bytes and branches to
+0x80263264 -- the start -- when both are set. Both are set. It does not start.
+
+So the question is no longer what to send; it is whether that handler is
+running on this screen at all, and whether the MSRB it reads is the one Dolphin
+filled. Both codes begin by checking `getMinorMajor` against SCENE_ONLINE_CSS
+and exiting quietly if it does not match, and several other places call
+FN_LoadMatchState, so the polls being observed do not by themselves prove the
+character select's own fetch is happening.
+
+**The next test is Z.** `HANDLE_CONNECTED` disconnects when Z is *held* for
+DISCONNECT_HOLD_DELAY (0x30 frames), counted one per frame in CSSDT. If holding
+Z on this screen drops the connection, the handler is running against a fresh
+MSRB and the fault is downstream of the start branch. If it does nothing, the
+handler is not running and the scene check is where to look. The probe mode
+needs a continuous hold for this -- the existing one taps six frames in sixty
+and will never reach the threshold.
 
 ### On the pad, and a correction
 

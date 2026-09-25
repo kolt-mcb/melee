@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..2931b00fb 100644
+index 4e3991914..aacc0e954 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -229,7 +229,26 @@ index 4e3991914..2931b00fb 100644
  #endif
  
  		if (isConnected)
-@@ -3018,6 +3203,123 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -2293,6 +2478,18 @@ void CEXISlippi::prepareOnlineMatchState()
+ 		return;
+ 	}
+ 
++	// The two bytes HandleInputsOnCSS.asm ANDs together to decide whether to
++	// start the game. If both are 1 and it still sits on the character select,
++	// the problem is on the game's side of this buffer, not this one's.
++	if (getenv("SLIPPI_DIRECT_PEERS") != nullptr)
++	{
++		static int readyTick = 0;
++		if ((readyTick++ % 60) == 0)
++			ERROR_LOG(SLIPPI_ONLINE, "[Direct] ready bytes: local %d, remote %d, idx %d/%d",
++			          (int)localPlayerReady, (int)remotePlayersReady,
++			          (int)localPlayerIndex, (int)remotePlayerIndex);
++	}
++
+ 	m_read_queue.push_back(localPlayerReady);   // Local player ready
+ 	m_read_queue.push_back(remotePlayersReady); // Remote players ready
+ 	m_read_queue.push_back(localPlayerIndex);   // Local player index
+@@ -3018,6 +3215,123 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -353,7 +372,7 @@ index 4e3991914..2931b00fb 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3327,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3339,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -382,7 +401,7 @@ index 4e3991914..2931b00fb 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3706,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3718,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -398,7 +417,7 @@ index 4e3991914..2931b00fb 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3830,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3842,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
