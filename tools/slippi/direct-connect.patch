@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..6aa1d0a87 100644
+index 4e3991914..31795063a 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -10,7 +10,7 @@ index 4e3991914..6aa1d0a87 100644
  #include "Core/HW/SystemTimers.h"
  #include "Core/State.h"
  
-@@ -144,8 +145,74 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
+@@ -144,8 +145,87 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
  	OSD::AddMessage(msg, duration_ms, color);
  }
  
@@ -62,6 +62,19 @@ index 4e3991914..6aa1d0a87 100644
 +	// Slippi menu takes is not documented anywhere and the screens differ, so
 +	// this offers both rather than assuming; the taps are short enough that a
 +	// screen which wants the other one is not disturbed by the wrong press.
++	// SLIPPI_DIRECT_PRESS=stick is the diagnostic rather than the driver: it
++	// only pushes the stick down, once a second. If the cursor on the mode list
++	// moves, the game is reading this pad and only the confirming button is
++	// wrong; if it does not, the codeset is not reading the SI path at all and
++	// no button would ever have worked.
++	static const char *pressMode = getenv("SLIPPI_DIRECT_PRESS");
++	if (pressMode != nullptr && strcmp(pressMode, "stick") == 0)
++	{
++		if ((tick % 60) < 8)
++			pad->stickY = 0x10;          // hard down
++		return;
++	}
++
 +	int slot = (tick / 30) % 2;
 +	if ((tick % 30) < 4)
 +		pad->button |= (slot == 0) ? PAD_BUTTON_A : PAD_BUTTON_START;
@@ -85,7 +98,7 @@ index 4e3991914..6aa1d0a87 100644
  	INFO_LOG(SLIPPI, "EXI SLIPPI Constructor called.");
  
  	// @TODO: For mainline port, ISO file path can't be fetched this way. Look at the following:
-@@ -2134,6 +2201,8 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2134,6 +2214,8 @@ void CEXISlippi::prepareOnlineMatchState()
  
  	m_read_queue.clear();
  
@@ -94,7 +107,7 @@ index 4e3991914..6aa1d0a87 100644
  	auto errorState = SlippiMatchmaking::ProcessState::ERROR_ENCOUNTERED;
  	SlippiMatchmaking::ProcessState mmState = !forcedError.empty() ? errorState : matchmaking->GetMatchmakeState();
  
-@@ -3018,6 +3087,117 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3100,117 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -212,7 +225,7 @@ index 4e3991914..6aa1d0a87 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3205,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3218,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -241,7 +254,7 @@ index 4e3991914..6aa1d0a87 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3584,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3597,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -257,7 +270,7 @@ index 4e3991914..6aa1d0a87 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3708,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3721,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:

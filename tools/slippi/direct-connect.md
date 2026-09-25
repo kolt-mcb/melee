@@ -132,31 +132,51 @@ fail:
 
 ## What is still missing: the emulator does not play
 
-The emulator's *game* stays on the Online Play menu. Its netplay client is
-connected and has both sides' selections, but the game itself never enters the
-character select or the match, so no pads flow from it. The port plays; the
-emulator watches.
+The emulator's *game* gets as far as Slippi's online character select and stops
+there. Its netplay client is connected and holds both sides' selections; the
+port plays, the emulator watches.
 
-Getting it to play needs the game to walk its own menus, and **nothing has been
-found that can press a button on it.** Beyond the pipe controller, which is
-measured above, direct injection was tried and is the more interesting failure:
+### Buttons work. This took four wrong answers to establish.
 
-    SLIPPI_DIRECT_PRESS=1 installs a Movie::SetGCInputManip handler, which is
-    where Dolphin's own TAS input dialog writes, and every pad status passes
-    through it on the way to the game.
+`SLIPPI_DIRECT_PRESS=1` installs a `Movie::SetGCInputManip` handler -- where
+Dolphin's own TAS input dialog writes -- and every pad status passes through it
+on its way to the game. Two details make the difference between that working
+and looking completely dead:
 
-That handler is reached -- it logs that it is being called -- and it presents a
-complete, valid controller: `err` cleared to PAD_ERR_NONE, both sticks centred,
-`PAD_USE_ORIGIN` set, A and Start tapped alternately four frames out of every
-thirty. The menu does not move. One detail worth keeping: it must be installed
-from the first EXI poll rather than the device constructor, because DolphinWX's
-frame installs its own TAS handler while it sets itself up and replaces
-anything registered earlier.
+- **Install it from the first EXI poll, not the constructor.** DolphinWX's
+  frame registers its own TAS handler while it sets itself up, which is after
+  the EXI device exists, so anything registered earlier is silently replaced.
+- **Present a whole controller, not a button.** Port 1 is mapped to a pipe
+  device that never binds, so what arrives is an empty status with an error in
+  it. `err` is cleared to `PAD_ERR_NONE`, both sticks centred, `PAD_USE_ORIGIN`
+  set.
 
-So the codeset's online menus evidently do not read the pad through the SI path
-at all. That is the next thing to establish, and the way to establish it is to
-find where the netplay codeset reads controller state -- it is Gecko code
-operating on game memory, so the answer is an address, not a Dolphin setting.
+The thing that made this look unreachable for so long was pressing A and Start
+alternately, on the theory that one of them must be the confirming button. A
+opens the next screen and Start leaves it again, so the pair sat on the mode
+list forever, looking exactly like a pad nothing was reading.
+
+`SLIPPI_DIRECT_PRESS=stick` is what settled it: push the stick down, once a
+second, and nothing else. The cursor walks Ranked -> Unranked -> Direct. The
+pad was being read the whole time. **When input appears not to arrive, move
+something continuous rather than pressing something discrete** -- a cursor that
+moves is proof, and a screen that does not change is not disproof.
+
+With A alone the game confirms the mode and lands on the online character
+select: "Unranked Mode / Select your character", the user shown as DIRECT.
+
+### Where it stops
+
+On that screen the hand sits on the player's own token and will not move. The
+same stick push that walks the mode list does nothing here, over forty seconds
+of pushing, with no button held.
+
+The likely reason, and the next thing to test: online play is supposed to keep
+both players' cursors in step, so the codeset almost certainly reads the
+character select's inputs from the netplay layer rather than from the pad --
+the same path `handleOnlineInputs` feeds during a match. If that is right, no
+amount of pressing at the SI end will ever move that hand, and the way to drive
+it is to supply the input where Slippi expects it to come from.
 
 ### Two things this file claimed that are not true
 
