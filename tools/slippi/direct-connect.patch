@@ -1,11 +1,227 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..9775d8902 100644
+index 4e3991914..6aa1d0a87 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-@@ -3025,6 +3025,22 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -30,6 +30,7 @@
+ #include "Core/NetPlayClient.h"
+ 
+ #include "Core/HW/EXI_DeviceSlippi.h"
++#include "Core/Movie.h"
+ #include "Core/HW/SystemTimers.h"
+ #include "Core/State.h"
+ 
+@@ -144,8 +145,74 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
+ 	OSD::AddMessage(msg, duration_ms, color);
+ }
+ 
++// Direct mode can press its own buttons.
++//
++// The pipe controller does not reach this emulator -- the device is created and
++// read and the game still never sees a press (tools/slippi/direct-connect.md) --
++// but Dolphin hands every pad status through Movie::CallGCInputManip on its way
++// to the game, which is the same place the TAS input dialog writes. Nothing
++// external is involved, so there is no window focus, no device binding and no
++// /dev/uinput to arrange.
++//
++// The sequence is deliberately not a recorded route. It taps A until the thing
++// it is waiting for has happened, so it does not depend on how long a boot took
++// or how many frames a transition ran for.
++static std::atomic<int> g_directPressPhase(0);   // 0 = confirm a mode, 1 = character select, 2 = done
++static std::atomic<bool> g_directPressEnabled(false);
++
++static void directInputManip(GCPadStatus *pad, int controllerID)
++{
++	if (controllerID != 0 || !g_directPressEnabled.load(std::memory_order_acquire))
++		return;
++
++	int phase = g_directPressPhase.load(std::memory_order_acquire);
++	if (phase >= 2)
++		return;
++
++	static int tick = 0;
++	if (tick == 0)
++		ERROR_LOG(SLIPPI_ONLINE, "[Direct] the injector is being called");
++	tick++;
++
++	// Present a whole controller, not just a button. Port 1 is mapped to a pipe
++	// device that never binds, so what arrives here is an empty status with an
++	// error in it -- and a port the game believes is empty cannot operate a
++	// menu no matter what buttons are set on it.
++	pad->err = PAD_ERR_NONE;
++	pad->stickX = GCPadStatus::MAIN_STICK_CENTER_X;
++	pad->stickY = GCPadStatus::MAIN_STICK_CENTER_Y;
++	pad->substickX = GCPadStatus::C_STICK_CENTER_X;
++	pad->substickY = GCPadStatus::C_STICK_CENTER_Y;
++	pad->triggerLeft = 0;
++	pad->triggerRight = 0;
++	pad->analogA = 0;
++	pad->analogB = 0;
++	pad->button = PAD_USE_ORIGIN;
++
++	// Alternate A and Start, four frames held out of every thirty. Which one a
++	// Slippi menu takes is not documented anywhere and the screens differ, so
++	// this offers both rather than assuming; the taps are short enough that a
++	// screen which wants the other one is not disturbed by the wrong press.
++	int slot = (tick / 30) % 2;
++	if ((tick % 30) < 4)
++		pad->button |= (slot == 0) ? PAD_BUTTON_A : PAD_BUTTON_START;
++
++	if ((tick % 600) == 0)
++		ERROR_LOG(SLIPPI_ONLINE, "[Direct] still pressing, phase %d",
++		          g_directPressPhase.load(std::memory_order_acquire));
++}
++
+ CEXISlippi::CEXISlippi()
+ {
++	// SLIPPI_DIRECT_PRESS=1 drives the game with injected pad presses instead
++	// of producing its state directly; the game then walks its own menus and
++	// everything downstream -- the character select, the lock-in, the match --
++	// happens the way it would for a player.
++	if (getenv("SLIPPI_DIRECT_PEERS") != nullptr && getenv("SLIPPI_DIRECT_PRESS") != nullptr)
++	{
++		g_directPressEnabled.store(true, std::memory_order_release);
++		ERROR_LOG(SLIPPI_ONLINE, "[Direct] pressing buttons for the menus");
++	}
+ 	INFO_LOG(SLIPPI, "EXI SLIPPI Constructor called.");
+ 
+ 	// @TODO: For mainline port, ISO file path can't be fetched this way. Look at the following:
+@@ -2134,6 +2201,8 @@ void CEXISlippi::prepareOnlineMatchState()
+ 
+ 	m_read_queue.clear();
+ 
++	directModeAutoDrive();
++
+ 	auto errorState = SlippiMatchmaking::ProcessState::ERROR_ENCOUNTERED;
+ 	SlippiMatchmaking::ProcessState mmState = !forcedError.empty() ? errorState : matchmaking->GetMatchmakeState();
+ 
+@@ -3018,6 +3087,117 @@ void CEXISlippi::handleUpdateAppRequest()
+ #endif
+ }
+ 
++void CEXISlippi::directModeAutoDrive()
++{
++	// Installed here, not in the constructor: DolphinWX's frame installs its
++	// own TAS manip function while it sets itself up, which is after the EXI
++	// device exists, so anything registered earlier is simply replaced.
++	if (g_directPressEnabled.load(std::memory_order_acquire))
++	{
++		static bool installed = false;
++		if (!installed)
++		{
++			Movie::SetGCInputManip(directInputManip);
++			installed = true;
++			ERROR_LOG(SLIPPI_ONLINE, "[Direct] input hook installed");
++		}
++	}
++
++// --- direct mode: the online menus, without the menus -------------------
++//
++// Everything the Online Play screens produce is state, and there are only
++// two pieces of it: a match request, and a locked-in character. The game
++// makes the first when a mode is confirmed (CMD_FIND_OPPONENT) and the
++// second at the character-select lock-in (CMD_SET_MATCH_SELECTIONS). Under
++// the harness that drives this emulator nothing can press either button --
++// see tools/slippi/direct-connect.md -- so produce the state here instead.
++//
++// This is not a shortcut around the protocol. Both pieces go through the
++// same paths the menus use: FindMatch with an ordinary search, and
++// SetMatchSelections on the same netplay client, so what goes out on the
++// wire is what a Slippi client would have sent.
++//
++// SLIPPI_DIRECT_CHAR is an external character-select id, the numbering the
++// codeset itself writes: 9 is Marth, 20 is Falco. SLIPPI_DIRECT_STAGE is
++// optional, and only the lowest player index that names one is used.
++if (getenv("SLIPPI_DIRECT_PEERS") != nullptr)
++{
++	auto directState = matchmaking->GetMatchmakeState();
++
++	// Pressing buttons and asking for the match directly are alternatives,
++	// not companions: if the request has already been made, confirming the
++	// mode again puts the game and the matchmaker in different places.
++	if (g_directPressEnabled.load(std::memory_order_acquire))
++	{
++		if (directState != SlippiMatchmaking::ProcessState::IDLE &&
++		    g_directPressPhase.load(std::memory_order_acquire) == 0)
++		{
++			ERROR_LOG(SLIPPI_ONLINE, "[Direct] a mode was confirmed; on to the character select");
++			g_directPressPhase.store(1, std::memory_order_release);
++		}
++		if (localSelections.isCharacterSelected &&
++		    g_directPressPhase.load(std::memory_order_acquire) == 1)
++		{
++			ERROR_LOG(SLIPPI_ONLINE, "[Direct] the game locked a character in itself");
++			g_directPressPhase.store(2, std::memory_order_release);
++		}
++		return;
++	}
++
++	if (directState == SlippiMatchmaking::ProcessState::IDLE)
++	{
++		SlippiMatchmaking::MatchSearchSettings search;
++		search.mode = SlippiMatchmaking::OnlinePlayMode::UNRANKED;
++		search.connectCode = "";
++		lastSearch = search;
++
++		if (!isEnetInitialized)
++		{
++			if (enet_initialize() < 0)
++				ERROR_LOG(SLIPPI_ONLINE, "[Direct] enet_initialize failed");
++			isEnetInitialized = true;
++		}
++
++		ERROR_LOG(SLIPPI_ONLINE, "[Direct] requesting a match with no menu");
++		matchmaking->FindMatch(search);
++	}
++	else if (directState == SlippiMatchmaking::ProcessState::CONNECTION_SUCCESS)
++	{
++		// prepareOnlineMatchState takes the client off matchmaking once the
++		// connection lands. It never runs here, so nothing else will, and the
++		// pointer staying null is also what defeated the cleanup guard.
++		if (slippi_netplay == nullptr)
++		{
++			slippi_netplay = matchmaking->GetNetplayClient();
++			if (slippi_netplay != nullptr)
++				ERROR_LOG(SLIPPI_ONLINE, "[Direct] adopted the netplay client");
++		}
++		if (slippi_netplay == nullptr || localSelections.isCharacterSelected)
++			return;
++		const char *charEnv = getenv("SLIPPI_DIRECT_CHAR");
++		const char *stageEnv = getenv("SLIPPI_DIRECT_STAGE");
++
++		SlippiPlayerSelections sel;
++		sel.characterId = charEnv != nullptr ? (u8)atoi(charEnv) : 9;
++		sel.characterColor = 0;
++		sel.isCharacterSelected = true;
++		sel.teamId = 0;
++		sel.stageId = stageEnv != nullptr ? (u16)atoi(stageEnv) : 0;
++		sel.isStageSelected = stageEnv != nullptr;
++		sel.rngOffset = 0;
++
++		// Merge does not carry the index, and every reader of these
++		// selections finds its peer by it.
++		localSelections.playerIdx = matchmaking->LocalPlayerIndex();
++		localSelections.Merge(sel);
++		slippi_netplay->SetMatchSelections(localSelections);
++
++		ERROR_LOG(SLIPPI_ONLINE, "[Direct] locked in character %d as player %d",
++		          (int)localSelections.characterId, (int)localSelections.playerIdx);
++	}
++}
++}
++
+ void CEXISlippi::prepareOnlineStatus()
+ {
+ 	m_read_queue.clear();
+@@ -3025,6 +3205,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
++	// The mode-select screen polls this and nothing else: it sends
++	// CMD_GET_ONLINE_STATUS and CMD_CLEANUP_CONNECTION, and only starts
++	// asking for match state once a mode has been confirmed. So this is
++	// where direct mode has to reach in to ask for the match.
++	directModeAutoDrive();
++
 +	// Direct mode (SLIPPI_DIRECT_PEERS, see SlippiMatchmaking::startMatchmaking)
 +	// never talks to Slippi's services, so there is no account to be logged in
 +	// to -- but the game's own menu refuses to enter online play unless this
@@ -25,6 +241,54 @@ index 4e3991914..9775d8902 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
+@@ -3382,6 +3584,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+ 		return;
+ 	}
+ 
++	// Direct mode has to be polled from somewhere the game touches every
++	// frame. prepareOnlineStatus looked like that place and is not: the mode
++	// screen stops asking once it has a name to draw, so the lock-in never
++	// got its turn even though the connection was up and successful.
++	if (getenv("SLIPPI_DIRECT_PEERS") != nullptr)
++	{
++		directModeAutoDrive();
++	}
++
+ 	u8 byte = memPtr[0];
+ 	if (byte == CMD_RECEIVE_COMMANDS)
+ 	{
+@@ -3497,6 +3708,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+ 			prepareOnlineStatus();
+ 			break;
+ 		case CMD_CLEANUP_CONNECTION:
++			// In direct mode the game does not know a match was ever asked for --
++			// nothing pressed a button, the request came from
++			// directModeAutoDrive -- so it keeps asking for the stale connection
++			// to be torn down, and tears down the live one. Ignore it while a
++			// connection exists; the real teardown paths are untouched.
++			// Not conditional on slippi_netplay: that pointer is only ever set
++			// in prepareOnlineMatchState, which the game never calls here, so
++			// testing it let every cleanup through.
++			if (getenv("SLIPPI_DIRECT_PEERS") != nullptr)
++			{
++				break;
++			}
+ 			handleConnectionCleanup();
+ 			break;
+ 		case CMD_LOG_MESSAGE:
+diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.h b/Source/Core/Core/HW/EXI_DeviceSlippi.h
+index c8fdedb2b..51922b5f7 100644
+--- a/Source/Core/Core/HW/EXI_DeviceSlippi.h
++++ b/Source/Core/Core/HW/EXI_DeviceSlippi.h
+@@ -256,6 +256,8 @@ class CEXISlippi : public IEXIDevice
+ 	void handleLogOutRequest();
+ 	void handleUpdateAppRequest();
+ 	void prepareOnlineStatus();
++	// Direct mode only: produces the state the online menus would have.
++	void directModeAutoDrive();
+ 	void handleConnectionCleanup();
+ 	void prepareNewSeed();
+ 	void handleReportGame(const SlippiExiTypes::ReportGameQuery &query);
 diff --git a/Source/Core/Core/Slippi/SlippiMatchmaking.cpp b/Source/Core/Core/Slippi/SlippiMatchmaking.cpp
 index 3cf77d008..25146ed64 100644
 --- a/Source/Core/Core/Slippi/SlippiMatchmaking.cpp

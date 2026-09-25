@@ -86,58 +86,77 @@ above use 51450 and 51452.
 
 ## Where this got to
 
-Measured on 2026-09-25, with the harness above:
+**The handshake is complete.** The port and the emulator connect, exchange
+MATCH_SELECTIONS in both directions, and agree a seed:
 
-- The port comes up on the Slippi protocol, listens, and waits for the peer
-  (`holding the boot until every player has offered a seed`).
-- The emulator boots, loads the 58 KB online codeset, and goes **straight to
-  Slippi's "Online Play" menu** -- Ranked / Unranked / Direct / Teams / Party,
-  Unranked highlighted, with the login check satisfied by the patch above.
-- `SlippiMatchmaking::startMatchmaking` is never called, so the direct-mode
-  patch never runs and the two never connect.
+    emulator   [Matchmaking] direct: 1 peer(s), my port 51452, my index 1
+               Slippi online connection successful!
+               [Netplay] Received selections from opponent with player idx 0
+               [Direct] adopted the netplay client
+               [Direct] locked in character 9 as player 1
 
-The reason is that **nothing can press a button on this emulator.** That is
-worth stating carefully, because it took several wrong answers to get to:
+    port       [SLP] peer connected (1 live)
+               [SLP] selections out: char 9 stage 31 rng 2A1B
+               [SLP] slot 1 is 100007f:51452
+               [SLP] selections in: char 9 stage -1 rng 0000;
+                     agreed seed 00002A1B (we decides)
 
-    the pipe device exists and is read.  Dolphin holds an open descriptor on
-    User/Pipes/slp1 for the whole run -- check it by scanning every process,
-    `readlink /proc/*/fd/*`, not by trusting a pid from pgrep, which here
-    matched the wrong process and said the opposite.
+The port then stops holding its boot and plays. That is everything the earlier
+version of this file listed as unproven, and it reproduces run to run.
 
-    the vocabulary and the control names match.  ParseCommand takes
-    `PRESS A`, `RELEASE A`, `SET MAIN 0.5 0.0` and `SET L -1`; the device
-    registers "Button A", "MAIN X", "MAIN Y" exactly as mainline does, and
-    GCPadNew.ini's `Device = Pipe/0/slp1` is re-saved by Dolphin on exit,
-    which means it resolved.
+### How, given nothing can press a button
 
-    and yet the game never sees any of it.  Two runs of the same length, one
-    sending nothing and one mashing Start and A for ten seconds, load the
-    same 13 files and end on the same screen. That A/B is the only honest
-    test of whether input arrived; a screenshot alone is not, because the
-    menu changes for other reasons -- dropping SLIPPI_DIRECT_PEERS turns the
-    mode list into a "Log-in" entry, which looks exactly like input having
-    worked.
+The online menus only ever *produce state*: a match request when a mode is
+confirmed (`CMD_FIND_OPPONENT`), and a locked-in character at the character
+select (`CMD_SET_MATCH_SELECTIONS`). `directModeAutoDrive` produces both
+directly, through the same paths the menus use -- an ordinary `FindMatch`, and
+`SetMatchSelections` on the same netplay client -- so what goes out on the wire
+is what a Slippi client would have sent.
 
-Two settings are necessary and neither is sufficient: `SIDevice0` must be 6
-rather than the shipped 12 (the Wii U adapter), and `BackgroundInput` must be
-True or an unfocused window discards every poll. With both set, the A/B above
-still comes out identical. What is left is the binding between the pad config
-and the device, which mainline does at a point this fork apparently does not
-reach in batch mode.
+Three things had to be true for that to work, and each was found by watching it
+fail:
 
-### Three ways forward, none of them free
+- **It has to be polled from the command dispatch.** `prepareOnlineStatus`
+  looked like the right home and is not: the mode screen stops asking once it
+  has a name to draw, so the lock-in never got its turn even though the
+  connection was already up and successful.
+- **`prepareOnlineMatchState` never runs at all** while the game sits on the
+  mode menu, which is why the first attempt -- putting the code there -- did
+  nothing. The game sends `CMD_GET_ONLINE_STATUS` and `CMD_CLEANUP_CONNECTION`
+  and nothing else.
+- **The game's cleanup has to be ignored.** It does not know a match was ever
+  asked for, so it asks for the stale connection to be torn down and tears down
+  the live one, about 360 ms after it is established. The guard for that cannot
+  test `slippi_netplay`: that pointer is only ever set in
+  `prepareOnlineMatchState`, so testing it let every cleanup through.
 
-1. **A virtual pad through uinput**, which the evdev backend already supports
-   (`HAVE_LIBEVDEV` is in this build's defines). `/dev/uinput` is root-only
-   here and python-evdev is not installed, so this needs a decision about
-   access rather than more code.
-2. **Rebuild the emulator** with a log line in `ciface::Pipes::PopulateDevices`
-   and in the pad's `UpdateReferences`, which would say in one run whether the
-   device is present when the mapping is resolved. It is the definitive answer
-   and costs a full Ishiiruka build.
-3. **Feed it a `.dtm` movie** with `-m`, which needs no controller backend at
-   all. Cheapest to try, and the thing to check first is whether movie playback
-   and an online session can coexist.
+## What is still missing: the emulator does not play
+
+The emulator's *game* stays on the Online Play menu. Its netplay client is
+connected and has both sides' selections, but the game itself never enters the
+character select or the match, so no pads flow from it. The port plays; the
+emulator watches.
+
+Getting it to play needs the game to walk its own menus, and **nothing has been
+found that can press a button on it.** Beyond the pipe controller, which is
+measured above, direct injection was tried and is the more interesting failure:
+
+    SLIPPI_DIRECT_PRESS=1 installs a Movie::SetGCInputManip handler, which is
+    where Dolphin's own TAS input dialog writes, and every pad status passes
+    through it on the way to the game.
+
+That handler is reached -- it logs that it is being called -- and it presents a
+complete, valid controller: `err` cleared to PAD_ERR_NONE, both sticks centred,
+`PAD_USE_ORIGIN` set, A and Start tapped alternately four frames out of every
+thirty. The menu does not move. One detail worth keeping: it must be installed
+from the first EXI poll rather than the device constructor, because DolphinWX's
+frame installs its own TAS handler while it sets itself up and replaces
+anything registered earlier.
+
+So the codeset's online menus evidently do not read the pad through the SI path
+at all. That is the next thing to establish, and the way to establish it is to
+find where the netplay codeset reads controller state -- it is Gecko code
+operating on game memory, so the answer is an address, not a Dolphin setting.
 
 ### Two things this file claimed that are not true
 

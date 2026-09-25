@@ -77,13 +77,17 @@ XA=$(ps -eo args | grep -oP '(?<=-auth )\S+' | head -1)
 [ -n "$XA" ] || XA=$HOME/.Xauthority
 
 # --- the emulator ------------------------------------------------------------
+# `env` rather than a bare assignment list: a conditional expansion in that
+# position is not treated as an assignment, it is run as a command.
 ( cd "$EMUDIR" && \
-  XAUTHORITY=$XA DISPLAY=${DISPLAY:-:0} GDK_BACKEND=x11 \
+  env XAUTHORITY=$XA DISPLAY=${DISPLAY:-:0} GDK_BACKEND=x11 \
   SLIPPI_DIRECT_PEERS=127.0.0.1:$PORT_PORT \
   SLIPPI_DIRECT_PORT=$EMU_PORT \
   SLIPPI_DIRECT_INDEX=1 \
   SLIPPI_DIRECT_DECIDER=0 \
-  timeout "$RUNFOR" ./dolphin-emu -b -e "$ISO" ) > "$OUT/emu.out" 2>&1 &
+  SLIPPI_DIRECT_CHAR=${SLIPPI_CHAR:-9} \
+  ${SLIPPI_PRESS:+SLIPPI_DIRECT_PRESS=1} \
+  timeout -k 10 "$RUNFOR" ./dolphin-emu -b -e "$ISO" ) > "$OUT/emu.out" 2>&1 &
 EMU=$!
 
 # --- the port ---------------------------------------------------------------
@@ -94,38 +98,14 @@ EMU=$!
   MELEE_NET_PORT=$PORT_PORT MELEE_NET_PLAYERS=2 \
   MELEE_NET_PEERS=127.0.0.1:$PORT_PORT,127.0.0.1:$EMU_PORT \
   MELEE_BOOT_MODE=14 MELEE_BOOT_MATCH=9,9,31 \
-  timeout "$RUNFOR" ./build/pc/melee-pc ) > "$OUT/port.out" 2>&1 &
+  timeout -k 10 "$RUNFOR" ./build/pc/melee-pc ) > "$OUT/port.out" 2>&1 &
 PRT=$!
 
-# --- walk the emulator's menus ----------------------------------------------
-sleep 25
-if [ -n "${SLIPPI_NO_INPUT:-}" ]; then
-    echo "SLIPPI_NO_INPUT set -- sending nothing, as the control half of the A/B"
-    sleep "$RUNFOR"
-    exec 3> /dev/null
-else
-exec 3> "$PIPE"
-printf 'SET L -1\nSET R -1\nSET MAIN 0.5 0.5\nSET C 0.5 0.5\n' >&3
-# Title, then the menus, then Slippi's own "Online Play" screen. START gets
-# past the intro and the card check; A takes each menu entry. The screen this
-# lands on lists Ranked / Unranked / Direct / Teams / Party with Unranked
-# already highlighted, so the last press is the one that matters: Unranked is
-# the one to take, because Direct stops for a connect code and in direct mode
-# there is no code to give it.
-i=0
-while [ $i -lt 14 ]; do
-    printf 'PRESS START\n' >&3; sleep 0.12; printf 'RELEASE START\n' >&3; sleep 0.5
-    printf 'PRESS A\n' >&3;     sleep 0.12; printf 'RELEASE A\n' >&3;     sleep 0.5
-    i=$((i + 1))
-done
-# Confirm Unranked. Matchmaking starts here: the game sends its find-match
-# command, SlippiMatchmaking::startMatchmaking runs, and the direct-mode patch
-# takes it straight to OPPONENT_CONNECTING.
-sleep 2
-printf 'PRESS A\n' >&3; sleep 0.2; printf 'RELEASE A\n' >&3
-sleep 20
-exec 3>&-
-fi
+# --- wait ---------------------------------------------------------------
+# No menu walking any more. Nothing could press a button on this emulator
+# (tools/slippi/direct-connect.md has the measurement), so the direct-mode
+# patch produces the two pieces of state the menus would have: it asks for a
+# match, and it locks a character in once connected.
 
 wait $EMU 2>/dev/null
 wait $PRT 2>/dev/null
