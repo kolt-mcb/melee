@@ -165,63 +165,64 @@ moves is proof, and a screen that does not change is not disproof.
 With A alone the game confirms the mode and lands on the online character
 select: "Unranked Mode / Select your character", the user shown as DIRECT.
 
-### The character select ignores this pad, and does not need to be driven
+### Where it gets to
 
-B does not back out of it and no stick push moves the hand, on either port,
-with the pad demonstrably read one screen earlier. That screen takes its input
-from somewhere else.
+`SLIPPI_PRESS=1 tools/slippi/direct_vs.sh` now takes the emulator to the
+**connected** online character select: the screen reads "Playing: direct" and
+"Hold Z to disconnect", the handshake is complete, and Dolphin's own view of the
+connection is healthy on every poll:
 
-It does not matter, because it does not have to be operated.
-`Online/Menus/CSS/HandleInputsOnCSS.asm` -- the codeset's own handler, injected
-at `0x80263258`, source in `extern/slippi/slippi-ssbm-asm` -- ends at
-`CHECK_SHOULD_START_MATCH`, which starts the game by itself:
-
-        lbz r3, MSRB_IS_LOCAL_PLAYER_READY(REG_MSRB_ADDR)
-        lbz r4, MSRB_IS_REMOTE_PLAYER_READY(REG_MSRB_ADDR)
-        and. r3, r3, r4
-
-Both of those come from Dolphin, out of `prepareOnlineMatchState`: local
-readiness is `localSelections.isCharacterSelected`, which `directModeAutoDrive`
-sets, and remote readiness arrives from the peer. So the button gets the game
-to the screen and the state gets it off again.
-
-Other things the same file settles, which would each have cost a rebuild to
-discover: Start is the button there rather than A; it refuses to act until a
-character exists (`-0x49A9(r13)`); and Start does both halves at once --
-`FN_LOCK_IN_AND_SEARCH` is a SetMatchSelections write followed by
-CMD_FIND_OPPONENT. That last one is why matchmaking never began from the mode
-list: the request belongs to the character select.
-
-### Where it stops now
-
-Pressing and the auto-drive cooperate, and the whole sequence runs:
-
-    [Direct] requesting a match with no menu
-    [Matchmaking] direct: 1 peer(s), my port 51452, my index 1, decider 0
-    [Direct] a mode was confirmed; on to the character select
-    [Netplay] Received selections from opponent with player idx 0
-    [Matchmaking] Connection success!
-    [Direct] adopted the netplay client
+    [Direct] match state polled, mmState 4, netplay 1
+    [Direct] match state: status 2, active 1, remotes 1 -> connected 1
     [Direct] locked in character 9 as player 1
 
-and then, a moment later:
+mmState 4 is CONNECTION_SUCCESS, status 2 is NET_CONNECT_STATUS_CONNECTED, and
+the active-player set matches the remote count, so neither of the two tests
+that can trigger a cleanup is failing any more.
 
-    Connection cleanup started...
+The ordering that makes this work took a while to see. Asking for the match is
+safe only *after* the game has left the mode list, because putting matchmaking
+out of IDLE while that screen is up stops it advancing -- press A at it all run
+and nothing happens. There is no signal for "the mode list is behind us"
+except one: the game requests match state, and it only does that from the
+character select (`FetchMatchInfo.asm` -> `FN_LoadMatchState` ->
+`CONST_SlippiCmdGetMatchState`). So the first such request is the trigger, and
+the auto-drive holds off until it arrives.
 
-and the game falls back to the mode list. That cleanup is **not** the one the
-game asks for -- CMD_CLEANUP_CONNECTION is ignored in direct mode -- so it is
-one of the calls inside `prepareOnlineMatchState`, which means that function
-*is* being polled once the character select is up, exactly as expected. It
-looks at the connection, decides it is not connected, and tears it down.
+That also explains an earlier dead end. A window of "press A for the first ten
+seconds" spends itself before the mode list exists -- boot takes twenty-five --
+so the game never leaves the first screen and never asks for match state, and
+the whole chain stalls with no error anywhere.
 
-The next thing to find is which of its two tests fails. It requires
-`slippi_netplay->GetSlippiConnectStatus()` to be CONNECTED, and separately that
-`GetActivePlayerIndices().size()` equals `matchmaking->RemotePlayerCount()`.
-The second is the more suspicious: the active-player set is maintained from
-what peers send, and the port may never send whatever marks it active. Note
-also that the auto-drive *moves* the client out of matchmaking with
-`GetNetplayClient()`, so anything that asks matchmaking for it afterwards gets
-nothing.
+### What is left
+
+The game has not started the match. From `HANDLE_CONNECTED` in
+HandleInputsOnCSS.asm, a non-zero `MSRB_IS_LOCAL_PLAYER_READY` jumps straight to
+`CHECK_SHOULD_START_MATCH`, which ANDs it with `MSRB_IS_REMOTE_PLAYER_READY` and
+starts the game. Dolphin fills both from `prepareOnlineMatchState`:
+`localPlayerReady` is `localSelections.isCharacterSelected`, which the auto-drive
+sets before that line runs, and `remotePlayersReady` comes from the peer's
+selections, which have arrived.
+
+So both *should* read 1. The next step is one log line rather than another
+guess: print `localPlayerReady` and `remotePlayersReady` next to the connection
+report above. If both are 1 and the game still sits there, the MSRB offsets
+Dolphin writes are worth checking against `Online/Online.s`; if one is 0, it
+says which half to chase.
+
+Note also that the game's own idea of a chosen character (`-0x49A9(r13)`) is
+separate from Dolphin's `localSelections`, and the screen still says "Select
+your character" -- so the two views of "ready" are not the same thing, and that
+may matter.
+
+### On the pad, and a correction
+
+The character select does not respond to A, B or the stick from this pad. An
+earlier version of this file concluded from the B probe that the screen ignores
+the pad entirely. That is not sound: `PreventAPressCharUnselect.asm` and
+`PreventBPressCharUnselect.asm` are part of the codeset, so A and B are
+deliberately neutered there and prove nothing either way. Why the stick does
+not move the hand is still open.
 
 ### Two things this file claimed that are not true
 

@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..e92441101 100644
+index 4e3991914..2931b00fb 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -10,7 +10,7 @@ index 4e3991914..e92441101 100644
  #include "Core/HW/SystemTimers.h"
  #include "Core/State.h"
  
-@@ -144,8 +145,152 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
+@@ -144,8 +145,161 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
  	OSD::AddMessage(msg, duration_ms, color);
  }
  
@@ -28,6 +28,10 @@ index 4e3991914..e92441101 100644
 +// or how many frames a transition ran for.
 +static std::atomic<int> g_directPressPhase(0);   // 0 = confirm a mode, 1 = character select, 2 = done
 +static std::atomic<bool> g_directPressEnabled(false);
++// Set the first time the game asks for match state. Nothing else says
++// "the mode list is behind us": that request is made by FetchMatchInfo.asm,
++// which runs only on the online character select.
++static std::atomic<bool> g_directOnCss(false);
 +
 +static void directInputManip(GCPadStatus *pad, int controllerID)
 +{
@@ -141,7 +145,12 @@ index 4e3991914..e92441101 100644
 +	//
 +	// Local readiness is localSelections.isCharacterSelected, which is what
 +	// directModeAutoDrive sets; remote readiness arrives from the peer.
-+	if (tick < 600 && (tick % 30) < 4)
++	// Not "for the first ten seconds": the clock starts at the first EXI poll,
++	// early in boot, and the mode list does not appear for twenty-five. A
++	// window that short spends itself before there is anything to press.
++	// Tapping for the whole run costs nothing, because the screen after the
++	// mode list ignores this pad entirely.
++	if ((tick % 30) < 4)
 +		pad->button |= PAD_BUTTON_A;
 +
 +	if ((tick % 600) == 0)
@@ -163,7 +172,7 @@ index 4e3991914..e92441101 100644
  	INFO_LOG(SLIPPI, "EXI SLIPPI Constructor called.");
  
  	// @TODO: For mainline port, ISO file path can't be fetched this way. Look at the following:
-@@ -2134,6 +2279,8 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2134,6 +2288,8 @@ void CEXISlippi::prepareOnlineMatchState()
  
  	m_read_queue.clear();
  
@@ -172,7 +181,55 @@ index 4e3991914..e92441101 100644
  	auto errorState = SlippiMatchmaking::ProcessState::ERROR_ENCOUNTERED;
  	SlippiMatchmaking::ProcessState mmState = !forcedError.empty() ? errorState : matchmaking->GetMatchmakeState();
  
-@@ -3018,6 +3165,119 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -2147,6 +2303,19 @@ void CEXISlippi::prepareOnlineMatchState()
+ 
+ 	m_read_queue.push_back(mmState); // Matchmaking State
+ 
++	// Is this polled at all, and what does it see? The cleanup that drops the
++	// game back to the mode list comes from inside this function, and the
++	// report further down never printed -- so either this is not running, or
++	// it is running with a state that skips the connected path entirely.
++	if (getenv("SLIPPI_DIRECT_PEERS") != nullptr)
++	{
++		static int pollTick = 0;
++		g_directOnCss.store(true, std::memory_order_release);
++		if ((pollTick++ % 60) == 0)
++			ERROR_LOG(SLIPPI_ONLINE, "[Direct] match state polled, mmState %d, netplay %d",
++			          (int)mmState, slippi_netplay != nullptr ? 1 : 0);
++	}
++
+ 	u8 localPlayerReady = localSelections.isCharacterSelected;
+ 	u8 remotePlayersReady = 0;
+ 
+@@ -2200,10 +2369,26 @@ void CEXISlippi::prepareOnlineMatchState()
+ 		// If any players are disconnected and the match state is being requested (we are in a lobby),
+ 		// we should just disconnect. This allows for games to finish with a disconnected player but
+ 		// after that the "lobby" is terminated.
+-		if (slippi_netplay->GetActivePlayerIndices().size() != matchmaking->RemotePlayerCount())
++		auto activeCount = slippi_netplay->GetActivePlayerIndices().size();
++		if (activeCount != matchmaking->RemotePlayerCount())
+ 		{
+ 			isConnected = false;
+ 		}
++
++		// Direct mode reaches the character select and then falls back to the mode
++		// list on a cleanup from this function, so say which of the two tests is
++		// the one failing rather than inferring it. Once a second is plenty.
++		if (getenv("SLIPPI_DIRECT_PEERS") != nullptr)
++		{
++			static int reportTick = 0;
++			if ((reportTick++ % 60) == 0)
++			{
++				ERROR_LOG(SLIPPI_ONLINE,
++				          "[Direct] match state: status %d, active %d, remotes %d -> connected %d",
++				          (int)status, (int)activeCount, (int)matchmaking->RemotePlayerCount(),
++				          (int)isConnected);
++			}
++		}
+ #endif
+ 
+ 		if (isConnected)
+@@ -3018,6 +3203,123 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -230,9 +287,13 @@ index 4e3991914..e92441101 100644
 +			ERROR_LOG(SLIPPI_ONLINE, "[Direct] a character is locked in");
 +			g_directPressPhase.store(2, std::memory_order_release);
 +		}
-+		// Deliberately no return: the pressing gets the game as far as the
-+		// character select, and the state produced below is what gets it out of
-+		// there again. They are halves of one sequence, not alternatives.
++		// Timing, not exclusivity. Asking for the match while the game is still on
++		// the mode list puts matchmaking out of IDLE, and the mode list then never
++		// advances -- pressing A on it does nothing for the rest of the run. So
++		// hold off until the game asks for match state, which it only does from
++		// the character select, and then let the rest run.
++		if (!g_directOnCss.load(std::memory_order_acquire))
++			return;
 +	}
 +
 +	if (directState == SlippiMatchmaking::ProcessState::IDLE)
@@ -292,7 +353,7 @@ index 4e3991914..e92441101 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3285,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3327,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -321,7 +382,7 @@ index 4e3991914..e92441101 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3664,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3706,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -337,7 +398,7 @@ index 4e3991914..e92441101 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3788,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3830,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
