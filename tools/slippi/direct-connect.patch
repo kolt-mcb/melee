@@ -1,0 +1,100 @@
+diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
+index 4e3991914..9775d8902 100644
+--- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
++++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
+@@ -3025,6 +3025,22 @@ void CEXISlippi::prepareOnlineStatus()
+ 	auto isLoggedIn = user->IsLoggedIn();
+ 	auto userInfo = user->GetUserInfo();
+ 
++	// Direct mode (SLIPPI_DIRECT_PEERS, see SlippiMatchmaking::startMatchmaking)
++	// never talks to Slippi's services, so there is no account to be logged in
++	// to -- but the game's own menu refuses to enter online play unless this
++	// reports state 1. Report it, and give the game a name and code that are
++	// obviously local rather than anything resembling a real account.
++	if (getenv("SLIPPI_DIRECT_PEERS") != nullptr)
++	{
++		isLoggedIn = true;
++		if (userInfo.displayName.empty())
++			userInfo.displayName = "DIRECT";
++		if (userInfo.connectCode.empty())
++			userInfo.connectCode = "DRCT#0";
++		if (userInfo.latestVersion.empty())
++			userInfo.latestVersion = scm_slippi_semver_str;
++	}
++
+ 	u8 appState = 0;
+ 	if (isLoggedIn)
+ 	{
+diff --git a/Source/Core/Core/Slippi/SlippiMatchmaking.cpp b/Source/Core/Core/Slippi/SlippiMatchmaking.cpp
+index 3cf77d008..25146ed64 100644
+--- a/Source/Core/Core/Slippi/SlippiMatchmaking.cpp
++++ b/Source/Core/Core/Slippi/SlippiMatchmaking.cpp
+@@ -276,6 +276,68 @@ static enet_uint32 getLocalAddress(ENetAddress *mm_address)
+ 
+ void SlippiMatchmaking::startMatchmaking()
+ {
++	// --- direct mode -------------------------------------------------------
++	//
++	// SLIPPI_DIRECT_PEERS=ip:port[,ip:port...] skips the matchmaking service
++	// entirely and connects to peers whose addresses we already know. Online
++	// play normally learns them from mm.slippi.gg, which means a peer has to be
++	// a Slippi client with an account; this exists so it can be something else
++	// on the same LAN -- here, a decompilation of the game being checked against
++	// this emulator frame by frame.
++	//
++	// Everything the service would have supplied comes from the environment
++	// instead: our own listen port, which player index we are, and whether we
++	// are the decider whose RNG seed the others adopt. Nothing else about the
++	// session changes -- handleConnecting builds the same SlippiNetplayClient
++	// from the same fields, so the wire, the rollback and the codeset checks are
++	// all still whatever they were.
++	{
++		const char *peersEnv = getenv("SLIPPI_DIRECT_PEERS");
++		if (peersEnv != nullptr && peersEnv[0] != '\0')
++		{
++			const char *portEnv = getenv("SLIPPI_DIRECT_PORT");
++			const char *idxEnv = getenv("SLIPPI_DIRECT_INDEX");
++			const char *decEnv = getenv("SLIPPI_DIRECT_DECIDER");
++
++			m_remoteIps.clear();
++			std::vector<std::string> peerParts;
++			SplitString(std::string(peersEnv), ',', peerParts);
++			for (auto &peer : peerParts)
++			{
++				if (!peer.empty())
++					m_remoteIps.push_back(peer);
++			}
++
++			m_hostPort = portEnv != nullptr ? atoi(portEnv) : 51442;
++			m_localPlayerIndex = idxEnv != nullptr ? atoi(idxEnv) : 0;
++			// The decider is whoever the others take the seed from. Default to
++			// player 0 so a two-machine session needs one variable, not three.
++			m_isHost = decEnv != nullptr ? (atoi(decEnv) != 0) : (m_localPlayerIndex == 0);
++			m_joinedLobby = false;
++			m_allowedStages.clear();
++
++			// One entry per player: RemotePlayerCount() and the name lookups
++			// read this, and an empty vector makes the first of them return 0
++			// and the second index out of bounds.
++			m_playerInfo.clear();
++			for (size_t i = 0; i < m_remoteIps.size() + 1; i++)
++			{
++				SlippiUser::UserInfo info;
++				info.port = (int)i + 1;
++				info.displayName = i == (size_t)m_localPlayerIndex ? "local" : "direct";
++				info.connectCode = "DIRECT#000";
++				m_playerInfo.push_back(info);
++			}
++
++			ERROR_LOG(SLIPPI_ONLINE,
++			          "[Matchmaking] direct: %d peer(s), my port %d, my index %d, decider %d",
++			          (int)m_remoteIps.size(), m_hostPort, m_localPlayerIndex, (int)m_isHost);
++
++			m_state = ProcessState::OPPONENT_CONNECTING;
++			return;
++		}
++	}
++
+ 	// I don't understand why I have to do this... if I don't do this, rand always returns the
+ 	// same value
+ 	m_client = nullptr;
