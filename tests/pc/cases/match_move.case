@@ -13,6 +13,7 @@ window: 8
 ref_lead: -1515
 env: MELEE_BOOT_MODE=14
 env: MELEE_BOOT_MATCH=13,12,9,0,0
+env: MELEE_BOOT_STOCKS=3
 input: 145: right*60
 input: 235: x
 input: 275: a
@@ -57,3 +58,29 @@ ref_input: 1754:-X
 ref_input: 1790:+A
 ref_input: 1794:-A
 checks: 195, 251, 315
+
+# For tools/pc_divergence.py this is the case that matters: the same three
+# inputs go to both sides and every frame afterwards is compared, so a walk
+# that accelerates differently, a jump with the wrong arc or an attack whose
+# animation runs at the wrong rate all show up as a frame number rather than
+# as a feeling about a video. See match.case for why mode and scene differ by
+# construction.
+ignore: mode, scene
+# Measured, not guessed: the port's match runs three frames ahead of the
+# console's, and the harness found it by searching shifts (+3 buys 113 more
+# frames of agreement). It is not input latency -- under the shift the spawn
+# fall matches from its first frame as well -- but the entry into the match:
+# the port boots the debug-VS scene while Dolphin walks into a normal VS
+# match, and the two start counting match frames from slightly different
+# places.
+#
+# Declaring it here is what lets this case measure what it is for. With the
+# offset taken out, the action-state sequence is identical on both sides and
+# the residual is a real one: the fall off the spawn platform is bit-identical
+# frame by frame down to y = -0.306, and then the console lands (y snaps to
+# 0.0001, state Landing) while the port keeps falling for two more frames to
+# y = -4.106 before it notices. The port's ground collision is two frames
+# late. match_dash.case reproduces it with the same numbers.
+ref_shift: 3
+trace_frames: 1150
+ref_trace_frames: 3100

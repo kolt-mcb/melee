@@ -1,0 +1,66 @@
+# The lockstep case: tools/pc_lockstep.py runs this on the port and on Dolphin
+# at the same time, a frame at a time. It is match_move's inputs -- walk right,
+# jump, attack -- written in MATCH frames, because that is the clock the two
+# games share and the one the driver holds them both on.
+#
+# The console boots from tests/pc/states/vs_onett.sav rather than walking the
+# menus, so there is no navigation to go wrong and no PNG clock to get wrong.
+# Rebuild the state with: tools/pc_lockstep.py sync_move --make-state
+description: lockstep walk, jump and attack (Pikachu vs Peach, Onett)
+env: MELEE_BOOT_MODE=14
+env: MELEE_BOOT_MATCH=13,12,9,0,0
+env: MELEE_BOOT_STOCKS=3
+# The port boots the debug-VS scene and the console resumes a normal VS match,
+# so mode and scene differ by construction, and the port's entry into the match
+# runs three frames ahead. Both measured; see match_move.case.
+ignore: mode, scene
+# Two more that differ by construction rather than by error, and are listed
+# here so --stop-on-divergence stops on something worth looking at: the RNG
+# seed (the console reached this match through the menus, burning draws the
+# port never made -- the derived rng_draws column carries the useful part of
+# that signal and is still compared) and the animation-frame counter (the
+# port's entry into the match is 60 frames further along).
+ignore: seed, p0.animf, p1.animf, p2.animf, p3.animf
+ref_shift: 3
+sync_input: 12: right*60
+sync_input: 102: x
+sync_input: 142: a
+
+# The console's menu route, in dumped-PNG frames as everything in
+# tests/pc/cases is. --calibrate replays it once and writes down which
+# emulated frame each press landed on; after that the recording is what
+# runs, and dumping stays off.
+ref_input: 236:+START
+ref_input: 240:-START
+ref_input: 400:+START
+ref_input: 404:-START
+ref_input: 760:MAIN:0.5:0.0
+ref_input: 768:MAIN:0.5:0.5
+ref_input: 820:+A
+ref_input: 824:-A
+ref_input: 950:+A
+ref_input: 954:-A
+ref_input: 1000:P2:+A
+ref_input: 1004:P2:-A
+ref_input: 1060:MAIN:0.5:1.0
+ref_input: 1120:MAIN:0.5:0.5
+ref_input: 1130:MAIN:1.0:0.5
+ref_input: 1140:MAIN:0.5:0.5
+ref_input: 1150:MAIN:0.5:0.0
+ref_input: 1157:MAIN:0.5:0.5
+ref_input: 1170:+A
+ref_input: 1174:-A
+ref_input: 1180:P2:MAIN:0.5:1.0
+ref_input: 1240:P2:MAIN:0.5:0.5
+ref_input: 1250:P2:MAIN:1.0:0.5
+ref_input: 1260:P2:MAIN:0.5:0.5
+ref_input: 1270:P2:MAIN:0.5:0.0
+ref_input: 1277:P2:MAIN:0.5:0.5
+ref_input: 1290:P2:+A
+ref_input: 1294:P2:-A
+ref_input: 1340:+START
+ref_input: 1344:-START
+ref_input: 1420:MAIN:0.5:1.0
+ref_input: 1452:MAIN:0.5:0.5
+ref_input: 1480:+A
+ref_input: 1484:-A

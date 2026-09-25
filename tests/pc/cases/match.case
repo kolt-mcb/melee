@@ -21,6 +21,10 @@ window: 8
 ref_lead: -1530
 env: MELEE_BOOT_MODE=14
 env: MELEE_BOOT_MATCH=13,12,9,0,0
+# The Dolphin side walks the menus into a normal VS match, which is a 3-stock
+# match; the port's debug-VS boot defaults to 4. Same rules or the comparison
+# reports every player on every frame.
+env: MELEE_BOOT_STOCKS=3
 ref_input: 236:+START
 ref_input: 240:-START
 ref_input: 400:+START
@@ -56,3 +60,16 @@ ref_input: 1452:MAIN:0.5:0.5
 ref_input: 1480:+A
 ref_input: 1484:-A
 checks: 250, 320
+# tools/pc_divergence.py runs both sides much longer than the pixel
+# checkpoints need: it compares every frame, so its answer is only as good as
+# the number of frames it watched. The Dolphin figure is trace rows, and the
+# menu route eats about 2300 of them before the match starts.
+# The two sides reach the same match by routes that cannot be made identical:
+# the port boots the debug-VS scene (GM_DEBUG_VS, scene 1) because Dolphin
+# cannot be booted into a match at all -- the Gecko boot-to-mode patch does not
+# intercept the title transition -- while Dolphin walks the menus into GM_VS.
+# So the mode and scene differ by construction and are declared here rather
+# than reported every run. Everything else is expected to agree.
+ignore: mode, scene
+trace_frames: 1150
+ref_trace_frames: 3100

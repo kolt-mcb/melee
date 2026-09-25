@@ -5,3 +5,13 @@ description: intro movie playback, no input
 run_frames: 260
 align: movie
 checks: 200, 204, 208, 212
+
+# The divergence test (tools/pc_divergence.py) uses this case as its
+# calibration too, for the same reason the pixel suite does: with no input and
+# no menus, the two sides are running the same code from power-on, so anything
+# that differs is the port. They are aligned on the frame each enters the
+# opening movie, because outside a match there is no shared frame counter --
+# and the two boot paths do not take the same number of frames to get there.
+anchor: mode=24
+trace_frames: 1200
+ref_trace_frames: 1200

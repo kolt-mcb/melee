@@ -1,0 +1,73 @@
+# Ground attacks and a grab. Each action is separated by enough frames that a
+# divergence can be attributed to one of them rather than to the run-up.
+description: P1 jabs, crouches, down-tilts, grabs, then walks into a forward tilt
+align: search
+window: 8
+ref_lead: -1515
+env: MELEE_BOOT_MODE=14
+env: MELEE_BOOT_MATCH=13,12,9,0,0
+env: MELEE_BOOT_STOCKS=3
+# Same menu route as match_move.case, and the same measured relations: Dolphin
+# input goes in at port frame + 1515 (dump frames), and the port's match runs
+# three frames ahead of the console's.
+ignore: mode, scene
+ref_shift: 3
+run_frames: 420
+ref_frames: 2400
+trace_frames: 1150
+ref_trace_frames: 3100
+checks: 250, 320
+input: 160: a
+input: 200: down*30
+input: 212: a
+input: 230: neutral
+input: 270: z
+input: 310: right*50
+input: 322: a
+input: 380: neutral
+ref_input: 236:+START
+ref_input: 240:-START
+ref_input: 400:+START
+ref_input: 404:-START
+ref_input: 760:MAIN:0.5:0.0
+ref_input: 768:MAIN:0.5:0.5
+ref_input: 820:+A
+ref_input: 824:-A
+ref_input: 950:+A
+ref_input: 954:-A
+ref_input: 1000:P2:+A
+ref_input: 1004:P2:-A
+ref_input: 1060:MAIN:0.5:1.0
+ref_input: 1120:MAIN:0.5:0.5
+ref_input: 1130:MAIN:1.0:0.5
+ref_input: 1140:MAIN:0.5:0.5
+ref_input: 1150:MAIN:0.5:0.0
+ref_input: 1157:MAIN:0.5:0.5
+ref_input: 1170:+A
+ref_input: 1174:-A
+ref_input: 1180:P2:MAIN:0.5:1.0
+ref_input: 1240:P2:MAIN:0.5:0.5
+ref_input: 1250:P2:MAIN:1.0:0.5
+ref_input: 1260:P2:MAIN:0.5:0.5
+ref_input: 1270:P2:MAIN:0.5:0.0
+ref_input: 1277:P2:MAIN:0.5:0.5
+ref_input: 1290:P2:+A
+ref_input: 1294:P2:-A
+ref_input: 1340:+START
+ref_input: 1344:-START
+ref_input: 1420:MAIN:0.5:1.0
+ref_input: 1452:MAIN:0.5:0.5
+ref_input: 1480:+A
+ref_input: 1484:-A
+ref_input: 1675:+A
+ref_input: 1679:-A
+ref_input: 1715:MAIN:0.5:0.0
+ref_input: 1727:+A
+ref_input: 1731:-A
+ref_input: 1745:MAIN:0.5:0.5
+ref_input: 1785:+Z
+ref_input: 1789:-Z
+ref_input: 1825:MAIN:1.0:0.5
+ref_input: 1837:+A
+ref_input: 1841:-A
+ref_input: 1875:MAIN:0.5:0.5
