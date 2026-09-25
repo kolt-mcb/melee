@@ -1,0 +1,1381 @@
+{
+ "generated": "2026-09-20",
+ "menus": {
+  "0": {
+   "avail": "11111",
+   "count": 5,
+   "cursor": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "name": "MAIN",
+   "path": [],
+   "table_count": 5
+  },
+  "1": {
+   "avail": "11011",
+   "count": 5,
+   "cursor": [
+    0,
+    1,
+    3,
+    4
+   ],
+   "name": "1P",
+   "path": [
+    [
+     0,
+     0
+    ]
+   ],
+   "table_count": 5
+  },
+  "12": {
+   "avail": "1111111111",
+   "count": 10,
+   "cursor": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "name": "SPECIAL",
+   "path": [
+    [
+     0,
+     1
+    ],
+    [
+     2,
+     2
+    ]
+   ],
+   "table_count": 10
+  },
+  "18": {
+   "avail": "1",
+   "count": 27,
+   "cursor": [
+    24,
+    25,
+    26
+   ],
+   "name": "NAME_ENTRY",
+   "path": [
+    [
+     0,
+     1
+    ],
+    [
+     2,
+     4
+    ]
+   ],
+   "table_count": 1
+  },
+  "19": {
+   "avail": "1",
+   "count": 1,
+   "cursor": [
+    0
+   ],
+   "name": "SETTINGS_RUMBLE",
+   "path": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     0
+    ]
+   ],
+   "table_count": 1
+  },
+  "2": {
+   "avail": "11111",
+   "count": 5,
+   "cursor": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "name": "VS",
+   "path": [
+    [
+     0,
+     1
+    ]
+   ],
+   "table_count": 5
+  },
+  "20": {
+   "avail": "1",
+   "count": 1,
+   "cursor": [
+    0
+   ],
+   "name": "SETTINGS_SOUND",
+   "path": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     1
+    ]
+   ],
+   "table_count": 1
+  },
+  "21": {
+   "avail": "1",
+   "count": 1,
+   "cursor": [
+    0
+   ],
+   "name": "DISPLAY",
+   "path": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     2
+    ]
+   ],
+   "table_count": 1
+  },
+  "23": {
+   "avail": "1",
+   "count": 2,
+   "cursor": [
+    0
+   ],
+   "name": "SETTINGS_LANG",
+   "path": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     3
+    ]
+   ],
+   "table_count": 1
+  },
+  "24": {
+   "avail": "1",
+   "count": 1,
+   "cursor": [
+    0
+   ],
+   "name": "SETTINGS_ERASE",
+   "path": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     4
+    ]
+   ],
+   "table_count": 1
+  },
+  "25": {
+   "avail": "1",
+   "count": 1,
+   "cursor": [
+    0
+   ],
+   "name": "DATA_SNAP",
+   "path": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     0
+    ]
+   ],
+   "table_count": 1
+  },
+  "26": {
+   "avail": "1",
+   "count": 1,
+   "cursor": [
+    0
+   ],
+   "name": "DATA_ARCHIVES",
+   "path": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     1
+    ]
+   ],
+   "table_count": 1
+  },
+  "28": {
+   "avail": "111",
+   "count": 3,
+   "cursor": [
+    0,
+    1,
+    2
+   ],
+   "name": "RECORDS",
+   "path": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     2
+    ]
+   ],
+   "table_count": 3
+  },
+  "29": {
+   "avail": "1",
+   "count": 1,
+   "cursor": [
+    0
+   ],
+   "name": "DATA_SPECIAL",
+   "path": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     3
+    ]
+   ],
+   "table_count": 1
+  },
+  "3": {
+   "avail": "1101",
+   "count": 4,
+   "cursor": [
+    0,
+    1,
+    3
+   ],
+   "name": "TOY",
+   "path": [
+    [
+     0,
+     2
+    ]
+   ],
+   "table_count": 4
+  },
+  "30": {
+   "avail": "1",
+   "count": 10,
+   "cursor": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "name": "RECORDS_VS",
+   "path": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     2
+    ],
+    [
+     28,
+     0
+    ]
+   ],
+   "table_count": 1
+  },
+  "31": {
+   "avail": "1",
+   "count": 1,
+   "cursor": [
+    0
+   ],
+   "name": "RECORDS_BONUS",
+   "path": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     2
+    ],
+    [
+     28,
+     1
+    ]
+   ],
+   "table_count": 1
+  },
+  "32": {
+   "avail": "1",
+   "count": 1,
+   "cursor": [
+    0
+   ],
+   "name": "RECORDS_MISC",
+   "path": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     2
+    ],
+    [
+     28,
+     2
+    ]
+   ],
+   "table_count": 1
+  },
+  "33": {
+   "avail": "1",
+   "count": 6,
+   "cursor": [
+    0
+   ],
+   "name": "MULTI_VS",
+   "path": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     9,
+     2
+    ]
+   ],
+   "table_count": 1
+  },
+  "4": {
+   "avail": "111011",
+   "count": 6,
+   "cursor": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "name": "SETTINGS",
+   "path": [
+    [
+     0,
+     3
+    ]
+   ],
+   "table_count": 6
+  },
+  "5": {
+   "avail": "11011",
+   "count": 5,
+   "cursor": [
+    0,
+    1,
+    3,
+    4
+   ],
+   "name": "DATA",
+   "path": [
+    [
+     0,
+     4
+    ]
+   ],
+   "table_count": 5
+  },
+  "6": {
+   "avail": "110",
+   "count": 3,
+   "cursor": [
+    0,
+    1
+   ],
+   "name": "REG",
+   "path": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     0
+    ]
+   ],
+   "table_count": 3
+  },
+  "7": {
+   "avail": "1",
+   "count": 1,
+   "cursor": [
+    0
+   ],
+   "name": "EVENT",
+   "path": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     1
+    ]
+   ],
+   "table_count": 1
+  },
+  "9": {
+   "avail": "111",
+   "count": 3,
+   "cursor": [
+    0,
+    1,
+    2
+   ],
+   "name": "STADIUM",
+   "path": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     2
+    ]
+   ],
+   "table_count": 3
+  }
+ },
+ "options": {
+  "0,0": {
+   "dest": "menu:1P",
+   "menu": 0,
+   "name": "MAIN_1P",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "0,1": {
+   "dest": "menu:VS",
+   "menu": 0,
+   "name": "MAIN_VS",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "0,2": {
+   "dest": "menu:TOY",
+   "menu": 0,
+   "name": "MAIN_TOY",
+   "offered": true,
+   "presses": 2,
+   "sel": 2,
+   "verdict": "ok"
+  },
+  "0,3": {
+   "dest": "menu:SETTINGS",
+   "menu": 0,
+   "name": "MAIN_SETTINGS",
+   "offered": true,
+   "presses": 3,
+   "sel": 3,
+   "verdict": "ok"
+  },
+  "0,4": {
+   "dest": "menu:DATA",
+   "menu": 0,
+   "name": "MAIN_DATA",
+   "offered": true,
+   "presses": 4,
+   "sel": 4,
+   "verdict": "ok"
+  },
+  "1,0": {
+   "dest": "menu:REG",
+   "menu": 1,
+   "name": "1P_REG",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "1,1": {
+   "dest": "menu:EVENT",
+   "menu": 1,
+   "name": "1P_EVENT",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "1,2": {
+   "dest": "locked",
+   "menu": 1,
+   "name": "1P_2",
+   "offered": false,
+   "sel": 2
+  },
+  "1,3": {
+   "dest": "menu:STADIUM",
+   "menu": 1,
+   "name": "1P_STADIUM",
+   "offered": true,
+   "presses": 2,
+   "sel": 3,
+   "verdict": "ok"
+  },
+  "1,4": {
+   "dest": "mode:TRAINING",
+   "menu": 1,
+   "name": "1P_TRAINING",
+   "offered": true,
+   "presses": 3,
+   "sel": 4,
+   "verdict": "ok"
+  },
+  "12,0": {
+   "dest": "mode:CAMERA_MODE",
+   "menu": 12,
+   "name": "SPECIAL_VS_CAMERA",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "12,1": {
+   "dest": "mode:STAMINA_VS",
+   "menu": 12,
+   "name": "SPECIAL_VS_STAMINA",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "12,2": {
+   "dest": "mode:SUPER_SUDDEN_DEATH_VS",
+   "menu": 12,
+   "name": "SPECIAL_VS_SUDDEN_DEATH",
+   "offered": true,
+   "presses": 2,
+   "sel": 2,
+   "verdict": "ok"
+  },
+  "12,3": {
+   "dest": "mode:GIANT_VS",
+   "menu": 12,
+   "name": "SPECIAL_VS_GIANT",
+   "offered": true,
+   "presses": 3,
+   "sel": 3,
+   "verdict": "ok"
+  },
+  "12,4": {
+   "dest": "mode:TINY_VS",
+   "menu": 12,
+   "name": "SPECIAL_VS_TINY",
+   "offered": true,
+   "presses": 4,
+   "sel": 4,
+   "verdict": "ok"
+  },
+  "12,5": {
+   "dest": "mode:INVISIBLE_VS",
+   "menu": 12,
+   "name": "SPECIAL_VS_INVISIBLE",
+   "offered": true,
+   "presses": 5,
+   "sel": 5,
+   "verdict": "ok"
+  },
+  "12,6": {
+   "dest": "mode:FIXED_CAMERA_VS",
+   "menu": 12,
+   "name": "SPECIAL_VS_FIXED_CAMERA",
+   "offered": true,
+   "presses": 6,
+   "sel": 6,
+   "verdict": "ok"
+  },
+  "12,7": {
+   "dest": "mode:SINGLE_BUTTON_VS",
+   "menu": 12,
+   "name": "SPECIAL_VS_SINGLE_BUTTON",
+   "offered": true,
+   "presses": 7,
+   "sel": 7,
+   "verdict": "ok"
+  },
+  "12,8": {
+   "dest": "mode:LIGHTNING_VS",
+   "menu": 12,
+   "name": "SPECIAL_VS_LIGHTNING",
+   "offered": true,
+   "presses": 8,
+   "sel": 8,
+   "verdict": "ok"
+  },
+  "12,9": {
+   "dest": "mode:SLOMO_VS",
+   "menu": 12,
+   "name": "SPECIAL_VS_SLOMO",
+   "offered": true,
+   "presses": 9,
+   "sel": 9,
+   "verdict": "ok"
+  },
+  "18,0": {
+   "dest": "unreachable",
+   "menu": 18,
+   "name": "sel0",
+   "offered": true,
+   "sel": 0
+  },
+  "18,1": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel1",
+   "offered": false,
+   "sel": 1
+  },
+  "18,10": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel10",
+   "offered": false,
+   "sel": 10
+  },
+  "18,11": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel11",
+   "offered": false,
+   "sel": 11
+  },
+  "18,12": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel12",
+   "offered": false,
+   "sel": 12
+  },
+  "18,13": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel13",
+   "offered": false,
+   "sel": 13
+  },
+  "18,14": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel14",
+   "offered": false,
+   "sel": 14
+  },
+  "18,15": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel15",
+   "offered": false,
+   "sel": 15
+  },
+  "18,16": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel16",
+   "offered": false,
+   "sel": 16
+  },
+  "18,17": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel17",
+   "offered": false,
+   "sel": 17
+  },
+  "18,18": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel18",
+   "offered": false,
+   "sel": 18
+  },
+  "18,19": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel19",
+   "offered": false,
+   "sel": 19
+  },
+  "18,2": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel2",
+   "offered": false,
+   "sel": 2
+  },
+  "18,20": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel20",
+   "offered": false,
+   "sel": 20
+  },
+  "18,21": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel21",
+   "offered": false,
+   "sel": 21
+  },
+  "18,22": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel22",
+   "offered": false,
+   "sel": 22
+  },
+  "18,23": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel23",
+   "offered": false,
+   "sel": 23
+  },
+  "18,24": {
+   "dest": "-",
+   "menu": 18,
+   "name": "sel24",
+   "offered": true,
+   "presses": 0,
+   "sel": 24,
+   "verdict": "crash"
+  },
+  "18,25": {
+   "dest": "-",
+   "menu": 18,
+   "name": "sel25",
+   "offered": true,
+   "presses": 1,
+   "sel": 25,
+   "verdict": "inert"
+  },
+  "18,26": {
+   "dest": "-",
+   "menu": 18,
+   "name": "sel26",
+   "offered": true,
+   "presses": 2,
+   "sel": 26,
+   "verdict": "inert"
+  },
+  "18,3": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel3",
+   "offered": false,
+   "sel": 3
+  },
+  "18,4": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel4",
+   "offered": false,
+   "sel": 4
+  },
+  "18,5": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel5",
+   "offered": false,
+   "sel": 5
+  },
+  "18,6": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel6",
+   "offered": false,
+   "sel": 6
+  },
+  "18,7": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel7",
+   "offered": false,
+   "sel": 7
+  },
+  "18,8": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel8",
+   "offered": false,
+   "sel": 8
+  },
+  "18,9": {
+   "dest": "locked",
+   "menu": 18,
+   "name": "sel9",
+   "offered": false,
+   "sel": 9
+  },
+  "19,0": {
+   "dest": "-",
+   "menu": 19,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "2,0": {
+   "dest": "mode:VS",
+   "menu": 2,
+   "name": "VS_MELEE",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "2,1": {
+   "dest": "mode:TOURNAMENT",
+   "menu": 2,
+   "name": "VS_TOURNAMENT",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "2,2": {
+   "dest": "menu:SPECIAL",
+   "menu": 2,
+   "name": "VS_SPECIAL",
+   "offered": true,
+   "presses": 2,
+   "sel": 2,
+   "verdict": "ok"
+  },
+  "2,3": {
+   "dest": "menu:RULES",
+   "menu": 2,
+   "name": "VS_RULES",
+   "offered": true,
+   "presses": 3,
+   "sel": 3,
+   "verdict": "ok"
+  },
+  "2,4": {
+   "dest": "menu:NAME_ENTRY",
+   "menu": 2,
+   "name": "VS_NAME",
+   "offered": true,
+   "presses": 4,
+   "sel": 4,
+   "verdict": "ok"
+  },
+  "20,0": {
+   "dest": "-",
+   "menu": 20,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "21,0": {
+   "dest": "-",
+   "menu": 21,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "23,0": {
+   "axis": "right",
+   "dest": "-",
+   "menu": 23,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "23,1": {
+   "axis": "right",
+   "dest": "menu:SETTINGS",
+   "menu": 23,
+   "name": "sel1",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "24,0": {
+   "dest": "-",
+   "menu": 24,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "25,0": {
+   "dest": "-",
+   "menu": 25,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "26,0": {
+   "dest": "-",
+   "menu": 26,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "28,0": {
+   "dest": "menu:RECORDS_VS",
+   "menu": 28,
+   "name": "RECORDS_VS",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "28,1": {
+   "dest": "menu:RECORDS_BONUS",
+   "menu": 28,
+   "name": "RECORDS_BONUS",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "28,2": {
+   "dest": "menu:RECORDS_MISC",
+   "menu": 28,
+   "name": "RECORDS_MISC",
+   "offered": true,
+   "presses": 2,
+   "sel": 2,
+   "verdict": "ok"
+  },
+  "29,0": {
+   "dest": "-",
+   "menu": 29,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "3,0": {
+   "dest": "mode:TOY_GALLERY",
+   "menu": 3,
+   "name": "TOY_GALLERY",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "3,1": {
+   "dest": "mode:TOY_LOTTERY",
+   "menu": 3,
+   "name": "TOY_LOTTERY",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "3,2": {
+   "dest": "locked",
+   "menu": 3,
+   "name": "TOY_2",
+   "offered": false,
+   "sel": 2
+  },
+  "3,3": {
+   "dest": "mode:TOY_COLLECTION",
+   "menu": 3,
+   "name": "TOY_COLLECTION",
+   "offered": true,
+   "presses": 2,
+   "sel": 3,
+   "verdict": "ok"
+  },
+  "30,0": {
+   "dest": "-",
+   "menu": 30,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "30,1": {
+   "dest": "-",
+   "menu": 30,
+   "name": "sel1",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "inert"
+  },
+  "30,2": {
+   "dest": "-",
+   "menu": 30,
+   "name": "sel2",
+   "offered": true,
+   "presses": 2,
+   "sel": 2,
+   "verdict": "inert"
+  },
+  "30,3": {
+   "dest": "-",
+   "menu": 30,
+   "name": "sel3",
+   "offered": true,
+   "presses": 3,
+   "sel": 3,
+   "verdict": "inert"
+  },
+  "30,4": {
+   "dest": "-",
+   "menu": 30,
+   "name": "sel4",
+   "offered": true,
+   "presses": 4,
+   "sel": 4,
+   "verdict": "inert"
+  },
+  "30,5": {
+   "dest": "-",
+   "menu": 30,
+   "name": "sel5",
+   "offered": true,
+   "presses": 5,
+   "sel": 5,
+   "verdict": "inert"
+  },
+  "30,6": {
+   "dest": "-",
+   "menu": 30,
+   "name": "sel6",
+   "offered": true,
+   "presses": 6,
+   "sel": 6,
+   "verdict": "inert"
+  },
+  "30,7": {
+   "dest": "-",
+   "menu": 30,
+   "name": "sel7",
+   "offered": true,
+   "presses": 7,
+   "sel": 7,
+   "verdict": "inert"
+  },
+  "30,8": {
+   "dest": "-",
+   "menu": 30,
+   "name": "sel8",
+   "offered": true,
+   "presses": 8,
+   "sel": 8,
+   "verdict": "inert"
+  },
+  "30,9": {
+   "dest": "-",
+   "menu": 30,
+   "name": "sel9",
+   "offered": true,
+   "presses": 9,
+   "sel": 9,
+   "verdict": "inert"
+  },
+  "31,0": {
+   "dest": "-",
+   "menu": 31,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "32,0": {
+   "dest": "-",
+   "menu": 32,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "inert"
+  },
+  "33,0": {
+   "axis": "right",
+   "dest": "mode:10MAN_VS",
+   "menu": 33,
+   "name": "MULTI_VS_10MAN",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "33,1": {
+   "axis": "right",
+   "dest": "mode:100MAN_VS",
+   "menu": 33,
+   "name": "MULTI_VS_100MAN",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "33,2": {
+   "axis": "right",
+   "dest": "mode:3MIN_VS",
+   "menu": 33,
+   "name": "MULTI_VS_3MIN",
+   "offered": true,
+   "presses": 2,
+   "sel": 2,
+   "verdict": "ok"
+  },
+  "33,3": {
+   "axis": "right",
+   "dest": "mode:15MIN_VS",
+   "menu": 33,
+   "name": "MULTI_VS_15MIN",
+   "offered": true,
+   "presses": 3,
+   "sel": 3,
+   "verdict": "ok"
+  },
+  "33,4": {
+   "axis": "right",
+   "dest": "mode:ENDLESS_VS",
+   "menu": 33,
+   "name": "MULTI_VS_ENDLESS",
+   "offered": true,
+   "presses": 4,
+   "sel": 4,
+   "verdict": "ok"
+  },
+  "33,5": {
+   "axis": "right",
+   "dest": "mode:CRUEL_VS",
+   "menu": 33,
+   "name": "MULTI_VS_CRUEL",
+   "offered": true,
+   "presses": 5,
+   "sel": 5,
+   "verdict": "ok"
+  },
+  "4,0": {
+   "dest": "menu:SETTINGS_RUMBLE",
+   "menu": 4,
+   "name": "SETTINGS_RUMBLE",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "4,1": {
+   "dest": "menu:SETTINGS_SOUND",
+   "menu": 4,
+   "name": "SETTINGS_SOUND",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "4,2": {
+   "dest": "menu:DISPLAY",
+   "menu": 4,
+   "name": "SETTINGS_DISPLAY",
+   "offered": true,
+   "presses": 2,
+   "sel": 2,
+   "verdict": "ok"
+  },
+  "4,3": {
+   "dest": "locked",
+   "menu": 4,
+   "name": "SETTINGS_3",
+   "offered": false,
+   "sel": 3
+  },
+  "4,4": {
+   "dest": "menu:SETTINGS_LANG",
+   "menu": 4,
+   "name": "SETTINGS_LANG",
+   "offered": true,
+   "presses": 3,
+   "sel": 4,
+   "verdict": "ok"
+  },
+  "4,5": {
+   "dest": "menu:SETTINGS_ERASE",
+   "menu": 4,
+   "name": "SETTINGS_ERASE",
+   "offered": true,
+   "presses": 4,
+   "sel": 5,
+   "verdict": "ok"
+  },
+  "5,0": {
+   "dest": "menu:DATA_SNAP",
+   "menu": 5,
+   "name": "DATA_SNAP",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "5,1": {
+   "dest": "menu:DATA_ARCHIVES",
+   "menu": 5,
+   "name": "DATA_ARCHIVES",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "5,2": {
+   "dest": "locked",
+   "menu": 5,
+   "name": "DATA_SOUND",
+   "offered": false,
+   "sel": 2
+  },
+  "5,3": {
+   "dest": "menu:RECORDS",
+   "menu": 5,
+   "name": "DATA_RECORDS",
+   "offered": true,
+   "presses": 2,
+   "sel": 3,
+   "verdict": "ok"
+  },
+  "5,4": {
+   "dest": "menu:DATA_SPECIAL",
+   "menu": 5,
+   "name": "DATA_SPECIAL",
+   "offered": true,
+   "presses": 3,
+   "sel": 4,
+   "verdict": "ok"
+  },
+  "6,0": {
+   "dest": "mode:CLASSIC",
+   "menu": 6,
+   "name": "REG_CLASSIC",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "6,1": {
+   "dest": "mode:ADVENTURE",
+   "menu": 6,
+   "name": "REG_ADVENTURE",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "6,2": {
+   "dest": "locked",
+   "menu": 6,
+   "name": "REG_ALLSTAR",
+   "offered": false,
+   "sel": 2
+  },
+  "7,0": {
+   "dest": "mode:EVENT",
+   "menu": 7,
+   "name": "sel0",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "9,0": {
+   "dest": "mode:TARGET_TEST",
+   "menu": 9,
+   "name": "STADIUM_TARGET",
+   "offered": true,
+   "presses": 0,
+   "sel": 0,
+   "verdict": "ok"
+  },
+  "9,1": {
+   "dest": "mode:HOME_RUN_CONTEST",
+   "menu": 9,
+   "name": "STADIUM_HOMERUN",
+   "offered": true,
+   "presses": 1,
+   "sel": 1,
+   "verdict": "ok"
+  },
+  "9,2": {
+   "dest": "menu:MULTI_VS",
+   "menu": 9,
+   "name": "STADIUM_MULTIMAN",
+   "offered": true,
+   "presses": 2,
+   "sel": 2,
+   "verdict": "ok"
+  }
+ }
+}
