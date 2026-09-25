@@ -65,6 +65,11 @@ fi
 # appear, and every press vanishes with no error anywhere. 6 is the emulated
 # pad, which is what the rest of this repo's Dolphin work uses.
 sed -i "s/^SIDevice0 = .*/SIDevice0 = 6/" "$EMUDIR/User/Config/Dolphin.ini"
+# ...and it has to accept input while its window is not the focused one, which
+# it never is here. With BackgroundInput off -- the shipped default -- the pad
+# is polled and every value is thrown away: the pipe is read, the device is
+# there, the log says nothing, and the cursor simply never moves.
+sed -i "s/^BackgroundInput = .*/BackgroundInput = True/" "$EMUDIR/User/Config/Dolphin.ini"
 rm -f "$PIPE"; mkfifo "$PIPE"
 : > "$EMUDIR/User/Logs/dolphin.log"
 
@@ -94,6 +99,11 @@ PRT=$!
 
 # --- walk the emulator's menus ----------------------------------------------
 sleep 25
+if [ -n "${SLIPPI_NO_INPUT:-}" ]; then
+    echo "SLIPPI_NO_INPUT set -- sending nothing, as the control half of the A/B"
+    sleep "$RUNFOR"
+    exec 3> /dev/null
+else
 exec 3> "$PIPE"
 printf 'SET L -1\nSET R -1\nSET MAIN 0.5 0.5\nSET C 0.5 0.5\n' >&3
 # Title, then the menus, then Slippi's own "Online Play" screen. START gets
@@ -115,11 +125,19 @@ sleep 2
 printf 'PRESS A\n' >&3; sleep 0.2; printf 'RELEASE A\n' >&3
 sleep 20
 exec 3>&-
+fi
 
 wait $EMU 2>/dev/null
 wait $PRT 2>/dev/null
 cp "$EMUDIR/User/Logs/dolphin.log" "$OUT/emu.log" 2>/dev/null
 
+echo
+echo "=== did anything we pressed arrive? ==="
+# The only honest check. A screenshot is not one: the menu changes for reasons
+# of its own, and the mode list turning into a "Log-in" entry when
+# SLIPPI_DIRECT_PEERS is unset looks exactly like a button having worked.
+echo "  files loaded this run: $(grep -oP '(?<=Loading file: )\S+' "$OUT/emu.log" | sort -u | wc -l)"
+echo "  (run once with SLIPPI_NO_INPUT=1 and compare -- identical means nothing arrived)"
 echo
 echo "=== the emulator ==="
 grep -E 'SLIPPI' "$OUT/emu.log" | sed 's/.*\]: //' | grep -viE 'file size|loading file|writing file|preloaded' | tail -12

@@ -92,17 +92,52 @@ Measured on 2026-09-25, with the harness above:
   (`holding the boot until every player has offered a seed`).
 - The emulator boots, loads the 58 KB online codeset, and goes **straight to
   Slippi's "Online Play" menu** -- Ranked / Unranked / Direct / Teams / Party,
-  with Unranked highlighted. It does that with no input at all: a run that
-  sends nothing lands on the same screen as a run that mashes Start and A.
-- Nothing after that happens. The cursor never moves, no menu entry is ever
-  taken, `SlippiMatchmaking::startMatchmaking` is never called -- so the
-  direct-mode patch above never runs and the two never connect.
+  Unranked highlighted, with the login check satisfied by the patch above.
+- `SlippiMatchmaking::startMatchmaking` is never called, so the direct-mode
+  patch never runs and the two never connect.
 
-So the blocker is input: **the pipe controller does not reach this emulator.**
-Dolphin does scan `User/Pipes` at startup (it says so in the log), the FIFO is
-there before launch, `GCPadNew.ini` maps `Pipe/0/slp1`, and `SIDevice0` is 6 --
-and the cursor still does not move. That is the next thing to find, and it is
-worth finding with the controller-interface logs rather than by trying settings.
+The reason is that **nothing can press a button on this emulator.** That is
+worth stating carefully, because it took several wrong answers to get to:
+
+    the pipe device exists and is read.  Dolphin holds an open descriptor on
+    User/Pipes/slp1 for the whole run -- check it by scanning every process,
+    `readlink /proc/*/fd/*`, not by trusting a pid from pgrep, which here
+    matched the wrong process and said the opposite.
+
+    the vocabulary and the control names match.  ParseCommand takes
+    `PRESS A`, `RELEASE A`, `SET MAIN 0.5 0.0` and `SET L -1`; the device
+    registers "Button A", "MAIN X", "MAIN Y" exactly as mainline does, and
+    GCPadNew.ini's `Device = Pipe/0/slp1` is re-saved by Dolphin on exit,
+    which means it resolved.
+
+    and yet the game never sees any of it.  Two runs of the same length, one
+    sending nothing and one mashing Start and A for ten seconds, load the
+    same 13 files and end on the same screen. That A/B is the only honest
+    test of whether input arrived; a screenshot alone is not, because the
+    menu changes for other reasons -- dropping SLIPPI_DIRECT_PEERS turns the
+    mode list into a "Log-in" entry, which looks exactly like input having
+    worked.
+
+Two settings are necessary and neither is sufficient: `SIDevice0` must be 6
+rather than the shipped 12 (the Wii U adapter), and `BackgroundInput` must be
+True or an unfocused window discards every poll. With both set, the A/B above
+still comes out identical. What is left is the binding between the pad config
+and the device, which mainline does at a point this fork apparently does not
+reach in batch mode.
+
+### Three ways forward, none of them free
+
+1. **A virtual pad through uinput**, which the evdev backend already supports
+   (`HAVE_LIBEVDEV` is in this build's defines). `/dev/uinput` is root-only
+   here and python-evdev is not installed, so this needs a decision about
+   access rather than more code.
+2. **Rebuild the emulator** with a log line in `ciface::Pipes::PopulateDevices`
+   and in the pad's `UpdateReferences`, which would say in one run whether the
+   device is present when the mapping is resolved. It is the definitive answer
+   and costs a full Ishiiruka build.
+3. **Feed it a `.dtm` movie** with `-m`, which needs no controller backend at
+   all. Cheapest to try, and the thing to check first is whether movie playback
+   and an online session can coexist.
 
 ### Two things this file claimed that are not true
 
