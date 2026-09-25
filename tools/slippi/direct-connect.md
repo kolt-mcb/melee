@@ -165,43 +165,63 @@ moves is proof, and a screen that does not change is not disproof.
 With A alone the game confirms the mode and lands on the online character
 select: "Unranked Mode / Select your character", the user shown as DIRECT.
 
-### Where it stops, and what the codeset says has to happen
+### The character select ignores this pad, and does not need to be driven
 
-On the character select the hand sits on the player's own token and will not
-move. The same stick push that walks the mode list does nothing there, with no
-button held, over a minute, on either controller port.
+B does not back out of it and no stick push moves the hand, on either port,
+with the pad demonstrably read one screen earlier. That screen takes its input
+from somewhere else.
 
-What the screen wants is no longer guesswork. The codeset's own source is
-checked out at `extern/slippi/slippi-ssbm-asm`, and
-`Online/Menus/CSS/HandleInputsOnCSS.asm` is the handler, injected at
-`0x80263258` (`CSS_LoadButtonInputs`, once per frame). Reading it:
+It does not matter, because it does not have to be operated.
+`Online/Menus/CSS/HandleInputsOnCSS.asm` -- the codeset's own handler, injected
+at `0x80263258`, source in `extern/slippi/slippi-ssbm-asm` -- ends at
+`CHECK_SHOULD_START_MATCH`, which starts the game by itself:
 
-- **Start is the button, not A.** In the idle state it tests the Start bit and
-  nothing else; A is only ever used by Melee's own code to pick a character
-  off the grid.
-- **It refuses to act until a character is chosen.** Before looking at Start it
-  checks `-0x49A9(r13)` and returns if it is zero. So the hand has to reach a
-  portrait first -- there is no way to skip that with a button.
-- **Start then does both halves at once.** For unranked it calls
-  `FN_LOCK_IN_AND_SEARCH`, which is `FN_TX_LOCK_IN` (a
-  `CONST_SlippiCmdSetMatchSelections` EXI write, reading the chosen character
-  from `-0x49f0(r13)`) followed by `FN_TX_FIND_MATCH` (a
-  `CONST_SlippiCmdFindOpponent` write). That is why matchmaking never starts
-  from the mode list: the request is made *at the character select*, after a
-  character exists.
-- **Direct mode would stop for a connect code** -- `FN_LOAD_CODE_ENTRY` -- which
-  is the other reason unranked is the mode to drive.
-- It reads `-0x49B0(r13)`, "player index in control of CSS", when it checks
-  held inputs. Injecting on both ports 1 and 2 changes nothing, and the token
-  on screen is P1, so that is not what is blocking the hand.
+        lbz r3, MSRB_IS_LOCAL_PLAYER_READY(REG_MSRB_ADDR)
+        lbz r4, MSRB_IS_REMOTE_PLAYER_READY(REG_MSRB_ADDR)
+        and. r3, r3, r4
 
-So the remaining question is narrow: **what moves the hand on the online
-character select.** Melee's own CSS cursor code reads the pad, and the pad is
-demonstrably being read on the screen before it, which makes this look like
-the codeset substituting the input source for this scene -- plausibly so both
-players' cursors stay in step. `Inputs_GetPlayerHeldInputs` (`0x801a3680`) is
-where the handler gets held buttons from, and following what feeds *that* in
-the online CSS is the next thing to do.
+Both of those come from Dolphin, out of `prepareOnlineMatchState`: local
+readiness is `localSelections.isCharacterSelected`, which `directModeAutoDrive`
+sets, and remote readiness arrives from the peer. So the button gets the game
+to the screen and the state gets it off again.
+
+Other things the same file settles, which would each have cost a rebuild to
+discover: Start is the button there rather than A; it refuses to act until a
+character exists (`-0x49A9(r13)`); and Start does both halves at once --
+`FN_LOCK_IN_AND_SEARCH` is a SetMatchSelections write followed by
+CMD_FIND_OPPONENT. That last one is why matchmaking never began from the mode
+list: the request belongs to the character select.
+
+### Where it stops now
+
+Pressing and the auto-drive cooperate, and the whole sequence runs:
+
+    [Direct] requesting a match with no menu
+    [Matchmaking] direct: 1 peer(s), my port 51452, my index 1, decider 0
+    [Direct] a mode was confirmed; on to the character select
+    [Netplay] Received selections from opponent with player idx 0
+    [Matchmaking] Connection success!
+    [Direct] adopted the netplay client
+    [Direct] locked in character 9 as player 1
+
+and then, a moment later:
+
+    Connection cleanup started...
+
+and the game falls back to the mode list. That cleanup is **not** the one the
+game asks for -- CMD_CLEANUP_CONNECTION is ignored in direct mode -- so it is
+one of the calls inside `prepareOnlineMatchState`, which means that function
+*is* being polled once the character select is up, exactly as expected. It
+looks at the connection, decides it is not connected, and tears it down.
+
+The next thing to find is which of its two tests fails. It requires
+`slippi_netplay->GetSlippiConnectStatus()` to be CONNECTED, and separately that
+`GetActivePlayerIndices().size()` equals `matchmaking->RemotePlayerCount()`.
+The second is the more suspicious: the active-player set is maintained from
+what peers send, and the port may never send whatever marks it active. Note
+also that the auto-drive *moves* the client out of matchmaking with
+`GetNetplayClient()`, so anything that asks matchmaking for it afterwards gets
+nothing.
 
 ### Two things this file claimed that are not true
 
