@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..31795063a 100644
+index 4e3991914..ece3638fb 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -10,7 +10,7 @@ index 4e3991914..31795063a 100644
  #include "Core/HW/SystemTimers.h"
  #include "Core/State.h"
  
-@@ -144,8 +145,87 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
+@@ -144,8 +145,93 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
  	OSD::AddMessage(msg, duration_ms, color);
  }
  
@@ -38,10 +38,16 @@ index 4e3991914..31795063a 100644
 +	if (phase >= 2)
 +		return;
 +
++	// One clock for the whole sequence, advanced once per frame rather than
++	// once per port: this is called for every controller, so counting in here
++	// without the guard runs the script at double speed.
 +	static int tick = 0;
-+	if (tick == 0)
-+		ERROR_LOG(SLIPPI_ONLINE, "[Direct] the injector is being called");
-+	tick++;
++	if (controllerID == 0)
++	{
++		if (tick == 0)
++			ERROR_LOG(SLIPPI_ONLINE, "[Direct] the injector is being called");
++		tick++;
++	}
 +
 +	// Present a whole controller, not just a button. Port 1 is mapped to a pipe
 +	// device that never binds, so what arrives here is an empty status with an
@@ -98,7 +104,7 @@ index 4e3991914..31795063a 100644
  	INFO_LOG(SLIPPI, "EXI SLIPPI Constructor called.");
  
  	// @TODO: For mainline port, ISO file path can't be fetched this way. Look at the following:
-@@ -2134,6 +2214,8 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2134,6 +2220,8 @@ void CEXISlippi::prepareOnlineMatchState()
  
  	m_read_queue.clear();
  
@@ -107,7 +113,7 @@ index 4e3991914..31795063a 100644
  	auto errorState = SlippiMatchmaking::ProcessState::ERROR_ENCOUNTERED;
  	SlippiMatchmaking::ProcessState mmState = !forcedError.empty() ? errorState : matchmaking->GetMatchmakeState();
  
-@@ -3018,6 +3100,117 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3106,117 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -225,7 +231,7 @@ index 4e3991914..31795063a 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3218,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3224,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -254,7 +260,7 @@ index 4e3991914..31795063a 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3597,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3603,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -270,7 +276,7 @@ index 4e3991914..31795063a 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3721,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3727,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:

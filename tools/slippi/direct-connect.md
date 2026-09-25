@@ -165,18 +165,43 @@ moves is proof, and a screen that does not change is not disproof.
 With A alone the game confirms the mode and lands on the online character
 select: "Unranked Mode / Select your character", the user shown as DIRECT.
 
-### Where it stops
+### Where it stops, and what the codeset says has to happen
 
-On that screen the hand sits on the player's own token and will not move. The
-same stick push that walks the mode list does nothing here, over forty seconds
-of pushing, with no button held.
+On the character select the hand sits on the player's own token and will not
+move. The same stick push that walks the mode list does nothing there, with no
+button held, over a minute, on either controller port.
 
-The likely reason, and the next thing to test: online play is supposed to keep
-both players' cursors in step, so the codeset almost certainly reads the
-character select's inputs from the netplay layer rather than from the pad --
-the same path `handleOnlineInputs` feeds during a match. If that is right, no
-amount of pressing at the SI end will ever move that hand, and the way to drive
-it is to supply the input where Slippi expects it to come from.
+What the screen wants is no longer guesswork. The codeset's own source is
+checked out at `extern/slippi/slippi-ssbm-asm`, and
+`Online/Menus/CSS/HandleInputsOnCSS.asm` is the handler, injected at
+`0x80263258` (`CSS_LoadButtonInputs`, once per frame). Reading it:
+
+- **Start is the button, not A.** In the idle state it tests the Start bit and
+  nothing else; A is only ever used by Melee's own code to pick a character
+  off the grid.
+- **It refuses to act until a character is chosen.** Before looking at Start it
+  checks `-0x49A9(r13)` and returns if it is zero. So the hand has to reach a
+  portrait first -- there is no way to skip that with a button.
+- **Start then does both halves at once.** For unranked it calls
+  `FN_LOCK_IN_AND_SEARCH`, which is `FN_TX_LOCK_IN` (a
+  `CONST_SlippiCmdSetMatchSelections` EXI write, reading the chosen character
+  from `-0x49f0(r13)`) followed by `FN_TX_FIND_MATCH` (a
+  `CONST_SlippiCmdFindOpponent` write). That is why matchmaking never starts
+  from the mode list: the request is made *at the character select*, after a
+  character exists.
+- **Direct mode would stop for a connect code** -- `FN_LOAD_CODE_ENTRY` -- which
+  is the other reason unranked is the mode to drive.
+- It reads `-0x49B0(r13)`, "player index in control of CSS", when it checks
+  held inputs. Injecting on both ports 1 and 2 changes nothing, and the token
+  on screen is P1, so that is not what is blocking the hand.
+
+So the remaining question is narrow: **what moves the hand on the online
+character select.** Melee's own CSS cursor code reads the pad, and the pad is
+demonstrably being read on the screen before it, which makes this look like
+the codeset substituting the input source for this scene -- plausibly so both
+players' cursors stay in step. `Inputs_GetPlayerHeldInputs` (`0x801a3680`) is
+where the handler gets held buttons from, and following what feeds *that* in
+the online CSS is the next thing to do.
 
 ### Two things this file claimed that are not true
 

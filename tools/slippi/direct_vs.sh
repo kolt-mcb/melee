@@ -65,6 +65,9 @@ fi
 # appear, and every press vanishes with no error anywhere. 6 is the emulated
 # pad, which is what the rest of this repo's Dolphin work uses.
 sed -i "s/^SIDevice0 = .*/SIDevice0 = 6/" "$EMUDIR/User/Config/Dolphin.ini"
+# Port 2 as well: the online character select is driven by whichever player
+# index is in control of it, and this emulator is index 1.
+sed -i "s/^SIDevice1 = .*/SIDevice1 = 6/" "$EMUDIR/User/Config/Dolphin.ini"
 # ...and it has to accept input while its window is not the focused one, which
 # it never is here. With BackgroundInput off -- the shipped default -- the pad
 # is polled and every value is thrown away: the pipe is read, the device is
