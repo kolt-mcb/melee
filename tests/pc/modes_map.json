@@ -1,0 +1,161 @@
+{
+ "generated": "2026-09-20",
+ "modes": {
+  "100MAN_VS": {
+   "mode": 34,
+   "option": "33,1",
+   "probe": "1374 frames of play",
+   "shape": "css1+start"
+  },
+  "10MAN_VS": {
+   "mode": 33,
+   "option": "33,0",
+   "probe": "1374 frames of play",
+   "shape": "css1+start"
+  },
+  "15MIN_VS": {
+   "mode": 36,
+   "option": "33,3",
+   "probe": "1374 frames of play",
+   "shape": "css1+start"
+  },
+  "3MIN_VS": {
+   "mode": 35,
+   "option": "33,2",
+   "probe": "1374 frames of play",
+   "shape": "css1+start"
+  },
+  "ADVENTURE": {
+   "mode": 4,
+   "option": "6,1",
+   "probe": "reached scene 112, died there, no gameplay",
+   "shape": "css1+start"
+  },
+  "CAMERA_MODE": {
+   "mode": 10,
+   "option": "12,0",
+   "probe": "reached scene 1, no gameplay",
+   "shape": "css1"
+  },
+  "CLASSIC": {
+   "mode": 3,
+   "option": "6,0",
+   "probe": "1232 frames of play",
+   "shape": "css1+start"
+  },
+  "CRUEL_VS": {
+   "mode": 38,
+   "option": "33,5",
+   "probe": "1374 frames of play",
+   "shape": "css1+start"
+  },
+  "ENDLESS_VS": {
+   "mode": 37,
+   "option": "33,4",
+   "probe": "1374 frames of play",
+   "shape": "css1+start"
+  },
+  "FIXED_CAMERA_VS": {
+   "mode": 42,
+   "option": "12,6",
+   "probe": "1315 frames of play",
+   "shape": "css2+start+sss"
+  },
+  "GIANT_VS": {
+   "mode": 30,
+   "option": "12,3",
+   "probe": "1315 frames of play",
+   "shape": "css2+start+sss"
+  },
+  "HOME_RUN_CONTEST": {
+   "mode": 32,
+   "option": "9,1",
+   "probe": "reached scene 0, died there, no gameplay",
+   "shape": "css1+start"
+  },
+  "INVISIBLE_VS": {
+   "mode": 17,
+   "option": "12,5",
+   "probe": "reached scene 2, died there, no gameplay",
+   "shape": "css2+start+sss"
+  },
+  "LIGHTNING_VS": {
+   "mode": 19,
+   "option": "12,8",
+   "probe": "1315 frames of play",
+   "shape": "css2+start+sss"
+  },
+  "SINGLE_BUTTON_VS": {
+   "mode": 44,
+   "option": "12,7",
+   "probe": "1315 frames of play",
+   "shape": "css2+start+sss"
+  },
+  "SLOMO_VS": {
+   "mode": 18,
+   "option": "12,9",
+   "probe": "1315 frames of play",
+   "shape": "css2+start+sss"
+  },
+  "STAMINA_VS": {
+   "mode": 31,
+   "option": "12,1",
+   "probe": "1315 frames of play",
+   "shape": "css2+start+sss"
+  },
+  "SUPER_SUDDEN_DEATH_VS": {
+   "mode": 16,
+   "option": "12,2",
+   "probe": "1315 frames of play",
+   "shape": "css2+start+sss"
+  },
+  "TARGET_TEST": {
+   "mode": 15,
+   "option": "9,0",
+   "probe": "1374 frames of play",
+   "shape": "css1+start"
+  },
+  "TINY_VS": {
+   "mode": 29,
+   "option": "12,4",
+   "probe": "1315 frames of play",
+   "shape": "css2+start+sss"
+  },
+  "TOURNAMENT": {
+   "mode": 27,
+   "option": "2,1",
+   "probe": "no screen responded to input",
+   "shape": "none"
+  },
+  "TOY_COLLECTION": {
+   "mode": 13,
+   "option": "3,3",
+   "probe": "no screen responded to input",
+   "shape": "none"
+  },
+  "TOY_GALLERY": {
+   "mode": 11,
+   "option": "3,0",
+   "probe": "no screen responded to input",
+   "shape": "none"
+  },
+  "TOY_LOTTERY": {
+   "mode": 12,
+   "option": "3,1",
+   "probe": "no screen responded to input",
+   "shape": "none"
+  },
+  "TRAINING": {
+   "mode": 28,
+   "option": "1,4",
+   "probe": "1399 frames of play",
+   "shape": "css1+start+sss"
+  },
+  "VS": {
+   "mode": 2,
+   "option": "2,0",
+   "probe": "1315 frames of play",
+   "shape": "css2+start+sss"
+  }
+ }
+}

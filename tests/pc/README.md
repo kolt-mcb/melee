@@ -763,3 +763,149 @@ fixes before it opened, and the suite was the thing that said so each time.
   environment's mwcc cannot compile even untouched files (it cannot find
   `stdint.h`), so objdiff has not been run against these changes.
 
+# Every game mode, entered and played
+
+    tools/pc_modes.py map                # learn each mode's front end
+    tools/pc_modes.py list               # read what was learned
+    tools/pc_modes.py check              # enter every mode, score it
+    tools/pc_modes.py check --update-baseline
+    tools/pc_modes.py check vs training  # a few by name
+    tools/pc_modes.py show
+
+The menu suite above stops at the door: an option that leaves GM_MENU is
+recorded as `mode:VS` and the run ends a few hundred frames later. That is the
+right boundary for a menu suite and the wrong place to stop testing, because
+what is behind those doors is most of the game -- twenty-six modes, of which
+everything else in this directory only ever exercised one, and that one booted
+into directly with `MELEE_BOOT_MODE=14` rather than entered.
+
+This walks through the door and keeps going: through the character select, the
+stage select and the mode's own screens, until something is being played.
+Every mode is entered the way a player enters it.
+
+## Where the list of modes comes from
+
+`tests/pc/menu_map.json`. Every option the menu suite found that leaves into a
+game mode is a mode this suite covers, so the two stay in step by
+construction. Fixing the menu crashes added a mode here for free (camera mode
+had no destination recorded while it was crashing).
+
+## The front ends are measured, not declared
+
+What stands between a mode and its gameplay differs per mode, and a table of
+that in a tool would be a table of assumptions. `map` runs the candidate front
+ends in order of how much input they need -- `css1`, `css1+start`, `css1+sss`,
+`css1+start+sss`, `css2+start`, `css2+start+sss` -- and keeps the first that
+actually reaches gameplay, so a mode's recorded shape is one that was
+demonstrated on it. A mode where none of them reaches gameplay keeps the shape
+that got *furthest in*, rather than being recorded as having no front end:
+that distinction is what separates "this mode has nothing to drive" from "this
+mode is broken", and the first version of this got Classic wrong by reading
+scene numbers instead of running the thing.
+
+## Driving the character select
+
+`tools/pc_route.py` already models both cursors from the game's own tables, so
+this reuses it. One correction is needed, and it matters to any route that
+names a character:
+
+    if (gm_IsCKindUnlocked(CKIND_LUIGI) == 0) { row_a = 2; row_b = 0x13; }
+    else                                      { row_a = 0x13; row_b = 2; }
+
+icons[2] is Luigi, icons[0x13] is Pikachu, and `row_a` takes the bottom row's
+bounds. So when the **save** does not have Luigi unlocked those two trade
+cells, and the static table in mncharsel.static.h describes the other case.
+`MELEE_CSS_UNLOCK` does not help: it writes the icons' own state bytes while
+the swap asks the save. Every harness run is in that state, so a route aimed
+at the table's Pikachu cell selects Luigi -- which is what this suite did on
+its first run, and is worth checking in the generated `cases/auto/*` routes
+before trusting the character names in them.
+
+## The verdicts
+
+    match        reached gameplay and it ran: fighters present, positions
+                 finite, animation advancing
+    ran          a mode with no match to reach ran its window out
+    front-end    entered the mode and never got past its select screens
+    short        reached gameplay but not enough of it to judge
+    no-mode      the menu option did not open the mode
+    crash / hang the port died, or stopped answering
+
+`match` and `ran` carry what the trace saw -- characters, stage, frames of
+play -- and those go in the baseline, so a mode that still starts but starts
+something different is a regression rather than a pass.
+
+## Two things learned the hard way
+
+1. **A run is judged on what it reached, not on reaching the frame limit.**
+   These runs are half a minute each and the port opens a real window on
+   whatever display the suite runs on; SDL ends a run on `SDL_QUIT` or
+   Escape, so a stray keystroke stops one cleanly part way through. One VS run
+   in three ended early that way. A mode that played four seconds and was then
+   closed from outside has still shown what this suite asks about.
+2. **A hard failure is re-run before it is believed.** This port has
+   intermittent faults, and Training crashed once here and then ran cleanly a
+   dozen times. A cell that fails twice is a failure; one that fails once is
+   recorded as `flaky`, which is a different claim.
+
+## What it says today
+
+26 modes, about twenty minutes: **19 play a match, 4 run (no match to reach),
+1 never leaves its front end, 2 crash.**
+
+Everything in the VS family plays -- Melee, all ten special melees, all six
+multi-man melees -- and so do Classic, Training and Target Test, each with the
+right characters on the right stage (multi-man melee against Wireframes on
+Battlefield, Target Test on the character's own target stage). The trophy
+modes and Tournament run their screens.
+
+Three of the four modes that were broken when this suite first ran are fixed:
+
+- **Invisible Melee** crashed the first frame a fighter was drawn.
+  `lbRefract_800222A4` skips refraction setup on this port (its table is DOL
+  data that has not been extracted yet) and leaves the TObj array NULL, but
+  the *draw* path followed it anyway -- and Invisible Melee is the one mode
+  that draws through it. The draw now skips what the setup skipped. While
+  there: the array was allocated at `count * 4` and its image descriptors at
+  `count * 0x18`, both console sizes, so it would have been half an array even
+  once the data exists; both now use `sizeof`.
+- **Training** crashed after its stage select. `fn_8025A090` indexes
+  `mnStageSel_803F06D0[30]` with the stage select's own "nothing hovered"
+  value, which is 0x1E -- one past the end, twice in the same function. The
+  game bounds that index itself thirty lines earlier; both sites now do.
+- **Adventure** got two of its three layers fixed (see below).
+
+The two that still crash are the same shape as each other, and it is a
+different shape from anything the menu suite found:
+
+    ADVENTURE          dies dereferencing the scene's camera descriptor
+    HOME_RUN_CONTEST   dies dereferencing its own loaded archive data
+
+Both load their scene through `lbArchive_80016DBC`, and the port's version of
+that function resolves the symbol but returns **raw archive data**: unlike
+`lbArchive_LoadSections`, it does not run `pc_convert_section`, so what comes
+back still holds four-byte console offsets where the caller expects host
+pointers. Its own comment says as much ("Callers must convert what they get
+back"), and these two callers do not. The conversions they need exist already
+(`pc_conv_SceneDesc`, `pc_conv_CObjDescRaw`); what is missing is applying them
+at the call sites, the way `ifall.c` and `gm_19EF.c` already do.
+
+Adventure needed two further fixes before it got that far, both worth
+recording:
+
+- `gmClassic_80470708` and its three neighbours are console-sized byte
+  buffers (`u8[0x148]`) that every other file `extern`s as the structs cast
+  onto them -- `CSSData`, `DebugGameOverData`, `MatchExitInfo`,
+  `StartMeleeData`. All four are larger here, and `gm_801B06B0` zeroes a whole
+  `CSSData` through the first of them, off the end of the array and into the
+  next global. They are now sized for the larger of the two views.
+- `lbl_803D9750` is a table of `char*` holding two things that are not
+  pointers: entries 48..53 are the *bytes* of the string
+  "ScItrNormal_scene_data", one four-byte word per entry, handed to the loader
+  as `&table[48]`; and entries 24..47 are twelve 64-bit item masks read back
+  as `((u64*) &table[24])[stage_index]`. Both are four-byte packings inside an
+  eight-byte-per-entry table here -- the name read as "ScIt" and the masks
+  came out as one entry plus its padding. Both are now spelled out.
+
+`CAMERA_MODE` reaches its screen and no further: none of the six front ends
+gets it to gameplay. It is recorded as `front-end` rather than guessed at.
