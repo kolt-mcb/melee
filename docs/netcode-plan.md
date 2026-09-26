@@ -205,10 +205,51 @@ the simulation's entry rather than at the pad read; the only covered range that
 differs there is `perf.c`'s `start_time`, which nothing but the perf counters
 reads.
 
-Frame 108 replays now, and the case runs 80 rewinds and 80 frames compared clean
-at a one-frame rewind depth where it used to fail at the first one. It then
-segfaults in a memcpy, where the same run with the self-check off plays 3000
-frames, so there is at least one more of these.
+**There were four of these, and the rule is the one above.** Each showed up only
+once the last was fixed, and each was the same mistake in a different place: a
+cache of converted data outliving the data. The port converts GameCube archive
+data on first use; the conversions come out of the *game* heap via
+`lbHeap_80015BD0`; the memos sat in port objects or on the host heap, which a
+rollback does not touch.
+
+| memo | how it announced itself |
+| --- | --- |
+| `pc_script_prepare`'s byte-swap bitmap (`calloc`) | a fighter's script ran opcode 1 where it had run 55 |
+| `eflib.c`'s effect-descriptor cache (`calloc`) | `JObjLoadJointSub` on a freed joint tree |
+| `pc_ftconv.c`'s `static cache[4]` for Samus's grapple beam | a null `bcexp` descriptor |
+| `pc_itconv.c`'s converted-object cache | (same family; included with the above) |
+
+Spans are what made the last three cheap to fix: a port object can join the
+snapshot without moving a byte of anything.
+
+Where M1 stands now, and this is measured rather than hoped:
+
+| case | result |
+| --- | --- |
+| Samus vs Donkey Kong, CPUs playing, depth 4 | 864 rewinds, **3456 frames compared, clean** |
+| the idle debug boot, depth 4 | 864 rewinds, **3456 frames compared, clean** |
+| Samus vs Donkey Kong, CPUs, depth 1 | 1280 rewinds, **1280 frames compared, clean** |
+| Pikachu vs Peach, CPUs, depth 1 | 512 rewinds clean, then bad `HSD_FObjDesc` chains |
+
+The first of those failed at its very first rewind before this. The last is the
+open one: after about 512 rewinds the animation converter starts building
+descriptor chains thousands of nodes long, which used to take the stack with
+them and now exhausts the FObj pool instead -- `HSD_FObjLoadDesc` recurses once
+per node and the converter's own cap is 10000. Bad data, not a bad restore, and
+the next thing to chase. `fobj.c` and `pobj.c` now refuse rather than fault, so
+it reports instead of dying.
+
+AddressSanitizer found three real bugs on the way, none of them about rollback
+and all of them the same kind of layout assumption the decomp inherits from
+MWCC: `eflib.c` indexing past one global into its neighbour, `ft_0899.c` writing
+through `((volatile f32*) &sp1C)[-1]` to reach the spill declared above it, and
+`lb_020A.c` handing a `Vec3` to a function that copies a `Quaternion`. Two
+changes were needed to make ASan usable here at all and both are worth keeping:
+`pc_mem_probe` asks the kernel with `msync` under the sanitizer rather than
+`write()`, which is intercepted and whose whole purpose is to touch memory that
+may not be there; and the snapshot's own copies are exempt, because a region
+bracketing many globals necessarily copies across the redzones between them.
+Run it with `replace_intrin=0`.
 
 Also still open: the game heap region is the port's whole upward bump arena,
 17.5 MB of the 22.6 MB copied, and almost certainly a superset of what the

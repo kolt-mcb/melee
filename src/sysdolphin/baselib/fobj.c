@@ -520,9 +520,35 @@ void HSD_FObjInterpretAnimAll(void* fobj, void* obj,
 
 HSD_FObj* HSD_FObjLoadDesc(HSD_FObjDesc* desc)
 {
+#if BUILD_TARGET_PC
+    /* One stack frame per descriptor in the chain, and the port's converter
+     * (grDatFiles_ConvertFObjDescGCNtoX64) will happily build one 10000 long
+     * before its own depth cap stops it -- which overflows this stack and dies
+     * with SIGBUS, no backtrace and nothing said. A chain that long is bad data,
+     * so say so and stop rather than take the stack with it. */
+    static unsigned depth;
+    if (depth > 512) {
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "[FOBJGUARD] descriptor chain deeper than %u at "
+                            "%p; refusing to recurse further\n",
+                    depth, (void*) desc);
+            fflush(stderr);
+            port_guard_warn("fobj.c:chain_depth");
+        }
+        return NULL;
+    }
+#endif
     if (desc != NULL) {
         HSD_FObj* fobj = HSD_FObjAlloc();
+#if BUILD_TARGET_PC
+        depth++;
         fobj->next = HSD_FObjLoadDesc(desc->next);
+        depth--;
+#else
+        fobj->next = HSD_FObjLoadDesc(desc->next);
+#endif
         fobj->startframe = desc->startframe;
         fobj->obj_type = desc->type;
         fobj->frac_value = desc->frac_value;

@@ -156,6 +156,19 @@ static void PObjUpdateFunc(void* obj, int type, HSD_ObjData* val)
     }
 
     if (pobj_type(pobj) == POBJ_SHAPEANIM) {
+#if BUILD_TARGET_PC
+        /* The port's converter leaves this NULL: grDatFiles_ConvertPObjDescGCNtoX64
+         * says so where it handles the union -- POBJ_SKIN's joint reference is
+         * resolved in a second pass and POBJ_SHAPEANIM's shape-set reference is
+         * not converted at all yet. On the console the field is always there, so
+         * neither this nor HSD_PObjAnim below checks it, and a shape-animated
+         * PObj faults on a null. Skip instead, until the converter fills it in.
+         * The rollback self-check reached it first, because replaying frames
+         * spawns each effect twice. */
+        if (pobj->u.shape_set == NULL) {
+            return;
+        }
+#endif
         ShapeSetSetAnimResult(pobj->u.shape_set, type, val);
     }
 }
@@ -163,6 +176,12 @@ static void PObjUpdateFunc(void* obj, int type, HSD_ObjData* val)
 void HSD_PObjAnim(HSD_PObj* pobj)
 {
     if (pobj != NULL && pobj_type(pobj) == POBJ_SHAPEANIM) {
+#if BUILD_TARGET_PC
+        /* Unconverted shape-set reference; see PObjUpdateFunc above. */
+        if (pobj->u.shape_set == NULL) {
+            return;
+        }
+#endif
         HSD_AObjInterpretAnim(pobj->u.shape_set->aobj, pobj, PObjUpdateFunc);
     }
 }
