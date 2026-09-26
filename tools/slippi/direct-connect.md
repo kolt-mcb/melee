@@ -294,48 +294,48 @@ Writing the selection into memory does not substitute for it. The bytes land
 (`base 80497758 idx 0 char 9`) and the screen still reads "Select your
 character", so that state is recomputed from the cursor each frame.
 
-### The netplay layer does not feed the character select. It starves it.
+### Input does reach the character select. An earlier claim here was wrong.
 
-The question was where the netplay layer supplies that screen's inputs. It does
-not. Following the chain down:
+This file previously said `controller_map` was empty on the online character
+select, and concluded the netplay layer starves that screen of input. **That
+was a measurement artefact, and the conclusion was wrong.**
 
-- `Inputs_GetPlayerHeldInputs` (0x801a3680) is `gm_GetButtonsPressed` in this
-  decompilation, and it is one line: `return controller_map.x0[idx].button`.
-- `controller_map` lives at 0x80479C30, 0x30 bytes per controller, filled from
-  HSD_PadCopyStatus by the game's ordinary input evaluation.
-- The only netplay input copy in the codeset, at 0x803775b0
-  (`LogInputOnCopy.asm` marks it), is gated on SCENE_ONLINE_IN_GAME. The
-  character select is not in it.
+The probe read one half of a `u64` (`controller_map.x0[i].button`) once every
+180 EXI commands, against a button tapped four frames in thirty. Zero was the
+expected reading whether or not input was arriving. Reading both halves at a
+sane rate:
 
-So the character select reads inputs the ordinary way, and the answer is what
-is in that buffer:
+    [Direct] scene 0028 map p1 0000000100000100 all 0000000100000100
+    [Direct] scene 0001 map p1 0000000100000100 all 0000000100000100
+    [Direct] scene 0008 map p1 0000000100000100 all 0000000100000100
 
-    zTimer 0 | pad0 0000 padAll 0000
+`0x100` is PAD_BUTTON_A, and scene `0008` is the online character select. So the
+injected pad reaches the game's controller map on that screen, the same as on
+every other, and `Inputs_GetPlayerHeldInputs` -- which is a one-line read of
+that buffer -- can see it.
 
-Zero, for controller 1 and for the all-controllers union, with Z held for the
-entire run. Nothing is ignoring our input on that screen -- **it is not there**.
-The pad reaches the game on the mode list one screen earlier, and by the time
-the online character select is up with a connection established,
-`controller_map` is empty.
+What remains true, and is now the only open thread: the hand does not move, and
+the Z hold never registers (`zTimer` stays 0 and Z never appears in the buffer
+either, while A does). So the question is no longer "does input arrive" but why
+*this* input does not act on that screen when the same injection operates the
+menu before it.
 
-That also disposes of the player-index theory for good: index 0 and index 1
-both give `zTimer 0`, which they would, since the buffer every index reads from
-is zero.
+Also worth keeping: the two codes that take over input fetching,
+`ForceInputRefetchOnAdvance.asm` and `SkipNewInputFetchOnRollback.asm`, are both
+gated on SCENE_ONLINE_IN_GAME, so neither touches the character select. The
+netplay input copy at 0x803775b0 is gated the same way. None of them is
+involved here.
 
-### What to find next
+### A note on method
 
-What empties it. The likely candidates are in the codeset's input handling
-around the engine loop -- `StartEngineLoop.asm`,
-`ForceInputRefetchOnAdvance.asm`, `SkipNewInputFetchOnRollback.asm` -- which
-exist to take control of when inputs are fetched so rollback can work, and
-which may well suppress the ordinary fetch as soon as a connection is live.
-
-The cheap discriminator, and the first thing to do: log `controller_map` from
-somewhere that runs on *every* screen rather than only from
-prepareOnlineMatchState, which the game only calls on the character select.
-If the buffer is populated on the mode list and zero on the character select,
-the change happens on entry to that scene; if it is zero from the moment the
-connection lands, it is the connection that does it.
+Three claims in this file have now had to be withdrawn -- that the screen
+ignores the pad (the B probe was measuring a deliberately disabled button),
+that the scene check was failing, and that controller_map was empty. Each came
+from a single probe read at face value. The ones that survived contact were the
+ones with a control: the stick diagnostic, which moved a cursor and could not
+be mistaken for anything else, and the A/B input test against a no-input run.
+A probe that can return the same answer whether or not the thing is true is not
+evidence, and the cost of finding that out late is several rebuilds each time.
 
 ### On the pad, and a correction
 

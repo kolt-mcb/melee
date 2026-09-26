@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..aa3047577 100644
+index 4e3991914..5cf8f0ade 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -309,7 +309,7 @@ index 4e3991914..aa3047577 100644
  	m_read_queue.push_back(localPlayerReady);   // Local player ready
  	m_read_queue.push_back(remotePlayersReady); // Remote players ready
  	m_read_queue.push_back(localPlayerIndex);   // Local player index
-@@ -3018,6 +3276,152 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3276,179 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -318,6 +318,33 @@ index 4e3991914..aa3047577 100644
 +	// Installed here, not in the constructor: DolphinWX's frame installs its
 +	// own TAS manip function while it sets itself up, which is after the EXI
 +	// device exists, so anything registered earlier is simply replaced.
++	// controller_map from a hook that runs on every screen, not just the
++	// character select. prepareOnlineMatchState only runs on that one screen, so
++	// reading it there cannot say whether the buffer was ever populated. This
++	// runs from the command dispatch, which the game uses everywhere.
++	if (getenv("SLIPPI_DIRECT_PEERS") != nullptr)
++	{
++		static int mapTick = 0;
++		if ((mapTick++ % 5) == 0)
++		{
++			u8 major = PowerPC::HostRead_U8(0x80479D30);
++			u8 minor = PowerPC::HostRead_U8(0x80479D33);
++			// Both halves of the u64, for controller 1 and the all-controllers
++			// union, plus the trigger word: reading one half and finding zero
++			// proves nothing about where the bits actually sit.
++			u32 p1hi = PowerPC::HostRead_U32(0x80479C30);
++			u32 p1lo = PowerPC::HostRead_U32(0x80479C30 + 4);
++			u32 alhi = PowerPC::HostRead_U32(0x80479C30 + 4 * 0x30);
++			u32 allo = PowerPC::HostRead_U32(0x80479C30 + 4 * 0x30 + 4);
++			u32 trhi = PowerPC::HostRead_U32(0x80479C30 + 8);
++			u32 trlo = PowerPC::HostRead_U32(0x80479C30 + 12);
++			if ((p1hi | p1lo | alhi | allo | trhi | trlo) != 0 || (mapTick % 1800) == 1)
++				ERROR_LOG(SLIPPI_ONLINE,
++				          "[Direct] scene %02x%02x map p1 %08x%08x all %08x%08x trig %08x%08x",
++				          (int)minor, (int)major, p1hi, p1lo, alhi, allo, trhi, trlo);
++		}
++	}
++
 +	if (g_directPressEnabled.load(std::memory_order_acquire))
 +	{
 +		static bool installed = false;
@@ -462,7 +489,7 @@ index 4e3991914..aa3047577 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3429,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3456,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -491,7 +518,7 @@ index 4e3991914..aa3047577 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3808,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3835,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -507,7 +534,7 @@ index 4e3991914..aa3047577 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3932,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3959,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
@@ -526,7 +553,7 @@ index 4e3991914..aa3047577 100644
  			handleConnectionCleanup();
  			break;
  		case CMD_LOG_MESSAGE:
-@@ -3597,6 +4044,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
+@@ -3597,6 +4071,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
  
  	// Copy buffer data to memory
  	Memory::CopyToEmu(addr, queueAddr, size);
