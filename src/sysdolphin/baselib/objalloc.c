@@ -368,6 +368,26 @@ void _HSD_ObjAllocForgetMemory(void* low, void* high)
 }
 
 #if BUILD_TARGET_PC
+/* Every pool's used/free counts, folded into one number.
+ *
+ * The rollback self-check's traced fields were the fighters and the RNG seed,
+ * which is what the Dolphin comparison prints -- so a divergence anywhere else
+ * went unreported until something crashed on it, hundreds of frames later and
+ * nowhere near the cause. The object pools are a cheap and very wide detector:
+ * every HSD object the simulation allocates or frees moves one of these counts,
+ * so effects, particles, animation tracks and joints are all covered by walking
+ * a list a few dozen long. */
+u32 pc_objalloc_hash(void)
+{
+    HSD_ObjAllocData* data;
+    u32 h = 2166136261u;
+    for (data = alloc_datas; data != NULL; data = data->next) {
+        h = (h ^ data->used) * 16777619u;
+        h = (h ^ data->free) * 16777619u;
+    }
+    return h;
+}
+
 /* The live extent of the object heap, for the rollback snapshot in
  * src/port/netplay/pc_snapshot.c. This is a bump allocator, so everything the
  * game has ever taken from it -- every Fighter, every HSD object -- lies in

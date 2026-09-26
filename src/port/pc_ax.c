@@ -388,6 +388,19 @@ static void pc_ax_frame(void)
     if (!g_ax_inited) {
         return;
     }
+#if BUILD_NETPLAY
+    /* Not while the simulation is replaying a frame: see the note on
+     * pc_snapshot_is_replaying(). The mixer follows the output device, so
+     * running it twice for one frame leaves the driver, the synth and the voice
+     * allocator somewhere neither run would have put them -- measured as the
+     * only decompiled globals that differ between a frame's two runs. */
+    {
+        extern int pc_snapshot_is_replaying(void);
+        if (pc_snapshot_is_replaying()) {
+            return;
+        }
+    }
+#endif
     /* AXVPB.c dumps any voice whose estimated DSP cost would take the frame
      * past __AXMaxDspCycles, lowest priority first. The init below set that
      * budget to "infinite", but the game's AXInit runs __AXVPBInit again and

@@ -1679,6 +1679,15 @@ int pc_state_fields(PcStateField* out, int max)
             gens++;
         }
         PC_FIELD_AT("gen_count", gens, &hsd_804D78FC);
+        {
+            /* Every object pool's used/free counts in one number. Much wider
+             * than the fighter fields, and it is what turns "something crashed
+             * four hundred frames later" into "frame N disagreed". */
+            extern u32 pc_objalloc_hash(void);
+            static u32 pools;
+            pools = pc_objalloc_hash();
+            PC_FIELD_AT("obj_pools", pools, &pools);
+        }
         /* Unconditional: a field list whose length depends on the state cannot
          * be compared position by position. */
         PC_FIELD_AT("gen_head", (u32) (uintptr_t) hsd_804D78FC,

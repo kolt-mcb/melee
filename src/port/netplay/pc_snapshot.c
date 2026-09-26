@@ -957,6 +957,11 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
     }
 }
 
+int pc_snapshot_is_replaying(void)
+{
+    return snap_replaying;
+}
+
 void pc_snapshot_prerun(void)
 {
     extern u32 gm_GetFrameCount(void);

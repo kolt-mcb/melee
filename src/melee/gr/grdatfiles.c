@@ -4,6 +4,7 @@
 #include "port/pc_scene.h"
 #if BUILD_TARGET_PC
 #include "port/pc_grconv.h"
+#include "port/pc_itconv.h"
 #endif
 #endif
 #include "grdatfiles.h"
@@ -734,13 +735,59 @@ struct HSD_RObjAnimJoint_gcn {
  * The packed keyframe bytes (ad) are left in place in the archive: the FObj
  * interpreter (parseFloat et al.) reads them byte-by-byte in a fixed order,
  * so they are host-endianness independent and need no conversion. */
+/* Is `p` inside the archive `base` belongs to? The converters walk file offsets
+ * from a data section and add them to dataBase without asking whether the result
+ * is still in the file; a wrong offset then reads whatever follows, and for a
+ * `next` pointer that means a chain of arbitrary length built out of unrelated
+ * bytes. pc_itconv_locate knows each archive's extent, so ask it. */
+static int grdat_in_archive(const u8* base, const void* p, size_t need)
+{
+    const unsigned char* abase;
+    unsigned long alen;
+    if (base == NULL || p == NULL) {
+        return 0;
+    }
+    if (!pc_itconv_locate(base, &abase, &alen)) {
+        return 1; /* not a registered archive: no bound to check against */
+    }
+    return (const unsigned char*) p >= abase &&
+           (const unsigned char*) p + need <= abase + alen;
+}
+
 static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
 {
     HSD_FObjDesc* x64;
     const struct HSD_FObjDesc_gcn* gcn;
     u32 val, raw;
 
-    if (gcnPtr == NULL || depth > 10000) return NULL;
+    /* 10000 was the old cap and it is not a cap: HSD_FObjLoadDesc recurses once
+     * per node and a chain that long takes the stack with it. A real FObj chain
+     * is a handful of tracks, so a long one is bad data and the useful thing is
+     * to say which. */
+    if (gcnPtr == NULL) return NULL;
+    if (depth > 64) {
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "[GRDATGUARD] FObjDesc chain past depth %u at %p "
+                            "(dataBase %p); stopping. A chain this long is "
+                            "bad data, not a long animation.\n",
+                    depth, (const void*) gcnPtr, (const void*) dataBase);
+            fflush(stderr);
+        }
+        return NULL;
+    }
+    if (!grdat_in_archive(dataBase, gcnPtr, sizeof(*gcn))) {
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "[GRDATGUARD] FObjDesc at %p is outside the archive "
+                            "at %p; the offset that got here was wrong\n",
+                    (const void*) gcnPtr, (const void*) dataBase);
+            fflush(stderr);
+        }
+        return NULL;
+    }
 
     gcn = (const struct HSD_FObjDesc_gcn*)gcnPtr;
     x64 = lbHeap_80015BD0(0, sizeof(HSD_FObjDesc));

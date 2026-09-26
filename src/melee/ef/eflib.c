@@ -611,6 +611,26 @@ static EF_EffectDesc* pc_ef_desc(int gfx_id)
         d->model_desc.shapeanim_joint =
             grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(base + off, base, 0);
     }
+    if (getenv("MELEE_EFREGION") != NULL) {
+        /* Which pool the converted trees landed in, so the rollback snapshot's
+         * region list can be checked against where this data actually lives. */
+        extern int pc_lowmem_contains(const void* p);
+        extern void pc_lowmem_game_extent(void** base, unsigned long* used);
+        extern void pc_objheap_extent(void** base, unsigned long* used);
+        void* hb = NULL; unsigned long hu = 0;
+        void* ob = NULL; unsigned long ou = 0;
+        pc_lowmem_game_extent(&hb, &hu);
+        pc_objheap_extent(&ob, &ou);
+        fprintf(stderr,
+                "[EFREGION] gfx %d desc %p joint %p animjoint %p | pool=%d "
+                "heap=[%p,%p) objheap=[%p,%p)\n",
+                gfx_id, (void*) d, (void*) d->model_desc.joint,
+                (void*) d->model_desc.animjoint,
+                pc_lowmem_contains(d->model_desc.joint),
+                hb, (void*) ((char*) hb + hu), ob,
+                (void*) ((char*) ob + ou));
+        fflush(stderr);
+    }
     pc_ef_cache[bank][id] = d;
     return d;
 }

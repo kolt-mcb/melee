@@ -30,6 +30,22 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads);
  * here is identical on a replay, whatever diverges does so inside the
  * simulation; if it already differs, it differs in the work between the pad
  * read and here. */
+/* True while the game is re-running frames it has already played.
+ *
+ * Audio asks, because audio must not be replayed. The mixer advances with the
+ * output device, not with the simulation: two runs of one frame consume
+ * different numbers of samples, so the AX driver, the synth and the voice
+ * allocator come out of them in different states no matter what the snapshot
+ * restores. Measured, on both lockstep lineups: the only decompiled globals that
+ * differ between a frame's two runs are AXDriver_*, __AXVPB, __AXPB,
+ * HSD_Synth_*, lbaudio_ax's tables and the voice stack -- audio, all of it, and
+ * nothing else but a perf timestamp.
+ *
+ * So the simulation replays and the audio does not, which is also what a
+ * rollback wants to do anyway: a corrected frame should not re-play the sound it
+ * already played. */
+int pc_snapshot_is_replaying(void);
+
 void pc_snapshot_prerun(void);
 
 /* MELEE_SNAPTRACE=1: the frame counter at the simulation entry. */

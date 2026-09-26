@@ -231,13 +231,42 @@ Where M1 stands now, and this is measured rather than hoped:
 | Samus vs Donkey Kong, CPUs, depth 1 | 1280 rewinds, **1280 frames compared, clean** |
 | Pikachu vs Peach, CPUs, depth 1 | 512 rewinds clean, then bad `HSD_FObjDesc` chains |
 
-The first of those failed at its very first rewind before this. The last is the
-open one: after about 512 rewinds the animation converter starts building
-descriptor chains thousands of nodes long, which used to take the stack with
-them and now exhausts the FObj pool instead -- `HSD_FObjLoadDesc` recurses once
-per node and the converter's own cap is 10000. Bad data, not a bad restore, and
-the next thing to chase. `fobj.c` and `pobj.c` now refuse rather than fault, so
-it reports instead of dying.
+The first of those failed at its very first rewind before this.
+
+**The last one, and what is known about it.** Pikachu vs Peach replays cleanly
+for hundreds of frames and then dies in the animation loader. The guards added
+for it now name the actual problem instead of faulting:
+
+    [FOBJGUARD] depth 0: fobj=0x4b046c90 (ok) desc=0x5f657361625f6e69 (NOT A POINTER)
+
+That descriptor is ASCII -- `"in_base_"` -- so a converter has resolved an offset
+into the DAT's string table and handed the result to `HSD_FObjLoadDesc` as an
+`HSD_FObjDesc*`. Depth 0, so it is the initial descriptor, not a chain that went
+wrong partway.
+
+What is *not* wrong is the replay. The simulation is faithful as far as anything
+can measure it: the fighters agree, and so does a hash of every object pool's
+used and free counts -- which is a much wider net, since every HSD object the
+simulation allocates or frees moves one of those. Nothing is reported until the
+crash. It is also not static memory: the whole-program snapshot (77 MB) fails
+identically, and the converted effect data was confirmed to sit inside region 0.
+
+The lead worth following is that a converter is reading bytes
+`pc_script_prepare` has already byte-swapped in place, and getting a wrong offset
+out of `be32_swap`. That would produce exactly a pointer made of string bytes. It
+would also be a bug with no rollback involved -- the rewind only changes when the
+swap happens relative to the conversion -- which makes it checkable without any
+of this machinery: log the ranges the swap touches, and log a converter reading
+inside one.
+
+One more thing the diff mode settled on the way. Comparing a frame's two runs
+across all of memory, the *only* decompiled globals that differ are `AXDriver_*`,
+`__AXVPB`, `__AXPB`, `HSD_Synth_*`, `lbaudio_ax`'s tables and the voice stack --
+audio, all of it, and nothing else but `perf.c`'s `start_time`. That is expected
+and unfixable: the mixer advances with the output device, not with the
+simulation, so two runs of one frame consume different numbers of samples. The
+mixer is therefore skipped while replaying, which is what a rollback wants
+anyway -- a corrected frame should not re-play the sound it already played.
 
 AddressSanitizer found three real bugs on the way, none of them about rollback
 and all of them the same kind of layout assumption the decomp inherits from

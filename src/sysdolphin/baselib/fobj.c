@@ -1,4 +1,7 @@
 #include <stdio.h>
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 #include <stdlib.h>
 #include "fobj.h"
 
@@ -543,6 +546,43 @@ HSD_FObj* HSD_FObjLoadDesc(HSD_FObjDesc* desc)
     if (desc != NULL) {
         HSD_FObj* fobj = HSD_FObjAlloc();
 #if BUILD_TARGET_PC
+        /* HSD_FObjAlloc asserts and returns NULL when its pool has nothing
+         * left; on the console that assert stops the game, here it prints and
+         * carries on, and the next line writes through the null. Say which it
+         * was and how deep, because "crashed at address (nil)" does not
+         * distinguish a dead pool from a bad descriptor. */
+        if (fobj == NULL) {
+            static int said;
+            if (!said) {
+                said = 1;
+                fprintf(stderr, "[FOBJGUARD] HSD_FObjAlloc returned NULL at "
+                                "chain depth %u (desc %p, desc->next %p); the "
+                                "FObj pool is empty\n",
+                        depth, (void*) desc, (void*) desc->next);
+                fflush(stderr);
+                port_guard_warn("fobj.c:alloc_null");
+            }
+            return NULL;
+        }
+        /* Which of the two is not a pointer. The pool can hand back a non-null
+         * but bogus object if its free list has been damaged, and a descriptor
+         * can be a wrong offset resolved against the right base; the fault looks
+         * the same from outside and the fix does not. */
+        if (!pc_ptr_sane(fobj) || !pc_ptr_sane(desc)) {
+            static int said;
+            if (!said) {
+                said = 1;
+                fprintf(stderr, "[FOBJGUARD] depth %u: fobj=%p (%s) desc=%p "
+                                "(%s)\n",
+                        depth, (void*) fobj,
+                        pc_ptr_sane(fobj) ? "ok" : "NOT A POINTER",
+                        (void*) desc,
+                        pc_ptr_sane(desc) ? "ok" : "NOT A POINTER");
+                fflush(stderr);
+                port_guard_warn("fobj.c:bad_ptr");
+            }
+            return NULL;
+        }
         depth++;
         fobj->next = HSD_FObjLoadDesc(desc->next);
         depth--;
