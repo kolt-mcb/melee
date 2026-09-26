@@ -239,36 +239,44 @@ the same `connected 1`, `local 1, remote 1`, and the game sits exactly where it
 did. So the mismatch is not that the character select is reading a different
 port's inputs.
 
-The scene check is **not** the answer, which was the obvious next theory and is
-now disproven. Reading the game's own state from Dolphin -- the scene
-controller word at 0x80479D30, and OFST_R13_ONLINE_MODE off r13 -- gives:
+Three theories have now been tested and none of them was it. The state the
+game reports about itself is entirely correct:
 
     [Direct] ready bytes: local 1, remote 1, idx 1/0 | scene 0008 (want 0008),
-             r13 804db6a0, online mode 1
+             r13 804db6a0, online mode 1 |
+             inputs@80263258 483ff088, fetch@80260310 48401f88 |
+             msrb 810e9340 = [179 1 1]
 
-`0008` is SCENE_ONLINE_CSS exactly, online mode 1 is unranked, and r13 is where
-it should be. So both CSS codes pass their opening guard, and the game is on
-the screen it appears to be on, in the mode it appears to be in, with the
-readiness bytes it needs.
+- **The scene is right.** 0008 is SCENE_ONLINE_CSS exactly, and online mode 1
+  is unranked, so both CSS codes pass the guard they open with.
+- **The handler is installed.** Both injection sites hold branches into the
+  codeset (0x48-prefixed), so HandleInputsOnCSS.asm is not missing.
+- **The player index is not it.** Running the emulator as index 0 with the port
+  on slot 1 gives `idx 0/1` and changes nothing.
 
-That leaves a contradiction worth stating plainly, because it is the whole
-remaining problem:
+The MSRB line is worth reading carefully, because it looks like an answer and
+is not. Byte 0 is 179, which is `CONST_SlippiCmdGetMatchState` -- the command
+the game writes into that buffer before asking for a response -- and the
+handler forks on that byte, so 179 would indeed fall through to
+SKIP_START_MATCH. But this is sampled from inside `prepareOnlineMatchState`,
+which runs while the *write* is being handled, before the response is copied
+back. The command byte is exactly what should be there at that moment, and
+bytes 1 and 2 are the previous frame's response, which is why they read 1 and
+1. There are no "DMARead: Empty" errors in the log either, so the copy is
+happening. The sample proves nothing about what the handler sees.
 
-- The character select **displays** connected state -- "Playing: direct",
-  "Hold Z to disconnect" -- which is drawn from the MSRB that
-  `FetchMatchInfo.asm` refreshes. So that code is running and the buffer is
-  fresh.
-- `HANDLE_CONNECTED` in the same file, reading the same buffer, disconnects on
-  a Z hold and starts the match when both ready bytes are set. Z held for two
-  minutes does nothing, and the match never starts.
+To sample it properly the read has to be observed after it lands: log the first
+few bytes from `DMARead` itself, where the copy is made, or read the buffer at
+the start of the *following* command. Until that is done, whether the handler
+sees a connection state of 4 is still unknown -- and it remains the single
+value that decides between HANDLE_CONNECTED and doing nothing.
 
-Both cannot be true of a handler that is simply running against that buffer.
-The next thing to establish is whether the injection at `0x80263258` is present
-at all: read the instruction there with `PowerPC::HostRead_U32` and compare it
-against the original -- an installed C2 code replaces it with a branch. That
-says in one run whether `HandleInputsOnCSS.asm` is in the gct that gets written,
-and it distinguishes "the handler runs and does nothing" from "the handler is
-not there", which is the fork everything else now hangs on.
+Also worth revisiting with that in mind: the Z result. `HANDLE_CONNECTED` reads
+Z through `Inputs_GetPlayerHeldInputs` for "the player index in control of CSS"
+(`-0x49B0(r13)`), and in the default configuration that index is 1 while the
+token on screen is P1. If the game is reading player slot 1's inputs, a held Z
+on port 1 would never be seen, and the Z test would fail for a reason that has
+nothing to do with whether the handler runs.
 
 ### On the pad, and a correction
 

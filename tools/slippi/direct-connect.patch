@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..450c81945 100644
+index 4e3991914..aa84dda64 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -241,7 +241,7 @@ index 4e3991914..450c81945 100644
  #endif
  
  		if (isConnected)
-@@ -2293,6 +2490,32 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2293,6 +2490,51 @@ void CEXISlippi::prepareOnlineMatchState()
  		return;
  	}
  
@@ -262,19 +262,38 @@ index 4e3991914..450c81945 100644
 +			u8 minor = PowerPC::HostRead_U8(0x80479D33);
 +			u32 r13 = PowerPC::ppcState.gpr[13];
 +			u8 onlineMode = r13 != 0 ? PowerPC::HostRead_U8(r13 - 0x5060) : 0xFF;
++			// Is the handler even installed? A C2 gecko code replaces the
++			// instruction at its address with a branch (0x48/0x4B...), so reading
++			// these two tells "the handler runs and does nothing" apart from "the
++			// handler is not there". 0x80263258 is HandleInputsOnCSS, 0x80260310
++			// is FetchMatchInfo -- whose effects are visible on screen, so it makes
++			// a control for what an installed injection looks like.
++			// And what the handler actually reads. CSSDT_BUF_ADDR is 0x80005614;
++			// its first word is the MSRB pointer, whose bytes 0..2 are the
++			// connection state and the two ready flags. Comparing those against
++			// what was just sent says whether the game is holding our buffer.
++			u32 cssdt = PowerPC::HostRead_U32(0x80005614);
++			u32 msrb = cssdt != 0 ? PowerPC::HostRead_U32(cssdt) : 0;
++			int mConn = msrb != 0 ? PowerPC::HostRead_U8(msrb) : -1;
++			int mLocal = msrb != 0 ? PowerPC::HostRead_U8(msrb + 1) : -1;
++			int mRemote = msrb != 0 ? PowerPC::HostRead_U8(msrb + 2) : -1;
++			u32 inputsIns = PowerPC::HostRead_U32(0x80263258);
++			u32 fetchIns = PowerPC::HostRead_U32(0x80260310);
 +			ERROR_LOG(SLIPPI_ONLINE,
 +			          "[Direct] ready bytes: local %d, remote %d, idx %d/%d | scene %02x%02x "
-+			          "(want 0008), r13 %08x, online mode %d",
++			          "(want 0008), r13 %08x, online mode %d | inputs@80263258 %08x, "
++			          "fetch@80260310 %08x | msrb %08x = [%d %d %d]",
 +			          (int)localPlayerReady, (int)remotePlayersReady,
 +			          (int)localPlayerIndex, (int)remotePlayerIndex,
-+			          (int)minor, (int)major, r13, (int)onlineMode);
++			          (int)minor, (int)major, r13, (int)onlineMode, inputsIns, fetchIns,
++			          msrb, mConn, mLocal, mRemote);
 +		}
 +	}
 +
  	m_read_queue.push_back(localPlayerReady);   // Local player ready
  	m_read_queue.push_back(remotePlayersReady); // Remote players ready
  	m_read_queue.push_back(localPlayerIndex);   // Local player index
-@@ -3018,6 +3241,123 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3260,123 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -398,7 +417,7 @@ index 4e3991914..450c81945 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3365,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3384,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -427,7 +446,7 @@ index 4e3991914..450c81945 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3744,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3763,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -443,7 +462,7 @@ index 4e3991914..450c81945 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3868,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3887,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
