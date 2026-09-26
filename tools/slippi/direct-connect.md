@@ -294,14 +294,48 @@ Writing the selection into memory does not substitute for it. The bytes land
 (`base 80497758 idx 0 char 9`) and the screen still reads "Select your
 character", so that state is recomputed from the cursor each frame.
 
-### Where to look next
+### The netplay layer does not feed the character select. It starves it.
 
-Online play keeps both players' cursors in step, so the character select's
-inputs almost certainly come from the netplay layer rather than the pads --
-the same route `handleOnlineInputs` feeds during a match. Finding where that
-copy happens, and putting a local input into it, is the remaining work. It is
-one question now rather than six, and it is about input plumbing, not about
-the handshake.
+The question was where the netplay layer supplies that screen's inputs. It does
+not. Following the chain down:
+
+- `Inputs_GetPlayerHeldInputs` (0x801a3680) is `gm_GetButtonsPressed` in this
+  decompilation, and it is one line: `return controller_map.x0[idx].button`.
+- `controller_map` lives at 0x80479C30, 0x30 bytes per controller, filled from
+  HSD_PadCopyStatus by the game's ordinary input evaluation.
+- The only netplay input copy in the codeset, at 0x803775b0
+  (`LogInputOnCopy.asm` marks it), is gated on SCENE_ONLINE_IN_GAME. The
+  character select is not in it.
+
+So the character select reads inputs the ordinary way, and the answer is what
+is in that buffer:
+
+    zTimer 0 | pad0 0000 padAll 0000
+
+Zero, for controller 1 and for the all-controllers union, with Z held for the
+entire run. Nothing is ignoring our input on that screen -- **it is not there**.
+The pad reaches the game on the mode list one screen earlier, and by the time
+the online character select is up with a connection established,
+`controller_map` is empty.
+
+That also disposes of the player-index theory for good: index 0 and index 1
+both give `zTimer 0`, which they would, since the buffer every index reads from
+is zero.
+
+### What to find next
+
+What empties it. The likely candidates are in the codeset's input handling
+around the engine loop -- `StartEngineLoop.asm`,
+`ForceInputRefetchOnAdvance.asm`, `SkipNewInputFetchOnRollback.asm` -- which
+exist to take control of when inputs are fetched so rollback can work, and
+which may well suppress the ordinary fetch as soon as a connection is live.
+
+The cheap discriminator, and the first thing to do: log `controller_map` from
+somewhere that runs on *every* screen rather than only from
+prepareOnlineMatchState, which the game only calls on the character select.
+If the buffer is populated on the mode list and zero on the character select,
+the change happens on entry to that scene; if it is zero from the moment the
+connection lands, it is the connection that does it.
 
 ### On the pad, and a correction
 

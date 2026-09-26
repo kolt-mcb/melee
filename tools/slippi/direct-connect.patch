@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..f3dcd575b 100644
+index 4e3991914..aa3047577 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -241,7 +241,7 @@ index 4e3991914..f3dcd575b 100644
  #endif
  
  		if (isConnected)
-@@ -2293,6 +2490,59 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2293,6 +2490,67 @@ void CEXISlippi::prepareOnlineMatchState()
  		return;
  	}
  
@@ -279,6 +279,14 @@ index 4e3991914..f3dcd575b 100644
 +			// If they track what Dolphin sent, the handler is executing; if they
 +			// stay at zero, it is not, and no amount of correct buffer contents
 +			// will ever matter.
++			// controller_map (0x80479C30, 0x30 per controller, u64 button first).
++			// gm_GetButtonsPressed -- which the codeset calls
++			// Inputs_GetPlayerHeldInputs -- is a one-line read of this, filled from
++			// HSD_PadCopyStatus. If an injected button never appears here, it never
++			// reached the game at all on this screen; if it does, the character
++			// select is ignoring it for a reason of its own.
++			u32 pad0 = PowerPC::HostRead_U32(0x80479C30 + 4);
++			u32 padAll = PowerPC::HostRead_U32(0x80479C30 + 4 * 0x30 + 4);
 +			int prevLock = cssdt != 0 ? PowerPC::HostRead_U8(cssdt + 17) : -1;
 +			int prevConn = cssdt != 0 ? PowerPC::HostRead_U8(cssdt + 18) : -1;
 +			int zTimer = cssdt != 0 ? PowerPC::HostRead_U8(cssdt + 19) : -1;
@@ -290,18 +298,18 @@ index 4e3991914..f3dcd575b 100644
 +			ERROR_LOG(SLIPPI_ONLINE,
 +			          "[Direct] ready bytes: local %d, remote %d, idx %d/%d | scene %02x%02x "
 +			          "(want 0008), r13 %08x, online mode %d | inputs@80263258 %08x, "
-+			          "fetch@80260310 %08x | msrb %08x = [%d %d %d] | cssdt %08x prevLock %d prevConn %d zTimer %d",
++			          "fetch@80260310 %08x | msrb %08x = [%d %d %d] | cssdt %08x prevLock %d prevConn %d zTimer %d | pad0 %04x padAll %04x",
 +			          (int)localPlayerReady, (int)remotePlayersReady,
 +			          (int)localPlayerIndex, (int)remotePlayerIndex,
 +			          (int)minor, (int)major, r13, (int)onlineMode, inputsIns, fetchIns,
-+			          msrb, mConn, mLocal, mRemote, cssdt, prevLock, prevConn, zTimer);
++			          msrb, mConn, mLocal, mRemote, cssdt, prevLock, prevConn, zTimer, pad0, padAll);
 +		}
 +	}
 +
  	m_read_queue.push_back(localPlayerReady);   // Local player ready
  	m_read_queue.push_back(remotePlayersReady); // Remote players ready
  	m_read_queue.push_back(localPlayerIndex);   // Local player index
-@@ -3018,6 +3268,152 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3276,152 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -454,7 +462,7 @@ index 4e3991914..f3dcd575b 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3421,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3429,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -483,7 +491,7 @@ index 4e3991914..f3dcd575b 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3800,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3808,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -499,7 +507,7 @@ index 4e3991914..f3dcd575b 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3924,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3932,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
@@ -518,7 +526,7 @@ index 4e3991914..f3dcd575b 100644
  			handleConnectionCleanup();
  			break;
  		case CMD_LOG_MESSAGE:
-@@ -3597,6 +4036,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
+@@ -3597,6 +4044,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
  
  	// Copy buffer data to memory
  	Memory::CopyToEmu(addr, queueAddr, size);
