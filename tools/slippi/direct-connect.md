@@ -377,32 +377,42 @@ peer acknowledging them, and the connection alive to the end of the window:
 `peer acked 82` is the part that matters -- Slippi is receiving this side's
 inputs and saying so, which it was not doing in the first attempt.
 
-### The frames still do not line up, and waiting is the wrong fix
+### Sharing a numbering rather than a start
 
-The two sides number their pads from their own match frame 1, and they do not
-reach it together: this side starts when the selections are agreed, while the
-emulator still has a lock-in, a versus splash and a stage load ahead of it. An
-earlier run showed the gap plainly -- the emulator force-disconnecting at
-"frame: 8 | latest: 0" while this side reported "playing alone (match frame
-107)".
+The two sides do not reach match frame 1 together -- this one starts when the
+selections are agreed, while Slippi still has a lock-in, a versus splash and a
+stage load ahead of it -- and each was labelling pads from its own 1. Waiting
+for the other is not the fix, and both placements of a wait are commented in
+the source because they are the obvious thing to try:
 
-Two placements of a wait were tried and both are recorded in the source,
-because the second is a trap worth marking:
+- **before the stage load**, where the seed hold sits, still leaves seconds of
+  load before frame 1;
+- **at match frame 1**, after the load, deadlocks outright: Slippi is stalled
+  at its own frame 8 waiting for inputs from here and force-disconnects after
+  seven seconds, so its first pad never arrives. Measured -- this side sat at
+  the line for the full 120 s timeout while the emulator gave up at seven.
 
-- **Before the stage load**, where the seed hold already is: releasing there
-  still leaves a whole load -- seconds of it -- before frame 1, so the peer
-  spends that time waiting for inputs that do not come.
-- **At match frame 1**, after the load, which deadlocks. Slippi is stalled at
-  its own frame 8 waiting for inputs from here and force-disconnects after
-  seven seconds, so its first pad never arrives. Measured: this side sat at the
-  line for the full 120 s timeout while the emulator gave up at seven. Both
-  wait, neither sends.
+What works is measuring the difference once and translating at the wire
+boundary, in both directions, while both sides keep playing:
 
-What the two need is a shared *numbering*, not a shared start. This side should
-re-base its frame numbers onto the peer's when the first pad arrives, and keep
-playing meanwhile, rather than either side waiting for the other. That is the
-next change, and it is a change to how pads are labelled rather than to when
-the match begins.
+    [SLP] peer's first pad is its frame 1 while this side is at 4;
+          adopting an offset of 3 so both count one match
+
+`local = wire + slp_frame_offset`, applied to outgoing pad and checksum frames,
+incoming pad frames, and acks in both directions. Everything inside -- the
+rings, the barrier, the hashes -- stays in this machine's numbering and is
+untouched.
+
+With that in place a five-minute run exchanges **1533 pad messages** where it
+managed 96 before, holds the connection to the end, reports no desync and no
+hash mismatch, and Slippi never force-disconnects.
+
+**Where it stops now:** the two run in step to about match frame 75, and then
+this side reports "given up on the other players; playing alone" while the peer
+carries on sending. So the inputs are aligned and flowing; what gives out is
+this side's patience at the barrier when the peer's pads arrive late. That is a
+question about the stall tolerance and about how fast the emulator runs during
+its first seconds of a match, and it is the next thing to look at.
 
 ### On the pad, and a correction
 

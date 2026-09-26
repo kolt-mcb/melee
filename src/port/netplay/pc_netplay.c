@@ -653,6 +653,24 @@ static unsigned slp_rx_from[NET_SLOTS];
  * a gap above it is a real gap and still waits. */
 static s32 net_first_seen[NET_SLOTS];
 
+/* Peer frames arrive on the peer's own clock, and the two clocks do not start
+ * together: this side begins its match when the selections are agreed, while
+ * Slippi still has a lock-in, a versus splash and a stage load to get through.
+ * By the time the peer reaches its frame 1 this side is around a hundred
+ * frames in, and each was labelling pads from its own 1, so neither could find
+ * the frames the other asked for.
+ *
+ * Rather than either side waiting -- which deadlocks, see pc_net_match_begin --
+ * the difference is measured once, when the peer's first pad arrives, and
+ * applied at the wire boundary in both directions. Everything inside stays in
+ * this machine's numbering; only what goes out and what comes in is
+ * translated, so the rings, the barrier and the hashes are untouched.
+ *
+ *     local = wire + slp_frame_offset
+ */
+static s32 slp_frame_offset;
+static int slp_frame_offset_set;
+
 /* Whether any peer has sent a pad yet. A peer only sends pads once its own
  * match is running, so this is the one signal on the wire that says the
  * other side has started rather than merely agreed to start. */
@@ -1018,9 +1036,10 @@ static void slp_send_inputs(s32 newest)
         return;
     }
     put_u8(buf + 0, SLP_MSG_PAD);
-    put_u32(buf + 1, (unsigned) newest);
+    put_u32(buf + 1, (unsigned) (newest - slp_frame_offset));
     put_u8(buf + 5, (unsigned) net_slot);
-    put_u32(buf + 6, (unsigned) net_hashed);   /* checksum frame */
+    /* Both frame numbers go out on the peer's clock. */
+    put_u32(buf + 6, (unsigned) (net_hashed - slp_frame_offset));
     put_u32(buf + 10, net_hashed > 0 ? net_hash_val[net_hashed &
                                                     (NET_HASH_RING - 1)] : 0);
     /* The oldest frame any player still has not confirmed: with more than two
@@ -1057,7 +1076,21 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
     }
     if (buf[0] == SLP_MSG_PAD && len >= 14) {
         slp_rx_pads++;
-        s32 newest = (s32) get_u32(buf + 1);
+        s32 wire_newest = (s32) get_u32(buf + 1);
+        s32 newest;
+        if (!slp_frame_offset_set) {
+            /* net_last_sent is where this side is now, in its own numbering. */
+            slp_frame_offset =
+                (net_last_sent >= 0 ? net_last_sent : 0) - wire_newest;
+            slp_frame_offset_set = 1;
+            fprintf(stderr,
+                    "[SLP] peer's first pad is its frame %d while this side is "
+                    "at %d; adopting an offset of %d so both count one match\n",
+                    (int) wire_newest, (int) net_last_sent,
+                    (int) slp_frame_offset);
+            fflush(stderr);
+        }
+        newest = wire_newest + slp_frame_offset;
         int slot = (int) get_u8(buf + 5) & (NET_SLOTS - 1);
         slp_rx_from[slot]++;
         int count = (int) ((len - 14) / SLP_PAD_BYTES);
@@ -1072,7 +1105,7 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
         }
         if (count > 0) {
             slp_peer_playing = 1;
-            slp_send_ack(newest);
+            slp_send_ack(newest - slp_frame_offset);
         }
         return 1;
     }
@@ -1142,7 +1175,9 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
         return 1;
     }
     if (buf[0] == SLP_MSG_PAD_ACK && len >= 6) {
-        s32 frame = (s32) get_u32(buf + 1);
+        /* The peer acks in its own numbering, like everything else on the
+         * wire; net_peer_acked is compared against local frames. */
+        s32 frame = (s32) get_u32(buf + 1) + slp_frame_offset;
         int from_slot = (len >= 6) ? ((int) buf[5] & (NET_SLOTS - 1)) : -1;
         if (from_slot < 0) {
             /* An ack from a build that does not name its slot: treat it as the
@@ -1509,6 +1544,9 @@ void pc_net_match_begin(void)
     net_desynced = 0;
     net_stalls = 0;
     net_stall_ms = 0.0;
+    slp_frame_offset = 0;
+    slp_frame_offset_set = 0;
+    slp_peer_playing = 0;
 
     /* Not a wait for the peer here, though it is the obvious thing to try.
      *
