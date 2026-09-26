@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..1d33a2b06 100644
+index 4e3991914..0d647617e 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -10,7 +10,7 @@ index 4e3991914..1d33a2b06 100644
  #include "Core/HW/SystemTimers.h"
  #include "Core/State.h"
  
-@@ -144,8 +145,173 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
+@@ -144,8 +145,200 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
  	OSD::AddMessage(msg, duration_ms, color);
  }
  
@@ -32,6 +32,9 @@ index 4e3991914..1d33a2b06 100644
 +// "the mode list is behind us": that request is made by FetchMatchInfo.asm,
 +// which runs only on the online character select.
 +static std::atomic<bool> g_directOnCss(false);
++// Set once the game itself has a character chosen (-0x49A9(r13)), which is
++// the condition HandleInputsOnCSS checks before Start means anything.
++static std::atomic<bool> g_directCharChosen(false);
 +
 +static void directInputManip(GCPadStatus *pad, int controllerID)
 +{
@@ -162,8 +165,32 @@ index 4e3991914..1d33a2b06 100644
 +	// window that short spends itself before there is anything to press.
 +	// Tapping for the whole run costs nothing, because the screen after the
 +	// mode list ignores this pad entirely.
-+	if ((tick % 30) < 4)
++	if (g_directCharChosen.load(std::memory_order_acquire))
++	{
++		// "Press START to lock in": FN_LOCK_IN_AND_SEARCH, which sends the
++		// selections and asks for the match in one go. A is deliberately not
++		// pressed here any more -- it would unselect the character again.
++		if ((tick % 45) < 5)
++			pad->button |= PAD_BUTTON_START;
++	}
++	else if ((tick % 30) < 4)
 +		pad->button |= PAD_BUTTON_A;
++
++	// On the character select the hand has to reach a portrait before A means
++	// anything, so nudge it upward between the taps. Only once that screen is
++	// up, so the mode list is not disturbed.
++	// Bounded, not continuous. Pushing up for the whole run parks the hand above
++	// the top row where A has nothing to select; three seconds is enough to get
++	// it onto the grid, and after that A does the work.
++	if (g_directOnCss.load(std::memory_order_acquire) &&
++	    !g_directCharChosen.load(std::memory_order_acquire))
++	{
++		static int cssTick = -1;
++		if (cssTick < 0)
++			cssTick = tick;
++		if (tick - cssTick < 180 && (tick % 30) >= 8 && (tick % 30) < 20)
++			pad->stickY = 0xF0;
++	}
 +
 +	if ((tick % 600) == 0)
 +		ERROR_LOG(SLIPPI_ONLINE, "[Direct] still pressing, phase %d",
@@ -184,7 +211,7 @@ index 4e3991914..1d33a2b06 100644
  	INFO_LOG(SLIPPI, "EXI SLIPPI Constructor called.");
  
  	// @TODO: For mainline port, ISO file path can't be fetched this way. Look at the following:
-@@ -2134,6 +2300,8 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2134,6 +2327,8 @@ void CEXISlippi::prepareOnlineMatchState()
  
  	m_read_queue.clear();
  
@@ -193,7 +220,7 @@ index 4e3991914..1d33a2b06 100644
  	auto errorState = SlippiMatchmaking::ProcessState::ERROR_ENCOUNTERED;
  	SlippiMatchmaking::ProcessState mmState = !forcedError.empty() ? errorState : matchmaking->GetMatchmakeState();
  
-@@ -2147,6 +2315,19 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2147,6 +2342,19 @@ void CEXISlippi::prepareOnlineMatchState()
  
  	m_read_queue.push_back(mmState); // Matchmaking State
  
@@ -213,7 +240,7 @@ index 4e3991914..1d33a2b06 100644
  	u8 localPlayerReady = localSelections.isCharacterSelected;
  	u8 remotePlayersReady = 0;
  
-@@ -2200,10 +2381,26 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2200,10 +2408,26 @@ void CEXISlippi::prepareOnlineMatchState()
  		// If any players are disconnected and the match state is being requested (we are in a lobby),
  		// we should just disconnect. This allows for games to finish with a disconnected player but
  		// after that the "lobby" is terminated.
@@ -241,7 +268,7 @@ index 4e3991914..1d33a2b06 100644
  #endif
  
  		if (isConnected)
-@@ -2293,6 +2490,83 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2293,6 +2517,83 @@ void CEXISlippi::prepareOnlineMatchState()
  		return;
  	}
  
@@ -325,7 +352,7 @@ index 4e3991914..1d33a2b06 100644
  	m_read_queue.push_back(localPlayerReady);   // Local player ready
  	m_read_queue.push_back(remotePlayersReady); // Remote players ready
  	m_read_queue.push_back(localPlayerIndex);   // Local player index
-@@ -3018,6 +3292,190 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3319,233 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -430,6 +457,25 @@ index 4e3991914..1d33a2b06 100644
 +			return;
 +	}
 +
++	// In NOLOCK mode the game owns the whole sequence, including asking for the
++	// match: FN_LOCK_IN_AND_SEARCH sends the selections and then CMD_FIND_OPPONENT
++	// when Start is pressed. Asking from here as well builds a second matchmaking
++	// object and tears down the connection the first one made -- which shows up
++	// as the peer dropping and reconnecting the moment the character is locked in.
++	if (getenv("SLIPPI_DIRECT_NOLOCK") != nullptr)
++	{
++		// Notice when the game has a character of its own, which is what makes
++		// Start meaningful: HANDLE_IDLE checks -0x49A9(r13) before it will search.
++		// This has to happen before the return below, not inside the branches it
++		// skips, or the press never fires and the screen sits on "Press START".
++		u32 r13c = PowerPC::ppcState.gpr[13];
++		if (r13c >= 0x80000000 && r13c < 0x81800000 &&
++		    PowerPC::HostRead_U8(r13c - 0x49A9) != 0 &&
++		    !g_directCharChosen.exchange(true))
++			ERROR_LOG(SLIPPI_ONLINE, "[Direct] the game chose a character; pressing START");
++		return;
++	}
++
 +	if (directState == SlippiMatchmaking::ProcessState::IDLE)
 +	{
 +		SlippiMatchmaking::MatchSearchSettings search;
@@ -460,6 +506,30 @@ index 4e3991914..1d33a2b06 100644
 +		}
 +		if (slippi_netplay == nullptr || localSelections.isCharacterSelected)
 +			return;
++
++		// SLIPPI_DIRECT_NOLOCK leaves the lock-in to the game.
++		//
++		// Reporting isCharacterSelected before the game has chosen anything is
++		// not neutral: PreventAPressCharUnselect.asm and its B counterpart read
++		// MSRB_IS_LOCAL_PLAYER_READY and skip the character-select input
++		// handling entirely when it is set ("Only allow de-select when not
++		// locked-in"). So claiming to be locked in disables the very inputs
++		// needed to lock in, which is why A and B do nothing on that screen.
++		if (getenv("SLIPPI_DIRECT_NOLOCK") != nullptr)
++		{
++			u32 r13c = PowerPC::ppcState.gpr[13];
++			if (r13c >= 0x80000000 && r13c < 0x81800000 &&
++			    PowerPC::HostRead_U8(r13c - 0x49A9) != 0 &&
++			    !g_directCharChosen.exchange(true))
++				ERROR_LOG(SLIPPI_ONLINE, "[Direct] the game chose a character; pressing START");
++			static bool said = false;
++			if (!said)
++			{
++				said = true;
++				ERROR_LOG(SLIPPI_ONLINE, "[Direct] not locking in; leaving it to the game");
++			}
++			return;
++		}
 +		const char *charEnv = getenv("SLIPPI_DIRECT_CHAR");
 +		const char *stageEnv = getenv("SLIPPI_DIRECT_STAGE");
 +
@@ -516,7 +586,7 @@ index 4e3991914..1d33a2b06 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3483,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3553,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -545,7 +615,7 @@ index 4e3991914..1d33a2b06 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3862,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3932,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -561,7 +631,7 @@ index 4e3991914..1d33a2b06 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3986,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +4056,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
@@ -580,7 +650,7 @@ index 4e3991914..1d33a2b06 100644
  			handleConnectionCleanup();
  			break;
  		case CMD_LOG_MESSAGE:
-@@ -3597,6 +4098,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
+@@ -3597,6 +4168,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
  
  	// Copy buffer data to memory
  	Memory::CopyToEmu(addr, queueAddr, size);

@@ -326,41 +326,51 @@ Every input in that sentence has now been measured rather than assumed, and the
 model still does not predict the behaviour -- which means the model of
 HANDLE_CONNECTED's control flow is wrong somewhere not visible from outside it.
 
-### The handler reaches the Z branch and reads Z as not held
+### The emulator starts the match
 
-Adding `logf` lines to HandleInputsOnCSS.asm needs the codeset's own toolchain
--- the `gecko` program (Go) and devkitPPC -- and neither is installed here.
-Our `powerpc-eabi-as` cannot substitute: their macros (`branch`, `backup`) are
-written for devkitPPC's assembler and ours rejects the expansions.
+    SLIPPI_PRESS=1 SLIPPI_NOLOCK=1 tools/slippi/direct_vs.sh 180
 
-The same question can be answered from Dolphin, though, with a sentinel.
-"The Z timer reads 0" cannot distinguish *written zero every frame* from *never
-written*, and those were exactly the two remaining cases. But HANDLE_CONNECTED
-writes that byte unconditionally -- the increment path when Z is seen,
-RESET_HOLD_TIMER when it is not -- so poking a value the game would never leave
-there and looking again next sample separates them:
+walks the emulator from boot into a running match against the port, with nobody
+at the controller. The last frame shows "Ready", an 8:00 clock, Yoshi's Story,
+and two players: `direct`, playing the port's Marth, against `local`.
 
-    zTimer 0 sentinelSeen 0     x126
+The thing that had blocked it for so long was self-inflicted, and worth stating
+plainly because it looked like everything else:
 
-Every 0x7F poked into `CSSDT_Z_BUTTON_HOLD_TIMER` is gone by the next sample.
-So the handler runs, reaches its Z branch, and takes RESET_HOLD_TIMER: **it
-reads Z as not held.** It is not failing to execute, and it is not failing to
-find the buffer.
+**Reporting `isCharacterSelected` to Dolphin before the game had chosen a
+character disables the character select.** `PreventAPressCharUnselect.asm` and
+its B counterpart read `MSRB_IS_LOCAL_PLAYER_READY` and skip the input handling
+entirely when it is set -- "Only allow de-select when not locked-in". So the
+auto-drive, by claiming to be locked in, switched off the very inputs needed to
+lock in. Every symptom followed from that one lie: A did nothing, B did nothing,
+the hand would not move, and the start path had no character to build a match
+from. With `SLIPPI_DIRECT_NOLOCK=1` the pad works normally on that screen and
+the hand moves on the first try.
 
-Which is odd, because the buffer does hold Z -- intermittently. Of the samples
-taken on that screen during a continuous hold, thirteen showed
-`controller_map.x0[0].button` as 0x10 and eight showed zero. The injector sets
-Z on every pad poll, so a value that comes and goes means the game's copy of it
-comes and goes: the handler evidently reads at a point in the frame where it is
-clear.
+The sequence now is the real one, and the game does all of it:
 
-So the open question has changed shape again, and is now about *when* rather
-than *what*: which point in the frame fills controller_map, which point the
-handler reads it, and why an injection made at every SI poll is only
-intermittently present in between. That is a phase problem, and it is also the
-first explanation so far that accounts for A working on the menu -- a tap held
-four frames in thirty will survive a phase it happens to land in, while a
-continuous hold that is cleared each frame looks like nothing at all.
+1. A on the mode list confirms Unranked.
+2. The stick walks the hand onto the grid -- bounded, or it parks above the top
+   row where A has nothing to select -- and A picks whoever is under it.
+3. The game sets its own `-0x49A9(r13)`, which is what makes Start meaningful;
+   the injector notices and presses Start.
+4. Start runs `FN_LOCK_IN_AND_SEARCH`: the game sends its own
+   SetMatchSelections and its own CMD_FIND_OPPONENT, the direct-mode patch
+   takes that to the port, and the two connect and exchange selections.
+5. Both sides read ready, and the game starts the match itself.
+
+Two things fall out of letting the game own the sequence. Matchmaking must not
+be requested from Dolphin as well -- a second request builds a second
+matchmaking object and tears down the first one's connection, which shows up as
+the peer dropping the instant the character is locked in. And the character is
+whatever the hand lands on rather than `SLIPPI_DIRECT_CHAR`, which is only used
+by the old auto-drive path.
+
+**Still to do:** the match ends in a disconnect. The run window closes on the
+port before the emulator finishes booting the match -- it takes about a minute
+of menus to get there -- so the two have only seconds together. A longer window,
+or starting the port later, is the next thing to try, and only then is it worth
+looking at whether they actually stay in sync.
 
 ### On the pad, and a correction
 
