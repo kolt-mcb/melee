@@ -239,44 +239,52 @@ the same `connected 1`, `local 1, remote 1`, and the game sits exactly where it
 did. So the mismatch is not that the character select is reading a different
 port's inputs.
 
-Three theories have now been tested and none of them was it. The state the
-game reports about itself is entirely correct:
+### Everything measurable is correct, and it still does not start
 
-    [Direct] ready bytes: local 1, remote 1, idx 1/0 | scene 0008 (want 0008),
-             r13 804db6a0, online mode 1 |
-             inputs@80263258 483ff088, fetch@80260310 48401f88 |
-             msrb 810e9340 = [179 1 1]
+The response the game receives, sampled in `DMARead` where the copy is made
+rather than inside the command handler:
 
-- **The scene is right.** 0008 is SCENE_ONLINE_CSS exactly, and online mode 1
-  is unranked, so both CSS codes pass the guard they open with.
-- **The handler is installed.** Both injection sites hold branches into the
-  codeset (0x48-prefixed), so HandleInputsOnCSS.asm is not missing.
-- **The player index is not it.** Running the emulator as index 0 with the port
-  on slot 1 gives `idx 0/1` and changes nothing.
+    [Direct] DMARead -> 010e9340 size 962: [4 1 1]
 
-The MSRB line is worth reading carefully, because it looks like an answer and
-is not. Byte 0 is 179, which is `CONST_SlippiCmdGetMatchState` -- the command
-the game writes into that buffer before asking for a response -- and the
-handler forks on that byte, so 179 would indeed fall through to
-SKIP_START_MATCH. But this is sampled from inside `prepareOnlineMatchState`,
-which runs while the *write* is being handled, before the response is copied
-back. The command byte is exactly what should be there at that moment, and
-bytes 1 and 2 are the previous frame's response, which is why they read 1 and
-1. There are no "DMARead: Empty" errors in the log either, so the copy is
-happening. The sample proves nothing about what the handler sees.
+Connection state 4 (CONNECTION_SUCCESS), local ready 1, remote ready 1, into
+the same buffer CSSDT points at. Alongside it: scene `0008` is
+SCENE_ONLINE_CSS, online mode is 1, and both injection sites
+(`0x80263258`, `0x80260310`) hold branches into the codeset, so
+HandleInputsOnCSS.asm is installed.
 
-To sample it properly the read has to be observed after it lands: log the first
-few bytes from `DMARead` itself, where the copy is made, or read the buffer at
-the start of the *following* command. Until that is done, whether the handler
-sees a connection state of 4 is still unknown -- and it remains the single
-value that decides between HANDLE_CONNECTED and doing nothing.
+By the assembly that is sufficient. `HANDLE_CONNECTED` branches to
+`CHECK_SHOULD_START_MATCH` as soon as MSRB_IS_LOCAL_PLAYER_READY is non-zero;
+that ANDs the two ready bytes and branches to the start. All three bytes are
+what it wants. The game does not start.
 
-Also worth revisiting with that in mind: the Z result. `HANDLE_CONNECTED` reads
-Z through `Inputs_GetPlayerHeldInputs` for "the player index in control of CSS"
-(`-0x49B0(r13)`), and in the default configuration that index is 1 while the
-token on screen is P1. If the game is reading player slot 1's inputs, a held Z
-on port 1 would never be seen, and the Z test would fail for a reason that has
-nothing to do with whether the handler runs.
+Writing the game's own character-select state does not help either. Following
+`FN_TX_LOCK_IN` to its source -- selections base at `-0x49f0(r13)`, 0x24 per
+player, id at +0x70 -- and setting that plus the "character selected" byte at
+`-0x49A9(r13)` lands where it should (`base 80497758 idx 0 char 9`) and changes
+nothing: the screen still reads "Select your character", so the select screen's
+own logic evidently recomputes it from the cursor each frame.
+
+### What this means for the next attempt
+
+Black-box probing has run out. Six theories have been tested and disproved --
+the scene, the injection, the player index, the buffer contents, the pad, and
+the game's stored selection -- and each cost a rebuild to reject. The thing
+that has never been observed is the handler actually executing, and that is now
+the cheapest question left rather than the most expensive:
+
+- Dolphin has a debugger (`-d`). A breakpoint at `0x80263258` says in one run
+  whether HandleInputsOnCSS is entered at all, and stepping from there says
+  which branch it takes and what it reads. Every question above becomes an
+  observation instead of an inference.
+- Failing that, the same information comes from a few `logf` lines added to the
+  asm itself and rebuilt into the codeset, which is the way the Slippi
+  developers debug it.
+
+It is also worth saying plainly: none of this is needed for the port. The
+handshake, the seed agreement and the pad exchange are the parts that test the
+port's netplay, and those work. What remains is making somebody else's
+emulator start a match without a human at the controller, which is a harness
+problem, not a port problem.
 
 ### On the pad, and a correction
 

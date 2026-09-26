@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..aa84dda64 100644
+index 4e3991914..dda906d87 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -293,7 +293,7 @@ index 4e3991914..aa84dda64 100644
  	m_read_queue.push_back(localPlayerReady);   // Local player ready
  	m_read_queue.push_back(remotePlayersReady); // Remote players ready
  	m_read_queue.push_back(localPlayerIndex);   // Local player index
-@@ -3018,6 +3260,123 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3260,152 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -410,6 +410,35 @@ index 4e3991914..aa84dda64 100644
 +
 +		ERROR_LOG(SLIPPI_ONLINE, "[Direct] locked in character %d as player %d",
 +		          (int)localSelections.characterId, (int)localSelections.playerIdx);
++
++		// Telling Dolphin a character is chosen is not the same as the game having
++		// chosen one. The game keeps its own character-select state, and the screen
++		// still reads "Select your character": the hand never moved, so nothing was
++		// ever picked off the grid. Write the two things the codeset reads, where
++		// FN_TX_LOCK_IN reads them -- selections base at -0x49f0(r13), 0x24 per
++		// player, character id at +0x70 and colour at +0x73 -- and the "a character
++		// has been selected" byte the handler checks at -0x49A9(r13).
++		u32 r13 = PowerPC::ppcState.gpr[13];
++		if (r13 >= 0x80000000 && r13 < 0x81800000)
++		{
++			u32 selBase = PowerPC::HostRead_U32(r13 - 0x49f0);
++			u8 cssIdx = PowerPC::HostRead_U8(r13 - 0x5108);
++			if (selBase >= 0x80000000 && selBase < 0x81800000 && cssIdx < 4)
++			{
++				u32 entry = selBase + (u32)cssIdx * 0x24;
++				PowerPC::HostWrite_U8(localSelections.characterId, entry + 0x70);
++				PowerPC::HostWrite_U8(localSelections.characterColor, entry + 0x73);
++				PowerPC::HostWrite_U8(1, r13 - 0x49A9);
++				ERROR_LOG(SLIPPI_ONLINE,
++				          "[Direct] wrote the game's own selection: base %08x idx %d char %d",
++				          selBase, (int)cssIdx, (int)localSelections.characterId);
++			}
++			else
++			{
++				ERROR_LOG(SLIPPI_ONLINE, "[Direct] css selection base looks wrong: %08x idx %d",
++				          selBase, (int)cssIdx);
++			}
++		}
 +	}
 +}
 +}
@@ -417,7 +446,7 @@ index 4e3991914..aa84dda64 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3384,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3413,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -446,7 +475,7 @@ index 4e3991914..aa84dda64 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3763,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3792,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -462,7 +491,7 @@ index 4e3991914..aa84dda64 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3887,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3916,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
@@ -481,6 +510,25 @@ index 4e3991914..aa84dda64 100644
  			handleConnectionCleanup();
  			break;
  		case CMD_LOG_MESSAGE:
+@@ -3597,6 +4028,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
+ 
+ 	// Copy buffer data to memory
+ 	Memory::CopyToEmu(addr, queueAddr, size);
++
++	// What the game actually receives, sampled where the copy is made rather
++	// than from inside the command handler -- which runs before this and sees
++	// only the command byte the game wrote. A match-state response is the one
++	// that matters: byte 0 is the connection state HandleInputsOnCSS forks on.
++	if (getenv("SLIPPI_DIRECT_PEERS") != nullptr && size >= 3)
++	{
++		static int dmaTick = 0;
++		if ((dmaTick++ % 120) == 0)
++			ERROR_LOG(SLIPPI_ONLINE, "[Direct] DMARead -> %08x size %d: [%d %d %d]",
++			          addr, size, (int)queueAddr[0], (int)queueAddr[1], (int)queueAddr[2]);
++	}
+ }
+ 
+ // Configures (or reconfigures) the Jukebox by calling over the C FFI boundary.
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.h b/Source/Core/Core/HW/EXI_DeviceSlippi.h
 index c8fdedb2b..51922b5f7 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.h
