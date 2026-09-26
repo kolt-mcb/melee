@@ -264,27 +264,44 @@ player, id at +0x70 -- and setting that plus the "character selected" byte at
 nothing: the screen still reads "Select your character", so the select screen's
 own logic evidently recomputes it from the cursor each frame.
 
-### What this means for the next attempt
+### The handler runs. The input path is the problem.
 
-Black-box probing has run out. Six theories have been tested and disproved --
-the scene, the injection, the player index, the buffer contents, the pad, and
-the game's stored selection -- and each cost a rebuild to reject. The thing
-that has never been observed is the handler actually executing, and that is now
-the cheapest question left rather than the most expensive:
+A code breakpoint halts emulation, which is no use in a headless run, but the
+handler keeps its own scratch fields and those answer the same question for
+free. `HandleInputsOnCSS.asm` writes two of them every frame it runs, *before*
+it forks on the connection state, and bumps a third while Z is held:
 
-- Dolphin has a debugger (`-d`). A breakpoint at `0x80263258` says in one run
-  whether HandleInputsOnCSS is entered at all, and stepping from there says
-  which branch it takes and what it reads. Every question above becomes an
-  observation instead of an inference.
-- Failing that, the same information comes from a few `logf` lines added to the
-  asm itself and rebuilt into the codeset, which is the way the Slippi
-  developers debug it.
+    cssdt 810e9300 prevLock 1 prevConn 4 zTimer 0
 
-It is also worth saying plainly: none of this is needed for the port. The
-handshake, the seed agreement and the pad exchange are the parts that test the
-port's netplay, and those work. What remains is making somebody else's
-emulator start a match without a human at the controller, which is a harness
-problem, not a port problem.
+- **prevConn 4 and prevLock 1** are MSRB_CONNECTION_STATE and
+  MSRB_IS_LOCAL_PLAYER_READY copied into CSSDT by the handler itself. So the
+  handler executes, every frame, reading exactly the values Dolphin sends. The
+  fork on 4 therefore takes HANDLE_CONNECTED, and with local ready non-zero
+  that goes straight to CHECK_SHOULD_START_MATCH.
+- **zTimer 0, with Z held for the entire run.** The Z timer only increments
+  while `Inputs_GetPlayerHeldInputs` reports Z down for the CSS's controlling
+  player. It never does.
+
+So the injected pad reaches the game -- it operated the mode list -- and does
+not reach the character select's input read. That is the original hypothesis,
+now evidenced rather than assumed, and it explains the last thing standing:
+CHECK_SHOULD_START_MATCH branches to 0x80263264, which is the game's own
+start-match code, and that builds a match from the character select's
+selections. Nothing has ever been selected there, because nothing can move the
+hand.
+
+Writing the selection into memory does not substitute for it. The bytes land
+(`base 80497758 idx 0 char 9`) and the screen still reads "Select your
+character", so that state is recomputed from the cursor each frame.
+
+### Where to look next
+
+Online play keeps both players' cursors in step, so the character select's
+inputs almost certainly come from the netplay layer rather than the pads --
+the same route `handleOnlineInputs` feeds during a match. Finding where that
+copy happens, and putting a local input into it, is the remaining work. It is
+one question now rather than six, and it is about input plumbing, not about
+the handshake.
 
 ### On the pad, and a correction
 
