@@ -224,13 +224,38 @@ and exiting quietly if it does not match, and several other places call
 FN_LoadMatchState, so the polls being observed do not by themselves prove the
 character select's own fetch is happening.
 
-**The next test is Z.** `HANDLE_CONNECTED` disconnects when Z is *held* for
-DISCONNECT_HOLD_DELAY (0x30 frames), counted one per frame in CSSDT. If holding
-Z on this screen drops the connection, the handler is running against a fresh
-MSRB and the fault is downstream of the start branch. If it does nothing, the
-handler is not running and the scene check is where to look. The probe mode
-needs a continuous hold for this -- the existing one taps six frames in sixty
-and will never reach the threshold.
+**The Z test says the handler is not acting on our input.**
+`SLIPPI_DIRECT_PRESS=zhold` holds Z for the whole run -- held, not tapped,
+because `HANDLE_CONNECTED` counts it one frame at a time up to
+DISCONNECT_HOLD_DELAY (0x30) and resets the moment it is released. Two minutes
+of it changed nothing: match-state polls continued to the end of the run and
+the only cleanup in the log is the one at shutdown, a second after the last
+poll. If that handler were running against a fresh MSRB, the connection would
+have dropped inside a second.
+
+Swapping the player indices changes nothing either. With
+`SLIPPI_DIRECT_INDEX=0` and the port on slot 1, Dolphin reports `idx 0/1` and
+the same `connected 1`, `local 1, remote 1`, and the game sits exactly where it
+did. So the mismatch is not that the character select is reading a different
+port's inputs.
+
+What that leaves is the scene check both CSS codes open with:
+
+        getMinorMajor r3
+        cmpwi r3, SCENE_ONLINE_CSS
+        bne EXIT
+
+If the game's minor/major scene is not SCENE_ONLINE_CSS then
+HandleInputsOnCSS.asm exits without doing anything, FetchMatchInfo.asm never
+refreshes CSSDT's MSRB, and every symptom follows: correct bytes from Dolphin,
+no reaction to Z, no start. The screen would still look right, because what
+draws it is the ordinary character select.
+
+The next step is to read the game's own state rather than infer it: from
+Dolphin, `Memory::Read_U8` the scene id and `OFST_R13_ONLINE_MODE`
+(`-0x5060(r13)`) and log them beside the ready bytes. That says in one run
+whether the game believes it is on the online character select at all, and if
+it does not, the entry path that was skipped is where the fix belongs.
 
 ### On the pad, and a correction
 

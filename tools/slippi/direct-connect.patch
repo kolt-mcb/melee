@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..aacc0e954 100644
+index 4e3991914..060fddf0e 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -10,7 +10,7 @@ index 4e3991914..aacc0e954 100644
  #include "Core/HW/SystemTimers.h"
  #include "Core/State.h"
  
-@@ -144,8 +145,161 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
+@@ -144,8 +145,173 @@ void OSDMessageHandler(const char *message, u32 color, u32 duration_ms)
  	OSD::AddMessage(msg, duration_ms, color);
  }
  
@@ -88,10 +88,12 @@ index 4e3991914..aacc0e954 100644
 +	static const char *pressMode = getenv("SLIPPI_DIRECT_PRESS");
 +	bool isProbe = pressMode != nullptr && strcmp(pressMode, "1") != 0;
 +
-+	// A probe still has to get to the screen it is probing, so it spends its
-+	// first ten seconds confirming a mode exactly as the real sequence does,
-+	// and only then starts doing its one thing.
-+	if (isProbe && tick < 600)
++	// A probe still has to get to the screen it is probing. Gated on having seen
++	// a match-state request rather than on a timer: the clock here starts at the
++	// first EXI poll and the mode list does not appear for twenty-five seconds,
++	// so any fixed window either expires before there is anything to press or
++	// keeps pressing long after.
++	if (isProbe && !g_directOnCss.load(std::memory_order_acquire))
 +	{
 +		if ((tick % 30) < 4)
 +			pad->button |= PAD_BUTTON_A;
@@ -110,6 +112,16 @@ index 4e3991914..aacc0e954 100644
 +		{
 +			if ((tick % 60) < 8)
 +				pad->stickY = 0xF0;
++			return;
++		}
++		// Held, not tapped. HANDLE_CONNECTED counts Z one frame at a time up to
++		// DISCONNECT_HOLD_DELAY (0x30) and resets the count the moment it is
++		// released, so a tap can never reach the threshold.
++		if (strcmp(pressMode, "zhold") == 0)
++		{
++			pad->button |= PAD_TRIGGER_Z;
++			pad->triggerLeft = 0;
++			pad->triggerRight = 0;
 +			return;
 +		}
 +		u16 probe = 0;
@@ -172,7 +184,7 @@ index 4e3991914..aacc0e954 100644
  	INFO_LOG(SLIPPI, "EXI SLIPPI Constructor called.");
  
  	// @TODO: For mainline port, ISO file path can't be fetched this way. Look at the following:
-@@ -2134,6 +2288,8 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2134,6 +2300,8 @@ void CEXISlippi::prepareOnlineMatchState()
  
  	m_read_queue.clear();
  
@@ -181,7 +193,7 @@ index 4e3991914..aacc0e954 100644
  	auto errorState = SlippiMatchmaking::ProcessState::ERROR_ENCOUNTERED;
  	SlippiMatchmaking::ProcessState mmState = !forcedError.empty() ? errorState : matchmaking->GetMatchmakeState();
  
-@@ -2147,6 +2303,19 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2147,6 +2315,19 @@ void CEXISlippi::prepareOnlineMatchState()
  
  	m_read_queue.push_back(mmState); // Matchmaking State
  
@@ -201,7 +213,7 @@ index 4e3991914..aacc0e954 100644
  	u8 localPlayerReady = localSelections.isCharacterSelected;
  	u8 remotePlayersReady = 0;
  
-@@ -2200,10 +2369,26 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2200,10 +2381,26 @@ void CEXISlippi::prepareOnlineMatchState()
  		// If any players are disconnected and the match state is being requested (we are in a lobby),
  		// we should just disconnect. This allows for games to finish with a disconnected player but
  		// after that the "lobby" is terminated.
@@ -229,7 +241,7 @@ index 4e3991914..aacc0e954 100644
  #endif
  
  		if (isConnected)
-@@ -2293,6 +2478,18 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2293,6 +2490,18 @@ void CEXISlippi::prepareOnlineMatchState()
  		return;
  	}
  
@@ -248,7 +260,7 @@ index 4e3991914..aacc0e954 100644
  	m_read_queue.push_back(localPlayerReady);   // Local player ready
  	m_read_queue.push_back(remotePlayersReady); // Remote players ready
  	m_read_queue.push_back(localPlayerIndex);   // Local player index
-@@ -3018,6 +3215,123 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3227,123 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -372,7 +384,7 @@ index 4e3991914..aacc0e954 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3339,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3351,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -401,7 +413,7 @@ index 4e3991914..aacc0e954 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3718,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3730,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -417,7 +429,7 @@ index 4e3991914..aacc0e954 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3842,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3854,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
