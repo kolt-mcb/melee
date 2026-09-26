@@ -65,7 +65,7 @@ extern void pc_lowmem_full_extent(void** base, unsigned long* size,
  * its own scripts the wrong way round. */
 extern unsigned long pc_itconv_marks_size(void);
 extern void pc_itconv_marks_save(void* out);
-extern void pc_itconv_marks_restore(const void* in);
+extern void pc_itconv_marks_restore(const void* in, unsigned long len);
 extern unsigned long pc_lowmem_state_size(void);
 extern void pc_lowmem_state_save(void* out);
 extern void pc_lowmem_state_restore(const void* in);
@@ -309,7 +309,19 @@ static void region_describe(int i, SnapRegion* out)
     }
 }
 
-static int snapshot_take(Snapshot* s, s32 frame)
+/* AddressSanitizer puts a redzone between globals, and a region that brackets
+ * many of them necessarily copies across those redzones -- so the copy is
+ * reported as a global-buffer-overflow every time, which halts the run before it
+ * reaches anything real. The copy is deliberate and its bounds come from the
+ * linker, so these two are exempt; everything they read is inside the span the
+ * linker gave them. */
+#ifdef __SANITIZE_ADDRESS__
+#define SNAP_NO_ASAN __attribute__((no_sanitize_address))
+#else
+#define SNAP_NO_ASAN
+#endif
+
+SNAP_NO_ASAN static int snapshot_take(Snapshot* s, s32 frame)
 {
     int i;
     double t0 = snap_now_ms();
@@ -381,7 +393,7 @@ static int snapshot_take(Snapshot* s, s32 frame)
     return 1;
 }
 
-static int snapshot_restore(const Snapshot* s)
+SNAP_NO_ASAN static int snapshot_restore(const Snapshot* s)
 {
     int i;
     double t0 = snap_now_ms();
@@ -416,7 +428,7 @@ static int snapshot_restore(const Snapshot* s)
      * question "is this piece of the restore the one causing that?" gets
      * answered by running rather than by reading. */
     if ((snap_skip() & 16) == 0 && s->marks != NULL && s->marks_len != 0) {
-        pc_itconv_marks_restore(s->marks);
+        pc_itconv_marks_restore(s->marks, s->marks_len);
     }
     snap_restore_ms += snap_now_ms() - t0;
     return 1;
@@ -501,7 +513,7 @@ static void diff_areas(void)
     snap_diff[3].what = "every object's .bss";
 }
 
-static void diff_capture(s32 frame)
+SNAP_NO_ASAN static void diff_capture(s32 frame)
 {
     int i;
     unsigned long total = 0;
@@ -532,7 +544,7 @@ static void diff_capture(s32 frame)
     }
 }
 
-static void diff_compare(s32 frame)
+SNAP_NO_ASAN static void diff_compare(s32 frame)
 {
     int i, shown = 0, covered = 0;
     if (snap_diff_frame != frame) {

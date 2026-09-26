@@ -192,6 +192,15 @@ static inline int pc_mem_readable(const void* p, unsigned long n)
 static inline int pc_mem_probe(uintptr_t aligned, size_t len)
 {
     static int fd = -2;
+#ifdef __SANITIZE_ADDRESS__
+    /* AddressSanitizer intercepts write() and checks the buffer, so probing a
+     * range this way is reported as an overflow of whatever object the range
+     * starts in -- every call, which halts the run before it reaches anything
+     * real. msync asks the kernel the same question without a buffer for the
+     * interceptor to inspect. Only the answer for whole pages, which is all
+     * this function is asked for. */
+    return msync((void*) aligned, len, MS_ASYNC) == 0;
+#endif
     if (fd == -2) {
         fd = open("/dev/null", O_WRONLY
 #ifdef O_CLOEXEC

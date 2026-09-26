@@ -361,13 +361,18 @@ void pc_itconv_marks_save(void* out)
     }
 }
 
-void pc_itconv_marks_restore(const void* in)
+void pc_itconv_marks_restore(const void* in, unsigned long len)
 {
     const unsigned char* p = (const unsigned char*) in;
+    const unsigned char* end = p + len;
     struct pc_marks_hdr h;
     unsigned long k;
     int i;
-    if (p == NULL) {
+    /* Bounds-checked rather than trusted. The blob is this file's own output, so
+     * a record that does not fit means the caller handed over a stale or
+     * truncated buffer, and walking off the end of it would be a wild read
+     * rather than an error anyone could attribute. */
+    if (p == NULL || len < sizeof(h)) {
         return;
     }
     memcpy(&h, p, sizeof(h));
@@ -383,8 +388,14 @@ void pc_itconv_marks_restore(const void* in)
     }
     for (k = 0; k < h.count; k++) {
         struct pc_marks_rec r;
+        if ((unsigned long) (end - p) < sizeof(r)) {
+            break;
+        }
         memcpy(&r, p, sizeof(r));
         p += sizeof(r);
+        if ((unsigned long) (end - p) < r.bytes) {
+            break;
+        }
         for (i = 0; i < g_arch_n; i++) {
             if (g_arch[i].base != r.base || g_arch[i].swapped == NULL) {
                 continue;

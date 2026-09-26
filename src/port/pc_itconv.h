@@ -61,7 +61,7 @@ int pc_itconv_object_mark(const unsigned char* start);
  * swapped them. See the comment on pc_itconv_marks_save(). */
 unsigned long pc_itconv_marks_size(void);
 void pc_itconv_marks_save(void* out);
-void pc_itconv_marks_restore(const void* in);
+void pc_itconv_marks_restore(const void* in, unsigned long len);
 
 /* Look an Article up in one of the ItCo tables, converting it on first use.
  * Tables this file does not own (the stage item table) are read through

@@ -261,8 +261,23 @@ void ft_80089B08(Fighter_GObj* gobj)
                 guess = 0.5 * guess * (3.0 - guess * guess * line_len);
                 guess = 0.5 * guess * (3.0 - guess * guess * line_len);
                 guess = 0.5 * guess * (3.0 - guess * guess * line_len);
+#if BUILD_TARGET_PC
+                /* The console stores the reciprocal-square-root result to the
+                 * stack as an f32 and reloads it, so the double is truncated
+                 * before the comparison below; the volatile spill is what
+                 * reproduces that. Reaching it as the word before sp1C is how
+                 * the decomp names the slot MWCC chose, and it only works while
+                 * the compiler puts line_len_sqrt immediately before sp1C --
+                 * which GCC does not have to, and does not under
+                 * AddressSanitizer, where the write lands in a redzone. Name the
+                 * variable: same truncation, no dependency on where the two
+                 * locals land. */
+                line_len_sqrt = (f32) ((f64) line_len * guess);
+                line_len = line_len_sqrt;
+#else
                 ((volatile f32*) &sp1C)[-1] = (f32) ((f64) line_len * guess);
                 line_len = ((volatile f32*) &sp1C)[-1];
+#endif
             }
             if (line_len < 5.0f) {
                 adj_angle = 0.0f;

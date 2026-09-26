@@ -453,12 +453,30 @@ void efLib_Update(HSD_GObj* gobj)
 
 #if BUILD_TARGET_PC
 #include "gr/grdatfiles.h"
+#include "lb/lbheap.h"
 extern u8* pc_ef_dataBase[50];
 
 /* The effect desc table is big-endian archive data: { f32 lifetime;
  * joint, animjoint, matanim, shapeanim offsets } per entry. Converted on
  * first use and cached per bank; a bank that reloads at another address
  * drops its cache. */
+/* The memo lives where the thing it describes lives.
+ *
+ * This table used to be calloc()'d, and the descriptors in it too, while the
+ * joint trees they point at come from lbHeap_80015BD0 -- the game heap. A
+ * rollback restores the game heap and rewinds its cursor, which turns those
+ * trees back into free space, and a host-heap cache that survived the rewind
+ * then handed out descriptors pointing into it: efLib_Create walked a freed
+ * joint tree and JObjLoadJointSub faulted on a child pointer that was no longer
+ * a pointer. Same shape as the script byte-swap marks -- port-side bookkeeping
+ * about game memory, not rewound with the game memory.
+ *
+ * So the table is static storage in a decompiled translation unit, which the
+ * snapshot's linker-bracketed .bss span already covers, and each descriptor is
+ * allocated from the game heap alongside the trees it points at. Both then
+ * rewind with the heap and the memo can never outlive what it describes.
+ * 400 KB of .bss, and 400 KB more in each snapshot. */
+static EF_EffectDesc* pc_ef_cache_tbl[50][1000];
 static EF_EffectDesc** pc_ef_cache[50];
 static u8* pc_ef_cache_base[50];
 
@@ -497,7 +515,7 @@ static EF_EffectDesc* pc_ef_desc(int gfx_id)
     base = pc_ef_dataBase[bank];
     if (pc_ef_cache[bank] == NULL || pc_ef_cache_base[bank] != base) {
         if (pc_ef_cache[bank] == NULL) {
-            pc_ef_cache[bank] = calloc(1000, sizeof(EF_EffectDesc*));
+            pc_ef_cache[bank] = pc_ef_cache_tbl[bank];
             /* memset(NULL) is not a graceful degradation. */
             if (pc_ef_cache[bank] == NULL) {
                 return NULL;
@@ -510,7 +528,12 @@ static EF_EffectDesc* pc_ef_desc(int gfx_id)
         return pc_ef_cache[bank][id];
     }
     raw = (const u8*) efAsync_DatEntries[bank].data + id * 0x14;
-    d = calloc(1, sizeof(EF_EffectDesc));
+    /* From the game heap, not the host's: see the note on pc_ef_cache_tbl. */
+    d = lbHeap_80015BD0(0, sizeof(EF_EffectDesc));
+    if (d == NULL) {
+        return NULL;
+    }
+    memset(d, 0, sizeof(*d));
     lt = pc_ef_be32(raw);
     memcpy(&d->lifetime, &lt, 4);
     off = pc_ef_be32(raw + 4);
@@ -1764,8 +1787,22 @@ void efLib_SetParamAlpha(HSD_GObj* gobj, u8 alpha)
 {
     s32 idx;
 
+#if BUILD_TARGET_PC
+    /* The console's code reaches efLib_ParamTable by indexing past the end of
+     * efLib_AnimQueue, because MWCC based the second array's address off the
+     * first and the decomp has to spell it that way to match (see the comment
+     * on the declarations above). That only works while the linker keeps the two
+     * adjacent, which nothing guarantees and AddressSanitizer actively
+     * prevents: it puts a redzone between globals, so the read is a
+     * global-buffer-overflow and the run stops there. Name the array being
+     * addressed instead. Same memory when they are adjacent, defined when they
+     * are not, and it leaves the GameCube build's spelling alone.
+     * cf. the port's other linker-layout dependencies. */
+    EF_ParamEntry* base = efLib_ParamTable;
+#else
     // WHY
     EF_ParamEntry* base = efLib_AnimQueue + 0x10;
+#endif
 
     for (idx = 0; idx < 8; idx++) {
         if (base[idx].gobj == gobj) {
@@ -1780,17 +1817,36 @@ void efLib_SetParamAlpha(HSD_GObj* gobj, u8 alpha)
     return;
 
 found:
+#if BUILD_TARGET_PC
+    base[idx].gobj = gobj;
+    base[idx].alpha = alpha;
+#else
     // WHY
     efLib_AnimQueue[idx + 0x10].gobj = gobj;
     efLib_AnimQueue[idx + 0x10].alpha = alpha;
+#endif
 }
 
 void efLib_SetParamGfxId(HSD_GObj* gobj, s32 gfx_id)
 {
     s32 idx;
 
+#if BUILD_TARGET_PC
+    /* The console's code reaches efLib_ParamTable by indexing past the end of
+     * efLib_AnimQueue, because MWCC based the second array's address off the
+     * first and the decomp has to spell it that way to match (see the comment
+     * on the declarations above). That only works while the linker keeps the two
+     * adjacent, which nothing guarantees and AddressSanitizer actively
+     * prevents: it puts a redzone between globals, so the read is a
+     * global-buffer-overflow and the run stops there. Name the array being
+     * addressed instead. Same memory when they are adjacent, defined when they
+     * are not, and it leaves the GameCube build's spelling alone.
+     * cf. the port's other linker-layout dependencies. */
+    EF_ParamEntry* base = efLib_ParamTable;
+#else
     // WHY
     EF_ParamEntry* base = efLib_AnimQueue + 0x10;
+#endif
 
     for (idx = 0; idx < 8; idx++) {
         if (base[idx].gobj == gobj) {
@@ -1805,9 +1861,14 @@ void efLib_SetParamGfxId(HSD_GObj* gobj, s32 gfx_id)
     return;
 
 found:
+#if BUILD_TARGET_PC
+    base[idx].gobj = gobj;
+    base[idx].gfx_id = gfx_id;
+#else
     // WHY
     efLib_AnimQueue[idx + 0x10].gobj = gobj;
     efLib_AnimQueue[idx + 0x10].gfx_id = gfx_id;
+#endif
 }
 
 void efLib_Cb_ApplyStoredAlpha(EF_Effect* effect)

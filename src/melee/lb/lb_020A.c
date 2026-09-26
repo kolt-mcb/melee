@@ -213,7 +213,20 @@ void fn_8002113C(HSD_JObj* jobj, Vec3* axis, f32 angle)
     Mtx tmpMtx;
     Mtx rotMtx;
     Mtx result;
+#if BUILD_TARGET_PC
+    /* The console declares a Vec3 here and hands its address to
+     * HSD_JObjGetRotation and HSD_JObjSetRotation as a Quaternion*, which copy
+     * sixteen bytes. On GCN the fourth word lands in the padding PAD_STACK
+     * below reserves and nothing minds. Here it is a 16-byte write into a
+     * 12-byte object -- AddressSanitizer calls it a stack-buffer-overflow, and
+     * it is one; whether it happens to land in a gap is the compiler's choice.
+     * Declaring the storage as the type those two functions actually copy costs
+     * nothing and says what is going on. The Vec3 uses below take the first
+     * three words, which is what the code wants. */
+    Quaternion rot;
+#else
     Vec3 rot;
+#endif
     Quaternion rot2;
     Vec3 localAxis;
     Mtx mtx;
@@ -228,9 +241,9 @@ void fn_8002113C(HSD_JObj* jobj, Vec3* axis, f32 angle)
 
     if (!(jobj->flags & JOBJ_USE_QUATERNION)) {
         HSD_JObjGetRotation(jobj, (Quaternion*) &rot);
-        HSD_MkRotationMtx(tmpMtx, &rot);
+        HSD_MkRotationMtx(tmpMtx, (Vec3*) &rot);
         PSMTXConcat(tmpMtx, rotMtx, result);
-        HSD_QuatLib_8037EB28(result, &rot);
+        HSD_QuatLib_8037EB28(result, (Vec3*) &rot);
         HSD_JObjSetRotation(jobj, (Quaternion*) &rot);
     } else {
         HSD_JObjGetRotation(jobj, &rot2);

@@ -506,8 +506,20 @@ out_objs = " ".join(_obj(s) for s in ALL_SOURCES + ENET_SOURCES)
 # INSERT BEFORE, not AFTER: the default linker script's `.data : { *(.data) }`
 # claims input sections on a first-match basis, so a section inserted after it
 # would collect nothing and bracket an empty span.
-# The simulation is the decompiled game, plus the port's AX glue. Those three
-# files compile the audio SDK's own translation units -- AXVPB.c, AXAlloc.c and
+# The simulation is the decompiled game, plus the port's AX glue and its
+# converters.
+#
+# The converters are here because each keeps a memo -- a cache of "I have
+# already rebuilt this" -- while what it hands back is allocated from the *game*
+# heap by lbHeap_80015BD0. A rollback restores the game heap and rewinds its
+# cursor, so those objects become free space; a memo that sat outside the
+# snapshot survived and kept handing out pointers into them. That crashed twice
+# in a row from different directions: efLib_Create walking a freed joint tree,
+# and Samus's grapple beam (pc_ftconv_samus_gbeam's function-local `cache[4]`)
+# reaching a null bcexp descriptor. Inside the snapshot, a memo cannot outlive
+# what it describes.
+#
+# The AX glue files compile the audio SDK's own translation units -- AXVPB.c, AXAlloc.c and
 # the reverb -- so the voice array, the PB array and the voice free stack are
 # their statics even though the objects are the port's. The game's audio state
 # and the SDK's have to move together or not at all, and each half found out
@@ -516,7 +528,8 @@ out_objs = " ".join(_obj(s) for s in ALL_SOURCES + ENET_SOURCES)
 # pointer from AXFreeVoice, because the voice array had been rewound and the
 # free stack that indexes it had not. They are adjacent in link order, so this
 # is one span.
-SNAP_EXTRA = {"ax_vpb_glue", "ax_alloc_glue", "axfx_reverb_std_glue"}
+SNAP_EXTRA = {"ax_vpb_glue", "ax_alloc_glue", "axfx_reverb_std_glue",
+              "pc_ftconv", "pc_itconv", "pc_grconv"}
 
 # TEMPORARY EXPERIMENT (PC_SNAP_WIDE=1): everything except the snapshot's own
 # bookkeeping and the objects holding OS handles. Answers whether the remaining
