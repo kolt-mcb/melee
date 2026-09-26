@@ -652,6 +652,11 @@ static unsigned slp_rx_from[NET_SLOTS];
  * is never coming. Only frames below the first one ever seen are filled in --
  * a gap above it is a real gap and still waits. */
 static s32 net_first_seen[NET_SLOTS];
+
+/* Whether any peer has sent a pad yet. A peer only sends pads once its own
+ * match is running, so this is the one signal on the wire that says the
+ * other side has started rather than merely agreed to start. */
+static int slp_peer_playing;
 /* The newest frame this side has finished. It is what the acks carry: a peer
  * needs to know how far we have *got*, not which packet arrived last. The
  * resend window runs back to the slowest peer's progress, so a frame somebody
@@ -1066,6 +1071,7 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
             ring_put(&net_in[slot], newest - i, &pad);
         }
         if (count > 0) {
+            slp_peer_playing = 1;
             slp_send_ack(newest);
         }
         return 1;
@@ -1503,6 +1509,19 @@ void pc_net_match_begin(void)
     net_desynced = 0;
     net_stalls = 0;
     net_stall_ms = 0.0;
+
+    /* Not a wait for the peer here, though it is the obvious thing to try.
+     *
+     * Holding at match frame 1 until the peer's first pad arrives deadlocks:
+     * Slippi's side is stalled at its own frame 8 waiting for inputs from
+     * here, and force-disconnects after seven seconds, so its first pad never
+     * comes. Both sides wait and neither sends. Measured -- the port sat at
+     * the line for the full 120 s timeout while the emulator disconnected at
+     * seven.
+     *
+     * What the two need is a shared numbering, not a shared start: this side
+     * should re-base its frame numbers onto the peer's when the first pad
+     * arrives, rather than either side waiting for the other. */
     net_stall_worst = 0.0;
     net_report_at = now_ms() + 5000.0;
 
@@ -1614,6 +1633,22 @@ void pc_net_pads(GCPadStatus* pads)
      * frames in and the fighters were somewhere else by frame 1. The pin was
      * in place the whole time and reported nothing wrong: it was pinning each
      * side to its own number. */
+    /* And then hold again until the peer is actually playing.
+     *
+     * Agreeing on selections is not the same as starting together. The peer
+     * agrees while it is still on its character select, and has a lock-in
+     * animation, a versus splash and a stage load to get through before its
+     * match frame 1; this side, told only that the negotiation is done, starts
+     * immediately. Both then number their pads from their own frame 1, about a
+     * hundred frames apart, and neither can find the frames the other is
+     * asking for. The emulator gives up first -- "Force-disconnecting player 0
+     * after 7s stall (frame: 8 | latest: 0)" -- while this side reports the
+     * same disagreement from the other end, "given up on the other players;
+     * playing alone (match frame 107)".
+     *
+     * A peer only sends pads once its own match is running, so its first pad
+     * is the signal that it has arrived. Waiting for it costs a moment at the
+     * start and is what makes the two sides count the same match. */
     if (net_slippi_proto && !slp_sel_got) {
         double began = now_ms();
         double last_note = began;
@@ -1623,15 +1658,19 @@ void pc_net_pads(GCPadStatus* pads)
             t = now_ms();
             if (t - last_note > 2000.0) {
                 last_note = t;
-                fprintf(stderr, "[SLP] holding the boot until every player "
-                                "has offered a seed (%.0f s, %d of %d in)\n",
+                fprintf(stderr, "[SLP] holding the boot: %s (%.0f s, %d of %d "
+                                "connected)\n",
+                        !slp_sel_got ? "waiting for every player to offer a seed"
+                                     : "seeds agreed, waiting for the peer's "
+                                       "first pad so both count the same match",
                         (t - began) / 1000.0, slp_conn_count(),
                         net_players - 1);
                 fflush(stderr);
             }
             if (t - began > NET_CONNECT_WAIT_MS) {
-                fprintf(stderr, "[SLP] no selections from the peer after "
-                                "%.0f s; playing alone\n",
+                fprintf(stderr, "[SLP] peer never %s after %.0f s; playing "
+                                "alone\n",
+                        !slp_sel_got ? "offered selections" : "started playing",
                         (t - began) / 1000.0);
                 net_state = NET_SOLO;
                 break;

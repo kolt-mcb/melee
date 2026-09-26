@@ -366,36 +366,43 @@ the peer dropping the instant the character is locked in. And the character is
 whatever the hand lands on rather than `SLIPPI_DIRECT_CHAR`, which is only used
 by the old auto-drive path.
 
-### With a longer window: they play, and then the frames disagree
+### With a longer window: they play
 
-A five-minute run gets a real match with inputs crossing in both directions --
-412 pad messages, `pads in from slot1=412` -- and then both sides say the same
-thing about why it ends:
+A five-minute run gets a match with inputs crossing in both directions, the
+peer acknowledging them, and the connection alive to the end of the window:
 
-    emulator   Force-disconnecting player 0 after 7s stall (frame: 8 | latest: 0)
-    port       not in the barrier: given up on the other players; playing alone
-               (match frame 107, gm counter 107, state 4, slot 0 of 2, sel 1/1)
+    [SLP] tx 3703, rx 176 (96 pad messages), peer acked 82, last sent 83
+    [SLP] pads in from slot1=96; conns 1
 
-The emulator is at frame 8 and the newest input it holds from the port is
-frame 0. The port is at frame 107 and has stopped waiting. Neither is wrong
-about its own clock: they are simply not counting the same match.
+`peer acked 82` is the part that matters -- Slippi is receiving this side's
+inputs and saying so, which it was not doing in the first attempt.
 
-The port starts its match the moment the selections arrive. The emulator has a
-Ready splash and a scene load still to get through, so it reaches frame 1 of
-the match about a hundred frames later, and each side labels its pads with its
-own frame numbers. The port's inputs are all for frames the emulator has not
-reached; the emulator's are for frames the port left behind.
+### The frames still do not line up, and waiting is the wrong fix
 
-That is frame alignment, which this repository has met before -- it is what
-`MELEE_NET_LEAD` and `MELEE_NET_RENDEZVOUS` exist for in the Dolphin harness,
-where both sides are walked to the same scene and then released together. The
-Slippi path needs the same treatment: the port should hold at the start of its
-match until the peer's frame numbering says the peer has started too, rather
-than starting when the handshake completes.
+The two sides number their pads from their own match frame 1, and they do not
+reach it together: this side starts when the selections are agreed, while the
+emulator still has a lock-in, a versus splash and a stage load ahead of it. An
+earlier run showed the gap plainly -- the emulator force-disconnecting at
+"frame: 8 | latest: 0" while this side reported "playing alone (match frame
+107)".
 
-Only once they are counting the same frames is it worth asking whether they
-stay in sync, which is the behaviour-delta problem -- the port implements three
-of the codeset's deltas, and UCF is not one of them.
+Two placements of a wait were tried and both are recorded in the source,
+because the second is a trap worth marking:
+
+- **Before the stage load**, where the seed hold already is: releasing there
+  still leaves a whole load -- seconds of it -- before frame 1, so the peer
+  spends that time waiting for inputs that do not come.
+- **At match frame 1**, after the load, which deadlocks. Slippi is stalled at
+  its own frame 8 waiting for inputs from here and force-disconnects after
+  seven seconds, so its first pad never arrives. Measured: this side sat at the
+  line for the full 120 s timeout while the emulator gave up at seven. Both
+  wait, neither sends.
+
+What the two need is a shared *numbering*, not a shared start. This side should
+re-base its frame numbers onto the peer's when the first pad arrives, and keep
+playing meanwhile, rather than either side waiting for the other. That is the
+next change, and it is a change to how pads are labelled rather than to when
+the match begins.
 
 ### On the pad, and a correction
 
