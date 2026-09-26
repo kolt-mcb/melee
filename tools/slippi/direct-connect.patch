@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..060fddf0e 100644
+index 4e3991914..450c81945 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -241,7 +241,7 @@ index 4e3991914..060fddf0e 100644
  #endif
  
  		if (isConnected)
-@@ -2293,6 +2490,18 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2293,6 +2490,32 @@ void CEXISlippi::prepareOnlineMatchState()
  		return;
  	}
  
@@ -252,15 +252,29 @@ index 4e3991914..060fddf0e 100644
 +	{
 +		static int readyTick = 0;
 +		if ((readyTick++ % 60) == 0)
-+			ERROR_LOG(SLIPPI_ONLINE, "[Direct] ready bytes: local %d, remote %d, idx %d/%d",
++		{
++			// What the game itself thinks it is doing. Both CSS codes begin by
++			// comparing getMinorMajor against SCENE_ONLINE_CSS (0x0008) and exit
++			// quietly otherwise, which would explain correct bytes going ignored.
++			// getMinorMajor reads the scene controller word at 0x80479D30 and
++			// builds (minor << 8) | major from its first and last bytes.
++			u8 major = PowerPC::HostRead_U8(0x80479D30);
++			u8 minor = PowerPC::HostRead_U8(0x80479D33);
++			u32 r13 = PowerPC::ppcState.gpr[13];
++			u8 onlineMode = r13 != 0 ? PowerPC::HostRead_U8(r13 - 0x5060) : 0xFF;
++			ERROR_LOG(SLIPPI_ONLINE,
++			          "[Direct] ready bytes: local %d, remote %d, idx %d/%d | scene %02x%02x "
++			          "(want 0008), r13 %08x, online mode %d",
 +			          (int)localPlayerReady, (int)remotePlayersReady,
-+			          (int)localPlayerIndex, (int)remotePlayerIndex);
++			          (int)localPlayerIndex, (int)remotePlayerIndex,
++			          (int)minor, (int)major, r13, (int)onlineMode);
++		}
 +	}
 +
  	m_read_queue.push_back(localPlayerReady);   // Local player ready
  	m_read_queue.push_back(remotePlayersReady); // Remote players ready
  	m_read_queue.push_back(localPlayerIndex);   // Local player index
-@@ -3018,6 +3227,123 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3241,123 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -384,7 +398,7 @@ index 4e3991914..060fddf0e 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3351,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3365,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -413,7 +427,7 @@ index 4e3991914..060fddf0e 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3730,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3744,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -429,7 +443,7 @@ index 4e3991914..060fddf0e 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3854,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3868,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:

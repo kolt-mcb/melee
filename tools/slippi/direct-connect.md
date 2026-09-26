@@ -239,23 +239,36 @@ the same `connected 1`, `local 1, remote 1`, and the game sits exactly where it
 did. So the mismatch is not that the character select is reading a different
 port's inputs.
 
-What that leaves is the scene check both CSS codes open with:
+The scene check is **not** the answer, which was the obvious next theory and is
+now disproven. Reading the game's own state from Dolphin -- the scene
+controller word at 0x80479D30, and OFST_R13_ONLINE_MODE off r13 -- gives:
 
-        getMinorMajor r3
-        cmpwi r3, SCENE_ONLINE_CSS
-        bne EXIT
+    [Direct] ready bytes: local 1, remote 1, idx 1/0 | scene 0008 (want 0008),
+             r13 804db6a0, online mode 1
 
-If the game's minor/major scene is not SCENE_ONLINE_CSS then
-HandleInputsOnCSS.asm exits without doing anything, FetchMatchInfo.asm never
-refreshes CSSDT's MSRB, and every symptom follows: correct bytes from Dolphin,
-no reaction to Z, no start. The screen would still look right, because what
-draws it is the ordinary character select.
+`0008` is SCENE_ONLINE_CSS exactly, online mode 1 is unranked, and r13 is where
+it should be. So both CSS codes pass their opening guard, and the game is on
+the screen it appears to be on, in the mode it appears to be in, with the
+readiness bytes it needs.
 
-The next step is to read the game's own state rather than infer it: from
-Dolphin, `Memory::Read_U8` the scene id and `OFST_R13_ONLINE_MODE`
-(`-0x5060(r13)`) and log them beside the ready bytes. That says in one run
-whether the game believes it is on the online character select at all, and if
-it does not, the entry path that was skipped is where the fix belongs.
+That leaves a contradiction worth stating plainly, because it is the whole
+remaining problem:
+
+- The character select **displays** connected state -- "Playing: direct",
+  "Hold Z to disconnect" -- which is drawn from the MSRB that
+  `FetchMatchInfo.asm` refreshes. So that code is running and the buffer is
+  fresh.
+- `HANDLE_CONNECTED` in the same file, reading the same buffer, disconnects on
+  a Z hold and starts the match when both ready bytes are set. Z held for two
+  minutes does nothing, and the match never starts.
+
+Both cannot be true of a handler that is simply running against that buffer.
+The next thing to establish is whether the injection at `0x80263258` is present
+at all: read the instruction there with `PowerPC::HostRead_U32` and compare it
+against the original -- an installed C2 code replaces it with a branch. That
+says in one run whether `HandleInputsOnCSS.asm` is in the gct that gets written,
+and it distinguishes "the handler runs and does nothing" from "the handler is
+not there", which is the fork everything else now hangs on.
 
 ### On the pad, and a correction
 
