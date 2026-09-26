@@ -72,6 +72,8 @@ extern void pc_lowmem_full_extent(void** base, unsigned long* size,
 /* The script byte-swap marks. They sit on the host heap and describe words that
  * sit in the game heap, so restoring the heap without them makes the game read
  * its own scripts the wrong way round. */
+extern int pc_itconv_arch_at(int i, const unsigned char** base,
+                            unsigned long* len);
 extern unsigned long pc_itconv_marks_size(void);
 extern void pc_itconv_marks_save(void* out);
 extern void pc_itconv_marks_restore(const void* in, unsigned long len);
@@ -382,8 +384,111 @@ static int region_class(int i)
 
 static void region_describe(int i, SnapRegion* out);
 
+/* ---- holes: the loaded file data inside the game heap --------------------
+ *
+ * Nearly half the game heap region is archives -- DATs read off the disc, 8 MB
+ * of the 17 in a two-character match. An archive is written when it loads and
+ * only read afterwards, so copying it every few frames is the largest single
+ * waste in the region list, and leaving it out is worth more than any amount of
+ * cleverness about which of its pages changed.
+ *
+ * Two things have to go together for that to be correct. The archives are not
+ * rewound, so neither are the marks that record which of their objects
+ * pc_script_prepare has byte-swapped in place: swapping happens once per object
+ * ever, so leaving both alone keeps them agreeing. Restoring one without the
+ * other is the bug this whole milestone started with, in either direction.
+ *
+ * And it is checkable rather than argued: if the game ever writes to archive
+ * data during play, the self-check reports the frame it did.
+ */
+#define SNAP_HOLES 64
+
+typedef struct SnapHole {
+    unsigned long lo;
+    unsigned long hi;
+} SnapHole;
+
+static SnapHole snap_holes[SNAP_HOLES];
+static int snap_nholes;
+static unsigned long snap_hole_bytes;
+
+static int snap_holes_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        /* On by default; MELEE_NET_SYNCTEST_WHOLE_HEAP=1 copies the archives
+         * too, which is how "is this safe?" gets answered by running. */
+        on = getenv("MELEE_NET_SYNCTEST_WHOLE_HEAP") == NULL;
+    }
+    return on;
+}
+
+static int snap_hole_cmp(const void* a, const void* b)
+{
+    const SnapHole* x = (const SnapHole*) a;
+    const SnapHole* y = (const SnapHole*) b;
+    return x->lo < y->lo ? -1 : (x->lo > y->lo ? 1 : 0);
+}
+
+/* The archive extents that fall inside this region, as offsets into it, sorted
+ * and clamped. Rebuilt per snapshot: archives come and go with scenes. */
+static void snap_holes_build(const SnapRegion* r)
+{
+    int k = 0;
+    const unsigned char* ab;
+    unsigned long al;
+    snap_nholes = 0;
+    snap_hole_bytes = 0;
+    if (!snap_holes_on() || r->addr == NULL) {
+        return;
+    }
+    while (pc_itconv_arch_at(k, &ab, &al) && snap_nholes < SNAP_HOLES) {
+        k++;
+        if (al == 0 || ab < r->addr || ab + al > r->addr + r->len) {
+            continue;
+        }
+        snap_holes[snap_nholes].lo = (unsigned long) (ab - r->addr);
+        snap_holes[snap_nholes].hi = snap_holes[snap_nholes].lo + al;
+        snap_nholes++;
+    }
+    qsort(snap_holes, (size_t) snap_nholes, sizeof(snap_holes[0]),
+          snap_hole_cmp);
+    {
+        int i;
+        for (i = 0; i < snap_nholes; i++) {
+            snap_hole_bytes += snap_holes[i].hi - snap_holes[i].lo;
+        }
+    }
+}
+
+/* Call `run` for each stretch of [0, len) that is not in a hole. */
+static void snap_spans_outside_holes(unsigned long len,
+                                     void (*run)(void* ctx, unsigned long off,
+                                                 unsigned long n),
+                                     void* ctx)
+{
+    unsigned long at = 0;
+    int i;
+    for (i = 0; i < snap_nholes && at < len; i++) {
+        unsigned long lo = snap_holes[i].lo;
+        unsigned long hi = snap_holes[i].hi;
+        if (hi <= at) {
+            continue;
+        }
+        if (lo > at) {
+            unsigned long end = lo < len ? lo : len;
+            run(ctx, at, end - at);
+        }
+        at = hi > at ? hi : at;
+    }
+    if (at < len) {
+        run(ctx, at, len - at);
+    }
+}
+
 /* The two directions of a page run: into the store when taking, back out of it
- * when restoring. */
+ * when restoring. The "_outside" forms take a run of dirty pages and copy only
+ * the parts of it that are not inside a hole, so the two filters compose. */
 typedef struct SnapRunCtx {
     unsigned char* mem;
     unsigned char* store;
@@ -415,6 +520,44 @@ static void snap_run_load(void* c, unsigned long off, unsigned long n)
     }
     memcpy(x->mem + off, x->store + off, n);
     x->bytes += n;
+}
+
+/* A dirty run minus the holes. Walks the holes once per run; there are a couple
+ * of dozen of them and the runs are few, so this stays cheap. */
+static void snap_run_clipped(SnapRunCtx* x, unsigned long off, unsigned long n,
+                             void (*inner)(void*, unsigned long,
+                                           unsigned long))
+{
+    unsigned long at = off;
+    unsigned long end = off + n;
+    int i;
+    for (i = 0; i < snap_nholes && at < end; i++) {
+        unsigned long lo = snap_holes[i].lo;
+        unsigned long hi = snap_holes[i].hi;
+        if (hi <= at) {
+            continue;
+        }
+        if (lo >= end) {
+            break;
+        }
+        if (lo > at) {
+            inner(x, at, lo - at);
+        }
+        at = hi > at ? hi : at;
+    }
+    if (at < end) {
+        inner(x, at, end - at);
+    }
+}
+
+static void snap_run_save_outside(void* c, unsigned long off, unsigned long n)
+{
+    snap_run_clipped((SnapRunCtx*) c, off, n, snap_run_save);
+}
+
+static void snap_run_load_outside(void* c, unsigned long off, unsigned long n)
+{
+    snap_run_clipped((SnapRunCtx*) c, off, n, snap_run_load);
 }
 
 typedef struct Snapshot {
@@ -597,6 +740,17 @@ static void region_describe(int i, SnapRegion* out)
     } else if (i == SNAP_R_ARAM) {
         void* base = NULL;
         unsigned long used = 0;
+        /* Off unless asked for. ARAM is loaded file data -- animation banks,
+         * put there when a scene loads and only read while it plays -- and a
+         * scene load ends the rewindable stretch anyway, because
+         * pc_snapshot_match_end drops the snapshot when the heaps are rebuilt.
+         * Measured: zero bytes of it change between one snapshot and the next,
+         * and both CPU lineups replay a whole match with it left out. It costs
+         * 6.3 MB of a 25 MB region list, so it is the single cheapest thing to
+         * stop copying. MELEE_NET_SYNCTEST_ARAM=1 puts it back. */
+        if (getenv("MELEE_NET_SYNCTEST_ARAM") == NULL) {
+            return;
+        }
         pc_aram_extent(&base, &used);
         out->addr = (unsigned char*) base;
         out->len = used;
@@ -685,9 +839,20 @@ SNAP_NO_ASAN static int snapshot_take(Snapshot* s, s32 frame)
                         dst->len != cur.len || !snap_dirty_ok();
             dst->addr = cur.addr;
             dst->len = cur.len;
+            if (i == SNAP_R_HEAP) {
+                snap_holes_build(&cur);
+            } else {
+                snap_nholes = 0;
+                snap_hole_bytes = 0;
+            }
             if (whole) {
-                memcpy(dst->data, cur.addr, cur.len);
-                snap_copied[i] = cur.len;
+                SnapRunCtx x;
+                x.mem = cur.addr;
+                x.store = dst->data;
+                x.len = cur.len;
+                x.bytes = 0;
+                snap_spans_outside_holes(cur.len, snap_run_save, &x);
+                snap_copied[i] = x.bytes;
                 dst->primed = 1;
             } else {
                 SnapRunCtx x;
@@ -695,7 +860,7 @@ SNAP_NO_ASAN static int snapshot_take(Snapshot* s, s32 frame)
                 x.store = dst->data;
                 x.len = cur.len;
                 x.bytes = 0;
-                snap_dirty_runs(cur.addr, cur.len, snap_run_save, &x);
+                snap_dirty_runs(cur.addr, cur.len, snap_run_save_outside, &x);
                 snap_copied[i] = x.bytes;
             }
         }
@@ -779,17 +944,30 @@ SNAP_NO_ASAN static int snapshot_restore(const Snapshot* s)
          *
          * Only the pages written since the snapshot need putting back: every
          * other page still holds what was copied into the store. */
-        if (snap_dirty_ok() && src->primed) {
+        if (i == SNAP_R_HEAP) {
+            SnapRegion cur2;
+            region_describe(SNAP_R_HEAP, &cur2);
+            /* Against the *stored* length: the region may have grown, and the
+             * holes are offsets into what was captured. */
+            cur2.len = src->len;
+            cur2.addr = src->addr;
+            snap_holes_build(&cur2);
+        } else {
+            snap_nholes = 0;
+            snap_hole_bytes = 0;
+        }
+        {
             SnapRunCtx x;
             x.mem = src->addr;
             x.store = src->data;
             x.len = src->len;
             x.bytes = 0;
-            snap_dirty_runs(src->addr, src->len, snap_run_load, &x);
+            if (snap_dirty_ok() && src->primed) {
+                snap_dirty_runs(src->addr, src->len, snap_run_load_outside, &x);
+            } else {
+                snap_spans_outside_holes(src->len, snap_run_load, &x);
+            }
             snap_restored[i] = x.bytes;
-        } else {
-            memcpy(src->addr, src->data, src->len);
-            snap_restored[i] = src->len;
         }
     }
     if ((snap_skip() & 1) == 0 && s->lm != NULL) {
@@ -799,7 +977,12 @@ SNAP_NO_ASAN static int snapshot_restore(const Snapshot* s)
      * alone, the same way the other bits leave a region alone: it is how the
      * question "is this piece of the restore the one causing that?" gets
      * answered by running rather than by reading. */
-    if ((snap_skip() & 16) == 0 && s->marks != NULL && s->marks_len != 0) {
+    /* The marks pair with the archives. When the archives are not rewound --
+     * the default -- neither are these, and the two stay agreeing because a
+     * swap happens once per object ever. Restoring one without the other is the
+     * bug this milestone opened with, in whichever direction. */
+    if (!snap_holes_on() && (snap_skip() & 16) == 0 && s->marks != NULL &&
+        s->marks_len != 0) {
         pc_itconv_marks_restore(s->marks, s->marks_len);
     }
     {
@@ -1284,6 +1467,31 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
                         snap_takes ? snap_take_ms / snap_takes : 0.0,
                         snap_clears ? snap_clear_ms / snap_clears : 0.0,
                         snap_rewinds ? snap_restore_ms / snap_rewinds : 0.0);
+                if (snap_workset()) {
+                    /* How much of the game heap region is loaded file data --
+                     * archives, read off the disc and then only read. If that is
+                     * most of it, leaving it out is worth more than any amount
+                     * of cleverness about which pages changed. */
+                    int k = 0;
+                    const unsigned char* ab;
+                    unsigned long al;
+                    unsigned long inside = 0, count = 0;
+                    SnapRegion h;
+                    region_describe(SNAP_R_HEAP, &h);
+                    while (pc_itconv_arch_at(k, &ab, &al)) {
+                        if (h.addr != NULL && ab >= h.addr &&
+                            ab + al <= h.addr + h.len) {
+                            inside += al;
+                            count++;
+                        }
+                        k++;
+                    }
+                    fprintf(stderr, "[SNAP]   %lu archives registered, %lu of "
+                                    "them inside the game heap region: %lu KB "
+                                    "of its %lu KB\n",
+                            (unsigned long) k, count, inside >> 10,
+                            h.len >> 10);
+                }
                 if (snap_workset()) {
                     fprintf(stderr, "[SNAP]   changed since the last snapshot: "
                                     "%lu KB of %lu (heap %lu, .data %lu, "

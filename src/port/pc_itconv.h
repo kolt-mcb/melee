@@ -59,6 +59,11 @@ int pc_itconv_object_mark(const unsigned char* start);
  * bytes the script layer has already swapped. */
 int pc_itconv_object_is_swapped(const unsigned char* start);
 
+/* Walk the registered archives: returns 0 once `i` is past the last one. The
+ * rollback snapshot uses this to account for the loaded file data sitting in the
+ * middle of the game heap. */
+int pc_itconv_arch_at(int i, const unsigned char** base, unsigned long* len);
+
 /* The byte-swap marks as one blob, for the rollback snapshot. They live on the
  * host heap and describe data that lives in the game heap, so a snapshot of the
  * game heap alone puts the words back without putting back the record of having

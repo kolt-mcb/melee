@@ -292,17 +292,44 @@ list and everything to do with how much of the port happens to be resident. So
 it is off by default and on by request, and the mechanism rather than the idea is
 what is wrong.
 
-**Neither path is close to cheap enough to snapshot every frame, which is what
-M3 needs.** Two ways forward, in order of appeal:
+**So the regions were narrowed instead, and that worked.** Two kinds of loaded
+file data were sitting in the middle of the list:
 
-- Narrow the regions. The game heap region is still the port's *whole* upward
-  arena, 17-20 MB of the 33, and most of it is loaded archives rather than
-  simulation state. The allocator knows the difference and does not currently
-  say.
+- **The archives.** `pc_itconv` already registers every DAT read off the disc,
+  and 21 of them account for **8008 KB of the game heap region's 17 MB**. An
+  archive is written when it loads and read for the rest of the match, so the
+  snapshot now skips those extents -- and the byte-swap marks with them, because
+  the two have to be rewound together or not at all, and not-at-all is correct
+  when a swap happens once per object ever.
+- **ARAM.** Animation banks, put there at scene load. Zero bytes of it change
+  between one snapshot and the next, and a scene load ends the rewindable
+  stretch anyway. 6.3 MB.
+
+| | region list | moved per snapshot | take | put back |
+| --- | --- | --- | --- | --- |
+| before | 33 MB | 33 MB | 4.4 ms | 4.2 ms |
+| archives out | 33 MB | 25 MB | 4.4 ms | 4.2 ms |
+| ARAM out too | 27 MB | **19 MB** | **2.0 ms** | **1.8 ms** |
+
+Halved, and every case still replays a whole match. `MELEE_NET_SYNCTEST_WHOLE_HEAP=1`
+and `MELEE_NET_SYNCTEST_ARAM=1` put each back, which is how "is this safe?" gets
+answered by running rather than by argument -- and the self-check is the thing
+that would report it if either turned out to be written during play.
+
+**What is left, and why M3 still needs work.** 2 ms each way is twice the
+acceptance and nowhere near cheap enough to snapshot every frame, which is what
+rollback proper does. Of the 19 MB still moved, the measured working set is about
+1.5 MB. The rest is converted asset data -- joint trees, animation trees, the
+things `grDatFiles_Convert*` builds -- which `lbHeap_80015BD0` allocates from the
+same heap as live simulation objects, so nothing distinguishes them from outside
+the allocator. Two ways on, in order of appeal:
+
+- Have the allocator say. A flag on the allocation, or a separate heap for
+  write-once converted data, and the region shrinks to the working set.
 - Write-protect the regions and count the faults here rather than asking the
   kernel afterwards: a couple of syscalls per take instead of a walk of the whole
   process. It needs to share SIGSEGV with the port's crash handler and its guard
-  pages, which is the reason it is second.
+  pages, which is why it is second.
 
 AddressSanitizer found three real bugs on the way, none of them about rollback
 and all of them the same kind of layout assumption the decomp inherits from

@@ -427,6 +427,24 @@ void pc_itconv_marks_restore(const void* in, unsigned long len)
     }
 }
 
+/* Enumerate the registered archives, so the rollback snapshot can measure -- and
+ * eventually leave out -- the loaded file data inside the game heap. An archive
+ * is a DAT read off the disc: megabytes of it, written when it loads and read for
+ * the rest of the match. */
+int pc_itconv_arch_at(int i, const unsigned char** base, unsigned long* len)
+{
+    if (i < 0 || i >= g_arch_n) {
+        return 0;
+    }
+    if (base != NULL) {
+        *base = g_arch[i].base;
+    }
+    if (len != NULL) {
+        *len = g_arch[i].len;
+    }
+    return 1;
+}
+
 int pc_itconv_locate(const void* p, const unsigned char** base,
                      unsigned long* len)
 {
