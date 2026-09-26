@@ -268,11 +268,41 @@ argument for it is the same.
 5760 is the whole length of these matches, not a stopping point. Two of the three
 used to fail at their first rewind.
 
-The cost is 29-33 MB and 3.2-3.5 ms each way, against the 1 ms in the acceptance
-above, so that part is not met. The heap region is 17-20 MB of it and ARAM 6.3,
-and the heap region is still the port's whole upward arena rather than the part
-the simulation writes. That is the remaining M2 work and it is now the only thing
-between M1 and its stated budget.
+**The cost, and why the obvious fix does not fix it.** 29-33 MB and about 3 ms
+each way, against the 1 ms above. Of that, **1.5 MB changes between one snapshot
+and the next**: the rest is converted characters, stage geometry and animation
+banks, written once at load and read for the rest of the match. So copying only
+what changed should be nearly free, and `MELEE_NET_SYNCTEST_DIRTY=1` does it --
+Linux will say which pages were written, through `/proc/self/clear_refs` and the
+soft-dirty bit in `/proc/self/pagemap`.
+
+It half works, and the half that does not is instructive:
+
+| | copying everything | copying the changes |
+| --- | --- | --- |
+| put back | 3.4-4.8 ms | **0.6-1.0 ms** |
+| take | 4.2-4.8 ms | 4.2-10.1 ms |
+
+The restore wins reliably, by a factor of five, across every case and a full
+match each. The take does not, and not by a fixed amount: clearing the soft-dirty
+bits is process-wide -- there is no per-range form -- so the kernel walks every
+resident page in the process, and that one call measured 3.0, 4.0, 5.7 and 6.6 ms
+in four runs of the same length. It has nothing to do with the size of the region
+list and everything to do with how much of the port happens to be resident. So
+it is off by default and on by request, and the mechanism rather than the idea is
+what is wrong.
+
+**Neither path is close to cheap enough to snapshot every frame, which is what
+M3 needs.** Two ways forward, in order of appeal:
+
+- Narrow the regions. The game heap region is still the port's *whole* upward
+  arena, 17-20 MB of the 33, and most of it is loaded archives rather than
+  simulation state. The allocator knows the difference and does not currently
+  say.
+- Write-protect the regions and count the faults here rather than asking the
+  kernel afterwards: a couple of syscalls per take instead of a walk of the whole
+  process. It needs to share SIGSEGV with the port's crash handler and its guard
+  pages, which is the reason it is second.
 
 AddressSanitizer found three real bugs on the way, none of them about rollback
 and all of them the same kind of layout assumption the decomp inherits from

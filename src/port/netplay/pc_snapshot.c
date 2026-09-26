@@ -46,8 +46,10 @@
 #include <melee/pl/player.h>
 #include <sysdolphin/baselib/gobj.h>
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <time.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -82,6 +84,216 @@ extern u32 pc_state_hash(void);
 #include <port/pc_trace.h>
 #define SNAP_FIELDS 64
 
+/* ---- dirty-page tracking -------------------------------------------------
+ *
+ * Measured, on a four-frame rewind in a CPU match: 695 KB of the 31 MB in the
+ * region list changes between one snapshot and the next. The rest is loaded
+ * data -- converted characters, stage geometry, animation banks -- that is
+ * written once and read for the rest of the match. Copying it every few frames
+ * is the whole of the cost.
+ *
+ * Linux will say which pages were written: writing "4" to /proc/self/clear_refs
+ * clears the soft-dirty bit on every page in the process, and bit 55 of a page's
+ * /proc/self/pagemap entry is set again the moment something writes to it. One
+ * pread per region reads the bits for the whole range, eight bytes a page.
+ *
+ * The scheme, for a single snapshot slot:
+ *
+ *   take     copy the pages dirtied since the last clear into the store, then
+ *            clear. The store now matches memory everywhere.
+ *   restore  copy back the pages dirtied since the take -- which are exactly
+ *            the ones that differ -- then clear.
+ *
+ * Both directions therefore touch the working set rather than the region, and
+ * neither depends on knowing which allocations are simulation state. Where the
+ * kernel will not answer -- no CONFIG_MEM_SOFT_DIRTY, or /proc not mounted --
+ * every page is treated as dirty, which is the old behaviour exactly.
+ */
+#define SNAP_PAGE_ENTS 4096 /* pagemap entries read per pread */
+#define SNAP_PM_SOFT_DIRTY (1ULL << 55)
+
+static int snap_pm_fd = -2;
+static long snap_pagesz;
+
+/* Clear the soft-dirty bit on every page in the process. Cheap, and
+ * process-wide by design: there is no per-range form, and clearing bits for
+ * memory nothing here tracks costs nothing. */
+static int snap_dirty_reset(void)
+{
+    int fd = open("/proc/self/clear_refs", O_WRONLY);
+    int ok;
+    if (fd < 0) {
+        return 0;
+    }
+    ok = write(fd, "4\n", 2) == 2;
+    close(fd);
+    return ok;
+}
+
+static int snap_page_is_dirty(const void* p)
+{
+    unsigned long long e = 0;
+    off_t off;
+    if (snap_pm_fd < 0 || snap_pagesz <= 0) {
+        return 1;
+    }
+    off = (off_t) (((uintptr_t) p / (uintptr_t) snap_pagesz) * 8u);
+    if (pread(snap_pm_fd, &e, sizeof(e), off) != (ssize_t) sizeof(e)) {
+        return 1;
+    }
+    return (e & SNAP_PM_SOFT_DIRTY) != 0;
+}
+
+/* Walk a range a page at a time and hand each run of dirty pages to `run`, as
+ * offsets into the range.
+ *
+ * The range does not start on a page boundary -- a linker-bracketed span begins
+ * wherever the objects in it happen to land -- so the walk is over the pages
+ * that *cover* it, and the first of those reaches back before `addr`. Getting
+ * that wrong shifts every offset by the misalignment, which restores the wrong
+ * bytes and looks exactly like a snapshot that missed something. It did: the
+ * frame counter came back unchanged and the check said the rewind had not taken.
+ *
+ * Reads the bits in blocks rather than one page per syscall: a 20 MB region is
+ * five thousand pages, and five thousand preads a frame is its own cost.
+ */
+static void snap_dirty_runs(unsigned char* addr, unsigned long len,
+                            void (*run)(void* ctx, unsigned long off,
+                                        unsigned long n),
+                            void* ctx)
+{
+    static unsigned long long ents[SNAP_PAGE_ENTS];
+    unsigned long page = (unsigned long) snap_pagesz;
+    uintptr_t first_page = (uintptr_t) addr & ~(uintptr_t) (page - 1);
+    /* How far into the first page the range starts. */
+    unsigned long skew = (unsigned long) ((uintptr_t) addr - first_page);
+    unsigned long npages = (skew + len + page - 1) / page;
+    unsigned long i = 0;
+    unsigned long run_start = 0;
+    int in_run = 0;
+
+    /* A run of pages [a, b) covers range offsets [a*page - skew, b*page - skew),
+     * clamped to the range; the callbacks do the clamping at the far end. */
+#define SNAP_EMIT(a, b)                                                        \
+    do {                                                                       \
+        unsigned long lo_ = (a) * page;                                        \
+        unsigned long hi_ = (b) * page;                                        \
+        lo_ = lo_ > skew ? lo_ - skew : 0;                                     \
+        hi_ = hi_ > skew ? hi_ - skew : 0;                                     \
+        if (hi_ > lo_) {                                                       \
+            run(ctx, lo_, hi_ - lo_);                                          \
+        }                                                                      \
+    } while (0)
+
+    while (i < npages) {
+        unsigned long want = npages - i;
+        ssize_t got;
+        unsigned long k;
+        if (want > SNAP_PAGE_ENTS) {
+            want = SNAP_PAGE_ENTS;
+        }
+        got = pread(snap_pm_fd, ents, want * 8,
+                    (off_t) (((first_page / page) + i) * 8u));
+        if (got != (ssize_t) (want * 8)) {
+            /* Cannot tell: treat the rest as dirty rather than skip it. */
+            if (!in_run) {
+                run_start = i;
+                in_run = 1;
+            }
+            i = npages;
+            break;
+        }
+        for (k = 0; k < want; k++) {
+            int dirty = (ents[k] & SNAP_PM_SOFT_DIRTY) != 0;
+            if (dirty && !in_run) {
+                run_start = i + k;
+                in_run = 1;
+            } else if (!dirty && in_run) {
+                SNAP_EMIT(run_start, i + k);
+                in_run = 0;
+            }
+        }
+        i += want;
+    }
+    if (in_run) {
+        SNAP_EMIT(run_start, npages);
+    }
+#undef SNAP_EMIT
+}
+
+static int snap_dirty_ok(void)
+{
+    static int ok = -1;
+    if (ok >= 0) {
+        return ok;
+    }
+    ok = 0;
+    /* MELEE_NET_SYNCTEST_DIRTY=1 turns this on. It is off by default, and the
+     * reason is measured.
+     *
+     * Of the 29-33 MB in the region list, about 1.5 MB changes between one
+     * snapshot and the next: the rest is converted characters, stage geometry
+     * and animation banks, written once and read for the rest of the match. So
+     * copying only what changed should be most of a free win, and for the
+     * restore it is -- reliably, across every case and a full match each:
+     *
+     *     put back   copying everything 3.4-4.8 ms | copying the changes 0.6-1.0
+     *     take       copying everything 4.2-4.8 ms | copying the changes 4.2-10.1
+     *
+     * The take is where it falls down, and not by a fixed amount. Clearing the
+     * soft-dirty bits is process-wide -- there is no per-range form -- so the
+     * kernel walks every resident page in the process, and that cost was
+     * measured at 3.0, 4.0, 5.7 and 6.6 ms in four runs of the same length. It
+     * has nothing to do with the size of the region list and everything to do
+     * with how much of the port happens to be resident, which is why the
+     * per-cycle comparison came out both ways before whole matches were run.
+     *
+     * So: a reliable factor of five on the restore, a coin-toss on the take,
+     * and on by request rather than by default until the mechanism changes.
+     *
+     * Neither path is remotely cheap enough to snapshot every frame, which is
+     * what rollback proper needs. That wants the regions narrowed -- the game
+     * heap region is still the port's whole upward arena -- or this same scheme
+     * with the pages write-protected and the faults counted here, which is a
+     * couple of syscalls a take instead of a walk of the whole process.
+     */
+    if (getenv("MELEE_NET_SYNCTEST_DIRTY") == NULL) {
+        return ok;
+    }
+    snap_pagesz = sysconf(_SC_PAGESIZE);
+    if (snap_pagesz <= 0) {
+        return ok;
+    }
+    snap_pm_fd = open("/proc/self/pagemap", O_RDONLY);
+    if (snap_pm_fd >= 0) {
+        /* Prove the bit actually moves before trusting it: the file exists on
+         * kernels built without soft-dirty support and simply never sets it,
+         * which would make every restore a no-op and every check pass. */
+        unsigned char* probe = (unsigned char*) malloc((size_t) snap_pagesz * 3);
+        if (probe != NULL) {
+            unsigned char* a = probe + snap_pagesz -
+                               ((uintptr_t) probe % (uintptr_t) snap_pagesz);
+            a[0] = 1;
+            a[snap_pagesz] = 1;
+            if (snap_dirty_reset()) {
+                a[snap_pagesz] = 2;
+                ok = snap_page_is_dirty(a + snap_pagesz) &&
+                     !snap_page_is_dirty(a);
+            }
+            free(probe);
+        }
+    }
+    if (!ok && snap_pm_fd >= 0) {
+        close(snap_pm_fd);
+        snap_pm_fd = -1;
+    }
+    fprintf(stderr, "[SNAP] dirty-page tracking %s\n",
+            ok ? "on; snapshots copy the working set"
+               : "not available; snapshots copy every region in full");
+    fflush(stderr);
+    return ok;
+}
+
 /* One captured region. The extent is recorded with the data because the heap
  * grows: a snapshot restored onto a larger heap must put back only what it
  * took, and one restored onto a smaller one is a bug worth reporting rather
@@ -91,6 +303,10 @@ typedef struct SnapRegion {
     unsigned long len;
     unsigned char* data;
     unsigned long cap;
+    /* The store only matches memory once a full copy has been made into it, and
+     * only while the region has not moved. Until then, and after it does, the
+     * dirty bits say nothing useful and the copy has to be whole. */
+    int primed;
 } SnapRegion;
 
 /* The linker brackets the snapshotted translation units' mutable static
@@ -165,6 +381,41 @@ static int region_class(int i)
 }
 
 static void region_describe(int i, SnapRegion* out);
+
+/* The two directions of a page run: into the store when taking, back out of it
+ * when restoring. */
+typedef struct SnapRunCtx {
+    unsigned char* mem;
+    unsigned char* store;
+    unsigned long len;
+    unsigned long bytes;
+} SnapRunCtx;
+
+static void snap_run_save(void* c, unsigned long off, unsigned long n)
+{
+    SnapRunCtx* x = (SnapRunCtx*) c;
+    if (off >= x->len) {
+        return;
+    }
+    if (off + n > x->len) {
+        n = x->len - off;
+    }
+    memcpy(x->store + off, x->mem + off, n);
+    x->bytes += n;
+}
+
+static void snap_run_load(void* c, unsigned long off, unsigned long n)
+{
+    SnapRunCtx* x = (SnapRunCtx*) c;
+    if (off >= x->len) {
+        return;
+    }
+    if (off + n > x->len) {
+        n = x->len - off;
+    }
+    memcpy(x->mem + off, x->store + off, n);
+    x->bytes += n;
+}
 
 typedef struct Snapshot {
     s32 frame;
@@ -250,6 +501,29 @@ static unsigned long snap_last[SNAP_REGIONS];
 static unsigned long snap_bytes;
 /* Bytes per class, for a log line that does not grow with the span count. */
 static unsigned long snap_by_class[SNAP_CLASSES];
+/* Bytes that changed since the previous snapshot, per region, when asked for. */
+static unsigned long snap_dirty[SNAP_REGIONS];
+/* Bytes actually moved by the last take and the last restore -- the working set
+ * when the dirty bits are available, the whole region list when they are not. */
+static unsigned long snap_copied[SNAP_REGIONS];
+static unsigned long snap_restored[SNAP_REGIONS];
+static unsigned long snap_copied_bytes, snap_restored_bytes;
+/* Time spent in the process-wide soft-dirty clear, which is the take's cost and
+ * is set by how much of the whole process is resident rather than by the size of
+ * the region list. Worth reporting separately so the two are not confused. */
+static double snap_clear_ms;
+static int snap_clears;
+static unsigned long snap_dirty_by_class[SNAP_CLASSES];
+
+static int snap_workset(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* s = getenv("MELEE_NET_SYNCTEST_WORKSET");
+        on = (s != NULL && *s != '\0' && strcmp(s, "0") != 0);
+    }
+    return on;
+}
 /* Time spent copying, so the cost is measured rather than assumed. */
 static double snap_take_ms, snap_restore_ms;
 static int snap_takes;
@@ -384,15 +658,55 @@ SNAP_NO_ASAN static int snapshot_take(Snapshot* s, s32 frame)
             dst->data = p;
             dst->cap = cur.len;
         }
-        dst->addr = cur.addr;
-        dst->len = cur.len;
-        memcpy(dst->data, cur.addr, cur.len);
+        /* MELEE_NET_SYNCTEST_WORKSET=1 counts how much of each region actually
+         * changed since the last snapshot, a page at a time. The region list is
+         * honest but coarse -- region 0 is the port's whole upward arena, most of
+         * which is loaded data that never changes -- and the answer says how much
+         * a dirty-page scheme could save before one is written. */
+        if (snap_workset() && dst->cap >= cur.len && dst->len == cur.len) {
+            unsigned long off;
+            unsigned long dirty = 0;
+            for (off = 0; off < cur.len; off += 4096) {
+                unsigned long n = cur.len - off;
+                if (n > 4096) {
+                    n = 4096;
+                }
+                if (memcmp(dst->data + off, cur.addr + off, n) != 0) {
+                    dirty += n;
+                }
+            }
+            snap_dirty[i] = dirty;
+        }
+        {
+            /* A region that has moved, grown past what the store holds, or has
+             * never been copied in full cannot be updated from its dirty bits:
+             * the store does not match the rest of it. */
+            int whole = !dst->primed || dst->addr != cur.addr ||
+                        dst->len != cur.len || !snap_dirty_ok();
+            dst->addr = cur.addr;
+            dst->len = cur.len;
+            if (whole) {
+                memcpy(dst->data, cur.addr, cur.len);
+                snap_copied[i] = cur.len;
+                dst->primed = 1;
+            } else {
+                SnapRunCtx x;
+                x.mem = cur.addr;
+                x.store = dst->data;
+                x.len = cur.len;
+                x.bytes = 0;
+                snap_dirty_runs(cur.addr, cur.len, snap_run_save, &x);
+                snap_copied[i] = x.bytes;
+            }
+        }
         snap_last[i] = cur.len;
     }
     memset(snap_by_class, 0, sizeof(snap_by_class));
+    memset(snap_dirty_by_class, 0, sizeof(snap_dirty_by_class));
     for (i = 0, snap_bytes = 0; i < SNAP_REGIONS; i++) {
         snap_bytes += snap_last[i];
         snap_by_class[region_class(i)] += snap_last[i];
+        snap_dirty_by_class[region_class(i)] += snap_dirty[i];
     }
     if ((snap_skip() & 1) == 0) {
         unsigned long n = pc_lowmem_state_size();
@@ -418,6 +732,18 @@ SNAP_NO_ASAN static int snapshot_take(Snapshot* s, s32 frame)
         }
         s->marks_len = n;
         pc_itconv_marks_save(s->marks);
+    }
+    /* Every dirty page has been copied, so the next interval starts clean. That
+     * is also what makes the restore's scan mean "written since the snapshot"
+     * rather than "written at some point". */
+    if (snap_dirty_ok()) {
+        double c0 = snap_now_ms();
+        snap_dirty_reset();
+        snap_clear_ms += snap_now_ms() - c0;
+        snap_clears++;
+    }
+    for (i = 0, snap_copied_bytes = 0; i < SNAP_REGIONS; i++) {
+        snap_copied_bytes += snap_copied[i];
     }
     snap_take_ms += snap_now_ms() - t0;
     snap_takes++;
@@ -449,8 +775,22 @@ SNAP_NO_ASAN static int snapshot_restore(const Snapshot* s)
         /* Restore exactly what was taken. The heap may have grown since, and
          * the bytes past the snapshot belong to allocations that did not exist
          * at the captured frame; the allocator's own cursor is restored with
-         * the rest of its state, so they become free space again. */
-        memcpy(src->addr, src->data, src->len);
+         * the rest of its state, so they become free space again.
+         *
+         * Only the pages written since the snapshot need putting back: every
+         * other page still holds what was copied into the store. */
+        if (snap_dirty_ok() && src->primed) {
+            SnapRunCtx x;
+            x.mem = src->addr;
+            x.store = src->data;
+            x.len = src->len;
+            x.bytes = 0;
+            snap_dirty_runs(src->addr, src->len, snap_run_load, &x);
+            snap_restored[i] = x.bytes;
+        } else {
+            memcpy(src->addr, src->data, src->len);
+            snap_restored[i] = src->len;
+        }
     }
     if ((snap_skip() & 1) == 0 && s->lm != NULL) {
         pc_lowmem_state_restore(s->lm);
@@ -462,6 +802,34 @@ SNAP_NO_ASAN static int snapshot_restore(const Snapshot* s)
     if ((snap_skip() & 16) == 0 && s->marks != NULL && s->marks_len != 0) {
         pc_itconv_marks_restore(s->marks, s->marks_len);
     }
+    {
+        int k;
+        for (k = 0, snap_restored_bytes = 0; k < SNAP_REGIONS; k++) {
+            snap_restored_bytes += snap_restored[k];
+        }
+        if (snap_trace()) {
+            static int said;
+            if (said < 3) {
+                said++;
+                fprintf(stderr, "[SNAPTRACE] restore moved %lu KB:",
+                        snap_restored_bytes >> 10);
+                for (k = 0; k < SNAP_REGIONS; k++) {
+                    if (s->r[k].len != 0) {
+                        fprintf(stderr, " r%d=%lu/%lu", k, snap_restored[k],
+                                s->r[k].len);
+                    }
+                }
+                fprintf(stderr, "\n");
+                fflush(stderr);
+            }
+        }
+    }
+    /* Deliberately no clear here. Clearing is process-wide -- the kernel walks
+     * every resident page in the process, which is the expensive part -- and
+     * once per cycle is enough: the next take's scan then reports everything
+     * written since the *take* rather than since the restore, which is a
+     * superset of what the replay touched. Copying a superset into the store is
+     * correct; copying a subset would not be. */
     snap_restore_ms += snap_now_ms() - t0;
     return 1;
 }
@@ -904,15 +1272,34 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
                 fprintf(stderr, "[SNAP] synctest clean: %d rewinds, %d frames "
                                 "replayed (%d compared), %lu KB copied (heap "
                                 "%lu, .data %lu, .bss %lu, objheap %lu, "
-                                "aram %lu, conv %lu), %.2f ms to take and "
-                                "%.2f to put back\n",
+                                "aram %lu, conv %lu); %lu KB in and %lu KB "
+                                "out last time, %.2f ms to take (%.2f of it "
+                                "the soft-dirty clear) and %.2f to put back\n",
                         snap_rewinds, snap_frames_checked, snap_frames_compared,
                         (snap_bytes) >> 10, snap_by_class[0] >> 10,
                         snap_by_class[1] >> 10, snap_by_class[2] >> 10,
                         snap_by_class[3] >> 10, snap_by_class[4] >> 10,
-                        snap_by_class[5] >> 10,
+                        snap_by_class[5] >> 10, snap_copied_bytes >> 10,
+                        snap_restored_bytes >> 10,
                         snap_takes ? snap_take_ms / snap_takes : 0.0,
+                        snap_clears ? snap_clear_ms / snap_clears : 0.0,
                         snap_rewinds ? snap_restore_ms / snap_rewinds : 0.0);
+                if (snap_workset()) {
+                    fprintf(stderr, "[SNAP]   changed since the last snapshot: "
+                                    "%lu KB of %lu (heap %lu, .data %lu, "
+                                    ".bss %lu, objheap %lu, aram %lu, "
+                                    "conv %lu)\n",
+                            (snap_dirty_by_class[0] + snap_dirty_by_class[1] +
+                             snap_dirty_by_class[2] + snap_dirty_by_class[3] +
+                             snap_dirty_by_class[4] +
+                             snap_dirty_by_class[5]) >> 10,
+                            snap_bytes >> 10, snap_dirty_by_class[0] >> 10,
+                            snap_dirty_by_class[1] >> 10,
+                            snap_dirty_by_class[2] >> 10,
+                            snap_dirty_by_class[3] >> 10,
+                            snap_dirty_by_class[4] >> 10,
+                            snap_dirty_by_class[5] >> 10);
+                }
                 fflush(stderr);
             }
         }
