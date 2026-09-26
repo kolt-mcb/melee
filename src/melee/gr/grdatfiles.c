@@ -777,6 +777,28 @@ static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* da
         }
         return NULL;
     }
+    /* MELEE_SWAPCHECK=1: is this object one the script layer has already turned
+     * into host order? If so the be32_swap below reads its offsets backwards and
+     * everything after is nonsense. Costs a lookup per node, so it is off by
+     * default. */
+    if (getenv("MELEE_SWAPCHECK") != NULL) {
+        const unsigned char* ostart;
+        const unsigned char* oend;
+        if (pc_itconv_object(gcnPtr, &ostart, &oend) &&
+            pc_itconv_object_is_swapped(ostart))
+        {
+            static int said;
+            if (said < 4) {
+                said++;
+                fprintf(stderr, "[SWAPCHECK] FObjDesc at %p is inside an object "
+                                "(%p..%p) the script layer already swapped; its "
+                                "offsets will read backwards\n",
+                        (const void*) gcnPtr, (const void*) ostart,
+                        (const void*) oend);
+                fflush(stderr);
+            }
+        }
+    }
     if (!grdat_in_archive(dataBase, gcnPtr, sizeof(*gcn))) {
         static int said;
         if (!said) {

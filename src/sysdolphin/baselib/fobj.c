@@ -1,6 +1,7 @@
 #include <stdio.h>
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
+#include "port/pc_execinfo.h"
 #endif
 #include <stdlib.h>
 #include "fobj.h"
@@ -573,11 +574,38 @@ HSD_FObj* HSD_FObjLoadDesc(HSD_FObjDesc* desc)
             if (!said) {
                 said = 1;
                 fprintf(stderr, "[FOBJGUARD] depth %u: fobj=%p (%s) desc=%p "
-                                "(%s)\n",
+                                "(%s) from %p\n",
                         depth, (void*) fobj,
                         pc_ptr_sane(fobj) ? "ok" : "NOT A POINTER",
                         (void*) desc,
-                        pc_ptr_sane(desc) ? "ok" : "NOT A POINTER");
+                        pc_ptr_sane(desc) ? "ok" : "NOT A POINTER",
+                        __builtin_return_address(0));
+                if (!pc_ptr_sane(desc)) {
+                    /* The bytes, not just the value: a pointer that is really
+                     * string data says a struct was read at the wrong offset,
+                     * and which string says which struct. */
+                    const unsigned char* b = (const unsigned char*) &desc;
+                    int k;
+                    fprintf(stderr, "[FOBJGUARD]   as bytes:");
+                    for (k = 0; k < 8; k++) {
+                        fprintf(stderr, " %02X", b[k]);
+                    }
+                    fprintf(stderr, "  as text: \"");
+                    for (k = 0; k < 8; k++) {
+                        fputc(b[k] >= 0x20 && b[k] < 0x7F ? b[k] : '.', stderr);
+                    }
+                    fprintf(stderr, "\"\n");
+                    {
+                        /* The real path, not just the return address: the
+                         * callers here are small and get inlined, so
+                         * __builtin_return_address names whatever function the
+                         * call site ended up inside. */
+                        void* bt[12];
+                        int nbt = backtrace(bt, 12);
+                        fprintf(stderr, "[FOBJGUARD]   from:\n");
+                        backtrace_symbols_fd(bt + 1, nbt - 1, 2);
+                    }
+                }
                 fflush(stderr);
                 port_guard_warn("fobj.c:bad_ptr");
             }

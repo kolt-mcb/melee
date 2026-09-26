@@ -53,6 +53,13 @@
 
 extern void pc_lowmem_game_extent(void** base, unsigned long* used);
 extern void pc_objheap_extent(void** base, unsigned long* used);
+/* Emulated ARAM: a carve from the top of the pool that no other region reaches,
+ * and not read-only -- animation data is loaded into it as scenes load. */
+extern void pc_aram_extent(void** base, unsigned long* used);
+/* The converters' arena. Mostly written once at load, but several converters
+ * memoise into records here and point them at game-heap objects, so the two have
+ * to be rewound together. */
+extern void pc_lowmem_conv_extent(void** base, unsigned long* used);
 /* The pool allocator's cursor and free-list heads. These are statics in a port
  * object, so they are outside every region copied below, and the arena's bytes
  * cannot be put back without them: a restore that rolls back the `next` links
@@ -128,14 +135,17 @@ static const SnapSpan snap_spans[SNAP_SPANS][2] = {
  * .data spans, then SNAP_SPANS .bss spans. */
 #define SNAP_R_HEAP 0
 #define SNAP_R_OBJHEAP 1
-#define SNAP_R_DATA0 2
+#define SNAP_R_ARAM 2
+#define SNAP_R_CONV 3
+#define SNAP_R_DATA0 4
 #define SNAP_R_BSS0 (SNAP_R_DATA0 + SNAP_SPANS)
 #define SNAP_REGIONS (SNAP_R_BSS0 + SNAP_SPANS)
 
-/* Four classes, so the skip mask and the log stay about kinds of state rather
+/* Five classes, so the skip mask and the log stay about kinds of state rather
  * than about however many spans the link happens to need: 1 heap, 2 .data,
- * 4 .bss, 8 object heap. */
-#define SNAP_CLASSES 4
+ * 4 .bss, 8 object heap, 16 ARAM. (Bit 4 of the mask, value 16, also leaves the
+ * script byte-swap marks alone -- both belong to "the data the game loaded".) */
+#define SNAP_CLASSES 6
 
 static int region_class(int i)
 {
@@ -144,6 +154,12 @@ static int region_class(int i)
     }
     if (i == SNAP_R_OBJHEAP) {
         return 3;
+    }
+    if (i == SNAP_R_ARAM) {
+        return 4;
+    }
+    if (i == SNAP_R_CONV) {
+        return 5;
     }
     return (i < SNAP_R_BSS0) ? 1 : 2;
 }
@@ -277,6 +293,10 @@ static const char* region_name(int i)
         return "game .bss";
     case 3:
         return "HSD object heap";
+    case 4:
+        return "ARAM";
+    case 5:
+        return "converter arena";
     default:
         return "OUTSIDE EVERY REGION";
     }
@@ -298,6 +318,18 @@ static void region_describe(int i, SnapRegion* out)
         void* base = NULL;
         unsigned long used = 0;
         pc_objheap_extent(&base, &used);
+        out->addr = (unsigned char*) base;
+        out->len = used;
+    } else if (i == SNAP_R_ARAM) {
+        void* base = NULL;
+        unsigned long used = 0;
+        pc_aram_extent(&base, &used);
+        out->addr = (unsigned char*) base;
+        out->len = used;
+    } else if (i == SNAP_R_CONV) {
+        void* base = NULL;
+        unsigned long used = 0;
+        pc_lowmem_conv_extent(&base, &used);
         out->addr = (unsigned char*) base;
         out->len = used;
     } else {
@@ -871,12 +903,14 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
                 }
                 fprintf(stderr, "[SNAP] synctest clean: %d rewinds, %d frames "
                                 "replayed (%d compared), %lu KB copied (heap "
-                                "%lu, .data %lu, .bss %lu, objheap %lu), "
-                                "%.2f ms to take and %.2f to put back\n",
+                                "%lu, .data %lu, .bss %lu, objheap %lu, "
+                                "aram %lu, conv %lu), %.2f ms to take and "
+                                "%.2f to put back\n",
                         snap_rewinds, snap_frames_checked, snap_frames_compared,
                         (snap_bytes) >> 10, snap_by_class[0] >> 10,
                         snap_by_class[1] >> 10, snap_by_class[2] >> 10,
-                        snap_by_class[3] >> 10,
+                        snap_by_class[3] >> 10, snap_by_class[4] >> 10,
+                        snap_by_class[5] >> 10,
                         snap_takes ? snap_take_ms / snap_takes : 0.0,
                         snap_rewinds ? snap_restore_ms / snap_rewinds : 0.0);
                 fflush(stderr);

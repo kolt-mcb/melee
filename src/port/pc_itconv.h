@@ -55,6 +55,10 @@ int pc_itconv_object(const void* p, const unsigned char** start,
  * the previous state (1 if it was already marked). Used by pc_script.c. */
 int pc_itconv_object_mark(const unsigned char* start);
 
+/* Read-only form of the above, for asking whether a converter is about to read
+ * bytes the script layer has already swapped. */
+int pc_itconv_object_is_swapped(const unsigned char* start);
+
 /* The byte-swap marks as one blob, for the rollback snapshot. They live on the
  * host heap and describe data that lives in the game heap, so a snapshot of the
  * game heap alone puts the words back without putting back the record of having

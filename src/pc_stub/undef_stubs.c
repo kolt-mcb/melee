@@ -694,6 +694,27 @@ unsigned char* pc_aram_host(unsigned long aram_off)
     return pc_aram_base + aram_off;
 }
 
+/* The live extent of emulated ARAM, for the rollback snapshot.
+ *
+ * ARAM is a carve from the top of the pool, so none of the snapshot's other
+ * regions reach it -- and it is not read-only: the game DMAs animation data
+ * into it and ARAlloc hands out more of it as scenes load. A replayed frame
+ * therefore read whatever the *first* run had left there, and a FigaTrack
+ * fetched from it could be anything; the symptom was an HSD_FObjDesc* whose
+ * eight bytes were the middle of the string "sysdolphin_base_library".
+ *
+ * A bump allocator, so everything ever handed out is below the cursor and the
+ * 16 MB behind it has never been written. */
+void pc_aram_extent(void** base, unsigned long* used)
+{
+    if (base != NULL) {
+        *base = pc_aram_base;
+    }
+    if (used != NULL) {
+        *used = pc_aram_used;
+    }
+}
+
 /* Is this 32-bit slot an ARAM offset or a host address?
  *
  * The console packs both kinds of value into one word and tells them apart
@@ -4696,6 +4717,31 @@ void pc_lowmem_full_extent(void** base, unsigned long* size,
     if (top != NULL) { *top = (unsigned long) g_low_mem_top; }
 }
 
+/* The converters' arena, for the rollback snapshot.
+ *
+ * Mostly write-once -- converted character and item data, built at load -- which
+ * is why it started out excluded. But not entirely: several converters memoise
+ * into records that live here, and what they memoise is allocated from the game
+ * heap by lbHeap_80015BD0. A rollback reclaims the heap and leaves the arena
+ * alone, so the memo goes on pointing at memory that has been handed back.
+ * pc_ftconv_partanim's rec->x8[k] is one: a fighter changing to a walk read an
+ * HSD_AObjDesc through it whose fobjdesc was the middle of the string
+ * "sysdolphin_base_library".
+ *
+ * A bump allocator, so the live extent is [base, base+used). */
+static unsigned char* g_conv_base = NULL;
+static unsigned long g_conv_used = 0;
+
+void pc_lowmem_conv_extent(void** base, unsigned long* used)
+{
+    if (base != NULL) {
+        *base = g_conv_base;
+    }
+    if (used != NULL) {
+        *used = g_conv_used;
+    }
+}
+
 void* pc_lowmem_alloc(unsigned long size)
 {
     static unsigned char* base = NULL;
@@ -4712,6 +4758,8 @@ void* pc_lowmem_alloc(unsigned long size)
     if (size == 0 || used + size > cap) return NULL;
     p = base + used;
     used += size;
+    g_conv_base = base;
+    g_conv_used = used;
     return p;
 }
 

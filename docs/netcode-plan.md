@@ -233,40 +233,46 @@ Where M1 stands now, and this is measured rather than hoped:
 
 The first of those failed at its very first rewind before this.
 
-**The last one, and what is known about it.** Pikachu vs Peach replays cleanly
-for hundreds of frames and then dies in the animation loader. The guards added
-for it now name the actual problem instead of faulting:
+**And the last one was the same thing again, in the arena.** Pikachu vs Peach
+replayed cleanly for hundreds of frames and then died in the animation loader.
+The guards named it rather than faulting:
 
-    [FOBJGUARD] depth 0: fobj=0x4b046c90 (ok) desc=0x5f657361625f6e69 (NOT A POINTER)
+    [FOBJGUARD] depth 0: fobj=0x5b046c90 (ok) desc=0x5f657361625f6e69 (NOT A POINTER)
+    [FOBJGUARD]   as bytes: 69 6E 5F 62 61 73 65 5F  as text: "in_base_"
 
-That descriptor is ASCII -- `"in_base_"` -- so a converter has resolved an offset
-into the DAT's string table and handed the result to `HSD_FObjLoadDesc` as an
-`HSD_FObjDesc*`. Depth 0, so it is the initial descriptor, not a chain that went
-wrong partway.
+A descriptor pointer made of ASCII -- the middle of `"sysdolphin_base_library"`.
+A backtrace put it under `ftCo_Walk_CheckInput`, a fighter changing to a walk,
+which reaches `pc_ftconv_partanim`: another lazy memo, this one written into a
+record the converters allocate with `pc_lowmem_alloc` -- the arena carved from
+the top of the pool, which no region covered -- pointing at an anim-joint tree
+allocated from the game heap, which every region did. The rewind reclaimed the
+tree and left the memo. Adding the arena's live extent fixed it, and the extent
+is 55 KB, because almost everything the converters produce goes through the game
+heap instead.
 
-What is *not* wrong is the replay. The simulation is faithful as far as anything
-can measure it: the fighters agree, and so does a hash of every object pool's
-used and free counts -- which is a much wider net, since every HSD object the
-simulation allocates or frees moves one of those. Nothing is reported until the
-crash. It is also not static memory: the whole-program snapshot (77 MB) fails
-identically, and the converted effect data was confirmed to sit inside region 0.
+Two things were ruled out on the way and are worth not repeating: the converters
+never read bytes `pc_script_prepare` has already swapped (`MELEE_SWAPCHECK=1`
+asks, and the answer was zero in a whole match, with and without rewinds), and
+ARAM -- which is also a carve and also uncovered -- was added at the same time
+and changed nothing on its own. It stays in, because it is mutable and the
+argument for it is the same.
 
-The lead worth following is that a converter is reading bytes
-`pc_script_prepare` has already byte-swapped in place, and getting a wrong offset
-out of `be32_swap`. That would produce exactly a pointer made of string bytes. It
-would also be a bug with no rollback involved -- the rewind only changes when the
-swap happens relative to the conversion -- which makes it checkable without any
-of this machinery: log the ranges the swap touches, and log a converter reading
-inside one.
+**M1 holds.** All three cases, four-frame rewinds, a full match each:
 
-One more thing the diff mode settled on the way. Comparing a frame's two runs
-across all of memory, the *only* decompiled globals that differ are `AXDriver_*`,
-`__AXVPB`, `__AXPB`, `HSD_Synth_*`, `lbaudio_ax`'s tables and the voice stack --
-audio, all of it, and nothing else but `perf.c`'s `start_time`. That is expected
-and unfixable: the mixer advances with the output device, not with the
-simulation, so two runs of one frame consume different numbers of samples. The
-mixer is therefore skipped while replaying, which is what a rollback wants
-anyway -- a corrected frame should not re-play the sound it already played.
+| case | result |
+| --- | --- |
+| Samus vs Donkey Kong, CPUs playing | 1440 rewinds, **5760 frames compared, clean** |
+| Pikachu vs Peach, CPUs playing | 1440 rewinds, **5760 frames compared, clean** |
+| the idle debug boot | 1440 rewinds, **5760 frames compared, clean** |
+
+5760 is the whole length of these matches, not a stopping point. Two of the three
+used to fail at their first rewind.
+
+The cost is 29-33 MB and 3.2-3.5 ms each way, against the 1 ms in the acceptance
+above, so that part is not met. The heap region is 17-20 MB of it and ARAM 6.3,
+and the heap region is still the port's whole upward arena rather than the part
+the simulation writes. That is the remaining M2 work and it is now the only thing
+between M1 and its stated budget.
 
 AddressSanitizer found three real bugs on the way, none of them about rollback
 and all of them the same kind of layout assumption the decomp inherits from

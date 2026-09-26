@@ -259,6 +259,24 @@ int pc_itconv_object(const void* p, const unsigned char** start,
     return 1;
 }
 
+/* Has the object starting here already been byte-swapped in place? The same
+ * question pc_itconv_object_mark asks, without answering it by setting the bit.
+ *
+ * For the converters: they read the same archive bytes as big-endian, so an
+ * object pc_script_prepare has already turned into host order gives them
+ * offsets with their bytes the wrong way round -- and a wrong offset added to
+ * the data base lands anywhere, including the string table. */
+int pc_itconv_object_is_swapped(const unsigned char* start)
+{
+    struct arch* a = find_arch(start);
+    u32 idx;
+    if (a == NULL || a->swapped == NULL) {
+        return 0;
+    }
+    idx = (u32) (start - a->base) / 4;
+    return (a->swapped[idx >> 3] & (unsigned char) (1u << (idx & 7))) != 0;
+}
+
 int pc_itconv_object_mark(const unsigned char* start)
 {
     struct arch* a = find_arch(start);
