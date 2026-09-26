@@ -407,12 +407,36 @@ With that in place a five-minute run exchanges **1533 pad messages** where it
 managed 96 before, holds the connection to the end, reports no desync and no
 hash mismatch, and Slippi never force-disconnects.
 
-**Where it stops now:** the two run in step to about match frame 75, and then
-this side reports "given up on the other players; playing alone" while the peer
-carries on sending. So the inputs are aligned and flowing; what gives out is
-this side's patience at the barrier when the peer's pads arrive late. That is a
-question about the stall tolerance and about how fast the emulator runs during
-its first seconds of a match, and it is the next thing to look at.
+### An ack claimed frames that had not arrived
+
+Measuring the stall rather than raising the timeout was the right call, because
+the timeout was not the problem. At the moment this side gave up:
+
+    [NET] no input from a player for 15 s; carrying on alone from frame 15
+          (offset 3, sent to 18)
+    [NET]   slot 1: newest held 26, first seen 4, acked 18
+
+Waiting on frame 15, holding the peer's pads up to 26, having acked 18. The
+frames it needed were *older* than ones it already had.
+
+An ack means "everything up to here has arrived", and the peer stops resending
+at or below it. This side was acking the newest frame in the batch that turned
+up, which claims any frame that did not. One lost datagram then leaves a hole
+nothing will refill: the barrier waits on that frame while pads for later ones
+keep arriving, and fifteen seconds later it gives up with a ring full of
+inputs it cannot use.
+
+It acks the newest *contiguous* frame now -- the newest with no gap behind it.
+With that, the give-up stops happening: a five-minute run reaches match frame
+78 and is still going when the window closes, where before it quit at 15.
+
+**Where it stops now:** progress is slow and stally -- 21 stalls, thirty
+seconds of waiting, worst case 13.6 s -- so the two are advancing in bursts
+rather than running. The next measurement is which side is waiting: whether the
+emulator is stalled on inputs from here (in which case the resend window or the
+delay is wrong) or running ahead and idle. The instrumentation for that is
+already in place; it wants a run with both sides' frame numbers logged over
+time rather than at the end.
 
 ### On the pad, and a correction
 

@@ -216,6 +216,45 @@ static void ring_put(InputRing* r, s32 f, const NetPad* p)
     r->pad[i] = *p;
 }
 
+/* The newest frame a ring holds, or -1. Only for reporting: it says
+ * whether a stall is waiting on pads that have not arrived at all or on
+ * one particular frame in a stream that is otherwise flowing. */
+static s32 ring_newest(const InputRing* r)
+{
+    s32 best = -1;
+    int i;
+    for (i = 0; i < NET_RING; i++) {
+        if (r->frame[i] > best) {
+            best = r->frame[i];
+        }
+    }
+    return best;
+}
+
+static int ring_get(const InputRing* r, s32 f, NetPad* out);
+
+/* The newest frame with no gap behind it, starting from `from`.
+ *
+ * An ack means "everything up to this frame is here": the peer stops
+ * resending anything at or below it. Acking the newest frame that arrived
+ * therefore claims the ones that did not. One lost datagram then leaves a
+ * hole that can never be refilled, and the barrier waits on that frame
+ * forever while pads for later ones keep arriving -- which is exactly what
+ * it did: waiting on 15, holding up to 26, having acked 18.
+ */
+static s32 ring_contiguous(const InputRing* r, s32 from)
+{
+    s32 f = from;
+    NetPad tmp;
+    if (from < 0) {
+        return -1;
+    }
+    while (ring_get(r, f + 1, &tmp)) {
+        f++;
+    }
+    return f;
+}
+
 static int ring_get(const InputRing* r, s32 f, NetPad* out)
 {
     int i = f & NET_RING_MASK;
@@ -1104,8 +1143,12 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
             ring_put(&net_in[slot], newest - i, &pad);
         }
         if (count > 0) {
+            /* Ack what is actually here, not the newest that turned up. */
+            s32 solid = ring_contiguous(&net_in[slot], net_first_seen[slot]);
             slp_peer_playing = 1;
-            slp_send_ack(newest - slp_frame_offset);
+            if (solid >= 0) {
+                slp_send_ack(solid - slp_frame_offset);
+            }
         }
         return 1;
     }
@@ -1894,9 +1937,24 @@ void pc_net_pads(GCPadStatus* pads)
                 break;
             }
             if (t - began > (double) net_timeout_ms) {
-                fprintf(stderr, "[NET] no input from a player for %.0f s; "
-                                "carrying on alone from frame %d\n",
-                        (t - began) / 1000.0, (int) frame);
+                {
+                    int k;
+                    fprintf(stderr, "[NET] no input from a player for %.0f s; "
+                                    "carrying on alone from frame %d "
+                                    "(offset %d, sent to %d)\n",
+                            (t - began) / 1000.0, (int) frame,
+                            (int) slp_frame_offset, (int) net_last_sent);
+                    for (k = 0; k < NET_SLOTS; k++) {
+                        if (!net_is_remote(k)) {
+                            continue;
+                        }
+                        fprintf(stderr, "[NET]   slot %d: newest held %d, "
+                                        "first seen %d, acked %d\n",
+                                k, (int) ring_newest(&net_in[k]),
+                                (int) net_first_seen[k],
+                                (int) net_peer_acked[k]);
+                    }
+                }
                 fflush(stderr);
                 net_state = NET_SOLO;
                 break;
