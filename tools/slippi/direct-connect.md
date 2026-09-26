@@ -294,48 +294,49 @@ Writing the selection into memory does not substitute for it. The bytes land
 (`base 80497758 idx 0 char 9`) and the screen still reads "Select your
 character", so that state is recomputed from the cursor each frame.
 
-### Input does reach the character select. An earlier claim here was wrong.
+### Input reaches the handler, with the right index, and is still not acted on
 
-This file previously said `controller_map` was empty on the online character
-select, and concluded the netplay layer starves that screen of input. **That
-was a measurement artefact, and the conclusion was wrong.**
+First, a harness bug that invalidated several earlier runs:
 
-The probe read one half of a `u64` (`controller_map.x0[i].button`) once every
-180 EXI commands, against a button tapped four frames in thirty. Zero was the
-expected reading whether or not input was arriving. Reading both halves at a
-sane rate:
+    ${SLIPPI_PRESS:+SLIPPI_DIRECT_PRESS=1}
 
-    [Direct] scene 0028 map p1 0000000100000100 all 0000000100000100
-    [Direct] scene 0001 map p1 0000000100000100 all 0000000100000100
-    [Direct] scene 0008 map p1 0000000100000100 all 0000000100000100
+turned any mode name into the literal `1`, so every "Z held" run launched
+through `direct_vs.sh` was actually tapping A. It passes the value through now.
+Only the hand-run ones were ever genuine, and the conclusions drawn from the
+others -- including "two minutes of Z did nothing" -- were about a run that
+never held Z.
 
-`0x100` is PAD_BUTTON_A, and scene `0008` is the online character select. So the
-injected pad reaches the game's controller map on that screen, the same as on
-every other, and `Inputs_GetPlayerHeldInputs` -- which is a one-line read of
-that buffer -- can see it.
+With that fixed, the chain is verified end to end on the online character
+select (scene 0008), during a real Z hold:
 
-What remains true, and is now the only open thread: the hand does not move, and
-the Z hold never registers (`zTimer` stays 0 and Z never appears in the buffer
-either, while A does). So the question is no longer "does input arrive" but why
-*this* input does not act on that screen when the same injection operates the
-menu before it.
+    p1 0000000000000010 all 0000000000000010 | cssCtl 0 sel 00000010
 
-Also worth keeping: the two codes that take over input fetching,
-`ForceInputRefetchOnAdvance.asm` and `SkipNewInputFetchOnRollback.asm`, are both
-gated on SCENE_ONLINE_IN_GAME, so neither touches the character select. The
-netplay input copy at 0x803775b0 is gated the same way. None of them is
-involved here.
+- `0x10` is PAD_TRIGGER_Z, so the injected hold reaches `controller_map`.
+- `cssCtl 0` is the byte at `-0x49B0(r13)` -- the player index
+  HANDLE_CONNECTED passes to `Inputs_GetPlayerHeldInputs`.
+- `sel 00000010` is `controller_map.x0[0].button`, the entry that index
+  selects. It holds Z.
 
-### A note on method
+So the function the handler calls has Z in the buffer it reads, at the index
+the handler asks for, while the handler is demonstrably running with connection
+state 4 (it writes prevConn itself). `CSSDT_Z_BUTTON_HOLD_TIMER` stays 0 for
+the whole run, which means the branch that increments it is never taken.
 
-Three claims in this file have now had to be withdrawn -- that the screen
-ignores the pad (the B probe was measuring a deliberately disabled button),
-that the scene check was failing, and that controller_map was empty. Each came
-from a single probe read at face value. The ones that survived contact were the
-ones with a control: the stick diagnostic, which moved a cursor and could not
-be mistaken for anything else, and the A/B input test against a no-input run.
-A probe that can return the same answer whether or not the thing is true is not
-evidence, and the cost of finding that out late is several rebuilds each time.
+Every input in that sentence has now been measured rather than assumed, and the
+model still does not predict the behaviour -- which means the model of
+HANDLE_CONNECTED's control flow is wrong somewhere not visible from outside it.
+
+### This needs execution visibility, not more memory probes
+
+Reading memory has taken this as far as it goes: it can show what the handler
+*should* see, and cannot show which branch it takes. The next thing worth doing
+is the one the codeset's authors do -- add `logf` lines inside
+HandleInputsOnCSS.asm at the fork and at the Z check, and rebuild the codeset --
+or run it under Dolphin's debugger interactively, with a human present, where a
+breakpoint that halts is an advantage rather than a problem.
+
+That is a different kind of session from this one, and worth being deliberate
+about rather than continuing to guess from outside.
 
 ### On the pad, and a correction
 

@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..5cf8f0ade 100644
+index 4e3991914..9bb67c0fd 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -309,7 +309,7 @@ index 4e3991914..5cf8f0ade 100644
  	m_read_queue.push_back(localPlayerReady);   // Local player ready
  	m_read_queue.push_back(remotePlayersReady); // Remote players ready
  	m_read_queue.push_back(localPlayerIndex);   // Local player index
-@@ -3018,6 +3276,179 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3276,190 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -338,10 +338,21 @@ index 4e3991914..5cf8f0ade 100644
 +			u32 allo = PowerPC::HostRead_U32(0x80479C30 + 4 * 0x30 + 4);
 +			u32 trhi = PowerPC::HostRead_U32(0x80479C30 + 8);
 +			u32 trlo = PowerPC::HostRead_U32(0x80479C30 + 12);
++			// The index HANDLE_CONNECTED actually passes to
++			// Inputs_GetPlayerHeldInputs, and the controller_map entry it selects.
++			// Entry 0 and the union are the control: if those hold Z and the
++			// selected one does not, the index is the fault.
++			u32 r13b = PowerPC::ppcState.gpr[13];
++			int cssCtl = (r13b >= 0x80000000 && r13b < 0x81800000)
++			                 ? PowerPC::HostRead_U8(r13b - 0x49B0)
++			                 : -1;
++			u32 selLo = (cssCtl >= 0 && cssCtl < 5)
++			                ? PowerPC::HostRead_U32(0x80479C30 + (u32)cssCtl * 0x30 + 4)
++			                : 0xDEADBEEF;
 +			if ((p1hi | p1lo | alhi | allo | trhi | trlo) != 0 || (mapTick % 1800) == 1)
 +				ERROR_LOG(SLIPPI_ONLINE,
-+				          "[Direct] scene %02x%02x map p1 %08x%08x all %08x%08x trig %08x%08x",
-+				          (int)minor, (int)major, p1hi, p1lo, alhi, allo, trhi, trlo);
++				          "[Direct] scene %02x%02x map p1 %08x%08x all %08x%08x trig %08x%08x | cssCtl %d sel %08x",
++				          (int)minor, (int)major, p1hi, p1lo, alhi, allo, trhi, trlo, cssCtl, selLo);
 +		}
 +	}
 +
@@ -489,7 +500,7 @@ index 4e3991914..5cf8f0ade 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3456,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3467,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -518,7 +529,7 @@ index 4e3991914..5cf8f0ade 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3835,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3846,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -534,7 +545,7 @@ index 4e3991914..5cf8f0ade 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3959,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3970,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
@@ -553,7 +564,7 @@ index 4e3991914..5cf8f0ade 100644
  			handleConnectionCleanup();
  			break;
  		case CMD_LOG_MESSAGE:
-@@ -3597,6 +4071,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
+@@ -3597,6 +4082,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
  
  	// Copy buffer data to memory
  	Memory::CopyToEmu(addr, queueAddr, size);

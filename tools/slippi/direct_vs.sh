@@ -89,7 +89,7 @@ XA=$(ps -eo args | grep -oP '(?<=-auth )\S+' | head -1)
   SLIPPI_DIRECT_INDEX=1 \
   SLIPPI_DIRECT_DECIDER=0 \
   SLIPPI_DIRECT_CHAR=${SLIPPI_CHAR:-9} \
-  ${SLIPPI_PRESS:+SLIPPI_DIRECT_PRESS=1} \
+  ${SLIPPI_PRESS:+SLIPPI_DIRECT_PRESS=$SLIPPI_PRESS} \
   timeout -k 10 "$RUNFOR" ./dolphin-emu -b -e "$ISO" ) > "$OUT/emu.out" 2>&1 &
 EMU=$!
 
