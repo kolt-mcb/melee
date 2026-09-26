@@ -151,39 +151,64 @@ together.** The frame counter and the heap, the arena's bytes and the
 allocator's cursor, the game's audio and the SDK's -- each one was a boundary
 drawn through the middle of something.
 
-**What the region list still cannot explain, and what that rules out.** With
-CPUs playing, or on Onett, a replayed frame diverges -- and the report is always
-the same shape: the seed moved and the draw count moved with it, no fighter
-field differs, and rewinding a single frame is enough to show it. Frame 108 of
-Samus vs Donkey Kong is the smallest case: 8 draws on the first run, 2 on the
-replay. `MELEE_GFXTRACE=1` says why. An action's GFX spawn (`ftCo_8009F834`,
-gfx 1031) is reached once, on the first run, and not on the replay -- and the
-generator it would have made accounts for exactly the six missing draws.
+**The frame that would not replay, and what it turned out to be.** With CPUs
+playing, or on Onett, a replayed frame diverged: the seed and the draw count
+moved, no fighter field did, and rewinding a single frame was enough to show it.
+`MELEE_CMDTRACE=1` across the rewind, on frame 108 of Samus vs Donkey Kong:
 
-This is not a missing region, and it is worth writing down how thoroughly that
-was established, because the obvious next move is to go looking for one:
+    [CMD] f294 p0 ms70 mem=dc000407 op=55     first run
+    [CMD] f295 p0 ms70 mem=070400dc op=1      replay
 
-- `MELEE_NET_SYNCTEST_DIFF=2` copies everything the simulation could live in --
-  both ends of the pool, and every object's `.data` and `.bss` -- at the frame
-  a snapshot is taken from, and compares it immediately after the restore.
-  **Not one covered byte differs, at any rewind.** The restore is complete.
-- The 40-odd ranges it reports as uncovered all belong to `gx_gl_bridge`
-  (renderer), `pc_ax` (mixing buffers), `render` (frame counters),
-  `pc_snapshot` (its own bookkeeping) and `pc_ptr.h`'s readability cache. None
-  is read by the simulation: the cache is a pure memo over a probe, and
-  `pc_render_frame_now` is read only inside `render.c`.
-- The generator itself is at `0x4f04af18`, inside the HSD object heap, which is
-  region 3. Its memory was copied and put back.
-- The pads are now replayed, not re-polled (below). It made no difference here.
-- No allocation fell back to the host heap, so nothing lives outside the pool.
+The same script word, read the other way round. `pc_script_prepare()` byte-swaps
+an archive object's words in place the first time the game reads them and records
+that it has in a bitmap that `calloc()` puts on the host heap. The words are in
+the game heap and the snapshot restores them to the big-endian form they had
+before the swap; the bitmap is not in the snapshot and still says "already host
+order", so the replay skipped the swap and the fighter's animation script ran
+opcode 1 -- which does nothing -- where the first run ran opcode 55, which spawns
+a landing effect. The six missing random draws were that effect and its particle
+generator. The marks now travel with the snapshot.
 
-So two runs of one frame, from byte-identical simulation state and with the same
-inputs, take different paths. What is left is state that is not in the pool and
-not in any object's static storage: the host stack -- the restore happens partway
-down a call chain, and a replayed frame is entered from a different place in the
-loop than the original was -- or a thread. An uninitialised read would look
-exactly like this, and this port has had several. That is where M2 goes next,
-and it is a different hunt from the one the region list was for.
+**Lazy in-place conversion with out-of-band bookkeeping is not idempotent under
+any state restore.** That is the rule to carry forward. It is not a rollback
+problem specifically -- it would break a savestate feature identically -- and the
+port converts data lazily in more than one place, so the rest want auditing
+before any restore is trusted.
+
+**What it cost to find, and what that rules out for next time.** Every obvious
+suspect was wrong, and each was eliminated by running rather than reasoning:
+
+- Not unrestored memory. With everything except the self-check's own bookkeeping
+  in the snapshot -- 59 MB of `.bss` instead of 4.6 -- the failure was
+  byte-identical. `MELEE_NET_SYNCTEST_DIFF=2` also showed zero *covered* bytes
+  differing after any restore, so the restore itself is complete.
+- Not the stack. `MELEE_NET_SYNCTEST_SCRUB` fills the frame's stack with a
+  constant before every frame; `MELEE_NET_SYNCTEST_EQSTACK` puts the snapshot
+  straight back after taking it, so a first run is preceded by the same call tree
+  as a replay. Neither moved it.
+- Not audio, and not the clock: two machines of different architectures are
+  already bit-identical for whole matches, so the simulation does not read one.
+- Not the pads -- a CPU's inputs never pass through them -- though the pad
+  handling was wrong and is fixed below.
+- Player 0's whole `Fighter` struct is byte-identical at the entry to the
+  simulation on both runs. That is the measurement that said the difference had
+  to come from something outside memory, and sent the search to the bytes of the
+  script itself.
+
+Two things found on the way. **The frame counter advances between the pad read
+and the simulation**, so a pad read taken while the counter says F feeds the
+simulation of frame F+1; `MELEE_SNAPTRACE=1` prints both hooks with the counter
+at each, which is how that became visible. A restore therefore has to put back
+the pads that were read when the counter last said the snapshot's frame, not the
+ones in hand. And `MELEE_NET_SYNCTEST_DIFF=3` splits a frame in two, comparing at
+the simulation's entry rather than at the pad read; the only covered range that
+differs there is `perf.c`'s `start_time`, which nothing but the perf counters
+reads.
+
+Frame 108 replays now, and the case runs 80 rewinds and 80 frames compared clean
+at a one-frame rewind depth where it used to fail at the first one. It then
+segfaults in a memcpy, where the same run with the self-check off plays 3000
+frames, so there is at least one more of these.
 
 Also still open: the game heap region is the port's whole upward bump arena,
 17.5 MB of the 22.6 MB copied, and almost certainly a superset of what the
