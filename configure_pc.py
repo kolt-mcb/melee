@@ -518,7 +518,14 @@ out_objs = " ".join(_obj(s) for s in ALL_SOURCES + ENET_SOURCES)
 # is one span.
 SNAP_EXTRA = {"ax_vpb_glue", "ax_alloc_glue", "axfx_reverb_std_glue"}
 
+# TEMPORARY EXPERIMENT (PC_SNAP_WIDE=1): everything except the snapshot's own
+# bookkeeping and the objects holding OS handles. Answers whether the remaining
+# one-frame divergence is caused by memory at all.
+SNAP_WIDE_DENY = {"pc_snapshot", "window", "render", "gx_gl_bridge"}
+
 def _is_sim(src):
+    if os.environ.get("PC_SNAP_WIDE") == "1":
+        return Path(src).stem not in SNAP_WIDE_DENY
     if Path(src).stem in SNAP_EXTRA:
         return True
     return str(MELEE) in src or str(SRC / "sysdolphin") in src

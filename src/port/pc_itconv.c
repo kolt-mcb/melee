@@ -283,6 +283,121 @@ int pc_itconv_object_mark(const unsigned char* start)
     return 0;
 }
 
+/* The byte-swap marks, for the rollback snapshot.
+ *
+ * pc_script_prepare() byte-swaps an object's words in place the first time the
+ * game reads them, and records that it has done so in the bitmap above -- which
+ * calloc() puts on the host heap, outside the low-memory pool and outside every
+ * object's static storage, so a snapshot of either does not contain it.
+ *
+ * That combination does not survive a rewind. The words themselves are in the
+ * game heap and are restored to the big-endian form they had before the swap;
+ * the bitmap is not, and still says "already host order". The replayed frame
+ * then reads the script as big-endian words: a fighter's animation script that
+ * executed opcode 55 on the first run executed opcode 1 on the second, the two
+ * being the same word read the other way round, and the frame quietly did
+ * something else entirely.
+ *
+ * Lazy in-place conversion with out-of-band bookkeeping is not idempotent under
+ * any state restore, so the bookkeeping has to travel with the state. The blob
+ * below is (archive base, bitmap length, bitmap) per archive that has one; the
+ * restore matches archives by base address, because the table is compacted as
+ * archives come and go and an index would not survive that.
+ */
+struct pc_marks_hdr {
+    unsigned long count;
+};
+struct pc_marks_rec {
+    const unsigned char* base;
+    unsigned long bytes;
+};
+
+static unsigned long arch_mark_bytes(const struct arch* a)
+{
+    return a->len / 32 + 1;
+}
+
+unsigned long pc_itconv_marks_size(void)
+{
+    unsigned long n = sizeof(struct pc_marks_hdr);
+    int i;
+    for (i = 0; i < g_arch_n; i++) {
+        if (g_arch[i].swapped != NULL) {
+            n += sizeof(struct pc_marks_rec) + arch_mark_bytes(&g_arch[i]);
+        }
+    }
+    return n;
+}
+
+void pc_itconv_marks_save(void* out)
+{
+    unsigned char* p = (unsigned char*) out;
+    struct pc_marks_hdr h;
+    int i;
+    if (p == NULL) {
+        return;
+    }
+    h.count = 0;
+    for (i = 0; i < g_arch_n; i++) {
+        if (g_arch[i].swapped != NULL) {
+            h.count++;
+        }
+    }
+    memcpy(p, &h, sizeof(h));
+    p += sizeof(h);
+    for (i = 0; i < g_arch_n; i++) {
+        struct pc_marks_rec r;
+        unsigned long bytes;
+        if (g_arch[i].swapped == NULL) {
+            continue;
+        }
+        bytes = arch_mark_bytes(&g_arch[i]);
+        r.base = g_arch[i].base;
+        r.bytes = bytes;
+        memcpy(p, &r, sizeof(r));
+        p += sizeof(r);
+        memcpy(p, g_arch[i].swapped, bytes);
+        p += bytes;
+    }
+}
+
+void pc_itconv_marks_restore(const void* in)
+{
+    const unsigned char* p = (const unsigned char*) in;
+    struct pc_marks_hdr h;
+    unsigned long k;
+    int i;
+    if (p == NULL) {
+        return;
+    }
+    memcpy(&h, p, sizeof(h));
+    p += sizeof(h);
+    /* An archive whose bitmap was created after the snapshot has no record
+     * here. Its words were swapped after the snapshot too, and the restore has
+     * put them back big-endian, so the bitmap must go back to saying nothing
+     * has been swapped rather than being left as it is. */
+    for (i = 0; i < g_arch_n; i++) {
+        if (g_arch[i].swapped != NULL) {
+            memset(g_arch[i].swapped, 0, arch_mark_bytes(&g_arch[i]));
+        }
+    }
+    for (k = 0; k < h.count; k++) {
+        struct pc_marks_rec r;
+        memcpy(&r, p, sizeof(r));
+        p += sizeof(r);
+        for (i = 0; i < g_arch_n; i++) {
+            if (g_arch[i].base != r.base || g_arch[i].swapped == NULL) {
+                continue;
+            }
+            if (arch_mark_bytes(&g_arch[i]) == r.bytes) {
+                memcpy(g_arch[i].swapped, p, r.bytes);
+            }
+            break;
+        }
+        p += r.bytes;
+    }
+}
+
 int pc_itconv_locate(const void* p, const unsigned char** base,
                      unsigned long* len)
 {

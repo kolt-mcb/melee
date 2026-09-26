@@ -1,5 +1,9 @@
 #include "ft_081B.h"
 #if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
+#if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
 
@@ -1276,6 +1280,25 @@ bool ft_80084A80(int arg0, Fighter_GObj* gobj, int* arg1, int* arg2, int* arg3)
     u32 temp_r26;
     int* var_r25;
     PAD_STACK(4);
+
+#if BUILD_TARGET_PC
+    /* MELEE_GFXTRACE=1 also reports the terrain lookup behind a footstep or
+     * landing effect: which fighter asked, whether it was on the ground, and
+     * which collision line it was standing on. The rollback self-check found a
+     * frame whose replay does not spawn the effect its first run did, and this
+     * distinguishes "the script never reached the command" from "it reached it
+     * and the ground answered differently". */
+    if (getenv("MELEE_GFXTRACE") != NULL) {
+        extern u32 gm_GetFrameCount(void);
+        extern u32 pc_frame_number;
+        fprintf(stderr,
+                "[GFXGROUND] gframe=%u pcf=%u which=%d player=%d ga=%d "
+                "floor=%d anim=%.3f\n",
+                (unsigned) gm_GetFrameCount(), (unsigned) pc_frame_number, arg0,
+                (int) fp->player_id, (int) fp->ground_or_air,
+                (int) fp->coll_data.floor.index, (double) fp->cur_anim_frame);
+    }
+#endif
 
     if (fp->ground_or_air == GA_Ground) {
         temp_r0 = fp->coll_data.floor.index;

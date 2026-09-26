@@ -55,6 +55,14 @@ int pc_itconv_object(const void* p, const unsigned char** start,
  * the previous state (1 if it was already marked). Used by pc_script.c. */
 int pc_itconv_object_mark(const unsigned char* start);
 
+/* The byte-swap marks as one blob, for the rollback snapshot. They live on the
+ * host heap and describe data that lives in the game heap, so a snapshot of the
+ * game heap alone puts the words back without putting back the record of having
+ * swapped them. See the comment on pc_itconv_marks_save(). */
+unsigned long pc_itconv_marks_size(void);
+void pc_itconv_marks_save(void* out);
+void pc_itconv_marks_restore(const void* in);
+
 /* Look an Article up in one of the ItCo tables, converting it on first use.
  * Tables this file does not own (the stage item table) are read through
  * unchanged. */

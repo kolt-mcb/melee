@@ -24,6 +24,17 @@
  * only as long as nothing is being pressed. */
 void pc_snapshot_frame(s32 frame, GCPadStatus* pads);
 
+/* Called from the scene loop immediately before HSD_GObj_RunProcs, i.e. at the
+ * entry to the simulation rather than at the pad read. Only does anything under
+ * MELEE_NET_SYNCTEST_DIFF=3, where it splits the frame in two: if the state
+ * here is identical on a replay, whatever diverges does so inside the
+ * simulation; if it already differs, it differs in the work between the pad
+ * read and here. */
+void pc_snapshot_prerun(void);
+
+/* MELEE_SNAPTRACE=1: the frame counter at the simulation entry. */
+void pc_snapshot_prerun_trace(void);
+
 /* Leaving the match: the kept snapshot refers to a heap that is about to be
  * rebuilt. */
 void pc_snapshot_match_end(void);

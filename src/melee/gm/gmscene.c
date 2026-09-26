@@ -363,6 +363,18 @@ void gm_801A4D34(void (*on_frame)(void), UNUSED GameSceneInfo* info)
             extern void port_render_frame_begin(void);
             port_render_frame_begin();
 
+#if BUILD_NETPLAY
+            /* The rollback self-check's other measuring point: the state at the
+             * entry to the simulation, so a divergence can be attributed to the
+             * simulation or to the work ahead of it. Inert unless asked for. */
+            {
+                extern void pc_snapshot_prerun(void);
+                extern void pc_snapshot_prerun_trace(void);
+                pc_snapshot_prerun();
+                pc_snapshot_prerun_trace();
+            }
+#endif
+
             HSD_GObj_RunProcs();
 
             /* PC port: render hook after GObj process chain */

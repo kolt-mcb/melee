@@ -43,6 +43,8 @@
 #if BUILD_NETPLAY
 
 #include <melee/gm/gm_1A3F.h>
+#include <melee/pl/player.h>
+#include <sysdolphin/baselib/gobj.h>
 
 #include <stdio.h>
 #include <time.h>
@@ -58,6 +60,12 @@ extern void pc_objheap_extent(void** base, unsigned long* used);
  * the same block out twice. */
 extern void pc_lowmem_full_extent(void** base, unsigned long* size,
                                   unsigned long* used, unsigned long* top);
+/* The script byte-swap marks. They sit on the host heap and describe words that
+ * sit in the game heap, so restoring the heap without them makes the game read
+ * its own scripts the wrong way round. */
+extern unsigned long pc_itconv_marks_size(void);
+extern void pc_itconv_marks_save(void* out);
+extern void pc_itconv_marks_restore(const void* in);
 extern unsigned long pc_lowmem_state_size(void);
 extern void pc_lowmem_state_save(void* out);
 extern void pc_lowmem_state_restore(const void* in);
@@ -149,6 +157,10 @@ typedef struct Snapshot {
     /* The allocator bookkeeping that goes with region 0. */
     unsigned char* lm;
     unsigned long lm_len;
+    /* The script byte-swap marks that go with the archives in it. */
+    unsigned char* marks;
+    unsigned long marks_cap;
+    unsigned long marks_len;
 } Snapshot;
 
 static int snap_enabled(void)
@@ -176,6 +188,32 @@ static int snap_skip(void)
         mask = (s != NULL) ? (int) strtol(s, NULL, 0) : 0;
     }
     return mask;
+}
+
+/* MELEE_SNAPTRACE=1 prints the frame counter at the two places this file hooks
+ * -- the pad read and the entry to the simulation -- with the port's own frame
+ * number. It answers whether "frame F" names one body of work: if the counter
+ * moves between the two hooks, or if two bodies share a value, then the point a
+ * snapshot is taken at is not a frame boundary and a replay is not replaying
+ * what it appears to. */
+static int snap_trace(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* s = getenv("MELEE_SNAPTRACE");
+        on = (s != NULL && *s != '\0' && strcmp(s, "0") != 0);
+    }
+    return on;
+}
+
+static int snap_eqstack(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* s = getenv("MELEE_NET_SYNCTEST_EQSTACK");
+        on = (s != NULL && *s != '\0' && strcmp(s, "0") != 0);
+    }
+    return on;
 }
 
 static int snap_depth(void)
@@ -324,6 +362,19 @@ static int snapshot_take(Snapshot* s, s32 frame)
         }
         pc_lowmem_state_save(s->lm);
     }
+    {
+        unsigned long n = pc_itconv_marks_size();
+        if (s->marks_cap < n) {
+            unsigned char* p = realloc(s->marks, n);
+            if (p == NULL) {
+                return 0;
+            }
+            s->marks = p;
+            s->marks_cap = n;
+        }
+        s->marks_len = n;
+        pc_itconv_marks_save(s->marks);
+    }
     snap_take_ms += snap_now_ms() - t0;
     snap_takes++;
     s->valid = 1;
@@ -359,6 +410,13 @@ static int snapshot_restore(const Snapshot* s)
     }
     if ((snap_skip() & 1) == 0 && s->lm != NULL) {
         pc_lowmem_state_restore(s->lm);
+    }
+    /* Bit 4 of MELEE_NET_SYNCTEST_SKIP leaves the script byte-swap marks
+     * alone, the same way the other bits leave a region alone: it is how the
+     * question "is this piece of the restore the one causing that?" gets
+     * answered by running rather than by reading. */
+    if ((snap_skip() & 16) == 0 && s->marks != NULL && s->marks_len != 0) {
+        pc_itconv_marks_restore(s->marks);
     }
     snap_restore_ms += snap_now_ms() - t0;
     return 1;
@@ -506,6 +564,15 @@ static void diff_compare(s32 frame)
                 }
             }
             if (region_of(a->addr + lo) >= 0) {
+                /* A covered range that differs is the interesting one here: it
+                 * was restored, so something wrote it differently since. Worth
+                 * printing, not just counting. */
+                if (covered < SNAP_DIFF_REPORT) {
+                    fprintf(stderr, "[SNAPDIFF]   %p + %lu differs and IS "
+                                    "covered, in %s (%s)\n",
+                            (void*) (a->addr + lo), hi - lo + 1,
+                            region_name(region_of(a->addr + lo)), a->what);
+                }
                 covered++;
                 continue;
             }
@@ -527,6 +594,45 @@ static void diff_compare(s32 frame)
                   "above)");
     fflush(stderr);
     snap_diff_reported = 1;
+}
+
+/* MELEE_NET_SYNCTEST_SCRUB=<KB> fills the stack the frame is about to use with
+ * a constant before every frame, both the first run and the replay.
+ *
+ * This is a test of one hypothesis, not a fix. Everything the simulation could
+ * read has been shown to be restored byte for byte, and two runs of one frame
+ * still take different paths, so what differs is not in the pool and not in any
+ * object's static storage. The stack is the remaining candidate: the restore
+ * happens partway down a call chain, a replayed frame is entered from a
+ * different place in the loop than the original, and a read of an
+ * uninitialised local therefore finds different leftovers. If scrubbing makes
+ * the divergence go away, that is what it was.
+ */
+static unsigned long snap_scrub_kb(void)
+{
+    static long kb = -1;
+    if (kb < 0) {
+        const char* s = getenv("MELEE_NET_SYNCTEST_SCRUB");
+        kb = (s != NULL) ? atol(s) : 0;
+        if (kb < 0) {
+            kb = 0;
+        }
+        if (kb > 4096) {
+            kb = 4096;
+        }
+    }
+    return (unsigned long) kb;
+}
+
+/* Never inlined: the buffer has to be below this file's frame, where the
+ * frame's own call tree will put its locals. */
+__attribute__((noinline)) static void snap_scrub_stack(unsigned long kb)
+{
+    volatile unsigned char buf[4096];
+    memset((void*) buf, 0xA5, sizeof(buf));
+    if (kb > 4) {
+        snap_scrub_stack(kb - 4);
+    }
 }
 
 /* ---- the self-check ---------------------------------------------------
@@ -608,8 +714,16 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
             fflush(stderr);
         }
     }
+    if (snap_trace()) {
+        extern u32 pc_frame_number;
+        fprintf(stderr, "[SNAPTRACE] padread frame=%d pcf=%u replaying=%d\n",
+                (int) frame, (unsigned) pc_frame_number, snap_replaying);
+    }
     if (frame <= 0) {
         return;
+    }
+    if (snap_scrub_kb() != 0) {
+        snap_scrub_stack(snap_scrub_kb());
     }
 
     h = pc_state_hash();
@@ -619,7 +733,8 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
         /* Replay the frame with the inputs it had. This has to happen before
          * the comparison below, because it is an input to the frame about to
          * run, not a result of it. */
-        if (pads != NULL && snap_pads_have[slot] && snap_hash_frame[slot] == frame) {
+        if (pads != NULL && snap_pads_have[slot] &&
+            snap_hash_frame[slot] == frame) {
             memcpy(pads, snap_pads[slot], sizeof(snap_pads[slot]));
         }
         /* The first frame after a restore is the one that proves the restore
@@ -774,6 +889,28 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
             diff_capture(frame);
         }
         if (snapshot_restore(&snap_keep)) {
+            /* The pads for the frame about to be replayed, which are not the
+             * ones just read.
+             *
+             * The frame counter advances between this hook and the simulation:
+             * a pad read taken while the counter says F feeds the simulation of
+             * frame F+1 (MELEE_SNAPTRACE=1 shows the two hooks and the counter
+             * at each). So the restore, which puts the counter back to the
+             * snapshot's frame, has to put back the pads that were read when
+             * the counter last said that -- the pads sitting in `pads` here
+             * belong to the frame after the one being replayed.
+             *
+             * Missing this made the first frame of every rewind replay with the
+             * wrong inputs. It went unnoticed for as long as it did because
+             * nothing was being pressed: with idle fighters every pad is zero
+             * and the wrong pads are the right ones, which is exactly why a
+             * 5760-frame idle match was clean and any match with CPUs playing
+             * failed within a hundred frames. */
+            int ks = (int) (back & (SNAP_HASH_RING - 1));
+            if (pads != NULL && snap_pads_have[ks] &&
+                snap_hash_frame[ks] == back) {
+                memcpy(pads, snap_pads[ks], sizeof(snap_pads[ks]));
+            }
             if (snap_diff_on() >= 2) {
                 /* The snapshot's own frame, because that is the state the
                  * restore was supposed to reproduce. */
@@ -795,6 +932,106 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
         if (snapshot_take(&snap_keep, frame) && snap_diff_on() >= 2) {
             diff_capture(frame);
         }
+        /* MELEE_NET_SYNCTEST_EQSTACK=1 puts the snapshot straight back after
+         * taking it. The copy is a no-op -- the bytes are the ones just read --
+         * so nothing about the simulation changes; what changes is that the
+         * frame about to run is now preceded by the same call tree, and so by
+         * the same leftovers on the stack, as a replayed frame is. Everything
+         * in memory has been shown identical between a frame's two runs, and
+         * they still diverge, so stack leftovers are what is left to test. */
+        if (snap_eqstack() && snap_keep.valid) {
+            snapshot_restore(&snap_keep);
+        }
+    }
+}
+
+void pc_snapshot_prerun(void)
+{
+    extern u32 gm_GetFrameCount(void);
+    s32 frame;
+
+    if (!snap_enabled() || snap_failed || snap_diff_on() != 3) {
+        return;
+    }
+    frame = (s32) gm_GetFrameCount();
+    if (frame <= 0) {
+        return;
+    }
+    if (snap_replaying) {
+        diff_compare(frame);
+    } else {
+        diff_capture(frame);
+    }
+}
+
+/* Player 0's Fighter as it stood at the entry to the simulation, kept from the
+ * first run of a frame and compared on the replay. The struct is the whole
+ * input to everything the fighter then does, so if it matches here and the two
+ * runs still behave differently, the difference is not in the fighter. */
+#define SNAP_FT_BYTES 0x2800
+static unsigned char snap_ft_copy[SNAP_FT_BYTES];
+static int snap_ft_have;
+static s32 snap_ft_frame;
+
+static const unsigned char* snap_player0_bytes(void)
+{
+    StaticPlayer* sp = Player_GetPtrForSlot(0);
+    HSD_GObj* gobj;
+    if (sp == NULL) {
+        return NULL;
+    }
+    gobj = sp->player_entity[0];
+    if (gobj == NULL || gobj->user_data == NULL) {
+        return NULL;
+    }
+    return (const unsigned char*) gobj->user_data;
+}
+
+void pc_snapshot_prerun_trace(void)
+{
+    extern u32 gm_GetFrameCount(void);
+    extern u32 pc_frame_number;
+    const unsigned char* ft;
+    s32 frame;
+
+    if (!snap_enabled() || !snap_trace()) {
+        return;
+    }
+    frame = (s32) gm_GetFrameCount();
+    fprintf(stderr, "[SNAPTRACE] prerun  frame=%d pcf=%u replaying=%d\n",
+            (int) frame, (unsigned) pc_frame_number, snap_replaying);
+
+    ft = snap_player0_bytes();
+    if (ft == NULL) {
+        return;
+    }
+    if (!snap_replaying) {
+        memcpy(snap_ft_copy, ft, SNAP_FT_BYTES);
+        snap_ft_have = 1;
+        snap_ft_frame = frame;
+        return;
+    }
+    if (!snap_ft_have || snap_ft_frame != frame) {
+        return;
+    }
+    {
+        unsigned long i;
+        int shown = 0;
+        for (i = 0; i < SNAP_FT_BYTES; i++) {
+            if (ft[i] == snap_ft_copy[i]) {
+                continue;
+            }
+            if (shown < 8) {
+                fprintf(stderr, "[SNAPTRACE]   fighter0 +0x%lx: first %02X now "
+                                "%02X\n",
+                        i, snap_ft_copy[i], ft[i]);
+            }
+            shown++;
+        }
+        fprintf(stderr, "[SNAPTRACE]   fighter0 at frame %d: %d bytes differ "
+                        "at the simulation entry\n",
+                (int) frame, shown);
+        fflush(stderr);
     }
 }
 
