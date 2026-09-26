@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..9bb67c0fd 100644
+index 4e3991914..1d33a2b06 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -241,7 +241,7 @@ index 4e3991914..9bb67c0fd 100644
  #endif
  
  		if (isConnected)
-@@ -2293,6 +2490,67 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2293,6 +2490,83 @@ void CEXISlippi::prepareOnlineMatchState()
  		return;
  	}
  
@@ -289,7 +289,23 @@ index 4e3991914..9bb67c0fd 100644
 +			u32 padAll = PowerPC::HostRead_U32(0x80479C30 + 4 * 0x30 + 4);
 +			int prevLock = cssdt != 0 ? PowerPC::HostRead_U8(cssdt + 17) : -1;
 +			int prevConn = cssdt != 0 ? PowerPC::HostRead_U8(cssdt + 18) : -1;
++			// A sentinel, because "the timer reads 0" cannot tell "written 0 every
++			// frame" from "never written at all", and those are exactly the two
++			// cases left. HANDLE_CONNECTED writes this byte unconditionally: the
++			// increment path when Z is seen, RESET_HOLD_TIMER to zero when it is
++			// not. So poke a value the game would never leave there and look again
++			// next sample. Cleared means the handler reaches its Z branch and
++			// decides Z is up; untouched means it never gets there.
 +			int zTimer = cssdt != 0 ? PowerPC::HostRead_U8(cssdt + 19) : -1;
++			static int sentinelState = 0;
++			int sentinelSeen = -1;
++			if (cssdt != 0)
++			{
++				if (sentinelState == 1)
++					sentinelSeen = zTimer;   // what became of the value poked last time
++				PowerPC::HostWrite_U8(0x7F, cssdt + 19);
++				sentinelState = 1;
++			}
 +			int mConn = msrb != 0 ? PowerPC::HostRead_U8(msrb) : -1;
 +			int mLocal = msrb != 0 ? PowerPC::HostRead_U8(msrb + 1) : -1;
 +			int mRemote = msrb != 0 ? PowerPC::HostRead_U8(msrb + 2) : -1;
@@ -298,18 +314,18 @@ index 4e3991914..9bb67c0fd 100644
 +			ERROR_LOG(SLIPPI_ONLINE,
 +			          "[Direct] ready bytes: local %d, remote %d, idx %d/%d | scene %02x%02x "
 +			          "(want 0008), r13 %08x, online mode %d | inputs@80263258 %08x, "
-+			          "fetch@80260310 %08x | msrb %08x = [%d %d %d] | cssdt %08x prevLock %d prevConn %d zTimer %d | pad0 %04x padAll %04x",
++			          "fetch@80260310 %08x | msrb %08x = [%d %d %d] | cssdt %08x prevLock %d prevConn %d zTimer %d sentinelSeen %d | pad0 %04x padAll %04x",
 +			          (int)localPlayerReady, (int)remotePlayersReady,
 +			          (int)localPlayerIndex, (int)remotePlayerIndex,
 +			          (int)minor, (int)major, r13, (int)onlineMode, inputsIns, fetchIns,
-+			          msrb, mConn, mLocal, mRemote, cssdt, prevLock, prevConn, zTimer, pad0, padAll);
++			          msrb, mConn, mLocal, mRemote, cssdt, prevLock, prevConn, zTimer, sentinelSeen, pad0, padAll);
 +		}
 +	}
 +
  	m_read_queue.push_back(localPlayerReady);   // Local player ready
  	m_read_queue.push_back(remotePlayersReady); // Remote players ready
  	m_read_queue.push_back(localPlayerIndex);   // Local player index
-@@ -3018,6 +3276,190 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3292,190 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -500,7 +516,7 @@ index 4e3991914..9bb67c0fd 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3467,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3483,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -529,7 +545,7 @@ index 4e3991914..9bb67c0fd 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +3846,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +3862,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -545,7 +561,7 @@ index 4e3991914..9bb67c0fd 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +3970,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +3986,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
@@ -564,7 +580,7 @@ index 4e3991914..9bb67c0fd 100644
  			handleConnectionCleanup();
  			break;
  		case CMD_LOG_MESSAGE:
-@@ -3597,6 +4082,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
+@@ -3597,6 +4098,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
  
  	// Copy buffer data to memory
  	Memory::CopyToEmu(addr, queueAddr, size);

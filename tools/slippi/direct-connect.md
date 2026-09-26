@@ -326,17 +326,41 @@ Every input in that sentence has now been measured rather than assumed, and the
 model still does not predict the behaviour -- which means the model of
 HANDLE_CONNECTED's control flow is wrong somewhere not visible from outside it.
 
-### This needs execution visibility, not more memory probes
+### The handler reaches the Z branch and reads Z as not held
 
-Reading memory has taken this as far as it goes: it can show what the handler
-*should* see, and cannot show which branch it takes. The next thing worth doing
-is the one the codeset's authors do -- add `logf` lines inside
-HandleInputsOnCSS.asm at the fork and at the Z check, and rebuild the codeset --
-or run it under Dolphin's debugger interactively, with a human present, where a
-breakpoint that halts is an advantage rather than a problem.
+Adding `logf` lines to HandleInputsOnCSS.asm needs the codeset's own toolchain
+-- the `gecko` program (Go) and devkitPPC -- and neither is installed here.
+Our `powerpc-eabi-as` cannot substitute: their macros (`branch`, `backup`) are
+written for devkitPPC's assembler and ours rejects the expansions.
 
-That is a different kind of session from this one, and worth being deliberate
-about rather than continuing to guess from outside.
+The same question can be answered from Dolphin, though, with a sentinel.
+"The Z timer reads 0" cannot distinguish *written zero every frame* from *never
+written*, and those were exactly the two remaining cases. But HANDLE_CONNECTED
+writes that byte unconditionally -- the increment path when Z is seen,
+RESET_HOLD_TIMER when it is not -- so poking a value the game would never leave
+there and looking again next sample separates them:
+
+    zTimer 0 sentinelSeen 0     x126
+
+Every 0x7F poked into `CSSDT_Z_BUTTON_HOLD_TIMER` is gone by the next sample.
+So the handler runs, reaches its Z branch, and takes RESET_HOLD_TIMER: **it
+reads Z as not held.** It is not failing to execute, and it is not failing to
+find the buffer.
+
+Which is odd, because the buffer does hold Z -- intermittently. Of the samples
+taken on that screen during a continuous hold, thirteen showed
+`controller_map.x0[0].button` as 0x10 and eight showed zero. The injector sets
+Z on every pad poll, so a value that comes and goes means the game's copy of it
+comes and goes: the handler evidently reads at a point in the frame where it is
+clear.
+
+So the open question has changed shape again, and is now about *when* rather
+than *what*: which point in the frame fills controller_map, which point the
+handler reads it, and why an injection made at every SI poll is only
+intermittently present in between. That is a phase problem, and it is also the
+first explanation so far that accounts for A working on the menu -- a tap held
+four frames in thirty will survive a phase it happens to land in, while a
+continuous hold that is cleared each frame looks like nothing at all.
 
 ### On the pad, and a correction
 
