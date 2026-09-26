@@ -4722,6 +4722,54 @@ struct pc_lm_hdr {
 static struct pc_lm_hdr* g_lm_free[PC_LM_NCLASS];
 static unsigned long g_lm_live, g_lm_fallback;
 
+/* The allocator's own bookkeeping, for the rollback snapshot.
+ *
+ * pc_snapshot.c copies the arena's bytes, which include the free-list links
+ * that live inside freed blocks. The cursor and the list heads are statics
+ * here, in a port object, and so are outside every region it copies -- and a
+ * restore that puts the bytes back without them leaves the two disagreeing:
+ * the heads point at blocks whose headers have been rolled back to an older
+ * `next`, the same block can then be handed out twice, and the game's own
+ * lists acquire a cycle. That is what a match hung on, spinning in userspace,
+ * about 3200 frames in, before this existed.
+ *
+ * Opaque on purpose: the snapshot asks how big the state is and keeps a blob,
+ * so the header layout above stays private to this file. */
+struct pc_lm_snapshot {
+    size_t used;
+    size_t top;
+    unsigned long live;
+    unsigned long fallback;
+    struct pc_lm_hdr* free_list[PC_LM_NCLASS];
+};
+
+unsigned long pc_lowmem_state_size(void)
+{
+    return (unsigned long) sizeof(struct pc_lm_snapshot);
+}
+
+void pc_lowmem_state_save(void* out)
+{
+    struct pc_lm_snapshot* st = (struct pc_lm_snapshot*) out;
+    if (st == NULL) return;
+    st->used = g_low_mem_used;
+    st->top = g_low_mem_top;
+    st->live = g_lm_live;
+    st->fallback = g_lm_fallback;
+    memcpy(st->free_list, g_lm_free, sizeof(st->free_list));
+}
+
+void pc_lowmem_state_restore(const void* in)
+{
+    const struct pc_lm_snapshot* st = (const struct pc_lm_snapshot*) in;
+    if (st == NULL) return;
+    g_low_mem_used = st->used;
+    g_low_mem_top = st->top;
+    g_lm_live = st->live;
+    g_lm_fallback = st->fallback;
+    memcpy(g_lm_free, st->free_list, sizeof(st->free_list));
+}
+
 void* pc_lowmem_malloc(size_t size)
 {
     struct pc_lm_hdr* h;

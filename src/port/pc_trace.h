@@ -20,4 +20,14 @@ void pc_trace_sync_wait(void);
  * from a breakpoint on Fighter_Create. */
 void pc_trace_seed_fighter_create(void);
 
+/* One named component of the simulation hash; see pc_state_fields(). */
+typedef struct PcStateField {
+    const char* name;
+    u32 val;
+    const void* addr; /* where the value was read from */
+    int slot;         /* player slot, or -1 if not per-player */
+} PcStateField;
+
+int pc_state_fields(PcStateField* out, int max);
+
 #endif

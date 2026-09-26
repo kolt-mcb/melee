@@ -1626,6 +1626,68 @@ static void pc_trace_spawn_item(int frame)
  *
  * MELEE_HASHLOG=<path> writes one line per match frame; MELEE_HASHLOG=1 puts
  * it on stderr, which on Android is logcat. */
+/* The same fields, one at a time and named, so a difference can be reported as
+ * a field rather than as two hashes that disagree. The rollback self-check in
+ * src/port/netplay/pc_snapshot.c uses this to say what a snapshot missed. Kept
+ * beside the hash above deliberately: if one gains a field the other should. */
+int pc_state_fields(PcStateField* out, int max)
+{
+    int n = 0;
+    int i;
+
+#define PC_FIELD_AT(nm, v, a)                                                  \
+    do {                                                                       \
+        if (n < max) {                                                         \
+            out[n].name = (nm);                                                \
+            out[n].val = (u32) (v);                                            \
+            out[n].addr = (const void*) (a);                                    \
+            out[n].slot = i;                                                   \
+            n++;                                                               \
+        }                                                                      \
+    } while (0)
+#define PC_FIELD_U(nm, v) PC_FIELD_AT(nm, v, &(v))
+#define PC_FIELD_F(nm, v)                                                      \
+    do {                                                                       \
+        union { f32 f; u32 u; } b_;                                            \
+        b_.f = (v);                                                            \
+        PC_FIELD_AT(nm, b_.u, &(v));                                           \
+    } while (0)
+
+    i = -1;
+    PC_FIELD_AT("rand_seed", *HSD_RandSeedPtr, HSD_RandSeedPtr);
+    for (i = 0; i < 4; i++) {
+        StaticPlayer* sp = Player_GetPtrForSlot(i);
+        HSD_GObj* gobj;
+        Fighter* fp;
+
+        if (sp == NULL) {
+            continue;
+        }
+        PC_FIELD_U("player_state", sp->player_state);
+        PC_FIELD_U("ckind", sp->ckind);
+        PC_FIELD_U("stocks", sp->stocks);
+        PC_FIELD_U("damage_percent", sp->staminas.byName.damage_percent);
+
+        gobj = sp->player_entity[0];
+        fp = (gobj != NULL) ? (Fighter*) gobj->user_data : NULL;
+        if (fp == NULL) {
+            continue;
+        }
+        PC_FIELD_U("motion_id", fp->motion_id);
+        PC_FIELD_F("cur_anim_frame", fp->cur_anim_frame);
+        PC_FIELD_F("cur_pos.x", fp->cur_pos.x);
+        PC_FIELD_F("cur_pos.y", fp->cur_pos.y);
+        PC_FIELD_F("facing_dir", fp->facing_dir);
+        PC_FIELD_F("self_vel.x", fp->self_vel.x);
+        PC_FIELD_F("self_vel.y", fp->self_vel.y);
+        PC_FIELD_U("ground_or_air", fp->ground_or_air);
+    }
+#undef PC_FIELD_F
+#undef PC_FIELD_U
+#undef PC_FIELD_AT
+    return n;
+}
+
 u32 pc_state_hash(void)
 {
     u32 h = 2166136261u;

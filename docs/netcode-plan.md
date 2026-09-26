@@ -65,6 +65,24 @@ Capture the simulation's state and put it back, with nothing else changed.
 
 Done when the synctest is green for both cases and the cost is in the log.
 
+**Where this stands.** The mechanism works and the check is real: the rewind
+puts the frame counter back, the game replays the frames it already played, and
+every replayed frame's hash is compared against the one it produced first time.
+3200 frames replayed and 3200 compared, clean, on the debug VS boot.
+
+Two things had to be learned the hard way and are worth carrying forward:
+
+- **A synctest can pass by comparing nothing.** The first version reported
+  sixteen clean rewinds having checked zero frames: the frame counter lives in
+  a decompiled translation unit's `.bss`, which the snapshot did not cover, so
+  after each restore the game carried on forwards instead of replaying and
+  every hash lookup missed. `pc_snapshot.c` now asserts that the first frame
+  after a restore is the snapshot's own frame plus one, and counts frames
+  actually compared rather than frames it believes it replayed.
+- **The cost is measured, and it is over budget.** 22.5 MB per snapshot, 2.3 ms
+  to take and 2.1 ms to put back -- not the 1 ms above. The region list is
+  honest rather than tight; see M2 for where the 17.5 MB of it goes.
+
 ### M2 -- The region list, found rather than guessed
 
 The regions M1 copies. The survey (§5) gives a starting list that someone else
@@ -76,10 +94,34 @@ because our heap layout is our own.
 - Exclusions are found by M1 failing, never by reasoning. Each exclusion gets
   a comment saying which synctest frame found it.
 - A linker-bracketed span for the game's own `.data`/`.bss`, which on ELF is
-  an `INSERT AFTER` script. Android is ELF too, so both our targets are covered.
+  an `INSERT BEFORE` script -- `INSERT AFTER` brackets nothing, because the
+  default script's `.data : { *(.data) }` claims input sections first. Android
+  is ELF too, so both our targets are covered.
 
 Done when the region list is derived from synctest evidence and documented
 with the frame that justified each exclusion.
+
+**Where this stands.** Four regions, each one kept because a run without it
+fails -- `MELEE_NET_SYNCTEST_SKIP=<mask>` drops a region so the question can be
+answered by running rather than by reasoning:
+
+| dropped | what happens |
+| --- | --- |
+| the game heap | 128 frames clean, then a segfault |
+| the game's `.data` | `rand_seed` reported outside every region, frame 2 |
+| the game's `.bss` | the rewind does not take: the frame counter is in there |
+| the HSD object heap | `cur_anim_frame` outside every region, frame 2 |
+
+Two of those are worth keeping in mind. The `.bss` case is the one that made
+the check honest at all (see `pc_snapshot.c`). The heap case is the opposite
+warning: the *hash* stayed correct for 128 frames without it and the run died
+anyway, so a green checksum is not the same as a complete region list, and the
+crash was the only evidence that region belongs.
+
+Still open here: the game heap region is the port's whole upward bump arena,
+17.5 MB of the 22.5 MB copied, and almost certainly a superset of what the
+simulation writes. Narrowing it is the remaining M2 work and it is what stands
+between the measured cost and the budget below.
 
 ### M3 -- Rollback against a local peer
 

@@ -366,3 +366,23 @@ void _HSD_ObjAllocForgetMemory(void* low, void* high)
 {
     alloc_datas = NULL;
 }
+
+#if BUILD_TARGET_PC
+/* The live extent of the object heap, for the rollback snapshot in
+ * src/port/netplay/pc_snapshot.c. This is a bump allocator, so everything the
+ * game has ever taken from it -- every Fighter, every HSD object -- lies in
+ * [top, curr), and the 64 MB behind curr has never been written. obj_heap
+ * itself is a static in a decompiled translation unit, so it is inside the
+ * linker's .bss bracket and the cursor is restored along with the bytes. */
+void pc_objheap_extent(void** base, unsigned long* used)
+{
+    if (base != NULL) {
+        *base = (void*) obj_heap.top;
+    }
+    if (used != NULL) {
+        *used = (unsigned long) (obj_heap.curr >= obj_heap.top
+                                    ? obj_heap.curr - obj_heap.top
+                                    : 0);
+    }
+}
+#endif
