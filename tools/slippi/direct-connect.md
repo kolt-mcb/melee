@@ -366,11 +366,36 @@ the peer dropping the instant the character is locked in. And the character is
 whatever the hand lands on rather than `SLIPPI_DIRECT_CHAR`, which is only used
 by the old auto-drive path.
 
-**Still to do:** the match ends in a disconnect. The run window closes on the
-port before the emulator finishes booting the match -- it takes about a minute
-of menus to get there -- so the two have only seconds together. A longer window,
-or starting the port later, is the next thing to try, and only then is it worth
-looking at whether they actually stay in sync.
+### With a longer window: they play, and then the frames disagree
+
+A five-minute run gets a real match with inputs crossing in both directions --
+412 pad messages, `pads in from slot1=412` -- and then both sides say the same
+thing about why it ends:
+
+    emulator   Force-disconnecting player 0 after 7s stall (frame: 8 | latest: 0)
+    port       not in the barrier: given up on the other players; playing alone
+               (match frame 107, gm counter 107, state 4, slot 0 of 2, sel 1/1)
+
+The emulator is at frame 8 and the newest input it holds from the port is
+frame 0. The port is at frame 107 and has stopped waiting. Neither is wrong
+about its own clock: they are simply not counting the same match.
+
+The port starts its match the moment the selections arrive. The emulator has a
+Ready splash and a scene load still to get through, so it reaches frame 1 of
+the match about a hundred frames later, and each side labels its pads with its
+own frame numbers. The port's inputs are all for frames the emulator has not
+reached; the emulator's are for frames the port left behind.
+
+That is frame alignment, which this repository has met before -- it is what
+`MELEE_NET_LEAD` and `MELEE_NET_RENDEZVOUS` exist for in the Dolphin harness,
+where both sides are walked to the same scene and then released together. The
+Slippi path needs the same treatment: the port should hold at the start of its
+match until the peer's frame numbering says the peer has started too, rather
+than starting when the handshake completes.
+
+Only once they are counting the same frames is it worth asking whether they
+stay in sync, which is the behaviour-delta problem -- the port implements three
+of the codeset's deltas, and UCF is not one of them.
 
 ### On the pad, and a correction
 
