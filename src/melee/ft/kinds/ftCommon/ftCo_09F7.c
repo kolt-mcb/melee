@@ -1,4 +1,8 @@
 #include "ftCo_09F7.h"
+#if BUILD_TARGET_PC
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 
 #include <math.h>
 #include <placeholder.h>
@@ -69,6 +73,20 @@ void ftCo_8009F834(Fighter_GObj* gobj, int arg1, enum Fighter_Part part,
     f32 random_or_angle;
     u8 temp_r3;
     PAD_STACK(68);
+
+#if BUILD_TARGET_PC
+    /* MELEE_GFXTRACE=1 reports every action GFX spawn with the frame and the
+     * gfx id. The rollback self-check found a frame that spawns one on its
+     * first run and not on its replay; this says whether the call is reached
+     * at all on the second pass or only takes a different branch inside. */
+    if (getenv("MELEE_GFXTRACE") != NULL) {
+        extern u32 gm_GetFrameCount(void);
+        extern u32 pc_frame_number;
+        fprintf(stderr, "[GFXTRACE] gframe=%u pcf=%u gfx=%d part=%d\n",
+                (unsigned) gm_GetFrameCount(), (unsigned) pc_frame_number,
+                arg1, (int) part);
+    }
+#endif
 
     gfx_id = arg1;
     fp = gobj->user_data;

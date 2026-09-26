@@ -56,6 +56,8 @@ extern void pc_objheap_extent(void** base, unsigned long* used);
  * cannot be put back without them: a restore that rolls back the `next` links
  * inside freed blocks while leaving the list heads at their newer values hands
  * the same block out twice. */
+extern void pc_lowmem_full_extent(void** base, unsigned long* size,
+                                  unsigned long* used, unsigned long* top);
 extern unsigned long pc_lowmem_state_size(void);
 extern void pc_lowmem_state_save(void* out);
 extern void pc_lowmem_state_restore(const void* in);
@@ -76,14 +78,67 @@ typedef struct SnapRegion {
     unsigned long cap;
 } SnapRegion;
 
-/* The linker brackets the decompiled game's mutable static storage; these are
- * the section bounds from build/pc/melee-state.ld. */
-extern unsigned char __melee_state_data_start[];
-extern unsigned char __melee_state_data_end[];
-extern unsigned char __melee_state_bss_start[];
-extern unsigned char __melee_state_bss_end[];
+/* The linker brackets the snapshotted translation units' mutable static
+ * storage. Not one span each: the wanted objects are not contiguous in link
+ * order -- ax_vpb_glue.o sits among the port's own -- and an excluded one has
+ * to stay where it is rather than be relocated to the end, so the script emits
+ * one marker pair per unbroken run. Unused pairs are empty. See the generated
+ * build/pc/melee-state.ld and the block that writes it in configure_pc.py. */
+#define SNAP_SPANS 8 /* must match SNAP_SPANS in configure_pc.py */
 
-#define SNAP_REGIONS 4
+#define SNAP_SPAN_DECL(k)                                                      \
+    extern unsigned char __melee_state_data_##k##_start[];                     \
+    extern unsigned char __melee_state_data_##k##_end[];                       \
+    extern unsigned char __melee_state_bss_##k##_start[];                      \
+    extern unsigned char __melee_state_bss_##k##_end[];
+SNAP_SPAN_DECL(0)
+SNAP_SPAN_DECL(1)
+SNAP_SPAN_DECL(2)
+SNAP_SPAN_DECL(3)
+SNAP_SPAN_DECL(4)
+SNAP_SPAN_DECL(5)
+SNAP_SPAN_DECL(6)
+SNAP_SPAN_DECL(7)
+#undef SNAP_SPAN_DECL
+
+typedef struct SnapSpan {
+    unsigned char* lo;
+    unsigned char* hi;
+} SnapSpan;
+
+#define SNAP_SPAN_ROW(k)                                                       \
+    { { __melee_state_data_##k##_start, __melee_state_data_##k##_end },        \
+      { __melee_state_bss_##k##_start, __melee_state_bss_##k##_end } }
+/* [span][0] is .data, [span][1] is .bss. */
+static const SnapSpan snap_spans[SNAP_SPANS][2] = {
+    SNAP_SPAN_ROW(0), SNAP_SPAN_ROW(1), SNAP_SPAN_ROW(2), SNAP_SPAN_ROW(3),
+    SNAP_SPAN_ROW(4), SNAP_SPAN_ROW(5), SNAP_SPAN_ROW(6), SNAP_SPAN_ROW(7),
+};
+#undef SNAP_SPAN_ROW
+
+/* Region 0 is the game heap and region 1 the object heap; then SNAP_SPANS
+ * .data spans, then SNAP_SPANS .bss spans. */
+#define SNAP_R_HEAP 0
+#define SNAP_R_OBJHEAP 1
+#define SNAP_R_DATA0 2
+#define SNAP_R_BSS0 (SNAP_R_DATA0 + SNAP_SPANS)
+#define SNAP_REGIONS (SNAP_R_BSS0 + SNAP_SPANS)
+
+/* Four classes, so the skip mask and the log stay about kinds of state rather
+ * than about however many spans the link happens to need: 1 heap, 2 .data,
+ * 4 .bss, 8 object heap. */
+#define SNAP_CLASSES 4
+
+static int region_class(int i)
+{
+    if (i == SNAP_R_HEAP) {
+        return 0;
+    }
+    if (i == SNAP_R_OBJHEAP) {
+        return 3;
+    }
+    return (i < SNAP_R_BSS0) ? 1 : 2;
+}
 
 static void region_describe(int i, SnapRegion* out);
 
@@ -139,6 +194,8 @@ static int snap_depth(void)
  * reports measured bytes rather than the section sizes the linker reserved. */
 static unsigned long snap_last[SNAP_REGIONS];
 static unsigned long snap_bytes;
+/* Bytes per class, for a log line that does not grow with the span count. */
+static unsigned long snap_by_class[SNAP_CLASSES];
 /* Time spent copying, so the cost is measured rather than assumed. */
 static double snap_take_ms, snap_restore_ms;
 static int snap_takes;
@@ -170,7 +227,10 @@ static int region_of(const void* p)
 
 static const char* region_name(int i)
 {
-    switch (i) {
+    if (i < 0) {
+        return "OUTSIDE EVERY REGION";
+    }
+    switch (region_class(i)) {
     case 0:
         return "game heap";
     case 1:
@@ -187,29 +247,27 @@ static const char* region_name(int i)
 static void region_describe(int i, SnapRegion* out)
 {
     memset(out, 0, sizeof(*out));
-    if ((snap_skip() & (1 << i)) != 0) {
+    if ((snap_skip() & (1 << region_class(i))) != 0) {
         return;
     }
-    if (i == 0) {
+    if (i == SNAP_R_HEAP) {
         void* base = NULL;
         unsigned long used = 0;
         pc_lowmem_game_extent(&base, &used);
         out->addr = (unsigned char*) base;
         out->len = used;
-    } else if (i == 1) {
-        out->addr = __melee_state_data_start;
-        out->len = (unsigned long) (__melee_state_data_end -
-                                    __melee_state_data_start);
-    } else if (i == 2) {
-        out->addr = __melee_state_bss_start;
-        out->len = (unsigned long) (__melee_state_bss_end -
-                                   __melee_state_bss_start);
-    } else if (i == 3) {
+    } else if (i == SNAP_R_OBJHEAP) {
         void* base = NULL;
         unsigned long used = 0;
         pc_objheap_extent(&base, &used);
         out->addr = (unsigned char*) base;
         out->len = used;
+    } else {
+        int which = (i < SNAP_R_BSS0) ? 0 : 1;
+        const SnapSpan* sp =
+            &snap_spans[i - (which == 0 ? SNAP_R_DATA0 : SNAP_R_BSS0)][which];
+        out->addr = sp->lo;
+        out->len = (unsigned long) (sp->hi - sp->lo);
     }
 }
 
@@ -231,7 +289,7 @@ static int snapshot_take(Snapshot* s, s32 frame)
             dst->addr = cur.addr;
             dst->len = 0;
             snap_last[i] = 0;
-            if (i == 0 && (snap_skip() & 1) == 0) {
+            if (i == SNAP_R_HEAP && (snap_skip() & 1) == 0) {
                 return 0;
             }
             continue;
@@ -249,8 +307,10 @@ static int snapshot_take(Snapshot* s, s32 frame)
         memcpy(dst->data, cur.addr, cur.len);
         snap_last[i] = cur.len;
     }
+    memset(snap_by_class, 0, sizeof(snap_by_class));
     for (i = 0, snap_bytes = 0; i < SNAP_REGIONS; i++) {
         snap_bytes += snap_last[i];
+        snap_by_class[region_class(i)] += snap_last[i];
     }
     if ((snap_skip() & 1) == 0) {
         unsigned long n = pc_lowmem_state_size();
@@ -304,6 +364,171 @@ static int snapshot_restore(const Snapshot* s)
     return 1;
 }
 
+/* ---- diff mode: finding a missing region instead of guessing at one ----
+ *
+ * A field-level report says which value moved, which is a good start and is
+ * often not the answer: a seed that differs was computed from something else
+ * that was missed. MELEE_NET_SYNCTEST_DIFF=1 answers the question directly.
+ * At the frame a rewind is about to be taken from, it copies everything the
+ * simulation could possibly live in -- the whole pool, both cursors' worth, and
+ * every object's .data and .bss, not just the snapshotted ones. When the replay
+ * reaches that same frame it compares, and reports the ranges that differ and
+ * that no region covers. Those are the candidates, and nothing else is.
+ *
+ * It is slow and it is meant to be: it copies hundreds of megabytes per rewind
+ * and is not on unless asked for.
+ */
+extern unsigned char __melee_all_melee_data_start[];
+extern unsigned char __melee_all_melee_data_end[];
+extern unsigned char __melee_all_melee_bss_start[];
+extern unsigned char __melee_all_melee_bss_end[];
+
+#define SNAP_DIFF_AREAS 4
+#define SNAP_DIFF_REPORT 200
+/* Differing bytes closer together than this are reported as one range; a
+ * struct with a few changed fields should read as one line, not as five. */
+#define SNAP_DIFF_JOIN 128
+
+typedef struct DiffArea {
+    unsigned char* addr;
+    unsigned long len;
+    unsigned char* copy;
+    unsigned long cap;
+    const char* what;
+} DiffArea;
+
+static DiffArea snap_diff[SNAP_DIFF_AREAS];
+static s32 snap_diff_frame = -1;
+static int snap_diff_reported;
+
+/* 1 compares the two runs of the replayed frame, which says what ended up
+ * different. 2 compares the state just after a restore against the state the
+ * snapshot was taken from, which says what was never put back -- a stricter
+ * question and the one that names a missing region, because everything a region
+ * covers has just been written and cannot differ. */
+static int snap_diff_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* s = getenv("MELEE_NET_SYNCTEST_DIFF");
+        on = (s != NULL && *s != '\0' && strcmp(s, "0") != 0) ? atoi(s) : 0;
+        if (on < 0) {
+            on = 0;
+        }
+    }
+    return on;
+}
+
+static void diff_areas(void)
+{
+    void* base = NULL;
+    unsigned long size = 0, used = 0, top = 0;
+    pc_lowmem_full_extent(&base, &size, &used, &top);
+    /* The pool grows from both ends; the gap between the cursors has never
+     * been handed out, so there is nothing in it to differ. */
+    snap_diff[0].addr = (unsigned char*) base;
+    snap_diff[0].len = used;
+    snap_diff[0].what = "pool, bump end";
+    snap_diff[1].addr = (unsigned char*) base + top;
+    snap_diff[1].len = (base != NULL && size > top) ? size - top : 0;
+    snap_diff[1].what = "pool, carved end";
+    snap_diff[2].addr = __melee_all_melee_data_start;
+    snap_diff[2].len =
+        (unsigned long) (__melee_all_melee_data_end -
+                         __melee_all_melee_data_start);
+    snap_diff[2].what = "every object's .data";
+    snap_diff[3].addr = __melee_all_melee_bss_start;
+    snap_diff[3].len = (unsigned long) (__melee_all_melee_bss_end -
+                                        __melee_all_melee_bss_start);
+    snap_diff[3].what = "every object's .bss";
+}
+
+static void diff_capture(s32 frame)
+{
+    int i;
+    unsigned long total = 0;
+    diff_areas();
+    for (i = 0; i < SNAP_DIFF_AREAS; i++) {
+        DiffArea* a = &snap_diff[i];
+        if (a->addr == NULL || a->len == 0) {
+            a->len = 0;
+            continue;
+        }
+        if (a->cap < a->len) {
+            unsigned char* p = realloc(a->copy, a->len);
+            if (p == NULL) {
+                a->len = 0;
+                continue;
+            }
+            a->copy = p;
+            a->cap = a->len;
+        }
+        memcpy(a->copy, a->addr, a->len);
+        total += a->len;
+    }
+    snap_diff_frame = frame;
+    if (!snap_diff_reported) {
+        fprintf(stderr, "[SNAPDIFF] watching %lu KB at frame %d\n",
+                total >> 10, (int) frame);
+        fflush(stderr);
+    }
+}
+
+static void diff_compare(s32 frame)
+{
+    int i, shown = 0, covered = 0;
+    if (snap_diff_frame != frame) {
+        return;
+    }
+    for (i = 0; i < SNAP_DIFF_AREAS; i++) {
+        DiffArea* a = &snap_diff[i];
+        unsigned long j = 0;
+        if (a->len == 0) {
+            continue;
+        }
+        while (j < a->len) {
+            unsigned long lo, hi, gap;
+            if (a->addr[j] == a->copy[j]) {
+                j++;
+                continue;
+            }
+            lo = j;
+            hi = j;
+            gap = 0;
+            /* Walk to the end of this run, tolerating short matching gaps so
+             * one changed struct reads as one range. */
+            for (j++; j < a->len; j++) {
+                if (a->addr[j] != a->copy[j]) {
+                    hi = j;
+                    gap = 0;
+                } else if (++gap > SNAP_DIFF_JOIN) {
+                    break;
+                }
+            }
+            if (region_of(a->addr + lo) >= 0) {
+                covered++;
+                continue;
+            }
+            if (shown < SNAP_DIFF_REPORT) {
+                fprintf(stderr, "[SNAPDIFF]   %p + %lu differs (%s), no region "
+                                "covers it\n",
+                        (void*) (a->addr + lo), hi - lo + 1, a->what);
+            }
+            shown++;
+        }
+    }
+    fprintf(stderr, "[SNAPDIFF] frame %d: %d uncovered ranges differ%s, and %d "
+                    "covered ones%s\n",
+            (int) frame, shown,
+            shown > SNAP_DIFF_REPORT ? " (listing capped)" : "", covered,
+            snap_diff_on() >= 2
+                ? " (a covered range differing here would be a restore bug)"
+                : " (those were restored, so they are downstream of something "
+                  "above)");
+    fflush(stderr);
+    snap_diff_reported = 1;
+}
+
 /* ---- the self-check ---------------------------------------------------
  *
  * Every `depth` frames: keep a snapshot. `depth` frames later: put it back and
@@ -321,6 +546,11 @@ static s32 snap_hash_frame[SNAP_HASH_RING];
  * can be reported field by field instead of as two hashes. */
 static PcStateField snap_fields[SNAP_HASH_RING][SNAP_FIELDS];
 static int snap_nfields[SNAP_HASH_RING];
+/* The pads each frame was played with, so a replay can be played with them
+ * again instead of with whatever the input layer holds by then. */
+#define SNAP_PADS 4
+static GCPadStatus snap_pads[SNAP_HASH_RING][SNAP_PADS];
+static int snap_pads_have[SNAP_HASH_RING];
 static int snap_replaying;
 static s32 snap_replay_until;
 /* The frame the restored snapshot was taken at. After a restore the game's own
@@ -337,7 +567,7 @@ static int snap_frames_checked;
  * compared; this is the number that says the check did work. */
 static int snap_frames_compared;
 
-void pc_snapshot_frame(s32 frame)
+void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
 {
     u32 h;
     int slot;
@@ -386,6 +616,12 @@ void pc_snapshot_frame(s32 frame)
     slot = (int) (frame & (SNAP_HASH_RING - 1));
 
     if (snap_replaying) {
+        /* Replay the frame with the inputs it had. This has to happen before
+         * the comparison below, because it is an input to the frame about to
+         * run, not a result of it. */
+        if (pads != NULL && snap_pads_have[slot] && snap_hash_frame[slot] == frame) {
+            memcpy(pads, snap_pads[slot], sizeof(snap_pads[slot]));
+        }
         /* The first frame after a restore is the one that proves the restore
          * rewound anything. A replay that resumes at the frame after the one
          * the rewind was triggered from has not replayed: the game read its
@@ -407,6 +643,9 @@ void pc_snapshot_frame(s32 frame)
                 snap_failed = 1;
                 return;
             }
+        }
+        if (snap_diff_on() == 1 && frame == snap_replay_until) {
+            diff_compare(frame);
         }
         if (snap_hash_frame[slot] == frame) {
             snap_frames_compared++;
@@ -430,11 +669,29 @@ void pc_snapshot_frame(s32 frame)
                 int j;
                 int shown = 0;
                 if (n != snap_nfields[slot]) {
-                    fprintf(stderr, "[SNAP]   the state has %d fields now and "
-                                    "had %d on the first run\n",
+                    /* The list's own shape moved, which is a bigger difference
+                     * than any value in it: a player or an object the list
+                     * walks exists in one run and not the other. Reported on
+                     * its own, because comparing the two position by position
+                     * past this point lines the wrong fields up. */
+                    fprintf(stderr, "[SNAP]   the state has %d traced fields "
+                                    "now and had %d on the first run, so "
+                                    "something the list walks exists in one "
+                                    "run and not the other\n",
                             n, snap_nfields[slot]);
                 }
                 for (j = 0; j < n && j < snap_nfields[slot]; j++) {
+                    /* Names, not just positions: a list that changed shape
+                     * would otherwise report one field's value against
+                     * another's and read as nonsense. */
+                    if (now[j].name != snap_fields[slot][j].name) {
+                        fprintf(stderr, "[SNAP]   field %d is %s now and was "
+                                        "%s; the lists have diverged, stopping "
+                                        "here\n",
+                                j, now[j].name, snap_fields[slot][j].name);
+                        shown++;
+                        break;
+                    }
                     if (now[j].val == snap_fields[slot][j].val) {
                         continue;
                     }
@@ -445,7 +702,22 @@ void pc_snapshot_frame(s32 frame)
                             snap_fields[slot][j].val, now[j].val,
                             now[j].addr,
                             region_name(region_of(now[j].addr)));
+                    /* A field read through a pointer is read from a different
+                     * place in each run, and it is the first run's place that
+                     * says where the state that went missing lived. */
+                    if (snap_fields[slot][j].addr != now[j].addr) {
+                        fprintf(stderr, "[SNAP]     on the first run it was at "
+                                        "%p in %s\n",
+                                snap_fields[slot][j].addr,
+                                region_name(region_of(snap_fields[slot][j].addr)));
+                    }
                     shown++;
+                }
+                {
+                    /* Which code drew the last randoms, for when the count is
+                     * what moved. Addresses; addr2line names them. */
+                    extern void pc_rng_recent(const char* tag);
+                    pc_rng_recent("after rewind");
                 }
                 if (shown == 0) {
                     fprintf(stderr, "[SNAP]   no traced field differs, so the "
@@ -475,9 +747,9 @@ void pc_snapshot_frame(s32 frame)
                                 "%lu, .data %lu, .bss %lu, objheap %lu), "
                                 "%.2f ms to take and %.2f to put back\n",
                         snap_rewinds, snap_frames_checked, snap_frames_compared,
-                        (snap_bytes) >> 10, snap_last[0] >> 10,
-                        snap_last[1] >> 10, snap_last[2] >> 10,
-                        snap_last[3] >> 10,
+                        (snap_bytes) >> 10, snap_by_class[0] >> 10,
+                        snap_by_class[1] >> 10, snap_by_class[2] >> 10,
+                        snap_by_class[3] >> 10,
                         snap_takes ? snap_take_ms / snap_takes : 0.0,
                         snap_rewinds ? snap_restore_ms / snap_rewinds : 0.0);
                 fflush(stderr);
@@ -488,11 +760,25 @@ void pc_snapshot_frame(s32 frame)
 
     snap_hash_frame[slot] = frame;
     snap_hash[slot] = h;
+    if (pads != NULL) {
+        memcpy(snap_pads[slot], pads, sizeof(snap_pads[slot]));
+        snap_pads_have[slot] = 1;
+    } else {
+        snap_pads_have[slot] = 0;
+    }
     snap_nfields[slot] = pc_state_fields(snap_fields[slot], SNAP_FIELDS);
 
     if (snap_keep.valid && frame >= snap_keep.frame + snap_depth()) {
         s32 back = snap_keep.frame;
+        if (snap_diff_on() == 1) {
+            diff_capture(frame);
+        }
         if (snapshot_restore(&snap_keep)) {
+            if (snap_diff_on() >= 2) {
+                /* The snapshot's own frame, because that is the state the
+                 * restore was supposed to reproduce. */
+                diff_compare(snap_keep.frame);
+            }
             snap_rewinds++;
             snap_replaying = 1;
             snap_replay_until = frame;
@@ -506,7 +792,9 @@ void pc_snapshot_frame(s32 frame)
     }
 
     if (!snap_keep.valid) {
-        snapshot_take(&snap_keep, frame);
+        if (snapshot_take(&snap_keep, frame) && snap_diff_on() >= 2) {
+            diff_capture(frame);
+        }
     }
 }
 

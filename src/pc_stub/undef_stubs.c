@@ -4684,6 +4684,18 @@ void pc_lowmem_game_extent(void** base, unsigned long* used)
     }
 }
 
+/* The pool's full geometry, for the synctest's diff mode: everything between
+ * the two cursors has never been handed out, so a diff only has to look at
+ * [base, base+used) and [base+top, base+size). */
+void pc_lowmem_full_extent(void** base, unsigned long* size,
+                           unsigned long* used, unsigned long* top)
+{
+    if (base != NULL) { *base = g_low_mem_base; }
+    if (size != NULL) { *size = (unsigned long) g_low_mem_size; }
+    if (used != NULL) { *used = (unsigned long) g_low_mem_used; }
+    if (top != NULL) { *top = (unsigned long) g_low_mem_top; }
+}
+
 void* pc_lowmem_alloc(unsigned long size)
 {
     static unsigned char* base = NULL;

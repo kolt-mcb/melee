@@ -506,21 +506,57 @@ out_objs = " ".join(_obj(s) for s in ALL_SOURCES + ENET_SOURCES)
 # INSERT BEFORE, not AFTER: the default linker script's `.data : { *(.data) }`
 # claims input sections on a first-match basis, so a section inserted after it
 # would collect nothing and bracket an empty span.
-ORDERED_OBJS = [(_obj(s), (str(MELEE) in s or str(SRC / "sysdolphin") in s))
-                for s in ALL_SOURCES + ENET_SOURCES]
+# The simulation is the decompiled game, plus the port's AX glue. Those three
+# files compile the audio SDK's own translation units -- AXVPB.c, AXAlloc.c and
+# the reverb -- so the voice array, the PB array and the voice free stack are
+# their statics even though the objects are the port's. The game's audio state
+# and the SDK's have to move together or not at all, and each half found out
+# separately: with neither in, __AXSyncPBs walked a cycle and a match stalled
+# 3200 frames in; with only ax_vpb_glue in, __AXRemoveFromStack took a null
+# pointer from AXFreeVoice, because the voice array had been rewound and the
+# free stack that indexes it had not. They are adjacent in link order, so this
+# is one span.
+SNAP_EXTRA = {"ax_vpb_glue", "ax_alloc_glue", "axfx_reverb_std_glue"}
+
+def _is_sim(src):
+    if Path(src).stem in SNAP_EXTRA:
+        return True
+    return str(MELEE) in src or str(SRC / "sysdolphin") in src
+
+ORDERED_OBJS = [(_obj(s), _is_sim(s)) for s in ALL_SOURCES + ENET_SOURCES]
 # Translation units left out of the snapshot. A name belongs here only because
 # MELEE_NET_SYNCTEST=1 caught it, and the comment says which frame. Taking one
 # out does not move it; it just stops it being copied.
 SNAP_EXCLUDE = set()
-_SIM_IX = [i for i, (o, sim) in enumerate(ORDERED_OBJS) if sim]
-assert _SIM_IX, "no simulation objects found for the snapshot bracket"
-# Two symbols can only bracket the simulation if its objects are one unbroken
-# run, which they are today: ALL_SOURCES lists the port, the stubs and the SDK
-# first and every decompiled group after them. If that changes, fail here
-# rather than quietly snapshotting a port object.
-assert _SIM_IX == list(range(_SIM_IX[0], _SIM_IX[-1] + 1)), (
-    "the simulation's objects are no longer contiguous in link order, so the "
-    "snapshot bracket would span port objects too")
+# The simulation's objects need not be contiguous in link order, and are not:
+# ax_vpb_glue.o sits among the port's own. So the markers come in pairs, one
+# pair per unbroken run of wanted objects, and each pair brackets that run where
+# it already is. Nothing moves, and an exclusion punches a hole rather than
+# shifting everything after it -- which is the only way to exclude anything at
+# all, given that a translation unit left out of the section would be collected
+# by the default script's wildcard instead and relocated to the end.
+SNAP_SPANS = 8  # must match SNAP_SPANS in src/port/netplay/pc_snapshot.c
+
+def _snap_runs():
+    runs, cur = [], None
+    for i, (o, sim) in enumerate(ORDERED_OBJS):
+        want = sim and Path(o).stem not in SNAP_EXCLUDE
+        if want and cur is None:
+            cur = [i, i]
+        elif want:
+            cur[1] = i
+        elif cur is not None:
+            runs.append(tuple(cur))
+            cur = None
+    if cur is not None:
+        runs.append(tuple(cur))
+    return runs
+
+_SNAP_RUNS = _snap_runs()
+assert _SNAP_RUNS, "no simulation objects found for the snapshot bracket"
+assert len(_SNAP_RUNS) <= SNAP_SPANS, (
+    "%d runs of snapshot objects but only %d span symbol pairs; raise "
+    "SNAP_SPANS here and in pc_snapshot.c" % (len(_SNAP_RUNS), SNAP_SPANS))
 STATE_LD = str(OUT_DIR / "melee-state.ld")
 
 def _state_ld():
@@ -529,14 +565,26 @@ def _state_ld():
     # the program never does -- and neither is any .rodata.
     def sect(name, pat):
         tag = name.strip(".")
+        starts = {lo: k for k, (lo, hi) in enumerate(_SNAP_RUNS)}
+        ends = {hi: k for k, (lo, hi) in enumerate(_SNAP_RUNS)}
         out = "SECTIONS\n{\n  %s :\n  {\n" % name
+        # Outer bounds over every object, not just the snapshotted ones. The
+        # synctest's diff mode compares all of this between a frame's two runs
+        # and reports which differing bytes no region covers, which is how a
+        # missing region gets found rather than guessed at.
+        out += "    __melee_all_%s_start = .;\n" % tag.replace("state_", "")
         for i, (o, sim) in enumerate(ORDERED_OBJS):
-            if i == _SIM_IX[0]:
-                out += "    __%s_start = .;\n" % tag
-            if not (sim and Path(o).stem in SNAP_EXCLUDE):
-                out += '    "%s"(%s)\n' % (o, pat)
-            if i == _SIM_IX[-1]:
-                out += "    __%s_end = .;\n" % tag
+            if i in starts:
+                out += "    __%s_%d_start = .;\n" % (tag, starts[i])
+            out += '    "%s"(%s)\n' % (o, pat)
+            if i in ends:
+                out += "    __%s_%d_end = .;\n" % (tag, ends[i])
+        # The unused pairs still have to exist, because pc_snapshot.c declares
+        # a fixed SNAP_SPANS of them. Collapsed here, they are empty spans.
+        for k in range(len(_SNAP_RUNS), SNAP_SPANS):
+            out += "    __%s_%d_start = .;\n    __%s_%d_end = .;\n" % (
+                tag, k, tag, k)
+        out += "    __melee_all_%s_end = .;\n" % tag.replace("state_", "")
         return out + "  }\n}\n"
     return ("/* Generated by configure_pc.py -- do not edit.\n"
             " * Brackets the decompiled game's mutable static storage so the\n"

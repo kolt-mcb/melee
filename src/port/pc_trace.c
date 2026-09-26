@@ -1655,6 +1655,36 @@ int pc_state_fields(PcStateField* out, int max)
 
     i = -1;
     PC_FIELD_AT("rand_seed", *HSD_RandSeedPtr, HSD_RandSeedPtr);
+    /* How many draws have been made, not just where the seed ended up. Two
+     * runs of one frame that disagree on the seed disagree either about which
+     * code ran or about how many times; this separates those. random.c is a
+     * decompiled unit, so the counter is inside the snapshot and rewinds with
+     * the rest, which is what makes it comparable. */
+    {
+        extern u32 pc_rng_count;
+        PC_FIELD_AT("rand_draws", pc_rng_count, &pc_rng_count);
+    }
+    /* The particle generator list: how many are live, and where they live.
+     * A replayed frame that emits a different number of particles is either
+     * looking at a different list or failing to allocate from a pool the
+     * snapshot does not cover, and the region the head address falls in says
+     * which. */
+    {
+        extern HSD_Generator* hsd_804D78FC;
+        HSD_Generator* g;
+        /* Not `n`: that is the field counter the macros above increment, and
+         * shadowing it here made every field land at the wrong index. */
+        u32 gens = 0;
+        for (g = hsd_804D78FC; g != NULL && gens < 4096; g = g->next) {
+            gens++;
+        }
+        PC_FIELD_AT("gen_count", gens, &hsd_804D78FC);
+        /* Unconditional: a field list whose length depends on the state cannot
+         * be compared position by position. */
+        PC_FIELD_AT("gen_head", (u32) (uintptr_t) hsd_804D78FC,
+                    hsd_804D78FC != NULL ? (void*) hsd_804D78FC
+                                         : (void*) &hsd_804D78FC);
+    }
     for (i = 0; i < 4; i++) {
         StaticPlayer* sp = Player_GetPtrForSlot(i);
         HSD_GObj* gobj;

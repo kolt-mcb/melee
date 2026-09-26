@@ -68,7 +68,16 @@ Done when the synctest is green for both cases and the cost is in the log.
 **Where this stands.** The mechanism works and the check is real: the rewind
 puts the frame counter back, the game replays the frames it already played, and
 every replayed frame's hash is compared against the one it produced first time.
-3200 frames replayed and 3200 compared, clean, on the debug VS boot.
+5760 frames replayed and every one of them compared, clean, on the debug VS
+boot with idle fighters -- that match's whole length, not a stopping point. Both
+lockstep lineups, and any lineup with CPUs playing, fail early; M2 below has the
+evidence and what it rules out. So M1's acceptance is not met, and the thing
+standing in the way is understood rather than guessed at.
+
+The spec above says "re-advance with the same inputs", and the first version did
+not: it let the game re-read whatever the input layer held by then, which is the
+same only while nothing is pressed. The pads each frame was played with are now
+recorded and written back over the freshly polled ones during a replay.
 
 Two things had to be learned the hard way and are worth carrying forward:
 
@@ -79,8 +88,8 @@ Two things had to be learned the hard way and are worth carrying forward:
   every hash lookup missed. `pc_snapshot.c` now asserts that the first frame
   after a restore is the snapshot's own frame plus one, and counts frames
   actually compared rather than frames it believes it replayed.
-- **The cost is measured, and it is over budget.** 22.5 MB per snapshot, 2.3 ms
-  to take and 2.1 ms to put back -- not the 1 ms above. The region list is
+- **The cost is measured, and it is over budget.** 22.6 MB per snapshot, 1.9 ms
+  to take and 1.9 ms to put back -- not the 1 ms above. The region list is
   honest rather than tight; see M2 for where the 17.5 MB of it goes.
 
 ### M2 -- The region list, found rather than guessed
@@ -118,10 +127,68 @@ warning: the *hash* stayed correct for 128 frames without it and the run died
 anyway, so a green checksum is not the same as a complete region list, and the
 crash was the only evidence that region belongs.
 
-Still open here: the game heap region is the port's whole upward bump arena,
-17.5 MB of the 22.5 MB copied, and almost certainly a superset of what the
-simulation writes. Narrowing it is the remaining M2 work and it is what stands
-between the measured cost and the budget below.
+**Spans, not one bracket.** The wanted objects are not contiguous in link
+order, so the script emits a marker pair per unbroken run of them and the
+snapshot walks the pairs. That is not a refinement; it is the only way to
+include or exclude a single translation unit, because one left out of the
+section gets collected by the default script's wildcard instead and relocated
+to the end of `.bss` -- which is the move that crashed the port. With spans,
+nothing moves and an exclusion punches a hole.
+
+The first thing it was needed for was audio, and audio taught the same lesson
+twice. The port's `ax_vpb_glue.c`, `ax_alloc_glue.c` and `axfx_reverb_std_glue.c`
+compile the audio SDK's own translation units, so the voice array, the PB array
+and the voice free stack are *port* statics -- in the middle of the link, out of
+reach of a single bracket. With none of them in the snapshot, the game's audio
+state rewound and the SDK's did not, `__AXSyncPBs` walked a cycle and a match
+stalled 3200 frames in. With only `ax_vpb_glue` in, `__AXRemoveFromStack` took a
+null pointer out of `AXFreeVoice`: the voice array had been rewound and the free
+stack that indexes it had not. All three, and the match runs.
+
+That is the general shape of every bug in this milestone, and it is worth
+stating as the rule: **state that is written together must be snapshotted
+together.** The frame counter and the heap, the arena's bytes and the
+allocator's cursor, the game's audio and the SDK's -- each one was a boundary
+drawn through the middle of something.
+
+**What the region list still cannot explain, and what that rules out.** With
+CPUs playing, or on Onett, a replayed frame diverges -- and the report is always
+the same shape: the seed moved and the draw count moved with it, no fighter
+field differs, and rewinding a single frame is enough to show it. Frame 108 of
+Samus vs Donkey Kong is the smallest case: 8 draws on the first run, 2 on the
+replay. `MELEE_GFXTRACE=1` says why. An action's GFX spawn (`ftCo_8009F834`,
+gfx 1031) is reached once, on the first run, and not on the replay -- and the
+generator it would have made accounts for exactly the six missing draws.
+
+This is not a missing region, and it is worth writing down how thoroughly that
+was established, because the obvious next move is to go looking for one:
+
+- `MELEE_NET_SYNCTEST_DIFF=2` copies everything the simulation could live in --
+  both ends of the pool, and every object's `.data` and `.bss` -- at the frame
+  a snapshot is taken from, and compares it immediately after the restore.
+  **Not one covered byte differs, at any rewind.** The restore is complete.
+- The 40-odd ranges it reports as uncovered all belong to `gx_gl_bridge`
+  (renderer), `pc_ax` (mixing buffers), `render` (frame counters),
+  `pc_snapshot` (its own bookkeeping) and `pc_ptr.h`'s readability cache. None
+  is read by the simulation: the cache is a pure memo over a probe, and
+  `pc_render_frame_now` is read only inside `render.c`.
+- The generator itself is at `0x4f04af18`, inside the HSD object heap, which is
+  region 3. Its memory was copied and put back.
+- The pads are now replayed, not re-polled (below). It made no difference here.
+- No allocation fell back to the host heap, so nothing lives outside the pool.
+
+So two runs of one frame, from byte-identical simulation state and with the same
+inputs, take different paths. What is left is state that is not in the pool and
+not in any object's static storage: the host stack -- the restore happens partway
+down a call chain, and a replayed frame is entered from a different place in the
+loop than the original was -- or a thread. An uninitialised read would look
+exactly like this, and this port has had several. That is where M2 goes next,
+and it is a different hunt from the one the region list was for.
+
+Also still open: the game heap region is the port's whole upward bump arena,
+17.5 MB of the 22.6 MB copied, and almost certainly a superset of what the
+simulation writes. Narrowing it is what stands between the measured cost and the
+budget below.
 
 ### M3 -- Rollback against a local peer
 
