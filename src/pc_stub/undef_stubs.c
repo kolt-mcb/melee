@@ -4666,6 +4666,24 @@ void* pc_lowmem_carve(unsigned long size)
 
 /* Sub-4GB bump arena for the archive converters (pc_ftconv, pc_itconv):
  * never freed, so a plain bump. */
+/* The live extent of the game heap, for the rollback snapshot.
+ *
+ * The pool is carved from both ends: OSAllocFromHeap grows up from the
+ * base, and pc_lowmem_alloc carves down from the top for converted asset
+ * data. Only the upward half is simulation state -- the carves hold
+ * character and item data built once at load and never written again --
+ * so a snapshot wants the bottom extent and nothing else.
+ */
+void pc_lowmem_game_extent(void** base, unsigned long* used)
+{
+    if (base != NULL) {
+        *base = g_low_mem_base;
+    }
+    if (used != NULL) {
+        *used = (unsigned long) g_low_mem_used;
+    }
+}
+
 void* pc_lowmem_alloc(unsigned long size)
 {
     static unsigned char* base = NULL;

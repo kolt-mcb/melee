@@ -40,6 +40,7 @@
  */
 
 #include "port/netplay/pc_netplay.h"
+#include "port/netplay/pc_snapshot.h"
 #include "port/netplay/pc_netdolphin.h"
 
 #include <enet/enet.h>
@@ -1641,6 +1642,7 @@ void pc_net_match_end(void)
         return;
     }
     net_match_set(0, "pc_net_match_end");
+    pc_snapshot_match_end();
     fprintf(stderr, "[NET] match over: %u stalled frames, %.0f ms waiting "
                     "(worst %.1f ms)%s\n",
             net_stalls, net_stall_ms, net_stall_worst,
@@ -1653,6 +1655,12 @@ void pc_net_pads(GCPadStatus* pads)
     s32 frame;
     NetPad mine;
     double waited;
+
+    /* The rollback self-check runs on its own, before any of the netplay
+     * state below: it is a property of this machine's simulation and wants
+     * testing in a solo match, where nothing else can be blamed for a
+     * difference. */
+    pc_snapshot_frame((s32) gm_GetFrameCount());
 
     /* A Dolphin host owns the whole session -- its protocol, its clock, and
      * no notion of a match frame at all -- so that route takes the pads over
