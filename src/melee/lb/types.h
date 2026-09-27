@@ -37,7 +37,8 @@ typedef union CmdUnion CmdUnion;
  * PC_SCRIPT_INPLACE says which arrangement is in force. Everything below that
  * reverses member order for the host word tests it, not BUILD_TARGET_PC. */
 #ifndef PC_SCRIPT_BE
-#if defined(BUILD_TARGET_PC) && defined(__GNUC__) && !defined(__clang__)
+#if defined(BUILD_TARGET_PC) && defined(__GNUC__) && !defined(__clang__) &&           \
+    !defined(PC_SCRIPT_INPLACE)
 #define PC_SCRIPT_BE __attribute__((scalar_storage_order("big-endian")))
 #else
 #define PC_SCRIPT_BE

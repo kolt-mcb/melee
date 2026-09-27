@@ -97,11 +97,21 @@ if [ -n "${MELEE_RB_SIMHASH:-}" ]; then
 fi
 
 echo "rollback pair: delay=$DELAY window=$WINDOW loss=${LOSS}% jitter=${JITTER}ms frames=$FRAMES"
+# MELEE_RB_GUEST_BIN puts a *different* binary on the guest side. What that is
+# for: the two sides of a real match are not the same build -- desktop against
+# tablet is GCC against Clang, and therefore the attribute arrangement against the
+# in-place one (see PC_SCRIPT_INPLACE). Pointing one side at build/pc-inpl/melee-pc
+# tests that pairing here, without the tablet.
+HOST_BIN=${MELEE_RB_HOST_BIN:-./build/pc/melee-pc}
+GUEST_BIN=${MELEE_RB_GUEST_BIN:-$HOST_BIN}
+echo "  host  $HOST_BIN"
+echo "  guest $GUEST_BIN"
+
 $RUN env $COMMON $SIMH $CDH MELEE_NET=host MELEE_NET_PORT=$PORT MELEE_NET_SLOT=0 \
-    timeout -k 5 ${MELEE_RB_TIMEOUT:-500} ./build/pc/melee-pc > "$OUT/$TAG-h.log" 2>&1 &
+    timeout -k 5 ${MELEE_RB_TIMEOUT:-500} "$HOST_BIN" > "$OUT/$TAG-h.log" 2>&1 &
 sleep 3
 $RUN env $COMMON $SIMG $CDG MELEE_NET=127.0.0.1:$PORT MELEE_NET_SLOT=1 \
-    timeout -k 5 ${MELEE_RB_TIMEOUT:-500} ./build/pc/melee-pc > "$OUT/$TAG-g.log" 2>&1 &
+    timeout -k 5 ${MELEE_RB_TIMEOUT:-500} "$GUEST_BIN" > "$OUT/$TAG-g.log" 2>&1 &
 wait
 
 rc=0

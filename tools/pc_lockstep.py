@@ -475,7 +475,12 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
             env["MELEE_WINDOW_POS"] = "%d,%d" % TILE_RIGHT
         port_out = open(os.path.join(dbg, "port.log"), "w") if dbg \
             else subprocess.DEVNULL
-        port = subprocess.Popen([os.path.join(REPO, "build", "pc", "melee-pc"),
+        # MELEE_PORT_BIN compares a different build against the console -- the
+        # in-place script flavour, say (build/pc-inpl), which is what Clang and
+        # therefore Android compiles. Without it only the default build can be
+        # held against the emulator, and the emulator is the only oracle there is.
+        port = subprocess.Popen([os.environ.get(
+            "MELEE_PORT_BIN", os.path.join(REPO, "build", "pc", "melee-pc")),
                                  "-w", str(size[0]), str(size[1])],
                                 cwd=REPO, env=env, stdout=port_out,
                                 stderr=subprocess.STDOUT if dbg

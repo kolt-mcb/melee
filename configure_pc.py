@@ -255,6 +255,13 @@ if ASAN:
 # pointer truncation by accident. Android mandates PIE + ASLR, where the
 # heap lands at 0x7xxx_xxxx_xxxx; this flavour reproduces that on the
 # desktop (port-android.md Phase 3) so the suite can find the sites.
+# PC_SCRIPT_INPLACE=1 compiles the script structs the way a compiler without
+# scalar_storage_order has to -- host-order declarations plus the in-place
+# byte-swap in port/pc_script.c. That is what Clang gets, and therefore what
+# Android runs, so this is how the desktop reproduces it: it lets a netplay pair
+# put one side on each arrangement, which is what desktop-against-tablet is, without
+# needing the tablet to find out that the two disagree. Same idea as PC_PIE above.
+SCRIPT_INPLACE = os.environ.get("PC_SCRIPT_INPLACE") == "1"
 PIE = os.environ.get("PC_PIE") == "1" and not ASAN
 if PIE:
     OUT_DIR = BUILD / "pc-pie"
@@ -393,7 +400,7 @@ else:
 # reproducing the console's roundings exactly -- explicitly, with fma(), at
 # the sites the console fuses, and nowhere else. -fexcess-precision=standard
 # for the same reason: no intermediate precision the console does not have.
-CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -fno-builtin-atanf -fno-builtin-atan2f -fno-builtin-asinf -fno-builtin-acosf -std=gnu11 -ffp-contract=off -fexcess-precision=standard -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "") + (" -DBUILD_SLIPPI=1" if SLIPPI else "") + (" -DBUILD_NETPLAY=1 -I" + str(PORT_SRC / "netplay" / "enet" / "include") if NETPLAY else "")
+CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -fno-builtin-atanf -fno-builtin-atan2f -fno-builtin-asinf -fno-builtin-acosf -std=gnu11 -ffp-contract=off -fexcess-precision=standard -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "") + (" -DBUILD_SLIPPI=1" if SLIPPI else "") + (" -DBUILD_NETPLAY=1 -I" + str(PORT_SRC / "netplay" / "enet" / "include") if NETPLAY else "") + (" -DPC_SCRIPT_INPLACE=1" if SCRIPT_INPLACE else "")
 if ANDROID:
     # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
     LDFLAGS = "-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"

@@ -2106,7 +2106,8 @@ ASSERT_SIZE(struct Fighter, 0x23EC);
  * fallback stays -- but it must agree, or these structs and the ones over there
  * would disagree about member order. */
 #ifndef PC_SCRIPT_BE
-#if defined(BUILD_TARGET_PC) && defined(__GNUC__) && !defined(__clang__)
+#if defined(BUILD_TARGET_PC) && defined(__GNUC__) && !defined(__clang__) &&           \
+    !defined(PC_SCRIPT_INPLACE)
 #define PC_SCRIPT_BE __attribute__((scalar_storage_order("big-endian")))
 #else
 #define PC_SCRIPT_BE

@@ -887,6 +887,49 @@ The same, desktop against tablet, x86-64 against arm64.
 - Acceptance is the same as M3 plus: no desync across a full match on real
   hardware, twice.
 
+**Started 2026-09-27. Two things done, one thing found, one thing waiting.**
+
+*arm64 has the rollback code now.* `build.ninja.android` predated
+`pc_snapshot.c`, so the Android link had every rollback symbol undefined --
+`pc_snapshot_prerun`, `pc_rollback_enabled`, the rest. Regenerated with
+`ANDROID_NDK=... PC_NETPLAY=1` it links: 62 MB of `libmain.so` with the snapshot
+in it. The attribute work from M3 is Clang-clean, which that build checks harder
+than the desktop does -- it compiles with `-Werror=unknown-attributes` precisely
+so a `scalar_storage_order` Clang would silently ignore is a hard error instead.
+
+*The desktop can now play the arrangement the tablet will use.* Clang ignores the
+attribute, so Android keeps the in-place byte-swap, and the two sides of a real
+match are therefore not the same arrangement. `PC_SCRIPT_INPLACE=1` builds that
+flavour on the desktop (the same idea as `PC_PIE` reproducing Android's ASLR),
+`MELEE_RB_GUEST_BIN` puts a different binary on the guest side of the pair, and
+`MELEE_PORT_BIN` lets the lockstep hold a flavour other than the default against
+the emulator.
+
+**The two arrangements disagree, and that is M4's real blocker.** Attribute host
+against in-place guest desyncs at match frame 2, every frame differing. It is not
+the struct declarations -- a generated test reads one word through all 79 switch
+blocks both ways and compares every named field, 0 mismatches -- and it is not the
+raw-read macros, which invert consistently. It is narrower than it first looks:
+
+- Both arrangements are **identical to the console** down the menu route:
+  `sync_pair2`, **1500 frames, 0 fields differing** for the attribute build, 400
+  frames clean for the in-place one.
+- They differ on the **debug-VS boot**, which is what the pair rig uses: first at
+  trace row 82, in `p_ecbbx` -- a fighter's ECB -- and two joint columns. A small
+  numeric difference in data read from an archive, which is the fingerprint of the
+  in-place swap having converted something a later reader wanted big-endian.
+
+So what has to be settled before M4 can be measured is which of the two is right
+on the debug boot, and the console can only be asked down the menu route. Either
+the debug boot reads fighter attributes through a path the menu route does not, or
+the in-place swap is mutating data that shares a reloc object with a script -- the
+hazard `MELEE_SWAPCHECK` was built for, and it only ever looked at `FObjDesc`
+nodes.
+
+*The hardware half is waiting on hardware:* `adb devices` is empty, so
+desktop-against-tablet has not been run. Everything above was reachable without
+it, which is the point of building the arrangement locally.
+
 ### M5 -- Finding a peer without a service
 
 Only once M4 holds. Connect codes, LAN discovery, NAT traversal. Deliberately
