@@ -647,6 +647,39 @@ Two instances on one machine, artificial delay and loss in between.
 Done when a scripted match runs to completion under injected loss, twice, with
 identical final state on both sides.
 
+**MET.** `tools/pc_rollback_pair.sh --loss 5 --jitter 100 --delay 3 --window 6
+--frames 7200`, twice:
+
+| | run A | run B |
+| --- | --- | --- |
+| match frames simulated | 6254 | 6190 |
+| corrections | 802 over 1443 frames | 874 over 1471 frames |
+| restoring | 2467 ms total | 2400 ms total |
+| waits for a full window | 76 | 70 |
+| desyncs reported | 0 | 0 |
+| frames the wire actually compared | 4404 of 5367 | 4347 of 5308 |
+| **frames differing, compared offline** | **0 of 6254** | **0 of 6190** |
+
+The last row is the one that matters and it is not the wire check: both sides
+write `MELEE_SIMHASHLOG`, one line per simulated frame with the last line for a
+frame being its final state, and the two files are diffed afterwards. Every frame
+of both matches agrees, which is stronger than "no desync was reported" -- the
+wire compares what arrives in time, and that was 82%.
+
+**The cost is now the problem, as expected.** Copying the archives puts the
+snapshot at 22.6 MB and 3.09 ms to take, and a rollback match on this machine
+(both sides on one CPU) runs at about **50 fps against 59 before**. The fix is
+not to stop copying them -- that is the desync -- but to copy only the objects
+`pc_script_prepare` has actually swapped, which the marks already record. That is
+the next piece of work, and until it is done M4's hardware will be running a
+port that is ten frames a second slower than it needs to be.
+
+Two smaller things the acceptance turned up, both in the rig rather than the
+netcode: a side whose peer has exited keeps playing alone and then wedges in a
+scene load, repeatedly reopening the stage's music, which blocks the next run
+until the timeout kills it; and `timeout`'s SIGTERM is not always enough to stop
+it (`timeout -k`).
+
 ### M4 -- Rollback across machines and architectures
 
 The same, desktop against tablet, x86-64 against arm64.
