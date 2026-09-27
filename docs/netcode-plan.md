@@ -770,9 +770,31 @@ than of the history of speculative passes.
 Which also explains why `pc_itconv_marks_rewind` did not fix it: un-swapping what
 was swapped *since the snapshot* keeps one process self-consistent, and this is a
 disagreement *between* processes about swaps that each did at a different frame.
-The real fix is to stop the swap state existing -- convert eagerly, or read through
-a byte-swap instead of rewriting the buffer -- and until then the archives are
-copied.
+
+**An attempt at the cheap fix from here, and where it stopped.** If a swapped
+object is no longer read-only, it should stop being a hole -- so
+`pc_script_prepare` now registers every object it swaps
+(`pc_itconv_arch_note_write`), which takes 84 KB out of the holes and leaves the
+other 8 MB out of the snapshot. Two things went wrong on the way and both are worth
+knowing:
+
+- The generation check added earlier -- decline a rewind to a store taken before a
+  range was registered -- was written when the only writer was the magnifier, which
+  registers itself once. With a registration every few frames it declined *every*
+  rewind: a match ran 0 corrections and 841 waits for a full window, which is
+  rollback switched off, and "it still desyncs" would have meant nothing. Removed.
+- Registration and un-swapping then overlapped destructively: an object the
+  snapshot now copies is restored by the restore, and un-swapping it afterwards
+  reverses it. That moved the desync from frame 552 to frame **8**. Each registered
+  range now records the generation it appeared at and the un-swap skips any object
+  the store had already copied, which put the desync back at 552.
+
+It is still 552. With the filter in place the un-swap reports **zero** objects put
+back across 95 restores, where some were expected, so either no rewind window
+contains a swap or the extra-bit comparison is not seeing them -- that is the next
+thing to look at, and it is a question about the bookkeeping rather than another
+hypothesis about the game. The default is unchanged and re-verified: 860 frames
+compared offline, none differing.
 
 The wide scan says the same thing about memory the snapshot does not cover: 33 of
 2620 outer 64 KB blocks differ in a clean run, all of them port state (the GL

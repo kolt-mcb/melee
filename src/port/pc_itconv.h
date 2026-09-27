@@ -76,6 +76,10 @@ void pc_itconv_marks_restore(const void* in, unsigned long len);
  * inverse, so this puts megabytes of loaded file data back without having copied
  * any of it. See the comment on the definition. */
 void pc_itconv_marks_rewind(const void* in, unsigned long len);
+/* The same, told which generation of the archive-write set the store was taken
+ * under, so it leaves alone any object that store already copied. */
+void pc_itconv_marks_rewind_gen(const void* in, unsigned long len,
+                                unsigned long store_gen);
 
 /* Tell the snapshot that the port wrote into archive memory here, so it stops
  * treating that range as immutable. The offscreen magnifier's EFB copy is the

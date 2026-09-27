@@ -462,10 +462,19 @@ static void arch_object_at(const struct arch* a, u32 off, u32* start, u32* end)
  * was not then, and the archives are as they were without having been copied.
  * Usually that is no objects at all; a frame that dispatches a script in a new
  * object for the first time makes it one. */
+static int arch_write_copied_by(const unsigned char* p, unsigned long n,
+                                unsigned long store_gen);
+
 unsigned long pc_itconv_unswapped;   /* objects put back, for the diagnostics */
 unsigned long pc_itconv_rewinds;
 
 void pc_itconv_marks_rewind(const void* in, unsigned long len)
+{
+    pc_itconv_marks_rewind_gen(in, len, (unsigned long) -1);
+}
+
+void pc_itconv_marks_rewind_gen(const void* in, unsigned long len,
+                                unsigned long store_gen)
 {
     const unsigned char* p = (const unsigned char*) in;
     const unsigned char* end = p + len;
@@ -524,6 +533,12 @@ void pc_itconv_marks_rewind(const void* in, unsigned long len)
                     continue;
                 }
                 arch_object_at(a, off, &o_start, &o_end);
+                if (arch_write_copied_by(a->base + o_start,
+                                         (unsigned long) (o_end - o_start),
+                                         store_gen))
+                {
+                    continue; /* restored from the store; do not swap it back */
+                }
                 pc_itconv_unswapped++;
                 for (w = a->base + o_start; w + 4 <= a->base + o_end; w += 4) {
                     unsigned char t0 = w[0], t1 = w[1];
@@ -552,10 +567,18 @@ void pc_itconv_marks_rewind(const void* in, unsigned long len)
  * Rather than copy all 8 MB of archives to cover a few kilobytes, the port
  * reports where it writes and the snapshot stops treating those ranges as holes.
  * Self-discovering: a new writer registers itself the first time it writes. */
-#define ARCH_WRITE_MAX 16
+/* Enough for every script object a match dispatches, merged: the swaps number in
+ * the dozens and cluster inside a few archives, so 4 KB rounding and the merge
+ * below collapse them, but the cap has to be generous or the tail of them silently
+ * stays a hole. */
+#define ARCH_WRITE_MAX 256
 struct arch_write {
     const unsigned char* base;
     unsigned long len;
+    /* The generation this range appeared at. A snapshot records the generation it
+     * was taken under, so comparing the two says whether that store copied these
+     * bytes -- which decides whether a restore has already put them back. */
+    unsigned long gen;
 };
 static struct arch_write g_arch_writes[ARCH_WRITE_MAX];
 static int g_arch_writes_n;
@@ -611,10 +634,29 @@ void pc_itconv_arch_note_write(const void* p, unsigned long len)
         if (g_arch_writes_n < ARCH_WRITE_MAX) {
             g_arch_writes[g_arch_writes_n].base = a->base + lo;
             g_arch_writes[g_arch_writes_n].len = hi - lo;
+            g_arch_writes[g_arch_writes_n].gen = pc_itconv_arch_write_gen + 1;
             g_arch_writes_n++;
             pc_itconv_arch_write_gen++;
         }
     }
+}
+
+/* Did a snapshot taken at `store_gen` copy these bytes? It did if the range had
+ * already been registered by then, because registering it is what stops the
+ * snapshot treating it as a hole. If so the restore has put the pre-swap bytes
+ * back already and un-swapping on top would reverse them -- which is what moved
+ * the desync from match frame 552 to frame 8 when the two mechanisms first met. */
+static int arch_write_copied_by(const unsigned char* p, unsigned long n,
+                               unsigned long store_gen)
+{
+    int i;
+    for (i = 0; i < g_arch_writes_n; i++) {
+        const unsigned char* b = g_arch_writes[i].base;
+        if (p >= b && p + n <= b + g_arch_writes[i].len) {
+            return g_arch_writes[i].gen <= store_gen;
+        }
+    }
+    return 0;
 }
 
 int pc_itconv_arch_write_at(int i, const unsigned char** base,

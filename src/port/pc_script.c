@@ -37,6 +37,21 @@ void pc_script_prepare(const void* u)
         w[2] = t1;
         w[3] = t0;
     }
+    /* This object is no longer the read-only file data the snapshot assumes an
+     * archive is: its byte order now depends on whether anything has dispatched
+     * an opcode in it yet. Register it, so the rollback snapshot stops treating
+     * it as a hole and starts rewinding it along with the mark that records the
+     * swap.
+     *
+     * Without this the two sides of a netplay match end up with different sets of
+     * swapped objects -- measured at 85 against 95, with 7 only one side had and
+     * 9 only the other -- because a speculative frame dispatches scripts the
+     * corrected timeline does not, and nothing puts those back. Reading the same
+     * word then gives two different numbers, which is a desync a few hundred
+     * frames later. Registering the object is enough where un-swapping was not:
+     * un-swapping keeps one process self-consistent, and the problem is two
+     * processes disagreeing about swaps each made at a different frame. */
+    pc_itconv_arch_note_write(start, (unsigned long) (end - start));
     if (trace_on()) {
         fprintf(stderr, "[SCRIPT] host-order %p..%p (%ld bytes)\n",
                 (const void*) start, (const void*) end, (long) (end - start));

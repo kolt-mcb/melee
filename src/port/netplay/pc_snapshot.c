@@ -81,6 +81,8 @@ extern unsigned long pc_itconv_marks_size(void);
 extern void pc_itconv_marks_save(void* out);
 extern void pc_itconv_marks_restore(const void* in, unsigned long len);
 extern void pc_itconv_marks_rewind(const void* in, unsigned long len);
+extern void pc_itconv_marks_rewind_gen(const void* in, unsigned long len,
+                                       unsigned long store_gen);
 extern unsigned long pc_lowmem_state_size(void);
 extern void pc_lowmem_state_save(void* out);
 extern void pc_lowmem_state_restore(const void* in);
@@ -1246,7 +1248,10 @@ SNAP_NO_ASAN static int snapshot_restore(const Snapshot* s)
              * swapped since and then take the marks back: a byte-swap is its own
              * inverse, so the archives end up as they were without 8 MB of
              * copying. */
-            pc_itconv_marks_rewind(s->marks, s->marks_len);
+            /* Told which generation this store was taken under, so it leaves
+             * alone the objects the store copied and only puts back the ones it
+             * could not have. */
+            pc_itconv_marks_rewind_gen(s->marks, s->marks_len, s->write_gen);
         } else {
             pc_itconv_marks_restore(s->marks, s->marks_len);
         }
@@ -2794,17 +2799,19 @@ int pc_rollback_rewind(s32 to, s32 upto)
         upto <= to) {
         return 0;
     }
-    /* Not from a store taken before the port knew it writes somewhere inside an
-     * archive: that store does not contain the range, so restoring it would put
-     * back everything except the bytes that had just started changing. A snapshot
-     * is only taken while nothing is guessed, so the one in hand can predate the
-     * discovery by a whole window. Declining costs this correction; the netplay
-     * layer keeps the guess and waits, which is what it does for any rewind that
-     * is not available. */
-    if (snap_rb.write_gen != pc_itconv_arch_write_gen) {
-        snap_rb.valid = 0;
-        return 0;
-    }
+    /* This used to decline a rewind to a store taken before the port knew it
+     * writes somewhere inside an archive, on the grounds that such a store does
+     * not contain the range. That was right while the only writer was the
+     * magnifier, which registers itself once and early. It is catastrophic now
+     * that pc_script_prepare registers every object it byte-swaps, because a swap
+     * happens every few frames: every rewind was declined, and a match ran with 0
+     * corrections and 841 waits for a full window, which is rollback switched off
+     * rather than rollback working.
+     *
+     * It is not needed either. A rewind to a store older than the registration is
+     * covered by pc_itconv_marks_rewind, which un-swaps whatever has been swapped
+     * since and takes the marks back with it; newer stores contain the object,
+     * because it is no longer a hole. Between them every case is handled. */
     t0 = snap_now_ms();
     if (!snapshot_restore(&snap_rb)) {
         snap_rb.valid = 0;
