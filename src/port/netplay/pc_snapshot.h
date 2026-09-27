@@ -69,6 +69,29 @@ void pc_snapshot_prerun(void);
 /* MELEE_SNAPTRACE=1: the frame counter at the simulation entry. */
 void pc_snapshot_prerun_trace(void);
 
+/* ---- rollback, driven by the netplay layer ------------------------------
+ *
+ * The self-check above rewinds on a schedule of its own to prove the machinery.
+ * Rollback rewinds because a peer's input turned up late and contradicted what
+ * was guessed, which only the netplay layer knows about -- so it drives these
+ * two instead.
+ *
+ * pc_rollback_mark() keeps a snapshot of a frame every player's real input is
+ * known for: that is the frame a correction can be rewound to, and there is only
+ * ever one worth keeping, the newest such. pc_rollback_rewind() puts it back and
+ * arranges for the frames after it to be simulated again inside the current
+ * displayed frame, with whatever inputs are now known.
+ *
+ * Both are no-ops unless MELEE_NET_ROLLBACK is set, so the delay-based path is
+ * untouched by their presence. */
+int pc_rollback_enabled(void);
+int pc_rollback_mark(s32 frame);
+int pc_rollback_rewind(s32 to, s32 upto);
+
+/* What the last rewind cost and how many there have been, for the frame-timing
+ * log: M3 asks for the rollback count and the re-simulation cost. */
+void pc_rollback_stats(unsigned* rewinds, unsigned* frames, double* ms);
+
 /* Leaving the match: the kept snapshot refers to a heap that is about to be
  * rebuilt. */
 void pc_snapshot_match_end(void);

@@ -314,6 +314,21 @@ void gm_801A4D34(void (*on_frame)(void), UNUSED GameSceneInfo* info)
 
         for (i = 0; i < pad_queue_count; i++) {
             HSD_PerfSetStartTime();
+#if BUILD_NETPLAY
+            /* The inputs for the frame this iteration is about to simulate.
+             *
+             * Normally the pads are read once per displayed frame, in
+             * port_input_poll, and that is the same thing -- one simulated frame
+             * per displayed one. It stops being the same thing during a
+             * rollback, where this loop runs several frames before presenting
+             * anything and each of them had its own inputs. So they are put in
+             * here, before the pad renew below copies them on, rather than once
+             * outside the loop. Inert unless a rollback is in progress. */
+            {
+                extern void port_pads_for_next_frame(void);
+                port_pads_for_next_frame();
+            }
+#endif
             lb_800198E0();
             if (DbLevel >= DbLKind_DebugRom) {
                 gm_801A4970(&temp_r25->unk_10.db_input);

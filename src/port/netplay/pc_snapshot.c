@@ -667,6 +667,7 @@ static unsigned snap_catchup_depth_seen;
 /* Frames a rewind still owes; see pc_snapshot_catchup_frames. */
 static unsigned snap_catchup_owed;
 static int snap_catchup_on(void);
+int pc_rollback_enabled(void);
 
 /* Closes a burst once its last unseen frame has run. */
 static void snap_catchup_finish(void);
@@ -1670,6 +1671,11 @@ static int snap_catchup_on(void)
     if (on < 0) {
         const char* s = getenv("MELEE_NET_SYNCTEST_CATCHUP");
         on = (s != NULL && *s != '\0' && strcmp(s, "0") != 0);
+        /* Rollback cannot work without it: a correction for four frames ago has
+         * to be caught up inside this frame, not over the next four. */
+        if (pc_rollback_enabled()) {
+            on = 1;
+        }
     }
     return on;
 }
@@ -1749,6 +1755,14 @@ void pc_snapshot_prerun(void)
     {
         extern void pc_force_cpu_frame(void);
         pc_force_cpu_frame();
+    }
+    /* A rollback's replay ends here, because nothing else will end it: the
+     * self-check clears snap_replaying when its comparison reaches the last
+     * replayed frame, and the self-check is not running. Left set, the mixer
+     * stays muted for the rest of the match and every frame keeps being treated
+     * as one that is being redone. */
+    if (snap_replaying && !snap_enabled() && frame >= snap_replay_until) {
+        snap_replaying = 0;
     }
     /* Once per simulated frame, which is the point of being here. */
     snap_check(frame);
@@ -1832,10 +1846,89 @@ void pc_snapshot_prerun_trace(void)
     }
 }
 
+/* ---- rollback ------------------------------------------------------------ */
+
+static Snapshot snap_rb;
+static unsigned rb_rewinds, rb_frames;
+static double rb_ms;
+
+int pc_rollback_enabled(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* s = getenv("MELEE_NET_ROLLBACK");
+        on = (s != NULL && *s != '\0' && strcmp(s, "0") != 0);
+    }
+    return on;
+}
+
+int pc_rollback_mark(s32 frame)
+{
+    if (!pc_rollback_enabled() || frame <= 0) {
+        return 0;
+    }
+    /* Only the newest confirmed frame is worth keeping: a correction can never
+     * ask to go further back than the oldest frame whose inputs were guessed,
+     * and that is this frame plus one by construction. */
+    if (snap_rb.valid && snap_rb.frame == frame) {
+        return 1;
+    }
+    return snapshot_take(&snap_rb, frame);
+}
+
+int pc_rollback_rewind(s32 to, s32 upto)
+{
+    double t0;
+    if (!pc_rollback_enabled() || !snap_rb.valid || snap_rb.frame != to ||
+        upto <= to) {
+        return 0;
+    }
+    t0 = snap_now_ms();
+    if (!snapshot_restore(&snap_rb)) {
+        snap_rb.valid = 0;
+        return 0;
+    }
+    /* The same machinery the self-check replays with: the counter is back at
+     * `to`, the loop owes the frames up to `upto`, and the pad queue hands them
+     * out so they are all simulated before anything is presented. */
+    snap_replaying = 1;
+    snap_restored_frame = to;
+    snap_replay_until = upto;
+    snap_rewind_checked = 1; /* the netplay layer knows what it asked for */
+    /* Inputs `to` through `upto` inclusive have to be consumed again, which is
+     * one more frame than the difference between them; the loop runs one of them
+     * itself, so it owes the rest. */
+    snap_catchup_owed = (unsigned) (upto - to);
+    /* The snapshot stays valid: the same frame is the newest confirmed one until
+     * the netplay layer says otherwise, and a second correction inside the same
+     * window has to be able to rewind to it again. */
+    rb_rewinds++;
+    rb_frames += (unsigned) (upto - to);
+    rb_ms += snap_now_ms() - t0;
+    return 1;
+}
+
+void pc_rollback_stats(unsigned* rewinds, unsigned* frames, double* ms)
+{
+    if (rewinds != NULL) { *rewinds = rb_rewinds; }
+    if (frames != NULL) { *frames = rb_frames; }
+    if (ms != NULL) { *ms = rb_ms; }
+}
+
 void pc_snapshot_match_end(void)
 {
+    int i;
     snap_keep.valid = 0;
+    snap_rb.valid = 0;
     snap_replaying = 0;
+    snap_catchup_owed = 0;
+    /* The heaps are about to be rebuilt, so nothing in either store describes
+     * anything any more and the next snapshot has to be a whole one rather than
+     * an update of what changed. */
+    for (i = 0; i < SNAP_REGIONS; i++) {
+        snap_keep.r[i].primed = 0;
+        snap_rb.r[i].primed = 0;
+    }
 }
 
 #endif /* BUILD_NETPLAY */

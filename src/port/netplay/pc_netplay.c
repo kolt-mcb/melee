@@ -282,6 +282,21 @@ static int net_slot;         /* the slot in the match this machine plays */
  * Only a scripted run driving a particular port needs to change it. */
 static int net_local_pad;
 static int net_delay = 3;
+
+/* How far ahead of the oldest unresolved guess the simulation may run.
+ *
+ * Not a tuning knob so much as the thing that makes rollback possible at all.
+ * Without it the two sides do not pace each other -- there is no barrier any
+ * more -- and the faster one runs away: it guessed at frame 1, reached frame
+ * 2366 before its peer had sent a hundred, and by then frame 1 had been
+ * overwritten in the input ring, so the guess could never be settled and no
+ * rewind ever happened. A rollback cannot reach further back than it has state
+ * for, so the window is also the bound on how far the two may drift.
+ *
+ * Four frames by measurement, not by taste: re-simulating four is 7.3 ms and
+ * eight is 13.6, against a 16.7 ms frame that has its own work to do. */
+static int rb_window = 4;
+
 static int net_trace;
 static int net_slippi_proto;  /* MELEE_NET_PROTO=slippi */
 /* How many players are in this match, and therefore how many slots the
@@ -387,6 +402,14 @@ static void net_config(void)
         net_delay = atoi(s);
         if (net_delay < 0) net_delay = 0;
         if (net_delay > 20) net_delay = 20;
+    }
+    {
+        const char* s = getenv("MELEE_NET_ROLLBACK_WINDOW");
+        if (s != NULL) {
+            rb_window = atoi(s);
+            if (rb_window < 1) rb_window = 1;
+            if (rb_window > 20) rb_window = 20;
+        }
     }
     s = getenv("MELEE_NET_TIMEOUT");
     if (s != NULL) {
@@ -1296,6 +1319,82 @@ static int all_remote_ready(s32 frame)
     return 1;
 }
 
+/* ---- rollback: guess, then correct ---------------------------------------
+ *
+ * The delay path below waits at a barrier until every player's input for the
+ * frame has arrived, which is why it needs input delay to cover the link. This
+ * path does not wait. A frame whose peer input has not turned up is simulated
+ * with the last input that did, and when the real one arrives the frames that
+ * guessed are simulated again with it.
+ *
+ * Two numbers carry the whole state:
+ *
+ *   rb_confirmed   the newest frame every player's real input was known for
+ *                  when it was simulated. pc_rollback_mark keeps a snapshot of
+ *                  it, and a correction can never need to go further back --
+ *                  the frame after it is the oldest one that guessed.
+ *   rb_guessed     the oldest frame simulated with a guess, or -1 for none.
+ *
+ * A correction is not "an input arrived": it is "an input arrived for a frame
+ * that guessed". The distinction matters because inputs for future frames arrive
+ * constantly and none of them is a correction.
+ */
+static void pad_to_gc(GCPadStatus* g, const NetPad* n);
+
+static s32 rb_guessed = -1;
+static s32 rb_played = -1; /* the newest frame simulated, guessed or not */
+static unsigned rb_guesses, rb_corrected, rb_stalls;
+
+/* Is every frame in [from, to] known for every remote player? A correction can
+ * only be made for a whole run of frames, because re-simulating from the oldest
+ * guess means re-consuming all of them. */
+static int rb_ready_through(s32 from, s32 to)
+{
+    s32 f;
+    for (f = from; f <= to; f++) {
+        if (!all_remote_ready(f)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* The input to feed for a slot on this frame: its own if known, otherwise the
+ * newest it has sent. Repeating the last input is the standard guess and the
+ * right one for a controller, which is held far more often than it changes. */
+static int rb_input_for(int slot, s32 frame, NetPad* out)
+{
+    s32 newest;
+    if (ring_get(&net_in[slot], frame, out)) {
+        return 1; /* real */
+    }
+    newest = ring_newest(&net_in[slot]);
+    if (newest >= 0 && ring_get(&net_in[slot], newest, out)) {
+        return 0; /* guessed */
+    }
+    memset(out, 0, sizeof(*out));
+    return 0;
+}
+
+/* Fill the pad array for one frame of a rollback's re-simulation. Called from the
+ * scene loop, once per simulated frame, before the pad renew copies them on.
+ * Real inputs where they are known by now, the last-known repeated where they are
+ * not -- the same rule the first run of the frame used, so a frame whose inputs
+ * have not changed replays identically and one whose inputs have arrived replays
+ * with them. */
+void pc_net_pads_replay(GCPadStatus* pads, int frame)
+{
+    int slot;
+    if (net_state == NET_OFF || !pc_rollback_enabled() || pads == NULL) {
+        return;
+    }
+    for (slot = 0; slot < net_players; slot++) {
+        NetPad p;
+        (void) rb_input_for(slot, (s32) frame, &p);
+        pad_to_gc(&pads[slot], &p);
+    }
+}
+
 /* ---- the state checksum -------------------------------------------------
  *
  * Enough of the simulation to catch a divergence within a frame or two of it
@@ -1650,6 +1749,43 @@ void pc_net_match_end(void)
     fflush(stderr);
 }
 
+/* The checksum, and where it is taken from matters under rollback.
+ *
+ * A frame simulated against a guessed input has a state that is about to be
+ * thrown away and redone, so comparing it against the peer's would report a
+ * desync that is only a difference of opinion about the future. Only confirmed
+ * frames -- ones whose inputs were all real -- are worth hashing, and the
+ * rollback path calls this only for those.
+ */
+static void net_hash_and_compare(s32 frame)
+{
+    /* A checksum every few frames, compared against the peer's. It is the
+     * only way either side finds out that they have stopped playing the same
+     * match, and it names the frame. */
+    if (frame > net_hashed && frame > 0) {
+        /* Once per match frame, not once per call: the load sits on frame 0
+         * for as long as it takes, and a hash taken at some arbitrary point
+         * in it says nothing except that the two machines load at different
+         * speeds. The frame is hashed as it begins -- that is, the state the
+         * previous frame left -- which is the same moment on both sides. */
+        u32 h = state_hash();
+        int i = frame & (NET_HASH_RING - 1);
+        net_hashed = frame;
+        hash_remember(frame, h);
+        {
+            int k;
+            for (k = 0; k < net_players; k++) {
+                if (net_is_remote(k) && net_peer_hash_frame[k][i] == frame) {
+                    hash_compare(k, frame, net_peer_hash_val[k][i]);
+                }
+            }
+        }
+        if ((frame % 10) == 0) {
+            send_hash(frame, h);
+        }
+    }
+}
+
 void pc_net_pads(GCPadStatus* pads)
 {
     s32 frame;
@@ -1886,6 +2022,143 @@ void pc_net_pads(GCPadStatus* pads)
      * stage -- so the timeout only starts counting once something has
      * arrived; before that this says what it is waiting for and keeps
      * waiting. */
+    if (pc_rollback_enabled()) {
+        /* No barrier. Take what has arrived, redo anything that was guessed, and
+         * carry on.
+         *
+         * One number carries the state: rb_guessed, the oldest frame simulated
+         * with a guessed input, or -1 if none is. While it is -1 the state was
+         * built entirely from real inputs, so every frame is a safe place to
+         * rewind to and a snapshot is kept at each. The moment a frame has to
+         * guess, that snapshot -- taken before its input was consumed -- is
+         * exactly the rewind point, and it stays put until the guess is settled.
+         *
+         * The first version of this kept a separate "confirmed" frame and only
+         * updated it while nothing was guessed. The host guesses on frame 1,
+         * before anything is confirmed, so confirmed stayed at -1 and no rewind
+         * was ever possible: it guessed for the whole match and reported no
+         * desync, which is what a rollback that never rolls back looks like.
+         * Hence the report below, and hence one number rather than two.
+         */
+        net_pump();
+        /* Do not guess further ahead than there is state to rewind to. When the
+         * window is full, wait for the input that settles the oldest guess --
+         * the same wait the delay path does, but only when prediction has run
+         * out of room rather than on every frame. */
+        if (rb_guessed >= 0 && frame - rb_guessed >= rb_window) {
+            double began = now_ms();
+            /* Wait for the whole guessed run, not just its oldest frame. Waiting
+             * for the oldest alone looked like it bounded the drift and did not:
+             * the wait ended the moment that one frame arrived, the correction
+             * below still could not fire because the frames after it were
+             * missing, and the simulation carried on -- seven hundred frames past
+             * a guess it could no longer reach, because the input ring had
+             * recycled the entry. Waiting for the run is what actually bounds
+             * it. */
+            while (!rb_ready_through(rb_guessed, frame)) {
+                struct pollfd pfd;
+                double t;
+                pfd.fd = net_fd;
+                pfd.events = POLLIN;
+                poll(&pfd, 1, 2);
+                net_pump();
+                t = now_ms();
+                if (t - began >= 16.0) {
+                    if (net_slippi_proto) {
+                        slp_send_inputs(net_last_sent);
+                        slp_send_ack(net_done);
+                    } else {
+                        send_inputs(net_last_sent);
+                    }
+                    began = t;
+                }
+                if (now_ms() - began > NET_CONNECT_WAIT_MS) {
+                    net_quiet("peer stopped sending inside the rollback window",
+                              frame);
+                    return;
+                }
+            }
+            rb_stalls++;
+        }
+        if (rb_guessed >= 0 && rb_played >= rb_guessed) {
+            /* Only once every guessed frame has its real input. Correcting part
+             * of the window would leave the snapshot at a frame that is no
+             * longer the oldest guess, with no way to take a new one until the
+             * re-simulation gets there -- and nothing to rewind to in the
+             * meantime. Waiting for the whole window costs a little latency and
+             * cannot get stuck. */
+            if (rb_ready_through(rb_guessed, rb_played) &&
+                pc_rollback_rewind(rb_guessed, rb_played)) {
+                rb_guessed = -1;
+                rb_corrected++;
+                return; /* the loop re-simulates those frames from here */
+            }
+        }
+        if (rb_guessed < 0) {
+            /* Nothing guessed yet, so this is a safe rewind point: the state
+             * here was built from real inputs only. */
+            pc_rollback_mark(frame);
+        }
+        if (!all_remote_ready(frame) && rb_guessed < 0) {
+            rb_guessed = frame;
+            rb_guesses++;
+        }
+        if (frame > rb_played) {
+            rb_played = frame;
+        }
+        net_done = frame;
+        {
+            int slot;
+            for (slot = 0; slot < net_players; slot++) {
+                NetPad p;
+                (void) rb_input_for(slot, frame, &p);
+                pad_to_gc(&pads[slot], &p);
+            }
+        }
+        if (rb_guessed < 0) {
+            /* Confirmed: this state was built from real inputs and will not be
+             * redone, so it is the state worth comparing with the peer. A
+             * speculative one is not -- and the first version of this path
+             * returned before the comparison entirely, so it reported no desync
+             * for a whole match while checking nothing at all. */
+            net_hash_and_compare(frame);
+        }
+        {
+            /* What the rollback actually did. Without this "no desync" means
+             * nothing: a path that never rewinds is indistinguishable from one
+             * that works, which is how the first version of this passed. */
+            static double last;
+            double t = now_ms();
+            if (t - last > 2000.0) {
+                unsigned rw = 0, fr = 0;
+                double ms = 0.0;
+                last = t;
+                pc_rollback_stats(&rw, &fr, &ms);
+                int pk = -1, k2;
+                s32 pnew = -1, pfirst = -1;
+                for (k2 = 0; k2 < net_players; k2++) {
+                    if (net_is_remote(k2)) { pk = k2; break; }
+                }
+                if (pk >= 0) {
+                    pnew = ring_newest(&net_in[pk]);
+                    pfirst = net_first_seen[pk];
+                }
+                fprintf(stderr, "[RB]   peer slot %d: newest input %d, first "
+                                "seen %d, ready(guess)=%d\n",
+                        pk, (int) pnew, (int) pfirst,
+                        rb_guessed >= 0 ? all_remote_ready(rb_guessed) : -1);
+                fprintf(stderr, "[RB] frame %d: %u rewinds over %u frames, "
+                                "%.2f ms restoring; %u frames started on a "
+                                "guess, %u windows corrected, %u waits for a "
+                                "full window; oldest guess now %d\n",
+                        (int) frame, rw, fr, ms, rb_guesses, rb_corrected,
+                        rb_stalls, (int) rb_guessed);
+                fflush(stderr);
+            }
+        }
+        return;
+    }
+
     {
         double began = now_ms();
         double last_note = began;
@@ -2013,31 +2286,7 @@ void pc_net_pads(GCPadStatus* pads)
         }
     }
 
-    /* A checksum every few frames, compared against the peer's. It is the
-     * only way either side finds out that they have stopped playing the same
-     * match, and it names the frame. */
-    if (frame > net_hashed && frame > 0) {
-        /* Once per match frame, not once per call: the load sits on frame 0
-         * for as long as it takes, and a hash taken at some arbitrary point
-         * in it says nothing except that the two machines load at different
-         * speeds. The frame is hashed as it begins -- that is, the state the
-         * previous frame left -- which is the same moment on both sides. */
-        u32 h = state_hash();
-        int i = frame & (NET_HASH_RING - 1);
-        net_hashed = frame;
-        hash_remember(frame, h);
-        {
-            int k;
-            for (k = 0; k < net_players; k++) {
-                if (net_is_remote(k) && net_peer_hash_frame[k][i] == frame) {
-                    hash_compare(k, frame, net_peer_hash_val[k][i]);
-                }
-            }
-        }
-        if ((frame % 10) == 0) {
-            send_hash(frame, h);
-        }
-    }
+    net_hash_and_compare(frame);
 
     if (net_report_at > 0.0 && now_ms() >= net_report_at) {
         net_report_at = now_ms() + 5000.0;

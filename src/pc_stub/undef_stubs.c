@@ -3148,6 +3148,29 @@ static int pc_frame_hidden;
 /* 0 discard, 1 draw, 2 skip; see pc_frame_hidden_begin. */
 static int pc_frame_hidden_mode;
 
+#if BUILD_NETPLAY
+/* Put the inputs for the frame the scene loop is about to simulate into the pad
+ * array, so a rollback's re-simulated frames get theirs rather than repeating
+ * whatever the last pad read happened to hold. g_gc_pads is here, the rings are
+ * in the netplay layer, so this is the join between them. */
+void port_pads_for_next_frame(void)
+{
+    extern int pc_snapshot_is_replaying(void);
+    extern u32 gm_GetFrameCount(void);
+    extern void pc_net_pads_replay(GCPadStatus* pads, int frame);
+    extern void gm_SyncPadToControllerMap(void);
+    if (!pc_snapshot_is_replaying()) {
+        return;
+    }
+    /* The same frame the netplay layer labels its inputs by: pc_net_pads is
+     * called with gm_GetFrameCount() too, from port_input_poll, and this hook
+     * sits at the same point in the counter's life -- before the simulation
+     * advances it. So no offset. */
+    pc_net_pads_replay(g_gc_pads, (int) gm_GetFrameCount());
+    gm_SyncPadToControllerMap();
+}
+#endif
+
 /* For gobj.c: is the pass it is about to walk for a frame nobody will see? */
 int pc_frame_is_hidden(void)
 {
