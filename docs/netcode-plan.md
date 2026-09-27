@@ -722,16 +722,29 @@ what a 1100-frame run re-confirms after all four changes (849 frames compared
 offline, none differing). M4's hardware runs a port ten frames a second slower
 than it needs to be until this is finished.
 
-**The measurement has now been taken, and it says the mechanism is not what the
-commits above assumed.** A desyncing run, archives excluded, both sides' 64-byte
-chunk tables dumped at frames 550 and 552 with the game heap and the archives in
-the scan: 364,595 chunks compared, 1980 differing at 550, and at 552 **exactly the
-same 1980 -- nothing new**. The two processes enter the frame whose simulation
-diverges holding identical memory, archives included, and the fifteen-field
-checksum agrees there too.
+**The measurement has now been taken, and reading it needed one more correction
+than expected.** A desyncing run, archives excluded, both sides' 64-byte chunk
+tables dumped at frames 550 and 552 with the game heap and the archives in the
+scan: 364,595 chunks compared, 1980 differing at 550, and at 552 exactly the same
+1980.
 
-So the divergence is not a region the snapshot is missing. And the floor is
-accounted for: 1121 of those 1980 chunks are `lbl_80441064`, 556 are
+That was first read as "nothing new, so the memory is identical", and it is not
+what it says. **The floor has to come from a run that did not desync, not from an
+earlier frame of the run that did** -- subtracting frame 550 of a run whose
+divergence had already started at 550 subtracts the divergence. Against a clean
+run's floor instead, the desyncing run differs in **34 region chunks at frame
+550**: 22 of them audio (`__AXVPB`, `__AXPB`, `hsd_SynthSFXNodes`, `AXDriver_*`),
+7 heap with no symbol, and three carrying game symbols -- `ftColl_803C0C40`,
+`it_803F1EE4`, `ptclref_804D0E5C`. Read at byte granularity in a *clean* run, the
+first two are byte-identical between processes and `ptclref_804D0E5C` differs in
+two bytes even there, so which of the three matters is not yet settled.
+
+The wide scan says the same thing about memory the snapshot does not cover: 33 of
+2620 outer 64 KB blocks differ in a clean run, all of them port state (the GL
+bridge, the audio device, diagnostics, libc statics), and a desyncing run adds two
+-- both in game `.data`, around the stage tables.
+
+The audio floor is accounted for: 1121 of those 1980 chunks are `lbl_80441064`, 556 are
 `lbl_80433C64` -- the 71 KB delay and 53 KB reverb work buffers
 `HSD_AudioSFXSetupAux` is given in lbaudio_ax.c -- and most of the rest is AX
 driver state, `hsd_SynthSFXNodes`, and tables holding host-heap pointers
