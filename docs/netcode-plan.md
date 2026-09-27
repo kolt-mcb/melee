@@ -422,16 +422,39 @@ Both CPU lineups replay 7168 frames, compared, clean on the default. So a correc
 eight-frame rollback costs about 13.6 ms of re-simulation plus one 2 ms restore,
 against 35 ms before -- two and a half times cheaper for one flag.
 
-**What still stands between here and M3.** 13.6 ms is most of a 16.7 ms frame, so
-an eight-frame rollback still does not fit beside a frame's own work. The
-breakdown says where the rest is: eight frames of simulation alone are 4.7 ms, so
-the render callbacks cost about 1.1 ms a frame even with nothing drawn, and that
-is the CPU half -- matrices, vertex generation, TEV state -- for geometry that is
-then discarded. Getting under budget means running only the callbacks whose side
-effects the simulation actually reads. `psDispParticles`' clock and `appsrt`
-stamping are two; the honest position is that nobody has enumerated the rest, and
-the self-check is the instrument for doing it: exclude a link, see whether a whole
-match still replays.
+**Running only some of the callbacks does not work, and that was worth finding
+out.** `MELEE_NET_SYNCTEST_HIDDEN_LINKS` is a bitmask over the render link index,
+so a subset can be tried and the self-check asked whether a whole match still
+replays. It does not:
+
+| links run on an unseen frame | Pikachu vs Peach | Samus vs Donkey Kong |
+| --- | --- | --- |
+| all of them | clean, 7168 frames | clean, 7168 frames |
+| effects only (7, 8) | diverges, frame 3007 | -- |
+| none (camera callback only) | clean, 7168 frames | diverges, frame 3723 |
+| no render pass at all | diverges, frame 3310 | -- |
+
+The middle rows are the point: a subset can look right for one lineup and fail on
+another, because these callbacks interact -- the camera pass sets up state the
+others consume and they write shared state back. Pikachu vs Peach passing with no
+nested passes at all was luck, and Samus says so. So all of them run, and only the
+geometry is discarded. The mask stays, as the instrument that showed it.
+
+**What that leaves M3, in terms of the one number that matters.** The cost scales
+with how many frames a rollback has to re-simulate, which is the rollback window:
+
+| window | re-simulation | plus a restore |
+| --- | --- | --- |
+| 2 frames | 2.2 ms | ~4.2 ms |
+| 4 frames | 7.3 ms | ~9.3 ms |
+| 8 frames | 13.6 ms | ~15.6 ms |
+
+Each verified over a whole match, 7168 frames replayed and compared. Against a
+16.7 ms frame that also has its own ~4.5 ms of work, an eight-frame window does
+not fit and a two-to-four frame one does. That is not a compromise so much as
+ordinary practice: rollback implementations pair a small window with a frame or
+two of input delay, and M3 should be specified that way -- a couple of frames of
+delay, a four-frame window, and the measurements above as the budget.
 
 One harness artefact was found and fixed getting here, and it is the kind worth
 naming. `MELEE_FORCE_CPU` writes the CPU levels into the player slots every frame,

@@ -386,6 +386,29 @@ static inline void render_gobj(HSD_GObj* cur, int i)
 void HSD_GObj_80390ED0(HSD_GObj* gobj, u32 mask)
 {
     s32 i = 0;
+#if BUILD_TARGET_PC
+    /* On a frame nobody will see -- one the simulation is re-running to catch up
+     * after a rollback -- only some of these passes need to happen at all. They
+     * are here not for their picture but for what their callbacks write, and only
+     * some callbacks write anything the simulation reads.
+     *
+     * MELEE_NET_SYNCTEST_HIDDEN_LINKS is a bitmask over the link index, default
+     * all ones, and the rollback self-check is how a smaller one is justified:
+     * leave a link out, and see whether a whole match still replays frame for
+     * frame. Effects are links 7 and 8 (GObj_SetupGXLink in ef/eflib.c), and
+     * psDispParticles -- the particle clock and the per-particle appsrt stamp --
+     * is the one side effect known to matter so far. */
+    extern int pc_frame_is_hidden(void);
+    static unsigned long long hidden_links = 0;
+    int hidden = pc_frame_is_hidden();
+    if (hidden_links == 0) {
+        const char* e = getenv("MELEE_NET_SYNCTEST_HIDDEN_LINKS");
+        hidden_links = (e != NULL) ? strtoull(e, NULL, 0) : ~0ULL;
+        if (hidden_links == 0) {
+            hidden_links = 1ULL << 63; /* "none", without re-reading the env */
+        }
+    }
+#endif
 
     while (mask) {
         if (mask & 1) {
@@ -394,6 +417,14 @@ void HSD_GObj_80390ED0(HSD_GObj* gobj, u32 mask)
             while (prios) {
                 if (prios & 1) {
                     HSD_GObj* cur;
+#if BUILD_TARGET_PC
+                    if (hidden && j < 63 &&
+                        (hidden_links & (1ULL << j)) == 0) {
+                        j++;
+                        prios >>= 1;
+                        continue;
+                    }
+#endif
                     for (cur = HSD_GObjGXLinkHead[j]; cur != NULL;
                          cur = cur->next_gx)
                     {

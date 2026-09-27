@@ -3148,6 +3148,12 @@ static int pc_frame_hidden;
 /* 0 discard, 1 draw, 2 skip; see pc_frame_hidden_begin. */
 static int pc_frame_hidden_mode;
 
+/* For gobj.c: is the pass it is about to walk for a frame nobody will see? */
+int pc_frame_is_hidden(void)
+{
+    return pc_frame_hidden;
+}
+
 static void pc_frame_hidden_begin(void)
 {
     extern int pc_snapshot_catchup_hidden(void);
