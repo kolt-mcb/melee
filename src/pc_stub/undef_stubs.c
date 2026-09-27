@@ -3145,37 +3145,51 @@ void window_poll_events(void);
  *
  * Asked once per iteration, at the start, because asking counts down. */
 static int pc_frame_hidden;
+/* 0 discard, 1 draw, 2 skip; see pc_frame_hidden_begin. */
+static int pc_frame_hidden_mode;
 
 static void pc_frame_hidden_begin(void)
 {
     extern int pc_snapshot_catchup_hidden(void);
-    static int skip = -1;
-    if (skip < 0) {
-        /* Caught-up frames are drawn by default, and that is not a conservative
-         * choice -- it is the only correct one found so far.
-         *
-         * Skipping the draw looks free: nobody sees those frames. It is not,
-         * because the game's render callbacks write state the simulation then
-         * reads. psDispParticles alone advances the particle clock and stamps
-         * every particle's appsrt, and it is a render link. With the draws
-         * skipped, Pikachu vs Peach diverges under an eight-frame catch-up at
-         * match frame 3310; with them kept it replays 5888 frames clean.
-         * Advancing the particle clock by hand was not enough, and neither was
-         * letting the mixer run -- both were tried, both left the divergence at
-         * the same frame with the same hashes.
-         *
-         * The cost of being right is the whole problem, and it is measured:
-         * eight frames caught up take 35.5 ms drawn against 4.7 ms not drawn.
-         * MELEE_NET_SYNCTEST_SKIP_HIDDEN=1 takes the fast one, for measuring
-         * against. Rollback needs the render pass's side effects without its
-         * drawing, and that is the next piece of work. */
-        skip = getenv("MELEE_NET_SYNCTEST_SKIP_HIDDEN") != NULL;
+    /* What to do about a frame the simulation runs and nobody sees.
+     *
+     * MELEE_NET_SYNCTEST_HIDDEN picks, and the default is the middle one:
+     *
+     *   discard  run the render callbacks, throw the geometry away  (default)
+     *   draw     render it properly, as if it were being shown
+     *   skip     do not render at all
+     *
+     * "skip" is the obvious thing and it is wrong: the callbacks write state the
+     * simulation reads -- psDispParticles advances the particle clock and stamps
+     * each particle's appsrt, and it is a render link -- so a skipped pass
+     * diverges. Pikachu vs Peach found it at match frame 3310 under an
+     * eight-frame catch-up.
+     *
+     * "discard" keeps the callbacks and drops what they produce, which is the
+     * expensive half. Measured over eight caught-up frames:
+     *
+     *   draw      35.5 ms average, 50.3 worst
+     *   discard   14.2 ms average, 24.7 worst   <- correct, and 2.5x cheaper
+     *   skip       4.7 ms average, 28.0 worst   <- wrong
+     */
+    static int mode = -1; /* 0 discard, 1 draw, 2 skip */
+    if (mode < 0) {
+        const char* m = getenv("MELEE_NET_SYNCTEST_HIDDEN");
+        mode = 0;
+        if (m != NULL) {
+            if (m[0] == 'd' && m[1] == 'r') {
+                mode = 1;
+            } else if (m[0] == 's') {
+                mode = 2;
+            }
+        }
     }
-    pc_frame_hidden = skip ? pc_snapshot_catchup_hidden() : 0;
-    if (!skip) {
-        /* Still count the frame down, so the burst measurement and the
-         * last-frame test stay right. */
-        (void) pc_snapshot_catchup_hidden();
+    pc_frame_hidden_mode = mode;
+    /* Counted down whichever mode is in force, so the burst measurement and the
+     * last-frame test stay right. */
+    pc_frame_hidden = pc_snapshot_catchup_hidden();
+    if (mode == 1) {
+        pc_frame_hidden = 0; /* draw it like any other frame */
     }
 }
 #endif
@@ -3238,6 +3252,20 @@ __attribute__((weak)) void port_render_frame_end(void)
      * port_render_frame_begin is by the flag it set, not by asking again --
      * asking counts down. */
     if (pc_frame_hidden) {
+        /* Run the render pass for what it writes, and throw the drawing away.
+         *
+         * The callbacks are the reason this frame cannot simply skip rendering
+         * -- several of them write state the simulation reads. The geometry they
+         * produce is another matter: nobody will see this frame, so the bridge
+         * discards it instead of uploading and drawing, which is where nearly
+         * all of a rendered frame's time goes. */
+        if (pc_frame_hidden_mode == 0) {
+            extern int pc_gx_discard;
+            extern void invoke_gx_render_links(void);
+            pc_gx_discard = 1;
+            invoke_gx_render_links();
+            pc_gx_discard = 0;
+        }
         /* The particle system's frame counter is advanced by the render pass and
          * by nothing else: psDispParticles increments psFrameNum when it is
          * called with sw == 0, and that call is a render link. Skipping the pass

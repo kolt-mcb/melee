@@ -406,22 +406,32 @@ CPU write (which was a real bug, and moved the failure from 3273 to 3310 and no
 further). Drawing the caught-up frames fixes it outright -- 5888 frames replayed
 and compared, clean, on both CPU lineups.
 
-| eight frames caught up | average | worst |
-| --- | --- | --- |
-| drawn (correct) | **35.5 ms** | 50.3 ms |
-| not drawn (wrong) | 4.7 ms | 28.0 ms |
+So the callbacks have to run. What does not have to happen is the drawing: the
+vertices they hand over can be thrown away instead of uploaded, which is
+`pc_gx_discard` in the GX bridge -- one flag, checked where a batch would be
+uploaded, which empties it and returns. `MELEE_NET_SYNCTEST_HIDDEN` picks between
+the three, and the middle one is the default:
 
-Drawing is the default now, because a fast wrong answer is no use;
-`MELEE_NET_SYNCTEST_SKIP_HIDDEN=1` takes the other one for measuring against.
+| eight frames caught up | average | worst | correct? |
+| --- | --- | --- | --- |
+| `draw` -- render it properly | 35.5 ms | 50.3 ms | yes |
+| `discard` -- callbacks, no geometry | **13.6 ms** | 23.9 ms | **yes** |
+| `skip` -- no render pass at all | 4.7 ms | 28.0 ms | no |
 
-**So this is what stands between here and M3.** A correct eight-frame rollback
-costs 35 ms, twice a frame's budget, and almost all of it is drawing frames that
-will never be shown. The work is to run the render callbacks for their side
-effects without submitting any geometry -- the CPU half of `render_present`
-without `gx_frame_end` and the swap -- which needs the GX bridge to discard
-rather than accumulate. Failing that, the side effects themselves have to be
-found and moved into the simulation, `psDispParticles`' clock and `appsrt`
-stamping being the two already identified.
+Both CPU lineups replay 7168 frames, compared, clean on the default. So a correct
+eight-frame rollback costs about 13.6 ms of re-simulation plus one 2 ms restore,
+against 35 ms before -- two and a half times cheaper for one flag.
+
+**What still stands between here and M3.** 13.6 ms is most of a 16.7 ms frame, so
+an eight-frame rollback still does not fit beside a frame's own work. The
+breakdown says where the rest is: eight frames of simulation alone are 4.7 ms, so
+the render callbacks cost about 1.1 ms a frame even with nothing drawn, and that
+is the CPU half -- matrices, vertex generation, TEV state -- for geometry that is
+then discarded. Getting under budget means running only the callbacks whose side
+effects the simulation actually reads. `psDispParticles`' clock and `appsrt`
+stamping are two; the honest position is that nobody has enumerated the rest, and
+the self-check is the instrument for doing it: exclude a link, see whether a whole
+match still replays.
 
 One harness artefact was found and fixed getting here, and it is the kind worth
 naming. `MELEE_FORCE_CPU` writes the CPU levels into the player slots every frame,

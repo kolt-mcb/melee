@@ -6149,8 +6149,29 @@ static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
     return 0;
 }
 
+/* Drawing nothing, on purpose.
+ *
+ * A rollback re-simulates frames nobody will see, and it cannot simply skip
+ * their rendering: the game's render callbacks write state the simulation reads
+ * -- psDispParticles advances the particle clock and stamps each particle's
+ * appsrt, and it is a render link. So those callbacks have to run. What does not
+ * have to happen is any of this: the vertices they hand over can be thrown away
+ * instead of uploaded and drawn, which is where the time goes.
+ *
+ * Set around the render pass of an unseen frame; the callbacks run, the GX state
+ * tracking stays exactly as it was, and nothing reaches the GPU. */
+int pc_gx_discard;
+
 static void bridge_upload_and_draw(void)
 {
+    if (pc_gx_discard) {
+        /* Everything a real draw would have consumed, consumed. The state has to
+         * be left as the draw would leave it or the next primitive inherits this
+         * one's vertices. */
+        g_state.vert_count = 0;
+        g_state.in_primitive = FALSE;
+        return;
+    }
     if (pc_canary_on()) pc_check_canaries("upload_and_draw");
     /* PC diag: MELEE_TEVDUMP=<frame> — dump the TEV pipeline for the first
      * few draws of that frame, to see how the final colour is derived. */
