@@ -754,8 +754,53 @@ static int grdat_in_archive(const u8* base, const void* p, size_t need)
            (const unsigned char*) p + need <= abase + alen;
 }
 
+#if BUILD_TARGET_PC
+/* MELEE_SWAPCHECK=1: report a converter about to read big-endian out of an
+ * archive object the script layer has already byte-swapped in place.
+ *
+ * On the in-place arrangement (PC_SCRIPT_INPLACE -- every compiler without GCC's
+ * scalar_storage_order, which means Android) pc_script_prepare turns a whole
+ * reloc object into host order the first time an opcode in it is dispatched. The
+ * object bound comes from the nearest reloc targets, so it can cover more than
+ * the script: anything else the archive put in the same object is byte-reversed
+ * too, and a converter reading it with be32_swap then gets offsets backwards.
+ * A wrong offset added to dataBase lands anywhere.
+ *
+ * This existed for FObjDesc nodes only, which is why it reported nothing while
+ * the arrangements disagreed about fighter joints -- animation trees were never
+ * asked about. Every converter entry that takes a raw archive pointer now asks.
+ * Off by default: it is a lookup per node. */
+static void grdat_swapcheck(const void* p, const char* what)
+{
+    static int on = -1;
+    static int said;
+    const unsigned char* ostart;
+    const unsigned char* oend;
+    if (on < 0) {
+        on = getenv("MELEE_SWAPCHECK") != NULL;
+    }
+    if (!on || p == NULL || said >= 64) {
+        return;
+    }
+    if (pc_itconv_object(p, &ostart, &oend) &&
+        pc_itconv_object_is_swapped(ostart))
+    {
+        said++;
+        fprintf(stderr,
+                "[SWAPCHECK] %s at %p is inside an object (%p..%p) the script "
+                "layer already swapped; its offsets read backwards\n",
+                what, p, (const void*) ostart, (const void*) oend);
+        fflush(stderr);
+    }
+}
+#define GRDAT_SWAPCHECK(p, what) grdat_swapcheck((p), (what))
+#else
+#define GRDAT_SWAPCHECK(p, what) ((void) 0)
+#endif
+
 static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "FObjDesc");
     HSD_FObjDesc* x64;
     const struct HSD_FObjDesc_gcn* gcn;
     u32 val, raw;
@@ -776,28 +821,6 @@ static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* da
             fflush(stderr);
         }
         return NULL;
-    }
-    /* MELEE_SWAPCHECK=1: is this object one the script layer has already turned
-     * into host order? If so the be32_swap below reads its offsets backwards and
-     * everything after is nonsense. Costs a lookup per node, so it is off by
-     * default. */
-    if (getenv("MELEE_SWAPCHECK") != NULL) {
-        const unsigned char* ostart;
-        const unsigned char* oend;
-        if (pc_itconv_object(gcnPtr, &ostart, &oend) &&
-            pc_itconv_object_is_swapped(ostart))
-        {
-            static int said;
-            if (said < 4) {
-                said++;
-                fprintf(stderr, "[SWAPCHECK] FObjDesc at %p is inside an object "
-                                "(%p..%p) the script layer already swapped; its "
-                                "offsets will read backwards\n",
-                        (const void*) gcnPtr, (const void*) ostart,
-                        (const void*) oend);
-                fflush(stderr);
-            }
-        }
     }
     if (!grdat_in_archive(dataBase, gcnPtr, sizeof(*gcn))) {
         static int said;
@@ -849,6 +872,7 @@ static HSD_FObjDesc* grDatFiles_ConvertFObjDescGCNtoX64(const u8* gcnPtr, u8* da
 /* Convert HSD_AObjDesc (animation object descriptor) */
 HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "AObjDesc");
     HSD_AObjDesc* x64;
     const struct HSD_AObjDesc_gcn* gcn;
     u32 raw, fobj_off;
@@ -878,6 +902,7 @@ HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
 /* Convert HSD_RObjAnimJoint chain (linked list, no recursion) */
 static HSD_RObjAnimJoint* grDatFiles_ConvertRObjAnimJointChainGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "RObjAnimJointChain");
     HSD_RObjAnimJoint* x64Head = NULL;
     HSD_RObjAnimJoint* x64Tail = NULL;
     const struct HSD_RObjAnimJoint_gcn* gcn;
@@ -924,6 +949,7 @@ static HSD_RObjAnimJoint* grDatFiles_ConvertRObjAnimJointChainGCNtoX64(const u8*
 /* Convert HSD_AnimJoint tree (recursive, like HSD_Joint) */
 HSD_AnimJoint* grDatFiles_ConvertAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "AnimJointTree");
     HSD_AnimJoint* x64;
     const struct HSD_AnimJoint_gcn* gcn;
     u32 val;
@@ -968,6 +994,7 @@ HSD_AnimJoint* grDatFiles_ConvertAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dat
  * why all five main-menu buttons read "1-P Mode". */
 static HSD_TexAnim* grDatFiles_ConvertTexAnimGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "TexAnim");
     HSD_TexAnim* x64;
     const struct HSD_TexAnim_gcn* gcn;
     u32 val;
@@ -1034,6 +1061,7 @@ static HSD_TexAnim* grDatFiles_ConvertTexAnimGCNtoX64(const u8* gcnPtr, u8* data
  * still left NULL: nothing on the port reads it. */
 static HSD_MatAnim* grDatFiles_ConvertMatAnimGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "MatAnim");
     HSD_MatAnim* x64;
     const struct HSD_MatAnim_gcn* gcn;
     u32 val;
@@ -1067,6 +1095,7 @@ static HSD_MatAnim* grDatFiles_ConvertMatAnimGCNtoX64(const u8* gcnPtr, u8* data
 /* Convert HSD_MatAnimJoint tree (recursive, like HSD_Joint) */
 HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "MatAnimJointTree");
     HSD_MatAnimJoint* x64;
     const struct HSD_MatAnimJoint_gcn* gcn;
     u32 val;
@@ -1101,6 +1130,7 @@ HSD_MatAnimJoint* grDatFiles_ConvertMatAnimJointTreeGCNtoX64(const u8* gcnPtr, u
 /* Convert HSD_ShapeAnimJoint tree (recursive, like HSD_Joint) */
 HSD_ShapeAnimJoint* grDatFiles_ConvertShapeAnimJointTreeGCNtoX64(const u8* gcnPtr, u8* dataBase, u32 depth)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "ShapeAnimJointTree");
     HSD_ShapeAnimJoint* x64;
     const struct HSD_ShapeAnimJoint_gcn* gcn;
     u32 val;
@@ -1404,6 +1434,7 @@ static int g_grdat_envpending_n = 0;
  * pairs. Joints resolve in the second pass. */
 static HSD_EnvelopeDesc** grDatFiles_ConvertEnvelopeListGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "EnvelopeList");
     const u8* op = gcnPtr;
     int n = 0;
     while (n < 128) {
@@ -2027,6 +2058,7 @@ static HSD_VtxDescList* grDatFiles_ConvertVtxDescListGCNtoX64(const u8* gcnVtxPt
  * generate its positions (see drawShapeAnim/get_shape_vertex_xyz). */
 static HSD_ShapeSetDesc* grDatFiles_ConvertShapeSetDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "ShapeSetDesc");
     static int shape_count = 0;
     if (gcnPtr == NULL) return NULL;
 
@@ -2406,6 +2438,7 @@ struct HSD_SObjDesc_gcn {
 /* Convert a GCN HSD_Tlut to an x86_64 HSD_Tlut. */
 static HSD_Tlut* grDatFiles_ConvertTlutGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "Tlut");
     const struct HSD_Tlut_gcn* gcn;
     HSD_Tlut* x64;
     u32 val;
@@ -2428,6 +2461,7 @@ static HSD_Tlut* grDatFiles_ConvertTlutGCNtoX64(const u8* gcnPtr, u8* dataBase)
  * n_entries), so reuse the HSD_Tlut_gcn layout. */
 static HSD_TlutDesc* grDatFiles_ConvertTlutDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "TlutDesc");
     const struct HSD_Tlut_gcn* gcn;
     HSD_TlutDesc* x64;
     u32 val;
@@ -2451,6 +2485,7 @@ static HSD_TlutDesc* grDatFiles_ConvertTlutDescGCNtoX64(const u8* gcnPtr, u8* da
  * Also converts the referenced image descriptor and tlut. */
 HSD_SObjDesc* grDatFiles_ConvertSObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "SObjDesc");
     const struct HSD_SObjDesc_gcn* gcn;
     HSD_SObjDesc* x64;
     u32 val;
@@ -2486,6 +2521,7 @@ struct HSD_WObjDesc_gcn {
  * Camera eyepos/interest WObjs only use pos; robjdesc is left NULL. */
 static HSD_WObjDesc* grDatFiles_ConvertWObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "WObjDesc");
     const struct HSD_WObjDesc_gcn* gcn;
     HSD_WObjDesc* x64;
     u32 raw;
@@ -2625,6 +2661,7 @@ struct LightList_gcn {
 /* Convert a GCN HSD_LightDesc chain to x86_64 (follows 'next'). */
 static HSD_LightDesc* grDatFiles_ConvertLightDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "LightDesc");
     const struct HSD_LightDesc_gcn* gcn;
     HSD_LightDesc* x64;
     u32 val;
@@ -2711,6 +2748,7 @@ static HSD_LightDesc* grDatFiles_ConvertLightDescGCNtoX64(const u8* gcnPtr, u8* 
  * to x86_64. Returns a pointer to the converted array. */
 LightList** grDatFiles_ConvertLightListGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "LightList");
     const u32* entries;
     LightList** arr;
     u32 val;
@@ -2760,6 +2798,7 @@ struct HSD_FogDesc_gcn {
 /* Convert a GCN HSD_FogDesc to x86_64. fogadjdesc is left NULL. */
 HSD_FogDesc* grDatFiles_ConvertFogDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
 {
+    GRDAT_SWAPCHECK(gcnPtr, "FogDesc");
     const struct HSD_FogDesc_gcn* gcn;
     HSD_FogDesc* x64;
     u32 raw;

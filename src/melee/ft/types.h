@@ -2143,7 +2143,14 @@ typedef struct ftData_UnkModelStruct {
 } ftData_UnkModelStruct;
 
 struct ftData_80085FD4_ret {
-#if defined(PC_SCRIPT_INPLACE)
+/* BUILD_TARGET_PC, not PC_SCRIPT_INPLACE: the two branches differ in pointer
+ * WIDTH, not byte order, so both PC arrangements need the host one. Guarding it
+ * on the arrangement put the GCC build -- the one the console comparisons are run
+ * with -- back on the console layout, and the bug the comment below describes came
+ * back: ftData_80085FD4(fp, ms)->x8 is how the game asks whether a motion exists,
+ * so a wrong offset invents or loses motions. Found by the two arrangements
+ * disagreeing about whether a fighter enters motion 16. */
+#if defined(BUILD_TARGET_PC)
     /* This struct only ever views a Fighter_WaitAnimData entry
      * (ftData_80085FD4 returns &fp->x24[msid] cast), so its field offsets
      * must match that struct's x86_64 layout exactly. The old PC widening
