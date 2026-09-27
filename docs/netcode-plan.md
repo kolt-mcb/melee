@@ -722,13 +722,44 @@ what a 1100-frame run re-confirms after all four changes (849 frames compared
 offline, none differing). M4's hardware runs a port ten frames a second slower
 than it needs to be until this is finished.
 
-**The measurement that would settle it**, and the reason it has not: dump both
-sides' 64-byte chunk tables at frames chosen ahead of the divergence *with holes
-on and the heap included*, and read off whether the chunks that differ beyond the
-noise floor lie inside archives (the dump flags them). A run that desyncs while
-dumping has not been captured yet -- the dump is 12 MB a frame and the runs that
-desynced did not write theirs -- so fixing that plumbing is the first step rather
-than another hypothesis.
+**The measurement has now been taken, and it says the mechanism is not what the
+commits above assumed.** A desyncing run, archives excluded, both sides' 64-byte
+chunk tables dumped at frames 550 and 552 with the game heap and the archives in
+the scan: 364,595 chunks compared, 1980 differing at 550, and at 552 **exactly the
+same 1980 -- nothing new**. The two processes enter the frame whose simulation
+diverges holding identical memory, archives included, and the fifteen-field
+checksum agrees there too.
+
+So the divergence is not a region the snapshot is missing. And the floor is
+accounted for: 1121 of those 1980 chunks are `lbl_80441064`, 556 are
+`lbl_80433C64` -- the 71 KB delay and 53 KB reverb work buffers
+`HSD_AudioSFXSetupAux` is given in lbaudio_ax.c -- and most of the rest is AX
+driver state, `hsd_SynthSFXNodes`, and tables holding host-heap pointers
+(`g_arch`, `pc_kind_tbl`). The mixer follows the output device, so none of that is
+expected to agree.
+
+What has been ruled out, each with a run rather than an argument, all with the
+archives excluded and all still desyncing at match frame 552:
+
+| ruled out | evidence |
+| --- | --- |
+| the swap state | `pc_itconv_marks_rewind` un-swaps 26 objects over 113 restores; desyncs |
+| a stale hole layout | fixed (the layout travels in the snapshot); desyncs |
+| the magnifier's EFB-copy range | registered, 20 KB, split out of the hole; desyncs |
+| a store older than that discovery | dropped, and such a rewind declined; desyncs |
+| audio | `MELEE_NO_AUDIO=1`: 3 of 4 desync |
+| stack leftovers | `MELEE_NET_SYNCTEST_SCRUB=96`: 2 of 4 desync |
+| the discard-mode render pass | `MELEE_NET_SYNCTEST_HIDDEN=draw`: 2 of 3 desync |
+
+Copying the archives does prevent it -- six clean runs including the two full
+matches, against about half of runs failing without -- and after all of the above
+the honest statement is that **why** is not known. Two candidates remain, and they
+need a different kind of work rather than another one-flag experiment: game state
+living outside the snapshot's region list entirely, which the chunk scan cannot
+see because it scans the regions (the wider bracket `__melee_all_melee_*` is what
+to scan instead); and a genuine race that the slower configuration hides, in which
+case copying the archives is a coincidence and M3's acceptance rests on timing.
+The second would matter a great deal, so it is worth settling before M4.
 
 Two smaller things the acceptance turned up, both in the rig rather than the
 netcode: a side whose peer has exited keeps playing alone and then wedges in a

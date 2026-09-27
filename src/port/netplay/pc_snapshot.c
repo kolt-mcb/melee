@@ -2525,6 +2525,19 @@ void pc_snapshot_prerun(void)
     }
 
     /* Once per simulated frame, which is the point of being here. */
+    /* MELEE_NET_SYNCTEST_SCRUB=<KB> here as well as in the self-check's hook,
+     * because under rollback that hook does not run and this is the only place
+     * that is once per *simulated* frame.
+     *
+     * What it is for: the snapshot does not cover the stack, and does not need to
+     * if every frame writes what it reads. If one does not, the leftovers it
+     * finds depend on what ran before it -- and two ports whose rollbacks made
+     * them render a different number of times have different leftovers. Filling
+     * the stack with a constant first makes both sides find the same garbage, so
+     * a desync that survives it is not that, and one that disappears is. */
+    if (snap_scrub_kb() != 0) {
+        snap_scrub_stack(snap_scrub_kb());
+    }
     {
         extern void pc_state_hash_log_frame(int frame);
         extern void pc_state_fields_mark(int frame);

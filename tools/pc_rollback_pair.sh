@@ -67,7 +67,11 @@ fi
 RUN="setarch -R"
 command -v setarch >/dev/null 2>&1 || RUN=""
 [ -n "${MELEE_RB_ASLR:-}" ] && RUN=""   # for isolating what the layout changes
-COMMON="MELEE_NET_ROLLBACK=1 MELEE_NET_DELAY=$DELAY
+# A side that has given up on its peer stops instead of playing on to its own
+# frame limit: otherwise every run in a loop ends with a couple of minutes of one
+# process talking to nobody, which is pure waiting and has twice looked like a hang.
+COMMON="MELEE_NET_EXIT_ALONE=1
+        MELEE_NET_ROLLBACK=1 MELEE_NET_DELAY=$DELAY
         MELEE_NET_ROLLBACK_WINDOW=$WINDOW
         MELEE_NET_LOSS=$LOSS MELEE_NET_JITTER=$JITTER
         MELEE_BOOT_MODE=14 MELEE_BOOT_MATCH=16,1,9 MELEE_BOOT_STOCKS=5

@@ -593,6 +593,26 @@ static void net_match_set(int v, const char* who)
 static void net_quiet(const char* why, s32 frame)
 {
     double t = now_ms();
+    /* MELEE_NET_EXIT_ALONE=1 stops rather than playing on.
+     *
+     * For the test rig, not for a game: when one side of a pair finishes first,
+     * the other keeps going to its own frame limit with nobody to talk to, which
+     * adds a couple of minutes of nothing to every run in a loop and has twice
+     * been mistaken for a hang. A player would rather the match carried on;
+     * a measurement would rather it ended. */
+    {
+        static int quit_alone = -1;
+        if (quit_alone < 0) {
+            const char* e = getenv("MELEE_NET_EXIT_ALONE");
+            quit_alone = (e != NULL && *e != '\0' && strcmp(e, "0") != 0);
+        }
+        if (quit_alone && net_state == NET_SOLO) {
+            fprintf(stderr, "[NET] playing alone and MELEE_NET_EXIT_ALONE is "
+                            "set; stopping at match frame %d\n", (int) frame);
+            fflush(stderr);
+            _exit(0);
+        }
+    }
     if (t < net_quiet_note_at) {
         return;
     }
