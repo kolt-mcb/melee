@@ -651,6 +651,26 @@ static unsigned long snap_dirty[SNAP_REGIONS];
 static unsigned long snap_copied[SNAP_REGIONS];
 static unsigned long snap_restored[SNAP_REGIONS];
 static unsigned long snap_copied_bytes, snap_restored_bytes;
+
+static unsigned snap_catchup_left;
+/* How long a catch-up burst takes, wall clock, from the restore to the last
+ * re-simulated frame. This is the number that decides whether rollback fits in a
+ * frame, and it is not the snapshot cost -- it is mostly the simulation running
+ * several times. */
+static double snap_catchup_t0;
+static double snap_catchup_ms;
+static unsigned snap_catchup_n;
+static unsigned snap_catchup_worst_frames;
+static double snap_catchup_worst_ms;
+static int snap_catchup_close;
+static unsigned snap_catchup_depth_seen;
+/* Frames a rewind still owes; see pc_snapshot_catchup_frames. */
+static unsigned snap_catchup_owed;
+static int snap_catchup_on(void);
+
+/* Closes a burst once its last unseen frame has run. */
+static void snap_catchup_finish(void);
+
 /* Time spent in the process-wide soft-dirty clear, which is the take's cost and
  * is set by how much of the whole process is resident rather than by the size of
  * the region list. Worth reporting separately so the two are not confused. */
@@ -1467,6 +1487,13 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
                         snap_takes ? snap_take_ms / snap_takes : 0.0,
                         snap_clears ? snap_clear_ms / snap_clears : 0.0,
                         snap_rewinds ? snap_restore_ms / snap_rewinds : 0.0);
+                if (snap_catchup_n != 0) {
+                    fprintf(stderr, "[SNAP]   catch-up: %u bursts, %.2f ms "
+                                    "average, worst %.2f ms over %u frames -- "
+                                    "mostly the simulation, not the copy\n",
+                            snap_catchup_n, snap_catchup_ms / snap_catchup_n,
+                            snap_catchup_worst_ms, snap_catchup_worst_frames);
+                }
                 if (snap_workset()) {
                     /* How much of the game heap region is loaded file data --
                      * archives, read off the disc and then only read. If that is
@@ -1562,6 +1589,12 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
             snap_replay_until = frame;
             snap_restored_frame = back;
             snap_rewind_checked = 0;
+            /* The frames this rewind owes, beyond the one the loop is already
+             * about to run. Asked for, and cleared, at the top of the next
+             * outer iteration. */
+            if (snap_catchup_on() && frame > back + 1) {
+                snap_catchup_owed = (unsigned) (frame - back) - 1u;
+            }
             snap_keep.valid = 0;
         } else {
             snap_keep.valid = 0;
@@ -1589,6 +1622,75 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
 int pc_snapshot_is_replaying(void)
 {
     return snap_replaying;
+}
+
+/* MELEE_NET_SYNCTEST_CATCHUP=1 makes the self-check re-simulate its rewound
+ * frames inside one displayed frame instead of one per frame, which is the shape
+ * rollback needs. Off by default so the check itself stays as simple as
+ * possible; on, it exercises the mechanism and proves the result is the same. */
+static int snap_catchup_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* s = getenv("MELEE_NET_SYNCTEST_CATCHUP");
+        on = (s != NULL && *s != '\0' && strcmp(s, "0") != 0);
+    }
+    return on;
+}
+
+/* Frames left to re-simulate. Counted down by the loop as it runs them, so the
+ * render hooks can tell the last one from the rest. */
+/* Set when a restore happens, consumed by the next question about the pad queue.
+ *
+ * The queue count is asked at the top of the scene loop's outer iteration, which
+ * is *before* the pad read where the restore happens -- so asking how many frames
+ * are owed at that moment gets the answer for the previous iteration. Recording
+ * it at the restore and handing it over once is both correct and simpler than
+ * trying to recompute it from the frame numbers afterwards. */
+unsigned pc_snapshot_catchup_frames(void)
+{
+    unsigned owed = snap_catchup_owed;
+    snap_catchup_owed = 0;
+    if (owed == 0) {
+        return 0;
+    }
+    snap_catchup_left = owed;
+    snap_catchup_t0 = snap_now_ms();
+    snap_catchup_depth_seen = owed + 1u;
+    return owed;
+}
+
+int pc_snapshot_catchup_hidden(void)
+{
+    if (snap_catchup_left == 0) {
+        snap_catchup_finish();
+        return 0;
+    }
+    if (--snap_catchup_left == 0) {
+        /* The last frame nobody sees: the burst ends after this one runs, so
+         * close the measurement at the next visible frame's start instead.
+         * Recording it here would leave out the frame being counted. */
+        snap_catchup_close = 1;
+    }
+    return 1;
+}
+
+/* Called at the start of a visible frame, to close a burst that has just
+ * finished. */
+static void snap_catchup_finish(void)
+{
+    double ms;
+    if (!snap_catchup_close) {
+        return;
+    }
+    snap_catchup_close = 0;
+    ms = snap_now_ms() - snap_catchup_t0;
+    snap_catchup_ms += ms;
+    snap_catchup_n++;
+    if (ms > snap_catchup_worst_ms) {
+        snap_catchup_worst_ms = ms;
+        snap_catchup_worst_frames = snap_catchup_depth_seen;
+    }
 }
 
 void pc_snapshot_prerun(void)

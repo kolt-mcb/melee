@@ -46,6 +46,24 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads);
  * already played. */
 int pc_snapshot_is_replaying(void);
 
+/* How many frames still have to be re-simulated to get back to where the game
+ * was before the rewind.
+ *
+ * Rollback has to do that inside one displayed frame -- a correction arriving
+ * for four frames ago means four simulation steps now, not one per frame for the
+ * next four. The scene loop already has the shape for it: it runs its body once
+ * per entry in the pad queue, so the port's HSD_PadGetRawQueueCount asks this and
+ * returns one more than it, and the render hooks sit out every iteration but the
+ * last. The frames are played with their recorded inputs, which the self-check
+ * was already doing.
+ *
+ * Zero when not replaying, so it costs nothing when rollback is off. */
+unsigned pc_snapshot_catchup_frames(void);
+
+/* True while the loop is inside a caught-up frame that is not the last one, i.e.
+ * a frame whose output nobody will ever see. Render hooks check it. */
+int pc_snapshot_catchup_hidden(void);
+
 void pc_snapshot_prerun(void);
 
 /* MELEE_SNAPTRACE=1: the frame counter at the simulation entry. */

@@ -348,6 +348,36 @@ Also still open: the game heap region is the port's whole upward bump arena,
 simulation writes. Narrowing it is what stands between the measured cost and the
 budget below.
 
+**Re-simulating several frames inside one displayed frame.** This is the one
+mechanism rollback needs that nothing here had yet: a correction for four frames
+ago means four simulation steps *now*, not one per frame for the next four. The
+scene loop already has the shape for it. It runs its body once per entry in the
+pad queue, because the console read however many samples the SI had buffered, so
+`MELEE_NET_SYNCTEST_CATCHUP=1` makes the port's queue count return one plus
+however many frames a rewind owes, and the render hooks sit out every iteration
+but the last.
+
+It works: with it on, the frame counter goes from 1 to 5 inside a single
+displayed frame, and the four hidden frames draw nothing.
+
+It is not yet *verified*, and the reason is worth writing down because it bears on
+M3. `pc_snapshot_frame` is called from `port_input_poll`, which runs once per
+displayed frame -- not once per simulated frame. Everything the self-check does
+per frame hangs off that call: the hash it stores, the comparison, the recorded
+pads. With catch-up on, several frames are simulated per call, so the
+bookkeeping no longer lines up and the check reports what looks like a failed
+rewind ("the next frame is 5, not 2") when what actually happened is the thing it
+was asked to do. Moving the per-frame half of the check to `pc_snapshot_prerun`,
+which does run once per simulated frame, is the next step and is also what M3
+needs regardless: the rollback loop has to feed inputs and compare state per
+simulated frame, not per displayed one.
+
+One thing found on the way, and it was hiding in plain sight:
+`undef_stubs.c` had a strong `lb_80019894()` returning a constant 1, which won
+over `lb_0195.c`'s weak one -- so `HSD_PadGetRawQueueCount` was never what the
+scene loop asked, and the port had no way to run its simulation more than once
+per displayed frame. It defers to it now.
+
 ### M3 -- Rollback against a local peer
 
 Two instances on one machine, artificial delay and loss in between.

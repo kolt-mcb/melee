@@ -2441,7 +2441,32 @@ u8 HSD_PadGetRawQueueCount(void)
     /* PC port: return 1 to allow game loop to proceed.
      * The game expects at least one pad status update per frame.
      * HSD_PadRenewStatus() populates g_gc_pads with current input state. */
-    return g_gc_pads_initialized ? 1 : 0;
+    if (!g_gc_pads_initialized) {
+        return 0;
+    }
+#if BUILD_NETPLAY
+    /* More than one when the simulation owes frames.
+     *
+     * The console read this to find out how many pad samples the SI had queued
+     * and ran its frame once for each, so the scene loop already knows how to
+     * simulate several times before it presents anything. That is exactly what a
+     * rollback needs: a correction for four frames ago means four simulation
+     * steps now, not one per frame for the next four. So the count is one plus
+     * however many frames the rewind still owes, and the render hooks sit out
+     * all but the last. */
+    {
+        extern unsigned pc_snapshot_catchup_frames(void);
+        unsigned owed = pc_snapshot_catchup_frames();
+        if (owed > 0) {
+            if (owed > 30) {
+                owed = 30; /* a rollback deeper than this is a desync, not a
+                            * rollback; do not spend a second on it */
+            }
+            return (u8) (1u + owed);
+        }
+    }
+#endif
+    return 1;
 }
 
 s32 HSD_PadGetResetSwitch(void)
@@ -3108,6 +3133,26 @@ void window_poll_events(void);
     gm_SyncPadToControllerMap();
 }
 
+#if BUILD_NETPLAY
+/* Is this a frame nobody will see?
+ *
+ * When the simulation owes frames -- a rollback re-running what it already ran,
+ * or the self-check's catch-up -- the scene loop runs its body several times
+ * before presenting anything, and only the last of those produces the picture.
+ * Drawing the others would cost the same as drawing real frames and be thrown
+ * away, which is the difference between a rollback that fits in a frame and one
+ * that does not.
+ *
+ * Asked once per iteration, at the start, because asking counts down. */
+static int pc_frame_hidden;
+
+static void pc_frame_hidden_begin(void)
+{
+    extern int pc_snapshot_catchup_hidden(void);
+    pc_frame_hidden = pc_snapshot_catchup_hidden();
+}
+#endif
+
 __attribute__((weak)) void port_render_frame_begin(void)
 {
 void render_clear(void);
@@ -3116,6 +3161,13 @@ void render_clear(void);
     extern void GXSetProjection(f32 mtx[4][4], u32 type);
     extern void gx_set_mv_matrix(f32 mtx[3][4]);
     
+#if BUILD_NETPLAY
+    pc_frame_hidden_begin();
+    if (pc_frame_hidden) {
+        return;
+    }
+#endif
+
     render_clear();
     gx_set_default_3d_camera();
     GXSetZMode(FALSE, 0, FALSE);
@@ -3153,6 +3205,15 @@ __attribute__((weak)) void port_render_frame_end(void)
     extern void render_debug_overlay(void);
     extern void render_present(void);
     extern void pc_ax_pump(void);
+#if BUILD_NETPLAY
+    /* Nothing to flush and nothing to present: this frame was re-simulated to
+     * catch up and its picture is not wanted. The pairing with
+     * port_render_frame_begin is by the flag it set, not by asking again --
+     * asking counts down. */
+    if (pc_frame_hidden) {
+        return;
+    }
+#endif
     GXFlush();
     render_debug_overlay();
     { extern void pc_objalloc_check(const char*); pc_objalloc_check("frame start"); }
@@ -3406,7 +3467,12 @@ __attribute__((weak)) void gm_801A4510(void) { PC_STUB_HIT("gm_801A4510");}
 void lb_8001955C(void) {}
 void lb_800195D0(void) {}
 void lb_80019628(void) {}
-u8 lb_80019894(void) { return 1; }  /* Return 1 to allow game loop to proceed */
+/* The scene loop's "how many pad samples are queued?", and the strong definition
+ * that wins over lb_0195.c's weak one -- so this, not HSD_PadGetRawQueueCount, is
+ * what the loop actually asks. Normally one. More when the simulation owes
+ * frames: see the note on HSD_PadGetRawQueueCount above, which this defers to so
+ * the two cannot disagree. */
+u8 lb_80019894(void) { return HSD_PadGetRawQueueCount(); }
 void lb_800198E0(void) {}
 void lb_80019880(u64 arg0) {}
 /* lb_80019900 and lb_80019A30 are implemented in lb_0195.c — removed stubs */
