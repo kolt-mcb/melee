@@ -391,13 +391,37 @@ about 4.7 ms of re-simulation plus one 2 ms restore. That fits in a 16.7 ms fram
 beside the ~4.5 ms the port already spends, with the worst case uncomfortably
 close. The per-frame snapshot, not the re-simulation, is the thing to watch.
 
-**The open end, and it is narrow.** Pikachu vs Peach diverges under catch-up, and
-the deeper the catch-up the sooner: clean for 7168 frames at depth 2, frame 5932
-at depth 4, frame 3310 at depth 8. The report is a single RNG draw
-(`rand_draws` 0xAC4E against 0xAC4D) and the ring names the HUD's damage-counter
-shake, `offset_rand` in `if/ifstatus.c`. That is a gobj proc, so it does run during
-a catch-up -- this is not an input the hidden frames are missing -- and something
-about its state spans the window instead. Depth-dependence is the clue to follow.
+**And the reason it diverged is the thing that now sets the price.** Pikachu vs
+Peach failed under catch-up, sooner the deeper it went: clean at depth 2, frame
+5932 at depth 4, frame 3310 at depth 8. What the caught-up frames were missing was
+not an input -- it was the **render pass**. The saving that made catch-up look
+cheap was skipping the draw for frames nobody sees, and the game's render
+callbacks write state the simulation then reads. `psDispParticles` alone advances
+the particle clock and stamps every particle's `appsrt`, and it is a render link.
+
+Three things were tried and ruled out before that, each leaving the divergence at
+the same frame with the same hashes: advancing the particle clock by hand,
+letting the mixer run on replayed frames, and the harness's per-displayed-frame
+CPU write (which was a real bug, and moved the failure from 3273 to 3310 and no
+further). Drawing the caught-up frames fixes it outright -- 5888 frames replayed
+and compared, clean, on both CPU lineups.
+
+| eight frames caught up | average | worst |
+| --- | --- | --- |
+| drawn (correct) | **35.5 ms** | 50.3 ms |
+| not drawn (wrong) | 4.7 ms | 28.0 ms |
+
+Drawing is the default now, because a fast wrong answer is no use;
+`MELEE_NET_SYNCTEST_SKIP_HIDDEN=1` takes the other one for measuring against.
+
+**So this is what stands between here and M3.** A correct eight-frame rollback
+costs 35 ms, twice a frame's budget, and almost all of it is drawing frames that
+will never be shown. The work is to run the render callbacks for their side
+effects without submitting any geometry -- the CPU half of `render_present`
+without `gx_frame_end` and the swap -- which needs the GX bridge to discard
+rather than accumulate. Failing that, the side effects themselves have to be
+found and moved into the simulation, `psDispParticles`' clock and `appsrt`
+stamping being the two already identified.
 
 One harness artefact was found and fixed getting here, and it is the kind worth
 naming. `MELEE_FORCE_CPU` writes the CPU levels into the player slots every frame,

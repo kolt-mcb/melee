@@ -396,7 +396,15 @@ static void pc_ax_frame(void)
      * only decompiled globals that differ between a frame's two runs. */
     {
         extern int pc_snapshot_is_replaying(void);
-        if (pc_snapshot_is_replaying()) {
+        /* MELEE_NET_SYNCTEST_MIX_REPLAY=1 runs the mixer on replayed frames after
+         * all, which is wrong for audio -- it re-plays what was already played --
+         * but answers whether the voice state the mixer maintains is what a
+         * replayed frame diverges on. */
+        static int mix_replay = -1;
+        if (mix_replay < 0) {
+            mix_replay = getenv("MELEE_NET_SYNCTEST_MIX_REPLAY") != NULL;
+        }
+        if (!mix_replay && pc_snapshot_is_replaying()) {
             return;
         }
     }

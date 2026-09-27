@@ -3149,7 +3149,34 @@ static int pc_frame_hidden;
 static void pc_frame_hidden_begin(void)
 {
     extern int pc_snapshot_catchup_hidden(void);
-    pc_frame_hidden = pc_snapshot_catchup_hidden();
+    static int skip = -1;
+    if (skip < 0) {
+        /* Caught-up frames are drawn by default, and that is not a conservative
+         * choice -- it is the only correct one found so far.
+         *
+         * Skipping the draw looks free: nobody sees those frames. It is not,
+         * because the game's render callbacks write state the simulation then
+         * reads. psDispParticles alone advances the particle clock and stamps
+         * every particle's appsrt, and it is a render link. With the draws
+         * skipped, Pikachu vs Peach diverges under an eight-frame catch-up at
+         * match frame 3310; with them kept it replays 5888 frames clean.
+         * Advancing the particle clock by hand was not enough, and neither was
+         * letting the mixer run -- both were tried, both left the divergence at
+         * the same frame with the same hashes.
+         *
+         * The cost of being right is the whole problem, and it is measured:
+         * eight frames caught up take 35.5 ms drawn against 4.7 ms not drawn.
+         * MELEE_NET_SYNCTEST_SKIP_HIDDEN=1 takes the fast one, for measuring
+         * against. Rollback needs the render pass's side effects without its
+         * drawing, and that is the next piece of work. */
+        skip = getenv("MELEE_NET_SYNCTEST_SKIP_HIDDEN") != NULL;
+    }
+    pc_frame_hidden = skip ? pc_snapshot_catchup_hidden() : 0;
+    if (!skip) {
+        /* Still count the frame down, so the burst measurement and the
+         * last-frame test stay right. */
+        (void) pc_snapshot_catchup_hidden();
+    }
 }
 #endif
 
@@ -3211,6 +3238,17 @@ __attribute__((weak)) void port_render_frame_end(void)
      * port_render_frame_begin is by the flag it set, not by asking again --
      * asking counts down. */
     if (pc_frame_hidden) {
+        /* The particle system's frame counter is advanced by the render pass and
+         * by nothing else: psDispParticles increments psFrameNum when it is
+         * called with sw == 0, and that call is a render link. Skipping the pass
+         * on a frame nobody sees therefore stops particle time, and the counter
+         * is what tells psdisp whether a particle's appsrt has already been
+         * transformed this frame. Advance it the way the skipped pass would
+         * have -- the sw == 0 call does that and nothing else. */
+        {
+            extern void psDispParticles(u32 target_link, u32 sw);
+            psDispParticles(0, 0);
+        }
         return;
     }
 #endif
