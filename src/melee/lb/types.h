@@ -42,7 +42,7 @@ typedef union CmdUnion CmdUnion;
 #define PC_SCRIPT_BE __attribute__((scalar_storage_order("big-endian")))
 #else
 #define PC_SCRIPT_BE
-#if defined(PC_SCRIPT_INPLACE)
+#if defined(BUILD_TARGET_PC) && !defined(PC_SCRIPT_INPLACE)
 #define PC_SCRIPT_INPLACE 1
 #endif
 #endif

@@ -932,16 +932,52 @@ wrong ECB.
 `MELEE_SWAPCHECK=1` reports nothing, which is not a contradiction: it only ever
 looked at stage `FObjDesc` nodes, never at fighter animation.
 
-**Which implies the fix, and it is smaller than an accessor refactor.**
-`pc_script_prepare` swaps a whole *reloc object* because that was the cheap way to
-avoid needing opcode lengths, and an object holds whatever the archive put beside
-the script. The marks bitmap already has **one bit per four-byte word** -- only the
-object's first word is ever set. Marking and swapping per word, for the couple of
-words a command actually spans, would mean nothing but words read as script is
-ever written. That shrinks what the in-place arrangement can corrupt from an
-object to at most a word or two past the end of a script, and it shrinks the
-rollback hazard with it. Whether it closes the gap entirely is a measurement: does
-the in-place build then agree with the attribute build on the debug boot?
+**The fix that suggested is not available, and checking why found a worse bug.**
+`pc_script_prepare` swaps a whole *reloc object* and the marks bitmap already has
+one bit per four-byte word, so swapping per word looked like a free way to stop
+touching anything but script. It is not: `sizeof(union CmdUnion)` is **4**, the
+numbered suffixes (`spawn_hitbox_0` through `_5`) are consecutive *words* of one
+command, and `prepare` is called **only when entering a script** -- at a jump or
+call target, or at a subaction's first command. The interpreter then walks the rest
+of the object with no further calls. Object granularity is load-bearing; a
+word-granular swap would leave every multi-word command half-converted.
+
+So the object bound, which comes from the nearest reloc targets, has to line up
+with the script, and there are two ways it can fail to:
+
+- **under-swap** -- the script runs past the next reloc target, so the tail stays
+  big-endian and the interpreter reads it as host order. Nothing prepares it,
+  because falling through a boundary is not entering a script.
+- **over-swap** -- the object runs past the end of the script into whatever the
+  archive put next, and that gets byte-reversed.
+
+Either produces the symptom. The discriminator is cheap and has not been run yet:
+log every swapped object's bounds, and log the address of every command word
+actually executed. An executed word that lies inside an archive but outside every
+swapped object is under-swap, and proves it. Under the attribute arrangement
+neither can happen, because every word is read big-endian wherever the object
+bounds fall -- which is why that arrangement is console-identical and this one is
+not.
+
+**The worse bug, found on the way.** The block that picks the arrangement lives in
+two headers, and they disagreed. `ft/types.h` tested `BUILD_TARGET_PC`;
+`lb/types.h` tested `defined(PC_SCRIPT_INPLACE)` inside its own `#else` -- a
+condition that can never be true there, so it never defined anything. Both blocks
+sit under `#ifndef PC_SCRIPT_BE`, so whichever header a translation unit reached
+first decided for it, and **the two disagreed about struct member order in the same
+program**. On Clang the first-reached-`lb` case gave the worst of both: the
+attribute expands to nothing, so scalars are host-order, the member-order guards
+took the GameCube branch, and `pc_script_prepare` compiled to an immediate
+`return` -- no swap at all. That is the Android build. Proven with the NDK clang
+and the real Android cflags: before the fix it selects the attribute arrangement it
+cannot implement, after it selects in-place. Both headers now test
+`defined(BUILD_TARGET_PC) && !defined(PC_SCRIPT_INPLACE)`, and all four arms were
+checked in isolation (GCC-PC, Clang-PC, explicit define, GameCube).
+
+It is worth being clear that this was introduced by the accessor work in this same
+sequence, and that nothing caught it, because Android is not in the desktop test
+loop and `-Werror=unknown-attributes` only fires if the attribute is *applied*, not
+if it silently expands to nothing.
 
 Either way the conclusion for Android stands: it runs the arrangement that mutates
 archive data, the test harnesses lean heavily on the debug boot, and the attribute
