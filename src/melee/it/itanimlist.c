@@ -40,7 +40,10 @@ ItCmd it_803F22A8[16] = {
 };
 
 typedef struct itAnimlistCmdUnk {
-#if defined(BUILD_TARGET_PC)
+/* PC_SCRIPT_INPLACE, like the declarations in lb/types.h: this reversal describes
+ * the host word the in-place swap produces, and must not be used when the archive
+ * is read where it lies. */
+#if defined(PC_SCRIPT_INPLACE)
     u16 x2;
     u16 x0_b14 : 2;
     u16 opcode : 8;

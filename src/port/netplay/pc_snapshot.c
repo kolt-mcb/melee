@@ -80,6 +80,10 @@ extern int pc_itconv_arch_at(int i, const unsigned char** base,
 extern unsigned long pc_itconv_marks_size(void);
 extern void pc_itconv_marks_save(void* out);
 extern void pc_itconv_marks_restore(const void* in, unsigned long len);
+/* For PC_SCRIPT_INPLACE: whether the archives are written to during play, which
+ * decides whether they can be left out of the snapshot. */
+#include <melee/lb/types.h>
+
 extern void pc_itconv_marks_rewind(const void* in, unsigned long len);
 extern void pc_itconv_marks_rewind_gen(const void* in, unsigned long len,
                                        unsigned long store_gen);
@@ -424,8 +428,18 @@ static int snap_holes_on(void)
 {
     static int on = -1;
     if (on < 0) {
-        /* OFF by default now: the archives are copied and rewound like anything
-         * else, and MELEE_NET_SNAP_HOLES=1 leaves them out again for measuring.
+        /* On when the archives are genuinely read-only, off when they are not.
+         *
+         * They are read-only exactly when the command structs carry
+         * scalar_storage_order and the port reads the stream where it lies
+         * (PC_SCRIPT_INPLACE undefined -- see melee/lb/types.h). Then nothing
+         * writes to an archive during play, measured: MELEE_ARCHWATCH=1 reports
+         * zero byte-swaps absorbed and zero other writes over a match, and the
+         * pair runs five for five clean with 8 MB left out. Where the in-place
+         * swap is still used -- a compiler without the attribute, which today
+         * means Android's Clang -- the archives are mutable and must be copied.
+         *
+         * MELEE_NET_SNAP_HOLES=0/1 overrides either way.
          *
          * Leaving them out was verified by a full match on every self-check
          * case, and that verification could not have found what is wrong with
@@ -448,7 +462,14 @@ static int snap_holes_on(void)
          * have actually been swapped, which the marks already know -- is the
          * open work. Correct first. */
         const char* e = getenv("MELEE_NET_SNAP_HOLES");
-        on = (e != NULL && *e != '\0' && strcmp(e, "0") != 0);
+#if defined(PC_SCRIPT_INPLACE)
+        on = 0;
+#else
+        on = 1;
+#endif
+        if (e != NULL && *e != '\0') {
+            on = (strcmp(e, "0") != 0);
+        }
     }
     return on;
 }

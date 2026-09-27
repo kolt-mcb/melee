@@ -2100,16 +2100,24 @@ ASSERT_SIZE(struct Fighter, 0x23EC);
 
 /* PC port: read big-endian, MSB-first bitfields -- see PC_SCRIPT_BE in
  * lb/types.h. Without it the opcode is the wrong six bits of the wrong byte. */
+/* PC_SCRIPT_BE and PC_SCRIPT_INPLACE come from lb/types.h, which decides between
+ * reading the archive big-endian through the attribute and byte-swapping it in
+ * place. This header is included without it in a few translation units, so the
+ * fallback stays -- but it must agree, or these structs and the ones over there
+ * would disagree about member order. */
 #ifndef PC_SCRIPT_BE
-#if defined(BUILD_TARGET_PC)
-#define PC_SCRIPT_BE /* host-order words now; see lb/types.h */
+#if defined(BUILD_TARGET_PC) && defined(__GNUC__) && !defined(__clang__)
+#define PC_SCRIPT_BE __attribute__((scalar_storage_order("big-endian")))
 #else
 #define PC_SCRIPT_BE
+#if defined(BUILD_TARGET_PC)
+#define PC_SCRIPT_INPLACE 1
+#endif
 #endif
 #endif
 
 struct gmScriptEventDefault {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value1 : 26;
     u32 opcode : 6;
 #else
@@ -2134,7 +2142,7 @@ typedef struct ftData_UnkModelStruct {
 } ftData_UnkModelStruct;
 
 struct ftData_80085FD4_ret {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     /* This struct only ever views a Fighter_WaitAnimData entry
      * (ftData_80085FD4 returns &fp->x24[msid] cast), so its field offsets
      * must match that struct's x86_64 layout exactly. The old PC widening

@@ -2,6 +2,10 @@
 #include "pc_script.h"
 #include "pc_itconv.h"
 
+/* For PC_SCRIPT_INPLACE, which says whether the archive is read where it lies or
+ * byte-swapped in place. */
+#include <melee/lb/types.h>
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +25,20 @@ void pc_script_prepare(const void* u)
     const unsigned char* end;
     unsigned char* w;
 
+#if !defined(PC_SCRIPT_INPLACE)
+    /* Nothing to do: the command structs carry
+     * scalar_storage_order("big-endian"), so they read the archive where it lies
+     * and it is never written to. That is the arrangement rollback needs -- an
+     * archive that is only ever read is genuinely the read-only file data the
+     * snapshot leaves out, and two machines cannot end up having swapped
+     * different sets of objects. Kept as a call rather than compiled out at every
+     * site so the interpreters read the same on both arrangements. */
+    (void) u;
+    (void) start;
+    (void) end;
+    (void) w;
+    return;
+#endif
     if (u == NULL) {
         return;
     }

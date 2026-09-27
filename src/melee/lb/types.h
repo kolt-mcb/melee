@@ -14,14 +14,37 @@
 
 typedef union CmdUnion CmdUnion;
 
-/* Formerly scalar_storage_order("big-endian"), which made the script structs
- * below load big-endian and allocate their bitfields MSB-first. It is
- * GCC-only -- it is the single reason Clang could not build the port -- so
- * the PC declarations are written for the host word instead and
- * port/pc_script.c byteswaps the archive object that holds them. Defined
- * here, before the first user, and left empty on every target. */
+/* How the port reads the big-endian command scripts in the DAT archives, decided
+ * here because everything below depends on it.
+ *
+ * `scalar_storage_order("big-endian")` does the whole job: the struct's scalars
+ * load byte-swapped AND its bitfields are allocated MSB-first, so one set of
+ * declarations serves both targets and **the archive is never written to**. It is
+ * GCC-only, which is why it was dropped when the Android build wanted Clang, and
+ * the replacement -- host-order declarations plus port/pc_script.c byte-swapping
+ * each archive object in place the first time an opcode in it is dispatched -- is
+ * what made archives mutable during play.
+ *
+ * That is not a small thing to have made mutable. The rollback snapshot leaves the
+ * archives out as read-only file data, and two machines rolling back at different
+ * moments then swap different sets of objects and read the same word two different
+ * ways. Measured: 85 objects swapped on one side against 95 on the other, and a
+ * desync. Rollback runs on the desktop build, which is GCC, so the attribute is
+ * used wherever it exists and the in-place swap is kept only for compilers without
+ * it -- where there is no rollback to break. Clang support is the one thing that
+ * would remove the fallback entirely.
+ *
+ * PC_SCRIPT_INPLACE says which arrangement is in force. Everything below that
+ * reverses member order for the host word tests it, not BUILD_TARGET_PC. */
 #ifndef PC_SCRIPT_BE
+#if defined(BUILD_TARGET_PC) && defined(__GNUC__) && !defined(__clang__)
+#define PC_SCRIPT_BE __attribute__((scalar_storage_order("big-endian")))
+#else
 #define PC_SCRIPT_BE
+#if defined(PC_SCRIPT_INPLACE)
+#define PC_SCRIPT_INPLACE 1
+#endif
+#endif
 #endif
 
 struct HitResult {
@@ -350,14 +373,14 @@ struct ColorOverlay_UnkInner {
  * every include; the layout is the same four bytes. */
 union ColorOverlay_x8_t {
     struct {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
         u8 a, b, g, r;
 #else
         u8 r, g, b, a;
 #endif
     } light_color;
     struct {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
         s32 yz : 13;
         s32 x : 13;
         s32 unk : 6;
@@ -368,7 +391,7 @@ union ColorOverlay_x8_t {
 #endif
     } PC_SCRIPT_BE light_rot1;
     struct {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
         s32 yz : 12;
         s32 x : 12;
         u32 x0_7 : 1;
@@ -393,7 +416,7 @@ union ColorOverlay_x8_t {
 #endif
     } PC_SCRIPT_BE light_rot2;
     struct {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
         u32 timer : 26;
         u32 unk : 6;
 #else
@@ -584,29 +607,29 @@ struct lbColl_8000A10C_arg0_t {
  * -- so the stream stays untouched and the declarations stay identical to
  * the GameCube ones. Every member of union CmdUnion (and the union itself)
  * carries it. */
-#ifndef PC_SCRIPT_BE
-#if defined(BUILD_TARGET_PC)
-/* Formerly scalar_storage_order("big-endian") -- GCC-only. The PC
- * declarations below are written for the host word instead (see
- * tools/pc_script_le.py and port/pc_script.c). */
-#define PC_SCRIPT_BE
-#else
-#define PC_SCRIPT_BE
-#endif
-#endif
+/* PC_SCRIPT_BE and PC_SCRIPT_INPLACE are decided at the top of this header, before
+ * the first struct that depends on them. */
 
 /* Command scripts are also read raw in a handful of places -- a whole word
  * copied into a scratch command, a halfword pulled out by pointer cast.
  * Those bypass PC_SCRIPT_BE, so they need the swap spelled out. */
-#if defined(BUILD_TARGET_PC)
-/* Script words are byteswapped to host order once at first execution
- * (port/pc_script.c), so whole-word and halfword reads need no swap -- but
- * a halfword/byte INDEX still has to flip: big-endian halfword 0 is the
- * high half of the host word. */
+#if defined(PC_SCRIPT_INPLACE)
+/* The in-place scheme: port/pc_script.c has already turned the words into host
+ * order, so whole-word and halfword reads need no swap -- but a halfword or byte
+ * INDEX still has to flip, because big-endian halfword 0 is the high half of the
+ * host word. */
 #define PC_SCRIPT_W(x) (x)
 #define PC_SCRIPT_H(x) (x)
 #define PC_SCRIPT_HIDX(i) (1 - (i))
 #define PC_SCRIPT_BIDX(i) (3 - (i))
+#elif defined(BUILD_TARGET_PC)
+/* The attribute scheme: the stream is still big-endian, so a read that bypasses
+ * the structs has to swap -- and an index does not flip, because the bytes are
+ * where the console put them. */
+#define PC_SCRIPT_W(x) ((u32) __builtin_bswap32((u32) (x)))
+#define PC_SCRIPT_H(x) ((u16) __builtin_bswap16((u16) (x)))
+#define PC_SCRIPT_HIDX(i) (i)
+#define PC_SCRIPT_BIDX(i) (i)
 #else
 #define PC_SCRIPT_W(x) (x)
 #define PC_SCRIPT_H(x) (x)
@@ -615,7 +638,7 @@ struct lbColl_8000A10C_arg0_t {
 #endif
 
 struct Command_00 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value : 26;
     u32 code : 6;
 #else
@@ -624,7 +647,7 @@ struct Command_00 {
 #endif
 } PC_SCRIPT_BE;
 struct Command_02 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value : 26;
     u32 code : 6;
 #else
@@ -633,7 +656,7 @@ struct Command_02 {
 #endif
 } PC_SCRIPT_BE;
 struct Command_03 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value : 26;
     u32 code : 6;
 #else
@@ -642,13 +665,15 @@ struct Command_03 {
 #endif
 } PC_SCRIPT_BE;
 struct Command_04 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 x;
 #else
     u32 x;
 #endif
 } PC_SCRIPT_BE;
 struct Command_05 {
+/* BUILD_TARGET_PC, not PC_SCRIPT_INPLACE: this one is about pointer size, not
+ * byte order, so it holds however the words are read. */
 #if defined(BUILD_TARGET_PC)
     /* Unrelocated 32-bit archive offset -- Locate() is a no-op on PC, and a
      * real 8-byte pointer here would double sizeof(union CmdUnion) and make
@@ -660,13 +685,13 @@ struct Command_05 {
 } PC_SCRIPT_BE;
 struct Command_07 {
 #if defined(BUILD_TARGET_PC)
-    u32 off;
+    u32 off; /* as Command_05: pointer size, not byte order */
 #else
     CmdUnion* ptr;
 #endif
 } PC_SCRIPT_BE;
 struct Command_09 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 param_2 : 18;
     u32 param_1 : 8;
     u32 id : 6;
@@ -677,7 +702,7 @@ struct Command_09 {
 #endif
 } PC_SCRIPT_BE;
 struct unk0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk2 : 18;  ///< Bits 14~31
     u32 unk1 : 8;   ///< Bits 6~13
     u32 opcode : 6; ///< Bits 0~5
@@ -688,7 +713,7 @@ struct unk0 {
 #endif
 } PC_SCRIPT_BE;
 struct unk1 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 : 19;
     u32 unk2 : 1;   ///< Bit 12
     u32 unk1 : 4;   ///< Bits 8~11
@@ -702,7 +727,7 @@ struct unk1 {
 #endif
 } PC_SCRIPT_BE;
 struct set_throw_flags {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 hit_idx : 26; ///< Bits 6~31
     u32 opcode : 6;   ///< Bits 0~5
 #else
@@ -711,7 +736,7 @@ struct set_throw_flags {
 #endif
 } PC_SCRIPT_BE;
 struct unk3 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s32 unk1 : 25; ///< Bits 7~31
     s32 unk0 : 7;  ///< Bits 0~6
 #else
@@ -720,7 +745,7 @@ struct unk3 {
 #endif
 } PC_SCRIPT_BE;
 struct unk4 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u8 _pc_pad[2];
     u16 : 2;
     u16 unk1 : 8;   ///< Bits 6~13
@@ -731,7 +756,7 @@ struct unk4 {
 #endif
 } PC_SCRIPT_BE;
 struct unk5 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s32 unk1 : 18; ///< Bits 14~31
     s32 unk0 : 14; ///< Bits 0~13
 #else
@@ -740,7 +765,7 @@ struct unk5 {
 #endif
 } PC_SCRIPT_BE;
 struct unk6 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u8 _pc_pad[3];
     u8 : 1;
     u8 unk1 : 1;   ///< Bit 6
@@ -751,7 +776,7 @@ struct unk6 {
 #endif
 } PC_SCRIPT_BE;
 struct set_airborne_state {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 state : 26; ///< Bits 6~31
     u32 opcode : 6; ///< Bits 0~5
 #else
@@ -760,14 +785,14 @@ struct set_airborne_state {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071998
 struct unk8 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     int unk0;
 #else
     int unk0;
 #endif
 } PC_SCRIPT_BE;
 struct part_anim {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk3 : 12;
     s32 unk2 : 7;
     s32 unk1 : 7;
@@ -780,7 +805,7 @@ struct part_anim {
 #endif
 } PC_SCRIPT_BE;
 struct unk9 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk2 : 13;
     u32 unk1 : 13;
     s32 unk0 : 6;
@@ -791,7 +816,7 @@ struct unk9 {
 #endif
 } PC_SCRIPT_BE;
 struct unk10 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk3 : 13;
     u32 unk2 : 12;
     u32 unk1 : 1;
@@ -804,7 +829,7 @@ struct unk10 {
 #endif
 } PC_SCRIPT_BE;
 struct unk11 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk1 : 26;
     s32 unk0 : 6;
 #else
@@ -813,7 +838,7 @@ struct unk11 {
 #endif
 } PC_SCRIPT_BE;
 struct unk12 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk3 : 14;
     u32 unk2 : 10;
     u32 unk1 : 2;
@@ -826,7 +851,7 @@ struct unk12 {
 #endif
 } PC_SCRIPT_BE;
 struct unk13 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk2 : 18;
     u32 unk1 : 8;
     u32 unk0 : 6;
@@ -837,7 +862,7 @@ struct unk13 {
 #endif
 } PC_SCRIPT_BE;
 struct unk14 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 : 18;
     u32 unk1 : 8;
     u32 unk0 : 6;
@@ -847,7 +872,7 @@ struct unk14 {
 #endif
 } PC_SCRIPT_BE;
 struct unk15 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk1 : 26;
     u32 unk0 : 6;
 #else
@@ -856,7 +881,7 @@ struct unk15 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80072B14
 struct unk16 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s32 unk4 : 25;
     s32 unk3 : 1;
     u32 unk0 : 6;
@@ -867,7 +892,7 @@ struct unk16 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80072B3C
 struct unk17 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s32 unk1 : 26;
     u32 unk0 : 6;
 #else
@@ -876,7 +901,7 @@ struct unk17 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80072B94
 struct unk18 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s32 damage_amount : 26;
     u32 unk0 : 6;
 #else
@@ -885,7 +910,7 @@ struct unk18 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80072BF4
 struct unk19 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk1 : 26;
     u32 unk0 : 6;
 #else
@@ -894,7 +919,7 @@ struct unk19 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80072C6C
 struct unk20 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk1 : 26;
     u32 unk0 : 6;
 #else
@@ -903,7 +928,7 @@ struct unk20 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80072CB0
 struct unk21 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 : 17;
     u32 unk2 : 8;
     u32 unk1 : 1;
@@ -915,7 +940,7 @@ struct unk21 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_800730B8
 struct set_hitbox_damage {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value : 23;
     u32 idx : 3;
     u32 opcdoe : 6;
@@ -926,7 +951,7 @@ struct set_hitbox_damage {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_8007162C
 struct set_hitbox_scale {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value : 23;
     u32 idx : 3;
     u32 opcode : 6;
@@ -937,7 +962,7 @@ struct set_hitbox_scale {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_8007169C
 struct set_hitbox_x42_b57 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value : 1;
     u32 type : 1;
     u32 idx : 24;
@@ -950,7 +975,7 @@ struct set_hitbox_x42_b57 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071708
 struct set_cmd_var {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value : 24;
     u32 idx : 2;
     u32 opcode : 6;
@@ -961,7 +986,7 @@ struct set_cmd_var {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071708
 struct set_hurt_state {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 state : 18;
     u32 bone_idx : 8;
     u32 opcode : 6;
@@ -972,7 +997,7 @@ struct set_hurt_state {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071A9C
 struct set_jab_combo {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 disabled : 26;
     u32 opcode : 6;
 #else
@@ -981,7 +1006,7 @@ struct set_jab_combo {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071AE8
 struct set_jab_rapid {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 state : 26;
     u32 opcode : 6;
 #else
@@ -990,7 +1015,7 @@ struct set_jab_rapid {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071B28
 struct set_dobj_flags {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s32 value : 19;
     s32 idx : 7;
     u32 opcode : 6;
@@ -1001,7 +1026,7 @@ struct set_dobj_flags {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071D40
 struct set_throw_hitbox_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 damage : 23;
     u32 idx : 3;
     u32 opcode : 6;
@@ -1012,7 +1037,7 @@ struct set_throw_hitbox_0 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071E04
 struct set_throw_hitbox_1 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 : 5;
     u32 hit_x28 : 9;
     u32 hit_x24 : 9;
@@ -1024,7 +1049,7 @@ struct set_throw_hitbox_1 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071E04
 struct set_throw_hitbox_2 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 : 12;
     u32 sfx_kind : 4;
     u32 sfx_severity : 3;
@@ -1038,7 +1063,7 @@ struct set_throw_hitbox_2 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071E04
 struct unk27 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value : 26;
     u32 opcode : 6;
 #else
@@ -1047,7 +1072,7 @@ struct unk27 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071F34
 struct set_article_vis {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value : 26;
     u32 opcode : 6;
 #else
@@ -1056,7 +1081,7 @@ struct set_article_vis {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071F78
 struct set_fighter_vis {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 value : 26;
     u32 opcode : 6;
 #else
@@ -1065,7 +1090,7 @@ struct set_fighter_vis {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80071FA0
 struct set_tex_anim {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s32 frame : 11;
     s32 idx2 : 7;
     s32 idx : 7;
@@ -1080,7 +1105,7 @@ struct set_tex_anim {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_800726F4
 struct unk31 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk1 : 16;
     u32 unk0 : 10;
     u32 opcode : 6;
@@ -1091,7 +1116,7 @@ struct unk31 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80073008
 struct unk32 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk1 : 13;
     u32 unk0 : 13;
     u32 opcode : 6;
@@ -1102,7 +1127,7 @@ struct unk32 {
 #endif
 } PC_SCRIPT_BE; ///< #ftAction_80073008
 struct unk33 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk1 : 13;
     u32 unk0 : 13;
     u32 opcode : 6;
@@ -1113,7 +1138,7 @@ struct unk33 {
 #endif
 } PC_SCRIPT_BE; ///< #it_8027990C
 struct spawn_gfx_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unk1 : 15;
     u32 useUnkBone : 1;
     u32 destroyOnStateChange : 1;
@@ -1130,7 +1155,7 @@ struct spawn_gfx_0 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_gfx_1 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unkFloat : 16;
     u32 gfxID : 16;
 #else
@@ -1139,7 +1164,7 @@ struct spawn_gfx_1 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_gfx_2 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s16 offsetY : 16;
     s16 offsetZ : 16;
 #else
@@ -1148,7 +1173,7 @@ struct spawn_gfx_2 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_gfx_3 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u16 rangeZ : 16;
     s16 offsetX : 16;
 #else
@@ -1157,7 +1182,7 @@ struct spawn_gfx_3 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_gfx_4 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u16 rangeX : 16;
     u16 rangeY : 16;
 #else
@@ -1166,7 +1191,7 @@ struct spawn_gfx_4 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_hitbox_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 damage : 10;
     u32 use_common_bone_ids : 1;
     u32 bone : 8;
@@ -1185,7 +1210,7 @@ struct spawn_hitbox_0 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_hitbox_1 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s32 z_offset : 16;
     u32 size : 16;
 #else
@@ -1194,7 +1219,7 @@ struct spawn_hitbox_1 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_hitbox_2 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s32 x_offset : 16;
     s32 y_offset : 16;
 #else
@@ -1203,7 +1228,7 @@ struct spawn_hitbox_2 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_hitbox_3 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 rebound : 1;
     u32 clank : 1;
     u32 ignore_fighter_scale : 1;
@@ -1224,7 +1249,7 @@ struct spawn_hitbox_3 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_hitbox_4 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 hit_aerial : 1;
     u32 hit_grounded : 1;
     u32 hit_sfx_kind : 5;
@@ -1243,7 +1268,7 @@ struct spawn_hitbox_4 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_hitbox_5 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 : 16;
     u32 x1_b7 : 1;
     u32 x1_b6 : 1;
@@ -1267,7 +1292,7 @@ struct spawn_hitbox_5 {
 #endif
 } PC_SCRIPT_BE;
 struct it_create_hitbox_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 damage : 13;
     u32 bone : 7;
     u32 hit_group : 3;
@@ -1282,7 +1307,7 @@ struct it_create_hitbox_0 {
 #endif
 } PC_SCRIPT_BE;
 struct it_create_hitbox_4 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 x40_b2 : 1;
     u32 x40_b3 : 1;
     u32 sfx_kind : 4;
@@ -1303,7 +1328,7 @@ struct it_create_hitbox_4 {
 #endif
 } PC_SCRIPT_BE;
 struct spawn_hitbox_skip {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     /* Hand-converted (tools/pc_script_le.py declines odd-sized byte arrays).
      * MWCC parks these five bits in byte 15, the low byte of the fourth
      * word (masks 0x80..0x08); once that word is host order they sit in
@@ -1325,7 +1350,7 @@ struct spawn_hitbox_skip {
 #endif
 } PC_SCRIPT_BE;
 struct sound_effect_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 unknown : 18;
     u32 behavior : 8;
     u32 opcode : 6;
@@ -1336,14 +1361,14 @@ struct sound_effect_0 {
 #endif
 } PC_SCRIPT_BE;
 struct sound_effect_1 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 sfx_id;
 #else
     u32 sfx_id;
 #endif
 } PC_SCRIPT_BE;
 struct sound_effect_2 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 panning : 8;
     u32 volume : 8;
     u32 padding : 16;
@@ -1354,7 +1379,7 @@ struct sound_effect_2 {
 #endif
 } PC_SCRIPT_BE;
 struct pseudo_random_sfx_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 random_range : 6;
     u32 behavior : 4;
     u32 panning : 8;
@@ -1369,14 +1394,14 @@ struct pseudo_random_sfx_0 {
 #endif
 } PC_SCRIPT_BE;
 struct pseudo_random_sfx_1 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 sfx_id;
 #else
     u32 sfx_id;
 #endif
 } PC_SCRIPT_BE;
 struct stage_sfx_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 pitch_select : 8;
     u32 x2_b0_7 : 8;
     u32 sfx_base : 10;
@@ -1389,14 +1414,14 @@ struct stage_sfx_0 {
 #endif
 } PC_SCRIPT_BE;
 struct stage_sfx_1 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 sfx_id;
 #else
     u32 sfx_id;
 #endif
 } PC_SCRIPT_BE;
 struct stage_sfx_2 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 x2_b0_15 : 16;
     u32 x0_b0_15 : 16;
 #else
@@ -1405,7 +1430,7 @@ struct stage_sfx_2 {
 #endif
 } PC_SCRIPT_BE;
 struct stage_sfx_3 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 x3_b0_7 : 8;
     u32 x2_b0_7 : 8;
     u32 x0_b0_15 : 16;
@@ -1416,7 +1441,7 @@ struct stage_sfx_3 {
 #endif
 } PC_SCRIPT_BE;
 struct footstep_fx_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 x3_b0_7 : 8;
     u32 x2_b0_7 : 8;
     u32 x1_b7 : 1;
@@ -1433,7 +1458,7 @@ struct footstep_fx_0 {
 #endif
 } PC_SCRIPT_BE;
 struct unk_fx_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 x3_b0_7 : 8;
     u32 x2_b0_7 : 8;
     u32 x1_b0_7 : 8;
@@ -1448,7 +1473,7 @@ struct unk_fx_0 {
 #endif
 } PC_SCRIPT_BE;
 struct smash_charge_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 charge_rate : 16;
     u32 charge_frames : 10;
     u32 opcode : 6;
@@ -1459,7 +1484,7 @@ struct smash_charge_0 {
 #endif
 } PC_SCRIPT_BE;
 struct smash_charge_1 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 x1_b0_23 : 24;
     u32 color_anim : 8;
 #else
@@ -1468,7 +1493,7 @@ struct smash_charge_1 {
 #endif
 } PC_SCRIPT_BE;
 struct wind_fx_0 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     u32 bone : 8;
     u32 x0_b6_17 : 18;
     u32 opcode : 6;
@@ -1479,7 +1504,7 @@ struct wind_fx_0 {
 #endif
 } PC_SCRIPT_BE;
 struct wind_fx_1 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s16 x : 16;
     s16 timer : 16;
 #else
@@ -1488,7 +1513,7 @@ struct wind_fx_1 {
 #endif
 } PC_SCRIPT_BE;
 struct wind_fx_2 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s16 mag : 16;
     s16 y : 16;
 #else
@@ -1497,7 +1522,7 @@ struct wind_fx_2 {
 #endif
 } PC_SCRIPT_BE;
 struct wind_fx_3 {
-#if defined(BUILD_TARGET_PC)
+#if defined(PC_SCRIPT_INPLACE)
     s16 decay : 16;
     s16 angle : 16;
 #else
