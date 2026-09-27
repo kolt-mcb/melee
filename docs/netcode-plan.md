@@ -668,11 +668,26 @@ wire compares what arrives in time, and that was 82%.
 
 **The cost is now the problem, as expected.** Copying the archives puts the
 snapshot at 22.6 MB and 3.09 ms to take, and a rollback match on this machine
-(both sides on one CPU) runs at about **50 fps against 59 before**. The fix is
-not to stop copying them -- that is the desync -- but to copy only the objects
-`pc_script_prepare` has actually swapped, which the marks already record. That is
-the next piece of work, and until it is done M4's hardware will be running a
-port that is ten frames a second slower than it needs to be.
+(both sides on one CPU) runs at about **50 fps against 59 before**.
+
+Two attempts at getting the cost back have failed, and both are worth recording
+because the obvious argument for each is wrong:
+
+- **Un-swap instead of copy.** A byte-swap is its own inverse, so a restore can
+  put the archives back by swapping back whatever has been swapped since --
+  `pc_itconv_marks_rewind`, no copying at all. It works (91 restores, 18 objects
+  put back in one run) and the pair still desyncs: **2 of 4 runs**, same frame.
+- **Restore through the layout the take used.** The restore recomputed the hole
+  list from the archive list *as it then was*, so an archive registering between
+  take and restore moved the boundaries and the restore skipped bytes the take had
+  copied. That is a real bug and it is fixed -- the layout travels in the
+  snapshot now -- but it is not this one either.
+
+So something in archive memory has to be rewound that is neither the swap state
+nor a boundary mistake, and `MELEE_ARCHWATCH=1` says nothing writes there but the
+swaps. One of those two statements is incomplete, and finding out which is the
+next piece of work. Until then the archives are copied, and M4's hardware runs a
+port ten frames a second slower than it needs to be.
 
 Two smaller things the acceptance turned up, both in the rig rather than the
 netcode: a side whose peer has exited keeps playing alone and then wedges in a

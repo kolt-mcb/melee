@@ -77,6 +77,7 @@ extern int pc_itconv_arch_at(int i, const unsigned char** base,
 extern unsigned long pc_itconv_marks_size(void);
 extern void pc_itconv_marks_save(void* out);
 extern void pc_itconv_marks_restore(const void* in, unsigned long len);
+extern void pc_itconv_marks_rewind(const void* in, unsigned long len);
 extern unsigned long pc_lowmem_state_size(void);
 extern void pc_lowmem_state_save(void* out);
 extern void pc_lowmem_state_restore(const void* in);
@@ -595,6 +596,17 @@ typedef struct Snapshot {
     unsigned char* marks;
     unsigned long marks_cap;
     unsigned long marks_len;
+    /* The holes as they stood when this was taken.
+     *
+     * The restore used to recompute them from the archive list *as it is now*,
+     * which is only the same list if nothing registered or freed an archive in
+     * between. When something did, the two layouts disagreed and the restore
+     * skipped a range the take had copied -- so that memory kept its current
+     * value instead of the snapshot's, which is a drift rather than a crash and
+     * looks exactly like a counter that is one or two out. A snapshot has to be
+     * restored through the layout it was taken with. */
+    SnapHole holes[SNAP_HOLES];
+    int nholes;
 } Snapshot;
 
 static int snap_enabled(void)
@@ -1007,6 +1019,11 @@ SNAP_NO_ASAN static int snapshot_take(Snapshot* s, s32 frame)
             dst->len = cur.len;
             if (i == SNAP_R_HEAP) {
                 snap_holes_build(&cur);
+                /* Kept, so the restore uses this layout rather than whatever the
+                 * archive list looks like by then. */
+                memcpy(s->holes, snap_holes,
+                       sizeof(snap_holes[0]) * (size_t) snap_nholes);
+                s->nholes = snap_nholes;
             } else {
                 snap_nholes = 0;
                 snap_hole_bytes = 0;
@@ -1111,13 +1128,14 @@ SNAP_NO_ASAN static int snapshot_restore(const Snapshot* s)
          * Only the pages written since the snapshot need putting back: every
          * other page still holds what was copied into the store. */
         if (i == SNAP_R_HEAP) {
-            SnapRegion cur2;
-            region_describe(SNAP_R_HEAP, &cur2);
-            /* Against the *stored* length: the region may have grown, and the
-             * holes are offsets into what was captured. */
-            cur2.len = src->len;
-            cur2.addr = src->addr;
-            snap_holes_build(&cur2);
+            /* The layout this snapshot was taken with, not a fresh one: see the
+             * comment on Snapshot::holes. Recomputing it here was a real bug --
+             * an archive registered between the take and the restore moved the
+             * boundaries, and the restore then skipped bytes the take had
+             * copied. */
+            memcpy(snap_holes, s->holes,
+                   sizeof(snap_holes[0]) * (size_t) s->nholes);
+            snap_nholes = s->nholes;
         } else {
             snap_nholes = 0;
             snap_hole_bytes = 0;
@@ -1147,9 +1165,17 @@ SNAP_NO_ASAN static int snapshot_restore(const Snapshot* s)
      * the default -- neither are these, and the two stay agreeing because a
      * swap happens once per object ever. Restoring one without the other is the
      * bug this milestone opened with, in whichever direction. */
-    if (!snap_holes_on() && (snap_skip() & 16) == 0 && s->marks != NULL &&
-        s->marks_len != 0) {
-        pc_itconv_marks_restore(s->marks, s->marks_len);
+    if ((snap_skip() & 16) == 0 && s->marks != NULL && s->marks_len != 0) {
+        if (snap_holes_on()) {
+            /* The archives were not copied, so their words are still whatever
+             * the passes since the snapshot left them as. Un-swap what has been
+             * swapped since and then take the marks back: a byte-swap is its own
+             * inverse, so the archives end up as they were without 8 MB of
+             * copying. */
+            pc_itconv_marks_rewind(s->marks, s->marks_len);
+        } else {
+            pc_itconv_marks_restore(s->marks, s->marks_len);
+        }
     }
     {
         int k;
@@ -1811,7 +1837,23 @@ static void snap_chunkdump_maybe(s32 frame)
             for (j = 0; j < n; j++) {
                 int reg = -1;
                 unsigned char* a = snap_wide_page_addr(j, &reg);
-                fprintf(o, "%d %p %08X\n", (int) frame, (void*) a, buf[j]);
+                /* A flag for "inside an archive", i.e. inside a hole the
+                 * snapshot leaves out. Without it a chunk that differs between
+                 * two processes says nothing about whether the holes are the
+                 * reason. */
+                const unsigned char* ab;
+                unsigned long al;
+                int t = 0;
+                int in_arch = 0;
+                while (pc_itconv_arch_at(t, &ab, &al)) {
+                    if (a >= ab && a < ab + al) {
+                        in_arch = 1;
+                        break;
+                    }
+                    t++;
+                }
+                fprintf(o, "%d %p %08X %c\n", (int) frame, (void*) a, buf[j],
+                        in_arch ? 'A' : '-');
             }
             fflush(o);
             free(buf);

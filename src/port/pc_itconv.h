@@ -71,6 +71,11 @@ int pc_itconv_arch_at(int i, const unsigned char** base, unsigned long* len);
 unsigned long pc_itconv_marks_size(void);
 void pc_itconv_marks_save(void* out);
 void pc_itconv_marks_restore(const void* in, unsigned long len);
+/* The same, for a snapshot that did not copy the archives: un-swap whatever has
+ * been byte-swapped since, then restore the marks. A byte-swap is its own
+ * inverse, so this puts megabytes of loaded file data back without having copied
+ * any of it. See the comment on the definition. */
+void pc_itconv_marks_rewind(const void* in, unsigned long len);
 
 /* Look an Article up in one of the ItCo tables, converting it on first use.
  * Tables this file does not own (the stage item table) are read through

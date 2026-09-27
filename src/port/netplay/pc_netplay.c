@@ -2420,6 +2420,15 @@ void pc_net_pads(GCPadStatus* pads)
                 fprintf(stderr, "[RB]   checked: %u frames hashed, %u of them "
                                 "compared against the peer's\n",
                         net_hash_taken, net_hash_matched);
+                {
+                    /* How much work the archives' swap state is actually making
+                     * a restore do. If this stays at zero, the swap state was
+                     * never what a restore had to put back. */
+                    extern unsigned long pc_itconv_unswapped, pc_itconv_rewinds;
+                    fprintf(stderr, "[RB]   archives: %lu restores, %lu objects "
+                                    "un-swapped\n",
+                            pc_itconv_rewinds, pc_itconv_unswapped);
+                }
                 fflush(stderr);
             }
         }

@@ -427,6 +427,117 @@ void pc_itconv_marks_restore(const void* in, unsigned long len)
     }
 }
 
+/* The extent of the object whose first word is at `off` within archive `a`. */
+static void arch_object_at(const struct arch* a, u32 off, u32* start, u32* end)
+{
+    unsigned lo = 0, hi = a->nbounds;
+    while (lo < hi) {
+        unsigned mid = (lo + hi) / 2;
+        if (a->bounds[mid] <= off) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    *start = (lo > 0) ? a->bounds[lo - 1] : 0;
+    *end = (lo < a->nbounds) ? a->bounds[lo] : (u32) a->len;
+}
+
+/* Put the archives back the way they were when `in` was saved, by un-swapping
+ * whatever has been swapped since, and then restoring the marks.
+ *
+ * This is what lets a rollback leave the archives out of its snapshot. They are
+ * megabytes of loaded file data, written at load and read afterwards, so copying
+ * them every frame is the largest waste in the region list -- but they are not
+ * read-only, because pc_script_prepare byte-swaps an object in place the first
+ * time an opcode in it is dispatched. Left alone, *which* objects are in host
+ * order then depends on which frames a side happened to re-simulate rather than
+ * on the frame, and two machines that rewound differently read the same archive
+ * words two different ways. That is a desync, and it took a pair of ports and a
+ * chunk-by-chunk memory diff to see, because inside one process it is perfectly
+ * self-consistent.
+ *
+ * Copying them fixes it and costs 8 MB a frame. This costs nothing, because a
+ * byte-swap is its own inverse: swap back the objects whose bit is set now and
+ * was not then, and the archives are as they were without having been copied.
+ * Usually that is no objects at all; a frame that dispatches a script in a new
+ * object for the first time makes it one. */
+unsigned long pc_itconv_unswapped;   /* objects put back, for the diagnostics */
+unsigned long pc_itconv_rewinds;
+
+void pc_itconv_marks_rewind(const void* in, unsigned long len)
+{
+    const unsigned char* p = (const unsigned char*) in;
+    const unsigned char* end = p + len;
+    struct pc_marks_hdr h;
+    unsigned long k;
+    int i;
+    if (p == NULL || len < sizeof(h)) {
+        return;
+    }
+    pc_itconv_rewinds++;
+    memcpy(&h, p, sizeof(h));
+    p += sizeof(h);
+    /* Every archive's stored bitmap, matched by base address. An archive with no
+     * record was swapped for the first time after the snapshot, so all of its
+     * marked objects have to go back. */
+    for (i = 0; i < g_arch_n; i++) {
+        struct arch* a = &g_arch[i];
+        const unsigned char* stored = NULL;
+        const unsigned char* q = p;
+        unsigned long j;
+        if (a->swapped == NULL) {
+            continue;
+        }
+        for (k = 0; k < h.count; k++) {
+            struct pc_marks_rec r;
+            if ((unsigned long) (end - q) < sizeof(r)) {
+                break;
+            }
+            memcpy(&r, q, sizeof(r));
+            q += sizeof(r);
+            if ((unsigned long) (end - q) < r.bytes) {
+                break;
+            }
+            if (r.base == a->base && r.bytes == arch_mark_bytes(a)) {
+                stored = q;
+                break;
+            }
+            q += r.bytes;
+        }
+        for (j = 0; j < arch_mark_bytes(a); j++) {
+            unsigned char now = a->swapped[j];
+            unsigned char was = (stored != NULL) ? stored[j] : 0;
+            unsigned char extra = (unsigned char) (now & ~was);
+            int bit;
+            if (extra == 0) {
+                continue;
+            }
+            for (bit = 0; bit < 8; bit++) {
+                u32 o_start, o_end, off;
+                unsigned char* w;
+                if ((extra & (1u << bit)) == 0) {
+                    continue;
+                }
+                off = (u32) (((j * 8) + (unsigned) bit) * 4);
+                if (off >= (u32) a->len) {
+                    continue;
+                }
+                arch_object_at(a, off, &o_start, &o_end);
+                pc_itconv_unswapped++;
+                for (w = a->base + o_start; w + 4 <= a->base + o_end; w += 4) {
+                    unsigned char t0 = w[0], t1 = w[1];
+                    w[0] = w[3];
+                    w[1] = w[2];
+                    w[2] = t1;
+                    w[3] = t0;
+                }
+            }
+        }
+    }
+    pc_itconv_marks_restore(in, len);
+}
+
 /* Enumerate the registered archives, so the rollback snapshot can measure -- and
  * eventually leave out -- the loaded file data inside the game heap. An archive
  * is a DAT read off the disc: megabytes of it, written when it loads and read for
