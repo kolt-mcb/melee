@@ -1500,7 +1500,15 @@ static void hash_compare(int slot, s32 frame, u32 peer)
          * the wire, so nothing here can say which field differs -- but both
          * sides print theirs on the same frame, and diffing the two logs does.
          * Cheaper than adding fields to the protocol, and it does not change
-         * what is compared. */
+         * what is compared.
+         *
+         * These are this frame's, read now, which is not the same as the state
+         * of the frame that disagreed: a checksum compared on the peer's hash
+         * arriving is compared some frames later, and what gets printed is then
+         * a divergence several frames grown. That made every report look far
+         * larger than the difference that started it. MELEE_FIELDRING=1 keeps
+         * the last 32 frames' fields in memory at no per-frame I/O cost, and the
+         * dump below is of the frames around the one that actually disagreed. */
         PcStateField f[64];
         int n = pc_state_fields(f, 64);
         int k;
@@ -1508,6 +1516,15 @@ static void hash_compare(int slot, s32 frame, u32 peer)
             fprintf(stderr, "[NET]   field slot %d %-16s %08X\n", f[k].slot,
                     f[k].name, f[k].val);
         }
+    }
+    {
+        extern void pc_state_fields_dump(int from);
+        extern void pc_snapshot_chunkring_dump(s32 from, s32 to);
+        fprintf(stderr, "[NET] the frames leading up to it:\n");
+        pc_state_fields_dump((int) frame - 8);
+        /* And the memory itself, chunk by chunk, if it was being recorded:
+         * diffing the two sides' dumps names the bytes. */
+        pc_snapshot_chunkring_dump(frame - 5, frame);
     }
     fflush(stderr);
 }

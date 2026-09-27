@@ -3223,6 +3223,17 @@ static void pc_frame_hidden_begin(void)
 }
 #endif
 
+/* How many render passes have run, and how many of those were for a frame nobody
+ * sees. Each match frame has to get exactly one pass on both sides of a netplay
+ * match, because the pass draws from the game's RNG -- particle emission does --
+ * and a side that renders a frame twice, or not at all, has drawn a different
+ * number of random numbers by the next frame. That moves the CPU players'
+ * decisions, and it reads as one fighter landing a heavy hit the other never saw.
+ * Logged per simulated frame (MELEE_SIMHASHLOG) so the two sides' counts can be
+ * diffed rather than reasoned about. */
+unsigned pc_render_passes;
+unsigned pc_render_passes_hidden;
+
 __attribute__((weak)) void port_render_frame_begin(void)
 {
 void render_clear(void);
@@ -3233,7 +3244,9 @@ void render_clear(void);
     
 #if BUILD_NETPLAY
     pc_frame_hidden_begin();
+    pc_render_passes++;
     if (pc_frame_hidden) {
+        pc_render_passes_hidden++;
         return;
     }
 #endif

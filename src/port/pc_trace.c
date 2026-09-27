@@ -1931,6 +1931,65 @@ static void pc_trace_jointhash(void)
             (unsigned) gm_GetFrameCount(), h);
 }
 
+/* The last few frames' fields, kept in memory and printed only if something goes
+ * wrong.
+ *
+ * Writing them to a log every frame is what a diagnostic normally does, and here
+ * it destroys what it is measuring: the divergence being chased is sensitive to
+ * how long a frame takes -- it decides which frames have to guess -- and a run
+ * with a field dump per frame stopped desyncing at all. So the fields go into a
+ * ring at no I/O cost, and the desync path (src/port/netplay/pc_netplay.c) asks
+ * for them once it knows which frame to ask about. MELEE_FIELDRING=1 turns it on.
+ *
+ * The ring is indexed by frame, so a frame re-simulated by a rollback overwrites
+ * its own slot and what is kept is that frame's final state, which is the one
+ * worth comparing. */
+#define PC_FIELDRING 32
+#define PC_FIELDRING_MAX 64
+static PcStateField pc_fr_val[PC_FIELDRING][PC_FIELDRING_MAX];
+static int pc_fr_n[PC_FIELDRING];
+static s32 pc_fr_frame[PC_FIELDRING];
+static int pc_fieldring_on;
+
+void pc_state_fields_mark(int frame)
+{
+    int i;
+    if (pc_fieldring_on == 0) {
+        const char* e = getenv("MELEE_FIELDRING");
+        pc_fieldring_on = (e != NULL && *e != '\0') ? 1 : -1;
+    }
+    if (pc_fieldring_on < 0 || frame <= 0) {
+        return;
+    }
+    i = frame & (PC_FIELDRING - 1);
+    pc_fr_n[i] = pc_state_fields(pc_fr_val[i], PC_FIELDRING_MAX);
+    pc_fr_frame[i] = frame;
+}
+
+/* Every field of every frame still in the ring at or after `from`, named, in
+ * frame order. Both sides print theirs and the two are diffed. */
+void pc_state_fields_dump(int from)
+{
+    s32 f;
+    if (pc_fieldring_on < 0) {
+        fprintf(stderr, "[FIELDS] not recording; set MELEE_FIELDRING=1\n");
+        return;
+    }
+    for (f = from; f < from + PC_FIELDRING; f++) {
+        int i = f & (PC_FIELDRING - 1);
+        int k;
+        if (pc_fr_frame[i] != f) {
+            continue;
+        }
+        for (k = 0; k < pc_fr_n[i]; k++) {
+            fprintf(stderr, "[FIELDS] %d %d %s %08X\n", (int) f,
+                    pc_fr_val[i][k].slot, pc_fr_val[i][k].name,
+                    pc_fr_val[i][k].val);
+        }
+    }
+    fflush(stderr);
+}
+
 /* The same number, but once per *simulated* frame rather than once per
  * displayed one, and with no requirement that the frame counter go forwards.
  *
@@ -1959,7 +2018,39 @@ void pc_state_hash_log_frame(int frame)
     if (!want) {
         return;
     }
-    fprintf(out != NULL ? out : stderr, "%d %08X\n", frame, pc_state_hash());
+    {
+        /* MELEE_SIMHASHLOG_MEM=1 adds a checksum of every region the snapshot
+         * covers. Slow -- it reads the whole of the game's memory -- but it is
+         * the only number here that cannot miss a divergence by not having
+         * looked at the field that moved. */
+        static int mem = -1;
+        if (mem < 0) {
+            const char* e = getenv("MELEE_SIMHASHLOG_MEM");
+            mem = (e != NULL && *e != '\0');
+        }
+        if (mem) {
+            /* Per region, not one number: see pc_snapshot_region_checksums. */
+            extern int pc_snapshot_region_checksums(u32* out, int max);
+            u32 rc[32];
+            int rn = pc_snapshot_region_checksums(rc, 32);
+            int k;
+            FILE* o = out != NULL ? out : stderr;
+            fprintf(o, "%d %08X", frame, pc_state_hash());
+            for (k = 0; k < rn; k++) {
+                fprintf(o, " %08X", rc[k]);
+            }
+            fprintf(o, "\n");
+            (void) 0;
+        } else {
+            /* The render-pass counts ride along: they cost nothing and they are
+             * the first thing to check when two sides disagree, because the pass
+             * draws from the game's RNG. */
+            extern unsigned pc_render_passes, pc_render_passes_hidden;
+            fprintf(out != NULL ? out : stderr, "%d %08X %u %u\n", frame,
+                    pc_state_hash(), pc_render_passes,
+                    pc_render_passes_hidden);
+        }
+    }
     /* No flush per line. The desync this log exists to find is sensitive to how
      * long a frame takes -- with a field dump and a flush on every frame it
      * stopped happening at all, which is the most misleading result a diagnostic

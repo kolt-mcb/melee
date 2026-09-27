@@ -511,44 +511,132 @@ mistake -- a check that cannot fail:
   rollback path only for confirmed frames, since a frame simulated against a
   guess has a state about to be thrown away.
 
-**What to do next, and one thing already ruled out.** The desync report now
-prints this side's traced fields, so diffing the two logs names the field rather
-than the frame. It says the particle system, which is where every hard divergence
-in this milestone has ended up.
+**Where the desync is, as of the impairment work.** Five things were wrong with
+the way this was being measured, and one thing is wrong with the port. They are
+worth separating, because four of the five made the measurement lie.
 
-The first suspicion was that re-simulating a *ragged* range is not faithful in
-some case the self-check does not reach -- the check rewinds a fixed depth on a
-fixed cadence, while rollback rewinds whatever the link produces and the two sides
-rewind different ranges. `MELEE_NET_SYNCTEST_DEPTH_MAX=<n>` settles that without
-any networking: each rewind picks a depth in [1, n], deterministically so a
-failure reproduces. At a maximum of eight, both CPU lineups run **1600 rewinds and
-7164 frames compared, clean**. Ragged ranges replay exactly as regular ones do, so
-that is not it.
+*The check was looking at a thirtieth of the match.* A hash went out every tenth
+frame, and the comparison only landed when the peer's arrived before this side
+reached that frame -- which under rollback it does not, because the two sides no
+longer step together. Measured: **one** frame compared in three hundred. The
+count of frames hashed against frames actually compared is now printed every two
+seconds, `MELEE_NET_HASH_EVERY=1` sends every frame's, and a verification run
+compares 93% of frames rather than 0.3%.
 
-Which leaves the difference that actually distinguishes rollback from the
-self-check: a correction re-simulates with *different* inputs, on purpose, and the
-two sides only converge if every frame that used a guess is re-simulated with the
-same real inputs on both. The next places to look, in order:
+*It never looked at the frames rollback touches.* Only frames that had not
+guessed were hashed, which leaves the one class of frame the machinery acts on as
+the one class never checked. A corrected frame is not speculative -- a correction
+only fires once every frame in the run has its real input -- so the replay hashes
+what it rebuilds now, keyed off the run the netplay layer asked for. With that,
+the rule about never rewinding past a published hash turned out to be off by one:
+a hash labelled F is the state F-1 left, which is exactly what the snapshot at F
+restores.
 
-- Whether a side ever hashes a frame it later changes. The argument that it cannot
-  is that a correction only ever rewinds to a frame after the last one hashed,
-  because hashing requires no outstanding guess -- worth checking rather than
-  trusting, by recording the frame each hash was taken at and asserting no rewind
-  reaches it.
-- `hash_compare` stores a peer hash that arrives early in a ring indexed by
-  `frame & (NET_HASH_RING - 1)`, and compares it when this side reaches that
-  frame. Under rollback the two sides drift further apart than the barrier ever
-  let them, so that ring is a candidate for comparing two different frames'
-  values.
+*The self-check's comparison was as narrow as the wire's.* Fifteen fields per
+player, so state restored wrongly but not feeding one of them stays invisible
+until it eventually does. `MELEE_NET_SYNCTEST_WIDE=1` compares **every byte the
+snapshot covers**, per region, and on failure narrows to the differing 64 bytes,
+which is a symbol away from a variable name. It immediately found a real bug (see
+below) and, once that was fixed, established something the narrow check never
+could: a replay reproduces the game's memory exactly, byte for byte, except for
+`HSD_PerfLastStat` and `start_time` -- wall-clock measurements that feed a debug
+display. **The restore is faithful.**
 
-Two other things the runs turned up, both needing work before the acceptance
-below can be attempted: a side that falls behind can make its peer wait long
-enough to trip the watchdog, which is what frame-advantage regulation exists for
-(the side that is ahead gives up a little time so the two stay close); and there
-is no loss or jitter injection yet, so "5% loss and 100 ms of jitter" has not been
-tried.
+*The impairment injector broke the handshake.* A held packet came back without
+its sender and fell back to `net_peer[0]`, which on the host is still zero when
+the delayed packet is the *hello*: the host learned that its peer lived at
+0.0.0.0:0 and both sides waited for each other until the watchdog fired. That
+read as "rollback cannot survive jitter". It is not. Alongside it, the wait for a
+full window could not time out -- it paced retransmits off a variable it reset
+every 16 ms and then tested the overall bound against the same variable -- so a
+peer that really had stopped sending span there instead of reporting itself.
 
+*The two processes were not comparable.* The low-memory pool is mmap'd at the
+first address a scan finds free, which depends on each process's own layout, so
+two copies of the port routinely hold it 256 MB apart -- and every pointer that
+reached a field dump then differed for the whole match. The rig runs both sides
+with address randomisation off, and the checksum records the generator-list head
+as a pool offset rather than a host pointer.
 
+**The bug that was real: particle time ran twice on every re-simulated frame.** A
+frame a rollback redoes is rendered in "discard" mode -- the callbacks run,
+because some of them write state the simulation reads, and the geometry is thrown
+away. One of those callbacks *is* the particle clock. Underneath it the same
+advance was being made again by hand, a line written for "skip" mode where the
+pass does not run at all. So particle time advanced twice per caught-up frame.
+The first rewind at a match entry came back holding 35 particle generators where
+the run it was redoing had 1; four hundred frames later the generator list had a
+cycle in it and the peer walking it hung inside `efLib_DestroyAll`. Clean now at
+depth 4 in the default mode, and the pair survives 600 frames of 5% loss and 100
+ms of jitter with 49 corrections and no desync.
+
+**What still fails, and exactly where it is.** A full 7200-frame match under 5%
+loss and 100 ms of jitter desyncs at match frame 553, in roughly half of runs.
+The instruments now say a great deal about it:
+
+- `MELEE_SIMHASHLOG` writes one line per *simulated* frame, every pass, so the
+  last line for a frame is that frame's final state. `MELEE_HASHLOG` cannot do
+  this -- it is written per displayed frame and drops any frame whose counter
+  went backwards, which is what a rewind is -- and diffing two sides' logs names
+  the first frame that really differs rather than the first frame a sample landed
+  on. It says 553, consistently, across every run that fails.
+- Comparing the two processes' memory 64 bytes at a time, at frames chosen in
+  advance, gives a noise floor of about 2% of chunks (render state each side has
+  touched a different number of times, padding nobody wrote) which is **flat from
+  frame 30 to frame 540**. The two simulations do not drift before then. At 553 it
+  jumps to 634 chunks beyond the floor.
+- Between 542 and 552 the only chunks differing beyond the floor are audio:
+  `__AXVPB`, `__AXPB`, `__AXStackHead`, `AXDriver_*`, `hsd_SynthSFXNodes`. The
+  mixer is driven by the wall clock and pumped once per *displayed* frame, so the
+  two sides' audio state is not expected to agree and this much is honest.
+- Diffing the random-number *call sites* of each frame's final pass
+  (`MELEE_RNGAT=<lo>-<hi>`, filtered by the displayed-frame counter so a replayed
+  frame is not counted twice) puts the parting inside frame 552: the host makes 11
+  draws, all in `particle.c`; the guest makes 54, beginning with
+  `efAsync_Dispatch`, `ftColl_80078538` and `grOnett_801E5030`. The guest sees a
+  fighter collision, a hit effect and Onett's traffic; the host sees none of it.
+
+With the game heap in the scan as well (`MELEE_CHUNKHEAP=1`; seventeen
+megabytes, where the fighters live), 364,590 chunks compare and entering frame
+552 exactly **three** differ beyond the floor. Two of them are archive objects
+that one side has byte-swapped and the other has not. The third is a `Ground`
+struct holding an Onett callback and a counter two apart.
+
+**Which is the bug: the archives are left out of the snapshot, and that is only
+safe if nothing about them depends on the history of passes.** Something does.
+An archive is not *written* during play -- measured rather than assumed, with a
+watcher that keeps a copy of all 21 of them and reports any change that is not a
+four-byte reversal: **391 byte-swaps absorbed over a match and not one other
+write**. But it *is* byte-swapped in place, lazily, the first time an opcode in
+one of its objects is dispatched, and with the archives left out nothing rewinds
+that. Which objects are in host order therefore depends on which frames each side
+happened to re-simulate, not on the frame. Inside one process that is
+self-consistent -- which is exactly why the single-process check replays a whole
+match clean, and why leaving the archives out looked verified. Between two
+processes it is not.
+
+Measured on the pair, 1100 frames at 5% loss and 100 ms of jitter: archives left
+out desyncs in about half of runs, always at match frame 553; **archives copied
+ran four for four clean**. So they are copied by default now, and
+`MELEE_NET_SNAP_HOLES=1` leaves them out again for measuring. The cost is the
+thing to come back to -- 22.6 MB and 3.09 ms to take, against 14.6 MB and 2.18 ms
+-- and the cheaper fix is to copy only the objects that have actually been
+swapped, which the marks already know.
+
+> A savestate check that runs in one process cannot find state whose value
+> depends on the history of passes rather than on the frame. It is
+> self-consistent by construction. Only two machines that rewound differently can
+> tell, which is an argument for the pair rig being part of the check and not
+> just the demo.
+
+One thing already ruled out, with evidence rather than argument: that
+re-simulating a *ragged* range is unfaithful in a way the fixed-cadence check
+misses. `MELEE_NET_SYNCTEST_DEPTH_MAX=<n>` picks a depth in [1, n] per rewind,
+deterministically, and at eight both CPU lineups run 1600 rewinds and 7164 frames
+compared, clean. So is the hash ring: both sides of the comparison carry the
+frame number they belong to, so a stale slot can never be mistaken for the
+current frame -- it can only cost a comparison, which the coverage count now
+measures.
 
 Two instances on one machine, artificial delay and loss in between.
 

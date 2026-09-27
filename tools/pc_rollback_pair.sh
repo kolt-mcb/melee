@@ -78,6 +78,14 @@ COMMON="MELEE_NET_ROLLBACK=1 MELEE_NET_DELAY=$DELAY
 # pass, so the last line for a frame is that frame's final state. The wire
 # checksum only samples, and a rollback desync can start well before the first
 # frame a sample lands on; diffing these two files names the frame exactly.
+# MELEE_RB_CHUNKDUMP=<frames> dumps each side's memory chunk table at those match
+# frames, to its own file, for diffing across the two processes.
+CDH= CDG=
+if [ -n "${MELEE_RB_CHUNKDUMP:-}" ]; then
+    CDH="MELEE_CHUNKDUMP=$MELEE_RB_CHUNKDUMP MELEE_CHUNKDUMP_FILE=$OUT/$TAG-h.chunks"
+    CDG="MELEE_CHUNKDUMP=$MELEE_RB_CHUNKDUMP MELEE_CHUNKDUMP_FILE=$OUT/$TAG-g.chunks"
+fi
+
 SIMH= SIMG=
 if [ -n "${MELEE_RB_SIMHASH:-}" ]; then
     SIMH="MELEE_SIMHASHLOG=$OUT/$TAG-h.simhash"
@@ -85,11 +93,11 @@ if [ -n "${MELEE_RB_SIMHASH:-}" ]; then
 fi
 
 echo "rollback pair: delay=$DELAY window=$WINDOW loss=${LOSS}% jitter=${JITTER}ms frames=$FRAMES"
-$RUN env $COMMON $SIMH MELEE_NET=host MELEE_NET_PORT=$PORT MELEE_NET_SLOT=0 \
-    timeout ${MELEE_RB_TIMEOUT:-500} ./build/pc/melee-pc > "$OUT/$TAG-h.log" 2>&1 &
+$RUN env $COMMON $SIMH $CDH MELEE_NET=host MELEE_NET_PORT=$PORT MELEE_NET_SLOT=0 \
+    timeout -k 5 ${MELEE_RB_TIMEOUT:-500} ./build/pc/melee-pc > "$OUT/$TAG-h.log" 2>&1 &
 sleep 3
-$RUN env $COMMON $SIMG MELEE_NET=127.0.0.1:$PORT MELEE_NET_SLOT=1 \
-    timeout ${MELEE_RB_TIMEOUT:-500} ./build/pc/melee-pc > "$OUT/$TAG-g.log" 2>&1 &
+$RUN env $COMMON $SIMG $CDG MELEE_NET=127.0.0.1:$PORT MELEE_NET_SLOT=1 \
+    timeout -k 5 ${MELEE_RB_TIMEOUT:-500} ./build/pc/melee-pc > "$OUT/$TAG-g.log" 2>&1 &
 wait
 
 rc=0

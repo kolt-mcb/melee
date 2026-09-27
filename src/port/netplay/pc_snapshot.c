@@ -383,6 +383,8 @@ static int region_class(int i)
 }
 
 static void region_describe(int i, SnapRegion* out);
+int pc_snapshot_region_checksums(u32* out, int max);
+const char* pc_snapshot_region_name(int i);
 
 /* ---- holes: the loaded file data inside the game heap --------------------
  *
@@ -416,9 +418,31 @@ static int snap_holes_on(void)
 {
     static int on = -1;
     if (on < 0) {
-        /* On by default; MELEE_NET_SYNCTEST_WHOLE_HEAP=1 copies the archives
-         * too, which is how "is this safe?" gets answered by running. */
-        on = getenv("MELEE_NET_SYNCTEST_WHOLE_HEAP") == NULL;
+        /* OFF by default now: the archives are copied and rewound like anything
+         * else, and MELEE_NET_SNAP_HOLES=1 leaves them out again for measuring.
+         *
+         * Leaving them out was verified by a full match on every self-check
+         * case, and that verification could not have found what is wrong with
+         * it. An archive is not written during play -- measured, with
+         * MELEE_ARCHWATCH=1: 21 archives, 391 byte-swaps absorbed over a match
+         * and not one other write -- but it *is* byte-swapped in place, lazily,
+         * the first time an opcode in one of its objects is dispatched. With the
+         * archives left out, nothing rewinds that: which objects are in host
+         * order depends on the history of passes over the frames, not on the
+         * frame. Inside one process that is self-consistent, which is exactly
+         * why a single-process check replays a whole match clean. Between two
+         * processes it is not: two sides that re-simulate different frames swap
+         * different objects at different frames and read the same archive words
+         * two different ways.
+         *
+         * Measured on the pair, 1100 frames under 5% loss and 100 ms of jitter:
+         * archives left out desyncs in about half of runs, at match frame 553;
+         * archives copied ran four for four clean. The cost is about 8 MB more
+         * per snapshot, and the cheaper fix -- copying only the objects that
+         * have actually been swapped, which the marks already know -- is the
+         * open work. Correct first. */
+        const char* e = getenv("MELEE_NET_SNAP_HOLES");
+        on = (e != NULL && *e != '\0' && strcmp(e, "0") != 0);
     }
     return on;
 }
@@ -852,6 +876,76 @@ static void region_describe(int i, SnapRegion* out)
 #else
 #define SNAP_NO_ASAN
 #endif
+
+/* A checksum of every region the snapshot copies -- that is, of all the memory a
+ * rollback is responsible for putting back.
+ *
+ * The state checksum the netplay layer compares is fifteen fields per player. It
+ * is the right size for a per-frame wire message and far too narrow to find a
+ * divergence: anything that differs outside those fields -- a hitbox, hitlag, an
+ * attack's state -- stays invisible until it produces one of them, and then it
+ * looks as though thirty per cent of damage appeared from nowhere in a single
+ * frame. This covers everything, so the frame it first differs on is the frame
+ * the two simulations actually parted. Too expensive for the wire, which is why
+ * it goes in the log (MELEE_SIMHASHLOG_MEM=1) and is diffed offline. */
+SNAP_NO_ASAN static u32 region_checksum(int i)
+{
+    SnapRegion cur;
+    unsigned long off;
+    u32 h = 2166136261u;
+    region_describe(i, &cur);
+    if (cur.addr == NULL || cur.len == 0) {
+        return 0;
+    }
+    /* The length goes in as well, so a region that grew cannot hash the same as
+     * one that did not. */
+    h = (h ^ (u32) cur.len) * 16777619u;
+    for (off = 0; off + 4 <= cur.len; off += 4) {
+        u32 w;
+        memcpy(&w, cur.addr + off, 4);
+        h = (h ^ w) * 16777619u;
+    }
+    return h;
+}
+
+SNAP_NO_ASAN u32 pc_snapshot_state_checksum(void)
+{
+    u32 h = 2166136261u;
+    int i;
+    for (i = 0; i < SNAP_REGIONS; i++) {
+        h = (h ^ region_checksum(i)) * 16777619u;
+    }
+    return h;
+}
+
+/* One checksum per region, for the log. A single number over all of them is too
+ * blunt to use: two processes differ somewhere in the game's memory from the
+ * first frame -- the load takes different lengths, the mixer is at a different
+ * place, padding was never written -- so the combined number differs from frame
+ * 1 in a run whose simulation does not part until frame 553. Per region, the
+ * noisy ones can be told from the one that goes wrong. */
+int pc_snapshot_region_checksums(u32* out, int max)
+{
+    int i;
+    int n = 0;
+    for (i = 0; i < SNAP_REGIONS && n < max; i++) {
+        out[n++] = region_checksum(i);
+    }
+    return n;
+}
+
+/* Which class a region index belongs to, for reading the log back: the first
+ * four are the heaps, then one span per marker pair of .data, then of .bss. */
+const char* pc_snapshot_region_name(int i)
+{
+    if (i == SNAP_R_HEAP) return "heap";
+    if (i == SNAP_R_OBJHEAP) return "objheap";
+    if (i == SNAP_R_ARAM) return "aram";
+    if (i == SNAP_R_CONV) return "conv";
+    if (i >= SNAP_R_DATA0 && i < SNAP_R_DATA0 + SNAP_SPANS) return "data";
+    if (i >= SNAP_R_BSS0 && i < SNAP_R_BSS0 + SNAP_SPANS) return "bss";
+    return "?";
+}
 
 SNAP_NO_ASAN static int snapshot_take(Snapshot* s, s32 frame)
 {
@@ -1357,6 +1451,425 @@ static int snap_frames_compared;
  * pad-read frame F is the state this sees at G = F+1, which is why the
  * rewind-took test below is still "restored frame plus one".
  */
+/* MELEE_CHUNKRING=1 keeps the chunk checksums of the last few frames in memory,
+ * for comparing *two processes* rather than two passes of one. The netplay desync
+ * check can only say which frame the two sides stopped agreeing on; this says
+ * which sixty-four bytes, which is a symbol away from saying which variable. Both
+ * sides dump their ring when the desync fires and the two dumps are diffed.
+ *
+ * In memory, and only over the object heap and the static spans, because the
+ * fault is a race: a diagnostic that adds a millisecond to a frame changes which
+ * frames have to guess and the desync stops happening. */
+int snap_chunkring(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* s = getenv("MELEE_CHUNKRING");
+        on = (s != NULL && *s != '\0' && strcmp(s, "0") != 0);
+    }
+    return on;
+}
+
+void pc_snapshot_chunkring_mark(s32 frame);
+void pc_snapshot_chunkring_dump(s32 from, s32 to);
+
+/* MELEE_NET_SYNCTEST_WIDE=1 compares every byte the snapshot covers, per region,
+ * instead of only the fifteen fields per player the state checksum holds.
+ *
+ * Those fifteen are the right size for the wire and much too narrow for this
+ * check: state that is restored wrongly but does not feed one of them stays
+ * invisible until it eventually does, which in a real match was five hundred
+ * frames later and looked like thirty per cent of damage appearing from nowhere.
+ * Replaying the same frames from a faithful snapshot has to reproduce the memory
+ * exactly, so any region that differs here is a fault, named and at the frame it
+ * happened. Expensive -- it reads the game's whole memory twice per replayed
+ * frame -- which is why it is a flag. */
+static int snap_wide(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* s = getenv("MELEE_NET_SYNCTEST_WIDE");
+        on = (s != NULL && *s != '\0' && strcmp(s, "0") != 0);
+    }
+    return on;
+}
+
+#define SNAP_WIDE_RING 64
+static u32 snap_wide_val[SNAP_WIDE_RING][SNAP_REGIONS];
+static s32 snap_wide_frame[SNAP_WIDE_RING];
+
+/* Per 4 KB page as well as per region, for the few frames either side of a
+ * failure: the region says which part of the game's memory was not put back, and
+ * this says which page of it, which is a symbol away from saying which variable.
+ * Only the .data and .bss spans -- the heaps are hundreds of megabytes and the
+ * faults found here have all been in static storage. */
+/* 64 bytes, not 4096. A page of static storage holds dozens of unrelated
+ * variables, and in the first run of this some of them were the performance
+ * counters and the audio driver -- both driven by the wall clock, both certain to
+ * differ on a replay, and both harmless. At 64 bytes a difference names one or
+ * two symbols, which is the difference between a clue and a page of noise. */
+#define SNAP_WIDE_CHUNK 64
+#define SNAP_WIDE_PAGES 400000
+#define SNAP_WIDE_PG_RING 8
+static u32 snap_wide_pg[SNAP_WIDE_PG_RING][SNAP_WIDE_PAGES];
+static s32 snap_wide_pg_frame[SNAP_WIDE_PG_RING];
+
+/* Which regions the chunk scan covers: the object heap (a few hundred KB, and
+ * where every Fighter and HSD object lives) and all the .data and .bss spans.
+ * Not the game heap or the converter arena -- tens of megabytes each, and reading
+ * them every frame slows a frame enough to change which frames have to guess,
+ * which makes the fault being looked for stop happening. */
+static int snap_chunk_region(int i)
+{
+    /* MELEE_CHUNKHEAP=1 adds the game heap. It is seventeen megabytes, so it is
+     * out of the per-frame ring by default -- but the fighters live in it, and a
+     * scan that leaves it out cannot say the simulation agreed, only that the
+     * object heap and the statics did. The chosen-frame dump turns it on. */
+    static int heap = -1;
+    if (heap < 0) {
+        const char* e = getenv("MELEE_CHUNKHEAP");
+        heap = (e != NULL && *e != '\0' && strcmp(e, "0") != 0);
+    }
+    if (i == SNAP_R_HEAP) {
+        return heap;
+    }
+    return i == SNAP_R_OBJHEAP || i >= SNAP_R_DATA0;
+}
+
+SNAP_NO_ASAN int snap_wide_pages(u32* out, int max)
+{
+    int i;
+    int n = 0;
+    for (i = 0; i < SNAP_REGIONS && n < max; i++) {
+        if (!snap_chunk_region(i)) {
+            continue;
+        }
+        {
+        SnapRegion cur;
+        unsigned long off;
+        region_describe(i, &cur);
+        if (cur.addr == NULL || cur.len == 0) {
+            continue;
+        }
+        for (off = 0; off < cur.len && n < max; off += SNAP_WIDE_CHUNK) {
+            unsigned long m = cur.len - off;
+            u32 h = 2166136261u;
+            unsigned long k;
+            if (m > SNAP_WIDE_CHUNK) {
+                m = SNAP_WIDE_CHUNK;
+            }
+            for (k = 0; k + 4 <= m; k += 4) {
+                u32 w;
+                memcpy(&w, cur.addr + off + k, 4);
+                h = (h ^ w) * 16777619u;
+            }
+            out[n++] = h;
+        }
+        }
+    }
+    return n;
+}
+
+/* The address a page index from snap_wide_pages refers to. */
+static unsigned char* snap_wide_page_addr(int want, int* region)
+{
+    int i;
+    int n = 0;
+    for (i = 0; i < SNAP_REGIONS; i++) {
+        SnapRegion cur;
+        unsigned long off;
+        if (!snap_chunk_region(i)) {
+            continue;
+        }
+        region_describe(i, &cur);
+        if (cur.addr == NULL || cur.len == 0) {
+            continue;
+        }
+        for (off = 0; off < cur.len; off += SNAP_WIDE_CHUNK) {
+            if (n == want) {
+                if (region != NULL) {
+                    *region = i;
+                }
+                return cur.addr + off;
+            }
+            n++;
+        }
+    }
+    return NULL;
+}
+
+#define SNAP_CR_RING 8
+static u32* snap_cr_val[SNAP_CR_RING];
+static s32 snap_cr_frame[SNAP_CR_RING];
+static int snap_cr_n[SNAP_CR_RING];
+
+/* MELEE_CHUNKDUMP=<frame>[,<frame>...] writes the chunk table at those match
+ * frames to MELEE_CHUNKDUMP_FILE, whether or not anything has gone wrong. The
+ * ring's dump-on-desync says which bytes differ once the two sides have already
+ * parted; this says how many differ at a frame chosen in advance, which is the
+ * only way to tell a divergence that is growing from a baseline that was always
+ * there. Two processes differ in plenty of memory for honest reasons -- render
+ * state a side has touched a different number of times, padding nobody wrote --
+ * so the count at an early frame is the noise floor. */
+/* MELEE_ARCHWATCH=1 checks the assumption the holes rest on: that an archive is
+ * written when it loads and only read afterwards, so leaving it out of the
+ * snapshot cannot lose anything.
+ *
+ * The one write that does happen is legitimate -- pc_script_prepare byte-swaps an
+ * object's words in place the first time an opcode in it is dispatched, once per
+ * object ever, and the marks that record it are deliberately not rewound either.
+ * So a changed word is reported only when it is *not* the byte-reversal of what
+ * was there before. Anything else is state the simulation keeps inside archive
+ * memory, which a rollback silently fails to rewind: a counter there drifts by
+ * however many frames were re-simulated, and two sides drift apart.
+ *
+ * A copy of every archive is kept, so this costs the memory the holes save. It is
+ * a diagnostic, not a mode to play in. */
+static int snap_archwatch(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* e = getenv("MELEE_ARCHWATCH");
+        on = (e != NULL && *e != '\0' && strcmp(e, "0") != 0);
+    }
+    return on;
+}
+
+#define SNAP_AW_MAX 64
+typedef struct ArchCopy {
+    const unsigned char* base;
+    unsigned long len;
+    unsigned char* copy;
+} ArchCopy;
+static ArchCopy snap_aw[SNAP_AW_MAX];
+static int snap_aw_n;
+static unsigned long snap_aw_swaps;
+
+SNAP_NO_ASAN static void snap_archwatch_check(s32 frame)
+{
+    const unsigned char* ab;
+    unsigned long al;
+    int k = 0;
+    if (!snap_archwatch()) {
+        return;
+    }
+    {
+        static double last;
+        double t = snap_now_ms();
+        if (t - last > 3000.0) {
+            last = t;
+            fprintf(stderr, "[ARCHWATCH] watching %d archives, %lu byte-swaps "
+                            "absorbed so far\n", snap_aw_n, snap_aw_swaps);
+            fflush(stderr);
+        }
+    }
+    while (pc_itconv_arch_at(k, &ab, &al)) {
+        int i;
+        ArchCopy* a = NULL;
+        for (i = 0; i < snap_aw_n; i++) {
+            if (snap_aw[i].base == ab) {
+                a = &snap_aw[i];
+                break;
+            }
+        }
+        if (a == NULL) {
+            if (snap_aw_n < SNAP_AW_MAX) {
+                a = &snap_aw[snap_aw_n++];
+                a->base = ab;
+                a->len = al;
+                a->copy = (unsigned char*) malloc(al);
+                if (a->copy != NULL) {
+                    memcpy(a->copy, ab, al);
+                }
+            }
+            k++;
+            continue;
+        }
+        if (a->copy != NULL && a->len == al) {
+            unsigned long off;
+            int said = 0;
+            unsigned long swaps = 0;
+            for (off = 0; off + 4 <= al; off += 4) {
+                const unsigned char* n = ab + off;
+                const unsigned char* o = a->copy + off;
+                if (memcmp(n, o, 4) == 0) {
+                    continue;
+                }
+                /* A byte-reversal is pc_script_prepare doing its job. */
+                if (n[0] == o[3] && n[1] == o[2] && n[2] == o[1] &&
+                    n[3] == o[0])
+                {
+                    memcpy(a->copy + off, n, 4);
+                    swaps++;
+                    continue;
+                }
+                if (said < 8) {
+                    fprintf(stderr,
+                            "[ARCHWATCH] frame %d: archive %d at %p + %#lx "
+                            "changed and it is not a byte-swap: %02X %02X %02X "
+                            "%02X -> %02X %02X %02X %02X\n",
+                            (int) frame, k, (const void*) ab, off, o[0], o[1],
+                            o[2], o[3], n[0], n[1], n[2], n[3]);
+                    said++;
+                }
+                memcpy(a->copy + off, n, 4);
+            }
+            if (said) {
+                fflush(stderr);
+            }
+            snap_aw_swaps += swaps;
+        }
+        k++;
+    }
+}
+
+/* MELEE_BYTEAT=<frame>:<addr>[,<addr>...] prints the raw bytes at those addresses
+ * on that match frame. The chunk scan says which sixty-four bytes two processes
+ * disagree about; for an address in the game heap there is no symbol to look up,
+ * so the only way to find out what lives there is to read it. */
+static void snap_byteat_maybe(s32 frame)
+{
+    static const char* spec = (const char*) -1;
+    static s32 want;
+    const char* p;
+    if (spec == (const char*) -1) {
+        const char* e = getenv("MELEE_BYTEAT");
+        spec = NULL;
+        if (e != NULL) {
+            const char* colon = strchr(e, ':');
+            if (colon != NULL) {
+                want = (s32) strtol(e, NULL, 0);
+                spec = colon + 1;
+            }
+        }
+    }
+    if (spec == NULL || frame != want) {
+        return;
+    }
+    for (p = spec; *p != '\0';) {
+        unsigned long a = strtoul(p, (char**) &p, 0);
+        if (a != 0) {
+            int k;
+            /* And whether it is inside an archive, because an archive is a hole
+             * in the snapshot: memory there is not rewound, so a counter living
+             * in one drifts by however many frames were re-simulated. */
+            {
+                const unsigned char* ab;
+                unsigned long al;
+                int j = 0;
+                const char* where = "not in an archive";
+                while (pc_itconv_arch_at(j, &ab, &al)) {
+                    if ((unsigned long) ab <= a && a < (unsigned long) ab + al) {
+                        where = "INSIDE AN ARCHIVE (a hole in the snapshot)";
+                        break;
+                    }
+                    j++;
+                }
+                fprintf(stderr, "[BYTEAT] %#lx is %s\n", a, where);
+            }
+            fprintf(stderr, "[BYTEAT] %d %#lx", (int) frame, a);
+            for (k = 0; k < 64; k++) {
+                fprintf(stderr, " %02X", ((unsigned char*) a)[k]);
+            }
+            fprintf(stderr, "\n");
+        }
+        while (*p == ',' || *p == ' ') {
+            p++;
+        }
+        if (a == 0) {
+            break;
+        }
+    }
+    fflush(stderr);
+}
+
+static void snap_chunkdump_maybe(s32 frame)
+{
+    static const char* list = (const char*) -1;
+    static FILE* out;
+    const char* p;
+    if (list == (const char*) -1) {
+        list = getenv("MELEE_CHUNKDUMP");
+        if (list != NULL) {
+            const char* f = getenv("MELEE_CHUNKDUMP_FILE");
+            out = (f != NULL) ? fopen(f, "w") : NULL;
+        }
+    }
+    if (list == NULL) {
+        return;
+    }
+    for (p = list; *p != '\0';) {
+        long v = strtol(p, (char**) &p, 10);
+        if (v == (long) frame) {
+            u32* buf = (u32*) malloc(sizeof(u32) * SNAP_WIDE_PAGES);
+            int n, j;
+            FILE* o = out != NULL ? out : stderr;
+            if (buf == NULL) {
+                return;
+            }
+            n = snap_wide_pages(buf, SNAP_WIDE_PAGES);
+            for (j = 0; j < n; j++) {
+                int reg = -1;
+                unsigned char* a = snap_wide_page_addr(j, &reg);
+                fprintf(o, "%d %p %08X\n", (int) frame, (void*) a, buf[j]);
+            }
+            fflush(o);
+            free(buf);
+            return;
+        }
+        while (*p == ',' || *p == ' ') {
+            p++;
+        }
+        if (v == 0 && *p == '\0') {
+            break;
+        }
+    }
+}
+
+SNAP_NO_ASAN void pc_snapshot_chunkring_mark(s32 frame)
+{
+    int i;
+    snap_archwatch_check(frame);
+    snap_byteat_maybe(frame);
+    snap_chunkdump_maybe(frame);
+    if (!snap_chunkring() || frame <= 0) {
+        return;
+    }
+    i = (int) (frame & (SNAP_CR_RING - 1));
+    if (snap_cr_val[i] == NULL) {
+        snap_cr_val[i] = (u32*) malloc(sizeof(u32) * SNAP_WIDE_PAGES);
+        if (snap_cr_val[i] == NULL) {
+            return;
+        }
+    }
+    snap_cr_n[i] = snap_wide_pages(snap_cr_val[i], SNAP_WIDE_PAGES);
+    snap_cr_frame[i] = frame;
+}
+
+void pc_snapshot_chunkring_dump(s32 from, s32 to)
+{
+    s32 f;
+    if (!snap_chunkring()) {
+        fprintf(stderr, "[CHUNK] not recording; set MELEE_CHUNKRING=1\n");
+        return;
+    }
+    for (f = from; f <= to; f++) {
+        int i = (int) (f & (SNAP_CR_RING - 1));
+        int j;
+        if (snap_cr_frame[i] != f || snap_cr_val[i] == NULL) {
+            continue;
+        }
+        for (j = 0; j < snap_cr_n[i]; j++) {
+            int reg = -1;
+            unsigned char* a = snap_wide_page_addr(j, &reg);
+            fprintf(stderr, "[CHUNK] %d %p %08X\n", (int) f, (void*) a,
+                    snap_cr_val[i][j]);
+        }
+    }
+    fflush(stderr);
+}
+
+
 static void snap_check(s32 frame)
 {
     u32 h;
@@ -1398,6 +1911,65 @@ static void snap_check(s32 frame)
         }
         if (snap_hash_frame[slot] == frame) {
             snap_frames_compared++;
+        }
+        if (snap_wide()) {
+            int w = (int) (frame & (SNAP_WIDE_RING - 1));
+            if (snap_wide_frame[w] == frame) {
+                u32 now[SNAP_REGIONS];
+                int i;
+                int bad = 0;
+                pc_snapshot_region_checksums(now, SNAP_REGIONS);
+                for (i = 0; i < SNAP_REGIONS; i++) {
+                    if (now[i] != snap_wide_val[w][i]) {
+                        if (!bad) {
+                            fprintf(stderr,
+                                    "[SNAP] WIDE CHECK FAILED at frame %d "
+                                    "(rewound from %d): the replay did not "
+                                    "reproduce the memory\n",
+                                    (int) frame, (int) snap_replay_until);
+                            bad = 1;
+                        }
+                        fprintf(stderr,
+                                "[SNAP]   region %d (%s): first run %08X, "
+                                "after rewind %08X\n",
+                                i, pc_snapshot_region_name(i),
+                                snap_wide_val[w][i], now[i]);
+                    }
+                }
+                if (bad) {
+                    int k = (int) (frame & (SNAP_WIDE_PG_RING - 1));
+                    {
+                        static u32 now_pg[SNAP_WIDE_PAGES];
+                        int np;
+                        int j;
+                        int shown = 0;
+                        if (snap_wide_pg_frame[k] != frame) {
+                            fprintf(stderr, "[SNAP]   (no page detail kept for "
+                                            "frame %d)\n", (int) frame);
+                            np = 0;
+                        } else {
+                            np = snap_wide_pages(now_pg, SNAP_WIDE_PAGES);
+                        }
+                        np = snap_wide_pages(now_pg, SNAP_WIDE_PAGES);
+                        for (j = 0; j < np && shown < 60; j++) {
+                            if (now_pg[j] != snap_wide_pg[k][j]) {
+                                int reg = -1;
+                                unsigned char* a2 =
+                                    snap_wide_page_addr(j, &reg);
+                                fprintf(stderr,
+                                        "[SNAP]   %p + %d (region %d %s) "
+                                        "differs\n",
+                                        (void*) a2, SNAP_WIDE_CHUNK, reg,
+                                        pc_snapshot_region_name(reg));
+                                shown++;
+                            }
+                        }
+                    }
+                    fflush(stderr);
+                    snap_failed = 1;
+                    return;
+                }
+            }
         }
         if (snap_hash_frame[slot] == frame && snap_hash[slot] != h) {
             fprintf(stderr,
@@ -1566,6 +2138,19 @@ static void snap_check(s32 frame)
     snap_hash_frame[slot] = frame;
     snap_hash[slot] = h;
     snap_nfields[slot] = pc_state_fields(snap_fields[slot], SNAP_FIELDS);
+    if (snap_wide()) {
+        int w = (int) (frame & (SNAP_WIDE_RING - 1));
+        pc_snapshot_region_checksums(snap_wide_val[w], SNAP_REGIONS);
+        snap_wide_frame[w] = frame;
+        /* Keyed by frame, like the region ring above. A rotating pair was not
+         * enough: by the time a replay compares the first frame it redid, the
+         * pair held the last two frames of the first run instead. */
+        {
+            int pw = (int) (frame & (SNAP_WIDE_PG_RING - 1));
+            snap_wide_pages(snap_wide_pg[pw], SNAP_WIDE_PAGES);
+            snap_wide_pg_frame[pw] = frame;
+        }
+    }
 
 }
 
@@ -1831,7 +2416,10 @@ void pc_snapshot_prerun(void)
     /* Once per simulated frame, which is the point of being here. */
     {
         extern void pc_state_hash_log_frame(int frame);
+        extern void pc_state_fields_mark(int frame);
         pc_state_hash_log_frame(frame);
+        pc_state_fields_mark(frame);
+        pc_snapshot_chunkring_mark(frame);
     }
     snap_check(frame);
     if (snap_diff_on() == 3) {
