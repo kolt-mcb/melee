@@ -1,7 +1,6 @@
 #ifndef SYSDOLPHIN_BASELIB_DEVCOM_H
 #define SYSDOLPHIN_BASELIB_DEVCOM_H
 
-#include <stdint.h>
 
 #include <sysdolphin/baselib/forward.h>
 

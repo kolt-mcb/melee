@@ -2,7 +2,6 @@
 #define MELEE_LB_MEMORY_H
 
 #include <Runtime/platform.h>
-#include <stdint.h>
 
 typedef struct Handle {
     struct Handle* x0_next;

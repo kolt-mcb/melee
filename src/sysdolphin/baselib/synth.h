@@ -1,5 +1,4 @@
 #ifndef SYSDOLPHIN_SYNTH_H
-#include <stdint.h>
 #define SYSDOLPHIN_SYNTH_H
 
 #include <placeholder.h>

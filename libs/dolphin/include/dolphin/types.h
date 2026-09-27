@@ -1,7 +1,11 @@
 #ifndef _DOLPHIN_TYPES_H_
 #define _DOLPHIN_TYPES_H_
 
+#ifdef BUILD_TARGET_PC
+/* Only the host build's typedefs below are spelled in terms of these, and the
+ * GameCube compiler has no stdint.h to find. */
 #include <stdint.h>
+#endif
 
 #ifdef BUILD_TARGET_PC
 typedef int8_t s8;

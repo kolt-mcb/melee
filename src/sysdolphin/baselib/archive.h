@@ -8,13 +8,11 @@
 
 #define HSD_ARCHIVE_DONT_FREE 1
 
-/* Size assertions only meaningful on decomp target (32-bit) */
-#ifdef BUILD_TARGET_PC
-/* Pointer sizes differ on x86_64; skip struct size checks on port */
-#define ASSERT_SIZE(s_, e_)
-#else
-#define ASSERT_SIZE(struct_, expected) STATIC_ASSERT(sizeof(struct_) == expected)
-#endif
+/* ASSERT_SIZE used to be defined again here, once per target. Runtime/platform.h
+ * already does exactly that a few lines above -- real under MUST_MATCH, which
+ * only the GameCube build sets, and empty otherwise -- so both arms were
+ * redundant, and the GameCube one was a redefinition with different parameter
+ * names, which that compiler treats as an error rather than a warning. */
 
 struct HSD_ArchiveHeader {
     u32 file_size; /* 0x00 */

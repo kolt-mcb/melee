@@ -2,7 +2,6 @@
 #define _lbarchive_h_
 
 #include <Runtime/platform.h>
-#include <stdint.h>
 
 #include <sysdolphin/baselib/forward.h>
 

@@ -114,19 +114,13 @@ typedef bool (*Predicate)(void);
 #define S32_MAX 0x7FFFFFFF
 #define F32_MAX 3.4028235e38f
 
-/* GCN math constants (from MSL/math.h) */
-#ifndef M_PI_F
-#define M_PI_F 3.14159265358979323846f
-#endif
-#ifndef M_PI_2_F
-#define M_PI_2_F (M_PI_F / 2.0f)
-#endif
-#ifndef M_PI_3
-#define M_PI_3 (M_PI_F / 3.0f)
-#endif
-#ifndef M_TAU
-#define M_TAU (2.0f * M_PI_F)
-#endif
+/* M_PI_F, M_PI_2_F, M_PI_3 and M_TAU used to be defined here as well. They are
+ * defined again further down this same header, unguarded, which is where they
+ * came from originally -- so the later definitions always won and these ones
+ * never applied to anything. On the GameCube compiler the second definition of
+ * M_TAU is an error rather than a warning, which is how they were found. Note
+ * that the pair disagreed: this one made M_TAU a float, the real one makes it a
+ * double, and it is the double the port has been compiling with all along. */
 
 /* GCN rad/deg conversion constants (from MSL/math.h) */
 #ifndef rad_to_deg
