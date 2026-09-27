@@ -298,6 +298,11 @@ static int net_delay = 3;
  * eight is 13.6, against a 16.7 ms frame that has its own work to do. */
 static int rb_window = 4;
 
+/* MELEE_NET_ROLLBACK_TRACE=1: every rewind, with its range. Two logs side by side
+ * then show which frames each machine redid, which is the only way to see that
+ * they redid the same work from different starting points. */
+static int rb_trace;
+
 static int net_trace;
 static int net_slippi_proto;  /* MELEE_NET_PROTO=slippi */
 /* How many players are in this match, and therefore how many slots the
@@ -324,6 +329,16 @@ static int net_is_remote(int slot)
 static int net_match;        /* a match is running */
 static s32 net_last_sent = -1;
 static s32 net_hashed = -1;   /* the last match frame hashed and compared */
+/* How many frames were hashed, and how many of those the peer had a hash for to
+ * compare against. The second number is the one that matters: a hash nobody
+ * checks is not a check, and under rollback it is easy to hash frames the peer
+ * has long since dropped from its ring. */
+static unsigned net_hash_taken, net_hash_matched;
+/* One frame in this many has its hash sent. MELEE_NET_HASH_EVERY=1 sends every
+ * frame's, which is what a verification run wants: at ten, nine frames in ten
+ * are never compared with anything and a desync inside them is found late or
+ * not at all. */
+static int net_hash_every = 10;
 static int net_desynced;
 static long net_timeout_ms = 15000;
 /* How long to hold the match's first frame waiting for a peer to appear at
@@ -403,6 +418,17 @@ static void net_config(void)
         net_delay = atoi(s);
         if (net_delay < 0) net_delay = 0;
         if (net_delay > 20) net_delay = 20;
+    }
+    {
+        rb_trace = getenv("MELEE_NET_ROLLBACK_TRACE") != NULL;
+    }
+    {
+        const char* s2 = getenv("MELEE_NET_HASH_EVERY");
+        if (s2 != NULL) {
+            net_hash_every = atoi(s2);
+            if (net_hash_every < 1) net_hash_every = 1;
+            if (net_hash_every > 600) net_hash_every = 600;
+        }
     }
     {
         const char* s = getenv("MELEE_NET_ROLLBACK_WINDOW");
@@ -1345,6 +1371,12 @@ static void pad_to_gc(GCPadStatus* g, const NetPad* n);
 static s32 rb_guessed = -1;
 static s32 rb_played = -1; /* the newest frame simulated, guessed or not */
 static unsigned rb_guesses, rb_corrected, rb_stalls;
+/* The run of frames the correction now in progress is rebuilding. Only these
+ * are final, and only these may be hashed from the replay path: the hook that
+ * feeds a replayed frame its pads is also entered for frames outside the run,
+ * and hashing those published a checksum of a state still built on a guess --
+ * which the next rewind then had to be refused for having already sent. */
+static s32 rb_replay_from = -1, rb_replay_upto = -1;
 
 /* Is every frame in [from, to] known for every remote player? A correction can
  * only be made for a whole run of frames, because re-simulating from the oldest
@@ -1383,6 +1415,8 @@ static int rb_input_for(int slot, s32 frame, NetPad* out)
  * not -- the same rule the first run of the frame used, so a frame whose inputs
  * have not changed replays identically and one whose inputs have arrived replays
  * with them. */
+static void net_hash_and_compare(s32 frame);
+
 void pc_net_pads_replay(GCPadStatus* pads, int frame)
 {
     int slot;
@@ -1393,6 +1427,21 @@ void pc_net_pads_replay(GCPadStatus* pads, int frame)
         NetPad p;
         (void) rb_input_for(slot, (s32) frame, &p);
         pad_to_gc(&pads[slot], &p);
+    }
+    /* Compare the frames a correction rebuilt, too.
+     *
+     * The live path hashes only frames that never guessed, which is right --
+     * a speculative state is not worth comparing. But a frame that guessed and
+     * was then corrected is no longer speculative: a correction only fires once
+     * every frame in the run has its real input, so what the replay rebuilds
+     * here is final. Leaving it unhashed meant the one class of frame the
+     * rollback machinery actually touches was the one class never checked, and
+     * "no desync" covered only the frames that needed no rollback at all. The
+     * `frame > net_hashed` guard inside keeps each frame hashed once. */
+    if (rb_replay_upto >= 0 && (s32) frame >= rb_replay_from &&
+        (s32) frame <= rb_replay_upto)
+    {
+        net_hash_and_compare((s32) frame);
     }
 }
 
@@ -1435,6 +1484,7 @@ static void hash_compare(int slot, s32 frame, u32 peer)
         net_peer_hash_val[slot][i] = peer;
         return;
     }
+    net_hash_matched++;
     if (net_hash_val[i] == peer) {
         return;
     }
@@ -1464,32 +1514,144 @@ static void hash_compare(int slot, s32 frame, u32 peer)
 
 /* ---- receiving ---------------------------------------------------------- */
 
-static void net_pump(void)
+/* ---- a deliberately bad link --------------------------------------------
+ *
+ * MELEE_NET_LOSS=<percent> drops that share of arriving packets and
+ * MELEE_NET_JITTER=<ms> holds each one for up to that long before letting it
+ * through. Both are for testing rather than for play: a rollback that only works
+ * on a local socket works because the socket never makes it guess, and M3 asks
+ * for five per cent loss and a hundred milliseconds of jitter specifically.
+ *
+ * The drop is not random per run -- a deterministic generator, so a failure can
+ * be looked at twice. And it drops on *arrival* rather than on send, because that
+ * is where it can be done without touching the protocol: a dropped packet is
+ * resent by the sender's own retransmit, exactly as a real loss would be. */
+static unsigned net_bad_rng = 0x1234567u;
+static int net_loss_pct = -1;
+static int net_jitter_ms = -1;
+
+#define NET_HOLD_MAX 64
+typedef struct HeldPacket {
+    unsigned char buf[1024];
+    int len;
+    double due;
+    struct sockaddr_in from;
+} HeldPacket;
+static HeldPacket net_held[NET_HOLD_MAX];
+static int net_held_n;
+static long net_dropped, net_delayed;
+
+static unsigned net_bad_next(void)
+{
+    unsigned x = net_bad_rng;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    net_bad_rng = x;
+    return x;
+}
+
+static void net_bad_config(void)
+{
+    const char* l;
+    const char* j;
+    if (net_loss_pct >= 0) {
+        return;
+    }
+    l = getenv("MELEE_NET_LOSS");
+    j = getenv("MELEE_NET_JITTER");
+    net_loss_pct = (l != NULL) ? atoi(l) : 0;
+    net_jitter_ms = (j != NULL) ? atoi(j) : 0;
+    if (net_loss_pct < 0) net_loss_pct = 0;
+    if (net_loss_pct > 90) net_loss_pct = 90;
+    if (net_jitter_ms < 0) net_jitter_ms = 0;
+    if (net_jitter_ms > 2000) net_jitter_ms = 2000;
+    if (net_loss_pct != 0 || net_jitter_ms != 0) {
+        fprintf(stderr, "[NET] link impairment on: %d%% loss, up to %d ms "
+                        "jitter\n", net_loss_pct, net_jitter_ms);
+        fflush(stderr);
+    }
+}
+
+/* Should this arriving packet be dropped? */
+static int net_bad_drop(void)
+{
+    net_bad_config();
+    if (net_loss_pct == 0) {
+        return 0;
+    }
+    if ((int) (net_bad_next() % 100u) < net_loss_pct) {
+        net_dropped++;
+        return 1;
+    }
+    return 0;
+}
+
+/* Hold it for a while instead of handling it now. Returns 1 if held. */
+static int net_bad_hold(const unsigned char* buf, int len,
+                        const struct sockaddr_in* from)
+{
+    net_bad_config();
+    if (net_jitter_ms == 0 || net_held_n >= NET_HOLD_MAX ||
+        len > (int) sizeof(net_held[0].buf))
+    {
+        return 0;
+    }
+    net_held[net_held_n].len = len;
+    memcpy(net_held[net_held_n].buf, buf, (size_t) len);
+    /* The sender travels with the packet. A held hello that came back without
+     * one taught the host that its peer lived at 0.0.0.0:0. */
+    net_held[net_held_n].from = *from;
+    net_held[net_held_n].due =
+        now_ms() + (double) (net_bad_next() % (unsigned) (net_jitter_ms + 1));
+    net_held_n++;
+    net_delayed++;
+    return 1;
+}
+
+static void net_handle(const unsigned char* buf, ssize_t n,
+                       const struct sockaddr_in* from);
+
+/* Let through anything whose hold has expired. */
+static void net_bad_release(void)
+{
+    double t = now_ms();
+    int i = 0;
+    while (i < net_held_n) {
+        if (net_held[i].due <= t) {
+            unsigned char tmp[1024];
+            struct sockaddr_in tfrom = net_held[i].from;
+            int len = net_held[i].len;
+            memcpy(tmp, net_held[i].buf, (size_t) len);
+            net_held[i] = net_held[net_held_n - 1];
+            net_held_n--;
+            net_handle(tmp, len, &tfrom);
+            continue;
+        }
+        i++;
+    }
+}
+
+/* One arriving packet, handled. Split out of net_pump so a packet held back by
+ * the jitter injector can be run through exactly the same path later. */
+static void net_handle(const unsigned char* cbuf, ssize_t n,
+                       const struct sockaddr_in* cfrom)
 {
     unsigned char buf[1024];
     struct sockaddr_in from;
-    socklen_t flen;
-    ssize_t n;
-
-    if (net_slippi_proto) {
-        slp_enet_pump();
+    if (n < NET_HDR || n > (ssize_t) sizeof(buf)) {
         return;
     }
-    if (net_fd < 0) {
-        return;
-    }
-    for (;;) {
-        flen = sizeof(from);
-        n = recvfrom(net_fd, buf, sizeof(buf), 0, (struct sockaddr*) &from,
-                     &flen);
+    memcpy(buf, cbuf, (size_t) n);
+    from = *cfrom;
         if (n < NET_HDR) {
             return;
         }
         if (net_slippi_proto && slp_receive(buf, n, NULL)) {
-            continue;
+            return;
         }
         if (get_u32(buf) != NET_MAGIC) {
-            continue;
+            return;
         }
         switch ((int) get_u8(buf + 4)) {
         case MSG_HELLO: {
@@ -1628,7 +1790,39 @@ static void net_pump(void)
         default:
             break;
         }
+}
+
+static void net_pump(void)
+{
+    unsigned char buf[1024];
+    struct sockaddr_in from;
+    socklen_t flen;
+    ssize_t n;
+
+    if (net_slippi_proto) {
+        slp_enet_pump();
+        return;
     }
+    if (net_fd < 0) {
+        return;
+    }
+    for (;;) {
+        flen = sizeof(from);
+        n = recvfrom(net_fd, buf, sizeof(buf), 0, (struct sockaddr*) &from,
+                     &flen);
+        if (n < NET_HDR) {
+            break;
+        }
+        /* A deliberately bad link, when asked for: drop some, hold some. */
+        if (net_bad_drop()) {
+            continue;
+        }
+        if (net_bad_hold(buf, (int) n, &from)) {
+            continue;
+        }
+        net_handle(buf, n, &from);
+    }
+    net_bad_release();
 }
 
 /* ---- the frame ---------------------------------------------------------- */
@@ -1786,6 +1980,7 @@ static void net_hash_and_compare(s32 frame)
         u32 h = state_hash();
         int i = frame & (NET_HASH_RING - 1);
         net_hashed = frame;
+        net_hash_taken++;
         hash_remember(frame, h);
         {
             int k;
@@ -1795,7 +1990,7 @@ static void net_hash_and_compare(s32 frame)
                 }
             }
         }
-        if ((frame % 10) == 0) {
+        if (net_hash_every <= 1 || (frame % net_hash_every) == 0) {
             send_hash(frame, h);
         }
     }
@@ -2061,7 +2256,15 @@ void pc_net_pads(GCPadStatus* pads)
          * the same wait the delay path does, but only when prediction has run
          * out of room rather than on every frame. */
         if (rb_guessed >= 0 && frame - rb_guessed >= rb_window) {
+            /* Two clocks, deliberately. `began` paces the retransmits and is
+             * reset every time one goes out; `entered` bounds the whole wait and
+             * is not. Measuring the bound from the retransmit clock made it
+             * unreachable -- it was reset 16 ms before every test of it -- so a
+             * peer that really had stopped sending span here until the watchdog
+             * killed the process, which reads as "rollback stalls under
+             * impairment" rather than "the timeout was never armed". */
             double began = now_ms();
+            double entered = began;
             /* Wait for the whole guessed run, not just its oldest frame. Waiting
              * for the oldest alone looked like it bounded the drift and did not:
              * the wait ended the moment that one frame arrived, the correction
@@ -2087,7 +2290,7 @@ void pc_net_pads(GCPadStatus* pads)
                     }
                     began = t;
                 }
-                if (now_ms() - began > NET_CONNECT_WAIT_MS) {
+                if (now_ms() - entered > NET_CONNECT_WAIT_MS) {
                     net_quiet("peer stopped sending inside the rollback window",
                               frame);
                     return;
@@ -2102,8 +2305,37 @@ void pc_net_pads(GCPadStatus* pads)
              * re-simulation gets there -- and nothing to rewind to in the
              * meantime. Waiting for the whole window costs a little latency and
              * cannot get stuck. */
+            if (rb_ready_through(rb_guessed, rb_played)) {
+                /* A rewind must never reach a frame this side has already
+                 * published a hash for: that hash describes a state about to be
+                 * replaced, and the peer would compare against something no
+                 * longer here. The argument that it cannot happen is that
+                 * hashing requires no outstanding guess, so a guess -- and
+                 * therefore a rewind target -- always starts after the last
+                 * hashed frame. Checked rather than trusted. */
+                /* Strictly less than, not at most. A hash labelled F is taken
+                 * before F is simulated -- the state F-1 left -- and the
+                 * snapshot at F is taken at that same moment, so rewinding to F
+                 * reproduces the hash labelled F rather than invalidating it.
+                 * Only labels above F describe states the replay will rebuild
+                 * from different inputs. */
+                if (rb_guessed < net_hashed) {
+                    fprintf(stderr, "[RB] rewind to %d would undo frame %d, "
+                                    "which has already been hashed and sent\n",
+                            (int) rb_guessed, (int) net_hashed);
+                    fflush(stderr);
+                }
+                if (rb_trace) {
+                    fprintf(stderr, "[RBT] rewind %d..%d (at frame %d, hashed "
+                                    "%d)\n",
+                            (int) rb_guessed, (int) rb_played, (int) frame,
+                            (int) net_hashed);
+                }
+            }
             if (rb_ready_through(rb_guessed, rb_played) &&
                 pc_rollback_rewind(rb_guessed, rb_played)) {
+                rb_replay_from = rb_guessed;
+                rb_replay_upto = rb_played;
                 rb_guessed = -1;
                 rb_corrected++;
                 return; /* the loop re-simulates those frames from here */
@@ -2168,6 +2400,9 @@ void pc_net_pads(GCPadStatus* pads)
                                 "full window; oldest guess now %d\n",
                         (int) frame, rw, fr, ms, rb_guesses, rb_corrected,
                         rb_stalls, (int) rb_guessed);
+                fprintf(stderr, "[RB]   checked: %u frames hashed, %u of them "
+                                "compared against the peer's\n",
+                        net_hash_taken, net_hash_matched);
                 fflush(stderr);
             }
         }
