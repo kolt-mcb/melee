@@ -72,6 +72,8 @@ extern void pc_lowmem_full_extent(void** base, unsigned long* size,
 /* The script byte-swap marks. They sit on the host heap and describe words that
  * sit in the game heap, so restoring the heap without them makes the game read
  * its own scripts the wrong way round. */
+extern int pc_itconv_arch_write_at(int i, const unsigned char** base,
+                                   unsigned long* len);
 extern int pc_itconv_arch_at(int i, const unsigned char** base,
                             unsigned long* len);
 extern unsigned long pc_itconv_marks_size(void);
@@ -475,6 +477,50 @@ static void snap_holes_build(const SnapRegion* r)
         snap_holes[snap_nholes].lo = (unsigned long) (ab - r->addr);
         snap_holes[snap_nholes].hi = snap_holes[snap_nholes].lo + al;
         snap_nholes++;
+    }
+    /* Anything the port has written inside an archive is not immutable, so it
+     * must not be a hole. Split whichever hole contains it: the archives stay out
+     * of the snapshot except for the few kilobytes that actually change. */
+    {
+        const unsigned char* wb;
+        unsigned long wl;
+        int w = 0;
+        while (pc_itconv_arch_write_at(w, &wb, &wl)) {
+            unsigned long lo, hi;
+            int i;
+            w++;
+            if (wb < r->addr || wb + wl > r->addr + r->len) {
+                continue;
+            }
+            lo = (unsigned long) (wb - r->addr);
+            hi = lo + wl;
+            for (i = 0; i < snap_nholes; i++) {
+                if (snap_holes[i].lo >= hi || snap_holes[i].hi <= lo) {
+                    continue;
+                }
+                if (snap_holes[i].lo >= lo && snap_holes[i].hi <= hi) {
+                    /* Entirely written: not a hole at all. */
+                    snap_holes[i] = snap_holes[--snap_nholes];
+                    i--;
+                    continue;
+                }
+                if (lo > snap_holes[i].lo && hi < snap_holes[i].hi) {
+                    /* Splits it in two. */
+                    if (snap_nholes < SNAP_HOLES) {
+                        snap_holes[snap_nholes].lo = hi;
+                        snap_holes[snap_nholes].hi = snap_holes[i].hi;
+                        snap_nholes++;
+                    }
+                    snap_holes[i].hi = lo;
+                    continue;
+                }
+                if (lo <= snap_holes[i].lo) {
+                    snap_holes[i].lo = hi;
+                } else {
+                    snap_holes[i].hi = lo;
+                }
+            }
+        }
     }
     qsort(snap_holes, (size_t) snap_nholes, sizeof(snap_holes[0]),
           snap_hole_cmp);
@@ -1729,7 +1775,7 @@ SNAP_NO_ASAN static void snap_archwatch_check(s32 frame)
                     swaps++;
                     continue;
                 }
-                if (said < 8) {
+                if (said < 400) {
                     fprintf(stderr,
                             "[ARCHWATCH] frame %d: archive %d at %p + %#lx "
                             "changed and it is not a byte-swap: %02X %02X %02X "

@@ -10789,6 +10789,16 @@ static void pc_efb_copy(void* dest)
                           "skipping copy", dest, dw, dh, g_copy_dst_fmt);
         return;
     }
+    /* The destination may be inside a DAT archive -- the offscreen magnifier's
+     * texture is -- and the rollback snapshot leaves archives out on the grounds
+     * that they are written at load and only read after. Tell it otherwise, or a
+     * rewind will not put this back and two machines that rendered a different
+     * number of times will hold different archive contents. */
+    {
+        extern void pc_itconv_arch_note_write(const void* p, unsigned long len);
+        unsigned long bytes = (unsigned long) dw * (unsigned long) dh * 4u;
+        pc_itconv_arch_note_write(dest, bytes);
+    }
     pc_fb_rect_to_window((f32) g_state.tex_copy_src[0],
                          (f32) g_state.tex_copy_src[1], (f32) sw, (f32) sh, r);
     if (r[2] <= 0 || r[3] <= 0) return;

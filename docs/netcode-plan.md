@@ -683,11 +683,36 @@ because the obvious argument for each is wrong:
   copied. That is a real bug and it is fixed -- the layout travels in the
   snapshot now -- but it is not this one either.
 
-So something in archive memory has to be rewound that is neither the swap state
-nor a boundary mistake, and `MELEE_ARCHWATCH=1` says nothing writes there but the
-swaps. One of those two statements is incomplete, and finding out which is the
-next piece of work. Until then the archives are copied, and M4's hardware runs a
-port ten frames a second slower than it needs to be.
+The third attempt found something real. `MELEE_ARCHWATCH=1` had said nothing
+writes to archive memory but the byte-swaps -- and that measurement was taken over
+frames that never reached the divergence, because a self-check run rewinding every
+four frames advances its match frames far more slowly than its displayed ones. Run
+in the configuration that actually desyncs, it reports writes at once, and a
+hardware watchpoint on the address names them:
+
+    pc_efb_copy_gpu   <- GXCopyTex <- HSD_ImageDescCopyFromEFB
+                      <- lb_800122C8 <- ifMagnify_802FBBDC
+
+The offscreen-player magnifier does an **EFB copy into a texture whose image
+buffer lives inside a DAT archive**, and the bridge stamps its own bookkeeping
+into that buffer -- sixteen bytes, changing every frame the magnifier draws. So
+"an archive is written when it loads and only read afterwards" is false, and the
+justification for the holes with it. (With the reporting cap lifted, those four
+words are the *only* archive bytes ever written, which is worth knowing: the
+exception is tiny.)
+
+`pc_itconv_arch_note_write` therefore lets the port say where it writes inside an
+archive, and the snapshot splits that range back out of the hole -- measured
+working, one range of 20 KB, registered the first time the magnifier draws. It is
+necessary and it is **not sufficient**: 2 of 5 runs still desync at the same
+frame. Which is consistent with the range being registered only once the magnifier
+has drawn, so a rewind across its first appearance is still unprotected -- and
+frame 553 is about where a player first goes offscreen. Whether that is the whole
+of it is unsettled.
+
+So the archives stay copied, which is the configuration the acceptance was
+verified in, and M4's hardware runs a port ten frames a second slower than it
+needs to be until this is finished.
 
 Two smaller things the acceptance turned up, both in the rig rather than the
 netcode: a side whose peer has exited keeps playing alone and then wedges in a

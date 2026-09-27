@@ -77,6 +77,14 @@ void pc_itconv_marks_restore(const void* in, unsigned long len);
  * any of it. See the comment on the definition. */
 void pc_itconv_marks_rewind(const void* in, unsigned long len);
 
+/* Tell the snapshot that the port wrote into archive memory here, so it stops
+ * treating that range as immutable. The offscreen magnifier's EFB copy is the
+ * writer this exists for; see the definition. Safe on any pointer -- one outside
+ * every archive is ignored. */
+void pc_itconv_arch_note_write(const void* p, unsigned long len);
+int pc_itconv_arch_write_at(int i, const unsigned char** base,
+                            unsigned long* len);
+
 /* Look an Article up in one of the ItCo tables, converting it on first use.
  * Tables this file does not own (the stage item table) are read through
  * unchanged. */

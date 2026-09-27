@@ -2425,9 +2425,21 @@ void pc_net_pads(GCPadStatus* pads)
                      * a restore do. If this stays at zero, the swap state was
                      * never what a restore had to put back. */
                     extern unsigned long pc_itconv_unswapped, pc_itconv_rewinds;
+                    extern int pc_itconv_arch_write_at(int i,
+                                                       const unsigned char** b,
+                                                       unsigned long* l);
+                    const unsigned char* wb;
+                    unsigned long wl, wtot = 0;
+                    int wn = 0;
+                    while (pc_itconv_arch_write_at(wn, &wb, &wl)) {
+                        wtot += wl;
+                        wn++;
+                    }
                     fprintf(stderr, "[RB]   archives: %lu restores, %lu objects "
-                                    "un-swapped\n",
-                            pc_itconv_rewinds, pc_itconv_unswapped);
+                                    "un-swapped, %d written ranges (%lu KB) no "
+                                    "longer holes\n",
+                            pc_itconv_rewinds, pc_itconv_unswapped, wn,
+                            wtot >> 10);
                 }
                 fflush(stderr);
             }

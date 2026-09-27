@@ -538,6 +538,92 @@ void pc_itconv_marks_rewind(const void* in, unsigned long len)
     pc_itconv_marks_restore(in, len);
 }
 
+/* Archive ranges the game writes to during play.
+ *
+ * The snapshot leaves archives out on the grounds that a DAT is written when it
+ * loads and only read afterwards. That is nearly true, and the exception is not a
+ * small one: the offscreen-player magnifier does an EFB copy into a texture whose
+ * image buffer lives inside an archive (ifMagnify_802FBBDC ->
+ * HSD_ImageDescCopyFromEFB -> GXCopyTex), so several kilobytes of render output
+ * land in archive memory every frame it draws. Left out of the snapshot, those
+ * bytes are never rewound, and two machines whose rollbacks made them render
+ * different numbers of times end up with different archive contents.
+ *
+ * Rather than copy all 8 MB of archives to cover a few kilobytes, the port
+ * reports where it writes and the snapshot stops treating those ranges as holes.
+ * Self-discovering: a new writer registers itself the first time it writes. */
+#define ARCH_WRITE_MAX 16
+struct arch_write {
+    const unsigned char* base;
+    unsigned long len;
+};
+static struct arch_write g_arch_writes[ARCH_WRITE_MAX];
+static int g_arch_writes_n;
+
+void pc_itconv_arch_note_write(const void* p, unsigned long len)
+{
+    const unsigned char* q = (const unsigned char*) p;
+    struct arch* a;
+    int i;
+    if (q == NULL || len == 0) {
+        return;
+    }
+    a = find_arch(q);
+    if (a == NULL) {
+        return; /* not archive memory; nothing to do */
+    }
+    /* Clamped to the archive, and rounded out to 4 KB so a writer that moves
+     * about within a texture does not add an entry per frame. */
+    {
+        unsigned long off = (unsigned long) (q - a->base);
+        unsigned long lo = off & ~4095UL;
+        unsigned long hi = (off + len + 4095UL) & ~4095UL;
+        if (hi > a->len) {
+            hi = a->len;
+        }
+        if (lo >= hi) {
+            return;
+        }
+        for (i = 0; i < g_arch_writes_n; i++) {
+            const unsigned char* b = g_arch_writes[i].base;
+            if (b == a->base + lo && g_arch_writes[i].len == hi - lo) {
+                return; /* already known */
+            }
+            /* Grow an adjacent or overlapping entry rather than adding one. */
+            if (b <= a->base + hi && b + g_arch_writes[i].len >= a->base + lo) {
+                const unsigned char* nb = (b < a->base + lo) ? b : a->base + lo;
+                const unsigned char* ne = (b + g_arch_writes[i].len >
+                                           a->base + hi)
+                                              ? b + g_arch_writes[i].len
+                                              : a->base + hi;
+                g_arch_writes[i].base = nb;
+                g_arch_writes[i].len = (unsigned long) (ne - nb);
+                return;
+            }
+        }
+        if (g_arch_writes_n < ARCH_WRITE_MAX) {
+            g_arch_writes[g_arch_writes_n].base = a->base + lo;
+            g_arch_writes[g_arch_writes_n].len = hi - lo;
+            g_arch_writes_n++;
+        }
+    }
+}
+
+int pc_itconv_arch_write_at(int i, const unsigned char** base,
+                            unsigned long* len)
+{
+    if (i < 0 || i >= g_arch_writes_n) {
+        return 0;
+    }
+    if (base != NULL) {
+        *base = g_arch_writes[i].base;
+    }
+    if (len != NULL) {
+        *len = g_arch_writes[i].len;
+    }
+    return 1;
+}
+
 /* Enumerate the registered archives, so the rollback snapshot can measure -- and
  * eventually leave out -- the loaded file data inside the game heap. An archive
  * is a DAT read off the disc: megabytes of it, written when it loads and read for
