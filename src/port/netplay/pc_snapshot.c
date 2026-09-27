@@ -2525,6 +2525,31 @@ void pc_snapshot_prerun(void)
     }
 
     /* Once per simulated frame, which is the point of being here. */
+    /* MELEE_NET_SLOW_MS=<ms> burns that long on every simulated frame.
+     *
+     * Copying the archives costs about a millisecond a frame and prevents the
+     * desync; nothing narrower does. That leaves two explanations -- it restores
+     * something that matters, or it is slow enough to hide a race -- and they are
+     * told apart by adding the cost without the copying. If the desync goes away
+     * with only this, the acceptance rested on timing and the archives were a
+     * coincidence. */
+    {
+        static double ms = -1.0;
+        if (ms < 0.0) {
+            const char* e = getenv("MELEE_NET_SLOW_MS");
+            ms = (e != NULL) ? atof(e) : 0.0;
+            if (ms < 0.0) {
+                ms = 0.0;
+            }
+        }
+        if (ms > 0.0) {
+            double until = snap_now_ms() + ms;
+            while (snap_now_ms() < until) {
+                /* spin: sleeping would hand the CPU to the other side and
+                 * change the thing being measured */
+            }
+        }
+    }
     /* MELEE_NET_SYNCTEST_SCRUB=<KB> here as well as in the self-check's hook,
      * because under rollback that hook does not run and this is the only place
      * that is once per *simulated* frame.

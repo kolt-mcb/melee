@@ -750,10 +750,16 @@ archives excluded and all still desyncing at match frame 552:
 | audio | `MELEE_NO_AUDIO=1`: 3 of 4 desync |
 | stack leftovers | `MELEE_NET_SYNCTEST_SCRUB=96`: 2 of 4 desync |
 | the discard-mode render pass | `MELEE_NET_SYNCTEST_HIDDEN=draw`: 2 of 3 desync |
+| the port writing into archive memory at all | the EFB-override stamp now reads the buffer instead of writing it, so `MELEE_ARCHWATCH=1` reports **zero** archive writes; desyncs |
+| the cost of copying being what helps | `MELEE_NET_SLOW_MS=1` burns the same time per simulated frame without copying (37 fps, slower than copying makes it): desyncs |
 
 Copying the archives does prevent it -- six clean runs including the two full
 matches, against about half of runs failing without -- and after all of the above
-the honest statement is that **why** is not known. Two candidates remain, and they
+the honest statement is that **why** is not known. The last row of that table is
+worth its own sentence, because it was the explanation that would have mattered
+most: adding the same cost per frame without doing the copying does *not* prevent
+the desync, so copying the archives is not working by being slow and the
+acceptance does not rest on timing. Two candidates remain, and they
 need a different kind of work rather than another one-flag experiment: game state
 living outside the snapshot's region list entirely, which the chunk scan cannot
 see because it scans the regions (the wider bracket `__melee_all_melee_*` is what

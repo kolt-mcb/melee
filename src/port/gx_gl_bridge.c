@@ -7179,13 +7179,19 @@ static struct pc_efb_override* pc_efb_override_slot(void* img)
     return o;
 }
 
+/* Remember what the image buffer holds, so a later texture that happens to live
+ * at the same address is not served this override (the lookup memcmps the buffer
+ * against this).
+ *
+ * It used to write a unique stamp *into* the buffer, and that buffer can be inside
+ * a DAT archive -- the offscreen magnifier's is. So the port was writing its own
+ * bookkeeping into game-owned memory that the rollback snapshot leaves out on the
+ * grounds that archives are read-only after load, which made that assumption false
+ * and the port the thing breaking it. Copying the buffer's existing bytes answers
+ * the same question -- has the game put something else here? -- and writes nothing. */
 static void pc_efb_override_mark(struct pc_efb_override* o, void* img)
 {
-    u32 j;
-    for (j = 0; j < PC_EFB_MARK_BYTES; j++) {
-        o->mark[j] = (u8) (0xA5 ^ (j * 31) ^ (u8) g_efb_over_seq);
-    }
-    memcpy(img, o->mark, PC_EFB_MARK_BYTES);
+    memcpy(o->mark, img, PC_EFB_MARK_BYTES);
     g_efb_over_seq++;
 }
 
@@ -7326,15 +7332,10 @@ static void pc_efb_offscreen_publish(void* img)
     o->tex = g_off_tex;
     o->w = (u32) g_off_w;
     o->h = (u32) g_off_h;
-    /* Stamp the RAM the console would have written, so a later texture that
-     * happens to live at the same address is not served this one. */
-    {
-        u32 j;
-        for (j = 0; j < PC_EFB_MARK_BYTES; j++) {
-            o->mark[j] = (u8) (0xA5 ^ (j * 31) ^ (u8) g_efb_over_seq);
-        }
-        memcpy(img, o->mark, PC_EFB_MARK_BYTES);
-    }
+    /* Remember what is in the RAM the console would have written, so a later
+     * texture that happens to live at the same address is not served this one.
+     * Read rather than stamped: see pc_efb_override_mark. */
+    memcpy(o->mark, img, PC_EFB_MARK_BYTES);
     { static int n=0; if (n<4 && getenv("MELEE_EFBLOG")) { n++;
         fprintf(stderr, "[OFF] publish img=%p tex=%u %ux%u\n",
                 img, o->tex, o->w, o->h); } }
