@@ -33,12 +33,40 @@ while [ $# -gt 0 ]; do
 done
 
 cd "$ROOT"
+# Insist on a clean start. A copy left over from an earlier run keeps the UDP
+# port, swallows the new guest's hellos, and the run then reports "no peer after
+# 120 s" from a guest that was talking to a corpse -- which looks like a netcode
+# fault and is housekeeping.
 pkill -x melee-pc 2>/dev/null
-sleep 1
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    pgrep -x melee-pc >/dev/null || break
+    sleep 1
+done
+if pgrep -x melee-pc >/dev/null; then
+    pkill -9 -x melee-pc 2>/dev/null
+    sleep 1
+fi
+if pgrep -x melee-pc >/dev/null; then
+    echo "a melee-pc is still running and will not die; not starting" >&2
+    exit 2
+fi
 
 # The watchdog is what turns a stall into an exit instead of a hang. A rollback
 # side that waits forever for a peer's input is a bug, and this is how it gets
 # reported rather than waited out.
+# Both sides run with address randomisation off (`setarch -R`, see RUN below).
+# The low-memory pool is mmap'd at the first address in a scan that fits, which
+# depends on the process's own layout, so two copies of the port routinely land
+# 256 MB apart: every pointer that reaches the comparison then differs for the
+# whole match, and the first frame the generator list stopped being empty looked
+# exactly like a desync. MELEE_LOWMEM_BASE does not fix it -- pinned to an
+# address the process cannot spare a gigabyte at, the pin falls back to a 256 MB
+# pool, which the game does not fit in and which crashes in the arena check.
+# Removing the randomisation gives both sides the same base and the full size,
+# repeatably. The checksum no longer carries a raw pointer either.
+RUN="setarch -R"
+command -v setarch >/dev/null 2>&1 || RUN=""
+[ -n "${MELEE_RB_ASLR:-}" ] && RUN=""   # for isolating what the layout changes
 COMMON="MELEE_NET_ROLLBACK=1 MELEE_NET_DELAY=$DELAY
         MELEE_NET_ROLLBACK_WINDOW=$WINDOW
         MELEE_NET_LOSS=$LOSS MELEE_NET_JITTER=$JITTER
@@ -46,11 +74,21 @@ COMMON="MELEE_NET_ROLLBACK=1 MELEE_NET_DELAY=$DELAY
         MELEE_BOOT_CPU=9,9 MELEE_FORCE_CPU=9,9
         MELEE_MAX_FRAMES=$FRAMES MELEE_NOVSYNC=1 MELEE_WATCHDOG=300"
 
+# MELEE_RB_SIMHASH=1 has each side write one line per simulated frame -- every
+# pass, so the last line for a frame is that frame's final state. The wire
+# checksum only samples, and a rollback desync can start well before the first
+# frame a sample lands on; diffing these two files names the frame exactly.
+SIMH= SIMG=
+if [ -n "${MELEE_RB_SIMHASH:-}" ]; then
+    SIMH="MELEE_SIMHASHLOG=$OUT/$TAG-h.simhash"
+    SIMG="MELEE_SIMHASHLOG=$OUT/$TAG-g.simhash"
+fi
+
 echo "rollback pair: delay=$DELAY window=$WINDOW loss=${LOSS}% jitter=${JITTER}ms frames=$FRAMES"
-env $COMMON MELEE_NET=host MELEE_NET_PORT=$PORT MELEE_NET_SLOT=0 \
+$RUN env $COMMON $SIMH MELEE_NET=host MELEE_NET_PORT=$PORT MELEE_NET_SLOT=0 \
     timeout ${MELEE_RB_TIMEOUT:-500} ./build/pc/melee-pc > "$OUT/$TAG-h.log" 2>&1 &
 sleep 3
-env $COMMON MELEE_NET=127.0.0.1:$PORT MELEE_NET_SLOT=1 \
+$RUN env $COMMON $SIMG MELEE_NET=127.0.0.1:$PORT MELEE_NET_SLOT=1 \
     timeout ${MELEE_RB_TIMEOUT:-500} ./build/pc/melee-pc > "$OUT/$TAG-g.log" 2>&1 &
 wait
 
@@ -64,6 +102,8 @@ for side in h g; do
     grep "^\[RB\] frame" "$f" | tail -1 | cut -c1-140 | sed 's/^/    /'
     grep -m1 -oE "DESYNC at match frame [0-9]+" "$f" | sed 's/^/    /'
     grep -m1 -oE "playing alone.*" "$f" | cut -c1-110 | sed 's/^/    gave up: /'
+    grep -m1 -oE "Low-memory pool reserved at [^ ]+ \([0-9]+ MB\)" "$f" |
+        sed 's/^/    /'
     grep -c DESYNC "$f" | grep -qx 0 || rc=1
 done
 exit $rc

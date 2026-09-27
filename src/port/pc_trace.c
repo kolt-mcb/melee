@@ -1626,6 +1626,28 @@ static void pc_trace_spawn_item(int frame)
  *
  * MELEE_HASHLOG=<path> writes one line per match frame; MELEE_HASHLOG=1 puts
  * it on stderr, which on Android is logcat. */
+/* A pointer as something two machines can compare: its offset from the base of
+ * the low-memory pool, or 0xFFFFFFFF for a null, or the pointer's own low bits
+ * for anything outside the pool (a static, which is at the same link address in
+ * both). Any pointer that goes into the checksum has to come through here. */
+static u32 pc_trace_pool_off(const void* p)
+{
+    extern void pc_lowmem_full_extent(void** base, unsigned long* size,
+                                      unsigned long* used, unsigned long* top);
+    void* base = NULL;
+    unsigned long size = 0, used = 0, top = 0;
+    if (p == NULL) {
+        return 0xFFFFFFFFu;
+    }
+    pc_lowmem_full_extent(&base, &size, &used, &top);
+    if (base != NULL && (const unsigned char*) p >= (unsigned char*) base &&
+        (const unsigned char*) p < (unsigned char*) base + size)
+    {
+        return (u32) ((const unsigned char*) p - (unsigned char*) base);
+    }
+    return (u32) (uintptr_t) p;
+}
+
 /* The same fields, one at a time and named, so a difference can be reported as
  * a field rather than as two hashes that disagree. The rollback self-check in
  * src/port/netplay/pc_snapshot.c uses this to say what a snapshot missed. Kept
@@ -1689,8 +1711,18 @@ int pc_state_fields(PcStateField* out, int max)
             PC_FIELD_AT("obj_pools", pools, &pools);
         }
         /* Unconditional: a field list whose length depends on the state cannot
-         * be compared position by position. */
-        PC_FIELD_AT("gen_head", (u32) (uintptr_t) hsd_804D78FC,
+         * be compared position by position.
+         *
+         * As an offset into the low-memory pool, never as the host pointer it
+         * is. The pool is mmap'd at whatever address the process can get -- the
+         * scan starts at 0x10000000 and takes the first that works, which
+         * depends on that process's own layout -- so two copies of the port
+         * playing each other routinely hold it 256 MB apart. Hashed raw, this
+         * one field then reported a desync on the first frame the generator
+         * list stopped being empty, and every frame after it: a real-looking
+         * divergence, in a match that had not diverged, produced entirely by
+         * the measurement. An offset is the same number on both sides. */
+        PC_FIELD_AT("gen_head", pc_trace_pool_off(hsd_804D78FC),
                     hsd_804D78FC != NULL ? (void*) hsd_804D78FC
                                          : (void*) &hsd_804D78FC);
     }
@@ -1897,6 +1929,82 @@ static void pc_trace_jointhash(void)
     }
     fprintf(stderr, "[JOINTHASH] %u %08X\n",
             (unsigned) gm_GetFrameCount(), h);
+}
+
+/* The same number, but once per *simulated* frame rather than once per
+ * displayed one, and with no requirement that the frame counter go forwards.
+ *
+ * MELEE_HASHLOG cannot be used to chase a rollback desync: it is written from
+ * pc_trace_frame, which runs per displayed frame, so the frames a correction
+ * re-simulates inside one displayed frame never reach it -- and its `g <= last`
+ * guard drops them anyway, because a rewind is precisely the counter going
+ * backwards. What it records for a corrected frame is therefore the guessed
+ * value that was thrown away.
+ *
+ * This writes every pass over every frame, so the last line for a given frame
+ * is that frame's final state. Two sides' logs diffed on that basis name the
+ * first frame that really differs, rather than the first frame a sampled
+ * checksum happened to land on. */
+void pc_state_hash_log_frame(int frame)
+{
+    static int want = -1;
+    static FILE* out;
+    if (want < 0) {
+        const char* p = getenv("MELEE_SIMHASHLOG");
+        want = (p != NULL && *p != '\0');
+        if (want && strcmp(p, "1") != 0 && strcmp(p, "-") != 0) {
+            out = fopen(p, "w");
+        }
+    }
+    if (!want) {
+        return;
+    }
+    fprintf(out != NULL ? out : stderr, "%d %08X\n", frame, pc_state_hash());
+    /* No flush per line. The desync this log exists to find is sensitive to how
+     * long a frame takes -- with a field dump and a flush on every frame it
+     * stopped happening at all, which is the most misleading result a diagnostic
+     * can give. Flushed every so often instead, so a run that is killed rather
+     * than finishing still leaves most of its log behind. */
+    {
+        static int since;
+        if (out != NULL && ++since >= 64) {
+            since = 0;
+            fflush(out);
+        }
+    }
+    /* MELEE_SIMHASHLOG_FIELDS=1 adds the named fields behind the number. The
+     * hash says which frame stopped agreeing; these say which field did, and
+     * they have to be recorded per simulated frame rather than read off the
+     * desync report -- that report prints the state at the moment the mismatch
+     * was noticed, which for a checksum compared on arrival is some later frame
+     * entirely, and it therefore looks like a far bigger divergence than the one
+     * that started it. */
+    {
+        /* MELEE_SIMHASHLOG_FIELDS=1 dumps fields on every frame;
+         * =<from>-<to> only within that range of match frames, which is what
+         * keeps the run's timing close enough to the one that failed. */
+        static int fields = -1;
+        static int f_from, f_to;
+        if (fields < 0) {
+            const char* e = getenv("MELEE_SIMHASHLOG_FIELDS");
+            fields = (e != NULL && *e != '\0');
+            f_from = 0;
+            f_to = 0x7FFFFFFF;
+            if (fields && strchr(e, '-') != NULL) {
+                f_from = atoi(e);
+                f_to = atoi(strchr(e, '-') + 1);
+            }
+        }
+        if (fields && frame >= f_from && frame <= f_to) {
+            PcStateField f[64];
+            int n = pc_state_fields(f, 64);
+            int k;
+            for (k = 0; k < n; k++) {
+                fprintf(out != NULL ? out : stderr, "  %d %d %s %08X\n", frame,
+                        f[k].slot, f[k].name, f[k].val);
+            }
+        }
+    }
 }
 
 static void pc_trace_hashlog(void)

@@ -3301,8 +3301,22 @@ __attribute__((weak)) void port_render_frame_end(void)
          * on a frame nobody sees therefore stops particle time, and the counter
          * is what tells psdisp whether a particle's appsrt has already been
          * transformed this frame. Advance it the way the skipped pass would
-         * have -- the sw == 0 call does that and nothing else. */
-        {
+         * have -- the sw == 0 call does that and nothing else.
+         *
+         * Only when the pass really was skipped. In discard mode the links above
+         * DID run, and render pass 0 of the effects link is itself the sw == 0
+         * call (efLib's render callback, ef/eflib.c), so doing it again here
+         * advanced particle time twice on every caught-up frame. That is the
+         * whole of the rollback desync this was hunted for: the first rewind at
+         * a match entry came back with 35 particle generators where the run it
+         * was redoing had 1, the generator list eventually formed a cycle, and a
+         * peer walking it hung inside efLib_DestroyAll. The self-check says it
+         * plainly once asked the right way -- clean at depth 1, clean at depth 4
+         * with MELEE_NET_SYNCTEST_HIDDEN=draw, failing on the first rewind at
+         * depth 4 with the default -- because the fault needs two frames
+         * re-simulated inside one displayed frame before the double count shows.
+         */
+        if (pc_frame_hidden_mode == 2) {
             extern void psDispParticles(u32 target_link, u32 sw);
             psDispParticles(0, 0);
         }

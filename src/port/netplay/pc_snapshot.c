@@ -1792,7 +1792,18 @@ void pc_snapshot_prerun(void)
     extern u32 gm_GetFrameCount(void);
     s32 frame;
 
-    if (!snap_enabled() || snap_failed) {
+    /* Both reasons to be here, not just the self-check. snap_enabled() is
+     * MELEE_NET_SYNCTEST alone, so with rollback on this function used to return
+     * on its first line and its whole body was dead -- including the two things
+     * below that exist precisely for a rollback: the replay flag was never
+     * cleared, so every frame after the first correction looked like a replayed
+     * one, and the harness's per-simulated-frame work never happened, so the
+     * frames a catch-up re-simulated inside one displayed frame were driven
+     * differently from the frames that got one displayed frame each. Two sides
+     * rewinding by different amounts at different moments then applied it a
+     * different number of times to the same match frame, which is a divergence
+     * the netcode is blamed for and the harness caused. */
+    if ((!snap_enabled() && !pc_rollback_enabled()) || snap_failed) {
         return;
     }
     frame = (s32) gm_GetFrameCount();
@@ -1816,7 +1827,12 @@ void pc_snapshot_prerun(void)
     if (snap_replaying && !snap_enabled() && frame >= snap_replay_until) {
         snap_replaying = 0;
     }
+
     /* Once per simulated frame, which is the point of being here. */
+    {
+        extern void pc_state_hash_log_frame(int frame);
+        pc_state_hash_log_frame(frame);
+    }
     snap_check(frame);
     if (snap_diff_on() == 3) {
         if (snap_replaying) {
