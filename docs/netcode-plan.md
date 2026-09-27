@@ -745,13 +745,34 @@ are not in it. Regenerated against the binary the runs actually used:
 | 7 | **game heap, no symbol** -- 0x104bd1c0, 0x104bd200, and five around 0x4b0076..0x4b0089 |
 | 2 | the outer-bracket blocks the wide scan adds, both game `.data` around the stage tables |
 
-Those seven are the lead: they are the only differences left that are game state,
-they are absent from clean runs, and the same addresses turned up in an earlier
-desyncing run, so they are not run-to-run noise. They are in the pool's carved
-end rather than the bump end, which narrows what they can be -- the object heap,
-ARAM, or the converter arena -- and the next step is to say which region and which
-allocation, because the dump does not currently carry the region a chunk came
-from.
+**Followed to the end, those seven say the archives after all, and the paragraph
+above this one was wrong.** With the region printed per chunk they split cleanly:
+five are in the HSD object heap, two are in the pool's bump end. Read at byte
+granularity, the two in the bump end differ *by byte order* -- `2C 00 00 1E`
+against `1E 00 00 2C`, `91 16 80 00` against `00 80 16 91` -- and the dump's own
+archive flag says they are **inside an archive**. One process has byte-swapped that
+data and the other has not.
+
+`MELEE_SCRIPT_TRACE=1` on both sides of a desyncing run confirms it directly: the
+host byte-swapped **85** archive objects and the guest **95**, with 7 objects only
+the host swapped and 9 only the guest. `pc_script_prepare` swaps an object in place
+the first time an opcode in it is dispatched, a speculative frame dispatches
+scripts the corrected timeline may not, and with the archives out of the snapshot
+nothing puts those back -- so the two sides' archive byte order diverges
+permanently and reading the same word gives two different numbers. The five
+object-heap chunks are downstream of that: one side has objects the other does not.
+
+So the mechanism is what the first commit on this said it was, and the commit that
+"corrected" it was itself wrong -- misled by the floor bug above. Copying the
+archives works because it makes their byte order a function of the frame rather
+than of the history of speculative passes.
+
+Which also explains why `pc_itconv_marks_rewind` did not fix it: un-swapping what
+was swapped *since the snapshot* keeps one process self-consistent, and this is a
+disagreement *between* processes about swaps that each did at a different frame.
+The real fix is to stop the swap state existing -- convert eagerly, or read through
+a byte-swap instead of rewriting the buffer -- and until then the archives are
+copied.
 
 The wide scan says the same thing about memory the snapshot does not cover: 33 of
 2620 outer 64 KB blocks differ in a clean run, all of them port state (the GL
