@@ -2023,8 +2023,12 @@ static void snap_chunkdump_maybe(s32 frame)
                     }
                     t++;
                 }
-                fprintf(o, "%d %p %08X %c\n", (int) frame, (void*) a, buf[j],
-                        in_arch ? 'A' : '-');
+                /* The region index as well: for an address in the pool there
+                 * is no symbol to look up, and which region it came from --
+                 * object heap, ARAM, the converter arena, the bump end -- is
+                 * most of what identifies it. */
+                fprintf(o, "%d %p %08X %c %d\n", (int) frame, (void*) a, buf[j],
+                        in_arch ? 'A' : '-', reg);
             }
             fflush(o);
             free(buf);
