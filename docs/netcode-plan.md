@@ -791,10 +791,21 @@ knowing:
 
 It is still 552. With the filter in place the un-swap reports **zero** objects put
 back across 95 restores, where some were expected, so either no rewind window
-contains a swap or the extra-bit comparison is not seeing them -- that is the next
-thing to look at, and it is a question about the bookkeeping rather than another
-hypothesis about the game. The default is unchanged and re-verified: 860 frames
-compared offline, none differing.
+contains a swap or the extra-bit comparison is not seeing them.
+
+**But the right fix is not down this road at all, and §5 says why.** The other
+decomp-based port with working rollback never rewrites archive data -- it
+byte-swaps on access -- so it has no conversion state to keep in step, and its
+snapshot leaves the archives out. This port did that too until the Android build
+dropped `scalar_storage_order` for want of Clang support. Reading script words
+through explicit accessors instead of rewriting the buffer removes this whole class
+and gives back both the 8 MB and the ten frames a second; more snapshot bookkeeping
+around an in-place conversion only ever narrows the window. That is the M3 tail to
+finish, and it is a change to the four interpreters and the generated command
+structs (`tools/pc_script_le.py`) rather than to the netcode.
+
+The default is unchanged and re-verified: 860 frames compared offline, none
+differing.
 
 The wide scan says the same thing about memory the snapshot does not cover: 33 of
 2620 outer 64 KB blocks differ in a clean run, all of them port state (the GL
@@ -875,7 +886,41 @@ Surveyed 2026-09-26. Two architectures, both of which solve problems this port
 has, and neither of whose code can be copied -- see the licence note.
 
 **Decomp-based, own netcode** (`999sian/melee-pc`, GPL-3.0-or-later). The same
-foundation as this port, with rollback already working. Its snapshot regions,
+foundation as this port, with rollback already working.
+
+*Re-surveyed 2026-09-27, for the archive question.* Two facts from it settle what
+this port should do. Its porting notes say "Structs mapping archive contents are
+byte-swapped on access by GCC, disc pointers are 32-bit slots relocated to host
+addresses" -- so the archive data **stays big-endian in memory and is never
+rewritten**, and there is no lazy conversion state to get out of step. And its
+README says "Audio/worker state remains excluded" from the snapshot. So the port
+with working rollback keeps archives immutable and leaves audio out, which is the
+exact opposite of the arrangement this port arrived at.
+
+This port *used* to do the same thing: `pc_script.h` records that it "used to read
+them in place through GCC's scalar_storage_order attribute; that is GCC-only", and
+`lb/types.h` and `gr/grbigblue.c` both record that the attribute went away **for
+the Android build**, Clang not having it. Swapping in place instead is what made the
+archives mutable, and that is the desync in M3. The way out is therefore not more
+snapshot bookkeeping but byte-swap on *access* again, done portably -- explicit
+accessors rather than the GCC attribute -- which removes the class outright and
+lets the archives go back to being 8 MB this port does not copy.
+
+**Dolphin's own Melee rollback** (`SlippiSavestate.cpp` in the Slippi tree, in
+`extern/`, GPL-2.0). Worth reading because it is the same problem solved against
+emulated RAM, and its shape is the one arrived at here independently: four full
+regions -- two data/BSS, two heap, the main heap's bounds read at run time from the
+pointers at `0x804d76b8` and `0x804d76bc` -- minus a sorted exclusion list which is
+subtracted by splitting the regions, which is what `snap_holes_build` does.
+
+What it excludes is the useful part: **audio, and XFB/VI memory (`0x804c0980 +
+0x15F8`). Not archives.** Its sound list includes `0x80433C64 + 0x1EE80`, which is
+`lbl_80433C64` -- the 53 KB AXFX reverb work buffer that turned out to be 556 of
+the 1980 chunks in this port's cross-process noise floor, with the 71 KB delay
+buffer beside it. So a Melee rollback is expected to save the archives and expected
+not to save the mixer, and both halves of that are now measured here too. Excluding
+those two buffers would take 124 KB off the snapshot and, more usefully, remove
+most of the floor that makes a cross-process memory diff hard to read. Its snapshot regions,
 which are the starting point for M2: the `HeapDesc[]` array at the arena start
 ("list heads live outside every cell and the first attempt missed them"); the
 game's `.data`/`.bss` bracketed by linker symbols, minus excluded translation
