@@ -360,17 +360,53 @@ but the last.
 It works: with it on, the frame counter goes from 1 to 5 inside a single
 displayed frame, and the four hidden frames draw nothing.
 
-It is not yet *verified*, and the reason is worth writing down because it bears on
-M3. `pc_snapshot_frame` is called from `port_input_poll`, which runs once per
-displayed frame -- not once per simulated frame. Everything the self-check does
-per frame hangs off that call: the hash it stores, the comparison, the recorded
-pads. With catch-up on, several frames are simulated per call, so the
-bookkeeping no longer lines up and the check reports what looks like a failed
-rewind ("the next frame is 5, not 2") when what actually happened is the thing it
-was asked to do. Moving the per-frame half of the check to `pc_snapshot_prerun`,
-which does run once per simulated frame, is the next step and is also what M3
-needs regardless: the rollback loop has to feed inputs and compare state per
-simulated frame, not per displayed one.
+It is verified now, and verifying it needed the check restructured. Everything
+keyed to a frame -- the stored hash, the comparison, the recorded inputs -- hung
+off `pc_snapshot_frame`, which `port_input_poll` calls once per *displayed* frame.
+With catch-up a displayed frame covers several simulated ones, so all of it moved
+to `pc_snapshot_prerun`, which the scene loop calls once per simulated frame. That
+is the structure M3 needs anyway: a rollback loop feeds inputs and compares state
+per simulated frame.
+
+| case | depth | result |
+| --- | --- | --- |
+| Samus vs Donkey Kong, CPUs | 2 / 4 / 8 | 3232 / 3840 / 4224 frames compared, clean |
+| the idle debug boot | 8 | 7168 frames compared, clean |
+| Pikachu vs Peach, CPUs | 2 | 7168 frames compared, clean |
+| Pikachu vs Peach, CPUs | 4 | diverges at frame 5932 |
+| Pikachu vs Peach, CPUs | 8 | diverges at frame 3310 |
+
+**And the cost, which is the number M3 turns on.** The burst is timed from the
+restore to the last re-simulated frame:
+
+| frames caught up | average | worst |
+| --- | --- | --- |
+| 2 | 0.5 ms | 4.1 ms |
+| 4 | 1.3 ms | 5.5 ms |
+| 8 | 4.7 ms | 28.0 ms |
+
+So the simulation is cheap -- a frame of it is a fraction of a millisecond, because
+almost all of a displayed frame is drawing -- and an eight-frame rollback costs
+about 4.7 ms of re-simulation plus one 2 ms restore. That fits in a 16.7 ms frame
+beside the ~4.5 ms the port already spends, with the worst case uncomfortably
+close. The per-frame snapshot, not the re-simulation, is the thing to watch.
+
+**The open end, and it is narrow.** Pikachu vs Peach diverges under catch-up, and
+the deeper the catch-up the sooner: clean for 7168 frames at depth 2, frame 5932
+at depth 4, frame 3310 at depth 8. The report is a single RNG draw
+(`rand_draws` 0xAC4E against 0xAC4D) and the ring names the HUD's damage-counter
+shake, `offset_rand` in `if/ifstatus.c`. That is a gobj proc, so it does run during
+a catch-up -- this is not an input the hidden frames are missing -- and something
+about its state spans the window instead. Depth-dependence is the clue to follow.
+
+One harness artefact was found and fixed getting here, and it is the kind worth
+naming. `MELEE_FORCE_CPU` writes the CPU levels into the player slots every frame,
+from `pc_trace_frame`, which `render_present` calls -- so it happened once per
+frame the port *displayed*. The same thing, until the simulation runs more than
+once per displayed frame: the caught-up frames never got the write. It is
+simulation input, so it is now `pc_force_cpu_frame()` and runs once per simulated
+frame. Moving the divergence from frame 3273 to 3310 is all it did, which is how
+one knows it was real and not the whole story.
 
 One thing found on the way, and it was hiding in plain sight:
 `undef_stubs.c` had a strong `lb_80019894()` returning a constant 1, which won

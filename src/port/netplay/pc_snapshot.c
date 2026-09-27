@@ -1271,7 +1271,10 @@ static int snap_nfields[SNAP_HASH_RING];
  * again instead of with whatever the input layer holds by then. */
 #define SNAP_PADS 4
 static GCPadStatus snap_pads[SNAP_HASH_RING][SNAP_PADS];
-static int snap_pads_have[SNAP_HASH_RING];
+/* Keyed by the frame the inputs belong to, not by the pad read that produced
+ * them: with catch-up a displayed frame can cover several simulated ones, so the
+ * two numbering schemes have to be kept apart. */
+static s32 snap_pads_frame[SNAP_HASH_RING];
 static int snap_replaying;
 static s32 snap_replay_until;
 /* The frame the restored snapshot was taken at. After a restore the game's own
@@ -1288,70 +1291,34 @@ static int snap_frames_checked;
  * compared; this is the number that says the check did work. */
 static int snap_frames_compared;
 
-void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
+/* The per-frame half of the self-check, and it runs once per *simulated* frame.
+ *
+ * That distinction is the whole reason this is a separate function.
+ * pc_snapshot_frame below is called from port_input_poll, which runs once per
+ * frame the port displays -- and with catch-up on, a displayed frame can contain
+ * several simulated ones. Everything keyed to a frame therefore belongs here, at
+ * the scene loop's per-iteration hook, and not there: the hash, the comparison,
+ * and the decision that a replay has finished.
+ *
+ * The frame counter reads one more here than it does at the pad read, because it
+ * advances in between (MELEE_SNAPTRACE=1 prints both). So a snapshot taken at
+ * pad-read frame F is the state this sees at G = F+1, which is why the
+ * rewind-took test below is still "restored frame plus one".
+ */
+static void snap_check(s32 frame)
 {
     u32 h;
     int slot;
 
-    if (!snap_enabled() || snap_failed) {
+    if (!snap_enabled() || snap_failed || frame <= 0) {
         return;
     }
-    {
-        /* Say so once, with the frame, because "no output" otherwise reads
-         * the same whether the check is off, never reached, or never given a
-         * frame to work with. */
-        static int announced = 0;
-        if (!announced) {
-            announced = 1;
-            void* b = NULL;
-            unsigned long u = 0;
-            pc_lowmem_game_extent(&b, &u);
-            fprintf(stderr, "[SNAP] synctest on: rewinding %d frames "
-                            "periodically; first frame seen is %d, game heap "
-                            "%p + %lu KB\n",
-                    snap_depth(), (int) frame, b, u >> 10);
-            fflush(stderr);
-        }
-    }
-    {
-        /* Until the first rewind lands, say what frame numbers are arriving:
-         * a counter that never leaves zero is a different problem from a
-         * snapshot that never restores. */
-        static s32 seen_max = -1;
-        static int ticks = 0;
-        if (frame > seen_max) {
-            seen_max = frame;
-        }
-        if (snap_rewinds == 0 && (++ticks % 120) == 0) {
-            fprintf(stderr, "[SNAP] %d frames seen, highest %d, snapshot %s\n",
-                    ticks, (int) seen_max,
-                    snap_keep.valid ? "held" : "not taken");
-            fflush(stderr);
-        }
-    }
-    if (snap_trace()) {
-        extern u32 pc_frame_number;
-        fprintf(stderr, "[SNAPTRACE] padread frame=%d pcf=%u replaying=%d\n",
-                (int) frame, (unsigned) pc_frame_number, snap_replaying);
-    }
-    if (frame <= 0) {
-        return;
-    }
-    if (snap_scrub_kb() != 0) {
-        snap_scrub_stack(snap_scrub_kb());
-    }
-
     h = pc_state_hash();
     slot = (int) (frame & (SNAP_HASH_RING - 1));
 
     if (snap_replaying) {
-        /* Replay the frame with the inputs it had. This has to happen before
-         * the comparison below, because it is an input to the frame about to
-         * run, not a result of it. */
-        if (pads != NULL && snap_pads_have[slot] &&
-            snap_hash_frame[slot] == frame) {
-            memcpy(pads, snap_pads[slot], sizeof(snap_pads[slot]));
-        }
+        /* The inputs for this frame were put back at the pad read, which is
+         * where they are available; see pc_snapshot_frame. */
         /* The first frame after a restore is the one that proves the restore
          * rewound anything. A replay that resumes at the frame after the one
          * the rewind was triggered from has not replayed: the game read its
@@ -1541,15 +1508,85 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
         return;
     }
 
+    /* First run of this frame: remember what it produced, so the replay has
+     * something to be compared against. The inputs are recorded at the pad read
+     * instead, which is the only place they exist. */
     snap_hash_frame[slot] = frame;
     snap_hash[slot] = h;
-    if (pads != NULL) {
-        memcpy(snap_pads[slot], pads, sizeof(snap_pads[slot]));
-        snap_pads_have[slot] = 1;
-    } else {
-        snap_pads_have[slot] = 0;
-    }
     snap_nfields[slot] = pc_state_fields(snap_fields[slot], SNAP_FIELDS);
+
+}
+
+void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
+{
+    u32 h;
+    int slot;
+
+    if (!snap_enabled() || snap_failed) {
+        return;
+    }
+    {
+        /* Say so once, with the frame, because "no output" otherwise reads
+         * the same whether the check is off, never reached, or never given a
+         * frame to work with. */
+        static int announced = 0;
+        if (!announced) {
+            announced = 1;
+            void* b = NULL;
+            unsigned long u = 0;
+            pc_lowmem_game_extent(&b, &u);
+            fprintf(stderr, "[SNAP] synctest on: rewinding %d frames "
+                            "periodically; first frame seen is %d, game heap "
+                            "%p + %lu KB\n",
+                    snap_depth(), (int) frame, b, u >> 10);
+            fflush(stderr);
+        }
+    }
+    {
+        /* Until the first rewind lands, say what frame numbers are arriving:
+         * a counter that never leaves zero is a different problem from a
+         * snapshot that never restores. */
+        static s32 seen_max = -1;
+        static int ticks = 0;
+        if (frame > seen_max) {
+            seen_max = frame;
+        }
+        if (snap_rewinds == 0 && (++ticks % 120) == 0) {
+            fprintf(stderr, "[SNAP] %d frames seen, highest %d, snapshot %s\n",
+                    ticks, (int) seen_max,
+                    snap_keep.valid ? "held" : "not taken");
+            fflush(stderr);
+        }
+    }
+    if (snap_trace()) {
+        extern u32 pc_frame_number;
+        fprintf(stderr, "[SNAPTRACE] padread frame=%d pcf=%u replaying=%d\n",
+                (int) frame, (unsigned) pc_frame_number, snap_replaying);
+    }
+    if (frame <= 0) {
+        return;
+    }
+    if (snap_scrub_kb() != 0) {
+        snap_scrub_stack(snap_scrub_kb());
+    }
+
+    /* The pads that will drive the next frame, keyed by that frame. The counter
+     * advances between here and the simulation, so the pads read while it says F
+     * are the inputs to frame F+1; keying them that way is what lets a replay
+     * ask for "the inputs frame G had" without having to know the offset. */
+    if (pads != NULL) {
+        int ns = (int) ((frame + 1) & (SNAP_HASH_RING - 1));
+        if (!snap_replaying) {
+            memcpy(snap_pads[ns], pads, sizeof(snap_pads[ns]));
+            snap_pads_frame[ns] = frame + 1;
+        } else if (snap_pads_frame[ns] == frame + 1) {
+            /* Replaying: put back the inputs that frame had. */
+            memcpy(pads, snap_pads[ns], sizeof(snap_pads[ns]));
+        }
+    }
+    if (snap_replaying) {
+        return;
+    }
 
     if (snap_keep.valid && frame >= snap_keep.frame + snap_depth()) {
         s32 back = snap_keep.frame;
@@ -1574,9 +1611,8 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
              * and the wrong pads are the right ones, which is exactly why a
              * 5760-frame idle match was clean and any match with CPUs playing
              * failed within a hundred frames. */
-            int ks = (int) (back & (SNAP_HASH_RING - 1));
-            if (pads != NULL && snap_pads_have[ks] &&
-                snap_hash_frame[ks] == back) {
+            int ks = (int) ((back + 1) & (SNAP_HASH_RING - 1));
+            if (pads != NULL && snap_pads_frame[ks] == back + 1) {
                 memcpy(pads, snap_pads[ks], sizeof(snap_pads[ks]));
             }
             if (snap_diff_on() >= 2) {
@@ -1698,17 +1734,30 @@ void pc_snapshot_prerun(void)
     extern u32 gm_GetFrameCount(void);
     s32 frame;
 
-    if (!snap_enabled() || snap_failed || snap_diff_on() != 3) {
+    if (!snap_enabled() || snap_failed) {
         return;
     }
     frame = (s32) gm_GetFrameCount();
     if (frame <= 0) {
         return;
     }
-    if (snap_replaying) {
-        diff_compare(frame);
-    } else {
-        diff_capture(frame);
+    /* The harness's own per-frame writes, before the frame they belong to runs.
+     * MELEE_FORCE_CPU lives in pc_trace_frame, which render_present calls, so
+     * with catch-up it stopped happening for the frames that are simulated but
+     * not shown -- and the check then reported a divergence that was the
+     * harness's doing. Simulation input belongs once per simulated frame. */
+    {
+        extern void pc_force_cpu_frame(void);
+        pc_force_cpu_frame();
+    }
+    /* Once per simulated frame, which is the point of being here. */
+    snap_check(frame);
+    if (snap_diff_on() == 3) {
+        if (snap_replaying) {
+            diff_compare(frame);
+        } else {
+            diff_capture(frame);
+        }
     }
 }
 

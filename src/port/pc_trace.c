@@ -1950,6 +1950,138 @@ static void pc_trace_hashlog(void)
     }
 }
 
+/* MELEE_FORCE_CPU's per-frame write, on its own.
+ *
+ * It was inside pc_trace_frame, which render_present calls -- so it happened once
+ * per frame the port *displayed*. That is the same thing until the simulation
+ * runs more than once per displayed frame, which is what a rollback does: the
+ * caught-up frames then never got the write, the CPU slots reverted for them, and
+ * the self-check reported a divergence that was the harness's doing rather than
+ * the port's. This is simulation input, so it belongs once per simulated frame.
+ *
+ * Idempotent -- it writes the same values every time -- so calling it from both
+ * places costs nothing and keeps harness runs without netplay working. */
+void pc_force_cpu_frame(void)
+{
+    {
+        const char* cpu = getenv("MELEE_FORCE_CPU");
+        /* From match frame 1 rather than during the load. Setting the
+         * slots to CPU before the match starts changes the entry: the
+         * fighters are still descending at match frame 1 instead of
+         * standing, and the two sides' entries then run out of phase by
+         * the difference in their load lengths (measured: 29 frames, port
+         * ahead). Left human through the load, both sides' entries are
+         * identical to the frame, and the slots become CPUs together at
+         * the first frame either of them is playing. */
+        if (cpu != NULL) {
+            int lvl[2] = { 0, 0 };
+            int slot;
+            sscanf(cpu, "%d,%d", &lvl[0], &lvl[1]);
+            for (slot = 0; slot < 2; slot++) {
+                StaticPlayer* sp = Player_GetPtrForSlot(slot);
+                if (lvl[slot] <= 0 || sp == NULL) {
+                    continue;
+                }
+                /* Level and type are plain data and are written from the
+                 * first frame: the AI copies them when it initialises,
+                 * and a slot that becomes a CPU without them fights at
+                 * level 1 whatever was asked for. slot_type is what
+                 * actually makes the slot a CPU, and it waits: set during
+                 * the load it changes the entry sequence, leaving the
+                 * fighters still descending at match frame 1 and the two
+                 * sides' entries out of phase by the difference in their
+                 * load lengths. */
+                sp->cpu_level = (u8) lvl[slot];
+                sp->cpu_type = 4;
+                if (gm_GetFrameCount() >= 2) {
+                    sp->pkind = Gm_PKind_Cpu;
+                }
+                /* The AI copies the level once, in ftCo_800A101C, and
+                 * here that runs before this hook has written the slot
+                 * even once -- the fighter then fights at level 1 whatever
+                 * was asked for, while the console, whose longer load
+                 * gives its own hook several frames first, gets the real
+                 * level. Correct the live AI struct too, up to the point
+                 * the match starts. */
+                if (gm_GetFrameCount() <= 2) {
+                    /* Both entities, not just the first.
+                     * player_entity[1] is the follower -- Nana -- and she
+                     * is a fighter with an AI struct of her own, created
+                     * in the same load and drawing from the same stream.
+                     * Forcing only the leader left the Ice Climbers
+                     * parting from the console on match frame 14 with
+                     * three extra draws, the same signature the leaders
+                     * had on frame 35. */
+                    int ei;
+                    for (ei = 0; ei < 2; ei++) {
+                    HSD_GObj* g = sp->player_entity[ei];
+                    Fighter* fp = (g != NULL) ? (Fighter*) g->user_data
+                                              : NULL;
+                    if (fp != NULL) {
+                        fp->cpu.level = lvl[slot];
+                        /* The AI's decision timer is seeded from the one
+                         * random draw ftCo_800A101C makes as the fighter
+                         * is created. Both sides start it from zero, and
+                         * both do it here -- the local Dolphin build makes
+                         * the same two writes under the same variable, so
+                         * this is an alignment and not a correction. Once,
+                         * on the frame the slots become CPUs; writing it
+                         * every frame would stop the clock.
+                         *
+                         * The load frame is reseeded immediately before
+                         * the fighters are built now (see
+                         * pc_seed_at_fighter_create), so the draw itself
+                         * lands in the same place on both sides; dropping
+                         * these two writes on this side alone is what is
+                         * wrong, not the writes. */
+                        if (gm_GetFrameCount() == 2) {
+                            fp->cpu.x7C = 0;
+                            fp->cpu.x80 = 0;
+                            /* And the ranged-attack cooldown, which
+                             * ftCo_800B9704 computes from one random draw
+                             * as the fighter is created -- inside the
+                             * load, which is the one window the two sides
+                             * cannot be made to match.
+                             *
+                             * MELEE_SEED_EACH_LOAD restarts both sides
+                             * from the same seed at the top of every load
+                             * frame, so a draw agrees as long as it falls
+                             * in the same place within its frame. These
+                             * do not: the console spreads its load over
+                             * 185 frames and builds its two fighters in
+                             * different ones, so each takes the same draw
+                             * from a freshly seeded stream; this side
+                             * builds both in one frame and the second
+                             * reads on from where the first stopped.
+                             * Measured on Samus vs Samus: 39 and 32 here
+                             * against 39 and 39 on the console, and 32
+                             * counts out six frames sooner, so the second
+                             * CPU committed to an attack on match frame
+                             * 35 and the console's on 41. That was the
+                             * most common single divergence in the
+                             * character-by-stage sweep.
+                             *
+                             * Reseeding per fighter instead fixes Pokemon
+                             * Stadium and breaks Onett, because which
+                             * load frame each fighter lands in is itself
+                             * a property of the stage. So agree on the
+                             * value rather than on the draw, from the
+                             * level both sides already agree about. This
+                             * is the same kind of alignment as the two
+                             * writes above, and the local Dolphin build
+                             * makes the same write under the same
+                             * variable. */
+                            fp->cpu.x34 =
+                                (10 - lvl[slot]) * 22 + 10;
+                        }
+                    }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void pc_trace_frame(int frame)
 {
     pc_trace_spawn_item(frame);
@@ -2267,123 +2399,7 @@ void pc_trace_frame(int frame)
          * and this did not -- the two fought different matches from frame 1.
          * CPU type 4 as well: a CPU with no type set never commits to an
          * attack. */
-        {
-            const char* cpu = getenv("MELEE_FORCE_CPU");
-            /* From match frame 1 rather than during the load. Setting the
-             * slots to CPU before the match starts changes the entry: the
-             * fighters are still descending at match frame 1 instead of
-             * standing, and the two sides' entries then run out of phase by
-             * the difference in their load lengths (measured: 29 frames, port
-             * ahead). Left human through the load, both sides' entries are
-             * identical to the frame, and the slots become CPUs together at
-             * the first frame either of them is playing. */
-            if (cpu != NULL) {
-                int lvl[2] = { 0, 0 };
-                int slot;
-                sscanf(cpu, "%d,%d", &lvl[0], &lvl[1]);
-                for (slot = 0; slot < 2; slot++) {
-                    StaticPlayer* sp = Player_GetPtrForSlot(slot);
-                    if (lvl[slot] <= 0 || sp == NULL) {
-                        continue;
-                    }
-                    /* Level and type are plain data and are written from the
-                     * first frame: the AI copies them when it initialises,
-                     * and a slot that becomes a CPU without them fights at
-                     * level 1 whatever was asked for. slot_type is what
-                     * actually makes the slot a CPU, and it waits: set during
-                     * the load it changes the entry sequence, leaving the
-                     * fighters still descending at match frame 1 and the two
-                     * sides' entries out of phase by the difference in their
-                     * load lengths. */
-                    sp->cpu_level = (u8) lvl[slot];
-                    sp->cpu_type = 4;
-                    if (gm_GetFrameCount() >= 2) {
-                        sp->pkind = Gm_PKind_Cpu;
-                    }
-                    /* The AI copies the level once, in ftCo_800A101C, and
-                     * here that runs before this hook has written the slot
-                     * even once -- the fighter then fights at level 1 whatever
-                     * was asked for, while the console, whose longer load
-                     * gives its own hook several frames first, gets the real
-                     * level. Correct the live AI struct too, up to the point
-                     * the match starts. */
-                    if (gm_GetFrameCount() <= 2) {
-                        /* Both entities, not just the first.
-                         * player_entity[1] is the follower -- Nana -- and she
-                         * is a fighter with an AI struct of her own, created
-                         * in the same load and drawing from the same stream.
-                         * Forcing only the leader left the Ice Climbers
-                         * parting from the console on match frame 14 with
-                         * three extra draws, the same signature the leaders
-                         * had on frame 35. */
-                        int ei;
-                        for (ei = 0; ei < 2; ei++) {
-                        HSD_GObj* g = sp->player_entity[ei];
-                        Fighter* fp = (g != NULL) ? (Fighter*) g->user_data
-                                                  : NULL;
-                        if (fp != NULL) {
-                            fp->cpu.level = lvl[slot];
-                            /* The AI's decision timer is seeded from the one
-                             * random draw ftCo_800A101C makes as the fighter
-                             * is created. Both sides start it from zero, and
-                             * both do it here -- the local Dolphin build makes
-                             * the same two writes under the same variable, so
-                             * this is an alignment and not a correction. Once,
-                             * on the frame the slots become CPUs; writing it
-                             * every frame would stop the clock.
-                             *
-                             * The load frame is reseeded immediately before
-                             * the fighters are built now (see
-                             * pc_seed_at_fighter_create), so the draw itself
-                             * lands in the same place on both sides; dropping
-                             * these two writes on this side alone is what is
-                             * wrong, not the writes. */
-                            if (gm_GetFrameCount() == 2) {
-                                fp->cpu.x7C = 0;
-                                fp->cpu.x80 = 0;
-                                /* And the ranged-attack cooldown, which
-                                 * ftCo_800B9704 computes from one random draw
-                                 * as the fighter is created -- inside the
-                                 * load, which is the one window the two sides
-                                 * cannot be made to match.
-                                 *
-                                 * MELEE_SEED_EACH_LOAD restarts both sides
-                                 * from the same seed at the top of every load
-                                 * frame, so a draw agrees as long as it falls
-                                 * in the same place within its frame. These
-                                 * do not: the console spreads its load over
-                                 * 185 frames and builds its two fighters in
-                                 * different ones, so each takes the same draw
-                                 * from a freshly seeded stream; this side
-                                 * builds both in one frame and the second
-                                 * reads on from where the first stopped.
-                                 * Measured on Samus vs Samus: 39 and 32 here
-                                 * against 39 and 39 on the console, and 32
-                                 * counts out six frames sooner, so the second
-                                 * CPU committed to an attack on match frame
-                                 * 35 and the console's on 41. That was the
-                                 * most common single divergence in the
-                                 * character-by-stage sweep.
-                                 *
-                                 * Reseeding per fighter instead fixes Pokemon
-                                 * Stadium and breaks Onett, because which
-                                 * load frame each fighter lands in is itself
-                                 * a property of the stage. So agree on the
-                                 * value rather than on the draw, from the
-                                 * level both sides already agree about. This
-                                 * is the same kind of alignment as the two
-                                 * writes above, and the local Dolphin build
-                                 * makes the same write under the same
-                                 * variable. */
-                                fp->cpu.x34 =
-                                    (10 - lvl[slot]) * 22 + 10;
-                            }
-                        }
-                        }
-                    }
-                }
-            }
-        }
+        pc_force_cpu_frame();
         if (want != NULL && !seeded && gm_GetFrameCount() == 1) {
             seeded = 1;
             *HSD_RandSeedPtr = (u32) strtoul(want, NULL, 16);
