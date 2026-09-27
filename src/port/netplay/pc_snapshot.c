@@ -626,7 +626,43 @@ static int snap_eqstack(void)
     return on;
 }
 
-static int snap_depth(void)
+/* How many frames to rewind, and how often. Small and frequent finds a missing
+ * region sooner; a rollback in a real session is rarely more than a handful of
+ * frames, so this is also about the right shape.
+ *
+ * MELEE_NET_SYNCTEST_DEPTH_MAX=<n> makes it vary instead: each rewind picks a
+ * depth in [1, n]. That is deliberately closer to what rollback does than a fixed
+ * cadence is -- rollback rewinds whatever range the link produces, and the two
+ * machines rewind different ones -- and it is the cheapest way to ask whether
+ * re-simulating a ragged range is as faithful as re-simulating a regular one,
+ * with no networking involved. Deterministic, so a failure reproduces. */
+static unsigned snap_rng_state = 0x9E3779B9u;
+
+static unsigned snap_rng(void)
+{
+    /* xorshift32: this must not touch the game's RNG, which is the thing being
+     * checked. */
+    unsigned x = snap_rng_state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    snap_rng_state = x;
+    return x;
+}
+
+static int snap_depth_max(void)
+{
+    static int n = -1;
+    if (n < 0) {
+        const char* s = getenv("MELEE_NET_SYNCTEST_DEPTH_MAX");
+        n = (s != NULL) ? atoi(s) : 0;
+        if (n < 0) n = 0;
+        if (n > 32) n = 32;
+    }
+    return n;
+}
+
+static int snap_depth_fixed(void)
 {
     static int n = -1;
     if (n < 0) {
@@ -636,6 +672,21 @@ static int snap_depth(void)
         if (n > 32) n = 32;
     }
     return n;
+}
+
+/* Chosen when a snapshot is taken and held until it is used, so the depth a
+ * rewind reports is the depth it actually rewound. */
+static int snap_depth_now;
+
+static int snap_depth(void)
+{
+    if (snap_depth_max() == 0) {
+        return snap_depth_fixed();
+    }
+    if (snap_depth_now < 1) {
+        snap_depth_now = 1 + (int) (snap_rng() % (unsigned) snap_depth_max());
+    }
+    return snap_depth_now;
 }
 
 /* What the last snapshot actually copied, per region and in total, so the log
@@ -1640,6 +1691,7 @@ void pc_snapshot_frame(s32 frame, GCPadStatus* pads)
     }
 
     if (!snap_keep.valid) {
+        snap_depth_now = 0; /* a fresh depth for the next rewind */
         if (snapshot_take(&snap_keep, frame) && snap_diff_on() >= 2) {
             diff_capture(frame);
         }

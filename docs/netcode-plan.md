@@ -511,14 +511,35 @@ mistake -- a check that cannot fail:
   rollback path only for confirmed frames, since a frame simulated against a
   guess has a state about to be thrown away.
 
-**What to do next.** The desync report now prints this side's traced fields, so
-diffing the two logs names the field rather than the frame. It says the particle
-system, which is where every hard divergence in this milestone has ended up. The
-suspicion worth testing first is that re-simulating a *ragged* range is not
-idempotent in some case the self-check does not reach: the check always rewinds a
-fixed depth from a fixed cadence, while rollback rewinds whatever range the link
-happens to produce, and the two sides rewind different ones. A self-check that
-rewinds random depths would settle that without any networking at all.
+**What to do next, and one thing already ruled out.** The desync report now
+prints this side's traced fields, so diffing the two logs names the field rather
+than the frame. It says the particle system, which is where every hard divergence
+in this milestone has ended up.
+
+The first suspicion was that re-simulating a *ragged* range is not faithful in
+some case the self-check does not reach -- the check rewinds a fixed depth on a
+fixed cadence, while rollback rewinds whatever the link produces and the two sides
+rewind different ranges. `MELEE_NET_SYNCTEST_DEPTH_MAX=<n>` settles that without
+any networking: each rewind picks a depth in [1, n], deterministically so a
+failure reproduces. At a maximum of eight, both CPU lineups run **1600 rewinds and
+7164 frames compared, clean**. Ragged ranges replay exactly as regular ones do, so
+that is not it.
+
+Which leaves the difference that actually distinguishes rollback from the
+self-check: a correction re-simulates with *different* inputs, on purpose, and the
+two sides only converge if every frame that used a guess is re-simulated with the
+same real inputs on both. The next places to look, in order:
+
+- Whether a side ever hashes a frame it later changes. The argument that it cannot
+  is that a correction only ever rewinds to a frame after the last one hashed,
+  because hashing requires no outstanding guess -- worth checking rather than
+  trusting, by recording the frame each hash was taken at and asserting no rewind
+  reaches it.
+- `hash_compare` stores a peer hash that arrives early in a ring indexed by
+  `frame & (NET_HASH_RING - 1)`, and compares it when this side reaches that
+  frame. Under rollback the two sides drift further apart than the barrier ever
+  let them, so that ring is a candidate for comparing two different frames'
+  values.
 
 Two other things the runs turned up, both needing work before the acceptance
 below can be attempted: a side that falls behind can make its peer wait long
