@@ -919,12 +919,34 @@ raw-read macros, which invert consistently. It is narrower than it first looks:
   numeric difference in data read from an archive, which is the fingerprint of the
   in-place swap having converted something a later reader wanted big-endian.
 
-So what has to be settled before M4 can be measured is which of the two is right
-on the debug boot, and the console can only be asked down the menu route. Either
-the debug boot reads fighter attributes through a path the menu route does not, or
-the in-place swap is mutating data that shares a reloc object with a script -- the
-hazard `MELEE_SWAPCHECK` was built for, and it only ever looked at `FObjDesc`
-nodes.
+Narrowed further, and it is the second of those. The differing columns are a
+fighter's ECB and two joint columns, and an ECB is computed from joint positions --
+so this is animation data read differently, not an attribute constant. The
+in-place build swaps **25 objects** over that boot, and they are small: 4, 16, 40
+bytes, sitting in the archive data in the pool's bump end, right among the
+`_figatree` animation trees the fighter converter pulls (`MELEE_FTCONV_TRACE`
+names them). A single 4-byte word byte-reversed inside an animation curve is
+exactly a slightly wrong joint, and a slightly wrong joint is exactly a slightly
+wrong ECB.
+
+`MELEE_SWAPCHECK=1` reports nothing, which is not a contradiction: it only ever
+looked at stage `FObjDesc` nodes, never at fighter animation.
+
+**Which implies the fix, and it is smaller than an accessor refactor.**
+`pc_script_prepare` swaps a whole *reloc object* because that was the cheap way to
+avoid needing opcode lengths, and an object holds whatever the archive put beside
+the script. The marks bitmap already has **one bit per four-byte word** -- only the
+object's first word is ever set. Marking and swapping per word, for the couple of
+words a command actually spans, would mean nothing but words read as script is
+ever written. That shrinks what the in-place arrangement can corrupt from an
+object to at most a word or two past the end of a script, and it shrinks the
+rollback hazard with it. Whether it closes the gap entirely is a measurement: does
+the in-place build then agree with the attribute build on the debug boot?
+
+Either way the conclusion for Android stands: it runs the arrangement that mutates
+archive data, the test harnesses lean heavily on the debug boot, and the attribute
+arrangement is the one that cannot corrupt. That is worth fixing for the port's own
+sake, not only for the netcode.
 
 *The hardware half is waiting on hardware:* `adb devices` is empty, so
 desktop-against-tablet has not been run. Everything above was reachable without
