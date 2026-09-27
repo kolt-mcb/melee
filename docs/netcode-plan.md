@@ -984,6 +984,44 @@ not reach the affected motions -- and what proves it is the offset table above.
 **So M4's gate is open.** The arrangements agree, which was the thing that had to
 be settled before a desktop-versus-tablet measurement could mean anything.
 
+### M4, software half: measured
+
+Desktop against tablet is GCC against Clang, and therefore the attribute
+arrangement against the in-place one. `MELEE_RB_GUEST_BIN` puts a different binary
+on the guest side, so that pairing can be measured here without hardware -- and it
+is the half that was failing, at match frame 2.
+
+Two full matches, 7200 frames each, 5% loss and 100 ms jitter, attribute host
+against in-place guest: **0 desyncs on both sides of both runs**, with 908-936
+rewinds and the same number of windows corrected. Non-zero correction counts are
+part of the result, not decoration: a guard that silently declined every rewind once
+produced a flawless run with rollback switched off.
+
+Then the coverage, which is where the first version of this measurement went wrong.
+The rig builds a fixed environment list per side, so `MELEE_NET_HASH_EVERY` set
+outside it never reached the game, and the first clean 7200-frame run had compared
+**418 of the 5146 frames it hashed**. A rollback desync that begins between two
+samples is invisible to that, so the number meant nothing. Full comparison is now
+the rig's default; the reruns compared 4147 of 5149. The shortfall is inherent --
+a frame still speculative, or whose peer hash has not arrived, cannot be compared on
+the wire.
+
+The remaining fifth is closed offline. With `MELEE_RB_SIMHASH=1` each side writes
+one line per simulated frame, and diffing the two files compares **every** frame:
+6138 compared, **0 differing**. The two arrangements are bit-identical for a full
+impaired match.
+
+> One trap in reading those files: the line carries the state hash *and* the two
+> render-pass counters added for the M3 diagnostics. Those legitimately differ
+> between the sides -- different rewind counts mean different hidden passes -- so a
+> whole-line diff reports 6137 of 6138 frames differing and looks catastrophic.
+> Compare column 2.
+
+*Hardware half still blocked:* `adb devices` is empty, so desktop-against-tablet on
+real hardware is unmeasured. Everything that can be checked without the device now
+passes, including that the Android build finally selects the arrangement it can
+actually implement.
+
 Either way the conclusion for Android stands: it runs the arrangement that mutates
 archive data, the test harnesses lean heavily on the debug boot, and the attribute
 arrangement is the one that cannot corrupt. That is worth fixing for the port's own
