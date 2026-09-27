@@ -40,6 +40,7 @@
  */
 
 #include "port/netplay/pc_netplay.h"
+#include <port/pc_trace.h>
 #include "port/netplay/pc_snapshot.h"
 #include "port/netplay/pc_netdolphin.h"
 
@@ -1444,6 +1445,20 @@ static void hash_compare(int slot, s32 frame, u32 peer)
             "Play continues so the frame can be looked at, but nothing "
             "after this frame means anything.\n",
             (int) frame, net_hash_val[i], peer);
+    {
+        /* This side's own traced fields, named. Only the peer's *hash* crosses
+         * the wire, so nothing here can say which field differs -- but both
+         * sides print theirs on the same frame, and diffing the two logs does.
+         * Cheaper than adding fields to the protocol, and it does not change
+         * what is compared. */
+        PcStateField f[64];
+        int n = pc_state_fields(f, 64);
+        int k;
+        for (k = 0; k < n; k++) {
+            fprintf(stderr, "[NET]   field slot %d %-16s %08X\n", f[k].slot,
+                    f[k].name, f[k].val);
+        }
+    }
     fflush(stderr);
 }
 

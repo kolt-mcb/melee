@@ -473,6 +473,62 @@ per displayed frame. It defers to it now.
 
 ### M3 -- Rollback against a local peer
 
+**Where it is.** `MELEE_NET_ROLLBACK=1` replaces the frame barrier with
+prediction: a frame whose peer input has not arrived is simulated with the last
+one that did, and when the real inputs turn up the frames that guessed are
+simulated again with them, inside a single displayed frame, using the catch-up
+machinery M1 proved. Two local instances:
+
+| | |
+| --- | --- |
+| rewinds | ~104 per 900 frames, most of them one frame deep |
+| restore cost | 2.4 ms each, which is the snapshot cost |
+| window | 4 frames (`MELEE_NET_ROLLBACK_WINDOW`), by the M1 measurements |
+| 900 frames | clean, three runs out of three |
+| 1600 frames | desyncs at match frame 980, in one run out of two |
+
+So the loop works and is not yet correct. The desync is worth describing, because
+it is not a near miss: `rand_draws` 0x30C5 against 0x314B is a hundred and
+thirty-four draws apart, `gen_count` 1 against 9. The two sides are a long way
+apart by the time it is noticed, and it is the particle system again.
+
+Three things made it look like it worked before it did, and all three are the same
+mistake -- a check that cannot fail:
+
+- The state machine kept a "confirmed" frame updated only while nothing was
+  guessed. The host guesses on frame 1, before anything is confirmed, so it
+  stayed at -1, no rewind was ever possible, and it guessed for a whole match and
+  reported no desync. One number now: the oldest guessed frame.
+- Nothing bounded the drift. Without a barrier the faster side ran away -- guessed
+  at frame 1, reached 2366 before the peer had sent a hundred, and by then frame 1
+  had been recycled in the input ring, so the guess could never be settled. The
+  window caps it, and the wait is for the whole guessed run rather than its oldest
+  frame, because correcting part of a window leaves nothing to rewind to.
+- **The desync check was not running.** It lives after the barrier, and the
+  rollback path returned before it. "No desync" meant "no comparison" -- exactly
+  the shape of the self-check that once reported sixteen clean rewinds having
+  compared nothing. It is a function now, called from both paths, and from the
+  rollback path only for confirmed frames, since a frame simulated against a
+  guess has a state about to be thrown away.
+
+**What to do next.** The desync report now prints this side's traced fields, so
+diffing the two logs names the field rather than the frame. It says the particle
+system, which is where every hard divergence in this milestone has ended up. The
+suspicion worth testing first is that re-simulating a *ragged* range is not
+idempotent in some case the self-check does not reach: the check always rewinds a
+fixed depth from a fixed cadence, while rollback rewinds whatever range the link
+happens to produce, and the two sides rewind different ones. A self-check that
+rewinds random depths would settle that without any networking at all.
+
+Two other things the runs turned up, both needing work before the acceptance
+below can be attempted: a side that falls behind can make its peer wait long
+enough to trip the watchdog, which is what frame-advantage regulation exists for
+(the side that is ahead gives up a little time so the two stay close); and there
+is no loss or jitter injection yet, so "5% loss and 100 ms of jitter" has not been
+tried.
+
+
+
 Two instances on one machine, artificial delay and loss in between.
 
 - Predict with the last known input, roll back and re-simulate on correction.
