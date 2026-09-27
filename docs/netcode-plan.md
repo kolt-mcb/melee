@@ -789,11 +789,35 @@ knowing:
   range now records the generation it appeared at and the un-swap skips any object
   the store had already copied, which put the desync back at 552.
 
-It is still 552. With the filter in place the un-swap reports **zero** objects put
-back across 95 restores, where some were expected, so either no rewind window
-contains a swap or the extra-bit comparison is not seeing them.
+**RESOLVED, the way §5 said.** The command structs carry
+`scalar_storage_order("big-endian")` again wherever the compiler has it -- the
+desktop GCC build, and so every build that runs rollback -- so the stream stays
+big-endian, nothing writes to an archive, and two machines cannot end up having
+swapped different sets of objects. `PC_SCRIPT_INPLACE` selects the arrangement and
+everything that reverses member order for the host word tests it: 83 structs in
+`lb/types.h`, 2 in `ft/types.h`, 1 in `itanimlist.c`. Two stay on
+`BUILD_TARGET_PC` because they are about pointer size rather than byte order.
 
-**But the right fix is not down this road at all, and §5 says why.** The other
+Verified against the emulator first, because nothing else is an oracle here:
+`tools/pc_lockstep.py sync_pair2`, 400 frames, **identical on every compared
+frame**. Then: a generated test reads the same word through every switched struct
+both ways and compares each named field, **0 mismatches**; the command traces
+agree frame for frame and opcode for opcode; and `MELEE_SCRIPT_TRACE=1` reports
+**0 swaps** with `MELEE_ARCHWATCH=1` reporting **0** byte-swaps absorbed and 0
+other writes over a match, where there were 900 before.
+
+So the archives are read-only again, they go back out of the snapshot, and the
+pair runs **five for five clean** at 5% loss and 100 ms of jitter, every frame of
+every run identical offline. The snapshot is back to **14.6 MB and 2.28 ms** from
+22.6 MB and 3.09, and a rollback match runs at **58-60 fps against 50**. M3's tail
+is closed, and M4 starts from a port that is not paying for this.
+
+The rest of this section is kept because the dead ends are worth knowing. In
+particular: with the filter in place the un-swap reported **zero** objects put
+back across 95 restores, which was the clue that the snapshot bookkeeping was
+never going to reach it.
+
+**The right fix was not down that road at all, and §5 said why.** The other
 decomp-based port with working rollback never rewrites archive data -- it
 byte-swaps on access -- so it has no conversion state to keep in step, and its
 snapshot leaves the archives out. This port did that too until the Android build
