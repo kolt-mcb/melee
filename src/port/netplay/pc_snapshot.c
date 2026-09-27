@@ -74,6 +74,7 @@ extern void pc_lowmem_full_extent(void** base, unsigned long* size,
  * its own scripts the wrong way round. */
 extern int pc_itconv_arch_write_at(int i, const unsigned char** base,
                                    unsigned long* len);
+extern unsigned long pc_itconv_arch_write_gen;
 extern int pc_itconv_arch_at(int i, const unsigned char** base,
                             unsigned long* len);
 extern unsigned long pc_itconv_marks_size(void);
@@ -653,6 +654,9 @@ typedef struct Snapshot {
      * restored through the layout it was taken with. */
     SnapHole holes[SNAP_HOLES];
     int nholes;
+    /* Which generation of the archive-write set this was taken under; see
+     * snapshot_take. */
+    unsigned long write_gen;
 } Snapshot;
 
 static int snap_enabled(void)
@@ -1009,6 +1013,25 @@ SNAP_NO_ASAN static int snapshot_take(Snapshot* s, s32 frame)
 {
     int i;
     double t0 = snap_now_ms();
+    /* The set of archive ranges the port writes to only grows, and it grows the
+     * first time something writes -- the magnifier's EFB copy does, several
+     * hundred frames into a match. A snapshot taken before that range was known
+     * does not contain it, so a rewind to it cannot put it back, and the two
+     * sides of a netplay match end up disagreeing about memory neither of them
+     * copied. `s` is dropped when the set moves, which costs one rollback
+     * opportunity, once. */
+    if (pc_itconv_arch_write_gen != s->write_gen) {
+        int k;
+        s->write_gen = pc_itconv_arch_write_gen;
+        s->valid = 0;
+        for (k = 0; k < SNAP_REGIONS; k++) {
+            s->r[k].primed = 0;
+        }
+        if (snap_trace()) {
+            fprintf(stderr, "[SNAP] an archive write range appeared; what this "
+                            "store holds is incomplete and is being replaced\n");
+        }
+    }
     s->frame = frame;
     s->valid = 0;
     for (i = 0; i < SNAP_REGIONS; i++) {
@@ -2625,6 +2648,17 @@ int pc_rollback_rewind(s32 to, s32 upto)
     double t0;
     if (!pc_rollback_enabled() || !snap_rb.valid || snap_rb.frame != to ||
         upto <= to) {
+        return 0;
+    }
+    /* Not from a store taken before the port knew it writes somewhere inside an
+     * archive: that store does not contain the range, so restoring it would put
+     * back everything except the bytes that had just started changing. A snapshot
+     * is only taken while nothing is guessed, so the one in hand can predate the
+     * discovery by a whole window. Declining costs this correction; the netplay
+     * layer keeps the guess and waits, which is what it does for any rewind that
+     * is not available. */
+    if (snap_rb.write_gen != pc_itconv_arch_write_gen) {
+        snap_rb.valid = 0;
         return 0;
     }
     t0 = snap_now_ms();

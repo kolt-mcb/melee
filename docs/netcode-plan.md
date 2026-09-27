@@ -703,16 +703,32 @@ exception is tiny.)
 
 `pc_itconv_arch_note_write` therefore lets the port say where it writes inside an
 archive, and the snapshot splits that range back out of the hole -- measured
-working, one range of 20 KB, registered the first time the magnifier draws. It is
-necessary and it is **not sufficient**: 2 of 5 runs still desync at the same
-frame. Which is consistent with the range being registered only once the magnifier
-has drawn, so a rewind across its first appearance is still unprotected -- and
-frame 553 is about where a player first goes offscreen. Whether that is the whole
-of it is unsettled.
+working, one range of 20 KB, registered the first time the magnifier draws. A
+store taken before that range was known cannot contain it, so such a store is
+dropped and a rewind to one is declined.
 
-So the archives stay copied, which is the configuration the acceptance was
-verified in, and M4's hardware runs a port ten frames a second slower than it
-needs to be until this is finished.
+**All of that is necessary and none of it is sufficient.** Four attempts, each
+sound on its own terms and each leaving the desync where it was:
+
+| attempt | result |
+| --- | --- |
+| un-swap instead of copy (`pc_itconv_marks_rewind`) | runs -- 26 objects put back over 113 restores -- still desyncs |
+| restore through the take's hole layout | a real bug, fixed; still desyncs |
+| cover the magnifier's EFB-copy range | registers 20 KB; still desyncs |
+| drop stores taken before the range was known | still desyncs, 2 of 2 |
+
+So the archives stay copied, which is what the acceptance was verified with and
+what a 1100-frame run re-confirms after all four changes (849 frames compared
+offline, none differing). M4's hardware runs a port ten frames a second slower
+than it needs to be until this is finished.
+
+**The measurement that would settle it**, and the reason it has not: dump both
+sides' 64-byte chunk tables at frames chosen ahead of the divergence *with holes
+on and the heap included*, and read off whether the chunks that differ beyond the
+noise floor lie inside archives (the dump flags them). A run that desyncs while
+dumping has not been captured yet -- the dump is 12 MB a frame and the runs that
+desynced did not write theirs -- so fixing that plumbing is the first step rather
+than another hypothesis.
 
 Two smaller things the acceptance turned up, both in the rig rather than the
 netcode: a side whose peer has exited keeps playing alone and then wedges in a

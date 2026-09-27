@@ -559,6 +559,10 @@ struct arch_write {
 };
 static struct arch_write g_arch_writes[ARCH_WRITE_MAX];
 static int g_arch_writes_n;
+/* Bumped whenever the set grows. A snapshot taken before a range was known does
+ * not contain it, so a rewind to that snapshot cannot put it back: the snapshot
+ * layer watches this and throws away what it holds when it moves. */
+unsigned long pc_itconv_arch_write_gen;
 
 void pc_itconv_arch_note_write(const void* p, unsigned long len)
 {
@@ -596,6 +600,9 @@ void pc_itconv_arch_note_write(const void* p, unsigned long len)
                                            a->base + hi)
                                               ? b + g_arch_writes[i].len
                                               : a->base + hi;
+                if (nb != b || ne != b + g_arch_writes[i].len) {
+                    pc_itconv_arch_write_gen++;
+                }
                 g_arch_writes[i].base = nb;
                 g_arch_writes[i].len = (unsigned long) (ne - nb);
                 return;
@@ -605,6 +612,7 @@ void pc_itconv_arch_note_write(const void* p, unsigned long len)
             g_arch_writes[g_arch_writes_n].base = a->base + lo;
             g_arch_writes[g_arch_writes_n].len = hi - lo;
             g_arch_writes_n++;
+            pc_itconv_arch_write_gen++;
         }
     }
 }
