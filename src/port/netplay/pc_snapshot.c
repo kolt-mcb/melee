@@ -1000,6 +1000,11 @@ int pc_snapshot_region_checksums(u32* out, int max)
  * four are the heaps, then one span per marker pair of .data, then of .bss. */
 const char* pc_snapshot_region_name(int i)
 {
+    /* Negative indices are the wide scan's extra areas, which are not regions:
+     * they are every object's static storage, most of which the snapshot does not
+     * cover. A difference there is the interesting kind. */
+    if (i == -1) return "ALL .data (not a snapshot region)";
+    if (i == -2) return "ALL .bss (not a snapshot region)";
     if (i == SNAP_R_HEAP) return "heap";
     if (i == SNAP_R_OBJHEAP) return "objheap";
     if (i == SNAP_R_ARAM) return "aram";
@@ -1631,10 +1636,90 @@ static int snap_chunk_region(int i)
     return i == SNAP_R_OBJHEAP || i >= SNAP_R_DATA0;
 }
 
+/* MELEE_CHUNKWIDE=1 adds the *whole* of every object's .data and .bss to the scan,
+ * not just the spans the snapshot covers.
+ *
+ * The point is structural: the chunk scan walks the snapshot's region list, so it
+ * can only ever report differences in memory the snapshot already knows about. If
+ * the thing two processes disagree about lives outside that list -- game state in a
+ * port object's static storage, say -- the scan cannot see it by construction, and
+ * reports "identical" for a pair that is about to diverge. That is exactly what it
+ * reported. This is how that blind spot gets looked at. */
+static int snap_chunk_wide(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* e = getenv("MELEE_CHUNKWIDE");
+        on = (e != NULL && *e != '\0' && strcmp(e, "0") != 0);
+    }
+    return on;
+}
+
+/* The two extra areas, as (addr, len). Index 0 and 1 past the regions. */
+static void snap_chunk_extra(int k, unsigned char** addr, unsigned long* len)
+{
+    *addr = NULL;
+    *len = 0;
+    if (!snap_chunk_wide()) {
+        return;
+    }
+    {
+        /* Said once, because the size is the reason this is a chosen-frame dump
+         * and not something the per-frame ring can carry. */
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "[CHUNK] wide scan: .data %lu KB, .bss %lu KB\n",
+                    (unsigned long) (__melee_all_melee_data_end -
+                                     __melee_all_melee_data_start) >> 10,
+                    (unsigned long) (__melee_all_melee_bss_end -
+                                     __melee_all_melee_bss_start) >> 10);
+            fflush(stderr);
+        }
+    }
+    if (k == 0) {
+        *addr = __melee_all_melee_data_start;
+        *len = (unsigned long) (__melee_all_melee_data_end -
+                                __melee_all_melee_data_start);
+    } else if (k == 1) {
+        *addr = __melee_all_melee_bss_start;
+        *len = (unsigned long) (__melee_all_melee_bss_end -
+                                __melee_all_melee_bss_start);
+    }
+}
+#define SNAP_CHUNK_EXTRA 2
+/* The extra areas are scanned in 64 KB blocks, not 64 bytes. At 64 bytes the whole
+ * of every object's .bss is 2.7 million chunks and 90 MB of dump per side, which is
+ * not a measurement so much as a disk exercise. Coarse first: a differing block
+ * names 64 KB, and `nm` lists what lives there. */
+#define SNAP_WIDE_BIG 65536
+
 SNAP_NO_ASAN int snap_wide_pages(u32* out, int max)
 {
     int i;
     int n = 0;
+    for (i = 0; i < SNAP_CHUNK_EXTRA && n < max; i++) {
+        unsigned char* a;
+        unsigned long l, off;
+        snap_chunk_extra(i, &a, &l);
+        if (a == NULL || l == 0) {
+            continue;
+        }
+        for (off = 0; off < l && n < max; off += SNAP_WIDE_BIG) {
+            unsigned long m = l - off;
+            u32 hh = 2166136261u;
+            unsigned long k;
+            if (m > SNAP_WIDE_BIG) {
+                m = SNAP_WIDE_BIG;
+            }
+            for (k = 0; k + 4 <= m; k += 4) {
+                u32 w;
+                memcpy(&w, a + off + k, 4);
+                hh = (hh ^ w) * 16777619u;
+            }
+            out[n++] = hh;
+        }
+    }
     for (i = 0; i < SNAP_REGIONS && n < max; i++) {
         if (!snap_chunk_region(i)) {
             continue;
@@ -1670,6 +1755,23 @@ static unsigned char* snap_wide_page_addr(int want, int* region)
 {
     int i;
     int n = 0;
+    for (i = 0; i < SNAP_CHUNK_EXTRA; i++) {
+        unsigned char* a;
+        unsigned long l, off;
+        snap_chunk_extra(i, &a, &l);
+        if (a == NULL || l == 0) {
+            continue;
+        }
+        for (off = 0; off < l; off += SNAP_WIDE_BIG) {
+            if (n == want) {
+                if (region != NULL) {
+                    *region = -1 - i; /* negative: an extra area, not a region */
+                }
+                return a + off;
+            }
+            n++;
+        }
+    }
     for (i = 0; i < SNAP_REGIONS; i++) {
         SnapRegion cur;
         unsigned long off;
