@@ -932,52 +932,57 @@ wrong ECB.
 `MELEE_SWAPCHECK=1` reports nothing, which is not a contradiction: it only ever
 looked at stage `FObjDesc` nodes, never at fighter animation.
 
-**The fix that suggested is not available, and checking why found a worse bug.**
-`pc_script_prepare` swaps a whole *reloc object* and the marks bitmap already has
-one bit per four-byte word, so swapping per word looked like a free way to stop
-touching anything but script. It is not: `sizeof(union CmdUnion)` is **4**, the
-numbered suffixes (`spawn_hitbox_0` through `_5`) are consecutive *words* of one
-command, and `prepare` is called **only when entering a script** -- at a jump or
-call target, or at a subaction's first command. The interpreter then walks the rest
-of the object with no further calls. Object granularity is load-bearing; a
-word-granular swap would leave every multi-word command half-converted.
+**Resolved, and it was neither.** Not under-swap, not over-swap: a guard that had
+nothing to do with byte order.
 
-So the object bound, which comes from the nearest reloc targets, has to line up
-with the script, and there are two ways it can fail to:
+The steps, because each ruled something out rather than merely failing to find it:
 
-- **under-swap** -- the script runs past the next reloc target, so the tail stays
-  big-endian and the interpreter reads it as host order. Nothing prepares it,
-  because falling through a boundary is not entering a script.
-- **over-swap** -- the object runs past the end of the script into whatever the
-  archive put next, and that gets byte-reversed.
+1. `MELEE_SWAPCHECK` only ever asked about stage `FObjDesc` nodes. Generalised to
+   all 17 converter entries that take a raw archive pointer. Still zero hits --
+   and the reason is itself the answer to the over-swap question: the first
+   byte-swap of the boot happens *after* every converter has run, so a swap cannot
+   corrupt converter input at all. Ruled out by construction.
+2. The decoded command streams differ, 22 against 24, parting company at frame 100
+   motion 16.
+3. Every command before that reads the **identical word** -- each build's is exactly
+   the other's byte-reverse. Both arrangements read the same script data, so the
+   script layer was never involved, and the fighter simply never enters motion 16.
+4. Two runs of each binary are bit-identical, so 22-vs-24 is real. Cheap, and it
+   should have come first.
+5. That left the member-order guards. Mapping them to their enclosing structs (with
+   brace tracking -- a naive scan blames the macro block that follows a struct) put
+   76 of 78 on `CmdUnion` members. A type-versus-order audit of all 80 found exactly
+   one whose two branches differ in **type** rather than order.
 
-Either produces the symptom. The discriminator is cheap and has not been run yet:
-log every swapped object's bounds, and log the address of every command word
-actually executed. An executed word that lies inside an archive but outside every
-swapped object is under-swap, and proves it. Under the attribute arrangement
-neither can happen, because every word is read big-endian wherever the object
-bounds fall -- which is why that arrangement is console-identical and this one is
-not.
+That one is `ftData_80085FD4_ret`, and it views a `Fighter_WaitAnimData` entry --
+`ftData_80085FD4` returns `&fp->x24[msid]` cast to it. That entry is host-converted
+data, not archive bytes, so its branches differ in pointer *width*: the accessor
+work switched its guard to `PC_SCRIPT_INPLACE` along with the ones that really are
+about member order, and the GCC build went back onto the console layout. Measured:
 
-**The worse bug, found on the way.** The block that picks the arrangement lives in
-two headers, and they disagreed. `ft/types.h` tested `BUILD_TARGET_PC`;
-`lb/types.h` tested `defined(PC_SCRIPT_INPLACE)` inside its own `#else` -- a
-condition that can never be true there, so it never defined anything. Both blocks
-sit under `#ifndef PC_SCRIPT_BE`, so whichever header a translation unit reached
-first decided for it, and **the two disagreed about struct member order in the same
-program**. On Clang the first-reached-`lb` case gave the worst of both: the
-attribute expands to nothing, so scalars are host-order, the member-order guards
-took the GameCube branch, and `pc_script_prepare` compiled to an immediate
-`return` -- no swap at all. That is the Android build. Proven with the NDK clang
-and the real Android cflags: before the fix it selects the attribute arrangement it
-cannot implement, after it selects in-place. Both headers now test
-`defined(BUILD_TARGET_PC) && !defined(PC_SCRIPT_INPLACE)`, and all four arms were
-checked in isolation (GCC-PC, Clang-PC, explicit define, GameCube).
+    before:  ret size=40  x8=16  xC=24  x14=36
+    viewing:     size=32  x8=12  xC=16  x14=28
+    after:   ret size=32  x8=12  xC=16  x14=28
 
-It is worth being clear that this was introduced by the accessor work in this same
-sequence, and that nothing caught it, because Android is not in the desktop test
-loop and `-Werror=unknown-attributes` only fires if the attribute is *applied*, not
-if it silently expands to nothing.
+So `->x8` read the entry's `xC`, which is the subaction script pointer, and `->x14`
+read past the entry into the next one. Callers ask
+`ftData_80085FD4(fp, ms)->x8 != 0` to decide **whether a motion exists**, so that
+question was being answered by "does some other motion have a script". The struct's
+own comment describes this same bug being fixed once before.
+
+The general lesson, and the reason it survived the accessor work: a guard around
+*field order* and a guard around *field width* look identical in a diff, and only
+the first belongs on the arrangement. `Command_05`/`Command_07` were deliberately
+left on `BUILD_TARGET_PC` for exactly this reason; this one was missed. The audit
+that finds them compares the two branches' member types, not their text.
+
+Both arrangements now produce identical command streams, and the desktop build is
+still identical to the console for 600 frames of `sync_pair2`. That second result
+shows no regression rather than proving the fix -- Samus against Donkey Kong need
+not reach the affected motions -- and what proves it is the offset table above.
+
+**So M4's gate is open.** The arrangements agree, which was the thing that had to
+be settled before a desktop-versus-tablet measurement could mean anything.
 
 Either way the conclusion for Android stands: it runs the arrangement that mutates
 archive data, the test harnesses lean heavily on the debug boot, and the attribute
