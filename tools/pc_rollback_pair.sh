@@ -76,8 +76,15 @@ COMMON="MELEE_NET_EXIT_ALONE=1
         MELEE_NET_LOSS=$LOSS MELEE_NET_JITTER=$JITTER
         MELEE_BOOT_MODE=14 MELEE_BOOT_MATCH=16,1,9 MELEE_BOOT_STOCKS=5
         MELEE_BOOT_CPU=9,9 MELEE_FORCE_CPU=9,9
-        MELEE_MAX_FRAMES=$FRAMES MELEE_NOVSYNC=1 MELEE_WATCHDOG=300"
+        MELEE_MAX_FRAMES=$FRAMES MELEE_NOVSYNC=1 MELEE_WATCHDOG=300
+        MELEE_NET_HASH_EVERY=${MELEE_RB_HASH_EVERY:-1}"
 
+# Every simulated frame is hashed and compared against the peer's, because the
+# default cadence samples: an M3 run once reported "0 desyncs" having compared one
+# frame in 300, and a rollback desync that starts between samples is invisible. The
+# [RB] "checked:" line prints both counts, so a run whose compared count is far
+# below its hashed count is not evidence of anything. MELEE_RB_HASH_EVERY=<n>
+# loosens it again if the cost ever matters.
 # MELEE_RB_SIMHASH=1 has each side write one line per simulated frame -- every
 # pass, so the last line for a frame is that frame's final state. The wire
 # checksum only samples, and a rollback desync can start well before the first
