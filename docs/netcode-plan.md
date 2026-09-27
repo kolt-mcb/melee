@@ -733,11 +733,25 @@ what it says. **The floor has to come from a run that did not desync, not from a
 earlier frame of the run that did** -- subtracting frame 550 of a run whose
 divergence had already started at 550 subtracts the divergence. Against a clean
 run's floor instead, the desyncing run differs in **34 region chunks at frame
-550**: 22 of them audio (`__AXVPB`, `__AXPB`, `hsd_SynthSFXNodes`, `AXDriver_*`),
-7 heap with no symbol, and three carrying game symbols -- `ftColl_803C0C40`,
-`it_803F1EE4`, `ptclref_804D0E5C`. Read at byte granularity in a *clean* run, the
-first two are byte-identical between processes and `ptclref_804D0E5C` differs in
-two bytes even there, so which of the three matters is not yet settled.
+550**, and reading them needed one more correction: a symbol table generated
+before the binary was relinked attributes small statics to their neighbours, which
+is how `ftColl_803C0C40` and an item command table first appeared in this list and
+are not in it. Regenerated against the binary the runs actually used:
+
+| the 34 | what they are |
+| --- | --- |
+| 22 | audio -- `__AXVPB`, `__AXPB`, `hsd_SynthSFXNodes`, `AXDriver_*` |
+| 3 | port statics: `want.1`, `on.0` (`static int on = -1;` env-flag caches, one side having evaluated the flag and the other not) and the tail of `ptclref_804D0E5C`, which differs in clean runs too |
+| 7 | **game heap, no symbol** -- 0x104bd1c0, 0x104bd200, and five around 0x4b0076..0x4b0089 |
+| 2 | the outer-bracket blocks the wide scan adds, both game `.data` around the stage tables |
+
+Those seven are the lead: they are the only differences left that are game state,
+they are absent from clean runs, and the same addresses turned up in an earlier
+desyncing run, so they are not run-to-run noise. They are in the pool's carved
+end rather than the bump end, which narrows what they can be -- the object heap,
+ARAM, or the converter arena -- and the next step is to say which region and which
+allocation, because the dump does not currently carry the region a chunk came
+from.
 
 The wide scan says the same thing about memory the snapshot does not cover: 33 of
 2620 outer 64 KB blocks differ in a clean run, all of them port state (the GL
