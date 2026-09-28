@@ -126,11 +126,41 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
         unsigned long lo = mod_base != 0 ? mod_base : 0x400000UL;
         unsigned long hi = mod_end != 0 ? mod_end : 0x800000UL;
         unsigned long* sp = (unsigned long*)(rsp & ~7UL);
-        for (int i = 0; i < 512; i++) {
-            unsigned long v = sp[i];
-            if (v >= lo && v < hi) {
-                n = snprintf(buf, sizeof(buf), "[CRASH] stack[%d]=%s+%#lx\n",
-                             i, mod_name, v - lo);
+        /* Depth matters more than it looks. 512 words is 4 KB, and a fault
+         * inside a vendor GL driver can sit deeper than that below the port's
+         * own frame -- PowerVR's shader library on a PVR Rogue does, so every
+         * return address of ours was past the end of the scan and the dump
+         * printed nothing at all: sp, fp, lr and a broken fp chain, which names
+         * the driver and nothing else. Scan 32 KB, and cap the number of hits
+         * printed rather than the distance searched, so the first frames still
+         * appear when the window holds hundreds of stale addresses.
+         * MELEE_CRASH_STACK_WORDS overrides the depth. */
+        {
+            unsigned long words = 4096;
+            int hits = 0;
+            const char* ws = getenv("MELEE_CRASH_STACK_WORDS");
+            if (ws != NULL && *ws != '\0') {
+                long v = atol(ws);
+                if (v > 0 && v < (1L << 22)) {
+                    words = (unsigned long) v;
+                }
+            }
+            for (unsigned long i = 0; i < words && hits < 64; i++) {
+                unsigned long v = sp[i];
+                if (v >= lo && v < hi) {
+                    hits++;
+                    n = snprintf(buf, sizeof(buf),
+                                 "[CRASH] stack[%lu]=%s+%#lx\n", i, mod_name,
+                                 v - lo);
+                    write(2, buf, n);
+                }
+            }
+            if (hits == 0) {
+                n = snprintf(buf, sizeof(buf),
+                             "[CRASH] no %s return address in %lu stack words "
+                             "(fault is in another module, deeper than the "
+                             "scan, or on another thread)\n",
+                             mod_name, words);
                 write(2, buf, n);
             }
         }

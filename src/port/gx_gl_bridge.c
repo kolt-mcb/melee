@@ -1446,7 +1446,15 @@ static const char* g_frag_src =
 "            // Non-strict: the selector is not trustworthy, so take the\n"
 "            // konstant alpha register and only honour the K0-K3 alpha\n"
 "            // picks that HSD sets explicitly in sobjlib.\n"
-"            if (ksel >= 8 && ksel <= 15) return u_kcolor[ksel - 8].a;\n"
+"            // 0x0C-0x0F select K0-K3, exactly as the KCSEL table above:\n"
+"            // this read ksel 8..15 as K0-K3 and indexed u_kcolor[ksel - 8],\n"
+"            // which runs to 7 in a four-element array. Out-of-bounds dynamic\n"
+"            // indexing into a uniform block is undefined, and a desktop\n"
+"            // driver absorbing it is luck, not permission: on an IMG Rogue\n"
+"            // GE8320 it faulted the GPU and took the process down inside\n"
+"            // libusc.so, which reads as a driver bug from the outside. The\n"
+"            // fix is the same correction the colour path already had.\n"
+"            if (ksel >= 12 && ksel <= 15) return u_kcolor[ksel - 12].a;\n"
 "            return u_kalpha.a;\n"
 "        }\n"
 "        if (ksel <= 7) return float(8 - ksel) / 8.0;\n"
@@ -3056,6 +3064,46 @@ static char* pc_ubo_source(const char* src)
     int i;
     if (!nl) { strcpy(out, src); return out; }
     memcpy(out, src, (size_t) (nl - src) + 1); o = (size_t) (nl - src) + 1;
+    /* The block goes after the whole header, not just after #version.
+     *
+     * On ES the header is four lines -- the version, then `precision highp
+     * float/int/sampler2D` -- and a fragment shader has NO default float
+     * precision in GLSL ES. Inserting the block straight after #version
+     * therefore declared its vec4 and mat members before any precision was in
+     * force, which is invalid. Desktop GL never noticed: its header is the one
+     * `#version 330 core` line and core GLSL has default precision.
+     *
+     * PowerVR's compiler does not report the error, it dereferences a null and
+     * takes the process with it -- SIGSEGV at +0x3c4 inside
+     * /vendor/lib64/libusc.so, on a driver thread with none of our frames on
+     * its stack, so it reads as a driver bug rather than bad GLSL. A match was
+     * unreachable on an IMG Rogue GE8320 because of these four lines; the title
+     * screen survived only because its variants were already compiled.
+     *
+     * So copy every leading directive line that must precede a declaration --
+     * precision, #extension, #define, blank and comment lines -- and insert
+     * after them. */
+    for (;;) {
+        const char* q = nl + 1;
+        const char* e;
+        size_t len;
+        while (*q == ' ' || *q == '\t') q++;
+        if (strncmp(q, "precision ", 10) != 0 &&
+            strncmp(q, "#extension", 10) != 0 &&
+            strncmp(q, "#define", 7) != 0 && strncmp(q, "//", 2) != 0 &&
+            *q != '\n' && *q != '\r')
+        {
+            break;
+        }
+        e = strchr(nl + 1, '\n');
+        if (e == NULL) {
+            break;
+        }
+        len = (size_t) (e - (nl + 1)) + 1;
+        memcpy(out + o, nl + 1, len);
+        o += len;
+        nl = e;
+    }
     o += (size_t) sprintf(out + o, "layout(std140) uniform PcUniforms {\n");
     for (i = 0; i < g_ubo_n; i++) {
         const UboMember* m = &g_ubo_mem[i];
@@ -3087,6 +3135,103 @@ static char* pc_ubo_source(const char* src)
     }
     out[o] = 0;
     return out;
+}
+/* Reconcile our std140 arithmetic with the driver's actual layout.
+ *
+ * pc_ubo_layout() computes member offsets by hand. std140 is fully specified, so
+ * that should agree with every driver -- but when it does not, the shader reads
+ * whatever happens to sit at the wrong offset, and a uniform used as a loop bound
+ * or an index turns a layout slip into a GPU fault rather than a wrong pixel. GL
+ * will simply tell us the layout, so ask, and believe the driver over ourselves.
+ *
+ * Called once, after the first program carrying the block has linked. Every
+ * variant declares the same block, so one query serves all of them.
+ * MELEE_UBOCHECK=1 prints the whole table, matches included. */
+static void pc_ubo_reconcile(GLuint prog)
+{
+    static int done;
+    int i, k, mism = 0, miss = 0;
+    int verbose;
+    if (!g_ubo_ok || done || prog == 0) {
+        return;
+    }
+    done = 1;
+    verbose = getenv("MELEE_UBOCHECK") != NULL;
+    for (i = 0; i < g_ubo_n; i++) {
+        UboMember* m = &g_ubo_mem[i];
+        char nm[128];
+        const char* names[1];
+        GLuint idx = GL_INVALID_INDEX;
+        GLint off = -1, astride = 0, mstride = 0;
+        if (m->arr) {
+            snprintf(nm, sizeof(nm), "%s[0]", m->ent->name);
+        } else {
+            snprintf(nm, sizeof(nm), "%s", m->ent->name);
+        }
+        names[0] = nm;
+        glGetUniformIndices(prog, 1, names, &idx);
+        if (idx == GL_INVALID_INDEX) {
+            /* Without an instance name the block name is not part of the
+             * uniform's name, but not every driver agrees, so try the qualified
+             * spelling before concluding the member was optimised out. */
+            char qual[160];
+            snprintf(qual, sizeof(qual), "PcUniforms.%s", nm);
+            names[0] = qual;
+            glGetUniformIndices(prog, 1, names, &idx);
+        }
+        if (idx == GL_INVALID_INDEX) {
+            miss++;
+            continue; /* optimised out, or this driver will not say */
+        }
+        glGetActiveUniformsiv(prog, 1, &idx, GL_UNIFORM_OFFSET, &off);
+        glGetActiveUniformsiv(prog, 1, &idx, GL_UNIFORM_ARRAY_STRIDE, &astride);
+        glGetActiveUniformsiv(prog, 1, &idx, GL_UNIFORM_MATRIX_STRIDE, &mstride);
+        if (off < 0) {
+            continue;
+        }
+        {
+            u32 want_stride = m->arr ? (astride > 0 ? (u32) astride : m->stride)
+                                     : m->stride;
+            int changed = ((u32) off != m->off) || (want_stride != m->stride);
+            if (changed || verbose) {
+                fprintf(stderr,
+                        "[UBOCHECK] %-22s ours off=%-5u stride=%-4u | driver "
+                        "off=%-5d stride=%-4d%s\n",
+                        nm, m->off, m->stride, off, astride,
+                        changed ? "   <-- MISMATCH, taking the driver's" : "");
+            }
+            if (changed) {
+                mism++;
+                m->off = (u32) off;
+                m->stride = want_stride;
+                for (k = 0; k < m->ent->count; k++) {
+                    if (m->arr && k >= m->arr) {
+                        break;
+                    }
+                    g_ubo_off[m->ent->base + k] =
+                        (int) (m->off + (u32) k * m->stride);
+                }
+            }
+        }
+    }
+    if (mism != 0) {
+        fprintf(stderr,
+                "[UBOCHECK] %d of %d members were at a different offset than "
+                "computed; using the driver's layout\n",
+                mism, g_ubo_n);
+        g_ubo_dirty = 1;
+    }
+    if (miss != 0) {
+        /* Worth saying out loud: a driver that will not report the block's
+         * layout cannot be checked against, so our arithmetic is all there is. */
+        fprintf(stderr,
+                "[UBOCHECK] %d of %d members could not be looked up; layout "
+                "unverified on this driver\n",
+                miss, g_ubo_n);
+    }
+    if (mism != 0 || miss != 0 || verbose) {
+        fflush(stderr);
+    }
 }
 static void pc_ubo_write(GLint vloc, int kind, int n, int transpose, const void* data)
 {
@@ -3139,11 +3284,11 @@ static void pc_ubo_bind(void)
     g_ubo_dirty = 0;
     g_ubo_pending = 1;
 }
-static u32 g_ubo_lap = (u32) -1; /* the ring lap the bound range was streamed in */
 static GLintptr g_ubo_reserve(void)
 {
     return g_ubo_ok ? (GLintptr) g_ubo_align + (GLintptr) g_ubo_size : 0;
 }
+static u32 g_ubo_lap = (u32) -1; /* the ring lap the bound range was streamed in */
 static void pc_ubo_commit(void)
 {
     GLintptr off;
@@ -4414,6 +4559,7 @@ static void bridge_compile_shaders(void)
         glGetProgramInfoLog(g_shader_program, 512, NULL, log);
         PORT_LOG_ERROR("Shader link failed: %s", log);
     }
+    pc_ubo_reconcile(g_shader_program);
     glDeleteShader(vs);
     glDeleteShader(fs);
     
