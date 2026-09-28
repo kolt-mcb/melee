@@ -13,7 +13,7 @@ android {
     compileSdkVersion 34
     defaultConfig {
         applicationId "com.melee.pcport"
-        minSdkVersion 31
+        minSdkVersion 30
         targetSdkVersion 34
         versionCode 1
         versionName "0.1"
