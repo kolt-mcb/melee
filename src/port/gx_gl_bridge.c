@@ -22,6 +22,7 @@
 #define _GNU_SOURCE
 #define GL_GLEXT_PROTOTYPES
 #include <sys/stat.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <time.h>
 
@@ -90,6 +91,44 @@ typedef uint8_t GXTlutFmt;
 
 /* ============================================================
  * Internal types — must match GX types exactly */
+
+/* The last GL entry point the bridge called, for the crash handler.
+ *
+ * A fault inside a vendor driver has none of our frames within reach of the
+ * stack scan -- PowerVR's shader compiler sits four levels deep under a
+ * draw -- so the dump names the driver and no caller. Each of the calls
+ * below records its name and source line first; main.c's handler prints
+ * them. Two stores per call. */
+const char* volatile pc_gl_crumb_fn;
+volatile int pc_gl_crumb_line;
+volatile unsigned pc_gl_crumb_n;
+volatile long pc_gl_crumb_arg[6]; /* set by call sites worth describing */
+volatile unsigned pc_gl_crumb_prog, pc_gl_crumb_fbo;
+volatile long pc_gl_crumb_tex[4], pc_gl_crumb_texp[4]; /* per unit, at the last draw */
+static void pc_gl_crumb_textures(void);
+#define PC_GLC(fn) (pc_gl_crumb_fn = fn, pc_gl_crumb_line = __LINE__, pc_gl_crumb_n++)
+#define glDrawArrays(...) (PC_GLC("glDrawArrays"), glDrawArrays(__VA_ARGS__))
+#define glDrawElementsBaseVertex(...) (PC_GLC("glDrawElementsBaseVertex"), glDrawElementsBaseVertex(__VA_ARGS__))
+#define glTexImage2D(...) (PC_GLC("glTexImage2D"), glTexImage2D(__VA_ARGS__))
+#define glCompressedTexImage2D(...) (PC_GLC("glCompressedTexImage2D"), glCompressedTexImage2D(__VA_ARGS__))
+#define glTexSubImage2D(...) (PC_GLC("glTexSubImage2D"), glTexSubImage2D(__VA_ARGS__))
+#define glUseProgram(p) (PC_GLC("glUseProgram"), pc_gl_crumb_prog = (p), glUseProgram(p))
+#define glBindBufferRange(...) (PC_GLC("glBindBufferRange"), glBindBufferRange(__VA_ARGS__))
+#define glGenerateMipmap(...) (PC_GLC("glGenerateMipmap"), glGenerateMipmap(__VA_ARGS__))
+#define glReadPixels(...) (PC_GLC("glReadPixels"), glReadPixels(__VA_ARGS__))
+#define glBlitFramebuffer(...) (PC_GLC("glBlitFramebuffer"), glBlitFramebuffer(__VA_ARGS__))
+#define glLinkProgram(...) (PC_GLC("glLinkProgram"), glLinkProgram(__VA_ARGS__))
+#define glProgramBinary(...) (PC_GLC("glProgramBinary"), glProgramBinary(__VA_ARGS__))
+#define glCompileShader(...) (PC_GLC("glCompileShader"), glCompileShader(__VA_ARGS__))
+#define glClear(...) (PC_GLC("glClear"), glClear(__VA_ARGS__))
+#define glFlush(...) (PC_GLC("glFlush"), glFlush(__VA_ARGS__))
+#define glClientWaitSync(...) (PC_GLC("glClientWaitSync"), glClientWaitSync(__VA_ARGS__))
+#define glMapBufferRange(...) (PC_GLC("glMapBufferRange"), glMapBufferRange(__VA_ARGS__))
+#define glBufferSubData(...) (PC_GLC("glBufferSubData"), glBufferSubData(__VA_ARGS__))
+#define glBufferData(...) (PC_GLC("glBufferData"), glBufferData(__VA_ARGS__))
+#define glBindFramebuffer(t, f) (PC_GLC("glBindFramebuffer"), pc_gl_crumb_fbo = (f), glBindFramebuffer(t, f))
+#define glFramebufferTexture2D(...) (PC_GLC("glFramebufferTexture2D"), glFramebufferTexture2D(__VA_ARGS__))
+#define glCheckFramebufferStatus(...) (PC_GLC("glCheckFramebufferStatus"), glCheckFramebufferStatus(__VA_ARGS__))
 #include "platform.h"
 
 /* Dolphin typedefs u32/u8 etc as long-sized on x86_64.
@@ -1862,6 +1901,28 @@ static GLboolean gls_is_enabled(GLenum cap)
     g_gls.cap[i] = glIsEnabled(cap);
     return g_gls.cap[i];
 }
+/* The draw's pipeline state, for the crash breadcrumb: a driver that
+ * re-specialises programs at draw time (PowerVR folds blending into the
+ * fragment program) faults on a state combination, not a call. */
+static void pc_gl_crumb_draw(void)
+{
+    pc_gl_crumb_arg[0] = (long) g_gls.cap[1] << 32 | (long) g_gls.beq;
+    pc_gl_crumb_arg[1] = (long) g_gls.bsrc << 16 | (long) g_gls.bdst;
+    pc_gl_crumb_arg[2] = (long) g_gls.bsrca << 16 | (long) g_gls.bdsta;
+    pc_gl_crumb_arg[3] = g_gls.cmask[0] << 3 | g_gls.cmask[1] << 2 | g_gls.cmask[2] << 1 | g_gls.cmask[3];
+    pc_gl_crumb_arg[4] = (long) g_gls.cap[0] << 32 | (long) g_gls.dfunc << 1 | g_gls.dmask;
+    pc_gl_crumb_arg[5] = (long) pc_gl_crumb_prog << 32 | pc_gl_crumb_fbo;
+    pc_gl_crumb_textures();
+}
+/* MELEE_GL_FINISH_DRAWS=1: glFinish after every draw, so a driver that
+ * defers its work to the next flush faults inside the draw that caused it
+ * rather than some later upload. */
+static void pc_gl_crumb_after(void)
+{
+    static int fin = -1;
+    if (fin < 0) fin = getenv("MELEE_GL_FINISH_DRAWS") != NULL;
+    if (fin) { pc_gl_crumb_fn = "glFinish after draw"; glFinish(); }
+}
 static void gls_blend_eq(GLenum e)
 {
     if ((g_gls.known & GLS_BEQ) && g_gls.beq == e) { pc_diag_gl_skips++; return; }
@@ -2401,8 +2462,10 @@ static void pc_batch_flush(void)
         }
         if (ok && n > 0) {
             GLintptr ioff = pc_vbo_stream_raw(g_istage, (GLsizeiptr) (n * sizeof(u16)));
+            pc_gl_crumb_draw();
             glDrawElementsBaseVertex(GL_TRIANGLES, (GLsizei) n, GL_UNSIGNED_SHORT,
                                      (const void*) ioff, base);
+            pc_gl_crumb_after();
             pc_diag_batch_calls++;
             pc_diag_draw_calls++;
             g_batch_n = 0;
@@ -2414,7 +2477,9 @@ static void pc_batch_flush(void)
         g_batch_first[i] += base;
     }
     if (g_batch_n == 1) {
+        pc_gl_crumb_draw();
         glDrawArrays(g_batch_mode, g_batch_first[0], g_batch_count[0]);
+        pc_gl_crumb_after();
         pc_diag_draw_calls++;
     }
 #if PC_HAVE_MULTIDRAW
@@ -2429,8 +2494,10 @@ static void pc_batch_flush(void)
          * draw calls come back, but the rest of the batch -- one state and
          * uniform application per display list, one vertex upload -- is
          * where most of the win was, and that is unaffected. */
+        pc_gl_crumb_draw();
         for (i = 0; i < g_batch_n; i++) {
             glDrawArrays(g_batch_mode, g_batch_first[i], g_batch_count[i]);
+            pc_gl_crumb_after();
             pc_diag_draw_calls++;
         }
     }
@@ -2717,6 +2784,224 @@ static GLuint compile_shader(GLenum type, const char* src)
     return s;
 }
 
+/* MELEE_SHTEST=<dir>: a shader self-test, run once the base program links.
+ *
+ * Every prog_<id>.vert/.frag pair in <dir> (MELEE_SHADER_DUMP's output) is
+ * compiled, linked and drawn once -- one triangle, the uniform block bound
+ * to zeros, blending on and alpha writes off as the game leaves them -- with
+ * a glFinish after each, then the process exits. A driver that only builds
+ * real GPU code at a program's first draw (PowerVR) faults on the variant
+ * responsible, and the log names it. A match takes minutes to reach on a
+ * tablet; this takes seconds, and the sources can be edited on the host. */
+static u32 g_ubo_size;
+static void pc_shtest(const char* dir)
+{
+    DIR* d = opendir(dir);
+    struct dirent* e;
+    GLuint ubo = 0, vao = 0;
+    static u8 zeros[16384];
+    int n = 0, bad = 0;
+    if (d == NULL) { fprintf(stderr, "[SHTEST] cannot open %s\n", dir); return; }
+    glGenBuffers(1, &ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(zeros), zeros, GL_STATIC_DRAW);
+    /* The range the game binds: the block's own size, not the whole buffer.
+     * MELEE_SHTEST_WHOLE=1 binds all of it instead. */
+    if (getenv("MELEE_SHTEST_WHOLE") != NULL) glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo);
+    else glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0, (GLsizeiptr) g_ubo_size);
+    fprintf(stderr, "[SHTEST] block bound as %s (%u bytes)\n",
+            getenv("MELEE_SHTEST_WHOLE") ? "the whole buffer" : "the block's range", (unsigned) g_ubo_size);
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+    glEnable(GL_DEPTH_TEST);
+    while ((e = readdir(d)) != NULL) {
+        char path[512];
+        char* src[2] = { NULL, NULL };
+        const char* ext[2] = { "vert", "frag" };
+        unsigned id;
+        GLuint sh[2], prog;
+        GLint ok = 0;
+        int k;
+        if (sscanf(e->d_name, "prog_%u.vert", &id) != 1 || strstr(e->d_name, ".vert") == NULL) continue;
+        for (k = 0; k < 2; k++) {
+            FILE* f;
+            long len;
+            snprintf(path, sizeof(path), "%s/prog_%u.%s", dir, id, ext[k]);
+            f = fopen(path, "rb");
+            if (f == NULL) break;
+            fseek(f, 0, SEEK_END); len = ftell(f); fseek(f, 0, SEEK_SET);
+            src[k] = (char*) malloc((size_t) len + 1);
+            len = (long) fread(src[k], 1, (size_t) len, f);
+            src[k][len] = 0;
+            fclose(f);
+        }
+        if (src[0] == NULL || src[1] == NULL) { free(src[0]); free(src[1]); continue; }
+        fprintf(stderr, "[SHTEST] prog %u: drawing\n", id);
+        pc_gl_crumb_arg[5] = (long) id;
+        sh[0] = compile_shader(GL_VERTEX_SHADER, src[0]);
+        sh[1] = compile_shader(GL_FRAGMENT_SHADER, src[1]);
+        free(src[0]); free(src[1]);
+        if (!sh[0] || !sh[1]) { fprintf(stderr, "[SHTEST] prog %u: compile failed\n", id); bad++; continue; }
+        prog = glCreateProgram();
+        glAttachShader(prog, sh[0]);
+        glAttachShader(prog, sh[1]);
+        glBindAttribLocation(prog, 0, "a_pos");
+        glBindAttribLocation(prog, 1, "a_nrm");
+        glBindAttribLocation(prog, 2, "a_col");
+        glBindAttribLocation(prog, 3, "a_uv0");
+        glBindAttribLocation(prog, 4, "a_uv1");
+        /* MELEE_SHTEST_BINARY=1: link and read back as the shader cache does
+         * (pc_prog_build + pc_shc_store), before the first draw; =2 also
+         * reloads the program from that binary, as a cache hit does. */
+        {
+            const char* b = getenv("MELEE_SHTEST_BINARY");
+            int bin = b ? atoi(b) : 0;
+#ifdef GL_PROGRAM_BINARY_RETRIEVABLE_HINT
+            if (bin) glProgramParameteri(prog, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
+#endif
+            glLinkProgram(prog);
+            glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+            if (ok && bin) {
+                GLint len = 0;
+                GLenum bfmt = 0;
+                void* blob;
+                glGetProgramiv(prog, GL_PROGRAM_BINARY_LENGTH, &len);
+                blob = malloc((size_t) (len > 0 ? len : 1));
+                glGetProgramBinary(prog, len, NULL, &bfmt, blob);
+                if (bin == 2) {
+                    glDeleteProgram(prog);
+                    prog = glCreateProgram();
+                    glProgramBinary(prog, bfmt, blob, len);
+                    glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+                }
+                free(blob);
+            }
+        }
+        if (!ok) { fprintf(stderr, "[SHTEST] prog %u: link failed\n", id); bad++; continue; }
+        {
+            GLuint bi = glGetUniformBlockIndex(prog, "PcUniforms");
+            if (bi != GL_INVALID_INDEX) glUniformBlockBinding(prog, bi, 0);
+        }
+        glUseProgram(prog);
+        {
+            /* Each texture configuration the bridge creates: plain RGBA8,
+             * then the swizzles of the shadow target (R8, G/B/A from red)
+             * and of the GPU EFB copies (pc_efb_gpu_copy), on all units. */
+            static const GLint swz[][4] = {
+                { GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA },
+                { GL_RED, GL_RED, GL_RED, GL_RED },
+                { GL_ALPHA, GL_ALPHA, GL_ALPHA, GL_ALPHA },
+                { GL_GREEN, GL_GREEN, GL_GREEN, GL_GREEN },
+                { GL_BLUE, GL_BLUE, GL_BLUE, GL_BLUE },
+                { GL_RED, GL_RED, GL_RED, GL_ALPHA },
+            };
+            static GLuint tex[6][2];
+            static const u8 texel[4 * 4 * 4] = { 0 };
+            int m, u, fmt;
+            char nm[8];
+            if (tex[0][0] == 0) {
+                for (m = 0; m < 6; m++) for (fmt = 0; fmt < 2; fmt++) {
+                    glGenTextures(1, &tex[m][fmt]);
+                    glBindTexture(GL_TEXTURE_2D, tex[m][fmt]);
+                    if (fmt == 0) glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, texel);
+                    else glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 4, 4, 0, GL_RED, GL_UNSIGNED_BYTE, texel);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, swz[m][0]);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, swz[m][1]);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, swz[m][2]);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, swz[m][3]);
+                }
+            }
+            for (u = 0; u < 4; u++) {
+                GLint loc;
+                snprintf(nm, sizeof(nm), "u_tex%d", u);
+                loc = glGetUniformLocation(prog, nm);
+                if (loc >= 0) glUniform1i(loc, u);
+            }
+            for (m = 0; m < 6; m++) for (fmt = 0; fmt < 2; fmt++) {
+                pc_gl_crumb_arg[4] = m * 2 + fmt;
+                for (u = 0; u < 4; u++) {
+                    glActiveTexture(GL_TEXTURE0 + u);
+                    glBindTexture(GL_TEXTURE_2D, tex[m][fmt]);
+                }
+                glDrawArrays(GL_TRIANGLES, 0, 3);
+                glFinish();
+            }
+            /* Then the vertex layout real draws use, in every primitive
+             * mode GX can ask for, with the plain texture bound. */
+            {
+                static GLuint vbo;
+                static const GLenum prim[] = { GL_TRIANGLES, GL_POINTS, GL_LINES, GL_LINE_STRIP,
+                                               GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN };
+                size_t q;
+                if (vbo == 0) {
+                    Vertex v[6];
+                    memset(v, 0, sizeof(v));
+                    for (q = 0; q < 6; q++) { v[q].pos[0] = (f32) (q & 1); v[q].pos[1] = (f32) (q >> 1) * 0.5f; v[q].nrm[2] = 1.0f; v[q].col[3] = 1.0f; }
+                    glGenBuffers(1, &vbo);
+                    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+                    glBufferData(GL_ARRAY_BUFFER, sizeof(v), v, GL_STATIC_DRAW);
+                    glEnableVertexAttribArray(0);
+                    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, pos));
+                    glEnableVertexAttribArray(1);
+                    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, nrm));
+                    glEnableVertexAttribArray(2);
+                    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, col));
+                    glEnableVertexAttribArray(3);
+                    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, tex0));
+                    glEnableVertexAttribArray(4);
+                    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, tex1));
+                }
+                for (u = 0; u < 4; u++) {
+                    glActiveTexture(GL_TEXTURE0 + u);
+                    glBindTexture(GL_TEXTURE_2D, tex[0][0]);
+                }
+                for (q = 0; q < sizeof(prim) / sizeof(prim[0]); q++) {
+                    pc_gl_crumb_arg[4] = 100 + (long) q;
+                    glDrawArrays(prim[q], 0, 6);
+                    glFinish();
+                }
+                /* The draw forms the batcher issues: a non-zero first vertex,
+                 * and 16-bit indices from a buffer with a base vertex. */
+                {
+                    static GLuint ibo;
+                    static const u16 idx[6] = { 0, 1, 2, 1, 2, 3 };
+                    if (ibo == 0) {
+                        glGenBuffers(1, &ibo);
+                        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+                        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(idx), idx, GL_STATIC_DRAW);
+                    }
+                    pc_gl_crumb_arg[4] = 200;
+                    glDrawArrays(GL_TRIANGLES, 3, 3);
+                    glFinish();
+                    pc_gl_crumb_arg[4] = 201;
+                    glDrawElementsBaseVertex(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (const void*) 0, 2);
+                    glFinish();
+                    pc_gl_crumb_arg[4] = 202;
+                    glDrawElementsBaseVertex(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, (const void*) 2, 0);
+                    glFinish();
+                }
+            }
+            glActiveTexture(GL_TEXTURE0);
+        }
+        fprintf(stderr, "[SHTEST] prog %u: ok\n", id);
+        glUseProgram(0);
+        /* MELEE_SHTEST_KEEP=1 keeps every program alive, as the game does. */
+        if (getenv("MELEE_SHTEST_KEEP") == NULL) glDeleteProgram(prog);
+        glDeleteShader(sh[0]);
+        glDeleteShader(sh[1]);
+        n++;
+    }
+    closedir(d);
+    fprintf(stderr, "[SHTEST] done: %d drawn, %d failed to build\n", n, bad);
+    fflush(stderr);
+    _exit(0);
+}
+
 
 /* ------------------------------------------------------------------
  * Shader variants.
@@ -2957,7 +3242,6 @@ typedef struct {
 } UboMember;
 static UboMember g_ubo_mem[64];
 static int g_ubo_n;
-static u32 g_ubo_size;
 static int g_ubo_off[VLOC_MAX];
 static u8 g_ubo_img[16384];
 static int g_ubo_dirty, g_ubo_ok;
@@ -3008,9 +3292,19 @@ static int pc_ubo_find_decl(const char* name, char* type, int* arr)
     }
     return 0;
 }
+/* MELEE_UBO_PAD_HEAD=n / MELEE_UBO_PAD_TAIL=n add n unused vec4s before
+ * the first member or after the last: head padding shifts every offset,
+ * tail padding keeps them and only grows the block. A bisection aid for
+ * drivers whose codegen depends on the block's shape. */
+static int pc_ubo_pad(const char* var)
+{
+    const char* v = getenv(var);
+    int n = v ? atoi(v) : 0;
+    return n < 0 ? 0 : (n > 256 ? 256 : n);
+}
 static void pc_ubo_layout(void)
 {
-    u32 cur = 0;
+    u32 cur = 16u * (u32) pc_ubo_pad("MELEE_UBO_PAD_HEAD");
     int i, k;
     for (i = 0; i < VLOC_MAX; i++) g_ubo_off[i] = -1;
     g_ubo_n = 0;
@@ -3050,7 +3344,9 @@ static void pc_ubo_layout(void)
         }
         g_ubo_n++;
     }
-    g_ubo_size = (cur + 15) & ~15u;
+    cur = (cur + 15) & ~15u;
+    cur += 16u * (u32) pc_ubo_pad("MELEE_UBO_PAD_TAIL");
+    g_ubo_size = cur;
 }
 /* The block declaration, and the source with the members' own uniform
  * lines taken out. Inserted after the version line, which the ES path
@@ -3073,12 +3369,8 @@ static char* pc_ubo_source(const char* src)
      * force, which is invalid. Desktop GL never noticed: its header is the one
      * `#version 330 core` line and core GLSL has default precision.
      *
-     * PowerVR's compiler does not report the error, it dereferences a null and
-     * takes the process with it -- SIGSEGV at +0x3c4 inside
-     * /vendor/lib64/libusc.so, on a driver thread with none of our frames on
-     * its stack, so it reads as a driver bug rather than bad GLSL. A match was
-     * unreachable on an IMG Rogue GE8320 because of these four lines; the title
-     * screen survived only because its variants were already compiled.
+     * (This was suspected of the PowerVR GE8320 match crash and is not its
+     * cause -- see docs/powervr-ubo-crash.md -- but it was invalid GLSL ES.)
      *
      * So copy every leading directive line that must precede a declaration --
      * precision, #extension, #define, blank and comment lines -- and insert
@@ -3105,11 +3397,13 @@ static char* pc_ubo_source(const char* src)
         nl = e;
     }
     o += (size_t) sprintf(out + o, "layout(std140) uniform PcUniforms {\n");
+    if (pc_ubo_pad("MELEE_UBO_PAD_HEAD") > 0) o += (size_t) sprintf(out + o, "    vec4 pc_pad_head[%d];\n", pc_ubo_pad("MELEE_UBO_PAD_HEAD"));
     for (i = 0; i < g_ubo_n; i++) {
         const UboMember* m = &g_ubo_mem[i];
         if (m->arr) o += (size_t) sprintf(out + o, "    %s %s[%d];\n", m->type, m->ent->name, m->arr);
         else o += (size_t) sprintf(out + o, "    %s %s;\n", m->type, m->ent->name);
     }
+    if (pc_ubo_pad("MELEE_UBO_PAD_TAIL") > 0) o += (size_t) sprintf(out + o, "    vec4 pc_pad_tail[%d];\n", pc_ubo_pad("MELEE_UBO_PAD_TAIL"));
     o += (size_t) sprintf(out + o, "};\n");
     p = nl + 1;
     while (*p) {
@@ -3703,7 +3997,7 @@ static int pc_shc_enabled(void)
         g_shc_drv = pc_shc_fnv(g_vert_src, strlen(g_vert_src), g_shc_drv);
         g_shc_drv = pc_shc_fnv(g_frag_src, strlen(g_frag_src), g_shc_drv);
         {
-            static const char* const sw[] = { "MELEE_UBO_EXCLUDE", "MELEE_TEXGEN_LEGACY", "MELEE_NO_QDIV" };
+            static const char* const sw[] = { "MELEE_UBO_EXCLUDE", "MELEE_UBO_PAD_HEAD", "MELEE_UBO_PAD_TAIL", "MELEE_TEXGEN_LEGACY", "MELEE_NO_QDIV" };
             size_t k;
             for (k = 0; k < sizeof(sw) / sizeof(sw[0]); k++) {
                 const char* x = getenv(sw[k]);
@@ -4061,7 +4355,7 @@ void pc_shc_prepare_match(int stkind)
     GLint saved[VLOC_MAX];
     GLint* row;
     int ck[4], nck, i, k;
-    int loaded = 0, compiled = 0, seen = 0;
+    int loaded = 0, compiled = 0, seen = 0, prep_max;
     struct timespec t0, t1;
     static const char* const common_name = "common.txt";
 
@@ -4072,6 +4366,12 @@ void pc_shc_prepare_match(int stkind)
     if (stkind < 0 || stkind >= 35) stkind = g_shc_cur_stkind;
     g_shc_cur_stkind = stkind;
     if (!pc_shc_enabled() || g_spec_n <= 0) return;
+    /* MELEE_SHC_PREP_MAX=n: bring at most n keys (a bisection aid for
+     * drivers that fail once enough programs exist). */
+    {
+        const char* e = getenv("MELEE_SHC_PREP_MAX");
+        prep_max = e ? atoi(e) : -1;
+    }
     clock_gettime(CLOCK_MONOTONIC, &t0);
     nck = pc_lineup_chars(ck);
     row = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
@@ -4090,7 +4390,7 @@ void pc_shc_prepare_match(int stkind)
         for (p = text; *p; ) {
             const char* nl = strchr(p, '\n');
             size_t len = nl ? (size_t) (nl - p) : strlen(p);
-            if (len > 0 && pc_shc_parse_line(p, len, row, NULL)) {
+            if (len > 0 && (prep_max < 0 || seen < prep_max) && pc_shc_parse_line(p, len, row, NULL)) {
                 int r = pc_shc_bring(row, 1);
                 seen++;
                 if (r == 1) loaded++; else if (r == 2) compiled++;
@@ -4103,7 +4403,7 @@ void pc_shc_prepare_match(int stkind)
     for (i = 0; i < g_shc_rows_n; i++) {
         const ShcRow* r = &g_shc_rows[i];
         int hit = (r->stkind == stkind), j;
-        if (r->menu) continue;
+        if (r->menu || (prep_max >= 0 && seen >= prep_max)) continue;
         for (j = 0; !hit && j < r->nck; j++) for (k = 0; !hit && k < nck; k++) if (r->ck[j] == ck[k]) hit = 1;
         if (!hit) continue;
         {
@@ -4185,24 +4485,25 @@ static Prog* pc_prog_build(void)
     GLint linked;
     Prog* pr;
     int i, k;
-    if (getenv("MELEE_SHADER_DUMP")) {
-        static int dn;
-        char path[256];
-        FILE* f;
-        snprintf(path, sizeof(path), "%s/variant_%03d.frag", getenv("MELEE_SHADER_DUMP"), dn);
-        f = fopen(path, "w"); if (f) { fputs(fsrc, f); fclose(f); }
-        snprintf(path, sizeof(path), "%s/variant_%03d.vert", getenv("MELEE_SHADER_DUMP"), dn);
-        f = fopen(path, "w"); if (f) { fputs(vsrc, f); fclose(f); }
-        dn++;
-    }
-    free(vsrc); free(fsrc);
     if (!vs || !fs) {
+        free(vsrc); free(fsrc);
         PORT_LOG_ERROR("shader variant compile failed");
         if (vs) glDeleteShader(vs);
         if (fs) glDeleteShader(fs);
         return NULL;
     }
     id = glCreateProgram();
+    /* MELEE_SHADER_DUMP=<dir>: the variant's sources, named by GL program
+     * id so a crash breadcrumb's program can be matched to its source. */
+    if (getenv("MELEE_SHADER_DUMP")) {
+        char path[256];
+        FILE* f;
+        snprintf(path, sizeof(path), "%s/prog_%u.frag", getenv("MELEE_SHADER_DUMP"), (unsigned) id);
+        f = fopen(path, "w"); if (f) { fputs(fsrc, f); fclose(f); }
+        snprintf(path, sizeof(path), "%s/prog_%u.vert", getenv("MELEE_SHADER_DUMP"), (unsigned) id);
+        f = fopen(path, "w"); if (f) { fputs(vsrc, f); fclose(f); }
+    }
+    free(vsrc); free(fsrc);
     glAttachShader(id, vs);
     glAttachShader(id, fs);
     glBindAttribLocation(id, 0, "a_pos");
@@ -4265,8 +4566,8 @@ static Prog* pc_prog_register(Prog* pr, u32 h, int fresh)
     if (fresh) pc_shc_store(pr, h);
     g_progs[g_prog_n++] = pr;
     if (getenv("MELEE_SHADERLOG")) {
-        fprintf(stderr, "[SHADER] variant %d %s (frame %u, hash %08x)\n", g_prog_n,
-                fresh ? "built" : "loaded", pc_frame_number, h);
+        fprintf(stderr, "[SHADER] variant %d %s (frame %u, hash %08x, program %u)\n", g_prog_n,
+                fresh ? "built" : "loaded", pc_frame_number, h, (unsigned) pr->id);
     }
     return pr;
 }
@@ -4560,6 +4861,7 @@ static void bridge_compile_shaders(void)
         PORT_LOG_ERROR("Shader link failed: %s", log);
     }
     pc_ubo_reconcile(g_shader_program);
+    if (getenv("MELEE_SHTEST") != NULL) pc_shtest(getenv("MELEE_SHTEST"));
     glDeleteShader(vs);
     glDeleteShader(fs);
     
@@ -12562,12 +12864,24 @@ static void gx_format_to_gl(u8 gx_fmt, GLenum* internal_fmt, GLenum* base_fmt, G
         *internal_fmt = GL_RGBA8; *base_fmt = GL_RGBA; *data_type = GL_UNSIGNED_BYTE; break;
     case 0x0E: /* CMPR — decompressed at upload time */
         *internal_fmt = GL_RGBA8; *base_fmt = GL_RGBA; *data_type = GL_UNSIGNED_BYTE; break;
-    case 0x16: /* Z24X8: depth/stencil (GX_TF_Z24X8 = 0x06 | ZTF) */
-        *internal_fmt = GL_DEPTH_COMPONENT24; *base_fmt = GL_DEPTH_COMPONENT; *data_type = GL_UNSIGNED_INT_24_8; break;
-    case 0x11: /* Z8: 8-bit depth (GX_TF_Z8 = 0x01 | ZTF) */
-        *internal_fmt = GL_DEPTH_COMPONENT16; *base_fmt = GL_DEPTH_COMPONENT; *data_type = GL_UNSIGNED_SHORT; break;
-    case 0x13: /* Z16: 16-bit depth (GX_TF_Z16 = 0x03 | ZTF) */
-        *internal_fmt = GL_DEPTH_COMPONENT16; *base_fmt = GL_DEPTH_COMPONENT; *data_type = GL_UNSIGNED_SHORT; break;
+    /* Z textures are colour textures here, at the GX format's own byte size.
+     *
+     * The port never uses one as depth: its only user, HSD_EraseRect's Z8
+     * image, is emulated by collapsing the depth range (bridge_upload_and_draw),
+     * and the image is merely bound while it draws. They were depth formats,
+     * which cost three things. Z8 went up as DEPTH_COMPONENT16/UNSIGNED_SHORT,
+     * reading two bytes a pixel from one. Z24X8 paired DEPTH_COMPONENT24 with
+     * UNSIGNED_INT_24_8, which ES rejects outright. And nothing samples a
+     * depth texture as depth, so a depth format only buys driver-specific
+     * behaviour. Sampled, R8 gives (d,0,0,1), what a depth texture gives.
+     * (Suspected, and ruled out, as the PowerVR match crash:
+     * docs/powervr-ubo-crash.md.) */
+    case 0x16: /* Z24X8 (GX_TF_Z24X8 = 0x06 | ZTF): laid out as RGBA8 */
+        *internal_fmt = GL_RGBA8; *base_fmt = GL_RGBA; *data_type = GL_UNSIGNED_BYTE; break;
+    case 0x11: /* Z8 (GX_TF_Z8 = 0x01 | ZTF): one byte a pixel */
+        *internal_fmt = GL_R8; *base_fmt = GL_RED; *data_type = GL_UNSIGNED_BYTE; break;
+    case 0x13: /* Z16 (GX_TF_Z16 = 0x03 | ZTF): two bytes a pixel */
+        *internal_fmt = GL_RG8; *base_fmt = GL_RG; *data_type = GL_UNSIGNED_BYTE; break;
     default:
         *internal_fmt = GL_RGBA8; *base_fmt = GL_RGBA; *data_type = GL_UNSIGNED_BYTE; break;
     }
@@ -12967,6 +13281,20 @@ static u32 g_tex_slot_hash[MAX_TEXTURES];
  * (min, mag, wrap_s, wrap_t), and the texture they were set on: the four
  * glTexParameteri calls per GXLoadTexObj are skipped while they match. */
 static u64 g_tex_slot_params[MAX_TEXTURES];
+/* The textures on each unit at the last draw, for the crash breadcrumb:
+ * GL name, GX format, size, mip chain and sampler parameters. */
+static void pc_gl_crumb_textures(void)
+{
+    int u;
+    for (u = 0; u < 4 && u < PC_TEXN; u++) {
+        u32 sl = g_active_tex_slots[u];
+        if (sl >= MAX_TEXTURES) { pc_gl_crumb_tex[u] = -1; continue; }
+        pc_gl_crumb_tex[u] = (long) g_bound_tex[u] << 40 | (long) g_state.tex_cache_w[sl] << 26 |
+                             (long) g_state.tex_cache_h[sl] << 12 | (long) g_tex_cache_hasmip[sl] << 9 |
+                             (long) g_tex_slot_compressed[sl] << 8 | g_state.tex_cache_fmt[sl];
+        pc_gl_crumb_texp[u] = (long) g_tex_slot_params[sl];
+    }
+}
 static GLuint g_tex_slot_params_tex[MAX_TEXTURES];
 u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod);
 
@@ -13689,6 +14017,9 @@ skip_tlut:
                      GL_RGBA, GL_UNSIGNED_BYTE, upload_src);
     } else {
         if (g_tex_slot_compressed[slot]) { glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1000); g_tex_slot_compressed[slot] = FALSE; }
+        pc_gl_crumb_arg[0] = fmt; pc_gl_crumb_arg[1] = (long) internal_fmt;
+        pc_gl_crumb_arg[2] = (long) base_fmt; pc_gl_crumb_arg[3] = (long) data_type;
+        pc_gl_crumb_arg[4] = (long) upload_w << 16 | upload_h; pc_gl_crumb_arg[5] = (long) (uintptr_t) upload_src;
         glTexImage2D(GL_TEXTURE_2D, 0, internal_fmt, upload_w, upload_h, 0,
                      base_fmt, data_type, upload_src);
     }

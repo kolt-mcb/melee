@@ -2028,7 +2028,11 @@ void pc_state_hash_log_frame(int frame)
             const char* e = getenv("MELEE_SIMHASHLOG_MEM");
             mem = (e != NULL && *e != '\0');
         }
+#ifndef BUILD_NETPLAY
+        mem = 0; /* the snapshot regions live in netplay/pc_snapshot.c */
+#endif
         if (mem) {
+#ifdef BUILD_NETPLAY
             /* Per region, not one number: see pc_snapshot_region_checksums. */
             extern int pc_snapshot_region_checksums(u32* out, int max);
             u32 rc[32];
@@ -2040,7 +2044,7 @@ void pc_state_hash_log_frame(int frame)
                 fprintf(o, " %08X", rc[k]);
             }
             fprintf(o, "\n");
-            (void) 0;
+#endif
         } else {
             /* The render-pass counts ride along: they cost nothing and they are
              * the first thing to check when two sides disagree, because the pass

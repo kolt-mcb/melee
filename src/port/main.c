@@ -102,6 +102,32 @@ static void crash_handler(int sig, siginfo_t* info, void* ctx)
                  sig, info->si_addr, (void*)pc, mod_name,
                  mod_base != 0 ? pc - mod_base : pc);
     write(2, buf, n);
+    {
+        extern const char* volatile pc_gl_crumb_fn;
+        extern volatile int pc_gl_crumb_line;
+        extern volatile unsigned pc_gl_crumb_n;
+        if (pc_gl_crumb_fn != NULL) {
+            n = snprintf(buf, sizeof(buf), "[CRASH] last GL call: %s at gx_gl_bridge.c:%d (call #%u)\n",
+                         pc_gl_crumb_fn, pc_gl_crumb_line, pc_gl_crumb_n);
+            write(2, buf, n);
+            {
+                extern volatile long pc_gl_crumb_arg[6];
+                n = snprintf(buf, sizeof(buf), "[CRASH] last GL args: %lx %lx %lx %lx %lx %lx\n",
+                             pc_gl_crumb_arg[0], pc_gl_crumb_arg[1], pc_gl_crumb_arg[2],
+                             pc_gl_crumb_arg[3], pc_gl_crumb_arg[4], pc_gl_crumb_arg[5]);
+                write(2, buf, n);
+            }
+            {
+                extern volatile long pc_gl_crumb_tex[4], pc_gl_crumb_texp[4];
+                int u;
+                for (u = 0; u < 4; u++) {
+                    n = snprintf(buf, sizeof(buf), "[CRASH] unit %d: tex %lx params %lx\n", u,
+                                 pc_gl_crumb_tex[u], pc_gl_crumb_texp[u]);
+                    write(2, buf, n);
+                }
+            }
+        }
+    }
     /* Raw stack dump first: backtrace() below can itself fault (it lazily
      * dlopens libgcc_s / mallocs, which dies on a corrupted heap). Dumping
      * words from SP only reads mapped stack memory and cannot fault; the

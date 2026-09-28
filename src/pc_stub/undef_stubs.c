@@ -3222,6 +3222,13 @@ static void pc_frame_hidden_begin(void)
     }
 }
 #endif
+#if !BUILD_NETPLAY
+/* Without netplay no frame is simulated unseen. */
+int pc_frame_is_hidden(void)
+{
+    return 0;
+}
+#endif
 
 /* How many render passes have run, and how many of those were for a frame nobody
  * sees. Each match frame has to get exactly one pass on both sides of a netplay
