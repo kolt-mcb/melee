@@ -1017,10 +1017,50 @@ impaired match.
 > whole-line diff reports 6137 of 6138 frames differing and looks catastrophic.
 > Compare column 2.
 
-*Hardware half still blocked:* `adb devices` is empty, so desktop-against-tablet on
-real hardware is unmeasured. Everything that can be checked without the device now
-passes, including that the Android build finally selects the arrangement it can
-actually implement.
+### M4, hardware half: the port runs on the tablet, the GPU driver kills the match
+
+The device to hand is a TCL 9081X on Android 11 (SDK 30), PowerVR Rogue GE8320.
+Getting the port onto it took two things: lowering the declared `minSdkVersion` from
+31 to 30 (the native library uses no API-31 symbol, so nothing had to be rebuilt),
+and a device reboot -- the OEM PackageManager had gone stale and answered
+`am start` with "Activity class does not exist" for a component it was itself
+listing. Nothing about the APK changed between those two states.
+
+It then works, up to a point. The port boots, finds its assets, compiles its 291
+shader specialisations, and renders the **title screen at a steady 60.0 fps** at
+1920x1200.
+
+**At match start it dies in the GPU driver.** `Signal11 at address 0x3c4`, with
+`pc` and `lr` byte-identical across every run even though ASLR moved libmain.so
+between them. That is the tell: they are not in libmain.so, and the crash handler's
+"libmain.so + 0x542085bc" was an offset larger than the library. Resolved against
+`/proc/<pid>/maps` -- read through `run-as`, since the shell cannot read an app's
+maps -- both land inside **`/vendor/lib64/libusc.so`**, PowerVR's Universal Shader
+Compiler, which is mapped at a fixed address on this device.
+
+The tempting wrong answer was the ten `GUARD SKIP [texp.c:1244] corrupted
+pointer/data skipped` lines immediately before it. Those fire **identically on the
+desktop** -- the same ten, plus texp.c:376, :393 and :601 -- and the desktop run
+finishes. Both drivers are handed the same thing; only this one dies. Also ruled
+out: another stage crashes the same way, and `MELEE_SHADER_CACHE=0` changes nothing.
+So it is a third vendor-driver class beside the Adreno and Mali ones already on
+record, not a port bug and not a netcode one.
+
+One ordering trap is worth writing down for the retry, because it cost the first
+attempt. The host gives up after `NET_CONNECT_WAIT_MS`, a **compile-time** 120 s,
+and the tablet needs about two minutes to boot the game off external storage. Start
+the guest first and bring the host up only once the guest's log says `[NET]
+connecting to ...`; otherwise the host exits "playing alone" before the guest
+arrives. On the attempt where the timing did line up, the tablet got as far as
+`[NET] match starting, seed 3F2A1B0C, delay 3 frames` -- the match began on the
+device -- and then the driver took it down.
+
+*So M4's hardware half is unmeasured, and not for want of netcode.* Everything
+checkable without a working device passes, the software half is bit-identical, and
+what is needed is a device whose GPU driver survives a match. The tablet also
+confirmed the useful half of the setup: both machines on one LAN, 11-19 ms RTT,
+`melee.env` carrying the knobs, and the arrangement fix present in the shipped
+`libmain.so`.
 
 Either way the conclusion for Android stands: it runs the arrangement that mutates
 archive data, the test harnesses lean heavily on the debug boot, and the attribute
