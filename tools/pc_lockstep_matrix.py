@@ -117,13 +117,27 @@ def route_steps(case_lines):
     return steps
 
 
+def icon_name(ck):
+    """The CSS grid's name for a character kind.
+
+    pc_matrix names kinds `CKind_Mario`; the route grid keys them `MARIO`. When
+    the two drifted apart, `mx.CHARS[ck] not in rt.load_grid()` was true for
+    every character, so every cell of the sweep was recorded "no-icon" and
+    skipped -- silently, because the skip printed nothing. The sweep completed in
+    under a second and looked like it had simply found nothing to do. Anything
+    that skips a cell says so now.
+    """
+    n = mx.CHARS[ck]
+    return n[len("CKind_"):].upper() if n.startswith("CKind_") else n.upper()
+
+
 def make_case(c0, c1, stage_kind):
     """Write the .case and its route; return the case name."""
     name = "auto_%s_%s_%s" % (mx.CHARS[c0].lower(), mx.CHARS[c1].lower(),
                               mx.STAGES[stage_kind].lower())
     os.makedirs(CASES, exist_ok=True)
     os.makedirs(ROUTES, exist_ok=True)
-    lines = rt.case_lines(mx.CHARS[c0], mx.CHARS[c1],
+    lines = rt.case_lines(icon_name(c0), icon_name(c1),
                           mx.STAGES[stage_kind], stage_kind)
     with open(os.path.join(CASES, name + ".case"), "w") as f:
         f.write("\n".join(lines) + "\n")
@@ -294,20 +308,6 @@ def cmd_run(a):
         print("== every cell was skipped; nothing was measured")
         return 1
     return 0
-
-
-def icon_name(ck):
-    """The CSS grid's name for a character kind.
-
-    pc_matrix names kinds `CKind_Mario`; the route grid keys them `MARIO`. When
-    the two drifted apart, `mx.CHARS[ck] not in rt.load_grid()` was true for
-    every character, so every cell of the sweep was recorded "no-icon" and
-    skipped -- silently, because the skip printed nothing. The sweep completed in
-    under a second and looked like it had simply found nothing to do. Anything
-    that skips a cell says so now.
-    """
-    n = mx.CHARS[ck]
-    return n[len("CKind_"):].upper() if n.startswith("CKind_") else n.upper()
 
 
 def key(c):
