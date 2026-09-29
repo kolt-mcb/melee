@@ -204,6 +204,56 @@ void pc_profile_report(void)
     }
 }
 
+#ifdef __ANDROID__
+/* The game thread's own stack, by walking the frame-pointer chain from the
+ * interrupted context (the unwinder is not signal-safe here; see above). */
+static void prof_stack_dump(void* uc)
+{
+#if defined(__aarch64__)
+    unsigned long fp = ((ucontext_t*) uc)->uc_mcontext.regs[29];
+    unsigned long pcs[24];
+    int n = 0, i;
+    pcs[n++] = ((ucontext_t*) uc)->uc_mcontext.pc;
+    pcs[n++] = ((ucontext_t*) uc)->uc_mcontext.regs[30];
+    while (fp != 0 && (fp & 7) == 0 && n < 24) {
+        unsigned long next = ((unsigned long*) fp)[0];
+        pcs[n++] = ((unsigned long*) fp)[1];
+        if (next <= fp) break;
+        fp = next;
+    }
+    for (i = 0; i < n; i++) {
+        Dl_info di;
+        if (dladdr((void*) pcs[i], &di) && di.dli_fbase != NULL) {
+            fprintf(stderr, "[STACK] #%d %s+0x%lx %s\n", i, strrchr(di.dli_fname, '/') ? strrchr(di.dli_fname, '/') + 1 : di.dli_fname,
+                    pcs[i] - (unsigned long) di.dli_fbase, di.dli_sname ? di.dli_sname : "?");
+        } else {
+            fprintf(stderr, "[STACK] #%d %p\n", i, (void*) pcs[i]);
+        }
+    }
+#else
+    (void) uc;
+#endif
+}
+static void prof_report_signal(int sig, siginfo_t* si, void* uc)
+{
+    (void) sig; (void) si;
+    if (prof_only_tid != 0 && (long) syscall(SYS_gettid) != prof_only_tid) {
+        /* Report here, then have the game thread show where it is. */
+        pc_profile_report();
+        syscall(SYS_tgkill, getpid(), prof_only_tid, SIGUSR2);
+        return;
+    }
+    if (prof_only_tid == 0) pc_profile_report();
+    fprintf(stderr, "[STACK] game thread:\n");
+    prof_stack_dump(uc);
+}
+#else
+static void prof_report_signal(int sig, siginfo_t* si, void* uc)
+{
+    (void) sig; (void) si; (void) uc;
+    pc_profile_report();
+}
+#endif
 void pc_profile_init(void)
 {
     struct sigaction sa;
@@ -232,5 +282,14 @@ void pc_profile_init(void)
     setitimer(ITIMER_PROF, &it, NULL);
     prof_on = 1;
     atexit(pc_profile_report);
+    /* SIGUSR2 reports on demand: a hang before the first present never
+     * reaches the periodic report (kill -USR2 from `run-as` on Android). */
+    {
+        struct sigaction su;
+        memset(&su, 0, sizeof(su));
+        su.sa_sigaction = prof_report_signal;
+        su.sa_flags = SA_RESTART | SA_SIGINFO;
+        sigaction(SIGUSR2, &su, NULL);
+    }
     fprintf(stderr, "[PROFILE] sampling at 1kHz\n");
 }
