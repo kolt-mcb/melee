@@ -5833,7 +5833,11 @@ u32 pc_diag_uploads, pc_diag_mipgens, pc_diag_hashes, pc_diag_draws;
 u32 pc_diag_upload_kb;
 void gx_frame_begin(void)
 {
-    pc_frame_number = g_state.frame_count + 1;
+    extern int pc_gxq_active;
+    /* With the bridge on its own thread the game thread numbers the frame
+     * (pc_gxq_pre_frame_begin); writing it here too, a frame late from the
+     * bridge thread, let game-thread readers see it go backwards. */
+    if (!pc_gxq_active) pc_frame_number = g_state.frame_count + 1;
     gx_trace_frame_begin();
     g_state.frame_count++;
     g_frame_draw_idx = 0;
