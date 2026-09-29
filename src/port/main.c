@@ -316,6 +316,63 @@ void pc_watchdog_pet(void)
     }
 }
 
+
+/* MELEE_FPMODE=1: report the FPU's rounding/denormal mode, and prove it by
+ * arithmetic rather than by reading a control register.
+ *
+ * x86-64 and AArch64 agree on everything IEEE-754 requires, but not on what they
+ * do with a subnormal result unless both are in IEEE mode: SSE has FTZ/DAZ in
+ * MXCSR and AArch64 has FZ in FPCR, and a library, a driver or a JIT can set
+ * either behind the port's back. Flushing turns a tiny non-zero into an exact
+ * zero, which changes the SIGN of a cross product -- and a cross product's sign
+ * is how the collision code decides which side of a floor line a point is on.
+ * A fighter walking off a ledge is exactly that test, and desktop and tablet
+ * disagree on one.
+ *
+ * The denormal round-trip below is the real check: a control-register bit can be
+ * read wrong or set later, but if `tiny` comes back zero the hardware is
+ * flushing, whatever the register says. */
+static void pc_report_fp_mode(void)
+{
+    /* Build the subnormals from their bit patterns at runtime. Writing them as
+     * decimal literals does not work: the compiler folds the constant and the
+     * probe reports a zero it created itself, not one the FPU flushed. */
+    volatile float small;
+    volatile float scaled;
+    volatile float mul = 0.5f;
+    u32 fb = 0x00800000u; /* smallest NORMAL float; halving it must go subnormal */
+    u32 out;
+    if (getenv("MELEE_FPMODE") == NULL) {
+        return;
+    }
+    memcpy((void*) &small, &fb, sizeof(fb));
+    scaled = small * mul; /* subnormal unless the FPU flushes it */
+    memcpy(&out, (const void*) &scaled, sizeof(out));
+    fprintf(stderr,
+            "[FPMODE] smallest normal %08X * 0.5 -> %08X  (%s)\n",
+            fb, out,
+            out == 0 ? "FLUSHED TO ZERO -- not IEEE" : "subnormal kept, IEEE");
+#if defined(__aarch64__)
+    {
+        u64 fpcr;
+        __asm__ volatile("mrs %0, fpcr" : "=r"(fpcr));
+        fprintf(stderr, "[FPMODE] aarch64 FPCR=%016llX FZ=%d FZ16=%d RMode=%d\n",
+                (unsigned long long) fpcr, (int) ((fpcr >> 24) & 1),
+                (int) ((fpcr >> 19) & 1), (int) ((fpcr >> 22) & 3));
+    }
+#elif defined(__x86_64__)
+    {
+        unsigned mxcsr;
+        __asm__ volatile("stmxcsr %0" : "=m"(mxcsr));
+        fprintf(stderr, "[FPMODE] x86-64 MXCSR=%08X FTZ=%d DAZ=%d RC=%d\n",
+                mxcsr, (int) ((mxcsr >> 15) & 1), (int) ((mxcsr >> 6) & 1),
+                (int) ((mxcsr >> 13) & 3));
+    }
+#endif
+    fflush(stderr);
+}
+
+
 static void install_crash_handler(void)
 {
 #if defined(__EMSCRIPTEN__)
@@ -426,6 +483,7 @@ int main(int argc, char* argv[])
 
     /* PC port: install crash handler for debugging */
     install_crash_handler();
+    pc_report_fp_mode();
     {
         extern void pc_assert_report_suppressed(void);
         atexit(pc_assert_report_suppressed);
