@@ -153,6 +153,28 @@ void render_present(void)
         s_max_frames = mf ? atoi(mf) : -1;
     }
     s_present_count++;
+    /* MELEE_MEMLOG=1: one line a frame -- free memory against the GL work that
+     * can allocate driver memory the process RSS never shows. */
+    {
+        static int ml = -1;
+        if (ml < 0) ml = getenv("MELEE_MEMLOG") != NULL;
+        if (ml) {
+            extern u32 pc_diag_uploads, pc_diag_upload_kb, pc_diag_draws;
+            extern int pc_diag_gl_tex_live, pc_diag_gl_buf_live, pc_diag_gl_prog_live;
+            char mb[256];
+            long fr = -1;
+            FILE* mf = fopen("/proc/meminfo", "r");
+            if (mf != NULL) {
+                while (fgets(mb, sizeof(mb), mf) != NULL) {
+                    if (sscanf(mb, "MemFree: %ld", &fr) == 1) break;
+                }
+                fclose(mf);
+            }
+            fprintf(stderr, "[MEMLOG] present %d free %ld MB tex %d buf %d prog %d uploads %u (%u MB) draws %u\n",
+                    s_present_count, fr / 1024, pc_diag_gl_tex_live, pc_diag_gl_buf_live,
+                    pc_diag_gl_prog_live, pc_diag_uploads, pc_diag_upload_kb >> 10, pc_diag_draws);
+        }
+    }
     /* MELEE_PROFILE's report runs at exit, which an Android force-stop
      * never reaches: repeat it every 1500 frames as well. */
     if (s_present_count % 1500 == 0 && getenv("MELEE_PROFILE") != NULL) {

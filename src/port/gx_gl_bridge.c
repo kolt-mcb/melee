@@ -106,6 +106,14 @@ volatile long pc_gl_crumb_arg[6]; /* set by call sites worth describing */
 volatile unsigned pc_gl_crumb_prog, pc_gl_crumb_fbo;
 volatile long pc_gl_crumb_tex[4], pc_gl_crumb_texp[4]; /* per unit, at the last draw */
 static void pc_gl_crumb_textures(void);
+/* Live GL object counts, for MELEE_MEMLOG. */
+int pc_diag_gl_tex_live, pc_diag_gl_buf_live, pc_diag_gl_prog_live;
+#define glGenTextures(n, p) (pc_diag_gl_tex_live += (n), glGenTextures(n, p))
+#define glDeleteTextures(n, p) (pc_diag_gl_tex_live -= (n), glDeleteTextures(n, p))
+#define glGenBuffers(n, p) (pc_diag_gl_buf_live += (n), glGenBuffers(n, p))
+#define glDeleteBuffers(n, p) (pc_diag_gl_buf_live -= (n), glDeleteBuffers(n, p))
+#define glCreateProgram() (pc_diag_gl_prog_live++, glCreateProgram())
+#define glDeleteProgram(p) (pc_diag_gl_prog_live--, glDeleteProgram(p))
 #define PC_GLC(fn) (pc_gl_crumb_fn = fn, pc_gl_crumb_line = __LINE__, pc_gl_crumb_n++)
 #define glDrawArrays(...) (PC_GLC("glDrawArrays"), glDrawArrays(__VA_ARGS__))
 #define glDrawElementsBaseVertex(...) (PC_GLC("glDrawElementsBaseVertex"), glDrawElementsBaseVertex(__VA_ARGS__))
@@ -1780,33 +1788,47 @@ static const char* g_frag_src =
 "\n"
 "    // Alpha test (GCN style: two compares combined with AND/OR)\n"
 "    // comp0: 0=NEVER, 1=LESS, 2=EQUAL, 3=LEQUAL, 4=GREATER, 5=NOTEQUAL, 6=GEQUAL, 7=ALWAYS\n"
-"    bool pass0 = true;\n"
-"    if (u_alpha_cmp_func == 0) pass0 = false; // NEVER\n"
-"    else if (u_alpha_cmp_func == 1) pass0 = col.a < u_alpha_cmp_ref; // LESS\n"
-"    else if (u_alpha_cmp_func == 2) pass0 = abs(col.a - u_alpha_cmp_ref) <= 0.001; // EQUAL\n"
-"    else if (u_alpha_cmp_func == 3) pass0 = col.a <= u_alpha_cmp_ref; // LEQUAL\n"
-"    else if (u_alpha_cmp_func == 4) pass0 = col.a > u_alpha_cmp_ref; // GREATER\n"
-"    else if (u_alpha_cmp_func == 5) pass0 = abs(col.a - u_alpha_cmp_ref) > 0.001; // NOTEQUAL\n"
-"    else if (u_alpha_cmp_func == 6) pass0 = col.a >= u_alpha_cmp_ref; // GEQUAL\n"
-"    // else pass0 = true; // ALWAYS\n"
+/* Only when the test can fail. Both compares ALWAYS and a combine other than
+ * XOR always pass; for a variant these are specialisation constants, so this
+ * condition folds and the section -- discard included -- goes with it.
+ *
+ * Without it the section folded only through the pass0/pass1/pass
+ * assignments, and PowerVR's compiler (GE8320, DDK 1.13) keeps a remnant of
+ * the discard branch: its backend, PVRUniFlexCompileToHw, run at the first
+ * draw with the depth test disabled, follows a null successor and faults at
+ * 0x3c4 in libusc.so. Every match reached such a draw (an untextured, fogged
+ * variant, e.g. the HUD) within a second. A literal `if (false) discard` and
+ * a data-dependent discard are both fine; only the half-folded one is not.
+ * docs/powervr-ubo-crash.md has the reduction. */
+"    if (!(u_alpha_cmp_func == 7 && u_alpha_cmp_func1 == 7 && u_alpha_op != 2)) {\n"
+"        bool pass0 = true;\n"
+"        if (u_alpha_cmp_func == 0) pass0 = false; // NEVER\n"
+"        else if (u_alpha_cmp_func == 1) pass0 = col.a < u_alpha_cmp_ref; // LESS\n"
+"        else if (u_alpha_cmp_func == 2) pass0 = abs(col.a - u_alpha_cmp_ref) <= 0.001; // EQUAL\n"
+"        else if (u_alpha_cmp_func == 3) pass0 = col.a <= u_alpha_cmp_ref; // LEQUAL\n"
+"        else if (u_alpha_cmp_func == 4) pass0 = col.a > u_alpha_cmp_ref; // GREATER\n"
+"        else if (u_alpha_cmp_func == 5) pass0 = abs(col.a - u_alpha_cmp_ref) > 0.001; // NOTEQUAL\n"
+"        else if (u_alpha_cmp_func == 6) pass0 = col.a >= u_alpha_cmp_ref; // GEQUAL\n"
+"        // else pass0 = true; // ALWAYS\n"
 "\n"
-"    bool pass1 = true;\n"
-"    if (u_alpha_cmp_func1 == 0) pass1 = false; // NEVER\n"
-"    else if (u_alpha_cmp_func1 == 1) pass1 = col.a < u_alpha_cmp_ref1; // LESS\n"
-"    else if (u_alpha_cmp_func1 == 2) pass1 = abs(col.a - u_alpha_cmp_ref1) <= 0.001; // EQUAL\n"
-"    else if (u_alpha_cmp_func1 == 3) pass1 = col.a <= u_alpha_cmp_ref1; // LEQUAL\n"
-"    else if (u_alpha_cmp_func1 == 4) pass1 = col.a > u_alpha_cmp_ref1; // GREATER\n"
-"    else if (u_alpha_cmp_func1 == 5) pass1 = abs(col.a - u_alpha_cmp_ref1) > 0.001; // NOTEQUAL\n"
-"    else if (u_alpha_cmp_func1 == 6) pass1 = col.a >= u_alpha_cmp_ref1; // GEQUAL\n"
-"    // else pass1 = true; // ALWAYS\n"
+"        bool pass1 = true;\n"
+"        if (u_alpha_cmp_func1 == 0) pass1 = false; // NEVER\n"
+"        else if (u_alpha_cmp_func1 == 1) pass1 = col.a < u_alpha_cmp_ref1; // LESS\n"
+"        else if (u_alpha_cmp_func1 == 2) pass1 = abs(col.a - u_alpha_cmp_ref1) <= 0.001; // EQUAL\n"
+"        else if (u_alpha_cmp_func1 == 3) pass1 = col.a <= u_alpha_cmp_ref1; // LEQUAL\n"
+"        else if (u_alpha_cmp_func1 == 4) pass1 = col.a > u_alpha_cmp_ref1; // GREATER\n"
+"        else if (u_alpha_cmp_func1 == 5) pass1 = abs(col.a - u_alpha_cmp_ref1) > 0.001; // NOTEQUAL\n"
+"        else if (u_alpha_cmp_func1 == 6) pass1 = col.a >= u_alpha_cmp_ref1; // GEQUAL\n"
+"        // else pass1 = true; // ALWAYS\n"
 "\n"
-"    // Combine: op=0 (AND), op=1 (OR), op=2 (XOR), op=3 (XNOR)\n"
-"    bool pass;\n"
-"    if (u_alpha_op == 0) pass = pass0 && pass1;     // AND\n"
-"    else if (u_alpha_op == 1) pass = pass0 || pass1; // OR\n"
-"    else if (u_alpha_op == 2) pass = pass0 != pass1; // XOR\n"
-"    else pass = pass0 == pass1;                     // XNOR\n"
-"    if (!pass) { discard; }\n"
+"        // Combine: op=0 (AND), op=1 (OR), op=2 (XOR), op=3 (XNOR)\n"
+"        bool pass;\n"
+"        if (u_alpha_op == 0) pass = pass0 && pass1;     // AND\n"
+"        else if (u_alpha_op == 1) pass = pass0 || pass1; // OR\n"
+"        else if (u_alpha_op == 2) pass = pass0 != pass1; // XOR\n"
+"        else pass = pass0 == pass1;                     // XNOR\n"
+"        if (!pass) { discard; }\n"
+"    }\n"
 "\n"
 "    // DstAlpha override (GXSetDstAlpha)\n"
 "    if (u_dst_alpha_enabled != 0) {\n"
@@ -2826,6 +2848,20 @@ static void pc_shtest(const char* dir)
         GLint ok = 0;
         int k;
         if (sscanf(e->d_name, "prog_%u.vert", &id) != 1 || strstr(e->d_name, ".vert") == NULL) continue;
+        /* MELEE_SHTEST_SKIP=a,b,c leaves those programs out; MELEE_SHTEST_ONLY=a
+         * tests one. */
+        {
+            const char* sk = getenv("MELEE_SHTEST_SKIP");
+            const char* on = getenv("MELEE_SHTEST_ONLY");
+            char key[16];
+            snprintf(key, sizeof(key), ",%u,", id);
+            if (on != NULL && (unsigned) atoi(on) != id) continue;
+            if (sk != NULL) {
+                char buf[4096];
+                snprintf(buf, sizeof(buf), ",%s,", sk);
+                if (strstr(buf, key) != NULL) continue;
+            }
+        }
         for (k = 0; k < 2; k++) {
             FILE* f;
             long len;
@@ -2886,6 +2922,83 @@ static void pc_shtest(const char* dir)
             if (bi != GL_INVALID_INDEX) glUniformBlockBinding(prog, bi, 0);
         }
         glUseProgram(prog);
+        if (getenv("MELEE_SHTEST_FOCUS") != NULL) {
+            /* MELEE_SHTEST_FOCUS=<fbo>,<mask>,<blend>: only the given state --
+             * fbo 0 default / 1 RGBA8 / 2 R8, mask as a 4-bit RGBA value. */
+            static GLuint ffbo[3], fft[3], ffr[3];
+            int want[3] = { 1, 0, 1 }, t;
+            const char* fp = getenv("MELEE_SHTEST_FOCUS");
+            if (ffbo[1] == 0) {
+                for (t = 1; t < 3; t++) {
+                    glGenFramebuffers(1, &ffbo[t]); glGenTextures(1, &fft[t]); glGenRenderbuffers(1, &ffr[t]);
+                    glBindTexture(GL_TEXTURE_2D, fft[t]);
+                    if (t == 1) glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 64, 64, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+                    else glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 64, 64, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+                    glBindRenderbuffer(GL_RENDERBUFFER, ffr[t]);
+                    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, 64, 64);
+                    glBindFramebuffer(GL_FRAMEBUFFER, ffbo[t]);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fft[t], 0);
+                    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, ffr[t]);
+                }
+                glBindTexture(GL_TEXTURE_2D, 0);
+            }
+            /* A sequence: states separated by '/', drawn in order. */
+            while (fp != NULL && *fp) {
+                int zs = 0;
+                if (sscanf(fp, "%d,%d,%d,%d", &want[0], &want[1], &want[2], &zs) < 3) break;
+                pc_gl_crumb_arg[4] = zs << 16 | want[0] << 12 | want[1] << 8 | want[2];
+                /* depth: 0 test on LEQUAL write on; 1 test off; 2 range (1,1);
+                 * 3 ALWAYS; 4 NEVER; 5 LESS; 6 LEQUAL write off; 7 GEQUAL. */
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glDepthRangef(0.0f, 1.0f);
+                switch (zs) {
+                case 1: glDisable(GL_DEPTH_TEST); break;
+                case 2: glDepthFunc(GL_LEQUAL); glDepthRangef(1.0f, 1.0f); break;
+                case 3: glDepthFunc(GL_ALWAYS); break;
+                case 4: glDepthFunc(GL_NEVER); break;
+                case 5: glDepthFunc(GL_LESS); break;
+                case 6: glDepthFunc(GL_LEQUAL); glDepthMask(GL_FALSE); break;
+                case 7: glDepthFunc(GL_GEQUAL); break;
+                default: glDepthFunc(GL_LEQUAL); break;
+                }
+                glBindFramebuffer(GL_FRAMEBUFFER, ffbo[want[0] < 0 || want[0] > 2 ? 0 : want[0]]);
+                glColorMask((want[1] & 8) != 0, (want[1] & 4) != 0, (want[1] & 2) != 0, (want[1] & 1) != 0);
+                /* blend: 0 off; 1..64 on, with GX factor pair (b-1)/8, (b-1)%8. */
+                if (want[2]) {
+                    static const GLenum sf2[] = { GL_ZERO, GL_ONE, GL_DST_COLOR, GL_ONE_MINUS_DST_COLOR,
+                                                  GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA };
+                    static const GLenum df2[] = { GL_ZERO, GL_ONE, GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR,
+                                                  GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA };
+                    int bp = (want[2] - 1) & 63;
+                    glEnable(GL_BLEND);
+                    glBlendFunc(sf2[bp / 8], df2[bp % 8]);
+                } else {
+                    glDisable(GL_BLEND);
+                }
+                {
+                    struct timespec q0, q1;
+                    static unsigned slow, total;
+                    double ms;
+                    clock_gettime(CLOCK_MONOTONIC, &q0);
+                    glDrawArrays(GL_TRIANGLES, 0, 3);
+                    glFinish();
+                    clock_gettime(CLOCK_MONOTONIC, &q1);
+                    ms = (q1.tv_sec - q0.tv_sec) * 1e3 + (q1.tv_nsec - q0.tv_nsec) / 1e6;
+                    total++;
+                    /* A draw that compiles takes milliseconds; one that does
+                     * not takes well under one. */
+                    if (ms > 2.0) {
+                        slow++;
+                        fprintf(stderr, "[SHTEST] compile #%u at draw %u (prog %u state %d,%d,%d,%d, %.1f ms)\n",
+                                slow, total, id, want[0], want[1], want[2], zs, ms);
+                    }
+                }
+                fp = strchr(fp, '/');
+                if (fp != NULL) fp++;
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        } else
         {
             /* Each texture configuration the bridge creates: plain RGBA8,
              * then the swizzles of the shadow target (R8, G/B/A from red)
@@ -2922,7 +3035,10 @@ static void pc_shtest(const char* dir)
                 loc = glGetUniformLocation(prog, nm);
                 if (loc >= 0) glUniform1i(loc, u);
             }
-            for (m = 0; m < 6; m++) for (fmt = 0; fmt < 2; fmt++) {
+            /* MELEE_SHTEST_SECTIONS=<bits>: 1 swizzles, 2 primitives, 4 draw
+             * forms, 8 the state matrix (default all). */
+            int sec = getenv("MELEE_SHTEST_SECTIONS") ? atoi(getenv("MELEE_SHTEST_SECTIONS")) : 15;
+            for (m = 0; m < 6 && (sec & 1); m++) for (fmt = 0; fmt < 2; fmt++) {
                 pc_gl_crumb_arg[4] = m * 2 + fmt;
                 for (u = 0; u < 4; u++) {
                     glActiveTexture(GL_TEXTURE0 + u);
@@ -2960,7 +3076,7 @@ static void pc_shtest(const char* dir)
                     glActiveTexture(GL_TEXTURE0 + u);
                     glBindTexture(GL_TEXTURE_2D, tex[0][0]);
                 }
-                for (q = 0; q < sizeof(prim) / sizeof(prim[0]); q++) {
+                for (q = 0; q < sizeof(prim) / sizeof(prim[0]) && (sec & 2); q++) {
                     pc_gl_crumb_arg[4] = 100 + (long) q;
                     glDrawArrays(prim[q], 0, 6);
                     glFinish();
@@ -2975,15 +3091,106 @@ static void pc_shtest(const char* dir)
                         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
                         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(idx), idx, GL_STATIC_DRAW);
                     }
+                    if (sec & 4) {
                     pc_gl_crumb_arg[4] = 200;
                     glDrawArrays(GL_TRIANGLES, 3, 3);
                     glFinish();
+                    }
+                    if (sec & 4) {
                     pc_gl_crumb_arg[4] = 201;
                     glDrawElementsBaseVertex(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (const void*) 0, 2);
                     glFinish();
                     pc_gl_crumb_arg[4] = 202;
                     glDrawElementsBaseVertex(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, (const void*) 2, 0);
                     glFinish();
+                    }
+                }
+                /* Fixed-function state the backend may fold into the program:
+                 * every GX blend factor pair, subtract, depth write/func/range,
+                 * cull, scissor, colour masks, and two offscreen targets. */
+                {
+                    static const GLenum sf[] = { GL_ZERO, GL_ONE, GL_DST_COLOR, GL_ONE_MINUS_DST_COLOR,
+                                                 GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA };
+                    static const GLenum df[] = { GL_ZERO, GL_ONE, GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR,
+                                                 GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA };
+                    static GLuint fbo[2], ftex[2], frb[2];
+                    int a2, b2, t;
+                    if (fbo[0] == 0) {
+                        for (t = 0; t < 2; t++) {
+                            glGenFramebuffers(1, &fbo[t]);
+                            glGenTextures(1, &ftex[t]);
+                            glGenRenderbuffers(1, &frb[t]);
+                            glBindTexture(GL_TEXTURE_2D, ftex[t]);
+                            if (t == 0) glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 64, 64, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+                            else glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 64, 64, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+                            glBindRenderbuffer(GL_RENDERBUFFER, frb[t]);
+                            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, 64, 64);
+                            glBindFramebuffer(GL_FRAMEBUFFER, fbo[t]);
+                            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ftex[t], 0);
+                            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, frb[t]);
+                        }
+                        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                        glActiveTexture(GL_TEXTURE0);
+                        glBindTexture(GL_TEXTURE_2D, tex[0][0]);
+                    }
+                    /* MELEE_SHTEST_MATRIX bits: 1 blend pairs, 2 subtract, 4 masks,
+                     * 8 depth/cull/scissor; MELEE_SHTEST_TARGETS bits: 1 default,
+                     * 2 RGBA8, 4 R8. */
+                    int mx = getenv("MELEE_SHTEST_MATRIX") ? atoi(getenv("MELEE_SHTEST_MATRIX")) : 15;
+                    int tg = getenv("MELEE_SHTEST_TARGETS") ? atoi(getenv("MELEE_SHTEST_TARGETS")) : 7;
+                    for (t = 0; t < 3 && (sec & 8); t++) {
+                        if (!(tg & (1 << t))) continue;
+                        glBindFramebuffer(GL_FRAMEBUFFER, t == 0 ? 0 : fbo[t - 1]);
+                        glEnable(GL_BLEND);
+                        glBlendEquation(GL_FUNC_ADD);
+                        for (a2 = 0; a2 < 8 && (mx & 1); a2++) for (b2 = 0; b2 < 8; b2++) {
+                            pc_gl_crumb_arg[4] = 1000 * (t + 1) + a2 * 8 + b2;
+                            glBlendFunc(sf[a2], df[b2]);
+                            glDrawArrays(GL_TRIANGLES, 0, 3);
+                            glFinish();
+                        }
+                        if (mx & 2) {
+                        glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+                        glBlendFunc(GL_ONE, GL_ONE);
+                        pc_gl_crumb_arg[4] = 1000 * (t + 1) + 100;
+                        glDrawArrays(GL_TRIANGLES, 0, 3); glFinish();
+                        }
+                        glBlendEquation(GL_FUNC_ADD);
+                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                        for (a2 = 0; a2 < 16 && (mx & 4); a2++) {
+                            pc_gl_crumb_arg[4] = 1000 * (t + 1) + 200 + a2;
+                            glColorMask((a2 & 8) != 0, (a2 & 4) != 0, (a2 & 2) != 0, (a2 & 1) != 0);
+                            glDrawArrays(GL_TRIANGLES, 0, 3); glFinish();
+                        }
+                        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+                        for (a2 = 0; a2 < 2 && (mx & 8); a2++) {
+                            if (a2) glDisable(GL_BLEND); else glEnable(GL_BLEND);
+                            /* MELEE_SHTEST_DEPTH bits: 1 funcs x write, 2 collapsed
+                             * range, 4 depth test off, 8 cull, 16 scissor. */
+                            int dp = getenv("MELEE_SHTEST_DEPTH") ? atoi(getenv("MELEE_SHTEST_DEPTH")) : 31;
+                            for (b2 = 0; b2 < 8 && (dp & 1); b2++) {
+                                pc_gl_crumb_arg[4] = 1000 * (t + 1) + 300 + a2 * 16 + b2;
+                                glDepthFunc(GL_NEVER + (GLenum) b2);
+                                glDepthMask(GL_TRUE); glDrawArrays(GL_TRIANGLES, 0, 3); glFinish();
+                                glDepthMask(GL_FALSE); glDrawArrays(GL_TRIANGLES, 0, 3); glFinish();
+                            }
+                            glDepthFunc(GL_LEQUAL); glDepthMask(GL_TRUE);
+                            pc_gl_crumb_arg[4] = 1000 * (t + 1) + 400 + a2;
+                            if (dp & 2) { glDepthRangef(1.0f, 1.0f); glDrawArrays(GL_TRIANGLES, 0, 3); glFinish(); }
+                            glDepthRangef(0.0f, 1.0f);
+                            if (dp & 4) { glDisable(GL_DEPTH_TEST); glDrawArrays(GL_TRIANGLES, 0, 3); glFinish(); }
+                            glEnable(GL_DEPTH_TEST);
+                            if (dp & 8) {
+                            glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glDrawArrays(GL_TRIANGLES, 0, 3); glFinish();
+                            glCullFace(GL_FRONT); glDrawArrays(GL_TRIANGLES, 0, 3); glFinish();
+                            }
+                            glDisable(GL_CULL_FACE);
+                            if (dp & 16) { glEnable(GL_SCISSOR_TEST); glScissor(1, 1, 8, 8); glDrawArrays(GL_TRIANGLES, 0, 3); glFinish(); }
+                            glDisable(GL_SCISSOR_TEST);
+                        }
+                        glEnable(GL_BLEND);
+                    }
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 }
             }
             glActiveTexture(GL_TEXTURE0);
@@ -4584,6 +4791,30 @@ static Prog* pc_prog_register(Prog* pr, u32 h, int fresh)
  * uniforms whenever they change, and the key is queued for the pump to
  * compile outside the match. */
 
+/* Whether a miss in a match compiles its variant where it is met instead of
+ * drawing with the base program.
+ *
+ * MELEE_SHC_SYNC=1 asks for it (the seed sweep); =0 refuses it. Otherwise it
+ * is on for PowerVR, where the base program cannot be drawn at all: its
+ * first draw sends the driver's backend (PVRUniFlexCompileToHw) into a
+ * 15-second stall that takes ~800 MB of kernel memory, and Android's
+ * low-memory killer ends the process -- on a GE8320 every match, within a
+ * second of its first frame. A variant compiled on the spot costs one
+ * stutter per miss (three in a Samus-vs-DK match on Onett) instead. */
+static int pc_shc_sync_wanted(void)
+{
+    const char* e = getenv("MELEE_SHC_SYNC");
+    const char* r;
+    if (e != NULL) return strcmp(e, "0") != 0;
+    r = (const char*) glGetString(GL_RENDERER);
+    if (r != NULL && strstr(r, "PowerVR") != NULL) {
+        fprintf(stderr, "[SHCACHE] %s: compiling misses on the spot, never drawing the base program "
+                        "(MELEE_SHC_SYNC=0 to override)\n", r);
+        return 1;
+    }
+    return 0;
+}
+
 static Prog* pc_uber(void)
 {
     int i, k;
@@ -4698,7 +4929,7 @@ static Prog* pc_prog_select(void)
         /* MELEE_SHC_SYNC=1: compile every miss where it is met, match or
          * not -- for the seed sweep, which needs the keys a match uses and
          * on a desktop never sees a frame slow enough to open the valve. */
-        { static int sync = -1; if (sync < 0) sync = getenv("MELEE_SHC_SYNC") != NULL; if (sync) in_match = 0; }
+        { static int sync = -1; if (sync < 0) sync = pc_shc_sync_wanted(); if (sync) in_match = 0; }
         if (in_match && pc_defer_has(h) && pc_uber() != NULL) {
             g_spec_dirty = 0;
             return g_uber;
@@ -4831,6 +5062,7 @@ static void bridge_compile_shaders(void)
 {
     pc_vloc_init();
     pc_ubo_init();
+    if (getenv("MELEE_SHTEST") != NULL) pc_shtest(getenv("MELEE_SHTEST"));
     GLuint vs = compile_shader(GL_VERTEX_SHADER, g_vert_src);
     /* The base program draws whatever variant a match has not compiled;
      * unrolled like the variants, guarded by the stage count uniform. */
@@ -4861,7 +5093,6 @@ static void bridge_compile_shaders(void)
         PORT_LOG_ERROR("Shader link failed: %s", log);
     }
     pc_ubo_reconcile(g_shader_program);
-    if (getenv("MELEE_SHTEST") != NULL) pc_shtest(getenv("MELEE_SHTEST"));
     glDeleteShader(vs);
     glDeleteShader(fs);
     
@@ -5332,6 +5563,7 @@ u32 pc_frame_number = 0;
 /* Per-frame GL work counters for the MELEE_FPS line: texture uploads,
  * mip generations, content hashes, draw calls. */
 u32 pc_diag_uploads, pc_diag_mipgens, pc_diag_hashes, pc_diag_draws;
+u32 pc_diag_upload_kb;
 void gx_frame_begin(void)
 {
     pc_frame_number = g_state.frame_count + 1;
@@ -14008,6 +14240,7 @@ skip_tlut:
 
     /* Upload */
     pc_diag_uploads++;
+    pc_diag_upload_kb += (u32) (((u64) upload_w * upload_h * 4) >> 10);
     if (compressed_levels) {
         /* Uploaded above, levels and all. */
     } else if (fmt == 0x0E || fmt == 0x04 || fmt == 0x05 || fmt == 0x03 || fmt == 0x02 || fmt == 0x00 || fmt == 0x01 || (fmt == 0x06 && upload_src != img)) {

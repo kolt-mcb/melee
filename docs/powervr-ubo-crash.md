@@ -1,16 +1,40 @@
-# The PowerVR match crash (open)
+# The PowerVR match crash (resolved)
 
-Device: TCL 9081X, IMG Rogue GE8320 (MediaTek), Android 11 / SDK 30.
-Title screen renders at a steady 60 fps. **Every match dies the moment it starts.**
+Device: TCL 9081X, IMG Rogue GE8320 (MediaTek), Android 11 / SDK 30, DDK 1.13.
+Title screen rendered at 60 fps; every match died the moment it started. It now plays
+full matches (Samus vs DK on Onett, 8+ minutes, ~20 fps -- CPU-bound, a separate job).
 
 ```
 [CRASH] Signal11 at address 0x3c4, pc=0x7114e605bc  lr=0x7114ce95b0
 ```
 
-Both addresses resolve, via `/proc/<pid>/maps` read through `run-as`, into
-`/vendor/lib64/libusc.so` -- PowerVR's shader library, mapped at a fixed address,
-which is why the values are identical across runs despite ASLR. The faulting thread
-carries **none of the port's frames**, so there is no call site to read.
+**Two causes, both in the driver's draw-time backend, both worked around in GLSL/policy:**
+
+1. **A half-folded `discard`.** The alpha test assigned `pass0`/`pass1`/`pass` through
+   `if/else` chains on specialisation constants and ended `if (!pass) discard;`. With both
+   compares ALWAYS the condition is constant only *through that data flow*; the driver
+   leaves a remnant of the discard branch, and `PVRUniFlexCompileToHw` -- run at the first
+   draw **with the depth test disabled** (with it on, discard is lowered differently)
+   follows its null successor. Reduced on the device to one variant (untextured, fogged)
+   and one state. A literal `if (false) discard` and a data-dependent discard are both
+   fine. Fix: the section is guarded by a direct constant condition ("the test can fail"),
+   so it folds away whole.
+2. **The base program cannot be drawn.** Once (1) was fixed, the first match frame
+   stalled for 15 s while the driver took ~800 MB of kernel memory -- not in the process
+   RSS, visible only as MemFree collapsing -- and the low-memory killer ended the process
+   ("device is not responding", `psi_complete_stall_ms=70`). The frame was the first
+   draw with the base (uber) program, which serves variants match prep did not cover.
+   Fix: on PowerVR, misses compile their own variant on the spot (`MELEE_SHC_SYNC`
+   semantics; `=0` overrides). Three misses in a match, one stutter each.
+
+**How it was found.** The shader self-test (`MELEE_SHTEST`, below) reproduced (1) once it
+drew every variant under a matrix of fixed-function state; sectioning the matrix, then
+state sequences (`MELEE_SHTEST_FOCUS`), then editing one dumped variant on the host and
+re-pushing it (`MELEE_SHTEST_ONLY`, `SHDIR`) reduced it in ~40 s runs. (2) came from
+`MELEE_MEMLOG=1`, a per-frame line of free memory against live GL objects, uploads and
+draws: flat through loading, then one frame that never presented.
+
+Everything below is the history of the chase, kept for its eliminations.
 
 ## Where it faults
 
@@ -107,7 +131,7 @@ formats of the GX byte size now; nothing samples them as depth.
 - A run needs ~4 minutes to reach a match: ~2.5 of boot and base-program compile, then
   ~75 s of match prep when the program-binary cache misses.
 
-## Suggested next step
+## Suggested next step (superseded -- see the top)
 
 Every property of a single draw that the self-test can reproduce has been reproduced
 without a crash. What it does not reproduce is the game's **sequence** of draws --
