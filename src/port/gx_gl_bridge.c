@@ -12574,6 +12574,23 @@ u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, u8 mipmap, u8 max_lod)
 }
 void GXLoadTexMtxImm(f32 mtx[][4], u32 id, u32 type)
 {
+    /* Loading the matrix already there changes nothing, and the flush below
+     * ends the current batch: HSD reloads every material's texture matrix
+     * every frame, ~1050 times a match frame, mostly unchanged. A bitwise
+     * comparison (memcmp), so -0.0 and NaN payloads count as changes.
+     * MELEE_TEXMTX_ALWAYS=1 restores the unconditional flush. */
+    if (!ENV_FLAG("MELEE_TEXMTX_ALWAYS")) {
+        int same = 1;
+        if (id < 68) same = g_state.tex_mtx_loaded[id] &&
+                            memcmp(g_state.mtx_array[id], mtx, sizeof(f32) * 12) == 0;
+        if (same && id >= 64 && id <= 124 && ((id - 64) % 3) == 0) {
+            u32 k = (id - 64) / 3;
+            same = g_state.pt_mtx_loaded[k] && memcmp(g_state.pt_mtx_array[k], mtx, sizeof(f32) * 12) == 0;
+        } else if (id >= 68 && !(id <= 124 && ((id - 64) % 3) == 0)) {
+            same = 0;
+        }
+        if (same) return;
+    }
     gx_flush_pending_gl();
     GX_TRACE("GXLoadTexMtxImm(p, %u, %u)", id, type);
     if (id < 68) g_state.tex_mtx_loaded[id] = TRUE;

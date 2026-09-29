@@ -198,6 +198,10 @@ void render_present(void)
         extern void pc_gltime_report(unsigned frames);
         pc_gltime_report(300);
         if (getenv("MELEE_GLTIME") != NULL) pc_glq_wait_report(300);
+        {
+            extern void pc_gxprof_report(unsigned frames);
+            pc_gxprof_report(300);
+        }
     }
     if (s_max_frames > 0 && s_present_count >= s_max_frames) {
         g_should_quit = TRUE;

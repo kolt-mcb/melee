@@ -653,9 +653,15 @@ n += "port_srcs = " + " ".join(PORT_SOURCES) + "\n"
 n += "stub_srcs = " + " ".join(PC_STUB_SOURCES) + "\n"
 n += "decomp_srcs = " + " ".join(DECOMP_SOURCES) + "\n\n"
 
+# PC_GXPROF=1: time every GX entry point inclusively (src/port/pc_gxprof.c) by
+# instrumenting the bridge alone.
+GXPROF = os.environ.get("PC_GXPROF") == "1"
 for s in ALL_SOURCES:
     n += "build " + _obj(s) + ": cc " + s + "\n"
-    n += "  cflags = $cflags\n\n"
+    if GXPROF and str(s).endswith("gx_gl_bridge.c"):
+        n += "  cflags = $cflags -finstrument-functions -DPC_GXPROF=1\n\n"
+    else:
+        n += "  cflags = $cflags\n\n"
 
 for s in ENET_SOURCES:
     n += "build " + _obj(s) + ": cc " + s + "\n"
