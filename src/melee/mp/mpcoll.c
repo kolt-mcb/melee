@@ -1059,8 +1059,26 @@ static inline float max_inline(float a, float b)
     return (a > b) ? a : b;
 }
 
+#if BUILD_TARGET_PC
+/* Every grounded-collision entry point -- mpColl_800471F8, _800473CC,
+ * _800477E0 and the rest -- funnels through this worker, so tracing it here
+ * catches whichever branch ft_081B.c actually took. Tracing one entry point
+ * instead caught nothing: the common path for a walking fighter is
+ * mpColl_800473CC, and _800471F8 only runs during the ledge cooldown. */
+static void mp_groundtrace(CollData* coll, int result, unsigned which);
+static bool mpColl_80043754_impl(mpColl_Callback cb, CollData* coll, u32 flags);
 bool mpColl_80043754(mpColl_Callback cb, CollData* coll, u32 flags)
 {
+    bool r = mpColl_80043754_impl(cb, coll, flags);
+    mp_groundtrace(coll, (int) r, (unsigned) flags);
+    return r;
+}
+static bool mpColl_80043754_impl(mpColl_Callback cb, CollData* coll, u32 flags)
+{
+#else
+bool mpColl_80043754(mpColl_Callback cb, CollData* coll, u32 flags)
+{
+#endif
     Vec3 vel;
 
     u8 _[4];
@@ -2917,6 +2935,69 @@ static inline bool inline1(CollData* coll, int i,
     mpCollEnd(coll, result, true);
     return result;
 }
+
+#if BUILD_TARGET_PC
+/* MELEE_GROUNDTRACE=<from>-<to>: log the grounded-collision test over a range of
+ * match frames, on both machines, so the two logs can be diffed.
+ *
+ * mpColl_800471F8 is the test whose answer becomes GA_Air or GA_Ground in
+ * ft_081B.c: a walking fighter that steps past the end of its floor line is how
+ * a fighter starts to fall. Desktop and tablet were bit-identical for 696 frames
+ * of a netplay match and disagreed at 697 -- host in ftCo_MS_Fall and airborne,
+ * tablet still walking -- so both enter this call with identical state and leave
+ * it with different answers, which puts the divergence inside it.
+ *
+ * Every float is printed as its bit pattern. A one-ULP difference is invisible in
+ * decimal and is exactly the size of difference worth looking for here. */
+static int mp_gt_from = -1, mp_gt_to = -1;
+static int mp_gt_on(void)
+{
+    static int init;
+    if (!init) {
+        const char* e = getenv("MELEE_GROUNDTRACE");
+        init = 1;
+        if (e != NULL && *e != '\0') {
+            const char* dash = strchr(e, '-');
+            mp_gt_from = atoi(e);
+            mp_gt_to = (dash != NULL) ? atoi(dash + 1) : 0x7FFFFFFF;
+        }
+    }
+    return mp_gt_from >= 0;
+}
+static u32 mp_gt_bits(float f)
+{
+    u32 u;
+    memcpy(&u, &f, sizeof(u));
+    return u;
+}
+static void mp_groundtrace(CollData* coll, int result, unsigned which)
+{
+    s32 fr;
+    if (!mp_gt_on()) {
+        return;
+    }
+    fr = (s32) gm_GetFrameCount();
+    if (fr < mp_gt_from || fr > mp_gt_to) {
+        return;
+    }
+    fprintf(stderr,
+            "[GT] f%d w=%u r=%d floor=%d flags=%08X "
+            "pos=%08X,%08X prev=%08X,%08X "
+            "ecb t=%08X,%08X b=%08X,%08X r=%08X,%08X l=%08X,%08X "
+            "n=%08X,%08X\n",
+            (int) fr, which, result, coll->floor.index,
+            (unsigned) coll->env_flags,
+            mp_gt_bits(coll->cur_pos.x), mp_gt_bits(coll->cur_pos.y),
+            mp_gt_bits(coll->prev_pos.x), mp_gt_bits(coll->prev_pos.y),
+            mp_gt_bits(coll->ecb.top.x), mp_gt_bits(coll->ecb.top.y),
+            mp_gt_bits(coll->ecb.bottom.x), mp_gt_bits(coll->ecb.bottom.y),
+            mp_gt_bits(coll->ecb.right.x), mp_gt_bits(coll->ecb.right.y),
+            mp_gt_bits(coll->ecb.left.x), mp_gt_bits(coll->ecb.left.y),
+            mp_gt_bits(coll->floor.normal.x), mp_gt_bits(coll->floor.normal.y));
+}
+#else
+#define mp_groundtrace(coll, result, which) ((void) 0)
+#endif
 
 bool mpColl_800471F8(CollData* coll)
 {
