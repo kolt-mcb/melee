@@ -1,3 +1,4 @@
+#define GL_GLEXT_PROTOTYPES /* the GL 3 entry points pc_glq.h wraps */
 /* ============================================================
  * PC port: real-stage render test (MELEE_STAGE_TEST=1)
  *
@@ -13,6 +14,9 @@
 #include "platform.h"
 
 #include <GL/gl.h>
+#include <GL/glext.h>
+#include <GL/glcorearb.h>
+#include "pc_glq.h" /* GL calls: breadcrumb, timing, render-thread queue */
 
 #include <stdio.h>
 #include <stdlib.h>

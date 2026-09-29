@@ -1,3 +1,4 @@
+#define GL_GLEXT_PROTOTYPES /* the GL 3 entry points pc_glq.h wraps */
 /**
  * @file texture_render.c
  * @brief Renders decompressed CMPR textures as OpenGL quads via the GX bridge.
@@ -43,6 +44,7 @@ static unsigned int swap32_fn(unsigned int v)
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include <GL/glcorearb.h>
+#include "pc_glq.h" /* GL calls: breadcrumb, timing, render-thread queue */
 
 #include "port/log.h"
 #include "port/fs.h"

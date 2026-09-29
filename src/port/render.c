@@ -18,6 +18,10 @@
 void pc_get_fb_size(float* w, float* h);
 #include "texture_render.h"
 #include "platform.h"
+#include <GL/gl.h>
+#include <GL/glext.h>
+#include <GL/glcorearb.h>
+#include "pc_glq.h" /* GL calls: breadcrumb, timing, render-thread queue */
 #include <math.h>
 #include <stdbool.h>
 #include <time.h>
@@ -130,6 +134,13 @@ void render_present(void)
      *
      * The frame counter moves with it, so a trace line and a screenshot with
      * the same number are still the same frame. */
+    /* MELEE_FRAME_DELAY_MS=n: sleep n ms a frame -- a test of whether
+     * anything in the renderer depends on how long frames take. */
+    {
+        static int delay = -1;
+        if (delay < 0) delay = getenv("MELEE_FRAME_DELAY_MS") ? atoi(getenv("MELEE_FRAME_DELAY_MS")) : 0;
+        if (delay > 0) SDL_Delay((Uint32) delay);
+    }
     g_render_frame++;
     pc_render_frame_now = g_render_frame;
     pc_trace_frame(g_render_frame);
@@ -160,7 +171,6 @@ void render_present(void)
         if (ml < 0) ml = getenv("MELEE_MEMLOG") != NULL;
         if (ml) {
             extern u32 pc_diag_uploads, pc_diag_upload_kb, pc_diag_draws;
-            extern int pc_diag_gl_tex_live, pc_diag_gl_buf_live, pc_diag_gl_prog_live;
             char mb[256];
             long fr = -1;
             FILE* mf = fopen("/proc/meminfo", "r");
@@ -170,9 +180,8 @@ void render_present(void)
                 }
                 fclose(mf);
             }
-            fprintf(stderr, "[MEMLOG] present %d free %ld MB tex %d buf %d prog %d uploads %u (%u MB) draws %u\n",
-                    s_present_count, fr / 1024, pc_diag_gl_tex_live, pc_diag_gl_buf_live,
-                    pc_diag_gl_prog_live, pc_diag_uploads, pc_diag_upload_kb >> 10, pc_diag_draws);
+            fprintf(stderr, "[MEMLOG] present %d free %ld MB uploads %u (%u MB) draws %u\n",
+                    s_present_count, fr / 1024, pc_diag_uploads, pc_diag_upload_kb >> 10, pc_diag_draws);
         }
     }
     /* MELEE_PROFILE's report runs at exit, which an Android force-stop
@@ -184,6 +193,7 @@ void render_present(void)
     if (s_present_count % 300 == 0) {
         extern void pc_gltime_report(unsigned frames);
         pc_gltime_report(300);
+        if (getenv("MELEE_GLTIME") != NULL) pc_glq_wait_report(300);
     }
     if (s_max_frames > 0 && s_present_count >= s_max_frames) {
         g_should_quit = TRUE;
@@ -581,6 +591,12 @@ void render_present(void)
             }
         }
         clock_gettime(CLOCK_MONOTONIC, &s_ph[3]);
+        {
+            /* The scene framebuffer of an internal resolution, scaled into
+             * the window (nothing when rendering at window resolution). */
+            extern void pc_ires_present(void);
+            pc_ires_present();
+        }
         pc_fb_discard_depth();
         pc_gputime_end();
         window_swap();

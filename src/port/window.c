@@ -1,3 +1,4 @@
+#define GL_GLEXT_PROTOTYPES /* the GL 3 entry points pc_glq.h wraps */
 #include <stdio.h>
 #if BUILD_TARGET_PC
 #include "port/pc_dbgflag.h"
@@ -5,6 +6,10 @@
 #include <stdlib.h>
 #include "window.h"
 #include "log.h"
+#include <GL/gl.h>
+#include <GL/glext.h>
+#include <GL/glcorearb.h>
+#include "pc_glq.h" /* GL calls: breadcrumb, timing, render-thread queue */
 
 static SDL_Window* g_sdl_window = NULL;
 static SDL_GLContext g_gl_context = NULL;
@@ -97,11 +102,11 @@ int window_sync_swap_interval(void)
     if (want == g_swap_interval) {
         return g_swap_interval;
     }
-    if (SDL_GL_SetSwapInterval(want) != 0 && want != 1) {
+    if (pc_glq_set_swap_interval(want) != 0 && want != 1) {
         PORT_LOG_WARN("swap interval %d rejected (%s); using 1", want,
                       SDL_GetError());
         want = 1;
-        SDL_GL_SetSwapInterval(1);
+        pc_glq_set_swap_interval(1);
     }
     PORT_LOG_INFO("Vsync on: %d Hz display, swap interval %d -> %d Hz", hz,
                   want, want > 0 ? hz / want : hz);
@@ -393,7 +398,10 @@ void window_get_size(int* width, int* height)
 
 void window_swap(void)
 {
-    SDL_GL_SwapWindow(g_sdl_window);
+    /* The first present is where start-up GL ends: hand the context to the
+     * render thread there, if MELEE_GL_THREAD asks for one (pc_glq.c). */
+    pc_glq_maybe_start(g_sdl_window, g_gl_context);
+    pc_glq_swap(g_sdl_window);
 }
 
 SDL_Window* window_get_sdl_window(void)

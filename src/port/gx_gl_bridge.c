@@ -92,118 +92,11 @@ typedef uint8_t GXTlutFmt;
 /* ============================================================
  * Internal types — must match GX types exactly */
 
-/* The last GL entry point the bridge called, for the crash handler.
- *
- * A fault inside a vendor driver has none of our frames within reach of the
- * stack scan -- PowerVR's shader compiler sits four levels deep under a
- * draw -- so the dump names the driver and no caller. Each of the calls
- * below records its name and source line first; main.c's handler prints
- * them. Two stores per call. */
-const char* volatile pc_gl_crumb_fn;
-volatile int pc_gl_crumb_line;
-volatile unsigned pc_gl_crumb_n;
-volatile long pc_gl_crumb_arg[6]; /* set by call sites worth describing */
-volatile unsigned pc_gl_crumb_prog, pc_gl_crumb_fbo;
-volatile long pc_gl_crumb_tex[4], pc_gl_crumb_texp[4]; /* per unit, at the last draw */
+/* Every GL call goes through pc_glq.h: a breadcrumb for the crash handler
+ * (main.c prints the last call and its line), MELEE_GLTIME timing, and -- with
+ * MELEE_GL_THREAD=1 -- the queue to the render thread (pc_glq.c). */
 static void pc_gl_crumb_textures(void);
-/* Live GL object counts, for MELEE_MEMLOG. */
-int pc_diag_gl_tex_live, pc_diag_gl_buf_live, pc_diag_gl_prog_live;
-#define glGenTextures(n, p) (pc_diag_gl_tex_live += (n), glGenTextures(n, p))
-#define glDeleteTextures(n, p) (pc_diag_gl_tex_live -= (n), glDeleteTextures(n, p))
-#define glGenBuffers(n, p) (pc_diag_gl_buf_live += (n), glGenBuffers(n, p))
-#define glDeleteBuffers(n, p) (pc_diag_gl_buf_live -= (n), glDeleteBuffers(n, p))
-#define glCreateProgram() (pc_diag_gl_prog_live++, glCreateProgram())
-#define glDeleteProgram(p) (pc_diag_gl_prog_live--, glDeleteProgram(p))
-#define PC_GLC(fn) (pc_gl_crumb_fn = fn, pc_gl_crumb_line = __LINE__, pc_gl_crumb_n++)
-/* MELEE_GLTIME=1: wall time inside each wrapped GL entry point, per name,
- * reported as ms and calls per frame (pc_gltime_report, from render.c).
- * Which driver calls a frame's time goes to, when the driver is the largest
- * item in a profile and its symbols are stripped. */
-int pc_gltime_on = -1;
-static struct timespec pc_gltime_t0;
-static struct { const char* name; u64 ns; u32 calls; } pc_gltime_tab[48];
-static int pc_gltime_n;
-static int pc_gltime_enabled(void)
-{
-    if (pc_gltime_on < 0) pc_gltime_on = getenv("MELEE_GLTIME") != NULL;
-    return pc_gltime_on;
-}
-static void pc_gltime_begin(void) { clock_gettime(CLOCK_MONOTONIC, &pc_gltime_t0); }
-static void pc_gltime_add(const char* name)
-{
-    struct timespec t1;
-    int i;
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    for (i = 0; i < pc_gltime_n; i++) if (pc_gltime_tab[i].name == name || strcmp(pc_gltime_tab[i].name, name) == 0) break;
-    if (i == pc_gltime_n) {
-        if (pc_gltime_n >= 48) return;
-        pc_gltime_tab[pc_gltime_n++].name = name;
-    }
-    pc_gltime_tab[i].ns += (u64) ((t1.tv_sec - pc_gltime_t0.tv_sec) * 1000000000ll + (t1.tv_nsec - pc_gltime_t0.tv_nsec));
-    pc_gltime_tab[i].calls++;
-}
-void pc_gltime_report(unsigned frames)
-{
-    int i, j;
-    if (pc_gltime_on != 1 || frames == 0) return;
-    for (i = 1; i < pc_gltime_n; i++) for (j = i; j > 0 && pc_gltime_tab[j].ns > pc_gltime_tab[j - 1].ns; j--) {
-        __typeof__(pc_gltime_tab[0]) t = pc_gltime_tab[j]; pc_gltime_tab[j] = pc_gltime_tab[j - 1]; pc_gltime_tab[j - 1] = t;
-    }
-    fprintf(stderr, "[GLTIME] over %u frames, ms/frame (calls/frame):", frames);
-    for (i = 0; i < pc_gltime_n; i++) {
-        fprintf(stderr, " %s %.2f (%.0f)", pc_gltime_tab[i].name, pc_gltime_tab[i].ns / 1e6 / frames,
-                (double) pc_gltime_tab[i].calls / frames);
-        pc_gltime_tab[i].ns = 0; pc_gltime_tab[i].calls = 0;
-    }
-    fprintf(stderr, "\n");
-}
-/* A void GL call, crumbed and (when MELEE_GLTIME is on) timed. */
-#define PC_GLV(name, call) (PC_GLC(name), pc_gltime_enabled() ? (pc_gltime_begin(), (call), pc_gltime_add(name)) : (void) (call))
-#define glDrawArrays(...) PC_GLV("glDrawArrays", glDrawArrays(__VA_ARGS__))
-#define glDrawElementsBaseVertex(...) PC_GLV("glDrawElementsBaseVertex", glDrawElementsBaseVertex(__VA_ARGS__))
-#define glTexImage2D(...) PC_GLV("glTexImage2D", glTexImage2D(__VA_ARGS__))
-#define glCompressedTexImage2D(...) PC_GLV("glCompressedTexImage2D", glCompressedTexImage2D(__VA_ARGS__))
-#define glTexSubImage2D(...) PC_GLV("glTexSubImage2D", glTexSubImage2D(__VA_ARGS__))
-#define glUseProgram(p) (pc_gl_crumb_prog = (p), PC_GLV("glUseProgram", glUseProgram(p)))
-#define glBindBufferRange(...) PC_GLV("glBindBufferRange", glBindBufferRange(__VA_ARGS__))
-#define glGenerateMipmap(...) PC_GLV("glGenerateMipmap", glGenerateMipmap(__VA_ARGS__))
-#define glReadPixels(...) PC_GLV("glReadPixels", glReadPixels(__VA_ARGS__))
-#define glBlitFramebuffer(...) PC_GLV("glBlitFramebuffer", glBlitFramebuffer(__VA_ARGS__))
-#define glLinkProgram(...) PC_GLV("glLinkProgram", glLinkProgram(__VA_ARGS__))
-#define glProgramBinary(...) PC_GLV("glProgramBinary", glProgramBinary(__VA_ARGS__))
-#define glCompileShader(...) PC_GLV("glCompileShader", glCompileShader(__VA_ARGS__))
-#define glClear(...) PC_GLV("glClear", glClear(__VA_ARGS__))
-#define glFlush(...) PC_GLV("glFlush", glFlush(__VA_ARGS__))
-#define glClientWaitSync(...) (PC_GLC("glClientWaitSync"), glClientWaitSync(__VA_ARGS__))
-#define glMapBufferRange(...) (PC_GLC("glMapBufferRange"), glMapBufferRange(__VA_ARGS__))
-#define glBufferSubData(...) PC_GLV("glBufferSubData", glBufferSubData(__VA_ARGS__))
-#define glBufferData(...) PC_GLV("glBufferData", glBufferData(__VA_ARGS__))
-#define glBindFramebuffer(t, f) (pc_gl_crumb_fbo = (f), PC_GLV("glBindFramebuffer", glBindFramebuffer(t, f)))
-#define glFramebufferTexture2D(...) PC_GLV("glFramebufferTexture2D", glFramebufferTexture2D(__VA_ARGS__))
-#define glCheckFramebufferStatus(...) (PC_GLC("glCheckFramebufferStatus"), glCheckFramebufferStatus(__VA_ARGS__))
-#define glBindTexture(...) PC_GLV("glBindTexture", glBindTexture(__VA_ARGS__))
-#define glActiveTexture(...) PC_GLV("glActiveTexture", glActiveTexture(__VA_ARGS__))
-#define glBindBuffer(...) PC_GLV("glBindBuffer", glBindBuffer(__VA_ARGS__))
-#define glEnable(...) PC_GLV("glEnable", glEnable(__VA_ARGS__))
-#define glDisable(...) PC_GLV("glDisable", glDisable(__VA_ARGS__))
-#define glBlendFuncSeparate(...) PC_GLV("glBlendFuncSeparate", glBlendFuncSeparate(__VA_ARGS__))
-#define glBlendEquation(...) PC_GLV("glBlendEquation", glBlendEquation(__VA_ARGS__))
-#define glDepthFunc(...) PC_GLV("glDepthFunc", glDepthFunc(__VA_ARGS__))
-#define glDepthMask(...) PC_GLV("glDepthMask", glDepthMask(__VA_ARGS__))
-#define glColorMask(...) PC_GLV("glColorMask", glColorMask(__VA_ARGS__))
-#define glScissor(...) PC_GLV("glScissor", glScissor(__VA_ARGS__))
-#define glViewport(...) PC_GLV("glViewport", glViewport(__VA_ARGS__))
-#define glDepthRangef(...) PC_GLV("glDepthRangef", glDepthRangef(__VA_ARGS__))
-#define glCullFace(...) PC_GLV("glCullFace", glCullFace(__VA_ARGS__))
-#define glFrontFace(...) PC_GLV("glFrontFace", glFrontFace(__VA_ARGS__))
-#define glTexParameteri(...) PC_GLV("glTexParameteri", glTexParameteri(__VA_ARGS__))
-#define glUniform1i(...) PC_GLV("glUniform1i", glUniform1i(__VA_ARGS__))
-#define glUniform1f(...) PC_GLV("glUniform1f", glUniform1f(__VA_ARGS__))
-#define glUniform4fv(...) PC_GLV("glUniform4fv", glUniform4fv(__VA_ARGS__))
-#define glUniformMatrix4fv(...) PC_GLV("glUniformMatrix4fv", glUniformMatrix4fv(__VA_ARGS__))
-#define glVertexAttribPointer(...) PC_GLV("glVertexAttribPointer", glVertexAttribPointer(__VA_ARGS__))
-#define glBindVertexArray(...) PC_GLV("glBindVertexArray", glBindVertexArray(__VA_ARGS__))
-#define glPixelStorei(...) PC_GLV("glPixelStorei", glPixelStorei(__VA_ARGS__))
+#include "pc_glq.h"
 #include "platform.h"
 
 /* Dolphin typedefs u32/u8 etc as long-sized on x86_64.
@@ -2207,8 +2100,46 @@ static pc_pfn_getqui64 p_getqui64; static pc_pfn_getqui p_getqui;
 typedef void (*pc_pfn_invalfb)(GLenum, GLsizei, const GLenum*);
 static pc_pfn_invalfb p_invalfb;
 static int g_invalfb_state = -1;
+extern GLuint pc_ires_fbo; /* the scene framebuffer, below */
+static void pc_fb_discard_depth_exec(void* p)
+{
+    static const GLenum att[2] = { 0x1801 /* GL_DEPTH */, 0x1802 /* GL_STENCIL */ };
+    (void) p;
+    p_invalfb(GL_FRAMEBUFFER, 2, att);
+}
+static void pc_invalfb_exec(void* p)
+{
+    GLenum* a = (GLenum*) p;
+    if (p_invalfb != NULL) p_invalfb(a[0], (GLsizei) a[1], a + 2);
+}
+/* glInvalidateFramebuffer through the queue (it comes from GetProcAddress). */
+void glInvalidateFramebuffer_pc(GLenum target, GLsizei n, const GLenum* att)
+{
+    GLenum buf[8];
+    int i;
+    if (g_invalfb_state < 0) {
+        g_invalfb_state = 0;
+        if (getenv("MELEE_NO_INVALIDATE") == NULL) {
+            p_invalfb = (pc_pfn_invalfb) SDL_GL_GetProcAddress("glInvalidateFramebuffer");
+            if (p_invalfb != NULL) g_invalfb_state = 1;
+        }
+    }
+    if (g_invalfb_state != 1 || n > 6) return;
+    buf[0] = target;
+    buf[1] = (GLenum) n;
+    for (i = 0; i < n; i++) buf[2 + i] = att[i];
+    if (pc_glq_active) {
+        memcpy(pc_glq_push(pc_invalfb_exec, sizeof(buf)), buf, sizeof(buf));
+        pc_glq_commit();
+    } else {
+        pc_invalfb_exec(buf);
+    }
+}
 void pc_fb_discard_depth(void)
 {
+    /* With a scene framebuffer, pc_ires_present invalidates it instead; the
+     * window has nothing to discard but the blit. */
+    if (pc_ires_fbo != 0) return;
     static const GLenum att[2] = { 0x1801 /* GL_DEPTH */, 0x1802 /* GL_STENCIL */ };
     if (g_invalfb_state < 0) {
         g_invalfb_state = 0;
@@ -2221,6 +2152,14 @@ void pc_fb_discard_depth(void)
     /* The offscreen pass binds its own FBO and restores; at present time the
      * default framebuffer is bound. GL_DEPTH/GL_STENCIL name the default
      * framebuffer's buffers; a user FBO would need GL_*_ATTACHMENT. */
+    /* Through the queue like every other GL call: this entry point comes
+     * from SDL_GL_GetProcAddress, so no macro sees it, and on the game
+     * thread there is no context while the render thread owns it. */
+    if (pc_glq_active) {
+        *(int*) pc_glq_push(pc_fb_discard_depth_exec, sizeof(int)) = 0;
+        pc_glq_commit();
+        return;
+    }
     p_invalfb(GL_FRAMEBUFFER, 2, att);
 }
 #define PC_TQ_N 4
@@ -2229,6 +2168,9 @@ static int g_tq_i = -1, g_tq_open;
 u64 pc_diag_gpu_ns; u32 pc_diag_gpu_frames;
 static int pc_tq_init(void)
 {
+    /* Reached through function pointers, which the render-thread queue does
+     * not wrap: the gpu(query) column is unavailable with MELEE_GL_THREAD. */
+    if (pc_glq_active) return 0;
     if (g_tq_i >= 0) return 1;
     if (window_gl_es()) {
         if (!pc_gl_has_ext("GL_EXT_disjoint_timer_query")) return 0;
@@ -8291,6 +8233,116 @@ GLuint pc_efb_override_tex(const void* img, u32 w, u32 h)
  * (origin bottom-left, y up), letterboxed so the 4:3 image keeps its aspect
  * inside whatever window we happen to have. Without this the game's viewport
  * would land in the bottom-left 640x480 corner of a 1280x720 window. */
+/* ---- Internal render resolution ------------------------------------------
+ *
+ * MELEE_INTERNAL_RES=<k> renders the scene into an offscreen framebuffer of
+ * k times the GameCube framebuffer (640x480 at k=1) and scales it to the window
+ * once, at present. 0 renders at the window's own resolution, as before.
+ *
+ * Why: a weak tile-based GPU is fill-bound at a tablet's native resolution.
+ * The MT6765 tablet's PowerVR GE8320 draws 1920x1200 -- 7.5x the console's
+ * pixels -- and at half the linear resolution a match went from 21 to 36 fps:
+ * the swap stopped waiting 14 ms on the GPU, and the draw calls themselves
+ * halved, since the driver stalls while the GPU is behind. Dolphin renders at
+ * native resolution by default for the same reason.
+ *
+ * The scene framebuffer stands in for the window's everywhere: binding
+ * framebuffer 0 binds it (the remap is in the GL layer, pc_glq_map_fb, so the
+ * bridge's save/restore of bindings needs no change), and GameCube coordinates
+ * map into its size instead of the window's (pc_fb_rect_to_window). */
+GLuint pc_ires_fbo;
+int pc_ires_w, pc_ires_h;
+static GLuint g_ires_color, g_ires_depth;
+static f32 pc_ires_scale(void)
+{
+    static f32 k = -1.0f;
+    if (k < 0.0f) {
+        const char* e = getenv("MELEE_INTERNAL_RES");
+        if (e != NULL) {
+            k = (f32) atof(e);
+        } else {
+            /* Default: native resolution everywhere but on a GPU measured to be
+             * fill-bound at it. */
+            const char* r = (const char*) glGetString(GL_RENDERER);
+            k = (r != NULL && strstr(r, "PowerVR Rogue GE8") != NULL) ? 1.5f : 0.0f;
+        }
+        if (k < 0.0f || k > 8.0f) k = 0.0f;
+        if (k > 0.0f) fprintf(stderr, "[IRES] internal resolution %.2fx the GameCube framebuffer\n", (double) k);
+    }
+    return k;
+}
+/* Create (or resize) the scene framebuffer and make it the default. */
+static void pc_ires_ensure(void)
+{
+    extern GLuint pc_glq_default_fb;
+    f32 k = pc_ires_scale(), fbw = 640.0f, fbh = 480.0f;
+    int w, h;
+    void pc_get_fb_size(float* w, float* h);
+    if (k <= 0.0f) return;
+    pc_get_fb_size(&fbw, &fbh);
+    if (fbw <= 0.0f || fbh <= 0.0f) return;
+    w = (int) (fbw * k + 0.5f);
+    h = (int) (fbh * k + 0.5f);
+    if (pc_ires_fbo != 0 && w == pc_ires_w && h == pc_ires_h) return;
+    if (pc_ires_fbo == 0) {
+        glGenFramebuffers(1, &pc_ires_fbo);
+        glGenRenderbuffers(1, &g_ires_color);
+        glGenRenderbuffers(1, &g_ires_depth);
+    }
+    glBindRenderbuffer(GL_RENDERBUFFER, g_ires_color);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, w, h);
+    glBindRenderbuffer(GL_RENDERBUFFER, g_ires_depth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+    pc_glq_default_fb = 0;
+    glBindFramebuffer(GL_FRAMEBUFFER, pc_ires_fbo);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, g_ires_color);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, g_ires_depth);
+    pc_ires_w = w;
+    pc_ires_h = h;
+    pc_glq_default_fb = pc_ires_fbo;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0); /* -> the scene framebuffer */
+    fprintf(stderr, "[IRES] scene framebuffer %dx%d\n", w, h);
+}
+/* At present: the scene, scaled up into the window's letterbox. */
+void pc_ires_present(void)
+{
+    extern GLuint pc_glq_default_fb;
+    void window_get_size(int* width, int* height);
+    int ww = 0, wh = 0, dw, dh, dx, dy;
+    f32 sx, sy, sc;
+    static const GLenum all[3] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT, GL_STENCIL_ATTACHMENT };
+    if (pc_ires_fbo == 0) {
+        pc_ires_ensure(); /* first frame: from here on, draws go to it */
+        return;
+    }
+    window_get_size(&ww, &wh);
+    if (ww <= 0 || wh <= 0) return;
+    sx = (f32) ww / (f32) pc_ires_w;
+    sy = (f32) wh / (f32) pc_ires_h;
+    sc = sx < sy ? sx : sy;
+    dw = (int) ((f32) pc_ires_w * sc);
+    dh = (int) ((f32) pc_ires_h * sc);
+    dx = (ww - dw) / 2;
+    dy = (wh - dh) / 2;
+    gls_disable(GL_SCISSOR_TEST);
+    gls_color_mask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    pc_glq_default_fb = 0;
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); /* the window */
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, pc_ires_fbo);
+    glViewport(0, 0, ww, wh);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glBlitFramebuffer(0, 0, pc_ires_w, pc_ires_h, dx, dy, dx + dw, dy + dh,
+                      GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    pc_glq_default_fb = pc_ires_fbo;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0); /* -> the scene framebuffer */
+    /* Nothing of this frame's scene is needed again: say so, so a tiler does
+     * not write it back to memory. */
+    glInvalidateFramebuffer_pc(GL_FRAMEBUFFER, 3, all);
+    pc_ires_ensure(); /* follows a change of the GameCube framebuffer size */
+}
+
 void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
 {
     void window_get_size(int* width, int* height);
@@ -8318,7 +8370,12 @@ void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
         out[3] = (GLint) h;
         return;
     }
-    window_get_size(&win_w, &win_h);
+    if (pc_ires_fbo != 0) {
+        win_w = pc_ires_w;
+        win_h = pc_ires_h;
+    } else {
+        window_get_size(&win_w, &win_h);
+    }
     if (fb_w <= 0.0f || fb_h <= 0.0f || win_w <= 0 || win_h <= 0) {
         out[0] = (GLint) x; out[1] = (GLint) y;
         out[2] = (GLint) w; out[3] = (GLint) h;
