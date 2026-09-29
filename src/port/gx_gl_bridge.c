@@ -115,28 +115,95 @@ int pc_diag_gl_tex_live, pc_diag_gl_buf_live, pc_diag_gl_prog_live;
 #define glCreateProgram() (pc_diag_gl_prog_live++, glCreateProgram())
 #define glDeleteProgram(p) (pc_diag_gl_prog_live--, glDeleteProgram(p))
 #define PC_GLC(fn) (pc_gl_crumb_fn = fn, pc_gl_crumb_line = __LINE__, pc_gl_crumb_n++)
-#define glDrawArrays(...) (PC_GLC("glDrawArrays"), glDrawArrays(__VA_ARGS__))
-#define glDrawElementsBaseVertex(...) (PC_GLC("glDrawElementsBaseVertex"), glDrawElementsBaseVertex(__VA_ARGS__))
-#define glTexImage2D(...) (PC_GLC("glTexImage2D"), glTexImage2D(__VA_ARGS__))
-#define glCompressedTexImage2D(...) (PC_GLC("glCompressedTexImage2D"), glCompressedTexImage2D(__VA_ARGS__))
-#define glTexSubImage2D(...) (PC_GLC("glTexSubImage2D"), glTexSubImage2D(__VA_ARGS__))
-#define glUseProgram(p) (PC_GLC("glUseProgram"), pc_gl_crumb_prog = (p), glUseProgram(p))
-#define glBindBufferRange(...) (PC_GLC("glBindBufferRange"), glBindBufferRange(__VA_ARGS__))
-#define glGenerateMipmap(...) (PC_GLC("glGenerateMipmap"), glGenerateMipmap(__VA_ARGS__))
-#define glReadPixels(...) (PC_GLC("glReadPixels"), glReadPixels(__VA_ARGS__))
-#define glBlitFramebuffer(...) (PC_GLC("glBlitFramebuffer"), glBlitFramebuffer(__VA_ARGS__))
-#define glLinkProgram(...) (PC_GLC("glLinkProgram"), glLinkProgram(__VA_ARGS__))
-#define glProgramBinary(...) (PC_GLC("glProgramBinary"), glProgramBinary(__VA_ARGS__))
-#define glCompileShader(...) (PC_GLC("glCompileShader"), glCompileShader(__VA_ARGS__))
-#define glClear(...) (PC_GLC("glClear"), glClear(__VA_ARGS__))
-#define glFlush(...) (PC_GLC("glFlush"), glFlush(__VA_ARGS__))
+/* MELEE_GLTIME=1: wall time inside each wrapped GL entry point, per name,
+ * reported as ms and calls per frame (pc_gltime_report, from render.c).
+ * Which driver calls a frame's time goes to, when the driver is the largest
+ * item in a profile and its symbols are stripped. */
+int pc_gltime_on = -1;
+static struct timespec pc_gltime_t0;
+static struct { const char* name; u64 ns; u32 calls; } pc_gltime_tab[48];
+static int pc_gltime_n;
+static int pc_gltime_enabled(void)
+{
+    if (pc_gltime_on < 0) pc_gltime_on = getenv("MELEE_GLTIME") != NULL;
+    return pc_gltime_on;
+}
+static void pc_gltime_begin(void) { clock_gettime(CLOCK_MONOTONIC, &pc_gltime_t0); }
+static void pc_gltime_add(const char* name)
+{
+    struct timespec t1;
+    int i;
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    for (i = 0; i < pc_gltime_n; i++) if (pc_gltime_tab[i].name == name || strcmp(pc_gltime_tab[i].name, name) == 0) break;
+    if (i == pc_gltime_n) {
+        if (pc_gltime_n >= 48) return;
+        pc_gltime_tab[pc_gltime_n++].name = name;
+    }
+    pc_gltime_tab[i].ns += (u64) ((t1.tv_sec - pc_gltime_t0.tv_sec) * 1000000000ll + (t1.tv_nsec - pc_gltime_t0.tv_nsec));
+    pc_gltime_tab[i].calls++;
+}
+void pc_gltime_report(unsigned frames)
+{
+    int i, j;
+    if (pc_gltime_on != 1 || frames == 0) return;
+    for (i = 1; i < pc_gltime_n; i++) for (j = i; j > 0 && pc_gltime_tab[j].ns > pc_gltime_tab[j - 1].ns; j--) {
+        __typeof__(pc_gltime_tab[0]) t = pc_gltime_tab[j]; pc_gltime_tab[j] = pc_gltime_tab[j - 1]; pc_gltime_tab[j - 1] = t;
+    }
+    fprintf(stderr, "[GLTIME] over %u frames, ms/frame (calls/frame):", frames);
+    for (i = 0; i < pc_gltime_n; i++) {
+        fprintf(stderr, " %s %.2f (%.0f)", pc_gltime_tab[i].name, pc_gltime_tab[i].ns / 1e6 / frames,
+                (double) pc_gltime_tab[i].calls / frames);
+        pc_gltime_tab[i].ns = 0; pc_gltime_tab[i].calls = 0;
+    }
+    fprintf(stderr, "\n");
+}
+/* A void GL call, crumbed and (when MELEE_GLTIME is on) timed. */
+#define PC_GLV(name, call) (PC_GLC(name), pc_gltime_enabled() ? (pc_gltime_begin(), (call), pc_gltime_add(name)) : (void) (call))
+#define glDrawArrays(...) PC_GLV("glDrawArrays", glDrawArrays(__VA_ARGS__))
+#define glDrawElementsBaseVertex(...) PC_GLV("glDrawElementsBaseVertex", glDrawElementsBaseVertex(__VA_ARGS__))
+#define glTexImage2D(...) PC_GLV("glTexImage2D", glTexImage2D(__VA_ARGS__))
+#define glCompressedTexImage2D(...) PC_GLV("glCompressedTexImage2D", glCompressedTexImage2D(__VA_ARGS__))
+#define glTexSubImage2D(...) PC_GLV("glTexSubImage2D", glTexSubImage2D(__VA_ARGS__))
+#define glUseProgram(p) (pc_gl_crumb_prog = (p), PC_GLV("glUseProgram", glUseProgram(p)))
+#define glBindBufferRange(...) PC_GLV("glBindBufferRange", glBindBufferRange(__VA_ARGS__))
+#define glGenerateMipmap(...) PC_GLV("glGenerateMipmap", glGenerateMipmap(__VA_ARGS__))
+#define glReadPixels(...) PC_GLV("glReadPixels", glReadPixels(__VA_ARGS__))
+#define glBlitFramebuffer(...) PC_GLV("glBlitFramebuffer", glBlitFramebuffer(__VA_ARGS__))
+#define glLinkProgram(...) PC_GLV("glLinkProgram", glLinkProgram(__VA_ARGS__))
+#define glProgramBinary(...) PC_GLV("glProgramBinary", glProgramBinary(__VA_ARGS__))
+#define glCompileShader(...) PC_GLV("glCompileShader", glCompileShader(__VA_ARGS__))
+#define glClear(...) PC_GLV("glClear", glClear(__VA_ARGS__))
+#define glFlush(...) PC_GLV("glFlush", glFlush(__VA_ARGS__))
 #define glClientWaitSync(...) (PC_GLC("glClientWaitSync"), glClientWaitSync(__VA_ARGS__))
 #define glMapBufferRange(...) (PC_GLC("glMapBufferRange"), glMapBufferRange(__VA_ARGS__))
-#define glBufferSubData(...) (PC_GLC("glBufferSubData"), glBufferSubData(__VA_ARGS__))
-#define glBufferData(...) (PC_GLC("glBufferData"), glBufferData(__VA_ARGS__))
-#define glBindFramebuffer(t, f) (PC_GLC("glBindFramebuffer"), pc_gl_crumb_fbo = (f), glBindFramebuffer(t, f))
-#define glFramebufferTexture2D(...) (PC_GLC("glFramebufferTexture2D"), glFramebufferTexture2D(__VA_ARGS__))
+#define glBufferSubData(...) PC_GLV("glBufferSubData", glBufferSubData(__VA_ARGS__))
+#define glBufferData(...) PC_GLV("glBufferData", glBufferData(__VA_ARGS__))
+#define glBindFramebuffer(t, f) (pc_gl_crumb_fbo = (f), PC_GLV("glBindFramebuffer", glBindFramebuffer(t, f)))
+#define glFramebufferTexture2D(...) PC_GLV("glFramebufferTexture2D", glFramebufferTexture2D(__VA_ARGS__))
 #define glCheckFramebufferStatus(...) (PC_GLC("glCheckFramebufferStatus"), glCheckFramebufferStatus(__VA_ARGS__))
+#define glBindTexture(...) PC_GLV("glBindTexture", glBindTexture(__VA_ARGS__))
+#define glActiveTexture(...) PC_GLV("glActiveTexture", glActiveTexture(__VA_ARGS__))
+#define glBindBuffer(...) PC_GLV("glBindBuffer", glBindBuffer(__VA_ARGS__))
+#define glEnable(...) PC_GLV("glEnable", glEnable(__VA_ARGS__))
+#define glDisable(...) PC_GLV("glDisable", glDisable(__VA_ARGS__))
+#define glBlendFuncSeparate(...) PC_GLV("glBlendFuncSeparate", glBlendFuncSeparate(__VA_ARGS__))
+#define glBlendEquation(...) PC_GLV("glBlendEquation", glBlendEquation(__VA_ARGS__))
+#define glDepthFunc(...) PC_GLV("glDepthFunc", glDepthFunc(__VA_ARGS__))
+#define glDepthMask(...) PC_GLV("glDepthMask", glDepthMask(__VA_ARGS__))
+#define glColorMask(...) PC_GLV("glColorMask", glColorMask(__VA_ARGS__))
+#define glScissor(...) PC_GLV("glScissor", glScissor(__VA_ARGS__))
+#define glViewport(...) PC_GLV("glViewport", glViewport(__VA_ARGS__))
+#define glDepthRangef(...) PC_GLV("glDepthRangef", glDepthRangef(__VA_ARGS__))
+#define glCullFace(...) PC_GLV("glCullFace", glCullFace(__VA_ARGS__))
+#define glFrontFace(...) PC_GLV("glFrontFace", glFrontFace(__VA_ARGS__))
+#define glTexParameteri(...) PC_GLV("glTexParameteri", glTexParameteri(__VA_ARGS__))
+#define glUniform1i(...) PC_GLV("glUniform1i", glUniform1i(__VA_ARGS__))
+#define glUniform1f(...) PC_GLV("glUniform1f", glUniform1f(__VA_ARGS__))
+#define glUniform4fv(...) PC_GLV("glUniform4fv", glUniform4fv(__VA_ARGS__))
+#define glUniformMatrix4fv(...) PC_GLV("glUniformMatrix4fv", glUniformMatrix4fv(__VA_ARGS__))
+#define glVertexAttribPointer(...) PC_GLV("glVertexAttribPointer", glVertexAttribPointer(__VA_ARGS__))
+#define glBindVertexArray(...) PC_GLV("glBindVertexArray", glBindVertexArray(__VA_ARGS__))
+#define glPixelStorei(...) PC_GLV("glPixelStorei", glPixelStorei(__VA_ARGS__))
 #include "platform.h"
 
 /* Dolphin typedefs u32/u8 etc as long-sized on x86_64.
@@ -2816,6 +2883,133 @@ static GLuint compile_shader(GLenum type, const char* src)
  * responsible, and the log names it. A match takes minutes to reach on a
  * tablet; this takes seconds, and the sources can be edited on the host. */
 static u32 g_ubo_size;
+
+/* MELEE_SHTEST_BENCH=1 (with MELEE_SHTEST=<dir>): the driver's per-draw cost
+ * model. Two dumped variants, a small indexed triangle list from a buffer,
+ * and N draws per case, each case timed with a glFinish at its end:
+ *   plain       same program, same bindings -- the floor
+ *   ubo-range   glBindBufferRange at a new 256-byte-aligned offset per draw
+ *   ubo-data    glBufferSubData of the block into one range per draw
+ *   prog        alternate between two programs per draw
+ *   tex         rebind texture unit 0 between two textures per draw
+ *   verts       glBufferSubData of 64 vertices per draw (the vertex ring)
+ * Prints microseconds per draw. */
+static GLuint pc_shtest_link(const char* dir, unsigned id)
+{
+    char path[512];
+    char* src[2] = { NULL, NULL };
+    const char* ext[2] = { "vert", "frag" };
+    GLuint sh[2], prog;
+    GLint ok = 0;
+    int k;
+    for (k = 0; k < 2; k++) {
+        FILE* f;
+        long len;
+        snprintf(path, sizeof(path), "%s/prog_%u.%s", dir, id, ext[k]);
+        f = fopen(path, "rb");
+        if (f == NULL) return 0;
+        fseek(f, 0, SEEK_END); len = ftell(f); fseek(f, 0, SEEK_SET);
+        src[k] = (char*) malloc((size_t) len + 1);
+        len = (long) fread(src[k], 1, (size_t) len, f);
+        src[k][len] = 0;
+        fclose(f);
+    }
+    sh[0] = compile_shader(GL_VERTEX_SHADER, src[0]);
+    sh[1] = compile_shader(GL_FRAGMENT_SHADER, src[1]);
+    free(src[0]); free(src[1]);
+    if (!sh[0] || !sh[1]) return 0;
+    prog = glCreateProgram();
+    glAttachShader(prog, sh[0]); glAttachShader(prog, sh[1]);
+    glBindAttribLocation(prog, 0, "a_pos"); glBindAttribLocation(prog, 1, "a_nrm");
+    glBindAttribLocation(prog, 2, "a_col"); glBindAttribLocation(prog, 3, "a_uv0");
+    glBindAttribLocation(prog, 4, "a_uv1");
+    glLinkProgram(prog);
+    glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+    if (!ok) return 0;
+    {
+        GLuint bi = glGetUniformBlockIndex(prog, "PcUniforms");
+        if (bi != GL_INVALID_INDEX) glUniformBlockBinding(prog, bi, 0);
+    }
+    return prog;
+}
+static void pc_shtest_bench(const char* dir, GLuint ubo)
+{
+    const char* ids = getenv("MELEE_SHTEST_BENCH");
+    unsigned a = 240, b = 867;
+    int n = getenv("MELEE_SHTEST_BENCH_N") ? atoi(getenv("MELEE_SHTEST_BENCH_N")) : 2000;
+    GLuint pa, pb, vbo, ibo, big, tex[2];
+    static Vertex vtx[64];
+    static u16 idx[96];
+    static u8 blk[16384], texel[64 * 64 * 4];
+    int c, i;
+    static const char* const names[] = { "plain", "ubo-range", "ubo-data", "prog", "tex", "verts", "basevertex", "idx-offset", "blend", "depth", "all4" };
+    if (sscanf(ids, "%u,%u", &a, &b) < 2) { a = 240; b = 867; }
+    pa = pc_shtest_link(dir, a);
+    pb = pc_shtest_link(dir, b);
+    if (!pa || !pb) { fprintf(stderr, "[BENCH] cannot build prog_%u / prog_%u\n", a, b); return; }
+    for (i = 0; i < 64; i++) {
+        vtx[i].pos[0] = (f32) (i % 8) * 0.1f - 0.4f; vtx[i].pos[1] = (f32) (i / 8) * 0.1f - 0.4f;
+        vtx[i].nrm[2] = 1.0f; vtx[i].col[0] = vtx[i].col[3] = 1.0f;
+    }
+    for (i = 0; i < 96; i++) idx[i] = (u16) (i % 64);
+    glGenBuffers(1, &vbo); glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vtx) * 64, NULL, GL_DYNAMIC_DRAW);
+    for (i = 0; i < 64; i++) glBufferSubData(GL_ARRAY_BUFFER, (GLintptr) (i * sizeof(vtx)), sizeof(vtx), vtx);
+    glGenBuffers(1, &ibo); glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(idx), idx, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, pos));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, nrm));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, col));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, tex0));
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, tex1));
+    glGenBuffers(1, &big); glBindBuffer(GL_UNIFORM_BUFFER, big);
+    glBufferData(GL_UNIFORM_BUFFER, 4 << 20, NULL, GL_DYNAMIC_DRAW);
+    glGenTextures(2, tex);
+    for (i = 0; i < 2; i++) {
+        glBindTexture(GL_TEXTURE_2D, tex[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 64, 64, 0, GL_RGBA, GL_UNSIGNED_BYTE, texel);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    }
+    glDisable(GL_DEPTH_TEST);
+    for (c = 0; c < 11; c++) {
+        struct timespec t0, t1;
+        double us;
+        glUseProgram(pa);
+        glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0, (GLsizeiptr) g_ubo_size);
+        glBindTexture(GL_TEXTURE_2D, tex[0]);
+        glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0);
+        glFinish();
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+        for (i = 0; i < n; i++) {
+            switch (c) {
+            case 1: glBindBufferRange(GL_UNIFORM_BUFFER, 0, big, (GLintptr) ((i % 4000) * 256), (GLsizeiptr) g_ubo_size); break;
+            case 2: glBindBuffer(GL_UNIFORM_BUFFER, ubo); blk[0] = (u8) i;
+                    glBufferSubData(GL_UNIFORM_BUFFER, 0, (GLsizeiptr) g_ubo_size, blk); break;
+            case 3: glUseProgram((i & 1) ? pb : pa); break;
+            case 4: glBindTexture(GL_TEXTURE_2D, tex[i & 1]); break;
+            case 5: glBufferSubData(GL_ARRAY_BUFFER, (GLintptr) ((i % 63) * sizeof(vtx)), sizeof(vtx), vtx); break;
+            case 8: if (i & 1) glEnable(GL_BLEND); else glDisable(GL_BLEND); break;
+            case 9: glDepthMask((i & 1) ? GL_TRUE : GL_FALSE); break;
+            case 10: glUseProgram((i & 1) ? pb : pa);
+                     glBindBufferRange(GL_UNIFORM_BUFFER, 0, big, (GLintptr) ((i % 4000) * 256), (GLsizeiptr) g_ubo_size);
+                     glBindTexture(GL_TEXTURE_2D, tex[i & 1]); break;
+            default: break;
+            }
+            if (c == 6 || c == 10) glDrawElementsBaseVertex(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0, (i % 63) * 64);
+            else if (c == 7) glDrawElements(GL_TRIANGLES, 48, GL_UNSIGNED_SHORT, (const void*) (uintptr_t) ((i % 48) * 2));
+            else glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0);
+        }
+        glFinish();
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        us = ((t1.tv_sec - t0.tv_sec) * 1e9 + (t1.tv_nsec - t0.tv_nsec)) / 1e3 / n;
+        fprintf(stderr, "[BENCH] %-10s %7.2f us/draw\n", names[c], us);
+    }
+}
 static void pc_shtest(const char* dir)
 {
     DIR* d = opendir(dir);
@@ -2839,6 +3033,12 @@ static void pc_shtest(const char* dir)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
     glEnable(GL_DEPTH_TEST);
+    if (getenv("MELEE_SHTEST_BENCH") != NULL) {
+        pc_shtest_bench(dir, ubo);
+        closedir(d);
+        fflush(stderr);
+        _exit(0);
+    }
     while ((e = readdir(d)) != NULL) {
         char path[512];
         char* src[2] = { NULL, NULL };
@@ -4748,17 +4948,31 @@ static u32 pc_spec_hash(void)
     return h;
 }
 
+/* Programs by key hash: open addressing over g_progs indices (+1, 0 empty).
+ * The lookup was a walk of every program, a dependent load per entry -- 7% of
+ * a match frame on the Cortex-A53 tablet, with ~300 programs live. */
+#define PROG_IDX_N 32768 /* a power of two, over twice PROG_MAX */
+static u16 g_prog_idx[PROG_IDX_N];
+static void pc_prog_index_add(int i)
+{
+    u32 s = g_progs[i]->hash & (PROG_IDX_N - 1);
+    while (g_prog_idx[s] != 0) s = (s + 1) & (PROG_IDX_N - 1);
+    g_prog_idx[s] = (u16) (i + 1);
+}
 static Prog* pc_prog_find(u32 h)
 {
-    int i, k;
-    for (i = 0; i < g_prog_n; i++) {
-        Prog* pr = g_progs[i];
-        int same = 1;
-        if (pr->hash != h) continue;
-        for (k = 0; k < g_spec_n; k++) {
-            if (pr->key[k] != g_spec_canon[g_spec_slots[k]]) { same = 0; break; }
+    u32 s = h & (PROG_IDX_N - 1);
+    int k;
+    while (g_prog_idx[s] != 0) {
+        Prog* pr = g_progs[g_prog_idx[s] - 1];
+        if (pr->hash == h) {
+            int same = 1;
+            for (k = 0; k < g_spec_n; k++) {
+                if (pr->key[k] != g_spec_canon[g_spec_slots[k]]) { same = 0; break; }
+            }
+            if (same) return pr;
         }
-        if (same) return pr;
+        s = (s + 1) & (PROG_IDX_N - 1);
     }
     return NULL;
 }
@@ -4771,7 +4985,9 @@ static Prog* pc_prog_register(Prog* pr, u32 h, int fresh)
     pr->key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
     for (i = 0; i < g_spec_n; i++) pr->key[i] = g_spec_canon[g_spec_slots[i]];
     if (fresh) pc_shc_store(pr, h);
-    g_progs[g_prog_n++] = pr;
+    g_progs[g_prog_n] = pr;
+    pc_prog_index_add(g_prog_n);
+    g_prog_n++;
     if (getenv("MELEE_SHADERLOG")) {
         fprintf(stderr, "[SHADER] variant %d %s (frame %u, hash %08x, program %u)\n", g_prog_n,
                 fresh ? "built" : "loaded", pc_frame_number, h, (unsigned) pr->id);
@@ -9825,53 +10041,95 @@ static void dl_decode(const u8* ptr, const u8* end, u32 vsize, u32 pos_cnt, DlEn
 u64 pc_diag_replay_ns; u32 pc_diag_replay_verts, pc_diag_replay_skinned;
 static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
 {
+    /* The state this loop reads and writes lives in locals and goes back to
+     * g_state at the end, and around the flush when the buffer fills (which
+     * reads it). Every output vertex is a store into g_state.verts, so the
+     * compiler had to reload each g_state field after it -- on the in-order
+     * Cortex-A53 of the PowerVR tablet, ~330 cycles a vertex. The arithmetic
+     * is the same operations in the same order. */
     u32 n = dp->nverts, i;
-    int skin = g_state.va_mode[0] != 0 && g_state.mtx3d_active;
+    const int skin = g_state.va_mode[0] != 0 && g_state.mtx3d_active;
+    const int mid_track = g_state.va_mode[0] != 0;
+    const int pos_en = g_state.pos_enabled != 0, nrm_en = g_state.nrm_enabled != 0;
+    const int clr_en = g_state.clr_enabled != 0, t0_en = g_state.tex0_enabled != 0;
+    const int t1_en = g_state.tex1_enabled != 0, view_ok = g_state.view_matrix_valid != 0;
+    f32 lpos[3], lnrm[3], lclr[4], lt0[2], lt1[2], bmin[3], bmax[3];
+    GXColor cc = g_state.cur_color;
+    u32 lmid = g_state.last_mtx_idx, bcount = g_state.bounds_count, vc = g_state.vert_count;
+    int mid_min = g_state.batch_mid_min, mid_max = g_state.batch_mid_max;
+    u32 skinned = g_state.batch_skinned;
+    int pretrans = g_batch_pretransformed, bvalid = g_state.bounds_valid;
+    Vertex* verts = g_state.verts;
     struct timespec r0, r1;
     int timed = pc_drawsec_on();
     if (timed) clock_gettime(CLOCK_MONOTONIC, &r0);
+    memcpy(lpos, g_state.last_pos, sizeof(lpos));
+    memcpy(lnrm, g_state.last_nrm, sizeof(lnrm));
+    memcpy(lclr, g_state.last_clr, sizeof(lclr));
+    memcpy(lt0, g_state.last_tex0, sizeof(lt0));
+    memcpy(lt1, g_state.last_tex1, sizeof(lt1));
+    memcpy(bmin, g_state.bounds_min, sizeof(bmin));
+    memcpy(bmax, g_state.bounds_max, sizeof(bmax));
     pc_diag_replay_verts += n;
     if (skin) pc_diag_replay_skinned += n;
+    pc_stat_vadds += n;
+#define DL_BULK_STORE() do { \
+        memcpy(g_state.last_pos, lpos, sizeof(lpos)); memcpy(g_state.last_nrm, lnrm, sizeof(lnrm)); \
+        memcpy(g_state.last_clr, lclr, sizeof(lclr)); memcpy(g_state.last_tex0, lt0, sizeof(lt0)); \
+        memcpy(g_state.last_tex1, lt1, sizeof(lt1)); memcpy(g_state.bounds_min, bmin, sizeof(bmin)); \
+        memcpy(g_state.bounds_max, bmax, sizeof(bmax)); g_state.cur_color = cc; \
+        g_state.last_mtx_idx = lmid; g_state.bounds_count = bcount; g_state.bounds_valid = bvalid; \
+        g_state.vert_count = vc; g_state.batch_mid_min = mid_min; g_state.batch_mid_max = mid_max; \
+        g_state.batch_skinned = skinned; g_batch_pretransformed = pretrans; \
+    } while (0)
     for (i = 0; i < n; i++) {
         const DlVert* s = &dv[i];
         Vertex* v;
-        pc_stat_vadds++;
-        if (g_state.vert_count >= MAX_VERTS) bridge_upload_and_draw();
-        if (g_state.vert_count >= MAX_VERTS) {
+        if (vc >= MAX_VERTS) {
+            DL_BULK_STORE();
+            bridge_upload_and_draw();
+            /* The flush resets the batch; take back what it left. */
+            vc = g_state.vert_count;
+            mid_min = g_state.batch_mid_min; mid_max = g_state.batch_mid_max;
+            skinned = g_state.batch_skinned; pretrans = g_batch_pretransformed;
+            bcount = g_state.bounds_count; bvalid = g_state.bounds_valid;
+            memcpy(bmin, g_state.bounds_min, sizeof(bmin));
+            memcpy(bmax, g_state.bounds_max, sizeof(bmax));
+        }
+        if (vc >= MAX_VERTS) {
             static int warned = 0;
             if (warned < 4) {
                 warned++;
-                PORT_LOG_WARN("vertex buffer full (%u); dropping vertex",
-                              (unsigned) g_state.vert_count);
+                PORT_LOG_WARN("vertex buffer full (%u); dropping vertex", (unsigned) vc);
             }
             continue;
         }
-        v = &g_state.verts[g_state.vert_count];
-        if (g_state.va_mode[0] != 0) g_state.last_mtx_idx = s->mid;
-        g_state.last_pos[0] = s->pos[0]; g_state.last_pos[1] = s->pos[1]; g_state.last_pos[2] = s->pos[2];
-        if (g_state.pos_enabled) {
+        v = &verts[vc];
+        if (mid_track) lmid = s->mid;
+        lpos[0] = s->pos[0]; lpos[1] = s->pos[1]; lpos[2] = s->pos[2];
+        if (pos_en) {
             f32 px = s->pos[0], py = s->pos[1], pz = s->pos[2];
             f32 mag;
             if (skin) {
                 u32 mid = s->mid;
                 const f32 (*m)[4];
-                if (g_state.batch_mid_min < 0 || (int) mid < g_state.batch_mid_min) g_state.batch_mid_min = (int) mid;
-                if ((int) mid > g_state.batch_mid_max) g_state.batch_mid_max = (int) mid;
-                g_state.batch_skinned++;
+                if (mid_min < 0 || (int) mid < mid_min) mid_min = (int) mid;
+                if ((int) mid > mid_max) mid_max = (int) mid;
+                skinned++;
                 if (mid >= 28) mid = 0;
                 m = (const f32 (*)[4]) g_state.mtx_array[mid];
                 px = m[0][0]*s->pos[0] + m[0][1]*s->pos[1] + m[0][2]*s->pos[2] + m[0][3];
                 py = m[1][0]*s->pos[0] + m[1][1]*s->pos[1] + m[1][2]*s->pos[2] + m[1][3];
                 pz = m[2][0]*s->pos[0] + m[2][1]*s->pos[1] + m[2][2]*s->pos[2] + m[2][3];
-                if (g_state.nrm_enabled && !(s->flags & DLV_NRM)) {
+                if (nrm_en && !(s->flags & DLV_NRM)) {
                     const f32 (*nm)[4] = g_nrm_mtx_valid[mid]
                                              ? (const f32 (*)[4]) g_nrm_mtx_array[mid] : m;
-                    f32 NX = g_state.last_nrm[0], NY = g_state.last_nrm[1], NZ = g_state.last_nrm[2];
-                    g_state.last_nrm[0] = nm[0][0]*NX + nm[0][1]*NY + nm[0][2]*NZ;
-                    g_state.last_nrm[1] = nm[1][0]*NX + nm[1][1]*NY + nm[1][2]*NZ;
-                    g_state.last_nrm[2] = nm[2][0]*NX + nm[2][1]*NY + nm[2][2]*NZ;
+                    f32 NX = lnrm[0], NY = lnrm[1], NZ = lnrm[2];
+                    lnrm[0] = nm[0][0]*NX + nm[0][1]*NY + nm[0][2]*NZ;
+                    lnrm[1] = nm[1][0]*NX + nm[1][1]*NY + nm[1][2]*NZ;
+                    lnrm[2] = nm[2][0]*NX + nm[2][1]*NY + nm[2][2]*NZ;
                 }
-                g_batch_pretransformed = 1;
+                pretrans = 1;
             }
             mag = px*px + py*py + pz*pz;
             if (mag > 1e12f) {
@@ -9888,59 +10146,61 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
             if (py < -1e6f) py = -1e6f; if (py > 1e6f) py = 1e6f;
             if (pz < -1e6f) pz = -1e6f; if (pz > 1e6f) pz = 1e6f;
             v->pos[0] = px; v->pos[1] = py; v->pos[2] = pz;
-            if (g_state.view_matrix_valid) {
+            if (view_ok) {
                 mag = px*px + py*py + pz*pz;
                 if (mag > 100.0f && mag < 200000000.0f) {
-                    if (g_state.bounds_count == 0) {
-                        g_state.bounds_min[0] = px; g_state.bounds_min[1] = py; g_state.bounds_min[2] = pz;
-                        g_state.bounds_max[0] = px; g_state.bounds_max[1] = py; g_state.bounds_max[2] = pz;
+                    if (bcount == 0) {
+                        bmin[0] = px; bmin[1] = py; bmin[2] = pz;
+                        bmax[0] = px; bmax[1] = py; bmax[2] = pz;
                     } else {
-                        if (px < g_state.bounds_min[0]) g_state.bounds_min[0] = px;
-                        if (py < g_state.bounds_min[1]) g_state.bounds_min[1] = py;
-                        if (pz < g_state.bounds_min[2]) g_state.bounds_min[2] = pz;
-                        if (px > g_state.bounds_max[0]) g_state.bounds_max[0] = px;
-                        if (py > g_state.bounds_max[1]) g_state.bounds_max[1] = py;
-                        if (pz > g_state.bounds_max[2]) g_state.bounds_max[2] = pz;
+                        if (px < bmin[0]) bmin[0] = px;
+                        if (py < bmin[1]) bmin[1] = py;
+                        if (pz < bmin[2]) bmin[2] = pz;
+                        if (px > bmax[0]) bmax[0] = px;
+                        if (py > bmax[1]) bmax[1] = py;
+                        if (pz > bmax[2]) bmax[2] = pz;
                     }
-                    g_state.bounds_count++;
-                    g_state.bounds_valid = TRUE;
+                    bcount++;
+                    bvalid = TRUE;
                 }
             }
         }
-        v->nrm[0] = g_state.last_nrm[0]; v->nrm[1] = g_state.last_nrm[1]; v->nrm[2] = g_state.last_nrm[2];
+        v->nrm[0] = lnrm[0]; v->nrm[1] = lnrm[1]; v->nrm[2] = lnrm[2];
     skip_deg:
-        if (g_state.clr_enabled) {
-            v->col[0] = g_state.last_clr[0]; v->col[1] = g_state.last_clr[1];
-            v->col[2] = g_state.last_clr[2]; v->col[3] = g_state.last_clr[3];
+        if (clr_en) {
+            v->col[0] = lclr[0]; v->col[1] = lclr[1];
+            v->col[2] = lclr[2]; v->col[3] = lclr[3];
         } else {
-            v->col[0] = g_state.cur_color.r / 255.0f; v->col[1] = g_state.cur_color.g / 255.0f;
-            v->col[2] = g_state.cur_color.b / 255.0f; v->col[3] = g_state.cur_color.a / 255.0f;
+            v->col[0] = cc.r / 255.0f; v->col[1] = cc.g / 255.0f;
+            v->col[2] = cc.b / 255.0f; v->col[3] = cc.a / 255.0f;
         }
-        if (g_state.tex0_enabled) { v->tex0[0] = g_state.last_tex0[0]; v->tex0[1] = g_state.last_tex0[1]; }
-        if (g_state.tex1_enabled) { v->tex1[0] = g_state.last_tex1[0]; v->tex1[1] = g_state.last_tex1[1]; }
-        g_state.vert_count++;
+        if (t0_en) { v->tex0[0] = lt0[0]; v->tex0[1] = lt0[1]; }
+        if (t1_en) { v->tex1[0] = lt1[0]; v->tex1[1] = lt1[1]; }
+        vc++;
         /* The per-attribute calls that follow GXPosition in the decode. */
         if (s->flags & DLV_CLR) {
-            g_state.cur_color.r = s->col[0]; g_state.cur_color.g = s->col[1];
-            g_state.cur_color.b = s->col[2]; g_state.cur_color.a = s->col[3];
-            g_state.last_clr[0] = s->col[0] / 255.0f; g_state.last_clr[1] = s->col[1] / 255.0f;
-            g_state.last_clr[2] = s->col[2] / 255.0f; g_state.last_clr[3] = s->col[3] / 255.0f;
-            v->col[0] = g_state.last_clr[0]; v->col[1] = g_state.last_clr[1];
-            v->col[2] = g_state.last_clr[2]; v->col[3] = g_state.last_clr[3];
+            cc.r = s->col[0]; cc.g = s->col[1];
+            cc.b = s->col[2]; cc.a = s->col[3];
+            lclr[0] = s->col[0] / 255.0f; lclr[1] = s->col[1] / 255.0f;
+            lclr[2] = s->col[2] / 255.0f; lclr[3] = s->col[3] / 255.0f;
+            v->col[0] = lclr[0]; v->col[1] = lclr[1];
+            v->col[2] = lclr[2]; v->col[3] = lclr[3];
         }
         if (s->flags & DLV_NRM) {
-            g_state.last_nrm[0] = s->nrm[0]; g_state.last_nrm[1] = s->nrm[1]; g_state.last_nrm[2] = s->nrm[2];
+            lnrm[0] = s->nrm[0]; lnrm[1] = s->nrm[1]; lnrm[2] = s->nrm[2];
             v->nrm[0] = s->nrm[0]; v->nrm[1] = s->nrm[1]; v->nrm[2] = s->nrm[2];
         }
         if (s->flags & DLV_T0) {
-            g_state.last_tex0[0] = s->t0[0]; g_state.last_tex0[1] = s->t0[1];
+            lt0[0] = s->t0[0]; lt0[1] = s->t0[1];
             v->tex0[0] = s->t0[0]; v->tex0[1] = s->t0[1];
         }
         if (s->flags & DLV_T1) {
-            g_state.last_tex1[0] = s->t1[0]; g_state.last_tex1[1] = s->t1[1];
+            lt1[0] = s->t1[0]; lt1[1] = s->t1[1];
             v->tex1[0] = s->t1[0]; v->tex1[1] = s->t1[1];
         }
     }
+    DL_BULK_STORE();
+#undef DL_BULK_STORE
     if (timed) {
         clock_gettime(CLOCK_MONOTONIC, &r1);
         pc_diag_replay_ns += (u64) ((r1.tv_sec - r0.tv_sec) * 1000000000ll + (r1.tv_nsec - r0.tv_nsec));

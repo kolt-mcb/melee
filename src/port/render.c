@@ -181,6 +181,10 @@ void render_present(void)
         extern void pc_profile_report(void);
         pc_profile_report();
     }
+    if (s_present_count % 300 == 0) {
+        extern void pc_gltime_report(unsigned frames);
+        pc_gltime_report(300);
+    }
     if (s_max_frames > 0 && s_present_count >= s_max_frames) {
         g_should_quit = TRUE;
     }

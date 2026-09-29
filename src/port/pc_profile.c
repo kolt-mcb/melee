@@ -186,6 +186,15 @@ void pc_profile_report(void)
         fprintf(stderr, "\n");
     }
     fflush(stderr);
+    /* MELEE_PROFILE_RESET=1: each report covers only the window since the last
+     * (the periodic Android report), so a match is not buried under boot's
+     * shader compiles. */
+    if (getenv("MELEE_PROFILE_RESET") != NULL) {
+        memset(prof_addr, 0, sizeof(prof_addr));
+        memset(prof_count, 0, sizeof(prof_count));
+        prof_used = 0;
+        prof_samples = 0;
+    }
 }
 
 void pc_profile_init(void)

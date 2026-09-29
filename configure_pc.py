@@ -360,6 +360,15 @@ if ANDROID:
     ARCH_FLAGS = ("-fPIC" + _attr + " -Wno-unknown-warning-option"
                   " -isystem " + str(ROOT / "tools" / "android" / "glshim")
                   + _dep_inc + " -DBUILD_TARGET_ANDROID=1")
+    # Schedule for an in-order core. Tuning only -- no instruction the
+    # generic ARMv8 target lacks, and no change to floating-point contraction
+    # (-ffp-contract=off below still holds), so results are unchanged. The
+    # cheap tablets are all little cores (Cortex-A53 on the MT6765/PowerVR
+    # tablet, A55 as the little cluster everywhere else), where scheduling
+    # decides the throughput; the big out-of-order cores barely notice it.
+    # PC_ANDROID_TUNE= (empty) builds untuned, for comparison.
+    if ANDROID_ABI == "arm64-v8a":
+        ARCH_FLAGS += " " + os.environ.get("PC_ANDROID_TUNE", "-mtune=cortex-a55")
 elif WASM:
     OUT_DIR = BUILD / "wasm"
     CC = str(Path(EMSDK) / "upstream" / "emscripten" / "emcc")
