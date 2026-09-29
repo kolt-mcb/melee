@@ -41,6 +41,9 @@
 #include <GL/glcorearb.h>
 
 #include "pc_glq.h"
+#include <dlfcn.h>
+/* Synchronous calls by function, for MELEE_GLTIME (pc_glq_wait_report). */
+static struct { void (*fn)(void*); unsigned n; } q_sync_tab[32];
 
 int pc_glq_active;
 GLuint pc_glq_default_fb;
@@ -203,8 +206,10 @@ size_t pc_glq_pixel_bytes(int w, int h, unsigned format, unsigned type)
 typedef struct {
     void (*fn)(void*); /* NULL: wrap to the start of the ring */
     unsigned size;     /* padded bytes of arguments that follow */
-    unsigned heap;     /* the arguments are in a malloc'd block (ptr follows) */
+    unsigned short heap; /* the arguments are in a malloc'd block (ptr follows) */
+    unsigned short seq;  /* producer's count, checked by the consumer */
 } QHdr;
+static unsigned short q_seq_prod, q_seq_cons;
 #define Q_CAP ((size_t) 16 << 20)
 #define Q_BIG ((size_t) 256 << 10) /* payloads above this go to the heap */
 static char* q_buf;
@@ -262,6 +267,18 @@ static void q_game_wait(int (*pred)(void*), void* arg)
 }
 void pc_glq_wait_report(unsigned frames)
 {
+    {
+        Dl_info di;
+        int k;
+        fprintf(stderr, "[GLQ] sync calls per frame:");
+        for (k = 0; k < 32 && q_sync_tab[k].fn; k++) {
+            unsigned long off = 0;
+            if (dladdr((void*) q_sync_tab[k].fn, &di) && di.dli_fbase) off = (unsigned long) ((char*) (void*) q_sync_tab[k].fn - (char*) di.dli_fbase);
+            fprintf(stderr, " 0x%lx %.2f", off, (double) q_sync_tab[k].n / frames);
+            q_sync_tab[k].n = 0;
+        }
+        fprintf(stderr, "\n");
+    }
     int i;
     if (!pc_glq_active || frames == 0) return;
     fprintf(stderr, "[GLQ] game-thread waits, ms/frame (count/frame):");
@@ -294,8 +311,42 @@ static int q_has_room(void* need)
     return q_head + *(size_t*) need - atomic_load_explicit(&q_tail, memory_order_acquire) <= Q_CAP;
 }
 
+/* The queue has one producer. pc_glq_set_producer names it (the game thread
+ * at start, the bridge thread once the GX queue runs); a push from any other
+ * thread is reported with a backtrace -- two producers corrupt the ring. */
+#include "pc_execinfo.h"
+static pthread_t q_producer;
+static int q_producer_set;
+void pc_glq_set_producer(void) { q_producer = pthread_self(); q_producer_set = 1; }
+/* The pause/resume hand-over, on the game thread while the producer (the
+ * bridge thread, with the GX queue on) is idle: take the role, then give it back. */
+static pthread_t q_producer_saved;
+static int q_producer_saved_set;
+static void q_producer_swap_in(void)
+{
+    q_producer_saved = q_producer;
+    q_producer_saved_set = q_producer_set;
+    pc_glq_set_producer();
+}
+static void q_producer_swap_out(void)
+{
+    q_producer = q_producer_saved;
+    q_producer_set = q_producer_saved_set;
+}
+static void q_check_producer(void)
+{
+    static int said;
+    if (q_producer_set && !pthread_equal(q_producer, pthread_self()) && said < 5) {
+        void* bt[16];
+        int n = backtrace(bt, 16);
+        said++;
+        fprintf(stderr, "[GLQ] GL call from a second producer thread (%s):\n", pc_gl_crumb_fn ? pc_gl_crumb_fn : "?");
+        backtrace_symbols_fd(bt, n, 2);
+    }
+}
 void* pc_glq_push(void (*fn)(void*), size_t bytes)
 {
+    q_check_producer();
     QHdr* h;
     size_t need, at;
     int heap = bytes > Q_BIG;
@@ -315,7 +366,8 @@ void* pc_glq_push(void (*fn)(void*), size_t bytes)
     h = (QHdr*) (q_buf + at);
     h->fn = fn;
     h->size = (unsigned) body;
-    h->heap = (unsigned) heap;
+    h->heap = (unsigned short) heap;
+    h->seq = ++q_seq_prod;
     q_pending_bytes = need;
     if (heap) {
         void* p = malloc(bytes);
@@ -349,6 +401,12 @@ static void q_sync_exec(void* p)
 static int q_sync_done(void* p) { return atomic_load_explicit(&((QSync*) p)->done, memory_order_acquire); }
 void pc_glq_call_sync(void (*fn)(void*), void* args)
 {
+    {
+        int i;
+        for (i = 0; i < 32; i++) {
+            if (q_sync_tab[i].fn == fn || q_sync_tab[i].fn == NULL) { q_sync_tab[i].fn = fn; q_sync_tab[i].n++; break; }
+        }
+    }
     QSync s;
     QSync** slot;
     s.fn = fn;
@@ -411,6 +469,11 @@ GLsync pcq_glFenceSync(GLenum condition, GLbitfield flags)
     if (!pc_glq_active) {
         f->real = (glFenceSync)(condition, flags);
         atomic_store(&f->state, 1);
+        /* Made while the app was in the background (the game thread holds
+         * the context and the render thread, owning nothing, leaves the
+         * list alone): after the resume only the render thread's poll can
+         * signal it, and a wait on it hung the game there for good. */
+        if (q_buf != NULL && q_npolled < Q_FENCES) q_polled[q_npolled++] = f;
     } else {
         QFence** slot = (QFence**) pc_glq_push(q_fence_make, sizeof(QFence*));
         *slot = f;
@@ -433,6 +496,10 @@ void pcq_glDeleteSync(GLsync sync)
     QFence* f = (QFence*) sync;
     if (f == NULL) return;
     if (!pc_glq_active) {
+        int i;
+        for (i = 0; i < q_npolled; i++) {
+            if (q_polled[i] == f) { q_polled[i] = q_polled[--q_npolled]; break; }
+        }
         if (f->real != NULL) (glDeleteSync)(f->real);
         free(f);
         return;
@@ -501,6 +568,34 @@ static void pcq_glGetIntegerv_shadow(GLenum pname, GLint* data)
     }
 }
 
+/* ---- texture names ------------------------------------------------------ */
+/* glGenTextures answers with names, so queued it waits for the render thread
+ * to run everything before it -- up to a frame's work, every time the bridge
+ * meets a new texture (every other frame in a match: 4 ms a frame on the
+ * tablet). Names are made 64 at a time instead and handed out here. */
+#define Q_TEXPOOL 64
+static GLuint q_texpool[Q_TEXPOOL];
+static int q_texpool_n;
+typedef struct { GLuint* out; } QGenT;
+static void q_gentex_exec(void* p) { (glGenTextures)(Q_TEXPOOL, ((QGenT*) p)->out); }
+void pcq_glGenTextures(GLsizei n, GLuint* textures)
+{
+    GLsizei i;
+    if (!pc_glq_active) {
+        (glGenTextures)(n, textures);
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        if (q_texpool_n == 0) {
+            QGenT a;
+            a.out = q_texpool;
+            pc_glq_call_sync(q_gentex_exec, &a);
+            q_texpool_n = Q_TEXPOOL;
+        }
+        textures[i] = q_texpool[--q_texpool_n];
+    }
+}
+
 /* ---- present, swap interval -------------------------------------------- */
 static void q_swap_exec(void* p)
 {
@@ -515,9 +610,16 @@ static int q_frame_room(void* p)
                atomic_load_explicit(&q_frames_done, memory_order_acquire) <= 1;
 }
 static void pc_glq_resume(void);
+int pc_glq_want_resume(void) { return atomic_load(&q_want_resume); }
+/* The game thread (pc_gxq_pre_frame_begin), with the bridge thread idle: SDL
+ * restored the context there. */
+void pc_glq_resume_from_game(void) { pc_glq_resume(); }
 void pc_glq_swap(void* win)
 {
-    if (atomic_load(&q_want_resume)) pc_glq_resume();
+    extern int pc_gxq_active;
+    /* With the GX queue on this runs on the bridge thread, which never held
+     * the context; the game thread resumes instead. */
+    if (!pc_gxq_active && atomic_load(&q_want_resume)) pc_glq_resume();
     if (!pc_glq_active) {
         SDL_GL_SwapWindow((SDL_Window*) win);
         return;
@@ -582,7 +684,9 @@ static int q_fast_cpus(cpu_set_t* set)
     }
     return n;
 }
-static void q_pin_fast(const char* who)
+void pc_glq_pin_fast(const char* who);
+static void q_pin_fast(const char* who) { pc_glq_pin_fast(who); }
+void pc_glq_pin_fast(const char* who)
 {
     cpu_set_t set;
     int n;
@@ -650,6 +754,12 @@ static void* q_main(void* arg)
                 tail += Q_CAP - tail % Q_CAP;
                 continue;
             }
+            if (h->seq != (unsigned short) (q_seq_cons + 1)) {
+                static int said;
+                if (said++ < 5) fprintf(stderr, "[GLQ] queue out of step at %zu (lap %zu): seq %u, expected %u, pub %zu\n",
+                                        tail % Q_CAP, tail / Q_CAP, h->seq, (unsigned short) (q_seq_cons + 1), pub);
+            }
+            q_seq_cons = h->seq;
             {
                 struct timespec c0, c1;
                 void (*fn)(void*) = h->fn;
@@ -706,8 +816,15 @@ static void* q_main(void* arg)
  * event pump (an event watch), on the game thread. */
 static void pc_glq_suspend(void)
 {
+    extern void pc_gxq_drain(void);
     if (!pc_glq_active) return;
+    /* The bridge thread produces GL while the GX queue is on: let it finish
+     * and go idle before the context moves. */
+    pc_gxq_drain();
+    /* The bridge thread is idle now: this thread records the hand-over. */
+    q_producer_swap_in();
     pc_glq_call_sync(q_release_exec, NULL);
+    q_producer_swap_out();
     pc_glq_active = 0;
     SDL_GL_MakeCurrent(q_win, q_ctx);
 }
@@ -715,13 +832,18 @@ static void pc_glq_suspend(void)
  * it sends the event, so the hand-over waits for the next present. */
 static void pc_glq_resume(void)
 {
+    extern void window_apply_surface_scale(void);
     atomic_store(&q_want_resume, 0);
+    /* SDL recreated the EGL surface at its native size. */
+    window_apply_surface_scale();
     if (pc_glq_active || q_buf == NULL) return;
     q_ctx = SDL_GL_GetCurrentContext();
     if (q_ctx == NULL) return;
     SDL_GL_MakeCurrent(q_win, NULL);
     pc_glq_active = 1;
+    q_producer_swap_in();
     pc_glq_call_sync(q_take_exec, NULL);
+    q_producer_swap_out();
 }
 static int q_event_watch(void* user, SDL_Event* e)
 {
@@ -761,6 +883,7 @@ void pc_glq_maybe_start(void* win, void* ctx)
         return;
     }
     q_game_wait(q_owned, NULL);
+    pc_glq_set_producer();
 #if defined(__linux__) || defined(__ANDROID__)
     q_pin_fast("game");
 #endif

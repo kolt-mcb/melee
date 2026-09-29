@@ -58,12 +58,15 @@ static void pc_ps_fifo_u8(u8 v)
 }
 #define PS_FIFO_F32(v) pc_ps_fifo_f32(v)
 #define PS_FIFO_U8(v) pc_ps_fifo_u8(v)
-#define GXClearVtxDesc() (pc_ps_tex_direct = 0, pc_ps_nf = 0, GXClearVtxDesc())
+/* These shadow the GX queue's renames (pc_gxq_names.h), so the inner calls
+ * name the queued entry points explicitly -- calling the bridge directly
+ * from the game thread corrupted the render thread's queue. */
+#define GXClearVtxDesc() (pc_ps_tex_direct = 0, pc_ps_nf = 0, PC_GXQ_NAME(GXClearVtxDesc)())
 #define GXSetVtxDesc(a, t)                                                    \
     (((a) == GX_VA_TEX0 ? (void) (pc_ps_tex_direct = ((t) == GX_DIRECT))     \
                         : (void) 0),                                          \
-     GXSetVtxDesc(a, t))
-#define GXBegin(p, f, n) (pc_ps_nf = 0, GXBegin(p, f, n))
+     PC_GXQ_NAME(GXSetVtxDesc)(a, t))
+#define GXBegin(p, f, n) (pc_ps_nf = 0, PC_GXQ_NAME(GXBegin)(p, f, n))
 #else
 #define PS_FIFO_F32(v) (GXWGFifo.f32 = (v))
 #define PS_FIFO_U8(v) (GXWGFifo.u8 = (v))

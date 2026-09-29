@@ -999,21 +999,6 @@ static inline void pcq_glGenRenderbuffers(GLsizei n, GLuint * renderbuffers)
 }
 #define glGenRenderbuffers(...) PCQ_V("glGenRenderbuffers", pcq_glGenRenderbuffers(__VA_ARGS__))
 
-typedef struct { GLsizei n; GLuint * textures; } pcq_a_glGenTextures;
-static void pcq_x_glGenTextures(void* p_) { pcq_a_glGenTextures* a_ = (pcq_a_glGenTextures*) p_; (glGenTextures)(a_->n, a_->textures); }
-static inline void pcq_glGenTextures(GLsizei n, GLuint * textures)
-{
-    pcq_a_glGenTextures* a_ = NULL;
-    if (!pc_glq_active) (glGenTextures)(n, textures); else {
-        pcq_a_glGenTextures b_;
-        b_.n = n;
-        b_.textures = textures;
-        pc_glq_call_sync(pcq_x_glGenTextures, &b_);
-    }
-    (void) a_;
-}
-#define glGenTextures(...) PCQ_V("glGenTextures", pcq_glGenTextures(__VA_ARGS__))
-
 typedef struct { GLsizei n; GLuint * arrays; } pcq_a_glGenVertexArrays;
 static void pcq_x_glGenVertexArrays(void* p_) { pcq_a_glGenVertexArrays* a_ = (pcq_a_glGenVertexArrays*) p_; (glGenVertexArrays)(a_->n, a_->arrays); }
 static inline void pcq_glGenVertexArrays(GLsizei n, GLuint * arrays)

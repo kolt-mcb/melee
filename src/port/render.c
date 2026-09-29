@@ -22,6 +22,7 @@ void pc_get_fb_size(float* w, float* h);
 #include <GL/glext.h>
 #include <GL/glcorearb.h>
 #include "pc_glq.h" /* GL calls: breadcrumb, timing, render-thread queue */
+#include "pc_gxq.h"
 #include <math.h>
 #include <stdbool.h>
 #include <time.h>
@@ -120,6 +121,7 @@ static double s_ph_ns[5];
  * before the gx walk, and the old block-scope declaration sat after it. */
 static int g_render_frame = 0;
 
+static void render_present_tail(int frame);
 void render_present(void)
 {
     /* The state trace goes here, before anything in this function draws.
@@ -143,6 +145,7 @@ void render_present(void)
     }
     g_render_frame++;
     pc_render_frame_now = g_render_frame;
+    if (g_render_frame >= 3) pc_gxq_maybe_start(); /* after start-up GL (archive textures) */
     pc_trace_frame(g_render_frame);
 
     if (s_after_swap.tv_sec != 0) {
@@ -197,7 +200,7 @@ void render_present(void)
     if (s_present_count % 300 == 0) {
         extern void pc_gltime_report(unsigned frames);
         pc_gltime_report(300);
-        if (getenv("MELEE_GLTIME") != NULL) pc_glq_wait_report(300);
+        if (getenv("MELEE_GLTIME") != NULL) { pc_glq_wait_report(300); pc_gxq_wait_report(300); }
         {
             extern void pc_gxprof_report(unsigned frames);
             pc_gxprof_report(300);
@@ -253,6 +256,18 @@ void render_present(void)
     }
     
     /* Flush any remaining GX batches before swapping */
+    /* The end of the frame -- the bridge's flush, screenshots, pacing,
+     * the upscale and the swap -- runs where the bridge runs: on the bridge
+     * thread when the GX queue is on (pc_gxq.c), so that thread stays the
+     * render thread's only producer. */
+    /* The tail runs up to a frame later on the bridge thread, when the game
+     * thread's g_render_frame has moved on: it gets its own frame's number. */
+    pc_gxq_run_frame_tail(render_present_tail, g_render_frame);
+}
+
+/* The second half of render_present (see there). */
+static void render_present_tail(int frame)
+{
     gx_frame_end();
     clock_gettime(CLOCK_MONOTONIC, &s_ph[2]);
     
@@ -329,14 +344,14 @@ void render_present(void)
         int want = 0;
         int si;
         for (si = 0; si < g_shot_n; si++) {
-            if (g_render_frame == g_shot_frames[si]) {
+            if (frame == g_shot_frames[si]) {
                 want = 1;
                 break;
             }
         }
-        if (!want && g_shot_from >= 0 && g_render_frame >= g_shot_from &&
-            g_render_frame <= g_shot_to &&
-            ((g_render_frame - g_shot_from) % g_shot_stride) == 0)
+        if (!want && g_shot_from >= 0 && frame >= g_shot_from &&
+            frame <= g_shot_to &&
+            ((frame - g_shot_from) % g_shot_stride) == 0)
         {
             want = 1;
         }
@@ -393,11 +408,11 @@ void render_present(void)
                 }
                 fprintf(stderr,
                         "[SCREENSHOT] frame=%d %dx%d nonblack=%.1f%%\n",
-                        g_render_frame, cw, ch,
+                        frame, cw, ch,
                         100.0 * nonblack / (cw * ch));
                 fflush(stderr);
                 snprintf(shotpath, sizeof(shotpath), "%s/screenshot_%d.ppm",
-                         g_shot_dir, g_render_frame);
+                         g_shot_dir, frame);
                 f = fopen(shotpath, "wb");
                 if (f != NULL) {
                     /* PPM rows are top-down; glReadPixels gives bottom-up. */

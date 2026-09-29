@@ -99,6 +99,14 @@ float __fabsf(float);
  * and the link fails with an undefined symbol. On PC they are static. */
 #define PC_STATIC_INLINE static inline
 
+
+/* The GX command queue (src/port/pc_gxq.c): every translation unit but the
+ * bridge itself calls the bridge's entry points under their queue wrappers'
+ * names. PC_GXQ_IMPL is set for gx_gl_bridge.c by configure_pc.py. */
+#if !defined(PC_GXQ_IMPL)
+#include "pc_gxq_names.h"
+#endif
+
 #endif
 
 /* A float-to-int conversion whose value does not fit is the one piece of

@@ -2886,7 +2886,7 @@ static void pc_shtest_bench(const char* dir, GLuint ubo)
     static u16 idx[96];
     static u8 blk[16384], texel[64 * 64 * 4];
     int c, i;
-    static const char* const names[] = { "plain", "ubo-range", "ubo-data", "prog", "tex", "verts", "basevertex", "idx-offset", "blend", "depth", "all4" };
+    static const char* const names[] = { "plain", "ubo-range", "ubo-data", "prog", "tex", "verts", "basevertex", "idx-offset", "blend", "depth", "all4", "persist-write", "persist-same" };
     if (sscanf(ids, "%u,%u", &a, &b) < 2) { a = 240; b = 867; }
     pa = pc_shtest_link(dir, a);
     pb = pc_shtest_link(dir, b);
@@ -2920,8 +2920,32 @@ static void pc_shtest_bench(const char* dir, GLuint ubo)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     }
     glDisable(GL_DEPTH_TEST);
-    for (c = 0; c < 11; c++) {
+    /* Cases 11-12: draw from a persistently mapped, coherent buffer (the
+     * vertex ring's mode on Android), writing 64 fresh vertices into it per
+     * draw, or drawing the same ones. */
+    GLuint pbuf = 0;
+    unsigned char* pmap = NULL;
+    if (pc_gl_buffer_storage == NULL) pc_gl_buffer_storage = (PC_PFN_BUFFERSTORAGE) SDL_GL_GetProcAddress("glBufferStorageEXT");
+    if (pc_gl_buffer_storage != NULL) {
+        GLbitfield f = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT_EXT | GL_MAP_COHERENT_BIT_EXT;
+        glGenBuffers(1, &pbuf);
+        glBindBuffer(GL_ARRAY_BUFFER, pbuf);
+        pc_gl_buffer_storage(GL_ARRAY_BUFFER, (GLsizeiptr) sizeof(vtx) * 4096, NULL, f);
+        pmap = (unsigned char*) glMapBufferRange(GL_ARRAY_BUFFER, 0, (GLsizeiptr) sizeof(vtx) * 4096, f);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    }
+    for (c = 0; c < 13; c++) {
         struct timespec t0, t1;
+        if (c >= 11) {
+            if (pmap == NULL) break;
+            glBindBuffer(GL_ARRAY_BUFFER, pbuf);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, pos));
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, nrm));
+            glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, col));
+            glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, tex0));
+            glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, tex1));
+            memcpy(pmap, vtx, sizeof(vtx));
+        }
         double us;
         glUseProgram(pa);
         glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0, (GLsizeiptr) g_ubo_size);
@@ -2939,12 +2963,14 @@ static void pc_shtest_bench(const char* dir, GLuint ubo)
             case 5: glBufferSubData(GL_ARRAY_BUFFER, (GLintptr) ((i % 63) * sizeof(vtx)), sizeof(vtx), vtx); break;
             case 8: if (i & 1) glEnable(GL_BLEND); else glDisable(GL_BLEND); break;
             case 9: glDepthMask((i & 1) ? GL_TRUE : GL_FALSE); break;
+            case 11: memcpy(pmap + (size_t) (i % 4000) * sizeof(vtx), vtx, sizeof(vtx)); break;
             case 10: glUseProgram((i & 1) ? pb : pa);
                      glBindBufferRange(GL_UNIFORM_BUFFER, 0, big, (GLintptr) ((i % 4000) * 256), (GLsizeiptr) g_ubo_size);
                      glBindTexture(GL_TEXTURE_2D, tex[i & 1]); break;
             default: break;
             }
-            if (c == 6 || c == 10) glDrawElementsBaseVertex(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0, (i % 63) * 64);
+            if (c == 11) glDrawElementsBaseVertex(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0, (i % 4000) * 64);
+            else if (c == 6 || c == 10) glDrawElementsBaseVertex(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0, (i % 63) * 64);
             else if (c == 7) glDrawElements(GL_TRIANGLES, 48, GL_UNSIGNED_SHORT, (const void*) (uintptr_t) ((i % 48) * 2));
             else glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0);
         }
@@ -5218,11 +5244,82 @@ static void pc_vloc_init(void)
     }
 }
 
+/* The base program is compiled from source at every start: 136 s of a
+ * 2.5-minute boot on a PowerVR GE8320, which compiles the eight unrolled
+ * stages slowly. It goes in the binary cache beside the variants, under
+ * the same driver-and-template hash; the file is base.bin. */
+#define PC_SHC_BASE_MAGIC 0x3142534du
+static int pc_shc_base_path(char* out, size_t n)
+{
+    if (!pc_shc_enabled()) return 0;
+    snprintf(out, n, "%s/base.bin", g_shc_dir);
+    return 1;
+}
+static GLuint pc_shc_base_load(void)
+{
+    char path[640];
+    FILE* f;
+    u32 hdr[4], len = 0;
+    void* data;
+    GLuint id;
+    GLint linked = 0;
+    if (!pc_shc_base_path(path, sizeof(path))) return 0;
+    f = fopen(path, "rb");
+    if (f == NULL) return 0;
+    if (fread(hdr, sizeof(hdr), 1, f) != 1 || hdr[0] != PC_SHC_BASE_MAGIC || hdr[1] != g_shc_drv ||
+        fread(&len, sizeof(len), 1, f) != 1 || len == 0 || len > (64u << 20)) {
+        fclose(f); return 0;
+    }
+    data = malloc(len);
+    if (fread(data, 1, len, f) != len) { free(data); fclose(f); return 0; }
+    fclose(f);
+    id = glCreateProgram();
+    glProgramBinary(id, (GLenum) hdr[2], data, (GLsizei) len);
+    free(data);
+    glGetProgramiv(id, GL_LINK_STATUS, &linked);
+    if (!linked) { glDeleteProgram(id); unlink(path); return 0; }
+    return id;
+}
+static void pc_shc_base_store(GLuint id)
+{
+    char path[640];
+    FILE* f;
+    GLint len = 0;
+    GLsizei got = 0;
+    GLenum fmt = 0;
+    void* data;
+    u32 hdr[4];
+    if (!pc_shc_base_path(path, sizeof(path))) return;
+    glGetProgramiv(id, GL_PROGRAM_BINARY_LENGTH, &len);
+    if (len <= 0) return;
+    data = malloc((size_t) len);
+    glGetProgramBinary(id, len, &got, &fmt, data);
+    if (got > 0 && (f = fopen(path, "wb")) != NULL) {
+        u32 l = (u32) got;
+        hdr[0] = PC_SHC_BASE_MAGIC; hdr[1] = g_shc_drv; hdr[2] = (u32) fmt; hdr[3] = 0;
+        fwrite(hdr, sizeof(hdr), 1, f);
+        fwrite(&l, sizeof(l), 1, f);
+        fwrite(data, 1, (size_t) got, f);
+        fclose(f);
+    }
+    free(data);
+}
+
 static void bridge_compile_shaders(void)
 {
+    struct timespec t0, t1;
     pc_vloc_init();
     pc_ubo_init();
     if (getenv("MELEE_SHTEST") != NULL) pc_shtest(getenv("MELEE_SHTEST"));
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    g_shader_program = pc_shc_base_load();
+    if (g_shader_program != 0) {
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        fprintf(stderr, "[SHCACHE] base program loaded in %.0f ms\n",
+                (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6);
+        pc_ubo_reconcile(g_shader_program);
+        goto base_ready;
+    }
     GLuint vs = compile_shader(GL_VERTEX_SHADER, g_vert_src);
     /* The base program draws whatever variant a match has not compiled;
      * unrolled like the variants, guarded by the stage count uniform. */
@@ -5244,6 +5341,9 @@ static void bridge_compile_shaders(void)
     glBindAttribLocation(g_shader_program, 2, "a_col");
     glBindAttribLocation(g_shader_program, 3, "a_uv0");
     glBindAttribLocation(g_shader_program, 4, "a_uv1");
+#ifdef GL_PROGRAM_BINARY_RETRIEVABLE_HINT
+    glProgramParameteri(g_shader_program, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
+#endif
     glLinkProgram(g_shader_program);
     GLint linked;
     glGetProgramiv(g_shader_program, GL_LINK_STATUS, &linked);
@@ -5255,6 +5355,13 @@ static void bridge_compile_shaders(void)
     pc_ubo_reconcile(g_shader_program);
     glDeleteShader(vs);
     glDeleteShader(fs);
+    if (linked) {
+        pc_shc_base_store(g_shader_program);
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        fprintf(stderr, "[SHCACHE] base program compiled in %.0f ms\n",
+                (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6);
+    }
+base_ready:
     
     
     
@@ -8084,6 +8191,7 @@ extern u64 pc_diag_efb_ns;
 static GLuint g_cp_fbo;
 static GLuint g_cp_tex[PC_EFB_OVERRIDES];
 static u32 g_cp_w[PC_EFB_OVERRIDES], g_cp_h[PC_EFB_OVERRIDES];
+static u8 g_cp_checked[PC_EFB_OVERRIDES];
 
 static int pc_efb_gpu_fmt_ok(u32 fmt)
 {
@@ -8131,6 +8239,7 @@ static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         g_cp_w[slot] = dw;
         g_cp_h[slot] = dh;
+        g_cp_checked[slot] = 0; /* a new image: completeness asked once, below */
     }
     switch (fmt) {
     case 0x20: case 0x28: sg = sb = sa = GL_RED; break;        /* R4, R8 */
@@ -8152,10 +8261,17 @@ static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
                            g_cp_tex[slot], 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_draw);
-    if (glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read);
-        return 0;
+    /* An RGBA8 texture attached as the only colour attachment is complete or
+     * it is not, for as long as the image stays; asking on every copy was a
+     * round trip to the render thread each time (pc_glq.c) -- 4 ms a frame
+     * of the bridge thread waiting on the MT6765 tablet. */
+    if (!g_cp_checked[slot]) {
+        if (glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read);
+            return 0;
+        }
+        g_cp_checked[slot] = 1;
     }
     /* A blit obeys the scissor (the lesson of the shadow work), and the
      * swapped source rows do the top/bottom flip. */
@@ -8281,7 +8397,18 @@ GLuint pc_efb_override_tex(const void* img, u32 w, u32 h)
 GLuint pc_ires_fbo;
 int pc_ires_w, pc_ires_h;
 static GLuint g_ires_color, g_ires_depth;
+/* The internal resolution wanted (k x 640x480; 0 = the window's own). Where
+ * the platform can scale the window's own buffers (Android: the display
+ * hardware scales a smaller surface for free -- window.c), that is used and
+ * the scene framebuffer below stays off: no extra target, clear or blit. */
+f32 pc_ires_want(void);
 static f32 pc_ires_scale(void)
+{
+    extern int window_surface_scaled(void);
+    if (window_surface_scaled()) return 0.0f;
+    return pc_ires_want();
+}
+f32 pc_ires_want(void)
 {
     static f32 k = -1.0f;
     if (k < 0.0f) {
@@ -8412,6 +8539,11 @@ void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
     sx = (f32) win_w / fb_w;
     sy = (f32) win_h / fb_h;
     scale = sx < sy ? sx : sy;
+    if (ENV_FLAG("MELEE_VPTRACE")) {
+        static int n;
+        if (n++ < 3) fprintf(stderr, "[VP] rect->window: window %dx%d fb %.0fx%.0f scale %.3f\n",
+                             win_w, win_h, (double) fb_w, (double) fb_h, (double) scale);
+    }
     /* MELEE_RENDER_SCALE=<f> shrinks the rendered image inside the window.
      * This is a measurement knob, not a display mode -- it letterboxes
      * rather than upscaling -- and exists to answer whether a scene is
@@ -12195,19 +12327,42 @@ void GXSetCoprMod(void) {}
 static LightSlot g_ls_pool[PC_LS_POOL];
 static const void* g_ls_owner[PC_LS_POOL];
 static u32 g_ls_next;
+/* Found by the object's address, never by anything written into it: with
+ * the bridge on its own thread (pc_gxq.c) the call runs after the caller may
+ * have left, and a GXLightObj on the stack (initialize.c has one) would be
+ * written after its frame is gone. A slot is claimed by an object's first
+ * GXInitLight* call and kept while the address is. */
+static u16 g_ls_map[PC_LS_POOL * 2]; /* slot + 1, open addressing by address */
 static LightSlot* pc_light_slot(void* obj)
 {
-    u32* d = (u32*) obj;
-    u32 i;
+    u32 h, i;
     if (obj == NULL) return NULL;
-    if (d[0] == PC_LS_MAGIC && d[1] < PC_LS_POOL && g_ls_owner[d[1]] == obj) {
-        return &g_ls_pool[d[1]];
+    h = (u32) (((uintptr_t) obj >> 3) * 2654435761u) & (PC_LS_POOL * 2 - 1);
+    for (;;) {
+        u16 e = g_ls_map[h];
+        if (e == 0) break;
+        if (g_ls_owner[e - 1] == obj) return &g_ls_pool[e - 1];
+        h = (h + 1) & (PC_LS_POOL * 2 - 1);
     }
     i = g_ls_next++ % PC_LS_POOL;
+    if (g_ls_owner[i] != NULL) {
+        /* Evicting: rebuild the map without the old owner. */
+        u32 k;
+        g_ls_owner[i] = NULL;
+        memset(g_ls_map, 0, sizeof(g_ls_map));
+        for (k = 0; k < PC_LS_POOL; k++) {
+            if (g_ls_owner[k] != NULL) {
+                u32 hh = (u32) (((uintptr_t) g_ls_owner[k] >> 3) * 2654435761u) & (PC_LS_POOL * 2 - 1);
+                while (g_ls_map[hh] != 0) hh = (hh + 1) & (PC_LS_POOL * 2 - 1);
+                g_ls_map[hh] = (u16) (k + 1);
+            }
+        }
+        h = (u32) (((uintptr_t) obj >> 3) * 2654435761u) & (PC_LS_POOL * 2 - 1);
+        while (g_ls_map[h] != 0) h = (h + 1) & (PC_LS_POOL * 2 - 1);
+    }
     g_ls_owner[i] = obj;
+    g_ls_map[h] = (u16) (i + 1);
     memset(&g_ls_pool[i], 0, sizeof(LightSlot));
-    d[0] = PC_LS_MAGIC;
-    d[1] = i;
     return &g_ls_pool[i];
 }
 
@@ -12891,6 +13046,50 @@ void GXGetViewportv(f32 *vp)
  * to overrun psdisp's into its inverse-view matrix). */
 static u32 g_proj_type;
 u32 g_proj_type_set(u32 t) { g_proj_type = t; return t; }
+/* The projection as GXGetProjectionv reports it, kept on the game thread
+ * while the GX queue runs (pc_gxq.c): the particle and fog code read it back
+ * a few times a frame, and a synchronous call waits for the bridge to finish
+ * everything queued before it -- 12 ms a frame on the MT6765 tablet. Three
+ * things set it: GXSetProjection (rows 0-2 as given, row 3 by type, a
+ * non-finite or huge row rejected), gx_frame_begin's 1280x720 ortho (matrix
+ * only), and the state at the moment the queue starts. */
+static f32 g_shadow_proj[4][4];
+static u32 g_shadow_proj_type;
+static void pc_proj_report(f32 (*m)[4], u32 type, f32* ptr)
+{
+    int persp = (type == 0);
+    ptr[0] = (f32) type;
+    ptr[1] = m[0][0];
+    ptr[2] = persp ? m[0][2] : m[0][3];
+    ptr[3] = m[1][1];
+    ptr[4] = persp ? m[1][2] : m[1][3];
+    ptr[5] = m[2][2];
+    ptr[6] = m[2][3];
+}
+void pc_gxq_shadow_seed_projection(void)
+{
+    memcpy(g_shadow_proj, g_state.proj_matrix, sizeof(g_shadow_proj));
+    g_shadow_proj_type = g_proj_type;
+}
+void pc_gxq_note_projection(f32 mtx[4][4], u32 type)
+{
+    int i, j;
+    for (i = 0; i < 3; i++)
+        for (j = 0; j < 4; j++)
+            if (!isfinite(mtx[i][j]) || fabsf(mtx[i][j]) > 1e8f) return;
+    memcpy(g_shadow_proj, mtx, sizeof(f32) * 3 * 4);
+    g_shadow_proj_type = type;
+}
+void pc_gxq_note_frame_begin_projection(void)
+{
+    static const f32 ortho[4][4] = {
+        { 2.0f / 1280.0f, 0, 0, -1 }, { 0, 2.0f / 720.0f, 0, -1 }, { 0, 0, -1, 0 }, { 0, 0, 0, 1 } };
+    memcpy(g_shadow_proj, ortho, sizeof(ortho));
+}
+void pc_gxq_shadow_GXGetProjectionv(f32* ptr)
+{
+    if (ptr) pc_proj_report(g_shadow_proj, g_shadow_proj_type, ptr);
+}
 void GXGetProjectionv(f32 *ptr)
 {
     if (ptr) {
@@ -13305,6 +13504,34 @@ enum {
  * The bridge previously declared (dim, fmt, s_clamp, t_clamp) here, so `fmt`
  * actually received wrap_s — EVERY texture in the game decoded with a bogus
  * format (hence the monochrome/noisy look everywhere). */
+/* The metadata a GXTexObj carries for GXGetTexObj*-style readers:
+ *   dummy[0] = (width << 16) | height
+ *   dummy[1] = (fmt << 16) | (mipmap << 8) | (s_clamp << 4) | t_clamp
+ *   dummy[2] = image (low 32 bits), dummy[3] = TLUT name (CI only)
+ * Written on the caller's thread: see GXInitTexObj. */
+extern int pc_gxq_active;
+void pc_texobj_stamp(void* texObj, const void* image, u16 width, u16 height,
+                     u8 fmt, u8 s_clamp, u8 t_clamp, u8 mipmap)
+{
+    if (texObj) {
+        GXTexObj *to = (GXTexObj*)texObj;
+        to->dummy[0] = ((u32)width << 16) | (u32)height;
+        to->dummy[1] = ((u32)fmt << 16) | ((u32)mipmap << 8) | ((u32)s_clamp << 4) | (u32)t_clamp;
+        to->dummy[2] = (u32)(uintptr_t)image;
+    }
+}
+void pc_texobj_stamp_ci(void* texObj, const void* image, u16 width, u16 height,
+                        u8 ci_fmt, u8 s_wrap, u8 t_wrap, u8 mipmap, u32 tlut_name)
+{
+    if (texObj) {
+        GXTexObj* to = (GXTexObj*)texObj;
+        to->dummy[0] = ((u32)width << 16) | (u32)height;
+        to->dummy[1] = ((u32)ci_fmt << 16) | ((u32)mipmap << 8) |
+                       ((u32)s_wrap << 4) | (u32)t_wrap;
+        to->dummy[2] = (u32)(uintptr_t)image;
+        to->dummy[3] = tlut_name;
+    }
+}
 void GXInitTexObj(void* texObj, const void* image, u16 width, u16 height,
     u8 fmt, u8 s_clamp, u8 t_clamp, u8 mipmap)
 {
@@ -13316,12 +13543,11 @@ void GXInitTexObj(void* texObj, const void* image, u16 width, u16 height,
      *   dummy[0] = (width << 16) | height
      *   dummy[1] = (fmt << 16) | (dim << 8) | (s_clamp << 4) | t_clamp
      *   dummy[2] = (u32)(uintptr_t)image (lower 32 bits) */
-    if (texObj) {
-        GXTexObj *to = (GXTexObj*)texObj;
-        to->dummy[0] = ((u32)width << 16) | (u32)height;
-        to->dummy[1] = ((u32)fmt << 16) | ((u32)dim << 8) | ((u32)s_clamp << 4) | (u32)t_clamp;
-        to->dummy[2] = (u32)(uintptr_t)image;
-    }
+    /* The object's own fields are written by pc_texobj_stamp, on the
+     * caller's thread (the GX queue's pre-hook): with the bridge on its own
+     * thread this runs later, when a GXTexObj on the caller's stack -- as
+     * HSD_EraseRect's is -- may be gone (ASan: stack-use-after-return). */
+    if (!pc_gxq_active) pc_texobj_stamp(texObj, image, width, height, fmt, s_clamp, t_clamp, mipmap);
     
     { static const void* last_img; g_tx_init++;
       if (image != last_img) { last_img = image; g_tx_distinct++; }
@@ -14804,14 +15030,7 @@ void GXInitTexObjCI(void* texObj, const void* image, u16 width, u16 height,
 {
     GX_TRACE("GXInitTexObjCI(p, p, %u, %u, 0x%X, %u, %u, %u, %u)",
              width, height, ci_fmt, s_wrap, t_wrap, mipmap, tlut_name);
-    if (texObj) {
-        GXTexObj* to = (GXTexObj*)texObj;
-        to->dummy[0] = ((u32)width << 16) | (u32)height;
-        to->dummy[1] = ((u32)ci_fmt << 16) | ((u32)mipmap << 8) |
-                       ((u32)s_wrap << 4) | (u32)t_wrap;
-        to->dummy[2] = (u32)(uintptr_t)image;
-        to->dummy[3] = tlut_name;
-    }
+    if (!pc_gxq_active) pc_texobj_stamp_ci(texObj, image, width, height, ci_fmt, s_wrap, t_wrap, mipmap, tlut_name);
     memset(&g_state.current_tex, 0, sizeof(g_state.current_tex));
     g_state.current_tex.valid = TRUE;
     g_state.current_tex.width = width;
@@ -14932,3 +15151,8 @@ void GXLoadTlut(void* tlutObj, u32 tlut_group)
     }
     PORT_LOG_DEBUG("TLUT loaded: slot=%u fmt=%u count=%u", tlut_group, d->fmt, d->count);
 }
+
+/* The GX command queue's wrappers for this file's entry points: every other
+ * translation unit calls them under these names (pc_gxq.c, tools/gen_gxq.py). */
+#include "pc_gxq.h"
+#include "pc_gxq_gen.inc"

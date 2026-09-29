@@ -77,7 +77,7 @@ SHADOW = {"glUseProgram", "glBindFramebuffer", "glViewport", "glScissor", "glAct
 REMAP = {"glBindFramebuffer": ("framebuffer", "pc_glq_map_fb(framebuffer)")}
 
 # Handled by hand in pc_glq.c (fences, the shadowed queries).
-MANUAL = {"glFenceSync", "glClientWaitSync", "glDeleteSync", "glGetIntegerv"}
+MANUAL = {"glFenceSync", "glClientWaitSync", "glDeleteSync", "glGetIntegerv", "glGenTextures"}
 
 DESKTOP_ONLY = {
     "glClearDepth": ("void", [("GLdouble", "depth")]),

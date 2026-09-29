@@ -314,6 +314,10 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
      * well and the two clocks beat: frames land 8.3 ms apart, then 16.7,
      * which reads as constant micro-stutter however good the frame rate
      * looks. MELEE_SWAP_INTERVAL overrides the choice. */
+    {
+        void window_apply_surface_scale(void);
+        window_apply_surface_scale(); /* Android: internal resolution by the display */
+    }
     g_vsync_on = getenv("MELEE_NOVSYNC") ? 0 : 1;
     g_swap_interval = 0;
     if (g_vsync_on)
@@ -391,8 +395,66 @@ void window_poll_events(void)
     }
 }
 
+/* Android: render into a smaller window surface and let the display hardware
+ * scale it to the panel -- the internal resolution at no GPU cost, instead of
+ * an offscreen target, its clear and a blit (5-6 ms of the render thread a
+ * frame on the MT6765 tablet). The buffers keep the panel's aspect, at the
+ * internal height (720 for 1.5x 640x480). SDL sets the geometry back to the
+ * native size whenever it creates the EGL surface -- at start and on resume
+ * -- so it is applied after each. MELEE_IRES_FBO=1 keeps the offscreen path. */
+static int g_surf_w, g_surf_h;
+int window_surface_scaled(void) { return g_surf_w > 0; }
+#if defined(__ANDROID__)
+#include <SDL_syswm.h> /* the SDL include dir itself on Android */
+#include <android/native_window.h>
+/* The window starts smaller than the panel (the system bars are still up:
+ * 1920x1030 on the tablet) and grows when the app goes fullscreen; a buffer
+ * sized for the first aspect is then stretched. Recompute on every size
+ * change. */
+static int window_resize_watch(void* user, SDL_Event* e)
+{
+    void window_apply_surface_scale(void);
+    (void) user;
+    if (e->type == SDL_WINDOWEVENT && e->window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+        window_apply_surface_scale();
+    }
+    return 0;
+}
+void window_apply_surface_scale(void)
+{
+    extern float pc_ires_want(void);
+    static int watching;
+    SDL_SysWMinfo info;
+    int w = 0, h = 0, th;
+    float k;
+    if (getenv("MELEE_IRES_FBO") != NULL || g_sdl_window == NULL) return;
+    k = pc_ires_want();
+    if (k <= 0.0f) return;
+    if (!watching) {
+        watching = 1;
+        SDL_AddEventWatch(window_resize_watch, NULL);
+    }
+    SDL_GetWindowSize(g_sdl_window, &w, &h);
+    th = (int) (480.0f * k + 0.5f);
+    if (w <= 0 || h <= 0 || th >= h) return;
+    SDL_VERSION(&info.version);
+    if (!SDL_GetWindowWMInfo(g_sdl_window, &info) || info.info.android.window == NULL) return;
+    g_surf_h = th;
+    g_surf_w = ((int) ((float) w * (float) th / (float) h + 0.5f) + 1) & ~1;
+    ANativeWindow_setBuffersGeometry(info.info.android.window, g_surf_w, g_surf_h, 0);
+    fprintf(stderr, "[IRES] window surface %dx%d, scaled to %dx%d by the display\n", g_surf_w, g_surf_h, w, h);
+}
+#else
+void window_apply_surface_scale(void) {}
+#endif
+
 void window_get_size(int* width, int* height)
 {
+    if (g_surf_w > 0) {
+        *width = g_surf_w;
+        *height = g_surf_h;
+        return;
+    }
     SDL_GetWindowSize(g_sdl_window, width, height);
 }
 

@@ -73,10 +73,12 @@ GLsync pcq_glFenceSync(GLenum condition, GLbitfield flags);
 GLenum pcq_glClientWaitSync(GLsync sync, GLbitfield flags, GLuint64 timeout);
 void pcq_glDeleteSync(GLsync sync);
 void pcq_glGetIntegerv(GLenum pname, GLint* data);
+void pcq_glGenTextures(GLsizei n, GLuint* textures);
 #define glFenceSync(...) PCQ_R("glFenceSync", pcq_glFenceSync(__VA_ARGS__))
 #define glClientWaitSync(...) PCQ_R("glClientWaitSync", pcq_glClientWaitSync(__VA_ARGS__))
 #define glDeleteSync(...) PCQ_V("glDeleteSync", pcq_glDeleteSync(__VA_ARGS__))
 #define glGetIntegerv(...) PCQ_V("glGetIntegerv", pcq_glGetIntegerv(__VA_ARGS__))
+#define glGenTextures(...) PCQ_V("glGenTextures", pcq_glGenTextures(__VA_ARGS__))
 
 #include "pc_glq_gen.h"
 

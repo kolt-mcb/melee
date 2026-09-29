@@ -658,8 +658,10 @@ n += "decomp_srcs = " + " ".join(DECOMP_SOURCES) + "\n\n"
 GXPROF = os.environ.get("PC_GXPROF") == "1"
 for s in ALL_SOURCES:
     n += "build " + _obj(s) + ": cc " + s + "\n"
-    if GXPROF and str(s).endswith("gx_gl_bridge.c"):
-        n += "  cflags = $cflags -finstrument-functions -DPC_GXPROF=1\n\n"
+    if str(s).endswith("gx_gl_bridge.c"):
+        # The bridge defines its entry points under their real names; the
+        # rest of the build calls them through the GX queue (pc_prelude.h).
+        n += "  cflags = $cflags -DPC_GXQ_IMPL=1" + (" -finstrument-functions -DPC_GXPROF=1" if GXPROF else "") + "\n\n"
     else:
         n += "  cflags = $cflags\n\n"
 
