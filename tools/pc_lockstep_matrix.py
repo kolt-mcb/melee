@@ -272,9 +272,14 @@ def cmd_run(a):
             if a.redo or key(c) not in res]
     print("== %d cells to run" % len(todo))
     t0 = time.time()
+    grid = rt.load_grid()
+    skipped = 0
     for i, (ck, opp, st, tag) in enumerate(todo, 1):
-        if mx.CHARS[ck] not in rt.load_grid() or mx.CHARS[opp] not in rt.load_grid():
+        if icon_name(ck) not in grid or icon_name(opp) not in grid:
             res[key((ck, opp, st, tag))] = {"verdict": "no-icon"}
+            skipped += 1
+            print("%-10s vs %-10s %-10s no-icon (skipped)"
+                  % (mx.CHARS[ck], mx.CHARS[opp], mx.STAGES[st]))
             continue
         name = make_case(ck, opp, st)
         info = run_cell(name, a.frames, a.timeout, a.cpu)
@@ -285,7 +290,24 @@ def cmd_run(a):
               % (mx.CHARS[ck], mx.CHARS[opp], mx.STAGES[st], info["verdict"],
                  info.get("frame", info.get("frames", "")), i, len(todo),
                  (done / i) * (len(todo) - i) / 60))
+    if skipped == len(todo) and todo:
+        print("== every cell was skipped; nothing was measured")
+        return 1
     return 0
+
+
+def icon_name(ck):
+    """The CSS grid's name for a character kind.
+
+    pc_matrix names kinds `CKind_Mario`; the route grid keys them `MARIO`. When
+    the two drifted apart, `mx.CHARS[ck] not in rt.load_grid()` was true for
+    every character, so every cell of the sweep was recorded "no-icon" and
+    skipped -- silently, because the skip printed nothing. The sweep completed in
+    under a second and looked like it had simply found nothing to do. Anything
+    that skips a cell says so now.
+    """
+    n = mx.CHARS[ck]
+    return n[len("CKind_"):].upper() if n.startswith("CKind_") else n.upper()
 
 
 def key(c):
