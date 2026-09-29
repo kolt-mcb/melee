@@ -5848,6 +5848,21 @@ static void gx_flush_pending_named(const char* who)
     g_gen_uni++;
 }
 #define gx_flush_pending() gx_flush_pending_named(__func__)
+/* A texture load: its state reaches only the texture block of the staging
+ * (the unit bindings and enables) and the matrix group. Bumping the uniform
+ * generation re-staged every TEV, alpha and fog uniform too -- 160 times a
+ * frame in a match, the largest single cause of full staging. */
+u32 g_gen_tex;
+static void gx_flush_pending_tex(void)
+{
+    g_last_bump = "GXLoadTexObj";
+    if (g_state.vert_count > 0) {
+        bridge_upload_and_draw();
+    }
+    pc_batch_flush();
+    g_gen_mtx++;
+    g_gen_tex++;
+}
 static void gx_flush_pending_unused(void)
 {
     g_gen_mtx++;
@@ -6553,6 +6568,7 @@ static int pc_stagecheck_on(void)
     if (on < 0) on = getenv("MELEE_STAGECHECK") != NULL;
     return on;
 }
+static void pc_stage_textures(void);
 static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
 {
     memset(mvp, 0, sizeof(f32) * 16);
@@ -6968,8 +6984,15 @@ static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
             g_state.fog_color.a / 255.0f);
     }
     
-    /* Upload active texture info to fragment shader: one enable per unit,
-     * and the sampler uniforms pinned to their units. */
+    pc_stage_textures();
+    } /* stage_b */
+    return 0;
+}
+/* The texture block: the unit bindings, one enable per unit, and the sampler
+ * uniforms pinned to their units. Part of the full staging, and on its own
+ * after a texture load (g_gen_tex). */
+static void pc_stage_textures(void)
+{
     for (u32 i = 0; i < PC_TEXN; i++) {
         u32 slot = g_active_tex_slots[i];
         GLuint tex_id = g_state.tex_cache_valid[slot] ? g_state.tex_cache[slot] : 0;
@@ -6983,8 +7006,6 @@ static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
     if (g_tex1_loc >= 0) UP1I(g_tex1_loc, 1);
     if (g_tex2_loc >= 0) UP1I(g_tex2_loc, 2);
     if (g_tex3_loc >= 0) UP1I(g_tex3_loc, 3);
-    } /* stage_b */
-    return 0;
 }
 
 /* Drawing nothing, on purpose.
@@ -7336,6 +7357,11 @@ static void bridge_upload_and_draw(void)
     s_staged_uni = g_gen_uni;
     f32 mvp[4][4];
     if (pc_stage_uniforms(stage_a, stage_b, mvp)) return;
+    {
+        static u32 s_staged_tex = (u32) -1;
+        if (s_staged_tex != g_gen_tex && !stage_b) pc_stage_textures();
+        s_staged_tex = g_gen_tex;
+    }
     /* MELEE_STAGECHECK=1: run the full staging again in compare-only mode
      * after a gated pass, so a value the gates left stale is reported by
      * name -- the oracle for holes in the generation bookkeeping. */
@@ -11547,11 +11573,12 @@ void GXSetTevAlphaOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_re
 }
 void GXSetNumChans(u32 n)
 {
-    /* No early-out here: the flush this makes covers a hole in the
-     * generation bookkeeping that is still open -- MELEE_STAGECHECK finds
-     * u_chan_color and u_tevreg stale (state moved, no bump) about twenty
-     * draws a frame, and without this flush the fighters' shadows on the
-     * stage go missing (golden match_move, frame 315). */
+    /* MELEE_NUMCHANS_ALWAYS=1 restores the unconditional flush this used to
+     * make (it covered generation holes elsewhere; see the setters that now
+     * bump for themselves). */
+    static int always = -1;
+    if (always < 0) always = getenv("MELEE_NUMCHANS_ALWAYS") != NULL;
+    if (!always && g_state.num_chans == n) return;
     gx_flush_pending();
     GX_TRACE("GXSetNumChans(%u)", n);
     /* Sets the number of enabled color channels (GX_COLOR0, GX_COLOR1). */
@@ -14103,7 +14130,8 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
             return;
         }
     }
-    gx_flush_pending();
+    /* MELEE_TEX_FULLSTAGE=1: the old behaviour (a full re-stage). */
+    if (ENV_FLAG("MELEE_TEX_FULLSTAGE")) gx_flush_pending(); else gx_flush_pending_tex();
     GX_TRACE("GXLoadTexObj(p, %u)", texEnv);
     if (pc_canary_on()) pc_check_canaries("GXLoadTexObj:enter");
     g_tx_calls++;
