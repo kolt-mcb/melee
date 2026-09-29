@@ -67,11 +67,18 @@ static int prof_phdr_cb(struct dl_phdr_info* info, size_t size, void* data)
  * profiled run every time. Sample the interrupted PC from the signal
  * context instead -- one frame, no unwinding, async-signal-safe -- which
  * gives a flat profile by leaf function, resolved offline. */
+/* MELEE_PROFILE_GAME=1: only samples taken on the thread that armed the
+ * profiler (the game thread) -- with the render thread (pc_glq.c) running, the
+ * process-wide timer otherwise mixes the two. */
+#include <unistd.h>
+#include <sys/syscall.h>
+static long prof_only_tid;
 static void prof_tick(int sig, siginfo_t* si, void* uc)
 {
     void* pc;
     int s;
     (void) sig; (void) si;
+    if (prof_only_tid != 0 && (long) syscall(SYS_gettid) != prof_only_tid) return;
     void* by_caller = NULL;
 #if defined(__aarch64__)
     pc = (void*) ((ucontext_t*) uc)->uc_mcontext.pc;
@@ -218,6 +225,9 @@ void pc_profile_init(void)
     it.it_value = it.it_interval;
 #ifdef __ANDROID__
     dl_iterate_phdr(prof_phdr_cb, (void*) &pc_profile_init);
+#endif
+#ifdef __ANDROID__
+    if (getenv("MELEE_PROFILE_GAME") != NULL) prof_only_tid = (long) syscall(SYS_gettid);
 #endif
     setitimer(ITIMER_PROF, &it, NULL);
     prof_on = 1;
