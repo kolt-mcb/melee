@@ -2390,6 +2390,7 @@ static u32 g_batch_gen_mtx, g_batch_gen_uni;
  * flush turns it into a vertex-buffer index by adding the base it streamed
  * to. */
 static Vertex g_stage[PC_VBO_RING_VERTS];
+u32 pc_diag_stage_copied, pc_diag_stage_inplace; /* vertices, for MELEE_MEMLOG */
 static unsigned g_stage_n;
 static int g_batch_flushing;
 
@@ -2579,6 +2580,7 @@ static GLint pc_batch_stage(const Vertex* src, unsigned count)
     }
     first = (GLint) g_stage_n;
     memcpy(g_stage + g_stage_n, src, sizeof(Vertex) * (size_t) count);
+    pc_diag_stage_copied += count;
     g_stage_n += count;
     return first;
 }
@@ -10121,7 +10123,7 @@ static void dl_decode(const u8* ptr, const u8* end, u32 vsize, u32 pos_cnt, DlEn
  * can still read the state this one leaves. The one thing dropped is the
  * normal transform bridge_add_vertex applies to the previous vertex's
  * normal, when this vertex carries its own normal and overwrites it. */
-u64 pc_diag_replay_ns; u32 pc_diag_replay_verts, pc_diag_replay_skinned;
+u64 pc_diag_replay_ns; u32 pc_diag_replay_verts, pc_diag_replay_skinned, pc_diag_replay_calls;
 static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
 {
     /* The state this loop reads and writes lives in locals and goes back to
@@ -10156,6 +10158,22 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
     pc_diag_replay_verts += n;
     if (skin) pc_diag_replay_skinned += n;
     pc_stat_vadds += n;
+    pc_diag_replay_calls++;
+    /* Ask for the whole primitive's decoded vertices at once. They are read
+     * once a frame from ~1.5 MB of cached lists scattered over the heap --
+     * far past the tablet's 512 KB L2 -- in runs of ~700 bytes, too short for
+     * the Cortex-A53's prefetcher to get going, so each line was a DRAM miss
+     * taken one after another. Issued together, the misses overlap.
+     * MELEE_NO_DL_PREFETCH=1 turns it off. */
+    {
+        static int pf = -1;
+        if (pf < 0) pf = getenv("MELEE_NO_DL_PREFETCH") == NULL;
+        if (pf) {
+            const char* b = (const char*) dv;
+            size_t bytes = (size_t) n * sizeof(DlVert), off;
+            for (off = 0; off < bytes; off += 64) __builtin_prefetch(b + off);
+        }
+    }
 #define DL_BULK_STORE() do { \
         memcpy(g_state.last_pos, lpos, sizeof(lpos)); memcpy(g_state.last_nrm, lnrm, sizeof(lnrm)); \
         memcpy(g_state.last_clr, lclr, sizeof(lclr)); memcpy(g_state.last_tex0, lt0, sizeof(lt0)); \

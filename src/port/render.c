@@ -180,8 +180,12 @@ void render_present(void)
                 }
                 fclose(mf);
             }
-            fprintf(stderr, "[MEMLOG] present %d free %ld MB uploads %u (%u MB) draws %u\n",
-                    s_present_count, fr / 1024, pc_diag_uploads, pc_diag_upload_kb >> 10, pc_diag_draws);
+            {
+                extern u32 pc_diag_stage_copied, pc_diag_stage_inplace, pc_diag_replay_calls, pc_diag_replay_verts;
+                fprintf(stderr, "[MEMLOG] present %d free %ld MB uploads %u (%u MB) draws %u staged in place %u copied %u replay calls %u verts %u\n",
+                        s_present_count, fr / 1024, pc_diag_uploads, pc_diag_upload_kb >> 10, pc_diag_draws,
+                        pc_diag_stage_inplace, pc_diag_stage_copied, pc_diag_replay_calls, pc_diag_replay_verts);
+            }
         }
     }
     /* MELEE_PROFILE's report runs at exit, which an Android force-stop
