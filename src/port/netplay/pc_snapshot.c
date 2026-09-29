@@ -40,6 +40,18 @@
  */
 #include "port/netplay/pc_snapshot.h"
 
+/* pc_gxq_drain(): wait for the bridge thread to finish the frame it is drawing.
+ *
+ * With MELEE_GX_THREAD on (the default on Android, and what the tablet needs to
+ * hold 60 fps) the bridge runs up to a frame behind the game thread, and
+ * GXCopyTex writes EFB pixels *into game memory* from that thread -- shadows and
+ * lbrefract do this every frame. Those writes land in the regions a snapshot
+ * copies, so an undrained bridge can write into a capture midway through it, or
+ * into memory just restored under it. Either way two machines running an
+ * identical simulation disagree on a region checksum, which reads as a desync
+ * and is not one. Draining is a no-op when the bridge thread is off. */
+#include "port/pc_gxq.h"
+
 #if BUILD_NETPLAY
 
 #include <melee/gm/gm_1A3F.h>
@@ -1040,7 +1052,10 @@ const char* pc_snapshot_region_name(int i)
 SNAP_NO_ASAN static int snapshot_take(Snapshot* s, s32 frame)
 {
     int i;
-    double t0 = snap_now_ms();
+    double t0;
+    /* Before reading a byte of it: see the note on pc_gxq.h above. */
+    pc_gxq_drain();
+    t0 = snap_now_ms();
     /* The set of archive ranges the port writes to only grows, and it grows the
      * first time something writes -- the magnifier's EFB copy does, several
      * hundred frames into a match. A snapshot taken before that range was known
@@ -1199,10 +1214,15 @@ SNAP_NO_ASAN static int snapshot_take(Snapshot* s, s32 frame)
 SNAP_NO_ASAN static int snapshot_restore(const Snapshot* s)
 {
     int i;
-    double t0 = snap_now_ms();
+    double t0;
     if (!s->valid) {
         return 0;
     }
+    /* Before writing a byte of it, for the same reason as the take: a bridge
+     * still drawing the previous frame would otherwise put its EFB copy back on
+     * top of the state just restored. */
+    pc_gxq_drain();
+    t0 = snap_now_ms();
     for (i = 0; i < SNAP_REGIONS; i++) {
         SnapRegion cur;
         const SnapRegion* src = &s->r[i];
