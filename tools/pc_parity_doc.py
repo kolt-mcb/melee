@@ -46,6 +46,7 @@ def main():
 
     bpath = os.path.join(ROOT, a.baseline)
     data = json.load(open(bpath))
+    budget_hint = 600
     mtime = __import__("datetime").date.fromtimestamp(os.path.getmtime(bpath))
     def cname(i):
         n = mx.CHARS.get(i, "?%d" % i) if isinstance(mx.CHARS, dict) else (
@@ -70,8 +71,21 @@ def main():
     n_kinds = len(mx.CHARS) if not isinstance(mx.CHARS, dict) else max(mx.CHARS) + 1
     unrunnable = {i for i in range(n_kinds) if lm.icon_name(i) not in grid}
 
+    # Two file shapes. The baseline stores a plain frame count per cell; the
+    # live results file stores {verdict, frame, field, log}, which also says
+    # WHICH column parted and when -- the thing that groups cells into bugs.
+    sig = {}
     cells = {}
     for key, frames in data.items():
+        if isinstance(frames, dict):
+            v = frames
+            if v.get("verdict") not in ("identical", "diverged"):
+                continue
+            if v["verdict"] == "diverged":
+                sig[key] = (v.get("field", "?"), v.get("frame", "?"))
+            frames = budget_hint if v["verdict"] == "identical" else v.get(
+                "frame", 0)
+            data[key] = frames
         parts = key.split(",")
         if len(parts) != 3:
             continue
@@ -194,6 +208,28 @@ def main():
           % (sname(s), len(v), max(v), med,
              sum(1 for n in v if n >= budget)))
     w("")
+
+    if sig:
+        w("## Divergence signatures")
+        w("")
+        w("Grouped by stage and by the column that parted first. A stage where")
+        w("every cell parts on the same field at the same frame is **one bug**,")
+        w("not two dozen -- which is the difference between a week of work and an")
+        w("afternoon.")
+        w("")
+        w("| stage | cells | first field | frame |")
+        w("| --- | ---: | --- | ---: |")
+        bystage = collections.defaultdict(collections.Counter)
+        for key, (field, frame) in sig.items():
+            st = int(key.split(",")[2])
+            bystage[st][(field, frame)] += 1
+        rows = []
+        for st, c in bystage.items():
+            (field, frame), n = c.most_common(1)[0]
+            rows.append((sum(c.values()), sname(st), field, frame))
+        for n, st, field, frame in sorted(rows, reverse=True):
+            w("| %s | %d | `%s` | %s |" % (st, n, field, frame))
+        w("")
 
     w("## The grid")
     w("")
