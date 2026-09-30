@@ -47,6 +47,7 @@ import argparse
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -159,30 +160,80 @@ def make_case(c0, c1, stage_kind):
 IDENTICAL_RE = re.compile(r"IDENTICAL on every compared frame")
 DIVERGE_RE = re.compile(r"match frame (\d+)\s+(\S+)\s+port")
 NOMATCH_RE = re.compile(r"NO FRAMES COMPARED")
+# A side that exited is not a side that disagreed. Its last values are whatever
+# was in memory as it fell over, so this outranks the divergence it looks like.
+DIED_RE = re.compile(r"SIDE DIED: (\S+) exited rc=(-?\d+)")
 EARLY_RE = re.compile(r"STOPPED EARLY after (\d+) of (\d+) frames")
 
 
 LOGS = os.path.join(REPO, "tests", "pc", "lockstep_logs")
 
+# What fail-fast stops for. A divergence is a finding; a timeout or a failed
+# route is the harness not having measured anything, and stopping the sweep for
+# one would be stopping for a flake -- stage 13 reported "no frames" once and
+# rendered fine on a re-run.
+FAIL_FAST_VERDICTS = ("diverged", "port-died", "ref-died")
+
+
+# Every process this runner starts carries the socket path in its environment,
+# because pc_lockstep.py hands its whole environment to both games. That makes
+# the socket path the run's identity: it is how reap() finds this run's leftover
+# games without touching a concurrent run's live ones. Set it here rather than
+# reading it, so it is present even in the default single-run case.
+SOCK = os.environ.setdefault("MELEE_LOCKSTEP_SOCK", "/tmp/pc_lockstep.sock")
+SOCK_TAG = ("MELEE_LOCKSTEP_SOCK=" + SOCK).encode()
+
+
+def _our_games():
+    """PIDs of the games belonging to THIS run, by environment, not by name.
+
+    pkill by process name is what stopped the sweep from being shardable: the
+    guard below runs before every cell, so with several shards going, each
+    shard's first cell killed every other shard's game mid-run. The verdicts
+    that came back were not measurements of anything -- and it looked like
+    parallelism was unsound rather than that the harness was shooting its
+    siblings.
+    """
+    pids = []
+    for ent in os.listdir("/proc"):
+        if not ent.isdigit():
+            continue
+        try:
+            with open("/proc/%s/comm" % ent, "rb") as f:
+                comm = f.read().strip()
+            if comm not in (b"melee-pc", b"dolphin-emu-nog",
+                            b"dolphin-emu-nogui"):
+                continue
+            with open("/proc/%s/environ" % ent, "rb") as f:
+                if SOCK_TAG not in f.read().split(b"\0"):
+                    continue
+        except OSError:
+            continue  # exited while we looked, or not ours to read
+        pids.append(int(ent))
+    return pids
+
 
 def reap():
-    """Kill anything the last cell left behind.
+    """Kill anything the last cell left behind -- ours only.
 
     A run leaves two heavyweight processes and the sweep is 750 runs long, so
     one that does not clean up after itself is not a leak, it is an
     out-of-memory kill several hours in with nothing to show for it. The
     matrix suite has needed the same guard since the beginning.
     """
-    for pat in (["pkill", "-x", "melee-pc"],
-                ["pkill", "-f", "dolphin-emu-nogui"]):
-        subprocess.run(pat, capture_output=True)
-    for _ in range(40):
-        if (subprocess.run(["pgrep", "-x", "melee-pc"],
-                           capture_output=True).returncode != 0 and
-                subprocess.run(["pgrep", "-f", "dolphin-emu-nogui"],
-                               capture_output=True).returncode != 0):
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        pids = _our_games()
+        if not pids:
             return
-        time.sleep(0.5)
+        for pid in pids:
+            try:
+                os.kill(pid, sig)
+            except OSError:
+                pass
+        for _ in range(20 if sig == signal.SIGTERM else 40):
+            if not _our_games():
+                return
+            time.sleep(0.5)
 
 
 def run_cell(name, frames, timeout, cpu):
@@ -208,10 +259,23 @@ def run_cell(name, frames, timeout, cpu):
             # --stop-on-divergence waits on a keypress before releasing the
             # two games, which is the point of it interactively and a hang
             # here.
-            p = subprocess.run(argv, cwd=REPO, stdout=f,
-                               stderr=subprocess.STDOUT,
-                               stdin=subprocess.DEVNULL, timeout=timeout)
-            rc = p.returncode
+            # Its own session, so a timeout can kill the whole group. Killing
+            # just pc_lockstep.py leaves the two games it started orphaned and
+            # running: they get reparented, outlive the cell, and the next
+            # cell meets them on the barrier.
+            p = subprocess.Popen(argv, cwd=REPO, stdout=f,
+                                 stderr=subprocess.STDOUT,
+                                 stdin=subprocess.DEVNULL,
+                                 start_new_session=True)
+            try:
+                rc = p.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(os.getpgid(p.pid), signal.SIGKILL)
+                except OSError:
+                    pass
+                p.wait(timeout=30)
+                rc = -1
         except subprocess.TimeoutExpired:
             rc = -1
     with open(path, errors="replace") as f:
@@ -219,7 +283,16 @@ def run_cell(name, frames, timeout, cpu):
     info = {"rc": rc}
     m = DIVERGE_RE.search(out)
     early = EARLY_RE.search(out)
-    if m:
+    died = DIED_RE.search(out)
+    if died:
+        # Keep whatever it also reported -- the frame it got to is still worth
+        # having -- but do not call a crash a divergence.
+        info["verdict"] = died.group(1) + "-died"
+        info["exit"] = int(died.group(2))
+        if m:
+            info["frame"] = int(m.group(1))
+            info["field"] = m.group(2)
+    elif m:
         # Report the divergence even when the run also stopped early: the
         # frame it parted on is the finding, and the reason it stopped.
         info["verdict"] = "diverged"
@@ -289,6 +362,15 @@ def cmd_run(a):
     res = load()
     todo = [c for c in cells(chars, stages, a.pair)
             if a.redo or key(c) not in res]
+    if a.shard:
+        # Round-robin over the flattened cell list rather than splitting the
+        # roster, so the shards stay the same length whatever N is and no shard
+        # ends up holding only the slow stages. Deal from the same ordered list
+        # every shard computes independently: they need no coordination to
+        # cover the grid exactly once between them.
+        i, n = (int(x) for x in a.shard.split("/"))
+        todo = [c for j, c in enumerate(todo) if j % n == i]
+        print("== shard %d/%d" % (i, n))
     print("== %d cells to run" % len(todo))
     t0 = time.time()
     grid = rt.load_grid()
@@ -309,6 +391,19 @@ def cmd_run(a):
               % (mx.CHARS[ck], mx.CHARS[opp], mx.STAGES[st], info["verdict"],
                  info.get("frame", info.get("frames", "")), i, len(todo),
                  (done / i) * (len(todo) - i) / 60))
+        if a.fail_fast and info["verdict"] in FAIL_FAST_VERDICTS:
+            # Two different jobs: measuring the grid wants every cell, and
+            # asking "did this change break parity" wants the first answer and
+            # nothing else. Without this the second job costs the first job's
+            # four hours, so it does not get run.
+            print("== fail-fast: %s vs %s on %s %s%s"
+                  % (mx.CHARS[ck], mx.CHARS[opp], mx.STAGES[st],
+                     info["verdict"],
+                     " at match frame %s" % info["frame"]
+                     if "frame" in info else ""))
+            print("== stopping with %d of %d cells run" % (i, len(todo)))
+            reap()
+            return 2
     if skipped == len(todo) and todo:
         print("== every cell was skipped; nothing was measured")
         return 1
@@ -429,7 +524,8 @@ def cmd_grid(a):
                                        "2" if f < 50 else
                                        "3" if f < 200 else "4")
         return {"route-failed": "R", "timeout": "T", "stopped-early": "S",
-                "no-icon": "-", "no-verdict": "?"}.get(d, "?")
+                "no-icon": "-", "no-verdict": "?",
+                "port-died": "X", "ref-died": "E"}.get(d, "?")
     # One letter per column, assigned by position rather than taken from the
     # name: half a dozen stage names share a first letter (Castle/Corneria,
     # Kongo/Kraid, Inishie1/Inishie2) and a header nobody can read backwards
@@ -444,6 +540,7 @@ def cmd_grid(a):
     print("\n  # identical   . parts on frame 1   1/2/3/4 parts by frame "
           "10/50/200/600")
     print("  R route failed   T timeout   S stopped early   - no icon")
+    print("  X the port died   E the emulator died")
     print("  columns: " + ", ".join("%s=%s" % (key[s], mx.STAGES[s])
                                     for s in stages))
     return 0
@@ -536,6 +633,11 @@ def main():
     r.add_argument("--pair", default="mirror",
                    choices=("mirror", "rotate", "both"))
     r.add_argument("--redo", action="store_true")
+    r.add_argument("--shard", help="I/N: run only cells I, I+N, I+2N ... of "
+                                   "this run's cell list")
+    r.add_argument("--fail-fast", action="store_true",
+                   help="stop at the first cell that does not agree "
+                        "(exit 2), instead of measuring the whole grid")
     sub.add_parser("report")
     sub.add_parser("grid")
     sub.add_parser("baseline")

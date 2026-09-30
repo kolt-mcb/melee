@@ -68,9 +68,10 @@ PIPE = os.environ.get(
     "MELEE_LOCKSTEP_PIPE",
     os.path.expanduser("~/.local/share/dolphin-emu/Pipes/brash"))
 ROUTES = os.path.join(REPO, "tests", "pc", "routes")
-DUMPDIR = os.path.expanduser("~/.local/share/dolphin-emu/Dump/Frames")
-SOCK = os.environ.get("MELEE_LOCKSTEP_SOCK", "/tmp/pc_lockstep.sock")
 DOLPHIN_USER = os.environ.get("MELEE_DOLPHIN_USER")
+DUMPDIR = (os.path.join(DOLPHIN_USER, "Dump", "Frames") if DOLPHIN_USER
+           else os.path.expanduser("~/.local/share/dolphin-emu/Dump/Frames"))
+SOCK = os.environ.setdefault("MELEE_LOCKSTEP_SOCK", "/tmp/pc_lockstep.sock")
 
 # The port frame on which its match begins, so a match-frame input script can
 # be turned into the port-frame script MELEE_PAD_SCRIPT wants. Checked against
@@ -512,6 +513,50 @@ def accept_sides(server, want, timeout=180):
     return sides
 
 
+def our_games():
+    """PIDs of the games belonging to THIS run, found by environment.
+
+    Not by process name. Every process this script starts inherits its
+    environment, so the barrier socket path is the run's identity; a sweep
+    running several cells at once needs that, because `pkill -x melee-pc`
+    here killed the other runs' games mid-frame. They were not different
+    measurements, they were no measurement at all.
+    """
+    tag = ("MELEE_LOCKSTEP_SOCK=" + SOCK).encode()
+    pids = []
+    for ent in os.listdir("/proc"):
+        if not ent.isdigit():
+            continue
+        try:
+            with open("/proc/%s/comm" % ent, "rb") as f:
+                if f.read().strip() not in (b"melee-pc", b"dolphin-emu-nog",
+                                            b"dolphin-emu-nogui"):
+                    continue
+            with open("/proc/%s/environ" % ent, "rb") as f:
+                if tag not in f.read().split(b"\0"):
+                    continue
+        except OSError:
+            continue
+        pids.append(int(ent))
+    return pids
+
+
+def kill_our_games():
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        pids = our_games()
+        if not pids:
+            return
+        for pid in pids:
+            try:
+                os.kill(pid, sig)
+            except OSError:
+                pass
+        for _ in range(10 if sig == signal.SIGTERM else 20):
+            if not our_games():
+                return
+            time.sleep(0.25)
+
+
 def cleanup(procs):
     for proc in procs:
         if proc is None:
@@ -520,8 +565,7 @@ def cleanup(procs):
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
-    subprocess.run(["pkill", "-x", "dolphin-emu-nog"], capture_output=True)
-    subprocess.run(["pkill", "-x", "melee-pc"], capture_output=True)
+    kill_our_games()
     if os.path.exists(SOCK):
         os.unlink(SOCK)
 
@@ -529,8 +573,7 @@ def cleanup(procs):
 def serve():
     if os.path.exists(SOCK):
         os.unlink(SOCK)
-    subprocess.run(["pkill", "-x", "melee-pc"], capture_output=True)
-    subprocess.run(["pkill", "-x", "dolphin-emu-nog"], capture_output=True)
+    kill_our_games()
     time.sleep(1.0)
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(SOCK)
@@ -677,6 +720,8 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
         os.environ["MELEE_SEED_EACH_LOAD"] = "1"
     ref_proc, port_proc, steps = launch(case, headless, dumping=False,
                                         with_port=True, size=size, route=route)
+    SIDE_PROCS.clear()
+    SIDE_PROCS.update({"port": port_proc, "ref": ref_proc})
     sides = accept_sides(server, 2)
     port, ref = sides["port"], sides["ref"]
 
@@ -1044,6 +1089,25 @@ def compare_row(a, b, columns, tol, ignore, first, pending_skew=None,
     return new
 
 
+# The two children, so finish() can ask whether either of them is still
+# alive. A crashed port and a 1-ulp float difference both end the run with
+# values that do not match, and recording them the same way is how 23 cells of
+# "the port dies on this stage" ended up filed as "diverged on match frame 1".
+SIDE_PROCS = {}
+
+
+def dead_sides():
+    """(name, rc) for each side that has already exited."""
+    out = []
+    for name, proc in SIDE_PROCS.items():
+        if proc is None:
+            continue
+        rc = proc.poll()
+        if rc is not None:
+            out.append((name, rc))
+    return out
+
+
 def finish(first, compared, secs, wanted=0):
     print("\n   %d frames compared in %.0fs (%.1f fps)"
           % (compared, secs, compared / secs if secs else 0))
@@ -1053,7 +1117,17 @@ def finish(first, compared, secs, wanted=0):
     if compared == 0:
         print("   NO FRAMES COMPARED -- a side stopped before the barrier "
               "engaged; this is a failure, not a match")
+        for name, rc in dead_sides():
+            print("   SIDE DIED: %s exited rc=%d after %d compared frames"
+                  % (name, rc, compared))
         return 1
+    # Before reading anything into the values: if one of them is no longer
+    # running, its last numbers are not a measurement of the simulation, they
+    # are what was in memory as it fell over. Say so, and say it first.
+    if wanted and compared < wanted:
+        for name, rc in dead_sides():
+            print("   SIDE DIED: %s exited rc=%d after %d compared frames"
+                  % (name, rc, compared))
     if wanted and compared < wanted:
         print("   STOPPED EARLY after %d of %d frames -- treating as a "
               "failure" % (compared, wanted))
