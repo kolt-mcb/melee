@@ -2351,6 +2351,34 @@ bool Ground_801C2D24(enum_t arg0, Vec3* arg1)
     }
     if (stage_info.x280[arg0] != NULL) {
         lb_8000B1CC(stage_info.x280[arg0], NULL, arg1);
+#if BUILD_TARGET_PC
+        /* MELEE_STAGE_DIAG: the world position this hands back, beside the sum
+         * of the translations up the parent chain.
+         *
+         * They should agree. When they do not, the joint's world matrix is
+         * stale -- computed before the stage's root transform was final -- and
+         * the fighter is placed by a transform the stage has since moved. On a
+         * stage that sails, like Rainbow Cruise, that is the difference between
+         * the deck and open air. The sum is what the file says; the world
+         * matrix is what the engine currently believes. */
+        if (getenv("MELEE_STAGE_DIAG") != NULL) {
+            HSD_JObj* j = stage_info.x280[arg0];
+            Vec3 sum = { 0.0f, 0.0f, 0.0f };
+            HSD_JObj* w;
+            int depth = 0;
+            for (w = j; w != NULL && depth < 32; w = w->parent, depth++) {
+                sum.x += w->translate.x;
+                sum.y += w->translate.y;
+                sum.z += w->translate.z;
+            }
+            fprintf(stderr,
+                    "[X280] get %d: world (%.4f, %.4f) parents (%.4f, %.4f) "
+                    "depth %d%s\n",
+                    (int) arg0, (double) arg1->x, (double) arg1->y,
+                    (double) sum.x, (double) sum.y, depth,
+                    HSD_JObjMtxIsDirty(j) ? " DIRTY" : "");
+        }
+#endif
         return true;
     }
     if ((unsigned) arg0 - 1 <= 2) {
