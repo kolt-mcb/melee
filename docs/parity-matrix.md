@@ -37,8 +37,8 @@ reported -- no cell could have cleared them.
 
 | bar | cells | share |
 | --- | ---: | ---: |
-| clean for the whole 600-frame window | 298 of 481 | 62% |
-| identical through 60 frames | 392 of 481 | 81% |
+| clean for the whole 600-frame window | 435 of 694 | 63% |
+| identical through 60 frames | 543 of 694 | 78% |
 
 The plan's definition of done is every cell clean at 7200 frames, which
 needs the sweep's budget raised before it can even be asked.
@@ -47,44 +47,49 @@ needs the sweep's budget raised before it can even be asked.
 
 | character | cells | best | median | clean |
 | --- | ---: | ---: | ---: | ---: |
-| Fox | 21 | 18 | 9 | 0 |
-| PopoNana | 20 | 46 | 14 | 0 |
-| Kirby | 20 | 600 | 141 | 1 |
-| Yoshi | 20 | 600 | 332 | 3 |
-| Donkey | 21 | 600 | 600 | 14 |
-| Mewtwo | 20 | 600 | 600 | 14 |
-| Pichu | 20 | 600 | 600 | 14 |
-| Ganon | 19 | 600 | 600 | 14 |
-| Koopa | 20 | 600 | 600 | 14 |
-| Luigi | 20 | 600 | 600 | 14 |
-| Mars | 20 | 600 | 600 | 14 |
-| Captain | 20 | 600 | 600 | 15 |
-| Ness | 20 | 600 | 600 | 15 |
-| Peach | 20 | 600 | 600 | 15 |
-| Pikachu | 20 | 600 | 600 | 15 |
-| Samus | 20 | 600 | 600 | 15 |
-| Zelda | 20 | 600 | 600 | 15 |
-| Falco | 20 | 600 | 600 | 15 |
-| CLink | 20 | 600 | 600 | 15 |
-| DrMario | 20 | 600 | 600 | 15 |
-| GameWatch | 20 | 600 | 600 | 15 |
-| Link | 20 | 600 | 600 | 15 |
-| Mario | 20 | 600 | 600 | 15 |
-| Purin | 20 | 600 | 600 | 16 |
+| Fox | 29 | 18 | 9 | 0 |
+| PopoNana | 29 | 46 | 6 | 0 |
+| Kirby | 29 | 600 | 126 | 2 |
+| Yoshi | 29 | 600 | 384 | 6 |
+| Luigi | 29 | 600 | 600 | 18 |
+| Pichu | 29 | 600 | 600 | 20 |
+| Link | 29 | 600 | 600 | 20 |
+| Donkey | 29 | 600 | 600 | 21 |
+| Mewtwo | 29 | 600 | 600 | 21 |
+| CLink | 29 | 600 | 600 | 21 |
+| Ganon | 28 | 600 | 600 | 21 |
+| Koopa | 29 | 600 | 600 | 21 |
+| Mars | 29 | 600 | 600 | 21 |
+| Captain | 28 | 600 | 600 | 22 |
+| Ness | 29 | 600 | 600 | 22 |
+| Peach | 29 | 600 | 600 | 22 |
+| Pikachu | 29 | 600 | 600 | 22 |
+| Samus | 29 | 600 | 600 | 22 |
+| Zelda | 29 | 600 | 600 | 22 |
+| Falco | 29 | 600 | 600 | 22 |
+| DrMario | 29 | 600 | 600 | 22 |
+| GameWatch | 29 | 600 | 600 | 22 |
+| Mario | 29 | 600 | 600 | 22 |
+| Purin | 29 | 600 | 600 | 23 |
 
 ## By stage
 
 | stage | cells | best | median | clean |
 | --- | ---: | ---: | ---: | ---: |
 | RCruise | 24 | 1 | 1 | 0 |
+| BigBlue | 24 | 1 | 1 | 0 |
 | Kongo | 24 | 1 | 1 | 0 |
-| Pura | 2 | 1 | 1 | 0 |
+| Pura | 23 | 1 | 1 | 0 |
 | Greens | 24 | 61 | 61 | 0 |
 | Venom | 23 | 596 | 596 | 0 |
 | Story | 24 | 600 | 561 | 10 |
 | Castle | 24 | 600 | 600 | 12 |
 | MuteCity | 24 | 600 | 600 | 18 |
 | Yoster | 24 | 600 | 600 | 19 |
+| Icemt | 24 | 600 | 600 | 19 |
+| OldPupupu | 24 | 600 | 600 | 19 |
+| OldYoshi | 24 | 600 | 600 | 19 |
+| Last | 24 | 600 | 600 | 19 |
 | Zebes | 24 | 600 | 600 | 19 |
 | Onett | 24 | 600 | 600 | 19 |
 | Garden | 24 | 600 | 600 | 20 |
@@ -95,8 +100,11 @@ needs the sweep's budget raised before it can even be asked.
 | Izumi | 24 | 600 | 600 | 20 |
 | Inishie2 | 24 | 600 | 600 | 20 |
 | PStadium | 24 | 600 | 600 | 20 |
+| OldKongo | 24 | 600 | 600 | 20 |
+| Battle | 24 | 600 | 600 | 20 |
 | Corneria | 24 | 600 | 600 | 20 |
 | GreatBay | 24 | 600 | 600 | 21 |
+| Flatzone | 24 | 600 | 600 | 21 |
 
 ## Divergence signatures
 
@@ -110,15 +118,22 @@ afternoon.
 | RCruise | 24 | `p0.motion` | 1 |
 | Kongo | 24 | `p0.y` | 1 |
 | Greens | 24 | `rng_draws` | 61 |
+| BigBlue | 24 | `p0.motion` | 1 |
 | Venom | 23 | `rng_draws` | 596 |
+| Pura | 23 | `p0.motion` | 1 |
 | Story | 14 | `p1.aihash` | 65 |
 | Castle | 12 | `rng_draws` | 584 |
 | MuteCity | 6 | `p0.aihash` | 550 |
 | Zebes | 5 | `p0.aihash` | 3 |
 | Yoster | 5 | `p0.aihash` | 3 |
 | Onett | 5 | `rng_draws` | 14 |
+| OldYoshi | 5 | `p1.aihash` | 3 |
+| OldPupupu | 5 | `p0.aihash` | 3 |
+| Last | 5 | `p0.aihash` | 3 |
+| Icemt | 5 | `rng_draws` | 14 |
 | Shrine | 4 | `rng_draws` | 46 |
 | PStadium | 4 | `rng_draws` | 32 |
+| OldKongo | 4 | `p0.motion` | 3 |
 | Kraid | 4 | `rng_draws` | 13 |
 | Izumi | 4 | `rng_draws` | 39 |
 | Inishie2 | 4 | `rng_draws` | 18 |
@@ -126,8 +141,9 @@ afternoon.
 | Garden | 4 | `rng_draws` | 1 |
 | Fourside | 4 | `rng_draws` | 34 |
 | Corneria | 4 | `p1.aihash` | 6 |
+| Battle | 4 | `p0.aihash` | 3 |
 | GreatBay | 3 | `p0.aihash` | 3 |
-| Pura | 2 | `p0.motion` | 1 |
+| Flatzone | 3 | `rng_draws` | 13 |
 
 ## The grid
 
@@ -135,31 +151,31 @@ Rows are characters, columns are stages, in the same order as the
 per-stage table above.
 
 ```
-            s2   s3   s4   s5   s6   s7   s8   s9   s10  s11  s12  s13  s14  s15  s16  s17  s18  s19  s20  s22  s23  
-Captain       ok   ok   ok    1   ok   ok   65   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-Donkey        ok   ok  584    1   ok   ok  326   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    1 
-Fox           10    9   18    1   10   17    9   10    9    1    9   10    8   10   10    9   17   16    9    8    1 
-GameWatch     ok   ok  365    1   ok   ok   ok   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    . 
-Kirby        104  190  215    1   76  300   ok  282   78    1  115  141  179  405   42   40  140  248   97  283    . 
-Koopa         ok   ok  584    1  316   ok   ok   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-Link          ok   ok  584    1   ok   ok   ok   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-Luigi         ok   ok   ok    1   ok   ok  232   ok   ok    1   ok   ok   ok   ok  231   61   ok   ok   ok  476    . 
-Mario         ok   ok   ok    1   ok   ok  407   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-Mars          ok   ok  584    1   ok   ok  472   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-Mewtwo        ok   ok  584    1   ok   ok   ok   ok  550    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-Ness          ok   ok  584    1   ok   ok   ok   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-Peach         ok   ok   ok    1   ok   ok  531   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    . 
-Pikachu       ok   ok   ok    1   ok   ok  298   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-PopoNana      39   32   14    1    3    6   13   14   43    1    1    3   46   13    3   26   34    3   18   14    . 
-Purin         ok   ok   ok    1   ok   ok   ok   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-Samus         ok   ok   ok    1   ok   ok   ok   ok   45    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-Yoshi         74  332  211    1   ok   68  526  406  551    1   ok   ok  388  308  177   61  585  316  238  407    . 
-Zelda         ok   ok   ok    1   ok   ok   ok  251   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    . 
-Falco         ok   ok   ok    1   ok   ok  550   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    . 
-CLink         ok   ok   ok    1   ok   ok  587   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-DrMario       ok   ok   ok    1   ok   ok  561   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    . 
-Pichu         ok   ok   ok    1  532   ok   ok   ok   ok    1  369   ok   ok   ok   ok   61   ok   ok   ok  596    . 
-Ganon         ok   ok  584    1   ok   ok   77   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok    .    . 
+            s2   s3   s4   s5   s6   s7   s8   s9   s10  s11  s12  s13  s14  s15  s16  s17  s18  s19  s20  s22  s23  s24  s25  s27  s28  s29  s30  s31  s32  
+Captain       ok   ok   ok    1   ok   ok   65   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    .    1   ok   ok   ok   ok   ok   ok   ok 
+Donkey        ok   ok  584    1   ok   ok  326   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    1    1   ok   ok   ok   ok   ok   ok   ok 
+Fox           10    9   18    1   10   17    9   10    9    1    9   10    8   10   10    9   17   16    9    8    1    1    6    9    6   10    9    5   10 
+GameWatch     ok   ok  365    1   ok   ok   ok   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    1    1   ok   ok   ok   ok   ok   ok   ok 
+Kirby        104  190  215    1   76  300   ok  282   78    1  115  141  179  405   42   40  140  248   97  283    1    1   45   ok   36  126   25  156  272 
+Koopa         ok   ok  584    1  316   ok   ok   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    1    1   ok   ok   ok   ok   ok   ok   ok 
+Link          ok   ok  584    1   ok   ok   ok   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    1    1   ok   ok   ok  125   ok   ok   76 
+Luigi         ok   ok   ok    1   ok   ok  232   ok   ok    1   ok   ok   ok   ok  231   61   ok   ok   ok  476    1    1   77   ok  413   ok  344   ok   ok 
+Mario         ok   ok   ok    1   ok   ok  407   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    1    1   ok   ok   ok   ok   ok   ok   ok 
+Mars          ok   ok  584    1   ok   ok  472   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    1    1   ok   ok   ok   ok   ok   ok   ok 
+Mewtwo        ok   ok  584    1   ok   ok   ok   ok  550    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    1    1   ok   ok   ok   ok   ok   ok   ok 
+Ness          ok   ok  584    1   ok   ok   ok   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    1    1   ok   ok   ok   ok   ok   ok   ok 
+Peach         ok   ok   ok    1   ok   ok  531   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    1    1   ok   ok   ok   ok   ok   ok   ok 
+Pikachu       ok   ok   ok    1   ok   ok  298   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    1    1   ok   ok   ok   ok   ok   ok   ok 
+PopoNana      39   32   14    1    3    6   13   14   43    1    1    3   46   13    3   26   34    3   18   14    1    1   14   13    3    3    3    3    3 
+Purin         ok   ok   ok    1   ok   ok   ok   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    1    1   ok   ok   ok   ok   ok   ok   ok 
+Samus         ok   ok   ok    1   ok   ok   ok   ok   45    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    1    1   ok   ok   ok   ok   ok   ok   ok 
+Yoshi         74  332  211    1   ok   68  526  406  551    1   ok   ok  388  308  177   61  585  316  238  407    1    1   ok  525  384   ok   ok  424  165 
+Zelda         ok   ok   ok    1   ok   ok   ok  251   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    1    1   ok   ok   ok   ok   ok   ok   ok 
+Falco         ok   ok   ok    1   ok   ok  550   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    1    1   ok   ok   ok   ok   ok   ok   ok 
+CLink         ok   ok   ok    1   ok   ok  587   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  596    1    1   ok   ok   ok  107   ok   ok   ok 
+DrMario       ok   ok   ok    1   ok   ok  561   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok  476    1    1   ok   ok   ok   ok   ok   ok   ok 
+Pichu         ok   ok   ok    1  532   ok   ok   ok   ok    1  369   ok   ok   ok   ok   61   ok   ok   ok  596    1    1  271   ok   ok   ok   ok   ok   ok 
+Ganon         ok   ok  584    1   ok   ok   77   ok   ok    1   ok   ok   ok   ok   ok   61   ok   ok   ok    .    1    1   ok   ok   ok   ok   ok   ok   ok 
 
 stage numbers:
   s2   Izumi
@@ -183,5 +199,13 @@ stage numbers:
   s20  Inishie2
   s22  Venom
   s23  Pura
+  s24  BigBlue
+  s25  Icemt
+  s27  Flatzone
+  s28  OldPupupu
+  s29  OldYoshi
+  s30  OldKongo
+  s31  Battle
+  s32  Last
 ```
 
