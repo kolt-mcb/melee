@@ -60,10 +60,17 @@ REPO = os.path.dirname(HERE)
 DOLPHIN = os.environ.get("MELEE_DOLPHIN_BIN",
                          "/home/grunt/Dolphin-emu/build/Binaries/dolphin-emu-nogui")
 ISO = "/home/grunt/brashmos/Super Smash Bros. Melee (USA) (En,Ja) (v1.02).iso"
-PIPE = os.path.expanduser("~/.local/share/dolphin-emu/Pipes/brash")
+# Per-instance, so the sweep can shard. Two lockstep runs cannot share a
+# Dolphin input pipe, a barrier socket or a Dolphin user directory: they would
+# read each other's pad tokens, meet on the same barrier, and write the same
+# config and save files. tools/pc_lockstep_shard.sh sets all three.
+PIPE = os.environ.get(
+    "MELEE_LOCKSTEP_PIPE",
+    os.path.expanduser("~/.local/share/dolphin-emu/Pipes/brash"))
 ROUTES = os.path.join(REPO, "tests", "pc", "routes")
 DUMPDIR = os.path.expanduser("~/.local/share/dolphin-emu/Dump/Frames")
-SOCK = "/tmp/pc_lockstep.sock"
+SOCK = os.environ.get("MELEE_LOCKSTEP_SOCK", "/tmp/pc_lockstep.sock")
+DOLPHIN_USER = os.environ.get("MELEE_DOLPHIN_USER")
 
 # The port frame on which its match begins, so a match-frame input script can
 # be turned into the port-frame script MELEE_PAD_SCRIPT wants. Checked against
@@ -384,6 +391,8 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
             "-C", "Dolphin.Display.RenderWindowHeight=%d" % h,
             "-C", "Graphics.Settings.AspectRatio=2",
             "-C", "Graphics.Settings.InternalResolution=1"]
+    if DOLPHIN_USER:
+        argv += ["-u", DOLPHIN_USER]
     # Tile the two windows rather than letting both land wherever the window
     # manager puts them -- the point of watching a lockstep run is seeing the
     # same frame twice, next to each other. Dolphin on the left, the port on

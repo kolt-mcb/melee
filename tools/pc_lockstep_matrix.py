@@ -60,7 +60,12 @@ import pc_suite
 
 CASES = os.path.join(REPO, "tests", "pc", "cases", "auto")
 ROUTES = os.path.join(REPO, "tests", "pc", "routes")
-RESULTS = os.path.join(REPO, "tests", "pc", "lockstep_matrix.json")
+# Per-shard, because save() rewrites the whole file after every cell: two
+# shards sharing it would each overwrite the other's results with their own
+# view. tools/pc_lockstep_shard.sh gives each shard its own and merges after.
+RESULTS = os.environ.get(
+    "MELEE_MATRIX_RESULTS",
+    os.path.join(REPO, "tests", "pc", "lockstep_matrix.json"))
 
 # Emulated-frame offsets for each step of a generated route, taken from the
 # calibration of sync_pair2. The first twelve steps are the fixed prologue
