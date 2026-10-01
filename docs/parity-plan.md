@@ -36,8 +36,9 @@ cells-per-cause rather than by severity.
 
 ## Stage causes
 
-- [ ] **RCruise** -- 24 cells, `p0.motion` at frame 1, every cell at frame 1.
-      IN PROGRESS. `grRCruise_801FF7A4` re-points spawn slots 0..3 at
+- [ ] **RCruise** -- 24 cells. MOSTLY FIXED (commit c6449d315): seven of nine
+      fields now agree; one vertical term left, see below.
+      WAS: `p0.motion` at frame 1, every cell at frame 1. `grRCruise_801FF7A4` re-points spawn slots 0..3 at
       `Ground_801C3FA4(stage_gobj, 10..13)`, which counts nodes in a
       depth-first walk rather than indexing an array, so the slot depends on
       the converted tree having the console's exact shape. Watchpoint-proven
@@ -174,3 +175,40 @@ Four shards is this machine's size: a pair costs ~1.1 GB resident and ~1.3
 cores, with one Dolphin thread the bottleneck. 46.6 s a cell against 119 s
 serial. The emulator is the only oracle -- port-versus-port agreement is
 determinism, not correctness ([[melee-pc-ground-truth]]).
+
+
+## RCruise: the one term left (2026-10-01)
+
+Three console-offset aliases in the scroll path are fixed (c6449d315) and the
+stage scrolls. At match frame 1 `motion`, `animf`, `x`, `goa`, `floor`, `env`
+and `ecbby` all agree; the fighters stand on the stage. What is left is one
+constant:
+
+    p0.y  port 37.6110  console 47.0931   diff 9.4821
+    p1.y  port 50.5931  console 60.0751   diff 9.4820
+
+That is the scroll root's own error, measured at its first write:
+
+    console scroll root y, first real value  28.8301
+    port    scroll root y, first real value  19.3480
+    difference                                9.4821
+
+Not the formula and not the camera offset. The port's terms reproduce its own
+answer exactly: `cam_y_offset` 34.32 (applied twice, once subtracted and once
+added after the negation), sp18 (ctr joint world) (276.21, 75.90, 274.56), sp24
+(cam joint world) (276.21, 77.22, 284.46), diff (0, 1.32, 9.90), giving
+sp64.y 14.972, negated and offset to 19.348. For the console's 28.8301 its
+`(-diff.y * sp18.z/diff.z + sp18.y)` must be 29.81 where the port's is 39.29.
+
+So the wrong inputs are the **ctr and cam joint world positions**, which come
+from `Ground_801C3FA4(gobj, 1)` and `(gobj, 2)` -- depth-first node counts
+again. The port's locals are node 1 (416.5, 165.0, 656.0) and node 2
+(0, 2.0, 15.0). Both sides start with the root at (0,0), so the divergence is
+in those joints on the very first scroll frame.
+
+Next: read the console's ctr/cam joint world positions at its first scroll
+call. Console map_gobjs[3] is 0x80c2c780, and ScrollVars.ctr_jobj is gp+F8 on
+the console (union 0xC4 + 0x34), so the pointer can be watched out of map 3's
+Ground and then the joint's own matrix watched in turn. Note the scroll is a
+feedback loop -- it reads joints whose world positions depend on the root it
+moved last frame -- so compare first-frame values, not steady state.
