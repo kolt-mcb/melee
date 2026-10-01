@@ -235,7 +235,17 @@ void grRCruise_801FF168(void)
     HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
     grgobj = grRCruise_801FF2C8(3);
     gp2 = GET_GROUND(grgobj);
+    /* The scroll reads this back as `gp->u.scroll.anim_gobj`, and on the
+     * GameCube both names are gp+EC so either one works. They are not the same
+     * byte on the host: DynamicsDesc is 24 bytes here, so rcruise2.xEC sits at
+     * offset 48 while scroll.anim_gobj is at 40 -- the write landed on
+     * scroll.int_jobj, anim_gobj kept stale data, the guard below rejected it,
+     * and the stage never scrolled. Write it through the member that reads it. */
+#if BUILD_TARGET_PC
+    gp2->u.scroll.anim_gobj = jgobj;
+#else
     gp2->u.rcruise2.xEC = jgobj;
+#endif
     grRCruise_801FF2C8(0);
     grRCruise_801FF2C8(2);
     grRCruise_801FF2C8(5);
@@ -547,15 +557,38 @@ void grRCruise_801FF924(Ground_GObj* gobj)
             struct grRCruise_ScrollVarsForInit scroll;
         } u;
     };
+#if BUILD_TARGET_PC
+    /* The shadow struct above casts a Ground to hardcoded console offsets: its
+     * union starts at 0xC4, which is where Ground's union sits on the
+     * GameCube. On the host that union is at 256, so every write through it
+     * landed 60 bytes early. The real scroll fields were never set, so
+     * grRCruise_801FFADC's own guards rejected them frame after frame, the
+     * stage never scrolled, and every fighter on this stage spawned where the
+     * unscrolled geometry put it -- off the end of it, with no floor. Use the
+     * real type here and keep the cast for the console build.
+     *
+     * The two layouts are field-for-field the same; only three names differ,
+     * hence the macros. */
+#define RC_SCROLL_X34 x38
+#define RC_SCROLL_X40 x44
+#define RC_SCROLL_X00 x0
+#define RC_SCROLL_X04 x4
+    Ground* gp = GET_GROUND(gobj);
+#else
+#define RC_SCROLL_X34 x34
+#define RC_SCROLL_X40 x40
+#define RC_SCROLL_X00 x00.b0
+#define RC_SCROLL_X04 x04
     struct grRCruise_ScrollGround* gp =
         (struct grRCruise_ScrollGround*) GET_GROUND(gobj);
+#endif
     HSD_JObj* jobj = GET_JOBJ(gobj);
     PAD_STACK(0x8);
 
-    gp->u.scroll.x34[0] = Ground_801C3FA4(gobj, 4);
-    gp->u.scroll.x34[1] = Ground_801C3FA4(gobj, 5);
-    gp->u.scroll.x34[2] = Ground_801C3FA4(gobj, 6);
-    gp->u.scroll.x40 = Ground_801C3FA4(gobj, 7);
+    gp->u.scroll.RC_SCROLL_X34[0] = Ground_801C3FA4(gobj, 4);
+    gp->u.scroll.RC_SCROLL_X34[1] = Ground_801C3FA4(gobj, 5);
+    gp->u.scroll.RC_SCROLL_X34[2] = Ground_801C3FA4(gobj, 6);
+    gp->u.scroll.RC_SCROLL_X40 = Ground_801C3FA4(gobj, 7);
     gp->u.scroll.int_jobj = Ground_801C3FA4(gobj, 3);
     HSD_ASSERT(0x2B0, gp->u.scroll.int_jobj);
     gp->u.scroll.cam_jobj = Ground_801C3FA4(gobj, 2);
@@ -564,14 +597,18 @@ void grRCruise_801FF924(Ground_GObj* gobj)
     gp->u.scroll.ctr_jobj = Ground_801C3FA4(gobj, 1);
     HSD_ASSERT(0x2B4, gp->u.scroll.ctr_jobj);
 
-    HSD_JObjGetTranslation(gp->u.scroll.ctr_jobj, &gp->u.scroll.x04);
+    HSD_JObjGetTranslation(gp->u.scroll.ctr_jobj, &gp->u.scroll.RC_SCROLL_X04);
     gp->u.scroll.x10.z = 0.0F;
     gp->u.scroll.x10.y = 0.0F;
     gp->u.scroll.x10.x = 0.0F;
     gp->u.scroll.x1C.z = 0.0F;
     gp->u.scroll.x1C.y = 0.0F;
     gp->u.scroll.x1C.x = 0.0F;
-    gp->u.scroll.x00.b0 = 0;
+    gp->u.scroll.RC_SCROLL_X00 = 0;
+#undef RC_SCROLL_X34
+#undef RC_SCROLL_X40
+#undef RC_SCROLL_X00
+#undef RC_SCROLL_X04
     grAnime_801C8138(gobj, gp->map_id, 0);
     grAnime_801C752C(jobj, 1, 30628, HSD_AObjSetFlags, 3, 0x20000000);
     gobj->render_cb = (GObj_RenderFunc) fn_80201BE0;
@@ -649,7 +686,17 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
         sp64.z = 0.0f;
         lbVector_Sub(&sp64, &cam_offset2);
         sp64.y += 10.0f;
+#if BUILD_TARGET_PC
+        /* `u.arwing.xE0` is gp+E0 on the GameCube, which is this union's +0x1C
+         * -- the same bytes as u.scroll.x1C, so the console means that field.
+         * On the host arwing.xE0 sits at offset 36 and spans 12 bytes, which
+         * runs over scroll.anim_gobj at 40: the Vec3's components landed in the
+         * pointer and the next frame dereferenced a float (-14.9721). Write it
+         * through the field the console means. */
+        lbVector_Diff(&gp->u.scroll.x10, &sp64, &gp->u.scroll.x1C);
+#else
         lbVector_Diff(&gp->u.scroll.x10, &sp64, &gp->u.arwing.xE0);
+#endif
         gp->u.scroll.x10 = sp64;
         sp64.x *= -1.0f;
         sp64.y *= -1.0f;
