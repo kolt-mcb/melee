@@ -64,9 +64,28 @@ cells-per-cause rather than by severity.
       `HSD_JObjAddNext`, and its flags differ from the port's by exactly bit 18
       (0x40000) -- a bit the port's code never reads or sets, so it arrives
       from data on one side and not the other.
-      Next: why the port's ^2 has a scaled parent when its matrix is computed
-      and the console's does not. Look at how the port attaches the stage's
-      map-object hierarchy, and at the order of attach vs matrix setup.
+      FOUND, one level further down: **the port's ship hierarchy is not
+      attached under the joint the stage scrolls.** Rainbow Cruise scrolls the
+      stage every frame from `grRCruise_801FFADC`, and on the console the joint
+      it moves IS the ancestor of the ship chain -- 0x80c76b00, written 132
+      times over five match frames, -276.2101 climbing to -235.1761 at about
+      0.305/frame. On the port that function moves a different joint
+      (0x109bace0) and the ship chain's root (0x10a5f1e0) is never written at
+      all: a hardware watchpoint on its translate did not fire once in 300
+      frames. So the console's spawn joints ride a scrolling stage and the
+      port's sit still, which is the whole 70-unit offset and the fighter
+      standing in open air.
+
+      Also port-side, console counterpart NOT yet checked: the scroll's own
+      anim gobj has no HSD object (`anim_gobj->hsd_obj` is NULL), and
+      `HSD_JObjSetScale(NULL, ...)` fires 120 times in 150 frames
+      (jobj.h:449), about once a frame.
+
+      Next: why the map-object hierarchy is not under the scrolled root. The
+      console reparents that level with `HSD_JObjAddNext` after `JObjLoad`
+      leaves it parentless, so the attach step and its order are the place to
+      look. Do not chase this with line-number breakpoints -- the file is
+      optimised and gdb relocates them across functions, which cost a run.
       Ruled out, do not re-tread: the spawn table and slot resolution (slots
       0..3 resolve once each, to joint indices 16..19); the collision data
       (129 lines, 78 floors, 45 joints load, floors around world x -325..+150);
