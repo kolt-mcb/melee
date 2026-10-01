@@ -2377,6 +2377,22 @@ bool Ground_801C2D24(enum_t arg0, Vec3* arg1)
                     (int) arg0, (double) arg1->x, (double) arg1->y,
                     (double) sum.x, (double) sum.y, depth,
                     HSD_JObjMtxIsDirty(j) ? " DIRTY" : "");
+            /* And the chain itself, so the ancestor that is wrong can be
+             * named rather than inferred from the total. Read only: calling
+             * HSD_JObjSetupMatrix from a probe is what made Peach's Castle
+             * spawn at twice the distance with the diagnostic on, so nothing
+             * here may compute a matrix the game has not. */
+            depth = 0;
+            for (w = j; w != NULL && depth < 32; w = w->parent, depth++) {
+                fprintf(stderr,
+                        "[X280]   ^%d jobj=%p t=(%.3f,%.3f) "
+                        "mtx_t=(%.3f,%.3f) sx=%.3f flags=%X%s\n",
+                        depth, (void*) w,
+                        (double) w->translate.x, (double) w->translate.y,
+                        (double) w->mtx[0][3], (double) w->mtx[1][3],
+                        (double) w->mtx[0][0], w->flags,
+                        HSD_JObjMtxIsDirty(w) ? " DIRTY" : "");
+            }
         }
 #endif
         return true;
