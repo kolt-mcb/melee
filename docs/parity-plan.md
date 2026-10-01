@@ -113,9 +113,16 @@ cells-per-cause rather than by severity.
 
 ## Character causes
 
-- [ ] **Fox** -- 29 cells, 0 clean, parts at frames 1..18 on `aihash`
-      (`p0.aihash` x15, `p1.aihash` x10). Earliest and most uniform of the
-      four, so likely the cheapest to find.
+- [ ] **Fox** -- 29 cells, 0 clean, parts at frames 1..18 on `aihash`.
+      CAUSE FOUND: one 1-ULP float. `MELEE_AIDUMP` on both sides shows exactly
+      one word of 115 differing, by one bit (40905AAE against 40905AAF) --
+      `cpu.x568`, a running max of `dy + scale` over the hurtbox capsules
+      (ftCo_0A01.c:677), read by ftcpuattack.c. `MELEE_BONES` then shows bones
+      18, 19 and 20 differing by a growing amount (~1-2, ~6, ~5 ulp), so bone
+      18 starts it and the rest accumulates down the chain.
+      Next: what computes bone 18's transform -- a rotation's trig is the
+      likeliest ULP source. Bones 67/71/72 read zero on the console and are the
+      known stale-matrix class, not real differences.
 - [ ] **Ice Climbers (PopoNana)** -- 29 cells, 0 clean, frames 1..46,
       `rng_draws` x15. Nana is a second fighter driven by the first; a known
       desync source already (Nana's X during Ice Shot, see
