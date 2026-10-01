@@ -411,6 +411,7 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
     # draws nothing on either side.
     if (os.environ.get("MELEE_RNG_WATCH") or os.environ.get("MELEE_CODE_BP")
             or os.environ.get("MELEE_FTWATCH")
+            or os.environ.get("MELEE_ADDRWATCH")
             or os.environ.get("MELEE_SEED_EACH_LOAD")
             or os.environ.get("MELEE_TRACE_AT_PC")):
         # MELEE_SEED_EACH_LOAD is on the list because its per-fighter reseed
