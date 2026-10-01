@@ -44,10 +44,29 @@ cells-per-cause rather than by severity.
       writer; skipping it (`MELEE_RC_NOSPAWN=1`, a diagnostic) puts p1's
       unscaled spawn y at 91.00 on both sides against 37.833 with it.
       Commits 225d52d6c, cb841715e.
-      Next: read the console's own `x280[]` at match start out of Dolphin.
-      Inference from fighter positions is exhausted -- at match frame 1 the
-      console's fighters are already mid-entry (`animf` 0.0 and 55.0 against
-      the port's -1.0), so their positions are not raw spawn points.
+      DONE, and it refuted the hypothesis: the console performs the same
+      reassignment, from the same functions (`MELEE_ADDRWATCH` on 0x8049E94C
+      shows `Ground_801C2D0C+0x10` called from `grRCruise_801FF7A4+0xE4`).
+      Everything the two sides *read* agrees bit-for-bit -- the depth-first
+      node identity, node 11's local translate (62.0, 37.8333, 0.0), the ship
+      joint's local translate, and the ship animation's start value (445.3333)
+      and rate (0.557/frame). What differs is the **world matrices** computed
+      over that identical data:
+
+          console ^2 (ship's parent)  local (432.5000, 58.1667)
+                                      world (432.5000, 58.1667)  unchanged
+          port    ^2                  local (432.500,  58.167)
+                                      world (285.450,  38.390)   = 0.66 x local
+
+      The port bakes the stage's 0.66 scale, and a parent transform, into these
+      joints' world matrices; the console does not at this level. Its ^2 is
+      parentless at load (`JObjLoad` writes 0) and is reparented later by
+      `HSD_JObjAddNext`, and its flags differ from the port's by exactly bit 18
+      (0x40000) -- a bit the port's code never reads or sets, so it arrives
+      from data on one side and not the other.
+      Next: why the port's ^2 has a scaled parent when its matrix is computed
+      and the console's does not. Look at how the port attaches the stage's
+      map-object hierarchy, and at the order of attach vs matrix setup.
       Ruled out, do not re-tread: the spawn table and slot resolution (slots
       0..3 resolve once each, to joint indices 16..19); the collision data
       (129 lines, 78 floors, 45 joints load, floors around world x -325..+150);
