@@ -2881,11 +2881,26 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
                  * with this diagnostic on and correctly with it off. A
                  * probe must not set up matrices the game has not. */
                 HSD_JObj* j = stage_info.x280[s];
+                HSD_JObj* w;
+                int d;
                 fprintf(stderr,
                         "[X280] spawn %d = local (%.4f, %.4f, %.4f)%s\n", s,
                         (double) j->translate.x, (double) j->translate.y,
                         (double) j->translate.z,
                         HSD_JObjMtxIsDirty(j) ? " mtx dirty" : "");
+                /* The chain's locals at load, to be held against the same
+                 * chain when the spawn is actually read. If they differ, the
+                 * hierarchy moved in between and the spawn is taken from a
+                 * pose the stage has left. Read only -- computing a matrix
+                 * here is what made Peach's Castle spawn at twice the
+                 * distance. */
+                for (d = 0, w = j; w != NULL && d < 8; w = w->parent, d++) {
+                    fprintf(stderr,
+                            "[X280]   load ^%d t=(%.3f,%.3f) flags=%X%s\n",
+                            d, (double) w->translate.x,
+                            (double) w->translate.y, w->flags,
+                            HSD_JObjMtxIsDirty(w) ? " DIRTY" : "");
+                }
             } else {
                 fprintf(stderr, "[X280] spawn %d = NONE\n", s);
             }

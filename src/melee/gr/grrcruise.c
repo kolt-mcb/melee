@@ -468,6 +468,20 @@ void grRCruise_801FF7A4(Ground_GObj* gobj)
         gp->u.rcruise2.xC4.data = NULL;
     }
 
+#if BUILD_TARGET_PC
+    /* MELEE_RC_NOSPAWN=1: skip the spawn-point reassignment below.
+     *
+     * A DIAGNOSTIC, not a fix. Ground_801C3FA4 counts nodes in a depth-first
+     * walk, so it returns whatever the 10th..13th node happens to be. If the
+     * port's converted tree carries nodes the console's does not, these
+     * indices resolve where the console's walk runs off the end and returns
+     * NULL -- and then this clobbers four correct spawn points with joints
+     * from the ship. Skipping it says whether the console reassigns at all:
+     * if the port then spawns where the console does, it does not. */
+    if (getenv("MELEE_RC_NOSPAWN") != NULL) {
+        return;
+    }
+#endif
     jobj = Ground_801C3FA4(stage_gobj, 10);
     if (jobj != NULL) {
         Ground_801C2D0C(0, jobj);
