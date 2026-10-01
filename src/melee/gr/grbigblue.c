@@ -1690,7 +1690,13 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
     Vec3 check_pos;
     Ground* gp = gobj->user_data;
     HSD_JObj* jobj = GET_JOBJ(gobj);
-    u8* bp = (u8*) gp;
+    /* Rebased: bp is indexed at the console's absolute offsets
+     * (bp[0xC4] and up), and on the host this union is at 256, not 0xC4.
+     * Unrebased, this state machine kept its lane state in Ground's own
+     * fields, so the track sections under the players were never unhidden and
+     * mpJointHide left the stage with no floor. GRBB_CAR_BASE is a plain cast
+     * on the console. */
+    u8* bp = GRBB_CAR_BASE(gp);
     PAD_STACK(76);
 
     HSD_JObjGetTranslation2(jobj, &pos);
@@ -1719,9 +1725,9 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
 
     switch ((s8) bp[0xC4]) {
     case 0: {
-        if (*(s32*) ((u8*) Ground_GetMapGObj(32)->user_data + 0xCC) != 0) {
+        if (*(s32*) (GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data) + 0xCC) != 0) {
             volatile u32 cars_avail = 0;
-            u8* mgp = (u8*) Ground_GetMapGObj(32)->user_data;
+            u8* mgp = GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data);
             s32 count = 0;
 
             if ((s8) mgp[0xE5] != 0) {
@@ -1816,7 +1822,7 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
     case 2: {
         s32 timer = *(s32*) (GRBB_CAR_BASE(bp) + 0xC8);
         if (timer <= 0) {
-            u8* mgp = (u8*) Ground_GetMapGObj(32)->user_data;
+            u8* mgp = GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data);
             s32 ctr = 3;
             s32 idx = 0;
             u8* p = mgp;
@@ -1846,7 +1852,7 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
         if (pos.x > (50.0f + Stage_GetBlastZoneRightOffset())) {
             HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
             *(f32*) (GRBB_CAR_BASE(bp) + 0xD8) = 0.0f;
-            *(s32*) ((u8*) Ground_GetMapGObj(32)->user_data + 0xCC) = 0;
+            *(s32*) (GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data) + 0xCC) = 0;
             {
                 u8* mgp2 = (u8*) Ground_GetMapGObj(32)->user_data;
                 if (jobj != NULL) {
@@ -1954,8 +1960,20 @@ void grBigBlue_801E9F3C(Ground_GObj* gobj)
 
     HSD_JObjSetScale(jobj, &v);
 
+#if BUILD_TARGET_PC
+    /* Both of these are console byte offsets into Ground: gp+C4 is where this
+     * union starts on the GameCube and gp+D0 is its +0xC. The host puts the
+     * union at 256, so the raw forms wrote into Ground's own fields instead --
+     * and the timer this one is meant to clear kept whatever it held. The byte
+     * write stays a byte write at the union's first byte: the console zeroes
+     * the first byte of that word, which is its most significant, and naming
+     * the u32 field here would clear all four. */
+    ((u8*) &gp->u.bigblue)[0] = 0;
+    GET_GROUND(Ground_GetMapGObj(32))->u.bigblue.platform.xD0_timer = 0;
+#else
     ((u8*) gp)[0xC4] = 0;
     *(s32*) ((u8*) GET_GROUND(Ground_GetMapGObj(32)) + 0xD0) = 0;
+#endif
     grAnime_801C8138(gobj, gp->map_id, 0);
 }
 
@@ -2003,7 +2021,12 @@ void grBigBlue_801EA05C(Ground_GObj* gobj)
 
     switch ((s8) gp->u.bigblue.x0) {
     case 0:
+#if BUILD_TARGET_PC
+        if (GET_GROUND(Ground_GetMapGObj(32))->u.bigblue.platform.xD0_timer !=
+            0) {
+#else
         if (*(s32*) ((u8*) GET_GROUND(Ground_GetMapGObj(32)) + 0xD0) != 0) {
+#endif
             gp->u.bigblue.platform.xC8_timer = 0;
             gp->u.bigblue.platform.xD0_timer = 0;
             gp->u.bigblue.platform.xCC_timer = 0;
