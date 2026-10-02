@@ -469,13 +469,22 @@ well the causes are understood. Re-check with
       So the port's whole child lifecycle for this generator runs a frame
       behind; nothing about the counts differs.
 
-      Next, and it must come first: the port's census prints THREE entries per
-      frame for one idnum (f26:1, f26:3, f26:2), so hsd_8039EE24 runs several
-      passes per frame -- presumably once per link mask. Earlier frames cannot
-      be compared until the passes are disambiguated (print the mask, or the
-      pass index, beside each line). Only then is it safe to trace the lag back
-      to its origin, which is the remaining question: what starts this
-      generator's children a frame late.
+      CORRECTION to the wording above: `idnum` is NOT a unique instance
+      identity. Four distinct generator pointers carry idnum 455 in this run,
+      and the three entries per frame at f26 are three different generators,
+      not three passes -- the walk runs with a single mask (00060000). So idnum
+      identifies a group, not an object.
+
+      The lag finding survives, with its scope bounded: across f54-f60 exactly
+      ONE generator carries idnum 455, so the numChild series compared there is
+      unambiguous. At f26, f30 and f40 three do, which is exactly where the
+      ambiguity was flagged.
+
+      Next: to trace the lag earlier than f54, match generators individually --
+      the census prints `gen=` pointers, and the console's MEMAT prints r3, so
+      pair them by (idnum, numChild) history rather than idnum alone. The
+      remaining question is unchanged: what starts this generator's children a
+      frame late.
 
       Still unexplained: rng_draws first differs at 61, not 60, although the
       populations differ at 60. So "draws = removals" fails on at least one

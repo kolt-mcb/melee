@@ -9141,12 +9141,21 @@ void hsd_8039EE24(u32 mask)
             if (pg >= 0) {
                 extern u32 gm_GetFrameCount(void);
                 int f = (int) gm_GetFrameCount();
+                static int pgen_last_frame = -1, pgen_pass_n;
+                int pgen_pass;
+                if (f != pgen_last_frame) {
+                    pgen_last_frame = f;
+                    pgen_pass_n = 0;
+                }
+                pgen_pass = pgen_pass_n;
                 if (f >= pg && f <= pg_hi) {
                     fprintf(stderr,
-                            "[PGEN] f%d gen=%p link=%d kind=%08X random=%08X "
+                            "[PGEN] f%d p%d msk=%08X gen=%p link=%d kind=%08X "
+                            "random=%08X "
                             "count=%08X genLife=%u life=%u idnum=%u "
                             "numChild=%u draws=%d\n",
-                            f, (void*) gen, (int) gen->linkNo,
+                            f, pgen_pass, (unsigned) mask, (void*) gen,
+                            (int) gen->linkNo,
                             (unsigned) gen->kind,
                             *(const unsigned*) &gen->random,
                             *(const unsigned*) &gen->count,
