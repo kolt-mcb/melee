@@ -975,7 +975,30 @@ void grVenom_80204B88(Ground_GObj* gobj)
 
     env_flags = *(u8*) &gp->u.venom2.xE0_state.xE0_state_pad;
 
-    if ((env_flags >> 5) & 1) {
+    /* Which named bit a numeric shift of that byte picks up.
+     *
+     * The byte is written through the b0..b7 bitfields (here and at
+     * grVenom_8020362C) and read back here as a number, and those two only
+     * agree under the console's bit allocation. MWCC puts b0 at the byte's
+     * MSB; GCC puts it at the LSB, confirmed both ways --
+     * `ptype /o struct grVenom_GroundVars2` gives b0 bit offset 0 here, and
+     * the console's own extractions in grVenom_8020362C
+     * (rlwinm r5,25..30,31,31 at 0x80203690) come out as source bits 24..29
+     * of an lbz, i.e. b0 at the MSB.
+     *
+     * So (env_flags >> 5) & 1 is b2 on the console and b5 here, and
+     * (env_flags >> 1) & 1 is b6 there and b1 here: this reads two entirely
+     * different flags. Name the console's bits on PC and leave the GameCube
+     * expression exactly as it was. */
+#if BUILD_TARGET_PC
+#define VE_ENV_HI (gp->u.venom2.xE0_state.b2)
+#define VE_ENV_LO (gp->u.venom2.xE0_state.b6)
+#else
+#define VE_ENV_HI ((env_flags >> 5) & 1)
+#define VE_ENV_LO ((env_flags >> 1) & 1)
+#endif
+
+    if (VE_ENV_HI) {
         if (gp->u.venom2.xE0_state.xE0_state_pad.state != 1) {
             color_set1 = grVe_804DB7D8;
             Ground_801C052C(&color_set1);
@@ -989,7 +1012,7 @@ void grVenom_80204B88(Ground_GObj* gobj)
             Ground_801C0574(&color_set1);
             gp->u.venom2.xE0_state.xE0_state_pad.state = 1;
         }
-    } else if ((env_flags >> 1) & 1) {
+    } else if (VE_ENV_LO) {
         if (gp->u.venom2.xE0_state.xE0_state_pad.state != 2) {
             color_set2 = grVe_804DB7DC;
             Ground_801C05BC(&color_set2);

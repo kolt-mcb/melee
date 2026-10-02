@@ -1077,3 +1077,35 @@ use the sweep's own 600 rather than a shortened run.
 
 So Venom's frame-476 one-extra-draw signature stands, unexplained, and the
 method above is still the way at it.
+
+### Venom: a confirmed bitfield-order bug (2026-10-02)
+
+grVenom_80204B88 writes the byte at gp+0xE0 through the b0..b7 bitfields and
+reads it back as a NUMBER:
+
+    env_flags = *(u8*) &gp->u.venom2.xE0_state.xE0_state_pad;
+    if ((env_flags >> 5) & 1) { ... } else if ((env_flags >> 1) & 1) { ... }
+
+Those two only agree under the console's bit allocation, and they disagree
+here. Verified in both directions rather than derived:
+
+  - host: `ptype /o struct grVenom_GroundVars2` on build/pc/melee-pc gives
+    b0 at bit offset 0, b1 at 1, ... b7 at 7. LSB-first.
+  - console: grVenom_8020362C's six extractions at 0x80203690
+    (rlwinm r5, 25..30, 31, 31 after an lbz) resolve to source bits 24..29,
+    and with the byte in bits 24..31 that is b0 at the byte's MSB. MSB-first.
+
+So numeric bit 5 is b2 on the console and b5 here; numeric bit 1 is b6 there
+and b1 here. The port's environment-colour state machine was switching on two
+entirely different flags from the ones the console switches on. Fixed PC-side
+by naming the console's bits (VE_ENV_HI/VE_ENV_LO); the GameCube object is
+byte-identical.
+
+`state` is NOT affected and was checked: `padding:7, state:2, padding2:7` in a
+u16 puts state at value bits 8..7 under both allocations (MSB-first gives
+padding 15..9 and state 8..7; LSB-first gives padding 0..6 and state 7..8), and
+the console's own `lhz` + `rlwinm r0,25,30,31` reads exactly those two bits.
+
+Whether this is the frame-476 rng_draws divergence is NOT yet established --
+the colour state machine has no RNG in it -- so it may be a real bug that flips
+no cells. A clean row sweep on the fixed build is the test.
