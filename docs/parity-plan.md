@@ -453,11 +453,29 @@ well the causes are understood. Re-check with
             <- their numChild reaches 0 one frame late
             <- their child particles die one frame late
 
-      Next: the particle life countdown is `if (--pp->life == 0)` at
-      particle.c:7661 (pre-decrement, standard), so compare a particle's
-      INITIAL life and whether the countdown runs once per frame on both sides.
-      One skipped decrement, or an initial life one higher, produces exactly
-      this.
+      Ruled out: the particle countdown and its initial value. particle.c:7661
+      is `if (--pp->life == 0)` (pre-decrement) and particle.c:4968 sets
+      `pp->life = life + 1`, neither under a BUILD_TARGET_PC guard, so both are
+      the console's own behaviour.
+
+      THE LAG IS UNIFORM, measured per idnum with numChild (generator offset
+      0x50, so MELEE_MEMAT needs 21 words):
+
+          port     f54:9   f55:8   f56:6   f57:5   f58:3   f59:2   f60:0
+          console mf53:9  mf54:8  mf55:6  mf56:5  mf57:3  mf58:2  mf59:0
+
+      One frame, consistently, over seven frames, and the same lag holds across
+      the preceding batch (the ...:2 -> 0 run ending port f44 / console mf43).
+      So the port's whole child lifecycle for this generator runs a frame
+      behind; nothing about the counts differs.
+
+      Next, and it must come first: the port's census prints THREE entries per
+      frame for one idnum (f26:1, f26:3, f26:2), so hsd_8039EE24 runs several
+      passes per frame -- presumably once per link mask. Earlier frames cannot
+      be compared until the passes are disambiguated (print the mask, or the
+      pass index, beside each line). Only then is it safe to trace the lag back
+      to its origin, which is the remaining question: what starts this
+      generator's children a frame late.
 
       Still unexplained: rng_draws first differs at 61, not 60, although the
       populations differ at 60. So "draws = removals" fails on at least one
