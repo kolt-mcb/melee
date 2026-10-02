@@ -324,10 +324,23 @@ well the causes are understood. Re-check with
 
       So this is not a lifetime bug and nothing retires early; my earlier
       reading of hsd_8039D3AC as "the retirement path" was wrong -- it runs for
-      every generator every frame. The question is upstream, in effect
-      spawning: which effect the port does not spawn on frame 61. Their
-      `life` values are 30, 12, 12, 30, 30, 30, which should help identify
-      them. The port has effect tooling (EFTRACE) for that next step.
+      every generator every frame.
+
+      And the last link does NOT reach effect spawning: MELEE_EFTRACE shows only
+      22 efSync_Spawn calls in the whole run, the last at port frame 2300, well
+      before match frame 61 (about port frame 2316). So generators are not
+      created by effect spawns each frame.
+
+      Also retract "6, 6, 6 then 4": that was a window artefact. Over match
+      frames 50-70 the port's draws per frame run
+      4 4 4 8 4 8 7 6 6 8 6 [4] 4 6 4 4 5 8 4 4 4 -- a fluctuating population,
+      in which frame 61's 4 is unremarkable. What IS true: the cell first parts
+      at 61, so every frame to 60 matched the console exactly, 8s and 7s
+      included, and then the two differ by one generator at 61.
+
+      Next, and it needs the console side: a per-frame generator census on
+      Dolphin to compare populations, since no port-side measurement can say
+      which generator the console has. Everything cheaper has been tried.
       Note the port's
       `MELEE_RNGLOG` is useless here -- its `f=` reads 0 throughout and the cap
       fills on the title demo (`gm_SetupTitleDemo`); `MELEE_RNGAT` is the tool.
