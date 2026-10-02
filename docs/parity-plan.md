@@ -860,7 +860,40 @@ that fired at frame 4 was on another fighter's joints, yet MELEE_ROTWATCH
 shows bone 18's dirty count going from one per frame at 1-3 to two per frame
 from 4. Those two facts have not been reconciled.
 
-Honest state: frames 1-3 bit-identical, frame 4 differs, the writer of the
-difference unattributed. Do not build on the frame-4 bone numbers until the
-sampling question above is settled and the second dirty-propagation at frame 4
-is traced to its origin.
+RESOLVED, and the sampling caveat above is RETRACTED. The two dumps ARE
+sampling the same moment: both sides' frame-4 value for bone 18 is the SOLVED
+rotation (port bd15512f, console bd155113), not one solved and one not. Had the
+sampling been misaligned the console would have shown the pre-solve animation
+value instead. So the frame-4 bone numbers are trustworthy and the earlier
+instruction not to build on them was wrong.
+
+The stray w was an uninitialised read, found by following the one writer
+MELEE_JOBJWATCH could not see. lb_00F9.c:918, the dynamics solver:
+
+    Quaternion rotation;
+    HSD_QuatLib_8037EB28(bone_mtx, (Vec3*) &rotation);  /* fills 3 floats */
+    HSD_JObjSetRotation(jobj, &rotation);               /* copies 4 */
+
+HSD_QuatLib_8037EB28 is declared `s32 (Mtx, Vec3*)`, so .w is never written and
+HSD_JObjSetRotation stores stack garbage into the joint, where lbCopyJObjSRT
+then carries it around the skeleton. Harmless to the transform -- the next line
+clears JOBJ_USE_QUATERNION -- but it is a real uninitialised read, and the
+console's stack happened to hold 0 there while the port's held 1.5757115.
+Zeroed PC-side; the GameCube object is byte-identical.
+
+Note this is the same site the earlier Fox note already named as the writer of
+cpu.x568 (lb_00F9.c:918). Two independent trails arrived at it.
+
+What remains for Fox is the real difference and it is now clean of that noise:
+
+    bone 17   port 3f405b3b 3e8364f2 bea4c033   ref 3f405b39 3e8364f1 bea4c030
+    bone 18   port bd15512f 3e25736a 3c01343a   ref bd155113 3e25735a 3c01341d
+    bone 19   port be8723d9 3bcab181 b9a97e95   ref be8723e0 3bcab3b6 b9a9811f
+
+r3 is now 0 on both. The surviving ulp differences come out of the float chain
+in that same block -- PSMTXTranspose, PSMTXMultVec, HSD_QuatLib_8037ECE0,
+EulerToQuat, HSD_QuatLib_8037EC4C, PSMTXQuat, HSD_QuatLib_8037EB28 -- which is
+the known-hard part: two inferred FMA pairings in quatlib.c were tried earlier
+and reverted as no-ops. Attack it with the 750 quirks list
+([[melee-pc-750-float-quirks]]) a site at a time, disassembling with -M 750cl,
+rather than by guessing pairings.

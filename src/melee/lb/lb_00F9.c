@@ -915,6 +915,29 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                 HSD_QuatLib_8037EC4C(&angle_quat, &euler_quat, &result_quat);
                 PSMTXQuat(bone_mtx, &result_quat);
                 HSD_QuatLib_8037EB28(bone_mtx, (Vec3*) &rotation);
+#if BUILD_TARGET_PC
+                /* HSD_QuatLib_8037EB28 takes a Vec3* and fills three floats;
+                 * `rotation` is a Quaternion and HSD_JObjSetRotation copies
+                 * four. So .w is read uninitialised here and stored into the
+                 * joint, where lbCopyJObjSRT then carries it around the
+                 * skeleton.
+                 *
+                 * Harmless to the transform -- the next line clears
+                 * JOBJ_USE_QUATERNION, so w is never used to build a matrix --
+                 * but not harmless to read. On the console the stack happens
+                 * to hold 0 there; here it held 1.5757115, and Fox's bones 17,
+                 * 18 and 19 all came away with w = 3fc9b0ea where the console
+                 * had 0. That difference is what the frame-4 bone comparison
+                 * kept reporting, and chasing it cost a whole pass: it looked
+                 * like a quaternion written by a solver, which is why the IK
+                 * save/restore, lb_8000C490 and lb_8000C868 were each probed
+                 * and cleared.
+                 *
+                 * Zeroing it makes the port deterministic and agrees with what
+                 * the console produces. PC-only, so the GameCube codegen is
+                 * untouched. */
+                rotation.w = 0.0f;
+#endif
                 HSD_JObjSetRotation(jobj, &rotation);
                 HSD_JObjClearFlagsAll(jobj, 0x20000U);
             }

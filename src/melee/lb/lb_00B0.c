@@ -648,6 +648,16 @@ void lbCopyJObjSRT(HSD_JObj* src, HSD_JObj* dst)
 void lb_8000C868(HSD_Joint* arg0, HSD_JObj* arg1, HSD_JObj* arg2, float arg8,
                  float arg9)
 {
+#if BUILD_TARGET_PC
+    /* This one was missing its note while every other writer in the file had
+     * one, so MELEE_JOBJWATCH's log of "everything that touched this joint"
+     * was quietly incomplete -- and the write it could not see is the one
+     * that matters: Fox's bone 18 changes rotation between two
+     * HSD_JObjMakeMatrix calls at frame 4 with nothing attributing it. Like
+     * lb_8000C490 this slerps a whole Quaternion into arg2->rotate, w
+     * included, which is the shape of the stray w = 3fc9b0ea seen there. */
+    pc_jobj_note(__func__, arg2);
+#endif
     Vec3 spC0;
     Vec3 spB4;
     Quaternion spA4;
