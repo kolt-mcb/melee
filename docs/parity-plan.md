@@ -303,7 +303,18 @@ well the causes are understood. Re-check with
       that frame -- one particle's worth of randomness. The console's own RNG
       callers (MELEE_RNG_WATCH) include 0x8039ef04 and the 0x8039b* group, the
       same particle neighbourhood, so both sides draw there heavily.
-      Next: which generator, and why it emits one fewer. Note the port's
+      NARROWED FURTHER with MELEE_PGEN (added here): the draws are a census of
+      live generators, because every generator on this stage has random=0.0 and
+      so draws exactly once per pass. The port walks 6, 6, 4 generators on
+      frames 59, 60, 61 -- so it holds ONE FEWER LIVE GENERATOR than the
+      console at frame 61 (it lost two between 60 and 61, the console one).
+      Not a branch difference and not a missing draw inside a generator: a
+      generator's lifetime ends a frame early.
+      Next: what ends a generator's life, and why one ends early. The `fmaf`
+      comment at particle.c:9103 describes the neighbouring class -- a count
+      crossing 1.0 a frame early or late -- so look for the same shape in
+      whatever retires a generator.
+      Note the port's
       `MELEE_RNGLOG` is useless here -- its `f=` reads 0 throughout and the cap
       fills on the title demo (`gm_SetupTitleDemo`); `MELEE_RNGAT` is the tool.
 - [ ] **Venom** (23) -- one missed RNG draw at 596 (and 476).

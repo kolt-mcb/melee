@@ -9096,6 +9096,37 @@ void hsd_8039EE24(u32 mask)
             continue;
         }
         hsd_8039D214(gen);
+#if BUILD_TARGET_PC
+        /* MELEE_PGEN=<match frame>: every generator this pass walks, and
+         * whether it will draw. One draw happens per generator per frame in
+         * the `random >= 0` branch, so a frame's draw count is a census of
+         * which generators were live -- and a stage whose RNG stream parts by
+         * one draw on one frame (Green Greens at 61, port 4 against the
+         * console's 5) is asking exactly which generator went quiet. */
+        {
+            static int pg = -2, pg_hi;
+            if (pg == -2) {
+                const char* e = getenv("MELEE_PGEN");
+                const char* dash = e ? strchr(e, '-') : NULL;
+                pg = e ? atoi(e) : -1;
+                pg_hi = dash ? atoi(dash + 1) : pg;
+            }
+            if (pg >= 0) {
+                extern u32 gm_GetFrameCount(void);
+                int f = (int) gm_GetFrameCount();
+                if (f >= pg && f <= pg_hi) {
+                    fprintf(stderr,
+                            "[PGEN] f%d gen=%p link=%d kind=%08X random=%08X "
+                            "count=%08X draws=%d\n",
+                            f, (void*) gen, (int) gen->linkNo,
+                            (unsigned) gen->kind,
+                            *(const unsigned*) &gen->random,
+                            *(const unsigned*) &gen->count,
+                            gen->random < 0.0F ? 0 : 1);
+                }
+            }
+        }
+#endif
         if (gen->random < 0.0F) {
             gen->count -= gen->random;
         } else {
