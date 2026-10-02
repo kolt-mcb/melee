@@ -1106,6 +1106,51 @@ u16 puts state at value bits 8..7 under both allocations (MSB-first gives
 padding 15..9 and state 8..7; LSB-first gives padding 0..6 and state 7..8), and
 the console's own `lhz` + `rlwinm r0,25,30,31` reads exactly those two bits.
 
-Whether this is the frame-476 rng_draws divergence is NOT yet established --
-the colour state machine has no RNG in it -- so it may be a real bug that flips
-no cells. A clean row sweep on the fixed build is the test.
+It is NOT the frame-476 divergence: a clean row sweep on the fixed build
+returned the identical verdicts (Captain 596, Donkey 476, GameWatch 476,
+Koopa 596, Fox 8, Kirby 283). A real bug, zero cells.
+
+## Venom's missing draw, pinned (2026-10-02)
+
+Donkey/Venom, all three RNG entries watched over match frames 473-479
+(MELEE_CODE_BP=803804F8,80380528,80380580 + MELEE_RNGAT), caught the
+divergence at 476 with port 4 draws against the console's 5. Per caller:
+
+    grVenom_8020362C    console 2 (+0xe4, +0x110)   port 2    agree
+    grVenom_80205AD4    console 1 (+0x2fc)          port 1    agree
+    grVenom_80205F30    console 1 (+0x5a0)          port 0    MISSING
+    hsd_8039EE24        console 1                   port 1    agree
+
+The missing one is grvenom.c:1623:
+
+    if (!(gp->u.venom.xF0 & 7) && HSD_Randi(8) == 0) {
+
+confirmed against the console's own instructions at 0x802064bc --
+`lwz r0,240(r31); clrlwi. r0,r0,29; bne; li r3,8; bl 0x80380580` -- where
+240 is 0xF0 and clrlwi 29 is `& 7`. So the console's xF0 & 7 is zero at frame
+476 and the port's is not, and the `&&` short-circuits before the draw.
+
+xF0 is only ever INCREMENTED (grvenom.c:1738, `xF0 = xF0 + 1`) and never
+initialised, so it is a count of how many times that code has run. A
+difference therefore means the port has entered it a different NUMBER of
+times -- not that the counter is stored in the wrong place. That is the thing
+to measure next: how many times grVenom_80205F30 reaches line 1738 on each
+side, up to frame 476.
+
+Found on the way, and a genuine bug whether or not it explains xF0: grvenom.c
+uses BOTH u.venom and u.venom2, and they collide on the host --
+
+    venom.xD8   console +20   host +36   s32
+    venom2.xD4  console +16   host +32   HSD_JObj* (8 bytes, 32..40)
+
+so venom.xD8 sits INSIDE venom2.xD4's pointer here, where on the console they
+are adjacent and distinct. grvenom.c:778 stores a joint into venom2.xD4 and
+grvenom.c:1151/1245-1288 use venom.xD8 as a state machine. The earlier
+union-audit run reported no mixed group for Venom, which was wrong: the two
+views are used by functions in different callback groups, and the audit only
+looks within a group.
+
+Instrument note: MELEE_MEMAT is NOT frame-gated -- it arms at boot and fires
+for every hit. Pointing it at a per-frame PC (0x802064BC) made Dolphin too
+slow to finish Venom's 2450-frame route inside the timeout. Use MELEE_CODE_BP,
+which is gated by FROM/TO, or pick a PC that is only reached in the window.

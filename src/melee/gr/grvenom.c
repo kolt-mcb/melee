@@ -1620,6 +1620,36 @@ void grVenom_80205F30(Ground_GObj* gobj)
         case 9:
         case 10:
         case 11:
+#if BUILD_TARGET_PC
+            /* MELEE_VENOMF0=<match frame>: the counter that gates this draw.
+             *
+             * Venom's cells part at match frame 476 on rng_draws, port 4
+             * against the console's 5, and the missing draw is this
+             * HSD_Randi(8) -- console grVenom_80205F30+0x5a0, where
+             * `lwz r0,240(r31); clrlwi. r0,r0,29` is exactly the xF0 & 7
+             * below. So on the console xF0 & 7 is zero at 476 and here it is
+             * not. xF0 is only ever incremented (once per entry, a few lines
+             * down) and never initialised, so a difference means this code
+             * has run a different NUMBER of times -- not that the counter is
+             * stored wrong. */
+            {
+                static int vf = -2;
+                if (vf == -2) {
+                    const char* e = getenv("MELEE_VENOMF0");
+                    vf = e != NULL ? atoi(e) : -1;
+                }
+                if (vf >= 0) {
+                    extern u32 gm_GetFrameCount(void);
+                    int fr = (int) gm_GetFrameCount();
+                    if (fr >= vf && fr <= vf + 3) {
+                        fprintf(stderr,
+                                "[VENOMF0] f%d gp=%p xF0=%d xF0&7=%d\n", fr,
+                                (void*) gp, (int) gp->u.venom.xF0,
+                                (int) (gp->u.venom.xF0 & 7));
+                    }
+                }
+            }
+#endif
             if (!(gp->u.venom.xF0 & 7) && HSD_Randi(8) == 0) {
                 gp->u.venom.xFC = 0;
                 type_idx = base[gp->u.venom.xC8 + 11];
