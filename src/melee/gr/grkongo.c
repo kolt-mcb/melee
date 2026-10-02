@@ -323,6 +323,33 @@ void grKongo_801D577C(Ground_GObj* arg0)
     f32 limit_angle;
     f32 angle_delta;
 
+#if BUILD_TARGET_PC
+    /* MELEE_KGROT=1, at the entry: whether this platform's state machine runs
+     * and which state it is in.
+     *
+     * Its case 1 never fired on the port over a whole Kongo run, so either the
+     * function is not called or xC4 never reaches 1. The transition out of
+     * case 0 is gated on the s16 countdown gp->u.kongo2.xCC, which sits at
+     * host +12 -- inside the eight bytes that kongo3.xCC, a pointer, occupies
+     * at host +8. */
+    {
+        static int kre = -1;
+        if (kre < 0) {
+            const char* e = getenv("MELEE_KGROT");
+            kre = e ? atoi(e) : 0;
+        }
+        if (kre > 0) {
+            extern u32 gm_GetFrameCount(void);
+            fprintf(stderr,
+                    "[KGROT] f%u ENTRY gp=%p xC4=%d k2.xCC=%d xD4=%.5f "
+                    "xD8=%.5f xE0=%.6f xDC=%.6f\n",
+                    gm_GetFrameCount(), (void*) gp, (int) gp->u.kongo3.xC4,
+                    (int) gp->u.kongo2.xCC, (double) gp->u.kongo3.xD4,
+                    (double) gp->u.kongo3.xD8, (double) gp->u.kongo3.xE0,
+                    (double) gp->u.kongo3.xDC);
+        }
+    }
+#endif
     switch (gp->u.kongo3.xC4) {
     case 2:
     case 3: {
@@ -384,6 +411,34 @@ void grKongo_801D577C(Ground_GObj* arg0)
         break;
     case 1:
         gp->u.kongo3.xE0 += gp->u.kongo3.xDC;
+#if BUILD_TARGET_PC
+        /* MELEE_KGROT=1: the clamp that bounds this platform's angular speed.
+         *
+         * Kongo's slot-1 spawn hangs off a joint whose rot.z the console has
+         * at 0.17453 when the fighter is placed, and 0.17453 is ten degrees to
+         * five places -- too round for an angle that has been accumulating for
+         * one frame, and exactly MTXDegToRad(10). The port's same joint reads
+         * 0.00070. So the suspect is this clamp's bound, not the accumulation:
+         * a parameter that reads small here pins the speed near zero and the
+         * angle never grows. */
+        {
+            static int kr = -1;
+            if (kr < 0) {
+                const char* e = getenv("MELEE_KGROT");
+                kr = e ? atoi(e) : 0;
+            }
+            if (kr > 0) {
+                extern u32 gm_GetFrameCount(void);
+                fprintf(stderr,
+                        "[KGROT] f%u unk38=%.6f rad=%.6f xE0=%.6f xDC=%.6f "
+                        "xD8=%.6f\n",
+                        gm_GetFrameCount(), (double) yakumono_param->unk38,
+                        (double) MTXDegToRad(yakumono_param->unk38),
+                        (double) gp->u.kongo3.xE0, (double) gp->u.kongo3.xDC,
+                        (double) gp->u.kongo3.xD8);
+            }
+        }
+#endif
         Ground_ClampSymmetric(gp->u.kongo3.xE0,
                               MTXDegToRad(yakumono_param->unk38),
                               &gp->u.kongo3.xE0);

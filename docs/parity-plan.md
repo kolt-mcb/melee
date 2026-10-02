@@ -622,3 +622,87 @@ HSD_Rand (0x803804F8), HSD_Randf (0x80380528) and HSD_Randi (0x80380580) each
 carry their own copy of the LCG on console, so MELEE_CODE_BP wants all three.
 Watching one of them made Green Greens look like it had no RNG divergence at
 all. MELEE_CODE_BP's own comment said so and was not read.
+
+## Kongo, after a day on it (2026-10-02)
+
+Established, each measured on both sides at the same moment:
+
+  - Only slot 1 is wrong, and only p1 ever differs. At the FIRST spawn lookup
+    on each side (MELEE_MEMAT=801C2E1C:31:3 for the console, [X280] get for the
+    port) the console yields (-22.8034, 31.7913, -2.3540) and the port
+    (-16.0264, 28.6641). Slot 0 is exact on both.
+
+  - Both sides pick the SAME joint, with the same local translate
+    (14.0065, 37.8003, 15.9019), identity rotation and unit scale. So the
+    difference is entirely in the ancestor chain.
+
+  - The chain is the same five joints with the same translates on both sides.
+    Summing those translates with the joint's own gives (-16.0005, 28.0003,
+    0.0), which is the port's answer to within a rounding -- so the port
+    composes essentially no rotation, and the console composes one. A later
+    console lookup's matrix reads
+
+        0.98481  -0.17364  -0.00170  | -22.80343
+        0.17344   0.98311   0.05846  |  31.79129
+       -0.00848  -0.05787   0.99829  |   -2.35404
+
+    whose top row is cos and sin of ten degrees. The corresponding joint field
+    is rot.z: the console's ancestor ^1 carries 0.17453 (ten degrees to five
+    places, = MTXDegToRad(10)) where the port's carries 0.00070.
+
+    Note on reading those dumps: HSD_JObj's rotate is at console +0x1C, not
+    +0x20 -- the port has rotate sixteen bytes before scale and scale twelve
+    before translate, and translate is at +0x38. Reading from +0x20 shifts the
+    components by one and makes a Z rotation look like a Y rotation, which it
+    did for a while here.
+
+Eliminated, each by measurement rather than by argument:
+
+  - The joint-index walk and the pair table. The console's joint translate is
+    identical to the one the port's walk picks, so JOBJ_INSTANCE flags and the
+    walk order are not involved.
+  - x280[] overflow. The array has 261 entries and the walk writes at most 152.
+  - The spline path. MELEE_SPLROT=1 prints the tangent Ground_801C4B50 builds
+    its rotation from; over the window where the rotation appears, the port
+    calls it zero times AND the console's breakpoint on lbShadow_8000E9F0 does
+    not fire either. grKongo_801D6668, splGetCardinalTangent and the rest are
+    out.
+  - A pre-match duration difference. Both sides run exactly 126 platform
+    updates, and on both sides ZERO of them run before the first spawn lookup.
+    So whatever sets the rotation, it is not the platform updater.
+  - The platform state machine stalling. MELEE_KGROT=1 shows grKongo_801D577C
+    running with xC4=0 and its countdown starting at 180 and decrementing one
+    per call, which is orderly; it simply has not expired by the spawn.
+
+What is left, and the one clean next step: something writes ancestor ^1's
+rot.z during match frame 0 and before the first spawn lookup, and it is not
+any of the above. MELEE_ADDRWATCH on that field (80C2BB00+12, and the right
+address is 80C2BAFC+16 given the +0x1C correction) armed and reported no
+writes at all, although the value demonstrably changes -- so the watch is
+either looking at the wrong bytes or missing writes, and making it trustworthy
+is the next thing to do rather than guessing further.
+
+Separately, and worth fixing whatever the rotation turns out to be,
+grkongo.c's views disagree about the host layout in two directions:
+
+  MERGED -- two console variables on one set of host bytes:
+    host +8    kongo.xCC  (console +8)  == kongo2.xC8 (console +4)   benign:
+               xC8 is written once, to 0, and never read
+    host +28   kongo.xD8  (console +20) == kongo2.xDC (console +24)   harmful:
+               both used in one block of grKongo_801D6668, where xD8 tracks a
+               maximum y and xDC a minimum z, and the init sets xDC to F32_MAX
+    host +40   kongo2.xE8 (console +36) == kongo3.xE4 (console +32)
+
+  SPLIT -- one console variable with several host homes:
+    console +36 is kongo2.xE8 at host +40, kongo3.xE8 at host +44 and
+    kongo.xE8 at host +52, so writes through different views do not see each
+    other at all.
+
+  The causes are the nested `void* keep` at gp+D0 in grKongo_GroundVars (4
+  bytes on console, 8 here) and the leading HSD_Spline* in
+  grKongo_GroundVars2. A fix that only pads cannot work in general -- a
+  pointer cannot be four bytes here -- so this wants the same treatment as
+  Green Greens: address a given set of console bytes through one view. Where
+  two views declare the same console offset with the same type, swapping the
+  view is console-identical and separates the host storage for free; e.g.
+  kongo2.xD8 is console +20 like kongo.xD8 but host +24, clear of xDC at +28.
