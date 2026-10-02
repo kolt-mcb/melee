@@ -34,6 +34,36 @@
 void ftCo_Wait_Anim(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+    /* MELEE_FTWAIT=1: which branch the idle state takes.
+     *
+     * On Big Blue's match frame 1 the console calls ftCo_8008A7A8 from here
+     * (console lr=ftCo_Wait_Anim+0x30) and takes one HSD_Randi(100); the port
+     * takes none and never enters that function at all. So the port is taking
+     * the other branch, which means x2224_b2 reads set here and clear there.
+     * The console's test is `lbz r0,8740(r4); rlwinm. r0,r0,27,31,31`, i.e.
+     * bit 0x20 of fp+0x2224 -- the third bit down from the MSB, as an
+     * MSB-first bitfield allocates it. */
+    {
+        static int fw = -1;
+        if (fw < 0) {
+            const char* e = getenv("MELEE_FTWAIT");
+            fw = e ? atoi(e) : 0;
+        }
+        if (fw > 0) {
+            extern u32 gm_GetFrameCount(void);
+            fprintf(stderr,
+                    "[FTWAIT] f%u gobj=%p b2=%d bits=%d%d%d%d%d%d%d%d "
+                    "ledge=%d anim=%d\n",
+                    gm_GetFrameCount(), (void*) gobj, (int) fp->x2224_b2,
+                    (int) fp->x2224_b0, (int) fp->x2224_b1,
+                    (int) fp->x2224_b2, (int) fp->x2224_b3,
+                    (int) fp->x2224_b4, (int) fp->x2224_b5,
+                    (int) fp->x2224_b6, (int) fp->can_walljump,
+                    (int) fp->x2064_ledgeCooldown, (int) fp->anim_id);
+        }
+    }
+#endif
     if (fp->x2224_b2) {
         ftCo_DownSpot_Enter(gobj);
     } else {

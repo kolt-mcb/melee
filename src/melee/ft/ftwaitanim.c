@@ -62,6 +62,31 @@ static inline enum_t getAnimID(WaitStruct* arg1)
 void ftCo_8008A7A8(Fighter_GObj* gobj, WaitStruct* arg1)
 {
     Fighter* fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+    /* MELEE_FTWAIT=1: the three things that decide whether this function asks
+     * the RNG for an idle variant.
+     *
+     * The console takes one HSD_Randi(100) here (ftCo_8008A7A8+0x118) on Big
+     * Blue's match frame 1 and the port takes none, which is that cell's first
+     * divergence. Only two things can cause that: frames still remaining in
+     * the current animation, or a NULL wait table. */
+    {
+        static int fw = -1;
+        if (fw < 0) {
+            const char* e = getenv("MELEE_FTWAIT");
+            fw = e ? atoi(e) : 0;
+        }
+        if (fw > 0) {
+            extern u32 gm_GetFrameCount(void);
+            fprintf(stderr,
+                    "[FTWAIT] f%u gobj=%p kind=%d remaining=%d arg1=%p "
+                    "item=%p anim_id=%d\n",
+                    gm_GetFrameCount(), (void*) gobj, (int) fp->kind,
+                    (int) ftAnim_IsFramesRemaining(gobj), (void*) arg1,
+                    (void*) fp->item_gobj, (int) fp->anim_id);
+        }
+    }
+#endif
     if (!ftAnim_IsFramesRemaining(gobj)) {
         if (arg1 == NULL ||
             (fp->item_gobj != NULL && fp->kind != Ft_Kind_Mewtwo &&
