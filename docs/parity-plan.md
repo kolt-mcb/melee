@@ -1062,3 +1062,18 @@ MELEE_RNGAT on the port, then resolve the extra draw's caller.
 The union audit does NOT apply: venom and venom2 are both shifted views, but no
 callback group mixes them, so this is not the Greens mechanism even though it
 is the Greens signature.
+
+CORRECTION, same day. I ran captain/venom clean, saw IDENTICAL for 480 frames,
+and concluded the baseline's "Venom 0/23" was stale -- that today's global
+rotation.w fix had flipped the row. It had not. captain/venom's recorded
+divergence is at frame 596 and I ran only 480 frames, so the run stopped short
+of it and the clean result meant nothing. A re-sweep of the row immediately
+showed donkey/venom still diverging at 476 and fox/venom at 8.
+
+The lesson is narrow and worth keeping: a cell's verdict is only as good as a
+window that reaches its recorded divergence frame. Read the frame out of
+tests/pc/lockstep_logs/<case>.log before choosing --frames, and when in doubt
+use the sweep's own 600 rather than a shortened run.
+
+So Venom's frame-476 one-extra-draw signature stands, unexplained, and the
+method above is still the way at it.
