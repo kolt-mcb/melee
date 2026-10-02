@@ -203,6 +203,44 @@ void ft_80089B08(Fighter_GObj* gobj)
                 ik.jobj0->rotate = rot_save0;
                 ik.jobj1->rotate = rot_save1;
                 ik.jobj2->rotate = rot_save2;
+#if BUILD_TARGET_PC
+                /* MELEE_IKRESTORE=<match frame>: the rotations this leaves on
+                 * the three leg joints.
+                 *
+                 * These are whole-Quaternion struct copies, so they write w as
+                 * well as x/y/z and they bypass HSD_JObjSetMtxDirty -- which
+                 * means MELEE_ROTWATCH cannot see them. Fox's bone 18 reads
+                 * w = 3fc9b0ea at the frame the IK first runs where the
+                 * console reads 0, and the question is whether the restore
+                 * below has already happened by then: if it has, and w is 0
+                 * here, then something writes it again afterwards. */
+                {
+                    static int ir = -2;
+                    if (ir == -2) {
+                        const char* e = getenv("MELEE_IKRESTORE");
+                        ir = e != NULL ? atoi(e) : -1;
+                    }
+                    if (ir >= 0) {
+                        extern u32 gm_GetFrameCount(void);
+                        if ((int) gm_GetFrameCount() == ir) {
+                            fprintf(stderr,
+                                    "[IKRESTORE] f%d chain2 j0=%p "
+                                    "rot=(%08x,%08x,%08x,%08x) j1=%p "
+                                    "rot=(%08x,%08x,%08x,%08x)\n",
+                                    ir, (void*) ik.jobj0,
+                                    *(const unsigned*) &ik.jobj0->rotate.x,
+                                    *(const unsigned*) &ik.jobj0->rotate.y,
+                                    *(const unsigned*) &ik.jobj0->rotate.z,
+                                    *(const unsigned*) &ik.jobj0->rotate.w,
+                                    (void*) ik.jobj1,
+                                    *(const unsigned*) &ik.jobj1->rotate.x,
+                                    *(const unsigned*) &ik.jobj1->rotate.y,
+                                    *(const unsigned*) &ik.jobj1->rotate.z,
+                                    *(const unsigned*) &ik.jobj1->rotate.w);
+                        }
+                    }
+                }
+#endif
             }
             if (fp->x221C_u16_y & 1) {
                 ik.jobj0 =
@@ -240,6 +278,36 @@ void ft_80089B08(Fighter_GObj* gobj)
                 ik.jobj0->rotate = rot_save3;
                 ik.jobj1->rotate = rot_save4;
                 ik.jobj2->rotate = rot_save5;
+#if BUILD_TARGET_PC
+                /* The other leg. Same reasoning as the chain above: whole
+                 * Quaternion copies that write w and bypass SetMtxDirty. */
+                {
+                    static int ir2 = -2;
+                    if (ir2 == -2) {
+                        const char* e = getenv("MELEE_IKRESTORE");
+                        ir2 = e != NULL ? atoi(e) : -1;
+                    }
+                    if (ir2 >= 0) {
+                        extern u32 gm_GetFrameCount(void);
+                        if ((int) gm_GetFrameCount() == ir2) {
+                            fprintf(stderr,
+                                    "[IKRESTORE] f%d chain1 j0=%p "
+                                    "rot=(%08x,%08x,%08x,%08x) j1=%p "
+                                    "rot=(%08x,%08x,%08x,%08x)\n",
+                                    ir2, (void*) ik.jobj0,
+                                    *(const unsigned*) &ik.jobj0->rotate.x,
+                                    *(const unsigned*) &ik.jobj0->rotate.y,
+                                    *(const unsigned*) &ik.jobj0->rotate.z,
+                                    *(const unsigned*) &ik.jobj0->rotate.w,
+                                    (void*) ik.jobj1,
+                                    *(const unsigned*) &ik.jobj1->rotate.x,
+                                    *(const unsigned*) &ik.jobj1->rotate.y,
+                                    *(const unsigned*) &ik.jobj1->rotate.z,
+                                    *(const unsigned*) &ik.jobj1->rotate.w);
+                        }
+                    }
+                }
+#endif
             }
         }
         if (fp->x221C_u16_y & 4) {

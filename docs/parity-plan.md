@@ -820,3 +820,47 @@ A note on the new tool: MELEE_ROTWATCH prints at any recursion depth
 deliberately. Gating it to depth 0, which is where __builtin_return_address
 names the real setter, hid these joints entirely -- they are never dirtied
 directly.
+
+### Fox, where the frame-4 trail ended (2026-10-02, later)
+
+The two bone dumps really do fire at different points in the frame:
+
+    port     pc_trace_frame -> pc_trace_bones, called from render.c:149,
+             i.e. render_present, at the end of the frame
+    console  inside MeleeWriteTraceLine, which fires from the post-sim trace
+             breakpoint when MELEE_TRACE_AT_PC is armed
+
+That asymmetry is worth removing on its own. It is NOT, however, enough to
+dismiss the frame-4 difference, because the harness is bit-exact for full
+matches on two cases with this same sampling -- so the points are aligned for
+every traced field, and a bone dump taken at the same call should be too.
+
+Ruled out as the writer of the stray w, each by probe:
+
+  - ft_0899.c's leg IK restores. MELEE_IKRESTORE=<frame> (added here) prints
+    the rotations each chain leaves. At frame 4 the chain-2 restore does not
+    run at all, and the chain-1 restore runs once, leaving w=0, on joints
+    (0x19d86920, 0x19d869e0) that are not p0's bones 17-19
+    (0x19c671e0/2a0/360). Both restores are whole-Quaternion struct copies
+    that bypass HSD_JObjSetMtxDirty, which is why MELEE_ROTWATCH never sees
+    them -- that much was right.
+  - the floor-angle path (fp->x221C_u16_y & 4): it ends at
+    ftPartSetRotX(fp, 0, angle) and touches bone 0 only.
+  - the PC-only IK gates pc_ik_solve_off / pc_ik_ankle_off: both are
+    env-driven (MELEE_NO_IK_SOLVE, MELEE_NO_IK_ANKLE) and off by default, so
+    the port does solve.
+
+What the value says: all three of bones 17, 18 and 19 carry the SAME
+w = 3fc9b0ea = 1.5757115, which is one writer setting a quaternion on each.
+It is not a literal anywhere in the tree and it is not pi/2 (3fc90fdb,
+1.5707964) -- it is a computed angle about 0.28 degrees short of it, and
+ik.angle_max is M_PI_2f, so a solver using rotate.w as scratch for an angle
+fits the shape. Which solver, on which call, is unresolved: the only IK chain
+that fired at frame 4 was on another fighter's joints, yet MELEE_ROTWATCH
+shows bone 18's dirty count going from one per frame at 1-3 to two per frame
+from 4. Those two facts have not been reconciled.
+
+Honest state: frames 1-3 bit-identical, frame 4 differs, the writer of the
+difference unattributed. Do not build on the frame-4 bone numbers until the
+sampling question above is settled and the second dirty-propagation at frame 4
+is traced to its origin.
