@@ -357,11 +357,31 @@ well the causes are understood. Re-check with
       means they agree and the cause is elsewhere. Pin the mapping before
       reading anything into it.
 
-      Also note the console shows no frame with 5 removals, yet rng_draws says
-      it drew 5 at f61 -- so "draws = population = removals", which holds for
-      the port, does NOT hold on the console. That equivalence is the basis of
-      everything above and needs re-deriving for the console before the two
-      sides' numbers can be compared at all.
+      MAPPING NOW PINNED: gating the breakpoint to match frame 61 alone gives
+      hf=3102, so hf=3102 <-> f61 and the earlier window realigns to
+      f58:6 f59:6 f60:4 f61:4 on the console against f58:6 f59:6 f60:6 f61:4 on
+      the port -- the populations differ at frame 60, a frame before rng_draws
+      reports it.
+
+      The port's side is now understood mechanistically. Its censused
+      generators are *parked parents*: particle.c:8041 does
+      `if (gen->numChild != 0) { gen->random = 0.0F; gen->genLife = 1;
+      return gen; }`, which is exactly their measured state (random 0.0,
+      genLife 1). So they are never removed, and genLife=1 brings them back
+      through the same branch every frame, drawing once each -- a stable
+      per-frame draw, not a lifetime about to expire.
+
+      CROSS-SIDE COMPARISON NOT YET VALID. The console generator dumped with
+      MELEE_MEMAT reads kind=0e400000, random=1.0, count=3e47e400, genLife=0,
+      while the port's read kind=08000000, random=0.0, count=0, genLife=1.
+      Different `kind` means these are different generators, so the field
+      differences say nothing. Establish correspondence first -- by kind, or by
+      walking both lists from their heads (console head hsd_804D78FC =
+      0x804D78FC) -- before comparing any field.
+
+      Also unresolved: the console shows no frame with 5 removals, yet
+      rng_draws says it drew 5 at f61, so "draws = removals" holds for the port
+      and not for the console.
       Note the port's
       `MELEE_RNGLOG` is useless here -- its `f=` reads 0 throughout and the cap
       fills on the title demo (`gm_SetupTitleDemo`); `MELEE_RNGAT` is the tool.
