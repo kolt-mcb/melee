@@ -382,6 +382,32 @@ well the causes are understood. Re-check with
       Also unresolved: the console shows no frame with 5 removals, yet
       rng_draws says it drew 5 at f61, so "draws = removals" holds for the port
       and not for the console.
+
+      **STRONGEST LEAD: the port is missing two whole generator kinds.**
+      Comparing kind distributions -- port over match frames 1-70 (524
+      generators, MELEE_PGEN=1-70), console over its MEMAT dumps (1641):
+
+          kind       port  console
+          0E000002     56      56     exact
+          08400000     40      40     exact
+          08040000      4       4     exact
+          08000003    112      92
+          0E000001     80      72
+          08000000    232     170
+          0E400000      0    1173     <- the console's most common, absent here
+          08000002      0      34     <- absent here
+
+      Three kinds matching exactly is what makes this comparable at all; the
+      two zeroes are then meaningful. Note 0E400000 = 08400000 | 0x06000000,
+      and the port HAS 08400000 in the exact console count, so the missing bits
+      are 0x06000000 in that combination.
+
+      Caveat before anyone acts: the two captures do not cover identical
+      windows (the port's is match-gated, the console's MEMAT fired beyond its
+      gate), and 1173 missing generators would skew rng_draws from frame 1
+      rather than frame 61 -- so either those generators do not draw (random <
+      0 skips the draw) or they fall outside the match. Resolve that before
+      treating the absence as the cause.
       Note the port's
       `MELEE_RNGLOG` is useless here -- its `f=` reads 0 throughout and the cap
       fills on the title demo (`gm_SetupTitleDemo`); `MELEE_RNGAT` is the tool.
