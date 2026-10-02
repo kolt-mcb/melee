@@ -9117,11 +9117,12 @@ void hsd_8039EE24(u32 mask)
                 if (f >= pg && f <= pg_hi) {
                     fprintf(stderr,
                             "[PGEN] f%d gen=%p link=%d kind=%08X random=%08X "
-                            "count=%08X draws=%d\n",
+                            "count=%08X genLife=%u life=%u draws=%d\n",
                             f, (void*) gen, (int) gen->linkNo,
                             (unsigned) gen->kind,
                             *(const unsigned*) &gen->random,
                             *(const unsigned*) &gen->count,
+                            (unsigned) gen->genLife, (unsigned) gen->life,
                             gen->random < 0.0F ? 0 : 1);
                 }
             }
