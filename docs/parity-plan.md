@@ -974,12 +974,38 @@ column (lb_00F9.c:227-229, 547-549, 1145), and it is written per link as the
 loop walks the chain -- so when link 0 reads next->unk_2C it is reading a value
 stored on the PREVIOUS frame.
 
-Next, and this is the open end: the bone MATRICES were verified identical at
-frame 4, but frame 3 was only checked for rotations. Compare bone 18's full
-matrix at frames 1-3. If a matrix differs while its rotation matches, the fault
-is in HSD_JObjMakeMatrix's construction from rotation, translation and parent,
-not in the dynamics solver at all -- and the dynamics chain is then just the
-first place it became visible.
+That comparison was made and it is CONFOUNDED -- usefully, because it
+calibrates the instrument. At frames 1-3 the console's bone 17-19 matrices read
+as pure identity with zero translation (3f800000,0,0,0 / ...) while the port's
+hold real transforms, and the console's m3 column carries world positions
+around -72 (c2913b3c) where the port's carries locals around -0.13
+(be02f256). Those are not ulp differences and not a divergence.
+
+The reason is where each dump fires, and it splits by FIELD:
+
+    rotations  comparable. Both sides sample after the simulation, which is
+               why frames 1-3 agree bit for bit and frame 4's solved value
+               appears on both (port bd15512f, console bd155113).
+    matrices   NOT comparable before they are first built. The port's dump
+               runs from render_present (render.c:149), after rendering has
+               forced every matrix; the console's runs from
+               MeleeWriteTraceLine at the post-sim breakpoint, before
+               rendering, so a joint whose matrix nothing has demanded yet is
+               still identity there. By frame 4 the dynamics solver has called
+               lb_8000B1CC, which forces construction, and the two agree
+               exactly.
+
+So the caveat retracted in d3ee258b3 was right about rotations and wrong to
+throw out wholesale: matrices needed it. MELEE_BONESFULL's m* fields are only
+trustworthy once something in the frame has forced the matrix, and the way to
+check that is the MTX_DIRTY flag the same dump prints.
+
+Which leaves the Fox question where it was: link 0's next->unk_2C is 1-2 ulp
+out on the solver's first frame, unk_2C comes from a matrix translation column,
+and the frame-4 matrices agree. So either the write happened at a frame where
+the port's and console's matrices legitimately differed in build state, or
+unk_2C is written somewhere other than the three sites in this file. Find every
+writer of unk_2C across the tree before measuring again.
 
 Also eliminated on the way, so it is not retried: the unfused
 `axis->y * axis->y + axis->z * axis->z` in lbVector_RotateAboutUnitAxis is
