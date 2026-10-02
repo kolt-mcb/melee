@@ -537,25 +537,55 @@ MELEE_MEMAT=801C2E1C:31:3 the Vec3 that lb_8000B1CC wrote, which is the
 instruction after the call inside Ground_801C2D24. Port side:
 MELEE_STAGE_DIAG=1 prints the same thing as [X280] get.
 
-Where it goes wrong is the joint INDEX. The pair table names joints by their
-position in a depth-first walk of the map's joint tree (Ground_801C34AC), and
-the port's walk assigns map 10's slot 0 from joint index 6 -- which is right --
-and slot 1 from joint index 20 -- which is not. So the two walks agree early
-and part somewhere between. The walk skips the children of a JOBJ_INSTANCE
-node, so one wrong instance flag shifts every index after it.
+It is NOT the joint index, which is what the first version of this section
+said. MELEE_MEMAT=801C2E10:3:24 dumps the HSD_JObj the console passes to
+lb_8000B1CC, and its own translate is
 
-What is already ruled out:
+    slot 0   console joint translate (24.5000,  4.4363, 25.4209)
+    slot 1   console joint translate (14.0065, 37.8003, 15.9019)
 
-  - The pair data is read correctly. The joint indices come out monotonically
-    increasing (2,3,4,5,6,17,18,...,20,21,38), which a misread stride or a
-    byte-order mistake does not produce.
-  - x280[] is not overflowing. The walk writes slots up to 152 and the array
-    has 261 entries, so those are real slots, not unswapped shorts.
+which are exactly the translates of the joints the port's walk picks -- idx 6
+and idx 20 of map 10 in MELEE_STAGE_DIAG=2's dump. Both sides choose the SAME
+joint for both slots, with the same local translate, identity rotation and unit
+scale. The joint-index walk is fine and the pair table is read correctly.
 
-MELEE_STAGE_DIAG=2 (added here) prints the whole tree in the walk's own order
-with each joint's world position, so the joint carrying the console's
-(-22.80, 31.79, -2.35) can be named and the gap between the two indices
-counted.
+So the same joint resolves to two different world positions, and the
+difference is in its ANCESTORS. Slot 1 hangs two joints deeper than slot 0:
+
+    ^0 the joint   t=(14.007, 37.800)  mtx_t=(-16.026, 28.664)
+    ^1             t=(-0.007, -0.114)  mtx_t=(-30.007,  -9.418)  flags 10040008
+    ^2             t=(-30.000, -6.250) mtx_t=(-30.000,  -9.686)  flags 10040088
+    ^3 root        t=( 0.000, -3.436)
+    ^4             t=( 0.000,  0.000)                            flags 10000000
+
+Slot 0's chain is three deep and has neither ^1 nor ^2, which is exactly why
+slot 0 agrees and slot 1 does not. ^2 carries 0x80 in its flags where nothing
+else in the chain does.
+
+The port's chain is very nearly a pure translation: the ancestors' translates
+sum to (-30.007, -9.800, -15.902), and adding the joint's own gives
+(-16.0005, 28.0003, 0.0) against a computed world of (-16.0264, 28.6641). The
+console's is not: console world minus the local translate is
+(-36.8099, -6.0090, -18.2559), which differs from the port's ancestor sum by
+(-6.80, +3.79, -2.35) -- and the console's world z is -2.354 where the port's
+is 0, so the whole z discrepancy is in the ancestors too.
+
+Those two intermediate joints are a moving platform. The spawn is read once at
+match start, so if the platform's pose at that moment differs -- an animation
+not yet advanced, or advanced a different number of times -- the spawn differs
+with it, and this diagnostic's own comment warns about exactly that ("the
+joint's world matrix is stale, computed before the stage's root transform was
+final"). Note the chain reports no DIRTY flag, so if it is staleness it is not
+the kind HSD_JObjMtxIsDirty catches.
+
+Next: read the console's ^1 and ^2 the same way. The jobj dump's +0x0C looks
+like the parent pointer (slot 0 has 80c2aee0, slot 1 has 80c2bae0), so a
+MEMAT chasing it one level at a time gives their translates and matrices to
+compare against the port's.
+
+Also ruled out along the way: x280[] is not overflowing. The walk writes slots
+up to 152 and the array has 261 entries, so those are real slots and not
+unswapped shorts.
 
 ## Big Blue: not the stage file (2026-10-02)
 
