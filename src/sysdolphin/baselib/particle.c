@@ -8008,6 +8008,33 @@ void hsd_8039D354(u32 unused)
 
 HSD_Generator* hsd_8039D3AC(HSD_Generator* gen, HSD_Generator* prev)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_PGEN also reports retirements, with the call site that asked for
+     * one. Three places retire a generator and the census alone cannot say
+     * which: on Green Greens two generators leave the list between match
+     * frames 60 and 61 where the console loses one, so which site fired is
+     * the whole question. */
+    {
+        static int rg = -2, rg_hi;
+        if (rg == -2) {
+            const char* e = getenv("MELEE_PGEN");
+            const char* dash = e ? strchr(e, '-') : NULL;
+            rg = e ? atoi(e) : -1;
+            rg_hi = dash ? atoi(dash + 1) : rg;
+        }
+        if (rg >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            int f = (int) gm_GetFrameCount();
+            if (f >= rg && f <= rg_hi) {
+                fprintf(stderr, "[PRETIRE] f%d gen=%p genLife=%u life=%u "
+                                "from=%p\n",
+                        f, (void*) gen, (unsigned) gen->genLife,
+                        (unsigned) gen->life,
+                        __builtin_return_address(0));
+            }
+        }
+    }
+#endif
     if (gen->type & 0x80) {
         hsd_8039D0A0(gen);
     }

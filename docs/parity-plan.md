@@ -310,10 +310,24 @@ well the causes are understood. Re-check with
       console at frame 61 (it lost two between 60 and 61, the console one).
       Not a branch difference and not a missing draw inside a generator: a
       generator's lifetime ends a frame early.
-      Next: what ends a generator's life, and why one ends early. The `fmaf`
-      comment at particle.c:9103 describes the neighbouring class -- a count
-      crossing 1.0 a frame early or late -- so look for the same shape in
-      whatever retires a generator.
+      CHAIN ESTABLISHED. A generator with genLife == 1 is removed on the frame
+      it is processed (particle.c:9180: `life = genLife - 1; if (life == 0)`
+      calls hsd_8039D3AC, which unlinks). MELEE_PGEN now also logs removals,
+      and all six are removed on EVERY frame 58, 59 and 60 while the census
+      still shows six with genLife=1 each frame -- so they are not persisting,
+      they are re-created every frame. Therefore:
+
+          one fewer RNG draw at f61
+            = one fewer generator walked
+            = one fewer generator CREATED that frame
+            = one fewer effect spawned
+
+      So this is not a lifetime bug and nothing retires early; my earlier
+      reading of hsd_8039D3AC as "the retirement path" was wrong -- it runs for
+      every generator every frame. The question is upstream, in effect
+      spawning: which effect the port does not spawn on frame 61. Their
+      `life` values are 30, 12, 12, 30, 30, 30, which should help identify
+      them. The port has effect tooling (EFTRACE) for that next step.
       Note the port's
       `MELEE_RNGLOG` is useless here -- its `f=` reads 0 throughout and the cap
       fills on the title demo (`gm_SetupTitleDemo`); `MELEE_RNGAT` is the tool.
