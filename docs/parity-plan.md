@@ -674,13 +674,41 @@ Eliminated, each by measurement rather than by argument:
     running with xC4=0 and its countdown starting at 180 and decrementing one
     per call, which is orderly; it simply has not expired by the spawn.
 
-What is left, and the one clean next step: something writes ancestor ^1's
-rot.z during match frame 0 and before the first spawn lookup, and it is not
-any of the above. MELEE_ADDRWATCH on that field (80C2BB00+12, and the right
-address is 80C2BAFC+16 given the +0x1C correction) armed and reported no
-writes at all, although the value demonstrably changes -- so the watch is
-either looking at the wrong bytes or missing writes, and making it trustworthy
-is the next thing to do rather than guessing further.
+What writes it: the joint is CONTINUOUSLY ANIMATED, which the earlier
+single-sample readings hid. Re-reading every pass of joint 80c2bae0 through
+HSD_JObjSetupMatrixSub, in order, its rot.z oscillates
+
+    hf 2907   0.00000 -> 0.17453      already at full amplitude
+    hf 2921..2938       0.16985 .. 0.12834     swinging back
+    hf 2939..3001       0.12846 .. 0.17453     and returning
+
+all of it at mf=0, with rot.x moving slightly too. So it is a swinging
+platform, and 0.17453 is the swing's EXTREME -- which is why it looked like a
+suspiciously exact ten degrees and sent this chase after a clamp bound. The
+port's equivalent sits flat at 0.00070.
+
+That also resolves what looked like a contradiction: MELEE_ADDRWATCH on
+80C2BB00+12 reported no writes while the value demonstrably changed. The
+watch's hits go to Dolphin's MEMMAP log channel, which the CODEBP comment in
+the same file already notes "does not reach stderr in the headless build" --
+so the watch is firing and its output is going nowhere. Worth fixing, but it is
+no longer the blocker.
+
+The blocker is now a question with a name: what advances that animation. The
+platform updater grKongo_801D577C is NOT it -- measured, 126 calls on each side
+and zero before the first spawn lookup -- and the port's own angle reads
+0.00000 with its countdown still at 180. What remains is the canned animation
+the group's init starts, grAnime_801C8138(arg0, map_id, 0). On the console the
+platform is mid-swing by the time the spawn is read; on the port it is at rest.
+
+HYPOTHESIS, not yet measured: the port is not advancing the stage's animation
+before the match starts, so every stage with pre-match animated geometry begins
+in a different pose. This port has form here -- an earlier session found 2852
+animations that silently never loaded ([[melee-pc-aram-vs-pointer]]) -- and it
+would explain why FOUR of the five stages that part at match start do so
+(RCruise, BigBlue, Kongo, Pura) rather than drifting later. Test it by counting,
+on both sides, how many times the stage's animation is advanced before the first
+spawn lookup, the same way the platform-updater count was taken.
 
 Separately, and worth fixing whatever the rotation turns out to be,
 grkongo.c's views disagree about the host layout in two directions:
