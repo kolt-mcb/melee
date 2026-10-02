@@ -1546,13 +1546,15 @@ void grVenom_80205F30(Ground_GObj* gobj)
         if (vg >= 0) {
             extern u32 gm_GetFrameCount(void);
             int fr = (int) gm_GetFrameCount();
-            if (fr >= vg && fr <= vg + 4) {
+            if (fr >= vg && fr <= vg + 6) {
                 fprintf(stderr,
                         "[VENOMGATE] f%d gp=%p xC8=%d entry=%p entry8=%d "
-                        "gate=%d xF0=%d xF0&7=%d\n",
+                        "gate=%d state=%d xF0=%d xF0&7=%d\n",
                         fr, (void*) gp, (int) gp->u.venom.xC8, (void*) entry,
                         (int) entry[8], (int) ((u32) entry[8] != 0U),
-                        (int) gp->u.venom.xF0, (int) (gp->u.venom.xF0 & 7));
+                        (int) base[gp->u.venom.xC8 + 11],
+                        (int) gp->u.venom.xF0,
+                        (int) (gp->u.venom.xF0 & 7));
             }
         }
     }

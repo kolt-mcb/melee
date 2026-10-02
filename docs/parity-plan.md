@@ -1154,3 +1154,65 @@ Instrument note: MELEE_MEMAT is NOT frame-gated -- it arms at boot and fires
 for every hit. Pointing it at a per-frame PC (0x802064BC) made Dolphin too
 slow to finish Venom's 2450-frame route inside the timeout. Use MELEE_CODE_BP,
 which is gated by FROM/TO, or pick a PC that is only reached in the window.
+
+## Venom: ROOT CAUSE FOUND (2026-10-02)
+
+The missing frame-476 draw is console-offset arithmetic over a struct that
+contains pointers.
+
+grvenom.c:35 declares
+
+    typedef struct grVe_Data {
+        /* +0  */ GrJoint joints[5];          30 bytes
+        /* +1E */ u16 pad;
+        /* +20 */ struct {
+            HSD_GObj* arwing_gobj[3];         console +32, 4 bytes each
+            int       arwing_type[3];         console +44
+        } arwing;
+    } grVe_Data;
+
+and grVenom_80205F30 casts `&grVe_803E5348` to `s32*` and walks those two
+parallel arrays by CONSOLE word offsets:
+
+    entry = base + gp->u.venom.xC8;
+    entry[8]                      -> arwing_gobj[xC8]   (byte 32 + 4*xC8)
+    base[gp->u.venom.xC8 + 11]    -> arwing_type[xC8]   (byte 44 + 4*xC8)
+
+On the host the pointers are eight bytes, so arwing_gobj spans 32..56 and
+arwing_type starts at 56. base[xC8+8] therefore lands on HALF A POINTER and
+base[xC8+11] lands INSIDE arwing_gobj[1].
+
+Measured end to end at match frame 476, both sides agreeing on the index:
+
+    port     xC8=0  entry8=1997030808  gate=1  state=0  xF0=0
+    console  r3 at 0x80205fac = 0x803e5348, i.e. xC8=0; 0x80205fb8 reached,
+             so its gate passed too
+
+1997030808 is 0x77084598 -- a heap address's low word, non-zero, so the port's
+gate passes for the wrong reason. state=0 is a pointer's zero upper half, so
+`switch (state)` misses the case holding the HSD_Randi(8) and the draw never
+happens. The console reads a real arwing_type there and takes it.
+
+Note the console's STATIC entry[8] is 0 (read out of the DOL at 0x803E5368),
+and the console's gate still passed -- the table is written at runtime, which
+is what put arwing_gobj[0] there.
+
+Also established along the way: grVenom_80205F30 is first called at match frame
+476 (MELEE_VENOMF0=1 prints call #1 at f476), xF0 is 0 on BOTH sides there, so
+the xF0 & 7 gate is NOT the discriminator; and grVe_804D6A3C, the flag on the
+early return, is a static s32 read once and never written anywhere, so it is
+permanently zero.
+
+THE COMPLICATION, and why this is not a two-line fix: other accesses in the
+same function index far past the struct --
+
+    base[idx0 + 0xD6]      base[state + 0x7A]      base[... + 170]
+
+grVe_Data is 56 bytes on console and 72 here, so `base` is a window onto
+grVe_803E5348 AND whatever the linker put after it, and every one of those far
+reads is shifted as well ([[melee-pc-linker-layout-reads]]). Fixing the +8 and
++11 accesses to use the named fields is correct and provable, but it may not
+flip the cell on its own while the far reads are still wrong. Doing this
+properly means giving grVe_Data a console-faithful layout, or giving the far
+reads an explicit base, rather than patching the two offsets this divergence
+happens to go through.
