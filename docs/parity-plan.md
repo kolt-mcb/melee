@@ -184,6 +184,36 @@ serial. The emulator is the only oracle -- port-versus-port agreement is
 determinism, not correctness ([[melee-pc-ground-truth]]).
 
 
+## Pura: the floor the console stands on is 44 units away (2026-10-01)
+
+Solidly measured:
+
+- `p0.x` AGREES with the console. Only `y` is wrong, and no floor is found
+  (-1 against the console's 258). So the spawn point is right and the surface
+  it should land on is not there -- not the "wrong spawn" class RCruise was in.
+- The console's floor for p0 is line **258**, which belongs to collision
+  **joint 25** (`floor=257+11`).
+- In the port, line 258's local span is (-1.8, 1.5)..(-1.5, 1.3) and joint 25's
+  matrix reads scale 10, tx 0, ty -35, which puts the line at world
+  x -18..-15. The fighter falls down x = -60 (confirmed by MELEE_FLOORTRACE:
+  prev=(-60.00,35.00) cur=(-60.00,34.23), hit=0, every step).
+- So the float carrying that line is about 44 units from where the console has
+  it. Pura is Poke Floats and its platforms move, so this is the same CLASS as
+  RCruise -- animated stage geometry in the wrong place -- by a different
+  mechanism.
+
+Ruled out for Pura: shadow structs and raw console offsets (grpura.c has
+neither), a differing spawn (identical on both routes), missing collision data
+(installed once, identical counts), unbound collision joints (40 joints with
+identical matrices), and route dependence (see the retraction above).
+
+NOT established, and the next measurement: whether joint 25 is supposed to move
+and does not. The tx=0 reading comes from MELEE_MPDUMP, which caps at 40 prints
+and calls `HSD_JObjSetupMatrix` itself, so it is not a sample of the game's own
+state over time. A gdb watchpoint is the right tool; note that
+`mpLib_80055E9C`'s `joint` and `jobj` locals are not live at function entry, so
+capture them after the assignment, not with a breakpoint on the function.
+
 ## RCruise: the one term left (2026-10-01)
 
 Three console-offset aliases in the scroll path are fixed (c6449d315) and the
