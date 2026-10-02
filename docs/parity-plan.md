@@ -402,7 +402,23 @@ well the causes are understood. Re-check with
       (particle.c:8041 sets random=0.0, genLife=1 and returns, so they are
       re-parked every frame and draw once each), the cell first parts at match
       frame 61 with port 4 draws against the console's 5, and every frame to 60
-      agreed. Nothing beyond that is established.
+      agreed.
+
+      AND NOW, on a key both sides measure (Dolphin fork commit fb0e8f2 adds
+      `mf=` beside `hf=` in [CODEBP]/[MEMAT], so no offset has to be inferred):
+
+          console generator removals  mf58:6  mf59:6  mf60:4  mf61:4  mf62:4
+          port    generator removals   f58:6   f59:6   f60:6   f61:4
+
+      The populations differ at match frame 60, with the port a frame late.
+      This is the conclusion the retracted realignment had guessed; it now
+      rests on measurement rather than an inferred offset.
+
+      Still unexplained, and the next thing to settle: rng_draws first differs
+      at 61, not 60, so at frame 60 the port has two more generators than the
+      console and yet draws the same number. "draws = removals" must therefore
+      fail on at least one side. Settle that before treating frame 60 as the
+      origin.
 
 ## RCruise: the one term left (2026-10-01)
 
