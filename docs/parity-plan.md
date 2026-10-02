@@ -425,11 +425,39 @@ well the causes are understood. Re-check with
       the console processes 4 generators and the port 6, and the port drops its
       two a frame later (at 61). Both sides agree through 59.
 
-      Since the port's are parked parents -- parked precisely because
-      `numChild != 0` -- they stop being parked when their children are gone.
-      So the hypothesis to test next is that a CHILD's `life` countdown runs
-      one frame longer in the port, keeping the parent parked an extra frame.
-      The port's children show life = 30, 12, 12, 30, 30, 30.
+      CHAIN COMPLETE, every link identity-matched. MELEE_PGEN now prints
+      `idnum`, which is a stable generator identity that works across machines,
+      and `numChild`:
+
+          port     f58: 455 456 457 458 467 468
+                   f59: 455 456 457 458 467 468
+                   f60: 455 456 457 458 467 468
+                   f61: 456 458 467 468          <- drops 455, 457
+          console mf58: 455 456 457 458 467 468
+                  mf60: 456 458 467 468          <- dropped them a frame earlier
+
+      Same generators, same idnums, and `gen->life` matches exactly (2 x 12 and
+      4 x 30 per frame on both sides), so neither the roster nor the lifetimes
+      differ -- only when two of them die.
+
+      They are parked parents, so they die when numChild hits 0, and on the
+      port:
+
+          idnum 455 and 457   numChild  f57:5  f58:3  f59:2  f60:0
+
+      So their last children die between f59 and f60 here, and before mf60's
+      walk on the console. Reading up:
+
+          Greens' frame-61 RNG divergence
+            <- the port drops generators 455/457 one frame late
+            <- their numChild reaches 0 one frame late
+            <- their child particles die one frame late
+
+      Next: the particle life countdown is `if (--pp->life == 0)` at
+      particle.c:7661 (pre-decrement, standard), so compare a particle's
+      INITIAL life and whether the countdown runs once per frame on both sides.
+      One skipped decrement, or an initial life one higher, produces exactly
+      this.
 
       Still unexplained: rng_draws first differs at 61, not 60, although the
       populations differ at 60. So "draws = removals" fails on at least one
