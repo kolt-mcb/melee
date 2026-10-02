@@ -414,11 +414,26 @@ well the causes are understood. Re-check with
       This is the conclusion the retracted realignment had guessed; it now
       rests on measurement rather than an inferred offset.
 
-      Still unexplained, and the next thing to settle: rng_draws first differs
-      at 61, not 60, so at frame 60 the port has two more generators than the
-      console and yet draws the same number. "draws = removals" must therefore
-      fail on at least one side. Settle that before treating frame 60 as the
-      origin.
+      Checked with MEMAT, now also mf-keyed: the console's in-match generators
+      read kind=08000000 and genLife=0 AT THE CALL, which is exactly what the
+      port's PRETIRE log reads at the same point (its census reads genLife=1
+      because that is before the decrement). So kind and genLife AGREE between
+      the sides -- and the earlier "missing kind 0E400000" really was a
+      pre-match artefact, as retracted.
+
+      So the difference is purely one of population timing: at match frame 60
+      the console processes 4 generators and the port 6, and the port drops its
+      two a frame later (at 61). Both sides agree through 59.
+
+      Since the port's are parked parents -- parked precisely because
+      `numChild != 0` -- they stop being parked when their children are gone.
+      So the hypothesis to test next is that a CHILD's `life` countdown runs
+      one frame longer in the port, keeping the parent parked an extra frame.
+      The port's children show life = 30, 12, 12, 30, 30, 30.
+
+      Still unexplained: rng_draws first differs at 61, not 60, although the
+      populations differ at 60. So "draws = removals" fails on at least one
+      side, and that should be settled alongside the life countdown.
 
 ## RCruise: the one term left (2026-10-01)
 
