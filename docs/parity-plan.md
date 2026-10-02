@@ -954,13 +954,41 @@ and its link_dir is 1-2 ulp out. Links 1 and 2 have both inputs wrong, which
 is what a per-link integrator does once the first link is off -- they are
 consequences, not separate faults.
 
-That puts the whole remaining question on what computes link_dir, which is
-local to lb_00F9.c and has five assignment sites: 626 (clamp_dir), 635
-(natural_dir), 765 (gnd_norm), 807 and 845 (gnd_norm2), reached through a
-branchy path involving PSVECCrossProduct, lbVector_Normalize and DYN_FMA
-spellings that are already partly modelled. Which branch link 0 takes at frame
-4 is the next thing to print; only then is it worth reading any of those float
-sites against -M 750cl.
+Which branch sets link_dir: NONE of them, at frame 4. All five assignment
+sites are now tagged (MELEE_DYNCHAIN takes a range, and [DYNSITE] names the
+site), and over frames 1-5 only site 1 fires, at frame 5. The dynamics cross
+product itself first runs at frame 4 -- nothing at 1, 2 or 3 -- so frame 4 IS
+the solver's first execution and link_dir is already 1-2 ulp out on its very
+first use. That makes it an INITIALISATION difference, not an accumulated one,
+which is a much smaller thing to chase.
+
+link_dir's initial value (lb_00F9.c:564):
+
+    link_dir = normalize(cur->next->desc.lb_unk0.unk_2C
+                         - cur->desc.lb_unk0.unk_2C)
+
+current_dir is built from the SAME cur->desc.lb_unk0.unk_2C and is bit-exact
+for link 0, so that term is right and the difference is in cur->NEXT's unk_2C.
+unk_2C is a joint's world position copied straight out of a matrix translation
+column (lb_00F9.c:227-229, 547-549, 1145), and it is written per link as the
+loop walks the chain -- so when link 0 reads next->unk_2C it is reading a value
+stored on the PREVIOUS frame.
+
+Next, and this is the open end: the bone MATRICES were verified identical at
+frame 4, but frame 3 was only checked for rotations. Compare bone 18's full
+matrix at frames 1-3. If a matrix differs while its rotation matches, the fault
+is in HSD_JObjMakeMatrix's construction from rotation, translation and parent,
+not in the dynamics solver at all -- and the dynamics chain is then just the
+first place it became visible.
+
+Also eliminated on the way, so it is not retried: the unfused
+`axis->y * axis->y + axis->z * axis->z` in lbVector_RotateAboutUnitAxis is
+CORRECT -- the console emits fmuls/fmuls/fadds at 0x8000d900, not an fmadds.
+And `#define sqrtf_accurate(x) sqrtf(x)` in placeholder.h does NOT apply to the
+PC build: its `#if BUILD_TARGET_PC` branch deliberately leaves the real
+functions unshadowed, confirmed with the preprocessor. The console's
+lbVector_NormalizeXY does use four Newton iterations against
+RotateAboutUnitAxis's three, and the port matches both.
 
 Also still worth doing, and cheaper: compare the dynamics state (unk_38,
 unk_44, unk_54, unk_84) from match frame 1 onward. Until that is done, "Fox's

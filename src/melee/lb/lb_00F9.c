@@ -39,6 +39,36 @@
  * by match frame 7 and a visible amount apart by 616. */
 #if BUILD_TARGET_PC
 #include <math.h>
+
+#if BUILD_TARGET_PC
+/* MELEE_DYNCHAIN: which of the five link_dir assignments fired, and what it
+ * left behind.
+ *
+ * At match frame 4 link 0's current_dir is bit-exact against the console and
+ * its link_dir is 1-2 ulp out, so the fault is in whichever of those five
+ * assignments ran. Four are unreachable on any given frame, and reading float
+ * sites before knowing which one executes is how the earlier quatlib attempt
+ * was wasted. */
+static void pc_dyn_site(int site, const Vec3* v)
+{
+    static int ds = -2, ds_hi;
+    if (ds == -2) {
+        const char* e = getenv("MELEE_DYNCHAIN");
+        const char* dash = e != NULL ? strchr(e, '-') : NULL;
+        ds = e != NULL ? atoi(e) : -1;
+        ds_hi = dash != NULL ? atoi(dash + 1) : ds;
+    }
+    if (ds >= 0) {
+        extern u32 gm_GetFrameCount(void);
+        int fr = (int) gm_GetFrameCount();
+        if (fr >= ds && fr <= ds_hi) {
+            fprintf(stderr, "[DYNSITE] f%d site=%d link_dir=(%08x,%08x,%08x)\n",
+                    fr, site, *(const unsigned*) &v->x,
+                    *(const unsigned*) &v->y, *(const unsigned*) &v->z);
+        }
+    }
+}
+#endif
 #define DYN_FMA(a, b, c) fmaf((a), (b), (c))
 #define DYN_FMS(a, b, c) fmaf((a), (b), -(c))
 #define DYN_FMAD(a, b, c) fma((a), (b), (c))
@@ -79,6 +109,7 @@ const struct {
 /* 4D63B8 */ static u8 lb_804D63B8;
 
 #ifdef MUST_MATCH
+
 static void order_data(void)
 {
     (void) "active deffect:";
@@ -624,6 +655,9 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                     lbVector_RotateAboutUnitAxis(&clamp_dir, &clamp_axis,
                                                  cur->desc.lb_unk0.unk_88);
                     link_dir = clamp_dir;
+                    #if BUILD_TARGET_PC
+                    pc_dyn_site(1, &link_dir);
+                    #endif
                 }
             }
 
@@ -633,6 +667,9 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                     cur->desc.lb_unk0.unk_50)
                 {
                     link_dir = natural_dir;
+                    #if BUILD_TARGET_PC
+                    pc_dyn_site(2, &link_dir);
+                    #endif
                 } else {
                     PSVECCrossProduct(&link_dir, &natural_dir,
                                       &convergence_axis);
@@ -763,6 +800,9 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                         lbVector_RotateAboutUnitAxis(&gnd_norm, &floor_cross,
                                                      1.5707964f);
                         link_dir = gnd_norm;
+                        #if BUILD_TARGET_PC
+                        pc_dyn_site(3, &link_dir);
+                        #endif
                         if (floor_hit != 0) {
                             on_ground = 1;
                         } else {
@@ -805,6 +845,9 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                                 &gnd_norm2, &floor_cross2, 1.5707964f);
                             on_ground = 1;
                             link_dir = gnd_norm2;
+                            #if BUILD_TARGET_PC
+                            pc_dyn_site(4, &link_dir);
+                            #endif
                         } else {
                             f32 end_x2 =
                                 DYN_FMA(link_dir.x, cur->desc.lb_unk0.unk_48,
@@ -843,6 +886,9 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                                     &gnd_norm2, &floor_cross2, ground_angle);
                                 on_ground = 1;
                                 link_dir = gnd_norm2;
+                                #if BUILD_TARGET_PC
+                                pc_dyn_site(5, &link_dir);
+                                #endif
                             } else {
                                 on_ground = 0;
                             }
@@ -869,18 +915,22 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
              * reassigned a few lines later (link_dir = adj_dir), so by then
              * the value the cross product saw is gone. */
             {
-                static int dc2 = -2;
+                static int dc2 = -2, dc2_hi;
                 if (dc2 == -2) {
                     const char* e = getenv("MELEE_DYNCHAIN");
+                    const char* dash = e != NULL ? strchr(e, '-') : NULL;
                     dc2 = e != NULL ? atoi(e) : -1;
+                    dc2_hi = dash != NULL ? atoi(dash + 1) : dc2;
                 }
                 if (dc2 >= 0) {
                     extern u32 gm_GetFrameCount(void);
-                    if ((int) gm_GetFrameCount() == dc2) {
+                    int fr2 = (int) gm_GetFrameCount();
+                    if (fr2 >= dc2 && fr2 <= dc2_hi) {
                         fprintf(stderr,
-                                "[DYNCROSS] cur_dir=(%08x,%08x,%08x) "
+                                "[DYNCROSS] f%d cur_dir=(%08x,%08x,%08x) "
                                 "link_dir=(%08x,%08x,%08x) "
                                 "axis=(%08x,%08x,%08x) angle=%08x\n",
+                                fr2,
                                 *(const unsigned*) &current_dir.x,
                                 *(const unsigned*) &current_dir.y,
                                 *(const unsigned*) &current_dir.z,
