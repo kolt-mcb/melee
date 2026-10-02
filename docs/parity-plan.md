@@ -234,16 +234,27 @@ well the causes are understood. Re-check with
       which is the scroll root's own first-write error. Localised to the ctr and
       cam joint world positions on the first scroll frame. Compare FIRST-frame
       values; the scroll is a feedback loop.
-- [ ] **Pura** (24) -- untouched. Same `p0.motion`-at-frame-1 signature as
-      RCruise and also spawns on animated geometry. Audit grpura.c for the three
+- [ ] **Pura** (24) -- audited, cause NOT found. No shadow structs and no raw
+      console offsets in grpura.c, so RCruise's shapes are absent; it does use
+      three union members (u.pura, u.pura2, u.pura3) whose host layouts differ
+      (pura.xC8 at offset 4, pura2.xC8 at 8, both gp+C8 on the console), but
+      whether the code aliases them in one phase is unproven. Measured: spawns
+      identical on both routes ((-60,25) and (-30,50)), collision installed
+      once with identical counts, 40 collision joints with identical matrices,
+      and the first ground tests bit-identical. `p0.x` AGREES with the console;
+      only `y` is wrong and no floor is found (-1 against 258).
+      Same `p0.motion`-at-frame-1 signature as RCruise and also spawns on
+      animated geometry. Audit grpura.c for the three
       alias shapes RCruise had (a cross-union write, a shadow struct with
       console padding, a raw `u.<other>.xNN` meaning this union's field) BEFORE
       treating it as a new cause. Cheapest candidate on the board.
 - [ ] **BigBlue** (24) -- cause NOT found; five offset fixes made with zero
-      parity change (d3a9a1e2b). Chase the route discriminator: 193 of 651
-      ground tests find a floor on the debug boot, 0 of 255 on the lockstep's
-      menu path, from identical spawns and identical collision data. The file's
-      own header comment describes that symptom for the track show/hide path.
+      parity change (d3a9a1e2b). **The "route discriminator" reported earlier
+      was an artefact and is RETRACTED**: "193 of 651 floors on the debug boot
+      against 0 of 255 on the menu path" compared 400 frames against ten. In
+      the same window both routes find zero floors (89 r=0 on the debug boot at
+      match frames 0-15). There is no route dependence. Always match the
+      GROUNDTRACE window before comparing counts.
 - [ ] **Kongo** (24) -- untouched, and probably NOT the other three's cause:
       it parts on `p0.y` and a floor IS found.
 - [ ] **Greens** (24) -- one missed RNG draw at frame 61.
