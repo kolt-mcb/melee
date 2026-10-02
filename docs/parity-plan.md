@@ -1042,3 +1042,23 @@ unk_44, unk_54, unk_84) from match frame 1 onward. Until that is done, "Fox's
 divergence starts at frame 4" should be read as "becomes visible at frame 4" --
 the rotation write is gated on !approximatelyZero(angle_diff), so the state can
 drift invisibly before it.
+
+## Venom: the Green Greens signature, on 23 cells (2026-10-02)
+
+Across the recorded logs every non-character Venom cell parts the same way:
+
+    match frame 476   rng_draws   port N   console N+1
+
+One extra console draw, at the same frame for every character, which is what a
+stage-level event looks like rather than a character one. Frames 584 and 596
+carry the same shape on other stages.
+
+Green Greens was exactly this signature and took one fix for 19 cells, so the
+method is proven: watch ALL THREE RNG entries (0x803804F8 HSD_Rand,
+0x80380528 HSD_Randf, 0x80380580 HSD_Randi -- watching only one makes the
+divergence appear to vanish) with MELEE_CODE_BP_FROM/TO bracketing 476 and
+MELEE_RNGAT on the port, then resolve the extra draw's caller.
+
+The union audit does NOT apply: venom and venom2 are both shifted views, but no
+callback group mixes them, so this is not the Greens mechanism even though it
+is the Greens signature.
