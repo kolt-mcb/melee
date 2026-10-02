@@ -338,9 +338,30 @@ well the causes are understood. Re-check with
       at 61, so every frame to 60 matched the console exactly, 8s and 7s
       included, and then the two differ by one generator at 61.
 
-      Next, and it needs the console side: a per-frame generator census on
-      Dolphin to compare populations, since no port-side measurement can say
-      which generator the console has. Everything cheaper has been tried.
+      The console side IS reachable and needed no new tooling:
+      `MELEE_CODE_BP=8039D3AC` with `MELEE_CODE_BP_FROM/_TO` logs every console
+      generator removal with r3 (the generator) and the call site, and
+      `MELEE_MEMAT=<pc>:<reg>:<words>` dumps memory behind a register at a
+      breakpoint. My claim that this needed new Dolphin instrumentation was
+      wrong -- MELEE_MEMDUMP, MELEE_MEMAT, MELEE_CODE_BP and a dozen *DUMP
+      hooks already exist.
+
+      First comparison, WITH AN UNRESOLVED AMBIGUITY -- do not build on it:
+
+          console removals  hf=3099: 6  3100: 6  3101: 4  3102: 4  3103: 4
+          port removals       f58:   6    f59: 6    f60: 6    f61: 4
+
+      Five console frames for a 58-62 window, so hf maps to match frames, but
+      the OFFSET is unpinned and decides the answer: hf=3101 <-> f60 means the
+      populations differ at 60 and the port is a frame late; hf=3101 <-> f61
+      means they agree and the cause is elsewhere. Pin the mapping before
+      reading anything into it.
+
+      Also note the console shows no frame with 5 removals, yet rng_draws says
+      it drew 5 at f61 -- so "draws = population = removals", which holds for
+      the port, does NOT hold on the console. That equivalence is the basis of
+      everything above and needs re-deriving for the console before the two
+      sides' numbers can be compared at all.
       Note the port's
       `MELEE_RNGLOG` is useless here -- its `f=` reads 0 throughout and the cap
       fills on the title demo (`gm_SetupTitleDemo`); `MELEE_RNGAT` is the tool.
