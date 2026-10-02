@@ -890,10 +890,49 @@ What remains for Fox is the real difference and it is now clean of that noise:
     bone 18   port bd15512f 3e25736a 3c01343a   ref bd155113 3e25735a 3c01341d
     bone 19   port be8723d9 3bcab181 b9a97e95   ref be8723e0 3bcab3b6 b9a9811f
 
-r3 is now 0 on both. The surviving ulp differences come out of the float chain
-in that same block -- PSMTXTranspose, PSMTXMultVec, HSD_QuatLib_8037ECE0,
-EulerToQuat, HSD_QuatLib_8037EC4C, PSMTXQuat, HSD_QuatLib_8037EB28 -- which is
-the known-hard part: two inferred FMA pairings in quatlib.c were tried earlier
-and reverted as no-ops. Attack it with the 750 quirks list
-([[melee-pc-750-float-quirks]]) a site at a time, disassembling with -M 750cl,
-rather than by guessing pairings.
+r3 is now 0 on both.
+
+The chain is now BISECTED, and quatlib is not in it. MELEE_DYNCHAIN=<frame>
+(added here) prints the block's inputs and its first intermediate, and the
+console's own value for the same intermediate is readable at the same call with
+MELEE_MEMAT=8037ECE0:3:3. At match frame 4:
+
+    local_axis  bone 17  port bcfc8114 bf385773 bf2256bc
+                         ref  bcfc8124 bf385774 bf2256bb
+                bone 18  port 3f1a70d5 3f3f0cd0 bc83eae0
+                         ref  3f1a70df 3f3f0cc8 bc83eb00
+
+local_axis is what PSMTXTranspose and PSMTXMultVec produced, BEFORE quatlib is
+called at all -- so HSD_QuatLib_8037ECE0, EulerToQuat, HSD_QuatLib_8037EC4C,
+PSMTXQuat and HSD_QuatLib_8037EB28 are all out, and so are the two FMA
+pairings an earlier session guessed at in quatlib.c.
+
+One step further up, rotation_axis differs too (MELEE_MEMAT=80342AA8:4:3 reads
+PSMTXMultVec's input vector on the console; 76 calls at that frame, matched to
+the port's by value):
+
+    bone 17  port bf1d1f5e bf3d66bd be8d139c
+             ref  bf1d1f5d bf3d66be be8d139b
+    bone 18  port 3f05d933 3efec2ae bf312f9f
+             ref  3f05d92c 3efec2a4 bf312fa7
+
+And the bone matrices were identical at frame 4, so parent_mtx is not the
+source either. That puts the fault upstream of this whole block, in what
+produces rotation_axis: PSVECCrossProduct of saved_dir and link_dir, then
+lbVector_Normalize. The normalize itself is already carefully modelled --
+lbvector.h's LV_SQ is the deliberately UNFUSED spelling, with a comment about
+exactly this 1-ULP class on the leg IK's normalise -- so look at the cross
+product's inputs before suspecting it again.
+
+AND A CORRECTION TO WHAT "FRAME 4" MEANS. rotation_axis is
+cur->desc.lb_unk0.unk_38: integrator state, carried frame to frame, not
+recomputed from scratch. The rotation write is gated on
+`if (!approximatelyZero(angle_diff))`. So the dynamics state can drift for
+several frames with no visible effect on any bone, and surface only when that
+gate first opens -- which is what frame 4 is. The bone-rotation bisection
+found when the difference became VISIBLE, not when it started.
+
+Next: compare the dynamics state itself (unk_38, unk_44, unk_54, unk_84) from
+match frame 1 onward, rather than the bone rotations. Until that is done,
+"Fox's divergence starts at frame 4" should be read as "becomes visible at
+frame 4".

@@ -907,6 +907,50 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
             PSMTXMultVec(bone_mtx, &rotation_axis, &local_axis);
             if (!approximatelyZeroVec3(local_axis)) {
                 Quaternion rotation;
+#if BUILD_TARGET_PC
+                /* MELEE_DYNCHAIN=<match frame>: the inputs to this rotation's
+                 * float chain and its first intermediate.
+                 *
+                 * Fox's bones 17-19 come out of here differing by a few ulp
+                 * from the console, and the chain is long -- PSMTXTranspose,
+                 * PSMTXMultVec, HSD_QuatLib_8037ECE0, EulerToQuat,
+                 * HSD_QuatLib_8037EC4C, PSMTXQuat, HSD_QuatLib_8037EB28. Two
+                 * inferred FMA pairings in quatlib.c were tried in an earlier
+                 * session and reverted as no-ops, so this bisects the chain
+                 * instead: local_axis is what PSMTXTranspose and PSMTXMultVec
+                 * produced, and the console's own value for it is readable
+                 * with MELEE_MEMAT=8037ECE0:3:3, which dumps the same vector
+                 * at the same call. If local_axis already differs the fault is
+                 * upstream of quatlib entirely. */
+                {
+                    static int dc = -2;
+                    if (dc == -2) {
+                        const char* e = getenv("MELEE_DYNCHAIN");
+                        dc = e != NULL ? atoi(e) : -1;
+                    }
+                    if (dc >= 0) {
+                        extern u32 gm_GetFrameCount(void);
+                        if ((int) gm_GetFrameCount() == dc) {
+                            fprintf(stderr,
+                                    "[DYNCHAIN] jobj=%p angle=%08x "
+                                    "axisvec=(%08x,%08x,%08x) "
+                                    "local_axis=(%08x,%08x,%08x) "
+                                    "rot_in=(%08x,%08x,%08x)\n",
+                                    (void*) jobj,
+                                    *(const unsigned*) &angle_diff,
+                                    *(const unsigned*) &rotation_axis.x,
+                                    *(const unsigned*) &rotation_axis.y,
+                                    *(const unsigned*) &rotation_axis.z,
+                                    *(const unsigned*) &local_axis.x,
+                                    *(const unsigned*) &local_axis.y,
+                                    *(const unsigned*) &local_axis.z,
+                                    *(const unsigned*) &jobj->rotate.x,
+                                    *(const unsigned*) &jobj->rotate.y,
+                                    *(const unsigned*) &jobj->rotate.z);
+                        }
+                    }
+                }
+#endif
                 HSD_QuatLib_8037ECE0(&local_axis, &angle_quat, angle_diff);
                 euler_angles.x = jobj->rotate.x;
                 euler_angles.y = jobj->rotate.y;
