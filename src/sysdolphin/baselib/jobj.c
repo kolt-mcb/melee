@@ -1979,15 +1979,67 @@ void HSD_JObjSetupMatrixSub(HSD_JObj* jobj)
     }
 }
 
+#if BUILD_TARGET_PC
+static int pc_rotwatch_depth;
+#endif
+
 void HSD_JObjSetMtxDirtySub(HSD_JObj* jobj)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_ROTWATCH=1, with MELEE_JOBJWATCH=<player>:<bone> naming the
+     * joint: every caller that marks that joint dirty, with the rotation it
+     * is leaving behind.
+     *
+     * This is the port-side answer to "what wrote this joint's rotation",
+     * which came up for both Kongo's spawn platform and Fox's leg chain. The
+     * console-side MELEE_ADDRWATCH cannot answer it in the headless build --
+     * its hits go to Dolphin's MEMMAP log channel, which does not reach
+     * stderr -- and the rotation setters here are inline in jobj.h, on the
+     * GameCube matching path, so they are the wrong place to probe. Every
+     * setter funnels through this function for any joint with children, and
+     * __builtin_return_address names the caller the way a link register does.
+     */
+    {
+        static int rw = -1;
+        if (rw < 0) {
+            const char* e = getenv("MELEE_ROTWATCH");
+            rw = e != NULL ? atoi(e) : 0;
+        }
+        /* Printed at any depth, with the depth, because this function
+         * recurses into its children: a joint deep in a chain is reached by
+         * PROPAGATION from an ancestor, never by a setter of its own, and
+         * gating on depth 0 hides it completely. depth>0 means "my ancestor
+         * was dirtied"; the setter's own name is only available at depth 0. */
+        if (rw > 0) {
+            extern void* pc_jobj_watch_ptr;
+            if (pc_jobj_watch_ptr == (void*) jobj) {
+                extern u32 gm_GetFrameCount(void);
+                fprintf(stderr,
+                        "[ROTWATCH] gframe=%u j=%p depth=%d from=%p "
+                        "rot=(%08x,%08x,%08x,%08x)\n",
+                        (unsigned) gm_GetFrameCount(), (void*) jobj,
+                        pc_rotwatch_depth, __builtin_return_address(0),
+                        *(const unsigned*) &jobj->rotate.x,
+                        *(const unsigned*) &jobj->rotate.y,
+                        *(const unsigned*) &jobj->rotate.z,
+                        *(const unsigned*) &jobj->rotate.w);
+            }
+        }
+    }
+#endif
     jobj->flags |= 0x40;
     if (!(jobj->flags & JOBJ_INSTANCE)) {
         HSD_JObj* child = jobj->child;
         while (child != NULL) {
             if (!(child->flags & JOBJ_MTX_INDEP_PARENT)) {
                 if (!HSD_JObjMtxIsDirty(child)) {
+#if BUILD_TARGET_PC
+                    pc_rotwatch_depth++;
                     HSD_JObjSetMtxDirtySub(child);
+                    pc_rotwatch_depth--;
+#else
+                    HSD_JObjSetMtxDirtySub(child);
+#endif
                 }
             }
             child = child->next;

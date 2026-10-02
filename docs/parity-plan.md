@@ -759,3 +759,64 @@ grkongo.c's views disagree about the host layout in two directions:
   two views declare the same console offset with the same type, swapping the
   view is console-identical and separates the host storage for free; e.g.
   kongo2.xD8 is console +20 like kongo.xD8 but host +24, clear of xDC at +28.
+
+## Fox: the bone comparison needs a caveat (2026-10-02)
+
+Bisected, one run per frame, Fox vs Fox on Battlefield (parts at match frame 5
+on p0.aihash):
+
+    frames 1, 2, 3   bones 17, 18, 19 BIT-IDENTICAL, r3 = 0 on both sides
+    frame 4          r0..r2 differ by ulps, and the port's r3 = 3fc9b0ea
+                     where the console's is 0
+
+So the divergence starts exactly at frame 4, and the matrices (m0..m11) are
+still identical there -- which is why the aihash parts at 5, one frame later.
+
+The animation skeleton agrees exactly. MELEE_BONESFULL prints both the
+displayed joint (r*) and the animation joint (ar*), and at frame 4 ar* is
+identical on both sides while r* differs. By the dump's own documentation that
+makes it a blend-weight difference rather than an animation difference -- but
+lb_8000C490, the blend, is called ZERO times at frame 4 on either side
+(MELEE_BLENDAT on the port, a breakpoint on 0x8000C490 on the console).
+
+CAVEAT, and it matters for how the earlier Fox note should be read: the port's
+r3 at frame 4 is a quaternion w, and nothing in the fighter path writes a w
+except ft_0899.c's leg-IK save/restore --
+
+    rot_save0 = ik.jobj0->rotate;     /* whole Quaternion, w included */
+    ... solve ...
+    ik.jobj0->rotate = rot_save0;     /* direct struct copy, no SetMtxDirty */
+
+The port's dump therefore catches that joint while the IK's solved rotation is
+still in place and the console's catches it after the restore, or the other way
+round. The two dumps are not sampling the same moment once the IK is running,
+so "bones 18/19/20 differ by N ulp" is not safe to read as a simulation
+divergence. It is safe for frames 1-3, where they agree exactly -- and the fact
+that they agree there is itself the evidence that the sampling only parts once
+the IK engages.
+
+And the IK does engage at frame 4. MELEE_ROTWATCH=1 (added here, driven by
+MELEE_JOBJWATCH=<player>:<bone>) names every call that marks a joint's matrix
+dirty, with the rotation left behind:
+
+    bone 18   frames 1,2,3: one propagation per frame
+              frames 4,5,6: TWO per frame
+    bone 17   frame 3: one, at depth 4
+              frame 4: two, at depth 4 and at depth 1
+
+The second write at frame 4 leaves exactly the ar* animation value, which both
+sides agree on. Note both joints are only ever reached by PROPAGATION from an
+ancestor (depth > 0), never by a setter of their own, so the originating setter
+is higher up the skeleton than either.
+
+Next: settle the sampling first, not the arithmetic. Establish where in the
+frame each side's MELEE_BONES fires relative to ft_0899.c's IK restore, and
+re-take the frame-4 comparison at a point both sides can agree on -- otherwise
+any ulp hunt here is chasing the instrument again. The real divergence is not in
+doubt (the harness's own aihash column parts at frame 5 on a consistent key);
+only its location is.
+
+A note on the new tool: MELEE_ROTWATCH prints at any recursion depth
+deliberately. Gating it to depth 0, which is where __builtin_return_address
+names the real setter, hid these joints entirely -- they are never dirtied
+directly.
