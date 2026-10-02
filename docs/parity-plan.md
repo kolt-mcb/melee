@@ -518,3 +518,77 @@ well the causes are understood. Re-check with
       Still unexplained: rng_draws first differs at 61, not 60, although the
       populations differ at 60. So "draws = removals" fails on at least one
       side, and that should be settled alongside the life countdown.
+
+## Kongo: slot 1's spawn joint (2026-10-02)
+
+Kongo Jungle is 25 cells, none identical, and the grid classes it "start": the
+fighters part on match frame 1. Measured either side, the cause is one spawn
+point:
+
+    slot 0   console (24.5000, 1.0000, 0.0000)     port (24.5000, 1.0000)
+    slot 1   console (-22.8034, 31.7913, -2.3540)  port (-16.0264, 28.6641)
+
+Slot 0 is exact. Slot 1 is not, and p1's x at match frame 1 is exactly the
+port's slot-1 x, so nothing else has touched it yet -- p0 never differs, p1
+always does.
+
+Console side: MELEE_CODE_BP=801C2DF0 gives the slot in r3 and
+MELEE_MEMAT=801C2E1C:31:3 the Vec3 that lb_8000B1CC wrote, which is the
+instruction after the call inside Ground_801C2D24. Port side:
+MELEE_STAGE_DIAG=1 prints the same thing as [X280] get.
+
+Where it goes wrong is the joint INDEX. The pair table names joints by their
+position in a depth-first walk of the map's joint tree (Ground_801C34AC), and
+the port's walk assigns map 10's slot 0 from joint index 6 -- which is right --
+and slot 1 from joint index 20 -- which is not. So the two walks agree early
+and part somewhere between. The walk skips the children of a JOBJ_INSTANCE
+node, so one wrong instance flag shifts every index after it.
+
+What is already ruled out:
+
+  - The pair data is read correctly. The joint indices come out monotonically
+    increasing (2,3,4,5,6,17,18,...,20,21,38), which a misread stride or a
+    byte-order mistake does not produce.
+  - x280[] is not overflowing. The walk writes slots up to 152 and the array
+    has 261 entries, so those are real slots, not unswapped shorts.
+
+MELEE_STAGE_DIAG=2 (added here) prints the whole tree in the walk's own order
+with each joint's world position, so the joint carrying the console's
+(-22.80, 31.79, -2.35) can be named and the gap between the two indices
+counted.
+
+## Big Blue: not the stage file (2026-10-02)
+
+Five fixes to grbigblue.c changed nothing because the first divergence is not
+in it. The cell parts at match frame 1 on rng_draws, port 0 against the
+console's 1, and watching all three RNG entry points shows the console's one
+draw is an HSD_Randi from ftCo_8008A7A8+0x118 -- the fighter idle-animation
+picker -- called from ftCo_Wait_Anim+0x30.
+
+MELEE_FTWAIT=1 prints the branch that function takes. On Big Blue the port
+calls ftCo_Wait_Anim ZERO times where the console calls it every frame 0-3 for
+both fighters; the same build calls it 14 times on Green Greens. So the port's
+fighters never reach the idle state at all, which agrees with the grid's class
+for the stage ("start", first fields p0.motion, p0.x, p0.animf) and with the
+port's fighters carrying vx=-0.0597 at frame 3 where the console's carry 0.
+
+Big Blue spawns its fighters on a moving car. The missing draw is a symptom;
+the question is why they do not come to rest.
+
+## Watch the measuring key (2026-10-02)
+
+Two instruments that read the same quantity at different moments in the frame
+will disagree by a frame, and a one-frame disagreement looks exactly like a
+one-frame bug. This plan lost most of a day to one: `mf=`, added to avoid
+inferring offsets, was published at frame end and read mid-frame.
+
+Before believing any cross-machine series, check that both sides sample at the
+same point, and prefer a key whose sampling moment is visible in the output.
+Dolphin now prints mf= live and mf0= from frame end side by side for exactly
+this reason.
+
+A corollary that cost almost as much: the RNG is three functions, not one.
+HSD_Rand (0x803804F8), HSD_Randf (0x80380528) and HSD_Randi (0x80380580) each
+carry their own copy of the LCG on console, so MELEE_CODE_BP wants all three.
+Watching one of them made Green Greens look like it had no RNG divergence at
+all. MELEE_CODE_BP's own comment said so and was not read.

@@ -2797,6 +2797,52 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
         fprintf(stderr, "[X280] MATCH map=%d pairs=%p count=%d\n",
                 (int) map_id, (void*) pair, (int) count);
     }
+    /* MELEE_STAGE_DIAG=2: the whole joint tree in the order this walk counts
+     * it, with each joint's world position.
+     *
+     * The pairs name joints by their index in this traversal, so the index is
+     * only as good as the traversal agreeing with the console's. On Kongo
+     * Jungle slot 0 (joint index 6) lands on exactly the console's spawn,
+     * (24.5, 1.0, 0.0), and slot 1 (joint index 20) lands on (-16.03, 28.66)
+     * where the console has (-22.80, 31.79, -2.35) -- so the two walks agree
+     * early and part later. Printing the indexed tree says which joint carries
+     * the console's value, and the gap between the two indices is the number
+     * of joints one walk counts and the other does not.
+     *
+     * The walk below skips the children of a JOBJ_INSTANCE node, so a wrong
+     * instance flag shifts every index after it. */
+    if (getenv("MELEE_STAGE_DIAG") != NULL &&
+        atoi(getenv("MELEE_STAGE_DIAG")) >= 2)
+    {
+        HSD_JObj* w = root;
+        int idx = 0;
+        while (w != NULL && idx < 400) {
+            Vec3 wp;
+            lb_8000B1CC(w, NULL, &wp);
+            fprintf(stderr,
+                    "[X280TREE] map=%d idx=%d jobj=%p world=(%.4f,%.4f,%.4f) "
+                    "t=(%.3f,%.3f,%.3f) flags=%X%s\n",
+                    (int) map_id, idx, (void*) w, (double) wp.x, (double) wp.y,
+                    (double) wp.z, (double) w->translate.x,
+                    (double) w->translate.y, (double) w->translate.z,
+                    w->flags, (w->flags & JOBJ_INSTANCE) ? " INSTANCE" : "");
+            if (!(w->flags & JOBJ_INSTANCE) && HSD_JObjGetChild(w) != NULL) {
+                w = HSD_JObjGetChild(w);
+            } else if (HSD_JObjGetNext(w) != NULL) {
+                w = HSD_JObjGetNext(w);
+            } else {
+                while (1) {
+                    if (HSD_JObjGetParent(w) == NULL) { w = NULL; break; }
+                    if (HSD_JObjGetNext(HSD_JObjGetParent(w)) != NULL) {
+                        w = HSD_JObjGetNext(HSD_JObjGetParent(w));
+                        break;
+                    }
+                    w = HSD_JObjGetParent(w);
+                }
+            }
+            idx++;
+        }
+    }
     if (pair == NULL || count <= 0) {
         return;
     }
