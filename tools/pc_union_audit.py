@@ -34,6 +34,34 @@ for line in m.group(1).split('\n'):
     mm = re.match(r'\s*struct (\w+) (\w+);', line)
     if mm: views[mm.group(2)] = mm.group(1)
 
+# Where a field's console offset comes from.
+#
+# The /* +C gp+D0 */ comments give it directly but cover only 59 of the 100
+# views. The field NAMES give it for nearly all of them, because nearly every
+# field is named for where it sits on the console -- with two conventions in
+# play: most name the console ADDRESS (xD0 is gp+0xD0, union offset 0xD0-0xC4)
+# and some name the offset INSIDE the view (greens.xC is union offset 0xC).
+# Reading the second kind as the first skips the struct in silence, which is
+# how a first cut of this reported "greens: 0 shifted" for the one view
+# already proved shifted. So the convention is decided per struct.
+def field_num(n):
+    mm = re.match(r'^x([0-9A-F]{1,3})(?:_|$)', n)
+    return int(mm.group(1), 16) if mm else None
+
+def convention(names):
+    nums = [v for v in (field_num(f) for f in names) if v is not None]
+    return 'gp' if nums and max(nums) >= 0xC4 else 'union'
+
+def console_off(name, conv):
+    v = field_num(name)
+    if v is None: return None
+    if conv == 'gp':
+        return v - 0xC4 if 0xC4 <= v <= 0x3FF else None
+    return v if v <= 0x3FF else None
+
+structs = {sm.group(1): sm.group(2) for sm in
+           re.finditer(r'\nstruct (\w+) \{\n(.*?)\n\};', types, re.S)}
+
 decl = {}
 for sm in re.finditer(r'\nstruct (\w+) \{\n(.*?)\n\};', types, re.S):
     name, body = sm.group(1), sm.group(2)
@@ -88,7 +116,9 @@ for fname, fns in groups:
     hits.append((fname, fns, dict(used), risky))
 
 # host offsets for every struct named in a risky group, from the debug info
-need = sorted({views[v] for _, _, used, _ in hits for v in used if views[v] in decl})
+# every view, not just the ones in mixed groups: the second pass below
+# reports on all of them
+need = sorted({t for t in views.values() if t in structs})
 cmds = []
 for t in need: cmds += ['-ex', f'ptype /o struct {t}']
 out = subprocess.run(['gdb', '-batch', '-q', '--nx', 'build/pc/melee-pc'] + cmds,
@@ -138,3 +168,32 @@ for fname, fns, used, risky in hits:
             if len(bad) > 5: print(f"        ... and {len(bad)-5} more shared offsets disagree")
     print()
 print(f"{len(hits)} groups mix a pointer-bearing view with another view")
+
+# A second, wider pass: every view, from the field names rather than the
+# comments. A shifted view is not by itself a bug -- a view used on its own is
+# merely laid out differently here -- but a shifted view in a mixed group is.
+print()
+print("=" * 78)
+print("every view, console offsets taken from the field names:")
+print()
+mixed = {v for _, _, used, _ in hits for v in used}
+shifted = {}
+for vn, t in sorted(views.items()):
+    if t not in host or not host[t]: continue
+    conv = convention(host[t].keys())
+    bad = sorted((c, f, h) for f, h in host[t].items()
+                 for c in [console_off(f, conv)] if c is not None and c != h)
+    if bad: shifted[vn] = bad
+    # where both sources exist they must agree; say so if they do not
+    for off, f in decl.get(t, ()):
+        if f in host[t] and console_off(f, conv) not in (None, off):
+            print(f"  NOTE {vn}.{f}: comment says +{off}, "
+                  f"name says +{console_off(f, conv)}")
+for vn, bad in shifted.items():
+    tag = "  IN A MIXED GROUP" if vn in mixed else ""
+    print(f"  {vn:<20} {len(bad):>2} shifted, first "
+          f"{bad[0][1]} console +{bad[0][0]} host +{bad[0][2]}{tag}")
+print()
+print(f"{len(shifted)} of {len(views)} views are laid out differently here;")
+print(f"{len(set(shifted) & mixed)} of those are used in a group that mixes views, "
+      "which is the shape that broke Green Greens.")
