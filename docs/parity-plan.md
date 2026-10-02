@@ -458,282 +458,49 @@ well the causes are understood. Re-check with
       `pp->life = life + 1`, neither under a BUILD_TARGET_PC guard, so both are
       the console's own behaviour.
 
-      THE LAG IS UNIFORM, measured per idnum with numChild (generator offset
-      0x50, so MELEE_MEMAT needs 21 words):
+      THE LAG WAS NOT REAL. It was this plan's own measuring key.
 
-          port     f54:9   f55:8   f56:6   f57:5   f58:3   f59:2   f60:0
-          console mf53:9  mf54:8  mf55:6  mf56:5  mf57:3  mf58:2  mf59:0
+      `mf=` was added (Dolphin fb0e8f2) to stop offsets having to be inferred
+      from the unstable host frame counter. It reads g_melee_match_frame, which
+      is published from OnFrameEnd and from the post-sim trace breakpoint --
+      both of which run AFTER a breakpoint sited in the middle of a frame. So
+      every mid-frame [CODEBP]/[MEMAT] line carried the PREVIOUS frame's
+      number, while the port's instruments read their counter live. The error
+      has a direction: it makes the console look one frame ahead of the port.
+      Which is exactly, and only, what the "one frame late" chain was.
 
-      One frame, consistently, over seven frames, and the same lag holds across
-      the preceding batch (the ...:2 -> 0 run ending port f44 / console mf43).
-      So the port's whole child lifecycle for this generator runs a frame
-      behind; nothing about the counts differs.
+      Measured rather than argued (Dolphin 0d14eb3 reads mf live and prints the
+      frame-end value beside it as mf0): across 417 in-match hits of
+      hsd_8039D3AC in this cell, mf0 == mf - 1 on every single one. Re-keyed:
 
-      CORRECTION to the wording above: `idnum` is NOT a unique instance
-      identity. Four distinct generator pointers carry idnum 455 in this run,
-      and the three entries per frame at f26 are three different generators,
-      not three passes -- the walk runs with a single mask (00060000). So idnum
-      identifies a group, not an object.
+          console removals  f54:4  f55:6  f56:6  f57:6  f58:6  f59:6  f60:6  f61:4
+          port    removals                              f58:6  f59:6  f60:6  f61:4
 
-      The lag finding survives, with its scope bounded: across f54-f60 exactly
-      ONE generator carries idnum 455, so the numChild series compared there is
-      unambiguous. At f26, f30 and f40 three do, which is exactly where the
-      ambiguity was flagged.
+      Identical on every frame both cover. The numChild series agrees the same
+      way once re-keyed. So nothing about this generator's lifecycle differs,
+      and the four commits built on the lag -- 4597962ff, ce6491876, f48186e07
+      and the chain quoted above -- describe an artefact.
 
-      Next: to trace the lag earlier than f54, match generators individually --
-      the census prints `gen=` pointers, and the console's MEMAT prints r3, so
-      pair them by (idnum, numChild) history rather than idnum alone. The
-      remaining question is unchanged: what starts this generator's children a
-      frame late.
+      A ±1 shift makes any monotone series agree with itself, so "it fits now"
+      was never the evidence. The evidence is mf0 == mf - 1 at the breakpoint,
+      measured directly, with its sign fixed by where the publish happens.
+
+      EVERYTHING ELSE KEYED BY mf IS SUSPECT BY ONE FRAME in the same
+      direction, for any breakpoint not sited at frame end. Re-measure before
+      relying on it.
+
+      What survives for Greens, all of it measured on a key both sides share:
+      the cell first parts at match frame 61, port 4 draws against the console's
+      5; every frame to 60 agrees; the port's generators are parked parents
+      (particle.c:8041 re-parks them every frame, so they draw once each); kind
+      and genLife agree at the call; gen->life agrees exactly; and removals now
+      agree at 61 too, 4 against 4.
+
+      So the extra draw is NOT a removal, and it is not this generator. The
+      population walked at frame 61 is where to look next: re-run the port's
+      MELEE_PGEN census and the console's walk-site MEMAT over frames 55-62 on
+      the live key, and diff the generator sets rather than their counts.
 
       Still unexplained: rng_draws first differs at 61, not 60, although the
       populations differ at 60. So "draws = removals" fails on at least one
       side, and that should be settled alongside the life countdown.
-
-## RCruise: the one term left (2026-10-01)
-
-Three console-offset aliases in the scroll path are fixed (c6449d315) and the
-stage scrolls. At match frame 1 `motion`, `animf`, `x`, `goa`, `floor`, `env`
-and `ecbby` all agree; the fighters stand on the stage. What is left is one
-constant:
-
-    p0.y  port 37.6110  console 47.0931   diff 9.4821
-    p1.y  port 50.5931  console 60.0751   diff 9.4820
-
-That is the scroll root's own error, measured at its first write:
-
-    console scroll root y, first real value  28.8301
-    port    scroll root y, first real value  19.3480
-    difference                                9.4821
-
-Not the formula and not the camera offset. The port's terms reproduce its own
-answer exactly: `cam_y_offset` 34.32 (applied twice, once subtracted and once
-added after the negation), sp18 (ctr joint world) (276.21, 75.90, 274.56), sp24
-(cam joint world) (276.21, 77.22, 284.46), diff (0, 1.32, 9.90), giving
-sp64.y 14.972, negated and offset to 19.348. For the console's 28.8301 its
-`(-diff.y * sp18.z/diff.z + sp18.y)` must be 29.81 where the port's is 39.29.
-
-So the wrong inputs are the **ctr and cam joint world positions**, which come
-from `Ground_801C3FA4(gobj, 1)` and `(gobj, 2)` -- depth-first node counts
-again. The port's locals are node 1 (416.5, 165.0, 656.0) and node 2
-(0, 2.0, 15.0). Both sides start with the root at (0,0), so the divergence is
-in those joints on the very first scroll frame.
-
-Next: read the console's ctr/cam joint world positions at its first scroll
-call. Console map_gobjs[3] is 0x80c2c780, and ScrollVars.ctr_jobj is gp+F8 on
-the console (union 0xC4 + 0x34), so the pointer can be watched out of map 3's
-Ground and then the joint's own matrix watched in turn. Note the scroll is a
-feedback loop -- it reads joints whose world positions depend on the root it
-moved last frame -- so compare first-frame values, not steady state.
-
-## Checklist (2026-10-01, after the day's work)
-
-Measured state: **435 of 695 runnable cells clean = 62.6%**, unchanged today.
-Nothing moved to clean; what moved is how much differs inside cells and how
-well the causes are understood. Re-check with
-`python3 tools/pc_lockstep_matrix.py report`.
-
-### Stages
-
-- [ ] **RCruise** (24) -- scroll FIXED and emulator-verified (c6449d315): nine
-      differing fields down to two. One term left: both fighters 9.482 too low,
-      which is the scroll root's own first-write error. Localised to the ctr and
-      cam joint world positions on the first scroll frame. Compare FIRST-frame
-      values; the scroll is a feedback loop.
-- [ ] **Pura** (24) -- audited, cause NOT found. No shadow structs and no raw
-      console offsets in grpura.c, so RCruise's shapes are absent; it does use
-      three union members (u.pura, u.pura2, u.pura3) whose host layouts differ
-      (pura.xC8 at offset 4, pura2.xC8 at 8, both gp+C8 on the console), but
-      whether the code aliases them in one phase is unproven. Measured: spawns
-      identical on both routes ((-60,25) and (-30,50)), collision installed
-      once with identical counts, 40 collision joints with identical matrices,
-      and the first ground tests bit-identical. `p0.x` AGREES with the console;
-      only `y` is wrong and no floor is found (-1 against 258).
-      Same `p0.motion`-at-frame-1 signature as RCruise and also spawns on
-      animated geometry. Audit grpura.c for the three
-      alias shapes RCruise had (a cross-union write, a shadow struct with
-      console padding, a raw `u.<other>.xNN` meaning this union's field) BEFORE
-      treating it as a new cause. Cheapest candidate on the board.
-- [ ] **BigBlue** (24) -- cause NOT found; five offset fixes made with zero
-      parity change (d3a9a1e2b). **The "route discriminator" reported earlier
-      was an artefact and is RETRACTED**: "193 of 651 floors on the debug boot
-      against 0 of 255 on the menu path" compared 400 frames against ten. In
-      the same window both routes find zero floors (89 r=0 on the debug boot at
-      match frames 0-15). There is no route dependence. Always match the
-      GROUNDTRACE window before comparing counts.
-- [ ] **Kongo** (24) -- untouched, and probably NOT the other three's cause:
-      it parts on `p0.y` and a floor IS found.
-- [ ] **Greens** (24) -- one missed RNG draw at frame 61, LOCALISED to the
-      particle system. `rng_draws` is a DERIVED per-frame count (the LCG
-      stepped between consecutive frames' seeds), so this is one draw missing
-      inside frame 61, not a cumulative drift. `MELEE_RNGAT=58-62` on the port
-      gives every draw with its site:
-
-          gframe=58  6 draws  0x7e5eb9
-          gframe=59  6 draws  0x7e5eb9  + 2 draws 0x5a4b0f
-          gframe=60  6 draws  0x7e5eb9
-          gframe=61  4 draws  0x7e5eb9   <- console makes 5
-
-      0x7e5eb9 is `hsd_8039EE24` at particle.c:9112; 0x5a4b0f is
-      `ftCo_800A4BEC`. So the port's particle system draws one fewer time on
-      that frame -- one particle's worth of randomness. The console's own RNG
-      callers (MELEE_RNG_WATCH) include 0x8039ef04 and the 0x8039b* group, the
-      same particle neighbourhood, so both sides draw there heavily.
-      NARROWED FURTHER with MELEE_PGEN (added here): the draws are a census of
-      live generators, because every generator on this stage has random=0.0 and
-      so draws exactly once per pass. The port walks 6, 6, 4 generators on
-      frames 59, 60, 61 -- so it holds ONE FEWER LIVE GENERATOR than the
-      console at frame 61 (it lost two between 60 and 61, the console one).
-      Not a branch difference and not a missing draw inside a generator: a
-      generator's lifetime ends a frame early.
-      CHAIN ESTABLISHED. A generator with genLife == 1 is removed on the frame
-      it is processed (particle.c:9180: `life = genLife - 1; if (life == 0)`
-      calls hsd_8039D3AC, which unlinks). MELEE_PGEN now also logs removals,
-      and all six are removed on EVERY frame 58, 59 and 60 while the census
-      still shows six with genLife=1 each frame -- so they are not persisting,
-      they are re-created every frame. Therefore:
-
-          one fewer RNG draw at f61
-            = one fewer generator walked
-            = one fewer generator CREATED that frame
-            = one fewer effect spawned
-
-      So this is not a lifetime bug and nothing retires early; my earlier
-      reading of hsd_8039D3AC as "the retirement path" was wrong -- it runs for
-      every generator every frame.
-
-      And the last link does NOT reach effect spawning: MELEE_EFTRACE shows only
-      22 efSync_Spawn calls in the whole run, the last at port frame 2300, well
-      before match frame 61 (about port frame 2316). So generators are not
-      created by effect spawns each frame.
-
-      Also retract "6, 6, 6 then 4": that was a window artefact. Over match
-      frames 50-70 the port's draws per frame run
-      4 4 4 8 4 8 7 6 6 8 6 [4] 4 6 4 4 5 8 4 4 4 -- a fluctuating population,
-      in which frame 61's 4 is unremarkable. What IS true: the cell first parts
-      at 61, so every frame to 60 matched the console exactly, 8s and 7s
-      included, and then the two differ by one generator at 61.
-
-      The console side IS reachable and needed no new tooling:
-      `MELEE_CODE_BP=8039D3AC` with `MELEE_CODE_BP_FROM/_TO` logs every console
-      generator removal with r3 (the generator) and the call site, and
-      `MELEE_MEMAT=<pc>:<reg>:<words>` dumps memory behind a register at a
-      breakpoint. My claim that this needed new Dolphin instrumentation was
-      wrong -- MELEE_MEMDUMP, MELEE_MEMAT, MELEE_CODE_BP and a dozen *DUMP
-      hooks already exist.
-
-      First comparison, WITH AN UNRESOLVED AMBIGUITY -- do not build on it:
-
-          console removals  hf=3099: 6  3100: 6  3101: 4  3102: 4  3103: 4
-          port removals       f58:   6    f59: 6    f60: 6    f61: 4
-
-      Five console frames for a 58-62 window, so hf maps to match frames, but
-      the OFFSET is unpinned and decides the answer: hf=3101 <-> f60 means the
-      populations differ at 60 and the port is a frame late; hf=3101 <-> f61
-      means they agree and the cause is elsewhere. Pin the mapping before
-      reading anything into it.
-
-      MAPPING NOW PINNED: gating the breakpoint to match frame 61 alone gives
-      hf=3102, so hf=3102 <-> f61 and the earlier window realigns to
-      f58:6 f59:6 f60:4 f61:4 on the console against f58:6 f59:6 f60:6 f61:4 on
-      the port -- the populations differ at frame 60, a frame before rng_draws
-      reports it.
-
-      The port's side is now understood mechanistically. Its censused
-      generators are *parked parents*: particle.c:8041 does
-      `if (gen->numChild != 0) { gen->random = 0.0F; gen->genLife = 1;
-      return gen; }`, which is exactly their measured state (random 0.0,
-      genLife 1). So they are never removed, and genLife=1 brings them back
-      through the same branch every frame, drawing once each -- a stable
-      per-frame draw, not a lifetime about to expire.
-
-      CROSS-SIDE COMPARISON NOT YET VALID. The console generator dumped with
-      MELEE_MEMAT reads kind=0e400000, random=1.0, count=3e47e400, genLife=0,
-      while the port's read kind=08000000, random=0.0, count=0, genLife=1.
-      Different `kind` means these are different generators, so the field
-      differences say nothing. Establish correspondence first -- by kind, or by
-      walking both lists from their heads (console head hsd_804D78FC =
-      0x804D78FC) -- before comparing any field.
-
-      Also unresolved: the console shows no frame with 5 removals, yet
-      rng_draws says it drew 5 at f61, so "draws = removals" holds for the port
-      and not for the console.
-
-      **STRONGEST LEAD: the port is missing two whole generator kinds.**
-      Comparing kind distributions -- port over match frames 1-70 (524
-      generators, MELEE_PGEN=1-70), console over its MEMAT dumps (1641):
-
-          kind       port  console
-          0E000002     56      56     exact
-          08400000     40      40     exact
-          08040000      4       4     exact
-          08000003    112      92
-          0E000001     80      72
-          08000000    232     170
-          0E400000      0    1173     <- the console's most common, absent here
-          08000002      0      34     <- absent here
-
-      Three kinds matching exactly is what makes this comparable at all; the
-      two zeroes are then meaningful. Note 0E400000 = 08400000 | 0x06000000,
-      and the port HAS 08400000 in the exact console count, so the missing bits
-      are 0x06000000 in that combination.
-
-      Caveat before anyone acts: the two captures do not cover identical
-      windows (the port's is match-gated, the console's MEMAT fired beyond its
-      gate), and 1173 missing generators would skew rng_draws from frame 1
-      rather than frame 61 -- so either those generators do not draw (random <
-      0 skips the draw) or they fall outside the match. Resolve that before
-      treating the absence as the cause.
-      Note the port's
-      `MELEE_RNGLOG` is useless here -- its `f=` reads 0 throughout and the cap
-      fills on the title demo (`gm_SetupTitleDemo`); `MELEE_RNGAT` is the tool.
-- [ ] **Venom** (23) -- one missed RNG draw at 596 (and 476).
-- [ ] **Castle** (12) -- one missed RNG draw at 584.
-- [ ] **Story** (14) -- range 9..587, may be several causes rather than one.
-
-### Characters
-
-- [ ] **Fox** (29, 0 clean) -- reduced to ONE BIT and the writer named
-      (459e0b3f3): `HSD_JObjSetRotation` from `lb_8001044C` at lb_00F9.c:918.
-      Frames 1-4 identical, onset at frame 5 from identical inputs. Needs the
-      instruction stream for the `angle_diff` computation above that line, or a
-      print added to the Dolphin fork to compare intermediates. Do NOT guess at
-      fused sites -- two inferred pairings have already failed.
-- [ ] **Ice Climbers** (29, 0 clean) -- `rng_draws`, frames 1..46. Never
-      investigated. Nana is a second fighter driven by Popo.
-- [ ] **Kirby** (27, 2 clean) -- `p0.motion`, frames 1..405. Never
-      investigated. The copy-hat slots are heterogeneous.
-- [ ] **Yoshi** (23, 6 clean) -- `animf`, frames 1..585. Never investigated;
-      an animation counter, a different shape from the other three.
-- [ ] **The scattered 14** -- five are Luigi/Pichu `mv1c`, three `aihash`, two
-      `p1.motion` on Yoshi's Island. Probably three causes, not fourteen.
-
-### Harness, not parity
-
-- [ ] **Marth's 29 cells are unmeasured**, not failing: the port never leaves
-      the character select. Worth ~18 clean cells at the roster average.
-- [ ] **Sheik's 29 cannot be routed** (no CSS icon). Route via Zelda plus a
-      transform, or state 695 as the denominator.
-- [ ] **Re-run the grid at 7200 frames** once the rows and columns are clear.
-      600 frames certifies ten seconds; Jigglypuff and Ganondorf both looked
-      clean at 600 and parted at 1321 and 633.
-- [ ] **Re-baseline** when the grid is next complete -- but NOT while timeouts
-      are in the results file: `reached()` stores them as 0 and bakes a floor of
-      zero into those cells.
-
-### Method, learned the hard way today
-
-- The grid's verdict is binary per frame, so it **cannot show partial progress**
-  inside a cell. RCruise went from nine differing fields to two and still reads
-  `diverged @1`. For in-progress work measure the FIELD LIST at the divergent
-  frame; use the grid only for "is this cause gone".
-- Ask both sides the same question with the same instrument:
-  `MELEE_ADDRWATCH` on the console against a gdb hardware watchpoint on the
-  port. That is what cracked RCruise and Fox.
-- Prove a watch can fire before believing a negative: a control on a hot
-  address caught `MELEE_ADDRWATCH` reporting nothing because its window is in
-  MATCH frames and its hits log under `[RNGWATCH]`.
-- Do not infer an FMA pairing. quatlib.c says to read it from the instruction
-  stream, and two inferred ones were no-ops.
-- Line-number breakpoints in optimised stage files relocate across functions
-  and will invent a control flow that never happened.
