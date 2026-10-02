@@ -932,7 +932,38 @@ several frames with no visible effect on any bone, and surface only when that
 gate first opens -- which is what frame 4 is. The bone-rotation bisection
 found when the difference became VISIBLE, not when it started.
 
-Next: compare the dynamics state itself (unk_38, unk_44, unk_54, unk_84) from
-match frame 1 onward, rather than the bone rotations. Until that is done,
-"Fox's divergence starts at frame 4" should be read as "becomes visible at
-frame 4".
+Bisected two steps further, at match frame 4, with the console's values read
+at PSVECCrossProduct (0x80342E58) -- r3 is current_dir, r4 is link_dir -- and
+matched to the port's by value out of the 44 calls that frame:
+
+    current_dir   link 0 (bone 17)  EXACT MATCH, bf3ccf21 3ed359df 3f08d203
+                  link 1            port bf425c58 3f241888 bde6d283
+                                    ref  bf425c59 3f241885 bde6d27e
+                  link 2            port bf2e8e04 3f39c8b6 3dbbc6bb
+                                    ref  bf2e8e04 3f39c8b6 3dbbc69e
+
+    link_dir      link 0 (bone 17)  port bf4071c0 3f27802a bda8b409
+                                    ref  bf4071c2 3f27802b bda8b40a
+                  link 1            port bf1fb05e 3f46d714 3db28873
+                                    ref  bf1fb05f 3f46d716 3db2886d
+                  link 2            port bf5717a0 3f07a408 3dec5c0f
+                                    ref  bf57179e 3f07a408 3dec5c13
+
+So link 0 is the first divergence in the chain: its current_dir is bit-exact
+and its link_dir is 1-2 ulp out. Links 1 and 2 have both inputs wrong, which
+is what a per-link integrator does once the first link is off -- they are
+consequences, not separate faults.
+
+That puts the whole remaining question on what computes link_dir, which is
+local to lb_00F9.c and has five assignment sites: 626 (clamp_dir), 635
+(natural_dir), 765 (gnd_norm), 807 and 845 (gnd_norm2), reached through a
+branchy path involving PSVECCrossProduct, lbVector_Normalize and DYN_FMA
+spellings that are already partly modelled. Which branch link 0 takes at frame
+4 is the next thing to print; only then is it worth reading any of those float
+sites against -M 750cl.
+
+Also still worth doing, and cheaper: compare the dynamics state (unk_38,
+unk_44, unk_54, unk_84) from match frame 1 onward. Until that is done, "Fox's
+divergence starts at frame 4" should be read as "becomes visible at frame 4" --
+the rotation write is gated on !approximatelyZero(angle_diff), so the state can
+drift invisibly before it.

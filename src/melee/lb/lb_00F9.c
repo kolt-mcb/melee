@@ -855,6 +855,46 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
             angle_diff = lbVector_Angle(&current_dir, &link_dir);
             PSVECCrossProduct(&current_dir, &link_dir, &rotation_axis);
             lbVector_Normalize(&rotation_axis);
+#if BUILD_TARGET_PC
+            /* MELEE_DYNCHAIN, one step further up the bisection.
+             *
+             * rotation_axis is normalize(cross(current_dir, link_dir)) and it
+             * already differs from the console by 1-2 ulp at match frame 4,
+             * which is upstream of the whole quaternion chain. These are its
+             * two inputs. The console's current_dir is readable at the same
+             * call with MELEE_MEMAT=80342E58:3:3 (PSVECCrossProduct's first
+             * argument) and its link_dir with :4:3.
+             *
+             * Printed here rather than at the block below because link_dir is
+             * reassigned a few lines later (link_dir = adj_dir), so by then
+             * the value the cross product saw is gone. */
+            {
+                static int dc2 = -2;
+                if (dc2 == -2) {
+                    const char* e = getenv("MELEE_DYNCHAIN");
+                    dc2 = e != NULL ? atoi(e) : -1;
+                }
+                if (dc2 >= 0) {
+                    extern u32 gm_GetFrameCount(void);
+                    if ((int) gm_GetFrameCount() == dc2) {
+                        fprintf(stderr,
+                                "[DYNCROSS] cur_dir=(%08x,%08x,%08x) "
+                                "link_dir=(%08x,%08x,%08x) "
+                                "axis=(%08x,%08x,%08x) angle=%08x\n",
+                                *(const unsigned*) &current_dir.x,
+                                *(const unsigned*) &current_dir.y,
+                                *(const unsigned*) &current_dir.z,
+                                *(const unsigned*) &link_dir.x,
+                                *(const unsigned*) &link_dir.y,
+                                *(const unsigned*) &link_dir.z,
+                                *(const unsigned*) &rotation_axis.x,
+                                *(const unsigned*) &rotation_axis.y,
+                                *(const unsigned*) &rotation_axis.z,
+                                *(const unsigned*) &angle_diff);
+                    }
+                }
+            }
+#endif
 
             /* Rotate current_dir by angle_diff */
             {
