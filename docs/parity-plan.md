@@ -1000,12 +1000,33 @@ throw out wholesale: matrices needed it. MELEE_BONESFULL's m* fields are only
 trustworthy once something in the frame has forced the matrix, and the way to
 check that is the MTX_DIRTY flag the same dump prints.
 
-Which leaves the Fox question where it was: link 0's next->unk_2C is 1-2 ulp
-out on the solver's first frame, unk_2C comes from a matrix translation column,
-and the frame-4 matrices agree. So either the write happened at a frame where
-the port's and console's matrices legitimately differed in build state, or
-unk_2C is written somewhere other than the three sites in this file. Find every
-writer of unk_2C across the tree before measuring again.
+The other writer of unk_2C is now found, and it is not in lb_00F9.c:
+ftdynamics.c:31-33, inside ftCo_8009CB40_inline --
+
+    data->desc.lb_unk0.unk_2C.x = data->desc.lb_unk0.jobj->mtx[0][3];
+    data->desc.lb_unk0.unk_2C.y = data->desc.lb_unk0.jobj->mtx[1][3];
+    data->desc.lb_unk0.unk_2C.z = data->desc.lb_unk0.jobj->mtx[2][3];
+
+It reads the matrix translation column DIRECTLY, with no HSD_JObjSetupMatrix
+and no dirty check, so it captures whatever the matrix holds at that instant.
+Given what the calibration above establishes about lazy construction, that is
+exactly the hazard -- and the 1-2 ulp scale says both sides are reading a BUILT
+matrix that differs slightly at that moment, not one built and one identity
+(which would differ wholesale).
+
+So the matrix differs by ulps when ftDynamics reads it, and agrees by the
+post-sim sample. A matrix that is rebuilt later in the frame from agreeing
+inputs would do that.
+
+Next measurement, and it has to be at that instant rather than at frame end:
+breakpoint the inlined read inside ftCo_8009CB40 (console 0x8009CB40, the
+inline is a few instructions in) with MEMAT on the jobj, and print the same
+matrix port-side at the same statement. Anything sampled at frame end will keep
+agreeing and keep hiding this.
+
+Worth noting for context: ftDynamics was dead in this port until recently and
+only converted lately ([[melee-pc-dk-tie]]), so it has had far less exposure
+than the code around it.
 
 Also eliminated on the way, so it is not retried: the unfused
 `axis->y * axis->y + axis->z * axis->z` in lbVector_RotateAboutUnitAxis is
