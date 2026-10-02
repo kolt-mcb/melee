@@ -4003,7 +4003,42 @@ void Ground_801C4B50(HSD_Spline* spline, Vec3* arg1, Vec3* result, f32 arg8)
     f32 z1;
     f32 y0;
     splGetSplinePoint(arg1, spline, arg8);
+#if BUILD_TARGET_PC
+    /* MELEE_SPLROT=1: the tangent this rotation is built from.
+     *
+     * Kongo Jungle's travelling platform gets its position from
+     * splGetSplinePoint above -- which agrees with the console exactly, down
+     * to (14.0065, 37.8003, 15.9019) -- and its ROTATION from the tangent
+     * below. The console's comes out as ten degrees about Y (0.17453) and the
+     * port's as 0.0007 about Z, and that one rotation is the whole of the
+     * stage's 24-cell divergence: the fighter on slot 1 is placed through it.
+     *
+     * lbShadow_8000E9F0 leaves its output untouched when u is outside [0,1]
+     * or when spline->type is not 0-3, so a tangent that is never written
+     * reads as whatever the stack held -- which is what 0.0007 looks like.
+     * vec0 is seeded with a value no spline tangent can be so that case is
+     * visible rather than silent. */
+    vec0.x = vec0.y = vec0.z = -98765.0f;
+#endif
     lbShadow_8000E9F0(&vec0, spline, arg8);
+#if BUILD_TARGET_PC
+    {
+        static int sr = -1;
+        if (sr < 0) {
+            const char* e = getenv("MELEE_SPLROT");
+            sr = e ? atoi(e) : 0;
+        }
+        if (sr > 0) {
+            fprintf(stderr,
+                    "[SPLROT] spline=%p type=%d numcv=%d tension=%.4f u=%.6f "
+                    "tangent=(%.6f,%.6f,%.6f)%s\n",
+                    (void*) spline, (int) spline->type, (int) spline->numcv,
+                    (double) spline->tension, (double) arg8,
+                    (double) vec0.x, (double) vec0.y, (double) vec0.z,
+                    vec0.x == -98765.0f ? "  NEVER WRITTEN" : "");
+        }
+    }
+#endif
     lbVector_Normalize(&vec0);
     y0 = vec0.y;
     if (vec0.y < 0.0F) {
