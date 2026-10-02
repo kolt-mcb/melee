@@ -66,6 +66,44 @@ static grVe_Data grVe_803E5348 = {
 
 static int grVe_803E5380[3] = { 0 };
 
+#if BUILD_TARGET_PC
+/* The console walks several ADJACENT globals through one s32*; this port
+ * cannot.
+ *
+ * grVenom_80205F30 and friends take `base = (s32*) &grVe_803E5348` and index
+ * it by console word offsets. grVe_803E5348 is a grVe_Data -- 0x38 bytes
+ * there, 72 here, because its arwing_gobj[3] are four-byte pointers on the
+ * console and eight here. Offsets past word 13 are not even inside it: the
+ * symbol map puts grVe_803E5380 at word 14, grVe_803E5530 at word 122 and
+ * grVe_803E56A0 at word 214 from that base, so `base` is one pointer over a
+ * run of globals the linker placed end to end.
+ *
+ * Measured at Venom's match frame 476, both sides agreeing xC8 = 0:
+ * base[xC8+8] read 1997030808 (0x77084598, the low word of a heap address)
+ * where the console reads arwing_gobj[0], and base[xC8+11] read 0 (a
+ * pointer's zero upper half) where the console reads arwing_type[0]. The gate
+ * `entry[8] != 0` therefore passed for the wrong reason and `switch (state)`
+ * missed the case holding HSD_Randi(8) -- the one draw this stage's 23 cells
+ * part on.
+ *
+ * Every use is written #if/#else with the GameCube arm kept VERBATIM: a first
+ * attempt that merely re-spelled those expressions (base[x] for entry[x],
+ * *(HSD_GObj**)&base[x] for (HSD_GObj*)base[x]) changed that object's
+ * codegen. grVenom_80203FD4 already did this for base[base[xC8+14]+170].
+ *
+ * NOT addressed, same class: the two `(VenomSpawnData*) (base + type * 3)`
+ * casts read three words at word offset type*3, which stays inside the
+ * identical joints region for type 1-2 and crosses into arwing_gobj from 3
+ * up. */
+static int grVe_803E5530[53];
+static int grVe_803E56A0[6];
+#define VE_GOBJ(g) (grVe_803E5348.arwing.arwing_gobj[(g)->u.venom.xC8])
+#define VE_TYPE(g) (grVe_803E5348.arwing.arwing_type[(g)->u.venom.xC8])
+#define VE_W14(g) (grVe_803E5380[(g)->u.venom.xC8])
+#define VE_W7A(i) (grVe_803E5530[i])
+#define VE_WD6(i) (grVe_803E56A0[i])
+#endif
+
 static void stageGObj0_OnInit(Ground_GObj* gobj);
 static void stageGObj9_GObjProc(Ground_GObj* arg);
 
@@ -1119,7 +1157,11 @@ void grVenom_80204F20(Ground_GObj* arg0)
     }
 
     scale = Ground_801C0498();
+#if BUILD_TARGET_PC
+    state = VE_TYPE(gp);
+#else
     state = base[gp->u.venom.xC8 + 11];
+#endif
     if (state >= 8) {
         goto check_scale_uniform;
     }
@@ -1221,7 +1263,11 @@ void grVenom_802053B0(Ground_GObj* gobj)
         if (gp->u.venom.xD4 == 1) {
             gp->u.venom.xD4 = 0;
             grAnime_801C8138(gobj, gp->map_id,
+#if BUILD_TARGET_PC
+                             VE_W7A(VE_TYPE(gp)));
+#else
                              base[base[gp->u.venom.xC8 + 11] + 0x7A]);
+#endif
             return;
         }
 
@@ -1292,7 +1338,11 @@ void grVenom_802053B0(Ground_GObj* gobj)
 
     type_done:
         if (grAnime_801C83D0(gobj, 0, 7)) {
+#if BUILD_TARGET_PC
+            VE_GOBJ(gp) = NULL;
+#else
             base[gp->u.venom.xC8 + 8] = 0;
+#endif
             Ground_801C4A08(gobj);
         }
     } else {
@@ -1559,13 +1609,25 @@ void grVenom_80205F30(Ground_GObj* gobj)
         }
     }
 #endif
+#if BUILD_TARGET_PC
+    if (VE_GOBJ(gp) != NULL) {
+#else
     if ((u32) entry[8] != 0U) {
+#endif
+#if BUILD_TARGET_PC
+        if (VE_W14(gp) == 4) {
+#else
         if (entry[14] == 4) {
+#endif
             tmp_jobj = Ground_801C3FA4(gobj, 1);
             HSD_JObjSetRotationZ(tmp_jobj, 0.0F);
         }
 
+#if BUILD_TARGET_PC
+        state = VE_TYPE(gp);
+#else
         state = base[gp->u.venom.xC8 + 11];
+#endif
         switch (state) {
         case 1:
         case 2:
@@ -1606,7 +1668,11 @@ void grVenom_80205F30(Ground_GObj* gobj)
                     }
                     {
                         grVe_AnimData* anim_data = (grVe_AnimData*) base;
+#if BUILD_TARGET_PC
+                        s32 idx0 = VE_W14(gp);
+#else
                         s32 idx0 = base[gp->u.venom.xC8 + 14];
+#endif
                         s32 anim_arg =
                             grVe_GetAnimArg(fire_kind, gp, anim_data);
                         s32 anim_id = anim_data->anim_ids[idx0];
@@ -1614,8 +1680,16 @@ void grVenom_80205F30(Ground_GObj* gobj)
                                          1.0F);
                     }
                 } else {
+#if BUILD_TARGET_PC
+                    s32 idx0 = VE_W14(gp);
+#else
                     s32 idx0 = base[gp->u.venom.xC8 + 14];
+#endif
+#if BUILD_TARGET_PC
+                    s32 anim_id = VE_WD6(idx0);
+#else
                     s32 anim_id = base[idx0 + 0xD6];
+#endif
                     tmp_jobj = Ground_801C3FA4(gobj, anim_id);
                     HSD_JObjSetRotationZ(tmp_jobj, 0.0F);
                 }
@@ -1630,7 +1704,11 @@ void grVenom_80205F30(Ground_GObj* gobj)
             venom_80205F30_anim_done:;
             }
 
+#if BUILD_TARGET_PC
+            if ((other = VE_GOBJ(gp)) != NULL) {
+#else
             if ((other = (HSD_GObj*) base[gp->u.venom.xC8 + 8]) != NULL) {
+#endif
                 other_gp = other->user_data;
                 Ground_GetMapGObj(5);
                 lb_8000B1CC(Ground_801C3FA4(other, 5), NULL, &sp64);
@@ -1650,8 +1728,16 @@ void grVenom_80205F30(Ground_GObj* gobj)
             HSD_JObjSetTranslate(jobj, &sp94);
 
             {
+#if BUILD_TARGET_PC
+                s32 idx0 = VE_W14(gp);
+#else
                 s32 idx0 = base[gp->u.venom.xC8 + 14];
+#endif
+#if BUILD_TARGET_PC
+                s32 anim_id = VE_WD6(idx0);
+#else
                 s32 anim_id = base[idx0 + 0xD6];
+#endif
                 lb_8000B1CC(Ground_801C3FA4(gobj, anim_id), NULL, &sp94);
             }
             if (gp->u.venom.linked_gobj != NULL) {
@@ -1663,8 +1749,16 @@ void grVenom_80205F30(Ground_GObj* gobj)
 
             {
                 f32 rot_z;
+#if BUILD_TARGET_PC
+                s32 idx0 = VE_W14(gp);
+#else
                 s32 idx0 = base[gp->u.venom.xC8 + 14];
+#endif
+#if BUILD_TARGET_PC
+                s32 anim_id = VE_WD6(idx0);
+#else
                 s32 anim_id = base[idx0 + 0xD6];
+#endif
                 helper = Ground_801C3FA4(gobj, anim_id);
                 rot_z = HSD_JObjGetRotationZ(helper);
                 if (gp->u.venom.linked_gobj != NULL) {
@@ -1711,7 +1805,11 @@ void grVenom_80205F30(Ground_GObj* gobj)
 #endif
             if (!(gp->u.venom.xF0 & 7) && HSD_Randi(8) == 0) {
                 gp->u.venom.xFC = 0;
+#if BUILD_TARGET_PC
+                type_idx = VE_TYPE(gp);
+#else
                 type_idx = base[gp->u.venom.xC8 + 11];
+#endif
                 switch (type_idx) {
                 case 8:
                     if (gp->u.venom.xF0 > 0x3C && gp->u.venom.xF0 < 0xE6) {
@@ -1742,7 +1840,11 @@ void grVenom_80205F30(Ground_GObj* gobj)
                 HSD_GObj* far_other;
                 Ground* far_other_gp;
 
+#if BUILD_TARGET_PC
+                if ((far_other = VE_GOBJ(gp)) !=
+#else
                 if ((far_other = (HSD_GObj*) base[gp->u.venom.xC8 + 8]) !=
+#endif
                     NULL)
                 {
                     far_other_gp = far_other->user_data;
