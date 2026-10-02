@@ -701,14 +701,39 @@ and zero before the first spawn lookup -- and the port's own angle reads
 the group's init starts, grAnime_801C8138(arg0, map_id, 0). On the console the
 platform is mid-swing by the time the spawn is read; on the port it is at rest.
 
-HYPOTHESIS, not yet measured: the port is not advancing the stage's animation
-before the match starts, so every stage with pre-match animated geometry begins
-in a different pose. This port has form here -- an earlier session found 2852
-animations that silently never loaded ([[melee-pc-aram-vs-pointer]]) -- and it
-would explain why FOUR of the five stages that part at match start do so
-(RCruise, BigBlue, Kongo, Pura) rather than drifting later. Test it by counting,
-on both sides, how many times the stage's animation is advanced before the first
-spawn lookup, the same way the platform-updater count was taken.
+That animation hypothesis is now DEAD, and measured dead. MELEE_GRANIM=1
+(added here) prints what grAnime_801C8138 attaches and how far the attachment
+reaches. Kongo's map 10 does get an AnimJoint, and of its 46 joints exactly 2
+come away with an aobj -- neither of them the platform, which is idx 11 with
+aobj=NULL. That looked like the answer until the console was asked the same
+question: reading the console joint's own aobj (console +0x7C, word 31 -- the
+earlier 30-word dumps stopped one word short of it) gives
+
+    console platform joint 80c2bae0: aobj = 00000000
+
+NULL, exactly like the port's. 385 of the console's 1012 joints carry one, so
+the field is being read correctly; this joint simply is not AObj-animated on
+either side. The port's "2 of 46" is probably right.
+
+So the pre-match animation idea, and with it the tidy explanation for all four
+"start" stages, is out.
+
+What the timing says, in host frames of one run: the platform's rot.z jumps
+0 -> 0.17453 at hf 2907 and the first spawn lookup is at hf 2908. So the
+rotation is written one frame before the spawn is read, in a single step to
+full amplitude, and only then begins to swing.
+
+NEXT LEAD: grKongo_801D77E0 and fn_801D7700 set rotations with
+HSD_JObjSetRotationZ on joints held in gp->u.kongo3.xCC and xD0, and they run
+from a group init (grKongo_801D69B0 calls grKongo_801D7134 and
+grKongo_801D77E0) -- which is stage-load time, exactly where hf 2907 falls.
+And kongo3.xCC is one of the fields this file's host layout breaks: it is an
+8-byte pointer at host +8..16, and the s16 countdown kongo2.xCC sits at host
++12, INSIDE it. A pointer half-overwritten by a countdown, or a countdown
+corrupted by a pointer, would send that rotation to the wrong joint or nowhere.
+That ties the layout collisions already named above to the symptom, which no
+other candidate has done. Check which ground object grKongo_801D77E0 runs on
+and what joint pointer it reads there, on both sides.
 
 Separately, and worth fixing whatever the rotation turns out to be,
 grkongo.c's views disagree about the host layout in two directions:

@@ -340,13 +340,29 @@ void grKongo_801D577C(Ground_GObj* arg0)
         }
         if (kre > 0) {
             extern u32 gm_GetFrameCount(void);
+            /* And the spawn platform's own rotation, every frame.
+             *
+             * The console's joint for slot 1's parent has rot.z oscillating
+             * between 0.12834 and 0.17453 before the match even starts -- a
+             * swinging platform -- while the port read 0.00070 once, at the
+             * spawn. One sample cannot tell "not animated" from "animated,
+             * sampled at a different phase", and that distinction is the whole
+             * question. This prints it on every frame so the shape is visible:
+             * flat means the animation is not being applied here at all. */
+            extern HSD_JObj* Ground_801C2CF4(s32 i);
+            HSD_JObj* sp = Ground_801C2CF4(1);
+            HSD_JObj* spp = sp != NULL ? sp->parent : NULL;
             fprintf(stderr,
                     "[KGROT] f%u ENTRY gp=%p xC4=%d k2.xCC=%d xD4=%.5f "
-                    "xD8=%.5f xE0=%.6f xDC=%.6f\n",
+                    "xD8=%.5f xE0=%.6f xDC=%.6f | spawn1 parent rot="
+                    "(%.5f,%.5f,%.5f)\n",
                     gm_GetFrameCount(), (void*) gp, (int) gp->u.kongo3.xC4,
                     (int) gp->u.kongo2.xCC, (double) gp->u.kongo3.xD4,
                     (double) gp->u.kongo3.xD8, (double) gp->u.kongo3.xE0,
-                    (double) gp->u.kongo3.xDC);
+                    (double) gp->u.kongo3.xDC,
+                    spp ? (double) spp->rotate.x : -1.0,
+                    spp ? (double) spp->rotate.y : -1.0,
+                    spp ? (double) spp->rotate.z : -1.0);
         }
     }
 #endif

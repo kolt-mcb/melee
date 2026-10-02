@@ -1101,7 +1101,99 @@ void grAnime_801C8138(HSD_GObj* gobj, enum_t arg1, bool arg2)
     } else {
         aj = NULL;
     }
+#if BUILD_TARGET_PC
+    /* MELEE_GRANIM=1: what this actually attaches.
+     *
+     * Kongo Jungle's spawn platform has rot.z oscillating between 0.12834 and
+     * 0.17453 on the console before the match starts, and sits CONSTANT at
+     * 0.00070 on the port over every frame measured -- so the port is not
+     * animating that stage joint at all, rather than animating it out of
+     * phase. This is where the animation is attached, so this is where to see
+     * whether there is one to attach. An all-NULL triple here means the stage
+     * is static whatever else is right. */
+    {
+        static int ga = -1;
+        if (ga < 0) {
+            const char* e = getenv("MELEE_GRANIM");
+            ga = e ? atoi(e) : 0;
+        }
+        if (ga > 0) {
+            fprintf(stderr,
+                    "[GRANIM] map=%d anim=%d jobj=%p ajp=%p mjp=%p sap=%p "
+                    "aj=%p ma=%p sa=%p%s\n",
+                    (int) arg1, (int) arg2, (void*) jobj, (void*) ajp,
+                    (void*) mjp, (void*) sap, (void*) aj, (void*) ma,
+                    (void*) sa,
+                    (aj == NULL && ma == NULL && sa == NULL)
+                        ? "   NOTHING TO ATTACH"
+                        : "");
+        }
+    }
+#endif
     HSD_JObjAddAnimAll(jobj, aj, ma, sa);
+#if BUILD_TARGET_PC
+    /* And how far the attachment actually reached.
+     *
+     * HSD_JObjAddAnimAll walks the JObj tree and the AnimJoint tree in
+     * lockstep, so any shape mismatch between them silently attaches
+     * animations to the wrong joints or stops early. Kongo's map 10 does get
+     * an AnimJoint (aj is non-NULL above) and Ground_801C1CD0 ticks
+     * HSD_JObjAnimAll every frame, yet the spawn platform's rotation never
+     * moves -- so the question is whether the attachment reached that joint at
+     * all. This counts the joints in the subtree and how many came away with
+     * an AObj. */
+    {
+        static int ga2 = -1;
+        if (ga2 < 0) {
+            const char* e = getenv("MELEE_GRANIM");
+            ga2 = e ? atoi(e) : 0;
+        }
+        if (ga2 > 0) {
+            HSD_JObj* w = jobj;
+            int n = 0, with = 0, idx = 0;
+            while (w != NULL && n < 400) {
+                n++;
+                if (w->aobj != NULL) {
+                    with++;
+                    if (with <= 8) {
+                        /* With the translate, because the two probes that walk
+                         * this tree start from different roots and their
+                         * indices are not comparable. Kongo's spawn platform
+                         * is the joint at (-0.007, -0.114, 21.919). */
+                        fprintf(stderr,
+                                "[GRANIM]   idx %d aobj, t=(%.3f,%.3f,%.3f)\n",
+                                idx, (double) w->translate.x,
+                                (double) w->translate.y,
+                                (double) w->translate.z);
+                    }
+                }
+                if (w->translate.z > 21.9f && w->translate.z < 21.94f) {
+                    fprintf(stderr,
+                            "[GRANIM]   THE PLATFORM is idx %d, aobj=%p\n",
+                            idx, (void*) w->aobj);
+                }
+                if (!(w->flags & JOBJ_INSTANCE) &&
+                    HSD_JObjGetChild(w) != NULL) {
+                    w = HSD_JObjGetChild(w);
+                } else if (HSD_JObjGetNext(w) != NULL) {
+                    w = HSD_JObjGetNext(w);
+                } else {
+                    while (1) {
+                        if (HSD_JObjGetParent(w) == NULL) { w = NULL; break; }
+                        if (HSD_JObjGetNext(HSD_JObjGetParent(w)) != NULL) {
+                            w = HSD_JObjGetNext(HSD_JObjGetParent(w));
+                            break;
+                        }
+                        w = HSD_JObjGetParent(w);
+                    }
+                }
+                idx++;
+            }
+            fprintf(stderr, "[GRANIM] map=%d: %d joints in the subtree, "
+                            "%d carry an aobj\n", (int) arg1, n, with);
+        }
+    }
+#endif
     HSD_JObjReqAnimAll(jobj, 0.0f);
     archive = grDatFiles_801C6330(arg1);
     HSD_ASSERT(0x148, archive);
