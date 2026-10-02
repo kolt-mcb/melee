@@ -287,7 +287,21 @@ well the causes are understood. Re-check with
       GROUNDTRACE window before comparing counts.
 - [ ] **Kongo** (24) -- untouched, and probably NOT the other three's cause:
       it parts on `p0.y` and a floor IS found.
-- [ ] **Greens** (24) -- one missed RNG draw at frame 61, LOCALISED to the
+- [x] **Greens** -- FIXED (76c049e3e). 19 of the 24 cells are now identical for
+      600 frames; the 5 that remain are Fox, Kirby, Ice Climbers, Samus and
+      Young Link, which are the known character causes and fail on other stages
+      too. The cause was the init writing gp->u.greens while the updater reads
+      gp->u.greens2 -- the same bytes on GCN, pulled 12 apart here by two
+      pointers -- so the wind timer and its "entering the state" flag were
+      never written and the stage's state machine sat a step ahead of the
+      console's all match. Details below, including the two measurement
+      mistakes that cost the most time.
+
+      tools/pc_union_audit.py now looks for that shape everywhere: 59 of the
+      100 Ground union views are laid out differently here, and 18 of those are
+      used in a group that mixes two views. grkongo.c has four such groups.
+
+- [ ] **Greens, as it was** -- one missed RNG draw at frame 61, LOCALISED to the
       particle system. `rng_draws` is a DERIVED per-frame count (the LCG
       stepped between consecutive frames' seeds), so this is one draw missing
       inside frame 61, not a cumulative drift. `MELEE_RNGAT=58-62` on the port

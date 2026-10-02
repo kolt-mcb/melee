@@ -118,12 +118,24 @@ done
 # every shard decides the whole grid is still to do, and a sweep meant to finish
 # the last 200 cells re-runs all 900. The shards then still split the same
 # remaining list the same way, so they cover it exactly once between them.
+#
+# The seed is also kept as seed.json, because the merge needs it. Every shard's
+# file is a FULL copy of the baseline plus that shard's own work, so a plain
+# dict update over the three lets the last file's stale copy overwrite the other
+# two shards' fresh results -- `sorted()` puts results2 last, so a 24-cell
+# sweep landed 8 cells and silently dropped the rest. The merge now applies only
+# the entries a shard actually changed, and that is what seed.json is for.
+#
+# Re-seeded every run, not just when missing: a file left over from an earlier
+# sweep is not a snapshot of the current baseline, and the merge's comparison
+# needs one that is.
 BASE="$ROOT/tests/pc/lockstep_matrix.json"
-for ((s = 0; s < N; s++)); do
-    if [ ! -e "$OUT/results$s.json" ] && [ -e "$BASE" ]; then
+if [ -e "$BASE" ]; then
+    cp "$BASE" "$OUT/seed.json"
+    for ((s = 0; s < N; s++)); do
         cp "$BASE" "$OUT/results$s.json"
-    fi
-done
+    done
+fi
 
 pids=()
 for ((s = 0; s < N; s++)); do
@@ -161,11 +173,20 @@ import glob, json, os, sys
 out, dest = sys.argv[1], sys.argv[2]
 merged = json.load(open(dest)) if os.path.exists(dest) else {}
 before = dict(merged)
+seed_path = os.path.join(out, "seed.json")
+seed = json.load(open(seed_path)) if os.path.exists(seed_path) else {}
 files = sorted(glob.glob(os.path.join(out, "results*.json")))
+# Apply only what each shard CHANGED against the seed it started from.
+#
+# Each shard's file is a full copy of the baseline plus its own cells, so
+# updating with whole files lets the last one read overwrite its siblings'
+# fresh results with its own stale copy of them. Comparing against the seed
+# keeps each shard's work and nothing else; the shards run disjoint cells, so
+# no two of them can claim the same key.
 for f in files:
-    merged.update(json.load(open(f)))
-# Count what the shards actually contributed, not what they carried: each
-# shard's file is seeded from the baseline, so its length is not its work.
+    for k, v in json.load(open(f)).items():
+        if k not in seed or seed[k] != v:
+            merged[k] = v
 new_cells = [k for k in merged if k not in before]
 changed = [k for k in merged if k in before and merged[k] != before[k]]
 json.dump(merged, open(dest, "w"), indent=1, sort_keys=True)
