@@ -601,8 +601,26 @@ void fn_802190A0(void* user_data, int joint_id, CollData* coll, int coll_x50,
                  mpLib_GroundEnum ground_kind, float delta_y)
 {
     Ground* gp = user_data;
+    /* The shift reads b1234 on the console and a mixture here.
+     *
+     * ECBFlagStruct is b0:1, b1234:4, b5:1, b6:1, b7:1. MWCC allocates the
+     * first-declared bitfield at the MOST significant bit, so b1234 lands on
+     * numeric bits 6..3 and `(x >> 3) & 0xF` is exactly b1234 -- which is what
+     * the comment above says this means. GCC allocates from the least
+     * significant bit (gdb: b0 at offset 0, b1234 at 1..4), so the same shift
+     * picks up b1234's top two bits together with b5 and b6.
+     *
+     * Same class as grVenom_80204B88 (a842834ef): a value written through
+     * named bitfields and read back as a number agrees only under the
+     * console's allocation. Name the field on PC; the GameCube expression is
+     * untouched, and it is the only numeric read of x34_flags in the tree --
+     * every other access already goes through .bN. */
+#if BUILD_TARGET_PC
+    if (coll->x34_flags.b1234 == 1 && (ground_kind - 1) <= 1U)
+#else
     if (((*(u8*) &coll->x34_flags >> 3U) & 0xF) == 1 &&
         (ground_kind - 1) <= 1U)
+#endif
     {
         gp->u.map.xC4_b0 = true;
     }
