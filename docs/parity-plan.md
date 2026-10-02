@@ -219,3 +219,81 @@ the console (union 0xC4 + 0x34), so the pointer can be watched out of map 3's
 Ground and then the joint's own matrix watched in turn. Note the scroll is a
 feedback loop -- it reads joints whose world positions depend on the root it
 moved last frame -- so compare first-frame values, not steady state.
+
+## Checklist (2026-10-01, after the day's work)
+
+Measured state: **435 of 695 runnable cells clean = 62.6%**, unchanged today.
+Nothing moved to clean; what moved is how much differs inside cells and how
+well the causes are understood. Re-check with
+`python3 tools/pc_lockstep_matrix.py report`.
+
+### Stages
+
+- [ ] **RCruise** (24) -- scroll FIXED and emulator-verified (c6449d315): nine
+      differing fields down to two. One term left: both fighters 9.482 too low,
+      which is the scroll root's own first-write error. Localised to the ctr and
+      cam joint world positions on the first scroll frame. Compare FIRST-frame
+      values; the scroll is a feedback loop.
+- [ ] **Pura** (24) -- untouched. Same `p0.motion`-at-frame-1 signature as
+      RCruise and also spawns on animated geometry. Audit grpura.c for the three
+      alias shapes RCruise had (a cross-union write, a shadow struct with
+      console padding, a raw `u.<other>.xNN` meaning this union's field) BEFORE
+      treating it as a new cause. Cheapest candidate on the board.
+- [ ] **BigBlue** (24) -- cause NOT found; five offset fixes made with zero
+      parity change (d3a9a1e2b). Chase the route discriminator: 193 of 651
+      ground tests find a floor on the debug boot, 0 of 255 on the lockstep's
+      menu path, from identical spawns and identical collision data. The file's
+      own header comment describes that symptom for the track show/hide path.
+- [ ] **Kongo** (24) -- untouched, and probably NOT the other three's cause:
+      it parts on `p0.y` and a floor IS found.
+- [ ] **Greens** (24) -- one missed RNG draw at frame 61.
+- [ ] **Venom** (23) -- one missed RNG draw at 596 (and 476).
+- [ ] **Castle** (12) -- one missed RNG draw at 584.
+- [ ] **Story** (14) -- range 9..587, may be several causes rather than one.
+
+### Characters
+
+- [ ] **Fox** (29, 0 clean) -- reduced to ONE BIT and the writer named
+      (459e0b3f3): `HSD_JObjSetRotation` from `lb_8001044C` at lb_00F9.c:918.
+      Frames 1-4 identical, onset at frame 5 from identical inputs. Needs the
+      instruction stream for the `angle_diff` computation above that line, or a
+      print added to the Dolphin fork to compare intermediates. Do NOT guess at
+      fused sites -- two inferred pairings have already failed.
+- [ ] **Ice Climbers** (29, 0 clean) -- `rng_draws`, frames 1..46. Never
+      investigated. Nana is a second fighter driven by Popo.
+- [ ] **Kirby** (27, 2 clean) -- `p0.motion`, frames 1..405. Never
+      investigated. The copy-hat slots are heterogeneous.
+- [ ] **Yoshi** (23, 6 clean) -- `animf`, frames 1..585. Never investigated;
+      an animation counter, a different shape from the other three.
+- [ ] **The scattered 14** -- five are Luigi/Pichu `mv1c`, three `aihash`, two
+      `p1.motion` on Yoshi's Island. Probably three causes, not fourteen.
+
+### Harness, not parity
+
+- [ ] **Marth's 29 cells are unmeasured**, not failing: the port never leaves
+      the character select. Worth ~18 clean cells at the roster average.
+- [ ] **Sheik's 29 cannot be routed** (no CSS icon). Route via Zelda plus a
+      transform, or state 695 as the denominator.
+- [ ] **Re-run the grid at 7200 frames** once the rows and columns are clear.
+      600 frames certifies ten seconds; Jigglypuff and Ganondorf both looked
+      clean at 600 and parted at 1321 and 633.
+- [ ] **Re-baseline** when the grid is next complete -- but NOT while timeouts
+      are in the results file: `reached()` stores them as 0 and bakes a floor of
+      zero into those cells.
+
+### Method, learned the hard way today
+
+- The grid's verdict is binary per frame, so it **cannot show partial progress**
+  inside a cell. RCruise went from nine differing fields to two and still reads
+  `diverged @1`. For in-progress work measure the FIELD LIST at the divergent
+  frame; use the grid only for "is this cause gone".
+- Ask both sides the same question with the same instrument:
+  `MELEE_ADDRWATCH` on the console against a gdb hardware watchpoint on the
+  port. That is what cracked RCruise and Fox.
+- Prove a watch can fire before believing a negative: a control on a hot
+  address caught `MELEE_ADDRWATCH` reporting nothing because its window is in
+  MATCH frames and its hits log under `[RNGWATCH]`.
+- Do not infer an FMA pairing. quatlib.c says to read it from the instruction
+  stream, and two inferred ones were no-ops.
+- Line-number breakpoints in optimised stage files relocate across functions
+  and will invent a control flow that never happened.
