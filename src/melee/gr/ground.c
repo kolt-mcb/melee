@@ -2392,6 +2392,35 @@ bool Ground_801C2D24(enum_t arg0, Vec3* arg1)
                         (double) w->mtx[0][3], (double) w->mtx[1][3],
                         (double) w->mtx[0][0], w->flags,
                         HSD_JObjMtxIsDirty(w) ? " DIRTY" : "");
+                /* And each one's rotation and whole matrix.
+                 *
+                 * Kongo Jungle's slot 1 comes out at the console's
+                 * (-22.80343, 31.79129, -2.35404) through a matrix whose top
+                 * row is (0.98481, -0.17364, -0.00170) -- cos and sin of ten
+                 * degrees, a real rotation about Z. The port's answer is
+                 * within a rounding of the chain's plain translation sum, so
+                 * the rotation is being lost. Slot 0's console matrix is
+                 * identity plus a translation, which is why slot 0 agrees.
+                 *
+                 * The joint's own rotation is identity on both sides, so the
+                 * ten degrees belongs to an ancestor: this says which one
+                 * carries it here and which one should. */
+                fprintf(stderr,
+                        "[X280]   ^%d rot=(%.5f,%.5f,%.5f,%.5f) "
+                        "scale=(%.4f,%.4f,%.4f)\n"
+                        "[X280]   ^%d mtx [%9.5f %9.5f %9.5f %9.4f]\n"
+                        "[X280]   ^%d     [%9.5f %9.5f %9.5f %9.4f]\n"
+                        "[X280]   ^%d     [%9.5f %9.5f %9.5f %9.4f]\n",
+                        depth, (double) w->rotate.x, (double) w->rotate.y,
+                        (double) w->rotate.z, (double) w->rotate.w,
+                        (double) w->scale.x, (double) w->scale.y,
+                        (double) w->scale.z,
+                        depth, (double) w->mtx[0][0], (double) w->mtx[0][1],
+                        (double) w->mtx[0][2], (double) w->mtx[0][3],
+                        depth, (double) w->mtx[1][0], (double) w->mtx[1][1],
+                        (double) w->mtx[1][2], (double) w->mtx[1][3],
+                        depth, (double) w->mtx[2][0], (double) w->mtx[2][1],
+                        (double) w->mtx[2][2], (double) w->mtx[2][3]);
             }
         }
 #endif
