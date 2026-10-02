@@ -287,7 +287,25 @@ well the causes are understood. Re-check with
       GROUNDTRACE window before comparing counts.
 - [ ] **Kongo** (24) -- untouched, and probably NOT the other three's cause:
       it parts on `p0.y` and a floor IS found.
-- [ ] **Greens** (24) -- one missed RNG draw at frame 61.
+- [ ] **Greens** (24) -- one missed RNG draw at frame 61, LOCALISED to the
+      particle system. `rng_draws` is a DERIVED per-frame count (the LCG
+      stepped between consecutive frames' seeds), so this is one draw missing
+      inside frame 61, not a cumulative drift. `MELEE_RNGAT=58-62` on the port
+      gives every draw with its site:
+
+          gframe=58  6 draws  0x7e5eb9
+          gframe=59  6 draws  0x7e5eb9  + 2 draws 0x5a4b0f
+          gframe=60  6 draws  0x7e5eb9
+          gframe=61  4 draws  0x7e5eb9   <- console makes 5
+
+      0x7e5eb9 is `hsd_8039EE24` at particle.c:9112; 0x5a4b0f is
+      `ftCo_800A4BEC`. So the port's particle system draws one fewer time on
+      that frame -- one particle's worth of randomness. The console's own RNG
+      callers (MELEE_RNG_WATCH) include 0x8039ef04 and the 0x8039b* group, the
+      same particle neighbourhood, so both sides draw there heavily.
+      Next: which generator, and why it emits one fewer. Note the port's
+      `MELEE_RNGLOG` is useless here -- its `f=` reads 0 throughout and the cap
+      fills on the title demo (`gm_SetupTitleDemo`); `MELEE_RNGAT` is the tool.
 - [ ] **Venom** (23) -- one missed RNG draw at 596 (and 476).
 - [ ] **Castle** (12) -- one missed RNG draw at 584.
 - [ ] **Story** (14) -- range 9..587, may be several causes rather than one.
