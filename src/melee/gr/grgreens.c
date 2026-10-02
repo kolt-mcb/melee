@@ -370,6 +370,54 @@ void grGreens_802139C4(Ground_GObj* gobj)
 {
     Ground* gp = gobj->user_data;
     ftCo_800C06E8(gobj, 9, fn_80213B1C);
+#if BUILD_TARGET_PC
+    /* The same bytes, written through the view that reads them.
+     *
+     * This ground's updater (grGreens_80213C10, the next entry in the same
+     * callback group) works entirely in gp->u.greens2, while this init writes
+     * gp->u.greens. On GCN those are two views of one set of bytes, so
+     * "greens.x10 = 1" IS "greens2.x10 = 1". On the host they are not:
+     * greens.x4 and greens.x8_blocks are pointers, 8 bytes each where the
+     * console has 4, and they push everything after them 12 bytes along --
+     *
+     *     greens.xC  (24) lands on greens2.x18 (24)
+     *     greens.x10 (28) lands on greens2.x1C (28)
+     *     greens.x14 (32) lands on greens2.x20 (32)
+     *     greens.x18 (36) lands on greens2.x24 (36)
+     *     greens.x1C (40) lands past greens2 altogether (sizeof 40)
+     *
+     * so greens2.xC and greens2.x10 were never written at all and stayed
+     * zero. x10 is the updater's "entering this state" flag and xC its wind
+     * timer: with x10 zero the timer was never initialised, so the updater
+     * fell straight through to "xC--" and ran the counter negative instead of
+     * counting ~1700 frames down from a fresh randrange. Sixteen frames into
+     * the stage load it therefore advanced the state machine a step the
+     * console does not take -- x0 0 -> 1, and with it x4 = table[1] = 1 --
+     * and spent the whole match in case 1 while the console sat in case 0.
+     *
+     * Measured against the console: at match frame 61 Dolphin reads
+     * x0=0 x4=0 x8=6 xC=1689 x10=0, and the port read x0=1 x4=1 xC=-16. That
+     * is the whole of Green Greens' lockstep divergence -- the console takes
+     * an HSD_Randi(8) in case 0 that the port, being in case 1, never reaches
+     * (console lr=80213d74, grGreens_80213C10+0x164).
+     *
+     * The pointer members are dead for this ground: grGreens_802139C4 is the
+     * only function in its callback group that mentions them, and only to
+     * NULL them. Every real user of greens.x4/x8_blocks belongs to the block
+     * object's group (grGreens_80214674 and below), which has its own init.
+     *
+     * The order below is the console's, because two of these draw: randrange
+     * first, then HSD_Randi(2). */
+    gp->u.greens2.x0 = 0;
+    gp->u.greens2.x4 = 0;
+    gp->u.greens2.x8 = 0;
+    gp->u.greens2.xC = randrange(yakumono_param->x38_windTimerMax,
+                                 yakumono_param->x34_windTimerMin);
+    gp->u.greens2.x10 = 1;
+    gp->u.greens2.x1C = 0;
+    gp->u.greens2.x14 = HSD_Randi(2);
+    gp->u.greens2.x18 = 0;
+#else
     gp->u.greens.x0_flags.whole_thing = 0;
     gp->u.greens.x4 = NULL;
     gp->u.greens.x8_blocks = NULL;
@@ -379,6 +427,7 @@ void grGreens_802139C4(Ground_GObj* gobj)
     gp->u.greens.x1C = 0;
     gp->u.greens.x14 = HSD_Randi(2);
     gp->u.greens.x18 = 0;
+#endif
     grAnime_801C8138(gobj, gp->map_id, 0);
 }
 
@@ -463,6 +512,31 @@ void grGreens_80213C10(Ground_GObj* gobj)
     PAD_STACK(0xC);
     gp->u.greens2.x18 = 0;
 
+#if BUILD_TARGET_PC
+    /* MELEE_GRGREENS=1, at the entry: whether this function runs at all, and
+     * which of the two guards turns it back. The console's breakpoint inside
+     * it fires on every frame of the match; the port's reached the wind-timer
+     * decrement only 17 times in a 66-frame run, all before the match
+     * started. Something here returns early once play begins. */
+    {
+        static int gde = -1;
+        if (gde < 0) {
+            const char* e = getenv("MELEE_GRGREENS");
+            gde = e ? atoi(e) : 0;
+        }
+        if (gde > 0) {
+            extern u32 gm_GetFrameCount(void);
+            fprintf(stderr,
+                    "[GRGREENS] f%u ENTRY gp=%p map=%d aac=%d aad=%d x4=%d "
+                    "x10=%d xC=%d\n",
+                    gm_GetFrameCount(), (void*) gp, (int) gp->map_id,
+                    (int) grGr_804D6AAC, (int) grGr_804D6AAD,
+                    (int) gp->u.greens2.x4, (int) gp->u.greens2.x10,
+                    (int) gp->u.greens2.xC);
+        }
+    }
+#endif
+
     if (grGr_804D6AAC != 0) {
         return;
     }
@@ -487,7 +561,47 @@ void grGreens_80213C10(Ground_GObj* gobj)
         }
 
         gp->u.greens2.xC--;
+#if BUILD_TARGET_PC
+        /* MELEE_GRGREENS=1: the wind timer and the animation test that gate
+         * this function's only RNG draw.
+         *
+         * Green Greens' cell parts from the console at match frame 61 on one
+         * RNG draw, and the draw is this HSD_Randi(8) -- the console takes it
+         * and the port does not (console lr=80213d74 inside
+         * grGreens_80213C10+0x164). Both sides agree on every other draw in
+         * frames 54-63, so only the two conditions below can differ, and
+         * neither is in the harness's compared field set: xC could have been
+         * drifting for many frames with nothing to say so. */
+        {
+            static int gd = -1;
+            if (gd < 0) {
+                const char* e = getenv("MELEE_GRGREENS");
+                gd = e ? atoi(e) : 0;
+            }
+            if (gd > 0) {
+                extern u32 gm_GetFrameCount(void);
+                fprintf(stderr, "[GRGREENS] f%u xC=%d x8=%d x4=%d x10=%d\n",
+                        gm_GetFrameCount(), (int) gp->u.greens2.xC,
+                        (int) gp->u.greens2.x8, (int) gp->u.greens2.x4,
+                        (int) gp->u.greens2.x10);
+            }
+        }
+#endif
         if (grAnime_801C84A4(gobj, 0, 7) != 0) {
+#if BUILD_TARGET_PC
+            {
+                static int gd2 = -1;
+                if (gd2 < 0) {
+                    const char* e = getenv("MELEE_GRGREENS");
+                    gd2 = e ? atoi(e) : 0;
+                }
+                if (gd2 > 0) {
+                    extern u32 gm_GetFrameCount(void);
+                    fprintf(stderr, "[GRGREENS] f%u anime=1 xC=%d\n",
+                            gm_GetFrameCount(), (int) gp->u.greens2.xC);
+                }
+            }
+#endif
             if (gp->u.greens2.xC > 0) {
                 gp->u.greens2.x8 = HSD_Randi(8);
                 grAnime_801C8138(gobj, gp->map_id,
