@@ -197,3 +197,68 @@ print()
 print(f"{len(shifted)} of {len(views)} views are laid out differently here;")
 print(f"{len(set(shifted) & mixed)} of those are used in a group that mixes views, "
       "which is the shape that broke Green Greens.")
+
+# A third pass: views used anywhere in the SAME FILE.
+#
+# The group pass above only compares views used by functions in one
+# StageCallbacks group, and that is too narrow. grvenom.c uses u.venom and
+# u.venom2 from functions in different groups, so the group pass reported
+# Venom as clean -- and venom.xD8 (console +20, host +36) sits inside
+# venom2.xD4, an HSD_JObj* over host 32..40, which is a real collision that
+# went unreported.
+#
+# Same-file is a weaker signal than same-group: two views in one file may
+# belong to genuinely different ground objects, in which case they never share
+# storage and the pair is harmless. So these are printed as candidates to
+# verify, not as findings.
+print()
+print("=" * 78)
+print("views used in the SAME FILE whose fields share host bytes but not")
+print("console bytes (weaker signal than the groups above -- the two views may")
+print("belong to different objects, so verify before believing):")
+print()
+import glob as _glob
+file_views = {}
+for _path in sorted(_glob.glob('src/melee/gr/*.c')):
+    _used = {v for v in re.findall(r'u\.(\w+)\.', open(_path, errors='replace').read())
+             if v in views}
+    if len(_used) > 1:
+        file_views[_path] = sorted(_used)
+
+def _shared(va, vb):
+    ta, tb = views[va], views[vb]
+    ha, hb = host.get(ta, {}), host.get(tb, {})
+    if not ha or not hb:
+        return []
+    ca, cb = convention(ha.keys()), convention(hb.keys())
+    out = []
+    for fa, oa in ha.items():
+        xa = console_off(fa, ca)
+        if xa is None:
+            continue
+        for fb, ob in hb.items():
+            xb = console_off(fb, cb)
+            if xb is None:
+                continue
+            # overlap on the host but not on the console (4-byte console slots)
+            if oa < ob + 8 and ob < oa + 8 and not (xa < xb + 4 and xb < xa + 4):
+                out.append((va, fa, xa, oa, vb, fb, xb, ob))
+    return out
+
+_n = 0
+for _path, _vs in file_views.items():
+    _hits = []
+    for _i in range(len(_vs)):
+        for _j in range(_i + 1, len(_vs)):
+            _hits += _shared(_vs[_i], _vs[_j])
+    if not _hits:
+        continue
+    print(f"  {_path}  ({', '.join('u.' + v for v in _vs)})")
+    for va, fa, xa, oa, vb, fb, xb, ob in _hits[:6]:
+        print(f"      {va}.{fa} (console +{xa}, host +{oa}) overlaps "
+              f"{vb}.{fb} (console +{xb}, host +{ob})")
+    if len(_hits) > 6:
+        print(f"      ... and {len(_hits) - 6} more pairs")
+    print()
+    _n += 1
+print(f"{_n} files have at least one such pair.")

@@ -1495,11 +1495,68 @@ void grVenom_80205F30(Ground_GObj* gobj)
     sp88 = grVe_803B82DC;
     PAD_STACK(0x18);
 
+#if BUILD_TARGET_PC
+    /* MELEE_VENOMF0=1: is this callback invoked at all?
+     *
+     * The gate probe below printed nothing over match frames 470-474 while the
+     * port reached 476, and grVe_804D6A3C is a static s32 that is READ here
+     * and never written anywhere in the file, so the early return cannot be
+     * what stopped it. That leaves the callback not running -- i.e. the ground
+     * object it belongs to was never created. This counts calls so that is a
+     * measurement rather than an inference. */
+    {
+        static int ve = -2;
+        static long calls;
+        if (ve == -2) {
+            const char* e = getenv("MELEE_VENOMF0");
+            ve = e != NULL ? atoi(e) : -1;
+        }
+        if (ve >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            calls++;
+            if (calls <= 3 || (calls % 100) == 0) {
+                fprintf(stderr, "[VENOMCALL] f%u call #%ld flag=%d\n",
+                        gm_GetFrameCount(), calls, (int) grVe_804D6A3C);
+            }
+        }
+    }
+#endif
     if (grVe_804D6A3C) {
         return;
     }
 
     entry = base + gp->u.venom.xC8;
+#if BUILD_TARGET_PC
+    /* MELEE_VENOMF0=<frame>: the gate that decides whether xF0 advances.
+     *
+     * Venom's frame-476 divergence is a missing HSD_Randi(8) gated on
+     * xF0 & 7, and xF0 is only incremented inside this if -- so if this gate
+     * ever disagrees with the console's, xF0 falls behind and the draw is
+     * skipped. xC8 indexes grVe_803E5348, and xC8 is one of the fields this
+     * union moves on the host (console +4, host +8, because venom.xC4_flags
+     * is eight bytes here); venom2.xC8 is an HSD_JObj* over host 8..16. So
+     * printing the index and what it selects says whether the index itself
+     * is sane. */
+    {
+        static int vg = -2;
+        if (vg == -2) {
+            const char* e = getenv("MELEE_VENOMF0");
+            vg = e != NULL ? atoi(e) : -1;
+        }
+        if (vg >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            int fr = (int) gm_GetFrameCount();
+            if (fr >= vg && fr <= vg + 4) {
+                fprintf(stderr,
+                        "[VENOMGATE] f%d gp=%p xC8=%d entry=%p entry8=%d "
+                        "gate=%d xF0=%d xF0&7=%d\n",
+                        fr, (void*) gp, (int) gp->u.venom.xC8, (void*) entry,
+                        (int) entry[8], (int) ((u32) entry[8] != 0U),
+                        (int) gp->u.venom.xF0, (int) (gp->u.venom.xF0 & 7));
+            }
+        }
+    }
+#endif
     if ((u32) entry[8] != 0U) {
         if (entry[14] == 4) {
             tmp_jobj = Ground_801C3FA4(gobj, 1);
