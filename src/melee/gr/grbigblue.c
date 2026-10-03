@@ -3157,6 +3157,27 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
         if (angle < 0.0F) {
             angle = -angle;
         }
+#if BUILD_TARGET_PC
+        /* MELEE_BBADV=1: the two inputs to the track advance. The advance
+         * hides the current section (grBigBlue_801EB4AC's first act), and the
+         * cars' height raycast needs that section, so advancing a few frames
+         * early is enough to leave every car at the "no ground" sentinel.
+         * bone_pos is the section's start bone in world space. */
+        if (getenv("MELEE_BBADV") != NULL) {
+            static int n;
+            if (n < 8) {
+                n++;
+                fprintf(stderr,
+                        "[BBADV] angle=%.5f bone_x=%.4f threshold=%.4f -> %s\n",
+                        (double) angle, (double) bone_pos.x,
+                        (double) (-300.0F * Ground_801C0498()),
+                        (angle < 0.17453292F &&
+                         bone_pos.x < -300.0F * Ground_801C0498())
+                            ? "ADVANCE"
+                            : "hold");
+            }
+        }
+#endif
         if (angle < 0.17453292F && bone_pos.x < -300.0F * Ground_801C0498()) {
             grBigBlue_801EB4AC(gobj);
         }

@@ -540,6 +540,51 @@ typedef void (*ufc_callback)(HSD_JObj*, u32, f32);
  * that loses its visibility is usually not the joint the track names --
  * this reports the flip rather than the target. */
 HSD_JObj* pc_vis_watch;
+static int pc_vis_was;
+static int pc_vis_prev_visible;
+static void* pc_vis_last_caller;
+static int pc_vis_depth;
+#define PC_VIS_HIDDEN()                                                       \
+    (pc_vis_watch != NULL ? ((pc_vis_watch->flags & JOBJ_HIDDEN) ? 1 : 0) : -1)
+/* Read either side of the change on purpose: a BRANCH hide is recursive, so
+ * it never names the joint that loses its visibility, and sampling the flag
+ * only beforehand reports every hide that happens to run while the watch is
+ * visible instead of the one responsible. */
+/* Sampled on entry to either setter; the companion check runs on the next
+ * entry and in the collision refresh, so a flip is attributed to the caller
+ * that was last recorded here. */
+#define PC_VIS_ENTER()                                                        \
+    do {                                                                      \
+        if (pc_vis_watch != NULL && getenv("MELEE_JOBJVIS") != NULL) {        \
+            if (pc_vis_prev_visible && (pc_vis_watch->flags & JOBJ_HIDDEN)) { \
+                fprintf(stderr,                                               \
+                        "[JOBJVIS] watched joint %p went hidden; last flag "  \
+                        "setter was called from %p\n",                        \
+                        (void*) pc_vis_watch, pc_vis_last_caller);            \
+                pc_vis_prev_visible = 0;                                      \
+            } else if (!(pc_vis_watch->flags & JOBJ_HIDDEN)) {                \
+                pc_vis_prev_visible = 1;                                      \
+            }                                                                 \
+            /* Only the outermost entry: HSD_JObjSetFlagsAll recurses into
+             * itself to cover the subtree, so the inner frames' return
+             * addresses are the function itself and say nothing about who
+             * started the hide. */                                           \
+            if (pc_vis_depth == 0) {                                          \
+                pc_vis_last_caller = __builtin_return_address(0);             \
+            }                                                                 \
+        }                                                                     \
+    } while (0)
+#define PC_VIS_REPORT(tag, j, v)                                              \
+    do {                                                                      \
+        if (pc_vis_was == 0 && PC_VIS_HIDDEN() == 1 &&                        \
+            getenv("MELEE_JOBJVIS") != NULL) {                                \
+            fprintf(stderr,                                                   \
+                    "[JOBJVIS] %s on jobj %p (v=%.4f) HID THE WATCHED "       \
+                    "JOINT %p\n",                                            \
+                    (tag), (void*) (j), (double) (v),                         \
+                    (void*) pc_vis_watch);                                    \
+        }                                                                     \
+    } while (0)
 #endif
 
 void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
@@ -644,41 +689,29 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
              * in the world but never answers a raycast can have been hidden
              * from here, by an animation sitting at a different frame, rather
              * than by any of the stage's own code. */
-            if (getenv("MELEE_JOBJVIS") != NULL && val->fv <= 0.5 &&
-                pc_vis_watch != NULL &&
-                !(pc_vis_watch->flags & JOBJ_HIDDEN))
-            {
-                fprintf(stderr,
-                        "[JOBJVIS] BRANCH jobj %p v=%.4f HIDE while the "
-                        "watched joint %p was still visible\n",
-                        (void*) jobj, (double) val->fv,
-                        (void*) pc_vis_watch);
-            }
+            pc_vis_was = PC_VIS_HIDDEN();
 #endif
             if (val->fv > 0.5) {
                 HSD_JObjClearFlagsAll(jobj, JOBJ_HIDDEN);
             } else {
                 HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
             }
+#if BUILD_TARGET_PC
+            PC_VIS_REPORT("BRANCH", jobj, val->fv);
+#endif
             break;
         case HSD_A_J_NODE:
 #if BUILD_TARGET_PC
-            if (getenv("MELEE_JOBJVIS") != NULL && val->fv <= 0.5 &&
-                pc_vis_watch != NULL &&
-                !(pc_vis_watch->flags & JOBJ_HIDDEN))
-            {
-                fprintf(stderr,
-                        "[JOBJVIS] NODE jobj %p v=%.4f HIDE while the "
-                        "watched joint %p was still visible\n",
-                        (void*) jobj, (double) val->fv,
-                        (void*) pc_vis_watch);
-            }
+            pc_vis_was = PC_VIS_HIDDEN();
 #endif
             if (val->fv > 0.5) {
                 HSD_JObjClearFlags(jobj, JOBJ_HIDDEN);
             } else {
                 HSD_JObjSetFlags(jobj, JOBJ_HIDDEN);
             }
+#if BUILD_TARGET_PC
+            PC_VIS_REPORT("NODE", jobj, val->fv);
+#endif
             break;
         case HSD_A_J_SETBYTE0:
         case HSD_A_J_SETBYTE1:
@@ -1503,6 +1536,15 @@ u32 HSD_JObjGetFlags(HSD_JObj* jobj)
 void HSD_JObjSetFlags(HSD_JObj* jobj, u32 flags)
 {
 #if BUILD_TARGET_PC
+    /* MELEE_JOBJVIS: catch the hide at the setter rather than at a call site.
+     * Neither the stage's own eight hide sites nor the BRANCH/NODE animation
+     * tracks turned out to hide Big Blue's shown track section, and a hide
+     * can arrive through any caller of these two functions, so the only
+     * instrument that cannot miss it is one inside them -- reporting the
+     * caller's return address, which tools/rng_sites.py resolves. */
+    PC_VIS_ENTER();
+#endif
+#if BUILD_TARGET_PC
     if (jobj == NULL) {
         return; /* PC port: menu/title data paths can pass NULL while data tables are stubbed */
     }
@@ -1520,6 +1562,10 @@ void HSD_JObjSetFlags(HSD_JObj* jobj, u32 flags)
 
 void HSD_JObjSetFlagsAll(HSD_JObj* jobj, u32 flags)
 {
+#if BUILD_TARGET_PC
+    PC_VIS_ENTER();
+    pc_vis_depth++;
+#endif
     if (PC_PTR_VALID(jobj)) {
         HSD_JObjSetFlags(jobj, flags);
         if (!(jobj->flags & JOBJ_INSTANCE)) {
@@ -1529,6 +1575,9 @@ void HSD_JObjSetFlagsAll(HSD_JObj* jobj, u32 flags)
             }
         }
     }
+#if BUILD_TARGET_PC
+    pc_vis_depth--;
+#endif
 }
 
 void HSD_JObjClearFlags(HSD_JObj* jobj, u32 arg1)
