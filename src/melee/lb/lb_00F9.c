@@ -571,6 +571,42 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
         lbVector_Normalize(&natural_dir);
         lbVector_Normalize(&current_dir);
         lbVector_Normalize(&link_dir);
+#if BUILD_TARGET_PC
+        /* MELEE_DYNCHAIN, upstream of every rotation: link_dir as the
+         * normalize left it, and the two world positions it is the difference
+         * of. cur->unk_2C is this frame's (set a few lines above from
+         * bone_mtx); cur->next->unk_2C is last frame's, because the loop has
+         * not reached that link yet. If link_dir already differs here the
+         * cause is in those positions, not in the stiffness/gravity/force
+         * rotations below. */
+        {
+            static int d3 = -2, d3_hi;
+            if (d3 == -2) {
+                const char* e = getenv("MELEE_DYNCHAIN");
+                const char* dash = e != NULL ? strchr(e, '-') : NULL;
+                d3 = e != NULL ? atoi(e) : -1;
+                d3_hi = dash != NULL ? atoi(dash + 1) : d3;
+            }
+            if (d3 >= 0) {
+                extern u32 gm_GetFrameCount(void);
+                int f3 = (int) gm_GetFrameCount();
+                if (f3 >= d3 && f3 <= d3_hi) {
+                    fprintf(stderr,
+                            "[DYNRAW] f%d ld0=(%08x,%08x,%08x) "
+                            "cur=(%08x,%08x,%08x) next=(%08x,%08x,%08x)\n",
+                            f3, *(const unsigned*) &link_dir.x,
+                            *(const unsigned*) &link_dir.y,
+                            *(const unsigned*) &link_dir.z,
+                            *(const unsigned*) &cur->desc.lb_unk0.unk_2C.x,
+                            *(const unsigned*) &cur->desc.lb_unk0.unk_2C.y,
+                            *(const unsigned*) &cur->desc.lb_unk0.unk_2C.z,
+                            *(const unsigned*) &cur->next->desc.lb_unk0.unk_2C.x,
+                            *(const unsigned*) &cur->next->desc.lb_unk0.unk_2C.y,
+                            *(const unsigned*) &cur->next->desc.lb_unk0.unk_2C.z);
+                }
+            }
+        }
+#endif
 
         /* Save link direction */
         {
@@ -609,6 +645,37 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                     }
                 }
             }
+
+#if BUILD_TARGET_PC
+            /* MELEE_DYNCHAIN: link_dir as the gravity rotation left it.
+             *
+             * The console's own value for the same point is the first
+             * argument of the next lbVector_Angle call, so
+             * MELEE_MEMAT=8000D620:3:3 prints it in sequence: for each link
+             * the order is pre-rotation link_dir (stiffness), post-stiffness
+             * (gravity), post-gravity (force), then clamp_dir, current_dir
+             * and saved_dir. */
+            {
+                static int d4 = -2, d4_hi;
+                if (d4 == -2) {
+                    const char* e = getenv("MELEE_DYNCHAIN");
+                    const char* dash = e != NULL ? strchr(e, '-') : NULL;
+                    d4 = e != NULL ? atoi(e) : -1;
+                    d4_hi = dash != NULL ? atoi(dash + 1) : d4;
+                }
+                if (d4 >= 0) {
+                    extern u32 gm_GetFrameCount(void);
+                    int f4 = (int) gm_GetFrameCount();
+                    if (f4 >= d4 && f4 <= d4_hi) {
+                        fprintf(stderr,
+                                "[DYNGRAV] f%d postgrav=(%08x,%08x,%08x)\n",
+                                f4, *(const unsigned*) &link_dir.x,
+                                *(const unsigned*) &link_dir.y,
+                                *(const unsigned*) &link_dir.z);
+                    }
+                }
+            }
+#endif
 
             /* Apply interaction force */
             force_mag = 0.0f;

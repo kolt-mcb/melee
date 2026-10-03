@@ -638,6 +638,18 @@ void ftCo_800A0DA4(Fighter* fp)
                             *(const unsigned*) &fp->cur_pos.y,
                             *(const unsigned*) &scale,
                             *(const unsigned*) &fp->x34_scale.y);
+                    /* The x side too: Fox's AI-hash word #50 is cpu.x560,
+                     * the hurtbox's x extent, and it is the x components
+                     * that feed it. */
+                    fprintf(stderr,
+                            "[SCLDUMPX] gframe=%d p%d i=%d apx=%08x "
+                            "bpx=%08x curx=%08x f31=%08x f30=%08x\n",
+                            qf, (int) fp->player_id, (int) i,
+                            *(const unsigned*) &hurt->capsule.a_pos.x,
+                            *(const unsigned*) &hurt->capsule.b_pos.x,
+                            *(const unsigned*) &fp->cur_pos.x,
+                            *(const unsigned*) &var_f31,
+                            *(const unsigned*) &var_f30);
                 }
             }
         }
