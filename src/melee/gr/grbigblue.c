@@ -234,12 +234,34 @@ typedef struct grBb_Data803E2EB8 {
  * line that did it. The shown track section's collision follows its model's
  * JOBJ_HIDDEN, and the model starts visible and is hidden a few frames in by
  * one of these sites -- this says which. */
+/* The track section whose collision the cars' raycast needs. BBPOS records it
+ * when grBigBlue_801EB004 unhides it; the hide shim below then reports which
+ * site takes it back out, directly or as part of a subtree -- which a log of
+ * the hidden jobj alone cannot say, because HSD_JObjSetFlagsAll is
+ * recursive. */
+static HSD_JObj* grBb_watch_jobj;
+
 static void grBb_hide_dbg(HSD_JObj* j, int line)
 {
-    if (getenv("MELEE_BBHIDE") != NULL) {
-        fprintf(stderr, "[BBHIDE] line %d hides jobj %p\n", line, (void*) j);
-    }
+    int was = grBb_watch_jobj != NULL
+                  ? ((HSD_JObjGetFlags(grBb_watch_jobj) & JOBJ_HIDDEN) ? 1 : 0)
+                  : -1;
     HSD_JObjSetFlagsAll(j, JOBJ_HIDDEN);
+    if (getenv("MELEE_BBHIDE") != NULL) {
+        int now = grBb_watch_jobj != NULL
+                      ? ((HSD_JObjGetFlags(grBb_watch_jobj) & JOBJ_HIDDEN) ? 1
+                                                                           : 0)
+                      : -1;
+        if (was == 0 && now == 1) {
+            fprintf(stderr,
+                    "[BBHIDE] line %d hid jobj %p AND TOOK THE WATCHED "
+                    "SECTION %p WITH IT\n",
+                    line, (void*) j, (void*) grBb_watch_jobj);
+        } else {
+            fprintf(stderr, "[BBHIDE] line %d hides jobj %p (watched=%d)\n",
+                    line, (void*) j, now);
+        }
+    }
 }
 #define GRBB_HIDE(j) grBb_hide_dbg((j), __LINE__)
 #else
@@ -2717,6 +2739,12 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
                     (void*) active, (double) pos.x, (double) pos.y,
                     (double) pos.z, (double) yakumono_param->x0,
                     (double) Ground_801C0498());
+        }
+        grBb_watch_jobj = active;
+        {
+            /* and let the animation path see it too */
+            extern HSD_JObj* pc_vis_watch;
+            pc_vis_watch = active;
         }
         /* MELEE_BBVTX=1: the shown section's own collision vertices. The
          * section is placed at the same y as the console and its joint is

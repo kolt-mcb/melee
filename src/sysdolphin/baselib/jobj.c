@@ -534,6 +534,14 @@ void HSD_JObjAddAnimAll(HSD_JObj* jobj, HSD_AnimJoint* ajoint,
 
 typedef void (*ufc_callback)(HSD_JObj*, u32, f32);
 
+#if BUILD_TARGET_PC
+/* Set by whoever is chasing a joint that goes invisible without its own
+ * code hiding it. HSD_A_J_BRANCH hides a whole subtree, so the joint
+ * that loses its visibility is usually not the joint the track names --
+ * this reports the flip rather than the target. */
+HSD_JObj* pc_vis_watch;
+#endif
+
 void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
 {
 #if BUILD_TARGET_PC
@@ -629,6 +637,24 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
             HSD_JObjSetScaleZ(jobj, val->fv);
             break;
         case HSD_A_J_BRANCH:
+#if BUILD_TARGET_PC
+            /* MELEE_JOBJVIS=1: every animation-driven show/hide. A BRANCH or
+             * NODE track carries a stage's visibility, and a collision joint
+             * follows its model's JOBJ_HIDDEN -- so a stage whose geometry is
+             * in the world but never answers a raycast can have been hidden
+             * from here, by an animation sitting at a different frame, rather
+             * than by any of the stage's own code. */
+            if (getenv("MELEE_JOBJVIS") != NULL && val->fv <= 0.5 &&
+                pc_vis_watch != NULL &&
+                !(pc_vis_watch->flags & JOBJ_HIDDEN))
+            {
+                fprintf(stderr,
+                        "[JOBJVIS] BRANCH jobj %p v=%.4f HIDE while the "
+                        "watched joint %p was still visible\n",
+                        (void*) jobj, (double) val->fv,
+                        (void*) pc_vis_watch);
+            }
+#endif
             if (val->fv > 0.5) {
                 HSD_JObjClearFlagsAll(jobj, JOBJ_HIDDEN);
             } else {
@@ -636,6 +662,18 @@ void JObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
             }
             break;
         case HSD_A_J_NODE:
+#if BUILD_TARGET_PC
+            if (getenv("MELEE_JOBJVIS") != NULL && val->fv <= 0.5 &&
+                pc_vis_watch != NULL &&
+                !(pc_vis_watch->flags & JOBJ_HIDDEN))
+            {
+                fprintf(stderr,
+                        "[JOBJVIS] NODE jobj %p v=%.4f HIDE while the "
+                        "watched joint %p was still visible\n",
+                        (void*) jobj, (double) val->fv,
+                        (void*) pc_vis_watch);
+            }
+#endif
             if (val->fv > 0.5) {
                 HSD_JObjClearFlags(jobj, JOBJ_HIDDEN);
             } else {
