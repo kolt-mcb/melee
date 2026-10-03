@@ -35,24 +35,53 @@
  * an oversized struct the block is zeroed instead, so dat_attrs still points
  * somewhere valid and downstream reads yield 0 rather than faulting. */
 #define PC_DAT_ATTRS_MAX 0x424
+/* Returns a host-order copy of an ftData's ext_attr blob, repointing
+ * ft_data->ext_attr at it the first time. Defined in src/port/pc_ftconv.c so
+ * the once-per-ftData registry is shared: this macro expands in twenty-six
+ * character translation units and a static flag per unit would convert the
+ * same blob repeatedly. */
+void* pc_ext_attr_host_order(void* ft_data, void* blob, unsigned long n);
+/* The original behaviour: byteswap the blob into the caller's backup buffer
+ * and leave ft_data->ext_attr alone. */
+void* pc_ext_attr_swapped_copy(const void* blob, void* backup,
+                               unsigned long n);
+/* The blob arrives raw big-endian. It used to be swapped only on the way into
+ * dat_attrs_backup, which left ft_data->ext_attr itself big-endian -- and
+ * twenty-seven reads in the tree go at that pointer directly and got reversed
+ * floats. Measured on Kirby: every one of the first sixteen words differed by
+ * byte order between the two, and specialn_gravity_of_inhaled read
+ * 2.72598e+23 through ext_attr against 0.45 through dat_attrs.
+ *
+ * sizeof(attributeName) is why the conversion belongs here: the converter
+ * rebases the pointer without knowing the concrete struct's size, and nothing
+ * else does. It is an upper bound rather than the blob's real extent, which
+ * is why the helper copies rather than swapping the archive in place. */
 #define PUSH_ATTRS(fp, attributeName)                                         \
     do {                                                                      \
         void* backup = (fp)->dat_attrs_backup;                                \
-        const u32* src = ((fp)->ft_data != NULL)                              \
-                             ? (const u32*) (fp)->ft_data->ext_attr           \
-                             : NULL;                                          \
         unsigned long n_ = sizeof(attributeName);                             \
+        const void* src = NULL;                                               \
+        if ((fp)->ft_data != NULL &&                                          \
+            pc_ptr_sane((fp)->ft_data->ext_attr) &&                           \
+            pc_mem_readable((fp)->ft_data->ext_attr, n_))                     \
+        {                                                                     \
+            /* OFF by default: see the note above. Making ext_attr host order \
+             * is a measured regression, so this is opt-in until the reason   \
+             * is understood. */                                              \
+            src = getenv("MELEE_EXTATTR_FIX") != NULL                         \
+                      ? pc_ext_attr_host_order((fp)->ft_data,                 \
+                                               (fp)->ft_data->ext_attr, n_)   \
+                      : (fp)->ft_data->ext_attr;                              \
+            if (getenv("MELEE_EXTATTR_FIX") == NULL) {                        \
+                src = pc_ext_attr_swapped_copy(                               \
+                    (fp)->ft_data->ext_attr, backup, n_);                     \
+            }                                                                 \
+        }                                                                     \
         if (backup != NULL && n_ <= PC_DAT_ATTRS_MAX) {                       \
-            if (pc_ptr_sane(src) && pc_mem_readable(src, n_)) {               \
-                u32* d_ = (u32*) backup;                                      \
-                unsigned long i_;                                             \
-                for (i_ = 0; i_ < n_ / 4; i_++) {                             \
-                    u32 v_ = src[i_];                                         \
-                    d_[i_] = ((v_ >> 24) & 0xFF) | ((v_ >> 8) & 0xFF00) |     \
-                             ((v_ << 8) & 0xFF0000) | ((v_ << 24));           \
-                }                                                             \
-            } else {                                                          \
+            if (src == NULL) {                                                \
                 memset(backup, 0, n_);                                        \
+            } else if (src != backup) {                                       \
+                memcpy(backup, src, n_);                                      \
             }                                                                 \
             (fp)->dat_attrs = backup;                                         \
         }                                                                     \

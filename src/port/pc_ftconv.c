@@ -1762,3 +1762,93 @@ void* pc_script_target(const void* cur, u32 off)
     }
     return NULL;
 }
+
+#if BUILD_TARGET_PC
+/* ext_attr is the per-character attribute blob, and it arrives raw
+ * big-endian. PUSH_ATTRS byteswaps it on the way into fp->dat_attrs_backup,
+ * which is why every read through fp->dat_attrs is correct -- but
+ * twenty-seven reads in the tree go at gFtDataList[kind]->ext_attr directly
+ * and got reversed floats. Measured on Kirby: all sixteen of the first words
+ * reversed between the two, and specialn_gravity_of_inhaled reading
+ * 2.72598e+23 through ext_attr against 0.45 through dat_attrs. Fourteen of
+ * those reads are in ftyoshispecialn.c and thirteen across Kirby's inhale and
+ * Yoshi-copy paths -- the two character blocks whose lockstep cells diverge.
+ *
+ * This hands back a host-order blob and repoints ft_data->ext_attr at it, so
+ * both access paths agree, and does it once per ftData.
+ *
+ * It must NOT swap the archive copy in place, which was the first attempt and
+ * a regression: sizeof(the concrete struct) is an upper bound, not the blob's
+ * real extent in the file, so writing that many bytes back corrupts whatever
+ * the archive put after it -- measured as a fighter's x reading 429230080
+ * against the console's -0.0971, a worse failure than the bug being fixed.
+ * Reading past the end into a private allocation is as harmless as the
+ * original code's read-past-end into dat_attrs_backup. */
+#define PC_EXT_ATTR_SLOTS 40
+static const void* pc_ext_attr_done[PC_EXT_ATTR_SLOTS];
+static int pc_ext_attr_n;
+
+void* pc_ext_attr_host_order(void* ft_data, void* blob, unsigned long n)
+{
+    int i;
+    u32* copy;
+    const u32* src = (const u32*) blob;
+    if (ft_data == NULL || blob == NULL || n < 4) {
+        return blob;
+    }
+    for (i = 0; i < pc_ext_attr_n; i++) {
+        if (pc_ext_attr_done[i] == ft_data) {
+            return blob; /* already host order, and already repointed */
+        }
+    }
+    copy = pc_lowmem_alloc(n);
+    if (copy == NULL) {
+        return blob;
+    }
+    for (i = 0; (unsigned long) i < n / 4; i++) {
+        u32 v = src[i];
+        copy[i] = ((v >> 24) & 0xFF) | ((v >> 8) & 0xFF00) |
+                  ((v << 8) & 0xFF0000) | (v << 24);
+    }
+    if (pc_ext_attr_n < PC_EXT_ATTR_SLOTS) {
+        pc_ext_attr_done[pc_ext_attr_n++] = ft_data;
+    } else {
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "[PORT WARN] pc_ext_attr_host_order: more than %d "
+                            "ftData; later blobs convert every call\n",
+                    PC_EXT_ATTR_SLOTS);
+        }
+    }
+    ((struct ftData*) ft_data)->ext_attr = copy;
+    return copy;
+}
+#endif
+
+#if BUILD_TARGET_PC
+/* The original PUSH_ATTRS behaviour, kept as the default: byteswap the blob
+ * into the caller's backup buffer and leave ft_data->ext_attr as the raw
+ * big-endian archive bytes. Reading past the blob's real end is harmless
+ * here because the destination is private.
+ *
+ * Making ext_attr itself host order is the obvious fix for the twenty-seven
+ * direct readers, and it is a measured REGRESSION -- see the note on
+ * pc_ext_attr_host_order. */
+void* pc_ext_attr_swapped_copy(const void* blob, void* backup,
+                               unsigned long n)
+{
+    const u32* src = (const u32*) blob;
+    u32* dst = (u32*) backup;
+    unsigned long i;
+    if (src == NULL || dst == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < n / 4; i++) {
+        u32 v = src[i];
+        dst[i] = ((v >> 24) & 0xFF) | ((v >> 8) & 0xFF00) |
+                 ((v << 8) & 0xFF0000) | (v << 24);
+    }
+    return backup;
+}
+#endif
