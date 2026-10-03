@@ -2770,8 +2770,21 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
             continue;
         }
 
-        /* Direction flag check */
+        /* Direction flag check.
+         *
+         * Rebased: this byte is the car head's first, which is gp+0xC4 on the
+         * console and GRBB_CAR_BASE(gp)+0xC4 here -- the line above already
+         * reads the same word through GRBB_C4_WORD. Unrebased it read one of
+         * Ground's own fields, so the direction test answered at random and
+         * the lane search accepted lanes the console rejects. Bit 7 of that
+         * byte is the word's most significant bit, which is where MWCC puts
+         * the first declared field (GRBB_FLD_b0, shift 31); the bytes are
+         * kept in the console's order, so the shift itself is right. */
+#if BUILD_TARGET_PC
+        if ((GRBB_CAR_BASE(gp)[0xC4] >> 7) & 1) {
+#else
         if ((gp[0xC4] >> 7) & 1) {
+#endif
             if ((u32) random_lane > 1) {
                 if (random_lane != 4) {
                     continue;
@@ -3141,7 +3154,12 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
     {
         f32 old_rot = *(f32*) (GRBB_CAR_BASE(gp) + 0xF8);
         *(f32*) (GRBB_CAR_BASE(gp) + 0xF8) = old_rot + angular_vel;
+        /* Rebased, as above; bit 5 of that byte is GRBB_FLD_b2 (shift 29). */
+#if BUILD_TARGET_PC
+        if (!((GRBB_CAR_BASE(gp)[0xC4] >> 5) & 1) && old_rot > 0.0F) {
+#else
         if (!((gp[0xC4] >> 5) & 1) && old_rot > 0.0F) {
+#endif
             if (*(f32*) (GRBB_CAR_BASE(gp) + 0xF8) <= 0.0F) {
                 *(f32*) (GRBB_CAR_BASE(gp) + 0xF8) = 0.0F;
             }
