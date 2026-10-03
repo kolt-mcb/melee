@@ -3168,9 +3168,12 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
             if (n < 8) {
                 n++;
                 fprintf(stderr,
-                        "[BBADV] angle=%.5f bone_x=%.4f threshold=%.4f -> %s\n",
+                        "[BBADV] angle=%.5f bone_x=%.4f threshold=%.4f "
+                        "start_index=%d jobj=%p -> %s\n",
                         (double) angle, (double) bone_pos.x,
                         (double) (-300.0F * Ground_801C0498()),
+                        (int) entry->start_index,
+                        (void*) Ground_801C3FA4(gobj, entry->start_index),
                         (angle < 0.17453292F &&
                          bone_pos.x < -300.0F * Ground_801C0498())
                             ? "ADVANCE"
