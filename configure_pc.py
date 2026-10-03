@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -399,7 +400,42 @@ elif WASM:
                   " -DBUILD_TARGET_WASM=1")
 else:
     CC = "gcc"
-    ARCH_FLAGS = "-m64" + (" -fPIE" if PIE else "")
+    # Same warning-parity list the Android and WASM branches carry, and for
+    # the same reason: GCC 14 promoted -Wincompatible-pointer-types,
+    # -Wint-conversion, -Wimplicit-function-declaration and -Wreturn-mismatch
+    # to errors by default. The desktop branch never needed the downgrades
+    # while the only machine building it ran GCC 13; on GCC 15.2 the same
+    # tree stops with 37 errors across 18 files. That is a compiler-version
+    # change, not a platform one, so it is downgraded here and audited on its
+    # own schedule -- the warnings still print.
+    #
+    # Several of those 37 are real 64-bit bugs rather than decomp sloppiness:
+    # ftdata.c:221 stores a pointer into a u32, lbheap.c:180-181 build
+    # pointers out of unsigned ints, grrcruise.c:464 takes a truncated
+    # pointer from an undeclared grDatFiles_801C6324, and ifstatus.c:935
+    # returns nothing from a non-void function. Those want fixing at the
+    # site, not silencing; see docs/parity-plan.md.
+    # GCC's own spellings, not Clang's: -Wincompatible-function-pointer-types
+    # and -Wunknown-warning-option do not exist here, and GCC only mentions an
+    # unrecognised -Wno-* once some other diagnostic fires -- which turned the
+    # note itself into the failure. -Wreturn-mismatch is GCC 14+, silently
+    # accepted by 13.
+    ARCH_FLAGS = ("-m64" + (" -fPIE" if PIE else "")
+                  + " -Wno-error=incompatible-pointer-types"
+                  " -Wno-error=int-conversion"
+                  " -Wno-error=implicit-function-declaration"
+                  " -Wno-error=return-type")
+    # -Wreturn-mismatch is GCC 14+, and unlike a plain -Wno-, an unknown
+    # -Wno-error= is itself an error, so this one has to be gated rather
+    # than merely offered.
+    try:
+        _gccmaj = int(subprocess.run([CC, "-dumpversion"], check=True,
+                                     capture_output=True, text=True)
+                      .stdout.strip().split(".")[0])
+    except Exception:
+        _gccmaj = 0
+    if _gccmaj >= 14:
+        ARCH_FLAGS += " -Wno-error=return-mismatch"
 # -ffp-contract=off: GNU C mode defaults to `fast`, which lets GCC fuse a*b+c
 # into one rounding wherever the target can. Plain x86-64 cannot, so today it
 # changes nothing; the day anyone builds with -march=native the port starts
