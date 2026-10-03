@@ -4094,6 +4094,41 @@ void ftCo_800A7AAC(Fighter* fp)
         return;
     }
     partner_pos = partner->cur_pos;
+#if BUILD_TARGET_PC
+    /* MELEE_NANA=<frame>: the fighter this runs for, with its position and
+     * the pad the AI is driving it with. On the console this function runs
+     * only for the Nanas, and their positions diverge from the port's by
+     * frame 3 while both Popos stay bit-identical -- nothing in the
+     * lockstep's four player slots covers a sub-fighter.
+     *
+     * Console: MELEE_MEMAT=800A7AAC:3:2:6792 is cpu.buttons and the packed
+     * stick quartet at fp+0x1A88 and +0x1A8C; :2:176 is cur_pos. */
+    {
+        static int na = -2;
+        if (na == -2) {
+            const char* e = getenv("MELEE_NANA");
+            na = e != NULL ? atoi(e) : -1;
+        }
+        if (na >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            if ((int) gm_GetFrameCount() == na) {
+                fprintf(stderr,
+                        "[NANA] fp=%p slot=%d sub=%d kind=%d pos=(%.4f,%.4f) "
+                        "motion=%d buttons=%08x lstick=(%d,%d) goa=%d "
+                        "xFA_b7=%d x40=%08x scale=%08x facing=%08x\n",
+                        (void*) fp, (int) fp->player_id,
+                        (int) fp->is_sub_fighter, (int) fp->cpu.kind,
+                        (double) fp->cur_pos.x, (double) fp->cur_pos.y,
+                        (int) fp->motion_id, (unsigned) fp->cpu.buttons,
+                        (int) fp->cpu.lstick.x, (int) fp->cpu.lstick.y,
+                        (int) fp->ground_or_air, (int) fp->cpu.xFA_b7,
+                        *(const unsigned*) &fp->x40,
+                        *(const unsigned*) &fp->x34_scale.x,
+                        *(const unsigned*) &fp->facing_dir);
+            }
+        }
+    }
+#endif
     if (partner->ground_or_air == GA_Air) {
         s32 result;
         mp_UnkStruct0* island;

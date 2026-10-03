@@ -828,6 +828,24 @@ void Fighter_UnkInitReset_80067C98(Fighter* fp)
     Player_LoadPlayerCoords(fp->player_id, &player_coords);
     fp->facing_dir = Player_GetFacingDirection(fp->player_id);
 
+#if BUILD_TARGET_PC
+    /* MELEE_SPAWNOFF=1: the per-fighter spawn offset at the moment the spawn
+     * position is computed. Nana's is fp->x40 = ftIceClimberAttributes::xC4 =
+     * -5.0, set by ftData_OnLoad; if this runs first, x40 is still the 0.0
+     * that Fighter_UnkInitLoad_80068914 wrote and she spawns on top of Popo
+     * instead of five units behind him. */
+    if (getenv("MELEE_SPAWNOFF") != NULL) {
+        fprintf(stderr,
+                "[SPAWNOFF] kind=%d slot=%d sub=%d coords.x=%.4f x40=%.4f "
+                "scale=%.4f facing=%.4f -> %.4f\n",
+                (int) fp->kind, (int) fp->player_id,
+                (int) fp->is_sub_fighter, (double) player_coords.x,
+                (double) fp->x40, (double) fp->x34_scale.x,
+                (double) fp->facing_dir,
+                (double) (player_coords.x +
+                          fp->facing_dir * ftCommon_800804EC(fp)));
+    }
+#endif
     player_coords.x = FT_FMA(fp->facing_dir, ftCommon_800804EC(fp), player_coords.x);
     x = player_coords.x;
     fp->cur_pos.x = x;
