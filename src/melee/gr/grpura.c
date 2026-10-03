@@ -768,6 +768,19 @@ void grPura_802125F0(HSD_GObj* arg0)
             gp->u.pura.xC4 = desc->x0;
             joint = Ground_801C33C0(4, gp->u.pura.xC4);
             gp->u.pura2.xC8 = Ground_801C3FA4(arg0, joint);
+#if BUILD_TARGET_PC
+            /* MELEE_PURAFLOAT=1: every float's model id, the joint index the
+             * id maps to, and the joint the walk reached. A float whose joint
+             * comes back NULL is a float that never takes a position, and on
+             * Poke Floats that is the ground the fighters stand on. */
+            if (getenv("MELEE_PURAFLOAT") != NULL) {
+                fprintf(stderr,
+                        "[PURAFLOAT] i=%d model=%d gobj_id=%d joint=%d "
+                        "jobj=%p\n",
+                        (int) i, (int) desc->x0, (int) desc->x8, (int) joint,
+                        (void*) gp->u.pura2.xC8);
+            }
+#endif
 
             jobj = gobj->hsd_obj;
             HSD_JObjSetTranslateX(jobj,

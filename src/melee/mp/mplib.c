@@ -1070,9 +1070,30 @@ void mpLibLoad(MapCollData* coll_data)
         HSD_MemAlloc(sizeof(*groundCollLine) * groundCollLine_count);
     HSD_ASSERT(413, groundCollLine);
 #if BUILD_TARGET_PC
-    mp_pc_line_cap = (int) (0x3000 / sizeof(CollLine));
-    memset(groundCollLine, 0, 0x3000);
+    /* Both of these were 0x3000 -- a GameCube *byte* count for the line
+     * table, the same mistake the CollJoint allocation below describes. A
+     * CollLine is 8 bytes there and 16 here, so:
+     *
+     *  - the cap came out at 768 lines whatever the stage actually has. On a
+     *    stage with fewer it let the bounds checks in mpLib_80057FB4 and
+     *    friends accept ids past the end of the table; on one with more it
+     *    rejected the stage's own lines.
+     *  - the memset wrote 0x3000 bytes into an allocation sized
+     *    sizeof(CollLine) * groundCollLine_count. For any stage with fewer
+     *    than 768 lines that runs off the end, straight over whatever the
+     *    heap put after it -- groundCollVtx is allocated two lines above.
+     *
+     * Both follow the count the stage asked for. */
+    mp_pc_line_cap = groundCollLine_count;
+    memset(groundCollLine, 0, sizeof(*groundCollLine) * groundCollLine_count);
     mp_pc_real_coll = 1;
+    if (getenv("MELEE_MPDUMP") != NULL) {
+        fprintf(stderr,
+                "[MPLOAD] %d lines (%zu bytes), %d vtx, cap=%d\n",
+                (int) groundCollLine_count,
+                sizeof(*groundCollLine) * (size_t) groundCollLine_count,
+                (int) groundCollVtx_count, mp_pc_line_cap);
+    }
 #endif
     /* This used to be HSD_MemAlloc(0x3400): a GameCube *byte* count, which is
      * exactly 256 CollJoints there and matches the joint_id < 256 bound this
