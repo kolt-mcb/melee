@@ -857,6 +857,10 @@ static struct ftData_x8* pc_conv_PartsDesc(const u8* raw, const u8* base,
  * their zero-fill path (see rule 1 in the file header).
  *
  * GCN struct ftData is 0x60: 23 pointers plus the int at +0x54. */
+#if BUILD_TARGET_PC
+void pc_ext_attr_forget(const void* ft_data);
+#endif
+
 struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                               int kind)
 {
@@ -1200,6 +1204,9 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
     off = pc_be32(*(const u32*) (raw + 0x04));
     if (off < len) {
         out->ext_attr = pc_off_to_ptr(off, base, len);
+        /* This ftData is new even if the allocator handed back an address a
+         * previous one used; forget any conversion recorded against it. */
+        pc_ext_attr_forget(out);
     }
 
     /* +0x48 x48_items -- an array of Article pointers, stored as 4-byte file
@@ -1786,7 +1793,25 @@ void* pc_script_target(const void* cur, u32 off)
  * original code's read-past-end into dat_attrs_backup. */
 #define PC_EXT_ATTR_SLOTS 40
 static const void* pc_ext_attr_done[PC_EXT_ATTR_SLOTS];
+static u32 pc_ext_attr_copies[PC_EXT_ATTR_SLOTS][0x424 / 4];
 static int pc_ext_attr_n;
+
+/* A converted ftData is allocated fresh on every match load and lands on a
+ * recycled address, so a registry keyed on the pointer would report a brand
+ * new blob as "already converted" and hand back raw big-endian bytes --
+ * measured as dat_attrs reading gravity_of_inhaled 2.72598e+23 at runtime
+ * where it read 0.45 at load. pc_conv_ftData calls this for each ftData it
+ * builds so the address starts clean. */
+void pc_ext_attr_forget(const void* ft_data)
+{
+    int i;
+    for (i = 0; i < pc_ext_attr_n; i++) {
+        if (pc_ext_attr_done[i] == ft_data) {
+            pc_ext_attr_done[i] = pc_ext_attr_done[--pc_ext_attr_n];
+            return;
+        }
+    }
+}
 
 void* pc_ext_attr_host_order(void* ft_data, void* blob, unsigned long n)
 {
@@ -1801,26 +1826,28 @@ void* pc_ext_attr_host_order(void* ft_data, void* blob, unsigned long n)
             return blob; /* already host order, and already repointed */
         }
     }
-    copy = pc_lowmem_alloc(n);
-    if (copy == NULL) {
+    /* Static storage, not pc_lowmem_alloc: the allocator returning NULL made
+     * this fall back to handing back the RAW blob, which PUSH_ATTRS then
+     * copied into dat_attrs -- every attribute big-endian, strictly worse
+     * than the bug being fixed and silent about it. PC_DAT_ATTRS_MAX is the
+     * largest concrete DatAttrs, so forty of them is about 42 KB and needs no
+     * allocator and has no lifetime. */
+    if (n > 0x424u || pc_ext_attr_n >= PC_EXT_ATTR_SLOTS) {
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "[PORT WARN] pc_ext_attr_host_order: no slot for "
+                            "a %lu-byte blob; left big-endian\n", n);
+        }
         return blob;
     }
+    copy = pc_ext_attr_copies[pc_ext_attr_n];
     for (i = 0; (unsigned long) i < n / 4; i++) {
         u32 v = src[i];
         copy[i] = ((v >> 24) & 0xFF) | ((v >> 8) & 0xFF00) |
                   ((v << 8) & 0xFF0000) | (v << 24);
     }
-    if (pc_ext_attr_n < PC_EXT_ATTR_SLOTS) {
-        pc_ext_attr_done[pc_ext_attr_n++] = ft_data;
-    } else {
-        static int said;
-        if (!said) {
-            said = 1;
-            fprintf(stderr, "[PORT WARN] pc_ext_attr_host_order: more than %d "
-                            "ftData; later blobs convert every call\n",
-                    PC_EXT_ATTR_SLOTS);
-        }
-    }
+    pc_ext_attr_done[pc_ext_attr_n++] = ft_data;
     ((struct ftData*) ft_data)->ext_attr = copy;
     return copy;
 }

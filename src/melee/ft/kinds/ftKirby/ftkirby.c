@@ -2568,6 +2568,61 @@ void ftKb_Init_OnLoad(HSD_GObj* gobj)
 
     PUSH_ATTRS(fp, ftKb_DatAttrs);
 
+#if BUILD_TARGET_PC
+    /* MELEE_EXTATTR=1: the structural test for the ext_attr blob. PUSH_ATTRS
+     * has just byteswapped ft_data->ext_attr into fp->dat_attrs, so the two
+     * now hold the same struct in opposite byte orders -- IF the blob really
+     * is raw big-endian. Any code reading gFtDataList[kind]->ext_attr
+     * directly therefore reads reversed floats, and those reads cluster in
+     * exactly the two character blocks that fail: fourteen in
+     * ftyoshispecialn.c, thirteen across Kirby's inhale and Yoshi-copy.
+     *
+     * This runs at fighter load, so it needs no particular gameplay -- the
+     * earlier probe in ftKb_SpecialN_800F5A70 proved nothing because that
+     * function never ran in the cell it was tried on. */
+    if (getenv("MELEE_EXTATTR") != NULL) {
+        /* Is the ftData this fighter carries the same object the direct
+         * readers reach through gFtDataList[kind]? If not, repointing
+         * fp->ft_data->ext_attr fixes one and leaves the other raw, which
+         * would explain a read of specialn_x_offset_inhaled (blob+0x38, 5.4)
+         * still coming back byte-reversed with the fix on. */
+        extern ftData* gFtDataList[];
+        fprintf(stderr, "[EXTATTR] slot=%d attrs=%p ft_data=%p gList=%p %s\n",
+                (int) fp->player_id, (void*) fp->dat_attrs,
+                (void*) fp->ft_data, (void*) gFtDataList[Ft_Kind_Kirby],
+                fp->ft_data == gFtDataList[Ft_Kind_Kirby] ? "SAME"
+                                                          : "DIFFERENT");
+        {
+        const u32* raw = (const u32*) fp->ft_data->ext_attr;
+        const u32* swp = (const u32*) fp->dat_attrs;
+        if (raw != NULL && swp != NULL) {
+            int i, reversed = 0, equal = 0;
+            for (i = 0; i < 16; i++) {
+                u32 r = raw[i], w = swp[i];
+                u32 rev = ((r >> 24) & 0xFF) | ((r >> 8) & 0xFF00) |
+                          ((r << 8) & 0xFF0000) | (r << 24);
+                if (rev == w) {
+                    reversed++;
+                }
+                if (r == w) {
+                    equal++;
+                }
+            }
+            fprintf(stderr,
+                    "[EXTATTR] of the first 16 words: %d are byte-reversed "
+                    "between ext_attr and dat_attrs, %d are equal\n",
+                    reversed, equal);
+            fprintf(stderr,
+                    "[EXTATTR] gravity_of_inhaled (+0x44): ext_attr reads "
+                    "%g, dat_attrs reads %g\n",
+                    (double) ((const ftKb_DatAttrs*) raw)
+                        ->specialn_gravity_of_inhaled,
+                    (double) ((const ftKb_DatAttrs*) swp)
+                        ->specialn_gravity_of_inhaled);
+        }
+        }
+    }
+#endif
     fp->can_multijump = true;
     fp->x2D0 = fp->dat_attrs;
     fp->u.kb.hat.x8_b0 = Player_GetFlagsAEBit1(fp->player_id);

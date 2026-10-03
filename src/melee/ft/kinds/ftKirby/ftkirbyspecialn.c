@@ -278,6 +278,29 @@ void ftKb_SpecialN_800F5B5C(Fighter_GObj* gobj, Vec3* output)
     *output = fp->cur_pos;
     output->x = KN_FMA(da->specialn_x_offset_inhaled, fp->facing_dir, output->x);
     output->y += da->specialn_y_offset_inhaled;
+#if BUILD_TARGET_PC
+    /* MELEE_KBHOLD=1: the hold position handed to the inhaled victim, and the
+     * attribute behind it. p0.x reads 429230080 at frame 121 under
+     * MELEE_EXTATTR_FIX=1, which is byte-reversed 5.39994 -- and 5.4 is
+     * exactly specialn_x_offset_inhaled (PlKb.dat +0x4ec4, blob+0x38). This
+     * says whether the attribute arrives here correct, in which case the
+     * reversed value is produced somewhere else. */
+    if (getenv("MELEE_KBHOLD") != NULL) {
+        static int n;
+        if (n < 4) {
+            n++;
+            fprintf(stderr,
+                    "[KBHOLD] x_off=%g y_off=%g gravity=%g attrs=%p ft=%p "
+                    "facing=%g -> out=(%g,%g)\n",
+                    (double) da->specialn_x_offset_inhaled,
+                    (double) da->specialn_y_offset_inhaled,
+                    (double) da->specialn_gravity_of_inhaled,
+                    (void*) da, (void*) fp->ft_data,
+                    (double) fp->facing_dir, (double) output->x,
+                    (double) output->y);
+        }
+    }
+#endif
 }
 
 void ftKb_SpecialN_800F5BA4(Fighter* fp)
