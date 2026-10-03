@@ -243,6 +243,12 @@ void grRCruise_801FF168(void)
      * and the stage never scrolled. Write it through the member that reads it. */
 #if BUILD_TARGET_PC
     gp2->u.scroll.anim_gobj = jgobj;
+    if (getenv("MELEE_RCSCROLL") != NULL) {
+        fprintf(stderr,
+                "[RCSCROLL] set: gp2=%p jgobj=%p grgobj=%p anim_gobj=%p\n",
+                (void*) gp2, (void*) jgobj, (void*) grgobj,
+                (void*) gp2->u.scroll.anim_gobj);
+    }
 #else
     gp2->u.rcruise2.xEC = jgobj;
 #endif
@@ -642,7 +648,27 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
     PAD_STACK(0x8);
 
     gp = arg0->user_data;
+#if BUILD_TARGET_PC
+    /* The console loads the whole byte at gp+0xC4 and tests its top bit:
+     *
+     *     lbz     r0, 196(r29)
+     *     rlwinm. r0, r0, 25, 31, 31
+     *     bne     ...                 ; set -> skip this whole function
+     *
+     * That bit is where MWCC puts the FIRST declared bitfield of the byte,
+     * which is this field (and `u.rcruise.xC4.b0`, the name the stage's own
+     * setup writes it through). GCC allocates the first bitfield at the
+     * LSB instead, so `>> 7` reads the eighth field -- always zero.
+     *
+     * Rainbow Cruise creates two grounds for map 3: a hidden one that gets
+     * `u.rcruise.xC4.b0 = 1` so this function skips it, and the real scroll
+     * one. With the test reading the wrong bit, the hidden ground ran the
+     * body too, asserted on an anim gobj it was never given, and took the
+     * early return -- 10 GUARD SKIPs per match. Test the field by name. */
+    if (!gp->u.scroll.x0) {
+#else
     if (!(((u8) gp->u.scroll.x0 >> 7U) & 1)) {
+#endif
         Stage_UnkSetVec3TCam_Offset(&cam_offset);
         HSD_ASSERT(0x2E0U, gp->u.scroll.anim_gobj);
 #if BUILD_TARGET_PC
@@ -650,6 +676,15 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
          * anim gobj fell straight into ->user_data. Without it there is no
          * camera pair to read, so there is nothing to offset. */
         if (!pc_ptr_sane(gp->u.scroll.anim_gobj)) {
+            if (getenv("MELEE_RCSCROLL") != NULL) {
+                static int n;
+                if (n++ < 6) {
+                    fprintf(stderr,
+                            "[RCSCROLL] use: gobj=%p gp=%p anim_gobj=%p\n",
+                            (void*) arg0, (void*) gp,
+                            (void*) gp->u.scroll.anim_gobj);
+                }
+            }
             port_guard_warn("grrcruise.c:801FFADC no scroll anim gobj");
             return;
         }
@@ -668,8 +703,32 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
             return;
         }
 #endif
+#if BUILD_TARGET_PC
+    /* The retail code reads gp+0xF4 and gp+0xF0 here -- cam_jobj and
+     * int_jobj -- not gp+0xF8 and gp+0xF4:
+     *
+     *     801ffb48  lwz r30, 240(r4)   ; int_jobj  (gp+0xF0)
+     *     801ffb4c  lwz r31, 244(r4)   ; cam_jobj  (gp+0xF4)
+     *     801ffb60  mr  r3, r31 ; bl lb_8000B1CC   -> sp18
+     *     801ffb70  mr  r3, r30 ; bl lb_8000B1CC   -> sp24
+     *
+     * The two names below are one field too high in both, so the pair the
+     * z-projection divides came from the wrong joints: temp_f4 came out
+     * +27.7334 where the console has -14.3667, the scroll offset's y was
+     * 9.4820 short, and the whole stage -- collision included -- sat that
+     * far below the console's. Every one of Rainbow Cruise's cells diverged
+     * on match frame 1, both fighters low by exactly 9.482.
+     *
+     * The locals keep their decompiled names; only the fields they are
+     * loaded from are corrected, so the call order below still reads as the
+     * console executes it. (This file does not build for the GameCube
+     * target, so the #else arm is left exactly as it was.) */
+        ctr_jobj = anim_gp->u.scroll.cam_jobj; /* gp+0xF4 -> sp18 */
+        cam_jobj = anim_gp->u.scroll.int_jobj; /* gp+0xF0 -> sp24 */
+#else
         cam_jobj = anim_gp->u.scroll.cam_jobj;
         ctr_jobj = anim_gp->u.scroll.ctr_jobj;
+#endif
 #if BUILD_TARGET_PC
         if (!pc_ptr_sane(cam_jobj) || !pc_ptr_sane(ctr_jobj)) {
             port_guard_warn("grrcruise.c:801FFADC no scroll cam joints");
@@ -697,6 +756,24 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
 #else
         lbVector_Diff(&gp->u.scroll.x10, &sp64, &gp->u.arwing.xE0);
 #endif
+        if (getenv("MELEE_RCSCROLL") != NULL) {
+            static int n;
+            if (n++ < 3) {
+                fprintf(stderr,
+                        "[RCSCROLL] sp18=(%.4f,%.4f,%.4f) sp24=(%.4f,%.4f,%.4f)\n"
+                        "[RCSCROLL] diff=(%.4f,%.4f,%.4f) f4=%.6f\n"
+                        "[RCSCROLL] camoff=(%.4f,%.4f,%.4f) camoff2=(%.4f,%.4f,%.4f)\n"
+                        "[RCSCROLL] sp64=(%.4f,%.4f,%.4f)\n",
+                        (double) sp18.x, (double) sp18.y, (double) sp18.z,
+                        (double) sp24.x, (double) sp24.y, (double) sp24.z,
+                        (double) diff.x, (double) diff.y, (double) diff.z,
+                        (double) temp_f4,
+                        (double) cam_offset.x, (double) cam_offset.y,
+                        (double) cam_offset.z, (double) cam_offset2.x,
+                        (double) cam_offset2.y, (double) cam_offset2.z,
+                        (double) sp64.x, (double) sp64.y, (double) sp64.z);
+            }
+        }
         gp->u.scroll.x10 = sp64;
         sp64.x *= -1.0f;
         sp64.y *= -1.0f;

@@ -3406,6 +3406,55 @@ HSD_JObj* Ground_801C3FA4(HSD_GObj* gobj, int depth)
 #endif
         return NULL;
     }
+#if BUILD_TARGET_PC
+    /* MELEE_JOINTWALK=<n>: the first n calls print every node the walk steps
+     * through, with its flags and translation. The index a stage asks for is
+     * only as good as the shape of the converted tree: one extra node visited
+     * before the one the console lands on shifts every later index, and the
+     * stage then reads a joint that is not the one its code means. */
+    {
+        static int jw = -2, calls;
+        if (jw == -2) {
+            const char* e = getenv("MELEE_JOINTWALK");
+            jw = e != NULL ? atoi(e) : -1;
+        }
+        if (jw > 0 && calls < jw) {
+            HSD_JObj* w = jobj;
+            int step = 0;
+            calls++;
+            fprintf(stderr, "[JW] call %d gobj=%p want %d\n", calls,
+                    (void*) gobj, depth);
+            while (w != NULL && step <= depth + 2 && step < 24) {
+                fprintf(stderr,
+                        "[JW]   %2d jobj=%p flags=%08x t=(%.4f,%.4f,%.4f)%s\n",
+                        step, (void*) w, (unsigned) w->flags,
+                        (double) w->translate.x, (double) w->translate.y,
+                        (double) w->translate.z,
+                        (w->flags & 0x1000) ? " INSTANCE" : "");
+                step++;
+                if (!(w->flags & 0x1000) && HSD_JObjGetChild(w) != NULL) {
+                    w = HSD_JObjGetChild(w);
+                    continue;
+                }
+                if (HSD_JObjGetNext(w) != NULL) {
+                    w = HSD_JObjGetNext(w);
+                    continue;
+                }
+                for (;;) {
+                    if (HSD_JObjGetParent(w) == NULL) {
+                        w = NULL;
+                        break;
+                    }
+                    if (HSD_JObjGetNext(HSD_JObjGetParent(w)) != NULL) {
+                        w = HSD_JObjGetNext(HSD_JObjGetParent(w));
+                        break;
+                    }
+                    w = HSD_JObjGetParent(w);
+                }
+            }
+        }
+    }
+#endif
     while (jobj != NULL && depth != 0) {
         --depth;
         if (!(jobj->flags & 0x1000) && HSD_JObjGetChild(jobj) != NULL) {
