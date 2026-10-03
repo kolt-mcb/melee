@@ -54,6 +54,18 @@ extern struct ftData_UnkCountStruct ftData_Table_Unk0[];
 /* LEN: vis_table row count = number of costumes for the kind. */
 extern struct UnkCostumeList CostumeListsForeachCharacter[];
 
+/* The same swap for a float field: the bytes come out of the archive in the
+ * console's order, so read them as a word, swap, and reinterpret. */
+static f32 pc_be32f(u32 v)
+{
+    union {
+        u32 u;
+        f32 f;
+    } b;
+    b.u = __builtin_bswap32(v);
+    return b.f;
+}
+
 static u32 pc_be32(u32 v)
 {
     return ((v >> 24) & 0xFF) | ((v >> 8) & 0xFF00) | ((v << 8) & 0xFF0000) |
@@ -1229,8 +1241,19 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
      * dark faceted mass jutting from her head instead of a ponytail that
      * hangs, and DK's tie as a rigid board.
      *
-     * x4/x8/x10 stay NULL. x10 is the per-animation FigaTree table; both of
-     * its readers already take a "no tree" path when it is absent. */
+     * x4/x8 are the chain's *collider* list -- the count and an array of
+     * ftData_x38 ({int bone, Vec3, float}, 0x14 bytes, no pointers, so the
+     * record has the same layout here). ftColl_8007B3A8 copies them into
+     * fp->x1670[] and sets fp->x166C, and lb_8001044C takes that count as
+     * num_colliders. With x8 NULL the guard there set the count to 0, so the
+     * solver skipped its collider block -- including the lbVector_Normalize
+     * of link_dir at the top of it, which the console does run. That one
+     * missing normalise left Fox's tail 1-2 ulp from the console's on the
+     * solver's first frame, and it carried all the way out to the CPU AI's
+     * hurtbox extent: see the chain in the commit that traced it.
+     *
+     * x10 is the per-animation FigaTree table; both of its readers already
+     * take a "no tree" path when it is absent. */
     off = pc_be32(*(const u32*) (raw + 0x2C));
     if (off != 0 && off + 8u <= len) {
         const u8* d = base + off;
@@ -1331,13 +1354,42 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                         }
                     }
                 }
+                /* The collider list: x4 at +8 is the count, x8 at +0xC
+                 * the array. Capped at 0xB because that is what
+                 * ftColl_8007B3A8's own assert allows and what fp->x1670[]
+                 * has room for. */
+                {
+                    int hnum = (int) pc_be32(*(const u32*) (d + 8));
+                    u32 hoff = pc_be32(*(const u32*) (d + 0xC));
+                    if (hnum > 0 && hnum <= 0xB && hoff != 0 &&
+                        hoff + (u32) hnum * 0x14u <= len)
+                    {
+                        ftData_x38* hv =
+                            pc_lowmem_alloc(sizeof(*hv) * (size_t) hnum);
+                        if (hv != NULL) {
+                            int h;
+                            for (h = 0; h < hnum; h++) {
+                                const u32* r = (const u32*) (base + hoff +
+                                                             (u32) h * 0x14u);
+                                hv[h].x0 = (int) pc_be32(r[0]);
+                                hv[h].x4.x = pc_be32f(r[1]);
+                                hv[h].x4.y = pc_be32f(r[2]);
+                                hv[h].x4.z = pc_be32f(r[3]);
+                                hv[h].x10 = pc_be32f(r[4]);
+                            }
+                            dy->x4 = hnum;
+                            dy->x8 = hv;
+                        }
+                    }
+                }
                 out->x2C = dy;
                 if (pc_ftconv_trace()) {
                     fprintf(stderr,
                             "[FTCONV] dynamics: %d chains, [0] bone=%d "
-                            "count=%u\n",
+                            "count=%u, %d colliders\n",
                             dnum, (int) ab->array[0].bone_id,
-                            (unsigned) ab->array[0].dyn_desc.count);
+                            (unsigned) ab->array[0].dyn_desc.count,
+                            (int) dy->x4);
                 }
             }
         }

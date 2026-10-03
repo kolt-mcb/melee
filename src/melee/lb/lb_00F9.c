@@ -709,6 +709,37 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                                              cur->desc.lb_unk0.unk_44);
             }
 
+#if BUILD_TARGET_PC
+            /* MELEE_DYNCHAIN: link_dir after the force and angular-velocity
+             * rotations and before the max-angle clamp. The console's own
+             * value at the same point is MELEE_MEMAT=80010988:1:3:768
+             * (link_dir is at r1+768 in lb_8001044C, and 0x80010988 is the
+             * instruction after its angular-velocity rotation). */
+            {
+                static int d5 = -2, d5_hi;
+                if (d5 == -2) {
+                    const char* e = getenv("MELEE_DYNCHAIN");
+                    const char* dash = e != NULL ? strchr(e, '-') : NULL;
+                    d5 = e != NULL ? atoi(e) : -1;
+                    d5_hi = dash != NULL ? atoi(dash + 1) : d5;
+                }
+                if (d5 >= 0) {
+                    extern u32 gm_GetFrameCount(void);
+                    int f5 = (int) gm_GetFrameCount();
+                    if (f5 >= d5 && f5 <= d5_hi) {
+                        fprintf(stderr,
+                                "[DYNANG] f%d preclamp=(%08x,%08x,%08x) "
+                                "fmag=%08x unk44=%08x\n",
+                                f5, *(const unsigned*) &link_dir.x,
+                                *(const unsigned*) &link_dir.y,
+                                *(const unsigned*) &link_dir.z,
+                                *(const unsigned*) &force_mag,
+                                *(const unsigned*) &cur->desc.lb_unk0.unk_44);
+                    }
+                }
+            }
+#endif
+
             /* Apply max angle constraint */
             if (force_mag <
                 cur->desc.lb_unk0.unk_8C * cur->desc.lb_unk0.unk_48)
@@ -719,6 +750,43 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                 {
                     PSVECCrossProduct(&clamp_dir, &link_dir, &clamp_axis);
                     lbVector_Normalize(&clamp_axis);
+#if BUILD_TARGET_PC
+                    /* MELEE_DYNCHAIN: the clamp's axis and its result. Both
+                     * inputs (saved_dir and the pre-clamp link_dir) are
+                     * bit-identical to the console on Fox's frame 4, and the
+                     * result is not, so one of the four calls in this block
+                     * rounds differently. The console's axis is
+                     * MELEE_MEMAT=800109E4:1:3:368 and its result
+                     * MELEE_MEMAT=80010A0C:1:3:380 -- clamp_axis is at
+                     * r1+368 and clamp_dir at r1+380 in lb_8001044C. */
+                    {
+                        static int d6 = -2, d6_hi;
+                        if (d6 == -2) {
+                            const char* e = getenv("MELEE_DYNCHAIN");
+                            const char* dash =
+                                e != NULL ? strchr(e, '-') : NULL;
+                            d6 = e != NULL ? atoi(e) : -1;
+                            d6_hi = dash != NULL ? atoi(dash + 1) : d6;
+                        }
+                        if (d6 >= 0) {
+                            extern u32 gm_GetFrameCount(void);
+                            int f6 = (int) gm_GetFrameCount();
+                            if (f6 >= d6 && f6 <= d6_hi) {
+                                fprintf(stderr,
+                                        "[DYNCLAMP] f%d axis=(%08x,%08x,%08x)"
+                                        " unk88=%08x sv=(%08x,%08x,%08x)\n",
+                                        f6, *(const unsigned*) &clamp_axis.x,
+                                        *(const unsigned*) &clamp_axis.y,
+                                        *(const unsigned*) &clamp_axis.z,
+                                        *(const unsigned*) &cur->desc.lb_unk0
+                                             .unk_88,
+                                        *(const unsigned*) &clamp_dir.x,
+                                        *(const unsigned*) &clamp_dir.y,
+                                        *(const unsigned*) &clamp_dir.z);
+                            }
+                        }
+                    }
+#endif
                     lbVector_RotateAboutUnitAxis(&clamp_dir, &clamp_axis,
                                                  cur->desc.lb_unk0.unk_88);
                     link_dir = clamp_dir;
@@ -746,6 +814,42 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                 }
             }
 
+#if BUILD_TARGET_PC
+            /* MELEE_DYNCHAIN: link_dir and natural_dir after the convergence
+             * limit. This block's rotation is in-place and untagged, so
+             * nothing above names it; on Fox's frame 4 it is what moves
+             * link_dir from its post-gravity value.
+             *
+             * Console: MELEE_MEMAT=80010A74:1:9:768 -- link_dir is at r1+768,
+             * clamp_dir at r1+780 and natural_dir at r1+792 in lb_8001044C,
+             * and 0x80010A74 is the instruction after the block. */
+            {
+                static int d7 = -2, d7_hi;
+                if (d7 == -2) {
+                    const char* e = getenv("MELEE_DYNCHAIN");
+                    const char* dash = e != NULL ? strchr(e, '-') : NULL;
+                    d7 = e != NULL ? atoi(e) : -1;
+                    d7_hi = dash != NULL ? atoi(dash + 1) : d7;
+                }
+                if (d7 >= 0) {
+                    extern u32 gm_GetFrameCount(void);
+                    int f7 = (int) gm_GetFrameCount();
+                    if (f7 >= d7 && f7 <= d7_hi) {
+                        fprintf(stderr,
+                                "[DYNCONV] f%d ld=(%08x,%08x,%08x) "
+                                "nat=(%08x,%08x,%08x) unk50=%08x\n",
+                                f7, *(const unsigned*) &link_dir.x,
+                                *(const unsigned*) &link_dir.y,
+                                *(const unsigned*) &link_dir.z,
+                                *(const unsigned*) &natural_dir.x,
+                                *(const unsigned*) &natural_dir.y,
+                                *(const unsigned*) &natural_dir.z,
+                                *(const unsigned*) &cur->desc.lb_unk0.unk_50);
+                    }
+                }
+            }
+#endif
+
             /* Apply max angle deviation */
             {
                 f32 dev_angle = lbVector_Angle(&natural_dir, &link_dir);
@@ -758,6 +862,35 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
                                                      cur->desc.lb_unk0.unk_68);
                 }
             }
+
+#if BUILD_TARGET_PC
+            /* MELEE_DYNCHAIN: link_dir after the max-angle-deviation block,
+             * whose rotation is also in-place and untagged. Console:
+             * MELEE_MEMAT=80010ABC:1:3:768. */
+            {
+                static int d8 = -2, d8_hi;
+                if (d8 == -2) {
+                    const char* e = getenv("MELEE_DYNCHAIN");
+                    const char* dash = e != NULL ? strchr(e, '-') : NULL;
+                    d8 = e != NULL ? atoi(e) : -1;
+                    d8_hi = dash != NULL ? atoi(dash + 1) : d8;
+                }
+                if (d8 >= 0) {
+                    extern u32 gm_GetFrameCount(void);
+                    int f8 = (int) gm_GetFrameCount();
+                    if (f8 >= d8 && f8 <= d8_hi) {
+                        fprintf(stderr,
+                                "[DYNDEV] f%d postdev=(%08x,%08x,%08x) "
+                                "unk68=%08x ncol=%d\n",
+                                f8, *(const unsigned*) &link_dir.x,
+                                *(const unsigned*) &link_dir.y,
+                                *(const unsigned*) &link_dir.z,
+                                *(const unsigned*) &cur->desc.lb_unk0.unk_68,
+                                (int) num_colliders);
+                    }
+                }
+            }
+#endif
 
             /* Collider avoidance */
             if (num_colliders != 0) {
@@ -842,6 +975,34 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
 
                     gnd_norm = lb_803B7280.v1;
                     lbVector_Normalize(&link_dir);
+#if BUILD_TARGET_PC
+                    /* MELEE_DYNCHAIN: link_dir straight after the on_ground
+                     * block's normalize, which is in-place and untagged.
+                     * Console: MELEE_MEMAT=80010CE0:1:3:768 (0x80010CE0 is
+                     * the instruction after the same call). */
+                    {
+                        static int d9 = -2, d9_hi;
+                        if (d9 == -2) {
+                            const char* e = getenv("MELEE_DYNCHAIN");
+                            const char* dash =
+                                e != NULL ? strchr(e, '-') : NULL;
+                            d9 = e != NULL ? atoi(e) : -1;
+                            d9_hi = dash != NULL ? atoi(dash + 1) : d9;
+                        }
+                        if (d9 >= 0) {
+                            extern u32 gm_GetFrameCount(void);
+                            int f9 = (int) gm_GetFrameCount();
+                            if (f9 >= d9 && f9 <= d9_hi) {
+                                fprintf(stderr,
+                                        "[DYNNORM] f%d postnorm="
+                                        "(%08x,%08x,%08x)\n",
+                                        f9, *(const unsigned*) &link_dir.x,
+                                        *(const unsigned*) &link_dir.y,
+                                        *(const unsigned*) &link_dir.z);
+                            }
+                        }
+                    }
+#endif
                     {
                         f32 end_x =
                             DYN_FMA(link_dir.x, cur->desc.lb_unk0.unk_48,
@@ -886,6 +1047,35 @@ void lb_8001044C(DynamicsDesc* desc, void* colliders_raw, int num_colliders,
 
                     gnd_norm2 = lb_803B7280.v2;
                     lbVector_Normalize(&link_dir);
+#if BUILD_TARGET_PC
+                    /* MELEE_DYNCHAIN: link_dir after the on_ground == 0
+                     * branch's normalize -- the one that actually runs on
+                     * Fox's frame 4, and the last in-place change to
+                     * link_dir before the cross product reads it.
+                     * Console: MELEE_MEMAT=80010DEC:1:3:768. */
+                    {
+                        static int dA = -2, dA_hi;
+                        if (dA == -2) {
+                            const char* e = getenv("MELEE_DYNCHAIN");
+                            const char* dash =
+                                e != NULL ? strchr(e, '-') : NULL;
+                            dA = e != NULL ? atoi(e) : -1;
+                            dA_hi = dash != NULL ? atoi(dash + 1) : dA;
+                        }
+                        if (dA >= 0) {
+                            extern u32 gm_GetFrameCount(void);
+                            int fA = (int) gm_GetFrameCount();
+                            if (fA >= dA && fA <= dA_hi) {
+                                fprintf(stderr,
+                                        "[DYNNORM2] f%d postnorm2="
+                                        "(%08x,%08x,%08x)\n",
+                                        fA, *(const unsigned*) &link_dir.x,
+                                        *(const unsigned*) &link_dir.y,
+                                        *(const unsigned*) &link_dir.z);
+                            }
+                        }
+                    }
+#endif
                     {
                         s32 floor_hit2;
                         if (use_floor_fn != 0) {

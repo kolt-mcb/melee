@@ -1620,8 +1620,21 @@ struct Fighter {
     /* fp+11A0 */ FighterHurtCapsule hurt_capsules[15];
     /* fp+1614 */ Fighter_x1614_t x1614[2];
     /* fp+166C */ u8 x166C; ///< number of valid entries in x1670 array
+#if BUILD_TARGET_PC
+    /* Declared [1] with the rest of the array hidden in the filler below,
+     * which works on the console because the entry is 0x28 bytes there and
+     * the filler covers the other eleven. A Fighter_x1670_t holds an
+     * HSD_JObj*, so it is 48 bytes here and twelve of them need 576 where
+     * the console's layout leaves 440 -- ftColl_8007B3A8 writes up to
+     * ftData::x2C's hit count, which the asserts there cap at 0xB. Give the
+     * array its real extent on the host and let the struct grow; nothing
+     * reads this Fighter at a raw fp+0x1828. */
+    /* fp+1670 */ Fighter_x1670_t x1670[12];
+    /* fp+1674 */ u8 filler_x1674[0x1828 - 0x1670 - 0x28];
+#else
     /* fp+1670 */ Fighter_x1670_t x1670[1]; ///< @todo figure out proper size
     /* fp+1674 */ u8 filler_x1674[0x1828 - 0x1670 - 0x28];
+#endif
     /* fp+1828 */ enum_t x1828;
     /* fp+182C */ struct dmg {
         /* fp+182C */ float x182c_behavior;
