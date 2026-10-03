@@ -151,6 +151,29 @@ float ftKb_SpecialN_800F5A60(Fighter_GObj* gobj)
 float ftKb_SpecialN_800F5A70(void)
 {
     ftKb_DatAttrs* ea = gFtDataList[Ft_Kind_Kirby]->ext_attr;
+#if BUILD_TARGET_PC
+    /* MELEE_EXTATTR=1: ext_attr is the raw big-endian blob. PUSH_ATTRS
+     * byteswaps it into dat_attrs_backup and points fp->dat_attrs there, so
+     * reads through fp->dat_attrs are host order -- but these reads go
+     * straight at ext_attr and are not. This prints the value as read beside
+     * the same word byteswapped, which is what it should be. */
+    if (getenv("MELEE_EXTATTR") != NULL) {
+        static int n;
+        if (n < 3) {
+            u32 raw;
+            float swapped;
+            n++;
+            raw = *(const u32*) &ea->specialn_gravity_of_inhaled;
+            raw = ((raw >> 24) & 0xFF) | ((raw >> 8) & 0xFF00) |
+                  ((raw << 8) & 0xFF0000) | (raw << 24);
+            memcpy(&swapped, &raw, 4);
+            fprintf(stderr,
+                    "[EXTATTR] gravity_of_inhaled as read=%g  byteswapped=%g\n",
+                    (double) ea->specialn_gravity_of_inhaled,
+                    (double) swapped);
+        }
+    }
+#endif
     return ea->specialn_gravity_of_inhaled;
 }
 
