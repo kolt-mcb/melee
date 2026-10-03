@@ -229,6 +229,23 @@ typedef struct grBb_Data803E2EB8 {
 /* StageData.joints reads this as GrJoint {s16 joint, s16 map, s16 jobj
  * index}, which is what the console's halfword stream is; upstream types it
  * that way now too. */
+#if BUILD_TARGET_PC
+/* MELEE_BBHIDE=1: every track/model jobj this stage hides, with the source
+ * line that did it. The shown track section's collision follows its model's
+ * JOBJ_HIDDEN, and the model starts visible and is hidden a few frames in by
+ * one of these sites -- this says which. */
+static void grBb_hide_dbg(HSD_JObj* j, int line)
+{
+    if (getenv("MELEE_BBHIDE") != NULL) {
+        fprintf(stderr, "[BBHIDE] line %d hides jobj %p\n", line, (void*) j);
+    }
+    HSD_JObjSetFlagsAll(j, JOBJ_HIDDEN);
+}
+#define GRBB_HIDE(j) grBb_hide_dbg((j), __LINE__)
+#else
+#define GRBB_HIDE(j) HSD_JObjSetFlagsAll((j), JOBJ_HIDDEN)
+#endif
+
 GrJoint grBb_803E2938[] = {
     { 36, 34, 10 }, { 37, 34, 10 }, { 38, 34, 7 },  { 39, 34, 7 },
     { 40, 34, 7 },  { 41, 34, 14 }, { 42, 34, 14 }, { 43, 34, 14 },
@@ -330,9 +347,9 @@ void grBigBlue_801E57C0(void)
     grBigBlue_801E59F8(2);
     grBigBlue_801E59F8(0x22);
     grBigBlue_801E59F8(0x21);
-    HSD_JObjSetFlagsAll(grBigBlue_801E59F8(0x20)->hsd_obj, JOBJ_HIDDEN);
+    GRBB_HIDE(grBigBlue_801E59F8(0x20)->hsd_obj);
     grBigBlue_801E59F8(0x23);
-    HSD_JObjSetFlagsAll(grBigBlue_801E59F8(0x24)->hsd_obj, JOBJ_HIDDEN);
+    GRBB_HIDE(grBigBlue_801E59F8(0x24)->hsd_obj);
     Ground_801C39C0();
     Ground_801C3BB4();
     mpLib_80058044(0x21);
@@ -404,6 +421,8 @@ StageData grBb_StageData = {
     grBb_803E2938,
     ARRAY_SIZE(grBb_803E2938),
 };
+
+
 
 HSD_GObj* grBigBlue_801E59F8(s32 id)
 {
@@ -1345,7 +1364,7 @@ void grBigBlue_801E6C60(Ground_GObj* gobj)
                     (10.0f + Stage_GetBlastZoneRightOffset()) - 50.0f)
                 {
                 reset_route:
-                    HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
+                    GRBB_HIDE(jobj);
                     HSD_JObjSetRotationZ(jobj, 0.0f);
                     gp->u.bigblue.data[i].x44.z = 0.0f;
                     gp->u.bigblue.data[i].x44.y = 0.0f;
@@ -1493,19 +1512,41 @@ bool grBigBlue_801E8794(void* exclude, Vec3* pos, bool checkSecondary,
 
 void grBigBlue_801E8978(int index, void* data, void* extra)
 {
+#if BUILD_TARGET_PC
+    /* See the note on event_data in grBigBlue_GroundVars: the console walks
+     * these slots by biasing the Ground pointer four bytes per index, which
+     * is its pointer width and not this one's. */
+    Ground* gp = GET_GROUND(Ground_GetMapGObj(32));
+    if (gp == NULL || (unsigned) index >= 3U) {
+        return;
+    }
+    if (extra != NULL) {
+        gp->u.bigblue.event_extra = extra;
+    }
+    gp->u.bigblue.event_data[index] = data;
+#else
     u8* gp = (u8*) GET_GROUND(Ground_GetMapGObj(32));
     if (extra != NULL) {
         *(void**) (GRBB_CAR_BASE(gp) + 0xE0) = extra;
     }
     gp += index * 4;
     *(void**) (GRBB_CAR_BASE(gp) + 0xC8) = data;
+#endif
 }
 
 void* grBigBlue_801E89DC(int arg)
 {
+#if BUILD_TARGET_PC
+    Ground* gp = GET_GROUND(Ground_GetMapGObj(32));
+    if (gp == NULL || (unsigned) arg >= 3U) {
+        return NULL;
+    }
+    return gp->u.bigblue.event_data[arg];
+#else
     u8* gp = (u8*) GET_GROUND(Ground_GetMapGObj(32));
     gp += arg * 4;
     return *(void**) (GRBB_CAR_BASE(gp) + 0xC8);
+#endif
 }
 
 /// @todo Currently 82.96% match - platform/store use lwzx/stwx instead of
@@ -1906,7 +1947,7 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
     }
     case 3:
         if (pos.x > (50.0f + Stage_GetBlastZoneRightOffset())) {
-            HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
+            GRBB_HIDE(jobj);
             *(f32*) (GRBB_CAR_BASE(bp) + 0xD8) = 0.0f;
             *(s32*) (GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data) + 0xCC) = 0;
             {
@@ -2323,7 +2364,7 @@ void grBigBlue_801EA05C(Ground_GObj* gobj)
              HSD_JObjGetTranslationX(jobj) >
                  Stage_GetBlastZoneRightOffset() - 50.0f))
         {
-            HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
+            GRBB_HIDE(jobj);
             gp->u.bigblue.platform.xEC = 0.0f;
             gp->u.bigblue.platform.velocity.z = 0.0f;
             gp->u.bigblue.platform.velocity.y = 0.0f;
@@ -2568,7 +2609,7 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
     u32 i;
     grBb_TrackEntry* entry;
 
-    HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
+    GRBB_HIDE(jobj);
 
     scale.x = scale.y = scale.z = 1.0F;
     HSD_JObjSetScale(jobj, &scale);
@@ -3469,7 +3510,7 @@ void grBigBlue_801EC6C0(Ground_GObj* gobj)
         mpJointSetCb1(*(s16*) ((u8*) grBb_803E2938 + 0x4C4 + i * 2), gp,
                       (mpLib_JointCollisionCallback) fn_801EF60C);
 #endif
-        HSD_JObjSetFlagsAll(((HSD_JObj**) gp->u.bigblue.xC8)[i], JOBJ_HIDDEN);
+        GRBB_HIDE(((HSD_JObj**) gp->u.bigblue.xC8)[i]);
         val = HSD_Randi(2) ? 0 : 2;
         ((u8*) gp->u.bigblue.xCC)[i] = val;
     }

@@ -1713,6 +1713,17 @@ struct grBigBlue_GroundVars {
     void* xCC;
     f32 xD0;
     HSD_JObj* xD4[3];
+    /* The manager object's three event slots and its extra pointer -- gp+C8
+     * through gp+D4, and gp+E0, on the console. They cannot stay at those
+     * offsets here. grBigBlue_801E8978 and grBigBlue_801E89DC are the only
+     * code that touches them, and they step a slot by biasing the Ground
+     * pointer with the console's four-byte stride (`gp += index * 4`); with
+     * eight-byte pointers that makes slot 1 overlap slot 0 and slot 2 overlap
+     * slot 1, and union+4 is where data[0] begins once the two arrays above
+     * move out of the union. Indices 0, 1 and 2 are all used, so only slot 0
+     * was ever readable. */
+    void* event_data[3];
+    void* event_extra;
 #endif
 };
 
