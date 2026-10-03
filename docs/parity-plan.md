@@ -1289,3 +1289,45 @@ the right tool for a frame-1 divergence and for reading probe output.
 `_SDA2_BASE_` is 0x804DF9E0 (set at 0x80005348). Reading an `lfs rN,off(r2)`
 against a guessed base is how the sine-polynomial hypothesis looked confirmed
 when it was not; scan the DOL for `lis r2 / ori r2` instead.
+
+## Poke Floats: solved, and the class it belongs to
+
+**Poke Floats (24) is fixed** (e7e66ba47). Two PC-only clamps on converted
+DAT data were replacing correct values with wrong ones:
+
+* `grDatFiles_ConvertJointTreeGCNtoX64` clamped every converted joint's
+  `position` to +-500 and its `scale` to +-10, on the stated grounds that
+  "real stage geometry is typically within +-500 units of the origin".
+* `HSD_JObjMakeMatrix`'s PC arm then clamped the finished matrix's whole 3x3
+  to +-10 ("rotation/scale should be within +-10") and its translation to
+  +-2000.
+
++-1 bounds the 3x3 of a *pure rotation*; a joint that also scales has no such
+bound. Poke Floats scales its floats by 11 to 35, so fourteen of its
+twenty-six floats came out of the converter at a scale of exactly 10 -- and
+since `grPura_80213030` feeds each float's joints through `lb_8000B1CC` into
+`mpVtxSetPos`, their collision vertices shrank with them. That is why the
+fighters had no floor.
+
+How it was pinned down, in case the next one looks the same: the float roots'
+translations and rotations matched the console exactly and only the scale
+differed, on 14 of 26 floats; every DAT scale at or below 10 arrived intact
+and every one above it arrived as exactly 10. The ground truth is readable
+offline -- Poke Floats' float joints are a 0x40-stride `HSD_Joint` array at
+0x07cef4 in `orig/GALE01/GrPu.dat`, scale at +0x20, position at +0x2C, all
+big-endian.
+
+**The clamps were not local to this stage.** Counting joint-shaped records in
+each stage archive, the position clamp had something to bite on in nearly
+every stage and the scale clamp in most: GrNKr 20 joints scaled over 10 and 94
+positioned past 500, GrBb (Big Blue) 15 and 47, GrCs (Castle) 19 and 50, GrI1
+41 and 29, GrMc 11 and 23, GrVe 10 and 23, GrRc 0 and 12, GrKg (Kongo) 0 and
+11. Every row therefore needs re-measuring before any remaining thread is
+worth chasing -- a cell that was failing on clamped joint data will have been
+failing for a reason that no longer exists.
+
+Watch for more of this class: a port-only clamp or default on *game data* is a
+divergence source by construction, because the console has no such clamp. An
+audit of the converters and of `src/port` found no others -- the remaining
+numeric limits are renderer and hardware limits (TEV stage count, texture
+levels), which are legitimate.
