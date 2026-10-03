@@ -59,7 +59,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 DOLPHIN = os.environ.get("MELEE_DOLPHIN_BIN",
                          "/home/grunt/Dolphin-emu/build/Binaries/dolphin-emu-nogui")
-ISO = "/home/grunt/brashmos/Super Smash Bros. Melee (USA) (En,Ja) (v1.02).iso"
+# MELEE_ISO so a second machine can run the suite without editing this file;
+# the default is where it lives on the machine this was written on.
+ISO = os.environ.get(
+    "MELEE_ISO",
+    "/home/grunt/brashmos/Super Smash Bros. Melee (USA) (En,Ja) (v1.02).iso")
 # Per-instance, so the sweep can shard. Two lockstep runs cannot share a
 # Dolphin input pipe, a barrier socket or a Dolphin user directory: they would
 # read each other's pad tokens, meet on the same barrier, and write the same
