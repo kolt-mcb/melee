@@ -1577,6 +1577,39 @@ f32 grBigBlue_801E8B84(f32 right, f32 left, f32 bottom, f32 top)
     int i = 0;
     f32 result = grBb_804DB310;
 
+#if BUILD_TARGET_PC
+    /* MELEE_BBCARS=<frame>: the four car slots as this function sees them --
+     * the state that decides whether a car counts, and the position the
+     * fighters are held up by. The console's own view of the same four slots
+     * is MELEE_MEMAT=801e8bbc:3:64:212, which is r3 = map 33's Ground just
+     * after the load at 801e8bb8, 64 words from gp+D4. */
+    {
+        static int bc = -2;
+        if (bc == -2) {
+            const char* e = getenv("MELEE_BBCARS");
+            bc = e != NULL ? atoi(e) : -1;
+        }
+        if (bc >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            if ((int) gm_GetFrameCount() == bc) {
+                int c;
+                for (c = 0; c < 4; c++) {
+                    fprintf(stderr,
+                            "[BBCARS] lane %d state=%2u pos=(%.4f,%.4f,%.4f) "
+                            "height=%.4f target=%.4f\n",
+                            c,
+                            (unsigned) (gp->u.bigblue.car.lanes[c].state),
+                            (double) gp->u.bigblue.car.lanes[c].pos.x,
+                            (double) gp->u.bigblue.car.lanes[c].pos.y,
+                            (double) gp->u.bigblue.car.lanes[c].pos.z,
+                            (double) gp->u.bigblue.car.lanes[c].height,
+                            (double) gp->u.bigblue.car.lanes[c].target);
+                }
+            }
+        }
+    }
+#endif
+
     for (i = 0; i < 4; i++) {
         if ((unsigned) (gp->u.bigblue.car.lanes[i].state >> 2 & 0x3F) != 1U) {
             if (gp->u.bigblue.car.lanes[i].pos.y < right &&

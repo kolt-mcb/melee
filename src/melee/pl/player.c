@@ -612,6 +612,23 @@ void Player_LoadPlayerCoords(s32 slot, Vec3* arg_vec)
 
     player = &player_slots[slot];
     player_vecs = player->player_poses.byIndex;
+#if BUILD_TARGET_PC
+    /* MELEE_PLCOORDS=1: which pose index this slot is spawning from, and all
+     * four poses it chooses between. The retail code reads the same thing as
+     * StaticPlayer + transformed[0]*12 + 0x10, so the console's view is
+     * MELEE_MEMAT=80032738:3:16:0 -- sixteen words from the slot's base,
+     * which covers transformed[] at +0xC and the poses at +0x10. */
+    if (getenv("MELEE_PLCOORDS") != NULL) {
+        int q;
+        fprintf(stderr, "[PLCOORDS] slot=%d idx=%d poses:", (int) slot,
+                (int) player->transformed[0]);
+        for (q = 0; q < 4; q++) {
+            fprintf(stderr, " (%.4f,%.4f,%.4f)", (double) player_vecs[q].x,
+                    (double) player_vecs[q].y, (double) player_vecs[q].z);
+        }
+        fprintf(stderr, "\n");
+    }
+#endif
     *arg_vec = player_vecs[player->transformed[0]];
 }
 

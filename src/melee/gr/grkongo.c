@@ -199,6 +199,17 @@ Ground_GObj* grKongo_801D5340(int gobj_id)
     Ground_GObj* gobj;
     StageCallbacks* callbacks = &grKg_StageCallbacks[gobj_id];
     gobj = Ground_GetStageGObj(gobj_id);
+#if BUILD_TARGET_PC
+    /* MELEE_KGROT=1 also reports this stage's object setup: which ids got a
+     * GObj and which of them got a proc installed. grKongo_801D577C printed
+     * nothing at all over a whole run, and "the proc never runs" and "the
+     * object was never made" look identical from inside the proc. */
+    if (getenv("MELEE_KGROT") != NULL) {
+        fprintf(stderr, "[KGSETUP] id=%d gobj=%p on_init=%p proc=%p\n",
+                gobj_id, (void*) gobj, (void*) callbacks->on_init,
+                (void*) callbacks->gobj_proc);
+    }
+#endif
 
     if (gobj != NULL) {
         /// @todo ::Ground_SetupStageCallbacks
@@ -289,6 +300,12 @@ void grKongo_801D55D8(Ground_GObj* arg0)
 
     temp_r31 = arg0->user_data;
     temp_r28 = arg0->hsd_obj;
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_KGROT") != NULL) {
+        fprintf(stderr, "[KGINIT] map=%d gp=%p\n", (int) temp_r31->map_id,
+                (void*) temp_r31);
+    }
+#endif
     grAnime_801C8138(arg0, temp_r31->map_id, 0);
     grMaterial_801C94D8(temp_r28);
     temp_r31->u.kongo4.xE4 = 1.0f;
@@ -307,6 +324,17 @@ void grKongo_801D55D8(Ground_GObj* arg0)
     temp_r31->u.kongo4.xCE =
         rand_range(yakumono_param->unk68, yakumono_param->unk64);
     lb_8000B1CC(Ground_801C3FA4(arg0, 1), NULL, &sp14);
+#if BUILD_TARGET_PC
+    /* MELEE_KGROT=1: the spawn point this object registers, which is joint
+     * 1's world position. Console: MELEE_MEMAT=801d5750:1:3:20 -- the Vec3
+     * the retail code hands Ground_801C4D70, read off the stack at r1+20
+     * before the call runs. */
+    if (getenv("MELEE_KGROT") != NULL) {
+        fprintf(stderr, "[KGSPAWN] sp14=(%.4f,%.4f,%.4f) angle=%.5f\n",
+                (double) sp14.x, (double) sp14.y, (double) sp14.z,
+                (double) temp_r31->u.kongo4.xD8);
+    }
+#endif
     Ground_801C4D70(arg0, &sp14, temp_r31->u.kongo4.xD8);
 }
 
@@ -509,6 +537,38 @@ void grKongo_801D577C(Ground_GObj* arg0)
         }
         break;
     }
+#if BUILD_TARGET_PC
+    /* MELEE_KGROT=1: the animation frame this platform is driven to. The
+     * console's own value is f1 at the call: MELEE_CODE_BP=801d5d6c. */
+    if (getenv("MELEE_KGROT") != NULL) {
+        /* And whether there is anything for that rate to drive: the count
+         * of joints under this object that carry an HSD_AObj. A correct rate
+         * on a tree with no AObj in it animates nothing. */
+        HSD_JObj* root = Ground_801C3FA4(arg0, 0);
+        int njoint = 0, naobj = 0;
+        HSD_JObj* stack[64];
+        int sp = 0;
+        if (root != NULL) {
+            stack[sp++] = root;
+        }
+        while (sp > 0 && njoint < 512) {
+            HSD_JObj* w = stack[--sp];
+            njoint++;
+            if (w->aobj != NULL) {
+                naobj++;
+            }
+            if (w->child != NULL && sp < 63) {
+                stack[sp++] = w->child;
+            }
+            if (w->next != NULL && sp < 63) {
+                stack[sp++] = w->next;
+            }
+        }
+        fprintf(stderr, "[KGANIM] xE8=%.6f xE4=%.6f joints=%d with_aobj=%d\n",
+                (double) gp->u.kongo4.xE8, (double) gp->u.kongo4.xE4, njoint,
+                naobj);
+    }
+#endif
     grAnime_801C7A04(arg0, 0, 7, gp->u.kongo4.xE8);
 
     switch (gp->u.kongo4.xC6) {
