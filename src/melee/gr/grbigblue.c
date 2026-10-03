@@ -141,6 +141,27 @@ f32 grBb_804DB3F0 = -10.0f;
 #define GRBB_BE
 #define GRBB_C4_WORD(gp) __builtin_bswap32(*(u32*) (GRBB_CAR_BASE(gp) + 0xC4))
 
+/* A car slot's first two bytes are read two ways: as a byte at +0xD4, whose
+ * bits 2..7 are the car's state, and as a halfword at +0xD4, whose bits 4..8
+ * are its lane index. On the console that byte is the halfword's HIGH half:
+ *
+ *     801ec7b0  lbz    r0, 212(r29)      ; state: byte bits 2..7
+ *     801ec7b8  rlwimi r0, r3, 2, 24, 29
+ *     801ec7bc  stb    r0, 212(r29)
+ *     801ec7e0  lhz    r0, 212(r3)       ; lane: halfword bits 4..8
+ *     801ec7e4  rlwinm r0, r0, 28, 27, 31
+ *     801ec804  lhz    r0, 212(r29)
+ *     801ec808  rlwimi r0, r31, 4, 23, 27
+ *     801ec810  sth    r0, 212(r29)
+ *
+ * A little-endian halfword load makes it the LOW half, which puts the lane
+ * field (host halfword bits 4..8) on top of the state field (host halfword
+ * bits 2..7): picking a lane wrote over the car's state and setting the
+ * state wrote over the lane. The byte accesses are already right, so keep
+ * the two bytes in the console's order and swap on halfword access. */
+#define GRBB_HW(p) __builtin_bswap16(*(u16*) (p))
+#define GRBB_HW_SET(p, v) (*(u16*) (p) = __builtin_bswap16((u16) (v)))
+
 /* Field positions in that word, as the console allocates them: the shift of
  * the field's low bit, and its width. */
 #define GRBB_FLD_b0 31, 1
@@ -171,6 +192,8 @@ static void grBb_c4_set(void* gp, u32 value, int shift, int width)
 #define GRBB_SET(gp, f, v) grBb_c4_set(gp, (u32) (v), GRBB_FLD_##f)
 #else
 #define GRBB_CAR_BASE(gp) ((u8*) (gp))
+#define GRBB_HW(p) (*(u16*) (p))
+#define GRBB_HW_SET(p, v) (*(u16*) (p) = (u16) (v))
 /* The console needs no help: it is big-endian and allocates MSB-first. */
 #define GRBB_BE
 #define GRBB_C4_WORD(gp) (*(u32*) (GRBB_CAR_BASE(gp) + 0xC4))
@@ -3270,12 +3293,14 @@ void grBigBlue_801EC6C0(Ground_GObj* gobj)
             do {
                 line_idx = HSD_Randi(30);
                 {
-                    u8* p = (u8*) gp;
+                    /* The console walks the car slots from gp, which is
+                     * where its union starts; here that is the car base. */
+                    u8* p = GRBB_CAR_BASE(gp);
                     i = 0;
                     if (k > 0) {
                         s32 ctr = k;
                         while (ctr > 0) {
-                            u16 hw = *(u16*) (p + 0xD4);
+                            u16 hw = GRBB_HW(p + 0xD4);
                             if (((hw >> 4) & 0x1F) == line_idx) {
                                 break;
                             }
@@ -3288,9 +3313,18 @@ void grBigBlue_801EC6C0(Ground_GObj* gobj)
             } while (i != k);
 
             {
-                u16 hw = *(u16*) (car + 0xD4);
+                u16 hw = GRBB_HW(car + 0xD4);
                 hw = (hw & ~0x01F0) | ((line_idx & 0x1F) << 4);
-                *(u16*) (car + 0xD4) = hw;
+                GRBB_HW_SET(car + 0xD4, hw);
+#if BUILD_TARGET_PC
+                if (getenv("MELEE_BBLANE") != NULL) {
+                    fprintf(stderr,
+                            "[BBLANE] car %d (%p) line_idx=%d hw=%04x "
+                            "state=%d\n",
+                            (int) k, (void*) car, (int) line_idx,
+                            (unsigned) hw, (int) ((car[0xD4] >> 2) & 0x3F));
+                }
+#endif
             }
 
             idx = 0;

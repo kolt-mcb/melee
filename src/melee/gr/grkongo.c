@@ -804,8 +804,26 @@ void grKongo_801D651C(Ground_GObj* gobj)
     gp->u.kongo2.xC8 = 0.0f;
     gp->u.kongo2.xD0 = 0.0f;
     gp->u.kongo.xCC = 0.0f;
+#if BUILD_TARGET_PC
+    /* These two are gp+0xD8 and gp+0xDC, the running max-y and min-z of the
+     * platform's path along its spline, and grKongo_801D6668 below reads the
+     * first of them back as `u.kongo.xD8`. On the GameCube that is the same
+     * word; here it is not. u.kongo2 opens with an HSD_Spline*, four bytes on
+     * the console and eight here, so every field after it sits four bytes
+     * late: kongo2.xD8 landed at +24 where kongo.xD8 is at +28, and
+     * kongo2.xDC landed on +28 -- on top of it.
+     *
+     * So the max-y accumulator was initialised at one address and used at
+     * another, starting from the F32_MAX meant for min-z: `xD8 < sp5C.y` was
+     * never true, the platform's height was never tracked, and the test that
+     * drops its rider never fired. Min-z was destroyed by the same write.
+     * Spell both through the views whose host offsets are the console's. */
+    gp->u.kongo.xD8 = -99999.0f;
+    gp->u.kongo3.xDC = F32_MAX;
+#else
     gp->u.kongo2.xD8 = -99999.0f;
     gp->u.kongo2.xDC = F32_MAX;
+#endif
     splArcLengthPoint(&sp2C, gp->u.kongo2.xC4, gp->u.kongo.xCC);
     HSD_JObjSetTranslate(jobj, &sp2C);
 }
@@ -887,14 +905,25 @@ void grKongo_801D6668(Ground_GObj* arg0)
     if (gp->u.kongo.xD8 < sp5C.y) {
         gp->u.kongo.xD8 = sp5C.y;
     }
+#if BUILD_TARGET_PC
+    /* gp+0xDC; see the note on its initialiser in grKongo_801D651C. */
+    if (gp->u.kongo3.xDC > sp5C.z) {
+        gp->u.kongo3.xDC = sp5C.z;
+    }
+#else
     if (gp->u.kongo2.xDC > sp5C.z) {
         gp->u.kongo2.xDC = sp5C.z;
     }
+#endif
     if (((gp->u.kongo.xD8 - sp44.y) < 5.0f) &&
         ((gp->u.kongo.xD8 - sp5C.y) > 5.0f))
     {
         Ground_801C5440(gp, 0, 0x5A550U);
+#if BUILD_TARGET_PC
+        Ground_801C5630(gp, 0, 1.0f - (sp5C.z / gp->u.kongo3.xDC));
+#else
         Ground_801C5630(gp, 0, 1.0f - (sp5C.z / gp->u.kongo2.xDC));
+#endif
     }
 }
 
