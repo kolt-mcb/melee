@@ -3178,6 +3178,25 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
                          bone_pos.x < -300.0F * Ground_801C0498())
                             ? "ADVANCE"
                             : "hold");
+                /* And the start bone's ancestor chain. Its world x is 0.00
+                 * here against the console's 1072.75, and it is a separate
+                 * joint from the section the stage places -- two indices into
+                 * one depth-first walk, not parent and child -- so the
+                 * placement to explain is this chain's. */
+                {
+                    HSD_JObj* w = Ground_801C3FA4(gobj, entry->start_index);
+                    int d = 0;
+                    for (; w != NULL && d < 10; w = w->parent, d++) {
+                        fprintf(stderr,
+                                "[BBADV]   ^%d jobj=%p t=(%.3f,%.3f,%.3f) "
+                                "mtx_x=%.3f dirty=%d\n",
+                                d, (void*) w, (double) w->translate.x,
+                                (double) w->translate.y,
+                                (double) w->translate.z,
+                                (double) w->mtx[0][3],
+                                HSD_JObjMtxIsDirty(w) ? 1 : 0);
+                    }
+                }
             }
         }
 #endif
