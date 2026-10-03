@@ -564,9 +564,36 @@ void grKongo_801D577C(Ground_GObj* arg0)
                 stack[sp++] = w->next;
             }
         }
-        fprintf(stderr, "[KGANIM] xE8=%.6f xE4=%.6f joints=%d with_aobj=%d\n",
-                (double) gp->u.kongo4.xE8, (double) gp->u.kongo4.xE4, njoint,
-                naobj);
+        {
+            /* And the one AObj's own clock. A frozen curr_frame means the
+             * animation is never stepped; a moving one that leaves the
+             * joints alone means it is stepped but not applied. */
+            HSD_JObj* w2;
+            f32 cf = -1.0f, fr = -1.0f;
+            int s2 = 0;
+            if (root != NULL) {
+                stack[s2++] = root;
+            }
+            while (s2 > 0) {
+                w2 = stack[--s2];
+                if (w2->aobj != NULL) {
+                    cf = w2->aobj->curr_frame;
+                    fr = w2->aobj->framerate;
+                    break;
+                }
+                if (w2->child != NULL && s2 < 63) {
+                    stack[s2++] = w2->child;
+                }
+                if (w2->next != NULL && s2 < 63) {
+                    stack[s2++] = w2->next;
+                }
+            }
+            fprintf(stderr,
+                    "[KGANIM] xE8=%.6f joints=%d with_aobj=%d "
+                    "curr_frame=%.4f framerate=%.4f\n",
+                    (double) gp->u.kongo4.xE8, njoint, naobj, (double) cf,
+                    (double) fr);
+        }
     }
 #endif
     grAnime_801C7A04(arg0, 0, 7, gp->u.kongo4.xE8);
