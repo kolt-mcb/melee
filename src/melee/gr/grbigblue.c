@@ -2639,6 +2639,23 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
         u32 idx = (GRBB_C4_WORD(gp) >> 15) & 0x7F;
         HSD_JObj* active =
             Ground_801C3FA4(gobj, grBb_TrackEntries[idx].jobj_index);
+#if BUILD_TARGET_PC
+        /* MELEE_BBTRACK=1: the two track sections this stage keeps in the
+         * world. Only ever two of the thirty-two are unhidden -- `active`
+         * and `next` -- so which two decides whether the cars' raycast finds
+         * the track at all. Console: MELEE_MEMAT=801eb26c:30:1:196 gives the
+         * same word (r30 is the Ground there), and the two indices come out
+         * of it as (word >> 15) & 0x7F and (word >> 8) & 0x7F. */
+        if (getenv("MELEE_BBTRACK") != NULL) {
+            u32 w = GRBB_C4_WORD(gp);
+            u32 nx = (u32) (*(s8*) (GRBB_CAR_BASE(gp) + 0xC6)) & 0x7F;
+            fprintf(stderr,
+                    "[BBTRACK] c4=%08x active=%u (jobj %d) next=%u (jobj %d)\n",
+                    (unsigned) w, idx,
+                    (int) grBb_TrackEntries[idx].jobj_index, nx,
+                    (int) grBb_TrackEntries[nx].jobj_index);
+        }
+#endif
 
         HSD_JObjClearFlagsAll(active, JOBJ_HIDDEN);
 
@@ -3319,7 +3336,13 @@ f32 grBigBlue_801EC58C(Vec3* pos, Vec3* normal_out, f32 half_height)
                                   (fl & CollJoint_Enabled) &&
                                   !(fl & CollJoint_TooFar) &&
                                   !(fl & CollJoint_Hidden)) ? 1 : 0;
-                        en[i] = (char) ('0' + on);
+                        /* Which of the three reasons, per joint: 'h' hidden,
+                         * 'f' too far, '-' not enabled, '1' askable. The box
+                         * test and mpJointHide want different fixes. */
+                        en[i] = !(fl & CollJoint_Enabled) ? '-'
+                                : (fl & CollJoint_Hidden) ? 'h'
+                                : (fl & CollJoint_TooFar) ? 'f'
+                                : '1';
                         ne += on;
                     }
                     en[32] = '\0';
