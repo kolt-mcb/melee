@@ -136,6 +136,10 @@ void ftPk_SpecialLw_Enter(HSD_GObj* gobj)
     fp->throw_flags = 0;
     fp->mv.pk.specialhi.x4 = 1;
     fp->mv.pk.specialhi.x0 = 0;
+#if BUILD_TARGET_PC
+    /* Clears the bolt on the console too; the pointer is parked here. */
+    fp->mv.pk.speciallw.x0 = NULL;
+#endif
     Fighter_ChangeMotionState(gobj, 359, 0, 0.0f, 1.0f, 0.0f, 0);
     ftAnim_8006EBA4(gobj);
 }
@@ -147,6 +151,10 @@ void ftPk_SpecialAirLw_Enter(HSD_GObj* gobj)
     fp->throw_flags = 0;
     fp->mv.pk.specialhi.x4 = 1;
     fp->mv.pk.specialhi.x0 = 0;
+#if BUILD_TARGET_PC
+    /* Clears the bolt on the console too; the pointer is parked here. */
+    fp->mv.pk.speciallw.x0 = NULL;
+#endif
     Fighter_ChangeMotionState(gobj, 363, 0, 0.0f, 1.0f, 0.0f, 0);
     ftAnim_8006EBA4(gobj);
 }

@@ -85,28 +85,7 @@ union ftPikachu_MotionVars {
     } unk3;
 
     struct ftPikachu_SpecialHiVars {
-#ifdef BUILD_TARGET_PC
-        /* PC port: Thunder deliberately aliases this view over `speciallw`.
-         * ftPk_SpecialLw_Enter clears the live thunder item through
-         * `specialhi.x0` and sets the move's state through `specialhi.x4`,
-         * and ftPk_SpecialLw_8012765C reads that same state word back as
-         * `speciallw.x4` (the original build reads it whole: `lwz r0,
-         * 0x2344(r31)` at 0x80127674). On GCN both views line up because a
-         * pointer is a word; here `speciallw.x0` is eight bytes, so
-         * `specialhi.x0 = 0` cleared only half of it and `specialhi.x4 = 1`
-         * wrote 1 into the *upper* half -- leaving the thunder pointer at
-         * 0x100000000. ftPk_SpecialLw_SpawnEffect's `!speciallw.x0` guard
-         * then saw a live bolt that did not exist, so down-B ran its
-         * animation and never spawned thunder at all.
-         *
-         * Widening x0 to a pointer-sized slot restores both aliases: x0
-         * covers the whole pointer, and x4 lands on `speciallw.x4`. The
-         * fields after it only ever alias each other, so shifting them is
-         * harmless. */
-        intptr_t x0;
-#else
         int x0;
-#endif
         s32 x4;
         s32 x8;
         int xC;
@@ -117,9 +96,39 @@ union ftPikachu_MotionVars {
     } specialhi;
 
     struct ftPikachu_SpecialLwVars {
+#if BUILD_TARGET_PC
+        /* Thunder's bolt pointer is a word at offset 0 on the console, and
+         * eight bytes here. Declared there, it pushed `x4` to 8 -- off the
+         * `specialhi.x4` it aliases (ftPk_SpecialLw_8012765C reads that state
+         * word back as `speciallw.x4`: `lwz r0, 0x2344(r31)` at 0x80127674).
+         * Widening `specialhi.x0` to match fixed Thunder but moved every
+         * Quick Attack field after it by four bytes, so `specialhi.x1C` -- the
+         * velocity saved at the zip -- landed on 0x20 instead of 0x1C, a word
+         * other states read before writing.
+         *
+         * So the pointer is parked past the union's console fields, `x4`
+         * stays on its console offset, and both specialhi and speciallw keep
+         * the console layout. The console clears the bolt through
+         * `specialhi.x0 = 0`; the two Enter functions clear the parked
+         * pointer alongside it. */
+        s32 x0_word;
+        bool x4;
+        u8 pad_park[PC_MV_PARK - 0x8];
+        Item_GObj* x0;
+#else
         Item_GObj* x0;
         bool x4;
+#endif
     } speciallw;
 };
+
+#if BUILD_TARGET_PC
+_Static_assert(offsetof(union ftPikachu_MotionVars, specialhi.x1C) == 0x1C,
+               "Quick Attack's fields must sit on their console offsets");
+_Static_assert(offsetof(union ftPikachu_MotionVars, speciallw.x4) == 0x4,
+               "speciallw.x4 aliases specialhi.x4");
+_Static_assert(offsetof(union ftPikachu_MotionVars, speciallw.x0) >= PC_MV_PARK,
+               "the bolt pointer is parked past the console fields");
+#endif
 
 #endif
