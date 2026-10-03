@@ -78,6 +78,26 @@ static void pc_dyn_site(int site, const Vec3* v)
 #define DYN_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
+#if BUILD_TARGET_PC
+/* A pad-based overlay over whatever array the caller hands in, written at the
+ * console's offsets. Both callers' structs hold an HSD_JObj* in the middle --
+ * Fighter_x1670_t (ftColl_8007B3A8 fills it, ftColl_8007AF60 puts the live
+ * world position in its x18) and xB6C_t for items -- so on the host each
+ * entry is 48 bytes, not 0x28, and the field after the pointer sits four
+ * bytes later. Unrebased, `position` read x14 plus the first eight bytes of
+ * x18, and `collider++` stepped 40 bytes through a 48-byte array.
+ *
+ * Both callers happen to have the same host shape (Vec3, f32, pointer, u32,
+ * Vec3, u32), so one spelling serves both. */
+struct lb_Collider {
+    /* 0x00 */ char pad_00[0x0C];
+    /* 0x0C */ f32 radius;
+    /* 0x10 */ void* pad_10; /* the caller's HSD_JObj*: eight bytes here */
+    /* 0x14 */ char pad_14[0x04];
+    /* 0x18 */ Vec3 position;
+    /* 0x24 */ char pad_24[0x08];
+};
+#else
 struct lb_Collider {
     /* 0x00 */ char pad_00[0x0C];
     /* 0x0C */ f32 radius;
@@ -85,6 +105,7 @@ struct lb_Collider {
     /* 0x18 */ Vec3 position;
     /* 0x24 */ char pad_24[0x04];
 };
+#endif
 
 const struct {
     Vec3 v0;
