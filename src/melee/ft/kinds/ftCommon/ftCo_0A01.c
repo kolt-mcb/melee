@@ -4064,6 +4064,43 @@ void ftCo_800A7AAC(Fighter* fp)
                     } else {
                         d = ABS(island->x8.x - data->x54.x);
                         if (d < 5.0) {
+#if BUILD_TARGET_PC
+                            /* MELEE_AITARGET: the island edge this target is
+                             * built from, with the vertex indices it was
+                             * populated from. The console has x8 =
+                             * (0.7674, 0) here and the port (0, 1e-4). */
+                            {
+                                static int at4 = -2;
+                                if (at4 == -2) {
+                                    const char* e = getenv("MELEE_AITARGET");
+                                    at4 = e != NULL ? atoi(e) : -1;
+                                }
+                                if (at4 >= 0) {
+                                    extern u32 gm_GetFrameCount(void);
+                                    if ((int) gm_GetFrameCount() == at4) {
+                                        fprintf(stderr,
+                                                "[AIISLAND] p%d island=%p "
+                                                "x4=%u x6=%u x24=%d "
+                                                "x8=(%08x,%08x) "
+                                                "x14=(%08x,%08x) "
+                                                "x56C=%08x psub=%d "
+                                                "px564=%08x\n",
+                                                (int) fp->player_id,
+                                                (void*) island,
+                                                (unsigned) island->x4,
+                                                (unsigned) island->x6,
+                                                (int) island->x24,
+                                                *(const unsigned*) &island->x8.x,
+                                                *(const unsigned*) &island->x8.y,
+                                                *(const unsigned*) &island->x14.x,
+                                                *(const unsigned*) &island->x14.y,
+                                                *(const unsigned*) &data->x56C,
+                                                (int) partner->is_sub_fighter,
+                                                *(const unsigned*) &partner->cpu.x564);
+                                    }
+                                }
+                            }
+#endif
                             ftCo_800A1F3C(fp, 5.0 + island->x8.x, island->x8.y,
                                           data->x56C + partner->cpu.x564);
                         }
@@ -4099,6 +4136,38 @@ void ftCo_800A7AAC(Fighter* fp)
                 result = 0;
             }
         }
+#if BUILD_TARGET_PC
+        /* MELEE_AITARGET: the partner's hurtbox extents, which this target's
+         * distance is built from. `partner` is Nana, who is not one of the
+         * lockstep's four traced player slots, so nothing else would show a
+         * difference in her state. */
+        {
+            static int at5 = -2;
+            if (at5 == -2) {
+                const char* e = getenv("MELEE_AITARGET");
+                at5 = e != NULL ? atoi(e) : -1;
+            }
+            if (at5 >= 0) {
+                extern u32 gm_GetFrameCount(void);
+                if ((int) gm_GetFrameCount() == at5) {
+                    fprintf(stderr,
+                            "[AIPARTNER] p%d result=%d sub=%d ncap=%d "
+                            "x56C=%08x p.x55C=%08x p.x560=%08x "
+                            "p.x564=%08x p.x568=%08x ppos=(%08x,%08x)\n",
+                            (int) fp->player_id, (int) result,
+                            (int) partner->is_sub_fighter,
+                            (int) partner->hurt_capsules_len,
+                            *(const unsigned*) &data->x56C,
+                            *(const unsigned*) &partner->cpu.x55C,
+                            *(const unsigned*) &partner->cpu.x560,
+                            *(const unsigned*) &partner->cpu.x564,
+                            *(const unsigned*) &partner->cpu.x568,
+                            *(const unsigned*) &partner->cur_pos.x,
+                            *(const unsigned*) &partner->cur_pos.y);
+                }
+            }
+        }
+#endif
         if (result == 0) {
             ftCo_800A1F3C(fp, partner->cur_pos.x, partner->cur_pos.y,
                           data->x56C + partner->cpu.x564);
