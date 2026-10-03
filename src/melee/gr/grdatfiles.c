@@ -1919,24 +1919,15 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
         x64Joint->position.z = *(f32*)&raw;
     }
     
-    /* Clamp extreme values to prevent garbage transforms from bad archive data.
-     * Use tight limits (±500) to keep geometry near the camera frustum.
-     * Real stage geometry is typically within ±500 units of the origin. */
-    {
-        f32 pos_limit = 500.0f, scl_limit = 10.0f;
-        if (x64Joint->position.x < -pos_limit) x64Joint->position.x = -pos_limit;
-        if (x64Joint->position.x > pos_limit) x64Joint->position.x = pos_limit;
-        if (x64Joint->position.y < -pos_limit) x64Joint->position.y = -pos_limit;
-        if (x64Joint->position.y > pos_limit) x64Joint->position.y = pos_limit;
-        if (x64Joint->position.z < -pos_limit) x64Joint->position.z = -pos_limit;
-        if (x64Joint->position.z > pos_limit) x64Joint->position.z = pos_limit;
-        if (x64Joint->scale.x < -scl_limit) x64Joint->scale.x = -scl_limit;
-        if (x64Joint->scale.x > scl_limit) x64Joint->scale.x = scl_limit;
-        if (x64Joint->scale.y < -scl_limit) x64Joint->scale.y = -scl_limit;
-        if (x64Joint->scale.y > scl_limit) x64Joint->scale.y = scl_limit;
-        if (x64Joint->scale.z < -scl_limit) x64Joint->scale.z = -scl_limit;
-        if (x64Joint->scale.z > scl_limit) x64Joint->scale.z = scl_limit;
-    }
+    /* A converted joint's position used to be clamped to +-500 and its scale
+     * to +-10 here, on the grounds that "real stage geometry is typically
+     * within +-500 units of the origin". Neither limit is real. Poke Floats
+     * scales its floats by 11 to 35, and the clamp flattened fourteen of the
+     * twenty-six to exactly 10 -- taking their collision vertices with them,
+     * so the fighters spawned over a stage with no floor under them. The
+     * clamps were armour for archive data that converted badly during
+     * bring-up; what they do now is replace correct data with wrong data,
+     * silently, with no way to tell the two apart downstream. */
     
     if (visited_count < 3) {
         if (grdat_trace_on())

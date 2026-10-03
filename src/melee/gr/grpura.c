@@ -720,6 +720,36 @@ void stageGObj2_GObjProc(Ground_GObj* arg0)
     Quaternion quat;
 
     HSD_JObjGetTranslation2(gp->u.pura2.xC8, &vec);
+#if BUILD_TARGET_PC
+    /* MELEE_PURASRC=<frame>: each float's source joint translation, in the
+     * order the floats' procs run. The float's root is placed from this every
+     * frame, so a float whose collision sits in the wrong place has a source
+     * joint in the wrong place. Console: MELEE_MEMAT=80212340:29:3:56. */
+    {
+        static int ps = -2;
+        if (ps == -2) {
+            const char* e = getenv("MELEE_PURASRC");
+            ps = e != NULL ? atoi(e) : -1;
+        }
+        if (ps >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            if ((int) gm_GetFrameCount() == ps) {
+                fprintf(stderr,
+                        "[PURASRC] map=%d xC4=%d t=(%.4f,%.4f,%.4f) "
+                        "r=(%.5f,%.5f,%.5f) s=(%.4f,%.4f,%.4f)\n",
+                        (int) ((Ground*) arg0->user_data)->map_id,
+                        (int) gp->u.pura.xC4,
+                        (double) vec.x, (double) vec.y, (double) vec.z,
+                        (double) gp->u.pura2.xC8->rotate.x,
+                        (double) gp->u.pura2.xC8->rotate.y,
+                        (double) gp->u.pura2.xC8->rotate.z,
+                        (double) gp->u.pura2.xC8->scale.x,
+                        (double) gp->u.pura2.xC8->scale.y,
+                        (double) gp->u.pura2.xC8->scale.z);
+            }
+        }
+    }
+#endif
     HSD_JObjSetTranslate(jobj, &vec);
     HSD_JObjGetRotation(gp->u.pura2.xC8, &quat);
     HSD_JObjSetRotation(jobj, &quat);
@@ -906,6 +936,38 @@ void grPura_80213030(Ground_GObj* arg0)
         if (grPu_803E6C0C[var_r30].jobj != NULL) {
             lb_8000B1CC(grPu_803E6C0C[var_r30].jobj, NULL, &spC);
             mpVtxSetPos(grPu_803E6C0C[var_r30].joint.x, spC.x, spC.y);
+#if BUILD_TARGET_PC
+            /* MELEE_PURAVTX=<frame>: where each of the 42 collision vertices
+             * is being put. The fighters spawn at (-60, 25) and (-30, 50) and
+             * find no floor at all on this port, so the question is whether
+             * the float geometry is anywhere near them. */
+            {
+                static int pv = -2;
+                if (pv == -2) {
+                    const char* e = getenv("MELEE_PURAVTX");
+                    pv = e != NULL ? atoi(e) : -1;
+                }
+                if (pv >= 0) {
+                    extern u32 gm_GetFrameCount(void);
+                    if ((int) gm_GetFrameCount() == pv) {
+                        fprintf(stderr,
+                                "[PURAVTX] i=%u vtx=%d map=%d joint=%d "
+                                "pos=(%.3f,%.3f) jt=(%.3f,%.3f,%.3f) "
+                                "jrotz=%.5f jobj=%p\n",
+                                (unsigned) var_r30,
+                                (int) grPu_803E6C0C[var_r30].joint.x,
+                                (int) grPu_803E6C0C[var_r30].joint.y,
+                                (int) grPu_803E6C0C[var_r30].joint.z,
+                                (double) spC.x, (double) spC.y,
+                                (double) grPu_803E6C0C[var_r30].jobj->translate.x,
+                                (double) grPu_803E6C0C[var_r30].jobj->translate.y,
+                                (double) grPu_803E6C0C[var_r30].jobj->translate.z,
+                                (double) grPu_803E6C0C[var_r30].jobj->rotate.z,
+                                (void*) grPu_803E6C0C[var_r30].jobj);
+                    }
+                }
+            }
+#endif
         }
     }
     mpJointUpdateBounding(0);

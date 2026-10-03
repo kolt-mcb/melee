@@ -327,32 +327,19 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
             jobj->mtx[2][0] = 0.0f; jobj->mtx[2][1] = 0.0f; jobj->mtx[2][2] = 1.0f; jobj->mtx[2][3] = jobj->translate.z;
         }
     }
+    /* A joint matrix used to be clamped here: every 3x3 component to +-10
+     * ("rotation/scale should be within +-10") and the translation to +-2000
+     * ("real stage geometry is within +-2000 units"). Both premises are
+     * wrong. +-1 bounds the 3x3 of a pure *rotation*; a joint that also
+     * scales has no such bound, and Poke Floats scales its floats by 11 to
+     * 35, so the clamp silently shrank fourteen of its twenty-six floats to
+     * a scale of exactly 10 -- their collision vertices with them, which is
+     * why the fighters had no floor to stand on. The clamp was bring-up
+     * armour against joint data that converted badly; the conversions it was
+     * hiding have since been fixed, and what it does now is quietly replace
+     * correct data with wrong data. */
     if (jobj->parent != NULL) {
         PSMTXConcat(jobj->parent->mtx, jobj->mtx, jobj->mtx);
-    }
-    
-    /* PC port: Clamp final matrix translation to prevent extreme values
-     * from bad joint data. Real stage geometry is within ±2000 units.
-     * Also clamp rotation/scale components to prevent extreme transforms. */
-    {
-        f32 limit_pos = 2000.0f;
-        f32 limit_rot = 10.0f;  /* Rotation/scale should be within ±10 */
-        
-        /* Clamp rotation/scale components */
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                if (jobj->mtx[i][j] < -limit_rot) jobj->mtx[i][j] = -limit_rot;
-                if (jobj->mtx[i][j] > limit_rot) jobj->mtx[i][j] = limit_rot;
-            }
-        }
-        
-        /* Clamp translation components */
-        if (jobj->mtx[0][3] < -limit_pos) jobj->mtx[0][3] = -limit_pos;
-        if (jobj->mtx[0][3] > limit_pos) jobj->mtx[0][3] = limit_pos;
-        if (jobj->mtx[1][3] < -limit_pos) jobj->mtx[1][3] = -limit_pos;
-        if (jobj->mtx[1][3] > limit_pos) jobj->mtx[1][3] = limit_pos;
-        if (jobj->mtx[2][3] < -limit_pos) jobj->mtx[2][3] = -limit_pos;
-        if (jobj->mtx[2][3] > limit_pos) jobj->mtx[2][3] = limit_pos;
     }
 #else
     if (jobj->parent != NULL) {
