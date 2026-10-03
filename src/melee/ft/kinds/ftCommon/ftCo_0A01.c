@@ -7787,6 +7787,33 @@ void ftCo_800B0918(Fighter* fp0, Fighter* fp1)
 {
     struct CpuFighter* data;
 
+#if BUILD_TARGET_PC
+    /* MELEE_POPOIN=1: Popo's own stick, every time Nana's ring records it.
+     * Nana replays this five frames later, so a pre-match difference here is
+     * what puts her in a different place at match frame 1 -- and the
+     * lockstep's comparison does not start until then.
+     *
+     * Console: MELEE_MEMAT=800B0968:3:2:1568 -- fp+0x620 is
+     * input.lstick[0].x, read by the lfs at that instruction. */
+    if (getenv("MELEE_POPOIN") != NULL) {
+        extern u32 gm_GetFrameCount(void);
+        static int n;
+        if (n++ < 700) {
+            fprintf(stderr,
+                    "[POPOIN] #%d gf=%u slot=%d lstick=(%.5f,%.5f) "
+                    "nana_cpu=(%d,%d) nana_in=%.5f nana_x=%.4f "
+                    "nana_motion=%d b221F_b3=%d b2224_b2=%d iscpu=%d\n",
+                    n, (unsigned) gm_GetFrameCount(), (int) fp0->player_id,
+                    (double) fp0->input.lstick[0].x,
+                    (double) fp0->input.lstick[0].y,
+                    (int) fp1->cpu.lstick.x, (int) fp1->cpu.lstick.y,
+                    (double) fp1->input.lstick[0].x,
+                    (double) fp1->cur_pos.x, (int) fp1->motion_id,
+                    (int) fp1->x221F_b3, (int) fp1->x2224_b2,
+                    (int) ftCo_IsCpuControlled(fp1));
+        }
+    }
+#endif
     data = &fp1->cpu;
     data->x444++;
     data->x448++;
