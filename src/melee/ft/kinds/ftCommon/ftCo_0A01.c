@@ -1219,6 +1219,32 @@ bool ftCo_800A1F98(int x, float y)
 
 bool ftCo_IsCpuControlled(Fighter* fp)
 {
+#if BUILD_TARGET_PC
+    /* MELEE_AITARGET: the slot type this turns on. The Ice Climbers are the
+     * only characters for which it changes the answer -- with just two
+     * fighters, skipping the opponent leaves no candidate and the caller
+     * falls back to cpu.x44 either way; Nana is an extra candidate. */
+    {
+        static int at7 = -2;
+        if (at7 == -2) {
+            const char* e = getenv("MELEE_AITARGET");
+            at7 = e != NULL ? atoi(e) : -1;
+        }
+        if (at7 >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            static int n;
+            if ((int) gm_GetFrameCount() == at7 && n++ < 8) {
+                fprintf(stderr,
+                        "[AICPU] fp=%p slot=%d sub=%d ptype=%d cpukind=%d\n",
+                        (void*) fp, (int) fp->player_id,
+                        (int) fp->is_sub_fighter,
+                        (int) Player_8003248C(fp->player_id,
+                                              fp->is_sub_fighter),
+                        (int) fp->cpu.kind);
+            }
+        }
+    }
+#endif
     if (Player_8003248C(fp->player_id, fp->is_sub_fighter) != Gm_PKind_Cpu) {
         return false;
     }
@@ -3856,6 +3882,8 @@ void ftCo_800A75DC(Fighter* fp0, Fighter* fp1)
         if (at3 >= 0 && fp1 != NULL) {
             extern u32 gm_GetFrameCount(void);
             if ((int) gm_GetFrameCount() == at3) {
+                fprintf(stderr, "[AIWHO] from=%p fp=%p fp1=%p\n",
+                        __builtin_return_address(0), (void*) fp0, (void*) fp1);
                 fprintf(stderr,
                         "[AICHASE] p%d chasing p%d kind=%d sub=%d goa=%d "
                         "pos=(%08x,%08x) motion=%d\n",
@@ -3983,6 +4011,32 @@ void ftCo_800A75DC(Fighter* fp0, Fighter* fp1)
         mp_UnkStruct0* fp0_island;
         s32 same_island;
 
+#if BUILD_TARGET_PC
+        /* MELEE_AITARGET: this branch writes the CPU's target and the console
+         * never reaches any write inside this function, so the predicate
+         * above must be true there and is false here. Print its inputs. */
+        {
+            static int at6 = -2;
+            if (at6 == -2) {
+                const char* e = getenv("MELEE_AITARGET");
+                at6 = e != NULL ? atoi(e) : -1;
+            }
+            if (at6 >= 0) {
+                extern u32 gm_GetFrameCount(void);
+                if ((int) gm_GetFrameCount() == at6) {
+                    mp_UnkStruct0* isl =
+                        mpIsland_8005AB54(fp1->coll_data.floor.index);
+                    fprintf(stderr,
+                            "[AIGATE] p%d grkind=%d fp1goa=%d floor=%d "
+                            "island=%p a2718=%d\n",
+                            (int) fp0->player_id, (int) stage_info.grkind,
+                            (int) fp1->ground_or_air,
+                            (int) fp1->coll_data.floor.index, (void*) isl,
+                            (int) ftCo_800A2718(isl));
+                }
+            }
+        }
+#endif
         x60 = &fp0->cpu.x60;
         ftCo_800A1F3C(fp0, fp1->cur_pos.x, fp1->cur_pos.y,
                       data->x56C + fp1->cpu.x564);
