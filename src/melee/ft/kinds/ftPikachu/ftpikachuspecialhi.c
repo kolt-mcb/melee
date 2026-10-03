@@ -36,9 +36,12 @@
 #include <math.h>
 #define PK_FMA(a, b, c) fmaf((a), (b), (c))
 #define PK_FMAD(a, b, c) fma((a), (b), (c))
+#define PK_FMS(a, b, c) fmaf((a), (b), -(c))
 #else
 #define PK_FMA(a, b, c) ((a) * (b) + (c))
 #define PK_FMAD(a, b, c) ((a) * (b) + (c))
+/* a * b - c: MWCC emits fmsubs for this, and fmadds for `+ -c`. */
+#define PK_FMS(a, b, c) ((a) * (b) - (c))
 #endif
 
 /// @todo Move elsewhere.
@@ -208,9 +211,9 @@ void ftPk_SpecialHiStart1_Anim(HSD_GObj* gobj)
                 fp->parts[ftParts_GetBoneIndex(fp, FtPart_XRotN)].joint, 0,
                 &vec2);
             tempf = HSD_Randf();
-            vec2.x += PK_FMA(6.0f, tempf, -3.0f); /* fmsubs */
+            vec2.x += PK_FMS(6.0f, tempf, 3.0f);
             tempf = HSD_Randf();
-            vec2.y += PK_FMA(6.0f, tempf, -3.0f);
+            vec2.y += PK_FMS(6.0f, tempf, 3.0f);
             efSync_Spawn(1012, gobj, &vec2);
             fp->x2219_b0 = true;
             Fighter_SetEffectHitlagCallbacks(fp);
@@ -247,9 +250,9 @@ void ftPk_SpecialAirHiStart1_Anim(HSD_GObj* gobj)
                 fp->parts[ftParts_GetBoneIndex(fp, FtPart_XRotN)].joint, 0,
                 &vec2);
             tempf = HSD_Randf();
-            vec2.x += PK_FMA(10.0f, tempf, -5.0f);
+            vec2.x += PK_FMS(10.0f, tempf, 5.0f);
             tempf = HSD_Randf();
-            vec2.y += PK_FMA(10.0f, tempf, -5.0f);
+            vec2.y += PK_FMS(10.0f, tempf, 5.0f);
             efSync_Spawn(1012, gobj, &vec2);
             fp->x2219_b0 = true;
             Fighter_SetEffectHitlagCallbacks(fp);

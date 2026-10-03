@@ -1199,9 +1199,11 @@ void Fighter_UnkUpdateCostumeJoint_800686E4(Fighter_GObj* gobj)
     }
 #endif
     ftPartsPObjSetDefaultClass();
+#if BUILD_TARGET_PC
     if (getenv("MELEE_COSTLOG") != NULL)
         fprintf(stderr, "[COST] kind=%d costume_joint=%p\n",
                 (int) fp->kind, (void*) fp->x108_costume_joint);
+#endif
     jobj = HSD_JObjLoadJoint(fp->x108_costume_joint);
 #if BUILD_TARGET_PC
     if (getenv("MELEE_DIAG1") != NULL) {
