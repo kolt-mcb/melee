@@ -2663,6 +2663,46 @@ void grBigBlue_801EB004(Ground_GObj* gobj)
         pos.y = yakumono_param->x0 * Ground_801C0498();
         pos.z = 0.0F;
 
+#if BUILD_TARGET_PC
+        /* MELEE_BBTRACK=1: where the shown track section is put. The cars'
+         * height raycast searches a band around y=-30, so if this y is wrong
+         * the track is not where the rays look and every car falls back to
+         * the "no ground" sentinel. Console: MELEE_MEMAT=801eb340:1:3:68 --
+         * the Vec3 it builds on the stack before inlining the translate. */
+        if (getenv("MELEE_BBTRACK") != NULL) {
+            fprintf(stderr,
+                    "[BBPOS] active jobj=%p pos=(%.4f,%.4f,%.4f) "
+                    "yaku_x0=%.4f scale=%.4f\n",
+                    (void*) active, (double) pos.x, (double) pos.y,
+                    (double) pos.z, (double) yakumono_param->x0,
+                    (double) Ground_801C0498());
+        }
+        /* MELEE_BBVTX=1: the shown section's own collision vertices. The
+         * section is placed at the same y as the console and its joint is
+         * linked, so if the rays still miss, the vertices are the last thing
+         * between the two. */
+        if (getenv("MELEE_BBVTX") != NULL) {
+            extern CollJoint* mpGetGroundCollJoint(void);
+            extern CollVtx* mpGetGroundCollVtx(void);
+            CollJoint* cj = mpGetGroundCollJoint();
+            CollVtx* vtx = mpGetGroundCollVtx();
+            int jid = (int) grBb_TrackEntries[idx].jobj_index;
+            if (cj != NULL && vtx != NULL && jid >= 0 && jid < 256 &&
+                cj[jid].inner != NULL)
+            {
+                int vs = cj[jid].inner->vtx_start;
+                int vc = cj[jid].inner->vtx_count;
+                int q;
+                fprintf(stderr, "[BBVTX] joint %d: vtx_start=%d count=%d\n",
+                        jid, vs, vc);
+                for (q = 0; q < vc && q < 6; q++) {
+                    fprintf(stderr, "[BBVTX]   v%d pos=(%.3f,%.3f)\n", vs + q,
+                            (double) vtx[vs + q].pos.x,
+                            (double) vtx[vs + q].pos.y);
+                }
+            }
+        }
+#endif
         HSD_JObjSetTranslate(active, &pos);
     }
 
