@@ -1656,14 +1656,20 @@ static inline void grCastle_PickSatellite(Ground* gp, s32* wp)
      * chosen one against NULL) exists for the same reason. On the console a
      * stale slot read as some address and the frame carried on; here it was
      * a fault on a pointer whose top half was 0xFFFFFFFF, and it killed a
-     * Peach's Castle match within half a second of the CPUs starting. With
-     * no satellite to attach, there is nothing to pick this frame. */
+     * Peach's Castle match within half a second of the CPUs starting.
+     *
+     * Returning here is wrong, though: the console reaches HSD_Randi(11)
+     * below even when the slot holds nothing, because on a GameCube a NULL
+     * slot dereferences into readable low memory and the frame carries on.
+     * Skipping the draw left the port one RNG step behind the console the
+     * first time this fired -- the whole Peach's Castle column diverged at
+     * the same frame. So keep the control flow and only decline the two
+     * stores that would need the satellite this frame does not have. */
     {
         HSD_GObj* sat = (HSD_GObj*) gp->u.castle12.xC4[gp->u.castle12.xD0];
-        if (!pc_ptr_sane(sat) || !pc_ptr_sane(sat->user_data)) {
-            return;
-        }
-        sat_gp = (Ground*) sat->user_data;
+        sat_gp = (pc_ptr_sane(sat) && pc_ptr_sane(sat->user_data))
+                     ? (Ground*) sat->user_data
+                     : NULL;
     }
 #else
     sat_gp = (Ground*) ((HSD_GObj*) gp->u.castle12.xC4[gp->u.castle12.xD0])
@@ -1689,9 +1695,20 @@ static inline void grCastle_PickSatellite(Ground* gp, s32* wp)
             }
         }
         if (entity != NULL) {
+#if BUILD_TARGET_PC
+            /* Called either way: the console calls it too, and the result is
+             * only stored when there is a satellite to store it in. */
+            uintptr_t joint = (uintptr_t) Ground_801C3FA4(
+                entity, (s32) targets.e[idx].jobj_idx);
+            if (sat_gp != NULL) {
+                sat_gp->u.castle7.xD4 = joint;
+                sat_gp->u.castle7.xC4 = 1;
+            }
+#else
             sat_gp->u.castle7.xD4 = (uintptr_t) Ground_801C3FA4(
                 entity, (s32) targets.e[idx].jobj_idx);
             sat_gp->u.castle7.xC4 = 1;
+#endif
         }
     }
 }

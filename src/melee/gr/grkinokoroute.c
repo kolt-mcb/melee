@@ -579,7 +579,17 @@ void grKinokoRoute_802084B4(HSD_GObj* gobj)
     if (gobj2 != NULL) {
         void* gp2 = gobj2->user_data;
         if (gp2 != NULL) {
+#if BUILD_TARGET_PC
+            /* gp+0xC4 is the Ground union on the console; here it is at 256.
+             *
+             * gdb: &((struct Ground*)0)->u is 256, not 0xC4 = 196, because
+             * Ground's earlier members include pointers. So this wrote a flag
+             * 60 bytes short of the union and corrupted whatever sits there.
+             * Same class as the Venom fix (c77ee8bfc). */
+            ((UnkFlagStruct*) &((Ground*) gp2)->u)->b0 = 1;
+#else
             ((UnkFlagStruct*) ((u8*) gp2 + 0xC4))->b0 = 1;
+#endif
         }
     }
 

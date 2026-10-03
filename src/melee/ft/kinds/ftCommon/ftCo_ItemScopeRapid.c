@@ -148,7 +148,21 @@ void ftCo_ItemScopeRapid_IASA(Fighter_GObj* gobj)
 
 void ftCo_ItemScopeAirRapid_IASA(Fighter_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* 0x2C is where user_data sits on the console, not here.
+     *
+     * HSD_GObj::user_data is at offset 72 in this build (gdb: &((HSD_GObj*)0)
+     * ->user_data), because the pointers ahead of it are eight bytes, so this
+     * cast read the wrong eight bytes and fp was garbage. Every other function
+     * in this file writes `gobj->user_data`; this one is the outlier, and the
+     * decomp's raw cast only works at the console's layout.
+     *
+     * Same class as the Venom fix (c77ee8bfc): a console byte offset applied
+     * to a host struct. The GameCube arm keeps the cast verbatim. */
+    Fighter* fp = gobj->user_data;
+#else
     Fighter* fp = *(Fighter**) ((u8*) gobj + 0x2C);
+#endif
 
     if (fp->input.pressed_buttons & HSD_PAD_A) {
         *(s32*) &fp->mv = *(s32*) &p_ftCommonData->x5BC;
