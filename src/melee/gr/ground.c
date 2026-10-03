@@ -2517,6 +2517,21 @@ bool Ground_UpdateMapColl(Ground_GObj* arg0)
 
     map_id = gr->map_id;
 
+#if BUILD_TARGET_PC
+    /* MELEE_MAPCOLL=1: which maps get their collision re-synced to their
+     * animated model each frame, and whether the gate lets them. A joint
+     * whose StageData entry names a map that never reaches here keeps
+     * whatever hidden state it had -- which is how Big Blue's shown track
+     * section can have a visible model and no collision. */
+    if (getenv("MELEE_MAPCOLL") != NULL) {
+        static unsigned char seen[256];
+        if (map_id >= 0 && map_id < 256 && seen[map_id] < 2) {
+            seen[map_id]++;
+            fprintf(stderr, "[MAPCOLL] map %d gate=%d\n", map_id,
+                    (int) Ground_804D6950[map_id]);
+        }
+    }
+#endif
     if (Ground_804D6950[map_id] == 0) {
         result = false;
 

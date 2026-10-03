@@ -5141,6 +5141,11 @@ void mpJointHide(int joint_id)
 
 void mpJointUnhide(int joint_id)
 {
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_MAPCOLL") != NULL) {
+        fprintf(stderr, "[UNHIDE] joint %d\n", joint_id);
+    }
+#endif
     CollJoint* joint;
     CollLine* line;
     CollVtx* vtx;
@@ -5306,6 +5311,34 @@ void mpLib_80055E9C(int joint_id)
         v_r4->x14 = v_r4->pos.y;
     }
     jobj = joint->x20;
+#if BUILD_TARGET_PC
+    /* MELEE_MAPCOLL=1, for one joint: why this refresh does or does not put
+     * the joint's collision back in the world. Either x20 is NULL (the link
+     * never survived, so the collision can never follow the model) or the
+     * model still reads JOBJ_HIDDEN -- and those are different bugs.
+     * MELEE_MAPCOLL_JOINT picks which joint to watch. */
+    {
+        static int wj = -2;
+        if (wj == -2) {
+            const char* e = getenv("MELEE_MAPCOLL_JOINT");
+            wj = e != NULL ? atoi(e) : -1;
+        }
+        if (wj >= 0 && joint_id == wj) {
+            static int n;
+            if (n < 6) {
+                n++;
+                fprintf(stderr,
+                        "[MAPCOLL] joint %d: x20=%p jobj_hidden=%d "
+                        "coll_hidden=%d\n",
+                        joint_id, (void*) jobj,
+                        jobj != NULL
+                            ? ((HSD_JObjGetFlags(jobj) & JOBJ_HIDDEN) ? 1 : 0)
+                            : -1,
+                        (joint->flags & CollJoint_Hidden) ? 1 : 0);
+            }
+        }
+    }
+#endif
     if (jobj == NULL) {
         return;
     }
