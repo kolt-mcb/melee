@@ -2525,6 +2525,49 @@ void Fighter_UnkIncrementCounters_8006ABEC(Fighter_GObj* gobj)
 
 /// the stick pairs seen in input structs might make more sense as an array of
 /// 2, or a struct of 2 floats.. if it still matches.
+
+#if BUILD_TARGET_PC
+/* MELEE_MV1C=<slot>: bisect which call inside Fighter_Spaghetti_8006AD10
+ * writes fp->mv.co+0x1C.
+ *
+ * MELEE_FWATCH named this whole proc as the callback that turns that word from
+ * 0.6741 into -4.0 on the frame 18 lockstep cells diverge, but a callback is
+ * too coarse: there is no -4.0 literal anywhere in this file, so the write
+ * comes from one of the callees. 0x1C is unk_deadup.x5C.x, which
+ * ftCo_DeadUpFall_Phys reads before writing (see ftCommon/types.h), so a
+ * stray write there is part of the simulation. */
+static void mv1c_ck(Fighter* fp, const char* tag)
+{
+    static int slot = -2;
+    static unsigned last;
+    static int live;
+    unsigned now;
+
+    if (slot == -2) {
+        const char* e = getenv("MELEE_MV1C");
+        slot = (e != NULL) ? atoi(e) : -1;
+    }
+    if (slot < 0 || (int) fp->player_id != slot) {
+        return;
+    }
+    now = *(const unsigned*) ((const char*) &fp->mv.co + 0x1C);
+    if (!live) {
+        live = 1;
+        last = now;
+        return;
+    }
+    if (now != last) {
+        fprintf(stderr, "[MV1C] gframe=%u motion=%d %s: %08x -> %08x\n",
+                (unsigned) gm_GetFrameCount(), (int) fp->motion_id, tag,
+                last, now);
+        last = now;
+    }
+}
+#define MV1C_CK(t) mv1c_ck(fp, t)
+#else
+#define MV1C_CK(t) ((void) 0)
+#endif
+
 #define SET_STICKS(stickXPtr, stickYPtr, x, y)                                \
     do {                                                                      \
         float* stickX = (float*) &stickXPtr;                                  \
@@ -2729,7 +2772,9 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
             slp_PreFrame(fp);
 #endif
 
+            MV1C_CK("pre-Inner1");
             Fighter_Spaghetti_8006AD10_Inner1(fp);
+            MV1C_CK("post-Inner1");
 
             // Fighter_ClampSpecificValue
             fp->active_duration.lstick.x++;
@@ -2968,19 +3013,29 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
             fp->input.held_buttons[2] = fp->input.held_buttons[0];
             fp->x221D_b3 = 0;
 
+            MV1C_CK("pre-UnkInitLoad");
             Fighter_UnkInitLoad_80068914_Inner1(gobj);
+            MV1C_CK("post-UnkInitLoad");
         }
 
         if (!fp->x2219_b5) {
             if (fp->x1980) {
+                MV1C_CK("pre-8007FFD8");
                 ftCommon_8007FFD8(fp, p_ftCommonData->x6FC);
+                MV1C_CK("post-8007FFD8");
             }
+            MV1C_CK("pre-800DF0D0");
             ftCo_800DF0D0(gobj);
+            MV1C_CK("post-800DF0D0");
             ftCommon_8008031C(gobj);
+            MV1C_CK("post-8008031C");
             Fighter_UnkIncrementCounters_8006ABEC(gobj);
+            MV1C_CK("post-IncrementCounters");
 
             if (fp->input_cb) {
+                MV1C_CK("pre-input_cb");
                 fp->input_cb(gobj);
+                MV1C_CK("post-input_cb");
             }
         }
     }

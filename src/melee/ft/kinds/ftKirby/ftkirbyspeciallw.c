@@ -58,6 +58,39 @@ struct ftKb_Init_803CB4EC_t ftKb_Init_803CB4EC = {
     { 0.0F, 1.0F, 0.0F },
 };
 
+/* The console reads ftKb_Init_803CB4EC's `vec` by walking 0x74 bytes off the
+ * *previous* symbol. ftKb_Init_803CB490 is a 23-byte bool array at
+ * 0x803CB490; 0x803CB490 + 0x74 = 0x803CB504, which is 0x18 into
+ * ftKb_Init_803CB4EC (0x803CB4EC), and 0x18 is exactly where `vec` sits after
+ * its six ints. So on GameCube the cast below is a read 93 bytes past the end
+ * of the bool array that happens to land on the right field, and the layout
+ * struct's `char pad[0x74]` is what encodes that.
+ *
+ * The host linker has no reason to place those two objects adjacently, so the
+ * same arithmetic reads whatever it put there instead. Measured: Kirby's
+ * aerial Stone (ftKb_MS_SpecialAirLwStart) assigns this to
+ * mv.kb.speciallw.x18, whose .y component is union offset 0x1C -- the `mv1c`
+ * column. The port had -4.0 there against the console's 1.0, which is
+ * ftKb_Init_803CB4EC.vec.y exactly. That is the first differing field in ten
+ * of the lockstep matrix's diverged cells.
+ *
+ * Addressed from the object that actually owns the field, so the two targets
+ * agree. `p` is only ever used as `p->vec`, so correcting the pointer leaves
+ * every use site alone; the GameCube arm is the original expression verbatim
+ * and its MWCC object is byte-identical. See melee-pc-linker-layout-reads. */
+#if BUILD_TARGET_PC
+#define FTKB_INIT_803CB490_P                                                  \
+    ((struct ftKb_Init_803CB490_layout*) ((char*) &ftKb_Init_803CB4EC +        \
+                                          offsetof(struct ftKb_Init_803CB4EC_t, \
+                                                   vec) -                      \
+                                          offsetof(struct                      \
+                                                   ftKb_Init_803CB490_layout,  \
+                                                   vec)))
+#else
+#define FTKB_INIT_803CB490_P                                                  \
+    ((struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490)
+#endif
+
 static inline bool fbKb_SpecialLw_IASA_Inline(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -155,8 +188,7 @@ void ftKb_SpecialHi_800F3570(Fighter_GObj* gobj)
     f32 floor_normal_x_sign;
     f32 normal_y_slide;
     Fighter* fp = GET_FIGHTER(gobj);
-    struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+    struct ftKb_Init_803CB490_layout* p = FTKB_INIT_803CB490_P;
     ftKb_DatAttrs* dat_attr = fp->dat_attrs;
     {
         UNUSED u8 pad2[12];
@@ -201,8 +233,7 @@ void ftKb_SpecialHi_800F3570(Fighter_GObj* gobj)
 void ftKb_SpecialHi_800F36DC(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+    struct ftKb_Init_803CB490_layout* p = FTKB_INIT_803CB490_P;
     fp->mv.kb.speciallw.x24[0] = p->vec;
     fp->mv.kb.speciallw.x54[0] = fp->mv.kb.speciallw.x24[0];
     fp->mv.kb.speciallw.x88[0] = 0.0f;
@@ -601,8 +632,7 @@ void ftKb_SpecialLw1_Coll(Fighter_GObj* gobj)
     Fighter* fp2;
     Fighter* fp3;
     s32 temp;
-    struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+    struct ftKb_Init_803CB490_layout* p = FTKB_INIT_803CB490_P;
     PAD_STACK(16);
 
     if (ft_80082708(gobj) == GA_Ground) {
@@ -647,8 +677,7 @@ void ftKb_SpecialLw_Coll(Fighter_GObj* gobj)
     Fighter* fp2;
     Fighter* fp3;
     s32 temp;
-    struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+    struct ftKb_Init_803CB490_layout* p = FTKB_INIT_803CB490_P;
     PAD_STACK(16);
 
     if (ft_80082708(gobj) == GA_Ground) {
@@ -692,8 +721,7 @@ void ftKb_SpecialLwEnd_Coll(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     Fighter* fp2;
-    struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+    struct ftKb_Init_803CB490_layout* p = FTKB_INIT_803CB490_P;
     PAD_STACK(8);
     ft_80081D0C(gobj);
     fp2 = GET_FIGHTER(gobj);
@@ -764,8 +792,7 @@ void ftKb_SpecialAirLwStart_Coll(Fighter_GObj* gobj)
     Fighter* fp2;
     s32 temp;
     ftKb_DatAttrs* da = fp->dat_attrs;
-    struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+    struct ftKb_Init_803CB490_layout* p = FTKB_INIT_803CB490_P;
     PAD_STACK(16);
 
     if (ft_80081D0C(gobj) == GA_Air) {
@@ -814,8 +841,7 @@ void ftKb_SpecialAirLw_Coll(Fighter_GObj* gobj)
     ftKb_DatAttrs* da = fp->dat_attrs;
     Fighter* fp2;
     s32 temp;
-    struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+    struct ftKb_Init_803CB490_layout* p = FTKB_INIT_803CB490_P;
     PAD_STACK(16);
 
     if (ft_80081D0C(gobj) == GA_Air) {
@@ -863,8 +889,7 @@ void ftKb_SpecialAirLwEnd_Coll(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     Fighter* fp2;
-    struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+    struct ftKb_Init_803CB490_layout* p = FTKB_INIT_803CB490_P;
     PAD_STACK(8);
     ft_80081D0C(gobj);
     fp2 = GET_FIGHTER(gobj);
