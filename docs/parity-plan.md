@@ -1331,3 +1331,56 @@ divergence source by construction, because the console has no such clamp. An
 audit of the converters and of `src/port` found no others -- the remaining
 numeric limits are renderer and hardware limits (TEV stage count, texture
 levels), which are legitimate.
+
+## GCC 15 as a static analyser: 37 errors the GCC 13 build only warned about
+
+Building the port on a second machine running GCC 15.2 (the first ran 13.3)
+stopped with 37 errors across 18 files. GCC 14 promoted
+`-Wincompatible-pointer-types`, `-Wint-conversion`,
+`-Wimplicit-function-declaration` and `-Wreturn-mismatch` to errors by
+default, so the whole class became visible at once. `configure_pc.py` now
+carries the same warning-parity downgrades the Android and WASM branches
+already had, which is what lets the build run; it is not a fix.
+
+Four are live 64-bit bugs, not decomp sloppiness, and should be fixed at the
+site:
+
+  * `src/melee/ft/ftdata.c:221` -- assigns a `void*` into a `u32`. A pointer
+    truncated to 32 bits.
+  * `src/melee/lb/lbheap.c:180,181` -- build `void*` out of `unsigned int`.
+    The same class in the other direction.
+  * `src/melee/gr/grrcruise.c:464` -- `UnkArchiveStruct*` from `int`, because
+    `grDatFiles_801C6324` is undeclared and so assumed to return `int`. This
+    is the exact shape of the Android attract-demo fault (see
+    melee-pc-android-perf): an undeclared function returning a pointer,
+    truncated at the call. RCruise is also a stage with open menu-walk
+    crashes.
+  * `src/melee/if/ifstatus.c:935` -- `return` with no value from a function
+    returning non-void. The caller reads whatever is in the return register.
+
+Worth a look, less clearly wrong:
+
+  * `src/melee/if/ifstatus.c:859` returns an `HSD_GObj*` from a function
+    declared to return `HSD_JObj*`.
+  * `src/sysdolphin/baselib/mobj.c:538,544,571,587` confuse `HSD_TevDesc` with
+    `HSD_TExpTevDesc` and `HSD_TObjTevDesc` with `HSD_TObjTev`. Note that a
+    dropped `tobj->tev` was the cause of the UI greyscale bug.
+  * `src/melee/gr/grrcruise.c:348-365,836` -- 19 sites passing argument 3 of
+    `mpJointSetCb1` with the wrong pointer type.
+  * `src/melee/gr/grrcruise.c:160` -- `GrJoint*` initialised from `S16Vec3*`.
+  * `src/melee/gr/grdatfiles.c:3228` -- `void***` from `void**`.
+  * `src/melee/if/ifmagnify.c:667` -- `DynamicModelDesc*` from
+    `DynamicModelDesc**`.
+  * `src/melee/it/kinds/itcrazyhandbomb.c:73` -- a `void(*)(void)` installed as
+    an `HSD_GObjEvent`.
+  * Undeclared: `Camera_80030E44` (grpstadium.c:2168), `pcgx_GXSetZMode`
+    (pc_gxq_names.h:98), `HSD_CObjGetEyePosition` and `HSD_CObjGetInterest`
+    (pc_trace.c:1342-1343), `HSD_StateSetZMode` (sislib.c:2014),
+    `pc_ax_trace_on` (pc_ax.c:168, ax_vpb_glue.c:17 -- the declaration sits 11
+    lines *below* its first use), `lbArchive_NEFC`.
+  * `src/port/gx_gl_bridge.c:7276` -- `f32*` from `f32(*)[4]`; `mtx_array` is
+    `[68][3][4]` and the debug printer indexes one level short.
+
+Anything under `src/melee` or `src/sysdolphin` must keep its MWCC object
+byte-identical, so prefer an explicit cast or a missing declaration over a
+type change -- see melee-two-target-builds.
