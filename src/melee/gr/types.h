@@ -337,6 +337,42 @@ struct grKongo_GroundVars3 {
     f32 xE8;
 };
 
+/* The swaying platform's own view of gp+C4..gp+E8 -- grKongo_801D55D8 sets it
+ * up and grKongo_801D577C runs its state machine. The layout is the retail
+ * code's own, read off the widths and offsets it uses: six halfwords, then a
+ * word-sized pointer, then six floats.
+ *
+ * It needs a view of its own because the other three each describe a
+ * *different* Kongo object, and a pointer being eight bytes here instead of
+ * four pulls every field after it to a different place in each of them. For
+ * this object the damage was that gp+E8 ended up in three places at once:
+ * grKongo_801D55D8 initialised it as kongo.xE8 (host 52), the state machine
+ * ramped it as kongo2.xE8 (host 40, which is where the same function had just
+ * written gp+E4), and grAnime_801C7A04 was handed it as kongo3.xE8 (host 44),
+ * which nothing ever wrote. So the platform's animation frame was a constant
+ * zero and the platform never moved -- on the console its rotation is already
+ * swinging between 0.12834 and 0.17453 by the time the match starts, which is
+ * what every Kongo Jungle cell diverged on, on match frame 1.
+ *
+ * Nothing here needs a PC-only arm: natural alignment puts the pointer at
+ * host 16 and the floats at 24 through 44, and on GameCube the same
+ * declaration lands on gp+D0 and gp+D4 through gp+E8 exactly. */
+struct grKongo_GroundVars4 {
+    /* gp+C4 */ s16 xC4;
+    /* gp+C6 */ s16 xC6;
+    /* gp+C8 */ s16 xC8;
+    /* gp+CA */ s16 xCA;
+    /* gp+CC */ s16 xCC;
+    /* gp+CE */ s16 xCE;
+    /* gp+D0 */ void* keep;
+    /* gp+D4 */ f32 xD4;
+    /* gp+D8 */ f32 xD8;
+    /* gp+DC */ f32 xDC;
+    /* gp+E0 */ f32 xE0;
+    /* gp+E4 */ f32 xE4;
+    /* gp+E8 */ f32 xE8;
+};
+
 struct grKraid_GroundVars {
     /*  + gp+C4 */ s8 x0;
     /*  + gp+C5 */ s8 x1;
@@ -1568,11 +1604,34 @@ ASSERT_SIZE(struct grBigBlue_CarLane, 0x40);
 /// Car manager state (gobj ID 33).
 struct grBigBlue_CarVars {
     /* gp+C4 */ u32 flags;
+#if BUILD_TARGET_PC
+    /* collision_jobjs and ranks are gp+C8 and gp+CC on the console. They are
+     * pointers, so leaving them here costs eight bytes apiece and pushes
+     * lanes[] twelve bytes past gp+D4 -- and gp+D4 is where this module's own
+     * byte arithmetic reads the lanes, through GRBB_CAR_BASE + 0xD4 and up.
+     * The two readings then disagree: grBigBlue_801EB004 and its neighbours
+     * set a car's state and lane through the macro, at union+0x10, while
+     * grBigBlue_801E8B84 -- the function that answers what the fighters are
+     * standing on -- reads gp->u.bigblue.car.lanes[i].pos at union+0x1C. The
+     * cars were being driven in one memory and stood on in another, which is
+     * why every Big Blue cell diverged on match frame 1 with the fighters on
+     * the wrong floor.
+     *
+     * Neither pointer is reached by name anywhere (the module uses the
+     * xC8/xCC that grBigBlue_GroundVars keeps outside the union for the same
+     * reason), so padding their slots is enough to put every later field back
+     * on its console offset. */
+    u8 pad_C8[0xD0 - 0xC8];
+    /* gp+D0 */ s16 spawn_timer;
+    /* gp+D2 */ u8 pad_D2[2];
+    /* gp+D4 */ struct grBigBlue_CarLane lanes[4];
+#else
     /* gp+C8 */ HSD_JObj** collision_jobjs;
     /* gp+CC */ u8* ranks;
     /* gp+D0 */ s16 spawn_timer;
     /* gp+D2 */ u8 pad_D2[2];
     /* gp+D4 */ struct grBigBlue_CarLane lanes[4];
+#endif
 };
 ASSERT_SIZE(struct grBigBlue_CarVars, 0x110);
 
@@ -2137,6 +2196,7 @@ struct Ground {
         struct grKongo_GroundVars kongo;
         struct grKongo_GroundVars2 kongo2;
         struct grKongo_GroundVars3 kongo3;
+        struct grKongo_GroundVars4 kongo4;
         struct grKraid_GroundVars kraid;
         struct grKraid_GroundVars2 kraid2;
         struct grMuteCity_GroundVars mutecity;

@@ -291,23 +291,23 @@ void grKongo_801D55D8(Ground_GObj* arg0)
     temp_r28 = arg0->hsd_obj;
     grAnime_801C8138(arg0, temp_r31->map_id, 0);
     grMaterial_801C94D8(temp_r28);
-    temp_r31->u.kongo3.xE4 = 1.0f;
-    temp_r31->u.kongo.xE8 = 1.0f;
-    temp_r31->u.kongo.xD4 = 0.0f;
-    temp_r31->u.kongo.xD8 = 0.0f;
-    temp_r31->u.kongo3.xC4 = 0;
-    temp_r31->u.kongo3.xC6 = 0;
-    temp_r31->u.kongo3.xC8 = 2;
-    temp_r31->u.kongo.u.taru.keep = NULL;
-    temp_r31->u.kongo3.xDC = 0.0f;
-    temp_r31->u.kongo3.xE0 = 0.0f;
-    temp_r31->u.kongo.xE8 = yakumono_param->unk60;
-    temp_r31->u.kongo2.xCC =
+    temp_r31->u.kongo4.xE4 = 1.0f;
+    temp_r31->u.kongo4.xE8 = 1.0f;
+    temp_r31->u.kongo4.xD4 = 0.0f;
+    temp_r31->u.kongo4.xD8 = 0.0f;
+    temp_r31->u.kongo4.xC4 = 0;
+    temp_r31->u.kongo4.xC6 = 0;
+    temp_r31->u.kongo4.xC8 = 2;
+    temp_r31->u.kongo4.keep = NULL;
+    temp_r31->u.kongo4.xDC = 0.0f;
+    temp_r31->u.kongo4.xE0 = 0.0f;
+    temp_r31->u.kongo4.xE8 = yakumono_param->unk60;
+    temp_r31->u.kongo4.xCC =
         rand_range((s32) yakumono_param->unk30, (s32) yakumono_param->unk2C);
-    temp_r31->u.kongo2.xCE =
+    temp_r31->u.kongo4.xCE =
         rand_range(yakumono_param->unk68, yakumono_param->unk64);
     lb_8000B1CC(Ground_801C3FA4(arg0, 1), NULL, &sp14);
-    Ground_801C4D70(arg0, &sp14, temp_r31->u.kongo.xD8);
+    Ground_801C4D70(arg0, &sp14, temp_r31->u.kongo4.xD8);
 }
 
 bool grKongo_801D5774(Ground_GObj* arg)
@@ -327,11 +327,11 @@ void grKongo_801D577C(Ground_GObj* arg0)
     /* MELEE_KGROT=1, at the entry: whether this platform's state machine runs
      * and which state it is in.
      *
-     * Its case 1 never fired on the port over a whole Kongo run, so either the
-     * function is not called or xC4 never reaches 1. The transition out of
-     * case 0 is gated on the s16 countdown gp->u.kongo2.xCC, which sits at
-     * host +12 -- inside the eight bytes that kongo3.xCC, a pointer, occupies
-     * at host +8. */
+     * Its case 1 never fired on the port over a whole Kongo run. The cause
+     * was that this object was read through three different views of
+     * gp+C4..gp+E8 at once, and those land in different places here because a
+     * pointer is eight bytes rather than four -- see grKongo_GroundVars4,
+     * which is the single view this object now uses. */
     {
         static int kre = -1;
         if (kre < 0) {
@@ -356,77 +356,77 @@ void grKongo_801D577C(Ground_GObj* arg0)
                     "[KGROT] f%u ENTRY gp=%p xC4=%d k2.xCC=%d xD4=%.5f "
                     "xD8=%.5f xE0=%.6f xDC=%.6f | spawn1 parent rot="
                     "(%.5f,%.5f,%.5f)\n",
-                    gm_GetFrameCount(), (void*) gp, (int) gp->u.kongo3.xC4,
-                    (int) gp->u.kongo2.xCC, (double) gp->u.kongo3.xD4,
-                    (double) gp->u.kongo3.xD8, (double) gp->u.kongo3.xE0,
-                    (double) gp->u.kongo3.xDC,
+                    gm_GetFrameCount(), (void*) gp, (int) gp->u.kongo4.xC4,
+                    (int) gp->u.kongo4.xCC, (double) gp->u.kongo4.xD4,
+                    (double) gp->u.kongo4.xD8, (double) gp->u.kongo4.xE0,
+                    (double) gp->u.kongo4.xDC,
                     spp ? (double) spp->rotate.x : -1.0,
                     spp ? (double) spp->rotate.y : -1.0,
                     spp ? (double) spp->rotate.z : -1.0);
         }
     }
 #endif
-    switch (gp->u.kongo3.xC4) {
+    switch (gp->u.kongo4.xC4) {
     case 2:
     case 3: {
         f32 angular_vel;
-        angular_vel = gp->u.kongo3.xE0;
+        angular_vel = gp->u.kongo4.xE0;
         limit_angle =
             0.5f *
             (angular_vel * (angular_vel / MTXDegToRad(yakumono_param->unk34)));
         if (angular_vel > 0.0f) {
-            angle_delta = gp->u.kongo3.xD4 - gp->u.kongo3.xD8;
+            angle_delta = gp->u.kongo4.xD4 - gp->u.kongo4.xD8;
         } else if (angular_vel < 0.0f) {
-            angle_delta = gp->u.kongo3.xD8 - gp->u.kongo3.xD4;
+            angle_delta = gp->u.kongo4.xD8 - gp->u.kongo4.xD4;
         } else {
             HSD_ASSERT(505, 0);
         }
         if (angle_delta < 0.0f) {
             angle_delta += M_TAU;
         }
-        if (angle_delta < limit_angle || angle_delta < ABS(gp->u.kongo3.xE0)) {
-            if (gp->u.kongo3.xC4 == 3) {
-                gp->u.kongo3.xC4 = 0;
+        if (angle_delta < limit_angle || angle_delta < ABS(gp->u.kongo4.xE0)) {
+            if (gp->u.kongo4.xC4 == 3) {
+                gp->u.kongo4.xC4 = 0;
             }
             break;
         }
-        if (gp->u.kongo3.xC4 == 2) {
-            gp->u.kongo3.xC4 = 3;
+        if (gp->u.kongo4.xC4 == 2) {
+            gp->u.kongo4.xC4 = 3;
         }
         break;
     }
     case 0:
-        if (gp->u.kongo3.xE0 > 0.0f) {
-            if (gp->u.kongo3.xE0 < MTXDegToRad(yakumono_param->unk34)) {
-                gp->u.kongo3.xE0 = 0.0f;
-                gp->u.kongo3.xD8 = gp->u.kongo3.xD4;
+        if (gp->u.kongo4.xE0 > 0.0f) {
+            if (gp->u.kongo4.xE0 < MTXDegToRad(yakumono_param->unk34)) {
+                gp->u.kongo4.xE0 = 0.0f;
+                gp->u.kongo4.xD8 = gp->u.kongo4.xD4;
             } else {
-                gp->u.kongo3.xE0 -= MTXDegToRad(yakumono_param->unk34);
+                gp->u.kongo4.xE0 -= MTXDegToRad(yakumono_param->unk34);
             }
-        } else if (gp->u.kongo3.xE0 < 0.0f) {
-            if (gp->u.kongo3.xE0 > -MTXDegToRad(yakumono_param->unk34)) {
-                gp->u.kongo3.xE0 = 0.0f;
-                gp->u.kongo3.xD8 = gp->u.kongo3.xD4;
+        } else if (gp->u.kongo4.xE0 < 0.0f) {
+            if (gp->u.kongo4.xE0 > -MTXDegToRad(yakumono_param->unk34)) {
+                gp->u.kongo4.xE0 = 0.0f;
+                gp->u.kongo4.xD8 = gp->u.kongo4.xD4;
             } else {
-                gp->u.kongo3.xE0 += MTXDegToRad(yakumono_param->unk34);
+                gp->u.kongo4.xE0 += MTXDegToRad(yakumono_param->unk34);
             }
         }
-        gp->u.kongo2.xCC -= 1;
-        if (gp->u.kongo2.xCC < 0) {
+        gp->u.kongo4.xCC -= 1;
+        if (gp->u.kongo4.xCC < 0) {
             f32 spin_step;
-            gp->u.kongo3.xC4 = 1;
+            gp->u.kongo4.xC4 = 1;
             if (HSD_Randi(2) != 0) {
                 spin_step = MTXDegToRad(yakumono_param->unk34);
             } else {
                 spin_step = -MTXDegToRad(yakumono_param->unk34);
             }
-            gp->u.kongo3.xDC = spin_step;
-            gp->u.kongo2.xCC = rand_range((s32) yakumono_param->unk40,
+            gp->u.kongo4.xDC = spin_step;
+            gp->u.kongo4.xCC = rand_range((s32) yakumono_param->unk40,
                                           (s32) yakumono_param->unk3C);
         }
         break;
     case 1:
-        gp->u.kongo3.xE0 += gp->u.kongo3.xDC;
+        gp->u.kongo4.xE0 += gp->u.kongo4.xDC;
 #if BUILD_TARGET_PC
         /* MELEE_KGROT=1: the clamp that bounds this platform's angular speed.
          *
@@ -450,68 +450,68 @@ void grKongo_801D577C(Ground_GObj* arg0)
                         "xD8=%.6f\n",
                         gm_GetFrameCount(), (double) yakumono_param->unk38,
                         (double) MTXDegToRad(yakumono_param->unk38),
-                        (double) gp->u.kongo3.xE0, (double) gp->u.kongo3.xDC,
-                        (double) gp->u.kongo3.xD8);
+                        (double) gp->u.kongo4.xE0, (double) gp->u.kongo4.xDC,
+                        (double) gp->u.kongo4.xD8);
             }
         }
 #endif
-        Ground_ClampSymmetric(gp->u.kongo3.xE0,
+        Ground_ClampSymmetric(gp->u.kongo4.xE0,
                               MTXDegToRad(yakumono_param->unk38),
-                              &gp->u.kongo3.xE0);
+                              &gp->u.kongo4.xE0);
         {
-            s16 val2 = gp->u.kongo2.xCC;
-            gp->u.kongo2.xCC = val2 - 1;
+            s16 val2 = gp->u.kongo4.xCC;
+            gp->u.kongo4.xCC = val2 - 1;
             if (val2 < 0) {
-                gp->u.kongo3.xC4 = 2;
-                gp->u.kongo2.xCC = rand_range((s32) yakumono_param->unk30,
+                gp->u.kongo4.xC4 = 2;
+                gp->u.kongo4.xCC = rand_range((s32) yakumono_param->unk30,
                                               (s32) yakumono_param->unk2C);
-                gp->u.kongo3.xD4 = grKongo_801D8314();
+                gp->u.kongo4.xD4 = grKongo_801D8314();
             }
         }
         break;
     }
-    gp->u.kongo3.xD8 += gp->u.kongo3.xE0;
-    Ground_WrapAngle(&gp->u.kongo3.xD8);
-    HSD_JObjSetRotationZ(jobj, gp->u.kongo.xD8);
+    gp->u.kongo4.xD8 += gp->u.kongo4.xE0;
+    Ground_WrapAngle(&gp->u.kongo4.xD8);
+    HSD_JObjSetRotationZ(jobj, gp->u.kongo4.xD8);
     lb_8000B1CC(jobj, NULL, &vec);
-    Ground_801C4D70(arg0, &vec, gp->u.kongo3.xD8);
-    switch (gp->u.kongo3.xC8) {
+    Ground_801C4D70(arg0, &vec, gp->u.kongo4.xD8);
+    switch (gp->u.kongo4.xC8) {
     case 0: {
-        s16 val = gp->u.kongo2.xCE;
-        gp->u.kongo2.xCE -= 1;
+        s16 val = gp->u.kongo4.xCE;
+        gp->u.kongo4.xCE -= 1;
         if (val < 0) {
-            gp->u.kongo3.xC8 = 1;
+            gp->u.kongo4.xC8 = 1;
         }
     } break;
     case 1:
-        gp->u.kongo2.xE8 += yakumono_param->unk5C;
-        if (gp->u.kongo2.xE8 > yakumono_param->unk60) {
-            gp->u.kongo2.xE8 = yakumono_param->unk60;
-            gp->u.kongo2.xCE =
+        gp->u.kongo4.xE8 += yakumono_param->unk5C;
+        if (gp->u.kongo4.xE8 > yakumono_param->unk60) {
+            gp->u.kongo4.xE8 = yakumono_param->unk60;
+            gp->u.kongo4.xCE =
                 rand_range(yakumono_param->unk68, yakumono_param->unk64);
-            gp->u.kongo3.xC8 = 2;
+            gp->u.kongo4.xC8 = 2;
         }
         break;
     case 2: {
-        s16 val2 = gp->u.kongo2.xCE;
-        gp->u.kongo2.xCE = val2 - 1;
+        s16 val2 = gp->u.kongo4.xCE;
+        gp->u.kongo4.xCE = val2 - 1;
         if (val2 < 0) {
-            gp->u.kongo3.xC8 = 3;
+            gp->u.kongo4.xC8 = 3;
         }
     } break;
     case 3:
-        gp->u.kongo2.xE8 -= yakumono_param->unk5C;
-        if (gp->u.kongo2.xE8 < 0.0f) {
-            gp->u.kongo2.xE8 = 0.0f;
-            gp->u.kongo2.xCE = rand_range(*(s32*) &yakumono_param->unk58,
+        gp->u.kongo4.xE8 -= yakumono_param->unk5C;
+        if (gp->u.kongo4.xE8 < 0.0f) {
+            gp->u.kongo4.xE8 = 0.0f;
+            gp->u.kongo4.xCE = rand_range(*(s32*) &yakumono_param->unk58,
                                           *(s32*) &yakumono_param->unk54);
-            gp->u.kongo3.xC8 = 0;
+            gp->u.kongo4.xC8 = 0;
         }
         break;
     }
-    grAnime_801C7A04(arg0, 0, 7, gp->u.kongo3.xE8);
+    grAnime_801C7A04(arg0, 0, 7, gp->u.kongo4.xE8);
 
-    switch (gp->u.kongo3.xC6) {
+    switch (gp->u.kongo4.xC6) {
     case 0: { /* switch 2 */
         HSD_GObj* item_gobj = grKongo_801D8078(arg0);
         if (item_gobj != NULL) {
@@ -519,23 +519,23 @@ void grKongo_801D577C(Ground_GObj* arg0)
             {
                 f32 rand_val = HSD_Randf();
                 f32 diff = yakumono_param->unk24 - yakumono_param->unk20;
-                gp->u.kongo3.xCA = KG_FMA(diff, rand_val, yakumono_param->unk20);
+                gp->u.kongo4.xCA = KG_FMA(diff, rand_val, yakumono_param->unk20);
             }
-            gp->u.kongo.u.taru.keep = item_gobj;
-            gp->u.kongo3.xC6 = 1;
+            gp->u.kongo4.keep = item_gobj;
+            gp->u.kongo4.xC6 = 1;
             Ground_801C5440(gp, 0, 0x129U);
             grMaterial_801C9604(arg0, GR_COLOR_SCRIPT(yakumono_param->unk84), 0);
         }
         return;
     }
     case 1:
-        if (gp->u.kongo.u.taru.keep == NULL) {
-            gp->u.kongo3.xC6 = 0;
+        if (gp->u.kongo4.keep == NULL) {
+            gp->u.kongo4.xC6 = 0;
         } else {
-            if (gp->u.kongo3.xCA-- >= 0) {
+            if (gp->u.kongo4.xCA-- >= 0) {
                 break;
             }
-            gp->u.kongo3.xC6 = 2;
+            gp->u.kongo4.xC6 = 2;
         }
     case 2: { /* switch 2 */
         f32 angle;
@@ -549,27 +549,27 @@ void grKongo_801D577C(Ground_GObj* arg0)
         hit.unk10 = *(u32*) &yakumono_param->unk78;
         hit.unk14 = *(u32*) &yakumono_param->unk7C;
         hit.element = *(u32*) &yakumono_param->unk80;
-        angle = (f32) (1.5707963267948966 + (f64) gp->u.kongo3.xD8);
+        angle = (f32) (1.5707963267948966 + (f64) gp->u.kongo4.xD8);
         if (angle < 0.0f) {
             angle += M_TAU;
         } else if (angle > M_TAU) {
             angle = (f32) ((f64) angle - M_TAU);
         }
-        kept_gobj = gp->u.kongo.u.taru.keep;
+        kept_gobj = gp->u.kongo4.keep;
         angle = angle * 57.29578f;
         if (kept_gobj->p_link == HSD_GOBJ_PLINK_FIGHTER) {
             ftCo_8009EC70((Fighter_GObj*) kept_gobj, &vec, &hit, angle);
         } else if (kept_gobj->p_link == HSD_GOBJ_PLINK_ITEM) {
             it_802E2330((Item_GObj*) kept_gobj, &vec, &hit, angle);
         }
-        gp->u.kongo3.xC6 = 3;
+        gp->u.kongo4.xC6 = 3;
         Ground_801C5440(gp, 0, 0x12AU);
         grMaterial_801C95C4(arg0);
         return;
     }
     case 3: /* switch 2 */
         if (grKongo_801D8078(arg0) == NULL) {
-            gp->u.kongo3.xC6 = 0;
+            gp->u.kongo4.xC6 = 0;
         }
         break;
     }
