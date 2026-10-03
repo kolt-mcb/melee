@@ -3275,6 +3275,87 @@ f32 grBigBlue_801EC58C(Vec3* pos, Vec3* normal_out, f32 half_height)
     top = pos->y + half_height;
     bottom = pos->y - half_height;
 
+#if BUILD_TARGET_PC
+    /* MELEE_BBRAY=<frame>: which of the track's 32 collision ids answer this
+     * raycast. Every car's height comes from here, and a miss on all 32 puts
+     * the "no ground found" sentinel in the car's y -- so when the cars are
+     * at -FLT_MAX this says whether the ray is wrong or the track's
+     * collision is simply not in the world. */
+    {
+        static int br = -2;
+        if (br == -2) {
+            const char* e = getenv("MELEE_BBRAY");
+            br = e != NULL ? atoi(e) : -1;
+        }
+        if (br >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            if ((int) gm_GetFrameCount() == br) {
+                char hits[40];
+                int nh = 0;
+                for (i = 0; i < 32; i++) {
+                    int got = mpCheckMultiple(x1, top, x2, bottom, &hit_pos,
+                                              NULL, NULL, &hit_normal, 1, -1,
+                                              local_ids.v[i]) ? 1 : 0;
+                    hits[i] = (char) ('0' + got);
+                    nh += got;
+                }
+                hits[32] = '\0';
+                {
+                    /* And whether each of those 32 collision joints is even
+                     * in the world. mpCheckMultiple skips a joint whose
+                     * CollJoint_Enabled is clear, so "no hit" means either
+                     * the ray missed the geometry or mpJointHide took the
+                     * section out -- and those want different fixes. */
+                    CollJoint* cj = mpGetGroundCollJoint();
+                    char en[40];
+                    int ne = 0;
+                    for (i = 0; i < 32; i++) {
+                        /* The gate the ray walkers actually use is
+                         * CollJoint_TooFar, which mpBoundingCheck sets every
+                         * frame from the active box -- not Enabled. A joint
+                         * can be enabled all match and still never be asked. */
+                        u32 fl = cj != NULL ? cj[local_ids.v[i]].flags : 0;
+                        int on = (cj != NULL &&
+                                  (fl & CollJoint_Enabled) &&
+                                  !(fl & CollJoint_TooFar) &&
+                                  !(fl & CollJoint_Hidden)) ? 1 : 0;
+                        en[i] = (char) ('0' + on);
+                        ne += on;
+                    }
+                    en[32] = '\0';
+                    fprintf(stderr,
+                            "[BBRAY] x=%.3f y=%.3f half=%.1f -> %d/32 hits %s"
+                            " askable %d/32 %s\n",
+                            (double) pos->x, (double) pos->y,
+                            (double) half_height, nh, hits, ne, en);
+                    /* And where each enabled joint actually is. All 32 being
+                     * enabled while 31 never answer a ray means their
+                     * geometry is somewhere the ray cannot reach, so the
+                     * bounding box each joint was given at mpLibLoad is the
+                     * thing to read. */
+                    if (cj != NULL) {
+                        static int said;
+                        if (!said) {
+                            said = 1;
+                            for (i = 0; i < 32; i++) {
+                                CollJoint* j = &cj[local_ids.v[i]];
+                                fprintf(stderr,
+                                        "[BBJOINT] id=%2d min=(%.2f,%.2f) "
+                                        "max=(%.2f,%.2f)\n",
+                                        (int) local_ids.v[i],
+                                        (double) j->bounding_min.x,
+                                        (double) j->bounding_min.y,
+                                        (double) j->bounding_max.x,
+                                        (double) j->bounding_max.y);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif
+
     for (i = 0; i < 32; i++) {
         if (mpCheckMultiple(x1, top, x2, bottom, &hit_pos, NULL, NULL,
                             &hit_normal, 1, -1, local_ids.v[i]))

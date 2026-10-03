@@ -998,6 +998,10 @@ CollJoint* mpGetGroundCollJoint(void)
     return groundCollJoint;
 }
 
+#if BUILD_TARGET_PC
+static int pc_pruned_lines;
+#endif
+
 void mpPruneEmptyLines(MapCollData* coll_data)
 {
     MapLine* line;
@@ -1040,7 +1044,24 @@ void mpPruneEmptyLines(MapCollData* coll_data)
         line->next_id0 = -1;
         line->prev_id1 = -1;
         line->next_id1 = -1;
+#if BUILD_TARGET_PC
+        pc_pruned_lines++;
+#endif
     }
+#if BUILD_TARGET_PC
+    /* MELEE_MPDUMP: how much of the stage this pass took out of the world. A
+     * line whose two vertices coincide is a real degenerate line and the
+     * console removes it too, so a large count here means the vertices were
+     * wrong when this ran, not that the stage is full of empty lines. Big
+     * Blue's track raycast (grBigBlue_801EC58C) finds nothing on 31 of its
+     * 32 collision joints while all 32 are enabled, which is what this is
+     * meant to tell apart. */
+    if (getenv("MELEE_MPDUMP") != NULL) {
+        fprintf(stderr, "[MPPRUNE] grkind=%d: %d of %d lines marked EMPTY\n",
+                (int) stage_info.grkind, pc_pruned_lines,
+                (int) coll_data->line_count);
+    }
+#endif
 }
 
 void mpLibLoad(MapCollData* coll_data)
@@ -6542,6 +6563,28 @@ bool mpCheckedBounding(void)
 void mpBoundingCheck(float left, float bottom, float right, float top)
 {
     CollJoint* curr = jointListStart;
+#if BUILD_TARGET_PC
+    /* MELEE_MPBOX=1: the box every collision query is culled against, and how
+     * many joints it leaves askable. A stage whose geometry answers no rays
+     * has usually had it culled rather than lost it: Big Blue's track raycast
+     * can only ever reach 2 of its 32 sections because this box is around one
+     * fighter's ECB when the cars ask. */
+    if (getenv("MELEE_MPBOX") != NULL) {
+        CollJoint* c2;
+        int tot = 0, far = 0;
+        for (c2 = jointListStart; c2 != NULL; c2 = c2->next) {
+            tot++;
+            if (c2->flags & CollJoint_TooFar) {
+                far++;
+            }
+        }
+        fprintf(stderr,
+                "[MPBOX] box l=%.2f b=%.2f r=%.2f t=%.2f (before: %d of %d "
+                "too far)\n",
+                (double) left, (double) bottom, (double) right, (double) top,
+                far, tot);
+    }
+#endif
 
     while (curr != NULL) {
         if (curr->flags & CollJoint_Enabled &&
