@@ -2346,4 +2346,23 @@ struct ftCo_803C6594_t {
 #define FT_EXT_ATTR(fp) ((fp)->ft_data->ext_attr)
 #endif
 
+/* The same thing for the accessors that take no arguments at all.
+ *
+ * ftYs_SpecialN_GetExtAttr28(void) and seven neighbours in Yoshi's and
+ * Kirby's special-N paths reach gFtDataList[kind]->ext_attr with no fighter
+ * in scope, so FT_EXT_ATTR cannot serve them and they were the reads still
+ * coming back reversed. pc_ext_attr_host hands back a read-only host-order
+ * view of the same blob, byteswapped once per load (src/port/pc_ftconv.c).
+ *
+ * `sizeof(type)` can overrun the blob's real extent in the file, exactly as
+ * PUSH_ATTRS's copy into dat_attrs_backup does; the destination is private,
+ * so the overread is as harmless there as it is here. */
+#if BUILD_TARGET_PC
+const void* pc_ext_attr_host(int kind, unsigned long n);
+#define FT_KIND_EXT_ATTR(type, kind)                                          \
+    ((type*) pc_ext_attr_host(kind, sizeof(type)))
+#else
+#define FT_KIND_EXT_ATTR(type, kind) ((type*) gFtDataList[kind]->ext_attr)
+#endif
+
 #endif

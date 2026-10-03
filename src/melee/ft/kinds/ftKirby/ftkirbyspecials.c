@@ -198,6 +198,11 @@ void ftKb_SpecialN_800F5820(Fighter_GObj* gobj,
 
 void ftKb_SpecialN_800F5874(Vec2* arg0)
 {
+    /* NOT converted to FT_KIND_EXT_ATTR, unlike its neighbours: the type is
+     * wrong. ftCommonData is 0x818 bytes and Kirby's ext_attr blob is 0x424,
+     * so this reads a PlCo.dat struct out of a PlKb.dat block -- it only
+     * touches +9C and +A0, which is why it has never faulted. Needs the
+     * retail disassembly to say what it really reads before it is swapped. */
     ftCommonData* cd = gFtDataList[Ft_Kind_Kirby]->ext_attr;
     arg0->x = cd->x9C_radians;
     arg0->y = cd->xA0_radians;

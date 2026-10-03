@@ -39,6 +39,7 @@
 #include <melee/ft/types.h>
 #include <melee/ft/forward.h>
 #include <melee/ft/dobjlist.h>
+#include <melee/ft/ftdata.h>
 #include <melee/ft/kinds/ftCommon/types.h>
 #include <melee/ft/kinds/ftSamus/types.h>
 #include <sysdolphin/baselib/archive.h>
@@ -857,10 +858,6 @@ static struct ftData_x8* pc_conv_PartsDesc(const u8* raw, const u8* base,
  * their zero-fill path (see rule 1 in the file header).
  *
  * GCN struct ftData is 0x60: 23 pointers plus the int at +0x54. */
-#if BUILD_TARGET_PC
-void pc_ext_attr_forget(const void* ft_data);
-#endif
-
 struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                               int kind)
 {
@@ -1204,9 +1201,6 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
     off = pc_be32(*(const u32*) (raw + 0x04));
     if (off < len) {
         out->ext_attr = pc_off_to_ptr(off, base, len);
-        /* This ftData is new even if the allocator handed back an address a
-         * previous one used; forget any conversion recorded against it. */
-        pc_ext_attr_forget(out);
     }
 
     /* +0x48 x48_items -- an array of Article pointers, stored as 4-byte file
@@ -1771,85 +1765,71 @@ void* pc_script_target(const void* cur, u32 off)
 }
 
 #if BUILD_TARGET_PC
-/* ext_attr is the per-character attribute blob, and it arrives raw
- * big-endian. PUSH_ATTRS byteswaps it on the way into fp->dat_attrs_backup,
- * which is why every read through fp->dat_attrs is correct -- but
- * twenty-seven reads in the tree go at gFtDataList[kind]->ext_attr directly
- * and got reversed floats. Measured on Kirby: all sixteen of the first words
- * reversed between the two, and specialn_gravity_of_inhaled reading
- * 2.72598e+23 through ext_attr against 0.45 through dat_attrs. Fourteen of
- * those reads are in ftyoshispecialn.c and thirteen across Kirby's inhale and
- * Yoshi-copy paths -- the two character blocks whose lockstep cells diverge.
+/* A host-order view of a character's ext_attr blob, for the readers that have
+ * no fighter to hand.
  *
- * This hands back a host-order blob and repoints ft_data->ext_attr at it, so
- * both access paths agree, and does it once per ftData.
+ * The blob arrives raw big-endian. A reader with an fp uses FT_EXT_ATTR(fp),
+ * which resolves to fp->dat_attrs -- the swapped copy PUSH_ATTRS makes. That
+ * macro already exists (ft/types.h) and is the fix for the ninety-odd sites
+ * that once read ft_data->ext_attr directly.
  *
- * It must NOT swap the archive copy in place, which was the first attempt and
- * a regression: sizeof(the concrete struct) is an upper bound, not the blob's
- * real extent in the file, so writing that many bytes back corrupts whatever
- * the archive put after it -- measured as a fighter's x reading 429230080
- * against the console's -0.0971, a worse failure than the bug being fixed.
- * Reading past the end into a private allocation is as harmless as the
- * original code's read-past-end into dat_attrs_backup. */
+ * But a handful of accessors take no arguments at all:
+ * ftYs_SpecialN_GetExtAttr28(void) and its neighbours reach
+ * gFtDataList[kind]->ext_attr with nothing else in scope, so FT_EXT_ATTR
+ * cannot serve them. Those reads are the ones still coming back reversed --
+ * 2.72598e+23 where the console has 0.45 -- and they are all in Yoshi's and
+ * Kirby's special-N paths, the two character blocks whose cells diverge.
+ *
+ * Read-only by design. Two louder fixes were tried and both measured worse:
+ * swapping the archive in place (sizeof the concrete struct overruns the
+ * blob's real extent in the file and corrupts what follows it), and
+ * repointing ft_data->ext_attr at a swapped copy (dat_attrs then held raw
+ * bytes at runtime). Both showed up as a fighter's x reading 429230080
+ * against the console's -0.0971. Nothing here writes to the archive, to
+ * ft_data, or through PUSH_ATTRS.
+ *
+ * Keyed on the blob pointer, not on the ftData. ftData is rebuilt on every
+ * match load and lands on a recycled address, so a registry keyed on it
+ * reports a brand new conversion as already done -- which is precisely what
+ * made the earlier attempt hand back raw data. */
 #define PC_EXT_ATTR_SLOTS 40
-static const void* pc_ext_attr_done[PC_EXT_ATTR_SLOTS];
-static u32 pc_ext_attr_copies[PC_EXT_ATTR_SLOTS][0x424 / 4];
-static int pc_ext_attr_n;
+#define PC_EXT_ATTR_MAX 0x424
+static const void* pc_ext_attr_src[PC_EXT_ATTR_SLOTS];
+static u32 pc_ext_attr_view[PC_EXT_ATTR_SLOTS][PC_EXT_ATTR_MAX / 4];
+static unsigned long pc_ext_attr_len[PC_EXT_ATTR_SLOTS];
 
-/* A converted ftData is allocated fresh on every match load and lands on a
- * recycled address, so a registry keyed on the pointer would report a brand
- * new blob as "already converted" and hand back raw big-endian bytes --
- * measured as dat_attrs reading gravity_of_inhaled 2.72598e+23 at runtime
- * where it read 0.45 at load. pc_conv_ftData calls this for each ftData it
- * builds so the address starts clean. */
-void pc_ext_attr_forget(const void* ft_data)
+const void* pc_ext_attr_host(int kind, unsigned long n)
 {
-    int i;
-    for (i = 0; i < pc_ext_attr_n; i++) {
-        if (pc_ext_attr_done[i] == ft_data) {
-            pc_ext_attr_done[i] = pc_ext_attr_done[--pc_ext_attr_n];
-            return;
-        }
-    }
-}
+    const void* blob;
+    const u32* src;
+    u32* dst;
+    unsigned long i;
 
-void* pc_ext_attr_host_order(void* ft_data, void* blob, unsigned long n)
-{
-    int i;
-    u32* copy;
-    const u32* src = (const u32*) blob;
-    if (ft_data == NULL || blob == NULL || n < 4) {
-        return blob;
+    if (kind < 0 || kind >= PC_EXT_ATTR_SLOTS || n == 0 ||
+        n > PC_EXT_ATTR_MAX)
+    {
+        return NULL;
     }
-    for (i = 0; i < pc_ext_attr_n; i++) {
-        if (pc_ext_attr_done[i] == ft_data) {
-            return blob; /* already host order, and already repointed */
-        }
+    if (gFtDataList[kind] == NULL) {
+        return NULL;
     }
-    /* Static storage, not pc_lowmem_alloc: the allocator returning NULL made
-     * this fall back to handing back the RAW blob, which PUSH_ATTRS then
-     * copied into dat_attrs -- every attribute big-endian, strictly worse
-     * than the bug being fixed and silent about it. PC_DAT_ATTRS_MAX is the
-     * largest concrete DatAttrs, so forty of them is about 42 KB and needs no
-     * allocator and has no lifetime. */
-    if (n > 0x424u || pc_ext_attr_n >= PC_EXT_ATTR_SLOTS) {
-        static int said;
-        if (!said) {
-            said = 1;
-            fprintf(stderr, "[PORT WARN] pc_ext_attr_host_order: no slot for "
-                            "a %lu-byte blob; left big-endian\n", n);
-        }
-        return blob;
+    blob = gFtDataList[kind]->ext_attr;
+    if (!pc_ptr_sane(blob)) {
+        return NULL;
     }
-    copy = pc_ext_attr_copies[pc_ext_attr_n];
-    for (i = 0; (unsigned long) i < n / 4; i++) {
+    if (pc_ext_attr_src[kind] == blob && pc_ext_attr_len[kind] >= n) {
+        return pc_ext_attr_view[kind];
+    }
+    src = (const u32*) blob;
+    dst = pc_ext_attr_view[kind];
+    for (i = 0; i < n / 4; i++) {
         u32 v = src[i];
-        copy[i] = ((v >> 24) & 0xFF) | ((v >> 8) & 0xFF00) |
-                  ((v << 8) & 0xFF0000) | (v << 24);
+        dst[i] = ((v >> 24) & 0xFF) | ((v >> 8) & 0xFF00) |
+                 ((v << 8) & 0xFF0000) | (v << 24);
     }
-    pc_ext_attr_done[pc_ext_attr_n++] = ft_data;
-    ((struct ftData*) ft_data)->ext_attr = copy;
-    return copy;
+    pc_ext_attr_src[kind] = blob;
+    pc_ext_attr_len[kind] = n;
+    return dst;
 }
 #endif
 
