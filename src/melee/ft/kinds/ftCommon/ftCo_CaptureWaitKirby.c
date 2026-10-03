@@ -99,6 +99,22 @@ void ftCo_CaptureWaitKirby_IASA(Fighter_GObj* gobj)
     fp->grab_timer -= ftKb_SpecialN_800F5B00(fp->victim_gobj);
     fp->mv.co.capturekirby.x18 =
         ftCommon_GrabMash(fp, ftKb_SpecialN_800F5B10(fp->victim_gobj));
+#if BUILD_TARGET_PC
+    /* MELEE_KBGRAB=1: the victim's grab_timer every frame it is held. It is
+     * not a traced field, so it can drift for many frames while all sixteen
+     * compared columns still agree -- which is why a Kirby cell reports
+     * "120 frames, 0 fields differ" and then diverges at 156 on the victim's
+     * motion. It drains by duration_divisor (1.0) from base 250 and the
+     * victim is released at zero, so a one-frame difference in the release is
+     * a 1.0 difference here, acquired earlier and invisibly. Console:
+     * MELEE_MEMAT=800bd8e4:29:1:6732 (r29 is the victim's Fighter there). */
+    if (getenv("MELEE_KBGRAB") != NULL) {
+        extern u32 gm_GetFrameCount(void);
+        fprintf(stderr, "[KBGRAB] f%u timer=%.4f mash=%d\n",
+                (unsigned) gm_GetFrameCount(), (double) fp->grab_timer,
+                (int) fp->mv.co.capturekirby.x18);
+    }
+#endif
     if (fp->grab_timer <= 0) {
         Fighter_GObj* victim_gobj = fp->victim_gobj;
         fp->facing_dir = ftKb_SpecialN_800F5A60(victim_gobj);

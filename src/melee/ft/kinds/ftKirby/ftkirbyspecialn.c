@@ -195,6 +195,27 @@ f32 ftKb_SpecialN_800F5B00(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftKb_DatAttrs* da = fp->dat_attrs;
+#if BUILD_TARGET_PC
+    /* MELEE_KBINHALE=1: the three attributes that decide how long Kirby can
+     * hold a victim. The victim's grab_timer drains by duration_divisor a
+     * frame and its mash credit by inhale_resistance, so a wrong value here
+     * releases the victim on a different frame -- which is how seventeen of
+     * Kirby's twenty-seven cells diverge, on the victim's motion, while the
+     * inhaling Kirby stays identical. Console:
+     * MELEE_MEMAT=800f5b08:3:3:84 (r3 is ftKb_DatAttrs at that point, after
+     * the two loads at 800f5b00/04; three words from +0x54). */
+    if (getenv("MELEE_KBINHALE") != NULL) {
+        static int n;
+        if (n < 4) {
+            n++;
+            fprintf(stderr,
+                    "[KBINHALE] resistance=%.6f divisor=%.6f base=%.6f\n",
+                    (double) da->specialn_inhale_resistance,
+                    (double) da->specialn_duration_divisor,
+                    (double) da->specialn_base_duration);
+        }
+    }
+#endif
     return da->specialn_duration_divisor;
 }
 
