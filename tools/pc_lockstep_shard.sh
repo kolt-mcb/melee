@@ -129,6 +129,13 @@ done
 # Re-seeded every run, not just when missing: a file left over from an earlier
 # sweep is not a snapshot of the current baseline, and the merge's comparison
 # needs one that is.
+#
+# Every results and shard log file goes first, not just the N about to be
+# re-seeded. A 12-shard run after a 20-shard one left results12..19.json in
+# place, each a full copy of an older baseline, and the merge's glob took them
+# in: their stale entries differed from the new seed, so they were "changes",
+# and 513 cells were overwritten with verdicts from a previous sweep.
+rm -f "$OUT"/results*.json "$OUT"/shard*.log
 BASE="$ROOT/tests/pc/lockstep_matrix.json"
 if [ -e "$BASE" ]; then
     cp "$BASE" "$OUT/seed.json"
@@ -168,14 +175,17 @@ while [ "$left" -gt 0 ]; do
 done
 
 # Whatever each shard measured before it stopped is still a measurement.
-python3 - "$OUT" "$ROOT/tests/pc/lockstep_matrix.json" <<'PY'
+python3 - "$OUT" "$ROOT/tests/pc/lockstep_matrix.json" "$N" <<'PY'
 import glob, json, os, sys
-out, dest = sys.argv[1], sys.argv[2]
+out, dest, nshards = sys.argv[1], sys.argv[2], int(sys.argv[3])
 merged = json.load(open(dest)) if os.path.exists(dest) else {}
 before = dict(merged)
 seed_path = os.path.join(out, "seed.json")
 seed = json.load(open(seed_path)) if os.path.exists(seed_path) else {}
-files = sorted(glob.glob(os.path.join(out, "results*.json")))
+# This run's shards only, by number: a glob would also take a file some earlier,
+# wider run left behind.
+files = [f for f in (os.path.join(out, "results%d.json" % s)
+                     for s in range(nshards)) if os.path.exists(f)]
 # Apply only what each shard CHANGED against the seed it started from.
 #
 # Each shard's file is a full copy of the baseline plus its own cells, so
