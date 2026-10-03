@@ -1,5 +1,7 @@
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
+#include <stdio.h>
+#include <stdlib.h>
 #endif
 #include "mpisland.h" // IWYU pragma: keep
 
@@ -243,6 +245,16 @@ mp_UnkStruct0* mpIsland_8005AB54(int surface_idx)
                  * and only by the Ice Climbers, whose partner logic walks the
                  * island list. */
                 if (v2 == NULL || !pc_ptr_sane(v2[j].x0)) {
+                    if (getenv("MELEE_ISLANDDBG") != NULL) {
+                        static int n;
+                        if (n++ < 12) {
+                            fprintf(stderr,
+                                    "[ISLAND] bail: surface=%d node=%p j=%d "
+                                    "v2=%p x0=%p\n",
+                                    surface_idx, (void*) cur, j, (void*) v2,
+                                    v2 != NULL ? (void*) v2[j].x0 : NULL);
+                        }
+                    }
                     break;
                 }
 #endif

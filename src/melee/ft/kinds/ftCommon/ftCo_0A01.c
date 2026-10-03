@@ -1150,6 +1150,29 @@ void ftCo_800A1F3C_noinline2(Fighter* fp, float arg1, float arg2, float arg3)
 void ftCo_800A1F3C(Fighter* fp, float arg1, float arg2, float arg3)
 {
     struct CpuFighter* data = &fp->cpu;
+#if BUILD_TARGET_PC
+    /* MELEE_AITARGET=<frame>: every write of the CPU's target position with
+     * the address of whatever asked for it, so the site can be named instead
+     * of guessed at. */
+    {
+        static int at2 = -2;
+        if (at2 == -2) {
+            const char* e = getenv("MELEE_AITARGET");
+            at2 = e != NULL ? atoi(e) : -1;
+        }
+        if (at2 >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            if ((int) gm_GetFrameCount() == at2) {
+                fprintf(stderr,
+                        "[AISET] p%d x60=%d arg=(%08x,%08x,%08x) from=%p\n",
+                        (int) fp->player_id, (int) data->x60,
+                        *(const unsigned*) &arg1, *(const unsigned*) &arg2,
+                        *(const unsigned*) &arg3,
+                        __builtin_return_address(0));
+            }
+        }
+    }
+#endif
     if (data->x60 == 0) {
         data->x54.x = arg1;
         data->x54.y = arg2;
@@ -3819,6 +3842,33 @@ static inline s32 ftCo_800A75DC_CheckFloor(f32 x0, f32 above, f32 x1,
 void ftCo_800A75DC(Fighter* fp0, Fighter* fp1)
 {
     struct CpuFighter* data = &fp0->cpu;
+#if BUILD_TARGET_PC
+    /* MELEE_AITARGET=<frame>: who the CPU is chasing and whether that fighter
+     * is airborne -- the branch at the top of this function turns on it, and
+     * the Ice Climbers' Nana is not in the lockstep's traced player slots, so
+     * a difference in her state is invisible until it reaches the AI. */
+    {
+        static int at3 = -2;
+        if (at3 == -2) {
+            const char* e = getenv("MELEE_AITARGET");
+            at3 = e != NULL ? atoi(e) : -1;
+        }
+        if (at3 >= 0 && fp1 != NULL) {
+            extern u32 gm_GetFrameCount(void);
+            if ((int) gm_GetFrameCount() == at3) {
+                fprintf(stderr,
+                        "[AICHASE] p%d chasing p%d kind=%d sub=%d goa=%d "
+                        "pos=(%08x,%08x) motion=%d\n",
+                        (int) fp0->player_id, (int) fp1->player_id,
+                        (int) fp1->kind, (int) fp1->is_sub_fighter,
+                        (int) fp1->ground_or_air,
+                        *(const unsigned*) &fp1->cur_pos.x,
+                        *(const unsigned*) &fp1->cur_pos.y,
+                        (int) fp1->motion_id);
+            }
+        }
+    }
+#endif
     Vec3 floor_pos;
     Vec3 floor_normal;
     int line_id;
@@ -3868,6 +3918,40 @@ void ftCo_800A75DC(Fighter* fp0, Fighter* fp1)
                 x60 = &fp0->cpu.x60;
                 ftCo_800A1F3C(fp0, floor_pos.x, floor_pos.y,
                               data->x56C + fp1->cpu.x564);
+#if BUILD_TARGET_PC
+                /* MELEE_AITARGET=<frame>: which branch of the CPU's
+                 * "chase the airborne opponent" picks cpu.x54, and the island
+                 * edges it picks from. The Ice Climbers diverge here on match
+                 * frame 3 with x54 at the fighter's own spawn x. */
+                {
+                    static int at = -2;
+                    if (at == -2) {
+                        const char* e = getenv("MELEE_AITARGET");
+                        at = e != NULL ? atoi(e) : -1;
+                    }
+                    if (at >= 0) {
+                        extern u32 gm_GetFrameCount(void);
+                        if ((int) gm_GetFrameCount() == at) {
+                            fprintf(stderr,
+                                    "[AITARGET] p%d line=%d island=%p "
+                                    "x8=(%08x,%08x) x14=(%08x,%08x) "
+                                    "floor=(%08x,%08x) x54=(%08x,%08x) "
+                                    "x60=%d\n",
+                                    (int) fp0->player_id, (int) line_id,
+                                    (void*) island,
+                                    island ? *(const unsigned*) &island->x8.x : 0,
+                                    island ? *(const unsigned*) &island->x8.y : 0,
+                                    island ? *(const unsigned*) &island->x14.x : 0,
+                                    island ? *(const unsigned*) &island->x14.y : 0,
+                                    *(const unsigned*) &floor_pos.x,
+                                    *(const unsigned*) &floor_pos.y,
+                                    *(const unsigned*) &data->x54.x,
+                                    *(const unsigned*) &data->x54.y,
+                                    (int) data->x60);
+                        }
+                    }
+                }
+#endif
                 if (island != NULL) {
                     d = island->x14.x - data->x54.x;
                     if (d < 0.0f) {
