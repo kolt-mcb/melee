@@ -198,14 +198,24 @@ void ftKb_SpecialN_800F5820(Fighter_GObj* gobj,
 
 void ftKb_SpecialN_800F5874(Vec2* arg0)
 {
-    /* NOT converted to FT_KIND_EXT_ATTR, unlike its neighbours: the type is
-     * wrong. ftCommonData is 0x818 bytes and Kirby's ext_attr blob is 0x424,
-     * so this reads a PlCo.dat struct out of a PlKb.dat block -- it only
-     * touches +9C and +A0, which is why it has never faulted. Needs the
-     * retail disassembly to say what it really reads before it is swapped. */
-    ftCommonData* cd = gFtDataList[Ft_Kind_Kirby]->ext_attr;
-    arg0->x = cd->x9C_radians;
-    arg0->y = cd->xA0_radians;
+    /* This was typed ftCommonData* reading x9C_radians/xA0_radians, which is
+     * the wrong struct and the wrong names: ftCommonData is 0x818 bytes and
+     * Kirby's ext_attr blob is 0x424, so it read a PlCo.dat struct out of a
+     * PlKb.dat block. At those two offsets ftKb_DatAttrs has
+     * specialn_opponent_{horizontal,vertical}_velocity -- the velocity the
+     * inhaled opponent is spat out with, which is exactly what the one caller
+     * (ftCo_800BE494, the copy-star throw) uses it for. Nothing there is in
+     * radians.
+     *
+     * It never faulted because only +9C and +A0 are touched, and on the
+     * console the bytes are the same either way. On the host the mistyping
+     * also kept it off FT_KIND_EXT_ATTR, so it alone still read the raw
+     * big-endian blob: the victim was spat out with a reversed velocity,
+     * landed at x = -461278, and died on the spot in motion DeadLeft where
+     * the console has it rising at 2.3/frame in ftCo_MS_ThrownKirby. */
+    ftKb_DatAttrs* da = FT_KIND_EXT_ATTR(ftKb_DatAttrs, Ft_Kind_Kirby);
+    arg0->x = da->specialn_opponent_horizontal_velocity;
+    arg0->y = da->specialn_opponent_vertical_velocity;
 }
 
 HSD_Joint* ftKb_SpecialN_800F5898(Fighter_GObj* gobj)
