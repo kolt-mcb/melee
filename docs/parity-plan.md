@@ -1216,3 +1216,76 @@ flip the cell on its own while the far reads are still wrong. Doing this
 properly means giving grVe_Data a console-faithful layout, or giving the far
 reads an explicit base, rather than patching the two offsets this divergence
 happens to go through.
+
+
+## Session state, 2026-10-02: 524/701 (74.8%), and the six threads left
+
+Grid went 454/698 (65.0%) -> 524/701 (74.8%). Eleven root causes fixed, each
+verified in lockstep against Dolphin with the GameCube object byte-identical
+(or the file confirmed not to build for that target, pre-existing):
+
+  Venom          console word offsets over a struct holding host pointers
+  Peach's Castle a crash-guard returned before HSD_Randi(11)
+  Rainbow Cruise the decompiled source named the wrong two joints
+  Fox (x2)       missing ftDynamics collider list; lb_Collider at console
+                 offsets (29 cells -> 4)
+  Big Blue       car state byte vs lane halfword overlapped; two unrebased
+                 reads
+  Kongo          the spline platform's max-y/min-z aliased each other
+  mplib          the collision line table capped and cleared with a GameCube
+                 byte count -- half of every stage's lines was rejected
+  plus ftCo_ItemScopeRapid and grkinokoroute console-offset reads
+
+### Where each remaining thread stands
+
+**Ice Climbers (29).** Nana's position at match frame 1. Everything upstream
+agrees bit-for-bit: Popo's input (254 iterations), Nana's cpu.lstick
+((127,0)), the input-delay ring (x444/x448 five apart; the record struct is
+28 bytes both sides), her motion sequence (322->323->324->29->42), the copy's
+gate (x221F_b3 = 0 both), and ftCo_IsCpuControlled (true for Nana, false for
+Popo, both). At the same motion and stick the console's x stays -5.0 and the
+port's drifts to -4.013. One contradiction open: the console calls
+ftCo_GetCpuLStickX on every one of its 125 pre-match frames, yet its Nana's
+input.lstick[0].x reads 0.0 where the port's reads 1.0. Eliminated: the
+deadzone (0.28, so 1.0 survives) and a per-frame input reset
+(Fighter_ResetInputData_80068854 runs once per fighter, not per frame).
+NEXT: a per-frame trace of the pre-match. The lockstep does not compare
+anything before match frame 1, which is the underlying gap -- extending the
+trace to sub-fighters would also make this class visible at the point it
+happens.
+
+**Kongo (24).** Spawn slot 1's ancestor is missing a 10-degree Z rotation:
+the console's matrix top row is (0.98481, -0.17364, -0.00170), the port's
+(1.0, -0.00070, 0). It is present on the console at frame 1, so it is static
+or set during stage init -- NOT the spin state machine in
+grKongo_801D577C, whose countdown (u.kongo2.xCC) was measured counting down
+correctly (358 -> 215) and simply needs ~215 more frames to fire. The
+MELEE_KGROT note that "case 1 never fires" was about run length.
+NEXT: compare the joint rotations of the spawn-1 chain. MELEE_STAGE_DIAG
+prints the port's; the console side needs a probe, since MEMAT cannot chase
+the jobj->parent hop.
+
+**Big Blue (25).** Fighters now land instead of falling through, but on the
+wrong car (console floors 216/222, port 121/146). Car heights.
+
+**Poke Floats (24).** No floor at match frame 1 (console lines 258/260, port
+-1). Ruled out: the spawn joints, all 26 floats' joint resolution
+(MELEE_PURAFLOAT), the union views, and the DAT GrJoint table (converted
+with swapping).
+
+**Yoshi's Story (13).** Varied frames (65-587), deterministic -- re-measured
+serially to rule out contention.
+
+**Kirby (27) / Yoshi (21).** Kirby: frame 156, p0.motion 290 vs 292. Yoshi:
+frame 424, animf 34 vs 36.
+
+### Two traps that cost time here
+
+`pc_lockstep_matrix.py` runs every cell with `--cpu 9,9`. A bare
+`pc_lockstep.py` run leaves both fighters idle and cannot reproduce a matrix
+verdict -- "identical" from one is not evidence a cell passes. It is still
+the right tool for a frame-1 divergence and for reading probe output.
+
+`_SDA2_BASE_` is 0x804DF9E0 (set at 0x80005348). Reading an `lfs rN,off(r2)`
+against a guessed base is how the sine-polynomial hypothesis looked confirmed
+when it was not; scan the DOL for `lis r2 / ori r2` instead.
