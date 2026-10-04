@@ -3150,7 +3150,13 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
 
     entry = &grBb_TrackEntries[(GRBB_C4_WORD(gp) >> 15) & 0x7F];
 
-    lb_8000B1CC(Ground_801C3FA4(gobj, entry->start_index), NULL, &bone_pos);
+    /* The section's END bone: the original loads the halfword at entry+4
+     * (lha r4, 0x5a4(r28) over a table at 0x5a0), which is end_index -- the
+     * init reads +0/+2/+4 as jobj/start/end, so the names are right and this
+     * read was not. With the start bone the gate saw world x 0 instead of the
+     * console's 1072.75 (end bone translate 2145.5, scale 0.5), advanced the
+     * track on the first frames and hid the section the cars stand on. */
+    lb_8000B1CC(Ground_801C3FA4(gobj, entry->end_index), NULL, &bone_pos);
 
     {
         f32 angle = *(f32*) (GRBB_CAR_BASE(gp) + 0xF8);
@@ -3169,11 +3175,11 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
                 n++;
                 fprintf(stderr,
                         "[BBADV] angle=%.5f bone_x=%.4f threshold=%.4f "
-                        "start_index=%d jobj=%p -> %s\n",
+                        "end_index=%d jobj=%p -> %s\n",
                         (double) angle, (double) bone_pos.x,
                         (double) (-300.0F * Ground_801C0498()),
-                        (int) entry->start_index,
-                        (void*) Ground_801C3FA4(gobj, entry->start_index),
+                        (int) entry->end_index,
+                        (void*) Ground_801C3FA4(gobj, entry->end_index),
                         (angle < 0.17453292F &&
                          bone_pos.x < -300.0F * Ground_801C0498())
                             ? "ADVANCE"
@@ -3184,7 +3190,7 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
                  * one depth-first walk, not parent and child -- so the
                  * placement to explain is this chain's. */
                 {
-                    HSD_JObj* w = Ground_801C3FA4(gobj, entry->start_index);
+                    HSD_JObj* w = Ground_801C3FA4(gobj, entry->end_index);
                     int d = 0;
                     for (; w != NULL && d < 10; w = w->parent, d++) {
                         fprintf(stderr,
