@@ -1674,7 +1674,18 @@ f32 grBigBlue_801E8B84(f32 right, f32 left, f32 bottom, f32 top)
 #endif
 
     for (i = 0; i < 4; i++) {
-        if ((unsigned) (gp->u.bigblue.car.lanes[i].state >> 2 & 0x3F) != 1U) {
+#if BUILD_TARGET_PC
+        /* The car's state is bits 2..7 of the byte at lane+0: the original
+         * reads it as (byte >> 2) & 0x3F, one extrwi of six bits. `state` is
+         * already that field on the console and the LOW six bits on a host
+         * that allocates bitfields from the bottom, so the `>> 2` this line
+         * used to carry left four bits on both targets: every car's state
+         * compared wrong, and the fighters' ground query counted the wrong
+         * cars. Read the byte the way the original does. */
+        if (((*(u8*) &gp->u.bigblue.car.lanes[i] >> 2) & 0x3F) != 1U) {
+#else
+        if (gp->u.bigblue.car.lanes[i].state != 1U) {
+#endif
             if (gp->u.bigblue.car.lanes[i].pos.y < right &&
                 gp->u.bigblue.car.lanes[i].pos.y > left)
             {
@@ -4353,13 +4364,18 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
         rank_factor = BB_FMA(-drag, scale, lat) - height - heading_osc; /* fnmsubs */
     }
 
-    /* Collision/grounding check */
+    /* Collision/grounding check. grBigBlue_801EC58C answers -F32_MAX when no
+     * track is under the car, and that is what these tests compare against
+     * (an lfs of -F32_MAX in the original). They compared against 0.0 here,
+     * so a miss counted as ground: the car's height was set from -F32_MAX,
+     * every later ray started from there and could never hit, and three of
+     * the four cars sat at the sentinel for the rest of the match. */
     if ((lane_gp[0xD4] >> 1) & 1) {
         /* Grounded path */
         ground_y = grBigBlue_801EC58C((Vec3*) (lane_gp + 0xE0), &sp_vec,
                                       (f32) 500.0f);
 
-        if (0.0F != ground_y && ground_y > rank_factor) {
+        if (-F32_MAX != ground_y && ground_y > rank_factor) {
             if (*(f32*) (lane_gp + 0x10C) < 0.0F) {
                 u8 byte = lane_gp[0xD4];
                 lane_gp[0xD4] = (byte & ~0x02);
@@ -4369,7 +4385,7 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
             }
         }
 
-        if (0.0F != ground_y) {
+        if (-F32_MAX != ground_y) {
             f32 s = Ground_801C0498();
             f32 decay = yakumono_param->x80;
             /* 801EDC8C: decay*s plain, then an fnmsubs of 3*that off x10C */
@@ -4401,7 +4417,7 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
         ground_y =
             grBigBlue_801EC58C((Vec3*) (lane_gp + 0xE0), &sp_vec, 20.0F * s);
 
-        if (0.0F != ground_y) {
+        if (-F32_MAX != ground_y) {
             f32 s2 = Ground_801C0498();
             f32 drag = yakumono_param->x2C;
             f32 base_y = BB_FMA(drag, s2, ground_y);
@@ -4419,7 +4435,7 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
 
 heading_converge:
     /* Update rotation: smooth toward target angle */
-    if (0.0F != ground_y && !((lane_gp[0xD4] >> 1) & 1)) {
+    if (-F32_MAX != ground_y && !((lane_gp[0xD4] >> 1) & 1)) {
         f32 angle = atan2f(-sp_vec.x, sp_vec.y);
         f32 smooth = yakumono_param->x50;
         f31_rot = BB_FMA(smooth, angle - f31_rot, f31_rot);
