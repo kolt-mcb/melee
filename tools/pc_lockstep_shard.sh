@@ -144,10 +144,22 @@ if [ -e "$BASE" ]; then
     done
 fi
 
+# MELEE_SHARD_GPUS=0,1 deals the shards' ports round-robin over those EGL
+# devices (SDL's offscreen driver, so no display is needed). With every port
+# on one card the sweep is bound by that card switching between sixteen GL
+# contexts, each syncing on it every frame -- not by pixels: a 160x120 window
+# took exactly as long as 960x720. Unset, the ports render wherever SDL's
+# default video driver puts them.
+IFS=, read -r -a GPUS <<< "${MELEE_SHARD_GPUS:-}"
+
 pids=()
 for ((s = 0; s < N; s++)); do
     udir="$OUT/dolphin$s"
     echo "  shard $s: cells $s, $((s + N)), $((s + 2 * N)) ... -> $OUT/shard$s.log"
+    if [ ${#GPUS[@]} -gt 0 ]; then
+        export SDL_VIDEODRIVER=offscreen
+        export SDL_HINT_EGL_DEVICE="${GPUS[s % ${#GPUS[@]}]}"
+    fi
     MELEE_LOCKSTEP_SOCK="$OUT/lockstep$s.sock" \
     MELEE_LOCKSTEP_PIPE="$udir/Pipes/brash" \
     MELEE_DOLPHIN_USER="$udir" \

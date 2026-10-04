@@ -572,6 +572,15 @@ def cleanup(procs):
     for proc in procs:
         if proc is None:
             continue
+        # Dolphin does not exit on QUIT: it sat out the whole five seconds and
+        # was killed on every cell, which was the largest single part of a
+        # cell once the emulator was built optimised. The answer is already in
+        # by now, so it is killed straight away; the port does exit, at once.
+        args = proc.args if isinstance(proc.args, list) else [proc.args]
+        if args and args[0] == DOLPHIN:
+            proc.kill()
+            proc.wait()
+            continue
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
