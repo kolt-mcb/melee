@@ -277,6 +277,7 @@ static void pcq_x_glBlitFramebuffer(void* p_) { pcq_a_glBlitFramebuffer* a_ = (p
 static inline void pcq_glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)
 {
     pcq_a_glBlitFramebuffer* a_ = NULL;
+    if (pc_norender) return;
     if (!pc_glq_active) (glBlitFramebuffer)(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter); else {
         if (pc_glq_sync_all) { pcq_a_glBlitFramebuffer b_; b_.srcX0 = srcX0; b_.srcY0 = srcY0; b_.srcX1 = srcX1; b_.srcY1 = srcY1; b_.dstX0 = dstX0; b_.dstY0 = dstY0; b_.dstX1 = dstX1; b_.dstY1 = dstY1; b_.mask = mask; b_.filter = filter; pc_glq_call_sync(pcq_x_glBlitFramebuffer, &b_); } else {
         size_t o_ = sizeof(pcq_a_glBlitFramebuffer);
@@ -365,6 +366,7 @@ static void pcq_x_glClear(void* p_) { pcq_a_glClear* a_ = (pcq_a_glClear*) p_; (
 static inline void pcq_glClear(GLbitfield mask)
 {
     pcq_a_glClear* a_ = NULL;
+    if (pc_norender) return;
     if (!pc_glq_active) (glClear)(mask); else {
         if (pc_glq_sync_all) { pcq_a_glClear b_; b_.mask = mask; pc_glq_call_sync(pcq_x_glClear, &b_); } else {
         size_t o_ = sizeof(pcq_a_glClear);
@@ -760,6 +762,7 @@ static void pcq_x_glDrawArrays(void* p_) { pcq_a_glDrawArrays* a_ = (pcq_a_glDra
 static inline void pcq_glDrawArrays(GLenum mode, GLint first, GLsizei count)
 {
     pcq_a_glDrawArrays* a_ = NULL;
+    if (pc_norender) return;
     if (!pc_glq_active) (glDrawArrays)(mode, first, count); else {
         if (pc_glq_sync_all) { pcq_a_glDrawArrays b_; b_.mode = mode; b_.first = first; b_.count = count; pc_glq_call_sync(pcq_x_glDrawArrays, &b_); } else {
         size_t o_ = sizeof(pcq_a_glDrawArrays);
@@ -781,6 +784,7 @@ static void pcq_x_glDrawElements(void* p_) { pcq_a_glDrawElements* a_ = (pcq_a_g
 static inline void pcq_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void * indices)
 {
     pcq_a_glDrawElements* a_ = NULL;
+    if (pc_norender) return;
     if (!pc_glq_active) (glDrawElements)(mode, count, type, indices); else {
         if (pc_glq_sync_all) { pcq_a_glDrawElements b_; b_.mode = mode; b_.count = count; b_.type = type; b_.indices = indices; pc_glq_call_sync(pcq_x_glDrawElements, &b_); } else {
         size_t o_ = sizeof(pcq_a_glDrawElements);
@@ -803,6 +807,7 @@ static void pcq_x_glDrawElementsBaseVertex(void* p_) { pcq_a_glDrawElementsBaseV
 static inline void pcq_glDrawElementsBaseVertex(GLenum mode, GLsizei count, GLenum type, const void * indices, GLint basevertex)
 {
     pcq_a_glDrawElementsBaseVertex* a_ = NULL;
+    if (pc_norender) return;
     if (!pc_glq_active) (glDrawElementsBaseVertex)(mode, count, type, indices, basevertex); else {
         if (pc_glq_sync_all) { pcq_a_glDrawElementsBaseVertex b_; b_.mode = mode; b_.count = count; b_.type = type; b_.indices = indices; b_.basevertex = basevertex; pc_glq_call_sync(pcq_x_glDrawElementsBaseVertex, &b_); } else {
         size_t o_ = sizeof(pcq_a_glDrawElementsBaseVertex);
@@ -864,6 +869,7 @@ static void pcq_x_glFinish(void* p_) { pcq_a_glFinish* a_ = (pcq_a_glFinish*) p_
 static inline void pcq_glFinish(void)
 {
     pcq_a_glFinish* a_ = NULL;
+    if (pc_norender) return;
     if (!pc_glq_active) (glFinish)(); else {
         pcq_a_glFinish b_;
         pc_glq_call_sync(pcq_x_glFinish, &b_);
@@ -1240,6 +1246,7 @@ static void pcq_x_glGetTexImage(void* p_) { pcq_a_glGetTexImage* a_ = (pcq_a_glG
 static inline void pcq_glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void * pixels)
 {
     pcq_a_glGetTexImage* a_ = NULL;
+    if (pc_norender) return;
     if (!pc_glq_active) (glGetTexImage)(target, level, format, type, pixels); else {
         pcq_a_glGetTexImage b_;
         b_.target = target;
@@ -1384,6 +1391,7 @@ static void pcq_x_glMultiDrawArrays(void* p_) { pcq_a_glMultiDrawArrays* a_ = (p
 static inline void pcq_glMultiDrawArrays(GLenum mode, const GLint * first, const GLsizei * count, GLsizei drawcount)
 {
     pcq_a_glMultiDrawArrays* a_ = NULL;
+    if (pc_norender) return;
     if (!pc_glq_active) (glMultiDrawArrays)(mode, first, count, drawcount); else {
         if (pc_glq_sync_all) { pcq_a_glMultiDrawArrays b_; b_.mode = mode; b_.first = first; b_.count = count; b_.drawcount = drawcount; pc_glq_call_sync(pcq_x_glMultiDrawArrays, &b_); } else {
         size_t o_ = sizeof(pcq_a_glMultiDrawArrays);
@@ -1511,6 +1519,7 @@ static void pcq_x_glReadPixels(void* p_) { pcq_a_glReadPixels* a_ = (pcq_a_glRea
 static inline void pcq_glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void * pixels)
 {
     pcq_a_glReadPixels* a_ = NULL;
+    if (pc_norender) return;
     if (!pc_glq_active) (glReadPixels)(x, y, width, height, format, type, pixels); else {
         pcq_a_glReadPixels b_;
         b_.x = x;

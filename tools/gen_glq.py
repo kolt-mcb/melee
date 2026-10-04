@@ -124,6 +124,16 @@ def is_ptr(t):
     return "*" in t
 
 
+# GPU work skipped under MELEE_NORENDER (pc_norender): what the card executes
+# per frame, as against state, storage and mapping, which the bridge's own
+# bookkeeping depends on and which stay. Readbacks are skipped too -- with
+# nothing drawn there is nothing to read -- and leave the caller's memory as
+# it was.
+NORENDER = {"glDrawArrays", "glDrawElements", "glDrawElementsBaseVertex",
+            "glMultiDrawArrays", "glClear", "glBlitFramebuffer", "glReadPixels",
+            "glGetTexImage", "glFinish"}
+
+
 def gen():
     P = protos(header())
     missing = sorted(n for n in used() if n not in P and n not in DESKTOP_ONLY and n not in MANUAL)
@@ -157,6 +167,9 @@ def gen():
         lines.append("static inline %s pcq_%s(%s)" % (ret, n, sig))
         lines.append("{")
         lines.append("    %s* a_ = NULL;" % st)
+        if n in NORENDER:
+            assert ret == "void", n
+            lines.append("    if (pc_norender) return;")
         if n in REMAP:
             lines.append("    %s = %s;" % REMAP[n])
         if n in SHADOW:

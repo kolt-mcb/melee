@@ -404,6 +404,11 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
             "-C", "Graphics.Settings.InternalResolution=1"]
     if DOLPHIN_USER:
         argv += ["-u", DOLPHIN_USER]
+    # MELEE_DOLPHIN_VIDEO=Null (say): the emulator's video backend. The
+    # console is the oracle, so a backend is only usable once a full grid has
+    # given the same verdicts with it as with the default.
+    if os.environ.get("MELEE_DOLPHIN_VIDEO"):
+        argv += ["-v", os.environ["MELEE_DOLPHIN_VIDEO"]]
     # Tile the two windows rather than letting both land wherever the window
     # manager puts them -- the point of watching a lockstep run is seeing the
     # same frame twice, next to each other. Dolphin on the left, the port on
@@ -494,6 +499,13 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
         env["MELEE_FAKE_RTC"] = str(case.get("fake_rtc", GC_DEFAULT_RTC))
         if not headless:
             env["MELEE_WINDOW_POS"] = "%d,%d" % TILE_RIGHT
+        else:
+            # Nobody is looking, and the comparison reads game state, never a
+            # pixel: skip the GPU work (src/port/pc_glq.h). With it, a sweep
+            # was bound by one card's per-frame GL work and took the same
+            # time at 8 shards as at 24. MELEE_LOCKSTEP_RENDER=1 keeps it.
+            if os.environ.get("MELEE_LOCKSTEP_RENDER") != "1":
+                env.setdefault("MELEE_NORENDER", "1")
         port_out = open(os.path.join(dbg, "port.log"), "w") if dbg \
             else subprocess.DEVNULL
         # MELEE_PORT_BIN compares a different build against the console -- the

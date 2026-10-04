@@ -48,6 +48,14 @@ static struct { void (*fn)(void*); unsigned n; } q_sync_tab[32];
 int pc_glq_active;
 GLuint pc_glq_default_fb;
 int pc_glq_sync_all;
+int pc_norender;
+/* Read before main: the first GL call can come from any start-up path. */
+__attribute__((constructor)) static void pc_norender_init(void)
+{
+    const char* e = getenv("MELEE_NORENDER");
+    pc_norender = e != NULL && strcmp(e, "0") != 0;
+    if (pc_norender) fprintf(stderr, "[NORENDER] GPU work skipped: no draws, clears, readbacks or presents\n");
+}
 
 /* ---- breadcrumb and MELEE_GLTIME ------------------------------------- */
 const char* volatile pc_gl_crumb_fn;
@@ -621,7 +629,7 @@ void pc_glq_swap(void* win)
      * the context; the game thread resumes instead. */
     if (!pc_gxq_active && atomic_load(&q_want_resume)) pc_glq_resume();
     if (!pc_glq_active) {
-        SDL_GL_SwapWindow((SDL_Window*) win);
+        if (!pc_norender) SDL_GL_SwapWindow((SDL_Window*) win);
         return;
     }
     {

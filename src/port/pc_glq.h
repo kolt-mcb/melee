@@ -14,6 +14,11 @@
  * thread only; the render thread never reads it. */
 extern int pc_glq_active;
 extern int pc_glq_sync_all; /* MELEE_GLQ_SYNC_ALL: a diagnostic */
+/* MELEE_NORENDER=1: the GPU work is skipped -- draws, clears, blits, readbacks,
+ * glFinish and the present (tools/gen_glq.py, NORENDER). For the lockstep,
+ * which compares game state and never a pixel: sixteen shards rendering held
+ * a GPU at its limit and set the pace of the whole sweep. */
+extern int pc_norender;
 
 void* pc_glq_push(void (*fn)(void*), size_t bytes);
 void pc_glq_commit(void);
