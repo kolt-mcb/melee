@@ -61,7 +61,18 @@ struct grKongo_YakumonoParam {
     f32 unk78;
     f32 unk7C;
     f32 unk80;
+#if BUILD_TARGET_PC
+    /* An archive offset, not a pointer: its two readers hand it to
+     * GR_COLOR_SCRIPT, which takes a u32. Declared void* it was eight bytes
+     * at an eight-byte boundary, and every field after it -- the rope
+     * bridge's spring, clamp and impulse (unk90..unkB8) and the sinking
+     * logs' timers (unk88, unk8C) -- read the block eight bytes late: the
+     * bridge's planks sat pinned at their clamp and never swayed, so every
+     * fighter standing on it was at the wrong height on match frame 1. */
+    u32 unk84;
+#else
     void* unk84;
+#endif
     f32 unk88;
     f32 unk8C;
     f32 unk90;
@@ -76,6 +87,14 @@ struct grKongo_YakumonoParam {
     f32 unkB4;
     f32 unkB8;
 };
+#if BUILD_TARGET_PC
+/* The block is the archive's bytes, swapped in place (pc_yakumono_convert_layout),
+ * so this struct must keep the console's offsets. */
+_Static_assert(offsetof(struct grKongo_YakumonoParam, unk88) == 0x88,
+               "grKongo_YakumonoParam must keep the archive's layout");
+_Static_assert(offsetof(struct grKongo_YakumonoParam, unkB8) == 0xB8,
+               "grKongo_YakumonoParam must keep the archive's layout");
+#endif
 
 extern const grKg_SplineChoiceList grKg_803B7FD4;
 
