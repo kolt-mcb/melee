@@ -159,7 +159,7 @@ def make_case(c0, c1, stage_kind):
 # that ended before the barrier engaged agreed with nothing.
 IDENTICAL_RE = re.compile(r"IDENTICAL on every compared frame")
 DIVERGE_RE = re.compile(r"match frame (\d+)\s+(\S+)\s+port")
-NOMATCH_RE = re.compile(r"NO FRAMES COMPARED")
+NOMATCH_RE = re.compile(r"NO FRAMES COMPARED|ROUTE NEVER REACHED A MATCH")
 # A side that exited is not a side that disagreed. Its last values are whatever
 # was in memory as it fell over, so this outranks the divergence it looks like.
 DIED_RE = re.compile(r"SIDE DIED: (\S+) exited rc=(-?\d+)")

@@ -82,6 +82,12 @@ SOCK = os.environ.setdefault("MELEE_LOCKSTEP_SOCK", "/tmp/pc_lockstep.sock")
 # what actually happens and reported if it moves.
 PORT_MATCH_START = 134
 
+# Frames past the route's own match estimate (its last press + 200) before a
+# run with no match frame on either side is called stranded. The console's
+# match load is 185 frames, so a route that worked has long since produced
+# match frame 1 by then.
+NO_MATCH_GRACE = 600
+
 
 class Side:
     """One game, at the other end of a socket, stopped at the end of a frame."""
@@ -841,6 +847,22 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
             while pending and pending[0][0] <= clock:
                 _, pad, cmd = pending.pop(0)
                 pads.send(pad, cmd)
+
+            # Every press has gone in, the route's own estimate of the match
+            # is long past, and neither side has a match frame: the route
+            # stranded both in the menus, and nothing more is coming that
+            # could get them out. Without this the two step through the
+            # character select together until the sweep's per-cell timeout
+            # kills them -- 900 s for each of Roy's 29 cells, two of a full
+            # sweep's hours spent learning nothing.
+            if locked and not pending and pg == 0 and rg == 0 \
+                    and clock > route["match_frame"] + NO_MATCH_GRACE:
+                print("   ROUTE NEVER REACHED A MATCH: console frame %d since "
+                      "the rendezvous, the route expected one by %d; mode "
+                      "port %s console %s"
+                      % (clock, route["match_frame"], port.row["mode"],
+                         ref.row["mode"]))
+                return 1
 
             if pg > 0 and port_match_start is None:
                 port_match_start = int(port.row["frame"]) - pg + 1
