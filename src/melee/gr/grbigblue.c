@@ -4680,6 +4680,11 @@ s32 grBigBlue_801EDF44(Ground_GObj* gobj, s32 index)
 s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
 {
     s32 result = 0;
+    /* Car slots are reached through GRBB_CAR_BASE(gp) -- gp itself on the
+     * console, the union's real address here. Case 1 already did; the other
+     * cases wrote a respawned car's countdown and state through (u8*) gp, so
+     * they landed in Ground's own fields and the car kept its old countdown:
+     * a car respawned at match frame 367 that the console's does not. */
     Ground* gp = gobj->user_data;
     Vec3 pos;
     PAD_STACK(12);
@@ -4719,7 +4724,7 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
     case 10: {
         s32 offset = arg1 << 6;
         {
-            u8* base = (u8*) gp + offset;
+            u8* base = GRBB_CAR_BASE(gp) + offset;
             *(s32*) (base + 0xF0) = 0x14;
         }
         {
@@ -4728,13 +4733,13 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
             register u8 byte;
             st_val = arg2;
             result = 1;
-            byte = ((u8*) gp)[d4_off];
+            byte = GRBB_CAR_BASE(gp)[d4_off];
 #ifdef MWERKS_GEKKO
             asm { rlwimi byte, st_val, 2, 24, 29 }
 #else
             byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
-            ((u8*) gp)[d4_off] = byte;
+            GRBB_CAR_BASE(gp)[d4_off] = byte;
         }
         break;
     }
@@ -4769,7 +4774,7 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
         {
             s32 offset = arg1 << 6;
             {
-                u8* base = (u8*) gp + offset;
+                u8* base = GRBB_CAR_BASE(gp) + offset;
                 *(s32*) (base + 0xF0) = lo;
             }
             {
@@ -4778,13 +4783,13 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
                 register u8 byte;
                 st_val = arg2;
                 result = 1;
-                byte = ((u8*) gp)[d4_off];
+                byte = GRBB_CAR_BASE(gp)[d4_off];
 #ifdef MWERKS_GEKKO
                 asm { rlwimi byte, st_val, 2, 24, 29 }
 #else
                 byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
-                ((u8*) gp)[d4_off] = byte;
+                GRBB_CAR_BASE(gp)[d4_off] = byte;
             }
         }
         break;
@@ -5107,7 +5112,7 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
     case 8: {
         s32 offset = arg1 << 6;
         {
-            u8* base = (u8*) gp + offset;
+            u8* base = GRBB_CAR_BASE(gp) + offset;
             *(s32*) (base + 0xF0) = 0x3E8;
         }
         {
@@ -5116,13 +5121,13 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
             register u8 byte;
             st_val = arg2;
             result = 1;
-            byte = ((u8*) gp)[d4_off];
+            byte = GRBB_CAR_BASE(gp)[d4_off];
 #ifdef MWERKS_GEKKO
             asm { rlwimi byte, st_val, 2, 24, 29 }
 #else
             byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
-            ((u8*) gp)[d4_off] = byte;
+            GRBB_CAR_BASE(gp)[d4_off] = byte;
         }
         break;
     }
@@ -5132,13 +5137,13 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
         register s32 st_val;
         register u8 byte;
         st_val = arg2;
-        byte = ((u8*) gp)[d4_off];
+        byte = GRBB_CAR_BASE(gp)[d4_off];
 #ifdef MWERKS_GEKKO
         asm { rlwimi byte, st_val, 2, 24, 29 }
 #else
         byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
-        ((u8*) gp)[d4_off] = byte;
+        GRBB_CAR_BASE(gp)[d4_off] = byte;
         break;
     }
     }
