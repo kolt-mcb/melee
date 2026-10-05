@@ -1839,6 +1839,14 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
      * mpJointHide left the stage with no floor. GRBB_CAR_BASE is a plain cast
      * on the console. */
     u8* bp = GRBB_CAR_BASE(gp);
+    /* bp is already the rebased base. This function -- and
+     * grBigBlue_801ECB50 -- used to index it as GRBB_CAR_BASE(bp) + off, which
+     * is bp on the console and bp plus the rebase a second time here: the
+     * ship's timer, height and speed were kept 0x3C-odd bytes past where its
+     * state byte and its initialiser put them. Read back from there, the
+     * timer was 0 on the first frame of state 2, so the Falcon Flyer took off
+     * at once and carried the fighters with it, where the console's waits
+     * 900 frames. */
     PAD_STACK(76);
 
     HSD_JObjGetTranslation2(jobj, &pos);
@@ -1932,8 +1940,8 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
                         HSD_ASSERT(1739, 0);
                     }
                     HSD_JObjSetTranslate(jobj, &pos);
-                    *(f32*) (GRBB_CAR_BASE(bp) + 0xD0) = pos.y;
-                    *(f32*) (GRBB_CAR_BASE(bp) + 0xD8) = yakumono_param->xD0;
+                    *(f32*) (bp + 0xD0) = pos.y;
+                    *(f32*) (bp + 0xD8) = yakumono_param->xD0;
                     HSD_JObjClearFlagsAll(jobj, JOBJ_HIDDEN);
                     bp[0xC4] = 1;
                 }
@@ -1943,8 +1951,8 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
     }
     case 1:
         if (pos.x > 0.0f) {
-            *(f32*) (GRBB_CAR_BASE(bp) + 0xD8) = 0.0f;
-            *(s32*) (GRBB_CAR_BASE(bp) + 0xC8) = (s32) yakumono_param->xD8;
+            *(f32*) (bp + 0xD8) = 0.0f;
+            *(s32*) (bp + 0xC8) = (s32) yakumono_param->xD8;
             bp[0xC4] = 2;
         } else {
             f32 speed2 = 140.0f * Ground_801C0498();
@@ -1955,21 +1963,21 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
                                    BB_FMA(60.0f, Ground_801C0498(), 30.0f),
                                    140.0f * Ground_801C0498()) != 0)
             {
-                *(f32*) (GRBB_CAR_BASE(bp) + 0xD8) = 0.0f;
+                *(f32*) (bp + 0xD8) = 0.0f;
             } else {
-                *(f32*) (GRBB_CAR_BASE(bp) + 0xD8) = yakumono_param->xD0;
+                *(f32*) (bp + 0xD8) = yakumono_param->xD0;
             }
         }
         goto block_76;
     case 2: {
-        s32 timer = *(s32*) (GRBB_CAR_BASE(bp) + 0xC8);
+        s32 timer = *(s32*) (bp + 0xC8);
         if (timer <= 0) {
             u8* mgp = GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data);
             s32 ctr = 3;
             s32 idx = 0;
             u8* p = mgp;
 
-            *(f32*) (GRBB_CAR_BASE(bp) + 0xD8) = yakumono_param->xD0;
+            *(f32*) (bp + 0xD8) = yakumono_param->xD0;
             bp[0xC4] = 3;
 
         route_loop:
@@ -1986,14 +1994,14 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
                 }
             }
         } else {
-            *(s32*) (GRBB_CAR_BASE(bp) + 0xC8) = timer - 1;
+            *(s32*) (bp + 0xC8) = timer - 1;
         }
         goto block_76;
     }
     case 3:
         if (pos.x > (50.0f + Stage_GetBlastZoneRightOffset())) {
             GRBB_HIDE(jobj);
-            *(f32*) (GRBB_CAR_BASE(bp) + 0xD8) = 0.0f;
+            *(f32*) (bp + 0xD8) = 0.0f;
             *(s32*) (GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data) + 0xCC) = 0;
             {
                 u8* mgp2 = (u8*) Ground_GetMapGObj(32)->user_data;
@@ -2002,7 +2010,7 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
                 }
                 *(s32*) (mgp2 + 0xC8) = 1;
             }
-            *(f32*) (GRBB_CAR_BASE(bp) + 0xCC) = 0.0f;
+            *(f32*) (bp + 0xCC) = 0.0f;
             HSD_JObjSetRotationZ(jobj, 0.0f);
             bp[0xC4] = 0;
         }
@@ -2019,22 +2027,22 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
         f32 check_h;
 
         target_z = euler.z;
-        *(f32*) (GRBB_CAR_BASE(bp) + 0xCC) = target_z;
+        *(f32*) (bp + 0xCC) = target_z;
         cur_z = HSD_JObjGetRotationZ(jobj);
-        if (cur_z < *(f32*) (GRBB_CAR_BASE(bp) + 0xCC)) {
+        if (cur_z < *(f32*) (bp + 0xCC)) {
             delta = 0.017453292f *
-                    (yakumono_param->xD4 * (*(f32*) (GRBB_CAR_BASE(bp) + 0xCC) - cur_z));
+                    (yakumono_param->xD4 * (*(f32*) (bp + 0xCC) - cur_z));
             HSD_JObjAddRotationZ(jobj, delta);
-            if (HSD_JObjGetRotationZ(jobj) >= *(f32*) (GRBB_CAR_BASE(bp) + 0xCC)) {
-                HSD_JObjSetRotationZ(jobj, *(f32*) (GRBB_CAR_BASE(bp) + 0xCC));
+            if (HSD_JObjGetRotationZ(jobj) >= *(f32*) (bp + 0xCC)) {
+                HSD_JObjSetRotationZ(jobj, *(f32*) (bp + 0xCC));
             }
         } else {
             delta = 0.017453292f *
                     (yakumono_param->xD4 *
-                     (*(f32*) (GRBB_CAR_BASE(bp) + 0xCC) - HSD_JObjGetRotationZ(jobj)));
+                     (*(f32*) (bp + 0xCC) - HSD_JObjGetRotationZ(jobj)));
             HSD_JObjAddRotationZ(jobj, delta);
-            if (HSD_JObjGetRotationZ(jobj) <= *(f32*) (GRBB_CAR_BASE(bp) + 0xCC)) {
-                HSD_JObjSetRotationZ(jobj, *(f32*) (GRBB_CAR_BASE(bp) + 0xCC));
+            if (HSD_JObjGetRotationZ(jobj) <= *(f32*) (bp + 0xCC)) {
+                HSD_JObjSetRotationZ(jobj, *(f32*) (bp + 0xCC));
             }
         }
 
@@ -2050,15 +2058,15 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
         check_h = grBigBlue_801EC58C(&check_pos, NULL, 500.0f);
         if (bound_y <= check_h) {
             if (check_h == -3.4028235e38f) {
-                *(f32*) (GRBB_CAR_BASE(bp) + 0xD0) = fwd.y;
+                *(f32*) (bp + 0xD0) = fwd.y;
             } else {
-                *(f32*) (GRBB_CAR_BASE(bp) + 0xD0) = check_h + yakumono_param->xCC;
+                *(f32*) (bp + 0xD0) = check_h + yakumono_param->xCC;
             }
         } else {
-            *(f32*) (GRBB_CAR_BASE(bp) + 0xD0) = bound_y + yakumono_param->xCC;
+            *(f32*) (bp + 0xD0) = bound_y + yakumono_param->xCC;
         }
 
-        target_y = *(f32*) (GRBB_CAR_BASE(bp) + 0xD0);
+        target_y = *(f32*) (bp + 0xD0);
         diff_y = pos.y - target_y;
         if (diff_y < 0.0f) {
             diff_y = -diff_y;
@@ -2078,7 +2086,7 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
         }
         pos.y += vy;
 
-        HSD_JObjAddTranslationX(jobj, *(f32*) (GRBB_CAR_BASE(bp) + 0xD8));
+        HSD_JObjAddTranslationX(jobj, *(f32*) (bp + 0xD8));
         HSD_JObjSetTranslateY(jobj, pos.y);
         break;
     }
@@ -3927,9 +3935,9 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
             {
                 u32 st = (bp[0xD4] >> 2) & 0x3F;
                 if ((st == 7 &&
-                     *(f32*) (GRBB_CAR_BASE(bp) + 0xE0) < *(f32*) (target_car + 0xE0)) ||
+                     *(f32*) (bp + 0xE0) < *(f32*) (target_car + 0xE0)) ||
                     (st == 8 &&
-                     *(f32*) (GRBB_CAR_BASE(bp) + 0xE0) > *(f32*) (target_car + 0xE0)))
+                     *(f32*) (bp + 0xE0) > *(f32*) (target_car + 0xE0)))
                 {
                     byte = bp[0xD4];
 #ifdef MWERKS_GEKKO
@@ -3944,9 +3952,9 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
             {
                 u32 st = (bp[0x114] >> 2) & 0x3F;
                 if ((st == 7 &&
-                     *(f32*) (GRBB_CAR_BASE(bp) + 0x120) < *(f32*) (target_car + 0xE0)) ||
+                     *(f32*) (bp + 0x120) < *(f32*) (target_car + 0xE0)) ||
                     (st == 8 &&
-                     *(f32*) (GRBB_CAR_BASE(bp) + 0x120) > *(f32*) (target_car + 0xE0)))
+                     *(f32*) (bp + 0x120) > *(f32*) (target_car + 0xE0)))
                 {
                     byte = bp[0x114];
 #ifdef MWERKS_GEKKO
@@ -3998,8 +4006,8 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
     /* Timer-based car spawn */
     {
         u8* bp = GRBB_CAR_BASE(gp);
-        s16 timer = *(s16*) (GRBB_CAR_BASE(bp) + 0xD0);
-        *(s16*) (GRBB_CAR_BASE(bp) + 0xD0) = timer - 1;
+        s16 timer = *(s16*) (bp + 0xD0);
+        *(s16*) (bp + 0xD0) = timer - 1;
         if (timer < 0) {
             active_count = -1;
             if ((u32) ((bp[0xD4] >> 2) & 0x3F) == 1) {
@@ -4087,7 +4095,7 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
                                         tmin += HSD_Randi(diff);
                                     }
                                 }
-                                *(s16*) (GRBB_CAR_BASE(bp) + 0xD0) = (s16) tmin;
+                                *(s16*) (bp + 0xD0) = (s16) tmin;
                                 return;
                             }
                             return;
@@ -4123,7 +4131,7 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
                                         tmin += HSD_Randi(diff);
                                     }
                                 }
-                                *(s16*) (GRBB_CAR_BASE(bp) + 0xD0) = (s16) tmin;
+                                *(s16*) (bp + 0xD0) = (s16) tmin;
                                 return;
                             }
                             return;
