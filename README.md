@@ -64,12 +64,17 @@ screen. See **[port-android.md](port-android.md)**.
 ### WebAssembly
 
 ```sh
-EMSDK=/path/to/emsdk python3 configure_pc.py && ninja -f build.ninja.wasm
+tools/wasm/stage_assets.sh                       # your extraction, minus movies and music
+WASM_ASSETS=$PWD/build/wasm/stage WASM_LINK=1 EMSDK=/path/to/emsdk \
+    python3 configure_pc.py && ninja -f build.ninja.wasm
+python3 -m http.server -d build/wasm 8000 --bind 127.0.0.1   # open /melee.html
 ```
 
 This one is a bring-up rather than a way to play: it compiles, links, boots
-and renders over WebGL2. Assets stay user-supplied there too — the page reads
-an extraction you point it at, never a hosted copy. The plan, and what the
+and runs its frame loop over WebGL2. Without `WASM_LINK=1` it builds objects
+only. Assets stay user-supplied there too — today they are packaged into the
+local page from your own extraction (never a hosted copy, and never
+committed); reading a folder you point the page at is the plan. The plan, and what the
 wasm toolchain's stricter type checking found in code the desktop had been
 running for months, are in **[port-wasm.md](port-wasm.md)**.
 
