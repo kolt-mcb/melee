@@ -239,6 +239,14 @@ static void* gcn_ptr_to_x64(u32 gcn_ptr, u8* dataBase)
  * Returns the converted UnkStageDat pointer. */
 static void grdat_resolve_pobj_joints(void);
 static HSD_Joint* grdat_jointmap_find(u32 offset);
+#define GRDAT_MAX_AOBJ_TARGETS 512
+static struct {
+    const HSD_AObjDesc* desc;
+    u32 offset;        /* the archive offset obj_id named */
+    HSD_Joint* joint;  /* resolved when this archive's conversion ends */
+} g_grdat_aobj_targets[GRDAT_MAX_AOBJ_TARGETS];
+static int g_grdat_aobj_targets_n;
+static int g_grdat_aobj_resolved_n; /* entries [0, this) are settled */
 
 static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gcnDat, u8* dataBase)
 {
@@ -895,6 +903,19 @@ HSD_AObjDesc* grDatFiles_ConvertAObjDescGCNtoX64(const u8* gcnPtr, u8* dataBase)
         ? grDatFiles_ConvertFObjDescGCNtoX64(dataBase + fobj_off, dataBase, 0)
         : NULL;
     x64->obj_id = be32_swap(gcn->obj_id);
+    /* Resolved at the end of this archive's conversion, not here: the joint
+     * obj_id names is usually part of a model tree converted later in the
+     * same pass, and it has to be that very joint -- the stage instantiates
+     * it under its scaled root, and a path track's world position is the
+     * spline joint's matrix times the point (HSD_JObjSetupMatrixSub). */
+    if (x64->obj_id != 0 && x64->obj_id < PC_ARCHIVE_MAX_OFFSET &&
+        g_grdat_aobj_targets_n < GRDAT_MAX_AOBJ_TARGETS)
+    {
+        g_grdat_aobj_targets[g_grdat_aobj_targets_n].desc = x64;
+        g_grdat_aobj_targets[g_grdat_aobj_targets_n].offset = x64->obj_id;
+        g_grdat_aobj_targets[g_grdat_aobj_targets_n].joint = NULL;
+        g_grdat_aobj_targets_n++;
+    }
 
     return x64;
 }
@@ -1423,6 +1444,26 @@ static HSD_Joint* grdat_jointmap_find(u32 offset)
     return NULL;
 }
 
+/* An AObjDesc's obj_id names the joint its track drives -- for an
+ * HSD_A_J_PATH track, the spline joint it follows -- by its address in the
+ * archive: here, an offset. The offset map above is cleared between archives
+ * (grDatFiles_ResetJointMap), so it cannot answer when the animation is
+ * instanced later; the joint is resolved while this archive converts and kept
+ * here against its descriptor. HSD_AObjLoadDesc asks for it where the original
+ * loads the joint from obj_id directly. */
+
+
+HSD_Joint* grDatFiles_AObjDescTarget(const HSD_AObjDesc* desc)
+{
+    int i;
+    for (i = 0; i < g_grdat_aobj_targets_n; i++) {
+        if (g_grdat_aobj_targets[i].desc == desc) {
+            return g_grdat_aobj_targets[i].joint;
+        }
+    }
+    return NULL;
+}
+
 /* PC port: pending envelope-desc joint refs (offset -> x64 HSD_Joint*),
  * resolved in grdat_resolve_pobj_joints once the whole tree is converted. */
 #define GRDAT_MAX_ENVPENDING 32768
@@ -1661,6 +1702,15 @@ void grDatFiles_ResolvePObjJoints(void)
  * archives avoids the collisions without touching that path. */
 void grDatFiles_ResetJointMap(void)
 {
+    /* Settle the AObjDescs this archive named joints from while its offset
+     * map still answers for it. */
+    for (; g_grdat_aobj_resolved_n < g_grdat_aobj_targets_n;
+         g_grdat_aobj_resolved_n++)
+    {
+        int i = g_grdat_aobj_resolved_n;
+        g_grdat_aobj_targets[i].joint =
+            grdat_jointmap_find(g_grdat_aobj_targets[i].offset);
+    }
     g_grdat_jointmap_n = 0;
     g_grdat_imgmap_n = 0;
     g_grdat_pobjpending_n = 0;

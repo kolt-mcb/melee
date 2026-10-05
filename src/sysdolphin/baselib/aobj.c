@@ -238,8 +238,37 @@ HSD_AObj* HSD_AObjLoadDesc(HSD_AObjDesc* aobjdesc)
             if (hsd_obj != NULL) {
                 ref_INC(hsd_obj);
             } else {
+#if BUILD_TARGET_PC
+                /* obj_id is the joint's address in the archive -- on this
+                 * target an archive offset, not a pointer; grdatfiles.c
+                 * resolves it while converting (grDatFiles_AObjDescTarget). A path track's spline joint is often referenced
+                 * only from here, never loaded as part of a tree, so the
+                 * lookup above misses and the original loads it from that
+                 * address. Passing the offset as a pointer loaded nothing,
+                 * the track had no spline to follow, and Yoshi's Story's
+                 * Randall never left his first position: the CPU's ray
+                 * found a floor under x -91 that the console's cloud had
+                 * moved away from, and eleven Story cells parted on aihash. */
+                extern HSD_Joint* grDatFiles_AObjDescTarget(
+                    const HSD_AObjDesc* desc);
+                HSD_Joint* joint = grDatFiles_AObjDescTarget(aobjdesc);
+                phi_r30 = NULL;
+                if (joint != NULL) {
+                    /* The live instance first, as the original's lookup by
+                     * id finds it: every loaded JObj is registered under its
+                     * joint (HSD_JObjLoadJoint). Only a joint no tree loaded
+                     * gets one of its own. */
+                    phi_r30 = HSD_IDGetDataFromTable(0, (HSD_IDKey) joint, 0);
+                    if (phi_r30 != NULL) {
+                        ref_INC(phi_r30);
+                    } else {
+                        phi_r30 = (HSD_Obj*) HSD_JObjLoadJoint(joint);
+                    }
+                }
+#else
                 phi_r30 =
                     (HSD_Obj*) HSD_JObjLoadJoint((void*) aobjdesc->obj_id);
+#endif
             }
             if (aobj != NULL) {
                 if (aobj->hsd_obj != NULL) {
