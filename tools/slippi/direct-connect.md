@@ -473,3 +473,48 @@ runs at the *end* of `StartSlippiGame`, which is reached from `handleOnlineInput
 when a game begins -- it clears selections for the next game, not for this one.
 Treat the earlier paragraph as unverified until the input problem is fixed and
 a run can be watched from both ends.
+
+### The match plays to the end of the window (2026-10-05)
+
+    SLIPPI_PORT_ENV=SDL_VIDEODRIVER=offscreen SLIPPI_PRESS=1 SLIPPI_NOLOCK=1 \
+        tools/slippi/direct_vs.sh 150
+
+now runs a match against Slippi's own emulator for the whole window: 7,219
+frames, about 7,000 pads each way with every one acknowledged, one stall in
+total (about a second, at the start), and Slippi's own desync check passing on
+every frame. Four things stood between the last entry and that, and the
+"burst-stall" question above turned out to be three of them:
+
+- **The port's window was being throttled.** Run with a real window behind the
+  emulator's, a Wayland compositor throttles a covered, vsynced window to about
+  one frame per second -- the port's stage load took minutes, which read as the
+  port hanging on match frame 0. `SDL_VIDEODRIVER=offscreen` for the port side.
+- **The frame offset was measured, and wrong.** Both sides number the match
+  from its own frame 1, so the offset is zero. Measuring it from "where this
+  side is when the peer's first pad arrives" only made sense when this side
+  counted from the selection exchange; on a faster machine the emulator's pads
+  arrived while the port was still loading and it adopted -1, then -9, and the
+  two sides deadlocked.
+- **Slippi ended the game as a no-contest within two seconds.** The PAD
+  message's checksum field carried this port's own state hash. Slippi compares
+  that field with its own FN_COMPUTE_CHECKSUM (StartEngineLoop.asm) and, on a
+  mismatch in positions and percents, prints DESYNC DETECTED and ends the game
+  (GameEndMethod 7 in the report; `LRASInitiator: 0` is the default, not a
+  quit). The port now computes Slippi's checksum (`slp_checksum` in
+  pc_netplay.c). Negative control: adding 500 to it ends the game at frame 94,
+  so the comparison is real; with the true value it passes for 7,000 frames.
+- **The port's hash message used 0x84,** Slippi's CHAT_MESSAGE id: the emulator
+  read every hash as a chat request. It is 0xF0 now, which Slippi ignores.
+
+Also: the harness takes its emulator, ISO and port build from the repository
+(`extern/slippi/Ishiiruka/build`, the root `.iso`, `build/slippi` --
+`PC_SLIPPI=1 PC_NETPLAY=1 PC_BUILD_NAME=slippi`), adds `build/lib` beside a
+copied emulator to `LD_LIBRARY_PATH`, saves the replay beside the logs, and
+takes `SLIPPI_PORT_ENV` for the port and `SLIPPI_TS=1` to timestamp its log.
+
+**What this does not yet show** is the two sides playing the *same* match in
+every detail: the port boots Marth vs Marth from MELEE_BOOT_MATCH while the
+emulator plays whichever character its presses land on, and Slippi's check
+covers only positions and percents within a tolerance. Next: apply the peer's
+MATCH_SELECTIONS (character, stage) on the port, then compare the replay
+against the port's own trace frame by frame.

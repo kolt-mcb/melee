@@ -26,8 +26,17 @@
 set -u
 
 ROOT=$(cd -- "$(dirname -- "$0")/../.." && pwd)
-EMUDIR=${SLIPPI_EMU_DIR:-/home/grunt/melee/extern/slippi/Ishiiruka/build/Binaries}
-ISO=${SLIPPI_ISO:-"/home/grunt/brashmos/Super Smash Bros. Melee (USA) (En,Ja) (v1.02).iso"}
+EMUDIR=${SLIPPI_EMU_DIR:-$ROOT/extern/slippi/Ishiiruka/build/Binaries}
+# The disc image: SLIPPI_ISO, else MELEE_ISO (what the lockstep uses), else the
+# first .iso in the repository root (gitignored -- it is the player's own).
+ISO=${SLIPPI_ISO:-${MELEE_ISO:-$(ls "$ROOT"/*.iso 2>/dev/null | head -1)}}
+# The port side needs Slippi and netplay compiled in, which the lockstep's
+# build/pc does not have: PC_SLIPPI=1 PC_NETPLAY=1 PC_BUILD_NAME=slippi.
+PORTBIN=${SLIPPI_PORT_BIN:-$ROOT/build/slippi/melee-pc}
+# Libraries the emulator was linked against that this machine's distribution
+# does not ship (older FFmpeg, SFML, mbedTLS, the Rust extension), kept beside
+# the build when it was copied from another machine.
+[ -d "$EMUDIR/../lib" ] && export LD_LIBRARY_PATH="$(cd "$EMUDIR/../lib" && pwd)${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 RUNFOR=${1:-70}
 
 PORT_PORT=51450          # the port listens here
@@ -36,6 +45,10 @@ PIPE=$EMUDIR/User/Pipes/slp1
 OUT=${SLIPPI_OUT:-$ROOT/build/pc/slippi-direct}
 mkdir -p "$OUT"
 
+if [ ! -x "$PORTBIN" ]; then
+    echo "no Slippi port build at $PORTBIN -- PC_SLIPPI=1 PC_NETPLAY=1 PC_BUILD_NAME=slippi python3 configure_pc.py && ninja -f build.ninja.slippi" >&2
+    exit 1
+fi
 if [ ! -x "$EMUDIR/dolphin-emu" ]; then
     echo "no emulator at $EMUDIR/dolphin-emu -- see tools/slippi/direct-connect.md" >&2
     exit 1
@@ -55,9 +68,9 @@ SLIPPI_ONLINE = True
 EOF
 # The pad config is the one the rest of this repo's Dolphin work uses, with the
 # pipe renamed so a lockstep run and this one cannot write to each other's.
-if [ -f /home/grunt/.config/dolphin-emu/GCPadNew.ini ]; then
+if [ -f "$HOME/.config/dolphin-emu/GCPadNew.ini" ]; then
     sed 's|^Device = Pipe/0/brash$|Device = Pipe/0/slp1|' \
-        /home/grunt/.config/dolphin-emu/GCPadNew.ini > "$EMUDIR/User/Config/GCPadNew.ini"
+        "$HOME/.config/dolphin-emu/GCPadNew.ini" > "$EMUDIR/User/Config/GCPadNew.ini"
 fi
 # Port 1 has to be an emulated standard controller. This build ships
 # SIDevice0 = 12, the Wii U GameCube adapter -- a real USB device -- and with
@@ -73,6 +86,11 @@ sed -i "s/^SIDevice1 = .*/SIDevice1 = 6/" "$EMUDIR/User/Config/Dolphin.ini"
 # is polled and every value is thrown away: the pipe is read, the device is
 # there, the log says nothing, and the cursor simply never moves.
 sed -i "s/^BackgroundInput = .*/BackgroundInput = True/" "$EMUDIR/User/Config/Dolphin.ini"
+# Replays land beside this run's logs, not in whichever home directory the
+# emulator build was configured on -- a .slp of the run is the one record of
+# what each side actually sent (tools/slippi/slp_inputs.py reads it).
+mkdir -p "$OUT/replays"
+sed -i "s|^SlippiReplayDir = .*|SlippiReplayDir = $OUT/replays|" "$EMUDIR/User/Config/Dolphin.ini"
 rm -f "$PIPE"; mkfifo "$PIPE"
 : > "$EMUDIR/User/Logs/dolphin.log"
 
@@ -102,7 +120,13 @@ EMU=$!
   MELEE_NET_PORT=$PORT_PORT MELEE_NET_PLAYERS=2 \
   MELEE_NET_PEERS=127.0.0.1:$PORT_PORT,127.0.0.1:$EMU_PORT \
   MELEE_BOOT_MODE=14 MELEE_BOOT_MATCH=9,9,31 \
-  timeout -k 10 "$RUNFOR" ./build/pc/melee-pc ) > "$OUT/port.out" 2>&1 &
+  env ${SLIPPI_PORT_ENV:-} timeout -k 10 "$RUNFOR" "$PORTBIN" 2>&1 |
+  # SLIPPI_TS=1 stamps every line with wall-clock time, which is what lines the
+  # port's log up against the emulator's (whose lines carry mm:ss:ms).
+  if [ -n "${SLIPPI_TS:-}" ]; then
+      python3 -u -c 'import sys,time
+for l in sys.stdin: sys.stdout.write(time.strftime("%M:%S:")+"%03d "%(time.time()%1*1000)+l)'
+  else cat; fi ) > "$OUT/port.out" 2>&1 &
 PRT=$!
 
 # --- wait ---------------------------------------------------------------

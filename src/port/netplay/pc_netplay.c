@@ -97,7 +97,12 @@
  * only the four message types above and drops everything else without a word.
  * So the desync detector transmitted every hash and compared none of them, and
  * "no desync" on this path meant only that nothing had been checked. */
-#define SLP_MSG_HASH 0x84u
+/* Not 0x84: that is Slippi's own NP_MSG_SLIPPI_CHAT_MESSAGE, and a Slippi
+ * Dolphin peer read every hash as a chat request ("Received chat message from
+ * opponent 0: 10, 20, ..." -- the frame number taken as the message index).
+ * Slippi's ids are 0x80..0x86 and anything else is logged and ignored, so the
+ * port's own extension lives well clear of them. */
+#define SLP_MSG_HASH 0xF0u
 #define SLP_PAD_BYTES 8   /* SLIPPI_PAD_DATA_SIZE */
 #define SLP_MAX_PADS 64   /* keeps a packet inside one datagram */
 
@@ -351,6 +356,11 @@ static long net_timeout_ms = 15000;
 #define NET_HASH_RING 256
 static s32 net_hash_frame[NET_HASH_RING];
 static u32 net_hash_val[NET_HASH_RING];
+/* Slippi's own checksum of the same frames, for the PAD message's checksum
+ * field (slp_send_inputs). Kept apart from net_hash_val: a Slippi peer runs
+ * FN_COMPUTE_CHECKSUM, not this port's hash, and treats a mismatch in it as a
+ * desync -- see slp_checksum. */
+static u32 slp_cs_val[NET_HASH_RING];
 /* And the peer's, because whichever side is behind receives a hash for a
  * frame it has not reached yet. Without this only the leading side ever
  * notices a desync, which is a confusing way to find out. */
@@ -1150,8 +1160,10 @@ static void slp_send_inputs(s32 newest)
     put_u8(buf + 5, (unsigned) net_slot);
     /* Both frame numbers go out on the peer's clock. */
     put_u32(buf + 6, (unsigned) (net_hashed - slp_frame_offset));
-    put_u32(buf + 10, net_hashed > 0 ? net_hash_val[net_hashed &
-                                                    (NET_HASH_RING - 1)] : 0);
+    /* Slippi's checksum, not this port's hash: the peer compares it with its
+     * own FN_COMPUTE_CHECKSUM and ends the game on a mismatch. */
+    put_u32(buf + 10, net_hashed > 0 ? slp_cs_val[net_hashed &
+                                                  (NET_HASH_RING - 1)] : 0);
     /* The oldest frame any player still has not confirmed: with more than two
      * the window has to cover the slowest of them. */
     for (f = newest; f > slowest_ack() && n < SLP_MAX_PADS; f--) {
@@ -1189,15 +1201,22 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
         s32 wire_newest = (s32) get_u32(buf + 1);
         s32 newest;
         if (!slp_frame_offset_set) {
-            /* net_last_sent is where this side is now, in its own numbering. */
-            slp_frame_offset =
-                (net_last_sent >= 0 ? net_last_sent : 0) - wire_newest;
+            /* Both sides number the match the same way -- frame 1 is the first
+             * frame of the match on each -- so the offset is zero. It used to
+             * be measured as "where this side is when the peer's first pad
+             * arrives", which only made sense while this side counted from the
+             * selection exchange instead of from its own match frame 1. On a
+             * machine fast enough for the emulator's pads to arrive while this
+             * side was still on its load, that measured nonsense (-1, then -9
+             * after the reset at match begin), and the two sides deadlocked
+             * waiting for frames the other had numbered differently. Slippi's
+             * checksum (slp_checksum) is the check on this: compared for the
+             * wrong frame, it ends the game within a second. */
+            slp_frame_offset = 0;
             slp_frame_offset_set = 1;
             fprintf(stderr,
-                    "[SLP] peer's first pad is its frame %d while this side is "
-                    "at %d; adopting an offset of %d so both count one match\n",
-                    (int) wire_newest, (int) net_last_sent,
-                    (int) slp_frame_offset);
+                    "[SLP] peer's first pad is its frame %d (this side at %d)\n",
+                    (int) wire_newest, (int) net_last_sent);
             fflush(stderr);
         }
         newest = wire_newest + slp_frame_offset;
@@ -2003,6 +2022,56 @@ void pc_net_match_end(void)
  * frames -- ones whose inputs were all real -- are worth hashing, and the
  * rollback path calls this only for those.
  */
+/* Slippi's per-frame checksum, transcribed from FN_COMPUTE_CHECKSUM in
+ * slippi-ssbm-asm (Online/Core/StartEngineLoop.asm): for each of the four
+ * player slots, and for both of a slot's fighters (Sheik/Nana in the second),
+ * the action state, x, y, percent and spawn number go into an XOR and x, y and
+ * percent into a single-precision sum; then the slot's stock count is XORed in.
+ * The result's upper half is the XOR folded to sixteen bits, its lower half the
+ * float sum truncated to an integer.
+ *
+ * A Slippi peer compares this against its own every frame. A mismatch in the
+ * lower half (positions and percents, by more than one) is a "hard" desync:
+ * the codeset prints DESYNC DETECTED and ends the game as a no-contest. That is
+ * what ended every match against Slippi's emulator a couple of seconds in while
+ * this side sent its own hash in this field. The upper half only raises a
+ * "Desync Risk" warning. */
+static u32 slp_checksum(void)
+{
+    u32 cs = 0;
+    f32 sum = 0.0f;
+    int slot, e;
+    for (slot = 0; slot < 4; slot++) {
+        StaticPlayer* sp = Player_GetPtrForSlot(slot);
+        if (sp == NULL) {
+            continue;
+        }
+        for (e = 0; e < 2; e++) {
+            HSD_GObj* g = sp->player_entity[e];
+            Fighter* fp;
+            union { f32 f; u32 u; } x, y, pct;
+            if (g == NULL || g->user_data == NULL) {
+                continue;
+            }
+            fp = (Fighter*) g->user_data;
+            x.f = fp->cur_pos.x;
+            y.f = fp->cur_pos.y;
+            pct.f = fp->dmg.x1830_percent;
+            cs ^= (u32) fp->motion_id;
+            cs ^= x.u;
+            cs ^= y.u;
+            cs ^= pct.u;
+            cs ^= (u32) fp->x8_spawnNum;
+            sum = sum + x.f;
+            sum = sum + y.f;
+            sum = sum + pct.f;
+        }
+        cs ^= (u32) (u8) sp->stocks; /* lbz: zero-extended */
+    }
+    return (((cs >> 16) ^ (cs & 0xFFFFu)) << 16) |
+           ((u32) (s32) sum & 0xFFFFu); /* fctiwz truncates */
+}
+
 static void net_hash_and_compare(s32 frame)
 {
     /* A checksum every few frames, compared against the peer's. It is the
@@ -2018,6 +2087,9 @@ static void net_hash_and_compare(s32 frame)
         int i = frame & (NET_HASH_RING - 1);
         net_hashed = frame;
         net_hash_taken++;
+        if (net_slippi_proto) {
+            slp_cs_val[i] = slp_checksum();
+        }
         hash_remember(frame, h);
         {
             int k;
