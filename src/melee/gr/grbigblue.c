@@ -162,6 +162,18 @@ f32 grBb_804DB3F0 = -10.0f;
 #define GRBB_HW(p) __builtin_bswap16(*(u16*) (p))
 #define GRBB_HW_SET(p, v) (*(u16*) (p) = __builtin_bswap16((u16) (v)))
 
+/* The car code sets its bitfields with inline rlwimi under MWERKS_GEKKO, and
+ * those blocks had no other arm: on the host they compiled to nothing, so a
+ * car's state, collision slot and direction were never written at all. This
+ * is rlwimi on the same 32-bit view with IBM bit numbering (bit 0 = MSB), so
+ * each #else below is the asm above it, operand for operand. */
+static inline u32 grBb_rlwimi(u32 dst, u32 src, int sh, int mb, int me)
+{
+    u32 rot = sh ? (src << sh) | (src >> (32 - sh)) : src;
+    u32 mask = (0xFFFFFFFFu >> mb) & (0xFFFFFFFFu << (31 - me));
+    return (dst & ~mask) | (rot & mask);
+}
+
 /* Field positions in that word, as the console allocates them: the shift of
  * the field's low bit, and its width. */
 #define GRBB_FLD_b0 31, 1
@@ -3838,7 +3850,7 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
         f32 dist;
         f32 closest_dist = 3.4028235e38f;
         s32 ctr = 2;
-        u8* car_p = (u8*) gp;
+        u8* car_p = GRBB_CAR_BASE(gp);
         s32 found_ten = 0;
         s32 closest_lane = -1;
         s32 car_idx = 0;
@@ -3906,6 +3918,8 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
             byte = target_car[0xD4];
 #ifdef MWERKS_GEKKO
             asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+            byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
             target_car[0xD4] = byte;
 
@@ -3920,6 +3934,8 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
                     byte = bp[0xD4];
 #ifdef MWERKS_GEKKO
                     asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+                    byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
                     bp[0xD4] = byte;
                 }
@@ -3935,6 +3951,8 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
                     byte = bp[0x114];
 #ifdef MWERKS_GEKKO
                     asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+                    byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
                     bp[0x114] = byte;
                 }
@@ -3951,6 +3969,8 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
                     byte = p2[0xD4];
 #ifdef MWERKS_GEKKO
                     asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+                    byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
                     p2[0xD4] = byte;
                 }
@@ -3965,6 +3985,8 @@ void grBigBlue_801ECB50(Ground_GObj* gobj)
                         byte = p3[0xD4];
 #ifdef MWERKS_GEKKO
                         asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+                        byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
                         p3[0xD4] = byte;
                     }
@@ -4158,7 +4180,11 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
     lane_flags = lane_gp + 0xD4;
 
     {
-        u16 hw = *(u16*) lane_flags;
+        /* The halfword in the console's byte order: read raw, a host's
+         * little-endian load put the collision slot (bits 4..8) on the wrong
+         * bits, so this update drove another car's joint and started each
+         * car from that joint's position. */
+        u16 hw = GRBB_HW(lane_flags);
 #if BUILD_TARGET_PC
         void** arr = (void**) ((Ground*) gobj->user_data)->u.bigblue.xC8;
 #else
@@ -4180,7 +4206,7 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
             active = 0;
             behind = 0;
 
-            for (idx = 0, iter = gp; idx < 4; idx++, iter += 0x40) {
+            for (idx = 0, iter = GRBB_CAR_BASE(gp); idx < 4; idx++, iter += 0x40) {
                 u32 st = (iter[0xD4] >> 2) & 0x3F;
                 if (st != 1 && st != 7 && st != 8) {
                     active++;
@@ -4192,12 +4218,17 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
                 }
             }
 
-            /* Compute ranking-based target */
+            /* Compute ranking-based target: the cars are spaced evenly
+             * across the track's width, x1C * scale, in active + 1 slots.
+             * This had the division the wrong way round --
+             * (active + 1) * scale / x1C -- which spaced them a hundredth of
+             * a unit apart, so every car's target was the track's left edge
+             * and its base walked there at 0.5 a frame. */
             {
                 f32 scale = Ground_801C0498();
                 s32 total = yakumono_param->x1C;
                 rank_factor = (f32) (behind + 1) *
-                              ((f32) (active + 1) * scale / (f32) total);
+                              ((f32) total * scale / (f32) (active + 1));
             }
 
             {
@@ -4464,7 +4495,12 @@ s32 grBigBlue_801EDF44(Ground_GObj* gobj, s32 index)
 
     offset = index << 6;
     result = 0;
-    gp = (u8*) gobj->user_data;
+    /* Every access here is a car slot at a console offset (0xD4 + 0x40 *
+     * index and up), so take the base the slots are really at: on the
+     * console that is gp itself, here it is past Ground's wider header.
+     * Reading from gp read a car's state from the wrong bytes, and the writes
+     * -- acceleration, speed, timers -- landed on the neighbouring car. */
+    gp = GRBB_CAR_BASE(gobj->user_data);
 
     switch ((gp[offset + 0xD4] >> 2) & 0x3F) {
     case 1:
@@ -4647,14 +4683,14 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
         u8* car;
 
         HSD_JObjSetFlagsAll(
-            ((HSD_JObj**) gp->u.bigblue.xC8)[(*(u16*) car_d4 >> 4) & 0x1F],
+            ((HSD_JObj**) gp->u.bigblue.xC8)[(GRBB_HW(car_d4) >> 4) & 0x1F],
             JOBJ_HIDDEN);
 
         car = GRBB_CAR_BASE(gp) + offset;
         if (*(f32*) (car + 0xE0) > 0.0f) {
-            ((u8*) gp->u.bigblue.xCC)[(*(u16*) car_d4 >> 4) & 0x1F] = 0;
+            ((u8*) gp->u.bigblue.xCC)[(GRBB_HW(car_d4) >> 4) & 0x1F] = 0;
         } else {
-            ((u8*) gp->u.bigblue.xCC)[(*(u16*) car_d4 >> 4) & 0x1F] = 2;
+            ((u8*) gp->u.bigblue.xCC)[(GRBB_HW(car_d4) >> 4) & 0x1F] = 2;
         }
         {
             register s32 st_val;
@@ -4663,6 +4699,8 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
             byte = *car_d4;
 #ifdef MWERKS_GEKKO
             asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+            byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
             result = 1;
             *car_d4 = byte;
@@ -4685,6 +4723,8 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
             byte = ((u8*) gp)[d4_off];
 #ifdef MWERKS_GEKKO
             asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+            byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
             ((u8*) gp)[d4_off] = byte;
         }
@@ -4733,6 +4773,8 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
                 byte = ((u8*) gp)[d4_off];
 #ifdef MWERKS_GEKKO
                 asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+                byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
                 ((u8*) gp)[d4_off] = byte;
             }
@@ -4788,12 +4830,14 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
                     register s32 slot_val;
                     register u16 hw;
                     slot_val = slot;
-                    hw = *(u16*) (car + 0xD4);
+                    hw = GRBB_HW(car + 0xD4);
 #ifdef MWERKS_GEKKO
                     asm { rlwimi hw, slot_val, 4, 23, 27 }
+#else
+                    hw = grBb_rlwimi(hw, slot_val, 4, 23, 27);
 #endif
                     dir = 0;
-                    *(u16*) (car + 0xD4) = hw;
+                    GRBB_HW_SET(car + 0xD4, hw);
                 }
 
                 car_d4 = car + 0xD4;
@@ -4807,6 +4851,8 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
                     byte = car[0xD4];
 #ifdef MWERKS_GEKKO
                     asm { rlwimi byte, dir_val, 1, 30, 30 }
+#else
+                    byte = grBb_rlwimi(byte, dir_val, 1, 30, 30);
 #endif
                     car[0xD4] = byte;
                 }
@@ -4881,6 +4927,8 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
                     byte = *car_d4;
 #ifdef MWERKS_GEKKO
                     asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+                    byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
                     result = 1;
                     *car_d4 = byte;
@@ -4939,12 +4987,14 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
                     register s32 slot_val;
                     register u16 hw;
                     slot_val = slot;
-                    hw = *(u16*) (car + 0xD4);
+                    hw = GRBB_HW(car + 0xD4);
 #ifdef MWERKS_GEKKO
                     asm { rlwimi hw, slot_val, 4, 23, 27 }
+#else
+                    hw = grBb_rlwimi(hw, slot_val, 4, 23, 27);
 #endif
                     dir = 0;
-                    *(u16*) (car + 0xD4) = hw;
+                    GRBB_HW_SET(car + 0xD4, hw);
                 }
 
                 car_d4 = car + 0xD4;
@@ -4958,6 +5008,8 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
                     byte = car[0xD4];
 #ifdef MWERKS_GEKKO
                     asm { rlwimi byte, dir_val, 1, 30, 30 }
+#else
+                    byte = grBb_rlwimi(byte, dir_val, 1, 30, 30);
 #endif
                     car[0xD4] = byte;
                 }
@@ -5032,6 +5084,8 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
                     byte = *car_d4;
 #ifdef MWERKS_GEKKO
                     asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+                    byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
                     result = 1;
                     *car_d4 = byte;
@@ -5057,6 +5111,8 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
             byte = ((u8*) gp)[d4_off];
 #ifdef MWERKS_GEKKO
             asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+            byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
             ((u8*) gp)[d4_off] = byte;
         }
@@ -5071,6 +5127,8 @@ s32 grBigBlue_801EE398(Ground_GObj* gobj, s32 arg1, s32 arg2)
         byte = ((u8*) gp)[d4_off];
 #ifdef MWERKS_GEKKO
         asm { rlwimi byte, st_val, 2, 24, 29 }
+#else
+        byte = grBb_rlwimi(byte, st_val, 2, 24, 29);
 #endif
         ((u8*) gp)[d4_off] = byte;
         break;
@@ -5092,7 +5150,12 @@ bool grBigBlue_801EEF00(Ground_GObj* gobj, s32 index)
     u8* gp;
 
     offset = index << 6;
-    gp = (u8*) gobj->user_data;
+    /* Every access here is a car slot at a console offset (0xD4 + 0x40 *
+     * index and up), so take the base the slots are really at: on the
+     * console that is gp itself, here it is past Ground's wider header.
+     * Reading from gp read a car's state from the wrong bytes, and the writes
+     * -- acceleration, speed, timers -- landed on the neighbouring car. */
+    gp = GRBB_CAR_BASE(gobj->user_data);
 
     switch ((gp[offset + 0xD4] >> 2) & 0x3F) {
     case 1:
@@ -5335,12 +5398,12 @@ void grBigBlue_801EF424(Ground_GObj* gobj)
     while (k < 10 && changed != 0) {
         changed = 0;
 
-        for (i = 0, car_i = (u8*) gp; i < 4; i++, car_i += 0x40) {
+        for (i = 0, car_i = GRBB_CAR_BASE(gp); i < 4; i++, car_i += 0x40) {
             if ((u32) ((car_i[0xD4] >> 2) & 0x3F) == 1U) {
                 continue;
             }
 
-            for (j = 0, car_j = (u8*) gp; j < 4; j++, car_j += 0x40) {
+            for (j = 0, car_j = GRBB_CAR_BASE(gp); j < 4; j++, car_j += 0x40) {
                 if (i == j) {
                     continue;
                 }
@@ -5413,10 +5476,13 @@ void fn_801EF60C(Ground* gp, s32 joint_id, CollData* coll, s32 time_param,
     HSD_ASSERT(0xED9, car_num!=Gr_Fzero_Car_Max);
 
     params = yakumono_param;
-    p = (u8*) gp;
+    /* The car slots: GRBB_CAR_BASE is gp itself on the console and the
+     * slots' own block here, and their halfwords are read in the console's
+     * byte order -- this loop read them raw from gp and matched no car. */
+    p = GRBB_CAR_BASE(gp);
 
     for (i = 0; i < 4; i++) {
-        hw = *(u16*) (p + 0xD4);
+        hw = GRBB_HW(p + 0xD4);
         if (((hw >> 4) & 0x1F) == car_num) {
             *(f32*) (p + 0xF4) = -coll->x50 * params->x44;
         }
