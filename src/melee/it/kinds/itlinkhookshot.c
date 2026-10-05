@@ -1307,8 +1307,18 @@ static inline f64 it_802A4BFC_normalize_diff(Vec3* a, Vec3* b, Vec3* vec)
     vec->x = a->x - b->x;
     vec->y = a->y - b->y;
     vec->z = a->z - b->z;
+#if BUILD_TARGET_PC
+    /* Fused, as every other inlined normalise in this file is: 802A4C1C
+     * and its twin are fmuls y*y, fmadds x, fmadds z. Rounded three times
+     * here, the flying hookshot's links drifted an ulp from the console
+     * and Young Link's grab pulled the victim to the wrong x (Green
+     * Greens, frame 289). */
+    len = it_802A4BFC_sqrtf_offset(
+        LK_DOT(vec->x, vec->y, vec->z, vec->x, vec->y, vec->z));
+#else
     len = it_802A4BFC_sqrtf_offset(vec->x * vec->x + vec->y * vec->y +
                                    vec->z * vec->z);
+#endif
     if (len == 0.0F) {
         inv = 0.0F;
     } else {
