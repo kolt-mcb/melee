@@ -89,7 +89,30 @@ struct ftKb_DatAttrs {
     /*  +28 */ u32 jumpaerial_number_of_jumps;
     /*  +2C */ u32 jumpaerial_first_jump_action_state;
     /*  +30 */ u32 jumpaerial_final_jump_action_state;
+#if BUILD_TARGET_PC
+    /* The only sub-word field in any character's attribute struct, and
+     * PUSH_ATTRS byteswaps this blob in 32-bit words -- correct for every
+     * 32-bit field and wrong for a 16-bit one, which ends up reading the
+     * other half of its word.
+     *
+     * The console's bytes here are 00 28 (40; the note below says so), and
+     * +36 is the implicit padding before the float at +38, so the word is
+     * 00 28 00 00. A 32-bit swap stores 00 00 28 00, and a little-endian s16
+     * read at +34 gives 0 rather than 40. Kirby's inhale uses this as a
+     * countdown (ftKb_SpecialNLoop_IASA decrements it and only lets go of B
+     * once it reaches zero), so zero let the inhale end immediately: the port
+     * sat in ftKb_MS_SpecialNEnd while the console was still in
+     * ftKb_MS_SpecialNLoop. That is the first differing field in most of
+     * Kirby's remaining diverged cells.
+     *
+     * Reading it from +36 is where the console's half lands after the swap.
+     * Two s16 are laid out exactly as one s16 plus its padding, so this
+     * changes no offset on either target and the GameCube arm is unchanged. */
+    /*  +34 */ s16 jumpaerial_unk_swapped_half;
+    /*  +36 */ s16 jumpaerial_unk;
+#else
     /*  +34 */ s16 jumpaerial_unk;
+#endif
 
     // Neutral B (no hat)
     /*  +38 */ float specialn_x_offset_inhaled;
