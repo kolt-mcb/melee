@@ -2004,7 +2004,7 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
             *(f32*) (bp + 0xD8) = 0.0f;
             *(s32*) (GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data) + 0xCC) = 0;
             {
-                u8* mgp2 = (u8*) Ground_GetMapGObj(32)->user_data;
+                u8* mgp2 = GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data);
                 if (jobj != NULL) {
                     *(u32*) (mgp2 + 0xE0) = (u32) jobj;
                 }
@@ -2122,7 +2122,7 @@ void grBigBlue_801E9F3C(Ground_GObj* gobj)
     GET_GROUND(Ground_GetMapGObj(32))->u.bigblue.platform.xD0_timer = 0;
 #else
     ((u8*) gp)[0xC4] = 0;
-    *(s32*) ((u8*) GET_GROUND(Ground_GetMapGObj(32)) + 0xD0) = 0;
+    *(s32*) (GRBB_CAR_BASE(GET_GROUND(Ground_GetMapGObj(32))) + 0xD0) = 0;
 #endif
     grAnime_801C8138(gobj, gp->map_id, 0);
 }
@@ -2175,7 +2175,7 @@ void grBigBlue_801EA05C(Ground_GObj* gobj)
         if (GET_GROUND(Ground_GetMapGObj(32))->u.bigblue.platform.xD0_timer !=
             0) {
 #else
-        if (*(s32*) ((u8*) GET_GROUND(Ground_GetMapGObj(32)) + 0xD0) != 0) {
+        if (*(s32*) (GRBB_CAR_BASE(GET_GROUND(Ground_GetMapGObj(32))) + 0xD0) != 0) {
 #endif
             gp->u.bigblue.platform.xC8_timer = 0;
             gp->u.bigblue.platform.xD0_timer = 0;
@@ -4445,7 +4445,11 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
             u8* gp2;
 
             HSD_ASSERT(3255, map_gobj);
-            gp2 = (u8*) map_gobj->user_data;
+            /* The road's fields, at the rebased address its own proc keeps
+             * them at (GRBB_CAR_BASE); read from the raw Ground, the road's
+             * vertical step was other bytes, and a grounded car tracked the
+             * road wrong from the first section change (match frame 560). */
+            gp2 = GRBB_CAR_BASE(map_gobj->user_data);
             HSD_ASSERT(3256, gp2);
             *(f32*) (lane_gp + 0xE4) +=
                 *(f32*) (gp2 + 0xCC) - *(f32*) (gp2 + 0xD8);
