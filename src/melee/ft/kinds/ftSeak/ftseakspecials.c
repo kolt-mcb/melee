@@ -35,6 +35,17 @@
 #define SS_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
+/* The pose the chain blends from: entry 2 of a joint table behind
+ * ftData::x48_items[4] (grounded) or [5] (aerial). On the PC that table is
+ * still the file's 4-byte offsets, so it is read and converted by index;
+ * read in place, entry 2 was garbage and every blend was skipped. */
+#if BUILD_TARGET_PC
+extern void* pc_ftconv_joint_at(void* raw_table, int index);
+#define SK_CHAIN_JOINT(item) ((HSD_Joint*) pc_ftconv_joint_at((item), 2))
+#else
+#define SK_CHAIN_JOINT(item) ((item)[2])
+#endif
+
 /// @todo Fix common data struct
 #define COMMON_DATA_F32 ((float*) p_ftCommonData)
 
@@ -117,7 +128,7 @@ void ftSk_SpecialS_80110610(HSD_GObj* gobj, s32 arg1, float arg2)
 
             if (fp->mv.sk.specials.x14 < 1) {
                 ftAnim_80070108(fp, FtPart_TransN, 1 - fp->mv.sk.specials.x14,
-                                fp->mv.sk.specials.x14, item[2]);
+                                fp->mv.sk.specials.x14, SK_CHAIN_JOINT(item));
             }
 
             if (arg2 < 1) {
@@ -131,11 +142,11 @@ void ftSk_SpecialS_80110610(HSD_GObj* gobj, s32 arg1, float arg2)
     }
 
     if (arg2 < 1) {
-        ftAnim_80070010(fp, FtPart_TransN, arg2, 1 - arg2, item[2]);
+        ftAnim_80070010(fp, FtPart_TransN, arg2, 1 - arg2, SK_CHAIN_JOINT(item));
         return;
     }
 
-    ftAnim_8006FA58(fp, FtPart_TransN, item[2]);
+    ftAnim_8006FA58(fp, FtPart_TransN, SK_CHAIN_JOINT(item));
 }
 
 void ftSk_SpecialS_80110788(HSD_GObj* gobj)

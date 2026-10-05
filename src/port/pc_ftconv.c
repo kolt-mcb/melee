@@ -251,6 +251,44 @@ void* pc_ftconv_joint(void* raw)
     return NULL;
 }
 
+/* Entry `index` of a table of joint pointers that a fighter's DAT keeps
+ * behind one of its ftData::x48_items slots. The slot itself is rebased by
+ * pc_conv_ftData, but what it points at is still the file's: 4-byte
+ * big-endian offsets from the archive base, where the console's loader has
+ * already turned them into pointers. Sheik's chain hands entry 2 of slot
+ * 4/5 to the ftAnim blend functions as the pose the chain is blended from;
+ * read as a host pointer array it is garbage, and the blend was skipped. */
+void* pc_ftconv_joint_at(void* raw_table, int index)
+{
+    const u8* p = (const u8*) raw_table;
+    int i, best = -1;
+
+    if (raw_table == NULL || index < 0) return NULL;
+    for (i = 0; i < pc_ftconv_arch_n; i++) {
+        const u8* b = pc_ftconv_arch[i].base;
+        if (p >= b && (unsigned long) (p - b) + (unsigned long) (index + 1) * 4 <=
+                          pc_ftconv_arch[i].len)
+        {
+            if (best < 0 || pc_ftconv_arch[i].len < pc_ftconv_arch[best].len) {
+                best = i;
+            }
+        }
+    }
+    if (best < 0) {
+        fprintf(stderr,
+                "[PORT WARN] pc_ftconv_joint_at: %p is in no known fighter "
+                "archive; skipping\n",
+                raw_table);
+        return NULL;
+    }
+    {
+        const u8* b = pc_ftconv_arch[best].base;
+        u32 off = pc_be32(((const u32*) p)[index]);
+        if (off == 0 || off >= pc_ftconv_arch[best].len) return NULL;
+        return pc_ftconv_joint((void*) (b + off));
+    }
+}
+
 /* One ftDynamics record (dynamicsNum, the bone array, each bone's inner
  * data). The blend-slot table at +0x10 is left NULL: its readers take a
  * "no table" path, which for a copy hat costs the chain's motion, not a

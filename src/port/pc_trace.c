@@ -1023,7 +1023,9 @@ static void pc_trace_animid(void)
     }
     slot = atoi(spec);
     sp = Player_GetPtrForSlot(slot);
-    g = (sp != NULL) ? sp->player_entity[0] : NULL;
+    /* The active entity, as Player_GetEntity picks it (Sheik, once Zelda has
+     * transformed); the Dolphin side reads the same one. */
+    g = (sp != NULL) ? sp->player_entity[sp->transformed[0] ? 1 : 0] : NULL;
     fp = (g != NULL) ? (Fighter*) g->user_data : NULL;
     if (fp == NULL) {
         return;
@@ -1117,7 +1119,9 @@ static void pc_trace_bones(void)
     }
     want_f = (unsigned) gm_GetFrameCount();
     sp = Player_GetPtrForSlot(want_p);
-    g = sp->player_entity[0];
+    /* The active entity, as Player_GetEntity picks it: once Zelda turns into
+     * Sheik, entity 0 is the dormant Zelda. The Dolphin side reads the same. */
+    g = sp->player_entity[sp->transformed[0] ? 1 : 0];
     fp = (g != NULL) ? (Fighter*) g->user_data : NULL;
     if (fp == NULL || fp->parts == NULL) {
         return;
