@@ -125,9 +125,21 @@ void ftLk_SpecialHi_Coll(HSD_GObj* gobj)
 void ftLk_SpecialAirHi_Coll(HSD_GObj* gobj)
 {
     u8 _[8];
+#if BUILD_TARGET_PC
+    /* The original reads the landing lag at attrs+0x30 (ftLk_DatAttrs.x30, the
+     * same value ftLk_SpecialAirHi_Anim hands ftCo_80096900). The decomp spells
+     * that as Fighter::facing_dir1 through the attribute block cast to a
+     * Fighter, which is 0x30 on the console and somewhere else here: Link and
+     * Young Link landing out of an up-B got a lag of about one frame and stood
+     * up at once, where the console's stay in LandingFallSpecial. */
+    ftLk_DatAttrs* da = GET_FIGHTER(gobj)->dat_attrs;
+    if (ft_CheckGroundAndLedge(gobj, 0)) {
+        ftCo_LandingFallSpecial_Enter(gobj, false, da->x30);
+#else
     Fighter* fp = GET_FIGHTER(gobj)->dat_attrs;
     if (ft_CheckGroundAndLedge(gobj, 0)) {
         ftCo_LandingFallSpecial_Enter(gobj, false, fp->facing_dir1);
+#endif
     } else if (ftCliffCommon_80081298(gobj)) {
         return;
     }
