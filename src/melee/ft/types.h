@@ -2365,4 +2365,26 @@ const void* pc_ext_attr_host(int kind, unsigned long n);
 #define FT_KIND_EXT_ATTR(type, kind) ((type*) gFtDataList[kind]->ext_attr)
 #endif
 
+/* One byte out of an attribute blob, which PUSH_ATTRS byteswapped in 32-bit
+ * words. A whole-word field survives that; a byte does not, because the
+ * console's byte i of a word sits at host byte i^3 once the word is reversed.
+ *
+ * ftYoshiAttributes.x12C is the one such array that is actually read:
+ * ftCo_CatchPull takes Yoshi's pull-animation start frame from
+ * `x12C[frame - x124]`, so the host read a different byte of the same word --
+ * 46 where the console has 40. Yoshi's grab then left CatchPull six frames
+ * early, which was the first differing field in ten of his eleven diverged
+ * lockstep cells.
+ *
+ * Valid only for an array that starts 4-aligned and spans whole words, which
+ * x12C does (0x12C, twelve bytes). One straddling a word boundary would need
+ * its own arithmetic. The two other sub-word arrays in any character's
+ * attributes, ftLk_DatAttrs.xC0_filler and _ftSeakAttributes.data_filler_1,
+ * are never read. */
+#if BUILD_TARGET_PC
+#define FT_ATTR_BYTE(arr, i) ((arr)[(i) ^ 3])
+#else
+#define FT_ATTR_BYTE(arr, i) ((arr)[(i)])
+#endif
+
 #endif

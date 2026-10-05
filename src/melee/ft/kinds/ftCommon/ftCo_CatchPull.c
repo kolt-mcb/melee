@@ -34,7 +34,7 @@ void fn_800D9CE8(Fighter_GObj* gobj)
                 rate = frame - yattrs->x124;
                 ftAnim_SetAnimRate(gobj, rate);
                 ftAnim_8006EBA4(gobj);
-                startFrame = (f32) yattrs->x12C[(s32) rate];
+                startFrame = (f32) FT_ATTR_BYTE(yattrs->x12C, (s32) rate);
             }
         }
     } else {
