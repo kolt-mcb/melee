@@ -1,4 +1,5 @@
 #include "ftCo_Attack100.h"
+#include <stddef.h>
 #include <melee/ft/fighter.h>
 #include <melee/ft/ft_081B.h>
 #include <melee/ft/ft_0CDD.h>
@@ -154,7 +155,25 @@ void fn_800D79B4(HSD_GObj* gobj, void (*cb_ground)(HSD_GObj*),
         f32 timer; // 0x2340
         s32 flag;  // 0x2344
     } FighterOverlay;
+#if BUILD_TARGET_PC
+    /* The overlay's offsets are the console's: fp+0x2340 and fp+0x2344 are
+     * mv.co+0 and mv.co+4, where the scope's charge timer and its
+     * button-released flag live. On the host `mv` is at 0x2340 only on GCN --
+     * here it is at 0x2E90, because every pointer before it is eight bytes.
+     * Applied to `fp` directly, the two stores landed on x1980 instead, which
+     * is an HSD_GObj*: `timer += 1.0F` wrote a float into the low half of a
+     * live pointer and `flag = 1` wrote 1 into its upper half, every frame the
+     * A button was held with a scope. Fighter_Spaghetti_8006AD10 then tests
+     * that pointer (`if (fp->x1980) ftCommon_8007FFD8(...)`), so this was
+     * corruption, not only a wrong charge value.
+     *
+     * Anchored on mv.co so the same offsets mean the same fields on both
+     * targets. The GameCube arm is the original cast verbatim. */
+    FighterOverlay* fp_ovl = (FighterOverlay*) ((char*) &fp->mv.co -
+                                                offsetof(FighterOverlay, timer));
+#else
     FighterOverlay* fp_ovl = (FighterOverlay*) fp;
+#endif
 
     // Use this specific cast to generate the correct 'lfs' instruction for the
     // global int

@@ -35,6 +35,19 @@
  * an oversized struct the block is zeroed instead, so dat_attrs still points
  * somewhere valid and downstream reads yield 0 rather than faulting. */
 #define PC_DAT_ATTRS_MAX 0x424
+/* NOTE for anyone naming a new field in a character's attribute struct: the
+ * copy below byteswaps the blob in 32-bit WORDS. That is right for every
+ * 32-bit field and wrong for any sub-word one, because the console's half of
+ * a word is not the half a little-endian read finds at the same byte offset.
+ * A 16-bit field at a word's start must be declared at +2 on the host, and a
+ * byte field's offset within its word mirrors likewise.
+ *
+ * As of this note there is exactly one such field in all 26 characters'
+ * structs -- ftKb_DatAttrs.jumpaerial_unk, an s16 at +0x34, which read 0
+ * instead of 40 and let Kirby's inhale end on its first frame (see the
+ * comment there). The count being one is only true of the fields the decomp
+ * has NAMED; a 16-bit value still sitting inside a `u8 pad[...]` or an UNK
+ * region will have the same bug the day someone names it. */
 /* Unchanged from the original: byteswap the blob into the caller's backup and
  * leave ft_data->ext_attr alone. Rewriting ext_attr itself was tried and
  * regressed -- see melee-pc-extattr-byteorder. */
