@@ -2165,7 +2165,14 @@ void grStadium_801D4548(Ground_GObj* gobj)
                     temp_r31->u.stadium.xD8 = 0;
                     temp_r31->u.stadium.xDC = 6;
                     grStadium_801D435C(gobj);
+#if BUILD_TARGET_PC
+                    /* 0x80030E44 is Camera_RequestQuake (camera.c); under the
+                     * old name this resolved to a do-nothing stub and the
+                     * Stadium's quake never ran. */
+                    Camera_RequestQuake(1, NULL);
+#else
                     Camera_80030E44(1, NULL);
+#endif
                     return;
                 }
 #endif
