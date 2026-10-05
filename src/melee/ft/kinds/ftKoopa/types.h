@@ -13,9 +13,22 @@ struct ftKoopa_FighterVars {
 union ftKoopa_MotionVars {
     /// @todo Proper state name.
     struct ftKoopa_State1Vars {
+#if BUILD_TARGET_PC
+        /* Words on the console, and this view aliases specials below: x4 is
+         * specials.x4, the flag ftKp_SpecialSHit_Anim tests before setting
+         * the bite's damage from x2C, and x8 is specials.facing_dir. As an
+         * 8-byte UNK_T, x0 pushed x4 onto facing_dir and x8 onto x10, so
+         * the grounded bite kept the script's damage -- 3.64 where the
+         * console has 2.73 (Bowser on Rainbow Cruise, frame 477). Nothing
+         * stores a pointer here: both words are only ever cleared. */
+        u32 x0;
+        bool x4;
+        u32 x8;
+#else
         UNK_T x0;
         bool x4;
         UNK_T x8;
+#endif
         bool xC;
     } unk1;
     /// @todo Possibly #ftKoopa_State1Vars.
