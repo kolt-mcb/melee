@@ -159,7 +159,6 @@ __attribute__((weak)) void ftKb_SpecialN_800EED50(int a0, int a1) {}
 __attribute__((weak)) void Item_8026AB54(int a0, int a1, int a2) {}
 __attribute__((weak)) void Item_8026ABD8(int a0, int a1, float a2) {}
 __attribute__((weak)) void Item_8026AC74(int a0, int a1, int a2, float a3) {}
-__attribute__((weak)) void Item_8026AD20(int a0, int a1, int a2, float a3) {}
 __attribute__((weak)) int Item_IsGrabbable(int a0) { return 0; }
 __attribute__((weak)) void ftCo_KirbyYoshiEgg_Anim(int a0) {}
 __attribute__((weak)) void ftCo_KirbyYoshiEgg_Coll(int a0) {}
@@ -945,7 +944,6 @@ __attribute__((weak)) void Camera_8002F784(int a0, int a1) {}
 __attribute__((weak)) void Camera_8002F7AC(int a0) {}
 __attribute__((weak)) void Camera_8002F9E4(int a0, int a1) {}
 __attribute__((weak)) void Camera_8002FC7C(int a0, int a1) {}
-__attribute__((weak)) void Camera_800304E0(int a0) {}
 __attribute__((weak)) void Camera_80030730(float a0) {}
 __attribute__((weak)) int Camera_80030B50(void) { return 0; }
 __attribute__((weak)) int Camera_80030B7C(void) { return 0; }
@@ -1996,173 +1994,6 @@ __attribute__((weak)) int it_802F022C(int a0) { return 0; }
 __attribute__((weak)) void it_802F0320(int a0, int a1) {}
 __attribute__((weak)) void it_802F13B4(int a0, int a1) {}
 __attribute__((weak)) void it_802F2BDC(int a0, int a1) {}
-__attribute__((weak)) void it_803F5468(void) { }
-__attribute__((weak)) void it_803F54D8(void) { }
-__attribute__((weak)) void it_803F55D0(void) { }
-__attribute__((weak)) void it_803F56C8(void) { }
-__attribute__((weak)) void it_803F5740(void) { }
-__attribute__((weak)) void it_803F57A0(void) { }
-__attribute__((weak)) void it_803F57B0(void) { }
-__attribute__((weak)) void it_803F5800(void) { }
-__attribute__((weak)) void it_803F5850(void) { }
-__attribute__((weak)) void it_803F58E0(void) { }
-__attribute__((weak)) void it_803F5988(void) { }
-__attribute__((weak)) void it_803F59F8(void) { }
-__attribute__((weak)) void it_803F5AB0(void) { }
-__attribute__((weak)) void it_803F5BA8(void) { }
-__attribute__((weak)) void it_803F5C48(void) { }
-__attribute__((weak)) void it_803F5CC8(void) { }
-__attribute__((weak)) void it_803F5D28(void) { }
-__attribute__((weak)) void it_803F5DB0(void) { }
-__attribute__((weak)) void it_803F5F40(void) { }
-__attribute__((weak)) void it_803F5F90(void) { }
-__attribute__((weak)) void it_803F5FF0(void) { }
-__attribute__((weak)) void it_803F6090(void) { }
-__attribute__((weak)) void it_803F6110(void) { }
-__attribute__((weak)) void it_803F6130(void) { }
-__attribute__((weak)) void it_803F6150(void) { }
-__attribute__((weak)) void it_803F61B0(void) { }
-__attribute__((weak)) void it_803F6220(void) { }
-__attribute__((weak)) void it_803F6270(void) { }
-__attribute__((weak)) void it_803F62C0(void) { }
-__attribute__((weak)) void it_803F6310(void) { }
-__attribute__((weak)) void it_803F6370(void) { }
-__attribute__((weak)) void it_803F63C0(void) { }
-__attribute__((weak)) void it_803F6488(void) { }
-__attribute__((weak)) void it_803F64F8(void) { }
-__attribute__((weak)) void it_803F6530(void) { }
-__attribute__((weak)) void it_803F6568(void) { }
-__attribute__((weak)) void it_803F6630(void) { }
-__attribute__((weak)) void it_803F6640(void) { }
-__attribute__((weak)) void it_803F6680(void) { }
-__attribute__((weak)) void it_803F66C8(void) { }
-__attribute__((weak)) void it_803F6728(void) { }
-__attribute__((weak)) void it_803F6788(void) { }
-__attribute__((weak)) void it_803F6798(void) { }
-__attribute__((weak)) void it_803F67D0(void) { }
-__attribute__((weak)) void it_803F6818(void) { }
-__attribute__((weak)) void it_803F6888(void) { }
-__attribute__((weak)) void it_803F6920(void) { }
-__attribute__((weak)) void it_803F6998(void) { }
-__attribute__((weak)) void it_803F6A28(void) { }
-__attribute__((weak)) void it_803F6B28(void) { }
-__attribute__((weak)) void it_803F6B60(void) { }
-__attribute__((weak)) void it_803F6B70(void) { }
-__attribute__((weak)) void it_803F6BC8(void) { }
-__attribute__((weak)) void it_803F6C08(void) { }
-__attribute__((weak)) void it_803F6C68(void) { }
-__attribute__((weak)) void it_803F6C88(void) { }
-__attribute__((weak)) void it_803F6C98(void) { }
-__attribute__((weak)) void it_803F6CA8(void) { }
-__attribute__((weak)) void it_803F6E98(void) { }
-__attribute__((weak)) void it_803F6F40(void) { }
-__attribute__((weak)) void it_803F6F50(void) { }
-__attribute__((weak)) void it_803F70A8(void) { }
-__attribute__((weak)) void it_803F70B8(void) { }
-__attribute__((weak)) void it_803F70C8(void) { }
-__attribute__((weak)) void it_803F70F8(void) { }
-__attribute__((weak)) void it_803F7118(void) { }
-__attribute__((weak)) void it_803F7158(void) { }
-__attribute__((weak)) void it_803F7190(void) { }
-__attribute__((weak)) void it_803F71D8(void) { }
-__attribute__((weak)) void it_803F7220(void) { }
-__attribute__((weak)) void it_803F7288(void) { }
-__attribute__((weak)) void it_803F7340(void) { }
-__attribute__((weak)) void it_803F7438(void) { }
-__attribute__((weak)) void it_803F7488(void) { }
-__attribute__((weak)) void it_803F74A8(void) { }
-__attribute__((weak)) void it_803F74F8(void) { }
-__attribute__((weak)) void it_803F7528(void) { }
-__attribute__((weak)) void it_803F7548(void) { }
-__attribute__((weak)) void it_803F7558(void) { }
-__attribute__((weak)) void it_803F75C0(void) { }
-__attribute__((weak)) void it_803F75D0(void) { }
-__attribute__((weak)) void it_803F7668(void) { }
-__attribute__((weak)) void it_803F76A8(void) { }
-__attribute__((weak)) void it_803F76B8(void) { }
-__attribute__((weak)) void it_803F7740(void) { }
-__attribute__((weak)) void it_803F7750(void) { }
-__attribute__((weak)) void it_803F7760(void) { }
-__attribute__((weak)) void it_803F7898(void) { }
-__attribute__((weak)) void it_803F78D8(void) { }
-__attribute__((weak)) void it_803F78E8(void) { }
-__attribute__((weak)) void it_803F78F8(void) { }
-__attribute__((weak)) void it_803F7918(void) { }
-__attribute__((weak)) void it_803F7938(void) { }
-__attribute__((weak)) void it_803F7958(void) { }
-__attribute__((weak)) void it_803F7968(void) { }
-__attribute__((weak)) void it_803F79A0(void) { }
-__attribute__((weak)) void it_803F79C0(void) { }
-__attribute__((weak)) void it_803F79E0(void) { }
-__attribute__((weak)) void it_803F7A28(void) { }
-__attribute__((weak)) void it_803F7A48(void) { }
-__attribute__((weak)) void it_803F7A98(void) { }
-__attribute__((weak)) void it_803F7AC8(void) { }
-__attribute__((weak)) void it_803F7AD8(void) { }
-__attribute__((weak)) void it_803F7B08(void) { }
-__attribute__((weak)) void it_803F7B48(void) { }
-__attribute__((weak)) void it_803F7B58(void) { }
-__attribute__((weak)) void it_803F7BB0(void) { }
-__attribute__((weak)) void it_803F7BC0(void) { }
-__attribute__((weak)) void it_803F7C00(void) { }
-__attribute__((weak)) void it_803F7C10(void) { }
-__attribute__((weak)) void it_803F7C40(void) { }
-__attribute__((weak)) void it_803F7C70(void) { }
-__attribute__((weak)) void it_803F7CA0(void) { }
-__attribute__((weak)) void it_803F7CF8(void) { }
-__attribute__((weak)) void it_803F7D60(void) { }
-__attribute__((weak)) void it_803F7DC8(void) { }
-__attribute__((weak)) void it_803F7DE8(void) { }
-__attribute__((weak)) void it_803F7E08(void) { }
-__attribute__((weak)) void it_803F7E28(void) { }
-__attribute__((weak)) void it_803F7E78(void) { }
-__attribute__((weak)) void it_803F7EE8(void) { }
-__attribute__((weak)) void it_803F7F48(void) { }
-__attribute__((weak)) void it_803F7F58(void) { }
-__attribute__((weak)) void it_803F7FB8(void) { }
-__attribute__((weak)) void it_803F7FC8(void) { }
-__attribute__((weak)) void it_803F7FF8(void) { }
-__attribute__((weak)) void it_803F8058(void) { }
-__attribute__((weak)) void it_803F80C8(void) { }
-__attribute__((weak)) void it_803F80F8(void) { }
-__attribute__((weak)) void it_803F8128(void) { }
-__attribute__((weak)) void it_803F8180(void) { }
-__attribute__((weak)) void it_803F8190(void) { }
-__attribute__((weak)) void it_803F8200(void) { }
-__attribute__((weak)) void it_803F8250(void) { }
-__attribute__((weak)) void it_803F8270(void) { }
-__attribute__((weak)) void it_803F82A0(void) { }
-__attribute__((weak)) void it_803F82B0(void) { }
-__attribute__((weak)) void it_803F82F0(void) { }
-__attribute__((weak)) void it_803F8320(void) { }
-__attribute__((weak)) void it_803F83E0(void) { }
-__attribute__((weak)) void it_803F83F0(void) { }
-__attribute__((weak)) void it_803F8468(void) { }
-__attribute__((weak)) void it_803F85F0(void) { }
-__attribute__((weak)) void it_803F86C8(void) { }
-__attribute__((weak)) void it_803F87F0(void) { }
-__attribute__((weak)) void it_803F88C0(void) { }
-__attribute__((weak)) void it_803F8940(void) { }
-__attribute__((weak)) void it_803F89C8(void) { }
-__attribute__((weak)) void it_803F8A88(void) { }
-__attribute__((weak)) void it_803F8B48(void) { }
-__attribute__((weak)) void it_803F8BD8(void) { }
-__attribute__((weak)) void it_803F8C8C(void) { }
-__attribute__((weak)) void it_803F8DE8(void) { }
-__attribute__((weak)) void it_803F8E90(void) { }
-__attribute__((weak)) void it_803F8EB0(void) { }
-__attribute__((weak)) void it_803F8FD0(void) { }
-__attribute__((weak)) void it_803F9000(void) { }
-__attribute__((weak)) void it_803F90D0(void) { }
-__attribute__((weak)) void it_803F91D0(void) { }
-__attribute__((weak)) void it_803F9260(void) { }
-__attribute__((weak)) void it_803F9328(void) { }
-__attribute__((weak)) void it_803F9378(void) { }
-__attribute__((weak)) void it_803F9388(void) { }
-__attribute__((weak)) void it_803F93A8(void) { }
-__attribute__((weak)) void it_803F93C8(void) { }
-__attribute__((weak)) void it_803F9470(void) { }
-__attribute__((weak)) void it_803F94A0(void) { }
 /* PC port: gm_1601.c declares this `extern struct lbl_803B7A44_t
  * lbl_803B7A44;` -- six floats in .data, not a function. As a weak *function*
  * stub its address was in .text, so fn_80167638's `sp = lbl_803B7A44` copied
@@ -2176,16 +2007,7 @@ __attribute__((weak)) void it_803F94A0(void) { }
 __attribute__((weak, aligned(16))) float lbl_803B7A44[6] = {
     0.0f, 1.0f, -1.0f, 2.0f, 0.0f, 0.0f,
 };
-__attribute__((weak)) void lbl_803B7C08(void) { }
-__attribute__((weak)) void lbl_803B7C18(void) { }
-__attribute__((weak)) void lbl_803B7C28(void) { }
-__attribute__((weak)) void lbl_803B7C40(void) { }
-__attribute__((weak)) void lbl_803B7C80(void) { }
-__attribute__((weak)) void lbl_803B7CA8(void) { }
-__attribute__((weak)) void lbl_803B7CE0(void) { }
-__attribute__((weak)) void lbl_803B7D04(void) { }
 __attribute__((weak, aligned(16))) unsigned char lbl_803B7D18[36]; /* union TmAnimFrameTable */
-__attribute__((weak)) void lbl_803B7D3C(void) { }
 __attribute__((weak, aligned(16))) unsigned char lbl_803D6878[256]; /* data (GCN 0x803D6878), was void-fn stub */
 /* lbl_803D6A08: defined for real in src/pc_stub/pc_dol_data.c. */
 __attribute__((weak, aligned(16))) unsigned char lbl_803D6A18[256]; /* data (GCN 0x803D6A18), was void-fn stub */
@@ -2336,10 +2158,6 @@ __attribute__((weak)) void un_803204B0(int a0, int a1) {}
 __attribute__((weak)) void un_80321900(void) { }
 __attribute__((weak)) void vi0401_8031D020(int a0, int a1) {}
 __attribute__((weak, aligned(16))) unsigned char un_803F9FA4[64]; /* struct SoundTestData */
-__attribute__((weak)) void un_803FA258(void) { }
-__attribute__((weak)) void un_803FA4E0(void) { }
-__attribute__((weak)) void un_803FA790(void) { }
-__attribute__((weak)) void un_803FC4CC(void) { }
 __attribute__((weak)) void un_804A1F48(void) { }
 __attribute__((weak, aligned(16))) unsigned char un_804D6F3C[8]; /* u8[8] */
 __attribute__((weak, aligned(16))) unsigned char un_804D6F60[8]; /* u8[8] */

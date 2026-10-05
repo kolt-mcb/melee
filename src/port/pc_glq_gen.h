@@ -403,7 +403,7 @@ static inline void pcq_glClearColor(GLfloat red, GLfloat green, GLfloat blue, GL
 }
 #define glClearColor(...) PCQ_V("glClearColor", pcq_glClearColor(__VA_ARGS__))
 
-#if !defined(__ANDROID__)
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
 typedef struct { GLdouble depth; } pcq_a_glClearDepth;
 static void pcq_x_glClearDepth(void* p_) { pcq_a_glClearDepth* a_ = (pcq_a_glClearDepth*) p_; (glClearDepth)(a_->depth); }
 static inline void pcq_glClearDepth(GLdouble depth)
@@ -696,7 +696,7 @@ static inline void pcq_glDepthMask(GLboolean flag)
 }
 #define glDepthMask(...) PCQ_V("glDepthMask", pcq_glDepthMask(__VA_ARGS__))
 
-#if !defined(__ANDROID__)
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
 typedef struct { GLdouble n; GLdouble f; } pcq_a_glDepthRange;
 static void pcq_x_glDepthRange(void* p_) { pcq_a_glDepthRange* a_ = (pcq_a_glDepthRange*) p_; (glDepthRange)(a_->n, a_->f); }
 static inline void pcq_glDepthRange(GLdouble n, GLdouble f)
@@ -802,6 +802,7 @@ static inline void pcq_glDrawElements(GLenum mode, GLsizei count, GLenum type, c
 }
 #define glDrawElements(...) PCQ_V("glDrawElements", pcq_glDrawElements(__VA_ARGS__))
 
+#if !defined(__EMSCRIPTEN__)
 typedef struct { GLenum mode; GLsizei count; GLenum type; const void * indices; GLint basevertex; } pcq_a_glDrawElementsBaseVertex;
 static void pcq_x_glDrawElementsBaseVertex(void* p_) { pcq_a_glDrawElementsBaseVertex* a_ = (pcq_a_glDrawElementsBaseVertex*) p_; (glDrawElementsBaseVertex)(a_->mode, a_->count, a_->type, a_->indices, a_->basevertex); }
 static inline void pcq_glDrawElementsBaseVertex(GLenum mode, GLsizei count, GLenum type, const void * indices, GLint basevertex)
@@ -825,6 +826,7 @@ static inline void pcq_glDrawElementsBaseVertex(GLenum mode, GLsizei count, GLen
     (void) a_;
 }
 #define glDrawElementsBaseVertex(...) PCQ_V("glDrawElementsBaseVertex", pcq_glDrawElementsBaseVertex(__VA_ARGS__))
+#endif
 
 typedef struct { GLenum cap; } pcq_a_glEnable;
 static void pcq_x_glEnable(void* p_) { pcq_a_glEnable* a_ = (pcq_a_glEnable*) p_; (glEnable)(a_->cap); }
@@ -1072,7 +1074,7 @@ static inline void pcq_glGetBooleanv(GLenum pname, GLboolean * data)
 }
 #define glGetBooleanv(...) PCQ_V("glGetBooleanv", pcq_glGetBooleanv(__VA_ARGS__))
 
-#if !defined(__ANDROID__)
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
 typedef struct { GLenum target; GLintptr offset; GLsizeiptr size; void * data; } pcq_a_glGetBufferSubData;
 static void pcq_x_glGetBufferSubData(void* p_) { pcq_a_glGetBufferSubData* a_ = (pcq_a_glGetBufferSubData*) p_; (glGetBufferSubData)(a_->target, a_->offset, a_->size, a_->data); }
 static inline void pcq_glGetBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, void * data)
@@ -1240,7 +1242,7 @@ static inline const GLubyte * pcq_glGetStringi(GLenum name, GLuint index)
 }
 #define glGetStringi(...) PCQ_R("glGetStringi", pcq_glGetStringi(__VA_ARGS__))
 
-#if !defined(__ANDROID__)
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
 typedef struct { GLenum target; GLint level; GLenum format; GLenum type; void * pixels; } pcq_a_glGetTexImage;
 static void pcq_x_glGetTexImage(void* p_) { pcq_a_glGetTexImage* a_ = (pcq_a_glGetTexImage*) p_; (glGetTexImage)(a_->target, a_->level, a_->format, a_->type, a_->pixels); }
 static inline void pcq_glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void * pixels)
@@ -1385,7 +1387,7 @@ static inline void * pcq_glMapBufferRange(GLenum target, GLintptr offset, GLsize
 }
 #define glMapBufferRange(...) PCQ_R("glMapBufferRange", pcq_glMapBufferRange(__VA_ARGS__))
 
-#if !defined(__ANDROID__)
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
 typedef struct { GLenum mode; const GLint * first; const GLsizei * count; GLsizei drawcount; } pcq_a_glMultiDrawArrays;
 static void pcq_x_glMultiDrawArrays(void* p_) { pcq_a_glMultiDrawArrays* a_ = (pcq_a_glMultiDrawArrays*) p_; (glMultiDrawArrays)(a_->mode, a_->first, a_->count, a_->drawcount); }
 static inline void pcq_glMultiDrawArrays(GLenum mode, const GLint * first, const GLsizei * count, GLsizei drawcount)
@@ -1431,7 +1433,7 @@ static inline void pcq_glPixelStorei(GLenum pname, GLint param)
 }
 #define glPixelStorei(...) PCQ_V("glPixelStorei", pcq_glPixelStorei(__VA_ARGS__))
 
-#if !defined(__ANDROID__)
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
 typedef struct { GLfloat size; } pcq_a_glPointSize;
 static void pcq_x_glPointSize(void* p_) { pcq_a_glPointSize* a_ = (pcq_a_glPointSize*) p_; (glPointSize)(a_->size); }
 static inline void pcq_glPointSize(GLfloat size)

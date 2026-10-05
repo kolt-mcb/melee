@@ -2597,9 +2597,15 @@ static int pc_xdl_on(void)
 }
 static int pc_indexed_on(void)
 {
+#if defined(__EMSCRIPTEN__)
+    /* WebGL2 is GLES 3.0 and has no base-vertex draw, which the indexed batch
+     * needs; the per-primitive path below is what the web build draws with. */
+    return 0;
+#else
     static int on = -1;
     if (on < 0) on = getenv("MELEE_NO_INDEXED") == NULL;
     return on;
+#endif
 }
 static int pc_tri_class(GLenum m)
 {

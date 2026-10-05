@@ -8,6 +8,12 @@
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #include "port/fs.h"
+/* Declarations for calls this file otherwise makes implicitly, which assumes
+ * an int return. Native targets do not care; wasm type-checks every call and
+ * traps on the mismatch (HSD_StateSetZMode et al. are void). */
+#include "state.h"
+#include "tev.h"
+#include <melee/lb/lbarchive.h>
 #endif
 
 #include "cobj.h"

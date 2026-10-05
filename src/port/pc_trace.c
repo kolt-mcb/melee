@@ -27,6 +27,7 @@
  * ============================================================ */
 
 #include "port/pc_trace.h"
+#include <sysdolphin/baselib/cobj.h> /* HSD_CObjGet* are void; wasm checks */
 
 #include <sysdolphin/baselib/generator.h>
 #include <sysdolphin/baselib/psstructs.h>

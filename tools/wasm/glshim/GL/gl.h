@@ -39,4 +39,18 @@ static inline void pc_gles_get_buffer_sub_data(GLenum target, GLintptr off,
     }
 }
 #define glGetBufferSubData(t, o, s, d) pc_gles_get_buffer_sub_data(t, o, s, d)
+/* No base-vertex draws in GLES 3.0. The bridge's indexed batch, the one hot
+ * user, is switched off for this target (pc_indexed_on); what is left are the
+ * MELEE_GLBENCH micro-benchmark and a driver probe. Base 0 is an ordinary
+ * indexed draw; anything else is skipped rather than drawn wrong. */
+static inline void pc_gles30_draw_elements_base_vertex(GLenum mode, GLsizei count,
+                                                       GLenum type, const void* indices,
+                                                       GLint basevertex)
+{
+    if (basevertex == 0) {
+        glDrawElements(mode, count, type, indices);
+    }
+}
+#define glDrawElementsBaseVertex(m, c, t, i, b)                               \
+    pc_gles30_draw_elements_base_vertex(m, c, t, i, b)
 #endif

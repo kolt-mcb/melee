@@ -15,6 +15,9 @@
 #include "window.h"
 #include "log.h"
 #include "gx_gl_bridge.h"
+/* GXSetZMode is void (gx_gl_bridge.c); declared here because the GX headers
+ * clash with GL's. Without it the call is implicit, and wasm traps on that. */
+void GXSetZMode(u32 enable, u32 func, u32 update);
 void pc_get_fb_size(float* w, float* h);
 #include "texture_render.h"
 #include "platform.h"

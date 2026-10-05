@@ -709,7 +709,8 @@ if WASM and os.environ.get("WASM_LINK") != "1":
     # Phase 0: no link edge. Building the objects is the whole deliverable.
     n += "default " + out_objs + "\n\n"
 else:
-    n += "build " + OUT_PATH + ": link " + out_objs + " | " + STATE_LD + "\n"
+    # The state linker script is a native-only input (see LDFLAGS above).
+    n += "build " + OUT_PATH + ": link " + out_objs + ("" if WASM else " | " + STATE_LD) + "\n"
     n += "  ldflags = $ldflags\n"
     n += "  libs = $libs\n\n"
     n += "default " + OUT_PATH + "\n\n"

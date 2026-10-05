@@ -630,7 +630,7 @@ void lbAudioAx_8002838C(void);
 void gmMainLib_8015FCC0(void);
 void lbMthp_8001F87C(void);
 void gmMainLib_8015FBA4(void);
-int lbAudioAx_80028690(void);
+void lbAudioAx_80028690(void); /* lbaudio_ax.c */
 
 
 /* MSL va_list internals */
@@ -2736,7 +2736,7 @@ __attribute__((weak)) int THPDec_8032F8D4(int a0, int a1) { return 0; } /* decl:
 __attribute__((weak)) int THPDec_8032FD40(int a0, int a1) { return 0; } /* decl: s32 */
 __attribute__((weak)) void THPDec_80331340(int a0, int a1, int a2, int a3) { PC_STUB_HIT("THPDec_80331340");}
 __attribute__((weak)) void THPDec_803313D0(int a0, int a1, int a2, int a3, int a4) { PC_STUB_HIT("THPDec_803313D0");}
-__attribute__((weak)) long THPInit(void) { return 0; } /* decl: BOOL */
+__attribute__((weak)) void THPInit(void) {} /* callers use it as void; wasm checks */
 __attribute__((weak)) int THPVideoDecode(int a0, int a1, int a2, int a3, int a4) { return 0; } /* decl: s32 */
 __attribute__((weak)) void ThunderPhysTimer(void) { PC_STUB_HIT("ThunderPhysTimer");}
 __attribute__((weak)) void VIFlush(void) { PC_STUB_HIT("VIFlush");}
@@ -3428,7 +3428,6 @@ __attribute__((weak)) void get_stage_floor_height(void) { PC_STUB_HIT("get_stage
 __attribute__((weak)) void get_stick_x(void) { PC_STUB_HIT("get_stick_x");}
 __attribute__((weak)) void get_stick_y(void) { PC_STUB_HIT("get_stick_y");}
 __attribute__((weak)) void gmClassic_803DDEC8(void) { PC_STUB_HIT("gmClassic_803DDEC8");}
-__attribute__((weak)) void gmMainLib_8045A6C0(void) { PC_STUB_HIT("gmMainLib_8045A6C0");}
 __attribute__((weak)) int gm_80160638(int a0) { PC_STUB_HIT("gm_80160638"); return 0; }
 __attribute__((weak)) int gm_8016400C(int a0) { PC_STUB_HIT("gm_8016400C"); return 0; }
 __attribute__((weak)) int gm_80164024(int a0) { PC_STUB_HIT("gm_80164024"); return 0; }
@@ -3473,7 +3472,6 @@ __attribute__((weak)) int grFigureGet_80219C50(int a0) { PC_STUB_HIT("grFigureGe
 __attribute__((weak)) float grGarden_80203624(void) { PC_STUB_HIT("grGarden_80203624"); return 0; }
 __attribute__((weak)) int grGreatBay_801F66A4(void) { PC_STUB_HIT("grGreatBay_801F66A4"); return 0; }
 __attribute__((weak)) float grHomeRun_8021EF10(void) { PC_STUB_HIT("grHomeRun_8021EF10"); return 0; }
-__attribute__((weak)) void grIceMt_801FA6D8(int a0) { PC_STUB_HIT("grIceMt_801FA6D8");}
 __attribute__((weak)) int grInishie1_801FCAAC(int a0) { PC_STUB_HIT("grInishie1_801FCAAC"); return 0; }
 __attribute__((weak)) void grInishie2_801FD448(int a0) { PC_STUB_HIT("grInishie2_801FD448");}
 __attribute__((weak)) void grInishie2_801FD4CC(int a0) { PC_STUB_HIT("grInishie2_801FD4CC");}
@@ -3525,7 +3523,7 @@ __attribute__((weak)) void hsd_8039EE24(int a0) { PC_STUB_HIT("hsd_8039EE24");}
 __attribute__((weak)) int hsd_8039EFAC(int a0, int a1, int a2, int a3) { return 0; } /* decl: HSD_Generator* */
 __attribute__((weak)) int hsd_8039F05C(int a0, int a1, int a2) { return 0; } /* decl: HSD_Generator* */
 __attribute__((weak)) int hsd_8039F6CC(int a0, int a1, int a2, int a3) { return 0; } /* decl: HSD_Generator* */
-__attribute__((weak)) long hsd_803AAA48(void) { return 0; } /* decl: s32 */
+__attribute__((weak)) void hsd_803AAA48(void) {} /* card.h: void */
 __attribute__((weak)) void hsd_803AC3E0(int a0, int a1, int a2, int a3, int a4) { PC_STUB_HIT("hsd_803AC3E0");}
 __attribute__((weak)) void hsd_803B2374(void) { PC_STUB_HIT("hsd_803B2374");}
 __attribute__((weak)) void hsd_803B24E4(int a0, int a1, int a2, int a3) { PC_STUB_HIT("hsd_803B24E4");}
@@ -3600,7 +3598,6 @@ __attribute__((weak)) void lb_8001D21C(void) { PC_STUB_HIT("lb_8001D21C");}
 __attribute__((weak)) void lbSnap_8001E290(void) { PC_STUB_HIT("lbSnap_8001E290");}
 __attribute__((weak)) void lbMthp_8001F87C(void) { PC_STUB_HIT("lbMthp_8001F87C");}
 __attribute__((weak)) void lbAudioAx_8002838C(void) { PC_STUB_HIT("lbAudioAx_8002838C");}
-__attribute__((weak)) int lbAudioAx_80028690(void) { PC_STUB_HIT("lbAudioAx_80028690"); return 0; }
 
 /* lb_80019AAC: Initializes pad timer system for 60Hz game tick */
 __attribute__((weak)) void gmMainLib_8015FCC0(void) { PC_STUB_HIT("gmMainLib_8015FCC0");}

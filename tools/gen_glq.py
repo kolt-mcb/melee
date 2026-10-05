@@ -79,6 +79,9 @@ REMAP = {"glBindFramebuffer": ("framebuffer", "pc_glq_map_fb(framebuffer)")}
 # Handled by hand in pc_glq.c (fences, the shadowed queries).
 MANUAL = {"glFenceSync", "glClientWaitSync", "glDeleteSync", "glGetIntegerv", "glGenTextures"}
 
+# In GLES 3.2 (Android) but not GLES 3.0, which is all WebGL2 exposes.
+NOT_GLES30 = {"glDrawElementsBaseVertex"}
+
 DESKTOP_ONLY = {
     "glClearDepth": ("void", [("GLdouble", "depth")]),
     "glDepthRange": ("void", [("GLdouble", "n"), ("GLdouble", "f")]),
@@ -148,9 +151,14 @@ def gen():
         if n in MANUAL:
             continue
         ret, params = DESKTOP_ONLY.get(n) or P[n]
-        guard = n in DESKTOP_ONLY
-        if guard:
-            lines.append("#if !defined(__ANDROID__)")
+        # Desktop-only names are left to the GLES shims on Android and the
+        # web; the GLES 3.1/3.2 ones the web's GLES 3.0 (WebGL2) lacks are
+        # left to its shim too.
+        guard = n in DESKTOP_ONLY or n in NOT_GLES30
+        if n in DESKTOP_ONLY:
+            lines.append("#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)")
+        elif guard:
+            lines.append("#if !defined(__EMSCRIPTEN__)")
         sig = ", ".join("%s %s" % (t, v) for t, v in params) or "void"
         call = ", ".join(v for _, v in params)
         ptrs = [(t, v) for t, v in params if is_ptr(t)]
