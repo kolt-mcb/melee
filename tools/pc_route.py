@@ -57,6 +57,23 @@ DEADZONE = 200.0
 GAIN = 0.0002
 CURSOR_Y0 = -21.5
 
+# What the A press tests is not the cursor but the coin it carries, which
+# mncharsel.c keeps at the cursor plus (2.7, -2.0) (model->x8/xC). Aiming the
+# cursor at an icon's centre therefore dropped the coin 2.7 to its right --
+# off the edge of the narrow bottom-row icons: Pichu's coin landed on the
+# icon beside it, and Roy's (3.0 from centre to edge, before rounding the
+# walk to whole frames) on none at all, so his cell never left the select.
+COIN_OFFSET = (2.7, -2.0)
+
+# The select screen swaps two icons when Luigi is not unlocked
+# (mnCharSel init: gm_IsCKindUnlocked(CKind_Luigi) == 0 moves Luigi's icon to
+# the bottom row and Pikachu's to the top). These runs unlock the icons' own
+# state bytes but not Luigi himself, so the swap happens -- on the console
+# and here alike -- and a route aimed at the table's Luigi selected Pikachu
+# and the other way round. Measured: the auto_ckind_luigi routes spawned two
+# Pikachus, the pikachu routes two Luigis.
+LUIGI_LOCKED = True
+
 
 def step_for(stick):
     """Per-frame cursor movement for a raw stick reading, as the game does it."""
@@ -103,6 +120,9 @@ def load_grid(path=ICONS_SRC):
         l, r = bnds[0], bnds[1]
         u, d = defs[rows[0]], defs[rows[1]]
         grid[kinds[0][6:].upper()] = ((l + r) / 2.0, (u + d) / 2.0)
+    if LUIGI_LOCKED and "LUIGI" in grid and "PIKACHU" in grid:
+        (lx, ly), (px, py) = grid["LUIGI"], grid["PIKACHU"]
+        grid["LUIGI"], grid["PIKACHU"] = (lx, py), (px, ly)
     return grid
 
 
@@ -113,6 +133,7 @@ def plan(target, port, grid=None):
         sys.exit("no icon for %s (have: %s)"
                  % (target, ", ".join(sorted(k for k in grid if k[0] != "_"))))
     tx, ty = grid[target]
+    tx, ty = tx - COIN_OFFSET[0], ty - COIN_OFFSET[1]   # aim the coin
     x, y = 15.0 * port - 31.0, CURSOR_Y0
     out = []
     # One axis at a time, the way the recorded route does it: a diagonal would
