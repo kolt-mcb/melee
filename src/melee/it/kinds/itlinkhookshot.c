@@ -885,6 +885,44 @@ float it_802A3C98(Vec3* arg0, Vec3* arg1, Vec3* arg2)
     arg2->y = arg0->y - arg1->y;
     arg2->z = arg0->z - arg1->z;
 
+#if BUILD_TARGET_PC
+    /* The out-of-line copy's squared length is not fused: 802A3CF8 is three
+     * fmuls and two fadds, (x*x + y*y) + z*z. Fusing it put the Samus
+     * grapple's tip an ulp or three off in x and z, which is where Samus on
+     * Mute City first parts from the console (frame 45, the grabbed
+     * fighter's x). The grapple, Sheik's chain, the Ice Climbers' string and
+     * Ness's yo-yo all call this copy. The hookshot does not -- see
+     * lk_802A3C98_inlined below. */
+    len = sqrtf((arg2->x * arg2->x + arg2->y * arg2->y) +
+                arg2->z * arg2->z);
+#else
+    len = sqrtf(LK_DOT(arg2->x, arg2->y, arg2->z, arg2->x, arg2->y, arg2->z));
+#endif
+    if (len == (f64) 0.0F) {
+        inv = (f64) 0.0F;
+    } else {
+        inv = (f64) 1.0F / len;
+    }
+    arg2->x *= inv;
+    arg2->y *= inv;
+    arg2->z *= inv;
+    return len;
+}
+
+#if BUILD_TARGET_PC
+/* MWCC inlined it_802A3C98 into every caller in this file, and every inlined
+ * copy fuses the squared length (an fmadds pair before each frsqrte, in all
+ * thirteen hookshot handlers -- the console has no call to 802A3C98 here at
+ * all). So the hookshot keeps the fused form; making the out-of-line copy
+ * plain without this moved four Link and Young Link cells off the console. */
+static inline float lk_802A3C98_inlined(Vec3* arg0, Vec3* arg1, Vec3* arg2)
+{
+    f32 inv;
+    f32 len;
+    arg2->x = arg0->x - arg1->x;
+    arg2->y = arg0->y - arg1->y;
+    arg2->z = arg0->z - arg1->z;
+
     len = sqrtf(LK_DOT(arg2->x, arg2->y, arg2->z, arg2->x, arg2->y, arg2->z));
     if (len == (f64) 0.0F) {
         inv = (f64) 0.0F;
@@ -896,6 +934,8 @@ float it_802A3C98(Vec3* arg0, Vec3* arg1, Vec3* arg2)
     arg2->z *= inv;
     return len;
 }
+#define it_802A3C98 lk_802A3C98_inlined
+#endif
 
 s32 it_802A3D90(ItemLink* item_link)
 {
