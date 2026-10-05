@@ -4000,6 +4000,23 @@ void ftCo_800A75DC(Fighter* fp0, Fighter* fp1)
                 }
             }
         } else {
+#if BUILD_TARGET_PC
+            /* ftCo_800A4768 writes sp18 only when some island edge
+             * qualifies, and the console then aims the CPU at whatever the
+             * slot held. Measured at the call (800A7850, Mewtwo on Mute City,
+             * frames 549-550): the words are a saved back chain and a saved
+             * LR from ftCo_800A4BEC's callee, 804EE980 800A4D48 804EE980,
+             * the same on every frame this path is taken -- as floats about
+             * -9.5e-39, so the target is the origin. Uninitialised, the port
+             * aimed at whatever coordinate its own stack held (-60.2, 2.9)
+             * and Mewtwo's AI hash parted at frame 550. */
+            {
+                union { u32 u; f32 f; } w0 = { 0x804EE980 }, w1 = { 0x800A4D48 };
+                sp18.x = w0.f;
+                sp18.y = w1.f;
+                sp18.z = w0.f;
+            }
+#endif
             ftCo_800A4768(fp1, &sp18);
             ftCo_800A1F3C(fp0, sp18.x, sp18.y, data->x56C + fp1->cpu.x564);
         }
