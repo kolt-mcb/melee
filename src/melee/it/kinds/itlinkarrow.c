@@ -681,16 +681,34 @@ bool itLinkarrow_UnkMotion4_Anim(Item_GObj* gobj)
     case 4:
     case 6:
         rand = HSD_Randf();
+#if BUILD_TARGET_PC
+        /* The console reads these floats past the end of it_803F6A28, the
+         * five-entry ItemStateTable (0x50 bytes): [23] and [31] land on
+         * it_803F6A84[x9C] and it_803F6A84[x9C + 8], the table its twin
+         * itLinkArrow_802A81C4 indexes by name. Here a table entry holds
+         * three 8-byte pointers, so the same offsets read the function
+         * pointers' bytes, the wobble came out as nothing, and a stuck
+         * arrow's hurtbox never moved -- Link's boomerang hits it on the
+         * console on Final Destination at frame 76 and passes by here. */
+        temp_r3 = &it_803F6A84[ip->xDD4_itemVar.linkarrow.x9C];
+        var_f32 = MTXDegToRad(LA_FMA(temp_r3[8], rand, temp_r3[0]));
+#else
         temp_r3 = (f32*) &it_803F6A28 + ip->xDD4_itemVar.linkarrow.x9C;
         var_f32 = MTXDegToRad(LA_FMA(temp_r3[31], rand, temp_r3[23]));
+#endif
         var_f31 = ip->xDD4_itemVar.linkarrow.x94 + var_f32;
         break;
     case 1:
     case 3:
     case 5:
         rand = HSD_Randf();
+#if BUILD_TARGET_PC
+        temp_r3 = &it_803F6A84[ip->xDD4_itemVar.linkarrow.x9C];
+        var_f32 = MTXDegToRad(LA_FMA(temp_r3[8], rand, temp_r3[0]));
+#else
         temp_r3 = (f32*) &it_803F6A28 + ip->xDD4_itemVar.linkarrow.x9C;
         var_f32 = MTXDegToRad(LA_FMA(temp_r3[31], rand, temp_r3[23]));
+#endif
         var_f31 = ip->xDD4_itemVar.linkarrow.x94 - var_f32;
         break;
     default:
