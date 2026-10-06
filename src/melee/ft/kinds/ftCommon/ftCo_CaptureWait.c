@@ -10,6 +10,10 @@
 #include <melee/it/kinds/itlinkhookshot.h>
 #include <melee/it/kinds/itsamusgrapple.h>
 
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
+
 /* This was a struct laid over Fighter by raw GameCube byte offsets, reaching
  * grab_timer (fp+1A4C), victim_gobj (fp+1A58) and the capturewait arm of the
  * motion-vars union (fp+2340..234C) by padding to them. Two things break that
@@ -108,6 +112,10 @@ void fn_800DB790(Fighter_GObj* gobj)
     }
 
     ftCommon_8007E2F4(fp, 0x1FF);
+#if BUILD_SLIPPI
+    /* Slippi's wobble count starts here (800db880 / 800dbbd4). */
+    slp_compat_wobble_init(fp);
+#endif
 }
 
 void fn_800DB8A4(Fighter_GObj* gobj)
@@ -206,6 +214,10 @@ void fn_800DBAE4(Fighter_GObj* gobj)
     }
 
     ftCommon_8007E2F4(fp, 0x1FF);
+#if BUILD_SLIPPI
+    /* Slippi's wobble count starts here (800db880 / 800dbbd4). */
+    slp_compat_wobble_init(fp);
+#endif
 }
 
 static inline void fn_800DBBF8_noinline(Fighter_GObj* gobj1, Fighter* gobj2)

@@ -518,3 +518,53 @@ emulator plays whichever character its presses land on, and Slippi's check
 covers only positions and percents within a tolerance. Next: apply the peer's
 MATCH_SELECTIONS (character, stage) on the port, then compare the replay
 against the port's own trace frame by frame.
+
+### The same match, frame for frame (2026-10-05)
+
+    SLIPPI_PORT_ENV="SDL_VIDEODRIVER=offscreen MELEE_SLIPPI_COMPAT=all \
+        MELEE_SLP=$PWD/build/pc/slippi-direct/port-replays MELEE_PAD_SCRIPT=..." \
+        SLIPPI_PRESS=1 SLIPPI_NOLOCK=1 tools/slippi/direct_vs.sh 120
+    tools/slippi/compare_slp.py build/pc/slippi-direct/replays/<emu>.slp \
+        build/pc/slippi-direct/port-replays/<port>.slp
+
+The emulator's replay and the port's own now agree on every post-frame update
+-- action state, position, facing, percent, stocks -- for a whole window with
+the port's player driven by a pad script: 11,118 updates, deaths and respawns
+included, and the two Game Info Blocks are byte-identical. `compare_slp.py`
+reads a replay the emulator never closed (it is killed at the end of the
+window). An idle match had already compared identical, and that proved much
+less than it looked: nothing moves, so nothing can be out of place. Inputs
+showed four things.
+
+- **Lineup and stage.** The port applies the agreed MATCH_SELECTIONS
+  (`pc_net_lineup`, applied in `onEnterDebugVs`) and sends its real colour.
+- **Neutral spawns** (Slippi's NeutralSpawn.asm, `neutral-spawns` in
+  pc_slippi_compat.c) on the six legal stages.
+- **The frame numbering was 124 frames apart.** The port keyed pads and
+  checksums on `gm_GetFrameCount()`, which holds at 0 through the entry and
+  countdown and starts at GO. Slippi keys on ODB_FRAME, which counts from the
+  match scene's first frame: the scene counter `gm_801A4BA8()`, keyed
+  unchanged (measured -- `+1` and `+2` each put the emulator's onset that many
+  frames late). The emulator had played the port's first press at frame 147
+  and the port at 271. With that: Slippi's freeze-time clear (pads before frame
+  78 are zero, TriggerSendInput.asm) and its per-frame RNG re-seed (FN_SyncRNG
+  in InitOnlinePlay.asm: a priority-0 proc that writes rotl16(frame) + offset),
+  both in pc_netplay.c.
+- **The rules were different.** Slippi does not play the match its menus set
+  up: Dolphin hands over a fixed Game Info Block (prepareOnlineMatchState) and
+  InitOnlinePlay copies it over the StartMeleeData -- stock mode, four stocks,
+  eight minutes, items off, no rule callbacks. The port matched frame for frame
+  until the first stock was lost, on the emulator only. It now builds the same
+  block (`slp_build_online_block`) and decodes it into its StartMeleeData
+  (`slp_read_game_info_block`, the inverse of the replay writer's encoder).
+  Pausing depends on Slippi's mode, which the peer does not send:
+  `MELEE_SLP_MODE` (`direct` by default; the harness says `unranked`, which is
+  what the emulator's auto-drive confirms).
+
+The negative control still holds with the new numbering:
+`MELEE_SLP_BAD_CHECKSUM=1` ends the emulator's game about a second into play,
+GameEndMethod 7.
+
+Still open from Slippi's side: UCF (dashback, shield drop), wobbling, the
+Pokemon Stadium transformations and camera, teams, and the frame-0 path for
+Ice Climbers.

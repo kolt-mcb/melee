@@ -24,6 +24,12 @@ void pc_net_pads(GCPadStatus* pads);
  * uses). Resets the input rings and puts both sides on one RNG seed. */
 void pc_net_match_begin(void);
 
+/* The top of StartMelee (fn_8016E730), where Slippi's InitOnlinePlay runs.
+ * Against a Slippi peer: installs Slippi's online rules over the match's
+ * StartMeleeData and creates the GObj that re-seeds the RNG each frame. */
+struct StartMeleeData;
+void pc_net_slippi_match_init(struct StartMeleeData* data);
+
 /* Leaving the match scene. */
 void pc_net_match_end(void);
 

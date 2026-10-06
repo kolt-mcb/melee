@@ -16,9 +16,15 @@
 
 #include <dolphin/pad.h>
 #include <melee/ft/fighter.h>
+#include <melee/ft/ftcommon.h>
+#include <melee/ft/kinds/ftCommon/ftCo_Attack100.h>
 #include <melee/ft/forward.h>
 #include <melee/ft/types.h>
 #include <melee/gm/gm_1601.h>
+#include <melee/gm/gm_1A3F.h>
+#include <melee/gm/gmvs.h>
+#include <melee/gr/stage.h>
+#include <melee/it/types.h>
 #include <melee/pl/player.h>
 #include <string.h>
 
@@ -53,12 +59,13 @@ static const struct slp_compat_entry slp_fixes[SLP_FIX_COUNT] = {
       "same raw-input history as ucf-dashback" },
     { "ucf-sdi", 0, "8008e54c",
       "same raw-input history as ucf-dashback" },
-    { "neutral-spawns", 0, "8016e510",
-      "a spawn-point table keyed by stage; readable, not yet transcribed" },
-    { "wobbling", 0, "8008f090",
-      "needs a per-fighter wobble counter, which Slippi appends to the "
-      "player block; this port would keep it beside, as the L-cancel "
-      "status already is" },
+    { "neutral-spawns", 1, "8016e510",
+      "the six legal stages spawn at fixed, mirrored points, and facing "
+      "follows the side; elsewhere the stage's own spawn by player order" },
+    { "wobbling", 1, "8008f090",
+      "a fighter held by an Ice Climber is let go after the fourth distinct "
+      "hit from the grabber or its items (singles only), and Nana is made "
+      "to let go with Popo" },
     { "ps-camera", 0, "801d24fc",
       "Pokemon Stadium's transformation does not run on this port yet" },
 };
@@ -327,4 +334,233 @@ void slp_compat_clamp_costumes(void)
     }
 }
 
+/* ---- neutral spawns ----
+ * Transcribed from slippi-ssbm-asm External/NeutralSpawn/NeutralSpawn.asm,
+ * injected at 8016e510 in fn_8016E2BC: once a multiplayer slot's spawn point
+ * and facing are stored, re-store them from this table. Singles takes the
+ * player's order among the present slots; teams only applies to a 2v2, in
+ * team order. A stage not in the table falls back to the stage's own spawn
+ * points (Stage_80224E64), by order in singles and through {0,3,1,2} in teams.
+ * Facing follows the side: x > 0 faces left. Off in 1P modes, Training and
+ * Target Test, and for slots 5 and 6. */
+static const struct {
+    int stage;
+    float spawn[2][4][2]; /* [teams][spawn id][x, y] */
+} slp_neutral_spawns[] = {
+    { 0x20, /* Final Destination */
+      { { { -60, 10 }, { 60, 10 }, { -20, 10 }, { 20, 10 } },
+        { { -60, 10 }, { -20, 10 }, { 60, 10 }, { 20, 10 } } } },
+    { 0x1F, /* Battlefield */
+      { { { -38.8f, 35.2f }, { 38.8f, 35.2f }, { 0, 8 }, { 0, 62.4f } },
+        { { -38.8f, 35.2f }, { -38.8f, 5 }, { 38.8f, 35.2f }, { 38.8f, 5 } } } },
+    { 0x08, /* Yoshi's Story */
+      { { { -42, 26.6f }, { 42, 28 }, { 0, 46.9f }, { 0, 4.9f } },
+        { { -42, 26.6f }, { -42, 5 }, { 42, 28 }, { 42, 5 } } } },
+    { 0x1C, /* Dream Land */
+      { { { -46.6f, 37.2f }, { 47.4f, 37.3f }, { 0, 7 }, { 0, 58.5f } },
+        { { -46.6f, 37.2f }, { -46.6f, 5 }, { 47.4f, 37.3f }, { 47.4f, 5 } } } },
+    { 0x02, /* Fountain of Dreams */
+      { { { -41.25f, 21 }, { 41.25f, 27 }, { 0, 5.25f }, { 0, 48 } },
+        { { -41.25f, 21 }, { -41.25f, 5 }, { 41.25f, 27 }, { 41.25f, 5 } } } },
+    { 0x03, /* Pokemon Stadium */
+      { { { -40, 32 }, { 40, 32 }, { 70, 7 }, { -70, 7 } },
+        { { -40, 32 }, { -40, 5 }, { 40, 32 }, { 40, 5 } } } },
+};
+
+int pc_selected_stkind(void);
+
+void slp_compat_neutral_spawn(int slot, int is_teams)
+{
+    int spawn_id = 0, k, scene;
+    Vec3 pos;
+
+    if (!slp_compat(SLP_FIX_NEUTRAL_SPAWNS)) {
+        return;
+    }
+    if (gm_IsCurrently1PMode_inline() || slot >= 5) {
+        return;
+    }
+    scene = ((int) gm_GetCurrentSceneIndex() << 8) | gm_GetCurrentGameMode();
+    if (scene == 0x021C || scene == 0x010F) { /* Training, Target Test */
+        return;
+    }
+
+    if (is_teams != 1) {
+        /* The player's place among the slots that are present. */
+        for (k = 0; k <= 4; k++) {
+            if (Player_GetPlayerSlotType(k) == 3) {
+                continue;
+            }
+            if (k == slot) {
+                break;
+            }
+            spawn_id++;
+        }
+    } else {
+        /* Only a 2v2: every team has none or exactly two. */
+        int team, order[4], n = 0;
+        for (team = 0; team < 3; team++) {
+            int members = 0;
+            for (k = 0; k < 4; k++) {
+                if (Player_GetPlayerSlotType(k) != 3 &&
+                    Player_GetTeam(k) == team)
+                {
+                    members++;
+                }
+            }
+            if (members == 1 || members > 2) {
+                return;
+            }
+        }
+        for (team = 0; team < 3; team++) {
+            for (k = 0; k < 4; k++) {
+                if (Player_GetPlayerSlotType(k) != 3 &&
+                    Player_GetTeam(k) == team && n < 4)
+                {
+                    order[n++] = k;
+                }
+            }
+        }
+        for (spawn_id = 0; spawn_id < 4; spawn_id++) {
+            if (spawn_id < n && order[spawn_id] == slot) {
+                break;
+            }
+        }
+    }
+
+    pos.x = pos.y = pos.z = 0.0f;
+    {
+        int stage = pc_selected_stkind(), found = 0;
+        size_t t;
+        for (t = 0; t < sizeof(slp_neutral_spawns) / sizeof(slp_neutral_spawns[0]); t++) {
+            if (slp_neutral_spawns[t].stage == stage && spawn_id < 4) {
+                pos.x = slp_neutral_spawns[t].spawn[is_teams == 1][spawn_id][0];
+                pos.y = slp_neutral_spawns[t].spawn[is_teams == 1][spawn_id][1];
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            static const int teams_order[4] = { 0, 3, 1, 2 };
+            int id = is_teams == 1 ? teams_order[spawn_id & 3] : spawn_id;
+            Stage_80224E64(id, &pos);
+        }
+    }
+    Player_80032768(slot, &pos);
+    Player_SetFacingDirection(slot, pos.x > 0.0f ? -1.0f : 1.0f);
+}
+
 #endif /* BUILD_SLIPPI */
+
+/* ---- wobbling ----
+ * Slippi's PreventWobbling (External/PreventWobbling, in the netplay codeset
+ * unconditionally): the held fighter counts distinct hits from the fighter
+ * holding it -- or from that fighter's items -- and once there have been more
+ * than three in a singles match, the grab is broken for Popo and Nana both.
+ *
+ * The count lives where Slippi keeps it, in the held fighter's state
+ * variables at console offsets 0x2384 (count, a byte) and 0x2386 (the last
+ * move's ID, a halfword): mv + 0x44. This port keeps mv at the console's
+ * offsets, so they are the same bytes, and they are kept as the one word the
+ * console would see there, so anything else that reads it reads what the
+ * console's memory holds. */
+static u32* slp_wobble_word(Fighter* fp)
+{
+    return (u32*) ((u8*) &fp->mv + 0x44);
+}
+
+/* End of fn_800DB790 and fn_800DBAE4 (800db880, 800dbbd4): entering the
+ * held state starts the count again. */
+void slp_compat_wobble_init(struct Fighter* fp)
+{
+    u32* w;
+    if (!slp_compat(SLP_FIX_WOBBLING)) {
+        return;
+    }
+    w = slp_wobble_word((Fighter*) fp);
+    *w = (*w & 0x00FF0000u) | 0xFFFFu; /* count 0, last move -1 */
+}
+
+/* 8008f090, in ftCo_8008EC90's second copy of the capture-damage tail, after
+ * ftCo_800C8D00. Returns 1 when the original goes on to Wobbling_Exit
+ * (8008f0c8), which skips the CaptureDamage motion checks that follow. */
+int slp_compat_wobble_check(Fighter_GObj* gobj)
+{
+    Fighter* fp = GET_FIGHTER(gobj);
+    Fighter_GObj* grabber;
+    Fighter* gfp;
+    HSD_GObj* source;
+    u32* w;
+    unsigned move;
+    unsigned last;
+    unsigned count;
+    Fighter_GObj* nana;
+
+    if (!slp_compat(SLP_FIX_WOBBLING)) {
+        return 0;
+    }
+    /* Held, not thrown: CapturePulledHi (0xDF) to CaptureDamageLw (0xE4). */
+    if (fp->motion_id < 0xDF || fp->motion_id > 0xE4) {
+        return 0;
+    }
+    grabber = fp->victim_gobj;
+    if (grabber == NULL) {
+        return 0;
+    }
+    gfp = GET_FIGHTER(grabber);
+    if (!gfp->x2222_b5) { /* the grabber has a follower */
+        return 0;
+    }
+    w = slp_wobble_word(fp);
+    last = *w & 0xFFFFu;
+    source = fp->dmg.x1868_source;
+    if (source == (HSD_GObj*) grabber) {
+        move = gfp->x2074.x2088;
+    } else {
+        Item* ip;
+        if (source->classifier != HSD_GOBJ_CLASS_ITEM) {
+            return 0;
+        }
+        ip = (Item*) source->user_data;
+        if (ip->owner != (HSD_GObj*) grabber) {
+            return 0;
+        }
+        move = ip->xDA8_short;
+    }
+    if (move == last) {
+        return 0;
+    }
+    count = ((*w >> 24) + 1) & 0xFF;
+    *w = (count << 24) | (*w & 0x00FF0000u) | (move & 0xFFFFu);
+    if (gm_8016B168()) {
+        return 0;
+    }
+    if (count <= 3) {
+        return 0;
+    }
+
+    /* Break the grab. The original reaches CatchCut with r4 still holding
+     * the last move ID it compared against, and CatchCut tests it as a word:
+     * the held fighter is released unless that was 0. */
+    ftCo_800DA698(grabber, last != 0);
+    nana = Player_GetEntityAtIndex(gfp->player_id, 1);
+    if (nana != NULL) {
+        Fighter* nfp = GET_FIGHTER(nana);
+        if (!nfp->x221F_b1 && !nfp->x2219_b5 &&
+            nfp->x2070.x2071_b0_3 != 13)
+        {
+            if (nfp->ground_or_air == GA_Ground) {
+                ftCo_800DA698(nana, false);
+            } else {
+                float zero = 0.0F;
+                ftCommon_8007D5D4(nfp);
+                nfp->self_vel.x = p_ftCommonData->x374 * -nfp->facing_dir;
+                nfp->self_vel.y = p_ftCommonData->x378;
+                memcpy(&nfp->mv, &zero, sizeof(zero));
+                Fighter_ChangeMotionState(nana, 0xE6, 0, 0.0F, 1.0F, 0.0F,
+                                          NULL);
+            }
+        }
+    }
+    return 1;
+}

@@ -2761,6 +2761,8 @@ void pc_fwatch(const char* what, void* who, void* gobj)
             addr = (const unsigned*) &fp->cur_pos.x;
         } else if (field != NULL && strcmp(field, "posy") == 0) {
             addr = (const unsigned*) &fp->cur_pos.y;
+        } else if (field != NULL && strcmp(field, "animf") == 0) {
+            addr = (const unsigned*) &fp->cur_anim_frame;
         } else if (field != NULL && strcmp(field, "kby") == 0) {
             addr = (const unsigned*) &fp->x8c_kb_vel.y;
         } else if (field != NULL && strncmp(field, "mv:", 3) == 0) {

@@ -114,12 +114,15 @@ EMU=$!
 
 # --- the port ---------------------------------------------------------------
 # Slot 0 and the decider, so the seed and the stage are ours: Slippi takes the
-# stage from the lowest player index that selected one.
+# stage from the lowest player index that selected one. MELEE_SLP_MODE: the
+# emulator's auto-drive confirms the first entry on the mode list, which is
+# unranked ("online mode 1" in its log), and unranked disables pausing.
 ( cd "$ROOT" && \
   MELEE_NET_PROTO=slippi MELEE_NET=host MELEE_NET_SLOT=0 \
+  MELEE_SLP_MODE=${SLIPPI_MODE:-unranked} \
   MELEE_NET_PORT=$PORT_PORT MELEE_NET_PLAYERS=2 \
   MELEE_NET_PEERS=127.0.0.1:$PORT_PORT,127.0.0.1:$EMU_PORT \
-  MELEE_BOOT_MODE=14 MELEE_BOOT_MATCH=9,9,31 \
+  MELEE_BOOT_MODE=14 MELEE_BOOT_MATCH=${SLIPPI_PORT_MATCH:-9,9,31} \
   env ${SLIPPI_PORT_ENV:-} timeout -k 10 "$RUNFOR" "$PORTBIN" 2>&1 |
   # SLIPPI_TS=1 stamps every line with wall-clock time, which is what lines the
   # port's log up against the emulator's (whose lines carry mm:ss:ms).

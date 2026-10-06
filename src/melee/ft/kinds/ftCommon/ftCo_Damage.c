@@ -62,6 +62,10 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #define DMG_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define DMG_FMA(a, b, c) ((a) * (b) + (c))
@@ -830,6 +834,32 @@ static inline void inlineB2(Fighter_GObj* gobj)
     ftCommon_800804FC(fp);
 }
 
+#if BUILD_SLIPPI
+/* inlineB2 with Slippi's wobble check (8008f090) after ftCo_800C8D00: when
+ * the check breaks a grab, the original goes on at 8008f0c8, past the two
+ * CaptureDamage motion checks. Only the copy at 8008f090 has it. */
+static inline void inlineB2_slp(Fighter_GObj* gobj)
+{
+    Fighter* fp = gobj->user_data;
+    ftCo_800C8D00(gobj);
+    if (!slp_compat_wobble_check(gobj)) {
+        if (fp->motion_id == 0xe0 || fp->motion_id == 0xe1) {
+            ftCo_800DC284(gobj);
+        }
+        if (fp->motion_id == 0xe3 || fp->motion_id == 0xe4) {
+            ftCo_800DC3A4(gobj);
+        }
+    }
+    if (ftCo_8008DA4C(
+            gobj, fp->dmg.x1860_element,
+            ftCo_8008D8E8(fp->dmg.kb_applied * p_ftCommonData->x154)))
+    {
+        ftCo_800C0408(gobj);
+    }
+    ftCommon_800804FC(fp);
+}
+#endif
+
 static inline void inlineB4(Fighter_GObj* gobj)
 {
     ftCo_8008E9D0(gobj);
@@ -907,7 +937,11 @@ void ftCo_8008EC90(Fighter_GObj* gobj)
                         }
                     }
                     fp->input.pressed_buttons = fp->input.released_buttons = 0;
+#if BUILD_SLIPPI
+                    inlineB2_slp(gobj);
+#else
                     inlineB2(gobj);
+#endif
                     goto ret_A8C;
                 }
                 {

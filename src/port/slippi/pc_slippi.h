@@ -44,6 +44,13 @@ struct StartMeleeData;
  * Slippi injects at 8016e74c and copies the same 0x138-byte block. */
 void slp_GameStart(struct StartMeleeData* data);
 
+/* A console-format Game Info Block (0x138 bytes, big-endian, PowerPC bitfield
+ * order) into the host's StartMeleeData; the inverse of what slp_GameStart
+ * writes. Leaves the rule callbacks unset, as the console's memcpy of a block
+ * with zeros there does. */
+void slp_read_game_info_block(const unsigned char* b,
+                              struct StartMeleeData* d);
+
 /* Top of fn_8016CFE0 (SceneThink_VSMode's running-match case). Advances the
  * frame index, which starts at -123 on the first frame of the match, and
  * closes out the previous frame. */

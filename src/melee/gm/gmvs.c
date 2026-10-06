@@ -2031,6 +2031,10 @@ void fn_8016E2BC(void)
                 }
 #endif
                 Player_80032768(i, &sp18);
+#if BUILD_SLIPPI
+                /* Slippi's neutral spawns inject here (8016e510). */
+                slp_compat_neutral_spawn(i, controller.start.is_teams);
+#endif
                 is_teams = controller.start.is_teams == true;
                 Player_SetUnk45(
                     i, fn_80160840(gm_80160854(Player_GetPlayerId(i),
@@ -2079,6 +2083,10 @@ void fn_8016E730(StartMeleeData* arg0)
     HSD_GObj* temp_r30;
     VsSceneController* r30;
 
+#if BUILD_NETPLAY
+    /* Slippi's InitOnlinePlay replaces the db_Setup call below. */
+    pc_net_slippi_match_init(arg0);
+#endif
     db_Setup();
     gm_SetDbPauseInputHandlers(gm_AnyControllerPressedStart,
                                gm_AnyControllerPressedZ);

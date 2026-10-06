@@ -36,6 +36,7 @@
 #if BUILD_SLIPPI
 
 struct Fighter;
+struct HSD_GObj;
 
 enum SlpCompatFix {
     /* Implemented. */
@@ -66,10 +67,15 @@ void slp_compat_report(void);
 /* MELEE_SLIPPI_COMPAT applies to the character-select costume bounds, which is
  * a whole-lineup pass rather than a single site. */
 void slp_compat_clamp_costumes(void);
+/* fn_8016E2BC, after each multiplayer slot's spawn is stored (8016e510). */
+void slp_compat_neutral_spawn(int slot, int is_teams);
 
 /* ftCo_Turn_IASA, inside the first facing flip, where UCF's dashback test
  * goes (800c9a44). */
 void slp_compat_turn_iasa(struct Fighter* fp);
+
+void slp_compat_wobble_init(struct Fighter* fp);
+int slp_compat_wobble_check(struct HSD_GObj* gobj);
 
 #endif /* BUILD_SLIPPI */
 #endif /* PC_SLIPPI_COMPAT_H */

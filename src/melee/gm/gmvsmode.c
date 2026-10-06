@@ -276,6 +276,31 @@ void onEnterDebugVs(GameModeState* state)
                 pc_boot_players = n;
             }
         }
+        /* A Slippi match plays the lineup the players selected, not the one
+         * MELEE_BOOT_MATCH names: Slippi merges every player's selections
+         * into the match, so a peer that picked Pikachu is Pikachu on both
+         * machines only if this side boots it too. The netplay layer has them
+         * by now -- the boot holds until every selection has arrived -- and
+         * says nothing when this is not a Slippi match (or netplay is not
+         * built in, where the weak reference is null). */
+        {
+            extern int pc_net_lineup(int slot, int* ckind, int* color)
+                __attribute__((weak));
+            extern int pc_net_lineup_stage(void) __attribute__((weak));
+            if (pc_net_lineup != NULL && pc_net_lineup_stage != NULL) {
+                int ck, col, st;
+                for (i = 0; i < Gm_Player_NumMax; i++) {
+                    if (pc_net_lineup(i, &ck, &col)) {
+                        start->players[i].ckind = (s8) ck;
+                        start->players[i].color = (u8) col;
+                    }
+                }
+                st = pc_net_lineup_stage();
+                if (st >= 0) {
+                    start->rules.stkind = (u16) st;
+                }
+            }
+        }
         /* MELEE_BOOT_CPU makes a slot a CPU of the given level (1-9), so the
          * AI can be exercised from the debug boot.
          *

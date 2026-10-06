@@ -291,6 +291,152 @@ static void slp_write_game_info_block(unsigned char* b, const StartMeleeData* d)
     }
 }
 
+static unsigned get_u16(const unsigned char* p)
+{
+    return ((unsigned) p[0] << 8) | p[1];
+}
+
+static u32 get_u32(const unsigned char* p)
+{
+    return ((u32) p[0] << 24) | ((u32) p[1] << 16) | ((u32) p[2] << 8) | p[3];
+}
+
+static float get_f32(const unsigned char* p)
+{
+    u32 bits = get_u32(p);
+    float v;
+    memcpy(&v, &bits, sizeof(v));
+    return v;
+}
+
+#define BIT(byte, n) (((byte) >> (n)) & 1)
+
+/* The inverse of slp_write_game_info_block: a console-format block into the
+ * host's StartMeleeData. 0x38-0x5F is the callback block on the console, and
+ * a block that carries zeros there -- Slippi's online block does -- leaves
+ * every callback unset, exactly as Slippi's memcpy does. */
+void slp_read_game_info_block(const unsigned char* b, StartMeleeData* d)
+{
+    StartMeleeRules* r = &d->rules;
+    int i;
+
+    r->match_kind = b[0x00] >> 5;
+    r->x0_3 = (b[0x00] >> 2) & 7;
+    r->timer_enabled = BIT(b[0x00], 1);
+    r->timer_counts_up = BIT(b[0x00], 0);
+    r->x1_0 = BIT(b[0x01], 7);
+    r->x1_1 = BIT(b[0x01], 6);
+    r->x1_2 = BIT(b[0x01], 5);
+    r->x1_3 = BIT(b[0x01], 4);
+    r->x1_4 = BIT(b[0x01], 3);
+    r->x1_5 = BIT(b[0x01], 2);
+    r->timer_shows_hours = BIT(b[0x01], 1);
+    r->friendly_fire = BIT(b[0x01], 0);
+    r->is_stock = BIT(b[0x02], 7);
+    r->x2_1 = BIT(b[0x02], 6);
+    r->x2_2 = BIT(b[0x02], 5);
+    r->single_button = BIT(b[0x02], 4);
+    r->disable_pausing = BIT(b[0x02], 3);
+    r->x2_5 = BIT(b[0x02], 2);
+    r->x2_6 = BIT(b[0x02], 1);
+    r->x2_7 = BIT(b[0x02], 0);
+    r->x3_0 = BIT(b[0x03], 7);
+    r->x3_1 = BIT(b[0x03], 6);
+    r->x3_2 = BIT(b[0x03], 5);
+    r->x3_3 = BIT(b[0x03], 4);
+    r->x3_4 = BIT(b[0x03], 3);
+    r->x3_5 = BIT(b[0x03], 2);
+    r->x3_6 = BIT(b[0x03], 1);
+    r->x3_7 = BIT(b[0x03], 0);
+    r->x4_0 = BIT(b[0x04], 7);
+    r->is_vs = BIT(b[0x04], 6);
+    r->x4_2 = BIT(b[0x04], 5);
+    r->x4_3 = BIT(b[0x04], 4);
+    r->x4_4 = BIT(b[0x04], 3);
+    r->x4_5 = BIT(b[0x04], 2);
+    r->x4_6 = BIT(b[0x04], 1);
+    r->x4_7 = BIT(b[0x04], 0);
+    r->x5_0 = BIT(b[0x05], 7);
+    r->x5_1 = BIT(b[0x05], 6);
+    r->x5_2 = BIT(b[0x05], 5);
+    r->x5_3 = BIT(b[0x05], 4);
+    r->x5_4 = BIT(b[0x05], 3);
+    r->x5_5 = BIT(b[0x05], 2);
+    r->x5_6 = BIT(b[0x05], 1);
+    r->x5_7 = BIT(b[0x05], 0);
+
+    r->x6 = b[0x06];
+    r->x7 = b[0x07];
+    r->is_teams = b[0x08];
+    r->x9 = b[0x09];
+    r->xA = b[0x0A];
+    r->item_freq = (s8) b[0x0B];
+    r->sd_penalty = (s8) b[0x0C];
+    r->xD = b[0x0D];
+    r->stkind = (u16) get_u16(b + 0x0E);
+    r->time_limit = get_u32(b + 0x10);
+    r->x14 = b[0x14];
+    r->x18 = get_u32(b + 0x18);
+    r->x20 = ((u64) get_u32(b + 0x20) << 32) | get_u32(b + 0x24);
+    r->x28 = (int) get_u32(b + 0x28);
+    r->x2C = get_f32(b + 0x2C);
+    r->x30 = get_f32(b + 0x30);
+    r->game_speed = get_f32(b + 0x34);
+
+    r->on_unpause_override = NULL;
+    r->on_pause_override = NULL;
+    r->check_for_pauser_override = NULL;
+    r->on_match_start = NULL;
+    r->on_frame_start = NULL;
+    r->on_frame_end = NULL;
+    r->on_match_end = NULL;
+    r->x54 = NULL;
+    r->x58 = NULL;
+
+    for (i = 0; i < 6; i++) {
+        PlayerInitData* p = &d->players[i];
+        const unsigned char* e = b + 0x60 + 0x24 * i;
+        p->ckind = e[0x00];
+        p->slot_type = e[0x01];
+        p->stocks = e[0x02];
+        p->color = e[0x03];
+        p->slot = e[0x04];
+        p->spawn_pos = (s8) e[0x05];
+        p->spawn_dir = (s8) e[0x06];
+        p->sub_color = e[0x07];
+        p->handicap = e[0x08];
+        p->team = e[0x09];
+        p->nametag = e[0x0A];
+        p->xB = e[0x0B];
+        p->rumble_enabled = BIT(e[0x0C], 7);
+        p->xC_b1 = BIT(e[0x0C], 6);
+        p->vs_metal = BIT(e[0x0C], 5);
+        p->xC_b3 = BIT(e[0x0C], 4);
+        p->vs_invisible = BIT(e[0x0C], 3);
+        p->xC_b5 = BIT(e[0x0C], 2);
+        p->xC_b6 = BIT(e[0x0C], 1);
+        p->xC_b7 = BIT(e[0x0C], 0);
+        p->xD_b0 = BIT(e[0x0D], 7);
+        p->xD_b1 = BIT(e[0x0D], 6);
+        p->xD_b2 = BIT(e[0x0D], 5);
+        p->xD_b3 = BIT(e[0x0D], 4);
+        p->xD_b4 = BIT(e[0x0D], 3);
+        p->xD_b5 = BIT(e[0x0D], 2);
+        p->xD_b6 = BIT(e[0x0D], 1);
+        p->xD_b7 = BIT(e[0x0D], 0);
+        p->cpu_kind = e[0x0E];
+        p->cpu_level = e[0x0F];
+        p->damage = (u16) get_u16(e + 0x10);
+        p->damage1 = (u16) get_u16(e + 0x12);
+        p->hp = (u16) get_u16(e + 0x14);
+        p->attack_ratio = get_f32(e + 0x18);
+        p->defense_ratio = get_f32(e + 0x1C);
+        p->model_scale = get_f32(e + 0x20);
+    }
+}
+
+#undef BIT
+
 void slp_GameStart(StartMeleeData* data)
 {
     unsigned char* b;

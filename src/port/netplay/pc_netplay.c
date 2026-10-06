@@ -43,6 +43,9 @@
 #include <port/pc_trace.h>
 #include "port/netplay/pc_snapshot.h"
 #include "port/netplay/pc_netdolphin.h"
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi.h"
+#endif
 
 #include <enet/enet.h>
 
@@ -64,6 +67,8 @@
 #include <melee/ft/types.h>
 #include <melee/gm/gmvs.h>
 #include <melee/pl/player.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
 #include <sysdolphin/baselib/random.h>
 
 /* ---- wire format --------------------------------------------------------
@@ -92,6 +97,9 @@
 #define SLP_MSG_PAD_ACK 0x81u
 #define SLP_MSG_MATCH_SELECTIONS 0x82u
 #define SLP_MSG_CONN_SELECTED 0x83u
+/* Online.s: UNFREEZE_INPUTS_FRAME (84) - 6. Pads for frames before it are
+ * zero on a Slippi peer. */
+#define SLP_START_SYNC_FRAME 78
 /* The state checksum. It used to travel as the port's own MSG_HASH over
  * net_send, which in Slippi mode goes out over ENet -- where slp_receive knows
  * only the four message types above and drops everything else without a word.
@@ -638,6 +646,12 @@ static void net_quiet(const char* why, s32 frame)
 static unsigned slp_my_rng;
 static unsigned slp_peer_rng;
 static int slp_peer_char = -1, slp_peer_stage = -1;
+/* Every player's MATCH_SELECTIONS, by slot, so the match this side boots is
+ * the one Slippi merges from them: each slot plays its own player's character
+ * and colour, and the stage comes from the lowest slot that chose one
+ * (prepareOnlineMatchState). pc_net_lineup hands them to the boot lineup. */
+static int slp_sel_have[NET_SLOTS], slp_sel_char[NET_SLOTS];
+static int slp_sel_color[NET_SLOTS], slp_sel_stage[NET_SLOTS];
 static long slp_tx, slp_rx, slp_rx_pads;
 
 static void slp_send_selections(void);
@@ -959,15 +973,16 @@ static void slp_enet_send(const unsigned char* buf, size_t len)
 static void slp_send_selections(void)
 {
     unsigned char b[16];
-    int ck = 0, stage = 0;
+    int ck = 0, stage = 0, color = 0;
     {
         const char* spec = getenv("MELEE_BOOT_MATCH");
         const char* pl = getenv("MELEE_BOOT_PLAYERS");
-        int c0 = 0, c1 = 0, st = -1;
+        int c0 = 0, c1 = 0, st = -1, col0 = 0, col1 = 1;
         if (spec != NULL) {
-            sscanf(spec, "%d,%d,%d", &c0, &c1, &st);
+            sscanf(spec, "%d,%d,%d,%d,%d", &c0, &c1, &st, &col0, &col1);
         }
         ck = net_slot == 0 ? c0 : c1;
+        color = net_slot == 0 ? col0 : col1;
         /* With more than two players the pair in MELEE_BOOT_MATCH cannot say
          * what slot 2 is playing; MELEE_BOOT_PLAYERS lists every slot, so read
          * this one's out of it when it is set. */
@@ -998,7 +1013,7 @@ static void slp_send_selections(void)
     }
     b[0] = (unsigned char) SLP_MSG_MATCH_SELECTIONS;
     b[1] = (unsigned char) ck;          /* characterId */
-    b[2] = 0;                           /* characterColor */
+    b[2] = (unsigned char) color;       /* characterColor */
     b[3] = 1;                           /* isCharacterSelected */
     b[4] = (unsigned char) net_slot;    /* playerIdx */
     put_u16(b + 5, (unsigned) (stage < 0 ? 0 : stage));
@@ -1007,6 +1022,12 @@ static void slp_send_selections(void)
     b[12] = 0;                          /* teamId */
     b[13] = 0;                          /* alt_stage_mode */
     slp_sel_sent = 1;
+    if (net_slot >= 0 && net_slot < NET_SLOTS) {
+        slp_sel_have[net_slot] = 1;
+        slp_sel_char[net_slot] = ck;
+        slp_sel_color[net_slot] = color;
+        slp_sel_stage[net_slot] = stage;
+    }
     slp_enet_send(b, 14);
     fprintf(stderr, "[SLP] selections out: char %d stage %d rng %04X\n",
             ck, stage, slp_my_rng);
@@ -1164,6 +1185,18 @@ static void slp_send_inputs(s32 newest)
      * own FN_COMPUTE_CHECKSUM and ends the game on a mismatch. */
     put_u32(buf + 10, net_hashed > 0 ? slp_cs_val[net_hashed &
                                                   (NET_HASH_RING - 1)] : 0);
+    /* MELEE_SLP_BAD_CHECKSUM: the negative control. A wrong checksum must
+     * end the game on the Slippi side within a second; if it does not, the
+     * check is not comparing anything and "no desync" means nothing. */
+    {
+        static int bad = -1;
+        if (bad < 0) {
+            bad = getenv("MELEE_SLP_BAD_CHECKSUM") != NULL;
+        }
+        if (bad && net_hashed > 0) {
+            put_u32(buf + 10, get_u32(buf + 10) + 500);
+        }
+    }
     /* The oldest frame any player still has not confirmed: with more than two
      * the window has to cover the slowest of them. */
     for (f = newest; f > slowest_ack() && n < SLP_MAX_PADS; f--) {
@@ -1201,9 +1234,9 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
         s32 wire_newest = (s32) get_u32(buf + 1);
         s32 newest;
         if (!slp_frame_offset_set) {
-            /* Both sides number the match the same way -- frame 1 is the first
-             * frame of the match on each -- so the offset is zero. It used to
-             * be measured as "where this side is when the peer's first pad
+            /* Both sides number the match the same way -- by the match
+             * scene's frame, see net_match_frame -- so the offset is zero. It
+             * used to be measured as "where this side is when the peer's first pad
              * arrives", which only made sense while this side counted from the
              * selection exchange instead of from its own match frame 1. On a
              * machine fast enough for the emulator's pads to arrive while this
@@ -1251,6 +1284,10 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
         slp_note_peer(sel_slot, from);
         slp_peer_char = buf[1];
         slp_peer_stage = (buf[7] != 0) ? (int) ((buf[5] << 8) | buf[6]) : -1;
+        slp_sel_have[sel_slot] = 1;
+        slp_sel_char[sel_slot] = buf[1];
+        slp_sel_color[sel_slot] = buf[2];
+        slp_sel_stage[sel_slot] = slp_peer_stage;
         slp_peer_rng = peer_rng;
         /* One side's offer has to win, and both have to reach the same answer
          * without another round trip. Slippi calls that side the decider and
@@ -2022,6 +2059,147 @@ void pc_net_match_end(void)
  * frames -- ones whose inputs were all real -- are worth hashing, and the
  * rollback path calls this only for those.
  */
+/* The lineup Slippi will build, for the boot (gmvsmode.c): slot's character
+ * and colour as its player selected them. Returns 0 when this is not a Slippi
+ * match or that slot has not said. */
+int pc_net_lineup(int slot, int* ckind, int* color)
+{
+    if (!net_slippi_proto || slot < 0 || slot >= NET_SLOTS ||
+        !slp_sel_have[slot])
+    {
+        return 0;
+    }
+    *ckind = slp_sel_char[slot];
+    *color = slp_sel_color[slot];
+    return 1;
+}
+
+/* The stage Slippi will pick: the lowest-indexed player that selected one
+ * (prepareOnlineMatchState). -1 when none did. */
+int pc_net_lineup_stage(void)
+{
+    int k;
+    if (!net_slippi_proto) {
+        return -1;
+    }
+    for (k = 0; k < NET_SLOTS; k++) {
+        if (slp_sel_have[k] && slp_sel_stage[k] >= 0) {
+            return slp_sel_stage[k];
+        }
+    }
+    return -1;
+}
+
+#if BUILD_SLIPPI
+/* The match a Slippi peer plays is not the one its menus set up: Dolphin
+ * hands the game a fixed Game Info Block (EXI_DeviceSlippi.cpp,
+ * prepareOnlineMatchState) and InitOnlinePlay memcpys all 0x138 bytes of it
+ * over the StartMeleeData -- stock mode, four stocks, eight minutes, items
+ * off, and no rule callbacks -- with only the lineup, the stage and the
+ * player count patched in. Until this side did the same, the two matches
+ * agreed frame for frame and still ran different rules: the first stock lost
+ * was lost only on the emulator. The block is Ishiiruka's, byte for byte. */
+static const unsigned char slp_online_block[0x138] = {
+    0x32, 0x01, 0x86, 0x4C, 0xC3, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x6E, 0x00, 0x1F, 0x00, 0x00,
+    0x01, 0xE0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x3F, 0x80,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x78, 0x00,
+    0xC0, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x3F, 0x80,
+    0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x05, 0x00, 0x04, 0x01, 0x00, 0x01, 0x00, 0x00, 0x09, 0x00, 0x78, 0x00,
+    0xC0, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x3F, 0x80,
+    0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x15, 0x03, 0x04, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x09, 0x00, 0x78, 0x00,
+    0xC0, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x3F, 0x80,
+    0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x15, 0x03, 0x04, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x09, 0x00, 0x78, 0x00,
+    0xC0, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x3F, 0x80,
+    0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x21, 0x03, 0x04, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x09, 0x00, 0x78, 0x00,
+    0x40, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x3F, 0x80,
+    0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x21, 0x03, 0x04, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x09, 0x00, 0x78, 0x00,
+    0x40, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3F, 0x80, 0x00, 0x00, 0x3F, 0x80,
+    0x00, 0x00, 0x3F, 0x80, 0x00, 0x00,
+};
+
+static void put_be(unsigned char* p, u64 v, int n)
+{
+    while (n-- > 0) {
+        p[n] = (unsigned char) v;
+        v >>= 8;
+    }
+}
+
+/* prepareOnlineMatchState for a direct-connect match, as far as it concerns
+ * the block: the agreed selections, Slippi's shade counting, the empty slots,
+ * the stage, pausing allowed, the stock rules, items off. */
+static void slp_build_online_block(unsigned char* b)
+{
+    unsigned short counts[NET_SLOTS];
+    unsigned short keys[NET_SLOTS];
+    int nkeys = 0;
+    int remote = net_players - 1;
+    int stage = pc_net_lineup_stage();
+    int i;
+
+    memcpy(b, slp_online_block, sizeof(slp_online_block));
+    for (i = 0; i < NET_SLOTS && i < 4; i++) {
+        if (!slp_sel_have[i]) {
+            continue;
+        }
+        b[0x60 + i * 0x24] = (unsigned char) slp_sel_char[i];
+        b[0x63 + i * 0x24] = (unsigned char) slp_sel_color[i];
+        b[0x67 + i * 0x24] = 0;
+        b[0x69 + i * 0x24] = 0; /* team: no teams in a direct match */
+    }
+    /* The game does not separate two of the same character and colour (or a
+     * Zelda and a Sheik) by itself here, so Slippi numbers the shades. */
+    for (i = 0; i < 4; i++) {
+        unsigned char ch;
+        unsigned short key;
+        int k;
+        if (b[0x61 + i * 0x24] != 0) {
+            continue;
+        }
+        ch = b[0x60 + i * 0x24];
+        ch = ch == 0x13 ? 0x12 : ch;
+        key = (unsigned short) ((ch << 8) | b[0x63 + i * 0x24]);
+        for (k = 0; k < nkeys && keys[k] != key; k++) {
+        }
+        if (k == nkeys) {
+            keys[nkeys] = key;
+            counts[nkeys++] = 0;
+        }
+        b[0x67 + i * 0x24] = (unsigned char) counts[k]++;
+    }
+    b[0x08] = 0; /* not teams */
+    b[0x61 + 2 * 0x24] = remote >= 2 ? 0 : 3;
+    b[0x61 + 3 * 0x24] = remote >= 3 ? 0 : 3;
+    if (stage >= 0) {
+        put_be(b + 0x0E, (u64) stage, 2);
+    }
+    {
+        /* Pausing is allowed only in Slippi's direct mode. The peer does not
+         * say which mode it is in, so this side is told: MELEE_SLP_MODE,
+         * "direct" by default, "unranked" or "ranked" otherwise. */
+        const char* mode = getenv("MELEE_SLP_MODE");
+        if (mode == NULL || strcmp(mode, "direct") == 0) {
+            b[0x02] &= 0xF7;
+        } else {
+            b[0x02] |= 0x08;
+        }
+    }
+    /* desync_recovery's defaults: eight minutes, four stocks, no damage */
+    put_be(b + 0x10, 8 * 60, 4);
+    for (i = 0; i < 4; i++) {
+        b[0x62 + i * 0x24] = 4;
+        put_be(b + 0x70 + i * 0x24, 0, 2);
+    }
+    b[0x00] = 0x32; /* stock mode, count-down timer */
+    b[0x03] = 0x4C; /* score display hidden */
+    b[0x0B] = 0xFF; /* items off */
+    put_be(b + 0x23, 0xF80000000F000000ull, 8);
+}
+#endif
+
 /* Slippi's per-frame checksum, transcribed from FN_COMPUTE_CHECKSUM in
  * slippi-ssbm-asm (Online/Core/StartEngineLoop.asm): for each of the four
  * player slots, and for both of a slot's fighters (Sheik/Nana in the second),
@@ -2105,6 +2283,69 @@ static void net_hash_and_compare(s32 frame)
     }
 }
 
+/* The frame number pads and checksums are keyed on.
+ *
+ * Between two ports it is the game's own match frame (gm_GetFrameCount), which
+ * holds at 0 through the entry and the countdown and starts at GO. Slippi
+ * keys on ODB_FRAME instead: 1 at StartMelee (InitOnlinePlay.asm), one more
+ * at every pad read after (TriggerSendInput.asm, in HSD_PadRenewRawStatus),
+ * so scene frame s plays the inputs numbered s -- the scene's own frame
+ * counter, which StartMelee's scene starts at 0. Measured against the
+ * emulator rather than derived: keyed s + 1 it played each press one frame
+ * after this side did, keyed s + 2 two frames after. Scene frame 0 is then
+ * this side's unlockstepped frame 0, harmless because every pad before
+ * SLP_START_SYNC_FRAME is zero on both sides anyway.
+ *
+ * The two numberings differ by the whole countdown, 124 frames, and
+ * keyed on the match frame every input crossed the wire that far out of
+ * place: the emulator played this side's press at its replay frame 147, this
+ * side played it at 271. Idle matches never showed it, and the checksums
+ * agreed, because nothing moves in either window. */
+static s32 net_match_frame(void)
+{
+    if (net_slippi_proto) {
+        extern u32 gm_801A4BA8(void);
+        return (s32) gm_801A4BA8();
+    }
+    return (s32) gm_GetFrameCount();
+}
+
+/* Slippi re-seeds the RNG every frame of an online match (InitOnlinePlay.asm,
+ * FN_SyncRNG): from a player-class GObj created at the top of StartMelee,
+ * whose proc runs ahead of the fighters', the seed becomes the scene's
+ * unpaused frame count rotated by 16 plus the match's RNG offset -- the
+ * agreed seed. Whatever draws during a frame starts from that, so this side
+ * has to as well or every random choice parts from the emulator's. */
+static void slp_sync_rng(HSD_GObj* gobj)
+{
+    extern u32 gm_801A4BB8(void);
+    u32 f = gm_801A4BB8();
+    (void) gobj;
+    *HSD_RandSeedPtr = ((f << 16) | (f >> 16)) + net_seed;
+}
+
+void pc_net_slippi_match_init(StartMeleeData* data)
+{
+    HSD_GObj* gobj;
+    if (!net_started) {
+        net_config();
+    }
+    if (net_state == NET_OFF || !net_slippi_proto) {
+        return;
+    }
+#if BUILD_SLIPPI
+    {
+        unsigned char b[0x138];
+        slp_build_online_block(b);
+        slp_read_game_info_block(b, data);
+    }
+#else
+    (void) data;
+#endif
+    gobj = GObj_Create(4, 7, 0);
+    HSD_GObj_SetupProc(gobj, slp_sync_rng, 0);
+}
+
 void pc_net_pads(GCPadStatus* pads)
 {
     s32 frame;
@@ -2155,7 +2396,7 @@ void pc_net_pads(GCPadStatus* pads)
      * two arrived at frame 1 with different numbers of particles alive, the
      * particle scripts draw from the same generator the game does, and by
      * frame 10 the two were no longer playing the same match. */
-    frame = net_match ? (s32) gm_GetFrameCount() : -1;
+    frame = net_match ? net_match_frame() : -1;
 
     /* Slippi's seed is negotiated, so nothing of the match may run before the
      * negotiation is done -- not even the load. The pin below writes net_seed
@@ -2326,6 +2567,13 @@ void pc_net_pads(GCPadStatus* pads)
      * net_delay in the future; the frames before that are neutral on both
      * sides, which is what the delay costs. */
     pad_from_gc(&mine, &pads[net_local_pad]);
+    if (net_slippi_proto && frame + net_delay < SLP_START_SYNC_FRAME) {
+        /* Slippi clears every pad while the match is frozen
+         * (TriggerSendInput.asm, section 1), so only input-free frames sit
+         * before GO. A press here would reach the peer as one it has
+         * already thrown away. */
+        memset(&mine, 0, sizeof(mine));
+    }
     ring_put(&net_in[net_slot], frame + net_delay, &mine);
     if (frame + net_delay != net_last_sent) {
         net_last_sent = frame + net_delay;
