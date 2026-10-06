@@ -47,9 +47,13 @@ enum SlpCompatFix {
     /* Known, understood, not implemented -- see the table in the .c for what
      * each one still needs. Named here so that asking for one is answered
      * honestly instead of ignored. */
+    SLP_FIX_UCF_INPUT, /* UCF's raw-stick ring, 1.0 cardinals, SD counter */
     SLP_FIX_UCF_DASHBACK,
     SLP_FIX_UCF_SHIELDDROP,
     SLP_FIX_UCF_SDI,
+    SLP_FIX_UCF_SHIELD_SDI,
+    SLP_FIX_UCF_TUMBLE,
+    SLP_FIX_UCF_SQUATRV,
     SLP_FIX_NEUTRAL_SPAWNS,
     SLP_FIX_WOBBLING,
     SLP_FIX_PS_CAMERA,
@@ -73,6 +77,13 @@ void slp_compat_neutral_spawn(int slot, int is_teams);
 /* ftCo_Turn_IASA, inside the first facing flip, where UCF's dashback test
  * goes (800c9a44). */
 void slp_compat_turn_iasa(struct Fighter* fp);
+void slp_compat_ucf_input(struct Fighter* fp);
+int slp_compat_ucf_shield_drop(struct HSD_GObj* gobj, int* kind_reg);
+int slp_compat_ucf_pass_down(struct Fighter* fp, int down);
+int slp_compat_ucf_sdi(struct Fighter* fp, int lt);
+int slp_compat_ucf_shield_sdi(struct Fighter* fp, int lt);
+int slp_compat_ucf_tumble(struct Fighter* fp, int lt);
+float slp_compat_ucf_squatrv(struct Fighter* fp, float thr);
 
 void slp_compat_wobble_init(struct Fighter* fp);
 int slp_compat_wobble_check(struct HSD_GObj* gobj);

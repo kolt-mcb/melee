@@ -26,12 +26,22 @@
 #include <melee/ft/inlines.h>
 #include <melee/ft/types.h>
 
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
+
 /* 0D6620 */ static void ftCo_SquatRv_Enter(Fighter_GObj* gobj);
 
 bool ftCo_SquatRv_CheckInput(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if (fp->input.lstick[0].y > -p_ftCommonData->x94) {
+#if BUILD_SLIPPI
+    if (fp->input.lstick[0].y >
+        -slp_compat_ucf_squatrv(fp, p_ftCommonData->x94))
+#else
+    if (fp->input.lstick[0].y > -p_ftCommonData->x94)
+#endif
+    {
         ftCo_SquatRv_Enter(gobj);
         return true;
     }

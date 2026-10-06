@@ -683,10 +683,10 @@ index c8fdedb2b..51922b5f7 100644
  	void prepareNewSeed();
  	void handleReportGame(const SlippiExiTypes::ReportGameQuery &query);
 diff --git a/Source/Core/Core/Slippi/SlippiMatchmaking.cpp b/Source/Core/Core/Slippi/SlippiMatchmaking.cpp
-index 3cf77d008..25146ed64 100644
+index 3cf77d008..9d8e773b7 100644
 --- a/Source/Core/Core/Slippi/SlippiMatchmaking.cpp
 +++ b/Source/Core/Core/Slippi/SlippiMatchmaking.cpp
-@@ -276,6 +276,68 @@ static enet_uint32 getLocalAddress(ENetAddress *mm_address)
+@@ -276,6 +276,75 @@ static enet_uint32 getLocalAddress(ENetAddress *mm_address)
  
  void SlippiMatchmaking::startMatchmaking()
  {
@@ -743,6 +743,13 @@ index 3cf77d008..25146ed64 100644
 +				m_playerInfo.push_back(info);
 +			}
 +
++			// The service fills this from its response; nothing did here, so
++			// `items` -- a u32 member with no initialiser -- was whatever the
++			// heap held, and prepareOnlineMatchState turned items on at high
++			// frequency whenever that was not zero. Some sessions played with
++			// barrels and boxes, some without, and the peer could not know.
++			m_mmResult.items = 0;
++
 +			ERROR_LOG(SLIPPI_ONLINE,
 +			          "[Matchmaking] direct: %d peer(s), my port %d, my index %d, decider %d",
 +			          (int)m_remoteIps.size(), m_hostPort, m_localPlayerIndex, (int)m_isHost);
@@ -755,3 +762,16 @@ index 3cf77d008..25146ed64 100644
  	// I don't understand why I have to do this... if I don't do this, rand always returns the
  	// same value
  	m_client = nullptr;
+diff --git a/Source/Core/Core/Slippi/SlippiMatchmaking.h b/Source/Core/Core/Slippi/SlippiMatchmaking.h
+index 8585931d6..c53a41e3f 100644
+--- a/Source/Core/Core/Slippi/SlippiMatchmaking.h
++++ b/Source/Core/Core/Slippi/SlippiMatchmaking.h
+@@ -76,7 +76,7 @@ class SlippiMatchmaking
+ 		std::string id = "";
+ 		std::vector<SlippiUser::UserInfo> players;
+ 		std::vector<u16> stages;
+-		u32 items;
++		u32 items = 0;
+ 	};
+ 
+ 	void FindMatch(MatchSearchSettings settings);

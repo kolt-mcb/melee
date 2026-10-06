@@ -114,6 +114,10 @@
 
 #if BUILD_SLIPPI
 #include "port/slippi/pc_slippi.h"
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #endif
 #endif
 
@@ -2911,6 +2915,11 @@ void Fighter_Spaghetti_8006AD10(Fighter_GObj* gobj)
                 fp->activity_timer.lstick.x = 0;
             }
 
+#if BUILD_SLIPPI
+            /* UCF's input step (8006b460): raw-stick ring, 1.0 cardinals,
+             * shield-drop counter. */
+            slp_compat_ucf_input(fp);
+#endif
             // Fighter_ClampSpecificValue
             fp->active_duration.trigger++;
             if (fp->active_duration.trigger > 254) {

@@ -22,6 +22,10 @@
 #include <melee/ft/kinds/ftYoshi/ftyoshiguard.h>
 #include <melee/ft/types.h>
 
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
+
 /* 0992A8 */ static void ftCo_800992A8(Fighter_GObj* gobj, FtMotionId msid,
                                        bool);
 /* 099314 */ static void ftCo_80099314(Fighter_GObj* gobj, FtMotionId msid,
@@ -205,10 +209,20 @@ static inline bool inlineB0(Fighter* fp)
     return false;
 }
 
+#if BUILD_SLIPPI
+static int slp_kind_reg;
+#endif
+
 bool ftCo_80099794(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
     if (fp->input.held_buttons[0] & HSD_PAD_LR && inlineB0(fp)) {
+#if BUILD_SLIPPI
+        /* UCF shield drop (800998a4) returns past this caller's `true`. */
+        if (slp_compat_ucf_shield_drop(gobj, &slp_kind_reg)) {
+            return false;
+        }
+#endif
         ftCo_80099894(gobj);
         return true;
     }
@@ -219,6 +233,11 @@ bool ftCo_8009980C(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
     if (inlineB0(fp) || ftCo_800DF8E8(fp)) {
+#if BUILD_SLIPPI
+        if (slp_compat_ucf_shield_drop(gobj, &slp_kind_reg)) {
+            return false;
+        }
+#endif
         ftCo_80099894(gobj);
         return true;
     }
@@ -228,7 +247,13 @@ bool ftCo_8009980C(Fighter_GObj* gobj)
 void ftCo_80099894(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
+#if BUILD_SLIPPI
+    /* What r0 holds after UCF's injection, which replaced the load of
+     * fp->kind and never redoes it -- see slp_compat_ucf_shield_drop. */
+    switch (slp_kind_reg) {
+#else
     switch (fp->kind) {
+#endif
     case Ft_Kind_Yoshi:
         ftCo_80099954(gobj);
         break;

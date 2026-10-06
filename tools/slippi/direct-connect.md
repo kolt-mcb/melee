@@ -585,3 +585,40 @@ showed first as Nana:
   fn_8016E730 from when the if/ countdown was not built. Nana's AI steered
   through the countdown. The countdown's own callback (fn_8016B7F8) does it.
 - **Nana's follow nudge** (ftCo_800B0AF4) is a double fmadd on the console.
+
+### UCF, and the console's own stick processing (2026-10-05, night)
+
+Slippi plays every online match with UCF 0.84, and the port now does too
+(pc_slippi_compat.c, transcribed from the compiled words in
+`External/UCF 0.84/UCF` with build/binutils' objdump). Each part was checked
+against the emulator with a scripted input that provokes it -- the replays
+compare IDENTICAL with the part on, and part on the very frame with it off:
+
+| part | site | provoked by | without it |
+|---|---|---|---|
+| input step: raw ring, 1.0 cardinals, SD counter | 8006b460 | `s80/5`, `s-85/-3`, `c90/-2` | frame 172 |
+| dashback | 800c9a44 | stand, `s-24/0*1`, `s-100/0` | frame 192, Dash vs Turn |
+| shield drop (+ extended) | 800998a4, 8009a0b8 | shield on a platform, `s50/-10*6`, `s50/-63` | frame 192, Pass vs EscapeN |
+| SquatRv / DBOOC | 800d65ec | crouch, `s62/-49` | frame 191, Squat vs SquatRv |
+| SDI, shield SDI, tumble | 8008e54c, 80093294, 800908f4 | being hit | not provoked: the emulator's player cannot attack here |
+
+Two things the transcription had to keep that look like bugs: shield drop
+never re-executes the `lwz r0, 4(r4)` it replaced, so the Yoshi test after it
+compares a leftover register; and the SD counter is a byte that wraps.
+
+Under it, the stick processing is now the console's (HSD_PadClamp /
+HSD_PadADConvert / HSD_PadScale with gmMain_8015FD24's parameters): sticks
+clamped to radius 80 *after* the wire, not before it; triggers clamped to 140
+and divided by 140 (they were divided by 255); direction bits at adc_th 30 on
+the clamped stick (they used 40); and the raw-input queue pushed once a frame
+from the agreed pads (it was pushed twice, from the processed status). The pad
+script takes exact values for all of this: `s<x>/<y>`, `c<x>/<y>`, `lt<n>`,
+`rt<n>`.
+
+**The emulator sometimes plays with items.** The direct-peers path never sets
+`MatchmakeResult.items`, a u32 with no initialiser, so prepareOnlineMatchState
+turned items on at high frequency whenever the heap left it non-zero --
+roughly half of tonight's sessions. Nothing differs until a fighter touches a
+barrel the port never spawned. Fixed in direct-connect.patch (needs a rebuild
+of the emulator); until then compare_slp.py prints DIFFERENT RULES for such a
+run, and the run proves nothing.

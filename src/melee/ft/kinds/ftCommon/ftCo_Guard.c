@@ -43,6 +43,10 @@
  * in this file that the DOL executes as fmadds is written with this. */
 #if BUILD_TARGET_PC
 #include <math.h>
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #define GD_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define GD_FMA(a, b, c) ((a) * (b) + (c))
@@ -760,7 +764,12 @@ void ftCo_80093240(Fighter_GObj* gobj)
         if ((fp->input.lstick[0].x < 0 ? -fp->input.lstick[0].x
                                        : fp->input.lstick[0].x) >=
                 p_ftCommonData->sdi_min_stick_mag &&
+#if BUILD_SLIPPI
+            slp_compat_ucf_shield_sdi(fp, fp->active_timer.lstick.x <
+                                              p_ftCommonData->sdi_stick_window))
+#else
             fp->active_timer.lstick.x < p_ftCommonData->sdi_stick_window)
+#endif
         {
             float scl = p_ftCommonData->x4C0 * (fp->input.lstick[0].x *
                                                 p_ftCommonData->sdi_pos_scale);

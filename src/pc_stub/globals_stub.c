@@ -52,7 +52,7 @@ PadLibData HSD_PadLibData = {
 };
 
 
-/* Take one frame's raw input from HSD_PadGameStatus into the queue, the way
+/* Take one frame's raw input -- the pads PADRead returned -- into the queue, the way
  * HSD_PadRawUpdate does on the console. Nothing in Melee reads the queue,
  * which is why its absence went unnoticed, but it is state the console keeps,
  * and the two things that do read it index it the same way: the entry for the
@@ -63,14 +63,13 @@ PadLibData HSD_PadLibData = {
  * The console merges consecutive raw polls into one entry because it polls
  * faster than it renders; this port polls once per frame, so a frame is an
  * entry. */
-void pc_pad_raw_push(void)
+void pc_pad_raw_push(const HSD_PadStatus* pads)
 {
-    extern HSD_PadStatus HSD_PadGameStatus[4];
     PADStatus* q = HSD_PadRawQueue[HSD_PadLibData.qwrite].stat;
     int i;
 
     for (i = 0; i < 4; i++) {
-        const HSD_PadStatus* d = &HSD_PadGameStatus[i];
+        const HSD_PadStatus* d = &pads[i];
         q[i].button = (u16) d->button;
         q[i].stickX = d->stickX;
         q[i].stickY = d->stickY;

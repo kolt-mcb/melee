@@ -1567,6 +1567,8 @@ struct pc_pad_event {
     /* A C-stick event moves the substick instead of the main stick, which
      * is what a scripted smash attack needs. */
     int csub;
+    /* Analog trigger values, -1 when the event does not set one: "lt70". */
+    int lt, rt;
     /* Which controller. Defaults to 0; "1200:P2:a" drives the second, which
      * the character select needs -- one pad cannot pick two fighters. */
     int pad;
@@ -1606,6 +1608,36 @@ static int pc_pad_token(const char* t, struct pc_pad_event* ev)
         { "cright", 0, 80, 0, 1 },
     };
     size_t i;
+    int vx, vy;
+    char tail;
+    ev->lt = ev->rt = -1;
+    /* Exact analog values, for what the full-deflection names cannot say: a
+     * stick part-way across the gate, a ramp through the dead zone, a light
+     * shield. "s40/-62" is the main stick at (40, -62), "c0/-80" the C-stick,
+     * "lt70" and "rt140" the analog triggers. The separator is '/' because
+     * ',' already separates events. */
+    if (sscanf(t, "%*[sS]%d/%d%c", &vx, &vy, &tail) == 2 ||
+        sscanf(t, "%*[cC]%d/%d%c", &vx, &vy, &tail) == 2)
+    {
+        ev->button = 0;
+        ev->sx = vx;
+        ev->sy = vy;
+        ev->csub = (t[0] == 'c' || t[0] == 'C');
+        return 1;
+    }
+    if ((t[0] == 'l' || t[0] == 'L' || t[0] == 'r' || t[0] == 'R') &&
+        (t[1] == 't' || t[1] == 'T') && sscanf(t + 2, "%d%c", &vx, &tail) == 1)
+    {
+        ev->button = 0;
+        ev->sx = ev->sy = 0;
+        ev->csub = 2;
+        if (t[0] == 'l' || t[0] == 'L') {
+            ev->lt = vx;
+        } else {
+            ev->rt = vx;
+        }
+        return 1;
+    }
     for (i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
         if (strcasecmp(t, map[i].name) == 0) {
             ev->button = map[i].button;
@@ -1692,6 +1724,7 @@ static void pc_pad_run_script(GCPadStatus* pad, int which)
      * and every release on whichever ran second. */
     static int stick_x[4], stick_y[4];
     static int csub_x[4], csub_y[4];
+    int trig_l = -1, trig_r = -1;
     static u32 held[4];
     long frame;
     u32 pressed = 0;
@@ -1760,7 +1793,14 @@ static void pc_pad_run_script(GCPadStatus* pad, int which)
              * lasted -- one press moved one, two or three items depending on
              * how many frames elapsed and how loaded the machine was. Give
              * directions the same release window buttons already had. */
-            if (ev->csub) {
+            if (ev->csub == 2) {
+                if (ev->lt >= 0) {
+                    trig_l = ev->lt;
+                }
+                if (ev->rt >= 0) {
+                    trig_r = ev->rt;
+                }
+            } else if (ev->csub) {
                 csub_x[which] = ev->sx;
                 csub_y[which] = ev->sy;
             } else {
@@ -1777,6 +1817,12 @@ static void pc_pad_run_script(GCPadStatus* pad, int which)
     if (csub_x[which] != 0 || csub_y[which] != 0) {
         pad->subStickX = (s8) csub_x[which];
         pad->subStickY = (s8) csub_y[which];
+    }
+    if (trig_l >= 0) {
+        pad->analogL = (u8) trig_l;
+    }
+    if (trig_r >= 0) {
+        pad->analogR = (u8) trig_r;
     }
     pad->button |= pressed;
     pad->trigger |= pressed & ~held[which];
@@ -2097,23 +2143,39 @@ static void poll_joystick(void* joy, GCPadStatus* pad)
 /* Stick deflection to the four direction bits, matching sysdolphin's
  * HSD_PadADConvertCheck1: a dead zone on magnitude, then 90-degree octant
  * boundaries at +/-45 degrees. */
+/* HSD_PadADConvertCheck1, as the console runs it from HSD_PadRenewMasterStatus:
+ * on the clamped stick, with HSD_PadInit's adc_th (30) and adc_angle (0), and
+ * the angle compared against double constants. It was a threshold of 40 on the
+ * unclamped stick here, so a stick between 30 and 40 -- or a peer's raw stick
+ * past the gate -- set different direction bits on the two machines. */
 static uint32_t pc_pad_stick_dirs(int x, int y, uint32_t up, uint32_t down,
                                   uint32_t left, uint32_t right)
 {
-    const float TH = 40.0f; /* half deflection; GC gate reads ~80 */
-    float a;
+    const s8 adc_th = 30;
+    const f32 ha = 0.5F * 0.0F;
+    s8 cx = (s8) x, cy = (s8) y;
+    f32 r;
+    f32 a;
     uint32_t bits = 0;
 
-    if (sqrtf((float) (x * x + y * y)) < TH) {
+    pc_pad_clamp_stick(&cx, &cy);
+    r = sqrtf(((f32) cx * (f32) cx) + ((f32) cy * (f32) cy));
+    if (fabs(cx) == 0.0f) {
+        a = cy >= 0 ? 1.5707963267948966 : -1.5707963267948966;
+    } else {
+        a = (f32) atan2f(cy, cx);
+    }
+    if (r < adc_th) {
         return 0;
     }
-    a = (x == 0) ? (y >= 0 ? 1.5707963f : -1.5707963f)
-                 : atan2f((float) y, (float) x);
-    if (a < -2.3561945f) bits |= left;
-    if (a >= -2.3561945f && a <= -0.7853982f) bits |= down;
-    if (a > -0.7853982f && a < 0.7853982f) bits |= right;
-    if (a >= 0.7853982f && a <= 2.3561945f) bits |= up;
-    if (a > 2.3561945f) bits |= left;
+    if (a < -2.356194490192345 + ha) bits |= left;
+    if (a >= -2.356194490192345 - ha && a <= -0.7853981633974483 + ha)
+        bits |= down;
+    if (a > -0.7853981633974483 - ha && a < 0.7853981633974483 + ha)
+        bits |= right;
+    if (a >= 0.7853981633974483 - ha && a <= 2.356194490192345 + ha)
+        bits |= up;
+    if (a > 2.356194490192345 - ha) bits |= left;
     return bits;
 }
 
@@ -2182,12 +2244,11 @@ void HSD_PadRenewRawStatus(bool unused)
          * does. */
         pc_pad_inputs_apply(&g_gc_pads[pad], pad);
 
-        /* The console clamps every source the same way, after the raw read
-         * and before anything derives from it. */
-        pc_pad_clamp_stick(&g_gc_pads[pad].stickX, &g_gc_pads[pad].stickY);
-        pc_pad_clamp_stick(&g_gc_pads[pad].subStickX,
-                           &g_gc_pads[pad].subStickY);
-
+        /* Not clamped here: the console keeps the raw bytes in the raw queue
+         * and on the wire, and clamps only on the way to the master status
+         * (pc_pad_publish, and pc_pad_stick_dirs for the direction bits).
+         * UCF reads the raw bytes -- its 1.0 cardinals test a raw 80, which a
+         * clamp here had already turned into 79. */
         /* Synthesize the stick-direction bits into the raw button word.
          * sysdolphin's HSD_PadADConvert does this on GCN (controller.c,
          * which is not in this build); without it PAD_STICK_UP/DOWN/LEFT/
@@ -2218,6 +2279,18 @@ void HSD_PadRenewRawStatus(bool unused)
      * than in pc_pad_publish, which runs three times per frame. */
     pc_net_pads(g_gc_pads);
 #endif
+
+    /* This frame into the raw-input queue the console keeps, once: PADRead's
+     * output, which under Slippi is the agreed pads (TriggerSendInput swaps
+     * them in right after the read). It used to be pushed from
+     * pc_pad_publish, which runs twice a frame, from the processed status --
+     * so "two frames back", which is what UCF compares against, was this
+     * same frame. The queue lives in globals_stub.c, where dolphin/pad.h can
+     * be included -- see the note above PC_PAD_STICK_UP. */
+    {
+        extern void pc_pad_raw_push(const GCPadStatus* pads);
+        pc_pad_raw_push(g_gc_pads);
+    }
 }
 
 /* The synthetic stick-direction bits, for code that has a pad's stick values
@@ -2377,15 +2450,6 @@ GCPadStatus HSD_PadMasterStatus[4];
 GCPadStatus HSD_PadGameStatus[4];
 GCPadStatus HSD_PadCopyStatus[4];
 
-/* GC sticks read about +/-80 at the octagon gate; the game works in a
- * normalised -1..1 and applies its own dead zone (p_ftCommonData->x0/x4). */
-static float pc_pad_nml(int v)
-{
-    float f = (float) v / 80.0f;
-    if (f > 1.0f) f = 1.0f;
-    if (f < -1.0f) f = -1.0f;
-    return f;
-}
 
 void pc_pad_publish(void)
 {
@@ -2399,18 +2463,27 @@ void pc_pad_publish(void)
         d->trigger = s->button & ~l->button;   /* newly pressed this frame */
         d->release = l->button & ~s->button;
         d->repeat = d->trigger;
+        /* HSD_PadClamp and HSD_PadScale with the parameters gmMain_8015FD24
+         * sets: the sticks clamped to a radius of 80 and divided by 80, the
+         * analog triggers clamped to 140 and divided by 140. The local pads
+         * were clamped at the raw read already; a netplay peer's arrive raw,
+         * and clamping is idempotent. The triggers were divided by 255, so
+         * every partial press -- a light shield -- read 0.55 of what the
+         * console reads. */
         d->stickX = s->stickX;
         d->stickY = s->stickY;
         d->subStickX = s->subStickX;
         d->subStickY = s->subStickY;
-        d->analogL = s->analogL;
-        d->analogR = s->analogR;
-        d->nml_stickX = pc_pad_nml(s->stickX);
-        d->nml_stickY = pc_pad_nml(s->stickY);
-        d->nml_subStickX = pc_pad_nml(s->subStickX);
-        d->nml_subStickY = pc_pad_nml(s->subStickY);
-        d->nml_analogL = (float) s->analogL / 255.0f;
-        d->nml_analogR = (float) s->analogR / 255.0f;
+        pc_pad_clamp_stick(&d->stickX, &d->stickY);
+        pc_pad_clamp_stick(&d->subStickX, &d->subStickY);
+        d->analogL = s->analogL > 140 ? 140 : s->analogL;
+        d->analogR = s->analogR > 140 ? 140 : s->analogR;
+        d->nml_stickX = (f32) d->stickX / (f32) 80;
+        d->nml_stickY = (f32) d->stickY / (f32) 80;
+        d->nml_subStickX = (f32) d->subStickX / (f32) 80;
+        d->nml_subStickY = (f32) d->subStickY / (f32) 80;
+        d->nml_analogL = (f32) d->analogL / (f32) 140;
+        d->nml_analogR = (f32) d->analogR / (f32) 140;
         /* Only the first MELEE_PADS ports (default 2, which is what the
          * Dolphin reference captures are configured with) report a
          * controller. Every port used to read as connected, so the
@@ -2431,13 +2504,6 @@ void pc_pad_publish(void)
         HSD_PadCopyStatus[i] = *d;
     }
 
-    /* Push this frame into the raw-input queue the console keeps. It lives in
-     * globals_stub.c with the queue itself, because dolphin/pad.h cannot be
-     * included here -- see the note above PC_PAD_STICK_UP. */
-    {
-        extern void pc_pad_raw_push(void);
-        pc_pad_raw_push();
-    }
 }
 
 /* Additional pad functions needed by game code */

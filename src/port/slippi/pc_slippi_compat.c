@@ -10,6 +10,7 @@
 
 #if BUILD_SLIPPI
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,7 @@
 #include <dolphin/pad.h>
 #include <melee/ft/fighter.h>
 #include <melee/ft/ftcommon.h>
+#include <melee/ft/kinds/ftCommon/ftCo_0A01.h>
 #include <melee/ft/kinds/ftCommon/ftCo_Attack100.h>
 #include <melee/ft/forward.h>
 #include <melee/ft/types.h>
@@ -51,14 +53,25 @@ static const struct slp_compat_entry slp_fixes[SLP_FIX_COUNT] = {
       "clamp a costume index that is out of range for its character, which "
       "otherwise loads different data on each peer" },
 
-    { "ucf-dashback", 0, "800c9a44",
-      "transcribed (slp_ucf_dashback below) but never reached: the branch it "
-      "lives in wants has_turned == 0 at Turn's IASA, and this port always "
-      "has 1 there. Unresolved -- see the note on the function" },
-    { "ucf-shielddrop", 0, "800998a4",
-      "same raw-input history as ucf-dashback" },
-    { "ucf-sdi", 0, "8008e54c",
-      "same raw-input history as ucf-dashback" },
+    { "ucf-input", 1, "8006b460",
+      "UCF 0.84's input step: a raw-stick ring per port, 1.0 cardinals on "
+      "both sticks, and the counter shield drop reads" },
+    { "ucf-dashback", 1, "800c9a44",
+      "a raw stick that crossed 75 units in two frames turns a failed "
+      "dashback into one, at Turn's IASA frame 2" },
+    { "ucf-shielddrop", 1, "800998a4,8009a0b8",
+      "shield drop from a stick at the rim past -0.8, and the pass check "
+      "taking a recent fast downward flick as down" },
+    { "ucf-sdi", 1, "8008e54c",
+      "SDI from a raw stick that moved more than 62 units in two frames out "
+      "of the centre" },
+    { "ucf-shield-sdi", 1, "80093294",
+      "the same for shield SDI, on X" },
+    { "ucf-tumble", 1, "800908f4",
+      "tumble's fall cancel from a fast raw X flick" },
+    { "ucf-squatrv", 1, "800d65ec",
+      "SquatRv's (and so DBOOC's) threshold drops to 0.59 for a fresh stick "
+      "at the rim" },
     { "neutral-spawns", 1, "8016e510",
       "the six legal stages spawn at fixed, mirrored points, and facing "
       "follows the side; elsewhere the stage's own spawn by player order" },
@@ -161,49 +174,148 @@ int slp_compat(int fix)
     return slp_on[fix];
 }
 
-/* ---- UCF dashback: transcribed, and NOT reached ----
+/* ---- UCF 0.84 ----
+ * Transcribed from extern/slippi/slippi-ssbm-asm/External/UCF 0.84/UCF, the
+ * parts Slippi's netplay codeset injects (list_netplay.json); the .asm files
+ * are compiled words, disassembled with build/binutils' objdump.
  *
- * Left in place because the transcription is done and correct as far as it
- * goes, and throwing it away would mean redoing it. It is registered as not
- * implemented, so it never runs.
+ * The input step (8006b460) keeps, per controller port, a ring of the last
+ * four raw stick readings -- the parts of UCF that judge speed (dashback,
+ * shield drop) compare the newest against the one two back -- and a counter
+ * that shield drop reads. The block lives in Slippi's code cave and is never
+ * cleared, so neither is this one: two peers agree on it because they played
+ * the same frames. */
+static int slp_compat_trace(void);
+
+struct slp_ucf_port {
+    u8 ring[4][2]; /* raw stick X, Y: the low halfword of PADStatus word 0 */
+    u8 idx;        /* newest entry */
+    u8 sd;         /* frames since a fast downward flick; 0 when none */
+    u8 pad[2];
+};
+static struct slp_ucf_port slp_ucf[4];
+
+/* 1.0 cardinals: a raw stick at least 80 out on one axis and within 6 of
+ * centre on the other is set to exactly +-1.0 on that axis. The tests are the
+ * original's unsigned byte compares. */
+static void slp_ucf_cardinal(int x, int y, Vec2* out)
+{
+    if ((u8) (x + 79) > 158) {
+        if ((u8) (y + 6) > 12) {
+            return;
+        }
+        out->x = x < 0 ? -1.0F : 1.0F;
+        out->y = 0.0F;
+    } else {
+        if ((u8) (y + 79) <= 158) {
+            return;
+        }
+        if ((u8) (x + 6) > 12) {
+            return;
+        }
+        out->x = 0.0F;
+        out->y = y < 0 ? -1.0F : 1.0F;
+    }
+}
+
+/* |v| * 80 - 0.0001, one fmsubs, truncated: the stick back in raw units. */
+static int slp_ucf_units(float v)
+{
+    return (int) fmaf(fabsf(v), 80.0F, -0.0001F);
+}
+
+/* Fighter_Spaghetti_8006AD10, where it is about to count active_duration's
+ * trigger frame (8006b460): the fighter's sticks for this frame are final. */
+void slp_compat_ucf_input(struct Fighter* fp_)
+{
+    Fighter* fp = (Fighter*) fp_;
+    const PADStatus* raw;
+    struct slp_ucf_port* u;
+    unsigned port;
+    int ix, iy;
+    u8 sd = 0;
+
+    if (!slp_compat(SLP_FIX_UCF_INPUT) || ftCo_IsCpuControlled(fp)) {
+        return;
+    }
+    port = fp->x618_player_id & 3;
+    raw = pc_pad_raw_history((int) port, 0);
+    if (raw == NULL) {
+        return;
+    }
+    u = &slp_ucf[port];
+    u->idx = (u8) ((u->idx + 1) & 3);
+    u->ring[u->idx][0] = (u8) raw->stickX;
+    u->ring[u->idx][1] = (u8) raw->stickY;
+
+    /* Zelda (kind 0x13) in motion 0x15D keeps the game's own values. */
+    if (!(fp->kind == 0x13 && fp->motion_id == 0x15D)) {
+        Vec2 l0 = fp->input.lstick[0], c0 = fp->input.cstick[0];
+        slp_ucf_cardinal(raw->stickX, raw->stickY, &fp->input.lstick[0]);
+        slp_ucf_cardinal(raw->substickX, raw->substickY,
+                         &fp->input.cstick[0]);
+        if (slp_compat_trace() &&
+            (l0.x != fp->input.lstick[0].x || l0.y != fp->input.lstick[0].y ||
+             c0.x != fp->input.cstick[0].x || c0.y != fp->input.cstick[0].y))
+        {
+            extern u32 gm_GetFrameCount(void);
+            fprintf(stderr, "[SLP-COMPAT] cardinal p%u gf=%u motion=%u raw "
+                            "%d,%d c%d,%d: l %+.4f,%+.4f -> %+.4f,%+.4f  "
+                            "c %+.4f,%+.4f -> %+.4f,%+.4f\n",
+                    port, (unsigned) gm_GetFrameCount(),
+                    (unsigned) fp->motion_id, raw->stickX, raw->stickY,
+                    raw->substickX, raw->substickY, (double) l0.x,
+                    (double) l0.y, (double) fp->input.lstick[0].x,
+                    (double) fp->input.lstick[0].y, (double) c0.x,
+                    (double) c0.y, (double) fp->input.cstick[0].x,
+                    (double) fp->input.cstick[0].y);
+        }
+    }
+
+    /* The shield-drop counter: with the stick held down past -0.609375 and
+     * out past the 80-unit circle, a flick of more than 44 raw units in two
+     * frames starts it; once started it counts every frame until the stick
+     * leaves that region. A byte, so it wraps as the original's does. */
+    if (fp->input.lstick[0].y <= -0.609375F) {
+        ix = slp_ucf_units(fp->input.lstick[0].x) + 2;
+        iy = slp_ucf_units(fp->input.lstick[0].y) + 2;
+        if (iy * iy + ix * ix > 6400) {
+            if (u->sd != 0) {
+                sd = (u8) (u->sd + 1);
+            } else if (fp->active_timer.lstick.y <= 1) {
+                int d = (int) (s8) u->ring[u->idx][1] -
+                        (int) (s8) u->ring[(u->idx - 2) & 3][1];
+                if (d * d > 1936) {
+                    sd = 1;
+                }
+            }
+        }
+    }
+    u->sd = sd;
+}
+
+/* The ring's X change between the newest reading and the one two back, for
+ * `port`: what dashback and shield drop call fast. */
+static int slp_ucf_dx(unsigned port)
+{
+    const struct slp_ucf_port* u = &slp_ucf[port & 3];
+    return (int) (s8) u->ring[u->idx][0] -
+           (int) (s8) u->ring[(u->idx - 2) & 3][0];
+}
+
+/* ---- UCF dashback (800c9a44) ----
+ * Injected at the `stfs f0, 0x2C(r31)` inside ftCo_Turn_IASA's first
+ * `if (!has_turned) facing_dir = -facing_dir;`, so it runs with the flip
+ * applied and reads the new facing. Melee decides between a dash and a turn
+ * from the *processed* stick, which ramps, so a fast dashback on a worn
+ * controller reads as a turn; UCF adds a test on the raw stick -- more than
+ * 75 units in two frames is a dashback whatever the processed value says --
+ * and commits the turn when it fires. The follower is told by writing the
+ * direction straight into its CPU command block.
  *
- * What is known. Injected at 800c9a44, the `stfs f0, 0x2C(r31)` inside
- * ftCo_Turn_IASA's *first* `if (!has_turned) facing_dir = -facing_dir;`, so it
- * runs with the flip applied and reads the new facing. Every operand below is
- * the one the shipped PowerPC words load, including the last two that had to
- * be reversed: fp->cpu.x444 is the follower's CPU command block, and the
- * byte written to its lstickX is the sign bit of the leader's facing float
- * plus 127 -- 127 facing right, 128 facing left.
- *
- * What is not known. On this port that branch is never taken. Traced: Turn's
- * IASA runs at exactly cur_anim_frame == 2.0, which is the frame UCF tests
- * for, but has_turned is already true every time, because frames_to_turn is
- * 0.0 -- so ftCo_Turn_Anim_Inner set it on its first call. frames_to_turn
- * comes from the character attribute
- * frames_to_change_direction_on_standing_turn, which reads 0.0 for Fox and
- * for Bowser alike. The attribute block itself is located correctly (gravity,
- * weight and the walk speeds beside it are all sane) and pc_ftconv byte-swaps
- * the whole 0x180 bytes uniformly, so the port is most likely reading what the
- * file says.
- *
- * Which leaves a contradiction: by that reading the code would be dead on the
- * console too, and it plainly is not. So either this port's turn differs from
- * the console's in a way the lockstep has not caught, or a failed dashback
- * does not produce the standing Turn this hook sits in. The way to tell them
- * apart is a breakpoint on 800c9a44 in the patched Dolphin during a real
- * dashback: if the console executes it and this port does not reach the
- * equivalent branch, the port is wrong and it is a parity bug worth more than
- * this feature. That run has not happened yet -- it was killed for memory.
- *
- * What it is for: Melee decides between a dash and a turn from the *processed*
- * stick, which ramps, so a fast dashback on a worn controller reads as a turn.
- * UCF adds a second test on the raw analog byte -- more than 75 units of travel
- * in two frames is a dashback whatever the processed value says -- and commits
- * the turn when it fires.
- *
- * Transcribed from the shipped PowerPC words (the source is not published);
- * every offset below is the one the original loads.
- */
+ * It was once noted here as never reached; it is (85 times in a level-9 Fox
+ * mirror's first 40 s, at animation frame 2.0), and the console's Dolphin
+ * breaks on 800c9a44 too. */
 static int slp_compat_trace(void)
 {
     static int t = -1;
@@ -215,8 +327,6 @@ static int slp_compat_trace(void)
 
 static void slp_ucf_dashback(Fighter* fp)
 {
-    const PADStatus* now;
-    const PADStatus* was;
     int delta;
 
     if (slp_compat_trace()) {
@@ -250,14 +360,10 @@ static void slp_ucf_dashback(Fighter* fp)
         return;
     }
 
-    /* The whole point of the code: this frame's raw stick against the one two
-     * frames back. Before the port kept the queue there was nothing to ask. */
-    now = pc_pad_raw_history((int) fp->x618_player_id, 0);
-    was = pc_pad_raw_history((int) fp->x618_player_id, 2);
-    if (now == NULL || was == NULL) {
-        return;
-    }
-    delta = (int) now->stickX - (int) was->stickX;
+    /* The whole point of the code: the raw stick against two readings back,
+     * from UCF's own ring (not the console's raw queue -- the ring only moves
+     * when this fighter's input is processed). */
+    delta = slp_ucf_dx(fp->x618_player_id);
     if (delta * delta <= 75 * 75) {
         return;
     }
@@ -266,10 +372,9 @@ static void slp_ucf_dashback(Fighter* fp)
         /* Worth being able to see: the whole code is a condition, and a
          * condition that never fires looks exactly like one that is not
          * compiled in. */
-        fprintf(stderr, "[SLP-COMPAT] ucf-dashback fired: p%d raw %d -> %d "
-                        "(delta %d), facing %+.0f\n",
-                (int) fp->x618_player_id, (int) was->stickX,
-                (int) now->stickX, delta, (double) fp->facing_dir);
+        fprintf(stderr, "[SLP-COMPAT] ucf-dashback fired: p%d delta %d, "
+                        "facing %+.0f\n",
+                (int) fp->x618_player_id, delta, (double) fp->facing_dir);
     }
 
     fp->mv.co.turn.has_turned = true;
@@ -563,4 +668,179 @@ int slp_compat_wobble_check(Fighter_GObj* gobj)
         }
     }
     return 1;
+}
+
+/* ---- UCF shield drop (800998a4, 8009a0b8) ----
+ * 800998a4 is the top of ftCo_80099894, which the two spot-dodge checks call.
+ * When the stick is at the rim of the gate on a pass-through platform, not
+ * pushed further down than -0.8, it abandons the spot dodge: it returns
+ * straight to its caller's return address + 8, skipping that caller's
+ * `li r3, 1`, so the check reports false and the shield goes on to the pass
+ * check -- where 8009a0b8 takes a recent fast downward flick (the input
+ * step's counter, past 1) as down.
+ *
+ * It also never re-executes the instruction it replaced, `lwz r0, 4(r4)`
+ * (fp->kind), so when it does not fire, the `cmpwi r0, 0xE` that picks
+ * Yoshi's spot dodge reads whatever this code left in r0. *kind_reg gets that
+ * value: the caller's return address on the first test (never 0xE), the
+ * active stick timer, -1, 0, or the squared rim distance on the others. */
+int slp_compat_ucf_shield_drop(struct HSD_GObj* gobj, int* kind_reg)
+{
+    Fighter* fp = GET_FIGHTER((Fighter_GObj*) gobj);
+    int ix, iy;
+
+    *kind_reg = fp->kind;
+    if (!slp_compat(SLP_FIX_UCF_SHIELDDROP)) {
+        return 0;
+    }
+    if (slp_compat_trace()) {
+        fprintf(stderr, "[SLP-COMPAT] shield-drop p%d c.y=%+.3f/%+.3f "
+                        "tx=%d/%d y=%+.3f floor=%d flags=%x\n",
+                (int) fp->x618_player_id, (double) fp->input.cstick[0].y,
+                (double) p_ftCommonData->x314, fp->active_timer.lstick.x,
+                p_ftCommonData->x320, (double) fp->input.lstick[0].y,
+                fp->coll_data.floor.index,
+                (unsigned) fp->coll_data.floor.flags);
+    }
+    *kind_reg = (int) 0x80099800; /* mflr r0: an address, never 0xE */
+    if (!(fp->input.cstick[0].y > p_ftCommonData->x314)) {
+        return 0;
+    }
+    *kind_reg = fp->active_timer.lstick.x;
+    if (fp->active_timer.lstick.x < p_ftCommonData->x320) {
+        return 0;
+    }
+    if (!(fp->input.lstick[0].y > -0.8F)) {
+        return 0;
+    }
+    *kind_reg = fp->coll_data.floor.index;
+    if (fp->coll_data.floor.index == -1) {
+        return 0;
+    }
+    *kind_reg = (int) (fp->coll_data.floor.flags & 0x100);
+    if (*kind_reg == 0) {
+        return 0;
+    }
+    iy = slp_ucf_units(fp->input.lstick[0].y) + 2;
+    ix = slp_ucf_units(fp->input.lstick[0].x) + 2;
+    *kind_reg = iy * iy + ix * ix;
+    return *kind_reg > 6400;
+}
+
+/* 8009a0b8, in ftCo_8009A080's inlined copy of ftCo_80099F1C: `down` is the
+ * game's own lstick.y <= -x464. */
+int slp_compat_ucf_pass_down(struct Fighter* fp_, int down)
+{
+    Fighter* fp = (Fighter*) fp_;
+    if (down || !slp_compat(SLP_FIX_UCF_SHIELDDROP)) {
+        return down;
+    }
+    return slp_ucf[fp->x618_player_id & 3].sd > 1;
+}
+
+/* The ring's Y change, as slp_ucf_dx for X. */
+static int slp_ucf_dy(unsigned port)
+{
+    const struct slp_ucf_port* u = &slp_ucf[port & 3];
+    return (int) (s8) u->ring[u->idx][1] -
+           (int) (s8) u->ring[(u->idx - 2) & 3][1];
+}
+
+/* ---- UCF SDI (8008e54c) ----
+ * ftCo_Damage_OnEveryHitlag's second timer test, `active_timer.lstick.y <
+ * sdi_stick_window`; `lt` is its result. When it fails, UCF still allows the
+ * SDI if a sticky timer is fresh, the previous frame's stick was inside the
+ * SDI magnitude, and the raw stick moved more than 62 units in two frames. */
+int slp_compat_ucf_sdi(struct Fighter* fp_, int lt)
+{
+    Fighter* fp = (Fighter*) fp_;
+    float mag, thr;
+    int dx, dy;
+
+    if (lt || !slp_compat(SLP_FIX_UCF_SDI)) {
+        return lt;
+    }
+    if (fp->active_sticky.lstick.x > 1 && fp->active_sticky.lstick.y > 1) {
+        return 0;
+    }
+    /* fmuls y*y, then fmadds x*x + that; the threshold squared by fmuls. */
+    mag = fmaf(fp->input.lstick[1].x, fp->input.lstick[1].x,
+               fp->input.lstick[1].y * fp->input.lstick[1].y);
+    thr = p_ftCommonData->sdi_min_stick_mag *
+          p_ftCommonData->sdi_min_stick_mag;
+    if (!(thr > mag)) {
+        return 0;
+    }
+    dx = slp_ucf_dx(fp->x618_player_id);
+    dy = slp_ucf_dy(fp->x618_player_id);
+    return dx * dx + dy * dy > 3844;
+}
+
+/* ---- UCF shield SDI (80093294) ----
+ * ftCo_80093240's `active_timer.lstick.x < sdi_stick_window`, as above on X
+ * alone. The previous frame's X is compared signed, as the original does. */
+int slp_compat_ucf_shield_sdi(struct Fighter* fp_, int lt)
+{
+    Fighter* fp = (Fighter*) fp_;
+    int dx;
+
+    if (lt || !slp_compat(SLP_FIX_UCF_SHIELD_SDI)) {
+        return lt;
+    }
+    if (fp->active_sticky.lstick.x > 1) {
+        return 0;
+    }
+    if (!(fp->input.lstick[1].x < p_ftCommonData->sdi_min_stick_mag)) {
+        return 0;
+    }
+    dx = slp_ucf_dx(fp->x618_player_id);
+    return dx * dx > 3844;
+}
+
+/* ---- UCF tumble (800908f4) ----
+ * ftCo_DamageFall_IASA's `active_timer.lstick.x < x214`, rewritten as a
+ * compare with 1 (x214 is 1): a timer of exactly 1 counts too when the
+ * previous frame's |x| was under x210 and the raw X moved more than 75. */
+int slp_compat_ucf_tumble(struct Fighter* fp_, int lt)
+{
+    Fighter* fp = (Fighter*) fp_;
+    int dx;
+
+    if (!slp_compat(SLP_FIX_UCF_TUMBLE)) {
+        return lt;
+    }
+    if (fp->active_timer.lstick.x != 1) {
+        return fp->active_timer.lstick.x < 1;
+    }
+    if (!(fabsf(fp->input.lstick[1].x) < p_ftCommonData->x210)) {
+        return 0;
+    }
+    dx = slp_ucf_dx(fp->x618_player_id);
+    return dx * dx > 5625;
+}
+
+/* ---- UCF SquatRv (800d65ec) ----
+ * ftCo_SquatRv_CheckInput's threshold, x94: on the stick's first frame out
+ * past the 80-unit circle it is 0.59 instead, which is what lets a dash back
+ * out of crouch (DBOOC) come out of a fast flick. */
+float slp_compat_ucf_squatrv(struct Fighter* fp_, float thr)
+{
+    Fighter* fp = (Fighter*) fp_;
+    int ix, iy;
+
+    if (slp_compat_trace()) {
+        fprintf(stderr, "[SLP-COMPAT] squatrv p%d x94=%.4f tx=%d stick=%+.3f,%+.3f\n",
+                (int) fp->x618_player_id, (double) thr,
+                fp->active_timer.lstick.x, (double) fp->input.lstick[0].x,
+                (double) fp->input.lstick[0].y);
+    }
+    if (!slp_compat(SLP_FIX_UCF_SQUATRV) || fp->active_timer.lstick.x >= 1) {
+        return thr;
+    }
+    ix = slp_ucf_units(fp->input.lstick[0].x) + 2;
+    iy = slp_ucf_units(fp->input.lstick[0].y) + 2;
+    if (ix * ix + iy * iy > 6400) {
+        return 0.59F; /* 0x3F170A3D */
+    }
+    return thr;
 }

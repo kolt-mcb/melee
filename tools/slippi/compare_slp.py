@@ -62,6 +62,14 @@ def lineup(raw):
     return None, []
 
 
+def game_info(raw):
+    """The Game Info Block (0x138 bytes) from Game Start: the match's rules."""
+    for _off, cmd, p in events(raw):
+        if cmd == 0x36:
+            return bytes(p[4:4 + 0x138])
+    return b""
+
+
 # Post-Frame Update payload offsets (the spec's minus the command byte):
 # frame 0, port 4, follower 5, internal character 6, action state 7, x 9,
 # y 13, facing 17, percent 21, shield 25, ... stocks 32.
@@ -97,6 +105,15 @@ def main():
     print("lineup b: stage %s, %s" % lb)
     if la[0] != lb[0] or [p[2] for p in la[1]] != [p[2] for p in lb[1]]:
         print("DIFFERENT MATCHES: stage or characters disagree")
+    # The rules, byte for byte. Two sides can agree on every frame for a
+    # minute and still be playing different games -- items on one side only,
+    # say -- until the difference is touched; this names it up front.
+    ga, gb = game_info(ra), game_info(rb)
+    rules = [i for i in range(min(len(ga), len(gb))) if ga[i] != gb[i]]
+    if rules:
+        print("DIFFERENT RULES: Game Info Block differs at %s"
+              % ", ".join("0x%02X (%02X vs %02X)" % (i, ga[i], gb[i])
+                          for i in rules[:12]))
 
     fa, fb = post_frames(ra), post_frames(rb)
     common = sorted(set(fa) & set(fb))

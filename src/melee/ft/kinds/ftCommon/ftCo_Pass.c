@@ -23,6 +23,10 @@
 #include <melee/ft/types.h>
 #include <melee/mp/mpcoll.h>
 
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
+
 bool ftCo_80099F1C(Fighter_GObj* gobj)
 {
     Fighter* fp = gobj->user_data;
@@ -54,7 +58,18 @@ bool ftCo_8009A080(Fighter_GObj* gobj)
 {
     u8 _[8];
     Fighter* fp = gobj->user_data;
-    if (fp->input.held_buttons[0] & HSD_PAD_LR && ftCo_80099F1C(gobj)) {
+#if BUILD_SLIPPI
+    /* ftCo_80099F1C is inlined here on the console, and only this copy has
+     * UCF's extended shield drop (8009a0b8) in it. */
+    if (fp->input.held_buttons[0] & HSD_PAD_LR &&
+        slp_compat_ucf_pass_down(
+            fp, fp->input.lstick[0].y <= -p_ftCommonData->x464) &&
+        fp->active_timer.lstick.y < p_ftCommonData->x468 &&
+        mpColl_IsOnPlatform(&fp->coll_data))
+#else
+    if (fp->input.held_buttons[0] & HSD_PAD_LR && ftCo_80099F1C(gobj))
+#endif
+    {
         ftCo_8009A228(gobj);
         return true;
     }

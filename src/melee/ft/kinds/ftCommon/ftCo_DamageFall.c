@@ -26,6 +26,10 @@
 /* Fused on the console (fmadds/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
 #include <math.h>
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #define DF_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define DF_FMA(a, b, c) ((a) * (b) + (c))
@@ -130,7 +134,12 @@ void ftCo_DamageFall_IASA(HSD_GObj* gobj)
         RETURN_IF(ftCo_800D705C(gobj));
         RETURN_IF(ftCo_800CB870(gobj));
         if (ABS(fp->input.lstick[0].x) >= p_ftCommonData->x210 &&
+#if BUILD_SLIPPI
+            slp_compat_ucf_tumble(fp, fp->active_timer.lstick.x <
+                                          p_ftCommonData->x214))
+#else
             fp->active_timer.lstick.x < p_ftCommonData->x214)
+#endif
         {
             ftCo_Fall_Enter(gobj);
             return;
