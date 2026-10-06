@@ -2003,6 +2003,21 @@ void ftData_80085CD8(Fighter* fp, Fighter* arg1, int msid)
         if (temp_r3_2 != (u32) fp->x5A4) {
             if (temp_r3_2 != 0) {
                 temp_r3_3 = ftData_80086060(fp);
+#if BUILD_TARGET_PC
+                /* PC port: not the partner's copy. When the other half of a
+                 * pair (Popo and Nana, Zelda and Sheik) already holds this
+                 * animation, the console copies its parsed archive and
+                 * lbArchiveRelocate adds the address difference to every
+                 * relocated word. Here those words are still big-endian file
+                 * offsets -- the data section is never relocated, it is
+                 * converted (pc_conv_FigaTree) -- so the sum was garbage, the
+                 * conversion refused it ("FigaTree offsets out of range") and
+                 * the fighter got no animation: Nana held frame 0 of every
+                 * action she entered on the same frame as Popo, her ECB with
+                 * it, and landed a frame early. The bytes are the same either
+                 * way, so load them as the other branch does. */
+                temp_r3_3 = NULL;
+#endif
                 if ((temp_r3_3 != NULL) &&
                     (temp_r3->x14 == (u32) temp_r3_3->x5A4))
                 {
@@ -2116,6 +2131,10 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
         if (temp_r3_2 != (u32) arg0->x5A8) {
             if (temp_r3_2 != 0) {
                 temp_r3_3 = ftData_80086060(arg0);
+#if BUILD_TARGET_PC
+                /* PC port: not the partner's copy -- see the x590 loader. */
+                temp_r3_3 = NULL;
+#endif
                 if ((temp_r3_3 != NULL) &&
                     (temp_r3->x14 == (u32) temp_r3_3->x5A4))
                 {
