@@ -757,6 +757,15 @@ int slp_compat_ucf_sdi(struct Fighter* fp_, int lt)
     float mag, thr;
     int dx, dy;
 
+    if (slp_compat_trace()) {
+        fprintf(stderr, "[SLP-COMPAT] sdi p%d lt=%d tx=%d ty=%d sticky=%d,%d "
+                        "prev=%+.3f,%+.3f\n",
+                (int) fp->x618_player_id, lt, fp->active_timer.lstick.x,
+                fp->active_timer.lstick.y, fp->active_sticky.lstick.x,
+                fp->active_sticky.lstick.y, (double) fp->input.lstick[1].x,
+                (double) fp->input.lstick[1].y);
+    }
+
     if (lt || !slp_compat(SLP_FIX_UCF_SDI)) {
         return lt;
     }
@@ -773,6 +782,10 @@ int slp_compat_ucf_sdi(struct Fighter* fp_, int lt)
     }
     dx = slp_ucf_dx(fp->x618_player_id);
     dy = slp_ucf_dy(fp->x618_player_id);
+    if (slp_compat_trace()) {
+        fprintf(stderr, "[SLP-COMPAT] ucf-sdi p%d d=%d,%d -> %d\n",
+                (int) fp->x618_player_id, dx, dy, dx * dx + dy * dy > 3844);
+    }
     return dx * dx + dy * dy > 3844;
 }
 

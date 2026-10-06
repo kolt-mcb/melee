@@ -622,3 +622,21 @@ roughly half of tonight's sessions. Nothing differs until a fighter touches a
 barrel the port never spawned. Fixed in direct-connect.patch (needs a rebuild
 of the emulator); until then compare_slp.py prints DIFFERENT RULES for such a
 run, and the run proves nothing.
+
+### Driving the emulator's player (2026-10-05, night)
+
+`SLIPPI_EMU_SCRIPT` (direct_vs.sh -> SLIPPI_DIRECT_SCRIPT in the patched
+Ishiiruka) scripts the emulator's own player through the match, in the
+port's token syntax, keyed on the match scene's frame counter (0x80479D58 =
+replay frame + 123). `SLIPPI_CHAR` now actually pins the emulator's
+character (the game's own CSS selection used to override it), and
+`MatchmakeResult.items` is initialised, so every session plays items off.
+The patched emulator is rebuilt (on grunt, binary copied to
+extern/slippi/Ishiiruka/build/Binaries; the previous one is in
+grunt:~/ish-backup-20261005).
+
+With Fox jabbing and smashing a crouched or fuzz-steered Marth (several
+seeds, up to ~34%), the replays stay IDENTICAL with UCF SDI on and off -- the
+UCF SDI branch is consulted (it is reached only when both active timers have
+been stamped by a consumer) but never fires in these runs. SDI, shield SDI
+and tumble therefore remain transcribed and reviewed, not proven.
