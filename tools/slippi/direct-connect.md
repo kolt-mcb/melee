@@ -600,7 +600,7 @@ compare IDENTICAL with the part on, and part on the very frame with it off:
 | dashback | 800c9a44 | stand, `s-24/0*1`, `s-100/0` | frame 192, Dash vs Turn |
 | shield drop (+ extended) | 800998a4, 8009a0b8 | shield on a platform, `s50/-10*6`, `s50/-63` | frame 192, Pass vs EscapeN |
 | SquatRv / DBOOC | 800d65ec | crouch, `s62/-49` | frame 191, Squat vs SquatRv |
-| SDI, shield SDI, tumble | 8008e54c, 80093294, 800908f4 | being hit | not provoked: the emulator's player cannot attack here |
+| SDI, shield SDI, tumble | 8008e54c, 80093294, 800908f4 | see below (2026-10-06) | proven |
 
 Two things the transcription had to keep that look like bugs: shield drop
 never re-executes the `lwz r0, 4(r4)` it replaced, so the Yoshi test after it
@@ -695,3 +695,20 @@ the state), re-simulated frames take their inputs by the netplay frame number
 never re-sampled, and the replay writer records a re-simulated frame under
 the label it already had. Port-to-port rollback (pc_rollback_pair.sh, 5%
 loss, 100 ms jitter, 3000 frames) still runs with no desync.
+
+### SDI, shield SDI and tumble, provoked (2026-10-06)
+
+With the emulator's player scripted (SLIPPI_EMU_SCRIPT, SLIPPI_CHAR), the
+three remaining UCF parts now fire, and each one is the difference: IDENTICAL
+with it on, diverging on the frame with only it off.
+
+| part | how | fired | without it |
+|---|---|---|---|
+| tumble | Ganondorf down-smash every 100 frames; Marth flicks X 0 -> 28 -> 80 ~45 frames after each | 2 | frame 1577: Fall (29) vs DamageFall (38) |
+| SDI | Fox up-smash every 75 frames at Marth, flicks 28 -> 80 in flight | 1 | frame 2542: x off by 6.0 (one SDI step) |
+| shield SDI | Marth holds L, Fox jabs every 40 frames, flick 28 -> 80 three frames after each jab | 19 | frame 281: x off by ~4 |
+
+The SDI that fired is the case reasoned about above: the active timer stamped
+254 by a consumer, the sticky timer at 1, the previous stick inside the
+radius (0.35), a raw move of 80. All eight parts of UCF 0.84 are now proven
+against the emulator.

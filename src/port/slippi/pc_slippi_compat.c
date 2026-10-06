@@ -812,6 +812,10 @@ int slp_compat_ucf_shield_sdi(struct Fighter* fp_, int lt)
         return 0;
     }
     dx = slp_ucf_dx(fp->x618_player_id);
+    if (slp_compat_trace()) {
+        fprintf(stderr, "[SLP-COMPAT] ucf-shield-sdi p%d dx=%d -> %d\n",
+                (int) fp->x618_player_id, dx, dx * dx > 3844);
+    }
     return dx * dx > 3844;
 }
 
@@ -834,6 +838,10 @@ int slp_compat_ucf_tumble(struct Fighter* fp_, int lt)
         return 0;
     }
     dx = slp_ucf_dx(fp->x618_player_id);
+    if (slp_compat_trace()) {
+        fprintf(stderr, "[SLP-COMPAT] ucf-tumble p%d dx=%d -> %d\n",
+                (int) fp->x618_player_id, dx, dx * dx > 5625);
+    }
     return dx * dx > 5625;
 }
 
