@@ -568,3 +568,20 @@ GameEndMethod 7.
 Still open from Slippi's side: UCF (dashback, shield drop), wobbling, the
 Pokemon Stadium transformations and camera, teams, and the frame-0 path for
 Ice Climbers.
+
+### Ice Climbers, and Zelda into Sheik (2026-10-05)
+
+Ice Climbers against the emulator now compare IDENTICAL too (11,304 updates,
+Popo grabbing and pummelling), and so does Zelda transforming into Sheik and
+back. Three port bugs, none of them Slippi's, stood in the way, and each
+showed first as Nana:
+- **Nana had no animation** for any action she entered on the same frame as
+  Popo. ftData_80085CD8/80085E50 copy the partner's already-parsed archive and
+  `lbArchiveRelocate` it; here the data section still holds big-endian file
+  offsets, the relocation corrupted them, and pc_conv_FigaTree refused the
+  result. Frame 0 of every shared action, an ECB to match, and she landed a
+  frame early. The port now loads the bytes itself (ftdata.c).
+- **Input was enabled at scene start**, not at GO: a PC-only call in
+  fn_8016E730 from when the if/ countdown was not built. Nana's AI steered
+  through the countdown. The countdown's own callback (fn_8016B7F8) does it.
+- **Nana's follow nudge** (ftCo_800B0AF4) is a double fmadd on the console.

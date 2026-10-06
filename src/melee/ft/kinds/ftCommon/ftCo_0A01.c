@@ -6107,11 +6107,13 @@ void ftCo_800AC5A0(Fighter* fp)
             stick_x = (s8) (u8) stale_r30;
         }
 #endif
-        kb_mag = CO_FMA(kb_x, kb_x,
+        /* A directive inside a macro's arguments is undefined, and MWCC
+         * refuses it: the two spellings are whole statements instead. */
 #ifdef MUST_MATCH
-                        kb_mag =
+        kb_mag = CO_FMA(kb_x, kb_x, kb_mag = kb_y * kb_y);
+#else
+        kb_mag = CO_FMA(kb_x, kb_x, kb_y * kb_y);
 #endif
-                            kb_y * kb_y);
         kb_mag = sqrtf(kb_mag);
         if (!ftCo_IsNearlyZero(kb_mag)) {
             float x = kb_x * (1.0F / kb_mag);
@@ -7885,10 +7887,11 @@ void ftCo_800B0AF4(Fighter* fp)
         data->ltrigger = data->x448->x4;
         data->rtrigger = data->x448->x5;
         if (fp->x2225_b3) {
-            fp->cur_pos.x =
-                0.95 * fp->cur_pos.x + 0.05 * data->x448->cur_pos.x;
-            fp->cur_pos.y =
-                0.95 * fp->cur_pos.y + 0.05 * data->x448->cur_pos.y;
+            /* 800B0C50: fmul for the leader's share, then a double fmadd. */
+            fp->cur_pos.x = CO_FMAD(0.95, fp->cur_pos.x,
+                                    0.05 * data->x448->cur_pos.x);
+            fp->cur_pos.y = CO_FMAD(0.95, fp->cur_pos.y,
+                                    0.05 * data->x448->cur_pos.y);
             if (fp->motion_id != ftPp_MS_SpecialLw &&
                 fp->motion_id != ftPp_MS_SpecialAirLw)
             {

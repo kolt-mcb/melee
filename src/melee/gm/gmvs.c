@@ -2128,18 +2128,6 @@ void fn_8016E730(StartMeleeData* arg0)
     }
     ifAll_802F390C();
     lbBgFlash_Init(0xFF);
-#if BUILD_TARGET_PC
-    /* PC port: fighters start with input disabled (x221D_b4) and the game
-     * re-enables it with ftLib_800868A4() when the READY/GO countdown
-     * finishes. That countdown lives in the if/ HUD module, which is not in
-     * this build, so nothing ever completed it and every fighter ignored the
-     * controller forever -- the stick reached fp->input.lstick correctly and
-     * was wiped at the end of the same proc, every frame.
-     *
-     * Enable input as the match starts. When if/ is built this should go
-     * away in favour of the real countdown. */
-    ftLib_800868A4();
-#endif
     if (arg0->rules.on_match_start != NULL) {
         arg0->rules.on_match_start();
     }
