@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "lbcollision.h"
 
 #include <Runtime/platform.h>
@@ -2030,6 +2031,14 @@ bool lbColl_8000805C(HitCapsule* arg0, HurtCapsule* arg1, Mtx arg2, s32 arg3,
                         *(u32*) &arg1->b_pos.x, *(u32*) &arg1->b_pos.y,
                         *(u32*) &arg1->b_pos.z, *(u32*) &arg1->scale,
                         *(u32*) &arg5, (void*) var_r9, (int) res);
+                {
+                    int k;
+                    fprintf(stderr, "[HITTEST]   mtx");
+                    for (k = 0; k < 12; k++) {
+                        fprintf(stderr, " %08x", ((u32*) var_r9)[k]);
+                    }
+                    fprintf(stderr, "\n");
+                }
                 return res;
             }
         }
@@ -2134,6 +2143,41 @@ bool lbColl_80008688(HitCapsule* capsule, int type, void* victim)
 {
     int var_r0;
     int i;
+
+#if BUILD_TARGET_PC
+    /* MELEE_VICTIMS=<from>-<to>: each hit registration, with the re-hit rate
+     * and every victim slot's timer. The console's is MELEE_CODE_BP=80008688
+     * with MELEE_MEMAT=80008688:3:40:64 (capsule+0x40 onward). */
+    {
+        static int lo = -2, hi;
+        if (lo == -2) {
+            const char* e = getenv("MELEE_VICTIMS");
+            const char* d = e ? strchr(e, '-') : NULL;
+            lo = e ? atoi(e) : -1;
+            hi = d ? atoi(d + 1) : lo;
+        }
+        if (lo >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            int f = (int) gm_GetFrameCount();
+            if (f >= lo && f <= hi) {
+                int k;
+                fprintf(stderr,
+                        "[VICTIMS] gframe=%d cap=%p type=%d victim=%p "
+                        "rehit=%u x44=%d state=%d slots:",
+                        f, (void*) capsule, type, victim,
+                        (unsigned) capsule->x40_b4, (int) capsule->x44,
+                        (int) capsule->state);
+                for (k = 0; k < 12; k++) {
+                    fprintf(stderr, " %s%u",
+                            capsule->victims_1[k].victim == victim ? "*"
+                            : capsule->victims_1[k].victim ? "+" : "-",
+                            (unsigned) capsule->victims_1[k].x4);
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+    }
+#endif
 
     for (i = 0; i < ARRAY_SIZE(capsule->victims_1); i++) {
         if (capsule->victims_1[i].victim == victim) {

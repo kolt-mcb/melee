@@ -1521,6 +1521,22 @@ s32 grZebes_801DA528(HSD_GObj* arg0, void* arg1, s32 arg2, s32 arg3)
                 frame = (f32) ((f64) (dmg * thr) / 30.0);
             }
             grAnime_801C7B24(arg0, st->x20_anim_idx, 1, frame);
+#if BUILD_TARGET_PC
+            /* MELEE_ZEACID=1: the damaged blob's animation frame and the
+             * scale its joint ends up with -- the scale is what sizes the
+             * material's hurt capsule (lbColl_80006E58 divides by it). */
+            if (getenv("MELEE_ZEACID") != NULL) {
+                extern u32 gm_GetFrameCount(void);
+                HSD_JObj* j = st->x14_jobj1;
+                fprintf(stderr,
+                        "[ZEACID] gframe=%u dmg=%08x frame=%08x idx=%d "
+                        "scale=(%08x,%08x,%08x) aobj=%p\n",
+                        (unsigned) gm_GetFrameCount(), *(u32*) &dmg,
+                        *(u32*) &frame, (int) st->x20_anim_idx,
+                        *(u32*) &j->scale.x, *(u32*) &j->scale.y,
+                        *(u32*) &j->scale.z, (void*) j->aobj);
+            }
+#endif
         }
         break;
     }
@@ -1548,15 +1564,35 @@ s32 grZebes_801DA528(HSD_GObj* arg0, void* arg1, s32 arg2, s32 arg3)
 void fn_801DA9D8(Item_GObj* arg0, Ground* gp, Vec3* pos, HSD_GObj* fobj,
                  f32 slope)
 {
+#if BUILD_TARGET_PC
+    /* On the console xC.y/xC.z are gp+D4/D8: the acid state at gp+C8 that
+     * map 6 keeps (grZebes_801D8644), x0C_velocity and x10_damage. Here
+     * grZebes_GroundVars puts xC four bytes later (its x4 is 8-aligned),
+     * so the hit's damage never reached x10_damage and the hit position
+     * was written over it instead. The blob never shrank, its hurt capsule
+     * kept full size, and a jab the console misses landed. */
+    gp->u.zebes5.acid.x10_damage += slope;
+    gp->u.zebes5.acid.x0C_velocity = pos->x;
+#else
     gp->u.zebes.xC.z += slope;
     gp->u.zebes.xC.y = pos->x;
+#endif
 }
 
 void fn_801DA9F0(Item_GObj* arg0, Ground* gp, Vec3* pos, HSD_GObj* fobj,
                  f32 slope)
 {
+#if BUILD_TARGET_PC
+    /* gp+D4/D0 on the console: map 15's acid state starts at gp+C4
+     * (grZebes_GroundVars4), so these are its x10_damage and x0C_velocity.
+     * Through grZebes_GroundVars here xC.y is gp+D8 -- the low half of the
+     * xD8 joint pointer. */
+    gp->u.zebes4.xD4 += slope;
+    gp->u.zebes4.xD0 = pos->x;
+#else
     gp->u.zebes.xC.y += slope;
     gp->u.zebes.xC.x = pos->x;
+#endif
 }
 
 s32 grZebes_801DAA08(void)
