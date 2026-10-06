@@ -101,6 +101,14 @@ static const struct slp_compat_entry slp_fixes[SLP_FIX_COUNT] = {
     { "whispy-dir", 1, "8008653c",
       "a fighter in a dead state (action 0-11) casts no vote in the "
       "left/right count Whispy and spawned items use" },
+    { "ps-camera", 1, "801d24fc",
+      "Pokemon Stadium's big screen leaves its zoomed view when the tracked "
+      "fighter leaves a fixed box, not the camera's view, since the "
+      "transition draws from the RNG (PSCameraIndependentMonitor)" },
+    { "init-zero", 1, "80068eec,801c154c",
+      "a new fighter's and a new stage object's data start zeroed instead "
+      "of holding whatever the heap last had there (Init Player Data, Init "
+      "Stage Data)" },
 };
 
 static unsigned char slp_on[SLP_FIX_COUNT];
@@ -995,6 +1003,37 @@ int slp_compat_offscreen(struct Fighter* fp)
         return 1;
     }
     return 0;
+}
+
+/* ---- PSCameraIndependentMonitor (801d24fc) ----
+ * grStadium_801D32D0 still runs -- it places the zoomed view -- but whether
+ * the screen keeps tracking the fighter is a fixed box (the stage's camera
+ * limits pulled in by 50 and 40), not where the camera shows them. */
+int slp_compat_ps_monitor(int orig, struct HSD_GObj* player)
+{
+    Fighter* fp;
+
+    if (!slp_compat(SLP_FIX_PS_CAMERA)) {
+        return orig;
+    }
+    fp = GET_FIGHTER(player);
+    if (fp->cur_pos.x < -120.0F || fp->cur_pos.x > 120.0F ||
+        fp->cur_pos.y > 80.0F || fp->cur_pos.y < -20.0F)
+    {
+        return 0;
+    }
+    return 1;
+}
+
+/* ---- Init Player Data (80068eec), Init Stage Data (801c154c) ----
+ * Both blocks come back from their allocators uncleared on the console, so
+ * fields read before their init writes them hold stale heap contents; Slippi
+ * zeroes them. */
+void slp_compat_init_zero(void* p, unsigned long n)
+{
+    if (p != NULL && slp_compat(SLP_FIX_INIT_ZERO)) {
+        memset(p, 0, (size_t) n);
+    }
 }
 
 /* ---- WhispyBlowDirFix (8008653c) ----

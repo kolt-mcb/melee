@@ -1579,6 +1579,10 @@ Fighter_GObj* Fighter_Create(struct plAllocInfo* input)
      * contents. For example, Luigi's @c x222C_cycloneCharge.
      */
     fp = HSD_ObjAlloc(&fighter_alloc_data);
+#if BUILD_SLIPPI
+    /* Slippi's Init Player Data (80068eec). */
+    slp_compat_init_zero(fp, sizeof(Fighter));
+#endif
     fp->dat_attrs_backup = HSD_ObjAlloc(&fighter_dat_attrs_alloc_data);
     GObj_InitUserData(gobj, 4U, &Fighter_Unload_8006DABC, fp);
     ftData_8008572C(input->internal_id);

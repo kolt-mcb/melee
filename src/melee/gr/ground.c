@@ -143,6 +143,10 @@ static inline u32 be32(u32 x)
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
 #include <math.h>
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #define GD2_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define GD2_FMA(a, b, c) ((a) * (b) + (c))
@@ -1353,6 +1357,10 @@ Ground_GObj* Ground_GetStageGObj(int map_id)
         HSD_GObjFree(gobj);
         return NULL;
     }
+#if BUILD_SLIPPI
+    /* Slippi's Init Stage Data (801c154c). */
+    slp_compat_init_zero(gp, sizeof(Ground));
+#endif
     GObj_InitUserData(gobj, 3, mem_free, gp);
     gp->map_id = map_id;
     gp->gobj = gobj;

@@ -911,7 +911,14 @@ void grStadium_801D2344(Ground_GObj* g)
         temp_r3_8->flag = 0;
         if (gp->u.display.xDC == NULL ||
             Player_GetEntity(gp->u.display.xEE) == NULL ||
+#if BUILD_SLIPPI
+            /* Slippi's PSCameraIndependentMonitor (801d24fc). */
+            Player_8003219C(gp->u.display.xEE) ||
+            !slp_compat_ps_monitor(grStadium_801D32D0(gobj),
+                                   Player_GetEntity(gp->u.display.xEE)))
+#else
             Player_8003219C(gp->u.display.xEE) || !grStadium_801D32D0(gobj))
+#endif
         {
             grStadium_801D2A60(gobj);
         }
