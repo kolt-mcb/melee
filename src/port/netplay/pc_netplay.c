@@ -2293,6 +2293,32 @@ static void slp_build_online_block(unsigned char* b)
     b[0x03] = 0x4C; /* score display hidden */
     b[0x0B] = 0xFF; /* items off */
     put_be(b + 0x23, 0xF80000000F000000ull, 8);
+
+    /* MELEE_SLP_CPUS=<ck0>,<ck1>,<ck2>,<ck3>:<level>: every slot a CPU of
+     * that level, the patched emulator's SLIPPI_DIRECT_CPUS on this side. A
+     * session that plays itself, four fighters' worth of state under Slippi's
+     * checksum. -1 leaves a slot empty. */
+    {
+        const char* e = getenv("MELEE_SLP_CPUS");
+        int ck[4] = { -1, -1, -1, -1 };
+        int lvl = 9;
+        if (e != NULL && sscanf(e, "%d,%d,%d,%d:%d", &ck[0], &ck[1], &ck[2],
+                                &ck[3], &lvl) >= 4)
+        {
+            for (i = 0; i < 4; i++) {
+                unsigned char* p = b + 0x60 + i * 0x24;
+                if (ck[i] < 0) {
+                    p[1] = 3;
+                    continue;
+                }
+                p[0] = (unsigned char) ck[i];
+                p[1] = 1;
+                p[3] = 0;
+                p[7] = 0;
+                p[0xF] = (unsigned char) lvl;
+            }
+        }
+    }
 }
 #endif
 

@@ -28,6 +28,10 @@
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
 #include <math.h>
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #define D31_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define D31_FMA(a, b, c) ((a) * (b) + (c))
@@ -866,6 +870,10 @@ void ftCo_DeadUpFall_Anim(Fighter_GObj* gobj)
             fp->self_vel.z = data->x55C;
             fp->mv.co.unk_deadup.x40 = data->x530;
             fp->mv.co.unk_deadup.x44 = 3;
+#if BUILD_SLIPPI
+            /* Slippi's FreezeDeadUpFallPhysics (800d4c1c). */
+            slp_compat_deadup_hit(fp, data->x550, data->x55C);
+#endif
             return;
         case 3:
             ftCommon_8007E2FC(gobj);
@@ -906,8 +914,14 @@ void ftCo_DeadUpFall_Phys(Fighter_GObj* gobj)
                       fp->mv.co.unk_deadup.x4C);
         break;
     case 3:
-        ftCommon_Fall(fp, ca->x554, ca->x558);
-        lbVector_Add(&fp->mv.co.unk_deadup.x5C, &fp->self_vel);
+#if BUILD_SLIPPI
+        /* Slippi's FreezeDeadUpFallPhysics (800d4d68). */
+        if (!slp_compat_deadup_fall(fp, ca->x554, ca->x558))
+#endif
+        {
+            ftCommon_Fall(fp, ca->x554, ca->x558);
+            lbVector_Add(&fp->mv.co.unk_deadup.x5C, &fp->self_vel);
+        }
         if (fp->x2222_b6) {
             if (!ftAnim_80070FD0(fp)) {
                 break;

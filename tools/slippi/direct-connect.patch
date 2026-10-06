@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
-index 4e3991914..ac295608b 100644
+index 4e3991914..e94e56e90 100644
 --- a/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 +++ b/Source/Core/Core/HW/EXI_DeviceSlippi.cpp
 @@ -30,6 +30,7 @@
@@ -360,7 +360,25 @@ index 4e3991914..ac295608b 100644
  	INFO_LOG(SLIPPI, "EXI SLIPPI Constructor called.");
  
  	// @TODO: For mainline port, ISO file path can't be fetched this way. Look at the following:
-@@ -2134,6 +2476,8 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -1940,6 +2282,17 @@ void CEXISlippi::startFindMatch(u8 *payload)
+ 	// search.connectCode = SHIFTJISToUTF8(shiftJisCode).c_str();
+ 	search.connectCode = shiftJisCode;
+ 
++	// SLIPPI_DIRECT_MODE=direct: treat a direct-peers session as Slippi's
++	// direct mode whichever entry the auto-drive confirmed on the mode list
++	// (it is always the first, unranked). Direct mode has no stage or
++	// character restrictions; unranked silently drops the connection for a
++	// stage outside its pool.
++	if (getenv("SLIPPI_DIRECT_PEERS") != nullptr && getenv("SLIPPI_DIRECT_MODE") != nullptr &&
++	    strcmp(getenv("SLIPPI_DIRECT_MODE"), "direct") == 0)
++	{
++		search.mode = SlippiMatchmaking::OnlinePlayMode::DIRECT;
++	}
++
+ 	// Store this search so we know what was queued for
+ 	lastSearch = search;
+ 
+@@ -2134,6 +2487,8 @@ void CEXISlippi::prepareOnlineMatchState()
  
  	m_read_queue.clear();
  
@@ -369,7 +387,7 @@ index 4e3991914..ac295608b 100644
  	auto errorState = SlippiMatchmaking::ProcessState::ERROR_ENCOUNTERED;
  	SlippiMatchmaking::ProcessState mmState = !forcedError.empty() ? errorState : matchmaking->GetMatchmakeState();
  
-@@ -2147,6 +2491,19 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2147,6 +2502,19 @@ void CEXISlippi::prepareOnlineMatchState()
  
  	m_read_queue.push_back(mmState); // Matchmaking State
  
@@ -389,7 +407,7 @@ index 4e3991914..ac295608b 100644
  	u8 localPlayerReady = localSelections.isCharacterSelected;
  	u8 remotePlayersReady = 0;
  
-@@ -2200,10 +2557,26 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2200,10 +2568,26 @@ void CEXISlippi::prepareOnlineMatchState()
  		// If any players are disconnected and the match state is being requested (we are in a lobby),
  		// we should just disconnect. This allows for games to finish with a disconnected player but
  		// after that the "lobby" is terminated.
@@ -417,7 +435,7 @@ index 4e3991914..ac295608b 100644
  #endif
  
  		if (isConnected)
-@@ -2293,6 +2666,83 @@ void CEXISlippi::prepareOnlineMatchState()
+@@ -2293,6 +2677,83 @@ void CEXISlippi::prepareOnlineMatchState()
  		return;
  	}
  
@@ -501,7 +519,43 @@ index 4e3991914..ac295608b 100644
  	m_read_queue.push_back(localPlayerReady);   // Local player ready
  	m_read_queue.push_back(remotePlayersReady); // Remote players ready
  	m_read_queue.push_back(localPlayerIndex);   // Local player index
-@@ -2767,6 +3217,17 @@ void CEXISlippi::setMatchSelections(u8 *payload)
+@@ -2612,6 +3073,35 @@ void CEXISlippi::prepareOnlineMatchState()
+ 	u64 *item_bits = reinterpret_cast<u64 *>(&onlineMatchBlock[0x23]);
+ 	*item_bits = Common::swap64(new_items_value);
+ 
++	// Direct mode: SLIPPI_DIRECT_CPUS=<ck0>,<ck1>,<ck2>,<ck3>:<level> makes all
++	// four slots CPUs of that level with those characters (external ids),
++	// whatever the clients selected -- a desync test that plays itself. Every
++	// client in the session has to be told the same thing; the port's twin is
++	// MELEE_SLP_CPUS.
++	if (getenv("SLIPPI_DIRECT_PEERS") != nullptr && getenv("SLIPPI_DIRECT_CPUS") != nullptr)
++	{
++		int ck[4] = {-1, -1, -1, -1};
++		int lvl = 9;
++		if (sscanf(getenv("SLIPPI_DIRECT_CPUS"), "%d,%d,%d,%d:%d", &ck[0], &ck[1], &ck[2], &ck[3], &lvl) >= 4)
++		{
++			for (int i = 0; i < 4; i++)
++			{
++				u8 *e = &onlineMatchBlock[0x60 + i * 0x24];
++				if (ck[i] < 0)
++				{
++					e[1] = 3; // empty
++					continue;
++				}
++				e[0] = (u8)ck[i];
++				e[1] = 1; // CPU
++				e[3] = 0; // costume
++				e[7] = 0; // shade
++				e[0xF] = (u8)lvl;
++			}
++			ERROR_LOG(SLIPPI_ONLINE, "[Direct] CPU lineup %d,%d,%d,%d level %d", ck[0], ck[1], ck[2], ck[3], lvl);
++		}
++	}
++
+ 	// Add rng offset to output
+ 	appendWordToBuffer(&m_read_queue, rngOffset);
+ 
+@@ -2767,6 +3257,17 @@ void CEXISlippi::setMatchSelections(u8 *payload)
  	s.characterColor = payload[2];
  	s.isCharacterSelected = payload[3];
  
@@ -519,7 +573,7 @@ index 4e3991914..ac295608b 100644
  	s.stageId = Common::swap16(&payload[4]);
  	u8 stageSelectOption = payload[6];
  	// u8 onlineMode = payload[7];
-@@ -3018,6 +3479,233 @@ void CEXISlippi::handleUpdateAppRequest()
+@@ -3018,6 +3519,233 @@ void CEXISlippi::handleUpdateAppRequest()
  #endif
  }
  
@@ -753,7 +807,7 @@ index 4e3991914..ac295608b 100644
  void CEXISlippi::prepareOnlineStatus()
  {
  	m_read_queue.clear();
-@@ -3025,6 +3713,28 @@ void CEXISlippi::prepareOnlineStatus()
+@@ -3025,6 +3753,28 @@ void CEXISlippi::prepareOnlineStatus()
  	auto isLoggedIn = user->IsLoggedIn();
  	auto userInfo = user->GetUserInfo();
  
@@ -782,7 +836,7 @@ index 4e3991914..ac295608b 100644
  	u8 appState = 0;
  	if (isLoggedIn)
  	{
-@@ -3382,6 +4092,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3382,6 +4132,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  		return;
  	}
  
@@ -798,7 +852,7 @@ index 4e3991914..ac295608b 100644
  	u8 byte = memPtr[0];
  	if (byte == CMD_RECEIVE_COMMANDS)
  	{
-@@ -3497,6 +4216,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
+@@ -3497,6 +4256,18 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
  			prepareOnlineStatus();
  			break;
  		case CMD_CLEANUP_CONNECTION:
@@ -817,7 +871,7 @@ index 4e3991914..ac295608b 100644
  			handleConnectionCleanup();
  			break;
  		case CMD_LOG_MESSAGE:
-@@ -3597,6 +4328,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
+@@ -3597,6 +4368,18 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
  
  	// Copy buffer data to memory
  	Memory::CopyToEmu(addr, queueAddr, size);

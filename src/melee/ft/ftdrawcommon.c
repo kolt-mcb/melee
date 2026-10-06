@@ -20,6 +20,10 @@
 #include <melee/lb/lbcollision.h>
 #include <melee/lb/lbgx.h>
 #include <sysdolphin/baselib/cobj.h>
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/state.h>
 
@@ -468,7 +472,11 @@ void ftDrawCommon_80080E18(HSD_GObj* gobj, int arg1)
         switch (Camera_80031060()) {
         case 1:
             if (fp->x2220_b7) {
-                ftDrawCommon_80080E18_inline2(gobj, fp);
+#if BUILD_SLIPPI
+                /* Slippi's FreezeDeadUpFallPhysics (80080e80). */
+                if (!slp_compat_deadup_draw(gobj))
+#endif
+                    ftDrawCommon_80080E18_inline2(gobj, fp);
             }
             if (fp->x5AC.xC[4] != NULL) {
                 ftDrawCommon_80080E18_inline0(gobj, arg1);

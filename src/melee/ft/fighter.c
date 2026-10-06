@@ -2370,8 +2370,17 @@ void Fighter_8006A360(Fighter_GObj* gobj)
 #endif
         if (!fp->is_sub_fighter && Camera_80031144() == 1.0f) {
             if (fp->dmg.x1830_percent < p_ftCommonData->x7B0) {
+#if BUILD_SLIPPI
+                /* Slippi's BrawlOffscreenDamage (8006a880). */
+                int offscr = slp_compat_offscreen(fp);
+                if (offscr < 0) {
+                    offscr = ifMagnify_802FC998(fp->player_id);
+                }
+                if (offscr && (Player_GetMoreFlagsBit3(fp->player_id) != 0))
+#else
                 if (ifMagnify_802FC998(fp->player_id) &&
                     (Player_GetMoreFlagsBit3(fp->player_id) != 0))
+#endif
                 {
                     fp->dmg.x1910++;
                 } else {

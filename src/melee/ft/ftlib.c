@@ -30,6 +30,10 @@
 #include <melee/pl/player.h>
 #include <melee/pl/plbonuslib.h>
 #include <sysdolphin/baselib/cobj.h>
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #include <sysdolphin/baselib/debug.h>
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/random.h>
@@ -295,6 +299,12 @@ float ftLib_800864A8(Vec3* v, HSD_GObj* gobj)
                             *(u32*) &vec.x, *(u32*) &v->x,
                             (int) sgn(vec.x - v->x), (int) result);
                 }
+            }
+#endif
+#if BUILD_SLIPPI
+            /* Slippi's WhispyBlowDirFix (8008653c). */
+            if (slp_compat_dead_vote(cur)) {
+                continue;
             }
 #endif
             result += sgn(vec.x - v->x);

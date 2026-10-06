@@ -58,6 +58,9 @@ enum SlpCompatFix {
     SLP_FIX_WOBBLING,
     SLP_FIX_PS_FROZEN,
     SLP_FIX_FD_BG_RNG,
+    SLP_FIX_DEADUP_FREEZE,
+    SLP_FIX_OFFSCREEN_DAMAGE,
+    SLP_FIX_WHISPY_DIR,
 
     SLP_FIX_COUNT
 };
@@ -88,6 +91,11 @@ float slp_compat_ucf_squatrv(struct Fighter* fp, float thr);
 int slp_compat_ps_frozen(void);
 unsigned slp_compat_fd_bg_begin(void);
 void slp_compat_fd_bg_end(unsigned seed);
+int slp_compat_deadup_hit(struct Fighter* fp, float vy, float vz);
+int slp_compat_deadup_fall(struct Fighter* fp, float grav, float term);
+int slp_compat_deadup_draw(struct HSD_GObj* gobj);
+int slp_compat_offscreen(struct Fighter* fp);
+int slp_compat_dead_vote(struct HSD_GObj* gobj);
 
 void slp_compat_wobble_init(struct Fighter* fp);
 int slp_compat_wobble_check(struct HSD_GObj* gobj);

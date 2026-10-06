@@ -110,6 +110,8 @@ XA=$(ps -eo args | grep -oP '(?<=-auth )\S+' | head -1)
   ${SLIPPI_PRESS:+SLIPPI_DIRECT_PRESS=$SLIPPI_PRESS} \
   ${SLIPPI_NOLOCK:+SLIPPI_DIRECT_NOLOCK=1} \
   ${SLIPPI_EMU_SCRIPT:+SLIPPI_DIRECT_SCRIPT=$SLIPPI_EMU_SCRIPT} \
+  ${SLIPPI_CPUS:+SLIPPI_DIRECT_CPUS=$SLIPPI_CPUS} \
+  ${SLIPPI_MODE:+SLIPPI_DIRECT_MODE=$SLIPPI_MODE} \
   timeout -k 10 "$RUNFOR" ./dolphin-emu -b -e "$ISO" ) > "$OUT/emu.out" 2>&1 &
 EMU=$!
 
@@ -124,7 +126,7 @@ EMU=$!
   MELEE_NET_PORT=$PORT_PORT MELEE_NET_PLAYERS=2 \
   MELEE_NET_PEERS=127.0.0.1:$PORT_PORT,127.0.0.1:$EMU_PORT \
   MELEE_BOOT_MODE=14 MELEE_BOOT_MATCH=${SLIPPI_PORT_MATCH:-9,9,31} \
-  env ${SLIPPI_PORT_ENV:-} timeout -k 10 "$RUNFOR" "$PORTBIN" 2>&1 |
+  env ${SLIPPI_CPUS:+MELEE_SLP_CPUS=$SLIPPI_CPUS} ${SLIPPI_PORT_ENV:-} timeout -k 10 "$RUNFOR" "$PORTBIN" 2>&1 |
   # SLIPPI_TS=1 stamps every line with wall-clock time, which is what lines the
   # port's log up against the emulator's (whose lines carry mm:ss:ms).
   if [ -n "${SLIPPI_TS:-}" ]; then

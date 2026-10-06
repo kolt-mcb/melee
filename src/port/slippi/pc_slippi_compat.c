@@ -15,13 +15,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <dolphin/mtx.h>
 #include <dolphin/pad.h>
+#include <sysdolphin/baselib/cobj.h>
+#include <sysdolphin/baselib/jobj.h>
+#include <melee/cm/camera.h>
 #include <melee/ft/fighter.h>
 #include <melee/ft/ftcommon.h>
 #include <melee/ft/kinds/ftCommon/ftCo_0A01.h>
 #include <melee/ft/kinds/ftCommon/ftCo_Attack100.h>
 #include <melee/ft/forward.h>
 #include <melee/ft/types.h>
+#include <melee/gm/forward.h>
 #include <melee/gm/gm_1601.h>
 #include <melee/gm/gm_1A3F.h>
 #include <melee/gm/gmvs.h>
@@ -86,6 +91,16 @@ static const struct slp_compat_entry slp_fixes[SLP_FIX_COUNT] = {
     { "fd-bg-rng", 1, "8021aae4",
       "Final Destination's background transformation keeps the RNG seed it "
       "found, so freezing it on one side cannot desync the other" },
+    { "deadup-freeze", 1, "800d4c1c,800d4d68,80080e80",
+      "a screen KO's fall runs on its own velocity in the motion vars, and "
+      "the draw that pins the fighter to the camera moves only the model, "
+      "never the physics position (FreezeDeadUpFallPhysics)" },
+    { "offscreen-damage", 1, "8006a880",
+      "off-screen damage asks whether the fighter is outside the stage's "
+      "camera limits instead of whether its magnifier bubble is up" },
+    { "whispy-dir", 1, "8008653c",
+      "a fighter in a dead state (action 0-11) casts no vote in the "
+      "left/right count Whispy and spawned items use" },
 };
 
 static unsigned char slp_on[SLP_FIX_COUNT];
@@ -897,4 +912,94 @@ void slp_compat_fd_bg_end(unsigned seed)
     if (slp_compat(SLP_FIX_FD_BG_RNG)) {
         *HSD_RandSeedPtr = seed;
     }
+}
+
+/* ---- FreezeDeadUpFallPhysics ----
+ * The screen KO's draw (ftDrawCommon_80080E18) places the fighter in front of
+ * the camera by writing inverse-view x offset into fp->cur_pos. That makes a
+ * render-time camera part of the game state, which rollback and a client
+ * without screen shake cannot reproduce. Slippi's three hooks keep the fall
+ * in the motion vars (0x2348 Y and 0x234C Z velocity, 0x2350 the offset) and
+ * have the draw move the model only. */
+#define SLP_MV_F(fp, off) (*(float*) ((char*) &(fp)->mv.co + ((off) - 0x2340)))
+
+/* 800d4c1c (InitHitVelocity), after DeadUpFall_Anim stores x44 = 3. */
+int slp_compat_deadup_hit(struct Fighter* fp, float vy, float vz)
+{
+    if (!slp_compat(SLP_FIX_DEADUP_FREEZE)) {
+        return 0;
+    }
+    SLP_MV_F(fp, 0x2348) = vy;
+    SLP_MV_F(fp, 0x234C) = vz;
+    fp->self_vel.x = 0.0F;
+    fp->self_vel.y = 0.0F;
+    fp->self_vel.z = 0.0F;
+    return 1;
+}
+
+/* 800d4d68 (UpdateFallVelocity), in place of ftCommon_Fall and adding
+ * self_vel into the temp vector at 0x235C. */
+int slp_compat_deadup_fall(struct Fighter* fp, float grav, float term)
+{
+    float vy;
+
+    if (!slp_compat(SLP_FIX_DEADUP_FREEZE)) {
+        return 0;
+    }
+    vy = SLP_MV_F(fp, 0x2348) - grav;
+    if (!(vy > -term)) {
+        vy = -term;
+    }
+    SLP_MV_F(fp, 0x2348) = vy;
+    SLP_MV_F(fp, 0x2360) = SLP_MV_F(fp, 0x2360) + vy;
+    SLP_MV_F(fp, 0x2364) = SLP_MV_F(fp, 0x234C) + SLP_MV_F(fp, 0x2364);
+    return 1;
+}
+
+/* 80080e80 (UpdateModelPos): the product goes straight into the root
+ * joint's translation, without HSD_JObjSetTranslate's dirty marking, and
+ * fp->cur_pos is left alone. */
+int slp_compat_deadup_draw(struct HSD_GObj* gobj)
+{
+    Fighter* fp = GET_FIGHTER(gobj);
+    HSD_JObj* jobj = GET_JOBJ(gobj);
+    MtxPtr m;
+
+    if (!slp_compat(SLP_FIX_DEADUP_FREEZE)) {
+        return 0;
+    }
+    m = HSD_CObjGetInvViewingMtxPtr(Camera_800310B8());
+    PSMTXMultVec(m, (Vec3*) &SLP_MV_F(fp, 0x2350), &jobj->translate);
+    return 1;
+}
+
+/* ---- BrawlOffscreenDamage (8006a880) ----
+ * Replaces the magnifier query in the off-screen damage tick: 1 when the
+ * fighter is outside the stage's camera limits. -1 when not switched on. */
+int slp_compat_offscreen(struct Fighter* fp)
+{
+    if (!slp_compat(SLP_FIX_OFFSCREEN_DAMAGE)) {
+        return -1;
+    }
+    if (gm_801A4310() == GM_HOME_RUN_CONTEST) {
+        return 0;
+    }
+    if (fp->x221F_b1 || (int) fp->motion_id == 4 || (int) fp->motion_id == 6) {
+        return 0;
+    }
+    if (fp->cur_pos.x < Stage_GetCamBoundsLeftOffset() ||
+        fp->cur_pos.x > Stage_GetCamBoundsRightOffset() ||
+        fp->cur_pos.y > Stage_GetCamBoundsTopOffset() ||
+        fp->cur_pos.y < Stage_GetCamBoundsBottomOffset())
+    {
+        return 1;
+    }
+    return 0;
+}
+
+/* ---- WhispyBlowDirFix (8008653c) ----
+ * ftLib_800864A8's left/right vote skips a fighter in a dead state. */
+int slp_compat_dead_vote(struct HSD_GObj* gobj)
+{
+    return slp_compat(SLP_FIX_WHISPY_DIR) && (int) GET_FIGHTER(gobj)->motion_id <= 0xB;
 }
