@@ -27,7 +27,12 @@
 #endif
 
 #define HYPOT(x, y) sqrtf(BM_FMA((x), (x), (y) * (y)))
-#define VEC_XY_LENGTH(v) HYPOT((v)->x, (v)->y)
+/* Only it_802A13EC fuses its sum of squares (one fmadds before the frsqrte).
+ * The four velocity lengths -- UnkMotion1/2/3_Phys and it_802A20E8 -- square
+ * each component with fmuls and add with fadds, rounding three times. Fused,
+ * a returning boomerang's speed came out an ulp off and its path drifted from
+ * Slippi's emulator a few hundredths of a unit over a second. */
+#define VEC_XY_LENGTH(v) sqrtf((v)->x * (v)->x + (v)->y * (v)->y)
 
 ItemStateTable it_803F6920[] = {
     { -1, itLinkboomerang_UnkMotion0_Anim, NULL, NULL },

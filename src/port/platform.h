@@ -106,11 +106,22 @@ typedef bool (*Predicate)(void);  /* predicate callback */
 #ifndef M_PI_2f
 #define M_PI_2f (M_PI_F / 2.0f)
 #endif
+/* M_TAU and M_PI_3 are doubles, as in Runtime/platform.h: MWCC loads them
+ * with lfd and does the arithmetic in double before one frsp. As floats they
+ * were a different 2*pi added in single precision, so an angle wrapped by
+ * `a += M_TAU` came out one ulp off -- Link's boomerang drifted from Slippi's
+ * emulator from its first wrap on. The _F spellings are the float ones. */
 #ifndef M_PI_3
-#define M_PI_3 (M_PI_F / 3.0f)
+#define M_PI_3 (M_PI / 3)
 #endif
 #ifndef M_TAU
-#define M_TAU (2.0f * M_PI_F)
+#define M_TAU 6.283185307179586
+#endif
+#ifndef M_TAU_F
+#define M_TAU_F 6.283185307179586F
+#endif
+#ifndef M_PI_3_F
+#define M_PI_3_F (M_PI_F / 3.0F)
 #endif
 #ifndef rad_to_deg
 #define rad_to_deg (180.0f / M_PI_F)
