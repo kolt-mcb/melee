@@ -45,7 +45,11 @@ PIPE=$EMUDIR/User/Pipes/slp1
 OUT=${SLIPPI_OUT:-$ROOT/build/pc/slippi-direct}
 mkdir -p "$OUT"
 
-if [ ! -x "$PORTBIN" ]; then
+# SLIPPI_PEER=<ip>: the port runs on another machine (the tablet, say) and
+# listens there on $PORT_PORT; this script then starts only the emulator and
+# the remote side is launched by hand with the env printed below.
+PEER=${SLIPPI_PEER:-}
+if [ -z "$PEER" ] && [ ! -x "$PORTBIN" ]; then
     echo "no Slippi port build at $PORTBIN -- PC_SLIPPI=1 PC_NETPLAY=1 PC_BUILD_NAME=slippi python3 configure_pc.py && ninja -f build.ninja.slippi" >&2
     exit 1
 fi
@@ -102,7 +106,7 @@ XA=$(ps -eo args | grep -oP '(?<=-auth )\S+' | head -1)
 # position is not treated as an assignment, it is run as a command.
 ( cd "$EMUDIR" && \
   env XAUTHORITY=$XA DISPLAY=${DISPLAY:-:0} GDK_BACKEND=x11 \
-  SLIPPI_DIRECT_PEERS=127.0.0.1:$PORT_PORT \
+  SLIPPI_DIRECT_PEERS=${PEER:-127.0.0.1}:$PORT_PORT \
   SLIPPI_DIRECT_PORT=$EMU_PORT \
   SLIPPI_DIRECT_INDEX=1 \
   SLIPPI_DIRECT_DECIDER=0 \
@@ -120,6 +124,9 @@ EMU=$!
 # stage from the lowest player index that selected one. MELEE_SLP_MODE: the
 # emulator's auto-drive confirms the first entry on the mode list, which is
 # unranked ("online mode 1" in its log), and unranked disables pausing.
+if [ -n "$PEER" ]; then
+PRT=
+else
 ( cd "$ROOT" && \
   MELEE_NET_PROTO=slippi MELEE_NET=host MELEE_NET_SLOT=0 \
   MELEE_SLP_MODE=${SLIPPI_MODE:-unranked} \
@@ -134,6 +141,7 @@ EMU=$!
 for l in sys.stdin: sys.stdout.write(time.strftime("%M:%S:")+"%03d "%(time.time()%1*1000)+l)'
   else cat; fi ) > "$OUT/port.out" 2>&1 &
 PRT=$!
+fi
 
 # --- wait ---------------------------------------------------------------
 # No menu walking any more. Nothing could press a button on this emulator
@@ -142,7 +150,7 @@ PRT=$!
 # match, and it locks a character in once connected.
 
 wait $EMU 2>/dev/null
-wait $PRT 2>/dev/null
+[ -n "$PRT" ] && wait $PRT 2>/dev/null
 cp "$EMUDIR/User/Logs/dolphin.log" "$OUT/emu.log" 2>/dev/null
 
 echo
@@ -158,6 +166,10 @@ grep -E 'SLIPPI' "$OUT/emu.log" | sed 's/.*\]: //' | grep -viE 'file size|loadin
 echo "  startMatchmaking reached: $(grep -c 'Matchmaking\] direct' "$OUT/emu.log")"
 echo "  selections received:      $(grep -c 'Received selections' "$OUT/emu.log")"
 echo "=== the port ==="
-grep -E '^\[SLP\]' "$OUT/port.out" | tail -12
+if [ -n "$PEER" ]; then
+    echo "  (remote, on $PEER -- its log is on that machine)"
+else
+    grep -E '^\[SLP\]' "$OUT/port.out" | tail -12
+fi
 echo
 echo "logs in $OUT"

@@ -4731,6 +4731,13 @@ static void pc_shc_warm(void)
             (t.tv_sec - g_shq_t0.tv_sec) * 1e3 + (t.tv_nsec - g_shq_t0.tv_nsec) / 1e6, g_shq_n);
 }
 
+static int pc_shc_prep_over(const struct timespec* t0, int ms)
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (t.tv_sec - t0->tv_sec) * 1e3 + (t.tv_nsec - t0->tv_nsec) / 1e6 >= ms;
+}
+
 /* The loading screen: bring in every key this lineup will draw. */
 void pc_shc_prepare_match(int stkind)
 {
@@ -4738,9 +4745,11 @@ void pc_shc_prepare_match(int stkind)
     GLint saved[VLOC_MAX];
     GLint* row;
     int ck[4], nck, i, k;
-    int loaded = 0, compiled = 0, seen = 0, prep_max;
+    int loaded = 0, compiled = 0, seen = 0, prep_max, prep_ms, cut = 0;
     struct timespec t0, t1;
     static const char* const common_name = "common.txt";
+    /* Netplay, when compiled in: the peer must keep hearing from us. */
+    extern void pc_net_keepalive(void) __attribute__((weak));
 
     /* A kind outside the enum is a stale selection -- Classic never
      * passes the stage-select screen that writes selected_stage, and the
@@ -4754,6 +4763,16 @@ void pc_shc_prepare_match(int stkind)
     {
         const char* e = getenv("MELEE_SHC_PREP_MAX");
         prep_max = e ? atoi(e) : -1;
+    }
+    /* MELEE_SHC_PREP_MS=n: stop bringing keys after n ms; what is left is
+     * loaded where it is first drawn, the uber program covering a miss.
+     * Netplay defaults to 3000: Slippi's emulator drops a peer whose first
+     * inputs are 7 s late, and the tablet's full prep of a four-character
+     * Hyrule match is 31-45 s. Off line the prep is unbounded as before. */
+    {
+        const char* e = getenv("MELEE_SHC_PREP_MS");
+        const char* net = getenv("MELEE_NET");
+        prep_ms = e ? atoi(e) : (net != NULL && *net ? 3000 : -1);
     }
     clock_gettime(CLOCK_MONOTONIC, &t0);
     nck = pc_lineup_chars(ck);
@@ -4773,8 +4792,10 @@ void pc_shc_prepare_match(int stkind)
         for (p = text; *p; ) {
             const char* nl = strchr(p, '\n');
             size_t len = nl ? (size_t) (nl - p) : strlen(p);
-            if (len > 0 && (prep_max < 0 || seen < prep_max) && pc_shc_parse_line(p, len, row, NULL)) {
+            if (!cut && prep_ms >= 0 && pc_shc_prep_over(&t0, prep_ms)) cut = 1;
+            if (len > 0 && !cut && (prep_max < 0 || seen < prep_max) && pc_shc_parse_line(p, len, row, NULL)) {
                 int r = pc_shc_bring(row, 1);
+                if (pc_net_keepalive) pc_net_keepalive();
                 seen++;
                 if (r == 1) loaded++; else if (r == 2) compiled++;
             }
@@ -4786,11 +4807,13 @@ void pc_shc_prepare_match(int stkind)
     for (i = 0; i < g_shc_rows_n; i++) {
         const ShcRow* r = &g_shc_rows[i];
         int hit = (r->stkind == stkind), j;
-        if (r->menu || (prep_max >= 0 && seen >= prep_max)) continue;
+        if (!cut && prep_ms >= 0 && pc_shc_prep_over(&t0, prep_ms)) cut = 1;
+        if (cut || r->menu || (prep_max >= 0 && seen >= prep_max)) continue;
         for (j = 0; !hit && j < r->nck; j++) for (k = 0; !hit && k < nck; k++) if (r->ck[j] == ck[k]) hit = 1;
         if (!hit) continue;
         {
             int rr = pc_shc_bring(r->row, 1);
+            if (pc_net_keepalive) pc_net_keepalive();
             seen++;
             if (rr == 1) loaded++; else if (rr == 2) compiled++;
         }
@@ -4802,8 +4825,9 @@ void pc_shc_prepare_match(int stkind)
     clock_gettime(CLOCK_MONOTONIC, &t1);
     fprintf(stderr, "[SHCACHE] match prep (stage %d, chars", stkind);
     for (k = 0; k < nck; k++) fprintf(stderr, " %d", ck[k]);
-    fprintf(stderr, "): %d keys, %d loaded, %d compiled, in %.0f ms\n", seen, loaded, compiled,
-            (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6);
+    fprintf(stderr, "): %d keys, %d loaded, %d compiled, in %.0f ms%s\n", seen, loaded, compiled,
+            (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6,
+            cut ? " (budget reached; the rest load at first use)" : "");
 }
 
 /* The match is over: keys compiled from here on are menu keys again, and

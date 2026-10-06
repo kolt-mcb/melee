@@ -2055,6 +2055,28 @@ static void pad_to_gc(GCPadStatus* g, const NetPad* n)
     g->analogR = n->analogR;
 }
 
+/* A frame that takes longer than ENet's peer timeout (30 s at most) loses
+ * the connection: nothing acknowledges the peer's packets or answers its
+ * pings meanwhile. The tablet's loading screen, which prepares its shader
+ * cache for the lineup, is one -- 45 s on the first Hyrule match -- and
+ * Slippi's emulator dropped it. Long loads call this to keep the link
+ * serviced; it pumps at most every 50 ms and only on the game thread. */
+void pc_net_keepalive(void)
+{
+    static double last;
+    double t;
+
+    if (slp_host == NULL) {
+        return;
+    }
+    t = now_ms();
+    if (t - last < 50.0) {
+        return;
+    }
+    last = t;
+    slp_enet_pump();
+}
+
 void pc_net_match_begin(void)
 {
     if (!net_started) {
