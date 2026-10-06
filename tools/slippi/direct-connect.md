@@ -660,3 +660,15 @@ Stadium; the port's own pick is MELEE_SLP_FROZEN_PS=1, honoured only in
 direct and teams, as Ishiiruka does -- untested against the emulator, whose
 harness mode is unranked) and `fd-bg-rng` (the seed around Final
 Destination's background think).
+
+### The replay file itself (2026-10-06)
+
+`compare_slp.py --full` compares every byte of every pre-frame, post-frame
+and item update. Against the emulator the port's replay is now byte-identical
+in every pre- and post-frame update: the five state-flag bytes are recorded
+whole (they were missing every undocumented bit), and the misc action-state
+word is the raw first word of the motion-variable block in every state (it
+was written only in hitstun). The one known difference left: the item
+update's four misc bytes are written only for the kinds that give them a
+meaning (missile type, turnip face, charge shot); Slippi copies them raw for
+every item, and for a Link bomb that is leftover data.

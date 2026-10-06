@@ -111,6 +111,18 @@ static void put_f32(unsigned char* p, float v)
     put_u32(p, bits);
 }
 
+/* A byte's bits in reverse order: a PowerPC bitfield byte as this host
+ * stores it, or back. */
+static unsigned slp_rev8(unsigned b)
+{
+    unsigned r = 0;
+    int i;
+    for (i = 0; i < 8; i++) {
+        r |= ((b >> i) & 1u) << (7 - i);
+    }
+    return r;
+}
+
 /* ---- module state ---- */
 
 static int slp_enabled = -1;   /* -1 = not yet decided */
@@ -849,27 +861,30 @@ void slp_PostFrame(Fighter* fp)
     put_u8(p + 0x21, (unsigned) Player_GetStocks((int) slot));
     put_f32(p + 0x22, fp->cur_anim_frame);          /* fp+0x894 */
 
-    /* State bit flags. Assembled bit by bit: the console reads these as five
-     * whole bytes, but PowerPC packs bitfields from the top of the byte down
-     * and this host packs them from the bottom up, so the byte here is not
-     * the byte there. The bit each flag lands on is the one SPEC.md gives. */
-    put_u8(p + 0x26, ((unsigned) fp->x2218_b6 << 1) |   /* absorber active */
-                         ((unsigned) fp->x2218_b4 << 3) |
-                         ((unsigned) fp->reflecting << 4));
-    put_u8(p + 0x27, ((unsigned) fp->x221A_b5 << 2) |   /* temp intangible */
-                         ((unsigned) fp->fall_fast << 3) |
-                         ((unsigned) fp->x221A_b3 << 4) | /* defender hitlag */
-                         ((unsigned) fp->allow_sdi << 5)); /* in hitlag */
-    put_u8(p + 0x28, ((unsigned) fp->x221B_b5 << 2) |   /* holding a fighter */
-                         ((unsigned) fp->x221B_b0 << 7)); /* shield active */
-    put_u8(p + 0x29, ((unsigned) fp->x221C_b6 << 1) |   /* in hitstun */
-                         ((unsigned) fp->x221C_b5 << 2) |
-                         ((unsigned) fp->x221C_b2 << 5)); /* powershield */
-    put_u8(p + 0x2A, ((unsigned) fp->x221F_b6 << 1) |   /* cloaking device */
-                         ((unsigned) fp->is_sub_fighter << 3) | /* follower */
-                         ((unsigned) fp->x221F_b3 << 4) | /* inactive */
-                         ((unsigned) fp->x221F_b1 << 6) | /* dead */
-                         ((unsigned) fp->x221F_b0 << 7)); /* offscreen */
+    /* State bit flags: the console records five whole bytes of the fighter
+     * (0x2218, 0x221A, 0x221B, 0x221C, 0x221F; SendGamePostFrame.asm), every
+     * bit, documented or not. This host packs bitfields from the low bit up
+     * where PowerPC packs from the top down, so a byte of eight one-bit
+     * fields is the console's byte reversed. 0x221C is not one: its last
+     * field is three bits wide and runs into 0x221D, so it is built from its
+     * members, the console's bit 0 being the top bit of that field. These
+     * used to carry only the documented bits, so a replay of the same match
+     * differed from the console's in the bytes nobody has named. */
+    {
+        const u8* fb = (const u8*) &fp->cmd_timer + sizeof(fp->cmd_timer);
+        put_u8(p + 0x26, slp_rev8(fb[0x2218 - 0x2218]));
+        put_u8(p + 0x27, slp_rev8(fb[0x221A - 0x2218]));
+        put_u8(p + 0x28, slp_rev8(fb[0x221B - 0x2218]));
+        put_u8(p + 0x29, ((unsigned) fp->x221C_b0 << 7) |
+                             ((unsigned) fp->x221C_b1 << 6) |
+                             ((unsigned) fp->x221C_b2 << 5) |
+                             ((unsigned) fp->x221C_b3 << 4) |
+                             ((unsigned) fp->x221C_b4 << 3) |
+                             ((unsigned) fp->x221C_b5 << 2) |
+                             ((unsigned) fp->x221C_b6 << 1) |
+                             (((unsigned) fp->x221C_u16_y >> 2) & 1));
+        put_u8(p + 0x2A, slp_rev8(fb[0x221F - 0x2218]));
+    }
 
     /* fp+0x2340: the first word of the character's motion-variable block.
      * Slippi reads it raw, and while the hitstun flag above is set the game
@@ -891,11 +906,13 @@ void slp_PostFrame(Fighter* fp)
      * zero otherwise, which is what the field says when nothing is in
      * hitstun. */
     {
-        u32 misc_as = 0;
-        if (fp->x221C_b6) {
-            f32 hitstun = fp->mv.co.damage.x0;
-            memcpy(&misc_as, &hitstun, sizeof(misc_as));
-        }
+        /* The raw word, as the console records it in every state. This
+         * port keeps mv at the console's offsets -- the pointers that sat at
+         * offset 0 on the console (Thunder's bolt among them, the Thunder
+         * case above) are parked past the union -- so the first word is the
+         * console's counter, frame count or float, in every state. */
+        u32 misc_as;
+        memcpy(&misc_as, &fp->mv, sizeof(misc_as));
         put_u32(p + 0x2B, misc_as);
     }
 

@@ -90,12 +90,57 @@ def post_frames(raw):
     return out
 
 
+def keyed(raw, cmd):
+    """{key: payload} for one event type; the key is what makes it unique."""
+    out = {}
+    for _off, c, p in events(raw):
+        if c != cmd:
+            continue
+        frame = struct.unpack_from(">i", p, 0)[0]
+        if cmd in (0x37, 0x38):
+            key = (frame, p[4], p[5])
+        else:  # item: frame, spawn id
+            key = (frame, struct.unpack_from(">I", p, 0x21)[0]
+                   if len(p) >= 0x25 else _off)
+        out[key] = bytes(p)
+    return out
+
+
+def full_compare(ra, rb):
+    """Every byte, per event type: which payload offsets ever differ, how
+    often, and the first frame each does. The fields compare_slp checks by
+    name are the ones that decide gameplay; the rest are what a replay tool
+    reads, and a port that agrees on the first can still write the second
+    differently."""
+    for cmd, name in ((0x37, "pre-frame"), (0x38, "post-frame"),
+                      (0x3B, "item")):
+        a, b = keyed(ra, cmd), keyed(rb, cmd)
+        common = sorted(set(a) & set(b))
+        offs = {}
+        for k in common:
+            pa, pb = a[k], b[k]
+            for i in range(min(len(pa), len(pb))):
+                if pa[i] != pb[i]:
+                    n, first = offs.get(i, (0, k))
+                    offs[i] = (n + 1, first)
+        only = len(set(a) ^ set(b))
+        print("%s: %d in common, %d on one side only, %d offsets differ"
+              % (name, len(common), only, len(offs)))
+        for i in sorted(offs):
+            n, first = offs[i]
+            print("   +0x%02X (spec 0x%02X): %d updates, first %s"
+                  % (i, i + 1, n, first))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("a")
     ap.add_argument("b")
     ap.add_argument("--tol", type=float, default=0.0,
                     help="float tolerance (default exact)")
+    ap.add_argument("--full", action="store_true",
+                    help="also compare every byte of every pre-frame, "
+                         "post-frame and item update, by offset")
     args = ap.parse_args()
 
     ra = load(args.a)
@@ -114,6 +159,9 @@ def main():
         print("DIFFERENT RULES: Game Info Block differs at %s"
               % ", ".join("0x%02X (%02X vs %02X)" % (i, ga[i], gb[i])
                           for i in rules[:12]))
+
+    if args.full:
+        full_compare(ra, rb)
 
     fa, fb = post_frames(ra), post_frames(rb)
     common = sorted(set(fa) & set(fb))
