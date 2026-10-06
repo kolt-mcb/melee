@@ -248,6 +248,23 @@ with the function, the mechanism, and the port's reproduction.
   the port asks for them when it reaches the same point. Alone, the port
   stands in the common values. Final Destination went identical for 600
   frames on the strength of it. Ugly and honest, which was the choice.
+- `ftMr_SpecialLw` doColl (Mario's Tornado): tests `fp->cmd_vars[3]`, which
+  the Tornado's entry never clears and no script in a match sets, so it holds
+  whatever the heap held when the Fighter was allocated -- `HSD_ObjAlloc`
+  returns the block uncleared. Measured 2026-10-06: every scene's main heap
+  starts at 0x80BD5C40 and nothing clears it between scenes, so the word is
+  menu leftovers. On Poke Floats (the sweep's one remaining divergence,
+  Mario/Pura at 294) it is MnSlChr.usd at file offset 0xD4440, loaded by the
+  character select at 0x80BEE920; on other lineups it is free-list headers,
+  other menu data, or zero (3 of 8 fighters measured). It depends on the
+  menu route walked before the match, which the port's debug boot never
+  walks, so it is **not reproduced**: matching it would mean copying the
+  test route's memory history, wrong for any other route. Slippi's Init
+  Player Data code zeroes the Fighter, as does the port's `init-zero`
+  delta, and against Slippi the same Mario vs Mario on Poke Floats is
+  identical (7,491 frames, 220 frames of Tornado). If the console sweep
+  ever needs the cell, the route is the `ftCo_800AC5A0` one above: Dolphin
+  reports fighter+0x2200 at 80068EEC and the port takes it at Fighter_Create.
 
 ## Phase 6 -- Ratchet
 
