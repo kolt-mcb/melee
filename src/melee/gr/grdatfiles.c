@@ -3417,7 +3417,23 @@ UnkArchiveStruct* grDatFiles_801C6478(void* data, s32 length)
     arc = grDatFiles_801C62B4();
     HSD_ASSERT(290, arc);
     arc->unk0 = archive;
+#if BUILD_TARGET_PC
+    /* Pokemon Stadium's transformation DATs come through here mid-match. The
+     * map_head is GameCube-packed, as at match start, and needs the same
+     * conversion grDatFiles_801C6038 gives the stage's own file; without it
+     * the transformed platform could not be built and the stage never
+     * transformed. */
+    {
+        void* map_head = HSD_ArchiveGetPublicAddress(archive, "map_head");
+        UnkArchiveStruct* x64 =
+            map_head != NULL
+                ? grDatFiles_ConvertArchiveGCNtoX64(archive, map_head)
+                : NULL;
+        arc->unk4 = x64 != NULL ? x64->unk4 : NULL;
+    }
+#else
     arc->unk4 = HSD_ArchiveGetPublicAddress(archive, "map_head");
+#endif
     arc->unk8 = 1;
 
     grDatFiles_801C6228(arc->unk4);

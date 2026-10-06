@@ -29,6 +29,10 @@
  * console (8021AC78 and siblings). */
 #if BUILD_TARGET_PC
 #include <math.h>
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #define LT_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define LT_FMA(a, b, c) ((a) * (b) + (c))
@@ -393,7 +397,16 @@ static void grLast_8021AAB0(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
     if (!gp->u.map.xC4_b1 && !gp->u.map.xC4_b0) {
+#if BUILD_SLIPPI
+        /* Slippi's DesyncProofBGTransformations (8021aae4). */
+        {
+            unsigned seed = slp_compat_fd_bg_begin();
+            grLast_8021B2E8(gobj);
+            slp_compat_fd_bg_end(seed);
+        }
+#else
         grLast_8021B2E8(gobj);
+#endif
         if (gp->u.map.xC4_b26) {
             int tmp = grLast_8021B5C4(gobj);
             if (tmp != 0) {

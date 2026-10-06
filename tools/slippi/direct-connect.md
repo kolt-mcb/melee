@@ -640,3 +640,23 @@ seeds, up to ~34%), the replays stay IDENTICAL with UCF SDI on and off -- the
 UCF SDI branch is consulted (it is reached only when both active timers have
 been stamped by a consumer) but never fires in these runs. SDI, shield SDI
 and tumble therefore remain transcribed and reviewed, not proven.
+
+### Pokemon Stadium transforms (2026-10-06)
+
+A Pokemon Stadium match against the emulator now runs IDENTICAL for four
+minutes through two transformations (27,851 updates). It never transformed
+on the port: lbFile_800164A4 classified the buffer by the console's test
+(below 0x80000000 = an ARAM offset), so the transformation DAT went to
+emulated ARAM and the buffer stayed zero; and grDatFiles_801C6478, the
+mid-match stage loader, lacked the GameCube->x64 conversion the match-start
+loader has. The load completes the same frame on both sides, because Slippi
+makes it synchronous too (StadiumFileLoad.asm, GrPsxIsValid.asm) -- so the
+plain console, which loads from disc over several frames, still parts from
+the port at the first transformation in a long lockstep run, and Slippi
+does not.
+
+Also from Slippi's Stadium/FD hacks: `ps-frozen` (alt_stage_mode freezes the
+Stadium; the port's own pick is MELEE_SLP_FROZEN_PS=1, honoured only in
+direct and teams, as Ishiiruka does -- untested against the emulator, whose
+harness mode is unranked) and `fd-bg-rng` (the seed around Final
+Destination's background think).

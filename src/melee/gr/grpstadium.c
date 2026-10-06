@@ -40,6 +40,10 @@
 /* Fused on the console (fmadds/fmsubs/fnmsubs); pairing read off the DOL. */
 #if BUILD_TARGET_PC
 #include <math.h>
+
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 #define PS2_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define PS2_FMA(a, b, c) ((a) * (b) + (c))
@@ -2018,7 +2022,12 @@ void grStadium_801D4548(Ground_GObj* gobj)
 
     temp_r31 = GET_GROUND(gobj);
     temp_f31 = Ground_801C0498();
+#if BUILD_SLIPPI
+    /* Slippi's frozen-Stadium toggle replaces this check (801d457c). */
+    if (gm_8018841C() != 0 || slp_compat_ps_frozen()) {
+#else
     if (gm_8018841C() != 0) {
+#endif
         return;
     }
 

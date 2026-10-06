@@ -652,6 +652,8 @@ static int slp_peer_char = -1, slp_peer_stage = -1;
  * (prepareOnlineMatchState). pc_net_lineup hands them to the boot lineup. */
 static int slp_sel_have[NET_SLOTS], slp_sel_char[NET_SLOTS];
 static int slp_sel_color[NET_SLOTS], slp_sel_stage[NET_SLOTS];
+/* alt_stage_mode: 1 freezes Pokemon Stadium (Slippi's FrozenStadiumToggle). */
+static int slp_sel_alt[NET_SLOTS];
 static long slp_tx, slp_rx, slp_rx_pads;
 
 static void slp_send_selections(void);
@@ -1020,9 +1022,15 @@ static void slp_send_selections(void)
     b[7] = (unsigned char) (stage >= 0);
     put_u32(b + 8, slp_my_rng);
     b[12] = 0;                          /* teamId */
-    b[13] = 0;                          /* alt_stage_mode */
+    {
+        /* MELEE_SLP_FROZEN_PS=1 picks the frozen Stadium, as holding the
+         * toggle on Slippi's stage select does. */
+        const char* fz = getenv("MELEE_SLP_FROZEN_PS");
+        b[13] = (unsigned char) (fz != NULL && atoi(fz) != 0);
+    }
     slp_sel_sent = 1;
     if (net_slot >= 0 && net_slot < NET_SLOTS) {
+        slp_sel_alt[net_slot] = b[13];
         slp_sel_have[net_slot] = 1;
         slp_sel_char[net_slot] = ck;
         slp_sel_color[net_slot] = color;
@@ -1288,6 +1296,7 @@ static int slp_receive(const unsigned char* buf, ssize_t len,
         slp_sel_char[sel_slot] = buf[1];
         slp_sel_color[sel_slot] = buf[2];
         slp_sel_stage[sel_slot] = slp_peer_stage;
+        slp_sel_alt[sel_slot] = buf[13];
         slp_peer_rng = peer_rng;
         /* One side's offer has to win, and both have to reach the same answer
          * without another round trip. Slippi calls that side the decider and
@@ -2199,6 +2208,27 @@ static void slp_build_online_block(unsigned char* b)
     put_be(b + 0x23, 0xF80000000F000000ull, 8);
 }
 #endif
+
+/* The match's alt_stage_mode: the first player's in order who picked a
+ * stage, as prepareOnlineMatchState takes the stage itself -- and 0 outside
+ * the two modes with a stage select, direct and teams. */
+int pc_net_lineup_alt_stage(void)
+{
+    const char* mode = getenv("MELEE_SLP_MODE");
+    int k;
+    if (!net_slippi_proto ||
+        (mode != NULL && strcmp(mode, "direct") != 0 &&
+         strcmp(mode, "teams") != 0))
+    {
+        return 0;
+    }
+    for (k = 0; k < NET_SLOTS; k++) {
+        if (slp_sel_have[k] && slp_sel_stage[k] >= 0) {
+            return slp_sel_alt[k];
+        }
+    }
+    return 0;
+}
 
 /* Slippi's per-frame checksum, transcribed from FN_COMPUTE_CHECKSUM in
  * slippi-ssbm-asm (Online/Core/StartEngineLoop.asm): for each of the four

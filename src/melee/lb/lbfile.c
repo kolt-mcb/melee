@@ -239,7 +239,20 @@ void lbFile_800164A4(int file, uintptr_t dst, size_t* size, int pri,
      * caller that regresses to u32 gets an incompatible-pointer diagnostic
      * here rather than a silent garbage high half. */
     *size = lbFile_8001634C(file);
+#if BUILD_TARGET_PC
+    /* The console's test -- an address below 0x80000000 is an ARAM offset --
+     * reads every host buffer as ARAM here, because the port keeps its
+     * allocations below that line so they fit the game's 32-bit fields. The
+     * file then went to emulated ARAM and the buffer stayed zero: Pokemon
+     * Stadium's transformation DATs, the one in-match user of this, never
+     * loaded. Same classification as ftData's animation loader. */
+    {
+        extern int pc_aram_is_offset(unsigned long v);
+        type = pc_aram_is_offset((unsigned long) dst) ? 0x23 : 0x21;
+    }
+#else
     type = (dst >= 0x80000000) ? 0x21 : 0x23;
+#endif
     HSD_DevComRequest(file, 0, dst, ROUND_UP_32(*size), type, pri, callback,
                       args);
 }

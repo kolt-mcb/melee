@@ -28,6 +28,7 @@
 #include <melee/gr/stage.h>
 #include <melee/it/types.h>
 #include <melee/pl/player.h>
+#include <sysdolphin/baselib/random.h>
 #include <string.h>
 
 /* pc_stub/globals_stub.c: the console's five-frame raw-input queue, which
@@ -79,8 +80,12 @@ static const struct slp_compat_entry slp_fixes[SLP_FIX_COUNT] = {
       "a fighter held by an Ice Climber is let go after the fourth distinct "
       "hit from the grabber or its items (singles only), and Nana is made "
       "to let go with Popo" },
-    { "ps-camera", 0, "801d24fc",
-      "Pokemon Stadium's transformation does not run on this port yet" },
+    { "ps-frozen", 1, "801d457c",
+      "the match's alt_stage_mode (the stage picker's) freezes Pokemon "
+      "Stadium's transformations, as the training-mode check does" },
+    { "fd-bg-rng", 1, "8021aae4",
+      "Final Destination's background transformation keeps the RNG seed it "
+      "found, so freezing it on one side cannot desync the other" },
 };
 
 static unsigned char slp_on[SLP_FIX_COUNT];
@@ -856,4 +861,32 @@ float slp_compat_ucf_squatrv(struct Fighter* fp_, float thr)
         return 0.59F; /* 0x3F170A3D */
     }
     return thr;
+}
+
+/* ---- Pokemon Stadium, frozen (801d457c) ----
+ * Slippi's IngameCheckIfFrozen replaces grStadium_801D4548's training-mode
+ * check: a training match still freezes the stage, and otherwise the match's
+ * alt_stage_mode does. */
+int slp_compat_ps_frozen(void)
+{
+    extern int pc_net_lineup_alt_stage(void) __attribute__((weak));
+    if (!slp_compat(SLP_FIX_PS_FROZEN) || pc_net_lineup_alt_stage == NULL) {
+        return 0;
+    }
+    return pc_net_lineup_alt_stage() != 0;
+}
+
+/* ---- Final Destination's background (8021aae4) ----
+ * DesyncProofBGTransformations: the seed is saved before the background's
+ * think and put back after it. */
+unsigned slp_compat_fd_bg_begin(void)
+{
+    return *HSD_RandSeedPtr;
+}
+
+void slp_compat_fd_bg_end(unsigned seed)
+{
+    if (slp_compat(SLP_FIX_FD_BG_RNG)) {
+        *HSD_RandSeedPtr = seed;
+    }
 }
