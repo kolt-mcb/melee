@@ -10057,37 +10057,66 @@ static u32 dl_fnv(u32 h, const void* p, u32 n)
     for (i = 0; i < n; i++) { h ^= b[i]; h *= 16777619u; }
     return h;
 }
+/* FNV-1a over 32-bit words: a quarter of the multiplies of the byte form,
+ * and the multiply chain is the whole cost on an in-order core. Only ever
+ * compared with itself (cache keys), so the values need not match dl_fnv. */
+static u32 dl_fnv_w(u32 h, const void* p, u32 nwords)
+{
+    const u8* b = (const u8*) p;
+    u32 i, w;
+    for (i = 0; i < nwords; i++) {
+        memcpy(&w, b + 4 * i, 4);
+        h ^= w;
+        h *= 16777619u;
+    }
+    return h;
+}
 /* The first 256 bytes and 16 of every 512 after: enough to tell one model's
  * list from another's at the same address. */
 static u32 dl_content_hash(const u8* p, u32 n)
 {
     u32 h = 2166136261u, head = n < 256 ? n : 256, i;
-    h = dl_fnv(h, p, head);
-    for (i = 512; i + 16 <= n; i += 512) h = dl_fnv(h, p + i, 16);
+    h = dl_fnv_w(h, p, head / 4);
+    h = dl_fnv(h, p + (head & ~3u), head & 3u);
+    for (i = 512; i + 16 <= n; i += 512) h = dl_fnv_w(h, p + i, 4);
     return h ^ n;
 }
-/* Everything the decode reads besides the list's own bytes. */
+/* Everything the decode reads besides the list's own bytes -- and nothing
+ * it does not. An attribute that is off (mode 0) is never read, and a direct
+ * one (mode 1) never touches its array, so their leftover type, array and
+ * stride stay out of the key: a list drawn twice a frame whose two
+ * descriptors differ only in a disabled colour's type was decoded twice a
+ * frame, each draw evicting the other's entry (8 decodes a frame in a
+ * four-player match on Hyrule Temple). */
 static u32 dl_desc_sig(u32 pos_cnt, u32 vsize)
 {
-    u32 h = 2166136261u, a;
-    h = dl_fnv(h, g_state.va_mode, sizeof(g_state.va_mode));
+    u32 w[21 + 6 * 6 + 6 * 2 + 2], n = 0, a;
+    for (a = 0; a <= 20; a++) w[n++] = (u32) g_state.va_mode[a];
     for (a = 9; a <= 14; a++) {
-        const u8* arr = g_state.va_arr[a];
-        h = dl_fnv(h, &g_state.va_type[a], sizeof(g_state.va_type[a]));
-        h = dl_fnv(h, &g_state.va_cnt[a], sizeof(g_state.va_cnt[a]));
-        h = dl_fnv(h, &g_state.va_frac[a], sizeof(g_state.va_frac[a]));
-        h = dl_fnv(h, &g_state.va_stride[a], sizeof(g_state.va_stride[a]));
-        h = dl_fnv(h, &arr, sizeof(arr));
+        u32 mode = g_state.va_mode[a];
+        if (mode == 0) continue;
+        w[n++] = (u32) g_state.va_type[a];
+        w[n++] = (u32) g_state.va_cnt[a];
+        w[n++] = (u32) g_state.va_frac[a];
+        if (mode >= 2) {
+            uintptr_t arr = (uintptr_t) g_state.va_arr[a];
+            w[n++] = (u32) g_state.va_stride[a];
+            w[n++] = (u32) arr;
+            w[n++] = (u32) ((u64) arr >> 32);
+        }
     }
-    h = dl_fnv(h, g_vf_tex0_type, sizeof(g_vf_tex0_type));
-    h = dl_fnv(h, g_vf_tex0_frac, sizeof(g_vf_tex0_frac));
-    h = dl_fnv(h, g_vf_tex0_set, sizeof(g_vf_tex0_set));
-    h = dl_fnv(h, g_vf_pos_type, sizeof(g_vf_pos_type));
-    h = dl_fnv(h, g_vf_pos_frac, sizeof(g_vf_pos_frac));
-    h = dl_fnv(h, g_vf_pos_set, sizeof(g_vf_pos_set));
-    h = dl_fnv(h, &pos_cnt, sizeof(pos_cnt));
-    h = dl_fnv(h, &vsize, sizeof(vsize));
-    return h;
+    w[n++] = pos_cnt;
+    w[n++] = vsize;
+    {
+        u32 h = dl_fnv_w(2166136261u, w, n);
+        h = dl_fnv_w(h, g_vf_tex0_type, sizeof(g_vf_tex0_type) / 4);
+        h = dl_fnv_w(h, g_vf_tex0_frac, sizeof(g_vf_tex0_frac) / 4);
+        h = dl_fnv_w(h, g_vf_tex0_set, sizeof(g_vf_tex0_set) / 4);
+        h = dl_fnv_w(h, g_vf_pos_type, sizeof(g_vf_pos_type) / 4);
+        h = dl_fnv_w(h, g_vf_pos_frac, sizeof(g_vf_pos_frac) / 4);
+        h = dl_fnv_w(h, g_vf_pos_set, sizeof(g_vf_pos_set) / 4);
+        return h;
+    }
 }
 static void dl_entry_free(DlEntry* e)
 {
