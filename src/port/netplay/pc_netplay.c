@@ -100,6 +100,8 @@
 /* Online.s: UNFREEZE_INPUTS_FRAME (84) - 6. Pads for frames before it are
  * zero on a Slippi peer. */
 #define SLP_START_SYNC_FRAME 78
+/* The scene frame of GO: replay frame 0, 123 frames after -123. */
+#define SLP_GO_FRAME 124
 /* The state checksum. It used to travel as the port's own MSG_HASH over
  * net_send, which in Slippi mode goes out over ENet -- where slp_receive knows
  * only the four message types above and drops everything else without a word.
@@ -915,12 +917,95 @@ static void slp_enet_send_one(ENetPeer* to, const unsigned char* buf,
 /* To everyone. Slippi is a mesh, not a star: with four players each client
  * sends its own pads to all three others rather than relaying through a host,
  * so a broadcast here is one packet per peer. */
+/* A bad link on the Slippi path, when asked for. The UDP path's
+ * MELEE_NET_LOSS / MELEE_NET_JITTER never reached here -- ENet does its own
+ * receiving -- so a session against Slippi's emulator could only ever be
+ * tested over a perfect loopback. MELEE_NET_LAG_MS adds a fixed one-way delay
+ * on top of the jitter. Only the unreliable traffic is touched: pads, acks
+ * and checksums, which Slippi itself sends redundantly and expects to lose;
+ * the selections go reliably and losing one is not a network condition. */
+#define SLP_HOLD_MAX 512
+static int net_bad_drop(void);
+static void net_bad_config(void);
+static unsigned net_bad_next(void);
+static int net_jitter_ms;
+static struct {
+    unsigned char buf[512];
+    size_t len;
+    ENetPeer* peer;
+    double due;
+} slp_held[SLP_HOLD_MAX];
+static int slp_held_n;
+static int slp_lag_ms = -1;
+
+static int slp_bad_hold(const ENetPacket* pk, ENetPeer* peer)
+{
+    unsigned char id;
+    if (slp_lag_ms < 0) {
+        const char* e = getenv("MELEE_NET_LAG_MS");
+        slp_lag_ms = e != NULL ? atoi(e) : 0;
+        if (slp_lag_ms < 0) slp_lag_ms = 0;
+        if (slp_lag_ms > 2000) slp_lag_ms = 2000;
+        if (slp_lag_ms > 0) {
+            fprintf(stderr, "[SLP] link lag on: %d ms one way\n", slp_lag_ms);
+        }
+    }
+    if (pk->dataLength < 1 || pk->dataLength > sizeof(slp_held[0].buf)) {
+        return 0;
+    }
+    id = pk->data[0];
+    if (id != SLP_MSG_PAD && id != SLP_MSG_PAD_ACK && id != SLP_MSG_HASH) {
+        return 0;
+    }
+    if (net_bad_drop()) {
+        return 1;
+    }
+    net_bad_config();
+    if (slp_lag_ms == 0 && net_jitter_ms == 0) {
+        return 0;
+    }
+    if (slp_held_n >= SLP_HOLD_MAX) {
+        return 0;
+    }
+    memcpy(slp_held[slp_held_n].buf, pk->data, pk->dataLength);
+    slp_held[slp_held_n].len = pk->dataLength;
+    slp_held[slp_held_n].peer = peer;
+    slp_held[slp_held_n].due =
+        now_ms() + slp_lag_ms +
+        (net_jitter_ms > 0
+             ? (double) (net_bad_next() % (unsigned) (net_jitter_ms + 1))
+             : 0.0);
+    slp_held_n++;
+    return 1;
+}
+
+static int slp_receive(const unsigned char* buf, ssize_t len, ENetPeer* from);
+
+static void slp_bad_release(void)
+{
+    double now = now_ms();
+    int i = 0;
+    while (i < slp_held_n) {
+        if (slp_held[i].due <= now) {
+            unsigned char copy[512];
+            size_t len = slp_held[i].len;
+            ENetPeer* peer = slp_held[i].peer;
+            memcpy(copy, slp_held[i].buf, len);
+            slp_held[i] = slp_held[--slp_held_n];
+            slp_receive(copy, (ssize_t) len, peer);
+        } else {
+            i++;
+        }
+    }
+}
+
 static void slp_enet_pump(void)
 {
     ENetEvent ev;
     if (slp_host == NULL) {
         return;
     }
+    slp_bad_release();
     while (enet_host_service(slp_host, &ev, 0) > 0) {
         switch (ev.type) {
         case ENET_EVENT_TYPE_CONNECT:
@@ -936,8 +1021,10 @@ static void slp_enet_pump(void)
             break;
         case ENET_EVENT_TYPE_RECEIVE:
             slp_rx++;
-            slp_receive(ev.packet->data, (ssize_t) ev.packet->dataLength,
-                        ev.peer);
+            if (!slp_bad_hold(ev.packet, ev.peer)) {
+                slp_receive(ev.packet->data, (ssize_t) ev.packet->dataLength,
+                            ev.peer);
+            }
             enet_packet_destroy(ev.packet);
             break;
         case ENET_EVENT_TYPE_DISCONNECT:
@@ -2354,6 +2441,14 @@ static void slp_sync_rng(HSD_GObj* gobj)
     *HSD_RandSeedPtr = ((f << 16) | (f >> 16)) + net_seed;
 }
 
+/* The netplay frame number, for the rollback machinery outside this file:
+ * the snapshot's replay bounds and the re-simulated frames' inputs are in
+ * this numbering, which against a Slippi peer is not gm_GetFrameCount's. */
+s32 pc_net_frame_now(void)
+{
+    return net_match_frame();
+}
+
 void pc_net_slippi_match_init(StartMeleeData* data)
 {
     HSD_GObj* gobj;
@@ -2386,7 +2481,7 @@ void pc_net_pads(GCPadStatus* pads)
      * state below: it is a property of this machine's simulation and wants
      * testing in a solo match, where nothing else can be blamed for a
      * difference. */
-    pc_snapshot_frame((s32) gm_GetFrameCount(), pads);
+    pc_snapshot_frame(net_match_frame(), pads);
 
     /* A Dolphin host owns the whole session -- its protocol, its clock, and
      * no notion of a match frame at all -- so that route takes the pads over
@@ -2604,8 +2699,16 @@ void pc_net_pads(GCPadStatus* pads)
          * already thrown away. */
         memset(&mine, 0, sizeof(mine));
     }
-    ring_put(&net_in[net_slot], frame + net_delay, &mine);
-    if (frame + net_delay != net_last_sent) {
+    /* Only a frame not yet announced. After a rewind the counter is back on
+     * a frame whose input already went out; writing the live pad over it
+     * changed this side's past input to something the peer never saw, and
+     * the re-simulation then played that -- the emulator dashed on frame 169,
+     * this side 49 frames later. Lockstep never comes back to a frame, so
+     * there this changes nothing. */
+    if (frame + net_delay > net_last_sent) {
+        ring_put(&net_in[net_slot], frame + net_delay, &mine);
+    }
+    if (frame + net_delay > net_last_sent) {
         net_last_sent = frame + net_delay;
         if (net_slippi_proto) {
             slp_send_inputs(net_last_sent);
@@ -2619,7 +2722,16 @@ void pc_net_pads(GCPadStatus* pads)
      * stage -- so the timeout only starts counting once something has
      * arrived; before that this says what it is waiting for and keeps
      * waiting. */
-    if (pc_rollback_enabled()) {
+    /* Against a Slippi peer, not before GO (scene frame 124, the replay's
+     * frame 0). Port-to-port, rollback has only ever run from GO -- frames
+     * before it were the unlockstepped load -- and a restore inside the entry
+     * or the countdown does not give back the state it saved: a rewind on
+     * frame 5 put a fighter back a state, one on frame 109 re-ran a landing,
+     * and the emulator called each a desync. Until GO this is lockstep, which
+     * costs little: every pad before frame 78 is zero on both sides
+     * (TriggerSendInput), and nobody can move before GO. */
+    if (pc_rollback_enabled() &&
+        !(net_slippi_proto && frame < SLP_GO_FRAME)) {
         /* No barrier. Take what has arrived, redo anything that was guessed, and
          * carry on.
          *

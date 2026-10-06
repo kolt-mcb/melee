@@ -2635,6 +2635,8 @@ static void snap_catchup_finish(void)
     }
 }
 
+extern s32 pc_net_frame_now(void);
+
 void pc_snapshot_prerun(void)
 {
     extern u32 gm_GetFrameCount(void);
@@ -2654,7 +2656,7 @@ void pc_snapshot_prerun(void)
     if ((!snap_enabled() && !pc_rollback_enabled()) || snap_failed) {
         return;
     }
-    frame = (s32) gm_GetFrameCount();
+    frame = pc_net_frame_now(); /* the netplay numbering, as the replay bounds */
     if (frame <= 0) {
         return;
     }
@@ -2765,7 +2767,7 @@ void pc_snapshot_prerun_trace(void)
     if (!snap_enabled() || !snap_trace()) {
         return;
     }
-    frame = (s32) gm_GetFrameCount();
+    frame = pc_net_frame_now(); /* the netplay numbering, as the replay bounds */
     fprintf(stderr, "[SNAPTRACE] prerun  frame=%d pcf=%u replaying=%d\n",
             (int) frame, (unsigned) pc_frame_number, snap_replaying);
 

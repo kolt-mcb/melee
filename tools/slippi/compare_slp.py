@@ -77,6 +77,16 @@ FIELDS = (("action", 7, ">H"), ("x", 9, ">f"), ("y", 13, ">f"),
           ("facing", 17, ">f"), ("percent", 21, ">f"), ("stocks", 32, ">B"))
 
 
+def finalized(raw):
+    """The latest finalized frame the writer reported (Frame Bookend)."""
+    best = None
+    for _off, cmd, p in events(raw):
+        if cmd == 0x3C and len(p) >= 8:
+            f = struct.unpack_from(">i", p, 4)[0]
+            best = f if best is None else max(best, f)
+    return best if best is not None else 1 << 30
+
+
 def post_frames(raw):
     """{(frame, port, follower): {field: value}} from Post-Frame Updates."""
     out = {}
@@ -164,6 +174,12 @@ def main():
         full_compare(ra, rb)
 
     fa, fb = post_frames(ra), post_frames(rb)
+    # A frame past the writer's latest finalized frame may still be a
+    # prediction: Slippi records rolled-back frames as it simulates them, and
+    # an emulator stopped mid-match leaves its last few unconfirmed.
+    lim = min(finalized(ra), finalized(rb))
+    fa = {k: v for k, v in fa.items() if k[0] <= lim}
+    fb = {k: v for k, v in fb.items() if k[0] <= lim}
     common = sorted(set(fa) & set(fb))
     if not common:
         print("no frames in common")

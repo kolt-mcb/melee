@@ -672,3 +672,26 @@ was written only in hitstun). The one known difference left: the item
 update's four misc bytes are written only for the kinds that give them a
 meaning (missile type, turnip face, charge shot); Slippi copies them raw for
 every item, and for a Link bomb that is leftover data.
+
+### Over a bad link, and with rollback (2026-10-06)
+
+`MELEE_NET_LAG_MS` (plus `MELEE_NET_LOSS` / `MELEE_NET_JITTER`, which never
+reached the ENet path before) impair the pads, acks and checksums the port
+receives from a Slippi peer. Results against the emulator, scripted on both
+sides, compared to the latest finalized frame (compare_slp.py now stops
+there -- an emulator stopped mid-match leaves its last frames predicted):
+
+| link | port netcode | result |
+|---|---|---|
+| 40 ms + 10 jitter + 2% loss | lockstep, delay 3 | IDENTICAL, no stalls after the start |
+| 80 ms + 20 jitter + 5% loss | lockstep, delay 3 | IDENTICAL, 202 stalls (~1.4 s in 80 s) |
+| 80 ms + 20 jitter + 5% loss | MELEE_NET_ROLLBACK=1 | IDENTICAL, no stalls after GO |
+
+Rollback against a Slippi peer needed three fixes: it runs only from GO
+(scene frame 124; restores inside the entry and countdown do not give back
+the state), re-simulated frames take their inputs by the netplay frame number
+(pc_net_frame_now -- the snapshot and the replay hook read gm_GetFrameCount,
+124 frames off the Slippi key), a frame whose local input already went out is
+never re-sampled, and the replay writer records a re-simulated frame under
+the label it already had. Port-to-port rollback (pc_rollback_pair.sh, 5%
+loss, 100 ms jitter, 3000 frames) still runs with no desync.

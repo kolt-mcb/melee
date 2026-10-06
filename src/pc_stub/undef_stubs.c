@@ -3245,11 +3245,16 @@ void port_pads_for_next_frame(void)
     if (!pc_snapshot_is_replaying()) {
         return;
     }
-    /* The same frame the netplay layer labels its inputs by: pc_net_pads is
-     * called with gm_GetFrameCount() too, from port_input_poll, and this hook
-     * sits at the same point in the counter's life -- before the simulation
-     * advances it. So no offset. */
-    pc_net_pads_replay(g_gc_pads, (int) gm_GetFrameCount());
+    /* The same frame the netplay layer labels its inputs by, at the same
+     * point in the counter's life -- before the simulation advances it. Asked
+     * of the netplay layer rather than read from gm_GetFrameCount: against a
+     * Slippi peer the label is the scene's frame, 124 ahead of the match
+     * frame, and a replay that read the match frame took every re-simulated
+     * frame's inputs from 124 frames earlier. */
+    {
+        extern s32 pc_net_frame_now(void);
+        pc_net_pads_replay(g_gc_pads, (int) pc_net_frame_now());
+    }
     gm_SyncPadToControllerMap();
 }
 #endif

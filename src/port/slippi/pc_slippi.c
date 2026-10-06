@@ -128,6 +128,12 @@ static unsigned slp_rev8(unsigned b)
 static int slp_enabled = -1;   /* -1 = not yet decided */
 static int slp_active;         /* a match is being recorded right now */
 static int slp_frame;          /* current Slippi frame index */
+/* The label each scene-counter value was given, so a rolled-back frame is
+ * recorded under the number it had (the counter itself is not the label: it
+ * keeps counting through a pause, and the frame index does not). */
+#define SLP_LABEL_RING 256
+static int slp_label[SLP_LABEL_RING];
+static u32 slp_last_scene;
 static int slp_frame_open;     /* the stage holds an unflushed frame */
 static int slp_end_sent;
 static struct slp_meta slp_meta;
@@ -618,9 +624,19 @@ void slp_FrameStart(void)
      * frame. The counter does not have that problem: it is still zero then. */
     if (gm_801A4BA8() == 0) {
         slp_frame = SLP_FIRST_FRAME;
+    } else if (gm_801A4BA8() <= slp_last_scene &&
+               slp_last_scene - gm_801A4BA8() < SLP_LABEL_RING) {
+        /* A rollback: the scene counter (restored with the rest of the
+         * state) is back on a frame already recorded. Record it again under
+         * the label it had, as Slippi does -- a reader keeps the last copy of
+         * a frame -- rather than counting on, which gave every re-simulated
+         * frame a new number and slid the rest of the replay later. */
+        slp_frame = slp_label[gm_801A4BA8() % SLP_LABEL_RING];
     } else {
         slp_frame++;
     }
+    slp_last_scene = gm_801A4BA8();
+    slp_label[slp_last_scene % SLP_LABEL_RING] = slp_frame;
     slp_frame_open = 1;
 
     p = slp_stage_claim(SLP_STAGE_FRAME_START, SZ_FRAME_START);
