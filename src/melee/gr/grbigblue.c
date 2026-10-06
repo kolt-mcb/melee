@@ -844,6 +844,43 @@ void grBigBlue_801E6C60(Ground_GObj* gobj)
         s8 idx = gp->u.bigblue.data[i].index;
         u8 state = gp->u.bigblue.data[i].x1;
         HSD_JObj* jobj = gp->u.bigblue.xD4[idx];
+#if BUILD_TARGET_PC
+        /* MELEE_BBCAR=<lo>-<hi>: each car slot's state and countdown on
+         * entry, the two gates the spawn path reads (801E89DC(0) and the
+         * road heights at both blast lines). */
+        {
+            static int lo = -2, hi;
+            if (lo == -2) {
+                const char* e = getenv("MELEE_BBCAR");
+                const char* d = e ? strchr(e, '-') : NULL;
+                lo = e ? atoi(e) : -1;
+                hi = d ? atoi(d + 1) : lo;
+            }
+            if (lo >= 0) {
+                extern u32 gm_GetFrameCount(void);
+                int f = (int) gm_GetFrameCount();
+                if (f >= lo && f <= hi) {
+                    Vec3 rp = { 0 }, lp = { 0 };
+                    rp.x = 10.0f + Stage_GetBlastZoneRightOffset();
+                    lp.x = -rp.x;
+                    fprintf(stderr,
+                            "[BBCAR] gframe=%d i=%d idx=%d state=%d x4=%d "
+                            "gate0=%d right_y=%g left_y=%g pos=(%08x,%08x) "
+                            "vx=%08x tgt=%08x x8=%08x\n",
+                            f, (int) i, (int) idx, (int) (s8) state,
+                            (int) gp->u.bigblue.data[i].x4,
+                            (int) grBigBlue_801E89DC(0),
+                            (double) grBigBlue_801EC58C(&rp, NULL, 500.0f),
+                            (double) grBigBlue_801EC58C(&lp, NULL, 500.0f),
+                            *(u32*) &gp->u.bigblue.data[i].x38.x,
+                            *(u32*) &gp->u.bigblue.data[i].x38.y,
+                            *(u32*) &gp->u.bigblue.data[i].x44.x,
+                            *(u32*) &gp->u.bigblue.data[i].xC.z,
+                            *(u32*) &gp->u.bigblue.data[i].x8);
+                }
+            }
+        }
+#endif
 
         switch ((s8) state) {
         case 0: {
@@ -1224,16 +1261,22 @@ void grBigBlue_801E6C60(Ground_GObj* gobj)
                                 }
                             }
                         }
+                        /* 801E7C4C: back to 3, the settled phase the
+                         * tilt branch above tests for. Writing 4 here (and
+                         * 3 below) skipped the rise phase entirely: the car
+                         * never got its x44.y lift, so it sat 0.58 low and
+                         * the fighters riding it with it. */
                         if (cur_pos.y >= gp->u.bigblue.data[i].xC.y) {
                             gp->u.bigblue.data[i].x44.y = 0.0f;
                             gp->u.bigblue.data[i].x18.z = 0.0f;
                             gp->u.bigblue.data[i].x18.y = 0.0f;
-                            gp->u.bigblue.data[i].x34 = 4;
+                            gp->u.bigblue.data[i].x34 = 3;
                         }
                     } else if (gp->u.bigblue.data[i].x4 <= 0) {
+                        /* 801E7C70: the rise phase is 2. */
                         gp->u.bigblue.data[i].x44.y = yakumono_param->xAC;
                         gp->u.bigblue.data[i].x4 = yakumono_param->xB4;
-                        gp->u.bigblue.data[i].x34 = 3;
+                        gp->u.bigblue.data[i].x34 = 2;
                     } else {
                         f32 prev_x = gp->u.bigblue.data[i].x24;
                         f32 prev_y = gp->u.bigblue.data[i].x28;
@@ -1751,7 +1794,13 @@ void grBigBlue_801E8D64(Ground_GObj* gobj)
     {
         HSD_GObj* other = Ground_GetMapGObj(32);
         Ground* other_gp = other->user_data;
+#if BUILD_TARGET_PC
+        /* The manager's event_data[1] (gp+CC on the console). At that raw
+         * offset here it set data[0]'s countdown to 1 instead. */
+        other_gp->u.bigblue.event_data[1] = (void*) 1;
+#else
         *(s32*) (GRBB_CAR_BASE(other_gp) + 0xCC) = 1;
+#endif
     }
 
     y_pos = grBigBlue_801EC58C(&pos, NULL, grBb_804DB30C);
@@ -1875,6 +1924,26 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
 
     switch ((s8) bp[0xC4]) {
     case 0: {
+#if BUILD_TARGET_PC
+        /* The car manager (map 32) through its named fields. On the console
+         * these are gp+CC (event_data[1]), the slots' state bytes at gp+E5,
+         * +139, +18D and their lane indices at gp+E4, +138; read at those
+         * offsets here they land in data[0] -- its countdown stood in for
+         * the flag, and only by luck agreed with it. */
+        Ground* mg = GET_GROUND(Ground_GetMapGObj(32));
+        if ((intptr_t) mg->u.bigblue.event_data[1] != 0) {
+            s32 count = 0;
+
+            if ((s8) mg->u.bigblue.data[0].x1 != 0) {
+                count = 1;
+            }
+            if ((s8) mg->u.bigblue.data[1].x1 != 0) {
+                count++;
+            }
+            if ((s8) mg->u.bigblue.data[2].x1 != 0) {
+                count++;
+            }
+#else
         if (*(s32*) (GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data) + 0xCC) != 0) {
             volatile u32 cars_avail = 0;
             u8* mgp = GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data);
@@ -1900,6 +1969,7 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
                     count++;
                 }
             }
+#endif
 
             if (count <= 1) {
                 f32 height;
@@ -1972,6 +2042,29 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
     case 2: {
         s32 timer = *(s32*) (bp + 0xC8);
         if (timer <= 0) {
+#if BUILD_TARGET_PC
+            /* The first idle car slot is sent straight to its spawn state
+             * (801E98C0). At the console's gp+E5 + i*0x54 this wrote into
+             * data[0] instead, and the car the console launches the moment
+             * the Falcon Flyer leaves never appeared. */
+            Ground* mg = GET_GROUND(Ground_GetMapGObj(32));
+            s32 k;
+
+            *(f32*) (bp + 0xD8) = yakumono_param->xD0;
+            bp[0xC4] = 3;
+            for (k = 0; k < 3; k++) {
+                if ((s8) mg->u.bigblue.data[k].x1 == 0) {
+                    mg->u.bigblue.data[k].x1 = 2;
+                    mg->u.bigblue.data[k].x4 = 0;
+                    break;
+                }
+            }
+        } else {
+            *(s32*) (bp + 0xC8) = timer - 1;
+        }
+        goto block_76;
+    }
+#else
             u8* mgp = GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data);
             s32 ctr = 3;
             s32 idx = 0;
@@ -1998,10 +2091,24 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
         }
         goto block_76;
     }
+#endif
     case 3:
         if (pos.x > (50.0f + Stage_GetBlastZoneRightOffset())) {
             GRBB_HIDE(jobj);
             *(f32*) (bp + 0xD8) = 0.0f;
+#if BUILD_TARGET_PC
+            /* The manager's event_data[1] cleared, its extra pointer and
+             * event_data[0] set (gp+CC, gp+E0, gp+C8 on the console), where
+             * grBigBlue_801E89DC reads them. */
+            {
+                Ground* mg = GET_GROUND(Ground_GetMapGObj(32));
+                mg->u.bigblue.event_data[1] = NULL;
+                if (jobj != NULL) {
+                    mg->u.bigblue.event_extra = jobj;
+                }
+                mg->u.bigblue.event_data[0] = (void*) 1;
+            }
+#else
             *(s32*) (GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data) + 0xCC) = 0;
             {
                 u8* mgp2 = GRBB_CAR_BASE(Ground_GetMapGObj(32)->user_data);
@@ -2010,6 +2117,7 @@ void grBigBlue_801E93D8(Ground_GObj* gobj)
                 }
                 *(s32*) (mgp2 + 0xC8) = 1;
             }
+#endif
             *(f32*) (bp + 0xCC) = 0.0f;
             HSD_JObjSetRotationZ(jobj, 0.0f);
             bp[0xC4] = 0;
@@ -2119,7 +2227,10 @@ void grBigBlue_801E9F3C(Ground_GObj* gobj)
      * the first byte of that word, which is its most significant, and naming
      * the u32 field here would clear all four. */
     ((u8*) &gp->u.bigblue)[0] = 0;
-    GET_GROUND(Ground_GetMapGObj(32))->u.bigblue.platform.xD0_timer = 0;
+    /* map 32's gp+D0 is its manager's event_data[2] (801E8978(2, ...)),
+     * which on the host is not at platform.xD0_timer: that lands in
+     * data[0]. */
+    GET_GROUND(Ground_GetMapGObj(32))->u.bigblue.event_data[2] = NULL;
 #else
     ((u8*) gp)[0xC4] = 0;
     *(s32*) (GRBB_CAR_BASE(GET_GROUND(Ground_GetMapGObj(32))) + 0xD0) = 0;
@@ -2172,8 +2283,9 @@ void grBigBlue_801EA05C(Ground_GObj* gobj)
     switch ((s8) gp->u.bigblue.x0) {
     case 0:
 #if BUILD_TARGET_PC
-        if (GET_GROUND(Ground_GetMapGObj(32))->u.bigblue.platform.xD0_timer !=
-            0) {
+        if ((intptr_t) GET_GROUND(Ground_GetMapGObj(32))
+                ->u.bigblue.event_data[2] != 0)
+        {
 #else
         if (*(s32*) (GRBB_CAR_BASE(GET_GROUND(Ground_GetMapGObj(32))) + 0xD0) != 0) {
 #endif
@@ -2421,7 +2533,11 @@ void grBigBlue_801EA05C(Ground_GObj* gobj)
             gp->u.bigblue.platform.xEC = 0.0f;
             gp->u.bigblue.platform.velocity.z = 0.0f;
             gp->u.bigblue.platform.velocity.y = 0.0f;
+#if BUILD_TARGET_PC
+            GET_GROUND(Ground_GetMapGObj(32))->u.bigblue.event_data[2] = NULL;
+#else
             *(u32*) &GET_GROUND(Ground_GetMapGObj(32))->u.bigblue.xD0 = 0;
+#endif
             gp->u.bigblue.x0 = 0;
         }
         break;
