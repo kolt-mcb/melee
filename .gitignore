@@ -223,3 +223,13 @@ tools/slippi/node_modules/
 tools/slippi/package-lock.json
 tools/slippi/__pycache__/
 build.ninja.*
+
+# Game data stays local: reference frames and GX traces captured from the
+# retail game, debug screenshots, and the launcher icon cut from its art.
+# The pre-push hook refuses to publish these.
+/tests/pc/refs/
+/gx_trace/
+/tools/launcher/melee-pc.png
+/shot*.png
+/title_fix*.png
+/tev_test.png
