@@ -21,9 +21,10 @@ no-verdict or no-icon, of 754 cells.
 - [~] 24 Big Blue — 25, aihash, frames 648–1829
       - [x] lane object height summed in the wrong order (grBigBlue_801ED694,
             801EDD5C): 0 -> 9 identical, the rest diverge later (median ~2300)
+      - [x] float audit: fn_801E8560 dy*dy fusion, road lat_adj order -> 14/25
       - [ ] next: rerun triage on a remaining cell (Purin 678 is earliest)
 - [ ] 2 Fountain of Dreams — 24, rng_draws, 955–3555
-- [ ] 22 Venom — 23, rng_draws/aihash, ~1018 and ~1153
+- [~] 22 Venom — 23 -> 15 diverged (near-arwing anim tables read past the host struct)
 - [ ] 6 Zebes — 19, pct, median 2562
 - [ ] 8 Yoshi's Story — 15, aihash
 - [ ] 4 Castle — 13, aihash, median 830
@@ -32,7 +33,7 @@ no-verdict or no-icon, of 754 cells.
 - [ ] 7 Corneria — 9
 - [ ] 27 Flat Zone — 8
 - [ ] 17 Brinstar Depths (greens) — 8
-- [ ] 11 Rainbow Cruise — 7
+- [~] 11 Rainbow Cruise — 7 -> 2 (tilting platform distance fusion)
 - [ ] 10 Mute City — 7
 - [ ] 3 Pokémon Stadium — 7
 - [ ] 28 Dream Land (oldpupupu) — 6
@@ -41,6 +42,22 @@ no-verdict or no-icon, of 754 cells.
 - [ ] Long tail (1–4 each): Kongo, Mushroom Kingdom, Onett, Battlefield,
       Poké Floats, Final Destination, Garden, Shrine, Yoshi's Island N64,
       Kraid, Fourside, Kongo Jungle N64
+
+## Float audit (2026-10-07)
+
+Six read-only agents compared every gameplay float expression in the VS
+stage files and mp/ground libraries against the console asm.
+- Fixed: Big Blue x2, Rainbow Cruise, Venom (layout), Onett, Mute City sqrt,
+  Corneria (layout, audio only).
+- Collision (mplib.c): Floor/Ceiling/LeftWall/RightWall Remap sign tests
+  fused the wrong pair or not at all; mpLib_8005199C_Floor used a double
+  fma for a single fmadds. Applied; full sweep pending.
+- Clean: Castle, Icicle Mountain, Yoshi's Story, Great Bay, Fountain,
+  Kraid, Pokémon Stadium, the 16 small stages except Onett, mpcoll.c,
+  ground.c, grlib.c, granime.c. Their remaining desyncs come from shared
+  code (animation interpolation, items, AI), not stage arithmetic.
+- Open: mpLib_80056C54 reads total_dist before setting it (console does
+  too, inheriting the caller's f27).
 
 ## Other open items
 

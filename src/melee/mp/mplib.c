@@ -2181,7 +2181,7 @@ bool mpCheckFloorRemap(float ax, float ay, float bx, float by, float y_offset,
                         dy2 = SQ(int_y - old_y);
                         dist2 = dx2 + dy2;
 
-                        if (dx * (int_x - old_x) + dy * (int_y - old_y) < 0.0F)
+                        if (MP_FMAF(dx, int_x - old_x, dy * (int_y - old_y)) < 0.0F) /* 8004F688/8004F77C */
                         {
                             dist2 = -dist2;
                         }
@@ -2216,7 +2216,7 @@ bool mpCheckFloorRemap(float ax, float ay, float bx, float by, float y_offset,
                     dy2 = SQ(int_y - old_y);
                     dist2 = dx2 + dy2;
 
-                    if (dx * (int_x - old_x) + dy * (int_y - old_y) < 0.0F) {
+                    if (MP_FMAF(dx, int_x - old_x, dy * (int_y - old_y)) < 0.0F) /* 8004F688/8004F77C */ {
                         dist2 = -dist2;
                     }
 
@@ -2479,8 +2479,7 @@ bool mpCheckCeilingRemap(float ax, float ay, float bx, float by, Vec3* vec_out,
                         dx2 = SQ(sp58 - f29);
                         dy2 = SQ(sp54 - f28);
                         dist2 = dx2 + dy2;
-                        if ((x_f23 * (sp58 - f29)) + (y_f22 * (sp54 - f28)) <
-                            0.0F)
+                        if (MP_FMAF(x_f23, sp58 - f29, y_f22 * (sp54 - f28)) < 0.0F) /* 8004FE54/8004FF54 */
                         {
                             dist2 = -dist2;
                         }
@@ -2519,8 +2518,7 @@ bool mpCheckCeilingRemap(float ax, float ay, float bx, float by, Vec3* vec_out,
                         dx2 = SQ(sp58 - f29);
                         dy2 = SQ(sp54 - f28);
                         dist2 = dx2 + dy2;
-                        if ((x_f23 * (sp58 - f29)) + (y_f22 * (sp54 - f28)) <
-                            0.0F)
+                        if (MP_FMAF(x_f23, sp58 - f29, y_f22 * (sp54 - f28)) < 0.0F) /* 8004FE54/8004FF54 */
                         {
                             dist2 = -dist2;
                         }
@@ -2845,11 +2843,10 @@ bool mpCheckLeftWallRemap(float ax, float ay, float bx, float by,
                         dx2 = SQ(int_x - old_x);
                         dy2 = SQ(int_y - old_y);
                         dist2 = dx2 + dy2;
-                        /* 800507A0: the x term is the plain multiply here and the y
-                         * term fuses onto it -- the reverse of the pairing in
-                         * mpLib_800515A0_LeftWall. */
-                        if (MP_FMAF(dy, int_y - old_y,
-                                    dx * (int_x - old_x)) < 0.0F)
+                        /* 800507A0: fmuls dy*(int_y - old_y), then fmadds
+                         * dx*(int_x - old_x) onto it. */
+                        if (MP_FMAF(dx, int_x - old_x,
+                                    dy * (int_y - old_y)) < 0.0F)
                         {
                             dist2 = -dist2;
                         }
@@ -2888,11 +2885,10 @@ bool mpCheckLeftWallRemap(float ax, float ay, float bx, float by,
                         dx2 = SQ(int_x - old_x);
                         dy2 = SQ(int_y - old_y);
                         dist2 = dx2 + dy2;
-                        /* 800507A0: the x term is the plain multiply here and the y
-                         * term fuses onto it -- the reverse of the pairing in
-                         * mpLib_800515A0_LeftWall. */
-                        if (MP_FMAF(dy, int_y - old_y,
-                                    dx * (int_x - old_x)) < 0.0F)
+                        /* 800507A0: fmuls dy*(int_y - old_y), then fmadds
+                         * dx*(int_x - old_x) onto it. */
+                        if (MP_FMAF(dx, int_x - old_x,
+                                    dy * (int_y - old_y)) < 0.0F)
                         {
                             dist2 = -dist2;
                         }
@@ -3163,11 +3159,10 @@ bool mpCheckRightWallRemap(float ax, float ay, float bx, float by,
                         dx2 = SQ(int_x - old_x);
                         dy2 = SQ(int_y - old_y);
                         dist2 = dx2 + dy2;
-                        /* 800507A0: the x term is the plain multiply here and the y
-                         * term fuses onto it -- the reverse of the pairing in
-                         * mpLib_800515A0_LeftWall. */
-                        if (MP_FMAF(dy, int_y - old_y,
-                                    dx * (int_x - old_x)) < 0.0F)
+                        /* 800507A0: fmuls dy*(int_y - old_y), then fmadds
+                         * dx*(int_x - old_x) onto it. */
+                        if (MP_FMAF(dx, int_x - old_x,
+                                    dy * (int_y - old_y)) < 0.0F)
                         {
                             dist2 = -dist2;
                         }
@@ -3206,11 +3201,10 @@ bool mpCheckRightWallRemap(float ax, float ay, float bx, float by,
                         dx2 = SQ(int_x - old_x);
                         dy2 = SQ(int_y - old_y);
                         dist2 = dx2 + dy2;
-                        /* 800507A0: the x term is the plain multiply here and the y
-                         * term fuses onto it -- the reverse of the pairing in
-                         * mpLib_800515A0_LeftWall. */
-                        if (MP_FMAF(dy, int_y - old_y,
-                                    dx * (int_x - old_x)) < 0.0F)
+                        /* 800507A0: fmuls dy*(int_y - old_y), then fmadds
+                         * dx*(int_x - old_x) onto it. */
+                        if (MP_FMAF(dx, int_x - old_x,
+                                    dy * (int_y - old_y)) < 0.0F)
                         {
                             dist2 = -dist2;
                         }
@@ -3625,10 +3619,10 @@ int mpLib_8005199C_Floor(Vec3* vec, int joint_id_skip, int joint_id_only)
                                         fprintf(stderr, "[MPTRACE] f%u floor: joint %d line %d x=%08x y=%08x x0=%08x y0=%08x x1=%08x y1=%08x fma=%08x\n",
                                                 fr, (int) (joint - groundCollJoint), (int) (line - groundCollLine),
                                                 *(u32*) &x, *(u32*) &y, *(u32*) &x0, *(u32*) &y0, *(u32*) &x1, *(u32*) &y1,
-                                                ({ float t = MP_FMA(dy / dx, x - x0, y0); *(u32*) &t; })); }
+                                                ({ float t = MP_FMAF(dy / dx, x - x0, y0); *(u32*) &t; })); }
                             }
 #endif
-                            if (y >= MP_FMA(dy / dx, x - x0, y0)) { /* 80051B1C */
+                            if (y >= MP_FMAF(dy / dx, x - x0, y0)) { /* 80051B1C */
                                 line_id = line - groundCollLine;
                                 goto end;
                             }
