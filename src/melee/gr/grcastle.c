@@ -1497,7 +1497,15 @@ void grCastle_801CF308(Ground_GObj* gobj)
             } else {
                 HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
             }
+#if BUILD_TARGET_PC
+            /* The table is s16 data read a byte at a time: 0x0201 is 02 01
+             * on the console and 01 02 here, so every pair of blink delays
+             * ran in the wrong order and the satellite's hitbox arrived
+             * frames early. Index the console's byte order. */
+            val = ((s8*) &tbl)[gp->u.castle.xC8 ^ 1];
+#else
             val = ((s8*) &tbl)[gp->u.castle.xC8];
+#endif
             if (val != -1) {
                 gp->u.castle11.xCA = (s16) (2.0 * (f64) val);
             } else {
