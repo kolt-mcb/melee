@@ -273,6 +273,14 @@ void grStadium_801D1290(Ground_GObj* gobj)
     gp->u.display.xD0 = HSD_ArchiveGetPublicAddress(
         grDatFiles_801C6330(1)->unk0,
         "GrdPStadiumBG_OVDummy_mat6962_GrdPStadiumDummy_0_image_desc");
+#if BUILD_TARGET_PC
+    /* The public address is the raw big-endian desc; the screen's TObj
+     * points at the host copy the converter made, and grStadium_801D3138
+     * matches by pointer. Same as grIzumi_801CCD98. */
+    if (gp->u.display.xD0 != NULL) {
+        gp->u.display.xD0 = grDatFiles_LookupImageDesc(gp->u.display.xD0);
+    }
+#endif
     if (gp->u.display.xD0 == NULL) {
         OSReport("no such image desc!\n");
     }
