@@ -1512,7 +1512,7 @@ void fn_801E8560(Ground* gp, s32 param, CollData* coll, s32 time_param,
     {
         f32 dx = pos.x - coll->cur_pos.x;
         f32 dy = pos.y - coll->cur_pos.y;
-        dist = sqrtf(BB_FMA(dx, dx, dy * dy)); /* 801E8640: dy*dy plain */
+        dist = sqrtf(BB_FMA(dy, dy, dx * dx)); /* 801E863C fmuls dx*dx, 801E8640 fmadds dy*dy + that */
     }
 
     if (dist > 2.0F) {
@@ -3543,8 +3543,9 @@ void grBigBlue_801EBAF8(Ground_GObj* gobj)
                *(f32*) (GRBB_CAR_BASE(gp) + 0xC8)); /* fnmsubs 801EC070 */
 
     {
-        f32 lat_adj = 0.6F * (entry->delta.z / entry->delta.x) *
-                      (yakumono_param->x6C * Ground_801C0498());
+        /* 801EC07C..801EC0A0: the 0.6 is applied last. */
+        f32 lat_adj = 0.6F * ((entry->delta.z / entry->delta.x) *
+                              (yakumono_param->x6C * Ground_801C0498()));
 
         if (bone_pos.z > lat_adj) {
             *(f32*) (GRBB_CAR_BASE(gp) + 0xD0) = *(f32*) (GRBB_CAR_BASE(gp) + 0xD0) - lat_adj;

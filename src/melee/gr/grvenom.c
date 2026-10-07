@@ -1718,15 +1718,25 @@ void grVenom_80205F30(Ground_GObj* gobj)
                         break;
                     }
                     {
-                        grVe_AnimData* anim_data = (grVe_AnimData*) base;
 #if BUILD_TARGET_PC
+                        /* 802061A0..802061DC: grVe_803E5644[xF4*2 + kind]
+                         * and grVe_803E56A0[w14], which are 0x2FC and 0x358
+                         * past the console's data base. Through the host
+                         * struct both read whatever followed it, so the
+                         * near arwing played the wrong animation, finished
+                         * it on a different frame, and drew its next
+                         * HSD_Randi(4) at a different time. */
                         s32 idx0 = VE_W14(gp);
+                        s32 anim_arg =
+                            grVe_803E5644[gp->u.venom.xF4 * 2 + fire_kind];
+                        s32 anim_id = VE_WD6(idx0);
 #else
+                        grVe_AnimData* anim_data = (grVe_AnimData*) base;
                         s32 idx0 = base[gp->u.venom.xC8 + 14];
-#endif
                         s32 anim_arg =
                             grVe_GetAnimArg(fire_kind, gp, anim_data);
                         s32 anim_id = anim_data->anim_ids[idx0];
+#endif
                         grAnime_801C8098(gobj, anim_id, 7, anim_arg, 0.0F,
                                          1.0F);
                     }

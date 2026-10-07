@@ -37,7 +37,7 @@
 #include <trigf.h>
 
 /* Rainbow Cruise: the ship's projected offsets (fnmsubs), the sail
- * distance (dy*dy plain, dx fused), the rotation wrap and damping,
+ * distance (dx*dx plain, dy fused), the rotation wrap and damping,
  * and the double fmadd random scales. */
 #if BUILD_TARGET_PC
 #include <math.h>
@@ -1005,7 +1005,7 @@ void grRCruise_80200578(Ground* gp_arg, s32 joint_id, CollData* cd, s32 arg3,
     lb_8000B1CC(jobj, NULL, &pos);
     dx = pos.x - cd->cur_pos.x;
     dy = pos.y - cd->cur_pos.y;
-    dist = sqrtf(RC_FMA(dx, dx, dy * dy));
+    dist = sqrtf(RC_FMA(dy, dy, dx * dx)); /* fmuls dx*dx, then fmadds dy*dy + that */
     if (dist > 4.0f) {
         if (pos.x < cd->cur_pos.x) {
             gp->u.rcruise.x24 = RC_FMA(dist, (f32) arg3 / 1000.0f, gp->u.rcruise.x24);

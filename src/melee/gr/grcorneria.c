@@ -857,7 +857,7 @@ void grCorneria_801DDDA8(HSD_GObj* gobj, Vec3* vec)
         jobj = Ground_801C3FA4(gobj, 4);
         lb_8000B1CC(jobj, NULL, &pos);
         idx = arwing_types[gp->u.arwing.xC8];
-        vec->x = gp2->u.arwing.xDC + (-pos.z + lbl_803E2068[idx].x);
+        vec->x = gp2->u.corneria.offset_x + (-pos.z + lbl_803E2068[idx].x);
         vec->y = pos.y + lbl_803E2068[idx].y;
         vec->z = pos.x + lbl_803E2068[idx].z;
     } else {

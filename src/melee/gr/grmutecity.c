@@ -1633,13 +1633,18 @@ static inline f32 grMc_RandomWreckOffset(void)
 /* The console reaches sqrtf through frsqrte and three Newton steps, then
  * stores the result before reading it back; libm's sqrtf is more accurate
  * than that and diverges. */
+#if BUILD_TARGET_PC
+#define MC_NMSUB3(x, g) fma(-(f64) (x), (g) * (g), 3.0)
+#else
+#define MC_NMSUB3(x, g) (3.0 - (g) * (g) * (x))
+#endif
 static inline f32 grMc_Sqrtf(f32 x, volatile f32* result)
 {
     if (x > 0.0f) {
         f64 guess = __frsqrte((f64) x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
-        guess = 0.5 * guess * (3.0 - guess * guess * x);
+        guess = 0.5 * guess * MC_NMSUB3(x, guess); /* fnmsub */
+        guess = 0.5 * guess * MC_NMSUB3(x, guess); /* fnmsub */
+        guess = 0.5 * guess * MC_NMSUB3(x, guess); /* fnmsub */
         *result = (f32) (x * guess);
         return *result;
     }

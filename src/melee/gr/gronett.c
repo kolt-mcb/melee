@@ -746,9 +746,9 @@ void grOnett_801E43E0(Ground_GObj* gobj)
                     return;
                 }
                 gp->u.onettcar.timer_b = yakumono_param->x48;
-                gp->u.onettcar.speed_b =
-                    yakumono_param->x58 * HSD_RandF_noinline() +
-                    yakumono_param->x54;
+                gp->u.onettcar.speed_b = /* 801E4E98 fmadds */
+                    ON_FMA(yakumono_param->x58, HSD_RandF_noinline(),
+                           yakumono_param->x54);
                 gp->u.onettcar.state_b = 2;
                 return;
             }
