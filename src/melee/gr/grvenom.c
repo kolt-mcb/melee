@@ -91,10 +91,8 @@ static int grVe_803E5380[3] = { 0 };
  * *(HSD_GObj**)&base[x] for (HSD_GObj*)base[x]) changed that object's
  * codegen. grVenom_80203FD4 already did this for base[base[xC8+14]+170].
  *
- * NOT addressed, same class: the two `(VenomSpawnData*) (base + type * 3)`
- * casts read three words at word offset type*3, which stays inside the
- * identical joints region for type 1-2 and crosses into arwing_gobj from 3
- * up. */
+ * The two `(VenomSpawnData*) (base + type * 3)` casts go through
+ * ve_spawn_offset below. */
 static int grVe_803E5530[53];
 static int grVe_803E56A0[6];
 #define VE_GOBJ(g) (grVe_803E5348.arwing.arwing_gobj[(g)->u.venom.xC8])
@@ -1206,6 +1204,31 @@ typedef struct {
     f32 z;
 } VenomSpawnData;
 
+#if BUILD_TARGET_PC
+/* `(VenomSpawnData*) (base + type * 3)` on the console: the three words at
+ * byte 0x218 + type*12 from grVe_803E5348, i.e. grVe_803E5530[12 + 3*type]
+ * onward, read as floats. Mostly zero; words 48-52 are small ints (denormal
+ * floats); for type 13 the last word is one past the array, the first four
+ * bytes of the "arwin:user data error" string that follows it. On the host
+ * the same arithmetic walked off grVe_Data into unrelated memory. */
+static f32 ve_spawn_word(int i)
+{
+    union {
+        u32 u;
+        f32 f;
+    } w;
+    w.u = (i >= 0 && i < 53) ? (u32) grVe_803E5530[i]
+                             : (i == 53 ? 0x61727769U : 0U);
+    return w.f;
+}
+static void ve_spawn_offset(int type, Vec3* out)
+{
+    out->x = ve_spawn_word(12 + type * 3);
+    out->y = ve_spawn_word(13 + type * 3);
+    out->z = ve_spawn_word(14 + type * 3);
+}
+#endif
+
 void grVenom_802052E0(Ground_GObj* gobj, Vec3* pos)
 {
     u8* new_var2;
@@ -1230,11 +1253,26 @@ void grVenom_802052E0(Ground_GObj* gobj, Vec3* pos)
         new_var2 = (u8*) new_var4;
         new_var3 = &gp->u.venom;
         spawn_idx = (*new_var3).xC8;
+#if BUILD_TARGET_PC
+        {
+            Vec3 off;
+            (void) new_var;
+            (void) new_var2;
+            (void) data_idx;
+            (void) spawn_data;
+            ve_spawn_offset(
+                grVe_803E5348.arwing.arwing_type[spawn_idx], &off);
+            pos->x = jobj_pos.x + off.x;
+            pos->y = jobj_pos.y + off.y;
+            pos->z = jobj_pos.z + off.z;
+        }
+#else
         data_idx = new_var[spawn_idx + 11];
         spawn_data = (VenomSpawnData*) (new_var2 + data_idx * 12);
         pos->x = jobj_pos.x + spawn_data->x;
         pos->y = jobj_pos.y + spawn_data->y;
         pos->z = jobj_pos.z + spawn_data->z;
+#endif
     } else {
         pos->x = pos->y = pos->z = 0.0F;
     }
@@ -1259,7 +1297,12 @@ void grVenom_802053B0(Ground_GObj* gobj)
     jobj = gobj->hsd_obj;
     ptr = base + gp->u.venom.xC8;
 
+#if BUILD_TARGET_PC
+    (void) ptr;
+    if (VE_GOBJ(gp) == gobj) {
+#else
     if ((u32) ptr[8] == (u32) gobj) {
+#endif
         if (gp->u.venom.xD4 == 1) {
             gp->u.venom.xD4 = 0;
             grAnime_801C8138(gobj, gp->map_id,
@@ -1271,7 +1314,11 @@ void grVenom_802053B0(Ground_GObj* gobj)
             return;
         }
 
+#if BUILD_TARGET_PC
+        state = VE_TYPE(gp);
+#else
         state = ptr[11];
+#endif
         if (state >= 8) {
             goto check_far;
         }
@@ -1654,7 +1701,11 @@ void grVenom_80205F30(Ground_GObj* gobj)
                 if (gp->u.venom.xF8 <= 0) {
                     gp->u.venom.xF4 = HSD_Randi(4) + 1;
                     fire_kind = -1;
+#if BUILD_TARGET_PC
+                    switch (VE_W14(GET_GROUND(gobj))) {
+#else
                     switch (base[GET_GROUND(gobj)->u.venom.xC8 + 14]) {
+#endif
                     case 0:
                         break;
                     case 1:
@@ -1712,6 +1763,15 @@ void grVenom_80205F30(Ground_GObj* gobj)
                 other_gp = other->user_data;
                 Ground_GetMapGObj(5);
                 lb_8000B1CC(Ground_801C3FA4(other, 5), NULL, &sp64);
+#if BUILD_TARGET_PC
+                {
+                    Vec3 off;
+                    ve_spawn_offset(VE_TYPE(other_gp), &off);
+                    sp94.x = sp64.x + off.x;
+                    sp94.y = sp64.y + off.y;
+                    sp94.z = sp64.z + off.z;
+                }
+#else
                 {
                     VenomSpawnData* spawn_data =
                         (VenomSpawnData*) (base +
@@ -1721,6 +1781,7 @@ void grVenom_80205F30(Ground_GObj* gobj)
                     sp94.y = sp64.y + spawn_data->y;
                     sp94.z = sp64.z + spawn_data->z;
                 }
+#endif
             } else {
                 sp94.x = sp94.y = sp94.z = 0.0F;
             }
@@ -1850,6 +1911,15 @@ void grVenom_80205F30(Ground_GObj* gobj)
                     far_other_gp = far_other->user_data;
                     Ground_GetMapGObj(5);
                     lb_8000B1CC(Ground_801C3FA4(far_other, 5), NULL, &sp50);
+#if BUILD_TARGET_PC
+                    {
+                        Vec3 off;
+                        ve_spawn_offset(VE_TYPE(far_other_gp), &off);
+                        sp94.x = sp50.x + off.x;
+                        sp94.y = sp50.y + off.y;
+                        sp94.z = sp50.z + off.z;
+                    }
+#else
                     {
                         VenomSpawnData* spawn_data =
                             (VenomSpawnData*) (base +
@@ -1860,6 +1930,7 @@ void grVenom_80205F30(Ground_GObj* gobj)
                         sp94.y = sp50.y + spawn_data->y;
                         sp94.z = sp50.z + spawn_data->z;
                     }
+#endif
                 } else {
                     sp94.x = sp94.y = sp94.z = 0.0F;
                 }
@@ -1885,7 +1956,11 @@ void grVenom_80205F30(Ground_GObj* gobj)
                     sp88.y += 5.0F;
                     lbAudioAx_800237A8(0x6B6C9, 0x7F, 0x40);
                     fire_kind = -1;
+#if BUILD_TARGET_PC
+                    switch (VE_W14(GET_GROUND(gobj))) {
+#else
                     switch (base[GET_GROUND(gobj)->u.venom.xC8 + 14]) {
+#endif
                     case 0:
                         break;
                     case 1:
