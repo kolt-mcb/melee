@@ -1762,12 +1762,20 @@ struct grCastle_GroundVars {
 };
 
 struct grCastle_GroundVars3 {
+#if BUILD_TARGET_PC
+    u8 pad_0[0x28]; /* = castle9.dynamics on the host */
+#else
     /* +00 gp+C4 */ u8 pad_0[0x1C];
+#endif
     /* +1C gp+E0 */ DynamicsDesc x1C[12];
 };
 
 struct grCastle_GroundVars4 {
+#if BUILD_TARGET_PC
+    u8 pad_0[0x1E]; /* castle9's PC layout: xD6 at +0x1E */
+#else
     /* +00 gp+C4 */ u8 pad_0[0x12];
+#endif
     /* +12 gp+D6 */ s16 xD6;
     /* +14 gp+D8 */ s16 xD8;
     /* +16 gp+DA */ s16 xDA;
@@ -1823,10 +1831,22 @@ struct grCastle_GroundVars8 {
 };
 
 struct grCastle_GroundVars9 {
+#if BUILD_TARGET_PC
+    /* The same Ground (map 3) keeps castle2/castle12's three satellite
+     * GObj* at gp+C4..CF and their s16 xD0/xD2 after them: 28 bytes on a
+     * 64-bit host, 16 on the console. Laid out from +0x10 as on the console,
+     * the spawn timer below sat on satellite slot 2, was zeroed every frame
+     * by grCastle_801CF868, and the castle's item spawner never fired. */
+    /* +00 */ uintptr_t xC4;
+    /* +08 */ uintptr_t xC8;
+    /* +10 */ uintptr_t xCC;
+    /* +18 */ u8 pad_xD0[4];
+#else
     /* +00   gp+C4 */ u32 xC4;
     /* +04   gp+C8 */ u32 xC8;
     /* +08   gp+CC */ u32 xCC;
     /* +0C   gp+D0 */ u8 pad_xD0[4];
+#endif
     /* +10   gp+D4 */ s16 xD4;
     /* +12   gp+D6 */ s16 xD6;
     /* +14   gp+D8 */ s16 xD8;
