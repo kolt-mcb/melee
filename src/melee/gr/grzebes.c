@@ -991,7 +991,11 @@ void grZebes_801D9758(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
     ftCo_800C07F8(gobj, 3, grZebes_801DCBFC);
+#if BUILD_TARGET_PC
+    gp->u.zebes5.xC8 = 1; /* zebes.x4 is 8 bytes here and cleared xCC too */
+#else
     gp->u.zebes.x4 = 1;
+#endif
 }
 
 void grZebes_801D9798(HSD_GObj* gobj)
@@ -1024,7 +1028,11 @@ void grZebes_801D9798(HSD_GObj* gobj)
     gp->u.zebes5.xC8 = 0;
     gp->u.zebes5.xCC = 0.0f;
     gp->u.zebes5.xD0 = 0.0f;
+#if BUILD_TARGET_PC
+    gp->u.zebes4.xDC = NULL; /* 801DA254's LObj cache, read via zebes4 */
+#else
     gp->u.zebes5.xDC = 0;
+#endif
     gp->x11_flags.b012 = 1;
 
     for (j = 0;

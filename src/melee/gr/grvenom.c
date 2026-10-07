@@ -1421,11 +1421,21 @@ void grVenom_802056B0(Ground_GObj* gobj)
     gp->u.venom.xC8 = grVe_804D6A34;
     joint_idx = grVe_803E5380;
     joints = grVe_803E5680;
+#if BUILD_TARGET_PC
+    /* The wing's pose is read through u.arwing (grVenom_80205758), as in
+     * grcorneria.c's wing init; zero those, not venom's host offsets. */
+    gp->u.arwing.xD0 = 0;
+    gp->u.arwing.xDC = 0.0F;
+    gp->u.arwing.xE0.z = 0.0F;
+    gp->u.arwing.xE0.y = 0.0F;
+    gp->u.arwing.xE0.x = 0.0F;
+#else
     gp->u.venom.xD0 = 0;
     gp->u.venom.xDC = 0.0F;
     gp->u.venom.xE8 = 0.0F;
     gp->u.venom.xE4 = 0.0F;
     gp->u.venom.xE0 = 0.0F;
+#endif
     joint_offset = joint_idx[gp->u.venom.xC8];
     joint_id = joints[joint_offset];
     mpJointListAdd(joint_id);
@@ -1811,12 +1821,26 @@ void grVenom_80205F30(Ground_GObj* gobj)
 #endif
                 lb_8000B1CC(Ground_801C3FA4(gobj, anim_id), NULL, &sp94);
             }
+#if BUILD_TARGET_PC
+            /* Console gp+DC is the link Ground_LinkStarFoxArwing stores as
+             * u.starfox.linked_gobj (+24 on the host; venom.linked_gobj is
+             * +40 and was always NULL here), and the wing reads its pose
+             * through u.arwing in grVenom_80205758. Through the other views
+             * the wing platforms never followed their Arwing. */
+            if (gp->u.starfox.linked_gobj != NULL) {
+                Ground* sub = gp->u.starfox.linked_gobj->user_data;
+                if (sub != NULL) {
+                    sub->u.arwing.xE0 = sp94;
+                }
+            }
+#else
             if (gp->u.venom.linked_gobj != NULL) {
                 Ground* sub = gp->u.venom.linked_gobj->user_data;
                 if (sub != NULL) {
                     *(Vec3*) &sub->u.venom.xE0 = sp94;
                 }
             }
+#endif
 
             {
                 f32 rot_z;
@@ -1832,12 +1856,21 @@ void grVenom_80205F30(Ground_GObj* gobj)
 #endif
                 helper = Ground_801C3FA4(gobj, anim_id);
                 rot_z = HSD_JObjGetRotationZ(helper);
+#if BUILD_TARGET_PC
+                if (gp->u.starfox.linked_gobj != NULL) {
+                    Ground* sub = gp->u.starfox.linked_gobj->user_data;
+                    if (sub != NULL) {
+                        sub->u.arwing.xDC = rot_z;
+                    }
+                }
+#else
                 if (gp->u.venom.linked_gobj != NULL) {
                     Ground* sub = gp->u.venom.linked_gobj->user_data;
                     if (sub != NULL) {
                         sub->u.venom.xDC = rot_z;
                     }
                 }
+#endif
             }
             break;
         case 8:
@@ -2128,9 +2161,16 @@ bool grVenom_80206BF0(int arg0)
     wgobj = grVenom_80203EAC(8);
     HSD_ASSERT(2244, wgobj);
     gp = wgobj->user_data;
+#if BUILD_TARGET_PC
+    /* Read back by Ground_UpdateStarFoxSequence through u.starfox. */
+    gp->u.starfox.xCC = 10;
+    gp->u.starfox.arwing_slot = 0;
+    gp->u.starfox.xC4.word = var_r30;
+#else
     gp->u.venom.xCC = 10;
     gp->u.venom.xC8 = 0;
     gp->u.venom.xC4 = var_r30;
+#endif
     return 1;
 }
 
