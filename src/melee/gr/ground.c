@@ -6,6 +6,7 @@
 #include "port/log.h"
 #if BUILD_TARGET_PC
 #include "port/pc_itconv.h"
+#include "port/pc_scene.h"
 #endif
 #endif
 
@@ -1756,6 +1757,17 @@ static inline bool find_light_override(UnkArchiveStruct* archive,
 
     if (count != 0) {
         for (i = 0; i < count; i++) {
+#if BUILD_TARGET_PC
+            const GrLightOverridePC* arr = dat->unk18;
+            if (arr != NULL && arr[i].raw_desc != NULL &&
+                arr[i].raw_desc == pc_scene_light_desc_origin(desc))
+            {
+                *b6 = (arr[i].flags >> 6) & 1;
+                *b7 = (arr[i].flags >> 7) & 1;
+                *b5 = (arr[i].flags >> 5) & 1;
+                return true;
+            }
+#else
             LightOverrideEntry* arr = dat->unk18;
             if (arr[i].desc == desc) {
                 *b6 = arr[i].b;
@@ -1763,6 +1775,7 @@ static inline bool find_light_override(UnkArchiveStruct* archive,
                 *b5 = arr[i].c;
                 return true;
             }
+#endif
         }
     }
     return false;
@@ -1779,6 +1792,17 @@ static inline bool find_light_override_in_dat(UnkStageDat* dat,
     (void) dat;
     if (count != 0) {
         for (i = 0; i < count; i++) {
+#if BUILD_TARGET_PC
+            const GrLightOverridePC* arr = array_dat->unk18;
+            if (arr != NULL && arr[i].raw_desc != NULL &&
+                arr[i].raw_desc == pc_scene_light_desc_origin(desc))
+            {
+                *b6 = (arr[i].flags >> 6) & 1;
+                *b7 = (arr[i].flags >> 7) & 1;
+                *b5 = (arr[i].flags >> 5) & 1;
+                return true;
+            }
+#else
             LightOverrideEntry* arr = array_dat->unk18;
             if (arr[i].desc == desc) {
                 *b6 = arr[i].b;
@@ -1786,6 +1810,7 @@ static inline bool find_light_override_in_dat(UnkStageDat* dat,
                 *b5 = arr[i].c;
                 return true;
             }
+#endif
         }
     }
     return false;

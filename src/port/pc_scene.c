@@ -267,6 +267,34 @@ static void* conv_light_attn(u32 off, u8* dataBase, unsigned long size)
     return out;
 }
 
+/* Host light descs remember the file bytes they came from: stage light
+ * override tables (UnkStageDat::unk18) name descs by archive offset, and
+ * every conversion of a light list makes fresh copies. A ring, searched
+ * newest first, so a reused heap address resolves to its latest source. */
+#define PC_LIGHT_ORIGIN_MAX 512
+static struct {
+    const HSD_LightDesc* host;
+    const u8* raw;
+} pc_light_origin[PC_LIGHT_ORIGIN_MAX];
+static unsigned pc_light_origin_n;
+
+const void* pc_scene_light_desc_origin(const HSD_LightDesc* host)
+{
+    unsigned i, n;
+    if (host == NULL) {
+        return NULL;
+    }
+    n = pc_light_origin_n < PC_LIGHT_ORIGIN_MAX ? pc_light_origin_n
+                                                : PC_LIGHT_ORIGIN_MAX;
+    for (i = 0; i < n; i++) {
+        unsigned k = (pc_light_origin_n - 1 - i) % PC_LIGHT_ORIGIN_MAX;
+        if (pc_light_origin[k].host == host) {
+            return pc_light_origin[k].raw;
+        }
+    }
+    return NULL;
+}
+
 /* HSD_LightDesc, 0x18 on GameCube, and a `next` chain. */
 static HSD_LightDesc* conv_light(u32 off, u8* dataBase, int depth)
 {
@@ -281,6 +309,9 @@ static HSD_LightDesc* conv_light(u32 off, u8* dataBase, int depth)
     if (out == NULL) {
         return NULL;
     }
+    pc_light_origin[pc_light_origin_n % PC_LIGHT_ORIGIN_MAX].host = out;
+    pc_light_origin[pc_light_origin_n % PC_LIGHT_ORIGIN_MAX].raw = r;
+    pc_light_origin_n++;
     out->class_name = conv_class_name(be32(r + 0x00), dataBase);
     out->flags = be16(r + 0x08);
     out->attnflags = be16(r + 0x0A);

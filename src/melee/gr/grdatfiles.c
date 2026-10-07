@@ -576,8 +576,30 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
             }
         }
     }
-    x64Dat->unk18 = gcn_ptr_to_x64(be32_swap(gcnDat->unk18), dataBase);
+    x64Dat->unk18 = NULL;
     x64Dat->unk1C = be32_swap(gcnDat->unk1C);
+    {
+        u32 tab = be32_swap(gcnDat->unk18);
+        s32 cnt = x64Dat->unk1C;
+        if (tab != 0 && tab < PC_ARCHIVE_MAX_OFFSET && cnt > 0 && cnt < 256) {
+            GrLightOverridePC* rows =
+                lbHeap_80015BD0(0, (u32) cnt * sizeof(GrLightOverridePC));
+            if (rows != NULL) {
+                s32 li;
+                for (li = 0; li < cnt; li++) {
+                    const u8* e = dataBase + tab + li * 8;
+                    u32 d = be32_swap(*(const u32*) e);
+                    rows[li].raw_desc =
+                        (d != 0 && d < PC_ARCHIVE_MAX_OFFSET) ? dataBase + d
+                                                              : NULL;
+                    rows[li].flags = e[4];
+                }
+                x64Dat->unk18 = rows;
+            }
+        } else {
+            x64Dat->unk1C = 0;
+        }
+    }
     x64Dat->unk20 = gcn_ptr_to_x64(be32_swap(gcnDat->unk20), dataBase);
     x64Dat->unk24 = be32_swap(gcnDat->unk24);
     /* unk28 is consumed above (the flag is applied to the raw descriptors

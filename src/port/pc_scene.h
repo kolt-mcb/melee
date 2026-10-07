@@ -54,6 +54,8 @@ HSD_CObjDesc* pc_conv_CObjDescAt(const void* slot, u8* dataBase);
 /* As above, but given the descriptor's own address rather than a slot. */
 HSD_CObjDesc* pc_conv_CObjDescRaw(const void* raw, u8* dataBase);
 HSD_LightDesc* pc_conv_LightDescAt(const void* slot, u8* dataBase);
+/* The file bytes a host light desc was converted from, or NULL. */
+const void* pc_scene_light_desc_origin(const HSD_LightDesc* host);
 #endif
 
 #endif /* PORT_PC_SCENE_H */

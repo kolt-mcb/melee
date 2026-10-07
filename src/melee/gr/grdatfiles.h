@@ -48,6 +48,15 @@ struct MapCollData* grDatFiles_ConvertMapCollDataGCNtoX64(const u8* raw,
 void grDatFiles_ResetJointMap(void);
 /* The host HSD_ImageDesc converted from these raw archive bytes, or NULL. */
 struct HSD_ImageDesc* grDatFiles_LookupImageDesc(const void* raw);
+/* UnkStageDat::unk18 on PC. The file rows are 8 bytes, {desc offset, flag
+ * byte}; the descs they name only exist on the host as copies, so each row
+ * keeps the raw desc address and Ground_801C20E0 compares it with
+ * pc_scene_light_desc_origin(). flags is the file byte: a 0x80, b 0x40,
+ * c 0x20. */
+typedef struct GrLightOverridePC {
+    const void* raw_desc;
+    u8 flags;
+} GrLightOverridePC;
 #endif /* BUILD_TARGET_PC */
 
 
