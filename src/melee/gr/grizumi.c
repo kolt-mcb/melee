@@ -421,7 +421,16 @@ void grIzumi_801CBE64(Ground_GObj* gobj)
             HSD_GObj* plat =
                 grIzumi_801CCBDC(yakumono_param->x0, &x38, 0, gp->u.izumi.xD0);
             Ground* platground = GET_GROUND(plat);
+#if BUILD_TARGET_PC
+            /* The platform reads this as izumi3.xDC. Both are +0xDC on the
+             * console, but izumi2 opens with two pointers, so on a 64-bit
+             * host its xDC is 4 bytes further on and the platform's centre
+             * height read as 0: its up/down choice and the Randf that makes
+             * it went another way from the first move (frame ~990). */
+            platground->u.izumi3.xDC = yakumono_param->xC;
+#else
             platground->u.izumi2.xDC = yakumono_param->xC;
+#endif
             platground->x10_flags.b3 = 1;
             platground->x18 = gp->u.izumi.xC8;
         }
@@ -431,7 +440,16 @@ void grIzumi_801CBE64(Ground_GObj* gobj)
             HSD_GObj* plat =
                 grIzumi_801CCBDC(yakumono_param->x8, &x38, 1, gp->u.izumi.xD4);
             Ground* platground = GET_GROUND(plat);
+#if BUILD_TARGET_PC
+            /* The platform reads this as izumi3.xDC. Both are +0xDC on the
+             * console, but izumi2 opens with two pointers, so on a 64-bit
+             * host its xDC is 4 bytes further on and the platform's centre
+             * height read as 0: its up/down choice and the Randf that makes
+             * it went another way from the first move (frame ~990). */
+            platground->u.izumi3.xDC = yakumono_param->xC;
+#else
             platground->u.izumi2.xDC = yakumono_param->xC;
+#endif
             platground->x10_flags.b3 = 1;
             platground->x18 = gp->u.izumi.xC8;
         }
