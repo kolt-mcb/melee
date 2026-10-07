@@ -599,7 +599,14 @@ void ftCo_8009E4A8(Fighter* fp)
             return;
         }
 #endif
+#if BUILD_TARGET_PC
+        /* pc_ftconv sizes the table at FT_DYNSLOT_MAX entries. */
+        tree = ((unsigned) fp->x28[fp->anim_id][1] < FT_DYNSLOT_MAX)
+                   ? fp->ft_data->x2C->x10[fp->x28[fp->anim_id][1]]
+                   : NULL;
+#else
         tree = fp->ft_data->x2C->x10[fp->x28[fp->anim_id][1]];
+#endif
         if (tree != NULL) {
             for (i = 0; i < fp->dynamics_num; i++) {
                 ftCo_8009CB40(fp, i, 1, tree[i]);
@@ -733,7 +740,13 @@ void ftCo_8009E7B4(Fighter* fp, u8 (*arg1)[2])
                         }
                         return;
                     }
+#if BUILD_TARGET_PC
+                    tree = ((unsigned) blend_slot < FT_DYNSLOT_MAX)
+                               ? dyn[blend_slot]
+                               : NULL;
+#else
                     tree = dyn[blend_slot];
+#endif
                     if (tree == NULL) {
                         for (i = 0; i < fp->dynamics_num; i++) {
                             ftCo_8009CB40(fp, i, 0, NULL);

@@ -1361,6 +1361,27 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                         if (f0 != 0 && f0 < xoff && (xoff - f0) % stride == 0) {
                             slots = (xoff - f0) / stride;
                         }
+                        /* Mewtwo's arrays follow the table instead (f0 >
+                         * xoff), so no count can be inferred and his table
+                         * came out NULL: every chain fully simulated, where
+                         * the console has his taunt drive the tail's head.
+                         * Then take the table's leading run of entries that
+                         * are 0 or point at a whole array inside the file;
+                         * slots past the real ones are never indexed. */
+                        if (slots == 0 && f0 != 0) {
+                            while (slots < FT_DYNSLOT_MAX &&
+                                   xoff + (slots + 1) * 4u <= len)
+                            {
+                                u32 ao = pc_be32(
+                                    ((const u32*) (base + xoff))[slots]);
+                                if (ao != 0 &&
+                                    ((ao & 3) != 0 || ao + stride > len))
+                                {
+                                    break;
+                                }
+                                slots++;
+                            }
+                        }
                         if (slots > FT_DYNSLOT_MAX) {
                             slots = FT_DYNSLOT_MAX;
                         }
