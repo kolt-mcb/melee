@@ -45,7 +45,15 @@ void ft_800D76B8(Fighter_GObj* gobj)
             f32 x2340;
             s32 x2344;
         } ItemScopeVars;
+#if BUILD_TARGET_PC
+        /* mv.co+0/+4, as fn_800D79B4 reads them. Cast onto fp itself these
+         * landed on fp->x1980 (an HSD_GObj*) on the host, zeroing it, and
+         * the charge timer and released flag were never reset. */
+        ItemScopeVars* vars = (ItemScopeVars*) ((char*) &fp->mv.co -
+                                                offsetof(ItemScopeVars, x2340));
+#else
         ItemScopeVars* vars = (ItemScopeVars*) fp;
+#endif
 
         ftAnim_8006EBA4(gobj);
         vars->x2340 = 0.0F;
@@ -74,7 +82,15 @@ void ft_800D7770(Fighter_GObj* gobj)
             f32 x2340;
             s32 x2344;
         } ItemScopeVars;
+#if BUILD_TARGET_PC
+        /* mv.co+0/+4, as fn_800D79B4 reads them. Cast onto fp itself these
+         * landed on fp->x1980 (an HSD_GObj*) on the host, zeroing it, and
+         * the charge timer and released flag were never reset. */
+        ItemScopeVars* vars = (ItemScopeVars*) ((char*) &fp->mv.co -
+                                                offsetof(ItemScopeVars, x2340));
+#else
         ItemScopeVars* vars = (ItemScopeVars*) fp;
+#endif
 
         ftAnim_8006EBA4(gobj);
         ftCommon_ClampAirDrift(fp);
@@ -128,8 +144,13 @@ void fn_800D7938(Fighter_GObj* gobj)
     temp_r30 = gobj;
     temp_r31 = GET_FIGHTER(temp_r30);
     if (temp_r31->item_gobj != NULL) {
+#if BUILD_TARGET_PC
+        temp_r4 = it_80291DAC(temp_r31->item_gobj,
+                              (s32) *(f32*) &temp_r31->mv.co);
+#else
         temp_r4 = it_80291DAC(temp_r31->item_gobj,
                               (s32) ((FighterOverlay*) temp_r31)->x2340);
+#endif
         if (temp_r4 != -1) {
             it_80291F14(temp_r31->item_gobj, temp_r4);
         }
