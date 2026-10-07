@@ -1161,6 +1161,54 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
     r = a->base + spec_off;
 
     switch (kind) {
+    case It_Kind_Kyasarin: {
+        /* Birdo's block starts with a pointer (x0) and is all 32-bit after
+         * it. Flat-swapped, x0 was eight bytes here and every field read one
+         * word late: the walking speed x4 came from x8, 20 for 0.4, and
+         * Birdo crossed Mushroom Kingdom II fifty times too fast and pushed
+         * fighters off it. x0 is not read. */
+        itKyasarinAttributes* k;
+        if (spec_off + 0x4C > a->len) {
+            return;
+        }
+        k = zalloc(sizeof(*k));
+        if (k == NULL) {
+            return;
+        }
+        k->x0 = NULL;
+        conv_scalars(&k->x4, r + 4, 0x48);
+        art->x4_specialAttributes = k;
+        break;
+    }
+    case It_Kind_Old_Otto:
+    case It_Kind_Whitebea: {
+        /* The octopus (Old Kongo) and the polar bear (Icicle Mountain) read
+         * the same layout: a pointer to {s32, f32} at x0, then scalars, with
+         * single bytes at 0x10 and 0x28. Same eight-byte-pointer shift as
+         * Birdo's above. */
+        itOldottoseaAttributes* o;
+        u32 sub;
+        if (spec_off + 0x2C > a->len) {
+            return;
+        }
+        o = zalloc(sizeof(*o));
+        if (o == NULL) {
+            return;
+        }
+        sub = be32(r);
+        if (sub != 0 && sub + 8 <= a->len) {
+            o->x0 = zalloc(8);
+            if (o->x0 != NULL) {
+                conv_scalars(o->x0, a->base + sub, 8);
+            }
+        }
+        conv_scalars(&o->x4, r + 4, 0xC);
+        o->x10 = (s8) r[0x10];
+        conv_scalars(&o->x14, r + 0x14, 0x14);
+        o->x28 = (s8) r[0x28];
+        art->x4_specialAttributes = o;
+        break;
+    }
     case It_Kind_WStar: {
         /* The Warp Star's attribute block ends in an array of
          * {HSD_AnimJoint*, sfx} entries -- eight bytes each on the console,
