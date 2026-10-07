@@ -1976,7 +1976,27 @@ HSD_Joint* grDatFiles_ConvertJointTreeGCNtoX64(const u8* gcnJointPtr,
                 ? grDatFiles_ConvertSplineGCNtoX64(dataBase + val, dataBase)
                 : NULL;
     } else if ((x64Joint->flags & JOBJ_PTCL) != 0) {
-        x64Joint->u.dobjdesc = NULL;
+        /* A particle joint: the payload is an HSD_SList of packed
+         * bank/offset words ({u32 next, u32 data} in the file) that
+         * HSD_JObjDispSub hands to efLib_Cb_SPtcl. Leaving it NULL lost
+         * every stage-attached particle (torches, sparkles, smoke). */
+        HSD_SList* head = NULL;
+        HSD_SList** tail = &head;
+        u32 so = val;
+        int guard = 0;
+        while (so != 0 && so < PC_ARCHIVE_MAX_OFFSET && guard++ < 256) {
+            HSD_SList* node = lbHeap_80015BD0(0, sizeof(HSD_SList));
+            if (node == NULL) {
+                break;
+            }
+            node->next = NULL;
+            node->data = (void*) (uintptr_t) be32_swap(
+                *(const u32*) (dataBase + so + 4));
+            *tail = node;
+            tail = &node->next;
+            so = be32_swap(*(const u32*) (dataBase + so));
+        }
+        x64Joint->u.ptcl = head;
     } else if (val != 0 && val < 0x80000000U) {
         /* PC port: mark this joint as current so its POBJ_SKIN PObjDescs (which
          * carry no explicit joint ref) are parented to it. */
