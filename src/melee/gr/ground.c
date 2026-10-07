@@ -3013,9 +3013,14 @@ void Ground_801C36F4(int map_id, HSD_JObj* root, UNK_T joint)
     UnkStageDat* stage_dat;
     UnkArchiveStruct* archive;
     int entry_count;
+    /* The same 12-byte console entries Ground_801C34AC walks, spelled the
+     * same way. As {void*, u8[8]} they were 16 bytes on the host against the
+     * filler's 24, so past entry 0 the lookup read between entries and
+     * returned without clearing x280. */
     struct {
         void* joint;
-        u8 x4_pad[0x8];
+        s16* pairs;
+        s32 pair_count;
     }* entry;
     int i;
     u32 unused[4];
@@ -3050,6 +3055,40 @@ void Ground_801C36F4(int map_id, HSD_JObj* root, UNK_T joint)
         jobj = stage_info.x280[i];
         (void) jobj;
         if (jobj != NULL) {
+#if BUILD_TARGET_PC
+            /* A slot can still hold a joint whose object is gone; its memory
+             * has since been reused, and the parent chain it now reads ends
+             * in garbage (Icicle Mountain, ~2500 frames in: a wild address
+             * two links up). The console follows the same chain through its
+             * own freed memory and simply never reaches `root`, so the slot
+             * stays. Stop at the first link outside the game's pool and do
+             * the same. */
+            {
+                extern int pc_lowmem_contains(const void* p);
+                int stale = 0;
+                if (!pc_lowmem_contains(jobj)) {
+                    static int warned;
+                    if (!warned && getenv("MELEE_STAGE_DIAG") != NULL) {
+                        warned = 1;
+                        fprintf(stderr,
+                                "[X280] slot %d holds %p, not a joint\n", i,
+                                (void*) jobj);
+                    }
+                    continue;
+                }
+                while (jobj->parent != NULL) {
+                    if (!pc_lowmem_contains(jobj->parent)) {
+                        stale = 1;
+                        break;
+                    }
+                    jobj = jobj->parent;
+                }
+                if (!stale && jobj == root) {
+                    stage_info.x280[i] = NULL;
+                }
+                continue;
+            }
+#endif
             while (jobj->parent != NULL) {
                 jobj = jobj->parent;
             }
