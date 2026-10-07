@@ -23,8 +23,17 @@ HSD_AnimJoint* it_80293660(int idx)
      * the words are file offsets rather than pointers. src/port/pc_itconv.c
      * converts the two trees when it builds the article. */
     extern void* pc_kinoko_anim[2];
+    extern Article* pc_itconv_table_get(Article** table, int idx);
     if (idx < 0 || idx > 1) {
         return NULL;
+    }
+    /* The article converts on its first lookup, which is also what fills
+     * pc_kinoko_anim. A poison mushroom can be the first mushroom of a
+     * match, and its fighter then asked for the animations of a Kinoko
+     * article no Kinoko had looked up yet: NULL, so the shrink never
+     * animated and the fighter jumped straight to half size. */
+    if (pc_kinoko_anim[idx] == NULL && it_804D6D24 != NULL) {
+        (void) pc_itconv_table_get(it_804D6D24, It_Kind_Kinoko);
     }
     return (HSD_AnimJoint*) pc_kinoko_anim[idx];
 #else
