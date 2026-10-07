@@ -191,6 +191,25 @@ struct grIceMt_YakumonoParam {
 /* 1F9150 */ static int fn_801F9150(Ground_GObj* gobj, int* out);
 /* 1F91A8 */ static int fn_801F91A8(Ground_GObj*);
 /* 1F929C */ static void grIceMt_801F929C(HSD_GObj* arg0, void* arg1);
+
+/* The rising platforms' state blocks (seven s16 each). On the console they
+ * sit in icemt1.x34[] past the material items -- gp+100 and gp+10E for map
+ * 2, gp+108 for map 4 -- and are reached as a raw gp+0x100, as
+ * icemt1.x34[2]/[4] and as icemt.x100/x108, all one address. On the host
+ * those are three addresses, two of them on top of icemt1's joint pointers:
+ * the initialiser overwrote icemt1.x4 (which grIceMt_801F98A8 then put in
+ * respawn slot 0 as 0x27E01090025) and the per-frame update and the
+ * collision callbacks never saw each other's state. One place each here,
+ * still past the items the cleanup loops free. */
+#if BUILD_TARGET_PC
+#define IM_STATE_2A(gp) ((s16*) &(gp)->u.icemt1.x34[2])
+#define IM_STATE_2B(gp) ((s16*) &(gp)->u.icemt1.x34[4])
+#define IM_STATE_4(gp) ((s16*) &(gp)->u.icemt1.x34[4])
+#else
+#define IM_STATE_2A(gp) ((s16*) ((u8*) (gp) + 0x100))
+#define IM_STATE_2B(gp) (&(gp)->u.icemt.x108[3])
+#define IM_STATE_4(gp) ((gp)->u.icemt.x108)
+#endif
 /* 1F9668 */ static void grIceMt_801F9668(float);
 /* 1F98A8 */ static void grIceMt_801F98A8(HSD_GObj* param1);
 /* 1F993C */ static float grIceMt_801F993C(int under_id, int upper_id);
@@ -1075,10 +1094,10 @@ void stageGObj2_OnInit(Ground_GObj* arg0)
     gp->u.icemt1.x0_b0 = false;
     sp14 = grIm_804DB58C;
     grIceMt_801F8CDC(arg0, (s16*) &sp14, 2, &gp->u.icemt1.x34[0]);
-    grIceMt_801F91EC(arg0, (s16*) ((u8*) gp + 0x100),
+    grIceMt_801F91EC(arg0, IM_STATE_2A(gp),
                      grIceMt_801FA500(arg0, jobj), -1, 0x25, 0x109, 0x27E,
                      fn_801F9338);
-    grIceMt_801F91EC(arg0, &gp->u.icemt.x108[3], grIceMt_801FA500(arg0, jobj2),
+    grIceMt_801F91EC(arg0, IM_STATE_2B(gp), grIceMt_801FA500(arg0, jobj2),
                      -1, 38, 265, 638, fn_801F9448);
 }
 
@@ -1090,8 +1109,8 @@ bool stageGObj2_Callback1(Ground_GObj* param1)
 void stageGObj2_GObjProc(Ground_GObj* param1)
 {
     Ground* gp = GET_GROUND(param1);
-    grIceMt_801F929C(param1, &gp->u.icemt1.x34[2]);
-    grIceMt_801F929C(param1, &gp->u.icemt.x108[3]);
+    grIceMt_801F929C(param1, IM_STATE_2A(gp));
+    grIceMt_801F929C(param1, IM_STATE_2B(gp));
     grIceMt_801F98A8(param1);
     Ground_UpdateMapColl(param1);
 }
@@ -1198,7 +1217,7 @@ void stageGObj4_OnInit(Ground_GObj* arg0)
     sp14.x4 = grIm_804DB59C;
     grIceMt_801F8CDC(arg0, (s16*) &sp14, 4, &gp->u.icemt1.x34[0]);
     r = grIceMt_801FA500(arg0, jobj3);
-    grIceMt_801F91EC(arg0, gp->u.icemt.x108, grIceMt_801FA500(arg0, jobj2), r,
+    grIceMt_801F91EC(arg0, IM_STATE_4(gp), grIceMt_801FA500(arg0, jobj2), r,
                      117, 265, 638, fn_801F9558);
 }
 
@@ -1210,7 +1229,7 @@ bool stageGObj4_Callback1(Ground_GObj* param1)
 void stageGObj4_GObjProc(Ground_GObj* gobj)
 {
     Ground* gp = gobj->user_data;
-    grIceMt_801F929C(gobj, &gp->u.icemt1.x34[4]);
+    grIceMt_801F929C(gobj, IM_STATE_4(gp));
     grIceMt_801F98A8(gobj);
     Ground_UpdateMapColl(gobj);
 }
@@ -1602,7 +1621,7 @@ void fn_801F9338(void* user_data, int joint_id, CollData* coll, int coll_x50,
     {
         HSD_GObj* gobj;
         Ground* gp = user_data;
-        s16* s = gp->u.icemt.x100;
+        s16* s = IM_STATE_2A(gp);
         if ((s32) coll->x34_flags.b1234 == 1 && s[0] == 0) {
             gobj = Ground_GetMapGObj(2);
             s[0] = 1;
@@ -1628,7 +1647,7 @@ void fn_801F9448(void* user_data, int joint_id, CollData* coll, int coll_x50,
     {
         HSD_GObj* gobj;
         Ground* gp = user_data;
-        s16* s = &gp->u.icemt.x108[3];
+        s16* s = IM_STATE_2B(gp);
         if ((s32) coll->x34_flags.b1234 == 1 && s[0] == 0) {
             gobj = Ground_GetMapGObj(2);
             s[0] = 1;
@@ -1654,7 +1673,7 @@ void fn_801F9558(void* user_data, int joint_id, CollData* coll, int coll_x50,
     {
         HSD_GObj* gobj;
         Ground* gp = user_data;
-        s16* s = gp->u.icemt.x108;
+        s16* s = IM_STATE_4(gp);
         if ((s32) coll->x34_flags.b1234 == 1 && s[0] == 0) {
             gobj = Ground_GetMapGObj(4);
             s[0] = 1;

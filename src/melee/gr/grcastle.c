@@ -173,7 +173,15 @@ struct grCastle_YakumonoParam {
     /* 0x05A */ u8 pad_x5A[2];
     /* 0x05C */ grCastleParams_Entry entries[9];
     /* 0x110 */ f32 x110;
+#if BUILD_TARGET_PC
+    /* The colour script's archive offset (pc_grconv_stage_script). As a
+     * void* it was eight bytes at an eight-byte boundary and every field
+     * after it -- camera extents, platform timers -- read eight bytes late
+     * out of the converted block. */
+    /* 0x114 */ u32 x114;
+#else
     /* 0x114 */ void* x114;
+#endif
     /* 0x118 */ f32 x118;
     /* 0x11C */ f32 x11C;
     /* 0x120 */ f32 x120;

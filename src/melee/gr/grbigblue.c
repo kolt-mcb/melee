@@ -2630,9 +2630,17 @@ s32 grBigBlue_801EACE8(HSD_JObj* exclude, Vec3* point, f32* out_y,
             continue;
         }
 
+#if BUILD_TARGET_PC
+        /* data[i].x1 (gp+E5 + i*0x54 on the console); the raw offset read
+         * Ground's own header here, not the car slot's state. */
+        if ((int) (s8) gp->u.bigblue.data[i].x1 != 3) {
+            continue;
+        }
+#else
         if ((int) ((u8*) gp)[0xE5 + i * 0x54] != 3) {
             continue;
         }
+#endif
 
         HSD_JObjGetTranslation2(jobj, &pos);
 
