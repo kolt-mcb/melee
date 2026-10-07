@@ -279,9 +279,14 @@ bool it_802D8EC8(Item_GObj* gobj)
      * stage's own enemies do not always have them converted, and this one is
      * reached from Classic's bonus stages; without the check it faults at
      * zero. Treat a missing table as "not yet at the threshold". */
+    /* Word 0 of the attribute block is a pointer on the console; the flat
+     * copy here holds its archive offset, and read as an eight-byte pointer
+     * it was two words glued together -- Yoshi's Story faulted here when a
+     * Shy Guy was hit (match frame ~1000). pc_itconv resolves it. */
+    extern s32* pc_heiho_threshold;
     if (ip->xC4_article_data == NULL ||
         ip->xC4_article_data->x4_specialAttributes == NULL ||
-        *(s32**) ip->xC4_article_data->x4_specialAttributes == NULL)
+        pc_heiho_threshold == NULL)
     {
         static int said;
         if (!said) {
@@ -300,7 +305,11 @@ bool it_802D8EC8(Item_GObj* gobj)
         ip->xDD4_itemVar.heiho.x54 = NULL;
     }
     ip->xDCC_flag.b3 = 1;
+#if BUILD_TARGET_PC
+    if (ip->xC9C > (s32) (*pc_heiho_threshold * 0.8F)) {
+#else
     if (ip->xC9C > (s32) (**attr * 0.8F)) {
+#endif
         it_8027CE44(gobj);
         it_802D8EC8_inline(gobj);
         it_802D98AC(gobj);

@@ -1145,6 +1145,13 @@ static void conv_scalars(void* dst, const u8* src, unsigned long nbytes)
  * here; see the It_Kind_Kinoko case below. */
 void* pc_kinoko_anim[2];
 
+/* itheiho.c's it_802D8EC8 reads the Shy Guy's attribute word 0 as a pointer
+ * to an s32 (its spin threshold) and every other word as a float array by
+ * index. The flat swapped copy serves the floats; this holds what word 0
+ * points at, converted. NULL until a Heiho article is loaded. */
+s32* pc_heiho_threshold;
+static s32 pc_heiho_threshold_val;
+
 static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
                             int kind)
 {
@@ -1161,6 +1168,14 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
     r = a->base + spec_off;
 
     switch (kind) {
+    case It_Kind_Heiho: {
+        u32 sub = be32(r);
+        if (sub != 0 && sub + 4 <= a->len) {
+            pc_heiho_threshold_val = (s32) be32(a->base + sub);
+            pc_heiho_threshold = &pc_heiho_threshold_val;
+        }
+        break;
+    }
     case It_Kind_Kyasarin: {
         /* Birdo's block starts with a pointer (x0) and is all 32-bit after
          * it. Flat-swapped, x0 was eight bytes here and every field read one

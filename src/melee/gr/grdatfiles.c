@@ -84,6 +84,7 @@ void grDatFiles_801C5FC0(HSD_Archive* archive, void* data, size_t length)
  * and no background art. Real offsets are bounded by the archive's data
  * size; anything at or above 0x80000000 is a pointer, caught separately. */
 #define PC_ARCHIVE_MAX_OFFSET 0x4000000U
+static HSD_Spline* grDatFiles_ConvertSplineGCNtoX64(const u8* gcn, u8* dataBase);
 
 static inline u32 be32_swap(u32 x)
 {
@@ -516,8 +517,32 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
         }
     }
 
-    x64Dat->unk10 = (HSD_Spline**)gcn_ptr_to_x64(be32_swap(gcnDat->unk10), dataBase);
+    /* unk10 is an array of unk14 relocated HSD_Spline* -- four-byte offsets
+     * in the file. Handed over raw, Ground_801C247C indexed it with eight-
+     * byte pointers and returned two offsets glued together, and Kongo
+     * Jungle's travelling platform faulted on its first trip (frame 2072 of
+     * every match there). Convert the table and each spline it names. */
     x64Dat->unk14 = be32_swap(gcnDat->unk14);
+    x64Dat->unk10 = NULL;
+    {
+        u32 tab = be32_swap(gcnDat->unk10);
+        s32 cnt = x64Dat->unk14;
+        if (tab != 0 && tab < PC_ARCHIVE_MAX_OFFSET && cnt > 0 && cnt < 256) {
+            HSD_Spline** list =
+                lbHeap_80015BD0(0, (u32) cnt * sizeof(HSD_Spline*));
+            if (list != NULL) {
+                s32 si;
+                for (si = 0; si < cnt; si++) {
+                    u32 so = be32_swap(*(const u32*) (dataBase + tab + si * 4));
+                    list[si] = (so != 0 && so < PC_ARCHIVE_MAX_OFFSET)
+                                   ? grDatFiles_ConvertSplineGCNtoX64(
+                                         dataBase + so, dataBase)
+                                   : NULL;
+                }
+                x64Dat->unk10 = list;
+            }
+        }
+    }
     x64Dat->unk18 = gcn_ptr_to_x64(be32_swap(gcnDat->unk18), dataBase);
     x64Dat->unk1C = be32_swap(gcnDat->unk1C);
     x64Dat->unk20 = gcn_ptr_to_x64(be32_swap(gcnDat->unk20), dataBase);
