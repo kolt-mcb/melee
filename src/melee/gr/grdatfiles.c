@@ -354,8 +354,25 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
             x64Arr[i].unkC = (HSD_ShapeAnimJoint**) grdat_conv_anim_set_array(
                 pval, dataBase, GRDAT_SHAPEANIMJOINT);
 
+            /* The map's camera: a GCN HSD_CameraDescPerspective (class name,
+             * WObj descs, four-byte pointers). Left raw, Ground_801C3BB4
+             * handed it to HSD_CObjLoadDesc, which read the class-name
+             * pointer as two words glued together and faulted -- Corneria's
+             * and Venom's down-taunt conversation, the only maps that load
+             * it. Converted here, once. */
             pval = be32_swap(*(const u32*)(ep + 0x10));
-            x64Arr[i].x10 = (HSD_CameraDescPerspective*)gcn_ptr_to_x64(pval, dataBase);
+            x64Arr[i].x10 = (pval != 0 && pval < PC_ARCHIVE_MAX_OFFSET)
+                                ? grDatFiles_ConvertCameraDescGCNtoX64(
+                                      dataBase + pval, dataBase)
+                                : NULL;
+            if (x64Arr[i].x10 != NULL && getenv("MELEE_STAGE_DIAG") != NULL) {
+                HSD_CameraDescPerspective* cd = x64Arr[i].x10;
+                fprintf(stderr,
+                        "[GRCAM] map %d camera desc converted: eye=%p "
+                        "interest=%p fov=%.2f\n",
+                        (int) i, (void*) cd->eyepos, (void*) cd->interest,
+                        (double) cd->fov);
+            }
 
             /* x18 is the map's own light list: a NULL-terminated array of
              * LightList offsets. Ground_801C466C_inline hands it straight to

@@ -206,8 +206,8 @@ void pc_render_stage_test(void)
         /* Dump each camera's eye+interest to identify the main stage view. */
         for (int i = 0; i < sd->unkC; i++) {
             if (sd->unk8[i].x10 == NULL) continue;
-            HSD_CameraDescPerspective* cd2 =
-                grDatFiles_ConvertCameraDescGCNtoX64((const u8*)sd->unk8[i].x10, dataBase);
+            /* The stage loader converts unk8[].x10 now. */
+            HSD_CameraDescPerspective* cd2 = sd->unk8[i].x10;
             if (!cd2) continue;
             HSD_CObj* c2 = lb_80013B14(cd2);
             if (c2) {
@@ -241,8 +241,7 @@ void pc_render_stage_test(void)
 
         /* Convert the camera desc (fixes GCN WObj/Vec pointers) and make a CObj. */
         if (sd->unk8[use].x10 != NULL) {
-            HSD_CameraDescPerspective* cd =
-                grDatFiles_ConvertCameraDescGCNtoX64((const u8*)sd->unk8[use].x10, dataBase);
+            HSD_CameraDescPerspective* cd = sd->unk8[use].x10;
             if (cd) {
                 s_cam = lb_80013B14(cd);
                 if (s_cam && stage_diag()) {
