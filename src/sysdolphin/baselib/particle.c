@@ -39,6 +39,7 @@ int baselib_mfspr(int spr);
 #include <dolphin/gx.h>
 #include <dolphin/os.h>
 #include <baselib/cobj.h>
+#include <baselib/wobj.h>
 #include <baselib/gobjobject.h>
 #include <baselib/mtx.h>
 #include <baselib/psappsrt.h>
@@ -8390,7 +8391,14 @@ f32 hsd_8039DAD4(HSD_Generator* gen)
     if ((gen->type & 0x100) && gen->jobj != NULL && (gen->type & 0x400) &&
         !(gen->kind & 0x30000))
     {
+#if BUILD_TARGET_PC
+        /* jobj+0x44 is HSD_JObj.mtx on the console only; here the host
+         * layout moves it, and the raw offset read rotation/scale/translate
+         * as a matrix. */
+        PSMTXCopy(((HSD_JObj*) gen->jobj)->mtx, jobj_mtx);
+#else
         PSMTXCopy((void*) ((u8*) gen->jobj + 0x44), jobj_mtx);
+#endif
 
         /* Extract and normalize each column of the 3x3 rotation */
         tmpvec.x = jobj_mtx[0][0];
@@ -8425,6 +8433,17 @@ f32 hsd_8039DAD4(HSD_Generator* gen)
     /* Billboard orientation: kind & 0x10000 */
     if (gen->kind & 0x10000) {
         HSD_ASSERT(677, psCamera);
+#if BUILD_TARGET_PC
+        /* cobj+0x24 / +0xC..0x14 are the eye WObj and its position on the
+         * console; on the host the raw offsets read the scissor box as a
+         * pointer and faulted on billboarded generators. */
+        {
+            HSD_CObj* cobj = psCamera;
+            look_dir.x = cobj->eyepos->pos.x - gen->pos.x;
+            look_dir.y = cobj->eyepos->pos.y - gen->pos.y;
+            look_dir.z = cobj->eyepos->pos.z - gen->pos.z;
+        }
+#else
         {
             HSD_CObj* cobj = psCamera;
             void* view = *(void**) ((u8*) cobj + 0x24);
@@ -8434,6 +8453,7 @@ f32 hsd_8039DAD4(HSD_Generator* gen)
             view = *(void**) ((u8*) cobj + 0x24);
             look_dir.z = *(f32*) ((u8*) view + 0x14) - gen->pos.z;
         }
+#endif
         PSVECNormalize(&look_dir, &look_dir);
         HSD_CObjGetUpVector(psCamera, &cam_up);
         PSVECNormalize(&cam_up, &cam_up);
