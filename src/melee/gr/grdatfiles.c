@@ -453,10 +453,26 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
             pval = be32_swap(*(const u32*)(ep + 0x28));
             x64Arr[i].x28 = gcn_ptr_to_x64(pval, dataBase);
 
-            pval = be32_swap(*(const u32*)(ep + 0x2C));
-            x64Arr[i].x2C = (s16*)gcn_ptr_to_x64(pval, dataBase);
-
+            /* x2C: x30 joint indices (s16) that Ground_801C3BB4 hands to
+             * Ground_801C3FA4. Left pointing at the file they stayed big-
+             * endian -- index 1 read as 256 -- the lookup found nothing and
+             * lb_8000F9F8 never ran on those joints. Swapped copy here. */
             x64Arr[i].x30 = be32_swap(*(const s32*)(ep + 0x30));
+            pval = be32_swap(*(const u32*)(ep + 0x2C));
+            x64Arr[i].x2C = NULL;
+            if (pval != 0 && pval < PC_ARCHIVE_MAX_OFFSET &&
+                x64Arr[i].x30 > 0 && x64Arr[i].x30 <= 0x1000)
+            {
+                s16* idx = lbHeap_80015BD0(0, sizeof(s16) * (size_t) x64Arr[i].x30);
+                if (idx != NULL) {
+                    int xi;
+                    for (xi = 0; xi < x64Arr[i].x30; xi++) {
+                        idx[xi] = (s16) be16_swap(
+                            *(const u16*) (dataBase + pval + xi * 2));
+                    }
+                    x64Arr[i].x2C = idx;
+                }
+            }
         }
         x64Dat->unk8 = x64Arr;
     } else {
@@ -3491,8 +3507,17 @@ GroundParam grDatFiles_803E0848 = {
     1,  0x80, { 0 }, 0x1E, 0,  1,     0x8000, 10,
     0,  0,    1,     1,    1,  { 0 }, 40,     10,
     50, 100,  10,    10,   10, 10,    false,  0,
+#if BUILD_TARGET_PC
+    0,  0,    30,    10,   0,  0,     { 0 },  0,
+#else
     0,  0,    30,    10,   0,  0,     { 0 },  &grDatFiles_803E07E4,
+#endif
     1,
 };
+#if BUILD_TARGET_PC
+_Static_assert(offsetof(GroundParam, stage_params) == 0xB0, "GroundParam");
+_Static_assert(offsetof(GroundParam, xB8) == 0xB8, "GroundParam colours");
+_Static_assert(offsetof(GroundParam, xD8) == 0xD8, "GroundParam colours");
+#endif
 
 UnkStageDat grDatFiles_803E0924 = { 0 };

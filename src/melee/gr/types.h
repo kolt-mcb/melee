@@ -2313,7 +2313,14 @@ struct GroundParam {
      * One row per #StKind this ground serves, looked up by
      * #StageParam::stkind.
      */
+#if BUILD_TARGET_PC
+    /* Raw big-endian archive offset (pc_stage_param_row reads it). Kept
+     * 4 bytes wide so the colours below stay at their file offsets; an
+     * 8-byte pointer here moved every one of them by 4. */
+    u32 stage_params;
+#else
     StageParam* stage_params;
+#endif
     s32 stage_param_count;
     GXColor xB8;
     GXColor xBC;

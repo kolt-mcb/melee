@@ -2147,7 +2147,12 @@ static void panicMissingStageParam(StKind stkind, s32 count)
     OSReport("             check StageParam.csv or StageItem.csv, stdata.c\n");
     {
         ssize_t i;
+#if BUILD_TARGET_PC
+        StageParam* p = NULL;
+        count = 0;
+#else
         StageParam* p = stage_info.param->stage_params;
+#endif
         for (i = 0; i < count; i++, p++) {
             OSReport(" stageid=%d\n", p->stkind);
         }
