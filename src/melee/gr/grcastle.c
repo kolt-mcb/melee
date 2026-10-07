@@ -1997,12 +1997,32 @@ void grCastle_801D0520(Ground_GObj* gobj, int renderpass)
     }
 }
 
+#if BUILD_TARGET_PC
+/* The material callbacks hand over the Ground itself; unkCastle reads it at
+ * the console's absolute offsets (gp+10C, gp+134), which on the host land
+ * a union's worth early -- in effect_a/effect_b -- so a block's hit freed
+ * a joint pointer as if it were the block's material item and the port
+ * faulted (Peach's Castle, from about frame 745). Name the fields. */
+static inline void grCastle_pc_break_block(void* ground, s32 i)
+{
+    Ground* gp = ground;
+    gp->u.castle10.state[i] = 1;
+    grMaterial_801C8CDC((HSD_GObj*) (uintptr_t) gp->u.castle10.x10C[i]);
+    gp->u.castle10.x10C[i] = 0;
+    Ground_801C53EC(0x53020U);
+}
+#endif
+
 static inline void grCastle_801D0550_sub(unkCastle* arg0, s32 i)
 {
+#if BUILD_TARGET_PC
+    grCastle_pc_break_block(arg0, i);
+#else
     arg0->x134[i] = 1;
     grMaterial_801C8CDC(arg0->x10C[i]);
     arg0->x10C[i] = NULL;
     Ground_801C53EC(0x53020U);
+#endif
 }
 
 void grCastle_801D0550(void* arg0, unkCastle* arg1)
@@ -2038,10 +2058,14 @@ void grCastle_801D0680(void* arg0, unkCastle* arg1)
 static void grCastle_801D06CC_sub(unkCastle* arg0, Ground_GObj* gobj, s32 i)
 {
     if (ftLib_80086960(gobj) || itGetKind(gobj) != It_PKind_Random) {
+#if BUILD_TARGET_PC
+        grCastle_pc_break_block(arg0, i);
+#else
         arg0->x134[i] = 1;
         grMaterial_801C8CDC(arg0->x10C[i]);
         arg0->x10C[i] = NULL;
         Ground_801C53EC(0x53020U);
+#endif
     }
 }
 
