@@ -40,6 +40,46 @@ ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 N=${1:-3}
 shift 2>/dev/null || true
 OUT=${MELEE_SHARD_OUT:-${TMPDIR:-/tmp}/pc_shard}
+MATRIX="$ROOT/tests/pc/lockstep_matrix.json"
+
+# MELEE_LOCKSTEP_SLIPPI=1 measures the port against Slippi rather than an
+# unpatched console. The port is meant to match Slippi, and Slippi changes
+# gameplay (it zeroes new fighter and stage data, applies UCF, fixes the
+# freeze glitch, ...); against an unpatched console each of those reads as a
+# divergence that is really an agreement. So in this mode:
+#   - every reference Dolphin runs the Slippi sub-codes the port implements,
+#     extracted from Slippi's own codeset by tools/slippi/gameplay_gecko.py
+#     (MELEE_SLIPPI_INI: Slippi Dolphin's Sys/GameSettings/GALE01r2.ini);
+#   - the port is the Slippi build with every compat fix on;
+#   - shards, results and logs live apart from the console sweep's.
+SLIPPI=${MELEE_LOCKSTEP_SLIPPI:-0}
+if [ "$SLIPPI" = 1 ]; then
+    OUT=${MELEE_SHARD_OUT:-${TMPDIR:-/tmp}/pc_shard_slippi}
+    MATRIX="$ROOT/tests/pc/lockstep_matrix_slippi.json"
+    export MELEE_MATRIX_LOGS="$ROOT/tests/pc/lockstep_logs_slippi"
+    export MELEE_PORT_BIN="${MELEE_PORT_BIN:-$ROOT/build/slippi/melee-pc}"
+    export MELEE_SLIPPI_COMPAT="${MELEE_SLIPPI_COMPAT:-all}"
+    SLIPPI_INI=${MELEE_SLIPPI_INI:-$ROOT/build/slippi/GALE01r2.slippi.ini}
+    if [ ! -r "$SLIPPI_INI" ]; then
+        echo "MELEE_LOCKSTEP_SLIPPI=1 needs Slippi's GALE01r2.ini at $SLIPPI_INI"
+        echo "(extract extern/slippi/dolphin/Slippi_Online-x86_64.AppImage and"
+        echo " copy squashfs-root/usr/bin/Sys/GameSettings/GALE01r2.ini there)"
+        exit 1
+    fi
+    [ -x "$MELEE_PORT_BIN" ] || { echo "no Slippi port build at $MELEE_PORT_BIN"; exit 1; }
+    SLIPPI_GECKO=$(python3 "$ROOT/tools/slippi/gameplay_gecko.py" "$SLIPPI_INI") || exit 1
+    # Gecko needs Sys/codehandler.bin, and the lockstep Dolphin is configured
+    # for a /usr/local install that does not exist, so it finds no Sys at all
+    # ("Could not enable cheats because codehandler.bin was missing") and runs
+    # none of the codes. MELEE_DOLPHIN_SYS (a local patch to that Dolphin's
+    # FileUtil.cpp) points it at a Sys holding only the code handler, so
+    # nothing else the console sweep has been measured with changes.
+    SLIPPI_SYS="$ROOT/build/slippi/dolphin-sys"
+    mkdir -p "$SLIPPI_SYS"
+    cp -f "$(dirname "$MELEE_DOLPHIN_BIN")/Sys/codehandler.bin" "$SLIPPI_SYS/" 2>/dev/null || {
+        echo "no codehandler.bin next to $MELEE_DOLPHIN_BIN"; exit 1; }
+    export MELEE_DOLPHIN_SYS="$SLIPPI_SYS"
+fi
 mkdir -p "$OUT"
 
 # Where Dolphin really keeps each half of its user directory when no -u is
@@ -94,7 +134,15 @@ seed_userdir() {
     grep -q "Device *= *Pipe/0/brash" "$udir/Config/GCPadNew.ini" 2>/dev/null || {
         echo "  !! $udir/Config/GCPadNew.ini: pad 1 is not bound to the pipe"
         bad=1; }
-    if grep -q "^\[Gecko_Enabled\]" "$udir/GameSettings/GALE01r2.ini" 2>/dev/null; then
+    if [ "$SLIPPI" = 1 ]; then
+        # Rewritten every run, so a change to the codeset or to the port's
+        # fix table reaches the reference without clearing the shard dirs.
+        { printf '[Core]\nEnableCheats = True\n'; printf '%s\n' "$SLIPPI_GECKO"; } \
+            > "$udir/GameSettings/GALE01r2.ini"
+        grep -q "EnableCheats *= *True" "$udir/Config/Dolphin.ini" 2>/dev/null || {
+            echo "  !! $udir/Config/Dolphin.ini: cheats are off, the Slippi codes would not run"
+            bad=1; }
+    elif grep -q "^\[Gecko_Enabled\]" "$udir/GameSettings/GALE01r2.ini" 2>/dev/null; then
         echo "  !! $udir/GameSettings/GALE01r2.ini has an enabled Gecko patch;"
         echo "     the route walks the menus from the title screen, so a boot"
         echo "     patch makes the console skip them and the cell hang."
@@ -136,7 +184,7 @@ done
 # in: their stale entries differed from the new seed, so they were "changes",
 # and 513 cells were overwritten with verdicts from a previous sweep.
 rm -f "$OUT"/results*.json "$OUT"/shard*.log
-BASE="$ROOT/tests/pc/lockstep_matrix.json"
+BASE="$MATRIX"
 if [ -e "$BASE" ]; then
     cp "$BASE" "$OUT/seed.json"
     for ((s = 0; s < N; s++)); do
@@ -187,7 +235,7 @@ while [ "$left" -gt 0 ]; do
 done
 
 # Whatever each shard measured before it stopped is still a measurement.
-python3 - "$OUT" "$ROOT/tests/pc/lockstep_matrix.json" "$N" <<'PY'
+python3 - "$OUT" "$MATRIX" "$N" <<'PY'
 import glob, json, os, sys
 out, dest, nshards = sys.argv[1], sys.argv[2], int(sys.argv[3])
 merged = json.load(open(dest)) if os.path.exists(dest) else {}

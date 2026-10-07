@@ -166,7 +166,8 @@ DIED_RE = re.compile(r"SIDE DIED: (\S+) exited rc=(-?\d+)")
 EARLY_RE = re.compile(r"STOPPED EARLY after (\d+) of (\d+) frames")
 
 
-LOGS = os.path.join(REPO, "tests", "pc", "lockstep_logs")
+LOGS = os.environ.get("MELEE_MATRIX_LOGS",
+                      os.path.join(REPO, "tests", "pc", "lockstep_logs"))
 
 # What fail-fast stops for. A divergence is a finding; a timeout or a failed
 # route is the harness not having measured anything, and stopping the sweep for
