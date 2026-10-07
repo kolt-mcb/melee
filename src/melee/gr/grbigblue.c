@@ -4588,8 +4588,12 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
             f32 s2 = Ground_801C0498();
             f32 drag = yakumono_param->x2C;
             f32 base_y = BB_FMA(drag, s2, ground_y);
+            /* 801EDD5C/801EDD60: xF8 + base_y first, then the oscillation.
+             * Summed left to right the lane's height came out a bit away
+             * from the console's, the track joint it moves (joint 22) with
+             * it, and the CPUs' floor raycasts after that. */
             *(f32*) (lane_gp + 0xE4) =
-                heading_osc + *(f32*) (lane_gp + 0xF8) + base_y;
+                heading_osc + (*(f32*) (lane_gp + 0xF8) + base_y);
         } else {
             lane_gp[0xD4] = (lane_gp[0xD4] & ~0x02) | 0x02;
             {

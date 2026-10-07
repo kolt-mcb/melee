@@ -38,6 +38,9 @@
 #include <Runtime/platform.h>
 
 #include <melee/lb/forward.h>
+#if BUILD_TARGET_PC
+static inline float sqrtf_store(float x, volatile float* y);
+#endif
 #include <sysdolphin/baselib/forward.h>
 
 #include <math.h>
@@ -1877,8 +1880,17 @@ void mpLib_8004ED5C(int line_id, float* x0_out, float* y0_out, float* x1_out,
     x1_f2 = groundCollVtx[i1].pos.x;
     y1_f3 = groundCollVtx[i1].pos.y;
 
+#if BUILD_TARGET_PC
+    /* The console inlines sqrtf here as frsqrte plus three Newton steps
+     * (8004EE48..8004EE88), which is not always the correctly rounded root
+     * libm gives; sqrtf_store is that sequence. */
+    volatile float sqrt_tmp;
+#define MP_LINE_SQRTF(x) sqrtf_store((x), &sqrt_tmp)
+#else
+#define MP_LINE_SQRTF(x) sqrtf(x)
+#endif
     if (mpLineGetPrev(line_id) != -1) {
-        distance = sqrtf(SQ(x0_f0 - x1_f2) + SQ(y0_f1 - y1_f3));
+        distance = MP_LINE_SQRTF(SQ(x0_f0 - x1_f2) + SQ(y0_f1 - y1_f3));
         if (distance > 0.001F) {
             x0_f0 += (x0_f0 - x1_f2) / distance;
             y0_f1 += (y0_f1 - y1_f3) / distance;
@@ -1888,7 +1900,7 @@ void mpLib_8004ED5C(int line_id, float* x0_out, float* y0_out, float* x1_out,
 
     if (mpLineGetNext(line_id) != -1) {
         if (!calculated_distance) {
-            distance = sqrtf(SQ(x0_f0 - x1_f2) + SQ(y0_f1 - y1_f3));
+            distance = MP_LINE_SQRTF(SQ(x0_f0 - x1_f2) + SQ(y0_f1 - y1_f3));
         }
         if (distance > 0.001F) {
             x1_f2 += (x1_f2 - x0_f0) / distance;
@@ -1900,6 +1912,7 @@ void mpLib_8004ED5C(int line_id, float* x0_out, float* y0_out, float* x1_out,
     *y0_out = y0_f1;
     *x1_out = x1_f2;
     *y1_out = y1_f3;
+#undef MP_LINE_SQRTF
 }
 
 bool mpCheckFloor(float ax, float ay, float bx, float by, float y_offset,
