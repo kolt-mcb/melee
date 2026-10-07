@@ -1,4 +1,7 @@
 #include "itfoods.h"
+#if BUILD_TARGET_PC
+#include <string.h>
+#endif
 
 #include "types.h"
 #include <melee/it/inlines.h>
@@ -46,9 +49,28 @@ void it_8028F9D8(Item_GObj* arg0, Vec3* arg1, f32 arg8)
     Item* temp_r30 = GET_ITEM(arg0);
     Vec4* temp_r6 = temp_r30->xC4_article_data->x4_specialAttributes;
     f32 var_2;
+#if BUILD_TARGET_PC
+    /* The console reads the 16-byte variant table through a Vec4 view:
+     * word 3 of entry i is the x offset, word 0 of entry i+1 the y offset.
+     * pc_itconv widens the table to itFoodsAttributes (24 bytes, pointer
+     * at +8), so the Vec4 stride read other words and a carried food sat
+     * about a unit off -- off the ledge, on Yoshi's Story, where the
+     * console's landed. Same words, read by field. */
+    {
+        const itFoodsAttributes* fa =
+            (const itFoodsAttributes*) temp_r6;
+        s32 v = temp_r30->xDD4_itemVar.foods.x0;
+        f32 offx, offy;
+        memcpy(&offx, &fa[v].xC, 4);
+        memcpy(&offy, &fa[v + 1].x0, 4);
+        temp_r30->pos.x = FO_FMA(arg8, offx, arg1->x);
+        var_2 = offy;
+    }
+#else
     temp_r30->pos.x =
         FO_FMA(arg8, temp_r6[temp_r30->xDD4_itemVar.foods.x0].w, arg1->x);
     var_2 = temp_r6[temp_r30->xDD4_itemVar.foods.x0 + 1].x;
+#endif
     temp_r30->pos.y = var_2 + arg1->y;
     temp_r30->pos.z = arg1->z;
     HSD_JObjSetTranslate(arg0->hsd_obj, &temp_r30->pos);
