@@ -1,3 +1,6 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "grcorneria.h"
 
 #include <placeholder.h>
@@ -77,7 +80,16 @@ struct grCorneria_YakumonoParam {
     /* 0x78 */ s32 x78;
     /* 0x7C */ s32 x7C;
     /* 0x80 */ s32 x80;
+#if BUILD_TARGET_PC
+    /* A color script's archive offset, converted by GR_COLOR_SCRIPT where it
+     * is used. As a void* it was eight bytes here and pushed x88 -- the
+     * background sections' scroll speed -- past the end of the 0x8C block:
+     * it read 0, maps 8 and 9 never moved, and the Arwing spawn read the
+     * wrong section under it. */
+    /* 0x84 */ u32 x84;
+#else
     /* 0x84 */ void* x84;
+#endif
     /* 0x88 */ f32 x88;
 };
 
@@ -330,6 +342,21 @@ static inline s32 grCn_RandRange(s32 imax, s32 imin)
 static inline int grCn_CheckFar(Vec3* pos)
 {
     s32 kind = grCorneria_801E0A74(&pos->x);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_CNARW") != NULL) {
+        extern u32 gm_GetFrameCount(void);
+        HSD_GObj* m8 = Ground_GetMapGObj(8);
+        HSD_GObj* m9 = Ground_GetMapGObj(9);
+        fprintf(stderr, "[CNFAR] gframe=%u pos=(%08x,%08x,%08x) kind=%d "
+                        "map8=%p x=%g map9=%p x=%g scale=%g\n",
+                (unsigned) gm_GetFrameCount(), *(u32*) &pos->x,
+                *(u32*) &pos->y, *(u32*) &pos->z, (int) kind, (void*) m8,
+                m8 ? (double) HSD_JObjGetTranslationX(m8->hsd_obj) : 0.0,
+                (void*) m9,
+                m9 ? (double) HSD_JObjGetTranslationX(m9->hsd_obj) : 0.0,
+                (double) Ground_801C0498());
+    }
+#endif
     switch (kind) {
     case 4:
     case 9:
@@ -1194,6 +1221,36 @@ void grCorneria_801DED50(Ground_GObj* gobj)
         return;
     }
 
+#if BUILD_TARGET_PC
+    /* MELEE_CNARW=<lo>-<hi>: each Arwing's slot, type, frame counter, state
+     * and countdown on entry. The console's is MELEE_MEMAT=801DEDA0:31:16:200
+     * (gp+C8 onward). */
+    {
+        static int lo = -2, hi;
+        if (lo == -2) {
+            const char* e = getenv("MELEE_CNARW");
+            const char* d = e ? strchr(e, '-') : NULL;
+            lo = e ? atoi(e) : -1;
+            hi = d ? atoi(d + 1) : lo;
+        }
+        if (lo >= 0) {
+            extern u32 gm_GetFrameCount(void);
+            int f = (int) gm_GetFrameCount();
+            if (f >= lo && f <= hi) {
+                fprintf(stderr,
+                        "[CNARW] gframe=%d slot=%d type=%d group=%d live=%d "
+                        "xF0=%d xF4=%d xF8=%d xFC=%d\n",
+                        f, (int) gp->u.corneria2.xC8,
+                        (int) arwing_types[gp->u.corneria2.xC8],
+                        (int) arwing_groups[gp->u.corneria2.xC8],
+                        arwing_gobjs[gp->u.corneria2.xC8] != NULL,
+                        (int) gp->u.corneria2.xF0, (int) gp->u.corneria2.xF4,
+                        (int) gp->u.corneria2.xF8, (int) gp->u.corneria2.xFC);
+            }
+        }
+    }
+#endif
+
     if (arwing_gobjs[gp->u.corneria2.xC8] != NULL) {
         if (arwing_groups[gp->u.corneria2.xC8] == 4) {
             arwing = Ground_801C3FA4(gobj, 1);
@@ -1562,6 +1619,22 @@ void grCorneria_801DFC98(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_CNARW") != NULL) {
+        extern u32 gm_GetFrameCount(void);
+        u32 f = gm_GetFrameCount();
+        if (f < 3 || f % 100 == 0) {
+            fprintf(stderr,
+                    "[CNBG8] gframe=%u map=%d xC4=%d offy_word=%08x b0=%d "
+                    "x=%g\n",
+                    (unsigned) f, (int) gp->map_id,
+                    (int) gp->u.corneria.xC4.value,
+                    *(u32*) &gp->u.corneria.offset_y.val,
+                    (int) gp->u.corneria.offset_y.flags.b0,
+                    (double) HSD_JObjGetTranslationX(jobj));
+        }
+    }
+#endif
 
     if (gp->u.corneria.xC4.value == 0 && gp->u.corneria.offset_y.flags.b0 != 1)
     {

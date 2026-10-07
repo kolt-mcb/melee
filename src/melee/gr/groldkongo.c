@@ -65,7 +65,13 @@ struct grOldKongo_YakumonoParam {
     s32 rrfix_barrel_attack;
     s32 rradd_barrel_attack;
     s32 x68;
+#if BUILD_TARGET_PC
+    /* A colour script's archive offset (GR_COLOR_SCRIPT). As a void* it sat
+     * at 0x70 here, four bytes past the field. */
+    u32 x6C;
+#else
     void* x6C;
+#endif
 };
 
 /* 20F468 */ static void grOldKongo_8020F468(bool);
