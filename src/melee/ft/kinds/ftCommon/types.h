@@ -462,9 +462,22 @@ union ftCommon_MotionVars {
 #endif
     } capturelikelike;
     struct {
+#if BUILD_TARGET_PC
+        /* The mushroom states also keep the size they grow from and to in
+         * walk.middle/fast_anim_frame (+0xC/+0x10) and stash velocities in
+         * common.x14..x63. With 8-byte callbacks, x4 landed on +8..+F and
+         * zeroed the start size, and x8 on +10 over the target size, so a
+         * fighter's first mushroom frames scaled from 0. x8 stays at its
+         * console offset; x4 moves past everything those states use. */
+        /* +00 */ HSD_GObjEvent x0;
+        /* +08 */ int x8;
+        /* +0C */ u8 pc_pad[0x68 - 0xC];
+        /* +68 */ HSD_GObjEvent x4;
+#else
         /* fp+2340 */ HSD_GObjEvent x0;
         /* fp+2344 */ HSD_GObjEvent x4;
         /* fp+2348 */ int x8;
+#endif
     } mushroom;
     struct {
         /* fp+2340 */ int x0;

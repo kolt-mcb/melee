@@ -297,6 +297,39 @@ void Fighter_LoadCommonData(void)
                 for (k = 0; k < 0x818 / 4; k++) pc_common[k] = PC_BE32(w[k]);
                 p_ftCommonData = (ftCommonData*)pc_common;
             }
+            /* Entries 12-15: the attribute modifiers for a resized fighter
+             * (giant/tiny mushroom), bunny hood, metal box and one more,
+             * all plain floats. Left on the arena they read as pointer
+             * halves or zero, ftCo_800CF6E8 rescaled nothing, and a giant
+             * fighter walked, jumped and fell at normal size's numbers. */
+            {
+                static u32 pc_mod12[sizeof(*Fighter_804D6524) / 4];
+                static u32 pc_mod13[sizeof(*Fighter_804D6520) / 4];
+                static u32 pc_mod14[sizeof(*Fighter_804D651C) / 4];
+                static u32 pc_mod15[sizeof(*Fighter_804D6518) / 4];
+                static const struct { int entry; u32* dst; u32 words; } mods[4] = {
+                    { 12, pc_mod12, sizeof(pc_mod12) / 4 },
+                    { 13, pc_mod13, sizeof(pc_mod13) / 4 },
+                    { 14, pc_mod14, sizeof(pc_mod14) / 4 },
+                    { 15, pc_mod15, sizeof(pc_mod15) / 4 },
+                };
+                int m;
+                for (m = 0; m < 4; m++) {
+                    u32 o = PC_BE32(offs[mods[m].entry]);
+                    u32 k;
+                    if (o == 0 || o + mods[m].words * 4 > fsize) {
+                        continue;
+                    }
+                    for (k = 0; k < mods[m].words; k++) {
+                        mods[m].dst[k] =
+                            PC_BE32(((const u32*) (dataBase + o))[k]);
+                    }
+                }
+                Fighter_804D6524 = (void*) pc_mod12;
+                Fighter_804D6520 = (void*) pc_mod13;
+                Fighter_804D651C = (void*) pc_mod14;
+                Fighter_804D6518 = (void*) pc_mod15;
+            }
             /* Ft_Kind_Max + 1 entries: index 0x21 (Ft_Kind_None) is the
              * shared 53-part table that thrown animations select through
              * x597_bits. Converting only 33 left ftPartsTable[33] NULL and
@@ -756,10 +789,12 @@ void Fighter_LoadCommonData(void)
                 Fighter_GrabMashShake = &pc_shake_tbl;
             }
         }
-        Fighter_804D6524 = (void*)pc_ptr_arena;
-        Fighter_804D6520 = (void*)pc_ptr_arena;
-        Fighter_804D651C = (void*)pc_ptr_arena;
-        Fighter_804D6518 = (void*)pc_ptr_arena;
+        /* Converted above (PlCo entries 12-15); the arena only stands in if
+         * that could not run. */
+        if (Fighter_804D6524 == NULL) Fighter_804D6524 = (void*)pc_ptr_arena;
+        if (Fighter_804D6520 == NULL) Fighter_804D6520 = (void*)pc_ptr_arena;
+        if (Fighter_804D651C == NULL) Fighter_804D651C = (void*)pc_ptr_arena;
+        if (Fighter_804D6518 == NULL) Fighter_804D6518 = (void*)pc_ptr_arena;
         /* Trophy platform joint (PlCo entry 16): an arena pointer parsed as
          * an HSD_Joint gave a JObj whose flags were the low bits of a host
          * pointer -- under PIE that included the IK bits and the renderer
