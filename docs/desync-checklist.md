@@ -23,11 +23,11 @@ no-verdict or no-icon, of 754 cells.
             801EDD5C): 0 -> 9 identical, the rest diverge later (median ~2300)
       - [x] float audit: fn_801E8560 dy*dy fusion, road lat_adj order -> 14/25
       - [ ] next: rerun triage on a remaining cell (Purin 678 is earliest)
-- [ ] 2 Fountain of Dreams — 24, rng_draws, 955–3555
-- [~] 22 Venom — 23 -> 15 diverged (near-arwing anim tables read past the host struct)
+- [x] 2 Fountain of Dreams — 24 -> 1 (platform height written through izumi2, read through izumi3)
+- [x] 22 Venom — 23 -> 2 (anim tables; wing platform link/pose through starfox/arwing views)
 - [ ] 6 Zebes — 19, pct, median 2562
 - [ ] 8 Yoshi's Story — 15, aihash
-- [ ] 4 Castle — 13, aihash, median 830
+- [x] 4 Castle — 13 -> 4 (castle9 spawn timer overlapped satellite pointers)
 - [ ] 13 Great Bay — 12, y/x
 - [ ] 25 Icicle Mountain — 10
 - [ ] 7 Corneria — 9
@@ -58,6 +58,17 @@ stage files and mp/ground libraries against the console asm.
   code (animation interpolation, items, AI), not stage arithmetic.
 - Open: mpLib_80056C54 reads total_dist before setting it (console does
   too, inheriting the caller's f27).
+
+## Shared lead: hurtbox extents (cpu.x55C..x568)
+
+On 6 stages (Poké Floats, Yoshi's Island, Big Blue, Castle, Yoshi's Story,
+Battlefield) the first AI words to differ are cpu.x55C/x560/x564/x568, the
+fighter's hurtbox extents (ftCo_0A01.c ~600-690, from bone positions).
+Mario on Poké Floats, frame 294: every body bone matches at 293; at 294 the
+CPU lands and changes state twice in one frame (85 -> 350 -> 349) and the
+port's pose is closer to the previous frame than the console's. So the
+first pose of the new animation is built differently (animation start /
+blend on a same-frame double transition).
 
 ## Other open items
 
