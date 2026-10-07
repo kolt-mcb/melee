@@ -1,3 +1,4 @@
+#include <string.h>
 #include "itwhitebea.h"
 
 #include <math.h> // IWYU pragma: keep
@@ -727,7 +728,18 @@ bool itWhitebea_UnkMotion7_Anim(Item_GObj* gobj)
     PAD_STACK(16);
     if (!it_80272C6C(gobj)) {
         ip->xDD4_itemVar.whitebea.x3C = 1;
+#if BUILD_TARGET_PC
+        /* The word at console 0x14 is also read as a float (it_802E35CC);
+         * pc_itconv stores it whole, and the console's lha takes its high
+         * half. */
+        {
+            u32 word;
+            memcpy(&word, &attrs->x14, sizeof(word));
+            ip->xDD4_itemVar.whitebea.x40 = (s16) (word >> 16);
+        }
+#else
         ip->xDD4_itemVar.whitebea.x40 = attrs->x14;
+#endif
         it_8027CAD8(gobj);
         Item_80268E5C(gobj, 0, ITEM_ANIM_UPDATE);
     }

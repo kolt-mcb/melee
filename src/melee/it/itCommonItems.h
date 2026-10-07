@@ -186,7 +186,13 @@ typedef struct itKyasarinEgg_ItemVars {
 } itKyasarinEgg_ItemVars;
 
 typedef struct itKyasarinEggAttributes {
+#if BUILD_TARGET_PC
+    /* Unread; four bytes so x4..x10 (the egg's speeds, drop chance and item
+     * spawn) line up with the flat-swapped block, as Birdo's own did not. */
+    /* +0  */ u32 x0;
+#else
     /* +0  */ s32* x0;
+#endif
     /* +4  */ f32 x4;
     /* +8  */ f32 x8;
     /* +C  */ s32 xC;

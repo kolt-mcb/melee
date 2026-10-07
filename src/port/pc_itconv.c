@@ -1,6 +1,7 @@
 /* PC port: item Article conversion. See pc_itconv.h. */
 #include "pc_itconv.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1168,6 +1169,29 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
     r = a->base + spec_off;
 
     switch (kind) {
+    case It_PKind_Unknown:
+    case It_Kind_Unknown_Swarm: {
+        /* Unown: nine scalars, then 26 four-byte offsets to the letters'
+         * joint trees, one picked at random when it spawns. Flat-swapped,
+         * x24[] was read as eight-byte pointers -- two offsets glued, into
+         * trees never converted -- and HSD_JObjLoadJoint faulted the first
+         * time a Poke Ball let Unown out. */
+        itUnknownAttributes* u;
+        int i;
+        if (spec_off + 0x24 + 26 * 4 > a->len) {
+            return;
+        }
+        u = zalloc(sizeof(*u));
+        if (u == NULL) {
+            return;
+        }
+        conv_scalars(u, r, 0x24);
+        for (i = 0; i < 26; i++) {
+            u->x24[i] = (HSD_Joint*) conv_joint_at(a, be32(r + 0x24 + i * 4));
+        }
+        art->x4_specialAttributes = u;
+        break;
+    }
     case It_Kind_Heiho: {
         u32 sub = be32(r);
         if (sub != 0 && sub + 4 <= a->len) {
@@ -1195,12 +1219,55 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         art->x4_specialAttributes = k;
         break;
     }
-    case It_Kind_Old_Otto:
     case It_Kind_Whitebea: {
-        /* The octopus (Old Kongo) and the polar bear (Icicle Mountain) read
-         * the same layout: a pointer to {s32, f32} at x0, then scalars, with
-         * single bytes at 0x10 and 0x28. Same eight-byte-pointer shift as
-         * Birdo's above. */
+        _Static_assert(offsetof(itWhiteBeaAttributes, x8) == 0xC &&
+                           offsetof(itWhiteBeaAttributes, x10) == 0x14 &&
+                           offsetof(itWhiteBeaAttributes, x14) == 0x18 &&
+                           offsetof(itOldottoseaAttributes, x14) == 0x18 &&
+                           offsetof(itOldottoseaAttributes, x20) == 0x24,
+                       "polar bear block layout");
+        /* The polar bear's block is read through two views that disagree
+         * about its middle: itWhiteBeaAttributes (s16 at 0x8..0xE, f32 at
+         * 0x10, s16 at 0x14 -- lha in the retail code) and, in it_802E35CC,
+         * itOldottoseaAttributes (f32 at 0x14..0x20 -- lfs). Same bytes, two
+         * types; on the host the two views' 0x14 fields both land at 0x18,
+         * so the word goes there whole and the s16 reader takes its high
+         * half (itwhitebea.c). Laid out for itWhiteBeaAttributes up to 0x14,
+         * then the float tail where itOldottoseaAttributes reads it. */
+        u8* w;
+        u32 sub;
+        if (spec_off + 0x24 > a->len) {
+            return;
+        }
+        w = zalloc(0x28);
+        if (w == NULL) {
+            return;
+        }
+        sub = be32(r);
+        if (sub != 0 && sub + 8 <= a->len) {
+            void* p = zalloc(8);
+            if (p != NULL) {
+                conv_scalars(p, a->base + sub, 8);
+            }
+            memcpy(w, &p, sizeof(p));
+        }
+        conv_scalars(w + 0x8, r + 0x4, 4);          /* x4 f32 */
+        {
+            int k;
+            for (k = 0; k < 4; k++) {               /* x8..xE s16 */
+                u16 h = (u16) ((r[0x8 + k * 2] << 8) | r[0x9 + k * 2]);
+                memcpy(w + 0xC + k * 2, &h, 2);
+            }
+        }
+        conv_scalars(w + 0x14, r + 0x10, 4);        /* x10 f32 */
+        conv_scalars(w + 0x18, r + 0x14, 0x10);     /* 0x14..0x20, words */
+        art->x4_specialAttributes = w;
+        break;
+    }
+    case It_Kind_Old_Otto: {
+        /* The octopus (Old Kongo): a pointer to {s32, f32} at x0, then
+         * scalars, with single bytes at 0x10 and 0x28. Same eight-byte-
+         * pointer shift as Birdo's above. */
         itOldottoseaAttributes* o;
         u32 sub;
         if (spec_off + 0x2C > a->len) {

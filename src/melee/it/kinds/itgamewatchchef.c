@@ -43,7 +43,11 @@ HSD_GObj* it_802C837C(Item_GObj* parent, Vec3* pos, enum_t kind, u32 arg3,
             GET_ITEM(gobj)->xC4_article_data->x4_specialAttributes;
         it_802C84A0(gobj, arg3);
         db_80225DD8(gobj, parent);
+#if BUILD_TARGET_PC
+        it_8027CE64(gobj, parent, (void*) (uintptr_t) attrs->x0);
+#else
         it_8027CE64(gobj, parent, attrs->x0);
+#endif
         return gobj;
     }
     return NULL;

@@ -851,7 +851,14 @@ typedef struct itGamewatchchefAttrEntry {
 } itGamewatchchefAttrEntry;
 
 typedef struct itGamewatchchefAttributes {
+#if BUILD_TARGET_PC
+    /* Word 0 of the flat-swapped file block. As a void* it was eight bytes
+     * and every field after it -- x4..xC and each sausage's entries[] --
+     * read one word late. Only passed along to gamewatch.attr, unread. */
+    /* +0 */ u32 x0;
+#else
     /* +0 */ void* x0;
+#endif
     /* +4 */ f32 x4;
     /* +8 */ f32 x8;
     /* +C */ f32 xC;
