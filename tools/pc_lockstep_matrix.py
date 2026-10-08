@@ -134,7 +134,14 @@ def icon_name(ck):
     that skips a cell says so now.
     """
     n = mx.CHARS[ck]
+    if n == "CKind_Seak":
+        # No icon of her own: Zelda's, with A held into the match load.
+        return "ZELDA"
     return n[len("CKind_"):].upper() if n.startswith("CKind_") else n.upper()
+
+
+def is_sheik(ck):
+    return mx.CHARS[ck] == "CKind_Seak"
 
 
 def make_case(c0, c1, stage_kind):
@@ -144,7 +151,8 @@ def make_case(c0, c1, stage_kind):
     os.makedirs(CASES, exist_ok=True)
     os.makedirs(ROUTES, exist_ok=True)
     lines = rt.case_lines(icon_name(c0), icon_name(c1),
-                          mx.STAGES[stage_kind], stage_kind)
+                          mx.STAGES[stage_kind], stage_kind,
+                          hold_a=(is_sheik(c0), is_sheik(c1)))
     with open(os.path.join(CASES, name + ".case"), "w") as f:
         f.write("\n".join(lines) + "\n")
     steps = route_steps(lines)
@@ -623,9 +631,8 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
     # The same ranges tools/pc_matrix.py runs: every character, and every
-    # stage from Izumi to Last. Sheik has no character-select icon (Zelda
-    # transforms into her), so that row records as no-icon rather than
-    # pretending to a route that cannot exist.
+    # stage from Izumi to Last. Sheik has no character-select icon; her row
+    # picks Zelda and holds A into the match load (see pc_route.case_lines).
     r.add_argument("--chars", default="0-25")
     r.add_argument("--stages", default="2-32")
     r.add_argument("--frames", type=int, default=1200)
