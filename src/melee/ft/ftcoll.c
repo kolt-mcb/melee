@@ -2512,8 +2512,11 @@ float ftColl_80079C70(Fighter* fp, Fighter* attacker, HitCapsule* hit,
               KB_FMA(0.01F * (float) (u32) hit->x24,
                      KB_FMA(ftd->x11C,
                             ((decay - ((w * decay) / (1.0F + w))) *
-                             KB_FMA(ftd->x114, x118 * (float) (u32) x28,
-                                    x118 * ftd->x110)),
+                             /* 80079D5C: x118 * x110 fused, the x114
+                              * product the rounded addend (as in
+                              * ftColl_80079AB0). */
+                             KB_FMA(x118, ftd->x110,
+                                    ftd->x114 * (x118 * (float) (u32) x28))),
                             ftd->x120),
                      (float) (u32) hit->x2C)));
     } else {
@@ -2542,12 +2545,15 @@ float ftColl_80079C70(Fighter* fp, Fighter* attacker, HitCapsule* hit,
                       0.01F * (float) (u32) hit->x24,
                       KB_FMA(ftd->x11C,
                              ((decay - ((w * decay) / (1.0F + w))) *
-                              KB_FMA(ftd->x114,
-                                     ((float) (u32) unk_count *
-                                      ((float) count +
-                                       fp->dmg.x1838_percentTemp)),
-                                     ftd->x110 * ((float) count +
-                                                  fp->dmg.x1838_percentTemp))),
+                              /* 80079E48: x110 * (count + percentTemp)
+                               * fused, the x114 product the addend. */
+                              KB_FMA(ftd->x110,
+                                     ((float) count +
+                                      fp->dmg.x1838_percentTemp),
+                                     ftd->x114 *
+                                         ((float) (u32) unk_count *
+                                          ((float) count +
+                                           fp->dmg.x1838_percentTemp)))),
                              ftd->x120),
                       (float) (u32) hit->x2C)));
         }
@@ -2575,9 +2581,10 @@ float ftColl_80079EA8(Fighter* fp, HitCapsule* hit, u32 unk_count)
         decay = ftd->xF8;
         x118 = ftd->x118;
 
+        /* 80079F44: x118 * x110 fused (as in ftColl_80079AB0). */
         result = KNOCKBACK(one, one, one, one, ftd, hit, w,
-                           KB_FMA(ftd->x114, x118 * hit->x28,
-                                  x118 * ftd->x110));
+                           KB_FMA(x118, ftd->x110,
+                                  ftd->x114 * (x118 * hit->x28)));
     } else {
         s32 count;
 
@@ -2586,11 +2593,12 @@ float ftColl_80079EA8(Fighter* fp, HitCapsule* hit, u32 unk_count)
         {
             float one = 1.0F;
 
+            /* 8007A030: x110 * (count + percentTemp) fused. */
             result = KNOCKBACK(
                 one, one, one, one, ftd, hit, w,
-                KB_FMA(ftd->x114,
-                       unk_count * (count + fp->dmg.x1838_percentTemp),
-                       ftd->x110 * (count + fp->dmg.x1838_percentTemp)));
+                KB_FMA(ftd->x110, (count + fp->dmg.x1838_percentTemp),
+                       ftd->x114 *
+                           (unk_count * (count + fp->dmg.x1838_percentTemp))));
         }
     }
 
