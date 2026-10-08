@@ -1837,6 +1837,15 @@ static HSD_Spline* grDatFiles_ConvertSplineGCNtoX64(const u8* gcn, u8* dataBase)
 
     off = be32_swap(*(const u32*) (gcn + 8));
     n = (sp->type == 1) ? 3u * (u32) (numcv - 1) + 1u : (u32) numcv;
+    /* The cardinal and B-spline kinds read cp[idx..idx+3] with idx up to
+     * numcv-2 -- two points past the end of the array. On the console
+     * those are whatever follows the array in the stage file; converting
+     * exactly n left them zero here. Rainbow Cruise's platform path (a
+     * six-point B-spline) runs in its last segment with a small weight on
+     * the phantom point, and the platform drifted from the console's by an
+     * ULP a frame until a CPU standing on it chose differently (random
+     * sweep seed 616037647). Carry the two points of file that follow. */
+    n += 2;
     if (off != 0 && off < PC_ARCHIVE_MAX_OFFSET) {
         Vec3* cv = lbHeap_80015BD0(0, n * sizeof(Vec3));
         if (cv != NULL) {
