@@ -41,6 +41,10 @@ CHECKLIST = os.path.join(REPO, "docs", "random-sweep.md")
 # frames of play; the cap only has to be past the end of it.
 MATCH_FRAMES = 30000
 
+# Verdicts that say the run never got to compare, retried this many times.
+HARNESS_FAILURES = ("route-failed", "no-verdict")
+RETRIES = 2
+
 
 def stages():
     """The VS stages the matrix sweeps (Izumi..Last)."""
@@ -112,9 +116,20 @@ def main():
         print("== #%d %s: %s on %s" % (
             n, name, ", ".join(mx.CHARS[c] for c in cks), mx.STAGES[st]),
             flush=True)
-        info = lm.run_cell(name, a.frames, a.timeout,
-                           ",".join(["9"] * a.players),
-                           extra=["--until-match-end"])
+        # A route that never reaches the match, or a run with no verdict, is
+        # the harness and not the game: before the rendezvous the console's
+        # menu presses go through Dolphin's pipes, and a starved Dolphin (a
+        # matrix sweep running alongside) can drop one. Those are retried;
+        # a divergence stops the sweep at once.
+        for attempt in range(1 + RETRIES):
+            info = lm.run_cell(name, a.frames, a.timeout,
+                               ",".join(["9"] * a.players),
+                               extra=["--until-match-end"])
+            if info.get("verdict") not in HARNESS_FAILURES:
+                break
+            print("   %s, retrying (%d/%d)" % (info.get("verdict"),
+                                              attempt + 1, RETRIES),
+                  flush=True)
         line = checklist_line(n, seed, cks, st, info)
         with open(a.checklist, "a") as f:
             f.write("%s  (%s)\n" % (line, datetime.datetime.now()
