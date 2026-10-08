@@ -1432,7 +1432,12 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         if (n == 0 || n > 64 || spec_off + n * 16 > a->len) {
             return;
         }
-        f = zalloc(sizeof(*f) * n);
+        /* One more than the table holds: it_8028F9D8 takes a variant's y
+         * offset from word 0 of the NEXT entry, so the last variant reads
+         * the first word of whatever follows the table in the file. Without
+         * the extra entry that read ran off the allocation and a dropped
+         * food landed at a heap-garbage height. */
+        f = zalloc(sizeof(*f) * (n + 1));
         if (f == NULL) {
             return;
         }
@@ -1442,6 +1447,9 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
             f[i].x4 = conv_joint_at(a, be32(e + 4));
             f[i].x8 = (s32) be32(e + 8);
             f[i].xC = (s32) be32(e + 12);
+        }
+        if (spec_off + n * 16 + 4 <= a->len) {
+            f[n].x0 = (s32) be32(r + n * 16);
         }
         art->x4_specialAttributes = f;
         break;
