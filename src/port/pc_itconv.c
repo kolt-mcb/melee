@@ -1200,6 +1200,37 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         }
         break;
     }
+    case It_Kind_Leadead: {
+        /* The ReDead: { itLeadeadAttr_x0* (HP s32, walk speed f32); s32;
+         * four f32; three s16; an s8 } -- the leading pointer of the
+         * Octorok's block plus Tingle's sub-word fields. Flat-swapped, x0
+         * was two scalars read as a host pointer, everything after it sat a
+         * word late, and the s16/s8 read the wrong halves. */
+        itLeadeadAttributes* d;
+        u32 sub;
+        if (spec_off + 0x1F > a->len) {
+            return;
+        }
+        d = zalloc(sizeof(*d));
+        if (d == NULL) {
+            return;
+        }
+        sub = be32(r);
+        if (sub != 0 && sub + 8 <= a->len) {
+            d->x0 = zalloc(sizeof(*d->x0));
+            if (d->x0 != NULL) {
+                d->x0->x0 = (s32) be32(a->base + sub);
+                conv_scalars(&d->x0->x4, a->base + sub + 4, 4);
+            }
+        }
+        conv_scalars(&d->x4, r + 4, 0x14);
+        d->x18 = (s16) ((r[0x18] << 8) | r[0x19]);
+        d->x1A = (s16) ((r[0x1A] << 8) | r[0x1B]);
+        d->x1C = (s16) ((r[0x1C] << 8) | r[0x1D]);
+        d->x1E = (s8) r[0x1E];
+        art->x4_specialAttributes = d;
+        break;
+    }
     case It_Kind_Tincle: {
         /* Tingle's block is 32-bit words except the two s8 at 0x54/0x55
          * (the range it_802EC4D0 draws its wait timer from). The flat swap
