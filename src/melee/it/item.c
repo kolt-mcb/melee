@@ -127,13 +127,18 @@ PokemonSelectionState Item_804A0E24;
  *
  * The console never clears an Item: a reused slot keeps the previous item's
  * leftovers (the port's pool is the same LIFO, so those agree), and a slot
- * used for the first time holds whatever the heap had there -- never zero in
- * practice (0x3C3C3C3C, 0xDDE3D0D0, ...). The port's fresh pool memory is
- * zero. Some item code reads fields its kind never sets: the Fan's motion-8
- * collision tests xD4C (ammo) and takes the landing path when it is non-zero,
- * which on the console it always was, so a falling Fan landed a frame apart
- * and drew different random numbers (Samus on Mute City, Bowser on Great
- * Bay). A first-use slot is filled with a non-zero pattern instead. */
+ * used for the first time holds whatever the heap had there. The port's fresh
+ * pool memory is zero. Some item code reads fields its kind never sets: the
+ * Fan's motion-8 collision tests xD4C (ammo; the Fan never writes it, see
+ * 80292AF8) and takes the landing path -- with its random break roll -- when
+ * it is non-zero, else it is destroyed outright. The residue is usually
+ * non-zero (Samus on Mute City, Bowser on Great Bay), so a first-use slot is
+ * filled with a non-zero pattern. It is not always: one 4-player Big Blue
+ * match (random sweep seed 42303469) had 0x0005d9d2, 0x703e3e3e and then 0
+ * in its first three slots, and the Fan in the third one desynced. That is
+ * heap garbage the port cannot reproduce without the console's heap, and two
+ * Slippi consoles can disagree on it too (Slippi zeroes new player and stage
+ * data, not items). */
 static void* pc_item_seen[256];
 static int pc_item_seen_n;
 
