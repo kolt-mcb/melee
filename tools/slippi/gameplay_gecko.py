@@ -128,6 +128,18 @@ def onframe(picked):
     return out
 
 
+# Writes for behaviour the original game leaves undefined, which the port
+# defines and the lockstep console must then be told about. Not Slippi's:
+# Slippi has no answer for these, and two Slippi consoles can disagree.
+#   80292B00  itHarisen_UnkMotion8_Coll tests xD4C, an ammo count the Fan
+#             never sets, so whether a thrown Fan takes the landing path
+#             (with its break roll) or is destroyed outright is whatever
+#             the heap held. The port always lands it; nop the branch.
+PORT_DEFINED = [
+    (0x80292B00, 0x60000000),
+]
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
@@ -145,6 +157,8 @@ def main():
     print("[OnFrame]")
     print("$" + title)
     for addr, val in onframe(picked):
+        print("0x%08X:dword:0x%08X" % (addr, val))
+    for addr, val in PORT_DEFINED:
         print("0x%08X:dword:0x%08X" % (addr, val))
     print("[OnFrame_Enabled]")
     print("$" + title)

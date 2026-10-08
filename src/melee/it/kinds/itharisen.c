@@ -159,7 +159,15 @@ bool itHarisen_UnkMotion8_Coll(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
 
+#if BUILD_TARGET_PC
+    /* xD4C is an ammo count the Fan never sets: the console tests heap
+     * garbage here, usually non-zero, and two consoles need not agree.
+     * The port always takes the landing path; the lockstep console is
+     * patched to match (PORT_DEFINED in tools/slippi/gameplay_gecko.py). */
+    if (true) {
+#else
     if (ip->xD4C != 0) {
+#endif
         it_8026E15C(gobj, it_8029287C);
         return false;
     }
