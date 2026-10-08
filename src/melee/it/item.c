@@ -1,4 +1,5 @@
 #include "item.h"
+#include <string.h>
 #if BUILD_TARGET_PC
 #include "port/pc_itconv.h"
 #endif
@@ -121,9 +122,42 @@ HSD_ObjAllocUnk Item_804A0C64;
 Item_FtTrack Item_804A0CCC;
 PokemonSelectionState Item_804A0E24;
 
+#if BUILD_TARGET_PC
+/* Item pool slots the port has handed out since the pool was set up.
+ *
+ * The console never clears an Item: a reused slot keeps the previous item's
+ * leftovers (the port's pool is the same LIFO, so those agree), and a slot
+ * used for the first time holds whatever the heap had there -- never zero in
+ * practice (0x3C3C3C3C, 0xDDE3D0D0, ...). The port's fresh pool memory is
+ * zero. Some item code reads fields its kind never sets: the Fan's motion-8
+ * collision tests xD4C (ammo) and takes the landing path when it is non-zero,
+ * which on the console it always was, so a falling Fan landed a frame apart
+ * and drew different random numbers (Samus on Mute City, Bowser on Great
+ * Bay). A first-use slot is filled with a non-zero pattern instead. */
+static void* pc_item_seen[256];
+static int pc_item_seen_n;
+
+static void pc_item_first_use_fill(void* user_data)
+{
+    int i;
+    for (i = 0; i < pc_item_seen_n; i++) {
+        if (pc_item_seen[i] == user_data) {
+            return;
+        }
+    }
+    if (pc_item_seen_n < (int) ARRAY_SIZE(pc_item_seen)) {
+        pc_item_seen[pc_item_seen_n++] = user_data;
+    }
+    memset(user_data, 0x3C, sizeof(Item));
+}
+#endif
+
 /// Init item struct?
 void Item_80266FCC(void)
 {
+#if BUILD_TARGET_PC
+    pc_item_seen_n = 0;
+#endif
     HSD_ObjAllocInit(&item_alloc_data, sizeof(Item), 4);
     HSD_ObjAllocInit(&item_dynamic_bones_alloc_data, sizeof(DynamicBoneTable),
                      4);
@@ -1042,6 +1076,9 @@ static HSD_GObj* Item_8026862C(SpawnItem* spawnItem)
         HSD_GObjFree(gobj);
         return NULL;
     }
+#if BUILD_TARGET_PC
+    pc_item_first_use_fill(user_data);
+#endif
     GObj_InitUserData(gobj, 6, Item_OnUserDataRemove, user_data);
     Item_80267AA8(gobj, spawnItem);
 #if BUILD_TARGET_PC
