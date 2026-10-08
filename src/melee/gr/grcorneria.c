@@ -1325,7 +1325,14 @@ void grCorneria_801DED50(Ground_GObj* gobj)
                                 NULL, &arwing_pos);
                     {
                         int* types = arwing_types;
+#if BUILD_TARGET_PC
+                        /* The Arwing objects keep their slot in u.arwing.xC8 (+8 on the
+                         * host); corneria2.xC8 is +4, which they never write: every
+                         * Arwing read slot 0 and took slot 0's offset. */
+                        int atype = types[arwing_gp->u.arwing.xC8];
+#else
                         int atype = types[arwing_gp->u.corneria2.xC8];
+#endif
                         pos.x = ship_gp->u.corneria.offset_x +
                                 (-arwing_pos.z + lbl_803E2068[atype].x);
                         pos.y = arwing_pos.y + lbl_803E2068[atype].y;
@@ -1446,7 +1453,14 @@ void grCorneria_801DED50(Ground_GObj* gobj)
                     lb_8000B1CC(Ground_801C3FA4(far_arwing, 4), NULL,
                                 &arwing_pos);
                     {
+#if BUILD_TARGET_PC
+                        /* The Arwing objects keep their slot in u.arwing.xC8 (+8 on the
+                         * host); corneria2.xC8 is +4, which they never write: every
+                         * Arwing read slot 0 and took slot 0's offset. */
+                        s32 atype = arwing_types[arwing_gp->u.arwing.xC8];
+#else
                         s32 atype = arwing_types[arwing_gp->u.corneria2.xC8];
+#endif
                         pos.x = ship_gp->u.corneria.offset_x +
                                 (-arwing_pos.z + lbl_803E2068[atype].x);
                         pos.y = arwing_pos.y + lbl_803E2068[atype].y;
