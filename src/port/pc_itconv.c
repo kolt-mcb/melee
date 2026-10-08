@@ -1216,19 +1216,21 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         }
         sub = be32(r);
         if (sub != 0 && sub + 4 <= a->len) {
-            o->x0 = zalloc(sizeof(s32));
-            if (o->x0 != NULL) {
-                *o->x0 = (s32) be32(a->base + sub);
-            }
+            /* The whole block x0 points at, not just the HP: itoldkuri
+             * also reads ((f32*) x0)[1], the walking speed. All scalars. */
+            u32 sz;
+            o->x0 = (s32*) conv_special(a, sub, &sz);
         }
         conv_scalars(&o->x4, r + 4, 0x18);
         o->x1C = (s16) ((r[0x1C] << 8) | r[0x1D]);
         art->x4_specialAttributes = o;
         break;
     }
+    case It_Kind_Kuriboh:
     case It_Kind_Old_Kuri: {
-        /* The N64 Goomba: { s32* hp; f32 x4, x8, xC } (itoldkuri.c), the
-         * same leading pointer as the Octorok. */
+        /* The Goombas (the Mushroom Kingdom enemy and the N64 one share
+         * itoldkuri.c): { s32* hp; f32 x4, x8, xC }, the same leading
+         * pointer as the Octorok. */
         struct { s32* x0; f32 x4, x8, xC; }* k;
         u32 sub;
         if (spec_off + 0x10 > a->len) {
@@ -1240,10 +1242,10 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         }
         sub = be32(r);
         if (sub != 0 && sub + 4 <= a->len) {
-            k->x0 = zalloc(sizeof(s32));
-            if (k->x0 != NULL) {
-                *k->x0 = (s32) be32(a->base + sub);
-            }
+            /* The whole block x0 points at, not just the HP: itoldkuri
+             * also reads ((f32*) x0)[1], the walking speed. All scalars. */
+            u32 sz;
+            k->x0 = (s32*) conv_special(a, sub, &sz);
         }
         conv_scalars(&k->x4, r + 4, 0xC);
         art->x4_specialAttributes = k;
