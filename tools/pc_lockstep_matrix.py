@@ -82,7 +82,7 @@ CSS_DELTA = 548
 TAIL_START_DELTA = 547
 TAIL_DELTA = 580
 
-STEP_RE = re.compile(r"^(\d+):(?:(P2):)?(.*)$")
+STEP_RE = re.compile(r"^(\d+):(?:P([2-4]):)?(.*)$")
 
 
 def route_steps(case_lines):
@@ -109,7 +109,7 @@ def route_steps(case_lines):
         m = STEP_RE.match(spec)
         if not m:
             raise ValueError("cannot parse route step %r" % spec)
-        frame, pad, tok = int(m.group(1)), 1 if m.group(2) else 0, m.group(3)
+        frame, pad, tok = int(m.group(1)), int(m.group(2)) - 1 if m.group(2) else 0, m.group(3)
         if tok.startswith("+"):
             cmd = "PRESS " + tok[1:]
         elif tok.startswith("-"):
@@ -245,7 +245,7 @@ def reap():
             time.sleep(0.5)
 
 
-def run_cell(name, frames, timeout, cpu):
+def run_cell(name, frames, timeout, cpu, extra=()):
     reap()
     # -u matters. Writing to a file rather than a pipe was supposed to make a
     # timed-out cell leave its output behind, and it did not: python
@@ -256,6 +256,7 @@ def run_cell(name, frames, timeout, cpu):
             "--frames", str(frames), "--headless", "--stop-on-divergence"]
     if cpu:
         argv += ["--cpu", cpu]
+    argv += list(extra)
     # Stream to a file rather than capture into memory. A cell that times out
     # is killed with its pipes still open, and subprocess hands back nothing:
     # the first four timeouts in this sweep left a zero-byte log and no way to
@@ -290,6 +291,9 @@ def run_cell(name, frames, timeout, cpu):
     with open(path, errors="replace") as f:
         out = f.read()
     info = {"rc": rc}
+    ended = re.search(r"MATCH ENDED at match frame (\d+)", out)
+    if ended:
+        info["match_frames"] = int(ended.group(1))
     m = DIVERGE_RE.search(out)
     early = EARLY_RE.search(out)
     died = DIED_RE.search(out)

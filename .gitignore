@@ -237,3 +237,6 @@ build.ninja.*
 /tev_test.png
 tests/pc/lockstep_matrix_slippi_noitems.json
 tests/pc/lockstep_logs_slippi_noitems/
+tests/pc/lockstep_logs_random/
+tests/pc/cases/auto/rand_*
+tests/pc/routes/rand_*

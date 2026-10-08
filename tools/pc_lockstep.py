@@ -232,8 +232,9 @@ def nav_steps(case):
     for entry in case["ref_input"]:
         frame, _, rest = entry.partition(":")
         pad = 0
-        if rest.startswith("P2:"):
-            pad, rest = 1, rest[3:]
+        m = re.match(r"P([2-4]):", rest)
+        if m:
+            pad, rest = int(m.group(1)) - 1, rest[3:]
         if rest.startswith("MAIN:"):
             x, y = rest[5:].split(":")
             cmd = "SET MAIN %s %s" % (x, y)
@@ -256,10 +257,13 @@ class Pads:
     """
 
     def __init__(self):
-        self.fds = [None, None]
+        self.fds = [None, None, None, None]
 
     def send(self, pad, cmd):
-        path = PIPE if pad == 0 else PIPE + "2"
+        # Pads 3 and 4 exist only in a Dolphin profile that binds them to
+        # pipes (the random four-player sweep); their paths simply never
+        # appear otherwise.
+        path = PIPE if pad == 0 else PIPE + str(pad + 1)
         if self.fds[pad] is None:
             if not os.path.exists(path):
                 return
@@ -693,7 +697,7 @@ def calibrate(case, headless):
 # ---------------------------------------------------------------- lockstep
 
 def run(case, frames, stop_on_divergence, headless, watch=(),
-        size=(960, 720), cpu="", seed=""):
+        size=(960, 720), cpu="", seed="", until_match_end=False):
     if not os.path.exists(route_path(case)):
         sys.exit("no recorded route for %s -- run with --calibrate first"
                  % case["name"])
@@ -801,6 +805,7 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
     locked = rendezvous is None
 
     compared = 0
+    last_pg, stalled = -1, 0
     first = {}
     t0 = None
     port_match_start = None
@@ -1085,6 +1090,17 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
                          compared / max(time.time() - t0, 1e-6)))
             if frames and compared >= frames:
                 return finish(first, compared, time.time() - t0, frames)
+            if until_match_end:
+                # The match frame stops advancing once the game leaves the
+                # match (the results screen); 300 compared frames without a
+                # new one ends the run as a complete match.
+                if pg != last_pg:
+                    last_pg, stalled = pg, 0
+                else:
+                    stalled += 1
+                if last_pg > 0 and stalled >= 300:
+                    print("   MATCH ENDED at match frame %d" % last_pg)
+                    return finish(first, compared, time.time() - t0, 0)
             port.release()
             ref.release()
     finally:
@@ -1233,6 +1249,9 @@ def main():
     ap.add_argument("--seed", default="",
                     help="hex RNG seed forced on both sides at match frame 1; "
                          "required for a CPU fight to stay in step")
+    ap.add_argument("--until-match-end", action="store_true",
+                    help="stop once the match is over (the match frame "
+                         "stops advancing) and judge the frames compared")
     ap.add_argument("--calibrate", action="store_true",
                     help="learn the console's menu route (slow, once per case)")
     args = ap.parse_args()
@@ -1243,7 +1262,8 @@ def main():
     w, _, h = args.size.partition("x")
     return run(case, args.frames, args.stop_on_divergence, args.headless,
                [c for c in args.watch.split(",") if c],
-               (int(w), int(h)), args.cpu, args.seed)
+               (int(w), int(h)), args.cpu, args.seed,
+               until_match_end=args.until_match_end)
 
 
 if __name__ == "__main__":

@@ -194,10 +194,10 @@ void pc_trace_seed_fighter_create(void)
      * late. The Dolphin build makes the same writes from its Fighter_Create
      * breakpoint. */
     if (cpu != NULL) {
-        int lvl[2] = { 0, 0 };
+        int lvl[4] = { 0, 0, 0, 0 };
         int slot;
-        sscanf(cpu, "%d,%d", &lvl[0], &lvl[1]);
-        for (slot = 0; slot < 2; slot++) {
+        sscanf(cpu, "%d,%d,%d,%d", &lvl[0], &lvl[1], &lvl[2], &lvl[3]);
+        for (slot = 0; slot < 4; slot++) {
             StaticPlayer* sp = Player_GetPtrForSlot(slot);
             if (lvl[slot] > 0 && sp != NULL) {
                 sp->cpu_level = (u8) lvl[slot];
@@ -2184,10 +2184,10 @@ void pc_force_cpu_frame(void)
          * identical to the frame, and the slots become CPUs together at
          * the first frame either of them is playing. */
         if (cpu != NULL) {
-            int lvl[2] = { 0, 0 };
+            int lvl[4] = { 0, 0, 0, 0 };
             int slot;
-            sscanf(cpu, "%d,%d", &lvl[0], &lvl[1]);
-            for (slot = 0; slot < 2; slot++) {
+            sscanf(cpu, "%d,%d,%d,%d", &lvl[0], &lvl[1], &lvl[2], &lvl[3]);
+            for (slot = 0; slot < 4; slot++) {
                 StaticPlayer* sp = Player_GetPtrForSlot(slot);
                 if (lvl[slot] <= 0 || sp == NULL) {
                     continue;
