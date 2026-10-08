@@ -1880,6 +1880,40 @@ static void fn_801D4220(int dcreq, uintptr_t args, void* buf, bool cancelflag)
     gp->u.stadium.xC4_b1 = false;
 }
 
+#if BUILD_TARGET_PC
+/* How long the console takes to read a transformation's DAT.
+ *
+ * lbFile_80016580 is asynchronous: on the console the read goes to the disc
+ * and fn_801D4220 runs when the drive is done, so state 1 below waits some
+ * frames before the stage starts to change. Here the read completes inside
+ * the call, and every transformation began that many frames early -- eleven
+ * for the fire stage, and from there on the dust, the quake, the RNG and the
+ * CPUs all differed (random sweep seed 309946342, the stage rising at 4064
+ * instead of 4075).
+ *
+ * The frames from the request to the callback, measured on Dolphin with its
+ * disc timing emulated (the default; Slippi plays the same way), are a
+ * function of the file: GrPs1 11, GrPs2 8, GrPs3 10, GrPs4 10, the same in
+ * every match sampled. The data is ready at once; only the moment the stage
+ * is told so is held back, by the console's count. */
+static const u8 pc_ps_load_frames[4] = { 11, 8, 10, 10 };
+static u32 pc_ps_load_ready = 0;
+
+static void pc_ps_load_begin(int file)
+{
+    extern u32 gm_GetFrameCount(void);
+    int n = (file >= 0 && file < 4) ? pc_ps_load_frames[file] : 0;
+    /* The callback lands on frame request+n; state 1 sees it a frame on. */
+    pc_ps_load_ready = gm_GetFrameCount() + (u32) n + 1;
+}
+
+static bool pc_ps_load_done(void)
+{
+    extern u32 gm_GetFrameCount(void);
+    return gm_GetFrameCount() >= pc_ps_load_ready;
+}
+#endif
+
 #ifdef MUST_MATCH
 #pragma push
 #pragma dont_inline on
@@ -1896,6 +1930,11 @@ bool grStadium_801D42B8(void)
     if (gp->u.stadium.xC4_b1) {
         return false;
     }
+#if BUILD_TARGET_PC
+    if (!pc_ps_load_done()) {
+        return false;
+    }
+#endif
     gp->u.stadium.xD0 =
         grDatFiles_801C6478(gp->u.stadium.xCC, gp->u.stadium.xC8);
     return true;
@@ -2100,6 +2139,9 @@ void grStadium_801D4548(Ground_GObj* gobj)
             gp->u.stadium.xC4_b1 = true;
             lbFile_80016580(datfiles[var_r29], gp->u.stadium.xCC,
                             &gp->u.stadium.xC8, fn_801D4220, 0);
+#if BUILD_TARGET_PC
+            pc_ps_load_begin(var_r29);
+#endif
             temp_r31->u.stadium.xDC = 1;
             return;
         }
