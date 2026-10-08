@@ -969,8 +969,11 @@ int slp_compat_deadup_fall(struct Fighter* fp, float grav, float term)
 }
 
 /* 80080e80 (UpdateModelPos): the product goes straight into the root
- * joint's translation, without HSD_JObjSetTranslate's dirty marking, and
- * fp->cur_pos is left alone. */
+ * joint's translation and fp->cur_pos is left alone. The code returns to
+ * 80080ee4, which is the rest of the original HSD_JObjSetTranslate: the
+ * dirty marking still happens. Leaving it out kept a respawning Mewtwo's
+ * tail clean on the port, where the console recomputed it at the KO-draw
+ * position and the tail reset on RebirthWait read those matrices. */
 int slp_compat_deadup_draw(struct HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -982,6 +985,9 @@ int slp_compat_deadup_draw(struct HSD_GObj* gobj)
     }
     m = HSD_CObjGetInvViewingMtxPtr(Camera_800310B8());
     PSMTXMultVec(m, (Vec3*) &SLP_MV_F(fp, 0x2350), &jobj->translate);
+    if (!(jobj->flags & JOBJ_MTX_INDEP_SRT)) {
+        HSD_JObjSetMtxDirty(jobj);
+    }
     return 1;
 }
 
