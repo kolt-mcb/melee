@@ -145,6 +145,10 @@ u32 Fighter_804D64F8 = 0;
 struct Fighter_804D64FC_t* Fighter_804D64FC = NULL;
 CrowdConfig* gCrowdConfig = NULL;
 HSD_Joint* Fighter_804D6504 = NULL;
+#if BUILD_TARGET_PC
+/* PlCo entry 20, raw, for the conversion below the table copy. */
+static void* pc_plco_entry20;
+#endif
 u8* Fighter_804D6508 = NULL;
 u8* Fighter_804D650C = NULL;
 UNK_T Fighter_804D6510 = NULL;
@@ -296,6 +300,11 @@ void Fighter_LoadCommonData(void)
                 u32 k;
                 for (k = 0; k < 0x818 / 4; k++) pc_common[k] = PC_BE32(w[k]);
                 p_ftCommonData = (ftCommonData*)pc_common;
+            }
+            {
+                u32 o20 = PC_BE32(offs[20]);
+                pc_plco_entry20 =
+                    (o20 != 0 && o20 < fsize) ? (void*) (dataBase + o20) : NULL;
             }
             /* Entries 12-15: the attribute modifiers for a resized fighter
              * (giant/tiny mushroom), bunny hood, metal box and one more,
@@ -803,7 +812,16 @@ void Fighter_LoadCommonData(void)
         Fighter_804D6510 = (void*)pc_ptr_arena;
         Fighter_804D650C = (void*)pc_ptr_arena;
         Fighter_804D6508 = (void*)pc_ptr_arena;
-        Fighter_804D6504 = NULL; /* HSD_JObjLoadJoint input: must stay NULL */
+        /* PlCo entry 20: the model whose material a metal (ftCo_800C8064)
+         * or cloaked (ftCo_800C8F6C) fighter is drawn with. Left NULL, both
+         * materials were NULL and the first metal fighter crashed the
+         * renderer (ftMaterial_800BF2B8). */
+        {
+            extern void* pc_ftconv_joint(void* raw);
+            Fighter_804D6504 = pc_plco_entry20 != NULL
+                                   ? pc_ftconv_joint(pc_plco_entry20)
+                                   : NULL;
+        }
         gCrowdConfig = (void*)pc_zero_target;
         if (Fighter_804D64FC == NULL) Fighter_804D64FC = (void*)pc_ptr_arena;
         return;
