@@ -1200,6 +1200,55 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         }
         break;
     }
+    case It_Kind_Octarock: {
+        /* Octorok's block starts with a pointer to its HP (it_802E4B00
+         * reads *x0), then six floats and an s16. Flat-swapped, x0 was a
+         * file offset read as a host pointer -- the first Octorok anyone hit
+         * crashed -- and every later field sat one word late. */
+        itOctarockAttributes* o;
+        u32 sub;
+        if (spec_off + 0x20 > a->len) {
+            return;
+        }
+        o = zalloc(sizeof(*o));
+        if (o == NULL) {
+            return;
+        }
+        sub = be32(r);
+        if (sub != 0 && sub + 4 <= a->len) {
+            o->x0 = zalloc(sizeof(s32));
+            if (o->x0 != NULL) {
+                *o->x0 = (s32) be32(a->base + sub);
+            }
+        }
+        conv_scalars(&o->x4, r + 4, 0x18);
+        o->x1C = (s16) ((r[0x1C] << 8) | r[0x1D]);
+        art->x4_specialAttributes = o;
+        break;
+    }
+    case It_Kind_Old_Kuri: {
+        /* The N64 Goomba: { s32* hp; f32 x4, x8, xC } (itoldkuri.c), the
+         * same leading pointer as the Octorok. */
+        struct { s32* x0; f32 x4, x8, xC; }* k;
+        u32 sub;
+        if (spec_off + 0x10 > a->len) {
+            return;
+        }
+        k = zalloc(sizeof(*k));
+        if (k == NULL) {
+            return;
+        }
+        sub = be32(r);
+        if (sub != 0 && sub + 4 <= a->len) {
+            k->x0 = zalloc(sizeof(s32));
+            if (k->x0 != NULL) {
+                *k->x0 = (s32) be32(a->base + sub);
+            }
+        }
+        conv_scalars(&k->x4, r + 4, 0xC);
+        art->x4_specialAttributes = k;
+        break;
+    }
     case It_Kind_Kyasarin: {
         /* Birdo's block starts with a pointer (x0) and is all 32-bit after
          * it. Flat-swapped, x0 was eight bytes here and every field read one
