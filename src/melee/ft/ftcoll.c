@@ -2691,7 +2691,7 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
 #endif
 
             if (arg4 != 0) {
-                u32 u_dmg = (u32) entry->x20;
+                u32 u_dmg = (u32) PC_F2U(entry->x20);
                 HitCapsule* sfx_hit = entry->hit0;
                 Fighter* sfx_fp = gobj->user_data;
                 int sfx_id = hit_effect_ids[sfx_hit->element];
@@ -2802,7 +2802,7 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
             kb = result;
 
             if (arg4 != 0) {
-                u32 u_dmg = (u32) entry->x20;
+                u32 u_dmg = (u32) PC_F2U(entry->x20);
                 int sfx_id = hit_effect_ids[hit->element];
                 int severity = hit->sfx_severity;
                 Fighter* sfx_fp = gobj->user_data;
@@ -3912,7 +3912,7 @@ void ftColl_8007BE3C(Fighter_GObj* gobj)
 
     {
         float x187c = fp->dmg.x187c;
-        u32 dmg_unsigned = fp->dmg.x1898;
+        u32 dmg_unsigned = PC_F2U(fp->dmg.x1898);
         u32 x1890 = fp->dmg.x1890;
         int effect_idx = hit_effect_ids[fp->dmg.x188c];
         Fighter* vfp = gobj->user_data;

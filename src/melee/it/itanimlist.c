@@ -129,8 +129,8 @@ void it_802790C0(Item_GObj* item_gobj, CommandInfo* cmd)
         hit->jobj = item_gobj->hsd_obj;
     }
     it_80272460(hit,
-                item->xC3C *
-                    ((f32) cmd->u->it_create_hitbox_0.damage * item->xC40),
+                PC_F2U(item->xC3C *
+                       ((f32) cmd->u->it_create_hitbox_0.damage * item->xC40)),
                 item_gobj);
     ++cmd->u;
 
@@ -191,7 +191,7 @@ void it_80279544(Item_GObj* item_gobj, CommandInfo* cmd)
     HitCapsule* hit = &item->x5D4_hitboxes[cmd->u->set_hitbox_damage.idx].hit;
     u32 val = PC_SCRIPT_H(((u16*) cmd->u)[PC_SCRIPT_HIDX(1)]) & 0x1FFF;
     PAD_STACK(8);
-    it_80272460(hit, (u32) (item->xC3C * ((f32) val * item->xC40)), item_gobj);
+    it_80272460(hit, (u32) PC_F2U(item->xC3C * ((f32) val * item->xC40)), item_gobj);
     ++cmd->u;
 }
 

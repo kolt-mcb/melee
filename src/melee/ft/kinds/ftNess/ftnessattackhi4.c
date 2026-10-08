@@ -92,7 +92,7 @@ static void ftNs_AttackHi4_YoyoApplyDamage(float unk_float, HSD_GObj* gobj)
             final_damage =
                 fp->x914->damage * NA_FMA(damage_mul, charge_duration2, 1.0f);
 
-            ftColl_8007ABD0(&fp->x914[0], final_damage, gobj);
+            ftColl_8007ABD0(&fp->x914[0], PC_F2U(final_damage), gobj);
         }
     }
 };
@@ -419,7 +419,7 @@ void ftNs_AttackHi4_YoyoSetChargeDamage(HSD_GObj* gobj)
         ((s32) fighter_data2->x914->state == HitCapsule_Enabled))
     {
         ftColl_8007ABD0(fighter_data2->x914,
-                        (u32) (fighter_data2->x914->damage *
+                        (u32) PC_F2U(fighter_data2->x914->damage *
                                NA_FMA(NA_FMA(0.0039059999398887157f,
                                              ness_attr->xB0_YOYO_DAMAGE_MUL,
                                              -1.0f),

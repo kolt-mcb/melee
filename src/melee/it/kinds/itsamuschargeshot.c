@@ -132,7 +132,7 @@ void it_802B56E4(Item_GObj* gobj, Vec3* vec, f32 farg0, f32 farg1, f32 farg2)
         ip->xDD4_itemVar.samuschargeshot.xDDC =
             SC2_FMA(farg1, (attr->xC - attr->x8) / farg2, attr->x8);
         ip->xDD4_itemVar.samuschargeshot.xDF8 =
-            (u32) SC2_FMA(farg1, (attr->x14 - attr->x10) / farg2, attr->x10);
+            (u32) PC_F2U(SC2_FMA(farg1, (attr->x14 - attr->x10) / farg2, attr->x10));
         ip->xDD4_itemVar.samuschargeshot.xDE0 = 0.0f;
         ip->xDD4_itemVar.samuschargeshot.xDE4 =
             SC2_FMA((f32) ip->xDD4_itemVar.samuschargeshot.xDEC,

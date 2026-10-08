@@ -284,7 +284,7 @@ bool itLinkArrow_802A850C(Item_GObj* gobj, Vec3* arg1, Vec3* arg2, f32 arg3,
         ip->xDD4_itemVar.linkarrow.xA8 =
             LA_FMA(arg4, (attr->x8 - attr->x4) / arg5, attr->x4);
         ip->xDD4_itemVar.linkarrow.xA4 =
-            LA_FMA(arg4, (attr->x10 - attr->xC) / arg5, attr->xC);
+            PC_F2U(LA_FMA(arg4, (attr->x10 - attr->xC) / arg5, attr->xC));
         ip->facing_dir = ftLib_800865C0(ip->xDD4_itemVar.linkarrow.xE0);
         HSD_JObjSetRotationY(jobj, M_PI_2 * ip->facing_dir);
         ip->pos = *arg1;

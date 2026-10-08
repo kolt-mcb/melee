@@ -248,10 +248,10 @@ Item_GObj* it_802C519C(Item_GObj* parent, Vec3* pos, s32 kind, s32 max_charge,
         {
             f32 base = attr->x10;
             ip->xDD4_itemVar.mewtwoshadowball.x24 =
-                MS_FMA((f32) ip->xDD4_itemVar.mewtwoshadowball.x18,
-                       (attr->x14 - base) /
-                           ip->xDD4_itemVar.mewtwoshadowball.x1C,
-                       base);
+                PC_F2U(MS_FMA((f32) ip->xDD4_itemVar.mewtwoshadowball.x18,
+                              (attr->x14 - base) /
+                                  ip->xDD4_itemVar.mewtwoshadowball.x1C,
+                              base));
         }
         ip->x40_vel.x = ip->xDD4_itemVar.mewtwoshadowball.x4.y *
                         cosf(ip->xDD4_itemVar.mewtwoshadowball.x4.x);
@@ -306,7 +306,7 @@ void it_802C53F0(Item_GObj* gobj, Vec3* pos, float angle, float charge,
         {
             f32 base = attr->x10;
             ip->xDD4_itemVar.mewtwoshadowball.x24 =
-                (u32) MS_FMA(charge, (attr->x14 - base) / max_charge, base);
+                (u32) PC_F2U(MS_FMA(charge, (attr->x14 - base) / max_charge, base));
         }
         ip->xDD4_itemVar.mewtwoshadowball.x4.z = 0.0f;
         {

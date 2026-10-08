@@ -260,7 +260,7 @@ void it_802EF548(Item_GObj* gobj)
     if (new_damage > (u32) attrs->xC) {
         new_damage = (u32) attrs->xC;
     }
-    it_80272460(&ip->x5D4_hitboxes[0].hit, (u32) new_damage, gobj);
+    it_80272460(&ip->x5D4_hitboxes[0].hit, (u32) PC_F2U(new_damage), gobj);
 
     ip->x40_vel.x = dir * ((1.0f + (ip->x5D4_hitboxes[0].hit.damage - 10.0f)) *
                            attrs->motions[ip->xDD4_itemVar.tools.x0].x18);

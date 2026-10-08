@@ -352,9 +352,9 @@ void ftLg_SpecialS_Anim(HSD_GObj* gobj)
         fp->x914[0].state == HitCapsule_Enabled)
     {
         ftColl_8007ABD0(&fp->x914[0],
-                        LS_FMA((f32) fp->mv.lg.SpecialS.chargeFrames,
-                               sa->x14_LUIGI_GREENMISSILE_DAMAGE_SLOPE,
-                               sa->x10_LUIGI_GREENMISSILE_DAMAGE_TILT),
+                        PC_F2U(LS_FMA((f32) fp->mv.lg.SpecialS.chargeFrames,
+                                      sa->x14_LUIGI_GREENMISSILE_DAMAGE_SLOPE,
+                                      sa->x10_LUIGI_GREENMISSILE_DAMAGE_TILT)),
                         gobj);
     }
 
@@ -376,9 +376,9 @@ void ftLg_SpecialAirS_Anim(HSD_GObj* gobj)
         fp->x914[0].state == HitCapsule_Enabled)
     {
         ftColl_8007ABD0(&fp->x914[0],
-                        LS_FMA((f32) fp->mv.lg.SpecialS.chargeFrames,
-                               sa->x14_LUIGI_GREENMISSILE_DAMAGE_SLOPE,
-                               sa->x10_LUIGI_GREENMISSILE_DAMAGE_TILT),
+                        PC_F2U(LS_FMA((f32) fp->mv.lg.SpecialS.chargeFrames,
+                                      sa->x14_LUIGI_GREENMISSILE_DAMAGE_SLOPE,
+                                      sa->x10_LUIGI_GREENMISSILE_DAMAGE_TILT)),
                         gobj);
     }
 
@@ -510,9 +510,9 @@ void ftLg_SpecialSMisfire_Anim(HSD_GObj* gobj)
         fp->x914[0].state == HitCapsule_Enabled)
     {
         ftColl_8007ABD0(&fp->x914[0],
-                        LS_FMA((f32) fp->mv.lg.SpecialS.chargeFrames,
-                               sa->x14_LUIGI_GREENMISSILE_DAMAGE_SLOPE,
-                               sa->x10_LUIGI_GREENMISSILE_DAMAGE_TILT),
+                        PC_F2U(LS_FMA((f32) fp->mv.lg.SpecialS.chargeFrames,
+                                      sa->x14_LUIGI_GREENMISSILE_DAMAGE_SLOPE,
+                                      sa->x10_LUIGI_GREENMISSILE_DAMAGE_TILT)),
                         gobj);
     }
 
@@ -534,9 +534,9 @@ void ftLg_SpecialAirSMisfire_Anim(HSD_GObj* gobj)
         fp->x914[0].state == HitCapsule_Enabled)
     {
         ftColl_8007ABD0(&fp->x914[0],
-                        LS_FMA((f32) fp->mv.lg.SpecialS.chargeFrames,
-                               sa->x14_LUIGI_GREENMISSILE_DAMAGE_SLOPE,
-                               sa->x10_LUIGI_GREENMISSILE_DAMAGE_TILT),
+                        PC_F2U(LS_FMA((f32) fp->mv.lg.SpecialS.chargeFrames,
+                                      sa->x14_LUIGI_GREENMISSILE_DAMAGE_SLOPE,
+                                      sa->x10_LUIGI_GREENMISSILE_DAMAGE_TILT)),
                         gobj);
     }
 

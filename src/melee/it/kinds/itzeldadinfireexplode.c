@@ -116,7 +116,7 @@ bool itZeldadinfireexplode_UnkMotion0_Anim(Item_GObj* gobj)
     if (ip->x5D4_hitboxes[0].hit.state != HitCapsule_Disabled) {
         temp_f1 = DE_FMA(ip->xDD4_itemVar.zeldadinfireexplode.xDD4, attrs->x10,
                          attrs->xC);
-        it_80272460(&ip->x5D4_hitboxes[0].hit, temp_f1, gobj);
+        it_80272460(&ip->x5D4_hitboxes[0].hit, PC_F2U(temp_f1), gobj);
 
         if (ip->xDD4_itemVar.zeldadinfireexplode.xDD8 == 0.0f) {
             ip->xDD4_itemVar.zeldadinfireexplode.xDD8 =

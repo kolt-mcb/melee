@@ -116,9 +116,9 @@ bool itNessPKFlashExplode_UnkMotion0_Anim(Item_GObj* gobj)
         ip->x5D4_hitboxes[0].hit.state != HitCapsule_Disabled)
     {
         it_80272460(&ip->x5D4_hitboxes[0].hit,
-                    PX_FMA(ip->xDD4_itemVar.pkflushexplode.xDD4,
-                           attr->x10_FLASH_EXPL_DAMAGE_MUL,
-                           attr->xC_FLASH_EXPL_BASE_DAMAGE),
+                    PC_F2U(PX_FMA(ip->xDD4_itemVar.pkflushexplode.xDD4,
+                                  attr->x10_FLASH_EXPL_DAMAGE_MUL,
+                                  attr->xC_FLASH_EXPL_BASE_DAMAGE)),
                     gobj);
         ip->xDB4_itcmd_var2 = 1;
     }

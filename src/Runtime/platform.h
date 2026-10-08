@@ -217,4 +217,26 @@ typedef unsigned int usize_t;
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+
+/* Float to u32 the way MWCC does it. Every float -> unsigned conversion on
+ * the console calls __cvt_fp2unsigned (src/Runtime/runtime.c): below zero or
+ * NaN gives 0, 2^32 and above gives 0xFFFFFFFF. x86 wraps a negative value
+ * instead, so a countdown that overshoots zero -- Wobbuffet's counter damage
+ * -- became a 4294967295-damage hitbox. Identity on the console build, so
+ * its codegen is unchanged. */
+#if BUILD_TARGET_PC
+static inline unsigned int PC_F2U(double d)
+{
+    if (!(d >= 0.0)) {
+        return 0;
+    }
+    if (d >= 4294967296.0) {
+        return 0xFFFFFFFFu;
+    }
+    return (unsigned int) d;
+}
+#else
+#define PC_F2U(x) (x)
+#endif
+
 #endif

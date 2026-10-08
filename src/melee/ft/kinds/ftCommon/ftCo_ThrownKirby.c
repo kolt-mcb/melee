@@ -147,7 +147,7 @@ void ftCo_800BDB58(Fighter_GObj* gobj, Fighter_GObj* thrower_gobj)
              ftKb_SpecialN_800F58AC, ftKb_SpecialN_800F5A88, false);
 
     /// @todo Possibly another callback in #inlineB2
-    ftColl_8007ABD0(fp->x914, inlineB1(gobj), gobj);
+    ftColl_8007ABD0(fp->x914, PC_F2U(inlineB1(gobj)), gobj);
 
     ftKb_SpecialN_800F5820(thrower_gobj, &fp->mv.co.thrownkirby.coll_box,
                            scale.x);

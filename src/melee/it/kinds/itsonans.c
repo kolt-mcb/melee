@@ -101,7 +101,7 @@ void it_802CD4FC(Item_GObj* gobj)
         HSD_JObjSetRotationZ(ip->xBBC_dynamicBoneTable->bones[4],
                              0.017453292f * ip->xDD4_itemVar.sonans.x64);
     }
-    it_80272460(&ip->x5D4_hitboxes[0].hit, (u32) ip->xDD4_itemVar.sonans.x68,
+    it_80272460(&ip->x5D4_hitboxes[0].hit, (u32) PC_F2U(ip->xDD4_itemVar.sonans.x68),
                 gobj);
     ip->xDD4_itemVar.sonans.x68 -= attrs->x20;
 }

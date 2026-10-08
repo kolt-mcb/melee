@@ -141,7 +141,7 @@ void it_80275640(Item_GObj* item_gobj, f32 arg1)
     for (i = 0; i < 4; i++) {
         HitCapsule* hitcapsule = &item->x5D4_hitboxes[i].hit;
         if (hitcapsule->state != HitCapsule_Disabled) {
-            it_80272460(hitcapsule, hitcapsule->damage * arg1, item_gobj);
+            it_80272460(hitcapsule, PC_F2U(hitcapsule->damage * arg1), item_gobj);
         }
     }
 }
