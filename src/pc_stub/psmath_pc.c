@@ -256,29 +256,28 @@ void PSMTXRotAxisRad(Mtx m, Vec* axis, f32 rad)
     f32 c = cosf(rad);
     f32 t = 1.0f - c;
     f32 x = n.x, y = n.y, z = n.z;
-    /* Every term is one fused multiply-add on the console. Read off
-     * PSMTXRotAxisRad at 80342530: the off-diagonals come out as
-     * `fnmsubs f6,f1,f30,f3` and `fmadds f7,f1,f30,f3` -- f30 is the sine,
-     * f3 the t*a*b product, f1 the remaining axis component -- so the
-     * `+/- s*component` is added to the product without rounding the product
-     * first. Written as two separate operations the result is a ULP away,
-     * and these matrices are the fighter's joint rotations: the leg IK runs
-     * its two joints through this twice a frame, and one ULP there moved
-     * Samus's leg hurt capsules (bones 13 and 14) enough to change x560 and
-     * x564 -- the reach the CPU AI reads -- which is where the port and the
-     * console first disagree in a level 9 match. */
-    f32 txy = y * (t * x), txz = z * (t * x), tyz = z * (t * y);
-    m[0][0] = fmaf(t * x, x, c);
+    /* Read off PSMTXRotAxisRad at 80342530. Only m01 and m10 are fused:
+     * `fnmsubs f6,f1,f30,f3` and `fmadds f7,f1,f30,f3` add +/- z*s to the
+     * t*x*y product without rounding z*s. Every other entry is built from
+     * rounded paired products (ps_muls0/ps_muls1) summed by ps_sum0/ps_sum1,
+     * so the product is rounded before the add. Fusing those too (as this
+     * once did) put Link's leg IK one ULP off on Flat Zone, which moved his
+     * leg hurt capsules and the AI words read from them. (Compiled with
+     * -ffp-contract=off, so a*b + c below is two roundings.) */
+    f32 tx = t * x, ty = t * y, tz = t * z;
+    f32 txy = tx * y, txz = tx * z, tyz = ty * z;
+    f32 xs = x * s, ys = y * s;
+    m[0][0] = tx * x + c;
     m[0][1] = fmaf(-z, s, txy);
-    m[0][2] = fmaf(y, s, txz);
+    m[0][2] = txz + ys;
     m[0][3] = 0;
     m[1][0] = fmaf(z, s, txy);
-    m[1][1] = fmaf(t * y, y, c);
-    m[1][2] = fmaf(-x, s, tyz);
+    m[1][1] = c + ty * y;
+    m[1][2] = -xs + tyz;
     m[1][3] = 0;
-    m[2][0] = fmaf(-y, s, txz);
-    m[2][1] = fmaf(x, s, tyz);
-    m[2][2] = fmaf(t * z, z, c);
+    m[2][0] = txz + -ys;
+    m[2][1] = xs + tyz;
+    m[2][2] = tz * z + c;
     m[2][3] = 0;
 }
 
