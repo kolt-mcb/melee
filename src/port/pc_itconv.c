@@ -1200,6 +1200,20 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         }
         break;
     }
+    case It_Kind_Tincle: {
+        /* Tingle's block is 32-bit words except the two s8 at 0x54/0x55
+         * (the range it_802EC4D0 draws its wait timer from). The flat swap
+         * reversed that word, so x54 read byte 0x57 and x55 byte 0x56: the
+         * timer came out different, Tingle stayed on the ground a frame (and
+         * then a whole cycle) longer than on the console, and its RNG draws
+         * landed on other frames (Bowser vs Bowser, Great Bay). */
+        itTincleAttributes* t = art->x4_specialAttributes;
+        if (t != NULL && spec_off + 0x56 <= a->len) {
+            t->x54 = (s8) r[0x54];
+            t->x55 = (s8) r[0x55];
+        }
+        break;
+    }
     case It_Kind_Octarock: {
         /* Octorok's block starts with a pointer to its HP (it_802E4B00
          * reads *x0), then six floats and an s16. Flat-swapped, x0 was a
