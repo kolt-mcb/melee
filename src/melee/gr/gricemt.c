@@ -290,7 +290,11 @@ static struct grIceMt_YakumonoParam* pc_icemt_param(const void* raw)
          * timer at 0xA4 came out as the other half, and the stage scrolled
          * at a fifth of the console's speed. Keep those halves at their
          * console bytes. */
-        if (o == 0x00 || o == 0x04 || o == 0x34 || o == 0x38 || o == 0x98 ||
+        /* 0x04 is not a pair: it is entry 0 of the f32 scroll-speed table
+         * grIceMt_801FA364 indexes at +4 (-0.15 in GrIm.dat). Split, its
+         * halves came out swapped and a scroll easing to speed 0 aimed at
+         * garbage. */
+        if (o == 0x00 || o == 0x34 || o == 0x38 || o == 0x98 ||
             o == 0xA4 || o == 0xA8)
         {
             u32 w = pc_icemt_be32(p + o);
