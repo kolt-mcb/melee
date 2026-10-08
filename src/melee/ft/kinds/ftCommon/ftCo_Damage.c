@@ -162,7 +162,17 @@ void ftCo_Damage_CalcKnockback(Fighter* fp)
 bool ftCo_8008DA4C(Fighter_GObj* gobj, HitElement arg1, enum_t arg2)
 {
     Fighter* fp = gobj->user_data;
+#if BUILD_TARGET_PC
+    /* With no damage this frame the console skips the switch and returns
+     * r3 as it stands -- fp, just loaded from gobj->user_data: non-zero, so
+     * true, and every caller then runs the colour-overlay script a second
+     * time this frame. Uninitialised here, it came back false, and Game &
+     * Watch's electric overlay fired its spawn a frame late (random sweep
+     * seed 499316575, Mushroom Kingdom, 857). */
+    bool result = true;
+#else
     bool result;
+#endif
     if (fp->dmg.x1838_percentTemp) {
         switch (arg1) {
         case HitElement_Fire:
