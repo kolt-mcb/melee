@@ -890,6 +890,13 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
             # character select together until the sweep's per-cell timeout
             # kills them -- 900 s for each of Roy's 29 cells, two of a full
             # sweep's hours spent learning nothing.
+            # A match was compared and both sides have left it: some matches
+            # go straight from the last match frame back to the menus, with
+            # no results screen for the stall test below to wait out.
+            if until_match_end and last_pg > 0 and pg == 0 and rg == 0:
+                print("   MATCH ENDED at match frame %d" % last_pg)
+                return finish(first, compared, time.time() - t0, 0)
+
             if locked and not pending and pg == 0 and rg == 0 \
                     and clock > route["match_frame"] + NO_MATCH_GRACE:
                 print("   ROUTE NEVER REACHED A MATCH: console frame %d since "
@@ -1094,7 +1101,7 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
                 # The match frame stops advancing once the game leaves the
                 # match (the results screen); 300 compared frames without a
                 # new one ends the run as a complete match.
-                if pg != last_pg:
+                if pg > 0 and pg != last_pg:
                     last_pg, stalled = pg, 0
                 else:
                     stalled += 1

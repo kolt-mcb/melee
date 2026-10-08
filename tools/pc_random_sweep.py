@@ -125,7 +125,8 @@ def main():
             info = lm.run_cell(name, a.frames, a.timeout,
                                ",".join(["9"] * a.players),
                                extra=["--until-match-end"])
-            if info.get("verdict") not in HARNESS_FAILURES:
+            if info.get("verdict") not in HARNESS_FAILURES \
+                    or attempt == RETRIES:
                 break
             print("   %s, retrying (%d/%d)" % (info.get("verdict"),
                                               attempt + 1, RETRIES),
