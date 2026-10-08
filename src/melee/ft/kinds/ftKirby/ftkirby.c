@@ -3917,7 +3917,17 @@ void ftKb_SpecialN_800F16D0(Fighter_GObj* gobj, FighterKind kind)
 
     switch (kind) {
     case Ft_Kind_Mario:
+#if BUILD_TARGET_PC
+        /* x0 is Mario's hat -- the kind-0 entry of the same table hats[]
+         * continues -- and its xC is slot 0, which the port converts to a
+         * dynamics object; the Article is the raw slot beside it. Reading
+         * xC left the fireball unregistered, the spawn returned NULL and
+         * it_8029B7C0 dereferenced it (random sweep seed 254429921). */
+        it_8026B3F8((Article*) ((KirbyHatStruct*) g->x0)->HAT_ARTICLE(0),
+                    It_Kind_Kirby_MarioFire);
+#else
         it_8026B3F8((Article*) g->x0->xC, It_Kind_Kirby_MarioFire);
+#endif
         break;
     case Ft_Kind_Luigi:
         it_8026B3F8((Article*) g->hats[16]->HAT_ARTICLE(0),
