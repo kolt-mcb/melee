@@ -390,6 +390,15 @@ def launch(case, headless, dumping, with_port, size=(960, 720), route=None):
     for kv in case["ref_env"]:
         k, _, v = kv.partition("=")
         ref_env[k] = v
+    # MELEE_NO_ITEMS=1 (Slippi online's rules): item frequency None. The port
+    # reads the variable itself; the console gets the same byte written into
+    # the save's preferences, *[0x804D3EE0] + 0x1CB0 (GamePrefs.item_freq),
+    # every frame -- Slippi's own code changes the default the save is built
+    # from, which happens at boot, before an OnFrame patch is applied.
+    if os.environ.get("MELEE_NO_ITEMS"):
+        poke = "804d3ee0+1cb0:1:ff"
+        ref_env["MELEE_POKE"] = (ref_env["MELEE_POKE"] + "," + poke
+                                 if ref_env.get("MELEE_POKE") else poke)
     # Both sides at the same size and the same aspect, so the two windows can
     # be compared by eye rather than only by the numbers: Dolphin renders 4:3
     # at native internal resolution into a window of exactly the size the port

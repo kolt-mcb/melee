@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "gmmain_lib.h"
 
 #include <Runtime/platform.h>
@@ -1189,6 +1190,13 @@ void gmMainLib_8015F600(int arg0, int arg1)
                                1);
         }
 
+#if BUILD_TARGET_PC
+        /* MELEE_NO_ITEMS=1: Slippi's "No Items" (General Codes, 043D4A60
+         * FF000000) -- item frequency None in the default preferences. */
+        if (getenv("MELEE_NO_ITEMS") != NULL) {
+            gmMainLib_DefaultGamePrefs.item_freq = 0xFF;
+        }
+#endif
         gmMainLib_804D3EE0->thing.save_data.x1CB0 = gmMainLib_DefaultGamePrefs;
 
         {

@@ -235,3 +235,5 @@ build.ninja.*
 /shot*.png
 /title_fix*.png
 /tev_test.png
+tests/pc/lockstep_matrix_slippi_noitems.json
+tests/pc/lockstep_logs_slippi_noitems/

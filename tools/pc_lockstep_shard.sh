@@ -68,6 +68,18 @@ if [ "$SLIPPI" = 1 ]; then
     fi
     [ -x "$MELEE_PORT_BIN" ] || { echo "no Slippi port build at $MELEE_PORT_BIN"; exit 1; }
     SLIPPI_GECKO=$(python3 "$ROOT/tools/slippi/gameplay_gecko.py" "$SLIPPI_INI") || exit 1
+    # MELEE_LOCKSTEP_NO_ITEMS=1: the rules Slippi online plays, items off.
+    # The console gets Slippi's own write (General Codes, "No Items"), the
+    # port the same through MELEE_NO_ITEMS, and the results go to their own
+    # matrix so the items-on sweep stays as it is.
+    if [ "${MELEE_LOCKSTEP_NO_ITEMS:-0}" = 1 ]; then
+        SLIPPI_GECKO=$(printf '%s\n' "$SLIPPI_GECKO" |
+            sed 's/^\[OnFrame_Enabled\]$/0x803D4A60:dword:0xFF000000\n[OnFrame_Enabled]/')
+        export MELEE_NO_ITEMS=1
+        OUT=${MELEE_SHARD_OUT:-${TMPDIR:-/tmp}/pc_shard_slippi_noitems}
+        MATRIX="$ROOT/tests/pc/lockstep_matrix_slippi_noitems.json"
+        export MELEE_MATRIX_LOGS="$ROOT/tests/pc/lockstep_logs_slippi_noitems"
+    fi
     # Gecko needs Sys/codehandler.bin, and the lockstep Dolphin is configured
     # for a /usr/local install that does not exist, so it finds no Sys at all
     # ("Could not enable cheats because codehandler.bin was missing") and runs
