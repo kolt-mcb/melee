@@ -1229,7 +1229,10 @@ void grBigBlue_801E6C60(Ground_GObj* gobj)
                     }
                     gp->u.bigblue.data[i].x18.y = (f32) dir_val;
 
-                    if (phase == 2) {
+                    /* 801E791C reloads x34: the stores just above can have
+                     * set it to 1, and a car hit while rising (phase 2) has
+                     * to start reacting this frame, not finish the rise. */
+                    if (gp->u.bigblue.data[i].x34 == 2) {
                         cur_pos.y += gp->u.bigblue.data[i].x44.y;
                         gp->u.bigblue.data[i].xC.x = euler.x;
                         {
