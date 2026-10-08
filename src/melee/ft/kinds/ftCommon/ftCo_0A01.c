@@ -2641,6 +2641,14 @@ Fighter* ftCo_800A4A40(Fighter* fp)
     return cur_fp;
 }
 
+#if BUILD_TARGET_PC
+/* The LR word ftCo_800A75DC later reads as uninitialised stack (see there):
+ * the return address saved by the last non-leaf function ftCo_800A4BEC
+ * called -- ftCo_IsAlly (800A4CB0 -> 800A4CB4) or ftCo_800A0F00 (800A4D44
+ * -> 800A4D48). Its other callees are leaves and save nothing. */
+static u32 pc_a4bec_lr = 0x800A4D48;
+#endif
+
 Fighter* ftCo_800A4BEC(Fighter* fp)
 {
     Fighter* cur_fp;
@@ -2661,9 +2669,30 @@ Fighter* ftCo_800A4BEC(Fighter* fp)
     {
         if (fp->gobj != cur) {
             cur_fp = GET_FIGHTER(cur);
+#if BUILD_TARGET_PC
+            bool pc_d1;
+            if (inlineD0(fp, cur_fp)) {
+                continue;
+            }
+            pc_a4bec_lr = 0x800A4CB4;
+            if (ftCo_IsAlly_dontinline(fp, cur_fp) || ftCo_800A1C44(cur_fp)) {
+                continue;
+            }
+            if (cur_fp->x221F_b3 || cur_fp->x2224_b2) {
+                pc_d1 = true;
+            } else {
+                pc_a4bec_lr = 0x800A4D48;
+                pc_d1 = ftCo_800A0F00(cur_fp->gobj) ||
+                        ftLib_8008732C(cur_fp->gobj);
+            }
+            if (1) {
+                if (1) {
+                    if (!pc_d1) {
+#else
             if (!inlineD0(fp, cur_fp) && !ftCo_IsAlly_dontinline(fp, cur_fp)) {
                 if (!ftCo_800A1C44(cur_fp)) {
                     if (!inlineD1(cur_fp)) {
+#endif
                         if (data->xF9_b0) {
                             if (cur_fp == data->x48) {
                                 return cur_fp;
@@ -4011,7 +4040,8 @@ void ftCo_800A75DC(Fighter* fp0, Fighter* fp1)
              * aimed at whatever coordinate its own stack held (-60.2, 2.9)
              * and Mewtwo's AI hash parted at frame 550. */
             {
-                union { u32 u; f32 f; } w0 = { 0x804EE980 }, w1 = { 0x800A4D48 };
+                union { u32 u; f32 f; } w0 = { 0x804EE980 }, w1;
+                w1.u = pc_a4bec_lr;
                 sp18.x = w0.f;
                 sp18.y = w1.f;
                 sp18.z = w0.f;
