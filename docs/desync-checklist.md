@@ -96,13 +96,26 @@ Open:
   (gfx 19 -> particle 2538 -> child gfx 332) is processed a frame later on
   the port; the 2443 list differs in position, not content. Probes:
   MELEE_PGEN (port) vs console MELEE_MEMAT=8039EEE4:30:7:4.
+  Captain Falcon, Poke Floats (2474-2475) is the same class. At 2474 the
+  generator list, every count after the update, every leftover after the
+  spawn, the particle processing order and every generator created all
+  agree; at 2475 the generators created that frame (genLife 2, a 06/0e/08
+  triplet) carry counts rotated by one. Next: print generator addresses
+  on both sides to tie list positions to identities across the frame
+  boundary (something between the particle loop and the next generator
+  pass rewrites or reorders them).
+- Ice Climbers, Green Greens: fixed (knockback fused-pair in
+  ftColl_80079C70/80079EA8).
 - Mewtwo, Onett (3288) / Greens: respawn (motion 6 -> 7). The tail reset
   reads joint matrices the console last computed at render time (y ~112,
   set up after a SetMtxDirty at the frame start); the port's are the
   capsule refresh's (y ~212), and the console also runs tail dynamics on
   that frame where the port does not.
-- Items: Slippi's General Codes include "No Items" (043D4A60). The sweep
-  runs with items on, which is more than Slippi online plays.
+- Items: Slippi's General Codes include "No Items" (043D4A60). The main
+  sweep keeps items on; MELEE_LOCKSTEP_NO_ITEMS=1 runs the items-off sweep
+  into lockstep_matrix_slippi_noitems.json. The console saves its
+  preferences to its memory card, so an items-off run leaves that Dolphin
+  profile items-off: never share profiles between the two modes.
 
 ## Other open items
 
