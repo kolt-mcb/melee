@@ -81,7 +81,17 @@ void ftCo_800C08A0(Fighter_GObj* gobj, Fighter_GObj* arg1, DynamicsDesc* arg2,
     int hurt_idx;
     Fighter* fp = GET_FIGHTER(gobj);
     PAD_STACK(8);
+#if BUILD_TARGET_PC
+    /* arg2 is a stage hazard's flat block of attack words ({state, damage,
+     * angle, ...}, the lbColl_80008D30_arg1 view below). As a DynamicsDesc
+     * its count is the word at +4 on the console, the damage; here the
+     * leading pointer is eight bytes and count landed on the angle: a fall
+     * into Zebes's acid dealt 90% instead of 14%. */
+    f = ftColl_800765F0(fp, NULL,
+                        ((lbColl_80008D30_arg1*) arg2)->damage);
+#else
     f = ftColl_800765F0(fp, NULL, arg2->count);
+#endif
     hurt_idx = 0;
     switch (arg3) {
     case BuryType_Unk2:
