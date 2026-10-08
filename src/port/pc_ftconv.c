@@ -1833,6 +1833,26 @@ void* pc_script_target(const void* cur, u32 off)
         }
         return (void*) (base + off);
     }
+    /* Not a fighter or item-article archive this registry has seen: stage
+     * items run scripts straight out of the stage's own archive (Peach's
+     * Castle's switch loops on a goto), and a NULL here ended the script --
+     * the switch's hitbox was cleared and never re-created, nobody could
+     * press it, and the blocks the console raised at 6078 never came (random
+     * sweep seed 827015723). The item converter keeps
+     * every archive lbArchive loads; ask it, and remember the answer. */
+    {
+        extern int pc_itconv_locate(const void*, const unsigned char**,
+                                    unsigned long*);
+        const unsigned char* base;
+        unsigned long len;
+        if (pc_itconv_locate(cur, &base, &len)) {
+            if (off >= len) {
+                return NULL;
+            }
+            pc_ftconv_note_archive(base, len);
+            return (void*) (base + off);
+        }
+    }
     return NULL;
 }
 
