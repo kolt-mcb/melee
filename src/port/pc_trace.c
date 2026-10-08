@@ -118,7 +118,9 @@ static u32 ai_hash(const struct CpuFighter* a)
     AI_H(a->x14); AI_H(a->x18); AI_H(a->x1C); AI_H(a->x20); AI_H(a->x24);
     AI_H(a->x28); AI_H(a->x2C); AI_H(a->x30); AI_H(a->x34);
     AI_HF(a->x38); AI_HF(a->x3C); AI_HF(a->x40);
-    AI_H(a->x50);
+    /* x50 is the closest item, stored as a pointer (ftCo_800A648C): the
+     * two sides' addresses never agree, so only whether one is set. */
+    AI_H(a->x50 != 0);
     AI_HF(a->x54.x); AI_HF(a->x54.y); AI_H(a->x60);
     AI_HF(a->x64.x); AI_HF(a->x64.y); AI_HF(a->x6C.x); AI_HF(a->x6C.y);
     AI_HF(a->x74.x); AI_HF(a->x74.y);
