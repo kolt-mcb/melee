@@ -83,6 +83,27 @@ after dynamics; the port now does the same (compat `dynamics`).
 Probe: console `MELEE_CODE_BP=8000F38C` (lbShadow_8000F38C) logs one hit per
 drawn frame; a missing gframe is a skipped draw.
 
+## Slippi sweep, 2026-10-08
+
+Fixed: Big Blue car phase reload; PSMTXRotAxisRad fusing (leg IK, Flat
+Zone); PlCo metal/cloak model; Octorok/Goomba HP pointers; foods table
+tail word; float->u32 via __cvt_fp2unsigned (PC_F2U); cpu.x50 hashed as
+a pointer; first-use item slots non-zero (Fan xD4C).
+
+Open:
+- Ganon, Castle (2444) / Captain, Poke Floats (2476): particle generator
+  list order. Seeds and caller order agree through 2443, but a generator
+  (gfx 19 -> particle 2538 -> child gfx 332) is processed a frame later on
+  the port; the 2443 list differs in position, not content. Probes:
+  MELEE_PGEN (port) vs console MELEE_MEMAT=8039EEE4:30:7:4.
+- Mewtwo, Onett (3288) / Greens: respawn (motion 6 -> 7). The tail reset
+  reads joint matrices the console last computed at render time (y ~112,
+  set up after a SetMtxDirty at the frame start); the port's are the
+  capsule refresh's (y ~212), and the console also runs tail dynamics on
+  that frame where the port does not.
+- Items: Slippi's General Codes include "No Items" (043D4A60). The sweep
+  runs with items on, which is more than Slippi online plays.
+
 ## Other open items
 
 - [ ] Pokémon Stadium big screen draws black (TObj now found; render-to-texture)
