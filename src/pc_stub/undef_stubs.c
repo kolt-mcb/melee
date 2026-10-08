@@ -2967,6 +2967,15 @@ void OSReport(const char *fmt, ...);
      * The real lb_80019AAC accesses GCN-style virtual addresses (0x80xxxxxx)
      * which crash on x86_64 due to RIP-relative address overflow. */
     if (lb_80019AAC_noop) lb_80019AAC_noop();
+    /* Audio before the memory init, as gmMain_8015FD24's boot does.
+     * HSD_SynthInit takes the sound banks' ARAM with ARAlloc, and
+     * lbMemory_8001564C starts the game's ARAM heap at whatever ARAlloc
+     * has handed out so far. The other way round the banks sat inside the
+     * heap: with four characters loaded, an SFX bank load landed on the
+     * first fighter's animation archive (PlNsAJ.dat at 0x96c820) and he
+     * held frame 0 of every animation. */
+    OSReport("[INIT] lbAudioAx_8002838C\n");
+    lbAudioAx_8002838C();
     OSReport("[INIT] lbMemory_8001564C\n");
     lbMemory_8001564C();
     OSReport("[INIT] lbHeap_80015F3C\n");
@@ -2987,8 +2996,6 @@ void OSReport(const char *fmt, ...);
     lbArq_80014D2C();
     OSReport("[INIT] lbSnap_8001E290\n");
     lbSnap_8001E290();
-    OSReport("[INIT] lbAudioAx_8002838C\n");
-    lbAudioAx_8002838C();
     OSReport("[INIT] gmMainLib_8015FCC0\n");
     gmMainLib_8015FCC0();
     OSReport("[INIT] lbMthp_8001F87C\n");
