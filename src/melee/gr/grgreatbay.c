@@ -755,9 +755,19 @@ void grGreatBay_801F5914(void* user_data, int joint_id, CollData* coll,
 #endif
         temp_r0 == 3)
     {
+#if BUILD_TARGET_PC
+        /* The turtle's own proc (grGreatBay_801F5600) reads these through
+         * greatbay4. u.greatbay has a pointer at +C8, so on the host its
+         * xD4/xD8/xE0 are 8 bytes further on: the turtle never felt anyone
+         * standing on it and sank at its unloaded rate. */
+        gp->u.greatbay4.xD4 = ((u32) coll->env_flags & Collide_LedgeGrabMask);
+        gp->u.greatbay4.xD8 += 1;
+        gp->u.greatbay4.xE0 += coll_x50 / 100.0f;
+#else
         gp->u.greatbay.xD4 = ((u32) coll->env_flags & Collide_LedgeGrabMask);
         gp->u.greatbay.xD8 += 1;
         gp->u.greatbay.xE0 += coll_x50 / 100.0f;
+#endif
     }
 }
 
