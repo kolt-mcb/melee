@@ -734,7 +734,7 @@ static ItemAttr* conv_attr(const struct arch* a, u32 off)
     ItemAttr* out;
     u8 b0, b1;
 
-    if (off == 0 || off + 0x84 > a->len) {
+    if (off + 0x84 > a->len) {
         return NULL;
     }
     src = a->base + off;
@@ -758,6 +758,22 @@ static ItemAttr* conv_attr(const struct arch* a, u32 off)
      * (there is no x2 member). */
     out->x3 = src[2];
     return out;
+}
+
+/* The ItemAttr a pointer field at file offset `field` points to. Zero is
+ * null only when the archive does not relocate that word: Kirby's copy
+ * articles (PlKbCp*.dat) put the attribute record first in the data
+ * section, so the article's word 0 is a relocated zero, and treating it
+ * as null left Kirby's Dr. Mario pill (kind 131) without attributes --
+ * the port refused to spawn it, and the CPUs that would have reacted to
+ * it chose differently (random sweep seed 106519686). */
+static ItemAttr* conv_attr_field(const struct arch* a, u32 field)
+{
+    u32 off = be32(a->base + field);
+    if (off == 0 && !arch_is_ptr(a, field)) {
+        return NULL;
+    }
+    return conv_attr(a, off);
 }
 
 /* Per-item attributes: a block of 32-bit scalars whose size only the item
@@ -1051,7 +1067,7 @@ static Article* conv_article(const struct arch* a, u32 off)
     if (out == NULL) {
         return NULL;
     }
-    out->x0_common_attr = conv_attr(a, be32(src + 0x0));
+    out->x0_common_attr = conv_attr_field(a, off);
     out->x4_specialAttributes = conv_special(a, be32(src + 0x4), &spec_size);
     out->x8_hurtbones = conv_hurt(a, be32(src + 0x8));
     out->xC_itemStates = conv_states(a, be32(src + 0xC), &nstates);
@@ -1617,7 +1633,7 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         if (al == NULL) {
             return;
         }
-        al->x0 = conv_attr(a, be32(r + 0x0));
+        al->x0 = conv_attr_field(a, (u32) (r - a->base));
         conv_scalars(&al->x4, r + 0x4, 4);
         conv_scalars(&al->x8, r + 0x8, 4);
         art->x4_specialAttributes = al;
