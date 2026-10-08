@@ -1549,7 +1549,12 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         break;
     }
     case It_Kind_Link_Arrow:
-    case It_Kind_CLink_Arrow: {
+    case It_Kind_CLink_Arrow:
+    /* Kirby's copies of the bows shoot the same arrow, attributes and all;
+     * left out, its two trail-joint pointers stayed raw and the second one
+     * became a wild jobj (random sweep seed 306202671 crashed at 215). */
+    case It_Kind_Kirby_LinkArrow:
+    case It_Kind_Kirby_CLinkArrow: {
         itLinkArrowAttributes* w = zalloc(sizeof(*w));
         u32 v;
         if (w == NULL) {
