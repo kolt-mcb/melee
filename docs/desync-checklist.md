@@ -70,6 +70,19 @@ port's pose is closer to the previous frame than the console's. So the
 first pose of the new animation is built differently (animation start /
 blend on a same-frame double transition).
 
+## Render-dependent state (2026-10-07)
+
+Fox/Mewtwo hurtbox drift (x560/x564) was not arithmetic. The console
+occasionally runs two logic frames in one retrace and skips a draw (Fox
+Mute City: mf0 1515, once in 1600 frames). Joint matrices are set up
+lazily at draw time, and the dynamics reset on a motion change
+(ftCo_8009CB40) copies the tail joints' matrix translations, so after a
+skipped draw the tail restarts from an older pose. Slippi's
+FastForward/DynamicsFix (8009e090) sets up every dirty fighter matrix
+after dynamics; the port now does the same (compat `dynamics`).
+Probe: console `MELEE_CODE_BP=8000F38C` (lbShadow_8000F38C) logs one hit per
+drawn frame; a missing gframe is a skipped draw.
+
 ## Other open items
 
 - [ ] Pokémon Stadium big screen draws black (TObj now found; render-to-texture)
