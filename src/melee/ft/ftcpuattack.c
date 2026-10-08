@@ -1764,7 +1764,16 @@ void ftCo_800B77E8(Fighter* fp)
                 tmp->xEC++;
             }
         }
+#if BUILD_TARGET_PC
+        /* fp+2238 is read through Game & Watch's view of the union; for
+         * Kirby it is the copy kind (u.kb.hat.kind). The port's ftKb_Hat
+         * opens with an 8-byte pointer, so G&W's field no longer lines up
+         * with it -- Kirby holding Jigglypuff's copy queued the wrong
+         * defensive move (random sweep seed 539661371). */
+        charge = fp->u.kb.hat.kind;
+#else
         charge = fp->u.gw.x2238_panicCharge;
+#endif
         if (charge == 3 || charge == 0xD || charge == 0x10) {
             {
                 struct CpuFighter* tmp = &fp->cpu;

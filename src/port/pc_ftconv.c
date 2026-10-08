@@ -358,6 +358,22 @@ static ftDynamics* pc_conv_dynamics_at(const u8* base, unsigned long len, u32 of
  * and the parts descriptor (one visibility row: the loader asks for costume
  * 0) are converted; the five per-kind slots are heterogeneous (a joint here,
  * an animation there) and stay NULL until each kind is done. */
+/* The five per-copy-kind slots: dynamic-bone chains (Bowser's shell
+ * spikes, Zelda's hair) that ftCo_8009D074 and its siblings read straight
+ * off the hat, Articles (see KirbyHatStruct), or plain numbers. */
+static void kirby_hat_slots(KirbyHatStruct* h, const u8* p, const u8* base,
+                            unsigned long len)
+{
+    int q;
+    for (q = 0; q < 5; q++) {
+        u32 off = pc_be32(*(const u32*) (p + 0xC + 4 * q));
+        h->hat_dynamics[q] = pc_conv_dynamics_at(base, len, off);
+        h->pc_raw_slots[q] =
+            (off != 0 && off < len) ? (void*) (base + off) : NULL;
+        h->pc_raw_words[q] = off;
+    }
+}
+
 void* pc_ftconv_kirby_hat(void* raw)
 {
     const u8* p = (const u8*) raw;
@@ -384,7 +400,12 @@ void* pc_ftconv_kirby_hat(void* raw)
              * 4-byte-aligned in-archive offsets; anything else is left as
              * it was. */
             if (joff == 0 || (joff & 3) != 0 || joff + 0x40 > len) {
-                return h; /* empty hat: no joint, no parts, mask 0 */
+                /* No joint, no parts -- but the five slots are still this
+                 * kind's: Jigglypuff's hat opens with 1 and keeps the mask
+                 * of bones to insert in slot 1. Dropping it left Kirby
+                 * short of seven bones and the copy crashed. */
+                kirby_hat_slots(h, p, base, len);
+                return h;
             }
             {
                 const u8* j = base + joff;
@@ -393,6 +414,7 @@ void* pc_ftconv_kirby_hat(void* raw)
                     u32 v = pc_be32(*(const u32*) (j + 4 * k));
                     if (k == 1) continue; /* flags */
                     if (v != 0 && ((v & 3) != 0 || v >= len)) {
+                        kirby_hat_slots(h, p, base, len);
                         return h;
                     }
                 }
@@ -413,20 +435,7 @@ void* pc_ftconv_kirby_hat(void* raw)
                     h->desc.vis_table = rows;
                 }
             }
-            {
-                /* the five per-copy-kind dynamic-bone chains (Bowser's
-                 * shell spikes, Zelda's hair): ftCo_8009D074 and its
-                 * siblings read these straight off the hat */
-                int q;
-                for (q = 0; q < 5; q++) {
-                    u32 off = pc_be32(*(const u32*) (p + 0xC + 4 * q));
-                    h->hat_dynamics[q] = pc_conv_dynamics_at(base, len, off);
-                    /* and the archive pointer, for the slots that are really
-                     * Articles -- see KirbyHatStruct */
-                    h->pc_raw_slots[q] =
-                        (off != 0 && off < len) ? (void*) (base + off) : NULL;
-                }
-            }
+            kirby_hat_slots(h, p, base, len);
             if (pc_ftconv_trace()) {
                 fprintf(stderr, "[FTCONV] kirby hat %p -> joint %p model_num %u dyn %p %p %p %p %p\n", raw,
                         (void*) h->hat_joint, (unsigned) h->desc.model_num,

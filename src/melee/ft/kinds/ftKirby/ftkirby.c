@@ -2925,7 +2925,16 @@ HSD_JObj* ftKb_Init_UnkMotionStates6(Fighter_GObj* gobj)
 
 void ftKb_SpecialN_800EF040(Fighter_GObj* gobj, int arg1, KirbyHatStruct* hat)
 {
+#if BUILD_TARGET_PC
+    /* Slot 1 is a bit mask here, not a pointer; the converter made it a
+     * dynamics object, so read the word it came from. Taking the pointer
+     * left Kirby without the bones Jigglypuff's hat is skinned to, and the
+     * hat's envelopes resolved to NULL joints (random sweep seed 539661371
+     * crashed at match frame 299). */
+    u32 mask = hat->pc_raw_words[1];
+#else
     u32 mask = (u32) hat->hat_dynamics[1];
+#endif
     if (mask != 0) {
         Fighter* fp = GET_FIGHTER(gobj);
         struct Fighter_804D6540_t* ft_data = Fighter_804D6540[fp->kind];
@@ -3242,7 +3251,12 @@ void ftKb_SpecialN_800EF69C(Fighter_GObj* gobj, int arg1, KirbyHatStruct* hat)
         HSD_ObjFree(&fighter_x2040_alloc_data, fp->u.kb.hat.x1C.data);
         fp->u.kb.hat.x14.data = NULL;
     }
+#if BUILD_TARGET_PC
+    /* The same mask ftKb_SpecialN_800EF040 inserts by -- see there. */
+    mask = hat->pc_raw_words[1];
+#else
     mask = (u32) hat->hat_dynamics[1];
+#endif
     if (mask != 0) {
         ftKb_RemoveHatParts(gobj, mask);
     }

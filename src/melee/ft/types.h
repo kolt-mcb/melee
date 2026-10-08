@@ -2237,6 +2237,11 @@ struct KirbyHatStruct {
      * Fox, the blaster's article data came back NULL, the spawn was refused,
      * and the next frame dereferenced the NULL it left behind. */
     void* pc_raw_slots[5];
+    /* And the slot words themselves, untranslated: for some copy kinds a
+     * slot is neither a pointer nor an Article but a plain number --
+     * ftKb_SpecialN_800EF040 reads slot 1 as the mask of extra bones the
+     * hat needs inserted into Kirby. */
+    u32 pc_raw_words[5];
 #endif
 };
 
