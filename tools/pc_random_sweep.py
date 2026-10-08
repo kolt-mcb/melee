@@ -47,8 +47,17 @@ RETRIES = 2
 
 
 def stages():
-    """The VS stages the matrix sweeps (Izumi..Last)."""
-    return [k for k in sorted(mx.STAGES) if 2 <= k <= 32]
+    """The VS stages (Izumi..Last) the stage select has a panel for --
+    Akaneia and Icetop are in the range but cannot be picked."""
+    out = []
+    for k in sorted(mx.STAGES):
+        if 2 <= k <= 32:
+            try:
+                rt.case_lines_n(["MARIO", "MARIO"], mx.STAGES[k], k)
+            except SystemExit:
+                continue
+            out.append(k)
+    return out
 
 
 def characters():
