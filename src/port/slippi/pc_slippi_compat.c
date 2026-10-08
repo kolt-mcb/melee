@@ -109,6 +109,10 @@ static const struct slp_compat_entry slp_fixes[SLP_FIX_COUNT] = {
       "a new fighter's and a new stage object's data start zeroed instead "
       "of holding whatever the heap last had there (Init Player Data, Init "
       "Stage Data)" },
+    { "dynamics", 1, "8009e090",
+      "after a fighter's dynamics run, every dirty joint matrix of the "
+      "fighter is set up at once, so the next frame does not depend on "
+      "whether this one was rendered (FastForward/DynamicsFix)" },
 };
 
 static unsigned char slp_on[SLP_FIX_COUNT];
@@ -1041,4 +1045,38 @@ void slp_compat_init_zero(void* p, unsigned long n)
 int slp_compat_dead_vote(struct HSD_GObj* gobj)
 {
     return slp_compat(SLP_FIX_WHISPY_DIR) && (int) GET_FIGHTER(gobj)->motion_id <= 0xB;
+}
+
+/* FastForward/DynamicsFix (8009e090, the end of ftCo_8009DD94).
+ *
+ * Joint matrices are set up lazily: most of them only when the frame is
+ * drawn. Some gameplay reads them -- the dynamics reset on a motion change
+ * (ftCo_8009CB40) copies each tail joint's matrix translation -- so on a frame
+ * the console did not draw (two logic frames in one retrace, or a rollback)
+ * the next frame sees older matrices. Slippi makes that impossible by
+ * setting up every dirty joint of the fighter right after its dynamics run.
+ * The test is the console's own: not 0x00800000 and dirty (0x40), then
+ * HSD_JObjSetupMatrixSub, child before sibling. */
+static void slp_dynamics_walk(HSD_JObj* jobj)
+{
+    if (!(jobj->flags & 0x00800000) && (jobj->flags & 0x40)) {
+        HSD_JObjSetupMatrixSub(jobj);
+    }
+    if (jobj->child != NULL) {
+        slp_dynamics_walk(jobj->child);
+    }
+    if (jobj->next != NULL) {
+        slp_dynamics_walk(jobj->next);
+    }
+}
+
+void slp_compat_dynamics_fix(struct HSD_GObj* gobj)
+{
+    if (slp_compat(SLP_FIX_DYNAMICS)) {
+        Fighter* fp = GET_FIGHTER(gobj);
+        HSD_JObj* root = GET_JOBJ(fp->gobj);
+        if (root != NULL) {
+            slp_dynamics_walk(root);
+        }
+    }
 }

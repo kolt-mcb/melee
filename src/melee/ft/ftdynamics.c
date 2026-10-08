@@ -2,6 +2,9 @@
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif
+#if BUILD_SLIPPI
+#include "port/slippi/pc_slippi_compat.h"
+#endif
 
 #include <Runtime/platform.h>
 
@@ -477,6 +480,9 @@ void ftCo_8009DD94(Fighter_GObj* gobj, bool arg1)
             dyn++;
         }
     }
+#if BUILD_SLIPPI
+    slp_compat_dynamics_fix(gobj);
+#endif
 }
 
 void ftCo_8009E0A8(Fighter_GObj* gobj)

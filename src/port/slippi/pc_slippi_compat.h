@@ -63,6 +63,7 @@ enum SlpCompatFix {
     SLP_FIX_WHISPY_DIR,
     SLP_FIX_PS_CAMERA,
     SLP_FIX_INIT_ZERO,
+    SLP_FIX_DYNAMICS, /* fighter matrices set up after dynamics */
 
     SLP_FIX_COUNT
 };
@@ -97,6 +98,7 @@ int slp_compat_deadup_hit(struct Fighter* fp, float vy, float vz);
 int slp_compat_deadup_fall(struct Fighter* fp, float grav, float term);
 int slp_compat_deadup_draw(struct HSD_GObj* gobj);
 int slp_compat_offscreen(struct Fighter* fp);
+void slp_compat_dynamics_fix(struct HSD_GObj* gobj);
 int slp_compat_dead_vote(struct HSD_GObj* gobj);
 int slp_compat_ps_monitor(int orig, struct HSD_GObj* player);
 void slp_compat_init_zero(void* p, unsigned long n);
