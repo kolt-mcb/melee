@@ -833,6 +833,19 @@ static inline f32 grBigBlue_LaneSpeed(s32 idx)
     return ((f32*) &speeds)[idx] * Ground_801C0498();
 }
 
+/* gp+C4 is a spawn counter here, named through the Arwing's view of the
+ * union. On the port that view's xC4 is 8 bytes wide (it holds a GObj for
+ * Corneria), so `= 0` also zeroed the first car's index and state behind it
+ * -- the car parked mid-road, its collision stayed where it stopped, and a
+ * CPU later found a floor the console's had driven off (random sweep seed
+ * 42303469, Big Blue, 6503) -- and `+= 1` counted with that car's bytes as
+ * the high half. Use this stage's own 4-byte word. */
+#if BUILD_TARGET_PC
+#define GRBB_SPAWN_COUNT(gp) ((gp)->u.bigblue.x0_w)
+#else
+#define GRBB_SPAWN_COUNT(gp) ((gp)->u.arwing.xC4)
+#endif
+
 void grBigBlue_801E6C60(Ground_GObj* gobj)
 {
     s32 i;
@@ -1063,9 +1076,9 @@ void grBigBlue_801E6C60(Ground_GObj* gobj)
                                 grBigBlue_801E8A1C(i);
                             }
                         }
-                        base->u.arwing.xC4 += 1;
+                        GRBB_SPAWN_COUNT(base) += 1;
                         if ((int) grBigBlue_801E89DC(2) == 0) {
-                            u32 cnt = base->u.arwing.xC4;
+                            u32 cnt = GRBB_SPAWN_COUNT(base);
                             if ((s32) cnt >= (s32) yakumono_param->x11C) {
                                 s32 max = yakumono_param->x120;
                                 if ((s32) cnt <= max &&
@@ -1076,7 +1089,7 @@ void grBigBlue_801E6C60(Ground_GObj* gobj)
                             }
                         }
                         if ((int) grBigBlue_801E89DC(1) == 0) {
-                            u32 cnt2 = base->u.arwing.xC4;
+                            u32 cnt2 = GRBB_SPAWN_COUNT(base);
                             if ((s32) cnt2 >= (s32) yakumono_param->xDC &&
                                 (s32) gp->u.bigblue.data[i].x2 == 1 &&
                                 ((s32) cnt2 >= (s32) yakumono_param->xE0 ||
@@ -1084,7 +1097,7 @@ void grBigBlue_801E6C60(Ground_GObj* gobj)
                             {
                                 grBigBlue_801E8978(0, NULL, NULL);
                                 grBigBlue_801E8978(1, (void*) 1, jobj);
-                                base->u.arwing.xC4 = 0;
+                                GRBB_SPAWN_COUNT(base) = 0;
                             }
                         }
                     }
