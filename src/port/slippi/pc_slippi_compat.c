@@ -81,7 +81,13 @@ static const struct slp_compat_entry slp_fixes[SLP_FIX_COUNT] = {
     { "neutral-spawns", 1, "8016e510",
       "the six legal stages spawn at fixed, mirrored points, and facing "
       "follows the side; elsewhere the stage's own spawn by player order" },
-    { "wobbling", 1, "8008f090",
+    /* Three hooks: the count is started at 800db880 and 800dbbd4 (entering
+     * the held state) and checked at 8008f090. The lockstep console must
+     * get all three: with only the check, the count is whatever the held
+     * fighter's state variables last held -- Fox's Illusion GObj pointer,
+     * 0x80e3bde0, read as count 128 -- and the first hit broke the grab
+     * (random sweep seed 306388599). */
+    { "wobbling", 1, "8008f090,800db880,800dbbd4",
       "a fighter held by an Ice Climber is let go after the fourth distinct "
       "hit from the grabber or its items (singles only), and Nana is made "
       "to let go with Popo" },
@@ -636,16 +642,26 @@ int slp_compat_wobble_check(Fighter_GObj* gobj)
     if (!slp_compat(SLP_FIX_WOBBLING)) {
         return 0;
     }
+#define WOBBLE_DBG(why)                                                       \
+    do {                                                                      \
+        if (getenv("MELEE_GRABDBG") != NULL) {                                \
+            fprintf(stderr, "[GRABDBG] gframe=%u p%d wobble check: %s\n",     \
+                    (unsigned) gm_GetFrameCount(), (int) fp->player_id, why); \
+        }                                                                     \
+    } while (0)
     /* Held, not thrown: CapturePulledHi (0xDF) to CaptureDamageLw (0xE4). */
     if (fp->motion_id < 0xDF || fp->motion_id > 0xE4) {
+        WOBBLE_DBG("not held");
         return 0;
     }
     grabber = fp->victim_gobj;
     if (grabber == NULL) {
+        WOBBLE_DBG("no grabber");
         return 0;
     }
     gfp = GET_FIGHTER(grabber);
     if (!gfp->x2222_b5) { /* the grabber has a follower */
+        WOBBLE_DBG("grabber has no follower");
         return 0;
     }
     w = slp_wobble_word(fp);
@@ -656,19 +672,29 @@ int slp_compat_wobble_check(Fighter_GObj* gobj)
     } else {
         Item* ip;
         if (source->classifier != HSD_GOBJ_CLASS_ITEM) {
+            WOBBLE_DBG("hit by someone else");
             return 0;
         }
         ip = (Item*) source->user_data;
         if (ip->owner != (HSD_GObj*) grabber) {
+            WOBBLE_DBG("hit by someone else's item");
             return 0;
         }
         move = ip->xDA8_short;
     }
     if (move == last) {
+        WOBBLE_DBG("same move as last hit");
         return 0;
     }
     count = ((*w >> 24) + 1) & 0xFF;
     *w = (count << 24) | (*w & 0x00FF0000u) | (move & 0xFFFFu);
+    if (getenv("MELEE_GRABDBG") != NULL) {
+        fprintf(stderr, "[GRABDBG] gframe=%u p%d held by p%d: hit %u "
+                        "(last %u) count %u teams=%d\n",
+                (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                (int) gfp->player_id, move, last, count,
+                (int) gm_8016B168());
+    }
     if (gm_8016B168()) {
         return 0;
     }

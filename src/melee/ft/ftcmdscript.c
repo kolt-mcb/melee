@@ -341,6 +341,32 @@ void ftCo_800B462C(Fighter* fp)
     data->write_pos = data->buffer;
 }
 
+#if BUILD_TARGET_PC
+/* MELEE_CPUCMDAT=<lo>-<hi>: who wrote each CPU command on those match
+ * frames, as the caller's return address for addr2line. The console's
+ * counterpart is MELEE_CODE_BP=800B463C,800B46B8, whose hits print lr. A CPU
+ * that picks a different stick on one frame with every traced field equal
+ * is a decision made somewhere in ftcpuattack.c, and the command stream
+ * alone does not say where. */
+static int cpucmd_at(void)
+{
+    extern u32 gm_GetFrameCount(void);
+    static int lo = -2, hi;
+    int f;
+    if (lo == -2) {
+        const char* e = getenv("MELEE_CPUCMDAT");
+        const char* dash = e ? strchr(e, '-') : NULL;
+        lo = e ? atoi(e) : -1;
+        hi = dash ? atoi(dash + 1) : lo;
+    }
+    if (lo < 0) {
+        return 0;
+    }
+    f = (int) gm_GetFrameCount();
+    return f >= lo && f <= hi;
+}
+#endif
+
 /// Writes a command to the current location in the script buffer area
 void ftCo_800B463C(Fighter* fp, u8 cmd)
 {
@@ -348,6 +374,14 @@ void ftCo_800B463C(Fighter* fp, u8 cmd)
     if (data->write_pos >= data->buffer + sizeof(data->buffer)) {
         HSD_ASSERTREPORT(501, 0, "command script buffer over flow!\n");
     }
+#if BUILD_TARGET_PC
+    if (cpucmd_at()) {
+        extern u32 gm_GetFrameCount(void);
+        fprintf(stderr, "[CPUCMD-AT] gframe=%d p%d byte=%u from=%p\n",
+                (int) gm_GetFrameCount(), (int) fp->player_id, (unsigned) cmd,
+                __builtin_return_address(0));
+    }
+#endif
     *data->write_pos = cmd;
     data->write_pos++;
 }
@@ -355,29 +389,11 @@ void ftCo_800B463C(Fighter* fp, u8 cmd)
 void ftCo_800B46B8(Fighter* fp, u8 cmd, u8 arg)
 {
 #if BUILD_TARGET_PC
-    /* MELEE_CPUCMDAT=<lo>-<hi>: who wrote each two-byte CPU command on those
-     * match frames, as the caller's return address for addr2line. The
-     * console's counterpart is MELEE_CODE_BP=800B46B8, whose hits print lr.
-     * A CPU that picks a different stick on one frame with every traced
-     * field equal is a decision made somewhere in ftcpuattack.c, and the
-     * command stream alone does not say where. */
-    {
-        static int lo = -2, hi;
-        if (lo == -2) {
-            const char* e = getenv("MELEE_CPUCMDAT");
-            const char* dash = e ? strchr(e, '-') : NULL;
-            lo = e ? atoi(e) : -1;
-            hi = dash ? atoi(dash + 1) : lo;
-        }
-        if (lo >= 0) {
-            extern u32 gm_GetFrameCount(void);
-            int f = (int) gm_GetFrameCount();
-            if (f >= lo && f <= hi) {
-                fprintf(stderr, "[CPUCMD-AT] gframe=%d p%d cmd=%u arg=%u from=%p\n",
-                        f, (int) fp->player_id, (unsigned) cmd, (unsigned) arg,
-                        __builtin_return_address(0));
-            }
-        }
+    if (cpucmd_at()) {
+        extern u32 gm_GetFrameCount(void);
+        fprintf(stderr, "[CPUCMD-AT] gframe=%d p%d cmd=%u arg=%u from=%p\n",
+                (int) gm_GetFrameCount(), (int) fp->player_id, (unsigned) cmd,
+                (unsigned) arg, __builtin_return_address(0));
     }
 #endif
     ftCo_800B463C(fp, cmd);

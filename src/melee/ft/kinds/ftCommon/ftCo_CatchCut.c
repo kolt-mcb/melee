@@ -8,6 +8,25 @@
 void ftCo_800DA698(Fighter_GObj* gobj, bool arg1)
 {
     Fighter* fp = GET_FIGHTER(gobj);
+#if BUILD_TARGET_PC
+    /* MELEE_GRABDBG=1: every grab break, with who asked for it. The
+     * console's counterpart is MELEE_CODE_BP=800DA698, whose hits print
+     * lr. */
+    {
+        extern u32 gm_GetFrameCount(void);
+        static int dbg = -1;
+        if (dbg < 0) {
+            dbg = getenv("MELEE_GRABDBG") != NULL;
+        }
+        if (dbg) {
+            fprintf(stderr, "[GRABDBG] gframe=%u p%d catch cut (%d) from %p "
+                            "grab_timer=%g\n",
+                    (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                    (int) arg1, __builtin_return_address(0),
+                    (double) GET_FIGHTER(fp->victim_gobj)->grab_timer);
+        }
+    }
+#endif
     if (fp->ground_or_air == GA_Air) {
         fp->self_vel.x = -fp->facing_dir * p_ftCommonData->x374;
         fp->self_vel.y = p_ftCommonData->x378;
