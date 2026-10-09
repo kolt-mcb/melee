@@ -622,6 +622,15 @@ float ftAnim_8006F3DC(Fighter_GObj* fighter_gobj)
                 }
             }
         }
+#if BUILD_TARGET_PC
+        /* No part has an AObj: the console falls off the end and returns
+         * whatever f1 held, which is 100.0 on the only path seen to get here
+         * (Yoshi's GuardDamage re-entered on a shield hit, three frames;
+         * random sweep seeds 68194490, 723905966, 1043562158). Here it was
+         * whatever xmm0 held, 0.0. The value is what the trace reports as
+         * the animation frame; say what the console says. */
+        return 100.0f;
+#endif
     } else {
         return lbGetJObjCurrFrame(fp->x8AC_animSkeleton);
     }
